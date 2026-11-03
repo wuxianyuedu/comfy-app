@@ -30,8 +30,10 @@ const DRAG_CANCEL_SELECTOR = "input, textarea, select, button, [contenteditable]
  *  指示线画在实际插入位置，落点即所见。取不到几何信息（测试桩 / 理论上
  *  的分离节点）时退回 before。 */
 const positionOf = (event: DragEvent<HTMLDivElement>): WorkflowIODropPosition => {
+  // oxlint-disable-next-line no-unnecessary-condition -- 合成/测试事件可能缺 currentTarget，? 保留为运行时守卫
   const rect = event.currentTarget?.getBoundingClientRect?.();
-  if (!rect || rect.height <= 0) {
+  const rectPresent = Boolean(rect);
+  if (!rectPresent || rect.height <= 0) {
     return "before";
   }
   return event.clientY < rect.top + rect.height / 2 ? "before" : "after";
@@ -101,11 +103,16 @@ export function useDynamicWorkflowForm(
   const { onUploadError, onUploadProgress } = props;
   const { io, values, onChange, onReorder, mode } = props;
 
-  /* IO-edit 作者态：行内提供「必填/可选」或 👁 可见性回调时，数值类参数（seed/steps/cfg…）
-   * 也要渲染成完整参数行，否则按端口行版式压缩成单行、那套版式从不渲染必填/👁，
-   * 作者永远碰不到（seed 挤没的历史根因）。CreatePanel / 画布 workflow 节点等运行期只读表单
-   * 不带这些回调，数值行保持紧凑端口行 + SeedMode。
-   * rowTrailing 同样按作者态处理：行尾徽标只有完整参数行才渲染得出，否则数值参数漏标。 */
+  /* IO-edit 作者态：行内提供了「必填 / 可选」切换或 👁 可见性等编辑回调。
+   *  此时数值类参数（seed/steps/cfg…）也要渲染成完整参数行，让作者能在
+   *  预览里调它们的必填与可见——否则它们被按端口行版式压缩成单行，那套版式
+   *  从不渲染必填/👁，作者永远碰不到（seed 挤没的历史根因）。
+   *  CreatePanel / 画布 workflow 节点等运行期只读表单不带这些回调，数值行
+   *  仍保持原有紧凑端口行 + SeedMode 的布局。
+   *
+   *  `rowTrailing` 同样按「作者态」处理：行尾徽标只有完整参数行才渲染得出，
+   *  数值行若留在端口行版式里就永远标不上（工作流库的行归属徽标会漏掉
+   *  seed/steps 这类数值参数）。 */
   const isAuthoringEdit = !!(
     props.onRequiredChange ??
     props.onLabelChange ??
@@ -116,10 +123,13 @@ export function useDynamicWorkflowForm(
 
   const { wireInputs, widgetInputs, outputs } = useMemo(() => splitWorkflowIO(io), [io]);
 
-  /* 多模式：按当前模式过滤 visible === false 的行，只是展示层过滤 —— 被隐藏参数仍留在 values 里
-   *（调用方用 defaultInputValues(io, mode) 播种模式默认值），提交 ComfyUI 的 payload 不会缺字段。
-   * showHiddenInMode（IO 编辑预览）不过滤：隐藏行置灰呈现，作者靠行内 👁 恢复；否则眼睛跟着消失、改不回来。 */
-  const visibilityFilterMode = props.showHiddenInMode ? null : mode;
+  /* 多模式：按当前模式过滤掉 `visible === false` 的行。
+   *  只是展示层过滤——被隐藏的参数仍留在 values 里（调用方用
+   *  defaultInputValues(io, mode) 给它播种了模式默认值），所以提交给
+   *  ComfyUI 的 payload 不会因为「当前模式不显示」就缺字段。
+   *  `showHiddenInMode`（IO 编辑预览）不过滤：隐藏行置灰呈现，作者靠
+   *  行内 👁 恢复显示——否则隐藏后眼睛跟着消失，永远改不回来。 */
+  const visibilityFilterMode = props.showHiddenInMode === true ? null : mode;
   const shownWireInputs = useMemo(
     () => filterVisibleInMode(wireInputs, visibilityFilterMode),
     [wireInputs, visibilityFilterMode],
@@ -145,10 +155,12 @@ export function useDynamicWorkflowForm(
   const groups = useMemo(() => inferGroups(shownWidgetInputs), [shownWidgetInputs]);
   const { groupedKeys } = groups;
 
-  /* 端口行 = 连线输入 + 数值 widget（seed/steps/cfg…），后者并入以继承可连接的单行布局。
-   * 已分组针脚排除在外，永不重复渲染（一次这里，一次在 GroupedControls）。
-   * IO 编辑作者态下数值 widget 不再并入 —— 改由 widgetSectionEntries 渲染成完整参数行，
-   * 否则必填/👁 无从编辑。 */
+  /* 端口行 = 连线输入 + 数值 widget（seed/steps/cfg …）。数值
+   * widget 并入它们以继承可连接的单行布局。
+   * 已分组的针脚排除在外，好让它们永不重复渲染（一次这里，一次
+   * 在 GroupedControls 里）。
+   *   IO 编辑作者态（isAuthoringEdit）下数值 widget 不再并入端口行 —— 改由
+   *   widgetSectionEntries 渲染成完整参数行，否则必填 / 👁 无从编辑。 */
   const portEntries = useMemo(
     () => [
       ...shownWireInputs,
@@ -169,11 +181,19 @@ export function useDynamicWorkflowForm(
     [shownWidgetInputs, groupedKeys, isAuthoringEdit],
   );
 
-  /* 拖拽状态刻意留在组件本地（不进 workflow-io.ts 或 context），避免同页另一表单的拖拽焦点被抢。
-   * draggingKey = 用户拎起的 ioKey，dragOverKey = 光标所在行（画插入线）；drop/dragend 时清掉，不留陈旧高亮。
-   * 被拿起的键同时记在 ref：原生拖拽横跨多个 task，drop 闭包可能来自另一次渲染、读到旧 state；
-   * ref 在 dragstart 现场写好、drop 一律以它为准 —— 否则「拖完什么都没发生」（ISSUE #349）。
-   * state 仍保留：插入指示线/半透明行靠它触发重渲。 */
+  /* 拖拽状态刻意留在组件本地（不进 workflow-io.ts 或任何
+   * context），好让某个界面上的重排不会抢走同页另一个
+   * 表单的拖拽焦点。`draggingKey` 是用户拎起的 ioKey；
+   * `dragOverKey` 是光标当前所在的行（画
+   * 插入线）。两者都在 drop / dragend 时清掉，好让落下的行
+   * 永不留下陈旧高亮。
+   *
+   *  **被拿起的键同时记在 ref 上**：一次原生拖拽横跨多个 task（dragstart →
+   *  dragover… → drop），`drop` 拿到的处理器闭包可能来自**另一次渲染**，
+   *  它读到的 `draggingKey` 是那一刻的 state 而不是起手时写入的值。ref 在
+   *  dragstart 现场立刻写好，drop 一律以它为准 —— 否则「拖完什么都没发生」
+   *（ISSUE #349：编辑 IO 里拖拽调整参数顺序失效）。
+   *  state 仍保留：插入指示线 / 半透明行都靠它触发重渲。 */
   const dragFromRef = useRef<string | null>(null);
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
@@ -213,7 +233,7 @@ export function useDynamicWorkflowForm(
          *  —— preventDefault 直接取消这次拖拽。 */
         /* SAFETY: 类型断言已复核 */
         const target = event.target as HTMLElement | null;
-        if (target?.closest?.(DRAG_CANCEL_SELECTOR)) {
+        if (target?.closest(DRAG_CANCEL_SELECTOR)) {
           event.preventDefault();
           return;
         }
@@ -233,7 +253,7 @@ export function useDynamicWorkflowForm(
       },
       onDragOver: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
         const fromKey = dragFromRef.current;
-        if (!fromKey || fromKey === ioKey) {
+        if (fromKey === null || fromKey === "" || fromKey === ioKey) {
           return;
         }
         event.preventDefault();
@@ -255,7 +275,7 @@ export function useDynamicWorkflowForm(
         const toKey = rowKeyOf(event.target) ?? ioKey;
         const pos = positionOf(event);
         endDrag();
-        if (!fromKey || fromKey === toKey) {
+        if (fromKey === null || fromKey === "" || fromKey === toKey) {
           return;
         }
         onReorder(fromKey, toKey, pos);
@@ -315,7 +335,7 @@ export function useDynamicWorkflowForm(
   const onFile = useCallback(
     async (file: File) => {
       const target = uploadTarget;
-      if (!target) {
+      if (target === null || target === "") {
         return;
       }
       setUploading(true);

@@ -139,6 +139,7 @@ export function issueTitle(stage, lane = "pr") {
  * @returns {number | null} PR 号；认不出时 null（不猜）
  */
 export function prIidFromUrl(url) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- url 是平台 eventUrl（外部输入），空值兜底保留
   const m = /\/pulls?\/(\d+)/.exec(String(url ?? ""));
   if (!m) {
     return null;
@@ -343,7 +344,9 @@ export function commentPull(io, slug, iid, body, sn) {
 export function appendToIssue(io, slug, number, body, sn) {
   return runAppendIssueComment({
     run: io.run,
-    log: (line) => io.log(`[pr-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
+    log: (line) => {
+      io.log(`[pr-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`);
+    },
     slug,
     number,
     body,
@@ -412,7 +415,11 @@ export function pickSelf(list, sn) {
 export function main(io = {}) {
   const argv = io.argv ?? process.argv.slice(2);
   const env = io.env ?? process.env;
-  const log = io.log ?? ((s) => console.log(s));
+  const log =
+    io.log ??
+    ((s) => {
+      console.log(s);
+    });
   const run = io.run ?? makeRunner(ROOT);
   const dryRun = argv.includes("--dry-run");
   const noBlock = argv.includes("--no-block");
@@ -560,6 +567,7 @@ export function main(io = {}) {
   /* 「被取消」与「真失败」的分界那句原话只在 `get-build-stage -v` 的 `data.error` 里
    * ⇒ 分类之前先补（ISSUE #2406）。取不到就照旧按状态判，只是念不出原话。 */
   const outcome = classifyBuildOutcome(
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- firstDetail 由平台读数数组下标取，运行时可能为空；类型面标的恒真只是没建模索引
     firstDetail ? enrichStageErrors(run, slug, sn, firstDetail.json) : null,
   );
   // 这里刻意保留 ||：`name` 是展示名，缺或为空串都退 id —— `??` 管不住空串那一半。
@@ -614,11 +622,11 @@ export function main(io = {}) {
       log(
         `[pr-failure-issue] ${offline ? "离线档" : "--dry-run"}：` +
           `「${s.stage}」→ ${
-          decision.action === "recommend"
-            ? `评论在 PR #${target.prIid} 下（不新建单）`
-            : s.number
-              ? `在 #${s.number} 下追加一条读数（不新建）`
-              : `新建一张：${issueTitle(s.stage, lane ?? "pr")}`
+            decision.action === "recommend"
+              ? `评论在 PR #${target.prIid} 下（不新建单）`
+              : s.number
+                ? `在 #${s.number} 下追加一条读数（不新建）`
+                : `新建一张：${issueTitle(s.stage, lane ?? "pr")}`
           } · 正文 ${body.length} 字 · 一条都没写`,
       );
       continue;
@@ -657,7 +665,9 @@ export function main(io = {}) {
     }
     const created = runNewIssue({
       run,
-      log: (line) => log(`[pr-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
+      log: (line) => {
+        log(`[pr-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`);
+      },
       slug,
       handle,
       root: ROOT,

@@ -35,6 +35,7 @@ export function useSchemaSyncPush(): {
     } catch {
       /* 网络层失败同理：下一次轮询（2s）会把真实状态带回来。 */
     } finally {
+      // oxlint-disable-next-line no-unnecessary-condition -- stoppedRef 由卸载清理在 await 期间写入，规则的控制流分析看不到该写入点
       if (!stoppedRef.current) {
         setPushing(false);
       }

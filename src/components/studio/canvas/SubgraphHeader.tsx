@@ -115,7 +115,7 @@ export function SubgraphHeader({
        *  理由同 WorkflowNode —— 输出按节点标识，
        *  所以逐端口复选框已移除；一个复选框标记
        *  整个节点作为工作流输出源。 */}
-      {io?.ioEditMode && outputRef && (
+      {io?.ioEditMode === true && outputRef && (
         <IoCheckbox
           io={io}
           ioRef={{

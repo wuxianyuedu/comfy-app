@@ -45,7 +45,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
     opening: c.opening,
   };
   const busy = isComfyBusy(c.status, flags);
-  const running = !!c.status?.up;
+  const running = c.status?.up === true;
   const configHint = comfyConfigHint(c.instance);
 
   return (
@@ -96,7 +96,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
                 留给「启动 / 关闭」。只在「明确未运行」时禁用 —— 探测进行中也允许
                 点一下，openComfy 会先取一份新鲜状态再打开（ISSUE #339）。 */}
             <StatusButton
-              disabled={c.opening || (!running && !c.status?.probing)}
+              disabled={c.opening || (!running && c.status?.probing !== true)}
               // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onClick={() => void c.openComfy()}
               variant="primary"
@@ -107,7 +107,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
                 地址由服务端自己探（comfyOpen），不采信界面缓存的旧 base；禁用口径同「打开查看」。
                 配色与「打开查看」同档（此前 outline + 手写 text 覆写导致同层按钮长出两种形状）。 */}
             <StatusButton
-              disabled={c.browserOpening || (!running && !c.status?.probing)}
+              disabled={c.browserOpening || (!running && c.status?.probing !== true)}
               // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onClick={() => void c.openComfyInBrowser()}
             >
@@ -124,7 +124,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
               onClick={() => void c.startComfy()}
               variant={running ? "primary" : "primary-solid"}
             >
-              {c.starting || c.status?.starting ? "启动中…" : "启动 ComfyUI"}
+              {c.starting || c.status?.starting === true ? "启动中…" : "启动 ComfyUI"}
             </StatusButton>
             <StatusButton
               disabled={busy || !running}
@@ -132,14 +132,14 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
               onClick={() => void c.stopComfy()}
               variant={running ? "primary-solid" : "primary"}
             >
-              {c.stopping || c.status?.stopping ? "关闭中…" : "关闭 ComfyUI"}
+              {c.stopping || c.status?.stopping === true ? "关闭中…" : "关闭 ComfyUI"}
             </StatusButton>
           </div>
         </div>
 
         {/* 未配置路径：说清后果 + 给出**唯一**能改它的地方。不做成禁用但不解释的
             按钮 —— 那种形态下用户只会反复点它。 */}
-        {configHint ? (
+        {configHint !== null && configHint !== "" ? (
           <div className="border-warning/40 bg-warning/10 mb-3 rounded-lg border px-3 py-2">
             <p className="text-warning-strong text-xs leading-relaxed">{configHint}</p>
             <Button

@@ -319,7 +319,7 @@ export function BrowserStatusBar() {
         ))}
 
         {/* 降级提示 */}
-        {degradedNote && (
+        {degradedNote !== null && degradedNote !== "" && (
           <span
             className="text-warning-strong/90 hidden items-center gap-1 sm:flex"
             title={degradedNote}

@@ -1,9 +1,16 @@
 "use client";
 
 /**
- * 设置页「远端模型管理」分区 sub-hook：本地候选勾选、远端条目增删改 + 测试连接；返回形状与 controller 逐字段一致（§12.18）。
- * 设置页只做「配置」，实际用哪个模型由工坊运行时切换；增删改即时落库（经注入的 `persistLlmDraft`），
- * 连通性 / 调用测试走服务端代理（apiKey 不直接打远端）。
+ * 设置页「远端模型管理」分区的 sub-hook（`use-settings-page` 的拆分件）。
+ *
+ * 设置页只做「配置」：本地候选的勾选、远端条目的增删改 + 测试连接，不区分
+ * 「当前生效」——实际用哪个模型由工坊运行时切换（configSave.model）。
+ * 增删改即时落库（无需再点保存按钮，经注入的 `persistLlmDraft`），失败时
+ * 提示条给出可读错误；连通性 / 实际调用测试走服务端代理（apiKey 不直接打远端）。
+ *
+ * 这一块只依赖「当前 llm 草稿 + 草稿编辑 + 持久化」三样（经参数注入），
+ * 与 ComfyUI / DbStudio / Ollama 无任何共享 state。返回形状与主 hook
+ * controller 逐字段一致，视图与测试都不感知——§12.18 复用优先。
  */
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 
@@ -88,10 +95,12 @@ export function useSettingsRemoteModels(input: {
       if (llmDraft.extraModels.some((e) => e.name === name)) {
         return { ok: false, error: `模型「${name}」已在列表中` };
       }
+      const trimmedBaseUrl = entry.baseUrl?.trim();
+      const trimmedApiKey = entry.apiKey?.trim();
       const cleaned: RemoteModelEntry = {
         name,
-        baseUrl: entry.baseUrl?.trim() ? entry.baseUrl.trim() : null,
-        apiKey: entry.apiKey?.trim() ? entry.apiKey.trim() : null,
+        baseUrl: trimmedBaseUrl !== undefined && trimmedBaseUrl !== "" ? trimmedBaseUrl : null,
+        apiKey: trimmedApiKey !== undefined && trimmedApiKey !== "" ? trimmedApiKey : null,
         kind: entry.kind ?? null,
       };
       const nextDraft = {
@@ -144,13 +153,20 @@ export function useSettingsRemoteModels(input: {
       const typedKey = patch.apiKey?.trim();
       const updated: RemoteModelEntry = {
         name: nextName,
-        baseUrl: patch.baseUrl === undefined ? (existing?.baseUrl ?? null) : patch.baseUrl,
-        /* `apiKey` 三态（台账 A11 的客户端这一半）：重填了 → 新值；勾了「清除密钥」
-         * → `null`；都没动 → **省略这个键**。`existing` 来自服务端**脱敏下发**的清单
-         * （永远不带值），写成 `(existing?.apiKey ?? null)` 会被 `replaceAll` 的
-         * 覆盖语义把库里那把密钥清掉 —— 「我没意见」的正确表达是缺键。 */
-        ...(typedKey ? { apiKey: typedKey } : patch.clearApiKey ? { apiKey: null } : {}),
-        kind: patch.kind === undefined ? (existing?.kind ?? null) : patch.kind,
+        baseUrl: patch.baseUrl === undefined ? (existing.baseUrl ?? null) : patch.baseUrl,
+        /* `apiKey` 三态（台账 A11 的客户端这一半）：
+         *   · 用户重填了 → 新值；
+         *   · 显式勾了「清除密钥」→ `null`；
+         *   · 都没动 → **省略这个键**。
+         * 此前这里是 `(existing?.apiKey ?? null)`，而真实场景里 `existing` 来自服务端
+         * **脱敏下发**的清单（永远不带值）→ 折成 `null` → `replaceAll` 按覆盖语义把
+         * 库里那把密钥清掉。草稿不该揣测保留值：「我没意见」的正确表达是缺键。 */
+        ...(typedKey !== undefined && typedKey !== ""
+          ? { apiKey: typedKey }
+          : patch.clearApiKey === true
+            ? { apiKey: null }
+            : {}),
+        kind: patch.kind === undefined ? (existing.kind ?? null) : patch.kind,
       };
       const nextDraft = {
         ...llmDraft,

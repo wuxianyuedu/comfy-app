@@ -23,7 +23,7 @@ export function buildCharacterPrompt(c: Character, style?: StyleRef): string {
   }
 
   // 关联的技能模板（充当美术指导的外包装）
-  if (style?.promptTemplate) {
+  if (style !== undefined && style.promptTemplate !== "") {
     parts.push(style.promptTemplate);
   }
 
@@ -41,8 +41,9 @@ export function buildCharacterNegative(_c: Character, style?: StyleRef): string 
     "watermark",
     "text",
   ];
-  if (style?.negativePrompt) {
-    base.push(style.negativePrompt);
+  const styleNegative = style?.negativePrompt;
+  if (styleNegative !== undefined && styleNegative !== "") {
+    base.push(styleNegative);
   }
   return base.join(", ");
 }
@@ -84,7 +85,7 @@ export function buildShotPrompt(
   }
 
   // Style wrapper
-  if (style?.promptTemplate) {
+  if (style !== undefined && style.promptTemplate !== "") {
     parts.push(style.promptTemplate);
   }
 
@@ -107,8 +108,9 @@ export function buildShotNegative(characters: Array<Character>, style?: StyleRef
       neg.push(character.negativePrompt);
     }
   });
-  if (style?.negativePrompt) {
-    neg.push(style.negativePrompt);
+  const styleNegative = style?.negativePrompt;
+  if (styleNegative !== undefined && styleNegative !== "") {
+    neg.push(styleNegative);
   }
   return [...new Set(neg)].join(", ");
 }

@@ -124,7 +124,7 @@ export function useCodeUpdateWatch({
       lastBootIdRef.current = bootId;
       /* ③ 一上来就带重启原因 = 这个进程是启动器自愈重启起来的（重启发生在页面
        *    加载之前，bootId 变化在页面这边看不到），补一条留底通知。 */
-      if (bootId && restartReason) {
+      if (bootId !== null && bootId !== "" && restartReason !== null && restartReason !== "") {
         notifyRestart(bootId, restartReason, restartDetail);
       }
       return;
@@ -137,7 +137,7 @@ export function useCodeUpdateWatch({
      *    探活可能根本没失败过（进程换得比一拍还快）。 */
     if (isBootIdChange(lastBootIdRef.current, bootId)) {
       lastBootIdRef.current = bootId;
-      if (bootId && restartReason) {
+      if (bootId !== null && bootId !== "" && restartReason !== null && restartReason !== "") {
         notifyRestart(bootId, restartReason, restartDetail);
       }
       reportCodeUpdatedSinceLoad();

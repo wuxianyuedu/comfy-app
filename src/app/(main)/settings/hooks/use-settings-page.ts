@@ -57,7 +57,7 @@ const SETTINGS_CACHE_KEY = "settingsPage.lastGoodConfig.v1";
 function readSettingsCache(): { llm?: QueryLlmConfig; settings?: Settings } {
   try {
     const raw = sessionStorage.getItem(SETTINGS_CACHE_KEY);
-    if (!raw) {
+    if (raw === null || raw === "") {
       return {};
     }
     /* SAFETY: 类型断言已复核 */
@@ -65,7 +65,7 @@ function readSettingsCache(): { llm?: QueryLlmConfig; settings?: Settings } {
       llm?: QueryLlmConfig;
       settings?: Settings;
     };
-    return parsed && typeof parsed === "object" ? parsed : {};
+    return Boolean(parsed) && typeof parsed === "object" ? parsed : {};
   } catch {
     return {};
   }

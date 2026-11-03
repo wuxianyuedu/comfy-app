@@ -106,6 +106,7 @@ export function parseWorkflowIOMap(value: unknown): WorkflowIOMap {
   }
   const data = parsed.data;
   for (const entry of Object.values(data)) {
+    // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- 落库 JSON 的防御判断：类型收窄不覆盖运行期 null，保留原判断
     if (!entry || typeof entry !== "object") {
       continue;
     }
@@ -135,7 +136,8 @@ export function isVisibleInMode(
   if (!entry || typeof entry !== "object") {
     return true;
   }
-  if (!mode) {
+  /* 模式码落库数据可能出现空串残留，语义同「没有模式语境」 */
+  if (mode === undefined || mode === null || mode === "") {
     return true;
   }
   return entry.modeOverrides?.[mode]?.visible ?? true;
@@ -154,7 +156,8 @@ export function isVisibleInMode(
  *  `null` 不算覆盖：它表示不出一个「有意义的默认值」，放行只会把 `null` 下发给
  *  ComfyUI；一律回退图内默认值。 */
 export function resolveEntryDefault(entry: WorkflowIOEntry, mode?: string | null): unknown {
-  if (mode) {
+  /* 模式码落库数据可能出现空串残留，语义同「没有模式语境」 */
+  if (mode !== undefined && mode !== null && mode !== "") {
     const modeDefault = entry.modeOverrides?.[mode]?.defaultValue;
     if (modeDefault !== undefined && modeDefault !== null) {
       return modeDefault;
@@ -175,7 +178,8 @@ export function resolveEntryRequired(
   if (!entry || typeof entry !== "object") {
     return undefined;
   }
-  if (mode) {
+  /* 模式码落库数据可能出现空串残留，语义同「没有模式语境」 */
+  if (mode !== undefined && mode !== null && mode !== "") {
     const modeRequired = entry.modeOverrides?.[mode]?.required;
     if (modeRequired !== undefined) {
       return modeRequired;
@@ -195,7 +199,8 @@ export function resolveEntrySeedMode(
   if (!entry || typeof entry !== "object") {
     return undefined;
   }
-  if (mode) {
+  /* 模式码落库数据可能出现空串残留，语义同「没有模式语境」 */
+  if (mode !== undefined && mode !== null && mode !== "") {
     const modeSeed = entry.modeOverrides?.[mode]?.seedMode;
     if (modeSeed !== undefined) {
       return modeSeed;
@@ -208,6 +213,7 @@ export function resolveEntrySeedMode(
 export function collectModeCodes(io: WorkflowIOMap | null | undefined): Array<string> {
   const seen = new Set<string>();
   for (const entry of Object.values(io ?? {})) {
+    // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- 落库 IO 表的防御判断：类型收窄不覆盖运行期 null，保留原判断
     if (!entry || typeof entry !== "object") {
       continue;
     }

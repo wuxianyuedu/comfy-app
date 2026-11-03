@@ -31,7 +31,7 @@ vi.mock("fs", () => ({
       if (!entry) {
         throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
       }
-      if (opts?.withFileTypes) {
+      if (opts?.withFileTypes === true) {
         return (entry.subdirs ?? []).map((name) => ({
           name,
           isDirectory: () => true,
@@ -115,7 +115,7 @@ function uploadForm(init: {
   const file = new File(["abcd"], init.name ?? "note.txt", {
     type: init.type ?? "text/plain",
   });
-  if (init.sizeOverMax) {
+  if (init.sizeOverMax === true) {
     // 不真分配 100MB：`file.size` 是原型上的 getter，实例属性就能顶掉它
     Object.defineProperty(file, "size", { value: 101 * 1024 * 1024 });
   }

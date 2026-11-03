@@ -42,5 +42,5 @@ const SECTION_SUMMARY: Record<Section, string> = {
 
 /** 取一个分区的说明。查不到时给通用兜底（新增分区忘了补文案不该让标题行空着）。 */
 export function sectionSummary(section: Section): string {
-  return SECTION_SUMMARY[section] ?? "本分区的配置";
+  return SECTION_SUMMARY[section];
 }

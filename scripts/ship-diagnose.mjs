@@ -32,7 +32,16 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { gitScratchPath } from "./git-dir.mjs";
-import { CODE } from "./ship-core.mjs";
+import {
+  classifyPrMergeable,
+  CODE,
+  codeTag,
+  conflictAdviceLines,
+  findPullForBranch,
+  readPullVerdict,
+} from "./ship-core.mjs";
+import { cnbJson } from "./ship-exec.mjs";
+import { scanPullPages } from "./ship-platform.mjs";
 import {
   classifyBuildOutcome,
   describeFailedStages,
@@ -43,6 +52,10 @@ import {
   pipelineForStage,
   progressReadout,
   resolveBuildSn,
+  stalledStages,
+  /* 与下面本文件导出的 `stallReadout`（念「签名没动」）同名不同义：这一条念「某一格停摆」
+     （ISSUE #2901），所以进来就改名，免得两件事在同一个文件里读成一件事。 */
+  stallReadout as stalledStageReadout,
 } from "./ci-build-readout.mjs";
 
 /**
@@ -233,7 +246,49 @@ export function runDiagnose({
     command: "pnpm ship --diagnose",
   });
   if (!target) {
-    return CODE.NOT_RUN;
+    /* ISSUE #3083：「归不到 build」有两种真相 —— 当前分支的开放 PR 与 base 冲突
+     * （平台**永不**派生，出口是解冲突）与 sha 归属不上 / 平台延迟（出口是等或
+     * 核 sha）。两者在读数上长得一样，不问一眼就落 2 会把前一种人留在「再等等」
+     * 上。问不到（不在分支上 / 清单或回读没跑起来 / 缺键）⇒ 照实念「未知」，不猜。 */
+    const branch = run("git", ["rev-parse", "--abbrev-ref", "HEAD"]).stdout.trim();
+    const scan = branch
+      ? scanPullPages(
+          { run, slug },
+          { state: "open", visit: (json) => findPullForBranch(json, branch) },
+        )
+      : { hit: null, ran: false, scanned: 0 };
+    const pr = scan.hit
+      ? cnbJson(run, ["pulls", "get-pull", "--repo", slug, "--number", String(scan.hit), "-v"])
+      : null;
+    const pv = pr ? readPullVerdict(pr.json) : null;
+    const cls = classifyPrMergeable(pv);
+    if (cls === "conflict" && scan.hit) {
+      log(
+        `[ship] 当前分支的开放 PR #${scan.hit} 与 base 冲突 ⇒ 平台不会为它派生 build：` +
+          `「归不到 build」的真因是冲突，不是「还在排队」（${codeTag(CODE.CONFLICT)}）。`,
+      );
+      for (const line of conflictAdviceLines({ number: scan.hit, baseRef: null })) {
+        log(line);
+      }
+      return CODE.CONFLICT;
+    }
+    if (cls === "mergeable" && scan.hit) {
+      log(
+        `[ship] 当前分支的开放 PR #${scan.hit} 可合并（不是冲突）⇒ 归不到 build 是另一回事：` +
+          `sha 没推上去，或平台还没开跑（${codeTag(CODE.CI_PENDING)}）。`,
+      );
+      return CODE.CI_PENDING;
+    }
+    /** 分型不了的原因，逐字念事实（不猜）。 */
+    let why = "当前不在任何分支上";
+    if (branch) {
+      why = scan.hit ? "PR 可合并状态缺键 / 回读没跑起来" : "当前分支没有开放 PR，或开放清单取不到";
+    }
+    log(
+      `[ship] 「归不到 build」的可合并性分型取不到读数（${why}）⇒ 只能报未知，不猜` +
+        `（${codeTag(CODE.READOUT_MISSING)}）。`,
+    );
+    return CODE.READOUT_MISSING;
   }
   const rawStatus = fetchBuildStatus(run, slug, target);
   if (!rawStatus) {
@@ -249,7 +304,9 @@ export function runDiagnose({
   let reason = outcome.reasons.find((r) => r.reason)?.reason ?? null;
   if (!reason && outcome.state === "cancelled") {
     const first = outcome.cancelled[0];
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- cancelled 来自平台数据，空数组时首元素运行时为 undefined
     const pipeline = first ? pipelineForStage(outcome, first.id) : null;
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- first 可为 undefined；pipelineForStage 查不到时可为 null（平台数据）
     if (first && pipeline) {
       reason = fetchStageReason(run, slug, target, pipeline.id, first.id);
     }
@@ -278,6 +335,18 @@ export function runDiagnose({
       previous,
       stored,
       prefix: "[ship]",
+    })) {
+      log(line);
+    }
+    /* 「有格在飞」那一支可能是**停摆**而不是长跑（ISSUE #2901）：平台把 `endTime` 写成等于
+     * `startTime`、`duration` 却不为 0，而那一格永远不会回来 —— 平台的兜底是 8640s 超时。
+     * 这一句只把那一形念出来，不改上面的判断、也不改退码。 */
+    for (const line of stalledStageReadout({
+      signature: progress.signature,
+      sn: target,
+      stalled: stalledStages(statusJson),
+      minutes: DIAGNOSE_STALL_MINUTES,
+      slug,
     })) {
       log(line);
     }

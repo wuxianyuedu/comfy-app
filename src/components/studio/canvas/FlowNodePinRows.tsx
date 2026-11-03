@@ -66,27 +66,34 @@ export function FlowNodePinRows({
 
         // 输入侧 —— 按声明的槽位类型着色，标签走与 widget 行
         // 相同的 label / zh-CN / 友好名链（作者 label 优先）。
-        const inMeta = inName ? rawMeta[inName] : undefined;
+        const inMeta = inName !== undefined && inName !== "" ? rawMeta[inName] : undefined;
         const inType = inMeta?.type ?? "*";
         const inCol = portColor(inType);
-        const inLabel = inName
-          ? sanitizeComboLabel(inMeta?.label) ||
-            sanitizeComboLabel(inMeta?.localized) ||
-            friendlyInputName(inName)
-          : "";
+        const inLabel =
+          inName !== undefined && inName !== ""
+            ? sanitizeComboLabel(inMeta?.label) ||
+              sanitizeComboLabel(inMeta?.localized) ||
+              friendlyInputName(inName)
+            : "";
 
         // 输出侧 —— 按 `outputs[i][1]` 着色，标签优先取 rawOutputs 的
         // `localized`（中文），否则用原始 key。
-        const outCol = outType ? portColor(outType) : undefined;
-        const outRaw = outName
-          ? data.rawOutputs?.find((output) => output.name === outName)
-          : undefined;
+        const outCol = outType !== undefined && outType !== "" ? portColor(outType) : undefined;
+        const outRaw =
+          outName !== undefined && outName !== ""
+            ? data.rawOutputs?.find((output) => output.name === outName)
+            : undefined;
         const outDisplay = outRaw?.localized ?? outName;
 
         /* 端口行的观感：两端取一致的一档（见 toneOf）。 */
         const tone =
           PORT_ROW_TONES[
-            toneOf(inName, outName ? `${OUTPUT_PORT_HANDLE_PREFIX}${outName}` : undefined)
+            toneOf(
+              inName,
+              outName !== undefined && outName !== ""
+                ? `${OUTPUT_PORT_HANDLE_PREFIX}${outName}`
+                : undefined,
+            )
           ];
 
         return (
@@ -124,18 +131,21 @@ export function FlowNodePinRows({
                 {/* 顶部针脚区**未连线**输入的 IO 复选框 ——
                  * 已连线的槽位取值来自上游，把它
                  * 暴露成工作流输入没有意义。 */}
-                {io?.ioEditMode && inMeta && !inMeta.isConnection && !inMeta.isBoundary && (
-                  <IoCheckbox
-                    io={io}
-                    ioRef={{
-                      nodeId: data.nodeId,
-                      hostNodeId: data.hostNodeId,
-                      name: inName ?? "",
-                      kind: "param",
-                      direction: "input",
-                    }}
-                  />
-                )}
+                {io?.ioEditMode === true &&
+                  inMeta &&
+                  !inMeta.isConnection &&
+                  inMeta.isBoundary !== true && (
+                    <IoCheckbox
+                      io={io}
+                      ioRef={{
+                        nodeId: data.nodeId,
+                        hostNodeId: data.hostNodeId,
+                        name: inName ?? "",
+                        kind: "param",
+                        direction: "input",
+                      }}
+                    />
+                  )}
                 <span
                   className="text-2xs min-w-0 flex-1 truncate text-left"
                   style={{
@@ -172,7 +182,7 @@ export function FlowNodePinRows({
                     right: 5,
                     background: outCol,
                     boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
-                    ...(io?.ioEditMode
+                    ...(io?.ioEditMode === true
                       ? {
                           /* IO 编辑模式下端点整体缩到几乎不可见（不误导作者去连
                            * 输出口），提亮档只放大 1px 保持「这是同一个锚点」。 */

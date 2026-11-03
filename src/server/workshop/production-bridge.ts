@@ -37,7 +37,7 @@ export type SessionContent = {
 
 /** 解析会话内容的归属用户：显式 id 必须存在；缺省取本机最早的账号（确定性）。 */
 export async function resolveOwnerUserId(explicit: string | null): Promise<string> {
-  if (explicit) {
+  if (explicit !== null && explicit !== "") {
     const found = await workshopDb
       .select({ id: user.id })
       .from(user)
@@ -54,7 +54,7 @@ export async function resolveOwnerUserId(explicit: string | null): Promise<strin
     .orderBy(asc(user.createdAt))
     .limit(1);
   const owner = first[0]?.id;
-  if (!owner) {
+  if (owner === undefined) {
     throw new Error(
       "本机还没有任何用户：先在应用内完成一次登录 / 初始化，MCP 会话才有归属（production 行需要 userId）",
     );
@@ -69,7 +69,7 @@ export async function ensureProductionProject(
   ownerId: string,
   title: string,
 ): Promise<string> {
-  if (projectId) {
+  if (projectId !== null && projectId !== "") {
     const rows = await workshopDb.select().from(project).where(eq(project.id, projectId)).limit(1);
     const proj = rows[0];
     if (!proj) {

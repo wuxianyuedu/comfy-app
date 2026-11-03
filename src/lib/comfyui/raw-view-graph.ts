@@ -128,7 +128,7 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
 
     if (Array.isArray(n.inputs) && n.inputs.length) {
       for (const inp of n.inputs) {
-        // oxlint-disable-next-line strict-boolean-expressions -- 外部 JSON 的 inputs 数组元素运行期可能为 null，保留防御判空
+        // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- 外部 JSON 的 inputs 数组元素运行期可能为 null，保留防御判空
         if (!inp || typeof inp.name !== "string") {
           continue;
         }
@@ -171,7 +171,7 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
       inputs: slots,
       outputTypes: Array.isArray(n.outputs)
         ? n.outputs.map((output) =>
-            // oxlint-disable-next-line strict-boolean-expressions -- 外部 JSON 的 outputs 数组元素运行期可能为 null，保留防御判空
+            // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- 外部 JSON 的 outputs 数组元素运行期可能为 null，保留防御判空
             output && typeof output.type === "string" ? output.type : "",
           )
         : [],

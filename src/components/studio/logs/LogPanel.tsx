@@ -65,7 +65,7 @@ function useVirtualWindow(input: {
   const expandedIds = useMemo(() => {
     const ids = new Set<string>();
     for (const key of Object.keys(expansionMap)) {
-      if (expansionMap[key]) {
+      if (expansionMap[key] === true) {
         ids.add(key);
       }
     }
@@ -124,7 +124,7 @@ export function LogPanel() {
   } = useLogPanel((state) => state.header);
   /* 计数一律看**当前来源**：「全部来源」下是全局数，选了某个来源就是该来源自己
    * 的数——级别按钮与来源下拉共用同一份，两边永远对得上（ISSUE #360）。 */
-  const originCounts = countsByOrigin[origin ?? "all"] ?? countsByOrigin.all;
+  const originCounts = countsByOrigin[origin];
   const revision = useLogPanel((state) => state.revision);
   const droppedTotal = useLogPanel((state) => state.droppedTotal);
   /* 「用户有没有主动要求回到最新」的生成号：它一变，贴底就升级为「一路追到
@@ -301,7 +301,7 @@ export function LogPanel() {
   const total = filteredLogs.length;
   /* 「现在复制/下载的是哪一类」——与页脚的筛选摘要同口径，导出前一眼可见。 */
   const scopeLabel = [
-    ORIGIN_TEXT[origin ?? "all"],
+    ORIGIN_TEXT[origin],
     FILTER_LABELS.find((item) => item.value === filter)?.label ?? "全部",
     search.trim() ? `搜索「${search.trim()}」` : null,
   ]

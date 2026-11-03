@@ -42,7 +42,7 @@ export function useCancelTask({ taskId, onFailed }: UseCancelTaskArgs): CancelTa
      *  这一小段窗口内的取消点击（CanvasNode 正在发请求）。/cancel 端点幂等，
      *  对不存在的 taskId 返回 404 且无副作用；缺 id 时只告诉用户没送达。 */
     const currentTaskId = taskIdRef.current;
-    if (!currentTaskId) {
+    if (currentTaskId === undefined || currentTaskId === null || currentTaskId === "") {
       onFailedRef.current("取消请求异常：尚未生成 taskId");
       return;
     }

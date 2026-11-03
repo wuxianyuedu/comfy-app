@@ -196,15 +196,15 @@ export function useMaterialLibrary({
 
   const breadcrumbSegments: Array<{ key: string | null; label: string }> = searching
     ? [{ label: `搜索结果 · ${items.length}`, key: null }]
-    : folder
-      ? [
+    : folder === null
+      ? [{ label: "全部", key: null }]
+      : [
           { label: "全部", key: null },
           {
             label: folders.find((fld) => fld.id === folder)?.name ?? folder,
             key: folder,
           },
-        ]
-      : [{ label: "全部", key: null }];
+        ];
 
   return {
     scope,

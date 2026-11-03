@@ -37,11 +37,11 @@ export function readPortFocusRole(
   data: Record<string, unknown> | undefined,
   handle: string | undefined | null,
 ): EdgeFocusRole {
-  if (!handle) {
+  if (handle === undefined || handle === null || handle === "") {
     return "none";
   }
   const table = data?.[NODE_PORT_FOCUS_DATA_KEY];
-  if (!table || typeof table !== "object") {
+  if (typeof table !== "object" || table === null) {
     return "none";
   }
   /* SAFETY: 类型断言已复核 */
@@ -103,7 +103,7 @@ export function useRelatedEdgesHighlight(
     state.nodeLookup.forEach((internal, nodeId) => {
       /* SAFETY: 类型断言已复核 */
       const userNode = internal.internals.userNode as Node | undefined;
-      if (userNode?.selected) {
+      if (userNode?.selected === true) {
         selectedIds.add(nodeId);
       }
     });
@@ -131,8 +131,8 @@ export function useRelatedEdgesHighlight(
           ? "none"
           : resolveEdgeFocus({
               endpoints: {
-                source: edge.source ?? null,
-                target: edge.target ?? null,
+                source: edge.source,
+                target: edge.target,
               },
               resolveNodeId,
               isSelected,
@@ -172,6 +172,7 @@ export function useRelatedEdgesHighlight(
           },
         };
       });
+      // oxlint-disable-next-line no-unnecessary-condition -- changed 在 map 回调里写入，规则的控制流分析看不到该写入点
       return changed ? next : currentEdges;
     });
 
@@ -237,6 +238,7 @@ export function useRelatedEdgesHighlight(
           },
         };
       });
+      // oxlint-disable-next-line no-unnecessary-condition -- 同上：changed 在 map 回调里写入
       return changed ? next : currentNodes;
     });
   }, [resolveNodeIdOption, setEdges, setNodes, store]);
@@ -251,7 +253,7 @@ export function useRelatedEdgesHighlight(
       state.nodeLookup.forEach((internal, nodeId) => {
         /* SAFETY: 类型断言已复核 */
         const userNode = internal.internals.userNode as Node | undefined;
-        if (userNode?.selected) {
+        if (userNode?.selected === true) {
           ids.push(nodeId);
         }
       });

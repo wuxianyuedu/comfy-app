@@ -186,6 +186,7 @@ export async function pollTask(
 ): Promise<TaskResult | TaskFailure> {
   const start = Date.now();
 
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 轮询由内部超时/终止判据 return，`while (true)` 是刻意写法
   while (true) {
     if (Date.now() - start > timeoutMs) {
       return {
@@ -199,9 +200,11 @@ export async function pollTask(
       /* 把 0..100 的进度透到画布上。
        * 此前被丢掉了 —— pollTask 只读 status 与 images，于是画布的图片/影片预览
        * 即使 /api/tasks/[id] 返回了 task.progress，也没进度可显示。 */
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- task 来自 /api/tasks/[id] 轮询回包（API 响应），保留 ?. 防御字段缺失
       if (onProgress && typeof task?.progress === "number") {
         onProgress(clampPct(task.progress));
       }
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：API 回包里 images 运行期可缺，`?? []` 是兜底
       const imgs: Array<TaskResult> = task?.images ?? [];
       if (imgs.length) {
         const v = imgs.find((img) => img.mediaType === "video") ?? imgs[0];
@@ -213,6 +216,7 @@ export async function pollTask(
         }
       }
       /* SAFETY: 类型断言已复核 */
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- API 回包，task 运行期可能为 null/缺 status
       const st = task?.status as string | undefined;
       if (st === "FAILED" || st === "CANCELLED" || st === "ERROR") {
         /* 防御性归一：`task.error` 在库里是可空文本列，
@@ -220,11 +224,13 @@ export async function pollTask(
          * `String(res.error)`）可能把字面量 "[object Object]" 存了进来。
          * 这里既把结构化对象剥成 JSON，也识别那个垃圾字符串哨兵，
          * 让界面永远不显示 `[object Object]`；垃圾字符串换成通用兜底文案。 */
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- API 回包，task 运行期可能为 null；error 列类型上收窄但实际可空/可存对象
         const rawErr = task?.error;
         const peeled =
           typeof rawErr === "string"
             ? rawErr
-            : rawErr && typeof rawErr === "object"
+            : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+              rawErr != null && typeof rawErr === "object" // oxlint-disable-line typescript/no-unnecessary-condition -- 历史数据可能把 error 存成对象/非空值，类型收窄不覆盖，判空保留
               ? (() => {
                   try {
                     return JSON.stringify(rawErr);
@@ -243,12 +249,14 @@ export async function pollTask(
           /* 失败也回传请求 payload 快照，前端用于在失败面板里
            *  展示「执行了哪些参数」。task.params 由 /api/generate route.ts
            *  写入（任务表的 JSON 列）。 */
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- API 回包，params 列运行期可缺
           params: task?.params ?? undefined,
           /* 把 /api/tasks/[id] 的 task.validationErrors 里的结构化校验错误
            * 带进失败结果，让 CanvasNode 能渲染出精确到字段的列表。 */
           /* validationErrors 存在任务表的 JSON 列里，类型上是 unknown——
            *  直接 `as ValidationError[]` 只是假保险（列里存了别的东西时
            *  会在渲染期炸）。按 §05「API 响应一律 Zod 校验」收口成真校验。 */
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- API 回包，validationErrors 列运行期可缺
           validationErrors: parseValidationErrorsJson(task?.validationErrors),
         };
       }

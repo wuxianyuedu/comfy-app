@@ -26,6 +26,7 @@ import type {
 
 const ENV_DEFAULTS: LLMConfig = {
   /* SAFETY: 类型断言已复核 */
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- LLM_PROVIDER 是环境变量，运行期可为空串；断言只改类型不做 sanitize，`|| "local"` 是唯一回落
   provider: (process.env.LLM_PROVIDER as LLMProviderType) || "local",
   baseUrl: process.env.LLM_BASE_URL ?? OLLAMA_DEFAULT_BASE_URL,
   model: process.env.LLM_MODEL ?? "",
@@ -73,6 +74,7 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
         baseUrl: r.baseUrl,
         apiKey: r.apiKey,
         /* SAFETY: 类型断言已复核 */
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- kind 来自 DB 列，运行期可为 null/undefined；断言只标类型，`?? null` 负责归一
         kind: (r.kind as RemoteModelKind) ?? null,
       }));
       // 合并两来源：本地候选名 + 远端表条目。`split.remoteEntries` 在列里不该再
@@ -89,21 +91,22 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
         ...remoteEntries,
         ...split.remoteEntries,
       ];
-      if (row.apiKey) {
+      if (typeof row.apiKey === "string" && row.apiKey !== "") {
         cfg.apiKey = row.apiKey;
       }
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+      // oxlint-disable-next-line eqeqeq, typescript/no-unnecessary-condition -- 同时判 null 与 undefined；DB 数值列运行期可为 null，类型按非空标
       if (row.temperature != null) {
         cfg.temperature = row.temperature;
       }
       // temperatureByTask 是 json 列，读出来是 unknown —— 形状由 resolveTaskTemperature 消费，
       /* SAFETY: 类型断言已复核 */
       const raw = row as Record<string, unknown>;
+      // oxlint-disable-next-line strict-boolean-expressions -- temperatureByTask 是 DB json 列读出的 unknown，形状不保证，按任意真值判「有没有配」
       if (raw.temperatureByTask) {
         /* SAFETY: 类型断言已复核 */
         cfg.temperatureByTask = raw.temperatureByTask as Record<TaskType, number>;
       }
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+      // oxlint-disable-next-line eqeqeq, typescript/no-unnecessary-condition -- 同时判 null 与 undefined；DB 数值列运行期可为 null，类型按非空标
       if (row.maxTokens != null) {
         cfg.maxTokens = row.maxTokens;
       }
@@ -116,20 +119,20 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
     if (override.provider) {
       cfg.provider = override.provider;
     }
-    if (override.baseUrl) {
+    if (typeof override.baseUrl === "string" && override.baseUrl !== "") {
       cfg.baseUrl = override.baseUrl;
     }
-    if (override.model) {
+    if (typeof override.model === "string" && override.model !== "") {
       cfg.model = override.model;
       // 工坊 / 设置页按名字切换模型：命中带独立连接参数的候选条目时改走该条目
       const entry = cfg.extraModels?.find(
-        (e) => e.name === override.model && !!(e.baseUrl ?? e.apiKey),
+        (e) => e.name === override.model && Boolean(e.baseUrl ?? e.apiKey),
       );
       if (entry) {
-        if (entry.baseUrl) {
+        if (typeof entry.baseUrl === "string" && entry.baseUrl !== "") {
           cfg.baseUrl = entry.baseUrl;
         }
-        if (entry.apiKey) {
+        if (typeof entry.apiKey === "string" && entry.apiKey !== "") {
           cfg.apiKey = entry.apiKey;
         }
       }
@@ -169,6 +172,7 @@ export async function getConfigForClient() {
       baseUrl: r.baseUrl,
       apiKey: r.apiKey,
       /* SAFETY: 类型断言已复核 */
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- kind 来自 DB 列，运行期可为 null/undefined，`?? null` 负责归一
       kind: (r.kind as RemoteModelKind) ?? null,
     }));
     // 读取层兜底归并：`remoteModel` 表里若存着指向本机回环、且不带 apiKey 的条目，
@@ -184,8 +188,8 @@ export async function getConfigForClient() {
   const cfgSafe = { ...cfg };
   /* SAFETY: 类型断言已复核 */
   delete (cfgSafe as Partial<LLMConfig>).apiKey;
-  const extraSafe = extra.map((e) =>
-    typeof e === "object" && e !== null ? maskRemoteEntryForClient(e) : e,
+  const extraSafe = extra.map(
+    (e) => (typeof e === "object" && e !== null ? maskRemoteEntryForClient(e) : e), // oxlint-disable-line typescript/no-unnecessary-condition -- extra 由 DB json 列与本地候选名合并，元素运行期可为 null
   );
   return {
     ...cfgSafe,
@@ -211,7 +215,7 @@ function maskRemoteEntryForClient(e: RemoteModelEntry): RemoteModelEntry {
 
 function headersFor(cfg: LLMConfig): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (cfg.provider === "remote" && cfg.apiKey) {
+  if (cfg.provider === "remote" && typeof cfg.apiKey === "string" && cfg.apiKey !== "") {
     h.Authorization = `Bearer ${cfg.apiKey}`;
   }
   return h;
@@ -236,7 +240,7 @@ export function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
         ? ""
         : typeof cause === "string"
           ? cause
-          : (JSON.stringify(cause) ?? "");
+          : (JSON.stringify(cause) ?? ""); // oxlint-disable-line typescript/no-unnecessary-condition -- cause 是 unknown，带 toJSON 返回 undefined 时 JSON.stringify 运行期返回 undefined
   const base = cfg.baseUrl.replace(/\/$/, "");
   const local = cfg.provider === "local" || isLoopbackBaseUrl(base);
   // 常见 Node undici 底层错误码
@@ -297,7 +301,7 @@ function messagesToWire(
     if (m.tool_calls) {
       base.tool_calls = m.tool_calls;
     }
-    if (m.tool_call_id) {
+    if (typeof m.tool_call_id === "string" && m.tool_call_id !== "") {
       base.tool_call_id = m.tool_call_id;
     }
     return base;
@@ -315,7 +319,9 @@ export async function getVisionLLMConfig(override?: LLMRequestOptions): Promise<
   if (visionModel === cfg.model) {
     return cfg;
   }
-  const entry = cfg.extraModels?.find((e) => e.name === visionModel && !!(e.baseUrl ?? e.apiKey));
+  const entry = cfg.extraModels?.find(
+    (e) => e.name === visionModel && Boolean(e.baseUrl ?? e.apiKey),
+  );
   return {
     ...cfg,
     model: visionModel,
@@ -359,7 +365,7 @@ const ERR_MODEL_UNCONFIGURED =
   "尚未配置生效模型：请先在「设置 → 本地模型/远程模型」中选择或填写要使用的模型名";
 
 function assertModelConfigured(cfg: LLMConfig): void {
-  if (!cfg.model?.trim()) {
+  if (!cfg.model.trim()) {
     throw new Error(ERR_MODEL_UNCONFIGURED);
   }
 }
@@ -409,6 +415,7 @@ export async function streamLLM(
   let buffer = "";
   let full = "";
 
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- SSE 读取轮询由内部 done 判据 break，`while (true)` 是刻意写法
   while (true) {
     const { done, value } = await reader.read();
     if (done) {
@@ -529,8 +536,15 @@ export async function completeLLMTools(
   // 逐条显式判空（而非 filter 后依赖类型收窄）：不同 TS 版本对
   // filter 回调的类型谓词推断不一致，显式守卫在两种版本下都能收窄。
   const toolCalls = rawCalls.flatMap((call) => {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- rawCalls 来自 LLM API 回包 JSON，元素运行期可为 null，保留 ?. 守卫
     const fn = call?.function;
-    if (!call?.id || !fn?.name || typeof fn.arguments !== "string") {
+    if (
+      typeof call?.id !== "string" || // oxlint-disable-line typescript/no-unnecessary-condition -- 同上：API 回包元素运行期可为 null，?. 是防御
+      call.id === "" ||
+      typeof fn?.name !== "string" ||
+      fn.name === "" ||
+      typeof fn.arguments !== "string"
+    ) {
       return [];
     }
     return [

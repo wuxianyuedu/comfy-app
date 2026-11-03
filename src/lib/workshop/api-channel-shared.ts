@@ -60,7 +60,7 @@ export function findStringUnderKeys(value: unknown, keys: Array<string>, depth =
   if (Array.isArray(value)) {
     for (const item of value) {
       const hit = findStringUnderKeys(item, keys, depth + 1);
-      if (hit) {
+      if (hit !== null) {
         return hit;
       }
     }
@@ -78,7 +78,7 @@ export function findStringUnderKeys(value: unknown, keys: Array<string>, depth =
   for (const v of Object.values(value)) {
     if (isRecord(v) || Array.isArray(v)) {
       const hit = findStringUnderKeys(v, keys, depth + 1);
-      if (hit) {
+      if (hit !== null) {
         return hit;
       }
     }
@@ -125,7 +125,7 @@ export function extractRemoteTaskId(payload: unknown): string | null {
 /* 取出 base64 媒体载荷并包装成 data URL；取不到则为 null。 */
 export function extractBase64DataUrl(payload: unknown, mime = "image/png"): string | null {
   const b64 = findStringUnderKeys(payload, B64_KEYS, 2);
-  if (!b64) {
+  if (b64 === null) {
     return null;
   }
   /* 有些上游直接内联一个 data URL。 */
@@ -191,9 +191,7 @@ export function extractSavedOutputs(value: unknown): Array<SavedOutput> {
  *  历史事故：条目里填了完整端点仍被无条件再拼一次，请求打到
  *  /v1/images/images/generations 而 404。纯字符串拼装，可单测。 */
 export function resolveImagesGenerationsEndpoint(baseUrl: string): string {
-  const base = String(baseUrl ?? "")
-    .trim()
-    .replace(/\/+$/, "");
+  const base = String(baseUrl).trim().replace(/\/+$/, "");
   if (/\/images\/generations$/i.test(base)) {
     return base;
   }

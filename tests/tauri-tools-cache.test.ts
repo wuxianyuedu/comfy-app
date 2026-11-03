@@ -28,6 +28,7 @@ import {
 import {
   NSIS_PLAN,
   TOOLS_MANIFEST_FILE,
+  download,
   ensure,
   listTreeFiles,
   mirrorDir,
@@ -63,10 +64,12 @@ function fixturePlan(dllContent: string) {
     ...NSIS_PLAN,
     version: "9.99",
     assets: {
-      zip: { sha256: "z".repeat(64), bytes: 1 },
+      /* url 是生产 plan 的必填件（`--download` 那一族要它）；seed/ensure 用不到，夹具给一个无效形态占位。 */
+      zip: { sha256: "z".repeat(64), bytes: 1, url: "https://fixture.invalid/nsis.zip" },
       dll: {
         sha256: crypto.createHash("sha256").update(dllContent).digest("hex"),
         bytes: dllContent.length,
+        url: "https://fixture.invalid/nsis.dll",
       },
     },
   };
@@ -86,7 +89,7 @@ function fakeCacheTree(
   const plan = fixturePlan(dllContent);
   const root = path.join(tauriRoot, NSIS_PLAN.cacheRel);
   for (const rel of plan.required) {
-    if (opts.drop?.includes(rel)) {
+    if (opts.drop?.includes(rel) === true) {
       continue;
     }
     const abs = path.join(root, ...rel.split("/"));
@@ -199,7 +202,13 @@ describe("--seed", () => {
 
     const la2 = tmpDir("seed-baddll");
     const plan = fakeCacheTree(la2).plan;
-    const bad = { ...plan, assets: { ...plan.assets, dll: { sha256: "f".repeat(64), bytes: 1 } } };
+    const bad = {
+      ...plan,
+      assets: {
+        ...plan.assets,
+        dll: { sha256: "f".repeat(64), bytes: 1, url: plan.assets.dll.url },
+      },
+    };
     const mirror2 = path.join(tmpDir("seed-baddll-tools"), "nsis", "9.99");
     const lines2: Array<string> = [];
     expect(
@@ -308,6 +317,162 @@ describe("ensure（作业起手那一格）", () => {
     });
     expect(code).toBe(1);
     expect(lines.join("\n")).toContain("与清单对不上");
+  });
+});
+
+describe("--download（即弃机那一族：从被钉的公开资产直接建镜像）", () => {
+  /* 夹具字节与 URL：sha256 按字节现算，让「哈希认不过」与「传输失败」都能被测到；
+   * zip 的「解压」由假 tar 直接在 `-C` 目录里造顶层 `nsis-<版本>/` 树（只测编排，不测真归档）。 */
+  const ZIP_BYTES = Buffer.from("fake-nsis-zip-bytes");
+  const DLL_BYTES = Buffer.from("dll-bytes");
+  const ZIP_URL = "https://fixture.invalid/nsis-9.99.zip";
+  const DLL_URL = "https://fixture.invalid/nsis_tauri_utils.dll";
+
+  const sha256hex = (buf: Buffer) => crypto.createHash("sha256").update(buf).digest("hex");
+
+  function downloadPlan() {
+    return {
+      ...NSIS_PLAN,
+      version: "9.99",
+      assets: {
+        zip: { bytes: ZIP_BYTES.length, sha256: sha256hex(ZIP_BYTES), url: ZIP_URL },
+        dll: { bytes: DLL_BYTES.length, sha256: sha256hex(DLL_BYTES), url: DLL_URL },
+      },
+    };
+  }
+
+  /**
+   * 假传输层：`curl` 按 URL 把夹具字节写到 `-o` 目标；`tar` 在 `-C` 目录造出
+   * `nsis-9.99/` 顶层树（含除 dll 外的必需件 —— dll 由 download 自己落位）。
+   */
+  function fakeDownloadRun(opts: { failZip?: boolean } = {}) {
+    const plan = downloadPlan();
+    const calls: Array<{ args: Array<string>; cmd: string }> = [];
+    const run = (cmd: string, args: Array<string>) => {
+      calls.push({ args, cmd });
+      if (cmd === "curl") {
+        const dest = args[args.indexOf("-o") + 1]!;
+        const url = args.at(-1)!;
+        if (url === ZIP_URL) {
+          if (opts.failZip) {
+            return { status: 22, stdout: "", stderr: "The requested URL returned error: 403" };
+          }
+          fs.writeFileSync(dest, ZIP_BYTES);
+          return { status: 0, stdout: "", stderr: "" };
+        }
+        if (url === DLL_URL) {
+          fs.writeFileSync(dest, DLL_BYTES);
+          return { status: 0, stdout: "", stderr: "" };
+        }
+        return { status: 22, stdout: "", stderr: "404" };
+      }
+      if (cmd === "tar") {
+        const dest = args[args.indexOf("-C") + 1]!;
+        const top = path.join(dest, `${plan.name}-${plan.version}`);
+        for (const rel of plan.required) {
+          if (rel === plan.dllRel) {
+            continue;
+          }
+          const abs = path.join(top, ...rel.split("/"));
+          fs.mkdirSync(path.dirname(abs), { recursive: true });
+          fs.writeFileSync(abs, `内容:${rel}`);
+        }
+        return { status: 0, stdout: "", stderr: "" };
+      }
+      return { status: 1, stdout: "", stderr: "unexpected cmd" };
+    };
+    return { calls, run };
+  }
+
+  it("下载成功 ⇒ 退 0：镜像与清单落盘（含 downloadedAt）、必需件齐、暂存区清干净", () => {
+    const tools = tmpDir("dl-ok-tools");
+    const plan = downloadPlan();
+    const mirror = mirrorDir(tools, plan);
+    const { calls, run } = fakeDownloadRun();
+    const lines: Array<string> = [];
+    expect(
+      download({ dryRun: false, log: (l) => lines.push(l), mirror, plan, run }),
+    ).toBe(0);
+    /* curl×2（zip + dll）+ tar×1，顺序也是这个顺序。 */
+    expect(calls.map((c) => c.cmd)).toEqual(["curl", "tar", "curl"]);
+    expect(missingRequired(mirror, plan.required)).toEqual([]);
+    /* SAFETY: 类型断言已复核 */
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(mirror, TOOLS_MANIFEST_FILE), "utf8"),
+    ) as { downloadedAt?: string; files: Array<{ path: string; sha256: string }>; version: string };
+    expect(manifest.version).toBe(plan.version);
+    expect(manifest.downloadedAt).toBeTruthy();
+    expect(manifest.files.map((f) => f.path)).toContain(plan.dllRel);
+    const dllEntry = manifest.files.find((f) => f.path === plan.dllRel);
+    expect(dllEntry?.sha256).toBe(plan.assets.dll.sha256);
+    /* 交账出口：暂存区不许留半棵树。 */
+    expect(fs.existsSync(`${mirror}.staging`)).toBe(false);
+    expect(lines.join("\n")).toContain("已下载建镜像");
+  });
+
+  it("镜像已在场（清单可读）⇒ 退 0，一次传输都不发", () => {
+    const tools = tmpDir("dl-again-tools");
+    const plan = downloadPlan();
+    const mirror = mirrorDir(tools, plan);
+    expect(
+      download({ dryRun: false, log: quiet(), mirror, plan, run: fakeDownloadRun().run }),
+    ).toBe(0);
+    const again = fakeDownloadRun();
+    const lines: Array<string> = [];
+    expect(
+      download({ dryRun: false, log: (l) => lines.push(l), mirror, plan, run: again.run }),
+    ).toBe(0);
+    expect(again.calls).toHaveLength(0);
+    expect(lines.join("\n")).toContain("不动任何东西");
+  });
+
+  it("哈希与被钉的对不上 ⇒ 退 1，不落盘、不留暂存（资产变了 ⇒ 同批改 NSIS_PLAN）", () => {
+    const tools = tmpDir("dl-badhash-tools");
+    const plan = downloadPlan();
+    plan.assets.zip = { ...plan.assets.zip, sha256: "0".repeat(64) };
+    const mirror = mirrorDir(tools, plan);
+    const lines: Array<string> = [];
+    expect(
+      download({ dryRun: false, log: (l) => lines.push(l), mirror, plan, run: fakeDownloadRun().run }),
+    ).toBe(1);
+    expect(lines.join("\n")).toContain("与被钉的那件对不上");
+    expect(fs.existsSync(mirror)).toBe(false);
+    expect(fs.existsSync(`${mirror}.staging`)).toBe(false);
+  });
+
+  it("传输失败（curl 非零）⇒ 退 2「没有结论」，不静默降级、不落盘", () => {
+    const tools = tmpDir("dl-down-tools");
+    const plan = downloadPlan();
+    const mirror = mirrorDir(tools, plan);
+    const lines: Array<string> = [];
+    expect(
+      download({
+        dryRun: false,
+        log: (l) => lines.push(l),
+        mirror,
+        plan,
+        run: fakeDownloadRun({ failZip: true }).run,
+      }),
+    ).toBe(2);
+    expect(lines.join("\n")).toContain("没有结论");
+    expect(fs.existsSync(mirror)).toBe(false);
+    expect(fs.existsSync(`${mirror}.staging`)).toBe(false);
+  });
+
+  it("目录在而清单不可读（残缺镜像）⇒ 退 1，不覆盖", () => {
+    const tools = tmpDir("dl-broken-tools");
+    const plan = downloadPlan();
+    const mirror = mirrorDir(tools, plan);
+    fs.mkdirSync(mirror, { recursive: true });
+    fs.writeFileSync(path.join(mirror, "stray.txt"), "半棵树");
+    const { calls, run } = fakeDownloadRun();
+    const lines: Array<string> = [];
+    expect(
+      download({ dryRun: false, log: (l) => lines.push(l), mirror, plan, run }),
+    ).toBe(1);
+    expect(calls).toHaveLength(0);
+    expect(lines.join("\n")).toContain("残缺镜像");
+    expect(fs.existsSync(path.join(mirror, "stray.txt"))).toBe(true);
   });
 });
 

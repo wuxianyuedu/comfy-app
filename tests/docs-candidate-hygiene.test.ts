@@ -222,7 +222,7 @@ describe("正文与用例不许成为死规则的唯一出处", () => {
       if (srcCandidates.has(candidate)) {
         continue;
       } // src 自己也在供给，不是正文造成的死规则
-      if (REGISTERED[candidate]) {
+      if (REGISTERED[candidate] !== undefined && REGISTERED[candidate] !== "") {
         continue;
       } // 逐字示例 / 检索式，已给理由
       const where = proseFiles.filter(([, text]) => spelledIn(text, candidate)).map(([f]) => f);

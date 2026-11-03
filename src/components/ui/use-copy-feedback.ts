@@ -44,7 +44,7 @@ export type CopyController = {} & CopyRunner & CopyProducer;
  * 复制失败的提示文案 —— 出口给上半句与下半句，调用处只补「可复制物在哪」（`target`）。固定句走出口、位置走参数：位置是界面事实（布局变了说法要跟着变），而「浏览器拒绝剪贴板」与落点无关。
  */
 export function copyFailureText(target?: string): string {
-  const where = target ? `${target}后复制` : "后复制";
+  const where = target !== undefined && target !== "" ? `${target}后复制` : "后复制";
   return `复制失败：剪贴板不可用，请手动选中${where}`;
 }
 

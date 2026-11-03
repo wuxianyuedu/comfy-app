@@ -28,7 +28,8 @@ function tempDir(): string {
 afterEach(() => {
   while (tempDirs.length) {
     const dir = tempDirs.pop();
-    if (dir) {
+    /* while 条件已保证队列非空，这里只判 undefined */
+    if (dir !== undefined) {
       rmSync(dir, { recursive: true, force: true });
     }
   }

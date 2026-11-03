@@ -227,7 +227,7 @@ async function pollOnce(): Promise<void> {
   }
   /* 进程活着、只是这一拍没应答（跑图满载）：这不是「掉线」观测——不计入连续失败
      （反而清零），数据保留旧值并置 stale，在线结论保持。 */
-  if (next.processAlive) {
+  if (next.processAlive === true) {
     feedLiveness(true);
     observeOnline(true);
     publish({

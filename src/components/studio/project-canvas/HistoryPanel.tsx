@@ -93,9 +93,13 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
       </div>
 
       {/* ── 作用域切换（仅在有项目时出现）──
-          此前选中给下边框、未选中没写，未选中那枚矮 2px、切换时基线上下跳。
-          改用 `ui/tabs` 的 `line` 档：选中态由 `data-active` 驱动，两枚同高同基线。 */}
-      {projectId && (
+          此前是手搓的 `<Button variant="ghost">` + 下划线三元：选中档给
+          `border-b-2 border-accent`，**未选中档根本没有那条边框** —— 于是
+          未选中的那一枚整体比选中的矮 2px，切来切去文字基线上下跳。这就是
+          「一排里选一个」的又一处手搓（与上面类型筛选同一族）。
+          改用 `ui/tabs` 的 `line` 档：它就是这一类「下划线页签」的全库实现，
+          选中态由 `data-active` 驱动（字色 / 下划线两层），两枚同高同基线。 */}
+      {projectId !== undefined && projectId !== null && projectId !== "" && (
         <Tabs
           className="gap-0"
           onValueChange={(value) => {
@@ -133,9 +137,14 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
       )}
 
       {/* ── 类型筛选（pill）──
-          此前选中只给底色/字色，字重与悬停都没钉，划过已选中项会被 `ghost` 的
-          `hover:bg-muted` 改成未选中样（ISSUE #1423）。整排交给 `ui/select-chip`：
-          选中态四层 + 自带同值 `hover:`，语义回到 radiogroup + radio。 */}
+          此前是手搓的 `<Button variant="ghost">` + 选中分支：选中档只写了
+          `bg-surface-2 text-ink-bright ring-border-strong`，字重与悬停都没钉
+          —— 划过**已选中**的那一枚时，`ghost` 变体的 `hover:bg-muted` 会把它
+          改成「未选中」的样子（用户原话「悬浮和非悬浮一个紫一个白」那一族，
+          ISSUE #1423）。整排交给 `ui/select-chip`（「一排里选一个」的全库
+          唯一实现，规范 16 §16.2.4）：选中态有底色 / 字色 / 描边 / 字重四层，
+          且自带与常态同值的 `hover:`。语义也从 `aria-pressed` 回到
+          `radiogroup` + `radio`（这一排本来就只能选一个）。 */}
       <div aria-label="按类型筛选生成记录" className="flex gap-1.5 px-4 py-3" role="radiogroup">
         {FILTER_TABS.map((filterTab) => (
           <SelectChip
@@ -151,7 +160,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
       </div>
 
       {/* ── Error banner ── */}
-      {error && (
+      {error !== null && error !== "" && (
         <div className="border-destructive/30 bg-destructive/10 mx-4 mb-2 flex items-start gap-2 rounded-lg border px-3 py-2">
           <span className="text-destructive text-2xs min-w-0 flex-1 wrap-break-word">{error}</span>
           <Button
@@ -216,7 +225,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                   })}
                 >
                   <div className="bg-canvas-deep flex aspect-square items-center justify-center overflow-hidden">
-                    {task.cover ? (
+                    {task.cover !== null && task.cover !== "" ? (
                       <MediaThumbnail
                         alt={titleOf(task)}
                         className="h-full w-full object-cover"
@@ -238,7 +247,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                     </span>
                   )}
                   <p className="text-ink-soft text-2xs truncate px-2 py-1.5">{titleOf(task)}</p>
-                  {onUse && cover && (
+                  {onUse && cover !== null && cover !== "" && (
                     <Hint accessibleName label="加入画布">
                       <Button
                         className="text-ink-soft absolute top-1 right-1 hidden rounded bg-black/70 group-hover:flex hover:bg-black/60 hover:text-white"
@@ -279,7 +288,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                   })}
                 >
                   {/* 缩略图 / 类型占位 */}
-                  {task.cover ? (
+                  {task.cover !== null && task.cover !== "" ? (
                     <div className="bg-canvas-deep size-10 shrink-0 overflow-hidden rounded-md">
                       <MediaThumbnail
                         alt={titleOf(task)}
@@ -304,7 +313,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                           {pill.label}
                         </span>
                       )}
-                      {task.status === "FAILED" && task.error && (
+                      {task.status === "FAILED" && task.error !== null && task.error !== "" && (
                         <span
                           className="text-destructive/80 text-3xs min-w-0 truncate"
                           title={task.error}
@@ -316,7 +325,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                   </div>
 
                   <div className="hidden shrink-0 items-center gap-1 pr-1 group-hover:flex">
-                    {onUse && cover && (
+                    {onUse && cover !== null && cover !== "" && (
                       <Hint accessibleName label="加入画布">
                         <Button
                           className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md"
@@ -334,7 +343,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                         </Button>
                       </Hint>
                     )}
-                    {task.cover && (
+                    {task.cover !== null && task.cover !== "" && (
                       <a
                         className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
                         download

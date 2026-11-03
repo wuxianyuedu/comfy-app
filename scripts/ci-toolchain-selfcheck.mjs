@@ -141,6 +141,7 @@ function run(cmd, args, downloadHost) {
     windowsHide: true,
     env,
   });
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout / stderr 实测为 undefined，@types/node 按 string 标
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
   return { ok: r.status === 0 && !r.error, out };
 }
@@ -161,13 +162,17 @@ function section(title) {
  * @returns {{major: number, minor: number, patch: number} | null}
  */
 export function parseVersion(text) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- text 是组件自己测出来的版本串（外部输入），类型按 string 标窄
   const m = /(\d+)\.(\d+)\.(\d+)/.exec(text ?? "");
   if (!m) {
     return null;
   }
   return {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则必需分组在 noUncheckedIndexedAccess 下仍是 string | undefined，兜底只服务于 tsc
     major: Number(m[1] ?? 0),
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上一行：必需分组按下标取在 tsc 里是 string | undefined
     minor: Number(m[2] ?? 0),
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上一行：必需分组按下标取在 tsc 里是 string | undefined
     patch: Number(m[3] ?? 0),
   };
 }
@@ -227,9 +232,10 @@ function installAndReverify() {
 export function pythonOnly() {
   section("python");
   /** @type {{command: string, path: string | null, version: string} | null} */
-  const python = findPython({
-    notes: /** @type {string[]} */ (/** @type {unknown} */ (notes)),
-  }) ?? installAndReverify();
+  const python =
+    findPython({
+      notes: /** @type {string[]} */ (/** @type {unknown} */ (notes)),
+    }) ?? installAndReverify();
   if (python) {
     console.log(`python : ${python.path ?? python.command} ${python.version}`.trim());
     return 0;

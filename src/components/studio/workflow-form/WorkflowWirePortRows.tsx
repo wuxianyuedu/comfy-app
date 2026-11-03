@@ -89,8 +89,10 @@ export function WirePortRows({
    * 一趟重渲染。指示线画的位置与 onDrop 收到的 position 同源。 */
   const [portDropPosition, setPortDropPosition] = useState<WorkflowIODropPosition>("before");
   const positionOf = (e: React.DragEvent<HTMLDivElement>): WorkflowIODropPosition => {
+    // oxlint-disable-next-line no-unnecessary-condition -- 合成/测试事件可能缺 currentTarget，? 保留为运行时守卫
     const rect = e.currentTarget?.getBoundingClientRect?.();
-    if (!rect || rect.height <= 0) {
+    const rectPresent = Boolean(rect);
+    if (!rectPresent || rect.height <= 0) {
       return "before";
     }
     return e.clientY < rect.top + rect.height / 2 ? "before" : "after";
@@ -105,7 +107,7 @@ export function WirePortRows({
         /* 输入框 / 下拉 / 按钮上起手不拖（与 widget 行同守卫）。 */
         /* SAFETY: 类型断言已复核 */
         const target = e.target as HTMLElement | null;
-        if (target?.closest?.(DRAG_CANCEL_SELECTOR)) {
+        if (target?.closest(DRAG_CANCEL_SELECTOR)) {
           e.preventDefault();
           return;
         }
@@ -118,7 +120,12 @@ export function WirePortRows({
         onPortDragStart?.(ioKey);
       },
       onDragOver: (e: React.DragEvent<HTMLDivElement>) => {
-        if (!draggingKey || draggingKey === ioKey) {
+        if (
+          draggingKey === undefined ||
+          draggingKey === null ||
+          draggingKey === "" ||
+          draggingKey === ioKey
+        ) {
           return;
         }
         e.preventDefault();
@@ -130,7 +137,12 @@ export function WirePortRows({
       },
       onDrop: (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
-        if (!onReorder || !draggingKey || draggingKey === ioKey) {
+        if (
+          draggingKey === undefined ||
+          draggingKey === null ||
+          draggingKey === "" ||
+          draggingKey === ioKey
+        ) {
           return;
         }
         const pos = positionOf(e);
@@ -165,11 +177,13 @@ export function WirePortRows({
         if (numericType && wireInput.control !== "textarea" && wireInput.control !== "image") {
           const b = numericBounds(wireInput);
           const isSeed = isSeedLike(wireInput);
-          const isDragging = onReorder && draggingKey === wireInput.ioKey;
+          const isDragging = onReorder !== undefined && draggingKey === wireInput.ioKey;
           const isDropTarget =
-            onReorder &&
+            onReorder !== undefined &&
             dragOverKey === wireInput.ioKey &&
-            draggingKey &&
+            draggingKey !== undefined &&
+            draggingKey !== null &&
+            draggingKey !== "" &&
             draggingKey !== wireInput.ioKey;
           return (
             <div
@@ -237,9 +251,11 @@ export function WirePortRows({
             {...portDrag(wireInput.ioKey)}
             className={`relative min-h-21.5 shrink-0 ${onReorder && draggingKey === wireInput.ioKey ? "opacity-50" : ""}`}
           >
-            {onReorder &&
+            {onReorder !== undefined &&
               dragOverKey === wireInput.ioKey &&
-              draggingKey &&
+              draggingKey !== undefined &&
+              draggingKey !== null &&
+              draggingKey !== "" &&
               draggingKey !== wireInput.ioKey && (
                 <div
                   className={`z-base bg-primary pointer-events-none absolute inset-x-0 h-0.5 shadow-[0_0_8px_color-mix(in_srgb,var(--color-primary)_60%,transparent)] ${portDropPosition === "before" ? "-top-px" : "-bottom-px"}`}
@@ -332,9 +348,11 @@ export function WirePortRows({
                 {...portDrag(output.ioKey)}
                 className={`relative flex h-7 shrink-0 items-center gap-2.5 pr-3.5 pl-3.5 ${onReorder && draggingKey === output.ioKey ? "opacity-50" : ""}`}
               >
-                {onReorder &&
+                {onReorder !== undefined &&
                   dragOverKey === output.ioKey &&
-                  draggingKey &&
+                  draggingKey !== undefined &&
+                  draggingKey !== null &&
+                  draggingKey !== "" &&
                   draggingKey !== output.ioKey && (
                     <div
                       className={`z-base bg-primary pointer-events-none absolute inset-x-0 h-0.5 shadow-[0_0_8px_color-mix(in_srgb,var(--color-primary)_60%,transparent)] ${portDropPosition === "before" ? "-top-px" : "-bottom-px"}`}

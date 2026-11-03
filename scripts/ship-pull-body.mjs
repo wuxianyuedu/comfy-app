@@ -37,6 +37,7 @@ export const DIFFSTAT_SAMPLE_MAX = 40;
  *   `total` 是逐行明细一共有几条（不含总计数行），`listed + omitted === total` 恒成立
  */
 export function capDiffstat(diffstat, sampleMax = DIFFSTAT_SAMPLE_MAX) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- diffstat 是 git diff --stat 的原文（外部数据），string 只是声明
   const lines = String(diffstat ?? "")
     .split(/\r?\n/)
     .filter((l) => l.trim() !== "");

@@ -85,7 +85,7 @@ vi.mock("~/lib/log/log-file-client", () => {
   const fetchLogSessions = vi.fn(async (source: string, sessionId?: string) => {
     sessionLogRequests.push({ source, session: sessionId ?? null });
     const query = new URLSearchParams({ source });
-    if (sessionId) {
+    if (sessionId !== undefined && sessionId !== "") {
       query.set("session", sessionId);
     }
     const res = await fetch(`/api/logs/sessions?${query.toString()}`);
@@ -162,7 +162,7 @@ const t = createTestTRPC();
 const mockRouter = t.router({
   setting: t.router({
     get: t.procedure.query(() => {
-      if (behavior.settingsError) {
+      if (behavior.settingsError !== undefined && behavior.settingsError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.settingsError,
@@ -171,7 +171,7 @@ const mockRouter = t.router({
       return { settings: behavior.settings ?? SETTINGS };
     }),
     save: t.procedure.mutation(() => {
-      if (behavior.saveSettingsError) {
+      if (behavior.saveSettingsError !== undefined && behavior.saveSettingsError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.saveSettingsError,
@@ -185,7 +185,7 @@ const mockRouter = t.router({
      * 那是**假红**（判据被环境吃掉），所以留一个必定计数的桩。 */
     comfyStatus: t.procedure.query(async () => {
       comfyStatusCalls += 1;
-      if (behavior.comfyStatusPending) {
+      if (behavior.comfyStatusPending === true) {
         await neverSettle();
       }
       return {
@@ -209,7 +209,7 @@ const mockRouter = t.router({
     /* Drizzle Studio：分区拉起的 status 查询与动作，均需有 mock handler，
      * 否则 onUnhandledFrame:error 会让渲染整个 hook 的用例全挂 */
     dbStudioStatus: t.procedure.query(() => {
-      if (behavior.dbStudioStatusError) {
+      if (behavior.dbStudioStatusError !== undefined && behavior.dbStudioStatusError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.dbStudioStatusError,
@@ -240,7 +240,7 @@ const mockRouter = t.router({
   }),
   llm: t.router({
     configGet: t.procedure.query(() => {
-      if (behavior.llmError) {
+      if (behavior.llmError !== undefined && behavior.llmError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.llmError,
@@ -249,7 +249,7 @@ const mockRouter = t.router({
       return { config: behavior.llm ?? LLM };
     }),
     configSave: t.procedure.mutation(() => {
-      if (behavior.saveLlmError) {
+      if (behavior.saveLlmError !== undefined && behavior.saveLlmError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.saveLlmError,

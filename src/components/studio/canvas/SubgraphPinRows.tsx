@@ -76,18 +76,22 @@ export function SubgraphPinRows({
                  *  就是哨兵边界连线）取值来自上游 —— 它们
                  *  不能被暴露成工作流输入。已连线的槽位
                  *  跳过复选框。 */}
-                {io?.ioEditMode && inName && !inInp?.isConnection && !inInp?.isBoundary && (
-                  <IoCheckbox
-                    io={io}
-                    ioRef={{
-                      nodeId: String(nodeId),
-                      hostNodeId,
-                      name: inName,
-                      kind: "param",
-                      direction: "input",
-                    }}
-                  />
-                )}
+                {io?.ioEditMode === true &&
+                  inName !== undefined &&
+                  inName !== "" &&
+                  inInp?.isConnection !== true &&
+                  inInp?.isBoundary !== true && (
+                    <IoCheckbox
+                      io={io}
+                      ioRef={{
+                        nodeId: String(nodeId),
+                        hostNodeId,
+                        name: inName,
+                        kind: "param",
+                        direction: "input",
+                      }}
+                    />
+                  )}
                 <span
                   /* 去掉 `truncate`：让长的边界端口标签
                    *  （例如 Settings 封装节点的 `Model: True = 🟡 Safetensors
@@ -128,7 +132,7 @@ export function SubgraphPinRows({
                     /* 默认右偏 5px，与左端口那颗的 `left: 5` 对称；IO 编辑模式缩到 4px
                      *  并贴住右边缘（`right: 0`）。**别把 `right` 提到 spread 之前**：
                      *  同一属性会被指定两次，TS 报 2783「此扩张将始终覆盖此属性」。 */
-                    ...(io?.ioEditMode
+                    ...(io?.ioEditMode === true
                       ? { width: 4, height: 4, opacity: 0.35, right: 0 }
                       : { width: 10, height: 10, right: 5 }),
                   }}

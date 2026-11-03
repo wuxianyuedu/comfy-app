@@ -1,9 +1,22 @@
 "use client";
-/* 分组参数控件 —— 入口（已拆分）。每组两种范式，由 StyleSwitcher 下拉切换：
- * 尺寸组（图片）分别填宽高 ⇄ 比例 + 清晰度；视频组分别填 ⇄ 时长 + 画质 + 比例。
- * 最终都经 onChange 写回真正底层 widget（width/height/length/aspect/quality），管线其余完全不动；
- * 所选范式按工作流存 localStorage。拆件：MultiSegmentPopover / StyleSwitcher / DimensionControl /
- * AspectMegapixelControl / DimensionControlParts / VideoControl / VideoField / presets / SizePresetTableModal。 */
+/* 分组参数控件 —— 入口（已拆分）。
+ *
+ * 每组两种「范式」，可由一个下拉（StyleSwitcher）切换：
+ * • 尺寸组（图片） —— 分别填写宽高 ⇄ 比例 + 清晰度（内部算宽高）
+ * • 视频组 —— 分别填写 ⇄ 时长 + 画质 + 比例
+ *
+ * 每种选择最终都经`onChange` 把**真正底层**的 widget 值
+ *（width/height/length/aspect/quality）写回去，所以管线其余部分
+ *（reconcile → toWorkflowInputsPayload → /api/generate）
+ * 完全不动。所选范式按工作流持久化在
+ * localStorage 里，好让用户的偏好扛过重新加载。
+ *
+ * 拆分为：MultiSegmentPopover.tsx / StyleSwitcher.tsx /
+ * DimensionControl.tsx（入口 + 宽高形态）/ AspectMegapixelControl.tsx
+ *（比例 + 百万像素 + 倍数形态）/ DimensionControlParts.tsx（共用零件）/
+ * 其余拆件：VideoControl.tsx / VideoField.tsx / grouped-controls-presets.ts /
+ * SizePresetTableModal.tsx（尺寸表配置）。
+ * ───────────────────────────────────────────────────────────────────────── */
 import type { DimensionGroup, EnrichedWidget, VideoGroup } from "../workflow-io";
 import { DimensionControl } from "./DimensionControl";
 import { VideoControl } from "./VideoControl";
@@ -59,20 +72,26 @@ function GroupedControls({
   const keys = new Set<string>();
   for (const group of [dimension, video]) {
     for (const entry of groupEntries(group)) {
-      if (entry?.ioKey) {
+      if (entry.ioKey) {
         keys.add(entry.ioKey);
       }
     }
   }
-  /* 画布/库内（compact）把组合控件收窄成同一块控件：控件照旧画（比例/像素/倍数的录入入口，带下拉菜单），
-   * 只是宽度按内容收窄、整块贴右沿；覆盖到的参数以真正参数行摆在框外左侧，一行一个、带大端点。
-   * 用户口径（ISSUE #355）：「红框部分对齐到右侧，左侧留出的区域放置那三个参数……圆点要和其他参数一致」。
-   * collapseGrouped={false} 保留完整录入（宽版表单 / CreatePanel 的既有观感）。 */
-  const narrow = compact && keys.size > 0 && collapseGrouped !== false;
+  /* 画布 / 库内（`compact`）把组合控件**收窄成同一块控件** —— 控件本身照旧画出来
+   * （它就是这几个端口的录入入口，带下拉菜单切换比例 / 像素 / 倍数），只是宽度按
+   * 内容收窄、整块贴右沿。
+   *
+   * 覆盖到的参数以**真正的参数行**形态摆在框外左侧：一行一个、各带与节点上其他
+   * 输入行同款的大端点。用户口径是「红框部分对齐到右侧，左侧留出的区域放置那三个
+   * 参数，三个参数要到框外，参数左侧的圆点要和其他参数一致」（ISSUE #355）。
+   *
+   *`collapseGrouped={false}` 保留组合控件的完整录入能力（宽版表单 / CreatePanel
+   * 的既有观感：作者在那里要的是整块录入，不是收窄控件）。 */
+  const narrow = compact === true && keys.size > 0 && collapseGrouped !== false;
 
   return (
     <>
-      {!compact && <SectionHeader accent={SECTION_ACCENT} count={count} label="组合参数" />}
+      {compact !== true && <SectionHeader accent={SECTION_ACCENT} count={count} label="组合参数" />}
       <div className="flex-col gap-3">
         {dimension && (
           <DimensionControl

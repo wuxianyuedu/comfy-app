@@ -43,7 +43,7 @@ const COLOR_TOKEN = /^--color-[a-z0-9-]+$/;
 function collectBareTokenCitations(text: string): Array<string> {
   const names = new Set<string>();
   for (const match of text.matchAll(/`(--color-[a-z0-9-]+)`/g)) {
-    if (match[1]) {
+    if (match[1] !== undefined && match[1] !== "") {
       names.add(match[1]);
     }
   }
@@ -65,10 +65,11 @@ type HexRow = {
 /** 单元格必须是**单独一颗**且**形如** `shape` 的行内代码。 */
 function singleCodeSpan(cell: string, shape: RegExp): string | null {
   const match = /^`([^`]+)`$/.exec(cell);
-  if (!match?.[1]) {
+  const span = match?.[1];
+  if (span === undefined || span === "") {
     return null;
   }
-  return shape.test(match[1]) ? match[1] : null;
+  return shape.test(span) ? span : null;
 }
 
 function parseHexCell(cell: string): string | null {
@@ -94,18 +95,18 @@ function collectHexRows(section: string): Array<HexRow> {
     }
     // slice(1, -1) 已去掉首尾两个空格子 ⇒ 列序是 0 角色 / 1 token / 2 浅色 / 3 深色 / 4 用途
     const token = singleCodeSpan(cells[1] ?? "", COLOR_TOKEN);
-    if (!token) {
+    if (token === null || token === "") {
       continue;
     }
     const light = parseHexCell(cells[2] ?? "");
     const dark = (cells[3] ?? "").includes("同值") ? light : parseHexCell(cells[3] ?? "");
-    if (!light && !dark) {
+    if ((light === null || light === "") && (dark === null || dark === "")) {
       continue;
     }
     rows.push({
       token,
-      ...(light ? { light } : {}),
-      ...(dark ? { dark } : {}),
+      ...(light !== null && light !== "" ? { light } : {}),
+      ...(dark !== null && dark !== "" ? { dark } : {}),
     });
   }
   return rows;
@@ -123,17 +124,19 @@ function sectionBetween(text: string, heading: string): string | null {
 
 /** 归一化产物值：只认 `#rrggbb` / `#rgb`，其余返回 null（该格不比）。 */
 function normalizeCssHex(value: string | undefined): string | null {
-  if (!value) {
+  if (value === undefined || value === "") {
     return null;
   }
   const raw = value.trim().toLowerCase();
   const six = /^#([0-9a-f]{6})$/.exec(raw);
-  if (six?.[1]) {
-    return `#${six[1]}`;
+  const sixHex = six?.[1];
+  if (sixHex !== undefined && sixHex !== "") {
+    return `#${sixHex}`;
   }
   const three = /^#([0-9a-f]{3})$/.exec(raw);
-  if (three?.[1]) {
-    return `#${[...three[1]].map((c) => c + c).join("")}`;
+  const threeHex = three?.[1];
+  if (threeHex !== undefined && threeHex !== "") {
+    return `#${[...threeHex].map((c) => c + c).join("")}`;
   }
   return null;
 }
@@ -148,7 +151,7 @@ function findHexMismatch(
     /* SAFETY: 类型断言已复核 */
     for (const state of ["light", "dark"] as const) {
       const doc = row[state];
-      if (!doc) {
+      if (doc === undefined || doc === "") {
         continue;
       }
       const actual = normalizeCssHex(resolve(row.token, state)) ?? "(产物里不是单一 hex)";
@@ -279,7 +282,7 @@ function scanProduct(pattern: RegExp): Array<{ file: string; value: string }> {
     const code = stripComments(readFileSync(abs, "utf8"));
     const rel = path.relative(ROOT_DIR, abs).split(path.sep).join("/");
     for (const m of code.matchAll(pattern)) {
-      if (m[1]) {
+      if (m[1] !== undefined && m[1] !== "") {
         hits.push({ file: rel, value: m[1] });
       }
     }
@@ -705,7 +708,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     ).toBeGreaterThanOrEqual(12);
 
     const unregistered = [...inUse.keys()]
-      .filter((v) => !OUT_OF_THEME_SIZES[v])
+      .filter((v) => OUT_OF_THEME_SIZES[v] === undefined || OUT_OF_THEME_SIZES[v] === "")
       .sort((a, b) => Number(a) - Number(b));
     expect(
       unregistered,
@@ -1057,7 +1060,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     const EXEMPT = new Set(["section", "page", "stage"]);
     const names = [
       ...readFileSync(GLOBALS_PATH, "utf8").matchAll(/^\s*--text-([a-z0-9]+)\s*:/gm),
-    ].flatMap((m) => (m[1] ? [m[1]] : []));
+    ].flatMap((m) => (m[1] !== undefined && m[1] !== "" ? [m[1]] : []));
     expect(names.length, "一颗 --text-* 都没解出来（正则漂了，这条会静默全绿）").toBeGreaterThan(4);
     const bad = names.filter((n) => !TSHIRT_NAME.test(n) && !EXEMPT.has(n));
     expect(

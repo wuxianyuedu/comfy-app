@@ -32,11 +32,11 @@ export function resolveEdgeFocus({
   const source = endpoints.source;
   const target = endpoints.target;
 
-  const sourceId = source ? resolveNodeId(source) : null;
-  const targetId = target ? resolveNodeId(target) : null;
+  const sourceId = source !== null && source !== "" ? resolveNodeId(source) : null;
+  const targetId = target !== null && target !== "" ? resolveNodeId(target) : null;
 
-  const sourceSelected = sourceId ? isSelected(sourceId) : false;
-  const targetSelected = targetId ? isSelected(targetId) : false;
+  const sourceSelected = sourceId !== null && sourceId !== "" ? isSelected(sourceId) : false;
+  const targetSelected = targetId !== null && targetId !== "" ? isSelected(targetId) : false;
 
   if (targetSelected && !sourceSelected) {
     return "upstream";
@@ -259,8 +259,14 @@ export function resolvePortFocusRoles({
     if (connection.paramMap === true) {
       continue;
     }
-    const source = connection.source ? resolveSourceId(connection.source) : null;
-    const target = connection.target ? resolveTargetId(connection.target) : null;
+    const source =
+      connection.source !== null && connection.source !== ""
+        ? resolveSourceId(connection.source)
+        : null;
+    const target =
+      connection.target !== null && connection.target !== ""
+        ? resolveTargetId(connection.target)
+        : null;
     const sourceSelected = source !== null && selectedIds.has(source);
     const targetSelected = target !== null && selectedIds.has(target);
     if (!sourceSelected && !targetSelected) {
@@ -274,10 +280,20 @@ export function resolvePortFocusRoles({
     const role: PortFocusRole =
       sourceSelected && targetSelected ? "related" : targetSelected ? "upstream" : "downstream";
 
-    if (target !== null && targetHandle) {
+    if (
+      target !== null &&
+      targetHandle !== null &&
+      targetHandle !== undefined &&
+      targetHandle !== ""
+    ) {
       assignPortRole(bucket(target), targetHandle, role);
     }
-    if (source !== null && sourceHandle) {
+    if (
+      source !== null &&
+      sourceHandle !== null &&
+      sourceHandle !== undefined &&
+      sourceHandle !== ""
+    ) {
       assignPortRole(bucket(source), portHandleId("source", sourceHandle), role);
     }
   }

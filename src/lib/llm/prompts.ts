@@ -20,6 +20,7 @@ function asText(v: unknown, fallback = ""): string {
     return fallback;
   }
   if (typeof v === "object") {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 对象带 toJSON 返回 undefined 时 JSON.stringify 运行期确实返回 undefined
     return JSON.stringify(v) ?? fallback;
   }
   if (typeof v === "function") {
@@ -76,11 +77,13 @@ export function buildCharacterMessages(c: {
 }): Array<LLMMessage> {
   const brief = [
     c.name ? `名字：${c.name}` : "",
-    c.appearance ? `已有外貌：${c.appearance}` : "",
-    c.costume ? `已有服装：${c.costume}` : "",
-    c.personality ? `已有性格：${c.personality}` : "",
-    c.styleTags?.length ? `风格标签：${c.styleTags.join("、")}` : "",
-    c.skillName ? `艺术风格：${c.skillName}` : "",
+    c.appearance !== undefined && c.appearance !== "" ? `已有外貌：${c.appearance}` : "",
+    c.costume !== undefined && c.costume !== "" ? `已有服装：${c.costume}` : "",
+    c.personality !== undefined && c.personality !== "" ? `已有性格：${c.personality}` : "",
+    c.styleTags !== undefined && c.styleTags.length > 0
+      ? `风格标签：${c.styleTags.join("、")}`
+      : "",
+    c.skillName !== undefined && c.skillName !== "" ? `艺术风格：${c.skillName}` : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -98,6 +101,7 @@ export type RawCharacter = {
 
 export function parseCharacter(text: string): RawCharacter {
   /* SAFETY: 类型断言已复核 */
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- extractJson 走 JSON.parse，回复是字面量 null 时运行期返回 null，`?? {}` 是唯一防线
   const obj = (extractJson(text) as Record<string, unknown>) ?? {};
 
   return {
@@ -128,6 +132,7 @@ export type RawCharacterFull = {
 
 export function parseCharacterFull(text: string): RawCharacterFull {
   /* SAFETY: 类型断言已复核 */
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：extractJson 遇 JSON 字面量 null 时返回 null，`?? {}` 是唯一防线
   const obj = (extractJson(text) as Record<string, unknown>) ?? {};
 
   return {

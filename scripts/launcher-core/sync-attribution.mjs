@@ -59,6 +59,7 @@ const NEXT_CONFIG_RE = /(?:^|\/)next\.config\.(?:js|ts|mjs|cjs)$/;
 export function parseDiffEntries(output) {
   /** @type {DiffEntry[]} */
   const entries = [];
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- output 入参声明 string，调用方喂的是 git 子进程输出（可能为 null/undefined）
   for (const rawLine of String(output ?? "").split("\n")) {
     const line = rawLine.trim();
     if (line === "") {
@@ -67,6 +68,7 @@ export function parseDiffEntries(output) {
     const parts = line.split("\t");
     const rawStatus = parts[0];
     const firstPath = parts[1];
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 无制表符的怪行 parts[1] 运行时为 undefined（git 输出是外部数据）
     if (rawStatus === undefined || firstPath === undefined) {
       continue;
     }
@@ -76,6 +78,7 @@ export function parseDiffEntries(output) {
     }
     if (parts.length >= 3) {
       const newPath = parts[2];
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 上方长度闸已保证有值，守卫为 noUncheckedIndexedAccess 收窄
       if (newPath === undefined) {
         continue;
       }
@@ -110,6 +113,7 @@ export function classifyChanges(entries) {
   let shell = false;
   let other = 0;
 
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 导出函数入参防御：调用方运行时可传 null/undefined
   for (const entry of entries ?? []) {
     const { status, path, oldPath } = entry;
     const name = baseName(path);

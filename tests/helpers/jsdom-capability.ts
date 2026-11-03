@@ -111,7 +111,8 @@ export function createJsdomCapabilityGate(
 
   return {
     consume(error) {
-      if (!error || typeof error.message !== "string") {
+      const hasError = Boolean(error);
+      if (!hasError || typeof error.message !== "string") {
         return false;
       }
       /* 第 ② 条口径：只有 jsdom 自己那条「能力缺口」通道有资格被吞。 */

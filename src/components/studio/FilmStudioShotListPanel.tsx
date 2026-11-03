@@ -67,7 +67,7 @@ export function FilmStudioShotListPanel({
                 variant="ghost"
               >
                 {/* Thumbnail：项目镜头有产出图则显缩略图，否则占位 */}
-                {shot.thumbnailUrl ? (
+                {shot.thumbnailUrl !== undefined && shot.thumbnailUrl !== "" ? (
                   <MediaThumbnail
                     className="h-12 w-14 shrink-0 rounded-md object-cover"
                     src={shot.thumbnailUrl}

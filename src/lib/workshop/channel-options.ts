@@ -42,7 +42,9 @@ export function channelSelectionDisplayValue(value: string, config: LLMConfigVie
   if (value) {
     return value;
   }
-  return config?.model ? channelOptionValue(config.provider, config.model) : "";
+  return config !== null && config.model !== ""
+    ? channelOptionValue(config.provider, config.model)
+    : "";
 }
 
 /** provider → 中文标签，供提示与成功状态统一口径 */

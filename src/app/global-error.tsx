@@ -34,7 +34,7 @@ export default function GlobalError({
               <h1 className="u-title-page">应用发生严重错误</h1>
               <p className="text-muted-foreground mt-2 max-w-md">
                 界面渲染时出现了未捕获的错误
-                {error.digest ? `（${error.digest}）` : ""}
+                {error.digest !== undefined && error.digest !== "" ? `（${error.digest}）` : ""}
                 。你可以重试，或返回首页。
               </p>
             </div>

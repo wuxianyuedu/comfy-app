@@ -94,7 +94,9 @@ import ts from "typescript";
  */
 function walk(root, fn) {
   fn(root);
-  ts.forEachChild(root, (child) => walk(child, fn));
+  ts.forEachChild(root, (child) => {
+    walk(child, fn);
+  });
 }
 
 /**
@@ -370,9 +372,11 @@ function identifierUsed(source, name) {
     }
     /* import 子句里的那几个标识符不算「用到」。 */
     const parent = node.parent;
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 根节点的 parent 运行时为 undefined（TS 类型声明不含该分量）
     if (parent !== undefined && ts.isImportSpecifier(parent)) {
       return;
     }
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上
     if (parent !== undefined && ts.isImportClause(parent)) {
       return;
     }
@@ -434,6 +438,7 @@ export function missingRequiredArgs(storyFile, givenArgs) {
         return;
       }
       for (const member of node.members) {
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- TS AST 成员的 name 在声明文件等形态下运行时可缺
         if (!ts.isPropertySignature(member) || member.name === undefined) {
           continue;
         }
@@ -473,6 +478,7 @@ function assignedNamesIn(source) {
     return out;
   }
   walk(source, (node) => {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- TS AST 节点的 name 形态运行时不受声明约束（可为 undefined）
     if (ts.isJsxAttribute(node) && node.name !== undefined) {
       out.add(propName(node.name.getText(source)));
       return;
@@ -482,6 +488,7 @@ function assignedNamesIn(source) {
         ts.isShorthandPropertyAssignment(node) ||
         ts.isPropertySignature(node) ||
         ts.isBindingElement(node)) &&
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：name 运行时可缺
       node.name !== undefined
     ) {
       out.add(propName(node.name.getText(source)));
@@ -564,6 +571,7 @@ function hasInputSideReference(file, name) {
 function isReturnTypePosition(node) {
   /** @type {ts.Node} */
   let current = node;
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 根节点的 parent 运行时为 undefined（TS 类型声明不含该分量）
   while (current.parent !== undefined) {
     const parent = current.parent;
     if (
@@ -640,6 +648,7 @@ function referencedPropsInterfaces(component, componentFile) {
       const touched = node.members.some(
         (m) =>
           ts.isPropertySignature(m) &&
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- TS AST 成员的 name 在声明文件等形态下运行时可缺
           m.name !== undefined &&
           identifiers.has(propName(m.name.getText(file))),
       );

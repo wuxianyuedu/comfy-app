@@ -48,7 +48,7 @@ function loadOrCreateKey(): Buffer {
     return cachedKey;
   } catch {
     const envSecret = process.env[ENV_VAR] ?? process.env[ENV_VAR.toLowerCase()];
-    if (envSecret && envSecret.trim().length >= 8) {
+    if (envSecret !== undefined && envSecret.trim().length >= 8) {
       cachedKey = deriveKey(envSecret.trim());
       return cachedKey;
     }
@@ -63,7 +63,7 @@ export function isEncrypted(value: string): boolean {
 }
 
 export function encryptLlmKey(plaintext: string | null | undefined): string | null {
-  if (!plaintext) {
+  if (plaintext === undefined || plaintext === null || plaintext === "") {
     return null;
   }
   const iv = randomBytes(12);
@@ -74,7 +74,7 @@ export function encryptLlmKey(plaintext: string | null | undefined): string | nu
 }
 
 export function decryptLlmKey(enc: string | null | undefined): string | null {
-  if (!enc) {
+  if (enc === undefined || enc === null || enc === "") {
     return null;
   }
   if (!isEncrypted(enc)) {
@@ -83,7 +83,14 @@ export function decryptLlmKey(enc: string | null | undefined): string | null {
   try {
     const body = enc.slice(PREFIX.length);
     const [ivB64, tagB64, ctB64] = body.split(":");
-    if (!ivB64 || !tagB64 || !ctB64) {
+    if (
+      ivB64 === undefined ||
+      ivB64 === "" ||
+      tagB64 === undefined ||
+      tagB64 === "" ||
+      ctB64 === undefined ||
+      ctB64 === ""
+    ) {
       return null;
     }
     const decipher = createDecipheriv(ALGO, loadOrCreateKey(), Buffer.from(ivB64, "base64"));

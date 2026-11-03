@@ -136,6 +136,7 @@ function parsePairs() {
      * 否则下面每一处 `f.endsWith(".ps1")` 都要重新问一遍「这会不会是 undefined」。 */
     const files = [...line.matchAll(/`([\w./-]+\.(?:ps1|mjs|cjs|py))`/g)]
       .map((m) => m[1])
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 捕获组按下标取被标成 string，filter 防正则改动后的失配
       .filter((f) => f !== undefined);
     if (files.length === 0) {
       continue;
@@ -290,6 +291,7 @@ function readmeSection(title) {
   for (let i = start + 1; i < lines.length; i++) {
     const line = lines[i] ?? "";
     const m = line.match(/^(#+)\s/);
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则只有一组捕获，`?? ""` 是 noUncheckedIndexedAccess 下的类型兜底
     if (m && (m[1] ?? "").length <= level) {
       break;
     }
@@ -309,6 +311,7 @@ function readmeSection(title) {
  * @param {RegExp} re 必须带一个捕获组，取的就是那一组
  * @returns {string[]} */
 function pathsIn(text, re) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 捕获组按下标取被标成 string，filter 防调用点正则失配
   return [...text.matchAll(re)].map((m) => m[1]).filter((p) => p !== undefined);
 }
 
@@ -434,6 +437,7 @@ function checkReadmeEntryList() {
   const indexed = new Set(
     (indexText === null ? [] : [...indexText.matchAll(/`((?:tools\/)?[\w-]+\/[\w.-]+\.ps1)`/g)])
       .map((m) => m[1])
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 捕获组按下标取被标成 string，filter 防正则改动后的失配
       .filter((p) => p !== undefined)
       .map((p) => (p.startsWith("tools/") ? p : `tools/${p}`)),
   );

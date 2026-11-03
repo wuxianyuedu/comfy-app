@@ -78,12 +78,12 @@ function staticSpecifiers(source: string): Array<string> {
   const code = stripComments(source);
   const specs: Array<string> = [];
   for (const m of code.matchAll(/from\s+["']([^"']+)["']/g)) {
-    if (m[1]) {
+    if (m[1] !== undefined && m[1] !== "") {
       specs.push(m[1]);
     }
   }
   for (const m of code.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)) {
-    if (m[1]) {
+    if (m[1] !== undefined && m[1] !== "") {
       specs.push(m[1]);
     }
   }
@@ -306,7 +306,7 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
     const ignore = read(".gitignore")
       .split(/\r?\n/)
       .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("#"));
+      .filter((line) => line !== "" && !line.startsWith("#"));
     expect(ignore).toContain("/.storybook/generated/");
     expect(ignore).toContain("/.storybook/assets/");
     expect(
@@ -750,7 +750,7 @@ function resolveTscBin(): {
     } catch {
       continue;
     }
-    if (!bin) {
+    if (bin === undefined || bin === "") {
       continue;
     }
     const file = path.resolve(path.dirname(pkgJson), bin);

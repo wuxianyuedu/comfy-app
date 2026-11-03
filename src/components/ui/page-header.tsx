@@ -57,7 +57,9 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   /* `description` 常驻优先：两者传同一个值时不该在屏上出现两遍（正文那条口径）。 */
-  const helpText = description ? undefined : help;
+  const hasDescription = Boolean(description);
+  const helpText = hasDescription ? undefined : help;
+  const hasTitleSuffix = Boolean(titleSuffix);
   /* 省略可见标题时，屏名退到 `sr-only` —— 视觉上不再占那一行，但读屏仍能按标题
      跳转、`h1` 也还在（ISSUE #1693 要的是「别占空间」，不是「没有标题」）。 */
   const hiddenTitle = title === undefined ? srTitle : undefined;
@@ -66,11 +68,7 @@ export function PageHeader({
      ⚠️ `helpText` **不算**这一列的成员：没有可见标题时它并到右侧动作组去
      （孤零零贴在最左边会与页签、动作组各隔一大片空白），算进来就会渲染出一个
      只有一颗图标按钮、其余全空的壳。 */
-  const hasTitleBlock =
-    title !== undefined ||
-    titleSuffix !== undefined ||
-    extra !== undefined ||
-    (title !== undefined && helpText !== undefined);
+  const hasTitleBlock = title !== undefined || titleSuffix !== undefined || extra !== undefined;
 
   return (
     <header
@@ -86,7 +84,7 @@ export function PageHeader({
             {title === undefined ? null : (
               <Heading className="font-title u-title-page min-w-0 truncate">{title}</Heading>
             )}
-            {titleSuffix ? (
+            {hasTitleSuffix ? (
               <span className="text-ink-fainter shrink-0 text-xs">{titleSuffix}</span>
             ) : null}
             {/* 有可见标题时说明钮跟在标题右侧（读者在「这一屏叫什么」的地方
@@ -94,7 +92,7 @@ export function PageHeader({
                 否则它会孤零零贴在页头最左边、与页签和动作组都隔着一大片空白。 */}
             {title !== undefined && helpText !== undefined ? <HeaderHelp text={helpText} /> : null}
           </div>
-          {description ? <p className="text-ink-muted mt-1 text-sm">{description}</p> : null}
+          {hasDescription ? <p className="text-ink-muted mt-1 text-sm">{description}</p> : null}
           {extra}
         </div>
       ) : null}

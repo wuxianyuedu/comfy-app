@@ -60,7 +60,7 @@ export function relativeSpecifiers(source: string): Array<string> {
     let m: RegExpExecArray | null;
     while ((m = re.exec(source))) {
       const spec = m[1];
-      if (spec?.startsWith(".")) {
+      if (spec?.startsWith(".") === true) {
         out.push(spec);
       }
     }

@@ -26,6 +26,11 @@
  *   3. **结论带证据**：返回体里带上 out 目录绝对路径、跑之前 / 跑之后的文件数与
  *      探针 mtime、typedoc 日志尾巴 —— 「产物没更新」这种事，没有这些数就只能靠猜。
  *
+ * 另：**类型检查不归这一跳**（ISSUE #2843）。typedoc 默认会先自己跑一趟 TS 类型检查，
+ * 那与「产物写出来没有」无关，且结论与 `tsc --noEmit` 完全同源 —— 起进程时带
+ * `--skipErrorChecking`，type error 由 PR 档的 `tsc` 承担；warning 类（未收录符号 /
+ * 死链 / JSDoc 漂移）照报不误，见 `tests/typedoc-run.test.ts` 钉住的那条 argv。
+ *
  * 谁在用它（**只此一处实现**，调用方不许再自己 `spawn` typedoc）：
  *   · `scripts/generate-api-docs.mjs`（= `pnpm run docs`，真写入 `docs/api`）；
  *   · `scripts/check-docs-api.cjs`（= `pnpm docs:check`，重生成到临时目录再比对）。
@@ -174,6 +179,21 @@ export function judgeRun(run, { after, startedAt }) {
 }
 
 /**
+ * 起 typedoc 的参数面 —— **唯一出处**（`spawnTypedoc` 只照这份起进程）。
+ *
+ * 为什么把它单独拎出来（ISSUE #2843）：参数面此前只活在 `spawn` 那一行里，
+ * 而用例层拿不到注入缝里的真参数（`spawnImpl` 替换的正是起进程那一步）——
+ * 「`--skipErrorChecking` 在不在」就只能靠读源码猜。导出这份构造器，用例直接断言
+ * 数组内容，参数面任何增删都会当场红。
+ *
+ * @param {string} outDir 输出目录
+ * @returns {string[]}
+ */
+export function typedocArgs(outDir) {
+  return ["--out", outDir, "--skipErrorChecking"];
+}
+
+/**
  * 起一次 typedoc：日志**原样透传**（给使用者看），同时攒一份尾巴（给结论用）。
  * @param {string} entry typedoc 的 JS 入口（`resolveTypedocEntry` 的产出）
  * @param {string} outDir 输出目录（绝对路径）
@@ -185,7 +205,12 @@ async function spawnTypedoc(entry, outDir, root) {
     // shell 层 —— DEP0190（args 数组 + 开 shell）与「含空格路径自己括引号」
     // 两个形态一起消失，参数由 Node 原生转义（与 `run-affected-tests.mjs` /
     // `check-format.cjs` 那批 `spawnSync(process.execPath, [entry, …])` 同一链路）。
-    const child = spawn(process.execPath, [entry, "--out", outDir], {
+    // `--skipErrorChecking`（ISSUE #2843）：typedoc 默认会在生成前自己再跑一趟完整
+    // 类型检查，而那一趟与本模块要判的东西无关 —— 类型由 PR 档的 `tsc --noEmit` 承担
+    // （同一个 `tsc`，typedoc 只是又跑一遍）。本模块判的是「产物写出来没有」，所以
+    // 这趟重复检查必须跳过。warning 类（未收录符号 / 死链 / JSDoc 漂移）**不受此旗标
+    // 影响**，仍照报，日志尾巴与退出码都不吃它。
+    const child = spawn(process.execPath, [entry, ...typedocArgs(outDir)], {
       cwd: root,
       env: { ...process.env },
     });
@@ -197,10 +222,12 @@ async function spawnTypedoc(entry, outDir, root) {
         lines.splice(0, lines.length - 400);
       }
     };
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawn 的 stdout 在 stdio 配置变化或子进程起不来时运行时为 null
     child.stdout?.on("data", (b) => {
       process.stdout.write(b);
       keep(b);
     });
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：stderr
     child.stderr?.on("data", (b) => {
       process.stderr.write(b);
       keep(b);
@@ -211,8 +238,12 @@ async function spawnTypedoc(entry, outDir, root) {
         .filter(Boolean)
         .slice(-LOG_TAIL_LINES)
         .join("\n");
-    child.on("error", (error) => resolve({ status: null, signal: null, error, log: tail() }));
-    child.on("close", (status, signal) => resolve({ status, signal, error: null, log: tail() }));
+    child.on("error", (error) => {
+      resolve({ status: null, signal: null, error, log: tail() });
+    });
+    child.on("close", (status, signal) => {
+      resolve({ status, signal, error: null, log: tail() });
+    });
   });
 }
 
@@ -242,7 +273,9 @@ export async function runTypedoc({
   attempts = DEFAULT_ATTEMPTS,
   backoff = DEFAULT_BACKOFF_MS,
   spawnImpl = spawnTypedoc,
-  onProgress = (msg) => console.error(`[typedoc] ${msg}`),
+  onProgress = (msg) => {
+    console.error(`[typedoc] ${msg}`);
+  },
 }) {
   const total = Math.max(1, attempts);
   const entry = resolveTypedocEntry(root);

@@ -148,7 +148,7 @@ export function PortHandle({
    *  （行的左沿 + 行高中线并不等于圆点位置 —— 组合控件折叠后行是两行结构，
    *  圆点锁在标签行中线，按整行 50% 量就会把线画到圆点下方十几像素处，表现为
    *  「线没有连接到端点上」）。 */
-  if (!nodeId) {
+  if (nodeId === null || nodeId === "") {
     return <span aria-hidden data-port-dot={id} style={dotStyle} />;
   }
 

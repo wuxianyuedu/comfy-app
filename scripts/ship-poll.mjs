@@ -32,8 +32,18 @@ import {
   downstreamSkipped,
   enrichStageErrors,
   inFlightStages,
+  progressReadout,
+  stalledStages,
+  stallReadout,
 } from "./ci-build-readout.mjs";
-import { CODE, readPullVerdict } from "./ship-core.mjs";
+import {
+  classifyPrMergeable,
+  CODE,
+  codeTag,
+  conflictAdviceLines,
+  readPullVerdict,
+} from "./ship-core.mjs";
+import { reportConflictStage, reportStage } from "./ship-stage.mjs";
 
 /**
  * 轮询的**同签名断流**上限：连续这么多次读到同一件事就不再读。
@@ -48,6 +58,17 @@ import { CODE, readPullVerdict } from "./ship-core.mjs";
  * 也不是把上限调大：那只是把误掐概率换小，两件事仍然分不开。
  */
 const POLL_STALL_MAX = 10;
+
+/**
+ * 停摆读数（ISSUE #2901）的告警阈值：一格 `start` + `endTime<=startTime` 超过这么多分钟，
+ * 就在轮询里明说「疑似 runner 失联」并给出出口。
+ *
+ * 与 `ship-diagnose.mjs` 的 `DIAGNOSE_STALL_MINUTES` 同一个数（10）：它答的是「隔了 10 分钟
+ * 还没动」，这里答的是「这一格从开始到现在过了 10 分钟还没回来」—— 同一件事的两个读法。
+ * ⚠️ 这是**读数**，不参与退码（硬规则 28③）：断流那一判一个字没改，仍旧是
+ * 「签名不变 + 没有一格在飞 + 10 眼」。它只是把「等 2h24m 兜底超时」这条路说出来。
+ */
+const POLL_STALLED_MINUTES = 10;
 
 /**
  * 平台侧那份分类 → 这一层用的形状。
@@ -80,19 +101,23 @@ export function toShipBuildState(state) {
  *   now: ()=>number,
  *   sleep: (ms:number)=>void | Promise<void>,
  *   number?: number | string | null,
+ *   baseRef?: string | null,
  * }} ctx
  *   `number` 是可选的 PR 号（建/复用 PR 之后才有）。给了它，「按 sha 还没解析到
  *   build」那一格会顺带读一眼 `get-pull` 的 `mergeable_state` / `blocked_on` ——
  *   ISSUE #2645：CI「没起」与「红了」在读数上长得像，而真因常在**冲突**
- *   （`mergeable_state=conflict` 的 PR 平台不派生构建），那一句能把人从「再等等 /
- *   换分支名」那条冤枉路上拽回来。没给（例如只是轮询、还不知道 PR 号）就只念旧文案。
+ *   （`mergeable_state=conflict` 的 PR 平台不派生构建）。读到冲突**当场收口**
+ *   （ISSUE #3083：念警告却继续轮满 10 眼是「说别干等、行为在干等」的自相矛盾）；
+ *   缺键 / 平台还在算按「未知」念一句、继续轮。没给 `number` 就只念旧文案。
+ *   `baseRef` 只用于冲突那一支的出口话术（点名该合哪条基线）；不给就念占位写法。
  * @returns {Promise<{buildState:"green"|"red"|"cancelled"|"running"|"unknown",buildSn:string|null,stop:number|null}>}
- *   `stop` 非 null 时调用方直接以此码收尾 —— 两种形状都落这里：执行者不在（**还没钉住
- *   build 时**取不到列表；钉住之后不再拉列表，ISSUE #3070），以及**同签名断流**
- *   （连着 `POLL_STALL_MAX` 眼读数没变、**且此刻没有任何一格在飞**，再等下去只是重复同一句话）。
+ *   `stop` 非 null 时调用方直接以此码收尾 —— 三种形状都落这里：执行者不在（**还没钉住
+ *   build 时**取不到列表；钉住之后不再拉列表，ISSUE #3070 ⇒ `CODE.NOT_RUN`）、**同签名断流**
+ *   （连着 `POLL_STALL_MAX` 眼读数没变、**且此刻没有任何一格在飞**，再等下去只是重复同一句话
+ *   ⇒ `CODE.CI_PENDING`），以及 **PR 冲突**（平台永不派生，当场退 `CODE.CONFLICT`，ISSUE #3083）。
  */
 export async function pollUntilTerminal(ctx) {
-  const { run, log, slug, newSha, now, sleep, number } = ctx;
+  const { run, log, slug, newSha, now, sleep, number, baseRef = null } = ctx;
   let buildState = /** @type {"green"|"red"|"cancelled"|"running"|"unknown"} */ ("unknown");
   let buildSn = null;
   const deadline = now() + 45 * 60 * 1000;
@@ -112,6 +137,8 @@ export async function pollUntilTerminal(ctx) {
   let sameSig = 0;
   /** 「这一轮已经因为格数续过命」的标记：每轮只念一次那句说明（见下面计数那一段）。 */
   let announcedFlight = false;
+  /** 「停摆读数已经念过」的标记（ISSUE #2901）：同一句话每 20 秒复述一遍与复述「没变化」同类。 */
+  let announcedStalled = false;
   for (;;) {
     /* ISSUE #3070：sha→sn 的映射一旦钉住就不再变（sha 在进平台段前已钉死，ISSUE #2812；
      * sn 是平台分配的）—— 钉住之后每 20 秒再拉一次全量列表，只是在重复确认同一件事，
@@ -130,6 +157,8 @@ export async function pollUntilTerminal(ctx) {
       const picked = pickBuildForSha(builds, newSha);
       if (picked) {
         buildSn = picked.sn;
+        /* 「走到哪了」：钉住 build 那一刻报一次（只在钉住时发，不每 20 秒复述）。 */
+        reportStage(log, "等 CI", { build: buildSn, sha: short(newSha), pr: number ?? "(无)" });
       }
       /* 钉住即不再看列表 ⇒ ISSUE #2950 那条「掉出列表窗口就按钉住的 sn 续读」的回退
        * 自然消解：它防的是「钉住了却被列表读数倒退回没起」，而钉住之后根本没有列表
@@ -140,15 +169,7 @@ export async function pollUntilTerminal(ctx) {
     /** 这一眼的状态 JSON；没解析到 build 时为 null（签名照样成立）。 */
     let statusJson = null;
     if (sn) {
-      const st = cnbJson(run, [
-        "build",
-        "get-build-status",
-        "--repo",
-        slug,
-        "--sn",
-        sn,
-        "-v",
-      ]);
+      const st = cnbJson(run, ["build", "get-build-status", "--repo", slug, "--sn", sn, "-v"]);
       statusJson = st ? st.json : null;
       /* 逐格读数优先于构建级状态 —— 平台把「被取消」记成构建级 `error`，而它与
        * 「真失败」的处置完全不同（前者重跑，后者查产物）。分类只有一份，
@@ -167,9 +188,10 @@ export async function pollUntilTerminal(ctx) {
         const first = outcome.cancelled[0];
         const skipped = downstreamSkipped(outcome).map((s) => s.name || s.id);
         log(
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- cancelled 来自平台数据，空数组时首元素运行时为 undefined
           `[ship]   这一跑**被取消**（不是产物坏了）：${first ? first.name : "(不知哪一格)"} 被终止 ⇒ 下面那几格根本没跑${
             skipped.length > 0 ? `（${skipped.join("、")}）` : ""
-            }，这一跑没有 CI 结论`,
+          }，这一跑没有 CI 结论`,
         );
         /* 「被谁顶掉的」是这一档唯一能让人**不去**查产物的那句话（ISSUE #2406）：
          * 原话与抢锁那一跑都来自平台，本仓一个字不代写。 */
@@ -204,12 +226,34 @@ export async function pollUntilTerminal(ctx) {
         ]);
         const pv = pr ? readPullVerdict(pr.json) : null;
         if (pv) {
+          const cls = classifyPrMergeable(pv);
           log(
             `[ship] PR #${number}：mergeable_state=${pv.mergeableState} blocked_on=${pv.blockedOn || "(无)"}`,
           );
-          if (pv.mergeableState === "conflict") {
+          if (cls === "conflict") {
+            /* ISSUE #3083：#2645 在这里念完警告**继续轮** —— 警告说「别干等」，行为
+             * 却在干等（签名不变 + 无格在飞，轮满 10 眼 ≈3 分 20 秒才断流），两句
+             * 互相推翻。冲突的 PR 平台**永远不会**派生构建 ⇒ 当场收口
+             * （退 3 CONFLICT，没跑起来家族），把预算还给解冲突的人。 */
             log(
-              "[ship]   ⚠️ 冲突的 PR 平台不派生 CI —— 先 `git fetch` + 合上游解冲突、推新 sha，别干等。",
+              `[ship]   ⚠️ 冲突的 PR 平台不派生 CI ⇒ 不再轮询，当场收口（${codeTag(CODE.CONFLICT)}）：`,
+            );
+            reportConflictStage({
+              run,
+              log,
+              number,
+              baseRef: baseRef ?? null,
+              blockedOn: pv.blockedOn,
+            });
+            for (const line of conflictAdviceLines({ number, baseRef: baseRef ?? null })) {
+              log(line);
+            }
+            return { buildState, buildSn, stop: CODE.CONFLICT };
+          }
+          if (cls === "unknown") {
+            log(
+              "[ship]   可合并状态取不到（mergeable_state 缺键 / 平台还在算）⇒ 不猜，" +
+                "继续轮；若迟迟没有 build，去平台上核一眼这条 PR 是否冲突。",
             );
           }
         }
@@ -221,6 +265,27 @@ export async function pollUntilTerminal(ctx) {
      * 同一条构建是 28/33）。所以停滞要同时满足两件：签名不变 **且** 此刻没有任何一格在飞。
      * 在飞那一判每轮只念一次 —— 它是「还在跑」这一事实的说明，不是每 20 秒要复述一遍的进度条。 */
     const flying = inFlightStages(statusJson);
+    /* 停摆读数额外说一次（ISSUE #2901）：那一形里**有**一格在飞（`start`），所以断流那一判
+     * 不会掐它 —— 而那正是最需要被念出来的一形：平台对 `start` / `duration` / `endTime`
+     * 三件的口径自相矛盾，等下去只有 8640s 的客户端超时兜底。
+     * 只在第一次越线时念，之后复述同一句话只是噪音（平台原值变了会再越一次线）。 */
+    const stalled = stalledStages(statusJson);
+    if (stalled.length > 0 && !announcedStalled) {
+      const progressed = progressReadout(statusJson, sn ?? "");
+      const lines = stallReadout({
+        signature: progressed.signature,
+        sn: sn ?? "",
+        stalled,
+        minutes: POLL_STALLED_MINUTES,
+        slug,
+      });
+      if (lines.length > 0) {
+        announcedStalled = true;
+        for (const line of lines) {
+          log(line);
+        }
+      }
+    }
     if (sig !== lastSig) {
       sameSig = 1;
       announcedFlight = false;
@@ -238,21 +303,22 @@ export async function pollUntilTerminal(ctx) {
     }
     lastSig = sig;
     if (sameSig >= POLL_STALL_MAX) {
-      /* 落 **2**（没跑起来）而不是红：签名含 stage 级进度之后，「连着 10 眼一模一样」意味着
+      /* 落「没跑起来家族」而不是红：签名含 stage 级进度之后，「连着 10 眼一模一样」意味着
        * 这条流水线**一个格都没推进过**，那就不是「测出一个红」而是「这一格没有终态结论」——
        * 与 `base-check` 的 `inconclusive` 同一口径（拿不到测量 ≠ 测量结果是红的）。
        * #2152 当初把它落红，理由是「它拿到了读数」；那句话在只看 pipeline 级计数的签名下成立
-       * （推进中的流水线也会被念成没动），签名补上 stage 级之后不再成立，业主定：改记 2。
+       * （推进中的流水线也会被念成没动），签名补上 stage 级之后不再成立，业主定：改记 2；
+       * ISSUE #3083 把它从泛化的 2 细分到 **4 CI_PENDING**（CI 无终态、不再烧预算干等）。
        * 下一动作仍然给人（看那一格的日志，或过一会儿再跑一次 `pnpm ship`，PR 复用不重建）。 */
       log(
         `[ship] build ${buildSn ?? "(未解析到 build)"} 连续 ${sameSig} 次读数没变、` +
-          `且此刻没有一格在飞（${sig}）⇒ 不再轮询：这一格没有终态结论`,
+          `且此刻没有一格在飞（${sig}）⇒ 不再轮询：这一格没有终态结论（${codeTag(CODE.CI_PENDING)}）`,
       );
       log(
         `[ship]   接着看：https://cnb.cool/${slug}/-/build/logs/${buildSn ?? "<sn>"}` +
           "，或过一会儿再 `pnpm ship`（PR 已存在会复用，不重建）",
       );
-      return { buildState, buildSn, stop: CODE.NOT_RUN };
+      return { buildState, buildSn, stop: CODE.CI_PENDING };
     }
     if (now() > deadline) {
       log("[ship] 轮询到预算上限仍未出终态 ⇒ 记「没跑起来」，不猜结论");

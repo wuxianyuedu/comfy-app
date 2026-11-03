@@ -115,7 +115,7 @@ export function validateRemoteModelFields(
       continue;
     }
     /* SAFETY: 类型断言已复核 */
-    if (out[key as keyof RemoteModelFieldValues]) {
+    if (out[key as keyof RemoteModelFieldValues] !== undefined) {
       continue;
     }
     /* SAFETY: 类型断言已复核 */

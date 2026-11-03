@@ -161,7 +161,7 @@ export function useLibraryWireFlow({
    *  派生一次的话，写入成功的线永远进不了画布（「松手线就消失」，ISSUE #355 复审）。
    *  节点集合仍固定（三列布局）：节点内部是整张表单，逐帧重建代价高；边只是几条线。 */
   const defaultEdges = useMemo(
-    () => deriveLibraryEdges(paramCards.wires, outputWires, !!canWire, selectedEdgeIds),
+    () => deriveLibraryEdges(paramCards.wires, outputWires, canWire === true, selectedEdgeIds),
     [paramCards.wires, outputWires, canWire, selectedEdgeIds],
   );
 
@@ -182,7 +182,12 @@ export function useLibraryWireFlow({
   const onConnect = useCallback(
     (connection: Connection) => {
       const { source, target, sourceHandle, targetHandle } = connection;
-      if (!sourceHandle || !targetHandle) {
+      if (
+        sourceHandle === null ||
+        sourceHandle === "" ||
+        targetHandle === null ||
+        targetHandle === ""
+      ) {
         return;
       }
       /* 左列卡片起手：handle id 就是**条目 id**（落库键），落点取另一端（宿主行的
@@ -379,7 +384,14 @@ export function libraryConnectionRefusal(
   if (!source || !target || source === target) {
     return "一条线要跨两列（同一列里的口不能相连）";
   }
-  if (!sourceHandle || !targetHandle) {
+  if (
+    sourceHandle === undefined ||
+    sourceHandle === null ||
+    sourceHandle === "" ||
+    targetHandle === undefined ||
+    targetHandle === null ||
+    targetHandle === ""
+  ) {
     return "松手的位置不是端点（对准圆点再松手）";
   }
   if (source === LIB_NODE_PARAMS && target === LIB_NODE_HOST) {
@@ -395,9 +407,9 @@ export function libraryConnectionRefusal(
     /* 输出侧只需要起手那一行是**真实存在的输出行**：`targetHandle` 是卡片圆点
      * 自己的 handle id（端口名，不是 ioKey 键空间），合法性不由它决定 ——
      * 方向已在 handle 的 source / target 类型上收窄。 */
-    return ctx.io?.[sourceHandle]
-      ? null
-      : "起手的那一行不是这份工作流的输出行（输出行才能连到右列卡片）";
+    return ctx.io?.[sourceHandle] === undefined
+      ? "起手的那一行不是这份工作流的输出行（输出行才能连到右列卡片）"
+      : null;
   }
   return "只能「对外参数 → 宿主卡片」或「宿主输出行 → 对外输出参数」";
 }
@@ -415,7 +427,12 @@ function connectionFromDrop(state: {
   toHandle?: DropHandle;
 }): LibraryConnection | null {
   const { fromHandle: from, toHandle: to } = state;
-  if (!from?.nodeId || !to?.nodeId) {
+  if (
+    from?.nodeId === undefined ||
+    from.nodeId === "" ||
+    to?.nodeId === undefined ||
+    to.nodeId === ""
+  ) {
     return null;
   }
   const fromIsTarget = from.type === "target";

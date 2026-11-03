@@ -195,7 +195,8 @@ function auditOne(kind: DraftElementKind, index: number, value: unknown): Array<
   /* SAFETY: 类型断言已复核 */
   const source = value as Record<string, unknown>;
   const id = check.idOf(source);
-  const label = id ? `${noun} #${String(index + 1)}「${id}」` : `${noun} #${String(index + 1)}`;
+  const label =
+    id === null ? `${noun} #${String(index + 1)}` : `${noun} #${String(index + 1)}「${id}」`;
   const issues: Array<DraftElementIssue> = [];
   for (const field of check.fields) {
     if (field.ok(source[field.key])) {

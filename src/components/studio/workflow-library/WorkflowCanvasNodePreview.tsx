@@ -139,7 +139,7 @@ export function WorkflowCanvasNodePreview({
     const map: Record<string, string> = {};
     for (const [ioKey, entry] of Object.entries(workflowIO ?? {})) {
       const resolved = resolveEntrySeedMode(entry, effectiveMode);
-      if (resolved) {
+      if (resolved !== undefined && resolved !== "") {
         map[ioKey] = resolved;
       }
     }
@@ -190,7 +190,10 @@ export function WorkflowCanvasNodePreview({
 
   const statusLabel = phase.kind === "running" ? `生成中 ${phase.pct}%` : STATUS_LABEL[phase.kind];
   const pct = phase.kind === "running" ? phase.pct : 0;
-  const nodeLabel = phase.kind === "running" && phase.node?.label ? phase.node.label : null;
+  const nodeLabel =
+    phase.kind === "running" && phase.node?.label !== undefined && phase.node.label !== ""
+      ? phase.node.label
+      : null;
 
   /* 模式契约口清单 —— 卡片头的话术与「工坊封装」页签**同一份**
    * （`modeContractEntries`：用户改过的模式走注册表，未改过的回落内置默认）。
@@ -248,7 +251,7 @@ export function WorkflowCanvasNodePreview({
   /* 生效模式名（chip 上显示的那个）。卡片刻的名字、表单按它解析的 required /
    * seed 行为、「在编辑器中打开」带过去的模式，全都取自同一个生效模式。 */
   const effectiveModeLabel = useMemo(
-    () => (effectiveMode ? modeLabel(effectiveMode) : modeLabel(taskType)),
+    () => (effectiveMode === null ? modeLabel(taskType) : modeLabel(effectiveMode)),
     [effectiveMode, taskType],
   );
   const outputWiring = useOutputWiring({
@@ -290,7 +293,7 @@ export function WorkflowCanvasNodePreview({
       {/* ── edit 模式：参数连线画布（三列 React Flow） ── */}
       {viewMode === "edit" && (
         <WorkflowLibraryCanvas
-          canWire={!!effectiveMode && !!onPatchParamMap}
+          canWire={effectiveMode !== null && !!onPatchParamMap}
           contractEntries={contractEntries}
           /* 闸门（`isValidConnection`）按它判类型 —— 必须与卡片列**同一份**
              契约（含作者自定义的口），否则自定义口的圆点拖到宿主行上会被判成
@@ -334,21 +337,25 @@ export function WorkflowCanvasNodePreview({
               modes={modes}
               onModeChange={onModeChange}
               outputs={outputs}
+              /* oxlint-disable-next-line no-unnecessary-condition -- 本块在外层 viewMode === "edit" 分支内已收窄，保留比较防外层条件调整后语义漂移 */
               phaseKind={viewMode === "edit" && phase.kind === "failed" ? "idle" : phase.kind}
               running={running}
               /* 编辑对外参数页签是配置界面，不应显示上次运行的失败状态（红点 +
                *  「失败」文案）。这里把失败态渲染成「待开始」的中性状态，运行中 /
                *  已完成等状态保留，方便用户必要时感知运行进度。 */
+              /* oxlint-disable-next-line no-unnecessary-condition -- 同上：外层已收窄为 edit，保留比较与 phaseKind 口径一致 */
               statusLabel={viewMode === "edit" && phase.kind === "failed" ? "待开始" : statusLabel}
               taskType={taskType}
               workflowName={workflowName}
             />
           }
           io={workflowIO}
-          onConnect={effectiveMode && onPatchParamMap ? wiring.connect : undefined}
-          onConnectOutput={effectiveMode && onPatchParamMap ? outputWiring.connect : undefined}
+          onConnect={effectiveMode !== null && onPatchParamMap ? wiring.connect : undefined}
+          onConnectOutput={
+            effectiveMode !== null && onPatchParamMap ? outputWiring.connect : undefined
+          }
           onDeleteWire={
-            effectiveMode && onPatchParamMap
+            effectiveMode !== null && onPatchParamMap
               ? (namespace, entryId) => {
                   if (namespace === "param") {
                     wiring.disconnect(entryId);
@@ -364,13 +371,13 @@ export function WorkflowCanvasNodePreview({
           }}
           onSelectOutput={(id) => {
             setSelectedOutputId(id);
-            if (id) {
+            if (id !== null) {
               setSelectedParamId(null);
             }
           }}
           onSelectParam={(id) => {
             setSelectedParamId(id);
-            if (id) {
+            if (id !== null) {
               setSelectedOutputId(null);
             }
           }}

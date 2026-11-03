@@ -53,7 +53,7 @@ function groupByElement(
 
 export function DraftIntegrityHint({ issues, onGoTo }: DraftIntegrityHintProps) {
   const summary = describeDraftIssues(issues);
-  if (!summary) {
+  if (summary === null || summary === "") {
     return null;
   }
   const lines = groupByElement(issues);

@@ -40,13 +40,14 @@ export class ErrorBoundary extends React.Component<
        * 下面的默认降级 UI，而不是把它当成降级的全部内容 —— 后者渲染出来是**整块
        * 空白**，用户既看不到出了什么事、也没有「重试」。 */
       const custom = this.props.fallback;
+      const hasCustom = Boolean(custom);
       if (typeof custom === "function") {
         /* SAFETY: 类型断言已复核 */
         const node = (custom as (error: Error | null) => React.ReactNode)(this.state.error);
         if (node !== null && node !== undefined) {
           return node;
         }
-      } else if (custom) {
+      } else if (hasCustom) {
         return custom;
       }
       return (

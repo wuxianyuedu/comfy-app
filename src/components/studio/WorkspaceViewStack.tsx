@@ -205,7 +205,7 @@ export function WorkspaceViewStack({
       );
     }
     // 项目优先闸门：进入项目界面（主页 / 画布 / 工坊 / 资源库 / 产出 / 成片）前必须先有一个活跃项目。
-    if (isProjectTab(view) && !activeProjectId) {
+    if (isProjectTab(view) && (activeProjectId === null || activeProjectId === "")) {
       return <ProjectGate onEnter={onEnterProject} onExit={onExitProject} />;
     }
     switch (view) {

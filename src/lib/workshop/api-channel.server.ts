@@ -88,6 +88,7 @@ export type { ApiImageRequest, ApiVideoSubmitRequest, ApiVideoSubmitResult };
 /** 统一输入的当前取值（适配器按类型取值落字段）。 */
 function unifiedImageInputs(req: ApiImageRequest): Partial<Record<WorkshopInputType, unknown>> {
   return {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- req 是外部 HTTP 请求体，prompt 可为 null；`?? undefined` 把 null 归一到缺省，其后 `value === undefined` 才会跳过
     prompt: req.prompt ?? undefined,
     negative: req.negative ?? undefined,
     "aspect-ratio": req.aspectRatio ?? undefined,
@@ -138,7 +139,7 @@ async function resolveTarget(
   }
   try {
     const entries = await remoteModelRepository.list();
-    const entry = entries.find((r) => r.name === wantedModel && r.baseUrl);
+    const entry = entries.find((r) => r.name === wantedModel && (r.baseUrl ?? "") !== "");
     if (!entry) {
       return { target: fallbackTarget(channel), channel, adapter: null };
     }

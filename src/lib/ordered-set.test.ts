@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  compareText,
-  union,
-  unique,
-  uniqueBy,
-  uniqueSorted,
-} from "./ordered-set";
+import { compareText, union, unique, uniqueBy, uniqueSorted } from "./ordered-set";
 
 describe("unique", () => {
   it("去重并保留首次出现的顺序", () => {
@@ -24,6 +18,7 @@ describe("compareText", () => {
      * （大写 Z 的码位 90 < 小写 a 的 97）。这一条钉住的正是那条账：
      * 两种判据混用会让同一份列表在不同面板顺序相反。 */
     expect(compareText("apple", "Zebra")).toBeLessThan(0);
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 刻意保留字面量比较：这一条用例钉的正是 JS `<` 按码位比较字符串的行为
     expect("Zebra" < "apple").toBe(true);
   });
 });
@@ -39,9 +34,11 @@ describe("uniqueSorted", () => {
 
   it("数字形态的字符串不按数值排（要数值序请显式传比较器）", () => {
     expect(uniqueSorted(["10", "9", "1"])).toEqual(["1", "10", "9"]);
-    expect(
-      uniqueSorted(["10", "9", "1"], (a, b) => Number(a) - Number(b)),
-    ).toEqual(["1", "9", "10"]);
+    expect(uniqueSorted(["10", "9", "1"], (a, b) => Number(a) - Number(b))).toEqual([
+      "1",
+      "9",
+      "10",
+    ]);
   });
 
   it("空数组给空数组", () => {
@@ -63,12 +60,7 @@ describe("uniqueBy", () => {
   });
 
   it("键为空值的项被跳过（没有身份的项不进结果集）", () => {
-    const rows = [
-      { name: "  " },
-      { name: "alpha" },
-      { name: "" },
-      { name: "alpha" },
-    ];
+    const rows = [{ name: "  " }, { name: "alpha" }, { name: "" }, { name: "alpha" }];
     expect(uniqueBy(rows, (r) => r.name.trim())).toEqual([{ name: "alpha" }]);
   });
 

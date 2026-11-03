@@ -51,13 +51,22 @@ export function useCanvasConnections({
       const needsImage = outEdges.some((outEdge) => {
         const t = nodesRef.current.find((current) => current.id === outEdge.target);
         return (
-          !outEdge.targetHandle ||
+          outEdge.targetHandle === undefined ||
+          outEdge.targetHandle === null ||
+          outEdge.targetHandle === "" ||
           outEdge.targetHandle === "inputImage" ||
-          t?.data?.kind === "workflow"
+          t?.data.kind === "workflow"
         );
       });
       let importedFile: string | null = null;
-      if (needsImage && rPath && rType !== "video") {
+      if (
+        needsImage &&
+        rPath !== undefined &&
+        // oxlint-disable-next-line no-unnecessary-condition -- rPath 类型是 string|undefined、无 null 分支；保留判 null 与上下判空口径一致，防旧数据存 null
+        rPath !== null &&
+        rPath !== "" &&
+        rType !== "video"
+      ) {
         try {
           importedFile = await importOutputAsInput(rPath);
         } catch {

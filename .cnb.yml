@@ -686,7 +686,8 @@
   # `package-desktop.yml`）跑的是镜像仓的**默认分支** —— CNB 的 master 不推过去，
   # 它们每天跑的就是一棵停在旧 SHA 的树，绿灯与「今天的 master 行不行」无关。
   # 所以每一次 master push 都要把 HEAD 推成那边的 `refs/heads/master`（`--force`：
-  # 镜像语义是「跟住」，漏推之后下一推自己追平）。
+  # 镜像语义是「跟住」，漏推之后下一推自己追平），并补一跳 `git lfs push` ——
+  # daily / package-desktop 的 checkout 同样开 `lfs: true`，字体对象不在就是假红。
   #
   # 排位：在 `合并形态复核` **之后**（形态不对的工作区整档 fail-stop，没资格的树不推）、
   # 在 `安装依赖` **之前**（推送只吃 git 与令牌，不吃 node_modules —— 早推早就位，
@@ -1679,7 +1680,9 @@
   # ── GitHub 镜像同步（**读数，恒不退非零**；ISSUE #2978 / #3051）──
   #
   # 双远端镜像（cnb 主）的推送跳：推 HEAD 到 `wuxianyuedu/comfy-app` 的 `cnb-pr-<IID>` 专属
-  # ref + `repository_dispatch` 派发，GitHub 侧 workflow 按**同一笔 sha** 起跑 —— 两边判同一份
+  # ref，再补一跳 `git lfs push`（不带 --all，只推该 ref 可达且远端还没有的对象 —— 镜像仓若
+  # 只有字体指针，GitHub 侧 `lfs: true` 的 checkout 会拿指针文件跑出假红），最后
+  # `repository_dispatch` 派发，GitHub 侧 workflow 按**同一笔 sha** 起跑 —— 两边判同一份
   # 树，读数才对得上账。
   #
   # ⚠️ 它从 `endStages` 前移到这里（#3051），改的是**起跑时机**：平台对 endStages 的语义是
@@ -1706,10 +1709,10 @@
   # （脚本内先脱敏，硬规则 17）。
   - name: GitHub 镜像同步
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs --readout
-    # 两跳 git 调用各自带超时并对 egress 类失败带退避重试（`scripts/ci-github-mirror-push.mjs`
+    # 三跳 git 调用各自带超时并对 egress 类失败带退避重试（`scripts/ci-github-mirror-push.mjs`
     # 的 REMOTE_PROBE_TIMEOUT_MS 30s×3 / PUSH_TIMEOUT_MS 240s×2 —— 没有限时就得吃 git 自己
     # 那个 21s 的 connect 超时，而那一形过去只被念成「令牌活不活」；重试的立案依据见
-    # 脚本文件头第 8 条）。10m 是外框，包住最坏墙钟（≈105s + ≈485s）与冷启动余量。
+    # 脚本文件头第 8 条）。10m 是外框，包住最坏墙钟（≈105s + ≈485s×2）与冷启动余量。
     timeout: 10m
 
   # ── 环境前提（**必须排在 `Install dependencies` 之前**，ISSUE #1959）──

@@ -95,6 +95,7 @@ function mainCheckoutRoot(root) {
     /** @param {string[]} args */
     const rev = (args) => {
       const got = spawnSync("git", args, { cwd, encoding: "utf8" });
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 起不来时 stdout 实测为 undefined，@types/node 按 string 标
       return got.status === 0 ? String(got.stdout ?? "").trim() : "";
     };
     const own = rev(["rev-parse", "--git-dir"]);
@@ -149,6 +150,7 @@ function gitName(root) {
       cwd: root || process.cwd(),
       encoding: "utf8",
     });
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 起不来时 stdout 实测为 undefined，@types/node 按 string 标
     return got.status === 0 ? String(got.stdout ?? "").trim() : "";
   } catch {
     return "";

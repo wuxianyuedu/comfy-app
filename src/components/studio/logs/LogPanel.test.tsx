@@ -134,7 +134,7 @@ afterEach(async () => {
 function levelButton(label: string): HTMLElement {
   const button = screen
     .getAllByRole("button")
-    .find((item) => item.getAttribute("title")?.startsWith(`当前来源的${label}：`));
+    .find((item) => item.getAttribute("title")?.startsWith(`当前来源的${label}：`) === true);
   if (!button) {
     throw new Error(`找不到级别按钮「${label}」`);
   }

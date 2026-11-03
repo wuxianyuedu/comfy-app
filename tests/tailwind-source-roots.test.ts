@@ -111,7 +111,7 @@ function declaredRoots(css: string): Array<string> {
   const out: Array<string> = [];
   for (const m of css.matchAll(/^\s*@source\s+"([^"]+)"\s*;/gm)) {
     const target = m[1];
-    if (target && !target.startsWith("inline(")) {
+    if (target !== undefined && target !== "" && !target.startsWith("inline(")) {
       out.push(target);
     }
   }

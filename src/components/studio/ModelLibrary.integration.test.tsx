@@ -35,7 +35,7 @@ const t = createTestTRPC();
 const mockRouter = t.router({
   model: t.router({
     list: t.procedure.query(() => {
-      if (behavior.listError) {
+      if (behavior.listError !== undefined && behavior.listError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.listError,

@@ -43,14 +43,18 @@ function sizeSpecOf(args: {
   ratio?: string;
   size?: string;
 }): SizeSpec | undefined {
-  if (args.ratio || args.clarity || args.multiple !== undefined) {
+  if (
+    (args.ratio !== undefined && args.ratio !== "") ||
+    (args.clarity !== undefined && args.clarity !== "") ||
+    args.multiple !== undefined
+  ) {
     return toSizeSpec({
       ratio: args.ratio,
       clarity: args.clarity,
       multiple: args.multiple,
     });
   }
-  if (args.size) {
+  if (args.size !== undefined && args.size !== "") {
     return sizeSpecFromText(args.size);
   }
   return undefined;

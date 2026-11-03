@@ -141,7 +141,9 @@ function ResumeProjectCard({
           </span>
         </div>
         <div className="text-ink-fainter flex items-center gap-2 text-xs">
-          {proj.subtitle && <span className="min-w-0 truncate">{proj.subtitle}</span>}
+          {proj.subtitle !== undefined && proj.subtitle !== "" && (
+            <span className="min-w-0 truncate">{proj.subtitle}</span>
+          )}
           {/* 「最近动过」这个措辞是刻意的：`updatedAt` 由上层给成什么口径，
               这里不许再加工成一个更精确的假象。 */}
           <span className="shrink-0">最近动过 · {proj.updatedAt}</span>
@@ -346,7 +348,9 @@ export function HomePage({
                         </span>
                       </div>
                       <div className="text-ink-fainter mt-1 flex items-center gap-2 text-[11.5px]">
-                        {proj.subtitle && <span>{proj.subtitle}</span>}
+                        {proj.subtitle !== undefined && proj.subtitle !== "" && (
+                          <span>{proj.subtitle}</span>
+                        )}
                         <span className="shrink-0">{proj.updatedAt}</span>
                       </div>
 

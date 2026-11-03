@@ -114,7 +114,8 @@ export function findPython({
        * 怎么起它**，管不了「选不选得中」：探针参数错了，`py` 在上一行就被跳过了。 */
       probeArgs: pythonProbeArgs(name, ["--version"]),
     });
-    if (found) {
+    /* whichCommand 的命中是拼出来的绝对路径，空串不可能出现 */
+    if (found !== null) {
       return {
         hit: { command: name, path: found, args: pythonProbeArgs(name), tried },
         missed,

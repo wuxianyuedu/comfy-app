@@ -231,6 +231,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
           <div className="flex flex-col gap-3">
             {TEMPERATURE_TASKS.map(([key, meta]) => {
               const override = c.drafts.llm.temperatureByTask?.[key];
+              // oxlint-disable-next-line no-unnecessary-condition -- 草稿层已把 null 归一为 undefined，!== null 防旧数据残留
               const isOverridden = override !== undefined && override !== null;
               const shown =
                 taskTempEdits[key] ?? String(isOverridden ? override : meta.defaultTemperature);

@@ -13,7 +13,7 @@ Usage:
   powershell -File scripts\quality-gate.ps1 -Mode test
   powershell -File scripts\quality-gate.ps1 -Mode all
 
-Mode: typecheck | lint | format | test | dependencyAudit | depsFreshness | storybook | bundleBudget | dailyAttendance | oxlintZeroRules | premerge | all   (default all)
+Mode: typecheck | lint | format | test | dependencyAudit | depsFreshness | storybook | bundleBudget | dailyAttendance | mirrorAttendance | oxlintZeroRules | premerge | all   (default all)
 
 Note on `premerge`: it is registered with Run=$false, i.e. NOT part of `all`.
 The platform squashes on merge (the local hook never sees that merge) and there
@@ -38,7 +38,7 @@ Extend / maintain - how to add a new gate:
     entry and it is enforced again.
 #>
 param(
-  [ValidateSet("typecheck", "lint", "format", "test", "dependencyAudit", "depsFreshness", "storybook", "bundleBudget", "dailyAttendance", "oxlintZeroRules", "premerge", "all")]
+  [ValidateSet("typecheck", "lint", "format", "test", "dependencyAudit", "depsFreshness", "storybook", "bundleBudget", "dailyAttendance", "mirrorAttendance", "oxlintZeroRules", "premerge", "all")]
   [string]$Mode = "all"
 )
 
@@ -96,7 +96,7 @@ $Blocks = @(
   @{ Name = "lint";      Label = "ESLint zero error / zero warning";
      Cmd = "pnpm"; Args = @("run","lint"); Run = $true }
   @{ Name = "format";    Label = "oxfmt format ratchet (scripts/check-format.cjs)";
-     Cmd = "node"; Args = @("scripts\check-format.cjs"); Run = $true }
+     Cmd = "node"; Args = @("scripts/check-format.cjs"); Run = $true }
   # 覆盖率门槛此前是**死配置**：`vitest.config.ts` 的 `coverage.thresholds` 写了
   # 几十条按实测定的门槛，而这一步是裸 `vitest run`，不带 `--coverage` —— 没有任何
   # 自动化路径判定过它们（规范 §11.7 / 台账 E2）。与 quality-gate.mjs 同批同步。
@@ -110,39 +110,45 @@ $Blocks = @(
   # 「按需召唤」那一层）；拿不到 registry 时脚本打「未扫描」退 0，话术里不许出现「干净」。
   # 台账按 (包名, advisory id) 记账、双向拦、--update 只许降，理由见脚本头。
   @{ Name = "dependencyAudit"; Label = "Dependency audit ratchet (high/critical; ledger keyed by package+advisory)";
-     Cmd = "node"; Args = @("scripts\check-dependency-audit.mjs"); Run = $true }
+     Cmd = "node"; Args = @("scripts/check-dependency-audit.mjs"); Run = $true }
   # 故事枚举来源（ISSUE #1381 续，规范 16 §16.2.3.2）：`cva()` 返回的是函数，
   # 写成 `Object.keys(xVariants.variants.轴)` 时 Storybook 在加载期抛
   # `Cannot read properties of undefined` —— 表现是「侧栏列着故事、画布一片空白」。
   @{ Name = "storybook"; Label = "Storybook story enum source (cva return value / missing variants)";
-     Cmd = "node"; Args = @("scripts\storybook-check.mjs"); Run = $true }
+     Cmd = "node"; Args = @("scripts/storybook-check.mjs"); Run = $true }
   # 依赖新鲜度（ISSUE #1569，规范 §13.5.13）：远端改过库的版本而本地还停在旧的那套上。
   # 与 quality-gate.mjs 的 GATES.depsFreshness 同批同步。与 dependencyAudit / format
   # 同属「会随时间变坏」的一类：昨天的结论推不出今天。这条**不做网络请求** ——
   # 远端引用陈旧只打 [未校验]、不阻断；刷新是人的动作 `git fetch`。
   @{ Name = "depsFreshness"; Label = "Dependency freshness (baseline vs origin/master + install sync)";
-     Cmd = "node"; Args = @("scripts\check-deps-freshness.mjs"); Run = $true }
+     Cmd = "node"; Args = @("scripts/check-deps-freshness.mjs"); Run = $true }
   # client chunk 体积预算（ISSUE #1781，规范 §13.5.4）。与 quality-gate.mjs 的
   # GATES.bundleBudget 同批同步。Run=$false：测量对象是 `next build` 的产物，判据在
   # 一次构建之后才有结论，而构建是半分钟级 —— 把它塞进每一次「完整验证」是拿半分钟
   # 换一个不会天天变的结论（成本判据同 §13.5.4）。同一脚本也挂在 `pnpm build` 收尾
   # （形态 C 兜底），所以这条更准确地说是一份**按需入口**。
   @{ Name = "bundleBudget"; Label = "Bundle size budget (client chunk gzip total + file count ratchet)";
-     Cmd = "node"; Args = @("scripts\check-bundle-budget.cjs"); Run = $false }
+     Cmd = "node"; Args = @("scripts/check-bundle-budget.cjs"); Run = $false }
   # **每日那一跑的出勤**（ISSUE #2114，规范 §13.5.23）。与 quality-gate.mjs 的
   # GATES.dailyAttendance 同批同步。Run=$false：判据要上网问平台（一次 get-build-logs +
   # 逐格详情），把网络请求放进「每次完整验证」是另一回事 —— §13.5.13 同口径：判据自身
   # 不做网络请求，「现在去不去问平台」是人的动作。出口：verify-quality.ps1
   # -Mode dailyAttendance。三态退码里 2 = 没结论 / 取不到读数，不算绿。
   @{ Name = "dailyAttendance"; Label = "Daily tier attendance (did the last scheduled run actually execute)";
-     Cmd = "node"; Args = @("scripts\check-daily-attendance.mjs"); Run = $false }
+     Cmd = "node"; Args = @("scripts/check-daily-attendance.mjs"); Run = $false }
   # 已清零 oxlint 规则集防回潮（ISSUE #3016，台账 #2777）：与 quality-gate.mjs 的
   # GATES.oxlintZeroRules 同批同步。与 format / depsFreshness 同属「会随时间变坏」
   # 的一类 —— 清零批落地之后没人守，下一次批量改动就会把同类漂移带回来
   # （no-negated-condition 在 #2977 清零后，#3015 / #3016 各自又扫出一批）。
   # 清单驱动的单规则探针：41 条已清零规则全仓 0 命中，命中逐条列位置退 1。
   @{ Name = "oxlintZeroRules"; Label = "Oxlint zero-cleared rules set (41 rules, repo-wide 0 hits)";
-     Cmd = "node"; Args = @("scripts\check-oxlint-zero-rules.mjs"); Run = $true }
+     Cmd = "node"; Args = @("scripts/check-oxlint-zero-rules.mjs"); Run = $true }
+  # GitHub 镜像那一格的出勤（ISSUE #3046）。与 quality-gate.mjs 的 GATES.mirrorAttendance
+  # 同批同步（#3095 收敛：mjs 侧先落地、ps1 侧漏了这一行，`ps1-consistency` 当场报集合不等）。
+  # Run=$false 的理由同 dailyAttendance：它要上网问平台，不进「每次完整验证」。
+  # 出口：`pnpm check:mirror-attendance` / `-Mode mirrorAttendance`。
+  @{ Name = "mirrorAttendance"; Label = "GitHub mirror push attendance (did the mirror cell actually push + dispatch)";
+     Cmd = "node"; Args = @("scripts/check-mirror-attendance.mjs"); Run = $false }
   # **合并前的固定动作**（规范 §13.6.2；ISSUE #1611 拍板）。与 quality-gate.mjs 的
   # GATES.premerge 同批同步。Run=$false：平台侧 squash 合并不跑本地钩子、#623 之后
   # 也无 CI 兜底，所以「我的分支绿 → master 绿」那一跳的三条判据（复算这一批 /
@@ -150,7 +156,7 @@ $Blocks = @(
   # 就是合并前敲一次。它的 base 段要建干净 worktree 跑整批判据（分钟量级），
   # 且它只在「准备合并」那一刻有意义 —— 不属于 `all`。
   @{ Name = "premerge"; Label = "Pre-merge fixed action (base recompute + commit claims + merge side loss)";
-     Cmd = "node"; Args = @("scripts\premerge-check.mjs"); Run = $false }
+     Cmd = "node"; Args = @("scripts/premerge-check.mjs"); Run = $false }
 )
 
 # Which gates to run

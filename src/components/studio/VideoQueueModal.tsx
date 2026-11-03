@@ -153,7 +153,7 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
                       key={task.id}
                     >
                       <div className="bg-canvas-deep flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg">
-                        {task.video ? (
+                        {task.video !== null && task.video !== "" ? (
                           <MediaThumbnail
                             alt={`V${String(index + 1).padStart(2, "0")}`}
                             className="h-full w-full object-cover"
@@ -179,7 +179,7 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
                         <p className="text-ink-fainter text-3xs mt-0.5 truncate font-mono">
                           {task.workflowName}
                         </p>
-                        {task.status === "FAILED" && task.error && (
+                        {task.status === "FAILED" && task.error !== null && task.error !== "" && (
                           <p
                             className="text-destructive text-3xs mt-0.5 truncate"
                             title={task.error}
@@ -197,7 +197,7 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
                         >
                           详情
                         </Button>
-                        {task.video && (
+                        {task.video !== null && task.video !== "" && (
                           <a
                             className="bg-primary/20 text-primary-strong hover:bg-primary/30 text-2xs rounded-md px-2.5 py-1 transition-colors"
                             download

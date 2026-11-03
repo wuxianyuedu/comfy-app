@@ -114,6 +114,7 @@ export type EncapsulatedInputs = {
  *  这一条**必须**看端口名：两种单位在类型上都是数字，没有别的判据（工坊的契约
  *  只有一个「时长」口，落点由作者连线声明；单位是端口自己的事）。 */
 function durationPinUsesFrames(e: WorkflowIOEntry): boolean {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- e 来自落库 IO 表（JSON），name/label 运行期可缺省，`?? ""` 是兜底
   const text = `${e.name ?? ""} ${e.label ?? ""}`.toLowerCase();
   if (/duration|seconds?|secs?|秒/.test(text)) {
     return false;
@@ -171,7 +172,7 @@ function durationValueFor(args: {
 }): number | undefined {
   const { io, resolved, values } = args;
   const target = resolved.duration;
-  const port = target ? io[target] : undefined;
+  const port = target !== undefined && target !== null && target !== "" ? io[target] : undefined;
   if (!port) {
     return values.duration ?? values.frames;
   }

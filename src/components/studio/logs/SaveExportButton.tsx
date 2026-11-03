@@ -47,7 +47,10 @@ export function SaveExportButton({
       /* `relativePath` 收成局部变量：`ok` 这个布尔量记不住「里面那个字段非空」，
        * 在原地补 `!` 等于让类型替运行时兜底。 */
       const relativePath = result.ok ? (result.relativePath ?? null) : null;
-      saved.flash({ savedPath: relativePath, failed: !relativePath });
+      saved.flash({
+        savedPath: relativePath,
+        failed: relativePath === null || relativePath === "",
+      });
     });
   };
 
@@ -67,7 +70,7 @@ export function SaveExportButton({
         </Button>
       </Hint>
       {/* 路径就是这次保存的「回执」：没有它，用户只能自己去猜文件在哪。 */}
-      {savedPath && (
+      {savedPath !== null && savedPath !== "" && (
         <span className="text-ink-fainter text-2xs max-w-56 truncate" title={savedPath}>
           已保存 {savedPath}
         </span>

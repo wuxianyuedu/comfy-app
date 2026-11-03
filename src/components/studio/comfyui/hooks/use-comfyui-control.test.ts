@@ -70,7 +70,7 @@ vi.mock("~/lib/log/log-file-client", () => {
   const fetchLogSessions = vi.fn(async (source: string, sessionId?: string) => {
     sessionLogRequests.push({ source, session: sessionId ?? null });
     const query = new URLSearchParams({ source });
-    if (sessionId) {
+    if (sessionId !== undefined && sessionId !== "") {
       query.set("session", sessionId);
     }
     const res = await fetch(`/api/logs/sessions?${query.toString()}`);

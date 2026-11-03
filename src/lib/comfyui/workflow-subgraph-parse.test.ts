@@ -377,6 +377,7 @@ describe("buildBoundaryLinks — 暴露口的槽位名必须是画布上真实�
       linkById,
       boundarySlotsByNode(boundaryLinkInfoById),
     );
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- sg.graph 是 Record，索引签名掩盖了运行期缺键（可能取到 undefined）
     expect(sg.graph["5277"]?.inputs?.seed).toBe(123);
   });
 

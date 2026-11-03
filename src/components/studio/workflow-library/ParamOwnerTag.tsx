@@ -4,7 +4,7 @@
  * 卡片不重复画线。没有任何对外参数落到这一行时不渲染。 */
 
 export function ParamOwnerTag({ label }: { label?: string }) {
-  if (!label) {
+  if (label === undefined || label === "") {
     return null;
   }
   return (

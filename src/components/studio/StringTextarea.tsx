@@ -32,7 +32,7 @@ export function StringTextarea({
   return (
     <Textarea
       className={`border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal text-2xs block w-full resize-none rounded border px-2 py-1.5 leading-snug focus-visible:ring-0${
-        mono ? " font-mono" : ""
+        mono === true ? " font-mono" : ""
       }`}
       onFocus={(event) => {
         event.currentTarget.blur();

@@ -160,12 +160,13 @@ export const FlowNode = React.memo(function FlowNode({
         // 根节点透明（isolation 把磨砂限制在本节点内）。
         // 普通节点保留实心面板。
         isolation: "isolate",
-        background: palette.modeColor ? "transparent" : palette.nodeBg,
-        outline: selected ? "2px solid rgba(56,189,248,0.9)" : "none",
-        outlineOffset: selected ? "2px" : undefined,
+        background:
+          palette.modeColor !== null && palette.modeColor !== "" ? "transparent" : palette.nodeBg,
+        outline: selected === true ? "2px solid rgba(56,189,248,0.9)" : "none",
+        outlineOffset: selected === true ? "2px" : undefined,
       }}
     >
-      {palette.modeColor && palette.nodeMode !== 0 && (
+      {palette.modeColor !== null && palette.modeColor !== "" && palette.nodeMode !== 0 && (
         <FrostLayer color={palette.modeColor} nodeMode={palette.nodeMode} />
       )}
       {/* 头部 —— 钉在 NODE_TITLE_H（litegraph 的 NODE_TITLE_HEIGHT）。

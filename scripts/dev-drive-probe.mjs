@@ -281,6 +281,7 @@ export function probeVolume(platform) {
       `if ($d) { "$($d.DriveFormat)|$($d.VolumeLabel)" } else { "|" }`,
     platform,
   );
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout 实测为 undefined，@types/node 按 string 标
   raw = String(viaDriveInfo.stdout ?? "").trim();
   if (!raw || raw === "|") {
     const viaGetVolume = runPowerShell(
@@ -288,6 +289,7 @@ export function probeVolume(platform) {
         `if ($v) { "$($v.FileSystemType)|$($v.FileSystemLabel)" } else { "|" }`,
       platform,
     );
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout 实测为 undefined，@types/node 按 string 标
     raw = String(viaGetVolume.stdout ?? "").trim();
   }
   const [fsType = "", label = ""] = raw.split("|");
@@ -450,6 +452,7 @@ export function probePnpmStore(platform) {
     const workspaceConfig = fs.readFileSync(path.join(ROOT, "pnpm-workspace.yaml"), "utf8");
     const matched = workspaceConfig.match(/^\s*package-import-method:\s*(\S+)/m);
     if (matched) {
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- matched[1] 是必需捕获组，noUncheckedIndexedAccess 下仍是 string | undefined
       importMethod = matched[1] ?? null;
     }
   } catch {

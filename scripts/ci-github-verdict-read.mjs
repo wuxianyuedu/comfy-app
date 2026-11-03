@@ -141,7 +141,9 @@ function realRunGit(args) {
   const r = spawnSync("git", args, { cwd: ROOT, encoding: "utf8", env: gitEnv() });
   return {
     code: r.status ?? -1,
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程失败时 stderr 实测为 null，@types/node 按 string 标
     stderr: String(r.stderr ?? ""),
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程失败时 stdout 实测为 null，@types/node 按 string 标
     stdout: String(r.stdout ?? ""),
   };
 }
@@ -180,6 +182,7 @@ export function workflowRunsUrl(repo) {
  * @returns {boolean} true ⇒ 是本跑
  */
 export function matchesTargetSha(run, sha) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- run 是 API 回话里的 unknown 条目，运行时可缺/为 null，断言不承重
   const title = String(/** @type {{display_title?: unknown}} */ (run)?.display_title ?? "");
   return title.includes(sha);
 }
@@ -210,7 +213,9 @@ export function isRetryableRequestFailure(error) {
   const code = String(e?.cause?.code ?? "");
   return (
     isEgressFailure(text) ||
-    /fetch failed|network|socket|econnreset|econnrefused|enotfound|etimedout|eai_again/i.test(text) ||
+    /fetch failed|network|socket|econnreset|econnrefused|enotfound|etimedout|eai_again/i.test(
+      text,
+    ) ||
     /^(ENOTFOUND|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN)$/i.test(code)
   );
 }
@@ -228,7 +233,9 @@ export function isRetryableRequestFailure(error) {
  */
 async function fetchWithTimeout(fetchImpl, url, token, label) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), CHECK_RUNS_TIMEOUT_MS);
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, CHECK_RUNS_TIMEOUT_MS);
   try {
     return await fetchImpl(url, {
       headers: {
@@ -280,6 +287,7 @@ async function requestJson(io, url, label) {
       if (!isRetryableRequestFailure(error) || attempt === REQUEST_MAX_ATTEMPTS) {
         break;
       }
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 下标越界时运行时为 undefined（未开 noUncheckedIndexedAccess），退避表长度不随上限变
       const wait = RETRY_BACKOFF_MS[attempt - 1] ?? RETRY_BACKOFF_MS.at(-1) ?? 5000;
       log(
         `[verdict] ${label}读数第 ${String(attempt)}/${String(REQUEST_MAX_ATTEMPTS)} 次没通（egress 类）⇒ ${String(wait / 1000)}s 后试第 ${String(attempt + 1)} 次（网络抖动重试；认证 / 权限类不重试）`,
@@ -309,11 +317,15 @@ function summarizeItems(runs, redConclusions) {
   const pending = [];
   for (const item of runs) {
     const run = /** @type {{conclusion?: unknown, name?: unknown, status?: unknown}} */ (item);
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- item 是 API 回话里的 unknown 条目，运行时可缺/为 null，断言不承重
     const name = String(run?.name ?? "(未命名)");
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- item 是 API 回话里的 unknown 条目，运行时可缺/为 null，断言不承重
     if (run?.status !== "completed") {
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- item 是 API 回话里的 unknown 条目，运行时可缺/为 null，断言不承重
       pending.push(`${name}（${String(run?.status ?? "?")}）`);
       continue;
     }
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- item 是 API 回话里的 unknown 条目，运行时可缺/为 null，断言不承重
     const conclusion = String(run?.conclusion ?? "?");
     if (redConclusions.has(conclusion)) {
       failing.push(`${name}（${conclusion}）`);
@@ -321,7 +333,13 @@ function summarizeItems(runs, redConclusions) {
       ok.push(`${name}（${conclusion}）`);
     }
   }
-  return { completed: runs.length > 0 && pending.length === 0, failing, ok, pending, total: runs.length };
+  return {
+    completed: runs.length > 0 && pending.length === 0,
+    failing,
+    ok,
+    pending,
+    total: runs.length,
+  };
 }
 
 /**
@@ -363,7 +381,7 @@ function failState(res) {
   if (!res.ok && res.kind === "http") {
     return { body: res.body, state: "http", status: res.status };
   }
-  return { error: !res.ok && res.kind === "egress" ? res.error : "未知读数失败", state: "egress" };
+  return { error: res.ok ? "未知读数失败" : res.error, state: "egress" };
 }
 
 /**
@@ -379,6 +397,7 @@ async function readMainPath(io, ctx) {
   const res = await requestJson(io, workflowRunsUrl(ctx.repo), "主路径（runs API）");
   if (res.ok) {
     const body = /** @type {{workflow_runs?: unknown}} */ (res.body);
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- body 是 API 回话 JSON，运行时可缺/为 null，断言不承重
     const all = Array.isArray(body?.workflow_runs) ? body.workflow_runs : [];
     const runs = all.filter((r) => matchesTargetSha(r, ctx.headSha));
     return runs.length > 0 ? { runs, state: "data" } : { state: "empty" };
@@ -397,6 +416,7 @@ async function readChecksPath(io, ctx) {
   const res = await requestJson(io, checkRunsUrl(ctx.repo, ctx.headSha), "兜底（checks API）");
   if (res.ok) {
     const body = /** @type {{check_runs?: unknown}} */ (res.body);
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- body 是 API 回话 JSON，运行时可缺/为 null，断言不承重
     return { runs: Array.isArray(body?.check_runs) ? body.check_runs : [], state: "data" };
   }
   return failState(res);
@@ -443,7 +463,11 @@ function reportEgressDown(log, label, error) {
  */
 export async function runVerdict(io) {
   const { dryRun = false, env } = io;
-  const log = io.log ?? ((line) => console.log(line));
+  const log =
+    io.log ??
+    ((line) => {
+      console.log(line);
+    });
   const fetchImpl = io.fetchImpl ?? fetch;
   const runGit = io.runGit ?? realRunGit;
   const sleep = io.sleep ?? realSleep;

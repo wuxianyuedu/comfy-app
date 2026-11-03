@@ -46,6 +46,13 @@ env:
   COMFYAPP_QUIET_COVERAGE: "1"
   # 主体=master ⇒ 读机器分支那份权威账（对位 `.cnb.yml` 每日档各格的同名键）。
   COMFY_CI_SUBJECT: "master"
+  # 全量单测里有**要真建一笔提交**的用例（tests/freshness-ledger-backend.test.ts 的
+  # `commit-tree`）：GitHub runner 检出后不带 git 身份 ⇒ `Author identity unknown`
+  # （#3095）。喂一份中性身份，判据一字不动；CNB 自托管节点本来就有全局身份。
+  GIT_AUTHOR_NAME: ci-mirror
+  GIT_AUTHOR_EMAIL: ci-mirror@users.noreply.github.com
+  GIT_COMMITTER_NAME: ci-mirror
+  GIT_COMMITTER_EMAIL: ci-mirror@users.noreply.github.com
 
 jobs:
   daily:
@@ -60,6 +67,10 @@ jobs:
         with:
           ref: ${{ github.event.inputs.head_sha || github.sha }}
           fetch-depth: 0
+          # 全量单测含字体用例（tests/embedded-title-font.test.ts，在固定结构清单里）：
+          # 它要字体真身字节，只检 LFS 指针文件必红 ⇒ 这一格必须拉 LFS。
+          # 对象由镜像那一格 `git lfs push` 送到；配额口径见 pr-gate.yml 同名注释。
+          lfs: true
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
         uses: pnpm/action-setup@v6

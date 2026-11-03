@@ -79,7 +79,7 @@ export function QueueRowLine({
         {displayValue(row.prompt)}
       </span>
       {terminal ? <StatusBadge label={taskStatusLabel(row.status)} status={row.status} /> : null}
-      {row.error ? (
+      {row.error !== null && row.error !== "" ? (
         <span className="text-danger-strong min-w-0 basis-full truncate text-xs">{row.error}</span>
       ) : null}
       <span className="flex shrink-0 items-center gap-1">

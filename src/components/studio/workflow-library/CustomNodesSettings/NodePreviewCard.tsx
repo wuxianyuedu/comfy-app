@@ -36,11 +36,14 @@ export function NodePreviewCard({
   const color = colorFor(data?.category);
   const inputs = data?.inputs ?? [];
   const outputs = data?.outputs ?? [];
-  const typed = inputs.filter((input) => !input.widget);
+  const typed = inputs.filter(
+    (input) => input.widget === undefined || input.widget === null || input.widget === "",
+  );
   // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   const widgets = inputs.filter((input) => input.widget != null);
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空串同义「无值」需回退 fallbackName，刻意用 ||
-  const title = data?.displayName || fallbackName;
+  /* 空串同义「无值」需回退 fallbackName（原 `||` 语义的显式写法）。 */
+  const displayName = data?.displayName;
+  const title = displayName !== undefined && displayName !== "" ? displayName : fallbackName;
 
   return (
     <div
@@ -76,7 +79,8 @@ export function NodePreviewCard({
         >
           {title}
         </span>
-        {data?.category && (
+        {/* oxlint-disable-next-line no-unnecessary-condition -- 节点清单来自 fetch 浅断言，category 判空保留运行时守卫 */}
+        {data?.category !== undefined && data?.category !== "" && (
           <span
             className="rounded-full px-1.5 py-px text-[8.5px] font-semibold"
             style={{ background: "rgba(0,0,0,0.28)" }}
@@ -84,7 +88,7 @@ export function NodePreviewCard({
             {data.category}
           </span>
         )}
-        {data?.outputNode && (
+        {data?.outputNode === true && (
           <span
             className="rounded-full px-1.5 py-px text-[8.5px] font-semibold"
             style={{ background: "rgba(255,255,255,0.22)" }}

@@ -26,6 +26,7 @@
 
 import { CODE, classifyPushFailure, looksNewlineMangled, readProof } from "./ship-core.mjs";
 import { safeRead, short } from "./ship-exec.mjs";
+import { reportStage } from "./ship-stage.mjs";
 /* 「这一笔是刻意的空提交」不靠猜索引 —— 由被触发的两条 D0 判据认这个说出来的旗标
  * （唯一生产者就是下面这一格，口径在 `intentional-empty-commit.mjs`，ISSUE #2354）。 */
 import { EMPTY_COMMIT_ENV } from "./intentional-empty-commit.mjs";
@@ -163,6 +164,13 @@ export function runPushStage(ctx) {
     log(`[ship] push 失败（exit ${ps.status}）⇒ ${classifyPushFailure(ps.stdout, ps.stderr).note}`);
     return { stop: true, codes: [CODE.RED] };
   }
+  /* 「走到哪了」第二格（ISSUE #3083）：sha 现读一次 —— 预检钉的那笔在 commit 段之后
+   * 已经前进，进度行报的是「推上去的那笔」，不是阶段 0 抬头的快照。 */
+  reportStage(log, "分支推送", {
+    branch,
+    remote: up.remote,
+    sha: short(run("git", ["rev-parse", "HEAD"]).stdout.trim()),
+  });
   const codes = [];
   /* 证明的读取也走这一次注入的解析器 —— 少了这个参数，注入只覆盖临时文件那一半，
    * 而这一格会去读这台机器真实的 `.git`（用例本地绿、节点红就是这么来的）。 */

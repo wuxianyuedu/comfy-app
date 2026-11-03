@@ -46,7 +46,7 @@ export function useContentAssetGallery({
   const images = gallery.key === ctxKey ? gallery.images : null;
 
   useEffect(() => {
-    if (!taskId || !enabled) {
+    if (taskId === undefined || taskId === null || taskId === "" || !enabled) {
       return;
     }
     /* 这一轮的作废守卫（规范 16 §16.2.4.34）：换任务 / 关掉开关会重开一轮，
@@ -58,7 +58,8 @@ export function useContentAssetGallery({
         guard.commit(() => {
           setGallery({
             key: ctxKey,
-            images: list && list.length > 1 ? list : null,
+            // oxlint-disable-next-line no-unnecessary-condition -- fetchTaskImages 的类型与实现都保证返回数组，判空恒真；保留相册降级口径，防空值防御被移除后静默崩溃
+            images: list !== null && list.length > 1 ? list : null,
           });
         });
       } catch {

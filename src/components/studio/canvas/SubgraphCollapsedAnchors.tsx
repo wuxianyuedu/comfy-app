@@ -24,8 +24,8 @@ export function SubgraphCollapsedAnchors({
   connectedInputs,
   connectedOutputs,
 }: SubgraphCollapsedAnchorsProps) {
-  const wiredInputs = connInputs.filter(({ inp }) => connectedInputs?.has(inp.name));
-  const wiredOutputs = outputs.filter(({ out }) => connectedOutputs?.has(out.name));
+  const wiredInputs = connInputs.filter(({ inp }) => connectedInputs?.has(inp.name) === true);
+  const wiredOutputs = outputs.filter(({ out }) => connectedOutputs?.has(out.name) === true);
   /* 锚柱跟主题联动（浅色下白描白会让锚柱整个消失）。 */
   const { resolvedTheme } = useTheme();
   const anchor = resolveAnchorCylinder(resolvedTheme);
@@ -45,7 +45,7 @@ export function SubgraphCollapsedAnchors({
           side: "left" as const,
           id: inp.name,
           title: `${label} (${inp.type})`,
-          color: portColor(inp.type ?? "*"),
+          color: portColor(inp.type),
         }))}
       />
       <CollapsedPortHandles
@@ -55,7 +55,7 @@ export function SubgraphCollapsedAnchors({
           side: "right" as const,
           id: `out:${out.name}`,
           title: `${display} (${out.type})`,
-          color: portColor(out.type ?? "*"),
+          color: portColor(out.type),
         }))}
       />
     </>

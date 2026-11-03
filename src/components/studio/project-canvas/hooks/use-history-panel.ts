@@ -51,7 +51,9 @@ export type HistoryPanelController = {
 
 export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPanelController {
   const [filter, setFilter] = useState<HistoryFilter>("all");
-  const [scope, setScope] = useState<HistoryScope>(projectId ? "project" : "all");
+  const [scope, setScope] = useState<HistoryScope>(
+    projectId !== undefined && projectId !== null && projectId !== "" ? "project" : "all",
+  );
   const [display, setDisplay] = useState<DisplayMode>("list");
 
   const [tasks, setTasks] = useState<Array<HistoryTaskRow>>([]);
@@ -77,7 +79,12 @@ export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPane
         projectId?: string;
         take: number;
       } = { take: TAKE };
-      if (scope === "project" && projectId) {
+      if (
+        scope === "project" &&
+        projectId !== undefined &&
+        projectId !== null &&
+        projectId !== ""
+      ) {
         params.projectId = projectId;
       }
       /* "all" 不是服务端认识的 media 枚举，只在筛选非全部时才带上。 */

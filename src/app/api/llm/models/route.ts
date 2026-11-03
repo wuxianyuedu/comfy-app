@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
   }
 
   const headers: Record<string, string> = {};
-  if (provider === "remote" && cfg.apiKey) {
+  if (provider === "remote" && cfg.apiKey !== null && cfg.apiKey !== "") {
     headers.Authorization = `Bearer ${cfg.apiKey}`;
   }
   const probe = (base: string) =>

@@ -107,7 +107,9 @@ function persistProjectToServer(p: CanvasProject): void {
       .mutate({
         id: p.id,
         name: p.name,
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 画布项目可能来自 localStorage/反序列化，nodes 运行期可缺省，`?? []` 是兜底
         nodes: p.nodes ?? [],
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：edges 运行期可缺省
         edges: p.edges ?? [],
       })
       /* 成功要把之前的拒收记录撤掉：用户照着提示把名字改对之后，
@@ -204,8 +206,10 @@ function toCanvasProject(row: ServerProjectRow): CanvasProject {
     name: row.name,
     updatedAt: new Date(row.updatedAt).getTime(),
     /* SAFETY: 类型断言已复核 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 行来自服务端 API（JSON 列），nodes 运行期可缺省，断言只改类型
     nodes: (row.nodes as CanvasProject["nodes"]) ?? [],
     /* SAFETY: 类型断言已复核 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：服务端行里 edges 运行期可缺省
     edges: (row.edges as CanvasProject["edges"]) ?? [],
   };
 }
@@ -318,7 +322,8 @@ export const EMPTY_DRAFT_NAME = EMPTY_DRAFT_NAMES[0];
 /* 当且仅当 `name` 是空草稿哨兵名时为真。用它代替在每个回收判据里
  * 硬编码「未命名」，让默认名只有一处事实源、不会漂移。 */
 export function isEmptyDraftName(name: string | undefined | null): boolean {
-  if (!name) {
+  /* 哨兵名非空，空串与缺省在最后的全等比较里同样判 false */
+  if (name === undefined || name === null) {
     return false;
   }
   return name === EMPTY_DRAFT_NAME;
@@ -370,6 +375,7 @@ export function findNextAvailableName(base: string, excludeId?: string): string 
   // 否则会一直与它相撞，而不是找到下一个空闲槽位。
   let suffix = 2;
 
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 命名去重由内部 return/上限判据退出，`while (true)` 是刻意写法
   while (true) {
     const candidate = `${baseClean}_${suffix}`;
     if (!taken.has(candidate)) {
@@ -454,6 +460,7 @@ function isReapableEmptyDraft(project: CanvasProject, activeId: string | null): 
   if (project.name !== EMPTY_DRAFT_NAME) {
     return false;
   }
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- project 来自 localStorage 索引（JSON.parse），nodes/edges 运行期可缺省，?. 与 ?? 0 都是兜底
   return (project.nodes?.length ?? 0) === 0 && (project.edges?.length ?? 0) === 0;
 }
 
@@ -508,7 +515,8 @@ export function reapAllEmptyDrafts(): number {
    * 那种悬空 active 指向谁都不存在，留着只会让上层以为「我有项目」而六个
    * 项目页签点进去全落空。是活跃项目就保留，否则清掉。 */
   const survivors = readIndex();
-  if (activeId && !survivors.some((survivor) => survivor.id === activeId)) {
+  /* 活跃 id 是持久化里的项目 id，不会是空串 */
+  if (activeId !== null && !survivors.some((survivor) => survivor.id === activeId)) {
     removeStorageItem(ACTIVE_KEY);
   }
   return doomed.length;
@@ -575,7 +583,9 @@ export async function listProjectsWithServer(): Promise<{
   for (const project of localAll) {
     byId.set(project.id, {
       ...project,
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 本地项目来自 localStorage 索引（JSON.parse），nodes 运行期可缺省
       nodes: project.nodes ?? [],
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：edges 运行期可缺省
       edges: project.edges ?? [],
       origin: "local",
     });

@@ -65,15 +65,21 @@ export function computeNodePalette(
   const modeColor = nodeMode === 4 ? BYPASS_COLOR : nodeMode === 2 ? DISABLED_COLOR : null;
   const effectiveColor = modeColor ?? role?.color;
 
-  const headerBg = effectiveColor ? mixHex(base.body, effectiveColor, 0.22) : base.header;
+  const headerBg =
+    effectiveColor !== undefined && effectiveColor !== ""
+      ? mixHex(base.body, effectiveColor, 0.22)
+      : base.header;
   // 卡片体：只 ~8% 着色，让角色身份是个提示而不是铺满。模式
   // 节点保留半透明着色，好让真正的背景模糊接上。
   const nodeBg = modeColor
     ? hexToRgba(modeColor, nodeMode === 4 ? 0.16 : 0.11)
-    : role?.color
+    : role?.color !== undefined && role.color !== ""
       ? mixHex(base.body, role.color, 0.08)
       : base.body;
-  const nodeBorder = effectiveColor ? mixHex(base.body, effectiveColor, 0.55) : base.borderFallback;
+  const nodeBorder =
+    effectiveColor !== undefined && effectiveColor !== ""
+      ? mixHex(base.body, effectiveColor, 0.55)
+      : base.borderFallback;
   const titleColor = modeColor ? lightenHex(modeColor, 0.3) : (role?.color ?? base.titleFallback);
   const dotBg = effectiveColor ?? base.dotFallback;
 

@@ -72,7 +72,7 @@ export function ConsoleOutput({
       {/* 结论条：跑完 / 被停才有。它是「这次到底成没成」的唯一出口
           （硬规则 4：失败路径必须有用户可见出口）—— 只看输出末尾几行
           是判不出成败的。 */}
-      {verdict && (
+      {verdict !== null && verdict !== "" && (
         <div
           className={cn(
             "flex shrink-0 items-center gap-2 border-t px-4 py-2 text-[12.5px]",

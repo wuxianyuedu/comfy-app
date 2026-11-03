@@ -244,6 +244,7 @@ function readShimTarget(shimPath) {
 
 /* 直接执行时念一句（人读的那一份；判据在用例里）：
  * `node scripts/package-bin-entry.mjs typedoc storybook vitest` */
+// oxlint-disable-next-line typescript/no-unnecessary-condition -- 直接执行判据：以 REPL / 无脚本入口方式入场时 argv[1] 运行时为 undefined
 if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   const names = process.argv.slice(2);
   if (names.length === 0) {

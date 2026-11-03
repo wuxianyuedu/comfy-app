@@ -179,7 +179,7 @@ function DefaultLogRow({ log, rowTestId }: { log: TaskLogEntry; rowTestId?: stri
       <span className="text-ink-strong min-w-0 flex-1 wrap-break-word whitespace-pre-wrap">
         {log.msg}
       </span>
-      {log.src && (
+      {log.src !== undefined && log.src !== "" && (
         <span className="text-ink-fainter hover:text-ink-faint text-2xs max-w-50 shrink-0 truncate">
           {log.src}
         </span>

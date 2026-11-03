@@ -76,6 +76,7 @@ export function useGenerate({
         const t = await vanillaApi.task.detail.query({
           id: taskIdForReconcile,
         });
+        // oxlint-disable-next-line no-unnecessary-condition -- t 来自 tRPC task.detail（外部数据），旧服务端可能缺 status，? 是运行时守卫
         if (!t?.status) {
           return;
         }
@@ -84,12 +85,13 @@ export function useGenerate({
           return;
         }
         if (t.status === "SUCCEEDED") {
+          const hasImages = Boolean(t.resultImages);
           guard.commit(() => {
             patch({
               status: "done",
               error: undefined,
               progress: 100,
-              ...(t.resultImages ? { resultImages: t.resultImages } : {}),
+              ...(hasImages ? { resultImages: t.resultImages } : {}),
             });
           });
         } else if (t.status === "FAILED" || t.status === "CANCELLED") {
@@ -119,9 +121,11 @@ export function useGenerate({
     // ── 用户上传的工作流节点：跑选中的 WorkflowTemplate ──
     if (
       d.kind === "workflow" ||
-      ((d.kind === "image" || d.kind === "video" || d.kind === "picture") && d.workflowId)
+      ((d.kind === "image" || d.kind === "video" || d.kind === "picture") &&
+        d.workflowId !== undefined &&
+        d.workflowId !== "")
     ) {
-      if (!d.workflowId) {
+      if (d.workflowId === undefined || d.workflowId === "") {
         patch({ error: "请先选择工作流", status: "error" });
         return;
       }
@@ -175,7 +179,7 @@ export function useGenerate({
           // 输出句柄，好让产出的媒体被展示且可继续串联。每个
           // 工作流节点只孵化一次（workflowSinkId 挡住重跑）。
           let sinkId = d.workflowSinkId;
-          if (!sinkId) {
+          if (sinkId === undefined || sinkId === "") {
             /* 这是**第四个**「把新节点放进画布」的落点（规范 16
              * §16.2.4.38）—— 收口时只找到三处，是 P35 的判据把它抓出来的。
              * 它的落点既不是指针也不是视口中心，而是**源节点右侧 340px**，
@@ -204,7 +208,7 @@ export function useGenerate({
                   resultPath: result.localPath,
                   resultMediaType: result.mediaType,
                   inputImage: imported ?? null,
-                  mode: imported ? "img2img" : "txt2img",
+                  mode: imported === null ? "txt2img" : "img2img",
                 };
             /* 节点 id 由出口生成 —— 先在本地算一份，好让紧接着的自动连线
              * 用同一个 id（出口的 `placeCanvasNode` 只吃「已经定好的 id」

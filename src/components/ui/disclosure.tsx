@@ -84,7 +84,7 @@ export function Disclosure({
           /* 触发行：默认「标记 + 内容」贴左、整行可点。调用处要两端对齐
            *  （标题左、状态右）时传 `className` 覆盖为 `justify-between`。 */
           "group/disclosure flex w-full cursor-pointer items-center gap-1.5 text-left select-none",
-          disabled && "cursor-not-allowed opacity-50",
+          disabled === true && "cursor-not-allowed opacity-50",
           className,
         )}
         data-slot="disclosure-trigger"

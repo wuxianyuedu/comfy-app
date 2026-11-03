@@ -255,7 +255,7 @@ describe("尺寸卡：六行的类型与拖线后的线（回归）", () => {
      * 而 `\s*` 化的写法既钉住了「四个实参按此顺序」这件事，
      * 又不把判据挂在「某次格式化后长什么样」上（规范 §12.11 的同款教训）。 */
     expect(flow).toMatch(
-      /deriveLibraryEdges\(\s*paramCards\.wires,\s*outputWires,\s*!!canWire,\s*selectedEdgeIds,?\s*\)/,
+      /deriveLibraryEdges\(\s*paramCards\.wires,\s*outputWires,\s*canWire === true,\s*selectedEdgeIds,?\s*\)/,
     );
     const canvas = read("WorkflowLibraryCanvas.tsx");
     expect(canvas).toMatch(/setEdges\(flow\.defaultEdges\)/);

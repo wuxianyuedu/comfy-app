@@ -21,7 +21,7 @@ export function isSameDay(a: Date, b: Date): boolean {
  */
 export function formatTime(ts: number, opts?: { alwaysDate?: boolean }): string {
   const time = formatClock(ts, { millis: true });
-  if (opts?.alwaysDate || !isSameDay(new Date(ts), new Date())) {
+  if (opts?.alwaysDate === true || !isSameDay(new Date(ts), new Date())) {
     /* 短日期前缀（`MM-DD`）走 `~/lib/time-format` 的 `formatShortDate`。 */
     return `${formatShortDate(ts)} ${time}`;
   }
@@ -46,8 +46,8 @@ export type FormattableLog = {
  */
 export function formatEntryForClipboard(entry: FormattableLog): string {
   const head = `${formatTime(entry.time, { alwaysDate: true })} [${entry.level.toUpperCase()}]`;
-  const where = entry.location ? ` <${entry.location}>` : "";
-  const from = entry.origin ? ` · ${entry.origin}` : "";
+  const where = entry.location !== undefined && entry.location !== "" ? ` <${entry.location}>` : "";
+  const from = entry.origin !== undefined && entry.origin !== "" ? ` · ${entry.origin}` : "";
   return `${head}${where} ${entry.message}${from}`;
 }
 

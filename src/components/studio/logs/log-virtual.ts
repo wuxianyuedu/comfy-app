@@ -117,9 +117,9 @@ export function layoutRows(
   for (const [i, entry] of entries.entries()) {
     const id = entry.id;
     let size: number;
-    if (id && expandedIds?.has(id)) {
+    if (id !== undefined && id !== "" && expandedIds?.has(id) === true) {
       size = LOG_ROW_EXPANDED;
-    } else if (id && singleLineIds?.has(id)) {
+    } else if (id !== undefined && id !== "" && singleLineIds?.has(id) === true) {
       size = LOG_ROW_SINGLE;
     } else {
       /* 每行的行数只数一次：estimateRowHeight 与 countLines 都靠它推高度。 */

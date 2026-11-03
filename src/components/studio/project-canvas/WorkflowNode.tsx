@@ -119,7 +119,11 @@ export function WorkflowNode({
       if (sourceFilter === "local") {
         return Boolean(workflowList.sourcePath);
       }
-      return !workflowList.sourcePath;
+      return (
+        workflowList.sourcePath === undefined ||
+        workflowList.sourcePath === null ||
+        workflowList.sourcePath === ""
+      );
     })
     .filter((workflow) => {
       if (modelFilter === "all") {
@@ -194,7 +198,7 @@ export function WorkflowNode({
           />
           <WorkflowModePickChip
             defaultMode={workflowModes?.defaultMode ?? null}
-            disabled={!d.workflowId}
+            disabled={d.workflowId === undefined || d.workflowId === ""}
             modes={workflowModes?.modes ?? []}
             onChange={onModesChange}
           />
@@ -255,7 +259,7 @@ export function WorkflowNode({
                   <span
                     className="text-ink-bright min-w-0 truncate text-sm font-semibold"
                     style={{ fontFamily: "var(--font-sans)" }}
-                    title={`IO 输出 · ${oLabel}${oType ? ` · ${oType}` : ""}`}
+                    title={`IO 输出 · ${oLabel}${oType !== undefined && oType !== "" ? ` · ${oType}` : ""}`}
                   >
                     {oLabel}
                   </span>

@@ -77,6 +77,7 @@ export function EmptyState({
   /* 传节点时原样渲染，传 lucide 组件时按统一尺寸渲染（历史两种调用都有，
    * 取并集才不会逼调用方先看一遍 props）。 */
   let renderedIcon: ReactNode = null;
+  const hasIcon = Boolean(icon);
   if (isIconComponent(icon)) {
     /* 组件形参必须渲染成 `<Icon …/>` 而不是 `{icon}`：lucide 图标是
      * `React.forwardRef` 的产物（对象），直接当子节点会被 React 判成
@@ -88,7 +89,7 @@ export function EmptyState({
     ) : (
       <Icon aria-hidden size={32} />
     );
-  } else if (icon) {
+  } else if (hasIcon) {
     renderedIcon = icon;
   }
 
@@ -118,22 +119,22 @@ export function EmptyState({
       )}
     >
       <EmptyHeader>
-        {renderedIcon && (
+        {Boolean(renderedIcon) && (
           <EmptyMedia className={cn(error ? "text-destructive" : "text-primary")}>
             {renderedIcon}
           </EmptyMedia>
         )}
-        {title && (
+        {title !== undefined && title !== "" && (
           <EmptyTitle className={cn(error ? "text-destructive" : "text-ink-strong")}>
             {title}
           </EmptyTitle>
         )}
-        {description && (
+        {Boolean(description) && (
           <EmptyDescription className="text-ink-muted mt-1 text-xs leading-relaxed">
             {description}
           </EmptyDescription>
         )}
-        {action && (
+        {Boolean(action) && (
           // EmptyContent 默认 flex-col + max-w-sm，操作按钮要横向排；
           // 覆盖 layout 到 flex-row，不动 variant 语义。
           <EmptyContent className="mt-3 flex-row justify-center gap-2">{action}</EmptyContent>

@@ -111,7 +111,8 @@ export function WorkflowLibraryList({
           松开即可读取该工作流 JSON
         </p>
       )}
-      {fileErr && (
+      {/* oxlint-disable-next-line no-unnecessary-condition -- 该 prop 声明为 string|null，undefined 判定对声明类型恒真；保留它兼容调用方缺省/显式 undefined */}
+      {fileErr !== null && fileErr !== undefined && fileErr !== "" && (
         <p className="border-destructive/25 bg-destructive/8 text-destructive text-2xs border-b px-3 py-1.5">
           ⚠ {fileErr}
         </p>
@@ -187,7 +188,7 @@ export function WorkflowLibraryList({
             </p>
             <ul className="flex flex-col gap-1">
               {pendingRows.map((pending) => {
-                const loadingPending = !!pendingLoading[pending.id];
+                const loadingPending = pendingLoading[pending.id] === true;
                 /* 整行不可点：点击即载入会被误触（只想看看名字 / 选中某一行的
                  * 用户会顺手点上去），因此载入动作只挂在右侧按钮上。 */
                 return (
@@ -248,6 +249,7 @@ function WorkflowListItem({
   const encapsulation = deriveEncapsulationStatus({
     io: workflow.workflowIO ?? null,
     paramMap: workflow.paramMap ?? null,
+    // oxlint-disable-next-line no-unnecessary-condition -- defaultMode 来自 tRPC 列表响应，旧行可能缺该字段
     mode: workflow.defaultMode ?? workflow.taskType ?? null,
   });
 

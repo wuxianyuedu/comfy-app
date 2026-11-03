@@ -361,6 +361,7 @@ if (runtimeMode) {
  * 异步链（connect 的探测/自动拉起都还在 microtask 里），不会在测试机上真把
  * ComfyUI 带起来——契约测断的是「领取发生 + 行翻 RUNNING」，不是全链执行。 */
 if (claimOnce) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- hostRuntime 由 bootRuntime 赋值，类型面只看到初始值 null
   if (!hostRuntime) {
     writeLine("--claim-once 需要 COMFY_EXECUTOR=host（骨架形态没有可领取的运行时）");
     process.exit(1);
@@ -397,7 +398,9 @@ let claimHandle = null;
 if (runtimeMode) {
   claimHandle = setInterval(() => {
     claimTickOnce().catch((error) => {
-      writeLine(`claim-tick 异常（下轮重试）：${error instanceof Error ? error.message : String(error)}`);
+      writeLine(
+        `claim-tick 异常（下轮重试）：${error instanceof Error ? error.message : String(error)}`,
+      );
     });
   }, CLAIM_TICK_MS);
 }
@@ -416,5 +419,9 @@ function shutdown(sig) {
   process.exit(0);
 }
 
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => {
+  shutdown("SIGTERM");
+});
+process.on("SIGINT", () => {
+  shutdown("SIGINT");
+});

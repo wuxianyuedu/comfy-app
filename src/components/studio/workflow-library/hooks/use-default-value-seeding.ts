@@ -23,7 +23,7 @@ export function useDefaultValueSeeding(params: {
   /* 播种键同时含 workflowId 与生效模式：换工作流 / 换模式都会落到下面的
    * 「整表重播」分支。这一步是必须的——若只按 mode 判定，上一个工作流的
    * 用户覆盖值会被当成新工作流的覆盖值保留下来（ioKey 恰好同名时）。 */
-  const activeSeedKey = `${workflowId ?? ""}|${effectiveMode ?? ""}`;
+  const activeSeedKey = `${workflowId}|${effectiveMode ?? ""}`;
   useEffect(() => {
     if (!workflowIO) {
       return;

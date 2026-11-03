@@ -116,18 +116,24 @@ function parseSettingsBlob(
   paths: Array<string>;
   summary: SettingsResp["summary"];
 } {
-  if (!data.settings) {
+  const settingsPresent = Boolean(data.settings);
+  if (!settingsPresent) {
     const err = data.error;
     const detail = typeof err === "string" ? err : (err?.message ?? `HTTP ${status}`);
     throw new Error(detail || `读取配置失败（HTTP ${status}）`);
   }
-  const paths = data.settings.paths || [];
+  /* `??` 而非 `||`：对象 / 数组在声明域内恒真，回退只在运行期 null/undefined
+   * （接口缺字段）时触发 —— 与原 `||` 在该域内逐值等价。 */
+  // oxlint-disable-next-line no-unnecessary-condition -- settings 来自 fetch 响应的浅断言，旧服务端响应可能缺 paths
+  const paths = data.settings.paths ?? [];
   return {
     paths,
     summary: data.summary,
     lastReport: data.lastReport,
-    discoveredByParent: data.discoveredByParent || {},
-    byPath: data.byPath || {},
+    // oxlint-disable-next-line no-unnecessary-condition -- 同上：旧服务端响应可能缺 discoveredByParent
+    discoveredByParent: data.discoveredByParent ?? {},
+    // oxlint-disable-next-line no-unnecessary-condition -- 同上：旧服务端响应可能缺 byPath
+    byPath: data.byPath ?? {},
   };
 }
 async function consumeSettingsStream(
@@ -199,7 +205,7 @@ async function consumeSettingsStream(
           if (ev.phase) {
             next.phase = ev.phase;
           }
-          if (ev.msg) {
+          if (ev.msg !== undefined && ev.msg !== "") {
             next.msg = ev.msg;
           }
           if (ev.discovered !== undefined) {
@@ -453,7 +459,8 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   const fetchManifest = useCallback(async () => {
     const manifest = await getCustomNodesManifest();
     if (manifest) {
-      setManifestByNode(manifest.nodes || {});
+      // oxlint-disable-next-line no-unnecessary-condition -- manifest 是 fetch 响应的 cast，旧服务端响应可能缺 nodes
+      setManifestByNode(manifest.nodes ?? {});
     }
   }, []);
   useEffect(() => {
@@ -505,8 +512,9 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
                 PARSE_LOG_MAX,
               ),
             );
+            // oxlint-disable-next-line no-unnecessary-condition -- 判别联合在 else 分支已收窄为 "done"，保留显式比较防守类型扩展后分支错位
           } else if (obj.type === "done") {
-            void onDone(obj.report ?? null, !!obj.ok);
+            void onDone(obj.report ?? null, obj.ok === true);
           }
         } catch {
           // 忽略非 JSON 行

@@ -29,6 +29,7 @@ export async function copyText(text: string): Promise<boolean> {
     return false;
   }
   try {
+    // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- 浏览器特性探测：非安全上下文 clipboard 可能缺位，类型不表达运行期缺省
     if (navigator.clipboard) {
       await navigator.clipboard.writeText(text);
       return true;

@@ -24,6 +24,7 @@ import {
   type WorkflowRow,
 } from "../workflow-library-config";
 import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
+import { isPlainRecord } from "~/lib/is-record";
 
 export type WorkflowLibraryDetailActions = {
   download: () => void;
@@ -107,7 +108,7 @@ export function resolveActiveMode(
   workflowId: string | null,
   defaultMode: string | null,
 ): string | null {
-  if (!workflowId || !override) {
+  if (workflowId === null || workflowId === "" || !override) {
     return defaultMode;
   }
   return override.workflowId === workflowId ? override.mode : defaultMode;
@@ -226,10 +227,7 @@ export function useWorkflowLibraryDetail(
    * 稿（它直读 DB 列，没有富化改写），缺省空对象。 */
   const paramMap = useMemo<Record<string, unknown>>(() => {
     const raw = template?.paramMap;
-    /* SAFETY: 类型断言已复核 */
-    return raw && typeof raw === "object" && !Array.isArray(raw)
-      ? (raw as Record<string, unknown>)
-      : {};
+    return isPlainRecord(raw) ? raw : {};
   }, [template]);
 
   const formatFlags = useMemo(

@@ -79,7 +79,7 @@ export function QueueMonitorView({
         </Button>
       </ViewActions>
 
-      {c.loadError ? (
+      {c.loadError !== null && c.loadError !== "" ? (
         <EmptyState
           className="mb-6"
           description="读不到任务记录时不沿用旧数据 —— 把已经结束的条目显示成还在跑，比读到空更坏。"

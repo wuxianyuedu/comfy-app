@@ -288,6 +288,7 @@ export function fetchRangeToFile(url, dest, offset, size, timeoutMs, { probeOnly
     ],
     { encoding: "utf8", windowsHide: true, timeout: timeoutMs + 5000 },
   );
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout / stderr 实测为 undefined，@types/node 按 string 标
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
   /* 子进程把结论打成一行 `OK <bytes> <total>` / `ERR <原因>` —— 解析在这里、
    * 取证在网上那一次。解析不到（被砍 / 崩了）当成「这一片没成」。 */
@@ -302,6 +303,7 @@ export function fetchRangeToFile(url, dest, offset, size, timeoutMs, { probeOnly
     return { bytes: -1, total: null, out };
   }
   const bytes = Number(a);
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- split 下标越界时运行时是 undefined，类型按 string 标窄
   const total = b === undefined || b === "null" ? null : Number(b);
   if (probeOnly) {
     rmSync(scratch, { force: true });

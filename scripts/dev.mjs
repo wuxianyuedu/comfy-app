@@ -46,6 +46,7 @@ function parseArgs(argv) {
     const a = argv[i];
     /* `noUncheckedIndexedAccess` 之下按下标取到的是 `string | undefined`；
      * `i < argv.length` 已保证这一格有值，守卫只把这件事写给类型检查器看。 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- argv 下标在 noUncheckedIndexedAccess 下是 string | undefined，守卫写给 tsc
     if (a === undefined) {
       continue;
     }
@@ -81,7 +82,13 @@ process.stdout.write(
 // 这正是壳 3809 / dev server 3100 那类「永远对不上」的来源。不阻断启动（命令行是
 // 权威入口），但必须说出来，否则用户只能看到一个连不上的端口。
 const envPort = Number.parseInt(process.env[APP_PORT_ENV_KEY] ?? "", 10);
-if (explicit && Number.isInteger(envPort) && envPort >= 1 && envPort <= 65_535 && envPort !== port) {
+if (
+  explicit &&
+  Number.isInteger(envPort) &&
+  envPort >= 1 &&
+  envPort <= 65_535 &&
+  envPort !== port
+) {
   process.stderr.write(
     `[dev.mjs] ⚠ 环境变量 ${APP_PORT_ENV_KEY}=${envPort} 与本次实际监听端口 ${port} 不一致：\n` +
       "[dev.mjs]   命令行的 -p/--port 优先，本次以它为准；但请确认调用方算端口的口径\n" +

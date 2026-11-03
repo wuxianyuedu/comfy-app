@@ -68,7 +68,7 @@ export function WorkflowOutputParamCardColumn({
         const portLabel = outputPortLabel(output);
         const handleId = output.ioKey;
         const type = output.type ?? "*";
-        const manual = !!isManual?.(output.ioKey);
+        const manual = isManual?.(output.ioKey) === true;
         return (
           <WorkflowParamCard
             canReset={canWire && manual}
@@ -131,6 +131,7 @@ export function WorkflowOutputParamCardColumn({
  *  标题只说「这是一个对外输出的口」，与左列的「提示词 / 尺寸」是同一层语义。 */
 function outputCardLabel(output: WorkflowIOEntry & { ioKey: string }): string {
   const label = (output.label ?? "").trim();
+  // oxlint-disable-next-line no-unnecessary-condition -- WorkflowIOEntry 来自持久化的工作流 IO JSON，旧数据可能缺 name
   const name = (output.name ?? "").trim();
   return label && label !== name ? label : "输出";
 }

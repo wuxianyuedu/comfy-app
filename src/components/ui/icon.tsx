@@ -157,7 +157,8 @@ export function Icon(props: IconProps) {
   const { own, rest } = splitDomProps(props, OWN_PROPS);
   const name = own.name;
   const size = own.size ?? 16;
-  const Cmp: LucideIcon | undefined = name ? ICON_MAP[name.toLowerCase()] : undefined;
+  const Cmp: LucideIcon | undefined =
+    name !== undefined && name !== null && name !== "" ? ICON_MAP[name.toLowerCase()] : undefined;
   if (!Cmp) {
     return null;
   }

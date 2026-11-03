@@ -267,6 +267,7 @@ function collectChangedFiles(patch) {
  * @returns {?{before: string, after: string, dots: ".." | "..."}} 认不出时回 `null`
  */
 function parseRange(range) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 实参源自 --range 命令行参数，类型按 string 标窄
   const trimmed = String(range ?? "").trim();
   const three = /^(.*?)\.\.\.(.*)$/.exec(trimmed);
   if (three) {

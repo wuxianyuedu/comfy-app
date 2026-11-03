@@ -38,11 +38,11 @@ export function StyleSwitcher({
     <div className="flex items-center gap-2">
       <span className="text-ink-muted text-3xs shrink-0">录入方式</span>
       <SelectMenu
-        className={narrow ? "w-37 max-w-full" : ""}
+        className={narrow === true ? "w-37 max-w-full" : ""}
         /* 宽档要「占满剩下的宽度」——那是`fullWidth`，不是`flex-1`：
          *`flex-1` 改的是 flex 项的伸缩，而触发器自身仍是内容宽，
          * 旁边的兄弟一变长它就被挤回内容宽。 */
-        fullWidth={!narrow}
+        fullWidth={narrow !== true}
         labels={Object.fromEntries(options.map((option) => [option.value, option.label]))}
         onChange={(value) => {
           /* SAFETY: 类型断言已复核 */

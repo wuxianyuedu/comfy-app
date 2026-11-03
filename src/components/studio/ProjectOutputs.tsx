@@ -309,7 +309,8 @@ export function ProjectOutputs() {
           height: image.height,
         })),
         /* 相对应用根的落点，形状来自布局那一处（组件里抄字面量 = 搬一次根就说错话）。 */
-        savePath: projectId ? artifactDirDisplay(selected.id, projectId) : "",
+        savePath:
+          projectId !== null && projectId !== "" ? artifactDirDisplay(selected.id, projectId) : "",
       },
       null,
       2,
@@ -342,7 +343,7 @@ export function ProjectOutputs() {
     downloadText(metaJson, `output-${selected.id}.json`);
   }, [metaJson, selected]);
 
-  if (!projectId) {
+  if (projectId === null || projectId === "") {
     return (
       <DocumentFrame
         backdrop={<AuroraBackground />}
@@ -373,7 +374,7 @@ export function ProjectOutputs() {
         actions={
           <>
             <SelectMenu
-              labels={Object.fromEntries(projects.map((p) => [p.id, p.name ?? "未命名项目"]))}
+              labels={Object.fromEntries(projects.map((p) => [p.id, p.name]))}
               onChange={setProjectId}
               options={projects.map((p) => p.id)}
               value={projectId}

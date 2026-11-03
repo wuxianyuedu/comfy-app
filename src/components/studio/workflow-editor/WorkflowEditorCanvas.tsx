@@ -47,7 +47,7 @@ export function isEdgeHandleCullingNoise(args: {
     return false;
   }
   /* 端点信息缺失（边引用的节点已被删）→ 交给 React Flow 自己处理。 */
-  if (!sourceId || !targetId) {
+  if (sourceId === null || sourceId === "" || targetId === null || targetId === "") {
     return false;
   }
   /* 两端都挂载还报错 ⇒ 是真的找不到 handle，必须暴露。 */
@@ -127,9 +127,11 @@ export function WorkflowEditorCanvas({
   const miniMapNodeColor = useCallback((node: Node) => {
     /* SAFETY: 类型断言已复核 */
     const d = node.data as WorkflowNodeData | undefined;
+    const role = d?.assignedRole;
     return (
-      (d?.assignedRole ? ROLE_COLOR_BY_KEY.get(d.assignedRole) : undefined) ??
-      "var(--color-ink-faint)"
+      (role !== null && role !== undefined && role !== ""
+        ? ROLE_COLOR_BY_KEY.get(role)
+        : undefined) ?? "var(--color-ink-faint)"
     );
   }, []);
 

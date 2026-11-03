@@ -212,6 +212,7 @@ export function splitExtraModels(raw: unknown): ExtraModelSplit {
  * 回环服务；真远端模型不会用回环地址访问。与服务端 describeFetchFailure 的判定一致。
  */
 export function isLoopbackBaseUrl(url: string): boolean {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- types.test.ts 显式传 null（`null as unknown as string`），`?? ""` 是该支唯一防线
   return /^(https?:\/\/)?(localhost|127\.|\[::1\])/i.test(String(url ?? "").trim());
 }
 
@@ -225,10 +226,13 @@ export function isMisplacedLocalOllama(
   e: { apiKey?: string | null; baseUrl?: string | null },
   llmBaseUrl: string | null | undefined,
 ): boolean {
-  if (e.apiKey) {
+  if (e.apiKey !== undefined && e.apiKey !== null && e.apiKey !== "") {
     return false;
   } // 带独立密钥 = 真远端
-  const effective = e.baseUrl?.trim() ? e.baseUrl : (llmBaseUrl ?? "");
+  const effective =
+    e.baseUrl !== undefined && e.baseUrl !== null && e.baseUrl.trim() !== ""
+      ? e.baseUrl
+      : (llmBaseUrl ?? "");
   return isLoopbackBaseUrl(effective);
 }
 
@@ -408,7 +412,7 @@ export function pickVisionModelName(
   override?: { visionModel?: string | null },
 ): string {
   const explicit = override?.visionModel?.trim();
-  if (explicit) {
+  if (explicit !== undefined && explicit !== "") {
     return explicit;
   }
   const imageEntry = cfg.extraModels?.find((e) => e.kind === "image");

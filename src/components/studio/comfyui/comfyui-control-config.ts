@@ -28,7 +28,11 @@ export function isComfyBusy(
   flags: { opening: boolean; starting: boolean; stopping: boolean },
 ): boolean {
   return (
-    flags.opening || flags.starting || flags.stopping || !!status?.starting || !!status?.stopping
+    flags.opening ||
+    flags.starting ||
+    flags.stopping ||
+    status?.starting === true ||
+    status?.stopping === true
   );
 }
 
@@ -40,13 +44,13 @@ export function comfyDotState(
   status: ComfyRuntimeStatus | null,
   flags: { starting: boolean; stopping: boolean },
 ): StatusDotState {
-  if (status?.up) {
+  if (status?.up === true) {
     return "up";
   }
-  if (flags.starting || flags.stopping || status?.starting || status?.stopping) {
+  if (flags.starting || flags.stopping || status?.starting === true || status?.stopping === true) {
     return "busy";
   }
-  if (status?.probing) {
+  if (status?.probing === true) {
     return "probing";
   }
   return "down";
@@ -60,18 +64,18 @@ export function comfyStatusText(
   status: ComfyRuntimeStatus | null,
   flags: { starting: boolean; stopping: boolean },
 ): string {
-  if (status?.up) {
-    const base = status.base ? `（${status.base}）` : "";
-    const via = status.via ? `·${status.via}` : "";
+  if (status?.up === true) {
+    const base = status.base !== null && status.base !== "" ? `（${status.base}）` : "";
+    const via = status.via !== null && status.via !== "" ? `·${status.via}` : "";
     return `ComfyUI 运行中${base}${via}`;
   }
-  if (flags.stopping || status?.stopping) {
+  if (flags.stopping || status?.stopping === true) {
     return "ComfyUI 关闭中…";
   }
-  if (flags.starting || status?.starting) {
+  if (flags.starting || status?.starting === true) {
     return "ComfyUI 正在启动…";
   }
-  if (status?.probing) {
+  if (status?.probing === true) {
     return "ComfyUI 状态检测中…";
   }
   return "ComfyUI 未运行";
@@ -82,7 +86,7 @@ export function comfyStatusText(
  * 探测中/未运行时的空 title 或半截结论都比不给更坏（悬停内容会被当作权威）。
  */
 export function comfyDotTitle(status: ComfyRuntimeStatus | null): string | undefined {
-  if (!status?.up) {
+  if (status?.up !== true) {
     return undefined;
   }
   return comfyStatusText(status, { starting: false, stopping: false });
@@ -107,7 +111,7 @@ export function instanceKindLabel(kind: "desktop" | "portable" | "venv" | null):
  * 空路径不写「按空路径启动」，只说「尚未保存路径」（出口由 `comfyConfigHint` 给）。
  */
 export function comfyStartPathText(status: ComfyRuntimeStatus | null): string {
-  const path = status?.path?.trim() ?? "";
+  const path = status?.path.trim() ?? "";
   return path
     ? `点「启动 ComfyUI」将按这条已保存路径拉起：${path}（在「设置 → 创作后端」里改，改完要点保存）`
     : "尚未保存 ComfyUI 路径 —— 先在「设置 → 创作后端」里填好并保存，这里才有可启动的路径。";
@@ -123,7 +127,7 @@ export function comfyConfigHint(
     pathConfigured: boolean;
   } | null,
 ): string | null {
-  if (instance?.pathConfigured) {
+  if (instance?.pathConfigured === true) {
     return null;
   }
   return "还没配置 ComfyUI 路径 —— 在「设置 → 创作后端」里填源码根或桌面实例根，再回来启动。";

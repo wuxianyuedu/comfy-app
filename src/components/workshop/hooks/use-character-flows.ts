@@ -101,7 +101,7 @@ export function useCharacterExtractFlow(input: {
   const extractChannel = parseChannelOption(extractChannelValue).channel;
   const { patch: cacheExtractPatch, appendProgress, appendLog, setLog } = extractActions;
 
-  const hasScript = !!scriptMarkdown?.trim();
+  const hasScript = scriptMarkdown !== undefined && scriptMarkdown.trim() !== "";
 
   /** 提取入口：本地模型 / 远端 API 由 LLM 输出角色卡 JSON，失败降级提示 */
   async function handleExtract() {

@@ -609,7 +609,9 @@ export function main(io = {}) {
    * @param {string} line
    * @param {string} [color] 只给合计那一行用（它自己不带三态前缀）
    */
-  const log = (line, color) => writeLine(paintLine(line, { enabled: paintOn, color }));
+  const log = (line, color) => {
+    writeLine(paintLine(line, { enabled: paintOn, color }));
+  };
   const onlyArg = argv.find((a) => a.startsWith("--only="));
   const only = onlyArg ? onlyArg.slice("--only=".length) : null;
   const cwd = io.cwd ?? ROOT;
@@ -740,7 +742,9 @@ export function main(io = {}) {
      * 现在每条判决都过 `gatePass` / `gateSkip` / `gateFail`，三态用同一列前缀，
      * 而「没判」的那一档有自己的名字。 */
     /** @param {string} line */
-    const say = (line) => log(line);
+    const say = (line) => {
+      log(line);
+    };
     for (const s of skipped) {
       gateSkip(s.label, `按面未触及：面 ${s.globs.join(" / ")}（平台那一格：${s.stage}）`, {
         out: say,
@@ -823,7 +827,15 @@ export function main(io = {}) {
   }
   if (notJudged.length > 0) {
     /* 「没判」与「没跑起来」同列（都是「没有结论」，都不是「通过」）——
-     * 这一档原先是恒绿且无声（ISSUE #2224 的现场）。 */
+     * 这一档原先是恒绿且无声（ISSUE #2224 的现场）。
+     * 结尾补一句**机器可认的结论行**（ISSUE #3102）：GitHub 侧的外壳
+     * （`ci-step-verdict.mjs`）只在这一行出现时把 exit 2 折成非红 ——
+     * 有红 / 有缺件（missing）都在这行之前各自 return，折不到它们。 */
+    log(
+      `[重档] 结论：没判（红 0、缺件 0、没判 ${notJudged.length}）—— ` +
+        "这些条目的前提在本次触发形态下不存在；聚合层按没判不按红",
+      COLORS.skip,
+    );
     return 2;
   }
   return 0;
@@ -832,6 +844,7 @@ export function main(io = {}) {
 /* 只在被直接执行时跑 main。被 import 时（`tests/ci-autofix-duties.test.ts` 要读
  * `HEAVY_GATES`）只暴露纯数据与函数 —— 否则 `process.exit()` 会当场把测试进程杀掉，
  * 而那件事的形态是「用例一条都没跑、套件却红了」，读起来与真红完全两样。 */
+// oxlint-disable-next-line typescript/no-unnecessary-condition -- process.argv[1] 在 node -e / REPL 形态下实为 undefined，@types/node 标成 string
 if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(main());
 }

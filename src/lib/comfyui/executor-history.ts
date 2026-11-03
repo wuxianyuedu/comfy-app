@@ -51,6 +51,7 @@ export async function fetchHistoryEntry(promptId: string): Promise<ComfyHistoryE
       lastRaw = hist;
       lastErr = null;
       /* SAFETY: 类型断言已复核 */
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- hist 来自 ComfyUI /history 的 JSON 响应，运行期可能是 null（类型断言把它标成 Record）
       const entry = hist?.[promptId] as ComfyHistoryEntry | undefined;
       // outputs 落盘也可能晚一拍，等到有 outputs 或明确报错为止。
       if (

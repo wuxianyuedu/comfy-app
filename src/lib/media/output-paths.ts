@@ -125,7 +125,7 @@ export function filmBgmRoot(root: string = generatedRoot()): string {
  *  那种位置一定在根外，因此同样落到 `null`。 */
 export function artifactDiskPath(url: string, root: string = generatedRoot()): string | null {
   const matched = /^\/(?:api\/)?generated\/(.+)$/.exec(url)?.[1];
-  if (!matched) {
+  if (matched === undefined) {
     return null;
   }
   let decoded: string;

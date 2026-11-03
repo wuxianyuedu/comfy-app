@@ -119,7 +119,7 @@ export function FlowNodeWidgetRows({
               /* STRING 堆叠块 —— 顶部是 LABEL + IoCheckbox，textarea
                * 在下方占满剩余竖向空间。 */
               <div className="flex shrink-0 items-center gap-1.5">
-                {io?.ioEditMode && !isConn && !isBoundary && (
+                {io?.ioEditMode === true && !isConn && !isBoundary && (
                   <IoCheckbox
                     io={io}
                     ioRef={{
@@ -136,11 +136,12 @@ export function FlowNodeWidgetRows({
                   style={{
                     /* 提亮档统一走表里的色；其余行沿用「连线行比普通行重一档」的
                      * 既有口径（`ink-strong` / `ink-subtle`）。 */
-                    color: tone.background
-                      ? tone.labelColor
-                      : isConn
-                        ? "var(--color-ink-strong)"
-                        : "var(--color-ink-subtle)",
+                    color:
+                      tone.background !== undefined && tone.background !== ""
+                        ? tone.labelColor
+                        : isConn
+                          ? "var(--color-ink-strong)"
+                          : "var(--color-ink-subtle)",
                     fontWeight: tone.labelWeight,
                   }}
                   title={k}
@@ -152,7 +153,7 @@ export function FlowNodeWidgetRows({
               <div className="flex min-w-0 flex-1 items-center gap-1.5">
                 {/* 工作流输入必须是**未连线**的 —— 对已连线 /
                  *  边界槽位跳过复选框。 */}
-                {io?.ioEditMode && !isConn && !isBoundary && (
+                {io?.ioEditMode === true && !isConn && !isBoundary && (
                   <IoCheckbox
                     io={io}
                     ioRef={{
@@ -168,11 +169,12 @@ export function FlowNodeWidgetRows({
                   className="text-2xs min-w-0 shrink text-left wrap-break-word whitespace-normal"
                   style={{
                     flex: "0 1 auto",
-                    color: tone.background
-                      ? tone.labelColor
-                      : isConn
-                        ? "var(--color-ink-strong)"
-                        : "var(--color-ink-subtle)",
+                    color:
+                      tone.background !== undefined && tone.background !== ""
+                        ? tone.labelColor
+                        : isConn
+                          ? "var(--color-ink-strong)"
+                          : "var(--color-ink-subtle)",
                     fontWeight: tone.labelWeight,
                   }}
                   title={k}

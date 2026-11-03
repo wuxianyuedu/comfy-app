@@ -384,6 +384,7 @@ export function CharacterDesigner({
                     update(character.id, { styleTags: items });
                   }}
                   placeholder="如：厚涂、国风…"
+                  /* oxlint-disable-next-line no-unnecessary-condition -- 角色对象来自浅校验的草稿解析（draft-store 只查数组不深查元素），脏草稿可能缺 styleTags，保留 ?? [] 兜底 */
                   value={character.styleTags ?? []}
                 />
               </div>
@@ -426,7 +427,7 @@ export function CharacterDesigner({
                     value={character.loraName ?? ""}
                   />
                 </div>
-                {character.loraName && (
+                {character.loraName !== undefined && character.loraName !== "" && (
                   <div>
                     <span className="text-muted-foreground mb-1 block text-xs">强度</span>
                     <Input

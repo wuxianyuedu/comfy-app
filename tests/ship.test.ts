@@ -66,8 +66,13 @@ import {
 } from "../scripts/ship-build.mjs";
 import {
   CODE,
+  CODE_TABLE,
+  classifyIsMerged,
+  classifyPrMergeable,
   classifyPushFailure,
+  codeTag,
   combineShipCodes,
+  conflictAdviceLines,
   decideCleanBranch,
   decideCreateBranch,
   deriveTitle,
@@ -119,8 +124,15 @@ import {
   releaseComment,
   runIssueAction,
 } from "../scripts/ship-claim.mjs";
-import { cleanBranch, createOrReusePull, reportVerdict } from "../scripts/ship-platform.mjs";
+import {
+  cleanBranch,
+  createOrReusePull,
+  mergeAndVerify,
+  reportVerdict,
+} from "../scripts/ship-platform.mjs";
 import { pollUntilTerminal } from "../scripts/ship-poll.mjs";
+import { conflictFiles, reportStage } from "../scripts/ship-stage.mjs";
+import { stalledStages, stallReadout as stallReadoutLines } from "../scripts/ci-build-readout.mjs";
 import {
   readIssueBody,
   runAppendIssueComment,
@@ -129,7 +141,7 @@ import {
 import { sameCommentBody, stripTrailingNewline } from "../scripts/ship-comment.mjs";
 import { decideReap, instanceReading, reapCheckoutInstances } from "../scripts/ship-reap.mjs";
 import { runPreflightStage } from "../scripts/ship-preflight.mjs";
-import { DIAGNOSE_STALL_MINUTES, stallReadout } from "../scripts/ship-diagnose.mjs";
+import { DIAGNOSE_STALL_MINUTES, runDiagnose, stallReadout } from "../scripts/ship-diagnose.mjs";
 import { main } from "../scripts/ship.mjs";
 import { EMPTY_COMMIT_ENV } from "../scripts/intentional-empty-commit.mjs";
 
@@ -284,6 +296,42 @@ describe("combineShipCodes：2 压过 1", () => {
 
   it("三态的字面值钉住（0 绿 / 1 红 / 2 没跑起来），与 premerge-check 同口径", () => {
     expect([CODE.GREEN, CODE.RED, CODE.NOT_RUN]).toEqual([0, 1, 2]);
+  });
+});
+
+describe("ISSUE #3083：码表对账 —— 出口散落了谁的码，这条先红", () => {
+  it("CODE 与 CODE_TABLE 一一对应：0–7 连续、名字唯一、每个码都有语义与下一步", () => {
+    /* 用户拍板「看到退码就知道是什么问题」：这张表是码↔语义的唯一出处
+     * （`scripts/ship-codes.mjs`），后续新增出口若绕开它写魔数、或加了码不补
+     * 语义行，这条先红 —— 不许出现「有码没名字」或「两码同名」。 */
+    expect(CODE_TABLE.map((r) => r.code)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    const names = CODE_TABLE.map((r) => r.name);
+    expect(new Set(names).size).toBe(names.length);
+    for (const [key, value] of Object.entries(CODE)) {
+      const row = CODE_TABLE.find((r) => r.code === value);
+      expect(row, `CODE.${key}=${value} 在 CODE_TABLE 里没有对应行`).toBeDefined();
+      expect(row?.name).toBe(key);
+      expect(row?.semantics.length).toBeGreaterThan(0);
+      expect(row?.next.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("codeTag：错误文案里的「退 N 名字」短签与码表同源", () => {
+    expect(codeTag(CODE.CONFLICT)).toBe("退 3 CONFLICT");
+    expect(codeTag(CODE.GREEN)).toBe("退 0 GREEN");
+    /* 码表外的值不许猜名字：照实念「?」，而不是编一个。 */
+    expect(codeTag(99)).toBe("退 99 ?");
+  });
+
+  it("压栈规则：没跑起来家族（≥2）压 1 压 0，同族取最早（近根因）", () => {
+    /* 与三态时代同一口径：「没拿到测量」不许被「另有几步红了」盖掉。
+     * 新码（3–7）都在没跑起来家族里，压栈行为对旧码 {0,1,2} 逐字等价。 */
+    expect(combineShipCodes([CODE.RED, CODE.CONFLICT])).toBe(CODE.CONFLICT);
+    expect(combineShipCodes([CODE.GREEN, CODE.PREFLIGHT, CODE.CI_PENDING])).toBe(
+      CODE.PREFLIGHT,
+    );
+    expect(combineShipCodes([CODE.GREEN, CODE.RED])).toBe(CODE.RED);
+    expect(combineShipCodes([CODE.GREEN])).toBe(CODE.GREEN);
   });
 });
 
@@ -1237,7 +1285,7 @@ describe("#2199 findMergedPullProofs：只认 is_merged，先剥尾数再找号"
     const calls: Array<string> = [];
     const run = (_c: string, args: Array<string>): FakeResult => {
       calls.push(args.join(" "));
-      if (opts.fail) {
+      if (opts.fail === true) {
         return { status: 9, stdout: "", stderr: "", error: null };
       }
       const page = Number(args[args.indexOf("--page") + 1]);
@@ -1369,16 +1417,16 @@ describe("cleanBranch：删的是 ref，判的还是回读 —— 两边各问�
         return ok("", opts.pushStatus ?? 0);
       }
       if (key.startsWith("ls-remote --heads")) {
-        if (opts.lsRemoteFails) {
+        if (opts.lsRemoteFails === true) {
           return ok("", 128);
         }
-        return ok(opts.remoteStillThere ? "abc123\trefs/heads/feat/x" : "", 0);
+        return ok(opts.remoteStillThere === true ? "abc123\trefs/heads/feat/x" : "", 0);
       }
       if (key.startsWith("branch -D")) {
         return ok("", opts.branchStatus ?? 0);
       }
       if (key.startsWith("show-ref --verify")) {
-        return ok("", opts.localStillThere ? 0 : 1);
+        return ok("", opts.localStillThere === true ? 0 : 1);
       }
       return ok("");
     };
@@ -1882,7 +1930,7 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
         };
       }
       if (args[0] === "issues" && args[1] === "get-issue") {
-        if (opts.getIssueFails) {
+        if (opts.getIssueFails === true) {
           return { status: 0, stdout: "boom", stderr: "", error: null };
         }
         return {
@@ -1904,7 +1952,7 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
           labels.push(name);
         }
         // 竞态夹具：另一个会话在我之后也把它的处理人标签打了上来。
-        if (opts.writeExtraHandler) {
+        if (opts.writeExtraHandler !== undefined && opts.writeExtraHandler !== "") {
           labels.push(`处理人:${opts.writeExtraHandler}`);
         }
         return { status: 0, stdout: json({}), stderr: "", error: null };
@@ -1915,16 +1963,16 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
         return { status: 0, stdout: json({}), stderr: "", error: null };
       }
       if (args[0] === "issues" && args[1] === "post-issue-comment") {
-        if (opts.postCommentFails) {
+        if (opts.postCommentFails === true) {
           return { status: 0, stdout: "boom", stderr: "", error: null };
         }
         const text = fs.readFileSync(arg(args, "--body-file"), "utf8");
-        const stored = opts.stripCommentTail ? text.replace(/\r?\n$/, "") : text;
+        const stored = opts.stripCommentTail === true ? text.replace(/\r?\n$/, "") : text;
         comments.unshift(opts.commentRewrite ? opts.commentRewrite(stored) : stored);
         return { status: 0, stdout: json({}), stderr: "", error: null };
       }
       if (args[0] === "issues" && args[1] === "list-issue-comments") {
-        if (opts.commentListFails) {
+        if (opts.commentListFails === true) {
           return { status: 0, stdout: "boom", stderr: "", error: null };
         }
         return {
@@ -1935,7 +1983,7 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
         };
       }
       if (args[0] === "issues" && args[1] === "list-issues") {
-        if (opts.listFails) {
+        if (opts.listFails === true) {
           return { status: 0, stdout: "boom", stderr: "", error: null };
         }
         const page = Number(arg(args, "--page") || "1");
@@ -3050,6 +3098,8 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
     found?: boolean;
     /** `pulls get-pull` 回读的 mergeable_state；不给则这一问回空（读不到）。 */
     mergeableState?: string;
+    /** true = 响应里**根本没有** mergeable_state 这个键（ISSUE #3083 缺键夹具）。 */
+    omitMergeableState?: boolean;
     /** 每次的 pipeline 计数（"0-1" 这种 `完成-总`），与 statuses 同长。 */
     progress?: Array<string>;
     /** 每次的 stage 计数（"12/33" 这种 `完成/总`）；不给就造不出 stages 字段。 */
@@ -3070,19 +3120,16 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
         return ok(JSON.stringify({ status: 200, data: { data: builds } }));
       }
       if (args[0] === "pulls" && args[1] === "get-pull") {
-        const ms = opts.mergeableState ?? "mergeable";
-        return ok(
-          JSON.stringify({
-            status: 200,
-            data: {
-              number: 2633,
-              mergeable_state: ms,
-              blocked_on: opts.blockedOn ?? "",
-              is_merged: false,
-              state: "open",
-            },
-          }),
-        );
+        const data: Record<string, unknown> = {
+          number: 2633,
+          blocked_on: opts.blockedOn ?? "",
+          is_merged: false,
+          state: "open",
+        };
+        if (!opts.omitMergeableState) {
+          data.mergeable_state = opts.mergeableState ?? "mergeable";
+        }
+        return ok(JSON.stringify({ status: 200, data }));
       }
       if (args[1] === "get-build-status") {
         const statuses = opts.statuses ?? ["pending"];
@@ -3117,7 +3164,7 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
             status: string;
           } = { status: p < Number(done) ? "success" : "running" };
           pipelinesStatus[`p${p}`] = pipeline;
-          if (stage) {
+          if (stage !== undefined && stage !== "") {
             /* 只有第一条 pipeline 带 stages（与本仓的真实拓扑一致：一条流水线，
              * 里面几十格）。运行中那一格的 `duration` 是占位 0 —— 平台按格缓冲。 */
             const [sDone, sTotal] = stage.split("/");
@@ -3159,7 +3206,7 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
 
   const base = { slug: "org/repo", newSha: SHA };
 
-  it("同一读数连续 10 次 ⇒ 断流、记「没有终态结论」（exit 2，不是红）", async () => {
+  it("同一读数连续 10 次 ⇒ 断流、记「没有终态结论」（退 4 CI_PENDING，不是红）", async () => {
     const f = io({ statuses: ["pending"], progress: ["0-1"] });
     const out = await pollUntilTerminal({
       run: f.run,
@@ -3168,10 +3215,11 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
       now: f.now,
       sleep: f.sleep,
     });
-    /* 落 2 而不是 1：签名含 stage 级进度之后，「连着 10 眼一模一样」意味着一个格都没推进过，
-     * 那是「拿不到测量」而不是「测出一个红」（#2152 当初落红，理由在只看 pipeline 级计数的
-     * 签名下会把推进中的流水线也念成没动；业主定：改记 2）。 */
-    expect(out.stop).toBe(CODE.NOT_RUN);
+    /* 属「没跑起来家族」而不是 1：签名含 stage 级进度之后，「连着 10 眼一模一样」意味着
+     * 一个格都没推进过，那是「拿不到测量」而不是「测出一个红」（#2152 当初落红，理由在
+     * 只看 pipeline 级计数的签名下会把推进中的流水线也念成没动；业主定：改记没跑起来）。
+     * #3083 码表化把它从泛化的 2 细分到 4（CI 无终态、PR 可合并那一类）。 */
+    expect(out.stop).toBe(CODE.CI_PENDING);
     expect(f.polls()).toBe(10);
     const all = f.log.join("\n");
     expect(all).toContain("连续 10 次读数没变");
@@ -3182,9 +3230,10 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
 
   it("ISSUE #2645：按 sha 查不到 build 且 PR 冲突 ⇒ 念 mergeable_state 并指明「平台不跑 CI」（每轮只念一次）", async () => {
     /* 真因常在冲突：mergeable_state=conflict 的 PR 平台不派生构建，干等只会烧预算。
-     * 这一条喂 `found:false`（列表里没有这条 sha）+ PR 冲突，验两件事：① 轮询会把
-     * `mergeable_state`/`blocked_on` 读出来打在「还没解析到 build」那一句旁边；
-     * ② 那句只在 `!picked` 那一格念一次（不每 20 秒复述）。 */
+     * 这一条喂 `found:false`（列表里没有这条 sha）+ PR 冲突。#2645 只念警告却继续轮；
+     * #3083 改成当场收口。验四件事：① 读出 `mergeable_state`/`blocked_on`；② 只念一次；
+     * ③ 念出口命令；④ **第一眼就停**（断流那句「读数没变」不出现，
+     * 「还没解析到 build」只念一次）。 */
     const f = io({
       found: false,
       mergeableState: "conflict",
@@ -3197,14 +3246,41 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
       now: f.now,
       sleep: f.sleep,
       number: 2633,
+      baseRef: "origin/master",
     });
-    expect(out.stop).toBe(CODE.NOT_RUN);
+    expect(out.stop).toBe(CODE.CONFLICT);
     const all = f.log.join("\n");
     expect(all).toContain("PR #2633：mergeable_state=conflict blocked_on=code_conflict");
     expect(all).toContain("冲突的 PR 平台不派生 CI");
+    expect(all).toContain("git fetch origin && git merge origin/master");
+    expect(all).toContain("pnpm ship");
     // 只念一次：反复复述「PR 冲突」与复述「没变化」是同一类噪音。
     expect(all.split("mergeable_state=conflict").length - 1).toBe(1);
-    // 没给 number 的那一族测试不受影响（上面那条「连续 10 次」就不带 number）。
+    /* 当场收口的钉子：继续轮才会出现的两句话都不许出现。 */
+    expect(all.split("还没解析到 build").length - 1).toBe(1);
+    expect(all).not.toContain("读数没变");
+  });
+
+  it("ISSUE #3083：mergeable_state 缺键 ⇒ 按「未知」念一句继续轮，既不当冲突也不当可合并", async () => {
+    /* 缺键夹具（#3059 口径）：响应里根本没有这个键 ⇒ 归一为 unknown。轮询不许把它
+     * 读成冲突（不误退），也不许读成「可合并 ⇒ 排队」，只念「取不到，不猜」，
+     * 然后照原样走到断流才停。 */
+    const f = io({ found: false, omitMergeableState: true });
+    const out = await pollUntilTerminal({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      ...base,
+      now: f.now,
+      sleep: f.sleep,
+      number: 2633,
+    });
+    /* 缺键按未知不拦，照原样走到断流才停 ⇒ 断流那一格给 4（CI 无终态）。 */
+    expect(out.stop).toBe(CODE.CI_PENDING);
+    const all = f.log.join("\n");
+    expect(all).toContain("mergeable_state=unknown");
+    expect(all).toContain("不猜");
+    expect(all).not.toContain("不派生 CI");
+    expect(all).toContain("读数没变");
   });
 
   it("ISSUE #2645（负控制）：查不到 build 但 PR 可合并 ⇒ 只念 mergeable_state，不报冲突提示", async () => {
@@ -3217,7 +3293,8 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
       sleep: f.sleep,
       number: 2633,
     });
-    expect(out.stop).toBe(CODE.NOT_RUN);
+    /* 可合并 ⇒ 不是冲突；查不到 build 走断流 ⇒ 4（CI 无终态）。 */
+    expect(out.stop).toBe(CODE.CI_PENDING);
     const all = f.log.join("\n");
     expect(all).toContain("PR #2633：mergeable_state=mergeable");
     expect(all).not.toContain("冲突的 PR 平台不派生 CI");
@@ -3299,7 +3376,7 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
       now: f.now,
       sleep: f.sleep,
     });
-    expect(out.stop).toBe(CODE.NOT_RUN);
+    expect(out.stop).toBe(CODE.CI_PENDING);
     expect(f.polls()).toBe(10);
     expect(f.log.join("\n")).toContain("且此刻没有一格在飞");
   });
@@ -3331,7 +3408,7 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
       now: f.now,
       sleep: f.sleep,
     });
-    expect(out.stop).toBe(CODE.NOT_RUN);
+    expect(out.stop).toBe(CODE.CI_PENDING);
     const repeated = f.log.filter((s) => s.includes("还没解析到 build"));
     expect(repeated).toHaveLength(10);
     expect(f.log.join("\n")).toContain("(未解析到 build)");
@@ -3612,6 +3689,158 @@ describe("被取消的那一跑：结论是「没有结论」，不是「CI 红�
   });
 });
 
+/**
+ * 「PR 冲突 ⇒ 平台不跑 CI」的分型与念法（ISSUE #3083，活证据 PR #3075：
+ * 建 PR 时 `mergeable_state=conflict`，解完 8 份冲突 push 后 CI 才起跑）。
+ *
+ * 判据落在四件事上：
+ *   ① `classifyPrMergeable` 三态各归各位（缺键 ≠ 冲突，也 ≠ 可合并 —— #3059 口径）；
+ *   ② 出口话术只有一份，基线在就点名、缺基线给占位（不猜远端名）；
+ *   ③ 判决格「没拿到终态」按冲突 / 缺键 / 可合并分三种念法，同一个退码 2；
+ *   ④ 合并格只有**正面读到冲突**才退 2（没跑起来），否则维持原有的红。
+ */
+describe("ISSUE #3083：冲突三态分型与判决 / 合并两格的念法", () => {
+  const ok = (stdout: string): FakeResult => ({
+    status: 0,
+    stdout,
+    stderr: "",
+    error: null,
+  });
+  /** 只会答 `pulls get-pull` 的量具（判决 / 合并两格的冲突分型只需要这一问）。 */
+  const pullIo = (pull: unknown) => {
+    const log: Array<string> = [];
+    const run = (cmd: string, args: Array<string>): FakeResult => {
+      if (cmd === "cnb" && args[1] === "get-pull") {
+        return ok(JSON.stringify({ status: 200, data: pull }));
+      }
+      return ok("");
+    };
+    return { run, log };
+  };
+  const CONFLICT_PULL = {
+    number: 7,
+    mergeable_state: "conflict",
+    blocked_on: "code_conflict",
+    is_merged: false,
+    state: "open",
+  };
+  const MERGEABLE_PULL = {
+    number: 7,
+    mergeable_state: "mergeable",
+    blocked_on: "",
+    is_merged: false,
+    state: "open",
+  };
+
+  it("classifyPrMergeable：conflict / mergeable / 缺键三态各归各位", () => {
+    expect(classifyPrMergeable({ mergeableState: "conflict", blockedOn: "" })).toBe("conflict");
+    /* mergeable_state 还在算，但 blocked_on 已经点名冲突 ⇒ 仍是冲突（两个键任一命中）。 */
+    expect(classifyPrMergeable({ mergeableState: "unknown", blockedOn: "code_conflict" })).toBe(
+      "conflict",
+    );
+    expect(classifyPrMergeable({ mergeableState: "mergeable", blockedOn: "" })).toBe("mergeable");
+    /* 缺键（readPullVerdict 归一为 "unknown"）/ 回读没跑起来 ⇒ unknown，不猜。 */
+    expect(classifyPrMergeable({ mergeableState: "unknown", blockedOn: "" })).toBe("unknown");
+    expect(classifyPrMergeable(null)).toBe("unknown");
+  });
+
+  it("conflictAdviceLines：基线在就点名基线；缺基线给占位，不猜远端名", () => {
+    const withBase = conflictAdviceLines({ number: 3075, baseRef: "origin/master" }).join("\n");
+    expect(withBase).toContain("git fetch origin && git merge origin/master");
+    expect(withBase).toContain("PR #3075");
+    expect(withBase).toContain("pnpm ship");
+    const noBase = conflictAdviceLines({ number: 3075, baseRef: null }).join("\n");
+    expect(noBase).toContain("<远端>/<主干>");
+    expect(noBase).not.toContain("git merge origin/master");
+  });
+
+  it("判决格：没拿到终态 + PR 冲突 ⇒ 退 3，报冲突与出口，不念「排队」", () => {
+    const f = pullIo(CONFLICT_PULL);
+    const code = reportVerdict({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      slug: "x/y",
+      number: 7,
+      buildState: "unknown",
+      buildSn: null,
+      baseRef: "origin/master",
+    });
+    expect(code).toBe(CODE.CONFLICT);
+    const all = f.log.join("\n");
+    expect(all).toContain("与 base 冲突");
+    expect(all).toContain("不是「还在排队」");
+    expect(all).toContain("git fetch origin && git merge origin/master");
+    expect(all).not.toContain("可能仍在排队");
+  });
+
+  it("判决格：没拿到终态 + mergeable_state 缺键 ⇒ 退 5 并照实念「取不到」，不猜排队", () => {
+    const f = pullIo({ number: 7, is_merged: false, state: "open" });
+    const code = reportVerdict({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      slug: "x/y",
+      number: 7,
+      buildState: "unknown",
+      buildSn: null,
+    });
+    expect(code).toBe(CODE.READOUT_MISSING);
+    const all = f.log.join("\n");
+    expect(all).toContain("取不到");
+    expect(all).not.toContain("可能仍在排队");
+    expect(all).not.toContain("与 base 冲突");
+  });
+
+  it("判决格：没拿到终态 + 可合并 ⇒ 退 4 且明说「可能仍在排队」", () => {
+    const f = pullIo(MERGEABLE_PULL);
+    const code = reportVerdict({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      slug: "x/y",
+      number: 7,
+      buildState: "unknown",
+      buildSn: null,
+    });
+    expect(code).toBe(CODE.CI_PENDING);
+    expect(f.log.join("\n")).toContain("可能仍在排队");
+  });
+
+  it("合并格：CI 未绿 + PR 冲突 ⇒ 退 3（没跑起来 ≠ 失败），不是误导性的红", () => {
+    const f = pullIo(CONFLICT_PULL);
+    const code = mergeAndVerify({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      slug: "x/y",
+      number: 7,
+      frags: [],
+      baseRef: "origin/master",
+      up: { remote: "origin", base: "origin/master", source: "origin" },
+      merge: true,
+      buildState: "unknown",
+    });
+    expect(code).toBe(CODE.CONFLICT);
+    const all = f.log.join("\n");
+    expect(all).toContain("与 base 冲突");
+    expect(all).not.toContain("CI 不是绿的");
+  });
+
+  it("合并格（负控制）：CI 红 + 可合并 ⇒ 维持退 1，并明说「CI 是红的」", () => {
+    const f = pullIo(MERGEABLE_PULL);
+    const code = mergeAndVerify({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      slug: "x/y",
+      number: 7,
+      frags: [],
+      baseRef: "origin/master",
+      up: { remote: "origin", base: "origin/master", source: "origin" },
+      merge: true,
+      buildState: "red",
+    });
+    expect(code).toBe(CODE.RED);
+    expect(f.log.join("\n")).toContain("CI 是红的");
+  });
+});
+
 describe("parseSlug：https 与 ssh 两种 origin 都要认", () => {
   it("取不到就回 null（不猜一个仓库名 —— 猜错会把 PR 开到别处）", () => {
     expect(parseSlug("https://cnb.cool/moon-read/comfy-app-t3")).toBe("moon-read/comfy-app-t3");
@@ -3803,13 +4032,14 @@ describe("findMergedPullForHeadSha：这一笔是不是已经随某条已合并�
   });
 });
 
-describe("readPullVerdict：字段缺省时不抛，且默认值是「没合上」", () => {
+describe("readPullVerdict：字段缺省时不抛，缺键走 unknown 三态（ISSUE #3059）", () => {
   it("缺 data / 缺字段都归一到安全默认", () => {
     expect(readPullVerdict(null)).toEqual({
       number: null,
       mergeableState: "unknown",
       blockedOn: "",
       isMerged: false,
+      isMergedTri: "unknown",
       state: "unknown",
       /* squash 标题那一格（ISSUE #2806）要读的字段：缺省同样是安全默认（空串 ⇒
        * 推导退回 branch-first），不是 undefined 漏到标题里。 */
@@ -3820,6 +4050,81 @@ describe("readPullVerdict：字段缺省时不抛，且默认值是「没合上�
         data: { number: 2027, is_merged: true, mergeable_state: "mergeable" },
       }).isMerged,
     ).toBe(true);
+  });
+});
+
+describe("ISSUE #3059：is_merged / state 缺键三态分型（缺键 ≠ false）", () => {
+  /* 平台应答间歇缺 is_merged / state 键：`=== true` 会把「没取到」读成「未合并 /
+   * 没关成」。四种夹具：缺键、null、两键都在但值不同、确认真假值 —— 分型只有
+   * merged / not_merged / unknown 三档，缺键一律 unknown 并给退 5 READOUT_MISSING。 */
+  it("classifyIsMerged：true / false 确认值；缺键、null、非布尔 ⇒ unknown（不按 false）", () => {
+    expect(classifyIsMerged(true)).toBe("merged");
+    expect(classifyIsMerged(false)).toBe("not_merged");
+    expect(classifyIsMerged(undefined)).toBe("unknown");
+    expect(classifyIsMerged(null)).toBe("unknown");
+    expect(classifyIsMerged("yes")).toBe("unknown");
+    /* 两者都在但值不同：判读只认 is_merged 原值，不认状态词。 */
+    expect(readPullVerdict({ data: { is_merged: true, state: "open" } }).isMergedTri).toBe(
+      "merged",
+    );
+    expect(readPullVerdict({ data: { is_merged: false, state: "closed" } }).isMergedTri).toBe(
+      "not_merged",
+    );
+    expect(readPullVerdict({ data: { state: "closed" } }).isMergedTri).toBe("unknown");
+  });
+
+  /* 走 main() 整链的三格（落地守卫 / 合并后回读 / 关单回读）依赖 fake + proofRoot，
+   * 嵌在下方 main() 那一组里（同名 describe「ISSUE #3059 …走 main() 整链的三格」）。 */
+  it("关单证明扫描：标题点名目标单子而那条 PR 的 is_merged 为 null ⇒ unknown 出口指到那条 PR", () => {
+    /* 纯函数层：findMergedPullProofs 的 unknown 出口（缺键不是「没证明」）。 */
+    const run = () => ({
+      status: 0,
+      stdout:
+        '{"status":200,"data":[{"number":3101,"is_merged":null,"title":"fix(x): 那笔 (#3059)"}]}',
+      stderr: "",
+      error: null,
+    });
+    const out = findMergedPullProofs({ run, slug: "a/b", numbers: [3059], pages: 1 });
+    expect(out.proofs.size).toBe(0);
+    expect(out.unknown.get(3059)).toEqual({ prNumber: 3101 });
+    /* 确认假值照旧只是「没证明」，不进 unknown。 */
+    const runFalse = () => ({
+      status: 0,
+      stdout:
+        '{"status":200,"data":[{"number":3101,"is_merged":false,"title":"fix(x): 那笔 (#3059)"}]}',
+      stderr: "",
+      error: null,
+    });
+    const outFalse = findMergedPullProofs({ run: runFalse, slug: "a/b", numbers: [3059], pages: 1 });
+    expect(outFalse.proofs.size).toBe(0);
+    expect(outFalse.unknown.size).toBe(0);
+  });
+
+  it("findMergedPullForHeadSha：sha 相同而 is_merged 缺键 ⇒ 不命中、经 sink 报 unknownPr", () => {
+    const sink: { unknownPr?: number | null } = {};
+    expect(
+      findMergedPullForHeadSha({ data: [{ number: 55, head: { sha: "aaa" } }] }, "aaa", sink),
+    ).toBeNull();
+    expect(sink.unknownPr).toBe(55);
+    /* null 同型；确认 false 则不报 unknown（那是确凿的「没合」）。 */
+    const sink2: { unknownPr?: number | null } = {};
+    expect(
+      findMergedPullForHeadSha(
+        { data: [{ number: 56, is_merged: null, head: { sha: "aaa" } }] },
+        "aaa",
+        sink2,
+      ),
+    ).toBeNull();
+    expect(sink2.unknownPr).toBe(56);
+    const sink3: { unknownPr?: number | null } = {};
+    expect(
+      findMergedPullForHeadSha(
+        { data: [{ number: 57, is_merged: false, head: { sha: "aaa" } }] },
+        "aaa",
+        sink3,
+      ),
+    ).toBeNull();
+    expect(sink3.unknownPr).toBeUndefined();
   });
 });
 
@@ -4170,6 +4475,7 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
    *  `--page N`（ISSUE #2964：复用判定必须翻页，量具得能按页给不同的答案）。 */
   function pullHarness(
     env: {
+      getPull?: FakeResult;
       openPullsPages?: Array<string>;
       postPull?: FakeResult;
       stat?: string;
@@ -4187,6 +4493,10 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
           return ok(env.openPullsPages[page - 1] ?? '{"status":200,"data":[]}');
         }
         return ok('{"status":200,"data":[]}');
+      }
+      if (cmd === "cnb" && key.includes("get-pull")) {
+        /* 不给就回空（回读没跑起来）—— 正好也是「按未知处理、不拦」的夹具（#3083）。 */
+        return env.getPull ?? ok("");
       }
       if (cmd === "cnb" && key.includes("post-pull")) {
         return env.postPull ?? ok('{"status":201,"data":{"number":3002}}');
@@ -4322,6 +4632,59 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
     expect(calls.some((c) => c.includes("post-pull"))).toBe(true);
   });
 
+  it("ISSUE #3083：建 PR 后立即回读 —— 冲突 ⇒ stop=3 CONFLICT，念读数与出口（平台不会派生 CI）", () => {
+    /* 活证据 PR #3075 的形状：建出来的那一刻 mergeable_state 就是 conflict。 */
+    const { heard, io } = pullHarness({
+      getPull: ok(
+        '{"status":200,"data":{"number":3002,"mergeable_state":"conflict","blocked_on":"code_conflict","is_merged":false,"state":"open"}}',
+      ),
+    });
+    const out = createOrReusePull(io);
+    expect(out.number).toBe(3002);
+    expect(out.stop).toBe(CODE.CONFLICT);
+    const all = heard.join("\n");
+    expect(all).toContain("mergeable_state=conflict");
+    expect(all).toContain("平台不会为这条 PR 派生 CI");
+    /* 出口点名这份检出的基线（量具的 baseRef 是 cnb/master），不许念成「排队」。 */
+    expect(all).toContain("git fetch cnb && git merge cnb/master");
+    expect(all).toContain("pnpm ship");
+    expect(all).not.toContain("可能仍在排队");
+  });
+
+  it("ISSUE #3083：复用路径同样回读 —— 开放 PR 冲突 ⇒ stop=3 CONFLICT", () => {
+    const { heard, io } = pullHarness({
+      openPullsPages: [
+        '{"data":[{"head":{"ref":"refs/heads/feat/big"},"number":2649}],"status":200}',
+      ],
+      getPull: ok(
+        '{"status":200,"data":{"number":2649,"mergeable_state":"conflict","blocked_on":"","is_merged":false,"state":"open"}}',
+      ),
+    });
+    const out = createOrReusePull(io);
+    expect(out.number).toBe(2649);
+    expect(out.stop).toBe(CODE.CONFLICT);
+    expect(heard.join("\n")).toContain("平台不会为这条 PR 派生 CI");
+  });
+
+  it("ISSUE #3083（负控制）：可合并 ⇒ stop:null；回读没跑起来 ⇒ 按未知不拦（缺读数不新增结论）", () => {
+    const good = pullHarness({
+      getPull: ok(
+        '{"status":200,"data":{"number":3002,"mergeable_state":"mergeable","blocked_on":"","is_merged":false,"state":"open"}}',
+      ),
+    });
+    const goodOut = createOrReusePull(good.io);
+    expect(goodOut.stop).toBeNull();
+    expect(good.heard.join("\n")).toContain("mergeable_state=mergeable");
+    expect(good.heard.join("\n")).not.toContain("派生 CI");
+
+    /* 量具默认 get-pull 回空串 ⇒ cnbJson 取不到 ⇒ 按「未知」念一句，stop:null。 */
+    const unread = pullHarness({});
+    const unreadOut = createOrReusePull(unread.io);
+    expect(unreadOut.number).toBe(3002);
+    expect(unreadOut.stop).toBeNull();
+    expect(unread.heard.join("\n")).toContain("按「未知」处理，不拦");
+  });
+
   it("readPullCreateError：只认 errcode / errmsg 这两个键名，成功响应一律回 null", () => {
     expect(
       readPullCreateError({
@@ -4387,9 +4750,9 @@ describe("ship 阶段 0：`.env` 缺键的读数与启动器同一份实现（IS
       expect(text).toContain("环境配置提醒");
       expect(text).toContain("COMFYAPP_DEV_HANDLE");
       expect(text).toContain("pnpm env:init");
-      // 读数不改结论：baseRef 取不到仍按原判据落 2。
+      // 读数不改结论：baseRef 取不到仍按原判据落 5（读数缺失，#3083 码表化前是 2）。
       expect(res.action).toBe("finish");
-      expect(res.codes).toContain(CODE.NOT_RUN);
+      expect(res.codes).toContain(CODE.READOUT_MISSING);
     } finally {
       rmSync(rootDir, { recursive: true, force: true });
       if (savedSkip === undefined) {
@@ -4580,7 +4943,7 @@ describe("ship 阶段 0 的依赖新鲜度那一格：读数分档，不再只�
     return { res, text: logs.join("\n") };
   }
 
-  it("依赖没装 ⇒ 落 2 并念「还没装」，而不是「红」，且后面的阶段照跑", async () => {
+  it("依赖没装 ⇒ 落 7 并念「还没装」，而不是「红」，且后面的阶段照跑", async () => {
     if (!ranThisCase()) {
       return;
     }
@@ -4597,8 +4960,9 @@ describe("ship 阶段 0 的依赖新鲜度那一格：读数分档，不再只�
       error: null,
     });
     // 这是本条的立案现场：过去这一格 action=finish + CODE.RED，整条链一步都走不了。
+    // #3083 码表化把它从 2 细分到 7 PREFLIGHT（本地前置「还没装」，出口是 pnpm install）。
     expect(res.action).toBe("continue");
-    expect(res.codes).toContain(CODE.NOT_RUN);
+    expect(res.codes).toContain(CODE.PREFLIGHT);
     expect(res.codes).not.toContain(CODE.RED);
     expect(text).toContain("依赖还没装");
     expect(text).toContain("pnpm install");
@@ -4628,7 +4992,7 @@ describe("ship 阶段 0 的依赖新鲜度那一格：读数分档，不再只�
     expect(text).toContain("依赖新鲜度红了");
   });
 
-  it("envBroken ⇒ 2，出口指向 git 读数而不是 `pnpm install`", async () => {
+  it("envBroken ⇒ 5，出口指向 git 读数而不是 `pnpm install`", async () => {
     if (!ranThisCase()) {
       return;
     }
@@ -4645,13 +5009,13 @@ describe("ship 阶段 0 的依赖新鲜度那一格：读数分档，不再只�
       error: null,
     });
     expect(res.action).toBe("continue");
-    expect(res.codes).toContain(CODE.NOT_RUN);
+    expect(res.codes).toContain(CODE.READOUT_MISSING);
     expect(res.codes).not.toContain(CODE.RED);
     expect(text).toContain("git 状态");
     expect(text).not.toContain("依赖新鲜度红了");
   });
 
-  it("判据起不来（读数是空的）⇒ 2，既不念「红了」也不念「没问题」", async () => {
+  it("判据起不来（读数是空的）⇒ 5，既不念「红了」也不念「没问题」", async () => {
     if (!ranThisCase()) {
       return;
     }
@@ -4662,7 +5026,7 @@ describe("ship 阶段 0 的依赖新鲜度那一格：读数分档，不再只�
       error: "ENOENT",
     });
     expect(res.action).toBe("continue");
-    expect(res.codes).toContain(CODE.NOT_RUN);
+    expect(res.codes).toContain(CODE.READOUT_MISSING);
     expect(text).toContain("没有给出可读的结论");
     expect(text).not.toContain("依赖新鲜度红了");
   });
@@ -4921,6 +5285,10 @@ describe("--diagnose：只读取回失败格与日志摘要", () => {
     build?: unknown;
     builds?: Array<unknown>;
     headSha?: string;
+    /** 开放 PR 清单（`pulls list-pulls --state open` 的响应，ISSUE #3083 冲突分型用）。 */
+    openPulls?: unknown;
+    /** `pulls get-pull` 的响应（ISSUE #3083 冲突分型用）；不给则回读没跑起来。 */
+    pull?: unknown;
     stage?: unknown;
   }) {
     const calls: Array<string> = [];
@@ -4966,6 +5334,12 @@ describe("--diagnose：只读取回失败格与日志摘要", () => {
       }
       if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-stage") {
         return ok(JSON.stringify(opts.stage ?? {}));
+      }
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "list-pulls") {
+        return ok(JSON.stringify(opts.openPulls ?? { status: 200, data: [] }));
+      }
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "get-pull") {
+        return ok(opts.pull ? JSON.stringify(opts.pull) : "");
       }
       return ok("");
     };
@@ -5031,12 +5405,81 @@ describe("--diagnose：只读取回失败格与日志摘要", () => {
     expect(f.calls.some((c) => c.includes("--sn cnb-mine"))).toBe(true);
   });
 
-  it("归属不到 ⇒ 2（没有结论），不拿「最新那条」顶上", async () => {
+  it("归属不到 ⇒ 5（读数缺失，没有结论），不拿「最新那条」顶上", async () => {
+    /* #3083 码表化：归不到 build 且 PR 侧也取不到读数 ⇒ 5 READOUT_MISSING（此前是 2）。 */
     const f = diagnoseIo({ build: FAILED, builds: [] });
     const code = await runMain(f, ["--diagnose"]);
-    expect(code).toBe(CODE.NOT_RUN);
+    expect(code).toBe(CODE.READOUT_MISSING);
     expect(f.log.join("\n")).toContain("没找到 pull_request 构建");
     expect(f.calls.some((c) => c.includes("get-build-status"))).toBe(false);
+  });
+
+  it("ISSUE #3083：归不到 build 且当前分支的开放 PR 冲突 ⇒ 报冲突与出口（真因不是「排队」）", async () => {
+    /* 活证据 PR #3075 的形状：归属不到 build 的真因是 PR 冲突、平台永不派生。 */
+    const f = diagnoseIo({
+      builds: [],
+      openPulls: {
+        status: 200,
+        data: [{ number: 3075, head: { ref: "refs/heads/feat/x" } }],
+      },
+      pull: {
+        status: 200,
+        data: {
+          number: 3075,
+          mergeable_state: "conflict",
+          blocked_on: "code_conflict",
+          is_merged: false,
+          state: "open",
+        },
+      },
+    });
+    const code = await runMain(f, ["--diagnose"]);
+    expect(code).toBe(CODE.CONFLICT);
+    const text = f.log.join("\n");
+    expect(text).toContain("PR #3075 与 base 冲突");
+    expect(text).toContain("不是「还在排队」");
+    expect(text).toContain("git push");
+    expect(text).toContain("pnpm ship");
+    /* 诊断仍是只读：分型只多看两眼（list-pulls / get-pull），一条写动作都不发。 */
+    for (const write of ["post-", "merge-pull", "update-issue", "delete-", "create-issue"]) {
+      expect(f.calls.some((c) => c.includes(write)), `发了写动作：${write}`).toBe(false);
+    }
+  });
+
+  it("ISSUE #3083：归不到 build 但开放 PR 可合并 ⇒ 明说「是另一回事」，不栽给冲突", async () => {
+    const f = diagnoseIo({
+      builds: [],
+      openPulls: {
+        status: 200,
+        data: [{ number: 3075, head: { ref: "refs/heads/feat/x" } }],
+      },
+      pull: {
+        status: 200,
+        data: {
+          number: 3075,
+          mergeable_state: "mergeable",
+          blocked_on: "",
+          is_merged: false,
+          state: "open",
+        },
+      },
+    });
+    const code = await runMain(f, ["--diagnose"]);
+    expect(code).toBe(CODE.CI_PENDING);
+    const text = f.log.join("\n");
+    expect(text).toContain("可合并（不是冲突）");
+    expect(text).not.toContain("与 base 冲突");
+  });
+
+  it("ISSUE #3083：归不到 build 且没有开放 PR（或回读没跑起来）⇒ 照实念「未知」，不猜", async () => {
+    /* 缺键 / 无 PR 夹具：开放清单为空 ⇒ 分型取不到读数，只许念「未知」。 */
+    const f = diagnoseIo({ builds: [] });
+    const code = await runMain(f, ["--diagnose"]);
+    expect(code).toBe(CODE.READOUT_MISSING);
+    const text = f.log.join("\n");
+    expect(text).toContain("只能报未知");
+    expect(text).not.toContain("与 base 冲突");
+    expect(text).not.toContain("可合并（不是冲突）");
   });
 
   it("与 --merge 同跑 ⇒ 2，且一条 build 命令都不发（一次只做一件）", async () => {
@@ -5174,7 +5617,7 @@ describe("--new-issue：一步建单并回读", () => {
       env,
       log: (l: string) => f.log.push(l),
       resolveGitDir: () => tmp.dir,
-      ...(root ? { root } : {}),
+      ...(root !== undefined && root !== "" ? { root } : {}),
     });
 
   it("建单 → 打 提单人: → get-issue 回读，三件原值念出来", async () => {
@@ -5423,7 +5866,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       calls.push([cmd, ...args].join(" "));
       const key = args.join(" ");
       if (cmd === "cnb" && args[0] === "--version") {
-        return env.cnbMissing
+        return env.cnbMissing === true
           ? { status: -1, stdout: "", stderr: "", error: "ENOENT" }
           : ok("1.15.25");
       }
@@ -5455,7 +5898,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
        * 因为这一格在 --branch 那一跳判的是「这个名字有没有被占用」—— 拿通用兜底的
        * 退 0 当默认值，等于让夹具自己担保「名字都撞车了」，于是建分支那一格永远走不到。 */
       if (cmd === "git" && key.startsWith("show-ref --verify --quiet")) {
-        return env.refExists
+        return env.refExists === true
           ? ok("9b1bade9cafe9b5a4d76e0c0d0bfb1d1a3a4f9b2")
           : { status: 1, stdout: "", stderr: "", error: null };
       }
@@ -5509,7 +5952,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       /* ── 整链形状（`chain: true` 才答）───────────────────────────
        * 默认不答，是为了不惊动已有那些用例：它们中好几条判的正是「建 PR 那一跳的
        * 各种失败出口」，一旦 list-pulls 有了可解析的响应就会改走「复用」那条支路。 */
-      if (!env.chain) {
+      if (env.chain !== true) {
         return ok("");
       }
       if (cmd === "git" && key.startsWith("rev-parse --short")) {
@@ -5635,7 +6078,8 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     // 「恒退 0」这句已从声明里撤掉，因为一个会藏掉阻塞事实的预览比不预览更糟。
     // 这条用例钉的是撤完之后行为不再被文档反向拉扯。
     const { run } = fake({ branch: "master" });
-    expect(await main({ ...quiet, run, args: ["--dry-run"] })).toBe(CODE.RED);
+    /* #3083 码表化：在 master 上属「本地前置不成立」⇒ 7 PREFLIGHT（此前念红 1）。 */
+    expect(await main({ ...quiet, run, args: ["--dry-run"] })).toBe(CODE.PREFLIGHT);
   });
 
   it("--dry-run + --branch：念出「不建分支」并把那一跳印进计划，一条 ref 都不动", async () => {
@@ -5753,7 +6197,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     }
   });
 
-  it("ISSUE #2812：跑期内切了分支 ⇒ 停在建 PR 之前，退 2 而不拿漂移的 sha 去推 PR/轮询", async () => {
+  it("ISSUE #2812：跑期内切了分支 ⇒ 停在建 PR 之前，退 6 而不拿漂移的 sha 去推 PR/轮询", async () => {
     /* 现场形状：`pnpm ship` 跑期内（比如等 hook 时）有人切了分支。晚读的
      * `rev-parse HEAD` 会钉到**新分支**的 sha 上，于是抬头说的分支与轮询盯的 sha
      * 分家 —— 拿别人分支的构建给自己的 PR 作证。这里让 `--abbrev-ref` 第一读
@@ -5785,7 +6229,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
         resolveGitDir: () => gitDir,
         args: ["--merge"],
       });
-      expect(code).toBe(CODE.NOT_RUN);
+      expect(code).toBe(CODE.GUARD_REFUSED);
       const all = heard.join("\n");
       expect(all).toContain("跑期内分支被切换");
       expect(all).toContain("feat/switched");
@@ -5798,7 +6242,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     }
   });
 
-  it("合并前第二道漂移复核：轮询期间才切的分支第一道拦不到 ⇒ 不合并，退 2", async () => {
+  it("合并前第二道漂移复核：轮询期间才切的分支第一道拦不到 ⇒ 不合并，退 6", async () => {
     /* 第一道复核在进平台段**前**，而轮询最长 45 分钟 —— 这期间切的分支只有
      * 合并动作前那一道拦得住。这里让切换发生在第一眼 get-build-status 之后，
      * 断言：① 第二道念出来并拦住 merge-pull；② 第一道**不误报**（它该沉默）。 */
@@ -5826,7 +6270,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
         resolveGitDir: () => gitDir,
         args: ["--merge"],
       });
-      expect(code).toBe(CODE.NOT_RUN);
+      expect(code).toBe(CODE.GUARD_REFUSED);
       const all = heard.join("\n");
       expect(all).toContain("合并前复核：跑期内分支被切换");
       // 第一道不误报：切换发生在它之后，它一个字都不该念。
@@ -5840,8 +6284,9 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   });
 
   it("平台标题回读没跑起来 ⇒ 明念「读数缺失」并退回 branch-first，不静默（ISSUE #2806 配套）", async () => {
-    /* get-pull 在这条链上被读三眼：verdict（阶段 5）、合并前的标题回读、合并后验真。
-     * 只让**标题那一眼**（第 2 眼）取不到 —— 其余照常，否则验真那格会把退码搅浑。 */
+    /* get-pull 在这条链上被读四眼：建 PR 后的冲突回读（ISSUE #3083）、verdict（阶段 5）、
+     * 合并前的标题回读、合并后验真。只让**标题那一眼**（第 3 眼）取不到 —— 其余照常，
+     * 否则验真那格会把退码搅浑。 */
     const { tmpRoot, gitDir } = proofRoot("title-read-fail");
     try {
       const heard: Array<string> = [];
@@ -5851,7 +6296,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
         const key = args.join(" ");
         if (cmd === "cnb" && key.includes("get-pull")) {
           getPulls += 1;
-          if (getPulls === 2) {
+          if (getPulls === 3) {
             return { status: 0, stdout: "不是 JSON", stderr: "", error: null };
           }
         }
@@ -5895,9 +6340,9 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     expect(calls.filter((c) => c.startsWith("git branch -D"))).toEqual([]);
   });
 
-  it("没有 changelog.d 碎片 ⇒ 红（单 PR 单变更那条不成立）", async () => {
+  it("没有 changelog.d 碎片 ⇒ 退 7（单 PR 单变更那条不成立；#3083 码表化前念红 1）", async () => {
     const { run } = fake({ frags: [] });
-    expect(await main({ ...quiet, run, args: ["--dry-run"] })).toBe(CODE.RED);
+    expect(await main({ ...quiet, run, args: ["--dry-run"] })).toBe(CODE.PREFLIGHT);
   });
 
   it("preflight 的暂存/未暂存读数按列判，不把未暂存改动算成已暂存（#2073）", async () => {
@@ -5967,7 +6412,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     }
   });
 
-  it("基线引用不存在 ⇒ 退 2 并说「没有事实源」，**不许**退成「没有碎片」的红", async () => {
+  it("基线引用不存在 ⇒ 退 5 并说「没有事实源」，**不许**退成「没有碎片」的红", async () => {
     /* 这一格钉的是「取不到」与「取到且为空」必须长得不一样 —— 而这一版就是在这里
      * 把两件事混成一件的：远端名写死 `origin`，`origin/master...HEAD` 那条 git 直接失败、
      * stdout 为空，于是 preflight 报「没有 changelog.d 碎片」（一条正当的假结论），
@@ -5982,7 +6427,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       args: ["--dry-run"],
     });
     const all = heard.join("\n");
-    expect(code).toBe(CODE.NOT_RUN);
+    expect(code).toBe(CODE.READOUT_MISSING);
     expect(all).toContain("没有事实源");
     expect(all).not.toContain("单 PR 单变更那条不成立");
   });
@@ -6344,7 +6789,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     }
   });
 
-  it("内容已随某条已合并 PR 落地 ⇒ 不再建 PR：退 2 并给「开新分支」的出口（ISSUE #2250）", async () => {
+  it("内容已随某条已合并 PR 落地 ⇒ 不再建 PR：退 6 并给「开新分支」的出口（ISSUE #2250）", async () => {
     /* 现场形状：squash 合并成功会把 PR 转 `closed`，于是「开放清单里没有」那格失效，
      * 同一条分支上再跑一次 ship 会建出一条**内容已在主干**的幽灵 PR —— 它能被再合一次
      * （主干落重复提交），还白烧一轮 CI。夹具的 HEAD 是 `d02ec96…`，这里就让它逐字命中。 */
@@ -6372,7 +6817,8 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       const all = heard.join("\n");
       expect(all).toContain("已随 PR #2237 落地");
       expect(all).toContain("开新分支");
-      expect(code).toBe(CODE.NOT_RUN);
+      /* #3083 码表化：已落地守卫从泛化的 2 细分到 6 GUARD_REFUSED。 */
+      expect(code).toBe(CODE.GUARD_REFUSED);
       /* 它确实去问了 closed 那一档，而不是拿 open 那份读数凑过去。 */
       expect(base.calls.some((c) => c.includes("list-pulls") && c.includes("--state closed"))).toBe(
         true,
@@ -6702,6 +7148,318 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     expect(all).toContain("cnb pulls post-pull-labels");
     expect(all).toContain("cnb pulls list-pull-labels");
   });
+
+  describe("ISSUE #3083：阶段化进度输出 —— 「走到哪了」每一格都有身份", () => {
+    /* 进度（▶ 走到哪）与退码（结论：exit N 是哪一类）是两套信息：这一组钉的是
+     * 前者 —— 每一格至少一条「阶段名 + 关键身份」的结构化行，且身份取自**平台回读**
+     * （PR 标题、合并 sha、issue state），不是本地推的。形状唯一出处 `ship-stage.mjs`。 */
+    const GET_PULL_TITLED =
+      '{"status":200,"data":{"number":777,"title":"fix(ship): 阶段进度 (#3083)","state":"open","mergeable_state":"mergeable","is_merged":true}}';
+    const ISSUE_CLOSED =
+      '{"status":200,"data":{"state":"closed","state_reason":"completed","closed_at":"2026-11-03T01:02:03.000Z","body":"x"}}';
+
+    it("整链：预检 → 推送 → 复用 PR → 等 CI → 合并 → 关单 → 清分支，每格一条带身份的阶段行", async () => {
+      const { tmpRoot, gitDir } = proofRoot("stages-chain");
+      try {
+        const heard: Array<string> = [];
+        const base = fake({ chain: true, branchSubjects: ["fix(ship): 阶段进度 (#3083)"] });
+        const run = overrideRun(base, {
+          "get-pull": GET_PULL_TITLED,
+          "update-issue": '{"status":200,"data":{}}',
+          "get-issue": ISSUE_CLOSED,
+        });
+        const code = await main({
+          root: tmpRoot,
+          run,
+          log: (s: string) => heard.push(s),
+          probeCnb: () => true,
+          resolveGitDir: () => gitDir,
+          env: {},
+          args: ["--merge", "--clean-branch", "--close-issue"],
+        });
+        expect(code).toBe(CODE.GREEN);
+        const all = heard.join("\n");
+        expect(all).toContain(
+          "[ship] ▶ 预检通过 | branch=feat/x | sha=d02ec963 | repo=moon-read/comfy-app-t3 | 碎片=1 份",
+        );
+        expect(all).toContain("[ship] ▶ 分支推送 | branch=feat/x | remote=cnb | sha=d02ec963");
+        /* 标题是**平台回读**的（get-pull 那份），不是 branch-first 本地推导的。 */
+        expect(all).toContain(
+          "[ship] ▶ 复用 PR | pr=777 | title=fix(ship): 阶段进度 (#3083) | state=open",
+        );
+        expect(all).toContain("[ship] ▶ 等 CI | build=cnb-267-1k5h0qvib | sha=d02ec963 | pr=777");
+        expect(all).toContain("[ship] ▶ 合并 | pr=777 | form=squash | sha=906bce4c | target=master");
+        expect(all).toContain(
+          "[ship] ▶ 关单 | issue=3083 | state=closed | state_reason=completed | closed_at=2026-11-03T01:02:03.000Z",
+        );
+        expect(all).toContain("[ship] ▶ 清分支 | branch=feat/x | remote=已删 | local=已删");
+      } finally {
+        fs.rmSync(tmpRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("新建 PR 那一格同样报「新建 PR」与平台回读的标题", async () => {
+      const { tmpRoot, gitDir } = proofRoot("stages-create");
+      try {
+        const heard: Array<string> = [];
+        const base = fake({ chain: true });
+        const run = overrideRun(base, {
+          "--state open": '{"status":200,"data":[]}',
+          "post-pull": '{"status":201,"data":{"number":3001}}',
+          "get-pull":
+            '{"status":200,"data":{"number":3001,"title":"新建的 PR 标题","state":"open","mergeable_state":"mergeable","is_merged":false}}',
+        });
+        const code = await main({
+          root: tmpRoot,
+          run,
+          log: (s: string) => heard.push(s),
+          probeCnb: () => true,
+          resolveGitDir: () => gitDir,
+          env: {},
+          args: ["--no-wait"],
+        });
+        expect(code).toBe(CODE.GREEN);
+        expect(heard.join("\n")).toContain(
+          "[ship] ▶ 新建 PR | pr=3001 | title=新建的 PR 标题 | state=open",
+        );
+      } finally {
+        fs.rmSync(tmpRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("冲突中断：退 3，报 PR 号 + 冲突面文件（merge-tree 只读探测）+「平台不会跑 CI」", async () => {
+      const { tmpRoot, gitDir } = proofRoot("stages-conflict");
+      try {
+        const heard: Array<string> = [];
+        const base = fake({ chain: true });
+        const run = (cmd: string, args: Array<string>): FakeResult => {
+          const key = args.join(" ");
+          if (cmd === "cnb" && key.includes("get-pull")) {
+            return {
+              status: 0,
+              stdout:
+                '{"status":200,"data":{"number":777,"title":"冲突的那条 PR","state":"open","mergeable_state":"conflict","blocked_on":"code_conflict","is_merged":false}}',
+              stderr: "",
+              error: null,
+            };
+          }
+          if (cmd === "git" && key.includes("merge-tree")) {
+            /* 真实形状：退 1 = 有冲突；stdout = tree OID + 逐行文件名 + 空行 + informational。 */
+            return {
+              status: 1,
+              stdout:
+                "a6348597d63a8c5d94c0f1b98f20da0aebce55c6\nsrc/a.ts\nsrc/b.ts\n\nAuto-merging src/a.ts\nCONFLICT (content): Merge conflict in src/a.ts\n",
+              stderr: "",
+              error: null,
+            };
+          }
+          return base.run(cmd, args);
+        };
+        const code = await main({
+          root: tmpRoot,
+          run,
+          log: (s: string) => heard.push(s),
+          probeCnb: () => true,
+          resolveGitDir: () => gitDir,
+          env: {},
+          args: [],
+        });
+        expect(code).toBe(CODE.CONFLICT);
+        const all = heard.join("\n");
+        expect(all).toContain("[ship] ▶ 复用 PR | pr=777 | title=冲突的那条 PR | state=open");
+        expect(all).toContain(
+          "[ship] ▶ 冲突 | pr=777 | base=cnb/master | blocked_on=code_conflict | files=2 个",
+        );
+        /* 冲突面逐文件一行、不截断 —— 解冲突的人按这份清单逐个开文件。 */
+        expect(all).toContain("[ship]   冲突文件：src/a.ts");
+        expect(all).toContain("[ship]   冲突文件：src/b.ts");
+        expect(all).toContain("平台不会为这条 PR 派生 CI");
+        expect(all).toContain("git fetch cnb && git merge cnb/master");
+        /* 冲突当场收口：build 列表一眼都不该再拉。 */
+        expect(base.calls.some((c) => c.includes("get-build-logs"))).toBe(false);
+      } finally {
+        fs.rmSync(tmpRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("关单失败分支：回读 state 不是 closed ⇒ 红，阶段行照实报 state=open", async () => {
+      const { tmpRoot, gitDir } = proofRoot("stages-close-red");
+      try {
+        const heard: Array<string> = [];
+        const base = fake({ chain: true, branchSubjects: ["fix(ship): 阶段进度 (#3083)"] });
+        const run = overrideRun(base, {
+          "get-pull": GET_PULL_TITLED,
+          "update-issue": '{"status":200,"data":{}}',
+          "get-issue": '{"status":200,"data":{"state":"open"}}',
+        });
+        const code = await main({
+          root: tmpRoot,
+          run,
+          log: (s: string) => heard.push(s),
+          probeCnb: () => true,
+          resolveGitDir: () => gitDir,
+          env: {},
+          args: ["--merge", "--close-issue"],
+        });
+        expect(code).toBe(CODE.RED);
+        const all = heard.join("\n");
+        expect(all).toContain("[ship] ▶ 关单 | issue=3083 | state=open | state_reason=(无)");
+      } finally {
+        fs.rmSync(tmpRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("reportStage：空值不落（不许出现 `title=` 这种占位冒充读数）", () => {
+      const lines: Array<string> = [];
+      reportStage((s: string) => lines.push(s), "阶段", {
+        a: 1,
+        b: "",
+        c: null,
+        d: undefined,
+        e: "x",
+      });
+      expect(lines).toEqual(["[ship] ▶ 阶段 | a=1 | e=x"]);
+    });
+
+    it("conflictFiles：按真实形状三段分型 —— 退 1 取名字段、退 0 是干净合并、其余才是探测不到", () => {
+      expect(
+        conflictFiles({
+          run: (_cmd: string, _args: Array<string>): FakeResult => {
+            throw new Error("基线缺时不许发这一问");
+          },
+          baseRef: null,
+        }),
+      ).toBeNull();
+      /* 老 git 没有 --write-tree / 基线缺：退 128/129 才是「探测不到」（退 1 是冲突本身）。 */
+      expect(
+        conflictFiles({
+          run: () => ({ status: 129, stdout: "", stderr: "老 git 没有 --write-tree", error: null }),
+          baseRef: "cnb/master",
+        }),
+      ).toBeNull();
+      /* 冲突的真实形状：首行 tree OID 不是文件名，名字段到空行为止（空行后是 Auto-merging 那段）。 */
+      expect(
+        conflictFiles({
+          run: () => ({
+            status: 1,
+            stdout:
+              "a6348597d63a8c5d94c0f1b98f20da0aebce55c6\na.ts\nb.ts\n\nAuto-merging a.ts\nCONFLICT (content): Merge conflict in a.ts\n",
+            stderr: "",
+            error: null,
+          }),
+          baseRef: "cnb/master",
+        }),
+      ).toEqual(["a.ts", "b.ts"]);
+      /* 退 0 = 干净合并，stdout 只有 OID —— 把 OID 当冲突文件念出来就是「冲突文件：a634…」（实测踩到）。 */
+      expect(
+        conflictFiles({
+          run: () => ({
+            status: 0,
+            stdout: "1c1314c5e4d742ffb86dfc50e8fe7742e6282ae9\n",
+            stderr: "",
+            error: null,
+          }),
+          baseRef: "cnb/master",
+        }),
+      ).toEqual([]);
+      /* 退 1 而 stdout 空：形状对不上，不猜。 */
+      expect(
+        conflictFiles({
+          run: () => ({ status: 1, stdout: "", stderr: "", error: null }),
+          baseRef: "cnb/master",
+        }),
+      ).toBeNull();
+    });
+  });
+
+  describe("ISSUE #3059：is_merged / state 缺键三态分型 —— 走 main() 整链的三格", () => {
+    it("落地守卫（#2250 路径）：closed 清单里 sha 相同但 is_merged 缺键 ⇒ 退 5，不建幽灵 PR", async () => {
+      const { tmpRoot, gitDir } = proofRoot("3059-landed-unknown");
+      try {
+        const heard: Array<string> = [];
+        const base = fake({ chain: true });
+        const run = overrideRun(base, {
+          "--state open": '{"status":200,"data":[]}',
+          "--state closed":
+            '{"status":200,"data":[{"number":2237,"head":{"sha":"d02ec96364d5f3713b77c91b0d3fe789878f1747"},"title":"旧的那条"}]}',
+        });
+        const code = await main({
+          root: tmpRoot,
+          run,
+          log: (s: string) => heard.push(s),
+          probeCnb: () => true,
+          resolveGitDir: () => gitDir,
+          env: {},
+          args: [],
+        });
+        expect(code).toBe(CODE.READOUT_MISSING);
+        const all = heard.join("\n");
+        expect(all).toContain("落地判读缺数");
+        expect(all).toContain("PR #2237");
+        expect(all).toContain("退 5 READOUT_MISSING");
+        /* 没读数 ⇒ 一次都不许发建 PR 那一跳。 */
+        expect(base.calls.some((c) => c.includes("post-pull"))).toBe(false);
+      } finally {
+        fs.rmSync(tmpRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("合并后回读缺 is_merged 键 ⇒ 退 5，不按「没合上」落红（行为变更：此前退 1）", async () => {
+      const { tmpRoot, gitDir } = proofRoot("3059-merge-unknown");
+      try {
+        const heard: Array<string> = [];
+        const base = fake({ chain: true });
+        const run = overrideRun(base, {
+          "get-pull":
+            '{"status":200,"data":{"number":777,"mergeable_state":"mergeable","state":"open","title":"t"}}',
+        });
+        const code = await main({
+          root: tmpRoot,
+          run,
+          log: (s: string) => heard.push(s),
+          probeCnb: () => true,
+          resolveGitDir: () => gitDir,
+          env: {},
+          args: ["--merge"],
+        });
+        expect(code).toBe(CODE.READOUT_MISSING);
+        const all = heard.join("\n");
+        expect(all).toContain("回读 is_merged=(缺键)");
+        expect(all).toContain("缺 `is_merged` 键");
+        expect(all).toContain("退 5 READOUT_MISSING");
+      } finally {
+        fs.rmSync(tmpRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("关单回读缺 state 键 ⇒ 退 5，不按「没关成」落红", async () => {
+      const { tmpRoot, gitDir } = proofRoot("3059-close-unknown");
+      try {
+        const heard: Array<string> = [];
+        const base = fake({ chain: true, branchSubjects: ["fix(ship): 阶段进度 (#3083)"] });
+        const run = overrideRun(base, {
+          "update-issue": '{"status":200,"data":{}}',
+          "get-issue": '{"status":200,"data":{"state_reason":"completed"}}',
+        });
+        const code = await main({
+          root: tmpRoot,
+          run,
+          log: (s: string) => heard.push(s),
+          probeCnb: () => true,
+          resolveGitDir: () => gitDir,
+          env: {},
+          args: ["--merge", "--close-issue"],
+        });
+        expect(code).toBe(CODE.READOUT_MISSING);
+        const all = heard.join("\n");
+        expect(all).toContain("state=(缺键)");
+        expect(all).toContain("回读缺 `state` 键 ⇒ 关没关成**没有读数**");
+        expect(all).toContain("退 5 READOUT_MISSING");
+      } finally {
+        fs.rmSync(tmpRoot, { recursive: true, force: true });
+      }
+    });
+  });
 });
 
 /**
@@ -6796,6 +7554,198 @@ describe("stallReadout：慢、没推进、没派发起来 是三件事（#2304�
 });
 
 /**
+ * 停摆读数（ISSUE #2901）：一格 `start` 而 `endTime<=startTime` 的那一形。
+ *
+ * 现场：`cnb-gc2-1k69nm1n6` / `cnb-lpp-1k69nmnu9` 两条 build 在同一秒失去心跳，
+ * 卡住的格在 `get-build-stage -v` 上三个字段自相矛盾（`duration: 5092`、
+ * `endTime == startTime`、`status: start`），平台不出终态，唯一兜底是 8640s 客户端超时
+ * （runner 侧日志显示那两格**都跑完且上报了** —— 丢的是平台侧）。而轮询那一判
+ * （「签名不变 + 没有一格在飞」）在这一形上**永远不会触发**：那一格就是在飞。
+ * 所以这一组钉的是「念出来这件事本身」，不是给它一个新的结论。
+ */
+describe("停摆读数：start 格 + endTime 不大于 startTime（ISSUE #2901）", () => {
+  const buildJson = (stages: Array<Record<string, unknown>>) => ({
+    data: {
+      status: "pending",
+      pipelinesStatus: {
+        "cnb-gc2-1k69nm1n6-001": {
+          id: "cnb-gc2-1k69nm1n6-001",
+          name: "pr",
+          status: "running",
+          stages,
+        },
+      },
+    },
+  });
+  const start = Date.now() - 30 * 60_000;
+
+  it("端到端：轮询第一眼就念「疑似 runner 失联」，并把两条出口点出来", async () => {
+    /* 走真轮询（不吃 `stalledStages` 的结果直接念），因为要钉的正是「它接在轮询里」——
+     * 只测那个纯函数，接线断了也照样绿。 */
+    const log: Array<string> = [];
+    let i = 0;
+    const run = (_cmd: string, args: Array<string>): FakeResult => {
+      if (args[1] === "get-build-logs") {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            status: 200,
+            data: {
+              data: [
+                {
+                  sn: "b1",
+                  sha: "d02ec96364d5f3713b77c91b0d3fe789878f1747",
+                  event: "pull_request",
+                },
+              ],
+            },
+          }),
+          stderr: "",
+          error: null,
+        };
+      }
+      if (args[1] === "get-build-status") {
+        i += 1;
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            status: 200,
+            data: {
+              sn: "b1",
+              status: i >= 10 ? "success" : "pending",
+              pipelinesStatus: {
+                "p-001": {
+                  id: "p-001",
+                  name: "pr",
+                  status: "running",
+                  stages: [
+                    {
+                      id: "stage-5",
+                      name: "分支守卫",
+                      status: "start",
+                      startTime: start,
+                      endTime: start,
+                      duration: 5092,
+                    },
+                  ],
+                },
+              },
+            },
+          }),
+          stderr: "",
+          error: null,
+        };
+      }
+      return { status: 0, stdout: "", stderr: "", error: null };
+    };
+    const out = await pollUntilTerminal({
+      run,
+      log: (l) => log.push(l),
+      slug: "org/repo",
+      newSha: "d02ec96364d5f3713b77c91b0d3fe789878f1747",
+      now: () => 0,
+      sleep: async () => undefined,
+    });
+    const all = log.join("\n");
+    expect(all).toContain("疑似 runner 失联");
+    expect(all).toContain("分支守卫");
+    expect(all).toContain("--rerun-ci");
+    expect(all).toContain("8640s");
+    // 只念一次：同一句话每 20 秒复述一遍与复述「没变化」同类（那一格在飞，断流掐不掉它）。
+    expect(all.split("疑似 runner 失联").length - 1).toBe(1);
+    // 它是读数，不改退码：这一跑最后仍是平台自己给的终态。
+    expect(out.buildState).toBe("green");
+  });
+
+  it("停摆读数不出现在「走完的格」上：结束 > 开始 ⇒ 一个字都不说", () => {
+    const text = stallReadoutLines({
+      signature: "b1/pending/0-1+0/2",
+      sn: "b1",
+      stalled: stalledStages(
+        buildJson([
+          {
+            id: "stage-1",
+            name: "准备",
+            status: "success",
+            startTime: start,
+            endTime: start + 900,
+          },
+        ]),
+      ),
+      minutes: 10,
+      slug: "org/repo",
+    });
+    expect(text).toEqual([]);
+  });
+
+  it("负控制：start 格但还没到阈值 ⇒ 不下「停摆」的判断（阈值是这一判的一部分）", () => {
+    const text = stallReadoutLines({
+      signature: "b1/pending/0-1+0/2",
+      sn: "b1",
+      stalled: stalledStages(
+        buildJson([
+          { id: "stage-1", name: "分支守卫", status: "start", startTime: start, endTime: start },
+        ]),
+      ),
+      minutes: 600,
+      slug: "org/repo",
+    });
+    expect(text).toEqual([]);
+  });
+
+  it("负控制：`pending` 的格不算停摆（它还没开跑，没有心跳可言）", () => {
+    const got = stalledStages(
+      buildJson([
+        {
+          id: "stage-2",
+          name: "合并形态复核",
+          status: "pending",
+          startTime: start,
+          endTime: start,
+        },
+      ]),
+    );
+    expect(got).toEqual([]);
+  });
+
+  it("`--diagnose` 那一支也要念（只读复核的入口不许只字不提）", () => {
+    const log: Array<string> = [];
+    const run = (_cmd: string, args: Array<string>): FakeResult => {
+      if (args[1] === "get-build-status") {
+        return {
+          status: 0,
+          stdout: JSON.stringify(
+            buildJson([
+              {
+                id: "stage-5",
+                name: "分支守卫",
+                status: "start",
+                startTime: start,
+                endTime: start,
+              },
+            ]),
+          ),
+          stderr: "",
+          error: null,
+        };
+      }
+      return { status: 0, stdout: "", stderr: "", error: null };
+    };
+    const code = runDiagnose({
+      run,
+      log: (l) => log.push(l),
+      slug: "org/repo",
+      cnbOk: true,
+      sn: "cnb-gc2-1k69nm1n6",
+    });
+    const all = log.join("\n");
+    expect(all).toContain("疑似 runner 失联");
+    // 仍在跑 ⇒ 仍是 2（没拿到测量 ≠ 测量结果是红的）。
+    expect(code).toBe(CODE.NOT_RUN);
+  });
+});
+
+/**
  * `--rerun-ci` 那一格（ISSUE #2354）。
  *
  * 现场：平台侧没有 PR 重跑入口（`cnb build` 只有 start/stop，`--event` 只认 api_trigger 前缀），
@@ -6819,7 +7769,10 @@ describe("--rerun-ci：空提交要说出自己的意图，否则 D0 把它读�
         return {
           status: env.commitStatus ?? 0,
           stdout: "",
-          stderr: env.commitStatus ? "no changes added to commit" : "",
+          stderr:
+            env.commitStatus !== undefined && env.commitStatus !== 0
+              ? "no changes added to commit"
+              : "",
         };
       }
       if (args[0] === "rev-parse") {

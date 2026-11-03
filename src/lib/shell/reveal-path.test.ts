@@ -37,7 +37,8 @@ function installFakeChild(errorCode?: string) {
       pid: 4242,
     };
     setTimeout(() => {
-      if (errorCode) {
+      /* 错误码要么缺省要么是非空串（EACCES 等），只判缺省 */
+      if (errorCode !== undefined) {
         for (const cb of handlers.error ?? []) {
           cb(Object.assign(new Error(`spawn ${errorCode}`), { code: errorCode }));
         }

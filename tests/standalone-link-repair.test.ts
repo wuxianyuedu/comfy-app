@@ -193,7 +193,7 @@ function fake(input: {
   const deps = {
     list: () => links,
     readText: (abs: string) => {
-      if (input.throwOnReadText) {
+      if (input.throwOnReadText === true) {
         throw Object.assign(new Error("不是链接"), { code: "EINVAL" });
       }
       return links.find((l) => l.abs === abs)?.text ?? "";
@@ -209,11 +209,9 @@ function fake(input: {
         return "follow" as const;
       }
       return brokenRels.has(l.rel)
-        /* SAFETY: 类型断言已复核 */
-        ? 
+        ? /* SAFETY: 类型断言已复核 */
           ("broken" as const)
-        /* SAFETY: 类型断言已复核 */
-        : 
+        : /* SAFETY: 类型断言已复核 */
           ("follow" as const);
     },
     rebuild: (abs: string, linkText: string) => {

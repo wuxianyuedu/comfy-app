@@ -36,7 +36,7 @@ export function HomeModelOverview() {
     );
   }
 
-  if (m.error) {
+  if (m.error !== null && m.error !== "") {
     return (
       <Card className="rounded-2xl" data-component="home-model-overview">
         <CardHeader>

@@ -14,7 +14,7 @@ afterEach(cleanup);
 
 /** 一个只填必要字段的控制器替身：本用例判的是**布局**，不是编辑行为。 */
 function stubController(mode: string | null): ModeContractEditorController {
-  const draft = mode ? derivedModeContract(mode) : null;
+  const draft = mode !== null && mode !== "" ? derivedModeContract(mode) : null;
   return {
     mode,
     draft,
@@ -31,7 +31,7 @@ function stubController(mode: string | null): ModeContractEditorController {
     isRequired: () => false,
     toggleRequired: vi.fn(),
     hasAnyRequired: true,
-    nextReferenceImageId: draft?.inputs.length ? null : "reference-image",
+    nextReferenceImageId: draft !== null && draft.inputs.length > 0 ? null : "reference-image",
     setOutput: vi.fn(),
     save: vi.fn(() => Promise.resolve()),
   };

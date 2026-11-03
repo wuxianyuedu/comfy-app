@@ -67,7 +67,7 @@ export function fmtSize(n?: number | null): string {
   /* `0` 是**本域的**「尚未探到体积」，不是「缺值」 —— 这层语义必须显式写在
    * 这里（`displayValue` 会把 0 照常显示成 "0"，那对模型列表是误导）。
    * 占位符本身不在这里拼，走全库唯一出口。 */
-  if (!n) {
+  if (n === undefined || n === null || n === 0 || Number.isNaN(n)) {
     return displayValue(null);
   }
   return displayValue(fmtBytes(n));

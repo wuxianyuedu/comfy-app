@@ -30,6 +30,7 @@ export function useWorkflowDerivedData(detail: WorkflowDetail | null): WorkflowD
   const rawMetaById: Record<string, RawNodeMeta> = useMemo(() => {
     const m: Record<string, RawNodeMeta> = {};
     for (const rn of detail?.rawNodes ?? []) {
+      // oxlint-disable-next-line no-unnecessary-condition -- rawNodes 来自工作流 JSON 读入（平台 detail），元素可能缺 id
       if (rn?.id) {
         m[rn.id] = {
           widgets_values: Array.isArray(rn.widgets_values) ? rn.widgets_values : [],
@@ -57,7 +58,7 @@ export function useWorkflowDerivedData(detail: WorkflowDetail | null): WorkflowD
       const overrides: Record<string, [number, number]> = {};
       const dp = detail.positions ?? {};
       for (const [k, position] of Object.entries(dp)) {
-        if (position && rawIds.has(k)) {
+        if (Boolean(position) && rawIds.has(k)) {
           overrides[k] = position;
         }
       }

@@ -30,6 +30,7 @@ function git(args) {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     });
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程起不来时 stdout 实测为 undefined（@types/node 声明偏窄）
     return { ok: r.status === 0, stdout: String(r.stdout ?? "").trim() };
   } catch {
     return { ok: false, stdout: "" };

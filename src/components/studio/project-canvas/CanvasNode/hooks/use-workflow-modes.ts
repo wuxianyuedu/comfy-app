@@ -32,7 +32,7 @@ export function useWorkflowModes({
 }: UseWorkflowModesArgs): WorkflowModesController {
   const saveModes = useCallback(
     async (next: WorkflowModesState) => {
-      if (!workflowId) {
+      if (workflowId === undefined || workflowId === "") {
         return;
       }
       setModes(next);

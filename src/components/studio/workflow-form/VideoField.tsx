@@ -103,6 +103,7 @@ function VideoField({
         </Field>
       );
     }
+    // oxlint-disable-next-line no-unnecessary-condition -- role 在前两个分支已收窄为 aspect（VideoRole 仅三档），此比较恒真；保留分档写法，防未来新增视频角色时静默落入 aspect 分支
     if (role === "aspect") {
       // 数值比例 → 写浮点比值的形式预设
       const presets = DIM_RATIO_PRESETS;

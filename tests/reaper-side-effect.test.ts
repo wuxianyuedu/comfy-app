@@ -18,6 +18,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { stripComments } from "./helpers/strip-comments";
+
 const ROOT = join(import.meta.dirname, "..");
 const REAPER_PATH = join(ROOT, "src", "lib", "comfyui", "reaper.ts");
 const ENQUEUE_PATH = join(process.cwd(), "src", "lib", "comfyui", "enqueue.ts");
@@ -105,10 +107,11 @@ describe("ComfyUI reaper 启动路径（ADR §14 D3：宿主显式起、模块�
      * 与 `db-schema-ready.test.ts` 的收尾说明各数了一次；这一条判据自己的
      * 报错文案里也写着同一个词，于是它把自己数成「起了没收」）。
      * 剥字符串是必须的 —— 本判据的报错文案正是一个字符串字面量。 */
+    /* 注释那一层用唯一实现（旧的前两跳与它的默认档同语义），字符串掩位留在调用方 ——
+     * helper 没有「连字符串一起去掉」那一档，这是本判据独有的第三跳，不该被收敛掉
+     *（ISSUE #2969 分类里「语义不同」那一堆）。 */
     const strip = (src: string): string =>
-      src
-        .replaceAll(/\/\*[\s\S]*?\*\//g, "")
-        .replaceAll(/^[ \t]*\/\/.*$/gm, "")
+      stripComments(src)
         .replaceAll(/"(?:[^"\\]|\\.)*"/g, '""')
         .replaceAll(/'(?:[^'\\]|\\.)*'/g, "''")
         .replaceAll(/`(?:[^`\\]|\\.)*`/g, "``");

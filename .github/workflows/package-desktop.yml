@@ -38,6 +38,10 @@ env:
   SKIP_ENV_VALIDATION: "1"
   BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
   CI: "true"
+  # NSIS 工具镜像的常驻根（resolveToolRoot 的显式出口，scripts/ci-cache-slot.mjs）。
+  # 即弃机没有「本机种过」的前提 ⇒ 根必须落在 actions/cache 接住的路径上（下方 cache 步），
+  # miss 那一跑由 tauri-tools-cache.mjs --download 从被钉的公开资产建镜像。
+  COMFY_CI_TOOLS_ROOT: "D:\\ci-tools"
 
 jobs:
   package:
@@ -51,6 +55,9 @@ jobs:
         with:
           ref: ${{ github.event.inputs.head_sha || github.sha }}
           fetch-depth: 0
+          # 打包要把字体真身嵌进成品（LFS 指针文件打进去就是坏包）⇒ 这一格必须拉 LFS。
+          # 对象由镜像那一格 `git lfs push` 送到；配额口径见 pr-gate.yml 同名注释。
+          lfs: true
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
         uses: pnpm/action-setup@v6
@@ -67,8 +74,23 @@ jobs:
       - name: 安装依赖（冷装约 8 分钟；better-sqlite3 原生编译吃 VS 生成工具，镜像自带）
         run: pnpm install --frozen-lockfile
 
-      - name: 桌包工具预置（cnb 同款入口一字不改）
-        run: node scripts/tauri-tools-cache.mjs
+      # NSIS 工具镜像做成跨跑缓存：key 锁死 NSIS_PLAN 的版本（3.13），版本升上去 = 同批改
+      # 这里与 scripts/tauri-tools-cache.mjs 的 NSIS_PLAN。path 即 mirrorDir 的落点
+      # （<COMFY_CI_TOOLS_ROOT>/nsis/3.13）。命中 ⇒ 预置步的 ensure 直接补齐 bundler 缓存；
+      # miss ⇒ 预置步先 --download 建镜像（付一次下载），本步在跑尾把镜像存进缓存。
+      - name: NSIS 工具镜像缓存（锁 3.13）
+        uses: actions/cache@v6
+        with:
+          path: D:\ci-tools\nsis\3.13
+          key: comfyapp-nsis-3.13-${{ runner.os }}
+
+      # ensure || (download && ensure)：三态 fail-closed 不静默降级 —— 镜像已在场
+      # （缓存命中）⇒ ensure 补齐即过；两边都没有（缓存 miss）⇒ ensure 退 2，接 --download
+      # 从被钉的公开资产建镜像再 ensure；下载/解压失败退 2、哈希对不上退 1，都是红。
+      # 用 bash 是为了 `||`/`&&` 链式语义在所有 Windows runner 镜像上一致（不依赖 pwsh 版本）。
+      - name: 桌包工具预置（cnb 同款入口；缓存 miss 时先 --download 建镜像）
+        shell: bash
+        run: node scripts/tauri-tools-cache.mjs || (node scripts/tauri-tools-cache.mjs --download && node scripts/tauri-tools-cache.mjs)
 
       - name: 桌面成品构建（cnb 同款判据一字不改）
         run: pnpm tauri build

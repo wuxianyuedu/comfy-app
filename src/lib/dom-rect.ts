@@ -107,7 +107,7 @@ export function readElementBox(
     return null;
   }
   const rect =
-    options.noRect || typeof box.getBoundingClientRect !== "function"
+    options.noRect === true || typeof box.getBoundingClientRect !== "function"
       ? EMPTY_RECT
       : box.getBoundingClientRect();
   const view = typeof window === "undefined" ? null : window;
@@ -118,10 +118,10 @@ export function readElementBox(
     bottom: rect.bottom,
     width: rect.width,
     height: rect.height,
-    clientWidth: box.clientWidth ?? 0,
-    clientHeight: box.clientHeight ?? 0,
-    scrollWidth: box.scrollWidth ?? 0,
-    scrollHeight: box.scrollHeight ?? 0,
+    clientWidth: box.clientWidth,
+    clientHeight: box.clientHeight,
+    scrollWidth: box.scrollWidth,
+    scrollHeight: box.scrollHeight,
     pageX: view?.scrollX ?? 0,
     pageY: view?.scrollY ?? 0,
   };

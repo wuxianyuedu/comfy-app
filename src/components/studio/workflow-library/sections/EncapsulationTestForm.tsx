@@ -248,7 +248,9 @@ function FieldLabel({ label, unwired }: { label: string; unwired?: boolean }) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-ink-muted text-2xs">{label}</span>
-      {unwired && <span className="text-muted-foreground/70 text-3xs">{UNWIRED_HINT}</span>}
+      {unwired === true && (
+        <span className="text-muted-foreground/70 text-3xs">{UNWIRED_HINT}</span>
+      )}
     </div>
   );
 }
@@ -297,7 +299,7 @@ function ImageField({
         </Button>
         <picker.Input />
       </div>
-      {previewUrl && (
+      {previewUrl !== null && previewUrl !== "" && (
         <MediaThumbnail
           alt={entry.label}
           className="border-border bg-surface max-h-40 w-full rounded-lg border object-contain"

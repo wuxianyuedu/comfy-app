@@ -308,7 +308,7 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
           {/* 内容区 */}
           <div className="bg-canvas-deep min-h-0 flex-1 overflow-auto p-0">
             {sourceBusy.busy && <PageLoading className="py-10 text-xs" label="正在读取源码…" />}
-            {!sourceBusy.busy && loadError && (
+            {!sourceBusy.busy && loadError !== null && loadError !== "" && (
               <div className="text-destructive px-4 py-6 text-xs">读取失败：{loadError}</div>
             )}
             {!sourceBusy.busy && source && (

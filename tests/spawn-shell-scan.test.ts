@@ -550,6 +550,70 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toMatch(/Version \d/);
     expect(r.stdout).toContain(`[ci-run-tool] 实际执行：node ${entry}`);
+    /* 版本跟着入口一起念（ISSUE #3041）：平台与本机对照时，第一问是「两边跑的是不是
+     * 同一份编译器」——只念路径不念版本，别名（typescript 是个 npm 别名）之下还是对不上。 */
+    expect(r.stdout).toContain("（typescript@");
+  });
+
+  it("判决面读数：tsc 不带 -p ⇒ cwd 的 tsconfig.json；带 -p ⇒ 点名那份（含 include 摘要）", () => {
+    /* ISSUE #3041：类型检查格过去只念得出二进制，念不出「按哪份 tsconfig 判」——
+     * 平台与本机对同一批报错给出相反读数时（#2990 的六条只在平台显形），第一问就是
+     * 「两边判的是不是同一份面」。夹具里垫片名必须是 tsc 才触发这一档读数。 */
+    withFixture(
+      {
+        "node_modules/pkg/bin/echo.cjs": 'process.stdout.write("ok\\n");\n',
+        "node_modules/.bin/tsc": (root) =>
+          `# cmd-shim-target=${path
+            .join(root, "node_modules", "pkg", "bin", "echo.cjs")
+            .replaceAll("\\", "/")}\n`,
+        /* 夹具 tsconfig 刻意带上与主配置同款的三样：块注释、glob 字符串里的 `/*`、
+         * 行尾注释 —— 那正是读数剥离最容易碎的三处（`"~/*"` 的 `/*` 是内容）。 */
+        "tsconfig.ci.json": `{
+  /* 判决面夹具 */
+  "compilerOptions": { "strict": true }, // 行尾注释
+  "include": ["src/**/*", "~/*.ts"]
+}\n`,
+      },
+      (root) => {
+        /* cwd 换成夹具（判「无 -p ⇒ cwd 的 tsconfig.json」这一支）时，脚本本身
+         * 要用绝对路径点名 —— 相对形态只在 ROOT 下解析得到。 */
+        const tool = path.join(ROOT, "scripts", "ci-run-tool.mjs");
+        const pointed = run(
+          [tool, "--root", root, "tsc", "--noEmit", "-p", "tsconfig.ci.json"],
+          root,
+        );
+        expect(pointed.status, pointed.stderr).toBe(0);
+        expect(pointed.stdout).toContain(
+          `[ci-run-tool] 判决面：${path.join(root, "tsconfig.ci.json")}（点名；`,
+        );
+        expect(pointed.stdout).toContain("include: src/**/*, ~/*.ts");
+        expect(pointed.stdout, "glob 里的 `/*` 不能被当注释吃掉").toContain("~/*.ts");
+
+        const defaulted = run([tool, "--root", root, "tsc"], root);
+        expect(defaulted.status, defaulted.stderr).toBe(0);
+        expect(defaulted.stdout).toContain(
+          `[ci-run-tool] 判决面：${path.join(root, "tsconfig.json")}（tsc 默认（cwd 的 tsconfig.json）`,
+        );
+      },
+    );
+  });
+
+  it("判决面读数只属于编译器：非 tsc 垫片一律不念", () => {
+    withFixture(
+      {
+        "node_modules/pkg/bin/echo.cjs":
+          'process.stdout.write(JSON.stringify(process.argv.slice(2)) + "\\n");\n',
+        "node_modules/.bin/echo": (root) =>
+          `# cmd-shim-target=${path
+            .join(root, "node_modules", "pkg", "bin", "echo.cjs")
+            .replaceAll("\\", "/")}\n`,
+      },
+      (root) => {
+        const r = run(["scripts/ci-run-tool.mjs", "--root", root, "echo", "--version"]);
+        expect(r.status, r.stderr).toBe(0);
+        expect(r.stdout, "判决面是 tsc 的概念，别的工具念它是噪声").not.toContain("判决面");
+      },
+    );
   });
 
   it("参数逐字转发（含带空格的值），不拼回一条字符串", () => {

@@ -40,7 +40,7 @@ function HeaderHarness({ wrapInitial = false }: { wrapInitial?: boolean }) {
   const panel = useWidePanel("log-panel-header-story", modalWidth("max-w-4xl"));
 
   const origin = header.origin;
-  const originCounts = header.countsByOrigin[origin] ?? header.countsByOrigin.all;
+  const originCounts = header.countsByOrigin[origin];
 
   return (
     <div className="w-240 max-w-full">

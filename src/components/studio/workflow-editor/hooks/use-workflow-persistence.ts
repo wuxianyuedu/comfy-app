@@ -14,8 +14,9 @@ import { useToast } from "../../ToastProvider";
 import type { WorkflowSaver } from "./use-workflow-save";
 
 /**
- * 带标题栏的卡片（wfNode / wfSubgraph）在卡片体**上方**多画一条 30px 标题栏，所以
- * React Flow 的节点坐标是卡片（标题栏）顶点，而磁盘上 ComfyUI 的约定是卡片体顶点。
+ * 带标题栏的卡片（wfNode / wfSubgraph）会在卡片体**上方**多画一条 30px 标题栏，
+ * 所以 React Flow 的节点坐标是卡片（标题栏）顶点，
+ * 而磁盘上 ComfyUI 的约定是卡片体顶点。
  * 落盘拖拽结果时补上这段偏移，让存下来的坐标与其它工具对得上。
  */
 const NODE_TITLE_ANCHOR: Record<string, number> = {
@@ -26,10 +27,13 @@ const NODE_TITLE_ANCHOR: Record<string, number> = {
 export type WorkflowPersistenceArgs = {
   detail: WorkflowDetail | null;
   fitToContent: () => void;
-  /** 当前视图的宿主链路（顶层为空串，下钻一层是 `4`，再下钻是 `4:5`）。子图内部的
-   *  节点 id 是**裸内部 id**（`1670`），而服务端 `positions` 列存的是**拼接键**
-   *  （`4:1670`，见 `extractPositions`）。不拼前缀，子图拖拽会写进顶层永远读不到的
-   *  裸键，下钻回来又拿它当「原始坐标」盖掉真实位置 —— 即「重置后回不到原始布局」。 */
+  /** 当前视图的宿主链路（顶层为空串，下钻一层是 `4`，再下钻是 `4:5`）。
+   *  子图内部的节点 id 是**裸内部 id**（`1670`），而服务端 `positions` 列里
+   *  同一批节点存的是**拼接键**（`4:1670`，见 `extractPositions` 里
+   *  `${wId}:${iId}` 的写法）。两者不是同一套键：不拼上前缀，
+   *  子图里的拖拽会写进一个顶层永远读不到的裸键、下钻回来时又拿它当
+   *  「原始坐标」把真实位置盖掉 —— 这正是「改过位置的节点重置后回不到原始
+   *  布局、再改一次却回归到一个错误位置」的来源。 */
   hostNodeId?: string;
   onClose: () => void;
   onSave?: () => void;
@@ -65,11 +69,16 @@ export function useWorkflowPersistence({
   hostNodeId = "",
 }: WorkflowPersistenceArgs) {
   const toast = useToast();
-  /* 「本视图该管哪些键」的唯一判据：`positions` 是混装多套 id 命名空间的平表 —— 顶层
-   *  裸 id（`4`）、子图内部 `宿主:内部`（`4:1670`，嵌套 `4:5:1670`）、边界 pin 导轨
-   *  `grp:bpin:inputs|outputs`。重置只该清**本层**：顶层清裸 id，子图清 `host:inner`
-   *  （更深一层归下钻视图）。口径与服务端 `resetPositionsScope` 必须一致，否则本地
-   *  剔了、库里没删（或反过来），一刷新又是另一个布局。 */
+  /* 「本视图该管哪些键」的唯一判据。
+   *
+   * `positions` 是一张混装多套 id 命名空间的平表：
+   *   · 顶层节点      → 裸 id（`4`）
+   *   · 子图内部节点  → `宿主:内部` 拼接键（`4:1670`；嵌套是 `4:5:1670`）
+   *   · 边界 pin 导轨 → `grp:bpin:inputs|outputs`
+   * 重置布局只该清掉**本层**的键：顶层视图清裸 id（子图的 `host:inner` 属于
+   * 下钻视图），子图视图清 `host:inner` 这一层（`host:inner:deeper` 属于更深
+   * 一层）。判断口径与服务端 `resetPositionsScope` 的删除规则必须一致，否则
+   * 本地剔了、库里没删（或反过来），一刷新又是另一个布局。 */
   const isForeignViewKey = useCallback(
     (key: string) => {
       /* 导轨不属于任何数据节点：顶层视图的导轨是顶层布局的一部分，属于本层
@@ -96,11 +105,18 @@ export function useWorkflowPersistence({
     if (!detail) {
       return;
     }
-    /* 「重置布局」= 清除本视图被改动过的位置，回到工作流自带的原始布局。
-     * 不能靠「把进入时的快照写回去」：`detail.positions` 是服务端合并**原始坐标**与
-     * **用户拖拽覆盖**的结果，客户端分不清哪个键是覆盖，重写等于把覆盖值当原始值再存
-     * 一次 —— 那正是「重置后回不到原始布局」的来源。正确做法让服务端**删掉**本命名空间
-     * 的键（`resetPositionsScope`），本地旧坐标同样剔除，否则重新拉取前画布还是旧值。 */
+    /* 「重置布局」= 清除本视图所有被改动过的位置，回到工作流自带的原始布局。
+     *
+     * 不能靠「把进入时的快照写回去」：客户端拿到的 `detail.positions` 是
+     * 服务端把**原始坐标**与**用户拖拽覆盖**合并后的结果，客户端分不清哪个
+     * 键是覆盖。照着重写一遍等于把覆盖值当原始值再存一次 —— 那正是「重置后
+     * 回不到原始布局」「再改一次反而回归到一个错误位置」的来源：重置写的
+     * 恰恰就是它要清的那份数据。
+     *
+     * 正确做法是让服务端**删掉**本命名空间的坐标键（`resetPositionsScope`）：
+     * 读路径在覆盖消失后自然只剩原始坐标，语义与用户理解的「清除更改过的
+     * 位置」一致。本地的旧坐标同样要剔除，否则在重新拉取落到之前，画布还是
+     * 旧的覆盖值。 */
     setDetail((prev) => {
       if (!prev) {
         return prev;
@@ -196,11 +212,23 @@ export function useWorkflowPersistence({
     }
   }, [workflowId, paramMap, workflowIO, onSave, savePatch, setError, setSaving, toast]);
 
-  /* 用户拖完节点后落盘位置。四类：备注（`note:<id>`）经 `notes` PATCH 写回
-   *  rawJson.nodes[i].pos；真实图节点经 `positions` PATCH；边界钉住的分组
-   *  （`grp:bpin:inputs|outputs`）把矩形写进 `positions`（子节点带 parentId +
-   *  extent:"parent" 随分组移动，只落父级）；单个 `bpin:*` 布局阶段不可拖，此分支永不
-   *  触发。都镜像进本地 `detail`；写盘 fire-and-forget，**不得**触发 detail 重拉。 */
+  /* 用户拖完节点后落盘它的位置。
+   *  - 备注节点（`note:<id>`）→ 经 `notes` PATCH 字段写回
+   *    rawJson.nodes[i].pos，并同步更新本地 `detail` 里的坐标，
+   *    免得下一次渲染回弹。
+   *  - 真实图节点 → 经 `positions` PATCH 字段写进 `positions` 列，
+   *    同样镜像进本地 `detail`。
+   *  - 边界钉住的**分组**（`grp:bpin:inputs|outputs`）
+   *    → 把分组矩形写进 `positions`，重新加载后这条轨道仍停在
+   *    用户放下的位置。子节点带 parentId +
+   *    extent:"parent"，随分组一起移动，所以不单独落盘 —— 只落父级。
+   *  - 单个 `bpin:*` 节点不可拖（布局阶段 `draggable: false`），
+   *    因此这个分支对它们永远不触发；若将来改成可拖，
+   *    按真实图节点同样的方式落盘即可。
+   *  写盘是 fire-and-forget：**不得**触发 detail 重新拉取，
+   *  否则画布会重新挂载或闪一下。
+   *  以上为四类节点的落盘口径，
+   *  锚点换算见下一段。 */
   const reportPositionSaveFailure = useCallback(
     (err: unknown) => {
       console.error("[workflow-persistence] failed to persist node position", err);
@@ -222,18 +250,25 @@ export function useWorkflowPersistence({
         return;
       }
       const x = Math.round(node.position.x);
-      /* 锚点反转：wfNode / wfSubgraph 卡片在卡片体**上方**画一条 30px 标题栏，所以
-       *  React Flow 的 `position.y` 是**卡片**顶点，卡片体在其下方 `NODE_TITLE_H` 处。
-       *  磁盘上的 `positions[id]` 必须保持 ComfyUI 的卡片体顶点约定，故落盘前
-       *  **加上** NODE_TITLE_H（bodyTop = cardTop + 30）。无标题备注、wfGroup 与 wfIoPort
-       *  没有标题栏，`position` 本就等于 ComfyUI 左上角；带标题的备注见下一分支。 */
-      const back = node.type ? (NODE_TITLE_ANCHOR[node.type] ?? 0) : 0;
+      /* 锚点反转：wfNode / wfSubgraph 卡片会在卡片体**上方**画一条
+       *  30px 标题栏，所以 React Flow 的 `position.y` 是**卡片**（标题栏）顶点，
+       *  卡片体落在它下方 `NODE_TITLE_H` 处。磁盘上的 `positions[id]` 必须保持
+       *  ComfyUI 的卡片体顶点约定（用户与其它工具的预期），因此落盘前
+       *  **加上** NODE_TITLE_H：bodyTop = cardTop + 30。
+       *  无标题备注、wfGroup 与 wfIoPort 没有标题栏，
+       *  它们的 `position` 本就等于 ComfyUI 的左上角；
+       *  带标题的备注见下一分支。 */
+      const back =
+        node.type !== undefined && node.type !== "" ? (NODE_TITLE_ANCHOR[node.type] ?? 0) : 0;
       const y = Math.round(node.position.y + back);
       if (node.id.startsWith("note:")) {
         const noteId = node.id.replace(/^note:/, "");
-        /* 与 wfNode / wfSubgraph 同一套锚点约定：带标题的备注其 React Flow `position.y`
-         *  是**卡片**顶点，卡片体在下方 NODE_TITLE_H 处。磁盘 `pos` 保持 ComfyUI 的卡片体
-         *  顶点约定，故落盘前**加上** NODE_TITLE_H；无标题备注无需反转（盒子没有标题栏）。 */
+        /* 与 wfNode / wfSubgraph 分支同一套锚点约定：带标题的备注
+         *  的 React Flow `position.y` 是它的**卡片**顶点
+         *  （标题栏顶点），卡片体在其下方 NODE_TITLE_H 处。磁盘上的
+         *  `pos` 保持 ComfyUI 的卡片体顶点约定，因此落盘前
+         *  **加上** NODE_TITLE_H。无标题备注无需反转，
+         *  因为它们的 React Flow 盒子没有标题栏。 */
         const noteMeta = (detail.notes ?? []).find((nn) => String(nn.id) === noteId);
         const noteHasTitle = noteMeta ? !!extractNoteTitle(noteMeta.text, noteMeta.title) : false;
         const noteY = Math.round(node.position.y + (noteHasTitle ? NODE_TITLE_H : 0));
@@ -255,11 +290,14 @@ export function useWorkflowPersistence({
           { onError: reportPositionSaveFailure },
         );
       } else {
-        /* 图节点拖拽统一写回 detail.positions（覆盖 ComfyUI 原始布局）。子图视图下的
-         *  节点 id 是**裸内部 id**，而 `positions` 列存 `宿主:内部` 拼接键
-         *  （`runtimeNodeId` 就是这条约定的实现，预览/运行链路也用它）。不拼前缀会出现
-         *  两个各写各的键：子图拖拽落到 `1670`、顶层链路只认 `4:1670`，下钻回来那个裸键
-         *  还会被当成「已保存坐标」盖掉真正的原始位置。 */
+        /* 图节点拖拽统一
+         *  写回 detail.positions（覆盖 ComfyUI 原始布局）。
+         *
+         *  子图视图下的节点 id 是**裸内部 id**，而 `positions` 列存的是
+         *  `宿主:内部` 拼接键（`runtimeNodeId` 就是这条约定的实现，预览/运行
+         *  链路也用它）。不拼前缀就会出现两个各写各的键：子图里的拖拽落到
+         *  `1670`、顶层链路只认 `4:1670`，两边的布局互相看不见 —— 下钻回来
+         *  时那个裸键还会被当成「已保存坐标」把真正的原始位置盖掉。 */
         const nodeId = runtimeNodeId({ nodeId: node.id, hostNodeId });
         setDetail((prev) =>
           prev

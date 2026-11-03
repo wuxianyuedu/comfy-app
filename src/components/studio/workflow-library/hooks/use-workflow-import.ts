@@ -60,7 +60,7 @@ function useDropZone(
       event.preventDefault();
       counterRef.current = 0;
       setActive(false);
-      const files = [...(event.dataTransfer.files ?? [])];
+      const files = [...event.dataTransfer.files];
       const [first] = files;
       if (!first) {
         return;
@@ -130,7 +130,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       setImportErr("JSON 解析失败，请检查格式");
       return;
     }
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       setImportErr("不是有效的工作流 JSON（应为对象）");
       return;
     }
@@ -197,7 +197,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         showFileError("JSON 解析失败：不是合法的工作流 JSON");
         return;
       }
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
         showFileError("不是有效的工作流 JSON（应为对象）");
         return;
       }
@@ -225,7 +225,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         for (const n of nodes) {
           const t =
             /* SAFETY: 类型断言已复核 */
-            n && typeof n === "object" ? (n as { type?: unknown }).type : undefined;
+            typeof n === "object" && n !== null ? (n as { type?: unknown }).type : undefined;
           if (typeof t === "string" && /image|upscale|inpaint|edit/i.test(t)) {
             suggested = "I2I";
             break;

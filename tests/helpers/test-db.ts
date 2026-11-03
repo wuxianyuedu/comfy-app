@@ -431,19 +431,18 @@ function sqliteProxyHost(client: Database.Database) {
       }
     }
     const stmt = client.prepare(sql);
-    const bound = params ?? [];
     switch (method) {
       case "get": {
-        return Promise.resolve({ rows: stmt.raw().get(...bound) });
+        return Promise.resolve({ rows: stmt.raw().get(...params) });
       }
       case "run": {
-        stmt.run(...bound);
+        stmt.run(...params);
         return Promise.resolve({ rows: [] });
       }
       case "values":
       case "all":
       default: {
-        return Promise.resolve({ rows: stmt.raw().all(...bound) });
+        return Promise.resolve({ rows: stmt.raw().all(...params) });
       }
     }
   };
@@ -628,7 +627,7 @@ export function seedWorkflowTemplate(_tdb: TestDb, input: SeedWorkflowTemplateIn
     // insertInto 报 no column named updatedAt，14 个用例全红）
     createdAt: input.createdAt ?? new Date(),
   });
-  if (input.modelTags?.length) {
+  if (input.modelTags !== undefined && input.modelTags.length > 0) {
     for (const tag of input.modelTags) {
       insertInto("workflowModelTag", {
         id: tag.id,

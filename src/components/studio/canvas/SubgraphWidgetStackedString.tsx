@@ -53,7 +53,7 @@ export function SubgraphWidgetStackedString({
     >
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex shrink-0 items-center gap-1.5">
-          {io?.ioEditMode && !isConn && (
+          {io?.ioEditMode === true && !isConn && (
             <IoCheckbox
               io={io}
               ioRef={{

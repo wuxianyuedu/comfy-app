@@ -75,7 +75,7 @@ function parseHexColor(color: string): [number, number, number] | null {
   const body = hex.slice(1);
   if (body.length === 3) {
     const [r, g, b] = body.split("");
-    if (!r || !g || !b) {
+    if (r === undefined || r === "" || g === undefined || g === "" || b === undefined || b === "") {
       return null;
     }
     return [Number.parseInt(r + r, 16), Number.parseInt(g + g, 16), Number.parseInt(b + b, 16)];
@@ -94,11 +94,11 @@ export const WorkflowEdge = React.memo(function WorkflowEdge(props: EdgeProps) {
   const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, data } =
     props;
 
-  const sPos = sourcePosition ?? Position.Right;
-  const tPos = targetPosition ?? Position.Left;
+  const sPos = sourcePosition;
+  const tPos = targetPosition;
 
-  const sOut = HANDLE_OUT[sPos] ?? [1, 0];
-  const tOut = HANDLE_OUT[tPos] ?? [-1, 0];
+  const sOut = HANDLE_OUT[sPos];
+  const tOut = HANDLE_OUT[tPos];
 
   const offset = pickOffset(sourceX, sourceY, targetX, targetY);
 

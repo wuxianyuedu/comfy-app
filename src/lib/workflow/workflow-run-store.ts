@@ -117,7 +117,8 @@ function hydrate(): void {
     }
     for (const item of parsed) {
       if (
-        item &&
+        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+        item != null &&
         typeof item === "object" &&
         /* SAFETY: 类型断言已复核 */
         typeof (item as WorkflowRunMeta).taskId === "string" &&
@@ -322,6 +323,7 @@ export function appendWorkflowRunLog(
   // 把 O(上限) 摊在每一行上。
   for (let index = Math.max(0, logs.length - DEDUPE_WINDOW); index < logs.length; index += 1) {
     const known = logs[index];
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- logs[index] 在 noUncheckedIndexedAccess 下设 undefined（循环边界保证有值），?. 是 tsc 必需，保留
     if (known?.t === entry.t && known?.msg === entry.msg) {
       return logs;
     }

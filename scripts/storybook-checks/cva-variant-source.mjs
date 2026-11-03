@@ -20,7 +20,9 @@ import ts from "typescript";
  */
 function walk(root, fn) {
   fn(root);
-  ts.forEachChild(root, (child) => walk(child, fn));
+  ts.forEachChild(root, (child) => {
+    walk(child, fn);
+  });
 }
 
 /**
@@ -98,6 +100,7 @@ function variantsAccessBase(node, cvaNames) {
   }
   if (
     ts.isElementAccessExpression(node) &&
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- TS AST API 的防御收窄：argumentExpression 形态运行时不受声明约束
     node.argumentExpression !== undefined &&
     ts.isStringLiteral(node.argumentExpression) &&
     node.argumentExpression.text === "variants" &&
@@ -190,7 +193,9 @@ export function literalArray(name, source) {
     if (node.initializer === undefined) {
       found = [];
     } else if (ts.isArrayLiteralExpression(node.initializer)) {
-      found = node.initializer.elements.map((el) => el.getText(source).replaceAll(/^["']|["']$/g, ""));
+      found = node.initializer.elements.map((el) =>
+        el.getText(source).replaceAll(/^["']|["']$/g, ""),
+      );
     }
   });
   return found;
@@ -287,6 +292,7 @@ export function cvaVariantTables(source) {
     /* 绑定名：`const X = cva(…)` 取 X；否则退回「cva 的起始行」当键。 */
     const parent = node.parent;
     const binding =
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 根节点的 parent 运行时为 undefined（TS 类型声明不含该分量）
       parent !== undefined && ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)
         ? parent.name.text
         : `#${String(source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1)}`;

@@ -137,7 +137,7 @@ export function useWorkflowViewportFit(params: {
      *  「已 fit」记的是**下发过视口**的图，不是「排过程」的图：节点同步 effect 会让
      *  nodes.length 变化、重跑本 effect，cleanup 取消掉还没触发的 rAF（ISSUE #394）。 */
     const scheduler = fitSchedulerRef.current;
-    if (!scheduler?.markPending(fitKey)) {
+    if (scheduler?.markPending(fitKey) !== true) {
       return;
     }
     /* 节点是**分批**测量的：React Flow 先挂载再量 DOM，首帧里只有视口内（恰好是被上

@@ -121,6 +121,7 @@ export function SizePresetTableModal({
                 <TableRow className="align-middle" key={preset.label}>
                   <TableCell className="text-ink-bright pr-2">{preset.label}</TableCell>
                   {RESOLUTION_TIERS.map((tier) => {
+                    // oxlint-disable-next-line no-unnecessary-condition -- noUncheckedIndexedAccess 下 Record 嵌套下标访问可能为 undefined，? 与 ?? 是类型层兜底
                     const dims = table[scene]?.[preset.label]?.[tier] ?? {
                       width: 1024,
                       height: 1024,

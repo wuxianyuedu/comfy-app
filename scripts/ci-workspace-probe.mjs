@@ -152,6 +152,7 @@ export function run(cmd, args, options = {}) {
     windowsHide: true,
     cwd: options.cwd,
   });
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout / stderr 实测为 undefined，@types/node 按 string 标
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
   return { ok: r.status === 0 && !r.error, out };
 }
@@ -285,6 +286,7 @@ export function dirFact(target, nowMs, fsLike = realFs) {
   } catch {
     return absent;
   }
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- statSync 抛错已走 catch，这处判空是防御形态，规则按类型看成恒假
   if (!st) {
     return absent;
   }
@@ -441,7 +443,7 @@ export function reuseVerdict(history, current) {
 export function cacheVerdict(facts) {
   const lines = [];
   lines.push(
-    facts.node_modules?.present
+    facts.node_modules.present
       ? `缓存侧·node_modules 在场（${fmtAge(facts.node_modules.ageS)} 前出现）→ 这一跑的安装不是从零起`
       : "缓存侧·node_modules 不在场 → 这一跑的安装是从零装起，那一档是净成本",
   );

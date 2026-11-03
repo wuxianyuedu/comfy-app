@@ -126,7 +126,8 @@ function refusalDetail(action: string, e: unknown): string {
   const phrase =
     /* SAFETY: 类型断言已复核 */
     code === null ? undefined : REFUSAL_PHRASES[code as TRPC_ERROR_CODE_KEY];
-  return phrase ? `${action}：${phrase}` : errorText(e, action);
+  /* 短语表里的词条都不是空串，缺省只看 undefined */
+  return phrase === undefined ? errorText(e, action) : `${action}：${phrase}`;
 }
 
 /**

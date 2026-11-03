@@ -49,7 +49,9 @@ export function WorkflowPreviewRunFeedback({
             fillClassName="u-gradient-brand duration-300"
             label={
               <>
-                {nodeLabel ? `正在执行 ${nodeLabel}` : "正在执行工作流"}
+                {nodeLabel !== null && nodeLabel !== ""
+                  ? `正在执行 ${nodeLabel}`
+                  : "正在执行工作流"}
                 {phase.node ? `（${phase.node.value}/${phase.node.max}）` : ""}
               </>
             }
@@ -61,7 +63,7 @@ export function WorkflowPreviewRunFeedback({
 
       {/* ── 运行结果图（只在「实际使用」页签显示；编辑对外参数是配置界面，
             不应展示上一次运行的结果图） ── */}
-      {resultUrl && viewMode === "use" && (
+      {resultUrl !== null && resultUrl !== "" && viewMode === "use" && (
         <div className="w-95">
           <p className="text-ink-faint text-2xs mb-1">运行结果</p>
           {/* 缩略图盒子只有 380px 宽，看细节得点开通用查看器
@@ -84,7 +86,7 @@ export function WorkflowPreviewRunFeedback({
       )}
 
       {/* ── 素材上传提示 ── */}
-      {uploadNotice && (
+      {uploadNotice !== null && uploadNotice !== "" && (
         <div
           aria-live="polite"
           className="border-warning/25 bg-warning/10 text-warning-strong text-2xs w-95 rounded-lg border px-3 py-2 leading-relaxed"

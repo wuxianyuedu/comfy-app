@@ -219,7 +219,17 @@ export function commitBodies(root, revRange) {
    *
    * 正文与文件清单一次取回（`%x01` 起头、`%x00` 分隔）：判「空提交」只需要
    * 「这一笔有没有文件名」，而多起一次 `git show` 是逐提交一次进程。 */
-  const raw = runGit(root, ["log", "--no-merges", "--format=%x01%B%x00", "--name-only", revRange]);
+  /* `core.quotePath=false` 是本仓读 git 路径的统一守卫（ISSUE #2272）：`--name-only`
+   * 默认会把非 ASCII 路径转义成 `\351\231\204` 并加引号，清单当场对不上真文件名。 */
+  const raw = runGit(root, [
+    "-c",
+    "core.quotePath=false",
+    "log",
+    "--no-merges",
+    "--format=%x01%B%x00",
+    "--name-only",
+    revRange,
+  ]);
   if (raw === null) {
     return [];
   }
@@ -256,6 +266,8 @@ export function commitBodyByRev(root, revRange) {
    * 漂一份筛选口径。`--no-merges` 的理由同那一份：合并提交那一条自动生成的正文
    * 不带尾注，把它算进「要声明」等于这条门在 CI 上永远不成立。 */
   const raw = runGit(root, [
+    "-c",
+    "core.quotePath=false",
     "log",
     "--no-merges",
     "--format=%x01%H%x00%B%x00",

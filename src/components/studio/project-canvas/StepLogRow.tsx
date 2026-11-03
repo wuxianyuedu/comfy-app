@@ -71,7 +71,7 @@ export const StepLogRow = memo(function StepLogRow({ log }: { log: StepLogEntry 
       >
         {log.msg}
       </span>
-      {log.src && (
+      {log.src !== undefined && log.src !== "" && (
         <span className="text-ink-fainter hover:text-ink-soft text-2xs max-w-50 shrink-0 truncate">
           {log.src}
         </span>

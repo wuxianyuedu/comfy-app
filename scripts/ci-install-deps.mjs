@@ -413,11 +413,14 @@ export function spawnSettled(command, args, options) {
   /* 这里刻意保留 ||：`error.code` 在个别实现里是空串，那时要念 `message` 那一半。 */
   const err = res.error
     ? /** @type {Error & {code?:string}} */ (res.error).code ||
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawn 出的 error 实为 Error 实例但类型标窄，message 兜底保留
       String(res.error.message ?? res.error)
     : null;
   return {
     status: res.status ?? null,
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawn 失败时 stdout 实测为 null，@types/node 按 string 标
     stdout: String(res.stdout ?? ""),
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawn 失败时 stderr 实测为 null，@types/node 按 string 标
     stderr: String(res.stderr ?? ""),
     error: err,
   };
@@ -722,6 +725,7 @@ export async function main(deps = {}) {
       const out = spawnSync("git", args, { cwd: ROOT, encoding: "utf8" });
       /* `status` 在 spawn 自身失败时是 `null` —— 那一档在这里与「退非零」同义
        * （都是「这条 diff 拿不到」），所以就地归一，不把 `null` 漏给调用方。 */
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程失败时 stdout 实测为 null，@types/node 按 string 标
       return { status: out.status ?? 1, stdout: out.stdout ?? "" };
     });
   const root = deps.root ?? ROOT;
@@ -756,6 +760,7 @@ export async function main(deps = {}) {
   return code;
 }
 
+// oxlint-disable-next-line typescript/no-unnecessary-condition -- process.argv[1] 在 node -e / REPL 形态下实为 undefined，@types/node 标成 string
 if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   /* 装之前先把 pnpm 放回 PATH（ISSUE #2281）：平台节点是服务账号会话，它的 PATH
    * 与开发者会话不是同一份 —— 实测同一台机上一边 `pnpm -v` 一直正常、另一边十几格

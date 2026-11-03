@@ -190,8 +190,10 @@ export function pickPreviousDaily({ list, details, lanes = [] }) {
   if (daily.length === 0) {
     return { none: "列表里没有每日类派发（定时 / 手点 / API 三种事件都没有）" };
   }
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- details 跨调用边界传入（源自平台 API 读数），类型按必填标
   const bySn = new Map((details ?? []).map((d) => [String(d.sn), d.json]));
   /** 与 `ci-pr-failure-issue` 的 `--lane` 同一口径：名单为空 = 不按档过滤。 */
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- lanes 元素源自命令行/名单读数，跨边界，类型按 string 标窄
   const wanted = new Set((Array.isArray(lanes) ? lanes : []).map((l) => String(l ?? "").trim()));
   let stray = 0;
   for (const build of daily) {
@@ -244,7 +246,7 @@ export const LANE_STAGES = /** @type {Record<string, string[]>} */ ({
  */
 export function laneStages(lane) {
   const key = String(lane ?? "").trim();
-  return key === "" ? [] : [...LANE_STAGES[key] ?? []];
+  return key === "" ? [] : [...(LANE_STAGES[key] ?? [])];
 }
 
 /**
@@ -398,7 +400,9 @@ export function composeBody({ slug, build, sn, stage, skipped, readout, handle, 
 export function appendReading(io, slug, number, body, sn) {
   return runAppendIssueComment({
     run: io.run,
-    log: (line) => io.log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
+    log: (line) => {
+      io.log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`);
+    },
     slug,
     number,
     body,
@@ -415,7 +419,11 @@ export function appendReading(io, slug, number, body, sn) {
  */
 export function main(io = {}) {
   const argv = io.argv ?? process.argv.slice(2);
-  const log = io.log ?? ((s) => console.log(s));
+  const log =
+    io.log ??
+    ((s) => {
+      console.log(s);
+    });
   const run = io.run ?? makeRunner(ROOT);
   const dryRun = argv.includes("--dry-run");
   const noBlock = argv.includes("--no-block");
@@ -631,7 +639,7 @@ export function main(io = {}) {
       log(
         `[daily-failure-issue] ${offline ? "离线档" : "--dry-run"}：「${s.stage}」${
           s.number ? `→ 在 #${s.number} 下追加一条读数（不新建）` : `→ 新建一张：${title}`
-          } · 正文 ${body.length} 字 · 优先级 ${AUTO_PRIORITY} · 一条都没写`,
+        } · 正文 ${body.length} 字 · 优先级 ${AUTO_PRIORITY} · 一条都没写`,
       );
       continue;
     }
@@ -656,7 +664,9 @@ export function main(io = {}) {
     }
     const code = runNewIssue({
       run,
-      log: (line) => log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
+      log: (line) => {
+        log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`);
+      },
       slug,
       handle,
       root: ROOT,

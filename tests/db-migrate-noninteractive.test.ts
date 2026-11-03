@@ -49,7 +49,7 @@ function hideMigrations(): string | null {
 }
 
 function restoreMigrations(): void {
-  if (moved && fs.existsSync(moved)) {
+  if (moved !== null && moved !== "" && fs.existsSync(moved)) {
     fs.rmSync(REAL_DRIZZLE, { recursive: true, force: true });
     fs.renameSync(moved, REAL_DRIZZLE);
   }

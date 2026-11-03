@@ -56,7 +56,7 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
         return [rawInput.name, rawInput.isConnection ? [] : ""] as [string, unknown];
       });
     }
-    const fromGraph = Object.entries(data.inputs ?? {});
+    const fromGraph = Object.entries(data.inputs);
     if (fromGraph.length > 0) {
       return fromGraph;
     }
@@ -68,11 +68,11 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
   // 槽位，从来不是输入端口。
   const connEntries = allEntries.filter(([k]) => {
     const m = rawMeta[k];
-    return m && m.widget === undefined && !m.preview;
+    return m !== undefined && m.widget === undefined && m.preview !== true;
   });
   const widgetEntries = allEntries.filter(([k]) => {
     const m = rawMeta[k];
-    return m?.widget !== undefined && !m.preview;
+    return m?.widget !== undefined && m.preview !== true;
   });
   // 布局**之前**按 `name` 跨两桶去重 —— 把类型端口与内联 widget
   // 合在一起的自定义节点（Z-Image-Base）会让同一个名字出现两次；

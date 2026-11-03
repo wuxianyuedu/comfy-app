@@ -33,7 +33,7 @@ const tempDirs: Array<string> = [];
 afterEach(() => {
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
-    if (dir) {
+    if (dir !== undefined && dir !== "") {
       rmSync(dir, { recursive: true, force: true });
     }
   }

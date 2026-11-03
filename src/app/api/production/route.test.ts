@@ -76,7 +76,7 @@ describe("PUT /api/production", () => {
 
 function getRequest(project: string | null) {
   const url = new URL("http://localhost/api/production");
-  if (project) {
+  if (project !== null && project !== "") {
     url.searchParams.set("project", project);
   }
   /* SAFETY: 类型断言已复核 */

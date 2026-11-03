@@ -43,10 +43,12 @@ export async function createWorkflowRunTask(
   }
 
   const modes = parseModesJson(tpl.modes);
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- tpl 来自 DB 行（JSON 列/历史数据），defaultMode/taskType 运行期可为 null，`??` 链是兜底
   const mode = tpl.defaultMode ?? tpl.taskType ?? modes[0] ?? null;
   const io =
     /* SAFETY: 类型断言已复核 */
-    tpl.workflowIO && typeof tpl.workflowIO === "object" && !Array.isArray(tpl.workflowIO)
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+    tpl.workflowIO != null && typeof tpl.workflowIO === "object" && !Array.isArray(tpl.workflowIO)
       ? (tpl.workflowIO as unknown as WorkflowIOMap)
       : {};
   /* 该模式生效的契约口清单：作者改过的模式按注册表（含自定义口），没改过的

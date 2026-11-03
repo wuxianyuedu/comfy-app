@@ -207,7 +207,7 @@ async function resolveSourceFile(
   /* 「应用服务输出」：Next dev server 的 stdout/stderr 转录（本次进程一份）。 */
   if (source === "app") {
     const file = await latestPanelLogFile();
-    return file ? { file, resumable: true } : null;
+    return file !== null && file !== "" ? { file, resumable: true } : null;
   }
   /* 壳侧两路（shell = 壳自持日志；shell-launch = 壳侧编排链路）：双击启动的最早一段现场（exe / 项目根 / 启动报告）只在这两份里。
    * 文件虽是追加写、跨运行累积，但**不能**按会话起点裁剪：锚点（dev-launcher.log 的 mtime）晚于壳写下的头几行（启动报告在编排器

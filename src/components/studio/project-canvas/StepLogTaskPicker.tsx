@@ -29,7 +29,7 @@ export const StepLogTaskPicker = memo(function StepLogTaskPicker({
     const map = new Map<string, number>();
     for (const cachedId of cachedIds) {
       const nodeId = getNodeIdByTaskId(cachedId) ?? loadStepLogPanelState(cachedId)?.nodeId;
-      if (!nodeId) {
+      if (nodeId === undefined || nodeId === "") {
         continue;
       }
       const seq = nodeSeqOf(nodes, nodeId);
@@ -50,7 +50,8 @@ export const StepLogTaskPicker = memo(function StepLogTaskPicker({
           const seq = seqByTaskId.get(id);
           const wn = meta?.workflowName?.trim();
           const st = meta?.status ?? "?";
-          const seqLabel = seq ? `#${seq}` : null;
+          // oxlint-disable-next-line no-unnecessary-condition -- seqByTaskId 只在 seq 非空时写入，Map.get 读到的值恒为 number；保留 null 判定作缺值防御
+          const seqLabel = seq === null ? null : `#${seq}`;
           const titleParts = [seqLabel, wn, st, id].filter(Boolean);
           const displayParts = [seqLabel, wn ?? `task ${id.slice(0, 8)}`, st].filter(Boolean);
           return [
@@ -65,7 +66,7 @@ export const StepLogTaskPicker = memo(function StepLogTaskPicker({
         onSelect(v || null);
       }}
       options={cachedIds}
-      placeholder={taskId ? undefined : "（无任务）"}
+      placeholder={taskId !== null && taskId !== "" ? undefined : "（无任务）"}
       value={taskId ?? ""}
     />
   );

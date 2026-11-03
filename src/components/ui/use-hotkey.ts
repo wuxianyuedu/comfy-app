@@ -82,7 +82,7 @@ function detectMac(): boolean {
   if (typeof navigator === "undefined") {
     return false;
   }
-  const platform = navigator.platform ?? "";
+  const platform = navigator.platform;
   return /Mac|iPhone|iPad|iPod/i.test(platform);
 }
 

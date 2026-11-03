@@ -75,7 +75,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
    * 判据按 `widget` 标记（封装节点 widgets_values 为空，旧 widgetValue 判据永不成立；ComfyUI 导出总带该标记）。
    * 空标签哨兵 IO（如 outputs[11] {name:"",type:"*",label:"PREVIEW"}）必须过滤，否则渲染出空 22px 行。 */
   const { connInputs, widgetInputs, cleanedOutputs } = useMemo(() => {
-    const cleanedInputs = (data.inputs ?? [])
+    const cleanedInputs = data.inputs
       .map((inp) => ({ inp, label: exposedName(inp) }))
       .filter(({ label }) => label.trim().length > 0);
     const cleanedOutputs = (data.outputs ?? [])
@@ -119,11 +119,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
         //  因此总下限 = 内容 + 标题 = size[1] + 30。
         //  与 WorkflowNode 的修正一致，卡片才能填满 React Flow 的节点框，
         //  而不是矮 30px。
-        minHeight: isCollapsed
-          ? NODE_TITLE_H
-          : data.size
-            ? (data.size.h ?? 0) + NODE_TITLE_H
-            : undefined,
+        minHeight: isCollapsed ? NODE_TITLE_H : data.size ? data.size.h + NODE_TITLE_H : undefined,
         // 这里同样不设 maxWidth 上限：ComfyUI 允许用户自由调整子图框，
         //  而我们必须尊重配置里带的 `size`
         //  （硬写 320 的上限会把用户在 ComfyUI 里明确调宽的框裁掉）。
@@ -134,10 +130,11 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
         //  普通子图用 `bg-node` 的实心面板（跟随主题）。
         isolation: "isolate",
         // ComfyUI 会给当前激活的节点画一圈亮色选中矩形。
-        outline: selected ? "2px solid rgba(56,189,248,0.9)" : "none",
-        outlineOffset: selected ? "2px" : undefined,
+        outline: selected === true ? "2px solid rgba(56,189,248,0.9)" : "none",
+        outlineOffset: selected === true ? "2px" : undefined,
       }}
     >
+      {/* oxlint-disable-next-line no-unnecessary-condition -- accent 由三态颜色表达式生成、类型上恒非空，保留判空防未来新增空色值把磨砂层画成透明 */}
       {accent && nodeMode !== 0 && <FrostLayer color={accent} nodeMode={nodeMode} />}
       {/* 头部 —— 紫色强调（子图身份）。与普通 WorkflowNode 头部同一个
        *  NODE_TITLE_H，好让带标题的节点在网格上对齐。 */}
@@ -150,7 +147,9 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
         onToggle={() => {
           setUserCollapsed((value) => !value);
         }}
-        outputRef={firstOutputName ? { name: firstOutputName } : null}
+        outputRef={
+          firstOutputName !== undefined && firstOutputName !== "" ? { name: firstOutputName } : null
+        }
         title={data.title}
       />
 

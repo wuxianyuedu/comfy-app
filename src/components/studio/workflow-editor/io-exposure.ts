@@ -66,10 +66,12 @@ export function enrichFromViewNodes(
 ): Record<string, WorkflowIOEntry> {
   const out: Record<string, WorkflowIOEntry> = {};
   for (const node of nodes ?? []) {
+    // oxlint-disable-next-line no-unnecessary-condition -- nodes 来自子图详情响应（JSON.parse 断言），脏数据可能缺 id
     if (!node?.id) {
       continue;
     }
     for (const input of node.raw_inputs ?? []) {
+      // oxlint-disable-next-line no-unnecessary-condition -- node.raw_inputs 是服务端原样负载，元素可能缺 name
       if (!input?.name) {
         continue;
       }

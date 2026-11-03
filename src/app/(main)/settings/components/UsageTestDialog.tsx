@@ -265,7 +265,10 @@ function UsageVideoModeQuickPick({
   // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   const modeValueIsBroken = modeValue != null && isModeValueBroken(modeValue);
   const modeToggleValue =
-    trimmedModeValue && !modeValueIsBroken && VIDEO_MODE_PRESETS.some((p) => p === trimmedModeValue)
+    trimmedModeValue !== undefined &&
+    trimmedModeValue !== "" &&
+    !modeValueIsBroken &&
+    VIDEO_MODE_PRESETS.some((p) => p === trimmedModeValue)
       ? [trimmedModeValue]
       : [];
   return (
@@ -295,7 +298,7 @@ function UsageVideoModeQuickPick({
             return null;
           }
           const hint = VIDEO_MODE_HINT[f.value.trim()];
-          return hint ? (
+          return hint !== undefined && hint !== "" ? (
             <p className="text-muted-foreground text-2xs mt-1" key="mode-hint">
               {hint}
             </p>
@@ -331,11 +334,14 @@ function UsageVideoModeQuickPick({
             </div>
           );
         })}
-        {videoModeMissingHint(usageTest.fields) && (
-          <p className="border-warning/60 bg-warning/5 text-warning-strong text-2xs mt-1 rounded-lg border border-dashed px-2 py-1.5">
-            ⚠ {videoModeMissingHint(usageTest.fields)}
-          </p>
-        )}
+        {(() => {
+          const missingHint = videoModeMissingHint(usageTest.fields);
+          return missingHint !== null && missingHint !== "" ? (
+            <p className="border-warning/60 bg-warning/5 text-warning-strong text-2xs mt-1 rounded-lg border border-dashed px-2 py-1.5">
+              ⚠ {missingHint}
+            </p>
+          ) : null;
+        })()}
       </div>
     </>
   );
@@ -475,19 +481,19 @@ function UsageTestResultPanel({
               {/* oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined */}
               {result.elapsedMs != null && ` · 耗时 ${fixed(result.elapsedMs / 1000, 1) ?? "0"}s`}
             </p>
-            {result.chatText && (
+            {result.chatText !== undefined && result.chatText !== "" && (
               <p className="border-border/50 bg-surface-1 max-h-40 overflow-y-auto rounded-lg border p-3 text-xs whitespace-pre-wrap">
                 {result.chatText}
               </p>
             )}
-            {result.imageUrl && (
+            {result.imageUrl !== undefined && result.imageUrl !== "" && (
               <MediaThumbnail
                 alt="生成结果"
                 className="border-border/50 max-h-56 w-full rounded-lg border"
                 src={result.imageUrl}
               />
             )}
-            {result.videoUrl && (
+            {result.videoUrl !== undefined && result.videoUrl !== "" && (
               <Hint label="在系统默认浏览器中打开生成的视频">
                 <Button
                   className="text-primary h-auto items-center gap-1 p-0 text-xs font-medium"
@@ -499,7 +505,7 @@ function UsageTestResultPanel({
                 </Button>
               </Hint>
             )}
-            {result.savedPath && (
+            {result.savedPath !== undefined && result.savedPath !== "" && (
               <p
                 className="border-border/50 bg-surface-1 text-muted-foreground text-2xs mt-2 rounded-lg border px-3 py-2 break-all"
                 title="本次产出的内容已在本地 temp 子目录保存一份"
@@ -508,27 +514,31 @@ function UsageTestResultPanel({
                 <span className="font-mono">{result.savedPath}</span>
               </p>
             )}
-            {result.pending && result.taskId && !usageTest.querying && (
-              <div className="bg-warning/10 text-warning-strong mt-2 rounded-lg px-3 py-2 text-xs">
-                <p className="font-medium">
-                  ⏳ 视频仍在生成中（不是失败），已提交到提供方， 生成通常需数十秒到几分钟。
-                </p>
-                <p className="text-muted-foreground mt-1 break-all">任务 ID：{result.taskId}</p>
-                <Button
-                  className="mt-2 h-auto items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold"
-                  disabled={usageTest.querying}
-                  // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                  onClick={() => void d.continueUsageWait()}
-                  variant="warning-solid"
-                >
-                  {usageTest.querying ? (
-                    <Spinner className="text-primary-foreground size-3" />
-                  ) : (
-                    "继续等待并获取结果"
-                  )}
-                </Button>
-              </div>
-            )}
+            {result.pending === true &&
+              result.taskId !== undefined &&
+              result.taskId !== "" &&
+              !usageTest.querying && (
+                <div className="bg-warning/10 text-warning-strong mt-2 rounded-lg px-3 py-2 text-xs">
+                  <p className="font-medium">
+                    ⏳ 视频仍在生成中（不是失败），已提交到提供方， 生成通常需数十秒到几分钟。
+                  </p>
+                  <p className="text-muted-foreground mt-1 break-all">任务 ID：{result.taskId}</p>
+                  <Button
+                    className="mt-2 h-auto items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold"
+                    disabled={usageTest.querying}
+                    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
+                    onClick={() => void d.continueUsageWait()}
+                    variant="warning-solid"
+                  >
+                    {/* oxlint-disable-next-line no-unnecessary-condition -- 外层 !usageTest.querying 已把它收窄成 false，三元留作渲染防御 */}
+                    {usageTest.querying ? (
+                      <Spinner className="text-primary-foreground size-3" />
+                    ) : (
+                      "继续等待并获取结果"
+                    )}
+                  </Button>
+                </div>
+              )}
           </>
         ) : (
           <p className="bg-destructive/10 text-danger-strong rounded-lg px-3 py-2 text-xs break-all">

@@ -253,7 +253,7 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `docs/api/**` 生成物与源同步的判据（ISSUE #1329 收尾）。同上一族：这一步的
   // 触发面与三向比对都是**下一次新增/删模块**时才响的守卫，而它挂的那一步在钩子里
   // 带 `--staged`（改了 src/lib 才跑）—— 只跟着改动走的话，「有人把 --staged 抹掉、
-  // 让它对每个提交重生成一整轮（百秒级，现值取法见规范 §13.5.17）」那次改动恰好落到 `.githooks/**` 上、本脚本放弃收窄，
+  // 让它对每个提交重生成一整轮（数十秒级，现值取法见规范 §13.5.17）」那次改动恰好落到 `.githooks/**` 上、本脚本放弃收窄，
   // 于是这条守卫不在清单里。表现是所有人被拖慢，然后开始 `--no-verify`。
   "tests/check-docs-api.test.ts",
   // 「页面内广播通道只剩一端」（台账 E9）：`AppEvents` 表里每一条都必须既有派发方
@@ -427,6 +427,12 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 但这三格防的是**运行期环境**的形状（CI 上 `worktree remove` 失败、临时目录被别的
   // 进程占着），那种漂移不来自任何一次文件改动 ⇒ 只有每次都跑才看得见。
   "tests/probe-worktree.test.ts",
+  // 「worktree 落点」的契约（ISSUE #2935 / AGENTS 硬规则 30 / 规范 §13.6.2）：worktree 一律落
+  // 仓内 `.worktrees/`（已入 `.gitignore`）或系统临时目录，**唯独不许 `.git/` 下** ——
+  // Vite/vitest 的 `server.fs.deny` 默认含 `**/.git/**`，落进去的检出里 DOM 档用例在模块
+  // 加载期就被 deny。它扫的是别的文件的**文本**（import 图追不到），而「有人把 worktree
+  // 建进 `.git/`」恰好是「下一次新增一个调用点」时才走得进的形态，故进固定清单。
+  "tests/worktree-location.test.ts",
   // 「`@theme` 声明的 token 清单」那份**文件快照**（规范 §11.9.1 / #1490 落地）：
   // `toMatchFileSnapshot` 把清单写成一份能独立打开、能单独 diff 的真文件，
   // 而它与源码之间的同步**没有任何机器判据** —— 它自己那条用例读的是

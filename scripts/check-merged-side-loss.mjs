@@ -329,7 +329,9 @@ function main() {
   }
   if (reportOnly) {
     console.log(`[merged-side-loss] ${sha} vs ${baseline}：疑似整份退回 ${lost.length} 份`);
-    lost.forEach((f) => console.log(`  · ${f}`));
+    lost.forEach((f) => {
+      console.log(`  · ${f}`);
+    });
     return;
   }
 
@@ -339,9 +341,9 @@ function main() {
   }
 
   console.error(
-    `[merged-side-loss] ${sha} vs ${baseline}：${lost.length} 份文件疑似整份退回 ——\n${
-      lost.map((f) => `  · ${f}`).join("\n")
-      }\n\n⚠️ 命中 = **需要人工看**，不等于「确定丢了」：blob 相等性有巧合（空文件、\n` +
+    `[merged-side-loss] ${sha} vs ${baseline}：${lost.length} 份文件疑似整份退回 ——\n${lost
+      .map((f) => `  · ${f}`)
+      .join("\n")}\n\n⚠️ 命中 = **需要人工看**，不等于「确定丢了」：blob 相等性有巧合（空文件、\n` +
       `逐字相同的正当改动）。逐份核对后，真丢的那批按原提交重放（cherry-pick）补回，\n` +
       `**别整份 goback**（会二次回退该文件上分支侧的正当增补）。`,
   );

@@ -36,7 +36,12 @@ export async function openTaskFolder(taskId: string): Promise<OpenFolderResult> 
  */
 export async function revealTaskFolder(taskId: string): Promise<{ detail: string; ok: boolean }> {
   const folder = await openTaskFolder(taskId);
-  if (!folder.opened || !folder.absolutePath) {
+  if (
+    !folder.opened ||
+    folder.absolutePath === undefined ||
+    folder.absolutePath === null ||
+    folder.absolutePath === ""
+  ) {
     return {
       ok: false,
       detail:
@@ -56,6 +61,7 @@ export async function fetchTaskWorkflow(taskId: string): Promise<{
   workflow?: unknown;
 } | null> {
   const result = await vanillaApi.task.workflow.query({ id: taskId });
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- result 来自 tRPC 查询回包（跨 IPC 边界）保留 ?. 防御，workflow 字段服务端确实可为 null
   return { workflow: result?.workflow ?? undefined };
 }
 

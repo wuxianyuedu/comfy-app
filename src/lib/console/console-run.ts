@@ -306,6 +306,7 @@ export function createConsoleRunner(): ConsoleRunner {
       });
     });
     clearTimeout(guard);
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- current 会被 cancel/close 回调置空，规则的控制流看不到闭包写入，运行期可能为 null
     const killed = current?.killed ?? false;
     current = null;
 
@@ -315,6 +316,7 @@ export function createConsoleRunner(): ConsoleRunner {
       code: exit.code,
       signal: exit.signal,
       killed,
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- truncated 由 forward/close 回调里置真，规则的控制流看不到闭包写入
       truncatedNote: truncated ? `输出超过 ${MAX_OUTPUT_CHARS} 字符已截断` : null,
       durationMs,
     });
@@ -354,7 +356,7 @@ export function createConsoleRunner(): ConsoleRunner {
  */
 async function terminate(child: ReturnType<typeof spawn>): Promise<void> {
   const pid = child.pid;
-  if (!pid) {
+  if (pid === undefined) {
     return;
   }
   await killProcessTree({

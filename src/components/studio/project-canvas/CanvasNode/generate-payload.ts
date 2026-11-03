@@ -67,8 +67,8 @@ export function buildCanvasGeneratePayload({
   return {
     workflow: d.workflowId ?? "",
     workflowInputs: [...baseInputs, ...cagInputs],
-    ...(d.inputImage ? { inputImage: d.inputImage } : {}),
-    ...(projectId ? { projectId } : {}),
+    ...(d.inputImage !== undefined && d.inputImage !== "" ? { inputImage: d.inputImage } : {}),
+    ...(projectId !== undefined && projectId !== null && projectId !== "" ? { projectId } : {}),
     ...(referenceImages.length > 0 ? { referenceImages } : {}),
   };
 }

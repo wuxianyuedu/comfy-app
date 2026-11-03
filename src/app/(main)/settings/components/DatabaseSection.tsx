@@ -20,10 +20,10 @@ import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 /** Drizzle Studio 状态 → 圆点语义（过渡态优先，口径同 ComfyUI 那条）。 */
 function dbStudioDotState(c: ReadySettingsPageController): StatusDotState {
-  if (c.dbStudioStatus?.up) {
+  if (c.dbStudioStatus?.up === true) {
     return "up";
   }
-  if (c.dbStudioStatus?.starting || c.dbStudioStarting) {
+  if (c.dbStudioStatus?.starting === true || c.dbStudioStarting) {
     return "busy";
   }
   return "down";
@@ -45,14 +45,14 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
         <span
           className={`text-ink/80 ${STATUS_TEXT_CLASS}`}
           title={
-            c.dbStudioStatus?.up
-              ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port ?? 4983}）`
+            c.dbStudioStatus?.up === true
+              ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port}）`
               : undefined
           }
         >
-          {c.dbStudioStatus?.up
-            ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port ?? 4983}）`
-            : c.dbStudioStarting || c.dbStudioStatus?.starting
+          {c.dbStudioStatus?.up === true
+            ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port}）`
+            : c.dbStudioStarting || c.dbStudioStatus?.starting === true
               ? "Drizzle Studio 正在启动…"
               : "Drizzle Studio 未运行"}
         </span>
@@ -66,7 +66,7 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
               「看」走软底、`outline` 给并列出口、**当前这一态该按的那一颗**
               才是实心。此前三颗都是实心品牌紫，一屏里三颗主按钮。 */}
           <StatusButton
-            disabled={c.dbStudioOpening || c.dbStudioStarting || !c.dbStudioStatus?.up}
+            disabled={c.dbStudioOpening || c.dbStudioStarting || c.dbStudioStatus?.up !== true}
             // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
             onClick={() => void c.openDbStudio()}
             variant="primary"
@@ -77,15 +77,15 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
             disabled={c.dbStudioStarting || c.dbStudioStatus?.up === true}
             // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
             onClick={() => void c.startDbStudio()}
-            variant={c.dbStudioStatus?.up ? "primary" : "primary-solid"}
+            variant={c.dbStudioStatus?.up === true ? "primary" : "primary-solid"}
           >
             {c.dbStudioStarting ? "启动中…" : "启动 Drizzle Studio"}
           </StatusButton>
           <StatusButton
-            disabled={c.dbStudioStopping || !c.dbStudioStatus?.up}
+            disabled={c.dbStudioStopping || c.dbStudioStatus?.up !== true}
             // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
             onClick={() => void c.stopDbStudio()}
-            variant={c.dbStudioStatus?.up ? "primary-solid" : "primary"}
+            variant={c.dbStudioStatus?.up === true ? "primary-solid" : "primary"}
           >
             {c.dbStudioStopping ? "关闭中…" : "关闭 Drizzle Studio"}
           </StatusButton>

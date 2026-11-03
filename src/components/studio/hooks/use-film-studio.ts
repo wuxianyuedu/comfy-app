@@ -204,7 +204,7 @@ export function useFilmStudio(): FilmStudioController {
               }),
             );
             setFfmpegAvailable(!!fData.ffmpegAvailable);
-            setRecent(fData.films ?? []);
+            setRecent(fData.films);
           });
         } catch {
           /* 元信息拉取失败不影响成片生成，静默忽略 */
@@ -229,7 +229,7 @@ export function useFilmStudio(): FilmStudioController {
   }, []);
 
   const fetchProjectShots = useCallback(async (): Promise<Array<ShotListItem>> => {
-    if (!activeProjectId) {
+    if (activeProjectId === null || activeProjectId === "") {
       return [];
     }
     const prod = await fetchProduction(activeProjectId);
@@ -238,7 +238,7 @@ export function useFilmStudio(): FilmStudioController {
   }, [activeProjectId]);
 
   useEffect(() => {
-    if (!activeProjectId) {
+    if (activeProjectId === null || activeProjectId === "") {
       return;
     }
     const guard = beginStaleRun();
@@ -260,7 +260,7 @@ export function useFilmStudio(): FilmStudioController {
   /** 单镜「退回让 AI 重做」：写回项目 + 刷新左栏列表（画布/工坊镜头行的退回入口共用）。 */
   const redoShot = useCallback(
     async (shotId: string) => {
-      if (!activeProjectId) {
+      if (activeProjectId === null || activeProjectId === "") {
         return;
       }
       await requestShotRedo(activeProjectId, shotId);
@@ -326,7 +326,7 @@ export function useFilmStudio(): FilmStudioController {
   ]);
 
   const createFromProject = useCallback(async () => {
-    if (!activeProjectId || projectShotCount === 0) {
+    if (activeProjectId === null || activeProjectId === "" || projectShotCount === 0) {
       toastError("当前项目还没有镜头，请先在工坊产出镜头");
       return;
     }
@@ -415,7 +415,7 @@ export function useFilmStudio(): FilmStudioController {
   const pollId = film?.id ?? null;
   useInterval(
     () => {
-      if (pollId) {
+      if (pollId !== null && pollId !== "") {
         void fetchDetail(pollId);
       }
     },

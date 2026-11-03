@@ -75,9 +75,17 @@ export function normalizeBounds(
     const styleW = toFiniteNumber(node.style?.width);
     const styleH = toFiniteNumber(node.style?.height);
     const width =
-      measuredW && measuredW > 0 ? measuredW : styleW && styleW > 0 ? styleW : fallbackSize.width;
+      measuredW !== null && measuredW > 0
+        ? measuredW
+        : styleW !== null && styleW > 0
+          ? styleW
+          : fallbackSize.width;
     const height =
-      measuredH && measuredH > 0 ? measuredH : styleH && styleH > 0 ? styleH : fallbackSize.height;
+      measuredH !== null && measuredH > 0
+        ? measuredH
+        : styleH !== null && styleH > 0
+          ? styleH
+          : fallbackSize.height;
 
     const x = node.position.x;
     const y = node.position.y;

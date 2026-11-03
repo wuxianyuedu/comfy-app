@@ -137,8 +137,8 @@ export function deriveSyncFlags(row: WorkflowRow): {
   dirty: boolean;
   missing: boolean;
 } {
-  const dirty = !!row.diskDirty;
-  const missing = !!row.diskMissing;
+  const dirty = row.diskDirty === true;
+  const missing = row.diskMissing === true;
   return { dirty, missing, canResync: dirty };
 }
 
@@ -180,10 +180,16 @@ function sourceOf(workflow: WorkflowRow): "local" | "online" {
   if (workflow.source === "local-pending") {
     return "local";
   }
-  return workflow.source ?? (workflow.sourcePath ? "local" : "online");
+  return (
+    workflow.source ??
+    (workflow.sourcePath !== undefined && workflow.sourcePath !== null && workflow.sourcePath !== ""
+      ? "local"
+      : "online")
+  );
 }
 
 function categoryOf(workflow: Pick<WorkflowRow, "taskType">): string | undefined {
+  // oxlint-disable-next-line no-unnecessary-condition -- taskType 来自 tRPC workflow.list 响应，旧数据可能缺该字段，空串兜底是运行期守卫
   return getWorkflowType(normalizeTaskType(workflow.taskType ?? ""))?.category;
 }
 
@@ -205,7 +211,7 @@ export function filterWorkflows(
     if (filters.type !== "all" && categoryOf(workflow) !== filters.type) {
       return false;
     }
-    if (filters.model !== "all" && !workflow.modelTags?.includes(filters.model)) {
+    if (filters.model !== "all" && workflow.modelTags?.includes(filters.model) !== true) {
       return false;
     }
     /* 本域只搜名称（不搜路径 / 标签）—— 归一化与命中判决走出口。 */

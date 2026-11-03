@@ -155,7 +155,7 @@ export function WorkflowNodeActionButton({
       {label}
     </Button>
   );
-  return hint ? (
+  return hint !== undefined && hint !== "" ? (
     <Hint label={hint} wrap>
       {button}
     </Hint>

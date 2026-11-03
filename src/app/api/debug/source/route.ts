@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
   }
 
   const file = request.nextUrl.searchParams.get("file");
-  if (!file) {
+  if (file === null || file === "") {
     return NextResponse.json({ error: "missing file param" }, { status: 400 });
   }
   if (file.includes("\0")) {

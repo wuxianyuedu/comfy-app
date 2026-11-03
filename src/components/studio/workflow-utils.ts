@@ -34,11 +34,11 @@ export function resolveNodePackage(
   properties?: Record<string, unknown>,
 ): string {
   const fromManifest = getCustomNodePackage(classType);
-  if (fromManifest) {
+  if (fromManifest !== undefined && fromManifest !== "") {
     return fromManifest;
   }
   const fromHeuristic = KNOWN_PACKAGE_HEURISTIC[classType];
-  if (fromHeuristic) {
+  if (fromHeuristic !== undefined && fromHeuristic !== "") {
     return fromHeuristic;
   }
   const cnr = properties?.cnr_id;
@@ -55,7 +55,7 @@ export function resolveNodePackage(
  *  它与「包来源」页脚是**并列**的另一个 UI 元素 —— 两者可同时在左下角出现，回答两个不同问题（「这个节点哪来的」与「它跑在服务端吗」）；样式对齐 ComfyUI 自己的暗色斜体标签。 */
 export function extractNoteTitle(text: string, fallback?: string): string {
   let raw;
-  if (fallback?.trim()) {
+  if (fallback !== undefined && fallback.trim() !== "") {
     raw = fallback.trim();
     // 剥掉 ComfyUI 给某些转换流程烤进去的 "Note:" / "Note : " 前缀，
     // 免得渲染出来的标题栏回显成 "Note: Note: X"。
@@ -245,6 +245,7 @@ export function renderSubgraphWidgetValue(value: unknown): string {
   if (typeof value === "object") {
     return "{…}";
   }
+  // oxlint-disable-next-line no-unnecessary-condition -- 上方分支已穷尽 unknown 的可能类型，此处类型上恒假；保留空值兜底与同族分支形状一致
   if (value === null || value === undefined) {
     return "";
   }
@@ -263,7 +264,7 @@ export function renderSubgraphWidgetValue(value: unknown): string {
  *  **但** BOOLEAN 开关的描述性标签（rgthree Settings 的 `"Model: True = 🟡 Safetensors | False = 🟣 GGUF"`）是**语义**不是选项清单 —— 它告诉读者开/关分别切到什么，必须原样保留（早先剥到只剩 `Model`，读起来像残缺标签；现在完整描述会渲染出来，由 widget 标签 span 上的 CSS 换行）。
  *  「Note: keep this secret」这类带冒号的普通句子同样原样保留。 */
 export function sanitizeComboLabel(label: string | undefined | null): string {
-  if (!label) {
+  if (label === undefined || label === null || label === "") {
     return "";
   }
   const colon = label.indexOf(":");
@@ -400,7 +401,7 @@ export function computeKahnLayout(
     }
     for (const value of Object.values(inputs)) {
       const srcId = linkTargetId(value);
-      if (!srcId) {
+      if (srcId === undefined || srcId === "") {
         continue;
       }
       const ownIncoming = incoming[id];
@@ -443,6 +444,7 @@ export function computeKahnLayout(
   const byLevel: Record<number, Array<string>> = {};
   for (const node of realNodes) {
     const lv = level[node.id] ?? 0;
+    // oxlint-disable-next-line no-unnecessary-condition -- Record 下标类型恒为数组，但运行时未赋值时是 undefined，||= 兜底必须保留
     (byLevel[lv] ||= []).push(node.id);
   }
   for (const arr of Object.values(byLevel)) {
@@ -478,6 +480,7 @@ export function buildEdges(
    * 表里时，Flow 节点回落的也是这里。存成 map，让下面的逐边查找保持 O(1)。 */
   const rawOutById = new Map<string, Array<RawOutputMeta>>();
   for (const rawNode of detail.rawNodes ?? []) {
+    // oxlint-disable-next-line no-unnecessary-condition -- rawNodes 来自工作流 JSON 读入（平台 detail），元素可能缺 id
     if (!rawNode?.id) {
       continue;
     }
@@ -486,8 +489,9 @@ export function buildEdges(
 
   const edges: Array<Edge> = [];
   let i = 0;
-  for (const [nodeId, raw] of Object.entries(detail.graph ?? {})) {
-    if (!raw || typeof raw !== "object") {
+  for (const [nodeId, raw] of Object.entries(detail.graph)) {
+    const rawPresent = Boolean(raw);
+    if (!rawPresent || typeof raw !== "object") {
       continue;
     }
     const inputs = asRecord(raw.inputs);
@@ -532,7 +536,7 @@ export function buildEdges(
         id: `e-${srcId}-${nodeId}-${inputName}-${i++}`,
         source: srcId,
         target: nodeId,
-        sourceHandle: outName ? `out:${outName}` : "out",
+        sourceHandle: outName !== null && outName !== "" ? `out:${outName}` : "out",
         targetHandle: inputName,
         animated: false,
         style: {
@@ -638,7 +642,7 @@ export function buildConnectedOutputs(
   outSlotNameById?: Record<string, Array<string>>,
 ): Record<string, Set<string>> {
   const map: Record<string, Set<string>> = {};
-  for (const raw of Object.values(detail.graph ?? {})) {
+  for (const raw of Object.values(detail.graph)) {
     const inp = asRecord(asRecord(raw)?.inputs) ?? {};
     for (const value of Object.values(inp)) {
       if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") {
@@ -660,7 +664,7 @@ export function buildConnectedOutputs(
         /* `at()` 越界即 `undefined`，与上面的 `slot < length` 是同一判据。 */
         name = staticOuts.at(slot) ?? rawOuts.at(slot)?.name ?? null;
       }
-      if (!name) {
+      if (name === null || name === "") {
         continue;
       }
       map[srcId] ??= new Set();
@@ -699,7 +703,7 @@ export function inferSourceOutNames(
 
     // 静态 + raw 都没有，从消费者（下游节点）的输入键反推
     const bySlot: Record<number, Array<string>> = {};
-    for (const consumerRaw of Object.values(detail.graph ?? {})) {
+    for (const consumerRaw of Object.values(detail.graph)) {
       const inp = asRecord(asRecord(consumerRaw)?.inputs) ?? {};
       for (const [inputKey, value] of Object.entries(inp)) {
         if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") {

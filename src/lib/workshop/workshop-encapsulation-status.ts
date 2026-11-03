@@ -92,7 +92,7 @@ function controlFor(id: string): EncapsulationControl {
  *  **自定义口是唯一的例外**：预制口的措辞有统一出处，自定义口没有 —— 它的名字
  *  只存在契约里，按「类」取会张冠李戴（把 `custom-text-1` 显示成「提示词」）。 */
 function displayLabel(id: string, contractLabel?: string): string {
-  if (exposedCustomKindOf(id) && contractLabel) {
+  if (exposedCustomKindOf(id) && contractLabel !== undefined && contractLabel !== "") {
     return contractLabel;
   }
   return exposedParamDisplayLabel(id);
@@ -159,7 +159,7 @@ export function deriveEncapsulationStatus(args: {
   const sizeSubTarget = (): string | null => {
     for (const id of SIZE_SUB_IDS) {
       const hit = sizeWired[id];
-      if (hit) {
+      if (hit !== undefined && hit !== null && hit !== "") {
         return hit;
       }
     }
@@ -207,7 +207,7 @@ export function deriveEncapsulationStatus(args: {
    *  图内的默认值兜底），把它算成「不能跑」会让「非必填参数不必连到工作流」这条
    *  口径失效（用户口径，ISSUE #720 第 2 条）。 */
   const sizeSlot = ordered.find((e) => e.id === "size");
-  if (sizeSlot?.required && !sizeDetermined && !missingRequired.includes(sizeSlot.label)) {
+  if (sizeSlot?.required === true && !sizeDetermined && !missingRequired.includes(sizeSlot.label)) {
     missingRequired.push(sizeSlot.label);
   }
   return {

@@ -39,7 +39,7 @@ function mkTmp() {
 afterEach(() => {
   while (tmpDirs.length) {
     const d = tmpDirs.pop();
-    if (d) {
+    if (d !== undefined && d !== "") {
       fs.rmSync(d, { recursive: true, force: true });
     }
   }

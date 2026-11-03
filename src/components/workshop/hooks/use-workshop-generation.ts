@@ -91,18 +91,18 @@ export function useWorkshopGeneration({
        * 工作流没连 lora 口 → unmatched 提示（describeUnmatchedInputs）。 */
       const loraChar = characters
         .filter((c) => shot.characterIds.includes(c.id))
-        .find((c) => c.loraName);
+        .find((c) => c.loraName !== undefined && c.loraName !== "");
+      const loraName = loraChar?.loraName;
+      const loraStrength = loraChar?.loraStrength;
       const { input, unmatched } = await buildLibraryWorkflowInput(workflowId, {
         prompt: shot.prompt,
         negativePrompt: shot.negativePrompt || undefined,
         size: sizeSpec,
         ...(refs.files.length > 0 ? { referenceImages: refs.files } : {}),
-        ...(loraChar?.loraName
+        ...(loraName !== undefined && loraName !== ""
           ? {
-              loraName: loraChar.loraName,
-              ...(loraChar.loraStrength === undefined
-                ? {}
-                : { loraStrength: loraChar.loraStrength }),
+              loraName,
+              ...(loraStrength === undefined ? {} : { loraStrength }),
             }
           : {}),
       });
@@ -140,11 +140,12 @@ export function useWorkshopGeneration({
               if (!progressGate.current.allow(shotId)) {
                 return;
               }
+              const label = node?.label;
               setShotProgress((prev) => ({
                 ...prev,
                 [shotId]: {
                   pct,
-                  ...(node?.label ? { label: node.label } : {}),
+                  ...(label !== undefined && label !== "" ? { label } : {}),
                 },
               }));
             },
@@ -167,7 +168,7 @@ export function useWorkshopGeneration({
                   ? { clipStatus: result.ok ? "done" : "failed" }
                   : { status: result.ok ? "done" : "failed" },
               );
-              if (!result.ok && result.message) {
+              if (!result.ok && result.message !== undefined && result.message !== "") {
                 /* 用户主动取消走的是 CANCELLED 终态：不是故障，文案要分开 ——
                  * 否则一次正常取消会被报成红色「生成失败」。 */
                 const cancelled = result.message.includes("CANCELLED");
@@ -216,7 +217,7 @@ export function useWorkshopGeneration({
       try {
         const { input, unmatchedWarning } = await buildShotInput(shot);
         /* 未生效的口在发起前提示：生成要跑几十秒到几十分钟，事后说就晚了。 */
-        if (unmatchedWarning) {
+        if (unmatchedWarning !== null && unmatchedWarning !== "") {
           notify(unmatchedWarning);
         }
         /* 归属在这里补，不进 `buildLibraryWorkflowInput`：那个封装同时服务封装页签的

@@ -41,7 +41,7 @@ export type MediaDragSourceProps = {
 export function displayNameFromUrl(url: string): string {
   const withoutQuery = url.split(/[?#]/)[0] ?? url;
   const last = withoutQuery.split("/").pop();
-  return last && last.length > 0 ? last : url;
+  return last !== undefined && last.length > 0 ? last : url;
 }
 
 /** 用法：把返回值整份摊到「代表这张图的那个元素」上，不要只摊一半 —— `draggable` 与光标类分开写就是此前四处那副样子。出口自己判可拖；调用处额外的判据（如「必须有封面」）走 `canDrag` 合进来：`<div key={item.id} {...mediaDragSourceProps({ url: item.url, kind: item.kind, className: "rounded-lg border" })} />`。 */
@@ -52,11 +52,11 @@ export function mediaDragSourceProps({
   canDrag = true,
   className = "",
 }: MediaDragSourceArgs): MediaDragSourceProps {
-  const draggable = canDrag && !!url;
+  const draggable = canDrag && url !== undefined && url !== null && url !== "";
   return {
     draggable,
     onDragStart: (event) => {
-      if (!url) {
+      if (url === undefined || url === null || url === "") {
         /* 理论上到不了这里（`draggable` 已挡住），但拖拽事件也可能被程序化
          * 触发 —— 静默丢投正是这条账要消灭的东西，所以显式返回。 */
         return;

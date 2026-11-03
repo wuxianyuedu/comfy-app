@@ -174,7 +174,7 @@ export function useConsole(): ConsoleController {
             );
             setVerdictOk(false);
           }
-          if (event.truncatedNote) {
+          if (event.truncatedNote !== null && event.truncatedNote !== "") {
             append(`\n${event.truncatedNote}\n`);
           }
           append(`\n[进程已退出，退出码 ${event.code ?? "未知"}]\n`);

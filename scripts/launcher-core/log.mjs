@@ -174,6 +174,7 @@ export function createLogSink(
   return {
     file: target,
     write(message, level = "INFO") {
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- level 是调用方传入的级别词，运行时可能不是 LEVELS 的登记键
       const name = LEVELS[level] ?? LEVELS.INFO;
       const line = `[${localTimestamp()}] [${name}] ${formatPrefix(runId, tag)}${message}`;
       process.stdout.write(`${line}\n`);
