@@ -51,8 +51,7 @@ describe("替身端口占位者的识别：命令行那一半", () => {
     expect(isFakeServerCmdline("NODE E2E/SUPPORT/FAKE-COMFYUI-SERVER.MJS")).toBe(true);
     expect(isFakeServerCmdline(FOREIGN_CMDLINE)).toBe(false);
     expect(isFakeServerCmdline("")).toBe(false);
-    /* SAFETY: 类型断言已复核 */
-    expect(isFakeServerCmdline(null as unknown as string)).toBe(false);
+    expect(isFakeServerCmdline(null)).toBe(false);
   });
 
   it("点名脚本的**文件名片段**才对得上（不是随便一个 node 进程）", () => {
