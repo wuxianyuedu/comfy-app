@@ -216,7 +216,7 @@ async function main() {
 // 用 exitCode 而不是 process.exit：后者会把还没 flush 的 stdout 截掉（Windows 管道上实测）。
 /* 「被直接执行才跑」的守卫（ISSUE #2740 第 2 案）：原来 `main()` 挂在模块顶层，
  * 于是 `export` 出去的 `parseArgs` **一旦被 import 就付一次真 typedoc 全量生成**
- * —— 那正是它的旗标行为至今没有用例的原因（要写用例的人得先等一整轮真生成、百秒级，
+ * —— 那正是它的旗标行为至今没有用例的原因（要写用例的人得先等一整轮真生成、数十秒级，
  * 现值取法见规范 §13.5.17，并往盘上写两千多份文件）。
  * `process.argv[1] &&` 那一格不是装饰：`node --input-type=module -e …` 那种宿主里它是
  * undefined，`pathToFileURL(undefined)` 当场抛 —— 形态照 `scripts/agent-film.mjs` 的写法，
