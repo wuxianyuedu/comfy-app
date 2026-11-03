@@ -33,8 +33,7 @@ type Story = StoryObj<typeof FilterBarHarness>;
 function FilterBarHarness() {
   const header = useLogPanel((state) => state.header);
   const origin = header.origin;
-  const originCounts =
-    header.countsByOrigin[origin] ?? header.countsByOrigin.all;
+  const originCounts = header.countsByOrigin[origin];
   return (
     <div className="border-border-strong bg-surface-1 flex min-h-14 w-240 max-w-full flex-wrap items-center gap-y-1.5 border-b px-4 py-2">
       <LogFilterBar originCounts={originCounts} />

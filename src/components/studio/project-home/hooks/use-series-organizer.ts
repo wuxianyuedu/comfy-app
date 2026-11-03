@@ -346,7 +346,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
     characterEpisodes: charEpisodes.data,
     seasonProgress: seasonProgressQuery.data,
     batchGenerating: batchGenerateMut.isPending,
-    workflows: workflowList.data?.workflows?.map((w) => ({ id: w.id, name: w.name })),
+    workflows: workflowList.data?.workflows.map((w) => ({ id: w.id, name: w.name })),
     inspectedCharacterId,
     seriesId,
     seasonId,

@@ -57,6 +57,7 @@ export function describeGlobalError(reason: unknown): string {
     return (reason as { message: string }).message;
   }
   try {
+    // oxlint-disable-next-line no-unnecessary-condition -- JSON.stringify 声明返回 string，但运行时对 function/symbol 会返回 undefined，?? 是兜底
     return JSON.stringify(reason, null, 2) ?? String(reason);
   } catch {
     return String(reason);
@@ -176,7 +177,9 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
       try {
         const { listen } = await import("@tauri-apps/api/event");
         unlisten = await listen<{ level: string; message: string }>("log:emit", (event) => {
+          // oxlint-disable-next-line no-unnecessary-condition -- payload 来自 Tauri IPC 事件（外部数据），旧壳可能缺字段，? 与 ?? 是运行时守卫
           const lv = event.payload?.level ?? "info";
+          // oxlint-disable-next-line no-unnecessary-condition -- 同上：message 缺省时按空串处理，? 与 ?? 是运行时守卫
           const message = event.payload?.message ?? "";
           if (!message) {
             return;

@@ -119,6 +119,7 @@ export function ErrorPanel({
     if (trimmed && trimmed !== "[object Object]" && trimmed !== "[unserializable error]") {
       errText = trimmed;
     }
+    // oxlint-disable-next-line no-unnecessary-condition -- error 声明为 string，但遗留行可能存过对象/[object Object]；保留判 undefined 作旧数据运行时防御
   } else if (raw !== undefined && typeof raw === "object") {
     errText = jsonOrString(raw, true);
   }

@@ -153,7 +153,7 @@ export function useSettingsRemoteModels(input: {
       const typedKey = patch.apiKey?.trim();
       const updated: RemoteModelEntry = {
         name: nextName,
-        baseUrl: patch.baseUrl === undefined ? (existing?.baseUrl ?? null) : patch.baseUrl,
+        baseUrl: patch.baseUrl === undefined ? (existing.baseUrl ?? null) : patch.baseUrl,
         /* `apiKey` 三态（台账 A11 的客户端这一半）：
          *   · 用户重填了 → 新值；
          *   · 显式勾了「清除密钥」→ `null`；
@@ -166,7 +166,7 @@ export function useSettingsRemoteModels(input: {
           : patch.clearApiKey === true
             ? { apiKey: null }
             : {}),
-        kind: patch.kind === undefined ? (existing?.kind ?? null) : patch.kind,
+        kind: patch.kind === undefined ? (existing.kind ?? null) : patch.kind,
       };
       const nextDraft = {
         ...llmDraft,

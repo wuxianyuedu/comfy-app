@@ -72,7 +72,7 @@ function GroupedControls({
   const keys = new Set<string>();
   for (const group of [dimension, video]) {
     for (const entry of groupEntries(group)) {
-      if (entry?.ioKey) {
+      if (entry.ioKey) {
         keys.add(entry.ioKey);
       }
     }

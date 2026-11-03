@@ -209,6 +209,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
         await runAsyncAction(
           async () => {
             const d = await queryClient.fetchQuery(trpc.workflow.detail.queryOptions({ id }));
+            // oxlint-disable-next-line no-unnecessary-condition -- detail 来自 tRPC 查询（外部数据），旧服务端可能缺 template 字段
             const tpl = d?.template;
             /* template 在类型上非空（恒真对象），防御「没取到」用 Boolean 保判空语义。 */
             const tplPresent = Boolean(tpl);
@@ -222,7 +223,9 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
               toast.error("下载失败", "该工作流没有可下载的内容");
               return true;
             }
+            // oxlint-disable-next-line no-unnecessary-condition -- tpl.name 来自 tRPC 响应，缺字段时用入参名兜底
             saveJsonFile(payload, `${tpl.name ?? name}.json`);
+            // oxlint-disable-next-line no-unnecessary-condition -- 同上：文件名兜底同一口径
             toast.success("已下载工作流", `${tpl.name ?? name}.json`);
             return true;
           },
@@ -244,10 +247,13 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
         await runAsyncAction(
           async () => {
             const d = await resyncMut.mutateAsync({ id });
+            // oxlint-disable-next-line no-unnecessary-condition -- resync 结果来自 tRPC mutation（外部数据），旧服务端可能缺 missing 字段
             if (d?.missing === true) {
               toast.error("同步失败", "磁盘文件已不存在，无法同步（请检查路径或重新载入）");
+              // oxlint-disable-next-line no-unnecessary-condition -- 同上：旧服务端可能缺 unchanged 字段
             } else if (d?.unchanged === true) {
               toast.info("磁盘文件未变化", name);
+              // oxlint-disable-next-line no-unnecessary-condition -- 同上：旧服务端可能缺 updated 字段
             } else if (d?.updated === true) {
               toast.success("已同步磁盘内容", name);
               await load();

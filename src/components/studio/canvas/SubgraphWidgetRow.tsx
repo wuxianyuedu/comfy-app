@@ -35,7 +35,7 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
    *  的 `{filename,subfolder,type}` 对象 / 数组而显示成 `[object Object]`），
    *  于是「封装节点选完图在界面上完全看不到」（实测反馈）。这里按类型
    *  切到缩略图；`mediaPreviewUrl` 同时吃字符串与这两种对象 / 数组形态。 */
-  const isImageType = ["IMAGE", "MASK", "IMAGEUPLOAD"].includes(inp.type ?? "");
+  const isImageType = ["IMAGE", "MASK", "IMAGEUPLOAD"].includes(inp.type);
   const previewUrl = isImageType ? mediaPreviewUrl(v) : null;
   const typeCol = portColor(inp.type);
   return (

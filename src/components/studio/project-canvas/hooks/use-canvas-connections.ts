@@ -58,13 +58,14 @@ export function useCanvasConnections({
           outEdge.targetHandle === null ||
           outEdge.targetHandle === "" ||
           outEdge.targetHandle === "inputImage" ||
-          t?.data?.kind === "workflow"
+          t?.data.kind === "workflow"
         );
       });
       let importedFile: string | null = null;
       if (
         needsImage &&
         rPath !== undefined &&
+        // oxlint-disable-next-line no-unnecessary-condition -- rPath 类型是 string|undefined、无 null 分支；保留判 null 与上下判空口径一致，防旧数据存 null
         rPath !== null &&
         rPath !== "" &&
         rType !== "video"

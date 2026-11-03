@@ -82,6 +82,7 @@ export function NodePreviewCard({
         >
           {title}
         </span>
+        {/* oxlint-disable-next-line no-unnecessary-condition -- 节点清单来自 fetch 浅断言，category 判空保留运行时守卫 */}
         {data?.category !== undefined && data?.category !== "" && (
           <span
             className="rounded-full px-1.5 py-px text-[8.5px] font-semibold"

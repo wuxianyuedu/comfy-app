@@ -154,11 +154,7 @@ export function MultiSegmentPopover({
         sideOffset={6}
       >
         {sections.map((section, i) => (
-          <Section
-            first={i === 0}
-            key={`${section.label}:${section.value ?? ""}`}
-            section={section}
-          />
+          <Section first={i === 0} key={`${section.label}:${section.value}`} section={section} />
         ))}
         {hasFooter ? <div className="border-border-strong mt-3 border-t pt-3">{footer}</div> : null}
       </PopoverContent>

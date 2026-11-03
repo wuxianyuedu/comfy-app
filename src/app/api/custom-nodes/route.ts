@@ -464,6 +464,7 @@ function runDiscoverStreaming(
           tryRun();
           return;
         }
+        // oxlint-disable-next-line no-unnecessary-condition -- 入口守卫已拦 resolved，此分支留作事件交错的防御
         if (!resolved) {
           resolved = true;
           send({
@@ -606,6 +607,7 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
             tryRun();
             return;
           }
+          // oxlint-disable-next-line no-unnecessary-condition -- 入口守卫已拦 closed，此分支留作事件交错的防御
           if (closed) {
             return;
           }

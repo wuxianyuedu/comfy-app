@@ -224,7 +224,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         const hit = codes.filter((code) =>
           Object.values(state.workflowIO).some(
             // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-            (entry) => entry?.modeOverrides != null && code in entry.modeOverrides,
+            (entry) => entry.modeOverrides != null && code in entry.modeOverrides,
           ),
         );
         if (hit.length === 0) {
@@ -232,7 +232,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         }
         const next: Record<string, WorkflowIOParam> = {};
         for (const [key, entry] of Object.entries(state.workflowIO)) {
-          const modes = entry?.modeOverrides;
+          const modes = entry.modeOverrides;
           if (!modes || !hit.some((code) => code in modes)) {
             next[key] = entry;
             continue;
@@ -568,7 +568,7 @@ export function createNodeJsonViewerStore(
       if (!detail) {
         return null;
       }
-      const rawEntry: unknown = detail.graph?.[nodeId];
+      const rawEntry: unknown = detail.graph[nodeId];
       const entry =
         /* SAFETY: 类型断言已复核 */
         Boolean(rawEntry) && typeof rawEntry === "object"
@@ -623,11 +623,12 @@ export function createNodeJsonViewerStore(
         ).nodes;
       }
       const rawNode = rawNodesSource
-        ? (rawNodesSource.find((rawNode) => String(rawNode?.id) === nodeId) ?? null)
+        ? // oxlint-disable-next-line no-unnecessary-condition -- rawNodesSource 来自 rawJson / 子图定义的浅断言，脏数据可能含 null 元素
+          (rawNodesSource.find((rawNode) => String(rawNode?.id) === nodeId) ?? null)
         : null;
       return {
         entry,
-        raw: rawMetaById?.[nodeId],
+        raw: rawMetaById[nodeId],
         rawNode,
         pos: positions?.[nodeId] ?? null,
       };

@@ -163,8 +163,9 @@ async function spawnOllamaServe(
       windowsHide: true,
       mode: "keepAlive",
     });
+    // oxlint-disable-next-line no-unnecessary-condition -- 判别联合里 child 在则 error 恒空，保留双判抵御形状漂移
     if (launched.child === undefined || launched.error !== undefined) {
-      const msg = launched.error ?? "未知错误";
+      const msg = launched.error;
       const hint =
         /enoent|not find|cannot find/i.test(msg) || msg.includes("EACCES")
           ? "未找到 ollama 命令，请先安装 Ollama 或将其加入 PATH 后重试"
@@ -209,7 +210,7 @@ async function spawnOllamaServe(
     );
 
     // Ollama 输出（serve 的 stdout/stderr）——截断每行避免日志文件膨胀
-    child.stdout?.on("data", (d: Buffer) => {
+    child.stdout.on("data", (d: Buffer) => {
       const text = clampText(d.toString("utf8").trimEnd(), {
         maxLength: INLINE_STDERR_MAX,
         marker: "",
@@ -218,7 +219,7 @@ async function spawnOllamaServe(
         appendOllamaLog(`[out] ${text}`);
       }
     });
-    child.stderr?.on("data", (d: Buffer) => {
+    child.stderr.on("data", (d: Buffer) => {
       const text = clampText(d.toString("utf8").trimEnd(), {
         maxLength: INLINE_STDERR_MAX,
         marker: "",

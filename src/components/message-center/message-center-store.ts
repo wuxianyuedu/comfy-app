@@ -262,7 +262,7 @@ function sameAsPersisted(current: Array<MessageRecord>): boolean {
       c.read === m.read &&
       c.title === m.title &&
       c.body === m.body &&
-      c?.runId === m.runId
+      c.runId === m.runId
     );
   });
 }

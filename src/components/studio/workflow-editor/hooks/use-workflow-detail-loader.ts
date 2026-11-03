@@ -159,9 +159,12 @@ export function useWorkflowDetailLoader({
   const applyDetailState = useCallback(
     (data: WorkflowDetail, isSubgraph: boolean) => {
       setDetail(data);
+      // oxlint-disable-next-line no-unnecessary-condition -- data 来自 tRPC / sessionStorage 缓存（JSON.parse 断言），旧缓存可能整段缺 paramMap
       setParamMap(data.paramMap ?? {});
+      // oxlint-disable-next-line no-unnecessary-condition -- 同上：旧缓存可能缺 workflowIO
       setWorkflowIO(data.workflowIO ?? {});
       if (!isSubgraph) {
+        // oxlint-disable-next-line no-unnecessary-condition -- data.name 来自缓存断言，且这条 ?? 链是「已有根名就不覆盖」的口径，删掉会改成 data.name 覆盖
         setRootWorkflowName((prev) => prev ?? data.name ?? "");
       }
     },
@@ -179,6 +182,7 @@ export function useWorkflowDetailLoader({
       if (isSubgraph && o?.subgraphUid !== undefined && o.subgraphUid !== "") {
         pushSubgraphStack(
           o.subgraphUid,
+          // oxlint-disable-next-line no-unnecessary-condition -- data.name 来自缓存断言，旧缓存缺字段时留空串兜底
           o.parentTitle ?? data.name ?? "子工作流",
           o.hostNodeId ?? "",
         );

@@ -73,7 +73,9 @@ export function paramClassStyle(cls: string): ParamClassStyle {
   /* SAFETY: 类型断言已复核 */
   const key = cls as ParamClass;
   return {
+    // oxlint-disable-next-line no-unnecessary-condition -- key 由 cls 断言而来（cls 来自持久化的参数映射），未知分类只能运行时回落到「参数」
     label: PARAM_CLASS_LABEL[key] ?? PARAM_CLASS_LABEL.other,
+    // oxlint-disable-next-line no-unnecessary-condition -- 同上：未知分类的配色只能运行时回落
     color: PARAM_CLASS_COLOR[key] ?? PARAM_CLASS_COLOR.other,
   };
 }

@@ -28,7 +28,7 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
       <div className="mb-4">
         <div className="flex items-center gap-2">
           <Checkbox
-            checked={c.drafts.settings.exitKillComfyui ?? false}
+            checked={c.drafts.settings.exitKillComfyui}
             id="exit-kill-comfyui"
             onCheckedChange={(next) => {
               c.patchSettings({
@@ -50,7 +50,7 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
       <div className="mb-4">
         <div className="flex items-center gap-2">
           <Checkbox
-            checked={c.drafts.settings.exitKillOllama ?? true}
+            checked={c.drafts.settings.exitKillOllama}
             id="exit-kill-ollama"
             onCheckedChange={(next) => {
               c.patchSettings({

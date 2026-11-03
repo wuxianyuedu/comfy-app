@@ -286,6 +286,7 @@ function CanvasInner({
        * 已传入。project 加载 effect 会覆盖 nodes，因此必须在这里把新节点合并进
        * baseNodes，否则原来的独立 effect 临时放置的节点会被 setNodes(baseNodes)
        * 覆盖掉，导致用户只看到已有节点被聚焦。 */
+      // oxlint-disable-next-line no-unnecessary-condition -- getProject / listProjects 读自 localStorage 的 JSON.parse(as 断言)，旧版本索引可能缺 nodes
       const baseNodes = proj.nodes ?? [];
       let nextNodes = baseNodes;
       if (pendingWorkflow) {
@@ -309,6 +310,7 @@ function CanvasInner({
       setProgress(prod ? normalizeProductionProgress(prod.progress) : null);
       setNodes(nextNodes);
 
+      // oxlint-disable-next-line no-unnecessary-condition -- 同上：旧版本索引可能缺 edges
       setEdges(proj.edges ?? []);
       setActive(proj.id);
       // fit after nodes are applied（双 rAF，等 ReactFlow 完成布局）

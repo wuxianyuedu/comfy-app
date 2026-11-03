@@ -206,7 +206,7 @@ export function useFilmStudio(): FilmStudioController {
               }),
             );
             setFfmpegAvailable(!!fData.ffmpegAvailable);
-            setRecent(fData.films ?? []);
+            setRecent(fData.films);
           });
         } catch {
           /* 元信息拉取失败不影响成片生成，静默忽略 */

@@ -388,7 +388,7 @@ export function ProjectOutputs() {
         actions={
           <>
             <SelectMenu
-              labels={Object.fromEntries(projects.map((p) => [p.id, p.name ?? "未命名项目"]))}
+              labels={Object.fromEntries(projects.map((p) => [p.id, p.name]))}
               onChange={setProjectId}
               options={projects.map((p) => p.id)}
               value={projectId}

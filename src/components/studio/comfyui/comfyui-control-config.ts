@@ -132,7 +132,7 @@ export function instanceKindLabel(kind: "desktop" | "portable" | "venv" | null):
  * 这里明说「尚未保存路径」即可。
  */
 export function comfyStartPathText(status: ComfyRuntimeStatus | null): string {
-  const path = status?.path?.trim() ?? "";
+  const path = status?.path.trim() ?? "";
   return path
     ? `点「启动 ComfyUI」将按这条已保存路径拉起：${path}（在「设置 → 创作后端」里改，改完要点保存）`
     : "尚未保存 ComfyUI 路径 —— 先在「设置 → 创作后端」里填好并保存，这里才有可启动的路径。";

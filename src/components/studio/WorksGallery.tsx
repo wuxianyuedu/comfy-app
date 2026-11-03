@@ -138,8 +138,8 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {projects.map((project) => {
-              const nodeCount = project.nodes?.length ?? 0;
-              const edgeCount = project.edges?.length ?? 0;
+              const nodeCount = project.nodes.length;
+              const edgeCount = project.edges.length;
               const badge = ORIGIN_BADGE[project.origin];
               const hint = ORIGIN_HINT[project.origin];
               const displayName = project.name || "未命名项目";
