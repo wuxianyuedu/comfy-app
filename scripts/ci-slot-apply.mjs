@@ -108,8 +108,15 @@ const ROOT = path.resolve(HERE, "..");
 /** 开关：不打开时本模块一次都不该被调用（见文件头「为什么带开关」）。 */
 export const SLOT_ENABLED_ENV = "COMFY_CI_SLOT";
 
-/** 空闲下限（字节）。低于它就不建槽 —— 槽省的是时间，不该拿能写盘的空间去换。 */
-export const FREE_SPACE_FLOOR_BYTES = 20 * 1024 ** 3;
+/**
+ * 空闲下限（字节）。低于它就不建槽 —— 槽省的是时间，不该拿能写盘的空间去换。
+ *
+ * 10 GiB 而不是更高：这道门要挡的是「盘已经快满了还去建 52 MiB 的槽」，不是「盘不宽裕
+ * 就别用缓存」。它挡得过头时的形态**不报错、只是静默不建槽**（`[缓存槽] 不建槽：空闲
+ * 16.0 GiB 低于下限 20.0 GiB ⇒ 退回作业内普通装`，ISSUE #3113）—— 槽自己就在占盘，
+ * 常驻缓存盘落到 20 GiB 以下之后机制就永久退化成普通装，而日志里那句读起来像「盘满了」。
+ */
+export const FREE_SPACE_FLOOR_BYTES = 10 * 1024 ** 3;
 
 /** 锁的失效时刻（毫秒）：拿着一把没主的锁比没有锁更坏，所以给一个明确的过期。 */
 export const LOCK_STALE_MS = 20 * 60 * 1000;
@@ -588,7 +595,7 @@ export function applySlot(io = {}) {
   }
 
   /* `floorBytes` 只有一条正当用途：判据自测把下限钉死，好让「不注入 probe」那条
-   * 回归位不读到**未受控的实时盘面**（生产不给 ⇒ 用默认的 20 GiB，行为一字不变）。 */
+   * 回归位不读到**未受控的实时盘面**（生产不给 ⇒ 用默认值，行为一字不变）。 */
   const room = hasRoomForSlot({
     path: cacheRoot,
     probe: io.probe,
