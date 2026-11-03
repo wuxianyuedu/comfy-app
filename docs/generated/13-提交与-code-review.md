@@ -205,7 +205,7 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 ✅ node scripts/check-function-length.cjs --staged # 函数长度硬闸 TS/TSX（见 12 §12.13）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-rust-function-length.cjs # 函数长度硬闸 Rust 壳（见 12 §12.13.1）
 ✅ node scripts/check-infra-file-size.cjs --staged # 基础设施层文件长度**硬闸**：`scripts/**` 的 .cjs/.mjs 与 `tools/**` 的 .ps1，与 R5 同阈值同口径、另立一档（见 12 §12.8 R5 姊妹档）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-format.cjs --staged   # oxfmt 格式**硬闸**（无基线、无 `--update`）：2026-10-29 起回到 D0（见 13.5.1.1，ISSUE #2610）。红了当场 `pnpm exec oxfmt <它点名的文件>` —— **只点本次改的**，全库 `--write` 违 §13.7；平台侧「oxfmt 格式」那一格仍跑全量档作第二层，`--staged` 见下 13.5.8.2
+✅ node scripts/check-format.cjs --staged   # oxfmt 格式**硬闸**（无基线、无 `--update`）：2026-10-29 起回到 D0（见 13.5.1.1，ISSUE #2610）。红了当场 `pnpm exec oxfmt <它点名的文件>` —— **只点本次改的**，全库 `--write` 违 §13.7；平台侧「oxfmt 格式」那一格跑 `--changed`（改动面 ∩ 扫描面）作第二层，`--staged` 见下 13.5.8.2
 ✅ node scripts/shell-gate.mjs               # 桌面壳门禁：**只在暂存命中 src-tauri 四类壳输入时**
    # 才做事 —— 有 .rs 改动就跑 `cargo test`（壳内全部 #[test] 唯一的执行者；条数随源码
    # 变动，不在文档里记账），并复用
@@ -368,7 +368,7 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
   而它按 `isWholeTrackRun` **不构成整档凭证**、不记账。
 - **格式判据（现名 oxfmt）是硬闸，且两层都有执行者**：见下面 13.5.1 / 13.5.1.1。
   它 2026-10-29 起回到 `.githooks/pre-commit` 的 D0（带 `--staged`，红了当场
-  `pnpm exec oxfmt <点名的文件>`），平台侧「oxfmt 格式」那一格**保留全量判定**；
+  `pnpm exec oxfmt <点名的文件>`），平台侧「oxfmt 格式」那一格判**改动面**（`--changed`）；
   「棘轮 + 基线」那一版早已随 ISSUE #1811 收尾作废（无 `--update`、无基线文件）。
 - 新增含 postinstall 构建脚本的依赖，同步 `pnpm-workspace.yaml` 的 `allowBuilds`
   （AGENTS.md 硬规则 7），否则非交互 `pnpm install` 会 exit 1。
@@ -421,19 +421,27 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 | 位置                                     | 档位                                                            | 谁在跑                         |
 | ---------------------------------------- | --------------------------------------------------------------- | ------------------------------ |
 | `.githooks/pre-commit` 的 **D0**         | 输入面跳过（带 `--staged`）                                     | 每次提交，**第一层**           |
-| `.cnb.yml` 的「oxfmt 格式」           | **全量**（不带 `--staged`，`ifModify: src/ + .storybook/`） | `pull_request` 流水线，每次 PR |
-| `pnpm check:all` 的 `format` 项          | 全量                                                            | 人的动作（完整验证那一档）     |
+| `.cnb.yml` 的「oxfmt 格式」           | **改动面**（`--changed`，`ifModify: src/ + .storybook/`） | `pull_request` 流水线，每次 PR |
+| `pnpm check:all` 的 `format` 项          | 改动面（`--changed`）                                          | 人的动作（完整验证那一档）     |
+| `pnpm format:check`（本地日常）          | 改动面（`--changed`，与平台同一条命令）                        | 人的动作                       |
+| `pnpm format:report`（存量盘点）         | 全量 `--report`（只列清单、退 0）                              | 人的动作，看欠账               |
 
 红了只有一条出路：`pnpm exec oxfmt <它点名的那几个文件>` —— **只点本次改的文件**。
 全库 `--write` 会产出与本次改动无关的整文件重排（违 §13.7，而紧邻的
 `格式化提交分离` 那一条判的就是这种提交）。
 
+**全量欠账怎么查**（2026-11-03，ISSUE #3011）：`printWidth` 80→100 的增量迁移还没走完，
+`pnpm format:report` 列出「未过 oxfmt」的全量清单（只列、退 0），当前 117 份（立案时
+146 份，随「谁碰谁迁」下降，这个数字随迁移变化，别当基线写死）。`format:ratchet` 仍是
+不带旗标的全量硬闸，只有迁移完成才会绿；日常判定用 `format:check`（改动面）。
+
 ⚠️ 平台侧那一步**不许带 `--staged`**：那里的工作区就是这次要判的那份源码，
 `--staged` 读的是「本次暂存」、恒为空 ⇒ 这一步会恒跳过（挂了等于没挂）。
 本地那一步反过来**必须带**：不命中扫描面（只改文档 / 只动 `scripts/`）时那 2s 是纯白付。
-**两边都有判据钉**（`tests/doc-check-hook-wiring.test.ts`：D0 有且带旗标、平台侧有且是
-全量档、两边点名的都是同一份脚本）。撤掉「平台侧那一格」是不许的 —— 本地 D0 只覆盖
-走钩子的那条路，`--no-verify` 与平台侧 squash 合并（硬规则 6）都绕过它。
+**两边都有判据钉**（`tests/doc-check-hook-wiring.test.ts`：D0 有且带旗标、平台侧有且带
+`--changed`、本地 `format:check` 与平台格点名的都是同一份脚本同一条命令）。撤掉「平台侧
+那一格」是不许的 —— 本地 D0 只覆盖走钩子的那条路，`--no-verify` 与平台侧 squash 合并
+（硬规则 6）都绕过它。
 
 ⚠️ **紧邻的 `check-reformat-only.cjs`（§13.5.2）不跟着挪**，两件事别混：那条判的是
 「这次提交有没有把真实改动埋进几百个文件的重排里」，后果**不可逆**（`git blame`
