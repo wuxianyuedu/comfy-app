@@ -108,6 +108,8 @@ import {
   pipelineSn,
   progressReadout,
   stageInFlight,
+  stalledStages,
+  stallReadout,
 } from "./ci-build-classify.mjs";
 
 /* 判断全在 `ci-build-classify.mjs`、念文本全在 `ci-build-print.mjs`，这里只是**转发**给既有
@@ -127,6 +129,8 @@ export {
   progressReadout,
   stageInFlight,
   stageLogExcerpt,
+  stalledStages,
+  stallReadout,
 };
 
 const ROOT = path.resolve(import.meta.dirname, "..");
