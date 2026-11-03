@@ -262,7 +262,8 @@ describe.skipIf(!hasPs)("依赖预检真跑（Windows / 有 PowerShell 时）", 
  * 所以判决既不是纯退出码、输出也看不见 —— 实测 `Object[] ["child-marker-line", 0]`。
  */
 const NOEXEC_MUTATION = {
-  from: String.raw`Cmd = "node"; Args = @("scripts\check-dependency-audit.mjs")`,
+  /* 路径用 `/`（#3095）：ps1 的 `Args` 全部改成跨平台分隔符，这条变异锚点跟着同形。 */
+  from: String.raw`Cmd = "node"; Args = @("scripts/check-dependency-audit.mjs")`,
   to: 'Cmd = "node-absent-on-this-machine"; Args = @("--version")',
 };
 
@@ -318,7 +319,7 @@ describe.skipIf(!hasPs)("运行器真跑：判决必须来自子进程真的执�
       patchGateText: (src) =>
         src.replace(
           NOEXEC_MUTATION.from,
-          String.raw`Cmd = "node"; Args = @("scripts\no-such-gate.mjs")`,
+          String.raw`Cmd = "node"; Args = @("scripts/no-such-gate.mjs")`,
         ),
     });
     const r = runGate(root);

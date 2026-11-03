@@ -77,7 +77,17 @@ export function conflictFiles({ run, baseRef }) {
   if (!baseRef) {
     return null;
   }
-  const r = run("git", ["merge-tree", "--write-tree", "--name-only", baseRef, "HEAD"]);
+  /* `core.quotePath=false`：`--name-only` 输出的是**路径**，默认会按 C 风格转义
+   * 并加引号（ISSUE #2272 / tests/git-path-quoting.test.ts 的全仓判据）。 */
+  const r = run("git", [
+    "-c",
+    "core.quotePath=false",
+    "merge-tree",
+    "--write-tree",
+    "--name-only",
+    baseRef,
+    "HEAD",
+  ]);
   if (r.status === 0) {
     return [];
   }
