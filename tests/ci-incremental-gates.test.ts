@@ -342,15 +342,18 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     }
   });
 
-  it("`oxfmt 格式` 的扫描面就是 `check-format.cjs` 剩下的那两棵树（ISSUE #2010）", () => {
-    /* 这一档是 ISSUE #2010 从本地钩子**挪过来**的，它的 globs 是**手写的上界**：
-     * `check-format.cjs` 的判据面是「`GLOBS` 展成候选 → `IGNORE_GLOBS` 剔掉」,
-     * 剩下 `src/**` 与 `.storybook/**` 两棵 —— globs 写窄了就是「改了却没人查格式」，
-     * 而那种漏判**没有任何别的判据**会看见（钩子里那一步已经撤了）。
+  it("`oxfmt 格式` 的触发面盖住判据面（改动面 ∩ GLOBS，ISSUE #2979）", () => {
+    /* 这一档是 ISSUE #2010 从本地钩子**挪过来**的；ISSUE #2979 起 `check-format.cjs`
+     * 有**两份判面**：全量档 = `GLOBS` − `IGNORE_GLOBS`（只剩 `src/**` 与
+     * `.storybook/**` 两棵树），改动面两档（`--changed` / `--staged`）= 改动面 ∩ `GLOBS`
+     * （**不过** `IGNORE_GLOBS` —— `scripts/**` 的格式从前没有任何判决面拦得到）。
+     * 平台那一格带 `--changed`，所以 globs（手写上界）必须盖住 GLOBS 能点到的
+     * 每一个目录 —— 写窄了就是「改了却没人查格式」，那种漏判**没有任何别的判据**会看见。
      *
-     * 判法不走「读实现」：把 `IGNORE_GLOBS` 里每一条逐个喂给 `isScanned()`，
-     * 断言它们确实在面外；再把两棵树的样本喂进去，断言它们确实在面内 ——
-     * 于是「`IGNORE_GLOBS` 增删目录」这个动作会在这里当场红（要求同批回来看 globs）。 */
+     * 判法不走「读实现」：全量档那份用 `isScanned()` 钉（两棵树在面内、
+     * `IGNORE_GLOBS` 每条确实把文件剔出**全量**面）；改动面那份用 `isChangedFaceFile()`
+     * 钉（`scripts/**` `tests/**` `tools/**` `e2e/**` 与根级 config 都在面内）——
+     * 于是「`GLOBS` 扩展名或 `IGNORE_GLOBS` 增删」会在这里当场红（要求同批回看 globs）。 */
     const gate = INCREMENTAL_GATES.find((g) => g.name === "oxfmt 格式");
     expect(
       gate,
@@ -358,19 +361,46 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
         "却没有登记收窄面 = 每一个 PR 都白付一次全库扫描（或反过来，改了却没人查）",
     ).toBeDefined();
     expect(gate?.script).toBe("scripts/check-format.cjs");
-    /* `["src/**", ".storybook/**"]` 是那两棵树的写法；顺序不判（两棵树之间没有语义）。 */
-    expect([...(gate?.globs ?? [])].sort()).toEqual([".storybook/**", "src/**"]);
+    /* 顺序不判（条目之间没有语义），逐条要对上。 */
+    expect([...(gate?.globs ?? [])].sort()).toEqual(
+      [
+        "src/**",
+        ".storybook/**",
+        "scripts/**",
+        "tests/**",
+        "tools/**",
+        "e2e/**",
+        "*.config.js",
+        "*.config.ts",
+        "*.config.mjs",
+        "*.config.cjs",
+      ].sort(),
+    );
     /* SAFETY: 类型断言已复核 */
     // oxlint-disable-next-line typescript/no-require-imports
     const fmt = require("../scripts/check-format.cjs") as {
       IGNORE_GLOBS: ReadonlyArray<string>;
+      isChangedFaceFile: (rel: string) => boolean;
       isScanned: (rel: string) => boolean;
     };
+    /* 全量档的两棵树照旧在面内。 */
     for (const rel of ["src/lib/a.ts", "src/app/b.tsx", ".storybook/preview.tsx"]) {
       expect(fmt.isScanned(rel), `判据面应当包含 ${rel}`).toBe(true);
     }
-    /* 反向：`IGNORE_GLOBS` 里每一条都把文件真正剔出扫描面 —— 这一步是自检，
-     * 它红的含义是「`IGNORE_GLOBS` 失效了」，请先修判据再看 globs。 */
+    /* 改动面两档的面：scripts / tests / tools / e2e 与根级 config 都要认 ——
+     * 那是 #2979 的本旨（本仓自己的脚本与用例也在格式判据的量程里）。 */
+    for (const rel of [
+      "scripts/probe.cjs",
+      "tests/anything.test.ts",
+      "tools/start/x.mjs",
+      "e2e/fixture.spec.ts",
+      "next.config.js",
+      "drizzle.config.ts",
+    ]) {
+      expect(fmt.isChangedFaceFile(rel), `改动面应当包含 ${rel}`).toBe(true);
+    }
+    /* 反向（全量档）：`IGNORE_GLOBS` 里每一条都把文件真正剔出**全量**面 —— 这一步是
+     * 自检，它红的含义是「`IGNORE_GLOBS` 失效了」，请先修判据再看 globs。 */
     for (const glob of fmt.IGNORE_GLOBS) {
       /* 造一个「一定长得像那个 glob 命中物」的探针：先展开花括号，再补上缺的路径与
        * 扩展名。`*.js` 那类「通配 + 扩展名」的条目展开后已经是真文件名，不能再改扩展名
@@ -381,7 +411,7 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
         : braced.replace(/\*\*$|\*$/, "probe.ts");
       expect(
         fmt.isScanned(probe),
-        `\`IGNORE_GLOBS\` 里的 ${glob} 没能把 ${probe} 剔出扫描面 —— 判据面与登记表漂了`,
+        `\`IGNORE_GLOBS\` 里的 ${glob} 没能把 ${probe} 剔出全量扫描面 —— 判据面与登记表漂了`,
       ).toBe(false);
     }
   });
