@@ -45,7 +45,7 @@ export function SubgraphCollapsedAnchors({
           side: "left" as const,
           id: inp.name,
           title: `${label} (${inp.type})`,
-          color: portColor(inp.type ?? "*"),
+          color: portColor(inp.type),
         }))}
       />
       <CollapsedPortHandles
@@ -55,7 +55,7 @@ export function SubgraphCollapsedAnchors({
           side: "right" as const,
           id: `out:${out.name}`,
           title: `${display} (${out.type})`,
-          color: portColor(out.type ?? "*"),
+          color: portColor(out.type),
         }))}
       />
     </>

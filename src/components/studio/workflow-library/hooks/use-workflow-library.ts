@@ -247,18 +247,24 @@ export function useWorkflowLibrary(
       return;
     }
     const snapshot = JSON.stringify({
+      // oxlint-disable-next-line no-unnecessary-condition -- listQ.data 来自 tRPC workflow.list 响应，旧服务端可能缺 workflows
       wf: listQ.data.workflows ?? [],
+      // oxlint-disable-next-line no-unnecessary-condition -- 同上：旧服务端可能缺 localPending
       pend: listQ.data.localPending ?? [],
     });
     if (snapshot === lastSyncedRef.current) {
       return;
     }
     lastSyncedRef.current = snapshot;
+    // oxlint-disable-next-line no-unnecessary-condition -- 同上：落本地 state 时保留兜底
     setWorkflows(listQ.data.workflows ?? []);
+    // oxlint-disable-next-line no-unnecessary-condition -- 同上：落本地 state 时保留兜底
     setLocalPending(listQ.data.localPending ?? []);
+    // oxlint-disable-next-line no-unnecessary-condition -- 同上：遍历前保留兜底
     for (const workflow of listQ.data.workflows ?? []) {
       if (
         workflow.diskRenamed &&
+        // oxlint-disable-next-line no-unnecessary-condition -- diskRenamedTo 来自 tRPC 响应，undefined 判定留作旧行防御
         workflow.diskRenamedTo !== undefined &&
         workflow.diskRenamedTo !== null &&
         workflow.diskRenamedTo !== ""
@@ -429,6 +435,7 @@ export function useWorkflowLibrary(
       : tagsQ.error
         ? errorText(tagsQ.error, "模型标签库加载失败")
         : null,
+    // oxlint-disable-next-line no-unnecessary-condition -- react-query 的 data 在首次加载期为 undefined，类型上收窄成非空，保留判空区分首次加载
     loading: listQ.isLoading && listQ.data === undefined && !listQ.isError,
     loadStalled,
     localRootsHint,

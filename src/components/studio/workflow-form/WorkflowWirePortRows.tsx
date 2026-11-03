@@ -103,6 +103,7 @@ export function WirePortRows({
    * 一趟重渲染。指示线画的位置与 onDrop 收到的 position 同源。 */
   const [portDropPosition, setPortDropPosition] = useState<WorkflowIODropPosition>("before");
   const positionOf = (e: React.DragEvent<HTMLDivElement>): WorkflowIODropPosition => {
+    // oxlint-disable-next-line no-unnecessary-condition -- 合成/测试事件可能缺 currentTarget，? 保留为运行时守卫
     const rect = e.currentTarget?.getBoundingClientRect?.();
     const rectPresent = Boolean(rect);
     if (!rectPresent || rect.height <= 0) {
@@ -120,7 +121,7 @@ export function WirePortRows({
         /* 输入框 / 下拉 / 按钮上起手不拖（与 widget 行同守卫）。 */
         /* SAFETY: 类型断言已复核 */
         const target = e.target as HTMLElement | null;
-        if (target?.closest?.(DRAG_CANCEL_SELECTOR)) {
+        if (target?.closest(DRAG_CANCEL_SELECTOR)) {
           e.preventDefault();
           return;
         }

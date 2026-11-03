@@ -113,6 +113,7 @@ export function WorkflowIoPreviewPanel({
       // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       effectiveMode != null &&
       Object.values(workflowIO).some(
+        // oxlint-disable-next-line no-unnecessary-condition -- workflowIO 来自持久化的工作流 IO JSON，旧数据条目可能为 null，?. 是运行时守卫
         (entry) => entry?.modeOverrides?.[effectiveMode] !== undefined,
       ),
     [workflowIO, effectiveMode],

@@ -95,6 +95,7 @@ export function useWindowMaximized(): [boolean, (next: boolean) => void] {
     let alive = true;
     void (async () => {
       const current = await isWindowMaximized();
+      // oxlint-disable-next-line no-unnecessary-condition -- alive 由卸载清理写入，规则的控制流分析看不到该写入点
       if (alive) {
         setMaximized(current);
       }

@@ -108,7 +108,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
    *     * 与 WorkflowNode 的拆分器一致，把每个暴露的 widget 槽都归进 WIDGET 区，
    *     * LABEL | VALUE 行才能渲染成内联 widget。 */
   const { connInputs, widgetInputs, cleanedOutputs } = useMemo(() => {
-    const cleanedInputs = (data.inputs ?? [])
+    const cleanedInputs = data.inputs
       .map((inp) => ({ inp, label: exposedName(inp) }))
       .filter(({ label }) => label.trim().length > 0);
     const cleanedOutputs = (data.outputs ?? [])
@@ -152,11 +152,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
         //  因此总下限 = 内容 + 标题 = size[1] + 30。
         //  与 WorkflowNode 的修正一致，卡片才能填满 React Flow 的节点框，
         //  而不是矮 30px。
-        minHeight: isCollapsed
-          ? NODE_TITLE_H
-          : data.size
-            ? (data.size.h ?? 0) + NODE_TITLE_H
-            : undefined,
+        minHeight: isCollapsed ? NODE_TITLE_H : data.size ? data.size.h + NODE_TITLE_H : undefined,
         // 这里同样不设 maxWidth 上限：ComfyUI 允许用户自由调整子图框，
         //  而我们必须尊重配置里带的 `size`
         //  （硬写 320 的上限会把用户在 ComfyUI 里明确调宽的框裁掉）。
@@ -171,6 +167,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
         outlineOffset: selected === true ? "2px" : undefined,
       }}
     >
+      {/* oxlint-disable-next-line no-unnecessary-condition -- accent 由三态颜色表达式生成、类型上恒非空，保留判空防未来新增空色值把磨砂层画成透明 */}
       {accent && nodeMode !== 0 && <FrostLayer color={accent} nodeMode={nodeMode} />}
       {/* 头部 —— 紫色强调（子图身份）。与普通 WorkflowNode 头部同一个
        *  NODE_TITLE_H，好让带标题的节点在网格上对齐。 */}

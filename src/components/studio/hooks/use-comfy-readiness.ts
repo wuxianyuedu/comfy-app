@@ -67,9 +67,9 @@ export function useComfyReadiness(): ComfyStatusViewModel {
     online,
     stale,
     connecting: online && !hasStats,
-    cudaVram: hasStats ? toBar(stats?.vramUsed, stats?.vramTotal) : null,
-    smiVram: hasStats ? toBar(stats?.smiVramUsed, stats?.smiVramTotal) : null,
-    ram: hasStats ? toBar(stats?.ramUsed, stats?.ramTotal) : null,
+    cudaVram: hasStats ? toBar(stats.vramUsed, stats.vramTotal) : null,
+    smiVram: hasStats ? toBar(stats.smiVramUsed, stats.smiVramTotal) : null,
+    ram: hasStats ? toBar(stats.ramUsed, stats.ramTotal) : null,
     degradedNote: online ? null : DEGRADED_NOTE,
   };
 }

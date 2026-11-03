@@ -126,7 +126,9 @@ export default function WorkspacePage() {
         listProjects()
           .slice(0, 8) // 给 HomePage 内部 recentsExpanded ? 7 : 3 切片留余量
           .map((project) => {
+            // oxlint-disable-next-line no-unnecessary-condition -- listProjects 读自 localStorage 的 JSON.parse(as 断言)，旧版本索引可能缺 nodes
             const nodeCount = project.nodes?.length ?? 0;
+            // oxlint-disable-next-line no-unnecessary-condition -- 同上：旧版本索引可能缺 edges
             const edgeCount = project.edges?.length ?? 0;
             return {
               id: project.id,

@@ -124,7 +124,7 @@ export function useSettingsDbStudio({
       ? {
           up: !!raw.up,
           starting: !!raw.starting,
-          port: raw.port ?? 4983,
+          port: raw.port,
         }
       : null,
     dbStudioStarting: starting,

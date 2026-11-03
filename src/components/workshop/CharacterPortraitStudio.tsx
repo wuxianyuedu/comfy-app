@@ -257,6 +257,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
               {session.error}
             </Alert>
           )}
+          {/* oxlint-disable-next-line no-unnecessary-condition -- 本块在外层 {focused && …} 内、focused 已收窄为真使本条件恒真；保留 || focused 与外层守卫解耦，防守卫调整后语义漂移 */}
           {(session.log.length > 0 || focused) && (
             /* 触发行右侧的「历史」是**另一个动作**（打开历史日志），不是折叠
              * 开关 —— 它不能放进`Disclosure` 的 trigger 里：

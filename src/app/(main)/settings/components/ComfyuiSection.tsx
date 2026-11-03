@@ -130,7 +130,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
       {desktopManaged && <ComfyuiStoragePaths storage={c.comfyStorage} />}
       <div className="mb-4 flex items-center gap-2">
         <Checkbox
-          checked={c.drafts.settings.comfyuiAutoStart ?? true}
+          checked={c.drafts.settings.comfyuiAutoStart}
           id="comfyui-autostart"
           onCheckedChange={(next) => {
             c.patchSettings({ comfyuiAutoStart: next === true });
@@ -142,7 +142,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
       </div>
       <div className="mb-4 flex items-center gap-2">
         <Checkbox
-          checked={c.drafts.settings.autoSyncLocalWorkflow ?? false}
+          checked={c.drafts.settings.autoSyncLocalWorkflow}
           id="auto-sync-local-workflow"
           onCheckedChange={(next) => {
             c.patchSettings({ autoSyncLocalWorkflow: next === true });

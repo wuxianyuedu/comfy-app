@@ -400,6 +400,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                   label={
                                     state.kind === "loaded" &&
                                     saved?.parsedAt !== undefined &&
+                                    // oxlint-disable-next-line no-unnecessary-condition -- saved 来自清单响应，parsedAt 逐字段判空沿用旧数据形状
                                     saved?.parsedAt !== null &&
                                     saved.parsedAt !== ""
                                       ? `已加载 ${saved.parsedAt.split("T")[1]?.slice(0, 5) ?? ""}`

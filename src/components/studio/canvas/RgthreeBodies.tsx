@@ -145,23 +145,22 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown
   // 行的形状取决于包（裸文件名字符串，或一条 widget 记录）。
   type PowerLoraWidget = string | Record<string, unknown>;
   /* SAFETY: 类型断言已复核 */
-  const loras: Array<PowerLoraWidget> = ((widgets ?? []) as Array<PowerLoraWidget>).filter(
-    (widget) => {
-      if (widget === null || widget === undefined) {
-        return false;
-      }
-      if (typeof widget !== "object" || Array.isArray(widget)) {
-        return typeof widget === "string" && widget.length > 0; // bare lora filename
-      }
-      if (Object.keys(widget).length === 0) {
-        return false;
-      } // {} placeholder
-      if (widget.type === "PowerLoraLoaderHeaderWidget") {
-        return false;
-      } // header widget
-      return true; // real lora tuple
-    },
-  );
+  const loras: Array<PowerLoraWidget> = (widgets as Array<PowerLoraWidget>).filter((widget) => {
+    // oxlint-disable-next-line no-unnecessary-condition -- widgets 来自 ComfyUI 的 widgets_values 原始 JSON，元素可能是 null，判空是运行时守卫
+    if (widget === null || widget === undefined) {
+      return false;
+    }
+    if (typeof widget !== "object" || Array.isArray(widget)) {
+      return typeof widget === "string" && widget.length > 0; // bare lora filename
+    }
+    if (Object.keys(widget).length === 0) {
+      return false;
+    } // {} placeholder
+    if (widget.type === "PowerLoraLoaderHeaderWidget") {
+      return false;
+    } // header widget
+    return true; // real lora tuple
+  });
 
   return (
     <div className="flex w-full flex-col gap-0.75 px-1 pt-0.5 pb-1">
@@ -236,7 +235,7 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown
                 }}
                 title={name}
               >
-                {name ?? "（未选择 Lora）"}
+                {name}
               </span>
               {modelStr !== undefined && (
                 <span
@@ -301,7 +300,7 @@ export function RgthreeLabelBody({
   properties: Record<string, unknown>;
   text: string;
 }) {
-  const p = properties ?? {};
+  const p = properties;
   const fontSize = typeof p.fontSize === "number" ? p.fontSize : 24;
   const fontFamily = typeof p.fontFamily === "string" ? p.fontFamily : "sans-serif";
   const fontColor = typeof p.fontColor === "string" ? p.fontColor : "#ffffff";

@@ -48,12 +48,12 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
           className={`text-ink/80 ${STATUS_TEXT_CLASS}`}
           title={
             c.dbStudioStatus?.up === true
-              ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port ?? 4983}）`
+              ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port}）`
               : undefined
           }
         >
           {c.dbStudioStatus?.up === true
-            ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port ?? 4983}）`
+            ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port}）`
             : c.dbStudioStarting || c.dbStudioStatus?.starting === true
               ? "Drizzle Studio 正在启动…"
               : "Drizzle Studio 未运行"}

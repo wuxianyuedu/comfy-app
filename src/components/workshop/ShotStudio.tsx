@@ -667,6 +667,7 @@ function ShotCardRow({
               gachaBusy ||
               shot.status === "running" ||
               !shot.prompt ||
+              // oxlint-disable-next-line no-unnecessary-condition -- 本按钮在外层 {channel === "local" && …} 内、channel 已收窄为 "local" 使本比较恒真；保留与上方「生成此镜头」按钮一致的条件形状，防外层守卫调整后两处口径漂移
               (channel === "local" && !workflowId)
             }
             onClick={() => {

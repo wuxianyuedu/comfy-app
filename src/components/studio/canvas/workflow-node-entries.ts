@@ -56,7 +56,7 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
         return [rawInput.name, rawInput.isConnection ? [] : ""] as [string, unknown];
       });
     }
-    const fromGraph = Object.entries(data.inputs ?? {});
+    const fromGraph = Object.entries(data.inputs);
     if (fromGraph.length > 0) {
       return fromGraph;
     }
