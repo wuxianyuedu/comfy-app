@@ -71,6 +71,12 @@
  *
  * 即：绿压过一切；「没跑出结论」压过一切红（127、「一条用例都没收集到」与退 **2** 都算）。
  *
+ * ⚠️ 「`current-green` 压过一切」只在**被判的就是本地这棵树**时成立（ISSUE #3043）：
+ * 平台 PR 建的是**合并态**（分支 ⊕ 目标分支），「本地绿 + 平台红」这一形下绿压不出证据 ——
+ * 平台红的那格建的是另一棵树。`--merge-state` 把那棵树真量一遍（`evaluateMergeState()`），
+ * 结论多一档 `merge-red`（红来自组合，不是基线的红、也不是本检出的红）；
+ * 没给这个输入时行为与从前逐字一致。
+ *
  * ── 第三条入口：Windows 上的 `pnpm exec …` 形态（ISSUE #1652 顺带）──────
  *
  * `pnpm` 在 Windows 上是 `.cmd` 垫片 —— Node 直接 spawn 它必然 `ENOENT` / `EINVAL`
@@ -128,7 +134,14 @@ import {
   ROOT,
 } from "./base-check/git-ref.mjs";
 import { resolveGateCommand, resolveMergeBatch, runGate } from "./base-check/hook-steps.mjs";
-import { isDidNotRunShaped, judge, nextSteps } from "./base-check/verdict.mjs";
+import {
+  didNotRunSide,
+  isDidNotRunShaped,
+  judge,
+  judgeMergeState,
+  nextSteps,
+} from "./base-check/verdict.mjs";
+import { linkDependencies, unlinkDependencies } from "./base-check/snapshot-link.mjs";
 
 export {
   git,
@@ -153,6 +166,7 @@ export {
   isDidNotRunShaped,
   isTimeoutShaped,
   judge,
+  judgeMergeState,
   nextSteps,
   runState,
 } from "./base-check/verdict.mjs";
@@ -167,7 +181,19 @@ export {
  * @param {{argv: string[], label: string, ref: string, keep?: boolean, json?: boolean}} input
  * @returns {number} 退出码（0 = 事实已复算；1 = 复算过程失败）
  */
-export function baseCheck({ argv, label, ref, keep = false, json = false }) {
+export function baseCheck({ argv, label, ref, keep = false, json = false, mergeState = null }) {
+  /* `--merge-state`（ISSUE #3043）：本检出绿、平台红的现场要量的是**合并态**那棵树
+   * （分支 ⊕ 目标分支），不是本地这棵。它接在单命令档上：本地有红的现场五态归因
+   * 已经够用，只有「本地全绿」才轮得到第三种树。 */
+  if (mergeState) {
+    return evaluateMergeState({
+      commands: [{ argv, label }],
+      into: mergeState.into,
+      ref,
+      keep,
+      json,
+    });
+  }
   return baseCheckMany({
     commands: [{ argv, label }],
     ref,
@@ -203,7 +229,14 @@ export function baseCheck({ argv, label, ref, keep = false, json = false }) {
  * @param {{commands: Array<{argv: string[], label: string, baseSide?: boolean}>, ref: string, keep?: boolean, json?: boolean, shape?: "single" | "batch", onTiming?: (label: string, ms: number) => void}} input
  * @returns {number} 退出码（0 = 事实已复算；1 = 复算过程失败）
  */
-export function baseCheckMany({ commands, ref, keep = false, json = false, shape = "batch", onTiming = undefined }) {
+export function baseCheckMany({
+  commands,
+  ref,
+  keep = false,
+  json = false,
+  shape = "batch",
+  onTiming = undefined,
+}) {
   /* 本检出那一侧：**先跑、先收**（不建 worktree 就能判掉的情形不付这笔 —— 同
    * `baseCheck` 的旧口径）。 */
   /** @type {Array<{code: number, output: string}>} */
@@ -357,112 +390,196 @@ export function baseCheckMany({ commands, ref, keep = false, json = false, shape
 }
 
 /**
- * 把本检出的依赖树**链**进干净快照（符号链接，只读方向）。
+ * 合并态复算（`--merge-state`，ISSUE #3043）—— 本检出绿、平台红的现场要量的**第三种树**。
  *
- * 为什么必须有：`git worktree add` 只检出受版本控制的文件，`node_modules`
- * 不在其中 —— 而 `--base` 那一批里近一半判据要它（tsc / eslint / TS AST 那几条）。
- * 缺了它不是「跑不了」，而是**跑出一个看起来像红的读数**：Node 找不到模块时退出
- * 码是 1，与「判据跑了且红」同形，于是「合并后会不会红」这个问题的答案被污染。
+ * 平台 PR 建的是**合并态**（分支 ⊕ 目标分支），而 `baseCheckMany` 的短路在「本检出全绿」
+ * 时给 `current-green`（「无需复算」）—— 那句话的隐含前提是「本地这棵树就是被判的那棵树」，
+ * 合并态恰恰不是。这里把那棵树真建出来量一遍：临时 worktree 落在 `into` 上，
+ * `git merge --no-commit --no-ff <HEAD>` 合出「分支 ⊕ 目标」的工作树与索引
+ * （与平台合并预览同一内容；不加 `--no-ff` 会被快进吞掉本分支），然后跑同一组命令。
  *
- * 只链 `node_modules` 这一项：其余缺件（`.env` / `db.sqlite` / `.next`）都在
- * 「判据自己该不该在快照上跑」的判定里 —— 要它们才跑得动的判据本就不该进这一批。
+ * 判决走 `judgeMergeState()`（三档：current-green **带证据** / merge-red / inconclusive）；
+ * 冲突建不出树 ⇒ 整档 `inconclusive` 并点名冲突面 —— 平台同样解不动（那一形 PR 不派生 CI）。
  *
- * 失败（已有同名目录 / 权限）不打红：那是「这一条判据在这个快照上跑不起来」，
- * 由 `inconclusive` 那一档接管，不是复算过程本身的失败。
+ * 本地有红的现场不进这一档：退回 `baseCheckMany` 的五态归因（那条路早就能回答「谁的红」）。
  *
- * **返回值是这次真的建出来的链接路径**（没建则 `null`）—— 收尾**必须先摘它**，
- * 理由见 {@link unlinkDependencies}：`git worktree remove --force` 会**穿 junction 把
- * 链出去的那半边一起删掉**，而链出去的那半边就是调用者的工作树。
- *
- * @param {string} from 本检出根
- * @param {string} to 快照根
- * @returns {string | null} 建出来的 `node_modules` 链接路径
+ * @param {{commands: Array<{argv: string[], label: string}>, into: string, ref: string, keep?: boolean, json?: boolean}} input
+ * @returns {number} 退出码（0 = 事实已复算；1 = 复算过程失败）
  */
-export function linkDependencies(from, to) {
-  const target = path.join(to, "node_modules");
-  const source = path.join(from, "node_modules");
-  if (fs.existsSync(target) || !fs.existsSync(source)) {
-    return null;
+function evaluateMergeState({ commands, into, ref, keep = false, json = false }) {
+  /* 本检出那一侧：先跑、先收（与 `baseCheckMany` 同口径）。 */
+  const current = [];
+  for (const c of commands) {
+    current.push(runGate(c.argv, ROOT));
   }
+  if (!current.every((r) => r.code === 0)) {
+    return baseCheckMany({ commands, ref, keep, json, shape: "single" });
+  }
+  const headSha = git(["rev-parse", "HEAD"]).stdout;
+  const intoSha = git(["rev-parse", "--verify", "--quiet", into]).stdout;
+  if (!headSha || !intoSha) {
+    fail(
+      `取不到合并态的两端（HEAD=${headSha || "无"}，${into}=${intoSha || "无"}）—— ` +
+        "先 `git fetch`，或用 `--merge-into <ref>` 点名另一条目标 ref",
+    );
+    return 1;
+  }
+  process.stdout.write(
+    `[base-check] 合并态：本检出绿（${commands.length} 条），复算跑在 ` +
+      `${into}@${intoSha.slice(0, 8)} ⊕ HEAD ${headSha.slice(0, 8)} 这棵树上 —— ` +
+      "本地绿证明不了它绿（ISSUE #3043）\n",
+  );
+  const attempts = [];
+  let worktreePath = null;
+  let dependencyLink = null;
   try {
-    fs.symlinkSync(source, target, "junction");
-    return target;
-  } catch {
-    try {
-      /* `junction` 是 Windows 上不需要提权的形态（`dir` 要开发者模式）；
-       * POSIX 上没有这个 type，退回默认。 */
-      fs.symlinkSync(source, target);
-      return target;
-    } catch {
-      /* 链不上就让它按「没跑起来」报 —— 由 `inconclusive` 那一档说清楚。 */
-      return null;
+    for (let attempt = 0; attempt < 2 && !worktreePath; attempt++) {
+      const candidate = fs.mkdtempSync(path.join(os.tmpdir(), "comfy-base-check-merge-"));
+      attempts.push(candidate);
+      fs.rmSync(candidate, { recursive: true, force: true });
+      const add = git(["worktree", "add", "--detach", candidate, intoSha]);
+      if (add.ok) {
+        worktreePath = candidate;
+      } else if (attempt === 1) {
+        fail(`建合并态 worktree 失败（${into}@${intoSha.slice(0, 8)}）：${add.stderr}`);
+        return 1;
+      }
+    }
+    dependencyLink = linkDependencies(ROOT, worktreePath);
+    /* `--no-commit`：要的是「合并后的树」，不是一笔合并提交 —— 停在提交之前，
+     * 工作树与索引已经是那棵树，跑判据足够。 */
+    const merge = git(["merge", "--no-commit", "--no-ff", headSha], worktreePath);
+    if (!merge.ok) {
+      const conflicts = git(["diff", "--name-only", "--diff-filter=U"], worktreePath).stdout;
+      const conflictFiles = conflicts.split("\n").filter(Boolean);
+      const conflictList = `${conflictFiles.slice(0, 5).join("、")}${conflictFiles.length > 5 ? " …" : ""}`;
+      const why =
+        conflictFiles.length > 0
+          ? `与 ${into} 有冲突（${conflictFiles.length} 份）：${conflictList}`
+          : `git merge 失败：${tail(merge.stderr, 5)}`;
+      process.stdout.write(`[base-check] 合并态建不出来 —— ${why}\n`);
+      printMergeStateReport({
+        json,
+        summary: "inconclusive",
+        into,
+        intoSha,
+        headSha,
+        rows: commands.map((c, i) => ({
+          label: c.label,
+          currentCode: current[i]?.code ?? 0,
+          mergeCode: null,
+          verdict: "inconclusive",
+          didNotRun: why,
+        })),
+      });
+      return 0;
+    }
+    const rows = [];
+    for (const [i, c] of commands.entries()) {
+      const run = runGate(c.argv, worktreePath);
+      const verdict = judgeMergeState({
+        currentCode: current[i]?.code ?? 0,
+        mergeCode: run.code,
+        mergeOutput: run.output,
+      });
+      rows.push({
+        label: c.label,
+        currentCode: current[i]?.code ?? 0,
+        mergeCode: run.code,
+        verdict,
+        ...(run.code === 0 ? {} : { mergeOutputTail: tail(run.output) }),
+        ...(verdict === "inconclusive"
+          ? {
+              didNotRun: didNotRunSide({
+                cur: current[i]?.code ?? 0,
+                curOutput: current[i]?.output,
+                base: run,
+                baseOutput: run.output,
+              }),
+            }
+          : {}),
+      });
+    }
+    const summary = rows.some((r) => r.verdict === "inconclusive")
+      ? "inconclusive"
+      : rows.some((r) => r.verdict === "merge-red")
+        ? "merge-red"
+        : "current-green";
+    printMergeStateReport({ json, summary, into, intoSha, headSha, rows });
+    return 0;
+  } finally {
+    for (const candidate of attempts) {
+      if (candidate !== worktreePath) {
+        fs.rmSync(candidate, { recursive: true, force: true });
+      }
+    }
+    if (worktreePath && !keep) {
+      /* 顺序与 `baseCheckMany` 同一条铁律：先摘 node_modules 链接再摘登记 ——
+       * `git worktree remove --force` 会穿 junction 删进本检出（那次实测连根拔了
+       * 主树的 node_modules）。摘不掉链接就跳过清理并点名，不拿工作树换整洁。 */
+      unlinkDependencies(dependencyLink);
+      if (dependencyLink && fs.existsSync(dependencyLink)) {
+        process.stderr.write(
+          "[base-check] 快照里的 node_modules 链接没摘掉 —— **跳过 worktree 清理**：" +
+            `继续删会穿链接删进本检出。请手工删除这个目录：${worktreePath}\n`,
+        );
+      } else {
+        /* 合并失败的那一档树上有 MERGE_HEAD / 未合并条目，先 abort（失败忽略）再摘。 */
+        git(["merge", "--abort"], worktreePath);
+        git(["worktree", "remove", "--force", worktreePath]);
+        fs.rmSync(worktreePath, { recursive: true, force: true });
+      }
+    } else if (worktreePath) {
+      process.stdout.write(`[base-check] 保留临时 worktree：${worktreePath}\n`);
     }
   }
 }
 
 /**
- * 摘掉快照里那条 `node_modules` 链接 —— **只摘 reparse point 本身**。
+ * 合并态那一档的报告打印（这一档有**自己的 JSON 形状**，不挤进 `--base` 那份契约）。
  *
- * 为什么这一步是硬要求而不是优化：`git worktree remove --force` 与
- * `fs.rmSync(dir, {recursive:true})` 在 Windows 上都会**跟着 junction 走进目标目录**
- * 逐个删除（实测：临时 repo + worktree + 指回主树的 junction，一次
- * `git worktree remove --force` 之后主树的 `node_modules/.bin` 与根上的受版本
- * 控制文件一起没了）。也就是说这条链的方向是「快照 → 你的工作树」，
- * 清理快照就是清理你的工作树。而 `fs.rmSync(link, {recursive:false})` 对
- * reparse point **只删链接**（同一实测里主树毫发无损），所以顺序固定为：
- * **先摘链、后摘 worktree**。
- *
- * @param {string | null} link {@link linkDependencies} 建出来的链接路径
+ * @param {{json: boolean, summary: "current-green" | "inconclusive" | "merge-red", into: string, intoSha: string, headSha: string, rows: Array<{label: string, currentCode: number, mergeCode: number | null, verdict: string, didNotRun?: string, mergeOutputTail?: string}>}} input
  */
-export function unlinkDependencies(link) {
-  if (!link) {
+function printMergeStateReport({ json, summary, into, intoSha, headSha, rows }) {
+  const tree = `${into}@${intoSha.slice(0, 8)} ⊕ HEAD ${headSha.slice(0, 8)}`;
+  if (json) {
+    process.stdout.write(`${JSON.stringify({ summary, tree, rows }, null, 2)}\n`);
     return;
   }
-  try {
-    fs.rmSync(link, { recursive: false, force: true });
-  } catch {
-    /* 摘不掉也不能继续走 `git worktree remove --force`：那一下会删到调用者的树。
-     * 宁可乐意留下一个临时目录（在系统临时区，重启即清），也不许把销毁工作树
-     * 当成一次复算的代价。 */
+  for (const r of rows) {
+    process.stdout.write(
+      `  · ${r.mergeCode === 0 ? "绿" : (r.verdict ?? "红")}  ${r.label}` +
+        `（本检出 ${r.currentCode} / 合并态 ${r.mergeCode ?? "未跑"}）\n`,
+    );
+    if (r.didNotRun) {
+      process.stdout.write(`      ↳ 没跑出结论：${r.didNotRun}\n`);
+    }
+  }
+  process.stdout.write(`[base-check] 结论：${summary}（树：${tree}）\n`);
+  for (const line of nextSteps(summary, { ref: into })) {
+    process.stdout.write(`[base-check] ${line}\n`);
+  }
+  for (const r of rows) {
+    if (!r.mergeOutputTail) {
+      continue;
+    }
+    process.stdout.write(`[base-check] 「${r.label}」合并态输出末尾：\n`);
+    process.stdout.write(
+      `${r.mergeOutputTail
+        .split("\n")
+        .map((l) => `    ${l}`)
+        .join("\n")}\n`,
+    );
   }
 }
 
-/**
- * 判决是 `inconclusive` 时，**是哪一侧、哪一种形态**（报告用它点名）。
- *
- * 单独成函数而不是从 `runState` 反推：那句话要说的是「127」「一条用例都没收集到」
- * 与「退 2（判据自己说没有结论）」三种形态的区分，而后两种只在**输出**与**码位**上
- * 看得见 —— 报告里给出的是「哪一侧说什么」，不是又一个需要人去解读的退出码。
- *
- * ⚠️ 第三种（退 2）的下一动作与前两种**不同**：前两种要「让命令真能跑起来」，
- * 第三种是命令跑起来了、但它声明前提不成立 ⇒ 去清它点名的那个前置再复算。
- * 混在一起报，读的人会去修一条没坏的命令（ISSUE #2791）。
- *
- * @param {{cur: number, curOutput?: string, base: {code: number, output?: string} | null, baseOutput?: string}} input
- * @returns {string}
- */
-export function didNotRunSide({ cur, curOutput, base, baseOutput }) {
-  const sides = [];
-  if (cur === 127) {
-    sides.push("本检出：127（找不到模块 / 命令）");
-  } else if (cur === 2) {
-    sides.push("本检出：退 2（判据自己声明这一跳没有结论，不是红）");
-  } else if (isDidNotRunShaped(curOutput)) {
-    sides.push("本检出：一条用例都没收集到");
-  }
-  /* 基线那一侧的 `runGate` 结果整个传进来（`base.output`），而不是另拿一份
-   * `baseOutput` —— 两个来源曾经在这里错位过一次（报告恒空），只留一条路。 */
-  const baseCode = base ? base.code : null;
-  const baseText = base ? String(base.output ?? "") : String(baseOutput ?? "");
-  if (baseCode === 127) {
-    sides.push("基线：127（找不到模块 / 命令）");
-  } else if (baseCode === 2) {
-    sides.push("基线：退 2（判据自己声明这一跳没有结论，不是红）");
-  } else if (baseCode !== null && baseCode !== 0 && isDidNotRunShaped(baseText)) {
-    sides.push("基线：一条用例都没收集到");
-  }
-  return sides.join("；");
-}
+/* 依赖链接那一层在 `base-check/snapshot-link.mjs`（ISSUE #3043 拆出：本文件加合并态
+ * 那一档后越过 900 行硬闸，而这一对自包含、有自己的用例）。re-export 保留：
+ * `tests/base-check-snapshot-link.test.ts` 与碎片里引用的名字不变。 */
+export { linkDependencies, unlinkDependencies } from "./base-check/snapshot-link.mjs";
+/* 「没跑出结论」的**哪一侧、哪一种**是判决话术，实现在 verdict.mjs（ISSUE #3043 拆出，
+ * 理由同上）。re-export 保留：tests 与 `reportMany` 引用的名字不变。 */
+export { didNotRunSide } from "./base-check/verdict.mjs";
 
 /**
  * 一组行 → 整批的结论（纯函数，两向都能被用例钉住）。
@@ -621,9 +738,7 @@ function reportMany(result, { json, shape = "batch" }) {
   for (const r of rows) {
     const mark = r.currentCode === 0 ? "绿" : (r.verdict ?? "红");
     process.stdout.write(
-      `  · ${mark}  ${r.label}（本检出 ${r.currentCode} / 基线 ${
-        r.baseCode ?? "未跑"
-      }）\n`,
+      `  · ${mark}  ${r.label}（本检出 ${r.currentCode} / 基线 ${r.baseCode ?? "未跑"}）\n`,
     );
     /* 「没跑出结论」的三种形态在退出码上同形（127 / 收集不到 / 判据自己退 2），
      * 只有码位与输出里的指纹分得开 —— 而这一行决定了人是去修代码、去查环境，
@@ -655,6 +770,24 @@ function reportMany(result, { json, shape = "batch" }) {
 
 /** @param {string[]} argv */
 function main(argv) {
+  /* `--merge-into <ref>` 是**值旗标**：它的值要从 argv 里摘出来，不能混进 args
+   * （args 是要复算的命令本身，混进去会被当成命令的第一个词）。 */
+  let mergeInto = null;
+  const cleaned = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--merge-into") {
+      mergeInto = argv[i + 1] ?? "";
+      i++;
+      continue;
+    }
+    if (typeof a === "string" && a.startsWith("--merge-into=")) {
+      mergeInto = a.slice("--merge-into=".length);
+      continue;
+    }
+    cleaned.push(a);
+  }
+  argv = cleaned;
   const args = argv.filter((a) => !a.startsWith("--"));
   const flags = new Set(argv.filter((a) => a.startsWith("--")));
   const JSON_OUT = flags.has("--json");
@@ -676,6 +809,21 @@ function main(argv) {
    * 事后那一档要「这红是不是本来就有的」⇒ 也优先主干，只有当主干与 HEAD 同义时
    * 才退回 `@{u}` 那套候选（理由与实测见 `resolveAttributionRef`）。 */
   const isBatch = flags.has("--base");
+  /* `--merge-state`（ISSUE #3043）：只接**单命令档**（被拦下时复算那一条）。
+   * `--base` 那一批问的是「并进去会不会红」，它的对象本来就是合并语义 ——
+   * 把两档混在一条命令上只会让「哪一档在判哪棵树」说不清。 */
+  if (flags.has("--merge-state") && isBatch) {
+    fail("--merge-state 只接单命令档；--base 那一批已经是合并语义，不需要它");
+    return 1;
+  }
+  if (mergeInto !== null && !flags.has("--merge-state")) {
+    fail("--merge-into 要跟 --merge-state 一起用（它只回答「合并态那棵树红不红」）");
+    return 1;
+  }
+  if (flags.has("--merge-state") && mergeInto === "") {
+    fail("--merge-into 后面要带一个 ref（例：--merge-into origin/master）");
+    return 1;
+  }
   /** 事后复算（单命令档）那条给 `{ref, why}`：基线该取主干还是 `@{u}` 是有条件的，
    *  而**选了哪一条**必须说出口 —— 不然一份写着 `origin/<自己的分支>` 的报告读起来
    *  像「与主干比过」，实际是拿自己跟自己比（ISSUE #1913 的那次误判就是这么来的）。 */
@@ -716,6 +864,7 @@ function main(argv) {
     ref,
     keep: flags.has("--keep"),
     json: JSON_OUT,
+    mergeState: flags.has("--merge-state") ? { into: mergeInto ?? "origin/master" } : null,
   });
 }
 

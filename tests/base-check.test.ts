@@ -34,6 +34,7 @@ import {
   isDidNotRunShaped,
   isTimeoutShaped,
   judge,
+  judgeMergeState,
   mayDecideOnCleanSnapshot,
   nextSteps,
   nextStepsMany,
@@ -970,6 +971,173 @@ describe("base-check —— 真仓库上的四态", () => {
       expect(resolveUpstreamRef(dir)).toBe("master");
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+/**
+ * `--merge-state`：**第三种树**那一档（ISSUE #3043）。
+ *
+ * 平台 PR 建的是**合并态**（分支 ⊕ 目标分支），而 `current-green` 的短路只量过本地
+ * —— 「本地绿 + 平台红」这一形下它给出的是「无需复算」，不构成证据。这一档把
+ * 合并态真建出来（`git merge --no-commit`）量一遍：本地绿 + 合并态红 ⇒ `merge-red`；
+ * 两棵树都绿 ⇒ `current-green`（这次有证据）；冲突 / 判据没跑起来 ⇒ `inconclusive`。
+ *
+ * 夹具形状：判据「只在 marker.txt 存在时红」，marker 落在**主干侧**的新提交里 ——
+ * 于是本分支（没合主干）绿、合并态（⊕ 主干）红，正是 #3043 立案的那一形。
+ */
+describe("base-check --merge-state —— 本地绿不证明合并态绿（ISSUE #3043）", () => {
+  /**
+   * 造「本分支绿 / 合并态红」的夹具：主干在分支开口之后落了 marker，
+   * 分支自己没动它。返回 work（分支 feat 检出）与 bare。
+   */
+  function makeMergeStateFixture(): { bare: string; work: string } {
+    const bare = mkdtempSync(join(tmpdir(), "base-check-merge-bare-"));
+    const work = mkdtempSync(join(tmpdir(), "base-check-merge-work-"));
+    git(bare, "init", "-q", "--bare", "-b", "master", ".");
+    git(work, "init", "-q", "-b", "master", ".");
+    git(work, "config", "user.email", "merge@example.com");
+    git(work, "config", "user.name", "merge");
+    git(work, "config", "commit.gpgsign", "false");
+    git(work, "remote", "add", "origin", bare);
+    writeFileSync(
+      join(work, "gate.cjs"),
+      [
+        'const fs = require("node:fs");',
+        'const has = fs.existsSync("marker.txt");',
+        String.raw`process.stdout.write(has ? "[gate] 命中\n" : "[gate] 干净\n");`,
+        "process.exit(has ? 1 : 0);",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(join(work, "seed.txt"), "seed\n");
+    git(work, "add", ".");
+    git(work, "commit", "-qm", "chore: seed");
+    git(work, "push", "-q", "origin", "master");
+    git(work, "checkout", "-q", "-b", "feat");
+    writeFileSync(join(work, "own.txt"), "mine\n");
+    git(work, "add", ".");
+    git(work, "commit", "-qm", "feat: 自己的一笔");
+    /* 主干在分支开口之后落 marker：本分支看不到它，合并态看得到。 */
+    git(work, "checkout", "-q", "master");
+    writeFileSync(join(work, "marker.txt"), "x\n");
+    git(work, "add", ".");
+    git(work, "commit", "-qm", "fix(other): 主干把 marker 带了进来");
+    git(work, "push", "-q", "origin", "master");
+    git(work, "checkout", "-q", "feat");
+    return { work, bare };
+  }
+
+  test("judgeMergeState（纯函数）：本地绿 + 合并态红 ⇒ merge-red；没跑起来 ⇒ inconclusive", () => {
+    expect(judgeMergeState({ currentCode: 0, mergeCode: 0 })).toBe("current-green");
+    expect(judgeMergeState({ currentCode: 0, mergeCode: 1 })).toBe("merge-red");
+    /* 「跑过去了但一条用例都没收集到」退 0 的那一形（ISSUE #2400 同一条边界）：
+     * 与真绿在退出码上同形，只有输出分得开。 */
+    expect(judgeMergeState({ currentCode: 0, mergeCode: 0, mergeOutput: "Tests  no tests" })).toBe(
+      "inconclusive",
+    );
+    expect(judgeMergeState({ currentCode: 0, mergeCode: 2 })).toBe("inconclusive");
+    expect(judgeMergeState({ currentCode: 0, mergeCode: 127 })).toBe("inconclusive");
+    /* 契约外输入不冒充任何结论（这一档只在本检出全绿后起合并树）。 */
+    expect(judgeMergeState({ currentCode: 1, mergeCode: 0 })).toBe("inconclusive");
+  });
+
+  test("本地绿 + 合并态红 ⇒ merge-red（不是 baseline-red、也不是 yours）", () => {
+    const r = makeMergeStateFixture();
+    try {
+      /* 前提必须成立：本分支上这份判据**真绿** —— 否则走的是五态归因，不是这一档。 */
+      const pre = runBaseCheckOnce(r.work, ["node", "gate.cjs"]);
+      expect(pre.stdout, `stdout=${pre.stdout}`).toContain("current-green");
+
+      const { code, stdout, stderr } = runBaseCheckOnce(r.work, [
+        "--merge-state",
+        "--merge-into",
+        "origin/master",
+        "node",
+        "gate.cjs",
+      ]);
+      expect(code, `stderr=${stderr}`).toBe(0);
+      expect(stdout, `stdout=${stdout}`).toContain("merge-red");
+      expect(stdout).toContain("合并态 1");
+      /* 下一动作要把它与另外两档的红分开：修在自己的分支上，别登记别线的红。 */
+      expect(stdout).toContain("组合");
+      expect(stdout).toContain("修在**自己的分支**上");
+    } finally {
+      dropRepo(r);
+    }
+  });
+
+  test("本地绿 + 合并态也绿 ⇒ current-green，且读数里看得见「合并态 0」这份证据", () => {
+    const r = makeMergeStateFixture();
+    try {
+      /* 主干那一笔改成不带 marker 的无关文件 ⇒ 合并态与本地都绿。 */
+      git(r.work, "checkout", "-q", "master");
+      rmSync(join(r.work, "marker.txt"), { force: true });
+      writeFileSync(join(r.work, "trunk-only.txt"), "t\n");
+      git(r.work, "add", ".");
+      git(r.work, "commit", "-qm", "fix(other): 主干的无关一笔");
+      git(r.work, "push", "-q", "origin", "master");
+      git(r.work, "checkout", "-q", "feat");
+
+      const { code, stdout, stderr } = runBaseCheckOnce(r.work, [
+        "--merge-state",
+        "node",
+        "gate.cjs",
+      ]);
+      expect(code, `stderr=${stderr}`).toBe(0);
+      expect(stdout, `stdout=${stdout}`).toContain("current-green");
+      expect(stdout).toContain("合并态 0");
+      expect(stdout).toContain("⊕ HEAD");
+    } finally {
+      dropRepo(r);
+    }
+  });
+
+  test("合并态建不出来（冲突）⇒ inconclusive 并点名冲突面，不冒充红也不冒充绿", () => {
+    const r = makeMergeStateFixture();
+    try {
+      /* 两侧各改 seed.txt ⇒ 合并冲突，「分支 ⊕ 目标」建不出树。 */
+      writeFileSync(join(r.work, "seed.txt"), "feat\n");
+      git(r.work, "add", ".");
+      git(r.work, "commit", "-qm", "feat: 改 seed");
+      git(r.work, "checkout", "-q", "master");
+      writeFileSync(join(r.work, "seed.txt"), "trunk\n");
+      git(r.work, "add", ".");
+      git(r.work, "commit", "-qm", "fix(other): 主干也改 seed");
+      git(r.work, "push", "-q", "origin", "master");
+      git(r.work, "checkout", "-q", "feat");
+
+      const { code, stdout, stderr } = runBaseCheckOnce(r.work, [
+        "--merge-state",
+        "node",
+        "gate.cjs",
+      ]);
+      expect(code, `stderr=${stderr}`).toBe(0);
+      expect(stdout, `stdout=${stdout}`).toContain("inconclusive");
+      expect(stdout).toContain("冲突");
+      expect(stdout).toContain("seed.txt");
+    } finally {
+      dropRepo(r);
+    }
+  });
+
+  test("用法边界：--merge-into 不带 --merge-state ⇒ 退 1；--merge-state 配 --base ⇒ 退 1", () => {
+    const r = makeMergeStateFixture();
+    try {
+      const lonely = runBaseCheckOnce(r.work, [
+        "--merge-into",
+        "origin/master",
+        "node",
+        "gate.cjs",
+      ]);
+      expect(lonely.code).toBe(1);
+      expect(lonely.stderr).toContain("--merge-into 要跟 --merge-state");
+
+      const withBase = runBaseCheckOnce(r.work, ["--base", "--merge-state"]);
+      expect(withBase.code).toBe(1);
+      expect(withBase.stderr).toContain("--merge-state 只接单命令档");
+    } finally {
+      dropRepo(r);
     }
   });
 });
