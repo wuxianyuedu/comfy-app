@@ -131,6 +131,7 @@ import { isNoiseLine, resolveNoiseFilter } from "./affected-launch-noise-reporte
  * 判决链仍只有 `scripts/affected-tests.mjs` 那一份（ISSUE #2240：换的只是**载体**，
  * 不是筛法 —— 改动面走 stdin，不再逐个铺进 argv）。 */
 import { collectList } from "./affected-launch-changed-list.mjs";
+import { applyLaunchCarrier } from "./affected-launch-carrier-flags.mjs";
 /* 组 C 分文件读数的**落盘布局**由账本那一侧拥有（读的一侧是格式的权威），而写这套布局的
  * 三件事现在住在 `affected-launch-junit-io.mjs`：import 而不是各抄一份文件名 —— 抄两份的
  * 漂移形态是静默的，改名那侧照常跑、这侧读不到，而「读不到」在这一格长得和「这次没有
@@ -262,6 +263,9 @@ export const SAFE_ARGV_BUDGET = 24_000;
 const PER_FILE_RERUN_MAX = 8;
 
 async function main(argv) {
+  /* 旗标面与载体判决住 `affected-launch-carrier-flags.mjs`（ISSUE #2869）。 */
+  const carrierCode = applyLaunchCarrier(argv);
+  if (carrierCode !== null) return carrierCode;
   const dryRun = argv.includes("--dry-run");
   /* 把本跑的逐份用时并进入库台账（人为跑；CI 不自动写 —— 平台工作区的改动进不了库）。 */
   const updateTiming = argv.includes("--update-timing");

@@ -789,3 +789,54 @@ describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2
     expect(Array.isArray(changedPathsFrom([]).paths)).toBe(true);
   });
 });
+
+/**
+ * 启动器的**旗标面**：`--changed-stdin` 真消费，读不到/空清单**退 2**（ISSUE #2869）。
+ *
+ * 现场：`node scripts/run-affected-tests.mjs --changed-stdin < 清单` 早先被**静默忽略**
+ * —— 旗标进了 argv、没有分支读它，改动面仍取暂存区 / `COMFY_AFFECTED_CHANGED`，
+ * 于是本地预检只跑固定清单，**看着绿、这一份改动对应的用例一条没跑**。
+ */
+describe("启动器消费 --changed-stdin，读不到就显式降级（ISSUE #2869）", () => {
+  const LAUNCHER = path.join(ROOT, "scripts", "run-affected-tests.mjs");
+  /** 一份自带映射的改动面（用例文件按路径命中自己）。 */
+  const LIST = ["tests/ship.test.ts"];
+
+  function run(args: Array<string>, input?: string) {
+    return spawnSync(process.execPath, [LAUNCHER, ...args], {
+      cwd: ROOT,
+      encoding: "utf8",
+      env: SPAWN_ENV,
+      input,
+      maxBuffer: 64 << 20,
+    });
+  }
+
+  it("有 stdin 时按 stdin 的清单跑（与 COMFY_AFFECTED_CHANGED 逐字同结果）", () => {
+    const viaEnv = spawnSync(process.execPath, [LAUNCHER, "--dry-run"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      env: { ...SPAWN_ENV, COMFY_AFFECTED_CHANGED: LIST.join("\n") },
+      maxBuffer: 64 << 20,
+    });
+    const viaStdin = run(["--dry-run", "--changed-stdin"], LIST.join("\n"));
+    expect(viaEnv.status, viaEnv.stderr ?? "").toBe(0);
+    expect(viaStdin.status, viaStdin.stderr ?? "").toBe(0);
+    expect(viaStdin.stdout).toBe(viaEnv.stdout);
+    expect(viaStdin.stderr).toContain("改动面自 stdin：1 条");
+  });
+
+  it("stdin 是空清单 ⇒ 退 2 并喊出来，不退回固定清单", () => {
+    const r = run(["--changed-stdin"], "");
+    expect(r.status, r.stderr ?? "").toBe(2);
+    expect(r.stdout).toBe("");
+    expect(r.stderr).toContain("清单是空的");
+    expect(r.stderr).toContain("退 2");
+  });
+
+  it("不认识的旗标 ⇒ 退 2 并点名（拼错与没写不能长得一样）", () => {
+    const r = run(["--changed-files=tests/ship.test.ts"]);
+    expect(r.status, r.stderr ?? "").toBe(2);
+    expect(r.stderr).toContain("--changed-files=tests/ship.test.ts");
+  });
+});
