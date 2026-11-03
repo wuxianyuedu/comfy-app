@@ -188,12 +188,12 @@ describe("空闲与锁：两条「不够就不做」的闸", () => {
   it("低于下限 ⇒ 不建槽，且原因里带两个数（读数要能自查）", () => {
     const out = hasRoomForSlot({
       path: job,
-      floorBytes: 20 * 1024 ** 3,
-      probe: () => 10 * 1024 ** 3,
+      floorBytes: 10 * 1024 ** 3,
+      probe: () => 5 * 1024 ** 3,
     });
     expect(out.ok).toBe(false);
-    expect(out.why).toContain("10.0");
-    expect(out.why).toContain("20");
+    expect(out.why).toContain("5.0");
+    expect(out.why).toContain("10");
   });
 
   it("读不到空闲 ⇒ 按不够处理（不许猜充足）", () => {
@@ -356,7 +356,7 @@ describe("applySlot 的三档", () => {
       env: { [SLOT_ENABLED_ENV]: "1", COMFY_CI_CACHE_ROOT: missingCache },
       // `floorBytes: 0`：这一条钉的是「真实 statfsFreeBytes 对还不存在的路径向上找到
       // 最近存在的祖先」，不是「这个卷此刻还剩多少空间」。下限不透传时走生产下限
-      // 20 GiB，而那是**未受控输入** —— runner 的缓存盘被填到 20 GiB 以下后（槽自己
+      // 生产下限，而那是**未受控输入** —— runner 的缓存盘被填到下限以下后（槽自己
       // 就在占盘），这条回归位对所有人红（实测两个在飞 PR 被同一条红拦下，本地
       // 19GB 的 G 盘同样红）。0 只放行「量具真的读到了数」；读不到（null）照旧判
       // 不够 ⇒ 祖先行走为的钉子原样保留。
@@ -599,8 +599,8 @@ describe("LRU 与作业侧补写", () => {
 });
 
 describe("常量与判据的配对", () => {
-  it("空闲下限是 20 GiB（配额按「个」而不按「GB」的前提）", () => {
-    expect(FREE_SPACE_FLOOR_BYTES).toBe(20 * 1024 ** 3);
+  it("空闲下限是 10 GiB（配额按「个」而不按「GB」的前提；#3113 从 20 GiB 收窄）", () => {
+    expect(FREE_SPACE_FLOOR_BYTES).toBe(10 * 1024 ** 3);
     expect(MAX_SLOT_KEYS).toBe(4);
   });
 
