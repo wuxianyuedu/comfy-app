@@ -638,7 +638,7 @@ function numericOrNull(v) {
  *
  * @param {any} json `cnb build get-build-status -v` 的解析结果
  * @returns {Array<{id: string, name: string, pipeline: string, pipelineId: string,
- *   startTime: number | null, durationMs: number | null, since: number}>}
+ *   startTime: number | null, durationMs: number | null, since: number}>} 每一项的读法如下：
  *   `since` 是「这一格从开始到现在过了多久」（毫秒；`startTime` 一定是数字，见上面的判法）
  */
 export function stalledStages(json) {
@@ -690,7 +690,8 @@ export function stalledStages(json) {
  *
  * 阈值那一档与 `ship-diagnose.mjs` 的 `DIAGNOSE_STALL_MINUTES` 同一个数：它答的是
  * 「隔了 10 分钟还没动」，与这里「这一格从开始到现在过了 10 分钟还没回来」是同一件事。
- * 纯函数（时间由 `stalledStages` 在调用那一刻算进 `since`）：用例不用等真实时间。
+ * 纯函数（时间由 `stalledStages` 在调用那一刻算进 `since`）：用例不用等真实时间，
+ * 入参五项也都不必再解释 —— 名字本身就是它们的说明书。
  *
  * @param {{minutes: number, signature: string, slug: string | null, sn: string,
  *   stalled: ReturnType<typeof stalledStages>}} input
