@@ -56,14 +56,17 @@ function mergeScene(fallback: SceneResolutionTable, raw: unknown): SceneResoluti
     const rawRow =
       // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       raw != null && typeof raw === "object"
-        ? /* SAFETY: 类型断言已复核 */ (raw as Record<string, unknown>)[preset.label]
+        ? /* SAFETY: 类型断言已复核 */
+          (raw as Record<string, unknown>)[preset.label]
         : undefined;
-    const row = /* SAFETY: 类型断言已复核 */ {} as Record<ResolutionTier, SizeDims>;
+    /* SAFETY: 类型断言已复核 */
+    const row = {} as Record<ResolutionTier, SizeDims>;
     for (const tier of RESOLUTION_TIERS) {
       const candidate =
         // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
         rawRow != null && typeof rawRow === "object"
-          ? /* SAFETY: 类型断言已复核 */ (rawRow as Record<string, unknown>)[tier]
+          ? /* SAFETY: 类型断言已复核 */
+            (rawRow as Record<string, unknown>)[tier]
           : undefined;
       row[tier] = isValidDims(candidate)
         ? {
