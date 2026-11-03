@@ -49,6 +49,14 @@
  *     有巧合：空文件、逐字相同的正当改动）；
  *   · 未命中 ⇒ 无事。
  *
+ * 命中里有**两道正当减除**，各有各的读数（安静地少判与「本来没事」在屏幕上长得一样）：
+ *
+ *   · **本笔自身的增补**（ISSUE #3004）：一笔 N 行改动反向应用必回上一版 —— 那是
+ *     恒等式不是退回（`ownDiffExplains()`）；
+ *   · **同内容的另一种排版**（ISSUE #2999）：结果版与基线版剥掉全部空白后逐字相等
+ *     —— printWidth 迁移把 80 列链式改回 100 列单行，逐字节正好等于格式化之前的
+ *     某一版；相对基线非空白内容一个字没少，不是退回（`sameModuloWhitespace()`）。
+ *
  * 退出码三态，与 `base-check.mjs` / `check-commit-claims.mjs` 同口径：
  *
  *   · `0` = 没有命中（或 `--report` 盘点档）；
@@ -120,6 +128,30 @@ export function isAncestor(ancestor, descendant) {
 }
 
 /**
+ * 两个 blob 的**非空白内容**是否逐字相同（ISSUE #2999 的判别件）。
+ *
+ * 为什么不用 `git diff -w`：那条只忽略**行内**空白，而 printWidth 迁移改的恰恰是
+ * **断行结构**（链式拆行 ⇄ 单行）—— 行数都变了，`-w` 下仍是 9+/27- 的实差，
+ * 治不了现场。把两侧内容各剥掉全部空白再比，链式与单行就折成同一个串；
+ * 真退回（少了一段代码）剥完仍不等。
+ *
+ * 只在**命中之后**对命中的那几份调用（每份两次 `cat-file blob`）——常规零命中
+ * 的跑一次也不多付。读不到内容回 `false`：那是「相等性没证出来」，fail-closed。
+ *
+ * @param {string} aSha 结果版的 blob sha
+ * @param {string} bSha 基线版的 blob sha
+ * @returns {boolean}
+ */
+function sameModuloWhitespace(aSha, bSha) {
+  const a = git(["cat-file", "blob", aSha]);
+  const b = git(["cat-file", "blob", bSha]);
+  if (a === null || b === null) {
+    return false;
+  }
+  return a.replaceAll(/\s+/g, "") === b.replaceAll(/\s+/g, "");
+}
+
+/**
  * 扫一次：返回「疑似整份退回」的文件清单。
  *
  * 对 `baseline..sha` 之间改动的每个文件，判它 `sha` 那一版是否 == 基线的某个**祖先**
@@ -130,7 +162,7 @@ export function isAncestor(ancestor, descendant) {
  *
  * @param {{sha: string, baseline: string, own?: {from: string} | null}} target
  *   待查的那一笔、它对照的基线那一笔，以及（可选）本笔要减掉的那一段起点
- * @returns {{ok: true, lost: string[], reverted: string[]} | {ok: false, reason: string}}
+ * @returns {{ok: true, lost: string[], reverted: string[], relaidOut: string[]} | {ok: false, reason: string}}
  *   取不到事实时给 `ok:false`；`reverted` 是**留在了命中清单里**的那一批（本笔自身的增补
  *   反向应用对不上），`lost` 是扣掉它们之后的结论。
  */
@@ -165,7 +197,7 @@ export function scan({ sha, baseline, own = null }) {
   /* 生成物先摘掉（口径 3），剩下的才是这一轮要取证的面。 */
   const files = changed.filter((f) => !isGenerated(f));
   if (files.length === 0) {
-    return { ok: true, lost: [], reverted: [] };
+    return { ok: true, lost: [], reverted: [], relaidOut: [] };
   }
 
   /* 取证只要两次遍历：候选历史一次、全部 blob 一次（逐文件 / 逐条历史各起一个 git
@@ -200,6 +232,8 @@ export function scan({ sha, baseline, own = null }) {
   }
 
   const lost = [];
+  /** 命中但被「同内容另一种排版」减掉的（ISSUE #2999，读数在 main 里念）。 */
+  const relaidOut = [];
   for (const f of files) {
     const result = blob.get(`${sha}:${f}`);
     const atBaseline = blob.get(`${baseline}:${f}`);
@@ -216,9 +250,21 @@ export function scan({ sha, baseline, own = null }) {
       historyShas: candidates.get(f) ?? [], // 同一圈 `files` 刚逐个 set 过，键必在（见上面那句注释）
       blobAt: (older) => blob.get(`${older}:${f}`) ?? null,
     });
-    if (hit) {
-      lost.push(f);
+    if (!hit) {
+      continue;
     }
+    /* **「同内容的另一种排版」不是退回**（ISSUE #2999）：现场是 printWidth 迁移 ——
+     * 结果版（100 列单行）与基线版（80 列链式）逐字节不同、却与**格式化之前**的
+     * 某一版逐字节相同，于是被读成「退回了基线之前的版本」。判据要抓的是
+     * 「丢了别线的成果」，而相对基线，结果版的**非空白内容一个字没少** ——
+     * 命中只是排版巧合。判别：两个 blob 去掉全部空白后逐字相等 ⇒ 减掉；
+     * 读不到内容 ⇒ 按「相等不成立」处理（fail-closed：没读到不许被读成扣过了，
+     * 与 `own` 那一道同一条铁律）。真退回（丢整段代码）剥掉空白后仍不等，照拦。 */
+    if (sameModuloWhitespace(result, atBaseline)) {
+      relaidOut.push(f);
+      continue;
+    }
+    lost.push(f);
   }
   /* 本笔自身的减除（ISSUE #3004）：见 `ownDiffExplains()` 那段。`own` 取不到 ⇒ 不扣 ——
    * 「没读到」不许被读成「扣过了」。 */
@@ -228,10 +274,10 @@ export function scan({ sha, baseline, own = null }) {
       return { ok: false, reason: "取本笔自身的 diff 没跑起来" };
     }
     if (explained) {
-      return { ok: true, lost: [], reverted: lost };
+      return { ok: true, lost: [], reverted: lost, relaidOut };
     }
   }
-  return { ok: true, lost, reverted: lost };
+  return { ok: true, lost, reverted: lost, relaidOut };
 }
 
 /**
@@ -317,7 +363,7 @@ function main() {
     process.exit(2);
   }
 
-  const { lost, reverted } = result;
+  const { lost, reverted, relaidOut } = result;
   /* 被减掉的那批要念出来（ISSUE #3004）：安静地少判一批评据，与「那批本来没事」
    * 在屏幕上长得一样。只在真减掉了东西的时候念。 */
   const dropped = reverted.length - lost.length;
@@ -326,6 +372,17 @@ function main() {
       `[merged-side-loss] 减掉 ${dropped} 份：反向应用本笔自身的 diff 后正好回到基线版` +
         "（= 这一笔自己的增补，不是退回；判据要抓的是「丢了别人的成果」）",
     );
+  }
+  /* 「同内容另一种排版」那一档也要点名（ISSUE #2999）：它没有丢任何东西，
+   * 但命中发生过的这件事本身是读数 —— 不念，下一次排版巧合还会无声地走一遍。 */
+  if (relaidOut.length > 0) {
+    console.log(
+      `[merged-side-loss] 减掉 ${relaidOut.length} 份：结果版与基线版**只差空白/断行**` +
+        "（同一种内容的另一种排版，非空白内容一个字没少 —— 不是退回，ISSUE #2999）——",
+    );
+    relaidOut.forEach((f) => {
+      console.log(`  · ${f}`);
+    });
   }
   if (reportOnly) {
     console.log(`[merged-side-loss] ${sha} vs ${baseline}：疑似整份退回 ${lost.length} 份`);

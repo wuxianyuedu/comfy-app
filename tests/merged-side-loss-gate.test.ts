@@ -219,4 +219,56 @@ describe("check-merged-side-loss —— 整份退回的事后复算", () => {
     expect(code).toBe(1);
     expect(output).toContain("src/f.ts");
   });
+
+  test("⑩ 结果版与基线版只差空白/断行 ⇒ 不是退回，且减掉的要点名（ISSUE #2999）", ({ repo }) => {
+    /* 现场形状（printWidth 迁移）：基线版是 80 列链式排版，结果版是 100 列单行 ——
+     * 逐字节不同（`diff -w` 也不为空：断行结构变了），却与**链式化之前**的某一版
+     * 逐字节相同。判据要抓的是「丢了别线的成果」，而相对基线非空白内容一个字没少。
+     * 判别是「剥掉全部空白后逐字相等」—— 用例把两半都钉住：这一半（排版巧合）放行
+     * 且念出减除读数，⑪ 那一半（真退回）照拦。 */
+    repo.write("src/g.ts", "export const g = call(1);\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "chore: 单行 v1（后来的结果版与它逐字节相同）");
+
+    // 基线：把 g 链式化（等价于被格式化重排过）—— 内容没变，只有排版。
+    repo.write("src/g.ts", "export const g = call(\n  1,\n);\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "style: 链式排版");
+    const good = out(repo.dir, "rev-parse", "HEAD");
+
+    // 结果：改回单行 —— 逐字节等于 v1，但相对基线只是断行不同。
+    repo.write("src/g.ts", "export const g = call(1);\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "style: 改回单行排版");
+    const relaid = out(repo.dir, "rev-parse", "HEAD");
+
+    const { code, output } = repo.run([relaid, "--baseline", good]);
+    expect(code, `output=${output}`).toBe(0);
+    expect(output).toContain("只差空白/断行");
+    expect(output).toContain("src/g.ts");
+  });
+
+  test("⑪ 排版减除不吞真退回：相对基线少了内容的照样拦（ISSUE #2999 的另一半）", ({ repo }) => {
+    repo.write("src/h.ts", "export const h = 1;\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "chore: v0（将要被退回的那一版）");
+
+    // 基线：内容真的变多（主干前移）。
+    repo.write("src/h.ts", "export const h = 2;\nexport const extra = 3;\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "feat: 主干前移");
+    const good = out(repo.dir, "rev-parse", "HEAD");
+
+    // 退回成 v0（逐字节）—— 剥掉空白后与基线版**不等**（少了 `= 2` 与 extra），
+    // 排版减除不许把它吞掉。
+    repo.write("src/h.ts", "export const h = 1;\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "fix: 整份退回成 v0");
+    const bad = out(repo.dir, "rev-parse", "HEAD");
+
+    const { code, output } = repo.run([bad, "--baseline", good]);
+    expect(code, `output=${output}`).toBe(1);
+    expect(output).toContain("src/h.ts");
+    expect(output).not.toContain("只差空白/断行");
+  });
 });
