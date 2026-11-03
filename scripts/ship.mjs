@@ -29,8 +29,13 @@
  *
  * ── 模块形状（一份 900 行硬闸装不下整条链，而按行数切会把因果切散）──────
  *
- *   · `ship-core.mjs`     —— **判断**：参数、阶段表、三态码的合成、平台 JSON 里
- *     哪一格才是终态。纯函数，不起进程、不读文件之外的事实。
+ *   · `ship-core.mjs`     —— **判断**：参数、阶段表、平台 JSON 里哪一格才是终态。
+ *     纯函数，不起进程、不读文件之外的事实。
+ *   · `ship-codes.mjs`    —— **退码表（唯一出处，ISSUE #3083）**：`CODE` 常量与
+ *     码 ↔ 语义对账表。看到退码就知道是哪件事；别处不许写魔数。
+ *   · `ship-stage.mjs`    —— **「走到哪了」阶段进度行（唯一出处，ISSUE #3083）**：
+ *     `[ship] ▶ <阶段> | key=value` 的排版，与冲突面的 merge-tree 只读探测。
+ *     进度说走到哪，退码说结果分类，两套信息互不替代。
  *   · `ship-exec.mjs`     —— **效应适配**：`cnb` 垫片怎么起、stderr 怎么接、
  *     一次性临时文件落在 git 目录哪儿。只因宿主而变。
  *   · `ship-platform.mjs` —— **平台侧三段 + 阶段 8 分支清理**：PR / verdict / 合并并回读、删 ref 那一格。
@@ -83,9 +88,11 @@
  *    把它当结论读，会把一条从没跑起来的 build 报成成功（实测踩过：非 JSON 输出里
  *    两个字段同名，`grep '^status:'` 恒取到 200，于是白轮询几十次）。
  *    所以取数只走 `cnb … -v` 的 **JSON**，且只读 `data.*`。
- * 2. **退出码三态，与 `premerge-check.mjs` / `base-check.mjs` 同口径。**
- *    `0` 走到终态且事实为绿；`1` **有事实是红的**；`2` **有一步没跑起来**
- *    （`cnb` 不在 / 取不到 build / 非 git 检出）。`2` 压过 `1`：
+ * 2. **退码分型表（0–7），唯一出处 `ship-codes.mjs`，与 `premerge-check.mjs` /
+ *    `base-check.mjs` 的三态口径兼容**（ISSUE #3083）：`0` 走到终态且事实为绿；
+ *    `1` **有事实是红的**；`2` **没跑起来（泛化兜底）**；`3`–`7` 是对「没跑起来」
+ *    的细分（冲突 / CI 无终态 / 读数缺失 / 守卫拦住 / 本地前置）—— 看到退码就知道
+ *    是哪件事。合码口径不变：「没跑起来家族」（≥2）压过 `1`，`1` 压过 `0` ——
  *    「没拿到测量」与「测量结果是红的」是两件事，混起来就是静默失效。
  * 3. **合并是显式动作。** 默认止于阶段 5（打印下一动作）。要合就 `--merge`。
  *
@@ -205,8 +212,9 @@ import { resolveGitDir } from "./git-dir.mjs";
 /* 旗标解析在 `ship-args.mjs`：它跟着「命令行长什么样」动，而 `ship-core` 跟着「外部执行者的
  * 读数形状」动（ISSUE #2491 把这一层拆出去的那条理由写在文件头）。 */
 import { parseArgs } from "./ship-args.mjs";
-import { CODE, combineShipCodes, parseSlug, PHASES, resolveUpstream } from "./ship-core.mjs";
-import { makeRunner, writeScratch } from "./ship-exec.mjs";
+import { CODE, codeTag, combineShipCodes, parseSlug, PHASES, resolveUpstream } from "./ship-core.mjs";
+import { makeRunner, short, writeScratch } from "./ship-exec.mjs";
+import { reportStage } from "./ship-stage.mjs";
 import { handleFromProcessEnv, readDevHandleWithSource } from "./ship-ticket.mjs";
 import { reapCheckoutInstances, readAppInstances } from "./ship-reap.mjs";
 import { cleanBranch, createOrReusePull, mergeAndVerify, reportVerdict } from "./ship-platform.mjs";
@@ -506,8 +514,16 @@ async function runFlow(deps, tmpFiles) {
       return CODE.GREEN;
     }
     /* slug 由 preflight 的 `!slug` 闸收窄后带回：阶段 0 之后的平台动作不再面对 null。 */
-    const { branch, frags, staged, unstagedModified, untracked } = pf;
+    const { branch, frags, staged, unstagedModified, untracked, sha } = pf;
     slug = pf.slug;
+    /* 「走到哪了」第一格（ISSUE #3083）：阶段名 + 关键身份。进度与退码是两套信息 ——
+     * 这一行说「预检走完了」，结论那行才说「结果是什么」。 */
+    reportStage(log, "预检通过", {
+      branch,
+      sha: short(sha),
+      repo: slug,
+      碎片: `${frags.length} 份`,
+    });
 
     // ── 阶段 1：commit（实现见 `ship-local.mjs`，判据仍在 `ship-core.mjs`）──
     if (want("commit")) {
@@ -558,17 +574,19 @@ async function runFlow(deps, tmpFiles) {
     const branchNow = run("git", ["rev-parse", "--abbrev-ref", "HEAD"]).stdout.trim();
     if (branchNow !== branch) {
       log(
-        `[ship] 跑期内分支被切换（${branch} → ${branchNow || "(取不到)"}）⇒ 停：` +
+        `[ship] 跑期内分支被切换（${branch} → ${branchNow || "(取不到)"}）⇒ 停（${codeTag(
+          CODE.GUARD_REFUSED,
+        )}）：` +
           "本轮前面的读数记的是旧分支，而平台动作会落到新分支上，两者已经不自洽。" +
           "回到原来的分支重跑（PR 已存在会复用，不重建）。",
       );
-      codes.push(CODE.NOT_RUN);
+      codes.push(CODE.GUARD_REFUSED);
       return finish(codes);
     }
     const newSha = run("git", ["rev-parse", "HEAD"]).stdout.trim();
 
     if (want("pull-request")) {
-      const { number } = createOrReusePull({
+      const { number, stop } = createOrReusePull({
         run,
         log,
         mkTmp,
@@ -581,6 +599,13 @@ async function runFlow(deps, tmpFiles) {
         explicitTitle: opt.title,
         handle,
       });
+      /* ISSUE #3083：收口码由那一格给（冲突 ⇒ 3 / 已落地守卫 ⇒ 6 / 建不出来 ⇒ 2），
+       * 出口话术在那一格已经念过；冲突的 PR 平台不会派生 CI，往下走（轮询最长
+       * 45 分钟预算）只是把同一句「没有结论」推迟。 */
+      if (stop !== null) {
+        codes.push(stop);
+        return finish(codes);
+      }
       if (!number) {
         codes.push(CODE.NOT_RUN);
         return finish(codes);
@@ -601,6 +626,7 @@ async function runFlow(deps, tmpFiles) {
         now,
         sleep,
         number,
+        baseRef,
       });
       if (poll.stop !== null) {
         codes.push(poll.stop);
@@ -610,7 +636,7 @@ async function runFlow(deps, tmpFiles) {
 
       // ── 阶段 5：verdict ──────────────────────────────────────
       if (want("verdict")) {
-        codes.push(reportVerdict({ run, log, slug, number, buildState, buildSn }));
+        codes.push(reportVerdict({ run, log, slug, number, buildState, buildSn, baseRef }));
       }
 
       // ── 阶段 6：merge（显式）─────────────────────────────────

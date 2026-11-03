@@ -30,9 +30,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { resolveGitDir } from "./git-dir.mjs";
+import { CODE } from "./ship-codes.mjs";
 
-/** 退出码三态（与 `premerge-check.mjs` 逐字同口径）。 */
-export const CODE = { GREEN: 0, RED: 1, NOT_RUN: 2 };
+/* 退出码表的**唯一出处**是 `ship-codes.mjs`（ISSUE #3083：三态扩成 0–7 的分型表，
+ * 「没跑起来」细分为冲突 / 排队 / 读数缺失 / 守卫 / 预检五类，2 的压栈语义不变）。
+ * 这里只做转口 —— 历史 import 面（`from "./ship-core.mjs"`）一处都不用改。 */
+export { CODE, CODE_TABLE, codeTag, combineShipCodes } from "./ship-codes.mjs";
 
 /* 清单类平台接口（`list-pulls` / `get-build-logs`）的翻页口径：**一份**，两处共用 ——
  * `ship-platform.mjs` 的 `scanPullPages`（复用/落地判定，ISSUE #2964）与
@@ -57,22 +60,6 @@ export const PHASES = [
   "close-issue",
   "clean-branch",
 ];
-
-/**
- * 合并多个阶段的退出码：**`2` 压过 `1`，`1` 压过 `0`**。
- *
- * @param {number[]} codes 已跑过的各段结论
- * @returns {number} 合并后的进程退出码
- */
-export function combineShipCodes(codes) {
-  if (codes.includes(CODE.NOT_RUN)) {
-    return CODE.NOT_RUN;
-  }
-  if (codes.includes(CODE.RED)) {
-    return CODE.RED;
-  }
-  return CODE.GREEN;
-}
 
 /**
  * 「这次要不要先把分支建出来」—— 判断与效应分家（与 `decideCloseIssue` 同一形状）。
@@ -454,22 +441,97 @@ export function readFreshnessState(res) {
 }
 
 /**
+ * `is_merged` 原值的三态分型（ISSUE #3059）：平台应答间歇缺这一键，
+ * `=== true` 会把「没取到」读成「未合并」—— 缺键 / null / 非布尔一律 `unknown`，
+ * **不按 false 处理**（与 `classifyPrMergeable` 对 `mergeable_state` 的口径同族）。
+ *
+ * @param {unknown} v 平台 `data.is_merged` 的原值
+ * @returns {"merged"|"not_merged"|"unknown"}
+ */
+export function classifyIsMerged(v) {
+  if (v === true) {
+    return "merged";
+  }
+  if (v === false) {
+    return "not_merged";
+  }
+  return "unknown";
+}
+
+/**
  * 读 PR JSON 的判决字段（同样只读 `data.*`）。
  *
  * @param {{data?:{number?:number|string,mergeable_state?:string,blocked_on?:string,is_merged?:boolean,state?:string,title?:string}} | null} json 解析结果
- * @returns {{number:number|null,mergeableState:string,blockedOn:string,isMerged:boolean,state:string,title:string}} 归一后的字段
- *   `title` 是平台上这条 PR 的**现标题**（合并那一跳取 squash 标题要用它，ISSUE #2806）
+ * @returns {{number:number|null,mergeableState:string,blockedOn:string,isMerged:boolean,isMergedTri:"merged"|"not_merged"|"unknown",state:string,title:string}} 归一后的字段
+ *   `title` 是平台上这条 PR 的**现标题**（合并那一跳取 squash 标题要用它，ISSUE #2806）。
+ *   `isMerged` 是 `isMergedTri === "merged"` 的派生展示值；**判读走 `isMergedTri`**，
+ *   缺键那一档不许经布尔混进「未合并」（ISSUE #3059）。
  */
 export function readPullVerdict(json) {
   const d = json?.data ?? {};
+  const tri = classifyIsMerged(d.is_merged);
   return {
     number: d.number === undefined ? null : Number(d.number),
     mergeableState: String(d.mergeable_state ?? "unknown"),
     blockedOn: String(d.blocked_on ?? ""),
-    isMerged: d.is_merged === true,
+    isMerged: tri === "merged",
+    isMergedTri: tri,
     state: String(d.state ?? "unknown"),
     title: String(d.title ?? ""),
   };
+}
+
+/**
+ * PR 可合并读数的三态分型（ISSUE #3083）。
+ *
+ * 为什么必须分型：「没有 build」在冲突 PR 上的真因是平台**永远不会**派生构建，
+ * 而它与「还在排队」在读数上长得一样（#3075 现场：建 PR 时 `mergeable_state=conflict`，
+ * 解完冲突 push 后 CI 才起跑）。`mergeable_state` **缺键**按 #3059 的口径处理 ——
+ * `readPullVerdict` 已把它归一为 `"unknown"`，这里落到第三态，既不拿它当「可合并」，
+ * 也不拿它当「冲突」（`=== true` 式的误读在缺键读数上给出的全是假结论）。
+ *
+ * @param {{mergeableState:string, blockedOn:string} | null} pv
+ *   `readPullVerdict` 的归一结果（回读本身没跑起来时为 null）
+ * @returns {"conflict"|"mergeable"|"unknown"}
+ *   `conflict` 与 base 冲突（平台不派生 CI）· `mergeable` 明确可合并 ·
+ *   `unknown` 缺键 / 平台还在算 / 取不到 —— 不猜
+ */
+export function classifyPrMergeable(pv) {
+  if (!pv) {
+    return "unknown";
+  }
+  if (pv.mergeableState === "conflict" || pv.blockedOn === "code_conflict") {
+    return "conflict";
+  }
+  if (pv.mergeableState === "mergeable") {
+    return "mergeable";
+  }
+  return "unknown";
+}
+
+/**
+ * 冲突出口的话术（只有一份，ISSUE #3083）。
+ *
+ * 五格（建 PR 后 / 轮询 / 判决 / 合并前 / `--diagnose`）念的「下一步」必须是同一
+ * 份：各写一份的漂移形态是「改一处漏四处」，而出口命令恰恰是最不能漂移的那一句。
+ * 只做引导、不做动作：解冲突是人工取舍（#3075 的 8 份冲突要人判），脚本一次也不
+ * 替人 merge / push。
+ *
+ * @param {{number:any, baseRef:string|null}} ctx
+ *   `baseRef` 是解析出的主干基线（如 `origin/master`）；取不到时给占位写法，
+ *   不猜一个远端名（远端叫什么、基线是哪条是每台克隆自己的事实）。
+ * @returns {string[]} 逐行话术（调用方逐行 log）
+ */
+export function conflictAdviceLines({ number, baseRef }) {
+  const merge = baseRef
+    ? `git fetch ${baseRef.split("/")[0]} && git merge ${baseRef}`
+    : "git fetch <远端> && git merge <远端>/<主干>   # 基线引用取不到，按你这份检出的事实替换";
+  return [
+    "[ship]   出口（人工解冲突 —— 取舍要人判，脚本不自动改代码）：",
+    `[ship]     ${merge}   # 逐个文件解完，提交`,
+    `[ship]     git push   # 推新 sha ⇒ 平台随即为 PR #${number} 派生 CI`,
+    "[ship]     pnpm ship  # 重跑：PR 已存在会复用（不重建），接着等 CI",
+  ];
 }
 
 /**
@@ -553,9 +615,12 @@ export function findPullForBranch(json, branch) {
  *
  * @param {any} json `list-pulls --state closed` 的原样 JSON
  * @param {string} headSha 本地 HEAD 的 sha
+ * @param {{unknownPr?: number|null} | null} [sink] 可选出站口：head.sha 逐字相同、
+ *   而 `is_merged` **缺键 / null / 非布尔**的那条经它报出（`unknownPr` = 那条的号）——
+ *   缺键不按「未合并」处理（ISSUE #3059），判读留给调用方（落地守卫按读数缺失收口）。
  * @returns {number | null} 命中的 PR 号；认不出（含空 sha）时 `null`
  */
-export function findMergedPullForHeadSha(json, headSha) {
+export function findMergedPullForHeadSha(json, headSha, sink = null) {
   const sha = String(headSha ?? "").trim();
   if (!sha) {
     return null;
@@ -563,11 +628,14 @@ export function findMergedPullForHeadSha(json, headSha) {
   const raw = json?.data;
   const list = Array.isArray(raw) ? raw : raw && Array.isArray(raw.data) ? raw.data : [];
   for (const p of list) {
-    if (p?.is_merged !== true) {
+    if (String(p?.head?.sha ?? "") !== sha) {
       continue;
     }
-    if (String(p?.head?.sha ?? "") === sha) {
+    if (p?.is_merged === true) {
       return Number(p.number);
+    }
+    if (typeof p?.is_merged !== "boolean" && sink) {
+      sink.unknownPr = Number(p.number) || null;
     }
   }
   return null;

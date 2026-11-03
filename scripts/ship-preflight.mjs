@@ -26,7 +26,13 @@
  */
 import process from "node:process";
 
-import { CODE, decideCreateBranch, planCommands, readFreshnessState } from "./ship-core.mjs";
+import {
+  CODE,
+  codeTag,
+  decideCreateBranch,
+  planCommands,
+  readFreshnessState,
+} from "./ship-core.mjs";
 import { HANDLE_SOURCES } from "./dev-handle.mjs";
 import { DEV_HANDLE_ENV_KEY, issueAuthoring, ticketReading } from "./ship-ticket.mjs";
 import { logInstanceReading } from "./ship-reap.mjs";
@@ -92,8 +98,11 @@ export async function runPreflightStage(ctx) {
   const head = run("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
   let branch = head.stdout.trim();
   if (head.status !== 0 || !branch) {
-    log("[ship] 取不到 HEAD ⇒ 非 git 检出 / 游离 HEAD，这一格没有结论（不是「通过」）");
-    return { action: "stop", codes, code: CODE.NOT_RUN };
+    log(
+      `[ship] 取不到 HEAD ⇒ 非 git 检出 / 游离 HEAD（${codeTag(CODE.PREFLIGHT)}）` +
+        " ⇒ 先到一个 git 检出里重跑；这一格没有结论（不是「通过」）",
+    );
+    return { action: "stop", codes, code: CODE.PREFLIGHT };
   }
   /* ── 建分支那一格（`--branch`，显式才动 ref）──────────────────
    * 这一格原本只会打印一句「先 git checkout -b feat/<描述>」然后退 1 —— 于是脚本在
@@ -129,10 +138,11 @@ export async function runPreflightStage(ctx) {
         relay(co);
         if (co.status !== 0) {
           log(
-            `[ship] 建分支没成（exit ${co.status}）⇒ 停：后面每一跳的分支名都取自它，` +
+            `[ship] 建分支没成（exit ${co.status}）⇒ 停（${codeTag(CODE.PREFLIGHT)}）：` +
+              "后面每一跳的分支名都取自它，" +
               "这一格没有结论，不拿一次失败的 checkout 冒充「已经在分支上」。",
           );
-          codes.push(CODE.RED);
+          codes.push(CODE.PREFLIGHT);
           return { action: "finish", codes };
         }
         log(
@@ -154,9 +164,10 @@ export async function runPreflightStage(ctx) {
   }
   if (branch === "master" || branch === "HEAD") {
     log(
-      `[ship] 当前在 \`${branch}\` 上。本仓不许直连主干（硬规则 6）⇒ 先：git checkout -b feat/<描述>`,
+      `[ship] 当前在 \`${branch}\` 上。本仓不许直连主干（硬规则 6）⇒ 先：` +
+        `git checkout -b feat/<描述>（${codeTag(CODE.PREFLIGHT)}）`,
     );
-    codes.push(CODE.RED);
+    codes.push(CODE.PREFLIGHT);
     return { action: "finish", codes };
   }
   const shaRes = run("git", ["rev-parse", "HEAD"]);
@@ -269,17 +280,18 @@ export async function runPreflightStage(ctx) {
     log(
       `[ship] 取不到可比的上游基线（上游 ${up.base ?? "(无)"} 不存在或这条分支还没有上游）` +
         " ⇒ 「分支带进来了哪些碎片」这一格**没有事实源**。这不是「没有碎片」，" +
-        "也不是「通过」：先 `git fetch` 或给这条分支设上游（`git branch -u <远端>/master`）。\n",
+        `也不是「通过」（${codeTag(CODE.READOUT_MISSING)}）：` +
+        "先 `git fetch` 或给这条分支设上游（`git branch -u <远端>/master`）。\n",
     );
-    codes.push(CODE.NOT_RUN);
+    codes.push(CODE.READOUT_MISSING);
     return { action: "finish", codes };
   }
   if (frags.length === 0) {
     log(
       `[ship] 没有 changelog.d/ 碎片（比的是 ${baseRef}...HEAD 与工作树）` +
-        " ⇒ 单 PR 单变更那条不成立（§13.10.5）。先补一份。",
+        ` ⇒ 单 PR 单变更那条不成立（§13.10.5）（${codeTag(CODE.PREFLIGHT)}）。先补一份。`,
     );
-    codes.push(CODE.RED);
+    codes.push(CODE.PREFLIGHT);
     return { action: "finish", codes };
   }
   if (!slug) {
@@ -326,10 +338,12 @@ export async function runPreflightStage(ctx) {
    * 后果是新克隆 / 评审容器 / NPC 工作区里整条 ship 链一步都走不了（ISSUE #2390）。
    *
    * 所以这一格读**判据自己的原值**，只读退出码这一条不够（红线③：结论来自既有执行者）：
-   *   · `no-install` ⇒ 2（没跑起来，且不构成结论）：本地两段与平台两段照跑，
-   *     它们不需要 `node_modules`；
-   *   · `envBroken`（拿不到 git 状态）⇒ 2：出口是修 git 读数，`pnpm install` 治不了；
-   *   · 真漂移（②/③ 任一命中）⇒ 保持 1：那才是「有事实是红的」。 */
+   *   · `no-install` ⇒ 7 PREFLIGHT（没跑起来家族，且不构成结论）：本地两段与平台两段
+   *     照跑，它们不需要 `node_modules`；
+   *   · `envBroken`（拿不到 git 状态）⇒ 5 READOUT_MISSING：出口是修 git 读数，
+   *     `pnpm install` 治不了；
+   *   · 真漂移（②/③ 任一命中）⇒ 保持 1：那才是「有事实是红的」。
+   * （#3083 码表化之前这三处分别念 2 / 2 / 1；行为变更记在 changelog 碎片里。） */
   const fresh = run("node", ["scripts/check-deps-freshness.mjs", "--json"]);
   const freshState = readFreshnessState(fresh);
   if (freshState === "clean") {
@@ -345,23 +359,25 @@ export async function runPreflightStage(ctx) {
     );
     log(
       "[ship] 这不是「新鲜度红了」，也不是「本机跑不了门禁」—— 硬规则 26：`node_modules` " +
-        "缺失只表示还没装。提交 / push / 平台那几段都不需要它，照跑。",
+        `缺失只表示还没装（${codeTag(CODE.PREFLIGHT)}）。` +
+        "提交 / push / 平台那几段都不需要它，照跑；要跑门禁先 `pnpm install`。",
     );
-    codes.push(CODE.NOT_RUN);
+    codes.push(CODE.PREFLIGHT);
   } else if (freshState === "env") {
     log(
       "[ship] 依赖新鲜度判据没跑起来（判据原值 `envBroken`：拿不到 git 状态）" +
-        " ⇒ 出口是修 git 读数，`pnpm install` 治不了这一格。",
+        ` ⇒ 出口是修 git 读数，\`pnpm install\` 治不了这一格（${codeTag(CODE.READOUT_MISSING)}）。`,
     );
-    codes.push(CODE.NOT_RUN);
+    codes.push(CODE.READOUT_MISSING);
   } else {
     /* 判据没给出可读的结论（起不来 / 退了非零而 `--json` 的形状对不上）——
      * 照样不许念成「红了」，也不许念成「没问题」。 */
     log(
       `[ship] 依赖新鲜度判据没有给出可读的结论（exit ${fresh.status}，` +
-        "`--json` 的读数不完整）⇒ 这一格没跑起来，不构成结论，也不念成「红了」。",
+        `\`--json\` 的读数不完整）⇒ 这一格没跑起来（${codeTag(CODE.READOUT_MISSING)}），` +
+        "不构成结论，也不念成「红了」。",
     );
-    codes.push(CODE.NOT_RUN);
+    codes.push(CODE.READOUT_MISSING);
   }
 
   return {

@@ -32,7 +32,16 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { gitScratchPath } from "./git-dir.mjs";
-import { CODE } from "./ship-core.mjs";
+import {
+  classifyPrMergeable,
+  CODE,
+  codeTag,
+  conflictAdviceLines,
+  findPullForBranch,
+  readPullVerdict,
+} from "./ship-core.mjs";
+import { cnbJson } from "./ship-exec.mjs";
+import { scanPullPages } from "./ship-platform.mjs";
 import {
   classifyBuildOutcome,
   describeFailedStages,
@@ -237,7 +246,49 @@ export function runDiagnose({
     command: "pnpm ship --diagnose",
   });
   if (!target) {
-    return CODE.NOT_RUN;
+    /* ISSUE #3083：「归不到 build」有两种真相 —— 当前分支的开放 PR 与 base 冲突
+     * （平台**永不**派生，出口是解冲突）与 sha 归属不上 / 平台延迟（出口是等或
+     * 核 sha）。两者在读数上长得一样，不问一眼就落 2 会把前一种人留在「再等等」
+     * 上。问不到（不在分支上 / 清单或回读没跑起来 / 缺键）⇒ 照实念「未知」，不猜。 */
+    const branch = run("git", ["rev-parse", "--abbrev-ref", "HEAD"]).stdout.trim();
+    const scan = branch
+      ? scanPullPages(
+          { run, slug },
+          { state: "open", visit: (json) => findPullForBranch(json, branch) },
+        )
+      : { hit: null, ran: false, scanned: 0 };
+    const pr = scan.hit
+      ? cnbJson(run, ["pulls", "get-pull", "--repo", slug, "--number", String(scan.hit), "-v"])
+      : null;
+    const pv = pr ? readPullVerdict(pr.json) : null;
+    const cls = classifyPrMergeable(pv);
+    if (cls === "conflict" && scan.hit) {
+      log(
+        `[ship] 当前分支的开放 PR #${scan.hit} 与 base 冲突 ⇒ 平台不会为它派生 build：` +
+          `「归不到 build」的真因是冲突，不是「还在排队」（${codeTag(CODE.CONFLICT)}）。`,
+      );
+      for (const line of conflictAdviceLines({ number: scan.hit, baseRef: null })) {
+        log(line);
+      }
+      return CODE.CONFLICT;
+    }
+    if (cls === "mergeable" && scan.hit) {
+      log(
+        `[ship] 当前分支的开放 PR #${scan.hit} 可合并（不是冲突）⇒ 归不到 build 是另一回事：` +
+          `sha 没推上去，或平台还没开跑（${codeTag(CODE.CI_PENDING)}）。`,
+      );
+      return CODE.CI_PENDING;
+    }
+    /** 分型不了的原因，逐字念事实（不猜）。 */
+    let why = "当前不在任何分支上";
+    if (branch) {
+      why = scan.hit ? "PR 可合并状态缺键 / 回读没跑起来" : "当前分支没有开放 PR，或开放清单取不到";
+    }
+    log(
+      `[ship] 「归不到 build」的可合并性分型取不到读数（${why}）⇒ 只能报未知，不猜` +
+        `（${codeTag(CODE.READOUT_MISSING)}）。`,
+    );
+    return CODE.READOUT_MISSING;
   }
   const rawStatus = fetchBuildStatus(run, slug, target);
   if (!rawStatus) {
