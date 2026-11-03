@@ -136,7 +136,6 @@ import {
 import { resolveGateCommand, resolveMergeBatch, runGate } from "./base-check/hook-steps.mjs";
 import {
   didNotRunSide,
-  isDidNotRunShaped,
   judge,
   judgeMergeState,
   nextSteps,
@@ -178,7 +177,9 @@ export {
  * `../.wt-base-check`，那会把 worktree 留在仓库的父目录里，忘记删就永久占位
  * （而且会被某些工具的目录遍历扫到）。放 `os.tmpdir()` 下不会有这个问题。
  *
- * @param {{argv: string[], label: string, ref: string, keep?: boolean, json?: boolean}} input
+ * @param {{argv: string[], label: string, ref: string, keep?: boolean, json?: boolean, mergeState?: {into: string} | null}} input
+ *   （`mergeState` 是 `--merge-state` 那一档的输入：`into` 是合并目标 ref。只接
+ *   单命令档；给它的那一跑问的是「分支 ⊕ 目标」那棵树，见 `evaluateMergeState()`。）
  * @returns {number} 退出码（0 = 事实已复算；1 = 复算过程失败）
  */
 export function baseCheck({ argv, label, ref, keep = false, json = false, mergeState = null }) {
@@ -408,6 +409,7 @@ export function baseCheckMany({
  */
 function evaluateMergeState({ commands, into, ref, keep = false, json = false }) {
   /* 本检出那一侧：先跑、先收（与 `baseCheckMany` 同口径）。 */
+  /** @type {Array<{code: number, output: string}>} */
   const current = [];
   for (const c of commands) {
     current.push(runGate(c.argv, ROOT));
@@ -429,6 +431,7 @@ function evaluateMergeState({ commands, into, ref, keep = false, json = false })
       `${into}@${intoSha.slice(0, 8)} ⊕ HEAD ${headSha.slice(0, 8)} 这棵树上 —— ` +
       "本地绿证明不了它绿（ISSUE #3043）\n",
   );
+  /** @type {string[]} */
   const attempts = [];
   let worktreePath = null;
   let dependencyLink = null;
@@ -444,6 +447,12 @@ function evaluateMergeState({ commands, into, ref, keep = false, json = false })
         fail(`建合并态 worktree 失败（${into}@${intoSha.slice(0, 8)}）：${add.stderr}`);
         return 1;
       }
+    }
+    if (!worktreePath) {
+      /* 循环保证到不了这里（两次都失败已在上面的 `attempt === 1` 分支 return 1）——
+       * 显式收口与 `baseCheckMany` 同一个用途：让类型收窄，不是判据。 */
+      fail(`建合并态 worktree 失败（${into}@${intoSha.slice(0, 8)}）：两次都没成功`);
+      return 1;
     }
     dependencyLink = linkDependencies(ROOT, worktreePath);
     /* `--no-commit`：要的是「合并后的树」，不是一笔合并提交 —— 停在提交之前，
@@ -773,15 +782,20 @@ function main(argv) {
   /* `--merge-into <ref>` 是**值旗标**：它的值要从 argv 里摘出来，不能混进 args
    * （args 是要复算的命令本身，混进去会被当成命令的第一个词）。 */
   let mergeInto = null;
+  /** @type {string[]} */
   const cleaned = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
+    if (a === undefined) {
+      /* `noUncheckedIndexedAccess` 下的形状兜底：进程给不出这一位时没有词可摘。 */
+      continue;
+    }
     if (a === "--merge-into") {
       mergeInto = argv[i + 1] ?? "";
       i++;
       continue;
     }
-    if (typeof a === "string" && a.startsWith("--merge-into=")) {
+    if (a.startsWith("--merge-into=")) {
       mergeInto = a.slice("--merge-into=".length);
       continue;
     }
