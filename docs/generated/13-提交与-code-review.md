@@ -9654,6 +9654,15 @@ exec node scripts/check-pending-merge-loss.mjs "$2"          # ② 内容档（#
    不自动登记 `KNOWN_FAILED_FILES`、不自动改判据 —— 那是判断，判据只保证**事实**
    这一半可复算。临时 worktree 建在系统临时目录、跑完即删（`--keep` 保留人工排查）。
 
+   **并行 worktree 的落点口径**（ISSUE #2935 / AGENTS 硬规则 30）：`git worktree add`
+   的目标路径只有两个合法落点 —— 仓内 `.worktrees/`（已入 `.gitignore`，检出内容
+   不进库）或系统临时目录（`mkdtempSync(join(tmpdir(), …))`，本节的 `base-check.mjs`
+   与 `tests/helpers/probe-worktree.ts` 就是后者）。**唯独不许落 `.git/` 下**：
+   Vite/vitest 的 `server.fs.deny` 默认含 `**/.git/**`，落进去的检出里 DOM 档用例
+   在模块加载期就被 deny（报错是 "Cannot find module" 族，指不到真实原因）；且 `.git/`
+   是 git 自己的簿记目录，不是放工作树的地方。契约判据
+   `tests/worktree-location.test.ts` 扫全仓调用点守着这条（正/负控在场）。
+
 2. **判断它挡不挡路**：挡路（硬闸类，所有人都提交不了）就地修掉；不挡路（棘轮类、
    或测试基线红）按 §11.12 登记进 `KNOWN_FAILED_FILES` 并写清归属与「别处更强的执行者」。
 3. **修了就写清归属**：硬闸红随本批一起修时，**单独一个 commit + 单独一条

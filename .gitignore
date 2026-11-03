@@ -41,6 +41,13 @@ MERGE_MSG
 COMMIT_EDITMSG
 SQUASH_MSG
 
+# 并行工作树（git worktree）的仓内落点（ISSUE #2935 / AGENTS 硬规则 30）：
+# worktree 只许落在这里或系统临时目录，**唯独不许落 `.git/` 下** —— Vite/vitest 的
+# `server.fs.deny` 默认含 `**/.git/**`，落在那下面的检出里 DOM 档用例在模块加载期
+# 就被 deny。仓内落点本身不入库：它是别的分支的检出，进 git 等于把「谁在并行做什么」
+# 当内容分发出去。
+/.worktrees/
+
 # local env files
 # do not commit any .env files to git, except for the .env.example file. https://create.t3.gg/en/usage/env-variables#using-environment-variables
 .env
