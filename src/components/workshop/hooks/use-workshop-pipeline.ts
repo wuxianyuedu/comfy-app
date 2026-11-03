@@ -446,7 +446,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       }
     })();
     // 仅首挂载执行一次；闭包读取经 ref，避免陈旧 state
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
   }, []);
 
   /* Phase 4（设计 §7）：完成状态以 production 表的 progress 为单一持久来源。

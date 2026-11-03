@@ -44,7 +44,7 @@ export function useDefaultValueSeeding(params: {
     seedRef.current = activeSeedKey;
     baselineRef.current = fresh;
     setValues(fresh);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅在 workflow/模式变化时整表播种，IO 变化走上面的保覆盖刷新
+    // oxlint-disable-next-line react/exhaustive-deps -- 仅在 workflow/模式变化时整表播种，IO 变化走上面的保覆盖刷新
   }, [workflowIO, workflowId, effectiveMode]);
 
   return { values, setValues };

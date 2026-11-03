@@ -110,7 +110,7 @@ export function useSettingsPage(options?: {
     }
     /* 设置是**瞬时页签**（切走即退场），通常挂载时的初值就够。这一条 effect 只
      * 覆盖「设置已挂载时又跳进来一次」：登记待落定的目标，仍不在这里消费。 */
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // oxlint-disable-next-line react/set-state-in-effect
     setPendingJump(requested);
     setSection(requested);
   }, [initialSection]);

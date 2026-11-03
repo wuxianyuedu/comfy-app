@@ -206,7 +206,7 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
     /* patch 是把映射写回节点的唯一通道；它由 CanvasNode 的 useCallback(id,
      * setNodes) 定义，本 hook 里只需在 workflow 变化时用一次，故显式忽略其
      * 依赖（与下方 seededFor / 筛选 effect 同口径）。 */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
   }, [d.kind, d.workflowId]);
 
   /* IO 加载完成后用工作流的默认值给动态表单播种一次，好让
@@ -230,7 +230,7 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
      * 本 hook 每次渲染拿到的都是同一个引用；`seededFor` 也只在
      * 「workflowId 换了」那一刻放行，与上面那段同口径（规范 §13.4 的
      * 「规则静态盲区」——按 id 触发的意图，静态推不出来）。 */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
   }, [wfIO, d.kind, d.workflowId]);
 
   /* Issue 1: 当「模型标签 / 来源」筛选变化导致当前已选
@@ -291,7 +291,7 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
     /* `patch` / `d` / `setTimeout` 之外还读了 `seededFor`（ref，稳定引用）——
      * 三个筛选条件的变化才是本 effect 的触发点；`d` 是渲染期新对象，
      * 挂进依赖会让每次节点数据变动都重跑一遍 `setTimeout(0)` 的重置。 */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
   }, [modelFilter, sourceFilter, wfList, d.kind, d.workflowId]);
 
   return {

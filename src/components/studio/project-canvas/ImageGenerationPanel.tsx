@@ -82,7 +82,7 @@ export function ImageGenerationPanel({
   // 把`patch` 放在 ref 里，好让取消处理器（由异步
   // 回调触发）总能读到最新的值，而不必被重建。
   const patchRef = useRef(patch);
-  // eslint-disable-next-line react-hooks/refs -- 渲染期把最新 props 写入 ref，供异步取消回调读取最新值（刻意模式）
+  // oxlint-disable-next-line react/refs -- 渲染期把最新 props 写入 ref，供异步取消回调读取最新值（刻意模式）
   patchRef.current = patch;
 
   /* 节点拿到 taskId（生成开始）时，设为全局面板活跃

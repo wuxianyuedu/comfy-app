@@ -252,7 +252,7 @@ export function MultiModeSelect({
                  * `jsx-a11y/click-events-have-key-events` 只读字面量 `onKeyDown`
                  * —— 规则认不出展开。豁免已在 `scripts/.a11y-rule-ledger.json`
                  * 的 `inlineExemptions` 登记（守它的是 `check-click-keyboard.cjs`）。 */
-                /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 键出口是 simpleKeyHandler 的属性展开，规则读不到 */
+                /* oxlint-disable-next-line jsx_a11y/click-events-have-key-events -- 键出口是 simpleKeyHandler 的属性展开，规则读不到 */
                 <div
                   className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors ${
                     isSelected

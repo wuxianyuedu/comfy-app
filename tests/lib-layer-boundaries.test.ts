@@ -21,7 +21,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
-import eslintConfig from "@/../eslint.config.js";
+import oxlintConfig from "@/../oxlint.parity.config.mjs";
 
 type ElementDef = { pattern: string; type: string };
 type Policy = {
@@ -29,22 +29,30 @@ type Policy = {
   from?: { element?: { type?: string } };
 };
 
-/** 从扁平配置里取出 boundaries 那一节（含 elements 声明与策略）。 */
+/**
+ * 从 **oxlint 判决配置**里取出 boundaries 那一节（含 elements 声明与策略）。
+ *
+ * #2777 PR-B 起 boundaries 的生效面在 oxlint（jsPlugin `boundaries`）；
+ * `eslint.config.js` 只剩 16 条 oxlint 没有等价实现的策略，不再承载分层边界。
+ */
 function boundariesSection(): { elements: Array<ElementDef>; policies: Array<Policy> } {
   /* SAFETY: 类型断言已复核 */
-  const configs = eslintConfig as unknown as Array<{
-    plugins?: Record<string, unknown>;
-    rules?: Record<string, unknown>;
+  const config = oxlintConfig as unknown as {
+    overrides?: Array<{ rules?: Record<string, unknown> }>;
     settings?: Record<string, unknown>;
-  }>;
-  const section = configs.find((c) => Boolean(c.plugins?.boundaries));
-  expect(section, "eslint.config.js 里找不到 boundaries 配置节").toBeTruthy();
+  };
   /* SAFETY: 类型断言已复核 */
-  const elements = (section?.settings?.["boundaries/elements"] ?? []) as Array<ElementDef>;
-  /* SAFETY: 类型断言已复核 */
-  const rule = section?.rules?.["boundaries/dependencies"] as
-    | [string, { policies?: Array<Policy> }]
-    | undefined;
+  const elements = (config.settings?.["boundaries/elements"] ?? []) as Array<ElementDef>;
+  let rule: [string, { policies?: Array<Policy> }] | undefined;
+  for (const one of config.overrides ?? []) {
+    const candidate = one.rules?.["boundaries/dependencies"] as
+      | [string, { policies?: Array<Policy> }]
+      | undefined;
+    if (candidate) {
+      rule = candidate;
+    }
+  }
+  expect(rule, "oxlint 判决配置里找不到 boundaries/dependencies").toBeTruthy();
   return { elements, policies: rule?.[1]?.policies ?? [] };
 }
 

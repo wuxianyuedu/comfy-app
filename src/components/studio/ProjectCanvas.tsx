@@ -319,7 +319,7 @@ function CanvasInner({
      * 独立 effect 接管（选中项 / 节点 / 连线各有一条）。
      * 把它挂上完整依赖会让每次节点变动都重跑一遍整段水合，把用户刚拖的
      * 位置覆盖回库里的旧值。 */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
   }, []);
 
   /* MiniMap 用的「稳定身份 → 颜色」查表。不依赖任何东西

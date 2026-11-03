@@ -83,7 +83,7 @@ export function useModelLibrary(): ModelLibraryController {
     /* 刻意只依赖 `[]`：本 effect 的语义就是「挂载时同步一次」。`syncMut` 是
      * mutation 稳定引用、`reload` 已收进 ref；把它们列进来正是上面那条
      * 自激循环的成因，不是「漏了依赖」。 */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
   }, []);
 
   /* react-query 数据 → 本地行：`models` 是 `listQ.data` 的纯派生，不是独立可变状态。

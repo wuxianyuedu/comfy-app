@@ -46,7 +46,7 @@ const CANARY = "scripts/eslint-gate-canary.mjs";
  * 叠起来的极端，不是给慢用例兜底（§11.13：不许靠抬超时掩盖）。
  * 这也是为什么 canary 支持 `--sabotage` 最小集：把调用次数压到最低（这一格现在
  * 全档 3 次），不给「受影响用例」格再添一个重夹具（同族教训见 ISSUE #2606）。 */
-const CASE_TIMEOUT = 600_000;
+const CASE_TIMEOUT = 120_000;
 
 function runCanary(args: Array<string> = []) {
   return spawnSync(process.execPath, [CANARY, ...args], {
@@ -56,9 +56,9 @@ function runCanary(args: Array<string> = []) {
   });
 }
 
-/** 这一趟起了几次 eslint（脚本把它打在读数里，就是为了能被这样断言）。 */
-function eslintCalls(text: string): number {
-  return Number(/eslint 调用 (\d+) 次/.exec(text)?.[1] ?? "-1");
+/** 这一趟起了几次 oxlint（脚本把它打在读数里，就是为了能被这样断言）。 */
+function oxlintCalls(text: string): number {
+  return Number(/oxlint 调用 (\d+) 次/.exec(text)?.[1] ?? "-1");
 }
 
 describe("scripts/eslint-gate-canary.mjs", () => {
@@ -69,11 +69,11 @@ describe("scripts/eslint-gate-canary.mjs", () => {
       expect(r.status, `stdout=${r.stdout ?? ""}\nstderr=${r.stderr ?? ""}`).toBe(0);
       const n = Number(/samples=(\d+)/.exec(r.stdout ?? "")?.[1] ?? "0");
       // 样本被删空却还退 0，是这条判据自己的失效形态（恒绿）
-      expect(n, `样本数不达标，实际：${r.stdout ?? ""}`).toBeGreaterThanOrEqual(11);
+      expect(n, `样本数不达标，实际：${r.stdout ?? ""}`).toBeGreaterThanOrEqual(10);
       /* 两批文件（tests 面与 scripts 面）必须在**同一次** eslint 调用里判完
        * （ISSUE #2862：这一格的墙钟几乎全是冷启动次数，单次约 30s）。
        * 拆回两次调用，功能断言一条都不会红 —— 所以次数要由这里钉住。 */
-      expect(eslintCalls(r.stdout ?? ""), `实际：${r.stdout ?? ""}`).toBe(1);
+      expect(oxlintCalls(r.stdout ?? ""), `实际：${r.stdout ?? ""}`).toBe(1);
     },
     CASE_TIMEOUT,
   );
@@ -85,7 +85,7 @@ describe("scripts/eslint-gate-canary.mjs", () => {
       expect(r.status, `stdout=${r.stdout ?? ""}\nstderr=${r.stderr ?? ""}`).toBe(1);
       expect(`${r.stderr ?? ""}${r.stdout ?? ""}`).toContain("unicorn/no-new-array");
       // 失败路径也要报得出次数（红的时候读不到它，就等于这一格没有这一项读数）。
-      expect(eslintCalls(`${r.stderr ?? ""}${r.stdout ?? ""}`)).toBe(1);
+      expect(oxlintCalls(`${r.stderr ?? ""}${r.stdout ?? ""}`)).toBe(1);
     },
     CASE_TIMEOUT,
   );
@@ -95,7 +95,7 @@ describe("scripts/eslint-gate-canary.mjs", () => {
     () => {
       const r = runCanary(["--sabotage", "no-console"]);
       expect(r.status, `stdout=${r.stdout ?? ""}\nstderr=${r.stderr ?? ""}`).toBe(0);
-      expect(eslintCalls(r.stdout ?? "")).toBe(1);
+      expect(oxlintCalls(r.stdout ?? "")).toBe(1);
     },
     CASE_TIMEOUT,
   );

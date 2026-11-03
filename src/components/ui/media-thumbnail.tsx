@@ -133,7 +133,7 @@ export const MediaThumbnail = React.memo(function MediaThumbnail(props: MediaThu
        * ⚠️ `jsx-a11y/media-has-caption` 要求 `<track>`，本基元刻意不给：它承载缩略图 / 预览（`muted`、
        * 几百像素），ComfyUI 产出的 mp4 本就无音轨，空 `<track>` 只会让读屏器读到假字幕轨（§6.9 口径是
        * 「控件可用」）。真要放带音频视频时，字幕由调用处另给 `<track>`。 */
-      /* eslint-disable-next-line jsx-a11y/media-has-caption -- 静音预览媒体，无音轨可配字幕（空 <track> 反而给读屏器一条假字幕轨） */
+      /* oxlint-disable-next-line jsx_a11y/media-has-caption -- 静音预览媒体，无音轨可配字幕（空 <track> 反而给读屏器一条假字幕轨） */
       <video
         aria-label={alt}
         autoPlay={autoPlay}

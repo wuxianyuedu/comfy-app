@@ -1,16 +1,18 @@
 /**
- * oxlint **parity 闸**配置（#2777 第一步「并行跑」）。
+ * oxlint **判决配置**（#2777 PR-B：判决主体切到 oxlint）。
  *
- * 只承载「eslint 侧当前生效、且 oxlint 有对应实现」的规则，按 eslint 的实际**文件类**
+ * 只承载「eslint 侧原先生效、且 oxlint 有对应实现」的规则，按 eslint 的实际**文件类**
  * 分三档（TS 源码 / scripts 的 js 面 / 根级 *.config.js）；severity 已按台账
  * 「一律对齐到更严一侧」处理。未列出的规则不判 —— 全量预设评估尺仍在
  * `oxlint.config.ts`，两者用途不同，别合并。
  *
  * 生成口径：eslint --print-config 的 14 份读数并集（台账
- * `log/tools/eslint-oxlint-parity.md`），逐条映射到 oxlint 规则名。本文件是**观察期
- * 的对照闸**，PR-B 摘 eslint 时它取代 eslint 成为唯一判决面。
+ * `log/tools/eslint-oxlint-parity.md`），逐条映射到 oxlint 规则名。PR-B 起它是
+ * `pnpm run lint` 的**第一判定口**；eslint 侧只剩 16 条 oxlint 没有等价实现的规则
+ * （`eslint.config.js`，命令 `pnpm run lint:policy`），两者串行、都拦。
  *
- * 本文件不改依赖、不动 eslint：`lint` 串行跑 eslint 与本闸，两边都判。
+ * 为什么保留文件名里的 `parity`：它是台账号（`log/tools/eslint-oxlint-parity.md`）
+ * 的锚，改名会把 29 处依赖点里的文档引用全部打散；语义已由本节头更新。
  */
 import { defineConfig } from "oxlint";
 

@@ -54,7 +54,7 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
 vi.mock("~/trpc/vanilla", () => {
   const pending = <T,>() =>
     // 永不 resolve：本用例只断言加载态，不等详情返回
-    // eslint-disable-next-line @typescript-eslint/no-empty-function -- never-resolve pending 桩
+    // oxlint-disable-next-line typescript/no-empty-function -- never-resolve pending 桩
     new Promise<T>(() => {});
   const query = () => vi.fn(() => pending());
   return {
