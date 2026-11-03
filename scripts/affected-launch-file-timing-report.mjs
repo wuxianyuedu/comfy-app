@@ -1,3 +1,4 @@
+// oxlint-disable-next-line awesomeness/no-novel-comments -- 模块头：说明这一份补的是哪一格、三条口径从哪来（非显然约束）
 /**
  * `affected-launch-file-timing-report.mjs` —— 「跑了哪些用例」那张清单的**另一半**：
  * 每份用例自己花了多久（ISSUE #2683）。
@@ -35,6 +36,7 @@ export const SLOWEST_SHOWN = 5;
 /** 逐份清单最多念几行（超出部分只念条数 —— 与 `MAX_LISTED` 同一动机）。 */
 export const TIMED_SHOWN = 15;
 
+// oxlint-disable-next-line awesomeness/no-novel-comments -- JSDoc 带 @param/@returns，是公开签名的一部分
 /**
  * 毫秒 → 人读时长，与 `affected-launch-rerun-report.mjs` 的 `fmtSec` 同形
  * （同一屏里两种刻度就是「这个数是什么单位」重新变成一个问题）。
@@ -50,6 +52,7 @@ function secs(ms) {
   return `${(value / 1000).toFixed(value < 100 ? 2 : 1)}s`;
 }
 
+// oxlint-disable-next-line awesomeness/no-novel-comments -- JSDoc 带参数/返回类型，是公开签名的一部分
 /**
  * 这一跑的**逐份用时**读数（quiet 档的收尾那一段）。
  *
