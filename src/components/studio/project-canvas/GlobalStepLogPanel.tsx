@@ -307,7 +307,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
               emptySlot={
                 <EmptyState
                   icon={FileText}
-                  title={taskId !== null ? "等待日志…" : "运行生成后此处会显示执行步骤日志"}
+                  title={taskId === null ? "运行生成后此处会显示执行步骤日志" : "等待日志…"}
                   variant="panel"
                 />
               }

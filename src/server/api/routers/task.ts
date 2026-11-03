@@ -296,16 +296,16 @@ export const taskRouter = createTRPCRouter({
        * 越界（id / projectId 形状会把结果甩出产物根）时只删库行并把原因落日志，
        * 不允许把一个根外路径交给 `fs.rm(..., { recursive: true })`。 */
       const dir = taskOutputDir(input.id, task.projectId);
-      if (dir !== null) {
+      if (dir === null) {
+        logger.warn(
+          `[task.delete] 产物目录越界，只删库行不动磁盘：taskId=${input.id} projectId=${task.projectId}`,
+        );
+      } else {
         fsPromises.rm(dir, { recursive: true, force: true }).catch((error: unknown) => {
           logger.warn(
             `[task.delete] 产物目录没删掉（库行照删）：${dir} — ${errorMessage(error, String(error))}`,
           );
         });
-      } else {
-        logger.warn(
-          `[task.delete] 产物目录越界，只删库行不动磁盘：taskId=${input.id} projectId=${task.projectId}`,
-        );
       }
       await taskRepository.delete(input.id);
       return { ok: true };

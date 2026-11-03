@@ -277,7 +277,7 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
         lastActivityRef.current = now;
       }
     },
-    { ms: taskId !== null ? 10_000 : null, immediate: false },
+    { ms: taskId === null ? null : 10_000, immediate: false },
   );
 
   const clear = () => {

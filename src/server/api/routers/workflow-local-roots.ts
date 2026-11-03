@@ -40,7 +40,7 @@ function getLocalWorkflowRoots(): Array<string> {
     .split(/[\n,]/)
     .map((part) => part.trim())
     .filter(Boolean);
-  return derived !== null ? [derived, ...extra] : extra;
+  return derived === null ? extra : [derived, ...extra];
 }
 
 /* 给「磁盘上有、但还没导入过」的文件生成的稳定、确定的占位 id。 */
@@ -142,7 +142,7 @@ function getAllowedLocalWorkflowRoots(): Array<string> {
     .split(/[\n,]/)
     .map((s) => s.trim())
     .filter(Boolean);
-  return derived !== null ? [derived, ...extra] : extra;
+  return derived === null ? extra : [derived, ...extra];
 }
 
 /** 判定 absPath 是否落在允许导入的根目录内（忽略大小写 / 正反斜杠）。 */

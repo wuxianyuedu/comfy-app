@@ -128,7 +128,7 @@ export function FormField({
     ...(error !== undefined && error !== null && error !== ""
       ? { "aria-invalid": true as const }
       : {}),
-    ...(errorId !== undefined ? { "aria-describedby": errorId } : {}),
+    ...(errorId === undefined ? {} : { "aria-describedby": errorId }),
   };
 
   /* `htmlFor` 只在**真的接得上**时才给：`children` 是 render-prop 时，

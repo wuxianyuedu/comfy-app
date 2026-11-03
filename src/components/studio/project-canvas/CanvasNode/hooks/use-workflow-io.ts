@@ -184,7 +184,7 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
           const dbDefault = typeof tpl.defaultMode === "string" ? tpl.defaultMode : null;
           const inferredMode =
             typeof tpl.taskType === "string" && tpl.taskType !== "" ? tpl.taskType : null;
-          const modes = dbModes.length > 0 ? dbModes : inferredMode !== null ? [inferredMode] : [];
+          const modes = dbModes.length > 0 ? dbModes : inferredMode === null ? [] : [inferredMode];
           const defaultMode =
             dbDefault !== null && dbDefault !== "" && modes.includes(dbDefault)
               ? dbDefault

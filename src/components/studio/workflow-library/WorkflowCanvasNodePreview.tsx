@@ -278,7 +278,7 @@ export function WorkflowCanvasNodePreview({
   /* 生效模式名（chip 上显示的那个）。卡片刻的名字、表单按它解析的 required /
    * seed 行为、「在编辑器中打开」带过去的模式，全都取自同一个生效模式。 */
   const effectiveModeLabel = useMemo(
-    () => (effectiveMode !== null ? modeLabel(effectiveMode) : modeLabel(taskType)),
+    () => (effectiveMode === null ? modeLabel(taskType) : modeLabel(effectiveMode)),
     [effectiveMode, taskType],
   );
   const outputWiring = useOutputWiring({

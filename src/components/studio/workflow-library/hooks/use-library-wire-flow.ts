@@ -468,9 +468,9 @@ export function libraryConnectionRefusal(
     /* 输出侧只需要起手那一行是**真实存在的输出行**：`targetHandle` 是卡片圆点
      * 自己的 handle id（端口名，不是 ioKey 键空间），合法性不由它决定 ——
      * 方向已在 handle 的 source / target 类型上收窄。 */
-    return ctx.io?.[sourceHandle] !== undefined
-      ? null
-      : "起手的那一行不是这份工作流的输出行（输出行才能连到右列卡片）";
+    return ctx.io?.[sourceHandle] === undefined
+      ? "起手的那一行不是这份工作流的输出行（输出行才能连到右列卡片）"
+      : null;
   }
   return "只能「对外参数 → 宿主卡片」或「宿主输出行 → 对外输出参数」";
 }

@@ -148,7 +148,7 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
           <Input
             className="text-ink-bright placeholder:text-ink-fainter h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-xs focus-visible:ring-0"
             onChange={textHandler(setSearch)}
-            placeholder={folder !== null ? "在当前分类搜索" : "搜索全部素材"}
+            placeholder={folder === null ? "搜索全部素材" : "在当前分类搜索"}
             type="text"
             value={search}
           />
@@ -170,9 +170,9 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
         <uploadPicker.Input />
         <Hint
           label={
-            folder !== null
-              ? `上传到「${folders.find((fld) => fld.id === folder)?.name ?? folder}」`
-              : "上传到「参考素材」"
+            folder === null
+              ? "上传到「参考素材」"
+              : `上传到「${folders.find((fld) => fld.id === folder)?.name ?? folder}」`
           }
           wrap
         >

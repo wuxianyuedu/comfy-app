@@ -108,28 +108,7 @@ export function ContentAssetBody({
 
   return (
     <div className="relative">
-      {mediaSrc !== null ? (
-        isPic ? (
-          <MediaThumbnail
-            alt={data.mediaName ?? "参考图"}
-            className="border-border-strong bg-canvas-deep h-65 w-full rounded-xl border object-cover"
-            onClick={() => {
-              if (imageCount > 1) {
-                gallery.setIndex(0);
-                gallery.setOpen(true);
-              }
-            }}
-            src={mediaSrc}
-            style={imageCount > 1 ? { cursor: "pointer" } : undefined}
-          />
-        ) : (
-          <MediaThumbnail
-            className="border-border-strong bg-canvas-deep h-65 w-full rounded-xl border object-cover"
-            controls
-            src={mediaSrc}
-          />
-        )
-      ) : (
+      {mediaSrc === null ? (
         /* 虚线大区改为 drop-only。
          *  - 不再是按钮元素，所以点击**不会**触发文件选择器（用户要的就是这点）。
          *  - 仍然需要 `nodrag nopan` + onPointerDown/onMouseDown stopPropagation，
@@ -184,6 +163,25 @@ export function ContentAssetBody({
           <Icon className="opacity-60" name={isPic ? "image" : "film"} size={38} />
           <span className="text-xs">{isPic ? "拖入上传图片" : "拖入上传视频"}</span>
         </div>
+      ) : isPic ? (
+        <MediaThumbnail
+          alt={data.mediaName ?? "参考图"}
+          className="border-border-strong bg-canvas-deep h-65 w-full rounded-xl border object-cover"
+          onClick={() => {
+            if (imageCount > 1) {
+              gallery.setIndex(0);
+              gallery.setOpen(true);
+            }
+          }}
+          src={mediaSrc}
+          style={imageCount > 1 ? { cursor: "pointer" } : undefined}
+        />
+      ) : (
+        <MediaThumbnail
+          className="border-border-strong bg-canvas-deep h-65 w-full rounded-xl border object-cover"
+          controls
+          src={mediaSrc}
+        />
       )}
       {/* "水逐渐装满" 进度覆盖层 — 仅当 status ===
        *  "running" 时渲染。absolute inset-0 + pointer-events-none 让它覆盖

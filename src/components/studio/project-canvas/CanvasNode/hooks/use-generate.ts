@@ -214,7 +214,7 @@ export function useGenerate({
                   resultPath: result.localPath,
                   resultMediaType: result.mediaType,
                   inputImage: imported ?? null,
-                  mode: imported !== null ? "img2img" : "txt2img",
+                  mode: imported === null ? "txt2img" : "img2img",
                 };
             /* 节点 id 由出口生成 —— 先在本地算一份，好让紧接着的自动连线
              * 用同一个 id（出口的 `placeCanvasNode` 只吃「已经定好的 id」

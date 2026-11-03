@@ -62,7 +62,7 @@ export type ManagedSpawnResult =
  *  用类型谓词让两个路径在分支内收窄成 string（函数返回 boolean 收不了窄）。 */
 function hasRedirectPair(
   opts: ManagedSpawnOptions,
-): opts is ManagedSpawnOptions & { redirectStdoutFile: string; redirectStderrFile: string } {
+): opts is ManagedSpawnOptions & { redirectStderrFile: string; redirectStdoutFile: string } {
   return opts.redirectStdoutFile !== undefined && opts.redirectStderrFile !== undefined;
 }
 

@@ -259,11 +259,11 @@ export async function generateImage(id: string, input: GenerateImageInput) {
   let prompt: string;
   let negative: string | undefined;
   const shot =
-    input.shotId !== undefined ? state.shots.find((s) => s.id === input.shotId) : undefined;
+    input.shotId === undefined ? undefined : state.shots.find((s) => s.id === input.shotId);
   const character =
-    input.characterId !== undefined
-      ? state.characters.find((c) => c.id === input.characterId)
-      : undefined;
+    input.characterId === undefined
+      ? undefined
+      : state.characters.find((c) => c.id === input.characterId);
   if (shot) {
     prompt = shot.prompt || shot.description;
     negative = shot.negativePrompt || undefined;

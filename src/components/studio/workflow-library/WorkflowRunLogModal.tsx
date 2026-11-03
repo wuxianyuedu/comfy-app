@@ -93,7 +93,7 @@ export function WorkflowRunLogModal({
   }, [open, runs, viewTaskId, onViewTaskIdChange]);
 
   const run: WorkflowRunMeta | null = useMemo(
-    () => (viewTaskId !== null ? (runs.find((r) => r.taskId === viewTaskId) ?? null) : null),
+    () => (viewTaskId === null ? null : (runs.find((r) => r.taskId === viewTaskId) ?? null)),
     [viewTaskId, runs],
   );
   const logs = run?.logs ?? [];

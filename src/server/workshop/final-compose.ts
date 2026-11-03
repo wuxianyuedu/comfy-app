@@ -136,12 +136,16 @@ export async function renderComposition(
     const tmp = path.join(tmpDir, `seg-${s.order}.mp4`);
     const scale = `scale=${COMPOSE_SCALE}`;
     const args =
-      clip !== null
+      clip === null
         ? [
+            "-loop",
+            "1",
             "-i",
             src,
             "-t",
             String(s.durationSec),
+            "-r",
+            "25",
             "-vf",
             scale,
             "-c:v",
@@ -152,14 +156,10 @@ export async function renderComposition(
             tmp,
           ]
         : [
-            "-loop",
-            "1",
             "-i",
             src,
             "-t",
             String(s.durationSec),
-            "-r",
-            "25",
             "-vf",
             scale,
             "-c:v",

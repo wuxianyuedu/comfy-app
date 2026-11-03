@@ -53,7 +53,7 @@ export const StepLogTaskPicker = memo(function StepLogTaskPicker({
           const seq = seqByTaskId.get(id);
           const wn = meta?.workflowName?.trim();
           const st = meta?.status ?? "?";
-          const seqLabel = seq !== null ? `#${seq}` : null;
+          const seqLabel = seq === null ? null : `#${seq}`;
           const titleParts = [seqLabel, wn, st, id].filter(Boolean);
           const displayParts = [seqLabel, wn ?? `task ${id.slice(0, 8)}`, st].filter(Boolean);
           return [

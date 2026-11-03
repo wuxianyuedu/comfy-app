@@ -689,7 +689,7 @@ export function applyParamMapping(args: {
      *  当成「尺寸 · 宽」写进宽度那一行。 */
     const target = resolved[entry.id];
     // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    const byPinKeys = target != null ? values[target] : undefined;
+    const byPinKeys = target == null ? undefined : values[target];
     const supplied = byContract ?? byPinKeys;
     if (supplied === undefined) {
       continue;

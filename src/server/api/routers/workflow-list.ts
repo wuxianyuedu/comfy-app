@@ -250,7 +250,7 @@ export const workflowListProcedures = {
            * 路由只负责把它收窄，不在出口再抄一份声明（ISSUE #1460）。 */
           paramMap: parseWorkflowParamMap(list.paramMap),
           sourcePath: list.sourcePath,
-          source: list.sourcePath !== null ? "local" : "online",
+          source: list.sourcePath === null ? "online" : "local",
           typeLabel: def?.label ?? list.taskType,
           typeCategory: def?.category ?? "image",
           typeDescription: def?.description ?? "",
