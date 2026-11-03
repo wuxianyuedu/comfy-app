@@ -50,7 +50,7 @@ export function ShotReviewDialog({
     }
     void review.review(shot.id);
     // 依赖只认「打开」与「目标镜头」；review 内部有作废守卫。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
   }, [open, shot.id]);
 
   const { verdict, reviewing, regenerating, error } = review;

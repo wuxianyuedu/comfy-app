@@ -56,7 +56,7 @@ const SCRIPT_SOURCE = normalizeControlFlow(
 );
 // 判据脚本是 CJS（`@ts-nocheck`，require 进来是 any），按仓库惯例显式标注返回形状。
 /* SAFETY: 类型断言已复核 */
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+// oxlint-disable-next-line typescript/no-require-imports
 const judge = require("../scripts/check-app-port-vectors.cjs") as {
   decidePythonVerdict: (
     first: Measure,

@@ -51,7 +51,7 @@ function TitleBarTab({
   tab: ShellTab;
 }) {
   return (
-    /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 键等价物是下面那行 `{...simpleKeyHandler(["Space", "Enter"], …)}`（§16.2.4.57）—— 规则认不出属性展开。 */
+    /* oxlint-disable-next-line jsx_a11y/click-events-have-key-events -- 键等价物是下面那行 `{...simpleKeyHandler(["Space", "Enter"], …)}`（§16.2.4.57）—— 规则认不出属性展开。 */
     <div
       aria-selected={active}
       data-no-drag

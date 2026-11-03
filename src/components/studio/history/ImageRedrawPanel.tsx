@@ -49,7 +49,7 @@ export function ImageRedrawPanel({
       failureText: "模板清单加载失败",
     });
     // 只在面板挂载时拉一次（ensureTemplates 自带去重）。
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- ensureTemplates 是稳定回调
+    // oxlint-disable-next-line react/exhaustive-deps -- ensureTemplates 是稳定回调
   }, []);
 
   return (

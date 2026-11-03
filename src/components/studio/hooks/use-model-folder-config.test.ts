@@ -132,7 +132,7 @@ function makeWrapper(explicitClient?: QueryClient) {
     return createElement(
       QueryClientProvider,
       { client: qc },
-      // eslint-disable-next-line react/no-children-prop -- createElement 的第三参即 children，tRPC 的 ProviderProps 要求它带在 props 上
+      // oxlint-disable-next-line react/no-children-prop -- createElement 的第三参即 children，tRPC 的 ProviderProps 要求它带在 props 上
       createElement(TRPCProvider, {
         trpcClient: client,
         queryClient: qc,

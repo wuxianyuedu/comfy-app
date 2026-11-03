@@ -196,7 +196,9 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
     if (head === null) {
       vanished++;
     } else if (
-      (head.split("\n")[0] ?? "").startsWith("/* eslint-disable @typescript-eslint/no-explicit-any")
+      /^\s*(\/\*|\/\/)\s*(eslint|oxlint)-disable @typescript-eslint\/no-explicit-any/.test(
+        head.split("\n")[0] ?? "",
+      )
     ) {
       problems.push(`R6 文件级 no-explicit-any 禁用头(战役已清零,禁止回流):${rel}`);
     }

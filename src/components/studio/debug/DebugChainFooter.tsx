@@ -193,7 +193,7 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
     <>
       {/* `onPointerDown` / `onMouseDown` / `onDragStart` 都是
           `stopPropagation` / `preventDefault` **守卫**，不是交互。 */}
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- 三个都是守卫，不是交互 */}
+      {/* oxlint-disable-next-line jsx_a11y/no-static-element-interactions -- 三个都是守卫，不是交互 */}
       <div
         onDragStart={(event) => {
           event.preventDefault();

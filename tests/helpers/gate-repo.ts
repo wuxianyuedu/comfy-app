@@ -667,7 +667,7 @@ export function defineGateRepo(options: GateRepoOptions) {
      * FixtureParseError，实测）；而本 fixture 不依赖任何其它 fixture ——
      * 空解构是 API 约束，no-empty-pattern 在此属误报，禁用一行。
      * 台账：本仓此形态仅 tests/helpers 两文件四处（本处 + platform-fixtures ×3）。 */
-    // eslint-disable-next-line no-empty-pattern
+    // oxlint-disable-next-line no-empty-pattern
     repo: async ({}, use) => {
       /* 收尾挂在 `use` 之后 —— 用例中途 throw 也跑（这是相对手写 `afterEach` 的收益）。 */
       const handle = createGateRepo(options);

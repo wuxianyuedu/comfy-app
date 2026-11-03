@@ -123,7 +123,7 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
       esRef.current = null;
       // 与「无任务 → 连接已关」这一外部系统事实同步（非渲染级联）：
       // 关掉上一条 EventSource 后把连接指示复位。
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      // oxlint-disable-next-line react/set-state-in-effect
       setConnected(false);
       return;
     }

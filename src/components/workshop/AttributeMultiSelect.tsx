@@ -165,7 +165,7 @@ export function AttributeMultiSelect({
                     {g.options.map((opt) => {
                       const on = selected.has(opt);
                       return (
-                        /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 同上：选项行的键出口是 `simpleKeyHandler` 的展开（`tabIndex` 本轮已补）。 */
+                        /* oxlint-disable-next-line jsx_a11y/click-events-have-key-events -- 同上：选项行的键出口是 `simpleKeyHandler` 的展开（`tabIndex` 本轮已补）。 */
                         <div
                           aria-selected={on}
                           key={opt}

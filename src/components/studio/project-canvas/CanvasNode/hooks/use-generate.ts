@@ -113,7 +113,7 @@ export function useGenerate({
     };
     /* patch 是稳定的（setNodes setter + id）—— 故意省略以避免
      * 重复触发；每个 (status="running", taskId) 只对账一次。 */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
   }, [d.status, taskIdForReconcile]);
 
   /* ── 图片 / 视频生成 ── */

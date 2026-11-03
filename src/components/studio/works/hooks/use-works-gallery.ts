@@ -67,7 +67,7 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
      * 是 async），首帧仍是 `loading: true` 的那一态，与 SSR 输出一致；
      * 规则认的是「effect 体里同步调了一个会 setState 的函数」，而那条判据要防的
      * 是级联渲染 —— 这个调用点不产生它（同一约定见 `use-workspace-tabs`）。 */
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // oxlint-disable-next-line react/set-state-in-effect
     void load();
     /* 画布内的编辑（upsert / rename / delete）会广播这一条，重取即可 ——
      * 装配层不重复实现增量更新。 */

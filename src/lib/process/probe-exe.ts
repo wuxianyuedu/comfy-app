@@ -153,7 +153,7 @@ export function probeExecutable(
      * 「没有码」（它会打出一句「起不来（）」），所以这里刻意不用 `??`。 */
     /* SAFETY: 类型断言已复核 */
     const errno = (probe.error as NodeJS.ErrnoException).code;
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+    // oxlint-disable-next-line typescript/prefer-nullish-coalescing
     const code: string = errno || "UNKNOWN"; // oxlint-disable-line strict-boolean-expressions -- 刻意保留 || 兜底：errno 为空串同样是「没有码」，不能换成 ??
     if (code === "ETIMEDOUT") {
       return { ok: false, failure: { kind: "timeout", timeoutMs } };

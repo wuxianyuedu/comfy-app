@@ -104,7 +104,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
      * 它读 `stepLogCache` 的模块级 Map，静态推不出何时该重算。三条各对应一次
      * 缓存写入：taskId 换（新任务进缓存）、logs 追加、validationErrors 更新。
      * 属规范 §13.4「规则静态盲区」；去掉任一条件会让面板停在旧清单上。 */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
     [logs, validationErrors, taskId],
   );
 

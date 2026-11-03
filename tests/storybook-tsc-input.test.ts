@@ -228,7 +228,7 @@ async function writeNarrowTsconfig(): Promise<{
  */
 function repoExclude(): Array<string> {
   /* SAFETY: 类型断言已复核 */
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  // oxlint-disable-next-line typescript/no-require-imports
   const ts = require("typescript") as {
     readConfigFile: (
       file: string,

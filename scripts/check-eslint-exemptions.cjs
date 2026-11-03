@@ -5,7 +5,7 @@
  *
  * ── 它补的是哪一格 ────────────────────────────────────────────────
  *
- * `eslint.config.js` 里有一批「某条 core 规则对**指定文件**关掉」的台账，形状是
+ * `oxlint.parity.config.mjs` 里有一批「某条 core 规则对**指定文件**关掉」的台账，形状是
  * `{ files: ["a.cjs", "b.ts"], rules: { "<规则>": "off" } }`。那种台账自己的注释写着
  * **何时可移除**（`no-control-regex` 那一块的原话是「若某文件改用非正则方案处理控制字符，
  * 可把该文件从这里摘掉」）—— 而这句话此前**没有任何执行者**：谁把那份文件改干净了，
@@ -23,6 +23,15 @@
  *     同一个判决立第二个执行者，就是给下一次「两套口径不一致」备料（AGENTS 硬规则 28 ③）。
  *   · **多登记 / 陈旧豁免**（台账里有它、现在**没有**命中了）⇒ 此前没有任何东西在读，
  *     本脚本判的就是这一向。
+ *
+ * ── 判决主体切到 oxlint 之后（#2777 PR-B）────────────────────────
+ *
+ * 台账的**出处**已换成 oxlint 判决配置（`loadOxlintConfig()`），不再读
+ * `eslint.config.js`（那份只剩 16 条 oxlint 没有等价实现的策略）。取数仍用
+ * 同进程 `Linter` + 内联 flat 配置跑**规则本体**：`no-control-regex` 是 core 规则，
+ * 这一段不依赖 eslint 的插件/配置面；oxlint CLI 有等价能力（`check-eslint-exemptions`
+ * 的替代实现见 `scripts/eslint-gate-canary.mjs` 的同一形态），但本脚本的三件输入契约
+ * （用例注入 `makeLinter`）先保留到 PR-C 摘依赖时一并切。
  *
  * ── 为什么取数用 `Linter` 而不是起 eslint CLI ───────────────────────
  *
@@ -51,15 +60,15 @@ const path = require("node:path");
 const { Linter } = require("eslint");
 const { parser } = require("typescript-eslint");
 
-/* 复用既有那份件对「真配置」的读法：`loadEslintConfig()` 是每进程一次的去重单飞
- * （`check-a11y-rules.cjs` 的文件头记着为什么只留一个读面：四个读点各求值一次等于把
- * 成本乘四，而配置求值首次实测 40s+），`normalize` 是规则档位的归一
+/* 复用既有那份件对配置的读法：`loadOxlintConfig()` 是每进程一次的去重单飞
+ * （`check-a11y-rules.cjs` 的文件头记着为什么只留一个读面），`normalize` 是规则档位的归一
  * （`"off"` 与 `["off"]` 同义）。这里不另写第二份配置加载器。 */
-const { loadEslintConfig, normalize } = require("./check-a11y-rules.cjs");
+const { loadOxlintConfig, normalize } = require("./check-a11y-rules.cjs");
 
 const TAG = "[eslint-exemptions]";
 const ROOT = path.resolve(__dirname, "..");
-const ESLINT_CONFIG_REL = "eslint.config.js";
+/** #2777 PR-B：台账的**唯一出处**已随判决主体切到 oxlint 判决配置。 */
+const OXLINT_CONFIG_REL = "oxlint.parity.config.mjs";
 
 /**
  * 本判据核的那批**文件级**豁免台账 —— 逐条点名，不做「扫全部规则」的启发式。
@@ -304,7 +313,7 @@ function printVerdict(v, reportOnly) {
       console.error(`${TAG}   · ${s}`);
     }
     console.error(
-      `${TAG} 出口：从 ${ESLINT_CONFIG_REL} 的那块 files 数组里把上面这些摘掉（还在违例的那些留着）。`,
+      `${TAG} 出口：从 ${OXLINT_CONFIG_REL} 的那块 files 数组里把上面这些摘掉（还在违例的那些留着）。`,
     );
     console.error(`${TAG} 依据：${v.removalCriterion}。`);
     console.error(
@@ -322,10 +331,11 @@ async function main() {
   /** @type {ConfigBlock[]} */
   let config;
   try {
-    config = /** @type {ConfigBlock[]} */ (await loadEslintConfig());
+    const oxlintConfig = await loadOxlintConfig();
+    config = /** @type {ConfigBlock[]} */ (oxlintConfig.overrides ?? []);
   } catch (error) {
     console.error(
-      `${TAG} ✗ 取不到 ${ESLINT_CONFIG_REL} 的求值结果 ⇒ 没结论（不是「台账是干净的」）：`,
+      `${TAG} ✗ 取不到 ${OXLINT_CONFIG_REL} 的求值结果 ⇒ 没结论（不是「台账是干净的」）：`,
       String(error).split("\n")[0],
     );
     return 2;

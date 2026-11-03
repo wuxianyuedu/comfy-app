@@ -108,7 +108,7 @@ export function ContentAssetBody({
          *  节点 wrapper 会进入 drag-suspect 状态吞掉 drop；onDragOver 必须 preventDefault。 */
         /* 拖放落点（`onDrop` / `onDragOver` / `onDragLeave`）—— HTML5 DnD 规范
            要求的是**提供替代路径**（右下角 FAB 选文件），不是给容器加个键。 */
-        /* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- DnD 落点，不是点击交互 */
+        /* oxlint-disable-next-line jsx_a11y/no-static-element-interactions -- DnD 落点，不是点击交互 */
         <div
           className={`nodrag nopan text-ink-soft flex h-65 w-full flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed transition-colors ${
             isDropOver
