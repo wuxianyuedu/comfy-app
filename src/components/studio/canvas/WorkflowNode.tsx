@@ -181,7 +181,9 @@ export const FlowNode = React.memo(function FlowNode({
           displayTitle={displayTitle}
           io={io}
           isCollapsed={isCollapsed}
-          onToggleCollapsed={() => setUserCollapsed((value) => !value)}
+          onToggleCollapsed={() => {
+            setUserCollapsed((value) => !value);
+          }}
           outputs={entries.outputs}
           palette={palette}
           role={role}

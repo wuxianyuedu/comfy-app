@@ -63,7 +63,9 @@ export function WorkflowLibrary({
       <WorkflowLibraryHeader
         modelFilter={c.modelFilter}
         modelTags={c.modelTags}
-        onManageModels={() => c.setShowModelManager(true)}
+        onManageModels={() => {
+          c.setShowModelManager(true);
+        }}
         onModelFilterChange={c.setModelFilter}
         onSourceFilterChange={c.setSourceFilter}
         onToggleImport={c.toggleImport}
@@ -193,7 +195,9 @@ export function WorkflowLibrary({
         <ModelTagManager
           initialTags={c.modelTags}
           onChanged={c.loadModelTags}
-          onClose={() => c.setShowModelManager(false)}
+          onClose={() => {
+            c.setShowModelManager(false);
+          }}
         />
       )}
     </WorkspaceFrame>

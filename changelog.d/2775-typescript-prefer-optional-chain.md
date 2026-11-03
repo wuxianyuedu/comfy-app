@@ -1,6 +1,7 @@
 ## Changed
 
-oxlint `typescript/prefer-optional-chain` 清零（#2775）：本批 `scripts/**` 39 份；`src/**` 那 4 份随下一批。
+oxlint `typescript/prefer-optional-chain` 全仓清零（#2775）：77 处 / 40 份
+（`scripts/**` 39 份 + `src/**` 4 份里的那一批）。
 
 自动 fixer 收敛 64 处（`a && a.b` → `a?.b`、`arr && arr[0]` → `arr?.[0]`），
 它不动的 13 处手补，全部是同一类：**尾项是右侧操作数**的形态

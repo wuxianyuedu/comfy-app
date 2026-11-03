@@ -77,9 +77,8 @@ export function mediaReferenceFilename(reference: unknown): string {
   if (reference == null || typeof reference !== "object") {
     return "";
   }
-  const raw: unknown = Array.isArray(reference)
-    ? /* SAFETY: 类型断言已复核 */ (reference as Array<unknown>)[0]
-    : reference;
+  /* SAFETY: 类型断言已复核 */
+  const raw: unknown = Array.isArray(reference) ? (reference as Array<unknown>)[0] : reference;
   // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (raw != null && typeof raw === "object") {
     /* SAFETY: 类型断言已复核 */

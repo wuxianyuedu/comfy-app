@@ -191,9 +191,7 @@ describe("deriveEncapsulationStatus", () => {
       mode: "t2i",
       requiredInputs: ["prompt", "size"],
     });
-    const flags = Object.fromEntries(
-      status.entries.map((entry) => [entry.id, entry.required]),
-    );
+    const flags = Object.fromEntries(status.entries.map((entry) => [entry.id, entry.required]));
     expect(flags.prompt).toBe(true);
     expect(flags.size).toBe(true);
     expect(flags.negative).toBe(false);
@@ -235,11 +233,7 @@ describe("deriveEncapsulationStatus：契约注册表覆盖", () => {
         { id: "reference-image", label: "参考图 / 输入图", control: "image" },
       ],
     });
-    expect(status.entries.map((e) => e.id)).toEqual([
-      "prompt",
-      "size",
-      "reference-image",
-    ]);
+    expect(status.entries.map((e) => e.id)).toEqual(["prompt", "size", "reference-image"]);
     // 契约里新增的口（IO 中没有能自动落上的）→ 未配置显式可见
     const ref = status.entries.find((e) => e.id === "reference-image");
     expect(ref?.targetIoKey).toBeNull();

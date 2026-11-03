@@ -59,7 +59,12 @@ export function ProjectOutputsMetadataSheet({
  与设置页两个抽屉（已迁`ui/sheet`）是同一件事的两套写法。
  遮罩与面板都由基元 Portal，顶部让出标题行的硬判据（ISSUE #310）
  收在`dialogBackdropClass()` 里。 */}
-      <Sheet onOpenChange={(next) => !next && onClose()} open={selected !== null}>
+      <Sheet
+        onOpenChange={(next) => {
+          if (!next) onClose();
+        }}
+        open={selected !== null}
+      >
         <SheetContent
           aria-label={`产出 #${selected?.id.slice(-4) ?? ""}`}
           className="gap-0 p-0"

@@ -129,8 +129,8 @@ describe("readFileAsDataUrl", () => {
 
   it("无 FileReader 的环境（SSR）reject 而非抛 ReferenceError", async () => {
     const original = globalThis.FileReader;
-    globalThis.FileReader =
-      /* SAFETY: 类型断言已复核 */ undefined as unknown as typeof globalThis.FileReader;
+    /* SAFETY: 类型断言已复核 */
+    globalThis.FileReader = undefined as unknown as typeof globalThis.FileReader;
     try {
       /* SAFETY: 类型断言已复核 */
       await expect(readFileAsDataUrl({} as File)).rejects.toThrow("当前环境不支持读取文件");

@@ -38,9 +38,8 @@ type FormFieldContextValue<
   name: TName;
 };
 
-const FormFieldContext = React.createContext<FormFieldContextValue>(
-  /* SAFETY: 类型断言已复核 */ {} as FormFieldContextValue,
-);
+/* SAFETY: 类型断言已复核 */
+const FormFieldContext = React.createContext<FormFieldContextValue>({} as FormFieldContextValue);
 
 function FormField<
   TFieldValues extends FieldValues = FieldValues,
@@ -57,9 +56,8 @@ type FormItemContextValue = {
   id: string;
 };
 
-const FormItemContext = React.createContext<FormItemContextValue>(
-  /* SAFETY: 类型断言已复核 */ {} as FormItemContextValue,
-);
+/* SAFETY: 类型断言已复核 */
+const FormItemContext = React.createContext<FormItemContextValue>({} as FormItemContextValue);
 
 function useFormField() {
   const fieldContext = React.useContext(FormFieldContext);

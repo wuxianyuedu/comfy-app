@@ -136,7 +136,9 @@ export function useWorkflowViewportFit(params: {
    *  结果，直接算会用到上一帧的尺寸（对刚展开/折叠过节点的画布尤其明显）。
    *  调度本身收在 `~/lib/next-frame`（规范 16 §16.2.4.42）。 */
   const recenterCanvas = useCallback(() => {
-    onNextFrame(() => fitToContent());
+    onNextFrame(() => {
+      fitToContent();
+    });
   }, [fitToContent]);
 
   /* 每打开一次工作流 / 子工作流就贴合内容一次。放在 `nodes` 之后，
@@ -191,7 +193,9 @@ export function useWorkflowViewportFit(params: {
     };
     /* 延后一帧，等 ReactFlow 量好视口、摆好节点再贴合。 */
     raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+    };
   }, [rf, rfStore, canvasSettings, fitKey, nodesCount]);
 
   return { fitToContent, recenterCanvas };

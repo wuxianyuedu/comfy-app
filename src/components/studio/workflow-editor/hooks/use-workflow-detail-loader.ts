@@ -52,7 +52,9 @@ function clearWorkflowCache(): void {
         keys.push(k);
       }
     }
-    keys.forEach((k) => sessionStorage.removeItem(k));
+    keys.forEach((k) => {
+      sessionStorage.removeItem(k);
+    });
   } catch {
     /* sessionStorage 可能被禁用（隐私模式），静默跳过 */
   }
@@ -260,7 +262,9 @@ export function useWorkflowDetailLoader({
               applyDetailState(data, isSubgraph);
             }
           })
-          .catch((error) => console.warn("[we] 后台刷新详情失败", error));
+          .catch((error) => {
+            console.warn("[we] 后台刷新详情失败", error);
+          });
         return;
       }
 

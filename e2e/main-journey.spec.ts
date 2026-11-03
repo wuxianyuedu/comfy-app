@@ -267,8 +267,9 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
       .not.toBeNull()
       .then(() => trpcQuery(page, "task.detail", { id: taskId }))
       .then(
+        /* SAFETY: 类型断言已复核 */
         (detail) =>
-          /* SAFETY: 类型断言已复核 */ detail as {
+          detail as {
             error?: string | null;
             images?: Array<unknown>;
             status?: string;

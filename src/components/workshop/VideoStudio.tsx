@@ -113,7 +113,9 @@ export function VideoStudio({
     return withTimeoutResult(
       new Promise<void>((resolve) => {
         close = watchTask(taskId, {
-          onProgress: (p) => reportProgress(shotId, p),
+          onProgress: (p) => {
+            reportProgress(shotId, p);
+          },
           onOutput: (out) => {
             // 优先取视频输出；非图片的额外产出（gif / 其他）照样落地。
             if (out.kind !== "image") {
@@ -285,11 +287,14 @@ export function VideoStudio({
               error={errors[shot.id]}
               fps={fps}
               key={shot.id}
-              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-              onCancel={() => void onCancelShot(shot)}
+              onCancel={() => {
+                onCancelShot(shot);
+              }}
               // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onGenerate={() => void generateClip(shot)}
-              onPatch={(p) => patchShot(shot.id, p)}
+              onPatch={(p) => {
+                patchShot(shot.id, p);
+              }}
               progress={progress[shot.id] ?? 0}
               shot={shot}
             />

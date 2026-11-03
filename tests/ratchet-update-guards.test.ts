@@ -75,11 +75,12 @@ const RATCHETS: Array<Ratchet> = [
     script: "check-void-floats.cjs",
     baseline: "scripts/.void-floats-baseline.json",
     fixture: { dirs: ["src/lib"], env: AST_ENV },
-    violate: (repo, n) =>
+    violate: (repo, n) => {
       repo.write(
         `src/lib/vf${n}.ts`,
         `async function vf${n}(): Promise<void> {}\nvoid vf${n}();\n`,
-      ),
+      );
+    },
   },
   /* 这里**没有** tw4 那两份（`tw4-canonical-report.mjs` / `tw4-spacing-canonical.mjs`）：
    * 它们在 ISSUE #1811 的 tw4 项里翻了硬闸 —— 基线删掉、`--update` 删掉，`--check`

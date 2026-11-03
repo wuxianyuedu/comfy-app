@@ -75,14 +75,18 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
               />
               <Button
                 className="h-7 px-2 text-xs"
-                onClick={() => c.selectSeries(c.seriesId === s.id ? null : s.id)}
+                onClick={() => {
+                  c.selectSeries(c.seriesId === s.id ? null : s.id);
+                }}
                 variant="ghost"
               >
                 {c.seriesId === s.id ? "收起" : "展开"}
               </Button>
               <Button
                 className="text-destructive h-7 px-2 text-xs"
-                onClick={() => c.deleteSeries(s.id)}
+                onClick={() => {
+                  c.deleteSeries(s.id);
+                }}
                 variant="ghost"
               >
                 删除
@@ -136,14 +140,18 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                 />
                 <Button
                   className="h-7 px-2 text-xs"
-                  onClick={() => c.selectSeason(c.seasonId === se.id ? null : se.id)}
+                  onClick={() => {
+                    c.selectSeason(c.seasonId === se.id ? null : se.id);
+                  }}
                   variant="ghost"
                 >
                   {c.seasonId === se.id ? "收起" : "展开"}
                 </Button>
                 <Button
                   className="text-destructive h-7 px-2 text-xs"
-                  onClick={() => c.deleteSeason(se.id)}
+                  onClick={() => {
+                    c.deleteSeason(se.id);
+                  }}
                   variant="ghost"
                 >
                   删除
@@ -215,7 +223,9 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                 {projectId !== undefined && projectId !== "" && (
                   <Button
                     className="h-7 px-2 text-xs"
-                    onClick={() => c.selectEpisode(c.episodeId === e.id ? null : e.id)}
+                    onClick={() => {
+                      c.selectEpisode(c.episodeId === e.id ? null : e.id);
+                    }}
                     variant="ghost"
                   >
                     {c.episodeId === e.id ? "已选" : "选定"}
@@ -223,7 +233,9 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                 )}
                 <Button
                   className="text-destructive h-7 px-2 text-xs"
-                  onClick={() => c.deleteEpisode(e.id)}
+                  onClick={() => {
+                    c.deleteEpisode(e.id);
+                  }}
                   variant="ghost"
                 >
                   删除
@@ -277,7 +289,9 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
               <div className="flex items-center gap-2">
                 <NativeSelect
                   className="flex-1"
-                  onChange={(e) => setGenWorkflow(e.target.value)}
+                  onChange={(e) => {
+                    setGenWorkflow(e.target.value);
+                  }}
                   value={genWorkflow}
                 >
                   <NativeSelectOption value="">选择工作流…</NativeSelectOption>

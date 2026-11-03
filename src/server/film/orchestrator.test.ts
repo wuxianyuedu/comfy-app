@@ -145,7 +145,9 @@ vi.mock("child_process", async (importOriginal) => ({
     kill: vi.fn(),
     on: vi.fn((event: string, cb: (code: number) => void) => {
       if (event === "close") {
-        queueMicrotask(() => cb(0));
+        queueMicrotask(() => {
+          cb(0);
+        });
       }
     }),
   })),
@@ -321,11 +323,10 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
     filmRepo.create.mockResolvedValue({ id: "f-offline" });
     llmStructured.mockRejectedValue(new Error("no llm"));
     const { parseIdeaToScenes } = await import("~/lib/workshop/script-parser");
-    vi.mocked(parseIdeaToScenes).mockReturnValue(
-      /* SAFETY: 类型断言已复核 */ [
-        { heading: "离线场景", action: "动作", dialogue: "台词", shotCount: 1 },
-      ] as unknown as ReturnType<typeof parseIdeaToScenes>,
-    );
+    /* SAFETY: 类型断言已复核 */
+    vi.mocked(parseIdeaToScenes).mockReturnValue([
+      { heading: "离线场景", action: "动作", dialogue: "台词", shotCount: 1 },
+    ] as unknown as ReturnType<typeof parseIdeaToScenes>);
 
     const r = await createFilm({ userId: "u1", title: "离线", script: "剧本" });
 
@@ -354,8 +355,9 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
 
 describe("createFilmFromProject — 从统一项目 Shot[] 直接建片（Phase 5）", () => {
   // 只映射用到的字段即可（id / index / prompt / negativePrompt / sceneHeading）。
+  /* SAFETY: 类型断言已复核 */
   const shot = (over: Record<string, unknown>) =>
-    /* SAFETY: 类型断言已复核 */ ({
+    ({
       sceneHeading: "",
       negativePrompt: "",
       ...over,

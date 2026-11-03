@@ -250,7 +250,9 @@ function mockSessionsFor(
   );
 }
 
-beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
+beforeAll(() => {
+  server.listen({ onUnhandledFrame: "error" });
+});
 beforeEach(() => {
   sessionLogRequests.length = 0;
   comfyStatusCalls = 0;

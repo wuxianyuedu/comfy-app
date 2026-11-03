@@ -87,9 +87,9 @@ export function toShipBuildState(state) {
  *   （`mergeable_state=conflict` 的 PR 平台不派生构建），那一句能把人从「再等等 /
  *   换分支名」那条冤枉路上拽回来。没给（例如只是轮询、还不知道 PR 号）就只念旧文案。
  * @returns {Promise<{buildState:"green"|"red"|"cancelled"|"running"|"unknown",buildSn:string|null,stop:number|null}>}
- *   `stop` 非 null 时调用方直接以此码收尾 —— 两种形状都落这里：执行者不在（取不到列表），
- *   以及**同签名断流**（连着 `POLL_STALL_MAX` 眼读数没变、**且此刻没有任何一格在飞**，
- *   再等下去只是重复同一句话）。
+ *   `stop` 非 null 时调用方直接以此码收尾 —— 两种形状都落这里：执行者不在（**还没钉住
+ *   build 时**取不到列表；钉住之后不再拉列表，ISSUE #3070），以及**同签名断流**
+ *   （连着 `POLL_STALL_MAX` 眼读数没变、**且此刻没有任何一格在飞**，再等下去只是重复同一句话）。
  */
 export async function pollUntilTerminal(ctx) {
   const { run, log, slug, newSha, now, sleep, number } = ctx;
@@ -113,24 +113,40 @@ export async function pollUntilTerminal(ctx) {
   /** 「这一轮已经因为格数续过命」的标记：每轮只念一次那句说明（见下面计数那一段）。 */
   let announcedFlight = false;
   for (;;) {
-    const logs = cnbJson(run, ["build", "get-build-logs", "--repo", slug, "-v"]);
-    const builds = logs ? asArray(logs.json) : null;
-    if (!builds) {
-      log("[ship] 取不到 build 列表 ⇒ 没跑起来，不当成「还在跑」也不当成「绿」");
-      return { buildState, buildSn, stop: CODE.NOT_RUN };
+    /* ISSUE #3070：sha→sn 的映射一旦钉住就不再变（sha 在进平台段前已钉死，ISSUE #2812；
+     * sn 是平台分配的）—— 钉住之后每 20 秒再拉一次全量列表，只是在重复确认同一件事，
+     * 请求量翻倍而读数不变。所以列表只在**还没钉住**时拉；钉住之后直接按 sn 读状态。
+     * 签名序列不受影响：签名只看 (statusJson, sn) 两件，列表从来不是签名的输入 ——
+     * 断流 / 在飞归零 / #2645 冲突信号的触发时机逐字不变（它们全挂在「有没有 sn」上）。
+     * 捎带消掉一个故障点：钉住之后列表的瞬时失败此前会把整跑掐成 NOT_RUN ——
+     * 那一拉本来就是冗余的，它的失败不该有话语权。 */
+    if (!buildSn) {
+      const logs = cnbJson(run, ["build", "get-build-logs", "--repo", slug, "-v"]);
+      const builds = logs ? asArray(logs.json) : null;
+      if (!builds) {
+        log("[ship] 取不到 build 列表 ⇒ 没跑起来，不当成「还在跑」也不当成「绿」");
+        return { buildState, buildSn, stop: CODE.NOT_RUN };
+      }
+      const picked = pickBuildForSha(builds, newSha);
+      if (picked) {
+        buildSn = picked.sn;
+      }
+      /* 钉住即不再看列表 ⇒ ISSUE #2950 那条「掉出列表窗口就按钉住的 sn 续读」的回退
+       * 自然消解：它防的是「钉住了却被列表读数倒退回没起」，而钉住之后根本没有列表
+       * 读数可倒退 —— 不留走不到的分支。「取不到列表」与「还没解析到」两格只在
+       * 未钉住时可达，话术与退码不变。 */
     }
-    const picked = pickBuildForSha(builds, newSha);
+    const sn = buildSn;
     /** 这一眼的状态 JSON；没解析到 build 时为 null（签名照样成立）。 */
     let statusJson = null;
-    if (picked) {
-      buildSn = picked.sn;
+    if (sn) {
       const st = cnbJson(run, [
         "build",
         "get-build-status",
         "--repo",
         slug,
         "--sn",
-        picked.sn,
+        sn,
         "-v",
       ]);
       statusJson = st ? st.json : null;
@@ -140,15 +156,13 @@ export async function pollUntilTerminal(ctx) {
        * ⚠️ 分界那句**原话**只在 `get-build-stage -v` 的 `data.error` 里，`get-build-status`
        * 的 `stages[]` 没有这一栏 ⇒ 分类之前先补（ISSUE #2406）。这一跳只对**非绿非 skipped**
        * 的那几格发请求，且**只在逐格读数已到终态时**才有意义 —— 在飞那几格还没原话。 */
-      const outcome = st
-        ? classifyBuildOutcome(picked ? enrichStageErrors(run, slug, picked.sn, st.json) : st.json)
-        : null;
+      const outcome = st ? classifyBuildOutcome(enrichStageErrors(run, slug, sn, st.json)) : null;
       /** @type {{state:"green"|"red"|"cancelled"|"running"|"unknown",raw:string|null}} */
       const v = outcome
         ? { state: toShipBuildState(outcome.state), raw: outcome.raw }
         : { state: "unknown", raw: null };
       buildState = v.state;
-      log(`[ship] build ${picked.sn} → data.status = ${v.raw ?? "(取不到)"}`);
+      log(`[ship] build ${sn} → data.status = ${v.raw ?? "(取不到)"}`);
       if (v.state === "cancelled" && outcome) {
         const first = outcome.cancelled[0];
         const skipped = downstreamSkipped(outcome).map((s) => s.name || s.id);
@@ -201,7 +215,7 @@ export async function pollUntilTerminal(ctx) {
         }
       }
     }
-    const sig = buildSignature(statusJson, picked ? picked.sn : "");
+    const sig = buildSignature(statusJson, sn ?? "");
     /* 「同签名」只是**没产生新计数**，不等于「没在动」：一格长 stage 在内部推进时签名逐字不变
      * （ISSUE #2184 实测 `…/pending/0-1+11/33` 连着 10 眼，而 `受影响用例` 正在跑；几分钟后
      * 同一条构建是 28/33）。所以停滞要同时满足两件：签名不变 **且** 此刻没有任何一格在飞。

@@ -168,8 +168,8 @@ const CHECKS: Record<DraftElementKind, ElementCheck> = {
       {
         key: "status",
         ok: (value) =>
-          typeof value === "string" &&
-          /* SAFETY: 类型断言已复核 */ (SHOT_STATUSES as ReadonlyArray<string>).includes(value),
+          /* SAFETY: 类型断言已复核 */
+          typeof value === "string" && (SHOT_STATUSES as ReadonlyArray<string>).includes(value),
         reason: "状态不在已知取值里：完成度计数会把它算错一边",
       },
     ],

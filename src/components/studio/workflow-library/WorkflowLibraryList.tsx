@@ -169,7 +169,9 @@ export function WorkflowLibraryList({
             {workflows.map((workflow) => (
               <WorkflowListItem
                 key={workflow.id}
-                onClick={() => onSelect(workflow.id)}
+                onClick={() => {
+                  onSelect(workflow.id);
+                }}
                 selected={selectedId === workflow.id}
                 workflow={workflow}
               />

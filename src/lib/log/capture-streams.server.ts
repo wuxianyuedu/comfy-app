@@ -238,12 +238,9 @@ export function installStreamCapture(): void {
       } catch {
         /* 转录失败不吞掉输出本身 */
       }
-      return original.call(
-        stream,
-        chunk,
-        /* SAFETY: 类型断言已复核 */ encodingOrCb as never,
-        /* SAFETY: 类型断言已复核 */ cb as never,
-      );
+      /* SAFETY: 类型断言已复核 */
+      /* SAFETY: 类型断言已复核 */
+      return original.call(stream, chunk, encodingOrCb as never, cb as never);
     };
     stream.write = patched;
   };

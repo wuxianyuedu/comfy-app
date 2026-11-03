@@ -125,7 +125,9 @@ describe("useItemAction", () => {
     act(() => {
       pending = result.current.run("a", () => gate);
     });
-    act(() => result.current.clear());
+    act(() => {
+      result.current.clear();
+    });
     expect(result.current.busyId).toBeNull();
     await act(async () => {
       release();

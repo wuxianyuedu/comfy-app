@@ -118,14 +118,21 @@ export function useImageZoom({
     setMode("manual");
   }, []);
 
-  const zoomIn = useCallback(() => scaleTo(scale * ZOOM_STEP), [scale, scaleTo]);
-  const zoomOut = useCallback(() => scaleTo(scale / ZOOM_STEP), [scale, scaleTo]);
-  const fit = useCallback(() => setMode("fit"), []);
-  const actualSize = useCallback(() => setMode("actual"), []);
-  const toggleFitActual = useCallback(
-    () => setMode((prev) => (prev === "fit" ? "actual" : "fit")),
-    [],
-  );
+  const zoomIn = useCallback(() => {
+    scaleTo(scale * ZOOM_STEP);
+  }, [scale, scaleTo]);
+  const zoomOut = useCallback(() => {
+    scaleTo(scale / ZOOM_STEP);
+  }, [scale, scaleTo]);
+  const fit = useCallback(() => {
+    setMode("fit");
+  }, []);
+  const actualSize = useCallback(() => {
+    setMode("actual");
+  }, []);
+  const toggleFitActual = useCallback(() => {
+    setMode((prev) => (prev === "fit" ? "actual" : "fit"));
+  }, []);
 
   return {
     mode,

@@ -243,7 +243,8 @@ export function parseWorkspaceTabs(
     if (!Array.isArray(entry) || entry.length < 2) {
       return null;
     }
-    const [view, projectId] = /* SAFETY: 类型断言已复核 */ entry as [unknown, unknown];
+    /* SAFETY: 类型断言已复核 */
+    const [view, projectId] = entry as [unknown, unknown];
     if (
       typeof view !== "string" ||
       /* SAFETY: 类型断言已复核 */

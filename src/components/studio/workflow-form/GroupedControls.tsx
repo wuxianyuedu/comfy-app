@@ -61,8 +61,12 @@ function GroupedControls({
   }
   const count = (dimension ? 1 : 0) + (video ? 1 : 0);
 
-  const set = (ioKey: string, v: unknown) => onChange({ ...values, [ioKey]: v });
-  const setMany = (patch: Record<string, unknown>) => onChange({ ...values, ...patch });
+  const set = (ioKey: string, v: unknown) => {
+    onChange({ ...values, [ioKey]: v });
+  };
+  const setMany = (patch: Record<string, unknown>) => {
+    onChange({ ...values, ...patch });
+  };
 
   /* 组合控件覆盖到的端口（宽/高、比例/像素/倍数、时长/画质/比例）。 */
   const keys = new Set<string>();

@@ -16,7 +16,7 @@
  * 同一份 glob）⇒ 那 13 条「在平台那一格被 `ifModify` 跳过」的判据不再在这一格照跑全量。
  * 收窄的两条边界在这里钉住：**改动面取不到 ⇒ 一条都不跳**、**跳过的逐条点名且不计入绿**。
  */
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   appendFileSync,
   copyFileSync,
@@ -38,6 +38,8 @@ import {
   main,
   narrowingDecision,
 } from "../scripts/ci-heavy-gates.mjs";
+import { syntheticMergeRange } from "../scripts/reformat-preview-range.mjs";
+import { createGateRepo, type GateRepo } from "./helpers/gate-repo";
 import {
   faceTouched,
   INCREMENTAL_GATES,
@@ -45,6 +47,17 @@ import {
 } from "../scripts/ci-incremental-gates.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+
+/** 沙箱仓库的起步形态：`master` 上一笔有内容的提交（两种检出形态都从这里分叉）。 */
+function initSandboxRepo(repo: GateRepo): void {
+  repo.git("init", "-q", "-b", "master", ".");
+  repo.git("config", "user.email", "gate@example.com");
+  repo.git("config", "user.name", "gate");
+  repo.git("config", "commit.gpgsign", "false");
+  repo.write("a.txt", "1\n");
+  repo.git("add", ".");
+  repo.commit("base");
+}
 const HOOK = path.join(ROOT, ".githooks", "pre-commit");
 
 const temps: Array<string> = [];
@@ -390,12 +403,120 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
     ]);
   });
 
-  it("登记表是**一处**出处：三条都在 `CHANGED_SCOPED` 里", () => {
+  it("登记表是**一处**出处：这三条都在 `CHANGED_SCOPED` 里", () => {
     /* 反查：这两条判据若没登记，复合档就会对它们走「剥旗标 ⇒ 判全仓」那一手，
      * 而那对它们**无效**（剥掉旗标之后判的仍是暂存集）。 */
     expect(CHANGED_SCOPED).toContain("scripts/check-doc-mirror-pairing.cjs");
     expect(CHANGED_SCOPED).toContain("scripts/known-failed-selftest-gate.mjs");
     expect(CHANGED_SCOPED).toContain("scripts/shell-gate.mjs");
+  });
+
+  /**
+   * `check-reformat-only.cjs` **不在 `CHANGED_SCOPED`**，但它也不是「剥旗标判全仓」
+   * 那一条（ISSUE #3035 / #3048）。
+   *
+   * 它只认两种判决面：暂存区，或显式 `--range`。剥掉 `--staged` 之后它回落到
+   * 「判 `HEAD~1..HEAD`」，而**平台侧转的是检出、不是合并预览** —— 那个区间只含检出
+   * 自己的最后一笔（现场 `cnb-o9p-1k6d5ohhj`：`170 个源文件里 118 个纯格式化`，
+   * 而那 118 份散在 27 笔里、没有一笔独占）。
+   *
+   * ⇒ 它的换发是**自己那一支**（`syntheticMergeRange()`）：区间是「另一父 .. 本 PR 那一侧
+   * 的 tip」。**终点取 tip、不取合成提交** —— `另一父..合成提交` 正好是整个 PR 区间，
+   * 主干那一批会与本 PR 混成一段（SUMMARY 口径按整段算分母，正是那个 170/118 的来源）。
+   * 认不出合成提交 ⇒ 这一条**没判**（不许给一个与本次改动无关的面，那等于恒绿）。
+   *
+   * 反向验证：把这一支删掉，下面那句 `--range` 当场红。
+   */
+  it("`check-reformat-only.cjs` 换发成合并预览的两个父，认不出就不许跑（#3048）", () => {
+    expect(CHANGED_SCOPED).not.toContain("scripts/check-reformat-only.cjs");
+    /* 三条形态各判一次，一条都不许落回「剥旗标 ⇒ 判 HEAD~1..HEAD」：
+     *   ① 认得出合成提交 ⇒ `--range <另一父>..<CNB_COMMIT>`（终点是 tip，不是 HEAD）
+     *   ② 没有 CNB_COMMIT / HEAD 不是合并提交 ⇒ `ok: false`（没判，不是绿） */
+    const mergeRange = syntheticMergeRange({
+      cwd: process.cwd(),
+      env: { CNB_COMMIT: "1111111111111111111111111111111111111111" },
+    });
+    expect(mergeRange.ok).toBe(false);
+    const got = heavyGateArgv(["node", "scripts/check-reformat-only.cjs", "--staged"], {
+      env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+    });
+    expect(got.ok).toBe(false);
+    if (got.ok) {
+      return;
+    }
+    expect(got.reason).toContain("判决面");
+    /* 「没判」的两个退出码都在这条上：判据自己的 2 与命令找不到的 127。 */
+    expect(got.notRunCodes).toEqual(expect.arrayContaining([2, 127]));
+  });
+
+  /**
+   * **平台两种检出形态都要给判决面**（ISSUE #3038 的现场：`cnb-2f9-1k6d890pk`）。
+   *
+   * 只认「合成合并预览」的代价实测过：平台那一跑转的是 **PR 头检出**（`HEAD` 就是源分支
+   * tip、父提交只有一条），于是 `syntheticMergeRange()` 判「HEAD 不是合并提交 ⇒ 没有可用
+   * 的判决面」，这一条**既不红也不绿** —— 那一格在平台上从来没有判过这个 PR。
+   *
+   * 这一条钉的是「头检出也要算得出区间」：起点 `merge-base(目标 sha, HEAD)`、终点 `HEAD`。
+   * 反向验证：把形态二那一支删掉，下面 `expect(face.ok).toBe(true)` 当场红。
+   */
+  it("PR 头检出（HEAD 就是源分支 tip）也递得出判决面（#3038）", () => {
+    const { repo } = createGateRepo({
+      script: "check-reformat-only.cjs",
+      workdir: "head-face",
+      setup: initSandboxRepo,
+    });
+    repo.git("checkout", "-q", "-b", "pr");
+    repo.write("a.txt", "2\n");
+    repo.git("add", ".");
+    repo.commit("change");
+    const head = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: repo.dir,
+      encoding: "utf8",
+    }).trim();
+    /* 目标分支在分叉点之后自己又落了一笔 —— 它**不该**进这个 PR 的分母，
+     * 所以起点必须是分叉点而不是目标 sha 自己。 */
+    repo.git("checkout", "-q", "master");
+    repo.write("b.txt", "theirs\n");
+    repo.git("add", ".");
+    repo.commit("target moves on");
+    const target = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: repo.dir,
+      encoding: "utf8",
+    }).trim();
+    /* 平台那一跑的形态：**检出本 PR 那一侧**（HEAD = 源分支 tip，父提交只有一条）。 */
+    repo.git("checkout", "-q", "pr");
+
+    const face = syntheticMergeRange({
+      cwd: repo.dir,
+      env: { CNB_COMMIT: head, CNB_PULL_REQUEST_TARGET_SHA: target },
+    });
+    expect(face.ok, JSON.stringify(face)).toBe(true);
+    if (!face.ok) {
+      return;
+    }
+    const forkPoint = execFileSync("git", ["merge-base", target, head], {
+      cwd: repo.dir,
+      encoding: "utf8",
+    }).trim();
+    expect(face.range).toBe(`${forkPoint}..${head}`);
+  });
+
+  it("认不出形态时仍然记成「没判」，不退回 HEAD~1..HEAD（#3038）", () => {
+    const { repo } = createGateRepo({
+      script: "check-reformat-only.cjs",
+      workdir: "head-face-bad",
+      setup: initSandboxRepo,
+    });
+    const head = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: repo.dir,
+      encoding: "utf8",
+    }).trim();
+    /* `CNB_COMMIT` 与 HEAD 对不上（并行会话推的另一种拼法）⇒ 不给面。 */
+    const face = syntheticMergeRange({ cwd: repo.dir, env: { CNB_COMMIT: "f".repeat(40) } });
+    expect(face.ok).toBe(false);
+    /* 没有目标 sha（本地手跑）也拿不到可信的面 —— 恒绿的判据比红更贵。 */
+    const noTarget = syntheticMergeRange({ cwd: repo.dir, env: { CNB_COMMIT: head } });
+    expect(noTarget.ok).toBe(false);
   });
 
   it("绿步一个字都不打 ⇒ 那一格**没判**（退 2，不许计入绿）", () => {
@@ -464,10 +585,14 @@ describe("复合档 —— 三态前缀带颜色区分（ISSUE #2748）", () => 
     const env: NodeJS.ProcessEnv = { ...process.env, COMFYAPP_CI_COLOR: "1" };
     delete env.NO_COLOR;
     delete env.FORCE_COLOR;
+    /* `maxBuffer` 显式给：`--json` 那一支会把一格的全部判决行吐出来，而宿主带着
+     * `FORCE_COLOR` 时每一行还多出几十个色号字节。超过默认的 1 MiB 时 `spawnSync`
+     * 报的是 `ENOBUFS`，读起来却像「这一条红在超时」（PR #2990 的
+     * `cnb-fvg-1k6botkg5` 里这条就是这么红成 `Test timed out in 60000ms` 的）。 */
     return spawnSync(
       process.execPath,
       ["scripts/ci-heavy-gates.mjs", "--only=判据自身", ...extraArgs],
-      { cwd: ROOT, encoding: "utf8", env, timeout: 120_000 },
+      { cwd: ROOT, encoding: "utf8", env, timeout: 120_000, maxBuffer: 64 << 20 },
     );
   }
 

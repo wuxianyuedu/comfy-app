@@ -161,7 +161,8 @@ export function createPinoLogger(opts: PinoLoggerOptions = {}) {
         }
         // pino 的 `logMethod` 钩子要的就是「就地转发」：它自己的类型声明是 `=> void`，
         // 转发这一步不产出任何值，也不需要往下游返回（#2918 逐处确认过返回值无人消费）。
-        method.apply(this, /* SAFETY: 类型断言已复核 */ args as never);
+        /* SAFETY: 类型断言已复核 */
+        method.apply(this, args as never);
       },
     },
   };

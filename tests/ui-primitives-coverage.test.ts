@@ -140,7 +140,9 @@ function businessSources(): Array<{ rel: string; text: string }> {
 
 /** 业务侧引用 `~/components/ui/<name>` 的文件数（不含 ui/ 内部互相引用）。 */
 function consumerCount(name: string): number {
-  const pattern = new RegExp(`from\\s+["']~/components/ui/${name.replaceAll(/[-]/g, String.raw`\-`)}["']`);
+  const pattern = new RegExp(
+    `from\\s+["']~/components/ui/${name.replaceAll(/[-]/g, String.raw`\-`)}["']`,
+  );
   return businessSources().filter((f) => pattern.test(f.text)).length;
 }
 
@@ -198,40 +200,42 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
    * 这两个**字面量**，而绕过的形态可以不含它们（例如自己包一层 `new Blob`
    * 却忘了 revoke、或自己写相对时间阈值）。用例逐个钉住出口模块存在 +
    * 导出的名字 + 至少一处业务引用。 */
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      ["~/lib/browser-io", ["copyText", "downloadText", "downloadJson"]],
-      ["~/lib/time-format", ["timeAgo", "formatClock"]],
-      /* 本批三条（规范 16 §16.2.4.54 ~ §16.2.4.56）：P50/P51/P52 是硬闸，
-       * 判的是「又写了一份」；这一层补**另一侧** —— 出口自己的接口不许被绕过
-       *（绕过的形态可以不含判据锚的那几个字面量）。 */
-      ["~/lib/number-format", ["fixed", "trimmed", "trimFixed", "alphaText"]],
-      ["~/lib/ordered-set", ["unique", "uniqueSorted", "uniqueBy", "union", "compareText"]],
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    ["~/lib/browser-io", ["copyText", "downloadText", "downloadJson"]],
+    ["~/lib/time-format", ["timeAgo", "formatClock"]],
+    /* 本批三条（规范 16 §16.2.4.54 ~ §16.2.4.56）：P50/P51/P52 是硬闸，
+     * 判的是「又写了一份」；这一层补**另一侧** —— 出口自己的接口不许被绕过
+     *（绕过的形态可以不含判据锚的那几个字面量）。 */
+    ["~/lib/number-format", ["fixed", "trimmed", "trimFixed", "alphaText"]],
+    ["~/lib/ordered-set", ["unique", "uniqueSorted", "uniqueBy", "union", "compareText"]],
+    [
+      "~/lib/media/data-url",
       [
-        "~/lib/media/data-url",
-        [
-          "isDataUrl",
-          "isInlineMedia",
-          "toDataUrl",
-          "wrapBase64",
-          "toBase64",
-          "parseDataUrl",
-          "base64PayloadOf",
-        ],
+        "isDataUrl",
+        "isInlineMedia",
+        "toDataUrl",
+        "wrapBase64",
+        "toBase64",
+        "parseDataUrl",
+        "base64PayloadOf",
       ],
-      /* 本批三条（规范 16 §16.2.4.60 ~ §16.2.4.62）：P56/P57/P58 是硬闸，
-       * 判的是「又写了一份」；这一层补**另一侧** —— 出口自己的接口不许被绕过
-       *（绕过的形态可以不含判据锚的那几个字面量，例如自己写一个
-       *  `toDisplayPath` 却忘了归一分隔符）。 */
-      [
-        "~/lib/path-display",
-        ["toDisplayPath", "stripPathPrefix", "lastSegments", "ellipsisMiddle", "normalizeSlashes"],
-      ],
-      ["~/lib/dom-props", ["OmitOwnProps", "splitDomProps", "commonOwnProps"]],
-      ["~/lib/with-timeout", ["withTimeout", "withTimeoutResult", "TimeoutError"]],
-    ] as const,
-  )("%s 是「按形态收口」的出口，且已被业务引用", ([spec, exports]) => {
-    const mod = readFileSync(join(SRC, `${spec.replace("~/", "").replaceAll("/", sep)}.ts`), "utf8");
+    ],
+    /* 本批三条（规范 16 §16.2.4.60 ~ §16.2.4.62）：P56/P57/P58 是硬闸，
+     * 判的是「又写了一份」；这一层补**另一侧** —— 出口自己的接口不许被绕过
+     *（绕过的形态可以不含判据锚的那几个字面量，例如自己写一个
+     *  `toDisplayPath` 却忘了归一分隔符）。 */
+    [
+      "~/lib/path-display",
+      ["toDisplayPath", "stripPathPrefix", "lastSegments", "ellipsisMiddle", "normalizeSlashes"],
+    ],
+    ["~/lib/dom-props", ["OmitOwnProps", "splitDomProps", "commonOwnProps"]],
+    ["~/lib/with-timeout", ["withTimeout", "withTimeoutResult", "TimeoutError"]],
+  ] as const)("%s 是「按形态收口」的出口，且已被业务引用", ([spec, exports]) => {
+    const mod = readFileSync(
+      join(SRC, `${spec.replace("~/", "").replaceAll("/", sep)}.ts`),
+      "utf8",
+    );
     for (const name of exports) {
       /* 导出形式：`export function` / `export const` / `export type` /
        * `export class`——出口可以是值也可以是类型（`OmitOwnProps` 是类型、
@@ -331,13 +335,12 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
    * 门槛都刻意留在现状之下：挡的是「掉回 0 / 掉回 1」，不是锁死数量。
    * `disclosure` 本批迁了 8 处、`option-list-popover` 4 处、`use-interval`
    * 10 处上下。 */
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      ["disclosure", "tsx", ["Disclosure"], 3],
-      ["option-list-popover", "tsx", ["OptionListPopover"], 3],
-      ["use-interval", "ts", ["useInterval"], 5],
-    ] as const,
-  )("ui/%s 是「同一形态的唯一出口」且已被业务引用", ([name, ext, exports, min]) => {
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    ["disclosure", "tsx", ["Disclosure"], 3],
+    ["option-list-popover", "tsx", ["OptionListPopover"], 3],
+    ["use-interval", "ts", ["useInterval"], 5],
+  ] as const)("ui/%s 是「同一形态的唯一出口」且已被业务引用", ([name, ext, exports, min]) => {
     const mod = readFileSync(join(SRC, "components", "ui", `${name}.${ext}`), "utf8");
     for (const symbol of exports) {
       expect(mod, `ui/${name} 应导出 ${symbol}`).toMatch(
@@ -367,121 +370,113 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
    * 门槛都刻意留在现状之下：挡的是「掉回 0 / 掉回 1」，不是锁死数量。
    * `list-filter` 本批迁了 8 处、`expansion-set` 3 份映射、`wide-panel` 3 个面板；
    * `progress` / `key-value-rows` 各迁了 10 处与 5 处。 */
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      ["~/lib/list-filter", "ts", ["normalizeNeedle", "matchesNeedle", "filterGroups"], 5],
-      ["~/components/ui/expansion-set", "ts", ["useExpansionSet", "ExpansionSet"], 1],
-      ["~/components/ui/wide-panel", "tsx", ["useWidePanel", "WidePanelToggle"], 3],
-      /* 本批（ISSUE #672 续）：异步动作的进度（P16）与对象渲染成键值行（P17）。 */
-      ["~/lib/progress", "ts", ["clampPct", "toPct", "pctToWidth"], 4],
-      ["~/components/ui/key-value-rows", "tsx", ["KeyValueRows"], 4],
-      /* 本批（ISSUE #672 续）：读用户选的文件（P24）、SSR 安全的 localStorage
-       *（P25）、Enter 提交（P26）。门槛留在现状之下：挡的是「掉回 0 / 掉回 1」。 */
-      ["~/lib/file-io", "ts", ["readFileAsText", "readFileAsDataUrl"], 4],
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    ["~/lib/list-filter", "ts", ["normalizeNeedle", "matchesNeedle", "filterGroups"], 5],
+    ["~/components/ui/expansion-set", "ts", ["useExpansionSet", "ExpansionSet"], 1],
+    ["~/components/ui/wide-panel", "tsx", ["useWidePanel", "WidePanelToggle"], 3],
+    /* 本批（ISSUE #672 续）：异步动作的进度（P16）与对象渲染成键值行（P17）。 */
+    ["~/lib/progress", "ts", ["clampPct", "toPct", "pctToWidth"], 4],
+    ["~/components/ui/key-value-rows", "tsx", ["KeyValueRows"], 4],
+    /* 本批（ISSUE #672 续）：读用户选的文件（P24）、SSR 安全的 localStorage
+     *（P25）、Enter 提交（P26）。门槛留在现状之下：挡的是「掉回 0 / 掉回 1」。 */
+    ["~/lib/file-io", "ts", ["readFileAsText", "readFileAsDataUrl"], 4],
+    [
+      "~/lib/browser-storage",
+      "ts",
       [
-        "~/lib/browser-storage",
-        "ts",
-        [
-          "hasBrowserStorage",
-          "readStorageItem",
-          "writeStorageItem",
-          "removeStorageItem",
-          "readStorageJson",
-          "writeStorageJson",
-        ],
-        5,
+        "hasBrowserStorage",
+        "readStorageItem",
+        "writeStorageItem",
+        "removeStorageItem",
+        "readStorageJson",
+        "writeStorageJson",
       ],
-      ["~/components/ui/use-enter-commit", "ts", ["enterCommit", "isCommitKey"], 5],
-      /* 上一批（ISSUE #672 续）：按条目挂错误（P30）、作废守卫（P31）、
-       * 服务端错误信封（P32）。⚠️ 这三条此前**只补了脚本侧的判据与用例，
-       * 没补这一侧的契约** —— 也就是「出口被抽出但没人用」在那个窗口里没有
-       * 任何判据。本批一并补上（这正是本文件开头说的「棘轮对『什么都不写』
-       * 天然无感」的同款盲区）。 */
-      ["~/components/ui/use-item-errors", "ts", ["useItemErrors"], 3],
-      ["~/lib/stale-run", "ts", ["beginStaleRun"], 3],
-      ["~/lib/api-error", "ts", ["apiErrorBody", "readApiError"], 2],
-      /* 本批三条（规范 16 §16.2.4.36 ~ §16.2.4.38）：唯一 id（P33）、
-       * ComfyUI 报错的建议词表（P34）、画布节点落地（P35）。 */
-      ["~/lib/unique-id", "ts", ["nextId", "uniqueStamp"], 3],
+      5,
+    ],
+    ["~/components/ui/use-enter-commit", "ts", ["enterCommit", "isCommitKey"], 5],
+    /* 上一批（ISSUE #672 续）：按条目挂错误（P30）、作废守卫（P31）、
+     * 服务端错误信封（P32）。⚠️ 这三条此前**只补了脚本侧的判据与用例，
+     * 没补这一侧的契约** —— 也就是「出口被抽出但没人用」在那个窗口里没有
+     * 任何判据。本批一并补上（这正是本文件开头说的「棘轮对『什么都不写』
+     * 天然无感」的同款盲区）。 */
+    ["~/components/ui/use-item-errors", "ts", ["useItemErrors"], 3],
+    ["~/lib/stale-run", "ts", ["beginStaleRun"], 3],
+    ["~/lib/api-error", "ts", ["apiErrorBody", "readApiError"], 2],
+    /* 本批三条（规范 16 §16.2.4.36 ~ §16.2.4.38）：唯一 id（P33）、
+     * ComfyUI 报错的建议词表（P34）、画布节点落地（P35）。 */
+    ["~/lib/unique-id", "ts", ["nextId", "uniqueStamp"], 3],
+    [
+      "~/lib/comfyui/error-advice",
+      "ts",
+      ["adviseOnError", "adviseWithFallback", "shouldAutoExpandError"],
+      2,
+    ],
+    /* 本批三条（规范 16 §16.2.4.39 ~ §16.2.4.41）：树的缩进与子行容器（P36）、
+     * 「某一条在忙」的执行态（P37）、元素几何的算术与量测接线（P38）。
+     * 门槛留在现状之下：挡的是「掉回 0 / 掉回 1」，不是锁死数量。 */
+    [
+      "~/components/ui/tree-rows",
+      "tsx",
+      ["TreeChildren", "TreeRow", "indentClass", "TREE_INDENT_STEP"],
+      1,
+    ],
+    ["~/components/ui/use-item-action", "ts", ["useItemAction"], 4],
+    ["~/components/ui/use-element-box", "ts", ["useElementBox"], 2],
+    [
+      "~/lib/dom-rect",
+      "ts",
       [
-        "~/lib/comfyui/error-advice",
-        "ts",
-        ["adviseOnError", "adviseWithFallback", "shouldAutoExpandError"],
-        2,
+        "readElementBox",
+        "offsetWithin",
+        "readLineHeight",
+        "rectToAnchorRect",
+        "anchorRectToVirtualElement",
       ],
-      /* 本批三条（规范 16 §16.2.4.39 ~ §16.2.4.41）：树的缩进与子行容器（P36）、
-       * 「某一条在忙」的执行态（P37）、元素几何的算术与量测接线（P38）。
-       * 门槛留在现状之下：挡的是「掉回 0 / 掉回 1」，不是锁死数量。 */
-      [
-        "~/components/ui/tree-rows",
-        "tsx",
-        ["TreeChildren", "TreeRow", "indentClass", "TREE_INDENT_STEP"],
-        1,
-      ],
-      ["~/components/ui/use-item-action", "ts", ["useItemAction"], 4],
-      ["~/components/ui/use-element-box", "ts", ["useElementBox"], 2],
-      [
-        "~/lib/dom-rect",
-        "ts",
-        [
-          "readElementBox",
-          "offsetWithin",
-          "readLineHeight",
-          "rectToAnchorRect",
-          "anchorRectToVirtualElement",
-        ],
-        4,
-      ],
-      /* 本批三条（规范 16 §16.2.4.42 ~ §16.2.4.44）：「等一帧再做事」的调度
-       *（P39）、复制之后的反馈（P40）、REST 的入参收窄（P41）。
-       * 门槛留在现状之下：挡的是「掉回 0 / 掉回 1」，不是锁死数量。 */
-      ["~/lib/next-frame", "ts", ["onNextFrame", "afterNextPaint"], 2],
-      /* P43（§16.2.4.46）把「复制失败的固定提示句」也收进同一个出口 ——
-       * `copyFailureText` 与两支调用形状同批钉住。 */
-      [
-        "~/components/ui/use-copy-feedback",
-        "ts",
-        ["useCopyFeedback", "useCopyResult", "copyFailureText"],
-        6,
-      ],
-      ["~/lib/is-record", "ts", ["isRecord", "isPlainRecord"], 3],
-      /* 本批（规范 16 §16.2.4.45）：错误文案的「动作前缀」（P42）。
-       * `error-message` 本来就是出口（`errorMessage`），本条是把**另一半**
-       *（动作名）也收进同一个模块 —— 所以这里钉的是新导出 `errorText`
-       * 与它的消费点数下限。 */
-      ["~/lib/error-message", "ts", ["errorMessage", "errorText"], 6],
-      ["~/server/lib/request-body", "ts", ["readJsonRecord", "isErrorResponse"], 3],
-      /* 这一条不是「收口存量」，是**新增能力**：全库的图此前只能渲染、不能查看
-       *（缩略图盒子只有几百像素宽，细节看不到）。登记在这里的理由与上面那批
-       * 相同 —— 「抽出出口但没人用」等于没做，而 `ViewableImage` 正是那个
-       * 「换个组件名就能接上」的入口。门槛留在现状之下（当前一处：工作流库
-       * 「实际使用」的运行结果图）。 */
-      ["~/components/ui/image-viewer", "tsx", ["ImageViewer", "ViewableImage"], 1],
-      /* 本批三条（规范 16 §16.2.4.66 ~ §16.2.4.68）：事件值 → 值回调的改写样板
-       *（P62）、分页 / 窗口切片（P63）、进度回调节流（P64）。
-       * 门槛留在现状之下：挡的是「掉回 0 / 掉回 1」，不是锁死数量。 */
-      [
-        "~/lib/form-props",
-        "ts",
-        [
-          "textHandler",
-          "checkedHandler",
-          "numberHandler",
-          "bindKey",
-          "readTextInput",
-          "digitsOnly",
-        ],
-        10,
-      ],
-      ["~/lib/page-window", "ts", ["tailPages", "countAfterPage", "tailWindow", "chunkRange"], 5],
-      [
-        "~/components/ui/use-throttled-progress",
-        "ts",
-        ["useThrottledProgress", "useThrottledProgressMap", "createThrottleGate"],
-        3,
-      ],
-    ] as const,
-  )("%s 是「同一形态的唯一出口」且已被业务引用", ([spec, ext, exports, min]) => {
+      4,
+    ],
+    /* 本批三条（规范 16 §16.2.4.42 ~ §16.2.4.44）：「等一帧再做事」的调度
+     *（P39）、复制之后的反馈（P40）、REST 的入参收窄（P41）。
+     * 门槛留在现状之下：挡的是「掉回 0 / 掉回 1」，不是锁死数量。 */
+    ["~/lib/next-frame", "ts", ["onNextFrame", "afterNextPaint"], 2],
+    /* P43（§16.2.4.46）把「复制失败的固定提示句」也收进同一个出口 ——
+     * `copyFailureText` 与两支调用形状同批钉住。 */
+    [
+      "~/components/ui/use-copy-feedback",
+      "ts",
+      ["useCopyFeedback", "useCopyResult", "copyFailureText"],
+      6,
+    ],
+    ["~/lib/is-record", "ts", ["isRecord", "isPlainRecord"], 3],
+    /* 本批（规范 16 §16.2.4.45）：错误文案的「动作前缀」（P42）。
+     * `error-message` 本来就是出口（`errorMessage`），本条是把**另一半**
+     *（动作名）也收进同一个模块 —— 所以这里钉的是新导出 `errorText`
+     * 与它的消费点数下限。 */
+    ["~/lib/error-message", "ts", ["errorMessage", "errorText"], 6],
+    ["~/server/lib/request-body", "ts", ["readJsonRecord", "isErrorResponse"], 3],
+    /* 这一条不是「收口存量」，是**新增能力**：全库的图此前只能渲染、不能查看
+     *（缩略图盒子只有几百像素宽，细节看不到）。登记在这里的理由与上面那批
+     * 相同 —— 「抽出出口但没人用」等于没做，而 `ViewableImage` 正是那个
+     * 「换个组件名就能接上」的入口。门槛留在现状之下（当前一处：工作流库
+     * 「实际使用」的运行结果图）。 */
+    ["~/components/ui/image-viewer", "tsx", ["ImageViewer", "ViewableImage"], 1],
+    /* 本批三条（规范 16 §16.2.4.66 ~ §16.2.4.68）：事件值 → 值回调的改写样板
+     *（P62）、分页 / 窗口切片（P63）、进度回调节流（P64）。
+     * 门槛留在现状之下：挡的是「掉回 0 / 掉回 1」，不是锁死数量。 */
+    [
+      "~/lib/form-props",
+      "ts",
+      ["textHandler", "checkedHandler", "numberHandler", "bindKey", "readTextInput", "digitsOnly"],
+      10,
+    ],
+    ["~/lib/page-window", "ts", ["tailPages", "countAfterPage", "tailWindow", "chunkRange"], 5],
+    [
+      "~/components/ui/use-throttled-progress",
+      "ts",
+      ["useThrottledProgress", "useThrottledProgressMap", "createThrottleGate"],
+      3,
+    ],
+  ] as const)("%s 是「同一形态的唯一出口」且已被业务引用", ([spec, ext, exports, min]) => {
     const rel = spec.replace("~/", "");
     const mod = readFileSync(join(SRC, `${rel}.${ext}`), "utf8");
     for (const symbol of exports) {

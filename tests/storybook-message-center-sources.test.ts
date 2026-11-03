@@ -147,7 +147,8 @@ describe("Storybook 消息中心注入层的契约（ISSUE #1381）", () => {
   });
 
   it("两个组件都有 story，且都接的是真组件", () => {
-    for (const [story, name] of /* SAFETY: 类型断言已复核 */ [
+    /* SAFETY: 类型断言已复核 */
+    for (const [story, name] of [
       [panelStory, "MessageCenterPanel"],
       [buttonStory, "MessageCenterButton"],
     ] as const) {
@@ -179,7 +180,11 @@ describe("Storybook 消息中心注入层的契约（ISSUE #1381）", () => {
         · **不剥注释**也不行 —— 解释「为什么必须 h-auto」的注释里就写着 `h-auto`，
           于是拿掉真属性之后判据照样绿（自打自）。
        所以：先在**剥了注释**的那一份上定位开标签、再只取该标签的属性串。 */
-    const open = panelCode.indexOf("onClick={() => markRead(");
+    /* 锚点是**调用点** `markRead(m.id)` 而不是 `onClick={() => markRead(` 的字面量：
+       箭头体是表达式还是块体（`{ markRead(m.id); }`）属于写法细节
+       （#2918 的 no-confusing-void-expression 清零就把这里改成了块体），
+       而本条要钉的是「这颗按钮」，不是「箭头长什么形」。调用点全文件唯一。 */
+    const open = panelCode.indexOf("markRead(m.id)");
     expect(
       open,
       "没在 MessageCenterPanel 里找到「标记已读」那颗 Button —— 改写法了？",

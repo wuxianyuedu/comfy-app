@@ -42,7 +42,10 @@ export function WorkflowSourceFilterChip({ value, onChange }: WorkflowSourceFilt
           />
         ),
       }))}
-      onSelect={(next) => onChange(/* SAFETY: 类型断言已复核 */ next as WorkflowSourceFilter)}
+      onSelect={(next) => {
+        /* SAFETY: 类型断言已复核 */
+        onChange(next as WorkflowSourceFilter);
+      }}
       trigger={
         <>
           <span

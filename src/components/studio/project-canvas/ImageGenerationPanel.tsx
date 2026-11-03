@@ -82,7 +82,9 @@ export function ImageGenerationPanel({
    * 「取消中…」态与失败回滚都在 useCancelTask 里（视图零 IO）。 */
   const { cancelling, cancel: onCancel } = useCancelTask({
     taskId: d.taskId,
-    onFailed: (reason) => patchRef.current({ status: "error", error: reason }),
+    onFailed: (reason) => {
+      patchRef.current({ status: "error", error: reason });
+    },
   });
 
   // 把`patch` 放在 ref 里，好让取消处理器（由异步
@@ -376,10 +378,12 @@ export function ImageGenerationPanel({
             compact
             io={wfIO ?? undefined}
             loading={wfIOLoading}
-            onChange={(next) => patch({ workflowInputs: next })}
-            onSeedModeChange={(ioKey, mode) =>
-              patch({ seedModes: { ...d.seedModes, [ioKey]: mode } })
-            }
+            onChange={(next) => {
+              patch({ workflowInputs: next });
+            }}
+            onSeedModeChange={(ioKey, mode) => {
+              patch({ seedModes: { ...d.seedModes, [ioKey]: mode } });
+            }}
             seedModes={d.seedModes}
             showOutputs={false}
             values={d.workflowInputs ?? {}}

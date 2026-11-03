@@ -86,7 +86,12 @@ export function QueueTaskLogModal({
   const bannerMessage = failureMessage ?? task.error ?? null;
 
   return (
-    <Dialog onOpenChange={(next) => !next && onClose()} open>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open
+    >
       <DialogContent
         aria-label="执行日志"
         className="bg-transparent p-0 ring-0"
@@ -135,7 +140,9 @@ export function QueueTaskLogModal({
                 <Button
                   className="text-ink-muted hover:bg-subtle hover:text-ink-strong text-2xs rounded-md px-2 py-0.5"
                   data-testid="queue-log-raw"
-                  onClick={() => setRawOpen(true)}
+                  onClick={() => {
+                    setRawOpen(true);
+                  }}
                   variant="ghost"
                 >
                   查看完整输出
@@ -183,7 +190,9 @@ export function QueueTaskLogModal({
         </div>
       </DialogContent>
       <WorkflowRunRawCliModal
-        onClose={() => setRawOpen(false)}
+        onClose={() => {
+          setRawOpen(false);
+        }}
         open={rawOpen}
         running={running}
         taskId={task.id}

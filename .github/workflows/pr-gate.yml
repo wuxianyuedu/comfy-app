@@ -1,0 +1,269 @@
+# PR 质量门禁（镜像档）—— 双远端镜像的 PR 门禁主体（ISSUE #2978 起，本批从一格冒烟扩成主体）
+#
+# 触发链：cnb PR 流水线的「GitHub 镜像同步」格把本跑 HEAD 推到本仓库的
+# `cnb-pr-<IID>` 专属 ref，再派发 `repository_dispatch`（event_type 逐字配对
+# `scripts/ci-github-mirror-push.mjs` 的 `EVENT_TYPE`）；本 workflow 按**同一笔 sha**
+# 检出并跑判据 —— 两边判同一份树，读数才对得上账。
+#
+# 与 `.cnb.yml` 质量门禁的对应（命令一字不改，判据同源）：
+#   · 本文件**承接**：分支守卫 / 提交声明核对 / 同步数据库表结构 / 类型检查 /
+#     固定结构用例 / 受影响用例 / 14 个 check-* 静态格 / lib Node-only 声明 /
+#     oxfmt 格式 / 重档静态判据。
+#   · **留在 CNB**（平台专有，本文件刻意不跑）：镜像身份 / 工作区复用读数 /
+#     缓存槽读数 / GitHub 镜像同步 / 环境前提（自托管节点事实读数）/
+#     覆盖率上报（`ci-coverage-report.mjs` 走 `cnb` CLI）/ 失败立案与令牌权限读数
+#     （CNB API）。
+#   · diff 类判据（`ci-affected-tests` / `premerge-check` / `check-format --changed`）
+#     读 `CNB_PULL_REQUEST_TARGET_SHA` 做三点 diff —— 这里用镜像 payload 的 `base_sha`
+#     注入同名变量，脚本零改动；缺席时它们各自退回 merge-base（脚本内已有该口径）。
+#   · CNB 侧的 `ci-cp936-exit.mjs` 包裹是给 CP936 控制台的转码层，GitHub runner
+#     原生 UTF-8，这里直跑真命令。
+#
+# 定位：并行双跑期与 cnb 侧同一份判据互相对账；谁转承重是单独一次决定。
+# 并发：同一 PR 的重复派发互相取消（对位 cnb 的 `pr-$IID` 锁）；手动触发按 run 各算。
+#
+# `uses:` 版本口径：有 v7 上 v7，没有就用该 action 的最新主版本（2026-11-02 按
+# `git ls-remote --tags` 逐仓核过，不是凭记忆）。背景：GitHub 2026-09-23 起已从 runner
+# 移除 node20 运行时，旧主版本会被强制挪到 node24 并在 run 页面刷弃用告警。
+#   · checkout v5 → v7：v6 起凭据改存独立文件、v7 起拒检 `pull_request_target` /
+#     `workflow_run` 的 fork PR —— 本文件只用 `repository_dispatch` / `workflow_dispatch`，
+#     两个行为变化都不沾；v6/v7 均为 node24。
+#   · setup-node v5 → v7：v6 的破坏性变更只是「自动缓存只对 npm 默认开」，
+#     这里 `cache: pnpm` 是显式输入，不受影响；v7 为 ESM 化与 NODE_AUTH_TOKEN 修正。
+#   · pnpm/action-setup v5 → v6：没有 v7（主版本序列 v1 → v4 → v5 → v6），v6 即最新；
+#     node24，新增 pnpm v11 支持，输入面不变。
+name: PR gate (mirror)
+
+on:
+  repository_dispatch:
+    types: [cnb-pr-sync]
+  workflow_dispatch:
+    inputs:
+      head_sha:
+        description: 要判的那一笔 sha（留空 = 当前默认分支 HEAD）
+        required: false
+        default: ""
+      base_sha:
+        description: 三点 diff 的基线（留空 = 各判据退回 merge-base）
+        required: false
+        default: ""
+
+concurrency:
+  group: pr-${{ github.event.client_payload.pr_number || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  # 与 `.cnb.yml` 的 `.common.env` 对齐：构建机上没有真实密钥，用占位值过
+  # src/env.js 的校验；BETTER_AUTH_SECRET 缺失会被 better-auth 生产校验拦下。
+  SKIP_ENV_VALIDATION: "1"
+  BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
+  CI: "true"
+  # vitest 判据预算临时放宽 ×2（ISSUE #2959；`.cnb.yml` 同键同值，口径见那里的注释）。
+  COMFY_TEST_TIMEOUT_SCALE: "2"
+  # 覆盖率 reporter 安静档（ISSUE #1959；逐文件明细在落盘的 lcov / json-summary 里）。
+  COMFYAPP_QUIET_COVERAGE: "1"
+  # 三点 diff 基线：镜像 payload 给的是 cnb 平台合成 merge 时的目标侧 sha，
+  # 与 CNB 上 `CNB_PULL_REQUEST_TARGET_SHA` 同源 ⇒ 同名注入，脚本零改动。
+  CNB_PULL_REQUEST_TARGET_SHA: ${{ github.event.client_payload.base_sha || github.event.inputs.base_sha || '' }}
+
+jobs:
+  # ── 纯静态判据：不装依赖，checkout + node 就够 ─────────────────────────
+  # 对应 `.cnb.yml` 的 分支守卫 / 提交声明核对 与 14 个 check-* 格。
+  # 一格串行跑完（CNB 上每格各自付一次 job 开销的教训见 `.cnb.yml` 「重档静态判据」
+  # 上方那段 —— 这里一开始就是合格形态）。
+  static-gates:
+    # `ubuntu-latest` 2026-10-19 ~ 11-19 正从 24.04 分批迁往 26.04：跟着浮动标签跑，等于让
+    # 这一格的机器由平台排期决定。钉版本 → 换镜像是单独一次决定（先按 `ubuntu-26.04` 试跑）。
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: 检出（按镜像 payload 的 sha）
+        uses: actions/checkout@v7
+        with:
+          # repository_dispatch 的 payload 里是合成 merge 的 sha；手动触发走 inputs。
+          ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
+          # 全量历史：镜像推来的合成 merge 带两支父历史，浅克隆拿不到 payload 那一笔，
+          # 分支守卫 / 提交声明核对 / 三点 diff 都要完整历史。
+          fetch-depth: 0
+
+      - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: 分支守卫（cnb 同款判据一字不改）
+        run: node scripts/check-branch-guard.cjs --pr-check --target master
+
+      - name: 提交声明核对（cnb 同款判据一字不改）
+        run: node scripts/premerge-check.mjs --only=claims
+
+      - name: 标题行让位
+        run: node scripts/check-title-bar-clearance.cjs
+
+      - name: 文件结构硬规则
+        run: node scripts/check-file-structure.cjs
+
+      - name: 跨平台动作对照
+        run: node scripts/check-ps1-consistency.mjs
+
+      - name: import 别名统一
+        run: node scripts/check-import-alias.cjs
+
+      - name: ComfyUI 端口口径
+        run: node scripts/check-comfyui-port-contract.cjs
+
+      - name: 内联样式注入
+        run: node scripts/check-inline-style.cjs
+
+      - name: 跨文件重复块
+        run: node scripts/check-code-duplication.cjs
+
+      - name: 函数长度 TS
+        run: node scripts/check-function-length.cjs
+
+      - name: 函数长度 Rust
+        run: node scripts/check-rust-function-length.cjs
+
+      - name: 模块循环依赖
+        run: node scripts/check-circular-deps.cjs
+
+      - name: 端口推导跨语言一致性
+        run: node scripts/check-app-port-vectors.cjs
+
+      - name: CHANGELOG 碎片
+        run: node scripts/check-changelog-fragments.cjs
+
+      - name: 主题色扫描
+        run: node scripts/check-theme-colors.cjs
+
+      - name: UI/逻辑分离
+        run: node scripts/check-ui-logic-separation.cjs
+
+  # ── 安装 + 数据库表结构 + 类型检查 + oxfmt ─────────────────────────────
+  # 对应 `.cnb.yml` 的 Install dependencies / 同步数据库表结构 / 类型检查 / oxfmt 格式。
+  typecheck-db-format:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: 检出（按镜像 payload 的 sha）
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
+        uses: pnpm/action-setup@v6
+
+      - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: 安装依赖（冷装约 8 分钟；allowBuilds 清单见 pnpm-workspace.yaml）
+        run: pnpm install --frozen-lockfile
+
+      - name: 同步数据库表结构（cnb 同款判据一字不改）
+        run: node scripts/db-push.mjs
+
+      - name: 类型检查（cnb 同款判据一字不改）
+        run: node scripts/ci-run-tool.mjs tsc --noEmit
+
+      - name: oxfmt 格式（cnb 同款判据一字不改；基线 = CNB_PULL_REQUEST_TARGET_SHA）
+        run: node scripts/check-format.cjs --changed
+
+      - name: lib Node-only 声明（cnb 同款判据一字不改）
+        run: node scripts/ci-run-tool.mjs vitest run tests/lib-node-only-declarations.test.ts
+
+  # ── 固定结构用例（FIXED_STRUCTURAL_TESTS 静态清单，不解析改动面）─────────
+  fixed-structural-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      COMFY_AFFECTED_QUIET: "1"
+      COMFY_AFFECTED_NOISE_FILTER: "1"
+      COMFY_AFFECTED_SEGMENT: "fixed"
+    steps:
+      - name: 检出（按镜像 payload 的 sha）
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
+        uses: pnpm/action-setup@v6
+
+      - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 固定结构用例（cnb 同款判据一字不改）
+        run: node scripts/ci-affected-tests.mjs
+
+  # ── 受影响用例（固定清单之外 + 这个 PR 改动牵扯到的用例，三点 diff）──────
+  affected-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      COMFY_AFFECTED_QUIET: "1"
+      COMFY_AFFECTED_NOISE_FILTER: "1"
+      COMFY_AFFECTED_SEGMENT: "affected"
+    steps:
+      - name: 检出（按镜像 payload 的 sha）
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
+        uses: pnpm/action-setup@v6
+
+      - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 受影响用例（cnb 同款判据一字不改）
+        run: node scripts/ci-affected-tests.mjs
+
+  # ── 重档静态判据（钩子注册表执行面，含 cargo test）─────────────────────
+  # `.cnb.yml` 那一格带 `.cargo-env` 锚点是自托管 Windows 的 rustup 代理路径
+  # （G:\.cargo + C:\Users\yuedu\.rustup）；ubuntu-24.04 镜像自带 Rust 工具链，
+  # 不需要那一对变量。cargo 依赖缓存由 swatinem/rust-cache 承担（钉 v2：
+  # `git ls-remote --tags` 核过它只有一个主版本，v2 即最新，且已是 node24 运行时）。
+  heavy-gates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: 检出（按镜像 payload 的 sha）
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
+        uses: pnpm/action-setup@v6
+
+      - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: cargo 缓存
+        uses: swatinem/rust-cache@v2
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 重档静态判据（cnb 同款判据一字不改）
+        run: node scripts/ci-heavy-gates.mjs

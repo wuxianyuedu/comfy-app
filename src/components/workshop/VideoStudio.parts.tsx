@@ -61,14 +61,18 @@ export function ChannelSwitch({
             抽共享，不是两边一起改）。 */}
         <div aria-label="生成通道" className="flex gap-2" role="radiogroup">
           <SelectChip
-            onClick={() => onChannelChange("local")}
+            onClick={() => {
+              onChannelChange("local");
+            }}
             selected={channel === "local"}
             shape="segment"
           >
             本地 · ComfyUI 工作流
           </SelectChip>
           <SelectChip
-            onClick={() => onChannelChange("api")}
+            onClick={() => {
+              onChannelChange("api");
+            }}
             selected={channel === "api"}
             shape="segment"
           >
@@ -88,7 +92,9 @@ export function ChannelSwitch({
           <span className="text-muted-foreground">帧率</span>
           <SelectMenu
             className="bg-subtle! border-border! text-xs"
-            onChange={(v) => onFpsChange(Number(v) || 16)}
+            onChange={(v) => {
+              onFpsChange(Number(v) || 16);
+            }}
             options={FPS_OPTIONS}
             placeholder="帧率"
             value={String(fps)}
@@ -231,11 +237,11 @@ export function ShotCard({
                 className="border-border bg-bg text-ink focus-visible:border-primary focus-visible:ring-primary/30 text-2xs h-auto w-14 rounded-md px-2 py-0.5"
                 max={20}
                 min={1}
-                onChange={(e) =>
+                onChange={(e) => {
                   onPatch({
                     duration: clamp(Number(e.target.value) || 5, 1, 20),
-                  })
-                }
+                  });
+                }}
                 type="number"
                 value={typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 5}
               />
@@ -245,12 +251,12 @@ export function ShotCard({
               <SelectMenu
                 className="bg-subtle! border-border! text-2xs"
                 labels={MOTION_LABELS}
-                onChange={(v) =>
+                onChange={(v) => {
                   onPatch({
                     /* SAFETY: 类型断言已复核 */
                     motion: v as MotionLevel,
-                  })
-                }
+                  });
+                }}
                 options={MOTIONS}
                 placeholder="运动"
                 value={shot.motion ?? "medium"}

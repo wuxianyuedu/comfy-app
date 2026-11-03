@@ -164,10 +164,10 @@ describe("resolveUpstream（两个路由同一口径的连接参数解析）", (
     // 名字不在条目里 → 全局
     const global = await resolveUpstream("unknown", "", "", "/chat");
     expect(global).toMatchObject({ base: "https://global/v1", path: "/chat" });
-    expect(
-      /* SAFETY: 类型断言已复核 */ (global as { headers: Record<string, string> }).headers
-        .Authorization,
-    ).toBe("Bearer sk-global");
+    /* SAFETY: 类型断言已复核 */
+    expect((global as { headers: Record<string, string> }).headers.Authorization).toBe(
+      "Bearer sk-global",
+    );
   });
 
   it("没有任何可用地址 → 返回可修正的错误文案而不是抛错", async () => {
@@ -198,10 +198,8 @@ describe("resolveUpstream（两个路由同一口径的连接参数解析）", (
       maxTokens: 2048,
     });
     const up = await resolveUpstream("x", "", "", "");
-    expect(
-      /* SAFETY: 类型断言已复核 */ (up as { headers: Record<string, string> }).headers
-        .Authorization,
-    ).toBeUndefined();
+    /* SAFETY: 类型断言已复核 */
+    expect((up as { headers: Record<string, string> }).headers.Authorization).toBeUndefined();
   });
 });
 
@@ -295,9 +293,10 @@ describe("readPayload / httpFailureDetail / parseExtraJson / chatTextFrom", () =
     // 现状（数组会被当合法「对象」合并），而不是按想象断言它会失败
     expect(parseExtraJson("[1]")).toEqual({ ok: true, extra: [1] });
     expect(parseExtraJson("{")).toMatchObject({ ok: false });
-    expect(
-      /* SAFETY: 类型断言已复核 */ (parseExtraJson("{") as { detail: string }).detail,
-    ).toContain("额外参数不是有效的 JSON 对象");
+    /* SAFETY: 类型断言已复核 */
+    expect((parseExtraJson("{") as { detail: string }).detail).toContain(
+      "额外参数不是有效的 JSON 对象",
+    );
   });
 
   it("chatTextFrom：认 OpenAI 的 string 与分片数组两种形态", () => {
@@ -361,13 +360,12 @@ describe("callChat", () => {
   });
 
   it("2xx 但响应体不是对象 → 同样归为失败", async () => {
-    fetchMock.mockResolvedValue(
-      /* SAFETY: 类型断言已复核 */ {
-        ok: true,
-        status: 200,
-        json: async () => "纯文本",
-      } as unknown as Response,
-    );
+    /* SAFETY: 类型断言已复核 */
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => "纯文本",
+    } as unknown as Response);
     await expect(callChat(UP, "m", "q", {})).resolves.toMatchObject({
       ok: false,
     });

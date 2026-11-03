@@ -206,8 +206,8 @@ async function buildWorkflowDetailJson(input: {
    *      未知键会被静默忽略。
    *      ignored. */
   const positionsFromRaw = raw && Array.isArray(raw.nodes) ? extractPositions(raw) : {};
-  const tplPositions =
-    /* SAFETY: 类型断言已复核 */ (tpl.positions as Record<string, [number, number]>) ?? {};
+  /* SAFETY: 类型断言已复核 */
+  const tplPositions = (tpl.positions as Record<string, [number, number]>) ?? {};
   const effectivePositions: Record<string, [number, number]> = {
     ...positionsFromRaw,
     ...tplPositions,
@@ -453,7 +453,7 @@ async function buildWorkflowDetailJson(input: {
     sourceOutdated,
     sourceMissing,
     /** 分类：绑定到磁盘文件时为 "local"，否则 "online"。 */
-    source: sourcePath !== null ? "local" : "online",
+    source: sourcePath === null ? "online" : "local",
   });
 }
 
@@ -716,9 +716,10 @@ export async function buildSubgraphDetail(
      *  只是一个安静的空白，排障时既不知道是哪条边、也无从判断是数据问题还是
      *  渲染问题（规范 10 §10.3.1：降级不得静默）。 */
     reportDroppedBoundaryLinks(sub, boundaryLinkInfoById, pinIdByLinkId, boundaryLinks);
+    /* SAFETY: 类型断言已复核 */
     const ann = extractSubgraphAnnotations(
       sub,
-      /* SAFETY: 类型断言已复核 */ (tpl.positions as Record<string, [number, number]>) ?? {},
+      (tpl.positions as Record<string, [number, number]>) ?? {},
       hostId,
     );
 

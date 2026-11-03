@@ -58,7 +58,9 @@ export function ModelLibrary() {
       <ViewActions>
         <Button
           className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary-strong gap-1.5"
-          onClick={() => c.setConfigOpen(true)}
+          onClick={() => {
+            c.setConfigOpen(true);
+          }}
           variant="outline"
         >
           <Icon data-icon="inline-start" name="settings" size={16} />
@@ -100,13 +102,24 @@ export function ModelLibrary() {
             </>
           ) : (
             <>
-              <SelectChip onClick={() => c.setFilter(ALL_TYPES)} selected={c.filter === ALL_TYPES}>
+              <SelectChip
+                onClick={() => {
+                  c.setFilter(ALL_TYPES);
+                }}
+                selected={c.filter === ALL_TYPES}
+              >
                 {`全部 (${c.models.length})`}
               </SelectChip>
               {c.typeChips.map(([t, count]) => {
                 const meta = folderMeta(t);
                 return (
-                  <SelectChip key={t} onClick={() => c.setFilter(t)} selected={c.filter === t}>
+                  <SelectChip
+                    key={t}
+                    onClick={() => {
+                      c.setFilter(t);
+                    }}
+                    selected={c.filter === t}
+                  >
                     {`${meta.label} (${count})`}
                   </SelectChip>
                 );
@@ -135,7 +148,9 @@ export function ModelLibrary() {
                两处叠加会把说明与按钮之间撑成 28px。 */
             <Button
               className="h-auto gap-1.5 px-4 py-2"
-              onClick={() => c.setConfigOpen(true)}
+              onClick={() => {
+                c.setConfigOpen(true);
+              }}
               variant="primary-solid"
             >
               <Icon data-icon="inline-start" name="settings" size={16} />
@@ -327,7 +342,12 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
  一个**兄弟 div** 单独接`onClick`（与全库其余弹窗的「外层带 onClick +
  内层 stopPropagation」又是一种写法），Esc 没接、焦点不锁也不归还。 */
   return (
-    <Dialog onOpenChange={(next) => !next && onClose()} open>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open
+    >
       <DialogContent
         aria-label="模型库"
         className="bg-transparent p-0 ring-0"
@@ -408,7 +428,9 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
               <Checkbox
                 checked={c.onlyEnabled}
                 className="border-border-strong bg-surface-2 text-primary-strong focus:ring-primary/40 size-3.5 rounded"
-                onCheckedChange={(checked) => c.setOnlyEnabled(checked === true)}
+                onCheckedChange={(checked) => {
+                  c.setOnlyEnabled(checked === true);
+                }}
               />
               仅显示已启用
             </FieldLabel>
@@ -499,9 +521,15 @@ function FolderConfigRow({
 }) {
   const primaryMeta = folderMeta(row.type);
 
-  const toggleEnabled = () => onToggle(row.folder, !row.enabled);
-  const enableFromAvailable = () => onAdd(row.folder);
-  const remove = () => onDelete(row.folder);
+  const toggleEnabled = () => {
+    onToggle(row.folder, !row.enabled);
+  };
+  const enableFromAvailable = () => {
+    onAdd(row.folder);
+  };
+  const remove = () => {
+    onDelete(row.folder);
+  };
 
   return (
     <div className="border-border-subtle bg-card rounded-xl border px-3 py-2.5">

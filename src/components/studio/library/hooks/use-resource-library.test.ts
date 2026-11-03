@@ -42,16 +42,14 @@ describe("useResourceLibrary", () => {
     const { result } = renderHook(() => useResourceLibrary());
     expect(result.current.library.scope).toBe("project");
 
-    act(() => result.current.setScope("cross"));
+    act(() => {
+      result.current.setScope("cross");
+    });
     await expect.poll(() => result.current.library.scope).toBe("cross");
     await expect
-      .poll(
-        () =>
-          fetchMock.mock.calls.some((call) =>
-            String(call[0]).includes("scope=cross"),
-          ),
-        { message: "切到跨项目后查询串要带上 scope=cross" },
-      )
+      .poll(() => fetchMock.mock.calls.some((call) => String(call[0]).includes("scope=cross")), {
+        message: "切到跨项目后查询串要带上 scope=cross",
+      })
       .toBe(true);
   });
 

@@ -48,9 +48,9 @@ function makeEntry(index: number, overrides: Partial<LogEntry> = {}): LogEntry {
 }
 
 function seed(count: number) {
-  act(() =>
-    useLogStore.getState().appendFileLogs(Array.from({ length: count }, (_, i) => makeEntry(i))),
-  );
+  act(() => {
+    useLogStore.getState().appendFileLogs(Array.from({ length: count }, (_, i) => makeEntry(i)));
+  });
 }
 
 /**
@@ -61,12 +61,12 @@ function seed(count: number) {
  * 具体值。
  */
 function useSmallPage(size = 200) {
-  act(() =>
+  act(() => {
     useLogStore.setState((state) => ({
       pageSize: size,
       header: { ...state.header, pageSize: size },
-    })),
-  );
+    }));
+  });
 }
 
 beforeEach(() => {
@@ -137,7 +137,9 @@ afterEach(async () => {
   }
   document
     .querySelectorAll('[data-slot="select-content"], [data-slot="select-backdrop"]')
-    .forEach((node) => node.remove());
+    .forEach((node) => {
+      node.remove();
+    });
   document
     .querySelectorAll<HTMLElement>("[data-base-ui-inert]")
     .forEach((node) => delete node.dataset.baseUiInert);
@@ -205,7 +207,9 @@ describe("LogPanel 日志面板", () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "更早的一页" }));
 
-    act(() => useLogStore.getState().appendFileLogs([makeEntry(9999, { message: "新来的" })]));
+    act(() => {
+      useLogStore.getState().appendFileLogs([makeEntry(9999, { message: "新来的" })]);
+    });
     const banner = screen.getByRole("button", { name: /有 1 条新的日志/ });
     await user.click(banner);
 
@@ -216,30 +220,32 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("按来源筛选能滤掉启动行，只看应用运行日志", async () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { message: "开发服务已就绪", origin: "dev" }),
           makeEntry(2, { message: "任务入队", origin: "app-runtime" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
 
-    act(() => useLogStore.getState().setOrigin("app-runtime"));
+    act(() => {
+      useLogStore.getState().setOrigin("app-runtime");
+    });
     expect(screen.getByText(/任务入队/)).toBeInTheDocument();
     expect(screen.queryByText(/开发服务已就绪/)).not.toBeInTheDocument();
   });
 
   it("搜索命中时高亮关键词，并只留下命中的行", async () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { message: "ComfyUI 启动完成" }),
           makeEntry(2, { message: "任务入队" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
     const user = userEvent.setup();
 
@@ -250,13 +256,13 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("连续重复行被折叠成一条「重复 N 次」说明", () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs(
           Array.from({ length: 40 }, (_, i) => makeEntry(i, { message: "ComfyUI 未就绪，等待中" })),
-        ),
-    );
+        );
+    });
     render(<LogPanel />);
     expect(screen.getByText(/以上内容连续重复 35 次/)).toBeInTheDocument();
   });
@@ -266,9 +272,9 @@ describe("LogPanel 日志面板", () => {
    * 两边对不上。下面两条锁住修法：计数要分来源，且能一眼看出警告/错误。 */
 
   it("收起状态下只显示当前来源的名字，不重复每一项的条数", () => {
-    act(() =>
-      useLogStore.getState().appendFileLogs([makeEntry(1, { level: "warn", origin: "app" })]),
-    );
+    act(() => {
+      useLogStore.getState().appendFileLogs([makeEntry(1, { level: "warn", origin: "app" })]);
+    });
     render(<LogPanel />);
     /* 收缩面板本来就窄：这里报一遍每个来源多少条，只是把宽度再挤掉一块，
      * 而左侧级别按钮上已经写着同样的数字（用户反馈第 4 条）。 */
@@ -281,15 +287,15 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("级别按钮显示当前来源的计数，切来源后同步变化", () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { level: "warn", origin: "app" }),
           makeEntry(2, { level: "warn", origin: "app" }),
           makeEntry(3, { level: "warn", origin: "launcher" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
     const warnButton = () => levelButton("警告");
 
@@ -298,10 +304,14 @@ describe("LogPanel 日志面板", () => {
 
     /* 切来源（等价于在来源列表里点一项——选择动作本身由
      * 「按来源筛选能滤掉启动行」那条用例覆盖） */
-    act(() => useLogStore.getState().setOrigin("launcher"));
+    act(() => {
+      useLogStore.getState().setOrigin("launcher");
+    });
     expect(warnButton().textContent).toContain("1");
 
-    act(() => useLogStore.getState().setOrigin("dev"));
+    act(() => {
+      useLogStore.getState().setOrigin("dev");
+    });
     /* 启动来源里一条警告都没有：按钮上是 0，列表也确实是空的——
      * 数字与内容对得上，用户不会再怀疑「日志丢了」。 */
     expect(warnButton().textContent).toContain("0");
@@ -316,19 +326,21 @@ describe("LogPanel 日志面板", () => {
    * 归入其他分类」。无文件来源的行（console 拦截 / Tauri 事件 / 全局错误）
    * 现在有自己的分类——此前选中任何来源都会把它们整批藏起来。 */
   it("来源列表里有「控制台 / 全局错误」分类，无文件来源的行能单独筛出来", () => {
-    act(() =>
+    act(() => {
       useLogStore.getState().appendFileLogs([
         { ...makeEntry(1, { message: "console 里的一条" }), source: "console" },
         { ...makeEntry(2, { message: "开发服务已就绪" }), origin: "dev" },
-      ]),
-    );
+      ]);
+    });
     render(<LogPanel />);
 
     /* 该分类出现在下拉选项里（带它自己的计数），而不是只在「全部来源」下能看见。 */
     const optionTexts = () => screen.queryAllByRole("option").map((o) => o.textContent ?? "");
     expect(useLogStore.getState().countsByOrigin.console.all).toBe(1);
 
-    act(() => useLogStore.getState().setOrigin("console"));
+    act(() => {
+      useLogStore.getState().setOrigin("console");
+    });
     expect(screen.getByText(/console 里的一条/)).toBeInTheDocument();
     expect(screen.queryByText(/开发服务已就绪/)).not.toBeInTheDocument();
     /* 计数与内容同口径：按钮上的数就是切过去能看到的行数。 */
@@ -337,7 +349,7 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("来源列表里每一项都自带「条数 / 信息 / 警告 / 错误」的计数", async () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
@@ -345,8 +357,8 @@ describe("LogPanel 日志面板", () => {
           makeEntry(2, { level: "warn", origin: "app" }),
           makeEntry(3, { level: "error", origin: "app" }),
           makeEntry(4, { level: "info", origin: "launcher" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
     const user = userEvent.setup();
 
@@ -372,9 +384,9 @@ describe("LogPanel 日志面板", () => {
    * jsdom 不做层叠与命中测试，所以这里断言的是**层级接线**：弹层定位层拿到的
    * class 必须高于遮罩。真正「点得动」由 e2e（真实 Chromium）兜底。 */
   it("级别按钮整组吃掉行头的富余宽度（不再挤成 32px 的窄条）", () => {
-    act(() =>
-      useLogStore.getState().appendFileLogs([makeEntry(1, { level: "warn", origin: "app" })]),
-    );
+    act(() => {
+      useLogStore.getState().appendFileLogs([makeEntry(1, { level: "warn", origin: "app" })]);
+    });
     render(<LogPanel />);
 
     const button = levelButton("警告");
@@ -422,14 +434,14 @@ describe("LogPanel 日志面板", () => {
    * 最小宽度就是「内边距 + 文字 + 四位数字」的固有宽度，挤不下时也不会切字。
    * 这三条在 jsdom 里只能断言**接线**（不做布局），实际渲染宽度由 e2e 量。 */
   it("级别按钮不会把文字切成省略号（无 truncate/overflow-hidden/min-w-0）", () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { level: "warn", origin: "app" }),
           makeEntry(2, { level: "info", origin: "app" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
 
     for (const label of ["全部", "调试", "信息", "警告", "错误"]) {
@@ -461,14 +473,14 @@ describe("LogPanel 日志面板", () => {
    * （`4ch` 定宽）保持中性灰，避免一行里出现两个互相稀释的高亮块。
    * 零条目也照样着色：它表达的是「这一格是警告」，不是「这里有 0 个问题」。 */
   it("级别按钮的标签带级别色：警告黄、错误红，数字保持中性", () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { level: "warn", origin: "app" }),
           makeEntry(2, { level: "error", origin: "app" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
 
     /* 颜色挂在按钮上、由标签文字继承（标签自身只管不换行）。
@@ -491,15 +503,15 @@ describe("LogPanel 日志面板", () => {
    * （同一个 `originCounts`），是同一项数据在两处出现。现在整块删除，计数只
    * 保留在级别按钮上；完整分类数（含信息）留在各按钮的悬浮说明里。 */
   it("标题旁不再有复述警告/错误的灰底胶囊（计数只在级别按钮上）", () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { level: "warn", origin: "app" }),
           makeEntry(2, { level: "error", origin: "app" }),
           makeEntry(3, { level: "info", origin: "app" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
 
     /* 老形态：标题旁一个 `rounded-full bg-subtle` 的胶囊，title 里写全分类数。 */
@@ -513,18 +525,20 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("页脚写出当前看的是哪一段，点一下即去掉该层筛选", async () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { message: "开发服务已就绪", origin: "dev" }),
           makeEntry(2, { level: "error", message: "任务失败", origin: "app" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
     const user = userEvent.setup();
 
-    act(() => useLogStore.getState().setOrigin("app"));
+    act(() => {
+      useLogStore.getState().setOrigin("app");
+    });
     await user.click(levelButton("错误"));
 
     const footer = screen.getByTestId("logpanel-origin-chip");
@@ -543,14 +557,14 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("计数与过滤同口径：搜索时数字跟着收窄，不会「写着 2 切过去只有 1」", async () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { message: "启动完成", origin: "app" }),
           makeEntry(2, { message: "另一件事", origin: "app" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
     const user = userEvent.setup();
     const allButton = () => levelButton("全部");
@@ -573,7 +587,9 @@ describe("LogPanel 日志面板", () => {
   /* ISSUE #262 复审（这一轮的 4 条反馈）──────────────────────────────── */
 
   it("行头里类别与计数在前，搜索与来源下拉被推到最右", () => {
-    act(() => useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]));
+    act(() => {
+      useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]);
+    });
     render(<LogPanel />);
 
     const header = document.querySelector(".min-h-14");
@@ -613,7 +629,9 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("来源下拉的弹层与扳机底边对齐，且不向上翻转", async () => {
-    act(() => useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]));
+    act(() => {
+      useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]);
+    });
     render(<LogPanel />);
     const user = userEvent.setup();
     await user.click(screen.getByRole("combobox", { name: "按来源筛选" }));
@@ -658,7 +676,9 @@ describe("LogPanel 日志面板", () => {
      * 别把我拽走」）。 */
     await user.click(screen.getByRole("button", { name: "更早的一页" }));
     expect(screen.getByText(/第 2 \/ 4 页/)).toBeInTheDocument();
-    act(() => useLogStore.getState().appendFileLogs([makeEntry(9999, { message: "新来的" })]));
+    act(() => {
+      useLogStore.getState().appendFileLogs([makeEntry(9999, { message: "新来的" })]);
+    });
     /* 正好来了 1 条新的（页面仍停在第 2 页，因为还没点「回到最新」） */
     expect(screen.getByText(/第 2 \/ 5 页/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /有 1 条新的日志/ })).toBeInTheDocument();
@@ -675,14 +695,14 @@ describe("LogPanel 日志面板", () => {
    * 文本、成功/失败说真话）；「日志一直刷、选不中」那一半由 e2e 在真实浏览器里
    * 证明（jsdom 不做剪切板也不做滚动）。 */
   it("每条日志末尾都有复制按钮，点一下复制的就是这一行", async () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { level: "error", message: "任务失败：连接超时" }),
           makeEntry(2, { message: "任务入队" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
     /* `userEvent.setup()` 会装一个**真的记录写入了什么**的剪贴板替身
      * （jsdom 本身不实现 navigator.clipboard）。这正好是这里要断言的：
@@ -736,17 +756,19 @@ describe("LogPanel 日志面板", () => {
     /* 两类来源各若干行：用户先把来源收窄到「应用运行」，再按复制——期望拿到的
      * 只有这一类（ISSUE #609 第 2 条：「复制日志，需要只复制当前选择类型的
      * 全部日志」）。 */
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { origin: "app-runtime", message: "要复制的运行日志" }),
           makeEntry(2, { origin: "dev", message: "不该被复制的启动日志" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
     const user = userEvent.setup();
-    act(() => useLogStore.getState().setOrigin("app-runtime"));
+    act(() => {
+      useLogStore.getState().setOrigin("app-runtime");
+    });
 
     await user.click(screen.getByRole("button", { name: "复制当前筛选的全部日志" }));
     const written = await navigator.clipboard.readText();
@@ -778,10 +800,8 @@ describe("LogPanel 日志面板", () => {
         }),
       );
       expect(await screen.findByText(/exports\//)).toBeInTheDocument();
-      const [url, init] = /* SAFETY: 类型断言已复核 */ fetchMock.mock.calls[0] as unknown as [
-        string,
-        { body: string },
-      ];
+      /* SAFETY: 类型断言已复核 */
+      const [url, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string }];
       expect(url).toBe("/api/logs/export");
       /* SAFETY: 类型断言已复核 */
       const sent = JSON.parse(init.body) as {
@@ -815,7 +835,8 @@ describe("LogPanel 日志面板", () => {
       const user = userEvent.setup();
       await user.click(screen.getByRole("button", { name: "打包诊断现场到本地文件" }));
       expect(await screen.findByText(/diagnostics-/)).toBeInTheDocument();
-      const [url] = /* SAFETY: 类型断言已复核 */ fetchMock.mock.calls[0] as unknown as [string];
+      /* SAFETY: 类型断言已复核 */
+      const [url] = fetchMock.mock.calls[0] as unknown as [string];
       expect(url).toBe("/api/logs/diagnostics");
     } finally {
       vi.unstubAllGlobals();
@@ -823,7 +844,9 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("复制失败时如实说失败，不谎报「已复制」", async () => {
-    act(() => useLogStore.getState().appendFileLogs([makeEntry(1, { message: "任务入队" })]));
+    act(() => {
+      useLogStore.getState().appendFileLogs([makeEntry(1, { message: "任务入队" })]);
+    });
     render(<LogPanel />);
     const user = userEvent.setup();
     /* 让剪贴板写入失败（权限被拒 / 非安全上下文都会走到这里）。注意顺序：
@@ -1016,7 +1039,9 @@ describe("LogPanel 日志面板", () => {
      结束（jsdom 不会派发那个事件），展开过一次就会给后续用例留下一份没摘除的
      弹层宿主。只影响测试环境，真实浏览器里过渡会正常结束。 */
   it("弹层定位层的层级高于面板遮罩（否则被遮罩压住、点不动）", async () => {
-    act(() => useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]));
+    act(() => {
+      useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]);
+    });
     render(<LogPanel />);
 
     /* 面板遮罩：面板改用 `ui/dialog` 后遮罩由基元 Portal 到 body（不再挂在
@@ -1043,14 +1068,14 @@ describe("LogPanel 日志面板", () => {
   /* 零条目同样不留占位：胶囊已删，所以「警告 0 / 错误 0」在任何地方都不出现，
    * 标题行不会因为一个恒在的徽标被挤（列宽也就不会被逼到省略号）。 */
   it("警告/错误都为零时标题行不留占位", () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { level: "info", origin: "app" }),
           makeEntry(2, { level: "info", origin: "app" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
 
     expect(document.querySelector("span.rounded-full")).toBeNull();

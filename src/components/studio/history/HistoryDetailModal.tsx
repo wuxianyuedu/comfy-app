@@ -100,7 +100,12 @@ export function HistoryDetailModal({
   /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给`ui/dialog`：此前自绘遮罩 +
  手写`onClick` 关闭，Esc 没接、焦点不锁也不归还。 */
   return (
-    <Dialog onOpenChange={(next) => !next && onClose()} open>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open
+    >
       <DialogContent
         aria-label="任务详情"
         className="bg-transparent p-0 ring-0"
@@ -139,7 +144,9 @@ export function HistoryDetailModal({
                 /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- onClick 是 stopPropagation 守卫，不是交互 */
                 <div
                   className={`border-border bg-panel-deep absolute top-13 right-5 ${zClass("popup")} w-[min(440px,calc(100vw-40px))] rounded-lg border p-3 shadow-xl`}
-                  onClick={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                  }}
                 >
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-ink-strong text-2xs font-medium">
@@ -181,7 +188,9 @@ export function HistoryDetailModal({
                   <div className="mt-2 flex flex-wrap justify-end gap-2">
                     <Button
                       className="text-2xs h-auto rounded-md px-2.5 py-1"
-                      onClick={() => actions.copyPath()}
+                      onClick={() => {
+                        actions.copyPath();
+                      }}
                       size="xs"
                       variant="success"
                     >

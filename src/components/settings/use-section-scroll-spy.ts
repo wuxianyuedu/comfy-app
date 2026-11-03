@@ -191,7 +191,9 @@ export function useSectionScrollSpy<Id extends string>({
         observer.observe(el);
       }
     }
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+    };
   }, [containerRef, sectionIds, revision]);
 
   const scrollToSection = useCallback(

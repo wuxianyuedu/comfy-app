@@ -92,9 +92,13 @@ export function CanvasArea({
     if (!menu) {
       return;
     }
-    const handler = () => setMenu(null);
+    const handler = () => {
+      setMenu(null);
+    };
     window.addEventListener("pointerdown", handler, { once: true });
-    return () => window.removeEventListener("pointerdown", handler);
+    return () => {
+      window.removeEventListener("pointerdown", handler);
+    };
   }, [menu]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -139,7 +143,9 @@ export function CanvasArea({
                 }`}
                 disabled={item.disabled}
                 key={item.id}
-                onClick={() => handleAction(item.id)}
+                onClick={() => {
+                  handleAction(item.id);
+                }}
                 variant={item.danger === true ? "danger" : "ghost"}
               >
                 <span className="text-ink-fainter shrink-0">{item.icon}</span>

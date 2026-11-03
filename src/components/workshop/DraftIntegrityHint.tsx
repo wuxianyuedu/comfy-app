@@ -72,7 +72,9 @@ export function DraftIntegrityHint({ issues, onGoTo }: DraftIntegrityHintProps) 
         <span className="flex-1">{summary}</span>
         <Button
           className="bg-amber/15 text-amber hover:bg-amber/25 font-medium"
-          onClick={() => onGoTo(jumpTo)}
+          onClick={() => {
+            onGoTo(jumpTo);
+          }}
           size="xs"
           type="button"
           variant="ghost"

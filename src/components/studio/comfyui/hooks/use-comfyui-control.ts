@@ -84,7 +84,9 @@ export function useComfyuiControl() {
     /* 刻意不另开日志：这条失败（重问状态没成）自己就有可见出口 —— 状态行留在
      * 上一次的结论上、30s 兜底轮询随后再试一次，用户看得到结果；而它最常见的
      * 成因（服务正在重启）每重启一次打一行只是噪声。 */
-    onChange: () => fireAndForget(comfyStatusQ.refetch(), () => undefined),
+    onChange: () => {
+      fireAndForget(comfyStatusQ.refetch(), () => undefined);
+    },
   });
 
   /* ── 启动 / 关闭 ───────────────────────────────────────── */

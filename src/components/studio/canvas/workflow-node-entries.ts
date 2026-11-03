@@ -99,8 +99,8 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
     }
     if (data.rawOutputs && data.rawOutputs.length > 0) {
       return data.rawOutputs.map(
-        (rawOutput) =>
-          /* SAFETY: 类型断言已复核 */ [rawOutput.name, rawOutput.type] as [string, string],
+        /* SAFETY: 类型断言已复核 */
+        (rawOutput) => [rawOutput.name, rawOutput.type] as [string, string],
       );
     }
     return [];

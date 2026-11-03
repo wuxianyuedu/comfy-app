@@ -18,7 +18,7 @@ type RuntimeExitInput = {
   port?: number | null;
   runId?: string | null;
   who: "dev" | "shell" | "signal";
-}
+};
 /** 判据函数的返回形状（.mjs 侧的 JSDoc 对 .ts 消费方不可见，这里显式声明一次）。 */
 type RuntimeExitRecord = {
   code: number | null;
@@ -29,7 +29,8 @@ type RuntimeExitRecord = {
   signal: string | null;
 };
 
-const { runtimeExitRecord } = /* SAFETY: 类型断言已复核 */ (await import(
+/* SAFETY: 类型断言已复核 */
+const { runtimeExitRecord } = (await import(
   pathToFileURL(join(process.cwd(), "scripts", "launcher-core", "downstream-exit.mjs")).href
 )) as { runtimeExitRecord: (input: RuntimeExitInput) => RuntimeExitRecord };
 

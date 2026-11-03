@@ -144,7 +144,9 @@ export function useLibraryWireFlow({
     if (dropHintTimerRef.current) {
       clearTimeout(dropHintTimerRef.current);
     }
-    dropHintTimerRef.current = setTimeout(() => setDropHint(null), 4000);
+    dropHintTimerRef.current = setTimeout(() => {
+      setDropHint(null);
+    }, 4000);
   }, []);
 
   /* ── 节点与边（只在挂载时派生一次）──

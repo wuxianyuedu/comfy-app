@@ -21,6 +21,7 @@ import {
   decideBaseAttribution,
   decidePremergePush,
   exitForNotRun,
+  isForeignRemotePush,
   mergeCandidates,
   parseRefLines,
   readProof,
@@ -133,9 +134,7 @@ describe("过期判定：什么时候才值得花那 336 秒", () => {
 
   it("没有目标分支 ref ⇒ 不跑也不拦（推 tag 不该被这一跳卡住）", () => {
     const verdict = decidePremergePush({
-      candidates: mergeCandidates(
-        parseRefLines(`refs/tags/v1\t${HEAD}\trefs/tags/v1\t${HEAD}`),
-      ),
+      candidates: mergeCandidates(parseRefLines(`refs/tags/v1\t${HEAD}\trefs/tags/v1\t${HEAD}`)),
       headSha: HEAD,
       upstreamSha: UPSTREAM,
       proof: null,
@@ -308,15 +307,19 @@ describe("证明的读写（本机、不入库；红着不许记）", () => {
 describe("接线在位（判据要有人跑，也要有人守那条线）", () => {
   const hook = readFileSync(".githooks/pre-push", "utf8");
 
-  it("钩子真的调用这份脚本（注释里的同名字样不算调用）", () => {
+  it("钩子真的调用这份脚本，并把「远端名 + 远端 URL」传下去（注释里的同名字样不算调用）", () => {
     // 锚定行首：把那一行前面加 `# ` 注掉之后，`toContain` 仍然命中，只有这里会红。
-    expect(hook).toMatch(/^node scripts\/premerge-proof\.mjs <"\$refs_in"/m);
+    // `"$1" "$2"` 是目的地那一问的输入（ISSUE #3025）：少了它们，推向镜像仓库的 push
+    // 会拿到「取不到上游引用」的读数而被拦死。
+    expect(hook).toMatch(/^node scripts\/premerge-proof\.mjs "\$1" "\$2" <"\$refs_in"/m);
   });
 
   it("stdin 只读一次、再分喂两处 —— 少一处就会有一方拿到空输入且不报错", () => {
     expect(hook).toMatch(/^cat >"\$refs_in" \|\| exit 1$/m);
     expect(hook).toMatch(/^git lfs pre-push "\$@" <"\$refs_in" \|\| exit \$\?$/m);
-    expect(hook).toMatch(/^node scripts\/premerge-proof\.mjs <"\$refs_in" \|\| exit \$\?$/m);
+    expect(hook).toMatch(
+      /^node scripts\/premerge-proof\.mjs "\$1" "\$2" <"\$refs_in" \|\| exit \$\?$/m,
+    );
   });
 
   it("LFS 那一跳没有被这次接线挤掉", () => {
@@ -458,5 +461,66 @@ describe("上游 sha 的取法：远端名不假定叫 origin，上游也不许�
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+/**
+ * 目的地那一问（ISSUE #3025）：推向镜像仓库 / 第三方备份远端时，这批 ref 与
+ * 「这条分支要不要合进本仓 master」无关 —— 跳过复算，且不许把原因说成「没有要合进
+ * master 的分支 ref」（那是行为，不是成因）。
+ *
+ * 现场：平台侧检出是 `git init` + 单 ref fetch，`refs/remotes/**` 一条都没有 ⇒
+ * `readRevisions()` 取不到上游 ⇒ `unavailable` ⇒ 退 2 ⇒ 镜像格那次 push 被拦死。
+ */
+describe("push 的目的地不在本仓 remote 上 ⇒ 跳过复算（ISSUE #3025）", () => {
+  it("URL 比对：命中本仓 remote（含 .git 后缀 / 尾斜杠 / 协议大小写差异）不算外来", () => {
+    const known = ["https://cnb.cool/moon-read/comfy-app-t3.git"];
+    expect(isForeignRemotePush("https://cnb.cool/moon-read/comfy-app-t3", known)).toBe(false);
+    expect(isForeignRemotePush("HTTPS://cnb.cool/moon-read/comfy-app-t3.git/", known)).toBe(false);
+    expect(isForeignRemotePush("https://cnb.cool/moon-read/comfy-app-t3.git/", known)).toBe(false);
+  });
+
+  it("镜像仓库的 URL 判成外来", () => {
+    const known = ["https://cnb.cool/moon-read/comfy-app-t3.git"];
+    expect(
+      isForeignRemotePush("https://x-access-token:TOKEN@github.com/wuxianyuedu/comfy-app.git", known),
+    ).toBe(true);
+  });
+
+  it("取不到 remote 清单 / 拿不到 push URL ⇒ 判「不是外来」（误判方向必须是多跑一次）", () => {
+    expect(isForeignRemotePush("https://github.com/x/y.git", [])).toBe(false);
+    expect(isForeignRemotePush(null, ["https://cnb.cool/moon-read/comfy-app-t3.git"])).toBe(false);
+    expect(isForeignRemotePush("", ["https://cnb.cool/moon-read/comfy-app-t3.git"])).toBe(false);
+  });
+
+  it("外来的 push ⇒ skip 退 0，且理由念的是目的地、不是「没有分支」", () => {
+    const candidates = mergeCandidates(parseRefLines(refLine()));
+    const verdict = decidePremergePush({
+      candidates,
+      headSha: HEAD,
+      /* 上游取不到正是平台检出形态下的读数 —— 外来远端这一判必须排在它前面。 */
+      upstreamSha: null,
+      proof: null,
+      foreignPush: { url: "https://x-access-token:TOKEN@github.com/wuxianyuedu/comfy-app.git" },
+    });
+    expect(verdict.verdict).toBe("skip");
+    expect(verdict.reasons[0]).toContain("github.com/wuxianyuedu/comfy-app");
+    expect(verdict.reasons[0]).toContain("不在本仓任何 remote 上");
+    const got = exitForNotRun(verdict, { proof: null, candidates, headSha: HEAD, upstreamSha: null });
+    expect(got?.code).toBe(0);
+  });
+
+  it("本仓远端 + 上游取不到 ⇒ 仍是 unavailable 退 2（这一刀不许放宽）", () => {
+    const candidates = mergeCandidates(parseRefLines(refLine()));
+    const verdict = decidePremergePush({
+      candidates,
+      headSha: HEAD,
+      upstreamSha: null,
+      proof: null,
+      foreignPush: null,
+    });
+    expect(verdict.verdict).toBe("unavailable");
+    const got = exitForNotRun(verdict, { proof: null, candidates, headSha: HEAD, upstreamSha: null });
+    expect(got?.code).toBe(2);
   });
 });

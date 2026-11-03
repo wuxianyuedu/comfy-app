@@ -62,8 +62,8 @@ function renderViewer(onClose: () => void = () => undefined) {
   const view = render(<ImageViewer alt="运行结果" onClose={onClose} src={SRC} />);
   return {
     ...view,
-    canvas: () =>
-      /* SAFETY: 类型断言已复核 */ view.getByTestId("image-viewer-canvas") as HTMLDivElement,
+    /* SAFETY: 类型断言已复核 */
+    canvas: () => view.getByTestId("image-viewer-canvas") as HTMLDivElement,
     percent: () => view.getByTestId("image-viewer-percent").textContent?.trim() ?? "",
     mode: () => view.getByTestId("image-viewer-mode").textContent?.trim() ?? "",
   };

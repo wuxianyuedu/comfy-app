@@ -64,7 +64,12 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
      监听 + 自绘遮罩 `onClick`，焦点也不会锁在弹窗内、关闭后不归还。
      `open={data !== null}` 与调用方的条件渲染同义，多一层兜底。 */
   return (
-    <Dialog onOpenChange={(next) => !next && onClose()} open={data !== null}>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open={data !== null}
+    >
       {/* 关闭按钮由下面的 header 自绘 —— 必须关掉基元的内置那枚，
           否则会渲染出两枚重叠的 ✕（见 `ui/dialog` 的 `showCloseButton`）。 */}
       <DialogContent

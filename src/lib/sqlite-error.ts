@@ -34,7 +34,8 @@ function fieldOf(value: unknown, key: "code" | "message" | "name"): string {
   if (typeof value !== "object" || value === null) {
     return "";
   }
-  const raw = /* SAFETY: 类型断言已复核 */ (value as Record<string, unknown>)[key];
+  /* SAFETY: 类型断言已复核 */
+  const raw = (value as Record<string, unknown>)[key];
   return typeof raw === "string" ? raw : "";
 }
 
@@ -54,9 +55,8 @@ function collect(error: unknown): { codes: Array<string>; messages: Array<string
       messages.push(message);
     }
     node =
-      typeof node === "object"
-        ? /* SAFETY: 类型断言已复核 */ (node as { cause?: unknown }).cause
-        : undefined;
+      /* SAFETY: 类型断言已复核 */
+      typeof node === "object" ? (node as { cause?: unknown }).cause : undefined;
   }
   return { codes, messages };
 }

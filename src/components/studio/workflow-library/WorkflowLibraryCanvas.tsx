@@ -275,7 +275,9 @@ function WorkflowLibraryCanvasInner({
    *  三条退出路径都置 `fitted`（fitView 完成 / 视口首次变化 / 兜底定时器），
    *  任一条都不会让画布停在「永远不显形」上。 */
   const [fitted, setFitted] = useState(false);
-  const markFitted = useCallback(() => setFitted(true), []);
+  const markFitted = useCallback(() => {
+    setFitted(true);
+  }, []);
   const handleInit = useCallback(
     (instance: ReactFlowInstance) => {
       void instance.fitView(libraryFitViewOptions()).then(markFitted, markFitted);
@@ -286,7 +288,9 @@ function WorkflowLibraryCanvasInner({
    *  定时器只负责「别让画布卡在不可见」，不参与缩放口径。 */
   useEffect(() => {
     const timer = window.setTimeout(markFitted, 600);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [markFitted]);
 
   /* React Flow 通过 Delete / Backspace 删除选中线时回调：解析出每条线对应的
@@ -491,7 +495,9 @@ function WorkflowLibraryCanvasInner({
           <Button
             aria-label="取消选中"
             className="text-primary-strong hover:bg-primary-500/20"
-            onClick={() => setSelectedEdgeIds(new Set())}
+            onClick={() => {
+              setSelectedEdgeIds(new Set());
+            }}
             size="icon-xs"
             type="button"
             variant="ghost"

@@ -554,7 +554,8 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     const tiers = parseTextTiers(readFileSync(GLOBALS_PATH, "utf8"), TSHIRT_NAME);
     /* 先验量具：这条是「等式为 0」的判据，档表解空了会永远绿（比红更糟）。
      * 六颗都是本仓真实在用、且**必须**能被类名表达的档。 */
-    for (const [px, name] of /* SAFETY: 类型断言已复核 */ [
+    /* SAFETY: 类型断言已复核 */
+    for (const [px, name] of [
       [9, "4xs"],
       [10, "3xs"],
       [11, "2xs"],
@@ -833,7 +834,8 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
      * 产物）：xs 12/16、sm 14/20、lg 18/28、2xs 11/16.5、3xs 10/15 —— 后两档的
      * 16.5 / 15 是**继承来的 1.5 倍**，不是配对。 */
     const tiers = parseTextTiers(readFileSync(GLOBALS_PATH, "utf8"), TSHIRT_NAME);
-    for (const [name, px] of /* SAFETY: 类型断言已复核 */ [
+    /* SAFETY: 类型断言已复核 */
+    for (const [name, px] of [
       ["xs", 16],
       ["sm", 20],
       ["lg", 28],

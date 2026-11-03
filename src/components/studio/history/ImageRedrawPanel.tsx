@@ -58,10 +58,10 @@ export function ImageRedrawPanel({
         <FieldLabel>模式</FieldLabel>
         <RadioGroup
           className="flex flex-row gap-4"
-          onValueChange={(v) =>
+          onValueChange={(v) => {
             /* SAFETY: 类型断言已复核 */
-            controller.setMode(v as "upscale" | "inpaint")
-          }
+            controller.setMode(v as "upscale" | "inpaint");
+          }}
           value={controller.mode}
         >
           {/* 点击区走 radio-group 的 children 语义（P78）：文字进 Item，
@@ -90,7 +90,9 @@ export function ImageRedrawPanel({
         </FieldLabel>
         <Select
           disabled={controller.busy}
-          onValueChange={(next) => controller.selectTemplate(next ?? "")}
+          onValueChange={(next) => {
+            controller.selectTemplate(next ?? "");
+          }}
           value={controller.selectedTemplateId || null}
         >
           <SelectTrigger

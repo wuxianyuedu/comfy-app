@@ -58,7 +58,9 @@ export function HistoryTaskCard({
         <Button
           aria-label="查看任务详情"
           className="bg-panel-deep relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-xl p-0"
-          onClick={() => onOpenDetail(task.id)}
+          onClick={() => {
+            onOpenDetail(task.id);
+          }}
           variant="ghost"
         >
           {task.cover !== null && task.cover !== "" ? (
@@ -100,7 +102,9 @@ export function HistoryTaskCard({
          * 块级元素，而它的默认排版是居中。 */}
         <Button
           className="h-auto min-w-0 flex-1 cursor-pointer justify-start rounded-xl p-0 text-left font-normal whitespace-normal hover:bg-transparent"
-          onClick={() => onOpenDetail(task.id)}
+          onClick={() => {
+            onOpenDetail(task.id);
+          }}
           variant="ghost"
         >
           <div className="flex flex-wrap items-center gap-2">
@@ -154,7 +158,9 @@ export function HistoryTaskCard({
             {st.isActive && (
               <Button
                 className="h-auto rounded-lg px-2.5 py-1"
-                onClick={() => onCancel(task.id)}
+                onClick={() => {
+                  onCancel(task.id);
+                }}
                 size="xs"
                 variant="warning"
               >
@@ -165,7 +171,9 @@ export function HistoryTaskCard({
               <Button
                 className="h-auto rounded-lg px-2.5 py-1"
                 disabled={retrying}
-                onClick={() => onRetry(task)}
+                onClick={() => {
+                  onRetry(task);
+                }}
                 size="xs"
                 variant="primary"
               >
@@ -174,7 +182,9 @@ export function HistoryTaskCard({
             )}
             <Button
               className="h-auto rounded-lg px-2.5 py-1"
-              onClick={() => onRemove(task.id)}
+              onClick={() => {
+                onRemove(task.id);
+              }}
               size="xs"
               variant="danger"
             >

@@ -1036,6 +1036,18 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
     );
     /* 它的判决**依赖暂存改动**：干净快照里它立刻返回 0，那行绿是假绿。 */
     expect(mayDecideOnCleanSnapshot(["node", "scripts/shell-gate.mjs"])).toBe(false);
+    /* `check-reformat-only.cjs` 带 `--staged` 时不进这一批（按参数形态就认得出）。
+     *
+     * ⚠️ **不带旗标那一形态现在会进来**（ISSUE #3038，此前因为它在 `CHANGED_SCOPED` 里
+     * 而被排除）：它落到「判 `HEAD` 这一次提交」那一支，而那一支的区间由合成提交的
+     * 父关系现算（`reformat-preview-range.mjs`）—— 干净快照上这一支读到的是
+     * `HEAD~1..HEAD`（一个**与本次改动无关**的区间），与它「只对本次改动作答」的定位
+     * 对不上；可它此时又**确实**能从提交历史里算出结论（不是空跑），所以不再算假绿。
+     * 两个方向都钉住，免得下一次有人只改一边。 */
+    expect(mayDecideOnCleanSnapshot(["node", "scripts/check-reformat-only.cjs", "--staged"])).toBe(
+      false,
+    );
+    expect(mayDecideOnCleanSnapshot(["node", "scripts/check-reformat-only.cjs"])).toBe(true);
     /* 复算里再复算会递归。 */
     expect(mayDecideOnCleanSnapshot(["node", "scripts/base-check.mjs", "x"])).toBe(false);
     /* 全仓判据留下。 */

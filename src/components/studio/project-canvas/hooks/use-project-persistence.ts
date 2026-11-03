@@ -99,8 +99,12 @@ export function useProjectPersistence({
     if (projectId === null || projectId === "" || !loaded) {
       return;
     }
-    const t = setTimeout(() => persistNow(), 500);
-    return () => clearTimeout(t);
+    const t = setTimeout(() => {
+      persistNow();
+    }, 500);
+    return () => {
+      clearTimeout(t);
+    };
   }, [nodes, edges, projectId, projectName, loaded, persistNow]);
 
   /* 600ms mutation effect：跳过加载后首轮变更，后续变更落盘。 */
@@ -115,13 +119,19 @@ export function useProjectPersistence({
       firstMutationRef.current = false;
       return;
     }
-    const t = setTimeout(() => persistNow(), 600);
-    return () => clearTimeout(t);
+    const t = setTimeout(() => {
+      persistNow();
+    }, 600);
+    return () => {
+      clearTimeout(t);
+    };
   }, [nodes, edges, loaded, persistNow]);
 
   /* 切走 / 关页前立即 flush，避免丢最近一次编辑。 */
   useEffect(() => {
-    const flush = () => persistNow();
+    const flush = () => {
+      persistNow();
+    };
     window.addEventListener("beforeunload", flush);
     return () => {
       window.removeEventListener("beforeunload", flush);

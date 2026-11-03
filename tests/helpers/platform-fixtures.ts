@@ -48,7 +48,7 @@ export type PlatformFixtures = {
    * 真实平台。**只读**，由宿主决定；判据要的是「这台机器上这条能不能跑」。
    */
   realPlatform: NodeJS.Platform;
-}
+};
 
 /** 宿主形态维度：被测代码问「这个命令能不能起」时，谁回答。 */
 export type HostFixtures = {
@@ -65,7 +65,7 @@ export type HostFixtures = {
     access: (candidate: string) => void;
     spawn: (cmd: string) => string | null;
   };
-}
+};
 
 /**
  * 这台机器是不是 Windows —— **给 `skipIf` / `runIf` 用的字面量**。

@@ -108,6 +108,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
   const candidates = portraitCandidates(character);
 
   return (
+    /* SAFETY: 类型断言已复核 */
     <div className="bg-subtle mt-3 rounded-lg p-3">
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <p className="text-muted-foreground text-xs font-medium">定妆照</p>
@@ -115,26 +116,28 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
             与镜头台 / 影片台的「生成通道」是同一族：手搓的
             `variant="outline"` + 选中三元，缺「已选中时的悬停值」那一半。 */}
         <div aria-label="定妆照生成通道" className="flex gap-2" role="radiogroup">
-          {
-            /* SAFETY: 类型断言已复核 */ (["local", "remote"] as const).map((channel) => (
-              <SelectChip
-                disabled={session.busy || session.importing}
-                key={channel}
-                onClick={() => actions.patch({ channel })}
-                selected={session.channel === channel}
-                shape="compact"
-              >
-                {channel === "local" ? "本地（ComfyUI）" : "远端 API"}
-              </SelectChip>
-            ))
-          }
+          {(["local", "remote"] as const).map((channel) => (
+            <SelectChip
+              disabled={session.busy || session.importing}
+              key={channel}
+              onClick={() => {
+                actions.patch({ channel });
+              }}
+              selected={session.channel === channel}
+              shape="compact"
+            >
+              {channel === "local" ? "本地（ComfyUI）" : "远端 API"}
+            </SelectChip>
+          ))}
         </div>
         {session.channel === "local" && (
           <SelectMenu
             className="bg-subtle! border-border! text-2xs"
             disabled={session.busy || session.importing}
             labels={localOptionLabels}
-            onChange={(value) => actions.patch({ localWorkflowId: value })}
+            onChange={(value) => {
+              actions.patch({ localWorkflowId: value });
+            }}
             options={localOptions}
             placeholder="选择本地生图模型"
             popoverMinWidth={240}
@@ -145,7 +148,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
           <SelectMenu
             className="bg-subtle! border-border! text-2xs"
             disabled={session.busy || session.importing}
-            onChange={(value) => actions.patch({ remoteModel: value })}
+            onChange={(value) => {
+              actions.patch({ remoteModel: value });
+            }}
             options={remoteImageModels}
             placeholder="选择远端生图模型"
             popoverMinWidth={220}
@@ -154,7 +159,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
         )}
         <ShotSizePicker
           disabled={session.busy}
-          onChange={(size) => actions.patch({ size })}
+          onChange={(size) => {
+            actions.patch({ size });
+          }}
           value={session.size}
         />
         <Button
@@ -287,7 +294,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                 </Disclosure>
                 <Button
                   className="text-muted-foreground hover:text-primary text-2xs h-auto shrink-0 p-0 underline underline-offset-2"
-                  onClick={() => loadHistory()}
+                  onClick={() => {
+                    loadHistory();
+                  }}
                   variant="link"
                 >
                   历史
@@ -349,7 +358,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                     className={`block overflow-hidden rounded-lg border-2 transition-colors ${
                       selected ? "border-primary" : "border-border hover:border-primary/60"
                     }`}
-                    onClick={() => actions.select(character.id, candidate.url)}
+                    onClick={() => {
+                      actions.select(character.id, candidate.url);
+                    }}
                     variant="ghost"
                   >
                     <MediaThumbnail
@@ -371,7 +382,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                   aria-label="删除这张定妆照候选"
                   className="text-muted-foreground hover:text-danger-strong absolute -top-1.5 -right-1.5 rounded-full bg-black/70"
                   disabled={session.busy || session.importing}
-                  onClick={() => actions.remove(character.id, candidate.url)}
+                  onClick={() => {
+                    actions.remove(character.id, candidate.url);
+                  }}
                   size="icon-xs"
                   variant="ghost"
                 >

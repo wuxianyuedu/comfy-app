@@ -184,8 +184,12 @@ export function useWorkflowLibraryDetail(
     [workflow],
   );
 
-  const openSource = useCallback(() => setSourceOpen(true), []);
-  const closeSource = useCallback(() => setSourceOpen(false), []);
+  const openSource = useCallback(() => {
+    setSourceOpen(true);
+  }, []);
+  const closeSource = useCallback(() => {
+    setSourceOpen(false);
+  }, []);
 
   /* 未选中工作流时不发请求（enabled:false）。hooks 顺序必须稳定，因此这里不
    * 做 early return —— 空态交给视图渲染。 */

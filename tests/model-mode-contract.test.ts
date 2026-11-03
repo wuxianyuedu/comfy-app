@@ -13,12 +13,7 @@ describe("远端模型工坊模式适配器：默认契约", () => {
     /* 「尺寸」在适配器层就是这三行（比例 + 百万像素 + 倍数）——与工坊尺寸
      *  选择器的统一口径一致：选「分辨率」时换算成这三个值再下发。 */
     const inputs = defaultInputsForMode("T2I");
-    expect(inputs.map((i) => i.type)).toEqual([
-      "prompt",
-      "aspect-ratio",
-      "megapixels",
-      "multiple",
-    ]);
+    expect(inputs.map((i) => i.type)).toEqual(["prompt", "aspect-ratio", "megapixels", "multiple"]);
     expect(defaultEndpointPathForMode("T2I")).toBe("/images/generations");
   });
 

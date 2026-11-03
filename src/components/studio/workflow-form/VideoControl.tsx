@@ -141,7 +141,9 @@ function VideoControl({
         label: "比例",
         value: val,
         options: opts.map((option) => ({ value: option, label: option })),
-        onChange: (option: string) => set(entry.ioKey, option),
+        onChange: (option: string) => {
+          set(entry.ioKey, option);
+        },
       };
     }
     const presets = DIM_RATIO_PRESETS;

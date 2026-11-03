@@ -304,6 +304,15 @@
     },
     {
       "file": "scripts/affected-launch-wallclock.mjs",
+      "const": "FIRST_PASS_TIMEOUT_RESERVE_MS",
+      "value": 30000,
+      "unit": "毫秒（源码字面写 `30_000`，判据按字面取值）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "第 1 遍被掐断之后给收尾（日志回吐 / 记账 / BeforeEnd）留的余量。不是判据：它只决定「提交给 vitest 的 timeout」与「还剩多少」之间差多少，两边都由 firstPassLimit() 一处算 —— 此前两处各算一遍，念出来的数比真实掐点还大（cnb-pl9-1k6b45aqm 的 stage-9）。留 0 会让掐断与收尾撞在同一个 deadline 上，那一屏只剩半句。"
+    },
+    {
+      "file": "scripts/affected-launch-wallclock.mjs",
       "const": "PLATFORM_STAGE_KILL_MS",
       "value": 3240000,
       "unit": "毫秒（平台那一刀的名义落点）",
@@ -389,6 +398,24 @@
       "kind": "report",
       "strictness": "n/a",
       "why": "固定段单块的最大份数（ISSUE #2863）：fixed 段是静态大清单（实测 106 份），argv 预算装得下 ⇒ 只切一块，任何一份带超时指纹判决链都以整块为粒度（cnb-bo5-1k68vik3o 实测一份 30s 超时 ⇒ 整块进复跑链）。24 把复跑粒度降一个量级，代价是多几次 vitest 冷启。不是松紧量：调它不改变任何断言判定。"
+    },
+    {
+      "file": "scripts/check-mirror-attendance.mjs",
+      "const": "DEFAULT_WINDOW_HOURS",
+      "value": 24,
+      "unit": "小时",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "镜像出勤的判据窗口（ISSUE #3046）。放宽它 = 更久以前的那次「已推 · 已派发」还算出勤；收紧 = 更容易报缺勤。它同时是取数翻页要盖到的地平线（沿用 check-daily-attendance.mjs 那个同名量的纪律：#2392 —— 没盖住窗口就落「没结论」，不落缺勤），所以两处消费共用这一个数、不各写一份。"
+    },
+    {
+      "file": "scripts/check-mirror-attendance.mjs",
+      "const": "DEFAULT_DETAIL_LIMIT",
+      "value": 8,
+      "unit": "跑",
+      "kind": "threshold",
+      "strictness": "larger-is-stricter",
+      "why": "逐跑取正文的上界（与 check-daily-attendance.mjs 的 FETCH_MAX_PAGES 同族：它决定**读到几跑**，不是松紧本身）。收紧 ⇒ 读到的样本变小，而这一档的结论主语就是「读到的那几跑」（headline 明写「最近读的 N 跑里…、未逐跑读 M 跑」，正是为了不把「我没读」念成「它没推」，#2392 那一族）；放宽 ⇒ 更容易在历史里撞到一次 present。"
     }
   ],
   "$notCovered": {

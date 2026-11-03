@@ -64,7 +64,9 @@ export const realProbeIo: ProbeIo = {
     }
     throw new Error(`还原写不进去（${WRITE_ATTEMPTS} 次仍失败）：${last}`);
   },
-  remove: (abs) => rmSync(abs, { force: true }),
+  remove: (abs) => {
+    rmSync(abs, { force: true });
+  },
 };
 
 /** 拍下这些路径**此刻**的字节（不存在记成 `null`）。在任何探针动手之前调用。 */
@@ -107,7 +109,8 @@ export function restoreToSnapshot(
     } catch (error) {
       failed.push({
         abs,
-        why: `读不到当前内容：${/* SAFETY: 类型断言已复核 */ (error as Error).message}`,
+        /* SAFETY: 类型断言已复核 */
+        why: `读不到当前内容：${(error as Error).message}`,
       });
       continue;
     }
@@ -123,7 +126,8 @@ export function restoreToSnapshot(
       }
       restored.push(abs);
     } catch (error) {
-      failed.push({ abs, why: /* SAFETY: 类型断言已复核 */ (error as Error).message });
+      /* SAFETY: 类型断言已复核 */
+      failed.push({ abs, why: (error as Error).message });
     }
   }
   return { restored, unchanged, failed };

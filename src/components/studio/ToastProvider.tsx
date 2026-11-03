@@ -82,7 +82,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const pending = timers.current;
     return () => {
-      pending.forEach((tm) => clearTimeout(tm));
+      pending.forEach((tm) => {
+        clearTimeout(tm);
+      });
       pending.clear();
     };
   }, []);
@@ -105,7 +107,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       if (duration !== undefined && duration > 0) {
         timers.current.set(
           id,
-          setTimeout(() => dismiss(id), duration),
+          setTimeout(() => {
+            dismiss(id);
+          }, duration),
         );
       }
     },
@@ -178,7 +182,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               <Button
                 aria-label="关闭"
                 className="text-ink-muted hover:text-ink-bright hover:bg-transparent"
-                onClick={() => dismiss(item.id)}
+                onClick={() => {
+                  dismiss(item.id);
+                }}
                 size="icon-xs"
                 variant="ghost"
               >

@@ -1411,7 +1411,8 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     expect(interactive).toContain("button");
     expect(interactive).toContain("[data-no-drag]");
     // 窗口按钮 / 查看日志 / 日志面板各自声明 no-drag（与脚本判据同源）
-    for (const [start, end] of /* SAFETY: 类型断言已复核 */ [
+    /* SAFETY: 类型断言已复核 */
+    for (const [start, end] of [
       [".win-buttons {", ".win-btn {"],
       [".log-toggle {", ".log-toggle:hover"],
       [".log-panel {", ".log-panel pre"],

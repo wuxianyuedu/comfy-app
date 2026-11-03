@@ -12,11 +12,7 @@ import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
 import { WorkflowNode } from "../WorkflowNode";
 import { ContentAssetBody } from "../ContentAssetNode";
 import { ImageGenerationPanel } from "../ImageGenerationPanel";
-import {
-  type CanvasNodeData,
-  type CanvasNodeType,
-  NODE_META,
-} from "~/lib/project-canvas/canvas-types";
+import { type CanvasNodeType, NODE_META } from "~/lib/project-canvas/canvas-types";
 import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
@@ -26,6 +22,7 @@ import { getProjectCanvasRenderChain } from "../canvas-render-chain";
 import { NodeChip, PORT_STYLE, StatusBadge, StatusDot } from "./CanvasNodePrimitives";
 import { OutputRowPort, SelectedToolbar } from "./SelectedToolbar";
 import { useFileUpload } from "./hooks/use-file-upload";
+import { useNodePatch } from "./hooks/use-node-patch";
 import { useWorkflowIo } from "./hooks/use-workflow-io";
 import { useGenerate } from "./hooks/use-generate";
 import { useShotGenerationWriteback } from "./hooks/use-shot-generation-writeback";
@@ -46,25 +43,7 @@ export const CanvasNode = React.memo(function CanvasNode({
   /* 镜头节点生成落定 → 回写对应 Shot（Phase 3c-2b，见 hook 注释）。 */
   useShotGenerationWriteback(d);
 
-  const patch = useCallback(
-    (p: Partial<CanvasNodeData>) =>
-      setNodes((nds) =>
-        nds.map((node) =>
-          node.id === id
-            ? {
-                ...node,
-                /* SAFETY: 类型断言已复核 */
-                data: {
-                  ...(node.data as CanvasNodeData),
-                  ...p,
-                },
-              }
-            : node,
-        ),
-      ),
-    [id, setNodes],
-  );
-  const deleteSelf = () => setNodes((nds) => nds.filter((nd) => nd.id !== id));
+  const { deleteSelf, patch } = useNodePatch(id);
 
   /* 镜头节点「退回让 AI 重做」：本地先回落 idle（清结果），并写回统一项目（清 imageUrl/clipUrl
    * + rev 自增）；run 若在跑，规划器下一步会重做该镜。IO 走 lib 客户端，本视图不碰 fetch。 */
@@ -105,7 +84,9 @@ export const CanvasNode = React.memo(function CanvasNode({
     workflowId: d.workflowId,
     modes: wfModes,
     setModes: setWfModes,
-    onFailed: (reason) => patch({ error: reason, status: "error" }),
+    onFailed: (reason) => {
+      patch({ error: reason, status: "error" });
+    },
   });
 
   /* 任务运行逻辑：挂载时对账 + runGenerate + 错误面板重试。 */
@@ -143,7 +124,9 @@ export const CanvasNode = React.memo(function CanvasNode({
         kind={d.kind}
         modelTagLib={modelTagLib}
         onGenerate={runGenerate}
-        onReplaceResult={() => pickFile("inputImage")}
+        onReplaceResult={() => {
+          pickFile("inputImage");
+        }}
         patch={patch}
         seededFor={seededFor}
         setWfModes={setWfModes}
@@ -319,14 +302,16 @@ export const CanvasNode = React.memo(function CanvasNode({
           id={id}
           modelFilter={modelFilter}
           modelTagLib={modelTagLib}
-          onFormChange={(next) => patch({ workflowInputs: next })}
+          onFormChange={(next) => {
+            patch({ workflowInputs: next });
+          }}
           onGenerate={runGenerate}
           onModelFilterChange={setModelFilter}
           onModesChange={(modes, defaultMode) => saveModes({ modes, defaultMode })}
           onPatch={patch}
-          onSeedModeChange={(ioKey, mode) =>
-            patch({ seedModes: { ...d.seedModes, [ioKey]: mode } })
-          }
+          onSeedModeChange={(ioKey, mode) => {
+            patch({ seedModes: { ...d.seedModes, [ioKey]: mode } });
+          }}
           onSelectWorkflow={(workflowId) => {
             const wf = wfList.find((item) => item.id === workflowId);
             seededFor.current = null;

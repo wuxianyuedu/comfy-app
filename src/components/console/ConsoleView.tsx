@@ -203,7 +203,9 @@ export function ConsoleView() {
                           : "bg-subtle text-ink-muted hover:text-ink",
                       )}
                       disabled={running}
-                      onClick={() => c.fill(item.command)}
+                      onClick={() => {
+                        c.fill(item.command);
+                      }}
                       variant="ghost"
                     >
                       {item.command}

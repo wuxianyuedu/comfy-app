@@ -146,7 +146,9 @@ export function ResourceLibrary() {
             <Hint accessibleName label="清空">
               <Button
                 className="text-ink-fainter hover:text-ink-soft h-auto shrink-0 p-0 hover:bg-transparent"
-                onClick={() => library.setSearch("")}
+                onClick={() => {
+                  library.setSearch("");
+                }}
                 size="icon-xs"
                 variant="ghost"
               >
@@ -190,7 +192,9 @@ export function ResourceLibrary() {
           action={
             <Button
               className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary mt-4 h-auto rounded-lg px-4 py-2"
-              onClick={() => c.setScope("cross")}
+              onClick={() => {
+                c.setScope("cross");
+              }}
               variant="outline"
             >
               看跨项目素材

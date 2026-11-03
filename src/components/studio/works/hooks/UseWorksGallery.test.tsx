@@ -35,7 +35,9 @@ vi.mock("../../project-canvas/hooks/use-sync-refusal-notice", () => ({
 
 vi.mock("~/lib/project-canvas/canvas-store", () => ({
   listProjectsWithServer: () => listProjectsWithServerMock(),
-  deleteProjectEverywhere: (id: string, name?: string) => deleteProjectEverywhereMock(id, name),
+  deleteProjectEverywhere: (id: string, name?: string) => {
+    deleteProjectEverywhereMock(id, name);
+  },
   reapAllEmptyDrafts: () => reapAllEmptyDraftsMock(),
 }));
 
@@ -93,7 +95,9 @@ describe("useWorksGallery", () => {
     const { result } = renderHook(() => useWorksGallery());
     await expect.poll(() => result.current.loading).toBe(false);
 
-    act(() => result.current.requestDelete("proj_orphan"));
+    act(() => {
+      result.current.requestDelete("proj_orphan");
+    });
     expect(result.current.pendingDelete?.id).toBe("proj_orphan");
 
     let name: string | null = null;
@@ -116,8 +120,12 @@ describe("useWorksGallery", () => {
     const { result } = renderHook(() => useWorksGallery());
     await expect.poll(() => result.current.loading).toBe(false);
 
-    act(() => result.current.requestDelete("proj_a"));
-    act(() => result.current.cancelDelete());
+    act(() => {
+      result.current.requestDelete("proj_a");
+    });
+    act(() => {
+      result.current.cancelDelete();
+    });
     expect(result.current.pendingDelete).toBeNull();
     expect(deleteProjectEverywhereMock).not.toHaveBeenCalled();
   });
@@ -127,7 +135,9 @@ describe("useWorksGallery", () => {
     const { result } = renderHook(() => useWorksGallery());
     await expect.poll(() => result.current.loading).toBe(false);
     expect(listProjectsWithServerMock).toHaveBeenCalledTimes(1);
-    act(() => result.current.refresh());
+    act(() => {
+      result.current.refresh();
+    });
     await expect.poll(() => listProjectsWithServerMock).toHaveBeenCalledTimes(2);
   });
 });

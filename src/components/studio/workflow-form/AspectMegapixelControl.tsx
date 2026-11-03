@@ -282,7 +282,9 @@ export function AspectMegapixelControl({
           label: option.label,
           render: <RatioIcon ratio={option.ratio} />,
         })),
-        onChange: (value) => apply(value, currentMp),
+        onChange: (value) => {
+          apply(value, currentMp);
+        },
       },
       {
         label: "像素",
@@ -306,7 +308,9 @@ export function AspectMegapixelControl({
         extra: (
           <MegapixelStepper
             disabled={disabled}
-            onChange={(megapixels) => apply(aspectValue, megapixels, currentMultiple)}
+            onChange={(megapixels) => {
+              apply(aspectValue, megapixels, currentMultiple);
+            }}
             value={currentMp}
           />
         ),
@@ -370,7 +374,9 @@ export function AspectMegapixelControl({
             {currentDims ? `${currentDims.width}×${currentDims.height}` : resolutionHint}
           </span>
         }
-        onOpen={() => setTableOpen(true)}
+        onOpen={() => {
+          setTableOpen(true);
+        }}
         scene={scene}
       />
     </div>
@@ -480,7 +486,14 @@ export function AspectMegapixelControl({
         )}
       </div>
 
-      {tableOpen && <SizePresetTableModal onClose={() => setTableOpen(false)} scene={scene} />}
+      {tableOpen && (
+        <SizePresetTableModal
+          onClose={() => {
+            setTableOpen(false);
+          }}
+          scene={scene}
+        />
+      )}
     </div>
   );
 }

@@ -73,6 +73,8 @@ import {
   deriveTitle,
   findMergedPullForHeadSha,
   findPullForBranch,
+  LIST_MAX_PAGES,
+  LIST_PAGE_SIZE,
   looksNewlineMangled,
   parseSlug,
   planCommands,
@@ -260,6 +262,15 @@ describe("asArray：「没拿到列表」与「拿到了但是空的」是两件
     expect(asArray({})).toBeNull();
     expect(asArray(null)).toBeNull();
     expect(asArray({ data: null })).toBeNull();
+  });
+});
+
+describe("清单翻页口径只有一份（ISSUE #2964 / #2950）", () => {
+  it("LIST_PAGE_SIZE / LIST_MAX_PAGES 钉住字面值：scanPullPages 与 resolveBuildSn 共用这一对", () => {
+    /* 两处此前各写一份（5 页 × 20 条），「下次调一处漏一处」就是这条要防的形状。
+     * 字面值钉在这里：谁要改上界，先在这条用例上看见自己改的是什么。 */
+    expect(LIST_PAGE_SIZE).toBe(20);
+    expect(LIST_MAX_PAGES).toBe(5);
   });
 });
 
@@ -1957,7 +1968,9 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
         fs.writeFileSync(p, text, "utf8");
         return p;
       },
-      cleanup: () => rmSync(dir, { recursive: true, force: true }),
+      cleanup: () => {
+        rmSync(dir, { recursive: true, force: true });
+      },
     };
   }
 
@@ -3324,6 +3337,94 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
     expect(f.log.join("\n")).toContain("(未解析到 build)");
   });
 
+  it("ISSUE #3070：钉住 sn 之后不再拉列表 —— 第二眼起 get-build-logs 调用为 0", async () => {
+    /* 签名序列论证：签名只看 (statusJson, sn)，列表从来不是输入；sha 已钉死（#2812）、
+     * sn 是平台分配的 ⇒ 钉住后再拉列表只是重复确认同一件事。这里第一眼钉住 b1，
+     * 之后列表**即便一直在变**也不该再被问 —— 读数只许来自钉住的那一条。 */
+    const log: Array<string> = [];
+    const statusCalls: Array<string> = [];
+    let logsCalls = 0;
+    let statusReads = 0;
+    const run = (_cmd: string, args: Array<string>): FakeResult => {
+      if (args[1] === "get-build-logs") {
+        logsCalls += 1;
+        const builds =
+          logsCalls === 1
+            ? [{ sn: "b1", sha: SHA, event: "pull_request", createTime: "t" }]
+            : [{ sn: "b2", sha: "0".repeat(40), event: "pull_request", createTime: "t2" }];
+        return ok(JSON.stringify({ status: 200, data: { data: builds } }));
+      }
+      if (args[1] === "get-build-status") {
+        statusCalls.push(args.join(" "));
+        statusReads += 1;
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: { sn: "b1", status: statusReads === 1 ? "running" : "success" },
+          }),
+        );
+      }
+      return ok("");
+    };
+    const out = await pollUntilTerminal({
+      run,
+      log: (s) => log.push(s),
+      ...base,
+      now: () => 0,
+      sleep: async () => undefined,
+    });
+    expect(out.stop).toBeNull();
+    expect(out.buildState).toBe("green");
+    expect(out.buildSn).toBe("b1");
+    expect(logsCalls, "钉住之后还在拉列表").toBe(1);
+    expect(log.join("\n")).not.toContain("还没解析到 build");
+    // 第二眼起读的都是钉住的那一条，不是列表里新来的 b2。
+    expect(statusCalls.every((c) => c.includes("--sn b1"))).toBe(true);
+  });
+
+  it("ISSUE #3070：钉住之后列表的瞬时失败不再有话语权（不再把整跑掐成 NOT_RUN）", async () => {
+    /* 改前：钉住之后每一轮仍先拉列表，列表一抖（取不到）整跑退 2 —— 那一拉本来
+     * 就是冗余的。这条把列表做成**第一次之后必炸**的饵：只要钉住后还去问它，
+     * 这条就红。 */
+    const log: Array<string> = [];
+    let logsCalls = 0;
+    let statusReads = 0;
+    const run = (_cmd: string, args: Array<string>): FakeResult => {
+      if (args[1] === "get-build-logs") {
+        logsCalls += 1;
+        if (logsCalls > 1) {
+          return { status: 1, stdout: "boom", stderr: "boom", error: "boom" };
+        }
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: { data: [{ sn: "b1", sha: SHA, event: "pull_request", createTime: "t" }] },
+          }),
+        );
+      }
+      if (args[1] === "get-build-status") {
+        statusReads += 1;
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: { sn: "b1", status: statusReads === 1 ? "running" : "success" },
+          }),
+        );
+      }
+      return ok("");
+    };
+    const out = await pollUntilTerminal({
+      run,
+      log: (s) => log.push(s),
+      ...base,
+      now: () => 0,
+      sleep: async () => undefined,
+    });
+    expect(out.stop).toBeNull();
+    expect(out.buildState).toBe("green");
+    expect(logsCalls).toBe(1);
+  });
+
   it("buildSignature：四件原值进签名，缺 data / 缺 sn / 缺 stages 都各有稳定形状", () => {
     expect(
       buildSignature(
@@ -3682,7 +3783,8 @@ describe("findMergedPullForHeadSha：这一笔是不是已经随某条已合并�
     expect(findMergedPullForHeadSha(CLOSED, "ff99ee88")).toBeNull();
     expect(findMergedPullForHeadSha(CLOSED, "")).toBeNull();
     expect(
-      findMergedPullForHeadSha(CLOSED, /* SAFETY: 类型断言已复核 */ undefined as never),
+      /* SAFETY: 类型断言已复核 */
+      findMergedPullForHeadSha(CLOSED, undefined as never),
     ).toBeNull();
   });
 
@@ -3709,6 +3811,9 @@ describe("readPullVerdict：字段缺省时不抛，且默认值是「没合上�
       blockedOn: "",
       isMerged: false,
       state: "unknown",
+      /* squash 标题那一格（ISSUE #2806）要读的字段：缺省同样是安全默认（空串 ⇒
+       * 推导退回 branch-first），不是 undefined 漏到标题里。 */
+      title: "",
     });
     expect(
       readPullVerdict({
@@ -3959,6 +4064,37 @@ describe("deriveTitle：PR 标题与主干那一行该取自哪一笔", () => {
       title: "",
       source: "none",
     });
+  });
+
+  it("ISSUE #2806：复用平台上改过标题的 PR ⇒ 平台现标题插到 branch-first 之前", () => {
+    /* 优先级是 `--title` > **平台现标题** > branch-first：平台上那条标题是最新的人意图，
+     * 而 branch-first 只描述**第一笔**提交。给 `--title` 时平台那个仍要退位（人以显式旗标为准）。 */
+    expect(
+      deriveTitle({
+        subjects: ["fix(ship): 第一笔"],
+        head: "fix(ship): 第一笔",
+        platform: "feat(ship): 评审后改的方向",
+      }),
+    ).toEqual({
+      title: "feat(ship): 评审后改的方向",
+      source: "platform",
+    });
+    expect(
+      deriveTitle({
+        subjects: ["fix(ship): 第一笔"],
+        head: "fix(ship): 第一笔",
+        explicit: "feat(x): 人给的",
+        platform: "feat(ship): 平台上那版",
+      }),
+    ).toEqual({ title: "feat(x): 人给的", source: "flag" });
+    /* 平台那个没给到 / 是空串 ⇒ 照原样退回 branch-first，不是退回 none。 */
+    expect(
+      deriveTitle({
+        subjects: ["fix(ship): 第一笔"],
+        head: "fix(ship): 第一笔",
+        platform: "  ",
+      }),
+    ).toEqual({ title: "fix(ship): 第一笔", source: "branch-first" });
   });
 });
 
@@ -5594,6 +5730,8 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       const all = heard.join("\n");
       expect(all).toContain("已有开放 PR #777 ⇒ 复用");
       expect(all).toContain("is_merged=true");
+      // 没切分支时两道漂移复核都沉默（不误报）—— 这条链本来就是绿的，多一个字都是噪音。
+      expect(all).not.toContain("跑期内分支被切换");
       expect(all).not.toContain("没删");
       expect(all).toContain("交给下一段（--clean-branch）收");
       expect(code).toBe(CODE.GREEN);
@@ -5610,6 +5748,132 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       ]);
       // 恢复线要真的带着那笔 sha，不然「可以恢复」是一句空话。
       expect(all).toContain("git branch feat/x edda13b6");
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("ISSUE #2812：跑期内切了分支 ⇒ 停在建 PR 之前，退 2 而不拿漂移的 sha 去推 PR/轮询", async () => {
+    /* 现场形状：`pnpm ship` 跑期内（比如等 hook 时）有人切了分支。晚读的
+     * `rev-parse HEAD` 会钉到**新分支**的 sha 上，于是抬头说的分支与轮询盯的 sha
+     * 分家 —— 拿别人分支的构建给自己的 PR 作证。这里让 `--abbrev-ref` 第一读
+     * （preflight 钉住的那个）是 feat/x，第二读变成 feat/switched。 */
+    const { tmpRoot, gitDir } = proofRoot("switched");
+    try {
+      const heard: Array<string> = [];
+      const base = fake({ chain: true });
+      /* 「跑期内切的」就按跑期内来演：push 那一跳**之后**再读分支名才变成别的 ——
+       * 装配层与 preflight（都在 push 之前）读到的仍是 feat/x。按调用次数翻牌会把
+       * 「这一族又多读了一次 HEAD」这种无关变化也演成漂移。 */
+      let pushed = false;
+      const run = (cmd: string, args: Array<string>): FakeResult => {
+        const key = args.join(" ");
+        if (cmd === "git" && key === "rev-parse --abbrev-ref HEAD" && pushed) {
+          return { status: 0, stdout: "feat/switched\n", stderr: "", error: null };
+        }
+        const r = base.run(cmd, args);
+        if (cmd === "git" && key.startsWith("push")) {
+          pushed = true;
+        }
+        return r;
+      };
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--merge"],
+      });
+      expect(code).toBe(CODE.NOT_RUN);
+      const all = heard.join("\n");
+      expect(all).toContain("跑期内分支被切换");
+      expect(all).toContain("feat/switched");
+      /* 停在建 PR / 轮询之前：漂移的 sha 一个字都不许被拿去问平台。 */
+      expect(base.calls.some((c) => c.includes("post-pull"))).toBe(false);
+      expect(base.calls.some((c) => c.includes("merge-pull"))).toBe(false);
+      expect(base.calls.some((c) => c.includes("get-build-logs"))).toBe(false);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("合并前第二道漂移复核：轮询期间才切的分支第一道拦不到 ⇒ 不合并，退 2", async () => {
+    /* 第一道复核在进平台段**前**，而轮询最长 45 分钟 —— 这期间切的分支只有
+     * 合并动作前那一道拦得住。这里让切换发生在第一眼 get-build-status 之后，
+     * 断言：① 第二道念出来并拦住 merge-pull；② 第一道**不误报**（它该沉默）。 */
+    const { tmpRoot, gitDir } = proofRoot("switched-late");
+    try {
+      const heard: Array<string> = [];
+      const base = fake({ chain: true });
+      let polled = false;
+      const run = (cmd: string, args: Array<string>): FakeResult => {
+        const key = args.join(" ");
+        if (cmd === "git" && key === "rev-parse --abbrev-ref HEAD" && polled) {
+          return { status: 0, stdout: "feat/switched\n", stderr: "", error: null };
+        }
+        const r = base.run(cmd, args);
+        if (cmd === "cnb" && key.includes("get-build-status")) {
+          polled = true;
+        }
+        return r;
+      };
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--merge"],
+      });
+      expect(code).toBe(CODE.NOT_RUN);
+      const all = heard.join("\n");
+      expect(all).toContain("合并前复核：跑期内分支被切换");
+      // 第一道不误报：切换发生在它之后，它一个字都不该念。
+      expect(all).not.toContain("[ship] 跑期内分支被切换（feat/x → feat/switched）⇒ 停");
+      // 拦住的是合并那一跳，不是轮询：CI 读数照旧走完。
+      expect(base.calls.some((c) => c.includes("merge-pull"))).toBe(false);
+      expect(base.calls.some((c) => c.includes("get-build-status"))).toBe(true);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("平台标题回读没跑起来 ⇒ 明念「读数缺失」并退回 branch-first，不静默（ISSUE #2806 配套）", async () => {
+    /* get-pull 在这条链上被读三眼：verdict（阶段 5）、合并前的标题回读、合并后验真。
+     * 只让**标题那一眼**（第 2 眼）取不到 —— 其余照常，否则验真那格会把退码搅浑。 */
+    const { tmpRoot, gitDir } = proofRoot("title-read-fail");
+    try {
+      const heard: Array<string> = [];
+      const base = fake({ chain: true });
+      let getPulls = 0;
+      const run = (cmd: string, args: Array<string>): FakeResult => {
+        const key = args.join(" ");
+        if (cmd === "cnb" && key.includes("get-pull")) {
+          getPulls += 1;
+          if (getPulls === 2) {
+            return { status: 0, stdout: "不是 JSON", stderr: "", error: null };
+          }
+        }
+        return base.run(cmd, args);
+      };
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--merge"],
+      });
+      const all = heard.join("\n");
+      expect(all).toContain("平台标题回读没跑起来");
+      expect(all).toContain("读数缺失");
+      expect(all).toContain("标题取自 branch-first");
+      const merge = base.calls.find((c) => c.includes("merge-pull")) ?? "";
+      expect(merge, "回读失败时退回 branch-first 那一行").toContain(
+        "--commit-title fix(x): 主体的那一笔 (#777)",
+      );
+      expect(code).toBe(CODE.GREEN);
     } finally {
       fs.rmSync(tmpRoot, { recursive: true, force: true });
     }
@@ -6201,6 +6465,38 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
         "--title feat(z): 整条 PR 其实是这件事",
       );
       expect(heard2.join("\n")).toContain("标题取自 flag");
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("ISSUE #2806：复用已在平台上改过标题的 PR ⇒ squash 那一行取平台现标题，不是 branch-first", async () => {
+    /* 现场形状：PR 建出后评审在平台上把标题改成了真正的方向（branch-first 只描述
+     * **第一笔**提交）。`--merge` 复用这条 PR 时，squash 标题若仍按 branch-first 推导，
+     * 主干上就落一行「标题与内容不符」的历史。这里让 get-pull 带 `title` 回来，
+     * 断言 merge-pull 的 `--commit-title` 用的是它。 */
+    const { tmpRoot, gitDir } = proofRoot("platform-title");
+    try {
+      const heard: Array<string> = [];
+      const base = fake({ chain: true });
+      const run = overrideRun(base, {
+        "get-pull":
+          '{"status":200,"data":{"number":777,"title":"feat(ship): 评审在平台上改过的标题","is_merged":true,"mergeable_state":"mergeable"}}',
+      });
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--merge"],
+      });
+      const merge = base.calls.find((c) => c.includes("merge-pull")) ?? "";
+      expect(merge, "squash 标题没用平台上那条现标题").toContain(
+        "--commit-title feat(ship): 评审在平台上改过的标题 (#777)",
+      );
+      expect(heard.join("\n")).toContain("标题取自 platform");
+      expect(code).toBe(CODE.GREEN);
     } finally {
       fs.rmSync(tmpRoot, { recursive: true, force: true });
     }

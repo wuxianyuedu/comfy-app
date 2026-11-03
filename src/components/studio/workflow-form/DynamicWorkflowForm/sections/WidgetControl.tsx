@@ -142,7 +142,9 @@ export function WidgetControl({
             on ? "text-success-strong" : "text-ink-muted"
           } ${missingRequired ? "ring-destructive/50 ring-1" : ""}`}
           disabled={disabled}
-          onClick={() => onValueChange(!on)}
+          onClick={() => {
+            onValueChange(!on);
+          }}
           role="switch"
           variant="ghost"
         >

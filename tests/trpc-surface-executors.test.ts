@@ -211,10 +211,9 @@ function scanSurface() {
       base: path.basename(f).replace(/\.tsx?$/, ""),
       text: stripComments(readFileSync(f, "utf8")),
     }));
+  /* SAFETY: 类型断言已复核 */
   const procedurePaths = Object.keys(
-    /* SAFETY: 类型断言已复核 */ (
-      appRouter._def as unknown as { procedures: Record<string, unknown> }
-    ).procedures,
+    (appRouter._def as unknown as { procedures: Record<string, unknown> }).procedures,
   ).sort();
   return { mounts, closures, tests, consumers, procedurePaths };
 }

@@ -61,7 +61,9 @@ function runHost(args: Array<string>, logPath: string) {
     child.stderr.on("data", (b: Buffer) => {
       stderr += b.toString("utf8");
     });
-    child.on("exit", (code) => resolve({ code, stderr }));
+    child.on("exit", (code) => {
+      resolve({ code, stderr });
+    });
   });
 }
 
@@ -114,7 +116,9 @@ describe("scripts/executor-host.mjs 骨架", () => {
       );
       child.kill("SIGTERM");
       const exitCode = await new Promise<number | null>((resolve) => {
-        child.on("exit", (c) => resolve(c));
+        child.on("exit", (c) => {
+          resolve(c);
+        });
       });
       const text = fs.readFileSync(logPath, "utf8");
       expect(text).toContain("boot pid=");
@@ -217,7 +221,9 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
       child.stderr.on("data", (b: Buffer) => {
         err += b.toString("utf8");
       });
-      child.on("exit", (c) => resolve({ code: c, stderr: err }));
+      child.on("exit", (c) => {
+        resolve({ code: c, stderr: err });
+      });
     });
     const text = fs.readFileSync(logPath, "utf8");
     expect(code, `stderr: ${stderr}\nlog:\n${text}`).toBe(0);
@@ -246,7 +252,9 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
         },
         stdio: ["ignore", "pipe", "pipe"],
       });
-      child.on("exit", (c) => resolve({ code: c }));
+      child.on("exit", (c) => {
+        resolve({ code: c });
+      });
     });
     expect(code).toBe(1);
     expect(fs.readFileSync(logPath, "utf8")).toContain("runtime boot FAILED");
@@ -268,7 +276,9 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
       child.stderr.on("data", (b: Buffer) => {
         err += b.toString("utf8");
       });
-      child.on("exit", (c) => resolve({ code: c, stderr: err }));
+      child.on("exit", (c) => {
+        resolve({ code: c, stderr: err });
+      });
     });
   }
 

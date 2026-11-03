@@ -226,7 +226,9 @@ export function ExtractToolbar({
             {logStage && (
               <Button
                 className="text-muted-foreground hover:text-primary text-3xs h-auto shrink-0 p-0 font-normal underline underline-offset-2"
-                onClick={() => loadHistory()}
+                onClick={() => {
+                  loadHistory();
+                }}
                 variant="link"
               >
                 历史

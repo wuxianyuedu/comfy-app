@@ -160,7 +160,8 @@ function sidesOf(
 ): { emitted: Array<string>; subscribed: Array<string> } {
   const emitted: Array<string> = [];
   const subscribed: Array<string> = [];
-  for (const [fn, bucket] of /* SAFETY: 类型断言已复核 */ [
+  /* SAFETY: 类型断言已复核 */
+  for (const [fn, bucket] of [
     ["emitAppEvent", emitted],
     ["subscribeAppEvent", subscribed],
   ] as const) {

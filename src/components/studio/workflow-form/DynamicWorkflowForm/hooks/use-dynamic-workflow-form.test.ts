@@ -262,7 +262,9 @@ describe("useDynamicWorkflowForm — set 与 values 的不可变更新", () => {
     const onChange = vi.fn();
     const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ values, onChange })));
 
-    act(() => result.current.set("b", 99));
+    act(() => {
+      result.current.set("b", 99);
+    });
 
     expect(onChange).toHaveBeenCalledTimes(1);
     /* SAFETY: 类型断言已复核 */
@@ -293,11 +295,15 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
   it("拿起一行后 draggingKey/dragOverKey 同步置位，endDrag 清空", () => {
     const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ onReorder: vi.fn() })));
 
-    act(() => result.current.beginPortDrag("k1"));
+    act(() => {
+      result.current.beginPortDrag("k1");
+    });
     expect(result.current.draggingKey).toBe("k1");
     expect(result.current.dragOverKey).toBe("k1");
 
-    act(() => result.current.endDrag());
+    act(() => {
+      result.current.endDrag();
+    });
     expect(result.current.draggingKey).toBeNull();
     expect(result.current.dragOverKey).toBeNull();
   });
@@ -306,21 +312,19 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
     const onReorder = vi.fn();
     const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ onReorder })));
 
-    act(() =>
-      result.current.dragHandlers!.onDragStart("from")(
-        /* SAFETY: 类型断言已复核 */ {
-          dataTransfer: { setData: vi.fn(), effectAllowed: "" },
-        } as never,
-      ),
-    );
-    act(() =>
-      result.current.dragHandlers!.onDrop("to")(
-        /* SAFETY: 类型断言已复核 */ {
-          preventDefault: vi.fn(),
-          dataTransfer: {},
-        } as never,
-      ),
-    );
+    act(() => {
+      /* SAFETY: 类型断言已复核 */
+      result.current.dragHandlers!.onDragStart("from")({
+        dataTransfer: { setData: vi.fn(), effectAllowed: "" },
+      } as never);
+    });
+    act(() => {
+      /* SAFETY: 类型断言已复核 */
+      result.current.dragHandlers!.onDrop("to")({
+        preventDefault: vi.fn(),
+        dataTransfer: {},
+      } as never);
+    });
 
     expect(onReorder).toHaveBeenCalledWith("from", "to", "before");
     // 拖完必须清高亮，否则会留下一道假的插入线
@@ -331,19 +335,20 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
   it("落点在目标行下半区时插到其后（指示线与插入位置同源）", () => {
     const onReorder = vi.fn();
     const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ onReorder })));
-    act(() => result.current.beginPortDrag("from"));
-    act(() =>
-      result.current.dragHandlers!.onDrop("to")(
-        /* SAFETY: 类型断言已复核 */ {
-          preventDefault: vi.fn(),
-          dataTransfer: {},
-          clientY: 80,
-          currentTarget: {
-            getBoundingClientRect: () => ({ top: 0, height: 100 }),
-          },
-        } as never,
-      ),
-    );
+    act(() => {
+      result.current.beginPortDrag("from");
+    });
+    act(() => {
+      /* SAFETY: 类型断言已复核 */
+      result.current.dragHandlers!.onDrop("to")({
+        preventDefault: vi.fn(),
+        dataTransfer: {},
+        clientY: 80,
+        currentTarget: {
+          getBoundingClientRect: () => ({ top: 0, height: 100 }),
+        },
+      } as never);
+    });
     expect(onReorder).toHaveBeenCalledWith("from", "to", "after");
   });
 
@@ -352,15 +357,14 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
     const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ onReorder })));
     const preventDefault = vi.fn();
     const setData = vi.fn();
-    act(() =>
-      result.current.dragHandlers!.onDragStart("k1")(
-        /* SAFETY: 类型断言已复核 */ {
-          target: { closest: () => ({}) }, // 命中可编辑控件（input/select…）
-          preventDefault,
-          dataTransfer: { setData, effectAllowed: "" },
-        } as never,
-      ),
-    );
+    act(() => {
+      /* SAFETY: 类型断言已复核 */
+      result.current.dragHandlers!.onDragStart("k1")({
+        target: { closest: () => ({}) }, // 命中可编辑控件（input/select…）
+        preventDefault,
+        dataTransfer: { setData, effectAllowed: "" },
+      } as never);
+    });
     expect(preventDefault).toHaveBeenCalled();
     expect(setData).not.toHaveBeenCalled();
     expect(result.current.draggingKey).toBeNull();
@@ -370,15 +374,16 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
     const onReorder = vi.fn();
     const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ onReorder })));
 
-    act(() => result.current.beginPortDrag("same"));
-    act(() =>
-      result.current.dragHandlers!.onDrop("same")(
-        /* SAFETY: 类型断言已复核 */ {
-          preventDefault: vi.fn(),
-          dataTransfer: {},
-        } as never,
-      ),
-    );
+    act(() => {
+      result.current.beginPortDrag("same");
+    });
+    act(() => {
+      /* SAFETY: 类型断言已复核 */
+      result.current.dragHandlers!.onDrop("same")({
+        preventDefault: vi.fn(),
+        dataTransfer: {},
+      } as never);
+    });
 
     expect(onReorder).not.toHaveBeenCalled();
     expect(result.current.draggingKey).toBeNull();
@@ -387,38 +392,37 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
   it("拖拽高亮不覆盖同一行：拖到自己时 dragOverKey 不变", () => {
     const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ onReorder: vi.fn() })));
 
-    act(() => result.current.beginPortDrag("k1"));
-    act(() =>
-      result.current.dragHandlers!.onDragOver("k1")(
-        /* SAFETY: 类型断言已复核 */ {
-          preventDefault: vi.fn(),
-          dataTransfer: {},
-        } as never,
-      ),
-    );
+    act(() => {
+      result.current.beginPortDrag("k1");
+    });
+    act(() => {
+      /* SAFETY: 类型断言已复核 */
+      result.current.dragHandlers!.onDragOver("k1")({
+        preventDefault: vi.fn(),
+        dataTransfer: {},
+      } as never);
+    });
     expect(result.current.dragOverKey).toBe("k1");
 
-    act(() =>
-      result.current.dragHandlers!.onDragOver("k2")(
-        /* SAFETY: 类型断言已复核 */ {
-          preventDefault: vi.fn(),
-          dataTransfer: { dropEffect: "" },
-        } as never,
-      ),
-    );
+    act(() => {
+      /* SAFETY: 类型断言已复核 */
+      result.current.dragHandlers!.onDragOver("k2")({
+        preventDefault: vi.fn(),
+        dataTransfer: { dropEffect: "" },
+      } as never);
+    });
     expect(result.current.dragOverKey).toBe("k2");
   });
 
   it("数据流里的 setData 被调用（Firefox 不调用就不启动拖拽）", () => {
     const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ onReorder: vi.fn() })));
     const setData = vi.fn();
-    act(() =>
-      result.current.dragHandlers!.onDragStart("k1")(
-        /* SAFETY: 类型断言已复核 */ {
-          dataTransfer: { setData, effectAllowed: "" },
-        } as never,
-      ),
-    );
+    act(() => {
+      /* SAFETY: 类型断言已复核 */
+      result.current.dragHandlers!.onDragStart("k1")({
+        dataTransfer: { setData, effectAllowed: "" },
+      } as never);
+    });
     expect(setData).toHaveBeenCalledWith("text/plain", "k1");
   });
 });
@@ -427,7 +431,9 @@ describe("useDynamicWorkflowForm — 图片上传", () => {
   it("pickFile 记住上传目标（选择框由 ui/file-picker 打开）", () => {
     const { result } = renderFormWithPicker(baseProps());
 
-    act(() => result.current.controller.pickFile("img-key"));
+    act(() => {
+      result.current.controller.pickFile("img-key");
+    });
 
     expect(result.current.controller.uploadTarget).toBe("img-key");
   });
@@ -437,7 +443,9 @@ describe("useDynamicWorkflowForm — 图片上传", () => {
     vi.mocked(uploadImageFile).mockResolvedValue("uploaded.png");
     const { result } = renderFormWithPicker(baseProps({ onChange }));
 
-    act(() => result.current.controller.pickFile("img-key"));
+    act(() => {
+      result.current.controller.pickFile("img-key");
+    });
     /* `pickPickerFile` 是同步派发 —— 但 `change` 之后挂着的上传 Promise
      * 要跑完，所以外面仍要 `await act`。 */
     await act(async () => {
@@ -459,7 +467,9 @@ describe("useDynamicWorkflowForm — 图片上传", () => {
     const consoleErr = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { result } = renderFormWithPicker(baseProps({ onChange }));
 
-    act(() => result.current.controller.pickFile("img-key"));
+    act(() => {
+      result.current.controller.pickFile("img-key");
+    });
     /* `pickPickerFile` 是同步派发 —— 但 `change` 之后挂着的上传 Promise
      * 要跑完，所以外面仍要 `await act`。 */
     await act(async () => {
@@ -482,7 +492,9 @@ describe("useDynamicWorkflowForm — 图片上传", () => {
     const consoleErr = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { result } = renderFormWithPicker(baseProps({ onUploadError }));
 
-    act(() => result.current.controller.pickFile("img-key"));
+    act(() => {
+      result.current.controller.pickFile("img-key");
+    });
     /* `pickPickerFile` 是同步派发 —— 但 `change` 之后挂着的上传 Promise
      * 要跑完，所以外面仍要 `await act`。 */
     await act(async () => {
@@ -502,7 +514,9 @@ describe("useDynamicWorkflowForm — 图片上传", () => {
     const onUploadProgress = vi.fn();
     const { result } = renderFormWithPicker(baseProps({ onUploadProgress }));
 
-    act(() => result.current.controller.pickFile("img-key"));
+    act(() => {
+      result.current.controller.pickFile("img-key");
+    });
     /* `pickPickerFile` 是同步派发 —— 但 `change` 之后挂着的上传 Promise
      * 要跑完，所以外面仍要 `await act`。 */
     await act(async () => {

@@ -23,7 +23,11 @@ import { createFitOnceScheduler } from "./subgraph-viewport";
 /** 下等到下一帧 rAF 结束（让聚焦 effect 的 step 真正跑一次）。 */
 async function flushFrame() {
   await act(async () => {
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => {
+        resolve();
+      }),
+    );
   });
 }
 

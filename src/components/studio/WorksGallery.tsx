@@ -150,7 +150,9 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
                 >
                   <Button
                     className="flex h-auto w-full items-start gap-3 rounded-2xl p-3.5 text-left font-normal"
-                    onClick={() => controller.openProject(project.id)}
+                    onClick={() => {
+                      controller.openProject(project.id);
+                    }}
                     variant="ghost"
                   >
                     <div

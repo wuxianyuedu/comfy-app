@@ -246,9 +246,13 @@ export function useFilmStudio(): FilmStudioController {
     const guard = beginStaleRun();
     void (async () => {
       const list = await fetchProjectShots();
-      guard.commit(() => applyProjectShots(list));
+      guard.commit(() => {
+        applyProjectShots(list);
+      });
     })();
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, [activeProjectId, fetchProjectShots, applyProjectShots]);
 
   const reloadProjectShots = useCallback(async () => {

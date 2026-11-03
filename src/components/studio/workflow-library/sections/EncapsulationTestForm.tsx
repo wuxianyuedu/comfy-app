@@ -93,8 +93,9 @@ export function EncapsulationTestForm({
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const disabled = running || !canRun;
 
-  const patchText = (id: string, next: string) =>
+  const patchText = (id: string, next: string) => {
     setTexts((prev) => withExposedValue(prev, id, next));
+  };
 
   /* 图片口的选取：`entryId` 与`file` 一起给，回调身份稳定（`useFilePicker`
    * 的 Input 靠 props 身份做 memo，回调每次都变会让隐藏 input 反复卸载重挂）。 */
@@ -197,7 +198,9 @@ export function EncapsulationTestForm({
               <NumberField
                 className="h-7 w-28"
                 disabled={disabled}
-                onChange={(value) => setNumbers((prev) => ({ ...prev, [entry.id]: value }))}
+                onChange={(value) => {
+                  setNumbers((prev) => ({ ...prev, [entry.id]: value }));
+                }}
                 value={numbers[entry.id] ?? 0}
               />
             </div>
@@ -223,7 +226,9 @@ export function EncapsulationTestForm({
             <Textarea
               className="border-border bg-bg text-xs"
               disabled={disabled}
-              onChange={textHandler((value) => patchText(entry.id, value))}
+              onChange={textHandler((value) => {
+                patchText(entry.id, value);
+              })}
               placeholder={entry.id === "prompt" ? "测试提示词" : `输入${entry.label}`}
               rows={entry.id === "prompt" ? 2 : 1}
               value={text}
@@ -280,7 +285,12 @@ function ImageField({
   value: string;
 }) {
   const entryId = entry.id;
-  const handlePick = useCallback((file: File) => onPick(entryId, file), [onPick, entryId]);
+  const handlePick = useCallback(
+    (file: File) => {
+      onPick(entryId, file);
+    },
+    [onPick, entryId],
+  );
   const picker = useFilePicker({ accept: "image/*", onPick: handlePick });
   /* 预览优先用本地 data URL（用户刚选的图，不依赖 ComfyUI）；没有才回退到
    * 按值算出的 ComfyUI 代理地址（`~/lib/media/media-url` 出口，空引用给 null）。 */

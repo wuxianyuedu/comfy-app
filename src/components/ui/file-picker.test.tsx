@@ -124,7 +124,12 @@ describe("useFilePicker（命令式）", () => {
       const picker = useFilePicker({ onPick: noop });
       seen.push(picker.Input.name);
       return (
-        <button aria-label="重渲染" onClick={() => force((n) => n + 1)}>
+        <button
+          aria-label="重渲染"
+          onClick={() => {
+            force((n) => n + 1);
+          }}
+        >
           <picker.Input />
         </button>
       );

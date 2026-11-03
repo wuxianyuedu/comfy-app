@@ -117,8 +117,12 @@ export function WidgetInputRow({
                   ? ""
                   : "border-border-strong bg-subtle text-ink-muted border"
               }`}
-              onClick={() => onRequiredChange(entry.required !== true)}
-              onMouseDown={(event) => event.stopPropagation()}
+              onClick={() => {
+                onRequiredChange(entry.required !== true);
+              }}
+              onMouseDown={(event) => {
+                event.stopPropagation();
+              }}
               variant={entry.required === true ? "danger" : "ghost"}
             >
               {entry.required === true ? "必填" : "可选"}
@@ -140,8 +144,12 @@ export function WidgetInputRow({
                   ? "text-ink-fainter hover:text-ink-soft"
                   : "text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
               }`}
-              onClick={() => onVisibilityChange(visible === false)}
-              onMouseDown={(event) => event.stopPropagation()}
+              onClick={() => {
+                onVisibilityChange(visible === false);
+              }}
+              onMouseDown={(event) => {
+                event.stopPropagation();
+              }}
               variant="ghost"
             >
               {visible === false ? (

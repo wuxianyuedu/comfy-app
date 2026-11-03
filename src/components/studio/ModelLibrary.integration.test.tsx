@@ -72,13 +72,17 @@ const ONE_MODEL: ModelRow = {
   fileSize: 5120,
 };
 
-beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
+beforeAll(() => {
+  server.listen({ onUnhandledFrame: "error" });
+});
 afterEach(() => {
   cleanup();
   behavior = { models: [] };
   server.resetHandlers();
 });
-afterAll(() => server.close());
+afterAll(() => {
+  server.close();
+});
 
 describe("ModelLibrary · 前端集成（MSW 数据态流转）", () => {
   it("mount 后先 loading，list 回包后渲染出模型行（loading→data）", async () => {

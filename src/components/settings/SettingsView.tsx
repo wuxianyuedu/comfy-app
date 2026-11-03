@@ -134,14 +134,18 @@ function SettingsLoadError({ errorText, onRetry }: { errorText: string; onRetry:
       setCopyFailed(false);
       copied.flash();
     },
-    onFailure: () => setCopyFailed(true),
+    onFailure: () => {
+      setCopyFailed(true);
+    },
   });
   const togglePanel = useLogPanel((s) => s.toggleOpen);
 
   /* 复制的是用户看到的这段可读文案（`errorText` 也已优先取服务端原文）；
    * 原始报错（tRPC code / 服务端 message / 堆栈首行）另见日志面板的同条记录
    * —— 视图不再手拼第二份原文，避免两处措辞漂移。 */
-  const copyErrorText = useCallback(() => copyError(errorText), [copyError, errorText]);
+  const copyErrorText = useCallback(() => {
+    copyError(errorText);
+  }, [copyError, errorText]);
 
   return (
     <div className="grid min-h-[60vh] place-items-center overflow-y-auto p-6">

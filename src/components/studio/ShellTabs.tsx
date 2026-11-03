@@ -86,7 +86,9 @@ function TabBlockedNotice({
    * 界面上什么都不变，成没成全靠猜。 */
   const copied = useFlashState();
   const copyUrl = useCopyFeedback({
-    onSuccess: () => copied.flash(),
+    onSuccess: () => {
+      copied.flash();
+    },
     onFailure: "silent",
   });
   return (
@@ -106,7 +108,9 @@ function TabBlockedNotice({
           <code className="text-ink-muted truncate text-xs">{url}</code>
           <Button
             className="text-ink-muted hover:bg-subtle hover:text-ink-strong h-auto shrink-0 rounded px-2 py-1"
-            onClick={() => copyUrl(url)}
+            onClick={() => {
+              copyUrl(url);
+            }}
             size="xs"
             variant="ghost"
           >

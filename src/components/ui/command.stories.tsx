@@ -85,7 +85,12 @@ function DialogDemo() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button onClick={() => setOpen(true)} variant="outline">
+      <Button
+        onClick={() => {
+          setOpen(true);
+        }}
+        variant="outline"
+      >
         打开命令面板（⌘K）
       </Button>
       <CommandDialog onOpenChange={setOpen} open={open}>
@@ -103,7 +108,11 @@ function DialogDemo() {
           </CommandGroup>
           <CommandSeparator />
           <CommandGroup heading="设置">
-            <CommandItem onSelect={() => setOpen(false)}>
+            <CommandItem
+              onSelect={() => {
+                setOpen(false);
+              }}
+            >
               <Settings /> 打开设置
             </CommandItem>
           </CommandGroup>

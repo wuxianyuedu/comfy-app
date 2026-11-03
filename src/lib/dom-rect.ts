@@ -146,8 +146,8 @@ export function offsetWithin(
   }
   const innerRect = inner.getBoundingClientRect();
   const outerRect = outer.getBoundingClientRect();
-  const outerScroll =
-    /* SAFETY: 类型断言已复核 */ (outer as unknown as { scrollTop?: number }).scrollTop ?? 0;
+  /* SAFETY: 类型断言已复核 */
+  const outerScroll = (outer as unknown as { scrollTop?: number }).scrollTop ?? 0;
   return innerRect.top - outerRect.top + outerScroll;
 }
 

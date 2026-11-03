@@ -43,9 +43,9 @@ function ctx() {
   };
 }
 
+/* SAFETY: 类型断言已复核 */
 beforeEach(() => {
-  /* SAFETY: 类型断言已复核 */ (globalThis as { __REJECT_INSERT__?: boolean }).__REJECT_INSERT__ =
-    false;
+  (globalThis as { __REJECT_INSERT__?: boolean }).__REJECT_INSERT__ = false;
   loggerErrorMock.mockClear();
 });
 
@@ -55,9 +55,9 @@ describe("audit 审计日志契约", () => {
     expect(loggerErrorMock).not.toHaveBeenCalled();
   });
 
+  /* SAFETY: 类型断言已复核 */
   it("失败路径：db 写入失败仍 logger.error('audit_write_failed')——关键路径不静默", async () => {
-    /* SAFETY: 类型断言已复核 */ (globalThis as { __REJECT_INSERT__?: boolean }).__REJECT_INSERT__ =
-      true;
+    (globalThis as { __REJECT_INSERT__?: boolean }).__REJECT_INSERT__ = true;
     // audit 内部 catch 住错误，不向调用方抛（不阻塞主流程）
     await expect(audit("role_changed", ctx(), { role: "admin" })).resolves.toBeUndefined();
     expect(loggerErrorMock).toHaveBeenCalled();

@@ -102,7 +102,10 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
       {projectId !== undefined && projectId !== null && projectId !== "" && (
         <Tabs
           className="gap-0"
-          onValueChange={(value) => setScope(/* SAFETY: 类型断言已复核 */ value as HistoryScope)}
+          onValueChange={(value) => {
+            /* SAFETY: 类型断言已复核 */
+            setScope(value as HistoryScope);
+          }}
           value={scope}
         >
           <TabsList
@@ -146,7 +149,9 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
         {FILTER_TABS.map((filterTab) => (
           <SelectChip
             key={filterTab.id}
-            onClick={() => setFilter(filterTab.id)}
+            onClick={() => {
+              setFilter(filterTab.id);
+            }}
             selected={filter === filterTab.id}
           >
             {filterTab.label}
@@ -190,7 +195,9 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
             {scope === "project" && globalCount !== null && globalCount > 0 && (
               <Button
                 className="border-border-strong text-ink-soft hover:bg-subtle hover:text-ink-bright text-2xs mt-3 h-auto rounded-lg px-3 py-1.5"
-                onClick={() => setScope("all")}
+                onClick={() => {
+                  setScope("all");
+                }}
                 variant="outline"
               >
                 查看全部记录
@@ -244,13 +251,13 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                     <Hint accessibleName label="加入画布">
                       <Button
                         className="text-ink-soft absolute top-1 right-1 hidden rounded bg-black/70 group-hover:flex hover:bg-black/60 hover:text-white"
-                        onClick={() =>
+                        onClick={() => {
                           onUse({
                             id: task.id,
                             cover,
                             mediaType: task.mediaType,
-                          })
-                        }
+                          });
+                        }}
                         size="icon-xs"
                         variant="ghost"
                       >
@@ -322,13 +329,13 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                       <Hint accessibleName label="加入画布">
                         <Button
                           className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md"
-                          onClick={() =>
+                          onClick={() => {
                             onUse({
                               id: task.id,
                               cover,
                               mediaType: task.mediaType,
-                            })
-                          }
+                            });
+                          }}
                           size="icon-sm"
                           variant="ghost"
                         >

@@ -20,13 +20,10 @@ const { test, expect } = defineGateRepo({
   dirs: ["src/components/studio", "src/components/ui", "src/app"],
 });
 
-const INLINE_Z =
-  "export function V() {\n  return <div style={{ zIndex: 7 }} />;\n}\n";
+const INLINE_Z = "export function V() {\n  return <div style={{ zIndex: 7 }} />;\n}\n";
 const ARBITRARY_Z = `export function V() {\n  return <div className="fixed ${"z-" + "[10000]"}" />;\n}\n`;
-const NUMERIC_TONE =
-  'export function V() {\n  return <div className="fixed z-9999" />;\n}\n';
-const SCALE_TONE =
-  'export function V() {\n  return <div className="fixed z-modal" />;\n}\n';
+const NUMERIC_TONE = 'export function V() {\n  return <div className="fixed z-9999" />;\n}\n';
+const SCALE_TONE = 'export function V() {\n  return <div className="fixed z-modal" />;\n}\n';
 
 describe("check-overlay-z.cjs（提交门槛，规范 §16.2.5）", () => {
   test("行内数字 zIndex 会被阻断（Z1 硬闸）", ({ repo }) => {
@@ -37,9 +34,7 @@ describe("check-overlay-z.cjs（提交门槛，规范 §16.2.5）", () => {
     expect(output).toContain("src/components/studio/A.tsx");
   });
 
-  test("任意值写法 z-[ <数字> ] 会被阻断（Z2 硬闸，规范 03 §3.2）", ({
-    repo,
-  }) => {
+  test("任意值写法 z-[ <数字> ] 会被阻断（Z2 硬闸，规范 03 §3.2）", ({ repo }) => {
     repo.write("src/components/studio/B.tsx", ARBITRARY_Z);
     const { code, output } = repo.run();
     expect(code).toBe(1);

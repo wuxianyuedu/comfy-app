@@ -98,7 +98,9 @@ export function RequiredChips({
                   className={`nodrag nopan text-3xs h-auto rounded px-1.5 py-px font-medium ${
                     required ? "" : "border-border-strong bg-subtle text-ink-muted border"
                   }`}
-                  onClick={() => onRequiredChange(pin.ioKey, !required)}
+                  onClick={() => {
+                    onRequiredChange(pin.ioKey, !required);
+                  }}
                   variant={required ? "danger" : "ghost"}
                 >
                   {required ? "必填" : "可选"}
@@ -122,8 +124,12 @@ export function RequiredChips({
                         ? "text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
                         : "text-ink-fainter hover:bg-surface-2 hover:text-ink-bright"
                     }`}
-                    onClick={() => onVisibilityChange(pin.ioKey, !visible)}
-                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={() => {
+                      onVisibilityChange(pin.ioKey, !visible);
+                    }}
+                    onMouseDown={(event) => {
+                      event.stopPropagation();
+                    }}
                     variant="ghost"
                   >
                     {visible ? (

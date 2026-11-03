@@ -1,0 +1,702 @@
+#!/usr/bin/env node
+/**
+ * `ci-github-mirror-push.mjs` —— 双远端镜像的**推送 + 派发**一格（ISSUE #2978）。
+ *
+ * ## 它要回答的那一格
+ *
+ * 开发流（PR / issue / `pnpm ship`）全在 CNB，而 GitHub Actions 的触发器只认
+ * 发生在 GitHub 侧的事件 —— 镜像推送就是把「这次 PR 跑到哪一笔」同步过去的那一跳：
+ * 把本跑工作区 HEAD 推到镜像仓库的**专属 ref**，再派发 `repository_dispatch`，
+ * 让 `.github/workflows/pr-gate.yml` 按同一笔 sha 起跑。
+ *
+ * 推的是 `HEAD`（PR 事件上是平台合成的 merge 提交）而不是 PR head：cnb 工作区
+ * 跑的就是这份树，GitHub 侧判同一份树才是对账；两个父提交的历史都在可达集里，
+ * 推送时一并带上。镜像 ref 按请求 ID 收口（`cnb-pr-<IID>`）—— 不猜源分支名的
+ * 环境变量形状，也没有同名互踩。
+ *
+ * ## 边界
+ *
+ * 1. **fail-closed**：令牌 / 请求 ID / HEAD / 目标仓库取不到 ⇒ 退 `2`（没跑起来），
+ *    不冒充成功。第 5 条那一跳让「目标仓库还没有」也落进这一类 —— 它是**外部前提**
+ *    没落地，不是这一格判出了红。
+ * 2. **不打令牌值**（硬规则 17）：令牌只出现在进程参数里；一切回显先过脱敏。
+ * 3. **它在主列，但按读数档跑**（ISSUE #2978 立案时放 `endStages`；#3051 前移进主列）：
+ *    平台的 `endStages` 语义是「stages 跑完才执行」，而这条流水线实测整跑 2546s ⇒ GitHub
+ *    那一跑最早只能在一个多小时后起跑，等「读回 GitHub 对同一笔 sha 的判决」那一格上线就
+ *    成了串行。前移是为了并行；而主列的退码**承重**（某格 `error` 会把后面的格整片
+ *    `skipped`），所以 `.cnb.yml` 给它的是 `--readout`：三态照旧打点、对外恒不退非零，
+ *    与 `镜像身份` / `工作区复用读数` 同一族。**搬的是位置，不是那句「它坏了既不许把门禁的
+ *    红洗成绿，也不许把自己的红叠进门禁的账」。** 翻成 fail-closed 的条件写在 #3051 期望
+ *    第 3 条（等回读格上线），不在这一批。
+ * 4. 推送用 `--force` 不用 `--force-with-lease`：lease 需要 expected 值（要先
+ *    `ls-remote` 再推，两跳网络 + 竞态窗），而 ref 按 IID 专属、由并发锁保证
+ *    同一 PR 同时只有一跑在推 —— 覆盖自己的旧值正是幂等语义。
+ * 5. **推送前先问一次「仓库在不在」**（`ls-remote`，取它第一条 refs 行当代理）。
+ *    为什么要有这一跳：目标仓库没建时，`git push` 的回话与「令牌坏了」**逐字同形**
+ *    （`Invalid username or token` / `Authentication failed`）—— 现场四次跑都停在
+ *    同一句上，读的人只能两边一起猜。分开它们的代价只要一次读，而猜错的代价是把
+ *    「前提没落地」当成「判据红了」去改代码（ISSUE #3014 的形态）。
+ *    刻意**不**用 HTTP 读 `api.github.com`：那要求令牌带读仓库元数据的权，而这一格
+ *    该要的最小面只有 `contents: write`（PR 上游那一族连 `repo-cnb-history:r` 都没有，
+ *    见 `.cnb.yml` 的令牌权限读数）；`ls-remote` 用的是**同一条**认证路径与同一枚令牌，
+ *    所以「它探通了而推不通」仍然只可能是写权 / 保护规则那一层的事 —— 那才是红。
+ *
+ * 6. **推送不带本仓的钩子**（`-c core.hooksPath=`，ISSUE #3025 的第二现场）：平台侧检出
+ *    是**工作区**，`prepare` 起的每一步都在同一棵树上，于是 `.githooks/pre-push` 会跟着
+ *    每一次 `git push` 跑。那一跳判的是「这条分支要不要合进本仓 `master`」，对镜像仓库
+ *    这一推没有对象；而它的前置（`refs/remotes/**`、`git-lfs`）在那一形态里都不成立 ——
+ *    #3025 给钩子补了「按目的地放行」，但那条判据要求 `git remote get-url` 读得到本仓
+ *    remote，平台检出连 remote 都没有（`refs/remotes/**` 零条）⇒ 读不到 ⇒ 按不对称口径
+ *    照旧复算 ⇒ 又一次被自家钩子拦死。所以这一跳**不经过任何本地钩子**：`push` 要在
+ *    别人的仓库上写东西，本仓的提交门槛对它没有管辖权。
+ * 7. **`GIT_DIR` / `GIT_WORK_TREE` 一律不从环境继承**（同上）：平台 `prepare` 里有
+ *    `export GIT_DIR=…` 的做法（本仓 `scripts/ci-*.mjs` 就有几处），那一形态下子进程里的
+ *    `git push` 会推到别的树上 —— 这一格的每一条 git 调用都显式清掉这两个变量，只吃 `cwd`。
+ * 8. **网络抖动的韧性**（2026-11-02，build `cnb-pe2-1k6e1uhj8`）：镜像格两次跑都死在
+ *    探活那一跳 —— `git ls-remote` 15s 无回话；而同日 19:47 同一台 runner（orange-connector）
+ *    探活通过并成功推过 PR ref ⇒ 节点到 github.com:443 是**间歇抖动**不是硬阻断，且令牌 /
+ *    仓库 / 配置三层都被那次成功证好。所以：探活单次上限放宽到 30s、至多试 3 次
+ *    （退避 5s / 10s）；推送**只对 egress 类失败**（与 `explainRemoteProbeFailure` 同一组
+ *    判据）重试 1 次。认证 / 权限 / 仓库不存在类**一律不重试** —— 重试它们只是把真问题
+ *    拖慢几分钟，还把「令牌坏了」读成「网络不好」。三态退码与 `--readout` 语义一字未动：
+ *    重试耗尽仍是原来的 exit 2 / exit 1，读数档照旧不折进流水线判决。
+ *
+ * ## `--master`：push 档（`master 合并复核`）的主干镜像
+ *
+ * 同一枚令牌、同一条推送链（探活 → `--force` 推），三件事与 PR 模式不同：
+ *
+ *   1. **没有 IID**：push 事件上没有 `CNB_PULL_REQUEST_IID`，上下文集换成
+ *      `resolveMasterContext()`（只要令牌与 HEAD 两件，ref 恒为 `master`）；
+ *   2. **不派发**：`repository_dispatch` 是给 PR 门禁那一跑的起跑枪；master 这一推
+ *      服务的对象是 GitHub 侧的 schedule（`daily.yml` / `package-desktop.yml`）——
+ *      它们跑默认分支，推完即就位，没有要叫醒的 workflow；
+ *   3. **日志前缀是 `[mirror-master]`**：与 PR 那一格的 `[mirror]` 分开 ——
+ *      `check-mirror-attendance.mjs` 按格名 + `[mirror]` 正文认 PR 档那一格，
+ *      两边各念各的，互不冒充出勤。
+ *
+ * 推 `HEAD:refs/heads/master` 仍带 `--force`：镜像的语义是「跟住 CNB 的 master」，
+ * 这一格红过几跑（漏推）之后，下一推必须能自己追平，不需要人去镜像仓手工对齐。
+ *
+ * ## 用法
+ *
+ * ```text
+ * node scripts/ci-github-mirror-push.mjs               # 三态退码（本地自查 / 将来承重那一档）
+ * node scripts/ci-github-mirror-push.mjs --readout     # 读数档：三态照打点，退码恒 0（CI 主列那一格）
+ * node scripts/ci-github-mirror-push.mjs --dry-run     # 只打印计划与 payload，不发任何请求
+ * node scripts/ci-github-mirror-push.mjs --master      # push 档那一格：推 master，不派发
+ * ```
+ *
+ * 环境变量：`GITHUB_MIRROR_TOKEN`（必填）、`GITHUB_MIRROR_REPO`（缺省
+ * `wuxianyuedu/comfy-app`）、`CNB_PULL_REQUEST_IID`、`CNB_PULL_REQUEST_TARGET_SHA`
+ * （后两件只属 PR 模式；`--master` 不读它们）。
+ */
+import { spawnSync } from "node:child_process";
+import path from "node:path";
+import process from "node:process";
+
+/** 三态退码与仓内其余档同口径（`0` 有结论 / `1` 有事实是红 / `2` 没跑起来）。 */
+export const CODE = { FAIL: 1, NO_FACT: 2, OK: 0 };
+
+/**
+ * 推送前那一问（`git ls-remote`）的墙钟上限（ISSUE #3051）。
+ *
+ * 为什么必须换成**本仓给的数**：不给就得等 git 自己的 connect 超时，而那一形的实测是
+ * `Failed to connect to github.com port 443 after 21114 ms` —— 二十一秒全花在这一格上，
+ * 且这一格从 #3051 起排在主列（`Install dependencies` 之前），每条 PR 都要付一次。
+ * 30s 的取法（2026-11-02 从 15s 放宽）：通的时候这一读实测 0.4–9.2s（#3014 记的几跑）；
+ * 而 `cnb-pe2-1k6e1uhj8` 连续两跑 15s 无回话、同日 19:47 同 runner 却探活通过 ——
+ * 15s 把「慢但活着」的抖动截成了「没通」。单次上限放宽 + 有限次重试（{@link PROBE_MAX_ATTEMPTS}）
+ * 配套给：最坏墙钟 3×30s + 退避 15s ≈ 105s，远在 `.cnb.yml` 那一格 10m 外框之内。
+ */
+export const REMOTE_PROBE_TIMEOUT_MS = 30_000;
+
+/**
+ * 探活（`ls-remote`）的尝试上限：首跳 + 2 次重试（文件头第 8 条）。
+ *
+ * 只有 egress 类失败（`isEgressFailure` 那组判据）才消耗重试；认证 / 权限 / 仓库不存在
+ * 这类「再试一百次也一样」的回话一次就交账。
+ */
+export const PROBE_MAX_ATTEMPTS = 3;
+
+/**
+ * 推送（`git push`）的尝试上限：首跳 + 1 次重试，且同样只对 egress 类失败（文件头第 8 条）。
+ * 给 2 不给更多：推送是真在写的一跳，连挂两次基本不是「抖一下」能解释的。
+ */
+export const PUSH_MAX_ATTEMPTS = 2;
+
+/**
+ * 重试之间的退避表（毫秒）：第 n 次重试前等 `RETRY_BACKOFF_MS[n-2]`，超出表长按末项取。
+ * 5s / 10s 的量级：够节点侧的抖动（TCP 重传窗 / 代理重连）过去，又不至于把整格外框吃光。
+ */
+export const RETRY_BACKOFF_MS = [5000, 10_000];
+
+/**
+ * `git push` 的墙钟上限（同一格，但这一跳是真在写）。
+ *
+ * 4 分钟留在 `.cnb.yml` 那一格 `timeout: 5m` 的外框之内：到点由本仓念「超时」，而不是让
+ * 平台把整格掐掉、一个字读数都不留（§13.6.4 那一族 —— 「拿不到测量」不许被读成「测量是红的」，
+ * 也不许被读成「什么都没发生」）。首次推整棵对象库可以很久，所以这一支给得宽。
+ */
+export const PUSH_TIMEOUT_MS = 240_000;
+
+/** 镜像仓库缺省坐标（`GITHUB_MIRROR_REPO` 可覆盖）。 */
+export const DEFAULT_REPO = "wuxianyuedu/comfy-app";
+
+/** `--master` 模式推的目标分支（GitHub 侧的默认分支；CNB `master` 的唯一镜像出口）。 */
+export const MASTER_REF = "master";
+
+/** 派发的事件名，与 `.github/workflows/pr-gate.yml` 的 `types:` 逐字配对。 */
+export const EVENT_TYPE = "cnb-pr-sync";
+
+/** 本仓检出根（`scripts/` 的上一层）—— 所有 git 子进程在这里跑，不靠继承的工作目录。 */
+const ROOT = path.resolve(import.meta.dirname, "..");
+
+/**
+ * 本格那次 `git push` 的完整参数表（含一条「不带本仓钩子」的 `-c`）。
+ *
+ * 为什么钩子必须被关掉（文件头第 6 条）：平台侧检出是一棵工作区，`.githooks/pre-push`
+ * 对每一次 `git push` 都跑，而它判的是「这条分支要不要合进本仓 `master`」—— 与「在镜像
+ * 仓库上写一个专属 ref」没有关系。它跑了只会把这一格拦在自己的前置条件上（远端的
+ * `refs/remotes/**` 在平台检出里并不存在）。
+ *
+ * 关的是**这一次调用**（`-c`），不是 `git config`：不落盘、不改检出状态，也就没有
+ * 「改完忘了改回去」这一种失败形态。
+ *
+ * @param {string} url 带凭据的推送 URL
+ * @param {string} ref 目标 ref 全名（`refs/heads/...`）
+ * @returns {string[]} git 参数表
+ */
+export function pushArgs(url, ref) {
+  return ["-c", "core.hooksPath=", "push", "--force", url, `HEAD:${ref}`];
+}
+
+/**
+ * git 子进程的环境：清掉 `GIT_DIR` / `GIT_WORK_TREE`（文件头第 7 条）。
+ *
+ * @returns {NodeJS.ProcessEnv} 交给 `spawnSync` 的环境
+ */
+function gitEnv() {
+  /** @type {NodeJS.ProcessEnv} */
+  const env = { ...process.env };
+  delete env.GIT_DIR;
+  delete env.GIT_WORK_TREE;
+  return env;
+}
+
+/**
+ * 镜像 ref 名：按 PR 请求 ID 收口的专属分支（不带 `refs/heads/` 前缀）。
+ *
+ * @param {string} iid 平台注入的 PR 请求 ID（纯数字）
+ * @returns {string} 形如 `cnb-pr-2649`
+ */
+export function mirrorRefFor(iid) {
+  return `cnb-pr-${iid}`;
+}
+
+/**
+ * 回显脱敏：把令牌的每一次出现换成占位（URL 形态与裸值形态都覆盖）。
+ *
+ * @param {string} text 待回显文本
+ * @param {string} secret 令牌原值
+ * @returns {string} 脱敏后的文本
+ */
+export function sanitize(text, secret) {
+  if (!secret) {
+    return text;
+  }
+  return text.split(`${secret}@`).join("***@").split(secret).join("***");
+}
+
+/**
+ * 组装推送 URL（令牌只进这一处，回显必须先过 {@link sanitize}）。
+ *
+ * 用户名：fine-grained PAT 有「必须用真实 GitHub 用户名」的实测反馈（classic 用
+ * `oauth2` 通），所以用户名可由 `GITHUB_MIRROR_USER` 覆盖，缺省 `oauth2`；
+ * 两形态都支持用户名任意。「值本身失效」与「形态不对」在同一句
+ * 「Invalid username or token」里分不开 —— 现场先拿真值在本地 `ls-remote` 定值。
+ *
+ * @param {string} repo `owner/repo`
+ * @param {string} token GitHub 令牌
+ * @returns {string} 带 Basic 凭据的 HTTPS URL
+ */
+export function buildPushUrl(repo, token, user = "oauth2") {
+  return `https://${user}:${token}@github.com/${repo}.git`;
+}
+
+/**
+ * 组装派发 payload（形状与 `.github/workflows/pr-gate.yml` 的
+ * `client_payload` 消费面一一对应）。
+ *
+ * @param {{ref: string, headSha: string, baseSha: string, prNumber: string}} args
+ * @returns {{event_type: string, client_payload: Record<string, string>}}
+ */
+export function dispatchPayload({ baseSha, headSha, prNumber, ref }) {
+  return {
+    client_payload: { base_sha: baseSha, branch: ref, head_sha: headSha, pr_number: prNumber },
+    event_type: EVENT_TYPE,
+  };
+}
+
+/**
+ * 从环境变量收口本次镜像的上下文；缺哪件就念哪件（fail-closed 的「读数」半边）。
+ *
+ * @param {{env: Record<string, string | undefined>, runGit: (args: string[]) => {code: number, stdout: string, stderr: string}}} io
+ * @returns {{ok: true, repo: string, token: string, iid: string, ref: string, headSha: string, baseSha: string} | {ok: false, reasons: string[]}}
+ */
+export function resolveContext(io) {
+  const { env, runGit } = io;
+  const reasons = [];
+  const token = env.GITHUB_MIRROR_TOKEN ?? "";
+  if (!token.trim()) {
+    reasons.push("`GITHUB_MIRROR_TOKEN` 未配置（平台侧注入；本地自查用 --dry-run）");
+  }
+  const iid = (env.CNB_PULL_REQUEST_IID ?? "").trim();
+  if (!/^\d+$/.test(iid)) {
+    reasons.push("`CNB_PULL_REQUEST_IID` 不是纯数字（本格只挂在 PR 流水线的质量门禁那一档上）");
+  }
+  const headSha = runGit(["rev-parse", "HEAD"]);
+  if (headSha.code !== 0 || !/^[0-9a-f]{40}$/i.test(headSha.stdout.trim())) {
+    reasons.push(`git rev-parse HEAD 取不到（exit ${headSha.code}）`);
+  }
+  if (reasons.length > 0) {
+    return { ok: false, reasons };
+  }
+  return {
+    /* base sha 只进 payload（GitHub 侧对账用），缺席不阻断 —— 那一格不读它。 */
+    baseSha: (env.CNB_PULL_REQUEST_TARGET_SHA ?? "").trim(),
+    headSha: headSha.stdout.trim(),
+    iid,
+    ok: true,
+    ref: mirrorRefFor(iid),
+    repo: (env.GITHUB_MIRROR_REPO ?? DEFAULT_REPO).trim(),
+    token: token.trim(),
+  };
+}
+
+/**
+ * `--master` 模式的上下文收口：push 事件上没有 `CNB_PULL_REQUEST_IID`，要的两件
+ * 只有令牌与 HEAD；ref 恒为 {@link MASTER_REF}（文件头「--master」一节）。
+ *
+ * @param {{env: Record<string, string | undefined>, runGit: (args: string[]) => {code: number, stdout: string, stderr: string}}} io
+ * @returns {{ok: true, repo: string, token: string, ref: string, headSha: string} | {ok: false, reasons: string[]}}
+ */
+export function resolveMasterContext(io) {
+  const { env, runGit } = io;
+  const reasons = [];
+  const token = env.GITHUB_MIRROR_TOKEN ?? "";
+  if (!token.trim()) {
+    reasons.push("`GITHUB_MIRROR_TOKEN` 未配置（push 流水线经 imports 注入；本地自查用 --dry-run）");
+  }
+  const headSha = runGit(["rev-parse", "HEAD"]);
+  if (headSha.code !== 0 || !/^[0-9a-f]{40}$/i.test(headSha.stdout.trim())) {
+    reasons.push(`git rev-parse HEAD 取不到（exit ${headSha.code}）`);
+  }
+  if (reasons.length > 0) {
+    return { ok: false, reasons };
+  }
+  return {
+    headSha: headSha.stdout.trim(),
+    ok: true,
+    ref: MASTER_REF,
+    repo: (env.GITHUB_MIRROR_REPO ?? DEFAULT_REPO).trim(),
+    token: token.trim(),
+  };
+}
+
+/**
+ * 找出这一次 git 调用的**子命令**。
+ *
+ * 不能拿 `args[0]` 判：`pushArgs()` 为了不带本仓钩子，前面挂着 `-c core.hooksPath=`，
+ * 于是推送那一跳的 `args[0]` 是 `-c`。按 `args[0]` 写会让推送**拿不到超时**而账面看不出
+ * 来（限时的缺席不会红，只会退回「吃平台外框那一刀」的旧形态）。
+ *
+ * @param {string[]} args git 参数表
+ * @returns {string} 子命令（`push` / `ls-remote` / `rev-parse`…）；一个都没有就回空串
+ */
+export function gitSubcommand(args) {
+  for (let i = 0; i < args.length; i += 1) {
+    const a = String(args[i] ?? "");
+    /* `-c` 吃下一个参数（`core.hooksPath=` 那一形态），跳过它才能走到真子命令。 */
+    if (a === "-c") {
+      i += 1;
+      continue;
+    }
+    if (!a.startsWith("-")) {
+      return a;
+    }
+  }
+  return "";
+}
+
+/**
+ * 这一跳该给多大墙钟：`ls-remote` 短、`push` 长，本地那几跳（`rev-parse`）不限。
+ *
+ * @param {string[]} args git 参数表
+ * @returns {number | undefined} 交给 `spawnSync` 的 timeout（毫秒）；不给 = 不限
+ */
+export function gitTimeoutFor(args) {
+  const sub = gitSubcommand(args);
+  if (sub === "ls-remote") {
+    return REMOTE_PROBE_TIMEOUT_MS;
+  }
+  if (sub === "push") {
+    return PUSH_TIMEOUT_MS;
+  }
+  return undefined;
+}
+
+/**
+ * 真身：git 子进程执行器（测试注入点同形的假件在用例里给）。
+ *
+ * ⚠️ 超时不是「git 回了个非零」：`spawnSync` 到点是**本仓把它杀了**，`status` 变 `null`、
+ * `error.code` 是 `ETIMEDOUT`。原样交出去只会读成一句「exit -1」，所以这里补一句回话，
+ * 让 `explainRemoteProbeFailure()` 把它归进 egress 那一类（#3051 之前这一形被念成
+ * 「令牌活不活 / 仓库在不在」，把人指到错的下一动作上）。
+ *
+ * @param {string[]} args git 参数表
+ * @returns {{code: number, stderr: string, stdout: string}}
+ */
+function realRunGit(args) {
+  const timeout = gitTimeoutFor(args);
+  const r = spawnSync("git", args, { cwd: ROOT, encoding: "utf8", env: gitEnv(), timeout });
+  /* 念出来的是子命令而不是 `args[0]` —— 推送那一跳的 `args[0]` 是 `-c`。 */
+  const sub = gitSubcommand(args);
+  if ((r.error ?? null) !== null || r.status === null) {
+    /* Node 把 `spawnSync` 的 `error` 标成 `Error`，而超时那一支实际带 `code: "ETIMEDOUT"`，
+     * 类型里没申出来 ⇒ 按形状读一次（不覆盖平台原值，也不假设它一定在）。 */
+    const code = /** @type {{ code?: string } | null | undefined} */ (r.error)?.code;
+    const why =
+      code === "ETIMEDOUT"
+        ? `git ${sub} 超时（>${String(timeout)} ms）：这一跳没拿到任何回话 —— 是没通，不是判出的红`
+        : `git ${sub} 连上都没连上：${String(r.error ?? "拿不到退出码")}`;
+    return {
+      code: -1,
+      stderr: `${String(r.stderr ?? "")}\n${why}`,
+      stdout: String(r.stdout ?? ""),
+    };
+  }
+  return { code: r.status, stderr: String(r.stderr ?? ""), stdout: String(r.stdout ?? "") };
+}
+
+/**
+ * 真身的退避等待（测试注入 `io.sleep` 的假件，用例一次真墙钟都不付）。
+ *
+ * @param {number} ms 等多久
+ * @returns {Promise<void>}
+ */
+const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * 带有限重试的一跳（文件头第 8 条）：**只有 egress 类失败**才消耗重试 ——
+ * 认证 / 权限 / 仓库不存在这类回话「再试一百次也一样」，一次就交账，不拖时间也不
+ * 把真问题读成网络抖动。
+ *
+ * 每一次重试都留一行读数（第几次、等多久），重试耗尽后交回**最后一次**的结果 ——
+ * 退码与后续话术与没有重试时逐字同形（探活仍是 exit 2、推送仍是 exit 1）。
+ *
+ * @param {string[]} args git 参数表
+ * @param {{runGit: typeof realRunGit, sleep: (ms: number) => Promise<void>, log: (line: string) => void, prefix: string, label: string, maxAttempts: number}} ctx
+ * @returns {Promise<{code: number, stderr: string, stdout: string}>} 最后一次尝试的结果
+ */
+async function runGitWithRetry(args, ctx) {
+  const { label, log, maxAttempts, prefix, runGit, sleep } = ctx;
+  let result = runGit(args);
+  for (let attempt = 2; attempt <= maxAttempts && result.code !== 0; attempt += 1) {
+    if (!isEgressFailure(`${result.stdout}\n${result.stderr}`)) {
+      break;
+    }
+    const wait = RETRY_BACKOFF_MS[attempt - 2] ?? RETRY_BACKOFF_MS.at(-1) ?? 5000;
+    log(
+      `[${prefix}] ${label}第 ${String(attempt - 1)}/${String(maxAttempts)} 次没通（egress 类）⇒ ${String(wait / 1000)}s 后试第 ${String(attempt)} 次（网络抖动重试；认证 / 权限类不重试）`,
+    );
+    await sleep(wait);
+    result = runGit(args);
+  }
+  return result;
+}
+
+/**
+ * `git ls-remote` 的输出里有没有**任何一条** ref —— 有 ⇒ 那枚令牌认到了目标仓库。
+ *
+ * 只看「有没有 refs 行」、不看 ref 名：空仓库的 `ls-remote` 回**零行且退 0**，非空仓库
+ * 一定回 `HEAD` 或某条 `refs/*`。所以这一判的语义是「仓库在、且令牌读得到它」，
+ * 与这个 PR 自己的 ref 存不存在无关（`--force` 推的是新 ref）。
+ *
+ * @param {string} stdout `git ls-remote` 的标准输出（可空串）
+ * @returns {boolean} 非空 ⇒ 在
+ */
+export function hasRemoteRefs(stdout) {
+  return stdout.split("\n").some((line) => /^[0-9a-f]{40}\s+\S+\s*$/i.test(line.trim()));
+}
+
+/**
+ * egress 类失败的判据（TCP / DNS / 代理层，含本仓自己给的超时那一句）。
+ *
+ * 这一组判据有两个消费面，必须同源：`explainRemoteProbeFailure()` 拿它选话术，
+ * `runGitWithRetry()` 拿它决定**值不值得再试一次** —— 两处各写一份正则，迟早漂成
+ * 「话术说是 egress、重试却不认」的孪生形态。
+ *
+ * @param {string} text git 那一跳的 stdout + stderr（未脱敏）
+ * @returns {boolean} true ⇒ 网络根本没到 GitHub，重试有意义
+ */
+export function isEgressFailure(text) {
+  return /failed to connect|could not connect to server|couldn't connect to host|could not resolve host|connection reset|connection timed out|name resolution|getaddrinfo|empty reply from server|超时/i.test(
+    text,
+  );
+}
+
+/**
+ * 把 `git ls-remote` 的失败回话翻成**具体那一句**（回话本身不判红，它只被念出来）。
+ *
+ * 三形态各有各的下一动作，读的人不必自己去猜：
+ *
+ * · `Repository not found` 是**仓库层面**没通（没建 / 令牌对它没有读权）；
+ * · 其余认证回话更可能落在**令牌值 / 身份范围**上；
+ * · `Failed to connect` / `Could not connect to server` / `Connection reset` / DNS 失败 /
+ *   本仓自己给的超时（`gitTimeoutFor` 那两支）都是 **egress 层** —— 网络根本没到 GitHub。
+ *
+ * 第三支是 #3051 补的：它缺席时那一形会落到下面那句通用话术上，把「节点连不上
+ * github.com:443」念成「令牌活不活 / 仓库在不在」—— 那句把人往令牌上查，而令牌是好的
+ * （实测 `cnb-61a-1k6d4na5o` 的 `stage-endStages-2`：`Failed to connect to github.com
+ * port 443 after 21114 ms`）。
+ *
+ * 这一函数**不改变退码** —— 三种都落「前提没落地」，改的只是下一动作能不能被照着做。
+ *
+ * @param {string} text `ls-remote` 的 stdout + stderr（未脱敏）
+ * @returns {string} 一句中文读数
+ */
+export function explainRemoteProbeFailure(text) {
+  if (isEgressFailure(text)) {
+    return "到 github.com 这一跳没通（TCP / DNS / 代理层）⇒ 出网问题在节点侧（白名单 / 代理 / 换 runner），与令牌值和这一格的判据都无关";
+  }
+  if (/repository not found|does not appear to be a git repository/i.test(text)) {
+    return "目标仓库在 GitHub 上不存在（或以这枚令牌的身份看不见它）⇒ 先去建仓库，再重跑这一格";
+  }
+  if (/repository access blocked|not accessible|deploy key/i.test(text)) {
+    return "这枚令牌的身份够不到目标仓库（fine-grained PAT 须把该仓库列进仓库访问范围）";
+  }
+  return "推送前的这一读就被拒了 ⇒ 现场拿真值在本地 `git ls-remote` 一次定值（仓库在不在 / 令牌活不活）";
+}
+
+/**
+ * 执行镜像：先问「仓库在不在」→ 推 HEAD → 派发。每一跳各自独立成读数，前一跳没通后一跳不发。
+ *
+ * @param {{env: Record<string, string | undefined>, fetchImpl?: typeof fetch, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, dryRun?: boolean, log?: (line: string) => void}} io
+ * @returns {Promise<number>} 仓内三态退码
+ */
+export async function runMirror(io) {
+  const { dryRun = false, env } = io;
+  const log = io.log ?? ((line) => console.log(line));
+  const fetchImpl = io.fetchImpl ?? fetch;
+  const runGit = io.runGit ?? realRunGit;
+  const sleep = io.sleep ?? realSleep;
+  const ctx = resolveContext({ env, runGit });
+  if (!ctx.ok) {
+    for (const reason of ctx.reasons) {
+      log(`[mirror] 没跑起来的原因：${reason}`);
+    }
+    log("[mirror] 结论：exit 2 —— 有一步没跑起来（不等于通过，也不等于「没有要同步的」）");
+    return CODE.NO_FACT;
+  }
+  const url = buildPushUrl(ctx.repo, ctx.token, (env.GITHUB_MIRROR_USER ?? "").trim() || "oauth2");
+  const payload = dispatchPayload({
+    baseSha: ctx.baseSha,
+    headSha: ctx.headSha,
+    prNumber: ctx.iid,
+    ref: ctx.ref,
+  });
+  const baseNote = ctx.baseSha
+    ? ` · base ${ctx.baseSha.slice(0, 8)}`
+    : " · base 缺席（payload 留空）";
+  log(
+    `[mirror] 计划：HEAD ${ctx.headSha.slice(0, 8)} → ${ctx.repo}:${ctx.ref} · 派发 ${EVENT_TYPE}${baseNote}`,
+  );
+  if (dryRun) {
+    log("[mirror] DRY-RUN：没推也没派发，payload 如下 ——");
+    log(JSON.stringify(payload, null, 2));
+    return CODE.OK;
+  }
+  /* 推送前那一问：目标仓库没建时 git 的回话与「令牌坏了」逐字同形（见文件头第 5 条）。
+   * egress 类的单次抖动不直接交账：至多 PROBE_MAX_ATTEMPTS 次、带退避（文件头第 8 条）。 */
+  const probe = await runGitWithRetry(["ls-remote", url], {
+    label: "探活",
+    log,
+    maxAttempts: PROBE_MAX_ATTEMPTS,
+    prefix: "mirror",
+    runGit,
+    sleep,
+  });
+  const probeText = sanitize(`${probe.stdout}\n${probe.stderr}`, ctx.token);
+  /* 两种形态先分开念：读失败是「前提没落地」，零条 ref 是**空仓库**（合法，继续推）。 */
+  log(
+    probe.code === 0
+      ? "[mirror] 推送前这一读：通（空仓库 ⇒ 零条 ref 也是通的）"
+      : `[mirror] 推送前这一读没通（exit ${probe.code}）：${explainRemoteProbeFailure(probeText)}`,
+  );
+  if (probe.code === 0 && !hasRemoteRefs(probe.stdout)) {
+    log("[mirror]   目标仓库是空的（零条 ref）—— `--force` 推一个新 ref 正是它该有的第一笔");
+  }
+  if (probe.code !== 0) {
+    for (const line of probeText.split("\n")) {
+      if (line.trim()) {
+        log(`[mirror]   ${line}`);
+      }
+    }
+    log("[mirror] 结论：exit 2 —— 前提没落地（egress / 目标仓库 / 令牌这三层之一，看上面那句是哪一种；不是这一格判出的红）");
+    return CODE.NO_FACT;
+  }
+  /* 推送同样只对 egress 类失败重试一次（PUSH_MAX_ATTEMPTS）；认证 / 权限类一次就交账。 */
+  const push = await runGitWithRetry(pushArgs(url, `refs/heads/${ctx.ref}`), {
+    label: "推送",
+    log,
+    maxAttempts: PUSH_MAX_ATTEMPTS,
+    prefix: "mirror",
+    runGit,
+    sleep,
+  });
+  if (push.code !== 0) {
+    log(`[mirror] 推送失败（exit ${push.code}）：`);
+    for (const line of `${push.stdout}\n${push.stderr}`.split("\n")) {
+      if (line.trim()) {
+        log(`[mirror]   ${sanitize(line, ctx.token)}`);
+      }
+    }
+    return CODE.FAIL;
+  }
+  let res;
+  try {
+    res = await fetchImpl(`https://api.github.com/repos/${ctx.repo}/dispatches`, {
+      body: JSON.stringify(payload),
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${ctx.token}`,
+        "Content-Type": "application/json",
+        "User-Agent": "comfy-app-cnb-mirror",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      method: "POST",
+    });
+  } catch (error) {
+    log(`[mirror] 派发请求没跑起来（网络层）：${String(error)}`);
+    return CODE.NO_FACT;
+  }
+  if (res.status !== 204) {
+    const body = await res.text().catch(() => "");
+    log(`[mirror] 派发被拒：HTTP ${res.status}（payload 与令牌都在，拒的是请求本身）`);
+    if (body.trim()) {
+      log(`[mirror]   ${sanitize(body, ctx.token)}`);
+    }
+    return CODE.FAIL;
+  }
+  log(`[mirror] ✓ 已推 ${ctx.repo}:${ctx.ref} @ ${ctx.headSha.slice(0, 8)} · 已派发 ${EVENT_TYPE}`);
+  return CODE.OK;
+}
+
+/**
+ * `--master` 模式的执行面：探活 → 推 `HEAD:refs/heads/master`，**没有派发那一跳**
+ * （这一推服务的是 GitHub 侧的 schedule workflow —— 它们跑默认分支，推完即就位，
+ * 没有要叫醒的对象）。探活与推送两跳的话术与 {@link runMirror} 同一族，
+ * 前缀换成 `[mirror-master]`（文件头「--master」一节第 3 条）。
+ *
+ * @param {{env: Record<string, string | undefined>, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, dryRun?: boolean, log?: (line: string) => void}} io
+ * @returns {Promise<number>} 仓内三态退码
+ */
+export async function runMasterMirror(io) {
+  const { dryRun = false, env } = io;
+  const log = io.log ?? ((line) => console.log(line));
+  const runGit = io.runGit ?? realRunGit;
+  const sleep = io.sleep ?? realSleep;
+  const ctx = resolveMasterContext({ env, runGit });
+  if (!ctx.ok) {
+    for (const reason of ctx.reasons) {
+      log(`[mirror-master] 没跑起来的原因：${reason}`);
+    }
+    log("[mirror-master] 结论：exit 2 —— 有一步没跑起来（不等于通过，也不等于「没有要同步的」）");
+    return CODE.NO_FACT;
+  }
+  const url = buildPushUrl(ctx.repo, ctx.token, (env.GITHUB_MIRROR_USER ?? "").trim() || "oauth2");
+  log(`[mirror-master] 计划：HEAD ${ctx.headSha.slice(0, 8)} → ${ctx.repo}:${ctx.ref}（不派发）`);
+  if (dryRun) {
+    log("[mirror-master] DRY-RUN：没推，计划如上");
+    return CODE.OK;
+  }
+  /* 推送前那一问与 PR 模式同一跳、同一份判读、同一套重试（文件头第 5 / 8 条）。 */
+  const probe = await runGitWithRetry(["ls-remote", url], {
+    label: "探活",
+    log,
+    maxAttempts: PROBE_MAX_ATTEMPTS,
+    prefix: "mirror-master",
+    runGit,
+    sleep,
+  });
+  const probeText = sanitize(`${probe.stdout}\n${probe.stderr}`, ctx.token);
+  log(
+    probe.code === 0
+      ? "[mirror-master] 推送前这一读：通（空仓库 ⇒ 零条 ref 也是通的）"
+      : `[mirror-master] 推送前这一读没通（exit ${probe.code}）：${explainRemoteProbeFailure(probeText)}`,
+  );
+  if (probe.code === 0 && !hasRemoteRefs(probe.stdout)) {
+    log("[mirror-master]   目标仓库是空的（零条 ref）—— `--force` 推 master 正是它该有的第一笔");
+  }
+  if (probe.code !== 0) {
+    for (const line of probeText.split("\n")) {
+      if (line.trim()) {
+        log(`[mirror-master]   ${line}`);
+      }
+    }
+    log("[mirror-master] 结论：exit 2 —— 前提没落地（egress / 目标仓库 / 令牌这三层之一，看上面那句是哪一种；不是这一格判出的红）");
+    return CODE.NO_FACT;
+  }
+  /* 与 PR 模式同一套：egress 类失败重试一次，认证 / 权限类一次就交账。 */
+  const push = await runGitWithRetry(pushArgs(url, `refs/heads/${ctx.ref}`), {
+    label: "推送",
+    log,
+    maxAttempts: PUSH_MAX_ATTEMPTS,
+    prefix: "mirror-master",
+    runGit,
+    sleep,
+  });
+  if (push.code !== 0) {
+    log(`[mirror-master] 推送失败（exit ${push.code}）：`);
+    for (const line of `${push.stdout}\n${push.stderr}`.split("\n")) {
+      if (line.trim()) {
+        log(`[mirror-master]   ${sanitize(line, ctx.token)}`);
+      }
+    }
+    return CODE.FAIL;
+  }
+  log(`[mirror-master] ✓ 已推 ${ctx.repo}:${ctx.ref} @ ${ctx.headSha.slice(0, 8)}`);
+  return CODE.OK;
+}
+
+/**
+ * 退码出口：读数档与承重档之间的那**唯一一道**分界（ISSUE #3051）。
+ *
+ * `--readout` 只折「对外那一位数」：上面每一行照旧念自己的三态原值（`结论：exit 2 —— …`），
+ * 所以「这一格没判成事」与「这一格是被折成 0 的、因为它不承重」在读数里分得开。
+ * 什么时候摘掉这个旗标（让它拦合并）见 #3051 期望第 3 条：等「读回 GitHub 同一笔 sha 的
+ * 判决」那一格上线 —— 在那之前先接进判决，就是把一条还没通的外部件挂在必经之路上
+ * （#3025 / #3027 那两次事故的同形）。
+ *
+ * @param {number} code `runMirror()` 给出的三态
+ * @param {boolean} readout 读数档（`.cnb.yml` 主列那一格用的形态）
+ * @returns {number} 交给进程的退出码
+ */
+export function exitCodeFor(code, readout) {
+  return readout ? CODE.OK : code;
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
+  const dryRun = process.argv.includes("--dry-run");
+  const readout = process.argv.includes("--readout");
+  const master = process.argv.includes("--master");
+  const code = master
+    ? await runMasterMirror({ dryRun, env: process.env })
+    : await runMirror({ dryRun, env: process.env });
+  if (readout && code !== CODE.OK) {
+    console.log(
+      `[${master ? "mirror-master" : "mirror"}] 读数档：上面那一行是三态原值；这一格不折进流水线判决（--readout，#3051）`,
+    );
+  }
+  process.exit(exitCodeFor(code, readout));
+}

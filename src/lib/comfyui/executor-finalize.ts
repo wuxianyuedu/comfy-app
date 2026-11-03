@@ -150,11 +150,11 @@ export async function complete(taskId: string, promptId: string) {
     await completeInner(taskId, promptId, executedWorkflow);
   } catch (error) {
     // 下载 / 落盘 / 写库任何一步炸了，都必须把任务收口，否则队列同样会卡死。
+    /* SAFETY: 类型断言已复核 */
     await finalizeFailure(
       taskId,
       promptId,
-      /* SAFETY: 类型断言已复核 */ (error as { message?: unknown } | null | undefined)?.message ??
-        "结果处理失败",
+      (error as { message?: unknown } | null | undefined)?.message ?? "结果处理失败",
     );
   }
 }
@@ -174,8 +174,8 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // 复现元数据。projectId 为 localStorage 的 CanvasProject.id（client 侧字符串）。
   const taskRow = await taskRepository.findExecutionMeta(taskId);
   const projectId: string | null = taskRow?.projectId ?? null;
-  const taskParams =
-    /* SAFETY: 类型断言已复核 */ (taskRow?.params as Record<string, unknown> | null) ?? {};
+  /* SAFETY: 类型断言已复核 */
+  const taskParams = (taskRow?.params as Record<string, unknown> | null) ?? {};
   const reqSeed =
     typeof taskParams.seed === "number" || typeof taskParams.seed === "string"
       ? String(taskParams.seed)
@@ -227,7 +227,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     `ComfyUI history 摘要：status=${verdict.statusStr ?? "(无)"} completed=${
       verdict.completed ?? "(无)"
     } 输出节点=${verdict.outputNodeCount}${
-      verdict.executionError !== undefined ? ` 执行错误=${verdict.executionError}` : ""
+      verdict.executionError === undefined ? "" : ` 执行错误=${verdict.executionError}`
     }`,
   );
   const outputKeys = historyOutputKeys({ [promptId]: entry }, promptId);
@@ -464,8 +464,8 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     negativePrompt: taskRow?.negativePrompt ?? null,
     seed: actualSeed === undefined ? (reqSeed ?? null) : String(actualSeed),
     size: sizeStr || null,
-    referenceImages:
-      /* SAFETY: 类型断言已复核 */ (taskRow?.referenceImages as Array<string> | null) ?? [],
+    /* SAFETY: 类型断言已复核 */
+    referenceImages: (taskRow?.referenceImages as Array<string> | null) ?? [],
     params: taskParams,
     createdAt: taskRow?.createdAt ?? null,
     files: saved,
@@ -553,9 +553,9 @@ export async function finalizeFailure(
    * 「它一上来就死了」。 */
   const startedAt = s.startedAt.get(taskId);
   const elapsedSuffix =
-    startedAt !== undefined
-      ? `（已运行 ${Math.max(0, Math.round((Date.now() - startedAt) / 100) / 10)}s）`
-      : "";
+    startedAt === undefined
+      ? ""
+      : `（已运行 ${Math.max(0, Math.round((Date.now() - startedAt) / 100) / 10)}s）`;
   log(taskId, "error", `✗ 生成失败：${friendly}${elapsedSuffix}`);
 
   const outcome = await writeTerminal(taskId, "失败收口", () =>

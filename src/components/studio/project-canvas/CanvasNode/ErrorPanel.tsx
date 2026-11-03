@@ -93,8 +93,12 @@ export function ErrorPanel({
    * 静默** —— 它本身就是一段可见文本，点它只是省一次选中。 */
   const [detailCopyFailed, setDetailCopyFailed] = useState(false);
   const copyDetail = useCopyFeedback({
-    onSuccess: () => setDetailCopyFailed(false),
-    onFailure: () => setDetailCopyFailed(true),
+    onSuccess: () => {
+      setDetailCopyFailed(false);
+    },
+    onFailure: () => {
+      setDetailCopyFailed(true);
+    },
   });
   const copyTaskId = useCopyFeedback({ onFailure: "silent" });
 
@@ -179,7 +183,7 @@ export function ErrorPanel({
                   <Button
                     className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 text-3xs h-auto rounded border px-1.5 py-0.5"
                     onClick={() => {
-                      void onRetry(errorContext?.request);
+                      onRetry(errorContext?.request);
                     }}
                     variant="outline"
                   >
@@ -190,7 +194,9 @@ export function ErrorPanel({
               <Hint accessibleName label={errExpanded ? "收起错误详情" : "展开错误详情"}>
                 <Button
                   className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 text-3xs h-auto rounded border px-1.5 py-0.5"
-                  onClick={() => setErrExpanded((value) => !value)}
+                  onClick={() => {
+                    setErrExpanded((value) => !value);
+                  }}
                   variant="outline"
                 >
                   {errExpanded ? "▲" : "▼"}
@@ -276,7 +282,9 @@ export function ErrorPanel({
                       <Hint label="点击复制 taskId">
                         <Button
                           className="nodrag nopan text-danger-strong/90 hover:text-danger-strong h-auto min-w-0 truncate p-0 text-left font-mono font-normal hover:bg-transparent"
-                          onClick={() => copyTaskId(taskId)}
+                          onClick={() => {
+                            copyTaskId(taskId);
+                          }}
                           variant="ghost"
                         >
                           {taskId}

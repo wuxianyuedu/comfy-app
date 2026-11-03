@@ -264,21 +264,19 @@ describe("runEnsureLaunch —— 保活拉起遇端口被占：识别、中止�
     );
     const { spawnManaged } = await import("~/lib/process/process-launch");
     // spawnManaged 是同步返回（keepAlive 下 child 是中介进程句柄）
-    vi.mocked(spawnManaged).mockReturnValue(
-      /* SAFETY: 类型断言已复核 */ { child: { pid: 4321 } } as never,
-    );
+    /* SAFETY: 类型断言已复核 */
+    vi.mocked(spawnManaged).mockReturnValue({ child: { pid: 4321 } } as never);
     const { getComfyRuntimeSnapshot } = await import("./status");
-    vi.mocked(getComfyRuntimeSnapshot).mockResolvedValue(
-      /* SAFETY: 类型断言已复核 */ {
-        running: true,
-        pid: 97_356,
-        port: 8188,
-        via: "配置路径的实例",
-        unverified: false,
-        didQueryProcTable: true,
-        source: "process",
-      } as never,
-    );
+    /* SAFETY: 类型断言已复核 */
+    vi.mocked(getComfyRuntimeSnapshot).mockResolvedValue({
+      running: true,
+      pid: 97_356,
+      port: 8188,
+      via: "配置路径的实例",
+      unverified: false,
+      didQueryProcTable: true,
+      source: "process",
+    } as never);
 
     const { runEnsureLaunch } = await import("./lifecycle-launch");
     const notes: Array<string> = [];

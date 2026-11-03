@@ -79,7 +79,9 @@ export function ShotFilmStrip({
                       : " border-border bg-subtle hover:bg-surface-2"
                   }`
                 }
-                onClick={() => onJump(shot)}
+                onClick={() => {
+                  onJump(shot);
+                }}
                 type="button"
                 variant="ghost"
               >

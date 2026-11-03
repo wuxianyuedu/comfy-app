@@ -78,6 +78,8 @@ import {
   affordablePerFileCount,
   budgetAllows,
   estimateSerialRerunMs,
+  firstPassLimit,
+  fmtMinutes,
   gateFirstPassByWallClock,
   gateRerunByWallClock,
   perFileBudgetStopReport,
@@ -109,7 +111,11 @@ import {
 } from "../scripts/affected-launch-retry-verdict.mjs";
 /* 话术层（收尾那两份账）现在住在自己那份文件里 —— 这里按它真实的落点 import，
  * 而不是让机制层再转出一层「看起来还在那儿」的假出口。 */
-import { rerunReport, unverifiedReport } from "../scripts/affected-launch-rerun-report.mjs";
+import {
+  firstPassKilledReport,
+  rerunReport,
+  unverifiedReport,
+} from "../scripts/affected-launch-rerun-report.mjs";
 import { groupShBody, withoutCommentLines } from "./helpers/hook-groups";
 /* 反向断言必须先剥注释再判（ISSUE #2660）：不剥的话「源码里不许出现 X」在 X 被挪进
  * 一句解释「为什么别这么写」的注释时**静默通过** —— 那是假绿，比误红更贵。
@@ -124,6 +130,9 @@ const LAUNCHER_PATH = "scripts/run-affected-tests.mjs";
  * 出列到这一份 —— 判据按**真实落点**读，机制层不转假出口（转一层的话「搬走了」与
  * 「还能用」长得一样）。启动器那一层留下的仍是判决链。 */
 const SPAWN_LAYER_PATH = "scripts/affected-launch-spawn.mjs";
+/* 显式全量档（`--full`）那一整格出列后的真实落点（ISSUE #3030：那一层已贴住 900 行硬闸，
+ * 整档搬进自己那份文件）—— 判据按**真实落点**读，不要求内容留在启动器里。 */
+const FULL_RUN_PATH = "scripts/affected-launch-full-run.mjs";
 
 /**
  * 把一段代码跑起来期间 `process.stderr` 的写入**收在手里**（随返回值交出 `text`）。
@@ -1069,7 +1078,8 @@ describe("钩子档并发：兜底由调用点注入（唯一出处 ci-load）�
        两格、本地那一跳照旧铺开。默认值撤掉之后，漏传必须**响**。 */
     for (const bad of [undefined, null, 0, -1, 2.5, Number.NaN, "2"]) {
       expect(
-        () => resolveMaxWorkers("2", /* SAFETY: 类型断言已复核 */ bad as unknown as number),
+        /* SAFETY: 类型断言已复核 */
+        () => resolveMaxWorkers("2", bad as unknown as number),
         `兜底 ${String(bad)} 必须停手`,
       ).toThrow(/兜底/);
     }
@@ -1173,7 +1183,9 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
        `runChunk` 走 —— 所以这条形状判据把 `quiet` 也算进同一行里。 */
     /* `exclude` 是同一个 `runChunk` 的第二个入参（停用台账，ISSUE #2948）—— 它也落在
        这一行里，同样不改判决链。 */
-    expect(src).toMatch(
+    /* 这一档的正文住在 `FULL_RUN_PATH`（ISSUE #3030 起）—— 按真实落点读：搬走了与
+     * 「还能用」在旧写法下长得一样，而那正是这条判据要拦的方向。 */
+    expect(readFileSync(FULL_RUN_PATH, "utf8")).toMatch(
       /return await runChunk\(\[\], \{ entry, workers, quiet: \w+, exclude: \w+ \}\)/,
     );
   });
@@ -2029,8 +2041,9 @@ describe("日志预算：quiet 档换 reporter，但清单要单独念", () => {
     const launcher = readFileSync(LAUNCHER_PATH, "utf8");
     expect(launcher).toMatch(/fileListReport\(segFiles, \{ quiet \}\)/);
     /* `--full` 那一档没有清单可列（vitest 自己收集），但也不许静默：
-     * 「这一档本来就不列」与「列清单这件事坏了」必须读得出区别。 */
-    expect(launcher).toMatch(/全量档由 vitest 自行收集，故不逐份列出/);
+     * 「这一档本来就不列」与「列清单这件事坏了」必须读得出区别。正文住在 `FULL_RUN_PATH`
+     * （ISSUE #3030 起），所以按真实落点读。 */
+    expect(readFileSync(FULL_RUN_PATH, "utf8")).toMatch(/全量档由 vitest 自行收集，故不逐份列出/);
   });
 });
 
@@ -2462,6 +2475,7 @@ describe("墙钟预算必须真的到得了第一遍（cnb-53r-1k6b6besn 的现�
   it("`stageBudget` 交给了 `runChunk`（第一遍的 `timeout` 只从它来）", () => {
     /* 针尖按**拼接**构造 —— 同下面那条「不许出现没接住 stderr 的调用点」：整段写成字面量
      * 会命中那条判据（它判的是本文件里没有漏接 stderr 的调用点），而恒红的判据比没有更坏。 */
+    // oxlint-disable-next-line typescript/no-unnecessary-template-expression -- 拆开 run 与 Chunk 是判据的前提：本文件里不许出现完整的 runChunk( 字面量，另一条判据按文本读本文件
     const call = new RegExp(`await\\s+run${"Chunk"}\\(chunk\\.files, \\{([\\s\\S]*?)\\}\\)`).exec(
       src,
     );
@@ -2539,5 +2553,78 @@ describe("墙钟判点：第一遍自己开不开得起（PR #2760 的现场）"
     expect(got.note).toContain("退 2");
     expect(got.note).toContain("拆开");
     expect(got.note).toContain("--full");
+  });
+});
+
+/* 第一遍的上界只有一个出处（build `cnb-pl9-1k6b45aqm` 的现场）。
+ *
+ * 那个数此前在 `runChunk` 里算了两次：一次喂给 `spawnVitest` 当 `timeout`（扣掉 30s
+ * 收尾余量），一次在掐断那一屏里念「剩余预算」—— 而后者漏了那笔扣减。于是一跑掐在
+ * 24.5 分钟时，日志念的是「剩余预算 25 分钟」：读的人拿到的是一个**比真实掐点还大**的
+ * 数，而它恰是判「这一格装不下 / 刚好差一点」的唯一读数。
+ *
+ * 这组钉的不是数值本身，是「念出来的那个数 = 真正提交给 vitest 的那个数」这条等式 ——
+ * 漂开时两边都编得过、也都跑得动，只有日志在说谎。 */
+describe("第一遍的上界：算一次、念的就是那一个数", () => {
+  const MIN = 60_000;
+  const RESERVE = 30_000;
+
+  it("上界 = 剩余 − 收尾余量（不是剩余本身）", () => {
+    expect(firstPassLimit(25 * MIN)).toBe(25 * MIN - RESERVE);
+    expect(firstPassLimit(60_000)).toBe(60_000 - RESERVE);
+  });
+
+  it("没设界 ⇒ null（不是 0：`timeout: 0` 在 spawnSync 里等于不设界，那正好把这一格唯一的上界拆掉）", () => {
+    expect(firstPassLimit(null)).toBeNull();
+    expect(firstPassLimit(undefined)).toBeNull();
+  });
+
+  it("剩余 ≤ 0 / 小于收尾余量 ⇒ 下界 1，不许落到 0 或负数", () => {
+    expect(firstPassLimit(0)).toBe(1);
+    expect(firstPassLimit(-5 * MIN)).toBe(1);
+    expect(firstPassLimit(10_000)).toBe(1);
+  });
+
+  it("读数写法：没设界就说没设界，不许念成 0 分钟", () => {
+    expect(fmtMinutes(null)).toContain("没设界");
+    /* 24.5 分钟：掐断那一屏念的就是这个数（现场读数是 25，差的正是那 30s 余量）。 */
+    expect(fmtMinutes(firstPassLimit(25 * MIN))).toBe("24.5 分钟");
+    expect(fmtMinutes(MIN)).toBe("1.0 分钟");
+  });
+});
+
+/* 掐断那一屏的三件事（`firstPassKilledReport`）。
+ *
+ * 「下一动作」此前只有一条「把改动拆开」，而 build `cnb-pl9-1k6b45aqm` 的现场是：
+ * 155 份被掐断，同一份清单在本机 3.5 分钟跑完 —— 缺的是那台机器的并发（`--maxWorkers=2`），
+ * 不是清单长度。对着那种现场说「拆小」，读的人会去拆一份根本不大的改动。
+ * 所以这一组钉的是「两档都要在」＋「不许把调大墙钟预算当成出口」。 */
+describe("第一遍被掐断：那一屏必须说清上界、结论、两档下一动作", () => {
+  const limitMs = firstPassLimit(25 * 60_000);
+  const text = firstPassKilledReport({ files: 155, limitMs, fmtMinutes });
+
+  it("上界念的是**这一遍真正拿到手**的那个数（不是「还剩多少」）", () => {
+    expect(text).toContain(fmtMinutes(limitMs));
+    expect(text).toContain("24.5 分钟");
+    /* 不许把没扣收尾余量那个数念出来 —— 它比真实掐点还大。 */
+    expect(text).not.toContain("25.0 分钟");
+  });
+
+  it("结论只能是「未判定」，不许读成红或绿", () => {
+    expect(text).toContain("未判定");
+    expect(text).toContain("退 2");
+    expect(text).toContain("没有任何一条断言给出结论");
+  });
+
+  it("下一动作两档都在：清单太大 ⇒ 拆小；并发太低 ⇒ 那是机器的问题", () => {
+    expect(text).toContain("§13.5.8.1");
+    expect(text).toContain("--maxWorkers");
+    expect(text).toContain("拆小买不到任何东西");
+    expect(text).toContain("--full");
+  });
+
+  it("点明「调大墙钟预算」不是出口（那是资源旋钮，只把同一件事推给平台那一刀）", () => {
+    expect(text).toContain("COMFY_AFFECTED_WALL_CLOCK_MS");
+    expect(text).toContain("不许");
   });
 });

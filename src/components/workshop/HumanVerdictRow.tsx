@@ -32,7 +32,9 @@ function RatingStars({
           aria-label={`${star} 星`}
           disabled={disabled}
           key={star}
-          onClick={() => onPick(value === star ? null : star)}
+          onClick={() => {
+            onPick(value === star ? null : star);
+          }}
           size="icon-sm"
           type="button"
           variant="ghost"
@@ -90,7 +92,9 @@ export function HumanVerdictRow({
   }
 
   // 反馈通道（~/lib/async-action 的形状）：成功清掉行内错误块，失败落一句话。
-  const report: ActionReport = (kind, detail) => setError(kind === "err" ? detail : "");
+  const report: ActionReport = (kind, detail) => {
+    setError(kind === "err" ? detail : "");
+  };
 
   const submit = (pass: boolean) =>
     busy.run(async () => {

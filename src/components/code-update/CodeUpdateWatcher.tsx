@@ -211,7 +211,9 @@ export function CodeUpdateWatcher() {
         body: notification.body,
       });
     });
-    return () => registerStaleStoreDeliver(null);
+    return () => {
+      registerStaleStoreDeliver(null);
+    };
   }, [toast]);
 
   return null;

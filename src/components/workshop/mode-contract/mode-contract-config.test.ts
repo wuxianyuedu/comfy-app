@@ -53,7 +53,8 @@ describe("生效契约（改过的用改过的，未改过的回落内置默认�
   it("注册表里有该模式时用它并标「已改」（模式码大小写不敏感）", () => {
     const custom = {
       mode: "T2I",
-      inputs: [/* SAFETY: 类型断言已复核 */ "prompt" as const],
+      /* SAFETY: 类型断言已复核 */
+      inputs: ["prompt" as const],
       /* SAFETY: 类型断言已复核 */
       output: "image" as const,
     };

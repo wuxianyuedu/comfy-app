@@ -560,8 +560,9 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
       let videoPath: string | undefined;
       let duration: number | undefined;
       if (next === "SUCCEEDED") {
+        /* SAFETY: 类型断言已复核 */
         const imgs =
-          /* SAFETY: 类型断言已复核 */ (task.resultImages as Array<{
+          (task.resultImages as Array<{
             localPath?: string;
             mediaType?: unknown;
           }> | null) ?? [];

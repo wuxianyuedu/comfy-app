@@ -32,7 +32,8 @@ import { describe, expect, it } from "vitest";
 // @ts-expect-error -- storybook 未随包提供该子路径的类型声明（exports 只有 default 条件）
 import * as storybookLoader from "storybook/internal/bin/loader";
 
-const { addExtensionsToRelativeImports } = /* SAFETY: 类型断言已复核 */ storybookLoader as {
+/* SAFETY: 类型断言已复核 */
+const { addExtensionsToRelativeImports } = storybookLoader as {
   addExtensionsToRelativeImports: (source: string, filePath: string) => string;
 };
 

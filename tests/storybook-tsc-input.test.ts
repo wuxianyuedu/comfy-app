@@ -163,8 +163,9 @@ function narrowTsconfigText(root: string, envDts: string, inheritedExclude: Arra
  * 不报错（见文件头）。
  */
 async function provisionNextEnv(outDir: string): Promise<string> {
+  /* SAFETY: 类型断言已复核 */
   const { writeAppTypeDeclarations } =
-    /* SAFETY: 类型断言已复核 */ (await import("next/dist/lib/typescript/writeAppTypeDeclarations.js")) as {
+    (await import("next/dist/lib/typescript/writeAppTypeDeclarations.js")) as {
       writeAppTypeDeclarations: (options: {
         baseDir: string;
         distDir: string;
@@ -733,7 +734,8 @@ function resolveTscBin(): {
   run: (args: Array<string>) => { output: string; status: number | null };
   runIn: (cwd: string, args: Array<string>) => { output: string; status: number | null };
 } | null {
-  for (const [pkg, binName] of /* SAFETY: 类型断言已复核 */ [
+  /* SAFETY: 类型断言已复核 */
+  for (const [pkg, binName] of [
     ["@typescript/native", "tsc"],
     ["typescript", "tsc6"],
   ] as const) {
@@ -816,7 +818,9 @@ describe("moveFileAcrossVolumes：跨卷退成 copy+unlink，别把节点布局�
       const spy = vi.spyOn(fs, "renameSync").mockImplementation(() => {
         throw errno("EPERM");
       });
-      expect(() => moveFileAcrossVolumes(from, to)).toThrow("EPERM");
+      expect(() => {
+        moveFileAcrossVolumes(from, to);
+      }).toThrow("EPERM");
       spy.mockRestore();
       expect(fs.existsSync(from), "报错被吞了 ⇒ 原处不该还在").toBe(true);
       expect(fs.existsSync(to), "EPERM 不该被当成「走退路」").toBe(false);

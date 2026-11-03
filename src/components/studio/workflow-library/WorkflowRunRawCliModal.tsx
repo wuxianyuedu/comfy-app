@@ -145,10 +145,15 @@ export function WorkflowRunRawCliModal({
   }, [open, taskId]);
 
   /* 运行期按需轮询刷新完整输出（统一走 useInterval，不自写 setInterval）。 */
-  useInterval(() => loadRef.current(true), {
-    ms: running ? 1500 : null,
-    immediate: false,
-  });
+  useInterval(
+    () => {
+      loadRef.current(true);
+    },
+    {
+      ms: running ? 1500 : null,
+      immediate: false,
+    },
+  );
 
   const scroller = useScrollFollow({
     containerRef: scrollerRef,
@@ -163,7 +168,9 @@ export function WorkflowRunRawCliModal({
       if (copiedTimerRef.current) {
         clearTimeout(copiedTimerRef.current);
       }
-      copiedTimerRef.current = setTimeout(() => setCopied(false), 1500);
+      copiedTimerRef.current = setTimeout(() => {
+        setCopied(false);
+      }, 1500);
     },
     onFailure: "silent",
   });
@@ -173,7 +180,12 @@ export function WorkflowRunRawCliModal({
   }
 
   return (
-    <Dialog onOpenChange={(next) => !next && onClose()} open>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open
+    >
       <DialogContent
         aria-label="comfy-cli 完整输出"
         className="bg-transparent p-0 ring-0"
@@ -197,7 +209,9 @@ export function WorkflowRunRawCliModal({
               <Hint accessibleName label="复制全部">
                 <Button
                   className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
-                  onClick={() => copy(lines.join("\n"))}
+                  onClick={() => {
+                    copy(lines.join("\n"));
+                  }}
                   size="icon-sm"
                   variant="ghost"
                 >
@@ -207,7 +221,9 @@ export function WorkflowRunRawCliModal({
               <Hint accessibleName label="刷新">
                 <Button
                   className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
-                  onClick={() => loadRef.current()}
+                  onClick={() => {
+                    loadRef.current();
+                  }}
                   size="icon-sm"
                   variant="ghost"
                 >
@@ -254,7 +270,9 @@ export function WorkflowRunRawCliModal({
               <Checkbox
                 checked={autoscroll}
                 className="cursor-pointer"
-                onCheckedChange={(c) => setAutoscroll(c === true)}
+                onCheckedChange={(c) => {
+                  setAutoscroll(c === true);
+                }}
               />
               自动滚动
             </FieldLabel>

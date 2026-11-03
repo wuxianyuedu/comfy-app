@@ -78,8 +78,9 @@ function paramsOf(path: Array<string> | undefined) {
 
 function get(path: Array<string> | undefined, range?: string) {
   return import("./route").then(({ GET }) =>
+    /* SAFETY: type assertion reviewed */
     GET(
-      /* SAFETY: type assertion reviewed */ new Request("http://x/api/generated", {
+      new Request("http://x/api/generated", {
         headers: range === undefined ? {} : { range },
       }) as never,
       paramsOf(path),

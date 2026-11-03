@@ -63,8 +63,6 @@ describe("工坊生成执行日志：JSONL 解析与 stage 校验", () => {
 
 describe("工坊生成执行日志：按天文件名", () => {
   it("文件名带日期、按天自然轮转", () => {
-    expect(generationLogFileName(new Date(2026, 8, 13))).toBe(
-      "generation-2026-09-13.log",
-    );
+    expect(generationLogFileName(new Date(2026, 8, 13))).toBe("generation-2026-09-13.log");
   });
 });

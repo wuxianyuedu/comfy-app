@@ -2262,10 +2262,9 @@ function firstStdoutMatch(
   // sleep-ok: 等的是**子进程 stdout 推上来的那一行**（父亲够不到，`expect.poll` 也够不着跨进程的流），
   // 定时器只当「子进程压根没起来」的失败上限，命中即 clear。
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error(`${what} 没在 ${timeoutMs}ms 内报出来 —— 这条用例的夹具坏了`)),
-      timeoutMs,
-    );
+    const timer = setTimeout(() => {
+      reject(new Error(`${what} 没在 ${timeoutMs}ms 内报出来 —— 这条用例的夹具坏了`));
+    }, timeoutMs);
     let buffered = "";
     child.stdout?.on("data", (chunk: Buffer) => {
       buffered += String(chunk);

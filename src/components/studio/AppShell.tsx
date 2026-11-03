@@ -148,7 +148,9 @@ export function AppShell({
   /* 桌面壳里这条栏由窗口标题行承载（与 `ShellTabs` 同一个判据）。 */
   const titleBarTabs = useTitleBarTabsActive();
   const [commandOpen, setCommandOpen] = useState(false);
-  useHotkey({ key: "k", mod: true }, () => setCommandOpen(true));
+  useHotkey({ key: "k", mod: true }, () => {
+    setCommandOpen(true);
+  });
 
   /* 侧栏列表 —— 与 `globalNavItems()` 的差别只有一处：设置不在侧栏列
      （它已经撤到顶栏右上角的菜单里，见 `sidebarNavItems` 的说明）。 */
@@ -242,7 +244,9 @@ export function AppShell({
                           <SidebarMenuItem key={project.id}>
                             <SidebarMenuButton
                               isActive={insideProject && project.id === activeProjectId}
-                              onClick={() => onOpenProject(project.id)}
+                              onClick={() => {
+                                onOpenProject(project.id);
+                              }}
                               size="sm"
                               tooltip={project.name}
                             >
@@ -303,7 +307,9 @@ export function AppShell({
 
           <TopBar
             active={active}
-            onOpenSearch={() => setCommandOpen(true)}
+            onOpenSearch={() => {
+              setCommandOpen(true);
+            }}
             onOpenSettings={onOpenSettings}
           />
 

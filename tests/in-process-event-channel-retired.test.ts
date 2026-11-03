@@ -60,9 +60,7 @@ describe("进程内事件通道（EventEmitter）已退役", () => {
    * 派生面为空、或某份文件被搬成只剩一行 re-export 时，全部 `not.toMatch`
    * 会在不判任何东西的情况下绿。 */
   it("这一族读的面非空：派生规则有命中、且每份文件剥完注释仍有代码", () => {
-    expect(CHAIN.length, "执行链派生面为空 ⇒ 下面那组 `emitter` 断言全在判空文").toBeGreaterThan(
-      0,
-    );
+    expect(CHAIN.length, "执行链派生面为空 ⇒ 下面那组 `emitter` 断言全在判空文").toBeGreaterThan(0);
     // 历史上真正持有 emitter 的那几份必须在面里：它们不在 = 规则或文件名漂了，覆盖面静默缩小。
     for (const name of [
       "enqueue.ts",
@@ -78,10 +76,9 @@ describe("进程内事件通道（EventEmitter）已退役", () => {
       ).toContain(`${COMFYUI_DIR}/${name}`);
     }
     for (const rel of READ_FILES) {
-      expect(
-        src(rel).trim(),
-        `${rel}：剥完注释是空文，落在它身上的反向断言恒真`,
-      ).not.toHaveLength(0);
+      expect(src(rel).trim(), `${rel}：剥完注释是空文，落在它身上的反向断言恒真`).not.toHaveLength(
+        0,
+      );
     }
   });
 
@@ -92,15 +89,13 @@ describe("进程内事件通道（EventEmitter）已退役", () => {
   it("判据本身有效：整行注释与行尾注释都不算，代码里的 emitter 算", () => {
     // 三头都要验：走的是 `stripCode` 本身（不是另调一次 `stripComments`），
     // 否则「上面那组忘了传 `{ trailing: true }`」这一形不会被这条抓住。
-    expect(
-      stripCode("// 这里过去写着 s.emitter.emit(taskId, …)\nconst ok = 1;\n"),
-    ).not.toMatch(/emitter/i);
-    expect(stripCode("const ok = 1; // 这里过去写着 s.emitter.emit\n")).not.toMatch(
+    expect(stripCode("// 这里过去写着 s.emitter.emit(taskId, …)\nconst ok = 1;\n")).not.toMatch(
       /emitter/i,
     );
-    expect(
-      stripCode('const s = state();\ns.emitter.emit(taskId, { type: "done" });\n'),
-    ).toMatch(/emitter/i);
+    expect(stripCode("const ok = 1; // 这里过去写着 s.emitter.emit\n")).not.toMatch(/emitter/i);
+    expect(stripCode('const s = state();\ns.emitter.emit(taskId, { type: "done" });\n')).toMatch(
+      /emitter/i,
+    );
   });
 
   it("RunnerState 的初值工厂不再收 EventEmitter，事件形状 TaskEvent 也不存在了", () => {
@@ -111,9 +106,7 @@ describe("进程内事件通道（EventEmitter）已退役", () => {
   });
 
   it("enqueue 不再导出 subscribe（零消费导出的判据由 check-dead-exports 兜）", () => {
-    expect(src("src/lib/comfyui/enqueue.ts")).not.toMatch(
-      /export function subscribe/,
-    );
+    expect(src("src/lib/comfyui/enqueue.ts")).not.toMatch(/export function subscribe/);
   });
 });
 

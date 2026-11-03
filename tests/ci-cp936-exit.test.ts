@@ -341,7 +341,9 @@ describe("CP936 出口：编排与退出码", () => {
 
   /** 编排那几条的公共注入面：`close` 由假子进程手动触发，输出不落 PowerShell。 */
   const closeWith = (child: { emitClose: () => void }) => {
-    queueMicrotask(() => child.emitClose());
+    queueMicrotask(() => {
+      child.emitClose();
+    });
     return child;
   };
 
@@ -893,7 +895,8 @@ describe("CP936 出口：编排与退出码", () => {
       platform: "win32",
       /* SAFETY: 类型断言已复核 */
       spawnImpl: ((_cmd: string, _args: Array<string>, opts: never) => {
-        calls.push({ stdio: /* SAFETY: 类型断言已复核 */ (opts as { stdio: unknown }).stdio });
+        /* SAFETY: 类型断言已复核 */
+        calls.push({ stdio: (opts as { stdio: unknown }).stdio });
         return { status: 0 };
       }) as never,
     });
@@ -1027,7 +1030,11 @@ describe("CP936 出口：**边到边发**（第六跑 —— 长跑 stage 的日
       /* 只喂 **stdout** 那条（`dataHandlers[0]`）：两条流各注册一次，随手全都喂
        * 会让同一块处理两遍 —— 本组判「发的时机与切法」，重复一块会把结论搅浑。 */
       push: (chunk: string) => dataHandlers[0]?.(chunk),
-      close: (code: number | null) => closeHandlers.forEach((fn) => fn(code)),
+      close: (code: number | null) => {
+        closeHandlers.forEach((fn) => {
+          fn(code);
+        });
+      },
     };
   };
 

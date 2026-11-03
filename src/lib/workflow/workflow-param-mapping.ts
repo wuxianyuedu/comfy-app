@@ -361,9 +361,8 @@ export function parseParamMapping(paramMap: unknown): ParamMapping {
   if (typeof sourceRaw !== "object" || sourceRaw === null || Array.isArray(sourceRaw)) {
     return out;
   }
-  for (const [key, value] of Object.entries(
-    /* SAFETY: 类型断言已复核 */ sourceRaw as Record<string, unknown>,
-  )) {
+  /* SAFETY: 类型断言已复核 */
+  for (const [key, value] of Object.entries(sourceRaw as Record<string, unknown>)) {
     if (!key.startsWith(MODE_KEY_PREFIX)) {
       continue;
     }
@@ -375,9 +374,8 @@ export function parseParamMapping(paramMap: unknown): ParamMapping {
       continue;
     }
     const byEntry: Record<string, string | null> = {};
-    for (const [entryId, target] of Object.entries(
-      /* SAFETY: 类型断言已复核 */ value as Record<string, unknown>,
-    )) {
+    /* SAFETY: 类型断言已复核 */
+    for (const [entryId, target] of Object.entries(value as Record<string, unknown>)) {
       /* 存量清理：那个键没有任何入口能再写出来，读到即丢（下面 `byEntry` 里没它，
        *  序列化自然也不会把它写回去）。 */
       if (entryId === LEGACY_SIZE_ENTRY_ID) {

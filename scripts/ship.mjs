@@ -549,6 +549,22 @@ async function runFlow(deps, tmpFiles) {
       codes.push(CODE.NOT_RUN);
       return finish(codes);
     }
+    /* 跑期内切分支即漂移（ISSUE #2812）：阶段 0 抬头记的是那时的分支，而平台段（PR 的
+     * `--head`、轮询归属的 sha）若按**现读**的 HEAD 取数，外部一次 `git checkout` 就会让
+     * 「抬头记的分支」与「轮询读的 sha」在同一次跑里互相矛盾，且轮询会为另一条分支的
+     * sha 空等。所以在进入平台段之前复核一次：分支被换 ⇒ 停（2），不拿不自洽的读数往下走。
+     * commit 段正常加笔不算漂移 —— 分支名不变，只有 sha 前进，而 sha 正是在这里钉住一次、
+     * 供 PR / 轮询 / 判决全程复用的。 */
+    const branchNow = run("git", ["rev-parse", "--abbrev-ref", "HEAD"]).stdout.trim();
+    if (branchNow !== branch) {
+      log(
+        `[ship] 跑期内分支被切换（${branch} → ${branchNow || "(取不到)"}）⇒ 停：` +
+          "本轮前面的读数记的是旧分支，而平台动作会落到新分支上，两者已经不自洽。" +
+          "回到原来的分支重跑（PR 已存在会复用，不重建）。",
+      );
+      codes.push(CODE.NOT_RUN);
+      return finish(codes);
+    }
     const newSha = run("git", ["rev-parse", "HEAD"]).stdout.trim();
 
     if (want("pull-request")) {
@@ -615,6 +631,8 @@ async function runFlow(deps, tmpFiles) {
             merge: opt.merge,
             buildState,
             explicitTitle: opt.title,
+            /* preflight 钉住的分支名：合并前第二道漂移复核要用（第一道在上面进平台段前）。 */
+            branch,
             landed,
             /* 只把「人这一跳给了哪个旗标」递过去：合并那一段收尾那句边界声明要按
              * 这一轮实际做了什么来说，不留一句被下一行推翻的话。 */

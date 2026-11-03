@@ -117,7 +117,9 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
     if (dropErrTimerRef.current) {
       clearTimeout(dropErrTimerRef.current);
     }
-    dropErrTimerRef.current = setTimeout(() => setDropErr(null), 4000);
+    dropErrTimerRef.current = setTimeout(() => {
+      setDropErr(null);
+    }, 4000);
   }, []);
 
   const handleImport = useCallback(async () => {
@@ -228,9 +230,8 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         const nodes = Array.isArray(obj.nodes) ? (obj.nodes as Array<unknown>) : [];
         for (const n of nodes) {
           const t =
-            typeof n === "object" && n !== null
-              ? /* SAFETY: 类型断言已复核 */ (n as { type?: unknown }).type
-              : undefined;
+            /* SAFETY: 类型断言已复核 */
+            typeof n === "object" && n !== null ? (n as { type?: unknown }).type : undefined;
           if (typeof t === "string" && /image|upscale|inpaint|edit/i.test(t)) {
             suggested = "I2I";
             break;

@@ -123,7 +123,9 @@ export function MaskCanvas({ value, onChange, disabled }: MaskCanvasProps) {
             className="text-2xs h-6 px-2"
             disabled={disabled}
             key={size}
-            onClick={() => setBrush(size)}
+            onClick={() => {
+              setBrush(size);
+            }}
             size="sm"
             type="button"
             variant={brush === size ? "secondary" : "ghost"}

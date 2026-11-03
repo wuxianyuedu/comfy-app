@@ -63,8 +63,12 @@ export function SubgraphHeader({
             event.stopPropagation();
             onToggle();
           }}
-          onMouseDown={(event) => event.stopPropagation()}
-          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => {
+            event.stopPropagation();
+          }}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+          }}
           size="icon-xs"
           style={{ pointerEvents: "auto" }}
           variant="ghost"

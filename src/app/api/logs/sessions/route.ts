@@ -199,9 +199,8 @@ export async function GET(request: Request) {
     /* 本次运行：目录与命名规则都从写方那一侧拿（`runtime-log-pack.server`）——
      * 读方自己拼 `log/current/services/<source>-*.log` 就会与写方漂开，而漂开的
      * 表现是「日志在磁盘上、界面上看不到」（两边各自都「看起来是对的」）。 */
-    const currentEntries = await listRuntimeLogFiles(
-      /* SAFETY: 类型断言已复核 */ source as RuntimeLogSource,
-    );
+    /* SAFETY: 类型断言已复核 */
+    const currentEntries = await listRuntimeLogFiles(source as RuntimeLogSource);
 
     /* 历史归档：`runs/` 与包内相对目录同样从写方那一侧取，端点不写 `log/runs`
      * 字面量。交给 `scanRunPacks` 的是**日志根的父目录**（`runsDir()` 自己拼

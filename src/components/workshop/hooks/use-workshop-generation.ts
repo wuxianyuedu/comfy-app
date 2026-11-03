@@ -132,7 +132,7 @@ export function useWorkshopGeneration({
       /* 订阅句柄 —— watchTask 返回前先给一个空实现，超时路径上一定已赋值。 */
       let close: () => void = () => undefined;
       /** 回写只认「仍归属本任务」的镜头（生图与视频的归属字段不同）。 */
-      const patchIfOwned = (p: Partial<Shot>) =>
+      const patchIfOwned = (p: Partial<Shot>) => {
         setShots((prev) =>
           prev.map((item) => {
             if (item.id !== shotId) {
@@ -142,6 +142,7 @@ export function useWorkshopGeneration({
             return owned ? { ...item, ...p } : item;
           }),
         );
+      };
       return withTimeoutResult(
         new Promise<void>((resolve) => {
           close = watchTask(taskId, {

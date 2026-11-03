@@ -142,7 +142,9 @@ function makeWrapper(explicitClient?: QueryClient) {
   };
 }
 
-beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
+beforeAll(() => {
+  server.listen({ onUnhandledFrame: "error" });
+});
 afterEach(() => {
   cleanup();
   behavior = { folders: [], comfyReachable: true };
@@ -151,7 +153,9 @@ afterEach(() => {
   configListCalls = 0;
   server.resetHandlers();
 });
-afterAll(() => server.close());
+afterAll(() => {
+  server.close();
+});
 
 describe("useModelFolderConfig", () => {
   it("挂载：loading 收敛，目录按 enabled 拆成两组，comfyReachable 落到状态", async () => {
@@ -357,7 +361,9 @@ describe("useModelFolderConfig", () => {
     });
     await expect.poll(() => result.current.loading).toBe(false);
 
-    act(() => result.current.setQ("lora"));
+    act(() => {
+      result.current.setQ("lora");
+    });
     expect(result.current.enabledRows).toEqual([]);
     expect(result.current.availableRows.map((r) => r.folder)).toEqual(["loras"]);
   });

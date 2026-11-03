@@ -119,7 +119,9 @@ export function WorkflowIoPreviewPanel({
   );
 
   const setIOLabel = useCallback(
-    (key: string, label: string) => ioApi.getState().setIOLabel(key, label),
+    (key: string, label: string) => {
+      ioApi.getState().setIOLabel(key, label);
+    },
     [ioApi],
   );
   /* 「必填 / 可选」切换：按当前模式写入覆盖（modes[mode].required）。
@@ -149,8 +151,9 @@ export function WorkflowIoPreviewPanel({
     [effectiveMode, ioApi],
   );
   const reorderIO = useCallback(
-    (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) =>
-      ioApi.getState().reorderIO(fromKey, targetKey, position),
+    (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) => {
+      ioApi.getState().reorderIO(fromKey, targetKey, position);
+    },
     [ioApi],
   );
 
@@ -252,7 +255,9 @@ export function WorkflowIoPreviewPanel({
               <Hint label={code}>
                 <Button
                   className={`${tabClass(effectiveMode === code)} h-auto`}
-                  onClick={() => setActiveMode(code)}
+                  onClick={() => {
+                    setActiveMode(code);
+                  }}
                   size="xs"
                   variant="ghost"
                 >

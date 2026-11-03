@@ -247,6 +247,15 @@ async function consumeSettingsStream(
   return { paths, summary, lastReport, byPath, discoveredByParent };
 }
 
+/** 延迟一拍 fire-and-forget 地拉一次数据，返回清定时器的 cleanup（三处 useEffect 共用）。 */
+function scheduleDeferredRefresh(run: () => Promise<unknown>): () => void {
+  // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
+  const timer = setTimeout(() => void run(), 0);
+  return () => {
+    clearTimeout(timer);
+  };
+}
+
 export function useCustomNodesSettings(): CustomNodesSettingsController {
   const [open, setOpen] = useState(false);
   const [savedPaths, setSavedPaths] = useState<Array<string>>([]);
@@ -445,9 +454,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     if (!open) {
       return;
     }
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    const timer = setTimeout(() => void fetchSettings(), 0);
-    return () => clearTimeout(timer);
+    return scheduleDeferredRefresh(fetchSettings);
   }, [open, fetchSettings]);
 
   // 打开时 + 每次解析后（report state 在解析完成事件落地时更新）拉取原始 manifest。
@@ -462,17 +469,13 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     if (!open) {
       return;
     }
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    const timer = setTimeout(() => void fetchManifest(), 0);
-    return () => clearTimeout(timer);
+    return scheduleDeferredRefresh(fetchManifest);
   }, [open, fetchManifest]);
   useEffect(() => {
     if (!report) {
       return;
     }
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    const timer = setTimeout(() => void fetchManifest(), 0);
-    return () => clearTimeout(timer);
+    return scheduleDeferredRefresh(fetchManifest);
   }, [report, fetchManifest]);
 
   async function readNdjson(

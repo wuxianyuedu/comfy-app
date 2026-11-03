@@ -150,7 +150,9 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
       <Hint label={notice.title}>
         <Button
           className={`text-2xs h-auto shrink-0 gap-0 rounded px-1 py-0 hover:underline ${tone}`}
-          onClick={() => window.location.reload()}
+          onClick={() => {
+            window.location.reload();
+          }}
           variant="ghost"
         >
           {notice.text}
@@ -165,7 +167,9 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
           <Button
             className={`text-2xs h-auto shrink-0 gap-1 rounded px-1 py-0 hover:underline ${tone}`}
             disabled={pushing}
-            onClick={() => setConfirming(true)}
+            onClick={() => {
+              setConfirming(true);
+            }}
             variant="ghost"
           >
             {notice.text}
@@ -176,7 +180,9 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
           confirmLabel="同步"
           danger
           description={`${notice.title}\n\n这批变更含「会丢数据」的语句（删列 / 重建表），执行后那些数据无法找回。确认这些数据可以丢弃后再继续。`}
-          onClose={() => setConfirming(false)}
+          onClose={() => {
+            setConfirming(false);
+          }}
           onConfirm={() => {
             setConfirming(false);
             void push();
@@ -263,8 +269,12 @@ export function BrowserStatusBar() {
    * 用 setTimeout 延迟到 render 提交后 setState，规避 react-hooks/set-state-in-effect。 */
   const [host, setHost] = useState("");
   useEffect(() => {
-    const t = setTimeout(() => setHost(window.location.host), 0);
-    return () => clearTimeout(t);
+    const t = setTimeout(() => {
+      setHost(window.location.host);
+    }, 0);
+    return () => {
+      clearTimeout(t);
+    };
   }, []);
 
   const fps = useFps();

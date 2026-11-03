@@ -130,7 +130,9 @@ export function WorkflowImportPanel({ state, onClose, onImport }: WorkflowImport
             aria-expanded={showHelpTip}
             aria-label="导入格式说明"
             className="border-border-strong bg-subtle text-ink-soft hover:border-primary/40 hover:text-primary text-2xs size-5 rounded-full"
-            onClick={() => setShowHelpTip((value) => !value)}
+            onClick={() => {
+              setShowHelpTip((value) => !value);
+            }}
             size="icon-xs"
             variant="outline"
           >

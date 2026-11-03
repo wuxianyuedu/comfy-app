@@ -124,8 +124,9 @@ export function FormField({
 
   const a11y: FormFieldA11y = {
     id: fieldId,
+    /* SAFETY: 类型断言已复核 */
     ...(error !== undefined && error !== null && error !== ""
-      ? { "aria-invalid": /* SAFETY: 类型断言已复核 */ true as const }
+      ? { "aria-invalid": true as const }
       : {}),
     ...(errorId !== undefined ? { "aria-describedby": errorId } : {}),
   };

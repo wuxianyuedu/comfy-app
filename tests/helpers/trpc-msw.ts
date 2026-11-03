@@ -32,8 +32,7 @@ async function forward(req: Request, router: AnyRouter): Promise<Response> {
   return new HttpResponse(body, {
     status: upstream.status,
     headers: {
-      "content-type":
-        upstream.headers.get("content-type") ?? "application/json",
+      "content-type": upstream.headers.get("content-type") ?? "application/json",
       vary: upstream.headers.get("vary") ?? "",
     },
   });
@@ -48,10 +47,7 @@ async function forward(req: Request, router: AnyRouter): Promise<Response> {
  * @param req 原始请求
  * @param router 承接它的 tRPC router
  */
-export async function forwardForTest(
-  req: Request,
-  router: AnyRouter,
-): Promise<Response> {
+export async function forwardForTest(req: Request, router: AnyRouter): Promise<Response> {
   return forward(req, router);
 }
 

@@ -34,8 +34,10 @@ function isValidDims(value: unknown): value is SizeDims {
   if (typeof value !== "object" || value === null) {
     return false;
   }
-  const width = /* SAFETY: 类型断言已复核 */ (value as { width?: unknown }).width;
-  const height = /* SAFETY: 类型断言已复核 */ (value as { height?: unknown }).height;
+  /* SAFETY: 类型断言已复核 */
+  const width = (value as { width?: unknown }).width;
+  /* SAFETY: 类型断言已复核 */
+  const height = (value as { height?: unknown }).height;
   return (
     typeof width === "number" &&
     typeof height === "number" &&

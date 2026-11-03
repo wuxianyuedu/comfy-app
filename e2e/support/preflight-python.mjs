@@ -216,7 +216,8 @@ export function pythonEvidence({
               .filter((k) => k.toLowerCase() === "path")
               .join(" / ") || "一个都没有"
           }）`
-        : ""}`,
+        : ""
+    }`,
   );
   for (const name of pythonCandidates(platform)) {
     const args = pythonProbeArgs(name, ["--version"]);

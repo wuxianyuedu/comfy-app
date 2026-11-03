@@ -73,7 +73,9 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
           messages: buildScriptMarkdownMessages(meta, idea),
           // 显式 provider+model：命中所选模型独立连接参数时改走该参数（与角色卡一致）
           opts: model ? { provider, model } : undefined,
-          onToken: (token) => setAiDraft((draft) => draft + token),
+          onToken: (token) => {
+            setAiDraft((draft) => draft + token);
+          },
         }),
       );
       const markdown = full.trim();
@@ -101,14 +103,15 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
               <SelectMenu
                 {...field}
                 className="bg-subtle! border-border! text-sm"
-                labels={/* SAFETY: 类型断言已复核 */ PROJECT_TYPE_LABELS as Record<string, string>}
-                onChange={(value) =>
+                /* SAFETY: 类型断言已复核 */
+                labels={PROJECT_TYPE_LABELS as Record<string, string>}
+                onChange={(value) => {
                   onMetaChange({
                     ...meta,
                     /* SAFETY: 类型断言已复核 */
                     type: value as ProjectType,
-                  })
-                }
+                  });
+                }}
                 options={PROJECT_TYPES}
                 placeholder="选择类型"
                 value={meta.type}
@@ -120,7 +123,9 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
               <input
                 {...field}
                 className="border-border bg-bg focus:border-primary w-full rounded-lg border px-3 py-2 text-sm outline-none"
-                onChange={(event) => onMetaChange({ ...meta, tone: event.target.value })}
+                onChange={(event) => {
+                  onMetaChange({ ...meta, tone: event.target.value });
+                }}
                 placeholder="温暖治愈 / 悬疑紧张 / 史诗感"
                 value={meta.tone}
               />
@@ -135,7 +140,9 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
               <input
                 {...field}
                 className="border-border bg-bg focus:border-primary w-full rounded-lg border px-3 py-2 text-sm outline-none"
-                onChange={(event) => onMetaChange({ ...meta, logline: event.target.value })}
+                onChange={(event) => {
+                  onMetaChange({ ...meta, logline: event.target.value });
+                }}
                 placeholder="一个关于…的故事"
                 value={meta.logline}
               />

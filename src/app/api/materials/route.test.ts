@@ -280,11 +280,10 @@ describe("POST /api/materials —— 上传", () => {
       folder: "docs",
       sizeOverMax: true,
     });
-    const res = await POST(
-      /* SAFETY: 类型断言已复核 */ {
-        formData: async () => form,
-      } as unknown as NextRequest,
-    );
+    /* SAFETY: 类型断言已复核 */
+    const res = await POST({
+      formData: async () => form,
+    } as unknown as NextRequest);
     expect(res.status).toBe(400);
     expect(disk.writeFile).toEqual([]);
   });

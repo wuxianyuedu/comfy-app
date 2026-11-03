@@ -179,7 +179,9 @@ function RevealPathButton({ path, children }: { children: React.ReactNode; path:
   /* 回执与成功态**必须同生共死**：两个独立定时器在时长一改就会漂移，留下
    * 「已定位」还在、绿色已经消失的自相矛盾画面（与 `SaveExportButton` 同款）。 */
   const hint = useFlashState(1200);
-  const feedback = useRevealLogPath(() => hint.flash());
+  const feedback = useRevealLogPath(() => {
+    hint.flash();
+  });
 
   const onReveal = () => {
     if (feedback.busy) {
@@ -266,7 +268,9 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
     },
   });
 
-  const onCopy = () => copy(formatEntryForClipboard(entry));
+  const onCopy = () => {
+    copy(formatEntryForClipboard(entry));
+  };
 
   return (
     <Hint
@@ -295,8 +299,9 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
               : "text-ink-muted"
         }`}
         data-log-copy=""
-        // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-        onClick={() => void onCopy()}
+        onClick={() => {
+          onCopy();
+        }}
         size="icon-xs"
         variant="ghost"
       >
@@ -411,7 +416,9 @@ export const LogRow = memo(function LogRow({
       <Hint label={locationHint}>
         <Button
           className="text-ink-fainter hover:text-ink-soft text-2xs h-auto max-w-[28%] shrink-0 cursor-pointer truncate rounded-none p-0 text-right font-normal whitespace-nowrap"
-          onClick={() => copyLocation(location)}
+          onClick={() => {
+            copyLocation(location);
+          }}
           variant="ghost"
         >
           {location}

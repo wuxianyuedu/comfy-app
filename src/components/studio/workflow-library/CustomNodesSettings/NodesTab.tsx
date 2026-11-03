@@ -43,7 +43,9 @@ function CardRow({
       data={manifestByNode[ct]}
       expanded={nodeCardExpansion.isExpanded(ct)}
       fallbackName={ct}
-      onToggle={() => nodeCardExpansion.toggle(ct)}
+      onToggle={() => {
+        nodeCardExpansion.toggle(ct);
+      }}
     />
   );
 }
@@ -286,7 +288,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                 <Disclosure
                   className="hover:bg-subtle w-auto flex-1 justify-between gap-2 rounded-xl px-3 py-2.5"
                   marker="caret"
-                  onOpenChange={() => parentExpansion.toggle(parent)}
+                  onOpenChange={() => {
+                    parentExpansion.toggle(parent);
+                  }}
                   open={isOpen}
                   panelClassName="contents"
                   /* 整排的排布在 Root 上（`rootClassName`）：触发开关与右侧的
@@ -424,7 +428,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                 <Disclosure
                                   className="hover:bg-subtle flex-row-reverse items-end justify-end gap-1 rounded-md px-1.5 py-1 text-right"
                                   marker="caret"
-                                  onOpenChange={() => nodeListExpansion.toggle(sub.path)}
+                                  onOpenChange={() => {
+                                    nodeListExpansion.toggle(sub.path);
+                                  }}
                                   open={nodeListOpen}
                                   panelClassName="hidden"
                                   trigger={
