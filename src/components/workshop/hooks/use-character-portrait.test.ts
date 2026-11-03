@@ -1,11 +1,7 @@
-// 「角色定妆照会话」编排层单测（规范 17 §17.4 SOP 第 4 步：优先测逻辑层）。
-//
-// 这一层此前完全没有用例：纯规则（候选去重 / 上限 / 定妆照回落）由
-// `lib/workshop/character-portrait.test.ts` 守着，但**编排本身**没有 —— 门禁文案、
-// 候选写回、busy 复位、日志与落盘、并发与项目归属都只能靠人肉读代码。下面逐条钉死。
-//
-// 用例走真实的 `useState`（宿主 hook 持有 characters），只 mock 网络层三个函数与
-// 日志落盘，这样「候选有没有真的写进角色」是断言出来的，而不是断言 mock 调用参数。
+// 「角色定妆照会话」编排层单测（规范 17 §17.4：优先测逻辑层）。
+// 纯规则由 `lib/workshop/character-portrait.test.ts` 守着，这里钉**编排本身**：
+// 门禁文案、候选写回、busy 复位、日志落盘、并发与项目归属。用例走真实 `useState`，
+// 只 mock 网络层与日志落盘 —— 「候选有没有写进角色」是断言出来的，不断言 mock 参数。
 
 import React from "react";
 import { act, cleanup, renderHook } from "@testing-library/react";

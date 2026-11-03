@@ -7,20 +7,9 @@ import type { TaskLogEntry } from "~/lib/workshop/generation-client";
 afterEach(cleanup);
 
 /**
- * 任务日志时间线的**级别筛选栏**回归判据（ISSUE #1925 第三批收口）。
- *
- * 这一排此前是手搓的 `Button variant="ghost"` + 选中三元：
- *   选中 → `bg-surface-2 text-ink`
- *   未选 → `text-ink-muted hover:bg-subtle hover:text-ink-strong`
- *
- * 两处都坏：① 选中档没钉悬停值，`ghost` 自带的
- * `hover:bg-muted hover:text-foreground` 照旧生效 —— 划过**已选中**的那一枚时
- * 底色/字色被改写，看上去像「未选中」（ISSUE #1423 那一族）；
- * ② `bg-surface-2` 在浅色主题下与行头底色同值（`log-row-style.ts` 的
- * `FILTER_SELECTED_STYLES` 就是为这件事立的），选中本来就弱。
- *
- * 现在整排交给 `ui/select-chip`。这里钉的是**形态**：
- * 单选语义 + 选中档四层俱在 + 悬停值回钉。
+ * 任务日志时间线的**级别筛选栏**回归判据（ISSUE #1925）：整排已交给 `ui/select-chip`。此前手搓
+ * `Button ghost`：选中档没钉悬停值，`hover:bg-muted` 会改写已选中项（ISSUE #1423 那族），且
+ * `bg-surface-2` 在浅色下与行头底色同值、选中本就弱。这里钉形态：单选语义 + 选中档四层俱在 + 悬停值回钉。
  */
 const logs: Array<TaskLogEntry> = [
   { t: 1, level: "info", msg: "开始" },

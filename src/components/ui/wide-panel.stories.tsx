@@ -4,36 +4,13 @@ import { modalWidth } from "~/components/ui/dialog-width";
 import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
 
 /**
- * `ui/wide-panel` 是「面板加宽档 + 它的触发钮」的**唯一出口**（规范 16 §16.2.4.18）。
- *
- * 它收的是三个日志面板（`LogPanel` / `GlobalStepLogPanel` /
- * `WorkflowRunLogModal`）里逐字同形的三份实现：档状态、宽度档、触发钮、
- * 图标切换、闭合。收掉重复之外还补了一件事 —— **「加宽」这个选择有记忆**：
- * 加宽态按 `storageKey` 落 `localStorage`，同一面板下次打开还是用户选过的档
- * （三份旧实现都只写了 `useState`，也就是「用户加宽过、关掉、再打开又变窄」）。
- *
- * ## 为什么用 store + `useSyncExternalStore` 而不是 `useState`
- *
- * 同一面板可能**同时挂两份实例**（按钮在标题栏、面板体在 Portal 里）。
- * 纯 `useState` 会让两边各有一份真相、互相看不见对方改了档；
- * 模块级 store + `useSyncExternalStore` 才是同一个真相（与 `useCanvasSettings`
- * 同一套机制）。
- *
- * ## 出口的形状
- *
- * `useWidePanel(id, modalWidth(base))` → `{ wide, toggle, set, widthClass, toggleLabel }`，
- * 其中 `widthClass` 直接交给 `popupClassName` / `className`，
- * `toggleLabel` 一处给出触发钮的 `title` 与 `aria-label`（旧三份是各写一遍，
- * 改名时漏一处就对不上）。
+ * `ui/wide-panel` 是「面板加宽档 + 触发钮」的唯一出口（规范 16 §16.2.4.18）。
+ * 收三个日志面板里逐字同形的三份实现（档状态、宽度档、触发钮、图标切换、闭合），并补上「加宽有记忆」：按 `storageKey` 落 localStorage，三份旧实现只写 useState（关掉再开又变窄）。
+ * 用 store + `useSyncExternalStore` 而非 useState：同一面板可能同时挂两份实例（按钮在标题栏、面板体在 Portal），纯 state 会让两边各有一份真相。出口形状：`useWidePanel(id, modalWidth(base))` → `{ wide, toggle, set, widthClass, toggleLabel }`。
  */
 /**
- * `Meta.component` 要的是**能渲染的东西**，而这一族的出口是 `useWidePanel`
- * 这个 hook、`WidePanelToggle` 又要一个 `panel` 对象 —— 所以在 meta 层放一个
- * 最小的承载组件，由它在内部建 `panel`。
- *
- * 不写 `args: { panel: {} as never }`：`as never` 在**判据自己的扫描面**里
- * （`tests/f13-projection-shapes.test.ts` 要求每一处逐处登记 + 写清理由），
- * 而这里本来就有正当写法 —— 造一个真组件即可。
+ * `Meta.component` 要的是能渲染的东西，而这一族的出口是 `useWidePanel` 这个 hook、`WidePanelToggle` 又要一个 `panel` 对象 —— 所以在 meta 层放一个最小的承载组件，由它内部建 `panel`。
+ * 不写 `args: { panel: {} as never }`：`as never` 在判据自己的扫描面里（`tests/f13-projection-shapes.test.ts` 要求逐处登记 + 理由），这里本来就有正当写法。
  */
 const meta = {
   title: "UI/WidePanel",
@@ -47,18 +24,8 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** 最小承载：建一个 `panel`，把触发钮与宽度档都摊出来。 */
-function WidePanelDemo({
-  base,
-  defaultWide = false,
-}: {
-  base: string;
-  defaultWide?: boolean;
-}) {
-  const panel = useWidePanel(
-    "storybook-wide-panel-demo",
-    modalWidth(base),
-    defaultWide,
-  );
+function WidePanelDemo({ base, defaultWide = false }: { base: string; defaultWide?: boolean }) {
+  const panel = useWidePanel("storybook-wide-panel-demo", modalWidth(base), defaultWide);
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
@@ -86,11 +53,7 @@ export const BothStates: Story = {
 
 function BothStatesDemo() {
   const narrow = useWidePanel("storybook-wide-demo-narrow", modalWidth("w-80"));
-  const wide = useWidePanel(
-    "storybook-wide-demo-wide",
-    modalWidth("w-80"),
-    true,
-  );
+  const wide = useWidePanel("storybook-wide-demo-wide", modalWidth("w-80"), true);
   return (
     <div className="flex items-center gap-6">
       <div className="flex flex-col items-center gap-2">

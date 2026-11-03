@@ -44,11 +44,9 @@ export function Field({ label, children }: { children: string; label: string }) 
 }
 
 /**
- * 一行任务。排队行给 `leading`（位次），最近结果行不给（改由状态徽标说话）。
- *
- * 状态一律走 `StatusBadge` 的语义色档，视图里不出现颜色档 —— 换主题才不用改这里
- * （规范 03 §3.6.2）。动作全走 `Button` 基元：`busy` 时禁用，判据在 controller 里，
- * 本行不自己比 id。
+ * 一行任务。排队行给 `leading`（位次），最近结果行不给（由状态徽标说话）。
+ * 状态走 StatusBadge 语义色档、视图不出现颜色档（换主题不用改这里，规范 03 §3.6.2）；
+ * 动作走 Button 基元，busy 时禁用（判据在 controller，本行不自己比 id）。
  */
 export function QueueRowLine({
   row,

@@ -93,12 +93,8 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
       </div>
 
       {/* ── 作用域切换（仅在有项目时出现）──
-          此前是手搓的 `<Button variant="ghost">` + 下划线三元：选中档给
-          `border-b-2 border-accent`，**未选中档根本没有那条边框** —— 于是
-          未选中的那一枚整体比选中的矮 2px，切来切去文字基线上下跳。这就是
-          「一排里选一个」的又一处手搓（与上面类型筛选同一族）。
-          改用 `ui/tabs` 的 `line` 档：它就是这一类「下划线页签」的全库实现，
-          选中态由 `data-active` 驱动（字色 / 下划线两层），两枚同高同基线。 */}
+          原手搓下划线页签：未选中档没有 border-b-2，整枚矮 2px，切来切去基线上下跳。
+          改用 ui/tabs `line` 档（全库实现，选中态由 data-active 驱动字色 / 下划线）。 */}
       {projectId !== undefined && projectId !== null && projectId !== "" && (
         <Tabs
           className="gap-0"
@@ -137,14 +133,9 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
       )}
 
       {/* ── 类型筛选（pill）──
-          此前是手搓的 `<Button variant="ghost">` + 选中分支：选中档只写了
-          `bg-surface-2 text-ink-bright ring-border-strong`，字重与悬停都没钉
-          —— 划过**已选中**的那一枚时，`ghost` 变体的 `hover:bg-muted` 会把它
-          改成「未选中」的样子（用户原话「悬浮和非悬浮一个紫一个白」那一族，
-          ISSUE #1423）。整排交给 `ui/select-chip`（「一排里选一个」的全库
-          唯一实现，规范 16 §16.2.4）：选中态有底色 / 字色 / 描边 / 字重四层，
-          且自带与常态同值的 `hover:`。语义也从 `aria-pressed` 回到
-          `radiogroup` + `radio`（这一排本来就只能选一个）。 */}
+          原手搓按钮：选中档未钉字重/悬停，划过得 hover:bg-muted 又变回「未选中」样子
+          （ISSUE #1423）。改用 ui/select-chip（「一排里选一个」的全库实现）：选中态
+          底色/字色/描边/字重四层且 hover 与常态同值，语义为 radiogroup + radio。 */}
       <div aria-label="按类型筛选生成记录" className="flex gap-1.5 px-4 py-3" role="radiogroup">
         {FILTER_TABS.map((filterTab) => (
           <SelectChip

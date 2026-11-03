@@ -1,32 +1,7 @@
 /**
- * `GET /api/generated/[...path]` —— 任务产物文件流的契约。
- *
- * 这个端点把 `<产物根>/<taskId>/<file>` 按 `/api/generated/...` 前缀吐出去，
- * 是**任意路径读取**的入口，所以它的价值全在边界上：
- *
- *   · 没有会话（`loginRequired` 开着时）必须 401，且一次都不碰磁盘；
- *   · 穿越出根目录必须 403（`../` 与兄弟目录前缀碰撞是两种不同形状，分开验）；
- *   · **属于别人的产物必须 404**（与「文件不存在」同形），且判定发生在 `stat`/`open` 之前
- *     —— 这里测的是「路由没有绕开 `~/lib/media/output-access` 那道闸」，
- *     闸本身的判据由它自己的单测管（两层各判各的，才不会两边都以为自己测过了）；
- *   · **带 `Range` 也一样过闸**：分段请求是新加的一条读盘路径，必须复用同一串判定，
- *     而不是在「读哪一段」那层再长出一套权限逻辑；
- *   · 读不到（含「指到目录」）必须 404，而不是把 EISDIR/EACCES 的原文抛成 500；
- *   · 命中时 `Content-Type` 走唯一出口 `contentTypeForPath`（不是自己 `switch` 一遍），
- *     长缓存必须是 `private` + `immutable`，并且要有 `Accept-Ranges: bytes`；
- *   · `Range` 三种结论各有状态码：206（带 `Content-Range`）、416（只写总长）、
- *     不认识的形状 → 忽略并回整份 200。形状本身在 `range-request.test.ts` 判，
- *     这里只判「翻成响应那一步对不对」，其中最要紧的一条是**只读要的那一段**
- *     —— 否则「拖进度条」= 整份成片读进内存，这条支持就白做。
- *
- * 兄弟目录那条（`generated-evil`）是这里最容易被「顺手简化」掉的一档：判据写成
- * `abs.startsWith(root)` 也能挡住 `../../etc/passwd`，看起来没坏，但会把
- * `<root>-evil/…` 一起放行。代码里那个 `+ path.sep` 就是为它存在的。
- *
- * mock 边界：`fs`（`stat` + `open` 两份假象，**读的位置与长度都记下来** ——
- * 「只读那一段」与「一次都没打开」都是要断言的事）、`~/server/auth/request-user`
- * （鉴权两态）、`~/lib/app-settings/app-settings.server`（`loginRequired` 两态）、
- * `~/lib/media/output-access`（归属判决由它自己的单测钉，这里只判「路由吃没吃它」）。
+ * `GET /api/generated/[...path]` —— 产物文件流（任意路径读取入口）的边界契约：未登录 401 且一次都不碰磁盘；
+ * 穿越出根 403（`../` 与兄弟目录前缀碰撞分开验，`+ path.sep` 专为 `<root>-evil` 存在）；别人的产物 404 且在 `stat`/`open` 之前判；
+ * `Range` 复用同一串判定且只读要的那一段；读不到 404（不抛 EISDIR/EACCES 原文）；`Content-Type` 走 `contentTypeForPath`，缓存 `private`+`immutable`；Range 三态 206/416/忽略回 200。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

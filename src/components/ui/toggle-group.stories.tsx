@@ -4,18 +4,8 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 
 /**
- * `ui/toggle-group` 是**一组互斥 / 可多选的开关按钮**：它把 `toggleVariants`
- * 的 `variant` / `size` 经 context 传给每个 `ToggleGroupItem`
- * （item 自己**不**接这两轴，只接 `value`）—— 所以本 story 的枚举清单挂在整个
- * 组上，而不是逐项传。
- *
- * 三根轴都在组上：
- * - `variant` × `size`：与 `ui/toggle` 同源，走 context 下发；
- * - `orientation`：横排 / 竖排（`flex-col`）；
- * - `spacing`（数字）：项之间的间隙（像素），`0` 就是紧贴的一整条分段控件。
- *
- * **多选还是单选由 `ToggleGroup` 的 `value` / `defaultValue` 形状决定**
- * （数组 = 多选），这是这一族最容易写错的一处 —— 两条 story 并排给出来。
+ * `ui/toggle-group` 是一组互斥 / 可多选的开关按钮：`variant` / `size` 经 context 传给每个 `ToggleGroupItem`（item 只接 `value`），故枚举清单挂在整个组上。三根轴都在组上：`variant` × `size`（与 `ui/toggle` 同源）、`orientation`（横 / 竖）、`spacing`（项间像素，`0` 即紧贴分段控件）。
+ * 多选还是单选由 `value` / `defaultValue` 形状决定（数组 = 多选）—— 这一族最容易写错的一处，两条 story 并排给。
  */
 type ToggleGroupVariant = NonNullable<React.ComponentProps<typeof ToggleGroup>["variant"]>;
 type ToggleGroupSize = NonNullable<React.ComponentProps<typeof ToggleGroup>["size"]>;

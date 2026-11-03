@@ -1,10 +1,6 @@
-// 「创作后端」分区**撤掉运行态之后仍然自洽**（ISSUE #1900）。
-//
-// 这一分区从「配置 + 运行态 + 日志」收成「只配置」。收的过程里最容易出的错是
-// **留一段没有出口的空白**：四个动作按钮与日志框没了，而用户按老位置找「启动
-// ComfyUI」时看到几个输入框，会以为功能被砍了。所以这里判两件：
-//   · 配置项都还在（路径 / 解释器 / 端口 / 启动参数 / 自动拉起 / 存储目录）；
-//   · 有一个**能点**的出口指向侧栏「ComfyUI」页（`workspace:navigate`）。
+// 「创作后端」分区**撤掉运行态之后仍然自洽**（ISSUE #1900）：收成「只配置」后
+// 最容易出的错是留一段没有出口的空白。判两件：配置项都还在；有一个**能点**的
+// 出口指向侧栏「ComfyUI」页（`workspace:navigate`）。
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";

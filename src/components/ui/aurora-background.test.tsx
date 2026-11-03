@@ -1,23 +1,11 @@
 // @vitest-environment jsdom
-/* 为何**不**留在 DOM 档默认的 happy-dom（这是本档的例外，口径见规范 §11.17）：
- * 本文件断的是**行内 style 里的 `color-mix()` 表达式**，而 happy-dom 的
- * CSSOM 不认识 `color-mix()`：赋给 `style.background` 时它把整条声明丢掉
- * （实测读回空串），于是三条用例全部读到 `""`。jsdom 原样保留该函数
- * （它不对 CSS 值做合法性校验）。
- * 这是「断言值的**保真度**」差异，不是组件行为差异：色相映射表本身由
- * `scripts/check-theme-colors.cjs` 的静态判据守着。
- */
+/* 为何**不**用 DOM 档默认的 happy-dom（本档例外，规范 §11.17）：本档断言行内 style 里的
+ * `color-mix()`，而 happy-dom 的 CSSOM 不认识它，赋给 `style.background` 时整条声明被丢掉
+ * （实测读回空串）；jsdom 原样保留该函数（不做 CSS 值合法性校验）。这是断言值**保真度**差异，
+ * 不是组件行为差异。 */
 /**
- * `AuroraGlow` 的色相映射回归（规范 03 §3.6.1.1「拼接 token 名」判据的配套用例）。
- *
- * 这个组件此前**零覆盖**，而它刚被从 `var(--color-aurora-${tone})` 改成一张
- * 「整名 → 字面量」表。表化唯一可能引入的新错就是**抄错色相**（把 magenta 映到
- * cyan 那颗），运行时字符串照样合法、肉眼只看得出「光晕换了个颜色」，所以钉这条。
- *
- * ⚠️ 说清这条**判不出什么**：拼法与表法产出的字符串逐字相同，所以「有没有拼名字」
- * 不由本用例守，由 `scripts/check-theme-colors.cjs` 的静态判据守 —— 后者治的是
- * Tailwind v4 按**字面名**决定是否保留 `@theme` 变量这件事（拼出来的名字它看不见，
- * 那颗 token 连编译产物都进不去）。
+ * `AuroraGlow` 色相映射回归（规范 03 §3.6.1.1「拼接 token 名」判据的配套用例）：组件刚由 `var(--color-aurora-${tone})` 改成「整名 → 字面量」表，表化唯一可能引入的新错是抄错色相（运行时字符串仍合法）。
+ * 「有没有拼名字」不由本用例守，由 `scripts/check-theme-colors.cjs` 静态判据守（Tailwind v4 按**字面名**决定是否保留 `@theme` 变量，拼出来的名字连编译产物都进不去）。
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";

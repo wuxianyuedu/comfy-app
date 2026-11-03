@@ -11,33 +11,11 @@ import {
    story 里的样例值同样是「会被抄走的代码」，所以它也得照出口写。 */
 import { artifactUrl } from "~/lib/media/output-layout";
 
-/**
- * `mediaDragSourceProps` 是「把一张媒体图变成可拖拽的源」的**唯一出口**。
- *
- * 它替代的是四处逐字重复的 `draggable` + `onDragStart`（`HistoryPanel` 与
- * `MaterialLibraryPanel` 各两个视图）—— 而**真正的病灶不在重复**：
- *
- * 1. **跨组件的契约靠手抄**：消费端 `use-canvas-drop` 里
- *    `JSON.parse(raw) as MediaDropPayload` —— 源端少写一个字段、把 `mediaType`
- *    写成别的名字，编译期一个字都不会说，运行时是一次**静默丢投**
- *    （拖到画布上什么都不发生、也没报错）。收进一处后，两端由**同一份类型**约束。
- * 2. **`displayName` 的推导各写各的**：出口给缺省（路径最后一段），
- *    调用处要自己的名字就显式传 —— `displayNameFromUrl()` 就是那一处。
- * 3. **「可拖 / 不可拖」的判据散在两处**（`draggable` 一个、光标类另一个）。
- *    出口把它们收成「可拖才有光标」。
- *
- * 出口是**纯函数而非 hook**：没有状态、没有订阅，而调用点都在 `Array.map`
- * 里（那里不能调 hook）。所以 story 用一节**真能拖的**卡片来展示它 ——
- * 返回值整份摊在一个元素上（`{...mediaDragSourceProps({...})}`）。
- *
- * 判据（§16.2.4.22）锚在**自定义 MIME 字面量**上：它是本项目「跨组件拖拽」
- * 的签名 —— 组件内的拖拽（React Flow 节点、表单行排序）不跨组件、不带这个
- * MIME，不该走本出口。
- *
- * ⚠️ Storybook 画布上拖拽**不会触发画布的落点逻辑**（那在应用里）。
- * 这一条 story 要验的是「可拖元素带不带正确属性」：能看到 `cursor-grab`、
- * 并且 `draggable` 属性为真。
- */
+/** `mediaDragSourceProps` 是「把一张媒体图变成可拖拽的源」的唯一出口。它替代的是四处逐字重复的 `draggable` + `onDragStart`（`HistoryPanel` 与 `MaterialLibraryPanel` 各两个视图），而真正的病灶不在重复：
+ * ① 跨组件契约靠手抄：消费端 `use-canvas-drop` 里 `JSON.parse(raw) as MediaDropPayload` —— 源端少写一个字段、把 `mediaType` 写成别的名字，编译期一个字都不会说，运行时是一次静默丢投（拖到画布上什么都不发生、也没报错）；收进一处后两端由同一份类型约束。② `displayName` 的推导各写各的：出口给缺省（路径最后一段），调用处要自己的名字就显式传 —— `displayNameFromUrl()` 就是那一处。③「可拖 / 不可拖」的判据散在两处（`draggable` 一个、光标类另一个），出口把它们收成「可拖才有光标」。
+ * 出口是纯函数而非 hook：没有状态、没有订阅，而调用点都在 `Array.map` 里（那里不能调 hook）；所以 story 用一节真能拖的卡片来展示它，返回值整份摊在一个元素上（`{...mediaDragSourceProps({...})}`）。
+ * 判据（§16.2.4.22）锚在自定义 MIME 字面量上：它是本项目「跨组件拖拽」的签名 —— 组件内的拖拽（React Flow 节点、表单行排序）不跨组件、不带这个 MIME，不该走本出口。
+ * ⚠️ Storybook 画布上拖拽不会触发画布的落点逻辑（那在应用里）；这一条 story 要验的是「可拖元素带不带正确属性」：能看到 `cursor-grab`、并且 `draggable` 属性为真。 */
 const meta = {
   title: "UI/MediaDragSource",
   component: MediaDragCard,

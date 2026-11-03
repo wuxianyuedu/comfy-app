@@ -8,25 +8,11 @@ import {
 } from "~/components/studio/workflow-form/DimensionControlParts";
 import type { EnrichedWidget } from "~/components/studio/workflow-io-groups";
 
-/**
- * 组合参数（尺寸 / 视频）弹层里的两件附属件。
- *
- * `RequiredChips` 是**必填 / 显隐控制**：grouped 行替代了各自的独立参数行，
- * 原来的必填/可选徽标与 👁 会跟着消失 —— 这件把它们按 pin 补回组合卡里。
- * 它的状态空间比看起来大，所以下面**逐档摆**：
- *
- *   · 只给 `onRequiredChange` → 只渲染「必填 / 可选」按钮；
- *   · 再给 `visibilityMode` + `onVisibilityChange` → 追加 👁 / 👁‍🗨；
- *   · 两者都不给 → **整件不渲染**（编辑态之外它不该出现在画布上）；
- *   · 多模式作者态 → `required` 按 `mode` 解析（读条目级 or 模式覆盖层）。
- *
- * 最后一条是有历史根因的：原实现直读条目级 `pin.required`，与写入模式覆盖层
- * 错层，表现是「点完按钮 UI 不回读，看起来像无法切换」。所以 story 里专设
- * 一档**同一批 pin 在两种 mode 下**的读数 —— 那正是这条坑的样子。
- *
- * `data-dimension-pin` 是每个 chip 的定位依据（判据与测试按它找），
- * 所以下面的 pin 名都写成真机上会出现的（`width` / `height` / `aspect` / `megapixels`）。
- */
+/** 组合参数（尺寸/视频）弹层附属件。RequiredChips 是必填/显隐控制：grouped 行替代独立参数行，
+ * 原必填/可选徽标与 👁 会消失 —— 这里按 pin 补回。只给 onRequiredChange → 只渲染必填/可选；
+ * 再给 visibilityMode + onVisibilityChange → 追加 👁；两者都不给 → 整件不渲染；
+ * 多模式作者态 → required 按 mode 解析（条目级或模式覆盖层）。历史根因：原实现直读 pin.required
+ * 与模式覆盖层错层，表现「点完不回读」。data-dimension-pin 是定位依据，pin 名写成真机值。 */
 const pin = (over: Partial<EnrichedWidget> & { ioKey: string }): EnrichedWidget => ({
   direction: "input",
   kind: "widget",
@@ -100,11 +86,9 @@ export const NotEditableRendersNothing: Story = {
 };
 
 /**
- * 同一批 pin 在两种 mode 下：`STEPS` 在 `turbo` 下变**必填**、在 `draft` 下**隐藏**。
- *
- * 这一档就是那条历史根因的现场 —— 必填/显隐必须按当前 mode 解析
- *（`resolveEntryRequired` / `isVisibleInMode`），直读条目级字段时会永远显示
- * 同一档，而界面上看起来就像「点了没反应」。
+ * 同一批 pin 在两种 mode：STEPS 在 turbo 下变必填、在 draft 下隐藏。这一档是历史根因现场 ——
+ * 必填/显隐必须按当前 mode 解析（resolveEntryRequired / isVisibleInMode）；直读条目级字段
+ * 会永远显示同一档，界面上就像「点了没反应」。
  */
 export const ModeOverrides: Story = {
   render: () => (

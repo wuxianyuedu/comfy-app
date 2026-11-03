@@ -1,16 +1,8 @@
 // @vitest-environment jsdom
 /**
  * 「按一下就亮、过一会儿自己复位」的反馈状态（规范 16 §16.2.4）。
- *
- * 这条账的形状是**时间线**，不是某个组件：全库 6 个落点各写一份
- * 「亮起 → `setTimeout` 复位」，其中 4 处裸 `setTimeout`（连卸载都不管）、
- * 2 处手写 `timerRef`。两类缺陷在各自的调用点都看不出来，只有把时间线
- * 拿出来单测才验得了：
- *  ① 卸载后仍然 `setState`；
- *  ② 连点时旧定时器没清 —— 第一次的复位提前抹掉第二次的亮起。
- *
- * 用假定时器把时间轴控制住，而不是 `await sleep(1500)`：真实等待会让
- * 用例慢且不稳，而且无法验证「第二下是否被第一下的复位打断」。
+ * 全库 6 个落点各写一份「亮起 → setTimeout 复位」：4 处裸 setTimeout（连卸载都不管）、2 处手写 timerRef。缺陷只有把时间线单测才验得了：① 卸载后仍 setState；② 连点时旧定时器没清，第一次的复位提前抹掉第二次的亮起。
+ * 用假定时器控制时间轴，而不是 `await sleep(1500)`：真实等待慢且不稳，也无法验证「第二下是否被第一下的复位打断」。
  */
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

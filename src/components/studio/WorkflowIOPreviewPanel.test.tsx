@@ -15,12 +15,10 @@ type IOMap = Record<string, WorkflowIOParam>;
 
 afterEach(cleanup);
 
-/* 面板把 seed 模式写进 store 的同时会落库一次（`~/lib/workflow/workflow-mutations`
- * 经 `vanillaApi.workflow.update`，一条 batch 三个字段）。不换桩的话「选递增值」
- * 那一步就真发 `POST /api/trpc/workflow.update`，在本机撞 `localhost:3000` 的
- * ECONNREFUSED —— happy-dom 还会把连接失败当成窗口级错误打两遍（ISSUE #2458：
- * 本文件一条断言都没红，噪声挂在别人的日志里）。本文件只断言 store 里的模式覆盖，
- * 落库结果不在断言面上，故给「永不 resolve」的桩（同 CanvasNode.test.tsx 的写法）。 */
+/* 面板把 seed 模式写进 store 的同时会落库一次（`vanillaApi.workflow.update`）。不换桩，「选递增值」
+ * 那一步就真发 `POST /api/trpc/workflow.update`，在本机撞 `localhost:3000` 的 ECONNREFUSED，
+ * happy-dom 还会把连接失败当窗口级错误打两遍（ISSUE #2458：本文件断言全绿，噪声挂在别人日志里）。
+ * 本文件只断言 store 里的模式覆盖，故给「永不 resolve」的桩（同 CanvasNode.test.tsx）。 */
 vi.mock("~/trpc/vanilla", () => {
   const pending = <T,>() =>
     // 永不 resolve：落库结果不影响本文件的断言
@@ -105,11 +103,9 @@ function seedRowLabel(): string | null {
 }
 
 /* ── 拖拽排序（ISSUE #349：编辑 IO 里拖不动参数行）────────────────────
- *
- * 用手写原生事件而不是 fireEvent.dragX：真实交互里 dragstart / dragover /
- * drop 之间隔着若干次 React 重渲（拖拽高亮、插入指示线都会改状态），`drop`
- * 拿到的处理器闭包未必是起手那一次渲染的。只有让事件各自 dispatch 一遍，
- * 才能命中「闭包里的被拖行已过期」这条路径。 */
+ * 用手写原生事件而非 fireEvent.dragX：真实交互里 dragstart / dragover / drop 之间隔着若干次
+ * React 重渲（拖拽高亮与插入指示线都会改状态），`drop` 拿到的处理器闭包未必是起手那次；
+ * 只有让事件各自 dispatch 一遍，才能命中「闭包里的被拖行已过期」这条路径。 */
 function nativeDrag(target: Element, type: string, ioKey: string, clientY = 5): void {
   const event = new Event(type, { bubbles: true, cancelable: true });
   Object.defineProperty(event, "dataTransfer", {

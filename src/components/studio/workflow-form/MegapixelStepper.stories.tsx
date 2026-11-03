@@ -8,21 +8,11 @@ import {
   MegapixelStepper,
 } from "~/components/studio/workflow-form/MegapixelStepper";
 
-/**
- * 百万像素自由值步进器 —— 尺寸控件里「档位之外还能自己填一个值」那一条。
- *
- * 纯 props（`value` / `onChange` / `disabled`），但它有一个**必须由 export 派生、
- * 不能手抄**的东西：上下限与步进量。所以下面那几档的边界值直接引
- * `MEGAPIXEL_MIN` / `MEGAPIXEL_MAX` / `MEGAPIXEL_STEP` —— 手抄一个 `0.1` / `16.7`
- * 就是这一批要消掉的假形态（改常量时 story 会继续显示旧口径，而画布看着正常）。
- *
- * 为什么要它：百万像素在端口上是**连续量**（FLOAT），1M / 2M / 4M 只是常用档位。
- * 工坊的尺寸选择器与工作流表单的尺寸控件**共用这一个实现** —— 两处各写一份必然
- * 在步进量、上限、小数位上分叉，故事里也就是要看「同一档位在两处是不是同一个数」。
- *
- * `data-testid="megapixel-stepper"` 是它与同块控件里宽 / 高 `NumberField` 的区分
- * 依据（它们的步进按钮 `title` 长得一样，按 title 查会同时命中三个）。
- */
+/** 百万像素自由值步进器 story —— 「档位之外还能自己填」那一条。纯 props（value/onChange/disabled），
+ * 上下限与步进量必须引 `MEGAPIXEL_MIN/MAX/STEP`，不得手抄（改常量时 story 会显示旧口径）。
+ * 百万像素在端口上是连续量（FLOAT），1M/2M/4M 只是常用档位；工坊尺寸选择器与工作流表单共用这一个实现，
+ * 两处各写一份必在步进量/上限/小数位分叉。data-testid="megapixel-stepper" 用于与宽/高 NumberField 区分
+ *（它们的步进按钮 title 相同，按 title 查会命中三个）。 */
 const meta = {
   title: "Studio/MegapixelStepper",
   component: MegapixelStepper,

@@ -1,18 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
-import {
-  ExitReminder,
-  exitReminderSignal,
-} from "~/components/ui/use-exit-reminder";
+import { ExitReminder, exitReminderSignal } from "~/components/ui/use-exit-reminder";
 
 /**
- * 判据**全在 CSS**（`globals.css` 的 `[data-exit-reminder]:has(~ [data-dirty])`），
- * 所以画布上能看到的状态取决于两件事同时成立：容器挂了 `data-dirty`、
- * 提示条是它的**同级后继兄弟**，且**主题 CSS 与 globals.css 都在**。
- *
- * 最后一条正是本 story 存在的理由：Storybook 里这三件很容易只成立两件，
- * 而表现是「组件明明在 DOM 里、就是看不见」—— 与真机上的表现对不上，
- * 于是 story 反而会让人误判成组件坏了。铺开两种状态来定这件事。
+ * 判据全在 CSS（`globals.css` 的 `[data-exit-reminder]:has(~ [data-dirty])`）：容器挂 `data-dirty`
+ * 且提示条是其**同级后继兄弟**，主题 CSS 与 `globals.css` 也都在 —— 三者缺一就表现为
+ * 「组件在 DOM 里却看不见」，与真机不一致，story 反而让人误判组件坏了。铺开两种状态定这件事。
  */
 const meta = {
   title: "UI/ExitReminder",
@@ -34,9 +27,7 @@ export const Idle: Story = {
       <div className="border-border border border-dashed p-2">
         <div {...exitReminderSignal(false)}>
           <ExitReminder {...args} />
-          <span className="text-ink-faint text-xs">
-            （提示条在上面这一行里，看不见）
-          </span>
+          <span className="text-ink-faint text-xs">（提示条在上面这一行里，看不见）</span>
         </div>
       </div>
     </div>
@@ -50,9 +41,7 @@ export const Shown: Story = {
       <span>下面是「有脏数据」时的形态：</span>
       <div className="border-border border border-dashed p-2">
         <div {...exitReminderSignal(true)}>
-          <span className="text-ink-faint text-xs">
-            （这一层带着 data-dirty）
-          </span>
+          <span className="text-ink-faint text-xs">（这一层带着 data-dirty）</span>
           <ExitReminder {...args} className="text-ink-faint mt-1 text-[11px]" />
         </div>
       </div>

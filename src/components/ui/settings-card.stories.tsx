@@ -5,18 +5,8 @@ import { Input } from "~/components/ui/input";
 import { SettingsCard } from "~/components/ui/settings-card";
 
 /**
- * `SettingsCard` 是**设置页那 11 个段落共用的「有标题的卡片」唯一出口**。
- *
- * 与 `ui/card` 的关系是**薄封装、不是平行实现**（`settings-card.tsx` 文件头
- * 写得很清楚）：底色 / 圆角 / 边框 / 内边距全部走官方 `Card` 与语义 token，
- * 本件只补两件事 ——
- *
- * 1. 一个**必填的字符串标题**（`Card` 本体没有 title prop，得自己拼
- *    `CardHeader + CardTitle` 那层结构）；
- * 2. 一处**外观微调**（`rounded-2xl` + `shadow-sm` + `backdrop-blur`），
- *    都是中性 utility、不含颜色。
- *
- * 所以 story 要验的是「设置页那一段长什么样」，不是「它跟 Card 有什么不同」。
+ * `SettingsCard` 是设置页 11 个段落共用的「有标题卡片」唯一出口，与 `ui/card` 是薄封装、不是平行实现：底色 / 圆角 / 边框 / 内边距全走官方 `Card` 与语义 token。
+ * 本件只补两件事 —— 必填字符串标题（自己拼 `CardHeader + CardTitle`）与外观微调（`rounded-2xl` + `shadow-sm` + `backdrop-blur`，均为中性 utility）。story 验的是「设置页那一段长什么样」。
  */
 const meta = {
   title: "UI/SettingsCard",

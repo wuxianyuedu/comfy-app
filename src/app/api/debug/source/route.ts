@@ -6,13 +6,9 @@ import { unauthorizedResponse } from "~/server/lib/error-response";
 import { toDisplayPath } from "~/lib/path-display";
 
 /**
- * 端点：GET /api/debug/source?file=src/components/studio/workflow-node.tsx
- *
- * 画布调试模式的「渲染链路标签」点击后读取项目源码用。
- * 安全约束：
- *  - file 必须是相对项目根的路径，且最终绝对路径必须落在 <项目根>/src 下
- *    （防止 `../` 路径穿越读取任意文件）；
- *  - 只允许读取源码/文本类扩展名。
+ * 端点：GET /api/debug/source?file=src/components/studio/workflow-node.tsx —— 画布调试模式「渲染链路标签」点击后读项目源码。
+ * 安全约束：file 必须是相对项目根的路径，且最终绝对路径必须落在 `<项目根>/src` 下（防 `../` 路径穿越读任意文件）；
+ * 只允许读取源码/文本类扩展名。
  */
 
 const PROJECT_ROOT = path.resolve(/*turbopackIgnore: true*/ process.cwd());

@@ -15,17 +15,9 @@ const WATCHED_MODULES = [
 ];
 
 /**
- * 取被观测模块的「改动指纹」：mtime + 大小。
- *
- * 为什么看源码文件的 mtime 而不是 Git 提交号：本项目最常见的用法正是
- * 「桌面壳长开、边改边看」，改动往往还没提交——提交号根本不会变，等于没有
- * 信号。源码 mtime 则如实反映「这台机器上的代码已经变了」。
- *
- * 为什么**不**把这个判定写进 `/api/update-check`：那条通道回答的是「哪些
- * 改动需要重启才生效」（Rust / 配置 / `.env`，前端源码明确被排除在它范围
- * 之外——HMR 会处理）。这里的场景恰恰相反：前端源码 HMR **会**生效，但
- * 「已经挂在页面上的旧组件实例」不会重建，于是旧实例与新模块错位。两件事、
- * 两套判据，混在一起会让那条通道开始对 src/ 的每次改动都报「需重启」。
+ * 取被观测模块的改动指纹（mtime + 大小）：常见用法是边改边看、改动未提交，Git 提交号不变。
+ * 不写进 `/api/update-check`：那条回答「哪些改动需重启」，这里是「HMR 生效但旧实例没重建」，
+ * 两套判据混在一起会让它对 src/ 每次改动都报需重启。
  */
 function moduleFingerprints(): string {
   const root = process.cwd();
@@ -41,31 +33,9 @@ function moduleFingerprints(): string {
 }
 
 /**
- * 端点：GET /api/dev/build-id
- *
- * 给前端一条「运行中的这棵模块图，是不是加载时的那一棵」的判定依据。
- *
- * 判据 = 进程启动标识 + 被观测源码模块的 mtime 指纹。任一方变化都意味着
- * 「当前页面跑的代码不是最新的」：
- *   · 启动标识变 → 应用服务重启过（页面还是旧进程送来的代码）；
- *   · 指纹变 → 源码在本机被改过（页面还没重载到改动后的模块）。
- *
- * `force-dynamic` 且 `no-store`：构建标识必须反映此刻，不做任何缓存。
- *
- * 除 `buildId`（合并串）外，另单独回 `bootId` 与 `restartReason`：
- *   · `bootId` 单独暴露，前端才能把「进程真的重启」与「只是源码 mtime 变了」
- *     分开——只有 bootId 变才是重启，值得单独提示；
- *   · `restartReason` 取启动器自愈重启 dev server 时注入的
- *     `COMFYAPP_RESTART_REASON`（如陈旧路由表清缓存重启），让重启通知能说清
- *     「为什么重启」，而不是只丢一句「服务重启了」。
- *
- * 再带上两件「为什么要重启」与「还需要做什么」的事实：
- *   · `restartDetail` —— 启动器懒归因产出的人话短句（`COMFYAPP_RESTART_DETAIL`），
- *     例「本次代码更新改了路由结构（新增 2 / 删除 1）」。归因失败时为 null，
- *     文案退化为「已自动重启」而不是编一个成因；
- *   · `depsStale` / `depsState` —— 依赖面（lockfile）是否已陈旧（见
- *     `~/lib/shell/deps-freshness.server`）。这一条**不随重启变**，是给「拉了新
- *     代码、需要停服务重装依赖」那个动作的通知源。非 dev / 无法判定时为 null。
+ * 端点：GET /api/dev/build-id —— 判定「运行中的模块图是不是加载时那棵」：buildId = bootId + 源码 mtime 指纹，任一变化即页面跑的不是最新。
+ * 另回 bootId（只有它变才是真重启）、restartReason/restartDetail（重启原因，归因失败为 null）、
+ * depsStale/depsState（依赖面陈旧与否，不随重启变，无法判定为 null）。
  */
 export async function GET() {
   const bootId = getServerBootId();

@@ -1,13 +1,7 @@
 // @vitest-environment jsdom
-/**
- * 分块失败降级的**接线**判据（判定本身在 `~/lib/shell/lazy-chunk-recovery` 的单测里）。
- *
- * 这里只钉两件事，它们都是「静默地错」的方向：
- *   · 分块失败 → 必须出现一个**真能出去**的动作（「重新加载页面」），而不是
- *     一句「重试」——`reset()` 重渲染的是同一棵树、手里的哈希还是旧的那份，
- *     重试必然再撞同一堵墙；
- *   · 其它异常 → 交回 `ErrorBoundary` 自己的降级 UI，不能被说成「文件没加载上」。
- */
+/** 分块失败降级的**接线**判据（判定本身在 `~/lib/shell/lazy-chunk-recovery` 的单测里）。只钉两件「静默地错」的事：
+ * 分块失败 → 必须出现**真能出去**的动作（「重新加载页面」），而不是「重试」——`reset()` 重渲染同一棵树、
+ * 哈希还是旧的，必然再撞同一堵墙；其它异常 → 交回 `ErrorBoundary` 自己的降级 UI，不能被说成「文件没加载上」。 */
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";

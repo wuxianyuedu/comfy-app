@@ -4,18 +4,8 @@ import { useState } from "react";
 import { SeedAdvancedField } from "~/components/workshop/SeedAdvancedField";
 
 /**
- * 工坊生成表单的「高级 · 种子」控件（Phase 8 · P8-1c）。
- *
- * 纯 props：`value` 是一段**原始字符串**（空串 = 自动随机），没有 tRPC、
- * 没有运行期依赖。它值得有 story 的地方在两件**只有真交互才看得见**的事：
- *
- *   · **空串与数字是两种语义，不是「没填」与「填了」** —— 空串是「每次生成自动取
- *     一个新 seed」，填数字是「pin 住这个 seed 复现同一张图」。所以下面把这两档
- *     并排放，画布上能同时读到输入框里是空的还是有值；
- *   · **折叠默认收起**：控件住在 `Disclosure` 里，默认状态下画布上只有「高级」两个字
- *     —— 这是刻意的（种子是高级输入，不该占常用区），story 里把展开与收起都摆出来。
- *
- * 输入用官方 `Input`（P68）、折叠用官方 `Disclosure`（P10），本件不手搓。
+ * 工坊生成表单的「高级 · 种子」控件（Phase 8 · P8-1c）。纯 props，无运行期依赖。值得看的是两件只有真交互才看得见的事：**空串与数字是两种语义**
+ *（空 = 每次自动取新 seed，数字 = pin 住复现同一张图，两档并排摆）；**折叠默认收起**（刻意，种子是高级输入）。输入用官方 `Input`（P68）、折叠用官方 `Disclosure`（P10）。
  */
 const meta = {
   title: "Workshop/SeedAdvancedField",

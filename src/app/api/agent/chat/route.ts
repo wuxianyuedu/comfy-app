@@ -1,8 +1,5 @@
-// POST /api/agent/chat — Agent 对话推理入口。
-// 接收用户消息 + 当前项目快照，服务端理解意图后返回：
-//   • 模型纯文本回复（无工具调用）
-//   • tool_calls 列表（前端执行后再回灌）
-//   • JSON 指令序列回退（模型不支持 tools 时）
+// POST /api/agent/chat — Agent 对话推理入口：接收用户消息 + 项目快照，服务端理解意图后返回
+// 模型纯文本回复 / tool_calls 列表（前端执行后再回灌）/ 模型不支持 tools 时的 JSON 指令序列回退。
 // 鉴权沿用 requireRequestUser（单机本地演示可回落默认用户）。
 
 import { type NextRequest, NextResponse } from "next/server";

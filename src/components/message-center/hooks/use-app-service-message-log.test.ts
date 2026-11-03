@@ -1,12 +1,9 @@
 // @vitest-environment jsdom
 // 「应用服务断开 / 启动」记进消息中心这条链路的**接线**契约。
-//
-// 判据与文案在 `~/lib/shell/app-service-message` 的单测里逐分支钉死了；这里钉的是
-// 三件只有接线才出问题的事：
-//   ① 边沿是从**上一次渲染**推进的（游标必须跨渲染存活，否则每拍都像首帧）；
-//   ② 断开那一刻的原因**走壳的 IPC** 读（`get_app_service_exit`，ISSUE #1915）——
-//      经 HTTP 那条端点由没了的那个服务自己应答，此刻必然不通；恢复那条才走 HTTP；
-//   ③ 写出去的消息**带时刻与原因**，且读不到原因时仍然发出去（时间本身已是事实）。
+// 判据与文案在 `~/lib/shell/app-service-message` 的单测里钉死了；这里钉三件只有接线
+// 才出问题的事：① 边沿从**上一次渲染**推进（游标必须跨渲染存活）；② 断开那刻的原因
+// **走壳的 IPC** 读（`get_app_service_exit`，ISSUE #1915）——HTTP 端点由没了的服务
+// 自己应答、此刻必然不通，恢复那条才走 HTTP；③ 消息带时刻与原因，读不到也照发。
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
@@ -55,13 +52,9 @@ function stubExitEndpoint({
 }
 
 /**
- * 让壳那条存活通道（`~/lib/shell/desktop-shell-client` 的 `readAppServiceExitRecord`，
- * 底层是壳命令 `get_app_service_exit`）回一份**记录原文**。
- *
- * 这个模块被 mock 掉是**为了能摆「壳内有这条通道」这一档**：jsdom 里
- * `isDesktopShell()` 为假，真实实现自己会回 null（浏览器形态的真实样子），
- * 那样就测不到「断开那一刻当场带上原因」。每个用例开始时它被重置回 null，
- * 于是缺省形态仍是浏览器那一档。
+ * 让壳那条存活通道（`readAppServiceExitRecord`，底层是壳命令 `get_app_service_exit`）
+ * 回一份**记录原文**。mock 掉它是**为了能摆「壳内有这条通道」这一档**：jsdom 里
+ * `isDesktopShell()` 为假，真实实现自己回 null；每个用例开始时重置回 null。
  */
 const shell = vi.hoisted(() => ({
   readAppServiceExitRecord: vi.fn(async (): Promise<string | null> => null),
@@ -89,9 +82,8 @@ const DEFAULT_RUN_ID = "a1b2c3";
 
 /**
  * 挂上 hook 并返回「推进到某一拍」的函数。
- *
  * `rerender` 收**部分事实**并与上一拍合并（`renderHook` 的 rerender 是整体替换，
- * 而这里几乎每个用例都只改一个字段）；缺省字段取 `DEFAULT_RUN_ID` 那一档。
+ * 而几乎每个用例都只改一个字段）；缺省字段取 `DEFAULT_RUN_ID` 那一档。
  */
 function mount(initial: Partial<Facts> = {}) {
   let cur: Facts = {

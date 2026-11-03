@@ -1,21 +1,8 @@
 "use client";
 
 /* ── WorkspaceViewStack · 打开的每一页视图的**常驻栈** ─────────────────
- *
- * 这是「页签让打开的界面保持打开」这条诉求的落点（ISSUE #1784 第 1 条）。
- * 收口前 `workspace/page.tsx` 用 `switch (viewMode)` 只渲染当前那一屏 ——
- * 切走即卸载：切回画布是一张重开的空网、控制台里跑着的命令断连、工坊草稿没了。
- * 现在按**页签列表**逐屏取内容、叠在一起用 CSS 显隐切换，卸载只发生在关掉那一页时。
- *
- * 为什么单独一个组件而不是继续留在页面里：
- *   · 页面那个函数已经在函数长度阈值附近（规范 §12.13，400 行），再把 13 个
- *     视图的分支摊在里面就超了 —— 而这条判据要的是**按职责拆**，不是加注释分段；
- *   · 十二份 `next/dynamic` 的懒加载声明与「哪一屏对应哪个组件」是同一条知识，
- *     收在一处才不会漂（收口前它们散在页面顶部 100 行里）。
- *
- * 显隐用 `hidden`（`display:none`）+ `h-full`，与壳页签 `ShellTabs` 对 iframe
- * 的做法同一套：切显隐不碰 React 的挂载状态。非当前页补 `aria-hidden`，
- * 读屏不会读到屏幕外那一屏（读屏用户不该被十个隐藏视图挨个念一遍）。
+ * 这是「页签让打开的界面保持打开」的落点（ISSUE #1784 第 1 条）：收口前 `workspace/page.tsx` 用 `switch (viewMode)` 只渲染当前那一屏、切走即卸载（切回画布是空网、控制台命令断连、工坊草稿没了）；现在按**页签列表**逐屏取内容、叠在一起用 CSS 显隐切换，卸载只发生在关掉那一页时。
+ * 单独成组件：页面函数已在长度阈值附近（规范 §12.13，400 行），且十二份 `next/dynamic` 与「哪一屏对应哪个组件」是同一条知识，收一处才不会漂。显隐用 `hidden` + `h-full`（与 `ShellTabs` 对 iframe 同一套，不碰 React 挂载状态）；非当前页补 `aria-hidden`，读屏不会挨个念十个隐藏视图。
  */
 
 import dynamic from "next/dynamic";
@@ -48,24 +35,9 @@ import {
 import { registerLazyViewLoader, startLazyViewPrefetch } from "./lazy-view-prefetch";
 
 /**
- * 懒加载视图的**统一出口**：所有 `next/dynamic` 声明都经它，好让「分块加载失败」
- * 有唯一的自愈点（ISSUE #1900）。
- *
- * 为什么要收这一手：这一屏里十二份懒加载声明共用同一件事实 —— 页面首帧拿到的是
- * 「该去哪个分块」的哈希，真正的 `import()` 在点开那一屏时才发出，而 dev server
- * 重建之后那些哈希可能已指向被换掉的旧分块。撞上时整屏崩成「页面出错了」，
- * 用户既不知道要刷新、也不觉得那是环境问题。修法见
- * `~/lib/shell/lazy-chunk-recovery`（判定 + 本会话刷一次）；这里只负责把它接到
- * **每一个** loader 上 —— 漏一个，那一屏就还是崩。
- *
- * 刷新的那一跳返回一个永不 settle 的 promise：页面正在被换掉，让它悬着比
- * 立刻抛错更好（抛了会先闪一下 error boundary 再被导航覆盖）。没触发刷新
- * （不是分块问题 / 本会话已刷过）时照常抛，错误照旧落到 error boundary。
- *
- * 顺带在这条唯一的出口上包一层 `withViewOpenReport`：分块解析后把内容包住，
- * 「界面打开耗时」的测量点于是正好落在内容真正挂载那一刻（外层包裹量不到 ——
- * 见 `./ViewOpenReport` 的说明）。视图 id 一并登记进 `LAZY_VIEWS`，让视图栈
- * 知道「这一屏由懒加载那条路自己记日志」，不必在别处再手抄一份懒加载清单。
+ * 懒加载视图的**统一出口**：所有 `next/dynamic` 声明都经它，好让「分块加载失败」有唯一的自愈点（ISSUE #1900）。十二份懒加载声明共用同一件事实 —— 首帧只拿到「该去哪个分块」的哈希，真正的 `import()` 在点开那一屏时才发出，dev server 重建后哈希可能指向被换掉的旧分块，撞上就整屏崩成「页面出错了」。修法见 `~/lib/shell/lazy-chunk-recovery`（判定 + 本会话刷一次）；这里负责把它接到**每一个** loader 上 —— 漏一个那一屏就还是崩。
+ * 刷新的那一跳返回永不 settle 的 promise：页面正在被换掉，让它悬着比立刻抛错更好（抛了会先闪 error boundary 再被导航覆盖）；没触发刷新时照常抛，错误照旧落到 error boundary。
+ * 顺带在这条唯一出口上包一层 `withViewOpenReport`：分块解析后把内容包住，「界面打开耗时」的测量点正好落在内容真正挂载那一刻（外层包裹量不到 —— 见 `./ViewOpenReport`）；视图 id 一并登记进 `LAZY_VIEWS`，视图栈不必另抄一份懒加载清单。
  */
 
 /** 由 `lazyView` 自己登记的懒加载视图 —— 它们的「界面打开」日志在内容挂载点写。 */
@@ -217,10 +189,7 @@ export function WorkspaceViewStack({
   onConsumeSettingsSection,
 }: WorkspaceViewStackProps) {
   /**
-   * 某一个视图该渲染什么 —— **按视图取值**，不再按「当前视图」取值。
-   *
-   * 判据里只认 `view`（页签的视图），项目用 `activeProjectId`：项目页签与活跃项目
-   * 的绑定在 `openViewTab` 时已确定，这里不重复判断绑定关系。
+   * 某一个视图该渲染什么 —— **按视图取值**，不再按「当前视图」取值。判据里只认 `view`（页签的视图），项目用 `activeProjectId`：项目页签与活跃项目的绑定在 `openViewTab` 时已确定，这里不重复判断绑定关系。
    */
   const renderView = (view: WorkspaceView) => {
     if (view === "home") {
@@ -331,16 +300,9 @@ export function WorkspaceViewStack({
     }
   };
 
-  /* 当前屏「打开时刻」的记账 —— 交给 `ViewOpenReport` 在内容挂载点多读一次，
-   * 由它算出「内容真的出现」减去这一步的耗时。
-   *
-   * 为什么是**成对**的 `{ view, at }` 而不是裸时刻：时刻与它对应的视图必须绑在
-   * 一起，否则「刚激活、时刻还没换」的那一帧里，新视图会拿到上一屏的旧时刻，算出
-   * 一个垃圾耗时（React 的子 effect 先于父 effect —— 内容那侧先读到 provider）。
-   * 绑成一对之后该帧读到的是 `null`（视图对不上）⇒ 只记一条正确的。
-   *
-   * 计时刻意放在 **effect** 里：渲染期调用 `performance.now()` 属 React 的不纯
-   * 调用（`react-hooks/purity` 会红），effect 里则是合规的。 */
+  /* 当前屏「打开时刻」的记账 —— 交给 `ViewOpenReport` 在内容挂载点多读一次，由它算出「内容真的出现」减去这一步的耗时。
+   * 为什么是**成对**的 `{ view, at }` 而不是裸时刻：时刻与对应视图必须绑一起，否则「刚激活、时刻还没换」那一帧里，新视图会拿到上一屏的旧时刻、算出垃圾耗时（React 子 effect 先于父 effect，内容侧先读到 provider）；绑成一对后该帧读到 `null`（视图对不上）⇒ 只记一条正确的。
+   * 计时刻意放在 **effect** 里：渲染期调用 `performance.now()` 属 React 的不纯调用（`react-hooks/purity` 会红），effect 里则合规。 */
   const [opened, setOpened] = useState<{
     at: number;
     view: WorkspaceView;

@@ -1,17 +1,7 @@
-/**
- * 居中模态卡片宽度档的回归（ISSUE #720）。
- *
- * 这条回归的现场只有真实浏览器量得出来（jsdom 不做布局，`getComputedStyle`
- * 在 jsdom 里也拿不到 Tailwind 的产出），所以这里的判据取**契约**而不是像素：
- *   1. 加宽档与默认档必须是**不同族**的宽度写法 —— 同族（两个 `max-w-*`）
- *      谁赢由 Tailwind 输出顺序决定，正是「加宽按钮按了没反应」的根因；
- *   2. `ui/dialog` 的弹窗基类里**不许再出现带变体的 `sm:max-w-*`** —— 带变体
- *      的 utility 会被排到所有无变体之后，连调用处跨族的 `w-*` 也压不过它
- *      （实测 1430×900 视口下三种写法量到的都是同一个 384px = 24rem）。
- *
- * 真实的宽度与「加宽真的变宽」由 e2e 在 Chromium 里量（见
- * `e2e/critical-flows.spec.ts` 的「日志弹窗宽度」用例）——两层分工同 §7.23.3。
- */
+/** 居中模态卡片宽度档的回归（ISSUE #720）。jsdom 不做布局、`getComputedStyle` 拿不到 Tailwind 产出，所以判据取契约而非像素：
+ * ① 加宽档与默认档必须是不同族的宽度写法 —— 同族（两个 `max-w-*`）谁赢由 Tailwind 输出顺序决定，正是「加宽按钮按了没反应」的根因；
+ * ② `ui/dialog` 的弹窗基类里不许再出现带变体的 `sm:max-w-*` —— 变体 utility 排在所有无变体之后，连调用处跨族的 `w-*` 也压不过（实测 1430×900 视口下三种写法量到的都是 384px = 24rem）。
+ * 真实宽度与「加宽真的变宽」由 e2e 在 Chromium 里量（`e2e/critical-flows.spec.ts` 的「日志弹窗宽度」用例），两层分工同 §7.23.3。 */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";

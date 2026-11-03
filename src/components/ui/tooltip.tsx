@@ -24,15 +24,10 @@ function TooltipTrigger({ ...props }: TooltipPrimitive.Trigger.Props) {
   return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />;
 }
 
-/* 提示气泡与窗口边缘之间保留的安全边距（px）。
- *
- * 基元默认只留 5px —— 于是在右上角 / 右下角这类贴边控件上，气泡的右边缘
- * 会**紧贴窗口边**（实测右边缘落在 1435/1440）：窗口边框与内阴影正好压住
- * 最后那几个像素，长文案读起来像「被屏幕裁掉了」。这不是定位算错
- *（Base UI 的 `shift` 确实把它夹回来了），而是**夹得太靠边**。
- *
- * 12 是「气泡圆角 + `px-3` 内边距」的自然读数：再小会让圆角弧线贴着窗口边，
- * 再大则窄窗下气泡被无谓地推离锚点。 */
+/* 提示气泡与窗口边缘之间的安全边距（px）。基元默认只留 5px，贴边控件上气泡右边缘会紧贴窗口边
+ * （实测落在 1435/1440），窗口边框与内阴影压住最后几个像素，长文案像被裁掉。不是定位算错
+ *（Base UI 的 `shift` 确实夹回来了），而是**夹得太靠边**。12 是「气泡圆角 + `px-3` 内边距」的
+ * 自然读数：再小圆角弧线贴着窗口边，再大窄窗下气泡被无谓推离锚点。 */
 const TOOLTIP_COLLISION_PADDING = 12;
 
 function TooltipContent({

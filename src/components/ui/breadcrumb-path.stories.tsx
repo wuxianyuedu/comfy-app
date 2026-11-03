@@ -3,20 +3,8 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { BreadcrumbPath, type BreadcrumbSegment } from "~/components/ui/breadcrumb-path";
 
 /**
- * `ui/breadcrumb-path` 是「一段路径 `A / B / 当前 C`」的**唯一实现**
- * （规范 16 §16.2.4.72）—— 素材库抽屉与资源库页此前各手写一份同一段渲染
- * （class 串逐字相同），差别只在分隔符的 `mx` 档。
- *
- * 三件值得单看的事：
- *
- * 1. **它建在 `ui/breadcrumb` 上**：`nav` + `ol` + `li` 的层级与
- *    `aria-current="page"` 一并给到 —— 手搓的 `span` + `/` 里这两样都没有；
- * 2. **末段不可点**（当前所在处，点它会重入同一层），中间段可点并回调
- *    `onNavigate`；
- * 3. **`navigable={false}` 用于搜索态**（层级已失效，回退由「清空搜索」承担）。
- *
- * 只有两段的路径、深三层、搜索态三档在这里并排看，
- * 才能确认「末段的样式档」与「中间段的 hover 档」没有互相漂移。
+ * `ui/breadcrumb-path` 是「一段路径 `A / B / 当前 C`」的**唯一实现**（规范 16 §16.2.4.72）：素材库抽屉与资源库页此前各手写一份同一段渲染（class 串逐字相同），差别只在分隔符的 `mx` 档。
+ * 建在 `ui/breadcrumb` 上：`nav` + `ol` + `li` 层级与 `aria-current="page"` 一并给到；末段不可点（点它会重入同一层），中间段可点并回调 `onNavigate`；`navigable={false}` 用于搜索态（层级已失效，回退由「清空搜索」承担）。
  */
 const meta = {
   title: "UI/BreadcrumbPath",

@@ -41,17 +41,10 @@ type HistoryDetailModalProps = {
 };
 
 /**
- * 历史任务详情弹窗 —— 纯展示层（规范 17 §17.2 第③层）。
- * 图片网格 + 工坊参数（工坊发起时）+ 工作流参数 + 打开目录 / 下载工作流。
- *
- * **不再有「独立」的提示词块与「生成参数」卡**：它们显示的内容与参数表重复
- * （同一句提示词出现两次），而卡片只认一小撮硬编码键名，种子这类关键参数
- * 反而从参数表里被过滤掉。现在一切参数都按来源分块，名字取工作流 IO 的作者
- * 标签（`workflowIO`）。
- *
- * 数据派生在 history-detail-derive.ts，动作在 hooks/use-history-detail-actions.ts，
- * 网络在 lib/history-detail-actions.ts；本文件只做排版与事件上抛。
- */
+ * 历史任务详情弹窗 —— 纯展示层（规范 17 §17.2 第③层）：图片网格 + 工坊参数（工坊发起时）+ 工作流参数 + 打开目录/下载工作流。
+ * 不再有独立提示词块与「生成参数」卡：它们与参数表重复（同一提示词出现两次），且只看硬编码键名，
+ * 反而过滤掉种子等关键参数；现在一切参数按来源分块，名字取工作流 IO 作者标签（workflowIO）。
+ * 派生在 history-detail-derive.ts、动作在 hooks/use-history-detail-actions.ts、网络在 lib/…；本文件只排版与上抛。 */
 export function HistoryDetailModal({
   detailId,
   detail,

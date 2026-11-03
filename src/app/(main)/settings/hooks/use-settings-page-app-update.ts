@@ -1,17 +1,9 @@
 "use client";
 
 /**
- * 设置页「应用自更新」分区的 sub-hook（`use-settings-page` 的拆分件）。
- *
- * 收口 Tauri updater 与安装/重启的**全部暂态**（busy / available / version /
- * currentVersion / message / progress）与**三个动作**（checkAppUpdate /
- * installAppUpdate / relaunchApp）；重入判据走 `useReentrancyLock` 唯一出口
- * （规范 16 §16.2.4.69）：读 `busy` state 是同一次事件循环里判不出的
- * （setState 是异步落状态的），「检测中」点「安装」会并发发出去。
- *
- * 主 hook 只留「组合 controller」这一层，本件承担自更新的 state 与动作。
- * 返回形状与主 hook 的 `appUpdate` 对象逐字段一致，控制器与视图不感知
- * ——§12.18 复用优先，拆包只挪文件、不动契约。
+ * 设置页「应用自更新」分区 sub-hook：收口 Tauri updater 的暂态与三个动作（check / install / relaunch）。
+ * 重入判据必须走 `useReentrancyLock`（§16.2.4.69）：同一事件循环里读 `busy` state 判不出并发（setState 异步落状态）。
+ * 返回形状与主 hook 的 `appUpdate` 逐字段一致（§12.18 复用优先，拆包不动契约）。
  */
 import { useCallback, useState } from "react";
 import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";

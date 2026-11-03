@@ -4,19 +4,9 @@ import { LogFilterBar } from "~/components/studio/logs/LogFilterBar";
 import { useLogPanel } from "~/components/studio/logs/LogProvider";
 
 /**
- * 日志面板行头里的「级别筛选 + 搜索」一组控件（第三层注入 · store 的现场）。
- *
- * `LogFilterBar` 只收一个 prop（`originCounts`，当前来源下各级别的条数），
- * 而它**自己**从 store 取 `filter` / `search` / 两个 setter —— 所以 story 得先
- * 让 store 里有一段时间线（`parameters.storeScene`），再把那个计数从**真切片**
- * 里读出来。
- *
- * 为什么计数不能手抄：它是 `countsByOrigin[origin]` 的派生值，而那张二维表是
- * store 按真时间线算的。手抄一份在分桶规则或计数口径改了之后仍然看着正常。
- *
- * 要看的是：**选中态不能只靠基元的 `data-pressed:bg-muted`**
- *（它解析到 `--color-subtle`，浅色主题下与行头底色同值 —— 那正是 ISSUE #609），
- * 以及**窄容器下整组折行、标签不被切成竖排单字**（判据是容器自己的 `min-w-fit`（内容固有宽度））。
+ * 日志面板行头「级别筛选 + 搜索」控件 story：LogFilterBar 只收 `originCounts`（filter/search 取自 store），
+ * 计数须从真切片读（`countsByOrigin` 派生，手抄在口径改动后仍看着正常）。选中态不能只靠
+ * `data-pressed:bg-muted`（与行头底色同值，ISSUE #609），窄容器须整组折行、标签不切竖排。
  */
 const meta = {
   title: "Studio/Logs/LogFilterBar",

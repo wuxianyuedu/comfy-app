@@ -1,10 +1,7 @@
 /**
- * 「把一张媒体图变成可拖拽源」只允许一处实现的契约（ISSUE #672 §16.2.4.22）。
- *
- * 现场：`HistoryPanel` 与 `MaterialLibraryPanel` 各有网格 / 列表两个视图，
- * **四处逐字相同**地手写 `setData("application/x-comfyapp-media", JSON.stringify(…))`，
- * 而消费端 `use-canvas-drop` 只做 `JSON.parse` + 类型断言 —— 形状对不上是
- * **静默丢投**。这里钉住「两端共用同一份载荷定义」这件事。
+ * 「把一张媒体图变成可拖拽源」只允许一处实现的契约（ISSUE #672 §16.2.4.22）。现场是四处逐字相同的
+ * `setData("application/x-comfyapp-media", JSON.stringify(…))`，而消费端只做 `JSON.parse` + 类型断言，
+ * 形状对不上就是静默丢投。这里钉住「两端共用同一份载荷定义」。
  */
 import { describe, expect, it } from "vitest";
 

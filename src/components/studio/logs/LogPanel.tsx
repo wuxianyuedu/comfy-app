@@ -37,19 +37,13 @@ import { useExpansionSet } from "~/components/ui/expansion-set";
 import { isCliJsonLine } from "~/lib/log/log-cli-json";
 
 /**
- * 页脚的一行摘要：说清楚「现在看的是哪一段、还有多少」。
- *
- * 搜索词会收窄结果，所以它出现在数字里是**必要**的说明（否则「共 12 条」会被
- * 读成面板一共只有 12 条）；这里用「命中」而不是「匹配」，与计数徽标上的
- * 「筛选命中」是同一个口径。
+ * 页脚的一行摘要：说清「现在看的是哪一段、还有多少」。
+ * 搜索词会收窄结果，因此它出现在数字里是必要的（否则「共 12 条」会被读成全部）；
+ * 用「命中」与计数徽标的「筛选命中」同口径。
  */
-/** 行位置表 + 视口窗口（纯派生，§17.1：删掉 JSX 也能测）。
- *  可展开的原始输出行（comfy-cli 原文 + JSON 容器）：折叠态强制单行、展开态
- *  用行高常量。判据走共享的 `isCliJsonLine`（便宜，只看前缀与首字符）——
- *  与 `LogRow` 同一口径，两边不会分叉。
- *  量不到视口高度（jsdom 不做布局 / 首帧测量之前）就**整页渲染**：虚拟化是
- *  性能优化，不该变成「内容看不见」的判据——取不到值时说「全都要」最安全，
- *  与改动前的行为一致。jsdom 里的单测正是走这一支。 */
+/** 行位置表 + 视口窗口（纯派生，§17.1：删掉 JSX 也能测）：可展开的原始输出行
+ *  折叠态强制单行、展开态用行高常量；判据走共享 `isCliJsonLine`，与 `LogRow` 同口径。
+ *  量不到视口高度（jsdom / 首帧）就整页渲染：虚拟化是优化，不该变成「内容看不见」。 */
 function useVirtualWindow(input: {
   expansionMap: Record<string, boolean>;
   pageLogs: Array<LogEntry>;
@@ -171,29 +165,16 @@ export function LogPanel() {
   }, [copyAll, copyAllRaw]);
 
   const bodyRef = useRef<HTMLDivElement>(null);
-  /* 滚动视口的**元素本身**进 state：下面「量视口」的 effect 必须等到这个元素
-   * 真的挂上才量。改成弹窗基元（`ui/dialog`）之后，面板内容经 Portal 渲染，
-   * 挂载比本组件晚一个提交 —— 只按 `[isOpen]` 触发的话，唯一的量测会发生在
-   * ref 还是 null 的时候，之后再也没有第二次，虚拟化于是静默退化成「整页渲染」
-   *（jsdom 里两条分支都渲染全部行，肉眼看不出来；只有量 DOM 节点数才发现）。
-   * 依赖「元素出现了没有」而不是「面板开了没有」，量测才与挂载方式无关。 */
-  /* 视口量测收在 `~/components/ui/use-element-box`（规范 16 §16.2.4.41）：
-   * 此前是本文件自持的 `ResizeObserver` + 手写等值判断 —— 与
-   * `WorkflowLibraryCanvas` 的底图量测各写一遍。
-   *
-   * ⚠️ **量测必须晚于元素挂载**：改成弹窗基元（`ui/dialog`）之后，面板内容经
-   * Portal 渲染、挂载比本组件晚一个提交 —— 按 `[isOpen]` 触发的话，那次量测
-   * 会发生在 ref 还是 `null` 的时候，之后再也没有第二次，虚拟化于是静默退化成
-   * 「整页渲染」（jsdom 里两条分支都渲染全部行，肉眼看不出来；只有量 DOM
-   * 节点数才发现）。出口的**回调 ref** 恰好把「元素出现了没有」作为触发点，
-   * 量测因此与挂载方式无关。 */
+  /* 滚动视口**元素本身**进 state：量测 effect 必须等它真的挂上。改用 `ui/dialog` 后
+   * 内容经 Portal 晚一个提交挂载，只按 `[isOpen]` 触发会让唯一一次量测算在 ref 为 null 时，
+   * 之后不再重测，虚拟化静默退化成整页渲染。依赖「元素出现」而非「面板开了」。 */
+  /* 视口量测收在 `~/components/ui/use-element-box`（规范 16 §16.2.4.41）。
+   * ⚠️ 量测必须晚于元素挂载：改 `ui/dialog` 后内容经 Portal 晚一个提交；按 `[isOpen]` 触发
+   * 会让量测落在 ref 为 null 时且不再重测，虚拟化静默退化成整页渲染——回调 ref 以「元素出现」为触发点。 */
   const [bodyBoxRef, bodyBox] = useElementBox();
-  /* 贴底基线（= 用户已看过的最新一条在**页面里的序号**）。
-   *
-   * 面板贴着底看时只滚到这里：新日志在下面累积，不再每两秒把内容整体上移一次
-   * ——那正是「刚选中一行就被刷新冲掉」的直接原因（ISSUE #262 复审）。
-   * 基线在「打开面板 / 用户滚回底部 / 换页」时重取，用户点「回到最新」后
-   * followResetAt 变化，贴底升级为一路追到最新。 */
+  /* 贴底基线（= 用户已看过的最新一条在页面里的序号）：贴底时只滚到这里，新日志在
+   * 下面累积，不再每两秒整体上移（「刚选中就被刷新冲掉」，ISSUE #262 复审）。
+   * 「打开面板 / 滚回底部 / 换页」时重取；点「回到最新」后 followResetAt 变化，升级为追最新。 */
   const [wrap, setWrap] = useState(true);
   /* comfy-cli 原始输出行的展开集合：状态走唯一出口 `useExpansionSet`
    * （规范 16 §16.2.4.17），高度由 `log-virtual` 按 **id** 给常量（展开态
@@ -207,23 +188,10 @@ export function LogPanel() {
    * 用户加宽后关掉再打开又回到窄档。 */
   const panel = useWidePanel("app-log", PANEL_WIDTH);
 
-  /* ── 虚拟窗口（ISSUE #609 八审：「切到 1000+ 的页签有明显卡顿」）────────
-   *
-   * 满页 2000 行一次性挂进 DOM 时，节点数约 1.5 万（每行还有若干分片 span），
-   * 切页那一刻的布局成本就是用户感知到的卡顿。规范 02 §2.6 要求大列表虚拟
-   * 滚动，这里只渲染视口内的几十行。
-   *
-   * 三个状态驱动的都是「**怎么算**」而不是「渲染什么」，因此都进 ref/state
-   * 的轻量档：
-   *   - `viewport`：滚动视口高度与可视宽度（软换行的容量用它算）；
-   *   - `scrollTop`：滚动位置（`onScroll` 里直接读 `el.scrollTop`）；
-   *   - 行位置表由 `pageLogs` + `wrap` 推出，随它们一起 memo。
-   *
-   * 为什么把 `scrollTop` 放进 state 而不是只读 ref：窗口区间是渲染结果的一部分
-   * （不是副作用），放进 ref 会让「滚动 → 不重渲染 → 内容不更新」。每帧一次
-   * `setState` 在 React 18 的批处理下只重渲染**列表容器**（行本身是 memo 的），
-   * 实测远低于一帧预算。
-   */
+  /* ── 虚拟窗口（ISSUE #609 八审：「切到 1000+ 的页签有明显卡顿」）：满页 2000 行一次性
+   * 挂进 DOM 约 1.5 万节点，布局成本即卡顿；规范 02 §2.6 要求大列表虚拟滚动。
+   * `viewport` / `scrollTop` / 行位置表驱动的是「怎么算」；`scrollTop` 必须进 state——
+   * 窗口区间是渲染结果，放 ref 会「滚动 → 不重渲染 → 内容不更新」。 */
   /* 视口尺寸（高度 + 可视宽度）由 `useElementBox` 给；这里只保留派生的
    * 便捷视图，未量到时保持与收口前一致的 0（下面的窗口逻辑据此走整页渲染）。 */
   const viewport = {
@@ -245,13 +213,9 @@ export function LogPanel() {
     totalPages,
   } = useMemo(() => selectPageLogs(viewLogs, page, pageSize), [viewLogs, page, pageSize]);
 
-  /* 第 1 页用**锚定**窗口（见 store 的 anchorId）：不锚定时窗口整体前移，每来一条
-   * 新日志就重建一次首行节点——用户刚框住的文本随节点被卸载，选区当场消失
-   * （「刚选择就刷新把我的选择弄没了」）。锚定后窗口原地不动，新行列在它之后；
-   * 「后面还有多少条新的」由 `truncatedFromEnd` 直接给出（不再靠长度差，封顶时
-   * 长度差恒为 0）。
-   *
-   * 其余页（历史页）本来就与「最新」无关，继续用固定窗口。 */
+  /* 第 1 页用**锚定**窗口（store 的 anchorId）：不锚定时窗口每来一条新日志就前移一格，
+   * 首行节点被卸载、用户刚框住的选区当场消失（「刚选择就刷新把我的选择弄没了」）。
+   * 锚定后窗口原地不动，新行列在其后；「后面还有多少条新的」由 `truncatedFromEnd` 给出。 */
   const anchored = useMemo(
     () => (safePage === 1 ? selectFirstPageWindow(viewLogs, anchorId, pageSize) : null),
     [safePage, viewLogs, anchorId, pageSize],
@@ -285,14 +249,9 @@ export function LogPanel() {
     }
   }, [page, safePage, setPage]);
 
-  /* 换页时把滚动位置收回头部，并同步 `scrollTop` 状态。
-   *
-   * 虚拟化之前不需要这一步：整页都在 DOM 里，浏览器自己会把超出的 `scrollTop`
-   * 钳回范围内。现在「渲染哪一段」由 `scrollTop` **算**出来，若它还停在上一页
-   * 的纵深上（比如第 2 页滚到 30000px、翻到只有 8 行的第 3 页），算出的窗口会
-   * 一路滑到末尾，用户看到的是「翻页后内容跑到一半、顶部空着」。
-   *
-   * `safePage` 是钳过边界的真实页码（见 selectPageLogs），据此判定「真的换了页」。 */
+  /* 换页时把滚动位置收回头部并同步 `scrollTop`：虚拟化后「渲染哪一段」由 `scrollTop`
+   * 算出，停在上一页纵深（如第 2 页 30000px 翻到只有 8 行的第 3 页）会让窗口滑到末尾，
+   * 用户看到「翻页后内容跑到一半、顶部空着」。`safePage` 是钳过边界的真实页码。 */
   useEffect(() => {
     const el = bodyRef.current;
     if (!el) {
@@ -302,15 +261,9 @@ export function LogPanel() {
     setScrollTop(0);
   }, [safePage]);
 
-  /* 视口尺寸（滚动视口高度 + 可供正文使用的宽度）。
-   *
-   * 高度决定**渲染几行**；宽度决定**软换行估几行**（见 log-virtual 的
-   * `countLines`）。两者都必须重新量：面板可以加宽（标题栏的「加宽」按钮）、
-   * 窗口可以缩放、正文列还会随滚动条出现而变窄。
-   *
-   * 用 ResizeObserver 而不是 window 的 resize：加宽按钮改的是元素宽度，
-   * 窗口尺寸一点没变。观测不到（jsdom / 老浏览器）时不额外退化——量出来恒为
-   * 0 已经会让下面的窗口逻辑走「整页渲染」那一支，行为与改动前一致。 */
+  /* 视口尺寸（滚动视口高度 + 可供正文使用的宽度）：高度决定渲染几行，宽度决定软换行
+   * 估几行（见 log-virtual `countLines`）。两者都须重量（加宽按钮 / 窗口缩放 / 滚动条出现）。
+   * 用 ResizeObserver 而非 window resize；观测不到（jsdom）时恒为 0，窗口逻辑走整页渲染。 */
 
   /* 贴底只追到「基线」——沉在 use-log-panel-pin（ISSUE #262 复审）。
    * refs（基线 / 上次落位 / 上次写入的 scrollTop）随 hook 走。 */

@@ -1,11 +1,7 @@
-// 工作流库逻辑层单测：hook 走真实 tRPC React 客户端（trpc.workflow.* /
-// trpc.workflowModel.list 的 options），由 MSW 转发到可控测试 router —— 因此断言的是
-// **真实管线下的 loading → data → 错误流转**，而不是 vi.mock 的永不 resolve 桩。
-//
-// 三个重点：
-//   1. 三级筛选 + 搜索的派生（纯规则在 workflow-library-config.test.ts）；
-//   2. 服务端列表 → 本地 state 的同步（快照比对，同一份数据不重复 setState）；
-//   3. §17.5.4：动作失败的错误不会被后台刷新吞掉（只有 refresh 才清）。
+// 工作流库逻辑层单测：hook 走真实 tRPC React 客户端（MSW 转发到可控测试 router），
+// 因此断言的是**真实管线下的 loading → data → 错误流转**，而不是 vi.mock 桩。
+// 重点：① 三级筛选 + 搜索派生；② 服务端列表 → 本地 state 同步（快照比对）；
+// ③ §17.5.4 动作失败的错误不会被后台刷新吞掉（只有 refresh 才清）。
 
 import { createElement, type ReactNode } from "react";
 import { act, cleanup, renderHook } from "@testing-library/react";

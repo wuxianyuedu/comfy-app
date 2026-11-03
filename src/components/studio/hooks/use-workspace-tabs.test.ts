@@ -1,10 +1,7 @@
 // @vitest-environment jsdom
-// 页签恢复与落盘的**装配**判据（`workspace-tabs.test.ts` 判的是纯状态规则，
-// 判不到「恢复那一步与落盘那一步在同一个 commit 里的先后」—— 而那一步正是
-// 「刷新后用户被踢出项目」的现场，ISSUE #1501 / #1727）。
-//
-// 无 JSX：本档是 `.test.ts`（与同目录其它 hook 用例同形），StrictMode 那一条
-// 用 `createElement` 包裹，免得为一个 wrapper 破例成 PascalCase 的 `.test.tsx`。
+// 页签恢复与落盘的**装配**判据（纯状态规则在 workspace-tabs.test.ts 判不到
+// 「恢复那一步与落盘那一步在同一 commit 的先后」—— 那正是刷新后被踢出项目的现场，
+// ISSUE #1501 / #1727）。无 JSX：`.test.ts` + createElement 包 StrictMode，不为此破例成 .tsx。
 import { createElement, StrictMode } from "react";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";

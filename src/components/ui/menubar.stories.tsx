@@ -17,17 +17,9 @@ import {
   MenubarTrigger,
 } from "~/components/ui/menubar";
 
-/**
- * `ui/menubar` 是**应用级菜单栏**：一排菜单项，点开各自的浮层，
- * 且**在同一排里左右移动会自动切换打开的菜单**（这是它与 `dropdown-menu`
- * 唯一的实质差别 —— 后者是一次性动作菜单，点开、选一个、关掉）。
- *
- * 于是本 story 要看的不是「菜单项长什么样」（与 dropdown-menu 同源），而是
- * **横排的联动**：画布上点开「文件」，再把鼠标移到「编辑」上，浮层会跟过去。
- *
- * 子部件与 dropdown-menu 完全同源（`MenubarMenu` 内部直接用 `DropdownMenu`
- * 那一族），所以这里只铺一次全套，不按轴拆。
- */
+/** `ui/menubar` 是应用级菜单栏：一排菜单项，点开各自的浮层，且在同一排里左右移动会自动切换打开的菜单 —— 这是它与 `dropdown-menu` 唯一的实质差别（后者是一次性动作菜单，点开、选一个、关掉）。
+ * 于是本 story 要看的不是「菜单项长什么样」（与 dropdown-menu 同源），而是横排的联动：画布上点开「文件」，再把鼠标移到「编辑」，浮层会跟过去。
+ * 子部件与 dropdown-menu 完全同源（`MenubarMenu` 内部直接用 `DropdownMenu` 那一族），所以这里只铺一次全套，不按轴拆。 */
 const meta = {
   title: "UI/Menubar",
   component: Menubar,

@@ -14,15 +14,8 @@ import {
 const BASE = `http://127.0.0.1:${String(COMFYUI_DEFAULT_PORT)}`;
 
 /**
- * 「服务状态行」= 本机常驻后端（ComfyUI / Drizzle Studio / Ollama）那一条
- * 「左侧状态文字 + 右侧一排按钮」。
- *
- * 这一条最值得看的是**宽度不够时会怎么退化**（ISSUE #423 的现场）：
- * 左侧状态文字截断、按钮整排落到第二行，而不是把按钮压成两行小字。
- * 所以第二个 story 直接给一条 360px 宽的容器。
- *
- * 第三个 story 是**主次**：一屏里只该有一颗实心（`primary-solid`）——
- * 当前这一态该按的那颗。缺省档（软底）留给了「打开查看」这类并列出口。
+ * 「服务状态行」= 本机常驻后端（ComfyUI / Drizzle Studio / Ollama）的「左侧状态文字 + 右侧一排按钮」。
+ * 最值得看的是宽度不够时怎么退化（ISSUE #423）：状态文字截断、按钮整排落到第二行，而不是压成两行小字，故第二个 story 给 360px 宽容器。第三个是主次：一屏只该有一颗实心（`primary-solid`），缺省软底留给并列出口。
  */
 const meta = {
   title: "UI/ServiceStatusRow",

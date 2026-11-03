@@ -1,12 +1,7 @@
-// DynamicWorkflowForm 逻辑层行为测试（ISSUE #319 的「先补护栏」步骤）。
-//
-// 这个表单是工作流库运行与画布生成共用的入口，改坏了影响面大，但 261 行的
-// hook 此前没有任何行为测试——「数值参数在运行态并入端口行 / 作者态独立成
-// 参数行」「多模式下隐藏行只是不显示、值仍留在 payload 里」「拖拽状态是
-// 组件本地的」这些规则全靠人读代码。
-//
-// 本文件只测逻辑层（renderHook），视图由 sections/*.test.tsx 承担。
-// 用例名直接写出「什么场景 → 什么派生结果」。
+// DynamicWorkflowForm 逻辑层行为测试（ISSUE #319 的「先补护栏」步骤）。该表单是工作流库运行与画布生成共用入口，
+// 改坏影响面大；此前 261 行 hook 无行为测试。本文件只测逻辑层（renderHook），视图由 sections/*.test.tsx 承担。
+// 覆盖：数值参数运行态并入端口行、作者态独立成参数行；多模式隐藏行只是不显示、值仍留在 payload；
+// 拖拽状态是组件本地的。用例名直接写「什么场景 → 什么派生结果」。
 
 import { act, cleanup, render, renderHook } from "@testing-library/react";
 import { createElement } from "react";
@@ -23,12 +18,9 @@ import type { DynamicWorkflowFormController } from "./use-dynamic-workflow-form"
 
 import { useDynamicWorkflowForm } from "./use-dynamic-workflow-form";
 
-/** 驱动 controller 暴露的隐藏 `<input type=file>`。
- *
- *  上传管线的入口现在是 `ui/file-picker` —— input 由 `FileInput` 组件渲染，
- *  所以测试必须**真的渲染它**（`renderHook` 不会渲染返回的组件）。这里把
- *  controller 与它的 `FileInput` 一起渲染，再从真实 DOM 派发 `change`，
- *  顺带覆盖「选完复位 `value`」那段样板。 */
+/** 驱动 controller 暴露的隐藏 `<input type=file>`。上传入口是 ui/file-picker，input 由 FileInput 渲染，
+ *  测试必须真的渲染它（renderHook 不渲染返回的组件）：这里把 controller 与 FileInput 一起渲染，
+ *  再从真实 DOM 派发 change，顺带覆盖「选完复位 value」。 */
 function renderFormWithPicker(props: DynamicWorkflowFormProps) {
   /* 本文件是 `.ts`（无 JSX），用 createElement 手搭一个「渲染 controller +
    * 它的 FileInput」的探针组件：`renderHook` 只挂 hook 不挂返回的节点，

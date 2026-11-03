@@ -34,14 +34,9 @@ export default function WorkspacePage() {
     closeTab: closeViewTabByKey,
   } = useWorkspaceTabs();
 
-  /* 「请求切到某个视图」的应用事件订阅（唯一订阅侧）。
-   * 触发方是工坊右栏的「资源库」卡 —— 那条链路上有 WorkshopPipeline /
-   * WorkshopAside 两层，穿 props 不划算（见 `lib/app-events` 里本事件的说明）。
-   * 载荷是字符串，这里按 `WORKSPACE_VIEWS` 收敛：未知 id 直接忽略，
-   * 不让它把 `viewMode` 带进一个无分支可渲染的状态。
-   *
-   * 载荷里的 `section`（目标设置分区）先落进一次性 state，再由视图栈逐层传给
-   * 设置视图、由它消费后回调清空（同下方的 `canvasSeedNew` 那一族）。 */
+  /* 「请求切到某个视图」应用事件的唯一订阅侧（触发方是工坊右栏「资源库」卡，链路隔
+   * WorkshopPipeline/WorkshopAside 两层，穿 props 不划算）。载荷按 `WORKSPACE_VIEWS` 收敛，
+   * 未知 id 忽略；`section` 先落一次性 state，由设置视图消费后回调清空。 */
   const [pendingSettingsSection, setPendingSettingsSection] = useState<string | null>(null);
   const consumeSettingsSection = useCallback(() => {
     setPendingSettingsSection(null);
@@ -104,15 +99,9 @@ export default function WorkspacePage() {
     taskType: string;
   } | null>(null);
 
-  // ── 最近项目：来源是 canvas-store（localStorage），不是 Task 表。
-  //    Task.type 只接受 TXT2IMG|IMG2IMG|INPAINT|HIRERES|VIDEO，所以画布
-  //    项目永远不会出现在那里。从 listProjects() 读取能保证
-  //    「最近项目」区反映用户真实的画布工作。
-  // ── 挂载时 + store 变化事件时加载真实的最近画布项目 ──
-  //    存在 localStorage（canvas-store），所以 SSR 返回 []；我们挂载后
-  //    再水合。"comfyapp:canvas-store-changed" 事件让首页
-  //    视图与 ProjectCanvas 里的编辑（upsert / delete
-  //    / rename）保持同步，无需整页重载。
+  // 最近项目来源是 canvas-store（localStorage），不是 Task 表（Task.type 不含画布项目类型）。
+  // 挂载时 + store 变化时加载：存 localStorage 故 SSR 返回 []，挂载后再水合；
+  // "comfyapp:canvas-store-changed" 事件让首页与 ProjectCanvas 的编辑保持同步，无需整页重载。
   const [recentProjects, setRecentProjects] = useState<Array<RecentProject>>([]);
   useEffect(() => {
     // 在首页挂载时做一次性清扫：移除较早代码版本
@@ -234,12 +223,9 @@ export default function WorkspacePage() {
   );
 
   /**
-   * 「+」菜单里能开的视图。
-   *
-   * 这一份清单是**入口的兜底**：侧栏刻意不列项目内那六个视图（主页/画布/工坊/
-   * 资源库/产出/成片），它们此前唯一的入口是 ProjectTabBar；那条切换器退役后，
-   * 没有这里它们就变成 unreachable。项目类视图只在已有活跃项目时放出 ——
-   * 没有项目时点了也只会落到 ProjectGate，等于给一个开不了的项。
+   * 「+」菜单里能开的视图：入口兜底——侧栏刻意不列项目内六视图，ProjectTabBar 退役后没有
+   * 这里它们就 unreachable。项目类视图只在已有活跃项目时放出（没有项目点了也只会落到
+   * ProjectGate）。
    */
   /** 项目 id → 项目名（页签标题用「工坊·项目名」区分同一视图的多页）。 */
   const projectNameOf = useCallback(

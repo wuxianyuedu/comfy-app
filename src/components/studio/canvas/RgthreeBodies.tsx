@@ -60,14 +60,9 @@ export function RgthreeFastGroupsBypasserBody({
             >
               {bypass ? "yes" : "no"}
             </span>
-            {/* 开关本体 —— 一颗可点击的小章，经 context 翻转
-             *  该分组的中止状态。**用 `~/components/ui/toggle` 的 `<Toggle>`**
-             *（P77）——单按钮 pressed 语义、不走 ToggleGroup（那是 2-7 项选项组的
-             *  账），也不在 Button 上手拼 `aria-pressed`。Toggle 内部走 Base UI
-             *  Toggle、自带 `aria-pressed` / `data-pressed` / Enter/Space / 焦点环，
-             *  自己补的那份写漏一处就是「这颗开关键盘点不动」。
-             *  外观逐条留在 `style` 里（§16.2.4.2 第 9 条：验收标准是渲染结果不变）。
-             *  指针事件照旧拦截，好让 ReactFlow 的拖拽处理器看不到这次点击。 */}
+            {/* 开关本体 —— 经 context 翻转分组中止状态。用 `ui/toggle` 的 <Toggle>（P77）：
+                单按钮 pressed 语义、自带 aria-pressed/data-pressed/Enter/Space/焦点环，不手拼 aria-pressed；
+                外观留在 style（§16.2.4.2 验收标准是渲染结果不变）；指针事件拦截，避免 ReactFlow 当作拖拽。 */}
             <Toggle
               /* 覆盖串要在 `variant` 之后由 `cn()` 合并 —— tailwind-merge 同一属性
                * 后面的类赢，所以底色 / 圆角 / 内边距 / 悬停底都由这里接管
@@ -117,16 +112,9 @@ export function RgthreeFastGroupsBypasserBody({
   );
 }
 
-/** 把 classType 硬编码映射到包名，服务清单解析器漏掉的知名自定义
- *  节点包（例如它的源码树不在解析路径上，
- *  或它的 `MAPPING/CATEGORY` 里没有包声明）。
- *  这张表要保持很窄 —— 超过约 5 条就说明该去
- *  扩展解析器而不是继续加表。
- *
- *  目前：
- *   • efficiency-nodes 的 SetNode / GetNode —— 它的包在我们装的环境里
- *     没有磁盘标记，节点本身也没有 `cnr_id`，所以硬编码这份
- *     归属。 */
+/** 把 classType 硬编码映射到包名，补服务清单解析器漏掉的知名自定义节点包
+ *（源码树不在解析路径，或其 MAPPING/CATEGORY 无包声明）。表要保持很窄 ——
+ *  超过约 5 条就该扩展解析器。当前：efficiency-nodes 的 SetNode / GetNode 无磁盘标记也无 `cnr_id`。 */
 export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown> }) {
   const fmtStrength = (v: unknown): string | undefined => {
     if (typeof v === "number") {
@@ -287,12 +275,9 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown
   );
 }
 
-/** rgthree Label 的运行时主体。rgthree 的 Label 节点没有
- *  I/O —— 它用 `properties` 里的样式（fontSize / fontFamily / fontColor / textAlign /
- *  backgroundColor / borderRadius / angle）绘制自己的标题（或 `text` 属性）。
- *  我们把这段带样式的文字只读渲染，铺满节点体。这个 classType
- *  会抑制标准标题栏（ComfyUI 不显示独立头部），
- *  好让绘制的文字读起来就是整个节点。 */
+/** rgthree Label 运行时主体：该 classType 无 I/O，用 properties 里的样式
+ *（fontSize/fontFamily/fontColor/textAlign/backgroundColor/borderRadius/angle）绘制标题或 `text`。
+ *  只读渲染铺满节点体；该 classType 抑制标准标题栏（ComfyUI 不显示独立头部）。 */
 export function RgthreeLabelBody({
   text,
   properties,

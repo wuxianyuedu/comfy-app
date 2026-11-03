@@ -20,20 +20,9 @@ import {
 } from "~/components/ui/dropdown-menu";
 
 /**
- * `ui/dropdown-menu` 是 base-ui Menu 的封装（**点击**触发的动作菜单）。
- *
- * 这一族有**四条彼此独立的轴**，散在四个不同的子部件上 —— 也就是说
- * 只看 `DropdownMenuItem` 的 props 是看不到全貌的：
- *
- * | 轴 | 住在哪 | 档 |
- * | --- | --- | --- |
- * | `variant` | `DropdownMenuItem` | `default` / `destructive` |
- * | `inset` | `DropdownMenuItem` 与 `SubTrigger` | 布尔（图标位空出来） |
- * | 勾选态 | `DropdownMenuCheckboxItem` | `checked` / `indeterminate` |
- * | 单选态 | `DropdownMenuRadioItem` | 组内互斥 |
- *
- * 下面按这四件事分组，而不是按「有没有子菜单」分 —— 分组依据是**判据**，
- * 不是排版习惯。
+ * `ui/dropdown-menu` 是 base-ui Menu 的封装（点击触发的动作菜单）。四条彼此独立的轴
+ * 分散在四个子部件上：`DropdownMenuItem` 的 `variant` / `inset`、`CheckboxItem` 的勾选态、
+ * `RadioItem` 的组内单选。下面按判据分组，不按「有没有子菜单」分。
  */
 type DropdownMenuItemVariant = NonNullable<
   React.ComponentProps<typeof DropdownMenuItem>["variant"]

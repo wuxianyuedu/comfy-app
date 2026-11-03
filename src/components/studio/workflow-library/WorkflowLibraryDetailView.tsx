@@ -96,17 +96,11 @@ export function WorkflowLibraryDetailView({
           ))}
         </TabsList>
 
-        {/* 「编辑对外参数 / 实际使用」两个页签共用**同一个常驻实例**：
-            预览的表单与运行态在两个视图间是同一份（DynamicWorkflowForm 完全
-            相同），放进 TabsContent 会随切换卸载重建、用户填了一半的参数被
-            重置。这里用受控 hidden 容器承载（不参与 Panel 卸载机制），
-            切页签只改 `viewMode`。
-
-            挂载时机由 `controller.canvasMounted` 给：**首次访问这两个页签之前
-            不渲染**。它下面挂着整个画布引擎（`@xyflow/react`），默认页签是
-            工坊封装时没有任何理由把它拉起来 —— 只在这里加 `hidden` 不够，
-            `hidden` 只藏不卸载，重物照样执行。访问过之后保持挂载（切回工坊封装
-            也不卸载），表单值与运行态才不丢。 */}
+        {/* 「编辑对外参数 / 实际使用」共用**同一个常驻实例**：表单与运行态在
+            两个视图间是同一份，放进 TabsContent 会随切换卸载重建、填一半的参数
+            被重置。用受控 hidden 容器承载，切页签只改 `viewMode`。
+            挂载时机由 `controller.canvasMounted` 给：首次访问这两个页签之前不渲染，
+            否则会拉起整个画布引擎；访问过后保持挂载。 */}
         {canvasMounted && (
           <div
             className="min-h-0 flex-1 overflow-y-auto p-5"

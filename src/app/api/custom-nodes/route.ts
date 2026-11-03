@@ -1,12 +1,7 @@
 /**
- * /api/custom-nodes 路由
- *
- * GET  → 返回设置（paths）、清单摘要与上次解析报告。
- * POST → { action: "saveSettings" } 已废弃：路径现在从 ComfyUI 安装根自动推导；
- *        { action: "parse" } 跑只读的 AST 解析器，返回按包分组的报告。
- *
- * 解析器**绝不**改动已配置的 custom_nodes 路径下的任何东西 ——
- * 它只读源码文本，只写生成出来的 manifest 与报告。
+ * /api/custom-nodes 路由：GET 返回设置（paths）、清单摘要与上次解析报告；POST
+ * { action: "parse" } 跑只读 AST 解析器（saveSettings 已废弃，路径从 ComfyUI 安装根自动推导）。
+ * 解析器绝不改动 custom_nodes 路径下的东西——只读源码文本，只写生成的 manifest 与报告。
  */
 import { type NextRequest, NextResponse } from "next/server";
 import { spawn } from "node:child_process";
@@ -320,14 +315,9 @@ async function runDiscover(parentDirs: ReadonlyArray<unknown>): Promise<Array<un
   return [];
 }
 
-/* `runDiscover` 的流式版本 —— 只为**一个**父目录起解析器进程，
- * 把每条 PROGRESS:: 行转发成 `{type:"progress"}` 事件，
- * 等到那行 JSON 回来时以最终的包列表 resolve。命中缓存则直接短路。
- *
- * 输出协议（ndjson）：
- *    {type:"progress", ...} 是进度事件（阶段 scan 或 hash，可带计数）
- *    {type:"discover_done", parent, packages, cached:false} 是收尾事件
- */
+/* `runDiscover` 的流式版本：只为一个父目录起解析器进程，PROGRESS:: 行转发成
+ * `{type:"progress"}` 事件，最终 JSON 回来时以包列表 resolve；命中缓存直接短路。
+ * 输出协议（ndjson）：progress（阶段 scan/hash，可带计数）+ 收尾 discover_done。 */
 
 /** PROGRESS:: 行解析出的进度字段(msg + 可选计数,键由 kvRegex 决定)。 */
 type DiscoverProgressFields = {
@@ -382,12 +372,9 @@ function runDiscoverStreaming(
         }
         return;
       }
-      /* 本档是否已经把退避交给下一个候选。**必须**有这一层：真机上 `spawn` 失败会先报
-       * `error`、随后**再发一次 `close`**，少了这个守卫，那个压根没起来的进程的 `close`
-       * 会走到下面的收尾分支，把「空结果」定成最终答案（`resolved = true`），
-       * 后面真跑成的那一档就被丢掉 —— 表现正是 Windows 上第一候选缺位时
-       * 「扫描到 0 个节点」，而过去的夹具只排 `error`、不排第二次 `close`，
-       * 所以这一形从来没有执行者（台账 A14）。 */
+      /* 本档是否已把退避交给下一候选：真机上 `spawn` 失败会先报 `error`、随后再发一次
+       * `close`，少了这个守卫，没起来的进程的 `close` 会把「空结果」定成最终答案，真跑成的
+       * 那档被丢掉（Windows 第一候选缺位时「扫描到 0 个节点」，台账 A14）。 */
       let handedOff = false;
       const cp = spawn(/*turbopackIgnore: true*/ attempt.command, attempt.args, {
         cwd: process.cwd(),

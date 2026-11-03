@@ -56,26 +56,11 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
         选择应用的主题外观：深色（Dark）或浅色（Light）。切换即时生效并自动保存，
         也可通过顶部导航栏的太阳/月亮按钮随时切换。
       </p>
-      {/* `role="radiogroup"` / `role="radio"` 由 `RadioGroup` 基元下发 —— 不手写：
-          手写只给了「读屏知道这是个单选组」，**方向键契约没人给**（本批之前
-          这两处正是「能聚焦、Tab 进得来、但组内方向键没反应」）。基元同时
-          负责 roving tabindex（组内只有选中项 `tabIndex=0`）与
-          ArrowUp/Down/Left/Right 的「移动 + 选中」。
-
-          **选中档必须自带与常态同值的 `data-checked:hover:`**（规范 16
-          §16.2.4.75）。这三组（主题卡 + 圆角 + 标题字阶）底部都是
-          `Button variant="ghost"`，而 `ghost` 自带 `hover:bg-muted
-          hover:text-foreground` —— 它是**无条件的**。选中档此前只钉了
-          `data-checked:bg-primary-soft` / `data-checked:text-*`，**没钉悬停值**，
-          于是划过**已选中**的那一枚时被 `hover:` 改写：「选中」在悬停期间变回
-          「未选中」。这不是特异性问题里的偶然 —— `data-checked:*` 编译出的选择器
-          是 `.data-checked\:bg-primary-soft:where([data-state=checked])`，
-          `:where()` **零特异性** ⇒ `(0,1,0)`，而 `hover:bg-muted` 是 `(0,2,0)`，
-          悬停档稳赢。`ui/select-chip` 当初就是为这件事把
-          `aria-checked:hover:bg-primary-soft` 写死的。
-          修法**就地钉**而不是换 `SelectChip`：这三组的单选语义与方向键契约由
-          `RadioGroup` 基元给，换成 `SelectChip`（自有 `role="radio"` + 手搓
-          roving）会把这条契约丢掉。 */}
+      {/* role/方向键契约/roving tabindex 由 `RadioGroup` 基元下发，不手写。
+          选中档必须自带与常态同值的 `data-checked:hover:`（规范 16 §16.2.4.75）：
+          `data-checked:*` 经 `:where()` 是零特异性 (0,1,0)，输给 `ghost` 无条件的
+          `hover:bg-muted` (0,2,0)，已选中项悬停会被改回「未选中」。
+          修法就地钉而不是换 `SelectChip`：那会丢掉 RadioGroup 的方向键契约。 */}
       <RadioGroup
         aria-label="主题外观"
         className="grid max-w-md grid-cols-2 gap-3"
@@ -103,13 +88,9 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
         ).map(({ value, label, Icon, hint }) => (
           <RadioGroupItem
             key={value}
-            /* 主题卡是「整卡可点」的选项，不是动作按钮：基元的尺寸/高度/内边距/
-               字号全部归还给调用处 —— 基类是「小圆点」形态（`size-4` +
-               `aspect-square`），这里必须连**宽度**与**宽高比**一起还
-               （`size-auto!` / `aspect-auto!`；只还 `h-auto` 的话宽度仍是 16px，
-               卡片被压成竖排单字、内容溢出叠到下一节）。
-               基元自带的「中心圆点」选中指示器是给小圆点形态用的；这里选中态
-               已由边框 + 底色表达，圆点只会叠在文字上，隐藏（见下一条同款）。 */
+            /* 整卡可点选项：基元尺寸全部归还调用处 —— 基类是小圆点形态（`size-4`+`aspect-square`），
+               必须连宽度与宽高比一起还（`size-auto!`/`aspect-auto!`），否则宽度仍 16px、卡片被压竖排。
+               基元的中心圆点指示器是小圆点形态用的；此处选中态已由边框+底色表达，圆点隐藏。 */
             nativeButton
             render={
               <Button

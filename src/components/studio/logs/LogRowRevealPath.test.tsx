@@ -1,20 +1,8 @@
 /**
- * 日志行里「点路径 → 在文件管理器里定位」的可见行为（ISSUE #1365）。
- *
- * 用户诉求一句话：那一列路径要**点得动**。这条链有四段，各段有自己的判据
- * （识别 / 命令形态 / 闸门 / 重入），本文件钉的是**接线**那一半 —— 也是唯一
- * 一段没有任何单测能覆盖、只能靠「渲染出来点一下」验证的部分：
- *
- *   ① 渲染出的确实是可点的按钮（而不是紫字），且**路径文本一字不改**；
- *   ② 点一下真的发一次 `setting.revealPath`，参数是扫出来的那段路径；
- *   ③ 同一次事件循环里的连点只发一次（重入锁，`useReentrancyLock` 的同步 ref）；
- *   ④ 成功说「已定位」、失败说「打开失败」并把服务端给的原因放进 `title`
- *      —— 失败必须有可见出口（硬规则 4）。
- *
- * mock 边界：`~/trpc/vanilla` 换成可编程的假客户端（**绝不真发请求**），
- * `~/lib/log/log-path-tokens` **不 mock** —— 识别是本功能的判据本体，
- * mock 掉它等于把「渲染出来的到底是不是路径」这件事从用例里删掉。
- */
+ * 日志行里「点路径 → 在文件管理器里定位」的可见行为（ISSUE #1365）——本文件钉**接线**：
+ * 渲染出可点按钮且文本一字不改；点一下发一次 `setting.revealPath`；同一事件循环连点只发一次
+ * （`useReentrancyLock`）；成功「已定位」、失败「打开失败」并把原因放进 `title`（硬规则 4）。
+ * mock 边界：`~/trpc/vanilla` 换假客户端；`log-path-tokens` 不 mock（识别是判据本体）。 */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -65,11 +53,9 @@ function renderRow(message: string) {
 }
 
 /**
- * 取悬停出来的提示浮层（Base UI 的 tooltip 不带 `role`，按 `data-slot` 认）。
- *
- * 用悬停而不是读属性：悬停文案是本功能唯一的「失败说清原因」通道（P82 把原生
- * `title=` 换成了 `ui/hint`），只断言「按钮上还有个 title 属性」会在这条治理线
- * 生效之后变成假绿。
+ * 取悬停出来的提示浮层（Base UI tooltip 不带 `role`，按 `data-slot` 认）。
+ * 用悬停而不是读属性：悬停文案是唯一的「失败说清原因」通道（P82 把原生 `title=` 换成
+ * `ui/hint`），只断言「按钮上还有 title 属性」会在这条治理线生效后变成假绿。
  */
 async function hintText(user: ReturnType<typeof userEvent.setup>, el: HTMLElement) {
   /* 先 `unhover` 再 `hover`：点击之后指针已经停在按钮上，直接再 hover 不会
@@ -126,12 +112,9 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
   });
 
   it("带空格的路径是**整条**一个按钮（启动器回显 pwsh/pnpm 的那行）", () => {
-    /* 这一条钉的是「上色层与可点层同源」。上色层（`log-row-style`）此前自己持
-     * 一份路径正则且 `[^\s]*` 吃到第一个空格就停，于是分片是 `C:\Program` 与
-     * ` Files\…` 两段；而识别在**分片之内**做（`PathLinkedText`），切碎的路径
-     * 等于认不出来 —— 面板于是给出一个指向 `C:\Program` 的按钮，而它不是存在的
-     * 目录（点了只会得到「找不到可在文件管理器里打开的路径」）。
-     * 现在上色层直接用 `findLogPathTokens` 的区间，一条路径恒在一个分片里。 */
+    /* 钉的是「上色层与可点层同源」：上色层此前自持 `[^\s]*` 正则，把 `C:\Program Files\…`
+     * 切成两段；识别在分片内做，切碎的路径认不出，按钮指向不存在的目录。
+     * 现在两处都取自 `findLogPathTokens` 的区间，一条路径恒在一个分片里。 */
     renderRow(
       String.raw`>>> "C:\Program Files\PowerShell\7\pwsh.EXE" -NoProfile -File "D:\Program Files\nodejs\pnpm.ps1" -v`,
     );

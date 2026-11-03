@@ -15,23 +15,10 @@ import { zClass } from "~/lib/shell/overlay-z";
 const ROLE_COLOR = portChipStyle("IMAGE").color;
 
 /**
- * 绕过 / 禁用节点用的毛玻璃层 —— 第二层注入（React Flow）里**缩放**那一维的现场。
- *
- * 这一族有一半是纯 props、另一半吃画布上下文，分开说：
- *
- *  · `NodeFrost({ zoom, color, nodeMode })` —— **纯 props**，`zoom` 是入参；
- *  · `FrostLayer` —— 自己订阅 `useStore(s => s.transform[2])`，所以只能在真画布里
- *    看（下面 `InCanvas` 那一档）。它存在的理由正是**性能**：把缩放订阅从每个节点
- *    挪到这一层，普通节点就不必在捏合 / 滚轮缩放时重渲染。
- *
- * 要看的是 Chromium 那条经典 bug 的**修法**在画布上真的成立：`backdrop-filter`
- * 在屏幕占位极小的元素上会重铺平铺，缩小时出现 2² / 3² / 4² 重影。修法是按
- * `1/zoom` 反向缩放模糊元素、外层 `overflow:hidden` 裁回节点边界 —— 所以这里
- * 把三档缩放并排，重影在 `zoom < 1` 那两档最容易看出来。
- *
- * `nodeMode` 的取值来自 LiteGraph：`0` 始终 / `2` 静音（灰）/ `4` 旁路（粉），
- * 颜色由 `computeNodePalette()` 给出 —— 不手抄色值。
- */
+ * 毛玻璃层 story — 缩放维度。`NodeFrost` 纯 props（zoom/color/nodeMode）；FrostLayer 自订阅 `transform[2]`，
+ * 只能在真画布看（缩放订阅收口到该层，避免全体节点重渲染）。验 Chromium backdrop-filter 小元素重铺 bug：
+ * 按 1/zoom 反向缩放 + overflow:hidden 裁回，并排三档，zoom<1 最易见 2²/3²/4² 重影。
+ * nodeMode = LiteGraph 0 始终 / 2 静音 / 4 旁路，颜色由 `computeNodePalette()` 给出。 */
 const meta = {
   title: "Studio/Canvas/NodeFrost",
   component: NodeFrost,

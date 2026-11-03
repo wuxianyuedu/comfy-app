@@ -7,19 +7,8 @@ import {
 } from "~/components/ui/key-value-rows";
 
 /**
- * `KeyValueRows` 是「把一个对象渲染成键值行」的**唯一出口**（规范 16 §16.2.4.20）。
- *
- * 它收的是全库 5 处各写一遍的「标签 + 值 + 空值占位」：`ProjectOutputs` 的参数表、
- * `HistoryDetailModal` 的生成参数卡与参数表、
- * `BrowserStatusBar` 的显存/内存。同一件事曾有**四种布局语言、五份 `map`** ——
- * 而「空值显示什么」早就由 `~/lib/display-value` 的 `displayValue` 收口了，
- * 剩下的只有**布局**这一层没被说出来。本组件收的就是这一层。
- *
- * 所以 story 按**四档 `layout`** 分组 —— 这就是本件存在的全部理由，
- * 其它 props（`bordered` / `striped` / `hint` / `itemClassName`）都是它的修饰。
- *
- * `value` 有两个互斥的写法：`value`（已渲染的节点，可以含徽标/链接）与
- * `raw`（原始值，交给 `displayValue`，`null`/`undefined`/`""` 自动给 `—`）。
+ * `KeyValueRows` 是「把一个对象渲染成键值行」的唯一出口（规范 16 §16.2.4.20），收的是全库 5 处各写一遍的「标签 + 值 + 空值占位」；空值显示已由 `~/lib/display-value` 的 `displayValue` 收口，本组件只补布局这一层。
+ * story 按四档 `layout` 分组（这是本件存在的全部理由）；`value` 与 `raw` 互斥：前者是已渲染节点，后者交给 `displayValue`（`null` / `undefined` / `""` 自动给 `—`）。
  */
 type Layout = NonNullable<KeyValueLayout>;
 

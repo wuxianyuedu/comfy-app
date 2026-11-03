@@ -1,14 +1,9 @@
 "use client";
 
-/** 从 ProjectCanvas 抽出 —— 媒体拖放落到画布
- *  的逻辑。素材库 / 历史面板经 `placeMediaNode`（按钮点击）或
- *  拖放处理器把文件交给画布。
- *
- *  文件住在产物根 generated/（经 /api/generated 提供），但
- *  图片 / 影片节点的 mediaPath 必须是 ComfyUI
- *  **输入**目录内的文件名，好让下游 LoadImage / LoadVideo 能消费它。
- *  `importOutputAsInput` 把字节拷回 ComfyUI 输入（按来源路径缓存，
- *  所以重复拖放不会重复上传）。
+/** 从 ProjectCanvas 抽出 —— 媒体拖放落到画布的逻辑（按钮点击走 `placeMediaNode`）。
+ *  文件住在产物根 generated/，但图片 / 影片节点的 mediaPath 必须是 ComfyUI **输入**
+ *  目录内的文件名，下游 LoadImage / LoadVideo 才消费得到；`importOutputAsInput`
+ *  把字节拷回输入目录（按来源路径缓存，重复拖放不会重复上传）。
  */
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 import type { XYPosition } from "@xyflow/react";

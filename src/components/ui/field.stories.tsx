@@ -17,15 +17,8 @@ import { Input } from "~/components/ui/input";
 import { Switch } from "~/components/ui/switch";
 
 /**
- * `ui/field` 是 shadcn 的**字段布局族**（`FieldSet` / `Field` / `FieldLabel` /
- * `FieldError` …），它只管**行内部**标签 / 控件 / 说明 / 错误四件的位置关系与
- * 容器查询下的响应式排布，不判校验、不管布局（见 `field.tsx` 的文件头）。
- *
- * 这一族此前没有 story 的原因不是「有数据依赖」——它是**纯 props**。
- * 真正的原因是没有 `FieldLegend` / `variant` 这些形态的现场：整族的价值在
- * 「四个部件拼在一起对不对」，单看一个 `Field` 只是个 `div`。所以这里的 story
- * 都按**真实落点的拼法**给（设置页的三件套、画布节点的勾选行…）。
- *
+ * `ui/field` 是 shadcn 的**字段布局族**（`FieldSet` / `Field` / `FieldLabel` / `FieldError` …），只管**行内部**标签 / 控件 / 说明 / 错误的位置关系与容器查询下的响应式排布，不判校验、不管布局（见 `field.tsx` 的文件头）。
+ * 这一族此前没有 story 不是因为「有数据依赖」（它是**纯 props**），而是没有 `FieldLegend` / `variant` 这些形态的现场：整族的价值在「四个部件拼在一起对不对」，单看一个 `Field` 只是个 `div`；这里的 story 都按**真实落点的拼法**给。
  * 枚举从 props 派生（不从任何变体表的返回值上取，规范 16 §16.2.3.4）。
  */
 type FieldOrientation = NonNullable<React.ComponentProps<typeof Field>["orientation"]>;

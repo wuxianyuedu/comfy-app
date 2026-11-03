@@ -1,14 +1,6 @@
-/**
- * 「渲染一张可能失败的媒体图」只允许一处实现的契约（ISSUE #672 §16.2.4.21）。
- *
- * 现场：全库 18 个文件的裸 `<img>` 里，**失败这一侧有四种写法** ——
- * `style.display = "none"`（`HomePage`）、`style.visibility = "hidden"`
- * （已删的训练工作室）、自持 `useState(failed)` + 方块（`WorkflowImagePreview`）、
- * 长文案说明（`SettingsPrimitives`）；另外 14 处**压根没有兜底**。
- *
- * 这里钉的是「行为不再取决于从哪个面板渲染」这件事，所以断言都落在
- * **失败之后 DOM 里还剩什么**与**src 换了之后有没有重新给机会**上。
- */
+/** 「渲染一张可能失败的媒体图」只允许一处实现的契约（ISSUE #672 §16.2.4.21）。
+ * 现场：全库 18 个文件的裸 `<img>` 里，失败这一侧有四种写法 —— `style.display = "none"`（HomePage）、`style.visibility = "hidden"`（已删的训练工作室）、自持 `useState(failed)` + 方块（WorkflowImagePreview）、长文案说明（SettingsPrimitives）；另外 14 处压根没有兜底。
+ * 这里钉的是「行为不再取决于从哪个面板渲染」这件事，所以断言都落在失败之后 DOM 里还剩什么与 src 换了之后有没有重新给机会上。 */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 

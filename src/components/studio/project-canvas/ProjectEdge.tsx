@@ -1,40 +1,19 @@
 "use client";
 
 /* ProjectEdge — 项目画布的连线渲染
- *
- * 在 React Flow 默认 `smoothstep` 之上补一层「选中节点相关连线」的视觉：
- * 上游 / 下游加粗并提亮渐变端点的亮度，无关连线在选中态下压暗，让用户一眼看出
- * 选中节点连到了哪里。
- *
- * 为什么不能继续用 `defaultEdgeOptions.style`：那套样式是**静态**的，每帧都
- * 一样，没法按边的关注级别切换；而关注级别是 `useRelatedEdgesHighlight` 逐条写在
- * `edge.data` 上的动态值。React Flow 只对「自定义类型的边」才把渲染权交给组件，
- * 所以这里包一层把 data 读出来算样式。
- *
- * 渐变（`url(#canvas-edge-gradient)`）原样保留：它承载的是项目画布的品牌观感，
- * 提亮通过 `filter` 实现（对渐变同样生效），而不是换一种平面描边。
- */
+ * 在 React Flow 默认 `smoothstep` 之上补「选中节点相关连线」的视觉：上下游加粗提亮、
+ * 无关连线压暗。不能用 `defaultEdgeOptions.style`：那套样式是静态的，而关注级别是
+ * `useRelatedEdgesHighlight` 逐条写入 `edge.data` 的动态值，React Flow 只把渲染权交给
+ * 自定义边组件。渐变 `url(#canvas-edge-gradient)` 原样保留（品牌观感），提亮靠 filter。 */
 
 import React from "react";
 import { BaseEdge, getSmoothStepPath, type EdgeProps } from "@xyflow/react";
-import {
-  shouldDimEdge,
-  type EdgeFocusRole,
-} from "../canvas/flow-focus-endpoints";
+import { shouldDimEdge, type EdgeFocusRole } from "../canvas/flow-focus-endpoints";
 import { readEdgeFocusRole } from "../canvas/hooks/use-related-edges-highlight";
 
 export const ProjectEdge = React.memo(function ProjectEdge(props: EdgeProps) {
-  const {
-    id,
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-    sourcePosition,
-    targetPosition,
-    style,
-    data,
-  } = props;
+  const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, data } =
+    props;
 
   const [edgePath] = getSmoothStepPath({
     sourceX,

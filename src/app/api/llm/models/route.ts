@@ -12,17 +12,9 @@ export const dynamic = "force-dynamic";
 const PROBE_TIMEOUT_MS = 6000;
 
 /**
- * GET /api/llm/models?provider=local|remote[&model=<name>] —— 拉取候选模型清单。
- *
- * - local：优先 GET {本地 base 剥掉 /v1}/api/tags（Ollama 形状），
- *   失败回落 GET {base}/models（LM Studio / vLLM 等 OpenAI 兼容端点）。
- * - remote：默认按已保存的全局远端 baseUrl / apiKey GET {base}/models；
- *   若带 model 参数且该远端条目配了独立 baseUrl/apiKey，则用该条目自己的
- *   连接参数探测——避免「工坊选了独立配置的远端模型，却拿全局 Base URL
- *   去探导致误报 fetch failed」这类误导提示。
- *
- * 探测失败不是硬错误：一律 200 + { ok:false, detail }，前端在对应分组里
- * 展示降级文案而不是让整页报错。
+ * GET /api/llm/models?provider=local|remote[&model=<name>] —— 拉取候选模型清单：local 优先 `{base剥掉/v1}/api/tags`（Ollama），
+ * 失败回落 `{base}/models`；remote 默认用已保存的全局 baseUrl/apiKey 探 `{base}/models`，带 model 且该条目配了独立连接参数时用它自己的，
+ * 避免「工坊选了独立配置却拿全局 Base URL 去探导致误报 fetch failed」。探测失败不是硬错误：一律 200 + `{ ok:false, detail }`，前端按分组展示降级文案。
  */
 export async function GET(req: NextRequest) {
   if (!(await requireRequestUser())) {

@@ -1,13 +1,7 @@
-/* 「所有项目」屏逻辑层单测（ISSUE #1522）。
- *
- * 守两句新承诺：
- *   · 列表是**并集**（服务端独有行也看得见，且标出出处）；
- *   · 删除对「索引里没有、只在服务端」的行也有行为（这正是此前缺的那个口子）。
- *
- * 取数与删除都在 `~/lib/project-canvas/canvas-store` 里，这里整体替换该模块 ——
- * 断言的是**编排**（什么时候重取、失败降级说什么、确认流的两步），
- * 以及那一层的实现细节（并集口径、两侧一起删）由 `canvas-store.test.ts` 守。
- */
+/* 「所有项目」屏逻辑层单测（ISSUE #1522）。守两句新承诺：列表是并集（服务端独有行也看得见并标出处）；
+ * 删除对「索引里没有、只在服务端」的行也有行为（此前缺的口子）。
+ * 取数与删除在 ~/lib/project-canvas/canvas-store，这里整体替换该模块 —— 断言编排
+ *（何时重取、失败降级说什么、确认流两步）；并集口径与两侧一起删由 canvas-store.test.ts 守。 */
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

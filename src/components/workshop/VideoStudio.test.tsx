@@ -1,14 +1,8 @@
 //
 // VideoStudio 行为测试：视频生成 stage 的双通道出口与门禁。
-//
-// 钉死的用户可见契约：
-//   • 空镜头列表给引导空态；
-//   • 本地通道没选视频工作流 → 单镜生成被行内门禁拦下（不发起请求）；
-//   • API 通道未配置 → 切过去后生成按钮禁用 + 放行提示；
-//   • API 提交同步返回 url → clipStatus 直接 done 并写回 clipUrl；
-//   • API 异步任务（remoteTaskId）→ 轮询到 url 后落定；
-//   • 进行中且有本机任务 id 的片段显示「取消」并接 onCancelShot。
-// 网络层整体 mock（generation-client），轮询用的 sleep 替换为即时（可控节奏）。
+// 钉死：空镜头引导空态；本地没选视频工作流 → 行内门禁拦下不请求；API 未配置 →
+// 生成禁用 + 放行提示；API 同步 url → 直接 done 写回 clipUrl；异步任务轮询落定；
+// 进行中有任务 id 显示「取消」。网络层整体 mock，轮询 sleep 替换为即时。
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -158,12 +152,9 @@ describe("VideoStudio 门禁与空态", () => {
   });
 
   it("阶段内那枚就近入口：接在 onOpenModelAdapters 上，且名字与落地页一致", async () => {
-    /* 两个判点各治一种静默失效：
-       ① 「点了没反应」—— 这枚按钮的回调此前只被写成 `() => undefined`，没有任何用例
-         断过它被调用；把弹窗改成「切视图」时如果接错线，表现就是按钮变成装饰。
-       ② 「名字对不上东西」—— 它原本写「API 通道设置」，而它要去的那一页标题是
-         「模型适配」（`ModelAdaptersView`）。用户点一个名字与落地页不符的按钮，
-         只能靠猜自己来对地方没有（§12.12）。这条断言把那个名字钉在按钮上。 */
+    /* 两个判点各治一种静默失效：① 回调此前只写成 `() => undefined`，接错线
+       按钮就变成装饰；② 按钮名字必须与落地页「模型适配」（`ModelAdaptersView`）
+       一致，名字对不上用户只能靠猜（§12.12）。 */
     const user = userEvent.setup();
     const { onOpenModelAdapters } = renderStudio({ apiChannels: null });
     await user.click(screen.getByRole("button", { name: "模型适配" }));

@@ -1,18 +1,11 @@
-// 队列执行日志流（第②层）的行为单测。
-//
-// 真正会坏掉的行为在这里锁住：
-//   · **换任务要重置** —— 上一个任务的日志/终态漏进下一个弹窗，比空着更误导；
-//   · **累积要有上限** —— 长任务的 progress 行能到几千条，不截尾就是把 state 撑大；
-//   · **卸载后到达的回调不许 setState** —— EventSource 关闭是异步的，closer 之后的
-//     迟到帧会把 React 打出「卸载后更新」警告。
+// 队列执行日志流（第②层）行为单测：换任务必须重置（上一条日志/终态漏进新弹窗比空着更误导）；
+// 累积有上限（长任务 progress 可到几千条）；卸载后到达的回调不许 setState
+//（EventSource 关闭是异步的，closer 之后的迟到帧会触发 React「卸载后更新」警告）。
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as GenerationClient from "~/lib/workshop/generation-client";
-import type {
-  TaskLogEntry,
-  TaskWatchHandlers,
-} from "~/lib/workshop/generation-client";
+import type { TaskLogEntry, TaskWatchHandlers } from "~/lib/workshop/generation-client";
 
 const watchTaskMock = vi.hoisted(() => vi.fn());
 

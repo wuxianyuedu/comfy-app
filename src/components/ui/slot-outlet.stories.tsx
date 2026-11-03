@@ -5,15 +5,8 @@ import { Button } from "~/components/ui/button";
 import { SlotContent, SlotOutlet, SlotOutletProvider } from "~/components/ui/slot-outlet";
 
 /**
- * `SlotOutlet` —— 「把子树渲染到别处的一个落点」的**全库唯一实现**
- * （规范 §12.18；应用是 `studio/ViewActions`，即「本屏动作挂到顶栏」）。
- *
- * 本 story 要看的只有一件事：**两种形态的差别**。上排是挂壳的样子 ——
- * 落点在「顶栏」那条横条里、内容传送过去；下排是**没挂落点**的样子 ——
- * 就地渲染，这正是 `/models` 独立路由页、Storybook、组件用例走的那一条。
- *
- * 传送机制本身不可见（内容就是宿主那一处的普通子节点，不浮、不遮、不抢焦点）——
- * 要浮层请用 `ui/dialog` / `ui/popover`。
+ * `SlotOutlet` —— 「把子树渲染到别处的一个落点」的全库唯一实现（规范 §12.18；应用是 `studio/ViewActions`，即「本屏动作挂到顶栏」）。要看的只有两种形态的差别：
+ * 上排挂壳（落点在顶栏、内容传送过去），下排没挂落点（就地渲染，`/models` 独立路由页、Storybook、用例走这条）。传送机制本身不可见（就是宿主处的普通子节点，不浮、不遮、不抢焦点）。
  */
 const meta = {
   title: "UI/SlotOutlet",

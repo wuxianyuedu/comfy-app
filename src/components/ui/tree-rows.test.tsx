@@ -1,10 +1,7 @@
 /**
- * `~/components/ui/tree-rows` 的契约（ISSUE #672 / 规范 16 §16.2.4.39）。
- *
- * 这条账的实质是「**缩进档 + 子行集合容器**」这组语义各层各写一遍，
- * 且同一棵树的三层可能用不同档（`NodesTab` 此前父级只有 `border-t`、
- * 子包有 `ml-3 + border-l-2`）。用例钉住：缩进与引导线是一组、`depth` 决定
- * 有没有档、「这一行 + 它的子行」绑成一对。
+ * `~/components/ui/tree-rows` 的契约（ISSUE #672 / 规范 16 §16.2.4.39）。实质是「缩进档 + 子行集合容器」
+ * 这组语义各层各写一遍，且同一棵树的三层可能用不同档（`NodesTab` 此前父级只有 `border-t`、子包有
+ * `ml-3 + border-l-2`）。用例钉住：缩进与引导线是一组、`depth` 决定有没有档、「这一行 + 它的子行」绑成一对。
  */
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";

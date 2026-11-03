@@ -1,12 +1,9 @@
 "use client";
 
-/* 尺寸预设表的 controller（规范 17 §17.2 第②层）：把 `lib/size-preset-store`
- * 的模块级快照接到 React，并把「改一格 / 恢复默认 / 是否已改」包成动作，
- * 视图只拿 `table` 与三个动作渲染，不直接碰 localStorage。
- *
- * 用 `useSyncExternalStore` 而不是 `useEffect` + `setState`：配置弹窗里改一格，
- * 已经挂载的尺寸控件（画布节点 / 库内预览 / 表单可能同时存在）要在同一次渲染里
- * 换值，且不触发「渲染期 setState」禁令（规范 §2.4 / §8.6）。 */
+/* 尺寸预设表 controller（规范 17 §17.2 第②层）：把 lib/size-preset-store 的模块级快照接到 React，
+ * 并把「改一格 / 恢复默认 / 是否已改」包成动作，视图只拿 table 与动作、不碰 localStorage。
+ * 用 useSyncExternalStore 而非 useEffect + setState：弹窗改一格，已挂载的尺寸控件（画布节点/库预览/表单
+ * 可能同时存在）要在同一次渲染换值，且不触发「渲染期 setState」禁令（规范 §2.4 / §8.6）。 */
 
 import { useCallback, useSyncExternalStore } from "react";
 

@@ -1,12 +1,6 @@
-/**
- * `FormField` —— 「标签 + 控件 + 校验错误」这一行的唯一实现
- * （规范 16 §16.2.4.26）。
- *
- * 这条账的实质不是字号不一致，而是三件事在**不同落点被漏掉**：
- *  `htmlFor` 关联（15 处表单行**没有一处**做过）、`aria-invalid` +
- *  `aria-describedby`（只有 1/15 处写了 `aria-invalid`、**没有一处**关联
- *  错误文案）、错误行的位置。所以用例逐条钉这三件，而不是钉 class。
- */
+/** `FormField` —— 「标签 + 控件 + 校验错误」这一行的唯一实现（规范 16 §16.2.4.26）。
+ * 这条账的实质不是字号不一致，而是三件事在不同落点被漏掉：`htmlFor` 关联（15 处表单行没有一处做过）、`aria-invalid` + `aria-describedby`（只有 1/15 处写了 `aria-invalid`、没有一处关联错误文案）、错误行的位置。
+ * 所以用例逐条钉这三件，而不是钉 class。 */
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 

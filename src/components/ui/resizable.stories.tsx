@@ -3,15 +3,9 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "~/components/ui/resizable";
 
 /**
- * `ui/resizable` 是 `react-resizable-panels` 的薄封装：左中右可拖拽分栏。
- *
- * 形态上有两条只有渲染出来才知道的事：
- * 1. **`ResizablePanelGroup` 自身是 `h-full w-full`** —— 放进一个**没有高度**
- *    的祖先里会塌成 0 高（分栏看得见，内容看不见）。所以 story 都给死高度。
- * 2. **`withHandle` 那一档**：不给时只有一条 1px 的缝（命中区靠 `after:` 扩到
- *    5px），给了才在中间画一根 6×1 的小竖条 —— 后者是「拖这里」的视觉提示。
- *
- * 拖拽 / 折叠 / 键盘调整归底座，story 不重复验那部分。
+ * `ui/resizable` 是 `react-resizable-panels` 的薄封装：左中右可拖拽分栏。两件只有渲染才知道：
+ * ① `ResizablePanelGroup` 自身是 `h-full w-full`，放进没有高度的祖先会塌成 0 高，故 story 给死高度；
+ * ② `withHandle` 不给时只有一条 1px 缝（命中区靠 `after:` 扩到 5px），给了才画 6×1 小竖条作为拖拽提示。
  */
 const meta = {
   title: "UI/Resizable",

@@ -86,14 +86,10 @@ function resolveSeed(raw: string): number {
   return Number.isFinite(n) ? Math.trunc(n) : randomSeed();
 }
 
-/** 自动预填：分镜输出 → 图片提示词。
- *
- *  从「场景分镜」来的镜头已带构建好的提示词；任何为空的（例如导入的裸镜头）
- *  从场景 + 角色卡一次性填上；被用户手改过的镜头（`editedRef`）不覆盖。
- *
- *  `scenes` / `characters` / `styles` 是父级每次渲染可能重建的数组，走 ref
- *  读最新值（每次渲染后同步），触发源只留 `shots` —— 否则父级任何一次
- *  重渲染都会让它跑一遍 O(N) 扫描（`onShotsChange` 是 setState，引用稳定）。 */
+/** 自动预填：分镜输出 → 图片提示词。为空的镜头从场景 + 角色卡一次性填上；
+ *  被用户手改过的（`editedRef`）不覆盖。
+ *  `scenes` / `characters` / `styles` 走 ref 读最新值，触发源只留 `shots` ——
+ *  否则父级每次重渲染都跑一遍 O(N) 扫描。 */
 function useAutoFillPrompts(
   shots: Array<Shot>,
   inputs: { characters: Array<Character>; scenes: Array<Scene>; styles: Array<StyleRef> },
@@ -129,10 +125,9 @@ function useAutoFillPrompts(
 }
 
 /**
- * 镜头生图 stage：消费「场景分镜」产出的镜头列表（提示词已在上游
- * 自动构建；空的在这里从场景 + 角色卡回填），并在本地 ComfyUI 链或
- * 配置的 API 通道上生成每个镜头图片。结果写回 Shot.imageUrl，好让
- * 视频 stage / FinalComposer 原样消费。
+ * 镜头生图 stage：消费「场景分镜」的镜头列表（空的提示词从场景 + 角色卡回填），
+ * 在本地 ComfyUI 链或配置的 API 通道上生成每镜图片，写回 Shot.imageUrl
+ * 供视频 stage / FinalComposer 消费。
  */
 export function ShotStudio({
   shots,

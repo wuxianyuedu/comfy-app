@@ -13,20 +13,8 @@ import {
 } from "~/components/ui/select";
 
 /**
- * `ui/button-group` 是**把相邻按钮粘成一条**的容器：只做「圆角与边框的接缝」
- * 那件事 —— 中间的项左圆角归零、右圆角归零，相邻项之间去掉重复的边框。
- *
- * 它自己不是按钮，也不改子元素的其它形态，所以 story 要看的是**接缝**：
- * 单独一个按钮看不出任何效果，得两个以上才成立。
- *
- * 三件事只有渲染出来才知道：
- * 1. `orientation` 两档：`horizontal`（横向接缝）/ `vertical`（纵向，改的是
- *    上下圆角与 `border-t`）；
- * 2. **不同基元混排也行**：`Button` / `SelectTrigger` / `Input` 放进同一个组，
- *    靠 `[&>[data-slot]]` 那套选择器统一接缝 —— 这一条是本件比「手写
- *    `-ml-px`」强的地方；
- * 3. `has-[>[data-slot=button-group]]:gap-2`：**嵌套**时外层改用 `gap`，
- *    不再做接缝合并（否则两组的接缝会互相吃掉）。
+ * `ui/button-group` 把相邻按钮粘成一条：只做圆角与边框接缝（中间项圆角归零、相邻项去掉重复边框），自身不是按钮；`orientation` 两档（horizontal / vertical 改上下圆角与 `border-t`）。
+ * 不同基元（Button / SelectTrigger / Input）混排靠 `[&>[data-slot]]` 统一接缝；`has-[>[data-slot=button-group]]:gap-2` 让嵌套外层改用 `gap`，否则两组的接缝会互相吃掉。
  */
 type ButtonGroupOrientation = NonNullable<React.ComponentProps<typeof ButtonGroup>["orientation"]>;
 

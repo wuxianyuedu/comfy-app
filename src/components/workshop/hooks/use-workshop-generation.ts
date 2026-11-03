@@ -1,14 +1,9 @@
 "use client";
 
 // ── 工坊生成链路（第②层）：单镜生图的执行态与编排 ────────────────────────────
-//
-// 从 `use-workshop-pipeline` 拆出来，是因为这三样东西只服务于「跑一次生成」，
-// 却占着主管线的状态位与行数：`generating`、每镜实时进度 `shotProgress`、
-// 按条目节流用的 `progressGate`，加上 `buildShotInput` / `generateShot`。
-// 主管线要装的是项目草稿与六段状态，进度回写这种高频细节混在里面，会让两边
-// 每次改动都互相碰到（也让行数一路顶到单文件 900 行的拆分线，规范 12 §12.8）。
-//
-// 本 hook **只搬不改**：判据、文案、节流口径、失败回写路径与拆分前逐字一致。
+// 从 `use-workshop-pipeline` 拆出（规范 12 §12.8 行数拆分线）：`generating` /
+// `shotProgress` / `progressGate` / `buildShotInput` / `generateShot` 只服务于
+//「跑一次生成」。本 hook **只搬不改**：判据、文案、节流口径、失败回写路径与拆分前一致。
 
 import React from "react";
 
@@ -37,11 +32,9 @@ export type WorkshopGenerationDeps = {
   /** 需要引起用户注意的失败/阻断文案通道（由主管线决定怎么渲染，不用 alert）。 */
   notify: (message: string | null) => void;
   /**
-   * 当前项目 id（空串 = 还没有活跃项目）。与镜头号一起写进任务行，让「这一镜出过图吗」
-   * 能由数据库回答，而不是只信草稿里那个 `imageUrl` 字符串。
-   *
-   * 这里是**原始字符串**而不是对象：整个依赖要被 `generateShot` 的 useCallback 吃进去，
-   * 传对象会让回调每次渲染都换身份，下游 memo 全废。
+   * 当前项目 id（空串 = 还没有活跃项目），写进任务行让「这一镜出过图吗」由数据库回答。
+   * 这里是**原始字符串**而不是对象：它要被 `generateShot` 的 useCallback 吃进去，
+   * 传对象会让回调每次渲染换身份，下游 memo 全废。
    */
   projectId: string;
   /** 回写目标镜头的 status / taskId / imageUrl —— 镜头数据仍归主管线持有。 */
@@ -79,12 +72,10 @@ export function useWorkshopGeneration({
    * 走与画布一致的本地 ComfyUI 链路(tRPC generate → SSE 任务流),
    * 结果回写 Shot.imageUrl / status,镜头生图阶段自动继承。
    */
-  /** 单镜生成请求的封装：本地通道一律走工作流库工作流（内置模板已移除），
-   *  按 ISSUE #145 只暴露 提示词 / 尺寸 / 参考图，其余走工作流默认值。
-   *
-   *  尺寸只表达一次（比例 + 分辨率 或 比例 + 百万像素 + 倍数）：整块交给封装层
-   *  （宽高由 size-presets 按场景现算）。没落到任何端口的口随结果以提示文案
-   *  返回 —— 「给了值却没生效」必须让用户知道（规范 10 §10.3.1），不静默丢。 */
+  /** 单镜生成请求的封装：本地通道一律走工作流库工作流（内置模板已移除），按
+   *  ISSUE #145 只暴露 提示词/尺寸/参考图。尺寸只表达一次，整块交给封装层现算；
+   *  没落到任何端口的口随结果以提示文案返回 ——「给了值却没生效」必须让用户知道
+   *（规范 10 §10.3.1），不静默丢。 */
   const buildShotInput = React.useCallback(
     async (shot: Shot): Promise<{ input: GenerateInput; unmatchedWarning: string | null }> => {
       /* 草稿里存的是尺寸表达（老数据可能是 "832x1216" 字符串，回读时归一）。 */
@@ -120,13 +111,10 @@ export function useWorkshopGeneration({
     [workflowId, characters, notify],
   );
 
-  /** 观察一个本地任务直到落定，结果回写对应镜头。生图与视频共用这一条观察
-   *  循环（`target` 决定写哪组字段：生图写 imageUrl/status，视频写
-   *  clipUrl/clipStatus）；批量循环与「恢复失联任务」都走它。回写前核对任务
-   *  归属 —— 恢复期间用户可能已对同一镜头重新发起（换了任务），旧观察不得
-   *  覆盖新结果。
-   *  30 分钟无响应按失败收尾并退订（与 ShotStudio / VideoStudio 的安全阀
-   *  同口径、同常量）：批量循环永不卡死在一条沉默的流上。 */
+  /** 观察一个本地任务直到落定，结果回写对应镜头（`target` 决定写生图还是视频字段）。
+   *  回写前核对任务归属 —— 恢复期间用户可能已对同一镜头重新发起，旧观察不得覆盖
+   *  新结果。30 分钟无响应按失败收尾并退订（与 ShotStudio / VideoStudio 同口径同
+   *  常量）：批量循环永不卡死在一条沉默的流上。 */
   const watchShotTask = React.useCallback(
     (shotId: string, taskId: string, target: "image" | "video" = "image"): Promise<void> => {
       /* 订阅句柄 —— watchTask 返回前先给一个空实现，超时路径上一定已赋值。 */

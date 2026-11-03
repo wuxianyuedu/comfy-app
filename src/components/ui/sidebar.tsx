@@ -170,12 +170,10 @@ function SidebarProvider({
           "group/sidebar-wrapper has-data-[variant=inset]:bg-sidebar flex min-h-svh w-full",
           className,
         )}
-        /* 客户端算出来的窄窗判据，**与 `data-state` 分开报**：E2E 判的是「左轨有
-           没有真的让位」，而让位要经过「客户端判据成立 → 生效态落盘」两步。两件事
-           只报一个，红了就分不清是判据没到（还在水合 / 客户端没重读快照）还是判据
-           到了而状态没跟着落（`resolveRailCollapsed` 那条推导断了）。
-           它同时也是这份状态唯一的可观测出口 —— 除它之外没有任何地方能看到
-           「客户端到底认没认这是一档窄窗」。 */
+        /* 客户端窄窗判据，**与 `data-state` 分开报**：E2E 判的是「左轨有没有真的让位」，
+           而让位要经过「判据成立 → 生效态落盘」两步；只报一个，红了就分不清是判据没到
+           （还在水合 / 没重读快照）还是判据到了而状态没跟着落（`resolveRailCollapsed` 断了）。
+           它也是这份状态唯一的可观测出口。 */
         data-narrow={narrow ? "true" : "false"}
         data-narrow-crossings={crossings}
         data-slot="sidebar-wrapper"
@@ -517,30 +515,11 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
   );
 }
 
-/* 导航项的三态：静止 / 悬停（指针在这儿）/ 选中（当前在这一项）。
- *
- * ISSUE #1291：此前悬停与选中**共用同一档底色**（`--sidebar-accent`），深色下那
- * 一档还与侧栏底几乎同色（1.04:1）—— 于是「悬停和选中都无法分辨」，选中态只剩
- * 一个 `font-medium` 在扛。现在两级底色各自一个 token（取值与实测见 `globals.css`），
- * 选中态再用 `before:` 伪元素补一根品牌色指示条：
- *
- *   · 底色与指示条**同时**出现 —— 只靠颜色深浅区分，色觉障碍用户看不出差别；
- *     指示条是形状/位置通道，与色彩通道正交（规范 06 §6.3 / WCAG 1.4.1）。
- *   · 指示条取 `bg-primary-strong` 而不是 `bg-primary`：`--color-primary` 是
- *     「品牌原色，浅底上当底色用」，压在选中底色上实测只有 2.73:1（浅）/ 2.32:1
- *     （深）—— 低于 WCAG 1.4.11 对「传达状态的图形」要求的 3:1，等于这根条子
- *     自己也不够显眼。`--color-primary-strong` 正是为「品牌色当文字/图形色」备的
- *     那一档，实测 4.43:1 / 3.74:1，两态都过。
- *   · 指示条用 `before:` 而非额外 DOM —— `SidebarMenuButton` 被全库多处复用，
- *     加一个必须自己渲染的子元素会变成每个调用点都要记得带上。
- *   · `aria-hidden` 由伪元素的天然无无障碍树语义保证（不产生节点），无需再标。
- *   · 指示条留在按钮内左侧（`left-0`），**不要外移到容器的 padding 槽里**：
- *     `SidebarContent` 在图标档带 `overflow-hidden`（官方基元自带），外移会被
- *     裁掉、选中提示在折叠档下直接消失。按钮本身已由容器 `p-2` 与侧栏边缘
- *     隔开，贴内边缘就是正确落点。
- *
- * 底色用 `data-active:bg-sidebar-selected`：`active` 由 `isActive` prop 经
- * `useRender` 的 state 落到 `data-active` 上，是官方基元的既有通道。 */
+/* 导航项三态：静止 / 悬停 / 选中。ISSUE #1291：此前两者共用 `--sidebar-accent`（深色下与
+ * 侧栏底仅 1.04:1），选中只剩 `font-medium` 在扛。现两级底色各一 token；选中态用 `before:`
+ * 补品牌色指示条（形状通道与色彩正交，WCAG 1.4.1），取 `bg-primary-strong` 而非 `bg-primary`
+ * （后者压在选中底色仅 2.73:1 / 2.32:1，低于 3:1）。指示条留按钮内左侧、不可外移 ——
+ * `SidebarContent` 图标档带 `overflow-hidden` 会被裁掉；用伪元素是为免每个调用点都带子元素。 */
 const sidebarMenuButtonVariants = cva(
   "peer/menu-button group/menu-button relative flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding,background-color,color] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-open:hover:bg-sidebar-accent data-open:hover:text-sidebar-accent-foreground data-active:bg-sidebar-selected data-active:font-medium data-active:text-sidebar-accent-foreground before:absolute before:top-1/2 before:left-0 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary-strong before:opacity-0 before:transition-opacity data-active:before:opacity-100 [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate",
   {

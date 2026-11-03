@@ -1,16 +1,8 @@
 "use client";
 
 /**
- * 日志面板行头的「级别筛选 + 搜索」一组控件。
- *
- * 「行头那排筛选按钮该怎么排」与面板的滚动逻辑毫无耦合，且注释与类名占了
- * 很大篇幅；拆开之后面板本体只管滚动与分页。
- *
- * 口径：这一组控件**自己从 store 取状态**（`useLogPanel`），不再由面板把
- * `filter / search / setFilter / setSearch` 当 props 传下来 —— 那几个值本来就
- * 只有这块用，传一遍只是把同一份依赖写两处（与 `SaveExportButton` 同一口径）。
- * **渲染位置仍由面板决定**（它在 `min-w-fit` 那个弹性容器里）。
- */
+ * 日志面板行头的「级别筛选 + 搜索」一组控件。「行头那排按钮该怎么排」与面板滚动逻辑毫无耦合，拆开后面板本体只管滚动与分页。
+ * 口径：这一组**自己从 store 取状态**（`useLogPanel`），不再由面板传 props（那几个值只有这块用，传一遍只是把同一份依赖写两处，与 `SaveExportButton` 同口径）；渲染位置仍由面板决定（它在 `min-w-fit` 那个弹性容器里）。 */
 
 import { Search } from "lucide-react";
 import { textHandler } from "~/lib/form-props";
@@ -44,15 +36,9 @@ export const FILTER_LABELS: Array<{ label: string; value: LogFilter }> = [
 ];
 
 /**
- * 级别按钮上的计数数字。
- *
- * **定宽 + 右对齐 + 等宽数字**：四个按钮上的 `0 / 12 / 3 / 1822` 宽度不一，
- * 按钮再等分也读不齐。这里给它一个显式的 `w-[4ch]`——「文字 + 四位数字」是
- * 这一格的固定预算，所以**文本长度不再随内容变化**。
- *
- * 数字本身不再按级别染色（`text-ink-fainter` 固定）：级别色已由同一行左侧的
- * **标签文字**承担（「警告」黄、「错误」红），同一个含义不必写两遍，
- * 也避免两个色块挤在一个按钮里互相稀释。
+ * 级别按钮上的计数数字：**定宽 + 右对齐 + 等宽数字**。四个按钮上的 `0 / 12 / 3 / 1822` 宽度不一，
+ * 按钮再等分也读不齐，所以给显式 `w-[4ch]`——「文字 + 四位数字」是固定预算，文本长度不再随内容变。
+ * 数字本身不按级别染色（`text-ink-fainter`）：级别色已由同一行左侧的**标签文字**承担，避免两个色块互相稀释。
  */
 function CountChip({ value }: { value: number }) {
   return (
@@ -75,29 +61,10 @@ export function LogFilterBar({
 
   return (
     <>
-      {/* 这个容器承担两件事：
-          1. **它自己就是那块弹性空间**——不再另设无名空白，五个按钮等分富余
-             宽度（用户诉求：「全部/警告/错误这些挤在一起，可以占用大些空间」）；
-             右侧的搜索 / 来源下拉 / 操作按钮也因此被顶到最右，不必再靠一个
-             单独的 `flex-1` 空白——多一个 `flex-1` 只会和它平分富余宽度，
-             于是「空白又回来了」。
-          2. **`min-w-fit` 是折行与否的判据**（ISSUE #1695 改的口径，见下）：
-             它取的是**内容固有宽度**，于是「这一整组放不下」这件事会如实反映
-             到行头的 `flex-wrap` 上——放不下就让整组落到第二行、并吃掉整行宽度。
-
-          **此前写的是 `min-w-56`（224px），那是错的**：那个值**小于**这五个
-          按钮的内容固有宽度（实测约 406px = 5 × 78px + 4 × 4px 间距），于是
-          容器可以被压到 224px、而里面的按钮有 `min-w-fit` 谁也压不下去 ——
-          多出来的那截**溢出容器的盒子**（实测 `scrollWidth - clientWidth`
-          在各宽度下是 16~174px），而 `overflow` 是默认的 `visible`，于是它
-          直接画到紧邻右边的搜索框上：用户截到的正是「错误」的紫色选中底盖住
-          搜索框左缘与放大镜（ISSUE #1695）。
-          更隐蔽的是它**同时废掉了折行**：`flex-wrap` 判的是子项的
-          **flex base size**（这里是 `basis-0`），不是它溢出的内容 ——
-          于是「内容放不下」永远不会触发换行，只会一直往外压。
-          `min-w-fit` 把这三件事一次理顺：容器不小于内容 ⇒ 不溢出、
-          装不下时如实换行、窄到极致时按钮保持 `min-w-fit` 不被切字
-          （ISSUE #262 要的「标签不出现省略号」仍由**按钮自己**的 `min-w-fit` 保）。 */}
+      {/* 容器承担两件事：① 它就是弹性空间——五个按钮等分富余宽度，右侧控件被顶到最右；多一个
+          `flex-1` 只会平分、空白又回来。② `min-w-fit`（ISSUE #1695）取内容固有宽度，放不下就整组
+          换行；此前 `min-w-56`（224px）小于按钮固有宽（约 406px），容器被压而按钮压不下去，溢出那截
+          （overflow 默认 visible）画到搜索框上，且 `flex-wrap` 判 flex base size 而非溢出内容、永不换行。 */}
       <ToggleGroup
         aria-label="日志级别筛选"
         className="ml-3 min-w-fit flex-1 basis-0 gap-1"
@@ -120,18 +87,10 @@ export function LogFilterBar({
       >
         {FILTER_LABELS.map((option) => (
           <ToggleGroupItem
-            /* `min-w-fit` 取的是**内容固有宽度**：`min-w-0` 会让容器压到能
-             * 忽略固有宽度、于是「警告」被切成 `警…`（ISSUE #262）。
-             * 它是这一组的**内容下限**，上面容器的 `min-w-fit` 与它同源 ——
-             * 两者一起保证「容器 ≥ 内容」（ISSUE #1695 的溢出就是这两者脱节
-             * 来的：容器被 `min-w-56` 允许压到 224px，按钮却压不下去）。
-             * **选中态不能只靠基元的 `data-pressed:bg-muted`**：它解析到
-             * `--color-subtle`，浅色主题下与行头 `--color-surface-1` 同值，
-             * 「选中的是哪一项」就又看不见了（ISSUE #609）—— 所以选中档显式
-             * 挂 `FILTER_SELECTED_ITEM_STYLES`（底色 + 描边 + 字重三层）。
-             * `LEVEL_LABEL_STYLES` 留在 className 里，因为「info/warn/error
-             * 三档文字色」是 **level-specific 语义色**（黄=警告、红=错误…）、
-             * 不是 active 视觉。P77 二批统一的是 active 的载体、不是这个。 */
+            /* `min-w-fit` 取**内容固有宽度**：`min-w-0` 会让容器忽略固有宽度、「警告」被切成 `警…`
+             * （ISSUE #262）；它与上面容器的 `min-w-fit` 同源（ISSUE #1695 的溢出正是两者脱节）。
+             * 选中态不能只靠 `data-pressed:bg-muted`（`--color-subtle` 浅色下与行头同值，ISSUE #609），
+             * 故显式挂 `FILTER_SELECTED_ITEM_STYLES`（底色 + 描边 + 字重）；`LEVEL_LABEL_STYLES` 是级别语义色。 */
             className={`flex h-9 min-w-fit flex-1 basis-0 items-center justify-center gap-1.5 rounded-lg px-2 text-xs leading-none transition-colors ${LEVEL_LABEL_STYLES[option.value]} ${
               option.value === filter ? FILTER_SELECTED_ITEM_STYLES : ""
             }`}
@@ -145,12 +104,9 @@ export function LogFilterBar({
         ))}
       </ToggleGroup>
 
-      {/* Search 紧跟在级别按钮之后（不再 `ml-auto`）。
-          行头的稀有宽度应当优先给**类别与条数**：搜索框是偶尔才用一次的
-          控件，却因为吃掉了 `ml-auto` 多出来的全部空间，把来源下拉一直顶在
-          级别按钮旁边，两者之间空出一大片（用户截图的红框正是这块空白），
-          而左侧那排四位数的计数反而最挤。现在下拉右移贴住搜索框，
-          中间被让出来的宽度由 `flex-1` 的空白区吸收。 */}
+      {/* Search 紧跟在级别按钮之后（不再 `ml-auto`）：行头稀有宽度应优先给**类别与条数**。
+          搜索框偶尔才用一次，却吃掉 `ml-auto` 多出的全部空间，把来源下拉顶在级别按钮旁、中间空出
+          一大片（用户截图红框正是它），左侧四位数计数反而最挤；现在下拉右移贴住搜索框，空隙由 `flex-1` 吸收。 */}
       {/* 搜索框可收缩（`shrink` + `min-w`）：行头窄到放不下时它先让位，
           而不是去挤筛选器的标签。`w-56` 是它舒展时的宽度。 */}
       <div className="relative flex w-56 min-w-24 shrink items-center">

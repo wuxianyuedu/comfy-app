@@ -1,22 +1,8 @@
 // @vitest-environment happy-dom
 /**
- * `useSectionScrollSpy` —— 「整页分区滚动 + 导航跟随」的唯一实现（ISSUE #1722）。
- *
- * 这条账最坏的失效模式是**静默**的：高亮停在上一节、或点导航滚到了别的一节 ——
- * 两种都不会报错、不会告警，只有用户觉得「这个目录指错地方了」。所以这里把三件
- * 事分开钉住：
- *
- *   ① 越过顶线的那一节成为当前分区（且取**文档顺序最后一个**越过线的 ——
- *      一次回调里同时进入两节时，读的是下面那一节）；
- *   ② 没有一节越过线时**保留**当前值（滚到最顶不该把高亮清掉）；
- *   ③ 点导航立刻通知调用方并 `scrollIntoView` 到那一节；
- *   ④ 环境没有 `IntersectionObserver` 时**退化而不是崩**（点击仍可用）。
- *
- * DOM 档里没有 `IntersectionObserver`（happy-dom 不实现它），所以本文件装一个
- * **可控的假观察器**：
- * 它记下被观察的元素与配置，并允许用例手动投递「谁进入了」——
- * 观察器的回调判据（`rootMargin` 那条线）由浏览器负责，这里测的是我们拿
- * entry 做了什么决策。
+ * `useSectionScrollSpy` 的唯一实现（ISSUE #1722）：失效模式是**静默**的，故钉四件事——
+ * ① 越过顶线的文档顺序最后一节为当前分区；② 无节越过线时保留当前值；③ 点导航立刻通知
+ * 并 `scrollIntoView`；④ 无 `IntersectionObserver` 时退化不崩（DOM 档没有它，装假观察器）。
  */
 import { act, renderHook } from "@testing-library/react";
 import type React from "react";

@@ -67,20 +67,9 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
  * `visibleMaterialScopes` / `canWriteMaterialScope`（这一族曾有两个入口、各写一份
  * `resolveScopes`，而且**两份都不判归属**；入口现在只有这一个）。 */
 
-/* ── 画布素材库 API ───────────────────────────────────────────
- * 文件系统支撑，落点 generated/materials/{scope}/{folder}/。
- * 详见 src/lib/materials.ts 顶部的存储选型说明。
- *
- * 端点：GET    /api/materials?projectId=proj_1&scope=project
- *          → { folders: [{id,name,count}], items: [] }           列分类
- * 端点：GET    /api/materials?projectId=proj_1&folder=docs
- *          → { folders: [...], items: [...] }                    列分类内文件
- * GET    /api/materials?projectId=proj_1&q=角色
- *          → { folders: [...], items: [...] }                    全库搜索
- * GET    ...&scope=cross                                         跨项目聚合
- * POST   multipart: file, projectId, folder                      上传
- * DELETE ?id=scope/folder/name                                   删除
- */
+/* ── 画布素材库 API：文件系统支撑，落点 generated/materials/{scope}/{folder}/（存储选型见 `~/lib/media/materials.ts` 顶部）。
+ * GET /api/materials?projectId=&scope=project 列分类{folders,items}；&folder=docs 列分类内文件；&q=角色 全库搜索；&scope=cross 跨项目聚合。
+ * POST multipart: file, projectId, folder 上传；DELETE ?id=scope/folder/name 删除。 */
 
 /** 解析出本次请求要读取的 scope 列表 —— 判据在 `visibleMaterialScopes`（一处）。 */
 

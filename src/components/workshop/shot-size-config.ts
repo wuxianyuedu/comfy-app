@@ -1,21 +1,8 @@
-/** 工坊尺寸的**薄层**（规范 17 §17.2 第①层）。
- *
- *  尺寸的口径、档位目录、场景尺寸表与所有换算都在 `lib/size-presets` —— 全项目
- *  只有那两种表达：
- *    · 比例 + 分辨率          —— 比例（16:9 …）× 分辨率档（1k / 2k / 4k）
- *    · 比例 + 百万像素 + 倍数  —— 比例 × 总像素档（1M / 2M / 4M）× 对齐倍数（8/16/32/64）
- *
- *  本模块只留工坊用得到的三件事：
- *    ① 老数据回读（草稿里存的 "832x1216" 这类 WxH 字符串 → 尺寸表达）；
- *    ② 一条**只认老形状**的出口：远端 API 通道要的「比例 + 百万像素 + 倍数」
- *       字段名（另有 `shotSizeToParam` 保留给只读 "WxH" 的老接口）；
- *    ③ 生成按钮旁的紧凑摘要。
- *
- *  下发到**工作流库的工作流**时不经过这里：把 `ShotSizeState` 直接交给封装层
- *  （`WorkshopExposedValues.size`），宽 / 高、比例标签、百万像素、倍数由封装层
- *  按当前模式的场景表现算 —— 不再拼字符串再反解。
- *
- *  无 React、无副作用，可直接单测。 */
+/** 工坊尺寸的**薄层**（规范 17 §17.2 第①层）。口径、档位、尺寸表与换算都在
+ *  `lib/size-presets`（全项目唯一表达）。本模块只留：① 老数据回读（"832x1216"
+ *  这类 WxH 字符串 → 尺寸表达）；② 只认老形状的出口（远端 API 通道要的字段名，
+ *  另有 `shotSizeToParam` 给只读 "WxH" 的老接口）；③ 生成按钮旁的紧凑摘要。
+ *  下发工作流库不经过这里（`ShotSizeState` 直接交封装层现算）。无 React、无副作用。 */
 
 import {
   DEFAULT_SIZE_SPEC,
@@ -41,18 +28,12 @@ export type ShotSizeState = SizeSpec;
 export const DEFAULT_SHOT_SIZE: ShotSizeState = DEFAULT_SIZE_SPEC;
 
 /** 旧数据（草稿里的 "832x1216" / 空值 / 脏值）→ 尺寸表达；识别不出回退默认。 */
-export function parseShotSize(
-  raw: unknown,
-  scene: SizeScene = "image",
-): ShotSizeState {
+export function parseShotSize(raw: unknown, scene: SizeScene = "image"): ShotSizeState {
   return sizeSpecFromText(raw, scene);
 }
 
 /** 尺寸表达 → 宽高（目标工作流要 width + height 时的派生值）。 */
-export function shotSizeToDims(
-  state: ShotSizeState,
-  scene: SizeScene = "image",
-): SizeDims {
+export function shotSizeToDims(state: ShotSizeState, scene: SizeScene = "image"): SizeDims {
   return sizeSpecDims(state, scene);
 }
 
@@ -62,9 +43,7 @@ export function shotSizeAspect(state: ShotSizeState): string {
 }
 
 /** 该清晰度档属于哪个子类（分辨率 / 百万像素）。 */
-export function shotClarityKind(
-  state: ShotSizeState,
-): SizeClarityPreset["kind"] {
+export function shotClarityKind(state: ShotSizeState): SizeClarityPreset["kind"] {
   return sizeSpecKind(state);
 }
 
@@ -75,10 +54,7 @@ export function clarityPresetOf(label: string): SizeClarityPreset {
 
 /** 内置工作流（txt2img / img2video…）接的就是 "WxH" 字符串 —— 只此一路还在用
  *  字符串表达，工作流库的工作流不走这里。 */
-export function shotSizeToParam(
-  state: ShotSizeState,
-  scene: SizeScene = "image",
-): string {
+export function shotSizeToParam(state: ShotSizeState, scene: SizeScene = "image"): string {
   return sizeSpecToWxH(state, scene);
 }
 

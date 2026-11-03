@@ -101,9 +101,8 @@ const THREE: Row = {
 
 /**
  * hook 用到 trpc.model.*，必须挂在真实的 tRPC Provider 下。
- * 用 createElement 而不是 JSX：本文件是 `.test.ts`（要求 .tsx 一律 PascalCase，
- * 而 hook 的测试伙伴文件按 必须 kebab-case），带 JSX 就得改名成 `Use*Test.tsx`，
- * 反而更怪。
+ * 用 createElement 而不是 JSX：本文件是 `.test.ts`（带 JSX 就得改名成 PascalCase，
+ * 而 hook 测试伙伴文件按约定是 kebab-case，反而更怪）。
  */
 function makeWrapper() {
   const qc = createTestQueryClient();
@@ -130,20 +129,9 @@ function makeWrapper() {
 }
 
 /**
- * 等本用例挂载的那次静默同步「已发车且全链落地」，让用例结束在**静止态**。
- *
- * 为什么需要它（ISSUE #2911）：hook 的 sync 经 `setTimeout(…, 0)` 发车、与 list
- * 并行，且 sync 的 `onSettled` 还会触发一次静默 refetch —— 而用例原本的收尾只等
- * `loading`（即初次 list）收敛。负载下 sync / refetch 的回包可以晚于此刻到达，
- * 于是 handler 在 `afterEach` 把 `syncCalls` / `listInputs` 清零**之后**才执行，
- * 把计数落进下一条用例（平台上实测形态：syncCalls 期望 1、实际 2）。
- *
- * 三段判据缺一不可：
- *   1. `syncCalls` 记账到 1 —— sync 的 handler **已进入**（排除「计时器还没发车」）；
- *   2. `listInputs` 到 2 —— 初次 list 与 sync 触发的 refetch **都已到达服务端**
- *      （排除「refetch 已派发但 handler 未执行」，那条会在下一条用例里污染
- *      `listInputs`，与 syncCalls 是同一类串号）；
- *   3. `refreshing` 收敛 —— 客户端把上述响应全部消化完，卸载时无任何在飞请求。
+ * 等本用例挂载的那次静默同步「已发车且全链落地」，让用例结束在**静止态**。为什么需要它
+ *（ISSUE #2911）：sync 经 `setTimeout(…,0)` 发车、与 list 并行，且 sync 的 `onSettled` 还会
+ * 触发一次静默 refetch；原收尾只等 `loading` 收敛，负载下回包可晚于 `afterEach` 清零后到达。
  */
 async function waitSyncSettled(result: { current: ModelLibraryController }): Promise<void> {
   await expect.poll(() => syncCalls, { message: "挂载时的静默同步应已记账" }).toBe(1);
@@ -272,51 +260,17 @@ describe("useModelLibrary", () => {
 });
 
 /**
- * 回归：游离 promise 链在卸载后不得再 setState（ISSUE #489）
- * ---------------------------------------------------------------------------
- * 实测形态：`pnpm test` **随机**非零退出（65 轮里 4 轮），用例层面全绿
- * （`Tests N passed / 0 failed`），退出码来自 vitest 的 `Unhandled Errors`：
- *
- * 实测量：Unhandled Rejection: ReferenceError: window is not defined
- *       栈帧：resolveUpdatePriority 在 react-dom-client.development.js:1308
- *       栈帧：dispatchSetState 在同一文件的 9126 行
- *       栈帧：use-model-library.ts:58 的 .finally(() => setLoading(false))
- *
- * 根因：`loadModels` 里 `listQ.refetch().finally(...)` 是一条**脱离组件生命
- * 周期的链**。测试结束后（jsdom 环境已拆除、window 已消失）它才 resolve，
- * 于是 setLoading 触发 React 更新调度、读 window 抛错。`cleanup()` 只卸载组件、
- * 不会取消这条已发出的 promise。
- *
- * 「点名哪个文件」只取决于谁的 MSW handler 回包慢一拍 —— 所以报错文件每次都不同
- * （实测出现过 ModelLibrary.integration / use-model-folder-config / WorkflowEditorInner），
- * 全是被牵连的无辜文件。这也是为什么这条要单独用**确定性**用例守住：
- * 靠全量跑碰上概率太低，没法当门禁。
- *
- * 反向验证：去掉 hook 里的 aliveRef 判定，本用例必挂（卸载后调用计数继续增长）。
+ * 回归：游离 promise 链在卸载后不得再 setState（ISSUE #489）。`loadModels` 里
+ * `listQ.refetch().finally(...)` 脱离组件生命周期；测试结束后 jsdom 已拆、window 消失它才
+ * resolve，setLoading 触发 React 调度读 window 抛错。`pnpm test` 随机非零退出（65 轮 4 轮）即此。
  */
 describe("useModelLibrary 卸载后不再 setState", () => {
   it("卸载后 refetch 回包不得触发更新调度（原缺陷：React 读到已拆除的 window）", async () => {
-    /* 把原来「只在全量并行下偶然出现」的时序变成**必现**：
-     * 让 list 的回包卡住到我们显式放行 —— 于是 `.finally` 必然发生在
-     * unmount 之后，正是缺陷形态（游离 promise 落在组件生命周期之外）。
-     *
-     * 判据为什么不是「有没有 unhandled rejection」：卸载后 React 在**仍有
-     * jsdom 环境**时能容忍这次更新（静默排掉），只有环境已拆才会抛 ——
-     * 而单测里没法在同一个用例内拆掉 jsdom。实测那条路走不通（改坏实现也绿）。
-     *
-     * 可判定的信号是**更新调度被触发的次数**：React 在没有活动 fiber 时接到
-     * setState，会走 `resolveUpdatePriority` 去读 `globalThis.window`。
-     * 拿一个记账替身换掉 window，只统计**调用栈含更新调度函数**的读取：
-     *
-     *   修好（finally 先判 aliveRef）→ 2 次（都来自本次卸载自身的清理）
-     *   没修（无条件 setLoading）    → 4 次（多出的两次就是游离 promise 触发的调度）
-     *
-     * 只统计调度栈、不统计全部读取很重要：ambient 活动（react-query 的
-     * focusManager / onlineManager、tRPC 的 getFetch）也会读 window，
-     * 全量统计得到的是 7 vs 16，混着与本缺陷无关的噪声。
-     *
-     * 反向验证：把 finally 改回无条件 `setLoading(false)`，本条必挂。
-     */
+    /* 把原来「只在全量并行下偶然出现」的时序变成**必现**：让 list 回包卡到显式放行，
+     * 于是 `.finally` 必然发生在 unmount 之后。判据是**更新调度被触发的次数**：React 在
+     * 无活动 fiber 时接到 setState 会走 `resolveUpdatePriority` 读 `globalThis.window`；
+     * 记账替身只统计调用栈含调度函数的读取（修好 2 次 / 没修 4 次；全量统计 7 vs 16 混噪声）。
+     * 反向验证：把 finally 改回无条件 `setLoading(false)`，本条必挂。 */
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {
       release = resolve;

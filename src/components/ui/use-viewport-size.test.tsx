@@ -1,15 +1,6 @@
-/**
- * 「当前视口多大」这个读数（`useViewportSize`）。
- *
- * 它存在的理由是两件**没有声音的错**：
- *   · 渲染期读 `window.innerWidth` 在 SSR / 首帧拿不到值，判空后的兜底值会让
- *     服务端与客户端渲染出两份不同的结果（hydration mismatch）；
- *   · 窗口缩放不触发重渲染，按旧值算出的浮层位置会一直错着。
- *
- * 所以用例钉住三件事：首帧是 `null`（而不是一个假数字）、挂载后量到真实值、
- * `resize` 之后跟着变 —— 以及**取值没变时不换引用**（`resize` 在拖动窗口时
- * 每帧都发，不判等会让整棵树按帧重渲染）。
- */
+/** 「当前视口多大」这个读数（`useViewportSize`）守两件**没有声音的错**：渲染期读 `innerWidth` 在 SSR / 首帧拿不到值，
+ * 兜底值会让服务端与客户端渲染出两份不同结果（hydration mismatch）；缩放不触发重渲染，则按旧值算出的浮层位置一直错着。
+ * 用例钉住首帧为 `null`、挂载后量到真实值、`resize` 后跟着变，且**取值没变时不换引用**（`resize` 每帧都发）。 */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
 

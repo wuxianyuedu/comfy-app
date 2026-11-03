@@ -4,13 +4,8 @@ import { CircleAlert, Info, TriangleAlert } from "lucide-react";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 
-/**
- * 候选清单从 `Alert` 的 props 派生 —— 写法与理由与 `button.stories.tsx`
- * 一致（`cva()` 的返回值运行时没有 `.variants`，见该文件注释）。
- *
- * 本件只列 `variant` 一轴：`AlertTitle` / `AlertDescription` / `AlertAction`
- * 三个 slot 是**组合**、不是变体，列不进 `options`。
- */
+/** 候选清单从 `Alert` 的 props 派生（不写 `cva()` 返回值上的 `.variants`：运行时没有，见 `button.stories.tsx`）。
+ * 本件只列 `variant` 一轴：`AlertTitle` / `AlertDescription` / `AlertAction` 三个 slot 是组合、不是变体，列不进 `options`。 */
 type AlertVariant = NonNullable<React.ComponentProps<typeof Alert>["variant"]>;
 
 const VARIANTS: Array<AlertVariant> = [

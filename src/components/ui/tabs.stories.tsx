@@ -2,20 +2,10 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 
-/**
- * `ui/tabs` 是 shadcn 的页签名基元（base-ui Tabs）。全库的「详情三页签」
- * （工作流库、任务详情）都走它，所以两档形态都要有现场：
- *
- * - `default`：药丸底（`bg-muted`），页签贴在一条灰色胶囊上；
- * - `line`：无底 + 当前项下方一条 2px 下划线（`after:` 那条），
- *   详情页顶部用它跟标题栏对齐。
- *
- * `orientation` 是**真实的第二根轴**（`group-data-vertical/tabs:*` 那一串全靠它），
- * 此前没有 story 就没人看得到「竖排时下划线跑到右边」这件事。
- *
- * 枚举从 props 派生（不从 `tabsListVariants` 的返回值上取 —— `cva()` 返回函数、
- * 运行期没有 `.variants`，见 `button.stories.tsx` 的注释与规范 16 §16.2.3.4）。
- */
+/** `ui/tabs` 是 shadcn 的页签名基元（base-ui Tabs）。全库「详情三页签」（工作流库、任务详情）都走它，两档形态都要有现场：
+ * `default` 药丸底（`bg-muted`）、`line` 无底 + 当前项下方 2px 下划线（`after:`），详情页顶部用它跟标题栏对齐。
+ * `orientation` 是**真实的第二根轴**（`group-data-vertical/tabs:*` 全靠它），此前没 story 就没人看得到「竖排时下划线
+ * 跑到右边」。枚举从 props 派生：`cva()` 返回函数、运行期没有 `.variants`（见 `button.stories.tsx` 与 §16.2.3.4）。 */
 type TabsListVariant = NonNullable<React.ComponentProps<typeof TabsList>["variant"]>;
 type TabsOrientation = NonNullable<React.ComponentProps<typeof Tabs>["orientation"]>;
 

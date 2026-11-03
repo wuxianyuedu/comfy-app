@@ -1,17 +1,9 @@
 "use client";
 
-// ── 后台 schema 同步的状态（底部状态栏「数据库同步中 / 已同步请刷新」的数据源）──
-//
-// 数据链路：启动脚本拉起 Next 的同时 spawn `scripts/db-sync.mjs` 做一次结构核对
-// 与同步（不阻塞启动）→ 它把结果写进 `log/schema-sync.json` → 服务端
-// `GET /api/schema` 读出来透出 → 本 hook 轮询。
-//
-// 为什么值得占一格状态栏：同步期间库结构可能还是旧的，业务请求会 500。页面若
-// 不说「正在同步」，用户看到的就是一个报错页，无从判断该等还是该去查别的 ——
-// 这正是「静默失败」最贵的形态。
-//
-// 轮询频率与 dev server 存活探测一致（2s，`use-interval` 同款：切后台暂停）。
-// 探测失败**不动状态**（与那条探测同口径）：瞬时断网不该把「正在同步」抹掉。
+// ── 后台 schema 同步的状态（底部状态栏「同步中 / 已同步请刷新」的数据源）
+// 链路：启动脚本 spawn `scripts/db-sync.mjs` 做结构核对 → 写 `log/schema-sync.json` →
+// `GET /api/schema` 透出 → 本 hook 轮询。值得占一格：同步期间库结构可能还是旧的，
+// 不说「正在同步」用户只看到一个报错页。轮询 2s（切后台暂停）；探测失败**不动状态**。
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -52,15 +44,9 @@ export type SchemaSyncNotice = {
 };
 
 /**
- * 相位 → 提示内容。返回 `null` = **不占位**。
- *
- * 抽成纯函数而不是写在组件里：它是判据（本仓库的 UI / 逻辑分离门禁），
- * 而要判的四种相位各有各的话要说 ——
- *   · `syncing`  让它等，别去查数据库；
- *   · `synced`   一次性事件，点一下就恢复（只在第一眼提示，见上面的 `ackAt`）；
- *   · `missing` / `stale` 需要人动手，给的是**命令**而不是安慰（规范 §9.2 第 3 条）；
- *   · `ready`（指纹一致，最常见）/ `unknown`（还没探到）不占位 —— 状态栏不该
- *     常驻一个「一切正常」的格子。
+ * 相位 → 提示内容。返回 `null` = **不占位**。抽成纯函数是判据（UI / 逻辑分离门禁）：
+ * `syncing` 让用户等、`synced` 是一次性事件（见 `ackAt`）、`missing` / `stale` 给**命令**
+ *（规范 §9.2 第 3 条）、`ready` / `unknown` 不占位 —— 状态栏不该常驻「一切正常」。
  */
 export function schemaSyncNotice(status: SchemaSyncStatus): SchemaSyncNotice | null {
   switch (status.phase) {
@@ -129,11 +115,8 @@ function toPhase(value: unknown): SchemaSyncPhase {
 }
 
 /** 「已经提示过一次『已同步，请刷新』」的标记（存状态文件的 `at`）。
- *
- * 为什么需要它：`synced` 是**一次性事件**，但状态文件会一直留着这个值
- * （直到下次启动重写）—— 不记标记的话，用户刷新完页面还会再看到一遍「请刷新」，
- * 而那时库早就同步好了。`syncing` / `missing` / `stale` 不属于此列：它们该一直
- * 显示到状态改变为止。 */
+ * `synced` 是一次性事件，但状态文件会一直留到下次启动重写；不记标记的话用户刷新完
+ * 还会再看到一遍「请刷新」。`syncing` / `missing` / `stale` 不属于此列，应显示到状态改变。 */
 const ACK_KEY = "schemaSync.ackAt";
 
 /** 「已同步，请刷新」的提示有效期。

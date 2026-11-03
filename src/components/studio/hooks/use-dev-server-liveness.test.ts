@@ -1,13 +1,9 @@
 // @vitest-environment jsdom
 // 「应用服务为什么断了」在 controller 层的取数契约（ISSUE #1692）。
-//
-// 这一层要锁住三件事，都是「读一次就够、读错就白读」的：
-//   ① 记录只在服务**成功应答之后**才去读（探活走的是刚死那个服务自己的 HTTP）；
-//   ② 每个 bootId 只读一次 —— 轮询 2s 一拍，不设这道闸等于每拍都打一次端点；
-//   ③ 只认「说的是上一次运行」的记录（runId 与当前进程相同的不显示）。
-//
-// 判据本身（成因文案、runId 对比）在 `~/lib/shell/app-service-exit` 的单测里，
-// 这里只验取数时机与去重。
+// 锁三件事：① 只在服务成功应答后才读记录（探活走刚死服务的 HTTP）；
+// ② 每个 bootId 只读一次（2s 轮询，不设闸等于每拍打一次端点）；
+// ③ 只认「说的是上一次运行」的记录（runId 与当前进程相同的不显示）。
+// 判据本身在 `~/lib/shell/app-service-exit` 单测，这里只验取数时机与去重。
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";

@@ -111,10 +111,8 @@ export function WorkshopAside({
     apiChannels?.image.configured === true || apiChannels?.video.configured === true;
 
   /**
-   * 只列**真有计数**的行。此前这里还摆着「剧本大纲.md / 分镜脚本.json」两行
-   * 与固定「参考图 / 音效 0 项」—— 那是写死的文案，不是项目的内容；素材的真实
-   * 清单在画布的素材库里（`use-material-library`），这一屏不再冒充。
-   * 「场景图」也改名为「镜头出图」：它数的是已出图的**镜头**条数，不是场景数。
+   * 只列**真有计数**的行：此前写死的「剧本大纲.md / 参考图 0 项」等不是项目内容，
+   * 真实清单在素材库（`use-material-library`）。「镜头出图」数的是已出图的**镜头**条数。
    */
   const resourceRows: Array<[string, string]> = [
     ["角色卡", `${String(characterCount)} 项`],

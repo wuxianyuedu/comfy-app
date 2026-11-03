@@ -12,11 +12,7 @@ afterEach(cleanup);
 const wrap = (ui: ReactNode) => <TooltipProvider delay={0}>{ui}</TooltipProvider>;
 
 /**
- * P82 出口（规范 16 §16.2.3）的回归：`Hint` 是「原生 `title=` → Tooltip」
- * 这条治理线唯一的落点，所以三件事必须钉住 ——
- *   ① 提示真的出得来（否则治理等于把文案删了）；
- *   ② 点击 / 禁用等原有交互不被 `TooltipTrigger` 的 render 接管吃掉；
- *   ③ 图标按钮的可访问名（规范 §6.1）在 `title=` 撤掉后仍然在。
+ * `Hint` 是「原生 `title=` → Tooltip」治理线唯一的落点（规范 16 §16.2.3），三件事必须钉住：① 提示真的出得来（否则治理等于把文案删了）；② 点击 / 禁用等原有交互不被 `TooltipTrigger` 的 render 接管吃掉；③ 图标按钮的可访问名（规范 §6.1）在 `title=` 撤掉后仍然在。
  */
 /** Base UI 的 tooltip 浮层不带 `role="tooltip"`（也不在 jsdom 里挂
  *  `aria-describedby`），所以按 `data-slot` 取那一层。 */

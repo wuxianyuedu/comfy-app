@@ -4,17 +4,8 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { RangeSlider } from "~/components/ui/range-slider";
 
 /**
- * `RangeSlider` 是**项目里单值滑块的唯一入口**（`ui/slider` 的薄封装）。
- *
- * 它的存在不是「再包一层」：`ui/slider` 是 base-ui 的**多把手**原语，
- * `value` 始终是数组、`onValueChange` 也回数组 —— 项目里消费点
- * （`WorkflowCanvasSettings` 的 SliderRow）
- * 用的都是**单值 + number 回调**。本件把这一层差异收干净，
- * 于是调用处不必各自写 `value={[v]}` / 从数组里淘第一个。
- *
- * 受控组件，story 里自己持一份 state。
- *
- * 与 `ui/number-field` 的分工：想**精确输入**用后者，想**大致瞄一眼**用本件。
+ * `RangeSlider` 是项目里单值滑块的唯一入口（`ui/slider` 的薄封装）。`ui/slider` 是 base-ui 多把手原语，`value` 始终是数组、`onValueChange` 也回数组，而项目消费点（如 `WorkflowCanvasSettings` 的 SliderRow）用的都是单值 + number 回调。
+ * 本件把 `value={[v]}` / 取首项这一层差异收干净。受控，story 自持 state；要精确输入用 `ui/number-field`，大致瞄一眼用本件。
  */
 const meta = {
   title: "UI/RangeSlider",

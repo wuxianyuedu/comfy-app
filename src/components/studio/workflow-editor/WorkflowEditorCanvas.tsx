@@ -30,20 +30,10 @@ import { useRelatedEdgesHighlight } from "../canvas/hooks/use-related-edges-high
 const EDGE_HANDLE_ERROR = "Couldn't create edge for";
 
 /** 过滤「视口裁剪」造成的 error#008 假告警，保留真正找不到 handle 的告警。
- *
- *  背景（ISSUE #374）：本画布开着 `onlyRenderVisibleElements`。React Flow 的
- *  节点裁剪按**每个节点各自**与视口求交（`getNodesInside`），而边的裁剪按
- *  **两端节点的并集包围盒**与视口求交（`isEdgeVisible`）。一条横跨整个画布的
- *  长边，其并集盒覆盖视口 → 判定为「可见」而进入渲染；但它的两端节点各自都在
- *  视口外、没有挂载，`handleBounds` 为空 —— `getEdgePosition` 于是返回 null 并
- *  打 error#008。这是裁剪策略的固有副作用，不是数据错误：用户一滚到那片区域，
- *  节点挂载、边随即正常渲染。
- *
- *  真正的 handle 缺失（渲染的 id 与边引用的 id 不同名）必须继续暴露 —— 那才是
- *  画布上「线永远画不出来」的 bug。判据：报错涉及的**两端节点此刻是否已挂载**。
- *  两端都挂载还报错 = 真问题；任一端未挂载 = 裁剪噪声。
- *
- *  返回值：`true` 表示这条告警应被忽略（纯函数，便于单测）。 */
+ *  ISSUE #374：`onlyRenderVisibleElements` 下节点按各自视口求交裁剪、边按两端并集
+ *  包围盒求交；长边被判「可见」而两端节点均未挂载、`handleBounds` 为空，
+ *  `getEdgePosition` 返回 null 并打 error#008 —— 裁剪的固有副作用，滚过去即好。
+ *  判据是**两端节点是否已挂载**：都挂载仍报错 = 真 bug（id 不同名），否则 = 噪声。 */
 export function isEdgeHandleCullingNoise(args: {
   message: string;
   /** 已挂载（进入 handleBounds 测量）的节点 id 集合。 */
@@ -150,12 +140,9 @@ export function WorkflowEditorCanvas({
   useRelatedEdgesHighlight(setEdges, { setNodes });
 
   /* ── error#008 假告警过滤器（ISSUE #374）──
-   *  见 `isEdgeHandleCullingNoise` 的文档：视口裁剪下「长边可见 / 端点未挂载」
-   *  会成批刷 error#008，而真正的 handle 不同名必须继续暴露。
-   *
-   *  「已挂载」的判据取 React Flow 内部事实源：`nodeLookup[id].internals
-   *  .handleBounds` —— 它只在节点的 DOM 真正挂载、被测量之后才有值。用
-   *  `useStoreApi` 在回调里按需读取，而不是订阅整张表，避免拖拽期间频繁重渲染。 */
+   *  「已挂载」取 React Flow 内部事实源：`nodeLookup[id].internals.handleBounds`，
+   *  它只在节点 DOM 真正挂载并被测量后才有值。用 `useStoreApi` 在回调里按需读，
+   *  不订阅整张表，避免拖拽期间频繁重渲染。 */
   const store = useStoreApi();
   const handleError = useCallback(
     (id: string, message: string) => {
@@ -193,13 +180,10 @@ export function WorkflowEditorCanvas({
       edgeTypes={workflowEdgeTypes}
       isValidConnection={isValidConnection}
       maxZoom={canvasSettingsHydrated ? canvasSettings.maxZoom : 2}
-      /* 这里**故意不设** `fitView` —— 初始视口由上面
-       *  的 useEffect 自己驱动，好让
-       *  我们能强制最小缩放 0.35。没有这个下限，
-       *  DaSiWa Wan 2.2 模板（130 节点，包围盒约 7000 px 宽）
-       *  会 fitView 到约 0.15x，每个备注都读不清。
-       *  fitViewOptions={{ padding: 0.3 }}
-       *  → 见上面的 useEffect；紧凑的 0.10 + 0.35 缩放下限。 */
+      /* 这里**故意不设** `fitView`：初始视口由下面的 useEffect 自己驱动，才能强制
+       *  最小缩放 0.35。没有这个下限，DaSiWa Wan 2.2 模板（130 节点，包围盒约
+       *  7000px 宽）会 fitView 到约 0.15x，每个备注都读不清。padding 0.3 与紧凑
+       *  的 0.10 + 0.35 下限见上面的 useEffect。 */
       minZoom={canvasSettingsHydrated ? canvasSettings.minZoom : 0.15}
       nodes={nodes}
       nodeTypes={workflowNodeTypes}
@@ -209,16 +193,11 @@ export function WorkflowEditorCanvas({
       onEdgesDelete={onEdgesDelete}
       /* 过滤视口裁剪造成的 error#008 假告警（ISSUE #374）—— 见 handleError。 */
       onError={handleError}
-      /* 商业级性能 —— 只挂载与视口
-       *  相交的节点 / 边。DaSiWa Wan 2.2 模板足足有 130
-       *  个节点、包围盒约 7000 px；React Flow 以前把
-       *  **整张图**（以及每条轨道 IO 端口）全挂上，
-       *  让浏览器每帧都绘制屏幕外的 DOM。视口裁剪后
-       *  DOM 与可见内容成正比，拖拽 / 平移 / 缩放
-       *  的开销降为一个小常数。
-       *  注意：初始 fitToContent() 视口仍由父级驱动
-       *（最小缩放下限 0.35）—— 裁剪用的是每个节点首次绘制后
-       *  的实测尺寸，所以初始 fit 不受影响。 */
+      /* 商业级性能 —— 只挂载与视口相交的节点 / 边。DaSiWa Wan 2.2 模板有 130 个
+       *  节点、包围盒约 7000px；此前整张图与每条轨道 IO 端口全挂上，浏览器每帧都
+       *  绘制屏幕外 DOM。裁剪后 DOM 与可见内容成正比，拖拽/平移/缩放降为小常数。
+       *  初始 fitToContent 仍由父级驱动（最小缩放 0.35）：裁剪用各节点首次绘制后
+       *  的实测尺寸，故初始 fit 不受影响。 */
       onlyRenderVisibleElements
       onNodeDragStop={onNodeDragStop}
       onNodesChange={onNodesChange}

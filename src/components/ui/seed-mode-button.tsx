@@ -22,16 +22,10 @@ export function isSeedLike(e: { label?: string; name: string }): boolean {
   return /seed|noise_seed/i.test(`${e.name} ${e.label ?? ""}`);
 }
 
-/** seed 模式浮层（Ardot 四选项面板）里的行内图形。
- *  纯几何、不依赖字体 —— 用 SVG 画在 36×36 的盒子里，
- *  底色与 WorkflowChipRow 的 chip 一致。
- *
- *  配色（固定=红 / 增减=绿 / 骰子=深底亮点）属**类型色例外**（规范 03 §3.6.1）：
- *  色值即「哪一种 seed 行为」的语义，不是表面色。取值集中在
- *  `src/app/globals.css` 的 `--color-seed-*` 一组 token（红/绿两档随主题，骰子
- *  三颗两态同值）—— SVG 的 `fill` / `stroke` 呈现属性直接引用它们，两处必须同名，
- *  缺一份定义图标会静默变成黑块 + 隐形箭头（门禁 `check-theme-colors.cjs` 的
- *  「幽灵 token」判据）。 */
+/** seed 模式浮层里的行内图形：纯几何、不依赖字体，用 SVG 画在 36×36 盒子里，底色与 WorkflowChipRow 的
+ *  chip 一致。配色（固定=红 / 增减=绿 / 骰子=深底亮点）属类型色例外（规范 03 §3.6.1），色值即「哪一种
+ *  seed 行为」的语义；取值集中在 `globals.css` 的 `--color-seed-*`，两处必须同名，缺一份定义图标会静默
+ *  变成黑块 + 隐形箭头（门禁 `check-theme-colors.cjs` 的幽灵 token 判据）。 */
 function SeedModeIcon({ value }: { value: string }) {
   // 36x36 的 viewBox，图形约 22x22 居中。
   if (value === "fixed") {
@@ -123,20 +117,10 @@ function SeedModeIcon({ value }: { value: string }) {
   );
 }
 
-/** 可点击的 seed 模式 chip（画布节点 → 数值 / seed 行内联）。
- *  点击展开与 Ardot 设计对齐的四选项「控件后行为」浮层
- *（深色卡片、图标 + 标题 + 提示、右侧单选圆点）。选中某项会调用 `onPick`，
- *  由画布层写回节点的 `seedModes` 映射。
- *
- *  浮层走 `~/components/ui/popover`（规范 16 §16.2.3 P2）：此前这里自搓了
- *  `createPortal` + 手写 fixed 定位（`placeFloating`）+ 遮罩 + 滚动重定位 +
- *  手写 Esc。为什么当时非 portal 不可 —— 面板长在 React Flow 节点里，而节点用
- *  `position:absolute + transform:translate3d(...)` 建了层叠上下文，`z-40`
- *  也会被别的节点盖住（ISSUE #349 记录的现象）。`ui/popover` 本身就是
- *  portal 到 body 的，这条约束由基元天然满足；视口翻转（#349：seed 行是表单
- *  最后一行，向下弹会把最后一项推出视口）改由 base-ui 的 Positioner 的
- *  `collisionAvoidance.side = 'flip'` 承担。
- */
+/** 可点击的 seed 模式 chip（画布节点 → 数值 / seed 行内联）。浮层走 `~/components/ui/popover`（规范 16
+ *  §16.2.3 P2）：此前自搓 `createPortal` + fixed 定位 + 遮罩 + 滚动重定位 + Esc；节点用 absolute + transform
+ *  建了层叠上下文，`z-40` 会被别的节点盖住（ISSUE #349），而 popover 本身 portal 到 body 天然满足。
+ *  视口翻转（#349：seed 是表单最后一行）由 base-ui Positioner 的 `collisionAvoidance.side = 'flip'` 承担。 */
 export function SeedModeButton({
   mode,
   onPick,

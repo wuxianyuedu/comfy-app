@@ -3,16 +3,8 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { Button, ButtonLink } from "~/components/ui/button";
 import { Icon } from "~/components/ui/icon";
 
-/**
- * 变体/尺寸清单从 `Button` 的 props 里派生（`VariantProps` 已在组件侧对
- * `buttonVariants` 求过值），而不是二写一份字面量数组 —— 新增一档变体时
- * 这里跟着类型报错，不会出现「故事里悄悄少了那一档」。
- *
- * 不能写 `buttonVariants.variants.variant`：`cva()` 的返回值是一个
- * `(props?) => string` 的**函数**，运行时并没有 `.variants`（只在 TS 泛型里
- * 存在）。那样写 tsc 会红、storybook 会在加载期抛 `Cannot read properties of
- * undefined` —— 即「索引里有故事、画布上什么都没有」。
- */
+/** 变体/尺寸清单从 `Button` 的 props 派生（`VariantProps` 已在组件侧对 `buttonVariants` 求过值），不二写一份字面量数组 —— 新增一档时这里跟着类型报错。
+ * 不能写 `buttonVariants.variants.variant`：`cva()` 的返回值是 `(props?) => string` 函数，运行时没有 `.variants`（只在 TS 泛型里存在），那样 tsc 会红、storybook 加载期抛 `Cannot read properties of undefined`。 */
 type ButtonVariant = NonNullable<React.ComponentProps<typeof Button>["variant"]>;
 type ButtonSize = NonNullable<React.ComponentProps<typeof Button>["size"]>;
 
