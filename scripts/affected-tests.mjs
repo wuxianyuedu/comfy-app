@@ -30,7 +30,9 @@
  * ⚠️ 闭包只跟着**静态写出来的**说明符走，两类它抓不到：运行时拼出来的路径
  * （`import(base + name)`、`path.join(dir, …)`）、以及解析目录之外的消费方。
  * 遇到公共地基（`vitest.config.ts`、`tests/setup.ts`、`package.json` / lockfile、
- * `.githooks/**`）被改时明确**放弃收窄**：只跑固定清单，并把放弃的理由打到 stderr。
+ * `.githooks/**`）被改时明确**放弃收窄**：固定清单全跑 + 本次变更路径命中的用例，
+ * 并把放弃的理由打到 stderr。兜底是**扩大范围、不是替换**（ISSUE #2792）——
+ * 过去这一档只跑固定清单，碰一下 `package.json` 连本次新加的用例一起丢。
  * 放弃是被看见的，不是静默降级。
  *
  * 兜底**刻意不是跑全量**，拦路石是两条实测（不是「全量带基线红」—— 真断言红今天是 0，
@@ -351,6 +353,9 @@ export function resolveAffectedTests({
    * ⚠️ **只有增量档（`subset`）按输入面筛**（`scripts/fixed-gate-input-faces.mjs`）：
    * `all` 那一档是「放弃收窄」的兜底 —— 改了全局测试配置、或命中了不可达的公共地基，
    * 那一刻的前提正是「这次没法信筛出来的结果」，所以固定清单**一条都不跳**。
+   * 但 `all` 档也**照样并入 `extra`**（本次变更路径命中的用例）：兜底是**扩大范围、
+   * 不是替换**（ISSUE #2792）—— 过去这一档传的是空集，碰一下 `package.json` 就把
+   * 本次新加/改过的用例一起丢了，平台上一次都没跑。
    * 被跳过的条目必须进 `reasons.__faceSkipped` 由 `main()` 打出口：一条悄悄不跑的判据，
    * 与一条没写判据的判据在日志里逐字同形（本仓立案最狠的那一族）。
    *
@@ -393,9 +398,14 @@ export function resolveAffectedTests({
     }
     changed.add(rel);
   }
-  if (wide.length > 0) {
-    return withFixed("all", [], wide.join(" / "));
-  }
+  /* **兜底 = 扩大范围，不是替换**（ISSUE #2792）：命中 `package.json` / lockfile /
+   * 全局测试配置这类面时，固定清单一条都不跳（mode `all`），但**这次改到的路径
+   * 命中的用例仍然要并进来**。过去这里直接 `return withFixed("all", [], …)`，
+   * 于是「碰一下 `package.json` + 新加一份用例」的提交在平台上一次都不跑那份新用例
+   * —— 兜底把本次变更也一起丢了，看着绿、实际那份改动从未被执行。
+   * 判定链继续往下走（它只依赖 `changed` / `tracked`，与 wide 原因无关），
+   * 最后一并交给 `withFixed("all", picked, wideNote)`。 */
+  const wideNote = wide.length > 0 ? wide.join(" / ") : null;
 
   const list = [...changed];
   /* 已消失的旧路径：改名旧侧、删除项。它们不在索引/HEAD 的 `ls-files` 里，而按路径
@@ -502,7 +512,7 @@ export function resolveAffectedTests({
     picked.delete(t);
   }
 
-  const out = withFixed("subset", picked);
+  const out = withFixed(wideNote ? "all" : "subset", picked, wideNote || undefined);
   if (skipped.length > 0) {
     out.reasons.__skipped = skipped.join(" ");
   }
@@ -760,12 +770,16 @@ function collectInputs() {
  * 假理由每遇到一次 wide 提交就当着所有人的面重印一遍，久而久之就成了「谁也不去翻兜底」的
  * 默认解释 —— 所以它跟判据一样需要执行者，不能只改一次文本。规范 §13.5.8 / §11.13。
  * @param {string} note 放弃收窄的原因（哪个公共地基被改了）
- * @param {number} count 固定清单里的用例文件数
+ * @param {number} fixedCount 这一段真跑到的固定清单条数
+ * @param {number} extraCount 本次变更路径命中、额外并入的条数（兜底=扩大范围，不是替换）
  */
-export function wideFallbackNote(note, count) {
+export function wideFallbackNote(note, fixedCount, extraCount) {
   return (
-    `[affected] 放弃收窄（${note}）→ 只跑固定清单 ${count} 个。` +
-    "兜底不是全量：wide 这一档跑全量实测要 32m35s，而钩子刻意不接受「空参数=全跑」" +
+    `[affected] 放弃收窄（${note}）→ 固定清单 ${fixedCount} 个 + 本次变更命中的 ` +
+    `${extraCount} 个（合计 ${fixedCount + extraCount}）。` +
+    "兜底是**扩大范围、不是替换**：固定清单一条不跳，这次改到的路径命中的用例照样并进来" +
+    "（过去这一档只跑固定清单，碰一下 `package.json` 就连新加/改过的用例一起丢）。" +
+    "它不是全量：wide 这一档跑全量实测要 32m35s，而钩子刻意不接受「空参数=全跑」" +
     "这种没人筛过的形态（真断言红已经是 0，不是挡路的那件事）。" +
     "要按名字跑全量（显式档，不受这条限制）：" +
     "`node scripts/run-affected-tests.mjs --full`。规范 §13.5.8 / §11.13\n"
@@ -822,7 +836,13 @@ function main() {
      * 下就是 `| undefined`）。这一支实测确实带着 `__note` —— 所以这处 `??` 同时是给 tsc 看的
      * 与给规则看的：规则那一侧不建模索引访问，按 §5.10 的 C 格留在原地。 */
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- `reasons` 的索引在 noUncheckedIndexedAccess 下可 undefined，规则没建模索引访问
-    process.stderr.write(wideFallbackNote(res.reasons.__note ?? "见 --json", res.tests.length));
+    process.stderr.write(
+      wideFallbackNote(
+        res.reasons.__note ?? "见 --json",
+        res.tests.length - extra.length,
+        extra.length,
+      ),
+    );
   } else {
     /* 「固定 N」必须是**这次真跑到的**固定条数，不是清单长度 —— 开了输入面之后两者
      * 可以不同，而这一行是唯一会被读账的数字：拿清单长度冒充实跑，跳过的那几条

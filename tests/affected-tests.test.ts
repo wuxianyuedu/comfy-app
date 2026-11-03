@@ -320,13 +320,33 @@ describe("affected-tests：改名（ISSUE #2226）", () => {
 });
 
 describe("affected-tests：兜底方向", () => {
-  it("公共地基被改 → 明确放弃收窄，且理由写在 __note 里", () => {
+  it("公共地基被改 → 明确放弃收窄，本次变更命中的用例仍并进来", () => {
     const run = harness({ [UI_TEST]: "it('x', () => {});" });
     const res = run(["vitest.config.ts", UI_SRC]);
     expect(res.mode).toBe("all");
     expect(res.reasons.__note).toContain("全局测试配置");
-    // 放弃收窄时**不**把受影响面塞进去 —— 那正是本层判定不了的部分。
-    expect(res.tests).toEqual([...FIXED_STRUCTURAL_TESTS].sort());
+    /* 兜底 = 扩大范围，不是替换（ISSUE #2792）：固定清单一条都不跳，但这次改到的
+     * 源码对应的用例必须一起跑 —— 过去这一档传的是空集，它连本次变更也一起丢了。 */
+    expect(res.tests).toContain(UI_TEST);
+    expect(res.tests).toEqual([...new Set([...FIXED_STRUCTURAL_TESTS, UI_TEST])].sort());
+  });
+
+  it("碰 package.json + 新加一份用例 ⇒ 那份用例必须跑（兜底=扩大范围，不是替换）", () => {
+    /* 这正是 ISSUE #2792 的现场：改依赖清单（wide 触发面）与新加/改过一份用例
+     * 同在一个提交里，过去只跑固定清单，那份新用例在平台上**一次都不跑**。
+     * 判定链必须继续走，把 `changed` 里的测试路径按「自身」并进来。 */
+    const ADDED = "src/components/ui/newly-added.test.tsx";
+    const run = harness({
+      [UI_TEST]: "it('x', () => {});",
+      [ADDED]: "it('y', () => {});",
+      "package.json": "{}",
+    });
+    const res = run(["package.json", ADDED]);
+    expect(res.mode).toBe("all");
+    expect(res.reasons.__note).toContain("package.json");
+    expect(res.tests).toContain(ADDED);
+    // 兜底的那一半照旧：固定清单一条都不能跳
+    expect(res.tests).toEqual([...new Set([...FIXED_STRUCTURAL_TESTS, ADDED])].sort());
   });
 
   /**
@@ -338,9 +358,10 @@ describe("affected-tests：兜底方向", () => {
    * 否则第一条只是在守一段死代码。
    */
   it("wide 话术只写实测的拦路石，不许回到「带别线基线红」那句假前提", () => {
-    const note = wideFallbackNote("门槛自身", 20);
+    const note = wideFallbackNote("门槛自身", 20, 5);
     expect(note).toContain("32m35s"); // 耗时：wide 那档跑全量的实测墙钟
     expect(note).toContain("空参数"); // 机制：钩子刻意不接受「空参数=全跑」
+    expect(note).toContain("扩大范围"); // 口径：兜底=扩大范围，不是替换（ISSUE #2792）
     expect(note).not.toContain("基线红"); // 旧假前提不许回潮
     expect(note).toContain("§13.5.8");
   });
@@ -353,7 +374,8 @@ describe("affected-tests：兜底方向", () => {
     );
     expect(r.status).toBe(0);
     // 断言「后半句逐字同源」：清单条数与放弃原因都由 CLI 自己算，这里不抄常量。
-    const tail = wideFallbackNote("X", 0).split("只跑固定清单 0 个。")[1]?.trim();
+    const note = wideFallbackNote("X", 0, 0);
+    const tail = note.slice(note.indexOf("兜底是")).trim();
     expect(tail, "话术构造函数自己变了形").toBeTruthy();
     expect(r.stderr).toContain("放弃收窄");
     expect(r.stderr).toContain(tail ?? "");

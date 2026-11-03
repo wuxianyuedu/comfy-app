@@ -275,7 +275,7 @@ function testsSection(changed) {
   const extra = tests.filter((t) => !FIXED_STRUCTURAL_TESTS.includes(t)).length;
   const lines = [
     `${TAG} 用例（来自 scripts/affected-tests.mjs 的判决链）`,
-    `  · 模式 ${mode}${mode === "all" ? "（放弃收窄：只跑固定清单，不是全量）" : "（增量面）"}` +
+    `  · 模式 ${mode}${mode === "all" ? "（放弃收窄：固定清单全跑 + 本次变更命中，不是全量）" : "（增量面）"}` +
       ` · 共 ${tests.length} 份（固定清单 ${tests.length - extra} + 受影响 ${extra}）`,
   ];
   if (typeof reasons.__note === "string") {
