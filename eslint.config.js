@@ -25,6 +25,26 @@ const STORE_SELECTOR_HOOKS = [
   "useUpdateCheckStore",
 ];
 
+/** store selector 两条 `no-restricted-syntax` 条目（单一出处）。
+ *
+ *  单独抽成常量是为了让 router 那份配置能**带上它们**再追加 router 自己的
+ *  selector —— 扁平配置里后一个匹配对象的 `no-restricted-syntax` 会整条替换掉
+ *  前一个的数组，不合并就必然「后一层把前一层盖掉」（#2777 实测：router 那条
+ *  因此从未生效）。
+ */
+const STORE_SELECTOR_ENTRIES = [
+  {
+    selector: `CallExpression[callee.name=/^(${STORE_SELECTOR_HOOKS.join("|")})$/] > ArrowFunctionExpression[body.type="ObjectExpression"]`,
+    message:
+      "store selector 里现拼对象字面量 = 每次 store 写入都返回新引用（字段没变也重渲染）。改成只返回原始值/稳定引用，或把派生下沉进 store；useShallow 是最后手段（规范 01 §1.2 / 07 §7.15.1）。",
+  },
+  {
+    selector: `CallExpression[callee.name=/^(${STORE_SELECTOR_HOOKS.join("|")})$/] > ArrowFunctionExpression CallExpression[callee.property.name=/^(map|filter|slice|concat|sort|split)$/]`,
+    message:
+      "store selector 里用 .map/.filter/.slice 造新数组 = 每次求值都是新引用（字段没变也重渲染）。把它下沉进 store 或抽成 store 内的稳定切片（规范 01 §1.2）。",
+  },
+];
+
 /* `eslint-plugin-jsx-a11y` 不是本仓的直接依赖（它在 `eslint-config-next` 的
  * `dependencies` 里），pnpm 的严格布局下顶层与 `import.meta.resolve` 都解析
  * 不到（符号链接的**真实路径**不在解析链上）。所以从 `next` 配置里已经装好的
@@ -266,12 +286,38 @@ export default tseslint.config(
         "error",
         { prefer: "type-imports", fixStyle: "inline-type-imports" },
       ],
-      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
       "@typescript-eslint/require-await": "off",
       "@typescript-eslint/no-misused-promises": [
         "error",
         { checksVoidReturn: { attributes: false } },
       ],
+      /* ── #2777 parity：以下 5 条 eslint 侧本就开着（继承自 tseslint/next），
+       *  这里显式写回 error，是为了让「eslint 判据」与 `oxlint.parity.config.mjs`
+       *  的对应条目逐条对得上，避免将来预设漂移后一边悄悄关掉。
+       *  存量已清零（0 命中），本批不改任何业务代码。 */
+      "@typescript-eslint/no-empty-function": "error",
+      "@typescript-eslint/no-inferrable-types": "error",
+      "@typescript-eslint/non-nullable-type-assertion-style": "error",
+      "@typescript-eslint/unbound-method": "error",
+      "import/no-anonymous-default-export": "error",
+      /* ── #2777 parity：这 13 条 oxlint 侧是 error、eslint 侧是 warn。
+       *  一律对齐到更严一侧 → 升 error（`--max-warnings 0` 下两者等价，
+       *  升 error 只为让两边口径一致、编辑器里更醒目）。
+       *  `no-img-element` 例外：本仓刻意关（理由见下一条注释），不参与对齐。 */
+      "@next/next/google-font-display": "error",
+      "@next/next/google-font-preconnect": "error",
+      "@next/next/next-script-for-ga": "error",
+      "@next/next/no-async-client-component": "error",
+      "@next/next/no-before-interactive-script-outside-document": "error",
+      "@next/next/no-css-tags": "error",
+      "@next/next/no-head-element": "error",
+      "@next/next/no-page-custom-font": "error",
+      "@next/next/no-styled-jsx-in-document": "error",
+      "@next/next/no-title-in-document-head": "error",
+      "@next/next/no-typos": "error",
+      "@next/next/no-unwanted-polyfillio": "error",
+      "react-hooks/exhaustive-deps": "error",
       /* 2026-08-30：按场景豁免。项目里 6 处 <img> 承载的全是运行时动态 URL
        *  （ComfyUI 产出走 /api/images、数据集图走 /api/file/、头像可能是外部
        *  链接），且多处尺寸完全自适应（max-h-[85vh]、w-full）。next/image 需要
@@ -417,27 +463,6 @@ export default tseslint.config(
       ],
     },
   },
-  /* ── router 层的错误信封只许 TRPCError（台账 E8 的防线，2026-10-01）──────────
-   * 裸 `throw new Error("…")` 在 tRPC 里不是「一个 400/404」，而是
-   * **INTERNAL_SERVER_ERROR** —— 于是三件事同时坏：「越权与不存在同形」这条口径在
-   * 状态码层没有判据（两边都 500，看着一样纯属巧合）、界面拿不到能分支的码只能显示
-   * 「出错了」（硬规则 4）、一次正常点击进 `trpc_error` 警告日志（把业务分支当故障报）。
-   * 判据写成 lint 而不是新的 `check-*.cjs`：B 组每次提交都跑、报错直接指到行号，
-   * 也不必再新增一份「会静默失效的清单」。selector 的语义与被扫存量由
-   * `tests/router-error-envelope.test.ts` 守着（含「扫描面不能是空的」那一条）。 */
-  {
-    files: ["src/server/api/routers/**/*.ts"],
-    rules: {
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector: 'ThrowStatement > NewExpression[callee.name!="TRPCError"]',
-          message:
-            "router 里请抛 new TRPCError({ code, message })：裸 Error 会被 tRPC 归成 INTERNAL_SERVER_ERROR，客户端就分不出「不存在 / 越权 / 重名」（规范 §11.2.1 第七条、台账 E8）。",
-        },
-      ],
-    },
-  },
   /* ── vitest 的 fixture 层要关掉 react-hooks/rules-of-hooks ──────────────────
    * `test.extend` 把回调的第二参叫 `use`（`async ({}, use) => { ...; await use(v) }`），
    * 而 `react-hooks/rules-of-hooks` 按**名字**判 React Hook —— 它在这个文件里
@@ -476,17 +501,36 @@ export default tseslint.config(
   {
     files: LINT_FILES,
     rules: {
+      "no-restricted-syntax": ["error", ...STORE_SELECTOR_ENTRIES],
+    },
+  },
+  /* ── router 层的错误信封只许 TRPCError（台账 E8 的防线，2026-10-01）──────────
+   * 裸 `throw new Error("…")` 在 tRPC 里不是「一个 400/404」，而是
+   * **INTERNAL_SERVER_ERROR** —— 于是三件事同时坏：「越权与不存在同形」这条口径在
+   * 状态码层没有判据（两边都 500，看着一样纯属巧合）、界面拿不到能分支的码只能显示
+   * 「出错了」（硬规则 4）、一次正常点击进 `trpc_error` 警告日志（把业务分支当故障报）。
+   * 判据写成 lint 而不是新的 `check-*.cjs`：B 组每次提交都跑、报错直接指到行号，
+   * 也不必再新增一份「会静默失效的清单」。selector 的语义与被扫存量由
+   * `tests/router-error-envelope.test.ts` 守着（含「扫描面不能是空的」那一条）。
+   *
+   * ⚠️ 这份对象必须排在 store selector 那份**之后**：扁平配置里后一个匹配对象
+   *  的 `no-restricted-syntax` 会**整条替换**前一个的数组。所以这里显式带上
+   *  `STORE_SELECTOR_ENTRIES` 再追加 router 那条 —— 两层才同时生效
+   *  （#2777 实测：此前 router 这条一直排在前面、被整条盖掉，从未报过一条）。
+   *
+   * `*.test.ts` 排除在外：测试夹具要模拟「下游抛裸 Error」来断言信封，
+   * 那正是被测行为本身，不是生产代码的错误信封。 */
+  {
+    files: ["src/server/api/routers/**/*.ts"],
+    ignores: ["src/server/api/routers/**/*.test.ts"],
+    rules: {
       "no-restricted-syntax": [
         "error",
+        ...STORE_SELECTOR_ENTRIES,
         {
-          selector: `CallExpression[callee.name=/^(${STORE_SELECTOR_HOOKS.join("|")})$/] > ArrowFunctionExpression[body.type="ObjectExpression"]`,
+          selector: 'ThrowStatement > NewExpression[callee.name!="TRPCError"]',
           message:
-            "store selector 里现拼对象字面量 = 每次 store 写入都返回新引用（字段没变也重渲染）。改成只返回原始值/稳定引用，或把派生下沉进 store；useShallow 是最后手段（规范 01 §1.2 / 07 §7.15.1）。",
-        },
-        {
-          selector: `CallExpression[callee.name=/^(${STORE_SELECTOR_HOOKS.join("|")})$/] > ArrowFunctionExpression CallExpression[callee.property.name=/^(map|filter|slice|concat|sort|split)$/]`,
-          message:
-            "store selector 里用 .map/.filter/.slice 造新数组 = 每次求值都是新引用（字段没变也重渲染）。把它下沉进 store 或抽成 store 内的稳定切片（规范 01 §1.2）。",
+            "router 里请抛 new TRPCError({ code, message })：裸 Error 会被 tRPC 归成 INTERNAL_SERVER_ERROR，客户端就分不出「不存在 / 越权 / 重名」（规范 §11.2.1 第七条、台账 E8）。",
         },
       ],
     },

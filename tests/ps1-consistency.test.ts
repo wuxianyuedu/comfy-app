@@ -278,7 +278,7 @@ describe("跨平台动作的实现契约", () => {
       scripts?: Record<string, string>;
     };
     expect(
-      pkg.scripts?.lint ?? "",
+      `${pkg.scripts?.lint ?? ""} ${pkg.scripts?.["lint:eslint"] ?? ""}`,
       "package.json 的 lint 脚本缺 --max-warnings（零警告门槛丢失）",
     ).toContain("--max-warnings");
     // 两侧的三项门禁名必须一致（增减门禁时只改一侧 = 两个平台给出不同结论）
