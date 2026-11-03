@@ -171,6 +171,45 @@ export default defineConfig({
       },
     },
     {
+      /* `tests/**` / `src/server/**` / `e2e/**` 关掉 `awesomeness/no-novel-comments`
+       * （ISSUE #2924 的包 A2）。
+       *
+       * 口径与 `scripts/**`、`src/lib/**` 两批一致：先抽样再定策。锁定基线
+       * `d7dac532` 的 1540 处 / 437 份，按 16 个子域分层抽 **110 条**，逐条判
+       * 「复述代码行为」vs「为什么 / 契约 / 证据 / 模块头 / 测试意图」，
+       * 结果**复述型 0/110（0%）**：why/约束 73%、模块头与测试意图 25%、
+       * JSDoc 类型 2%。测试文件里说明「在测什么、为什么这么断言」的注释按 why 计，
+       * mock 桩里的防御性说明同样保留 —— 它们正是删掉之后最难重建的那一类。
+       *
+       * 例外**按子域逐个登记**（每条 glob 后面是该层「抽样 n / 复述 0」与实测处数），
+       * 不写成 `tests/**` / `src/server/**` / `e2e/**` 三条大 glob：新增子域**不自动继承**
+       * 这条例外 —— 先抽样、再登记，复述型占比高于 0 的子域走「删复述」而不是登记。
+       *
+       * ⚠️ 这是**证据支撑的例外，不是永久豁免**：新代码仍按既定口径写注释；
+       * 评审发现复述型即删；任何子域复述型回升到 30% 以上时，撤掉它那一行 glob。 */
+      files: [
+        "tests/*.{ts,tsx}", // 抽样 60 / 复述 0（1155 处，根文件）
+        "tests/helpers/**", // 抽样 6 / 复述 0（109 处）
+        "tests/integration/**", // 抽样 1 / 复述 0（1 处）
+        "tests/stubs/**", // 抽样 1 / 复述 0（1 处）
+        "e2e/*.{ts,mjs}", // 抽样 6 / 复述 0（90 处，根文件）
+        "e2e/support/**", // 抽样 5 / 复述 0（72 处）
+        "src/server/api/**", // 抽样 6 / 复述 0（44 处）
+        "src/server/lib/**", // 抽样 4 / 复述 0（14 处）
+        "src/server/film/**", // 抽样 3 / 复述 0（13 处）
+        "src/server/workshop/**", // 抽样 3 / 复述 0（10 处）
+        "src/server/agent/**", // 抽样 3 / 复述 0（8 处）
+        "src/server/db/**", // 抽样 3 / 复述 0（7 处）
+        "src/server/better-auth/**", // 抽样 3 / 复述 0（6 处）
+        "src/server/*.ts", // 抽样 3 / 复述 0（5 处，根文件）
+        "src/server/mcp/**", // 抽样 2 / 复述 0（3 处）
+        "src/server/auth/**", // 抽样 1 / 复述 0（2 处）
+      ],
+      rules: {
+        "awesomeness/no-novel-comments": "off",
+      },
+    },
+    {
       files: ["src/server/api/routers/**/*.ts"],
       rules: {
         "eslint-js/no-restricted-syntax": [
