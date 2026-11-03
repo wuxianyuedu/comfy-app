@@ -8,14 +8,20 @@
  * GitHub 侧 `pr-gate.yml` 按**同一笔 sha** 起跑 —— 但那条链路是单向的：GitHub 判出了
  * 什么，CNB 这边一个字都读不到。本格就是回程那一跳，读数有两条路径：
  *
- * - **主路径（runs API）**：轮询 `GET /repos/{owner}/{repo}/actions/runs?head_sha=<sha>`，
+ * - **主路径（runs API）**：轮询 `GET /repos/{owner}/{repo}/actions/runs?event=repository_dispatch`，
+ *   再用 `display_title`（= pr-gate.yml 的 run-name，内含 payload 的 head_sha）认领本跑，
  *   用 workflow run 的 `conclusion` 判定 —— success / neutral / skipped 算绿；
  *   failure / timed_out / cancelled / action_required / startup_failure 判红；
  *   未 completed 继续等。需 `actions: read`。
- * - **兜底路径（Checks API）**：主路径读不到任何 run —— Actions 权限缺（401/403）
- *   或这一笔 head_sha 无匹配 —— 时，同一轮回落
+ *   不用 `?head_sha=`：dispatch 触发的 run 其 head_sha 落默认分支 HEAD，payload 的
+ *   sha 只在 client_payload，按它过滤恒得零条（PR #3080 线上实测）。
+ * - **兜底路径（Checks API）**：主路径读不到本跑的 run —— Actions 权限缺（401/403）
+ *   或 display_title 认不出 —— 时，同一轮回落
  *   `GET /repos/{owner}/{repo}/commits/{sha}/check-runs`（需 `checks: read`），
  *   判定词表与旧版一致（红：failure / timed_out / cancelled / action_required）。
+ *   ⚠️ 这条路径**需 workflow 主动建 check-run 才有效**（当前 pr-gate.yml 未建，
+ *   本批不实现主动建 check）—— 它只是「主路径不可用时的降级读数」占位，
+ *   现实中大概率读到零条（按「还没跑完」继续等，不误判）。
  *   每一轮都先试主路径：Actions 权限中途补上，下一轮自动走回主路径。
  *
  * 日志会明确打出本轮走的是哪条路径、为什么回落，线上判读不用猜。
@@ -38,9 +44,10 @@
  *    （至多 3 次，退避 5s / 10s）；401/403 与其余 HTTP 错误**一律不重试** —— 重试权限
  *    问题只是把真问题拖慢，还把「令牌缺 `actions: read`」读成「网络不好」。
  * 4. **不打令牌值**（硬规则 17）：一切回显先过 `sanitize`。
- * 5. **「check-run 可能挂在分支 HEAD」这一坑已由主路径规避**：runs API 按 `head_sha`
- *    过滤，读到的一定是本跑派发出去的那一笔，与 check-run 挂在哪笔 sha 上无关；
- *    兜底 checks 路径仍按同一笔 sha 读，是「主路径不可用时的降级读数」，不是主判定。
+ * 5. **「check-run 可能挂在分支 HEAD」这一坑已由主路径规避**：runs API 拉 dispatch
+ *    触发表后按 display_title 里的 sha 认领本跑，读到的一定是本跑派发出去的那一跑，
+ *    与 check-run 挂在哪笔 sha 上无关；兜底 checks 路径仍按同一笔 sha 读，是
+ *    「主路径不可用时的降级读数」，不是主判定。
  *
  * ## 用法
  *
@@ -148,19 +155,39 @@ function realRunGit(args) {
 const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * 主路径读数的 URL：`head_sha` 过滤是本格与镜像格「同一笔树」对账的落点
- * （`per_page=100`：pr-gate 一格 5 个 job，单页远远够）。
+ * 主路径读数的 URL。
+ *
+ * 不用 `?head_sha=`：repository_dispatch 触发的 run，其 `head_sha` 落**默认分支 HEAD**
+ * （dispatch 那一时刻的），payload 里那笔 sha 只在 `client_payload` —— 按 head_sha 过滤
+ * 恒得 `total_count=0`（PR #3080 线上实测：主路径 200 / total_count=0 → 空回落）。
+ * 改按 `event=repository_dispatch` 拉最近一页，再用 {@link matchesTargetSha} 按
+ * `display_title`（= pr-gate.yml 的 run-name，含 payload 的 head_sha）认领本跑。
+ * `per_page=100`：一页盖住最近的 dispatch 触发表，远远够。
  *
  * @param {string} repo `owner/repo`
- * @param {string} sha 要读的那一笔
  * @returns {string} API URL
  */
-export function workflowRunsUrl(repo, sha) {
-  return `https://api.github.com/repos/${repo}/actions/runs?head_sha=${sha}&per_page=100`;
+export function workflowRunsUrl(repo) {
+  return `https://api.github.com/repos/${repo}/actions/runs?event=repository_dispatch&per_page=100`;
+}
+
+/**
+ * 这条 run 是不是本跑派发出去的那一跑：display_title 里带目标 sha（pr-gate.yml 的
+ * run-name 把 payload 的 head_sha 全量写进标题，整 sha 子串匹配，不读缩写防撞前缀）。
+ *
+ * @param {unknown} run workflow_runs 里的一条
+ * @param {string} sha 要认领的那一笔
+ * @returns {boolean} true ⇒ 是本跑
+ */
+export function matchesTargetSha(run, sha) {
+  const title = String(/** @type {{display_title?: unknown}} */ (run)?.display_title ?? "");
+  return title.includes(sha);
 }
 
 /**
  * 兜底路径读数的 URL（`per_page=100`：pr-gate 一格 5 个 job，单页远远够）。
+ * ⚠️ 需 workflow 主动建 check-run 才有效（当前 pr-gate.yml 未建，本批不实现）；
+ * 读到零条由汇总层当「还没跑完」继续等，不误判。
  *
  * @param {string} repo `owner/repo`
  * @param {string} sha 要读的那一笔
@@ -340,17 +367,20 @@ function failState(res) {
 }
 
 /**
- * 主路径一跳：runs API 按 `head_sha` 过滤；零条 run 单独成一态（回落的信号之一）。
+ * 主路径一跳：按 `event=repository_dispatch` 拉最近一页 run，再用 display_title
+ * 认领本跑（{@link matchesTargetSha}）；本跑一条都认不出来时单独成 empty 态
+ * （回落的信号之一）。
  *
  * @param {{fetchImpl: typeof fetch, log: (line: string) => void, sleep: (ms: number) => Promise<void>, token: string}} io
  * @param {{repo: string, headSha: string}} ctx
  * @returns {Promise<PathRead>} 主路径读数状态
  */
 async function readMainPath(io, ctx) {
-  const res = await requestJson(io, workflowRunsUrl(ctx.repo, ctx.headSha), "主路径（runs API）");
+  const res = await requestJson(io, workflowRunsUrl(ctx.repo), "主路径（runs API）");
   if (res.ok) {
     const body = /** @type {{workflow_runs?: unknown}} */ (res.body);
-    const runs = Array.isArray(body?.workflow_runs) ? body.workflow_runs : [];
+    const all = Array.isArray(body?.workflow_runs) ? body.workflow_runs : [];
+    const runs = all.filter((r) => matchesTargetSha(r, ctx.headSha));
     return runs.length > 0 ? { runs, state: "data" } : { state: "empty" };
   }
   return failState(res);
@@ -427,7 +457,7 @@ export async function runVerdict(io) {
     return CODE.NO_FACT;
   }
   log(
-    `[verdict] 计划：轮询 ${ctx.repo} @ ${ctx.headSha.slice(0, 8)}（镜像 ref ${ctx.ref}）· 主路径 runs API（head_sha 过滤，需 actions: read），读不到任何 run 回落 checks API（需 checks: read）· 间隔 ${String(POLL_INTERVAL_MS / 1000)}s · 预算 ${String(POLL_BUDGET_MS / 60_000)}m`,
+    `[verdict] 计划：轮询 ${ctx.repo} @ ${ctx.headSha.slice(0, 8)}（镜像 ref ${ctx.ref}）· 主路径 runs API（event=repository_dispatch + display_title 认领本跑，需 actions: read），认不到本跑的 run 回落 checks API（需 checks: read，且需 workflow 主动建 check 才有效 —— 当前未建，兜底仅作降级读数）· 间隔 ${String(POLL_INTERVAL_MS / 1000)}s · 预算 ${String(POLL_BUDGET_MS / 60_000)}m`,
   );
   if (dryRun) {
     log("[verdict] DRY-RUN：没发任何请求，计划如上");
@@ -448,7 +478,7 @@ export async function runVerdict(io) {
       );
     } else if (main.state === "empty") {
       log(
-        "[verdict] 主路径（runs API）在这一笔 sha 上没读到任何 workflow run（head_sha 无匹配 / GitHub 侧还没起跑）⇒ 本轮回落兜底（checks API）",
+        "[verdict] 主路径（runs API）的 dispatch 触发表里没认出本跑（display_title 无目标 sha / GitHub 侧还没起跑）⇒ 本轮回落兜底（checks API）",
       );
     } else if (main.state === "http") {
       return reportHttpReject(log, "主路径（runs API）", main.status, main.body);

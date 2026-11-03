@@ -1,6 +1,7 @@
 /** `ci-github-verdict-read.mjs` 的用例（ISSUE #3051 期望第 3 条的前置：回读格先按读数档上线）。
  *
- *  双路径版：主路径 runs API（head_sha 过滤）读不到任何 run 时回落兜底 checks API。
+ *  双路径版：主路径 runs API（`event=repository_dispatch` 拉触发表，再用 display_title
+ *  里的目标 sha 认领本跑）认不到本跑的 run 时回落兜底 checks API。
  *  假件按 URL 分流（`/actions/runs` → 主路径，其余 → 兜底），两条路径的回话可以分别编排。
  *
  *  全部走注入面：fetch / git / sleep / now 都是假件，**一次真网络请求都不发、
@@ -13,6 +14,7 @@ import {
   REQUEST_MAX_ATTEMPTS,
   checkRunsUrl,
   isRetryableRequestFailure,
+  matchesTargetSha,
   runVerdict,
   summarizeCheckRuns,
   summarizeWorkflowRuns,
@@ -29,9 +31,11 @@ const okEnv = {
   CNB_PULL_REQUEST_IID: "2649",
 };
 
-/** 假条目（workflow run / check-run 的判定最小面同构）。 */
+/** 假条目（workflow run / check-run 的判定最小面同构；display_title 是主路径
+ *  认领本跑的锚点 —— pr-gate.yml 的 run-name 把 payload 的 head_sha 写进标题）。 */
 const run = (name: string, status: string, conclusion: string | null = null) => ({
   conclusion,
+  display_title: `PR #2649 · ${SHA}`,
   name,
   status,
 });
@@ -58,10 +62,18 @@ const gitOk = (args: Array<string>) => {
 };
 
 describe("纯函数", () => {
-  it("workflowRunsUrl：主路径按 head_sha 过滤读 workflow runs，单页 100 条", () => {
-    expect(workflowRunsUrl(REPO, SHA)).toBe(
-      `https://api.github.com/repos/${REPO}/actions/runs?head_sha=${SHA}&per_page=100`,
+  it("workflowRunsUrl：主路径按 event=repository_dispatch 拉 dispatch 触发表，单页 100 条（不用 ?head_sha= —— dispatch 触发的 run 其 head_sha 落默认分支 HEAD，按它过滤恒得零条）", () => {
+    expect(workflowRunsUrl(REPO)).toBe(
+      `https://api.github.com/repos/${REPO}/actions/runs?event=repository_dispatch&per_page=100`,
     );
+  });
+
+  it("matchesTargetSha：display_title 里带目标 sha 才算本跑（run-name 认领锚点）", () => {
+    expect(matchesTargetSha({ display_title: `PR #2649 · ${SHA}` }, SHA)).toBe(true);
+    expect(matchesTargetSha({ display_title: `PR #2649 · ${"c".repeat(40)}` }, SHA)).toBe(false);
+    expect(matchesTargetSha({ display_title: "manual" }, SHA)).toBe(false);
+    expect(matchesTargetSha({}, SHA)).toBe(false);
+    expect(matchesTargetSha(null, SHA)).toBe(false);
   });
 
   it("checkRunsUrl：兜底路径按同一笔 sha 读 check-runs，单页 100 条", () => {
@@ -185,7 +197,7 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     const { calls, heard, io } = harness({ runsFallback: new Response(runsBodyOf(ALL_GREEN), { status: 200 }) });
     const code = await runVerdict(io);
     expect(code).toBe(CODE.OK);
-    expect(calls).toEqual([workflowRunsUrl(REPO, SHA)]);
+    expect(calls).toEqual([workflowRunsUrl(REPO)]);
     const all = heard.join("\n");
     expect(all).toContain("cnb-pr-2649");
     expect(all).toContain("主路径（runs API）");
@@ -227,7 +239,7 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     });
     const code = await runVerdict(io);
     expect(code).toBe(CODE.OK);
-    expect(calls).toEqual([workflowRunsUrl(REPO, SHA), workflowRunsUrl(REPO, SHA)]);
+    expect(calls).toEqual([workflowRunsUrl(REPO), workflowRunsUrl(REPO)]);
     expect(sleeps).toEqual([POLL_INTERVAL_MS]);
     expect(heard.join("\n")).toContain("还在跑");
   });
@@ -236,12 +248,32 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     const { calls, heard, io } = harness();
     const code = await runVerdict(io);
     expect(code).toBe(CODE.OK);
-    expect(calls).toEqual([workflowRunsUrl(REPO, SHA), checkRunsUrl(REPO, SHA)]);
+    expect(calls).toEqual([workflowRunsUrl(REPO), checkRunsUrl(REPO, SHA)]);
     const all = heard.join("\n");
-    expect(all).toContain("没读到任何 workflow run");
+    expect(all).toContain("没认出本跑");
     expect(all).toContain("本轮回落兜底（checks API）");
     expect(all).toContain("兜底（checks API）");
     expect(all).toContain("全部完成且没有红");
+    expect(all).toContain("结论：exit 0");
+  });
+
+  it("主路径拉到了别跑的 run（display_title 无本跑 sha）⇒ 认不出本跑，同轮回落兜底", async () => {
+    /* dispatch 触发表是共享的：别个 PR 的 run 也在里面。认领不上 = 本跑还没起，
+     * 不是「有 run 就行」—— 这条用例钉住「按 display_title 认领，不是按表非空」。 */
+    const { calls, heard, io } = harness({
+      runsFallback: new Response(
+        runsBodyOf([
+          { conclusion: "failure", display_title: "PR #9999 · 别个 PR 的 sha", name: "static-gates", status: "completed" },
+        ]),
+        { status: 200 },
+      ),
+    });
+    const code = await runVerdict(io);
+    expect(code).toBe(CODE.OK);
+    expect(calls).toEqual([workflowRunsUrl(REPO), checkRunsUrl(REPO, SHA)]);
+    const all = heard.join("\n");
+    expect(all).toContain("没认出本跑");
+    expect(all).toContain("本轮回落兜底（checks API）");
     expect(all).toContain("结论：exit 0");
   });
 
@@ -249,7 +281,7 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     const { calls, heard, io } = harness({ runsFallback: new Response("no", { status: 403 }) });
     const code = await runVerdict(io);
     expect(code).toBe(CODE.OK);
-    expect(calls).toEqual([workflowRunsUrl(REPO, SHA), checkRunsUrl(REPO, SHA)]);
+    expect(calls).toEqual([workflowRunsUrl(REPO), checkRunsUrl(REPO, SHA)]);
     const all = heard.join("\n");
     expect(all).toContain("令牌没给 actions: read");
     expect(all).toContain("本轮回落兜底（checks API）");
@@ -283,9 +315,9 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     const code = await runVerdict(io);
     expect(code).toBe(CODE.OK);
     expect(calls).toEqual([
-      workflowRunsUrl(REPO, SHA),
+      workflowRunsUrl(REPO),
       checkRunsUrl(REPO, SHA),
-      workflowRunsUrl(REPO, SHA),
+      workflowRunsUrl(REPO),
       checkRunsUrl(REPO, SHA),
     ]);
     expect(sleeps).toEqual([POLL_INTERVAL_MS]);
@@ -358,7 +390,7 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
       const code = await runVerdict(io);
       expect(code).toBe(CODE.NO_FACT);
       /* 每条路径各一跳：「再试一百次也一样」⇒ 一个请求都不许多发。 */
-      expect(calls).toEqual([workflowRunsUrl(REPO, SHA), checkRunsUrl(REPO, SHA)]);
+      expect(calls).toEqual([workflowRunsUrl(REPO), checkRunsUrl(REPO, SHA)]);
       expect(sleeps).toHaveLength(0);
       const all = heard.join("\n");
       expect(all).toContain(`HTTP ${String(status)}`);
@@ -374,7 +406,7 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     });
     const code = await runVerdict(io);
     expect(code).toBe(CODE.NO_FACT);
-    expect(calls).toEqual([workflowRunsUrl(REPO, SHA)]);
+    expect(calls).toEqual([workflowRunsUrl(REPO)]);
     expect(sleeps).toHaveLength(0);
     /* 硬规则 17：任何回显都不许出现令牌原值。 */
     expect(heard.join("\n")).not.toContain(TOKEN);
