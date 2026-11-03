@@ -23,7 +23,7 @@ import { loadJudgeModule, REAL_ROOT, SCRIPT } from "./helpers/a11y-effective-con
 
 /**
  * 本文件里那几条要真读一次仓库根 `eslint.config.js` 的用例的显式预算
- * （它 import 了整个 `eslint-config-next`）。
+ * （PR-C 之前它 import 了整个 `eslint-config-next`）。
  *
  * 预算登记的是**实测成本，不是给慢用例兜底**（口径见 §11.13）：进程内首值本机隔离
  * 实测 **36.4s**（冷检出上 40s+），而「bin 形态」那条真子进程实测 **57.1s** ——
@@ -138,8 +138,8 @@ test("导出面：每个导出都是可调用的（不是「导了没人用」�
 });
 
 test("失败路径：真加载失败时带给原因冒出去，不吞（更不把半张表当结论）", CONFIG_BUDGET, () => {
-  /* 这一格的**真站点**在 bin 形态里（`.next/` 陈旧、`@eslint/compat` 被删掉这
-   * 类加载错误），但它在**共进程**里没有身份：`createRequire` / `import()` 都走
+  /* 这一格的**真站点**在 bin 形态里（`.next/` 陈旧、插件包缺失这类加载错误），
+   * 但它在**共进程**里没有身份：`createRequire` / `import()` 都走
    * 该脚本的模块缓存，于是「在子进程必然失败、在缓存之后必然成功」的样本没法在
    * 同一个进程里两种形态各测一次。
    *

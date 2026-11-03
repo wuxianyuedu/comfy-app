@@ -3,9 +3,11 @@
  *
  * 这份判据要守的那件事很窄：**eslint 的文件级豁免台账里，有没有已经不需要的豁免**。
  * 而它上线前量到的最坏形状不是「判错」，是**「一条都没判」被打成「台账全部陈旧」**：
- * `Linter#verify` 的内联配置写成形（eslintrc 形而非 flat 形）时，对每一份文件都抛错，
- * 取数脚本照样能打出一行「命中 0 处 / 0 份文件」。所以这组用例的重心不在
- * 「陈旧能不能判红」（那是一条过滤），而在**「没判成」会不会被读成结论**。
+ * 取数对每一份文件都失败时，脚本照样能打出一行「命中 0 处 / 0 份文件」。所以这组用例的
+ * 重心不在「陈旧能不能判红」（那是一条过滤），而在**「没判成」会不会被读成结论**。
+ *
+ * #2777 PR-C 起取数改调 oxlint CLI，本文件守住它的三处「没判成」：解析失败（诊断没有
+ * `code`）、`number_of_files` 少于应扫份数、以及 CLI 起不来 / 输出不可解析。
  *
  * 分工：
  *  · `judge` 那几条是**纯判决**，夹具直接喂三件输入（不碰磁盘，毫秒级）；
@@ -21,14 +23,17 @@ import { expect, test } from "vitest";
 const REAL_ROOT = path.resolve(__dirname, "..");
 const SCRIPT = path.join(REAL_ROOT, "scripts", "check-eslint-exemptions.cjs");
 
-/** `verify` 的最小形状（本文件只喂它自己造的读数，不依赖 eslint 的消息类型）。 */
-type FakeMessage = {
-  fatal?: boolean;
+/** oxlint `--format json` 的输出形状（本文件只喂它自己造的读数，不依赖 CLI 的完整类型）。 */
+type FakeDiagnostic = {
+  code?: string | null;
+  filename: string;
   message?: string;
-  ruleId?: string | null;
+  severity?: string;
 };
-type FakeLinter = {
-  verify: (code: string, config: unknown, opts: { filename: string }) => Array<FakeMessage>;
+type FakeOxlintRun = {
+  diagnostics: Array<FakeDiagnostic>;
+  number_of_files?: number;
+  status?: number | null;
 };
 
 /** 判据的导出面（与 `scripts/check-eslint-exemptions.cjs` 的 `module.exports` 对齐）。 */
@@ -52,10 +57,10 @@ type JudgeModule = {
   ) => { entries: Array<string>; mentionedAnywhere: boolean };
   scanViolations: (p: {
     files: Array<string>;
-    makeLinter?: () => FakeLinter;
     readFile?: (absPath: string) => string;
     root: string;
     ruleId: string;
+    runOxlint?: (files: Array<string>) => FakeOxlintRun;
   }) => {
     failed: Array<{ file: string; why: string }>;
     scanned: number;
@@ -119,13 +124,13 @@ test("台账里有一份现在不再违例 ⇒ stale 点名那一份，且不动
 });
 
 test("⚠ 每一份都没判成 ⇒ 没结论（退 2 那一档），**不许**读成「台账全部陈旧」", () => {
-  /* 这一条钉的是本判据上线前量到的那个真实假绿形状：`verify` 全部抛错时命中集合是空的，
+  /* 这一条钉的是本判据上线前量到的那个真实假绿形状：取数对每一份都失败时命中集合是空的，
    * 而空命中在朴素实现里正好等于「全部都不再违例」= 最刺眼的那个结论。
    * 断言分两半：状态必须是 inconclusive，且 stale 不能被当成结论使（那一份内容也不许是
    * 「三条全陈旧」的那种可用形态 —— 它只是差集，不构成判决）。 */
   const failed = ["a.cjs", "b.ts", "c.mjs"].map((file) => ({
     file,
-    why: 'verify 抛错：Key "parser": This appears to be in eslintrc format',
+    why: "oxlint 取数失败：oxlint 起不来",
   }));
   const v = judge(input({ violating: [], failed, scanned: 0 }));
   expect(v.state).toBe("inconclusive");
@@ -222,13 +227,21 @@ test("scanViolations：命中 / 未命中 / 读不到 / 解析失败 四种形�
       }
       return text;
     },
-    makeLinter: () => ({
-      /* 这里把真规则本体换成一个按内容认形状的最小 linter：命中 = 源码里有 CONTROL，
-       * 解析失败 = 源码里有 throwOnParse。规则语义本身不由这条用例判（那由 bin 那条判）。 */
-      verify: (code: string) =>
-        code.includes("throwOnParse")
-          ? [{ ruleId: null, fatal: true, message: "Parsing error" }]
-          : [{ ruleId: code.includes("CONTROL") ? RULE : null }],
+    runOxlint: (files: Array<string>) => ({
+      /* 这里把真 CLI 换成一撮按「文件名 + 内容」造的诊断：命中 = `x.cjs` 的
+       * `eslint(no-control-regex)`，解析失败 = 无 `code` 的那条。规则语义本身不由这条
+       * 用例判（那由 bin 那条判）。`number_of_files` 对齐应扫份数，才构成「每份都判过」。 */
+      diagnostics: [
+        { filename: path.join(REAL_ROOT, "x.cjs"), code: `eslint(${RULE})`, severity: "error" },
+        { filename: path.join(REAL_ROOT, "z.mjs"), severity: "error", message: "Parsing error" },
+        {
+          filename: path.join(REAL_ROOT, "y.ts"),
+          code: "eslint(no-debugger)",
+          severity: "warning",
+        },
+      ],
+      number_of_files: files.length,
+      status: 1,
     }),
   });
   expect(violating).toEqual(["x.cjs"]);
@@ -238,12 +251,41 @@ test("scanViolations：命中 / 未命中 / 读不到 / 解析失败 四种形�
   expect(String(failed.find((f) => f.file === "missing.cjs")?.why)).toContain("ENOENT");
 });
 
+test("oxlint 的 `number_of_files` 少于应扫份数 ⇒ 取数层自己就记一条「没判全」", () => {
+  /* 这一条挡的是「CLI 静默漏掉一批文件」：漏掉的那些没有诊断，命中集合照样可能是空的，
+   * 而那在判决层就是「台账全部陈旧」。把它在取数层就说清楚，判决才会落到 inconclusive。 */
+  const { failed } = scanViolations({
+    files: ["a.cjs", "b.cjs", "c.cjs"],
+    ruleId: RULE,
+    root: REAL_ROOT,
+    readFile: () => "",
+    runOxlint: () => ({ diagnostics: [], number_of_files: 2 }),
+  });
+  expect(failed).toHaveLength(1);
+  expect(failed[0]?.file).toContain("只扫了 2 份");
+});
+
+test("CLI 起不来 / 输出不可解析 ⇒ 这一批全部记为没判过（不退化成「没命中」）", () => {
+  const { violating, failed, scanned } = scanViolations({
+    files: ["a.cjs", "b.cjs"],
+    ruleId: RULE,
+    root: REAL_ROOT,
+    readFile: () => "",
+    runOxlint: () => {
+      throw new Error("oxlint 输出不是 JSON（退出码 2）");
+    },
+  });
+  expect(violating).toEqual([]);
+  expect(scanned).toBe(0);
+  expect(failed.map((f) => f.file).sort()).toEqual(["a.cjs", "b.cjs"]);
+});
+
 test(
   "bin 形态：真配置上这份判据跑得起来、退 0，且**读数自证**（台账非空、判过的份数等于台账条数）",
   CLI_BUDGET,
   () => {
     /* 这一条是这份新件的唯一端到端执行者：它同时证明
-     *   ① 真 `eslint.config.js` 上那块台账**认得出来**（不是夹具里的形状），
+     *   ① 真 `oxlint.parity.config.mjs` 上那块台账**认得出来**（不是夹具里的形状），
      *   ② 取数**真的跑了每一份**（`判过 N 份` 与 `台账 N 条` 同数 ⇒ 没有静默漏件），
      *   ③ 台账**非空**（读出 0 条 ⇒ 本条红，而不是「绿得毫无意义」），
      *   ④ 退出码形状（今天台账与事实相符 ⇒ 0）。
