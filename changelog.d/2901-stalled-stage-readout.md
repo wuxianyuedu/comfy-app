@@ -1,0 +1,3 @@
+## Fixed
+
+- **轮询里加一格「停摆读数」：一格 `start` 而 `endTime` 不大于 `startTime` 时，明写「疑似 runner 失联」并给出出口**（ISSUE #2901）。现场是两条 build 在同一秒失去心跳：runner 侧那两格**都跑完且上报了**（`exec-shell` 200、`job result sent` 逐条落盘，断连发生在结果发出 11 秒之后），丢的是平台侧的在飞结果，而平台既没有重连对账、也没有「`start` 超阈值无心跳即判死」的快路径，唯一兜底是 8640s（2h24m）的客户端超时 —— 那一跑最后正是 `Finished, code: ECONNABORTED`。断流那一判（签名不变 + 没有一格在飞）在这一形上永远不会触发，因为那一格就是在飞；于是加的是**读数**而不是新结论：`stalledStages()` 认那一形（在飞 + 两时间戳都有值且 `endTime<=startTime`），`stallReadout()` 越线（10 分钟，与 `DIAGNOSE_STALL_MINUTES` 同数）就念「疑似 runner 失联 / 这不是长跑的理由 / 已知结局是 8640s 兜底 / 下一动作 `--diagnose` 或 `--rerun-ci`」。轮询第一次越线念一次，`--diagnose` 的「还在跑」那一支也念。退码与断流判定一个字没改（硬规则 28③）。

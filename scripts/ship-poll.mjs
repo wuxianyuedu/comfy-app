@@ -32,6 +32,9 @@ import {
   downstreamSkipped,
   enrichStageErrors,
   inFlightStages,
+  progressReadout,
+  stalledStages,
+  stallReadout,
 } from "./ci-build-readout.mjs";
 import { CODE, readPullVerdict } from "./ship-core.mjs";
 
@@ -48,6 +51,17 @@ import { CODE, readPullVerdict } from "./ship-core.mjs";
  * 也不是把上限调大：那只是把误掐概率换小，两件事仍然分不开。
  */
 const POLL_STALL_MAX = 10;
+
+/**
+ * 停摆读数（ISSUE #2901）的告警阈值：一格 `start` + `endTime<=startTime` 超过这么多分钟，
+ * 就在轮询里明说「疑似 runner 失联」并给出出口。
+ *
+ * 与 `ship-diagnose.mjs` 的 `DIAGNOSE_STALL_MINUTES` 同一个数（10）：它答的是「隔了 10 分钟
+ * 还没动」，这里答的是「这一格从开始到现在过了 10 分钟还没回来」—— 同一件事的两个读法。
+ * ⚠️ 这是**读数**，不参与退码（硬规则 28③）：断流那一判一个字没改，仍旧是
+ * 「签名不变 + 没有一格在飞 + 10 眼」。它只是把「等 2h24m 兜底超时」这条路说出来。
+ */
+const POLL_STALLED_MINUTES = 10;
 
 /**
  * 平台侧那份分类 → 这一层用的形状。
@@ -112,6 +126,8 @@ export async function pollUntilTerminal(ctx) {
   let sameSig = 0;
   /** 「这一轮已经因为格数续过命」的标记：每轮只念一次那句说明（见下面计数那一段）。 */
   let announcedFlight = false;
+  /** 「停摆读数已经念过」的标记（ISSUE #2901）：同一句话每 20 秒复述一遍与复述「没变化」同类。 */
+  let announcedStalled = false;
   for (;;) {
     /* ISSUE #3070：sha→sn 的映射一旦钉住就不再变（sha 在进平台段前已钉死，ISSUE #2812；
      * sn 是平台分配的）—— 钉住之后每 20 秒再拉一次全量列表，只是在重复确认同一件事，
@@ -140,15 +156,7 @@ export async function pollUntilTerminal(ctx) {
     /** 这一眼的状态 JSON；没解析到 build 时为 null（签名照样成立）。 */
     let statusJson = null;
     if (sn) {
-      const st = cnbJson(run, [
-        "build",
-        "get-build-status",
-        "--repo",
-        slug,
-        "--sn",
-        sn,
-        "-v",
-      ]);
+      const st = cnbJson(run, ["build", "get-build-status", "--repo", slug, "--sn", sn, "-v"]);
       statusJson = st ? st.json : null;
       /* 逐格读数优先于构建级状态 —— 平台把「被取消」记成构建级 `error`，而它与
        * 「真失败」的处置完全不同（前者重跑，后者查产物）。分类只有一份，
@@ -169,7 +177,7 @@ export async function pollUntilTerminal(ctx) {
         log(
           `[ship]   这一跑**被取消**（不是产物坏了）：${first ? first.name : "(不知哪一格)"} 被终止 ⇒ 下面那几格根本没跑${
             skipped.length > 0 ? `（${skipped.join("、")}）` : ""
-            }，这一跑没有 CI 结论`,
+          }，这一跑没有 CI 结论`,
         );
         /* 「被谁顶掉的」是这一档唯一能让人**不去**查产物的那句话（ISSUE #2406）：
          * 原话与抢锁那一跑都来自平台，本仓一个字不代写。 */
@@ -221,6 +229,27 @@ export async function pollUntilTerminal(ctx) {
      * 同一条构建是 28/33）。所以停滞要同时满足两件：签名不变 **且** 此刻没有任何一格在飞。
      * 在飞那一判每轮只念一次 —— 它是「还在跑」这一事实的说明，不是每 20 秒要复述一遍的进度条。 */
     const flying = inFlightStages(statusJson);
+    /* 停摆读数额外说一次（ISSUE #2901）：那一形里**有**一格在飞（`start`），所以断流那一判
+     * 不会掐它 —— 而那正是最需要被念出来的一形：平台对 `start` / `duration` / `endTime`
+     * 三件的口径自相矛盾，等下去只有 8640s 的客户端超时兜底。
+     * 只在第一次越线时念，之后复述同一句话只是噪音（平台原值变了会再越一次线）。 */
+    const stalled = stalledStages(statusJson);
+    if (stalled.length > 0 && !announcedStalled) {
+      const progressed = progressReadout(statusJson, sn ?? "");
+      const lines = stallReadout({
+        signature: progressed.signature,
+        sn: sn ?? "",
+        stalled,
+        minutes: POLL_STALLED_MINUTES,
+        slug,
+      });
+      if (lines.length > 0) {
+        announcedStalled = true;
+        for (const line of lines) {
+          log(line);
+        }
+      }
+    }
     if (sig !== lastSig) {
       sameSig = 1;
       announcedFlight = false;
