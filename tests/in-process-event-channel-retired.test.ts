@@ -15,9 +15,13 @@
  * 别处更强的执行者：`tests/reaper-side-effect.test.ts` 管「谁起回收器」，
  * `scripts/check-dead-exports.cjs` 管零消费导出（`subscribe` 正是被它逼着一起删的）。
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  CHANNEL_RETIRE_EMITTER_ANCHORS,
+  CHANNEL_RETIRE_FACE,
+} from "../scripts/lib/execution-chain-files.mjs";
 import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -29,23 +33,11 @@ const COMFYUI_DIR = "src/lib/comfyui";
 const stripCode = (text: string): string => stripComments(text, { trailing: true });
 const src = (rel: string): string => stripCode(readFileSync(path.join(ROOT, rel), "utf8"));
 
-/**
- * 执行链的文件名规则：`executor*` / `runner-state*` / `enqueue` / `reaper` / `firstframe`。
- *
- * 面是**从目录派生**的，不是一份手抄清单：手抄清单在「把一个大文件拆成几个」之后
- * 只会**少判**，而少判在这一族反向断言上的表现是 `not.toMatch` 恒真 —— 账面读数与
- * 「真的退役干净」逐字相同。派生规则把那一格变成「新文件自动在面里」。
- * 排除 `*.test.*`：夹具里造一个 `EventEmitter` 是正当写法，不该被这条判红。
- */
-const EXEC_CHAIN_PATTERN = /^(?:executor|runner-state|enqueue|reaper|firstframe)/;
-const execChainFiles = (): Array<string> =>
-  readdirSync(path.join(ROOT, COMFYUI_DIR))
-    .filter((name) => /\.tsx?$/.test(name) && !/\.(?:test|spec)\.tsx?$/.test(name))
-    .filter((name) => EXEC_CHAIN_PATTERN.test(name.replace(/\.tsx?$/, "")))
-    .map((name) => `${COMFYUI_DIR}/${name}`)
-    .sort();
-
-const CHAIN = execChainFiles();
+/* 「执行链」这份面的唯一定义在 `scripts/lib/execution-chain-files.mjs`（ISSUE #2914）：
+ * 它**从目录派生**而不是手抄清单 —— 手抄清单在「把一个大文件拆成几个」之后只会**少判**，
+ * 而少判在这一族反向断言上的表现是 `not.toMatch` 恒真，账面读数与「真的退役干净」逐字相同。
+ * 为什么这份面要宽、与派发闸那份 5 项窄面为何不合并，见模块文件头。 */
+const CHAIN = CHANNEL_RETIRE_FACE;
 
 /** 这一族读的全部源（执行链 + 三条别处判据要交叉对账的接收者）。 */
 const READ_FILES = [
@@ -62,13 +54,7 @@ describe("进程内事件通道（EventEmitter）已退役", () => {
   it("这一族读的面非空：派生规则有命中、且每份文件剥完注释仍有代码", () => {
     expect(CHAIN.length, "执行链派生面为空 ⇒ 下面那组 `emitter` 断言全在判空文").toBeGreaterThan(0);
     // 历史上真正持有 emitter 的那几份必须在面里：它们不在 = 规则或文件名漂了，覆盖面静默缩小。
-    for (const name of [
-      "enqueue.ts",
-      "executor.ts",
-      "runner-state.ts",
-      "runner-state-shape.ts",
-      "reaper.ts",
-    ]) {
+    for (const name of CHANNEL_RETIRE_EMITTER_ANCHORS) {
       expect(
         CHAIN,
         `执行链面里不见了 ${name} —— 派生规则没命中它了，这条「任何模块都不再持有 emitter」` +
