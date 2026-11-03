@@ -5,16 +5,9 @@ import path from "node:path";
 import { tracingIgnoreArgs } from "~/lib/shell/tracing-ignore";
 import { toDisplayPath } from "~/lib/path-display";
 
-/* ── 运行期「本地更新」检测：需重启才生效的文件 ─────────────────
- * 桌面壳开着时，前端源码 src/ 由 dev server HMR 自动热更、无需打扰；
- * 但有一批「改完当前窗口不生效、得重启」的文件（startup-hotreload.md §2
- * 第 2 列）——Rust 源码 / tauri.conf.json / splash.html 需重编壳再重启，
- * .env / pnpm 配置 / package.json / lockfile 需重启 dev server。
- *
- * 本路由在运行期被前端轮询：首次被请求时把上述文件扫描成基线（模块级
- * 单例，近似 dev server 启动时刻），之后每次 GET 与当前扫描比对，回报
- * 「哪一组、具体哪些文件」在运行期被改过。前端据此弹安静的应用内提示。
- */
+/* 运行期「本地更新」检测：桌面壳开着时前端源码 src/ 由 dev server HMR 热更、无需打扰，但有一批「改完当前窗口不生效、得重启」的文件 —— Rust 源码 / tauri.conf.json /
+ * splash.html 需重编壳再重启，.env / pnpm 配置 / package.json / lockfile 需重启 dev server（startup-hotreload.md §2 第 2 列）。本路由被前端轮询：首次请求时扫描成基线
+ *（模块级单例，近似 dev server 启动时刻），之后每次 GET 与当前扫描比对，回报「哪一组、具体哪些文件」在运行期被改过，前端据此弹安静的应用内提示。 */
 
 /** 改完需「重编壳」才生效：编译期内嵌进二进制的源与配置。 */
 const RECOMPILE_ROOTS: Array<string> = ["src-tauri", "tauri.conf.json", "public/splash.html"];

@@ -1,12 +1,6 @@
-// CustomNodesSettings 逻辑层行为测试（ISSUE #318 的「先补护栏」步骤）。
-//
-// 为什么先补这一层：这个对话框的拆分已经做过一轮（1116 行 → 容器 73 +
-// NodesTab 379 + hook 503 + parsing 纯函数），但 **hook 与容器没有任何行为
-// 测试**。于是「解析失败要看得见」「打开/关闭要拉数据」「错误不会被下一次
-// 成功拉取冲掉」这些规则全靠人读代码，改动容易静默回归。
-//
-// 本文件只测逻辑层（renderHook），不渲染视图——视图由 SettingsParts.test.tsx
-// 与 NodesTab 承担。用例名直接写出「什么行为 → 什么可见结果」。
+// CustomNodesSettings 逻辑层行为测试（ISSUE #318）：拆分后 hook 与容器一直没有
+// 行为测试，「解析失败要看得见」「打开要拉数据」「错误不被下次成功冲掉」全靠
+// 人读代码。本文件只测 renderHook，视图由 SettingsParts / NodesTab 承担。
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

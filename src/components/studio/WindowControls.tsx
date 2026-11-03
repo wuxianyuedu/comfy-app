@@ -1,21 +1,8 @@
 "use client";
 
 /* ── WindowControls · 两条标题行共用的窗口按钮与拖拽判据 ─────────────────
- *
- * 桌面壳关掉原生装饰后，应用里有**两条**标题行要提供同一组窗口动作：
- *   · `TitleBarTabs` —— `ShellTabs` 的应用级标题行（页签 + 拖拽区 + 按钮）；
- *   · `WindowTitleBar` —— 整屏路由页（错误页 / 404 / global-error / 登录页）
- *     自带的精简标题行（只有拖拽区 + 按钮；那些页面一显示，`ShellTabs` 连
- *     同按钮一起卸载，见 ISSUE #1794 第二次修正）。
- *
- * 两处若各写一份按钮与最大化订阅，就是 §12.12 的孪生实现（实测重合 86.7%，
- * 被跨文件重复门禁拦下）——且「最大化 / 还原」图标跟着状态走这种细节漂了
- * 很难发现。所以按钮、状态订阅、拖拽判据都收在本模块，两条标题行各自只留
- * 自己的差异（页签 vs 没有页签）。
- *
- * 动作本体不在这里：`window-controls-client`（非壳降级为空操作）与
- * `title-bar-derive`（图标 / 标签 / 拖拽区判据）是第①层纯逻辑，本模块只
- * 负责把它们接进 React。
+ * 桌面壳关掉原生装饰后，`TitleBarTabs`（`ShellTabs` 的标题行）与 `WindowTitleBar`（整屏路由页：错误页 / 404 / global-error / 登录页，见 ISSUE #1794）都要提供同一组窗口动作；两处各写一份是 §12.12 的孪生实现（实测重合 86.7%，被跨文件重复门禁拦下），且「最大化/还原图标跟状态走」这类细节漂了很难发现。
+ * 所以按钮、状态订阅、拖拽判据收在本模块，两条标题行各自只留差异（页签 vs 没有页签）。动作本体不在这里：`window-controls-client`（非壳降级为空操作）与 `title-bar-derive`（图标 / 标签 / 拖拽区判据）是第①层纯逻辑，本模块只把它们接进 React。
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -81,11 +68,7 @@ export function WindowButton({
 }
 
 /**
- * 最大化状态：初始读一次，之后订阅窗口尺寸变化。
- *
- * 尺寸变化覆盖最大化 / 还原 / 拖拽边缘三种来路（双击标题栏、拖到屏幕顶、
- * 系统快捷键都会改它），所以不能只在点击时刷新。订阅带 `alive` 标记：
- * 回调落在已卸载组件上会触发 React 的卸载后更新。
+ * 最大化状态：初始读一次，之后订阅窗口尺寸变化（双击标题栏、拖到屏幕顶、系统快捷键都会改它，不能只在点击时刷新）。订阅带 `alive` 标记：回调落在已卸载组件上会触发 React 的卸载后更新。
  */
 export function useWindowMaximized(): [boolean, (next: boolean) => void] {
   const [maximized, setMaximized] = useState(false);
@@ -115,13 +98,8 @@ export function useWindowMaximized(): [boolean, (next: boolean) => void] {
 }
 
 /**
- * 标题行拖拽判据：按住拖拽区移动窗口、双击空白处最大化 / 还原。
- *
- * 只响应主键、且目标不在 `data-no-drag` 标记内（页签与按钮要把点击留给自己，
- * 否则会被拖拽行为吞掉 —— 判据在 `title-bar-derive`）。
- *
- * 最大化状态由调用方持有（它与 `WindowControls` 的按钮图标是同一格状态，
- * 两份 state 必然漂）—— 这里只拿到 setter。
+ * 标题行拖拽判据：按住拖拽区移动窗口、双击空白处最大化 / 还原。只响应主键、且目标不在 `data-no-drag` 内（页签与按钮要把点击留给自己，否则被拖拽吞掉 —— 判据在 `title-bar-derive`）。
+ * 最大化状态由调用方持有（与 `WindowControls` 的按钮图标是同一格状态，两份 state 必然漂），这里只拿 setter。
  */
 export function useTitleBarDrag(setMaximized: (next: boolean) => void) {
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -166,11 +144,7 @@ export function useTitleBarDrag(setMaximized: (next: boolean) => void) {
 }
 
 /**
- * 三个窗口按钮（最小化 / 最大化-还原 / 关闭）。
- *
- * 两条标题行渲染的是同一组按钮，连「最大化 / 还原」图标跟着状态走都一致 ——
- * 各自写一份的代价见文件头。状态由调用方传入（与拖拽双击共用同一格，
- * 否则双击最大化后按钮图标不刷新）。
+ * 三个窗口按钮（最小化 / 最大化-还原 / 关闭）。两条标题行渲染同一组按钮、连图标跟状态走都一致（各自写一份的代价见文件头）；状态由调用方传入（与拖拽双击共用同一格，否则双击最大化后图标不刷新）。
  */
 export function WindowControls({
   maximized,

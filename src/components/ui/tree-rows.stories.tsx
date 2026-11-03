@@ -4,25 +4,8 @@ import { Disclosure } from "~/components/ui/disclosure";
 import { TREE_INDENT_STEP, TreeChildren, TreeRow, indentClass } from "~/components/ui/tree-rows";
 
 /**
- * `TreeRow` / `TreeChildren` 是「一棵树的**层级关系**怎么画」的唯一实现
- * （规范 16 §16.2.4.39）。
- *
- * 它与另两个出口是**同一件事的三层**，配合使用、不互相替代：
- *
- * | 出口 | 回答的问题 |
- * | ---- | ---------- |
- * | `ExpansionSet` | **哪些行**折着（状态） |
- * | `Disclosure` | **一行**怎么折（交互与 a11y） |
- * | `TreeRow` / `TreeChildren` | 一棵树的**缩进与子行归属**（本件） |
- *
- * 这条账的形状是「渲染那一侧没人管」：`NodesTab` 一棵树三层、三层的子容器各写
- * 各的 —— 父目录行用 `border-t p-2`、子包行用 `ml-3 border-l-2 border-dashed`、
- * 节点卡又是另一套。三处都编译、都运行、外观「看着都对」，差别只在**缩进的
- * 语义**：引导线取哪一档、缩进是 `ml-3` 还是靠 `border-t` 分隔、「这个容器属于
- * 哪条父行」有没有说出来。这类差异**没有报错、没有告警**，只能靠「同一件事只
- * 允许一处实现」从结构上消除。
- *
- * 所以 story 按**层级深度**分组 —— 那是本件唯一真正在表达的东西。
+ * `TreeRow` / `TreeChildren` 是「一棵树的层级关系怎么画」的唯一实现（规范 16 §16.2.4.39）。它与另两个出口是同一件事的三层：`ExpansionSet` 管哪些行折着（状态）、`Disclosure` 管一行怎么折（交互与 a11y）、本件管缩进与子行归属。
+ * 这条账的形状是「渲染那一侧没人管」：`NodesTab` 三层各写各的容器，三处都编译、外观看着都对，差别只在缩进语义（引导线取哪档、`ml-3` 还是 `border-t`、容器属于哪条父行）—— 没有报错，只能靠「同一件事只允许一处实现」从结构上消除。故 story 按层级深度分组。
  */
 const meta = {
   title: "UI/TreeRows",

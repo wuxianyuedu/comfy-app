@@ -1,21 +1,7 @@
 /**
- * `GET /api/health` 的 schema 就绪度断言（ISSUE #489）。
- *
- * 背景：这个端点此前只做 `SELECT 1`，而**空库上 `SELECT 1` 也成功**——
- * `db.sqlite` 被留成 0 字节（`drizzle-kit push` 在无 TTY 上「报错 + exit 0」，
- * 见 `scripts/db-push.mjs`）时它会照旧回 `db: "up"`。于是「表根本没建」这一档
- * 被探针漏报：`/`、`/api/health` 都 200，只有真实业务路由 500
- * （`SqliteError: no such table: user`）——「看起来通了」比直接失败更难查。
- *
- * 四条契约：
- *   ready    → 200 + `db: "up"`（不能因为加了判据就把正常态也判坏）；
- *   missing  → 503 + `db: "empty"`（表还没建，探针必须说得出「为什么」）；
- *   unknown  → 503 + `db: "unknown"`（库文件都不在 / 不是 SQLite，同样不许报 ok）；
- *   探活失败 → 503 + `db: "down"`（前提是真去 await 那条 promise，见对应用例）。
- *
- * 另有一组是**跨域面**（D5）：CORS 从 `*` 收窄成启动页那一族源，且响应体里
- * 不再出现内部文档路径。两条都只在「谁真的在读它」这个前提下才成立，所以判据
- * 直接按请求头把两个源各问一遍。
+ * `GET /api/health` 的 schema 就绪度断言（ISSUE #489）：此前只做 `SELECT 1`，而空库上它也成功，`db.sqlite` 留成 0 字节时照旧回
+ * `db: "up"` —— 「表根本没建」被漏报成 200，只有业务路由 500（`no such table: user`）。四条契约：ready→200 `db:"up"`、
+ * missing→503 `db:"empty"`、unknown→503 `db:"unknown"`、探活失败→503 `db:"down"`（前提是真 await 那条 promise）；另有 D5：CORS 从 `*` 收窄成启动页那一族源、响应体不再出现内部文档路径。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -99,14 +85,8 @@ describe("GET /api/health", () => {
 });
 
 /* ── 跨域面：白名单收窄 + 响应体不许出现内部路径（D5）──────────────
- *
- * 启动页与 dev server 不同源，且它必须走 `mode: "cors"` 才读得到**真实状态码**
- * （no-cors 的 opaque 响应读不到，那正是历史「过早导航」的根因）——所以这个头
- * 不是可有可无的装饰。
- *
- * 但它此前是 `*`，而 503 的响应体里带着一句含**内部文档路径**的运维提示：那条
- * 「本端点无敏感信息」的理由不成立。收窄之后，恶意网页一读就被同源策略拒掉，
- * 而启动页在白名单里照常。
+ * 启动页与 dev server 不同源，且必须走 `mode: "cors"` 才读得到真实状态码（no-cors 的 opaque 读不到，正是历史「过早导航」的根因）。
+ * 此前白名单是 `*`，而 503 响应体带一句含内部文档路径的运维提示 —— 收窄后恶意网页一读就被同源策略拒掉，启动页仍照常。
  */
 describe("GET /api/health 跨域面（D5）", () => {
   const url = "http://127.0.0.1:3000/api/health";

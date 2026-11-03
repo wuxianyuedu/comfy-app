@@ -25,22 +25,10 @@ export const KNOWN_PACKAGE_HEURISTIC: Record<string, string> = {
   GetNode: "efficiency-nodes",
 };
 
-/** 解析工作流节点所属的包来源标签。
- *
- *  判据顺序（第一个非空的胜出）：
- *    1. `getCustomNodePackage(classType)` —— 由 `refreshCustomNodes()`
- *       从磁盘上的自定义节点清单填充。有值时最准（是确切的目录名）。
- *    2. `KNOWN_PACKAGE_HEURISTIC[classType]` —— 解析器没认出来时的
- *       人工兜底（见上面的表）。
- *    3. `properties.cnr_id` —— ComfyUI 自己盖的「本节点注册于注册表 X」
- *       印章。字面量 `"comfy-core"` 当作内建处理（ComfyUI 用这个字符串
- *       表示 `Extension` / `Preview3D` 这类内置 LiteGraph UUID 类）。
- *    4. `(rgthree)` 后缀捷径 —— `Fast Groups Bypasser (rgthree)`、
- *       `Power Lora Loader (rgthree)` 等无论清单 / cnr_id 状态如何都住在
- *       `rgthree-comfy` 目录下。后缀关键字与已登记包 `MAPPING` 的约定保持一致。
- *
- *  全部落空时返回字面量 `"ComfyUI"` —— `PackageFooter` 把它当作
- *  「内建」的提示，整个标签都不显示。 */
+/** 解析工作流节点所属的包来源标签。判据顺序（第一个非空的胜出）：① `getCustomNodePackage(classType)` —— 由 `refreshCustomNodes()` 从磁盘自定义节点清单填充，有值时最准（确切目录名）；② `KNOWN_PACKAGE_HEURISTIC[classType]` 人工兜底；③ `properties.cnr_id` —— ComfyUI 盖的「本节点注册于注册表 X」印章（字面量 `"comfy-core"` 当作内建：ComfyUI 用它表示 `Extension` / `Preview3D` 这类内置 LiteGraph UUID 类）。
+ *  ④ `(rgthree)` 后缀捷径 —— `Fast Groups Bypasser (rgthree)`、`Power Lora Loader (rgthree)` 等无论清单/cnr_id 状态如何都住在 `rgthree-comfy` 目录，后缀关键字与已登记包 `MAPPING` 的约定一致。
+ *  全部落空时返回字面量 `"ComfyUI"` —— `PackageFooter` 把它当作「内建」的提示，整个标签都不显示。
+ */
 export function resolveNodePackage(
   classType: string,
   properties?: Record<string, unknown>,
@@ -63,12 +51,8 @@ export function resolveNodePackage(
   return "ComfyUI";
 }
 
-/** ComfyUI 原生的 `frontend_only` 小胶囊（左下角）。节点的 LiteGraph
- *  `properties.frontend_only === true` 时渲染，表示该节点的活全在浏览器前端
- *  干完、没有后端执行。这是与「包来源」页脚**并列**的另一个 UI 元素 ——
- *  两者可以同时在左下角出现，回答的是两个不同的问题
- *  （「这个节点哪来的」与「它跑在服务端吗」）。样式对齐 ComfyUI 自己的
- *  暗色斜体标签。 */
+/** ComfyUI 原生的 `frontend_only` 小胶囊（左下角）：节点 LiteGraph `properties.frontend_only === true` 时渲染，表示该节点的活全在浏览器前端干完、没有后端执行。
+ *  它与「包来源」页脚是**并列**的另一个 UI 元素 —— 两者可同时在左下角出现，回答两个不同问题（「这个节点哪来的」与「它跑在服务端吗」）；样式对齐 ComfyUI 自己的暗色斜体标签。 */
 export function extractNoteTitle(text: string, fallback?: string): string {
   let raw;
   if (fallback !== undefined && fallback.trim() !== "") {
@@ -105,30 +89,13 @@ export function isNoteType(classType: string): boolean {
 }
 
 /* ── 标题栏高度 ──
- *  LiteGraph（以及用它的 ComfyUI）给每个带标题的节点都在**顶部**画一条固定
- *  的 `LiteGraph.NODE_TITLE_HEIGHT = 30` 栏。
- *
- *  约定（口径只此一处）：原始归档里序列化的 `size: [w, h]` 是**主体内容**高度
- *  （30px 的标题栏**不含**在 `size[1]` 里）。因此真正渲染出来的节点外框 =
- *  内容高度 + NODE_TITLE_H = `size[1] + 30`。
- *
- *  具体落点：
- *    • `data.size.h` 存的是原始**主体内容**高度 = `size[1]`（不做减法）。
- *    • React Flow 节点的 `style.height` = `size[1] + NODE_TITLE_H`（含标题栏）。
- *    • 各渲染器的主体用 `minHeight = data.size.h` 作为内容下限；标题栏在它
- *      之上，属于 React Flow 的外框，不属于主体的 flex 容器。
- *  无标题的便签没有独立标题栏，因此其 React Flow 外框 = `size[1]`（不加）。 */
+ *  LiteGraph（及用它的 ComfyUI）给每个带标题的节点在**顶部**画一条固定的 `LiteGraph.NODE_TITLE_HEIGHT = 30` 栏。口径只此一处：原始归档里序列化的 `size: [w, h]` 是**主体内容**高度（30px 标题栏不含在 `size[1]` 里），真正渲染出的外框 = 内容高度 + NODE_TITLE_H = `size[1] + 30`。
+ *  落点：`data.size.h` 存原始主体内容高度 = `size[1]`；React Flow 的 `style.height` = `size[1] + NODE_TITLE_H`；各渲染器主体用 `minHeight = data.size.h` 作内容下限，标题栏在它之上、属于 React Flow 外框。无标题的便签没有独立标题栏，其 React Flow 外框 = `size[1]`（不加）。 */
 export const NODE_TITLE_H = 30;
 
 /* ---------------------------------------------------------------------------
- *  伪「磨砂玻璃」层 —— **只在兜底时用，当前不渲染**。
- *  它在节点外框内画合成的彩色模糊色块，**一个真实像素都不采样**，
- *  因此 Chromium 那个小元素重复平铺的毛病（低缩放下便签被重复成 4 / 9 / 16 份）
- *  根本不会出现。它出现在两次「真背景模糊」尝试之间；用户后来更喜欢真正的
- *  透视模糊，所以线上走的是 <NodeFrost> —— 内层真实 `backdrop-filter`，
- *  并按 1/缩放 反向缩放，让它在屏幕上的占位永远不会小到触发重复平铺
- *  （见 WorkflowNode）。这里保留一份，是为了万一某个浏览器上真模糊的伪影
- *  再次冒头时能立刻切回来。
+ *  伪「磨砂玻璃」层 —— **只在兜底时用，当前不渲染**。它在节点外框内画合成的彩色模糊色块、**一个真实像素都不采样**，因此 Chromium 那个小元素重复平铺的毛病（低缩放下便签被重复成 4/9/16 份）根本不会出现。
+ *  它在两次「真背景模糊」尝试之间；用户后来更喜欢真正的透视模糊，线上走的是 <NodeFrost>（内层真实 `backdrop-filter`、按 1/缩放反向缩放，占位不会小到触发重复平铺，见 WorkflowNode）。保留一份是为了真模糊伪影再次冒头时能立刻切回来。
  * --------------------------------------------------------------------------- */
 export function pseudoFrostPalette(modeColor: string | null) {
   const mode = modeColor ?? "#ec4899";
@@ -236,13 +203,8 @@ export function renderWidgetValue(value: unknown): string {
   return (value as { toString(): string }).toString();
 }
 
-/** 「值单元格」的文字颜色：**未连线**取主档、**已连线**取低一档（值来自上游的信号）。
- *  两态取值交给主题 token（`--color-widget-value` / `-dim`）：暗色档是**纯白**，
- *  因为底色是深灰的节点表面（用户口径：「暗色下参数值都读成白的，有连线的那几个比
- *  纯白暗一点」）；浅色档不能照抄白（白底上会消失），所以不是一处写死的颜色。
- *
- *  此前这里按 JS 类型分色（数字琥珀 / 字符串靛蓝 / 布尔绿红），值列比标签列还抢眼；
- *  现在类型信息交给行首的端口圆点与类型徽章，值只有「亮 / 略暗」两档。 */
+/** 「值单元格」的文字颜色：**未连线**取主档、**已连线**取低一档（值来自上游的信号）。两态取值交给主题 token（`--color-widget-value` / `-dim`）：暗色档是纯白（底色是深灰节点表面），浅色档不能照抄白（白底上会消失），所以不是一处写死的颜色。
+ *  此前按 JS 类型分色（数字琥珀 / 字符串靛蓝 / 布尔绿红），值列比标签列还抢眼；现在类型信息交给行首端口圆点与类型徽章，值只有「亮 / 略暗」两档。 */
 export function valueCellColor(value: unknown, connected = false): string {
   /* 空值不是「值」，仍单独压弱一档 —— 与有没有连线无关。 */
   if (value === undefined || value === null) {
@@ -298,15 +260,8 @@ export function renderSubgraphWidgetValue(value: unknown): string {
   return "";
 }
 
-/** 把原始的 `label` / `localized_name` 修剪成面向用户的键名。
- *  自定义 COMBO widget（KJNodes 之类）会把整份选项清单烤进标签里，形如
- *  `"<键>: 选项1 | 选项2 | 选项3"`，很占地方 —— 这类选项清单要剥掉。
- *
- *  **但** BOOLEAN 开关的描述性标签（rgthree Settings 节点里的
- *  `"Model: True = 🟡 Safetensors | False = 🟣 GGUF"`）是**语义**，
- *  不是可选项清单：它告诉读者开/关分别切到什么，必须原样保留。
- *  （早先的实现在这里把整段剥到只剩 `Model`，读起来像被截断的残缺标签；
- *  现在完整描述会渲染出来，并由 widget 标签 span 上的 CSS 换行。）
+/** 把原始的 `label` / `localized_name` 修剪成面向用户的键名。自定义 COMBO widget（KJNodes 之类）会把整份选项清单烤进标签（`"<键>: 选项1 | 选项2 | 选项3"`），很占地方，要剥掉。
+ *  **但** BOOLEAN 开关的描述性标签（rgthree Settings 的 `"Model: True = 🟡 Safetensors | False = 🟣 GGUF"`）是**语义**不是选项清单 —— 它告诉读者开/关分别切到什么，必须原样保留（早先剥到只剩 `Model`，读起来像残缺标签；现在完整描述会渲染出来，由 widget 标签 span 上的 CSS 换行）。
  *  「Note: keep this secret」这类带冒号的普通句子同样原样保留。 */
 export function sanitizeComboLabel(label: string | undefined | null): string {
   if (label === undefined || label === null || label === "") {
@@ -405,19 +360,8 @@ export function parseHex(hex: string): [number, number, number] {
   ];
 }
 
-/** 把十六进制 `a`（**底色**，例如节点画布色的主体）按系数 `t ∈ [0,1]`
- *  向十六进制 `b`（**着色**，例如节点的角色色）混合，
- *  返回不透明的 `rgb(r,g,b)`。约定：
- *
- *    t=0  →  纯 `a`（底色，不着色）
- *    t=1  →  纯 `b`（完全被着色替换）
- *    0<t<1 → 「半透明着色叠在底色上」的不透明等价形式
- *            （即 CSS 里 `rgba(着色, t)` 叠在底色上的效果，
- *            预烘焙成一个实心 `rgb()`）。
- *
- *  调用一律写成 `mixHex(底色, 着色, t)` —— 方向与「把 X% 的着色混进底色」
- *  一致。行为等价于 CSS 的 `color-mix(in srgb, 底色 X%, 着色 Y%)`，
- *  其中 Y/(X+Y) ≡ t。 */
+/** 把十六进制 `a`（**底色**，如节点画布色的主体）按系数 `t ∈ [0,1]` 向十六进制 `b`（**着色**，如节点角色色）混合，返回不透明的 `rgb(r,g,b)`：t=0 → 纯 `a`；t=1 → 纯 `b`；0<t<1 → 「半透明着色叠在底色上」的不透明等价形式（CSS 里 `rgba(着色, t)` 叠底色的效果预烘焙成实心 `rgb()`）。
+ *  调用一律写成 `mixHex(底色, 着色, t)`；行为等价于 CSS `color-mix(in srgb, 底色 X%, 着色 Y%)`，其中 Y/(X+Y) ≡ t。 */
 export function mixHex(colorA: string, colorB: string, ratio: number): string {
   const pa = parseHex(colorA);
   const pb = parseHex(colorB);
@@ -427,13 +371,8 @@ export function mixHex(colorA: string, colorB: string, ratio: number): string {
   return `rgb(${red},${green},${bl})`;
 }
 
-/* 从 ComfyUI 图构建 ReactFlow 的边：每个形如 [nodeId, outputIndex] 的输入值，
- * 都变成一条从该节点指向消费方的边。
- *  - `targetHandle` 用输入字段名，ReactFlow 才能把线吸附到对应的 Handle id
- *    （每个连接行都会渲染一个）。
- *  - `sourceHandle` 用 "out:<输出名>"，线才会落到节点底部按输出渲染的 Handle 上。
- *  - 描边颜色取自线上流动的数据类型 —— MODEL→紫、CLIP→黄、LATENT→紫罗兰等 ——
- *    让画布读起来像一张忠实的 ComfyUI 图。 */
+/* 从 ComfyUI 图构建 ReactFlow 的边：每个形如 [nodeId, outputIndex] 的输入值都变成一条从该节点指向消费方的边。
+ *  `targetHandle` 用输入字段名（ReactFlow 才能吸附到对应 Handle id，每个连接行都会渲染一个）；`sourceHandle` 用 "out:<输出名>"，线才落到节点底部按输出渲染的 Handle 上；描边颜色取自线上流动类型 —— MODEL→紫、CLIP→黄、LATENT→紫罗兰等，让画布读起来像一张忠实的 ComfyUI 图。 */
 
 /* 最长路径（Kahn）拓扑布局。为**每一个**真实图节点都算出位置 ——
  * 不做截断，而 `buildWorkflowPreview` 为了卡片预览会截到 14 个。
@@ -579,12 +518,8 @@ export function buildEdges(
       const slotNames = outSlotNameById?.[srcId];
       const staticNames = Object.keys(inferOutputTypeAll(srcClass ?? ""));
       const rawOuts = rawOutById.get(srcId) ?? [];
-      /* 只有当源节点真的会渲染输出端口（静态表 或 raw outputs 命中）时，
-       * 才能把边 pin 到 "out:<name>"。自定义节点两者皆空时画布一个输出
-       * 端口都不渲染，`inferSourceOutNames` 从下游输入键反推出的名字
-       * （如 width / height）在画布上并不存在，写进 sourceHandle 会让
-       * React Flow 找不到 handle 而丢弃整条边并打 error#008 警告。
-       * 这类边回落到每个节点都挂的通用 "out" handle。 */
+      /* 只有当源节点真的会渲染输出端口（静态表 或 raw outputs 命中）时，才能把边 pin 到 "out:<name>"。自定义节点两者皆空时画布不渲染任何输出端口，`inferSourceOutNames` 从下游输入键反推出的名字（如 width / height）在画布上并不存在，写进 sourceHandle 会让 React Flow 找不到 handle、丢弃整条边并打 error#008 警告。
+       *  这类边回落到每个节点都挂的通用 "out" handle。 */
       let outName: string | null = null;
       if (staticNames.length > 0 || rawOuts.length > 0) {
         /* `.at()` 越界即 `undefined`，不必先写 `srcSlot < arr.length` 再靠 `!`
@@ -617,14 +552,8 @@ export function buildEdges(
     }
   }
 
-  /* 边界 pin 的接线：**方向很关键** —— React Flow 只在 source handle 为
-   * `type="source"` 且 target handle 为 `type="target"` 时才渲染边。
-   * 我们的 pin 节点暴露的是：
-   *   - 输入 pin：左侧 handle `id="in"`，type="source"
-   *   - 输出 pin：右侧 handle `id="out"`，type="target"
-   * 因此 "input" 型边界连线从 pin 流向内部（外部输入喂进封装节点），
-   * "output" 型边界连线从内部流向 pin（封装节点把内部结果暴露出去）。
-   * 早先这两者的方向是反的、handle id 也指错，结果一条边都渲染不出来。 */
+  /* 边界 pin 的接线：**方向很关键** —— React Flow 只在 source handle 为 `type="source"` 且 target handle 为 `type="target"` 时才渲染边。我们的 pin 节点暴露：输入 pin 左侧 `id="in"`/type="source"，输出 pin 右侧 `id="out"`/type="target"。
+   *  因此 "input" 型边界连线从 pin 流向内部（外部输入喂进封装节点），"output" 型从内部流向 pin（封装节点把结果暴露出去）；早先两者方向反了、handle id 也指错，结果一条边都渲染不出来。 */
   if (detail.boundaryLinks) {
     const bp = detail.boundaryPins;
     const lookupPin = (pinId: string): { type: string } | null => {
@@ -696,13 +625,8 @@ export function buildInputSources(
   return out;
 }
 
-/* 扫一遍工作流图，为每个源节点算出「至少有一条下游边」的输出**名字**集合。
- * WorkflowNode 与 WorkflowSubgraphNode 都靠它决定每行输出要不要渲染 source
- * Handle ——「没有线就没有圆点」。输出名的解析方式与
- * buildWfNode / buildSubgraphNode 的输出清单一致，
- * 这样 `connectedOutputs.has(name)` 才对得上行键。
- * 可选的 `outSlotNameById` 由 `inferSourceOutNames` 产出，
- * 针对那些输出**既不在**静态表里、**也不在**原始 JSON 里的节点。 */
+/* 扫一遍工作流图，为每个源节点算出「至少有一条下游边」的输出**名字**集合。WorkflowNode 与 WorkflowSubgraphNode 都靠它决定每行输出要不要渲染 source Handle ——「没有线就没有圆点」；输出名的解析方式与 buildWfNode / buildSubgraphNode 的输出清单一致，`connectedOutputs.has(name)` 才对得上行键。
+ *  可选的 `outSlotNameById` 由 `inferSourceOutNames` 产出，针对输出**既不在**静态表里、**也不在**原始 JSON 里的节点。 */
 export function buildConnectedOutputs(
   detail: WorkflowDetail,
   nodesById: Record<string, ComfyGraphNode>,
@@ -750,15 +674,8 @@ export function buildConnectedOutputs(
   return map;
 }
 
-/* 为每个源节点推导「挂在它 source Handle 上的按槽位输出名」，
- * 哪怕该节点既不在静态 `inferOutputTypeAll` 表里、原始 JSON 里也没有
- * `outputs[]`。逐节点的取值链：
- *   1. 静态 `inferOutputTypeAll` 表（KSampler → LATENT 等）。
- *   2. 导入 JSON 里的原始 `outputs[]` 数组。
- *   3. 下游节点的输入键，剥掉 ComfyUI 的「同名字段」后缀（`_N`）——
- *      输入 `width_1` 取出 `width`。对 ResolutionSelector 这类导出的工作流
- *      完全不携带 outputs 的全自定义节点，这是唯一能把名字捞回来的路子。
- *   4. 以上都没产出名字时，兜底用通用的 `out<N>`。 */
+/* 为每个源节点推导「挂在它 source Handle 上的按槽位输出名」，哪怕该节点既不在静态 `inferOutputTypeAll` 表里、原始 JSON 里也没有 `outputs[]`。逐节点取值链：① 静态 `inferOutputTypeAll` 表（KSampler → LATENT 等）；② 导入 JSON 的原始 `outputs[]`。
+ *  ③ 下游节点的输入键，剥掉 ComfyUI 的同名字段后缀（`_N`，输入 `width_1` 取出 `width`）—— 对 ResolutionSelector 这类导出的工作流完全不携带 outputs 的全自定义节点，这是唯一能把名字捞回来的路子；④ 以上都没产出名字时兜底 `out<N>`。 */
 export function inferSourceOutNames(
   detail: WorkflowDetail,
   nodesById: Record<string, ComfyGraphNode>,

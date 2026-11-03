@@ -13,20 +13,9 @@ import {
 } from "~/lib/project-canvas/canvas-types";
 
 /**
- * 画布节点的小型共享 UI 原语（`CanvasNodePrimitives`）—— 三件纯 props 的件，
- * 由节点头部与结果卡头部**共用**。
- *
- * 为什么合成一份 story 而不是三份：这三件的共同契约是「同一份状态 / 类型口径
- * 全库只有一处」——
- *   · `StatusDot` / `StatusBadge` 都按 `CanvasNodeData["status"]` 的**四档**穷举；
- *   · `NodeChip` 按 `NODE_META[kind]` 取色与类型字符。
- * 所以 story 里逐档**从 `canvas-types` 那份常量派生**（`STATUS_LABEL` /
- * `NODE_META`），不手抄「待开始 / 生成中…」那几句 —— 手抄就正好把这条契约
- * 在 story 里反过来写一遍，字面量漂了而画布看着正常。
- *
- * 一处值得看的历史：`StatusBadge` 此前**另写四档字面量配色**，改状态色要点两遍名。
- * 现在它走 `ui/status-badge` 的同一份「状态 → 语义 token」映射（规范 16 §16.2.4.5），
- * 所以下面这两件并排时**颜色口径是同一个**。
+ * 画布节点的小型共享 UI 原语（`CanvasNodePrimitives`）：三件纯 props 组件。
+ * 档位与配色一律从 `canvas-types` / `ui/status-badge` 的常量派生，不手抄字面量，
+ * 否则字面量漂了而画布看着正常（规范 16 §16.2.4.5）。
  */
 /* SAFETY: 类型断言已复核 */
 const STATUSES = Object.keys(STATUS_LABEL) as Array<keyof typeof STATUS_LABEL>;

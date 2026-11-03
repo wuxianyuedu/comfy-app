@@ -13,15 +13,9 @@ import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 
 /* ── 视频队列弹窗 —— 接了真实的 VIDEO 任务 ──
- 从 /api/tasks 拉取用户的 VIDEO 类型任务（已筛选），显示实时
- 状态（QUEUED / RUNNING / SUCCEEDED / FAILED），每 4s 自动刷新，
- 并打开某个片段的结果 / 结果详情。
-
- ⚠️ 此前这里还有一个「批量提交」草稿页签 —— 它长在内置模板通路被拆除之前，
- 每条草稿只有提示词、没有必填的 workflow，这条通路**从来没成功过**
- （ISSUE #2169，业主拍板整格撤掉：生产挂载从不播种草稿，
- 新视频的唯一真实入口是创作台「视频」模式，那条路一直在）。本弹窗只读地看队列。
-*/
+ 从 /api/tasks 拉取用户的 VIDEO 类型任务（已筛选），显示实时状态（QUEUED / RUNNING / SUCCEEDED / FAILED），
+ 每 4s 自动刷新，并可打开某个片段的结果 / 详情。本弹窗只读地看队列：「批量提交」草稿页签整格撤掉（ISSUE #2169）——
+ 每条草稿只有提示词、没有必填的 workflow，那条通路**从来没成功过**；新视频唯一真实入口是创作台「视频」模式。 */
 
 type StatusMeta = { cls: string; icon: string; label: string };
 

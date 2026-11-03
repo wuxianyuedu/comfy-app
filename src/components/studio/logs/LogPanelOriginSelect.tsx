@@ -1,17 +1,9 @@
 "use client";
 
 /**
- * 日志面板的「来源筛选下拉」子树（`LogPanel` 的拆分件）。
- *
- * 这里放 `OriginSelect` 组件 + 它私有的 `CountColumn` / `asOriginFilter` /
- * `ORIGIN_COLUMNS` / `ORIGIN_LABELS`，以及对外共享的 `ORIGIN_TEXT`（页脚与
- * 标题徽标也用同一份来源文案）与 `levelSummary` / `optionCountsText` 两个
- * 摘要函数。
- *
- * 这块「来源下拉的排版与文案」与主组件里的虚拟滚动 / 事件处理**没有共享
- * 状态**、只是一次性拿 `value` + `countsByOrigin` 渲染。主组件从
- * `./LogPanelOriginSelect` import `OriginSelect` 与 `ORIGIN_TEXT`；对外语义
- * 不变（消费者仍是 `~/components/studio/logs/LogPanel`）。
+ * 日志面板的「来源筛选下拉」子树（`LogPanel` 的拆分件）：放 `OriginSelect` 及私有
+ * `CountColumn` / `asOriginFilter` / `ORIGIN_*`、共享的 `ORIGIN_TEXT`（页脚与标题徽标同用）
+ * 与 `levelSummary` / `optionCountsText`；与主组件的虚拟滚动 / 事件处理无共享状态。
  */
 import {
   CONSOLE_ORIGIN,
@@ -36,15 +28,9 @@ function levelSummary(label: string, value: number): string {
 }
 
 /**
- * 来源下拉里每一项自己的计数摘要（`1822 条 · 信息 1821 · 警告 1 · 错误无`）。
- *
- * 它回答的是「**切过去**会看到多少」，与当前选中的是哪一个无关——所以在
- * 收起状态（扳机/触发按钮）里**不显示**：那是「已经选好了」的地方，数字重复
- * 一遍只占宽度（用户反馈：下拉显示的文本不需要再报一遍每一项有多少，左侧
- * 级别按钮上都看得到）。
- *
- * 打开后的候选列表另走 `SelectItem` 的多列布局（数字右对齐成表），这里只提供
- * 纯文本版本给屏幕阅读器与已选值兜底。
+ * 来源下拉里每一项的计数摘要（`1822 条 · 信息 1821 · 警告 1 · 错误无`）。
+ * 它回答「切过去会看到多少」，与当前选中无关，所以收起态不显示（级别按钮上已有）。
+ * 候选列表另走 `SelectItem` 多列布局，这里只提供纯文本给屏幕阅读器与已选值兜底。
  */
 function optionCountsText(counts: LogLevelCounts): string {
   return [
@@ -57,14 +43,8 @@ function optionCountsText(counts: LogLevelCounts): string {
 
 /**
  * 计数列（下拉候选列表里每个来源右边的四列数字）。
- *
- * 四列**定宽 + 右对齐 + 等宽数字**是这里的全部要点：宽度随内容变的数字列
- * 排在一起必然参差（`1769` 与 `0` 的视觉差异），读起来就是「对不齐、很难看」。
- * 所以每列显式定宽（`w-14`，容纳最大的四位数），「条」固定在总数那一列里。
- *
- * 零条目一律写「—」且保持灰色：整列 `0` 与「那一行本来就没有这项」长得一样，
- * 而这里要表达的正是「这个来源没有警告」这个**结论**（与级别按钮上显示 `0`
- * 而不隐藏同一条原则）。
+ * 四列定宽（`w-14`）+ 右对齐 + 等宽数字：宽度随内容变的数字列必然参差难读。
+ * 零条目一律写「—」且保持灰色——表达「这个来源没有警告」这一结论。
  */
 function CountColumn({
   label,
@@ -96,11 +76,8 @@ function CountColumn({
 
 /**
  * 把下拉回传的选中值收窄成来源筛选键。
- *
- * `Select` 的 `value` 是「任意可序列化值」（库的类型是 `any`），而我们只放
- * `LogOriginFilter` 这几个字符串。这里用一个真正的收窄函数而不是 `as`：值若
- * 意外为空/未知，落到「全部来源」这个**安全默认**上，而不是把 `undefined` 塞进
- * 索引里去渲染 `undefined`。
+ * `Select` 的 value 类型是 `any`；值意外为空/未知时落到「全部来源」这个安全默认，
+ * 而不是把 `undefined` 塞进索引去渲染。
  */
 function asOriginFilter(value: unknown): LogOriginFilter {
   /* SAFETY: 类型断言已复核 */
@@ -121,13 +98,8 @@ const ORIGIN_COLUMNS: Array<{
 
 /**
  * 级别标签在筛选按钮上的配色。
- *
- * 用户要求很直接：「警告文字改成黄色，错误改成红色」。颜色给**文字**而不是
- * 数字，是因为按 `/警告/` 找过去时，用户扫的是这几个字；数字（`4ch` 定宽）
- * 保持中性灰，才不会出现「两个字都带色、读起来像两个高亮块」。
- *
- * 零条目也照样着色：它表达的仍然是「这一格是警告」，而不是「这里有问题」——
- * 「有没有问题」由数字回答（`0` 与「切过去是空的」互相印证）。
+ * 颜色给**文字**而不是数字：用户按 `/警告/` 扫的是字；数字（`4ch` 定宽）保持中性灰，
+ * 避免两个高亮块互相稀释。零条目也照样着色——它表达「这一格是警告」。
  */
 /* 来源筛选（ISSUE #262）：启动日志与应用运行日志此前混在一屏，query 噪音把
  * 业务日志挤掉。分开看是最直接的「让日志有意义」手段。
@@ -172,18 +144,8 @@ const ORIGIN_TEXT: Record<LogOriginFilter, string> = {
 };
 
 /**
- * 来源筛选下拉。
- *
- * 用 `Select`（base-ui）而不是原生 `<select>`，只为一件事：**候选列表能排版**。
- * 原生 `<option>` 只接受纯文本、且字体与列宽由 OS 决定，"应用服务 · 1769 条 ·
- * 信息 1769" 与 "启动 · 46 条 · 信息 46" 的冒号、数字必然对不上——用户反馈的
- * 「能像表格一样吗，现在对不齐」就是这个。换成自绘列表后，数字挤成四列定宽右
- * 对齐，读起来就是一张表。
- *
- * 分工：
- * - **扳机（收起态）**只显示当前来源的名字——具体多少条、多少警告在左侧级别
- *   按钮与标题徽标上，这里再写一遍既重复又撑宽控件（用户反馈第 4 条）；
- * - **候选列表**才是「切换之前先看行情」的地方：每个来源一行，行内四列数字。
+ * 来源筛选下拉。用 base-ui `Select` 而非原生 `<select>`，只为候选列表能排版（原生 option 字宽由
+ * OS 决定、数字对不齐）；扳机只显示来源名，候选列表每来源一行、四列定宽右对齐数字。
  */
 function OriginSelect({
   value,
@@ -211,28 +173,18 @@ function OriginSelect({
             这里再报一遍既不增加信息量，又把本就不宽的行头再挤掉一块。 */}
         <SelectValue>{(selected) => ORIGIN_TEXT[asOriginFilter(selected)]}</SelectValue>
       </SelectTrigger>
-      {/* 弹层必须盖在日志面板之上：面板遮罩走刻度表的 `modal` 档（见本文件底部
-          overlayClass 的 z 参数），而 Select 的定位层若低于它——弹层照常画出来，却整块
-          压在遮罩底下**收不到指针事件**。用户读到的现象就是「点了下拉看不到菜单」
-          与「没法切换来源」，来源筛选因此形同失效（ISSUE #262）。
-          层级给在定位层（positionerClassName）而不是 Popup：Popup 的 z 只在
-          定位层建立的 stacking context 内部比较，改它越不出这一层。 */}
+      {/* 来源下拉弹层必须高于面板遮罩（modal 档），否则整块压在遮罩下收不到指针事件，
+          现象是「点下拉看不到菜单 / 没法切换来源」（ISSUE #262）。层级给在定位层
+          `positionerClassName` 而非 Popup：Popup 的 z 越不出定位层建立的 stacking context。 */}
       {/* `w-(--anchor-width)` 会把弹层压到扳机那么宽，四列数字直接挤成一团；
           这里放开宽度，让弹层按内容（四个定宽列）撑开。
           注意 `w-auto` / `min-w-max` 的**级联顺序**：两者都比 `w-(--anchor-width)`
           后出现，因此最终生效的是内容宽度（这正是这里要的效果）；反过来若把
           `w-auto` 去掉，弹层会被压到扳机的 90px，四列数字挤成一团。 */}
       <SelectContent
-        /* 与扳机**底边**对齐（用户要求：「弹出下拉菜单的最上方和下拉按钮的
-         * 最下方对齐即可」）。
-         *
-         * base-ui 的 `alignItemWithTrigger` 默认会把弹层挪去盖住扳机本身，
-         * 于是头部在窗口顶端时弹层只能向上生长——实测直接顶到窗口最上方、
-         * 盖住标题行的左侧（截图里就是这样）。两条一起改：
-         *   - `alignItemWithTrigger={false}`：弹层不覆盖扳机，从它下面开始；
-         *   - `collisionAvoidance={{ side: "none" }}`：撞到视口底部也不翻到
-         *     上面去，需要时改为**滚动**弹层自身。
-         * 于是弹层顶边恒等于扳机底边（sideOffset 4px），与窗口位置无关。 */
+        /* 扳机底边对齐（用户要求「弹层最上方与下拉按钮最下方对齐」）：关掉
+         * `alignItemWithTrigger` 使弹层不覆盖扳机，`collisionAvoidance.side="none"`
+         * 让撞到底部时不翻上去（改用弹层自身滚动），顶边恒等于扳机底边 + sideOffset 4px。 */
         alignItemWithTrigger={false}
         className="border-border-strong bg-card text-ink-field w-auto min-w-max rounded-lg border p-0"
         collisionAvoidance={{ side: "none" }}

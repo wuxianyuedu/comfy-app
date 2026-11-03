@@ -6,15 +6,10 @@ import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { ShellFullPage } from "~/components/studio/ShellFullPage";
 
-/* ── 「应用发生严重错误」——根布局崩掉时的兜底页 ─────────────────────────
- *
- * `global-error` 替换的是**整个**根布局（React 要求它自带 `<html>` / `<body>`），
- * 所以它拿不到根布局里的任何 Provider；但这不代表它不受应用级 chrome 的约束：
- * 一个 `<html>` 替换不掉**壳侧**那条标题行之外的东西 —— 它一显示，连
- * `ShellTabs` 带右上角的窗口按钮一起不在 DOM 里（ISSUE #1794 的第一次修复
- * 只让了位，让的是条不存在的标题行）。套 `ShellFullPage` 自带精简标题行；
- * `WindowTitleBar` 内部自带 `TooltipProvider`，所以本页没有根布局的
- * Provider 也能悬停出按钮提示。 */
+/* 「应用发生严重错误」——根布局崩掉时的兜底页：`global-error` 替换整个根布局（自带
+ * `<html>`/`<body>`），拿不到根布局的 Provider，且窗口按钮随 `ShellTabs` 一起离开 DOM
+ * （ISSUE #1794）。套 `ShellFullPage` 自带精简标题行；`WindowTitleBar` 内部自带
+ * `TooltipProvider`，没有根布局 Provider 也能悬停出提示。 */
 
 export default function GlobalError({
   error,

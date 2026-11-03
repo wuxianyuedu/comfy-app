@@ -1,12 +1,9 @@
 "use client";
 
 /* ── 主编点组件 ──
- * 行为不变地拆成 hook。逻辑簇现在住在本目录的兄弟模块里：
- * use-file-upload.ts（上传管线）、
- * use-workflow-io.ts（共享列表 + 动态 IO 表 + 播种/筛选 effect）、
- * use-generate.ts（对账 + runGenerate + 错误面板重试）与
- * ErrorPanel.tsx（可折叠错误面板）。本文件保留状态组装、
- * patch 与「按 kind 渲染 body」的 JSX。 */
+ * 行为不变地拆成 hook：上传管线 / 工作流 IO / 生成与重试 / 错误面板住在兄弟模块。
+ * 本文件保留状态组装、patch 与「按 kind 渲染 body」的 JSX。
+ */
 import React, { useCallback } from "react";
 import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
 import { WorkflowNode } from "../WorkflowNode";
@@ -139,10 +136,8 @@ export const CanvasNode = React.memo(function CanvasNode({
   } else if (d.kind === "text" || d.kind === "movie") {
     /* ── 内容载体节点（text / movie）· 对齐 Ardot 稿 715394877779066 v2 ──
      * 边框内 ~100% 预览（视频填满、文本 textarea 填满），空状态居中类型图标 + helper；
-     * 右下 36×36 圆 FAB（类型色 #FF5CA8 粉 / #FB923C 橙 + 白色图标）触发编辑/上传。
-     * Handle 全部在本组件渲染：右侧 output（同 parent 50%）。内容区与 FAB 抽离到
-     * ContentAssetBody 便于复用与单测。输出 Handle
-     * 直接骑跨在右侧边框 50% 处。 */
+     * 右下 36×36 圆 FAB（类型色 + 白色图标）触发编辑/上传。Handle 全在本组件渲染，
+     * 内容区与 FAB 抽离到 ContentAssetBody 便于复用与单测。 */
     const outStyle = d.kind === "text" ? PORT_STYLE.condition : PORT_STYLE.image;
     body = (
       <div className="relative -mx-3.5">
@@ -177,12 +172,10 @@ export const CanvasNode = React.memo(function CanvasNode({
       </div>
     );
   } else if (d.kind === "picture") {
-    /* 图片资产 = 生图节点整体。
-     * 主体永远显示预览（ContentAssetBody，含左侧 inputImage + 右侧 output Handle + FAB）；
-     * 仅当选中该节点时，在预览下方展开 ImageGenerationPanel（类型→模型→工作流 + 参数 +
-     * 生成 CTA）—— 即生图节点的「下半部分（除标题外）」。取消选中后下半部分隐藏，但已
-     * 填写的 workflowId / workflowInputs / genModelTag 仍存于 d（patch 落库），重选即恢复，
-     * 信息不丢。生成成功的图片直接写回本节点 mediaPath，由 ContentAssetBody 预览展示。 */
+    /* 图片资产 = 生图节点整体：主体永远显示预览（ContentAssetBody，含 input/output
+     * Handle + FAB）；仅当选中节点时在预览下方展开 ImageGenerationPanel。
+     * 取消选中后下半部分隐藏，但已填的 workflowId / workflowInputs / genModelTag
+     * 仍存于 d（patch 落库），重选即恢复；生成成功的图片写回 mediaPath。 */
     const outStyle = PORT_STYLE.image;
     body = (
       <div className="flex flex-col gap-2">
@@ -265,12 +258,9 @@ export const CanvasNode = React.memo(function CanvasNode({
  （避免 1px ↔ 2px 跳。Handle 骑跨设计保留——右下紫色 Handle 圆点本
  就设计在外露 +6，与 outline-offset 4 不冲突）。*/
     <div
-      /* 节点卡宽度从 340 提到 380，好让
-       * 标签列（「宽度」/「高度」/「步数」…）能完整渲染 2 字
-       * CJK 标签而不与步进器抢空间。配合
-       * （步进器以 max-w-[180px] 封顶），布局
-       * 现为： [label flex-1] ……… [type chip] / [stepper ≤180]，作用于
-       * 每条工作流 widget 行。 */
+      /* 节点卡宽度从 340 提到 380，好让标签列（「宽度」/「高度」/「步数」…）
+       * 完整渲染 2 字 CJK 标签而不与步进器抢空间；步进器以 max-w-[180px] 封顶，
+       * 布局为 [label flex-1] … [type chip] / [stepper ≤180]，作用于每条 widget 行。 */
       className="border-border-strong bg-card rounded-node relative w-95 border transition-[outline,box-shadow] duration-150"
       style={
         selected
@@ -385,25 +375,14 @@ export const CanvasNode = React.memo(function CanvasNode({
           <OutputRowPort kind={d.kind} wfIO={wfIO ?? null} />
         </div>
       )}
-      {/* 工作流输出 —— 由 ComfyUI 工作流暴露成右侧可连接的
-       * 源句柄（沿用标准工作流画布端点样式，
-       * 没有单独的底栏行）。颜色按解析出的输出类型
-       * （IMAGE/VHS_VIDEO…）经 outputTargetKind 走，所以句柄始终与
-       * Ardot 设计 token 一致，无论所选工作流的任务类型是什么。
-       *
-       * 用户反馈画布 workflow 节点右侧的紫色圆点
-       * 「看起来像漏出的 bug」—— workflow 节点是叶节点（生成图片 / 视频），
-       * 在 project canvas 上不会接出到下游节点，所以这个 source Handle 实
-       * 际上没人连。需要让出端口的能力由画布 IO-edit modal 提供（不在节
-       * 点上外挂圆点）。直接干掉这个 Handle，只在节点外侧浮层工具栏
-       * 「添加输出」里有需要时显式拖出。 */}
+      {/* 工作流输出 —— 由 ComfyUI 工作流暴露成右侧可连接的源句柄，颜色按解析出的
+       * 输出类型（IMAGE/VHS_VIDEO…）经 outputTargetKind 走，始终与 Ardot token 一致。
+       * workflow 节点是叶节点、这个 source Handle 实际没人连（用户反馈像漏出的 bug），
+       * 需要让出端口由画布 IO-edit modal 提供，已移除（见下方注释）。 */}
       {/* 已移除：d.kind ==="workflow" && <Handle type="source" ... /> */}
-      {/* 内容载体的输出句柄（text / picture / movie）——
- 已上移到 body wrapper 内（与 picture input Handle 同 parent），
- 保持右侧 50% 与左侧同 Y；底部不再挂 footer 行，去掉「输出 · 图像」label 与装饰点。
- video 节点现在也走 OutputRowPort（同 image / script）
- * —— 与 WorkflowNode.outputs row 视觉对齐。agent / text / picture / movie 仍由各自
- * body 内的 Handle 处理。 */}
+      {/* 内容载体的输出句柄（text / picture / movie）——已上移到 body wrapper 内
+       （与 picture input Handle 同 parent），保持右侧 50% 与左侧同 Y；底部不再挂 footer
+       行。video 节点现在也走 OutputRowPort（同 image / script）。agent 仍无输出 Handle。 */}
       {/* agent：没有输出 Handle */}
       {/* 调试模式：渲染链路模块标签（仅 debug-store 开启时由
        * DebugChainFooter 自行显示，kind 决定链路）。 */}

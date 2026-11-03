@@ -23,12 +23,9 @@ vi.mock("./hooks/use-fps", async (importOriginal) => {
   const actual = await importOriginal<typeof FpsModule>();
   return { ...actual, useFps: fpsMock };
 });
-/* 状态栏还挂着两个周期源：schema 同步状态（每挂载一次就 `GET /api/schema`）与
- * 队列快照（订阅即拉起 `GET /api/comfy/queue` 的轮询）。两者各有自己的用例
- * （`use-schema-sync-status.test.ts` / `use-comfy-queue.test.ts`），这里换桩 ——
- * 不换的话每一条用例都会真发两笔请求，在本机撞 `localhost:3000` 的
- * ECONNREFUSED，并在 happy-dom 拆窗时把这些在飞的请求打成一片 AbortError
- * （ISSUE #2458：它们是**别的文件**打印的噪声，这条用例自己一条断言都没红）。 */
+/* 状态栏还挂着 schema 同步与队列两个周期源（各自有专用用例），这里换桩 ——
+ * 不换则每条用例都真发两笔请求，撞 `localhost:3000` 的 ECONNREFUSED，并在拆窗
+ * 时把这些在飞请求打成 AbortError 噪声（ISSUE #2458：噪声来自别的文件）。 */
 vi.mock("./hooks/use-schema-sync-status", async (importOriginal) => {
   const actual = await importOriginal<typeof SchemaSyncModule>();
   return {
@@ -262,12 +259,9 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
 
 describe("BrowserStatusBar 纯图标按钮的可访问名", () => {
   /**
-   * 日志面板入口只有图标（外加可选的错误计数徽标），没有可见文字。少了
-   * `accessibleName`，它就既没有 `aria-label` 也没有 `title` —— 读屏用户点到的
-   * 是一颗匿名按钮，而自动化只能退回去等一个并不存在的 `title`
-   * （`locator.click` 没有独立动作超时，会静静等满整条用例的预算）。
-   * `ui/hint` 的契约正是「纯图标按钮传 accessibleName，由它把提示文案写成子元素
-   * 的 aria-label」，这里钉它真的落到 DOM 上。
+   * 日志面板入口只有图标，没有可见文字。缺 `accessibleName` 时它既无 `aria-label`
+   * 也无 `title`：读屏用户点到匿名按钮，自动化只能等一个不存在的 `title`（`locator.click`
+   * 无独立超时，会耗满用例预算）。`ui/hint` 的契约：纯图标按钮传 accessibleName，由它写成子元素 aria-label。
    */
   it("日志面板入口的提示文案同时是它的可访问名", () => {
     renderBar(viewModel());

@@ -1,18 +1,9 @@
 "use client";
 
 /**
- * `use-workshop-pipeline` 的两个挂载期 effect 拆分件（§12.13 函数长度：
- * 主管线函数 505 行，这两块各答一件事且只依赖注入的 setter / 回写口）。
- *
- *   · `useWorkshopBootstrapData` —— 首挂载三路拉取：技能列表（风格卡）、
- *     API 直连通道脱敏视图、工作流库可选清单；作废守卫用 beginStaleRun
- *     （规范 16 §16.2.4.34），三个请求各自落地自己的 set。
- *   · `useWorkshopTaskRecovery` —— 恢复失联任务（刷新 / 切走页签后重挂载）：
- *     草稿把 status / clipStatus=running 与任务 id 一起持久化，但观察循环活在
- *     内存里——重挂载后没有任何人再订阅那条 SSE，镜头会永远停在「生成中」。
- *     恢复前先查 task 表真值：已终态 → 直接回写产物 / 失败态；仍在跑 → 重订阅
- *     等 done 帧；查无真值 → 如实按失败收尾。生图（taskId / status）与视频
- *     （clipTaskId / clipStatus）各认各的字段。
+ * `use-workshop-pipeline` 的两个挂载期 effect 拆分件（§12.13）。`useWorkshopBootstrapData` —— 首挂载三路拉取，作废守卫用 beginStaleRun（规范 16 §16.2.4.34）。
+ * `useWorkshopTaskRecovery` —— 恢复失联任务：观察循环活在内存里，重挂载后没人再订阅那条 SSE，镜头会永远停在「生成中」；恢复前先查 task 表真值
+ *（已终态直接回写 / 仍在跑重订阅等 done 帧 / 查无真值按失败收尾）。
  */
 import { useEffect, useRef } from "react";
 

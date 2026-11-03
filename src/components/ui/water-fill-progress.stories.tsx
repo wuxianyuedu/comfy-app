@@ -3,11 +3,8 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { WaterFillProgress } from "~/components/ui/water-fill-progress";
 
 /**
- * 「水逐渐装满」的进度覆盖层：整层绝对定位 `inset-0`，所以要放在一个
- * `relative` 的容器里 —— 本件每张都用同一块底色方框当那个容器。
- *
- * 水层用 `translateY` 而不是 `height`（只触发合成层），`pct` 由
- * `~/lib/clamp` 夹取 —— 越界的输入在这一屏看得到。
+ * 「水逐渐装满」的进度覆盖层：整层绝对定位 `inset-0`，要放在 `relative` 容器里 —— 本件每张都用同一块底色方框当容器。
+ * 水层用 `translateY` 而不是 `height`（只触发合成层），`pct` 由 `~/lib/clamp` 夹取 —— 越界输入在这一屏看得到。
  */
 const meta = {
   title: "UI/WaterFillProgress",

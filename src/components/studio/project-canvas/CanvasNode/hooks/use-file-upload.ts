@@ -1,15 +1,10 @@
 "use client";
 
 /* CanvasNode 的文件上传管线。
- *  三条内聚的上传路径共用本 hook：生成器节点的
- *  图片输入选择器（pickFile + 隐藏 input）、内容载体媒体
- *  选择器（pickMedia/onMediaFile，含原样保留的
- *  只写 mediaKindRef）以及由 ContentAssetBody 交过来的拖放
- *  上传（onUploadFile）。
- *
- *  隐藏 `<input>` 的持有与「点谁去触发」已收进 `~/components/ui/file-picker`
- *  （`useFilePicker`）—— 此前本文件自己管两个 ref + 两个 `click()`，
- *  另一处 `use-dynamic-workflow-form` 又抄了一遍同一套样板。 */
+ * 三条内聚路径共用：生成器的图片输入（pickFile + 隐藏 input）、内容载体媒体选择
+ * （pickMedia / onMediaFile，含只写 mediaKindRef）、以及 ContentAssetBody 交来的拖放上传。
+ * 隐藏 `<input>` 的持有与触发已收进 `~/components/ui/file-picker`。
+ */
 import React from "react";
 import { useFilePicker } from "~/components/ui/file-picker";
 import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";

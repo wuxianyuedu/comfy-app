@@ -81,10 +81,7 @@ describe("useImageRedraw", () => {
       }),
     );
     expect(current().resultTaskId).toBe("task-new");
-    expect(deps.report).toHaveBeenCalledWith(
-      "ok",
-      expect.stringContaining("task-new"),
-    );
+    expect(deps.report).toHaveBeenCalledWith("ok", expect.stringContaining("task-new"));
   });
 
   it("局部重绘：原图 + 蒙版两槽；没画蒙版先拦下（不提交）", async () => {
@@ -99,10 +96,7 @@ describe("useImageRedraw", () => {
       await current().run("/generated/t/1.png");
     });
     expect(deps.submit).not.toHaveBeenCalled();
-    expect(deps.report).toHaveBeenCalledWith(
-      "err",
-      expect.stringContaining("蒙版"),
-    );
+    expect(deps.report).toHaveBeenCalledWith("err", expect.stringContaining("蒙版"));
 
     act(() => {
       current().setMask("data:image/png;base64,AAAA");
@@ -110,15 +104,10 @@ describe("useImageRedraw", () => {
     await act(async () => {
       await current().run("/generated/t/1.png");
     });
-    expect(deps.prepareImage).toHaveBeenCalledWith(
-      "data:image/png;base64,AAAA",
-    );
+    expect(deps.prepareImage).toHaveBeenCalledWith("data:image/png;base64,AAAA");
     expect(deps.submit).toHaveBeenCalledWith(
       expect.objectContaining({
-        referenceImages: [
-          "up-/generated/t/1.png",
-          "up-data:image/png;base64,AAAA",
-        ],
+        referenceImages: ["up-/generated/t/1.png", "up-data:image/png;base64,AAAA"],
       }),
     );
   });
@@ -134,10 +123,7 @@ describe("useImageRedraw", () => {
       await current().run("/generated/t/1.png");
     });
     expect(deps.submit).not.toHaveBeenCalled();
-    expect(deps.report).toHaveBeenCalledWith(
-      "err",
-      expect.stringContaining("模板"),
-    );
+    expect(deps.report).toHaveBeenCalledWith("err", expect.stringContaining("模板"));
 
     await act(async () => {
       await current().ensureTemplates();

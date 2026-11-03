@@ -4,25 +4,9 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { Button } from "~/components/ui/button";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 
-/**
- * `ConfirmDialog` 是**跟随应用主题的居中确认弹窗**，替换 `window.confirm()` /
- * `window.alert()`（后者贴视口左上、忽略深色 CSS）。
- *
- * 它基于 `ui/dialog`（不再自搓 `createPortal` + 手写 Esc + 手写遮罩点击），
- * 于是 Esc / 点遮罩关闭、焦点锁在弹窗内、关闭后焦点归还触发元素这几条
- * 无障碍行为都由基元负责，本件只管「确认弹窗长什么样」。
- *
- * 几条只有真点开才看得出的口径：
- *
- * 1. **两档语义色**（`danger` / 信息）：卡片 ring / 边框 / 图标颜色一起切，
- *    颜色全走语义 token（这里曾把 `violet-500/600` 写死 6 处，
- *    于是「改品牌色」对它不起作用 —— 它绕开了 `--color-primary`）。
- * 2. **确认按钮自动聚焦**：等一帧后 `focus()`（等 portal 挂载），
- *    Enter 立刻触发它 —— 与原生 `confirm()` 的肌肉记忆一致。每次打开都重置。
- * 3. **`pending`**：确认按钮转 spinner 态并禁用，用于「点完等结果」那一段。
- * 4. **`aria-labelledby` 每个实例一个 id**（`useId`）：`title` 写死 id 会在
- *    多个弹窗同时挂载时撞车，读屏器念到别处的标题。
- */
+/** `ConfirmDialog` 是跟随应用主题的居中确认弹窗，替换 `window.confirm()` / `window.alert()`（后者贴视口左上、忽略深色 CSS）。
+ * 它基于 `ui/dialog`（不再自搓 createPortal + 手写 Esc + 手写遮罩点击），Esc / 点遮罩关闭、焦点锁、焦点归还都由基元负责，本件只管「确认弹窗长什么样」。
+ * 几条真点开才看得出的口径：① 两档语义色（danger / 信息）的 ring / 边框 / 图标一起切，颜色全走语义 token（曾写死 `violet-500/600` 6 处，绕开 `--color-primary`）；② 确认按钮等一帧后 focus（等 portal 挂载），Enter 立刻触发，每次打开重置；③ `pending` 令确认按钮转 spinner 并禁用；④ `aria-labelledby` 每实例一个 `useId`，写死 id 会在多弹窗同挂时撞车、读屏念到别处标题。 */
 const meta = {
   title: "UI/ConfirmDialog",
   component: ConfirmDialog,

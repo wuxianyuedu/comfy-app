@@ -1,23 +1,8 @@
-/* 「所有项目」屏的**渲染**判据（ISSUE #1522 收尾）。
- *
- * 分层：逻辑层（取数 / 确认流 / 出处标注）由 `works/hooks/UseWorksGallery.test.tsx`
- * 守，`canvas-store.test.ts` 守并集与「两侧一起删」的口径；这里只断言**用户看得见
- * 的那一层** —— 这一屏此前没有任何视图层用例，于是「渲染出来才发现」的错在它上面
- * 没有判据（#1522 收尾那一轮撞到的 Markdown 星号就是这么漏出来的：类型检查、lint、
- * 逻辑层用例一个字都不看渲染结果）。
- *
- * 铺的是**这一屏自己独有的出口**，不是把 controller 的返回值再念一遍：
- *   · 说明句与它的降级那一句 —— 拉不到服务端时「看不到」不许被说成「不存在」；
- *   · 三种出处标 —— 只标「只在一侧」的行，`both` 是正常行（标出来是噪声）；
- *   · 删除的**两步** —— 点「删除」只弹确认框（此时一个删除都不该发生），
- *     而确认框的标题按出处分叉：删「仅服务端」那一行动的是**服务端**那份
- *     （本机没有副本可回退），说成同一句会让用户在删完一个别处的画布之后
- *     才知道删的是什么；
- *   · 空态与加载态 —— 这两种档下上面那些行一个都不该在。
- *
- * 判据打在**渲染出来的文本 / 可访问名**上（§11.2 行为断言），不 dump DOM 结构
- * （§11.9 禁止拿快照当结构基线）。
- */
+/* 「所有项目」屏的**渲染**判据（ISSUE #1522 收尾）。逻辑层（取数 / 确认流 / 出处标注）由
+ * `works/hooks/UseWorksGallery.test.tsx` 守，`canvas-store.test.ts` 守并集与「两侧一起删」的口径；这里只断言
+ * **用户看得见的那层** —— 该屏此前无视图层用例，类型检查 / lint / 逻辑层用例都不看渲染结果（#1522 撞到的
+ * Markdown 星号就这么漏出）。铺的是本屏独有出口：说明句与降级句（拉不到服务端时「看不到」不许说成「不存在」）、
+ * 只标「只在一侧」的出处标、删除的两步（点删除只弹确认框且标题按出处分叉）、空态 / 加载态下列行都不该在；判据打在文本 / 可访问名上。 */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -25,10 +10,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { ToastProvider } from "./ToastProvider";
 import { WorksGallery } from "./WorksGallery";
 import type { ProjectListEntry } from "~/lib/project-canvas/canvas-store";
-import {
-  defaultData,
-  type CanvasNodeType,
-} from "~/lib/project-canvas/canvas-types";
+import { defaultData, type CanvasNodeType } from "~/lib/project-canvas/canvas-types";
 import type { WorksGalleryController } from "./works/hooks/use-works-gallery";
 
 const controllerMock = vi.hoisted(() => vi.fn<() => WorksGalleryController>());
@@ -54,9 +36,7 @@ function renderWith(over: Partial<WorksGalleryController> = {}): void {
   renderScreen();
 }
 
-function controller(
-  over: Partial<WorksGalleryController> = {},
-): WorksGalleryController {
+function controller(over: Partial<WorksGalleryController> = {}): WorksGalleryController {
   return {
     projects: [],
     loading: false,
@@ -133,9 +113,7 @@ describe("WorksGallery 说明文案", () => {
 
   it("拉到了就不出现降级那一句（它对正常态是噪声）", () => {
     renderWith({ serverOk: true });
-    expect(
-      screen.queryByText(/服务端列表这一轮没拉到/),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/服务端列表这一轮没拉到/)).not.toBeInTheDocument();
   });
 });
 
@@ -232,13 +210,8 @@ describe("WorksGallery 卡片", () => {
      * 底色要的是「有一档底色 token（`bg-card` / `bg-surface-*` …）」，
      * 层级要的是 §16.2.5 刻度表里的 `z-base`（卡片内遮罩那一档），
      * 不是裸数字 —— 裸数字由 `check-overlay-z.cjs` 硬闸拦下。 */
-    const hasBackground = classes.some((c) =>
-      /^bg-(card|surface|background)(\/|$)/.test(c),
-    );
-    expect(
-      hasBackground,
-      "删除按钮没有不透明底：长名字会从「删除」二字底下透出来",
-    ).toBe(true);
+    const hasBackground = classes.some((c) => /^bg-(card|surface|background)(\/|$)/.test(c));
+    expect(hasBackground, "删除按钮没有不透明底：长名字会从「删除」二字底下透出来").toBe(true);
     expect(classes).toContain("z-base");
   });
 
@@ -265,9 +238,7 @@ describe("WorksGallery 删除确认", () => {
     screen.getByRole("button", { name: "删除项目「山与海」" }).click();
     expect(requestDelete).toHaveBeenCalledWith("proj_a");
     // 确认框还没挂（controller 的 pendingDelete 仍为 null）。
-    expect(
-      screen.queryByRole("button", { name: "删除项目" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "删除项目" })).not.toBeInTheDocument();
   });
 
   it("确认框按出处分叉：删「仅服务端」那一行说的是服务端，不是普通那句", () => {
@@ -288,17 +259,13 @@ describe("WorksGallery 删除确认", () => {
       pendingDelete: entry({ id: "both", name: "山与海" }),
     });
     expect(screen.getByText("删除此画布项目？")).toBeInTheDocument();
-    expect(
-      screen.getByText(/画布内的节点与连线将一并丢失/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/画布内的节点与连线将一并丢失/)).toBeInTheDocument();
   });
 
   it("确认框关着的时候一个字都不该出现（controller 说没有待删项）", () => {
     renderWith({ projects: [entry()], pendingDelete: null });
     expect(screen.queryByText("删除此画布项目？")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("删除服务端上的这条项目？"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("删除服务端上的这条项目？")).not.toBeInTheDocument();
   });
 });
 

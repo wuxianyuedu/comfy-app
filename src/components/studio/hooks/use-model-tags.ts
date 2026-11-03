@@ -1,13 +1,9 @@
 "use client";
 
-// ── 模型标签库：逻辑层（规范 17 §17.2 第②层）────────────────────────────────
-// 承载标签列表的 props 合并、新增/删除/重命名与错误提示。
-// ModelTagManager 视图只消费本 hook，不再出现 vanillaApi。
-//
-// props 合并规则（原组件的隐式契约，此处显式化）：
-//   父组件传来的 initialTags 是缓存快照，可能比本地列表旧 —— 只在能带来
-//   「本地没有的新标签」时才并入，绝不拿旧快照覆盖本地（否则新建的标签会在
-//   create() 与 refresh() 之间闪一下就消失）。
+// ── 模型标签库：逻辑层（规范 17 §17.2 第②层）
+// 承载标签列表的 props 合并、新增/删除/重命名与错误提示；视图只消费本 hook，不出现 vanillaApi。
+// props 合并规则（原组件隐式契约）：`initialTags` 是缓存快照，可能比本地列表旧 ——
+// 只在能带来「本地没有的新标签」时并入，绝不拿旧快照覆盖本地（否则新建标签会闪一下就消失）。
 
 import { useCallback, useState } from "react";
 
@@ -33,12 +29,9 @@ export type ModelTagsController = {
   /** 新增框草稿。 */
   draft: string;
   /**
-   * 按条目挂的错误（规范 16 §16.2.4.33）。
-   *
-   * 此前是一句 `useState<string | null>` —— 也就是「最近一次操作的草稿」：
-   * 新增失败后去删另一条，错误条被同一块覆盖，而上一条那行已经不再标红。
-   * 现在错误属于**那一条**：`errors.get(id)` 决定这一行标不标红，
-   * `errors.get(null)` 承载整表级错误（如列表刷新失败）。
+   * 按条目挂的错误（规范 16 §16.2.4.33）。此前是 `useState<string | null>`（最近一次操作
+   * 的草稿）：新增失败后去删另一条，错误条被覆盖而上一条不再标红。现在错误属于**那一条**：
+   * `errors.get(id)` 决定这一行标不标红，`errors.get(null)` 承载整表级错误。
    */
   errors: ItemErrors;
   /**
@@ -73,15 +66,11 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
    * 留下一个指向已不存在条目的错误条，用户找不到它说的是什么。 */
   const errors = useItemErrors(tags.map((tag) => tag.name));
 
-  /* 只在父组件递来「带了新标签」的快照时才并入——合并规则见文件头。
-   *
-   * 判据用**内容**而非数组引用：父组件若写成 `initialTags={tags?.data ?? []}`
-   * （每次渲染都是新数组），按引用比较会每次都 setState → 「Too many re-renders」。
-   * 用名称集合做 key，引用变、内容没变就什么都不做。
-   *
-   * 上一个 key 存在 state 里而不是 ref：`react-hooks/refs` 禁止在渲染期读写 ref，
-   * 而 React 19 的「渲染期调整 state」范式本就要求把前值放 state（放 ref 属于
-   * 渲染期副作用，会让组件在并发渲染下丢更新）。 */
+  /* 只在父组件递来「带了新标签」的快照时才并入 —— 合并规则见文件头。
+   * 判据用**内容**而非数组引用：父组件写成 `initialTags={tags?.data ?? []}` 时每次
+   * 都是新数组，按引用比较会每次 setState →「Too many re-renders」；用名称集合做 key。
+   * 上一个 key 放 state 而非 ref：`react-hooks/refs` 禁止渲染期读写 ref，React 19 的
+   * 「渲染期调整 state」范式也要求前值放 state（放 ref 会在并发渲染下丢更新）。 */
   const [prevSnapshotKey, setPrevSnapshotKey] = useState(() =>
     initialTags.map((tag) => tag.name).join(SNAPSHOT_KEY_SEP),
   );

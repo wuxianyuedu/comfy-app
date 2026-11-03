@@ -9,19 +9,9 @@ import {
   NavigationMenuTrigger,
 } from "~/components/ui/navigation-menu";
 
-/**
- * `ui/navigation-menu` 是**站点级导航条**（悬停即展开的横向菜单）。
- *
- * 与 `menubar` 的差别值得说清，两者很容易被当成一件事：
- * - `menubar` 是**应用菜单栏**（`文件 / 编辑` 那种），点开、选一个、关掉；
- * - 本件是**导航**，悬停即展开，且展开的浮层由 `NavigationMenuPositioner`
- *   **统一承载**，所以移动鼠标时面板位置会平滑地跟着走 ——
- *   这是本件最值得看的一处形态，光看单项是看不出来的。
- *
- * 定位那一层同样读 `useOverlayBoundary()`（可用区域 = 视口减去应用级标题行，
- * 壳态才有标题行）。`NavigationMenuTrigger` 自带的 `ChevronDownIcon`
- * 会在展开时 `rotate-180`。
- */
+/** `ui/navigation-menu` 是站点级导航条（悬停即展开的横向菜单）。
+ * 与 `menubar` 的差别值得说清：后者是应用菜单栏（「文件 / 编辑」那种，点开、选一个、关掉）；本件是导航，悬停即展开，且展开的浮层由 `NavigationMenuPositioner` 统一承载，所以移动鼠标时面板位置会平滑地跟着走 —— 这是本件最值得看的一处形态，光看单项是看不出来的。
+ * 定位那一层同样读 `useOverlayBoundary()`（可用区域 = 视口减去应用级标题行，壳态才有标题行）；`NavigationMenuTrigger` 自带的 `ChevronDownIcon` 会在展开时 `rotate-180`。 */
 const meta = {
   title: "UI/NavigationMenu",
   component: NavigationMenu,

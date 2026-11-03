@@ -1,14 +1,7 @@
 /**
  * 「全局快捷键」只允许一处实现的契约（ISSUE #672 §16.2.4.23）。
- *
- * 现场：6 处各写一份 `addEventListener("keydown", …)`，而**修饰键判据不同** ——
- * `LogProvider` 与 `UpdateCheckProvider` 只判 `ctrlKey`（**macOS 上按 ⌘ 没反应**）、
- * `json-viewer` 判了 `metaKey || ctrlKey` 却不过滤输入焦点、`ScriptMarkdownEditor`
- * 两者都判但把两件事塞进一个 handler。
- *
- * 这里钉的是**行为**（「在 mac 上到底能不能用」「在输入框里会不会被抢」），
- * 而不是实现字符串 —— 与「只断言源码里的类名抓不住 tailwind-merge 顺序问题」
- * 同源。
+ * 现场 6 处各写一份 `addEventListener("keydown", …)`，修饰键判据不同：两处只判 ctrlKey（macOS ⌘ 没反应）、一处判 metaKey || ctrlKey 却不过滤输入焦点、一处两者都判但把两件事塞进一个 handler。
+ * 这里钉行为（mac 上能不能用、输入框里会不会被抢），而不是实现字符串。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render } from "@testing-library/react";

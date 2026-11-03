@@ -1,17 +1,7 @@
 /**
- * `GET /api/debug/source?file=…` —— 画布调试模式读源码端点的边界。
- *
- * 这是一个「按调用方给的路径读项目内文件」的端点，所以它的正确性**全部**落在闸门上：
- *   · 未登录不读盘（401 走 `~/server/lib/error-response` 的唯一信封形态，不在这里手抄
- *     `{ error: { code: "auth.required" … } }` —— 那是 §10.9 与 ISSUE #573 收过一次的形状）；
- *   · 缺参数 / 含 NUL / 扩展名不在白名单 → 400，且**各自是不同的原因**，不能糊成一句；
- *   · 逃出 `src/` → 403。这里最有价值的一条是 `<项目根>/.env`：它**在项目里**，
- *     唯一挡住它的是「必须落在 src 下」这一条 containment，而不是 `../` 检查；
- *   · 读不到 → 404，不把 fs 原文回出去。
- *
- * NUL 那条另有一层：源码里嵌一个真 NUL 会让整份文件被 git/diff/grep 判成二进制
- * （AGENTS 硬规则 19 / §12.11），所以这个端点收到带 NUL 的 query 时必须显式拒，
- * 而不是让它进到 `path.resolve` 里。
+ * `GET /api/debug/source?file=…` —— 画布调试读源码端点的边界（正确性全在闸门）。未登录 401 不读盘；缺参 / 含 NUL /
+ * 扩展名不在白名单 → 400 且原因各别（NUL 须显式拒：真 NUL 会让整份文件被 git/diff 判成二进制，硬规则 19）；
+ * 逃出 `src/` → 403（`<项目根>/.env` 只靠「必须落在 src 下」挡）；读不到 → 404 不回 fs 原文。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";

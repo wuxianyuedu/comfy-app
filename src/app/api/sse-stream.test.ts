@@ -1,13 +1,7 @@
 /**
- * `createSseResponse` —— 两条 SSE 路由共用的传输边缘（帧头 / 心跳 / 收尾）。
- *
- * 抽这一层的原因是 `/api/comfy/liveness` 与 `/api/comfy/queue/events` 逐行重合 90%
- * （§12.12 硬闸）。抽出来之后**这条边缘自己**必须钉住三件事，否则两份路由的用例
- * 只能证明「各自的业务帧对了」，证明不了「协议形态没在搬迁里丢」：
- *   1. 帧头写全（`text/event-stream` / `no-cache` / 关反代缓冲）；
- *   2. `send` 出去的每一帧就是 `data: <json>\n\n`（含中文与引号的转义）；
- *   3. 收尾**只跑一次**且**断开也跑**：浏览器断开（`cancel`）与入队抛错两条路径
- *      都会调退订函数 —— 只清一条，15s 心跳会在流关闭之后继续跑。
+ * `createSseResponse` —— 两条 SSE 路由共用的传输边缘（帧头 / 心跳 / 收尾）。抽出来是因 `/api/comfy/liveness` 与 `/api/comfy/queue/events` 逐行重合 90%（§12.12 硬闸）；
+ * 抽出后这条边缘自己必须钉三件事，否则两份路由的用例只证明「业务帧对了」、证明不了「协议形态没在搬迁里丢」：帧头写全（`text/event-stream` / `no-cache` / 关反代缓冲）；
+ * `send` 出的每一帧就是 `data: <json>\n\n`（含中文与引号转义）；收尾**只跑一次**且**断开也跑**（`cancel` 与入队抛错两条路径都调退订 —— 只清一条，15s 心跳会在流关闭后继续跑）。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

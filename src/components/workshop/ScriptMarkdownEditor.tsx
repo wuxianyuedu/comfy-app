@@ -269,11 +269,8 @@ export function ScriptMarkdownEditor({
   }
 
   /* ⌘/Ctrl+S 保存、⌘/Ctrl+Z 撤销（Shift 变重做）。
-   *
-   * `filterInput: false` 是**刻意**的：本组件是一整块全屏编辑器，而它的主体
-   * 就是个 `<textarea>` —— 默认的「焦点在输入框里就跳过」会把这两个快捷键
-   * 全部挡死（用户正是在输入框里按 ⌘S）。此前手写的那份没接 `metaKey` 之外的
-   * 平台判断，也没有统一的过滤口径，正好落在这个反例上。 */
+   * `filterInput: false` 是**刻意**的：本组件主体就是 `<textarea>`，默认的
+   *「焦点在输入框里就跳过」会把这两个快捷键全部挡死（用户正是在输入框里按 ⌘S）。 */
   const saveHotkey = React.useCallback(() => onSave?.(), [onSave]);
   useHotkey({ key: "s", mod: true }, saveHotkey, {
     filterInput: false,

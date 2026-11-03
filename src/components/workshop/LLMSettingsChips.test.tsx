@@ -8,16 +8,9 @@ import type { LLMConfigView } from "~/lib/llm/types";
 afterEach(cleanup);
 
 /**
- * LLM 设置弹窗里两排「一排里选一个」的形态回归（ISSUE #1925 第三批收口）。
- *
- * 提供方（本地 / 远程）与模型清单此前都是手搓的 `Button variant="outline"` +
- * 选中三元：选中档只写了 `border-primary bg-primary-soft text-primary`，
- * 而 `outline` 变体自带 `hover:bg-muted hover:text-foreground` —— 划过**已选中**
- * 的那一枚时悬停档胜出，紫色选中翻成白字灰底（ISSUE #1423 那一族）。
- * 现在整排交给 `ui/select-chip`。
- *
- * 这里钉两件事：① 单选语义（`radiogroup` + `aria-checked`）；② 选中档自带与
- * 常态同值的悬停值。
+ * LLM 设置弹窗里两排「一排里选一个」的形态回归（ISSUE #1925 第三批收口）：手搓的 `Button variant="outline"` 选中档没钉悬停值，而 `outline` 变体自带
+ * `hover:bg-muted hover:text-foreground` —— 划过**已选中**的那枚时悬停档胜出，紫色选中翻成白字灰底（ISSUE #1423 那一族）。现整排交给 `ui/select-chip`。
+ * 这里钉两件事：① 单选语义（`radiogroup` + `aria-checked`）；② 选中档自带与常态同值的悬停值。
  */
 const cfg: LLMConfigView = {
   provider: "local",
@@ -62,10 +55,7 @@ describe("LLM 设置的提供方 / 模型清单 chip（ISSUE #1925）", () => {
       .getAllByRole("radio")
       .filter((c) => /Ollama|OpenAI/.test(c.textContent ?? ""));
     expect(providerChips).toHaveLength(2);
-    expect(providerChips.map((c) => c.getAttribute("aria-checked"))).toEqual([
-      "true",
-      "false",
-    ]);
+    expect(providerChips.map((c) => c.getAttribute("aria-checked"))).toEqual(["true", "false"]);
   });
 
   it("模型清单也是单选 radiogroup，且选中档四层俱在、悬停回钉常态", async () => {

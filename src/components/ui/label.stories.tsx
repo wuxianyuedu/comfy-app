@@ -4,15 +4,8 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 
-/**
- * `ui/label` 是原生 `<label>` 的薄封装，三件事值得单独看：
- *
- * 1. **`htmlFor` 关联**：点标签等于点控件（这里用 `<Input>` 现场验）；
- * 2. **`flex items-center gap-2`**：所以「标签 + 控件」并排时不必自己排 ——
- *    这也解释了为什么它有时显得比裸 `<label>` 宽；
- * 3. **`peer-disabled:*`**：兄弟控件禁用时标签一起变灰（`peer` 是同级的
- *    「状态来源」，不是子元素）。
- */
+/** `ui/label` 是原生 `<label>` 的薄封装，三件事值得单独看：
+ * ① `htmlFor` 关联：点标签等于点控件（这里用 `<Input>` 现场验）；② `flex items-center gap-2`：所以「标签 + 控件」并排时不必自己排，也解释了为什么它有时显得比裸 `<label>` 宽；③ `peer-disabled:*`：兄弟控件禁用时标签一起变灰（`peer` 是同级的「状态来源」，不是子元素）。 */
 const meta = {
   title: "UI/Label",
   component: Label,

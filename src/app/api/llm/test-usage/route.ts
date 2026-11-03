@@ -18,17 +18,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * POST /api/llm/test-usage —— 按用途（chat / image / video）发起**一次真实调用**。
- *
- * 请求解析、连接参数回落（弹窗内填的 → 条目已保存的 → 全局）与上游调用都在
- * `~/lib/llm/usage-test.server`，与「继续等待」路由（`./query`）逐字共用一份
- * —— 两个动作对同一上游必须发出同一形状的请求，密钥解析也必须同一口径。
- *
- * 生视频走任务制时：内置一轮轮询（VIDEO_POLL_TOTAL_MS），仍未就绪即以
- * `{ pending:true, taskId }` 返回，由 `./query` 接收「继续等待」，本路由
- * **不**重新提交。
- *
- * 失败一律 200 + `{ ok:false, detail }`，前端按 detail 展示降级文案。
+ * POST /api/llm/test-usage —— 按用途（chat / image / video）发起**一次真实调用**。请求解析、连接参数回落（弹窗内填的 → 条目已保存的 → 全局）
+ * 与上游调用都在 `usage-test.server`，与「继续等待」路由（`./query`）逐字共用一份 —— 两个动作对同一上游必须发出同一形状的请求，密钥解析同一口径。
+ * 生视频走任务制时内置一轮轮询（VIDEO_POLL_TOTAL_MS），仍未就绪即以 `{ pending:true, taskId }` 返回、由 `./query` 接「继续等待」（本路由不重新提交）；失败一律 200 + `{ ok:false, detail }`。
  */
 export async function POST(req: NextRequest) {
   if (!(await requireRequestUser())) {

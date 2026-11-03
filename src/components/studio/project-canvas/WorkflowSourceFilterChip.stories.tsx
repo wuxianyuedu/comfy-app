@@ -3,16 +3,9 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { WorkflowSourceFilterChip } from "~/components/studio/project-canvas/WorkflowSourceFilterChip";
 
 /**
- * 画布工作流节点上的「来源筛选」chip（全部 / 本机 / 在线）。
- *
- * 纯 props（`value` / `onChange`），但它有一件**只在两档并排时才看得见**的东西：
- * 触发器的**圆点与文字色按当前值分叉**（本机走 `status-online`、其余走
- * `primary-strong`）——「全部」与「在线」共用同一套配色，而语义上它们不是同一件事
- * （一个是不筛，一个是筛在线）。所以下面把三档都摆出来，这处口径要改时能一眼看到
- * 自己在改哪几档。
- *
- * 浮层壳与选项行走 `ui/option-list-popover`（规范 16 §16.2.4.14）—— 本目录四个
- * chip 此前各写一遍这份壳，所以 story 里不摆自定义浮层，只摆真组件。
+ * 画布工作流节点上的「来源筛选」chip（全部 / 本机 / 在线，纯 props）。
+ * 触发器圆点与文字色按当前值分叉（本机 `status-online`、其余 `primary-strong`）；
+ * 浮层壳与选项行走 `ui/option-list-popover`（规范 16 §16.2.4.14），story 只摆真组件。
  */
 /* SAFETY: 类型断言已复核 */
 const OPTIONS = ["all", "local", "online"] as const;

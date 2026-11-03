@@ -1,24 +1,9 @@
 "use client";
 
 /**
- * 设置页「数据库备份 / 恢复」分区的 sub-hook（`use-settings-page` 的拆分件）。
- *
- * 收口 3 个 tRPC 通道（`backupList` 查询 + `backupCreate` / `backupRestore`
- * 两个 mutation）与 2 个动作，形状与 `use-settings-page-db-studio.ts` 逐字段
- * 对齐（§12.18 复用优先：拆包只挪文件、不动契约）。
- *
- * ── 这里为什么不「恢复完就完事」──────────────────────────────────────────
- *
- * 「恢复」在这条链路上是**两步**，而界面必须把第二步讲出来：
- *
- *   1. 点按钮 → 服务端只写一个**待恢复标记**（`backupRestore`）；
- *   2. 真正换文件发生在**下次启动**（`scripts/db-backup-core.mjs` 的
- *      `applyPendingRestoreAtBoot`，排在 Next 起来之前）。
- *
- * 分开的理由是硬的：运行期有多个进程持有这个库（内嵌 Next server、执行宿主、
- * 用户可能开着的 Drizzle Studio），在别人握着句柄时覆盖 `db.sqlite` 是不可逆的
- * 数据事故。所以这个 hook 的产出里有一个 `pending` —— 视图拿它渲染
- * 「已登记，重启后生效」，而不是弹一句「恢复成功」把人骗去刷新页面。
+ * 设置页「数据库备份/恢复」分区的 sub-hook：收口 backupList 查询 + create/restore 两 mutation（§12.18 对齐 db-studio 件）。
+ * 「恢复」是两步：服务端只写待恢复标记，真正换文件在下次启动（`applyPendingRestoreAtBoot`）——运行期多个进程
+ * 持有这个库，别人握着句柄时覆盖 `db.sqlite` 是不可逆数据事故；故产出有 `pending`，视图报「已登记，重启后生效」。
  */
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useState } from "react";

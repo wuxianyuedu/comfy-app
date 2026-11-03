@@ -5,26 +5,11 @@ import { PortHandle, portChipStyle } from "~/components/studio/workflow-form/Wor
 import { DARK_PALETTE_BASE } from "~/components/studio/canvas/workflow-node-palette";
 import { StorybookFlowCanvas, canvasScene, withNodeType } from "../../../../.storybook/flow-canvas";
 
-/**
- * 画布端点（`PortHandle`）—— 第二层注入（React Flow）的**核心现场**。
- *
- * ## 为什么它此前写不出 story
- *
- * 它内部调 `useNodeId()`：拿不到宿主节点 id 时，React Flow 的 `<Handle>` 直接抛
- * error#010（"No node id found"）。所以「挂个假 provider」不是出路 —— 真
- * `<ReactFlow>` 里长出来的端点几何（骑跨卡片边框、圆心锁在子行中线）才是这份
- * story 要看的东西。注入层（`.storybook/flow-canvas.tsx`）给的就是那块真画布，
- * 节点渲染器由 story 通过 `nodeTypes` 注入。
- *
- * ## 要看的三条
- *
- *  · **类型 → 颜色**：IMAGE/MASK 紫、VIDEO/AUDIO 粉、STRING/INT 中性灰、
- *    BOOLEAN 绿、未知类型青（`portColorFor()` 的五个分支，逐档并排）；
- *  · **进出描边不同**：输入 `#4D4D59`、输出是卡片底色（外半圆在内、内半圆在外）；
- *  · **没有 node 上下文时退化为装饰圆点**：同一个组件在画布外（如 IO 预览面板、
- *    工作流库预览）复用同一行部件时，几何必须**完全一致** —— 那是同一条判据的
- *    另一半，所以下面两档并排给。
- */
+/** 画布端点（PortHandle）story —— 第二层注入（React Flow）的核心现场。它内部 useNodeId()，
+ * 拿不到宿主 id 时 <Handle> 直接抛 error#010，故「假 provider」不是出路：真 <ReactFlow> 里长出的
+ * 端点几何（骑跨卡片边框、圆心锁在子行中线）才是要看的东西；注入层 .storybook/flow-canvas.tsx 给真画布。
+ * 三条：类型→颜色（IMAGE/MASK 紫、VIDEO/AUDIO 粉、STRING/INT 灰、BOOLEAN 绿、未知青，portColorFor 五分支）；
+ * 进出描边不同（输入 #4D4D59、输出为卡片底色）；无 node 上下文时退化为装饰圆点且几何完全一致。 */
 const meta = {
   title: "Studio/WorkflowForm/WorkflowPortHandle",
   component: PortHandle,
@@ -58,10 +43,9 @@ const PORT_ROWS: Array<{ dir: "in" | "out"; id: string; type?: string }> = [
 ];
 
 /**
- * 一行端点。**内边距在行上、不在卡片上**（与 `OutputRowPort` / 画布节点同一份
- * 几何）：行是 `relative` 的、内容有 `px-3.5`，于是 `left/right: -6` 的端点正好
- * 骑在卡片边框上。把 `px-3.5` 放到卡片上时端点会压住标签 —— 那是这一层最容易
- * 摆错的一处，所以 story 里按真结构来。
+ * 一行端点。内边距在行上、不在卡片上（与 OutputRowPort / 画布节点同一份几何）：
+ * 行 relative、内容 px-3.5，于是 left/right: -6 的端点正好骑在卡片边框上；
+ * 把 px-3.5 放卡片上会让端点压住标签 —— 这一层最易摆错，故 story 按真结构来。
  */
 function PortRow({ portId, dir, type }: { dir: "in" | "out"; portId: string; type?: string }) {
   /* 卡面取**节点调色板的底色**（`DARK_PALETTE_BASE.body`）而不是再写一遍 hex ——
@@ -79,30 +63,16 @@ function PortRow({ portId, dir, type }: { dir: "in" | "out"; portId: string; typ
   );
 }
 
-/**
- * 真节点渲染器：**从 `nodeTypes` 进画布**，所以 `useNodeId()` 拿得到宿主 id、
- * `<Handle>` 走真分支。这一份刻意只放端点列 —— 它要验的就是端点本身。
- *
- * ## 端点 id 必须与真画布同口径（否则场景里的连线一条都画不出来）
- *
- * handle id **不是**随手取的短序号，而是 React Flow 找锚点的唯一凭据：
- * 找不到就会**静默丢弃整条边**（不报错、控制台干净、画布只是少几条线）。
- * 真画布上两套口径各管一侧（`FlowNodePinRows.tsx` / `WorkflowNode.tsx`）：
- *
- *  · **输出端** → `` `out:${outName}` ``（前缀常量是 `OUTPUT_PORT_HANDLE_PREFIX`）；
- *  · **输入端** → `ioKey`（这里用端口名本身，正是那份动态表单的键）。
- *
- * 所以这份渲染器的 `id` 与 `flow-canvas.tsx` 场景里每条边的
- * `sourceHandle` / `targetHandle` 是**对着写的**，改一侧必须同批改另一侧。
- * 判据 `tests/storybook-injection-layers.test.ts` 按两侧交集现算，不靠人记。
- */
+/** 真节点渲染器：从 nodeTypes 进画布，故 useNodeId() 拿得到宿主 id、Handle 走真分支；只放端点列。
+ * handle id 是 React Flow 找锚点的唯一凭据：找不到会静默丢弃整条边（不报错、画布只是少几条线）。
+ * 真画布两套口径：输出端 `out:${outName}`（OUTPUT_PORT_HANDLE_PREFIX），输入端 `ioKey`（端口名本身）。
+ * 本渲染器的 id 与 flow-canvas.tsx 场景里每条边的 sourceHandle/targetHandle 对着写，改一侧必须同批改另一侧；
+ * tests/storybook-injection-layers.test.ts 按两侧交集现算，不靠人记。 */
 function PortDemoNode() {
-  /* 十行 = 把两套 id 口径各显一遍（输入 = `ioKey`，输出 = `out:<name>`），也正是
-     `flow-canvas.tsx` 那几档场景的边引用到的全部端口。
-     代价是这张卡**比框架（`CANVAS_FRAME_CLASS`，560px）高** —— 所以摆它的三份
-     story 都传 `fit` 让 React Flow 缩到装得下。不传的话下沿会把最后一张卡切掉，
-     而构建 / tsc / eslint 全绿、只有画布上少一截（真浏览器量过：`fanOut` 切 151px、
-     `twoNodes` 切 79px、`mixedKinds` 切 51px）。 */
+  /* 十行 = 把两套 id 口径各显一遍（输入 = ioKey，输出 = out:<name>），也正是 flow-canvas.tsx 场景边引用到的全部端口。
+     代价是卡片比框架（CANVAS_FRAME_CLASS，560px）高 —— 故三份 story 都传 fit 让 React Flow 缩到装得下；
+     不传则下沿切掉最后一张卡，而构建/tsc/eslint 全绿、只有画布少一截
+     （真浏览器量过：fanOut 切 151px、twoNodes 切 79px、mixedKinds 切 51px）。 */
   const rows = useMemo(
     () => [
       {
@@ -264,10 +234,8 @@ export const Single: Story = {
 };
 
 /**
- * 扇出画布（一个源节点出三条线）：端点几何在**同一节点的多个 handle** 上都成立 ——
- * 单线场景看不出这件事（连线从哪个 handle 出、落哪个 handle 上，只有真画布算得出）。
- *
- * `fit` 同上（这一档是四张卡，不缩就把最下面那张切掉一半）。
+ * 扇出画布（一个源节点出三条线）：端点几何在同一节点的多个 handle 上都成立 ——
+ * 单线场景看不出（连线从哪个 handle 出、落哪个上只有真画布算得出）。`fit` 同上，不缩就切掉最下面那张一半。
  */
 export const FanOutCanvas: Story = {
   render: () => (
@@ -282,10 +250,8 @@ export const FanOutCanvas: Story = {
 };
 
 /**
- * 各 kind 混排（八张节点）：端点类型色的**分辨率** —— 单张节点只出一种色，
- * 「多类型并排时能不能分辨」是画布上才看得出来的那一维。
- *
- * `fit` 同上（八张卡分三行，不缩的话整个第三行都在框外）。
+ * 各 kind 混排（八张节点）：端点类型色的分辨率 —— 单张只出一种色，
+ * 「多类型并排能否分辨」是画布上才看得出的维度。`fit` 同上，不缩第三行会整个在框外。
  */
 export const MixedKindsCanvas: Story = {
   render: () => (

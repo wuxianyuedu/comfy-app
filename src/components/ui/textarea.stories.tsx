@@ -2,16 +2,9 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { Textarea } from "~/components/ui/textarea";
 
-/**
- * `ui/textarea` 的形态由**原生属性**驱动 —— 它没有变体轴，只有三件事在
- * 视图里反复出错，所以下面按这三件事分组：
- *
- * 1. **`field-sizing-content`**：它随内容长高（不需要 `rows` 手动调），
- *    但 `min-h-16` 保底 —— 两行以内看不出，给一段长提示词才看得出；
- * 2. **`aria-invalid`**：它是唯一的「错误态」入口（`aria-invalid:border-*`），
- *    与 `Field`/`FormField` 那条链共用；
- * 3. **`disabled` / 长短文案**的排版：`md:text-sm` 让桌面比移动端小一档。
- */
+/** `ui/textarea` 的形态由**原生属性**驱动 —— 无变体轴，只有三件事在视图里反复出错：① `field-sizing-content` 随内容长高
+ *（不需 `rows`），但 `min-h-16` 保底，两行内看不出；② `aria-invalid` 是唯一的「错误态」入口（`aria-invalid:border-*`），
+ * 与 `Field`/`FormField` 共用；③ `disabled` / 长短文案的排版：`md:text-sm` 让桌面比移动端小一档。 */
 const meta = {
   title: "UI/Textarea",
   component: Textarea,

@@ -1,10 +1,5 @@
-/* 默认值刷新（保覆盖）回归 —— ISSUE #288
- *
- * 场景：在 IO 编辑里改了某个参数的默认值并保存，回到工作流库的「画布样式
- * 预览」后，未被用户动过的参数要显示新默认值，用户已经改过的参数保持原值。
- *
- * 本文件只覆盖这一条数据流（IO 变化 → 表单值），故把运行相关的副作用
- * （生成 / SSE / 日志弹窗）与外部模块打桩，避免在 jsdom 里真发请求。 */
+/* 默认值刷新（保覆盖）回归 —— ISSUE #288：IO 里改默认值保存后，未动过的参数
+ * 显示新默认值，用户改过的保持原值。仅覆盖这条数据流，副作用全部打桩。 */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -152,10 +147,7 @@ describe("WorkflowCanvasNodePreview — 默认值刷新", () => {
 });
 
 /* ── 对外参数卡片列 + 行尾归属徽标（ISSUE #355）──
- *
- * 库里要看得见「对外参数」，且它与宿主卡片的表单行不重复表达同一件事：
- *   卡片列 = 这个模式统一对外暴露的参数（提示词 / 尺寸…，与具体工作流无关）；
- *   表单行尾徽标 = 这一行属于哪个对外参数。
+ * 卡片列 = 模式统一对外暴露的参数；行尾徽标 = 该行属于哪个对外参数；
  * 两者都从同一份 paramMap（`source.mode:<模式>`）派生。 */
 
 /** 一个「文生图」形状的工作流：提示词口 + 宽高比口。 */
@@ -293,12 +285,8 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
   });
 
   it("每张卡片右侧有端点，宿主行是它另一端（ISSUE #355 复审 / #529）", () => {
-    /* 「对外参数需要右侧有小圆点的端口，可和工作流节点上的参数相连」——
-     * 端点画在卡片的输出端口行上；宿主表单行则是另一端。
-     *
-     * ISSUE #529：端点从自绘的 `data-wire-anchor` 圆点换成 React Flow 的
-     * `<Handle>`（`data-handleid`），连线也从量 rect 的 SVG 换成 edge ——
-     * 断言对象随之变成「节点 / handle / edge」的 DOM。 */
+    /* 对外参数的端口画在卡片输出端口行上，宿主表单行是另一端。ISSUE #529：
+     * 端点换成 React Flow `<Handle>`、连线换成 edge，断言对象是节点/handle/edge DOM。 */
     const { container } = render(
       <WorkflowCanvasNodePreview
         defaultMode="T2I"

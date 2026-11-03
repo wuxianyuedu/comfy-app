@@ -8,19 +8,9 @@ import {
   ProgressValue,
 } from "~/components/ui/progress";
 
-/**
- * `ui/progress` 是 base-ui 的 Progress 原语，**与 `ui/progress-bar` 不是同一件**：
- *
- * - `progress-bar` 是项目里「进度条」的**唯一出口**（算好的 0..100 百分比 +
- *   文案 + aria，消费点几十处）；
- * - 本件是**基元**：`ProgressBar` 内部的 `ProgressTrack` 就来自这里。
- *   它多出来的能力是**组合** —— 标题（`ProgressLabel`）与数值（`ProgressValue`）
- *   是独立的 slot，且 `Progress` 本体自带一条默认轨道。
- *
- * 以前没有 story 的理由是「形态被 `progress-bar` 覆盖」。这一条只对了一半：
- * `ProgressLabel` / `ProgressValue` 两个 slot 在 `progress-bar` 里**看不到**
- * （那边是自绘的文字行），所以这里补的是「组合形态」那一格。
- */
+/** `ui/progress` 是 base-ui 的 Progress 原语，与 `ui/progress-bar` 不是同一件：`progress-bar` 是项目里「进度条」的唯一出口（算好的 0..100 百分比 + 文案 + aria，消费点几十处）；本件是基元 —— `ProgressBar` 内部的 `ProgressTrack` 就来自这里。
+ * 它多出来的能力是组合：标题（`ProgressLabel`）与数值（`ProgressValue`）是独立的 slot，且 `Progress` 本体自带一条默认轨道。
+ * 以前没有 story 的理由是「形态被 `progress-bar` 覆盖」。这一条只对了一半：`ProgressLabel` / `ProgressValue` 两个 slot 在 `progress-bar` 里看不到（那边是自绘的文字行），所以这里补的是「组合形态」那一格。 */
 const meta = {
   title: "UI/Progress",
   component: Progress,

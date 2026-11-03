@@ -1,9 +1,6 @@
 /**
- * `PUT /api/production` 的契约（Phase 3b-2）：工坊把生产数据写穿到 production 表。
- *
- * 钉三条：① 未鉴权 → 401；② 缺 project / 缺 production → 400（不静默写空行）；
- * ③ 正常 PUT → 落库一行，JSON 列（shots/progress）原样存回。
- *
+ * `PUT /api/production` 契约（Phase 3b-2）：① 未鉴权 → 401；② 缺 project/production → 400
+ * （不静默写空行）；③ 正常 PUT → 落库一行，JSON 列（shots/progress）原样存回。
  * 走 test-db 内存库（真 Drizzle），只 mock 鉴权与 db 两处边界。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";

@@ -1,19 +1,7 @@
 /**
- * `POST /api/schema/push` 的契约 —— 状态栏「立即同步」按钮的执行端。
- *
- * 要钉住的是**守卫的失败方向**：这个端点背后是 `db-sync.mjs --force`（会应用
- * 「会丢数据」的语句），所以任何「不该执行」的形态都必须停在 spawn 之前——
- *
- *   1. 相位不是 `stale` / `missing`（没有要修的东西 / 正在同步）→ 409；
- *   2. 状态文件读不到 / 坏掉 → 同样 409（没有依据就不发起）；
- *   3. 执行件不在（桌包载荷）→ 404，前端据 `canPush` 根本不显示按钮；
- *   4. 唯一放行的形态：相位确实是 stale / missing → spawn（带 force: true）。
- *
- * 两个依赖都替身化：`spawnSchemaSync` mock 掉（真 spawn 会起一个 15~30 秒的
- * drizzle 子进程并改写真实状态文件）；状态文件**读**走 `readFileSync` spy——
- * 不能写真文件：`GET /api/schema` 的测试与本文件并行跑，两份真文件读写会
- * 互相踩（同一份 `log/current/tools/schema-sync.json` 是它们共同的夹具）。同步本身的判据
- * 在 tests/db-schema-current.test.ts。
+ * `POST /api/schema/push` —— 状态栏「立即同步」按钮的执行端（背后是 `db-sync.mjs --force`，会丢数据）：任何「不该执行」的形态都必须停在 spawn 之前。
+ * 相位非 stale/missing → 409；状态文件读不到/坏掉 → 409；执行件不在 → 404；唯一放行：相位确为 stale/missing → spawn(force)。
+ * 状态文件读走 spy 不写真文件：与 `GET /api/schema` 的测试并行跑，共用同一份夹具会互踩。
  */
 import fs from "node:fs";
 import path from "node:path";

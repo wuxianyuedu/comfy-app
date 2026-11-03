@@ -1,22 +1,7 @@
 "use client";
-/* 尺寸组合控件之一：宽高比 + 百万像素 (+ 倍数) 形态（ResolutionSelector 类节点）。
- *
- * 这类节点不暴露 width/height，只暴露`aspect_ratio`（COMBO，值是形如
- *"16:9 (Widescreen)" 的标签）+`megapixels`（FLOAT，1 ≈ 1M 总像素），
- * 有的话再加一个宽高对齐倍数端口。因此没有宽高可推算，弹层把值直接写到这几个
- * widget 上。
- *
- * 「像素」一栏同时给两类档位（用户口径）：
- * · 「分辨率」（1k/2k/4k）：按场景尺寸表算出宽高，再唯一解地换算成
- * 「百万像素 + 倍数」写下去；
- * · 「百万像素」（1M/2M/4M）：直接写该档位的总像素量，倍数保持不变。
- *`megapixels` 是 FLOAT（连续量），因此百万像素那一组下面还有一条「自定义」
- * 步进器（`MegapixelStepper`）—— 档位之外能填 2.5 这类任意值。
- *
- * ComfyUI 可达时，精选针脚带`options`，我们
- * 原样渲染它们（高亮仍有效，因为我们从
- * 每个选项串里解析出比例）。不可达时（存储的 IO 表里缺 type/options）
- * 回落到内置的`ASPECT_RATIO_LABEL_PRESETS`。 */
+/* 尺寸组合控件之一：宽高比 + 百万像素 (+ 倍数) 形态（ResolutionSelector 类节点）。这类节点不暴露
+ * width/height，只有 aspect_ratio（COMBO 标签串，如 "16:9 (Widescreen)"）+ megapixels（FLOAT，1 ≈ 1M 总像素）
+ * (+ 倍数)，故直写 widget；「分辨率」档按场景表换算成「百万像素 + 倍数」，缺 options 时回落 ASPECT_RATIO_LABEL_PRESETS。 */
 
 import { useCallback, useMemo, useState } from "react";
 
@@ -238,13 +223,8 @@ export function AspectMegapixelControl({
     [scene, activeRatio, table, currentMultiple],
   );
 
-  /* 当前 megapixels 值落在哪个档位上：分辨率档按「该档换算出的总像素」比对，
-   * 百万像素档按档位数值比对。
-   *
-   * 必须是**精确**命中（容差 0.01）：自由值（2.5M，步进器填的）不能被「最近的
-   * 档位」吸走名字 —— 16:9 的 2k 档换算出来是 2.359M，比 2M 离它更近，于是
-   * 触发器会显示成「2k」，用户看着像「我填的 2.5 没了」。命不中档位就按自由值
-   * 显示（`2.5M`）。 */
+  /* 档位判定必须精确命中（容差 0.01）：自由值（2.5M，步进器填的）不能被「最近的
+   *  档位」吸走名字（16:9 的 2k 换算为 2.359M，比 2M 更近），命不中即按自由值显示。 */
   const mpLabel = useMemo(() => {
     const exact = clarityOptions.find((option) => Math.abs(option.megapixels - currentMp) < 0.01);
     return exact?.label ?? megapixelLabel(currentMp);
@@ -391,12 +371,9 @@ export function AspectMegapixelControl({
         }
       >
         {narrow === true ? (
-          /* 窄版（画布节点 / 库内）：组合控件**右对齐**，左侧腾出来的区域摆这三个
-           * 参数本身 —— 一行一个，端点骑跨卡片左缘，与节点上其他参数行长得一样
-           * （12px 大端点 + 参数名 + 类型徽章），不是控件框里那排「· 小点 + 名字」。
-           *
-           * 这三行各自是一个**真正的落点**（端点 id 即 ioKey）：拖到「百万像素」
-           * 就连到`megapixels`，不是笼统地落到整块控件上。 */
+          /* 窄版（画布节点 / 库内）：组合控件右对齐，左侧腾出的区域摆这三个参数本身 ——
+           * 一行一个，端点骑跨卡片左缘，与其他参数行同款（12px 大端点 + 参数名 + 类型徽章）。
+           * 每行都是真正的落点（端点 id 即 ioKey），拖到「百万像素」就连到 megapixels。 */
           <>
             <div className="flex min-w-0 flex-1 flex-col gap-0.5 self-center">
               {[aspect, megapixels, multiple]

@@ -14,23 +14,11 @@ import {
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 
-/**
- * `ui/dialog` 是居中模态弹窗的基座（base-ui Dialog）。本仓在这一层做过**有意改动**
- * （文件头的 `ui-customized` 标记指向规范 16 §16.8），story 要盯的正是那几处：
- *
- * 1. **`w-full` + `max-w-[calc(100%-2rem)]`，**并且 `sm:max-w-sm` 已被删掉。
- *    原因（ISSUE #720）：变体宽度（`sm:max-w-sm`）会被 Tailwind 的产序排在所有
- *    无变体 utility 之后，于是它不只压默认、**连调用处传进来的宽度一起压** ——
- *    三个日志弹窗的「加宽」按钮长期是按了没反应。所以调用处现在只传 `w-*`
- *    （见 `ui/dialog-width`），跟 `max-w-*` 打架只会得到「谁赢看产序」。
- * 2. **`showCloseButton` 的默认值只服务一种形态**：`true` 时渲染右上角内置的
- *    `✕`。**调用处只要自绘了关闭按钮就必须传 `false`** —— 漏传会同时渲染出
- *    两枚位置几乎重合的关闭按钮，中间那道缝还是「点了没反应」的死区。
- * 3. **遮罩不复用自绘样式**：内容层不再画 Backdrop，样式与实际渲染串在
- *    `dialog-overlay.ts` 里收口一次（它同时要满足「让出标题行」的硬判据）。
- *
- * 弹窗是**受控 / 非受控都支持**的；base-ui 负责 Esc、点遮罩关闭、焦点锁与归还。
- */
+/** `ui/dialog` 是居中模态弹窗的基座（base-ui Dialog），本仓在这一层做过有意改动（`ui-customized` → 规范 16 §16.8），story 盯的就是这几处：
+ * ① `w-full` + `max-w-[calc(100%-2rem)]`，且已删掉 `sm:max-w-sm`：变体宽度会被 Tailwind 产序排在所有无变体之后，不只压默认、连调用处传入的宽度一起压（ISSUE #720：三个日志弹窗的「加宽」长期按了没反应）；调用处只传 `w-*`（见 `ui/dialog-width`）。
+ * ② `showCloseButton` 的默认值只服务一种形态；调用处只要自绘关闭按钮就必须传 `false`，漏传会渲出两枚几乎重合的关闭按钮，中间缝是「点了没反应」的死区。
+ * ③ 遮罩不复用自绘样式：内容层不再画 Backdrop，样式与实际渲染串收口在 `dialog-overlay.ts`（同时满足「让出标题行」的硬判据）。
+ * 弹窗受控 / 非受控都支持，Esc、点遮罩关闭、焦点锁与归还由 base-ui 负责。 */
 const meta = {
   title: "UI/Dialog",
   component: Dialog,

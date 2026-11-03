@@ -1,14 +1,7 @@
 /**
- * IOEdit store —— 勾选写入的字段 + 作者改名。
- *
- * · 勾选写入（`toggleIO`）：只记**身份字段**（direction / kind / nodeId /
- *   name / hostNodeId）。下钻到子工作流内部勾选时，画布会把当前视图的宿主
- *   （外层封装）节点 id 一并带上 —— 运行期 comfy-cli 展开子图后的节点 id 是
- *   `宿主id:内部id`，只有把两个 id 都存下来才能确定性还原。画布透传的
- *   **显示名不落库**：它本来就是画布从同一个 raw 槽位读出来的名字。
- * · 作者改名（`setIOLabel`）：`label` 的唯一写入点，写什么存什么。
- *   旧版那套「勾选抄名字进库 → 再按机器名判定让位 / 清掉」的机制随根因一起
- *   删除（ISSUE #349），所以这里守的是「写入路径不改写作者命名」。
+ * IOEdit store —— 勾选写入的字段 + 作者改名。`toggleIO` 只记**身份字段**
+ * （direction / kind / nodeId / name / hostNodeId）；下钻时带上宿主节点 id，供运行期
+ * 按 `宿主id:内部id` 还原；显示名**不落库**。`setIOLabel` 是 `label` 的唯一写入点；旧的「勾选抄名字进库 → 按机器名让位」机制已随根因删除（ISSUE #349）。
  */
 import { describe, expect, it, vi } from "vitest";
 

@@ -1,20 +1,8 @@
 /**
- * log-callsite — 「这条 console 日志是哪里打的」的调用位置采集（纯函数）。
- *
- * 只做一件事：把 `new Error().stack` 的文本变成面板上那一列能读的位置。它与
- * 「过滤什么」「怎么合并时间线」没有关系，从 `log-analysis` 里拆出来独立成叶。
- * （那是「占位符展开 + 解析 + 过滤 + 合并」一族纯函数的合住地，采集链上的东西
- * 都往那儿挂，于是它一直是最先撞文件长度硬闸的那个。）
- *
- * 独立的理由：加完「库帧退路」之后 `log-analysis.ts` 越过了文件长度硬闸，而那一闸
- * 的正确出口是**拆模块**、不是抬基线（§12.6）。顺便把「按当时的文件名写死判据、
- * 拆文件后就静默失效」那一类脆弱点收进一个更小的面里。
- *
- * 两层出口（细节见 {@link locateInStack} 的注释），位置与「库帧怎么说」的文案都
- * 在这里，`LogRow` 只看 `" → "` 这个标记区分两态。
- *
- * @module logs/log-callsite
- */
+ * log-callsite — 「这条 console 日志是哪里打的」的调用位置采集（纯函数）：把 `new Error().stack`
+ * 的文本变成面板上那一列能读的位置，与过滤 / 时间线合并无关。从 `log-analysis` 拆出独立成叶——
+ * 那一族越过文件长度硬闸的正确出口是拆模块而非抬基线（§12.6），顺带缩小「按当时文件名写死、
+ * 拆文件后静默失效」的脆弱面；两层出口见 {@link locateInStack}。 */
 
 /** 一帧调用栈解析出的位置（`path` 已剥协议前缀，`lineNo` 仅数字时保留）。 */
 type StackFrame = {
@@ -27,19 +15,8 @@ type StackFrame = {
 };
 
 /**
- * 面板自身那一族模块的帧：栈顶永远是这些包装 / 采集函数，必须跳过。
- *
- * **按目录 + 文件名两段判、且大小写不敏感**（ISSUE #1703）。旧写法是
- * `/log-(?:store|provider)\.(tsx|ts|jsx|js)/`，它从来没匹配过真正的包装层
- * `LogProvider.tsx`（无连字符、驼峰），只匹配到了 `captureLocation` 当年所在的
- * `log-store.ts`。那个文件被拆出 `log-analysis.ts` 之后，这条正则连采集函数自己
- * 的帧都不认了 —— 于是**每条 console 日志的位置列都指向 `log-analysis.ts:<行号>`**，
- * 也就是日志器本身：用户拿着「有位置」的行去找，找到的是打印日志的那段代码。
- *
- * 判据改成「路径在 logs/ 目录下、且文件名以 log- 开头或叫 LogProvider」：
- * 拆文件、改后缀都不会再让它失效（这类「按当时的文件名写死」的判据，失效方式是
- * 静默给出**看似有效**的错答案，比返回空更难发现）。
- */
+ * 面板自身那一族模块的帧：栈顶永远是这些包装 / 采集函数，必须跳过。旧正则没匹配过包装层 `LogProvider.tsx`（驼峰），拆出 `log-analysis.ts` 后连采集函数自己的帧都不认，位置列因此指向日志器本身（ISSUE #1703）。
+ * 判据改为「路径在 logs/ 下、且文件名以 log- 开头或叫 LogProvider」：拆文件、改后缀不再失效。 */
 const LOGGER_SELF_RE = /(?:^|\/)logs\/(?:log-[\w.-]+\.(?:tsx?|jsx?)|LogProvider\.tsx?)\b/i;
 /** 框架 / 编译产物的特征帧（找业务帧时跳过）。 */
 const FRAMEWORK_FRAME_RE =
@@ -48,11 +25,9 @@ const FRAMEWORK_FRAME_RE =
 const PROJECT_SOURCE_RE = /\.(?:tsx?|mts|cts)$/i;
 
 /**
- * 解析一帧 → {@link StackFrame}；不是 `at …` 行或取不到位置段时返回 null。
- *
- * 位置段末尾一定是 `:line:col`，从后往前取两个冒号即可；`path` 侧的协议 / 前缀
- * 清理（webpack-internal、file://、`_next/static/chunks`）都收在这里一处 ——
- * 业务帧与库帧两条出口共用同一份口径，否则「哪个帧更可读」的比较没有共同基准。
+ * 解析一帧 → {@link StackFrame}；不是 `at …` 行或取不到位置段时返回 null。位置段末尾一定是
+ * `:line:col`，从后往前取两个冒号；`path` 侧的协议 / 前缀清理（webpack-internal、file://、
+ * `_next/static/chunks`）收在这里一处，业务帧与库帧两条出口共用同一口径。
  */
 function parseStackFrame(raw: string): StackFrame | null {
   const line = raw.trim();
@@ -104,13 +79,8 @@ function parseStackFrame(raw: string): StackFrame | null {
 }
 
 /**
- * 从**库帧**里取一个可读的包名（`@scope/pkg` 或 `pkg`）。
- *
- * 落在 `node_modules` 里的帧长这样：
- *   …/node_modules/react-dom/cjs/react-dom-client.development.js
- *   …/node_modules/.pnpm/@xyflow+react@12.12.0_x/node_modules/@xyflow/react/dist/esm/index.mjs
- * 取**最后一个** `node_modules/` 之后的头一段（`@scope` 时把头两段拼起来）即可。
- * pnpm 的 `.pnpm` 那一段本身不是包名，遇到就再往里找一层。取不到返回 null。
+ * 从**库帧**里取一个可读的包名（`@scope/pkg` 或 `pkg`）：取最后一个 `node_modules/` 之后的
+ * 头一段（`@scope` 时拼头两段）；pnpm 的 `.pnpm` 本身不是包名，遇到就再往里找一层。取不到返回 null。
  */
 function libraryNameOf(raw: string): string | null {
   const idx = raw.lastIndexOf("node_modules/");
@@ -138,11 +108,8 @@ function libraryNameOf(raw: string): string | null {
 }
 
 /**
- * 库帧 → `pkg → 函数名`（取不到函数名时只有 `pkg`）。
- *
- * 函数名从 `at FuncName (` 那一段取；匿名帧 / 取不到就只留包名。这一条回答的是
- * 「这条日志**不是我们写的**，是哪个库在哪一层打的」——没有它，用户看到的是一列
- * 没有位置列的行。
+ * 库帧 → `pkg → 函数名`（取不到函数名时只有 `pkg`）：函数名从 `at FuncName (` 取，
+ * 匿名帧只留包名。它回答「这条日志**不是我们写的**，是哪个库在哪一层打的」。
  */
 function describeLibraryFrame(frame: StackFrame): string | null {
   const pkg = libraryNameOf(frame.raw);
@@ -155,24 +122,9 @@ function describeLibraryFrame(frame: StackFrame): string | null {
 }
 
 /**
- * 从**给定的调用栈文本**中定位「这条日志是谁打的」；栈为空 / 解析失败 → undefined。
- *
- * 收成「吃字符串」的纯函数（而不是就地 `new Error()`）是为了可测：React 警告
- * 的栈、pnpm 的 `.pnpm` 深路径这些形态在用例里造得出来，真跑一遍却造不出来。
- *
- * 两层出口，按可信度降序取第一个命中的：
- *   1. **业务帧**（`.ts/.tsx`）→ `src/…/x.tsx:123`。最有用：能直接点开。
- *   2. **库帧**（`node_modules`）→ `@xyflow/react → MiniMapNodes`。业务帧一个
- *      都没有时（典型：React 自己发的警告、第三方回调里的问题）**退回这一层**，
- *      而不是返回 undefined —— ISSUE #1703 里那条 React key 警告正属此类：整列
- *      没有位置，用户凭日志分不清是 MiniMap 还是自己的节点树在重 key。
- *   3. 都取不到 → undefined（行上不出现位置列）。
- *
- * **只认 source-map 帧当业务帧**的原因：Next/webpack/Turbopack 在 dev 期把用户
- * 代码 source-map 到 `.tsx/.ts`；而框架自身的 console 输出来自被压缩/哈希的编译
- * chunk（形如 `src/00vplg9./.js:1879`），这类位置对用户没有可读含义 —— 它们既不
- * 是业务代码，也不指向任何能点开的东西，只配落进第 2 层（说出是哪个库）。
- */
+ * 从**给定的调用栈文本**中定位「这条日志是谁打的」；栈为空 / 解析失败 → undefined。收成吃字符串的纯函数是为了可测（React 警告的栈、pnpm 深路径在用例里造得出来）。
+ * 按可信度降序：① 业务帧（`.ts/.tsx`）→ `src/…/x.tsx:123`（能直接点开）；② 库帧（`node_modules`）→ `@xyflow/react → MiniMapNodes`（ISSUE #1703 的 React key 警告）；③ 都取不到 → undefined。
+ * 只认 source-map 帧当业务帧：框架输出源自压缩/哈希 chunk，对用户没有可读含义。 */
 export function locateInStack(stack: string | undefined): string | undefined {
   if (stack === undefined || stack === "") {
     return undefined;
@@ -217,11 +169,8 @@ export function locateInStack(stack: string | undefined): string | undefined {
 }
 
 /**
- * 取当前调用点的位置（栈来源 = `new Error().stack`）。
- *
- * 解析本体是上面的 {@link locateInStack} —— 拆开只为一件事：那份逻辑要能被
- * 用例直接喂**造出来的栈**（React 警告、pnpm 深路径这些形态没法在测试里真造
- * 出来）。`new Error()` 在调用点就地取，不要挪进 `locateInStack`：栈里多一层
+ * 取当前调用点的位置（栈来源 = `new Error().stack`）。解析本体是 {@link locateInStack}——拆开只为
+ * 让用例能喂**造出来的栈**；`new Error()` 必须在调用点就地取，不要挪进 `locateInStack`：栈里多一层
  * 就少看见一层真实调用者。
  */
 export function captureLocation(): string | undefined {

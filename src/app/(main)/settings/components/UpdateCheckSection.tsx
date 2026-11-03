@@ -1,13 +1,9 @@
 "use client";
 
 /**
- * 本地更新检测分区（规范 17 §17.2 第③层）。
- *
- * 开着桌面壳时，源码热更由 dev server 负责；只有「改完当前窗口不生效、得重启」
- * 的文件（Rust / tauri.conf.json / splash / .env / pnpm 配置）在运行期变动才有意义，
- * 检测结果由 `update-check-store` 承载（Provider 在根布局注册与持久化）。
- *
- * 视图自持的仅「本次手动检测的提示文案」这一个交互态，其余读 store。
+ * 本地更新检测分区（规范 17 §17.2 第③层）。桌面壳下源码热更归 dev server，只有
+ * 「改完须重启才生效」的文件（Rust / tauri.conf.json / splash / .env / pnpm 配置）在运行期检测；
+ * 结果由 `update-check-store` 承载，视图只自持「本次手动检测的提示文案」。
  */
 
 import { ArrowLeft } from "lucide-react";

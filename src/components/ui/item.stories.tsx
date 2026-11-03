@@ -17,15 +17,8 @@ import {
 } from "~/components/ui/item";
 
 /**
- * `ui/item` 是「列表项 = 前缀 media + 主内容 + 尾部动作」的基元族。
- *
- * **两根轴都在 `Item` 本体上**（`variant` × `size`），其中 `size=xs` 还会
- * 顺手改子部件：`ItemDescription` 变小一号、`ItemMedia` 的 image 档从
- * `size-10` 收到 `size-6`，以及 `Item` 自己的内边距在 `dropdown-menu-content`
- * 里归零 —— 也就是说 `size` 是「这一项住在哪」的语义，不只是尺寸。
- *
- * `ItemMedia` 自己还有第三根轴（`default` / `icon` / `image`）。
- * 三条轴的枚举全部从 props 派生（规范 16 §16.2.3.4）。
+ * `ui/item` 是「列表项 = 前缀 media + 主内容 + 尾部动作」的基元族。两根轴都在 `Item` 本体上（`variant` × `size`）；`size=xs` 还会改子部件（`ItemDescription` 小一号、image 档 `size-10`→`size-6`），且 `Item` 内边距在 `dropdown-menu-content` 里归零 —— `size` 是「这一项住在哪」的语义。
+ * `ItemMedia` 另有 `default` / `icon` / `image` 轴（规范 16 §16.2.3.4）。
  */
 type ItemVariant = NonNullable<React.ComponentProps<typeof Item>["variant"]>;
 type ItemSize = NonNullable<React.ComponentProps<typeof Item>["size"]>;

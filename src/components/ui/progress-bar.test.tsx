@@ -1,28 +1,7 @@
-/**
- * 进度条基元的形态契约（规范 16 §16.2.4.19）。
- *
- * 收口前全库 10 处各写一遍「track + width:X% + 百分比文字」，写法四派 ——
- * 而**数值**怎么算（夹取 / 下级可见宽度 / 不确定）已收在 `~/lib/progress`
- * （见该文件的用例）。这里只钉**形态**这一半，重点是那些「散在 10 处就永远
- * 不会被统一说出来」的语义决定：
- *
- *   1. `value === null` 是**不确定态**（滑动条纹），不是 0% 空条；
- *   2. **a11y 语义由基元给**（收口前 10 处里只有 2 处声明了 `role`）/「不确定」态没有 `aria-valuenow`（它不该被读成一个数）；
- *   3. 宽度下限只抬非零值（`minVisible`）；
- *   4. 填充观感差异走 `fillClassName`，不重画轨道；
- *   5. 条上没有可见文字时，可访问名走 `ariaLabel`（不传就不写 `aria-label`，
- *      既有消费点的 DOM 一字不变）。
- *
- * **PR-3 起 DOM 分两层**（P67 治理、改用 `ProgressPrimitive.Root`）：
- *   · `data-slot="progress-bar-track"` 挂在 base-ui Progress **Root** 上，
- *     管 ARIA（role / aria-valuenow / min / max / valuetext）—— 与旧手写
- *     `<div role="progressbar">` 的 data-slot 名保持兼容；
- *   · `data-slot="progress-track"` 是 shadcn `ProgressTrack`（base-ui Track
- *     的 cva 薄封装），管**视觉轨道**（`bg-*` / `h-*` / `overflow-hidden` /
- *     `rounded-*`）；`trackClassName` 覆盖的是这一层。
- *   本文件里 `aria-*` 与 `role` 类断言查前者，视觉类（bg/h/overflow）断言
- *   查后者，语义分层清晰、避免把 ARIA 与外观混在同一元素上。
- */
+/** 进度条基元的形态契约（规范 16 §16.2.4.19）。收口前全库 10 处各写一遍「track + width:X% + 百分比文字」，写法四派 —— 而数值怎么算（夹取 / 下级可见宽度 / 不确定）已收在 `~/lib/progress`（见该文件的用例）；这里只钉形态这一半，重点是那些「散在 10 处就永远不会被统一说出来」的语义决定：
+ * ① `value === null` 是不确定态（滑动条纹），不是 0% 空条；② a11y 语义由基元给（收口前 10 处里只有 2 处声明了 `role`），「不确定」态没有 `aria-valuenow`（它不该被读成一个数）；③ 宽度下限只抬非零值（`minVisible`）；④ 填充观感差异走 `fillClassName`，不重画轨道；⑤ 条上没有可见文字时，可访问名走 `ariaLabel`（不传就不写 `aria-label`，既有消费点的 DOM 一字不变）。
+ * PR-3 起 DOM 分两层（P67 治理、改用 `ProgressPrimitive.Root`）：`data-slot="progress-bar-track"` 挂在 base-ui Progress **Root** 上，管 ARIA（role / aria-valuenow / min / max / valuetext）—— 与旧手写 `<div role="progressbar">` 的 data-slot 名保持兼容；`data-slot="progress-track"` 是 shadcn `ProgressTrack`（base-ui Track 的 cva 薄封装），管视觉轨道（`bg-*` / `h-*` / `overflow-hidden` / `rounded-*`），`trackClassName` 覆盖的是这一层。
+ * 本文件里 `aria-*` 与 `role` 类断言查前者，视觉类（bg/h/overflow）断言查后者，语义分层清晰、避免把 ARIA 与外观混在同一元素上。 */
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 
@@ -123,12 +102,8 @@ describe("ProgressBar 的外观可覆盖而不重画轨道", () => {
         value={50}
       />,
     );
-    /* PR-3 起 progress-bar 分两层：
-     *   · data-slot="progress-bar-track" → base-ui ProgressPrimitive.Root，
-     *     管 ARIA（role/aria-valuenow/min/max/valuetext）；
-     *   · data-slot="progress-track" → shadcn ProgressTrack（视觉轨道容器），
-     *     管 bg-* / h-* / rounded-* / overflow-* 这类外观档。
-     * trackClassName 是覆盖**视觉轨道**的，所以断言查后者。 */
+    /* PR-3 起 progress-bar 分两层：`data-slot="progress-bar-track"` → base-ui `ProgressPrimitive.Root`，管 ARIA（role/aria-valuenow/min/max/valuetext）；`data-slot="progress-track"` → shadcn `ProgressTrack`（视觉轨道容器），管 bg-* / h-* / rounded-* / overflow-* 这类外观档。
+     * `trackClassName` 是覆盖视觉轨道的，所以断言查后者。 */
     const visualTrack = container.querySelector('[data-slot="progress-track"]')!;
     const fill = container.querySelector('[data-slot="progress-bar-fill"]')!;
     expect(visualTrack.className).toContain("bg-elevated");

@@ -1,17 +1,8 @@
-/* IO 暴露条目的显示名派生 —— 纯函数，无 React、无副作用。
- *
- * 名字只有一个来源、一条规则：
- *   ① 作者在 IO 面板里重命名过（`WorkflowIOEntry.label`，**唯一**写入点是
- *      `setIOLabel`）—— 这是唯一的「作者命名」，最高优先；
- *   ② 否则用富化链给出的名字（`ioLabel`：作者 label → 子图内部业务名 →
- *      localized → pin 名），由服务端按 raw 图解析；
- *   ③ 富化也没有时退到真实 pin 名。
- *
- * 勾选那一刻画布透传的名字**不进库**（`toggleIO` 只记身份字段）：它本来就是
- * 画布从同一个 raw 槽位读出来的显示名，抄一份下来只会在两处口径不一致时固化
- * 出一个陈旧名字（`value_1`）。显示名因此只在前端这一处算，后端只认 pin 名与
- * 事实字段 —— ISSUE #349 的整条「机器名让位 / 清洗」链随此删除：库里带
- * `label` 的条目从此一律按「作者重命名」直读（`setIOLabel` 传空串即可清掉）。 */
+/* IO 暴露条目的显示名派生 —— 纯函数，无 React、无副作用。名字只有一个来源、一条规则：
+ * ① 作者重命名过（`WorkflowIOEntry.label`，**唯一**写入点 `setIOLabel`）；② 否则用富化链
+ * （`ioLabel`：作者 label → 子图内部业务名 → localized → pin 名）；③ 否则真实 pin 名。
+ * 勾选时画布透传的名字**不进库**（只记身份字段），抄一份只会在口径不一致时固化成陈旧
+ * 名字（`value_1`）。ISSUE #349 的「机器名让位 / 清洗」链随此删除，带 `label` 一律直读。 */
 import { ioLabel, type WorkflowIOEntry } from "~/components/studio/workflow-io";
 import { sanitizeComboLabel } from "~/components/studio/workflow-utils";
 
@@ -51,15 +42,10 @@ export function mergeExposedEntry<T extends WorkflowIOEntry>(
 }
 
 /** 视图内节点元数据 → 可当「服务端富化」用的最小 IO 表（纯函数）。
- *
- *  IO 预览面板的数据源是服务端富化的 `detail.workflowIO`。下钻到子工作流
- *  后，详情响应里没有这份富化（子图路由不产出 workflowIO：它按整份工作流
- *  的下标打键，带进内层视图会误伤顶层未保存的编辑）——面板只能回落到本地
- *  存的 label，于是没被重命名过的条目会显示成原始槽位名。
- *
- *  子图详情的 `nodes[].raw_inputs[]` 里本来就带着内部节点的真实 label /
- *  localized / type，这里就地派生一份，让内层视图与顶层视图的取名口径一致。
- *  只补「服务端富化查不到」的字段，不覆盖已有值。 */
+ *  IO 预览的数据源是 `detail.workflowIO`；下钻子图后详情里没有这份富化（子图路由按整
+ *  份工作流的下标打键，带进内层会误伤顶层未保存的编辑），面板只能回落到本地 label，
+ *  未重命名过的条目会显示成原始槽位名。子图详情的 `nodes[].raw_inputs[]` 本就带真实
+ *  label / localized / type，这里就地派生、只补查不到的字段，不覆盖已有值。 */
 export function enrichFromViewNodes(
   nodes:
     | Array<{

@@ -1,15 +1,9 @@
 "use client";
 
-/* 工作流库「画布节点」预览的 **React Flow 节点**（三列各一个，ISSUE #529）。
- *
- * 节点内部照旧是普通 DOM：左列是 `WorkflowParamCardColumn`、中间是宿主运行卡片
- * （`LibraryHostCard`）、右列是 `WorkflowOutputParamCardColumn` —— 卡片与表单的
- * 渲染结构一行没改。变的只是**端点**：卡片圆点从自绘 `<span>` 换成真正的
- * `<Handle>`，连线从量 rect 的 SVG 换成真正的 edge。
- *
- * 端点几何复用 `PortHandle`（项目画布同款：12px、半颗骑跨卡片外缘、同款投影）
- * —— 卡片列与画布节点两个 surfaces 的端点不会一边贴边一边内缩。
- */
+/* 工作流库「画布节点」预览的 React Flow 节点（三列各一个，ISSUE #529）。
+ * 节点内部仍是普通 DOM：左列 `WorkflowParamCardColumn`、中间 `LibraryHostCard`、
+ * 右列 `WorkflowOutputParamCardColumn`。端点从自绘圆点换成 `<Handle>`、连线换成
+ * edge；端点几何复用 `PortHandle`，卡片列与画布节点的端点不会一侧贴边一侧内缩。 */
 
 import { createContext, useContext, memo } from "react";
 import type { NodeProps } from "@xyflow/react";
@@ -116,15 +110,11 @@ export const LibraryHostNode = memo(function LibraryHostNode(_props: NodeProps) 
   return <div data-testid="wflib-canvas-node-host">{content.host}</div>;
 });
 
-/** 垫在三列之下的**透明背景板**：把画布的包围盒撑到面板可视高度。
- *
- *  为什么需要它：画布靠 `fitView` 收内容，而 `fitView` 按节点包围盒缩放 ——
- *  卡片比视口矮时它只会放大到「贴满内容高度」，画布底边以下就落回面板底色，
- *  成了用户报的那块空白（ISSUE #596）。这一层不含内容、也没有端口，抬高它不会
- *  影响任何端点几何（与「给卡片节点虚报尺寸」的区别正在此）。
- *
- *  它**不是**背景色的来源：底色由容器与 `bg-canvas` 给，这里只负责撑尺寸，
- *  免得两处各画一层底色、深浅主题下互相盖。 */
+/** 垫在三列之下的**透明背景板**：把画布包围盒撑到面板可视高度。
+ *  卡片比视口矮时 fitView 只放大到内容高度，画布底边以下落回面板底色
+ *  （ISSUE #596）。这一层无内容、无端口，抬高它不影响端点几何。它不提供
+ *  底色（底色由容器与 `bg-canvas` 给），只负责撑尺寸。
+ */
 export const LibraryBackdropNode = memo(function LibraryBackdropNode(_props: NodeProps) {
   return <div aria-hidden className="h-full w-full" data-testid="wflib-canvas-backdrop" />;
 });

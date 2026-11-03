@@ -1,41 +1,9 @@
 "use client";
 
-/* 多段式下拉面板（比例 / 像素 / 倍数… 一组参数一次选完）。
- *
- * 触发按钮把当前选择折成一行摘要（如 `16:9 / 2K`），点开后面板里每个参数
- * 各占一行：比例（图标行，单选）、清晰度（分段，单选）、质量（分段，单选，
- * 可选）。行内各自单选，整面板允许多段并排展示 —— 故名「multi-segment」。
- *
- * 浮层走 `~/components/ui/popover`（规范 16 §16.2.3 P2）：此前这里自搓了
- * `createPortal` + fixed 定位 + 上下翻转 + 滚动重定位 + 手写 mousedown /
- * focusin 关闭 + z-index 魔数。定位、翻转、收边、外点关闭交给 base-ui 的
- * Positioner 与 Root 之后，本组件只留「多段面板」这件事自己的渲染。
- *
- * 触发按钮是 `ui/button` 的 `<Button>`（同 §16.2.4.2 第 1 条：
- * `PopoverTrigger` 用 `render` 把按钮本体交给基元，base-ui 会把 `aria-*`
- * 与委托事件原样透传）。
- *
- * ## 段内选项是 `ui/toggle-group`（P67 系列尾单 · §12.18 中间地带）
- *
- * 每一段（Section）内部原本是「手写 `<Button variant="ghost"
- * role="option" aria-selected={selected} onClick={...}>` 循环」——
- * 与 `~/components/ui/toggle-group` 是同一件事的第二份实现：单选分段
- * 控件的「按状态上 `data-pressed`、点已在项不改动、点新项切换、
- * 键盘 ←/→ 与 Home/End 在段内游走」全部由 base-ui ToggleGroup 提供。
- * 本件把每段换成一个 `<ToggleGroup value={[section.value]} multiple={false}>`
- * 包住该段的所有子分组行（子分组之间共享一个 `section.value`、跨子分组
- * 互斥；这正是 ToggleGroup 的 React Context 语义），每行选项换成
- * `<ToggleGroupItem value={opt.value}>`。触发 Popover 保持。
- *
- * 顺带去掉旧 PopoverTrigger 的 `aria-haspopup="listbox"` 与
- * PopoverContent 的 `role="listbox"`：面板里已经是**分段单选组**、
- * 不再是 listbox；让 base-ui Popover 自己给 `aria-haspopup="dialog"` +
- * `aria-expanded`。
- *
- * `opt.render` 是任意 ReactNode（比例图标 / 清晰度小徽标），`children`
- * 通道原生支持。选中态用 `data-[pressed]:` 属性选择器 + tailwind-merge
- * 表达：`bg-primary/20 text-ink-bright ring-primary/55` 与旧三元一致。
- */
+/* 多段式下拉面板（比例 / 像素 / 倍数… 一组参数一次选完）。触发按钮把当前选择折成一行摘要（如 `16:9 / 2K`），点开后面板里每个参数各占一行：比例（图标行，单选）、清晰度（分段，单选）、质量（分段，单选，可选）。行内各自单选，整面板允许多段并排展示 —— 故名「multi-segment」。
+ * 浮层走 `~/components/ui/popover`（规范 16 §16.2.3 P2）：此前这里自搓了 createPortal + fixed 定位 + 上下翻转 + 滚动重定位 + 手写 mousedown / focusin 关闭 + z-index 魔数。定位、翻转、收边、外点关闭交给 base-ui 的 Positioner 与 Root 之后，本组件只留「多段面板」这件事自己的渲染。触发按钮是 `ui/button` 的 `<Button>`（同 §16.2.4.2 第 1 条：`PopoverTrigger` 用 `render` 把按钮本体交给基元，base-ui 会把 `aria-*` 与委托事件原样透传）。
+ * 段内选项是 `ui/toggle-group`（P67 系列尾单 · §12.18 中间地带）：每一段（Section）内部原本是「手写 `<Button variant="ghost" role="option" aria-selected={selected} onClick={...}>` 循环」—— 与 `~/components/ui/toggle-group` 是同一件事的第二份实现（单选分段控件的「按状态上 `data-pressed`、点已在项不改动、点新项切换、键盘 ←/→ 与 Home/End 在段内游走」全部由 base-ui ToggleGroup 提供）。本件把每段换成一个 `<ToggleGroup value={[section.value]} multiple={false}>` 包住该段的所有子分组行（子分组之间共享一个 `section.value`、跨子分组互斥；这正是 ToggleGroup 的 React Context 语义），每行选项换成 `<ToggleGroupItem value={opt.value}>`，触发 Popover 保持。
+ * 顺带去掉旧 PopoverTrigger 的 `aria-haspopup="listbox"` 与 PopoverContent 的 `role="listbox"`：面板里已经是分段单选组、不再是 listbox；改让 base-ui Popover 自己给 `aria-haspopup="dialog"` + `aria-expanded`。`opt.render` 是任意 ReactNode（比例图标 / 清晰度小徽标），`children` 通道原生支持；选中态用 `data-[pressed]:` 属性选择器 + tailwind-merge 表达：`bg-primary/20 text-ink-bright ring-primary/55` 与旧三元一致。 */
 
 import React, { useMemo } from "react";
 import { ChevronDown } from "lucide-react";
@@ -97,14 +65,8 @@ export type SegmentSection<T extends string = string> = {
  *  顶掉、由内层 subgroup div 各自管横排与间距。 */
 const SECTION_GROUP_CLASS = "flex w-full flex-col items-stretch gap-2";
 
-/** ToggleGroupItem 的视觉档，与旧 `<Button variant="ghost" role="option">`
- *  循环里的两态**逐字对齐**：`min-w-13 flex-col gap-1 rounded-md
- *  px-1.5 py-1.5 text-2xs`；未选 `text-ink-muted hover:bg-subtle
- *  hover:text-ink-bright`；已选 `bg-primary/20 text-ink-bright
- *  ring-primary/55`。base-ui Toggle 的选中态属性是 **`data-pressed`**
- *  （Radix 时代的 `data-[state=on]` 在 base-ui 上永不匹配、会让选中高亮整体
- *  消失，见 `@base-ui/react/toggle` 的 `ToggleDataAttributes`），由它取代旧
- *  的 `selected` 布尔类拼接。 */
+/** ToggleGroupItem 的视觉档，与旧 `<Button variant="ghost" role="option">` 循环里的两态逐字对齐：`min-w-13 flex-col gap-1 rounded-md px-1.5 py-1.5 text-2xs`；未选 `text-ink-muted hover:bg-subtle hover:text-ink-bright`；已选 `bg-primary/20 text-ink-bright ring-primary/55`。
+ * base-ui Toggle 的选中态属性是 `data-pressed`（Radix 时代的 `data-[state=on]` 在 base-ui 上永不匹配、会让选中高亮整体消失，见 `@base-ui/react/toggle` 的 `ToggleDataAttributes`），由它取代旧的 `selected` 布尔类拼接。 */
 const ITEM_CLASS =
   "nodrag nopan h-auto min-w-13 flex-col gap-1 rounded-md border-0 bg-transparent px-1.5 py-1.5 text-2xs font-normal text-ink-muted hover:bg-subtle hover:text-ink-bright data-pressed:bg-primary/20 data-pressed:text-ink-bright data-pressed:ring-1 data-pressed:ring-primary/55 data-pressed:hover:bg-primary/20";
 
@@ -202,12 +164,7 @@ const Section = React.memo(function Section({
       <div className="text-ink-muted text-3xs mb-1.5 font-semibold tracking-wider uppercase">
         {section.label}
       </div>
-      {/* 整段共享一个 ToggleGroup(单选,`multiple={false}`);跨子分组互斥
-          由 base-ui 的 React Context 天然处理,不需要每 subgroup 各自持
-          state。value 走数组是 base-ui ToggleGroup 的固定形状(单选也用
-          长度 1 的数组);onValueChange 拿最新点击项(section.value 之外的
-          那一个)回传给 onChange。multiple={false} 时数组长度恒 ≤1,
-          `vals[0]` 就是唯一/最新值。 */}
+      {/* 整段共享一个 ToggleGroup(单选,`multiple={false}`);跨子分组互斥由 base-ui 的 React Context 天然处理,不需要每 subgroup 各自持 state。value 走数组是 base-ui ToggleGroup 的固定形状(单选也用长度 1 的数组);onValueChange 拿最新点击项(section.value 之外的 那一个)回传给 onChange。multiple={false} 时数组长度恒 ≤1, `vals[0]` 就是唯一/最新值。 */}
       <ToggleGroup
         className={SECTION_GROUP_CLASS}
         multiple={false}

@@ -1,17 +1,7 @@
 /**
- * 懒加载分块空闲预热的行为判据（`./lazy-view-prefetch`）。
- *
- * 钉四件事，每一件都对应一种「预热悄悄失效」的死法：
- *   ① 启动不当场要、等空闲才要 —— 否则它和首屏抢连接预算（同源 6 条的教训）；
- *   ② **串行** —— 任意时刻至多一条在途（同上，并发预热是那起
- *      `ERR_INSUFFICIENT_RESOURCES` 事故的同款成因）；
- *   ③ 一个 loader 失败不挡住后面的、也不抛未处理拒绝 —— 预热是提前量，
- *      真失败有 `lazy-chunk-recovery` 兜底，不该在这里变成新故障面；
- *   ④ 重复启动只排一次 —— StrictMode 双跑 effect / 重复挂载下不能翻倍。
- *
- * 空闲回调被 stub 成可控队列：「什么时候空闲」由用例决定，不用等真实空闲，
- * 也不必依赖宿主有没有 `requestIdleCallback`。另有一条用例走**没有**该 API
- * 的退化路径（定时器），把 `scheduleIdle` 的两个分支都覆盖到。
+ * 懒加载分块空闲预热的行为判据：① 等空闲才开始（否则与首屏抢连接预算，同源 6 条的教训）；② **串行**，至多一条在途
+ *（并发是 `ERR_INSUFFICIENT_RESOURCES` 事故同款成因）；③ 单个 loader 失败不挡后面的、不抛未处理拒绝（真失败由
+ *  `lazy-chunk-recovery` 兜底）；④ 重复启动只排一次。空闲回调 stub 成可控队列，另有一条退化路径（无 `requestIdleCallback`）。
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

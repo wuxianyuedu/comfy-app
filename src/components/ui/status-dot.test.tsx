@@ -5,13 +5,7 @@ import { StatusDot, type StatusDotState } from "./status-dot";
 afterEach(cleanup);
 
 /**
- * 状态圆点的判据（ISSUE #672 / 规范 16 §16.2.4）。
- *
- * 三件事必须钉住，否则「收口」会退回去：
- *   ① 四态齐全 —— 漏一态时调用方只能自己写三元，重复立刻长回来；
- *   ② 颜色走语义 token，不落 Tailwind 原生调色板（原先三处各写
- *      `bg-emerald-400` / `bg-amber-400` / `bg-rose-400`）；
- *   ③ `pulse` 只在传的时候出现（`animate-pulse` 是 P3 判据的计数对象）。
+ * 状态圆点的判据（ISSUE #672 / 规范 16 §16.2.4）。三件事必须钉住，否则「收口」会退回去：① 四态齐全（漏一态时调用方只能自己写三元）；② 颜色走语义 token、不落原生调色板（原先三处各写 `bg-emerald-400` 等）；③ `pulse` 只在传时出现。
  */
 const STATES: Array<StatusDotState> = ["up", "busy", "probing", "down"];
 

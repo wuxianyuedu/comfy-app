@@ -1,8 +1,6 @@
 /**
  * WorkflowLibrary 的纯类型与派生规则（规范 17 §17.2 第①层）。
- *
- * 无 React、无副作用，可直接单测；视图 / hook 一律从这里取类型与派生，
- * 不再各自重算一遍。
+ * 无 React、无副作用，可直接单测；视图 / hook 一律从这里取类型与派生。
  */
 
 import type { WorkflowPreview as WorkflowPreviewT } from "~/lib/comfyui/workflow";
@@ -12,14 +10,10 @@ import { getWorkflowType, normalizeTaskType } from "~/lib/workflow/workflow-type
 import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 
 /** 工作流库页头右侧动作按钮的**统一形态基类**：三处只差配色（渐变 vs outline），
- *  由调用方各自追加，避免三处各写一份 padding / 圆角 / 字号而漂移成三种观感
- *  （此前正是粉渐变 / 深色 / 纯紫混杂）。
- *
- *  这一串**只装与 `ui/button` 缺省档不同的那部分**：高度、圆角、字重、字号一律
- *  回落到基元的 `h-8 rounded-lg text-sm font-medium`。此前它自带
- *  `h-auto py-1.5 text-xs`，实测把三颗压成 ~28px 的一档 —— 既不是基元的 `sm`
- *  也不是 `default`，且 CTA 文案落到了 `text-xs`（规范 03 §3.10.1 里 12px 是
- *  「段级说明」档，不是按钮文案档）。回到 h-8 也让这一排与顶栏其余控件同高。 */
+ *  避免各写一份 padding / 圆角 / 字号而漂移成三种观感（此前粉渐变/深色/纯紫混杂）。
+ *  这一串只装与 `ui/button` 缺省档不同的部分：高度、圆角、字重回落到 `h-8
+ *  rounded-lg text-sm font-medium`；此前自带的 `h-auto py-1.5 text-xs` 把按钮压成
+ *  ~28px、文案落到 12px（不是按钮文案档，规范 03 §3.10.1）。 */
 export const HEADER_ACTION_BTN = "shrink-0 gap-1.5 px-3";
 
 /** 服务端 list 返回的本地工作流根目录摘要（只取前端判据用得到的字段）。 */
@@ -106,12 +100,10 @@ export type WorkflowRow = {
    *  卡片，或后续临时导入）。写入后服务端跟踪该文件，
    *  磁盘上一有变化就重新导入。 */
   sourcePath?: string | null;
-  /** 这个文件落在哪个已配置的 LOCAL_WORKFLOWS_PATH（原样
-   *  路径）下。服务端给每条已导入的本地工作流都盖上这个戳。
-   *  同一个配置根下的所有行取同一个值 —— 卡片用它标注「📂 来自
-   *  哪个目录」。文件没匹配上任何根时为 undefined
-   *  （例如在设置
-   *  LOCAL_WORKFLOWS_PATH 之前完成的旧导入）。 */
+  /** 这个文件落在哪个已配置的 LOCAL_WORKFLOWS_PATH（原样路径）下，服务端给每条
+   *  已导入的本地工作流盖上这个戳。同一个配置根下的所有行取同一个值（卡片标注
+   *  「📂 来自哪个目录」）；没匹配上任何根时为 undefined（在设置该路径之前完成的
+   *  旧导入）。 */
   sourceRoot?: string | null;
   taskType: string;
   /** 这条工作流有没有可执行内容 —— **RAW 原件有内容即可**。
@@ -181,11 +173,9 @@ export type PendingRow = {
 };
 
 /** `source` 字段是服务端可选回填的，缺失时按有无 sourcePath 判定。
- *
- *  `"local-pending"`（磁盘上有、还没导入）归入 `"local"`：它按定义**就是**本地
- *  来源，两态只是给卡片标「未导入」用的。`workflows` 列表里其实不会出现这一档
- *  （占位行走独立的 `pending`），这里显式收拢是为了让「三档声明 → 两档筛选」
- *  这条映射写在类型旁边 —— 否则加档时筛选条件会静默漏掉它。 */
+ *  `"local-pending"`（磁盘上有、还没导入）归入 `"local"`：它按定义就是本地来源，
+ *  两态只给卡片标「未导入」。`workflows` 列表里不会出现这一档（占位行走独立
+ *  `pending`），显式收拢是为了加档时筛选条件不会静默漏掉它。 */
 function sourceOf(workflow: WorkflowRow): "local" | "online" {
   if (workflow.source === "local-pending") {
     return "local";

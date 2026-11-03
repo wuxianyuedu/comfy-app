@@ -10,24 +10,9 @@ import {
   InputGroupTextarea,
 } from "~/components/ui/input-group";
 
-/**
- * `ui/input-group` 是「输入框 + 前后缀」的容器族。
- *
- * 这一族有**两根彼此独立的轴**，散在两个不同的子部件上 —— 只看 `InputGroup`
- * 的 props 是看不到全貌的：
- *
- * | 轴 | 住在哪 | 档 |
- * | --- | --- | --- |
- * | `align` | `InputGroupAddon` | `inline-start` / `inline-end` / `block-start` / `block-end` |
- * | `size` | `InputGroupButton` | `xs` / `sm` / `icon-xs` / `icon-sm` |
- *
- * 而 `align` 那一轴真正改的是**容器形态**：`inline-*` 时输入框还是单行
- * （前后缀夹在两侧），`block-*` 时容器变 `flex-col`、输入框高度自动让位
- * （`has-[>[data-align=block-end]]:[&>input]:pt-3` 那一串）—— 后者是
- * 「输入框上方一行标签 + 下方一行提示」的形态，光看单项看不出来。
- *
- * 所以 story 先按 `align` 的四档分组，再单独给按钮的 `size`。
- */
+/** `ui/input-group` 是「输入框 + 前后缀」的容器族。这一族有两根彼此独立的轴、散在两个不同子部件上，只看 `InputGroup` 的 props 看不到全貌：`align` 在 `InputGroupAddon`（inline-start / inline-end / block-start / block-end）、`size` 在 `InputGroupButton`（xs / sm / icon-xs / icon-sm）。
+ * `align` 那一轴真正改的是容器形态：`inline-*` 时输入框还是单行（前后缀夹在两侧）；`block-*` 时容器变 `flex-col`、输入框高度自动让位（`has-[>[data-align=block-end]]:[&>input]:pt-3` 那一串），即「输入框上方一行标签 + 下方一行提示」的形态，光看单项看不出来。
+ * 所以 story 先按 `align` 的四档分组，再单独给按钮的 `size`。 */
 type InputGroupAddonAlign = NonNullable<React.ComponentProps<typeof InputGroupAddon>["align"]>;
 type InputGroupButtonSize = NonNullable<React.ComponentProps<typeof InputGroupButton>["size"]>;
 

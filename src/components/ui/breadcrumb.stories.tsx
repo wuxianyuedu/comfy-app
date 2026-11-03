@@ -11,17 +11,10 @@ import {
   BreadcrumbSeparator,
 } from "~/components/ui/breadcrumb";
 
-/**
- * `ui/breadcrumb` 是「当前在哪一层」的导航基元。三件值得单看的事：
- *
- * 1. **`Breadcrumb` 是 `<nav aria-label="breadcrumb">`**（不是 `div`）——
- *    读屏器靠它把这段认成导航区；
- * 2. **最后一项必须是 `BreadcrumbPage`**（`aria-current="page"` +
- *    `aria-disabled`），不能再挂一个 `BreadcrumbLink` —— 那会让「当前位置」
- *    变成一个可点却没有去处的链接；
- * 3. **`BreadcrumbSeparator` 的默认子元素是 `ChevronRightIcon`**，
- *    但可以换成任意节点（这里换成 `/`）。
- */
+/** `ui/breadcrumb` 是「当前在哪一层」的导航基元。三件值得单看的事：
+ * 1. `Breadcrumb` 是 `<nav aria-label="breadcrumb">`（不是 div），读屏器靠它把这段认成导航区；
+ * 2. 最后一项必须是 `BreadcrumbPage`（aria-current="page" + aria-disabled），不能再挂可点却没有去处的 `BreadcrumbLink`；
+ * 3. `BreadcrumbSeparator` 默认子元素是 `ChevronRightIcon`，可换成任意节点（这里换成 `/`）。 */
 const meta = {
   title: "UI/Breadcrumb",
   component: Breadcrumb,

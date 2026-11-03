@@ -3,17 +3,9 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { EmptyCanvasHint } from "~/components/studio/project-canvas/EmptyCanvasHint";
 
 /**
- * 画布空态覆盖层 —— 纯 props（一个 `loading` 布尔），两档互斥：
- *
- *   · `loading = true` → 初始项目水合期间的加载卡（`Spinner` + 「加载中…」）；
- *   · `loading = false` → 画布确实为空时的引导卡（右键开始创建节点）。
- *
- * 两档值得并排看，因为它们**长得很像**（同一个居中卡片的形状），而含义完全不同：
- * 一个说「等一下」，一个说「动手吧」。用户在这两个状态下的下一步动作是相反的，
- * 只改文案不改形状时很容易把两者弄混 —— 这正是要摆在一屏里的理由。
- *
- * 组件是 `absolute inset-0`，真机上盖在画布上；所以 story 给一个**相对定位的容器**
- * 当画布替代品，否则它会跑到页面角落（那是这些 story 唯一需要额外提供的东西）。
+ * 画布空态覆盖层 —— 纯 props（一个 `loading` 布尔），两档互斥：加载卡 / 空画布引导卡。
+ * 两档长得很像但含义相反（一个说「等一下」，一个说「动手吧」），所以要并排看。
+ * 组件是 `absolute inset-0`，story 需相对定位容器，否则会跑到页面角落。
  */
 const meta = {
   title: "Studio/EmptyCanvasHint",

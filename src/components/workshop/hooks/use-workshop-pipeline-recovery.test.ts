@@ -1,12 +1,8 @@
 //
-// 工坊「失联任务恢复 + 30 分钟安全阀」回归测试。
-//
-// 草稿把 status=running 与 taskId 一起持久化，但 SSE 观察循环活在内存里：
-// 刷新 / 切页签重挂载后镜头会永远停在「生成中」（历史欠缺）。恢复逻辑先查
-// task 表真值（fetchTaskSnapshot）再决定「直接回写产物」还是「重订阅 SSE」
-// —— SSE 对「订阅前已终态」的任务只回放日志与一条 state 帧（成功终态不带
-// 产物、不发 done 帧），无脑重订阅会把已成功的任务判成「连接中断」。
-// 本文件逐条钉死恢复的四种分支，以及 generateShot 的超时阀与 unmatched 提示。
+// 工坊「失联任务恢复 + 30 分钟安全阀」回归测试。恢复逻辑先查 task 表真值
+//（fetchTaskSnapshot）再决定「直接回写产物」还是「重订阅 SSE」—— SSE 对
+//「订阅前已终态」的任务只回放日志与一条 state 帧（成功终态不带产物、不发 done
+// 帧），无脑重订阅会把已成功的任务判成「连接中断」。
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, cleanup } from "@testing-library/react";

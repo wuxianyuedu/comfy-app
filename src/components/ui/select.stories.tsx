@@ -12,23 +12,10 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 
-/**
- * `ui/select` 是 base-ui Select 的封装（**受控浮层的下拉**，与原生
- * `native-select` 不同族）。本仓在这一层做过**有意改动**（`ui-customized`
- * 标记，规范 16 §16.8），story 要盯的正是这几处：
- *
- * 1. **`alignItemWithTrigger` 默认 `false`**：base-ui 的原生默认是 `true`，
- *    它让弹层位置随选中项上下移动 —— 选中末尾项时弹层被顶到视口上方、
- *    前半截出屏。本仓改成不把「已选项」对齐到触发器（同款修复见
- *    `ui/select-menu` 与规范 07 §7.21.4）。要看这条差别：**选中最后一项**
- *    再重新打开，弹层应该还在触发器下方。
- * 2. **`SelectTrigger` 的 `size` 两档**（`sm` / `default`）：改高度与圆角。
- * 3. **定位层读 `useOverlayBoundary()`**（视口减去应用级标题行）。
- *
- * 与 `ui/select-menu` 的分工：那个是项目内「模型选择器」那类**带富标签**的
- * 出口（33 处消费点）；本件是通用基座。轻量、选项少、想省浮层的场景用
- * `native-select`。
- */
+/** `ui/select` 是 base-ui Select 的封装（受控浮层的下拉，与原生 `native-select` 不同族）。本仓在这一层做过有意改动（`ui-customized` 标记，规范 16 §16.8），story 要盯的正是这几处：
+ * 1. `alignItemWithTrigger` 默认 `false`：base-ui 的原生默认是 `true`，它让弹层位置随选中项上下移动 —— 选中末尾项时弹层被顶到视口上方、前半截出屏。本仓改成不把「已选项」对齐到触发器（同款修复见 `ui/select-menu` 与规范 07 §7.21.4）。要看这条差别：选中最后一项再重新打开，弹层应该还在触发器下方。
+ * 2. `SelectTrigger` 的 `size` 两档（`sm` / `default`）：改高度与圆角。3. 定位层读 `useOverlayBoundary()`（视口减去应用级标题行）。
+ * 与 `ui/select-menu` 的分工：那个是项目内「模型选择器」那类带富标签的出口（33 处消费点）；本件是通用基座。轻量、选项少、想省浮层的场景用 `native-select`。 */
 type SelectTriggerSize = NonNullable<React.ComponentProps<typeof SelectTrigger>["size"]>;
 
 const TRIGGER_SIZES: Array<SelectTriggerSize> = ["sm", "default"];

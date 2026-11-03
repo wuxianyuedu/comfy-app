@@ -4,16 +4,9 @@ import { useState } from "react";
 import { OptionListPopover, type OptionListItem } from "~/components/ui/option-list-popover";
 
 /**
- * `OptionListPopover` 是「一个可滚动的浮层选项列表」的唯一实现
- *（规范 16 §16.2.4.14）—— 收口前画布节点上那四个 chip 各写了一份同形的浮层。
- *
- * 它看起来「有数据依赖」，实际上**没有**：`items` 是纯数据、`value` 是字符串、
- * `onSelect` 是回调。它此前没 story 的原因只是 `trigger` 是一个 ReactNode
- *（chip 的外观由调用处给）。按注入层的口径，ReactNode 参数走 story 的 `render`，
- * Args 里只留可调的那几个 —— 于是它其实是最容易写的一档。
- *
- * 要看的是「壳与行」这件事：触发器上的 `▾` 随 `aria-expanded` 旋转、选中行有勾、
- * 行内容可以带前后装饰（画布 chip 靠它挂颜色点与计数）。
+ * `OptionListPopover` 是「可滚动浮层选项列表」的唯一实现（规范 16 §16.2.4.14）；它没有数据依赖：
+ * `items` 纯数据、`value` 字符串、`onSelect` 回调，`trigger` 是 ReactNode 故走 `render`。要看的是
+ * 壳与行：触发器 `▾` 随 `aria-expanded` 旋转、选中行有勾、行内容可带前后装饰（画布 chip 挂色点与计数）。
  */
 const ITEMS: Array<OptionListItem> = [
   { value: "workflow", label: "工作流名", title: "按工作流名过滤" },

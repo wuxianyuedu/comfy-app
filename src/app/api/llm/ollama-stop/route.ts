@@ -31,16 +31,9 @@ function localTimestamp(): string {
 }
 
 /**
- * 关闭动作落进**哪一份文件**：最近一次启动的那份。
- *
- * 「关闭」是另一个请求、甚至可能是另一个进程，它没有「本次启动」的句柄 ——
- * 因此不能自己新开一份（那会产出一份只有 `[action] 关闭` 两行的空文件，
- * 而用户要看的「为什么关得掉 / 关不掉」本该和那次启动的输出连在一起）。
- * 找不到任何既有文件时（跨重启来关一个别处拉起的实例）退回新建一份。
- *
- * 异步是跟着 `latestRuntimeLogFile` 的签名过来的（ISSUE #2193）。**逐行 await**
- * 而不是 fire-and-forget：这份文件的价值就在行的先后（`[action] 关闭` 必须排在
- * `■ 已手动关闭` 之前），并发完成顺序会把它写乱。
+ * 关闭动作落进最近一次启动的那份文件：「关闭」没有「本次启动」句柄，新开一份会产出空文件
+ * 且与启动输出断连；找不到既有文件时退回新建。异步跟着 `latestRuntimeLogFile`（ISSUE #2193）；
+ * 逐行 await：`[action] 关闭` 必须排在 `■ 已手动关闭` 之前。
  */
 async function writerForStop(): Promise<RuntimeLogWriter> {
   const latest = await latestRuntimeLogFile("ollama-runtime");
@@ -83,15 +76,9 @@ async function ollamaUp(): Promise<boolean> {
 }
 
 /**
- * 端点：POST /api/llm/ollama-stop
- *
- * 关闭 Ollama：官方 CLI 没有「退出 serve」的命令（`ollama stop <model>` 只停
- * 模型加载），所以进程级终止是唯一可靠的关闭方式。
- *
- * 终止**按映像名杀整棵树**，判据收在 `~/lib/process/kill-process-tree`（`mode: "image"`）：
- * Windows 映射到 `taskkill /IM ollama.exe /T /F`，POSIX 映射到 `pkill -x ollama`。
- * 本模块不再自己拼命令、也不自己摸 `process.platform` —— 按映像名杀同样是
- * 「杀整棵树」的一种，散在路由里就又是一处平台判据。
+ * 端点：POST /api/llm/ollama-stop —— 关闭 Ollama：官方 CLI 没有「退出 serve」的命令，进程级
+ * 终止是唯一可靠方式。按映像名杀整棵树，判据在 `~/lib/process/kill-process-tree`
+ * （`mode: "image"`：Windows `taskkill /IM /T /F`，POSIX `pkill -x`）。
  */
 export async function POST(_req: NextRequest) {
   if (!(await requireRequestUser())) {

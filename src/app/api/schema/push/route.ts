@@ -6,23 +6,9 @@ import { isRecord } from "~/lib/is-record";
 import { SCHEMA_SYNC_STATUS_FILE } from "~/lib/log/log-paths";
 
 /**
- * `POST /api/schema/push` —— 状态栏「立即同步」按钮的执行端。
- *
- * 背景：`stale` / `missing` 意味着启动时的自动同步**没能**把库带到当前 schema
- * —— dry-run 白名单判出这批变更含「会丢数据」的语句（删列 / 重建表），启动链路
- * 不替用户做这个决定（`db-schema-state.mjs` 的 ensureSchemaCurrent）。此前唯一的
- * 出口是让用户自己去终端跑 `pnpm db:push`；本端点把这件事收进页面：用户在确认
- * 弹窗里知情并确认后，由本端点以 `--force` 口径 spawn 一次同步。
- *
- * 执行者仍是 `scripts/db-sync.mjs`（带 `--force`），结果照旧写状态文件
- * `log/current/tools/schema-sync.json` —— 页面现有的 2s 轮询链路原样拿到 `syncing → synced /
- * stale` 的迁移，本端点不引入第二条状态通道。
- *
- * 守卫（三层，失败方向都是「不执行」）：
- *   1. 状态文件里不是 `stale` / `missing` → 409（没有需要修的东西就不许发起）；
- *   2. 同步已在进行（`syncing`）→ 409（两个 drizzle 并发写同一个库）；
- *   3. `scripts/db-sync.mjs` 不在（桌包载荷刻意不带它，那里也没有 drizzle-kit）
- *      → 404，前端据 `GET /api/schema` 的 `canPush` 压根不显示按钮。
+ * `POST /api/schema/push` —— 状态栏「立即同步」按钮的执行端：`stale` / `missing` 意味着启动时的自动同步没能把库带到当前 schema（dry-run 白名单判出这批变更含
+ * 删列 / 重建表这类会丢数据的语句，启动链路不替用户决定），此前只能让用户去终端跑 `pnpm db:push`；本端点在确认弹窗后以 `--force` 口径 spawn 一次 `db-sync.mjs`，
+ * 结果照旧写 `log/current/tools/schema-sync.json`（页面 2s 轮询原样拿到迁移，不引入第二条状态通道）。守卫三层、失败方向都是「不执行」：相位非 stale/missing → 409；`syncing` → 409（两个 drizzle 并发写同一库）；执行件不在（桌包刻意不带）→ 404，前端据 `canPush` 不显示按钮。
  */
 export const dynamic = "force-dynamic";
 
@@ -31,10 +17,7 @@ let spawning = false;
 
 export async function POST() {
   if (spawning) {
-    return NextResponse.json(
-      { ok: false, error: "已有一次同步在发起中" },
-      { status: 409 },
-    );
+    return NextResponse.json({ ok: false, error: "已有一次同步在发起中" }, { status: 409 });
   }
 
   const file = SCHEMA_SYNC_STATUS_FILE;
@@ -50,9 +33,7 @@ export async function POST() {
       {
         ok: false,
         error:
-          phase === "syncing"
-            ? "数据库正在同步中，请等它结束"
-            : "当前没有需要同步的数据库结构变更",
+          phase === "syncing" ? "数据库正在同步中，请等它结束" : "当前没有需要同步的数据库结构变更",
       },
       { status: 409 },
     );

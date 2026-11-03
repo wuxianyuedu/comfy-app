@@ -1,40 +1,9 @@
 "use client";
 
 /**
- * ImageViewer —— 「把一张图看全」的通用出口（浮层口径见规范 16 §16.2.3；
- * 缩略图与失败兜底复用 §16.2.4.21 的 `MediaThumbnail`，不另写一份）。
- *
- * 起因是运行结果图在详情面板里被裁：缩略图那个盒子只有几百像素宽，用户
- * 想看清提示词画出来的细节时没有任何放大入口（既不能按原始像素看，也不能
- * 缩放到某个局部）。此前全库的图片都只是「渲染出来」，没有「查看」这一档。
- *
- * 两种用法：
- *
- * - `<ViewableImage src={url} ... />` —— 缩略图 + 点开查看（多数落点用这个，
- *   调用处一行替换掉原来的 `MediaThumbnail`）；
- * - `<ImageViewer src={url} onClose={...} />` —— 受控弹窗（调用处自己管开关，
- *   例如点整张卡片才打开）。
- *
- * 交互按「看图」的通行口径给全：
- *
- * - **适应窗口**（默认）与 **原始大小（1:1）** 两个档位，加上按 1.25 倍的
- *   放大 / 缩小；倍数与百分比由 `use-image-zoom` 算（数值侧单测）；
- * - **滚轮缩放**：以光标为锚点 —— 缩放后光标下的那块像素仍停在光标处，
- *   否则放大时想看的地方会从指针底下跑掉；
- * - **按住拖拽平移**：1:1 看长图时靠滚动条太慢。**拖动期间只改 transform、
- *   松手才把位移落到滚动偏移** —— 逐帧写 `scrollLeft` / `scrollTop` 是主线程
- *   滚动，浏览器要为每一帧重新布局 + 绘制（大图尤其贵，指针 120Hz 下就是
- *   肉眼可见的卡顿），而「把已经画好的内容挪个位置」交给合成器就够了；
- * - **双击**在适应窗口与原始大小之间切换；Esc / 点遮罩 / 右上角关闭都走
- *   `ui/dialog`（焦点锁与归还、遮罩让位标题行都在基元里，见其文件头）。
- *
- * 三条刻意不做的：
- *
- * - 不做「旋转 / 翻转 / 下载」这类编辑动作：它们是另一件事，塞进来会让
- *   「看图」这个出口变成一个半成品编辑器；
- * - 不做图片预加载 / 相邻图切换：调用处只给一张图，多图切换是列表的事；
- * - 不用 `transform: scale` 缩放：那样「原始大小」的像素与容器滚动都对不上，
- *   滚动条也失去了长度信息。这里直接按像素给宽高，滚动交给容器。
+ * ImageViewer —— 「把一张图看全」的通用出口（规范 16 §16.2.3；缩略图 / 失败兜底复用 §16.2.4.21 的 `MediaThumbnail`）。用法：`<ViewableImage>` 缩略图 + 点开，或受控 `<ImageViewer>`。
+ * 滚轮缩放以光标为锚点；拖拽期间只改 transform、松手才写滚动偏移（逐帧写 `scrollLeft` 是主线程滚动，大图 120Hz 明显卡顿）。1:1 直接按像素给宽高，不用 `transform: scale`；Esc / 遮罩 / 关闭走 `ui/dialog`。
+ * 刻意不做旋转 / 翻转 / 下载与相邻图切换：那是另一件事，塞进来会变成半成品编辑器。
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -79,14 +48,9 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
   } | null>(null);
   const natural = loaded?.src === src ? loaded.size : null;
 
-  /* 画布（滚动容器）：既用来量可视区（算「适应窗口」），也用来改滚动偏移
-   * （拖拽平移 / 滚轮锚点）。两者必须指向同一个元素。
-   *
-   * 元素存 `ref` 而不是 `state`：往下要改它的 `scrollLeft` / `scrollTop`，
-   * 而「改 `useState` 拿到的值」是 React 明令禁止的（元素本身不是状态，
-   * 状态是它量出来的读数）。「元素出现了没有」这件事由 `useElementBox`
-   * 的读数派生（`box !== null` 即已挂上并量到）—— 这样 effect 的依赖仍然是
-   * 「元素本身」，而不是「弹窗开了没有」（规范 16 §16.2.4.12 末尾那条）。 */
+  /* 画布（滚动容器）既用来量可视区，也用来改滚动偏移，两者必须指向同一个元素。元素存 `ref`
+   * 而不是 `state`（往下要写它的 `scrollLeft` / `scrollTop`）；「元素挂上没有」由 `useElementBox`
+   * 的读数派生（`box !== null`），effect 依赖是元素本身而不是「弹窗开了没有」（规范 16 §16.2.4.12）。 */
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [boxRef, box] = useElementBox();
   const setScroller = useCallback(
@@ -98,13 +62,9 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
   );
   const scrollerReady = box !== null;
 
-  /* 可视区尺寸取**矩形**（`box.width` / `box.height`）而不是 `clientWidth` /
-   * `clientHeight`：后两者**不含滚动条**，会随「内容是否溢出」而变，于是
-   * 「适应窗口」算出的尺寸 ↔ 滚动条出现/消失 构成正反馈环 —— 按适应尺寸渲染
-   * → 差一点点溢出 → 出现滚动条 → 可视区变小 → 重算更小的适应尺寸 → 滚动条
-   * 消失 → 可视区变大 → …… 用户看到的就是「不停抖动、滚动条一来一去」，逐帧
-   * 重排还让拖拽发卡。矩形是**布局尺寸**，滚动条出现与否都不改它，适应尺寸
-   * 因此是矩形的纯函数，收敛到「无滚动条」这个不动点。 */
+  /* 可视区尺寸取矩形（`box.width` / `box.height`）而不是 `clientWidth` / `clientHeight`：后者不含
+   * 滚动条，会与「适应窗口」构成正反馈环（算尺寸 → 溢出 → 出现滚动条 → 视口变小 → …抖动）。
+   * 矩形是布局尺寸，滚动条出现与否都不改它，适应尺寸因此收敛到「无滚动条」的不动点。 */
   const zoom = useImageZoom({
     naturalSize: natural,
     viewportWidth: box ? box.width : null,
@@ -180,17 +140,9 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
     el.scrollTop = pending.top;
   }, [scrollerReady, zoom.scale]);
 
-  /* 拖拽平移：**拖动期间只改内层的 transform，松手才落到滚动偏移**。
-   *
-   * 为什么不能逐帧写 `scrollLeft` / `scrollTop`（用户实测「拖动有卡顿」）：
-   * 那是**主线程滚动** —— 浏览器必须为每一帧重新做布局与绘制，图片越大越贵
-   * （缩放后动辄几千像素宽），而指针设备一秒能来 120 次。拖拽这件事的实质
-   * 只是「把已经画好的内容挪个位置」，交给合成器（transform）不必碰布局。
-   *
-   * 松手时把累计位移一次性写回 `scrollLeft` / `scrollTop`：滚动条因此仍如实
-   * 反映位置，后续的滚轮锚定、双击缩放也就有了正确的基准。
-   *
-   * 指针捕获让指针移出容器后仍能收到事件（否则拖到边缘就断）。 */
+  /* 拖拽平移：拖动期间只改内层 transform，松手才落到滚动偏移。逐帧写 `scrollLeft` / `scrollTop`
+   * 是主线程滚动（每帧重新布局 + 绘制，大图 120Hz 下卡顿）；拖拽实质只是把已画好的内容挪位置，
+   * 交给合成器即可。松手一次性写回，滚动条仍如实反映位置；指针捕获保证移出容器后仍收到事件。 */
   const innerRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{
     dx: number;
@@ -347,13 +299,8 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
               >
                 <Plus data-icon="inline-start" size={14} />
               </Button>
-              {/* 缩放档位「一排里选一个」——走 SelectChip（全库唯一实现，
-                  规范 16 §16.2.4.75）。旧形态是手搓三元 + `bg-surface-2`
-                  选中底色，且**没钉字色悬停**：`ghost` 的
-                  `hover:text-foreground` 会把已选中那枚的字色翻回未选中档。
-                  注意 `zoom.mode` 还有第三种 `manual`（滚轮 / ± 按钮缩出来的
-                  自由倍数）—— 那时两枚都不选中，正是单选组「可以都不选」的
-                  合法状态（双击画布的 toggle 会把它收回前两档）。 */}
+              {/* 缩放档位「一排里选一个」走 SelectChip（规范 16 §16.2.4.75）。旧形态手搓三元 + `bg-surface-2`，且没钉字色悬停，`ghost` 的 `hover:text-foreground` 会把已选中那枚字色翻回未选中档。
+                  注意 `zoom.mode` 还有第三种 `manual`（滚轮 / ± 按钮缩出来的自由倍数）—— 那时两枚都不选中，正是单选组「可以都不选」的合法状态（双击画布会收回前两档）。 */}
               <div aria-label="缩放档位" className="flex items-center gap-0.5" role="radiogroup">
                 <SelectChip
                   className="gap-1 px-2 py-1"
@@ -446,11 +393,8 @@ function clampNext(current: number, zoomIn: boolean): number {
 }
 
 /**
- * 取第一个「真的给了」的文案：空串与只有空白都算没给。
- *
- * 用 `??` 串不起来这件事（`label ?? alt` 会让 `label=""` 挡住 `alt`），
- * 而 `label || alt` 会被 lint 判为「该用 `??`」—— 两者的差别恰好是这里
- * 要表达的语义，所以写成显式的筛选而不是二选一的运算符。
+ * 取第一个「真的给了」的文案：空串与只有空白都算没给。`label ?? alt` 会让 `label=""` 挡住 `alt`，
+ * 而 `label || alt` 会被 lint 判为该用 `??` —— 两者的差别恰是要表达的语义，故显式筛选。
  */
 function firstText(...values: Array<string | undefined>): string | null {
   return values.find((value) => (value ?? "").trim() !== "") ?? null;

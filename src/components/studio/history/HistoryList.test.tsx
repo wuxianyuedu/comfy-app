@@ -51,20 +51,11 @@ function renderList() {
   );
 }
 
-/**
- * 历史页状态筛选那一排的回归判据（ISSUE #1925）。
- *
- * 用户截图里五枚筛选在**深浅两套主题下都读不出选中态**。根因不是审美：
- * 选中档写的是 `bg-primary-solid` —— `primary-solid` 是 `Button` 的
- * **`variant` 轴取值**，不是给 className 用的类；样式表里没有这条规则，
- * 于是选中项没有底色，`text-primary-foreground` 的纯白字直接压在页面底色上。
- * 计数徽标的 `bg-subtle5` 同源，也是同一个不存在的类。
- *
- * 这里钉三件事：
- *   ① 一排筛选不再出现那两个「幽灵类名」（它们写在哪一轮都可能有人再抄回来）；
- *   ② 筛选项走 `ui/select-chip` 的选中态（`aria-checked` 驱动，视觉与 a11y 同源）；
- *   ③ 状态圆点的颜色来自语义 tone，不是 `FilterDef` 里写死的类名字面量。
- */
+/** 历史页状态筛选那排的回归判据（ISSUE #1925）。用户截图里五枚筛选在深浅两套主题下都读不出选中态：
+ * 选中档写的 `bg-primary-solid` 是 Button 的 variant 轴取值、不是 className 类，样式表无此规则，
+ * 于是无底色、白字压页面底色；计数徽标 `bg-subtle5` 同源不存在。
+ * 钉三件事：① 不再出现这两个幽灵类名；② 筛选项走 ui/select-chip 的 aria-checked 选中态；
+ * ③ 状态圆点颜色来自语义 tone，不是 FilterDef 里写死的类名字面量。 */
 describe("HistoryList 状态筛选（ISSUE #1925）", () => {
   it("不再使用那两个不存在的类名", () => {
     render(renderList());

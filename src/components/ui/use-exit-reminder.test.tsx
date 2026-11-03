@@ -1,18 +1,7 @@
 /**
  * 「离开这一屏就丢掉现场」的提醒（规范 10.3.1 / 06 §6.7 第 ③ 档）。
- *
- * 这条判据守的是**接线**，不是样式（样式的判据在 `globals.css` 那条选择器上，
- * 真命中要浏览器，见下）：
- * ① 没有信号时**整条不在可见流里**（`display: none`）—— 它可以在任何容器里
- *    无条件渲染，调用处不必先算一遍「现在该不该显示」；
- * ② 有信号时给出的是 `display: inline-block`（摆回来）；
- * ③ `exitReminderSignal(false)` 返回的属性值是 `undefined` —— **属性整条消失**，
- *    与「不写这个 prop」等价；返回 `""` 的话 `[data-dirty="false"]` 照样命中，
- *    那会让提醒在任何地方都常驻（而没有任何东西会报错）。
- *
- * ⚠️ 说清这条**判不出什么**：`:has(~ …)` 的**真命中**要靠浏览器（jsdom 不做
- * `:has()` 的样式解析）。因此「选择器写对了吗」这一半由 globals.css 的文本判据
- * 兜住（同目录的用例读那份 CSS），不是本文件。
+ * 守接线：无信号时整条 `display: none`（调用处可无条件渲染）、有信号时 `display: inline-block`；`exitReminderSignal(false)` 返回 `undefined`（属性整条消失），返回 `""` 会让 `[data-dirty="false"]` 常驻。
+ * ⚠️ `:has(~ …)` 的真命中要靠浏览器（jsdom 不做 `:has()` 样式解析），「选择器写对了吗」由 globals.css 的文本判据兜住。
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";

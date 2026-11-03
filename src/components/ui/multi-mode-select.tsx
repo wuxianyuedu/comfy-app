@@ -1,54 +1,9 @@
 "use client";
 
-/**
- * MultiModeSelect —— 一个工作流可挂多种模式（multi-select chip）。
- *
- * 工作流卡片右上角用它替代单选 SelectMenu：
- *   - 主 chip：默认 mode（按所在分类着色）
- *   - +N pill：附加模式弱化占位
- *   - 点主 chip 或 +N pill 开同一个多选 popover：
- *       · 搜索框（label / code / subCategory）
- *       · 按 image / video / audio 分类分组页签
- *       · 每行 = checkbox + label + code + 默认 toggle
- *       · 底部 取消 / 保存（显示已选条数）
- *
- * 浮层走 `~/components/ui/popover`（规范 16 §16.2.3 P2）：此前这里照抄了
- * SelectMenu 的全套自搓浮层（portal + fixed 定位 + 滚动重定位 + 手写 Esc /
- * 外点关闭 + z-index 魔数）—— 同一件事在库里因此有两份副本，改一处漏一处。
- * 现在定位与关闭语义交给 base-ui，本组件只留「多选 + 草稿」这件事自己。
- *
- * ## 为什么没合到 shadcn `Combobox`（P67 §12.18 中间地带 · 已评估保留）
- *
- * 曾装过 `~/components/ui/combobox`（**Base UI 版 Combobox**，带搜索；
- * 界面层最严格审计 §2.9 判定为"装了但 src 内 0 消费点"的死装件、已
- * 随本 PR 删除）。从形状看它与本件「搜索 + 多选」有重叠，但本件有
- * **3 条 Combobox 撑不住的复合语义**、硬合会丢业务判据 —— 这三条与
- * "磁盘上是否装有 combobox"无关，即便未来重新引入也需要独立评估：
- *
- *   1. **draft / apply 事务**：面板内 `useState<Set<string>>(new Set(modes))`
- *      起一份草稿、只有点「保存」才 `onChange` 回父层；点「取消」直接关
- *      浮层不改动。Combobox 是「即时选中即 `onChange`」的单向流，草稿态
- *      需要在外层再手写一份、并把 Combobox 的多选模式关掉——那时其实
- *      本件已经**不是 Combobox 的复用、而是 Combobox 的二次包装**，收益
- *      抵不上把 Base UI Combobox 拉进浮层里做多套状态同步的复杂度。
- *   2. **`defaultMode` 指针**：`modes` 里额外标一位「哪个是默认」并显示
- *      在 chip 主色上；`draftDefault` 与 draft 一起编辑、保存时若被取消
- *      勾选会回退到 `arr[0]` 保证 `defaultMode ⊆ modes` 约束成立。Combobox
- *      只有一维「选中集」、没有 second-class 的默认指针。
- *   3. **分类页签（image / video / audio）**：面板顶部切段、`activeTab`
- *      打开时定位到第一个已选模式的分类；每段独立展示符合该分类的候选。
- *      Combobox 是单一搜索列表、没有页签维度。
- *
- * 三条业务判据叠在一起、本件是**「草稿事务化的多选编辑器」**、Combobox
- * 是「即选即提交的可搜索单选/多选下拉」——语义不同，保留自绘（§12.18
- * 「确认是这一处独有的业务才就地写」）。文件里的**共性**（浮层定位 /
- * 外点关闭 / Esc）已经吃 base-ui Popover；**独立**的 draft / tab /
- * default 三态是本件的核心、没有对应基元可复用。
- *
- * 注：`ui/combobox.tsx` 已删除；上面这段选型论证不再依赖磁盘上有 combobox
- * 存在，若未来重新引入 Base UI Combobox（例如给多处搜索型下拉做统一出口）
- * 或本件被拆解，这段需要重新评估。
- */
+/** MultiModeSelect —— 一个工作流可挂多种模式（multi-select chip）：主 chip 显示默认 mode（按所在分类着色）、+N pill 弱化占位；点任一入口开同一个多选 popover（搜索 label / code / subCategory、按 image / video / audio 分类分组页签、每行 = checkbox + label + code + 默认 toggle、底部取消 / 保存并显示已选条数）。
+ * 浮层走 `~/components/ui/popover`（规范 16 §16.2.3 P2）：此前这里照抄了 SelectMenu 的全套自搓浮层（portal + fixed 定位 + 滚动重定位 + 手写 Esc / 外点关闭 + z-index 魔数），同一件事在库里有两份副本；现在定位与关闭语义交给 base-ui，本组件只留「多选 + 草稿」。
+ * 为什么没合到 shadcn `Combobox`（P67 §12.18 中间地带 · 已评估保留；曾装的 Base UI 版 Combobox 因 src 内 0 消费点已删除）：本件有 3 条 Combobox 撑不住的复合语义 —— ① draft / apply 事务（面板内 `useState<Set<string>>(new Set(modes))` 起草稿，只有点「保存」才 onChange 回父层、取消直接关不改动；Combobox 是即时选中即 onChange，硬合等于把 Combobox 二次包装再多做套状态同步）；② `defaultMode` 指针（`modes` 里额外标一位默认并显示在 chip 主色上，`draftDefault` 随草稿编辑、保存时若被取消勾选回退到 `arr[0]` 以保证 defaultMode ⊆ modes；Combobox 只有一维选中集）；③ 分类页签（打开时定位到第一个已选模式的分类、每段独立展示候选；Combobox 是单一搜索列表、没有页签维度）。
+ * 三条业务判据叠加，本件是「草稿事务化的多选编辑器」、Combobox 是「即选即提交的可搜索下拉」—— 语义不同，保留自绘（§12.18）；共性（浮层定位 / 外点关闭 / Esc）已吃 base-ui Popover，独立的 draft / tab / default 三态是本件核心。若未来重新引入 Base UI Combobox 或本件被拆解，这段选型论证需重新评估。 */
 
 import { useCallback, useMemo, useState } from "react";
 import { textHandler } from "~/lib/form-props";
@@ -305,12 +260,8 @@ export function MultiModeSelect({
                       : "text-ink-strong hover:bg-subtle"
                   }`}
                   key={item.code}
-                  /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`）——
-                   * 因此**必须**自带键盘等价物：ARIA 的 `checkbox` 角色承诺
-                   * 「Space 可切换」，只挂 `onClick` 就是「鼠标点得开、键盘进不来」。
-                   * 键判据走 `simpleKeyHandler`（§16.2.4.57 的唯一出口：归一
-                   * 键名 + `preventDefault` 显式），不在这里手写第二份
-                   * `event.key === " "` —— 那正是这条账要消除的形态。 */
+                  /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`），因此必须自带键盘等价物：ARIA 的 `checkbox` 角色承诺「Space 可切换」，只挂 `onClick` 就是「鼠标点得开、键盘进不来」。
+                   * 键判据走 `simpleKeyHandler`（§16.2.4.57 的唯一出口：归一键名 + `preventDefault` 显式），不在这里手写第二份 `event.key === " "` —— 那正是这条账要消除的形态。 */
                   onClick={() => {
                     toggle(item.code);
                   }}

@@ -1,28 +1,10 @@
 "use client";
 
 /* ── 选中节点 → 相关连线 + 相关端口行高亮 ──
- *
- * 把「哪条连线与选中节点相关」做成画布状态的一部分：订阅 React Flow 的选中事实源
- * （`nodeLookup` 里每个内部节点的 `internals.userNode.selected`），算出每类连线的
- * 关注级别后写回 edges，由边渲染层按级别加成不同样式。
- *
- * 为什么走 store 订阅而不是画布的 `onSelectionChange`：「选中」在两处画布都由
- * 点击 / 框选直接改 React Flow 内部状态（选中节点后拖走再点空白取消等路径），
- * 回调顺序并不可靠；而 `internals.userNode` 永远是那一帧真实渲染的节点对象，
- * 是最稳定的单一事实源。
- *
- * 端点解析与判据在 `flow-focus-endpoints.ts`（纯函数、可单测）；本 hook 只负责
- * 「读 store → 调纯函数 → 写 edges / 写节点」这条接线。
- *
- * **端口行同源**：选中只把线加粗仍答不出「这条线落到节点的哪一行」，所以同一份
- * store 快照里顺手算出每个节点上「有连线落到的端口行」，写回节点 data（新的节点
- * 对象才触发 React Flow 重渲染，见下）。节点标记与边标记必须来自同一帧，否则会
- * 出现「线亮了但落到的那一行没亮」。
- *
- * 写入策略：仅在关注级别真的变化时才换掉那条边 / 那个节点的对象（未变化的原样
- * 返回）—— React Flow 的边与节点渲染都按引用 memo，整表重建会让全图一起重渲染，
- * 百级节点的图每次点击都能看出卡顿。
- */
+ * 订阅 React Flow 的 `nodeLookup[*].internals.userNode.selected`（onSelectionChange 回调顺序不可靠，
+ * 该字段是每帧真实渲染节点，最稳定的单一事实源）；判据在 flow-focus-endpoints.ts，本 hook 只做接线。
+ * 端口行标记必须与边标记来自同一帧，否则「线亮而行不亮」。
+ * 写入策略：仅在关注级别真的变化时换对象（未变化原样返回）—— 边/节点按引用 memo，整表重建会让百级图重渲染。 */
 
 import { useCallback, useEffect } from "react";
 import { useStoreApi, type Edge, type Node } from "@xyflow/react";
@@ -85,12 +67,9 @@ function portFocusEquals(
   return keys.every((key) => a[key] === b[key]);
 }
 
-/** 写回节点表的函数形状。
- *
- *  只声明「写哪一张表」，不绑定具体节点类型：两处画布的节点各带自己的 data 类型
- *  （工作流节点 `WorkflowNodeData` / 项目画布 `CanvasNodeData`），而这里写入的
- *  只是 data 上的一个旁路字段（结构上兼容）。调用方若拿着更窄的 setter，需要显式
- *  说明这次写入不改变节点类型 —— 见 ProjectCanvas 的传参处。 */
+/** 写回节点表的函数形状：只声明「写哪张表」，不绑定节点类型 ——
+ *  两处画布的 data 类型（WorkflowNodeData / CanvasNodeData）不同，这里只写 data 上的旁路字段（结构兼容）。
+ *  调用方若持更窄 setter，需显式说明写入不改变节点类型（见 ProjectCanvas 传参处）。 */
 export type NodeTableWriter = (updater: (nodes: Array<Node>) => Array<Node>) => void;
 
 /** 从边 data 读回关注级别（没标记过 → "none"）。 */

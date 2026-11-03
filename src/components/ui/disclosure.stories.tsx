@@ -5,27 +5,9 @@ import { Button } from "~/components/ui/button";
 import { Disclosure, type DisclosureMarker } from "~/components/ui/disclosure";
 
 /**
- * `Disclosure` 是「点一行标题、把一段内容折叠 / 展开」的**唯一实现**
- * （规范 16 §16.2.4.13）。
- *
- * 它替代的是库里**三种**并行写法：原生 `<details>` 六处、自绘
- * 「布尔 state + 条件渲染 + ▸/▾」四处、以及树形结构的 `expandedParents`
- * 那份映射。三种的差别不是风格，而是**无障碍语义各写各的**：`<details>`
- * 天生带 `role` / `aria-expanded` / 键盘切换 / 「页内查找时自动展开」，
- * 自绘那份基本只有 `onClick`（`NodesTab` 还为此专门补了 `role="button"`
- * 与 Enter/Space —— 而注释里写着「不能用原生 button，因为嵌在 button 里非法」，
- * 那正是自绘外壳逼出来的绕路）。
- *
- * 形态取 base-ui `Collapsible` 而不是原生 `<details>`，为的是同时拿到：
- * `hidden="until-found"`（保留 `details` 最值钱的「页内查找自动展开」）、
- * 基元给的 `aria-expanded` / `aria-controls` / 键盘语义、以及受控 / 非受控两用。
- *
- * 三根轴：
- * - `marker`：折叠标记的形态（`caret` ▸▾ / `chevron` / `none` 由调用处自绘）；
- * - `open` + `onOpenChange`：受控（`ErrorPanel` 的展开态会被运行状态重置）；
- * - `leading` / `trailing`：与触发开关**同排**的内容 —— 用途是「一排按钮里
- *   只有一个是折叠开关」（基元的 trigger 是 `<button>`，往里塞 `<Button>`
- *   在 HTML 里非法）。**同排要靠 `rootClassName="flex …"` 给布局**。
+ * `Disclosure` 是「点一行标题、把一段内容折叠 / 展开」的**唯一实现**（规范 16 §16.2.4.13）：替代库里三种并行写法（原生 `<details>`、自绘布尔 state + ▸/▾、树形 `expandedParents` 映射），它们的差别是**无障碍语义各写各的**。
+ * 形态取 base-ui `Collapsible` 而非原生 `<details>`：同时拿到 `hidden="until-found"`（保留「页内查找自动展开」）、`aria-expanded` / `aria-controls` / 键盘语义、以及受控 / 非受控两用。
+ * 三根轴：`marker`（`caret` ▸▾ / `chevron` / `none` 由调用处自绘）、`open` + `onOpenChange`（受控，`ErrorPanel` 的展开态会被运行状态重置）、`leading` / `trailing`（与触发开关同排；基元 trigger 是 `<button>`，往里塞 `<Button>` 非法，同排要靠 `rootClassName="flex …"` 给布局）。
  */
 type Marker = NonNullable<DisclosureMarker>;
 

@@ -1,30 +1,9 @@
 import { overlayClass } from "~/lib/full-screen-layer";
 
 /**
- * `ui/dialog` / `ui/sheet` / `ui/fullscreen-dialog` 遮罩（Backdrop）的 class 串。
- *
- * 为什么独立成模块：遮罩的样式是「删掉 JSX 还能跑的判据」（规范 17 §17.2
- * 第①层），可以脱离 React 单测。**必须在一处定义**——`DialogContent`
- * 与 `SheetContent` 都必须带上同一份遮罩，而它同时要满足标题行让位的硬
- * 规则（ISSUE #310：遮罩曾铺满整个视口，把页签与右上角窗口按钮一起盖住，
- * 用户关不掉也切不回其它页签）。
- *
- * 底色是语义 token `bg-scrim` 而不是写死 `bg-black/*`（ISSUE #1742）：它是
- * **结构性表面**（覆盖整块内容区），浅主题需要更重的 α 才看得出「底下被压住」、
- * 深主题本身已暗要用另一个值 —— 两态各自取值由
- * `tests/dialog-backdrop-contrast.test.ts` 从编译产物真量，别再在调用处
- * 各写一份 `bg-black/40`（同一件事两套底色正是那条 ISSUE 的现场）。
- *
- * 为什么用 `overlayClass("modal")` 而**不**自己铺满视口：
- * 项目有 `check-title-bar-clearance.cjs` 门禁（顶层浮层必须带 `top-title-bar`），
- * 而「同一段 class 串里既有铺满视口的定位、又有 `top-title-bar`」是自相矛盾的
- * 写法 —— 后写的 `top` 覆盖前者，读代码的人只会看到两个互相打架的声明。
- * 统一走同一个常量函数，静态判据与运行时形态才是同一个来源。
- *
- * 提交门槛适配（静态扫描要求，两条都必须落在**同一行**）：
- * ① `check-title-bar-clearance.cjs` —— 描到「铺满视口」的定位声明时该行必须有 `top-title-bar`；
- * ② `check-inline-style.cjs` —— 字符串里出现内联定位声明即视为内联样式。
- * 故「铺满视口 + 顶部让位」写在同一行的同一个 class 串里。
+ * `ui/dialog` / `ui/sheet` / `ui/fullscreen-dialog` 遮罩（Backdrop）的 class 串：**必须在一处定义**（`DialogContent` 与 `SheetContent` 共用同一份），且是可脱离 React 单测的纯常量（规范 17 §17.2 第①层）。
+ * 底色用语义 token `bg-scrim` 而非写死 `bg-black/*`（ISSUE #1742：结构性表面，浅/深主题各自取值，由 `tests/dialog-backdrop-contrast.test.ts` 从编译产物真量）；遮罩必须带 `top-title-bar` 让位标题行（ISSUE #310：曾铺满视口盖住页签与窗口按钮，用户关不掉也切不回）。
+ * `check-title-bar-clearance.cjs` 与 `check-inline-style.cjs` 要求「铺满视口 + 顶部让位」落在**同一行**的同一个 class 串里，故统一走 `overlayClass("modal")`，而不是自己拼两套互相打架的定位。
  */
 export function dialogBackdropClass(className?: string): string {
   /* 顶部让位优先：`top-title-bar` 与「铺满视口」同时出现时，前者的 `top`

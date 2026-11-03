@@ -1,15 +1,10 @@
 "use client";
 
 /* ── 工作流库画布预览的「对外参数映射」编辑编排（规范 §17.2 第②层）──
- *
- * 库里这份映射与编辑器画布上的**同一份事实**（`paramMap.source.mode:<模式>`），
- * 用户在库里也要能改（ISSUE #355：「连线要能编辑，现在编辑不了」）。这一层负责：
- *   ① 拖线手势的落点解析（命中哪一行，等价于 React Flow 的 onConnect）；
- *   ② 一次编辑的落库编排（patch paramMap），本地叠加一层 overlay 立即回读；
- *   ③ 「恢复默认」：清掉该对外参数在当前模式下的手工线。
- *
- * 落库形状由 `~/lib/workflow/workflow-param-wiring` 给出（纯函数，与编辑器同一份）。
- * 视图只消费这里返回的 controller：不碰 tRPC、不解析映射。 */
+ * 与编辑器画布同一份事实（`paramMap.source.mode:<模式>`），库里也要能改
+ * （ISSUE #355）。本层负责：① 拖线落点解析；② 一次编辑的落库编排（patch
+ * paramMap），本地叠加 overlay 立即回读；③「恢复默认」清掉该参数在当前模式下的
+ * 手工线。落库形状来自 `~/lib/workflow/workflow-param-wiring`；视图不碰 tRPC。 */
 
 import { useCallback, useMemo, useState } from "react";
 
@@ -24,10 +19,9 @@ import {
 export type ParamWiringController = {
   /** 提交一份**完整** paramMap：先写本地 overlay（立刻回读），再落库。
    *
-   *  左列（`connect` / `disconnect` / `resetToAuto`）已内建这套编排；右列的输出
-   *  落点写在 `paramMap.output.*`，由调用方算好 next 后经这里提交 —— 两列共用同一
-   *  份 overlay，输出线才会像输入线一样「拖完立刻画出来」，而不必等一次 PATCH +
-   *  查询重拉（约 2s）才把线显示出来。 */
+   *  左列（connect / disconnect / resetToAuto）已内建这套编排；右列的输出落点由
+   *  调用方算好 next 后经这里提交 —— 两列共用同一份 overlay，输出线才会像输入线
+   *  一样「拖完立刻画出来」，不必等 PATCH + 查询重拉（约 2s）。 */
   commitParamMap: (next: Record<string, unknown>) => void;
   /** 拖线落上：把某个对外参数连到 ioKey（写入后立即回读）。 */
   connect: (entryId: string, ioKey: string) => void;

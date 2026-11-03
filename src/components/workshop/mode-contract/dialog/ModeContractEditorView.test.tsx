@@ -1,19 +1,6 @@
 /**
- * `ModeContractEditorView` 的**布局判据**（ISSUE #1870）。
- *
- * 这一刀把模式清单从「按类别平铺的三排 chip」改成「左侧一棵树 + 右侧编辑区」的
- * 两栏。形态改坏不会让任何功能断言变红，所以判据落在结构事实上：
- *
- *   1. **两栏都在**：左栏是模式导航（`role="radiogroup"`），右栏是编辑区 ——
- *      「树」与「正文」是同一屏里两个独立滚动的区域；
- *   2. **右栏跟着选中走**：选中某模式时右栏给出它的标题与输入口；未选时给出
- *      空态文案（不是一片空白）。
- *
- * 不锁样式类：栏宽度、颜色改了不该让用例红。
- *
- * ⚠️ 折叠那一条（同级反馈的第二刀）的判据在 `ModeContractModeNav.test.tsx`：
- * 折叠是导航自己的交互状态，这一层只摆布局、不感知它 —— 在这里再判一遍等于
- * 把同一条账记两处。
+ * `ModeContractEditorView` 的**布局判据**（ISSUE #1870）：形态改坏不会让功能断言变红，故判据落在结构事实上 —— ① 两栏都在（左栏 `role="radiogroup"` 导航、
+ * 右栏编辑区，各自独立滚动）；② 右栏跟着选中走，未选给空态文案。不锁样式类。折叠的判据在 `ModeContractModeNav.test.tsx`，这一层不感知它，不重复记两处的账。
  */
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";

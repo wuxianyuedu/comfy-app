@@ -1,19 +1,9 @@
 import { cn } from "~/lib/utils";
 
 /**
- * 序号圆 —— 工坊五个界面里逐字相同的那一枚（`CharacterDesigner` / `FinalComposer` /
- * `ShotStudio` / `StoryboardPlanner.parts` / `VideoStudio.parts`）。
- *
- * 为什么单独有它、而不是塞进 `ui/badge`：形状语义不同 —— 徽标是「一个可变文字的标签」，
- * 这里是「列表项的序号」，宽高相等、内容恒为一个数字或短索引。塞进 Badge 会让
- * `variant` / `tone` 两轴多出一支根本不适用的组合（等宽高 + 居中 + 无描边）。
- *
- * 为什么住在 `workshop/` 而不是 `ui/`：五个消费者全在工坊里，目前看不出第二个域的
- * 调用点（规范 §12.15 第三条：看不出第二个用的先就地写）。真要被别处用再提升到 `ui/`。
- *
- * `grid place-items-center` 是必需的，不是随手写的居中方案：契约 §Components
- * 「基元纪律 2」——`width`/`height` 对 `display: inline` 不生效，`<span className="size-6">`
- * 画出来是一条约 4×20px 的竖线。原来五处都恰好落在 flex 容器里才「碰巧」成立。
+ * 序号圆 —— 工坊五个界面里逐字相同的那一枚。不塞进 `ui/badge`：语义是「列表项序号」（等宽高、恒为短索引），徽标的 variant/tone 两轴不适用；住在 `workshop/`
+ * 而非 `ui/` 是规范 §12.15 第三条（消费者全在工坊）。`grid place-items-center` 必需：契约「基元纪律 2」—— width/height 对 `display: inline` 不生效，
+ * 缺了会画成约 4×20px 的竖线（原五处只是恰好落在 flex 容器里才成立）。
  */
 export function IndexDot({
   index,

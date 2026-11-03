@@ -1,33 +1,7 @@
 /**
- * WorkflowNode.ardot.tsx — 纯设计转代码参考件（PURE DESIGN-TO-CODE · v4）
- *
- * 由 Ardot 稿 714503087315759（项目画布节点 v2 重设计，frame 3:12 NodeCard-v2）
- * 逐 token 落地。本文件**不含任何运行时逻辑**。
- *
- * v4 关键修正（端点必须骑跨在 Card 边框上）：
- *   - Card 必须 `overflow-hidden`（保护底部 ActionBtn 圆角不被矩形 fill 盖出角）
- *   - 但端点 x=-6 / right=-6 会跑到 Card 外 → 不能让 Card 把端点切了
- *   - 解法：把 Card 包一层 wrapper，端点作为 wrapper 的 absolute 同辈子元素
- *     骑跨在 Card 上，Card 自身圆角和 ActionBtn 圆角都不被破坏
- *
- * v3 → v4 → v5 演进：
- *  v3：删内层 #0B0B10 容器，Card 半径 12→14，端点绑 subrow 中心
- *  v4：端点提到外层 wrapper（absolute inset-0 层），Card 保留 overflow-hidden
- *  v5：subrow pl 回到 14（与 Ardot 3:40/3:46/3:52 实测一致）
- *
- * v2/v3/v4/v5 共同 token（来自 batch_read 实测对齐）：
- *   Card        #16161C / border #26262E / radius 14 / 内部 overflow-hidden
- *   Header      340×32 · W 图标 #2A1F4A r14 28×28 + 状态胶囊 #1E1A2E r11 57×20
- *   Divider     340×1 #26262E
- *   ChipRow     340×44 居中放 312×24 #1E1A2E 紫描边 r8 chip
- *   端口行高度   STRING(86) INT(33) Output(28)
- *   端口色      STRING/INT → #9A9AAD · IMAGE/MASK → #7C5CFC · VIDEO → #FF5CA8
- *   端点        12px / 描边 in #4D4D59 · out #16161C（卡片底色）/ 投影 0 4 4
- *   端点位置    in left:-6 / out right:-6，圆心 = 卡缘 ±0，外露 6px 半圆
- *   TypeChip    STRING/INT #26262E r3 · IMAGE #1E1A2E+紫描边 r3
- *   ActionBtn   340×43 渐变 #7C5CFC→#FF5CA8 r14
- *   Subrow/X 起点 14（与 Card padding 一致）
- *   字体        Noto Sans SC（中文） / Inter（数字·类型 chip）
+ * WorkflowNode.ardot.tsx — 纯设计转代码参考件（PURE DESIGN-TO-CODE · v4，不含运行时逻辑）；由 Ardot 稿 714503087315759（frame 3:12 NodeCard-v2）逐 token 落地。
+ * v4 修正：Card 必须 overflow-hidden（保护 ActionBtn 圆角），但端点 x=-6/right=-6 会跑出卡外，故端点放在 wrapper 的 absolute 同辈层骑跨卡边。
+ * token：Card #16161C / border #26262E / r14，端点 12px（in #4D4D59 / out #16161C），IMAGE/MASK #7C5CFC · VIDEO #FF5CA8 · STRING/INT #9A9AAD。
  */
 import { upperToken } from "~/lib/upper-token";
 import { TypeChip } from "~/components/studio/TypeChip";
@@ -197,12 +171,7 @@ function PortRowOutput({ label, type }: { label: string; type: string }) {
 /**
  * 纯视觉工作流节点（无运行时逻辑）。
  * 通过 nodeTypes.workflowArdot 渲染到画布，仅供先看视觉、再叠功能。
- *
- * 结构：
- *   <div wrapper 340x353>
- *     <Card overflow-hidden + rounded-[14] + 内容/>
- *     <端点层 absolute inset-0 />     ← 端点骑跨卡边
- *   </div>
+ * 结构：<div wrapper 340×353> + <Card overflow-hidden rounded-[14]> + <端点层 absolute inset-0>。
  */
 export function WorkflowNodeArdot() {
   return (

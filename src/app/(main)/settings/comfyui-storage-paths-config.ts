@@ -50,10 +50,8 @@ export function buildStorageRows(storage: DesktopStoragePaths): Array<StoragePat
 
 /**
  * 卡片底部的一句话来源说明。
- *
- * 「这些目录是从哪读来的」必须写出来：共享目录来自 `extra_model_paths.yaml`，
- * 而主目录可能被启动参数改过 —— 不说清的话用户会以为看到的六条都是 ComfyUI
- * 自己算出来的默认值。
+ * 「这些目录从哪读来」必须写明：共享目录来自 `extra_model_paths.yaml`，主目录
+ * 可被启动参数覆盖，否则用户会误以为全是 ComfyUI 自己算出的默认值。
  */
 export function describeStorageHint(storage: DesktopStoragePaths): string {
   const fromYaml =

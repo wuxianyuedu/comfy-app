@@ -1,10 +1,8 @@
 "use client";
 
 /* ── 本地更新检测的跨组件共享状态（纯状态，无副作用/无 IO）────
- * 轮询的「脏」结果、开关与手动触发入口要被多个非嵌套 chrome 消费（轮询
- * 挂载组件、顶部导航的手动检测按钮），用 zustand 单例收口，避免 React
- * context 层层透传。真正的轮询与 toast 由 UpdateCheckProvider 驱动，
- * 本文件不 import 任何 React 组件，可被纯逻辑单测。
+ * 脏结果/开关/手动触发入口被多个非嵌套 chrome 消费，用 zustand 单例收口。
+ * 轮询与 toast 由 UpdateCheckProvider 驱动；本文件不 import React 组件。
  */
 
 import { create } from "zustand";
@@ -27,11 +25,8 @@ export type UpdateCheckState = {
   registerManual: (impl: (() => Promise<boolean>) | null) => void;
   /**
    * 跑一次手动检测：置忙 → 跑 → **无论如何**复位（规范 16 §16.2.4.71）。
-   *
-   * 忙碌位住在 store 里（多个非嵌套组件都要读它），所以它不能走
-   * `~/components/ui/use-busy-action` 那份组件级实现 —— 但「复位绑在
-   * `finally` 上」这条判据是同一个：收口前检测器自己写 `try/finally`，
-   * 而任何一处漏掉就会让「检测中」永远留在按钮上（按钮再也点不动）。
+   * 忙碌位住在 store 里（多组件读），不能走组件级 use-busy-action；
+   * 「复位绑在 finally」判据相同——漏掉则「检测中」永远卡在按钮上。
    */
   runChecking: <T>(action: () => Promise<T>) => Promise<T>;
   setChecking: (value: boolean) => void;
