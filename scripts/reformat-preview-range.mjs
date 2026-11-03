@@ -149,12 +149,12 @@ export function previewRangeEnds(deps) {
        * （拓扑上就是本 PR 那一侧），拿不到才用 `face.head`（至少不比 `HEAD~1` 更糟）。 */
       const tip = String(env.CNB_COMMIT ?? "").trim();
       const other = parents.find((p) => p !== face.firstParent && p !== "") ?? "";
-      const after = tip !== "" ? tip : other || face.head;
+      const after = tip === "" ? other || face.head : tip;
       /* 起点取**分叉点**：`第一父` 是「目标分支那一刻的顶端」，它自己也可能在分叉点
        * 之后落过提交（主干那批）—— 拿它当起点会把那批算进本 PR 的分母。分叉点算不出来
        * 才退回 `第一父`。 */
       const forkPoint = gitOrEmpty(["merge-base", face.firstParent, after]).trim();
-      return { before: forkPoint !== "" ? forkPoint : face.firstParent, after };
+      return { before: forkPoint === "" ? face.firstParent : forkPoint, after };
     }
   }
   return adopted(parents);
@@ -263,7 +263,7 @@ export function syntheticMergeRange(deps) {
      * 一段，`report()` 的汇总口径按整段算分母（现场 `cnb-o9p-1k6d5ohhj`：170 份里 118 份
      * 被判纯格式化，而同一区间逐提交复算只有一条 offender）。 */
     const forkPoint = forkPointOf(source);
-    return { ok: true, range: `${forkPoint !== "" ? forkPoint : other}..${source}` };
+    return { ok: true, range: `${forkPoint === "" ? other : forkPoint}..${source}` };
   }
 
   /* ── 形态二：PR 头检出（`HEAD` 就是本 PR 那一侧的 tip）── */

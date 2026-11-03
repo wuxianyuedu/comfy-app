@@ -13,7 +13,7 @@ Usage:
   powershell -File scripts\quality-gate.ps1 -Mode test
   powershell -File scripts\quality-gate.ps1 -Mode all
 
-Mode: typecheck | lint | format | test | dependencyAudit | depsFreshness | storybook | bundleBudget | dailyAttendance | premerge | all   (default all)
+Mode: typecheck | lint | format | test | dependencyAudit | depsFreshness | storybook | bundleBudget | dailyAttendance | oxlintZeroRules | premerge | all   (default all)
 
 Note on `premerge`: it is registered with Run=$false, i.e. NOT part of `all`.
 The platform squashes on merge (the local hook never sees that merge) and there
@@ -38,7 +38,7 @@ Extend / maintain - how to add a new gate:
     entry and it is enforced again.
 #>
 param(
-  [ValidateSet("typecheck", "lint", "format", "test", "dependencyAudit", "depsFreshness", "storybook", "bundleBudget", "dailyAttendance", "premerge", "all")]
+  [ValidateSet("typecheck", "lint", "format", "test", "dependencyAudit", "depsFreshness", "storybook", "bundleBudget", "dailyAttendance", "oxlintZeroRules", "premerge", "all")]
   [string]$Mode = "all"
 )
 
@@ -136,6 +136,13 @@ $Blocks = @(
   # -Mode dailyAttendance。三态退码里 2 = 没结论 / 取不到读数，不算绿。
   @{ Name = "dailyAttendance"; Label = "Daily tier attendance (did the last scheduled run actually execute)";
      Cmd = "node"; Args = @("scripts\check-daily-attendance.mjs"); Run = $false }
+  # 已清零 oxlint 规则集防回潮（ISSUE #3016，台账 #2777）：与 quality-gate.mjs 的
+  # GATES.oxlintZeroRules 同批同步。与 format / depsFreshness 同属「会随时间变坏」
+  # 的一类 —— 清零批落地之后没人守，下一次批量改动就会把同类漂移带回来
+  # （no-negated-condition 在 #2977 清零后，#3015 / #3016 各自又扫出一批）。
+  # 清单驱动的单规则探针：41 条已清零规则全仓 0 命中，命中逐条列位置退 1。
+  @{ Name = "oxlintZeroRules"; Label = "Oxlint zero-cleared rules set (41 rules, repo-wide 0 hits)";
+     Cmd = "node"; Args = @("scripts\check-oxlint-zero-rules.mjs"); Run = $true }
   # **合并前的固定动作**（规范 §13.6.2；ISSUE #1611 拍板）。与 quality-gate.mjs 的
   # GATES.premerge 同批同步。Run=$false：平台侧 squash 合并不跑本地钩子、#623 之后
   # 也无 CI 兜底，所以「我的分支绿 → master 绿」那一跳的三条判据（复算这一批 /
