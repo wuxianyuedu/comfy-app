@@ -198,9 +198,8 @@ export function readListHasMore(json) {
  * @param {(cmd:string,args:string[])=>any} run
  * @param {string} slug
  * @param {{maxPages?: number, pageSize?: number}} [opts]
- * @returns {{ok: boolean, pulls: any[], pages: number, windowComplete: boolean, oldest: number|null,
- *   note: string|null, stopReason: "has-more-false"|"short-page"|"empty-page"|"ceiling"|null,
- *   hasMoreKey: boolean}}
+ * @returns {{ok:boolean, pulls:any[], pages:number, windowComplete:boolean, oldest:number|null, note:string|null, stopReason:string|null, hasMoreKey:boolean}}
+ *   `stopReason` ∈ has-more-false / short-page / empty-page / ceiling（见上面终止条件四档）；
  *   `hasMoreKey` = 这趟有没有见到平台的翻页键（缺键路径与 #3059 缺键同族，账上要看得出）。
  */
 export function fetchPullsForBranches(run, slug, opts = {}) {
@@ -210,7 +209,11 @@ export function fetchPullsForBranches(run, slug, opts = {}) {
   const pulls = [];
   let pages = 0;
   let hasMoreKey = false;
-  /** @param {boolean} complete @param {any} stopReason @param {string|null} note */
+  /**
+   * @param {boolean} complete
+   * @param {any} stopReason
+   * @param {string|null} note
+   */
   const done = (complete, stopReason, note) => ({
     ok: true,
     pulls,
