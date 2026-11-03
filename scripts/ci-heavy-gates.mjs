@@ -827,7 +827,15 @@ export function main(io = {}) {
   }
   if (notJudged.length > 0) {
     /* 「没判」与「没跑起来」同列（都是「没有结论」，都不是「通过」）——
-     * 这一档原先是恒绿且无声（ISSUE #2224 的现场）。 */
+     * 这一档原先是恒绿且无声（ISSUE #2224 的现场）。
+     * 结尾补一句**机器可认的结论行**（ISSUE #3102）：GitHub 侧的外壳
+     * （`ci-step-verdict.mjs`）只在这一行出现时把 exit 2 折成非红 ——
+     * 有红 / 有缺件（missing）都在这行之前各自 return，折不到它们。 */
+    log(
+      `[重档] 结论：没判（红 0、缺件 0、没判 ${notJudged.length}）—— ` +
+        "这些条目的前提在本次触发形态下不存在；聚合层按没判不按红",
+      COLORS.skip,
+    );
     return 2;
   }
   return 0;

@@ -322,6 +322,11 @@ function main() {
   // 这里 HEAD 是预合并提交,分支名恒等于目标分支,只能按提交拓扑判。
   if (process.argv.includes("--pr-check")) {
     const target = argValue("--target") || PROTECTED_BRANCH;
+    /* 手动派发形态（ISSUE #3102）：workflow_dispatch 检出的就是目标分支 HEAD，
+     * 于是「源分支没有超出目标分支的提交」是**派发形态本身**，不是树的问题。
+     * 只有调用方显式传这个旗标才走这条；PR 形态（repository_dispatch 检出的
+     * 是 PR 专属 ref）不传，红就仍然是红 —— 判据强度一个字不动。 */
+    const manualDispatch = process.argv.includes("--manual-dispatch");
     const pr = evaluatePr(target);
     console.log(
       `[branch-guard] v${
@@ -333,6 +338,17 @@ function main() {
         },目标分支 ${
         target}`,
     );
+    if (pr.blocked && manualDispatch) {
+      console.log(`[branch-guard] 阻断:${pr.reason}(规范 13.6)。`);
+      console.log(
+        "[branch-guard] 结论：不判 —— 触发形态是 workflow_dispatch，检出的就是目标分支 HEAD，",
+      );
+      console.log(
+        "  源分支与目标分支在这里不可区分；PR 形态（repository_dispatch 按 cnb-pr-<IID> ref 检出）下",
+      );
+      console.log("  同一判据仍会红。聚合层按「没判」记（exit 2），不是绿。");
+      process.exit(2);
+    }
     if (pr.blocked) {
       console.error("");
       console.error(`[branch-guard] 阻断:${pr.reason}(规范 13.6)。`);

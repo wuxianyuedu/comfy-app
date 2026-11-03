@@ -104,7 +104,11 @@ jobs:
           node-version: 26
 
       - name: 分支守卫（cnb 同款判据一字不改）
-        run: node scripts/check-branch-guard.cjs --pr-check --target master
+        # 手动派发形态（ISSUE #3102）：`workflow_dispatch` 检出的就是 master HEAD，
+        # 「源分支没有超出 master 的提交」是派发形态本身 ⇒ 显式「不判」（exit 2，
+        # 外壳 `ci-step-verdict.mjs` 只在标记出现时折成非红）。PR 形态不带这个旗标，
+        # 判据照旧红。
+        run: node scripts/ci-step-verdict.mjs --label "分支守卫" --inconclusive-marker "[branch-guard] 结论：不判" -- node scripts/check-branch-guard.cjs --pr-check --target master ${{ github.event_name == 'workflow_dispatch' && '--manual-dispatch' || '' }}
 
       - name: 提交声明核对（cnb 同款判据一字不改）
         run: node scripts/premerge-check.mjs --only=claims
@@ -221,7 +225,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: 固定结构用例（cnb 同款判据一字不改）
-        run: node scripts/ci-affected-tests.mjs
+        run: node scripts/ci-step-verdict.mjs --label "固定结构用例" -- node scripts/ci-affected-tests.mjs
 
   # ── 受影响用例（固定清单之外 + 这个 PR 改动牵扯到的用例，三点 diff）──────
   affected-tests:
@@ -255,7 +259,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: 受影响用例（cnb 同款判据一字不改）
-        run: node scripts/ci-affected-tests.mjs
+        run: node scripts/ci-step-verdict.mjs --label "受影响用例" -- node scripts/ci-affected-tests.mjs
 
   # ── 重档静态判据（钩子注册表执行面，含 cargo test）─────────────────────
   # `.cnb.yml` 那一格带 `.cargo-env` 锚点是自托管 Windows 的 rustup 代理路径
@@ -299,4 +303,6 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: 重档静态判据（cnb 同款判据一字不改）
-        run: node scripts/ci-heavy-gates.mjs
+        # 「没判」那一档（缺 CNB_COMMIT 等前提）由脚本自己打结论行，外壳据此折成非红；
+        # 有红 / 有缺件不折，红照样红（ISSUE #3102）。
+        run: node scripts/ci-step-verdict.mjs --label "重档静态判据" --inconclusive-marker "[重档] 结论：没判" -- node scripts/ci-heavy-gates.mjs
