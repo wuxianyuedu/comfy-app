@@ -17,7 +17,7 @@ import { forwardForTest, setupTrpcServer } from "../../../../tests/helpers/trpc-
 import { createTestQueryClient } from "../../../../tests/helpers/renderWithProviders";
 import { TRPCProvider, createTrpcClient } from "~/trpc/react";
 
-import { useModelLibrary } from "./use-model-library";
+import { useModelLibrary, type ModelLibraryController } from "./use-model-library";
 import { ALL_TYPES } from "../model-library-config";
 
 type Row = {
@@ -41,7 +41,10 @@ type Behavior = {
 let behavior: Behavior = { models: [] };
 /** 记录 list 收到的入参，用于断言筛选真的传到了后端 */
 const listInputs: Array<{ q?: string; type?: string } | undefined> = [];
-/** 记录 sync 被调用的次数 —— 断言「挂载时同步一次」不会随重渲染复发。 */
+/** 记录 sync 被调用的次数 —— 断言「挂载时同步一次」不会随重渲染复发。
+ *  它是**跨用例共享**的模块级计数：用例必须在自己的请求全部落地后才结束
+ *  （见 waitSyncSettled），否则迟到的 handler 会在 afterEach 清零之后才执行，
+ *  把 +1 落进下一条用例（ISSUE #2911 的串号根因）。 */
 let syncCalls = 0;
 
 const t = createTestTRPC();
@@ -126,6 +129,32 @@ function makeWrapper() {
   };
 }
 
+/**
+ * 等本用例挂载的那次静默同步「已发车且全链落地」，让用例结束在**静止态**。
+ *
+ * 为什么需要它（ISSUE #2911）：hook 的 sync 经 `setTimeout(…, 0)` 发车、与 list
+ * 并行，且 sync 的 `onSettled` 还会触发一次静默 refetch —— 而用例原本的收尾只等
+ * `loading`（即初次 list）收敛。负载下 sync / refetch 的回包可以晚于此刻到达，
+ * 于是 handler 在 `afterEach` 把 `syncCalls` / `listInputs` 清零**之后**才执行，
+ * 把计数落进下一条用例（平台上实测形态：syncCalls 期望 1、实际 2）。
+ *
+ * 三段判据缺一不可：
+ *   1. `syncCalls` 记账到 1 —— sync 的 handler **已进入**（排除「计时器还没发车」）；
+ *   2. `listInputs` 到 2 —— 初次 list 与 sync 触发的 refetch **都已到达服务端**
+ *      （排除「refetch 已派发但 handler 未执行」，那条会在下一条用例里污染
+ *      `listInputs`，与 syncCalls 是同一类串号）；
+ *   3. `refreshing` 收敛 —— 客户端把上述响应全部消化完，卸载时无任何在飞请求。
+ */
+async function waitSyncSettled(result: { current: ModelLibraryController }): Promise<void> {
+  await expect.poll(() => syncCalls, { message: "挂载时的静默同步应已记账" }).toBe(1);
+  await expect
+    .poll(() => listInputs.length, { message: "初次 list 与 sync 触发的 refetch 应都已到达" })
+    .toBe(2);
+  await expect
+    .poll(() => result.current.refreshing, { message: "sync 与其触发的 refetch 应已落地" })
+    .toBe(false);
+}
+
 beforeAll(() => {
   server.listen({ onUnhandledFrame: "error" });
 });
@@ -151,6 +180,7 @@ describe("useModelLibrary", () => {
     await expect.poll(() => result.current.loading).toBe(false);
     expect(result.current.models).toHaveLength(1);
     expect(result.current.models[0]?.fileName).toBe("dreamshaper-xl.safetensors");
+    await waitSyncSettled(result);
   });
 
   /* 回归：effect 的依赖数组曾经是 `[syncMut, reload]`，而这两个引用
@@ -164,7 +194,10 @@ describe("useModelLibrary", () => {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.loading).toBe(false);
-    expect(syncCalls).toBe(1);
+    /* 先等本用例自己的 sync 全链落地再计数（原先是裸读 `syncCalls`，负载下
+     * handler 晚于 list 回包时会读到上一条用例的迟到 +1 / 自己的还没记账）；
+     * 断言本身不弱化 —— 重渲染后仍是硬断言 `toBe(1)`。 */
+    await waitSyncSettled(result);
 
     /* 反复重渲染（模拟父级因轮询 / 状态更新重渲染）：若依赖数组再回到不稳的
      * 引用上，这里会随之线性增长。 */
@@ -184,6 +217,7 @@ describe("useModelLibrary", () => {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.loading).toBe(false);
+    await waitSyncSettled(result);
 
     expect(result.current.filtered).toHaveLength(3);
     // 类型 chips 按数量降序
@@ -220,6 +254,7 @@ describe("useModelLibrary", () => {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.loading).toBe(false);
+    await waitSyncSettled(result);
     expect(result.current.typeChips).toEqual([["checkpoints", 1]]);
   });
 
@@ -229,6 +264,9 @@ describe("useModelLibrary", () => {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.loading).toBe(false);
+    /* sync 失败同样走 onSettled → 静默 refetch：syncCalls 仍记账 1、list 仍到 2，
+     * 收尾判定与成功路径同一条（见 waitSyncSettled）。 */
+    await waitSyncSettled(result);
     expect(result.current.models).toHaveLength(1);
   });
 });
