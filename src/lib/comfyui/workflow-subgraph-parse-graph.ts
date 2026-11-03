@@ -185,9 +185,12 @@ function resolveInputSlots(
   boundarySlots: ReadonlyArray<number> | undefined,
 ): Array<InputSlotRef> {
   if (!boundarySlots || boundarySlots.length === 0) {
-    return inputs
-      .map((entry, index) => ({ index, slot: entry?.idx ?? index }))
-      .sort((a, b) => a.slot - b.slot);
+    return (
+      inputs
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- inputs 元素来自外部工作流 JSON，运行期可能是 null
+        .map((entry, index) => ({ index, slot: entry?.idx ?? index }))
+        .sort((a, b) => a.slot - b.slot)
+    );
   }
   /* 哨兵边口径：**整张表按数组位置重建**（槽位下标 = 数组下标）。
    *
@@ -232,7 +235,7 @@ export function parseSubgraphSlots(
 
   const innerNodes: Array<RawNode> = Array.isArray(sub.nodes) ? sub.nodes : [];
   for (const rn of innerNodes) {
-    // oxlint-disable-next-line strict-boolean-expressions -- rn.id 是外部 JSON 的 string|number，按「非空真值」判有无（0/空串视为无 id）
+    // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- rn.id 是外部 JSON 的 string|number，按真值判有无；rn 本身运行期也可能为 null
     if (!rn?.id) {
       continue;
     }
@@ -256,7 +259,9 @@ export function parseSubgraphSlots(
       });
     }
     if (Array.isArray(rn.outputs)) {
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- outputs 元素来自外部 JSON，运行期可能是 null
       const sorted = [...rn.outputs].sort((a, b) => (a?.idx ?? 0) - (b?.idx ?? 0));
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- outputs 元素来自外部 JSON，运行期可能是 null
       outputNameByNodeSlot[nodeId] = sorted.map((x) => (typeof x?.name === "string" ? x.name : ""));
     }
   }
@@ -390,7 +395,7 @@ export function buildSubgraphGraph(
   }
 
   for (const rn of innerNodes) {
-    // oxlint-disable-next-line strict-boolean-expressions -- rn.id 是外部 JSON 的 string|number，按「非空真值」判有无（0/空串视为无 id）
+    // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- rn.id 是外部 JSON 的 string|number，按真值判有无；rn 本身运行期也可能为 null
     if (!rn?.id) {
       continue;
     }
@@ -419,7 +424,7 @@ export function buildSubgraphGraph(
        *  而不是空白行或错位行。 */
       const wvMap = pairWidgetValues(rn.inputs, rnWidgets);
       for (const inp of rn.inputs) {
-        // oxlint-disable-next-line strict-boolean-expressions -- inputs 元素来自外部 JSON，运行期可能是 null（类型收窄不覆盖），防御性判空
+        // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- inputs 元素来自外部 JSON，运行期可能是 null
         if (!inp || typeof inp.name !== "string") {
           continue;
         }
@@ -527,7 +532,7 @@ export function buildSubgraphGraph(
     const rawOutputs: Array<RawOutputEntry> = [];
     if (Array.isArray(rn.outputs)) {
       for (const o of rn.outputs) {
-        // oxlint-disable-next-line strict-boolean-expressions -- outputs 元素来自外部 JSON，运行期可能是 null（类型收窄不覆盖），防御性判空
+        // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- outputs 元素来自外部 JSON，运行期可能是 null
         if (!o || typeof o.name !== "string") {
           continue;
         }
@@ -615,6 +620,7 @@ export function buildSubgraphGraph(
         id: nodeId,
         widgets_values: Array.isArray(rn.widgets_values) ? rn.widgets_values : [],
         outputs: rawOutputs,
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- rn.flags 来自外部 JSON，运行期可能是 null
         flags: typeof rn.flags === "object" && rn.flags !== null ? rn.flags : {},
         mode: typeof rn.mode === "number" ? rn.mode : 0,
       });
@@ -639,7 +645,7 @@ export function buildSubgraphGraph(
     return {
       id: nodeId,
       class_type: classType,
-      title: n._meta?.title ?? (isUuidClass ? "" : classType) ?? nodeId,
+      title: n._meta?.title ?? (isUuidClass ? "" : classType),
       is_subgraph: isUuidClass,
       raw_inputs: rawInputsById[nodeId] ?? [],
       is_input_endpoint: isInEp,

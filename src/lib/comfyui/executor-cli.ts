@@ -237,7 +237,7 @@ export async function executeViaComfyCli(job: Job) {
   log(
     taskId,
     "info",
-    `工作流文件就绪（${Object.keys(patched?.nodes ?? {}).length || Object.keys(patched).length} 节点）`,
+    `工作流文件就绪（${Object.keys(patched.nodes ?? {}).length || Object.keys(patched).length} 节点）`,
   );
   /* 主模型名入日志（复用 `executed-model.ts` 的双格式识别，与状态栏同一份
    * 口径）：模型名是执行日志里最常被追问的上下文，出问题时「当时用的哪个
@@ -400,7 +400,7 @@ export async function executeViaComfyCli(job: Job) {
     promptId: () => promptId,
   });
 
-  child.stdout?.setEncoding("utf8");
+  child.stdout.setEncoding("utf8");
   const stdoutParser = createCliEnvelopeParser({
     taskId,
     log,
@@ -441,7 +441,7 @@ export async function executeViaComfyCli(job: Job) {
       void taskRepository.updateProgress(taskId, progress, node).catch(() => undefined);
     },
   });
-  child.stdout?.on("data", stdoutParser.sink);
+  child.stdout.on("data", stdoutParser.sink);
 
   // 实时透传 stderr：Python 的 traceback 一出现就进面板，而不是只在 close() 时汇总。
   // 行数上限 60（真实 traceback 一般 < 40 行）；click/Python 的
@@ -449,8 +449,8 @@ export async function executeViaComfyCli(job: Job) {
   // 错误堆栈挤出面板。单行截断放宽到 400 字符（traceback 的路径很长）。
   // stderrSink.raw() 始终完整累积，close 时的 tail 汇总不受行数上限影响。
   const stderrSink = createCliStderrSink({ taskId, log, rawCli: appendRawCli });
-  child.stderr?.setEncoding("utf8");
-  child.stderr?.on("data", stderrSink.sink);
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", stderrSink.sink);
 
   child.on("close", (code) => {
     clearTimeout(guard);

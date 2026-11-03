@@ -135,7 +135,7 @@ export function setSizePresetDims(
   tier: ResolutionTier,
   size: SizeDims,
 ): void {
-  const row = snapshot[scene]?.[ratioLabel];
+  const row = snapshot[scene][ratioLabel];
   if (!row) {
     return;
   }

@@ -207,6 +207,7 @@ async function buildWorkflowDetailJson(input: {
    *      ignored. */
   const positionsFromRaw = raw && Array.isArray(raw.nodes) ? extractPositions(raw) : {};
   /* SAFETY: 类型断言已复核 */
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- tpl.positions 是数据库 JSON 列，类型断言掩盖了运行期可能为 null 的情况
   const tplPositions = (tpl.positions as Record<string, [number, number]>) ?? {};
   const effectivePositions: Record<string, [number, number]> = {
     ...positionsFromRaw,
@@ -270,7 +271,7 @@ async function buildWorkflowDetailJson(input: {
     return {
       id: nodeId,
       class_type: classType,
-      title: resolvedTitle ?? n._meta?.title ?? (isUuidClass ? "" : classType) ?? nodeId,
+      title: resolvedTitle ?? n._meta?.title ?? (isUuidClass ? "" : classType),
       is_subgraph: isUuidClass,
       raw_inputs: rawInputsById[nodeId] ?? [],
       /* 该节点的 ComfyUI 精确外框尺寸（[w, h]）。rawJson 里没有该节点时为
@@ -299,7 +300,7 @@ async function buildWorkflowDetailJson(input: {
 
   const nodeTitleById: Record<string, string> = {};
   for (const n of nodes) {
-    nodeTitleById[n.id] = n.title ?? n.class_type;
+    nodeTitleById[n.id] = n.title;
   }
 
   /* ── workflowIO ENRICHMENT ──
@@ -376,7 +377,7 @@ async function buildWorkflowDetailJson(input: {
   const notes: Array<WorkflowDetailNote> = [];
   if (raw && Array.isArray(raw.nodes)) {
     raw.nodes.forEach((n) => {
-      // oxlint-disable-next-line strict-boolean-expressions -- nodes 元素来自外部 JSON，运行期可能是 null（类型收窄不覆盖），防御性判空
+      // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- nodes 元素来自外部 JSON，运行期可能是 null（类型收窄不覆盖），防御性判空
       if (!n || (n.type !== "Note" && n.type !== "MarkdownNote")) {
         return;
       }
@@ -562,9 +563,9 @@ export async function buildWorkflowDetailFull(
       tpl.rawJson = reimported.update.rawJson ?? tpl.rawJson;
       tpl.paramMap = reimported.update.paramMap ?? tpl.paramMap;
       tpl.positions = reimported.update.positions ?? tpl.positions;
-      tpl.sourceMtime = reimported.update.sourceMtime ?? tpl.sourceMtime;
-      tpl.sourceChecksum = reimported.update.sourceChecksum ?? tpl.sourceChecksum;
-      tpl.taskType = reimported.update.taskType ?? tpl.taskType;
+      tpl.sourceMtime = reimported.update.sourceMtime;
+      tpl.sourceChecksum = reimported.update.sourceChecksum;
+      tpl.taskType = reimported.update.taskType;
       await workflowTemplateRepository.update(tpl.id, {
         rawJson: tpl.rawJson,
         paramMap: tpl.paramMap,
@@ -691,7 +692,7 @@ export async function buildSubgraphDetail(
      *  的入参都叫 `value`），只按槽位名查会把最后一个暴露口的作者名安到所有
      *  同名字段上（ISSUE #394：`Seed` 节点显示成 `FPS`）。 */
     for (const n of sg.nodes) {
-      for (const inp of n.raw_inputs ?? []) {
+      for (const inp of n.raw_inputs) {
         const authorLabel = sg.proxyAuthorLabels[`${n.id}::${inp.name}`];
         if (authorLabel === undefined || authorLabel === "") {
           continue;
@@ -719,6 +720,7 @@ export async function buildSubgraphDetail(
     /* SAFETY: 类型断言已复核 */
     const ann = extractSubgraphAnnotations(
       sub,
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- tpl.positions 是数据库 JSON 列，类型断言掩盖了运行期可能为 null 的情况
       (tpl.positions as Record<string, [number, number]>) ?? {},
       hostId,
     );

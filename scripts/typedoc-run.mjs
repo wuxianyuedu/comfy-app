@@ -197,10 +197,12 @@ async function spawnTypedoc(entry, outDir, root) {
         lines.splice(0, lines.length - 400);
       }
     };
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawn 的 stdout 在 stdio 配置变化或子进程起不来时运行时为 null
     child.stdout?.on("data", (b) => {
       process.stdout.write(b);
       keep(b);
     });
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：stderr
     child.stderr?.on("data", (b) => {
       process.stderr.write(b);
       keep(b);

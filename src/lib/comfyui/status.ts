@@ -205,6 +205,7 @@ export function extractSetupCmds(raw: string): string | null {
   try {
     const parsed: unknown = JSON.parse(raw);
     /* SAFETY: 类型断言已复核 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- parsed 来自 JSON.parse（外部文件内容），运行期可能是 null，断言掩盖了这一点
     const setup = (parsed as { setup?: { cmds?: unknown } })?.setup;
     const cmds = setup?.cmds;
     return typeof cmds === "string" && cmds.trim() ? cmds : null;
@@ -289,6 +290,7 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
     };
   }
 
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- settings 由 app-settings.json 经 JSON.parse 合并而来，历史文件里 comfyuiPath 可能为 null
   const comfyuiPath = settings.comfyuiPath?.trim() ?? "";
 
   // 1.5) 配置端口已经有人应答 → 直接认「在跑」，跳过其余三次进程表查询。

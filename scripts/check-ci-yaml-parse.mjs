@@ -128,6 +128,7 @@ export function main(cwd = process.cwd()) {
   return files.flatMap((rel) => checkYamlFile(cwd, rel));
 }
 
+// oxlint-disable-next-line typescript/no-unnecessary-condition -- process.argv[1] 在 node -e / REPL 形态下实为 undefined，@types/node 标成 string
 if (process.argv[1] !== undefined && import.meta.url === new URL(`file://${path.resolve(process.argv[1])}`).href) {
   const problems = main();
   if (problems.length > 0) {

@@ -212,6 +212,7 @@ export function splitExtraModels(raw: unknown): ExtraModelSplit {
  * 回环服务；真远端模型不会用回环地址访问。与服务端 describeFetchFailure 的判定一致。
  */
 export function isLoopbackBaseUrl(url: string): boolean {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- types.test.ts 显式传 null（`null as unknown as string`），`?? ""` 是该支唯一防线
   return /^(https?:\/\/)?(localhost|127\.|\[::1\])/i.test(String(url ?? "").trim());
 }
 

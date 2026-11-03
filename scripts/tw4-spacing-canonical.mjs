@@ -155,6 +155,7 @@ function rewriteStringContent(content, changes) {
   const pieces = content.split(/(\s+)/);
   for (let i = 0; i < pieces.length; i += 2) {
     const piece = pieces[i];
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 守卫为 noUncheckedIndexedAccess 收窄服务（删掉 tsc 红）
     if (piece === undefined) {
       continue;
     }
@@ -172,6 +173,7 @@ function rewriteStringContent(content, changes) {
     /* 取一次再判（第七次「补类型不是纯减法」：这两个 `.exec(…)` 此前喂的是
      * `pieces[i]`，而隐式 any 让「可能没取到」不报；上一步把参数类型指实之后才现形）。 */
     const piece = pieces[i];
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：为 noUncheckedIndexedAccess 收窄服务（上方注释已记）
     if (piece === undefined) {
       continue;
     }

@@ -107,7 +107,7 @@ export function pickBuildForSha(builds, sha) {
  * @returns {string} 形如 `cnb-xxx-yyy/success/1-1+12/33`；没解析到 build 时形如 `(未解析到 build)/?/0-0+0/0`
  */
 export function buildSignature(json, sn = "") {
-  const d = (json?.data) ?? null;
+  const d = json?.data ?? null;
   const status = d && typeof d.status === "string" ? d.status : "(取不到 data)";
   const entries =
     d?.pipelinesStatus && typeof d.pipelinesStatus === "object"
@@ -129,7 +129,9 @@ export function buildSignature(json, sn = "") {
     const stages = p && Array.isArray(p.stages) ? p.stages : [];
     stageTotal += stages.length;
     stageDone += stages.filter(
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- stages 来自平台 API JSON，元素运行时可为 null
       (s) =>
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同一个 s：平台 JSON 元素运行时可为 null，这条守卫真的走得到
         s &&
         typeof s.status === "string" &&
         !RUNNING.has(s.status.toLowerCase()) &&

@@ -457,6 +457,7 @@ export function runIoBench(options = {}) {
       const watched = [];
       for (const filter of options.filters ?? []) {
         const hint = ENGINE_PROCESS_HINTS[filter.toLowerCase()];
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- ENGINE_PROCESS_HINTS 索引缺键时运行时是 undefined，类型按必有标
         if (!hint) {
           watched.push({
             filter,

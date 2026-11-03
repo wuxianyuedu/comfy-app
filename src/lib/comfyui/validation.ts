@@ -146,7 +146,9 @@ export function extractValidationErrors(
         /* SAFETY: 类型断言已复核 */
         const fromObject =
           /* SAFETY: 类型断言已复核 */
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- v 是 ComfyUI input_errors 的 JSON 值，运行期可能是 null，断言掩盖了这一点
           ((v as { message?: string })?.message ??
+            // oxlint-disable-next-line typescript/no-unnecessary-condition -- v 是 ComfyUI input_errors 的 JSON 值，运行期可能是 null，断言掩盖了这一点
             (v as { details?: string })?.details ??
             JSON.stringify(v)) ||
           "配置错误";

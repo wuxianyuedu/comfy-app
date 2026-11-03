@@ -98,6 +98,7 @@ export function findJunitReport(expectedAbs) {
   }
   hits.sort((a, b) => b.m - a.m);
   const best = hits[0];
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- hits 上方已判非空，守卫为 noUncheckedIndexedAccess 下 hits[0] 的 undefined 分量收窄
   if (!best) {
     return { path: expectedAbs, found: false, drifted: false };
   }

@@ -175,12 +175,12 @@ export function makePreflightCollectors({
         return {
           abort:
             `[e2e-run] ✗ ${verdict.reason}\n${
-            risky
+              risky
             }[e2e-run] 跑下去的下场：task 表缺列 → queue-status 500 → ` +
             `queue-monitor / main-journey 一批红，报错说的是「元素没出现」。\n${
-            hasRisky
-              ? "[e2e-run] 这是要人做「丢不丢得起」决定的变更。"
-              : "[e2e-run] 库与 schema 的关系现在读不出来，这一档不肯替你猜。"
+              hasRisky
+                ? "[e2e-run] 这是要人做「丢不丢得起」决定的变更。"
+                : "[e2e-run] 库与 schema 的关系现在读不出来，这一档不肯替你猜。"
             }先执行：pnpm db:push   然后重跑本档。\n`,
         };
       }
@@ -192,12 +192,11 @@ export function makePreflightCollectors({
         return { abort: `${describeBrowserMissing(verdict)}\n` };
       }
       return {
-        say:
-          `[e2e-run] 浏览器预检：${
+        say: `[e2e-run] 浏览器预检：${
           verdict.verdict === "ready"
             ? "这一档要用的浏览器能起来"
             : `拿不到结论（${verdict.detail ?? "原因未知"}）—— 不阻断`
-          }\n`,
+        }\n`,
       };
     },
   };
@@ -442,6 +441,7 @@ async function main(argv) {
     if (exit.reason === null) {
       const raw = argv[argv.indexOf(flag) + 1];
       process.stderr.write(
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- raw 由 argv 下标取，运行时可能 undefined，类型按 string 标窄
         `[e2e-run] ✗ 理由（"${String(raw ?? "").trim()}"）不算「有人回答过」—— ` +
           "写清这次为什么不跑 / 为什么不吃这一档（占位词与过短的理由都被拦）。\n" +
           `        用法：node scripts/e2e-run.mjs ${flag} "本次只改文档，不动功能链路"\n`,
@@ -623,12 +623,11 @@ async function main(argv) {
      * 不是「全量 e2e 绿了」—— 混记会把账变成一句承诺，而这张账的价值全在它是事实。 */
     const why = isWholeTrackRun(extra).why;
     process.stderr.write(
-      `[e2e-run] ${
-        notWholeTrackNotice({
-          label: "全量 e2e",
-          command: "pnpm test:e2e",
-          why,
-        })}`,
+      `[e2e-run] ${notWholeTrackNotice({
+        label: "全量 e2e",
+        command: "pnpm test:e2e",
+        why,
+      })}`,
     );
     return 0;
   }

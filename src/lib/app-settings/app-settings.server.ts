@@ -31,6 +31,7 @@ export function deriveComfyuiSubdir(
   comfyuiPath: string,
   subdir: "custom_nodes" | "workflows",
 ): string | null {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- comfyuiPath 来自设置文件 JSON.parse 后与 DEFAULTS 合并，文件可显式写 null（`{...DEFAULTS, ...parsed}` 会被 null 覆盖）
   const root = (comfyuiPath ?? "").trim();
   if (!root) {
     return null;
@@ -66,6 +67,7 @@ const COMFYUI_WORKFLOW_SUBDIRS: ReadonlyArray<ReadonlyArray<string>> = [
 /** 推导本地工作流根目录：`<comfyuiPath>[/ComfyUI]/user/default/workflows` 优先，
  *  回退旧的 `<comfyuiPath>[/ComfyUI]/workflows`。找不到返回 null（调用方自行降级）。 */
 export function deriveComfyuiWorkflowsDir(comfyuiPath: string): string | null {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：设置文件经 JSON.parse 合并后该字段运行期可为 null
   const root = (comfyuiPath ?? "").trim();
   if (!root) {
     return null;
@@ -177,7 +179,7 @@ export async function saveSettings(partial: Partial<AppSettings>): Promise<AppSe
 export function getExitPolicy(): ExitPolicy {
   const s = getSettingsSync();
   return {
-    exitKillComfyui: s.exitKillComfyui ?? false,
-    exitKillOllama: s.exitKillOllama ?? true,
+    exitKillComfyui: s.exitKillComfyui ?? false, // oxlint-disable-line typescript/no-unnecessary-condition -- 设置文件经 JSON.parse 合并，字段可显式为 null，?? 是该支唯一防线
+    exitKillOllama: s.exitKillOllama ?? true, // oxlint-disable-line typescript/no-unnecessary-condition -- 同上：设置文件字段运行期可为 null
   };
 }

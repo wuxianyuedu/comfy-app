@@ -836,6 +836,7 @@ export function main(io = {}) {
 /* 只在被直接执行时跑 main。被 import 时（`tests/ci-autofix-duties.test.ts` 要读
  * `HEAVY_GATES`）只暴露纯数据与函数 —— 否则 `process.exit()` 会当场把测试进程杀掉，
  * 而那件事的形态是「用例一条都没跑、套件却红了」，读起来与真红完全两样。 */
+// oxlint-disable-next-line typescript/no-unnecessary-condition -- process.argv[1] 在 node -e / REPL 形态下实为 undefined，@types/node 标成 string
 if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(main());
 }

@@ -22,9 +22,10 @@ function narrowMessages(raw: AgentChatRequest["messages"]): Array<LLMMessage> {
   return (
     raw
       // oxlint-disable-next-line strict-boolean-expressions -- 请求体 messages 未过 zod 校验（route.ts 直接断言），元素运行期可为 null，类型收窄不覆盖外部 JSON，保留防御判空
-      .filter((m) => m && typeof m === "object")
+      .filter((m) => m && typeof m === "object") // oxlint-disable-line typescript/no-unnecessary-condition -- 请求体 messages 未过 zod 校验，元素运行期可为 null，保留防御判空
       .map((m) => {
         const role = m.role;
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 请求体 role 来自外部 JSON，运行期可为 system 等类型外值，第三段判空是唯一防线
         if (role !== "assistant" && role !== "user" && role !== "tool") {
           return null;
         }

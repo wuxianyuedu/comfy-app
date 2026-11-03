@@ -392,6 +392,7 @@ function run(cmd, args) {
   const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true });
   return {
     ok: r.status === 0 && !r.error,
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawn 失败时 stdout/stderr 实测为 null，@types/node 按 string 标
     out: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim(),
   };
 }

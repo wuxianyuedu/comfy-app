@@ -143,6 +143,7 @@ function runEslint(files) {
   if (res.error) {
     throw new Error(`eslint 起不来：${res.error.message}`);
   }
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout 实测为 undefined，@types/node 按 string 标
   const text = (res.stdout ?? "").trim();
   let parsed;
   try {
@@ -158,6 +159,7 @@ function runEslint(files) {
  * @returns {Set<string | undefined>}
  */
 function rulesOf(entry) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- messages 来自 eslint 的 JSON 输出，元素运行时可为 null
   return new Set((entry?.messages ?? []).map((m) => m?.ruleId).filter(Boolean));
 }
 

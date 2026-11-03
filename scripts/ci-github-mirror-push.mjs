@@ -410,10 +410,13 @@ function realRunGit(args) {
         : `git ${sub} 连上都没连上：${String(r.error ?? "拿不到退出码")}`;
     return {
       code: -1,
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程失败时 stderr 实测为 null，@types/node 按 string 标
       stderr: `${String(r.stderr ?? "")}\n${why}`,
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程失败时 stdout 实测为 null，@types/node 按 string 标
       stdout: String(r.stdout ?? ""),
     };
   }
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程的 stdout/stderr 类型按 string 标，失败形态下实测可缺
   return { code: r.status, stderr: String(r.stderr ?? ""), stdout: String(r.stdout ?? "") };
 }
 
@@ -444,6 +447,7 @@ async function runGitWithRetry(args, ctx) {
     if (!isEgressFailure(`${result.stdout}\n${result.stderr}`)) {
       break;
     }
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 下标越界时运行时为 undefined（未开 noUncheckedIndexedAccess），退避表长度不随 maxAttempts 变
     const wait = RETRY_BACKOFF_MS[attempt - 2] ?? RETRY_BACKOFF_MS.at(-1) ?? 5000;
     log(
       `[${prefix}] ${label}第 ${String(attempt - 1)}/${String(maxAttempts)} 次没通（egress 类）⇒ ${String(wait / 1000)}s 后试第 ${String(attempt)} 次（网络抖动重试；认证 / 权限类不重试）`,

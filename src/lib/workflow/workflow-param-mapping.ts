@@ -408,7 +408,9 @@ export function serializeParamMapping(
   const source: Record<string, unknown> = {};
   for (const [mode, byEntry] of Object.entries(mapping.manualByMode ?? {})) {
     const targets: Record<string, string | null> = {};
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- manualByMode 来自落库 paramMap（JSON），byEntry 运行期可缺省
     for (const [id, target] of Object.entries(byEntry ?? {})) {
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- target 来自落库 JSON，运行期可为 null 以外类型外值，显式判空不删分支
       if (typeof target !== "string" && target !== null) {
         continue;
       }
@@ -509,6 +511,7 @@ export function ioKeyForHandle(
     return null;
   }
   for (const [ioKey, entry] of Object.entries(io ?? {})) {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- io 来自落库 IO 表（JSON），元素运行期可为 null
     if (entry?.nodeId === nodeId && entry.name === handleId) {
       return ioKey;
     }

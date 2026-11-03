@@ -48,6 +48,7 @@ const IMAGES_ENDPOINT = "/api/images";
  * 不必在调用处再包一层三元。示例见 `ContentAssetNode` 的相册区。
  */
 export function comfyImageUrl(ref: ComfyMediaRef): string | null {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- ref 来自 ComfyUI 工作流/相册数据（外部 JSON），filename 运行期可为 null，本函数契约就是空引用给 null
   const filename = ref.filename?.trim() ?? "";
   if (filename === "") {
     return null;

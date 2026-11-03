@@ -113,7 +113,9 @@ export function makeRunner(cwd) {
  * @returns {string | null} 构建号；读不到时 null
  */
 export function buildSnFromOutput(raw) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- raw 是 cnb 子进程输出（外部数据），string 只是声明
   const m = /"?sn"?\s*[:=]\s*"?(cnb-[A-Za-z0-9-]+)"?/.exec(String(raw ?? ""));
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则捕获组在部分匹配形态下运行时为 undefined
   return m ? (m[1] ?? null) : null;
 }
 

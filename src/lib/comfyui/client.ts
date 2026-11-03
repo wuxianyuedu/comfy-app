@@ -182,6 +182,7 @@ export async function resolveComfyBase(): Promise<string> {
    *
    * 判据链本身收在 `instance-port.ts`（与 status.ts 同口径：main.py → 启动器
    * 候选 → 环境反查），这里只管把结论翻成地址。 */
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- settings 由 app-settings.json 经 JSON.parse 合并而来，手写/历史文件里 comfyuiPath 可能为 null，非空判断是运行期防线
   const comfyuiPath = settings.comfyuiPath?.trim();
   if (comfyuiPath) {
     const found = await queryInstanceByPath(comfyuiPath);
@@ -360,9 +361,9 @@ export async function getView(filename: string, subfolder: string, type: string)
 
   url.searchParams.set("filename", filename);
 
-  url.searchParams.set("subfolder", subfolder ?? "");
+  url.searchParams.set("subfolder", subfolder);
 
-  url.searchParams.set("type", type ?? "");
+  url.searchParams.set("type", type);
 
   const res = await fetch(url.toString(), {
     // 取图/视频字节，大图或视频可能慢；给足余量，只挡真正的无限悬挂。
