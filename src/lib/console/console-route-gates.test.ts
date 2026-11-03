@@ -17,12 +17,18 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { stripComments } from "../../../tests/helpers/strip-comments";
+
 const ROOT = process.cwd();
 const ROUTE = join(ROOT, "src/app/api/console/run/route.ts");
 const source = readFileSync(ROUTE, "utf8");
 
-/** 剥掉注释再判形态：注释里出现「allow」这类词不该被当成代码。 */
-const code = source.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/\/\/[^\n]*/g, "");
+/* 剥掉注释再判形态：注释里出现「allow」这类词不该被当成代码。
+ * `{ trailing: true }` 是因为下面的判据全是 `not.toMatch`（「有没有留后门」），
+ * 一段正在教人别这么写的行尾注释会把判据红在自己身上。
+ * 旧形是**无锚**的行跳（`$` 都不写的字符类到行尾那种）—— 它会从字符串里的第一个
+ * 双斜杠一路吃到行尾，于是被禁写法只要落在同一行引号之后，这一格永远看不见（ISSUE #2969）。 */
+const code = stripComments(source, { trailing: true });
 
 /** 某个片段的出现位置；-1 = 没出现。 */
 const at = (needle: string) => code.indexOf(needle);

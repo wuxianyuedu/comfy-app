@@ -23,6 +23,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { stripComments } from "./helpers/strip-comments";
+
 const REPO_ROOT = resolve(".");
 const CANON_BASELINE = join(REPO_ROOT, "scripts", ".tw4-canonical-baseline.json");
 const SPACING_BASELINE = join(REPO_ROOT, "scripts", ".tw4-spacing-baseline.json");
@@ -58,7 +60,7 @@ describe.for([
     // 认调用本身而不是认变量名 —— 换个拼法也躲不过（口径同 §13.5.9 的 `HARD_GATE_FLIPS`）。
     /* 只判**代码**，不判注释 —— 翻闸的记录（「此前带一份基线、`--update` 收紧」）
      * 正是写在文件头的那一段，把注释也算进来会逼人删掉那段历史。 */
-    const code = src.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^\s*\/\/.*$/gm, "");
+    const code = stripComments(src);
     expect(code, "--update 是翻闸时删掉的收紧档").not.toContain("--update");
     expect(code, "脚本里出现了「把一份 .json 写回去」的调用 —— 那正是翻闸要消灭的通道").not.toMatch(
       /writeFileSync\([^)]*\.json/,

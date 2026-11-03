@@ -38,6 +38,7 @@ import {
   planExecutorHostSpawn,
 } from "../scripts/launcher-core/executor-host-spawn.mjs";
 import { launcherChainSource } from "./helpers/launcher-source";
+import { stripComments } from "./helpers/strip-comments";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -68,26 +69,33 @@ function readScript(rel: string): string {
   return fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
 }
 
+/** 脚本本体 = 剥掉注释后的文本；`topLevelCallAt` 的锚点也要从这一份上取。 */
+function scriptBody(source: string): string {
+  return stripComments(source, { trailing: true });
+}
+
 /**
- * 找出 `name(` **在顶层真的会被执行**的那一处调用，返回它的下标（找不到返回 -1）。
+ * 找出 `name(` **在顶层真的会被执行**的那一处调用，返回它在 `body` 里的下标（找不到返回 -1）。
  *
  * 为什么不直接 `indexOf("maybeSpawnExecutorHost({")`：那样只能证明**字符串在文件里**，
  * 证不出这一步会跑 —— 把它改成 `if (false) …`、搬进某个永不进入的分支、或整段注释掉，
  * 三种「这一步事实上没接线」的形态都能骗过纯字面匹配。本判据要守的恰恰是「接线与否」，
  * 所以按 TSDoc 意义上的**脚本本体**（`#!` 之后、顶层，注释先剥掉）来判：
  *
- *   · 注释里的字样不算（`/* … *\/` 与行注释都剥）；
+ *   · 注释里的字样不算（块注释与行注释都剥，唯一实现 `./helpers/strip-comments`）；
  *   · 前面紧跟 `if (false) ` / `void ` 之类改写被视作「不在顶层执行」——这里只认
  *     「行首（可有空白）就是 name(`」，够用且不引入解析器；
  *   · 反向验证：改成 `if (false) …` 后本函数返回 -1，调用方那条 expect 当场红。
+ *
+ * ⚠️ 参数是 `scriptBody()` 的结果而不是原文：返回的下标属于**剥后文本**那一个下标空间，
+ * 调用方拿去比的锚点必须也从同一份文本上取。旧写法把块注释**掩成等长空格**，是想让下标
+ * 能直接和原文比 —— 实测那个等长从来不成立（行注释那一跳是把字符删掉的）：
+ * `scripts/dev.mjs` 里那次调用原文下标 5143，掩位法给的是 4254。既然两个下标本来就不同源，
+ * 比较就是在赌余量，所以改成「同一份文本上取两个下标」，而不是去补那个等长假设（ISSUE #2969）。
  */
-function topLevelCallAt(source: string, name: string): number {
-  // 先剥块注释与行注释，避免注释里的示例写法被当成真实调用。
-  const stripped = source
-    .replaceAll(/\/\*[\s\S]*?\*\//g, (m) => m.replaceAll(/[^\n]/g, " "))
-    .replaceAll(/\/\/[^\n]*/g, "");
+function topLevelCallAt(body: string, name: string): number {
   const re = new RegExp(`^[ \t]*${name}\\(`, "m");
-  const hit = re.exec(stripped);
+  const hit = re.exec(body);
   return hit ? hit.index + hit[0].indexOf(name) : -1;
 }
 
@@ -223,10 +231,12 @@ describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
 describe("四个启动入口都接线（回归到「没人起宿主」的那道闸）", () => {
   it("scripts/dev.mjs 调用了共用件，且排在起 Next 之前（`pnpm dev` / `tauri dev` 的入口）", () => {
     const source = readScript("scripts/dev.mjs");
-    const callAt = topLevelCallAt(source, "maybeSpawnExecutorHost");
+    const body = scriptBody(source);
+    const callAt = topLevelCallAt(body, "maybeSpawnExecutorHost");
     /* 锚在**起 Next 的那一次 spawnSync** 上（与 start.mjs 同口径）：`nextArgs`
-     * 的参数里也有 "next"/"dev" 字面量，用它当锚会把手上的位置判反。 */
-    const nextAt = source.indexOf("spawnSync(invocation.command, invocation.args");
+     * 的参数里也有 "next"/"dev" 字面量，用它当锚会把手上的位置判反。锚点与 `callAt`
+     * 必须取自**同一份**剥后文本，否则比的是两个下标空间。 */
+    const nextAt = body.indexOf("spawnSync(invocation.command, invocation.args");
     expect(callAt).toBeGreaterThan(-1);
     expect(nextAt).toBeGreaterThan(-1);
     expect(callAt).toBeLessThan(nextAt);
@@ -237,10 +247,12 @@ describe("四个启动入口都接线（回归到「没人起宿主」的那道�
 
   it("scripts/start.mjs 调用了共用件，且排在起 Next 之前", () => {
     const source = readScript("scripts/start.mjs");
-    const callAt = topLevelCallAt(source, "maybeSpawnExecutorHost");
+    const body = scriptBody(source);
+    const callAt = topLevelCallAt(body, "maybeSpawnExecutorHost");
     /* 锚在**起 Next 的那一次 spawnSync** 上：`pnpmInvocation([...])` 的参数里
-     * 也有 "next"/"start" 两个字面量，用它当锚会把手上的位置判反。 */
-    const nextAt = source.indexOf("spawnSync(invocation.command, invocation.args");
+     * 也有 "next"/"start" 两个字面量，用它当锚会把手上的位置判反。锚点与 `callAt`
+     * 同样取自那份剥后文本（现在由 `body` 显式给出）。 */
+    const nextAt = body.indexOf("spawnSync(invocation.command, invocation.args");
     expect(callAt).toBeGreaterThan(-1);
     expect(nextAt).toBeGreaterThan(-1);
     expect(callAt).toBeLessThan(nextAt);
