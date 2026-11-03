@@ -36,11 +36,27 @@
  * 块注释**内部**的换行照旧丢弃：保持与旧实现相同的输出形状，免得
  * `{0,400}` 那一类窗口断言被行数变化带偏（本文件的输出形状被 31 份用例依赖）。
  *
+ * ── `{ syntax: "hash" }` 那一档（ISSUE #2934 加的模式，默认 `"js"`）─────────
+ *
+ * 本仓有两格判据的接收者不吃 JS 注释语法：`scripts/dev-launcher.ps1`（PowerShell）与
+ * `src-tauri/Cargo.toml`（TOML）都用 `#` 开注释。拿 JS 档去剥，实测前后字符数完全相同
+ * （2898 → 2898，等于没剥），于是「允许注释提及」的口径只在**机制上**没兑现：
+ * 注释里写一句「以前调过 `taskkill /IM`」照样会红，逼着文档撒谎。
+ *
+ * 这一档只做**行注释**（没有 `#` 的块注释语法），且以下两条边界照旧：
+ *   · 引号内的 `#` 是代码（`"a#b"` 原样留着）—— 与 `//` 那一档共用同一个引号状态机；
+ *   · 默认仍只去「整行都是注释」的，`trailing: true` 才连行尾一起去。
+ *
  * @param src 源码全文
- * @param opts `trailing`：连行尾注释一起去（默认关）
+ * @param opts `trailing`：连行尾注释一起去（默认关）；`syntax`：注释语法（默认 `"js"`）
  * @returns 只留代码的文本
  */
-export function stripComments(src: string, opts: { trailing?: boolean } = {}): string {
+export function stripComments(
+  src: string,
+  opts: { syntax?: "js" | "hash"; trailing?: boolean } = {},
+): string {
+  /* `hash` 档只换「行注释从哪个字符开始」与「有没有块注释」这两处，其余共用一份状态机。 */
+  const hashSyntax = opts.syntax === "hash";
   const out: Array<string> = [];
   let inBlock = false;
   let quote: null | "'" | '"' | "`" = null;
@@ -96,13 +112,14 @@ export function stripComments(src: string, opts: { trailing?: boolean } = {}): s
       continue;
     }
 
-    if (c === "/" && next === "*") {
+    /* `#` 档没有块注释语法：`/*` 在那两份接收者里就只是两个普通字符。 */
+    if (!hashSyntax && c === "/" && next === "*") {
       inBlock = true;
       i += 1;
       continue;
     }
 
-    if (c === "/" && next === "/") {
+    if (hashSyntax ? c === "#" : c === "/" && next === "/") {
       if (blankBefore || opts.trailing === true) {
         // 丢到行尾；换行本身留给下一轮写出，所以行数不漂
         const nl = src.indexOf("\n", i);
