@@ -1,6 +1,7 @@
-import { fixupPluginRules } from "@eslint/compat";
-import tseslint from "typescript-eslint";
-import next from "eslint-config-next/core-web-vitals";
+import nextPlugin from "@next/eslint-plugin-next";
+import react from "eslint-plugin-react";
+import reactHooks from "eslint-plugin-react-hooks";
+import tsParser from "@typescript-eslint/parser";
 
 /* ── #2777 PR-B：eslint 侧只保留 oxlint **没有等价实现**的 16 条 ────────────
  *
@@ -10,10 +11,17 @@ import next from "eslint-config-next/core-web-vitals";
  * `@next/next/no-location-assign-relative-destination`。
  *
  * 它**不再是**全量 eslint 配置：
- *   · 不再展开 `eslint-config-next` 的规则面（只取插件对象）；
- *   · 不再挂 tseslint 的三份预设、`@eslint/js`、unicorn、boundaries、unused-imports
- *     —— 那些都已由 oxlint parity 闸逐条接管（见台账 `log/tools/eslint-oxlint-parity.md`）；
+ *   · 只 `import` 三个插件包（`@next/eslint-plugin-next` / `eslint-plugin-react` /
+ *     `eslint-plugin-react-hooks`）与 `@typescript-eslint/parser`，不再经
+ *     `eslint-config-next` 中转、也不再挂 `@eslint/js` / tseslint 预设 / unicorn /
+ *     boundaries / unused-imports —— 那些都已由 oxlint 判决配置逐条接管
+ *     （台账 `log/tools/eslint-oxlint-parity.md`）；
  *   · 只对 `LINT_FILES`（TS 源码面）生效，命令是 `pnpm run lint:policy`。
+ *
+ * ── 复审条件（#2777 收尾约定）─────────────────────────────────────
+ * oxlint 支持 `react-hooks/*` 的等价实现（React Compiler 那 12 条）后，本文件那 12 条
+ * 即可删；`react/no-deprecated` 与 `@next/next/no-location-assign-relative-destination`
+ * 同理。等这些都不需要了，**这个文件和 `lint:policy` 档一起删**，而不是继续挂着。
  *
  * ⚠️ 别把 oxlint 已覆盖的规则加回来：同一个判决立两个执行者，下次口径不一致时
  *   没人知道该信哪一个（AGENTS 硬规则 28 ③）。
@@ -79,58 +87,16 @@ const LINT_FILES = [
   ".storybook/**/*.{ts,tsx,mts,cts}",
 ];
 
-/** 需要兼容包装的插件名：next 聚合配置引来、且仍在调用 ESLint 10 已移除插件 API
- *  的那几个（`react` / `react-hooks` / `@next/next`）。
- *
- *  为什么从 `eslint-config-next` 取插件对象而不是 `import` 插件包：本仓没有这三个
- *  插件的直接依赖，pnpm 严格布局下顶层解析不到；next 的 `plugins` 里那个正是同一实例。 */
-const COMPAT_PLUGIN_NAMES = ["react", "react-hooks", "@next/next"];
+/** 三个插件对象直接在 `package.json` 里声明为 devDependency 后 `import` 进来
+ *  （#2777 PR-C：不再经 `eslint-config-next` 中转，也不再需要 `@eslint/compat`
+ *  的 `fixupPluginRules` —— 这三个版本都已原生适配 ESLint 10，实测能跑）。 */
+const plugins = {
+  react,
+  "react-hooks": reactHooks,
+  "@next/next": nextPlugin,
+};
 
-/** 同一个插件对象只包一次：同名插件多处出现时必须指向**同一个**包装对象，
- *  否则 ESLint 10 会判定「同名插件重定义」而报 ConfigError。 */
-const compatPluginCache = new WeakMap();
-
-/**
- * @param {import("eslint").ESLint.Plugin} plugin
- * @returns {import("eslint").ESLint.Plugin}
- */
-function compatPlugin(plugin) {
-  const cached = compatPluginCache.get(plugin);
-  if (cached) {
-    return cached;
-  }
-  const fixed = fixupPluginRules(plugin);
-  compatPluginCache.set(plugin, fixed);
-  return fixed;
-}
-
-/** 从 next 的扁平数组里只取本判据要用的那三个插件对象。
- *
- *  @type {Record<string, import("eslint").ESLint.Plugin>}
- */
-const plugins = (() => {
-  /** @type {Record<string, import("eslint").ESLint.Plugin>} */
-  const picked = {};
-  for (const config of next) {
-    for (const [name, plugin] of Object.entries(config.plugins ?? {})) {
-      if (COMPAT_PLUGIN_NAMES.includes(name) && picked[name] === undefined) {
-        picked[name] = compatPlugin(
-          /** @type {import("eslint").ESLint.Plugin} */ (/** @type {unknown} */ (plugin)),
-        );
-      }
-    }
-  }
-  for (const name of COMPAT_PLUGIN_NAMES) {
-    if (picked[name] === undefined) {
-      throw new Error(
-        `eslint-config-next 没带 ${name} 插件 —— 它换结构了？本配置的 retention 集合依赖它。`,
-      );
-    }
-  }
-  return picked;
-})();
-
-export default tseslint.config(
+export default [
   {
     ignores: [
       // 构建产物与第三方目录（固定坐标）
@@ -160,7 +126,7 @@ export default tseslint.config(
   {
     files: LINT_FILES,
     languageOptions: {
-      parser: tseslint.parser,
+      parser: tsParser,
       parserOptions: { ecmaFeatures: { jsx: true }, sourceType: "module" },
     },
     plugins,
@@ -252,4 +218,4 @@ export default tseslint.config(
       reportUnusedDisableDirectives: true,
     },
   },
-);
+];

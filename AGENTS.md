@@ -81,13 +81,62 @@
 | ComfyUI 生命周期                                                      | `src/lib/comfyui/**`（lifecycle / executor-* / reaper）                                                                                                                                                                         | §3、§5                                                                                                                                                                                                                                                                                          |
 | 工坊管线                                                              | `src/components/workshop/**`、`src/lib/workshop/**`                                                                                                                                                                             | §5                                                                                                                                                                                                                                                                                              |
 | UI/逻辑分离                                                           | 视图层新增 `fetch`/`vanillaApi`/tRPC hook 时                                                                                                                                                                                    | §17（[17-UI与逻辑分离.md](docs/standards/17-UI与逻辑分离.md)）                                                                                                                                                                                                                                  |
-| lib 层边界与门禁                                                      | `src/lib/**`（新增/移动模块、拆 `.server.ts`、共享类型给视图层）                                                                                                                                                                | §18（[18-lib层规范.md](docs/standards/18-lib层规范.md)）；分层由 `eslint.config.js` 的 `boundaries` 强制，Node-only 声明由 `scripts/lib-node-only-scan.mjs` + `tests/lib-node-only-declarations.test.ts` 强制（§18.4），文件长度**硬闸** `check-file-structure.cjs`（超 900 行即阻断，无 flag） |
+| lib 层边界与门禁                                                      | `src/lib/**`（新增/移动模块、拆 `.server.ts`、共享类型给视图层）                                                                                                                                                                | §18（[18-lib层规范.md](docs/standards/18-lib层规范.md)）；分层由 `oxlint.parity.config.mjs` / `oxlint.config.ts` 的 `boundaries` 强制，Node-only 声明由 `scripts/lib-node-only-scan.mjs` + `tests/lib-node-only-declarations.test.ts` 强制（§18.4），文件长度**硬闸** `check-file-structure.cjs`（超 900 行即阻断，无 flag） |
 | lib 子域归属                                                          | `src/lib/**`（新增模块、新建子域目录、搬目录）                                                                                                                                                                                  | §12.5.3 + §18.12；门禁 `check-file-structure.cjs` 的 R13′/R14                                                                                                                                                                                                                                   |
 | 跨平台动作（新增/删除 `.ps1` 或 `.mjs` 入口、改 `package.json` 脚本） | `package.json`、`tools/**`、`scripts/*.ps1`、`scripts/*.mjs`                                                                                                                                                                    | §9.5（[launch-and-build.md](docs/standards/launch-and-build.md) 的**跨平台动作对照表**）+ §12.8；门禁 `scripts/check-ps1-consistency.mjs`                                                                                                                                                       |
 | 跨平台行为 / 端口与文档                                               | 新增按平台分叉的逻辑、改动 `src/lib/process/kill-process-tree.ts` / `launch-path.ts` 的平台判据、动 `scripts/app-port.mjs` 或 `src-tauri/`（Cargo 的 windows/gate、sidecar 命名、shell 插件）、**在文档/README 里写具体端口号** | §1.1、§3.1、§3.3、§9（[launch-and-build.md](docs/standards/launch-and-build.md)）；端口「两条链路」见 [reference-facts.md](docs/reference-facts.md) §1.1                                                                                                                                        |
 | 构建与打包                                                            | `scripts/build-desktop.mjs`、`tools/**`                                                                                                                                                                                         | §7、§8                                                                                                                                                                                                                                                                                          |
 | 复用/去重与常量收口                                                   | 抽共享模块、加/改默认地址与端口、写新的质量门禁、**动手前查有无现成实现 / 缺能力补地基**、**同一串手工命令被敲到第二次就收成入口**                                                                                            | §12.18（复用优先·写之前先查）、**§12.20（能做成工具的就做成工具）**、§12.12（跨文件重复）、§12.13（函数长度）、§12.14（端点收口）                                                                                                                                                                |
 | 提交 / PR / 合并这条流程本身                                          | `scripts/ship*.mjs`、`.cnb.yml`（PR 与每日两跑的清单）、`.qoder/skills/ship/SKILL.md`                                                                                                                                       | §13.6（`pnpm ship` 那四条红线）、§13.5.25（本地跑哪几条）、§13.10（碎片与单子）、§13.6.5（**删分支前**：落地与否只认 PR 的 `is_merged`，三点 diff 不是判据）                                                                                                                                                                                                                   |
+
+## lint 判据：oxlint 判决 + 策略守卫（#2777 收尾后的最终架构）
+
+`pnpm run lint` 是唯一判决口，实现是**两档串行**（`lint:policy` 不在 `lint` 里单独降级，
+`check:premerge` 继承 `lint`，所以 pre-push 与平台那一跑都跟着走）：
+
+| 档 | 命令 | 配置 | 管什么 |
+| --- | --- | --- | --- |
+| 通用 lint | `pnpm run lint:oxlint` | `oxlint.parity.config.mjs`（判决配置；`oxlint.config.ts` 是同源的 IDE 面） | 133 条规则的全量面：`src` / `tests` / `scripts` / `e2e` / `tools` / `.storybook` / 根配置文件 |
+| 策略守卫 | `pnpm run lint:policy` | `eslint.config.js`（**只有 16 条**） | oxlint 没有等价实现的策略；`files` 只匹配 TS 源码面，不跑整份历史 eslint 配置 |
+
+两侧的零警告语义都保留（oxlint `--deny-warnings`、eslint `--max-warnings 0`），
+`--fix` 由 `pnpm run lint:fix` 分别落到两档。平台格子的名字仍叫「ESLint（零警告）」——
+那是一个稳定标识（改名会打断历史读数），但它跑的就是这条 `lint` 链。
+
+### `lint:policy` 那 16 条（为什么还留在 eslint 侧）
+
+| 规则 | 留住它的理由 |
+| --- | --- |
+| `react-hooks/config`、`error-boundaries`、`gating`、`globals`、`immutability`、`preserve-manual-memoization`、`purity`、`set-state-in-render`、`static-components`、`use-memo`（10 条 error） | React Compiler 族，oxlint 未实现等价规则 |
+| `react-hooks/incompatible-library`、`react-hooks/unsupported-syntax`（2 条 warn） | 同上；warn 是上游档位，不升级 |
+| `no-restricted-syntax`（store selector 两条 selector，ISSUE #1780） | selector 里现拼对象 / 现造新数组 ⇒ 每次求值新引用、字段没变也重渲染；oxlint 无等价 selector 判据 |
+| `no-restricted-syntax`（router 只许 `TRPCError`，台账 E8） | 裸 `new Error` 会被 tRPC 归成 INTERNAL_SERVER_ERROR；判据是行为断言（`tests/router-error-envelope.test.ts`） |
+| `no-restricted-imports`（`src/components` 与视图层 features 目录禁 `drizzle-orm`） | pnpm 下 `module.source` 为 null 时 `boundaries/dependencies` 匹配不到，这是 scoped 兜底 |
+| `react/no-deprecated` | oxlint 未实现 |
+| `@next/next/no-location-assign-relative-destination` | oxlint 未实现 |
+
+### 依赖最小集
+
+`eslint.config.js` 只直接依赖 `@typescript-eslint/parser` 与三个插件包
+（`eslint-plugin-react` / `eslint-plugin-react-hooks` / `@next/eslint-plugin-next`），
+不再经 `eslint-config-next` 中转，也不需要 `@eslint/compat` 的补丁层；
+`eslint-plugin-jsx-a11y` 只服务 `scripts/check-a11y-rules.cjs` 读官方规则表。
+`eslint-plugin-boundaries` / `eslint-import-resolver-oxc` / `eslint-plugin-unused-imports`
+被 oxlint 的 `jsPlugins` / `settings` 复用 —— 留着它们**不是因为 eslint 还在跑**。
+
+### 复审条件（什么时候可以彻底拆掉策略守卫）
+
+oxlint 支持 `react-hooks/*` 那 12 条的等价实现后，`eslint.config.js` 与 `lint:policy`
+一起删（**连 eslint 本体和上表插件依赖一起**），`lint` 收成单档 `lint:oxlint`；
+`react/no-deprecated` / `@next/next/*` 同理。逐条对齐矩阵与缺口复核口径在
+`log/tools/eslint-oxlint-parity.md`（本地台账，不入仓）。
+
+### 已知限制
+
+- `unicorn/no-useless-length-check` 在 oxlint 侧注册但**实现为空** ⇒ 该条今天不产生
+  任何信号（不是「已通过」）。要重新承重，先补等价判据再启用。
+- `jsx_a11y` 的参数化 options 未镜像 ⇒ `check-a11y-rules.cjs` 只比**档位**，不比 options
+  （官方集合 / 废弃状态仍从插件对象取，不手抄规则表）。
 
 ## 硬规则（违反 = 提交被拒或必须回滚）
 
@@ -258,7 +307,7 @@
 
 21. **函数长度阈值 400 行（Rust 120 行）即阻断，硬闸**（ISSUE #536 / §12.13）：`scripts/check-function-length.cjs` 命中即阻断（存量已清零，无基线文件、无 `--update`）。**Rust 壳同维度阈值 120 行**（`scripts/check-rust-function-length.cjs` 扫 `src-tauri/src/**`；结构化编排的自然长度比 TSX 短）。R5 管**文件**行数、本条管**函数**行数，两条维度不可互相替代；括号与 Rust 字符串的识别细节见 §12.13 / §12.13.1。
 
-22. **`src/lib` 是门禁的一等公民，不是盲区**（ISSUE #575 / §18）：**lib 不得 import 视图层**（`src/components/**`、`src/app/**`）——`lib` 是被 `components` / `app` / `server` 共同依赖的地基；需要共享的类型下沉到 `src/lib` 下的类型模块（实例：`src/lib/workflow/workflow-io-types.ts`）。由 `eslint.config.js` 的 `boundaries` 强制，**元素顺序是语义**（`src/lib/core/**` 等数据层须排在 `src/lib/**` 之前，见 §18.3）。**Node-only 三选一，不许「都没有」**（§18.4）：全部出口只能服务端用 → `import "server-only"`；同领域服务端拆件 → `.server.ts`；纯 Node 宿主（由 `scripts/*.mjs` 动态加载，如 `src/lib/process/kill-process-tree.ts`）→ 两者都不加（给它加 `server-only` 会让启动编排直接崩，`server-only` 入口就是 `throw`）。**新增守卫前先查是否已有更强的一条**：客户端打包安全已由 `tests/client-bundle-node-builtins.test.ts`（从 `"use client"` 入口 DFS 可达性 + 完整引用链）守住，别再写「检查有没有 `server-only`」的第二判据。**R5 超 900 行文件即阻断**（**硬闸**，无基线、无 `--strict`、无 `--update`：存量已清零，
+22. **`src/lib` 是门禁的一等公民，不是盲区**（ISSUE #575 / §18）：**lib 不得 import 视图层**（`src/components/**`、`src/app/**`）——`lib` 是被 `components` / `app` / `server` 共同依赖的地基；需要共享的类型下沉到 `src/lib` 下的类型模块（实例：`src/lib/workflow/workflow-io-types.ts`）。由 `oxlint.parity.config.mjs` / `oxlint.config.ts` 的 `boundaries` 强制，**元素顺序是语义**（`src/lib/core/**` 等数据层须排在 `src/lib/**` 之前，见 §18.3）。**Node-only 三选一，不许「都没有」**（§18.4）：全部出口只能服务端用 → `import "server-only"`；同领域服务端拆件 → `.server.ts`；纯 Node 宿主（由 `scripts/*.mjs` 动态加载，如 `src/lib/process/kill-process-tree.ts`）→ 两者都不加（给它加 `server-only` 会让启动编排直接崩，`server-only` 入口就是 `throw`）。**新增守卫前先查是否已有更强的一条**：客户端打包安全已由 `tests/client-bundle-node-builtins.test.ts`（从 `"use client"` 入口 DFS 可达性 + 完整引用链）守住，别再写「检查有没有 `server-only`」的第二判据。**R5 超 900 行文件即阻断**（**硬闸**，无基线、无 `--strict`、无 `--update`：存量已清零，
     「手改 JSON 就能登记新违规」那条通道已经收掉，所以判据就退化成一句「这份文件现在
     是不是超过 900 行」）。基础设施层
     （`scripts/**` / `tools/**`）同维度由 `check-infra-file-size.cjs` 同口径硬闸守着。

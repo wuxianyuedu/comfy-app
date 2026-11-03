@@ -27,26 +27,23 @@
  * ── 判决主体切到 oxlint 之后（#2777 PR-B）────────────────────────
  *
  * 台账的**出处**已换成 oxlint 判决配置（`loadOxlintConfig()`），不再读
- * `eslint.config.js`（那份只剩 16 条 oxlint 没有等价实现的策略）。取数仍用
- * 同进程 `Linter` + 内联 flat 配置跑**规则本体**：`no-control-regex` 是 core 规则，
- * 这一段不依赖 eslint 的插件/配置面；oxlint CLI 有等价能力（`check-eslint-exemptions`
- * 的替代实现见 `scripts/eslint-gate-canary.mjs` 的同一形态），但本脚本的三件输入契约
- * （用例注入 `makeLinter`）先保留到 PR-C 摘依赖时一并切。
+ * `eslint.config.js`（那份只剩 16 条 oxlint 没有等价实现的策略）。
  *
- * ── 为什么取数用 `Linter` 而不是起 eslint CLI ───────────────────────
+ * ── 取数口径：oxlint CLI（#2777 PR-C）─────────────────────────────
  *
- * 同一个判决试过三把尺，读数逐字相同（19 处 / 13 份）：真配置 CLI **27.8s**、
- * 最小配置 CLI（`--no-config-lookup -c <临时件>`）**1.9s**、同进程 `Linter` + 内联 flat 配置
- * **755ms**。取最后一把，除便宜之外还因为它不需要往仓库里落一份临时配置：
- * 那份件落在仓内就进脚本档判决面（`tsconfig.scripts.json` 展开的那份 `.mjs` 全量面会被棘轮记账），
- * 落在仓外就解析不到 `typescript-eslint`（裸包名从**发起文件的位置**起解析，实测坐实）。
+ * 取数改调 `node_modules/oxlint/bin/oxlint --format json`，**不再吃 eslint 运行期 API**
+ * （原来的同进程 `Linter` 是 eslint 依赖的最后一处硬耦合）。判决配置对这批文件把
+ * 目标规则关着（那正是被对账的台账），所以要量「现在还违不违例」，得另起一份**最小
+ * 临时配置**把它打开；那份件落在 `os.tmpdir()`（仓外，不进脚本档判决面），跑完
+ * `finally` 里删掉。规则名归一后与台账逐条比（oxlint 的 JSON 里 core 规则写作
+ * `eslint(no-control-regex)`）。
  *
- * ⚠️ **本脚本最要紧的一条设计来自一次真实的假绿**：`Linter#verify` 的内联配置写成
- * eslintrc 形（`{ parser }` 放在顶层）而不是 flat 形（`languageOptions.parser`）时，
- * 它对**每一份文件都抛错**，而取数脚本照样能打出一行「命中 0 处 / 0 份文件」——
- * 那是「一条都没判」长得像「最有把握的那个结论」（台账全部陈旧）。所以这里的判决必须先看
- * **失败计数**：任何一份没被真判过 ⇒ 判「没结论」（退 2），既不判红也不判绿（§13.6.2 的
- * `inconclusive` 同一口径）。
+ * ⚠️ **本脚本最要紧的一条设计来自一次真实的假绿**：取数**每一份都没被判成**时，
+ * 命中集合是空的 —— 而空命中在朴素实现里正好等于「台账全部陈旧」（最刺眼的那个
+ * 结论）。所以判决必须先看**失败计数**：任何一份没被真判过 ⇒ 判「没结论」（退 2），
+ * 既不判红也不判绿（§13.6.2 的 `inconclusive` 同一口径）。oxlint 这边有两处会让
+ * 「没判成」冒出来：解析失败的诊断**没有 `code`**（只有 message + severity error），
+ * 以及输出里的 `number_of_files` 少于应扫份数。
  *
  * 用法：
  *   node scripts/check-eslint-exemptions.cjs            # 判真配置上那批文件级豁免
@@ -55,10 +52,9 @@
  *         2 没结论（任何一份没被判、台账形状变了、或条目是 glob 形状）。
  */
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
-
-const { Linter } = require("eslint");
-const { parser } = require("typescript-eslint");
+const { spawnSync } = require("node:child_process");
 
 /* 复用既有那份件对配置的读法：`loadOxlintConfig()` 是每进程一次的去重单飞
  * （`check-a11y-rules.cjs` 的文件头记着为什么只留一个读面），`normalize` 是规则档位的归一
@@ -69,6 +65,8 @@ const TAG = "[eslint-exemptions]";
 const ROOT = path.resolve(__dirname, "..");
 /** #2777 PR-B：台账的**唯一出处**已随判决主体切到 oxlint 判决配置。 */
 const OXLINT_CONFIG_REL = "oxlint.parity.config.mjs";
+/** #2777 PR-C：取数改走 oxlint CLI，不再吃 eslint 运行期 API（`Linter` 已摘掉）。 */
+const OXLINT_BIN = path.join(ROOT, "node_modules", "oxlint", "bin", "oxlint");
 
 /**
  * 本判据核的那批**文件级**豁免台账 —— 逐条点名，不做「扫全部规则」的启发式。
@@ -134,16 +132,98 @@ function readFileLevelExemptions(config, ruleId) {
  */
 
 /**
- * 用**规则本体**（不是自写正则）量这批文件现在还有没有命中。
+ * oxlint 的 JSON 把规则名写成 `<plugin>(<rule>)`（core 规则记成 `eslint(...)`），
+ * 台账这边用的是 eslint 的裸名 / `plugin/rule` 写法。归一成台账那套再逐字比。
+ * @param {string | undefined | null} code
+ * @returns {string | undefined}
+ */
+function normalizeOxlintCode(code) {
+  if (typeof code !== "string") {
+    return undefined;
+  }
+  const m = /^(\w+)\((.+)\)$/.exec(code);
+  if (!m) {
+    return code;
+  }
+  const [, plugin, rule] = m;
+  return plugin === "eslint" ? rule : `${plugin}/${rule}`;
+}
+
+/**
+ * 用**规则本体**量这批文件现在还有没有命中 —— 起一次 oxlint CLI。
+ *
+ * 判决配置对这批文件把目标规则关着（那正是被对账的台账），所以另起一份最小临时配置
+ * 把它打开。临时件落在 `os.tmpdir()`（仓外，不进脚本档的单文件判决面），`finally` 删掉。
+ *
+ * @param {string[]} files 逐字相对路径
+ * @param {string} ruleId 台账规则名（eslint 写法）
+ * @param {string} root
+ * @returns {{diagnostics: {code?: string | null, filename: string, message?: string, severity?: string}[],
+ *            number_of_files?: number, status: number | null}}
+ */
+function runOxlintCli(files, ruleId, root) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "comfy-oxlint-exempt-"));
+  const configFile = path.join(dir, "probe.config.mjs");
+  fs.writeFileSync(
+    configFile,
+    [
+      "export default {",
+      '  categories: { correctness: "off", suspicious: "off", perf: "off", style: "off",',
+      '    restriction: "off", nursery: "off", pedantic: "off" },',
+      `  rules: { ${JSON.stringify(ruleId)}: "error" },`,
+      "};",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  try {
+    const res = spawnSync(
+      process.execPath,
+      [
+        OXLINT_BIN,
+        "--config",
+        configFile,
+        "--format",
+        "json",
+        ...files.map((rel) => path.join(root, rel)),
+      ],
+      { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+    );
+    if (res.error) {
+      throw new Error(`oxlint 起不来：${res.error.message}`);
+    }
+    const text = (res.stdout ?? "").trim();
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new Error(`oxlint 输出不是 JSON（退出码 ${res.status}）：${text.slice(0, 400)}`);
+    }
+    return {
+      diagnostics: parsed.diagnostics ?? [],
+      number_of_files: parsed.number_of_files,
+      status: res.status,
+    };
+  } finally {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* 临时目录删不掉不影响判决：它在仓外、按次命名。 */
+    }
+  }
+}
+
+/**
+ * 量这批文件现在还有没有命中。
  * @param {{files: string[], ruleId: string, root: string,
  *          readFile?: (absPath: string) => string,
- *          makeLinter?: () => {verify: (code: string, config: object, opts: object) => Array<{ruleId?: string | null, fatal?: boolean, message?: string}>}}} p
- *   `readFile` / `makeLinter` 是注入缝：契约用例要能把「命中 / 没命中 / 解析失败 / 读不到」
- *   四种形状各喂一次，而不必往仓库里埋四份夹具文件（那些文件会被别的扫描面收去判）。
+ *          runOxlint?: (files: string[]) => {diagnostics: {code?: string | null, filename: string, message?: string, severity?: string}[], number_of_files?: number, status?: number | null}}} p
+ *   `readFile` / `runOxlint` 是注入缝：契约用例要能把「命中 / 没命中 / 解析失败 / 读不到」
+ *   四种形状各喂一次，而不必往仓库里埋四份夹具文件（那些文件会被别的扫描面收去判），
+ *   也不必每条用例都真起一次 CLI。
  * @returns {ScanOutcome}
  */
-function scanViolations({ files, ruleId, root, readFile, makeLinter }) {
-  const linter = makeLinter ? makeLinter() : new Linter({ configType: "flat" });
+function scanViolations({ files, ruleId, root, readFile, runOxlint }) {
   /** @type {(absPath: string) => string} */
   const read = readFile ?? ((absPath) => /** @type {string} */ (fs.readFileSync(absPath, "utf8")));
   /** @type {string[]} */
@@ -151,47 +231,64 @@ function scanViolations({ files, ruleId, root, readFile, makeLinter }) {
   /** @type {{file: string, why: string}[]} */
   const failed = [];
   let scanned = 0;
-  /* 内联配置必须是 **flat 形状**：`parser` 放进 `languageOptions` 而不是顶层 ——
-   * 顶层那份是 eslintrc 形，`verify` 会对每一份文件抛
-   * `Config (unnamed): Key "parser": This appears to be in eslintrc format`，
-   * 而命中数照样是 0（那正是本函数下面那条 `failed` 计数存在的理由）。
-   *
-   * 最后那句断言是必要的而不是偷懒：`rules` 的键在这里是算出来的（`ruleId` 是参数），
-   * 而 eslint 的类型把 `rules` 收成一张**具名规则**的表 —— 计算键在类型上表达不出来，
-   * 写死成 `"no-control-regex"` 又会把这条判据钉死在一条规则上（本文件是按名单跑的）。
-   * SAFETY: 这个对象就是本函数上面那 6 行自己造的，没有第三方往里塞东西；
-   * 形状错的那一险由「全部 verify 抛错 ⇒ 判没结论」那条用例与两条变异负责兜。
-   */
-  /** @type {import("eslint").Linter.Config} */
-  const config = {
-    files: ["**"],
-    languageOptions: { parser, ecmaVersion: "latest", sourceType: "module" },
-    rules: { [ruleId]: "error" },
-  };
+
+  /* 先过一遍可读性：读不到的份**不进**取数（喂给 CLI 只会得到一条「文件不在输出里」，
+   * 把设计内的跳过说成设计外的故障）。 */
+  /** @type {string[]} */
+  const readable = [];
   for (const rel of files) {
-    let code;
     try {
-      code = read(path.join(root, rel));
+      read(path.join(root, rel));
+      readable.push(rel);
     } catch (error) {
       const err = /** @type {NodeJS.ErrnoException} */ (error);
       failed.push({ file: rel, why: `读不到（${err.code ?? err.message}）` });
-      continue;
     }
-    let messages;
-    try {
-      messages = linter.verify(code, config, { filename: rel });
-    } catch (error) {
-      failed.push({ file: rel, why: `verify 抛错：${String(error).split("\n")[0]}` });
-      continue;
+  }
+
+  if (readable.length === 0) {
+    return { violating, failed, scanned };
+  }
+
+  let run;
+  try {
+    run = runOxlint ? runOxlint(readable) : runOxlintCli(readable, ruleId, root);
+  } catch (error) {
+    /* 起不来 / 输出不可解析 ⇒ 这一批全部「没判过」，判决必须是 inconclusive。 */
+    for (const rel of readable) {
+      failed.push({ file: rel, why: `oxlint 取数失败：${String(error).split("\n")[0]}` });
     }
-    /* `verify` 不抛错但给回 fatal 的两种（解析失败 / 内联配置注释报错）也不算判过。 */
-    const fatal = messages.find((m) => m.fatal);
-    if (fatal) {
-      failed.push({ file: rel, why: `解析失败：${fatal.message ?? "fatal"}` });
+    return { violating, failed, scanned: 0 };
+  }
+
+  /* `number_of_files` 是「真的解析了几份」的读数：少于应扫份数就不构成「每份都判过」。
+   * 这一条挡的是「CLI 静默漏掉一整批文件，命中集合为空 ⇒ 被读成台账全陈旧」。 */
+  if (typeof run.number_of_files === "number" && run.number_of_files !== readable.length) {
+    failed.push({
+      file: `(oxlint 只扫了 ${run.number_of_files} 份 / 应扫 ${readable.length} 份)`,
+      why: "取数面比台账窄 —— 这一跑不构成「每份都判过」",
+    });
+  }
+
+  /** @type {Map<string, {code?: string | null, filename: string, message?: string, severity?: string}[]>} */
+  const byFile = new Map();
+  for (const entry of run.diagnostics) {
+    const abs = path.resolve(root, entry.filename);
+    const list = byFile.get(abs) ?? [];
+    list.push(entry);
+    byFile.set(abs, list);
+  }
+
+  for (const rel of readable) {
+    const messages = byFile.get(path.resolve(root, rel)) ?? [];
+    /* 解析失败的诊断**没有 `code`**（只有 message + severity error）—— 它不算判过。 */
+    const parseFailure = messages.find((m) => m.severity === "error" && !m.code);
+    if (parseFailure) {
+      failed.push({ file: rel, why: `解析失败：${parseFailure.message ?? "fatal"}` });
       continue;
     }
     scanned += 1;
-    if (messages.some((m) => m.ruleId === ruleId)) {
+    if (messages.some((m) => normalizeOxlintCode(m.code) === ruleId)) {
       violating.push(rel);
     }
   }

@@ -94,16 +94,17 @@ const CLI_ARGS = parseArgs(process.argv.slice(2));
 const ESLINT_CONFIG = path.join(ROOT, "eslint.config.js");
 /** #2777 PR-B：jsx-a11y 规则的**生效面**已切到 oxlint 判决配置。 */
 const OXLINT_CONFIG = path.join(ROOT, "oxlint.parity.config.mjs");
-/** 官方 recommended / strict / 全部规则元数据仍从插件对象取（不手抄规则表）。 */
-const NEXT_CONFIG = "eslint-config-next/core-web-vitals";
+/** 官方 recommended / strict / 全部规则元数据仍从插件对象取（不手抄规则表）。
+ *  #2777 PR-C：直接依赖 `eslint-plugin-jsx-a11y`，不再经 `eslint-config-next` 中转。 */
+const A11Y_PLUGIN_SPEC = "eslint-plugin-jsx-a11y";
 
 /**
  * `eslint.config.js` 的**求值缓存**。
  *
- * 求值这份配置是本判据全部成本所在：它 import 了整个 `eslint-config-next`。
- * **首次**求值没有常数可言 —— 用户侧实测（8 核 / 16G、干净检出）40s 以上，
- * 被 Next 起过之后 ~1.1–1.7s；派生链与「为什么它是这条链上唯一的成本」写在
- * 规范 §11.19.1 的档 E 里，这里只记结论。
+ * 求值这份配置是本判据全部成本所在。**#2777 PR-C 之前**它 import 了整个
+ * `eslint-config-next`，**首次**求值没有常数可言 —— 用户侧实测（8 核 / 16G、干净检出）
+ * 40s 以上，被 Next 起过之后 ~1.1–1.7s（PR-C 起只剩四个小包，那笔钱不再付）。
+ * 派生链与「为什么它是这条链上唯一的成本」写在规范 §11.19.1 的档 E 里，这里只记结论。
  *
  * 于是有两条纪律：
  *
@@ -135,17 +136,16 @@ function loadOxlintConfig() {
 /** jsx-a11y 插件对象的求值缓存（官方集合与废弃状态的唯一出处）。 */
 let a11yPluginPromise;
 
-/** 从 `eslint-config-next` 的扁平数组里取 jsx-a11y 插件对象。 */
+/** 取 `eslint-plugin-jsx-a11y` 的插件对象（`recommended` / `strict` / 规则元数据的唯一出处）。 */
 function loadA11yPlugin() {
-  a11yPluginPromise ??= import(NEXT_CONFIG).then((mod) => {
-    for (const config of mod.default ?? []) {
-      if (config.plugins?.["jsx-a11y"]) {
-        return config.plugins["jsx-a11y"];
-      }
+  a11yPluginPromise ??= import(A11Y_PLUGIN_SPEC).then((mod) => {
+    const plugin = mod.default ?? mod;
+    if (typeof plugin?.rules !== "object" || plugin.rules === null) {
+      throw new Error(
+        `${A11Y_PLUGIN_SPEC} 里读不到 rules 表 —— 本判据从它读官方 recommended / 废弃状态（不手抄规则表）。`,
+      );
     }
-    throw new Error(
-      "eslint-config-next 里没有 jsx-a11y 插件对象 —— 本判据从它读官方 recommended / 废弃状态（不手抄规则表）。",
-    );
+    return plugin;
   });
   return a11yPluginPromise;
 }
@@ -187,9 +187,9 @@ const PREFIX = "jsx-a11y/";
  * 自己算 recommended —— 于是「配置里其实关掉了某条」这件事**完全看不见**，
  * 判据恒绿。判据要判的对象是**生效的那一份**，那就必须求值它。
  *
- * 求值路径：`eslint.config.js` 是 ESM（顶层 await）、且它自己 import 了
- * `eslint-config-next` —— 用 `pathToFileURL` + 动态 `import()` 起在同一进程里。
- * 副作用只有「读几份包」，零网络。
+ * 求值路径（#2777 PR-B 起）：生效面读 `oxlint.parity.config.mjs`（`loadOxlintConfig()`），
+ * 不再求值 eslint 配置；官方集合仍从 `eslint-plugin-jsx-a11y` 的插件对象取（PR-C 起是
+ * 直接依赖）。零网络。
  */
 async function effectiveRules() {
   /** @type {{rules?: Record<string, unknown>}[]} */
@@ -215,11 +215,9 @@ async function effectiveRules() {
 /**
  * 官方 `recommended` 的**有效集合**（去 off）+ 每条的 options。
  *
- * 从**配置里已经装好的插件对象**取（`eslint-config-next` 带进来的那一个）：
- * 本仓没有 `eslint-plugin-jsx-a11y` 直接依赖，pnpm 严格布局下顶层与
- * `import.meta.resolve` 都解析不到。口径与 `eslint.config.js` 的
- * `a11yRecommendedRules()` **同源**（那一份是配置，这一份是判据，两边都从
- * 插件对象算 —— 不各抄一份规则表）。
+ * 从 `eslint-plugin-jsx-a11y` 的插件对象取（PR-C 起是直接依赖，不再经
+ * `eslint-config-next` 中转）。口径与配置侧的 `a11yRecommendedRules()` **同源**
+ * （那一份是配置，这一份是判据，两边都从插件对象算 —— 不各抄一份规则表）。
  */
 async function officialRecommended() {
   const plugin = await loadA11yPlugin();
@@ -295,7 +293,7 @@ async function officialRuleMap() {
   const plugin = await loadA11yPlugin();
   if (typeof plugin.rules !== "object" || plugin.rules === null) {
     throw new Error(
-      "eslint-config-next 带的 jsx-a11y 插件里读不到 rules 表 —— 本判据从它读每条规则的废弃状态（不手抄废弃名单）。",
+      `${A11Y_PLUGIN_SPEC} 里读不到 rules 表 —— 本判据从它读每条规则的废弃状态（不手抄废弃名单）。`,
     );
   }
   /** @type {Map<string, { deprecated: boolean }>} */
