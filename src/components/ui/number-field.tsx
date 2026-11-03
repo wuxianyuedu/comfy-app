@@ -8,18 +8,8 @@ import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { fixed } from "~/lib/number-format";
 
-/**
- * ComfyUI 风数值步进器：  [—] [值] [+]
- *
- * 替换浏览器原生 <input type="number">，后者有：
- *   - 深色主题下颜色不对
- *   - 悬停就改值（spinner 按钮太容易误触）
- *   - 没有 min/max 边界的视觉提示
- *
- * 输入用「草稿态」：聚焦期间的击键保存在本地 draft 里原样回显（受控 value 的
- * clamp 回写会在输入中途把 "0." / 清空 / 小于 step 的值瞬间顶回去，等于
- * 没法打字）；blur 或点 +/- 时才把草稿 clamp 成合法值提交。
- */
+/** ComfyUI 风数值步进器： [—] [值] [+]。替换浏览器原生 `<input type="number">`：后者深色主题下颜色不对、悬停就改值（spinner 按钮太容易误触）、没有 min/max 边界的视觉提示。
+ * 输入用「草稿态」：聚焦期间的击键保存在本地 draft 里原样回显（受控 value 的 clamp 回写会在输入中途把 "0." / 清空 / 小于 step 的值瞬间顶回去，等于没法打字）；blur 或点 +/- 时才把草稿 clamp 成合法值提交。 */
 type NumberFieldProps = {
   /** 外层容器的额外 CSS 类 */
   className?: string;

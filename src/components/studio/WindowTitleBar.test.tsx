@@ -1,25 +1,7 @@
 /**
- * 精简窗口标题行（整屏路由页自带的那条 chrome）的两条契约。
- *
- * 背景（ISSUE #1794 第二次修正）：错误页 / 404 / global-error / 登录页一显示，
- * `ShellTabs`（含 `TitleBarTabs` 与右上角的最小化 / 最大化 / **关闭**）整个
- * 卸载 —— 第一次修复只让位（`top-title-bar`），让出来的是一条不在 DOM 里的
- * 标题行，用户实测「处理过还是会被盖住」。正确形态是这些页面**自带**标题行，
- * 本文件守的就是它：
- *
- *   1. **壳态渲染**：标题行在（`data-slot="title-bar"`，与 `TitleBarTabs` 同
- *      名标记，e2e 按它找 chrome），三个窗口按钮齐备且可访问名正确；
- *   2. **按钮落在右端**：拖拽空白区必须显式占位（`flex-1`）排在按钮之前 ——
- *      少了它，三个按钮整排落在左上角（ISSUE #1918：404 / 错误页上「关闭按钮
- *      跑到了左上角」），而「按钮在、名字对」这一档完全判不出来；
- *   3. **非壳态不渲染**：浏览器 / dev 由系统窗口提供标题行，再画一条既重复
- *      又占纵向空间（与 `ShellTabs` 同判据）。
- *
- * 壳形态怎么摆：`useTitleBarTabsActive` 读的是 `isDesktopShell()` 读的那个全局
- * 标记（`__TAURI_INTERNALS__`），直接打标记、不 mock 模块（同
- * `ShellTabs.test.tsx` 的手法）。窗口控制函数（minimize / toggleMaximize /
- * close）在非壳降级、壳内 jsdom 下 import 失败也会 catch 静默，所以点按钮
- * 不会把测试炸掉 —— 这里只判「按钮在、名字对」。
+ * 精简窗口标题行（整屏路由页自带的那条 chrome）的契约，ISSUE #1794 第二次修正：错误页 / 404 / 登录页显示时 `ShellTabs` 整个卸载，
+ *「让位」让出的是一条不在 DOM 里的标题行 —— 正确形态是这些页面**自带**标题行。三条：壳态渲染且有 `data-slot="title-bar"` 与三个
+ * 可访问名正确的按钮；拖拽空白区必须 `flex-1` 排在按钮前（ISSUE #1918）；非壳态不渲染；壳形态直接打 `__TAURI_INTERNALS__` 标记、不 mock。
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

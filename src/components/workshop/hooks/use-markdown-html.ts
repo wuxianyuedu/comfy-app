@@ -1,24 +1,9 @@
 "use client";
 
 /**
- * `useMarkdownHtml` —— 「一段 markdown 文本 → 可插入 DOM 的 HTML」的**按需**渲染。
- *
- * 为什么要一个 hook、而不是在视图里直接 `markdownToHtml(text)`：
- * `~/lib/markdown` 的顶层依赖是 `marked` + `dompurify`（含 DOMPurify 的白名单
- * 配置），是全库最重的两个客户端依赖。静态 import 它会让**任何静态可达的组件**
- * 把它们带进自己的静态图 —— 工坊中间列此前就是这样把两者一路带进入口
- * `src/app/workspace/page.tsx` 的（实测链：
- * `workspace/page.tsx -> WorkshopPipeline -> WorkshopStageBody -> lib/markdown`）。
- *
- * 本 hook 把那一步变成 `import()`：模块只在**第一次拿到非空 markdown** 时才下载。
- * 首帧（还没渲染出来）返回空串 —— 渲染 markdown 的场景（剧本预览）本身就不是
- * 首屏关键内容，空一拍比首屏多下载几百 KB 划算。
- *
- * 拿到之前那个 stale 守卫是必要的（规范 16 §16.2.4.34）：`text` 在下载期间变了时，
- * 旧一轮的结果不许落地。
- *
- * 判据 `scripts/check-barrel-heavy-deps.cjs`（规范 §12.19）会拒绝「又静态 import
- * 回 `~/lib/markdown` 的组件」。
+ * `useMarkdownHtml` —— markdown → HTML 的**按需**渲染。`~/lib/markdown` 顶层依赖 `marked` + `dompurify`（全库最重的两个客户端依赖），静态 import 会把它们带进
+ * 任何静态可达组件的图，故这里改成 `import()`：第一次拿到非空 markdown 才下载，首帧返回空串。stale 守卫必要（规范 16 §16.2.4.34）：下载期间 `text` 变了时旧一轮
+ * 结果不许落地。判据 `scripts/check-barrel-heavy-deps.cjs` 拒绝静态 import 回它。
  */
 import { useEffect, useState } from "react";
 

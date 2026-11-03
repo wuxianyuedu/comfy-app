@@ -1,12 +1,6 @@
-// 选中节点 → 相关连线高亮：接线层集成测试。
-//
-// 纯判据已由 flow-focus-endpoints.test.ts 覆盖；这里验的是「读 React Flow 内部
-// 选中事实源 → 写回 edges」这条接线本身，它是本功能唯一真正的风险点：
-//   1. 选中事实源取的是 `nodeLookup[*].internals.userNode.selected`（而不是业务侧
-//      nodes 数组）—— 取错了就永远算不出选中项，功能静默失效；
-//   2. 相关连线带关注级别，无关连线只带「画布有选中项」开关（渲染层据此压暗）；
-//   3. 取消选中时两样标记都必须清干净。这条是实测发现的真 bug：`focusActive`
-//      残留曾让取消选中后全图仍然发灰。
+// 选中节点 → 相关连线高亮：接线层集成测试（纯判据在 flow-focus-endpoints.test.ts）。
+// 验「读 React Flow 选中事实源 → 写回 edges」：取 `nodeLookup[*].internals.userNode.selected`，
+// 相关线带关注级别、无关线只带「有选中项」开关；取消选中必须清干净（`focusActive` 残留曾导致全图发灰）。
 
 import { useCallback, useEffect, useRef } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";

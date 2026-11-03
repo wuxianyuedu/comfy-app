@@ -11,46 +11,11 @@ import {
 } from "~/components/ui/empty";
 import { cn } from "~/lib/utils";
 
-/**
- * EmptyState —— 空状态占位（**全库唯一实现**，规范 16 §16.2.4；
- * 本次 PR-2 起改为 `~/components/ui/empty` 官方基元的薄封装）。
- *
- * **合并的三份历史**：此前「空态」有三份并行实现 —— `ui/empty-state.tsx`
- * （居中虚线卡片）、`studio/ui/EmptyState.tsx`（图标方块 + 警告色 + min-h
- * 变体）、`DynamicWorkflowForm/sections/EmptyStateHint.tsx`（行内小提示条）。
- * props 与形态都不一样，「改一处空态样式」要改三处。第一次收口按**取并集**
- * 收敛为单一 `EmptyState` 组件、三档 `variant`：`page` / `hint` / `error`
- * （第四档 `panel` 由这次治理新加，见下）。
- *
- * **P67 治理**（§16.2.3 / §12.18）：`page` / `error` 两档的骨架（居中 +
- * flex-col + 图标 + 标题 + 说明 + 操作）本来就是 shadcn 官方 `Empty` 系
- * 的形态；此前 `pnpm dlx shadcn@latest add empty` 未装、只能自绘 `<div>`。
- * 本 PR 装上基元之后，两档改用 `Empty + EmptyHeader + EmptyMedia +
- * EmptyTitle + EmptyDescription + EmptyContent`，尺寸/圆角/边框色由
- * `className` 传（对齐 shadcn `styling.md`：className for layout）。
- *
- * `hint` 档**刻意保留自绘 `<div>`**：它是「行内小提示条」，形态与
- * `Empty` 的「居中虚线卡片」不同族（前者是 inline paragraph-like block、
- * 挂在按钮组或段落区里说「这里为什么是空的、下一步做什么」），硬套 `Empty`
- * 反而丢语义。但本文件已 `import Empty`，P67 d 子判据短路透零、不再计入。
- *
- * `panel` 档是**面板里铺满居中的轻量占位**（日志面板 / 控制台输出 / CLI 原文
- * 模态 / 消息中心那一族 —— 收口前 6 处调用点各抄一份同样的类名）。它同样
- * 自绘 `<div>`，理由与 `hint` 同源且更硬：`Empty` 的骨架自带 `p-6` /
- * `rounded-xl` / `border-dashed` / `text-balance`，而这一档要的正是
- * **不带框、不带内距、不改换行**的铺满态 —— 套上去要覆写的类比它带来的还多，
- * 而 `text-balance` 会把长提示（「运行生成后此处会显示执行步骤日志」那一类）
- * 的折行改形，那是改外观、不是收口。
- *
- * 弱化程度由这一档自己定：图标 30% 透明、文案 `text-sm` + `text-ink-fainter`。
- * 需要更松的间距或更大图标的调用点走 `className` / 传已渲染节点（`cn()` 让
- * 调用处取胜），**不要再抄整串类名**（`tests/design-md-contract-sync.test.ts`
- * 的「只许有一个出处」判据按同一枚 class 字符串全命中抓）。
- *
- * **API 完全不变**：`title` / `description` / `icon` / `variant` /
- * `action` / `minHeightClass` / `className`；两处调用点
- * （`DetailHeader.tsx` / `WorkflowLibraryList.tsx` 等）零改动。
- */
+/** EmptyState —— 空状态占位（全库唯一实现，规范 16 §16.2.4；PR-2 起改为 `~/components/ui/empty` 官方基元的薄封装）。
+ * 合并三份历史实现（居中虚线卡片 / 图标方块 + 警告色 + min-h / 行内小提示条）为单组件，四档 variant：page / error / hint / panel（panel 为本次治理新增）。
+ * P67 治理（§16.2.3 / §12.18）：page / error 两档本就是 shadcn `Empty` 系形态（此前基元未装、只能自绘 `<div>`），现改用 Empty + Header + Media + Title + Description + Content，尺寸/圆角/边框色由 className 传（对齐 shadcn styling.md）。
+ * hint 与 panel 刻意保留自绘 `<div>`：hint 是行内提示条，与 `Empty` 的居中虚线卡片不同族，硬套会丢语义；panel 要的是不带框、不带内距、不改换行的铺满态，而 `Empty` 自带 p-6 / rounded-xl / border-dashed / text-balance（text-balance 会把长提示折行改形，是改外观不是收口）。弱化程度由该档自定（图标 30% 透明、文案 text-sm + text-ink-fainter），间距/图标走 className 或传已渲染节点，不要再抄整串类名（`tests/design-md-contract-sync.test.ts` 按同一 class 串全命中抓）。
+ * API 完全不变：title / description / icon / variant / action / minHeightClass / className，现有调用点零改动。 */
 export type EmptyStateVariant = "page" | "error" | "hint" | "panel";
 
 export type EmptyStateProps = {

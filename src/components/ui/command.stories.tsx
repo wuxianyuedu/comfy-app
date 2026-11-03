@@ -15,22 +15,9 @@ import {
   CommandShortcut,
 } from "~/components/ui/command";
 
-/**
- * `ui/command` 是 cmdk 的封装（**命令面板**：搜索 + 键盘上下选 + 回车执行）。
- *
- * 这一族有一条**结构上的硬约束**，只有打开面板才暴露：
- * `CommandInput` / `CommandList` / `CommandItem` / `CommandGroup` /
- * `CommandEmpty` **全都从 `<Command>` 的 context 里读 store**
- * （cmdk 的 `useCmdk` 直接解引用 `store.subscribe`）。所以
- * `CommandDialog` 内部必须套一层 `<Command>` —— 这条曾经漏过，表现是
- * 「打开面板就抛 `Cannot read properties of undefined (reading 'subscribe')`」，
- * 而**关闭时看不出来**（base-ui 的 `Dialog.Portal` 不渲染子节点）。
- * 因此下面每条 story 都先把面板真的打开一次。
- *
- * 另一处只有渲染才看得出：`CommandItem` 的勾选图标与 `CommandShortcut` 是
- * **互斥**的（`group-has-data-[slot=command-shortcut]/command-item:hidden`）——
- * 同一项既有快捷键又是勾选项时，只会显示快捷键。
- */
+/** `ui/command` 是 cmdk 的封装（命令面板：搜索 + 键盘上下选 + 回车执行）。
+ * 结构硬约束：`CommandInput` / `CommandList` / `CommandItem` / `CommandGroup` / `CommandEmpty` 都从 `<Command>` 的 context 读 store（cmdk 的 `useCmdk` 直接解引用 `store.subscribe`），所以 `CommandDialog` 内部必须套一层 `<Command>`；漏了打开时抛 `Cannot read properties of undefined (reading 'subscribe')`，关闭时看不出来（`Dialog.Portal` 不渲染子节点）——故每条 story 都先真的打开面板。
+ * `CommandItem` 的勾选图标与 `CommandShortcut` 互斥（`group-has-data-[slot=command-shortcut]/command-item:hidden`）：同一项既有快捷键又是勾选项时只显示快捷键。 */
 const meta = {
   title: "UI/Command",
   component: Command,

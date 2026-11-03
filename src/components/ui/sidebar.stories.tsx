@@ -27,37 +27,12 @@ import {
 } from "~/components/ui/sidebar";
 
 /**
- * `ui/sidebar` 是**应用左轨**（导航栏）的整套基元 —— 全库最大的一件，
- * 也是唯一一件「自己不只是一块 UI」的：它带**一套编排纪律**。
- *
- * ## 要看的四件事
- *
- * 1. **`collapsible` 三档**：`offcanvas`（整条滑走）/ `icon`（收成图标轨，
- *    `size-8` 且 `SidebarGroupLabel` 会 `-mt-8 opacity-0` 隐掉）/
- *    `none`（永远铺着）。三档之间的差别只有真收起才看得出 ——
- *    点左上角的触发钮，或按 **⌘/Ctrl+B**。
- * 2. **自动收起是「纪律」而不是「用户偏好」**：窗口跨过
- *    `NAV_AUTO_COLLAPSE_MAX_PX` 时 `resolveRailCollapsed` 会把轨收成图标档，
- *    而**用户自己点**的那一档记在 `choice`（连同当时的跨越次数）里 ——
- *    再跨一次阈值即作废，所以生效态是纯推导、不需要 effect 清理标记。
- *    这也决定了 cookie 只写「用户表态」的那一次。
- * 3. **`SidebarMenuButton` 的两根轴**（`variant` / `size`），
- *    以及 `tooltip` —— 它只在**收起且非移动端**时才显示
- *    （`hidden={state !== "collapsed" || isMobile}`）。
- * 4. **`SidebarInset`**：主内容区的那一列（`main`），与左轨是兄弟 ——
- *    它带 `peer-data-[variant=inset]` 一族，改左轨的 `variant` 会影响它。
- *
- * ## 宽度从哪来
- *
- * 三个宽度（展开 / 收起 / 移动端）全部来自 `~/lib/layout-budget`，本文件不写
- * 字面量 —— 它们同时是「左轨何时该自动收起」那笔账的加数
- * （`layout-budget.test.ts` 反算钉住）。
+ * `ui/sidebar` 是应用左轨（导航栏）的整套基元，也是唯一带编排纪律的一件。要看四件事：① `collapsible` 三档（`offcanvas` 滑走 / `icon` 收成 `size-8` 图标轨且 `SidebarGroupLabel` 隐掉 / `none` 常驻），收起才看得出；② 过 `NAV_AUTO_COLLAPSE_MAX_PX` 自动收成图标档，用户表态（连同跨越次数）再跨阈值即作废，生效态纯推导。
+ * ③ `SidebarMenuButton` 两轴与 `tooltip`（仅收起且非移动端）；④ `SidebarInset` 与左轨是兄弟，受 `peer-data-[variant=inset]` 影响。三个宽度全部来自 `~/lib/layout-budget`，本文件不写字面量。
  */
 /**
- * 两根轴（`variant` / `size`）住在 `SidebarMenuButton` 上，而 `Sidebar` 本体
- * 的轴是 `collapsible` / `variant` / `side` —— 同名轴在两处是**不同的事**。
- * `argTypes` 是「哪个清单属于哪个轴」的显式链接，所以这两条挂在
- * `SidebarMenuButton` 那一组（那正是它们真正生效的地方）。
+ * 两根轴（`variant` / `size`）住在 `SidebarMenuButton` 上，而 `Sidebar` 本体的轴是 `collapsible` / `variant` / `side` —— 同名轴在两处是不同的事。
+ * `argTypes` 挂在真正生效的 `SidebarMenuButton` 那一组。
  */
 type SidebarMenuButtonVariant = NonNullable<
   React.ComponentProps<typeof SidebarMenuButton>["variant"]

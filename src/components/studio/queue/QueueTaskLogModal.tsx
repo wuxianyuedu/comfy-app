@@ -1,21 +1,10 @@
 "use client";
 
-/**
- * QueueTaskLogModal —— 队列页「执行日志」弹窗。
- *
- * 从「队列与运行」的任意一行点「日志」打开：按 taskId 直连
- * `/api/tasks/:id/stream`（`useTaskLogStream`），服务端回放全量历史再增量
- * 推送 —— 在跑的实时跟、排队的看着它开跑、已结束的回放完整日志。
- *
- * 与工作流库的 `WorkflowRunLogModal` 同款交互（居中大弹窗 + 级别筛选 +
- * 自动滚动 + 加宽/收窄），时间线主体收在共享的 `logs/TaskLogTimeline`；
- * 差异只在头部：队列行的任务不在 workflow-run-store 登记表里（没有
- * workflowId），运行态取自流内的 progress / 终态帧，而不是那个 store。
- *
- * view 层只渲染（§17）：订阅在 `queue/hooks/use-task-log-stream.ts`，
- * 取消复用画布的 `useCancelTask`，「查看完整输出」复用工作流库的
- * `WorkflowRunRawCliModal`。
- */
+/** QueueTaskLogModal —— 队列页「执行日志」弹窗，从任意一行点「日志」打开。
+ * 按 taskId 直连 /api/tasks/:id/stream（useTaskLogStream）：服务端回放全量历史再增量推送 ——
+ * 在跑实时跟、排队看开跑、已结束回放完整日志。
+ * 交互同 WorkflowRunLogModal（居中大弹窗 + 级别筛选 + 自动滚动 + 加宽/收窄），时间线收在 logs/TaskLogTimeline；
+ * 差异在头部：队列任务不在 workflow-run-store 登记表（无 workflowId），运行态取自流内 progress/终态帧。本文件只渲染。 */
 
 import { useState } from "react";
 import { FileText, X } from "lucide-react";

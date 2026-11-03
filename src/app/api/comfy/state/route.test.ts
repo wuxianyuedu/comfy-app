@@ -1,19 +1,11 @@
 /**
- * `GET /api/comfy/state` —— 设置页那条「运行态变了」的长轮询通道。
- *
- * 路由本身只做两件事：把 `?since=` 翻成「从哪个纪元之后开始等」、把等待结果
- * 翻成 HTTP 帧。这里守的是**分工与三条出口**：
- *   · 有更新 → 200 + 那一次变化的载荷；
- *   · 窗口内没有更新 → 204（空体，客户端据此再发一轮，不是错误）；
- *   · 不带 `since` → 立刻拿到当前快照（首次调用 / 错过一次变化是同一段代码）；
- *   · `force-dynamic` 不能掉 —— 长轮询一旦被缓存就成了「永远回同一个答案」。
+ * `GET /api/comfy/state` —— 设置页「运行态变了」的长轮询通道（路由只翻 `?since=` 与 HTTP 帧）。
+ * 出口：有更新 → 200 + 载荷；窗口内无更新 → 204（客户端据此再发一轮）；不带 `since` → 立刻回当前快照。
+ * `force-dynamic` 不能掉（长轮询被缓存就成了永远回同一个答案）。
  */
 import { beforeEach, describe, expect, it } from "vitest";
 
-import {
-  noteComfyStateChange,
-  resetComfyStateWatchForTest,
-} from "~/lib/comfyui/state-watch";
+import { noteComfyStateChange, resetComfyStateWatchForTest } from "~/lib/comfyui/state-watch";
 
 beforeEach(() => {
   resetComfyStateWatchForTest();

@@ -1,13 +1,7 @@
 // @vitest-environment jsdom
 /**
- * `useExternalAction` —— 「触发一次外部动作」的执行态样板
- * （规范 16 §16.2.4.25）。
- *
- * 用例钉四处收口前**各判各的**地方：
- *  ① 结果字段差异（`ok` / `triggered`）不该漏到调用处；
- *  ② 空目标**在发起 IO 之前**拦下（不是把空串发给服务端吃 zod 的英文报错）；
- *  ③ 失败路径用 `errorMessage` 兜底成可读文案（硬规则 4）；
- *  ④ 连点两下**只发一次**（`busy` 是同步 ref，状态提交晚一拍挡不住）。
+ * `useExternalAction` —— 「触发一次外部动作」的执行态样板（规范 16 §16.2.4.25）。
+ * 用例钉四处收口前各判各的：结果字段差异（`ok` / `triggered`）不漏到调用处；空目标在发起 IO 前拦下；失败用 `errorMessage` 兜底成可读文案（硬规则 4）；连点只发一次（`busy` 是同步 ref）。
  */
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";

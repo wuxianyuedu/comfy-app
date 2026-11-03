@@ -78,13 +78,9 @@ describe("MaterialLibraryPanel", () => {
 });
 
 /**
- * 作用域切换（本项目 / 跨项目）的形态回归（ISSUE #1925 第三批收口）。
- *
- * 它此前是手搓的 `Button variant="ghost"` + 下划线三元：选中给
- * `border-b-2 border-accent`、**未选中档根本没写那条边框** —— 未选中的那一枚
- * 整体比选中的矮 2px，切来切去文字基线上下跳。这与
- * `project-canvas/HistoryPanel` 的作用域切换**逐字同形**（同一处缺陷的另一份），
- * 现在同样交给 `ui/tabs` 的 `line` 档：两枚同高，选中由 `data-active` 驱动。
+ * 作用域切换（本项目 / 跨项目）的形态回归（ISSUE #1925）。
+ * 此前选中给边框、未选中没写，未选中那一枚比选中矮 2px，切换时文字基线上下跳（与
+ * HistoryPanel 同形）。现在交给 `ui/tabs` 的 `line` 档：两枚同高，选中由 `data-active` 驱动。
  */
 describe("MaterialLibraryPanel 作用域切换（ISSUE #1925）", () => {
   beforeEach(() => {

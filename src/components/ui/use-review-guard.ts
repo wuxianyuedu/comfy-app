@@ -1,11 +1,9 @@
 "use client";
 
 // 「AI 评审」类在途异步的作废守卫 + 就地错误文案（§16.2.4.34 的复用形，#2918 收尾批提取）。
-//
-// 镜头 / 角色卡 / 剧本三份评审 hook 共享同一内核：弹窗可能在 LLM 返回前被关闭或切换目标，
-// 那一轮结果（无论成功失败）都不该落到界面上 —— 每次发起评审换一把 `beginStaleRun` 守卫，
-// 卸载时作废当前这把；失败统一经守卫写就地错误文案。成功路径各不相同，留在各 hook 自己
-// `guard.commit`。
+// 镜头 / 角色卡 / 剧本三份评审 hook 共享同一内核：弹窗可能在 LLM 返回前被关闭或切换目标，那一轮
+// 结果（无论成败）都不该落到界面上 —— 每次发起换一把 `beginStaleRun` 守卫，卸载时作废当前这把；
+// 失败统一经守卫写就地错误文案，成功路径各不相同、留在各 hook 自己 `guard.commit`。
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { beginStaleRun, type StaleRunGuard } from "~/lib/stale-run";

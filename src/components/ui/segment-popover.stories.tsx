@@ -13,19 +13,9 @@ import {
   SIZE_RATIO_PRESETS,
 } from "~/lib/media/size-presets";
 
-/**
- * `MultiSegmentPopover` 是「一组参数一次选完」的下拉面板（比例 / 像素 / 倍数）。
- *
- * 和 `OptionListPopover` 一样，它**没有数据依赖** —— `sections` 是纯数据、
- * 回调由调用处给。此前没 story 的原因只有一条：`triggerContent` / `opt.render` /
- * `footer` 都是 ReactNode，Args 面板装不下。按注入层的口径，那几项由 story 的
- * `render` 给。
- *
- * 要看的是「分段内单选」这件事：每一段内部互斥、段与段并排；分段下的**子分组**
- * 各占一行（分辨率与百万像素是两族，混在一行会看不出它们的单位不同）。
- * 数据用真的预设表（`~/lib/media/size-presets`）而不是手抄一份 —— 抄一份就等于
- * 让 story 与真机漂移。
- */
+/** `MultiSegmentPopover` 是「一组参数一次选完」的下拉面板（比例 / 像素 / 倍数），无数据依赖：`sections` 纯数据、回调由调用处给；
+ * `triggerContent` / `opt.render` / `footer` 是 ReactNode，Args 面板装不下，由 story 的 `render` 给。要看「分段内单选」：
+ * 段内互斥、段间并排，子分组各占一行。数据用真的预设表（`~/lib/media/size-presets`）而非手抄 —— 抄一份会与真机漂移。 */
 const RATIO_OPTIONS = SIZE_RATIO_PRESETS.map((preset) => ({
   value: preset.label,
   label: shortRatioLabel(preset.label),

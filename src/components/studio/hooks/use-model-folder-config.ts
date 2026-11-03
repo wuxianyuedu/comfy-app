@@ -1,11 +1,8 @@
 "use client";
 
-// ── 模型目录配置弹层：逻辑层（规范 17 §17.2 第②层）──────────────────────────
-// 承载目录列表拉取、启用/停用/删除配置与重新扫描。ModelConfigModal 视图只消费
-// 本 hook，不再出现 `trpc.model.*` 的 options 调用。
-//
-// 三个写操作（toggle / add / delete）都走同一个 runMutate 包装：
-// 失败统一落到 err，结束后统一 reload——原组件就是这个语义，收敛后不会再有
+// ── 模型目录配置弹层：逻辑层（规范 17 §17.2 第②层）
+// 承载目录列表拉取、启用/停用/删除配置与重新扫描；视图只消费本 hook，不再直呼 options。
+// 三个写操作都走同一个 runMutate 包装：失败统一落 err，结束后统一 reload，不会再有
 // 「某个分支忘了刷新」的漏网之鱼。
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -60,12 +57,9 @@ export function useModelFolderConfig(): ModelFolderConfigController {
   const syncMut = useMutation(trpc.model.sync.mutationOptions());
 
   /**
-   * 拉取目录列表。**注意这里不清 err**：
-   * 原实现在 load() 开头 `setErr(null)`，而每个写操作（toggle/add/remove）都是
-   * 「失败 → setErr → await load()」——错误刚写进去就被随后的 load 清掉了，
-   * 用户看到的提示条闪一下就没（与 §17.5.4 素材库那条同源）。
-   * 现改为：err 由**发起动作的一方**在开始时清除；load 只在**这一次请求真失败**时写 err，
-   * 成功路径不碰它。
+   * 拉取目录列表。**注意这里不清 err**：原来是 load() 开头 `setErr(null)`，而每个写操作都是
+   * 「失败 → setErr → await load()」，错误刚写进去就被清掉（与 §17.5.4 素材库同源）。现改为
+   * err 由发起动作方开始时清除，load 只在这一次请求真失败时写 err，成功路径不碰它。
    */
   const load = useCallback(async () => {
     setLoading(true);
@@ -98,21 +92,11 @@ export function useModelFolderConfig(): ModelFolderConfigController {
     };
   }, []);
 
-  /* 列表与连接状态**直接从查询派生**，不再镜像进 local state。
-   *
-   * 原来是一段「渲染期同步」：`if (configQ.data && configQ.data !== prevCfgData)` 才把
-   * `folders` / `comfyReachable` 写回状态。而弹层随开随卸载（`{c.configOpen && <ModelConfigModal/>}`）、
-   * QueryClient 是模块级单例（`src/trpc/query-client.ts`：staleTime 30s、gcTime 默认 5min）
-   * ⇒ **第二次挂载的首帧就带着缓存数据**，`prevCfgData` 的初值即那份数据 ⇒ 同步永不发生；
-   * 随后 `refetch()` 拿回逐字相同的载荷，react-query 的结构共享（`replaceEqualDeep`）连引用都不换
-   * ⇒ 仍然不同步。实测后果：第二次打开弹层显示「● ComfyUI 已连接 · 共 0 个目录」，
-   * 而 `comfyReachable` 停在 `useState(true)` 那个乐观默认值上 —— 没配 ComfyUI 路径的机器上
-   * 服务端明确回了不可达，界面仍报已连接；同一格还会把真有目录的实例显示成空列表。
-   *
-   * 派生之后没有「答案到了却没落到状态」这一格：`comfyReachable` 只在服务端说可达时才为真，
-   * 「还没拿到答案」表现为 false（视图用 `loading` 把它与「确认不可达」分开说）。
-   * 空列表走模块级常量 `EMPTY_FOLDERS`：字面量 `[]` 每次渲染都是新引用，会把下面
-   * `splitFolders` 的 useMemo 打成「每渲染必算」（exhaustive-deps 当场警告）。 */
+  /* 列表与连接状态**直接从查询派生**，不再镜像进 local state。原来的「渲染期同步」
+   * 在弹层第二次挂载时不会发生：QueryClient 是模块级单例（staleTime 30s），首帧就带缓存，
+   * `prevCfgData` 初值即当前数据；refetch 拿回逐字相同载荷，结构共享连引用也不换。
+   * 后果是 `comfyReachable` 停在 `useState(true)` 乐观默认值上（服务端已回不可达）。
+   * 派生后「答案到了却没落到状态」这一格消失；空列表用 `EMPTY_FOLDERS` 避免 useMemo 每渲染必算。 */
   const folders = configQ.data?.folders ?? EMPTY_FOLDERS;
   const comfyReachable = Boolean(configQ.data?.comfyReachable);
 

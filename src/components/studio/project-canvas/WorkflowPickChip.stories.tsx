@@ -6,18 +6,9 @@ import {
 } from "~/components/studio/project-canvas/WorkflowPickChip";
 
 /**
- * 画布工作流节点上的「工作流选择」chip。
- *
- * 纯 props（`value` / `options` / `onSelect` / `emptyHint` / `loading`），但这三档
- * 的状态**长得都很像「一个小按钮」**，而含义完全不同 —— 这正是这份 story 要摆的：
- *
- *   · **已选中**：触发器显示工作流名；
- *   · **未选中**：「选择工作流…」；
- *   · **加载中**：同一个未选中形态，但文字换成「加载中…」且下拉里走
- *     `PageLoading`（**不许把加载态渲染成空态** —— 那条差异只有并排看才分得清）。
- *
- * 选项行前缀的圆点按 `sourcePath` 分叉（有本机路径走 `status-online`、否则
- * `primary-strong`）——所以下面同时给了本机工作流与在线工作流两种选项。
+ * 画布工作流节点上的「工作流选择」chip（纯 props）。
+ * 已选中显示工作流名 / 未选中「选择工作流…」/ 加载中同形态但走 `PageLoading`
+ * （不许把加载态渲染成空态）。选项行圆点按 `sourcePath` 分叉（本机 `status-online`）。
  */
 const OPTIONS: Array<WorkflowPickOption> = [
   {

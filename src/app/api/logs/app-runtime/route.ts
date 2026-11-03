@@ -3,16 +3,9 @@ import { createAppRuntimeLogger } from "~/lib/log/app-runtime-log";
 import { RUNTIME_LOG_MESSAGE_MAX, clampText } from "~/lib/text-clamp";
 
 /**
- * 应用运行日志写入端点（客户端 → 服务端）。
- * =========================================================
- * `src/lib/log/app-runtime-log.ts` 是 Node-only 模块（顶层 import node:fs/node:path），
- * 只能由服务端代码 import。客户端逻辑层（如设置页 hook）需要把「静默失败」
- * 补记进 app-runtime.log 供日志面板轮询展示时，必须经此端点转交服务端写入，
- * 而非直接 import 该模块（否则 Turbopack 会把 node:fs 静态打进客户端 bundle，
- * 编译报 “does not support external modules (request: node:fs)”，见 ISSUE #282）。
- *
- * 仅接受有限字段，避免把任意 payload 落盘（对齐规范 07 §7.11/§12.5 埋点纪律）。
- * 写入失败绝不阻塞业务主流程（服务端 logger 内部已 try/catch）。
+ * 应用运行日志写入端点（客户端 → 服务端）：`app-runtime-log` 是 Node-only 模块，客户端必须经此端点转交写入，
+ * 直接 import 会让 Turbopack 把 node:fs 静态打进客户端 bundle（ISSUE #282）。
+ * 仅接受白名单字段（对齐规范 07 §7.11/§12.5）；写入失败绝不阻塞业务主流程。
  */
 
 /** 命名空间白名单：客户端可用的日志命名空间（防止任意注入）。 */
@@ -22,11 +15,8 @@ const ALLOWED_NS = new Set(["settings", "app"]);
 const ALLOWED_LEVEL = new Set<"info" | "warn" | "error">(["info", "warn", "error"]);
 
 /**
- * 单条消息最大长度（截断，防止异常 payload 撑爆日志文件）。
- *
- * 取值来自 `~/lib/text-clamp` 的 {@link RUNTIME_LOG_MESSAGE_MAX}（受
- * **日志文件体积**约束，见 §16.2.4.48）。这里**不加省略标记** —— 与既行为
- * 一致（原文是拼在行首的时间戳行内，标记会被读成日志内容的一部分）。
+ * 单条消息最大长度（截断防爆日志文件；取值受日志体积约束，§16.2.4.48）。
+ * 不加省略标记 —— 原文拼在行首时间戳行内，标记会被读成日志内容的一部分。
  */
 const MAX_MSG_LEN = RUNTIME_LOG_MESSAGE_MAX;
 

@@ -1,30 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
-import {
-  EMBEDDED_SCROLL_MAX_HEIGHT,
-  OVERLAY_MAX_HEIGHT,
-} from "~/components/ui/overlay-max-height";
+import { EMBEDDED_SCROLL_MAX_HEIGHT, OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 
-/**
- * `ui/overlay-max-height` 是浮层**最大高**两档的唯一定义处，对外面就是这两个串 ——
- * 所以这份 story 摊开的也是这两个串，外加一节能亲手把窗口拉高拉低的实测。
- *
- * 为什么值得单独一份（与 `dialog-overlay.stories.tsx` 同判据）：它是
- * 「删掉 JSX 还能跑的判据」（规范 17 §17.2 第①层），可以脱离 React 单测；
- * 而它**为什么不做成 `@theme` 的 `--max-height-*`** 这件事只有把串摆出来才讲得清：
- *
- * > 实测 `cn("max-h-[85vh]", "max-h-overlay")` **两条都留** —— tailwind-merge
- * > 认不出自定义名字属于哪一族，「谁覆写谁」就交给 Tailwind 的输出顺序。
- * > 那是规范 16 §16.2.4.12 那次「加宽按钮点了没反应」的同族事故。
- * > 存 arbitrary 串则同族冲突照常生效（同族的两枚 max-h 任意值只留后一条）。
- *
- * 两档是怎么量的（不是凑的）：85vh 是居中模态 / 图片看全 / 弹层面板那 6 处的事实档，
- * `78vh` 与 `90vh` 各一处是同一角色上的漂移值（差那 5–7 个百分点没有任何一处文档说过
- * 为什么）→ 并入；70vh 三处是**另一个角色**（页面里自滚动的卡片区，上限要留呼吸）。
- * 另有两处逐处判定过、刻意不收：JSON 面板 positioner 的 60vh（只有一个消费者，为它立一档
- * 就是「为以后可能用得上」留在库里）、`ConsoleView` 左栏的 `max-h-[45%]`（百分比相对父容器
- * 而非视口，量的不是同一件事）。
- */
+/** `ui/overlay-max-height` 是浮层最大高两档的唯一定义处，对外面就是这两个串 —— 所以这份 story 摊开的也是这两个串，外加一节能亲手把窗口拉高拉低的实测。
+ * 为什么值得单独一份（与 `dialog-overlay.stories.tsx` 同判据）：它是「删掉 JSX 还能跑的判据」（规范 17 §17.2 第①层），可以脱离 React 单测；而它为什么不做成 `@theme` 的 `--max-height-*`，只有把串摆出来才讲得清 —— 实测 `cn("max-h-[85vh]", "max-h-overlay")` 两条都留：tailwind-merge 认不出自定义名字属于哪一族，「谁覆写谁」就交给 Tailwind 的输出顺序，那是规范 16 §16.2.4.12 那次「加宽按钮点了没反应」的同族事故；存 arbitrary 串则同族冲突照常生效（同族的两枚 max-h 任意值只留后一条）。
+ * 两档怎么量的（不是凑的）：85vh 是居中模态 / 图片看全 / 弹层面板那 6 处的事实档，`78vh` 与 `90vh` 各一处是同一角色上的漂移值（差那 5–7 个百分点没有任何文档说过为什么）→ 并入；70vh 三处是另一个角色（页面里自滚动的卡片区，上限要留呼吸）。
+ * 另有两处逐处判定过、刻意不收：JSON 面板 positioner 的 60vh（只有一个消费者，为它立一档就是「为以后可能用得上」留在库里）、`ConsoleView` 左栏的 `max-h-[45%]`（百分比相对父容器而非视口，量的不是同一件事）。 */
 const meta = {
   title: "UI/OverlayMaxHeight",
   component: CapDemo,
@@ -80,10 +61,9 @@ function CapDemo() {
         </div>
       </div>
       <p className="text-ink-muted text-xs">
-        真形态（谁在什么场景取哪一档）见 <code>Dialog</code> /{" "}
-        <code>Sheet</code> 与 <code>Studio/ModelLibrary</code> 那批
-        story；调用点一律 import 这两个常量，别在调用处再写字面量 —— 契约
-        §Shapes 第 ⑦ 条按具名出处放行， 其余落点直接红。
+        真形态（谁在什么场景取哪一档）见 <code>Dialog</code> / <code>Sheet</code> 与{" "}
+        <code>Studio/ModelLibrary</code> 那批 story；调用点一律 import
+        这两个常量，别在调用处再写字面量 —— 契约 §Shapes 第 ⑦ 条按具名出处放行， 其余落点直接红。
       </p>
     </div>
   );

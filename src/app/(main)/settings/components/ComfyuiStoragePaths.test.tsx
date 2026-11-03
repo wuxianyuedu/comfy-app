@@ -1,9 +1,7 @@
 /**
  * `ComfyuiStoragePaths` 的可见行为（设置页「实例目录（只读）」区块）。
- *
- * 断言对齐用户能看到的四件事：六组标签都在、路径按斜杠统一显示、覆盖来源与
- * 「目录不存在」有标注、共享组为空时说「未配置共享目录」。非桌面实例
- * （storage 为 null）整块不渲染 —— 那是「不适用」而不是「空目录」。
+ * 断言：六组标签齐全、路径斜杠统一、覆盖来源与「目录不存在」有标注、共享组为
+ * 空时说「未配置共享目录」；非桌面实例（storage 为 null）整块不渲染。
  */
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";

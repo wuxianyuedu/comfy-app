@@ -1,21 +1,9 @@
 "use client";
 
 /**
- * 设置页「加载失败判定与补记日志」的 sub-hook（`use-settings-page` 的拆分件）。
- *
- * 「任一查询失败」与「两份配置都没拿到」是两件事。此前 `hasError` 只按
- * 「两份数据都为空」判定，于是「setting.get 成功、llm.configGet 失败」时：
- * 失败为真、草稿却仍为空 → 既不满足 hasError、也不满足 isInitialLoad，
- * 容器一路落到那句没有重试、没有原因、也没有日志指引的「配置数据未就绪」，
- * 用户被冻在死胡同里（正是 ISSUE #304 截图的现象）。现在把两个语义拆开：
- *   - `queryFailed`：任一查询 isError（错误视图与补记日志的判据）；
- *   - `hasError`：queryFailed **且** 草稿未就绪（容器据此走降级视图）。
- * 「一半成功一半失败」时草稿同样为空，因此也会落到错误视图，拿到重试与
- * 日志出口，而不是死角文案。
- *
- * 补记日志：加载失败只体现在降级 UI，不经过 console / unhandledrejection，
- * 全局错误钩子收不到——不主动补记的话，用户遇到失败时面板里什么也没有。
- * 同一错误文案只记一次（ref 去重；重试后仍是同一错误不刷屏）。
+ * 设置页「加载失败判定与补记日志」的 sub-hook（ISSUE #304）。
+ * `queryFailed` = 任一查询 isError；`hasError` = queryFailed 且草稿未就绪 —— 只按「两份数据都为空」判时，
+ * 「一半成功一半失败」会落到没有重试的死角文案。加载失败不过全局错误钩子，须主动补记，同文案 ref 去重只记一次。
  */
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
@@ -29,17 +17,9 @@ export function useSettingsLoadStatus() {
   const settingsQ = useQuery(trpc.setting.get.queryOptions());
   const llmQ = useQuery(trpc.llm.configGet.queryOptions());
 
-  /* ── 加载失败判定 ────────────────────────────────────────────
-   * 「任一查询失败」与「两份配置都没拿到」是两件事。此前 `hasError` 只按
-   * 「两份数据都为空」判定，于是「setting.get 成功、llm.configGet 失败」时：
-   * 失败为真、草稿却仍为空 → 既不满足 hasError、也不满足 isInitialLoad，
-   * 容器一路落到那句没有重试、没有原因、也没有日志指引的「配置数据未就绪」，
-   * 用户被冻在死胡同里（正是 ISSUE #304 截图的现象）。
-   * 现在把两个语义拆开：
-   *   - `queryFailed`：任一查询 isError（错误视图与补记日志的判据）；
-   *   - `hasError`：queryFailed **且** 草稿未就绪（容器据此走降级视图）。
-   * 「一半成功一半失败」时草稿同样为空，因此也会落到错误视图，拿到重试与
-   * 日志出口，而不是死角文案。 */
+  /* ── 加载失败判定（ISSUE #304）：「任一查询失败」与「两份都没拿到」是两件事。
+   * `queryFailed` = 任一 isError；`hasError` = queryFailed 且草稿未就绪（此前只按「两份都空」判，
+   * 「一半成功一半失败」会落到没有重试、没有日志指引的死角文案）。 */
   const queryFailed = !!settingsQ.isError || !!llmQ.isError;
   const isInitialLoad = settingsQ.isLoading || llmQ.isLoading;
 

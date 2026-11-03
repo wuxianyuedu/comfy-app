@@ -41,18 +41,11 @@ export function StringTextarea({
       ref={ref}
       rows={1}
       style={{
-        /* `width: 100%` 占住行内 flexbox 给我们的每个像素。
-         * `flex: 1 1 0` + `minHeight: 0` 在 hasSize 路径上接入行的 flex 链
-         *  —— textarea 填满 STRING 行
-         *  剩余的竖向空间（竖向堆叠）。此前这里
-         *  有 `maxHeight: 96`；已移除，因为它会把 12 行
-         *  提示词裁在行的另一半之后，正是用户报的
-         *  「内容不可自适应高度，不铺满可用空间」。
-         * `minWidth: 0` 覆盖默认的 `min-width: auto`，好让
-         *  极宽的提示词行在交叉轴上省略
-         *  而不是把标签顶出屏幕。（标签已单独占一行，此条
-         *  现在无关紧要，但保留作防御。）
-         * `overflowY: "auto"` 让多余内容可滚动。 */
+        /* `width: 100%` 占住行内 flexbox 给我们的每个像素；`flex: 1 1 0` + `minHeight: 0` 在 hasSize 路径上接入行的
+         *  flex 链，让 textarea 填满 STRING 行剩余的竖向空间。此前有 `maxHeight: 96`，已移除 —— 它会把 12 行
+         *  提示词裁在行的另一半，正是用户报的「内容不可自适应高度，不铺满可用空间」。`minWidth: 0` 覆盖默认的
+         *  `min-width: auto`，让极宽的提示词在交叉轴上省略而不是把标签顶出屏幕（标签已单独占一行，保留作防御）。
+         *  `overflowY: "auto"` 让多余内容可滚动。 */
         width: "100%",
         flex: "1 1 0",
         minHeight: 0,

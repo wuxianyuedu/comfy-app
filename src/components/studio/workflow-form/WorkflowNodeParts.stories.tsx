@@ -11,23 +11,11 @@ import {
 } from "~/components/studio/workflow-form/WorkflowNodeParts";
 import type { WorkflowIOEntry } from "~/lib/workflow/workflow-io-types";
 
-/**
- * 工作流节点卡片的共享视觉部件 —— **唯一事实源**。
- *
- * 这两个组件必须从同一份部件取卡片外观：
- *   · 项目画布（`project-canvas/WorkflowNode`）；
- *   · 工作流库的画布节点预览（`workflow-library/WorkflowCanvasNodePreview`）。
- *
- * 此前工作流库手搓了一份「画布样式预览」，宽度（340 vs 380）、状态胶囊、outputs 行、
- * 按钮圆角**全部漂移**。用户诉求是「工作流库里的节点展示与项目画布完全一致」——
- * 所以这组 story 要看的是**同一批部件拼出来的卡片**，而不是某一处的实现。
- *
- * 这里有三个刻意分叉的地方值得一提（它们是部件级 props，不是两处各写一遍）：
- *   · 头部右侧胶囊：画布放**节点序号**，库内放**运行状态**（由调用处给 `right`）；
- *   · outputs 行：库内**没有 React Flow 上下文**，`renderHandle` 不传时只渲染
- *     label + 类型 chip（端点几何只在画布那侧维护）；
- *   · 类型 chip 走 `typeDisplay()`，`*` 是「没声明类型」的出口，不是空串。
- */
+/** 工作流节点卡片共享视觉部件 story —— 唯一事实源。项目画布（project-canvas/WorkflowNode）与
+ * 工作流库预览必须从同一份部件取卡片外观。此前库内手搓预览，宽度 340 vs 380、状态胶囊、
+ * outputs 行、按钮圆角全部漂移；用户要求「工作流库节点展示与项目画布完全一致」。
+ * 三处刻意分叉（部件级 props）：头部胶囊画布给节点序号/库内给运行状态（right）；库内无 React Flow
+ * 上下文时 outputs 只渲染 label+chip；类型 chip 走 typeDisplay()（`*` 是「未声明类型」的出口，不是空串）。 */
 const entry = (
   over: Partial<WorkflowIOEntry> & { ioKey: string },
 ): WorkflowIOEntry & { ioKey: string } => ({
@@ -168,9 +156,8 @@ export const BothSites: Story = {
 
 /**
  * 散件总览：头部 / 分隔线 / 胶囊 / 只读 chip / 底部按钮各自单摆一份。
- *
- * 这些件的差别在小处（胶囊 `h-5 r11`、chip `h-6 r8` 紫描边），单看某一件时
- * 「规格对不对」很难判断；摆在一屏里才看得出它们的**尺寸梯度**是有意的。
+ * 差别在小处（胶囊 h-5 r11、chip h-6 r8 紫描边），单看一件难判「规格对不对」；
+ * 摆在一屏才看得出它们的尺寸梯度是有意的。
  */
 export const IndividualParts: Story = {
   render: () => (

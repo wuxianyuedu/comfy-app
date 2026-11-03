@@ -1,14 +1,7 @@
 /**
- * `GET /api/comfy/queue` —— 底部状态栏「排队 / 在跑」那一格的轮询端点。
- *
- * 路由本身只有一行：把 `collectComfyQueueStatus()` 的结果原样发出去。所以这里守的是
- * **分工**，不是逻辑：
- *   · 「ComfyUI 不可达 → `online: false`」这条降级**归采集器**（`queue-status.server`），
- *     路由不再兜一层 —— 两处都兜就会出现「采集器说离线、路由说正常」的分叉；
- *   · 采集器抛错时路由**不吞**：静默 catch 会把「采集坏了」伪装成「队列是空的」，
- *     违反 AGENTS 硬规则 4（失败路径要有可见出口）；
- *   · `force-dynamic` 不能掉 —— GET 一旦被缓存，排队数与进度就停在第一次的快照上，
- *     而这正是用户盯着一批任务等的那个数字。
+ * `GET /api/comfy/queue` —— 状态栏「排队/在跑」格的轮询端点（路由只有一行，守的是分工）。
+ * 「不可达 → `online:false`」的降级归采集器（`queue-status.server`），路由不再兜（两处都兜会分叉）；
+ * 采集器抛错路由不吞（AGENTS 硬规则 4）；`force-dynamic` 不能掉（被缓存后排队数停在第一次的快照）。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

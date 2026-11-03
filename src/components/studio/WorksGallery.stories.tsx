@@ -4,20 +4,9 @@ import { WorksGallery } from "~/components/studio/WorksGallery";
 import { projectScene, useSeededProjects } from "../../../.storybook/screen-frame";
 
 /**
- * 「项目」页 —— 整屏容器这一族里最省前提的一屏（真读 `canvas-store`、零 tRPC）。
- *
- * 它是整屏容器的**内容侧**样板：这一族的故事里，容器（`AppShell` / 画布 /
- * 工坊）之所以能摆出真形态，靠的就是把这种真视图装进去 —— 而不是塞一个占位
- * `<div>`（见 `.storybook/screen-frame.tsx` 的第一条口径）。
- *
- * 要看的是**项目卡网格在两种数量下的形态**：
- *
- *  · **没有项目**：空态（不是「没渲染」，是这一档的空态卡）；
- *  · **有几张卡**：卡片网格 + hover 删除；卡片上的「最近更新」时间走 `timeAgo()`
- *    的导出（不手抄一句「刚刚」）。
- *
- * 项目一律走真 action（`useSeededProjects` → `createProject()`），因为
- * 「名字撞了怎么办」「有没有置为活跃」都在这套规则里，手拼字面量会跳过它们。
+ * 「项目」页 —— 整屏容器这一族里最省前提的一屏（真读 `canvas-store`、零 tRPC），也是内容侧样板：
+ * 容器要摆出真形态就得把真视图装进去而非占位 `<div>`。看空态卡与几张卡两档（网格 + hover 删除，
+ * 「最近更新」走 `timeAgo()`）。项目走真 action `createProject()`，否则「名字撞了 / 有没有置活跃」都跳过。
  */
 const meta = {
   title: "Studio/WorksGallery",

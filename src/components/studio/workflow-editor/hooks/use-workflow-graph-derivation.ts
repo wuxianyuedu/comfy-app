@@ -1,23 +1,9 @@
 "use client";
 /* ── 编辑器的数据派生管线：detail → 视图元数据 → 图节点 ──
- *
- * 把「工作流详情」加工成画布可以渲染的形状，三步都在这里：
- * ① `useWorkflowDerivedData` —— raw 节点元数据映射、按视图范围取的详情
- *    （RAW / API）、每个节点的输出槽位名；
- * ② `ioDetailMap` —— IO 预览的富化数据源（顶层用服务端产出，子图视图就地派生）；
- * ③ `graphNodes` —— 把图转成流程节点。渲染顺序（从后到前）：
- *    分组框 → 便签注释 → 真实图节点（恒在最上层）。
- * 真实节点的布局策略按优先级：
- *    1. **已保存的坐标**（RAW 导入）：原样使用 ComfyUI 里的坐标，
- *       让画布与用户当初摆的样子完全一致。
- *    2. **自动布局（按 BFS 分层）**：只给了 API JSON 时用。
- * 连线的构建（`buildEdges`）留在编辑器本体——它与 `setEdges` 的同步效应
- * 是同一件事（见 workflow-canvas-io-isolation-guard 的来源判据）。
- *
- * 派生结果还会同步进 viewer / rgthree 两个 store（P2：让 getNodeJson /
- * getNodeView / getBypass 读到实时 detail，等价于旧 Context 每次用新 props
- * 渲染）——发布动作与派生是同一条管线，收在这里。
- */
+ * ① `useWorkflowDerivedData`（raw 元数据、RAW/API 详情、输出槽位名）；② `ioDetailMap`
+ * （IO 预览富化源，子图就地派生）；③ `graphNodes`。渲染从后到前：分组框 → 便签 → 真实
+ * 节点（最上层）。布局优先「已保存坐标」（RAW 导入，与 ComfyUI 一致），否则 BFS 分层。
+ * `buildEdges` 留在编辑器本体（与 `setEdges` 同效）；派生结果同步进 viewer/rgthree store。 */
 import { useEffect, useMemo } from "react";
 
 import { buildInitialNodes } from "../workflow-editor-build-nodes";
@@ -98,14 +84,10 @@ export function useWorkflowGraphDerivation(params: {
       detail,
       overrides: rgthreeApi.getState().overrides,
     });
-    /* `workflowId` / `viewerApi` / `rgthreeApi` 有意不入依赖：
-     *   · 两个 store 是模块级单例（`WorkflowStores` 的 hook 返回稳定引用），
-     *     写进依赖只会让 linter 满意、不改变触发时机；
-     *   · `workflowId` 的取值随 `detail` 一起变 —— loader 就是以它为键取详情，
-     *     所以「detail 变了」已经蕴含「workflowId 到位了」，单独挂它反而会在
-     *     详情尚未落地时先跑一轮，把 store 里的 `workflowId` 提前改成新 id
-     *     而细节还是旧的。
-     * 这条属规范 §13.4「规则静态盲区」那一类：按 id 触发的意图，静态推不出来。 */
+    /* `workflowId` / `viewerApi` / `rgthreeApi` 有意不入依赖：两个 store 的 hook 返回
+     *  稳定引用，写进依赖只让 linter 满意、不改变触发时机；`workflowId` 随 `detail`
+     *  一起变（loader 就以它为键取详情），单独挂它会在详情落地前先跑一轮，把 store 的
+     *  `workflowId` 提前改成新 id 而细节还是旧的。属规范 §13.4「规则静态盲区」。 */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail, rawMetaById, subgraphRawContext, subgraphStackLength]);
 

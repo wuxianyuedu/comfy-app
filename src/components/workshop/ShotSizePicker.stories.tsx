@@ -10,21 +10,9 @@ import {
 import { DEFAULT_SIZE_SPEC } from "~/lib/media/size-presets";
 
 /**
- * 镜头生图 / 生视频的尺寸选择器（比例 + 像素 [+ 倍数]）。
- *
- * 纯 props（`value` / `onChange` / `disabled` / `scene`），但它有**三个调用点**
- *（`ShotStudio` / `CharacterPortraitStudio` / 工作流库的封装测试表单），
- * 所以这组 story 要看的是「同一个控件在两种场景口径下」的形态差异：
- * `scene` 决定尺寸表用哪一份（生图走图片场景、视频走行业标准场景），
- * 因而**同一档 `clarity` 在两个场景下算出的宽高不同**。
- *
- * 与所有尺寸控件的共同口径（`lib/size-presets` 是全项目唯一表达）：
- *   · 「比例 + 分辨率」（1k / 2k / 4k，宽高按场景查表）；
- *   · 「比例 + 百万像素 + 倍数」（1M/2M/4M 之外还有一条自定义步进器）。
- *
- * 摘要那行小字调 `shotSizeSummary()`（组件自己用的那个出口）现算，不手抄
- * `832x1216` 这类数字 —— 手抄的宽高与真换算无关，改档位时 story 会继续显示旧值。
- * 默认档也从 `DEFAULT_SHOT_SIZE` 取（它就是 `DEFAULT_SIZE_SPEC` 的薄转发）。
+ * 镜头生图 / 生视频的尺寸选择器（比例 + 像素 [+ 倍数]）。纯 props、三个调用点，要看「同一控件在两种场景口径下」的形态差异：`scene` 决定尺寸表（生图走图片
+ * 场景、视频走行业标准场景），同一档 `clarity` 两场景算出的宽高不同。摘要小字调 `shotSizeSummary()` 现算、默认档从 `DEFAULT_SHOT_SIZE` 取，都不手抄
+ *（手抄值与真换算无关，改档位时 story 会继续显示旧值）。
  */
 const meta = {
   title: "Workshop/ShotSizePicker",

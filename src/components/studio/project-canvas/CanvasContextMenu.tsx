@@ -1,14 +1,9 @@
 "use client";
 
 /** 画布的右键上下文菜单（规范 16 §16.2.4.6 第一档：接 `ui/dropdown-menu`）。
- *
- *  此前是自绘外壳：一层 `fixed` 手定位面板 + 一层自绘遮罩负责关闭，Esc /
- *  方向键 / `role="menu"` 全都没有。现在这些语义由 base-ui 的 `Menu` 给，
- *  **调用处那份手写语义随之删掉**（只换容器会留下两套关闭路径）。
- *
- *  唯一需要自己想清楚的一处：菜单要开在**右键那个点**上，而 base-ui 的
- *  定位需要一个 trigger 元素 —— 所以这里渲染一个 `fixed` 的零尺寸 trigger
- *  放在 (x, y)，让 Positioner 锚定它。`open` 由父级持有的 `menu` 状态决定。
+ *  此前是自绘 fixed 手定位 + 自绘遮罩关闭，Esc / 方向键 / role="menu" 全没有；
+ *  现在由 base-ui `Menu` 给，调用处那份手写语义随之删掉（只换容器会留两套关闭路径）。
+ *  菜单要开在右键那个点上：渲染 fixed 零尺寸 trigger 放在 (x, y) 让 Positioner 锚定。
  */
 import { Icon } from "~/components/ui/icon";
 import {

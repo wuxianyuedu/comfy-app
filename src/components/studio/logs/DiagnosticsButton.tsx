@@ -17,20 +17,9 @@ const EMPTY_SAVED: { failed: boolean; savedPath: string | null } = {
 };
 
 /**
- * 「打包诊断」按钮：把**本次运行 + 最近几次历史**打成一个 zip。
- *
- * 与 `SaveExportButton` 的分工是刻意的，两者不可互相替代：
- *   - 「保存到本地」存的是**面板当前筛选到的行**（用户看得见的东西）；
- *   - 这一个带走的是**诊断要的整份现场**：
- *     `run.json`（runId / 版本 / 分支 / commit / 各 pid / 退出码 / 耗时）、
- *     上一次崩溃留下的残留（`crashed: true`）、comfyui 通信层原始回执 ——
- *     这些在面板上根本看不到，而报 bug 时恰恰最有用。
- *
- * 用户报问题时只要点一下、把路径里的那个文件发过来，比让他截图、或者去文件
- * 管理器里翻 `log/` 挑几个文件打包靠谱得多（ISSUE #1326）。
- *
- * 落盘在服务端（`POST /api/logs/diagnostics`），理由与「保存到本地」同一条：
- * 桌面壳里浏览器下载不保证落盘，而排障要的是「文件确实在、路径说得出来」。
+ * 「打包诊断」按钮：本次运行 + 最近几次历史打成 zip，落盘在 `POST /api/logs/diagnostics`
+ * （桌面壳里浏览器下载不保证落盘）。与 `SaveExportButton` 不可互换：那个存面板当前筛选的行，
+ * 这个带走诊断整份现场（`run.json`、崩溃残留、comfyui 原始回执），点一下把路径发过来即可（ISSUE #1326）。
  */
 export function DiagnosticsButton() {
   const saveDiagnostics = useLogPanel((state) => state.saveDiagnostics);

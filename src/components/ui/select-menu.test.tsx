@@ -1,16 +1,6 @@
-/**
- * `SelectMenu` 的**弹层定位口径**：弹层位置必须与「选中了哪一项」无关。
- *
- * base-ui Select 的 `alignItemWithTrigger` **默认为 true** —— 它会把
- * **已选项**对齐到触发器上（原生 `<select>` 的观感）。对「选项多、触发器在
- * 页面中部」的下拉来说，这等于弹层位置随选中项上下移动：选中末尾项时弹层被
- * 顶到视口上方、前半截出屏（用户实测工作流库页头筛选下拉）。
- *
- * jsdom 不做布局，量不出「弹层有没有被顶出去」；能钉的是我们**显式关掉了
- * 这个默认**这件事在 DOM 上留下的标记（`data-align-trigger="false"`，与
- * `ui/select` 的 `SelectContent` 同款口径）。少了它，真实浏览器里就会退回
- * 「弹层随选中项漂移」。
- */
+/** `SelectMenu` 的弹层定位口径：弹层位置必须与「选中了哪一项」无关。
+ * base-ui Select 的 `alignItemWithTrigger` 默认为 true —— 它会把已选项对齐到触发器上（原生 `<select>` 的观感）。对「选项多、触发器在页面中部」的下拉来说，这等于弹层位置随选中项上下移动：选中末尾项时弹层被顶到视口上方、前半截出屏（用户实测工作流库页头筛选下拉）。
+ * jsdom 不做布局，量不出「弹层有没有被顶出去」；能钉的是我们显式关掉了这个默认这件事在 DOM 上留下的标记（`data-align-trigger="false"`，与 `ui/select` 的 `SelectContent` 同款口径）。少了它，真实浏览器里就会退回「弹层随选中项漂移」。 */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 

@@ -1,12 +1,8 @@
 // @vitest-environment jsdom
-// 状态栏 controller 的行为测试（ISSUE #324 交付项 2 / 规范 11.2）：
+// 状态栏 controller 的行为测试（ISSUE #324 / 规范 11.2）：
 // 锁住「占用条显隐 + 双口径降级 + 轮询失败可见降级 + 就绪三态」。
-//
-// 两层被测对象各取所需：
-//  1) 纯折叠逻辑：把 useComfyStats 的返回值直接喂给 controller（spy 替换），
-//     覆盖各数据形态；用 spy 而非 mock 网络，runner 是 jsdom、客户端走 fetch。
-//  2) 真实轮询降级：不 mock，让真实 fetchComfyStats 打到未启动的 /api，
-//     验证「拉取失败 → offline + 可见降级」（不能静默消失）。
+// 两层：① 纯折叠逻辑（spy 替换 useComfyStats），覆盖各数据形态；
+// ② 真实轮询降级（不 mock，打到未启动的 /api，验证失败→offline 不静默消失）。
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, renderHook } from "@testing-library/react";
@@ -47,11 +43,7 @@ const OFFLINE: ComfyStatsPayload = {
 /** 让 controller 读到指定数据形态（不改网络层，只换 hook 返回）。
  *  online 显式传入：connecting 态正是「已连上但首个采样未到」，stats 为 null
  *  但 online 为 true，不能由 stats 反推。 */
-function stubStats(
-  online: boolean,
-  stats: ComfyStatsPayload | null,
-  stale = false,
-) {
+function stubStats(online: boolean, stats: ComfyStatsPayload | null, stale = false) {
   return vi.spyOn(comfyStats, "useComfyStats").mockReturnValue({
     stats,
     online,
@@ -108,10 +100,7 @@ describe("useComfyReadiness（数据形态折叠）", () => {
   });
 
   it("双口径同时可用：两项并列且各自百分比独立计算", () => {
-    stubStats(
-      true,
-      onlineStats({ smiVramUsed: 3 * GIB, smiVramTotal: 12 * GIB }),
-    );
+    stubStats(true, onlineStats({ smiVramUsed: 3 * GIB, smiVramTotal: 12 * GIB }));
     const { result } = renderHook(() => useComfyReadiness());
 
     expect(result.current.cudaVram?.pct).toBe(25);

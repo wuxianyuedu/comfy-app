@@ -2,38 +2,11 @@
 
 import { useEffect, useRef } from "react";
 
-/**
- * useHotkey —— 「在全局按下一个键 / 组合键时做一件事」的**唯一实现**
- * （规范 16 §16.2.4.23）。
- *
- * 为什么收口：全库有 **6 处**各自 `addEventListener("keydown", handler)`
- * + 手写清理，写法看着像，**判据却各不相同**：
- *
- *  - `LogProvider`（Ctrl+Shift+L 开关日志面板）与 `UpdateCheckProvider`
- *    （Ctrl+Shift+U 主动检测）只判 `ctrlKey && shiftKey` ——
- *    **macOS 上按 ⌘ 没有任何反应**，而用户不会认为「这个应用没有这个快捷键」，
- *    只会认为「它坏了」；
- *  - `json-viewer`（⌘/Ctrl+F）判了 `metaKey || ctrlKey`，却**不过滤输入焦点** ——
- *    在别的输入框里按 ⌘F 也会被它抢走（而它只是那一处 JSON 气泡的查找）；
- *  - `ScriptMarkdownEditor`（⌘/Ctrl+S、Z）两种修饰键都判，但**同时**把两件事
- *    塞进一个 handler，键名判据与动作混在一起；
- *  - `MessageCenterPanel` / `WorkshopHeader`（Esc 关闭）各自手写一遍。
- *
- * 也就是说：**「这个快捷键在 mac 上能不能用」取决于它是哪一处写的**。
- * 这类差异没有报错、没有告警、tsc / eslint 都不看，只能靠「同一件事只允许
- * 一处实现」从结构上消除。
- *
- * 本 hook 给出四件此前各处写不全的事：
- *  1. **修饰键默认跨平台**：`mod: true` 同时接受 ⌘ 与 Ctrl（除非显式
- *     `macOnly` / `ctrlOnly`，且那种情况要在调用处写明理由）；
- *  2. **`enabled`**：不满足条件时**不注册**（而不是注册了在 handler 里
- *     early return —— 后者会在别的 handler 都跑完之后才轮到它，顺序不可控）；
- *  3. **`filterInput`**（默认开）：焦点在输入框 / 文本域 / contenteditable 里
- *     时不触发 —— 单键（Esc 除外）与无修饰的组合键最需要它；
- *  4. **`preventDefault`**：命中时默认阻止浏览器默认行为（⌘S 会弹「保存网页」）。
- *
- * 与 `useInterval` / `useFlashState` 的分工：那两者管定时器，本 hook 管输入事件。
- */
+/** useHotkey —— 「全局按键 / 组合键做一件事」的唯一实现（规范 16 §16.2.4.23）。收口前全库 6 处各自
+ * `addEventListener("keydown")` + 手写清理，判据各异：`LogProvider` / `UpdateCheckProvider` 只判 `ctrlKey && shiftKey`
+ *（**macOS 上按 ⌘ 没反应**，用户只会认为它坏了），`json-viewer` 却**不过滤输入焦点**，`ScriptMarkdownEditor` 把键判据与动作
+ * 塞进一个 handler，Esc 两处各手写。本 hook 四件：`mod` 默认跨平台；`enabled` 为假时**不注册**（而非 handler 里
+ * early return，顺序不可控）；`filterInput` 默认开；命中默认 `preventDefault`。管输入事件，定时器归 `useInterval` / `useFlashState`。 */
 
 /** `mod` 在 macOS 上是 ⌘、其它平台是 Ctrl。 */
 export type HotkeySpec = {
@@ -74,19 +47,10 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
 }
 
-/**
- * 一个键盘事件是否命中给定规格。
- *
- * 判据分两步，**declared 只约束声明了的东西**：
- *  1. 主键相等（大小写不敏感）；
- *  2. 每个**显式声明**的修饰键都必须按下（`shift: true` 就得按住 Shift）；
- *     每个**未声明**的修饰键都必须没按 —— 唯一的例外是主键 `Escape`：
- *     它就是「退出」，不该因为用户同时按着 Shift 而失效。
- *
- * `mod` 是 `ctrl` / `meta` 的**平台相关简写**：macOS 上折成 `meta`、其它平台
- * 折成 `ctrl`。这条是这次收口的核心 —— 收口前所有 Ctrl 组合键在 mac 上都是
- * 死的，因为没人写 `metaKey`。
- */
+/** 一个键盘事件是否命中给定规格。判据分两步，**declared 只约束声明了的东西**：① 主键相等（大小写不敏感）；② 每个
+ * **显式声明**的修饰键必须按下，每个**未声明**的必须没按 —— 唯一例外是主键 `Escape`：它就是「退出」，不该因同时
+ * 按着 Shift 而失效。`mod` 是 `ctrl` / `meta` 的平台相关简写（macOS 折成 `meta`、其它折成 `ctrl`）：收口前所有
+ * Ctrl 组合键在 mac 上都是死的，因为没人写 `metaKey`。 */
 export function matchesHotkey(event: KeyboardEvent, spec: HotkeySpec, isMac: boolean): boolean {
   if (event.key.toLowerCase() !== spec.key.toLowerCase()) {
     return false;
@@ -123,9 +87,8 @@ function detectMac(): boolean {
 }
 
 /**
- * 用法：⌘/Ctrl+Shift+L 开关日志面板写
- * `useHotkey({ key: "l", mod: true, shift: true }, toggleOpen)`；
- * Esc 只在菜单打开时注册、且要能穿透输入框（用户可能正在改名）则写
+ * 用法：⌘/Ctrl+Shift+L 写 `useHotkey({ key: "l", mod: true, shift: true }, toggleOpen)`；Esc 只在菜单
+ * 打开时注册且要能穿透输入框（用户可能正在改名）则写
  * `useHotkey({ key: "Escape" }, close, { enabled: open, filterInput: false })`。
  */
 export function useHotkey(

@@ -2,25 +2,11 @@
 
 import { clampPct } from "~/lib/progress";
 
-/* ─────────────────────────────────────────────────────────────────────────
- * "水逐渐装满" 进度覆盖层。
- *
- * 用法：放在任何 `relative` 容器的子节点里，绝对定位 `inset-0` 覆盖整个
- * 预览区。当 generation 期间（status === "running"）把进度传给 `progress`
- * 即可。`pointer-events-none` 确保不会拦截 FAB / 点击上传 / 拖入等交互。
- *
- * 视觉：
- *   - 深色水层从底向上涨，用 `translateY` 代替 `height` 动画（只触发合成层、
- *     不引发重排，§2.7），700ms 平滑过渡。
- *   - 水面是一条 6px 振幅的正弦波（SVG path），骑在水的上沿；
- *     CSS keyframe `wf-wave` 让波形水平无限滑动，营造"水面在动"的感觉。
- *   - 百分比用 tabular-nums 大字居中，白色 + 软阴影，永远在水面之上。
- *   - `rounded-xl overflow-hidden` 跟随 ContentAssetBody 的虚线/图片圆角
- *     （两者都是 `rounded-xl`），不会溢出成方角。
- *
- * 注意：透明值不要全 1——保留 ~0.9 让底层图片/虚线隐约可见，符合参考图的
- * "暗幕 + 隐约背景" 视觉（见截图 4 的 20% 节点预览）。
- * ───────────────────────────────────────────────────────────────────────── */
+/* "水逐渐装满"进度覆盖层：放在任何 `relative` 容器的子节点里，绝对定位 `inset-0` 覆盖预览区；
+ * generation 期间（status === "running"）传 `progress`，`pointer-events-none` 确保不拦 FAB / 上传 / 拖入。
+ * 视觉：水层从底向上涨，用 `translateY` 而非 `height`（只触发合成层、不重排，§2.7）+ 700ms 过渡，
+ * 水面 6px 正弦波由 CSS keyframe `wf-wave` 水平无限滑动，百分比 tabular-nums 居中、永远在水面之上，
+ * `rounded-xl overflow-hidden` 跟随容器圆角；透明度保留 ~0.9，让底层图片隐约可见。 */
 export function WaterFillProgress({
   progress,
   className = "",

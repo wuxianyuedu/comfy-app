@@ -1,18 +1,7 @@
 /**
- * 设置页的**共享类型与常量**（`use-settings-page` 的叶子依赖）。
- *
- * 视图与容器共用这些类型：`Settings`、`LlmConfig`、`QueryLlmConfig`、
- * `Section`、`OllamaStatus`、`FlashMessage`、`SettingsPageDrafts`、
- * `SettingsPageController`、`ReadySettingsPageController`，以及侧边栏分区表
- * `SETTINGS_SECTIONS`、按任务温度区的 `TEMPERATURE_TASKS` 两个纯配置常量。
- * 它们与 `useSettingsPage` hook 的实现体无关,只是被两侧共同引用;§12.7
- * `check-circular-deps` 不看 `import type`、只要 AST 上有 import 边就算环,
- * 所以类型必须沉在**独立叶子文件**里才能真正把方向拉直:
- *   `use-settings-page-types.ts` ← `use-settings-page.ts`（并 re-export,
- *   消费者 `from "./hooks/use-settings-page"` 的路径不变,§12.18 复用优先）。
- *
- * 本文件只有类型与常量、没有 React —— 不带 `"use client"`，服务端消费者
- * 也能安全引它。
+ * 设置页的共享类型与常量（`use-settings-page` 的叶子依赖）。
+ * §12.7 `check-circular-deps` 连 `import type` 也算环边，类型须沉在独立叶子文件才能把方向拉直（hook 侧 re-export，消费路径不变）。
+ * 本文件只有类型与常量、没有 React —— 不带 `"use client"`，服务端也能安全引它。
  */
 import type { RuntimeLogController } from "~/components/studio/logs/use-runtime-log-source";
 import type { BackupEntry, PendingRestore } from "./use-settings-page-backup";
@@ -61,11 +50,9 @@ export type LlmConfig = {
 };
 
 /**
- * 服务端下发的 LLM 配置形状（`llm.configGet` 的出口）。
- *
- * 与草稿 {@link LlmConfig} 的唯一差别在 `extraModels`：下发的是「本地候选字符串 +
- * 远端条目对象」的混合清单（保存时按类型各自写回），而草稿在播种时就拆成了
- * `localCandidates` 与 `extraModels` 两栏。因此「读取兜底缓存」按本类型存。
+ * 服务端下发的 LLM 配置形状（`llm.configGet` 的出口）。与草稿 {@link LlmConfig} 的差别在 `extraModels`：
+ * 下发是「本地候选字符串 + 远端条目对象」混合清单（保存时按类型各自写回），草稿在播种时就拆成两栏；
+ * 「读取兜底缓存」按本类型存。
  */
 export type QueryLlmConfig = Omit<
   LlmConfig,
@@ -155,11 +142,8 @@ export type SettingsPageController = {
     pathConfigured: boolean;
   } | null;
   /** 桌面实例的六个存储目录（模型 / 共享模型 / 输入 / 共享输入 / 输出 /
-   *  共享输出）——**只读**。
-   *
-   *  非桌面实例为 null：便携版 / venv 的目录只由启动参数逐次决定，界面拿它回答
-   *  「模型在哪」会是另一套口径。数据来源同 `comfyInstance`（配置路径的函数），
-   *  因此同样在保存偏好之后重取一次，不进轮询。 */
+   *  共享输出）——**只读**；非桌面实例为 null（便携版 / venv 的目录只由启动参数
+   *  决定）。与 `comfyInstance` 同为配置路径的函数，保存偏好后重取、不进轮询。 */
   comfyStorage: DesktopStoragePaths | null;
   createBackupNow: () => Promise<void>;
   /* 启动日志（log/services/*-runtime.log）：共用同一套「按会话切分 + 跟随 +
@@ -233,12 +217,9 @@ export type SettingsPageController = {
   /** 侧边栏当前分区（纯视觉偏好，但影响渲染哪个表单，故由逻辑层持有）。 */
   section: Section;
   /**
-   * 「读不到 / 刚保存的配置」类失败的**可续用**状态（ISSUE #360）：
-   * 草稿已由缓存兜底播种，界面可用，只是当次刷新失败——视图据此在顶部渲染一条
-   * **非阻塞**提示条（含重试），而不是把整页换成错误视图。
-   *
-   * 与 `hasError` 的分工：`hasError` = 失败 **且** 连兜底草稿都没有（真的没法用）；
-   * `serveState` = 有兜底草稿时的「降级但可用」。两者互斥。
+   * 「读不到 / 刚保存的配置」类失败的**可续用**状态（ISSUE #360）：草稿已由缓存
+   * 兜底播种，视图据此渲染**非阻塞**提示条而非整页错误。与 `hasError` 互斥：
+   * `hasError` = 连兜底草稿都没有，`serveState` = 有兜底的降级可用。
    */
   serveState: { errorText: string } | null;
   setLlmApiKey: (value: string) => void;

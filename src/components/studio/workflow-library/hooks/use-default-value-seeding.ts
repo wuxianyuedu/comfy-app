@@ -1,12 +1,9 @@
 "use client";
 
 /* ── 输入值状态 + 模式默认值播种 ──
- *
- * 「画布样式预览」的表单值只有一个所有者，就是这里：workflow 或**生效模式**
- * 变化时，用该模式的两级默认值（模式覆盖 -> 作者 value -> 图内 defaultValue）
- * 回填表单，使预览初始即展示该模式下配置的默认值（模式 chip 上显示的就是它）。
- * io 尚未就绪时跳过，用户后续可自由覆盖。
- */
+ * 「画布样式预览」的表单值只有这一个所有者：workflow 或**生效模式**变化时，用
+ * 该模式的两级默认值（模式覆盖 → 作者 value → 图内 defaultValue）回填表单，
+ * 使预览初始即展示该模式的默认值。io 尚未就绪时跳过，用户后续可自由覆盖。 */
 import { useEffect, useRef, useState } from "react";
 
 import { defaultInputValues, mergeRefreshedDefaults, type WorkflowIOMap } from "../../workflow-io";

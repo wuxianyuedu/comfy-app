@@ -6,12 +6,9 @@ import { Alert, AlertDescription, AlertTitle } from "./alert";
 afterEach(cleanup);
 
 /**
- * `ui/alert` 的判据（ISSUE #672 / 规范 16 §16.2.4）。
- *
- * 基元此前只有 `default` / `destructive` 两支，而视图里六处「语义色边框 +
- * 底色 + 正文」的通知块都在自绘外壳。这里钉住新补的四支语义变体存在、
- * 且**颜色走语义 token 类名**（不落 Tailwind 原生调色板字面量）——
- * 换品牌色 / 状态色时调用处不用改。
+ * `ui/alert` 判据（ISSUE #672 / 规范 16 §16.2.4）：基元此前只有 `default` / `destructive`，
+ * 视图里六处自绘通知块改用新补的四支语义变体；这里钉住变体存在，
+ * 且**颜色走语义 token 类名**（不落 Tailwind 原生调色板字面量，换品牌色 / 状态色时调用处不用改）。
  */
 /* SAFETY: 类型断言已复核 */
 const VARIANTS = ["default", "destructive", "warning", "info", "success", "danger"] as const;

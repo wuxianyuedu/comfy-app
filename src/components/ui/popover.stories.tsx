@@ -7,19 +7,8 @@ import { Label } from "~/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 
 /**
- * `ui/popover` 是基座浮层：**锚在某个元素上的卡片**（区别于 `tooltip` 的
- * 悬停提示与 `dialog` 的居中模态）。
- *
- * 它的封装修了两件事，两件都只有真点开才看得出：
- *
- * 1. **可用区域 = 视口减去应用级标题行**（`useOverlayBoundary()`）——
- *    壳态下窗口顶部有一条标题行，浮层不该盖住它。首帧量不到视口时返回 `null`，
- *    此时**不传**这一档、退回基元默认的 `clipping-ancestors`（而不是拿假矩形摆位）。
- * 2. **`anchor` 可以是外部元素 / 虚拟锚点**：不给 `PopoverTrigger` 时
- *    （浮层由外部状态打开、触发元素住在别处，如画布节点里的 `#id` 芯片）
- *    由 `anchor` 指定。这一档是本件比「包一个 trigger」多出来的能力。
- *
- * 翻转 / 收边（`flip` / `shift`）由 base-ui 的 Positioner 自带，不必自己夹紧视口。
+ * `ui/popover` 是基座浮层：锚在某个元素上的卡片（区别于 tooltip 的悬停提示与 dialog 的居中模态）。两处封装只有真点开才看得出：① 可用区域 = 视口减去应用级标题行（`useOverlayBoundary()`），首帧量不到时返回 `null`，此时不传这一档、退回基元默认 `clipping-ancestors`（不拿假矩形摆位）。
+ * ② `anchor` 支持外部元素 / 虚拟锚点（不给 `PopoverTrigger`、由外部状态打开时用）。翻转 / 收边由 base-ui Positioner 自带。
  */
 const meta = {
   title: "UI/Popover",

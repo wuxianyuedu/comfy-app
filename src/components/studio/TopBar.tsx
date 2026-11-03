@@ -34,32 +34,9 @@ export type TopBarProps = {
 };
 
 /**
- * 顶部工具条（规范 §12.1 里与 `AppShell` 并列的那个空位）。
- *
- * 三件事：
- *
- *   - **侧栏开合**：`SidebarTrigger`。它同时就是「布局切换」—— 官方 `sidebar` 在
- *     `collapsible="icon"` 下，这个按钮切换的正是「宽栏 ↔ 图标档」两种形态；
- *     ⌘/Ctrl+B 与 cookie 记忆都封在 `ui/sidebar` 内部（走 `useHotkey`）。
- *   - **当前视图标题**：取代首页顶栏那排装饰性控件。那几个此前都是占位
- *     （搜索框是一个 `<div>` 假实现、铃铛与头像只弹一句 toast），本轮只留
- *     有真实后端的：消息入口复用状态栏那个 `MessageCenterButton`
- *     （`useMessageCenterStore` 的唯一出口，不再自绘一个铃铛）。
- *   - **全局搜索（⌘/Ctrl+K 命令面板）**：接 `command` 基元（`AppShell` 里用
- *     `useHotkey` 监听 ⌘/Ctrl+K 打开）。此前压住是因为 `command` 还没合并
- *     （在 #886），用 `Dialog` + 自绘列表会撞 P11（自绘浮层选项列表）。
- *   - **应用菜单**：设置。
- *   - **光暗一键切换**：`next-themes` 的 `setTheme`，与设置页外观分区同一个出口。
- *     这一颗此前**只有承诺没有实现** —— 设置页外观分区一直写着「也可通过顶部导航栏的
- *     太阳/月亮按钮随时切换」，而全仓没有那个按钮（改深浅色只能进设置页）。与其删掉那句
- *     承诺，不如把它补上：主题是最常用的单一开关，藏在一层导航之后不合理。
- *
- * 视图标题放在这里，是因为侧栏头部那条「Comfy-APP」名称行**没有承载任何信息**：
- * 图标档下它只剩一个字母，展开档下用户早就知道自己开的是什么应用；而工具条里
- * 图标与文字之间恰好空着一个槽位（右侧的搜索 / 消息 / 菜单靠 `ml-auto` 顶到
- * 最右），标题正好补上——**应用全局只有这一行顶栏**（首页与其余视图共用 `AppShell`，
- * 项目页签的主页 / 画布 / 工坊 / 资源库 / 产出 / 成片走 `ProjectTabBar` 高亮，见 `ProjectTabBar`）。
- * 只是那个名称行也不白占：顶部省下约 3.5rem 的纵向空间。
+ * 顶部工具条（规范 §12.1 里与 `AppShell` 并列的那个空位）：侧栏开合（`SidebarTrigger`，即「宽栏 ↔ 图标档」，⌘/Ctrl+B 与 cookie 记忆封在 `ui/sidebar` 内部）、当前视图标题、全局搜索（⌘/Ctrl+K，`command` 基元，`AppShell` 用 `useHotkey` 打开；自绘 `Dialog` + 列表会撞 P11）、消息入口（复用状态栏 `MessageCenterButton`）、应用菜单（设置）、光暗一键切换（`next-themes` 的 `setTheme`）。
+ * 首页顶栏那排装饰性占位（假搜索框、只弹 toast 的铃铛与头像）已撤，只留有真实后端的；光暗切换此前「只有承诺没有实现」（设置页外观分区写着顶栏有太阳/月亮按钮，而全仓没有）。
+ * 标题放这里是因为侧栏头部「Comfy-APP」名称行没有承载信息（图标档只剩一个字母），而工具条图标与文字之间恰好空着一个槽位；全局只有这一行顶栏，顶部还因此省下约 3.5rem 纵向空间。
  */
 export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
   const label = NAV_ITEMS.find((item) => item.id === active)?.label ?? "工作区";
@@ -72,10 +49,8 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
   const devtools = useDevtoolsLauncher();
 
   /**
-   * 一键翻深浅色。
-   *
-   * 读的是 `resolvedTheme` 而不是 `theme`：`theme` 可能是 `"system"`，那样点一下
-   * 会写成 system 而画面没变（本仓库 `enableSystem={false}`，但这条不依赖那个前提）。
+   * 一键翻深浅色。读 `resolvedTheme` 而非 `theme`：后者可能是 `"system"`，那样点一下会写成 system 而画面没变
+   * （本仓库 `enableSystem={false}`，但这条不依赖那个前提）。
    */
   const toggleTheme = () => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark");
@@ -125,14 +100,8 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
         <MessageCenterButton />
 
         <DropdownMenu>
-          {/* `render` 必须直接收那颗 `<Button>`：`DropdownMenuTrigger` 会把 menu 的
-              触发属性（pointerdown / click / `aria-haspopup`）以 props 形式灌进它收到的
-              那个元素，而 `Hint` 只吃 `label` / `side` / `accessibleName` / `wrap` /
-              `children`、不转发任意 props —— 套在中间（`render={<Hint>…</Hint>}`）等于把
-              这串 props 全丢掉，表现是**按钮点不开菜单**（ISSUE #1384）。
-              顺序只能是「`Hint` 在外、`DropdownMenuTrigger` 在内」：`TooltipTrigger` 与
-              `Menu.Trigger` 都是 `render` 接管同一个子元素，两层 props 会**合并**到那颗
-              `<Button>` 上，互不吞并。 */}
+          {/* `render` 必须直接收那颗 `<Button>`：`DropdownMenuTrigger` 会把 menu 的触发属性（pointerdown / click / `aria-haspopup`）以 props 形式灌进它收到的元素，而 `Hint` 只吃 `label` / `side` / `accessibleName` / `wrap` / `children`、不转发任意 props —— 套在中间（`render={<Hint>…</Hint>}`）等于把这串 props 全丢掉，表现是**按钮点不开菜单**（ISSUE #1384）。
+              顺序只能是「`Hint` 在外、`DropdownMenuTrigger` 在内」：`TooltipTrigger` 与 `Menu.Trigger` 都是 `render` 接管同一个子元素，两层 props 会**合并**到那颗 `<Button>` 上，互不吞并。 */}
           <Hint label="应用菜单">
             <DropdownMenuTrigger
               render={

@@ -13,21 +13,9 @@ import {
 import { DEFAULT_CANVAS_SETTINGS } from "~/components/studio/canvas/canvas-settings-types";
 
 /**
- * 画布上的三块装饰层 —— 第二层注入（React Flow）里**视口**那一维的现场。
- *
- * 三个组件全从 `useStore` 读运行期事实（`transform` 的平移与缩放、画布宽高），
- * 所以真画布是前提（`.storybook/flow-canvas.tsx`）。它们**不是**纯装饰 ——
- * 每一块都对应一次真实事故：
- *
- *  · `CanvasGrid` 的 `GRID_FINE_FADE_ZOOM`：曾经是「整张网格一起关掉」，连带
- *    承载底色的 `bgColor` 一起消失，缩到极限时整屏是黑的（用户侧「缩小到能显示
- *    节点」那段）。现在淡出的是**细线**，底色必须还在；
- *  · `ZoomIndicator` 的限幅取自用户设置（`minZoom` / `maxZoom`），不是写死的；
- *  · `CanvasRulers` 的标签步长按「屏幕间距 ≥ 48px」现算 —— 不这么算，缩小后
- *    标签会重叠成一片糊字。
- *
- * 所以下面按**缩放档**摆，而不是按组件摆：三块要看的都是同一件事（缩放变了，
- * 它们跟着怎么变）。
+ * 画布上的三块装饰层 —— 第二层注入（React Flow）里**视口**那一维的现场。三者全从 `useStore` 读运行期事实，故真画布是前提
+ * （`.storybook/flow-canvas.tsx`）；且**不是**纯装饰 —— 每块对应一次真实事故：`CanvasGrid` 的淡出阈值曾误作整张网格关闭
+ *（连底色一起消失 → 整屏黑）、`ZoomIndicator` 限幅取自用户设置、`CanvasRulers` 步长按「屏幕间距 ≥ 48px」现算。故按**缩放档**摆。
  */
 const meta = {
   title: "Studio/Canvas/Decorations",
@@ -70,10 +58,8 @@ export const ZoomedIn: Story = {
 };
 
 /**
- * 缩到细网格淡出阈值之下（`GRID_FINE_FADE_ZOOM = 0.3`，这里 0.25）。
- *
- * 这一档是那份事故的现场：**细线淡出、底色留下**。底色没了 = 整屏黑，
- * 而那是「画布到底渲染出来没有」的唯一直观凭据。
+ * 缩到细网格淡出阈值之下（`GRID_FINE_FADE_ZOOM = 0.3`，这里 0.25）：那份事故的现场 —— **细线淡出、底色留下**。
+ * 底色没了 = 整屏黑，而它是「画布到底渲染出来没有」的唯一直观凭据。
  */
 export const ZoomedOutFineGridFaded: Story = {
   render: () => (
@@ -88,9 +74,7 @@ export const GridOff: Story = {
   render: () => (
     <div className="p-4">
       <StorybookFlowCanvas scene={canvasScene("twoNodes")}>
-        <CanvasGrid
-          settings={{ ...DEFAULT_CANVAS_SETTINGS, showGrid: false }}
-        />
+        <CanvasGrid settings={{ ...DEFAULT_CANVAS_SETTINGS, showGrid: false }} />
         <CanvasRulers />
       </StorybookFlowCanvas>
     </div>

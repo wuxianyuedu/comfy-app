@@ -1,13 +1,7 @@
 /**
- * `/api/film/bgm` 上传口的闸门用例（这条此前**零执行者**）。
- *
- * 为什么值得为它写：它是唯一「把用户给的文件直接写进产物根」的 REST 口，
- * 而那次收口把它的落点从第五份手写的 `public/generated/films/bgm` 换成了
- * `filmBgmRoot()`。断言里刻意把 `process.cwd()` 顶到临时目录 ——
- * 谁再手写一份落点，就会写到临时目录之外，当场看得见（台账 A8 第二段）。
- *
- * mock 边界：`fs`（内存假象，写与 mkdir 的调用都记下来 —— 「拒绝发生在落盘之前」
- * 是要断言的事）、`~/server/auth/request-user`（鉴权两态）。
+ * `/api/film/bgm` 上传口的闸门用例（此前零执行者）：唯一「把用户给的文件直接写进产物根」的 REST 口，落点收在 `filmBgmRoot()`。
+ * 断言把 `process.cwd()` 顶到临时目录 —— 谁再手写一份落点就会写到临时目录之外，当场看得见（台账 A8 第二段）。
+ * mock 边界：`fs`（内存假象，写与 mkdir 调用都记下 ——「拒绝发生在落盘之前」是要断言的事）、`request-user`（鉴权两态）。
  */
 import type { NextRequest } from "next/server";
 import path from "node:path";

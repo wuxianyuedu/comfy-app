@@ -1,11 +1,7 @@
 "use client";
 
-/** 工作流库的导入面板。
- * 完全受父级控制 —— 所有面板状态住在
- * useWorkflowImport hook 里并经`state` 传入，好让
- * 拖放预填路径（handleDroppedFile）能在面板打开前填充同样的
- * 字段。行为不变。
- */
+/** 工作流库的导入面板。完全受父级控制 —— 所有面板状态住在 `useWorkflowImport` 并经 `state` 传入，
+ *  好让拖放预填路径（`handleDroppedFile`）能在面板打开前填同样的字段。行为不变。 */
 import { useMemo } from "react";
 import { textHandler } from "~/lib/form-props";
 

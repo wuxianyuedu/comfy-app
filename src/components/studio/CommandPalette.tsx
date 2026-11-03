@@ -21,15 +21,9 @@ export type CommandPaletteProps = {
 };
 
 /**
- * 全局命令面板（⌘/Ctrl+K）。
- *
- * 这一项此前被压住没做，是因为它要 `command` 基元，而那批基元当时还没合并
- * （在 #886）。现在 `command` 已在 master，这里落地 —— 走基元而不是
- * `Dialog` + 自绘列表，否则会撞 P11（自绘浮层选项列表）。
- *
- * 目前只收纳「切换视图」这一类命令，数据源就是 `NAV_ITEMS`，与侧栏同一份
- * （避免两套事实来源）。后面要加「打开设置 / 搜项目」等，往 `CommandGroup`
- * 里加一组即可，不必动侧栏。
+ * 全局命令面板（⌘/Ctrl+K）。走 `command` 基元而不自绘 `Dialog` + 列表，否则撞 P11（自绘浮层
+ * 选项列表）。目前只收纳「切换视图」，数据源 `NAV_ITEMS` 与侧栏同一份，避免两套事实来源；
+ * 后续加命令往 `CommandGroup` 里加一组即可。
  */
 export function CommandPalette({ open, onOpenChange, onSelect }: CommandPaletteProps) {
   return (

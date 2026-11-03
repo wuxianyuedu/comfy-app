@@ -1,24 +1,6 @@
 /* IO 预览侧面板（工作流编辑器）。
- *
- * 模式体系（与工作流库「类型」同源）：
- *   - 模式页签直接来自工作流的 `modes`（模板列，MultiModeSelect 维护），
- *     不再有「通用」页签，也不再提供自由文本模式码；
- *   - 点击页签切换模式，主表单即时切换到该模式的覆盖层——所有默认值都
- *     用原本的通用组件填写（写入 modes[mode].defaultValue），不再有单独
- *     的「覆盖列表」配置区；
- *   - 每行的 👁 切换该参数在当前模式下是否可见（modes[mode].visible），
- *     按模式分别保留；
- *   - 尚未添加任何模式时表单禁用（禁止配置参数），先在 MultiModeSelect
- *     里勾选模式。
- *
- * DATA MERGE. 本地 `workflowIO` 只携带勾选时的身份字段；`detailIOMap` 是
- * 服务端富化（type/defaultValue/nodeTitle/multiline）。对每个 key 优先取
- * 富化条目、再叠加本地条目——本地是作者编辑态的唯一事实源（label/value/
- * required/seedMode/modes 的未保存修改都在上面，必须整体透传）。
- * 显示名以本地 label 为准，回退顺序见 `io-exposure.ts`（子工作流封装节点的
- * 富化名会落到包装槽位名 `value_1`，与画布上的业务名对不上）。
- *
- * 位置：右上角，占满画布高度，`z-canvas-max`（规范 16 §16.2.5）。 */
+ * 模式体系（与工作流库「类型」同源）：模式页签直接来自工作流的 `modes`（MultiModeSelect 维护），没有「通用」页签、也不再提供自由文本模式码；点页签切换模式，主表单即时切到该模式的覆盖层（默认值写入 `modes[mode].defaultValue`，不再有单独的「覆盖列表」配置区）；每行 👁 切换该参数在当前模式是否可见（`modes[mode].visible`，按模式分别保留）；尚未添加任何模式时表单禁用，先在 MultiModeSelect 里勾选模式。
+ * DATA MERGE：本地 `workflowIO` 只带勾选时的身份字段，`detailIOMap` 是服务端富化（type/defaultValue/nodeTitle/multiline）；每个 key 先取富化条目、再叠加本地条目 —— 本地是作者编辑态的唯一事实源（label/value/required/seedMode/modes 的未保存修改都在上面，必须整体透传）。显示名以本地 label 为准，回退顺序见 `io-exposure.ts`（子工作流封装节点的富化名会落到包装槽位名 `value_1`，与画布业务名对不上）。位置：右上角，占满画布高度，`z-canvas-max`（规范 16 §16.2.5）。 */
 "use client";
 
 import { useCallback, useMemo, useState } from "react";

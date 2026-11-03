@@ -8,65 +8,9 @@ import { clampPct, pctToWidth } from "~/lib/progress";
 import { cn } from "~/lib/utils";
 
 /**
- * ProgressBar —— 「异步动作的进度条」的唯一出口（形态侧）（规范 16 §16.2.4.19；
- * 本次 PR-3 起改为基于 `~/components/ui/progress` 官方基元的二次封装）。
- *
- * 此前全库有 **10 处**各写一遍「track div + 内层 width:X% + 百分比文字」，
- * 写法四派（见 `~/lib/progress` 文件头）。这里收的是**形态**：轨道、填充、
- * 百分比文字、a11y 语义；**数值**怎么算由 `~/lib/progress` 负责。
- *
- * 三种用法：
- *
- * - 确定进度：`<ProgressBar value={toPct(done, total)} label="正在解析节点包" />`
- * - 不确定进度（总数还没算出来，条纹来回滑动）：
- *   `<ProgressBar value={null} label="正在扫描…" />`
- * - 0% 也留一格可见（个别面板的观感选择，显式传）：传**算好的百分比**加
- *   `minVisible={4}`（一般来自 `~/lib/progress` 的 `toPct(done, total)`）。
- *
- * 也就是说 `value` 收的是**算好的百分比**，`minVisible` 给一个可见下限。
- *
- * ## P67 治理（§16.2.3 / §12.18）
- *
- * 此前外层是**手写 `<div role="progressbar">` + 手挂 `aria-valuenow` /
- * `aria-valuemin` / `aria-valuemax` / `aria-valuetext`** 的裸 DOM 拼装
- * （P67 b 判据的锚点形态）。`ui/progress.tsx`（shadcn 官方 Progress）
- * 早已装、却没用上——它的 `ProgressPrimitive.Root` 会**替我们**给全这一
- * 组 ARIA（`role="progressbar"` / 夹取后的 `aria-valuenow` /
- * `aria-valuemin` / `aria-valuemax` 都自动挂），并把 `value: null`
- * 直接映射为 indeterminate（`aria-valuenow` 自然被 omit）。所以：
- *
- *   · **外层**换成 `ProgressPrimitive.Root`（base-ui 直连，与项目 shadcn
- *     `ui/progress.tsx` 内部同款）；
- *   · **视觉轨道**用 shadcn `ProgressTrack`（是 base-ui `Progress.Track`
- *     的薄 cva），`trackClassName` 走 cn 覆盖项目档色板；
- *   · **填充**仍由本件自绘 `<div data-slot="progress-bar-fill">` +
- *     手算 `pctToWidth(value, {minVisible})`：base-ui 的 Indicator 只
- *     按 `percentageValue` 直接给宽、不吃 `minVisible` 语义（「0 恒
- *     为 0、0<x<minVisible 抬到 minVisible」是本档项目的观感选择）——
- *     这是**正当差值**，符合 §12.18「有等价就 import，缺的差异用参数
- *     或薄封装补」。基元的 Track 是容器、Indicator 是可选子件，塞自己
- *     画的 fill div 不违语义。
- *
- * **外部 API 向后兼容**（`value` / `label` / `showValue` / `className`
- * / `trackClassName` / `fillClassName` / `minVisible`）——15 处消费点
- * （`FilmStudio` / `WorkshopHeader` / `WorkshopEncapsulationPanel` /
- * `CanvasProgressIndicator` 等）零改动。
- *
- * 之后补的唯一新增项 `ariaLabel`（可选）：给**条上没有可见文字**的用法
- * （工坊顶栏那种一段一根细条的分段控件）补可访问名。`label` 是渲染出来的
- * 可见文案，与本件的 ARIA 宿主是兄弟节点、不构成命名关系，所以条上没字的
- * 进度条对读屏器只剩一个数字、说不出「这是哪一段」—— 那不如不报。
- * 不传时行为与旧版逐字节一致（不写 `aria-label` 属性）。
- *
- * ## DOM 契约（回归测试锁的形状）
- *
- *   · `data-slot="progress-bar-track"` 挂在 base-ui Root 上（与旧实现
- *     同名，测试继续拿它读 role/aria-valuenow/aria-valuetext，传了
- *     `ariaLabel` 时也拿它读 `aria-label`）；
- *   · `data-slot="progress-bar-fill"` 与 `data-slot="progress-bar-indeterminate"`
- *     仍在原位置（本件自绘的两个 `<div>`）；
- *   · 视觉轨道 `<ProgressTrack>` 挂 `data-slot="progress-track"`（shadcn
- *     ProgressTrack 自带、无测试依赖）。
+ * ProgressBar —— 「异步动作的进度条」的唯一出口（形态侧，规范 16 §16.2.4.19；基于 `~/components/ui/progress` 二次封装）。`value` 收算好的百分比（0..100），`null` 为不确定态；`minVisible` 把 `0<x<minVisible` 抬到下限，填充因此自绘（base-ui Indicator 不吃这条语义），ARIA 由 `ProgressPrimitive.Root` 给全。
+ * 外部 API 向后兼容（`value` / `label` / `showValue` / `className` / `trackClassName` / `fillClassName` / `minVisible`），新增可选 `ariaLabel` 给条上无可见文字的用法；不传时行为与旧版一致。
+ * DOM 契约：`data-slot="progress-bar-track"` 挂 base-ui Root（测试读 role / aria-valuenow / aria-valuetext / aria-label），`progress-bar-fill` 与 `progress-bar-indeterminate` 仍是自绘 `<div>`。
  */
 export function ProgressBar({
   value,

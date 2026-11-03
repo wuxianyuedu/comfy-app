@@ -1,13 +1,8 @@
 "use client";
 
 /**
- * 设置页的业务逻辑层（规范 17 §17.2 第②层）。
- *
- * 承载：LLM / 偏好两份草稿的「从查询播种 + 编辑」，Ollama 探测与启动，
- * ComfyUI 启动与状态刷新，保存动作与提示条（flash）。
- *
- * 视图（`./page.tsx`）只消费这里返回的 controller：不碰 tRPC、不发 fetch、
- * 不算「按任务温度」的合并规则。
+ * 设置页业务逻辑层（规范 17 §17.2 第②层）：LLM/偏好草稿播种+编辑、Ollama 探测启动、
+ * ComfyUI 启动与状态刷新、保存与提示条。视图只消费返回的 controller，不碰 tRPC/fetch。
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -53,18 +48,10 @@ const FLASH_MS = 3500;
 /* 「没有提示」的空载荷：模块级常量，身份稳定（`useFlashLatch` 的依赖）。 */
 const NO_FLASH: FlashMessage | null = null;
 
-/* ── 配置读取的兜底缓存（ISSUE #360）──────────────────────────────────────
- * 设置页的两份读（`setting.get` / `llm.configGet`）是服务端最脆弱的两跳：前者走
- * SQLite，后者还要先跑 remote storage 迁移。应用服务刚重启 / 正在编译 / 数据库
- * 迁移的那几秒里，查询会失败——此前整页被换成「加载设置失败」，而界面本来能用。
- *
- * 兜底值 = 「最后一次成功读到的配置」：
- *   - 本会话内：`lastGood` 状态（内存，最权威，含用户刚保存的草稿）；
- *   - 跨刷新/重开：sessionStorage 里的一份快照（`readSettingsCache`）。
- *
- * 只放**配置**，不放密钥类输入态（API Key 输入框始终从空开始）。写失败
- * （隐私模式 / 配额）静默忽略：缓存是锦上添花，绝不影响主流程。
- */
+/* 配置读取的兜底缓存（ISSUE #360）：两份读（`setting.get` / `llm.configGet`）是服务端
+ * 最脆弱的两跳，重启/编译/迁移的几秒里查询会失败。兜底值 = 最后一次成功读到的配置
+ * （会话内 `lastGood` + sessionStorage 快照 `readSettingsCache`）。只放配置不放密钥类
+ * 输入态；写失败（隐私模式/配额）静默忽略。 */
 const SETTINGS_CACHE_KEY = "settingsPage.lastGoodConfig.v1";
 
 function readSettingsCache(): { llm?: QueryLlmConfig; settings?: Settings } {
@@ -110,14 +97,9 @@ export function useSettingsPage(options?: {
   const [section, setSection] = useState<Section>(
     () => readInitialSection(initialSection) ?? "llmLocal",
   );
-  /* 尚未落定的跳转目标 —— 与 `section`（导航高亮）分开：分区落点要等**外壳真的
-   * 滚过去**才算完成，而外壳只有把分区节铺出来之后才滚得动（三态中的加载 / 失败
-   * 壳没有分区节）。
-   *
-   * 这里刻意**不在挂载时消费**载荷（收口前的写法是在 effect 里 `setSection` +
-   * 立刻回调，于是设置页首帧还在 loading、载荷已被清空，等到就绪外壳挂上时
-   * 跳转目标已经丢了 —— 用户看到的症状是「点去设置，左侧仍停在第一项」）。
-   * 现在载荷留到 `ackJumpSection` 被调用为止，而它由外壳在**命中锚点**之后才调。 */
+  /* 尚未落定的跳转目标，与 `section`（导航高亮）分开：落点要等外壳真的滚过去才算
+   * 完成（加载/失败壳没有分区节，滚不动）。刻意不在挂载时消费载荷——首帧还在 loading
+   * 时清掉会丢目标——留到外壳命中锚点后调 `ackJumpSection` 为止。 */
   const [pendingJump, setPendingJump] = useState<Section | null>(() =>
     readInitialSection(initialSection),
   );
@@ -151,23 +133,12 @@ export function useSettingsPage(options?: {
   const [settingsDraft, setSettingsDraft] = useState<Settings | null>(null);
   const settingsQ = useQuery(trpc.setting.get.queryOptions());
   const llmQ = useQuery(trpc.llm.configGet.queryOptions());
-  /* 这两份查询的「最后一次成功结果」：读取失败时用它兜底播种草稿。
-   *
-   * 为什么必须兜底（ISSUE #360）：设置页此前把「一次刷新失败」当成「整页不可用」，
-   * 直接把界面换成错误视图。而这两份配置恰恰是**服务端最脆弱的两个读**——`setting.get`
-   * 走 SQLite，`llm.configGet` 还要先跑一次 remote storage 迁移。应用服务刚重启、
-   * 编译中、或数据库正在迁移的那几秒里，用户看到的是一整页「加载设置失败」，
-   * 而界面本来完全能用（草稿来自上一次成功的读取）。用户的原话就是「设置这边经常
-   * 出现这个问题」。
-   *
-   * 兜底只在「真的有过成功结果」时生效：没有历史结果（首次启动就失败）仍走全页
-   * 降级——那时界面确实无从渲染，给错误视图是诚实的。 */
-  /* 缓存的是**服务端下发的形状**（`extraModels` 是「字符串 | 对象」的混合清单，
-   * 与草稿里的 `LlmConfig` 不同——后者已拆分）。这里按查询返回类型收，播种时再拆。
-   *
-   * 用 state 而非 ref：下面的播种与「失败兜底」都在渲染期读它，而 React 19 的
-   * `react-hooks/refs` 规则禁止渲染期读写 ref（ref 的变化不参与渲染，读了会拿到
-   * 陈旧值）。state 的首值从 sessionStorage 取，天然支持「刷新后立刻失败」的场景。 */
+  /* 两份查询的「最后一次成功结果」，读取失败时兜底播种草稿（ISSUE #360）：避免把
+   * 「一次刷新失败」当成「整页不可用」。只在真的有过成功结果时生效——首次启动就失败
+   * 仍走全页降级。 */
+  /* 缓存的是服务端下发的形状（`extraModels` 是字符串|对象混合清单，播种时再拆成草稿的
+   * `LlmConfig`）。用 state 而非 ref：播种与失败兜底都在渲染期读它，React 19
+   * `react-hooks/refs` 禁止渲染期读写 ref；state 首值取自 sessionStorage。 */
   const [lastGood, setLastGood] = useState<{
     llm?: QueryLlmConfig;
     settings?: Settings;
@@ -246,12 +217,9 @@ export function useSettingsPage(options?: {
     setSettingsDraft(settingsData);
   }
 
-  /* ── 读取失败时的兜底播种（ISSUE #360）─────────────────────────
-   * 查询真的失败（不是还在加载）而草稿仍为空时，用「最后一次成功结果」（本次
-   * 会话内存里的，或上次运行留在 sessionStorage 的）把草稿播回来——界面立刻可用，
-   * 失败原因通过 `serveState` 以非阻塞提示条呈现（见下方 return）。
-   *
-   * 只在失败时兜底：正在加载（首帧）不播种，避免先闪一份旧值再跳到真实值。 */
+  /* 读取失败时的兜底播种（ISSUE #360）：查询真的失败（不是还在加载）且草稿为空时，
+   * 用 lastGood 播回草稿，失败原因经 `serveState` 以非阻塞提示条呈现。加载中（首帧）
+   * 不播种，避免先闪旧值。 */
   if (llmDraft === null && llmQ.isError && lastGood.llm) {
     const cached = lastGood.llm;
     const split = splitExtraModels(cached.extraModels);

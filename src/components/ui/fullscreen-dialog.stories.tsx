@@ -4,30 +4,10 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { Button } from "~/components/ui/button";
 import { FullScreenDialog } from "~/components/ui/fullscreen-dialog";
 
-/**
- * `FullScreenDialog` 是**全屏视图形态的弹窗基元**（铺满应用级标题行下方的
- * 整个内容区），与 `ui/dialog` 是同族但形态不同 —— 两者**不能靠调用处覆盖
- * class 拼出来**：
- *
- * - `DialogContent` 是居中卡片（`fixed top-1/2 left-1/2 -translate-x-1/2`）；
- * - 全屏层要的是「让出标题行、铺满其余内容区」，而它的定位类
- *   （`top-title-bar` / `bottom-6`）是本项目的**自定义工具类**，
- *   class 合并器（`cn`）不认识它们 —— 默认的 `top-1/2` 与 `-translate-y-1/2`
- *   会**残留**下来（实测），把面板顶到标题行上方、底部还留一条缝。
- *   所以定位只在基元这一层给一次，调用处只提供布局类（§17.2 第③层只渲染）。
- *
- * 三条行为都是有来由的，story 要盯的就是它们：
- *
- * 1. **铺满但**不铺到 `bottom-0`：底部状态栏是 `z-toast` 的固定悬浮层，
- *    铺满会把它压住（日志全屏视图实测「最后几行看不到」）。
- * 2. **禁掉点弹窗外关闭**（`disablePointerDismissal`）：全屏后弹窗外只剩窗口
- *    标题栏，用户想拖窗口的肌肉记忆会**把整个全屏视图关掉**（用户实测反馈）。
- *    只有显式出口（退出按钮 / Esc）能关。
- * 3. **`label` 是必填的**：它渲染成只读屏器可见的 `Dialog.Title`，
- *    并自动接到弹窗的 `aria-labelledby` —— 全屏视图通常没有可见标题。
- *
- * 受控：`open` / `onOpenChange` 住在调用处。
- */
+/** `FullScreenDialog` 是全屏视图形态的弹窗基元（铺满应用级标题行下方的整个内容区），与 `ui/dialog` 同族但形态不同，不能靠调用处覆盖 class 拼出来。
+ * `DialogContent` 是居中卡片（`fixed top-1/2 left-1/2 -translate-x-1/2`），而全屏层要「让出标题行、铺满其余内容区」，其定位类（`top-title-bar` / `bottom-6`）是本项目自定义工具类，`cn` 不认识它们 —— 默认的 `top-1/2` 与 `-translate-y-1/2` 会残留（实测），把面板顶到标题行上方、底部留一条缝；所以定位只在基元这层给一次，调用处只提供布局类（§17.2 第③层只渲染）。
+ * 三条有来由的行为：① 铺满但不铺到 `bottom-0` —— 底部状态栏是 `z-toast` 固定悬浮层，铺满会压住它（日志全屏视图「最后几行看不到」实测）；② 禁掉点弹窗外关闭（`disablePointerDismissal`）—— 全屏后弹窗外只剩窗口标题栏，拖窗口的肌肉记忆会把整个全屏视图关掉（用户实测反馈），只有显式出口（退出按钮 / Esc）能关；③ `label` 必填 —— 它渲染成只读屏器可见的 `Dialog.Title`，并自动接到弹窗的 `aria-labelledby`，全屏视图通常没有可见标题。
+ * 受控：`open` / `onOpenChange` 住在调用处。 */
 const meta = {
   title: "UI/FullScreenDialog",
   component: FullScreenDialog,

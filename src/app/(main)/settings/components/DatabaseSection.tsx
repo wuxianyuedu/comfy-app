@@ -2,9 +2,7 @@
 
 /**
  * 数据库（Drizzle Studio）分区（规范 17 §17.2 第③层）。
- *
- * 状态与「启动 / 停止 / 打开」动作来自 controller；视图自持的仅启动日志的
- * 滚动跟随（纯视觉偏好）。
+ * 状态与「启动 / 停止 / 打开」动作来自 controller；视图自持仅日志滚动跟随。
  */
 
 import { StatusDot, type StatusDotState } from "~/components/ui/status-dot";

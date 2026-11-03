@@ -1,20 +1,9 @@
 "use client";
 
 /**
- * 设置页「启动日志」的数据层（规范 17 §17.2 第②层）。
- *
- * 三个分区（ComfyUI / Drizzle Studio / Ollama）此前各写了一份「取文件尾部 →
- * 追加 / 替换 → 解析 ANSI → 启动期间每秒轮询」的实现，只有来源与解析器不同
- * （判据见规范 12 §12.12：跨文件复制的同一段逻辑会各自漂移）。这里收成一处：
- *
- *   - 数据来自 `GET /api/logs/sessions`（按**每一次启动**列文件，判据见
- *     `lib/log/runtime-log-file`），一次请求同时拿到**启动列表**与**选中那一次的
- *     正文** —— 界面因此能提供「切到哪一次启动」的下拉，而不用把整份日志读进
- *     浏览器。那四份 runtime 日志现在是**一次启动一份文件**（ISSUE #1326）：
- *   - 挂载、切换会话、点「刷新」都会重新取一次；`active`（正在启动）时每秒跟随；
- *     ComfyUI 被重启三次就有三份文件，切过去看的是**那一份整份**，不再需要任何
- *     切分判据；
- *   - 轮询回调只读 ref 里的选中项，不因用户切换下拉而重建定时器。
+ * 设置页「启动日志」的数据层（规范 17 §17.2 第②层）：三个分区此前各写一份同款实现，这里收成一处。
+ * 数据来自 `GET /api/logs/sessions`（一次启动一份文件，ISSUE #1326），一次请求拿到列表与正文。
+ * 挂载/切换/刷新重新取，`active` 时每秒跟随；轮询回调只读 ref 里的选中项，不重建定时器。
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -52,9 +41,8 @@ export type RuntimeLogSourceState = {
   text: string;
   /**
    * 这个来源一共有几份启动日志（不受下拉上限影响）。
-   *
-   * 界面据此说明「更早的启动不在列表里」（硬规则 4：必须有用户可见出口）——
-   * 一次启动一份文件之后，同一天可能攒几十份，不说的话用户会以为「只启动过这些次」。
+   * 界面据此说明「更早的启动不在列表里」（硬规则 4）；一次启动一份文件后同一天可能
+   * 攒几十份，不说的话用户会以为只启动过这些次。
    */
   total: number;
   /** 选中那一份的正文被服务端截断（界面提示「只看得到最近一段」）。 */
@@ -123,14 +111,9 @@ export function useRuntimeLogSource({
     const seq = (seqRef.current += 1);
     let slice = await fetchLogSessions(source, sessionRef.current);
     if (slice && seq === seqRef.current) {
-      /* 新的一次启动出现 → 自动切到最新（用户预期是「启动后自动看最新日志」，
-       * 不能停在旧会话里等他手动换下拉）。判据用会话开始时刻而不是文件名
-       * （见 latestStartedAtRef）；正在展示的已是最新则不用动。
-       *
-       * **第一项就是最新**：这是 `GET /api/logs/sessions` 的契约（`sessions`
-       * 新→旧，与 `selectedId` 的缺省值同为 `sessions[0]`）。跨包之后列表变长了，
-       * 取错一端会让「自动跟随」永远停在最旧那一份上 —— 方向只在契约里定义一次，
-       * 取法也只在契约里说一次。 */
+      /* 新的一次启动出现 → 自动切到最新（不能停在旧会话等用户手换下拉）。
+       * 判据用会话开始时刻（`latestStartedAtRef`）；已在最新则不动。
+       * `sessions` 按新→旧排列是 `GET /api/logs/sessions` 的契约，取错一端会让自动跟随停在最旧那份。 */
       const latest = slice.sessions[0] ?? null;
       const isNewStart =
         latest !== null &&

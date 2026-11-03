@@ -3,19 +3,8 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select";
 
 /**
- * `ui/native-select` 是**原生 `<select>` 的样式化封装**（不是 base-ui Select），
- * 它的存在理由是「选项很少、想省掉浮层」的场景：原生下拉在移动端与键盘上
- * 的行为零成本，只是样式不受主题控制 —— 本件把外观统一了。
- *
- * 与 `ui/select` / `ui/select-menu` 的分工：
- * - 想要**受控浮层**（能放富内容、能分组、能搜索）→ `ui/select` 系；
- * - 选项固定且少、想走系统原生下拉 → 本件。
- *
- * 两条只有渲染出来才知道的事：
- * 1. `NativeSelect` 外面包了一层 `div`（`w-fit` + 箭头绝对定位），
- *    所以「让它铺满」要传的是**外层**的 `className`（`w-full`）——
- *    `select` 自己已经是 `w-full`，给错层的话看起来没反应；
- * 2. 两档 `size` 同时改高度与圆角（`sm` 走 `rounded-[min(var(--radius-md),10px)]`）。
+ * `ui/native-select` 是原生 `<select>` 的样式化封装（不是 base-ui Select），用于「选项很少、想省掉浮层」：原生下拉在移动端与键盘上零成本，只是样式不受主题控制。与 `ui/select` 系的分工：要受控浮层 / 富内容 / 分组 / 搜索走 select；选项固定少、走系统下拉用本件。
+ * `NativeSelect` 外面包了一层 `w-fit` + 绝对定位箭头的 `div`，铺满要传外层 `className="w-full"`；两档 `size` 同时改高度与圆角（`sm` 走 `rounded-[min(var(--radius-md),10px)]`）。
  */
 type NativeSelectSize = NonNullable<React.ComponentProps<typeof NativeSelect>["size"]>;
 

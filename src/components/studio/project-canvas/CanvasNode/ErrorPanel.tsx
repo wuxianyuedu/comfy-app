@@ -1,12 +1,9 @@
 "use client";
 
-/* CanvasNode 的可折叠的错误面板。
- * 负责 errExpanded 开关状态 + shouldAutoExpand / errorSuggestion
- * 两个推导，并渲染整个面板 JSX（展开/收起、复制、重试、
- * 建议）。父组件无条件渲染 <ErrorPanel/>；节点不处于
- * 可见错误态时，组件在 hooks 之后返回 null，好让展开状态的
- * 生命周期与拆分前内联 JSX 完全一致（隐藏期间状态保留，
- * running/idle 切换时重置）。 */
+/* CanvasNode 的可折叠错误面板：负责 errExpanded 开关状态 + shouldAutoExpand /
+ * errorSuggestion 推导，并渲染整个面板 JSX（展开/收起、复制、重试、建议）。
+ * 父组件无条件渲染；非可见错误态时在 hooks 之后返回 null，使展开状态的生命周期
+ * 与拆分前内联 JSX 一致（隐藏期间保留，running/idle 切换时重置）。 */
 import { useMemo, useState } from "react";
 import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { Hint } from "~/components/ui/hint";

@@ -248,15 +248,9 @@ function CanvasInner({
   );
 
   /* ── 挂载时加载（或新建）当前项目 ──
-   *
-   *  草稿感知：用户点「新建项目」时我们**不**立刻往项目索引
-   *  里落一行空记录。而是由 `seedNew` 经 `createDraftProject`
-   *  分配新 id，只写 active-id。项目行只有在用户
-   *  产出真实内容那一刻（下面的自动落盘 effect），或经
-   *  `commitRename` / `newProject` 里的手动 upsert，才进索引。
-   *
-   *  挂载前先清掉历史会话遗留的「空默认」行，
-   *  免得最近项目列表一直脏着。 */
+   *  草稿感知：用户点「新建项目」时**不**立刻往项目索引里落一行空记录，而由 `seedNew` 经 `createDraftProject`
+   *  分配新 id、只写 active-id。项目行只在用户产出真实内容那一刻（下面的自动落盘 effect），或经
+   *  `commitRename` / `newProject` 里的手动 upsert 才进索引。挂载前先清掉历史会话遗留的「空默认」行，免得最近项目列表一直脏着。 */
   useEffect(() => {
     if (loadedRef.current) {
       return;
@@ -385,12 +379,8 @@ function CanvasInner({
         onConnect={onConnect}
         onEdgeClick={onEdgeClick}
         onEdgesChange={onEdgesChange}
-        /* 商业级性能 —— 只挂载与视口
-         *  相交的节点 / 边（与工作流画布同一处理）。
-         *  此前含大量工作流 / 素材节点的项目图每帧都把
-         *  **整张图**的 DOM 挂上；视口裁剪让
-         *  DOM 与可见内容成正比，拖拽 / 平移 / 缩放的开销因此保持
-         *  一个小常数。 */
+        /* 商业级性能 —— 只挂载与视口相交的节点 / 边（与工作流画布同一处理）：此前含大量工作流 / 素材节点的项目图
+         *  每帧都把**整张图**的 DOM 挂上；视口裁剪让 DOM 与可见内容成正比，拖拽 / 平移 / 缩放的开销保持一个小常数。 */
         onlyRenderVisibleElements
         onNodeClick={onNodeClick}
         onNodesChange={onNodesChange}

@@ -42,15 +42,9 @@ const PANEL_HEIGHT_PX = 560;
 const PANEL_MIN_HEIGHT_PX = 320;
 
 /**
- * 面板纵向落点：优先在图标**上方**展开（与图标底边对齐），上方放不下就翻到
- * 图标**下方**。
- *
- * 拖动过的入口常落在屏幕中部甚至偏上（用户就是为了不挡内容才拖的），此时只往上
- * 展开会把面板压到一两百像素高；翻到下方则能把它完整铺开。
- *
- * 返回的是**内联样式片段**而不是像素值：算式里只用 `100dvh` 与传入的偏移，
- * 渲染期不读 `window`（理由见调用处注释）。`anchorBottom` 是入口底边距视口
- * 下沿的距离，也就是「图标下方还剩多少」—— 面板翻到下方时占的正是这一段。
+ * 面板纵向落点：优先在图标**上方**展开（与图标底边对齐），上方放不下就翻到下方
+ *（只往上展开会把面板压到一两百像素高）。返回的是**内联样式片段**：算式只用
+ * `100dvh` 与传入偏移，渲染期不读 `window`（理由见调用处注释）。
  */
 export function panelPlacement(
   anchorBottom: number,
@@ -63,13 +57,9 @@ export function panelPlacement(
   maxHeight: string;
   top?: string;
 } {
-  /* 图标**上方**还剩多少 = 视口高 − 图标底边距下沿 − 图标直径 − 留白。
-   * 放不下 `PANEL_MIN_HEIGHT_PX` 就翻到图标下方。
-   *
-   * 这个判据**必须**用到视口高：`anchorBottom` 只说「图标下方还剩多少」，
-   * 上方的余量 = 视口高 − 图标高 − 它。早先版本误把它当成「上方余量」
-   *（越大越宽裕），于是在「图标贴顶、偏移很大」时反而选了向上展开，
-   * 把面板压成 144px 高 —— 标题栏与输入框之外什么都看不见。 */
+  /* 图标**上方**余量 = 视口高 − 图标底边距下沿 − 图标直径 − 留白；放不下
+   * `PANEL_MIN_HEIGHT_PX` 就翻到下方。这个判据必须用视口高：`anchorBottom` 只说
+   *「图标下方还剩多少」，误当成上方余量曾在「图标贴顶」时把面板压成 144px 高。 */
   const spaceAbove = viewportHeight - anchorBottom - PANEL_ANCHOR_OFFSET - PANEL_EDGE_GAP_PX;
   if (spaceAbove >= PANEL_MIN_HEIGHT_PX) {
     return {
@@ -79,11 +69,9 @@ export function panelPlacement(
     };
   }
   /* 翻到下方：顶边落在图标下沿（`100dvh − anchorBottom`）再让开一个间距。
-   *
-   * 高度上限同样写成 `100dvh` 的算式，**与 `top` 用同一个来源** —— 混用
-   *「JS 读到的视口高」与「CSS 的 `dvh`」会在两者不等时（软键盘弹起、
-   *  地址栏收放）让面板被 `max-height` 截短或伸出视口，而那种不一致没有任何
-   *  东西会报警。`height` 只给自然高度，实际显示高由 `max-height` 收口。 */
+   * 高度上限同样写成 `100dvh` 的算式、**与 `top` 同源** —— 混用 JS 读到的视口高
+   * 与 CSS 的 `dvh` 会在两者不等时（软键盘弹起、地址栏收放）把面板截短或伸出视口，
+   * 而那种不一致没有任何东西会报警。`height` 只给自然高度，显示高由 `max-height` 收口。 */
   return {
     top: `calc(100dvh - ${anchorBottom - PANEL_ANCHOR_OFFSET}px)`,
     height: `${PANEL_HEIGHT_PX}px`,
@@ -144,20 +132,11 @@ export function AgentOverlay({
   return (
     <div
       className={`border-border bg-panel-deep/95 ${zClass("popup")} fixed flex w-[min(440px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-xl`}
-      /* 面板与入口的相对位置：入口那一枚图标是锚点，面板从它**左侧**展开
-       * （`right` 再加上图标直径与间距）。
-       *
-       * 两者此前**各写一处固定偏移**（入口 `right-6 bottom-8`、面板
-       * `right-6 bottom-6`）—— 用户拖动入口之后，面板倏地跳回右下角、跟入口
-       * 脱节；窄窗下面板还会直接贴住视口边。位置**只由入口那一个来源派生**，
-       * 这里不再出现第二份「角落偏移」。
-       *
-       * 纵向由 `panelPlacement()` 判一次（见那个函数的 Why），高度收口交给 CSS
-       * 的 `max-height`／`top`／`bottom` 算式 —— 渲染期不读 `window.innerHeight`
-       *（SSR 与首帧拿不到真实视口，会 hydrate 出两份不同的内联样式）。
-       *
-       *   高度：`height` 给自然高度、`max-height` 收口，两者一起读作
-       *  「想长到 560px，但不许超出视口」。 */
+      /* 面板位置**只由入口那一个来源派生**（`right` 再加上图标直径与间距）——
+       * 此前两者各写一处固定偏移，用户拖动入口后面板会跳回右下角、跟入口脱节。
+       * 纵向由 `panelPlacement()` 判一次，高度收口交给 CSS 的 `max-height`／`top`／
+       * `bottom` 算式 —— 渲染期不读 `window.innerHeight`（SSR 与首帧拿不到真实
+       * 视口，会 hydrate 出两份不同的内联样式）。 */
       style={{
         right: anchor.right + PANEL_ANCHOR_OFFSET,
         ...panelPlacement(anchor.bottom, viewport.height),
@@ -339,21 +318,8 @@ export function AgentOverlay({
 }
 
 /**
- * 触发 Agent 浮层打开的浮动入口。
- *
- * 三件事与「一枚悬浮图标」一起给出（少一件这条入口就是碍事的）：
- *
- *   · **只占一枚图标** —— 此前是「图标 + Agent」的胶囊，右下角常驻时正好压在
- *     工坊右栏（生成资源 / 资源库）与内容区的交界上，把「选择生图工作流」这类
- *     控件的右半截盖住。收成 40px 的圆钮后，它让出的横向空间就是那些控件的。
- *   · **可以拖** —— 让它常驻某处就总有挡住东西的时候，`useDraggablePosition`
- *     给出拖动 + 位置记忆（见该 hook 的 Why：位置跟右下角走、跨会话记住、
- *     拖动与点击靠位移阈值分开）。
- *   · **悬停给名字** —— 只剩图标之后，光看一枚机器人图标说不出它是干什么的；
- *     提示由 `Hint` 给（全库唯一出口，规范 16 §16.2.3），不走原生 `title=`。
- *
- * 「被拖动的位置」由调用处透传进来（`WorkshopPipeline` 同时要用它定位浮层
- * 展开后的位置），本组件不自己持有一份。
+ * 触发 Agent 浮层打开的浮动入口：只占一枚圆钮（此前「图标 + Agent」的胶囊会压住工坊右栏控件的右半截）、可以拖（`useDraggablePosition` 给拖动 + 位置记忆）、
+ * 悬停由 `Hint` 给名字（全库唯一出口，规范 16 §16.2.3，不走原生 `title=`）；「被拖动的位置」由调用处透传（`WorkshopPipeline` 要用它定位浮层），本组件不自持。
  */
 export function AgentFab({
   elementRef,

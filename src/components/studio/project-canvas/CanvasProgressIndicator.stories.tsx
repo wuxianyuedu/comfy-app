@@ -7,20 +7,9 @@ import {
 import { PRODUCTION_STAGES, normalizeProductionProgress } from "~/lib/production/progress";
 
 /**
- * 画布侧「生产进度」指示器 —— **纯展示**，入参只有一份 `ProductionProgress`
- *（`{ stage, rendered }`，持久来源是 `production` 行的 `progress` 列，工坊与画布
- * 共读同一份）。
- *
- * 它没有数据依赖，但有一件**必须由判据派生、不能手抄**的东西：百分比。所以 story
- * 里的档位逐条调 `stageProgressPct()`（组件自己用的那个出口），不写死 `33%` ——
- * 手抄一份数字就是这一批要消掉的假形态（阶段序改了 story 会继续显示旧口径）。
- *
- * 要看的是两件在真机上容易混的事：
- *   · **阶段游标**：六段每段各自的读数（`rendered` 记满格，否则按阶段序）；
- *   · **`rendered` 是另一档**：它不参与阶段序，直接 100% 且文案换成「已合成」。
- *
- * 真机位置是画布左上角的绝对定位（`z-canvas-ui`），所以 story 里给一个相对定位的
- * 容器 —— 否则那件 `absolute` 会跑到画布外面去，看不到它真实的样子。
+ * 画布侧「生产进度」指示器 —— **纯展示**，入参一份 `ProductionProgress`（`{ stage, rendered }`，
+ * 持久来源是 `production` 行 `progress` 列，工坊与画布共读）。百分比逐条调 `stageProgressPct()`
+ * 现算；`rendered` 不参与阶段序，直接 100% 且文案「已合成」。真机是左上角绝对定位，story 需相对容器。
  */
 const meta = {
   title: "Studio/CanvasProgressIndicator",
@@ -63,10 +52,8 @@ export const EachStage: Story = {
 };
 
 /**
- * `rendered` 记满格：不管游标停在哪一段都是 100%，且标签换成「已合成」。
- *
- * 这一档与上面那一族**不是同一条分支**，所以要单独摆出来 —— 只测阶段游标的话，
- * 「已合成」那句文案与 100% 都验不到。
+ * `rendered` 记满格：不管游标停在哪一段都是 100%，标签换成「已合成」。
+ * 它与上面那一族**不是同一条分支**，必须单独摆出来，否则这两点都验不到。
  */
 export const Rendered: Story = {
   args: { progress: { stage: "video", rendered: true } },

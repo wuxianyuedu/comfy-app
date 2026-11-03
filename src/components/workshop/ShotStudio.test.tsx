@@ -1,14 +1,8 @@
 //
 // ShotStudio 行为测试：镜头生图 stage 的门禁、预填、并发出口与提示接线。
-//
-// 钉死的用户可见契约：
-//   • 本地通道没选工作流 → 单镜生成被行内门禁拦下（不发起任何请求）；
-//   • 本地生成发起前 unmatched 口经 onNotice 上屏（不静默丢输入）；
-//   • API 通道未配置 → 批量按钮禁用 + 放行提示；
-//   • 进行中且有本机任务 id 的镜头显示「取消」并接 onCancelShot；
-//   • 空提示词的镜头在挂载后自动预填（场景 + 角色卡素材），手改不覆盖由
-//     editedRef 保证（这里验「空提示词会被预填」这半条）。
-// 网络层整体 mock（generation-client），组件的编排与状态写回保持真实。
+// 钉死：本地没选工作流 → 行内门禁拦下不请求；unmatched 口经 onNotice 上屏；
+// API 未配置 → 批量禁用 + 放行提示；进行中有任务 id 显示「取消」接 onCancelShot；
+// 空提示词挂载后自动预填且手改不覆盖。网络层整体 mock（generation-client）。
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

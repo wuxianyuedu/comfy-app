@@ -1,13 +1,8 @@
 "use client";
-/* ComfyUI 子图封装节点的渲染器。
- *
- * 本组件是纯渲染的组合层，按视觉区域拆在同目录：
- *   - SubgraphHeader.tsx             （标题栏）
- *   - SubgraphCollapsedAnchors.tsx   （折叠态圆柱 + 不可见逐端口 Handle）
- *   - SubgraphPinRows.tsx            （顶部针脚连接行）
- *   - SubgraphWidgetRow.tsx          （LABEL | VALUE widget 行，含图片/COMBO 分支）
- *   - SubgraphWidgetStackedString.tsx（STRING 堆叠块 + 该形态的判定谓词）
- * 数据预处理（空标签过滤、连线型 / widget 型拆桶）收在下面的 useMemo。 */
+/* ComfyUI 子图封装节点渲染器 —— 纯渲染组合层，按视觉区域拆分在同目录：
+ * SubgraphHeader.tsx（标题栏）、SubgraphCollapsedAnchors.tsx（折叠锚点）、
+ * SubgraphPinRows.tsx（针脚行）、SubgraphWidgetRow.tsx（LABEL|VALUE 行）、
+ * SubgraphWidgetStackedString.tsx（STRING 堆叠块）；数据预处理收在下方 useMemo。 */
 import React, { useMemo, useState } from "react";
 
 import { sanitizeComboLabel, NODE_TITLE_H, hexToRgba } from "../workflow-utils";
@@ -47,16 +42,10 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
    *  也要压住连线。状态在本节点内，悬浮进出不影响其余节点。 */
   const { hoverHandlers, hoverRef } = useHoverElevation();
 
-  /* 这里**不再**订阅视口缩放 —— 见 FlowNode / FrostLayer：
-   *  只有磨砂（旁路 / 禁用）节点需要跟缩放。
-   *
-   *  父图上的子图卡片 —— 与 WorkflowNode 的两区布局对齐：
-   *  紫色**头部**、一个把「纯连线输入端口（左圆点）」与「暴露的输出端口
-   *  （右圆点）」按共享的 22px 行拉链式成对的**顶部 PINS 区**，
-   *  以及一个把暴露的 widget 输入列成 LABEL | VALUE 行的 **WIDGET 区**
-   *  （只有该 widget 槽**同时**接了线时才画圆点，与 WorkflowNode 的「both」
-   *  行为一致）。紫色身份色与下钻入口是唯一子图特有的两处；
-   *  IO 行用的是与普通节点**完全相同**的连接模型，接线方式因此保持统一。 */
+  /* 这里不再订阅视口缩放（只有磨砂节点需要跟缩放，见 FlowNode / FrostLayer）。
+   * 父图子图卡片与 WorkflowNode 两区布局对齐：紫色头部 + 顶部 PINS 区
+   *（纯连线输入左圆点与暴露输出右圆点按 22px 行拉链成对）+ WIDGET 区
+   *（LABEL|VALUE 行，仅槽位同时接线时才画圆点）；IO 行连接模型与普通节点完全相同。 */
   /* 子图身份色：默认紫色；封装节点自身被旁路时切成旁路粉（#ec4899），
    * 静音时切成灰色。与 WorkflowNode 的「模式 → 颜色」逻辑一致。 */
   const nodeMode = data.mode ?? 0;
@@ -80,33 +69,11 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
   const [userCollapsed, setUserCollapsed] = useState<boolean>(data.flags?.collapsed === true);
   const isCollapsed = userCollapsed;
 
-  /* 过滤掉显示标签为空的那些行，再把封装节点的输入拆成
-   *  WorkflowNode 风格的两个桶（都只依赖 data 上的两个数组，
-   *  收进一个 memo：IO 编辑模式开合等与 data 无关的重渲染不再重算）。
-   *
-   *  ComfyUI 有时会在子图封装节点上导出哨兵 / 占位 IO ——
-   *  例如 Settings.outputs[11] = `{name:"", type:"*", label:"PREVIEW"}`。
-   *  没有这道过滤，画布会渲染出一行 22px 高的空行，
-   *  用户会把它当成渲染 bug。
-   *
-   *  拆桶判据：
-   *   - connInputs   —— 纯类型端口（没有 widget 标记）。每个都有左边缘圆点
-   *                    （常亮，未接线时也显示），并在顶部 PINS 区与输出成对。
-   *                    若某个封装输入**同时**因上游接线带
-   *                    `isConnection: true`，也归到这里（线是有落点的，
-   *                    值来自上游）。
-   *   - widgetInputs —— 被暴露的 widget 槽（带 widget 标记）。
-   *                    在 WIDGET 区渲染成 LABEL | VALUE；只有该槽**同时**
-   *                    接线（`isConnection` / `isBoundary`）时才画圆点，
-   *                    与 WorkflowNode 的「both」行一致。
-   *
-   *  拆分判据从 `widgetValue` 改了过来（封装节点自己的 widgets_values
-   *  从来不会填充那个字段，所以旧判据在封装节点上永不成立）。
-   *     * `widgets_values[]` 是空的 —— ComfyUI 导出的封装节点不会把值内联进来），
-   *     * 改成了按 `widget` 标记判（ComfyUI 导出的封装节点总是有它，
-   *     * 服务端那一趟现在也会为自定义封装节点防御性地盖章）。
-   *     * 与 WorkflowNode 的拆分器一致，把每个暴露的 widget 槽都归进 WIDGET 区，
-   *     * LABEL | VALUE 行才能渲染成内联 widget。 */
+  /* 过滤空标签行，并把封装输入拆成两桶（收进 memo）：connInputs 为纯类型端口，
+   * 左边缘常亮圆点、与输出在 PINS 区成对（带 isConnection 的封装输入也归此）；
+   * widgetInputs 为暴露 widget 槽，渲染 LABEL|VALUE，仅 isConnection/isBoundary 时画圆点。
+   * 判据按 `widget` 标记（封装节点 widgets_values 为空，旧 widgetValue 判据永不成立；ComfyUI 导出总带该标记）。
+   * 空标签哨兵 IO（如 outputs[11] {name:"",type:"*",label:"PREVIEW"}）必须过滤，否则渲染出空 22px 行。 */
   const { connInputs, widgetInputs, cleanedOutputs } = useMemo(() => {
     const cleanedInputs = data.inputs
       .map((inp) => ({ inp, label: exposedName(inp) }))
@@ -209,12 +176,8 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
         />
       )}
 
-      {/* Widget 区 —— 暴露出的包裹 widget 输入，按 LABEL | VALUE 行排。
-       *  只有槽位**同时**接了线（isConnection / isBoundary）才挂
-       *  圆点（目标 Handle），与 WorkflowNode 的「两者都有」行一致。即便
-       *  如此值也照常显示（连线不消失 + 值可见）。
-       *  值很长的 STRING widget 拆成上下堆叠块。
-       *  章折叠时隐藏。 */}
+      {/* Widget 区：暴露的包裹 widget 输入按 LABEL|VALUE 行排。仅槽位同时接线
+          （isConnection/isBoundary）才挂目标 Handle；值照常显示。长 STRING 拆成上下堆叠块，章折叠时隐藏。 */}
       {!isCollapsed && widgetInputs.length > 0 && (
         /* widget 区与卡片同底（`bg-node`）：此前取 `bg-surface-1`（近黑），
          *  节点框改灰之后它会变成「灰框里的黑块」，nodeMode ≠ 0 时又必须

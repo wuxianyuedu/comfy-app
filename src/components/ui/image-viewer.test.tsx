@@ -1,23 +1,9 @@
 // @vitest-environment jsdom
-/* 为何**不**留在 DOM 档默认的 happy-dom（这是本档的例外，口径见规范 §11.17）：
- * 本文件要 `vi.spyOn(Element.prototype, "clientWidth", "get")` —— 给一个
- * **访问器**打桩。happy-dom 的 `clientWidth` 落在实例上（原型上没有访问器），
- * vitest 的 `spyOn` 当场以「The property "clientWidth" is not defined on
- * the object」抛错；jsdom 把它实现为原型上的 getter，可以打桩。
- * 这条判据要证明的恰恰是「适应窗口**没有**读 clientWidth」，所以那个桩
- * 必须打得进去 —— 换不了写法。
- */
-/**
- * 通用图片查看器的契约：**看全**这件事只允许一处实现。
- *
- * 用例钉的是「用户能拿到什么」而不是内部状态：头部显示原始像素尺寸、三个
- * 缩放入口（按钮 / 滚轮 / 双击）改的是同一个百分比、拖拽平移落到容器的滚动
- * 偏移、关闭只走一个出口；以及失败兜底与键盘可达（缩略图是按钮）。
- *
- * jsdom 不做布局：可视区恒为 0×0（于是「适应窗口」折算不出，倍数退回 100%），
- * 自然尺寸也不会真的读出来 —— 用例自己把 `naturalWidth/Height` 打上去，
- * 这正是真实浏览器里 `onLoad` 那一刻读到的两个数。
- */
+/* 为何不留在 DOM 档默认的 happy-dom（本档的例外，口径见规范 §11.17）：本文件要 `vi.spyOn(Element.prototype, "clientWidth", "get")` 给一个访问器打桩；happy-dom 的 `clientWidth` 落在实例上（原型上没有访问器），vitest 的 `spyOn` 当场以「The property "clientWidth" is not defined on the object」抛错，jsdom 把它实现为原型上的 getter、可以打桩。
+ * 这条判据要证明的恰恰是「适应窗口没有读 clientWidth」，所以那个桩必须打得进去 —— 换不了写法。 */
+/** 通用图片查看器的契约：看全这件事只允许一处实现。
+ * 用例钉的是「用户能拿到什么」而不是内部状态：头部显示原始像素尺寸、三个缩放入口（按钮 / 滚轮 / 双击）改的是同一个百分比、拖拽平移落到容器的滚动偏移、关闭只走一个出口；以及失败兜底与键盘可达（缩略图是按钮）。
+ * jsdom 不做布局：可视区恒为 0×0（于是「适应窗口」折算不出、倍数退回 100%），自然尺寸也不会真的读出来 —— 用例自己把 `naturalWidth/Height` 打上去，这正是真实浏览器里 `onLoad` 那一刻读到的两个数。 */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

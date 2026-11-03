@@ -1,17 +1,8 @@
 "use client";
 
 /**
- * CharacterDesigner 的两个分域 sub-hook（§12.13 函数长度：主组件 605 行，
- * 两个动作域各自只依赖注入的事实，与主组件的渲染无共享 state）：
- *
- *   · `useCharacterExtractFlow` —— 两通道（本地 / 远端模型）提取 + 外部导入（与
- *     `useStoryboardExtractFlow` 同族：会话经 props 注入 / 遗留用法退化
- *     局部会话；本地/API 通道 = LLM 流式输出角色卡 JSON）。
- *   · `useCharacterAiFlow` —— 一句话生成（独立模型选择 + 流式进度）与
- *     逐角色 AI 润色（「哪一条在忙」useItemAction /「错误挂那一条」
- *     useItemErrors，规范 16 §16.2.4.40 / §16.2.4.33）。
- *
- * 返回形状与原组件内联实现逐字段一致，视图与测试零感知（§12.18）。
+ * CharacterDesigner 的两个分域 sub-hook（§12.13）：`useCharacterExtractFlow`（两通道提取 + 外部导入，与 `useStoryboardExtractFlow` 同族）
+ * 与 `useCharacterAiFlow`（一句话生成 + 逐角色 AI 润色，规范 16 §16.2.4.40 / §16.2.4.33）。返回形状与原组件内联实现逐字段一致，视图与测试零感知（§12.18）。
  */
 import React from "react";
 import { workshopUid } from "~/lib/workshop/script-parser";

@@ -1,22 +1,9 @@
 "use client";
 
 /**
- * 「界面打开」日志的唯一落点 —— 补记**打开耗时**。
- *
- * 判据：从「这一屏成为当前页」（工作区页面的激活时刻）到「这一屏的内容组件真的
- * 挂载」的毫秒数。为什么耗时的测量点必须在这里：工作区视图栈里的懒加载视图由
- * `next/dynamic`（`ssr:false` 走 Loadable）渲染 —— 分块没到位时它先渲染成占位，
- * 外层的任何包裹组件在**激活那一刻**就挂载了，量到的是 0；只有把测量点放进
- * **内容本体**（`withViewOpenReport` 在分块解析后包住它），拿到的时刻才对应
- * 「界面真的出来了」。
- *
- * 「打开时刻」由 `WorkspaceViewStack` 经 context 交给这里：它是当前屏激活之后的
- * 一次 `performance.now()`（记在视图栈的 effect 里，与它对应的视图成对存放 ——
- * 见那里的说明），视图切换时更新（口径与视图栈一致：同一视图的两个项目页签算
- * 同一屏）。
- *
- * 视图栈里的懒加载视图由 `withViewOpenReport` 包（见 `WorkspaceViewStack` 的
- * `lazyView`）；即时加载的视图由视图栈直接包在 `ViewOpenReport` 外。
+ * 「界面打开」日志的唯一落点 —— 补记**打开耗时**：从「这一屏成为当前页」（工作区页面激活时刻）到「内容组件真的挂载」的毫秒数。
+ * 测量点必须放进内容本体：懒加载视图由 `next/dynamic`（`ssr:false` 走 Loadable）渲染，分块未到位时先渲染占位，任何外层包裹在激活那一刻就挂载、量到的是 0；`withViewOpenReport` 在分块解析后包住内容，才对应「界面真的出来了」。
+ * 「打开时刻」由 `WorkspaceViewStack` 经 context 交来（激活后的一次 `performance.now()`，与对应视图成对存放、切换时更新：同一视图的两个项目页签算同一屏）；懒加载视图经 `withViewOpenReport` 包，即时加载的直接由视图栈包。
  */
 
 import {
@@ -38,10 +25,7 @@ export type ViewOpenedAtLookup = (view: WorkspaceView) => number | null;
 export const ViewOpenedAtContext = createContext<ViewOpenedAtLookup | null>(null);
 
 /**
- * 把一屏内容包一层：内容挂载时补记一条「界面打开：<屏名> 耗时 <n>ms」。
- *
- * 收 `children` 而不是「收组件」，是为了两种用法共用同一份判据：即时加载的视图由
- * 视图栈直接包；懒加载的视图经 `withViewOpenReport` 包在**解析后**的组件外。
+ * 把一屏内容包一层：内容挂载时补记一条「界面打开：<屏名> 耗时 <n>ms」。收 `children` 而不是「收组件」，是为了两种用法共用同一份判据（即时加载由视图栈直接包，懒加载经 `withViewOpenReport` 包在解析后的组件外）。
  */
 export function ViewOpenReport({ view, children }: { children: ReactNode; view: WorkspaceView }) {
   const openedAt = useContext(ViewOpenedAtContext)?.(view) ?? null;

@@ -1,19 +1,7 @@
 /**
- * 日志面板的**采集 / 解析 / 过滤**纯函数（`log-store` 的拆分件）。
- *
- * 这里放 `serialize` 一族噪音判据
- * （`isReactQueryLog`、`isNoisyFrameworkLog`、`isNextDevNoise`、
- * `isRoutineRpcTimingLog`、`isRoutineRpcTimingLine`、
- * `isPanelSelfPollingLine`）→ 文件行解析（`parseFileLogs`）→ 时间线合并、
- * 去重、计数（`mergeTimeline`、`lastSeqOf`、`dropStaleEntries`、
- * `dedupeRepeats`、`computeCounts`、`computeOriginCounts`、
- * `computeFiltered`）与 ID 生成的窄封装。store 与外部消费者通过 `log-store`
- * 的 re-export 使用同一批符号，import 路径不变（§12.18 复用优先——
- * 拆包只挪文件、不动契约）。
- *
- * 这一层的函数**不吃 store state、也不写它**，是天然的叶子，让 store 只留
- * 「状态 + actions + selector」。方向：本文件 → `log-types`（类型）+ 外部 lib；
- * store → 本文件，无回环。
+ * 日志面板的**采集 / 解析 / 过滤**纯函数（`log-store` 的拆分件）：噪音判据 → `parseFileLogs`
+ * → 时间线合并 / 去重 / 计数 + ID 生成，经 `log-store` re-export 保持 import 路径（§12.18 只挪文件）。
+ * 这一层不吃也不写 store state，是天然叶子；方向：本文件 → `log-types`，store → 本文件，无回环。
  */
 import { upperToken } from "~/lib/upper-token";
 import { PANEL_SELF_POLL_ENDPOINTS } from "~/lib/log/panel-self-poll";
@@ -110,26 +98,10 @@ function serializeOne(a: unknown): string {
 }
 
 /* ── console 的 printf 风格占位符 ────────────────────────────────────────
- *
- * `console.error("… %s …", value)` 的正文里 `%s` 是**格式占位符**，不是日志
- * 内容：浏览器 / Node 的 console 会把它换成后面的实参再显示。面板此前按 `" "`
- * 拼接全部实参，于是用户读到的是一条「模板 + `%s` 原样 + 实参挂在尾巴上」的
- * 怪行 —— 用户报的那条 React key 警告正是这个形态（ISSUE #1703）：正文是
- * 「`Encountered two children with the same key, \`%s\`. ……`」这一大段模板，
- * 末尾缀着那条日志真正的实参，而本该换成实参的地方原样留着 `%s`。
- *
- * 那条警告真正要说的只有一句话：**`hero-1` 这个 key 重复了**。占位符不展开时
- * 那句话反而不在日志里（它在尾巴上、与模板隔了 150 个字符）。
- *
- * 只认 console 家族真正会消费的四种：`%s`（字符串化）、`%d` / `%i`（数值）、
- * `%o` / `%O`（对象，走序列化）、`%c`（CSS 样式 —— **消费但不显示**，样式表
- * 本来就不该进日志正文），以及转义 `%%` → `%`。
- *
- * **`%c` 必须被吃掉**：tRPC loggerLink 一族逐帧样式参数用的就是它，旧行为会把
- * 那段 CSS 原样留在消息里。`isReactQueryLog` 一族噪判据**看的是 `args[0]` 原串**
- * （不走 `serialize`），因此展开占位符不影响它们的判决 —— 那是有意的分工：
- * 过滤认「原始形态」，展示认「人读的形态」。
- */
+ * `console.error("… %s …", value)` 的 `%s` 是格式占位符而非日志内容，浏览器/Node 会换成实参；
+ * 面板按 " " 拼接全部实参，成了「模板 + `%s` 原样 + 实参缀尾巴」，真正要说的「哪个 key 重复」
+ * 被隔在 150 字符外（ISSUE #1703）。只认 `%s`/`%d`/`%i`/`%o`/`%O`/`%c`/`%%`；`%c` 必须吃掉
+ * （tRPC loggerLink 逐帧样式参数）。噪判据看 `args[0]` 原串、不受展开影响——过滤认原始形态。 */
 
 /** 占位符 → 消费一个实参的方式；`drop` 表示消费但不进正文（`%c` 的样式表）。 */
 const PLACEHOLDER_KINDS: Record<string, "text" | "number" | "object" | "drop"> = {
@@ -152,17 +124,9 @@ function renderArg(kind: string, value: unknown): string {
 }
 
 /**
- * 展开 console 的 printf 风格占位符（`%s` / `%d` / `%i` / `%f` / `%o` / `%O` /
- * `%c` / `%%`），把实参换进正文。
- *
- * 与浏览器 console 的差异（都是**有意的窄化**，宁可少换也不错换）：
- *   - 无对应实参的占位符**原样保留**（浏览器会打 `undefined`）——用户看到的
- *     是「这里本来该有个值」，而不是一句凭空的 `undefined`；
- *   - 实参多于占位符时，多出来的按旧行为追加在末尾（`" "` 连接），不丢信息；
- *   - 首参不是字符串时不做任何事（`console.error(err)` 这类没有模板可展开）。
- *
- * 不支持的宽度 / 精度修饰（`%.2f`、`%5d`）按**原样保留**处理：它们是正文里
- * 的字面量，强行解析只会把内容改错。
+ * 展开 console 的 printf 占位符（`%s` / `%d` / `%i` / `%f` / `%o` / `%O` / `%c` / `%%`）。
+ * 有意窄化：无对应实参的占位符原样保留（浏览器会打 undefined），多出的实参按旧行为缀在末尾，
+ * 首参非字符串不处理；`%.2f` / `%5d` 等不支持的宽度精度按字面量原样保留。
  */
 export function formatConsoleArgs(args: Array<unknown>): string {
   const first = args[0];
@@ -217,16 +181,9 @@ export function serialize(args: Array<unknown>): string {
 export { captureLocation, locateInStack } from "./log-callsite";
 
 /**
- * 过滤 tRPC loggerLink / React Query 内部追踪日志。
- *
- * tRPC 客户端在 dev 模式通过 loggerLink 把每次调用打成 console 日志，形如
- * `%c<< mutation #43 %cworkflow.update` 或 `%c>> query #1 ...`。这些日志随
- * 组件重渲染与保存操作大量产生，会淹没真正的业务日志；但 LoggerLink 对网络排错
- * 本身有价值（保留在 console），只是不写进日志面板。因此这里仅做面板侧丢弃。
- *
- * 同时兜底 tRPC 在 mutation 落库/重排后重新包装的塌缩形态（形如
- * `[[ << mutation #43 ]workflow.update {}`），它会被 React devtools 以
- * "Console Error" 形式从 LogProvider 转发帧抛到面板，同样属于无害框架噪音。
+ * 过滤 tRPC loggerLink / React Query 内部追踪日志：dev 下每次调用都打一行，会淹没业务日志，
+ * 但保留在浏览器 console、只做面板侧丢弃。同时兜底 mutation 后重新包装的塌缩形态
+ * （`[[ << mutation #43 ]workflow.update {}`），它经 React devtools 以 Console Error 转发进面板。
  */
 export function isReactQueryLog(args: Array<unknown>): boolean {
   if (args.length === 0) {
@@ -264,11 +221,8 @@ export function isNoisyFrameworkLog(args: Array<unknown>): boolean {
 }
 
 /**
- * 过滤 Next.js dev 自身的开发提示，避免它们以"业务 info 日志"身份进面板。
- * 典型例子：热更新完成时 Next dev 在浏览器 console 打印 `[Fast Refresh] done in
- * XXXXms`，它来自框架的 dev chunk（source-map 只到压缩后的哈希模块，形如
- * `src/00vplg9./.js`），并非任何业务代码打印，也没有可读的调用位置。
- * 与其它框架噪音一致：保留在浏览器 console（降为 debug），只不入面板。
+ * 过滤 Next.js dev 自身的开发提示（如 `[Fast Refresh] done in XXXXms`）：来自框架 dev chunk，
+ * 没有可读调用位置，与其它框架噪音一致——保留在浏览器 console（降为 debug），只不入面板。
  */
 export function isNextDevNoise(args: Array<unknown>): boolean {
   if (args.length === 0) {
@@ -279,26 +233,10 @@ export function isNextDevNoise(args: Array<unknown>): boolean {
 }
 
 /* 启动链路行的形态（dev-launcher 的 Transcript 是「裸文本 + 缩进」的混合体）：
- *
- *   "[10:22:24] [INFO ] 预检通过"                    ← 级别标记带填充空格（PadRight 5）
- *   "[10:22:25] [STEP] 检查端口占用"                 ← 标准形态
- *   "  [10:22:24] [INFO ] 未检测到 .env 配置文件。"     ← 缩进两格的续行
- *   "  [10:22:24] [ERROR] 启动失败："                   ← 同上
- *   "[10:22:30] [[OK] 服务器已就绪"                   ← 颜色码残缺留下的多余 `[`
- *
- * 三条口径缺一不可，否则整行会掉进裸文本兜底、以 "[HH:mm:ss] [LEVEL]" 原文
- * 显示在面板上（ISSUE #262 六审：用户读到的就是「启动 / 启动器两项还是没有
- * 日志内容」——行其实抓到了，只是没被认成日志行）：
- *   1. 级别标记容错：`\[` + 可选残码 + 可选空白 + 级别 + 可选空白 + 可选残码 + `]`。
- *      PowerShell 的 `PadRight(5)` 会给 INFO / STEP / OK 补尾空格，严格的
- *      `\[INFO\]` 匹配不到；颜色码残缺时 `[` 后还会多留一段假转义（`[[90m[OK`）；
- *   2. 行首允许**缩进**（`\s*`）—— dev-launcher 的引导文案与错误详情是缩进
- *      两格的续行，且同样带完整的时刻 + 级别前缀，不该当成另一种形态；
- *   3. 只认这六个级别名（`STEP` / `OK` / `INFO` / `WARN` / `ERROR` / `DEBUG`）——
- *      容错只放宽「级别周围」，不放过 `[rpc]` / `[system]` 这类普通前缀词。
- *
- * 时刻仍限 `HH:mm:ss`（带日期的行由下面两条更具体的规则接管）；级别名大小写
- * 不敏感，与 app-runtime / launcher 转录的宽松口径一致。 */
+ * 三条口径缺一不可，否则整行掉进裸文本兜底、以 "[HH:mm:ss] [LEVEL]" 原文显示（ISSUE #262 六审）：
+ * ① 级别标记容错（PadRight(5) 补尾空格、颜色码残缺会多留 `[[90m[OK`）；② 行首允许缩进；
+ * ③ 只认 STEP/OK/INFO/WARN/ERROR/DEBUG 六个级别名，不放过 `[rpc]` 这类普通前缀词；时刻限 HH:mm:ss。
+ */
 const LOG_LINE_RE =
   /^\s*\[(\d{2}):(\d{2}):(\d{2})\]\s*\[\[?[0-9;]*m?\[?\s*(STEP|OK|INFO|WARN|ERROR|DEBUG)\s*\[?[0-9;]*m?\]\s*(.*)$/;
 const LAUNCHER_LOG_RE = /^\[(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\.(\d{3})\]\s*(.*)$/;
@@ -306,13 +244,8 @@ const APP_RUNTIME_LOG_RE =
   /^\[(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\.(\d{3})\]\s*\[(INFO|WARN|ERROR|DEBUG)\]\s*(?:\[([^\]]+)\]\s*)?(.*)$/;
 
 /**
- * 过滤常规 tRPC/RPC 调用计时日志（#294）。
- *
- * 形如 `[rpc] setting.dbStudioStatus 155ms {"type":"query"}` / `[trpc] generate.generate
- * 25ms {"type":"query"}` 的行来自 tRPC 中间件的调用计时（历史上每次 query/mutation
- * 都写一条），正常调用每几秒就刷一整屏，把真正的业务/警告日志冲走。
- * 「有问题的调用」（失败 error、超过慢查询阈值的 warn）必须保留——它们的消息
- * 带「失败」字样或级别本身是 warn/error，不会命中这里的"常规 info 计时"判定。
+ * 过滤常规 tRPC/RPC 调用计时日志（#294）：`[rpc] xxx 155ms {…}` 来自中间件，正常调用每几秒刷一整屏。
+ * 带「失败」或 warn/error 级别的慢查询必须保留——它们不会命中这里的「常规 info 计时」判定。
  */
 export function isRoutineRpcTimingLog(args: Array<unknown>): boolean {
   if (args.length === 0) {
@@ -348,26 +281,9 @@ export function isRoutineRpcTimingLine(line: string): boolean {
 const GET_REQUEST_TARGET = /^\s*GET\s+(\S+)/;
 
 /**
- * 过滤面板**自轮询**产生的访问日志行（Next dev server 的请求日志）。
- *
- * 面板每 2s 轮询六路日志来源（`GET /api/logs/current?source=…`）与
- * `GET /api/dev/server-id`，另有每 30s 一拍的 `GET /api/dev/build-id`
- * （代码更新检测，`pauseWhenHidden: false` ⇒ 页面切后台也照打）；
- * dev server 把每个请求打到 stdout，被转录进
- * nextjs-panel 文件（app 来源）——下一轮轮询又把它读回来。这是一条**自我
- * 反馈回路**：不滤掉就以每轮数行的速度无限累积，而且这些行读不到行内时刻、
- * 只能钳到解析当时，于是成批挤在同一毫秒里把真正的日志淹没。时间线此前封顶
- * 2000 条时，它们正是把「启动 / 启动器」的行全部挤出面板的推手；现在不设
- * 上限，不滤掉的话同样会让时间线变成只剩回声。
- *
- * 端点集合取自 `~/lib/log/panel-self-poll` 那份清单 —— 请求方也 import 它，
- * 所以「新增一个自用请求」与「过滤它的回声」是同一处改动。此前这里手抄了两个
- * 名字，于是端点族长出第三个时账面一条都不红（ISSUE #2417）。
- * 只匹配清单里的端点：业务请求（tRPC / 页面路由 / 生成接口）照常显示 ——
- * 把集合写宽了会把真日志滤没，那比多几行回声坏得多。
- * 带时间戳前缀的形态（`[HH:mm:ss] [INFO] GET …`）由
- * parseFileLogs 在拆出正文后再问一次本函数。
- */
+ * 过滤面板**自轮询**产生的访问日志行（Next dev 请求日志），否则成自我反馈回路：每 2s 六路 + server-id、每 30s build-id 的请求被转录进 nextjs-panel、下一轮又读回来，无限累积且读不到行内时刻、只能钳到解析当时。
+ * 端点集合取自 `~/lib/log/panel-self-poll`（请求方与过滤同源，ISSUE #2417）；只匹配清单内端点，业务请求照常显示。
+ * 带 `[HH:mm:ss] [INFO]` 前缀的形态由 parseFileLogs 拆出正文后再问一次。 */
 export function isPanelSelfPollingLine(line: string): boolean {
   const match = GET_REQUEST_TARGET.exec(line);
   const target = match?.[1];
@@ -404,11 +320,8 @@ function parseLogLevel(level: string): LogLevel {
 }
 
 /**
- * 匹配 Next.js dev 的 `[Fast Refresh] rebuilding` 转录行。
- * 它由框架打进 launcher/dev 转录（无业务含义），但行内常携带上一条编译
- * 错误的级别标记（形如 `[INFO] [Fast Refresh] rebuilding [ERROR] ...`），
- * 按级别正则会整行落成 error——看起来像应用出错，实际只是热更新进行中。
- * 与 isNextDevNoise（浏览器 console 侧过滤）互补：这条处理文件转录侧。
+ * 匹配 Next.js dev 的 `[Fast Refresh] rebuilding` 转录行：行内常带上一条编译错误的级别标记，
+ * 按级别正则会整行落成 error。与 isNextDevNoise（console 侧）互补，这条处理文件转录侧。
  */
 const FAST_REFRESH_REBUILD_RE = /\[Fast\s*Refresh\]\s*rebuilding(?:\s*\[(?:ERROR|WARN|DEBUG)\])?/i;
 
@@ -533,17 +446,9 @@ function isLogLine(line: string): boolean {
 }
 
 /**
- * 渲染前折叠连续重复行：同一页里连续 N 条内容完全相同的行压缩成一条
- * `…（重复 N 次）`，只保留前 REPEAT_FOLD_LIMIT 条。
- *
- * 为什么必须有这一步：面板里最常见的「没信息量」形态不是长度，而是**重复**——
- * 同一路轮询每轮写一条同样的慢查询 / 重连提示，一屏就被刷满，用户看不到别的
- * （ISSUE #262）。写入侧已经按时间桶聚合了一次（§7.14.1），这里是视图侧的最后
- * 一道保险：只影响显示，不改动时间线本身。
- *
- * 只折叠**连续**重复（按相邻位置），不按键全局分组——跨距离的相同行之间隔着
- * 别的事件，合并它们会把时间线读成「同一个事件发生了 N 次」，那是错的。
- */
+ * 渲染前折叠连续重复行：连续 N 条完全相同的行压成一条 `…（重复 N 次）`，只留前 REPEAT_FOLD_LIMIT 条。面板最常见「没信息量」是同一路轮询每轮写同样的慢查询提示。
+ * 写入侧已按时间桶聚合一次（§7.14.1），这里是视图侧最后一道保险：只影响显示、不动时间线。
+ * 只折叠**连续**重复——跨距离合并会把时间线读成「同一事件发生 N 次」，那是错的。 */
 export function dedupeRepeats(
   entries: Array<LogEntry>,
   limit = REPEAT_FOLD_LIMIT,
@@ -601,23 +506,9 @@ export function computeCounts(logs: Array<LogEntry>, search = ""): LogLevelCount
 }
 
 /**
- * 按**行身份**挑出代表行：同一条日志被多路读到、在时间线上落成多份时，只留
- * 第一份（`mergeTimeline` 落板的就是它）。
- *
- * 视图层的去重（`dedupeRepeats`）只折叠**长成一样**的连续行；六路来源的副本行
- * 长在 `origin` 上，因此「全部来源」的时间线本来就该把它们各自显示出来（用户
- * 切到「应用运行」看的正是那一份）。但**数字**是另一回事：界面上的「全部来源
- * N 条」与「各分类之和」指的是同一批事件，而同一批事件在六个来源里各有各的
- * 计数——两边口径不同时，用户读到的就是「下拉上加起来比『全部来源』多好几倍」。
- *
- * 口径（与 `computeOriginCounts` 的守恒契约配套）：
- * - `all`（全部来源）**按身份计一次**：它是「这批日志有多少条」的答案；
- * - 逐来源**各按自己那份文件里的条数**计：它是「切过去会看到几行」的答案，
- *   与 `computeFiltered` 的筛选结果逐条对齐（否则就是那种最不可信的数字）；
- * - 于是守恒只在**每个来源内部**成立（该来源的各级别之和 = 该来源的总数），
- *   跨来源相加**不**等于「全部来源」——两边的语义本来就不同，界面上也必须
- *   分开摆（见 `LogFilterBar` 的标签：级别按钮的数字是「当前来源」的）。
- */
+ * 按**行身份**挑出代表行：同一条日志被多路读到、时间线上落成多份时只留第一份；视图去重只折叠长成一样的连续行，副本行长在 `origin` 上。
+ * 但**数字**不同：`all` 按身份计一次，逐来源各按自己文件条数计（与 `computeFiltered` 逐条对齐）。
+ * 守恒只在每个来源内部成立，跨来源相加≠全部来源，界面必须分开摆。 */
 export function dedupeByIdentity(
   logs: Array<LogEntry>,
   origin: LogOriginFilter = "all",
@@ -639,22 +530,9 @@ export function dedupeByIdentity(
 }
 
 /**
- * 来源 × 级别的二维计数表（`all` = 全部来源）。
- *
- * 面板此前**只有一个总数**：级别筛选行上的数字是全部来源的合计，来源下拉里
- * 只有名字没有数。于是「看着警告有 974 条，切到启动器却什么都没有」——
- * 那 974 条全在别处，而界面没有任何地方能看出来（ISSUE #360 的第二张图）。
- *
- * 契约：
- * - **key 是筛选值本身**：`"all"` + 四个级别，与 `LogFilter` 一一对应，视图直接
- *   `countsByOrigin[origin][level]` 取值，不需要在视图里再换算；
- * - **逐来源独立**：`countsByOrigin.launcher.warn` 只数 `origin === "launcher"`
- *   的行，`countsByOrigin.all` 才是全量；
- * - **不搜也能看，搜了就跟着收窄**：计数是「当前界面上能选到什么」的口径，因此
- *   与 `computeFiltered` 共用同一个 `matchesSearch`——搜索时会点中哪些行，计数上
- *   就显示几。两处若各写一套匹配规则，会出现「左边写着警告 2、切过去只剩 1」，
- *   比不显示数字更让人怀疑面板（ISSUE #360 的同一类问题）。
- */
+ * 来源 × 级别的二维计数表（`all` = 全部来源）。此前只有总数与来源名无数，「看着警告 974 条、切到启动器却什么都没有」（ISSUE #360）。
+ * 契约：key 是筛选值本身（`"all"` + 四个级别，视图直接 `countsByOrigin[origin][level]`）；逐来源独立（`launcher.warn` 只数 `origin === "launcher"`）。
+ * 计数与 `computeFiltered` 共用 `matchesSearch`，搜索时一起收窄，否则「左边写警告 2、切过去只剩 1」比不显示更让人怀疑面板。 */
 export function computeOriginCounts(logs: Array<LogEntry>, search = ""): LogOriginCounts {
   const table: LogOriginCounts = {
     all: zeroCounts(),
@@ -684,17 +562,11 @@ export function computeOriginCounts(logs: Array<LogEntry>, search = ""): LogOrig
     bucket.all += 1;
     bucket[entry.level] += 1;
   }
-  /* 「全部来源」按**身份**计（同一条日志被六路读到只算一条）。
-   *
-   * 这里是那张「下拉里四列数字」的**全部**来源：`table[origin]` 的每一项都是
-   * 「切到这个来源会看到几行」，而 `table.all` 是「面板上有多少条日志」——
-   * 两者语义不同，因此**跨来源相加本来就不等于 all**（同一批启动行写在
-   * launcher / dev-launcher / shell / shell-launch 好几份文件里，副本各算一份）。
-   *
-   * 历史形态：`all` 与逐来源用同一批行累加，于是撞上时间线上限（5000）时
-   * `all` 被截到上限、各分类之和还在算被挤掉的那些，守恒连「撞上限之前」都不
-   * 成立——e2e 那条守恒判据因此在整批跑时红（实测 5000 vs 3335）。
-   * 现在两个口径各自成立、各自可断言：逐来源**内部**守恒，`all` 等于身份数。 */
+  /* 「全部来源」按**身份**计（同一条日志被六路读到只算一条）。`table[origin]` 是「切过去会看到几行」，
+   * `table.all` 是「面板上有多少条日志」，两个语义——同一批启动行写在 launcher / dev-launcher /
+   * shell / shell-launch 好几份文件里，副本各算一份，因此跨来源相加本来就不等于 all。
+   * 历史形态是二者用同一批行累加，撞上限（5000）时 all 被截、各分类之和仍算被挤掉的行，守恒连
+   * 「撞上限之前」都不成立（e2e 实测 5000 vs 3335）；现在两个口径各自成立、各自可断言。 */
   for (const entry of dedupeByIdentity(logs)) {
     if (!matchesSearch(entry, search)) {
       continue;

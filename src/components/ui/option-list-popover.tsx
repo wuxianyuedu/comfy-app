@@ -7,26 +7,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover
 import { cn } from "~/lib/utils";
 
 /**
- * OptionListPopover —— 「一个可滚动的浮层选项列表」的**唯一实现**
- * （规范 16 §16.2.4.14）。
- *
- * 为什么收口：画布节点上的四个 chip（工作流名 / 形态 / 来源 / 模型标签）各自
- * 写了一份**逐行同形**的浮层 —— 触发器 `h-6 … rounded-lg` 配一个 `▾`
- * （`open` 时 `rotate-180`）、内容 `max-h-* overflow-y-auto` 的可滚动列表、
- * 每行 `<Button role="option" aria-selected>` 配「选中高亮 + 勾」。四份的
- * 「当前项」配色还各写各的（`violet-500/20` / `fuchsia-500/20` /
- * `primary-soft` / `bg-accent`）—— 改一处漏三片，且都不受主题 token 控制。
- *
- * 本基元负责**壳与行**：触发器（含 `▾` 与旋转）、可滚动内容区、选项行的
- * `role` / `aria-selected` / 选中态配色 / 勾标记、`Escape` 与外点关闭
- * （由 `ui/popover` 的 base-ui Positioner 给，调用处不再自绘）。
- * 调用处只提供：当前值、选项数组、`重新渲染一行左侧装饰` 与 `onSelect`。
- *
- * **不做成 `ui/select-menu` 的别名**：`select-menu` 是 `combobox` 语义
- * （有 listbox id / 键盘高亮索引 / `aria-controls`），用于表单里的「选一个值」；
- * 本基元是画布上的轻量「点一项切换」，没有高亮索引，行内容也更自由
- * （计数、类型章、颜色点）。两者语义不同，硬合会把 combobox 的 a11y 契约
- * 塞进 chip。
+ * OptionListPopover —— 「一个可滚动的浮层选项列表」的唯一实现（规范 16 §16.2.4.14）。收口前画布节点四个 chip 各写一份逐行同形的浮层，选中配色还各写各的（不受主题 token 控制）。
+ * 本基元负责壳与行（触发器含 `▾` 与旋转、可滚动内容区、选项行的 `role` / `aria-selected` / 选中态配色 / 勾标记、Escape 与外点关闭）。不做成 `ui/select-menu` 的别名：那个是 combobox 语义，本件是轻量「点一项切换」，行内容更自由。
  */
 export type OptionListItem = {
   /** 行文案。 */

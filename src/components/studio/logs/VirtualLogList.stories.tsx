@@ -8,23 +8,9 @@ import { EmptyState } from "~/components/ui/empty-state";
 import { sceneEntries, type SceneName } from "../../../../.storybook/store-sources";
 
 /**
- * 日志的**虚拟滚动容器** —— 两个弹窗（`GlobalStepLogPanel` /
- * `WorkflowRunLogModal`）共用的那一份。
- *
- * 它是**纯 props**（`entries` / `getMessage` / `renderRow` …），所以这一组里没有
- * store 的事。要摆的是它**自己**的两条职责，它们在真机上各有一种「看着正常、
- * 其实坏了」的形态：
- *
- *  · **窗口计算**：只把视口里的那几十行挂进 DOM（满页 2000 行时 DOM 节点数不再
- *    随页大小涨）。坏掉的样子是滚动条长度与内容对不上 —— 而画布上第一屏**完全
- *    正常**，因为第一屏永远在窗口里；
- *  · **贴底（follow）**：跟随态下「内容变了」就滚到底。坏掉的样子是「用户上滚读
- *    历史被按回底部」，同样只在**滚动之后**才看得见。
- *
- * 所以这里刻意摆了「一页之外还有货」的 `longTimeline`（2600 行）：第一屏与滚动
- * 到中段的形态要能同时看到。行仍然**来自真解析链路**（`sceneEntries()`，见
- * `store-sources.tsx`）—— 手捏 `entries` 字面量会绕过 `getMessage` 依赖的那几个
- * 字段（行高估算正是按 `message` 文本折行算的）。
+ * 日志的**虚拟滚动容器**（两个弹窗共用）。纯 props，没有 store 的事。要看两条职责的「看着正常
+ * 其实坏了」形态：窗口计算（坏掉时滚动条长度与内容对不上，第一屏仍正常）；贴底（坏掉时用户上滚
+ * 被按回底部）。刻意摆 2600 行 `longTimeline`，行来自真解析链路（`sceneEntries()`）。
  */
 const meta = {
   title: "Studio/Logs/VirtualLogList",
@@ -37,9 +23,7 @@ type Story = StoryObj<typeof VirtualLogListHarness>;
 
 /**
  * 适配件：定高框 + 真条目 + `LogRow` 作行渲染器。
- *
- * 定高是**必须**的（`h-96`）：这个组件的整个存在意义就是「视口只有这么高」，
- * 让容器自然撑开等于关掉虚拟化、把这一组要看的窗口计算整块跳过。
+ * 定高（`h-96`）是**必须**的：容器的存在意义就是「视口只有这么高」，自然撑开等于关掉虚拟化。
  */
 function VirtualLogListHarness({
   scene = "longTimeline",
@@ -93,9 +77,7 @@ export const Wrapped: Story = {
 
 /**
  * 不换行档：每行钉死成 `LOG_ROW_SINGLE`（一行）。
- *
- * 与 `Wrapped` 一对照就能看出虚拟化的另一面 —— 两种口径下「一屏装多少行」不同，
- * 而它们**共用同一份窗口计算**（`log-virtual` 的行高常量）。
+ * 与 `Wrapped` 对照可看出虚拟化另一面：两种口径「一屏装多少行」不同，但共用同一份窗口计算。
  */
 export const NoWrap: Story = {
   render: () => <VirtualLogListHarness wrap={false} />,

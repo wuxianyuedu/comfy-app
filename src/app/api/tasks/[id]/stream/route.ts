@@ -46,15 +46,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
           if (task) {
             // logs 是任务表的 JSON 列(运行时为 LogEntry[];send 收 unknown,无需断言)。
             const existing: Array<unknown> = Array.isArray(task.logs) ? task.logs : [];
-            // 优先回放 runner 内存日志（state().logs），它是每次 log() 写入的完整
-            // 现场、也是持久化到 DB 的源，恒为 DB 日志的超集。提交与领取
-            // （`kickQueue` → `claimAndDispatchOnce`）在 startGenerate 返回前、
-            // 前端 EventSource 尚未订阅时就会输出「任务已从队列领取」
-            // 「输入参数（workflowInputs，N 项）」等行；这些行落库走 200ms 防抖，
-            // 若 SSE 在防抖窗口内连接，只读 DB 会漏掉它们，
-            // 表现为「第二次执行（WS 已开、领取同步发日志）没有显示执行参数」。
-            // 这里改读内存日志兜底：内存为空（服务器重启）时回落 DB 日志。内存那份
-            // 只是整包落库前的草稿，两者内容同源，不会互相矛盾（ISSUE #1206）。
+            // 优先回放 runner 内存日志（getLogs），恒为 DB 日志超集：提交与领取在 EventSource
+            // 订阅前就会输出「已从队列领取」「输入参数」等行，而落库走 200ms 防抖，
+            // SSE 在防抖窗口内连接时只读 DB 会漏掉它们（ISSUE #1206）。
+            // 内存为空（服务器重启）时回落 DB 日志；两者同源，不会矛盾。
             const inMemory = getLogs(id);
             const replaySrc = inMemory.length > 0 ? inMemory : existing;
             // 回放顺序必须「先日志、后终态 state」：前端 watchTask 在处理 state 的
@@ -126,13 +121,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         }
       };
 
-      /* SSE 心跳。若长时间没有字节流动，操作系统 / 负载均衡 / 代理会在看似空闲
-       * 30–60s 后悄悄掐掉这个 socket（QUEUED 中的任务很常见：可能几分钟都没有
-       * `log` 事件），随后浏览器侧的 EventSource 会自动重连 ——
-       * 于是界面被「📡 / ⚪ 已订阅 / 任务状态」这类客户端日志刷屏，
-       * 而实际上什么都没变。SSE 注释行 `: hb\n\n` 对 EventSource 的
-       * onmessage 处理器不可见，却能刷新内核的 TCP 空闲计时器。
-       * 15s 远小于多数代理的空闲超时（通常 30–60s）。abort 时清除。 */
+      /* SSE 心跳：空闲 30–60s 后 OS/代理会悄悄掐掉 socket，EventSource 自动重连会刷屏。
+       * 注释行 `: hb\n\n` 对 onmessage 不可见但能刷新 TCP 空闲计时器；
+       * 15s 远小于多数代理空闲超时。abort 时清除。 */
       handles.heartbeat = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(`: hb ${Date.now()}\n\n`));
@@ -145,14 +136,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       }, 15_000);
 
       /* 数据库轮询 = SSE 的唯一事件源（P3 §5 ADR §13-3C，D2 定 3s）。
-       * 此前它是「emitter 之外的兜底」（取消只写库、外部对账改状态等路径
-       * 到不了订阅方），进程内 emitter 负责实时 log/progress/done；
-       * host 执行（Phase 3-B1）让 emitter 只覆盖 inline 一半流量，两模式
-       * 契约分裂——#1151 先补了终态收口，这一步把 log 增量与节点进度也
-       * 统一走 DB：单一来源、无重复帧、inline/host 同一观感（代价是
-       * ≤3s 延迟与 persistLogs 的 200ms 防抖）。
-       * `findSseSnapshot` 是窄投影（不含 workflowSnapshot 大列）；
-       * 同时最多一次轮询在途，abort 时关闭。 */
+       * 进程内 emitter 只覆盖 inline 一半流量（host 执行到不了），两模式契约曾分裂；
+       * log 增量与节点进度统一走 DB：单一来源、inline/host 同一观感（代价 ≤3s 延迟 + 200ms 落库防抖）。
+       * `findSseSnapshot` 是窄投影（不含 workflowSnapshot 大列）；同时最多一次轮询在途。 */
       let polling = false;
       handles.poll = setInterval(() => {
         if (polling) {

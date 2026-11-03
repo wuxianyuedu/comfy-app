@@ -1,29 +1,10 @@
 "use client";
 
 /**
- * 侧栏「ComfyUI」页的业务逻辑层（规范 17 §17.2 第②层）。
- *
- * 这一页回答一件事：**本机这个出图后端现在是什么状态，我要把它开起来 / 关下去 /
- * 打开看看**。它由设置页「创作后端」分区搬来（ISSUE #1900）—— 那一分区留着
- * **配置**（路径、解释器、端口、启动参数、是否自动拉起），运行态与启动日志
- * 归这一页，于是「改配置」与「看运行」不再是同一屏上互相挤的两件事。
- *
- * 搬过来时**没有**复制一份实现：设置页那一侧把运行时整块交出来，本 hook 接住；
- * 那一侧不再持任何运行态（所以不存在两份状态各自漂移的可能）。
- *
- * ## 与设置页侧的分工
- *
- * | 问题 | 归谁 |
- * | --- | --- |
- * | 路径 / 端口 / 启动参数 / 自动拉起怎么配 | 设置 → 创作后端（`useSettingsComfy`） |
- * | 装的是桌面版还是便携版 | 两侧都读 `setting.comfyInstance`（fs-only 的同一份事实） |
- * | 在不在跑 / 起 / 停 / 打开 / 启动日志 | 本 hook |
- * | 未配置路径时该去哪 | 本 hook 给 `configHint`，视图给出口 |
- *
- * 启动动作**不再**「先保存草稿再拉起」：本页没有草稿（配置在设置页保存），
- * 服务端按库里那一行拉起 —— 想改路径再去设置页改，改完回来启动。视图会把
- * 「将按哪个路径启动」写在页上（`instance`），不让用户猜。
- */
+ * 侧栏「ComfyUI」页业务逻辑层（规范 17 §17.2 第②层）：本机后端现在什么状态、开/关/打开看看。
+ * 由设置页「创作后端」分区搬来（ISSUE #1900）—— 那一侧只留配置（路径/解释器/端口/启动参数/自动拉起），
+ * 运行态与启动日志归本页；运行时整块交接、不复制实现，避免两份状态漂移。
+ * 启动不再「先保存草稿再拉起」：本页无草稿，服务端按库里那一行拉起；视图写出将按哪条路径启动（instance）。 */
 
 import { useCallback, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -40,12 +21,8 @@ import { useToast } from "~/components/studio/ToastProvider";
 import { useRuntimeLogSource } from "~/components/studio/logs/use-runtime-log-source";
 import { useComfyStateEvents } from "./use-comfy-state-events";
 
-/** 事件通道之外那条**兜底**轮询的节奏（毫秒）。
- *
- *  为什么要留：长轮询断开 / 服务重启 / 事件没送到时，界面不能就此停在旧结论上。
- *  为什么是 30s 而不是 5s：主角换成了事件（变化发生即推、变化一到即重问），
- *  这条只是「万一主通道坏了」的后备 —— 后备的节奏该按「多久发现通道坏了」定，
- *  而不是按「事实能多快追上」定。 */
+/** 事件通道之外兜底轮询节奏（毫秒）。留它是因长轮询断开/服务重启/事件丢失时界面不能停在旧结论；
+ * 30s 而非 5s：主角是事件，这条只是「万一主通道坏了」的后备 —— 节奏按「多久发现通道坏了」定。 */
 const COMFY_STATUS_FALLBACK_MS = 30_000;
 
 export function useComfyuiControl() {
@@ -213,15 +190,10 @@ export function useComfyuiControl() {
     }
   }, [comfyStatusQ, toast]);
 
-  /* 「在浏览器打开」＝把 ComfyUI 交给系统默认浏览器（放大看 / 装浏览器插件 /
-   * 多屏铺开）。它与页签内嵌是**并列出口**，不改变页签那一套：页签仍然内嵌，
-   * 这里只是把同一个地址再交给浏览器。
-   *
-   * 端点用 comfyOpen 而不是 openExternal：地址由服务端自己探（openComfyUi 内部
-   * 先 probeComfyUi），不采信前端 state 里的旧 base —— 用户点按钮时可能已经
-   * 隔了很久，端口可能已经变了，拿旧地址会打开一个空白浏览器页。
-   *
-   * 与 openComfy 一样先 refetch 一次状态，避免拿几秒前的旧结论误报「未运行」。 */
+  /* 「在浏览器打开」＝把 ComfyUI 交给系统默认浏览器，与页签内嵌是并列出口，不改变页签行为。
+   * 端点用 comfyOpen 而非 openExternal：地址由服务端先 probe，不采信前端旧 base
+   *（用户点按钮时可能已隔很久、端口已变，旧地址会打开空白页）。
+   * 与 openComfy 一样先 refetch 一次状态，避免用几秒前的旧结论误报「未运行」。 */
   const openComfyInBrowserAction = useExternalAction({
     target: "browser",
     report: (kind, text) => (kind === "ok" ? toast.success(text) : toast.error(text)),

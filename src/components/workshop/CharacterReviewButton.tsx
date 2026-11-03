@@ -1,11 +1,9 @@
 "use client";
 
 // 角色卡「AI 评审」入口 + 弹窗（Phase 8 · P8-1b 续）。
-//
-// 弹窗骨架（按钮 / 判定展示 / 占位 / 在途）在 `ReviewVerdictDialogButton`（§12.12
-// 共享内核）；本壳只装配角色卡场景：评审对象是这张卡（`review(character.id)`）、
-// 不带维度评分与改写（角色卡是可直接编辑的设定，不合格时修法就是照建议改上方字段、
-// 再用既有「定妆照」通道重出）。projectId 取自当前活跃项目（getActiveId，与工坊同源）。
+// 弹窗骨架在 `ReviewVerdictDialogButton`（§12.12 共享内核）；本壳只装配角色卡场景：
+// 评审对象是这张卡（`review(character.id)`）、不带维度评分与改写（不合格的修法是
+// 照建议改字段、再用既有「定妆照」通道重出）。projectId 取自当前活跃项目（getActiveId）。
 import { useState } from "react";
 
 import { getActiveId } from "~/lib/project-canvas/canvas-store";

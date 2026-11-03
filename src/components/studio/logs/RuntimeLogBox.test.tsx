@@ -5,17 +5,9 @@
  * 非空；jsdom 下同一段代码同步卸载。
  */
 /**
- * `RuntimeLogBox` 的交互契约（「启动日志」框 —— 设置页三段 + 侧栏「ComfyUI」页共用）。
- *
- * 对应三条用户反馈：
- *   1. 小窗口某些时候看着麻烦 → 要有**全屏查看**（且全屏里同样能切换启动）；
- *   2. 多次启动的日志混在一起 → 右上角下拉按「每次启动」切换；
- *   3. 服务在应用还开着的时候被重启过几次，日志全堆在同一个文件里（ISSUE
- *      #1326）→ 那四份 runtime 日志改成**一次启动一份文件**，下拉列的就是这些
- *      份，文案由服务端给（时刻）；列表被上限截断时要说明还有更早的。
- *
- * 断言对齐可见行为（下拉存不存在 / 选项文案 / 回调参数 / 全屏层出现与消失 /
- * 空态与各种截断提示），不锁样式类。
+ * `RuntimeLogBox` 的交互契约（设置页三段 + 侧栏「ComfyUI」页共用）。三条用户反馈：小窗口要全屏
+ * 查看（全屏里也能切换启动）；多次启动要按每次启动切换；服务重启后日志堆在同一文件（ISSUE #1326）
+ * → 一次启动一份文件，列表截断时说明还有更早的。断言对齐可见行为，不锁样式类。
  */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -63,9 +55,8 @@ function renderBox(log: RuntimeLogController) {
 
 /**
  * 两次运行的可选项（**文案形态与端点 `formatRunLabel` 的输出逐字一致**）。
- *
- * 视图直接渲染服务端给的 `title`，因此夹具必须按服务端那套写 —— 手写一个
- * 「长得像」的字符串，改口径时用例会一起漂过去。
+ * 视图直接渲染服务端给的 `title`，夹具必须按服务端那套写——手写「长得像」的字符串
+ * 会在改口径时一起漂过去。
  */
 function twoSessions(): RuntimeLogController["sessions"] {
   return [
@@ -102,13 +93,9 @@ describe("RuntimeLogBox", () => {
     });
     renderBox(log);
 
-    /* P76 之后这里不再是原生 `<select>`（裸 `<select>` 已被判据拦下），而是
-     * `ui/select-menu` 的 combobox：当前值在触发器的可见文字里，选项要**点开**
-     * 才存在于 DOM。所以定位从 `value` + `<option>` 改成 combobox 的可见文字 +
-     * 弹层里的 `role="option"` —— 用例锁的口径没变（列出每份的时刻、切换回传
-     * 那一份的文件名），只是换成新控件的读法。
-     * 选项要点**完整指针序列**（Base UI 的提交挂在指针抬起上，裸
-     * `fireEvent.click` 只发 click、提交不了）。 */
+    /* P76 之后这里不再是原生 `<select>`（裸 select 已被判据拦下），而是 `ui/select-menu`
+     * 的 combobox：当前值在触发器可见文字里，选项要点开才在 DOM 里。定位改读 combobox
+     * 可见文字 + 弹层 `role="option"`；选项要点完整指针序列（Base UI 的提交挂在指针抬起上）。 */
     const trigger = screen.getByLabelText("切换要查看的启动");
     expect(trigger.textContent).toContain("09-30 10:07:41");
 

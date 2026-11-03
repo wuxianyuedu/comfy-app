@@ -17,15 +17,9 @@ type LogFileInfo = {
 };
 
 /**
- * 递归列 `log/` 下的 `.log`。异步（ISSUE #2193）：这一份是整棵日志树
- * 「一次 `readdir` + 每个文件一次 `stat`」，同步写法把全部系统调用压在
- * 事件循环线程上；日志文件随运行次数增长，代价也跟着长。
- *
- * 两处语义按原样保住，没有顺手「改进」：
- *   - 目录不存在 ⇒ 空列表（第一次运行 / 从没写过日志）；
- *   - **其它**读故障（权限 / 磁盘 / readdir 与 stat 之间文件被换掉）⇒ 照旧上抛，
- *     由 `GET` 那一层回 500 —— 「读不到」不许被并成「没有」。
- * 这里原本不带 `turbopackIgnore` 标记，改完也不带（加标记会改变构建期 tracing）。
+ * 递归列 `log/` 下的 `.log`。异步（ISSUE #2193）：整棵日志树是「一次 `readdir` + 每个文件一次 `stat`」，同步写法把全部系统调用压在事件循环线程上。
+ * 两处语义按原样保住：目录不存在 ⇒ 空列表（第一次运行 / 从没写过日志）；**其它**读故障（权限 / 磁盘 / readdir 与 stat 之间文件被换掉）⇒ 照旧上抛，
+ * 由 `GET` 那层回 500 ——「读不到」不许并成「没有」。这里原本不带 `turbopackIgnore` 标记，改完也不带（加标记会改变构建期 tracing）。
  */
 async function scanLogFiles(dir: string, base: string): Promise<Array<LogFileInfo>> {
   let entries: Array<Dirent>;

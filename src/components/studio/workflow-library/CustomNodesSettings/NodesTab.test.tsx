@@ -1,12 +1,7 @@
 /**
- * 单包节点卡窗口化列表的判据（audit §C.1 F4b / ISSUE #2191）。
- *
- * 现场数量级（本机真实节点包目录实测）：15 个子包、最大单包 233 个节点类型、全开合计
- * ~503 张交互卡 —— 层 3「点开就全量 map」是三层里最后一处线性挂载。这里钉三件事：
- *   · 未量测环境（jsdom：clientHeight 恒 0）⇒ **全量渲染兜底**（与 ModelLibrary /
- *     ProjectOutputs 的 `measured` 守卫同形）—— 200 张卡都在，清单不至于一片空白；
- *   · `TreeChildren` 仍是行容器（P36 硬闸的完整样本不被虚拟化替换）；
- *   · 空清单分支与卡片折叠开关不被窗口化吞掉。
+ * 单包节点卡窗口化列表的判据（audit §C.1 F4b / ISSUE #2191）：未量测环境
+ * （jsdom clientHeight 恒 0）走全量渲染兜底，TreeChildren 仍是行容器，
+ * 空清单与卡片折叠开关不被窗口化吞掉。
  */
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";

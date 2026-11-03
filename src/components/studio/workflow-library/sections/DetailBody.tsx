@@ -17,17 +17,10 @@ import { useLazyChunkFallback } from "~/components/ui/use-lazy-chunk-fallback";
 import { EMBEDDED_SCROLL_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { WorkshopEncapsulationPanel } from "./WorkshopEncapsulationPanel";
 
-/* ── 两个页签的重型内容各自懒加载（规范 §12.19 / 02 §2.9） ─────────────────
- * 本面板在「工作流库」视图里常驻，而它下面挂着两件重物：
- *   · 画布预览 → `@xyflow/react`（整个画布引擎）；
- *   · 源文件页签 → `react18-json-view`。
- * 两者都是**按页签条件渲染**的，此前却是静态 import —— 于是「打开工作流库、
- * 只看一眼列表」也要把画布引擎和 JSON 树渲染器拖进静态图，再顺着
- * `components/studio/index.ts` 一路到入口。实测链见
- * `scripts/check-barrel-heavy-deps.cjs` 的报告。
- *
- * 换成 `React.lazy` 之后，模块只在**切到对应页签**时才下载。`key=workflow.id`
- * 那两处重建语义不变（懒加载组件同样按 key 重挂）。 */
+/* ── 两个页签的重型内容各自懒加载（规范 §12.19 / 02 §2.9）──
+ * 本面板常驻，下面挂着画布引擎 `@xyflow/react` 与 `react18-json-view`；此前静态
+ * import，打开工作流库看一眼列表也要把两者拖进静态图（见 check-barrel-heavy-deps）。
+ * 改 `React.lazy` 后只在切到对应页签时下载；`key=workflow.id` 重建语义不变。 */
 const LazyWorkflowCanvasNodePreview = React.lazy(() =>
   import("../WorkflowCanvasNodePreview").then((m) => ({
     default: m.WorkflowCanvasNodePreview,
@@ -92,16 +85,11 @@ export function DetailBody({
   return (
     <>
       {(tab === "canvas" || tab === "use") && (
-        /* 「编辑对外参数 / 实际使用」是同一份预览的两个视图模式（受控
-         * `viewMode`）：两个分支**必须渲染同一棵元素树**（同样的包裹层 +
-         * 同一个 `WorkflowCanvasNodePreview`，只有 `viewMode` 取值不同），
-         * 页签切换时 React 才会认成同一个实例 —— 表单值、运行态、结果图
-         * 因此都不丢（外层视图用常驻容器挂载本分支，见
-         * `WorkflowLibraryDetailView`）。
-         *
-         *  画布页签**吃满可用高度**（不再钉在 420px）：用户把详情面板看全屏时，
-         *  画布要一直铺到面板底部，下面不留一块面板底色（ISSUE #596）。高度链条
-         *  靠 flex 传下去 —— 外层的 `min-h-0 flex-1` 与本层的 `h-full` 缺一不可。 */
+        /* 「编辑对外参数 / 实际使用」是同一份预览的两个视图模式：两个分支**必须
+         * 渲染同一棵元素树**（同样包裹层 + `WorkflowCanvasNodePreview`，只差
+         * `viewMode`），页签切换时 React 才认成同一实例，表单值/运行态/结果图不丢
+         * （外层常驻容器见 `WorkflowLibraryDetailView`）。画布页签吃满可用高度
+         * （ISSUE #596），外层 `min-h-0 flex-1` 与本层 `h-full` 缺一不可。 */
         <div className="border-border bg-panel-deep flex h-full min-h-105 flex-col rounded-2xl border p-1">
           <div className="flex items-center justify-between px-3 py-2">
             <span className="text-ink-faint text-xs font-medium">

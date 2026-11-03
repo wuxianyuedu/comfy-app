@@ -1,10 +1,7 @@
 /**
  * 「添加 / 编辑模型」弹窗的**字段级校验出口**（规范 16 §16.2.4.8）。
- *
  * 只钉一件事：字段级规则不过时，视图能从 controller 拿到**逐字段**的错误，
- * 而不是一条无差别的横幅 —— 这正是接 `ui/form` 那次设计决定落地后
- * 「校验规则归谁持有」那个问题的可观测后果。
- * 网络侧动作（addRemoteModel / updateRemoteModel）由假 controller 顶替。
+ * 而不是一条无差别横幅。网络动作由假 controller 顶替。
  */
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";

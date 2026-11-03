@@ -5,15 +5,9 @@ import type { StepLogEntry } from "./stepLogCache";
 afterEach(cleanup);
 
 /**
- * 画布「执行日志」弹窗里级别筛选栏的形态回归（ISSUE #1925 第三批收口）。
- *
- * 这一排此前是手搓的 `Button variant="ghost"` + 选中三元（选中 →
- * `bg-surface-2 text-ink-bright`），与应用日志 / 任务日志时间线是同一族的
- * 两份手抄。坏在同一个接缝：选中档没钉悬停值，`ghost` 自带的
- * `hover:bg-muted hover:text-foreground` 会把「已选中」在悬停期间改写成
- * 「未选中」的样子（ISSUE #1423）。
- *
- * 现在整排交给 `ui/select-chip`。这里钉单选语义 + 选中档四层俱在 + 悬停回钉。
+ * 画布「执行日志」弹窗里级别筛选栏的形态回归（ISSUE #1925）。
+ * 选中档曾没钉悬停值，`ghost` 自带的 hover 样式会把「已选中」改写成未选中（ISSUE #1423）。
+ * 现在整排交给 `ui/select-chip`；这里钉单选语义 + 选中档四层俱在 + 悬停回钉。
  */
 const stepLogs: Array<StepLogEntry> = [
   { t: 1, level: "info", msg: "开始" },

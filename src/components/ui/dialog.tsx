@@ -45,22 +45,11 @@ function DialogContent({
    *  `className` 分开，是为了让「内容体」与「外层容器」各自可覆盖。 */
   popupClassName,
   children,
-  /** 是否渲染内置的右上角关闭按钮（`absolute top-2 right-2`）。
-   *
-   *  **调用处只要自绘了关闭按钮，就必须传 `false`**：本仓库的弹窗形态约定
-   *  是「自绘 header + 自绘关闭」，漏传会同时渲染出两枚位置几乎重合的关闭
-   *  按钮 —— 点下去命中的是 DOM 靠后 + 绝对定位的内置那枚，两枚之间的间隙
-   *  还成了「点了没反应」的死区，用户看到的就是「两个 ✕ 且关不掉」。
-   *  默认 `true` 只服务「不自绘 header、直接用基元卡片」这一种形态。 */
+  /** 是否渲染内置右上角关闭按钮（`absolute top-2 right-2`）。调用处自绘关闭按钮时必须传 `false`，漏传会渲出两枚几乎重合的 ✕（命中 DOM 靠后 + 绝对定位的内置那枚，两枚间隙成「点了没反应」的死区）。
+   * 默认 `true` 只服务「不自绘 header、直接用基元卡片」这一种形态。 */
   showCloseButton = true,
-  /** 是否渲染共享遮罩（`DialogOverlay` → base-ui 的 `Backdrop`）。
-   *
-   *  **默认 `true` 是本仓库的统一口径**：模态弹窗背后必须有一层**带色**的压暗底，
-   *  否则「弹窗浮在一堆还能点、还一样亮的界面之上」——用户分不清哪块是活的、
-   *  也看不出这是个需要先处理掉的对话框（ISSUE #1742）。这一层同时承担
-   *  「点遮罩即关闭」与「遮住并挡住背后内容」两件事。
-   *
-   *  只有「本就要贴在宿主里、不该压暗背后」的极少数内嵌场景才传 `false`。 */
+  /** 是否渲染共享遮罩（`DialogOverlay` → base-ui 的 `Backdrop`）。默认 `true` 是本仓库统一口径：模态弹窗背后必须有带色压暗底，否则浮在还能点、一样亮的界面上，用户分不清哪块是活的、也看不出这是待处理的对话框（ISSUE #1742）。
+   * 这一层同时承担「点遮罩即关闭」与「遮住并挡住背后内容」；只有本就要贴在宿主里、不该压暗背后的极少数内嵌场景才传 `false`。 */
   showOverlay = true,
   /** 给共享遮罩的额外 class（如全屏视图那档更重的底）。 */
   overlayClassName,
@@ -74,33 +63,14 @@ function DialogContent({
 }) {
   return (
     <DialogPortal>
-      {/* 遮罩（带色压暗底 + 挡住背后点击）由本组件**默认渲染**：base-ui 的
-          `Dialog.Backdrop` 是**独立的一层**，`DialogPortal` 只自动注入一层
-          **无色的** `InternalBackdrop`（`role="presentation"`、仅用于外部点击
-          判定与 `pointer-events` 兜底），肉眼看不见 —— 此前只有部分调用处
-          （`ui/fullscreen-dialog`）自己补了 `Backdrop`，于是**绝大多数弹窗背后
-          都是亮的、看起来还能点**（ISSUE #1742）。
-
-          样式与「让出标题行」的硬判据（ISSUE #310）都收口在
-          `~/components/ui/dialog-overlay` 的 `dialogBackdropClass()` 里，
-          `ui/sheet` 的 `SheetContent` 共用同一份。 */}
+      {/* 遮罩由本组件默认渲染：base-ui 的 `Dialog.Backdrop` 是独立一层，`DialogPortal` 只自动注入一层无色的 `InternalBackdrop`（`role="presentation"`，仅用于外部点击判定与 pointer-events 兜底），肉眼看不见。
+          此前只有部分调用处（`ui/fullscreen-dialog`）自己补了 Backdrop，绝大多数弹窗背后都是亮的、看起来还能点（ISSUE #1742）。样式与「让出标题行」硬判据（ISSUE #310）收口在 `~/components/ui/dialog-overlay` 的 `dialogBackdropClass()`，`ui/sheet` 的 `SheetContent` 共用同一份。 */}
       {showOverlay && <DialogOverlay className={overlayClassName} />}
       <DialogPrimitive.Popup
         className={cn(
-          /* 默认卡片。宽度**只有一处下限**：`max-w-[calc(100%-2rem)]`（不贴满
-             视口两侧），**不再在 sm 断点压到 `max-w-sm`**（ISSUE #720）。
-
-             为什么要把 `sm:max-w-sm` 删掉：它是**带变体的** max-width，
-             Tailwind 的产序把它排在所有无变体 utility 之后 —— 于是它不只压
-             默认，连调用处传进来的宽度一起压。三个日志弹窗的「加宽」按钮因此
-             长期是**按了没反应**：`popupClassName` 里的 `max-w-[96vw]` 比不过
-             它，连换成 `w-6xl` 这种跨族写法也没用（实测 1430×900 视口下三种
-             写法量到的都是同一个 384px = 24rem `max-w-sm`）。
-
-             调用处现在只传 `w-*`（见 `~/components/ui/dialog-width`）：跟一条
-             `max-w-*` 打架只会得到「谁赢看产序」的结果，跨族的 `width` 才有
-             确定的结论，而这里的 `max-w-*` 继续只做「别贴满视口」的兜底 ——
-             正是它该管的那件事。 */
+          /* 默认卡片。宽度只有一处下限 `max-w-[calc(100%-2rem)]`（不贴满视口两侧），不再在 sm 断点压到 `max-w-sm`（ISSUE #720）。
+             删掉 `sm:max-w-sm` 的原因：带变体的 max-width 被 Tailwind 产序排在所有无变体之后，不只压默认、连调用处传入的宽度一起压 —— 三个日志弹窗的「加宽」因此长期按了没反应（`max-w-[96vw]` 甚至跨族 `w-6xl` 都比不过，实测 1430×900 下三种写法量到的都是 384px = 24rem）。
+             调用处现在只传 `w-*`（见 `~/components/ui/dialog-width`）：跟 `max-w-*` 打架只会「谁赢看产序」，跨族 width 才有确定结论；这里的 `max-w-*` 只做「别贴满视口」的兜底。 */
           "bg-popover text-popover-foreground ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 z-modal fixed top-1/2 left-1/2 grid max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl p-4 text-sm ring-1 duration-100 outline-none",
           /* `w-full` 由调用处决定：默认卡片仍要「占满到自己的上限」（与删掉
              `sm:max-w-sm` 之前一致），但 `w-full` 属无变体宽度，同样会被调用处

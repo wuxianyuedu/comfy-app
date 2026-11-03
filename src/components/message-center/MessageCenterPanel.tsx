@@ -70,12 +70,8 @@ function fmtTime(t: number): string {
   return `${formatDate(t)} ${formatClock(t)}`;
 }
 
-/** 组头：一次启动与下一次启动之间的分隔。
- *
- *  手验反馈是「多次启动混在了一起，看不出哪几条属于同一次」——所以每一组**都有**
- *  组头（包括第一组）：第一行同时也是图例，告诉用户这条分割线是什么意思。
- *  「本次启动」用主色 + 实心点标出来，它是用户此刻身处的那一次；更早的批次退回
- *  弱色，让视线先落在当前组上。 */
+/** 组头：一次启动与下一次启动之间的分隔。每一组**都有**组头（含第一组：第一行
+ *  同时也是图例）；「本次启动」用主色 + 实心点标出，更早批次退回弱色。 */
 function RunGroupHeader({ group }: { group: MessageRunGroup<MessageRecord> }) {
   return (
     <li
@@ -245,24 +241,15 @@ export function MessageCenterPanel() {
                       key={m.id}
                     >
                       <div className="flex items-start gap-3">
-                        {/* 整行「点一下标记已读」用原生 `<Button variant="ghost">`
-                         *  而不是 `li` 上的 `onClick`：这条 `<li>` 里还嵌着一个删除
-                         *  按钮，两者不能合成同一个 `<button>`（HTML 里按钮套按钮
-                         *  非法），而键可达的语义是不能靠「父元素 onClick」白拿的
-                         *  —— 此前键盘用户能 Tab 到删除按钮，却没有任何路径标记已读
-                         *  （鼠标点得开、键盘进不来）。原生 `<button>` 的
-                         *  Enter/Space 与焦点语义是免费给的，再挂一个
-                         *  `simpleKeyHandler` 只是复刻浏览器默认行为（§16.2.4.57）。
-                         *  `ghost` 变体的底色/文字色由这里接管（§16.2.4.2 第 5 条），
-                         *  行外观与收口前一致。 */}
+                        {/* 整行「点一下标记已读」用原生 `<Button variant="ghost">` 而不是
+                         *  `li` 上的 `onClick`：行内还嵌着删除按钮，按钮套按钮非法；键可达
+                         *  语义靠不了「父元素 onClick」（此前键盘用户没有任何路径标记已读）。
+                         *  原生 button 免费给 Enter/Space（§16.2.4.57）；`ghost` 的底色/文字
+                         *  色由这里接管（§16.2.4.2 第 5 条），行外观与收口前一致。 */}
                         <Button
-                          /* `h-auto` 是必须的，不是风格：`size` 的缺省档带 `h-8`（32px
-                           * 定高），而这条按钮的内容是「标题 + 正文」——正文可能是**多段**
-                           *（陈旧实例那条就是：正文含换行、`whitespace-pre-wrap` 会照实
-                           * 换行）。定高 32px 之下正文溢出按钮盒、穿过 `<li>` 的下沿压到
-                           * 下一条消息上，而 `<li>` 的高度仍按 32px 算 ⇒ 画布上两张卡片
-                           * 叠在一起，tsc / eslint / 构建全绿。同文件另外两颗按钮也带
-                           * `h-auto`，这里此前漏了。 */
+                          /* `h-auto` 是必须的，不是风格：`size` 缺省档带 `h-8`（32px 定高），
+                           * 而这条按钮的内容是多段正文（`whitespace-pre-wrap` 照实换行）；定高
+                           * 之下正文溢出、压到下一条消息上，两张卡片叠在一起而检查全绿。 */
                           className="flex h-auto min-w-0 flex-1 items-start justify-start gap-3 rounded-lg p-0 text-left font-normal whitespace-normal hover:bg-transparent"
                           onClick={() => {
                             markRead(m.id);

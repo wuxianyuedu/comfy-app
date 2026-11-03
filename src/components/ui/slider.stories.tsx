@@ -3,16 +3,9 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { Slider } from "~/components/ui/slider";
 
 /**
- * `ui/slider` 是 base-ui 的 Slider（**多把手**原语）：`value` 始终是一个
- * 数组，长度就是把手数 —— 长度 1 是单值滑块，长度 2 就是区间滑块。
- *
- * 项目里单值滑块的**唯一入口**是 `ui/range-slider`（它把数组包成 number，
- * 见那件的 story）；本件是那个出口的底座，也是「区间」这一档唯一能写的
- * 地方（`range-slider` 表达不了两个值）。
- *
- * 底座自带 `role="slider"` + `aria-valuenow/min/max` + 键盘
- * ←/→ / PageUp/PageDown / Home/End —— 这些是它比原生 `<input type=range>`
- * 强的地方，也是本项目换掉原生实现的原因（见 `range-slider.tsx` 文件头）。
+ * `ui/slider` 是 base-ui 的多把手原语：`value` 是数组，长度即把手数（1 单值 / 2 区间）。单值滑块的唯一入口是
+ * `ui/range-slider`（数组包成 number）；本件是它的底座，也是「区间」唯一能写的地方。底座自带 `role="slider"`、
+ * aria 值属性与键盘操作 —— 这是换掉原生 `<input type=range>` 的原因（见 `range-slider.tsx` 文件头）。
  */
 const meta = {
   title: "UI/Slider",

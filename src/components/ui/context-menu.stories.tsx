@@ -19,17 +19,8 @@ import {
 } from "~/components/ui/context-menu";
 
 /**
- * `ui/context-menu` 是 base-ui ContextMenu 的封装 —— 与 `dropdown-menu`
- * **同一套子部件、同一个形态**，唯一的差别是**触发方式**：
- * 右键 / 长按（而不是点一下）。它多出来的是「触点即锚点」：
- * 浮层落在鼠标位置，而不是触发元素的下方。
- *
- * 因此本 story 要看的不是「菜单长什么样」（那与 dropdown-menu 一致），
- * 而是**在哪儿弹出来** —— 以及 `useOverlayBoundary()` 那条：可用区域是
- * 视口减去应用级标题行（壳态），首帧量不到时退回基元默认的
- * `clipping-ancestors`，而不是拿假矩形摆位。
- *
- * ⚠️ 画布上要**右键**才弹得出来。
+ * `ui/context-menu` 是 base-ui ContextMenu 的封装：与 `dropdown-menu` **同一套子部件、同一个形态**，唯一差别是**触发方式**（右键 / 长按）与「触点即锚点」（浮层落在鼠标位置，而不是触发元素下方）。
+ * 因此 story 要看的是**在哪儿弹出来**：`useOverlayBoundary()` 把可用区域取为视口减去应用级标题行（壳态），首帧量不到时退回基元默认的 `clipping-ancestors`，不拿假矩形摆位；画布上要**右键**才弹得出来。
  */
 const meta = {
   title: "UI/ContextMenu",

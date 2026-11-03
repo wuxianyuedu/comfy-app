@@ -1,10 +1,9 @@
 "use client";
 
 /* ── 运行期「本地更新」检测的控制器 hook（规范 17 §17.2 第②层）────
- * 唯一职责：按开关（存在共享 store）决定是否轮询 /api/update-check（网络
- * 收敛在 ~/lib/update-check-client），把「脏/分组/进行中」写回 store，并在
- * 「干净→脏」上升沿回调 onDirty（由容器层决定如何弹 toast）。本文件不做
- * localStorage、不 import toast/组件——开关持久化与 UI 提示都在容器层。
+ * 按开关轮询 /api/update-check（网络收敛在 ~/lib/update-check-client），
+ * 结果写回 store，「干净→脏」上升沿回调 onDirty。本文件不做
+ * localStorage、不 import toast/组件——持久化与 UI 提示都在容器层。
  */
 
 import { useCallback, useEffect, useRef } from "react";

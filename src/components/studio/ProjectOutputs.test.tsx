@@ -1,13 +1,7 @@
 /**
- * 产出网格的**行级虚拟化**判据（audit §C.1 F4a / ISSUE #2190）。
- *
- * 产出数随项目历史任务数只增不减、每卡挂媒体缩略图 —— 全量 `map` 的挂载成本
- * 线性上涨。这里钉三件事：
- *   · 未量测环境（jsdom：`clientWidth`/`clientHeight` 恒 0、ResizeObserver
- *     不在场）⇒ **全量渲染兜底**（与 ModelLibrary 的 `measured` 守卫同形——
- *     虚拟器在无读数环境里 `getVirtualItems()` 为空，网格会一片空白）；
- *   · 量测就绪后**只渲染视口附近的行**（200 张卡时在 DOM 里的远少于全量）；
- *   · 行内列数按容器宽度推（镜像旧 Tailwind 断点：2 / ≥640→3 / ≥1024→4）。
+ * 产出网格的**行级虚拟化**判据（audit §C.1 F4a / ISSUE #2190）：产出数只增不减、每卡挂缩略图，
+ * 全量 `map` 成本线性上涨。钉三件事：未量测环境（jsdom 尺寸恒 0、无 ResizeObserver）⇒ **全量渲染
+ * 兜底**（虚拟器无读数时 `getVirtualItems()` 为空，网格空白）；量测后只渲染视口附近的行；列数按容器宽度推。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";

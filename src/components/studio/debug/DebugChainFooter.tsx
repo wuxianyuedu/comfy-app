@@ -1,18 +1,10 @@
 "use client";
 
 /**
- * DebugChainFooter — 通用「渲染链路模块标签」组件。
- *
- * 订阅全局 debug-store；仅在调试模式开启时渲染。
- * 每个标签对应一个本项目代码模块：
- *  - 点击：弹出源码查看弹窗（GET /api/debug/source?file=... 读取该模块源码）
- *  - 弹窗内可复制完整相对路径 / 复制源码
- *  - hover title：显示完整相对路径
- *  - 防拖拽：阻断 pointer/mouse 事件冒泡，避免触发 ReactFlow 节点拖动
- *
- * 用法：
- *   用法：把 modules 传成 getWorkflowRenderChainModules(classType) 的结果
- */
+ * DebugChainFooter — 通用「渲染链路模块标签」组件，订阅全局 debug-store，仅调试模式渲染。
+ * 每个标签对应一个本项目模块：点击弹源码查看（GET /api/debug/source?file=...），
+ * 弹窗可复制路径/源码，hover title 显示完整相对路径；阻断 pointer/mouse 冒泡以免触发节点拖动。
+ * `modules` 传 getWorkflowRenderChainModules(classType) 的结果。 */
 
 import { useCallback, useState, type CSSProperties } from "react";
 import { CodeBlock, extToLanguage } from "~/components/ui/code-block";

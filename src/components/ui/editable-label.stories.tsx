@@ -2,16 +2,9 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { EditableLabel } from "~/components/ui/editable-label";
 
-/**
- * `EditableLabel` 是「点一下变输入框、回车提交」的行内改名件。
- *
- * 两条只有操作才看得出来的设计（所以 story 里都用 `play` 把它摆出来）：
- * 1. **不传 `onChange` 就是只读**（`editable = typeof onChange === "function"`）
- *    —— 这时连铅笔图标都不出现，形态与 `onChange` 那档**不同**；
- * 2. **`onChange` 只在回车 / 失焦时提交一次**，输入中途不回调 ——
- *    草稿与真值分离，所以入参 `label` 在编辑期间变了会被**覆盖回草稿**
- *    （`label !== prevLabel` 那条渲染期同步）。
- */
+/** `EditableLabel` 是「点一下变输入框、回车提交」的行内改名件。两条只有操作才看得出的设计（story 里都用 `play` 摆出来）：
+ * ① 不传 `onChange` 就是只读（`editable = typeof onChange === "function"`），连铅笔图标都不出现，形态与 `onChange` 那档不同；
+ * ② `onChange` 只在回车 / 失焦时提交一次，输入中途不回调 —— 草稿与真值分离，故入参 `label` 在编辑期间变了会被覆盖回草稿（`label !== prevLabel` 那条渲染期同步）。 */
 const meta = {
   title: "UI/EditableLabel",
   component: EditableLabel,

@@ -1,19 +1,6 @@
 /**
- * `ui/select` 在 base-ui 之上做过的那几处**有意改动**（文件头带 `ui-customized` 标记）。
- *
- * 故事面能看见它长什么样，但看不见「我们把基元的哪个默认关掉了」—— 而那正是
- * 三处事故的全部所在：
- *
- * 1. **层级必须给在定位层（Positioner）上**，默认 `z-popup`：Popup 自己的
- *    `z-*` 只在 positioner 建立的 stacking context **内部**生效，改它解决不了
- *    「模态遮罩里的下拉画得出来却收不到指针事件」（ISSUE #262）。所以这条
- *    判的不是样式好看，是**能不能点**。
- * 2. **`alignItemWithTrigger` 默认 `false`**：base-ui 的原生默认是 `true`，它把
- *    已选项对齐到触发器 ⇒ 弹层位置随选中项上下移动，选中末尾项时弹层被顶出
- *    视口（工作流库页头筛选下拉的用户实测）。`ui/select-menu` 那份用例钉的是
- *    **包装件**的用法，这件是基座 —— 基座的默认值漂了会一起带走 33 处消费点。
- * 3. **`size` 两档**住在 `data-size` 上（`data-[size=sm]:h-7` 与
- *    `data-[size=default]:h-8` 全靠这个属性命中）。
+ * `ui/select` 在 base-ui 之上做过的那几处有意改动（文件头带 `ui-customized` 标记）。三处都会静默失效：
+ * ① 层级必须给在 Positioner 上（默认 `z-popup`）：Popup 的 `z-*` 只在 stacking context 内部生效，改它解决不了「模态遮罩里的下拉收不到指针事件」（ISSUE #262）；② `alignItemWithTrigger` 默认 `false`（base-ui 默认 `true`，会把弹层顶出视口，ISSUE #421）；③ `size` 两档住在 `data-size` 上。
  */
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -62,16 +49,8 @@ function Demo({
 const POPUP_MARK = '[data-slot="select-content"]';
 
 /**
- * 打开下拉并返回弹层（Popup，带 `data-align-trigger` 那枚）。
- *
- * **开**用 `fireEvent.click`，**选**用 `userEvent` —— 两边各测出来的：
- *   · 整条路都走 `userEvent` 时，弹层「点了会开、但下一步查询前就自己关掉」
- *     （`aria-expanded` 回到 false），且**与机器负载有关**：单跑绿、
- *     pre-commit 的并发档里红 —— 那种量具不可复现，不能用；
- *   · 只用 `fireEvent.click(选项)` **不会提交**（`onValueChange` 实测零次调用），
- *     base-ui 的选中要走到真正的指针序列。
- * `select-menu.test.tsx` 与 `LogPanel.test.tsx` 的「打开并读属性」也走 fireEvent
- * 这一条，所以本份的「开」与它们同一个口径，只有「选」这步换成 userEvent。
+ * 打开下拉并返回弹层（Popup，带 `data-align-trigger` 那枚）。开用 `fireEvent.click`，选用 `userEvent`：全程 `userEvent` 时弹层会在下一步查询前自己关掉且与机器负载有关，不可复现；只用 `fireEvent.click(选项)` 不会提交（`onValueChange` 零次）。
+ * `select-menu.test.tsx` 与 `LogPanel.test.tsx` 的「打开并读属性」也走 fireEvent 这一条。
  */
 function openPopup(): HTMLElement {
   fireEvent.click(screen.getByRole("combobox"));

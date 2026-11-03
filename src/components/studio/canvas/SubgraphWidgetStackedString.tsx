@@ -1,17 +1,8 @@
 "use client";
-/* 子图封装节点上的 STRING widget 堆叠块 —— 标签行 + 只读多行文本框，
- * 堆叠在 LABEL 行**下方**（与 WorkflowNode 对齐）。行是
- * `flex-col gap-1.5 flex-1`，好让标签 + 字数章占住顶行、
- * 下面的 textarea 填满剩下的竖向空间。
- *
- * 与 WorkflowNode 分支配对：真正的 <textarea readOnly>
- * 让多行提示自动换行，溢出部分原生滚动
- * （不依赖 Tailwind className —— WorkflowNode
- * 子树历史上对任意值 className
- * 编译不可靠）。子图包裹 widget 用 `mono` 字体
- * （它们通常是系统名 / ID）。值为空时
- * 回落到淡淡的「（空）」占位，仍占住
- * flex-1 容器，行布局保持均衡。 */
+/* 子图封装节点的 STRING widget 堆叠块（LABEL 行下方）：标签行 + 字数章 + 只读多行 textarea。
+ * 行是 `flex-col gap-1.5 flex-1`，textarea 填满剩余竖向空间；原生 readOnly textarea 自动换行、
+ * 溢出原生滚动（不依赖 Tailwind className —— 该子树对任意值编译不可靠）。
+ * 子图包裹 widget 用 mono 字体；空值回落到「（空）」占位，仍占住 flex-1 容器。 */
 import { StringTextarea } from "../StringTextarea";
 import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
 import type { RawInputMeta } from "../workflow-types";

@@ -3,16 +3,9 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { WorkflowModelFilterChip } from "~/components/studio/project-canvas/WorkflowModelFilterChip";
 
 /**
- * 画布工作流节点上的「模型标签筛选」chip。
- *
- * 纯 props（`value` / `tags` / `onChange`）。`tags` 里每一档带一个 `count`，
- * 所以这份 story 要摆的是**「计数与筛选键是两件事」**：标签名进 `value`，
- * 计数只显示在选项行右侧（`tabular-nums`）。
- *
- * 两档空态刻意分开：
- *   · `tags` 为空 → 空提示「标签库为空，去工作流库『管理模型』添加」（带出口）；
- *   · 选了某一档 → 触发器显示**标签名本身**（不是「已筛选」那句），
- *     因为节点上那格只有几十像素，用户要看到的是"筛了哪个"。
+ * 画布工作流节点上的「模型标签筛选」chip（纯 props）。
+ * `tags` 的 `count` 只用于显示，筛选键仍是标签名；两档空态刻意分开：
+ * 标签库为空给出口，已选中则直接显示标签名（节点上那格只有几十像素）。
  */
 const TAGS = [
   { id: "t1", name: "SDXL", count: 12 },
