@@ -27,6 +27,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { launcherChainSource } from "./helpers/launcher-source";
+import { stripComments } from "./helpers/strip-comments";
 
 /**
  * 依赖 POSIX 执行语义的用例开关（shebang 能被内核解析、chmod 的 exec 位有效）。
@@ -997,11 +998,7 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
       // **块注释也要剥**：`/** … */` 里的举例会被逐行扫成「真写了这句」
       // （`scripts/ci-cp936-exit.mjs` 头注里就有 `spawn("pnpm")` 这种反面举例，
       // 只剥 `//` 会让本判据把它判成违规）。先剥 `/* … */` 再剥行注释。
-      const code = raw
-        .replaceAll(/\/\*[\s\S]*?\*\//g, "")
-        .split("\n")
-        .map((line) => line.replace(/^\s*\/\/.*$/, "").replace(/([^:])\/\/.*$/, "$1"))
-        .join("\n");
+      const code = stripComments(raw, { trailing: true });
 
       // ① 写死平台后缀 / 按平台三元拼可执行名 —— 形态本身就是缺陷。
       if (/"pnpm\.cmd"|'pnpm\.cmd'/.test(code)) {
@@ -1031,11 +1028,8 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
 
   it("dev.mjs：spawn 失败（命令起不来）必须非零退出，且把 error.code 与真实命令打出来", () => {
     const raw = fs.readFileSync(path.join(ROOT, "scripts", "dev.mjs"), "utf8");
-    // 注释里会**引用**旧写法作反面说明，判据只看代码：先剥掉行注释。
-    const code = raw
-      .split("\n")
-      .map((line) => line.replace(/\/\/.*$/, ""))
-      .join("\n");
+    // 注释里会**引用**旧写法作反面说明，判据只看代码：先剥掉行注释（共享件，#2969 收敛）。
+    const code = stripComments(raw, { trailing: true });
     expect(code).toContain("result.error");
     /* 「把 code 打出来」钉在**失败块那一段**里，而不是整份文件的子串：这一格原本断的是
      * 字面量 `result.error.code`，而它判的是语义 ——「那条失败路径必须报出错误码」。
