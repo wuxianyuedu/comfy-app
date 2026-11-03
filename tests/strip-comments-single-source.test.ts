@@ -103,6 +103,22 @@ const NAIVE_LEDGER: Array<string> = [
   "src/components/studio/workflow-editor/workflow-canvas-io-isolation-guard.test.ts",
 ];
 
+/**
+ * 「形状面」的特征串：块注释剥除正则的尾巴。它是**内联链式副本**的共同指纹 ——
+ * 那种写法不出现 `function stripComments(`，名字面看不见它（ISSUE #2969 立案：
+ * 13 份链式副本全在名字台账之外，其中一份还是无锚的 NAIVE 形状，两根串都躲过）。
+ *
+ * 同样拆成两段拼接：本文件自己就是源码，原样写着的被搜串会让它自匹配。
+ */
+const SHAPE_MARK = String.raw`[\s\S]*?` + String.raw`\*\/`;
+
+/**
+ * 形状台账：带内联剥注释、但**不打算**换成共享件的副本（语义确实不同才登记）。
+ * 本轮已把能换的全部换成 `./helpers/strip-comments`（#2969），故为空 ——
+ * 但它就是「面外长出新副本」的落点：新增一份必须先在这里登记并写清为什么不能换。
+ */
+const SHAPE_LEDGER: Array<string> = [];
+
 function sourceFiles(): Array<string> {
   const out: Array<string> = [];
   const walk = (dir: string): void => {
@@ -130,10 +146,24 @@ function sourceFiles(): Array<string> {
   return out.sort();
 }
 
-/** 排除 helper 本人之后，仍然带着本地定义的文件。 */
+/** 本文件自己：扫描面里排除，免得「写着特征串的判据」把自己算成副本。 */
+const SELF = "tests/strip-comments-single-source.test.ts";
+
+/** 排除 helper 与判据本人之后，仍然带着本地定义的文件。 */
 const definedIn = sourceFiles()
-  .filter((rel) => rel !== CANONICAL)
+  .filter((rel) => rel !== CANONICAL && rel !== SELF)
   .filter((rel) => readFileSync(path.join(ROOT, rel), "utf8").includes(DEFINITION_MARK));
+
+/**
+ * 名字面的**补集**：带形状指纹、却没有本地定义的那一批（内联链式副本）。
+ * 这就是 ISSUE #2969 之前「13 份全在台账之外」的那个面。
+ */
+const shapedIn = sourceFiles()
+  .filter((rel) => rel !== CANONICAL && rel !== SELF)
+  .filter((rel) => readFileSync(path.join(ROOT, rel), "utf8").includes(SHAPE_MARK));
+
+/** 判决面 = 名字 ∪ 形状（去重）。NAIVE 那一型必须在这个面上扫，否则双漏复现。 */
+const inlineFace = [...new Set([...definedIn, ...shapedIn])].sort();
 
 describe("stripComments 的唯一实现（§12.18 复用优先）", () => {
   it("helper 本人在位，且导出 stripComments", () => {
@@ -159,8 +189,36 @@ describe("stripComments 的唯一实现（§12.18 复用优先）", () => {
     ).toEqual([]);
   });
 
+  it("形状面：块注释剥除正则的内联副本同样只许出现在台账里（ISSUE #2969）", () => {
+    /* 先证「这根串没写坏」：台账里至少有一份确实带这个指纹。形状串一失效，
+     * 下面那条 not.toEqual([]) 的判决就成了恒真空转。 */
+    const withShape = LEDGER.filter((rel) =>
+      readFileSync(path.join(ROOT, rel), "utf8").includes(SHAPE_MARK),
+    );
+    expect(
+      withShape.length,
+      "形状串已经点不到任何一份现存副本 —— 它失效了，「面外长出新副本」这一格等于没判",
+    ).toBeGreaterThan(0);
+
+    const unregistered = shapedIn.filter(
+      (rel) => !LEDGER.includes(rel) && !SHAPE_LEDGER.includes(rel),
+    );
+    expect(
+      unregistered,
+      `名字面之外又长出 ${unregistered.length} 份内联剥注释：${unregistered.join("、")}。` +
+        "链式副本不写 `function stripComments(`，名字台账看不见它 —— 这正是 #2969 的漏洞。" +
+        "改用 ./helpers/strip-comments；语义确实不同才登记进 SHAPE_LEDGER 并写清理由。",
+    ).toEqual([]);
+
+    /* 反向：登记了但已经换走/删掉的，要从 SHAPE_LEDGER 里摘掉（表要能记账）。 */
+    const staleShape = SHAPE_LEDGER.filter((rel) => !shapedIn.includes(rel));
+    expect(staleShape, `SHAPE_LEDGER 里已经不存在这类副本的 ${staleShape.length} 份：${staleShape.join("、")}`).toEqual([]);
+  });
+
   it("「裸的全局去行尾注释」那一型不许多处扩散（实测会咬坏字符串里的 URL ⇒ 判据假绿）", () => {
-    const naive = definedIn.filter((rel) => {
+    /* 扫**判决面**（名字 ∪ 形状），不再只扫名字 —— #2969 立案里那份 NAIVE
+     *（`tests/helpers/quality-gate-gates.ts`）正是「两根串都点不到」的双漏。 */
+    const naive = inlineFace.filter((rel) => {
       const text = readFileSync(path.join(ROOT, rel), "utf8");
       return text.includes(NAIVE_MARK) && !text.includes(GUARD_MARK);
     });

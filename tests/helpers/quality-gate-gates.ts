@@ -18,6 +18,8 @@
  *   · `.ps1`：每一项是 `@{ Name = "key"; … Args = @("…"); Run = $false }`，可跨行。
  */
 
+import { stripComments } from "./strip-comments";
+
 /** 一条门禁在某一侧的形状。 */
 export type GateEntry = {
   /** 入口脚本体现在 `args` 里出现的那些路径（`../scripts/x.mjs` 形态，未归一化）。 */
@@ -33,16 +35,13 @@ export type GateEntry = {
  * 于是同一段文字既是文档又被当成登记（实测：某一项的注释里提到了另一个入口脚本，
  * 不剥就会把那一档认成别的档）。
  *
- * 与 `tests/helpers/strip-comments.ts` 的取舍一致（块注释整段去、行注释只去整行的），
- * 但**不复用那一份**：那一份是「拿正则断言源码形状」的门禁专用（有台账管着副本数），
- * 而这里要的是「剥到能解析对象字面量」—— 多一步把行内 `//` 之后的说明去掉。
- * 只在本文件出现一次，不构成第二处实现。
+ * 走共享件（ISSUE #2969）：`.ps1` 的 `#` 只去整行、JS 的 `//` 只去行尾 ——
+ * 与 `tests/helpers/strip-comments.ts` 同一份状态机（引号内的 `#` / `//` 都是代码）。
+ * 这里原先是内联的两条 replaceAll：块注释那条会把字符串里的 `/*` 当注释起点
+ *（吃掉后文真代码），行注释那条会把 `http://…` 截断。
  */
 function stripForParsing(src: string): string {
-  return src
-    .replaceAll(/\/\*[\s\S]*?\*\//g, "")
-    .replaceAll(/\/\/[^\n]*/g, "")
-    .replaceAll(/^\s*#[^\n]*$/gm, "");
+  return stripComments(stripComments(src, { syntax: "hash" }), { trailing: true });
 }
 
 /**
