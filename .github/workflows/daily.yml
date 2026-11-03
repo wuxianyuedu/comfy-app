@@ -85,6 +85,11 @@ jobs:
         run: node scripts/ci-daily-build.mjs
 
       - name: ESLint 零警告（cnb 同款判据一字不改：pnpm run lint，不是 eslint .）
+        env:
+          # 全量 lint 在这一格 OOM 过（runner 7GB RAM，V8 默认老生代上限约 2GB 不够）。
+          # 只抬本 step 的堆上限，不动全局 env —— 其余 step 用不上，改了反而掩盖别处的
+          # 内存回归信号。
+          NODE_OPTIONS: "--max-old-space-size=4096"
         run: pnpm run lint
 
       - name: 浏览器安装（cnb 同款入口；npmmirror 镜像源同 CNB）
