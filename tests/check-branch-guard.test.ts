@@ -142,6 +142,31 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
     expect(output).toContain("git checkout -b");
   });
 
+  /* ── 手动派发形态（ISSUE #3102）:同一拓扑，两种结论 ──────────────────── */
+
+  test("--manual-dispatch:同拓扑显式「不判」(exit 2),不是红也不是绿", ({ repo }) => {
+    /* 与上一条**同一份拓扑**，只多一个旗标 —— 这就是「手动派发形态下源分支=目标分支
+     * 是派发形态本身」的那一档。判据没有放宽：结论是 exit 2（没判），标记行供 GitHub
+     * 外壳折算成非红；措辞里必须写明「PR 形态下仍会红」。 */
+    repo.git("checkout", "-q", "-b", "sync-with-master");
+    const { code, output } = repo.run(["--pr-check", "--target", "master", "--manual-dispatch"]);
+    expect(code).toBe(2);
+    expect(output).toContain("[branch-guard] 结论：不判");
+    expect(output).toContain("workflow_dispatch");
+    expect(output).toContain("PR 形态");
+  });
+
+  test("--manual-dispatch 不是无条件跳过:真有超出目标分支的提交照样放行", ({ repo }) => {
+    /* 锁住反方向：旗标只影响「源分支=目标分支」那一档，不能变成「手动派发就永不红」。 */
+    repo.git("checkout", "-q", "-b", "feat/pr");
+    repo.write("feature.txt", "feature\n");
+    repo.git("add", ".");
+    repo.git("commit", "-qm", "feat: feature");
+    const { code, output } = repo.run(["--pr-check", "--target", "master", "--manual-dispatch"]);
+    expect(code).toBe(0);
+    expect(output).not.toContain("结论：不判");
+  });
+
   test("--pr-check:取不到目标分支 → 保守放行,不误报", ({ repo }) => {
     const { code, output } = repo.run(["--pr-check", "--target", "release/nope"]);
     expect(code).toBe(0);
