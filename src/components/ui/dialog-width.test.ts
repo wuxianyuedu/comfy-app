@@ -17,13 +17,13 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { MODAL_WIDE_WIDTH, modalWidth } from "./dialog-width";
+import { stripComments } from "../../../tests/helpers/strip-comments";
 
 /** 源码**去掉注释**再判：把「为什么删掉 sm:max-w-sm」写进注释不该让判据失效
- *  （同 §16.2.4.12 的 P9 口径）。 */
-const dialogSource = readFileSync(path.resolve(__dirname, "dialog.tsx"), "utf8").replaceAll(
-  /\/\*[\s\S]*?\*\//g,
-  "",
-);
+ *  （同 §16.2.4.12 的 P9 口径）。用唯一实现 `tests/helpers/strip-comments`（ISSUE #2969 的
+ *  副本收敛那一格）：本接收者实测两份读法判决无差，但旧形那条不跟引号状态的块注释正则
+ *  在同族别的文件上确实吃过真代码。 */
+const dialogSource = stripComments(readFileSync(path.resolve(__dirname, "dialog.tsx"), "utf8"));
 
 describe("居中模态卡片的宽度档", () => {
   it("加宽档用 width 而不是 max-width（跨族才有确定结论）", () => {
