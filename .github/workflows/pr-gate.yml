@@ -195,6 +195,12 @@ jobs:
         with:
           ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
           fetch-depth: 0
+          # 固定结构用例清单里有字体用例（tests/embedded-title-font.test.ts）：它断言
+          # 工作树里的字体是**真身字节**（与 index 里 LFS 指针记的 size 一致），只检指针
+          # 文件必红 ⇒ 这一格必须拉 LFS 真身。对象由镜像那一格 `git lfs push` 送过去。
+          # 配额：GitHub 免费档 LFS 1 GiB 存储 + 1 GiB/月带宽，**每次拉取都计带宽**
+          # （字体约 8.6 MB）—— 撞墙是 Billing 的事，不是这一格的事。
+          lfs: true
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
         uses: pnpm/action-setup@v6
@@ -225,6 +231,10 @@ jobs:
         with:
           ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
           fetch-depth: 0
+          # 与 fixed 那格同因：改动面含字体资产 / 字体用例时这一格也会跑到
+          # tests/embedded-title-font.test.ts，只检指针文件必红 ⇒ 同开 lfs: true。
+          # 配额口径见 fixed 那格（每次拉取计带宽，撞墙是 Billing 的事）。
+          lfs: true
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
         uses: pnpm/action-setup@v6

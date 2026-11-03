@@ -15,11 +15,13 @@ import {
   buildPushUrl,
   dispatchPayload,
   exitCodeFor,
+  explainLfsPushFailure,
   explainRemoteProbeFailure,
   gitSubcommand,
   gitTimeoutFor,
   hasRemoteRefs,
   isEgressFailure,
+  lfsPushArgs,
   mirrorRefFor,
   pushArgs,
   resolveContext,
@@ -83,6 +85,36 @@ describe("纯函数", () => {
     expect(args).toContain("HEAD:refs/heads/cnb-pr-1");
     /* `-c` 必须排在子命令**之前**，否则它会被 git 当参数吞掉、钩子照跑。 */
     expect(args.indexOf("-c")).toBeLessThan(args.indexOf("push"));
+  });
+
+  it("lfsPushArgs：第二跳同样不带本仓钩子、不带 --all（增量由 git-lfs 自己对账）", () => {
+    /* 文件头第 9 条：`git lfs push <url> HEAD` 只推「HEAD 可达且远端还没有」的对象 ——
+     * `--all` 会把存量历史全部重推计一次带宽，免费档 1 GiB/月 经不起这个。 */
+    const args = lfsPushArgs("https://example.invalid/x.git");
+    expect(args.slice(0, 2)).toEqual(["-c", "core.hooksPath="]);
+    expect(args.indexOf("-c")).toBeLessThan(args.indexOf("lfs"));
+    expect(args).toEqual(["-c", "core.hooksPath=", "lfs", "push", "https://example.invalid/x.git", "HEAD"]);
+    expect(args).not.toContain("--all");
+    /* 超时档位：lfs 与内容推送同量级（对象可以有几 MB），必须吃 PUSH_TIMEOUT_MS 而不是不限时。 */
+    expect(gitSubcommand(args)).toBe("lfs");
+    expect(gitTimeoutFor(args)).toBe(PUSH_TIMEOUT_MS);
+  });
+
+  it("explainLfsPushFailure：四族失败各有明确话术，不静默降级", () => {
+    /* 未安装 git-lfs ⇒ 下一动作是装它，不许被读成网络问题。 */
+    expect(explainLfsPushFailure("git: 'lfs' is not a git command. See 'git --help'.")).toContain(
+      "装 git-lfs",
+    );
+    /* 配额撞墙 ⇒ 指去 Billing，不指代码（免费档 1 GiB 存储 + 1 GiB/月带宽）。 */
+    expect(
+      explainLfsPushFailure("batch response: This repository is over its data quota."),
+    ).toContain("Billing");
+    /* 端点没开 / 令牌够不到 ⇒ 指去 Settings 开 Git LFS。 */
+    expect(
+      explainLfsPushFailure("batch request: Repository or object not found: exit status 404"),
+    ).toContain("Settings");
+    /* 不认得的形态 ⇒ 不编理由，叫人看 git-lfs 原话。 */
+    expect(explainLfsPushFailure("lock verify failed")).toContain("原话");
   });
 
   it("hasRemoteRefs：非空仓库认 refs 行，空仓库零行不算「在」", () => {
@@ -228,6 +260,8 @@ describe("runMirror（git 与 fetch 全假件）", () => {
       dispatchStatus?: number;
       env?: Record<string, string | undefined>;
       fetchThrows?: boolean;
+      lfsCode?: number;
+      lfsStderr?: string;
       probeCode?: number;
       probeResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
       probeStderr?: string;
@@ -238,6 +272,7 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     } = {},
   ) {
     const pushes: Array<Array<string>> = [];
+    const lfsPushes: Array<Array<string>> = [];
     const calls: Array<{ bodyText: string; init: RequestInit; url: string }> = [];
     const heard: Array<string> = [];
     const sleeps: Array<number> = [];
@@ -256,6 +291,14 @@ describe("runMirror（git 与 fetch 全假件）", () => {
           stdout: opts.probeStdout ?? `${REMOTE_REF}\n`,
           stderr: opts.probeStderr ?? "",
         };
+      }
+      /* LFS 那一跳（`lfs push`）参数表里也有 "push"，必须先于内容推送分流，各记各的账。 */
+      if (args.includes("lfs")) {
+        lfsPushes.push(args);
+        if ((opts.lfsCode ?? 0) !== 0) {
+          return { code: opts.lfsCode ?? 1, stdout: "", stderr: opts.lfsStderr ?? "" };
+        }
+        return { code: 0, stdout: "LFS objects already present", stderr: "" };
       }
       /* 推送那一条现在带 `-c core.hooksPath=`（文件头第 6 条）⇒ 子命令不在第 0 位。 */
       if (args.includes("push")) {
@@ -298,11 +341,11 @@ describe("runMirror（git 与 fetch 全假件）", () => {
       },
       log: (line: string) => heard.push(line),
     };
-    return { io, pushes, calls, heard, sleeps, probeCalls: () => probeCalls };
+    return { io, pushes, lfsPushes, calls, heard, sleeps, probeCalls: () => probeCalls };
   }
 
   it("推成 + 204 ⇒ 退 0；push 用 --force 打到专属 ref；payload 与请求一致", async () => {
-    const { io, pushes, calls, heard } = harness();
+    const { io, pushes, lfsPushes, calls, heard } = harness();
     const code = await runMirror(io);
     expect(code).toBe(CODE.OK);
     expect(pushes[0]?.[0]).toBe("-c");
@@ -319,6 +362,53 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(body.event_type).toBe("cnb-pr-sync");
     expect(body.client_payload?.head_sha).toBe(SHA);
     expect(heard.some((l) => l.includes("已推") && l.includes("已派发"))).toBe(true);
+    /* 第二跳 LFS：同一条认证路径、不带 --all（增量由 git-lfs 自己对账，文件头第 9 条）。 */
+    expect(lfsPushes).toHaveLength(1);
+    expect(lfsPushes[0]?.slice(0, 2)).toEqual(["-c", "core.hooksPath="]);
+    expect(lfsPushes[0]).toContain("lfs");
+    expect(lfsPushes[0]).toContain(buildPushUrl(DEFAULT_REPO, TOKEN));
+    expect(lfsPushes[0]).not.toContain("--all");
+    expect(heard.some((l) => l.includes("LFS 推送：通"))).toBe(true);
+  });
+
+  it("LFS 推送失败 ⇒ 退 1，一跳都不派发（派出去只会让 GitHub 侧拿指针文件跑假红）", async () => {
+    const { io, pushes, lfsPushes, calls, heard } = harness({
+      lfsCode: 1,
+      lfsStderr: `batch request: exit status 1 (token ${TOKEN})`,
+    });
+    const code = await runMirror(io);
+    expect(code).toBe(CODE.FAIL);
+    /* refs 推送照发（它在前一跳已成功），但派发一次都不许发。 */
+    expect(pushes).toHaveLength(1);
+    expect(lfsPushes).toHaveLength(1);
+    expect(calls).toHaveLength(0);
+    const all = heard.join("\n");
+    expect(all).toContain("LFS 推送失败");
+    expect(all).toContain("不派发");
+    /* 硬规则 17 在第二跳同样成立：git-lfs 的回话先过脱敏再回显。 */
+    expect(all).not.toContain(TOKEN);
+  });
+
+  it("LFS 推送撞上「没装 git-lfs」⇒ 话术指去装 git-lfs，不是网络问题", async () => {
+    const { io, calls, heard } = harness({
+      lfsCode: 1,
+      lfsStderr: "git: 'lfs' is not a git command. See 'git --help'.",
+    });
+    const code = await runMirror(io);
+    expect(code).toBe(CODE.FAIL);
+    expect(calls).toHaveLength(0);
+    expect(heard.join("\n")).toContain("装 git-lfs");
+  });
+
+  it("LFS 推送撞上「端点没开」（404 族）⇒ 话术指去 Settings，不静默降级", async () => {
+    const { io, calls, heard } = harness({
+      lfsCode: 1,
+      lfsStderr: "batch request: Repository or object not found: exit status 404",
+    });
+    const code = await runMirror(io);
+    expect(code).toBe(CODE.FAIL);
+    expect(calls).toHaveLength(0);
+    expect(heard.join("\n")).toContain("Settings");
   });
 
   it("硬规则 17：任何回显（含推送报错）都不许出现令牌原值", async () => {
@@ -529,6 +619,8 @@ describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
   function harness(
     opts: {
       env?: Record<string, string | undefined>;
+      lfsCode?: number;
+      lfsStderr?: string;
       probeCode?: number;
       probeResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
       probeStderr?: string;
@@ -539,6 +631,7 @@ describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
     } = {},
   ) {
     const pushes: Array<Array<string>> = [];
+    const lfsPushes: Array<Array<string>> = [];
     const heard: Array<string> = [];
     const sleeps: Array<number> = [];
     let probeCalls = 0;
@@ -556,6 +649,14 @@ describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
           stdout: opts.probeStdout ?? `${REMOTE_REF}\n`,
           stderr: opts.probeStderr ?? "",
         };
+      }
+      /* 与 runMirror 的 harness 同一分流：lfs push 先于内容 push 判，各记各的账。 */
+      if (args.includes("lfs")) {
+        lfsPushes.push(args);
+        if ((opts.lfsCode ?? 0) !== 0) {
+          return { code: opts.lfsCode ?? 1, stdout: "", stderr: opts.lfsStderr ?? "" };
+        }
+        return { code: 0, stdout: "", stderr: "" };
       }
       if (args.includes("push")) {
         pushes.push(args);
@@ -582,7 +683,7 @@ describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
         sleeps.push(ms);
       },
     };
-    return { heard, io, pushes, sleeps, probeCalls: () => probeCalls };
+    return { heard, io, pushes, lfsPushes, sleeps, probeCalls: () => probeCalls };
   }
 
   it("推成 ⇒ 退 0；--force 打到 refs/heads/master，且日志里没有任何「已派发」", async () => {
@@ -674,5 +775,30 @@ describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
     expect(eg.pushes).toHaveLength(PUSH_MAX_ATTEMPTS);
     expect(eg.sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
     expect(eg.heard.join("\n")).toContain("[mirror-master] 推送失败");
+  });
+
+  it("master 档同样跑 LFS 第二跳：daily / 桌包的 checkout 也开 lfs:true，前缀是 [mirror-master]", async () => {
+    /* master 这一推服务的对象是 GitHub 侧的 schedule（daily / package-desktop）——
+     * 它们的 checkout 同样开 `lfs: true`，对象不在就是同一格假红。 */
+    const { heard, io, lfsPushes } = harness();
+    const code = await runMasterMirror(io);
+    expect(code).toBe(CODE.OK);
+    expect(lfsPushes).toHaveLength(1);
+    expect(lfsPushes[0]).toContain("lfs");
+    expect(lfsPushes[0]).not.toContain("--all");
+    expect(heard.some((l) => l.startsWith("[mirror-master]") && l.includes("LFS 推送：通"))).toBe(true);
+  });
+
+  it("master 档 LFS 推送失败 ⇒ 退 1，与 PR 档同一族话术", async () => {
+    const { heard, io, lfsPushes } = harness({
+      lfsCode: 1,
+      lfsStderr: "batch response: This repository is over its data quota.",
+    });
+    const code = await runMasterMirror(io);
+    expect(code).toBe(CODE.FAIL);
+    expect(lfsPushes).toHaveLength(1);
+    const all = heard.join("\n");
+    expect(all).toContain("[mirror-master] LFS 推送失败");
+    expect(all).toContain("Billing");
   });
 });

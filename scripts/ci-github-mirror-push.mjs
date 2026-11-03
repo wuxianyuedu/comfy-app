@@ -60,6 +60,16 @@
  *    判据）重试 1 次。认证 / 权限 / 仓库不存在类**一律不重试** —— 重试它们只是把真问题
  *    拖慢几分钟，还把「令牌坏了」读成「网络不好」。三态退码与 `--readout` 语义一字未动：
  *    重试耗尽仍是原来的 exit 2 / exit 1，读数档照旧不折进流水线判决。
+ * 9. **refs 推完还有第二跳：LFS 对象**（第二批，字体真身那一族）。`.gitattributes` 把
+ *    `assets/fonts/**` 钉成 LFS；镜像仓若只有指针文件，GitHub 侧 `checkout` 开 `lfs: true`
+ *    会撞「拉不到对象」的红。所以内容推送成功后补一跳 `git lfs push <镜像> HEAD`：
+ *    **不带 `--all`**（只推该 ref 可达且远端还没有的对象，存量历史不重复计带宽），
+ *    已在场的对象由 git-lfs 自己跳过 ⇒ 增量语义成立。失败 ⇒ exit 1 且**不派发**：
+ *    派出去只会让 GitHub 侧拿指针文件跑出一格假红（字体用例对不上字节数）。
+ *    配额风险写在这里而不是等撞墙：GitHub 免费档 LFS 是 1 GiB 存储 + 1 GiB/月带宽，
+ *    字体约 8.6 MB、对象推送一次性，但**每一次 checkout 拉取都计带宽**（pr-gate 每跑
+ *    一至两拉）⇒ 撞墙时话术指去 Billing，不指代码。未安装 git-lfs / 仓库未启用 LFS
+ *    同样各有明确话术（`explainLfsPushFailure`），不静默降级。
  *
  * ## `--master`：push 档（`master 合并复核`）的主干镜像
  *
@@ -168,6 +178,21 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  */
 export function pushArgs(url, ref) {
   return ["-c", "core.hooksPath=", "push", "--force", url, `HEAD:${ref}`];
+}
+
+/**
+ * 第二跳（LFS 对象推送）的完整参数表（文件头第 9 条）。
+ *
+ * 与 {@link pushArgs} 同一纪律：`-c core.hooksPath=` 不带本仓钩子（pre-push 那一条
+ * 对「在镜像仓写对象」没有管辖权）。**不带 `--all`**：`git lfs push <url> HEAD` 的语义
+ * 是「HEAD 可达且远端还没有的对象」—— 增量由 git-lfs 自己按 LFS API 对账，存量历史
+ * 不重复计带宽。`HEAD` 本地可解析（PR 事件上是平台合成的 merge 提交，工作区跑的就是它）。
+ *
+ * @param {string} url 带凭据的推送 URL（与内容推送同一条认证路径）
+ * @returns {string[]} git 参数表
+ */
+export function lfsPushArgs(url) {
+  return ["-c", "core.hooksPath=", "lfs", "push", url, "HEAD"];
 }
 
 /**
@@ -351,7 +376,9 @@ export function gitTimeoutFor(args) {
   if (sub === "ls-remote") {
     return REMOTE_PROBE_TIMEOUT_MS;
   }
-  if (sub === "push") {
+  /* LFS 那一跳（`lfsPushArgs` 的子命令是 `lfs`）与内容推送同量级：对象可以有几 MB，
+   * 首次送存量更久 ⇒ 给推送档，不给探活档。 */
+  if (sub === "push" || sub === "lfs") {
     return PUSH_TIMEOUT_MS;
   }
   return undefined;
@@ -491,6 +518,77 @@ export function explainRemoteProbeFailure(text) {
 }
 
 /**
+ * 把 `git lfs push` 的失败回话翻成**具体那一句**（文件头第 9 条；与
+ * {@link explainRemoteProbeFailure} 同族：回话本身不判红，只被念出来）。
+ *
+ * 四形态各有各的下一动作，判的顺序要紧：
+ *
+ * · egress 层（重试耗尽仍没通）—— 与探活同一组判据，下一动作在节点侧；
+ * · **没装 git-lfs**（`'lfs' is not a git command`）—— 下一动作是装它，
+ *   不装就是每条 PR 都红在这里；
+ * · **配额撞墙**（`402` / `quota` / `bandwidth`）—— 下一动作在 Billing，
+ *   免费档 1 GiB 存储 + 1 GiB/月带宽，每一次 checkout 拉取都计带宽；
+ * · **LFS 端点没开 / 令牌够不到它**（`Repository or object not found` 那一族）——
+ *   公开仓默认启用，私有仓去 Settings 里开；这一格不降级。
+ *
+ * @param {string} text `git lfs push` 的 stdout + stderr（未脱敏）
+ * @returns {string} 一句中文读数
+ */
+export function explainLfsPushFailure(text) {
+  if (isEgressFailure(text)) {
+    return "到 github.com 这一跳没通（TCP / DNS / 代理层，重试已耗尽）⇒ 出网问题在节点侧，与令牌值和这一格的判据都无关";
+  }
+  if (/lfs.{0,4}is not a git command|is not a git command/i.test(text)) {
+    return "这台 runner 上没有 git-lfs（`lfs` 不是可识别的子命令）⇒ 先在节点装 git-lfs；不装就是每条 PR 都红在这里，这一格不降级";
+  }
+  if (/\b402\b|quota|bandwidth|storage limit/i.test(text)) {
+    return "镜像仓的 LFS 配额撞墙（GitHub 免费档 1 GiB 存储 + 1 GiB/月带宽，每次 checkout 拉取都计带宽）⇒ 去仓库 Settings → Billing 看配额 / 买 data pack，与代码无关";
+  }
+  if (/repository or object not found|repository not found|lfs.{0,24}(not enabled|disabled|not supported)|\b404\b/i.test(text)) {
+    return "镜像仓的 LFS 端点没开（或以这枚令牌的身份够不到它）⇒ 公开仓默认启用；私有仓去 Settings → Options 开 Git LFS，再重跑这一格";
+  }
+  return "LFS 对象推送被拒（不属于 egress / 未安装 / 配额 / 未启用四族）⇒ 看上面 git-lfs 的原话定下一动作，这一格不降级";
+}
+
+/**
+ * 内容推送成功后那一跳：把 LFS 对象也送过去（文件头第 9 条）。
+ *
+ * 失败 ⇒ `CODE.FAIL`，由调用方**不派发**：refs 已在而对象不在，GitHub 侧 checkout
+ * 开 `lfs: true` 的那几格会拿指针文件跑出一格假红。重试与超时与内容推送同一套
+ * （egress 类重试一次、`PUSH_TIMEOUT_MS` 墙钟）。
+ *
+ * @param {{log: (line: string) => void, prefix: string, runGit: typeof realRunGit,
+ *   sleep: (ms: number) => Promise<void>, token: string, url: string}} ctx
+ * @returns {Promise<number>} 仓内三态退码（这一跳只有 OK / FAIL 两态：前提那一层已由探活挡过）
+ */
+async function pushLfsObjects(ctx) {
+  const { log, prefix, runGit, sleep, token, url } = ctx;
+  const lfs = await runGitWithRetry(lfsPushArgs(url), {
+    label: "LFS 推送",
+    log,
+    maxAttempts: PUSH_MAX_ATTEMPTS,
+    prefix,
+    runGit,
+    sleep,
+  });
+  if (lfs.code !== 0) {
+    const text = sanitize(`${lfs.stdout}\n${lfs.stderr}`, token);
+    log(`[${prefix}] LFS 推送失败（exit ${lfs.code}）：${explainLfsPushFailure(text)}`);
+    for (const line of text.split("\n")) {
+      if (line.trim()) {
+        log(`[${prefix}]   ${line}`);
+      }
+    }
+    log(`[${prefix}] 结论：exit 1 —— refs 已推但 LFS 对象没送过去 ⇒ 不派发（派出去只会让 GitHub 侧拿指针文件当红）`);
+    return CODE.FAIL;
+  }
+  log(
+    `[${prefix}] LFS 推送：通（增量：只推该 ref 可达且远端还没有的对象，已在场的由 git-lfs 自己跳过）`,
+  );
+  return CODE.OK;
+}
+
+/**
  * 执行镜像：先问「仓库在不在」→ 推 HEAD → 派发。每一跳各自独立成读数，前一跳没通后一跳不发。
  *
  * @param {{env: Record<string, string | undefined>, fetchImpl?: typeof fetch, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, dryRun?: boolean, log?: (line: string) => void}} io
@@ -526,11 +624,12 @@ export async function runMirror(io) {
     ? ` · base ${ctx.baseSha.slice(0, 8)}`
     : " · base 缺席（payload 留空）";
   log(
-    `[mirror] 计划：HEAD ${ctx.headSha.slice(0, 8)} → ${ctx.repo}:${ctx.ref} · 派发 ${EVENT_TYPE}${baseNote}`,
+    `[mirror] 计划：HEAD ${ctx.headSha.slice(0, 8)} → ${ctx.repo}:${ctx.ref} · LFS 增量推送 · 派发 ${EVENT_TYPE}${baseNote}`,
   );
   if (dryRun) {
     log("[mirror] DRY-RUN：没推也没派发，payload 如下 ——");
     log(JSON.stringify(payload, null, 2));
+    log("[mirror] DRY-RUN：实跑时内容推送后还有一跳 LFS 增量推送（不带 --all，失败 ⇒ exit 1 不派发）");
     return CODE.OK;
   }
   /* 推送前那一问：目标仓库没建时 git 的回话与「令牌坏了」逐字同形（见文件头第 5 条）。
@@ -581,6 +680,19 @@ export async function runMirror(io) {
       }
     }
     return CODE.FAIL;
+  }
+  /* refs 已在 ⇒ 第二跳把 LFS 对象送过去（文件头第 9 条）。它挂了照样是红，且**不派发**：
+   * 派出去只会让 GitHub 侧拿指针文件跑出一格假红（字体用例对不上字节数）。 */
+  const lfsCode = await pushLfsObjects({
+    log,
+    prefix: "mirror",
+    runGit,
+    sleep,
+    token: ctx.token,
+    url,
+  });
+  if (lfsCode !== CODE.OK) {
+    return lfsCode;
   }
   let res;
   try {
@@ -638,9 +750,9 @@ export async function runMasterMirror(io) {
     return CODE.NO_FACT;
   }
   const url = buildPushUrl(ctx.repo, ctx.token, (env.GITHUB_MIRROR_USER ?? "").trim() || "oauth2");
-  log(`[mirror-master] 计划：HEAD ${ctx.headSha.slice(0, 8)} → ${ctx.repo}:${ctx.ref}（不派发）`);
+  log(`[mirror-master] 计划：HEAD ${ctx.headSha.slice(0, 8)} → ${ctx.repo}:${ctx.ref} · LFS 增量推送（不派发）`);
   if (dryRun) {
-    log("[mirror-master] DRY-RUN：没推，计划如上");
+    log("[mirror-master] DRY-RUN：没推，计划如上（实跑时内容推送后还有一跳 LFS 增量推送，不带 --all）");
     return CODE.OK;
   }
   /* 推送前那一问与 PR 模式同一跳、同一份判读、同一套重试（文件头第 5 / 8 条）。 */
@@ -689,6 +801,19 @@ export async function runMasterMirror(io) {
       }
     }
     return CODE.FAIL;
+  }
+  /* 与 PR 档同一跳（文件头第 9 条）：master 服务的 daily / 桌包两档 checkout 也开 lfs:true，
+   * 对象没送过去那边照样是「指针文件」的假红。 */
+  const lfsCode = await pushLfsObjects({
+    log,
+    prefix: "mirror-master",
+    runGit,
+    sleep,
+    token: ctx.token,
+    url,
+  });
+  if (lfsCode !== CODE.OK) {
+    return lfsCode;
   }
   log(`[mirror-master] ✓ 已推 ${ctx.repo}:${ctx.ref} @ ${ctx.headSha.slice(0, 8)}`);
   return CODE.OK;

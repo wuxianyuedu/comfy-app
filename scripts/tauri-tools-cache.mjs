@@ -19,12 +19,19 @@
  * 与两份缓存槽同卷的第四个目录 —— 它不是缓存，删了今天就没包），作业起手先补缓存，
  * 补不上就说「没有结论」并退非零。
  *
- * ## 两条动作（都不删任何东西）
+ * ## 三条动作（都不删任何东西）
  *
  * · `--seed`：从**本机那份 tauri 自己下好的缓存**把树种进常驻根，逐件记 sha256 + 字节。
  *   入场券是「那份缓存里必需件齐全」，不齐就退 2 —— 空手种一份残缺树比不种更坏。
  *   种的时候按**公开资产的哈希**核一次 `nsis_tauri_utils.dll`：核不过就不是那一件，
  *   不写进常驻根（这一条把「镜像被换过」和「版本升过没同步」分开，后者会安静地红在下一跑）。
+ * · `--download`：没有「本机成功打过包」的前提时（GitHub hosted runner 那种即弃机），
+ *   从**被钉死的两件公开资产**直接建常驻根镜像：下完先核 sha256 + 字节再落盘，
+ *   树的整形照搬 bundler 自己的 `get_and_extract_nsis`（解 zip ⇒ 顶层 `nsis-<版本>/`
+ *   改名 `NSIS/` ⇒ dll 落 `Plugins/x86-unicode/additional/`）。传输 / 解压失败 ⇒ 退 2
+ *   （没有结论，不静默降级）；哈希对不上 ⇒ 退 1（资产变了 ⇒ 同批改 `NSIS_PLAN`）。
+ *   与 `actions/cache` 配套：workflow 把常驻根的镜像目录做成跨跑缓存，miss 那一跑
+ *   付一次下载，后面全命中。
  * · 缺省（`ensure`）：必需件已在场 ⇒ 一个字都不动、退 0；不在场而常驻根里有 ⇒ 按清单拷过去
  *   并逐件复算哈希；两边都没有 ⇒ **退 2**，并把出口（本机跑一次 `--seed`）念出来。
  *
@@ -36,10 +43,12 @@
  *
  * ## 用法
  *
- *   node scripts/tauri-tools-cache.mjs            # 补缓存（CI 那一格用的就是这条）
- *   node scripts/tauri-tools-cache.mjs --seed     # 本机成功打过包之后，把树种进常驻根
- *   node scripts/tauri-tools-cache.mjs --dry-run  # 只打印会做什么
+ *   node scripts/tauri-tools-cache.mjs             # 补缓存（CI 那一格用的就是这条）
+ *   node scripts/tauri-tools-cache.mjs --seed      # 本机成功打过包之后，把树种进常驻根
+ *   node scripts/tauri-tools-cache.mjs --download  # 从被钉的公开资产直接建常驻根镜像（即弃机那一族）
+ *   node scripts/tauri-tools-cache.mjs --dry-run   # 只打印会做什么
  */
+import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -63,15 +72,20 @@ export const NSIS_PLAN = {
   version: "3.13",
   /** tauri 自己的落点（相对 `%LOCALAPPDATA%\tauri`）。 */
   cacheRel: "NSIS",
-  /** 两件公开资产的哈希（直连 GitHub 取到的原物，2026-10-27 本机实测）。 */
+  /**
+   * 两件公开资产的 URL + 哈希（直连 GitHub 取到的原物，2026-10-27 本机实测；
+   * URL 与 tauri bundler dev 分支源码里钉的逐字一致）。
+   */
   assets: {
     zip: {
       sha256: "ba63dffc4410ee89193e1cb5a41989991bd77c61068da17e3156d136b7b0b3d8",
       bytes: 2_363_925,
+      url: "https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.13/nsis-3.13.zip",
     },
     dll: {
       sha256: "5ba143b5db4a87d32d6e7802e033330aae56cbceabe0d1e3ba41948385ad4709",
       bytes: 34_304,
+      url: "https://github.com/tauri-apps/nsis-tauri-utils/releases/download/nsis_tauri_utils-v0.5.3/nsis_tauri_utils.dll",
     },
   },
   /** dll 在缓存树里的落点（正斜杠写，比较时统一分隔符）。 */
@@ -338,10 +352,173 @@ export function ensure({ cacheDir, toolRoot, toolRootFrom, dryRun, log, plan = N
 }
 
 /**
+ * 外部命令那一次调用的形状（`curl` / `tar`；测试注入假件的注入点）。
+ *
+ * @typedef {(cmd: string, args: string[]) => {status: number | null, stdout?: string, stderr?: string}} RunCmd
+ */
+
+/**
+ * `--download`：从被钉死的两件公开资产**直接建**常驻根镜像（文件头「三条动作」）。
+ *
+ * 可信锚点与 `--seed` 同一条：下完先核 sha256 + 字节，核不过就不是那一件，宁可退 1
+ * 也不写进常驻根。树的整形照搬 bundler 自己的 `get_and_extract_nsis`：解 zip ⇒ 顶层
+ * 目录 `nsis-<版本>/` 改名 `NSIS/` ⇒ dll 落 `Plugins/x86-unicode/additional/`。
+ * 解 zip 用 `tar`（bsdtar，Windows 10+ 与 GitHub windows runner 均自带），下载用
+ * `curl`（同前）—— 不引第三方依赖，保持 `main()` 的同步形态。
+ *
+ * 退码：传输 / 解压失败 ⇒ **2**（「今天取不到工具」是外部条件，不是判红，但**不静默
+ * 降级** —— 让 bundler 去现下就是去撞那条 22–23s 的预算）；哈希 / 树形状与被钉的对不上
+ * ⇒ **1**（红：资产变了 ⇒ 同批改 `NSIS_PLAN`）。
+ *
+ * @param {{mirror: string, dryRun: boolean, log: (line: string)=>void,
+ *   run?: RunCmd, plan?: NsisPlan}} io
+ * @returns {number}
+ */
+export function download({ mirror, dryRun, log, plan = NSIS_PLAN, run }) {
+  /** @type {RunCmd} */
+  const runCmd =
+    run ??
+    ((cmd, args) => {
+      const r = spawnSync(cmd, args, { encoding: "utf8", timeout: 300_000 });
+      return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
+    });
+  log(`[工具缓存] 下载建镜像：${plan.name} ${plan.version} → ${mirror}`);
+  if (readMirrorManifest(mirror)) {
+    log("[工具缓存] ✓ 镜像已在场（清单可读）⇒ 不动任何东西。");
+    return 0;
+  }
+  if (fs.existsSync(mirror)) {
+    /* 目录在而清单不可读 = 残缺镜像。与 --seed 同一条纪律：不覆盖（覆盖之后「常驻根里
+     * 这份是哪一天的」没有可读的来源），念出人工出口。 */
+    log(
+      `[工具缓存] 失败：${mirror} 已存在但清单不可读 —— 那是一份残缺镜像，` +
+        "先人工移走那一个目录再重跑，这一格不覆盖。",
+    );
+    return 1;
+  }
+  const zipAsset = plan.assets.zip;
+  const dllAsset = plan.assets.dll;
+  log(`[工具缓存] 两件被钉的资产：\n[工具缓存]   zip ${zipAsset.url}\n[工具缓存]   dll ${dllAsset.url}`);
+  if (dryRun) {
+    log("[工具缓存] --dry-run：不落盘。");
+    return 0;
+  }
+  const scratch = `${mirror}.staging`;
+  /** 最终会成为 `mirror` 的那棵树（scratch 里还躺着 zip / dll 原文，落完一并清）。 */
+  const tree = path.join(scratch, "tree");
+  const zipFile = path.join(scratch, `${plan.name}.zip`);
+  const dllFile = path.join(scratch, "nsis_tauri_utils.dll");
+  /**
+   * 交账出口：清掉暂存区（不许留半棵树）再念那句话。
+   *
+   * @param {number} code @param {string} line @returns {number}
+   */
+  const bail = (code, line) => {
+    fs.rmSync(scratch, { recursive: true, force: true });
+    log(line);
+    return code;
+  };
+  /**
+   * 下一件资产并核 sha256 + 字节。
+   *
+   * @param {{url: string, sha256: string, bytes: number}} asset @param {string} dest
+   * @returns {number | null} null = 通过；否则是退码（已念出原因、已清暂存）
+   */
+  const fetchAsset = (asset, dest) => {
+    const got = runCmd("curl", ["-fSL", "--retry", "3", "-o", dest, asset.url]);
+    if (got.status !== 0) {
+      return bail(
+        2,
+        `[工具缓存] **没有结论**：取不到 ${asset.url}（curl exit ${got.status}）` +
+          `${got.stderr ? ` —— ${String(got.stderr).trim().slice(0, 200)}` : ""}。` +
+          "传输层今天没跑起来，不静默降级。",
+      );
+    }
+    const bytes = fs.statSync(dest).size;
+    const sha = sha256File(dest);
+    if (sha !== asset.sha256 || bytes !== asset.bytes) {
+      return bail(
+        1,
+        `[工具缓存] 失败：${path.basename(dest)} 与被钉的那件对不上` +
+          `（sha256 读到 ${sha.slice(0, 12)}… / 钉 ${asset.sha256.slice(0, 12)}…；` +
+          `字节 ${bytes} / 钉 ${asset.bytes}）—— 资产变了或被换过，同批改 \`NSIS_PLAN\`，不落盘。`,
+      );
+    }
+    return null;
+  };
+  fs.rmSync(scratch, { recursive: true, force: true });
+  fs.mkdirSync(scratch, { recursive: true });
+  let bad = fetchAsset(zipAsset, zipFile);
+  if (bad !== null) {
+    return bad;
+  }
+  const untar = runCmd("tar", ["-xf", zipFile, "-C", scratch]);
+  if (untar.status !== 0) {
+    return bail(
+      2,
+      `[工具缓存] **没有结论**：解不开刚下载的 zip（tar exit ${untar.status}）—— 传输层 / 工具链今天没跑起来，不静默降级。`,
+    );
+  }
+  /* 照搬 bundler 的整形：顶层目录是 `nsis-<版本>/`，改名成缓存树名（`NSIS`）。 */
+  const topDir = path.join(scratch, `${plan.name}-${plan.version}`);
+  if (!fs.existsSync(topDir)) {
+    return bail(
+      1,
+      `[工具缓存] 失败：zip 顶层目录不是 ${plan.name}-${plan.version}（资产形状与被钉的对不上 ⇒ 同批改 \`NSIS_PLAN\`）。`,
+    );
+  }
+  fs.renameSync(topDir, tree);
+  bad = fetchAsset(dllAsset, dllFile);
+  if (bad !== null) {
+    return bad;
+  }
+  const dllDest = path.join(tree, ...plan.dllRel.split("/"));
+  fs.mkdirSync(path.dirname(dllDest), { recursive: true });
+  fs.renameSync(dllFile, dllDest);
+  const missing = missingRequired(tree, plan.required);
+  if (missing.length > 0) {
+    return bail(
+      1,
+      `[工具缓存] 失败：解出来的树缺 ${missing.length} 件必需件（${missing.join(", ")}）` +
+        " —— 资产形状与被钉的对不上，同批改 `NSIS_PLAN`，不落盘。",
+    );
+  }
+  const files = listTreeFiles(tree).map((rel) => {
+    const abs = path.join(tree, ...rel.split("/"));
+    return { path: rel, sha256: sha256File(abs), bytes: fs.statSync(abs).size };
+  });
+  const manifest = {
+    name: plan.name,
+    version: plan.version,
+    downloadedAt: new Date().toISOString(),
+    assetSha256: plan.assets,
+    files,
+  };
+  try {
+    fs.writeFileSync(path.join(tree, TOOLS_MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}\n`);
+    /* 整目录改名过去：常驻根里要么是没有这一份，要么是齐全的这一份，没有第三种。 */
+    fs.mkdirSync(path.dirname(mirror), { recursive: true });
+    fs.renameSync(tree, mirror);
+    fs.rmSync(scratch, { recursive: true, force: true });
+  } catch (error) {
+    return bail(
+      1,
+      `[工具缓存] 失败：落盘被拒 —— ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  log(
+    `[工具缓存] ✓ 已下载建镜像 ${files.length} 件·合计 ` +
+      `${(files.reduce((s, f) => s + f.bytes, 0) / 1024 ** 2).toFixed(1)} MiB → ${mirror}`,
+  );
+  return 0;
+}
+
+/**
  * 主流程。
  *
  * @param {{argv?: string[], env?: Record<string, string | undefined>,
  *   log?: (line: string)=>void, cwd?: string,
+ *   runSpawn?: RunCmd,
  *   runStore?: (args: string[], opts: object) => {status: number | null, stdout?: string}}} [io]
  * @returns {number} 0 在场或补齐 / 1 失败（哈希不符、写盘被拒）/ 2 没有结论
  */
@@ -351,11 +528,7 @@ export function main(io = {}) {
   const argv = io.argv ?? process.argv.slice(2);
   const dryRun = argv.includes("--dry-run");
   const seeding = argv.includes("--seed");
-  const cache = resolveTauriCacheRoot(env);
-  if (!cache.dir) {
-    log(`[工具缓存] **没有结论**：${cache.from}。`);
-    return 2;
-  }
+  const downloading = argv.includes("--download");
   const resolved = resolveToolRoot({
     cwd: io.cwd ?? ROOT,
     env,
@@ -364,6 +537,15 @@ export function main(io = {}) {
   log(`[工具缓存] 工具根：${resolved.root ?? "取不到"}（来源：${resolved.from}）`);
   if (!resolved.root) {
     log(`[工具缓存] **没有结论**：问不出工具根 ⇒ 一边都不动。配 ${TOOLS_ROOT_ENV} 是出口。`);
+    return 2;
+  }
+  /* `--download` 建的是常驻根镜像，不读 bundler 落点 ⇒ 不需要 LOCALAPPDATA 那一问。 */
+  if (downloading) {
+    return download({ dryRun, log, mirror: mirrorDir(resolved.root), run: io.runSpawn });
+  }
+  const cache = resolveTauriCacheRoot(env);
+  if (!cache.dir) {
+    log(`[工具缓存] **没有结论**：${cache.from}。`);
     return 2;
   }
   return seeding

@@ -60,6 +60,10 @@ jobs:
         with:
           ref: ${{ github.event.inputs.head_sha || github.sha }}
           fetch-depth: 0
+          # 全量单测含字体用例（tests/embedded-title-font.test.ts，在固定结构清单里）：
+          # 它要字体真身字节，只检 LFS 指针文件必红 ⇒ 这一格必须拉 LFS。
+          # 对象由镜像那一格 `git lfs push` 送到；配额口径见 pr-gate.yml 同名注释。
+          lfs: true
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
         uses: pnpm/action-setup@v6
