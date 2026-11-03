@@ -1207,7 +1207,7 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
   it("wide 话术指名的就是这条命令，且它真的存在于入口（不是写了一段跑不响的话）", () => {
     /* 两半一起钉才成立：前半是「话术里有这条出口」，后半是「那个出口在入口里认这个旗标」。
        只钉前半 = 守一句散文；只钉后半 = 守一个没人知道的开关。 */
-    const note = wideFallbackNote("门槛自身", 20);
+    const note = wideFallbackNote("门槛自身", 20, 0);
     expect(note).toContain("scripts/run-affected-tests.mjs --full");
     expect(src, "入口不认 --full，话术就指到空气上").toContain('argv.includes("--full")');
   });
