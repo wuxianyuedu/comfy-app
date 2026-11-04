@@ -122,6 +122,7 @@
 import { planSeparatedLaunches, resolveAffectedSegment } from "./affected-launch-segments.mjs";
 import { mergeTimingLedger, orderByKnownDuration, readTimingLedger } from "./affected-launch-duration-order.mjs";
 import { applySuspension, excludeArgs } from "./suspended-gate-tests.mjs"; // #2948
+import { patchCoverageArgs } from "./affected-patch-coverage.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
 /* 「受影响用例」门在 CI 里的良性 stderr 噪音屏蔽（按行判定，见文件头）：本文件只负责
  * 在起 vitest 前解析开关、在两遍 spawn 都把 `isNoiseLine` 透传下去。 */
@@ -651,6 +652,7 @@ export async function runChunk(chunk, deps) {
         withDefaultReporter: reporters.length === 0,
       }),
       `--maxWorkers=${workers}`,
+      ...patchCoverageArgs(chunkId, 1),
       ...excludeArgs(exclude),
       ...chunk,
     ],
@@ -751,6 +753,7 @@ export async function runChunk(chunk, deps) {
         withDefaultReporter: reporters.length === 0,
       }),
       "--no-file-parallelism",
+      ...patchCoverageArgs(chunkId, 2),
       ...retryFiles,
     ],
     filterLine ? { filterLine } : undefined,
