@@ -284,7 +284,8 @@ export function matchesTargetSha(run, sha) {
  * 两件事要让线上那一眼分得开：
  *   · **表里有 run、标题里没有 sha** ⇒ `run-name` 没渲染出 payload 的 sha（锚点恒假）；
  *   · **表里有 run、标题里是别的 sha** ⇒ 本跑推的那一笔与 dispatch payload 不是同一笔。
- * 只念标题不念条目全名：`display_title` 是 `run-name` 的产物、里面本来就只有 PR 号 + sha。
+ * 只念标题不念条目全名：`display_title` 是 `run-name` 的产物，里面是
+ * `PR #号 · [标题 · ]sha`（形状见 `.github/workflows/pr-gate.yml` 的 `run-name`）。
  *
  * @param {Array<unknown>} runs runs API 回话里的 `workflow_runs`（**全部**，不只是认领上的）
  * @returns {string} 一行样本（空表时给「零条」）

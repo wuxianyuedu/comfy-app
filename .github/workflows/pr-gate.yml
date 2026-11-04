@@ -38,7 +38,13 @@ name: PR gate (mirror)
 # 拉 run 后靠 display_title 里的 head_sha 认领本跑（`?head_sha=` 对 dispatch 触发的
 # run 失效 —— 那类 run 的 head_sha 落默认分支 HEAD，payload 的 sha 只在 client_payload）。
 # 字段名逐字对 `scripts/ci-github-mirror-push.mjs` 的 dispatchPayload（pr_number/head_sha）。
-run-name: "PR #${{ github.event.client_payload.pr_number || 'manual' }} · ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}"
+#
+# 标题（`pr_title`）排在中间、sha 留在**末尾且不截断**：认领靠整 sha 子串匹配，
+# 排版怎么变都动不到它。`pr_title` 缺席（老 payload / 平台标题读不到）时正中间那段
+# 是空串、尾随分隔符也不出现 ⇒ 渲染回老格式 `PR #号 · sha`，不是 `PR #号 ·  · sha`。
+# 标题由镜像格归一成单行并截到 160 字符（`scripts/ci-mirror-payload.mjs`），
+# 这里不做二次处理：run-name 总量上限 256，前缀 + 标题 + sha 最坏 ≈ 211。
+run-name: "PR #${{ github.event.client_payload.pr_number || 'manual' }} · ${{ github.event.client_payload.pr_title || '' }}${{ github.event.client_payload.pr_title && ' · ' }}${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}"
 
 on:
   repository_dispatch:
