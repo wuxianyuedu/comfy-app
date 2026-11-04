@@ -1,48 +1,8 @@
 /**
- * `lib` 与 `server` 的跨层依赖**逐个登记**（ISSUE #569 第 6 项 / 规范 §18.9）。
- *
- * 背景（实测）：`eslint-plugin-boundaries` 声明 `src/lib/**` 为 element `lib`
- * 之后，「lib 不得 import components」由机器拦住，**但「lib 不得 import server」
- * 这条没写** —— 于是 `lib/comfyui/**` 与 `lib/drizzle-studio/` 里 11 个文件
- * 直接 `from "~/server/lib/logger"`，而 `pnpm lint` 全绿，只能靠人读代码发现。
- *
- * 为什么不是「一律禁止」：`lib` 与 `server` 之间**本来就有两类合法方向**，一律
- * 禁止会把它们一起误伤（那不是判据，那是噪音）：
- *
- *   ① `src/lib/core/**`、`src/lib/db.ts` 是**数据层**（`eslint.config.js` 把
- *      `src/lib/core/**`、`src/lib/db/**` 显式声明为 element `server`；元素顺序
- *      是语义，见 `tests/lib-layer-boundaries.test.ts`）。它们 import
- *      `~/server/db/schema` 取 Drizzle 表定义是**同层**引用，不是越界。
- *   ② 测试文件里的 `vi.mock("~/server/lib/logger")` 说明符必须与源码串一致才能
- *      生效，源码改写时它自然跟着改；单独断言只会制造与源码脱节的门。
- *
- * 所以本用例守的是**第三条**：越界依赖必须**逐个登记**，清单只许变短。
- * 这是 ISSUE #569 第 6 项「决策并落地」的具体形式 —— 不允许再出现「新的 lib
- * 模块悄悄依赖 server」而没有任何判据拦它。
- *
- * 登记项（全部指向同一件事 + 同一后续动作）：
- *   · 目标 `src/server/lib/logger.ts` 的价值已被实测证明：`lib/core/logger.ts`
- *     是它的薄封装（接口逐字一致、调用方零改动），且 `core/logger.ts` 不带
- *     `server-only`（规范 §18.4 第三类：核心层被纯 Node 宿主与 Next 同时加载）。
- *     ⇒ 消除这批依赖 = 把 `server/lib/logger` 的实现在两个**同层**模块之间
- *       合并/下沉（`lib/core/logger` ⇄ `server/lib/logger`），新增已无事可做。
- *   · 目标 `src/server/better-auth/server.ts`（`lib/auth-server.ts`）属另一种
- *     情形（Next 请求上下文，无法下沉）。它**已按「消息/判决分离」消除**：
- *     `lib/auth-server.ts` 改为「会话 → 用户」的纯判决（会话由调用方传入），
- *     读会话的唯一落点搬到 `src/server/auth/request-user.ts`（`src/server/**`
- *     本来就是服务端物，不存在越界）。清单因此**归零**。
- *
- * 口径：源码串 + 目标文件路径。正则剥掉块注释，行注释只剥 `//` 开头的那一
- * 种，因此文件末尾的 `// from "~/server/lib/logger"` 这类说明**仍会被计入** ——
- * 对循环依赖检测（以源码串为输入）它就是同一条边，宁可多登记一条。
- *
- * **登记粒度是「边」，不是「源文件」**（这一点此前写错，等于门禁基本失效）：
- * `REGISTERED` 的键是源文件、值是目标文件，而判定曾写成 `!(e.from in REGISTERED)`
- * —— 只要一个文件因为**任何**理由进过一次清单，它此后新增的**任意** lib → server
- * 依赖都会被放行，且两条断言都不会红：新增边被当成「已登记」，`REGISTERED` 的值
- * 也没人比对。实测（`client.ts` 追加一个指向 `~/server/lib/brand-new` 的 import）
- * 三条用例全绿。现在比对的是 `from → to` 这一对，登记才真正等价于「这条边被裁决过」。
- */
+ * `lib` 与 `server` 的跨层依赖**逐个登记**（ISSUE #569 第 6 项 / 规范 §18.9）：`eslint-plugin-boundaries` 只拦住
+ * 「lib 不得 import components」，「lib 不得 import server」没写，于是 11 个文件直连 `~/server/lib/logger` 而 `pnpm lint`
+ * 全绿。不一律禁止：`src/lib/core/**`、`src/lib/db.ts` 被声明为 element `server`（同层引用）。登记粒度是**边**不是
+ * 源文件（旧写法 `!(e.from in REGISTERED)` 会放行此后任意新边，实测三例全绿）；清单只许变短，口径为源码串 + 目标路径。 */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -99,22 +59,10 @@ function stripComments(src: string): string {
 const SERVER_OWNED_RE = /^src\/server\/(?!db\/schema\.ts|db\.ts)/;
 
 /**
- * 登记项：`lib` 侧文件 → `server` 侧目标。**只许变短**（见头注）。
- *
- * 这一批登记项曾含 11 个文件 → `src/server/lib/logger.ts`（`lib/comfyui/**` 与
- * `lib/drizzle-studio/lifecycle.ts`，外加 7 个测试文件的 `vi.mock` 说明符）。
- * 它们已全部消除：日志**实现**合并到 `src/lib/core/logger.ts`（`lib` 侧的中立出口
- * 本就存在），服务端侧 `src/server/lib/logger.ts` 降为转发层，`lib` 侧统一
- * `import { logger } from "~/lib/core/logger"` —— 方向由 `lib → server` 变回
- * `lib → lib`，不再是越界。
- *
- * 最后一条（better-auth 会话读取需 **Next 请求上下文**，无法下沉）也已消除，
- * 做法见 `src/server/auth/request-user.ts` 的头注：`lib` 侧只保留
- * 「会话 → 用户」的判决并把会话作为**入参**，读会话的落点搬到 `src/server/**`。
- *
- * 因此清单现在是**空的** —— 这正是本用例要守住的终态：`src/lib` 里任何一处
- * 新增的 `lib → server` 依赖都必须先裁决，而不是「反正有一条已登记」。
- */
+ * 登记项：`lib` 侧文件 → `server` 侧目标。**只许变短**（见头注）。曾含 11 个文件 → `src/server/lib/logger.ts`
+ * （`lib/comfyui/**`、`lib/drizzle-studio/lifecycle.ts` 与 7 个测试的 `vi.mock`），已全消除：日志实现合并到
+ * `src/lib/core/logger.ts`，服务端侧降为转发层；better-auth 那条（需 Next 请求上下文）已按「消息/判决分离」消除，
+ * 见 `src/server/auth/request-user.ts` 头注。清单现为**空** = 终态：新边必须先裁决，不得靠「反正已登记一条」。 */
 const REGISTERED: Record<string, string> = {};
 
 type Edge = { from: string; to: string };

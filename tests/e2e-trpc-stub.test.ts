@@ -4,19 +4,9 @@ import { describe, expect, it } from "vitest";
 import { planStubResults, trpcJsonlBody } from "../e2e/support/trpc-stub";
 
 /**
- * 锁住 E2E 的 tRPC 桩产出**真协议形态**（ISSUE #1442）。
- *
- * 为什么值得一条机器判据：那个 helper 的失效方式是**静默**的 —— ISSUE #1442 的
- * 现场正是「四种信封形状行为完全一致、坏 JSON 也一样、控制台零报错」，桩产出的
- * 东西对不上协议时界面只是照旧显示真数据（或空态），没有任何东西变红。
- * 所以这里把「喂进去」这件事本身钉成可失败断言。
- *
- * 判据分两层，缺一不可：
- *   1. **形状**：第一行是 head（按 batchIndex 索引的对象），其后每行都必须是
- *      `{"json": …}` 信封（服务端 `jsonlStreamProducer` 的 `serialize` + `JSON.stringify`）；
- *   2. **真消费**：拿 `@trpc/server` 的 `jsonlStreamConsumer` 真读一遍 —— 这层的
- *      出处是**跑测试时安装的那份依赖**，所以 tRPC 升级换了协议会在这里变红，
- *      而不是等到某条 e2e 变成「数据没进去」的假绿。
+ * 锁住 E2E 的 tRPC 桩产出**真协议形态**（ISSUE #1442）。它的失效方式是**静默**的：#1442 现场是四种信封形状行为一致、坏 JSON 一样、控制台零报错，对不上协议时界面照旧显示真数据（或空态），没有东西变红。
+ * 判据两层缺一不可：① 形状 —— 首行是 head（按 batchIndex 索引的对象），其后每行必须是 `{"json": …}` 信封（服务端 `jsonlStreamProducer` 的 `serialize` + `JSON.stringify`）；
+ * ② 真消费 —— 用 `@trpc/server` 的 `jsonlStreamConsumer` 真读一遍，出处是**跑测试时装的那份依赖**，tRPC 升级换协议会在这里变红，而不是等某条 e2e 变成「数据没进去」的假绿。
  */
 
 /** 桩里出现的负载：含 `Date`（superjson 要靠 `meta` 路径还原）。 */
@@ -26,13 +16,9 @@ const payload = {
 };
 
 /**
- * 用**真消费者**读一遍桩的产出，返回 head。
- *
- * `deserialize` 位传 `superjson.deserialize` 而不是恒等函数：它的施加点是
- * `createConsumerStream` 的 `JSON.parse(line)` **之后、往 head/chunk 分派之前**
- * （`jsonlStreamConsumer` 里那个 TransformStream），也就是逐**行**解信封 ——
- * 这正是 `httpBatchStreamLink` 传 `transformer.output.deserialize` 的那一层。
- * 传恒等函数时 `{json, meta}` 会原样漏进下游，head 的槽位就不是结果信封了。
+ * 用**真消费者**读一遍桩的产出，返回 head。`deserialize` 传 `superjson.deserialize` 而非恒等函数：
+ * 施加点是 `createConsumerStream` 的 `JSON.parse(line)` **之后、往 head/chunk 分派之前**，即逐**行**解信封，
+ * 正是 `httpBatchStreamLink` 传 `transformer.output.deserialize` 那层；传恒等函数时 `{json, meta}` 原样漏进下游，head 槽位就不是结果信封。
  */
 async function consume(body: string) {
   const { jsonlStreamConsumer } = await import("@trpc/server/unstable-core-do-not-import");

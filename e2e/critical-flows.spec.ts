@@ -7,36 +7,15 @@ import { openSettingsView } from "./support/settings-entry";
 import { stubTrpc } from "./support/trpc-stub";
 
 /**
- * 关键链路 E2E（ISSUE #317）：把「登录 → 工作区 → 工作流库执行 → 工作台概览」
- * 四段收进 CI 的 `@critical` 门禁。
- *
- * 设计约束（与规范 11.3.1 / 11.7 对齐）：
- *   - **不依赖真实 ComfyUI / GPU / 外网**：后端交互走 Playwright 路由拦截、
- *     固定 fixture，或本仓库自带的**假 ComfyUI**（`e2e/support/fake-comfyui-server.mjs`，
- *     由 playwright.config 的第二个 webServer 拉起）。为什么「内嵌」那两条必须
- *     用假服务而不是路由拦截：能不能被内嵌是**服务端**探测的
- *     （`setting.comfyEmbeddable`），浏览器侧 `route.fulfill` 够不到那条链路
- *     （ISSUE #310）。
- *   - **选择器只用用户可见的东西**（getByRole / getByText），不依赖 data-testid，
- *     这样重构 DOM 不会让用例失效、而真实回归一定会被抓到。
- *   - 只断言「用户能感知的结果」，不断言内部 state。
- *
- * 为什么值得进 @critical：这四段是应用的主干。历史上「任务卡在队列但界面只显示
- * 等待日志」「ComfyUI 没启动却报任务连接中断」都是在这条链路上被用户先发现的
- * ——门禁跑起来之后，这类「界面没有可见出口」的退化会在合并前暴露。
+ * 关键链路 E2E（ISSUE #317）：登录 → 工作区 → 工作流库执行 → 工作台概览四段进 CI 的 `@critical` 门禁。
+ * 不依赖真实 ComfyUI / GPU / 外网：内嵌那两条必须走假服务（`e2e/support/fake-comfyui-server.mjs`），
+ * 因为能否内嵌是**服务端**探测（`setting.comfyEmbeddable`），浏览器侧 `route.fulfill` 够不到（ISSUE #310）。选择器只用用户可见的东西（getByRole/getByText），重构 DOM 不误红。
  */
 
 /**
- * 让与 ComfyUI / DB 相关的 tRPC 调用**不把界面卡住**。
- *
- * ⚠️ 它**不喂数据**，一行内容也改不了 —— 这里 fulfill 的是 JSON 数组，而
- * 客户端（`httpBatchStreamLink`，`src/trpc/link.ts`）按 **JSON Lines**
- * （`trpc-accept: application/jsonl`）读响应体，数组形态到不了上层
- * （根因与实测见 `./support/trpc-stub.ts` 的文件头，ISSUE #1442）。
- *
- * 它的作用只是把请求**很快答掉**，让首屏不必等 ComfyUI 探测与真实查询；
- * 断言若依赖数据，请改用 `./support/trpc-stub` 的 `stubTrpc()`
- * （那条路是真协议形态，`queue-monitor.spec.ts` 的位次用例即消费方）。
+ * 让与 ComfyUI / DB 相关的 tRPC 调用不卡住界面：它**不喂数据**，只把请求很快答掉。
+ * 这里 fulfill 是 JSON 数组，客户端（`httpBatchStreamLink`，`src/trpc/link.ts`）按 JSON Lines 读，
+ * 到不了上层（`./support/trpc-stub.ts` 文件头，ISSUE #1442）；断言若依赖数据改用 `stubTrpc()`（真协议形态）。
  */
 async function stubBackend(page: Page) {
   await page.route("**/api/trpc/**", async (route: Route) => {
@@ -151,34 +130,10 @@ test.describe("工作区链路 @critical", () => {
   });
 
   /**
-   * ISSUE #720：「加载是有个不知道是什么的图案在」。
-   *
-   * 现场是工作流库的加载态：`EmptyState` 的图标位是 `<span class="block">`
-   * 这种**非 flex** 的容器，而 `Spinner` 是个 `<span>` —— 默认
-   * `display: inline`，`size-6` 出的 width/height 对行内盒不生效，画出来的
-   * 是「2px 上下边框叠在一个行内盒上」：**4×21 的竖线**。用户看不出那是加载
-   * 指示器，只读到一个来源不明的图案。
-   *
-   * 尺寸只有真实浏览器量得出来（jsdom 不做布局、不做行内盒的宽高失效）。三条判据：
-   *   1. 宽高都到位（老形态宽 4px）；
-   *   2. 是个圆（宽高相等），不是竖条；
-   *   3. **把父容器的 flex 抽掉再复量一次**，仍然成立 —— 守的是「尺寸不靠调用处
-   *      布局撑着」：下一个非 flex 的落点照样会塌成竖线。
-   *
-   * 第 3 条原先钉的是「这个落点的父容器**不是** flex」。那是实现细节：加载态后来
-   * 进了 `EmptyState` 的 flex 图标位，代理判据从此恒红，却不说明任何退化。现在
-   * 直接做那个实验（量完立刻还原），比老写法严：老写法只会红，不会告诉你为什么。
-   *
-   * 读数用 `getComputedStyle` 的 width/height，不用 `boundingBox()`：spinner 带
-   * `animate-spin` 持续旋转，boundingBox 量到的是旋转后的外接矩形。两个实测后果：
-   *   · 读数随角度漂 —— 同一根图标两次跑分别量到 26×26 与 34×34；
-   *   · 判据会在最该红的时候放行 —— 老写法下把图标换成默认尺寸（真值 16×16）
-   *     用例**仍然绿**（旋转后的外接矩形把宽度抬过了 16 这条线）。
-   * 顺带一个算式：w×h 的盒转 45° 后外接矩形两边都是 (w+h)/√2 —— 24×16 的竖条
-   * 在 45° 那一刻量起来正好是正方形，「宽高相等」这条判据因此根本不由 boundingBox 保证。
-   * 两处负向验证各红在指定断言上：换成默认尺寸报 `宽度塌了：16×16`，
-   * 只给宽不给高报 `不是圆：24×16`。
-   */
+   * ISSUE #720：「加载是有个不知道是什么的图案」——`Spinner` 默认 `display: inline`，`size-6` 的
+   * width/height 对行内盒不生效，画出「4×21 的竖线」；尺寸只有真实浏览器量得出（jsdom 不做布局）。
+   * 判据：宽高到位（老形态宽 4px）、宽高相等是圆、把父容器 flex 抽掉再量仍成立——守「尺寸不靠调用处
+   * 布局撑着」（原先钉「父容器不是 flex」属实现细节，恒红却不说明退化）。读数用 `getComputedStyle` 而非 `boundingBox()`：`animate-spin` 使外接矩形随角度漂（26×26 / 34×34）。 */
   test("@critical 工作流库加载态的转圈是真的圆，不是一条竖线", async ({ page }) => {
     await stubBackend(page);
     /* 把列表查询拖住，制造「加载中」这一刻（它只持续几秒，抓不到就白跑）。 */
@@ -389,22 +344,10 @@ test.describe("工作台概览 @critical", () => {
 
 test.describe("应用页签与全屏视图 @critical", () => {
   /**
-   * ISSUE #310 回归：应用级页签搬到窗口标题行后，应用内的「全屏视图」
-   * （设置、工作流编辑器、消息中心…）与居中弹窗仍按 `fixed inset-0` 铺满整个
-   * 视口，把用户的**出路**整条盖住。
-   *
-   * 两种形态的出路不是同一个东西，判据也跟着分：
-   *   · **桌面壳内**出路是标题行页签栏 —— 但 Playwright 驱动不了壳窗口，这条
-   *     在本套件里量不到（页签栏不渲染），只能由壳侧验证守；
-   *   · **浏览器 / dev 形态**按设计**不渲染任何应用内页签栏**（`ShellTabs.tsx`
-   *     文件头：浏览器自带页签栏，再画一条既占纵向空间又与原生重复），实测
-   *     `[role="tablist"]` 计数为 0。此时用户唯一的常驻出路是**底部状态栏**
-   *     与各视图自己的关闭/返回出口。
-   *
-   * 所以这里守的是同一类退化的浏览器形态版本：浮层若盖住状态栏，
-   * `elementFromPoint` 会返回浮层自己的子节点。顺带钉住「不画假页签栏」——
-   * 哪天有人补一条应用内页签栏，这条会红，而不是悄悄多占 32px 纵向空间。
-   */
+   * ISSUE #310 回归：应用级页签搬到窗口标题行后，全屏视图（设置、工作流编辑器…）与居中弹窗仍按
+   * `fixed inset-0` 铺满视口，把用户的**出路**整条盖住。两种形态出路不同：桌面壳内是标题行页签栏，
+   * 但 Playwright 驱动不了壳窗口（这条归壳冒烟）；浏览器/dev 形态按设计**不渲染应用内页签栏**
+   * （`ShellTabs.tsx` 文件头，实测无应用内页签栏），唯一常驻出路是底部状态栏与各视图关闭口。所以守：浮层若盖住状态栏，`elementFromPoint` 会返回浮层子节点；并钉住「不画假页签栏」。 */
   const centerHitsOwnSubtree = (target: ReturnType<Page["locator"]>) =>
     target.evaluate((el) => {
       /* SAFETY: 类型断言已复核 */
@@ -432,13 +375,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
     // 打开设置（一页视图，不卸载 workspace 组件树）—— 入口收在顶栏应用菜单。
     await openSettingsView(page);
 
-    /* 关键断言：设置层铺满视口之后，状态栏与视图自己的出路都还点得到。
-     *
-     * 这一格**不再拿「返回」按钮当锚**：设置页那枚「← 返回」已按 ISSUE #1423
-     * 的后续删掉（它在一页页签里是第二条退出路径、在独立路由 `/settings` 下
-     * 又是另一个含义，且它唯一确定的作用只是把标题推离左边缘）。现在换成分区
-     * 导航的第一项 —— 那是设置视图内部**一挂载就在**的可点目标，用它判
-     * 「浮层有没有盖住自己」与原来的判据等价，而不再依赖一枚不该存在的按钮。 */
+    /* 关键断言：设置层铺满视口后，状态栏与视图自己的出路都还点得到。
+     * 锚点不再取「← 返回」：它已按 ISSUE #1423 的后续删掉（同一页签里的第二条退出路径，
+     * 作用只是把标题推离左边缘）。改用分区导航第一项——挂载即在的可点目标，判「浮层有没有
+     * 盖住自己」与原来的判据等价，而不再依赖一枚不该存在的按钮。 */
     await expectStatusBarNotCovered(page);
     const firstSection = page
       .getByRole("navigation", { name: "设置分区" })
@@ -484,26 +424,17 @@ test.describe("应用页签与全屏视图 @critical", () => {
   });
 
   /**
-   * ISSUE #262 复审（这一轮的 4 条反馈）。四条里有三条**只能用真实浏览器证明**：
-   * 弹层几何、翻页可点、以及「框住文本后内容还动不动」——jsdom 不做层叠与布局、
-   * 也不实现 Selection 与滚动，单测全绿照样复现。
-   *
-   * 这里在真实 Chromium 里量：
-   *   1. 来源下拉的弹层**顶边贴住扳机底边**（原先因 alignItemWithTrigger 会
-   *      向上生长、顶到窗口最上方）；
-   *   2. 弹层**可点**（点候选能切换来源）——层级契约的现场复核（规范 07 §7.21.4）；
-   *   3. 切换来源与翻页都生效（用户报的「没法翻页」）；
-   *   4. 行头里类别计数在下拉**左侧**，下拉贴着右侧操作区（布局重排的验收）。
-   */
+   * ISSUE #262 复审（4 条反馈）。三条**只能用真实浏览器证明**：弹层几何、翻页可点、框住文本后
+   * 内容是否还动——jsdom 不做层叠与布局、不实现 Selection 与滚动，单测全绿照样复现。这里量：
+   * ① 弹层顶边贴住扳机底边（原先 alignItemWithTrigger 向上生长、顶到窗口最上方）；② 弹层可点、
+   * 能切换来源（规范 07 §7.21.4）；③ 切来源与翻页都生效；④ 类别计数在下拉左侧、下拉贴右侧操作区。 */
   test.describe("应用日志面板：下拉位置、可点性与翻页 @critical", () => {
     const ROWS = 450;
 
     /**
-     * 造一批有内容的日志行，让面板有得翻、有得选。
-     *
-     * 时刻一定带 `[YYYY-MM-DD HH:mm:ss.mmm]` 前缀：面板的级别解析只认这一种
-     * （或 `[HH:mm:ss]`）形状的行；ISO 的 `T` / `Z` 分毫写法则整行落到兜底分支、
-     * 级别恒为 info——那样「警告黄、错误红」就永远没有可断言的样本。
+     * 造一批有内容的日志行，让面板有得翻、有得选。时刻必带 `[YYYY-MM-DD HH:mm:ss.mmm]`（或
+     * `[HH:mm:ss]`）前缀：级别解析只认这种形状；ISO 的 `T`/`Z` 写法整行落到兜底分支、级别恒为
+     * info，那样「警告黄、错误红」就永远没有可断言的样本。
      */
     async function stubLogs(page: Page) {
       await page.route("**/api/logs/current**", async (route: Route) => {
@@ -535,16 +466,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
     }
 
     /**
-     * 这一组定位器分两种，不是混用图省事：
-     *   - 入口按钮的说明走 `Hint`（规范 16 §16.2.3 P82：图标按钮与悬停说明用
-     *     Tooltip，不用原生 `title=`）—— 提示文案渲染成浮层、**不落 `title` 属性**，
-     *     所以 `getByTitle(/^日志面板/)`、`getByTitle("更早的一页")` 这类匹配不到，
-     *     只能按可访问名取（`getByRole("button", { name })`，由 `Hint` 的
-     *     `accessibleName` 写成 `aria-label`）。
-     *   - 面板加宽档（`ui/wide-panel` 的 `title={panel.toggleLabel}`）与来源/级别
-     *     计数（`LogFilterBar` 的 `title={…}`）**仍是刻意的原生 `title`**，那几处
-     *     `getByTitle` 是对的，别顺手一起换。
-     */
+     * 两种定位器不是混用图省事：入口按钮说明走 `Hint`（规范 16 §16.2.3 P82），提示文案渲染成浮层、
+     * **不落 `title` 属性**，`getByTitle(/^日志面板/)` 之类匹配不到，只能按可访问名取
+     * `getByRole("button", { name })`（`accessibleName` 写成 `aria-label`）。加宽档（`ui/wide-panel`）
+     * 与来源/级别计数（`LogFilterBar`）仍是刻意的原生 `title`，那几处 `getByTitle` 是对的，别换。 */
     /** 弹层矩形的四元组（`settleBox` 的返回形状）。 */
     type Box = { height: number; width: number; x: number; y: number };
 
@@ -561,14 +486,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
     }
 
     /**
-     * 等定位元素**几何落定**后再取矩形（`boundingBox()` 不认 CSS transition）。
-     *
-     * 为什么不能直接 `boundingBox()`：带入场动画的浮层在补间期间量到的是被
-     * `scale(.95)` 缩过的矩形（实测 439.6×249 vs 落定后 444×251.5），取点做
-     * `elementFromPoint` 会落到弹层边界之外。
-     * 为什么不能 `waitForTimeout(固定值)`：慢机器上照样量早、快机器上白等，
-     * 而这里要的是「动画结束后那片矩形」这个**状态**，不是一段时长。
-     */
+     * 等定位元素**几何落定**后取矩形（`boundingBox()` 不认 CSS transition）：带入场动画的浮层在
+     * 补间期间量到的是被 `scale(.95)` 缩过的矩形（实测 439.6×249 vs 落定后 444×251.5），取点做
+     * `elementFromPoint` 会落到弹层边界之外。也不能 `waitForTimeout(固定值)`：慢机器照样量早、
+     * 快机器白等——要的是「动画结束后那片矩形」这个**状态**，不是一段时长。 */
     async function settleBox(locator: Locator): Promise<Box> {
       let prev: Box | null = null;
       let box: Box | null = null;
@@ -611,42 +532,27 @@ test.describe("应用页签与全屏视图 @critical", () => {
       await trigger.click();
       const popup = page.locator('[data-slot="select-content"]');
       await expect(popup).toBeVisible();
-      /* 弹层带**入场动画**（base-ui 的 enter transition，`zoom-in-95` 那组
-         class 驱动），从 `scale(.95)` 补间到 1，实测约 280ms 才落定。
-         `boundingBox()` 不认 transition —— 动画没跑完时量到的是**被缩小的
-         矩形**（实测 439.6×249 vs 落定后 444×251.5），拿它去 `elementFromPoint`
-         时右下角那两个取点会落到弹层实际边界**之外**，命中旁边的定位层
-         （`div.z-popup`）而不是弹层子树 → 判据假红（ISSUE #1267 同族：
-         「量在了状态落定之前」）。
-         这里等**几何本身**稳定，而不是 `waitForTimeout(固定值)`：后者在慢机器
-         上仍会量早、在快机器上白等，而这条判据要的正是「落定后的矩形」。 */
+      /* 弹层带**入场动画**（base-ui 的 enter transition，`zoom-in-95` 那组 class），`scale(.95)`→1
+         实测约 280ms 落定。`boundingBox()` 不认 transition：动画中量到被缩小的矩形（439.6×249 vs
+         444×251.5），取点会落到弹层边界之外、命中 `div.z-popup` → 假红（ISSUE #1267 同族：量在
+         状态落定之前）。这里等**几何本身**稳定，而非 `waitForTimeout`：慢机器量早、快机器白等。 */
       const popupBox = await settleBox(popup);
 
       const t = triggerBox!;
       const p = popupBox;
-      /* 用户第 2 条诉求的可量化形式：「弹出下拉菜单的最上方和下拉按钮的最下方
-       * 对齐」。三条一起断言：
-       *   1. 弹层顶边**贴在扳机底边**（允许 ±8px：base-ui 的 alignItemWithTrigger
-       *      会带上一个把「已选项文本」与扳机文字对齐的微调量，用户视觉上仍是
-       *      「紧贴底边」）；
-       *   2. 弹层顶边**在窗口顶部的下方**（原先向上生长时会顶到 y≈0、盖住标题行）；
-       *   3. 弹层不覆盖扳机本身（`data-align-trigger=false` 的几何证据）。 */
+      /* 用户第 2 条诉求的可量化形式：「弹出下拉菜单的最上方和下拉按钮的最下方对齐」。三条一起断言：
+       * ① 弹层顶边**贴住扳机底边**（±8px：base-ui 的 alignItemWithTrigger 带「已选项文本」与扳机
+       *    文字对齐的微调量，视觉上仍是紧贴底边）；② 弹层顶边**在窗口顶部下方**（原先向上生长会
+       *    顶到 y≈0、盖住标题行）；③ 弹层不覆盖扳机本身（`data-align-trigger=false` 的几何证据）。 */
       expect(Math.abs(p.y - (t.y + t.height))).toBeLessThanOrEqual(8);
       expect(p.y).toBeGreaterThan(20);
       expect(p.y).toBeGreaterThan(t.y);
 
-      /* 可点性：弹层矩形内多点 elementFromPoint 必须命中弹层子树，而不是被
-       * 面板遮罩/日志行接走（规范 07 §7.21.4 的判据）。
-       *
-       * 取点**向内缩 6px** 而不是贴着边（原先取的 4px）：base-ui 的定位层
-       * （`div.z-popup`）与弹层本体**同矩形叠放**，而弹层本体比它唯一的子节点
-       * 宽 2px（实测 444 vs 442）—— 右侧/底部最外那几像素属于弹层自身的空白，
-       * `elementFromPoint` 在那里命中的是**上一层**的定位层，`closest()` 于是
-       * 找不到 `select-content`，判据假红。6px 落在内容区里，不受这圈空白影响。
-       *
-       * 注意这不是「把判据放松」：它守的仍是「弹层这一片能被指针命中、没有被
-       * 遮罩接走」。贴着 0~2px 的边量的是定位层与弹层的盒模型差异，不是可点性 ——
-       * 用户也不会去点弹层边框那 2px 空白。 */
+      /* 可点性：弹层矩形内多点 `elementFromPoint` 必须命中弹层子树，不被遮罩/日志行接走
+       * （规范 07 §7.21.4）。取点向内缩 6px 而非贴边（原 4px）：定位层 `div.z-popup` 与弹层同矩形
+       * 叠放，弹层本体比唯一子节点宽 2px（444 vs 442），贴边取点命中的是上一层定位层、`closest()`
+       * 找不到 `select-content` → 假红。这不是放松判据：0~2px 边量的是盒模型差异，不是可点性，
+       * 用户也不会点那 2px 空白。 */
       const hitAllInPopup = await page.evaluate(
         ({ box }) => {
           const inset = 6;
@@ -684,32 +590,17 @@ test.describe("应用页签与全屏视图 @critical", () => {
     });
 
     /**
-     * ISSUE #609 八审：「日志切换到 1000+ 的页签有明显卡顿需要优化」。
-     *
-     * 根因是一页 2000 行**全部**挂进 DOM（行内还有若干分片 span，满页约 1.5 万
-     * 个节点），切页那一刻的布局成本就是用户感知到的卡顿。规范 02 §2.6 要求
-     * 大列表虚拟滚动，现在只渲染视口内的几十行。
-     *
-     * 三条判据只有真实浏览器量得出来（jsdom 不做布局、clientHeight 恒为 0）：
-     *   1. **节点数不再随页大小增长**——满页时 DOM 里的行数是几十，不是 2000；
-     *   2. **一行都没丢**：总高 = 满页行数 × 单行高度，滚动条长度与内容一致，
-     *      而且滚到底能看到最后一行（虚拟化的经典翻车就是「滚不到底」）；
-     *   3. 切页那一刻的耗时远低于一次性渲染 2000 行的水平。
-     *
-     * 这里刻意把夹具堆到满页（`LOG_PAGE_SIZE`）：450 行时虚拟化前后都只有几十
-     * 行的量级，量不出差异。
-     */
+     * ISSUE #609 八审：切到 1000+ 页签明显卡顿。根因一页 2000 行**全部**挂进 DOM（满页约 1.5 万节点），
+     * 切页布局成本即用户感知卡顿；规范 02 §2.6 要求虚拟滚动，现只渲染视口内几十行。真实浏览器量三条
+     * （jsdom 不做布局、clientHeight 恒 0）：① 节点数不随页大小增长；② 总高 = 满页行数 × 单行高且能
+     * 滚到最后一行（经典翻车是「滚不到底」）；③ 切页耗时远低于一次性渲染。夹具堆满页（450 行量不出差异）。 */
     test("@critical 满页 2000 行只渲染视口内的几十行，且滚动条长度与内容一致", async ({ page }) => {
       await stubBackend(page);
       const ROWS = 2000;
-      /* 夹具的**时刻锚点必须在路由外取一次**（不能在 handler 里每轮 `Date.now()`）。
-       *
-       * 轮询会反复打这个路由，而真实服务端按 `offset` 只回**新增**内容——同一个
-       * 文件区间重读出的行时刻不变，客户端按 `(时刻, 级别, 正文)` 去重后时间线
-       * 稳定。夹具若每轮重算锚点，整批 2000 行的时刻都会平移，去重全部失效，
-       * 时间线每 2s 净增 2000 条（且新旧两批在时刻上交错），「滚到底看最后一行」
-       * 就落到哪一批上全看轮询次数与 `Date.now()` 的抖动——断言与虚拟化本身
-       * 无关，却会随机器快慢乱红。锚点固定后夹具与真实服务端同语义。 */
+      /* 夹具的**时刻锚点必须在路由外取一次**：轮询会反复打这个路由，而真实服务端按 `offset` 只回
+         新增内容，同一文件区间重读的行时刻不变，客户端按 `(时刻, 级别, 正文)` 去重后时间线稳定。
+         每轮重算锚点会让 2000 行时刻整体平移、去重全部失效，时间线每 2s 净增 2000 条，「滚到底看
+         最后一行」落到哪批全看轮询次数与时钟抖动 → 与虚拟化无关却随机器快慢乱红。固定后同语义。 */
       const start = Date.now() - ROWS * 1000;
       await page.route("**/api/logs/current**", async (route: Route) => {
         const p = (n: number, l = 2) => String(n).padStart(l, "0");
@@ -741,28 +632,20 @@ test.describe("应用页签与全屏视图 @critical", () => {
       const rendered = await page.locator("[data-log-index]").count();
       expect(rendered).toBeLessThan(200);
 
-      /* ② 内容一行不少：撑开滚动条的总高 = 2000 × 单行高度。外层的 style.height
-       * 就是它——读 style 而不是读 offsetHeight，是因为「估算高度」才是这里要
-       * 钉住的契约（实际布局高度会被浏览器取整，量出来恒差几个像素）。
-       *
-       * 单行高度**取模块常量本身**（`LOG_ROW_SINGLE`），不在这里抄一个数字：
-       * 抄一份就会与它漂开（`LOG_ROW_SINGLE` 从 27 改到 28 时，这里正是漏改的
-       * 那一处 —— 用例报「期望 54000、实际 56000」，读起来像虚拟化坏了，
-       * 其实只是算式过期）。契约仍是「总高 = 行数 × 单行高」，判据不变。 */
+      /* ② 内容一行不少：总高 = 2000 × 单行高度。读外层 style.height 而非 offsetHeight：要钉的是
+         「估算高度」这条契约，实际布局高度会被浏览器取整、恒差几像素。单行高度取模块常量
+         `LOG_ROW_SINGLE` 而非抄数字（它 27→28 时这里漏改，报「期望 54000、实际 56000」，读起来像
+         虚拟化坏了其实只是算式过期）。契约不变：总高 = 行数 × 单行高。 */
       const spacerHeight = await page
         .locator("[data-log-index]")
         .first()
         .evaluate((el) => el.parentElement!.parentElement!.style.height);
       expect(spacerHeight).toBe(`${ROWS * LOG_ROW_SINGLE}px`);
 
-      /* ③ 滚到底真的能到**本页最后一行**（虚拟化的经典翻车是「滚不到底」：
-       * 窗口算错时会停在中途，用户怎么拉都看不到页尾）。
-       *
-       * 判据钉在**页内绝对序号**上（`data-log-index`），而不是某一行的文案：
-       * 面板开着的时候轮询还在往时间线追加，第 1 页可能被锚定在旧位置（页脚会说
-       * 「有 N 条新的日志」）——那时页尾本来就不是「事件 1999」那条。序号是页内
-       * 位置，窗口一变它仍指着同一行，既不受轮询影响，也正是贴底逻辑用的同一份
-       * 口径（§7.28.3 第 1 条）。 */
+      /* ③ 滚到底真的能到**本页最后一行**（经典翻车：窗口算错时停在中途，用户拉不到页尾）。
+         判据钉**页内绝对序号** `data-log-index` 而非某行文案：面板开着时轮询仍在追加，第 1 页可能
+         锚在旧位置（页脚说「有 N 条新的日志」），页尾就不是「事件 1999」。序号是页内位置，窗口一变
+         仍指同一行，也是贴底逻辑用的同一份口径（§7.28.3 第 1 条）。 */
       await page.locator(".custom-scrollbar").evaluate((el) => {
         el.scrollTop = el.scrollHeight;
       });
@@ -856,49 +739,20 @@ test.describe("应用页签与全屏视图 @critical", () => {
     });
 
     /**
-     * ISSUE #720：「日志默认宽度太小了，而且加宽的按钮也失效了」。
-     *
-     * 两个现象是**同一个根因**：`ui/dialog` 的弹窗基类带着 `sm:max-w-sm`
-     * （**带变体**的 max-width，Tailwind 把变体 utility 排在所有无变体之后），
-     * 于是调用处无论写 `max-w-[96vw]` 还是 `w-6xl`，量到的都是 24rem：
-     *   · 默认档 `max-w-5xl` 从来没生效过 → 面板只有 **384px** 宽；
-     *   · 加宽档同理，按钮点了状态在变（title 加宽→收缩）、宽度纹丝不动。
-     *
-     * 判据只有真实浏览器量得出来（jsdom 不做布局，读不出 Tailwind 的产出）：
-     *   1. 默认宽度 ≥ 800px（老形态恒为 384px，直接红）；
-     *   2. 加宽后**明显更宽**且贴近视口（老形态前后差值 0）；
-     *   3. 加宽后不溢出视口（贴边但不出界）。
-     *
-     * ⚠️ 量宽度**必须等几何落定**（ISSUE #1769）：弹窗自身的宽度是补间的，
-     * 标签翻转只是提交、不是落定；详见用例体内那段说明。旧写法就是在这里
-     * 量早了，读数恒为补间起点、恰好等于加宽前的值，于是「三次同读数 1152」
-     * —— 那不是「按钮没生效」，是**测量窗口**错了。
-     * （顺带一笔：1152 不是「1280 的 0.9 档」，而是默认档 `w-6xl` = 72rem 的
-     * 实际值 —— 它与视口无关，所以「同读数」本身不构成任何一致性证据。）
-     */
+     * ISSUE #720：日志默认太窄、加宽按钮失效，同一根因：`ui/dialog` 弹窗基类带 `sm:max-w-sm`（带变体的
+     * max-width 排在所有无变体 utility 之后），调用处 `max-w-[96vw]` / `w-6xl` 都量到 24rem → 恒 384px。
+     * 判据（真实浏览器，jsdom 读不出 Tailwind 产出）：默认 ≥800px、加宽明显更宽且贴视口、不溢出视口。
+     * 量宽度须等几何落定（ISSUE #1769）：旧写法读到补间起点 1152（= 默认档 `w-6xl` = 72rem，与视口无关），「三次同读数」不构成一致性证据。 */
     test("@critical 日志弹窗默认够宽，且加宽按钮真的变宽", async ({ page }) => {
       await stubBackend(page);
       await stubLogs(page);
       await openPanel(page);
 
       /**
-       * 宽度必须量在**几何落定之后**（ISSUE #1769）。
-       *
-       * 弹窗基元（`ui/dialog` 的 Popup）带 base-ui 的 popup 过渡
-       * （`transition: all` + 调用处的 `duration-100`），于是**宽度本身是补间的**：
-       * 点下「加宽」那一帧标签就翻成「收缩」（那是 React 提交的结果），
-       * 而宽度要用约 100ms 从 1152 补到 1248。入场动画（`zoom-in-95`，keyframe）
-       * 同理——它作用在 transform 上，`getBoundingClientRect()` 会把缩放算进去。
-       *
-       * 旧写法在标签翻转后**立刻**量：实测（本机、`CI=1`、`--workers=1`、20 轮）
-       * 稳定量到 `1152 -> 1152`（= 补间的**起点**，恰好等于加宽前的读数），
-       * `after > before` 因此必红；`before` 同样是动画中的读数（实测 1128 / 1141
-       * 两种），末尾那句「收缩回到默认档」于是去轮询一个落定后不再出现的值。
-       * 两处的病根是同一个：**量在了状态落定之前**（规范 11 §11.13 / ISSUE #1267）。
-       *
-       * 所以三处读数一律走本文件已有的 `settleBox` —— 它等的正是**几何本身稳定**
-       * （相邻两次量到同一矩形），与动画时长解耦，不靠 `waitForTimeout(固定值)`。
-       */
+       * 宽度必须量在**几何落定之后**（ISSUE #1769）：`ui/dialog` 的 Popup 带 base-ui 过渡（`transition: all`
+       * + `duration-100`），宽度本身是补间的——点「加宽」那帧标签翻转，宽度要约 100ms 从 1152 补到 1248；
+       * 入场 `zoom-in-95` 作用在 transform 上，外接矩形也含缩放。旧写法立刻量，稳定 1152→1152（补间
+       * 起点，恰等于加宽前值）→ 假红；病根是**量在落定之前**（§11.13 / ISSUE #1267），故走 `settleBox`。 */
       const popup = page.locator('[data-slot="dialog-content"]');
       const popupWidth = async () => Math.round((await settleBox(popup)).width);
       const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
@@ -949,22 +803,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
     });
 
     /**
-     * ISSUE #262 复审：「顶部还有较大空白区域，全部/警告/错误这些挤在一起，
-     * 可以占用大些空间」；五审：「不要因为宽度不够导致文字显示成省略号」。
-     *
-     * 这三件事是一体的：行头的富余宽度过去被一个**无名空白**吸走，五个筛选按钮
-     * 被钉死在 32px 上。现在筛选按钮整组 `flex-1`、每个按钮等分（`min-w-fit`
-     * 保住「文字 + 四位数字」的固有宽度），于是
-     *   1. 按钮明显变宽（不再是 32px 的窄条）；
-     *   2. 最右一个按钮与搜索框之间不再横着一大片空白；
-     *   3. 标签与计数都完整显示，没有元素被文本溢出裁掉。
-     *
-     * 宽度只有真实浏览器量得出来（jsdom 不做布局），所以这几条在这里：
-     *   - 最窄的按钮宽度 ≥ 56px（32px 的老形态直接红）；
-     *   - 五个按钮等宽（差 ≤ 2px：`flex-1 basis-0` 的均分语义）；
-     *   - 「错误」按钮右边缘到搜索框左边缘的空白 < 48px（老形态这里是上百 px）；
-     *   - 每个按钮的 `scrollWidth <= clientWidth`（没有一个字被切掉/省略）。
-     */
+     * ISSUE #262 复审：「顶部还有较大空白，全部/警告/错误挤在一起」；五审：「不要因为宽度不够导致
+     * 文字显示成省略号」。行头富余宽度过去被无名空白吸走、五个筛选按钮钉死 32px；现在整组 `flex-1`
+     * 等分（`min-w-fit` 保住「文字 + 四位数字」固有宽度）。浏览器判据：最窄按钮 ≥56px、五个按钮等宽
+     * （差 ≤2px）、「错误」到搜索框空白 <48px、每个按钮 `scrollWidth` 不超 `clientWidth`（没有字被切掉/省略）。 */
     test("@critical 级别筛选占满行头富余宽度，不再挤成窄条也不留大片空白", async ({ page }) => {
       await stubBackend(page);
       await stubLogs(page);
@@ -999,18 +841,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
     });
 
     /**
-     * ISSUE #262 五审（对应用户这轮的截图）：
-     *
-     * 1. 「警告/错误显示重复了，左侧那两个去掉」——标题旁那块灰底胶囊
-     *    （`警告 n · 错误 n`）与级别按钮上的同名计数同源，是同一项数据说两遍；
-     * 2. 「右侧的警告文字改成黄色，错误改成红色」——级别色落在**文字**上；
-     * 3. 「每个都保留显示文字和四位数字的宽度即可。不要因为宽度不够导致文字
-     *    显示成省略号」——截图里的老形态正是 `警… 539`（标签被切成省略号、
-     *    数字被挤到下一行）。
-     *
-     * 这三条都是**布局结果**：jsdom 既不做布局也不实现 `scrollWidth`，
-     * 所以判据只能落在真实浏览器上。
-     */
+     * ISSUE #262 五审（对应用户截图）：① 标题旁灰底胶囊（`警告 n · 错误 n`）与级别按钮上的计数同源，
+     * 同一数据说两遍，删掉；② 级别色落在**文字**上（警告黄、错误红）；③ 每个按钮保住「文字 + 四位
+     * 数字」的宽度，不因宽度不够显示成省略号（老形态是 `警… 539`）。三条都是**布局结果**：jsdom 既
+     * 不做布局也不实现 `scrollWidth`，判据只能落在真实浏览器上。 */
     test("@critical 级别按钮不省略、带级别色，且标题旁不再复述警告/错误", async ({ page }) => {
       await stubBackend(page);
       await stubLogs(page);
@@ -1093,60 +927,39 @@ test.describe("应用页签与全屏视图 @critical", () => {
     });
 
     /**
-     * ISSUE #262 六审：「有的日志只在全部页签才显示，这种也要有自己的分类或是
-     * 归入其他分类」。
-     *
-     * 那批行是**没有文件来源**的（浏览器 console 拦截 / Tauri 事件 / 全局未捕获
-     * 错误），过去它们只在「全部来源」下可见：选中任何一个来源都会整批消失，
-     * 而下拉里既没有它们的名字、也看不出「还有一批行没被任何分类覆盖」。
-     *
-     * 判据是**守恒**：逐个分类的条数加起来 = 「全部来源」的条数——因此不存在
-     * 任何一行落不进分类。这条只能在真实浏览器里量：要读的正是下拉弹层里
-     * 四列数字的文本（jsdom 里弹层的过渡/层级行为与真实环境不同）。
-     */
+     * ISSUE #262 六审：「有的日志只在全部页签才显示，这种也要有自己的分类」。那批行**没有文件来源**
+     * （浏览器 console 拦截 / Tauri 事件 / 全局未捕获错误），过去只在「全部来源」下可见：选中任何
+     * 来源整批消失，下拉里既没有它们的名字、也看不出还有一批行没被分类覆盖。判据是**守恒**：逐个
+     * 分类的条数之和 = 「全部来源」条数。只能在真实浏览器里量（要读下拉弹层里四列数字的文本）。 */
     test("@critical 无文件来源的日志有「控制台 / 全局错误」分类且能筛出来", async ({ page }) => {
       await stubBackend(page);
       await stubLogs(page);
       await openPanel(page);
 
-      /* 掺 3 条**没有文件来源**的行：面板里的这种行正是 console 拦截来的
-       * （`source: "console"`、无 `origin`）。必须在面板打开**之后**打印——
-       * 拦截器是 `LogProvider` 挂载时装上的，更早的 console 调用没人接
-       * （`addInitScript` 里打印会一条也进不了面板）。`stubLogs` 造的都是
-       * app-runtime 文件行，所以这是唯一的 console 样本。
-       *
-       * 三条正文**各不相同**、也刻意不叫 `ResizeObserver loop…`，两个原因：
-       *   1. 同一毫秒写下的同一段正文属于「同一条日志被多路读到」的副本，
-       *      面板按 `arrivalKey` 收成一条（`[data-log-text]` 里也确实只该出现
-       *      一次，这正是下面那条「不重复」断言要守的）；
-       *   2. `ResizeObserver loop…` 是**浏览器自己**也会打的一条 console.error
-       *      （面板的拦截器把浏览器的 console 一起接了），用同名文本会让夹具
-       *      与真实噪声撞在一起，计数随机器/时序漂。 */
+      /* 掺 3 条**没有文件来源**的行（`source: "console"`、无 `origin`）：必须在面板打开**之后**打印
+         ——拦截器是 `LogProvider` 挂载时装上的，更早的 console 调用没人接（`addInitScript` 里打印一条
+         也进不了面板）。三条正文各不相同且不叫 `ResizeObserver loop…`：同一毫秒同一段正文会被按
+         `arrivalKey` 收成一条（下面「不重复」断言守的就是它），而同名文本会撞上浏览器自己打的
+         console.error，计数随机器/时序漂。 */
       for (let i = 1; i <= 3; i += 1) {
         await page.evaluate((n) => {
           console.error(`e2e 控制台样本 ${n}`);
         }, i);
       }
-      /* 拦截器经 `queueMicrotask` 入库，而面板一页 200 条、窗口**锚定**在打开
-       * 面板那一刻（真实日志文件同时在往里灌行），所以「这批行马上可见」不成立
-       * ——用可见性等待会等不到。这里等下拉开来源下拉后它们的计数到位。
-       *
-       * 顺带一个坑：`console.error` 会让 Next dev 的错误浮层也渲染一份同样的
-       * 文本，那是个隐藏节点——按文本全局找并 `toBeVisible` 会等到超时。 */
+      /* 拦截器经 `queueMicrotask` 入库，面板一页 200 条、窗口**锚定**在打开那一刻（真实日志文件同时
+         在灌行），所以「这批行马上可见」不成立，用可见性等待会等不到。这里等拉开来源下拉后计数到位。
+         顺带一个坑：`console.error` 会让 Next dev 的错误浮层渲染同样文本（隐藏节点），按文本全局找
+         并 `toBeVisible` 会等到超时。 */
       await page.getByRole("combobox", { name: "按来源筛选" }).click();
       const consoleOption = page.getByRole("option", {
         name: /控制台 \/ 全局错误/,
       });
       await expect(consoleOption).toBeVisible();
-      /* 样本真的进了面板（时刻最新 ≠ 窗口里可见，见上面的说明）。**至少** 3 条
-       * 而不是正好 3 条：应用自身也会往 console 写错误（例如资源加载失败），
-       * 它们同属这一分类，写死等值会让用例在别的机器上假红。
-       *
-       * 这条 `expect.poll` 同时也是「等第 3 条样本落板」的那一步：三次
-       * `console.error` 都经 `queueMicrotask` 入库，而每轮轮询会在同一毫秒里
-       * 追加一批文件行——同一毫秒内的同一段正文会被 `mergeTimeline` 按副本
-       * 收掉一条（`arrivalKey`），因此计数可能在 2 与 3 之间停一拍。下面守恒
-       * 那段的读数是同一个前提下取的，必须等它到位再往下走。 */
+      /* 样本真的进了面板（时刻最新 ≠ 窗口里可见，见上）。**至少** 3 条而非正好 3 条：应用自身也会
+         往 console 写错误（如资源加载失败），同属这一分类，写死等值会在别的机器上假红。
+         这条 `expect.poll` 同时是「等第 3 条样本落板」：三次 `console.error` 经 `queueMicrotask` 入库，
+         而每轮轮询在同一毫秒追加一批文件行，同一段正文被 `mergeTimeline` 按 `arrivalKey` 收掉一条，
+         所以计数可能在 2 与 3 之间停一拍——下面守恒那段的读数须等它到位再取。 */
       await expect
         .poll(async () =>
           Number(
@@ -1161,22 +974,11 @@ test.describe("应用页签与全屏视图 @critical", () => {
         )
         .toBeGreaterThanOrEqual(3);
 
-      /* 守恒的**正确形状**：逐来源内部守恒 + 全部来源等于身份数。
-       *
-       * 这里曾经断言「各分类之和 = 全部来源」，在整批跑时必红（实测
-       * `Expected: 5000, Received: 3335`）。两个原因，各自都是产品口径而不是
-       * 夹具问题（ISSUE #1240 / #1282）：
-       *   1. 六路来源读的是**六份文件**，其中若干份装的是同一段内容的副本
-       *      （dev-launcher 转写 dev、shell-launch 与 launcher 互相重叠）。
-       *      同一批启动行因此每个来源各有一份，相加必然大于「全部来源」；
-       *   2. 撞上时间线上限（5000）时，「全部来源」被截到上限，而各分类之和
-       *      还在算被挤掉的那些。
-       * 所以现在钉的是两条各自成立的等式：**每个来源的四个级别之和 = 该来源的
-       * 条数**（筛选结果与计数同口径），以及**全部来源 = 时间线上的条数**。
-       *
-       * 数字读的是每项里的 `sr-only` 纯文本摘要（`N 条 · 信息 x · 警告 y ·
-       * 错误 z`）而不是自绘的四列：后者是视觉产物，列的位置随样式变，读它等于
-       * 把用例绑在排版上。 */
+      /* 守恒的**正确形状**：逐来源内部守恒 + 全部来源等于时间线条数。曾断言「各分类之和 = 全部来源」，
+       * 整批跑必红（`Expected: 5000, Received: 3335`）：① 六路来源读六份文件，其中若干份装的是同一段
+       * 内容的副本（dev-launcher 转写 dev、shell-launch 与 launcher 重叠），同一批启动行每个来源各一份，
+       * 相加必然大于「全部来源」；② 撞时间线上限（5000）时「全部来源」被截断、各分类之和还在算被挤掉的
+       * 行（ISSUE #1240 / #1282）。数字读每项的 `sr-only` 摘要，不读自绘四列（列位置随样式变）。 */
       /* 定位到某个来源那一项：按 `getByRole("option")` + 文本锚定，**不按
        * accessible name 的 RegExp**——零条目的项渲染成「— 无」、有条目的渲染成
        * 「898 条数…」，两者之间差一个数字，用 `^应用服务 \d` 这类模式会在
@@ -1228,22 +1030,11 @@ test.describe("应用页签与全屏视图 @critical", () => {
         const c = await levelsOf(label);
         expect(`${label} ${c.info + c.warn + c.error}`).toBe(`${label} ${c.all}`);
       }
-      /* ② 时间线口径：「全部来源（按条去重）」= 时间线上的条数。两个数字来自
-       *    同一份 `filteredLogs`（下拉读 `countsByOrigin.all`，页脚读
-       *    `counts.all`），口径不同就会「下拉说 4000、页脚说 2000」，而用户
-       *    没有任何办法判断哪个对。页脚就在面板底部、弹层盖不到它，所以这一条
-       *    不必先关下拉（关掉之后 option 定位器就失效了）。
-       *
-       * **两个数必须在同一个浏览器回合里读**（一次 `evaluate`）：面板开着时轮询
-       * 每 2s 还在往时间线追加（`POLL_MS`），先后两次读会各自落在不同的时间线上
-       * —— 实测整批跑时报 `Expected: 901, Received: 1346`，差的正是两次读之间
-       * 新到的行。同一次 `derive()` 产出的这两个数在任何**同一瞬**都必然相等
-       * （`log-store` 的 `computeCounts` / `computeOriginCounts` 共用 `logs`），
-       * 所以要判的是「同一瞬相等」，而不是「先后两次读相等」。
-       *
-       * 仍用 `expect.poll`：即使同回合读，也可能撞上 React 已提交新时间线、但
-       * DOM 尚未刷完的那一帧 —— 那是可重试的瞬时不一致（ISSUE #1267 同族：量在
-       * 了状态落定之前），重试即稳定相等；而真正的口径分歧会**持续**不等。 */
+      /* ② 时间线口径：「全部来源（按条去重）」= 时间线条数。两数同源 `filteredLogs`（下拉读
+       * `countsByOrigin.all`，页脚读 `counts.all`），口径不同就会「下拉说 4000、页脚说 2000」，用户无
+       * 从判断；页脚在面板底部、弹层盖不到，不必先关下拉。**必须在同一浏览器回合里读**（一次
+       * `evaluate`）：轮询每 2s 追加，先后两读会落在不同时间线（实测 `Expected: 901, Received: 1346`），
+       * 同一次 `derive()` 的两数同一瞬必然相等（共用 `logs`）。撞上 DOM 未刷完那帧用 `expect.poll` 重试即可。 */
       const readTotalsInOneTurn = () =>
         page.evaluate(() => {
           const num = (text: string | null | undefined, re: RegExp) =>
@@ -1290,14 +1081,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
     });
 
     /**
-     * ISSUE #262 六审：「日志多了我想复制报错文本还是复制不了，我刚选中内容就
-     * 刷走了，需要每条日志后面加一个复制按钮，可复制日志内容」。
-     *
-     * 两件事在真实浏览器里量：
-     *   1. 每条行末尾都有复制按钮，且**点得动**（`opacity-0` 的按钮在 jsdom 里
-     *      与正常按钮无从区分，命中测试只有浏览器做得了）；
-     *   2. 它写进剪贴板的**就是这一行**（带时刻与级别），而不是整页。
-     */
+     * ISSUE #262 六审：「日志多了我想复制报错文本还是复制不了，刚选中内容就刷走了，需要每条日志后面
+     * 加一个复制按钮」。真实浏览器量两件：① 每条行末尾都有复制按钮且**点得动**（`opacity-0` 的按钮在
+     * jsdom 里与正常按钮无从区分，命中测试只有浏览器做得了）；② 写进剪贴板的**就是这一行**（带时刻
+     * 与级别），不是整页。 */
     test("@critical 每条日志末尾的复制按钮能复制到这一行", async ({ page, context }) => {
       await context.grantPermissions(["clipboard-read", "clipboard-write"]);
       await stubBackend(page);
@@ -1325,16 +1112,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
     });
 
     /**
-     * ISSUE #262 复审：「启动和启动器日志丢失」。
-     *
-     * 真实现场：会话起点取自 `dev-launcher.log` 的 mtime，而启动器进程
-     * （launcher）在它被创建**之前**就写下了自己的头几行（python / exe / cwd /
-     * 探测 Node）。过去拿这个起点去裁**整条时间线**，这些本次启动最早、最该被
-     * 看到的行被静默丢掉——面板上「启动」「启动器」两个来源恒为空。
-     *
-     * 这里在浏览器里复现同一时序：launcher 的行早于 sessionStart，dev 的行晚于
-     * 它。两条都必须出现在面板上（后者本来就该在，前者是老形态丢掉的那批）。
-     */
+     * ISSUE #262 复审：「启动和启动器日志丢失」。会话起点取自 `dev-launcher.log` 的 mtime，而 launcher
+     * 进程在它被创建**之前**就写下了自己的头几行（python / exe / cwd / 探测 Node）；过去拿这个起点裁
+     * **整条时间线**，本次启动最早、最该被看到的行被静默丢掉——面板上「启动」「启动器」两个来源恒为空。
+     * 这里复现同一时序：launcher 行早于 sessionStart、dev 行晚于它，两条都必须出现在面板上。 */
     test("@critical 启动器与启动日志不被会话起点裁掉", async ({ page }) => {
       await stubBackend(page);
 
@@ -1388,18 +1169,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
     });
 
     /**
-     * ISSUE #262 六审：「启动和启动器 2 项还是没有日志内容」。
-     *
-     * 三审修的是**裁剪**（行被会话起点当成历史丢掉），这一轮是下一段：行抓到了、
-     * 也没被裁，但**没被认成日志行**。真实现场是 PowerShell 的 `Write-Log`：
-     * 级别经 `PadRight(5)` 补过尾空格（`[INFO ]` / `[OK   ]`），引导文案与错误
-     * 详情是**缩进两格**的续行（`  [10:22:24] [ERROR] …`），颜色码偶尔残缺还会
-     * 在 `[` 后多留一段假转义（`[[90m[OK`）。严格的 `\[INFO\]` 一个都匹配不到，
-     * 整行于是以**原文**落板——面板上那两个来源看起来就只是带前缀的文本。
-     *
-     * 这里在浏览器里喂真实形态的行：断言级别标签被认出来（`INFO` / `ERROR`
-     * 不是正文的一部分）、正文里不再残留 `[HH:mm:ss] [LEVEL]` 前缀。
-     */
+     * ISSUE #262 六审：「启动和启动器 2 项还是没有日志内容」。三审修**裁剪**，这一轮是行抓到了、也没
+     * 被裁，但**没被认成日志行**：PowerShell 的 `Write-Log` 级别经 `PadRight(5)` 补尾空格（`[INFO ]` /
+     * `[OK   ]`），引导文案与错误详情是缩进两格的续行，颜色码残缺时还在 `[` 后多留假转义（`[[90m[OK`）；
+     * 严格 `\[INFO\]` 一个都匹配不到，整行以**原文**落板。这里喂真实形态，断言级别被认出、正文不残留前缀。 */
     test("@critical 启动与启动器两来源的日志行按级别解析 不整行显示原文", async ({ page }) => {
       await stubBackend(page);
 
@@ -1410,12 +1183,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
       };
       const now = Date.now();
       const sessionStart = now - 30_000;
-      /* 「只有时刻、没有日期」的行（dev.mjs 的真实形状）会被解析层按**今天同一时刻**
-         重建。所以这个时刻必须落在现在之前：一旦在未来，服务端的 `clampLogTime`
-         （`src/lib/log/log-session-scope.ts`）就把它钳成「本次读取的 now」，两轮读取
-         生成两个不同的去重键，面板把同一批行计两次 —— 本用例下面钉的「启动 4」就会
-         变成 8。真实运行里这类行永远是过去时刻，钳制不触发；写死 `10:22:24` 等于每天
-         只在 10:22 之后才忠实，其余时段伪造了一个未来时间，把用例绑死在 #1240 的机制上。 */
+      /* 「只有时刻、没有日期」的行（dev.mjs 真实形状）会被解析层按**今天同一时刻**重建，所以时刻必须
+         落在现在之前：一旦在未来，`clampLogTime`（`src/lib/log/log-session-scope.ts`）把它钳成「本次
+         读取的 now」，两轮读取生成不同去重键，面板把同一批行计两次——下面钉的「启动 4」会变 8。
+         写死 `10:22:24` 等于每天只在 10:22 之后才忠实，其余时段伪造未来时间（#1240 机制）。 */
       const clock = (t: number) => {
         const d = new Date(t);
         const p = (n: number) => String(n).padStart(2, "0");
@@ -1445,14 +1216,11 @@ test.describe("应用页签与全屏视图 @critical", () => {
       await page.route("**/api/logs/current**", async (route: Route) => {
         const params = new URL(route.request().url()).searchParams;
         const source = params.get("source");
-        /* 游标桩要与真服务端的 readLogSlice 同形（`src/app/api/logs/current/route.ts`）：
-           `size` 是**恒定的文件总大小**，客户端拿上一轮响应的 `size` 当游标；游标 == size
-           就是「读到文件末尾」→ 回空，且 size 与 offset 都不许缩 —— 把 size 报小等于宣称
-           「文件被新运行重建」，会触发尾部重读。
-           此前这里每轮无视 offset 重发同一批行：dev-launcher 的行没有时间戳，解析层按契约
-           钳到「当时本地时刻」（`log-store.ts` 时间线契约第 3 条），于是每轮生成一个新的
-           `time+level+message` 键，去重救不回来 —— 面板里同一条日志出现 3 份，
-           `getByText` 直接撞严格模式。 */
+        /* 游标桩要与真服务端 readLogSlice 同形（`src/app/api/logs/current/route.ts`）：`size` 是**恒定的
+           文件总大小**，客户端拿上一轮响应的 `size` 当游标；游标 == size 即「读到末尾」→ 回空，且 size
+           与 offset 都不许缩——报小等于宣称「文件被新运行重建」，会触发尾部重读。此前每轮无视 offset
+           重发同一批行：dev-launcher 行无时间戳，解析层按契约钳到「当时本地时刻」（`log-store.ts` 时间线
+           契约第 3 条），每轮生成新 `time+level+message` 键，去重救不回来——同一条日志出现 3 份撞严格模式。 */
         const offset = Number(params.get("offset") ?? "0");
         const lines =
           source === "dev-launcher" ? devLines : source === "launcher" ? launcherLines : [];
@@ -1477,12 +1245,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
       await page.getByRole("button", { name: /^日志面板/ }).click();
       await expect(page.getByText("应用日志", { exact: true }).first()).toBeVisible();
 
-      /* 四个级别标记都被认出来，正文里不残留 `[HH:mm:ss] [LEVEL]` 前缀。
-         这里只取 `.first()`：面板有两个独立消费者（状态栏的错误计数与面板本体），
-         本条守的是级别解析与「正文不残留前缀」，不裁决渲染层的重复计数 —— 那属于
-         #1240 的口径。上一段注释里写的「两轮各钳到当时本地时刻 → 键不同」是桩把
-         时刻写死在未来才触发的路径，已按真实形态改掉（时刻取现在之前）；因此下面
-         那条「启动 4」的来源计数重新有意义，由它守住「同一批行只计一次」。 */
+      /* 四个级别标记都被认出来，正文里不残留 `[HH:mm:ss] [LEVEL]` 前缀。这里只取 `.first()`：面板有
+         两个独立消费者（状态栏错误计数与面板本体），本条不裁决渲染层重复计数——那属于 #1240 的口径。
+         上一段「两轮各钳到当时本地时刻 → 键不同」是桩把时刻写死未来才触发的路径，已改掉；因此下面
+         「启动 4」的来源计数重新有意义，由它守住「同一批行只计一次」。 */
       await expect(page.getByText("预检通过").first()).toBeVisible();
       await expect(page.getByText("检查端口占用").first()).toBeVisible();
       await expect(page.getByText("Job Object 创建成功").first()).toBeVisible();
@@ -1511,47 +1277,20 @@ test.describe("应用页签与全屏视图 @critical", () => {
   });
 
   /**
-   * 同一处回归的**第三形态**：ComfyUI 的查看出口。
-   *
-   * 前两轮修的都是「本应用自己的浮层盖住标题行」，而这一轮关于「点开后看不看
-   * 得见东西」。两种形态的出口不是同一个东西（判据 `shouldUseBrowserTab`）：
-   *   · **桌面壳内**：把 ComfyUI 开成**同一个窗口的一个页签**，里面渲染 iframe；
-   *     未开 CORS 时 ComfyUI 对跨源返 403，是一片空白，所以「能不能嵌」由服务端
-   *     `setting.comfyEmbeddable` 回答，不可嵌时仍在**同一个页签内**给可读说明
-   *     （ISSUE #310 的原话是「只要多页签，不要另一个窗口」）。
-   *   · **浏览器 / dev**：不内嵌、也不画应用内页签栏，直接把 ComfyUI 交给
-   *     **新浏览器页签**（`window.open`），并给一条可见反馈。
-   *
-   * Playwright 起的是浏览器形态，所以上面那两条壳内断言（页签里的 iframe、
-   * 页签内的不可嵌说明）在本套件里量不到 —— 本文件下面的三条按**浏览器形态的
-   * 契约**守：新浏览器页签真的开出去、反馈看得见、应用内不长出假页签栏或 iframe。
-   * 壳内那两条目前没有任何自动化覆盖，要验得先把用例跑进真壳（§11.10.4 壳冒烟）。
-   */
+   * 同一处回归的**第三形态**：ComfyUI 的查看出口。前两轮修「本应用浮层盖住标题行」，这一轮是
+   * 「点开后看不看得见东西」。桌面壳内把 ComfyUI 开成同一窗口的一个页签、内渲染 iframe；未开 CORS
+   * 时跨源返 403 是一片空白，故「能不能嵌」由服务端 `setting.comfyEmbeddable` 回答，不可嵌时仍在同一页签内
+   * 给可读说明（ISSUE #310「只要多页签，不要另一个窗口」）；浏览器/dev 交给**新浏览器页签**并给反馈（壳内两条归 §11.10.4）。 */
   /**
-   * ComfyUI 相关 tRPC 端点的统一桩：状态说「在跑、地址是假服务」，内嵌探测结论
-   * 可参数化，「在浏览器打开」计次并回报成功。
-   *
-   * 为什么必须是一个处理器：同一个 URL 被多条通配路由匹配时，**后注册的那条先被
-   * 调用**，而它对不认识的 URL 会 `route.continue()` 把请求**直接放去网络** —— 先
-   * 注册的那条根本没机会应答。后果不是「有点遮蔽」而是两边都静默失灵：实测先挂
-   * 计次桩、后挂状态桩，`comfyOpen` 计数恒 0（看起来像动作没发出，其实是路由顺序
-   * 吃的）。所以这个 describe 里的 ComfyUI 端点统一由下面这一个处理器分派。
-   * 假 ComfyUI 在替身端口上（playwright.config 的第二个 webServer；端口不是
-   * 8188 —— 那个口留给本机真件，见 `fake-comfyui-endpoint.mjs`）。
-   */
+   * ComfyUI 相关 tRPC 端点的统一桩：状态说「在跑、地址是假服务」，内嵌探测可参数化，「在浏览器打开」计次。
+   * 为什么必须是一个处理器：同一 URL 被多条通配路由匹配时**后注册的先被调用**，它若 `route.continue()`
+   * 会把请求直接放去网络，先注册的桩根本没机会应答——实测先挂计次桩、后挂状态桩，`comfyOpen` 计数恒 0
+   * （看着像动作没发出，其实是路由顺序吃的）。假 ComfyUI 在替身端口（playwright.config 第二个 webServer）。 */
   /**
-   * ComfyUI 那一屏的三个过程一次桩好，并数「在浏览器打开」真的发出了几次。
-   *
-   * **响应形状必须走 `support/trpc-stub.ts`**。客户端是 `httpBatchStreamLink`，
-   * 它按 JSON Lines 读响应；`route.fulfill` 一个 `{result:{data}}` 的旧信封进去时
-   * **不抛错**、只是解不出数据（#1442 记的那一族），表现是 `refetch()` 永远不 settle ——
-   * 按钮停在「打开中…」、`comfyOpen` 一次都没发出，红的形状与「功能坏了」逐字同形。
-   *
-   * 这里原本是旧信封，之所以一直没暴露：它命中的是**设置页那一条链路**的过程名
-   * （`comfyui.status`），而 ISSUE #1900 把运行态搬成独立页之后，这一屏走的是
-   * `setting.comfyStatus` —— 三条 `url.includes(...)` 对现在的请求一个都不再命中，
-   * 整个桩成了装饰，`comfyOpen` 反而被它的旧信封形状卡住。
-   */
+   * ComfyUI 那一屏的三个过程一次桩好，并数「在浏览器打开」真的发出了几次。**响应形状必须走
+   * `support/trpc-stub.ts`**：客户端 `httpBatchStreamLink` 按 JSON Lines 读，`route.fulfill` 旧信封
+   * `{result:{data}}` 不抛错、只解不出数据（#1442），`refetch()` 永不 settle——按钮停在「打开中…」，
+   * `comfyOpen` 恒 0，红的形状与「功能坏了」逐字同形。旧信封命中的是 `comfyui.status`，ISSUE #1900 后走 `setting.comfyStatus`。 */
   async function stubComfyTrpc(page: Page, options: { embeddable?: boolean } = {}) {
     const calls = { open: 0 };
     /* 计次与桩**分开挂**：同一个 URL 只能有一个处理器（后注册的先被调用，再挂一条
@@ -1590,45 +1329,16 @@ test.describe("应用页签与全屏视图 @critical", () => {
   }
 
   /**
-   * 进入侧栏那一页「ComfyUI」（→ 可选地点「打开查看」）。
-   *
-   * 这里**不再走设置页**：ISSUE #1900 把运行态整块搬成了独立全局页签，设置 → 创作后端
-   * 只剩配置（`comfyStatusText` / `comfyDotTitle` 这两个「ComfyUI 运行中」的唯一产地，
-   * 现在只有 `ComfyuiControlView` 用）。旧写法在本仓 `origin/master` 上就已经红了 ——
-   * 它等的那句文案在设置那一屏根本渲染不出来，而「打开查看」那颗按钮也不在那一屏。
-   *
-   * `thenOpenView` 给 false 的场合：下一条用例要数「在浏览器打开」有没有额外开
-   * 窗口，而「打开查看」本身就会开一个新浏览器页签 —— 顺手点上它，判据就被自己
-   * 的动作污染了。**它只关掉最后那一下点击，不关掉等状态落地那一句**：两颗
-   * 「打开」都只在明确未运行时禁用（`ComfyuiControlView.tsx:115` / `:126`），
-   * 状态没落到界面上就点 = 点在一颗禁用按钮上，动作压根不发出去，判据只剩超时
-   * （实测：`comfyOpen` 计数恒 0，红的形状与「功能坏了」逐字同形）。
-   */
+   * 进入侧栏那页「ComfyUI」（→ 可选地点「打开查看」）。这里**不再走设置页**：ISSUE #1900 把运行态搬成
+   * 独立全局页签，设置 → 创作后端只剩配置（`comfyStatusText`/`comfyDotTitle` 唯一产地，仅 `ComfyuiControlView` 用）。
+   * `thenOpenView=false`：下一条要数「在浏览器打开」是否额外开窗口，而「打开查看」本身会开新页签，点上它判据
+   * 就被自己的动作污染。它只关最后一下点击、不关等状态落地：两颗「打开」只在明确未运行时禁用（`:115`/`:126`），状态没落地就点＝只剩超时。 */
 
   /**
-   * 这一屏「状态落到界面上」的那份事实 —— 判据读的是**运行态那个值**，不是文案本身，
-   * 也不是「状态行在不在」。
-   *
-   * 两次踩坑都记在这里，因为它们长得像同一个红，成因完全不同：
-   *
-   * ① `getByText(/ComfyUI 运行中/)`（本轮 CI 那条红）：匹配集**首帧是空的**（内容是
-   *    客户端查回来的），空集上 `toBeVisible()` 每一拍都落空；文案一出现，`.first()`
-   *    指到的是**跨元素**分布的那个节点（`ComfyUI 运行中（<base>）·<via>`，地址那段
-   *    可能单独成盒），于是「匹配到」与「整体可见」之间隔着一次补间 —— 实测那一拍读到
-   *    `visible=false`，再取句柄时撞上
-   *    `Protocol error: Runtime.callFunctionOn: … session closed`。现场是「文案明明在
-   *    屏幕上，用例却红在等文案」。
-   * ② 换成「状态行节点可见」：它是**首帧就在**的容器（内容还没回来时写的是
-   *    「ComfyUI 未运行」），于是它一次都不会落空、判据当场成立 —— 可那会儿状态还没
-   *    落地，「打开查看」仍是 `disabled`（`ComfyuiControlView` 只在明确未运行时禁用它），
-   *    后面那一击就点在被禁用的按钮上，红的形态变成 `locator.click: element is not enabled`
-   *    （与本文件 1690 行那段「点在一颗禁用按钮上，判据只剩超时」逐字同源）。
-   *
-   * 所以判据落在**活区节点的文本**上（`role="status"` + `aria-live="polite"`，视图侧
-   * 同批加的那个语义）：文案出现即挂载、状态一落地文本就变，`toHaveText` 自己会重试到
-   * 它成立为止。**文案内容一个字没改**，仍由 `comfyui-control-config` 的单元用例与这一
-   * 屏的组件用例钉着 —— 这条只借它当「状态已落地」的读数。
-   */
+   * 这屏「状态落到界面上」的判据读**运行态那个值**，不是文案本身，也不是「状态行在不在」。两次踩坑
+   * 长得像同一个红：① `getByText(/ComfyUI 运行中/)` 首帧匹配集为空，文案出现后 `.first()` 又指到跨元素
+   * 节点，实测那一拍 `visible=false`、再取句柄撞 `session closed`；② 「状态行节点可见」首帧就成立，但
+   * 状态没落地、「打开查看」仍 disabled，后一击点在被禁按钮上（与本文件 1690 行同源）。故判据落在**活区节点文本**（`role="status"` + `aria-live="polite"`），`toHaveText` 自己重试到状态落地。 */
   function comfyStatusRow(page: Page): Locator {
     return page
       .getByRole("status")
@@ -1639,12 +1349,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
   async function openComfyControlPage(page: Page, thenOpenView = true) {
     await page.goto("/workspace");
     await gotoWorkspaceView(page, "ComfyUI");
-    /* 先等状态真的落到界面上，再点任何一颗出口按钮。
-       浏览器分支只有拿得到**已缓存的 base** 时才同步 `window.open`；缓存还空着会先
-       `await` 一次 refetch，而 await 之后再 open 会被弹窗拦截器吞掉 —— 表现是「点了
-       没反应」，用例等到超时（整批跑时实测复现，单跑因为缓存已热不复现）。这一句同时
-       也是「用户看得见 ComfyUI 在跑、地址就在按钮旁边」的断言 —— 判据看
-       `comfyStatusRow()`（为什么不是那句文案，见它的头注）。 */
+    /* 先等状态真的落到界面上，再点任何一颗出口按钮。浏览器分支只有在拿得到**已缓存的 base** 时才同步
+       `window.open`；缓存空着会先 `await` 一次 refetch，而 await 之后再 open 会被弹窗拦截器吞掉——表现是
+       「点了没反应」，整批跑时实测复现（单跑缓存已热不复现）。这一句同时也是「用户看得见 ComfyUI 在跑、
+       地址就在按钮旁边」的断言，判据看 `comfyStatusRow()`（为什么不是那句文案，见它的头注）。 */
     await expect(comfyStatusRow(page)).toHaveText(/ComfyUI 运行中/, {
       timeout: 20_000,
     });
@@ -1680,13 +1388,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
     await expect(page.getByRole("tablist", { name: "应用页签" })).toHaveCount(0);
   });
 
-  /* 负向（浏览器形态版）：即使服务端内嵌探测回答「不可嵌」，浏览器形态也**不去看
-   * 这个结论** —— 它压根不内嵌，直接交给新浏览器页签。所以这里守的是两件「不该
-   * 出现」：不塞一个注定空白的 iframe、不把壳内那句「无法在此页签中显示」搬到浏览器
-   * 形态来（那句说明的前提是「同一个页签」，浏览器形态没有这个页签）。
-   *
-   * 壳内的正向契约（不可嵌 → 同一个页签内给可读说明、且不弹第二个窗口）在本套件
-   * 量不到，归 §11.10.4 的壳冒烟。`blocked` 结论本身怎么产出由
+  /* 负向（浏览器形态版）：即使服务端内嵌探测回答「不可嵌」，浏览器形态也**不去看这个结论**——它压根
+   * 不内嵌，直接交给新浏览器页签。所以守两件「不该出现」：不塞一个注定空白的 iframe、不把壳内那句
+   * 「无法在此页签中显示」搬到浏览器形态（那句的前提是「同一个页签」）。壳内的正向契约（不可嵌 → 同
+   * 页签内给可读说明、不弹第二窗口）归 §11.10.4 壳冒烟；`blocked` 结论怎么产出由
    * `src/lib/comfy/comfy-embed.test.ts` 守着。 */
   test("@critical 内嵌探测结论不影响浏览器形态：仍走新浏览器页签", async ({ page, context }) => {
     await stubComfyTrpc(page, { embeddable: false });
@@ -1704,13 +1409,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
   });
 
   /**
-   * 「在浏览器打开」是**与页签并列**的出口（放大看 / 装插件 / 多屏），
-   * 不是替代页签：点它不得新增或切换页签，且动作要真的发出去。
-   *
-   * 这条链路走服务端 `setting.comfyOpen`（Node 侧 spawn 拉起系统默认浏览器），
-   * 浏览器里没法真开一个系统窗口，所以这里断言「动作发出去了」——桩掉该端点
-   * 并数调用次数；同时用 popup 计数确认**没有**在应用内另开窗口。
-   */
+   * 「在浏览器打开」是**与页签并列**的出口（放大看 / 装插件 / 多屏），不是替代页签：点它不得新增或
+   * 切换页签，且动作要真的发出去。这条链路走服务端 `setting.comfyOpen`（Node 侧 spawn 拉起系统默认
+   * 浏览器），浏览器里没法真开系统窗口，所以断言「动作发出去了」——桩掉该端点并数调用次数；同时用
+   * popup 计数确认**没有**在应用内另开窗口。 */
   test("@critical 在浏览器打开 ComfyUI 动作发出且不切走当前视图", async ({ page }) => {
     let windowCount = 0;
     page.on("popup", () => {

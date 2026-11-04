@@ -1,34 +1,8 @@
-/**
- * 「拿不到测量」既不许被报成「四侧不一致」，也不许被当成绿（规范 §13.6.4.1 / 审查台账 R11-01）。
- *
- * 立案现场：一笔**纯文档**提交被 `scripts/check-app-port-vectors.cjs` 拦下，报
- * `[app-port-vectors] 四语言端口推导一致性失败：- Python 侧自检失败：spawnSync python3 ETIMEDOUT`，
- * 而同一条判据在钩子结束后**就地复跑退 0** —— 那不是内容红，是没拿到测量。
- * 旧实现有两处糊：① 子进程超时与真不一致塞进同一个 `problems`，于是标题那句在纯超时时也说得出嘴；
- * ② `hasCommand()` 用 `try/catch → false` 把「10 秒内没回答」与「这台机器没有 Python」糊成一件事，
- * 那一侧于是**既不参与比对也不报红**（静默漏报比报错误导得更久）。
- *
- * 第一刀（已合）只拆话术与分类，判定不放宽；本文件是**第二刀之后的形状**，口径由这条线拍板：
- * **让第二遍测量自己的形态说话**（不看 `os.loadavg()` —— Windows 恒 0，那条早就被 C 组否掉）：
- *   · 第一遍超时 ⇒ 当场再取证一次；第二遍答上了就按第二遍判（绿或真红照旧）；
- *   · 两遍都只是超时形态 ⇒ 「未校验」，**放行但点名**；
- *   · 探测不到 Python（`missing`）⇒ 同样「未校验」并点名，明说「四侧实际只答了三侧」——
- *     这一格以前是静默跳过，本文件把它变成会说话的；
- *   · 探测到命令但 `--version` 非零退出（`malformed`）⇒ **不是** `missing`：机器上有
- *     Python，只是这条探针不承认它的形态。第三刀补的正是这一格 —— 旧实现 `execFileSync`
- *     的失败只分「超时 / 其余」，其余一律 `missing`，于是这一侧被一句假话永久退出比对。
- *
- * 「放行」不是把红灯藏起来：放行的是**这一次取证**，判据本身还在 —— Node 侧逐条真跑与
- * Rust / PowerShell 侧的锁引用仍在同一趟里判，而 `missing` / 双超时都会被打出来。
- * 代价与触发面：只有第一遍超时才多花一趟（最坏 `PROBE_TIMEOUT_MS × 2 + PY_TIMEOUT_MS`）。
- *
- * **另有一条平台分叉**（ISSUE #1959）：其中一条要写 `#!/bin/sh` 的假命令 + `chmod`
- * 出执行位，这在 Windows 上不成立（libuv 不解析 shebang、`chmodSync` 不存执行位），
- * 所以经 `needsPosixExec` 只在 POSIX 上跑。判据**本身**是跨平台的
- * （`probeCommand` 对「不存在」「非零退出」的分支不依赖执行位）；另一条
- * （`present-but-nonzero`）原先用的是同一份 POSIX 夹具，现已改用两个平台都真能起的
- * `process.execPath`，**不再 skip** —— 那一格在 Windows 上照样成立，缺的只是可注入的形态。
- */
+/** 「拿不到测量」既不许被报成「四侧不一致」，也不许被当成绿（规范 §13.6.4.1 / 审查台账 R11-01）。立案：
+ * 一笔**纯文档**提交被 `check-app-port-vectors.cjs` 报 `spawnSync python3 ETIMEDOUT`，钩子后就地复跑退 0 ——
+ * 那不是内容红，是没拿到测量。第二刀口径「让第二遍测量自己的形态说话」（不看 `os.loadavg()`，Windows 恒 0）：
+ * 首遍超时 ⇒ 再取证一次并按第二遍判；两遍都超时 ⇒「未校验」放行但点名；`missing` ⇒ 同样放行并明说「四侧
+ * 只答三侧」；探测到但 `--version` 非零（`malformed`）⇒ **不是** `missing`（#1941：旧实现把它永久退出比对）。 */
 import { readFileSync, rmSync, writeFileSync, chmodSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -37,15 +11,10 @@ import { describe, expect, it } from "vitest";
 import { normalizeControlFlow } from "./helpers/source-shape";
 
 /**
- * 需要 POSIX 执行语义的用例开关：这条要写一个 `#!/bin/sh` 的假命令、再 `chmod`
- * 出执行位，而 Windows 上 libuv 不解析 shebang、`chmodSync` 也不存执行位 ——
- * 于是它探到的是 `missing`，红的形状与「判据写错了」逐字同形。
- *
- * 立案现场（ISSUE #1959）：它此前**没有**守卫，在 Linux 平台池上一直绿，
- * 所以没人发现它其实只在 POSIX 上成立。平台侧换成自托管 Windows 节点之后当场红了
- * —— 而那一跑证明的是「这条判据在 Windows 上从没被执行过」，不是「判据坏了」。
- * 与 `tests/dev-launcher-toolchain-gate.test.ts` 用的是同一条别名约定。
- */
+ * 需要 POSIX 执行语义的用例开关：要写 `#!/bin/sh` 假命令并 `chmod` 出执行位，而 Windows 上 libuv 不解析
+ * shebang、`chmodSync` 不存执行位 ⇒ 探到 `missing`，红的形状与「判据写错」逐字同形。立案 ISSUE #1959：
+ * 此前**没有**守卫，Linux 平台池一直绿所以没人发现它只在 POSIX 成立；换自托管 Windows 节点后当场红，
+ * 证明的正是「这条判据在 Windows 上从没被执行过」。与 `tests/dev-launcher-toolchain-gate.test.ts` 同一别名约定。 */
 const needsPosixExec = it.skipIf(process.platform === "win32");
 
 /* 形态断言的对象是这个脚本的**控制流**，不是括号 —— 先过归一化，
@@ -67,11 +36,9 @@ const judge = require("../scripts/check-app-port-vectors.cjs") as {
 };
 
 /**
- * 命令探测的四态（`probeCommand` 的返回）。
- *
- * 第四档 `present-but-nonzero` 是这次补上的：旧实现只有三档，把「命令起来了、只是
- * `--version` 非零退出」静默归进 `missing`，于是 Python 侧被以「这台机器探测不到
- * Python」的名义退出四侧比对 —— 而那句话是假的。
+ * 命令探测的四态（`probeCommand` 的返回）。第四档 `present-but-nonzero` 是补上的：旧实现只有三档，
+ * 把「命令起来了、只是 `--version` 非零退出」静默归进 `missing` ⇒ Python 侧被以「探测不到 Python」的
+ * 名义退出四侧比对，而那句话是假的。
  */
 type ProbeState = "ok" | "timeout" | "missing" | "present-but-nonzero";
 
@@ -152,14 +119,10 @@ describe("命令探测分四态，不许糊成布尔", () => {
     },
   );
 
-  /* 这一格**不** skip：它判的是「命令在、只是非零退出」，而那个形态在 Windows 上照样
-   * 存在 —— 缺的是「用 POSIX 才有的夹具造出来」这件事。探针命令取**跑测试自己的那个
-   * Node**（`process.execPath`）并用 `-e` 立刻退 3，两个平台同形。
-   *
-   * 刻意**不用**「写一个带 shebang 的临时脚本」那形状：那份夹具的前提是 POSIX 内核认
-   * shebang，而 Windows 的 `CreateProcess` 不认（无扩展名的文件会被当作 `…​.exe` 去找，
-   * 得到 `ERROR_FILE_NOT_FOUND` ⇒ libuv 报 `ENOENT` ⇒ 探针判 `missing`）。实测这条用例
-   * 在自托管 Windows 构建节点上正是这样红的 —— 红的是夹具，不是判据。 */
+  /* 这一格**不** skip：它判「命令在、只是非零退出」，该形态 Windows 上也存在 —— 缺的只是「用 POSIX 才
+   * 有的夹具造出来」。探针取**跑测试自己的那个 Node**（`process.execPath`）并用 `-e` 立刻退 3，两平台同形。
+   * 刻意不用带 shebang 的临时脚本：那份夹具的前提是 POSIX 内核认 shebang，而 Windows `CreateProcess` 不认
+   * （无扩展名文件当 `…​.exe` 去找 ⇒ `ERROR_FILE_NOT_FOUND` ⇒ libuv `ENOENT` ⇒ 判 `missing`），实测自托管节点正是这样红。 */
   it("命令在、只是非零退出 ⇒ present-but-nonzero，**不许**糊成 missing（ISSUE #1941）", () => {
     /* 真实形态：`execFileSync` 对这种失败给的是 `status !== 0` 而 `error.code === undefined`，
      * 与「命令不存在」的 `ENOENT` 完全不是一回事。旧实现只分「超时 / 其余」，

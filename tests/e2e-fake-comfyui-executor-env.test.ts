@@ -1,29 +1,7 @@
 /**
- * 「假 comfy-cli 怎么被起」的跨平台判据（ISSUE #1767）。
- *
- * ## 立案现场
- *
- * `playwright.config.ts` 此前把 `COMFY_CLI_PYTHON` 指向一份 POSIX shim
- * （`e2e/support/fake-comfyui/python.sh`，内容是 `PYTHONPATH=… exec python3 "$@"`）。
- * 而本应用把 `comfyCliPython` 的值当**解释器路径**直接 spawn
- * （`spawn(py, ["-m", "comfy_cli", "run", …])`，见 `executor-cli.ts`）：
- * Linux / macOS 上内核认 shebang 于是能跑，**Windows 上必然起不来** —— Node 的
- * `spawn` 走 CreateProcess，只执行 `.exe` 与经 cmd.exe 的 `.cmd` / `.bat`
- * （本仓库自己的判据见 `src/lib/process/executable-resolve.ts` 文件头，
- * 硬规则 12 也据此禁 `.bat` / `.cmd`）。
- *
- * 症状是**两条 `@critical` 主链路用例在 Windows 开发机上必红**，而报错话术在说
- * 「执行器收口失败」—— 真因是这份替身根本没起来。
- *
- * ## 判据分三头
- *
- *   ① **候选顺序按平台**：Windows 先试 `python`/`py`、POSIX 先试 `python3`
- *      ——「找一个真能跑的 Python」这件事不许写死一个平台的名字；
- *   ② **拼出来的 env 是两个平台同一条形状**：`COMFY_CLI_PYTHON` 是**真解释器**、
- *      `PYTHONPATH` 指替身包目录（分隔符按平台），且 `PYTHONPATH` 是**前缀**不是
- *      覆盖（别人设过的不能被掐掉）；
- *   ③ **接线在位**：`playwright.config.ts` 走这个模块；替身目录下**不再有**
- *      需要 shebang 的 `.sh`/`.ps1` 形态的入口（有一份就说明有人把老路走回来了）。
+ * 「假 comfy-cli 怎么被起」的跨平台判据（ISSUE #1767）：把 `COMFY_CLI_PYTHON` 指向 POSIX shim，`executor-cli.ts` 按解释器路径 spawn；
+ * Windows 的 CreateProcess 只认 `.exe`/`.cmd`/`.bat`（硬规则 12），两条 `@critical` 主链路在开发机上必红、报错却说「执行器收口失败」。判据三头：
+ * ① 候选按平台（Win `python`/`py`、POSIX `python3`）；② env 同形（真解释器 + `PYTHONPATH` 前缀非覆盖、分隔符按平台）；③ 接线在位、替身目录无 `.sh`/`.ps1`。
  */
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -159,12 +137,10 @@ describe("fakeExecutorEnv：两个平台同一条形状", () => {
       moduleRoot: "/fake/fake-comfyui",
       exists: () => true,
     });
-    /* 分隔符跟着「这条 env 是为**哪个平台**的 Python 拼的」走，不跟宿主 —— 与实现同口径
-     * （真实调用时 `platform` 缺省 = `process.platform`，两者相等，生产形态逐字不变）。
-     * 上一版这里用宿主 `path.delimiter`，而同一个 describe 的形状判据注入的是
-     * `platform: "linux"` 并按 POSIX 路径比对 —— 两条用例对「分隔符归谁管」的要求相反，
-     * 于是在 Windows 开发机上**必然恰好红一条**、在 POSIX 上全绿：这批形状判据
-     * 其实从没在非 POSIX 宿主上自证过（ISSUE #1767 的跨平台那一半）。 */
+    /* 分隔符跟「这条 env 是为**哪个平台**的 Python 拼的」走，不跟宿主（缺省 = `process.platform` 时两者
+     * 相等，生产形态逐字不变）。上一版用宿主 `path.delimiter`，而形状判据注入 `platform: "linux"`
+     * 并按 POSIX 路径比对 —— 两条用例要求相反，Windows 上**必然恰好红一条**、POSIX 全绿：这批形状
+     * 判据其实从没在非 POSIX 宿主上自证过（ISSUE #1767 的跨平台那一半）。 */
     expect(result.env.PYTHONPATH).toBe("/fake/fake-comfyui:/someone/else");
   });
 

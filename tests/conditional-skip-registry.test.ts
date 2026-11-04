@@ -1,28 +1,7 @@
 /**
- * 条件性 skip 必须**登记**：谁在什么条件下会暗掉、暗掉几处。
- *
- * 动因：`pnpm test` 报「全绿」时，`23 skipped` 这一串是唯一的线索，而它不说明
- * 「绿的是哪一种」。最典型的是产物档 —— `describe.skipIf(!standaloneExists)` 在没有
- * `.next/standalone` 的检出上整块不跑（`tests/turbopack-tracing-excludes.test.ts` 里
- * 那组产物级探针就是这样，换台机器同一条判据结论相反）。这类「静默不跑」与
- * §11.7 说的不可信绿灯是同一种病，只是它藏在 skip 里而不是藏在配置里。
- *
- * 三条判据：
- *   1. **站点都要登记**：扫描面里每一处条件性 skip（`it/test/describe.skipIf(...)`、
- *      经别名定义的 skip、以及无条件 `it.skip(` / `describe.skip(`）都必须落在
- *      `REGISTERED` 里，且**数量对得上** —— 偷偷多一处没登记就红，登记了却删掉站点也红
- *      （后者是「登记表本身会烂」这一类，跟失效的 mock 目标同病）。
- *   2. **登记必须说清档位与理由**：`tier` 只有四种（env / platform / artifact / manual），
- *      `why` 不许空。档位决定「在谁的机器上这一条其实没跑」。
- *   3. **报数要带上这一句**：全量绿 ≠ 产物级判据跑过。跑之前先确认 `pnpm build` 有没有
- *      做过（同 §11.13 末尾那条 ⚠️ 与 `check-standalone-contents.cjs`）。
- *
- * 扫描口径的边界（写清楚，不假装万能）：① 先过 `stripComments`（`./helpers/strip-comments`，
- * §12.18 的复用件）—— 这类判据扫的是**代码里的站点**，而文件头说明里正当会出现被扫的形状；
- * ② 只认**语句起始位置**的站点，所以断言里出现的 `describe.skipIf(...)` 字符串
- * （`turbopack-tracing-excludes.test.ts` 就拿它当被测文本）不会被算成站点；③ 别名只认
- * 「同文件内 `const X = it.skipIf(...)` 之后以 `X(` 开头的行」。这三条各由「判据不是空转」
- * 那组用例钉住 —— 形状变了要一起改这里，而不是让它静默漏数。
+ * 条件性 skip 必须**登记**：谁在什么条件下暗掉、暗掉几处。动因：`pnpm test` 全绿时「23 skipped」是唯一线索，却不说明「绿的是哪一种」—— 产物档在无 `.next/standalone` 的检出上整块不跑（同 §11.7 不可信绿灯）。
+ * 判据三条：① 每处条件性/无条件 skip 站点都落在 `REGISTERED` 且数量对得上（多一处或删站点都红）；② tier（env/platform/artifact/manual）+ why 必填；③ 报数须带「全量绿 ≠ 产物级判据跑过」。
+ * 扫描边界：先过 `stripComments`；只认语句起始位置的站点（断言里的字符串不算）；别名只认同文件 `const X = it.skipIf(...)` 后以 `X(` 开头的行 —— 三条各由「判据不是空转」那组用例钉住。
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -49,9 +28,8 @@ type Registration = {
 
 /**
  * 登记表。新增/删除条件性 skip 时**同批**改这里，并说明理由。
- *
- * `artifact` 那两条最需要盯：它们不是「这台机器没装东西」，而是「没构建就整块不判」，
- * 报覆盖率与报「全绿」时都得把它单独说一句。
+ * `artifact` 那两条最需要盯：不是「这台机器没装东西」，而是「没构建就整块不判」，
+ * 报覆盖率与报「全绿」时都得单独说一句。
  */
 const REGISTERED: Array<Registration> = [
   {
@@ -175,13 +153,8 @@ const REGISTERED: Array<Registration> = [
 
 /**
  * 语句起始位置的条件 skip：`it.skipIf(g)(` / `describe.skip(` / `test.skipIf(g)(`。
- *
- * ⚠️ 标识符那一格是 `\w+` 而不是写死的 `it|test|describe`，为的是认得**从
- * `test.extend` 派生出来的 test**（`platformTest` / `dbTest` 这类，见
- * `tests/helpers/platform-fixtures.ts`）。写成白名单时那些派生对象的 skip 站点
- * 会**整个漏出扫描面** —— 表现不是「这里红」而是「一条静默不跑的用例没人登记」，
- * 正是本文件开头说的那种病。放宽的代价是可能把某个同名普通函数算成站点，
- * 但那会在「登记项不陈旧」那条上报出来（多一条没人登记 = 红），不会静默。
+ * ⚠️ 标识符用 `\w+` 而非白名单 `it|test|describe`，为的是认得 `test.extend` 派生的 test（`platformTest` / `dbTest`，见
+ * `tests/helpers/platform-fixtures.ts`）—— 白名单会让那些 skip 站点整个漏出扫描面，表现是「一条静默不跑的用例没人登记」；放宽的代价可能把同名普通函数算成站点，那会在「登记项不陈旧」上报红。
  */
 const DIRECT_SITE_RE = /^\s*\w+\.skip(?:If\(([^)]*)\))?\(/;
 /** 别名定义：`const needsPosixExec = it.skipIf(<guard>);` */

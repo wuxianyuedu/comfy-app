@@ -3,21 +3,9 @@ import { expect, test, type Page } from "@playwright/test";
 import { gridLineColor } from "../src/components/studio/canvas/workflow-canvas-grid";
 
 /**
- * 主题 token 的**产物侧**判据（规范 03 §3.6.1.1 的配套，非提交前必跑层）。
- *
- * 为什么静态判据不够：门禁「幽灵 token / 拼接 token 名」查的是 CSS **源码**里有没有
- * 声明、引用是不是字面量；而 Tailwind v4 会按「源码里出现过字面名」决定哪些 `@theme`
- * 变量**真的进产物**。声明在源码里 ≠ 运行时解析得到 —— 中间隔着 tree-shake 与
- * Next 的 `@source` 根。只有真浏览器 + 真构建管线能给出结论。
- *
- * 为什么在 e2e 层：这里断言的四件事全部依赖「算出来的样式」，jsdom 不做级联计算
- * （`getComputedStyle().getPropertyValue('--x')` 在 jsdom 里恒为空、`fill` 也不会
- * 从呈现属性解析成 `rgb()`），vitest 侧无法复现。而 e2e 本来就要起一次应用，
- * 这条用例的增量成本只是一个 goto。
- *
- * 用例本身带**负控制**：一个不存在的 token 必须读到空、且 `fill` 退成
- * `rgb(0, 0, 0)` / `stroke` 退成 `none` —— 这正是规范里写的静默失效形态。
- * 少了这半条，「十颗都读到值」可以是一次全绿的假探针。
+ * 主题 token 的**产物侧**判据（规范 03 §3.6.1.1 的配套，非提交前必跑层）。静态门禁只查 CSS 源码里有没有声明、引用是不是字面量，而 Tailwind v4 按「源码里出现过字面名」决定哪些 `@theme` 变量真的进产物 —— 声明在源码 ≠ 运行时解析得到（中间隔着 tree-shake 与 Next 的 `@source` 根），只有真浏览器 + 真构建管线能给出结论。
+ * 放在 e2e 层：这里断言的四件事全依赖「算出来的样式」，jsdom 不做级联计算（`getComputedStyle().getPropertyValue('--x')` 恒为空、`fill` 不会从呈现属性解析成 `rgb()`），vitest 侧无法复现；而 e2e 本来就要起应用，增量成本只是一个 goto。
+ * 用例带**负控制**：不存在的 token 必须读到空、`fill` 退成 `rgb(0, 0, 0)` / `stroke` 退成 `none`（规范写的静默失效形态）；少了这半条，「十颗都读到值」可以是一次全绿的假探针。
  */
 
 /** 全仓「被 SVG 呈现属性或 JS 取色读走」的 token（字面名在源码里出现，静态判据已保证）。 */
@@ -45,24 +33,9 @@ const CONTRAST_PAIRS = [
 const MIN_GRAPHICAL_RATIO = 3;
 
 /**
- * 把页面切到指定主题档，并**确认它真落地了**才让用例继续往下读样式。
- *
- * 旧形态是一句 `classList.toggle("dark", …)` 之后什么都不等 —— 那是在和 hydration
- * 抢同一个属性：`src/app/ThemeProvider.tsx` 是 `attribute="class"` +
- * **`defaultTheme="dark"`** + `enableSystem={false}`，新 context 的 localStorage 是空的，
- * 所以 provider 挂载时一定会把 class 落回 dark。症状正是 ISSUE #2100 那一屏：
- * **α 是对的、色相取成了 dark 那颗**（light 档读到 slate-400），且只在别的用例把路由
- * 焐热、hydration 落点前移之后稳定复现。
- *
- * 两条一起治：**`beforeEach` 等到 `load`**（脚本到位是这条用户路径成立的前提 ——
- * 同一条口径在 `:373` 那条「二次代入」的立案注释里已经立过一次），拨完再 **poll 一次
- * 「页面确实在目标档」**。后者是本函数存在的另一半：**「我拨过了」不等于「页面在这档」**；
- * 缺了它，竞争只会把红挪到一条看不懂的消息上。
- *
- * ⚠️ 这里刻意**不**用「写 localStorage 再 reload」那种写法：同文件 `:373` 那条要先
- * 「建项目 → 开画布」才有可测的 DOM，reload 会把它自己搭的前提拆掉
- * （实测换成 reload 后，红从「色相取错」变成「`stroke: none` 解析不出颜色」——
- * 那是画布没了，不是 token 落空）。
+ * 把页面切到指定主题档，并**确认它真落地了**才让用例往下读样式。旧形态是 `classList.toggle("dark", …)` 后什么都不等 —— 那是和 hydration 抢同一个属性：`ThemeProvider` 是 `attribute="class"` + `defaultTheme="dark"` + `enableSystem={false}`，新 context 的 localStorage 为空，挂载必把 class 落回 dark ⇒ ISSUE #2100 那一屏（α 对、色相取成 dark 那颗）。
+ * 所以 `beforeEach` 等到 `load`（脚本到位是这条用户路径成立的前提，同口径在 `:373` 那条立案注释里立过），拨完再 **poll 一次「页面确实在目标档」** ——「我拨过了」不等于「页面在这档」。
+ * ⚠️ 刻意**不**用「写 localStorage 再 reload」：同文件 `:373` 要先建项目/开画布才有可测 DOM，reload 会拆掉自己搭的前提（实测红从「色相取错」变成 `stroke: none` —— 那是画布没了，不是 token 落空）。
  */
 async function setTheme(page: Page, dark: boolean): Promise<void> {
   await page.evaluate((d) => {
@@ -113,13 +86,9 @@ async function readSurface(page: Page, cls: string): Promise<string> {
 }
 
 /**
- * 计算出来的颜色有三种可能的序列化形态，必须都认：
- *  · `#rrggbb` —— `globals.css` 里的原始声明；
- *  · `rgb()` / `rgba()` —— 普通 `var()` 解析到 `stroke` / `fill` 上；
- *  · **`color(srgb 0 0 0 / 0.14)`** —— `color-mix(in srgb, …)` 的计算值，
- *    Chromium 保留 sRGB 色彩空间来序列化它，分量是 **0~1 的浮点**而不是 0~255。
- * 最后一型是实测撞出来的：拿 `/^rgba?\(/` 去断 `color-mix()` 的结果，
- * 会得到一条「没解析」的红 —— 而值其实是对的。所以断言比**分量**，不比字符串。
+ * 计算出来的颜色有三种序列化形态，必须都认：`#rrggbb`（`globals.css` 原始声明）、`rgb()` / `rgba()`（普通 `var()` 解析到 `stroke` / `fill` 上）、**`color(srgb 0 0 0 / 0.14)`** —— `color-mix(in srgb, …)` 的计算值，Chromium 保留 sRGB 色彩空间，分量是 0~1 浮点而非 0~255。
+ * 最后一型是实测撞出来的：拿 `/^rgba?\(/` 去断 `color-mix()` 的结果会得到一条「没解析」的红，而值其实是对的。
+ * 所以断言比**分量**，不比字符串。
  */
 type Color = { a: number; b: number; g: number; r: number };
 
@@ -258,14 +227,8 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
   });
 
   /**
-   * 网格线（规范 03 §3.6.1.1 的 A 方案落地）。
-   *
-   * 这里验两件在源码层判不出来的事：
-   *  ① `color-mix()` 写在 SVG 的 `stroke` 位置上**解析得了** —— React Flow 的
-   *     `<Background color=…>` 把值写成自定义属性 `--xy-background-pattern-color-props`，
-   *     真正的 stroke 由样式表取它，所以「送到」由 jsdom 用例钉、「解析得了」只能在这里钉；
-   *  ② 改动的目的成立：**浅色画布上的网格线不该比深色下更看不见**。写死 slate-400 时
-   *     浅色 1.11:1 / 深色 1.20:1（浅色反而更弱），换两档之后浅色走黑、反超深色。
+   * 网格线（规范 03 §3.6.1.1 的 A 方案落地）：① `color-mix()` 写在 SVG 的 `stroke` 位置**解析得了** —— React Flow 的 `<Background color=…>` 写成自定义属性 `--xy-background-pattern-color-props`，真 stroke 由样式表取它（「送到」由 jsdom 钉、「解析得了」只能在这钉）。
+   * ② 改动的目的成立：**浅色画布上的网格线不该比深色下更看不见**（写死 slate-400 时浅 1.11:1 / 深 1.20:1，换两档之后浅色走黑、反超深色）。
    */
   test("网格线：color-mix 在 stroke 位置解析，且浅色不再比深色更弱", async ({ page }) => {
     /* 三档 α 都是真值：0.14 = 主参考线默认与库预览定值，0.22 = 细线默认，0.6 = 用户拉高。 */
@@ -340,40 +303,13 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
   });
 
   /**
-   * **二次代入**这条路径（上一批留下的缝，本次补）。
-   *
-   * 上一条用例把 `color-mix()` 直接写进 `stroke`，那不是画布真正走的路。真实路径是：
-   * React Flow 把 `<Background color=…>` 写成内联自定义属性
-   * `--xy-background-pattern-color-props`，样式表里再
-   * `stroke: var(--xy-background-pattern-color-props, var(--xy-background-pattern-color, 默认))`
-   * 取它 —— 也就是**「一个 var() 嵌在自定义属性里、又被外层 var() 二次代入」**，
-   * 而且内层那个 `var()` 自己还带着 `color-mix()`。三段各有各的失效方式，
-   * 只验两头等于没验中间。
-   *
-   * 样式表由画布组件模块级 import，所以这里必须走 `/workspace` 并**把画布那一屏开出来**
-   * （`/login` 上没有这三条规则）。
-   *
-   * ⚠️ `f72a55ee`（PR #1786）把 `WorkspaceViewStack` 的所有视图改成 `next/dynamic`：
-   * 画布的 CSS 不再随 `/workspace` 急加载，而是要等那一屏真的被渲染。此前这一条只
-   * `goto("/workspace")` 就取 `document.styleSheets` —— 那句话在 `dynamic()` 化之前
-   * 成立，之后拿到 0 条，报的是它自带的反空转话术「前提没了」（不是构建坏了：规则确实
-   * 在 `.next/static/chunks/*.css` 里，只是进 DOM 的时机变了）。
+   * **二次代入**这条路径（上一批留下的缝）：React Flow 把 `<Background color=…>` 写成内联 `--xy-background-pattern-color-props`，样式表再 `stroke: var(--xy-background-pattern-color-props, var(--xy-background-pattern-color, 默认))` 取它 —— 一个 var() 嵌在自定义属性里、又被外层 var() 二次代入，内层还带 `color-mix()`；三段各有各的失效方式，只验两头等于没验中间。
+   * 必须走 `/workspace` 并**把画布那一屏开出来**（`/login` 上没有这三条规则）。⚠️ `f72a55ee`（PR #1786）把 `WorkspaceViewStack` 视图改成 `next/dynamic`：画布 CSS 不再随 `/workspace` 急加载，只 `goto` 会取到 0 条样式表（规则确实在 `.next/static/chunks/*.css`，只是进 DOM 的时机变了）。
    */
   test("二次代入：经 --xy-background-pattern-color-props 取到的仍是同一个色", async ({ page }) => {
-    /* ⚠️ 这里刻意**不写** `waitUntil: "domcontentloaded"`（原先有）。
-     *
-     * 立案读数：这一条在全量里必红、隔离单跑必绿，红在点「新建画布项目」之后
-     * 等不到 `[data-view="project"]` —— 而失败瞬间的无障碍快照显示页签**只有「首页」**、
-     * 那张卡也还在原位，即**点击根本没生效**（不是导航慢）。
-     *
-     * 为什么只有全量复现：本地这一档跑的是 `pnpm dev`（Turbopack 按需编译）。
-     * DCL 不要求 JS chunk 到位，而冷编译时 chunk 一定晚于 DCL —— 按钮「看得见、点得动、
-     * 也 enabled」，但 React 的 handler 还没挂上，`createProject()` 压根没被调用。
-     * 隔离复跑时编译是热的，chunk 赶得上 DCL，于是同一条代码路径过。
-     *
-     * 默认的 `load` 把「脚本都到位」当作前提，与同级
-     * `project-context-refresh.spec.ts` 同一口径（它点的是同一个按钮，一直没这问题）。
-     * 这不是「加等待绕过红」：`load` 才是这条用户路径成立的前提。 */
+    /* ⚠️ 这里刻意**不写** `waitUntil: "domcontentloaded"`（原先有）。立案读数：全量必红、隔离单跑必绿，红在点「新建画布项目」后等不到 `[data-view="project"]`，失败瞬间的无障碍快照显示页签**只有「首页」**、卡还在原位 —— 点击根本没生效。
+     * 只有全量复现：本地跑 `pnpm dev`（Turbopack 按需编译），DCL 不要求 JS chunk 到位，冷编译时 chunk 晚于 DCL —— 按钮可见可点也 enabled，但 React handler 还没挂上，`createProject()` 压根没被调用；隔离复跑编译是热的，chunk 赶得上 DCL。
+     * 默认的 `load` 把「脚本都到位」当作前提，与同级 `project-context-refresh.spec.ts` 同一口径（它点的是同一个按钮）。这不是「加等待绕过红」：`load` 才是这条用户路径成立的前提。 */
     await page.goto("/workspace");
     /* 开画布那一屏 —— 这既是「CSS 进 DOM」的前提，也让它成为一个**真的**用户路径：
        真实用户看到网格线，正是因为他打开了画布。
@@ -394,13 +330,8 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
       timeout: 30_000,
     });
 
-    /* 反空转：真规则不在场就别往下断言 —— 否则「取到了默认灰」会被读成「token 生效」。
-     *
-     * 必须**轮询**而不是取一次：`[data-view="canvas"]` 是 `WorkspaceViewStack.tsx:266`
-     * 那个 **wrapper**，它先挂上；带 `@xyflow/react/dist/style.css` 的是里面那个
-     * `dynamic(..., { ssr: false })` 的 chunk，晚一拍才落地。等 wrapper 可见后立刻数
-     * `document.styleSheets`，就是在自己的前提上抢跑 —— 实测单跑也是 `Received: 0`，
-     * 与并发无关（`style.css` 里那 3 处 token 一直好好在包里）。 */
+    /* 反空转：真规则不在场就别往下断言 —— 否则「取到了默认灰」会被读成「token 生效」。必须**轮询**而不是取一次：`[data-view="canvas"]` 是 `WorkspaceViewStack.tsx:266` 那个 **wrapper**，先挂上；带 `@xyflow/react/dist/style.css` 的是里面 `dynamic(..., { ssr: false })` 的 chunk，晚一拍才落地。
+     * 等 wrapper 可见后立刻数 `document.styleSheets` 是抢跑 —— 实测单跑也是 `Received: 0`，与并发无关。 */
     await expect
       .poll(
         () =>
@@ -454,19 +385,12 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
     }
 
     /**
-     * 负控制，也是这条路径最阴的地方：内层 token 一旦不存在，`--props` 整个变成
-     * guaranteed-invalid，外层 `var(--props, 默认)` **静默退回 xyflow 自己的默认灰** ——
-     * 不报错、不变黑、也不留痕，比 seed 图标那次的「退成黑色」还安静。
+     * 负控制，也是这条路径最阴的地方：内层 token 一旦不存在，`--props` 整个变成 guaranteed-invalid，外层 `var(--props, 默认)` **静默退回 xyflow 自己的默认灰** —— 不报错、不变黑、不留痕，比 seed 图标那次「退成黑色」还安静。
      * 所以这里断「确实退回了别的颜色」，把这个事实钉在测试里，而不是等下一个人猜。
      */
     /**
-     * 负控制，也是这条路径最阴的地方：内层 token 一旦不存在，整条 `stroke` 声明
-     * **不报错**，只是静默降级。实测降级到哪儿**取决于作用域**：
-     *   · 挂在 `.react-flow` 之外（xyflow 的 `…-lines-color-default` 不在作用域）→ `none`，线直接消失；
-     *   · 挂在 `.react-flow` 内 → 退回 xyflow 的默认灰（不是我们的色相）。
-     * 两种都无声。所以这里不赌具体值，只钉那条不变的不变量：**幽灵 token 绝不会
-     * 解析成我们的色相**，并把两种作用域的实际值打印出来供排障对照 ——
-     * 比 seed 图标那次「退成黑色」还安静，因为画面看着「只是没有网格线」。
+     * 负控制（续）：内层 token 不存在时整条 `stroke` 声明**不报错**，只是静默降级 —— `.react-flow` 之外（xyflow 的默认色不在作用域）→ `none`，线直接消失；之内 → 退回 xyflow 的默认灰（不是我们的色相）。
+     * 两种都无声，所以这里不赌具体值，只钉那条不变的不变量：**幽灵 token 绝不会解析成我们的色相**，并把两种作用域的实际值打印出来供排障对照。
      */
     const ghostExpr = "color-mix(in srgb, var(--color-nope-token) 14%, transparent)";
     const inBothScopes = await page.evaluate((e) => {
@@ -507,14 +431,10 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
   });
 
   /* ── 字体链（#1434）───────────────────────────────────────────────
-     全站正文一度落在浏览器默认字体上：`@theme inline` 里那行
-     `--font-sans: var(--font-sans)` 与 `@theme` 的真定义重名，而 inline 块不向
-     :root 发射变量 —— `font-sans` 于是内联成一句指向空气的自引用。
-     实测当时的现场：`getComputedStyle(documentElement).getPropertyValue("--font-sans")`
-     返回空串，body 与 h1 的计算字体是 UA 默认的 "Times New Roman"，而 tsc /
-     eslint / 主题色扫描 / 那条「别名不得与项目 token 重名」的判据全都报绿
-     （后者当时只覆盖块的前 26 个 --color-* 名字）。
-     颜色判据在产物侧读不到这件事，字体也一样 —— 只有真浏览器能判「实际用在哪」。 */
+     全站正文一度落在浏览器默认字体上：`@theme inline` 里 `--font-sans: var(--font-sans)` 与 `@theme`
+     的真定义重名，而 inline 块不向 :root 发射变量 —— `font-sans` 于是内联成一句指向空气的自引用。
+     实测现场：`getComputedStyle(documentElement).getPropertyValue("--font-sans")` 返回空串，body 与
+     h1 的计算字体是 UA 默认 "Times New Roman"，而 tsc / eslint / 主题色扫描 / 别名判据全绿。只有真浏览器能判「实际用在哪」。 */
   test("正文与标题真的用上设计那串字体栈（两态各自验）", async ({ page }) => {
     for (const dark of [false, true]) {
       await setTheme(page, dark);

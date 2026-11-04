@@ -1,12 +1,7 @@
 /**
- * `tests/helpers/jsdom-capability.ts` 的回归判据。
- *
- * 这份 helper 的本事是「让日志安静」，所以它最坏的失效形态恰好是**看起来最好**的那一种：
- * 吞得太宽 ⇒ 全量跑干净了，而真错误一起没了。下面每一格各钉一条吞/放的边界，
- * 变异方向也逐条写明（把哪一行改掉会红在哪一格）。
- *
- * 用 node 档不写文件头：判据面是纯函数 + 一个 `node:events` 的假 `virtualConsole`，
- * 不需要 DOM（口径见 `vitest.config.ts` 的 projects 那一段）。
+ * `tests/helpers/jsdom-capability.ts` 的回归判据。它的本事是「让日志安静」，最坏失效形态恰是看起来最好的那种：吞得太宽 ⇒
+ * 全量跑干净了，而真错误一起没了。下面每格各钉一条吞/放边界，并把变异方向（改哪一行红在哪一格）逐条写明。
+ * 用 node 档不写文件头：判据面是纯函数 + `node:events` 的假 `virtualConsole`，不需要 DOM（口径见 `vitest.config.ts` 的 projects）。
  */
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";

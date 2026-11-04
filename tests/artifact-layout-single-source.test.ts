@@ -1,27 +1,7 @@
 /**
- * 「产物布局只有一处定义」判据（台账 A8 的第二段，#12 的前置）。
- *
- * 一句话：`src/` 里不许再出现第二处「产物根 / 产物地址 / 地址→磁盘」的写法，
- * 全仓唯一出处是 `src/lib/media/output-paths.ts`。命中即红。
- *
- * 为什么这条判据值得存在（不是风格洁癖）：同一份布局此前有 **7 份实现**，
- * 其中两份**对同一个输入结论相反** ——
- *  · `compose-steps.ts` 把执行器写进库的 `/api/generated/…` 解析成
- *    `<cwd>/public/api/generated/…`（不剥 `api/` 段），那个目录不存在，
- *    「合成成片」对每一条镜头必败；而 `firstframe.ts` 那一份剥了，所以首帧一直是好的。
- *    同一句错在 `task.delete` 里也出现过一次（A8 当年修的就是那一处），
- *    **第二次实现活了下来** —— 这正是「复制实现」的代价：修一处不等于修完。
- *  · `media-source.server.ts` 的越界判据少了 `path.sep` 边界，同级 `generatedX`
- *    会被算作根内。
- *  · `scripts/comfyapp-open-folder.ps1` 还有一份**用另一种语言写的**允许根，
- *    在任何 TS 检索面之外 —— 搬根那天它不会跟着动，`comfyapp://open` 就会
- *    指着空目录 refuse 掉一切（下面第 3 条成对判据专门钉这一处）。
- *
- * 已知边界（说清比假装没有好）：**给人看的散文**不在这条判据的扫描面里 ——
- * `ProjectOutputs.tsx` / `ProjectOutputsMetadataSheet.tsx` / `MaterialLibraryPanel.tsx`
- * 三处 UI 文案写着 `public/generated/…`。它们不是路径构造、改了不影响行为，
- * 但「把产物根搬出 public/」（台账 A13 残留、任务 #12）那天必须一起改文案，
- * 已经写进那条目的清单里。判据不去断言文案，是为了不把「精确」换成「误报一片」。
+ * 「产物布局只有一处定义」判据（台账 A8 第二段 / #12 前置）：`src/` 内不许有第二处「产物根 / 产物地址 / 地址→磁盘」写法，唯一出处 `src/lib/media/output-paths.ts`。
+ * 为什么值得存在：同一布局曾有 7 份实现，两份对同一输入结论相反 —— `compose-steps.ts` 不剥 `api/` 段（合成必败），`firstframe.ts` 剥了（一直好）；修一处不等于修完。
+ * `media-source.server.ts` 缺 `path.sep` 边界、`.ps1` 有异语言允许根（搬根不会跟动）；UI 文案的 `public/generated/` 不扫，#12 搬根须一起改。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
@@ -172,17 +152,10 @@ describe("产物布局单一出处（台账 A8 第二段）", () => {
   it("comfyapp:// 的 PowerShell 允许根与 TS 的产物根同形（跨语言成对判据）", () => {
     const scriptsDir = path.join(process.cwd(), "scripts");
     const ps1 = readFileSync(path.join(scriptsDir, "comfyapp-open-folder.ps1"), "utf8");
-    /* 抠的是 `Join-Path` 的**各段**，不是一条拼好的相对路径。
-     *
-     * 为什么判据长这样（ISSUE #1348 的形态在前一版里是错的）：`.ps1` 原先写
-     * `Join-Path $PSScriptRoot "..\generated"` —— 一条**带平台分隔符**的字面量。
-     * 判据得把它解析成绝对路径才能和 `generatedRoot()` 比，而 `path.resolve` 只在
-     * Windows 上把 `\` 当分隔符：POSIX 上整串被当成一个文件名，
-     * 得到 `<repo>/scripts/..\generated`，与 `<repo>/generated` 永不相等 ——
-     * **Linux / CI 上恒红**。当时的补法是「解析前把 `\` 全换成 `/`」，
-     * 那是在**猜写这个字符串的机器是哪一端的**，判据与平台绑定这件事没被解决，
-     * 只是被藏进了 `replace`。真正的修法是让那段字面量不再带分隔符：
-     * 各段分开写，`Join-Path` 用宿主自己的分隔符拼，判据也按段解析。 */
+    /* 抠的是 `Join-Path` 的**各段**，不是一条拼好的相对路径（ISSUE #1348）。
+     * 上一版是 `Join-Path $PSScriptRoot "..\generated"`（带 `\` 的字面量），判据须先解析成绝对路径才能比；
+     * 而 `path.resolve` 只在 Windows 认 `\`，POSIX 上整串成了文件名 `<repo>/scripts/..\generated` 与
+     * `<repo>/generated` 永不相等 —— Linux / CI 恒红。红线是不让字面量带分隔符：各段分开写、按段解析。 */
     const segments = allowedRootSegments(ps1);
     // 非空自证：那条允许根被删掉/改写时这里必须红，而不是「没找到 = 不用比」
     expect(segments, "ps1 里找不到 comfyapp:// 的允许根赋值，成对判据落空").not.toBeNull();

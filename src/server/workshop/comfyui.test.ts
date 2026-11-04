@@ -1,19 +1,7 @@
 /**
- * 工坊 ComfyUI 通道两份进程内 memo 的**失效语义**（ISSUE #2194）。
- *
- * 此前的形状是「首读即定终身」：`settingsCache` 只在同进程写路径（save）里更新 ——
- * 而本模块的失败话术**指名让用户手改** `data/workshop-comfy-settings.json`，
- * 提示与缓存互相推翻；`resolvedBase` 则把「探测全落空」的缺省地址也缓存，
- * ComfyUI 重启换端口后整个进程生命周期钉死在死端口上（同维度的
- * `client.ts` 那一侧早有 `resetComfyBase()`，理由写的就是这件事）。
- *
- * 本文件钉住三条新语义：
- *   ① settings 缓存按 **size+mtime 指纹**比对 —— 手改文件的下一次读取必然
- *      miss（执行者 = 手改这个动作本身）；
- *   ② base 缓存在**网络层失败**时复位（执行者 = 本模块自己的 fetch 失败路径），
- *      而 **HTTP 状态失败不复位** —— 连上即存活（#685），GPU OOM 的 500 也是活实例；
- *   ③ 探测全落空**不缓存** —— 与 client.ts 同一句：「谁都没应答」不缓存，
- *      实例随时可能起来。
+ * 工坊 ComfyUI 通道两份进程内 memo 的失效语义（ISSUE #2194）。旧形状「首读即定终身」：失败话术让用户手改 `data/workshop-comfy-settings.json`，
+ * 缓存却只在同进程 save 更新；`resolvedBase` 连「探测全落空」的缺省地址也缓存，换端口后整个进程钉死（`client.ts` 早有 `resetComfyBase()`）。
+ * 钉三条：① settings 按 size+mtime 指纹比对，手改后必 miss；② base 仅网络层失败复位、HTTP 状态失败不复位（#685，OOM 的 500 也是活实例）；③ 探测全落空不缓存。
  */
 import {
   mkdtempSync,

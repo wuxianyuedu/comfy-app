@@ -1,19 +1,7 @@
 /**
- * 文档引用校验自检：锁住 scripts/check-doc-references.cjs（pnpm doc:check）的
- * 「单一事实 + 防裸值回潮」契约真的成立，而不是只写在文档里。
- *
- * 规范：docs/reference-facts.md（单一事实映射 + 维护规则）
- *   - placeholder 类（shell.* / 端口）：编辑态文档出现裸值即报错（防回潮）
- *   - verify 类（dev.*）：文档保留直观值，脚本核对权威源当前端口族
- *
- * 为什么覆盖「并行引用点」：同一份值出现在多篇文档、且原文形态不同时
- * （ComfyUI 端口在 workshop-mcp 里是无括号 `:8188`、在主规范「开发端口」行里是
- * `localhost:3100` / `:8188` 并列），主规范的引用点不会命中 `onlyDocs`。
- * 规则是**把引用点并进同一事实（otherDocs），而不是把它挪出校验范围**——
- * 挪出去等于放弃防回潮。这里用 FACTS 定义 + 文档原文双重断言锁住该行为。
- *
- * 为什么用子进程跑：该脚本被 `pnpm doc:check` 以 `node scripts/xxx.cjs` 调用，
- * 复用同一调用方式才等价于真实校验（脚本内部用 __dirname 定位仓库根）。
+ * 文档引用校验自检：锁住 `scripts/check-doc-references.cjs`（pnpm doc:check）的「单一事实 + 防裸值回潮」契约
+ * 真的成立（规范 docs/reference-facts.md：placeholder 类出现裸值即报错，verify 类核对权威源端口族）。并行引用点
+ * （ComfyUI 端口在多篇文档形态不同）要并进同一事实（otherDocs），挪出校验范围等于放弃防回潮；用子进程跑才等价。
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -26,24 +14,18 @@ import { createProbeTree } from "./helpers/probe-worktree.ts";
 /** 真实仓库根 —— 只用来**核对它没被写过**，本文件一次都不往它上面写（ISSUE #2665）。 */
 const REAL_ROOT = process.cwd();
 /**
- * 探针用的那份一次性克隆（HEAD + 当前工作树里脏的那几份）。
- *
- * 为什么不是「每组探针一棵」：`git worktree add` 实测 4.81s（3156 份文件），本文件有十几组
- * 探针 —— 每组一棵会把这一段从秒级抬到分钟级，而它换来的隔离量是零（同一棵树里的两组
- * 探针本来就不并发，vitest 文件内是串行的）。**文件级一棵**就够了：要挡的是
- * **别的用例文件**在同一时刻读同一份文档。
+ * 探针用的那份一次性克隆（HEAD + 当前工作树里脏的那几份）。不每组一棵：`git worktree add` 实测 4.81s（3156 份
+ * 文件），十几组会把这段抬到分钟级而隔离收益为零（vitest 文件内串行）。**文件级一棵**足够 —— 要挡的是
+ * **别的用例文件**同时读同一份文档。
  */
 const PROBE = createProbeTree(REAL_ROOT);
 /** 本文件的「仓库根」= 那份克隆：判据、渲染件、探针写盘全部落在它里面。 */
 const REPO_ROOT = PROBE.dir;
 const CHECK = join(REPO_ROOT, "scripts", "check-doc-references.cjs");
 
-/** 「文档怎么引用门禁」那三条判据的分片（它们在 `check-doc-gate-refs.cjs`）。
- *
- *  为什么要分成两份读：那一半判的**不是**「硬编码值 / 路径 / 端口」，两半合住一份文件
- *  时越过了文件长度硬闸；而它的**接入点**仍在 `check-doc-references.cjs` 的 `main` 里。
- *  于是「函数定义在哪」与「有没有人调它」是两个文件、两条读法 —— 拿哪一份去找另一件
- *  都会落空，那是判据搬了家、不是判据没了。 */
+/** 「文档怎么引用门禁」那三条判据的分片（在 `check-doc-gate-refs.cjs`）。分两份读：那一半判的不是「硬编码
+ * 值 / 路径 / 端口」，合住一份越过了文件长度硬闸；接入点仍在 `check-doc-references.cjs` 的 `main`。于是
+ * 「定义在哪」与「有没有人调它」是两个文件、两条读法 —— 拿哪一份找另一件都会落空，那是判据搬了家、不是没了。 */
 function gateRefsSource(): string {
   return readFileSync(join(REPO_ROOT, "scripts", "check-doc-gate-refs.cjs"), "utf8");
 }
@@ -91,15 +73,10 @@ function runCheck(): { code: number; output: string } {
 const docText = (rel: string) => readFileSync(join(REPO_ROOT, rel), "utf8");
 
 /* ── 探针收尾的最后一道网（ISSUE #2415 → #2593 订正 → #2665 换形）─────────
- * 本文件多数组的现场是「改一笔 → 判 → 收尾」。#2593 那一批把「收尾」从
- * `git checkout --`（那吃过两次未提交的文档改动）换成「进本文件那一刻的字节快照」；
- * #2665 这一批把**写的那一侧**整段搬进一次性克隆（`tests/helpers/probe-worktree.ts`），
- * 于是真实工作树不再被写、并发读者那道口子上不再有人往里丢探针文本。
- *
- * 因此这道网的语义**跟着换了**：它以前是「还原」，现在是「核对真实树没被动过」——
- * `PROBE_TARGETS` 这几份从模块加载到本文件跑完，字节必须与进来时逐字相同。
- * 红的意思是「有探针绕过了克隆去写真实树」（= 本件被写坏了，或有人新加了直写真实树的一组），
- * 不再是「工作区脏了」—— 后者可能是这条分支上正在做的活，不该由这一档判定。 */
+ * #2593 把「收尾」从 `git checkout --`（吃过两次未提交的文档改动）换成「进本文件那一刻的字节快照」；#2665 把
+ * **写的那一侧**整段搬进一次性克隆（`tests/helpers/probe-worktree.ts`），真实工作树不再被写。于是语义从「还原」
+ * 变成「核对真实树没被动过」：`PROBE_TARGETS` 从模块加载到跑完字节必须逐字相同；红 = 有探针绕过克隆写真实树，
+ * 工作区脏了不算（那可能是分支上正在做的活）。 */
 const PROBE_TARGETS = [
   "AGENTS.md",
   "docs/reference-facts.md",
@@ -148,12 +125,9 @@ afterAll(() => {
 });
 
 /**
- * 探针用的写文件：写完**读回来核对**，被占用或内容不符就重试。
- * 这些用例会临时改真实文件、跑一次 `doc:check` 子进程、再还原。Windows 上刚被
- * 子进程读过的文件会短暂占用，实测两次把 `writeFileSync` 直接打抛
- * （`UNKNOWN: unknown error, open …`）：一次抛在还原那一步，探针文本就**留在了仓库里**
- * （追加进 `docs/guides/DEV-QUERIES.md` 的那行就是这么来的，还被 `doc:render` 连生成态一起写脏）；
- * 另一次抛在写入那一步，用例得到一个与判据无关的红。两者都不该由一次瞬时占用决定成败。
+ * 探针用的写文件：写完**读回来核对**，被占用或内容不符就重试。Windows 上刚被 `doc:check` 子进程读过的文件会
+ * 短暂占用，实测两次把 `writeFileSync` 打抛（`UNKNOWN: unknown error, open …`）：一次抛在还原那步 ⇒ 探针文本
+ * 留在仓库里（`docs/guides/DEV-QUERIES.md` 那行即此来，还被 `doc:render` 连生成态写脏）；一次抛在写入 ⇒ 用例得到无关的红。
  */
 function writeText(abs: string, text: string): void {
   let lastError = "";
@@ -200,10 +174,9 @@ async function gateDocs(): Promise<Array<string>> {
 }
 
 /**
- * 「这条判据真的被 `main()` 调用了吗」—— 不能用 `toContain(调用文本)`。
- * 把那一行前面加 `// ` 注掉，行里仍含同一段字面量，`toContain` 照样命中（实测：
- * 本文件里四处「已接入 main 流程」的老写法第一次变异全都绿着放过，ISSUE #1374）。
- * 这里要求它是一行**独立语句**：行首只有缩进、结尾是分号。
+ * 「这条判据真的被 `main()` 调用了吗」—— 不能用 `toContain(调用文本)`：前面加 `// ` 注掉后行里仍含同一段
+ * 字面量，`toContain` 照样命中（ISSUE #1374：四处「已接入 main」的老写法第一次变异全绿着放过）。这里要求
+ * 它是一行**独立语句**：行首只有缩进、结尾是分号。
  */
 function isCalledInMain(script: string, call: string): boolean {
   const mainBody = script.slice(script.indexOf("function main()"));
@@ -449,15 +422,11 @@ describe("台账命令口径守卫（AGENTS 硬规则 1：包管理只用 pnpm�
 });
 
 describe("用户面文档不许教跑不通的驱动（ISSUE #2580）", () => {
-  /* 现场：`docs/guide-database-backup.md` 教的是 `require('better-sqlite3')` 的在线
-   * `backup()` 与 `pragma('integrity_check')`，而那包是 devDependencies —— 桌包用户与
-   * standalone 运行期根本没有它，照抄就是 `MODULE_NOT_FOUND`，动的还是用户数据。
-   * 机制（`VACUUM INTO`）、台账（D6）、核心实现与「不许出现那三个字样」的断言都早已改，
-   * 漏的是**给用户看的那一页**，所以这条挂在 doc:check（§13.5.17 那一档）上。
-   *
-   * 判据只认**可执行命令形状**（`require(…)` / `from …`），不认名字：规范里大量正当句子
-   * 在讲「当年为什么换掉它」。上面那条「台账命令口径」组用的探针文件（DEV-QUERIES.md）
-   * 已在 `PROBE_TARGETS` 的快照网里，这里复用同一份 ⇒ 不把新的入库文档拖进写探针的窗口。 */
+  /* 现场：`docs/guide-database-backup.md` 教 `require('better-sqlite3')` 的在线 `backup()` 与
+   * `pragma('integrity_check')`，而那包是 devDependencies —— 桌包用户与 standalone 运行期没有它，照抄就是
+   * `MODULE_NOT_FOUND`，动的还是用户数据。机制（`VACUUM INTO`）、台账（D6）、核心实现与「不许出现那三个字样」
+   * 的断言都早已改，漏的是**给用户看的那一页** ⇒ 挂在 doc:check（§13.5.17）。判据只认可执行命令形状
+   * （`require(…)` / `from …`），复用 DEV-QUERIES.md 探针以留在 `PROBE_TARGETS` 快照网里。 */
   const probe = "docs/guides/DEV-QUERIES.md";
 
   function withProbe(appended: string): { code: number; output: string } {
@@ -528,13 +497,10 @@ describe("用户面文档不许教跑不通的驱动（ISSUE #2580）", () => {
 });
 
 describe("AGENTS.md ↔ standards 漂移守卫", () => {
-  /* 目的：AGENTS.md 是代理自动加载的唯一导航文件，历史上两处漂移都恰好
-   *      落在 SCOPED_DOCS 的盲区（AGENTS.md 在仓库根，docs/ 才纳入）。
-   *      checkAgentsMdDrift 承担 C1/C3（路径存在性）+ C2（章节锚点）；
-   *      C4（npm/npx 命令）由 checkLedgerCommands 显式并入 AGENTS.md 承担——
-   *      AGENTS.md 不进 SCOPED_DOCS，否则 render-doc-placeholders 会为它
-   *      生成一份没有 {{占位符}} 的 docs/generated/AGENTS.md 冗余副本。
-   *      判据细节见 scripts/check-doc-references.cjs 顶部的段注释。 */
+  /* 目的：AGENTS.md 是代理自动加载的唯一导航文件，历史上两处漂移都落在 SCOPED_DOCS 的盲区（AGENTS.md 在仓库根、
+   * docs/ 才纳入）。checkAgentsMdDrift 承担 C1/C3（路径存在性）+ C2（章节锚点）；C4（npm/npx 命令）由
+   * checkLedgerCommands 显式并入 AGENTS.md —— 它不进 SCOPED_DOCS，否则 render-doc-placeholders 会生成一份没有
+   * {{占位符}} 的 docs/generated/AGENTS.md 冗余副本。细节见脚本顶部段注释。 */
 
   it("已接入 main 流程（不是定义了却没人调用）", () => {
     const script = readFileSync(CHECK, "utf8");
@@ -624,16 +590,11 @@ describe("AGENTS.md ↔ standards 漂移守卫", () => {
     expect(script).toContain("在仓库中不存在");
   });
 
-  /* 运行期产物的**目录形态**同样豁免（2026-10-23，ISSUE #2231 的连带）。
-   *
-   * `docs/api/` 进 `.gitignore` 之后，AGENTS.md 里「产物落在 `docs/api/`」那句话在新克隆里
-   * 指向一个**不存在**的目录 ⇒ `pnpm doc:check` 在 CI 上恒红，而「按提示去改 AGENTS.md」
-   * 是错的 —— 那句话讲的是「产物落在哪」，不是「仓库里有这个目录」。旧实现只豁免根级**单名**
-   * （`db.sqlite`），嵌套形态没有豁免：同一个洞，只是要等第一个嵌套形态出现。
-   *
-   * 为什么必须是**差分**探针：本机跑过 `pnpm run docs` 的话 `docs/api/` 是真存在的 ⇒
-   * 「不红」这件事在本机分不出是「豁免生效了」还是「那个目录真的在」⇒ 探针文件必须是
-   * **一定不存在**的名字，存在性检查本来会红、豁免让它不红 —— 那才有信号。 */
+  /* 运行期产物的**目录形态**同样豁免（2026-10-23，ISSUE #2231 的连带）：`docs/api/` 进 `.gitignore` 后，AGENTS.md
+   * 里「产物落在 `docs/api/`」在新克隆里指向不存在目录 ⇒ `pnpm doc:check` 在 CI 上恒红，而「去改 AGENTS.md」是错的
+   * （那句话讲产物落点，不是仓库里有这个目录）。旧实现只豁免根级单名，嵌套形态是同一个洞。必须用**差分**探针：
+   * 本机跑过 `pnpm run docs` 时该目录真在 ⇒ 探针名必须是**一定不存在**的，存在性检查本来会红、豁免让它不红。
+   * 那才有信号。 */
   it("被 .gitignore 忽略的嵌套目录形态同样豁免（差分探针）", () => {
     const ignored = withAgentsMdProbe("临时探针：`docs/api/__probe_not_exists__.md` 用于测试。");
     expect(ignored.code, ignored.output).toBe(0);
@@ -657,15 +618,9 @@ describe("AGENTS.md ↔ standards 漂移守卫", () => {
 });
 
 /**
- * 门禁步骤的「序号引用」口径（ISSUE #1374，签字：删序号、改用日志里打印的标签）。
- *
- * 为什么这条要钉住：钩子早已是「组 0 + A/B/C/D 四个并行组」，「第 N 步」在这份形状上
- * 没有唯一解释；而序号不属于任何现有事实核，所以每给 D 组追加一步，文档里那批数字
- * 就整体错位一次 —— 表现不是红，是**指到别的判据上**（立案时的实测样本：UI 基元复用
- * 棘轮写作「第 12 步」而实际第 9 条、生成态文档同步写作「第 26 步」而实际第 21 条）。
- *
- * 与 `tests/doc-check-hook-wiring.test.ts` 的分工：那份守「这一步在不在钩子里」，
- * 本组守「文档怎么引用这一步」。
+ * 门禁步骤的「序号引用」口径（ISSUE #1374，签字：删序号、改用日志里打印的标签）。钩子早已是「组 0 + A/B/C/D
+ * 四个并行组」，「第 N 步」没有唯一解释，序号也不属于任何事实核 ⇒ 每给 D 组追加一步文档那批数字就整体错位：
+ * 表现不是红，是**指到别的判据上**（实测写作「第 12 步」实际第 9 条）；与 `doc-check-hook-wiring` 的分工是「在不在钩子里」vs「文档怎么引用」。
  */
 describe("文档不许用「第 N 步」引用门禁步骤（ISSUE #1374）", () => {
   const STEP_RE = /第\s*\d+(?:\s*\/\s*\d+)?\s*步/;
@@ -1050,23 +1005,9 @@ describe("门禁的步数也不许写进文档（ISSUE #1407，签字口径 (a)�
 });
 
 /**
- * `pnpm doc:render` 的**自动修档**（`--check --autofix`，ISSUE #1981）。
- *
- * 这一档是平台侧「生成态文档与源同步」那一步在跑的形态：先判一次，红了就地重渲染、
- * 再判一次。它要守的是**三件各不相同的事**，缺一件都会让它变成一个假的绿：
- *
- *   ① **绿的时候不多写**：判定通过时它一次都不许写（否则每次 PR 都在改工作区）；
- *   ② **红了真能修好**：改一份编辑态文档、不动生成物 → 这一档应当自己把它修回来，
- *      并且**结论来自第二次 `--check`**（不是「写入模式退 0 就算通过」）；
- *   ③ **修不好时必须红**：产物被手改（内容与重渲染结果不同）时重渲染能修，
- *      但如果产物**多余**（源已不在 `SCOPED_DOCS` 里），重渲染并不会删它 ——
- *      这一档必须如实报红，而不是「跑过写入模式就当我赢了」。
- *
- * 用子进程跑真脚本（与 `runCheck` 同一条口径）。与这一文件里其它「真文件探针」
- * 组不同，本组的现场是**临时目录里的夹具仓库**（ISSUE #2415）：渲染器按
- * `DOC_RENDER_ROOT` / `DOC_RENDER_SCOPED` 把输入输出根注入到夹具上 ——
- * 本组一次也不写真仓库的入库文件，也不再有「改 → 判 → 改回来」的待恢复状态
- * （写入曾经失败过一次，探针句就留在了主干文档与它的镜像里）。
+ * `pnpm doc:render` 的**自动修档**（`--check --autofix`，ISSUE #1981）：平台侧「生成态文档与源同步」跑的就是它 ——
+ * 先判，红了就地重渲染再判。缺一件就变假绿：① 绿时一次都不许写；② 红了真能修好且结论来自**第二次 `--check`**
+ * （不是「写入模式退 0 就算通过」）；③ 修不好必须红（产物多余时重渲染不删它）。现场是临时目录夹具仓库（#2415），不写真仓库入库文件。
  */
 describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () => {
   const RENDER = join(REPO_ROOT, "scripts", "render-doc-placeholders.cjs");
@@ -1183,12 +1124,9 @@ describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () =
 });
 
 /**
- * `--only`：只写点名那几份镜像（ISSUE #2527）。
- *
- * 这一格治的是**代改别人的**那个形状：写入档是**无条件**重生成所有镜像的，而 D0 那格
- * 「改了源就得带上镜像」逼人跑它 —— 于是「带上自己那一份」顺带把别人留在 HEAD 上的
- * 陈旧镜像一起改脏进自己这批（真仓库实测一例：改 1 份规范带出另一份镜像 126 行整表重排）。
- * 分得很开才谈得上处置：`--only` 答「我这批该写哪几份」，`--check` 答「全量漂了谁」。
+ * `--only`：只写点名那几份镜像（ISSUE #2527）。治的是**代改别人的**形状：写入档无条件重生成所有镜像，而 D0
+ * 「改了源就得带上镜像」逼人跑它 ⇒「带上自己那一份」顺带把别人留在 HEAD 上的陈旧镜像改脏进本批（实测：改 1 份
+ * 规范带出另一份镜像 126 行整表重排）。`--only` 答「我这批该写哪几份」，`--check` 答「全量漂了谁」。
  */
 describe("doc:render 的 scoped 档（--only，ISSUE #2527）", () => {
   const RENDER = join(REPO_ROOT, "scripts", "render-doc-placeholders.cjs");

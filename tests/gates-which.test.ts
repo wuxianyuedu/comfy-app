@@ -1,14 +1,7 @@
 /**
- * `pnpm gates:which` —— 按改动面回答「该跑哪几条门禁 / 该跑哪份用例 / 该读哪一节规范」（ISSUE #2765）。
- *
- * 它治的是「不知道该跑哪条 ⇒ 推上去让平台告诉我红了哪格」，所以判据全钉在**读数从哪来**：
- *   ① 门禁分档只认钩子文本（`readHookSteps` / `localTierLabels`）与 `ci-incremental-gates`
- *      的收窄登记 —— 本入口不另立第二套筛法；
- *   ② 用例那一半直接起 `affected-tests.mjs` 的判决链；取不到读数时**原样带回落差**，
- *      不折成空清单（空清单在下游是「什么都不用跑」）；
- *   ③ 空改动面 / 取不到基线 / 不认识的旗标 ⇒ 退 2（= 没有结论），不是「没有问题」；
- *   ④ `AGENTS.md` 那张人读表与 `scripts/doc-reading-map.mjs` 双向对账 —— 改一边忘另一边
- *      当场红（同 `INCREMENTAL_GATES` ⇄ `.cnb.yml` 的守法）。
+ * `pnpm gates:which` —— 按改动面回答「该跑哪几条门禁 / 哪份用例 / 该读哪一节规范」（ISSUE #2765）。它治的是「不知道该跑哪条 ⇒ 推上去让平台告诉我红了哪格」，故判据全钉在**读数从哪来**：分档只认钩子文本
+ * （`readHookSteps` / `localTierLabels`）与 `ci-incremental-gates` 的收窄登记；用例那半直起 `affected-tests.mjs` 的判决链，取不到读数时**原样带回落差**，不折成空清单（空清单在下游是「什么都不用跑」）。
+ * 空改动面 / 取不到基线 / 不认识的旗标 ⇒ 退 2（= 没有结论），不是「没有问题」；`AGENTS.md` 那张人读表与 `scripts/doc-reading-map.mjs` 双向对账，改一边忘另一边当场红。
  */
 import { execFileSync, type spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -138,10 +131,8 @@ describe("gates:which —— 门禁分堆（分档与收窄面都转述既有登
 type FakeResult = { status: number | null; stderr?: string; stdout?: string };
 
 /**
- * 造一个假的 `spawnSync`。
- *
- * `affectedTests` 的 JSDoc 写的是 `typeof spawnSync`，而它的重载与 `stdio` 联合类型
- * 套不进一个手写假件 —— 这里显式过一道 cast，并保证假件的参数形状与真实调用同形。
+ * 造一个假的 `spawnSync`。`affectedTests` 的 JSDoc 是 `typeof spawnSync`，其重载与 `stdio` 联合类型
+ * 套不进手写假件 —— 这里显式过一道 cast，并保证假件的参数形状与真实调用同形。
  */
 function fakeSpawn(impl: (args: Array<string>, opts: { input?: string }) => FakeResult) {
   const fn = (_cmd: string, args: Array<string>, opts: { input?: string }): FakeResult =>
@@ -214,11 +205,8 @@ describe("gates:which —— 规范匹配（机器可读副本）", () => {
 });
 
 /**
- * 解析 `AGENTS.md` 那张「强制先读规范文档的改动范围」表。
- *
- * 只从表头那一行开始收，遇到第一行非表格行即停 —— 文件里别的表格不进这一份读数。
- *
- * @returns {Array<{scope: string, spec: string}>}
+ * 解析 `AGENTS.md` 那张「强制先读规范文档的改动范围」表：从表头那一行开始收，遇到第一行非表格行即停
+ * —— 文件里别的表格不进这一份读数。@returns `Array<{scope: string, spec: string}>`
  */
 function agentsTableRows() {
   const lines = readFileSync(AGENTS, "utf8").split(/\r?\n/);

@@ -1,25 +1,7 @@
 /**
- * 「视图层 store selector 不许现拼对象 / 现造新数组」这条判据自身的用例
- * （ISSUE #1780）。
- *
- * 与 `tests/router-error-envelope.test.ts` 同构：三层各管一件事，缺任何一层
- * 都会静默失效。
- *
- *   ① **存量为零** —— 真扫 `src/**`，按名字匹配真实的 store 订阅 hook 调用点，
- *      断言没有「selector 里写对象字面量 / 用 .map·.filter 造新数组」的形状。
- *      同时断言**扫描面非空** —— 路径写错时「零命中」看起来就像「全都修好了」，
- *      这是这一类清单最典型的死法。
- *   ② **清单与仓库同步** —— `oxlint.parity.config.mjs`（#2777 起判决主体）的
- *      `STORE_SELECTOR_HOOKS` 必须
- *      覆盖仓库里**全部** `create<...>()` 出来的 zustand store（漏登记 = 新 store
- *      不受判据保护，而 lint 那边一点反应都没有）。
- *   ③ **selector 真的会响** —— 拿 eslint 自带 `Linter` 在最小片段上验一次：
- *      反模式必须报、合法写法必须不报。少了这一层，② 就只是一句「配置里有个
- *      字符串」—— 本仓库已经付过学费：**「有配置 ≠ 配置在跑」**（§11.7）。
- *
- * 为什么 selector 必须按**名字**限定（而不是 `/^use[A-Z]/` 泛匹配）：见
- * `oxlint.parity.config.mjs` 那段注释 —— `useMemo(() => rows.slice(0, 8), [])` 与
- * `useState(() => ({ ... }))` 都是合法且常见的写法，泛匹配会全报出来。
+ * 「视图层 store selector 不许现拼对象 / 现造新数组」判据自身的用例（ISSUE #1780），与 router 信封那份同构：三层缺一都会静默失效。
+ * ① 真扫 `src/**` 按名字匹配 store 订阅 hook，断言无对象字面量 / `.map`·`.filter` 造数组，并断言扫描面非空（路径写错时「零命中」像「全修好了」）；② `oxlint.parity.config.mjs`（#2777 起判决主体）的 `STORE_SELECTOR_HOOKS` 必须覆盖全部 `create<...>()` 出来的 zustand store（漏登记 = 新 store 失去保护）。
+ * ③ 用 eslint `Linter` 最小片段验行为：反模式必须报、合法写法必须不报 ——「有配置 ≠ 配置在跑」（§11.7）。按**名字**限定而非 `/^use[A-Z]/` 泛匹配的理由见判决配置注释（`useMemo`/`useState` 的合法写法会被泛匹配全报）。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";

@@ -1,29 +1,7 @@
 /**
- * 测试夹具的 git 环境隔离（`tests/helpers/git-sandbox-env.ts`）的契约测试。
- *
- * 判的是什么：在临时目录里 `git add` 时，如果带着从钩子继承来的 `GIT_DIR`，
- * 这条命令作用的对象**不是**临时仓库，而是**调用方的真仓库** —— 探针文件进真索引，
- * 下一次提交报 `Error building trees`，而报错一个字都不指向那条测试。
- * 全仓实测 20 份用例文件自己 `git init` 临时仓库，所以这是一个类别，不是一个点。
- *
- * 为什么这里要**主动造污染**来判（而不是只判「清理后没事」）：
- * 只判正向的那一档，在「污染其实不会发生」的世界里同样为绿 —— 那是一条看起来在判、
- * 实际判不出的用例（本仓库对这类坑的口径见 §13.5.8 / §11.16）。所以两向都要钉：
- *   ① 带 `GIT_DIR` ⇒ 真仓库索引**确实**被写进探针条目（机制成立，不是臆测）；
- *   ② 带 `gitSandboxEnv()` ⇒ 真仓库索引**一个条目都没多**（清理有效）。
- *
- * ① 用的是本测试**自己 mkdtemp 出来的一份仓库**，不是运行它的那个仓库 ——
- * 判据可以随便污染夹具，但绝不许碰调用方的检出（这正是被测事故本身的形态）。
- *
- * 第四档（④，ISSUE #2787）：平台那一跑的改动面变量（`CNB_PULL_REQUEST_TARGET_SHA` 一族）
- * 同样进不来。判的是同一件事——「只对当前那一跑成立的读数」不许被子进程继承——只是
- * 这一族不是 git 导出的，第一类清单收不到，而它会一路走进用例 spawn 的判据脚本，
- * 让沙箱拿**真仓库的 sha** 去算自己的改动面（现场见 `git-sandbox-env.ts` 文件头第三类）。
- *
- * 第三档（③）：宿主开着 `core.autocrlf=true` 时，夹具的 `git add` **一条 advice 都不打**。
- * 那一行 `LF will be replaced by CRLF` 不改变任何结论，却是 CI 里最像「真红」的噪音；
- * 反向锚点同样是「先证明宿主那一档确实会叫」——不先造一次带噪的 `git add`，
- * ③ 在「宿主本来就没开 autocrlf」的世界里也照样为绿，那就等于没判。
+ * 测试夹具 git 环境隔离（`tests/helpers/git-sandbox-env.ts`）的契约：带继承的 `GIT_DIR` 时 `git add` 写的是调用方真仓库索引（探针进真索引 → `Error building trees`，报错不指向测试）；全仓 20 份用例自建临时仓库，是类别。
+ * 污染与清理两向都钉（只判正向在「污染不会发生」的世界同样为绿，§13.5.8/§11.16）：① 带 `GIT_DIR` 真索引确被写入（用自 mkdtemp 的仓库，不碰调用方检出）② `gitSandboxEnv()` 后一条不多。
+ * ④ `CNB_PULL_REQUEST_TARGET_SHA` 族（ISSUE #2787）不许继承进判据脚本（否则拿真仓库 sha 算改动面）；③ 宿主 autocrlf=true 时夹具 `git add` 无 advice。
  */
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -70,12 +48,9 @@ function makeRepo(name: string): string {
 }
 
 /**
- * 「没有夹具注入」的那份环境：只剥掉继承的仓库定位变量，**一个 `GIT_CONFIG_*` 都不加**。
- *
- * ③ 的反向锚点要用它 —— 先证明宿主的 `autocrlf=true` 确实会让 `git add` 叫一声，
- * 再证明夹具注入之后一声都不叫。少了这份，那条断言在「宿主本来就没开 autocrlf」
- * 的世界里同样为绿，等于没判（§13.5.8）。
- * @returns 可直接交给子进程的 `env`
+ * 「没有夹具注入」的那份环境：只剥掉继承的仓库定位变量，**一个 `GIT_CONFIG_*` 都不加**。③ 的反向锚点用它：
+ * 先证明宿主 `autocrlf=true` 确实会让 `git add` 叫一声，再证明夹具注入后一声不叫 —— 少了这份，那条断言在
+ * 「宿主本来就没开 autocrlf」的世界同样为绿，等于没判（§13.5.8）。可直接交给子进程的 `env`
  */
 function bareEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };

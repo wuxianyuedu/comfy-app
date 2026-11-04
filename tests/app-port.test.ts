@@ -16,11 +16,8 @@ import {
 } from "../scripts/app-port.mjs";
 
 /**
- * 应用端口解析契约（launch-and-build.md §1.1 / §1.4 多检出并行）。
- *
- * 推导算法是多语言约定（PowerShell / Python / Rust 各有同型实现），这里锁住
- * Node 侧行为与固定校验向量——向量由真实路径生成，四侧实现对同一输入必须
- * 得出同一端口，改动算法前先想清楚多检出并行会怎么被破坏。
+ * 应用端口解析契约（launch-and-build.md §1.1 / §1.4 多检出并行）。推导算法是多语言约定（PowerShell / Python / Rust 各有同型实现），
+ * 这里锁住 Node 侧行为与固定校验向量——向量由真实路径生成，四侧对同一输入必须得出同一端口；改动算法前先想清楚多检出并行会怎么被破坏。
  */
 describe("app-port 端口解析", () => {
   it("路径规范化：反斜杠转正斜杠 + 转小写 + resolve", () => {
@@ -171,18 +168,9 @@ describe("app-port 端口解析", () => {
 });
 
 /**
- * 四语言端口一致性：共享校验向量（ISSUE #489 缺陷 4）。
- *
- * 背景：`changelog.d` 与规范 §1.1 都承诺「Node / PowerShell / Python / Rust 四侧
- * 对同一路径给出同一端口」，但此前四侧各写各的固定断言（且 Node 侧只锁了一个
- * 路径），没有任何测试会发现某一侧漂移 —— 例如实测发现 Rust 的
- * `normalize_root_for_port` 完全不做路径解析，Node/Python/PowerShell 对**相对
- * 路径**会拼 cwd，于是 `rel/p` 四侧端口不同。对绝对路径（真实检出的形态）
- * 不影响，但「四侧一致」当时只是文档承诺，不是可失败断言。
- *
- * 这里把向量集中到 `tests/fixtures/app-port-vectors.json`，四侧测试读**同一份**
- * 文件：Node（本文件）、PowerShell / Python / Rust 各自断言同一批 input→port。
- * 任一侧实现漂移 → 对应侧测试失败，而不是等到 Windows 真机上才发现。
+ * 四语言端口一致性：共享校验向量（ISSUE #489 缺陷 4）。此前四侧各写各的固定断言（Node 只锁一个路径），没有任何测试会发现漂移 ——
+ * 实测 Rust 的 `normalize_root_for_port` 完全不做路径解析，Node / Python / PowerShell 对**相对路径**会拼 cwd，`rel/p` 四侧端口不同；
+ * 绝对路径（真实检出形态）不受影响，但「四侧一致」当时只是文档承诺。向量集中到 `tests/fixtures/app-port-vectors.json`，四侧读**同一份**，任一侧漂移即对应侧失败，而不是等 Windows 真机才发现。
  */
 describe("app-port 四语言共享校验向量", () => {
   /* SAFETY: 类型断言已复核 */
@@ -218,12 +206,9 @@ describe("app-port 四语言共享校验向量", () => {
 });
 
 /**
- * 仓库根取值的单一来源（ISSUE #1771）。
- *
- * 端口按「检出路径」推导，而「检出路径取哪个」是端口契约的另一半：同一份
- * `resolveAppPort` 喂进两种口径的根（`import.meta.url` 锚定的仓库根 vs
- * `process.cwd()`）在宿主 chdir 之后会给出**不同端口且不报错**。
- * `resolveRepoRoot()` 是那个事实的唯一出口，调用点不得再自算。
+ * 仓库根取值的单一来源（ISSUE #1771）。端口按「检出路径」推导，而「取哪个检出路径」是端口契约的另一半：同一份 `resolveAppPort` 喂进
+ * `import.meta.url` 锚定的仓库根与 `process.cwd()`，在宿主 chdir 之后会给出**不同端口且不报错**。`resolveRepoRoot()` 是那个事实的唯一出口，
+ * 调用点不得再自算。
  */
 describe("仓库根收口（resolveRepoRoot）", () => {
   it("锚在自己的文件位置，不是调用进程的 cwd", () => {

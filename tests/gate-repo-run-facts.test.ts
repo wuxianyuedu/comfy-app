@@ -1,26 +1,7 @@
 /**
- * 门禁夹具的**读数契约**：`run()` 交出五件，且不许把两类失败折成一件（ISSUE #2405）。
- *
- * 立案现场：本仓 17 份门禁自测各自手抄了一遍「搭临时仓库 + 跑真判据」那四件套，
- * 抄到第十五遍时折叠方式开始分叉 —— 常见的那一份是
- * `execFileSync` 包 `try/catch`，把结果压成 `{ ok: boolean, output }`。
- * 于是三类**下一动作完全不同**的失败在账面上逐字同形：
- *   ① 判据跑完了、**判出越界**（退 1，这才是被测行为）；
- *   ② 判据**根本没跑起来**：夹具少带一个依赖 ⇒ node 报 `Cannot find module`，
- *      退的**也是 1**；`ENOBUFS`（输出超 `maxBuffer`）/ 被子进程信号杀 ⇒ `status` 是 `null`；
- *   ③ spawn 层就没起来（`ENOENT`：node 自身不在）。
- * `expect(ok).toBe(false)` 在②上**照样绿**，`expect(ok).toBe(true)` 在②上红成
- * 「门禁拦了本该放行的形状」—— PR #2404 的 `受影响用例` 那一格就是这个形状
- * （页面上只剩 `expected false to be true`；那次究竟属于哪一类，当时**分辨不出来**）。
- *
- * 所以这里钉的是**量具自己**的四条口径（不放任意一份被测文件里 —— 量具的契约散在
- * 消费者中间，正是第十五份抄错时没人响的那个形状）：
- *   ① 退出码非 0 且**不是** spawn 错误 ⇒ `output` 仍合并两条流（违规原文常在 stderr）；
- *   ② 退出码 0 ⇒ `output` 只有 stdout（这上面有三十多份消费者的断言，读法不许漂）；
- *   ③ 脚本取不到 ⇒ `status` 与①逐字同码，但 `ran` 是 `false`，且
- *      `spawnError` / `signal` 能自证「不是被杀、不是 spawn 失败」；
- *   ④ `expectGateRan()` 只在③那一格抛，在①那一格不抛 —— 两半都要有执行者，
- *      否则「把两边一起判掉」这种改法看不出来（§13.6.4：拿不到测量 ≠ 测量结果是红的）。
+ * 门禁夹具的**读数契约**（ISSUE #2405）：`run()` 交出五件；两类失败不许折成一件 —— 常见抄法 `execFileSync` 套 `try/catch` 压成 `{ ok }`，
+ * 于是「判出越界 / 判据没跑起来 / spawn 失败」逐字同形（PR #2404 分辨不出来）。口径：非 0 且非 spawn ⇒ output 合两流；
+ * 退 0 ⇒ 只 stdout；取不到脚本 ⇒ 同码但 ran=false、spawnError 可自证；`expectGateRan()` 只在最后一格抛（§13.6.4）。
  */
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";

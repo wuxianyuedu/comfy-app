@@ -1,23 +1,7 @@
 /**
- * 提交门槛自检:把 scripts/check-merge-parents.mjs 当黑盒跑在临时仓库上,验证
- * 「合并提交必须双亲」这条判据(规范 §13.6.1 / ISSUE #1594)真的会阻断,而不是
- * 只写在文档里。
- *
- * 为什么用临时 git 仓库、且**真的调 git 造合并**:
- *   判据吃的事实是「本次提交将要落几个父」——它来自 `.git/MERGE_HEAD` 的行数,
- *   而不是内存里假装的某个布尔。立案现场就是「拓扑错了而树是对的」:只有真起一次
- *   `git merge`、真解一次冲突,才等价于 prepare-commit-msg 被触发时的处境。
- *
- * 覆盖的形态(每一条都对着判据里的一条分支):
- *   - 普通提交                      → 放行(消息没声明是合并);
- *   - 真合并提交(解冲突后 commit)    → 放行(MERGE_HEAD 在场,双亲);
- *   - 消息声明是合并但单亲           → **阻断**(回退现场),且给出重建合并的出口;
- *   - `--amend` 一个合并提交         → 放行(source=commit,父提交从 HEAD 继承);
- *   - 正文里出现 "Merge branch"      → 放行(只认首行声明,正文不构成声明);
- *   - 非 git 目录                    → 放行(判据无从命中,不误报)。
- *
- * 另有一条判的是**本仓库的钩子接线**:`.githooks/prepare-commit-msg` 存在且真的把
- * `$1` / `$2` 透传给判据 —— 判据写得对、钩子没接上,等于没有执行者(§13.5.12 的立案现场)。
+ * 提交门槛自检：黑盒跑 `scripts/check-merge-parents.mjs`，验证「合并提交必须双亲」真会阻断（§13.6.1 / ISSUE #1594）。
+ * 必须真调 `git merge`：判据吃 `.git/MERGE_HEAD` 行数而非内存布尔，「拓扑错而树对」只有真合并+真解冲突才复现。
+ * 覆盖：普通/真合并/`--amend`/正文含 "Merge branch"/非 git 目录放行；声明合并但单亲**阻断**并给重建出口；另钉钩子接线（§13.5.12）：`prepare-commit-msg` 真透传 `$1`/`$2`。
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";

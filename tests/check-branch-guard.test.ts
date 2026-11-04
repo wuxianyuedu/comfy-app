@@ -1,26 +1,7 @@
 /**
- * 提交门槛自检:把 scripts/check-branch-guard.cjs 当黑盒跑在临时仓库上,验证
- * 「不在 master 上直接提交」这条硬规则(规范 13.6 / ISSUE #492)真的会阻断提交,
- * 而不是只写在文档里。
- *
- * 为什么用临时 git 仓库而不是 mock git 调用:
- *   判据本身依赖三条 git 事实(当前分支名、HEAD 父提交数、工作树定位),在内存里
- *   假装这些事实恰好等于把规则重新实现一遍;真的建仓库、真的 commit 才等价于
- *   pre-commit 被触发时的处境(这也正是历史事故的来源:规则写得对,但没在真实
- *   提交路径上跑过)。
- *
- * 覆盖三类场景:
- *   - 分支上提交          → 放行
- *   - master 上直接提交    → 阻断,且提示里给出「怎么把提交搬走」
- *   - master 上合并提交    → 放行(PR 合并在平台侧完成,不该被本地门槛二次阻挡)
- *
- * 另覆盖服务端复核(`--pr-check`)。它的判据**不能**复用「分支名」:CNB 在
- * pull_request 事件上 checkout 的是**预合并提交**,容器里 `symbolic-ref HEAD` 恒等于
- * 目标分支——照搬「HEAD 在 master 上就是直连主干」会把每一条正常 PR 都拦死
- * (PR #633 第一次跑就是这么红的)。所以这里用真仓库把三种拓扑都跑一遍:
- *   - 源分支领先目标分支            → 放行
- *   - 源分支归并过目标分支(预合并)   → 放行
- *   - 源分支与目标分支完全同步       → 阻断(平台允许创建 source=master 的 PR)
+ * 提交门槛自检（规范 13.6 / ISSUE #492）：把 `scripts/check-branch-guard.cjs` 当黑盒跑在临时仓库上，验证「不在 master
+ * 上直接提交」真会阻断。必须用真仓库而非 mock：判据依赖分支名 / HEAD 父提交数 / 工作树定位，mock 等于重写规则；
+ * 覆盖三类提交场景。`--pr-check` 另有三种拓扑，且不能复用分支名（CNB 在 PR 上 checkout 预合并提交，`symbolic-ref HEAD` 恒等目标分支，PR #633 即因此全红）。
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";

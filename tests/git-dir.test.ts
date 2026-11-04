@@ -1,24 +1,6 @@
 /**
- * `scripts/git-dir.mjs` 的判据。
- *
- * ## 这一族判的是「写错地方」，不是「写不进去」
- *
- * 「本检出的 `.git` 在哪」看起来是个 trivial 问题，而它有两种失效形态，**两种都不报错**：
- *
- *   · 硬拼 `<root>/.git` 在 **worktree** 上拿到的是那个**指针文件**的路径 ——
- *     往里写东西会当场失败或写到一个不该在的地方；
- *   · 设了 `GIT_DIR` 时，真正的 git 目录与仓库根可以毫无关系。
- *
- * 本仓**恰好靠 worktree 跑事后复算**（`base-check.mjs` 建临时快照检出），
- * 而 `.git/comfy-precommit-timing.jsonl` 与 `.git/comfy-premerge-proof.json`
- * 两户都落在那个目录里。写错的那一侧不会喊 —— 读的那一侧只是「永远读不到」，
- * 于是「这次没留下证据」看起来就像「这次没有证据要留」。
- *
- * ## 为什么这里建真 repo / 真 worktree 而不是造假形状
- *
- * 造一个「`.git` 是文件、内容写着 `gitdir: …`」的假目录，测的是**我自己猜的那份格式**；
- * 真跑一次 `git worktree add` 测的才是 git 实际会给什么。前者会在 git 换格式时
- * 继续绿（那正是本模块要避免的那类失效）。
+ * `scripts/git-dir.mjs` 的判据：判的是「写错地方」，不是「写不进去」。硬拼 `<root>/.git` 在 **worktree** 上拿到的是那个**指针文件**的路径（往里写东西会当场失败或写到不该在的地方）；设了 `GIT_DIR` 时，真正的 git 目录与仓库根可以毫无关系；两种都**不报错**。本仓恰好靠 worktree 跑事后复算（`base-check.mjs` 建临时快照检出），而 `.git/comfy-precommit-timing.jsonl` 与 `.git/comfy-premerge-proof.json` 都落在那个目录里——写错的那侧不会喊，读的那侧只是「永远读不到」，「这次没留下证据」看起来就像「这次没有证据要留」。
+ * 所以建真 repo / 真 worktree 而不是造假形状：造一个「`.git` 是文件、内容写着 `gitdir: …`」的假目录，测的是**我自己猜的那份格式**，会在 git 换格式时继续绿（那正是本模块要避免的失效）。
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -46,22 +28,9 @@ function mustGitDir(cwd: string): string {
 }
 
 /**
- * 比较前先归一分隔符 —— 这不是和稀泥，是这组判据真正要说的东西：
- * git 回的是**它自己的正斜杠形式**（`C:/Users/…/repo/.git`），而 Windows 上
- * `path.join` 给反斜杠。同一个路径两种拼法：拿去拼落点没问题（Win32 两种都收），
- * 但**做字符串比较就会错** —— 反向断言（`not.toContain`）在两种拼法下**恒真**，
- * 于是「落错了地方」也测不出来。这条差异在本模块搬过来之前就存在于
- * `precommit-timing` 那份实现里，只是没人把它测出来过。
- *
- * ⚠️ **win32 上还要连大小写一起归一**（ISSUE #2087）：左值来自 git 自己回的形式，
- * 右值来自 `os.tmpdir()` —— 同一条路径，两个 API 给两种拼法。服务账号（Runner 常以
- * LocalSystem 跑）下 `%TEMP%` 是全大写 `C:\WINDOWS\TEMP`，而文件系统给的是
- * `C:/Windows/Temp`，于是这一格在**开发身份恒绿、在节点身份恒红**，
- * 而它报的是 `AssertionError` —— 看着完全像回归。Windows 路径大小写不敏感，
- * 大小写拼法从来不是这组判据的被测对象。
- * **posix 那一侧不许跟着做**：那条路上大小写有意义，归一会把「取到了另一个目录」
- * 判成正确（与 `scripts/.runtime-budget-baseline.json` 的 `byPlatform` 同一条口径 ——
- * 判据要在它跑得到的那种宿主上自证，而不是共用一个数）。
+ * 比较前先归一分隔符不是和稀泥：git 回的是**它自己的正斜杠形式**（`C:/Users/…/repo/.git`），Windows 上 `path.join` 给反斜杠；拼落点没问题（Win32 两种都收），但做字符串比较就会错——反向断言（`not.toContain`）在两种拼法下**恒真**，「落错了地方」也测不出来（该差异早存在于 `precommit-timing` 实现里）。
+ * ⚠️ **win32 上还要连大小写一起归一**（ISSUE #2087）：左值来自 git、右值来自 `os.tmpdir()`，Runner 常以 LocalSystem 跑，`%TEMP%` 是全大写 `C:\WINDOWS\TEMP`，而文件系统给 `C:/Windows/Temp` ⇒ 这一格在**开发身份恒绿、节点身份恒红**，且报 `AssertionError` 看着完全像回归；Windows 路径大小写不敏感，拼法从来不是被测对象。
+ * **posix 那一侧不许跟着做**：那里大小写有意义，归一会把「取到了另一个目录」判成正确（与 `scripts/.runtime-budget-baseline.json` 的 `byPlatform` 同一条口径 —— 判据要在它跑得到的宿主上自证）。
  */
 function norm(p: string | null): string {
   const slashed = String(p ?? "").replaceAll("\\", "/");
@@ -120,12 +89,9 @@ describe("resolveGitDir：三种检出形态", () => {
   });
 
   /**
-   * 归一函数自己的判据（ISSUE #2087 的回归位）。
-   *
-   * 上面那组断言只用到 `norm()`，而**它坏掉的形态是恒绿**：开发身份下两种拼法本来就一致，
-   * 于是「大小写被当成事实」这件事只有节点身份能照出来 —— 那正是它一路活到每日档的原因。
-   * 所以这里直接喂两种拼法给它，并且**按平台各判一次**（posix 那一支断言的是
-   * 「不许顺手把大小写归一掉」，它要是也归一，取错目录就会被判成正确）。
+   * 归一函数自己的判据（ISSUE #2087 的回归位）。上面那组断言只用到 `norm()`，而**它坏掉的形态是恒绿**：开发身份下两种拼法本来就一致，
+   * 只有节点身份能照出「大小写被当成事实」——那正是它一路活到每日档的原因。所以这里直接喂两种拼法给它，并且**按平台各判一次**：
+   * posix 那一支断言「不许顺手把大小写归一掉」，否则取错目录会被判成正确。
    */
   it("norm() 按平台归一：win32 连大小写一起，posix 只动分隔符", () => {
     const slashed = "C:/Windows/Temp/git-dir-x/repo/.git";

@@ -1,23 +1,7 @@
 /**
- * 「测试层裸 sleep 用在哪儿」门禁自测（规范 §11.14）。
- *
- * 判据的价值全在**判定口径**上，所以这里跑的是**真脚本**（临时仓库 + 只放被测文件），
- * 断言「该拦的拦、不该误伤的放过」。六条口径各有执行者：
- *
- *   ① **赌时间**（该拦）：`await new Promise(r => setTimeout(r, 50))` 单独成句，
- *      等的是状态落定 —— 条件成立时照样等满、不成立时只留一句「超时」。
- *   ② **声明豁免**（该放）：站点上方写着 `// sleep-ok: <理由>` —— 这是「等一个
- *      不会发生的事」/「mock 内部延迟」/「必须真挂钟」三类的登记方式。
- *   ③ **空声明**（该拦）：只有标签、后面空着，与没有声明等价（同 §11.19 的口径）。
- *   ④ **字符串 / 注释里的站点**（该放）：本站自己的自测夹具里就写着这个形态 ——
- *      判据去判自己的夹具是 §11.18.3.1 记过的坑（走 `maskNonCode`）。
- *   ⑤ **没被 await 的 Promise**（该放）：站点不是「等这条语句过去」，而是别的东西
- *      （例如丢给 `Promise.all` 的填充项）。
- *   ⑥ **硬闸**：非豁免站点命中即阻断；`--update` / `--strict` 是断头的
- *      （ISSUE #1811 收尾时从棘轮翻上来，基线文件已删）。
- *
- * ⚠️ 本文件自己**不进扫描面**（`FIXTURE_SKIP`）：它是喂给判据的被测字符串，
- * 判它等于判自己的量具 —— 与 `tests/test-concurrency-gate.test.ts` 同一取舍。
+ * 「测试层裸 sleep」门禁自测（§11.14）：真脚本 + 临时仓库，判「该拦的拦、该放的放」。①赌时间的裸 setTimeout 拦；
+ * ②`sleep-ok: <理由>` 豁免；③空声明同无声明、拦；④字符串/注释站点放行（`maskNonCode`，§11.18.3.1）；
+ * ⑤未 await 的 Promise 放行；⑥硬闸命中即阻，`--update`/`--strict` 断头（#1811）。本文件自身在 `FIXTURE_SKIP`。
  */
 import { execFileSync } from "node:child_process";
 /* `vi.spyOn(fs, …)` 要的是可写对象 ⇒ 必须 default 导入
@@ -54,13 +38,9 @@ const { scanFile, walk } = createRequire(import.meta.url)(SCRIPT) as {
 };
 
 /**
- * 在临时仓库里跑真脚本（cwd = 临时仓库根，只放被测文件 + 判据依赖）。
- *
- * 翻硬闸后**不再写基线文件**：判据没有基线可读、也没有 `--update` 可写；
- * 用例要验的正是「这个形态在无基线的档下会/不会红」。
- *
- * @param files 相对路径 → 内容
- * @param args 额外参数（如 --update / --report）
+ * 在临时仓库里跑真脚本（cwd = 临时仓库根，只放被测文件 + 判据依赖）。翻硬闸后不再写基线：
+ * 判据无基线可读、无 `--update` 可写，用例要验「无基线档下会/不会红」。
+ * @param files 相对路径 → 内容；@param args 额外参数（如 --update / --report）
  */
 function gate(
   files: Record<string, string>,
@@ -305,15 +285,9 @@ it("x", async () => {
 
 describe("裸 sleep 门禁：扫描期间文件消失（并发探针）", () => {
   it("读不到的文件返回 null，而不是把整个 D 组带崩", () => {
-    /* 现场：`tests/global-setup-cleanup.test.ts` 会在 `tests/` 下临时造
-       `.setup-cleanup-probe-<pid>-<ts>.test.tsx` 再删掉。同一份工作树里有两个
-       vitest 在跑时（并行会话，或本钩子的 C 组还没退干净），本判据就会
-       **「列到名字、读时已经没了」** —— 于是 D 组不是报出站点，而是带着一个
-       Node 栈崩掉（`ENOENT … .setup-cleanup-probe-….test.tsx`），表现成
-       「提交被拦下、报错里没有一个字指向改动」。
-       一个已经不存在的文件没有站点可言 ⇒ 返回 null 让调用方计数；
-       计数必须进结论行（`collect` 的 `vanished` 与 OK 那行的「另有 N 份未读」），
-       静默跳过就是 §13.5.12 那一族「判据自称在跑、实际没跑」。 */
+    /* `global-setup-cleanup.test.ts` 在 `tests/` 下造 `.setup-cleanup-probe-*.test.tsx` 再删；并行 vitest 下
+       本判据会「列到名字、读时已没」⇒ 整个 D 组带 Node ENOENT 栈崩掉，报错不指向改动。已不存在的文件
+       没有站点 ⇒ 返回 null 让调用方计数，且计数必须进结论行（否则落入 §13.5.12「自称在跑、实际没跑」）。 */
     const gone = path.resolve(__dirname, "..", "tests", `.setup-cleanup-probe-0-0.test.tsx`);
     expect(existsSync(gone), "夹具路径本身不该存在").toBe(false);
     expect(scanFile(gone)).toBeNull();
@@ -322,19 +296,10 @@ describe("裸 sleep 门禁：扫描期间文件消失（并发探针）", () => 
 
 describe("裸 sleep 门禁：扫描面在枚举途中消失（同族第 5 条）", () => {
   it("`walk` 对半路消失的目录降级为空，而不是把整个 D 组带崩", () => {
-    /* `scanFile` 那条挡的是**「列到名字、读时已没」**；这里挡的是同一个竞态的
-       另一个窗口 —— 递归枚举本身（`readdirSync`）撞上条目在两次调用之间被删，
-       抛的是 `ENOENT` 而**不是**从 `readFileSync` 出来的。
-
-       两份都是 `tests/global-setup-cleanup.test.ts` 那份瞬时探针造成的（它在
-       `tests/` 下写 `.setup-cleanup-probe-<pid>-<ts>.test.tsx` 再删）。只补前一个
-       等于把门禁的一半赌在时序上：命中哪个窗口取决于探针被删的那一刻 `walk`
-       走到了第几步，两个窗口都得接住。
-
-       造法：在 `readdirSync` 那一刻把目录删掉。用**真 syscall 竞态**造不稳定
-       （要卡在两次调用之间），所以这里替换掉那一刻的 `readdirSync`，让它在被
-       调用时先把目录删掉、再走原实现 —— 这样复现的是**同一个 ENOENT**，
-       且每次必现。 */
+    /* 与 `scanFile` 那条是同一竞态的另一个窗口：`readdirSync` 递归枚举时条目被删，抛 `ENOENT` 而非
+       `readFileSync`；来源同是 `global-setup-cleanup.test.ts` 的瞬时探针。只补前一个等于把门禁一半赌在
+       时序上，两个窗口都得接住。造法：替换那一刻的 `readdirSync`，先删目录再走原实现 ⇒ 复现同一个
+       ENOENT 且每次必现。 */
     const root = mkdtempSync(path.join(tmpdir(), "test-sleep-walk-"));
     try {
       const dir = path.join(root, "tests");

@@ -1,57 +1,7 @@
 /**
- * 「挂载即欠执行者」判据（台账 E3 收官）。
- *
- * 一句话：`src/server/api/root.ts` 每挂一个命名空间，它的**每一条 procedure**
- * 都必须在某个测试文件里被真正调用过。缺一条就红。
- *
- * 为什么判「有没有执行者」而不是「有没有测试文件」：E3 这条线一批批补下来
- * （project / task / setting / material / film / model / llm / skill /
- * workflowModel / generate / run），反复撞见同一个断层 —— **router 挂了、
- * 也能调通、但没有任何东西调用过它**。这种口坏掉时全绿：
- *  · `train.cancel`（炼丹功能已整体废弃删除）自数据层迁移起每次都 500
- *    （台账 F13），而它零执行者，所以那句 500 从来没有变成任何一条红；
- *  · `customNode.list` 把 `nodes` 写死成 `[]`、还顺手把整个 settings 回给客户端
- *    （本机路径与开关状态），零执行者、零消费方；
- *  · `post.getLatest` 那句注释写着「OWASP A01：要求已登录用户」，而
- *    `loginRequired` 默认 false ⇒ 匿名可读全表，且没人读它。
- *  后两个是本批删掉的。只补「每个 router 一份测试文件」挡不住第三条：文件在、
- *  某几条 procedure 照样零执行者 —— 本判据因此落到 procedure 粒度。
- *
- * 判据的两条腿（都不可省）：
- *  1. 测试文件要 **import 该 router 的文件闭包**（`workflow` 那种聚合 router
- *     把 procedure 拆在 `workflow-detail.ts` / `workflow-list.ts` 里，只认
- *     挂载文件会把它们的执行者判丢）；
- *  2. 同一个文件里要出现 `<procedureName>(` 这一调用形态。
- *     只认 (1) = 「有个测试文件提到过这个名字」；只认 (2) = 随便哪份测试里的
- *     `delete(` 都能冒充执行者。两条一起才既是「跑过」又是「跑的是这条」。
- *
- * 已知边界（写在判据旁边，不假装没有）：
- *  · 名字匹配是**文本级**的。若某条 procedure 的调用是 `caller()[name]()`
- *    这种拼出来的形态，本判据看不见 ⇒ 会报红。假红比假绿好修：改成显式调用；
- *    确实要留那种形态的，才在下面加一份带原因的豁免清单（装机时存量为零，
- *    所以现在还没有这条通道 —— 别为了一个不存在的调用方先把它建起来）。
- *  · 「有执行者」不等于「断言有效」。有效性由 `pnpm run check:all` 的 coverage
- *    门槛与逐批的反向验证负责，本判据只保证「不会有条口从来没人调用过」。
- *
- * ── 第二个维度：**消费方**（台账 E3′）────────────────────────────────
- *
- * 执行者保证「这条口坏掉时会红」，消费方保证「有人在用它」。两者不是一回事：
- * 一条口可以测试全绿、界面里一个字都没引用 —— 于是它慢慢烂掉，而烂掉的过程
- * 没人看见。本仓库的实例就是 `material.*`：三procedure 各有一整套归属用例
- * （100/100/95/80 那档），而素材库面板从头到尾走的是 REST 的 `/api/materials`
- * —— 同一套判据的两扇门，只有一扇有人走。另一扇不是「多一个入口」，是**多一份
- * 会漂移的实现**（§12.12），所以收口到有人走的那一侧。
- *
- * 判据：每条 procedure 必须能在 `src/**` 的**非测试**代码里找到一处点名它的引用
- * （三种形态见 `consumerNeedles()`），否则就必须出现在 `ZERO_CONSUMER` 里并写明
- * 「谁将来会接它」。登记表还要**双向不陈旧**：口删了登记还留着 = 红；消费方接上
- * 了登记还留着 = 红。
- *
- * 消费方维度的已知边界：
- *  · 剥注释用的是 `tests/helpers/strip-comments.ts`，它**不动行尾注释**（那需要真正的
- *    词法分析）。所以「`foo(); // 参考 task.detail`」这种尾注会被算成消费方 ——
- *    方向是假绿，出现时把那句尾注挪成整行注释即可（别去放宽判据）。
- *  · 只有测试在调 = 零消费方：`tests/` 与 `e2e/` 不在消费面内，这是刻意的。
+ * 「挂载即欠执行者」判据（台账 E3）：`src/server/api/root.ts` 每条 procedure 都须被测试真调用，否则红。
+ * 落到 procedure 粒度：`train.cancel`（500 零执行者，台账 F13）、`customNode.list`（`nodes` 写死 `[]` 且回吐 settings）曾全绿。
+ * 两条腿不可省：import router 的文件闭包（procedure 拆在 `workflow-*.ts`）且同文件出现 `<procedureName>(`；「消费方」见 `ZERO_CONSUMER`。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
@@ -296,17 +246,11 @@ describe("tRPC 挂载面：每条 procedure 都要有执行者（台账 E3）", 
 
 /* ── 第二个维度：消费方（台账 E3′）────────────────────────────────────────── */
 
-/** 「零消费方」登记表：口 → 为什么还留着。
- *
- *  这张表不是免罪牌：每条都要写清「谁将来接它」，并且**数量只许降不许升**
- *  （见 `登记表本身不陈旧` 那条用例）。要让这张表变长，得先动台账 E3′，
- *  而不是顺手加一行。
- *
- *  已收口的（不再需要登记，列在这里是为了别再加回来）：
- *   · `material.list` / `material.save` / `material.delete` —— 与 REST 的
- *     `/api/materials` 是同一套归属判据的两扇门，界面只走 REST 那一扇；
- *   · `llm.complete` —— 与 `/api/llm` 重复（那一扇还多带流式与 tools），
- *     它带的 provider / taskType 枚举闸在 `llm.configSave` 上同样有用例。 */
+/**
+ * 「零消费方」登记表：口 → 为什么还留着。不是免罪牌：每条写清「谁将来接它」，数量只许降不许升（见 `登记表本身不陈旧`）。
+ * 要变长得先动台账 E3′。已收口的（别再写回来）：`material.*` 与 REST `/api/materials` 是同一套归属判据的
+ * 两扇门，界面只走 REST；`llm.complete` 与 `/api/llm` 重复（那扇还多流式与 tools）。
+ */
 const ZERO_CONSUMER: Record<string, string> = {
   "project.get":
     "画布加载目前从 `project.list` 的行里取 nodes/edges（`lib/project-canvas/canvas-store.ts`），这条按 id 的单读口还没有入口用它。要么把画布改成按需单读（比 list 省），要么删口。",

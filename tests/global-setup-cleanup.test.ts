@@ -1,23 +1,7 @@
 /**
- * 全局 setup 里的 **RTL 逐用例卸载**真的注册上了吗（§11.17 / §12.18）。
- *
- * 动因：这行注册在本仓库**长期是死的**，而且死得完全静默。
- * `@testing-library/react` 只在「**那一刻 `afterEach` 是函数**」时才注册自动清理
- * —— 源码里就是一行 `if (typeof afterEach === "function") { afterEach(cleanup); }`
- * —— 而本仓库 `globals: false`（`vitest.config.ts`）
- * ⇒ `globalThis.afterEach` 是 `undefined` ⇒ 那行 `if` 从不成立、清理**从不发生**。
- *
- * 后果不是「少卸载一次」这么轻：一次用例里挂上的组件会留到同文件的下一条用例，
- * 其间 React scheduler 还排着的活（`setImmediate`）会在 jsdom 环境被拆掉之后落地
- * —— 现场是一句 `ReferenceError: window is not defined`，它**不是**任何一条用例的
- * 断言红，而是被打成全量跑的 **unhandled error**、把 `pnpm test` 的退出码打成非零。
- * 也就是「红指向的东西不是判据」（同 §11.13 里那两条同样形态的读数）。
- *
- * 判据形状：**不能纯文本判**。「`tests/setup.ts` 里出现过 `cleanup`」与「清理真的
- * 注册上了」是两件事 —— 前者在把注册挪进一个永远不执行的 `if` 里时照样为真。
- * 所以这里**起一份最小用例**（`vitest run`）去真跑：探针用例内挂一个组件，同文件
- * 下一条用例断言它已被卸载。清理没注册时挂载的容器会留在 `document.body` 里。
- * 这同时把「文件写入端」的错也照出来（`setup.ts` 挂不上、或 `setupFiles` 指错）。
+ * 全局 setup 里的 **RTL 逐用例卸载**真的注册上了吗（§11.17 / §12.18）。该注册在本仓**长期是死的、且死得完全静默**：`@testing-library/react` 只在「那一刻 `afterEach` 是函数」时才注册自动清理（源码 `if (typeof afterEach === "function") { afterEach(cleanup); }`），而本仓 `globals: false` ⇒ `globalThis.afterEach` 是 `undefined` ⇒ 那行 `if` 从不成立、清理**从不发生**。
+ * 后果不只「少卸载一次」：组件留到同文件下一条用例，React scheduler 还排着的活（`setImmediate`）在 jsdom 环境被拆掉之后落地——现场 `ReferenceError: window is not defined`，它**不是**任何一条用例的断言红，而是被打成全量跑的 **unhandled error**、把 `pnpm test` 退出码打成非零（「红指向的东西不是判据」，同 §11.13）。
+ * 判据**不能纯文本判**（「`tests/setup.ts` 里出现过 `cleanup`」与「清理真的注册上了」是两件事），所以起一份最小用例真跑（`vitest run`）：探针用例内挂一个组件，同文件下一条断言它已被卸载（清理没注册时挂载容器会留在 `document.body`）；这同时把「文件写入端」的错也照出来（`setup.ts` 挂不上、或 `setupFiles` 指错）。
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -50,18 +34,9 @@ describe("清理探针", () => {
 `;
 
 /**
- * node 档的反向探针：DOM 测试栈**不该**被载进来。
- *
- * 这一格守的是这次省下来的那笔钱。`tests/setup.ts` 此前静态 import RTL + jest-dom，
- * 于是 node 档（面最大那一档）每一份文件都要把用不上的 DOM 栈载一遍 ——
- * 同一批 60 份最便宜的 node 档文件实测 `Duration 25.69s (setup 70% …)`，
- * 改成按 `document` 条件加载后是 `12.22s (setup 8%)`。
- *
- * 为什么用「真跑一份 node 档探针」而不是读 `setup.ts` 的文本：本文件头就写着
- * **纯文本判不住** ——「出现过 `cleanup`」与「注册上了」是两件事，反过来也一样：
- * 文本里没有 `import "@testing-library/jest-dom/vitest"` 可以是静态 import 换成了
- * `require`、也可以是 dynamic import 被 vite 提前解析了。看**结果**（匹配器在不在
- * `expect` 上）才对应到那笔装载到底发生没发生。
+ * node 档的反向探针：DOM 测试栈**不该**被载进来。`tests/setup.ts` 此前静态 import RTL + jest-dom，node 档（面最大那一档）每份文件都要把它们载一遍 ——
+ * 同一批 60 份最便宜的 node 档文件实测 `Duration 25.69s (setup 70% …)`，改成按 `document` 条件加载后是 `12.22s (setup 8%)`。为什么真跑一份 node 档探针
+ * 而不是读 `setup.ts` 的文本：本文件头就写着**纯文本判不住**，反过来也一样 —— 文本里没有 `import "@testing-library/jest-dom/vitest"` 可以是静态 import 换成了 `require`、也可以是 dynamic import 被 vite 提前解析；看**结果**（匹配器在不在 `expect` 上）才对应到那笔装载到底发生没发生。
  */
 const NODE_PROBE = `import { expect, it } from "vitest";
 
@@ -72,14 +47,9 @@ it("node 档不载 DOM 测试栈", () => {
 `;
 
 /**
- * 探针必须写在**仓库树内**：`vitest.config.ts` 两个 project 的 `include` 都是
- * `src/**` / `tests/**`，树外的一份临时文件会被 `No test files found` 过滤掉
- * （实测过），于是探针会以「没跑」的形态给出假绿。
- *
- * `name` 决定探针落进哪一档：`.test.tsx` 被 `DOM_TEST_GLOBS` 接走（DOM 档），
- * `.test.ts` 留在 node 档。两档的 include/exclude 是同一份 glob 的两面，
- * 所以「写哪个扩展名」就是「测哪一档」——不另配 `--project`，那等于在这里
- * 重抄一遍归属判据（漂移是静默的）。
+ * 探针必须写在**仓库树内**：`vitest.config.ts` 两个 project 的 `include` 都是 `src/**` / `tests/**`，树外的一份临时文件会被 `No test files found`
+ * 过滤掉（实测过），于是探针会以「没跑」的形态给出假绿。`name` 决定探针落进哪一档：`.test.tsx` 被 `DOM_TEST_GLOBS` 接走（DOM 档）、`.test.ts` 留在 node 档 ——
+ * 两档的 include/exclude 是同一份 glob 的两面，所以「写哪个扩展名」就是「测哪一档」，不另配 `--project`（那等于在这里重抄一遍归属判据，漂移是静默的）。
  */
 function runProbe(source: string, name: string): { code: number; output: string } {
   const file = path.join(

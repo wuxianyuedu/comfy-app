@@ -1,11 +1,7 @@
 /**
- * CHANGELOG 碎片门禁自测（ISSUE #408「changelog 经常改动，总是冲突」）。
- *
- * 这条门禁的价值全在判定口径上：太松 → 碎片写成什么都放行，发版并入时才发现；
- * 太紧（比如把 README.md 也当碎片校验）→ 成员直接删门禁。用「临时仓库 + 只放
- * 被测碎片」跑真脚本，断言「该拦的拦、不该误伤的放过」。
- *
- * 规范：docs/standards/13-提交与-code-review.md §13.10.5
+ * CHANGELOG 碎片门禁自测（ISSUE #408「changelog 经常改动，总是冲突」）。太松 → 碎片写成什么都放行、发版并入
+ * 才发现；太紧（如把 README.md 也当碎片校验）→ 成员直接删门禁。用「临时仓库 + 只放被测碎片」跑真脚本，
+ * 断言「该拦的拦、不该误伤的放过」。规范：docs/standards/13-提交与-code-review.md §13.10.5
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";

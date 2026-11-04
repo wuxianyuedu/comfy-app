@@ -1,21 +1,7 @@
 /**
- * `quality-gate` 两份实现（`scripts/quality-gate.mjs` / `scripts/quality-gate.ps1`）
- * 里那张门禁表的**唯一一份解析器**（§12.18 复用优先）。
- *
- * 为什么要解析而不是 import：`quality-gate.mjs` 末尾是 `process.exit(main())`，
- * import 它等于**真跑一遍门禁**（起 pnpm、跑 vitest），用例里不可能这么做。所以
- * 「这一档登记成什么」只能从源码形状上读 —— 与 `tests/ps1-consistency.test.ts`
- * 早已在做的是同一件事，这里把那份内联实现收成共享件。
- *
- * 消费方（判据）：`tests/ps1-consistency.test.ts` —— 两侧的**门禁名集合**是否一致
- * （增减只改一侧），以及每一档的按需标记两侧是否对得上。
- *
- * ⚠️ 判据要按**入口**（`args` 里那个脚本路径）认那一档，不按名字：改名就能绕过的门禁
- * 等于没有。这一点与 `storybook-check.mjs` 的「不按 `xxxVariants` 命名判」同一条理由。
- *
- * 两份实现的形状（各自的历史都在文件里写着，这里只描述现状）：
- *   · `.mjs`：`GATES` 对象的每一项是 `  key: { … args: ["…"], … run: false, }`；
- *   · `.ps1`：每一项是 `@{ Name = "key"; … Args = @("…"); Run = $false }`，可跨行。
+ * `quality-gate` 两份实现（`scripts/quality-gate.mjs` / `.ps1`）门禁表的唯一解析器（§12.18）：
+ * 不能 import（`.mjs` 末尾 `process.exit(main())`，等于真跑一遍门禁），只能读源码形状；消费方
+ * `tests/ps1-consistency.test.ts` 比对两侧集合；判据按入口脚本认档而非名字（改名即可绕过）。
  */
 
 import { stripComments } from "./strip-comments";
@@ -31,28 +17,18 @@ export type GateEntry = {
 };
 
 /**
- * 去掉注释再解析 —— 不剥注释会咬到「解释这条门禁为什么不进 `all`」的那些 JSDoc，
- * 于是同一段文字既是文档又被当成登记（实测：某一项的注释里提到了另一个入口脚本，
- * 不剥就会把那一档认成别的档）。
- *
- * 走共享件（ISSUE #2969）：`.ps1` 的 `#` 只去整行、JS 的 `//` 只去行尾 ——
- * 与 `tests/helpers/strip-comments.ts` 同一份状态机（引号内的 `#` / `//` 都是代码）。
- * 这里原先是内联的两条 replaceAll：块注释那条会把字符串里的 `/*` 当注释起点
- *（吃掉后文真代码），行注释那条会把 `http://…` 截断。
+ * 去注释再解析：不剥会咬到「解释这档为什么进不了 `all`」的 JSDoc，同一段文字既当文档又被当登记
+ * （实测：注释里提到另一个入口脚本就会认错档）。走 `strip-comments` 共享件（ISSUE #2969）——
+ * 原内联两条 replaceAll 会把字符串里的注释起点吃掉、把 `http://…` 截断。
  */
 function stripForParsing(src: string): string {
   return stripComments(stripComments(src, { syntax: "hash" }), { trailing: true });
 }
 
 /**
- * 从 `.ps1` 源码里取出门禁块。
- *
- * 按**块**切分（`@{ … }`）而不是按行或前瞻：`.ps1` 的注释单独占行（`# …`）、
- * 块可跨行，用前瞻式正则会在「换行 / 注释 / 块尾形态」上静默取错 ——
- * `ps1-consistency` 的历史注释记着实测第一版就把 `typecheck` 当成了按需档。
- *
- * @param src `scripts/quality-gate.ps1` 的全文
- * @returns 每一块一条；名字取不到（形状不认识）的不返回
+ * 从 `.ps1` 源码取门禁块：按块（`@{ … }`）切分，不按行或前瞻 —— 注释独占行、块可跨行，
+ * 前瞻正则会在换行/注释/块尾静默取错（实测第一版把 `typecheck` 当成按需档）；名字取不到的不返回。
+ * @param src `scripts/quality-gate.ps1` 全文  @returns 每块一条（形状不认识的跳过）
  */
 export function parsePs1Gates(src: string): Array<GateEntry> {
   // **只在 `$Blocks` 数组里找**（与 `.mjs` 侧只在 `GATES` 里找同一条纪律）。
@@ -76,13 +52,9 @@ export function parsePs1Gates(src: string): Array<GateEntry> {
 }
 
 /**
- * 从 `.mjs` 源码的 `GATES` 块里取出门禁项。
- *
- * 每一项从 `  key: {` 到下一个 `  key: {`（或块的收尾 `};`）为止 —— 与
- * `ps1-consistency` 的同名口径逐字一致（那里先用的就是这个正则）。
- *
- * @param src `scripts/quality-gate.mjs` 的全文
- * @returns 每一项一条
+ * 从 `.mjs` 的 `GATES` 块取门禁项：每项从 `  key: {` 到下一个 `  key: {`（或收尾 `};`）为止，
+ * 与 `ps1-consistency` 的口径逐字一致。
+ * @param src `scripts/quality-gate.mjs` 全文  @returns 每项一条
  */
 export function parseMjsGates(src: string): Array<GateEntry> {
   const start = src.indexOf("const GATES = {");
@@ -105,15 +77,9 @@ export function parseMjsGates(src: string): Array<GateEntry> {
 }
 
 /**
- * 按**入口脚本文件名**取那一档（不按名字，理由见文件头）。
- *
- * 只在**唯一**命中时返回它；0 条或多条时返回 `null` —— 「按入口找不到」正是判据
- * 需要看见的形状（改名 / 删档 / 入口挪位都会变成它），而不是让调用方拿到 `undefined`
- * 再静默跳过断言。
- *
- * @param gates 某一侧解析出来的门禁
- * @param scriptName 入口脚本的文件名，如 `shell-gate.mjs`
- * @returns 唯一命中的那一档；不唯一时 null
+ * 按入口脚本文件名取那一档（不按名字，理由见文件头）：只在唯一命中时返回它；0 条或多条返回 `null` ——
+ * 「按入口找不到」正是判据要看见的形状（改名/删档/入口挪位即此），而不是让调用方拿 `undefined` 静默跳过。
+ * @param gates 某一侧解析的门禁  @param scriptName 入口文件名，如 `shell-gate.mjs`  @returns 唯一命中或 null
  */
 export function gateByEntry(gates: Array<GateEntry>, scriptName: string): GateEntry | null {
   // `.ps1` 里的路径写的是反斜杠（`scripts\\shell-gate.mjs`），`.mjs` 里是正斜杠 ——

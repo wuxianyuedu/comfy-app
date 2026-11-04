@@ -1,16 +1,7 @@
 /**
- * `check-doc-mirror-pairing.cjs` 的判据 —— 「改了 `SCOPED_DOCS` 的文档源，就必须同批
- * 带上 `docs/generated/**` 的镜像」（规范 §13.5.5，挂在 pre-commit 的 D0 形态档）。
- *
- * 这条判据存在的理由是**红会落到别人身上**：平台那一格 `生成态文档与源同步` 跑的是
- * `--check --autofix`，就地修好再判，所以「漏带镜像」在它那里从不出现；唯一还照得出它的
- * 是 `受影响用例` 里 `tests/check-doc-references.test.ts` 的「绿的时候不多写」—— 那一格
- * 按增量面命中，于是 2026-10-21 一天里三次，红都落在**下一个动文档面的人**身上。
- *
- * 夹具用 `createGateRepo()`（与其余 D0 判据同一份）：这条判据的**被测输入是暂存区本身** ——
- * 不 `git add` 就没有任何输入，而拿真仓库的索引做实验会污染同一台机上并行的检出。
- * `SCOPED_DOCS` 由 `copyGateDeps()` 随脚本一起带进沙箱（脚本 `require("./doc-facts.cjs")`），
- * 所以沙箱里用的就是真清单，不在测试里抄第二份文档名。
+ * `check-doc-mirror-pairing.cjs`：改了 `SCOPED_DOCS` 的文档源必须同批带 `docs/generated/**` 镜像（规范 §13.5.5，pre-commit D0）。
+ * 平台那格 `--check --autofix` 就地修，漏带从不出现；只有增量命中的 `check-doc-references` 照得出来——2026-10-21 三次红都落在
+ * 下一个动文档面的人身上。夹具 `createGateRepo()`：被测输入即暂存区本身（拿真索引会污染并行检出），清单随 `copyGateDeps()` 带入。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";

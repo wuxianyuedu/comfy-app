@@ -102,10 +102,8 @@ function localPathOf(ref: string | null): string | null {
 }
 
 /**
- * 用 ffmpeg 把本地片段合成为成片 mp4（最佳努力）：
- *  - 视频片段 → 按 duration 截断、缩放到成片画幅
- *  - 仅图片的镜头 → 按 duration 以静帧占位
- * 任一片段不可用则跳过；无可用本地片段则仅返回清单。
+ * 用 ffmpeg 把本地片段合成为成片 mp4（最佳努力）：视频按 duration 截断并缩放到成片画幅，仅图片的镜头
+ * 按 duration 以静帧占位；任一片段不可用则跳过，无可用本地片段则仅返回清单。
  */
 export async function renderComposition(
   plan: CompositionPlan,

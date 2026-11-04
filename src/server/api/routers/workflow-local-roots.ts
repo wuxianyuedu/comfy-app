@@ -1,11 +1,7 @@
-/* workflow 路由共享的「本地工作流目录」事实与安全边界。
- *
- * 从 workflow.ts（943 行）拆出的第 0 块：list 的磁盘扫描、create 的导入守卫
- * 读的是**同一组根目录**，此前散在大文件两处的 helper 各写一份——更糟的是
- * 两处读 `LOCAL_WORKFLOWS_PATH` 的方式不同（扫描用 `readEnvVar` 实时读 .env
- * 文件、守卫用 `process.env` 启动快照），`.env` 新增目录后界面会出现
- * 「待导入」项、点击导入却被守卫拒绝。现在两个口径收成本文件的一份出处。
- */
+/* workflow 路由共享的「本地工作流目录」事实与安全边界（workflow.ts 拆出的第 0 块）：list 的磁盘扫描与
+ * create 的导入守卫读**同一组根目录**。此前两处各写一份 helper，且读 `LOCAL_WORKFLOWS_PATH` 的口径不同
+ * （扫描用 `readEnvVar` 实时读 .env、守卫用 `process.env` 启动快照）：`.env` 新增目录后界面出现
+ * 「待导入」项、点击导入却被守卫拒绝。两个口径现收成本文件的一处出处。 */
 import path from "node:path";
 import { hash } from "node:crypto";
 
@@ -48,14 +44,10 @@ function pendingId(absPath: string): string {
   return `pending-${hash("sha1", absPath, "hex").slice(0, 12)}`;
 }
 
-/* 追加到 `list` 里的「本地待导入」占位行的形状。
- * 刻意与数据库里 `enriched` 出来的行保持结构一致，
- * 让前端的 `LibraryRow` 合并不必做额外适配。
- *
- * `createdAt` / `paramMap` 两处**必须与 `WorkflowListRow` 同形状**：
- * 同一份 payload 里出现两种形状（一处 `Date` 一处 ISO 串、一处权威类型一处
- * 泛对象）时，视图读任何一行都得先判形状 —— 那正是 #1460 要消掉的东西。
- * 两处都是 `Date`（superjson 过线保真）与 `WorkflowParamMap`（同一份读边界）。 */
+/* 追加到 `list` 里的「本地待导入」占位行的形状：刻意与库里 `enriched` 出来的行同构，让前端 `LibraryRow`
+ * 合并不必额外适配。`createdAt` / `paramMap` **必须与 `WorkflowListRow` 同形状** —— 同一份 payload 里两种
+ * 形状（一处 `Date` 一处 ISO 串、一处权威类型一处泛对象）会让视图每读一行都得先判形状，正是 #1460
+ * 要消掉的东西。两处都用 `Date`（superjson 过线保真）与 `WorkflowParamMap`（同一读边界）。 */
 type LocalPendingRow = {
   createdAt: Date;
   defaultMode: string | null;

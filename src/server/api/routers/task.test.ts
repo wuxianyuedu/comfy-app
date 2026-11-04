@@ -1,13 +1,9 @@
 import type * as LoggerModule from "~/lib/core/logger";
 import type * as FsPromises from "node:fs/promises";
 /**
- * task.router 集成测试。
- *
- * mock 边界：~/server/db（内存数据库替身）、~/server/better-auth、
- * ~/lib/core/logger（静音，同时给「失败必须有日志」那条硬规则留一个可断言的句柄）、
- * fs/promises（替换 `stat` 与 `rm` —— openFolder 的「目录存在」分支与 delete 的
- * 产物清理都不再触真实磁盘，用例也不许往仓库的 public/generated 里写删）。
- * repository 与限流中间件均走真实实现。
+ * task.router 集成测试。mock 边界：~/server/db（内存数据库替身）、~/server/better-auth、~/lib/core/logger（静音，同时给
+ * 「失败必须有日志」硬规则留可断言句柄）、fs/promises（替换 `stat`/`rm` —— openFolder 的「目录存在」分支与 delete 的产物清理
+ * 都不触真实磁盘，也不许往仓库 public/generated 写删）。repository 与限流中间件均走真实实现。
  */
 import path from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";

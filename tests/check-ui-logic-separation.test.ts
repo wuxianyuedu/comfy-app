@@ -1,15 +1,7 @@
 /**
- * `scripts/check-ui-logic-separation.cjs`（AGENTS 硬规则 10 的执行者）。
- *
- * 这条门禁在 ISSUE #1811 收尾时**从棘轮翻成硬闸**：S* 存量已清零，棘轮车道没有
- * 成员，`--update` 写回去的永远是一份空账 —— 所以基线文件已删、`--update` /
- * `--strict` 已不存在（它们此前还带着 ISSUE #1359 修过的那扇「0 基线短路」门，
- * 现在整条通道都没了）。用例改判「命中即退 1」与「那两个旗标是断头的」，
- * 并保留三条指标 / 三类豁免 / 硬规则 H1-H2 的判决覆盖。
- *
- * 形状照 `tests/check-code-duplication.test.ts`：脚本按 `__dirname/..` 定扫描根，所以把它
- * **复制进一次性 workspace 的 `scripts/`** 再 `execFileSync` —— 绝不往真仓库的 `src/` 里种文件
- * （本机有并行会话共用同一份检出，一瞬间的探针文件会喂给别人的 pre-commit）。
+ * `scripts/check-ui-logic-separation.cjs`（AGENTS 硬规则 10 的执行者）。ISSUE #1811 收尾时从棘轮翻成硬闸：
+ * S* 存量清零，`--update` / `--strict` 与基线文件已删（连带 #1359 的「0 基线短路」门），故用例判「命中即退 1」。
+ * 同 `check-code-duplication`：复制进一次性 workspace 的 `scripts/` 再 `execFileSync`，绝不往真 `src/` 种文件（并行会话共用检出）。
  */
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 

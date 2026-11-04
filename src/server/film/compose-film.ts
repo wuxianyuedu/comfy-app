@@ -1,13 +1,7 @@
 /**
- * `compose-film.ts` —— 服务端出片那半段：ffmpeg 探测 / 执行 / 合成 / 回写统一项目
- * （ISSUE #1257 从 `orchestrator.ts` 下沉出来：那个文件已经涨到越过规范 §12.6 的文件行数上限，拆法是「把出片那半段整块搬走」）。
- *
- * 为什么是「合成 + 回写」一起搬：`syncFilmToProject` 只被 `composeFilm` 调（合成完成
- * 才谈得上回写）。只搬 `composeFilm` 而把回写留在编排侧，新模块就要反向 import
- * `./orchestrator`，而编排要 import 合成 —— 直接成环。这条坑在 issue 里记着，别再试。
- *
- * 方向因此是单向的一条链：`orchestrator`（剧本 → 分镜 → 建片 → 逐镜 → 监看）
- * → `compose-film`（出片 + 回写）→ `film-log` / `compose-steps`（两侧共用的叶子）。
+ * `compose-film.ts` —— 服务端出片那半段：ffmpeg 探测 / 执行 / 合成 / 回写统一项目（ISSUE #1257
+ * 从 `orchestrator.ts` 下沉，因它越过 §12.6 行数上限，拆法是把这半段整块搬走。合成与回写一起搬：
+ * `syncFilmToProject` 只被 `composeFilm` 调，回写留在编排侧就要反向 import 成环（issue 记着）；方向单向：`orchestrator` → 本模块 → `film-log` / `compose-steps`（共用叶子）。
  */
 import "server-only";
 

@@ -1,16 +1,7 @@
 /**
- * 回归护栏：**脚本执行命令行必须能打出来**（唯一出口 `launcher-core/command-echo.mjs`）。
- *
- * 背景：脚本此前只打印步骤名（「1/4 执行 pnpm build」/「步骤 1/2：pnpm install」），
- * 真正被执行的那条命令行只在**失败分支**里出现 —— 顺利时看不到、出问题时才补一句，
- * 而 Windows 上「pnpm」到底被解析成哪一种形态（无扩展名 shim / `.ps1` / `.cmd`）
- * 恰恰只能从命令行看出来（ISSUE #576 的四轮现场都是这么收敛的）。
- *
- * 本用例钉住三件事：
- *   1. 格式化：必要才加引号、空参数不丢、输出单行；
- *   2. 回显出口：`>>> ` 前缀、sink 可注入、可用环境变量整体关掉；
- *   3. 接线：`shell.mjs` 的执行出口（`runSync` / `spawnInGroup`）真的把命令行打出来 ——
- *      只测格式化函数会漏掉「函数写了但没接上」，那正是这类能力最常见的失效形态。
+ * 回归护栏：脚本执行命令行必须能打出来（唯一出口 `launcher-core/command-echo.mjs`）。Windows 上
+ * 「pnpm」被解析成哪种形态（shim / `.ps1` / `.cmd`）只能从命令行看出（ISSUE #576）。钉三件事：
+ * 格式化、回显出口（`>>> ` 前缀、sink 可注入、可关）、接线（`runSync`/`spawnInGroup` 真打出来）。
  */
 import fs from "node:fs";
 import path from "node:path";

@@ -1,15 +1,7 @@
 /**
- * REST 错误出口的唯一形态（ISSUE #573）。
- *
- * 背景：15 个 route / 18 处各自手写
- *   { error: { code: "auth.required", message: "未登录或会话已失效" } }
- * 与 `core/errors.ts` 的 `AuthError` 默认值逐字相同。那时改文案要改 18 处，
- * 且新 route 会照着再抄一份 —— 这正是「本应复用却自己实现」的典型。
- *
- * 本测试钉住三件事：
- * 1. 未登录的 401 信封与 `AuthError` 是**同一份**（不是长得像的第二份）；
- * 2. 非 AppError 一律 500 / internal，且**不泄露 stack**；
- * 3. REST route 里不再出现手写信封字面量（防回潮）。
+ * REST 错误出口的唯一形态（ISSUE #573）：15 个 route / 18 处手写信封与 `AuthError` 默认值逐字相同，改文案要改 18 处、新 route 还会照抄。
+ * 钉三件事：未登录 401 信封与 `AuthError` 是同一份；非 AppError 一律 500 / internal 且不泄露 stack；
+ * REST route 里不再出现手写信封字面量（防回潮）。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";

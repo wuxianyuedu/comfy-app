@@ -1,32 +1,7 @@
 /**
- * 远端模型条目的线上契约（台账 E4 的第五格）：弹窗草稿 → 条目 → `configSave` 入参
- * → 落库 → 脱敏回读，必须是**同一枚模型**走完全程。
- *
- * 这一格修之前的形状是「三个各自自洽的名字」：
- *   · 弹窗草稿的字段叫 `model`（`remoteModelFieldSchema`），
- *   · 条目与库里那一列叫 `name`（`RemoteModelEntry`），
- *   · 而服务端 `configSave` 的入参里，`kind` 是一条**行内字面量枚举**
- *     `z.enum(["chat","image","video"])`，与 lib 里从 `REMOTE_MODEL_KINDS` 派生的那一份
- *     是两个独立真相。
- * 连接它们的是 `submitDialog()` 里手写两遍的 `name: addForm.model`。于是两种失效形态
- * 都不响：往用途词表里加一种（如 `audio`）时，弹窗选得到、条目类型也认（它由同一份词表
- * 派生），而落库那一步被服务端入参的 zod 拒掉 —— 表现是设置页保存时一句英文 zod 原文；
- * 把条目键写成草稿那一侧的 `model` 时更安静 —— 认不出 `name` 就**整条丢弃**，
- * 用户看到的是「刚加的模型没进列表」，而 tsc / eslint / 各份单测全绿
- * （草稿的 interface、controller 的参数形状、路由的入参各写一遍，谁都不引用谁）。
- *
- * 所以这里判四件事：
- *   ① 真草稿经真桥（`remoteModelEntryFromDraft`）产出的条目，被**真 router** 收下，
- *      并原样回读得到 —— 不造「我以为条目长这样」的夹具；
- *   ② `REMOTE_MODEL_KINDS` 里的**每一个**用途都存得进去 —— 这条就是「两份枚举」的
- *      语义判据：服务端那份若是抄的且少一个值，这里红（比 grep 那个字面量强 ——
- *      抄的那一份换任何写法都能骗过 grep，骗不过一次真调用）；
- *   ③ 键名漂移那一形（写 `model`、不写 `name`）被**拒**，且库里确实一行不落 ——
- *      静默丢条目与报错退出是两种完全不同的故障；
- *   ④ `hasApiKey` 是只读视图字段：客户端回写时带着它，**不许**凭空宣布「这条存过密钥」。
- *
- * mock 边界与同族那几份一致：只替内存库、会话与日志；router、仓储、入参 schema、
- * 脱敏回读（`getConfigForClient`）全部真实跑。
+ * 远端模型条目的线上契约（台账 E4 第五格）：弹窗草稿 `model` → 条目 `name` → `configSave` 入参 → 落库 → 脱敏回读须是同一枚模型。修前三处名字各自自洽：草稿 `remoteModelFieldSchema` 用 `model`、条目 `RemoteModelEntry` 用 `name`、服务端 `kind` 是行内 `z.enum(["chat","image","video"])` 而非 `REMOTE_MODEL_KINDS` 派生，靠 `submitDialog()` 手写两遍 `name: addForm.model` 连接（加 `audio` 被 zod 拒；写成 `model` 则整条静默丢弃）。
+ * 判四件事：① 真草稿经真桥 `remoteModelEntryFromDraft` 产出的条目被真 router 收下并原样回读；② `REMOTE_MODEL_KINDS` 每个用途都存得进去（服务端抄的那份少一个值即红，比 grep 强）；
+ * ③ 键名漂移（写 `model` 不写 `name`）被拒且库里一行不落（静默丢与报错是两种故障）；④ `hasApiKey` 是只读视图字段，客户端回写带它不许凭空宣布存过密钥。mock 只替内存库、会话与日志，router/仓储/schema/`getConfigForClient` 全真实跑。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as LoggerModule from "~/lib/core/logger";

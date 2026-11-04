@@ -1,26 +1,7 @@
 /**
- * 回归护栏：**Linux / macOS 首次上手链路的 `.env` 引导**（ISSUE #489）。
- *
- * 背景（实测复现，本机 Linux 干净检出）：
- *
- *   1. 文档 §9.1 与 README 的第一步都是 `cp .env.example .env`，但
- *      `.env.example` 里 `BETTER_AUTH_SECRET` 与两个 `BETTER_AUTH_GITHUB_*`
- *      都是**空串**，而 `src/env.js` 的 createEnv 配了
- *      `emptyStringAsUndefined: true` —— 空串等价于「没给」。于是照文档走的人
- *      拿到的是 `Invalid environment variables`，看不出是「值留空」。
- *      Windows 侧一直有 `scripts/prepare-local-run.ps1` 的第 4 步自动补齐
- *      （随机密钥 + OAuth 占位值），**Linux / macOS 没有任何等价物**。
- *   2. 更误导的是失败**发生的时机**：Next 会先打印
- *      `- Local: http://localhost:<port>` 与 `✓ Ready in 77ms`，之后才抛
- *      `Failed to load next.config.js`。用户读到的是「起来了但报错」，
- *      而真相是端口无人监听；且缺文件那条提示里的小贴士指向
- *      `tools/start/run-local.ps1`（Windows 专属，本模式明确不依赖）。
- *
- * 本用例钉死两条契约（反向验证：分别还原旧实现，对应用例必失败）：
- *   · `.env` 的生成/补齐有跨平台入口 `pnpm env:init`，且它生成的内容**真的**
- *     能让 `checkEnvFile` 通过（不是「脚本跑完了」就算数）；
- *   · `dev.mjs` / `start.mjs` 在**起 Next 之前**做预检并退出，
- *     从而不可能再出现「先 ✓ Ready 再崩」。
+ * 回归护栏：**Linux / macOS 首次上手链路的 `.env` 引导**（ISSUE #489）。照文档 `cp .env.example .env` 后密钥
+ * 与 OAuth 占位都是空串（`emptyStringAsUndefined`），报错 `Invalid environment variables` 且发生在 `✓ Ready`
+ * **之后**。钉两条契约：`pnpm env:init` 生成的内容真过 `checkEnvFile`；`dev.mjs`/`start.mjs` 起 Next 前预检退出。
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -52,13 +33,9 @@ afterEach(() => {
 });
 
 /**
- * 取一个脚本里的**相对** import 说明符（`./x` / `../x`）。
- *
- * 后缀面要比 `\.mjs` 宽（ISSUE #2562 的现场）：`scripts/launcher-core/shell.mjs` 早就
- * `import … from "../../src/lib/process/executable-resolve.ts"`（Node 的类型擦除让它能
- * 静态 import `.ts`），而那份 `.ts` 自己又 import 同目录的兄弟模块。只收 `.mjs` 的话，
- * 拷进临时检出的那一份会在**加载阶段**报 `ERR_MODULE_NOT_FOUND` —— 于是这条用例看到的
- * 是一段 ESM 解析栈，而不是它要判的「预检结论」。收 `.ts` / `.tsx` 之后闭包按事实走。
+ * 取一个脚本里的**相对** import 说明符（`./x` / `../x`）。后缀面要比 `\.mjs` 宽（ISSUE #2562）：`shell.mjs`
+ * 静态 import `.../executable-resolve.ts`（Node 的类型擦除允许），那 `.ts` 又 import 兄弟模块；只收 `.mjs`
+ * 时副本在**加载阶段**报 `ERR_MODULE_NOT_FOUND`。
  */
 function relativeImportsOf(entryFile: string): Array<string> {
   const src = fs.readFileSync(entryFile, "utf8");
@@ -73,12 +50,9 @@ function relativeImportsOf(entryFile: string): Array<string> {
 }
 
 /**
- * 把 `scripts/<entryRel>` 连同**逐层的相对依赖**一起复制进临时检出（保持相对路径形状）。
- *
- * 为什么不只拷入口：入口的依赖闭包会长。曾经只拷 `env-init.mjs` 就够，后来它
- * import 了 `launcher-core/standalone-runtime-env.mjs`，于是子进程报的是
- * `ERR_MODULE_NOT_FOUND` 的调用栈 —— 既不是预检结论也指不到业务原因，而用例只是
- * 「exit 1」。按闭包复制之后，这类漂移不会再以同一种令人误解的方式红。
+ * 把 `scripts/<entryRel>` 连同**逐层的相对依赖**一起复制进临时检出（保持相对路径形状）。不只拷入口：
+ * 依赖闭包会长。曾经只拷 `env-init.mjs` 就够，后来它 import 了 `launcher-core/standalone-runtime-env.mjs`，
+ * 子进程便报 `ERR_MODULE_NOT_FOUND` 调用栈 —— 既不是预检结论也指不到业务原因，而用例只是「exit 1」。
  */
 function copyScriptWithRelativeClosure(entryRel: string): string {
   /* 落点按**仓库根**相对计算，不是按 `scripts/` 相对（ISSUE #2562 的现场）：这条闭包
@@ -548,14 +522,11 @@ describe("dev/start 在起 Next 之前预检", () => {
         path.join(scriptsDir, "launcher-core", name),
       );
     }
-    // `shell.mjs` 静态 import `src/lib/process/executable-resolve.ts`（ISSUE #1327：
-    // 可执行形态判据的唯一实现）。副本里少这份，`dev.mjs` 在**加载阶段**就
-    // ERR_MODULE_NOT_FOUND，红出来的样子与本门禁无关（同上面那条注释）。
-    //
-    // **按链抄，不按一份文件抄**（ISSUE #1961）：那一份自己的依赖（现在有个叶子
-    // `platform.ts`）少一份同样在加载阶段就断 —— 而报错会指向与本门禁无关的地方
-    // （实测：`Cannot find module '…/src/lib/process/platform.ts'`）。
-    // 与 `tests/standalone-runtime.test.ts` 的判据同一条教训：逐份手抄必然漂。
+    // `shell.mjs` 静态 import `src/lib/process/executable-resolve.ts`（ISSUE #1327：可执行形态判据唯一实现）。
+    // 副本里少这份，`dev.mjs` 在**加载阶段**就 ERR_MODULE_NOT_FOUND，红出的样子与本门禁无关。
+    // **按链抄，不按一份文件抄**（ISSUE #1961）：它自己的依赖（现在有叶子 `platform.ts`）少一份同样断在
+    // 加载阶段，报错指向与本门禁无关的地方（实测 `Cannot find module '…/src/lib/process/platform.ts'`）。
+    // 与 `tests/standalone-runtime.test.ts` 同一条教训：逐份手抄必然漂。
     const processDir = path.join(ROOT, "src", "lib", "process");
     const resolveTo = path.join(tmp, "src", "lib", "process");
     fs.mkdirSync(resolveTo, { recursive: true });

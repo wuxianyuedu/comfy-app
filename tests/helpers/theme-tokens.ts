@@ -1,33 +1,7 @@
 /**
- * tests/helpers/theme-tokens.ts — 主题 token 的「真解析」取值器（测试基建）
- * ===========================================================================
- *
- * 为什么不直接用 jsdom 的 `getComputedStyle`：**jsdom 不解析 `var()` 链**。
- * 别名改成 `--card: var(--color-surface)` 之后，jsdom 返回的是字面量
- * `"var(--color-surface)"` 而不是 `#ffffff`，于是「两态取值是否不同」这类
- * 断言会全部误报（实测：`expected 'var(--color-bg)' not to be 'var(--color-bg)'`）。
- * 真实浏览器解析是对的（本文件的做法在 Chromium 里逐一核对过），但那不适合
- * 每个 `pnpm test` 都拉起浏览器。
- *
- * 所以这里自己实现两件事，判据不依赖运行时的级联实现：
- *
- * 1. **级联**：用 Tailwind 的 PostCSS 插件把 `globals.css` 编成产物，按
- *    PostCSS 的节点顺序收集 `:root` / `.dark` / `:root:not(.dark)` /
- *    `:root, :host` 等**能命中 `<html>` 的选择器**里的自定义属性声明，
- *    按「层外声明 > 层内声明」「同层内后写胜出」的规则算出有效值。
- * 2. **引用解析**：`var(--x)` 递归求值，带环检测与 fallback 支持。
- *
- * 编的是**固定输入源**的那份产物（`withPinnedSources`）：既不是「全仓扫类名」那一遍
- * （实测 21109ms → 121ms，且产物不再随无关源码变），也不是源码文本本身 —— 判据读的还是
- * Tailwind 真编出来的级联结果，口径不变。
- * `globals.css` 现在自带**两棵生产扫描根**（`@source`），那两个入口都会先把它们剥掉再钉自己
- * 的输入 —— 不剥就成了「theme 判据顺带扫全 src」，#1336 那笔账会以另一种形状回来。
- *
- * 本文件另有**一个**入口不走这条加工：`compiledCssPinnedTo`，它按参数把扫描面钉回具体目录，
- * 用来回答「这一批文件被扫进产物时会生成哪些类」（token 取值判据不需要它，正文卫生判据需要）。
- *
- * 判据能覆盖本文件关心的全部失效模式：别名取错态（浅/深相同）、引用成环、
- * 引用到一个未定义的 token。
+ * tests/helpers/theme-tokens.ts — 主题 token 的「真解析」取值器（测试基建）。判据：别名取错态、引用成环、
+ * 引用到未定义 token。jsdom 不解析 `var()` 链（返回字面量 `var(--x)`，断言全误报），所以用 Tailwind 的
+ * PostCSS 插件把 `globals.css` 编成产物，按节点顺序取命中 `<html>` 的声明（层外>层内、同层后写胜出）再递归求值 `var()`。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -45,15 +19,9 @@ const tailwind = twModule.default ?? (twModule as unknown as () => postcss.Accep
 const GLOBALS_CSS = path.resolve(__dirname, "../../src/app/globals.css");
 
 /**
- * 选择器能否命中 `<html>`（本项目的主题类挂在这个元素上）。
- *
- * 接受的形态只有四种（编译产物里实际出现的）：
- * - `:root` / `:host`            —— 两态都命中（`@theme` 的浅色默认档）
- * - `.dark`                      —— 仅深色；且必须**不带**后代/子选择器
- * - `:root:not(.dark)`           —— 仅浅色
- * - `:root, :host`（逗号组）      —— 逐个判
- *
- * 带后代 / 子选择器（`.dark select`）的一律不算 —— 那命中的是别的元素。
+ * 选择器能否命中 `<html>`（本项目的主题类挂在这个元素上）。只接受编译产物里实际出现的四种：
+ * `:root` / `:host`（两态都命中）、`.dark`（仅深色，且必须**不带**后代/子选择器）、`:root:not(.dark)`
+ * （仅浅色）、`:root, :host` 逗号组（逐个判）。带后代 / 子选择器（`.dark select`）的一律不算 —— 那命中的是别的元素。
  */
 function selectsHtml(selector: string): boolean {
   return selector.split(",").some((raw) => {
@@ -105,12 +73,9 @@ let compiled: Promise<string> | null = null;
 const pinnedCompiles = new Map<string, Promise<string>>();
 
 /**
- * 这三条 utility 是**判据自己要读的**（`theme-dark-token-cascade.test.ts` 里那三条
- * `css` 正则的来源）。Tailwind v4 只把「在源码里被用到的」类编进产物，所以关掉自动扫描之后
- * 必须显式点名，否则 `.bg-card {}` 那条规则根本不出现、断言全红。
- *
- * ⚠️ 新增一条「某个 utility 编成了什么」的断言时，**来这里补一行类名**，否则那条判据会因为
- * 产物里没有这个类而红 —— 那是正确形态的红（它在告诉你：这条断言依赖的类没被固定住）。
+ * 这三条 utility 是**判据自己要读的**（`theme-dark-token-cascade.test.ts` 里那三条 `css` 正则的来源）。
+ * Tailwind v4 只把源码里用到的类编进产物，关掉自动扫描后必须显式点名，否则 `.bg-card {}` 不出现。
+ * ⚠️ 新增「某个 utility 编成了什么」的断言时来这里补一行类名 —— 那条判据会红，而那是正确形态的红。
  */
 /* SAFETY: 类型断言已复核 */
 const PINNED_UTILITY_CLASSES = [
@@ -123,26 +88,18 @@ const PINNED_UTILITY_CLASSES = [
 ] as const;
 
 /**
- * 把 CSS 里**已有的 `@source` 指令全部剥掉**（生产的两棵根、`@source inline(...)` 点名、
- * 以及 `@source not`）。
- *
- * 为什么必须剥：`globals.css` 现在自带 `@source "../../src"` 与 `@source "../../.storybook"`
- * （见该文件里的扫描根注释块）。本文件的每一遍编译要的都不是「生产扫什么」，而是
- * 「**我给定的那一点输入**会编出什么」—— 留着那两行，钉成 `docs` 的那一遍会连 src 一起扫进来，
- * 差集判据当场失效；而 #1336 那份「固定输入源」也会退回全量级的耗时与不可复现。
+ * 把 CSS 里**已有的 `@source` 指令全部剥掉**（生产两棵根、`@source inline(...)` 点名、`@source not`）。
+ * 为什么必须剥：`globals.css` 自带 `@source "../../src"` 与 `@source "../../.storybook"`；每一遍编译要的不是
+ * 「生产扫什么」，而是「我给定的输入会编出什么」—— 留着它，钉成 `docs` 的那一遍会连 src 一起扫，差集判据失效。
  */
 export function stripSourceDirectives(cssText: string): string {
   return cssText.replaceAll(/^\s*@source\b[^\n]*\n/gm, "");
 }
 
 /**
- * 把「扫全仓」那一行换成「谁都不扫」。
- *
- * 两种形状都要接住（这是两件事，别合成一条）：
- * - 文件还没做默认拒绝时：改写那一行；
- * - 文件**已经**写了 `source(none)`（现在就是这种）：改写是空操作，不能再当成「找不到」而抛。
- *   真正的失败只有一种：整行 `@import "tailwindcss"` 都不在 —— 那时静默按别的方式编一遍
- *   会让这条优化悄悄失效，表现是「某天起 suite 又间歇红」，而那是最难归因的一类。
+ * 把「扫全仓」那一行换成「谁都不扫」。两种形状都要接住：文件还没做默认拒绝时改写那一行；文件**已经**写了
+ * `source(none)` 时改写是空操作，不能当成「找不到」而抛。真正的失败只有一种：整行 `@import "tailwindcss"`
+ * 都不在 —— 静默按别的方式编一遍会让这条优化悄悄失效，表现是「某天起 suite 又间歇红」，最难归因。
  */
 function disableAutoScan(cssText: string): string {
   if (!/@import\s+["']tailwindcss["']/.test(cssText)) {
@@ -159,36 +116,18 @@ function disableAutoScan(cssText: string): string {
 }
 
 /**
- * 把「扫全仓找类名」换成「只认上面那几条」，两件事一起解决（ISSUE #1336）：
- *
- * 1. **耗时**：全量扫描下这份编译本机实测 **21109ms**（vitest 里隔离跑也还是要 7.2s），
- *    两个 suite 的 `beforeAll` 各编一遍，满载时排到 `hookTimeout` 之外 ⇒ 整份 suite 红、
- *    里面的用例全被记成 skipped。改成固定输入源之后实测 **121ms**（360819 → 23172 字节）。
- * 2. **可复现**：全量扫描的产物会随「src 里谁用了哪个类」变 —— 判据读的是编译产物，
- *    却间接依赖一批与主题无关的源码。钉住输入源之后，同一份 `globals.css` 永远编出同一份产物。
- *
- * 差异有两项，都不改任何已有值（逐条比对过两态产物：**同名不同值 = 0 条**）：
- *
- * - **少**：不再带「全仓哪里用到过」的默认调色板变量（`--color-red-200` 这类，实测 238 条）。
- *   三个消费方读的都是项目自己的 token，一条都不在里面 —— 但这条是**跑出来的**，不是推出来的：
- *   只做「关扫描 + 钉三条 utility」的第一版把 `--color-primary-strong` 的**浅色档**摇没了
- *   （深色档手写在 `.dark {}` 里所以还在），`sidebar-state-contrast` 当场红一条，正是下一项在补它。
- * - **多**：项目自己 `@theme` 里的变量改成**无条件声明**（`@theme static`），产物不再随
- *   无关源码里的类用法变化 —— 判据读的是 token 的取值与级联，本来就不该依赖「谁用过了它」。
- *
- * 需要「某个 arbitrary 到底有没有被编进产物」那一类判据走的是另一个入口
- * `compiledCssPinnedTo`，它**不**做下面这两件事（`@theme static` 与 utility 钉名都会改变产物形状，
- * 而那类判据要的正是「原样编一遍会出什么」）。
+ * 把「扫全仓找类名」换成「只认上面那几条」（ISSUE #1336）：全量扫描 21109ms（隔离跑 7.2s）会让两个
+ * suite 的 `beforeAll` 撞 `hookTimeout` 全红，固定输入源后 121ms 且不再随 src 谁用过哪个类变。
+ * 差异不改已有值（同名不同值 = 0 条）：少了 238 条默认调色板变量（曾摇没 `--color-primary-strong` 浅色档），多了 `@theme static`。
  */
 export function withPinnedSources(cssText: string): string {
   const noAutoScan = disableAutoScan(stripSourceDirectives(cssText));
   const pins = PINNED_UTILITY_CLASSES.map((cls) => `@source inline("${cls}");`).join("\n");
-  // 把项目自己写的 `@theme` 改成 `@theme static`：v4 默认会**按用法 tree-shake** 主题变量
-  // ——「某个 token 有没有进产物」取决于全仓哪里用到了它，而这批用例读的是 token 的取值与
-  // 级联，不该被这件事左右（实测反例：关掉扫描后 `--color-primary-strong` 的浅色档消失，
-  // `sidebar-state-contrast` 的「浅色：选中底上的正文与指示条都够亮」当场红，而深色档因为
-  // 是手写在 `.dark {}` 里的所以还在 —— 这种「一半在、一半被摇掉」的形状比全红更难归因）。
-  // static 只**加**声明、不改任何已有值（逐条比对过两态产物：同名不同值 = 0 条）。
+  // 把项目自己写的 `@theme` 改成 `@theme static`：v4 默认按用法 tree-shake 主题变量 ——
+  // 「某个 token 有没有进产物」会取决于全仓哪里用到它，而这批用例读的是取值与级联。
+  // 实测反例：关掉扫描后 `--color-primary-strong` 浅色档消失，`sidebar-state-contrast` 当场红，
+  // 深色档因手写在 `.dark {}` 里还在 —— 「一半在、一半被摇掉」比全红更难归因。
+  // static 只**加**声明、不改已有值（同名不同值 = 0 条）。
   const staticTheme = noAutoScan.replaceAll(/@theme(\s+inline)?\s*\{/g, "@theme$1 static {");
   return `${staticTheme}\n${pins}\n`;
 }
@@ -209,24 +148,9 @@ export function compiledGlobalsCss(): Promise<string> {
 }
 
 /**
- * 只钉「扫描目录」、不做别的加工的编译 —— 回答「这一批源文件被扫进产物时会生成哪些类」。
- *
- * 只有一类判据需要它：**「某枚 arbitrary 候选名到底有没有被引擎解出来」**。
- * `compiledGlobalsCss()` 那份把输入源收成 4 条 utility（#1336 的耗时与可复现），
- * 因此它**结构上看不见**「文档正文里写全一枚会怎样」——那正是这类判据要问的事。
- * 这里保留 `source(none)`（全仓自动扫描空闲实测 19.5s、满载 70s 以上），把扫描面按参数逐目录
- * 钉回去，并且**先把 `globals.css` 自带的两棵生产根剥掉**（`stripSourceDirectives`）——
- * 不剥的话「钉成 docs 的那一遍」会连 src 一起扫，差集判据就在对一个混合面下结论。
- * 同样**不**加 `@theme static`、**不**钉 utility 名：那两个加工都会改变产物形状。
- *
- * 实测本机耗时（同一份 globals.css 只换扫描面，同一台机器两次采样）：src 面 1.6–2.4s、
- * docs+tests 面 4.0s、两棵生产根 1.8–3.5s、空扫描面 + 两条 inline 探针 <0.2s；
- * 而**自动全扫**是 13.0–19.5s（满载时实测 70s 以上）—— 所以默认拒绝顺手也把 CSS 编译
- * 从「十秒级」拉回「两秒级」。缓存按扫描面键，同一次 vitest 里重复取免费。
- *
- * ⚠️ 传进来的目录路径是相对 **本 CSS 文件所在目录**（`src/app`）解析的，
- * 所以仓库根要写成 `../../<dir>` —— 直接传 `docs` 会被解析成 `src/app/docs` 而静默扫空
- * （这条边界由 `docs-candidate-hygiene` 的空跑挡板兜着）。绝对路径也收（临时目录探针在用）。
+ * 只钉「扫描目录」、不做别的加工 —— 回答「这一批源文件被扫进产物时会生成哪些类」（`compiledGlobalsCss`
+ * 收成 4 条 utility，结构上看不见「某枚 arbitrary 是否被引擎解出来」）。保留 `source(none)`（自动全扫 13–19.5s、满载 70s+）
+ * 先剥掉自带的 `@source` 根；不加 `@theme static`、不钉 utility 名。目录按 CSS 所在目录 `src/app` 解析，仓库根写 `../../<dir>`。
  */
 export function compiledCssPinnedTo(
   dirs: ReadonlyArray<string>,
@@ -250,9 +174,7 @@ export function compiledCssPinnedTo(
 
 /**
  * 产物 CSS 里每条规则的**复合选择器**原样列出（一条规则一个字符串，逗号分组还在里面）。
- *
- * 为什么从 helper 出：本文件已经为 `themeTokens` 解析过同一份产物，判据再拿正则去啃选择器
- * 就会有两套转义/分组口径。要「哪些类真的被编进产物」那一类判据一律走这里。
+ * 为什么从 helper 出：`themeTokens` 已解析过同一份产物，判据再拿正则啃选择器会有两套转义/分组口径。
  * ⚠️ 选择器里的 CSS 转义**没**还原（产物里怎么写就怎么给）—— 还原属于判据自己的口径。
  */
 export function ruleSelectors(cssText: string): Array<string> {

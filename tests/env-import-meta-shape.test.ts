@@ -1,38 +1,7 @@
 /**
- * 「会被 Turbopack 打包的那一侧，`import.meta` 上只有 `url`」这条边界（ISSUE #2599）。
- *
- * ## 它守的是什么
- *
- * `src/env.js` 有一段「缺 `.env` 时给一句人话」的预检，它要先把自己所在目录的父目录
- * 算出来。`chore #2556` 那批把全仓的 `fileURLToPath(import.meta.url)` 样板换成
- * `import.meta.dirname` —— 在 `scripts/**` 那 141 处是对的（纯 Node 宿主，ESM 运行时
- * 真的提供这一位），而 `src/**` 里那一处会被打包器重写：
- *
- *   · 产物里 `import.meta` 是 Turbopack 合成的一个**取值器对象**，只有 `url`
- *     （`var __TURBOPACK__import$2e$meta__ = { get url () { return
- *     __turbopack_context__.F("src/env.js") } }` —— 读物是本仓 `.next/dev/server/chunks/`
- *     里改动前留下的产物，两份都对过；原始读数记在单子与规范 §9.1 里）；
- *   · 于是 `join(import.meta.dirname, "..", ".env")` 抛
- *     `ERR_INVALID_ARG_TYPE: The "path" argument must be of type string. Received undefined`，
- *     抛的时机是 `next build` 的 **collect page data** ⇒ `pnpm build` 整档红。
- *
- * 这条判据**不靠那份产物读数**（`.next` 不是每次都在：全新检出、清过缓存、或别人正好在
- * 构建就没有读物，而「没有读物」绝不能被读成「判过且通过」）。它判的是四件确定的事：
- * 那一侧不许出现那两位属性、边界是刻意的（`scripts/**` 那一侧照旧在用）、这段预检真的
- * 走在安全那一侧上、以及 `SKIP_ENV_VALIDATION` 的短路排在任何干活之前。
- *
- * ## 为什么这条判据必须进固定清单
- *
- * 它读的是磁盘文本（`readdirSync` + 正则），**不在这份仓库的 import 图里**：改
- * `src/env.js` 或任何 `src/**` 的人，增量面都不会把这条带上去。本仓为这一族记过账
- * （「判据在场、执行者不在场」⇒ 红落在之后每条 PR 上，主干冻结），所以它登记在
- * `scripts/fixed-structural-tests.mjs` 的固定清单里，每次提交都跑。
- *
- * ## 为什么反向那一半也要钉
- *
- * 只判「`src/**` 不许有」的话，下一任读者最容易做的处置是**把禁用扩到全仓** ——
- * 那会连带撤掉 `#2556` 那批里 141 处正当写法。所以这里同时钉「`scripts/**` 里
- * 这一位仍然在用、且判据不许去管它」。
+ * `import.meta` 边界（ISSUE #2599）：`src/env.js` 预检要算自身父目录；`chore #2556` 换成 `import.meta.dirname`（`scripts/**` 141 处对，`src/**` 会被打包器重写）。Turbopack 产物里 `import.meta` 只有 `url` ⇒ `join(import.meta.dirname, ...)` 抛 `ERR_INVALID_ARG_TYPE`，`pnpm build` 在 collect page data 全红。
+ * 判据不靠产物读数（缺读数 ≠ 通过），判四件事：`src/**` 无此属性、`scripts/**` 边界照旧、预检在安全侧、`SKIP_ENV_VALIDATION` 短路最先。
+ * 读磁盘文本不在 import 图 ⇒ 登记 `scripts/fixed-structural-tests.mjs` 固定清单；不许扩到全仓（会撤掉 141 处正当写法）。
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
@@ -62,12 +31,10 @@ function walk(dir: string): Array<string> {
   return out;
 }
 
-/** 扫一面，返回「文件:行 + 命中的那位属性」。
- *
- * **整行注释不计**（`//` 开头与 JSDoc 的 ` * ` 续行）：判据要报的是「这行代码会在
- * 打包图里取一个不存在的属性」，而 `src/env.js` 那段⚠️注释必须**点名这两位**才能把
- * 边界讲清楚 —— 把说明文字算成违规，逼出来的只会是一份读不出原因的注释。
- * 尾随注释（`code // import.meta.dirname`）仍然算：那一行本来就是代码。 */
+/** 扫一面，返回「文件:行 + 命中的那位属性」。整行注释（`//` 与 ` * ` 续行）不计：判据报的是
+ * 「这行代码会在打包图里取不存在的属性」，而 `src/env.js` 那段⚠️注释必须点名这两位才能讲清
+ * 边界 —— 把说明文字算违规只会逼出一份读不出原因的注释。尾随注释（`code // import.meta.dirname`）
+ * 仍算：那一行本来就是代码。 */
 function findUnsafe(face: string, { includeTests }: { includeTests: boolean }) {
   const hits: Array<string> = [];
   for (const file of walk(path.join(REPO_ROOT, face))) {
@@ -127,15 +94,11 @@ describe("打包面上的 import.meta：src/** 只有 url 这一位是活的（I
   });
 
   it("`SKIP_ENV_VALIDATION` 的短路排在**任何路径 / fs 动作之前**", () => {
-    /* #2599 的**第二格**，比属性那一格更阴：原来写的是「先 `join(...)`、只在用结果时
-     * 看旗标」，于是两个**显式声明跳过校验**的执行者（`.cnb.yml` 的构建档、
-     * `standalone-runtime-env.mjs` 的桌包运行期）照样在那一行上炸 —— 表现是「我按
-     * 你说的跳过了，却红在你没跳过的那一步」。旗标的语义是「整段跳过」，短路就得排在
-     * 所有 fs/path 动作之前。
-     *
-     * 只比两个位置：短路那一行、与这段预检**第一次去碰 Node 内置模块**的那一行
-     * （`await import("node:fs")`）—— 它是整段里最早的一个动作，比拿 `join(` 当锚点
-     * 稳：注释里出现 `join(` 太常见，会把「干活在前」判成假红。 */
+    /* #2599 第二格：原写法「先 `join(...)`、只在用结果时看旗标」，于是两个**显式跳过校验**的执行者
+     * （`.cnb.yml` 构建档、`standalone-runtime-env.mjs` 桌包运行期）照样在那行炸 —— 「我按你说的跳过了，
+     * 却红在你没跳过的那一步」。旗标语义是整段跳过，短路必须排在所有 fs/path 动作前。
+     * 只比两处：短路行与首次碰 Node 内置的 `await import("node:fs")` —— 它是最早的动作，
+     * 比 `join(` 稳（注释里常见 `join(`，会把「干活在前」判成假红）。 */
     const text = readFileSync(path.join(REPO_ROOT, "src/env.js"), "utf8");
     const guard = text.indexOf("!process.env.SKIP_ENV_VALIDATION");
     expect(guard, "取不到那条短路 ⇒ 外层守卫里没有这枚旗标（#2599 那一格会回来）").toBeGreaterThan(

@@ -1,27 +1,8 @@
 // @vitest-environment jsdom
 /**
- * comfy state 那条长轮询通道的**信封契约**（台账 E4 的第三格）：生产侧记下的那一笔，
- * 与消费侧交给订阅者的那一笔，必须是同一份形状。
- *
- * 这一族原先两边各测各的：客户端那份用例（`src/lib/comfy/comfy-state-client.test.ts`）
- * 回答 fetch 的是它**自己手写的 `change()` 夹具**，而路由那份（`src/app/api/comfy/state/route.test.ts`）
- * 用 `toMatchObject({seq, kind})` 只点它关心的两列 —— 两份都不引用对方的产物。
- * 于是任何一侧改字段名，另一侧只会**静默丢帧**：模块内那份手写收窄（`parseChange`）认不出新形状就回
- * `null`，`pollOnce` 把 `null` 当成「这一轮没有变化」，界面表现是「状态再也不即时更新」
- * （而这条通道存在的理由就是替掉那一拍 5s 轮询），tsc / eslint / 两边各自的用例 /
- * 覆盖率门槛全绿。`toMatchObject` 那一半尤其挡不住：它**只判点到的列**，少一列不多一列都不红。
- * 客户端那一半的收窄是手写的（逐字段 `typeof` 加一处 `as`），运行时没有东西知道它读哪几列
- * —— 与 E4 前两格（`task.list` 的 `videoPath`、`task.detail` 的 `images`）同形。
- *
- * 所以这里不新造任何夹具帧：把**真路由**的回答接进**真客户端**，然后判两件事，缺一不可 ——
- *   ① 交出去的那一笔与记下的那一笔 `toEqual`（这条同时挡「少一列」与「多要求一列」两个方向，
- *      比逐列断言强：逐列断言正是 `toMatchObject` 漏掉那一维的原因）；
- *   ② 反向证明：线上把 `detail` 改名，消费侧必须**一帧都不交**，
- *      而不是交出一个 `detail` 为 `undefined` 的半成品 —— 少了这一条，
- *      ①可以被一份「两边都不读 detail」的实现无痛满足。
- *
- * mock 边界只有 `fetch` 一处（客户端写的相对 URL 由这里交给真 handler）；
- * 路由、`state-watch` 的纪元与等待、客户端的 `seq` 去重与 `runId` 全部真实跑。
+ * comfy state 长轮询通道的**信封契约**（台账 E4 第三格）：生产侧记下的那笔与消费侧交给订阅者的那笔必须同一形状。原先两边各测各的
+ * （客户端用手写 `change()` 夹具，路由用 `toMatchObject({seq, kind})` 只点两列），任一字段改名另一侧只会**静默丢帧**（`parseChange` 认不出→`null`→`pollOnce` 当没变化，界面「状态不再即时更新」），tsc/eslint/两侧用例/覆盖率全绿。
+ * 做法：真路由接真客户端，① 交出的与记下的 `toEqual`（挡少一列与多要求一列）；② 线上把 `detail` 改名时消费侧**一帧都不交**（否则①可被「两边都不读 detail」满足）。mock 边界只有 `fetch`。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

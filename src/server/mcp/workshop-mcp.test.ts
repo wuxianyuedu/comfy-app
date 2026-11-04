@@ -1,21 +1,7 @@
 /**
- * 工坊 MCP 服务端的**第一批执行者**（此前 17 条工具零执行者）。
- *
- * 这扇门是给 AI 客户端用的：它能整幅覆盖草稿的角色卡与分镜并落库。
- * 两个此前没有任何东西挡着的洞，本文件各钉一条：
- *   · **入参形状**：`workshop_set_characters` / `workshop_set_storyboard` 的
- *     `characters` / `shots` 原本是 `z.array(z.any())` 再 `as never` 压进
- *     `Character[]` / `Shot[]`。`styleTags` 给成字符串（模型很常见的写法）会
- *     一路走到 `buildCharacterPrompt` 的 `c.styleTags.join()` 才炸 ——
- *     现在由 `~/lib/workshop/types` 的写侧契约在**边界**上归一并拒收脏形状；
- *   · **谁调了哪个出口**：MCP 层的职责就是「把一次工具调用翻译成一次 orchestrator
- *     调用」，而这条翻译关系此前没有任何执行者 —— 改错参数顺序、漏传 sessionId
- *     都不会有数字动。
- *
- * 走真的 `client.callTool`（内存 transport）而不是直接调 handler：
- * SDK 的 **校验发生在 transport 层**，`_registeredTools[x].handler` 拿到什么就传什么
- * （实测把 `{a: ""}` 直接喂给 handler 会原样进 callback）。只有走客户端才是
- * AI 客户端真实经历的那条路 —— 也才判得到「拒收时 orchestrator 一次都没被调用」。
+ * 工坊 MCP 服务端的**第一批执行者**（此前 17 条工具零执行者）。这扇门供 AI 客户端整幅覆盖草稿的角色卡与分镜并落库。
+ * ① 入参形状：`characters` / `shots` 原为 `z.array(z.any())` + `as never` 压进 `Character[]`，`styleTags` 给字符串会到 `buildCharacterPrompt` 的 `.join()` 才炸；现由 `~/lib/workshop/types` 在边界归一拒收。
+ * ② 翻译关系（工具调用 → orchestrator 调用）此前无执行者：参数顺序 / sessionId 改错不会有数字动。故走真的 `client.callTool`（内存 transport）—— SDK 校验在 transport 层，直调 handler 会把 `{a: ""}` 原样进 callback，也判不到「拒收时一次都没被调用」。
  */
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -69,10 +55,8 @@ vi.mock("~/server/workshop/comfyui", () => ({ saveComfySettings }));
 const SESSION = { sessionId: "sess_1" };
 
 /**
- * 每条工具的最小可用入参。
- *
- * 这张表**同时是判据的一部分**（见下面「17 条都在表里」那条用例）：
- * 新加工具却不写用例 = 红，这正是这一层此前的状态（17 条零执行者）。
+ * 每条工具的最小可用入参。这张表**同时是判据的一部分**（见「17 条都在表里」那条用例）：
+ * 新加工具却不写用例 = 红 —— 这正是这一层此前的状态（17 条零执行者）。
  */
 const TOOL_CALLS: Record<string, Record<string, unknown>> = {
   workshop_create_session: { title: "测试片", idea: "一只猫" },

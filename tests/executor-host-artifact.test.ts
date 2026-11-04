@@ -1,16 +1,7 @@
 /**
- * 宿主的产物化判据（P3 §5 ADR §13 的 3-E1，ISSUE #1169）。
- *
- * 这一刀做的事：把宿主运行时图从「tsx 加载 src/lib/** 的 TS 源」换成「构建期预编译
- * 一个文件，运行期按内容决定用哪份图」。判据分两层——
- *   ① 配置/形态层（永远跑）：构建链顺序、external 清单、`require` 垫片、入口的加载
- *      判据。这几条各对应一次实测踩到的坑，缺任何一条的表现都是「产物里设 host 起
- *      不来」，而构建期一声不响。
- *   ② 真产物层（有 `.next/standalone` 才跑）：真在产物目录里起一次宿主进程。
- *
- * 为什么不止靠 ②：`pnpm build` 不在 pre-commit 也不在 CI（CI 只跑 lint/tsc/test），
- * 只留真产物那一条就等于「改了构建链没人立刻知道」；而 ① 里的每一条都是从 ② 抓不
- * 到的方向（顺序写反、垫片被删、入口长出第二条加载路径）先在源码上就红。
+ * 宿主产物化判据（P3 §5 ADR §13 的 3-E1，ISSUE #1169）：把运行时图从「tsx 加载 TS 源」换成「构建期预编译一份，
+ * 运行期按内容选用」。①配置/形态层永远跑（构建链顺序、external 清单、`require` 垫片、入口加载判据）；
+ * ②真产物层（有 `.next/standalone` 才跑）。只靠②不行：`pnpm build` 不在 pre-commit/CI（CI 只跑 lint/tsc/test），①各条正是②抓不到的方向。
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";

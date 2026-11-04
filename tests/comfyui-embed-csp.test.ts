@@ -1,27 +1,7 @@
 /**
- * ComfyUI「应用级页签」内嵌的门禁（ISSUE #310 反复回归）。
- *
- * 页签把 ComfyUI（http://127.0.0.1:8188，跨端口即跨源）以 iframe 内嵌进主窗口。
- * 这条链路要同时满足两件事，缺一样页签里就只剩 Edge 的
- * 「已阻止此内容。请与网站所有者联系以解决此问题。」：
- *
- *   ① 服务端放行——ComfyUI 由本应用 spawn 并注入 `--enable-cors-header`
- *     （见 comfy-embed.ts 的探测判据），没有 XFO / frame-ancestors；
- *   ② **嵌入方放行**——应用页自己的 CSP 必须有 `frame-src` 放行 ComfyUI 的
- *     本地源。frame-src 不写会回退到 `default-src 'self'`，跨端口即被拒，
- *     且这层拦截发生在嵌入方页面，WebView2 的 `--disable-web-security`
- *     也豁免不了它（下一个用例锁住「别再走那条死路」）。
- *
- * 历史教训：#445 曾把开关押在 exe 同级 `app.exe.manifest` 的
- * `per_app_arguments` 上——那不是 WebView2 官方文档认可的机制，实测参数
- * 到不了浏览器进程（msedgewebview2 命令行无该开关），已整体移除。
- *
- * 同一条链路上还有第三件事（ISSUE #616）：页签**能显示**之后，页内的
- * HTML5 拖放（ComfyUI 拖入图片 / 工作流）还必须真的派发到 DOM。wry 默认给
- * 每个 webview 挂 WebView2 的原生拖放处理器，它一接手 `dragover` / `drop`
- * 就不再到 DOM —— 应用内拖不进去、浏览器整窗打开却正常。修法同样在壳侧：
- * 主窗 builder 调 `disable_drag_drop_handler()`。这层没有类型系统能拦住
- * 「谁顺手删了那一行」，所以在此钉住。
+ * ComfyUI「应用级页签」内嵌的门禁（ISSUE #310 反复回归）：ComfyUI（http://127.0.0.1:8188，跨端口即跨源）被 iframe 内嵌，缺任一样就只剩 Edge 的「已阻止此内容」。
+ * ① 服务端放行：由本应用 spawn 并注入 `--enable-cors-header`（见 comfy-embed.ts），无 XFO / frame-ancestors；② 嵌入方 CSP 需有 `frame-src`，不写即回退 `default-src 'self'`，这层拦截 WebView2 的 `--disable-web-security` 也豁免不了（#445 的 manifest 机制已因实测无效移除）。
+ * ③ 页签内 HTML5 拖放必须真派发到 DOM（ISSUE #616）：wry 默认原生处理器一接手 `dragover`/`drop` 就不再进 DOM，修法在壳侧 `disable_drag_drop_handler()`；无类型系统拦误删，故钉住。
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";

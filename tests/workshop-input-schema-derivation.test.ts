@@ -1,21 +1,7 @@
 /**
- * 工坊写侧 schema ⇄ 消费侧类型：派生之后「同一枚输入同读数」的判据（台账 E4 的形状，
- * ISSUE #2499）。
- *
- * 这一格的病是**两份互不引用的声明**：`Character` / `Shot` 的 interface 与 MCP 写侧
- * schema 各写一遍，加一个字段谁也不红；而它们喂的是同一条草稿（MCP 写入 / 画布 /
- * 仓储 / 草稿镜像）。现在类型由 `z.output` 派生，本文件判两件事：
- *
- *   ① **同读数**：一枚最小合法输入过 schema 之后，「缺省补值」与「键根本不出现」
- *      分得清 —— 后者是草稿 JSON 的形状（写 `undefined` 与不写这个键，在上层是两件事）；
- *   ② **该不同的那一半**：可选键在派生类型里**必须可选**（`{ motion?: … }`），
- *      而不是「必带这个键、值可为 undefined」—— 后者正是 #2499 那 25 处 tsc 错的根因，
- *      而它与前者在运行时 parse 结果上**完全同形**，只有 `tsc` 看得见（`expectTypeOf`
- *      借 `tsc` 当执行者，见 `tests/type-level-contracts.test.ts` 的文件头）。
- *
- * 入参那一侧另判一条：`createdAt` 的默认值下沉之后，SDK 推出的 JSON Schema 里它
- * **仍是可选字段** —— 否则外部 agent 会被要求自己造时间戳（`.default()` 的默认值
- * 只在解析时生效，不该把键变成 required）。
+ * 工坊写侧 schema ⇄ 消费侧类型：派生后「同一枚输入同读数」的判据（台账 E4 的形状，ISSUE #2499）。病是 `Character` / `Shot` interface 与 MCP 写侧 schema 各写一遍、加字段谁也不红，却喂同一条草稿；类型现由 `z.output` 派生。
+ * ① 同读数：最小合法输入过 schema 后，「缺省补值」与「键根本不出现」分得清（后者是草稿 JSON 的形状）。② 该不同的那一半：可选键在派生类型里必须可选（`{ motion?: … }`），而非「必带、值可 undefined」—— 后者正是 #2499 那 25 处 tsc 错根因，运行时 parse 完全同形，只有 `tsc` 看得见（`expectTypeOf` 借 `tsc` 当执行者）。
+ * 另判 `createdAt` 默认值下沉后 SDK 的 JSON Schema 仍是可选字段，否则外部 agent 被要求自己造时间戳（`.default()` 只在解析时生效）。
  */
 import { describe, expect, expectTypeOf, it } from "vitest";
 import * as z4mini from "zod/v4-mini";

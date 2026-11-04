@@ -1,17 +1,7 @@
 /**
- * 提交门槛自检：把 scripts/check-overlay-z.cjs 当黑盒跑在临时工作区上，
- * 验证「浮层层级刻度」这条**硬闸**（规范 16 §16.2.5）真的会阻断提交。
- *
- * 规范：docs/standards/16-shadcn-ui与表单校验.md §16.2.5（ISSUE #672 / #1811）
- *
- * 这一条在 ISSUE #1811 收尾时**从棘轮翻成硬闸**（Z3 的存量清零，棘轮车道
- * 无成员）。所以这里没有 `seedBaseline`：基线文件已删、`--update` 已不存在，
- * 用例改判「命中即退 1」与「`--update` 是断头的」。
- *
- * 为什么用子进程跑：门禁由 pre-commit 以 `node scripts/xxx.cjs` 调用，且内部以
- * `__dirname/..` 定位扫描根 —— 复用同一调用方式才等价于真实门禁。临时工作区与
- * `run` / `write` 由 `tests/helpers/gate-repo.ts` 提供（门禁自测的共用夹具，
- * 收尾挂在 fixture 的 `use` 之后）。
+ * 提交门槛自检：把 scripts/check-overlay-z.cjs 当黑盒跑在临时工作区上，验证「浮层层级刻度」这条**硬闸**（规范 16 §16.2.5，ISSUE #672 / #1811）真的阻断提交。
+ * #1811 收尾时它从棘轮翻成硬闸（Z3 存量清零、棘轮车道无成员），故无 `seedBaseline`、`--update` 已不存在，用例改判「命中即退 1」与「`--update` 是断头的」。
+ * 用子进程跑：门禁由 pre-commit 以 `node scripts/xxx.cjs` 调用、内部以 `__dirname/..` 定位扫描根，复用同方式才等价；临时工作区与 `run`/`write` 由 `tests/helpers/gate-repo.ts` 提供。
  */
 import { defineGateRepo, describe } from "./helpers/gate-repo";
 

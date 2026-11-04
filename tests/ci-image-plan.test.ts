@@ -1,12 +1,7 @@
 /**
- * 「节点镜像」那一份计划与打包的判据（ISSUE #1993 的续：用 docker 提速）。
- *
- * 被测的是 `scripts/ci-image-plan.mjs` —— 它**不碰 docker**（构建容器里没有 daemon），
- * 只算命令与打包。所以这一组判据全部落在能在本机判的形状上：版本**现读**（不写死）、
- * 层序（提交点写偏一层是这一层唯一不报错的错误）、tarball 的三种字节语义、
- * 以及「四件的清单只有一处出处」。
- *
- * 每条判据都配了**反向复算**：把缺陷形态放回去，对应的断言当场点名。
+ * 「节点镜像」计划与打包的判据（ISSUE #1993 续：用 docker 提速）。被测 `scripts/ci-image-plan.mjs`
+ * 不碰 docker，只算命令与打包：版本现读、层序（写偏一层是这层唯一不报错的错误）、tarball 三种字节
+ * 语义、四件清单只有一处出处；每条判据都配反向复算，把缺陷形态放回去让断言当场点名。
  */
 import { spawnSync } from "node:child_process";
 import {
@@ -281,12 +276,10 @@ describe("tarball：权限位、符号链接、可复现", () => {
         return `${t & 4 ? "r" : "-"}${t & 2 ? "w" : "-"}${t & 1 ? "x" : "-"}`;
       })
       .join("");
-  /* `tar -tvf` 的每行只按**第一格**与**行尾**取信息，不按列序号：GNU tar 把 uid/gid
-   * 合成 `0/0`、Windows 自带的 bsdtar 分成两格，日期在中文 locale 下又是「1月 01 1970」
-   * 三格 —— 原来那句 `split(/\s+/).slice(5)` 在 bsdtar 上整体错位，于是 `sub/link`
-   * 明明在清单里（实测那行是 `lrwxrwxrwx … sub/link -> ..\a.txt`）却被数成 **0 条**
-   * （CI `cnb-vue-1k59blt4c`：`expected +0 to be 1`）。第一格（类型 + mode）两种实现都在
-   * 位置 0，名字在最后一个空格之后（链接条目再砍掉 ` -> 目标`），这两条跨实现都成立。 */
+  /* `tar -tvf` 每行只按第一格与行尾取信息，不按列序号：GNU tar 把 uid/gid 合成 `0/0`、bsdtar 分两格，
+   * 中文 locale 日期又是三格 —— 旧的 `split(/\s+/).slice(5)` 在 bsdtar 上错位，`sub/link` 被数成 0
+   * （CI `cnb-vue-1k59blt4c`：`expected +0 to be 1`）。第一格（类型 + mode）两种实现都在位置 0，名字
+   * 在最后一个空格之后（链接条目再砍 ` -> 目标`），这两条跨实现都成立。 */
   const firstField = (line: string) => line.trim().split(/\s+/)[0] ?? "";
   const nameOf = (line: string) => {
     const head = (line.split(" -> ")[0] ?? "").trim();
@@ -296,18 +289,10 @@ describe("tarball：权限位、符号链接、可复现", () => {
   const lineFor = (text: string, name: string) =>
     text.split(/\r?\n/).find((l) => nameOf(l) === name);
 
-  /** 读这份 tarball 的清单：**相对路径 + `cwd`**，并且把「这台机器没有 tar」与
-   *  「tar 在，却读不了这个包」分开。
-   *
-   * 两件都是实测撞出来的：
-   *   · 传绝对路径时，Git 自带那份 GNU tar 会把 `C:\Users\…` 的冒号读成
-   *     **远程语法**（`host:path`），直接 `tar: Cannot connect to C: resolve failed`
-   *     退 **128**（本机现测）。而下面曾经只有一句 `if (status !== 0) return;` ——
-   *     于是这一格在这台开发机上**从来没有判过任何东西**，绿与「判过了」逐字同形
-   *     （§13.5.16 那条「红也 ≠ 跑过」的反面：**没跑也不红**）。CI 那台节点上是
-   *     bsdtar、没有这个语法，所以同一条判据在两台机器上**一台判、一台不判**。
-   *   · 「没有 tar」的证据是 `spawnSync` 的 `error`（ENOENT），不是退出码。
-   *     拿退出码当「环境没有」的判据，就会把真故障一起吞掉。 */
+  /** 读 tarball 清单：相对路径 + `cwd`，并把「机器没有 tar」与「tar 在但读不了包」分开。绝对路径会让
+   * Git 自带 GNU tar 把 `C:\Users\…` 的冒号当远程语法（`host:path`）退 128；旧代码只写
+   * `if (status !== 0) return;` ⇒ 这格在本机从未判过，绿与「判过了」同形（§13.5.16 反面）。「没 tar」
+   * 的证据是 `spawnSync` 的 `error`（ENOENT），不是退出码 —— 拿退出码会把真故障一起吞掉。 */
   const listTar = () => {
     const list = spawnSync("tar", ["-tvf", path.basename(tarFile)], {
       cwd: TMP,
@@ -330,13 +315,10 @@ describe("tarball：权限位、符号链接、可复现", () => {
     if (text === null) {
       return;
     }
-    /* 期望的 mode 来自**盘上那个文件本身**，不是写死的 `rwxr-xr-x`。
-     * 这一格判的是「`buildTarStream` 有没有把 stat 里的 mode 原样带进 header」，
-     * 而 Windows 上那句 `spawnSync("chmod", ["755", …])` 是一条不存在的命令 ——
-     * 盘上就是 `0666`，于是写死的字面量把「宿主没有 exec 位」判成「打包丢了权限」
-     * （CI 实测：`expected '-rw-rw-rw- …' to match /^-rwxr-xr-x .*bin\/run\.sh$/`）。
-     * 换成按盘上事实比，两端判的是同一件事，而且比原来更严：header 与盘上不一致就红
-     * （原来那句只认 755，把「在 Windows 上根本没法保权限」这件事一起误报进来了）。 */
+    /* 期望 mode 来自盘上那个文件本身，不是写死的 `rwxr-xr-x`：这一格判 `buildTarStream` 有没有把 stat
+     * 的 mode 原样带进 header。Windows 上 `chmod` 不存在、盘上就是 0666，写死的 755 会把「宿主没有
+     * exec 位」判成「打包丢了权限」（CI：`expected '-rw-rw-rw- …' to match /^-rwxr-xr-x .*bin\/run\.sh$/`）。
+     * 按盘上事实比两端判同一件事且更严：header 与盘上不一致就红。 */
     const onDisk = rwxField(statSync(path.join(src, "bin", "run.sh")).mode & 0o777);
     const runLine = lineFor(text, "bin/run.sh");
     expect(runLine, "tar 清单里没有 `bin/run.sh` 这一条").toBeDefined();

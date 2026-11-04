@@ -5,17 +5,9 @@ import { readEnvVar } from "~/lib/envfile";
 import type * as AppSettingsModule from "~/lib/app-settings/app-settings.server";
 import type * as ImportSourceModule from "~/lib/comfyui/importSource";
 /**
- * workflow.router 集成测试。
- *
- * mock 边界：~/server/db（内存数据库替身，见 tests/helpers/test-db.ts）、
- * ~/server/better-auth（getSession）、~/lib/core/logger（静音）、
- * ~/lib/envfile（屏蔽真实 .env 的 LOCAL_WORKFLOWS_PATH）、
- * ~/lib/comfyui/importSource（本地文件导入/重导入，避免真实磁盘依赖）、
- * ~/lib/comfyui/raw 的 fetchObjectInfo（钉成 null：本机开着 ComfyUI 时
- * 详情里的 COMBO 候选会变成真数据，同一份断言就随开发机状态漂）。
- * 其余（repository、workflow-types、workflow.ts、workflow-detail、
- * localWorkflows、raw 的 detectFormat/extractPositions）全部走真实实现 —— 导入链
- * 里**不再有**「转 API 图」这一步，所以不需要再 mock 转换器。
+ * workflow.router 集成测试。mock 只限：db（`tests/helpers/test-db.ts` 内存替身）、better-auth `getSession`、logger（静音）、
+ * envfile（屏蔽真 `.env` 的 `LOCAL_WORKFLOWS_PATH`）、importSource（免真实磁盘）、raw 的 `fetchObjectInfo` 钉 null
+ * （本机开 ComfyUI 时 COMBO 候选会变真数据，断言随开发机漂）。其余全走真实实现；导入链已无「转 API 图」，不需 mock 转换器。
  */
 import path from "node:path";
 import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";

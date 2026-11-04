@@ -1,54 +1,7 @@
 /**
- * 「客户端写的地址有没有落点」判据（台账 E3′ 带出的那类故障）。
- *
- * 起因：工坊首挂载的三路拉取里有一条 `fetch("/api/skills")`，而仓库里**没有**
- * `/api/skills` 这个 handler —— 请求必然 404，404 的 HTML 又让 `res.json()` 抛错，
- * 被调用点那句 `catch {}` 吞成「没有技能」。于是风格卡下拉常年空态，而
- * `pnpm test` / `pnpm check:all` 全绿：**没有任何一条判据知道这条地址是假的**。
- *
- * 为什么值得机器判：它的失败形态是「界面少一块 + 一声不吭」。人 review 时看见
- * `fetch("/api/skills")` 只会觉得那口存在，因为路径写得很像真的。而 REST 这一维
- * 此前两头都不管：既没人要求 handler 有用例，也没人要求调用点有 handler
- * （tRPC 那一维有 `trpc-surface-executors.test.ts` 兜着 —— 挂了就欠执行者与消费方）。
- *
- * 判据：`src/**` 里（非测试代码、剥注释后）每个**以引号 / 反引号 / `}` 紧接 `/api/`**
- * 的地址字面量，必须能在 `src/app/…/route.ts` 的目录形状里找到一个落点。
- *  · 段数要对齐：写 `/api/film` 而 handler 是 `/api/film/[id]` ⇒ 报（少一段就是 404）；
- *  · `[x]` 吃一段，`[...x]` 吃掉剩下的全部（也吃零段 —— `/api/trpc` 就是这么被
- *    `api/trpc/[trpc]` 接住的，本机 App Router 的实测行为）；
- *  · 模板串里的 `${…}` 当通配段：它吃什么由运行期决定，这里只保证形状对得上。
- *
- * ## 「前一位是 `}`」这一档为什么从豁免改成默认判
- *
- * 旧口径把 `}` 形态整个当成外部服务放过，理由写在原来的注释里：
- * `` `${comfyBaseUrl}/api/prompt` `` 是 ComfyUI 的接口，不归本应用的路由表管。
- * 这个代理规则**语法上说得通、语义上漏**：`src/config/custom-nodes.ts` 的
- * `` `${base}/api/custom-nodes/manifest` `` 前一位也是 `}`，而它是本应用的同源地址
- * ——「解析完注册表恒空」（台账 E9）就是这么躲过整条判据的：handler 在基线迁移时
- * 被删掉，调用点那句 fetch 因为写成模板形态而**从未被点名**。
- *
- * 所以这里改成**默认判、按整条地址登记放行**：`}` 形态一并进扫描面，外部服务由
- * `UPSTREAM_SERVICE_ADDRESS` 逐条登记并写原因。多花的登记换来的是
- * 「新写的同源地址一定会被判」—— 少判一条就是本次事故那一格。
- *
- *
- * 两类**长得像地址但不是本应用请求**的字面量必须显式登记，两张表吃同一套陈旧判据
- * （每条都要还有字面量在用、都要写着原因、都要**确实没有落点** —— 哪天那条路径
- * 真有了 route handler，登记就红，逼人重看「这条到底是谁的」）：
- *   · `NON_REQUEST_ADDRESS` —— 是本应用的路径，但那句字符串不是请求
- *     （`/api/trpc` 是 tRPC 的**通道基址**，真实请求一律是 `/api/trpc/<ns.proc>`，
- *     本机实测那条 200、基址本身 404，把它当 REST 路径判会永远红在 `src/trpc/**`；
- *     `/api/ws` 是 ComfyUI 的 WS 路径名，拼在 `ws://<comfy host>` 上，
- *     见 `runner-state.ts` 的 `WS_PATHS`）。
- *   · `UPSTREAM_SERVICE_ADDRESS` —— 上游服务自己的接口（本机 ComfyUI / Ollama /
- *     远端 LLM），本应用不实现它们，也不该被路由表判。
- *
- * 已知边界（写在判据旁边，不假装没有）：
- *  · 只看**整段字面量**。`"/api/" + kind` 这种拼出来的地址抓不到（它没有完整字面量）。
- *    要拼接就写成 `${base}/x` 的模板形态 —— 假红比假绿好修。
- *  · 判的是「有没有 handler」，不是「handler 答得对不对」。后者由各个 route 自己的用例负责。
- *  · 剥注释用 `tests/helpers/strip-comments.ts`，它不动行尾注释：
- *    `foo(); // 见 /api/xxx` 会被算成一条地址。方向是假红，出现时把尾注改成整行注释。
+ * 「客户端写的地址有没有落点」判据（台账 E3′）：`fetch("/api/skills")` 无 handler ⇒ 404 的 HTML 被 `catch {}`
+ * 吞成「没有技能」，界面空态而判据全绿。判据：`src/**` 剥注释后每个 `/api/` 字面量须在 `src/app/…/route.ts`
+ * 找到落点（段数对齐、`[x]`/`[...x]`/`${…}` 作通配）；`}` 形态也默认判，上游按整条地址登记放行（台账 E9）。
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
@@ -63,10 +16,8 @@ const WILD = "*";
 
 /** 递归收集目录下的 `.ts` / `.tsx`。
  *
- *  只跳 `node_modules` 与 `.next`。**不要**顺手跳名为 `generated` 的目录：
- *  产物根在仓库根，但 `src/app/api/generated/[...path]` 是一个真 route handler，
- *  跟着跳就会把「产物读取口」从路由表里抹掉 —— 表现是判据把 `/api/generated/...`
- *  报成没有落点（假红），而真正该报的那条反而被同一份盲区盖住。 */
+ * 只跳 `node_modules` 与 `.next`。**不要**顺手跳 `generated`：`src/app/api/generated/[...path]`
+ * 是真 route handler，跳掉会把「产物读取口」抹出路由表（假红，真该报的也被同一盲区盖住）。 */
 function collectTs(dir: string, out: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir)) {
     if (entry === "node_modules" || entry === ".next") {
@@ -165,14 +116,11 @@ const NON_REQUEST_ADDRESS: Record<string, string> = {
     "ComfyUI 自己的 WS 路径（`runner-state.ts` 的 `WS_PATHS`，拼在 `ws://<comfy host>` 上）。它是外部服务的地址，不进本应用的路由表。",
 };
 
-/** 上游服务**自己的**接口路径 → 它是谁的、地址是从哪台机器拼出来的。
+/** 上游服务**自己的**接口路径 → 它是谁的、地址从哪台机器拼出来。
  *
- *  这张表替代的是旧的「前一位是 `}` 就整类豁免」那条语法代理规则 —— 那条规则
- *  漏掉了 `src/config/custom-nodes.ts` 的同源模板地址（台账 E9）。改成按**整条
- *  规范地址**登记之后：新写一条 `${...}/api/x` 会先红，再由人决定它是不是上游。
- *
- *  段里的 `*` 是模板插值折出来的通配段（`/api/history/*` = `${base}/api/history/${id}`）。
- *  只能变短：哪天本应用在同名路径上立了 route handler，陈旧判据会把它点名。 */
+ *  替代旧的「前一位是 `}` 就整类豁免」：那条漏掉 `src/config/custom-nodes.ts` 的同源模板（台账 E9）；
+ *  改按整条规范地址登记后，新写 `${...}/api/x` 会先红、由人判断是不是上游。段里 `*` 是模板插值折出
+ *  的通配段（`/api/history/*`）且只能变短：本应用若在同名路径立了 handler，陈旧判据会把它点名。 */
 const UPSTREAM_SERVICE_ADDRESS: Record<string, string> = {
   "/api/prompt":
     "本机 ComfyUI 的提交队列口（`src/server/workshop/comfyui.ts` 把 prompt 图 POST 进去）。上游是 `http://127.0.0.1:<comfy port>`，不是本应用。",

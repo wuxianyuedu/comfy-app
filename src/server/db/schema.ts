@@ -1,22 +1,8 @@
-/**
- * `schema.ts` — Drizzle SQLite schema
- * ===========================================================================
- *
- * 表名严格对齐现有 `db.sqlite`，保证 `drizzle-kit push` 以 ALTER 方式同步、
- * **不破坏已有数据**。
- *
- * 列形态（**改了就是改库文件格式**，别当风格问题）：
- *   - `DateTime` 一律 ISO 字符串（TEXT）+ `dateNotNull` / `dateNull` 序列化。
- *     不用 Drizzle 默认的 `integer(timestamp)` —— 库里已有的行是 ISO 文本，
- *     换了读写两端对不上（`createdAt` 出现过的「裸毫秒串」就是旧格式残留，
- *     读取侧由 `dateNotNull.fromDriver` 与 `~/lib/time-format` 统一归一）。
- *   - `Boolean` 用 `integer(..., { mode: "boolean" })`（列里是 0/1）。
- *   - `Json` 用 `text(..., { mode: "json" })`（列里是 TEXT JSON）。
- *   - id 默认 cuid2（`@paralleldrive/cuid2` 的 createId）；
- *     Project 复用客户端 `proj_*` id（无默认）。
- *
- * @module server/db/schema — Drizzle SQLite schema（表定义与行类型）
- */
+/** `schema.ts` — Drizzle SQLite schema（表定义与行类型）。表名严格对齐现有 `db.sqlite`，保证
+ * `drizzle-kit push` 以 ALTER 方式同步、**不破坏已有数据**。列形态（改了就是改库文件格式）：
+ * `DateTime` 一律 ISO 文本 TEXT + `dateNotNull`/`dateNull`（不用默认 integer timestamp，已有行是
+ * ISO 文本）；`Boolean` 用 `integer(...,{mode:"boolean"})`，`Json` 用 `text(...,{mode:"json"})`，
+ * id 默认 cuid2（Project 复用客户端 `proj_*`）。@module server/db/schema */
 import {
   sqliteTable,
   text,
@@ -229,12 +215,9 @@ export const task = sqliteTable(
     workflowSnapshot: text("workflowSnapshot", { mode: "json" }),
     projectId: text("projectId"),
     /**
-     * 工坊镜头号：这条任务是为「哪一镜」跑的。只有按镜生成（工坊镜头生图）才有值，
-     * 手动/画布节点级生成为 NULL。
-     *
-     * 旧行**不回填**，且不能回填：提交时的 `params` 里没记镜头，任何按时间或按
-     * 名称的猜测都会把归属写错，而错一次的代价是健康度条从此长期报一个假数。
-     * 因此读侧的口径是「NULL = 归属未知」，**不等于**「这一镜没出过图」。
+     * 工坊镜头号：这条任务为「哪一镜」跑的；只有按镜生成（工坊镜头生图）才有值，其余 NULL。
+     * 旧行**不回填**且不能回填：提交时 `params` 没记镜头，按时间/名称猜归属会写错，代价是健康度条
+     * 长期报假数。因此读侧口径是「NULL = 归属未知」，**不等于**「这一镜没出过图」。
      */
     shotId: text("shotId"),
     referenceImages: text("referenceImages", { mode: "json" }),
@@ -246,14 +229,10 @@ export const task = sqliteTable(
     progress: integer("progress").notNull().default(0),
     resultImages: text("resultImages", { mode: "json" }),
     logs: text("logs", { mode: "json" }),
-    /** comfy-cli 的**完整原始输出**（不截断，P3 §5 ADR §14 D1 的 4-B2）。
-     *  面板里的 `[comfy-cli 原始]`/`stdout`/`stderr` 行出于防刷屏做过单行与行数
-     *  截断，「查看完整输出」那个入口需要的是被截掉的完整 JSON 与整段 traceback。
-     *  此前它只活在**执行进程的记忆**里（`runnerState.rawCli`），于是 host 执行的
-     *  任务点进去永远是空的——而排障恰恰最想看这种任务的原文。
-     *  写入时机：执行侧收口时整包落一次（成功与失败两条都写，形态与 `replaceLogs`
-     *  同族：只带归属守卫、不带终态守卫，尾随输出不该被挡掉）。行数上限由写入侧
-     *  `RAW_CLI_MAX_LINES` 兜着，本列不会无界增长。 */
+    /** comfy-cli 的**完整原始输出**（不截断，P3 §5 ADR §14 D1 的 4-B2）：面板为防刷屏截断，
+     *  「查看完整输出」要的是完整 JSON 与整段 traceback —— 此前只活在执行进程内存
+     *  （`runnerState.rawCli`），host 执行的任务点进去永远为空。收口时整包落一次（成功/失败都写，
+     *  只带归属守卫、不带终态守卫，尾随输出不该被挡）；行数上限由 `RAW_CLI_MAX_LINES` 兜着。 */
     rawCli: text("rawCli", { mode: "json" }),
     error: text("error"),
     validationErrors: text("validationErrors"),
@@ -266,14 +245,10 @@ export const task = sqliteTable(
      *  按 COMFY_EXECUTOR 写值），领取侧见 `repository-task-impl.ts` 的
      *  `claimNextQueued`。 */
     claimedBy: text("claimedBy"),
-    /** 被领走的时刻（P3 §5 ADR §14 D1 的 4-B2：状态栏「已运行 mm:ss」的时间基准）。
-     *  此前这个数只在**执行进程的内存**里（`runnerState.startedAt`），host 执行时
-     *  Next 侧读不到，状态栏那一格的耗时就永远是空的——而它恰恰是用户最想要的
-     *  那个数（前面堵了几个、当前这个跑了多久）。
-     *  写入点两条：`claimNextQueued`（pull 侧，与 `claimedBy` 同一语句）与
-     *  `markRunning`（inline 的 push 侧，4-B3 收敛成一条 pull 后只剩前一处）。
-     *  历史行不回填：NULL 的语义是「这一轮没记下开始时刻」，前端不显示耗时，
-     *  而不是「零秒」——拿 `createdAt` 冒充会把排队时间算进「已运行」，那是假数。 */
+    /** 被领走的时刻（P3 §5 ADR §14 D1 的 4-B2：状态栏「已运行 mm:ss」的时间基准）。此前只在
+     *  执行进程内存（`runnerState.startedAt`），host 执行时读不到，耗时那格永远为空 —— 而那正是
+     *  用户最想要的数。写入点：`claimNextQueued`（与 `claimedBy` 同一语句，4-B3 收敛后 `markRunning`
+     *  那处不再需要）。历史行不回填：NULL = 没记下开始时刻，前端不显示耗时；拿 `createdAt` 冒充会把排队算进去。 */
     claimedAt: dateNull("claimedAt"),
     /** 提交时刻的执行载荷（RAW 原件，P3 §5 ADR §13-3B1 决定 1）：host 领到行后
      *  由它重建 Job，不经 `workflowName` 回查模板——模板被改/删也不影响在队任务

@@ -1,17 +1,7 @@
 /**
- * worktree 落点契约（ISSUE #2935 / AGENTS 硬规则 30 / 规范 §13.6.2）。
- *
- * `git worktree add` 的目标路径只有两个合法落点：仓内 `.worktrees/`（已入
- * `.gitignore`，检出内容不进库）或系统临时目录（`mkdtempSync(join(tmpdir(), …))`）。
- * **唯独不许落 `.git/` 下**：Vite/vitest 的 `server.fs.deny` 默认把 `.git` 整棵子树
- * 挡在模块加载外（glob 形态见下行红话），落在那下面的检出里 DOM 档用例在加载期就被
- * deny，报错是 "Cannot find module" 族、指不到真实原因（#2935 的现场）；且 `.git/`
- * 是 git 自己的簿记目录，不是放工作树的地方。
- *
- * 本文件扫的是别的文件的**文本**（import 图追不到），所以登记在固定结构清单里。
- * 自匹配边界：被禁形状的夹具一律拼接写出（`".gi" + "t"` / `mustGit${"Dir"}`），
- * 否则本文件自己就在扫描面上、会把自己算成命中（同一族的口径见
- * `tests/probe-restore.test.ts` 那段「被禁形状一律拼接写出来」）。
+ * worktree 落点契约（ISSUE #2935 / AGENTS 硬规则 30 / §13.6.2）：只许仓内 `.worktrees/` 或系统临时目录；
+ * 落 `.git/` 下会被 Vite/vitest 的 `server.fs.deny` 在加载期挡成 "Cannot find module" 族（#2935 现场），
+ * 且那是 git 自己的簿记目录。本文件扫文本（import 图追不到），登记在固定结构清单；被禁形状的夹具一律拼接写出。
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -31,11 +21,9 @@ const SCAN_EXT = new Set([".ts", ".tsx", ".mjs", ".cjs"]);
 const CALL_SITE = /["']worktree["']\s*,\s*["']add["']|\bworktree\s+add\b/g;
 
 /**
- * 落点表达式里「落到 `.git/` 下」的形状：被引号包住、以 `.git` 为路径分量的串
- * （`".git"` / `".git/wt"` / `".git\\wt"`），或 git 目录解析器
- * （`resolveGitDir` / `mustGitDir` / `gitScratchPath`）—— 把 worktree 建进
- * git 的簿记目录只有这几种写法。相邻正当写法（`.worktrees/`、系统临时目录变量）
- * 一个都不命中，由下面的正控钉住。
+ * 落点表达式里「落到 `.git/` 下」的形状：被引号包住、以 `.git` 为路径分量的串（`".git"` / `".git/wt"` 等），
+ * 或 git 目录解析器（`resolveGitDir` / `mustGitDir` / `gitScratchPath`）。
+ * 相邻正当写法（`.worktrees/`、系统临时目录变量）一个都不命中，由下面的正控钉住。
  */
 const GIT_DIR_SHAPE =
   /["'`][^"'`\n]*\.git(?:[/\\"'`]|$)|\b(?:resolveGitDir|mustGitDir|gitScratchPath)\s*\(/;

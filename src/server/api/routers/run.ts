@@ -1,13 +1,8 @@
-// AI 自主执行 run 的控制端点（Phase 6 地基）。
-//
-// run = 挂在统一项目上的一份「AI 正在把流水线跑到成片」的协调态（生命周期 + 审批粒度 +
-// 每镜已处理 rev 快照），落在 production.run 列、由这里**单独写**（工坊自动保存不碰 run）。
-// 两个视图（画布 / 工坊）都是它的操纵台：都能 start / pause / resume / approve / cancel，
-// 都能读 status 看「下一步该做什么」。
-//
-// 控制端点管理 run 生命周期、`status` 用纯规划器算出下一步动作并回显。`start / resume / approve`
-// 把 run 置为 running 后，以 fire-and-forget 拉起服务端执行引擎 `advanceRunLoop`（推进到下一个
-// 停点：等点头 / 完成 / 失败 / 被暂停），引擎内部自带异常兜底、不抛给调用方。
+// AI 自主执行 run 的控制端点（Phase 6 地基）。run = 挂统一项目上的「AI 跑到成片」协调态（生命周期 + 审批
+// 粒度 + 每镜 rev 快照），落 `production.run` 列、由这里**单独写**（工坊自动保存不碰 run）。两视图（画布 /
+// 工坊）都是操纵台：start/pause/resume/approve/cancel + status。status 用纯规划器算下一步动作；
+// start/resume/approve 置 running 后 fire-and-forget 拉起 `advanceRunLoop`（推进到下一停点：点头/完成/
+// 失败/暂停），引擎自带兜底、不抛给调用方。
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 

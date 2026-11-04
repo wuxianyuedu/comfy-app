@@ -1,27 +1,7 @@
 /**
- * 主题别名 token 的级联回归（ISSUE #609，ISSUE #672 收口）。
- *
- * 背景：`globals.css` 里 shadcn 语义别名（`--card` / `--background` /
- * `--foreground` / `--border` …）的**深色档**写在靠前的 `.dark {}` 块，而
- * **浅色档**曾写在靠后的**裸 `:root {}`** 块。两个选择器落在同一个元素
- * （`<html>`）上、特异性相同（都是 0-1-0）——此时源码顺序决定胜负，写在
- * 后面的浅色 `:root` 恒压过前面的 `.dark`。
- *
- * 后果不是「某个组件漏改」，而是**所有走 shadcn 别名的 utility 在深色下取
- * 浅色值**：`bg-card` 编成 `background-color: var(--card)`，`--card` 恒为
- * `#ffffff`，于是工作流库画布的三张卡片在深色里是白底 + 近白字（用户报
- * 「深色下工作流库的画布界面也没法看」）。这类故障 tsc / eslint / 主题色
- * 扫描器**都看不见**（它扫的是写死色值，而这里是 token 解析错了）。
- *
- * ISSUE #672 收口之后，别名不再两态各写一份（改走「转发到项目 token」，
- * 见 `theme-token-single-source.test.ts`），本条判据因此不再测「浅色档压过
- * 深色档」这个具体形状，而是守着**它的等价性质**：每个别名在两态各取到
- * 一个非空、且等于它所跟随的项目 token 的值。
- *
- * 取值口径：`tests/helpers/theme-tokens.ts` —— 真编译 `globals.css` 产物，
- * 自己实现级联与 `var()` 链解析。**不要改回 `getComputedStyle`**：
- * jsdom 不解析 `var()`，别名改成转发后会返回字面量 `"var(--color-surface)"`，
- * 断言会全部变成误报（实测过）。本文件的做法在 Chromium 里逐项核对过。
+ * 主题别名 token 的级联回归（ISSUE #609，ISSUE #672 收口）。历史形态：深色档在 `.dark {}`、浅色档在靠后的裸 `:root {}`，同元素同特异性（0-1-0），
+ * 源码顺序定胜负 ⇒ 浅色恒压深色，所有走别名的 utility 在深色下取浅色值（白底近白字）；tsc / eslint / 色值扫描都看不见（它扫的是写死色值）。
+ * #672 后别名改走「转发到项目 token」，本条守其等价性质：每个别名两态各非空、且等于所跟随的项目 token。取值用 `tests/helpers/theme-tokens.ts` 真编译产物 —— **不要改回 `getComputedStyle`**（jsdom 不解析 `var()`，会全成误报）。
  */
 import { beforeAll, describe, expect, it } from "vitest";
 import { loadThemeTokens, type ThemeTokens } from "./helpers/theme-tokens";
@@ -84,15 +64,9 @@ describe("主题别名 token 在两态下各自生效（ISSUE #609）", () => {
 });
 
 /* 三条 utility 的「取值来自哪里」：声明的属性名 + 它编成了什么。
- *
- * **别把这些断言写回「允许哪几种拼法」的白名单** —— 这里量的性质是「取值来自
- * `var()`、且那颗变量在本态解得出主题值」，而白名单是这条性质的**实现细节**。
- * 历史上它们正是枚举写法（`var(--(card|color-surface))`），而 utility 编出的
- * 变量名跟着取值来源走：`--color-card` 成为项目 token 唯一事实来源之后，
- * `bg-card` 编的是 `var(--color-card)`，白名单里的第三种写法没人补 ⇒ 断言变成
- * 假性红、被登记进 `KNOWN_FAILED_FILES` 整个文件静默跳过（ISSUE #1282）。
- * 复用优先（规范 §12.18）：项目 token 是唯一事实来源，凡是 `--color-*` 形态都该
- * 天然被接受，不需要在判据里再养一份会过期的名字清单。 */
+ * **别把这些断言写回「允许哪几种拼法」的白名单** —— 这里量的是「取值来自 `var()`、且那颗变量在本态解得出主题值」，
+ * 白名单是这条性质的实现细节：`--color-card` 成为唯一事实来源后 `bg-card` 编的是 `var(--color-card)`，白名单没补 ⇒
+ * 假性红、被登记进 `KNOWN_FAILED_FILES` 整个文件静默跳过（ISSUE #1282）。复用优先（§12.18）：凡 `--color-*` 形态都天然被接受。 */
 /* SAFETY: 类型断言已复核 */
 const UTILITY_SOURCES = [
   { cls: "bg-card", prop: "background-color" },

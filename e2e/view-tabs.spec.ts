@@ -1,14 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
 /**
- * 视图页签条在真浏览器里的行为（@critical）。
- *
- * 这里判的是「装配 + 交互」这一层，jsdom 那侧替代不了：页签状态挂在 workspace 页面、
- * 侧栏导航要真的把它推起来、关闭要真的落回左邻。
- *
- * 顺带钉一条边界：浏览器/dev 形态下**没有** iframe 页签栏（可访问名「应用页签」），
- * 那是桌面壳才有的东西（ComfyUI 在浏览器里改由新浏览器页签打开）。视图页签条叫
- * 「已打开的视图」，两者不是一个控件，名字也不能混 —— 混了这条判据就废了。
+ * 视图页签条在真浏览器里的行为（@critical）：判「装配 + 交互」这层，jsdom 替代不了 —— 页签状态挂在
+ * workspace 页面、侧栏导航要真的把它推起来、关闭要真的落回左邻。边界：浏览器/dev 形态下没有 iframe
+ * 页签栏（可访问名「应用页签」，那是桌面壳才有的），视图页签条叫「已打开的视图」，两者名字不能混。
  */
 async function openWorkspace(page: Page) {
   await page.goto("/workspace");

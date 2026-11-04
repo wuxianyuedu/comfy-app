@@ -1,17 +1,7 @@
 /**
- * model.router 的闸门用例（体检清单 ⑨ 第二刀）。
- *
- * 这个 router 的「本机状态」是**每个用户启用哪些模型目录**（`userModelConfig`），
- * 目录名同时是 ComfyUI 里的路径片段。判三件事：
- *   · 写侧一律带会话用户 —— `addOrEnable` / `deleteForUser` 收到的是 `ctx.user.id`，
- *     关掉「禁用某个目录」的闸门必须只能落在自己那行上（别人的同名配置一个字都不动）；
- *   · 读侧 `configList` 的 override 只吃自己的行 —— 否则 A 启用/禁用的目录会串到 B 的界面；
- *   · `comfyReachable` 是**降级**而不是故障：ComfyUI 没起时 `fetch` 抛错要吞成 false，
- *     不能让整个配置页 500（口径同 comfy/stats 那条：可达性判据不许把面板带崩）。
- *
- * mock 边界：`~/server/db`（内存库 + 真 Drizzle，配置行是真的按 userId 过滤）、
- * `~/lib/models` 与 `~/lib/comfyui/client`（会真扫 ComfyUI 目录 / 发 HTTP，换成记账替身）、
- * `globalThis.fetch`（可达性）、`~/server/better-auth`、`~/lib/core/logger`。
+ * model.router 闸门用例（⑨ 第二刀）：本机状态是每用户启用的模型目录（`userModelConfig`），目录名同时是 ComfyUI 路径片段。判三件事：
+ * 写侧带会话用户（`addOrEnable` / `deleteForUser` 收 `ctx.user.id`，别人的同名配置一字不动）；读侧 `configList` 只吃自己的 override。
+ * `comfyReachable` 是降级而非故障：ComfyUI 没起时 `fetch` 抛错吞成 false，不能让配置页 500。mock：db（真 Drizzle，按 userId 过滤）、`~/lib/models`、`~/lib/comfyui/client`、`fetch`、better-auth、logger。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

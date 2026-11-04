@@ -1,24 +1,7 @@
 /**
- * film.router 的闸门用例（体检清单 ⑨ 第二刀）。
- *
- * 这个 router 的**归属**判据看起来是齐的（四个按 id 取片的口都走
- * `findByIdForUser(ctx.user.id, …)`），但它把「查不到」写成了
- * `throw new Error("Film not found")` —— 那不是 NOT_FOUND：tRPC 把裸 Error 归成
- * `INTERNAL_SERVER_ERROR`，于是
- *   · **越权与不存在并不同形**（台账 A2 / A3 / A12 定的口径），客户端也拿不到能分支的
- *     错误码，界面只能显示「出错了」；
- *   · 一条正常的「用户点了别人那张片的详情」在服务端表现为 500，会污染错误率与
- *     Sentry（把业务分支当故障报）。
- * 所以这一批用例先按**应该有的契约**写（当场照出上面那处），再连同路由一起修。
- *
- * 另一侧的价值在「拒绝必须发生在副作用之前」：`start` / `compose` / `cancel` 都是
- * 会起任务、烧 ffmpeg、改库口的动作，判据与动作之间隔一行就不算 gate ——
- * 用例断言编排模块**一次都没被调用**。
- *
- * mock 边界：`~/server/db`（内存库 + 真 Drizzle，归属真的按 userId 过滤）、
- * `~/server/better-auth`（无会话）、`~/lib/core/logger`；编排层（orchestrator /
- * compose-film）整个换成记账替身 —— 它们各自的判据在 `orchestrator.test.ts` 与
- * `compose-steps.test.ts` 里，这里只判「路由有没有把上下文传对、有没有在被拒时什么都不发起」。
+ * film.router 闸门用例（⑨ 第二刀）：归属看似齐（四个取片口走 `findByIdForUser`），但「查不到」写裸 `Error` ——
+ * tRPC 归成 500，越权与不存在不同形（台账 A2/A3/A12），正常业务分支污染错误率与 Sentry；用例按应有契约写。
+ * 拒绝必须先于副作用：`start`/`compose`/`cancel` 起任务、烧 ffmpeg、改库，断言编排一次未被调用。mock：db（内存库 + 真 Drizzle，按 userId 过滤）、better-auth、logger、编排记账替身。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

@@ -1,25 +1,7 @@
 /**
- * 「被轮询的日志路由不许用同步 fs IO」这条账的守卫（ISSUE #2193）。
- *
- * ## 它为什么值得是一条判据，而不是一段散文
- *
- * 这一条原本的住址是 `docs/audits/2026-09-26-performance-audit.md` §C.5 M12 与
- * 一份「哪几处还在用同步 IO」的手抄清单 —— 而那份清单点名两处、实面上是**五份**
- * route。手点数的必然形态是：新增一份 route、或某处又退回同步写法时，
- * 账面一个字都不会红（没人数的东西没人守）。形态确定（就是一个目录下的
- * `route.ts`）、成本可控（读七个文件）、能指到行 —— 正是 AGENTS 硬规则 27
- * 那条「只有这一类才升级成门禁」的形状。
- *
- * ## 判的是调用，不是叙述
- *
- * 注释里**必须**能出现 `statSync` 这个名字（这些文件正是要说明「为什么不再是它」），
- * 所以匹配前先过 `tests/helpers/strip-comments.ts`（那份助手存在的理由就是这一格）。
- *
- * ## 覆盖面按目录取，不写死名单
- *
- * 名单会漂：本轮立案时是五份，同目录下其实有七份 `route.ts`。按目录走 ⇒
- * 新加一份自动进面；目录被搬空则**当场红**（那条 `length > 0` 就是防「判据
- * 悄悄变成恒真」的负控制 —— 「确认存在」这句话自己也可能恒失败）。
+ * 「被轮询的日志路由不许用同步 fs IO」这条账的守卫（ISSUE #2193）。原住址是性能审计 `docs/audits/2026-09-26-performance-audit.md` §C.5 M12 与一份
+ * 手抄清单（点名两处、实面五份 route）：手点数的东西没人守，新增 route 或退回同步写法账面不会红；形态确定（一目录下的 `route.ts`）、成本可控、能指到行，正合 AGENTS 硬规则 27。
+ * 判的是调用不是叙述：注释里必须能出现 `statSync`，匹配前先过 `tests/helpers/strip-comments.ts`；覆盖面按目录取，新 route 自动进面、目录空则当场红（`length > 0` 防判据恒真）。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -33,10 +15,8 @@ const LOG_API_DIR = path.join(ROOT, "src", "app", "api", "logs");
 
 /**
  * 同步 fs 的调用形态。
- *
- * 连 `existsSync` 一起收是有原因的：它常被当成「免费的」而单独漏掉，
- * 但它同样是一次同步系统调用（本轮 `current` 那两处 `existsSync` + `statSync`
- * 就是合并成一次异步 `stat` 的）。`fs.promises.*` 不含 `Sync` 后缀，不被命中。
+ * 连 `existsSync` 一起收：它常被当成「免费的」而单独漏掉，但同样是一次同步系统调用（本轮 `current` 那两处
+ * `existsSync` + `statSync` 就是合并成一次异步 `stat`）。`fs.promises.*` 不含 `Sync` 后缀，不被命中。
  */
 const SYNC_FS_CALL =
   /\b(?:stat|lstat|readdir|readFile|writeFile|appendFile|open|close|exists|mkdir|rm|unlink|rename|copyFile|chmod|symlink|realpath|access|watch)Sync\s*\(/g;

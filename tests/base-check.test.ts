@@ -1,24 +1,7 @@
 /**
- * 「被门禁拦下先复算 master 基线」的执行者（规范 §13.6.2 第 1 步）的契约测试。
- *
- * 判据本体 `scripts/base-check.mjs` 是**纯读事实**的那一半：把你被拦住的那条判据
- * 在干净的上游提交上再跑一遍，给出 `baseline-red` / `yours` / `current-green` /
- * `inconclusive` 四态之一。它不替你决定「挡不挡路」、不自动登记、不改判据。
- *
- * 为什么在**真 git 仓库**上跑（不用 mock）：判据依赖三件真事实 —— HEAD 是检出、
- * 上游引用能解析、`git worktree add` 出一个干净快照。内存里假装这三件事，恰好等于
- * 把「复算」这件事重新实现一遍（而它唯一的失效形态正是「假装干净」）。
- *
- * 覆盖：① 三态的判决（纯函数，两向各一组）；② 命令解析（钩子标签 / 裸脚本名 /
- * 完整命令 / 标签歧义）；③ **`inconclusive` 的三条入口** —— 只存在未提交改动里的
- * 判据在基线侧 `MODULE_NOT_FOUND`，退出码与「跑了且红」同形（Node 是 1），
- * 所以「跑不起来」必须由**目标存不存在**判，不能由退出码判（实测踩过）；
- * 另一条是**一条用例都没收集到**（`Tests  no tests` / `Cannot find package`，
- * ISSUE #1652）—— 它同样是退出码 1，而「目标存不存在」看不见它（目标在、是它
- * 运行时的依赖链断了），所以这一族必须由**输出指纹**判，且两向都要钉住
- * （真红 `1 failed / 3 failed tests` 不许被吞成 `inconclusive`）。
- * 第三条是**判据自己退 2**（ISSUE #2791）：三态口径里那是「这一跳没有结论」，
- * 而它与 1 只差一个码位 —— 过去同权，于是「什么都没判」被报成「别线的红」。
+ * 「被门禁拦下先复算 master 基线」（§13.6.2 第 1 步）的契约测试：`scripts/base-check.mjs` 在干净上游复算，给
+ * `baseline-red` / `yours` / `current-green` / `inconclusive` 四态，不决定挡路、不登记、不改判据。必须在
+ * **真 git 仓库**上跑（依赖 HEAD 是检出、上游可解析、`worktree` 出干净快照；假装 = 把复算重实现一遍）。
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -50,15 +33,9 @@ import {
   tokenize,
 } from "../scripts/base-check.mjs";
 
-/* 每条用例都要真起 git 进程（init / commit / worktree add / 跑一次被判的判据），
- * 负载高的机器上会比「内存里翻转状态」那类慢一个量级 —— 本文件实测单条最慢约 4.9s
- * （load ≈65 下），所以给它自己的 hook 预算收到 30s（全局 hookTimeout 是 45s，
- * 那是给 `theme` 那种「真编一遍 CSS」的 beforeAll 留的，本文件用不满）。
- *
- * ⚠️ `testTimeout` 这里**不写**：全局已经是 30_000（`vitest.config.ts`），
- * 再写一遍是同值的死代码 —— 而它上一版就长这样，注释还写着「5s 不够」，
- * 读起来像「本条把预算放宽了」，实际一个字都没改（口径同 §11.13：
- * 要写就把**为什么是这个数**写出来，别留一条不生效的声明）。 */
+/* 每条用例都真起 git 进程（init / commit / worktree add / 跑一次被判判据），实测单条最慢约 4.9s
+ * （load ≈65 下），故 hook 预算收到 30s（全局 hookTimeout 45s 是给 `theme` 真编 CSS 的 beforeAll 留的）。
+ * ⚠️ `testTimeout` 这里**不写**：全局已是 30_000（`vitest.config.ts`），再写同值即死代码（§11.13）。 */
 vi.setConfig({ hookTimeout: 30_000 });
 
 const REPO_ROOT = process.cwd();
@@ -80,22 +57,9 @@ function git(cwd: string, ...args: Array<string>): string {
 }
 
 /**
- * 跑一次被测脚本 —— **带一次重试**。
- *
- * 为什么需要：C 组与 A（tsc）/ B（eslint）/ D（48 个判据脚本）**并行**跑
- * （钩子里 `--maxWorkers=4`），而在最冷的那一次（`pnpm install` 刚重建完
- * eslint 缓存、48 个脚本同时冷启）实测撞到过 `main()` 的早退：退出码 1、
- * **stdout 为空**。这不是被测行为 —— 它在本文件单跑、以及 16 路并发压测下
- * 都复现不出来，形态是「环境把一次 `git` 调用搞没了」。
- *
- * 所以这里对**整体失败**重试一次（不是放宽断言）：两次都失败才判红，
- * 而每次的取数都由真 git / 真子进程给出，判据的语义一字未变。
- * 这与本仓库「环境噪声收进夹具、不留给第十六个人再踩一次」的口径同源
- * （§11.16.1 的 `chmodSync` 那条就是这个理由）。
- *
- * @param {string} cwd
- * @param {string[]} args
- * @returns {{code: number, stdout: string, stderr: string}}
+ * 跑一次被测脚本 —— **带一次重试**。C 组与 A（tsc）/ B（eslint）/ D（48 判据）并行（`--maxWorkers=4`），最冷
+ * 那一次（`pnpm install` 刚重建 eslint 缓存、48 脚本同时冷启）实测撞到 `main()` 早退：退 1、stdout 为空；单跑
+ * 与 16 路并发都复现不出 —— 是环境把一次 `git` 调用搞没了。故对**整体失败**重试一次，两次都失败才判红。
  */
 function runBaseCheckOnce(
   cwd: string,
@@ -128,14 +92,9 @@ function runBaseCheckOnce(
 }
 
 /**
- * 造一个「有上游基线」的临时仓库（含一个**裸远端**）：
- *
- *   <bare>/master      ← 基线（只有 seed.txt 与那条判据脚本）
- *   <work>/feat        ← 「你的检出」，跟踪远端 master，且多一个 marker 文件让判据红
- *
- * 为什么要一个**真远端**而不是手写一条 `refs/remotes/…`：`resolveUpstreamRef()`
- * 的首选是 `@{u}`（当前分支的上游），而它只有在分支真跟踪某个远端时才解析得出。
- * 手写引用只能覆盖候选顺序的后半段，恰好绕开了最常走的那一条。
+ * 造一个「有上游基线」的临时仓库（含**裸远端**）：`<bare>/master` ← 基线（只有 seed.txt 与判据脚本），
+ * `<work>/feat` ← 「你的检出」，跟踪远端 master，多一个 marker 文件让判据红。要**真远端**：`resolveUpstreamRef()`
+ * 首选 `@{u}`，只有分支真跟踪远端才解析得出；手写 `refs/remotes/…` 只覆盖候选后半段。
  */
 function makeRepo(opts: { markerOnBase?: boolean; noTestsOnBase?: boolean } = {}): {
   bare: string;
@@ -219,11 +178,9 @@ function dropRepo(r: { bare: string; work: string }): void {
 }
 
 /**
- * 跑一次 base-check，返回 `{ code, stdout, stderr }`。
- *
- * 「复算过程本身失败」由退出码表达（脚本自己把「判据红了」编码进**输出**、退 0），
- * 所以这里只在**判据真的红了**时才可能拿到非 0 —— 而「脚本根本没跑起来」
- * （退出码非 0 **且** 两路输出都空）是环境噪声，重试一次（见 `runBaseCheckOnce`）。
+ * 跑一次 base-check，返回 `{ code, stdout, stderr }`。「判据红了」被脚本编码进**输出**并退 0，所以只有判据
+ * 真红才可能拿到非 0；而「脚本根本没跑起来」（非 0 **且**两路输出都空）是环境噪声，重试一次
+ * （见 `runBaseCheckOnce`）。
  */
 function runBaseCheck(
   cwd: string,
@@ -271,24 +228,9 @@ describe("base-check —— judge() 判决（纯函数，两向各一组）", ()
 });
 
 /* ── inconclusive 的第二条入口：一条用例都没收集到（ISSUE #1652）──────
- *
- * 现场（真事）：被 C 组拦下一条 `tests/check-a11y-rules.test.ts` 的 30s 超时，
- * 按 §13.6.4 去复算，第一次报 `inconclusive`（两侧 127），第二次却报了
- * `baseline-red`（「别线的红」）—— 依据是基线那一侧这段输出：
- *
- *     FAIL  node  tests/check-a11y-rules.test.ts
- *       `Cannot find package '@adobe/css-tools'`（在 jest-dom 的 matchers-*.mjs 上）
- *     Test Files  1 failed (1)
- *          Tests  no tests     ← 这个「收集到 0 条」的读数就是指纹
- *
- * 注意最后两行：**一个用例都没收集到**。这不是「判据跑了且红」，是**跑不起来**，
- * 而它退的是 1（vitest 收集失败），与「跑了且红」逐字同形；`commandTargetState`
- * 那条静态判据也看不见它（目标文件在，是它运行时的依赖链断了）。
- *
- * 走错这一档的代价不是「结论难看」，是**下一动作相反**：`baseline-red` 要人去就地修
- * 或按 §11.12 登记 `KNOWN_FAILED_FILES`，而这次根本没有「一条有主的账」可登 ——
- * 下一次它不红，从此没人解释得清它为什么在那儿（同 §13.6.4 反对把负载假红读成
- * `baseline-red` 的理由，只是换了触发原因）。
+ * 现场：C 组拦下 `check-a11y-rules.test.ts` 的 30s 超时，复算第一次 inconclusive（两侧 127）、第二次却报
+ * `baseline-red`，依据是基线输出 `Tests  no tests`（收集 0 条）—— 这不是「跑了且红」而是跑不起来，退 1
+ * 与红同形、`commandTargetState` 也看不见（依赖链断）。走错档的下一动作相反：会去登记一条不存在的账。
  */
 describe("base-check —— 没收集到用例：inconclusive 的第二条入口", () => {
   /* 基线那一侧的真实现场（原文形态，不是构造的）。 */
@@ -445,25 +387,13 @@ describe("base-check —— 没收集到用例：inconclusive 的第二条入口
 });
 
 /* ── 第五态：负载假红（ISSUE #1641）────────────────────────────────────
- *
- * 这一族的现场（实测）：同一份代码、同一个提交，8 核空闲时 66 个结构判据
- * 31.9s 全绿；把机器压到 load≈42 时 `tests/check-a11y-rules.test.ts` 报
- * `Test timed out in 30000ms`，隔离重跑立刻全绿。四态里没有它 —— 两侧都红
- * ⇒ 报 `baseline-red`，而照那个动作走会把一次调度抖动登记进 `KNOWN_FAILED_FILES`。 */
+ * 实测同一份代码、同一提交，8 核空闲时 66 个结构判据 31.9s 全绿；压到 load≈42 时 `check-a11y-rules.test.ts` 报
+ * `Test timed out in 30000ms`，隔离重跑立刻绿。四态没有它 —— 两侧都红就报 `baseline-red`，照那动作走会把
+ * 一次调度抖动登记进 `KNOWN_FAILED_FILES`。 */
 /* ── inconclusive 的第三条入口：判据自己退 2（ISSUE #2791）─────────────────
- *
- * 现场（本检出，被 §13.6.2 那条路撞出来）：
- *
- *     $ node scripts/base-check.mjs "node scripts/ci-affected-tests.mjs"
- *     [base-check] 结论：baseline-red（本检出 2，origin/master @ 224a5a3d 2）
- *     [base-check] 基线那次输出的末尾：… ※ 这一档**不算绿也不算红** …
- *
- * 两侧都是 **2**（本仓三态口径里的「这一跳没有结论」：0 绿 / 1 事实红 / 2 没结论，
- * 且 2 压 1 —— 同口径见 `check-daily-attendance` 的「退 2 不算绿」）。而 `judge()`
- * 过去只看「非零」，于是 2 与 1 逐字同权。后果不是难看，是**下一动作相反**：
- * `baseline-red` 要人把这条红记进历史（就地修 / 登记 `KNOWN_FAILED_FILES`），
- * 而这一次什么都没判 —— 登记的是一条不存在的账。
- */
+ * 现场（本检出被 §13.6.2 撞出）：结论 `baseline-red`（本检出 2，origin/master @ 224a5a3d 2）—— 两侧都是 2
+ * （0 绿 / 1 事实红 / 2 没结论，且 2 压 1）。`judge()` 过去只看「非零」，于是 2 与 1 同权；后果是下一动作
+ * 相反：会去登记一条不存在的账。 */
 describe("base-check —— inconclusive 的第三条入口：判据自己退 2", () => {
   const NO_PREMISE =
     "[deps-probe] × 这一跑的**前提**不成立（不是用例红）：\n" +
@@ -765,11 +695,9 @@ describe("base-check —— 真仓库上的四态", () => {
   });
 
   /**
-   * 「PR 分支 + 主干已推进 + 本地合过主干」那份夹具（ISSUE #1913 的现场形状）。
-   *
-   * 分支**推过一次** ⇒ `@{u}` 就是它自己那条线；随后主干带进一个违规，本地把主干
-   * 合了进来（还没推）。此时按旧口径拿 `@{u}` 当基线 = 拿**不含那批合并改动**的
-   * 自己跟自己比 ⇒ 主干自带的红会被判成 `yours`，把别线的债算到复算的人头上。
+   * 「PR 分支 + 主干已推进 + 本地合过主干」夹具（ISSUE #1913 的现场形状）：分支推过一次 ⇒ `@{u}` 是自己那条线；
+   * 随后主干带进违规、本地合了进来（还没推）。旧口径拿 `@{u}` 当基线 = 拿**不含合并改动**的自己跟自己比 ⇒
+   * 主干自带的红被判成 `yours`，把别线的债算到复算的人头上。
    */
   function makeMergedPrFixture(): { bare: string; work: string } {
     const bare = mkdtempSync(join(tmpdir(), "base-check-pr-bare-"));
@@ -811,17 +739,9 @@ describe("base-check —— 真仓库上的四态", () => {
 
   test("PR 分支合过主干 ⇒ 基线取主干，并把「取到哪条」说出口", () => {
     /**
-     * 这一条判的是**基线选择 + 报告口径**（本次的回归本体），刻意不走建快照那一趟：
-     * 快照那一条命令要付 `git worktree add` + 两侧各跑一遍判据，配上这个夹具（比
-     * `makeRepo()` 多一次 push 与一次 merge）实测单条 **49s**（本机同时压着 4 个检出的
-     * vitest 时），会把 30s 预算吃光；改成走快路后同一台机器上复测 **27.3s** ——
-     * 余量仍然不宽，所以这里**不抬预算**，只把代价挪走（§11.13 的口径：预算的出处是实测，
-     * 不是为了让颜色变绿而调的旋钮）。
-     * 「红落在哪一侧」的判决早有 `judge()` 的单测与上面 `markerOnBase` 那条 CLI 用例在判，
-     * 这里重复判一遍只是把同一条链付两次代价。
-     *
-     * 快路怎么选：给一个**必绿**的门禁 ⇒ `current-green` ⇒ 脚本按设计不建快照，
-     * 但「取了哪条基线」那一行照打 —— 正是本回归要钉的东西。
+     * 判的是**基线选择 + 报告口径**（回归本体），刻意不走建快照那趟：它有 `worktree add` + 两侧各跑一遍，本夹具
+     * 实测单条 49s（同机 4 份 vitest），吃光 30s；走快路复测 27.3s。余量不宽，故**不抬预算**只挪代价（§11.13：
+     * 预算出处是实测）。快路：给**必绿**门禁 ⇒ `current-green` ⇒ 不建快照，但「取了哪条基线」那一行照打 —— 正是要钉的。
      */
     const r = makeMergedPrFixture();
     try {
@@ -847,10 +767,8 @@ describe("base-check —— 真仓库上的四态", () => {
 
   test("主干与 HEAD 是同一份时才退回 `@{u}`（在 master 上直接复算的那种检出）", () => {
     /**
-     * 这一向**不复用** `makeMergedPrFixture()`：那个夹具要为「主干与 HEAD 不同」这件事
-     * 付一次 push + 一次 merge，而本用例只需要「HEAD 逐字等于主干」这一格 —— 用最少的
-     * git 动作造出来就行。判据文件在本仓是并发跑的（C 组与 A/B/D 挤同一台机器），
-     * 少造一半夹具就是少一分负载假红。
+     * 这一向**不复用** `makeMergedPrFixture()`：那个夹具为「主干与 HEAD 不同」付一次 push + merge，本用例
+     * 只需「HEAD 逐字等于主干」。判据文件与 A/B/D 并发挤同机，少造一半夹具就是少一分负载假红。
      */
     const bare = mkdtempSync(join(tmpdir(), "base-check-trunk-bare-"));
     git(bare, "init", "-q", "--bare", "-b", "master", ".");
@@ -944,18 +862,9 @@ describe("base-check —— 真仓库上的四态", () => {
   });
 
   test("取不到上游时 resolveUpstreamRef 若能看到本地 master 也应认得它", () => {
-    /* **先在临时仓库上判**（下一条的由来就在这段注释里）：这一格要验的是候选表
-     * **第三条**（本地 `master`）够得着，所以夹具就该只有「本地 `master`、既没有
-     * `@{u}` 也没有任何 remote」这一种形态 —— 拿「本仓库自己的检出」当夹具是错的，
-     * 它只在**开发机的检出**上成立。
-     *
-     * 实测（自托管 CI 的克隆方式）：平台侧是
-     * `git init -b master` → `git remote add origin …` → `git fetch … refs/pull/N/merge`
-     * → `git checkout -f FETCH_HEAD` —— HEAD **detached**、`refs/heads/*` 一个都没有
-     * （`master` 是未诞生的分支）、`@{u}` 更不存在，于是 `resolveUpstreamRef()` 三条
-     * 候选全落空、如实回 `null`。也就是说**「取不到上游」在 CI 上是正常状态**，
-     * 而原来那条断言把「取得到」写成了本检出的恒真性质 ⇒ 只在 CI 上假红。
-     * 出处与克隆形态见规范 §13.5.3（平台侧取自「不可信事件」的源分支）。 */
+    /* **先在临时仓库上判**：本格验候选表**第三条**（本地 `master`）够得着，夹具只能有「本地 `master`、无 `@{u}`
+     * 也无 remote」—— 平台自托管 CI 是 `checkout -f FETCH_HEAD`：HEAD detached、`refs/heads/*` 全无 ⇒ 三候选落空、
+     * 如实回 `null`。「取不到上游」在 CI 上正常，旧断言把它写成恒真性质，于是只在 CI 假红（规范 §13.5.3）。 */
     const dir = mkdtempSync(join(tmpdir(), "base-check-localmaster-"));
     try {
       git(dir, "init", "-q", "-b", "master", ".");
@@ -976,15 +885,9 @@ describe("base-check —— 真仓库上的四态", () => {
 });
 
 /**
- * `--merge-state`：**第三种树**那一档（ISSUE #3043）。
- *
- * 平台 PR 建的是**合并态**（分支 ⊕ 目标分支），而 `current-green` 的短路只量过本地
- * —— 「本地绿 + 平台红」这一形下它给出的是「无需复算」，不构成证据。这一档把
- * 合并态真建出来（`git merge --no-commit`）量一遍：本地绿 + 合并态红 ⇒ `merge-red`；
- * 两棵树都绿 ⇒ `current-green`（这次有证据）；冲突 / 判据没跑起来 ⇒ `inconclusive`。
- *
- * 夹具形状：判据「只在 marker.txt 存在时红」，marker 落在**主干侧**的新提交里 ——
- * 于是本分支（没合主干）绿、合并态（⊕ 主干）红，正是 #3043 立案的那一形。
+ * `--merge-state`：**第三种树**那一档（ISSUE #3043）。平台 PR 建的是合并态（分支 ⊕ 目标分支），而 `current-green`
+ * 短路只量过本地 —— 「本地绿 + 平台红」下它给出「无需复算」，不构成证据。真建合并态（`git merge --no-commit`）量一遍：
+ * 本地绿+合并态红 ⇒ `merge-red`；两树皆绿 ⇒ `current-green`；冲突/没跑起来 ⇒ `inconclusive`。夹具让 marker.txt 落在主干侧。
  */
 describe("base-check --merge-state —— 本地绿不证明合并态绿（ISSUE #3043）", () => {
   /**
@@ -1143,18 +1046,9 @@ describe("base-check --merge-state —— 本地绿不证明合并态绿（ISSUE
 });
 
 /**
- * `--base`：**合并前那一档**（ISSUE #1591）。
- *
- * 这条入口补的是「我的分支绿 → `master` 绿」之间那个**没有任何判据**的跳
- * （平台侧 squash 合并不跑本地钩子、#623 之后无 CI）。它必须成立在四件事上，
- * 缺一件就退化成「看着在守、其实没守」：
- *
- *   ① **面从钩子里现算**，不抄第二份清单（抄一份就会漂）；
- *   ② 只在**干净快照上判得出**的判据才进这一批（`--staged` / 只在改动命中时做事的
- *      那几条进去就等于问一个它们回答不了的问题）；
- *   ③ 整批的结论**优先级正确** —— 任一条「没跑起来」（127）压过「有红」，
- *      因为 127 与「跑了且红」在退出码上同形，拿它下判决是把人往错方向送；
- *   ④ 快照里**链上依赖树** —— 缺它的表现是近一半判据以「红」的形态报错（实测 9 条）。
+ * `--base`：**合并前那一档**（ISSUE #1591），补「我的分支绿 → `master` 绿」之间没有判据的跳（平台 squash 不跑
+ * 本地钩子、#623 后无 CI）。缺一即退化：① 面从钩子现算不抄第二份清单；② 只在干净快照上判得出的才进批；
+ * ③ 127 压过「有红」（两者退出码同形，拿它下判决会送错方向）；④ 快照里链上依赖树（缺它近一半判据报「红」，实测 9）。
  */
 describe("base-check --base —— 合并前面从钩子现算（不抄第二份清单）", () => {
   test("默认面 = 钩子里的全仓判据，且含 A 组的 tsc 与 B 组的 eslint", () => {
@@ -1204,14 +1098,9 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
     );
     /* 它的判决**依赖暂存改动**：干净快照里它立刻返回 0，那行绿是假绿。 */
     expect(mayDecideOnCleanSnapshot(["node", "scripts/shell-gate.mjs"])).toBe(false);
-    /* `check-reformat-only.cjs` 带 `--staged` 时不进这一批（按参数形态就认得出）。
-     *
-     * ⚠️ **不带旗标那一形态现在会进来**（ISSUE #3038，此前因为它在 `CHANGED_SCOPED` 里
-     * 而被排除）：它落到「判 `HEAD` 这一次提交」那一支，而那一支的区间由合成提交的
-     * 父关系现算（`reformat-preview-range.mjs`）—— 干净快照上这一支读到的是
-     * `HEAD~1..HEAD`（一个**与本次改动无关**的区间），与它「只对本次改动作答」的定位
-     * 对不上；可它此时又**确实**能从提交历史里算出结论（不是空跑），所以不再算假绿。
-     * 两个方向都钉住，免得下一次有人只改一边。 */
+    /* `check-reformat-only.cjs` 带 `--staged` 时不进这一批（按参数形态认得出）。⚠️ **不带旗标那一形态现在会进来**
+     * （ISSUE #3038，此前因在 `CHANGED_SCOPED` 里被排除）：它落到「判 `HEAD` 这次提交」支，区间由合成提交的父关系
+     * 现算 ⇒ 干净快照上读到 `HEAD~1..HEAD`，与「只对本次改动作答」的定位对不上；但它确实算得出结论，故不算假绿。 */
     expect(mayDecideOnCleanSnapshot(["node", "scripts/check-reformat-only.cjs", "--staged"])).toBe(
       false,
     );
@@ -1309,16 +1198,9 @@ describe("base-check --base —— 整批结论的优先级（纯函数）", () 
 });
 
 /**
- * `--base` 的**端到端**：真仓库、真快照、真归属。
- *
- * 为什么必须在真 git 仓库上跑（不能 mock）：这一档的每一条结论都建立在三件真事实
- * 上 —— 钩子里真有一批可复算的步骤、`git worktree` 真出一个干净快照、快照里真看得见
- * 依赖树。内存里假装这三件事，恰好等于把「合并前复算」重新实现一遍，而它唯一的失效
- * 形态正是「假装干净」。
- *
- * 夹具按 `makeRepo` 同款造一对（裸远端 + 工作检出），另外**把一份极小的
- * `.githooks/pre-commit` 与 `node_modules` 放进快照** —— 前者是「面从哪来」，
- * 后者是 `linkDependencies` 那一手要核的东西。
+ * `--base` 的**端到端**：真仓库、真快照、真归属。不能 mock：结论建立在钩子里真有一批可复算步骤、`git worktree`
+ * 真出干净快照、快照里真看得见依赖树 —— 内存假装 = 把「合并前复算」重实现一遍。夹具按 `makeRepo` 造裸远端 +
+ * 工作检出，并把极小 `.githooks/pre-commit`（面从哪来）与 `node_modules`（`linkDependencies` 要核）放进快照。
  */
 describe("base-check --base —— 真仓库上的端到端", () => {
   /** 一份最小的钩子：两条 `run` + 一条 `run_group`，够核「面从哪来」。 */
@@ -1451,12 +1333,9 @@ describe("base-check --base —— 真仓库上的端到端", () => {
 });
 
 /**
- * 「合并前复算要拿哪条当基线」与「被拦下时复算」是**两个问题**（ISSUE #1591）。
- *
- * 这一条是实测撞出来的：`resolveUpstreamRef()` 的首选是 `@{u}`（我这份检出从哪来），
- * 那对「这红是不是本来就有的」是对的；而 `--base` 问的是「并进 `master` 之后会不会红」，
- * 在 PR 分支上 `@{u}` 就是**你自己的分支** —— 拿它当基线等于自己跟自己比，输出
- * 「50 条全绿」、看起来一切正常，却一个字节都没回答那个问题。
+ * 「合并前复算拿哪条当基线」与「被拦下时复算」是**两个问题**（ISSUE #1591）。`resolveUpstreamRef()` 首选 `@{u}`
+ * （我这份检出从哪来）对「这红是不是本来就有的」是对的；而 `--base` 问「并进 `master` 后会不会红」，PR 分支上
+ * `@{u}` 就是你自己那条 —— 拿它当基线 = 自己跟自己比，输出「全绿」却一个字节都没回答那个问题。
  */
 describe("base-check --base —— 基线引用只认「要并进去的那条」", () => {
   test("PR 分支上不拿 `@{u}` 当基线（那是自己的分支）", () => {

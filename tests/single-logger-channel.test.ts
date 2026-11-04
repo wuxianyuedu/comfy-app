@@ -1,29 +1,7 @@
 /**
- * 回归护栏：**日志实现只有一处**（ISSUE #568）。
- *
- * 背景（实测）：`src/lib/core/logger.ts` 曾是「零依赖自研日志器」——自己拼行、
- * 走 `console.log/error`、**零脱敏**；而 `src/server/lib/logger.ts` 是 pino
- * （`REDACT_PATHS` + 密钥值形状守卫 + ERROR 镜像进应用日志面板）。两条通道
- * 使用面都不小（core 由 `repository-base` / `events` / `container` 用，pino 由
- * 31 个文件用），后果是**同一件事两种口径**、且脱敏契约在其中一条上不成立。
- *
- * 现在 `core/logger` 承载**唯一实现**（pino 工厂 / redact / 镜像 / pretty 全在
- * 那里），`src/server/lib/logger.ts` 只是一层兼容转发。
- * 本用例把「不许再长出第二条实现」机器化：**除日志门面外，无人可以直接调
- * `console.*` 输出日志**。
- *
- * 为什么不用「检查 `core/logger` 里有没有 console」这一条就够：
- * 那只能挡住「回退到旧实现」，挡不住「下一个人在新模块里直接 `console.log`」——
- * 而那正是最初长出第二套实现的方式。判据落在**全 `src/`** 上才有意义。
- *
- * 豁免（都写了理由，且用**正向断言**锁住豁免文件本身没被改坏）：
- *   - `src/lib/core/logger.ts`     —— 实现本身（当前实现里已无 console 调用）
- *   - `src/server/lib/logger.ts`   —— 兼容转发（不直接调 console）
- *   - `src/lib/comfyui/trace.ts` 等诊断通道 —— 由各自的落盘契约约束，不走 console
- *   - `scripts/**`                 —— 纯 Node 宿主脚本，不走应用日志契约
- *
- * 允许的形态：`console` 出现在**测试**与**启动/浏览器侧**（`src/app/api` 之外的
- * 客户端代码本来就在浏览器控制台）。因此本用例只扫服务端可达的库代码。
+ * 回归护栏：**日志实现只有一处**（ISSUE #568）。`core/logger.ts` 曾是零依赖自研器（自拼行、`console.*`、
+ * 零脱敏），`server/lib/logger.ts` 是 pino（REDACT + 镜像）—— 同一件事两种口径、脱敏在一条上不成立。
+ * 现 `core/logger` 是唯一实现；本用例钉「除门面外无人可直调 `console.*`」，且判据落在全 `src/` 服务端码。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -33,20 +11,9 @@ const ROOT = process.cwd();
 const SRC = join(ROOT, "src");
 
 /**
- * 扫描范围：**服务端可达的全部库代码**，无目录级豁免。
- *
- * 不扫视图层（`src/components/**`、`src/app/**`）—— 客户端本来就往浏览器
- * 控制台写，不在「服务端日志唯一通道」这条判据内。
- *
- * 历史上这里有 `SKIP_DIRS = ["src/lib/comfyui"]` 与一条 `ALLOWED`
- * （`generation-log.server.ts`），也就是**整片目录免检**。它们已被逐条消除：
- *
- *   - `generation-log.server.ts`：`console.warn` 已改走 `core/logger`（pino），
- *     消息文案不变，额外获得脱敏与 ERROR 镜像（面板可见）。豁免删除。
- *   - `src/lib/comfyui/**`：本目录**根本没有 console 调用**（实测），它真正的
- *     缺口是「trace 直写文件、不经脱敏」—— 那条由值形状守卫
- *     （`src/lib/core/redact-secret.ts`）在写入边界补上，不是靠目录免检绕开。
- *     目录级 SKIP 的危险恰在于：它让「以后往这里加 console」完全无声。
+ * 扫描范围：**服务端可达的全部库代码**，无目录级豁免；不扫视图层（客户端本就往浏览器控制台写）。
+ * 历史 `SKIP_DIRS`（`src/lib/comfyui`）与 `ALLOWED`（`generation-log.server.ts`）已逐条消除：前者本就
+ * 无 console（缺口由 `redact-secret.ts` 在写入边界补上）。目录级 SKIP 的危险恰在「以后加 console 完全无声」。
  */
 const SCAN_DIRS = ["src/lib", "src/server"];
 
@@ -56,26 +23,9 @@ function stripComments(src: string): string {
 }
 
 /**
- * 浏览器侧唯一通道的豁免清单。判据必须满足**全部**三条，缺一不可：
- *  1. 文件首行是 `"use client"` —— 只进浏览器打包图，永不跑到服务端
- *     （服务端日志唯一通道的判据只管服务端可达的代码）；
- *  2. console 是这套诊断的**传输手段本身**，不是「图省事随手带开头」——
- *    `watchTask` 的诊断日志靠 console.info 被 `LogProvider` 拦截后落进
- *    应用日志面板，这是项目规定的客户端日志口（规范 07 §7.6）；
- *  3. 同一份诊断还走 `h.onLog` 写进工作流库「执行日志」弹窗，两条通道都要。
- *
- * 清单按**文件**点名，不按目录：目录级豁免等于「以后往这里加 console 完全无声」，
- * 而这条判据的全部价值就在「服务端可达的代码里不许有第二份日志实现」。
- *
- * 第二条 `sync-notice.ts`（画布镜像的失败状态）三条各自成立：首行 `"use client"`
- * 且消费者只有 `canvas-store` 与画布的持久化 hook；console 是浏览器侧唯一的日志口
- * （这里不能用 `~/lib/core/logger` —— 那是 pino + 文件/DB 落盘，打进浏览器包既跑不
- * 起来也会点着 `client-bundle-node-builtins` 那条判据）；同一份诊断的第二条通道是
- * 「拒收登记表 + toast（给人话）」，而 console 那一行留的是服务端原文与码（给排查），
- * 少任何一条就变成「读不懂」或「查不到」。
- *
- * 豁免必须由正向后置断言锁住（见用例末尾的 `it("浏览器侧豁免确实标了
- * use client")`），防止以后把豁免套在服务端可达的文件上静默放过。
+ * 浏览器侧唯一通道的豁免清单，须**全部**三条成立：① 首行 `"use client"`（只进浏览器包、服务端不可达）；
+ * ② console 是诊断的**传输手段本身**（`LogProvider` 拦进面板，规范 07 §7.6）且同诊断还走 `h.onLog`；
+ * ③ 按**文件**点名，豁免由末尾正向断言锁住。`sync-notice.ts` 不能用 pino 门面（会点着 node-builtins）。
  */
 const CLIENT_ONLY = [
   "src/lib/workshop/generation-client.ts",

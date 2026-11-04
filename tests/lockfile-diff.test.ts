@@ -1,15 +1,7 @@
 /**
- * ISSUE #550：run-local.ps1 / quality-gate.ps1 只比对两个 lockfile 的 SHA256，
- * 只能回答「不一致」，回答不了「哪里不一致」——用户拿到的是「检测到依赖与
- * lockfile 不一致」，然后就没有下文了。
- *
- * 本用例锁两件事：
- *   1. scripts/lockfile/lock-diff.mjs 能从真实形态的 pnpm-lock.yaml 里解析出
- *      「哪个依赖加了 / 删了 / 版本变了」（直接喂真仓库 lockfile，不喂玩具样本）；
- *   2. 两个入口脚本在漂移分支里真的调用了差异渲染（防「细节又被删掉」回潮）。
- *
- * 差异定位的判据是 lockfile 段落，与 pnpm 内部结构解耦；
- * 不引入 YAML 依赖（standalone 产物里也不带第三方解析器）。
+ * ISSUE #550：run-local.ps1 / quality-gate.ps1 只比两个 lockfile 的 SHA256，只能答「不一致」不能答「哪里不一致」，用户拿到「检测到依赖与 lockfile 不一致」就没有下文。
+ * 锁两件事：① `lock-diff.mjs` 能从真实形态 pnpm-lock.yaml 解析「加了/删了/版本变了」（直接喂真仓库 lockfile，不喂玩具样本）；
+ * ② 两个入口脚本在漂移分支真调用差异渲染（防细节被删回潮）。差异定位按 lockfile 段落、与 pnpm 内部结构解耦；不引入 YAML 依赖（standalone 产物不带第三方解析器）。
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -43,11 +35,9 @@ function lockBody(text: string): string {
 }
 
 /**
- * 根 importer 里某个直接依赖的条目原文（包名 / specifier / version 三行）。
- *
- * 用例拿它当「改一处」的锚点。**别把版本号抄成字面量**：抄了等于把判据挂在
- * 「当前钉的是哪一版」上 —— 本文件已经被 `next` 与 `zod` 各绊过一次，升级依赖时
- * 打红的是一批与升级毫无关系的用例。锚点从真 lockfile 里现取，升到哪一版都成立。
+ * 根 importer 里某直接依赖的条目原文（包名 / specifier / version 三行），用例拿它当「改一处」的锚点。
+ * **别把版本号抄成字面量**：抄了等于把判据挂在「当前钉的是哪一版」上 —— 本文件已被 `next` 与 `zod` 各绊过一次，
+ * 升级依赖时打红的是一批与升级无关的用例；锚点从真 lockfile 现取，升到哪一版都成立。
  */
 function importerEntry(body: string, name: string): string {
   const found = new RegExp(`^ {6}${name}:\\n^ {8}specifier: .*\\n^ {8}version: .*$`, "m").exec(

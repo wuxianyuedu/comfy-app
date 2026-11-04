@@ -1,9 +1,7 @@
 // ── Workshop MCP 服务端（工具定义，双 transport 共用）───────────
-// buildWorkshopMcpServer() 返回已注册全部工坊工具的 McpServer，供 stdio
-// 与 HTTP(Streamable) 两种 transport 共用（同一份工具定义）。
-//
-// 工具覆盖工坊全流程：会话 → 脚本 → 角色 → 分镜 → 生图 → 生视频，
-// AI 客户端可按顺序调用以指挥端到端创作。
+// buildWorkshopMcpServer() 返回已注册全部工坊工具的 McpServer，stdio 与
+// HTTP(Streamable) 两种 transport 共用同一份工具定义；覆盖工坊全流程（会话 →
+// 脚本 → 角色 → 分镜 → 生图 → 生视频），AI 客户端可按顺序调用指挥端到端创作。
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 

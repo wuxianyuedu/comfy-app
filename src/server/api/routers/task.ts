@@ -86,12 +86,9 @@ export const taskRouter = createTRPCRouter({
           const checkpoint = typeof p.checkpoint === "string" ? p.checkpoint : null;
           const cover = task.images[0]?.localPath ?? null;
           const coverMediaType = task.images[0]?.mediaType ?? null;
-          /* 视频落点**只有服务端答得了**：封面（`images[0]`）通常是预览图，
-           * 它的 `cover` / `mediaType` 都指向那张图，看不出成片在哪。执行侧落盘
-           * 顺序是「先 images 后 videos」，因此成片不在首位 —— 必须单独找。
-           * 判据按**磁盘上的事实**：扩展名（`isVideo`，见 `lib/media/media-kind`）
-           * **或**产物子表的 `mediaType` —— 后者管住「落盘名不带视频扩展名、但
-           * 执行侧记了它是视频」的那一档，只看扩展名会把它漏成 `null`。 */
+          /* 视频落点只有服务端答得了：封面（`images[0]`）通常是预览图，成片不在首位（执行侧
+           * 「先 images 后 videos」）。判据按磁盘事实：扩展名（`isVideo`）**或**产物子表 `mediaType`
+           * —— 后者管住「落盘名不带视频扩展名、但记了是视频」那档，只看扩展名会漏成 `null`。 */
           const videoPath =
             task.images.find((image) => isVideo(image.localPath) || image.mediaType === "video")
               ?.localPath ?? null;
@@ -153,28 +150,18 @@ export const taskRouter = createTRPCRouter({
     if (task?.userId !== ctx.user.id) {
       throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
     }
-    /* 取消的统一出口（P3 §5 ADR §14 D2）：走执行侧那份 `cancelTask`，而不是
-     * 只把行写成 CANCELLED。区别对用户可感三件事——① 落一行「用户取消任务」
-     * 进执行日志（只写状态时面板上看不到原因）；② 这一行正占着 ComfyUI 执行位
-     * 时请求中断，不再「按了取消还继续出图」；③ 归还本进程的并发槽并清理记账。
-     * 归属在 host 名下时也有效：跨归属的只是状态标记与全局中断，kill 在飞子进程
-     * 仍由 host 自己的 tick 负责（executor-host.mjs 的 reconcileCancelled）。 */
+    /* 取消统一出口（P3 §5 ADR §14 D2）：走执行侧 `cancelTask` 而非只把行写成 CANCELLED ——
+     * ① 执行日志落「用户取消任务」；② 正占 ComfyUI 执行位时请求中断，不再「按了还继续出图」；
+     * ③ 归还本进程并发槽并清理记账。host 归属下同样有效，在飞子进程 kill 仍由 host 的 tick
+     * 负责（`executor-host.mjs` 的 reconcileCancelled）。 */
     await cancelExecutorTask(input.id);
     return { ok: true };
   }),
 
-  /* 「原样重跑」（#2481 · FR-QA-04③ 的历史面落点）：按**原任务行**重建一个
-   * QUEUED 任务（新 taskId，不复活旧行）。执行载荷用原行的 `execPayload`
-   * （提交时刻的 RAW 原件），语义是「复现当时那次提交」——模板后来改了 / 删了
-   * 都不影响这一格；要用新模板语义请去创作台重新生成。提示词 / 参数 / 归属
-   * （project / shot）/ 参考图逐字复制。
-   *
-   * 参考图语义（如实）：`referenceImages` 存的是 ComfyUI input 侧的持久文件名，
-   * 重跑原样复用；ComfyUI 侧文件被清理时任务会在 LoadImage 节点失败并进任务
-   * 日志 —— 失败可见，不是静默缺图（原始本地文件只在客户端，服务端没有可重传的源）。
-   *
-   * 只放行**终态**任务：QUEUED / RUNNING 本来就在跑，重跑是制造第二份。
-   */
+  /* 「原样重跑」（#2481 · FR-QA-04③）：按原任务行重建 QUEUED（新 taskId，不复活旧行）。执行载荷
+   * 用原行 `execPayload`（提交时刻 RAW 原件），语义是复现当时那次提交，模板后来改动/删除都不影响；
+   * 提示词/参数/归属/参考图逐字复制。参考图是 ComfyUI input 侧持久文件名，被清理时会在 LoadImage
+   * 失败并进任务日志（可见，非静默缺图）。只放行终态任务：QUEUED/RUNNING 重跑会造第二份。 */
   retry: authedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
     const original = await taskRepository.findByIdForUser(ctx.user.id, input.id);
     if (!original) {
@@ -283,18 +270,10 @@ export const taskRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
       }
       const fsPromises = await import("node:fs/promises");
-      /* 产物目录整体删除，目录与落盘侧共用 `taskOutputDir()` 这一份定义。
-       *
-       * 旧写法在这里有两处各自拼错的拼接，而两条失败都被
-       * `.catch(() => undefined)` 吞掉（磁盘一直在涨、日志里一个字都没有）：
-       *  · 目录只拼 `public/generated/<taskId>`，而 project 任务的产物实际落在
-       *    `projects/<projectId>/<taskId>` 下 —— 在画布里删任务永远删不到目录；
-       *  · 又按 `TaskImage.localPath` 逐张 unlink，却把 `/api/generated/...`
-       *    解析成 `public/api/generated/...`（多了一段 `api`）→ 每次都是 ENOENT。
-       * 现在只留「删整个产物目录」这一条：落盘侧保证每张产物都在该目录内
-       * （同一个 segments 派生），逐张删反而可能碰目录之外的文件。
-       * 越界（id / projectId 形状会把结果甩出产物根）时只删库行并把原因落日志，
-       * 不允许把一个根外路径交给 `fs.rm(..., { recursive: true })`。 */
+      /* 产物目录整体删除，目录与落盘侧共用 `taskOutputDir()`。旧写法两处拼错路径且都被
+       * `.catch(() => undefined)` 吞掉（磁盘在涨、日志空白）：目录只拼 `public/generated/<taskId>`
+       * 漏掉 `projects/<projectId>/<taskId>`；按 `localPath` 逐张 unlink 又把 `/api/generated`
+       * 解析成 `public/api/generated` ⇒ ENOENT。越界时只删库行并记原因，不把根外路径交给 rm。 */
       const dir = taskOutputDir(input.id, task.projectId);
       if (dir === null) {
         logger.warn(

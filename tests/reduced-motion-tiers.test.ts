@@ -1,22 +1,7 @@
-/**
- * 减弱动态效果的三档分治（规范 06 §6.7 的执行者）。
- *
- * 为什么这条必须有执行者：§6.7 原来写的是「所有 `transition` / `animation` 必须有
- * `prefers-reduced-motion` 降级」，而实测 `src/`+`public/`+`.storybook/` 里
- * `prefers-reduced-motion` **0 命中** —— 一句强制条文挂着零执行者，表现不是红，
- * 是「规范说做了而全绿」（规范 §13.5.8 那一族）。
- *
- * 判的四件事，缺一档都算这条判据在空转：
- * ① 循环动画必须停（含两处**内联 `style`** —— 它们必须带 `!important`，否则静默不降级）；
- * ② 大位移必须去掉位移、保留淡入；
- * ③ 短程 hover/focus **明确豁免** —— 所以降级块里不许出现全局 `*` 或 `transition: none`
- *    这类「一把梭」写法（那条是签字时被否掉的另一档方案）；
- * ④ 降级块点名的每个 `data-slot` **在组件源码里真的存在** —— 组件改名/删掉后，
- *    CSS 里的选择器不会报错，只会静默不再命中任何元素。这一半才是本用例独有的价值。
- * ⑤ 本轮新增的两条动效机制（`.value-tick` 与 `[data-exit-reminder]`）**各有执行者**：
- *    前者是「值变了闪一下」，后者是「离开会丢东西」的提示条。它们都不是循环动画，
- *    落在「没停下 / 没命中也不会报错」那一族里 —— 所以除降级外，还要判它们
- *    真的被 CSS 定义过、且被注明的那一条选择器形状没被改写。
+/** 减弱动态效果三档分治（规范 06 §6.7 的执行者）：要求 transition/animation 都有 `prefers-reduced-motion` 降级，实测
+ * `src/`/`public/`/`.storybook/` 0 命中 —— 挂零执行者即「规范说做了而全绿」。①循环动画必须停（内联 `style` 须
+ * `!important`）②大位移留淡入 ③短程 hover/focus 豁免（禁全局 `*`/`transition: none`）④`data-slot` 须在组件源码存在，
+ * 改名即静默失配；⑤新增 `.value-tick`/`[data-exit-reminder]` 各有执行者。
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -49,10 +34,9 @@ const DISPLACEMENT_SELECTORS = [
 ] as const;
 
 /**
- * 切出 `@media (prefers-reduced-motion: reduce)` 的**块体**。
- * 用花括号配平而不是「找下一个 `}`」—— 块里还有嵌套规则，粗切会在第一个内层
- * 闭括号就截断（那等于只核到半条规则）。取不到块 / 块内零声明都返回 null，
- * 让调用方判红，而不是「解析到 0 条」当成全绿。
+ * 切出 `@media (prefers-reduced-motion: reduce)` 的块体。用花括号配平而非「找下一个 `}`」：块里有嵌套规则，粗切会在
+ * 第一个内层闭括号截断（等于只核到半条）。取不到块 / 块内零声明都返回 null，让调用方判红，而不是把「解析到 0 条」
+ * 当成全绿。
  */
 function reduceBlockOf(text: string): string | null {
   const start = text.search(/@media[^{]*prefers-reduced-motion[^{]*\{/);

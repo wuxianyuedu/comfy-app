@@ -1,19 +1,7 @@
 /**
- * `scripts/build-desktop.mjs` 的步骤读数 —— 「念得出每一步多久」的执行者（ISSUE #2574）。
- *
- * 为什么要有这一条：装配那一大段（standalone 整树 `cpSync` → 顶层白名单剔除 → 载荷实体化
- * → 体积护栏 → 出厂计数）从第一步到最后一步**一个耗时都不念**，几百 MB 的一跳期间屏幕上
- * 没有任何新行 —— 在 CI 上长得和「卡死 / 超时前兆」一模一样，而脚本正在正常干活。
- * 本仓已经为此误判过一次（E2E 那格 36 分钟被平台按 stage 超时 kill），当时能用来分辨
- * 「在跑」与「挂了」的只有平台那一格的 duration（整格一个数，且它是**毫秒** —— #2442）。
- *
- * 面：这些断言读的是**磁盘文本**（`readFileSync`），不在任何 import 图里 ——
- * 改 `build-desktop.mjs` 不会让增量面把本文件带上去，而「有人把读数删掉 / 改成不参与判决
- * 的判定」恰好都不在改动面上。所以它登记进 `scripts/fixed-structural-tests.mjs` 固定跑
- * （与 `tests/env-import-meta-shape.test.ts`、`tests/eslint-gate-canary.test.ts` 同因）。
- *
- * 钉的是**语义**而不是行形状：哪一步念了时长、那一跳的计数口径是什么、读数不许变成判定、
- * 时长格式化只有一份。逐字比 `console.log` 的文案会随引号形态漂，所以按调用站点取。
+ * `scripts/build-desktop.mjs` 的步骤读数：装配整树几百 MB 一跳期间一个耗时都不念，CI 上长得像卡死
+ * （为此误判过一次，E2E 那格 36 分钟被 stage 超时 kill；平台 duration 是毫秒 —— #2442）。ISSUE #2574。
+ * 断言读磁盘文本、不在任何 import 图里，故登记进 `scripts/fixed-structural-tests.mjs` 固定跑；钉语义不钉行形状。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";

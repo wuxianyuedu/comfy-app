@@ -1198,14 +1198,9 @@ describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
 });
 
 /** 入口那一层的终点（`861623ced` 的回归）。
- *
- *  现场：`ci-github-mirror-push.mjs:765` 顶层 `await import('./ci-github-mirror-master.mjs')`
- *  —— 那一份**静态** import 本文件 ⇒ ESM 循环顶层 await 互等，Promise 永不 settle；
- *  事件循环空转后 Node 报 `Warning: Detected unsettled top-level await` 并退 13，
- *  日志里没有一句三态读数（`.cnb.yml` 那格 10m 一次都没走到）。
- *
- *  这里钉三件事：装载悬挂 ⇒ 假定时器到点退 2 并念清楚在等什么；执行面抛错 ⇒ 退 2 且
- *  `--readout` 不折零；以及真进程不再落到 exit 13 那档兜底。 */
+ * 现场：`ci-github-mirror-push.mjs:765` 顶层 `await import('./ci-github-mirror-master.mjs')`，而那一份**静态** import 本文件 ⇒ ESM 循环顶层 await 互等永不 settle；
+ * Node 报 `Warning: Detected unsettled top-level await` 退 13，日志里没有三态读数（`.cnb.yml` 那格 10m 一次都没走到）。
+ * 这里钉三件事：装载悬挂 ⇒ 假定时器到点退 2 并念清在等什么；执行面抛错 ⇒ 退 2 且 `--readout` 不折零；真进程不再落到 exit 13 那档兜底。 */
 describe("runMirrorEntry（入口的终点）", () => {
   /** 假定时器：`armed[0].cb()` 就是「到点」，一次真分钟都不等。 */
   function fakeTimers() {

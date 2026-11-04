@@ -1,25 +1,7 @@
 /**
- * 「受影响用例」在平台侧的执行入口（`scripts/ci-affected-tests.mjs`）。
- *
- * 这一格 2026-10-20 接走本地两个执行者（pre-commit 的 C 组与 pre-push 的
- * `unitTests` 段）—— 判据内容一个字没改（仍是 `run-affected-tests.mjs` 那条
- * 判决链），所以这里钉的全是**入口自己**那三件容易静默失效的事：
- *
- *   ① 改动面从哪来：PR 事件用平台给的 `CNB_PULL_REQUEST_TARGET_SHA`（三点 diff），
- *      没有它才退回 merge-base 两点 diff —— 拿错 base 会把「这个 PR 改了什么」
- *      判成「分支离 master 多远」，而后者随拓扑漂；
- *   ② **没判 ≠ 绿**：git 没跑起来 / 清单为空一律退 2，不许退 0 放行（空清单若
- *      放行，启动器会把 vitest 跑成全量，而全量绿在 PR 这一跳上是被 §13.5.21
- *      否掉的读数）。**唯一的例外是「拿到了、答案是空的」**（ISSUE #3026）：
- *      那一形态要先证一次（三点空 **且** 合成提交的 `第一父..HEAD` 也空），
- *      证得出来才按「零个文件」收 —— 证不出来照旧退 2；
- *   ③ 改动面真的经 `COMFY_AFFECTED_CHANGED` 递进了同一条判决链，并发按
- *      `ci-load.mjs` 收敛（不在这里另写一个 worker 数），退出码原样透传。
- *
- * 不起真 vitest：`spawn` 注入假实现，只核「起了哪个脚本、带了什么 env、退了什么码」。
- * 每一处 `main` 调用都要把两条读数出口接住（`...silent()` 或显式注入）—— 夹具打出的
- * 「造不出读数目录 / 没有落点 / 改动面为空」会在平台日志里与这一跑的真实读数并排，
- * 读的人分不出哪份是夹具（#2074 那两行 5.00 / 3.75 就是这么被误读的）。
+ * 平台侧「受影响用例」入口（`scripts/ci-affected-tests.mjs`，2026-10-20 接走 pre-commit C 组与 pre-push `unitTests`）。判据未变（仍走 `run-affected-tests.mjs` 判决链），故只钉入口三件易静默失效的事：①改动面取自 `CNB_PULL_REQUEST_TARGET_SHA`（三点 diff），无则退回 merge-base 两点；拿错 base 会把「本 PR 改了什么」判成「离 master 多远」。
+ * ②**没判 ≠ 绿**：git 没跑/清单空一律退 2（空清单放行会跑成全量，§13.5.21 否掉）；例外是 #3026「拿到了、答案为空」，须证三点空**且**合成提交 `第一父..HEAD` 也空。
+ * ③经 `COMFY_AFFECTED_CHANGED` 递进同一条链，并发按 `ci-load.mjs` 收敛，退出码透传。不起真 vitest：`spawn` 注入假实现；每处 `main` 调用都须接住两条读数出口（#2074 的夹具日志曾与真实读数误读并排）。
  */
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -396,9 +378,8 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
 
 /* ── 起跑前的依赖面体检（`scripts/ci-worktree-deps.mjs`）─────────────────────────
  *
- * 现场：输出里一串 `Error:` 加一段 `AggregateError`，一条断言都没红，而格子非零
- * 退出 —— 于是「这台机器上依赖没装上」被读成「这次改动有回归」。这一格现在把它分开：
- * 前提不成立 ⇒ 退 2（没判 ≠ 绿），而且**一次 vitest 都不起**（起了也只是再读一遍同一屏）。
+ * 现场：输出里一串 `Error:` 加 `AggregateError`，一条断言都没红而格子非零退出 —— 「依赖没装上」被
+ * 读成「这次改动有回归」。这一格把它分开：前提不成立 ⇒ 退 2（没判 ≠ 绿），且**一次 vitest 都不起**。
  */
 describe("ci-affected-tests — 起跑前的依赖面体检", () => {
   function fakeSpawn(status: number) {
@@ -467,10 +448,8 @@ describe("ci-affected-tests — 起跑前的依赖面体检", () => {
 
 /* ── 分文件读数目录（ISSUE #2074）─────────────────────────────────────────────
  *
- * 现场：这一格此前拿不到 junit —— `$LOGD` 只由 `.githooks/pre-commit` export，平台
- * 入口一个都没有 ⇒ 超时形态的复跑永远退回整块串行（实测 170~178s，买不到新证据），
- * 「清单 ⇄ 实到」的对账也没做成。这一组钉的是补救本身的三件事：目录造在哪、
- * 经 `LOGD` 递进去、收尾那行把份数念出来；造不出来时念「没有落点」，不许静默。
+ * 现场：此前拿不到 junit —— `$LOGD` 只由 `.githooks/pre-commit` export，平台入口一个都没有 ⇒ 超时形态复跑永远退回整块串行（实测 170~178s，买不到新证据），「清单 ⇄ 实到」对账也没做成。
+ * 这一组钉补救本身：目录造在哪、经 `LOGD` 递进去、收尾念份数；造不出来时念「没有落点」，不许静默。
  */
 describe("ci-affected-tests — 分文件读数目录（ISSUE #2074）", () => {
   function fakeSpawn(status: number) {

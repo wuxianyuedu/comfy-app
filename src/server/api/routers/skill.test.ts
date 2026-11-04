@@ -1,18 +1,7 @@
 /**
- * skill.router 的闸门用例（体检清单 ⑨ 第三刀的第二半）。
- *
- * 技能表是**全局的**（`slug` 唯一，没有 userId 维度），所以这里没有 IDOR 可判；
- * 判的是另外三件事：
- *   · **重名** —— `slug` 撞车是「你的输入与现存数据冲突」，必须是 `CONFLICT`，
- *     而不是 500（旧写法：裸 `throw new Error("Slug already exists")`）。
- *     码不对的实际代价：界面上「新建技能」按钮点了像崩了，用户不知道是名字重了；
- *   · **形状闸在落库之前** —— `slug` 只许 `[a-z0-9-]`（它会进 URL 与文件名），
- *     被拒时一次数据库都不查；
- *   · **列表的三个默认值** —— 未激活项默认不出现（`all` 才放开）、搜索串先 `trim`
- *     再传、分类标签没登记过时回退成分类名本身（回退坏了就是界面上一个 `undefined`）。
- *
- * mock 边界：`~/server/db`（内存库 + 真 Drizzle —— `slug` 的唯一索引是真的在拦，
- * 把它 mock 掉就等于把要测的那一层换掉）、`~/server/better-auth`、`~/lib/core/logger`。
+ * skill.router 闸门用例（⑨ 第三刀第二半）：技能表是全局的（`slug` 唯一，无 userId），没有 IDOR，判另外三件事 ——
+ * 重名必须 `CONFLICT` 而非 500（旧写法裸 `throw new Error(...)`，界面像崩了）；形状闸在落库前（`slug` 只许 `[a-z0-9-]`，被拒时不查库）；
+ * 列表三个默认值：未激活默认不出现（`all` 放开）、搜索串先 `trim`、分类标签未登记回退成分类名（坏了就是 `undefined`）。mock：db（真 Drizzle，`slug` 唯一索引真在拦）、better-auth、logger。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

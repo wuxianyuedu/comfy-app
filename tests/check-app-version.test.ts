@@ -1,18 +1,7 @@
 /**
- * 产品版本号三处同步判据的自检（ISSUE #1611 阶段三 D7，规范 launch-and-build §7.1.1）。
- *
- * 立案现场：`package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`
- * 三处手写同一个版本号（**当时恰好相等**），而**没有任何一处判据认识它**。这不是
- * 「改名要去三个地方」的麻烦 —— `tauri.conf.json` 的版本在编译期内嵌进壳，也是
- * `tauri-plugin-updater` 判「更新新旧」的基准：只升 `package.json` 时安装包与更新
- * 判定还停在旧版本，用户点「检测更新」看到「已是最新」，而实际发布的已经是新构建。
- *
- * 四头判据，缺一头这层就退化：
- *   ① **拦得住**：三处不一致即红；
- *   ② **读不出也红**：某处字段被改名 / 挪段（`[workspace.package]`）时不许静默放行；
- *   ③ **不误伤**：`Cargo.toml` 别的段里的 `version = "…"`（依赖表内联表）不算产品版本；
- *   ④ **接线在**：`package.json` 有入口、钩子 D 组真跑它（判据写在文件里没人跑 =
- *      §13.5.12 那个「判据自称在跑」的形态）。
+ * 产品版本号三处同步判据的自检（ISSUE #1611 阶段三 D7，规范 launch-and-build §7.1.1）。立案现场：`package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml` 三处手写同一版本且当时恰好相等，却没有任何判据认识它。
+ * `tauri.conf.json` 的版本编译期内嵌进壳，也是 `tauri-plugin-updater` 判更新新旧时的基准：只升 `package.json` 时安装包与更新判定停在旧版本，用户点「检测更新」见「已是最新」而实际已发新构建。
+ * 四头判据：① 三处不一致即红；② 某处字段被改名 / 挪段（如 `[workspace.package]`）不许静默放行；③ `Cargo.toml` 别的段里的 `version = "…"` 不算产品版本；④ `package.json` 有入口且钩子 D 组真跑（§13.5.12）。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";

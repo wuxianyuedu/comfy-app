@@ -1,22 +1,7 @@
 /**
- * `cnb` 起不来时，这份探针要给**一行读数**，不是一段 Node 栈（ISSUE #2690）。
- *
- * 现场读数（立案当时，本机 Windows）：
- * `node scripts/ci-probe-lock-readout.mjs report <仓库> <sn>` → `EXIT=1`，屏幕上只有
- * `Error: spawnSync cnb ENOENT` 加七八行栈 —— 因为 `readBuild` 那句 `execFileSync`
- * **不在 `try` 里**（那个 `try` 只盖 `JSON.parse`）。而 `spawnSync` 在 Windows 上不按
- * `PATHEXT` 找 `.CMD` 垫片，`cnb` 在本地正是那份垫片：把 `node_modules/.bin` 加进 PATH
- * 也照样 ENOENT。平台那一档不受起来不影响（容器里 `cnb` 是真身），所以这一格从来不在 CI 读数面上。
- *
- * 修法选的是「复用现成那一格」：`scripts/ship-exec.mjs` 的 `makeRunner()`（经
- * `pnpmInvocation(args, {name:"cnb"})` 起得来），而不是新写一份垫片解析。
- * ⚠️ 刻意**不用**同一份模块里的 `cnbJson()` —— 它把「ENOENT / 没有 `{` / 解析失败」
- * 三种折叠成同一个 `null`，而本件要的恰恰是分清这三种（每种下一动作不同）。
- *
- * 全部经**真起命令那一层的假执行者**判结果形态：实测只注 `readBuild` 的取数出口时，
- * 把 `cnbCall` 里 `r.error` 那一支压成空串，用例**照旧全绿**（它绕过了映射发生的那一层），
- * 所以出口开在 `cnbCall` 的第二个参数上 —— 变异打不中的判据等于没有判据。
- * 不读源码字面量（同一口径见 ISSUE #2660）。
+ * `cnb` 起不来时，这份探针要给一行读数，不是一段 Node 栈（ISSUE #2690）：现场 `EXIT=1` 只有 `Error: spawnSync
+ * cnb ENOENT` 加栈，因为 `readBuild` 的 `execFileSync` 不在 `try` 里；Windows 上 `spawnSync` 不按 `PATHEXT` 找 `.CMD` 垫片。
+ * 修法复用 `ship-exec.mjs` 的 `makeRunner()`（`pnpmInvocation` 起得来），刻意不用 `cnbJson()`（三种失败折成同一 null）；判据经真起命令层的假执行者，不读源码字面量（#2660）。
  */
 import { describe, expect, it } from "vitest";
 

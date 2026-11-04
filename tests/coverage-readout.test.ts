@@ -1,6 +1,5 @@
 /**
  * coverage-readout 读数（ISSUE #2689）：登记处单源、聚合口径、三态。
- *
  * 不跑全量覆盖率：纯函数层（`readRegisteredThresholds` / `aggregateForGlob` /
  * `buildCoverageReadout`）用合成 reports 与真实登记的 vitest.config.ts 核。
  */

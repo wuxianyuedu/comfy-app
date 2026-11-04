@@ -1,11 +1,6 @@
 /**
- * 运行期退出也要写下结束记录（ISSUE #1692 的第二半 / 规范 §4.5.3）。
- *
- * 判据在 `scripts/launcher-core/downstream-exit.mjs` 的 `runtimeExitRecord`
- * （纯函数），这里逐分支钉死：写侧原先只挂在**就绪等待期**那条路径上，于是
- * 「服务起来之后自己没了」——用户在界面上真正会看到的「应用服务已断开」——
- * 一条记录都不会有，恢复后读回 `null`，界面只能回一句把成因猜成「手工
- * `pnpm dev`」的兜底。而双击 exe 走的恰恰是这条最常出问题、也最该有原因的档位。
+ * 运行期退出也要写下结束记录（ISSUE #1692 第二半 / 规范 §4.5.3）：判据在 `scripts/launcher-core/downstream-exit.mjs` 的 `runtimeExitRecord`（纯函数），这里逐分支钉死。
+ * 写侧原先只挂在就绪等待期，于是「服务起来后自己没了」（用户真正看到的「应用服务已断开」）一条记录都没有，恢复后读回 `null`，界面只能把成因猜成「手工 `pnpm dev`」；双击 exe 恰是这条最常出问题、最该有原因的档。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";

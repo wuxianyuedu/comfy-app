@@ -1,17 +1,7 @@
 /**
- * src/lib `void someFn(...)` 语句棘轮自检:把 `scripts/check-void-floats.cjs`
- * 当黑盒跑在临时工作区上,验证 AST 判据、基线读写与「只挡新增、允许下降」的
- * 棘轮语义。
- *
- * 规范:docs/standards/13-提交与-code-review.md §13.5.7
- *      docs/standards/18-lib层规范.md
- *
- * 为什么值得有门禁:PR-4b 加了 `fireAndForget` 地基、PR-10 逐个审了 lib 里
- * 30+ 处 `void fn()` 把 10 处真漏改走 fireAndForget;但**人工审计会漂**——
- * 下一位开发者写下 `void persistLogs(taskId)`(若被调方没有内部 catch)就是一颗
- * 未来的 unhandledRejection,pre-commit 不会响。这条判据**强制显式**:
- * 写下 `void someFn()` 这个形态本身要走一次评审,要么改用 fireAndForget,
- * 要么 `--update` 收紧基线时说明「被调方内部已 catch、这里是刻意悬空」。
+ * src/lib `void someFn(...)` 语句棘轮自检：把 `scripts/check-void-floats.cjs` 当黑盒跑在临时工作区上，验证 AST 判据、基线读写与「只挡新增、允许下降」的棘轮语义（规范 §13.5.7 / `18-lib层规范.md`）。
+ * 为什么值得有门禁：PR-4b 加了 `fireAndForget` 地基、PR-10 审过 lib 里 30+ 处 `void fn()` 并改走 10 处真漏；但人工审计会漂 —— 后来者写下 `void persistLogs(taskId)`（被调方无内部 catch）就是未来的 unhandledRejection，pre-commit 不响。
+ * 判据**强制显式**：写下 `void someFn()` 这个形态本身要走一次评审，要么改用 fireAndForget，要么 `--update` 收紧基线时说明「被调方内部已 catch、刻意悬空」。
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";

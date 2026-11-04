@@ -1,23 +1,7 @@
 /**
- * `base-check` 那条「把本检出的依赖树链进干净快照」的链接，收尾**必须先摘**（ISSUE #1913 收尾翻出来的）。
- *
- * 判的是什么：`linkDependencies` 建的是一条**方向朝外**的链接 ——
- * `<快照>/node_modules` → 本检出的 `node_modules`。而清理那一步原本是
- * `git worktree remove --force <快照>`，实测它在 Windows 上**穿 junction 走进目标**逐个删，
- * 于是「销毁一个临时快照」变成了「销毁调用者正在干活的那棵树」。现场形态：
- * 跑完一次复算后 `node_modules/.bin` 整批不见，下一次 e2e 报
- * `Command "next" not found` + `Timed out waiting 180000ms from config.webServer`，
- * 全量档记成 `exit 1` —— 红的形状与「应用坏了」逐字同形，一个字都不指向复算工具。
- *
- * 两向都钉（与本仓 `tests/git-sandbox-env.test.ts` 同一个口径：只判正向的那一档，
- * 在「机制其实不成立」的世界里同样为绿）：
- *   ① **不摘就删 ⇒ 目标树确实被删穿**（机制成立，不是臆测）。只在 win32 判 ——
- *      POSIX 上 `git` 把符号链接当链接摘掉，没有这一跳；按平台分档判据的先例见
- *      `scripts/.runtime-budget-baseline.json`。
- *   ② **先 `unlinkDependencies` 再删 ⇒ 两边都活着**（修法有效）。
- *
- * ① 用的「被删的那棵树」是本测试自己 `mkdtempSync` 出来的夹具，**绝不是运行它的那份检出**
- * —— 判据可以随便毁夹具，但不许拿调用方的工作树做实验（那正是被测事故本身的形态）。
+ * `base-check`「把本检出的依赖树链进干净快照」的收尾必须**先摘链接**（ISSUE #1913）：链接方向朝外，清理却用 `git worktree remove --force`，
+ * 它在 Windows 上穿 junction 走进目标逐个删 ——「销毁临时快照」变成「销毁调用者的工作树」（现场 `.bin` 整批不见、`Command "next" not found`，与「应用坏了」同形）。
+ * 两向都钉：不摘就删 ⇒ 真被删穿（仅 win32，POSIX 把符号链接当链接摘）；先 `unlinkDependencies` 再删 ⇒ 两边都活。夹具用本测试 `mkdtempSync` 的树，不拿运行中的检出做实验。
  */
 import { spawnSync } from "node:child_process";
 import {
@@ -47,11 +31,9 @@ afterEach(() => {
 });
 
 /**
- * 起一份「像真实检出」的夹具：一次提交 + 一份**不入库**的 `node_modules/.bin/next`。
- *
- * `node_modules` 必须在提交之后才建 —— 否则它会进了索引，`git worktree add` 就在快照里
- * 直接检出一份真目录，`linkDependencies` 那条「已存在就不链」的短路会生效，
- * 实验就退化成「链都没建」的假绿。
+ * 造一份「像真实检出」的夹具：一次提交 + 一份**不入库**的 `node_modules/.bin/next`。
+ * `node_modules` 必须在提交之后才建 —— 否则它进了索引、`git worktree add` 会在快照里检出真目录，
+ * `linkDependencies` 的「已存在就不链」短路生效，实验退化成「链都没建」的假绿。
  */
 function makeFakeCheckout(name: string): string {
   const dir = mkdtempSync(join(tmpdir(), `base-check-snap-${name}-`));

@@ -1,25 +1,8 @@
-/**
- * setting.router 的闸门用例（台账 A5 那条口径在这里复算）。
- *
- * 这个路由是「设置页背后那台机器」的入口：它写的每一项都会变成**本机副作用**
- * （启动参数、解释器路径、端口、闩锁），它也有一个直接把地址交给系统浏览器的
- * 出口。所以用例按三条线组织，而不是按 procedure 顺序铺：
- *  1. **拒绝必须发生在写之前 / spawn 之前** —— 端口越界、协议不对时，
- *     `saveSettings` 与 `spawn` 一次都不许被调用；
- *  2. **协议白名单收成一处后的两个方向** —— `HTTPS://x` 不再被误拒、
- *     `http://␣␣` 不再被误放行（旧的前缀正则两个方向都错）；
- *  3. **闩锁的清除条件**（`comfyuiAutoStart:true` / 改了路径或启动参数）——
- *     这是 ISSUE #290 / #335 那两条「用户修好了却因为老闩锁不重试」的判据。
- *
- * mock 边界：`~/lib/app-settings/app-settings.server`、`~/lib/comfyui/lifecycle`、
- * `~/lib/comfyui/instance-kind`、`~/lib/drizzle-studio/lifecycle`（本机进程与配置的
- * 真实副作用一律不进用例）、`~/lib/comfy/comfy-embed` 的 `probeComfyEmbeddable`
- * 一条（探测要发真实 HTTP，其余成员走真实实现）、`node:fs` 的 `realpathSync`
- * 一条**默认透传的代理**（只有 `fsState.failRoot` 打开时让「取检出根」那一次抛错，
- * 见 `revealPath` 的用例）。
- * **`~/lib/shell/open-in-browser` 不 mock，只 mock `child_process`** —— 这样
- * `openExternal` 这一条测的是「路由没有绕开地基那道闸」，而不是「路由调到了地基」。
- */
+/** setting.router 的闸门用例（台账 A5 那条口径在这里复算）：这个路由是设置页背后那台机器的入口，
+ * 每项写入都会变成**本机副作用**（启动参数、解释器路径、端口、闩锁），另有一个把地址交给系统浏览器的出口。
+ * 三条线：① 拒绝必须发生在写/spawn **之前**；② 协议白名单收成一处后的两个方向（`HTTPS://x` 不再误拒、
+ * `http://␣␣` 不再误放行）；③ 闩锁清除条件（ISSUE #290/#335）。mock 边界：本机副作用模块全 mock，
+ * `open-in-browser` **不 mock**、只 mock `child_process` —— 测的是「路由没绕开地基闸」，不是「调到了地基」。 */
 import type * as NodeFs from "node:fs";
 import { basename, join, resolve } from "node:path";
 
@@ -116,10 +99,9 @@ vi.mock("~/server/better-auth", () => ({
 }));
 vi.mock("child_process", () => ({ spawn: spawnMock }));
 /**
- * `realpathSync` 换成「可指挥的代理」：默认原样转给真实实现，只有打开
- * `fsState.failRoot` 时让**取检出根那一次**（参数正是 `process.cwd()`）抛错。
- * 需要它是因为 `projectScopedProbe()` 的失败分支在真机上不可达 —— 当前工作目录
- * 一定存在，而「根取不到」是这条闸唯一的 fail-closed 出口。
+ * `realpathSync` 换成「可指挥的代理」：默认原样转给真实实现，只在打开 `fsState.failRoot` 时让
+ * **取检出根那一次**（参数正是 `process.cwd()`）抛错。需要它是因为 `projectScopedProbe()` 的失败
+ * 分支真机不可达 —— 当前工作目录一定存在，而「根取不到」是这条闸唯一的 fail-closed 出口。
  */
 vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>();
@@ -422,19 +404,11 @@ describe("setting 的状态读与进程动作", () => {
 
 // ─────────────────────────────── revealPath ───────────────────────────────
 
-/**
- * `setting.revealPath` —— 把「日志里那段文本」变成「在本机执行一个外部程序」之前
- * 的两道闸（ISSUE #1365）。
- *
- * 与上面 `openExternal` 那组同一族，但威胁面不同：那个的入参是 URL（协议闸能穷举），
- * 这个的入参是**任意候选文本**（日志原文里扫出来的），所以闸门落在「磁盘上真存在」
- * + 「在检出目录内」两条上。这里的用例全部用**本仓库里真实存在的路径**（
- * `process.cwd()` 下的文件），因为闸门第 ① 条问的就是文件系统 —— 造一个假路径
- * 只能测到「不存在被拒」，测不到「存在且在检出内被放行」。
- *
- * mock 边界与上面一致：只 mock `child_process`，`~/lib/shell/reveal-path` 走真实
- * 实现 —— 这样测的是「路由没有绕开地基那两道闸」，而不是「路由调到了地基」。
- */
+/** `setting.revealPath` —— 把「日志里那段文本」变成「在本机执行一个外部程序」之前的两道闸（ISSUE #1365）。
+ * 与 `openExternal` 同族但威胁面不同：入参是**任意候选文本**（日志原文里扫出来的），闸落在「磁盘上真
+ * 存在」+「在检出目录内」。用例全用本仓库真实存在的路径，因为闸 ① 问的就是文件系统 —— 造假路径只能测到
+ * 「不存在被拒」，测不到「存在且在检出内被放行」。只 mock `child_process`，`~/lib/shell/reveal-path` 走
+ * 真实实现，测的是「路由没有绕开地基那两道闸」。 */
 describe("setting.revealPath —— 打开本机路径之前的存在性 + 检出目录闸", () => {
   /** 本检出里必然存在的一份文件（用它当「合法目标」的样本）。 */
   const insideProject = "package.json";
@@ -505,13 +479,9 @@ describe("setting.revealPath —— 打开本机路径之前的存在性 + 检�
 });
 
 /**
- * `revealPath` 那道闸**自己坏掉时**的方向。
- *
- * 上面几组判的都是「闸在工作」时的取舍；这一组判的是闸读不到检出根时倒向哪一侧。
- * 真机上 `realpath(process.cwd())` 不会失败（当前工作目录一定存在），所以这条
- * 分支只能靠代理把它逼出来 —— 而它恰恰是最需要钉住的一侧：闸门失效时如果默认
- * 全放，「一句精心构造的日志让面板去打开 `C:\Windows\System32`」就从**文本判据**
- * 进不来了改从**闸自己**进来了。
+ * `revealPath` 那道闸**自己坏掉时**的方向：真机上 `realpath(process.cwd())` 不会失败，这条分支只能靠
+ * 代理逼出来 —— 而它恰恰最需要钉住：闸门失效时若默认全放，「精心构造的日志让面板去打开
+ * `C:\Windows\System32`」就从**闸自己**进来了，而不是文本判据。上面几组判的都是闸在工作时的取舍。
  */
 describe("setting.revealPath —— 取不到检出根时全拒，且这个结论不粘", () => {
   /** 与上面同一条样本：检出内、真实存在 —— 闸正常时它必须放行。 */

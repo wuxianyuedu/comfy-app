@@ -1,23 +1,7 @@
 /**
- * e2e 的 Python 前置（ISSUE #1959 第四轮）。
- *
- * ## 立案现场
- *
- * 假 comfy-cli 是**一个 Python 包**：主链路那条 `@critical` 用例要由
- * `COMFY_CLI_PYTHON` 指向的解释器把它 import 起来。缺解释器时此前只有 Playwright
- * 的 worker stdout 里一行 `⚠ 假 comfy-cli 未注入`，而人看到的是**两条**
- * 「执行器收口失败」的功能红 —— 一件事被报成两条，且报错不指向真因。
- *
- * ## 判据分三头
- *
- *   ① **可用时给出绝对路径**：`fakeExecutorEnv()` 交给应用的是一个裸名字
- *      （`python` / `py`），而应用侧直接 `spawn` 它 —— Windows 上 Node 不认
- *      PATHEXT，裸名字必然 ENOENT，而这一档只在「生产构建 + start」上暴露；
- *   ② **缺件时判红 + 给出能直接跑的出口**：「不阻断地提个醒」在这里等价于让两条
- *      主链路用例去跑一个注定红的结果，并把真因埋掉；
- *   ③ **接线在位**：`scripts/e2e-run.mjs` 在起 Playwright 之前判、结论经
- *      `E2E_PYTHON_PREFLIGHT` 带进 `playwright.config.ts`，且**读不出时退回原来的
- *      行为**（手工 `pnpm exec playwright test` 那条路不该被弄崩）。
+ * e2e 的 Python 前置（ISSUE #1959 第四轮）。假 comfy-cli 是**一个 Python 包**，主链路那条 `@critical` 用例要由 `COMFY_CLI_PYTHON` 指向的解释器把它 import 起来；缺解释器时此前只有 worker stdout 里一行 `⚠ 假 comfy-cli 未注入`，而人看到的是**两条**「执行器收口失败」的功能红——一件事被报成两条，且报错不指向真因。
+ * 判据分三头：① 可用时给出**绝对路径**（`fakeExecutorEnv()` 交的是裸名字 `python` / `py`，应用侧直接 `spawn`，Windows 上 Node 不认 PATHEXT ⇒ 裸名字必然 ENOENT，而这一档只在「生产构建 + start」上暴露）；② 缺件时判红并给出能直接跑的出口（「不阻断地提个醒」等价于让两条主链路去跑一个注定红的结果，并把真因埋掉）。
+ * ③ 接线在位：`scripts/e2e-run.mjs` 在起 Playwright 之前判，结论经 `E2E_PYTHON_PREFLIGHT` 带进 `playwright.config.ts`，且**读不出时退回原来的行为**（手工 `pnpm exec playwright test` 那条路不该被弄崩）。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -174,13 +158,9 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
 
   it("`.cnb.yml` 里 E2E 之前那一步答的就是 Python 这一格", () => {
     const yml = readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
-    /* 取的是「E2E 那一步的入口」，不是「E2E 那一步当时带的参数」。
-     * 原来这里写的是 `node scripts/e2e-run.mjs --grep=@critical` —— 那个字面量在
-     * 每日档改跑**整档**那一批里被去掉了（PR 上不再有收窄的那一格），于是 `indexOf`
-     * 回 `-1`，而 `-1` 不比任何正数小 ⇒ 这条判据当场红。红得对（它确实在说「E2E 那一行
-     * 被改了」），但**判据要的从来是顺序**，不是那一串参数 —— 参数形态由
-     * `tests/no-platform-ci-config.test.ts` 判（那里钉的是「每日那一格不许带 `--grep`」），
-     * 这里不抄第二轮（§12.12）。 */
+    /* 取的是「E2E 那一步的入口」，不是「E2E 那一步当时带的参数」：原来写 `node scripts/e2e-run.mjs --grep=@critical`，每日档改跑**整档**那一批里
+     * 被去掉后，`indexOf` 回 `-1`，而 `-1` 不比任何正数小 ⇒ 这条判据当场红。红得对（它确实在说「E2E 那一行被改了」），但**判据要的从来是顺序**，
+     * 不是那一串参数 —— 参数形态由 `tests/no-platform-ci-config.test.ts` 判（那里钉「每日那一格不许带 `--grep`」），这里不抄第二轮（§12.12）。 */
     const pythonAt = yml.indexOf("node scripts/ci-toolchain-selfcheck.mjs --python-only");
     const e2eAt = yml.indexOf("node scripts/e2e-run.mjs");
     /* **前置断言**：两侧都必须取到数。`indexOf` 取不到回 `-1`，而 `-1` 参与大小比较
@@ -193,16 +173,10 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     expect(e2eAt, "`.cnb.yml` 里没有 E2E 那一步了 —— 顺序无从比起").toBeGreaterThanOrEqual(0);
     // 顺序是判据的一部分：它必须排在 E2E 那一步**之前**。
     expect(pythonAt).toBeLessThan(e2eAt);
-    /* ⚠️ 顺带钉住**命令形态**：`--grep` 的值必须与开关连成一个 token（`=`）。
-     * 写成空格那版（`--grep @critical`）时，平台 runner 的命令行会把 `@` 开头的
-     * 裸 token 吃掉，Playwright 只收到没有值的 `--grep` —— 现场 `cnb-cdt-1k51s6mf1`：
-     *
-     *     error: option '-g, --grep <grep>' argument missing
-     *
-     * 这条只在**平台**上红：本地 bash / PowerShell 里两种写法都传得进去，所以它是
-     * 「停用期间看不见」那一类（`E2E 关键流程` 此前从没在那台节点上执行过）。
-     * 今天 E2E 那一格不带 `--grep`（整档跑），所以这一句判的是**回潮时的形状**：
-     * 谁把收窄加回来，必须用 `=` 连写。 */
+    /* ⚠️ 顺带钉住**命令形态**：`--grep` 的值必须与开关连成一个 token（`=`）。写成空格（`--grep @critical`）时平台 runner 的命令行会把 `@` 开头的
+     * 裸 token 吃掉，Playwright 只收到没有值的 `--grep` —— 现场 `cnb-cdt-1k51s6mf1`：`error: option '-g, --grep <grep>' argument missing`。这条只在
+     * **平台**上红：本地 bash / PowerShell 两种写法都传得进去，属「停用期间看不见」那一类（`E2E 关键流程` 此前从没在那台节点上执行过）。今天 E2E 那一格
+     * 不带 `--grep`（整档跑），所以这一句判的是**回潮时的形状**：谁把收窄加回来，必须用 `=` 连写。 */
     expect(
       yml,
       "`.cnb.yml` 里 E2E 那一步又写回了 `--grep @…`（空格那版）—— 平台命令行会吃掉那个 token",

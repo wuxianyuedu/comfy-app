@@ -1,14 +1,7 @@
 /**
- * 内存滑动窗口限流（单实例部署友好）。
- *
- * 设计说明：
- * - 本地单机部署（SQLite）无需引入 Redis/Upstash；内存桶即可挡暴力调用。
- * - 纯函数、零 tRPC 依赖，避免与 trpc.ts 循环引用；由 trpc.ts 的
- *   `rateLimitedProcedure` 中间件消费。
- * - 多副本部署时，将 `checkRateLimit` 内部实现替换为 Redis/Upstash
- *   滑动窗口（@upstash/ratelimit），接口不变。
- *
- * 注意：匿名限流依赖 `x-forwarded-for`（反代注入），本地直连时回退 "anon"。
+ * 内存滑动窗口限流（单实例部署友好）：本地 SQLite 单机无需 Redis/Upstash；纯函数、零 tRPC 依赖，
+ * 避免与 trpc.ts 循环引用，由其 `rateLimitedProcedure` 中间件消费；多副本时把 `checkRateLimit` 内部
+ * 换成 Redis/Upstash 滑动窗口（@upstash/ratelimit），接口不变。匿名限流依赖 `x-forwarded-for`，直连回退 "anon"。
  */
 
 type SlidingWindowEntry = {

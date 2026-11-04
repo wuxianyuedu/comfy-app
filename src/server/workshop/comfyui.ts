@@ -1,8 +1,7 @@
 // ── Workshop MCP 本地 ComfyUI 通道 ──────────────────────────────
-// 不依赖 Next/rpc 的 SSE 链路（那套依赖浏览器与 server-only），改为直接调用
-// 本地 ComfyUI 的 HTTP API：/api/prompt → /api/history → /api/view。
-// 工作流为 ComfyUI「API 格式」图（节点平铺），默认内置一个模型无关的 SDXL
-// txt2img 图；视频(i2v)与自定义图走 data/workshop-comfy-settings.json 模板，
+// 不依赖 Next/rpc 的 SSE 链路（那套依赖浏览器与 server-only），直接调本地 ComfyUI HTTP API：
+// /api/prompt → /api/history → /api/view。工作流为「API 格式」图（节点平铺），默认内置一个
+// 模型无关的 SDXL txt2img；视频(i2v)与自定义图走 data/workshop-comfy-settings.json 模板，
 // 支持 {{prompt}}/{{negative}}/{{image}} 占位替换，从而与任意已安装模型解耦。
 import { randomUUID } from "node:crypto";
 
@@ -53,18 +52,10 @@ const realSettingsFileIo: SettingsFileIo = {
   },
 };
 
-/**
- * settings 文件的指纹 memo（ISSUE #2194）。
- *
- * 为什么是**指纹比对**而不是显式 `reset`：**用户被本模块的话术指着手改这个文件**
- * （搜「comfyui 视频通道需要 i2v 工作流模板」），而显式 reset 需要一个「文件被改了」
- * 的执行者 —— 那只能是一个 watcher（为 397 行的模块引一套 fs.watch）或「没人按的按钮」。
- * size+mtime 指纹让**手改这个动作本身**成为执行者：改完的下一次读取必然 miss。
- * 指纹形状与 custom-nodes manifest 摘要（audit E6）/ lockfile 漂移（L11）同一族；
- * 一次 statSync，微秒级。
- *
- * 导出仅为用例（注入 io 不碰真盘）；模块自己用 `settingsMemo` 那一份。
- */
+/** settings 文件的指纹 memo（ISSUE #2194）：用户会被本模块话术指着手改这个文件，而显式 `reset` 需要
+ * 「执行者」—— 一个 watcher 或没人按的按钮；size+mtime 指纹让**改这个动作本身**成为执行者，改完的下一次
+ * 读取必然 miss。形状与 custom-nodes manifest 摘要（audit E6）/ lockfile 漂移（L11）同族，一次 statSync。
+ * 导出仅为用例（注入 io 不碰真盘）；模块自己用 `settingsMemo`。 */
 export function createSettingsFileMemo(file: string, io: SettingsFileIo = realSettingsFileIo) {
   let cache: ComfySettings | null = null;
   let fingerprint: string | null = null;
@@ -103,17 +94,10 @@ function loadSettings(): ComfySettings {
   return settingsMemo.load();
 }
 
-/**
- * 丢掉缓存的 ComfyUI base，让下一次 `resolveComfyBase()` 重新探测。
- *
- * 与 `~/lib/comfyui/client.ts` 的 `resetComfyBase()` 同一条语义（同维度两份缓存、
- * 此前只有那一侧带出口 —— ISSUE #2194）：ComfyUI 重启后可能落在**另一个**端口
- * （配置端口被占用时它会自己 +1），不清缓存就会在整个进程生命周期里钉死在
- * 一个已经死掉的端口上。
- *
- * **执行者**是本模块自己的网络层失败路径（`guardNetworkFailure`）——
- * 没有执行者的失效出口只是一层没人按的按钮（#2194 原话）。
- */
+/** 丢掉缓存的 ComfyUI base，让下一次 `resolveComfyBase()` 重新探测。与 `~/lib/comfyui/client.ts` 的
+ * `resetComfyBase()` 同语义（两处缓存此前只有那侧有出口，ISSUE #2194）：ComfyUI 重启后可能落在另一个
+ * 端口（配置端口被占用时自行 +1），不清就钉死在死端口上整个进程周期。执行者是本模块的
+ * `guardNetworkFailure` —— 没有执行者的失效出口只是没人按的按钮。 */
 export function resetWorkshopComfyBase(): void {
   resolvedBase = null;
 }
@@ -134,12 +118,10 @@ function guardNetworkFailure(e: unknown): never {
   throw e;
 }
 
-/** 解析 ComfyUI base（含端口探测，落 127.0.0.1 避免 localhost→IPv6 解析失败）。
- *
- * 存活判据走 `~/lib/comfyui/probe` 的 `probeBaseOnce` 唯一口径（**连上即存活**，
- * 含 GPU OOM 的 500 应答，#685）——此前这里自己 `r.ok`，与设置页的单点探测
- * 分叉：同一实例一边判活、这边判死。本模块是纯 Node 宿主（MCP），probe.ts
- * 是零依赖叶子（只有 fetch + 地址拼接），import 安全。 */
+/** 解析 ComfyUI base（含端口探测；落 127.0.0.1 避免 localhost→IPv6 解析失败）。存活判据走
+ * `~/lib/comfyui/probe` 的 `probeBaseOnce` 唯一口径（**连上即存活**，含 GPU OOM 的 500，#685）——
+ * 此前这里自己判 `r.ok`，与设置页单点探测分叉：同一实例一边判活、这边判死。`probe.ts` 是零依赖
+ * 叶子（只有 fetch + 地址拼接），本模块是纯 Node 宿主（MCP），import 安全。 */
 export async function resolveComfyBase(): Promise<string> {
   if (resolvedBase !== null) {
     return resolvedBase;

@@ -3,20 +3,9 @@ import { expect, test, type Page } from "@playwright/test";
 import { expectHomeReady } from "./support/home-anchors";
 
 /**
- * 「新建画布项目 → 刷新」之后用户仍在项目上下文里（ISSUE #1501）。
- *
- * 这条是**真浏览器**才判得出的：缺陷全程发生在 localStorage 与页面挂载之间 ——
- * 首页点「新建画布项目」走 `createProject()`，它立刻往项目索引落一行
- *「零节点零连线 + 名字 = 未命名」的记录并设 active-id；刷新时工作区页面挂载即调
- * `reapAllEmptyDrafts()`，那一行**正好命中空草稿哨兵**，于是被当成历史遗留的
- * 空草稿清掉，active-id 跟着被清。`openableViews` 只在 active 非空时才列项目类
- * 视图，所以「＋」菜单从 11 项退回 5 项 —— 用户被踢出项目。
- *
- * jsdom 那侧只判得到 store 的判据（`canvas-store.test.ts`），判不到
- * 「页面挂载 → 清扫 → 页签条重建」这条装配链路；而这一条正是当初断掉的地方。
- *
- * 为什么必须在**同一个 page** 里 reload：这正是缺陷的复现条件 ——
- * 此前项目内那六个视图在 e2e 里只能在一个页面会话内到达。
+ * 「新建画布项目 → 刷新」之后用户仍在项目上下文里（ISSUE #1501）。缺陷在 localStorage 与页面挂载之间：首页 `createProject()`
+ * 落的「零节点零连线 + 未命名」那行正好命中空草稿哨兵，刷新时被 `reapAllEmptyDrafts()` 清掉、active-id 跟着被清（「＋」菜单从 11 项退回 5 项）。
+ * jsdom 只判得到 store（`canvas-store.test.ts`），判不到「挂载 → 清扫 → 页签条重建」；必须同一 page 里 reload（项目内六个视图只能在单个会话内到达）。
  */
 
 /* 项目内的六个视图 —— 与 `projectTabs()` 的标签逐字对齐。
@@ -83,13 +72,9 @@ test.describe("新建项目后的上下文在刷新后仍成立 @critical", () =
     /* 刷新。缺陷就在这一步：active-id 被挂载时的清扫清掉，下面这六个消失。 */
     await page.reload();
 
-    /* reload 后要等界面重新稳定，否则点的是旧 DOM。
-     *
-     * 等的是**项目页签重新装好**（`主页·未命名`），不是首页那个入口卡 —— 这正是本
-     * 用例的关键：修复生效时用户**不回首页**，首页那四张入口卡在 reload
-     * 后根本不该出现。判据写成「等首页标题」等于把断言钉在缺陷态上：修复一落地
-     * 它反而红（判据成了缺陷的墓碑）。所以等的是「用户仍在项目里」这件事本身，
-     * 它同时也是下面那条断言的主体。 */
+    /* reload 后要等界面重新稳定，否则点的是旧 DOM。等的是项目页签重新装好（`主页·未命名`），不是首页入口卡：
+     * 修复生效时用户不回首页，那四张卡在 reload 后根本不该出现；判据写成「等首页标题」等于钉在缺陷态上，
+     * 修复一落地它反而红（判据成了缺陷的墓碑）。所以等的是「用户仍在项目里」这件事本身，它同时也是下面那条断言的主体。 */
     await expect(page.getByRole("tab", { name: /^主页/ })).toBeVisible();
 
     const afterReload = await openViewMenuItems(page);

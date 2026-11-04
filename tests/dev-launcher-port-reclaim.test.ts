@@ -1,23 +1,7 @@
 /**
- * 端口残留回收判据的回归护栏（ISSUE #621）。
- *
- * 现场：用户在别的项目里用 `COMFYAPP_PORT` 固定过端口，本检出的 `.env` 里也写着
- * 同一个数字；上一次启动的实例（dev server）退出得不干净，端口仍被它听着。
- * 兜底回收路径**一条也没跑**：
- *   - 会话锚点（`run/launcher-session.json`）在正常收尾时已被清掉；
- *   - `pidBelongsToRoot` 按「命令行里有没有出现过检出根路径」判定，而
- *     `pnpm dev -p N`（缺省端口）与 `pnpm exec next dev --turbo` 两条命令行里
- *     **都没有检出根路径** → 判成「别的检出 / 别的程序」，按 §1.4 只提示不回收。
- * 结果是死死卡在端口被占，而那个进程其实就是本检出自己的。
- *
- * 判据现在分两层（唯一出处 `scripts/launcher-core/orchestrator.mjs`）：
- *   1. `usesExplicitPort()` —— 编排器有没有把端口**显式传给** dev server。
- *      `pnpm dev` 一律是 `pnpm dev -p <port>`（Next 不认 `COMFYAPP_PORT`），
- *      因此显式口上的本检出应用服务只可能是残留；
- *   2. `portOwnershipVerdict()` —— 在「显式端口」这个前提下，用**应用服务自证**
- *      （`scripts/dev.mjs` / `scripts/start.mjs` / `next dev|start` +
- *      检出根路径）把「本检出自己的服务」从「别的程序恰好从本检出目录启动」
- *      里分出来。缺任一前提就不动它 —— 宁可放过一次残留，也不猜着杀别人的进程。
+ * 端口残留回收回归护栏（ISSUE #621）：上次 dev server 退出不干净仍听着 `COMFYAPP_PORT`，而 `pidBelongsToRoot`
+ * 靠命令行里的检出根路径判定，`pnpm dev -p N` / `pnpm exec next dev --turbo` 都不含它 → 判成「别的程序」只提示不回收。
+ * 两层判据（`scripts/launcher-core/orchestrator.mjs`）：`usesExplicitPort()` 显式端口前提 + `portOwnershipVerdict()` 应用服务自证；缺前提不动，宁可放过残留不误杀。
  */
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";

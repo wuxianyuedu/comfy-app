@@ -1,16 +1,7 @@
 /**
- * 提交门槛自检：把 scripts/check-ui-primitives.cjs 当黑盒跑在临时工作区上，
- * 验证「视图层自实现 UI 基元」这条棘轮（规范 §16.2.3）真的会阻断提交。
- *
- * 规范：docs/standards/16-shadcn-ui与表单校验.md §16.2.3（ISSUE #672）
- *
- * 为什么用子进程跑：门禁由 pre-commit 以 `node scripts/xxx.cjs` 调用，且内部以
- * `__dirname/..` 定位扫描根 —— 复用同一调用方式才等价于真实门禁。
- *
- * 夹具里**纯样例**的文件路径一律写成不存在的 `fixture-*`（ISSUE #2830）：写成真路径时，
- * 「按路径引用」那一档会把这份 70s+ 的自测算成那些业务文件的消费方。按**精确路径**登记在
- * 豁免表 / 迁移落点里的那几份（`ui-primitives-exempt-files.cjs`）必须保持真实路径 ——
- * 那一条测的正是「这个文件被显式放行」。
+ * 提交门槛自检：把 scripts/check-ui-primitives.cjs 当黑盒跑在临时工作区上，验证「视图层自实现 UI 基元」棘轮（规范 §16.2.3，
+ * ISSUE #672）真会阻断提交。用子进程跑是因为门禁由 pre-commit 以 `node scripts/xxx.cjs` 调用、内部以 `__dirname/..` 定位扫描根。
+ * 夹具**纯样例**路径一律写 `fixture-*`（ISSUE #2830）：写真路径会被「按路径引用」档算成那些业务文件的消费方；豁免表里的必须真实。
  */
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
@@ -40,12 +31,9 @@ function seedBaseline(repo: GateRepo): void {
 }
 
 /**
- * 把临时工作区里那份脚本改成「这几条仍走棘轮」的形态 —— 只把 rule id 从
- * `HARD_GATE_RULES` 摘掉，判据本身一字不动。
- *
- * 为什么要这样造：现网各条**全部**是硬闸，而「冻结存量 → 只许降 → --strict
- * 要求收紧 → --update 拒绝放宽」这套棘轮语义是给**新引入的判据**起步用的。
- * 不给它造一个执行者，这条路就没有任何测试覆盖，下次真加新判据时它是坏的也没人知道。
+ * 把临时工作区里那份脚本改成「这几条仍走棘轮」的形态 —— 只把 rule id 从 `HARD_GATE_RULES` 摘掉，判据一字不动。
+ * 为什么要造：现网各条**全部**是硬闸，而「冻结存量 → 只许降 → --strict 收紧 → --update 拒绝放宽」这套棘轮语义
+ * 是给**新引入的判据**起步用的；不给它造执行者，这条路就没有任何测试覆盖，下次真加新判据时它是坏的也没人知道。
  */
 function demoteToRatchet(repo: GateRepo, ...ids: Array<string>): void {
   /* `HARD_GATE_RULES` 随声明层搬到了 `ui-primitives-rules.cjs`（ISSUE #1811 拆
@@ -54,14 +42,10 @@ function demoteToRatchet(repo: GateRepo, ...ids: Array<string>): void {
    * 所以这里直接改副本即可。 */
   const rel = "scripts/ui-primitives-scope.cjs";
   const src = repo.read(rel);
-  /* **在 `HARD_GATE_RULES` 这一段的范围内**改，而不是在整份源码上按行形状找。
-   *
-   * 原先的实现是全局按「换行 + 缩进 + 引号包住的 id + 逗号」这条**行形状**做
-   * 替换 —— 它的注释写着「只把 rule id 从 HARD_GATE_RULES 摘掉」，但正则本身
-   * 并不锚定那一段，只赌「源码里再没有别处出现同一行形状」。脚本里一加别的按
-   * id 登记的表（`RULE_TIER_IDS` 就是），这个赌就输：正则会先摘掉那张表里的
-   * 登记项、把判据的分档自检打成红（实测 7 条用例连坐）。**赌「没有第二处」的
-   * 判据会在第二处出现的那天静默改错地方**（§13.5.12 同族），所以补锚点。 */
+  /* **在 `HARD_GATE_RULES` 这一段的范围内**改，而不是整份源码按行形状找。原先的实现全局按「换行 + 缩进 + 引号包住
+   * 的 id + 逗号」这条行形状替换，正则并不锚定那一段，只赌「源码里再没有别处出现同一行形状」—— 脚本一加别的按 id
+   * 登记的表（`RULE_TIER_IDS` 就是）赌就输：会先摘掉那张表里的登记项、把分档自检打成红（实测 7 条用例连坐）。
+   * **赌「没有第二处」的判据会在第二处出现那天静默改错地方**（§13.5.12 同族），所以补锚点。 */
   const decl = DECL_RE.exec(src);
   if (!decl) {
     throw new Error("读不到 HARD_GATE_RULES 的声明 —— 改测试");
@@ -489,12 +473,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P13 / P14 / P15：本批三条硬闸（规范 16 §16.2.4.16 ~ §16.2.4.18）──
-   *
-   * 与 P10~P12 同款：判据按**形态**取锚点，且**两条边界都要有用例** ——
-   * 判据太宽会逼下一个人改坏代码去迎合它。这三条各有一条特别的边界：
+   * 与 P10~P12 同款：判据按**形态**取锚点，且**两条边界都要有用例** —— 太宽会逼下一个人改坏代码去迎合它。
    *   · P13 必须同时看见「只 trim 不折小写」那种写法（更差的那种）；
-   *   · P14 不能把「在跑标记」这类非折叠语义的 Record 算进来；
-   *   · P15 不能把普通的 `useState(false)` 弹窗开关算进来。 */
+   *   · P14 不能把「在跑标记」这类非折叠语义的 Record 算进来；P15 不能把普通的 `useState(false)` 弹窗开关算进来。 */
   test("视图里自写搜索归一化（trim + 折小写）直接阻断（规范 P13）", ({ repo }) => {
     repo.write("src/components/studio/Searchable.tsx", SEARCH_NEEDLE_VIEW);
     const { code, output } = repo.run();
@@ -568,12 +549,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P16 / P17：本批两条硬闸（规范 16 §16.2.4.19 ~ §16.2.4.20）────────
-   *
-   * 这一批的两个问法是「谁在给一段异步动作配进度」与「谁在把一个对象渲染成
-   * 键值行」。两条判据各有一条**必须有的反面用例**（判据太宽会逼下一个人
-   * 改坏代码去迎合它）：
-   *   · P16 不能把普通的 `style={{ width: "200px" }}`（定宽）算进来；
-   *   · P17 不能把「只有小标题、没有值」「只有值、没有标签」算进来。 */
+   * 问法是「谁在给一段异步动作配进度」与「谁在把一个对象渲染成键值行」。两条各有一条**必须有的反面用例**
+   * （判据太宽会逼下一个人改坏代码去迎合它）：P16 不能把普通定宽 `style={{ width: "200px" }}` 算进来；
+   * P17 不能把「只有小标题、没有值」「只有值、没有标签」算进来。 */
   test("视图里自绘进度条填充直接阻断（规范 P16）", ({ repo }) => {
     repo.write("src/components/studio/Progress.tsx", PROGRESS_FILL_VIEW);
     const { code, output } = repo.run();
@@ -1678,11 +1656,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P36 / P37 / P38：本批三条硬闸（规范 §16.2.4.39 ~ §16.2.4.41）────
-   *
-   * 三条都按**形态**取锚点，且都**必须同时满足两个条件** —— 单数其中一半会把
-   * 界面上无处不在的合法写法算进来（左内边距 / 条件渲染 / 当前选中项 /
-   * 只读几何）。每条都配反面用例，且都用「先回放改造前的落点」验过判据真的
-   * 抓得住（判据漏掉更差的那一半，被拦下的就永远只是合规者）。 */
+   * 三条都按**形态**取锚点，且都**必须同时满足两个条件** —— 单数其中一半会把界面上无处不在的合法写法
+   * （左内边距 / 条件渲染 / 当前选中项 / 只读几何）算进来。每条都配反面用例，且都用「先回放改造前的落点」
+   * 验过判据真抓得住（判据漏掉更差的那一半，被拦下的就永远只是合规者）。 */
 
   test("手写「树的缩进档 + 子行集合容器」直接阻断（规范 P36）", ({ repo }) => {
     repo.write(
@@ -1944,12 +1920,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P39 / P40 / P41：本批三条硬闸（规范 §16.2.4.42 ~ §16.2.4.44）────
-   *
-   * 三条同样按**形态**取锚点，且都排除了「形态相近、语义不同」的合法写法：
-   *   · P39 排除帧循环（`step` 自递归采样器，不是「等一帧」）；
-   *   · P40 排除出口自身的实现与「纯编排 / 域转发」两层；
-   *   · P41 排除字段级校验（`BodySchema` 那类域判据）与出口自身。
-   * 每条都配反面用例。 */
+   * 三条同样按**形态**取锚点，且都排除了「形态相近、语义不同」的合法写法：P39 排除帧循环（`step` 自递归采样器，
+   * 不是「等一帧」）；P40 排除出口自身实现与「纯编排 / 域转发」两层；P41 排除字段级校验（`BodySchema` 那类域
+   * 判据）与出口自身。每条都配反面用例。 */
 
   test("裸写 requestAnimationFrame 调度直接阻断（规范 P39）", ({ repo }) => {
     repo.write(
@@ -3930,14 +3903,10 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P67：ui/ 层自造组件绕开 shadcn 基元（§16.2.3 / §12.18）────────
-   * 与 P1~P66 的"视图层不自造原语"对偶：这一条守的是 ui/ 层自己有没有
-   * 基于 shadcn 已装基元二次封装。范围收窄到 ui/ 是因为视图层的
-   * `WorkflowPickChip` / `ShotStatusBadge` 等业务包装消费 ui/ 基元后
-   * 用同样的命名不算轮子（见脚本内 UI_ONLY_RULES 的注释）。
-   * Empty / Field 两条子判据的「基元未装、先冻结起点」前置已经不成立：
-   * `ui/empty.tsx` 与 `ui/field.tsx` 都已装并被业务多处消费，本条现在是硬闸、
-   * 须为 0。（当年那句判断据是「`components.json` 里没有 empty」—— 而那个文件
-   * 只记 aliases / registries，从来不代表装了哪些组件。） */
+   * 与 P1~P66 的「视图层不自造原语」对偶：守的是 ui/ 层自己有没有基于已装基元二次封装。范围收窄到 ui/ 是因为
+   * 视图层的 `WorkflowPickChip` / `ShotStatusBadge` 等业务包装消费 ui/ 基元后用同样命名不算轮子。Empty / Field
+   * 两条子判据的前置「基元未装、先冻结起点」已不成立（都已装且被业务多处消费），本条现在是硬闸、须为 0。
+   * （当年那句判断据是「`components.json` 里没有 empty」—— 而那个文件只记 aliases / registries。） */
 
   test("P67 a. Badge 绕开：ui/ 里 `export function X(Badge|Chip|Tag)` 未 import Badge → 阻断", ({
     repo,
@@ -4649,14 +4618,10 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── 判据引入顺带解锁的 --update 逻辑：判据引入 vs 已有规则上升 ─────
-   * 见 scripts/check-ui-primitives.cjs 里 `before && after > before` 的
-   * 分支重构。测试锁：
-   *   · 旧基线里从没出现过的 rule id（新加判据的起点登记）→ `--update` 允许；
-   *   · 旧基线里已经有过的 rule id 上升 → `--update` 必须拒绝。
-   * 步骤：先造一个 P1 现场 → `--update` 登记起点 → 再写第二个 P1 →
-   * 第二次 `--update` 必须拦下（P1 已在基线、从 1 涨到 2 是"已有 rule 上升"）。
-   * 载体挑棘轮里最朴素的 P1（视图层裸 `<button>`）：P71/P78/P79/P80/P81
-   * 都在其他 PR 里升硬闸、走不到「新判据起点登记」这条分支了。 */
+   * 见 scripts/check-ui-primitives.cjs 里 `before && after > before` 的分支重构。测试锁：旧基线里从没出现过的
+   * rule id（新判据起点登记）→ `--update` 允许；旧基线里已有 rule id 上升 → 必须拒绝。步骤：造 P1 现场 →
+   * `--update` 登记起点 → 再写第二个 P1 → 第二次必须拦下（从 1 涨到 2 是「已有 rule 上升」）。载体挑最朴素的
+   * P1：P71/P78~P81 都在其他 PR 升硬闸、走不到「新判据起点登记」这条分支。 */
   test("--update 允许登记新判据起点、但拦下已有 rule id 的上升", ({ repo }) => {
     demoteToRatchet(repo, "P1");
     repo.write(
@@ -4680,11 +4645,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P77「视图层手写 aria-pressed」（棘轮）差分回归 ────────────
-   * 见 scripts/check-ui-primitives.cjs 里 P77 注释：合规出口是
-   * `~/components/ui/toggle-group` 的 `<ToggleGroup>` + `<ToggleGroupItem>`
-   * （内部由 Base UI 自动打 `aria-pressed` 与 `data-state`、给键盘导航与
-   * 组内互斥关系带 `role="group"`）。视图里出现 `aria-pressed=` 字面量 =
-   * 该文件在**手写一份"哪一个是选中"的状态契约**。 */
+   * 见脚本 P77 注释：合规出口是 `~/components/ui/toggle-group` 的 `<ToggleGroup>` + `<ToggleGroupItem>`（Base UI 自动
+   * 打 `aria-pressed` 与 `data-state`、给键盘导航与组内互斥带 `role="group"`）。视图里出现 `aria-pressed=` 字面量 =
+   * 该文件在**手写一份「哪一个是选中」的状态契约**。 */
   test("P77 视图层手写 aria-pressed 计入棘轮（相对基线增量 → 阻断）", ({ repo }) => {
     repo.write(
       "src/components/studio/P77ManualToggle.tsx",
@@ -4910,13 +4873,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P81「视图层 <Button> 直接子 icon 缺 data-icon」（棘轮）差分回归 ────
-   * 见 scripts/check-ui-primitives.cjs 里 P81 注释与 `isP81IconName` 白名单：
-   * 判据扫 `<Button[\s>][\s\S]*?</Button>` 块、按 tag 深度 1（Button 的
-   * 直接子级）取 icon-like 起始标签（`Icon` / `svg` / 后缀 `Icon` /
-   * lucide 白名单），开括号里没 `data-icon=` 即计一处。合规出口是
-   * `data-icon="inline-start"`（icon 在文字前）或 `"inline-end"`（icon
-   * 在文字后）—— shadcn `buttonVariants` 的 `has-data-[icon=*]` 选择器
-   * 只吃**直接子级**，故深层嵌套不算这条账。 */
+   * 见脚本 P81 注释与 `isP81IconName` 白名单：扫 `<Button[\s>][\s\S]*?</Button>` 块、按 tag 深度 1 取 icon-like
+   * 起始标签（`Icon` / `svg` / 后缀 `Icon` / lucide 白名单），开括号里没 `data-icon=` 即计一处。合规出口是
+   * `data-icon="inline-start"` 或 `"inline-end"` —— shadcn `buttonVariants` 的 `has-data-[icon=*]` 只吃直接子级。 */
   test("P81 Button 直接子 <Icon name> 无 data-icon → 阻断", ({ repo }) => {
     repo.write(
       "src/components/studio/P81Missing.tsx",
@@ -5001,17 +4960,10 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P82「视图层 `<Button>` 原生 title=」（硬闸）差分回归 ─────────
-   * 见 scripts/check-ui-primitives.cjs 里 P82 注释：合规出口是
-   * `~/components/ui/hint` 的 `<Hint label=…>`（`Tooltip` + Base UI
-   * `TooltipTrigger render={…}` 的薄封装）。
-   * 判据取「`<Button` 之后整段属性」，属性段由 `scanJsxAttrs()` 平衡扫描、
-   * `parseJsxProps()` 整名解析、`classifyTitleValue()` 分档。引入时用的是粗锚
-   * `[^>]*`，它会被属性段里箭头函数 / `{a > b}` / 带引号的值里那个 `>` 截断
-   * —— 粗锚在真实库上数到 78、AST 复数是 157。
-   * 下面除了「漏计已闭合」，还钉住三件从旧实现里修掉的误报/漏报：
-   *   · `data-title=` / `aria-label="title="` 不算原生 title（整名匹配）；
-   *   · `title=""` / `{undefined}` / `{null}` 归 empty、不计违规；
-   *   · `{...props}` 展开归 unknown、单列人工抽查。 */
+   * 见脚本 P82 注释：合规出口是 `~/components/ui/hint` 的 `<Hint label=…>`。判据取「`<Button` 之后整段属性」：
+   * `scanJsxAttrs()` 平衡扫描、`parseJsxProps()` 整名解析、`classifyTitleValue()` 分档；粗锚 `[^>]*` 会被箭头函数 /
+   * `{a > b}` / 带引号值里的 `>` 截断（真实库数到 78、AST 复数 157）。另钉三件误报/漏报：`data-title=` 与
+   * `aria-label="title="` 不算；`title=""` / `{undefined}` / `{null}` 不计；`{...props}` 归 unknown 人工抽查。 */
   test('P82 视图层 <Button title="x"> 直接阻断（硬闸命中行形态）', ({ repo }) => {
     repo.write(
       "src/components/studio/P82RawTitle.tsx",
@@ -5204,14 +5156,10 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P83「屏级标题不走字阶档 / 在 h1 上硬写字号」（棘轮）差分回归 ──────
-   * 判据见 scripts/check-ui-primitives.cjs 里 P83 的注释：只管 h1（屏级），
-   * 属性段必须出现 u-title-page / text-page 之一，且不得再叠 text-lg /
-   * text-[ 34px ] 这类硬写字号。
-   *
-   * 曾经还放行 `u-title-hero`：首页欢迎区那块大标题走的是它，ISSUE #1691 把那
-   * 块欢迎区删掉之后这一档连同 `--text-hero` 一起退役（零消费者）。下面这条
-   * 「合规出口」因此少了它，也**多了一条反例**（退役的档不许再当出口用）——
-   * 两侧都判，才不会出现「档删了、判据还放行」的静默失效。 */
+   * 见脚本 P83 注释：只管 h1（屏级），属性段必须出现 u-title-page / text-page 之一，且不得再叠 text-lg /
+   * text-[ 34px ] 这类硬写字号。曾还放行 `u-title-hero`（首页欢迎区），ISSUE #1691 删掉那块后这一档连同
+   * `--text-hero` 一起退役（零消费者）。下面「合规出口」少了它、**多了一条反例**（退役档不许再当出口）——
+   * 两侧都判，才不会「档删了、判据还放行」的静默失效。 */
   test("P83 h1 各屏自写字号 → 阻断", ({ repo }) => {
     repo.write(
       "src/components/studio/P83MissingTier.tsx",
@@ -5264,12 +5212,10 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("P83 不再认 `text-page` 那个出口：h1 只挂它 → 仍计", ({ repo }) => {
-    /* 从前 P83 认两个出口（`.u-title-page` 与 `text-page`）。第二个是个坑的入口而不是一条
-     * 出路：那颗 token 乘 `--font-scale`、只该经 `.u-title-page` 使用，却因为住在 `@theme`
-     * 里被 Tailwind 顺带生成成 JSX 可用的类 —— 而 `cn()` 把不认识的 `text-<名字>` 归进
-     * 颜色组，吃掉同一行真正的状态色。token 移到 `:root` 之后那个类根本不存在了，
-     * 挂它的 h1 字号会退回继承（= 屏级标题没有档）。与上面 `u-title-hero` 那条同一口径：
-     * **档不再是出口之后，判据不许还放行它**。 */
+    /* 从前 P83 认两个出口（`.u-title-page` 与 `text-page`）。第二个是坑的入口：那颗 token 乘 `--font-scale`、只该经
+     * `.u-title-page` 用，却因住在 `@theme` 里被 Tailwind 生成成 JSX 可用的类 —— 而 `cn()` 把不认识的 `text-<名字>`
+     * 归进颜色组、吃掉同一行真正的状态色。token 移到 `:root` 后那个类不存在了，挂它的 h1 字号退回继承。与
+     * `u-title-hero` 同一口径：**档不再是出口之后，判据不许还放行它**。 */
     repo.write(
       "src/components/studio/P83NoLongerExit.tsx",
       [
@@ -5504,14 +5450,10 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P86「视图层手搓屏级页头」（硬闸）─────────────────────────────────
-   * 判据见 scripts/check-ui-primitives.cjs 里 P86 的注释。这条编号此前
-   * **占了位置却没有实现**（规范 16 的表里写着 P86、脚本里最大到 P85），
-   * 本批把两边对齐：判据落成实现 + 唯一存量（`app/(main)/models/page.tsx`）
-   * 同批迁到 `ui/page-header` 后清零、直接进硬闸。
-   *
-   * 正例喂的是**收口前的真实形状**（连同那个 `text-muted-foreground` 色类）——
-   * 不是编的：若把色类也写成判据的一部分，这条正例就会绿着通过、而判据在
-   * 真实仓库上数出 0（「等式为 0 的判据若正则写漂会永远绿」）。 */
+   * 见脚本 P86 注释。这条编号此前**占了位置却没实现**（规范 16 表里写着 P86、脚本里最大到 P85），本批把两边
+   * 对齐：判据落成实现 + 唯一存量（`app/(main)/models/page.tsx`）同批迁到 `ui/page-header` 后清零、进硬闸。
+   * 正例喂的是**收口前的真实形状**（连同 `text-muted-foreground` 色类）—— 若把色类也写进判据，这条正例会绿着
+   * 通过而判据在真实仓库数出 0（「等式为 0 的判据若正则写漂会永远绿」）。 */
   test("P86 手搓屏级页头（`.u-title-page` + `mt-1 text-sm` 副说明）→ 阻断", ({ repo }) => {
     repo.write(
       "src/components/studio/P86Handroll.tsx",
@@ -5698,12 +5640,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    */
 
   test("预计算层：同一份文本只剥一次注释（同一份输入的重复计算被消掉）", ({ repo }) => {
-    /* 断言的是**行为**不是实现：拿两份内容逐字相同的文件，把 `stripComments`
-     * 换成会自增计数的探针，看它是按「文本」还是按「判据 × 文件」被调用。
-     *
-     * 为什么不能只断言「跑得动 / 退出码对不对」：缓存坏掉的表现是**仍然全绿**
-     * （剥注释是纯函数，多算几遍结果一样）—— 一条把缓存整个删掉的改动能全绿
-     * 通过，而它正是本层要守的东西。 */
+    /* 断言的是**行为**不是实现：拿两份内容逐字相同的文件，把 `stripComments` 换成会自增计数的探针，看它是按
+     * 「文本」还是按「判据 × 文件」被调用。为什么不能只断言「跑得动 / 退出码对不对」：缓存坏掉的表现是
+     * **仍然全绿**（剥注释是纯函数，多算几遍结果一样）—— 一条把缓存整个删掉的改动能全绿通过，而它正是本层要守的。 */
     /* 探针打在**文本引擎**里（`stripComments` 住在 `ui-primitives-engine.cjs`，
      * ISSUE #1747 的分层把机器从判据里抽了出去）。
      *
@@ -5793,14 +5732,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 });
 
 /**
- * `--staged` 的输入面跳过（ISSUE #1747）。
- *
- * 扫描面由 `SCAN_DIRS` 现算（五条根全在 `src/` 下）。两个方向都要钉住：
- * 不在扫描根下 ⇒ 跳过；落在扫描根下 ⇒ **照旧真扫**（跳过不是让判据松掉的后门）。
- *
- * 为什么不能只看退出码：「跳过」与「扫过之后 0 处违规」同为 0，一条把 `--staged`
- * 实现成「永远跳过」的改动能全绿通过 —— 正是门禁静默失效的形态（§11.23）。
- * 所以断言里要看见「未触及扫描面」/ 违规被点名，而不是只断言退出码。
+ * `--staged` 的输入面跳过（ISSUE #1747）。扫描面由 `SCAN_DIRS` 现算（五条根全在 `src/` 下）：不在扫描根下 ⇒ 跳过；落在扫描根下 ⇒
+ * **照旧真扫**（跳过不是让判据松掉的后门）。不能只看退出码：「跳过」与「扫过之后 0 处违规」同为 0，把 `--staged` 实现成
+ * 「永远跳过」的改动能全绿通过 —— 正是门禁静默失效（§11.23）；断言里要看见「未触及扫描面」/ 违规被点名。
  */
 describe("UI 基元复用棘轮 --staged 输入面跳过（ISSUE #1747）", () => {
   /* 这一组要真 git（`--staged` 读的是暂存区），所以单独搭一个带 `git init` 的工作区。 */

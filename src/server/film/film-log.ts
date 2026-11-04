@@ -1,10 +1,7 @@
 /**
- * `film-log.ts` —— 成片行日志的唯一写入口（ISSUE #1257 下沉出来的那一格）。
- *
- * 为什么单独一份：编排侧（`orchestrator.ts`：建片 / 逐镜提交 / 监看）与合成侧
- * （`compose-film.ts`）都要往 `filmProject.logs` 上追加行。它留在任何一侧，另一侧
- * 就得反向 import 过来 —— 而「编排引合成、合成引编排」正是 `check-circular-deps`
- * 拦的那条环（本刀要避开的就是它，判据看 AST 上的 import，`import type` 也不算安全）。
+ * `film-log.ts` —— 成片行日志的唯一写入口（ISSUE #1257 下沉出来的那一格）。单独一份：编排侧（`orchestrator.ts`）与合成侧（`compose-film.ts`）都要追加
+ * `filmProject.logs`；留在任一侧另一侧就得反向 import ——「编排引合成、合成引编排」正是 `check-circular-deps` 拦的环
+ * （本刀要避开；判据看 AST import，`import type` 也不算安全）。
  */
 import "server-only";
 

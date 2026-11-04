@@ -1,20 +1,7 @@
 /**
- * 「router 层的错误信封只许 TRPCError」这条判据自身的用例（台账 E8 的防线）。
- *
- * 三层各管一件事，缺任何一层都会静默失效：
- *   ① **存量为零** —— 真扫 `src/server/api/routers/**`（先过 `stripComments`，
- *      否则本文件的注释里那些「裸 `throw new Error`」叙述会把自己判红）。
- *      同时断言**扫描面非空**：路径写错时「零命中」看起来就像「全都修好了」，
- *      这是这一类清单最典型的死法。
- *   ② **配置在写** —— `oxlint.parity.config.mjs` 里确实有针对该 glob 的
- *      `eslint-js/no-restricted-syntax`（#2777 从 eslint 迁到 oxlint jsPlugin），
- *      规则条目直接从**导入的配置对象**里取（不在这里重抄一份，否则改了配置而测试还绿）。
- *   ③ **selector 真的会响** —— 拿 eslint 自带的 `Linter` 在最小片段上跑**行为断言**：
- *      裸 `throw new Error` 必须报、`throw new TRPCError` 必须不报；并且 router 目录里
- *      store selector 那条**同样还在响**（#2777 修层覆盖前，后一层会把前一层整条替换掉，
- *      只看源码文本永远看不出这事）。
- *      少了这一层，② 就只是一句「配置里有个字符串」—— 而本仓库已经付过学费：
- *      **「有配置 ≠ 配置在跑」**（§11.7 / 台账 E2 同源）。
+ * 「router 层的错误信封只许 TRPCError」判据自身的用例（台账 E8）。三层缺一都会静默失效：
+ * ① 真扫 `src/server/api/routers/**`（先 `stripComments`，否则本文件注释里的裸 `throw new Error` 会把自己判红）并断言扫描面非空 —— 路径写错时「零命中」看起来就像「全都修好了」，这是这类清单最典型的死法；
+ * ② 规则条目从 `oxlint.parity.config.mjs` 的导入对象取（#2777 迁 oxlint jsPlugin，不在测试里重抄）；③ 用 eslint `Linter` 最小片段验行为：裸 `throw new Error` 报、`throw new TRPCError` 不报，store selector 那条同样在响（#2777 修层覆盖前，后一层会整条替换前一层）——「有配置 ≠ 配置在跑」（§11.7 / 台账 E2）。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";

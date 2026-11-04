@@ -1,23 +1,7 @@
 /**
- * 三条策略守卫「迁到 oxlint 之后仍然真的会响」的对拍用例（#2777）。
- *
- * ── 为什么要这一份 ────────────────────────────────────────────────────────
- *
- * 这三条原先住在 `eslint.config.js`，由 `tests/router-error-envelope.test.ts` /
- * `tests/store-selector-shape.test.ts` 用 eslint 自带 `Linter` 做行为断言。
- * 迁到 `oxlint.parity.config.mjs` 后，执行者换了（oxlint 的 jsPlugin 通道），
- * 但**判据一个字都没变**：同一个 selector / 同一句 message。
- *
- * 「配置里写了」不等于「闸真的会响」（§11.7 / 台账 E2）。所以这一份直接拿
- * **真判决配置里的条目**喂给 **oxlint CLI 真跑一遍**：
- *
- *   ① 从 `oxlint.parity.config.mjs` 读规则条目（不在此重抄 selector / message）；
- *   ② 现生成一份只含这三条规则的最小探针配置（`node_modules/.cache/`，跑完即删）；
- *   ③ 在仓外临时目录造正反样本，断言命中集合与**文案逐字一致**。
- *
- * 另外两节钉「迁移本身」：`eslint.config.js` 里这三条已经删干净、只剩 14 条；
- * 两条规则的文件作用面（router 面排除 `*.test.ts`、drizzle 面只覆盖 components/features）
- * 仍按原样落在判决配置里 —— 少了任一面，「迁过去」就只是换了个文件写配置。
+ * 三条策略守卫「迁到 oxlint 之后仍然真的会响」的对拍用例（#2777）：执行者从 eslint 的 `Linter` 换成 oxlint jsPlugin，
+ * 判据一个字没变（同一个 selector / 同一句 message）。做法：① 从 `oxlint.parity.config.mjs` 读规则条目，不在测试里重抄；
+ * ② 现生成最小探针配置（`node_modules/.cache/`，跑完即删）；③ 仓外临时目录造正反样本，断言命中集合与文案逐字一致。另外钉「迁移本身」：`eslint.config.js` 已删干净只剩 14 条；router 面排除 `*.test.ts`、drizzle 面只覆盖 components/features 仍落在判决配置里。
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";

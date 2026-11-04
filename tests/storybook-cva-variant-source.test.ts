@@ -1,32 +1,7 @@
 /**
- * 故事文件的**枚举来源**判据（ISSUE #1381 续）。
- *
- * 为什么需要它：`cva()` 返回的是一个 `(props?) => string` 的**函数**，
- * `.variants` 只存在于 TS 泛型里、运行时并没有。于是
- * `Object.keys(buttonVariants.variants.variant)` 这种「从 cva 返回值上取候选」
- * 的写法有两个失败面，而两者**都不在同一处报错**：
- *
- *  · `tsc` 会红（类型上没有 `.variants`）—— 但只在跑过 tsc 的地方红；
- *  · Storybook 在**加载期**抛 `Cannot read properties of undefined` ——
- *    表现是「侧栏里列着这个组件的故事、画布上一片空白」，与「这个 story 挂了」
- *    的直觉对不上，首轮的 3 份 story 就是这么写的。
- *
- * `tests/storybook-config.test.ts` 守的是**配置**契约（glob / 样式 / 主题 /
- * 启动器），对「故事文件自己怎么写」无感 —— 本条补的就是那一格。
- *
- * 四条判据（只读文本与 AST，不起子进程）：
- *  1. **别从 cva 的返回值上取枚举** —— 基底按 `cva` 的**绑定名**判，
- *     不按 `xxxVariants` 这个名字：改名就能绕过的门禁等于没有。
- *  2. **手写的候选清单不许漏档** —— 正确写法（从 props 派生）拿不到运行时枚举，
- *     枚举值必须手写一份，于是「`cva` 里新加一档、故事没跟上」是这条账的日常
- *     失效形态。轴的链接走 `argTypes` 的 `options`，不靠命名约定猜。
- *  3. **`argTypes` 的 `options` 指向文件里真有的清单**（拼错名字 = 下拉空着，
- *     而 Storybook 不会为此报错）。
- *  4. **组件的每个变体轴，故事里都列出来了**（整条轴被漏掉 = 那一档没人验）。
- *
- * 已知边界（写清，别当成已完成）：只覆盖 `cva` 调用里 `variants` 那一层的
- * **字面量** key。`variants` 由外部常量拼出来、或轴名是计算属性时，本条读不到
- * —— 那类写法在 `ui/` 里当前为 0（判据报「轴数为 0」即跳过，不会假装通过）。
+ * 故事文件的**枚举来源**判据（ISSUE #1381 续）：`cva()` 返回函数，`.variants` 只在 TS 泛型里、运行时没有——
+ * `Object.keys(x.variants.variant)` 会 tsc 红（仅跑过 tsc 处）或 Storybook 加载期抛 `Cannot read properties of undefined`（画布空白）。四条判据：
+ * ① 别从 cva 返回值取枚举（按 `cva` 绑定名判，改名不能绕过）；② 手写候选清单不许漏档（轴链接走 `argTypes.options`）；③ `argTypes.options` 指向文件真有的清单（拼错＝下拉空且不报错）；④ 每个变体轴故事都列出。已知边界：只覆盖 `cva` 里 `variants` 字面量 key，外部常量/计算属性报「轴数为 0」即跳过。
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";

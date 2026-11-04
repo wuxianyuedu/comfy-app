@@ -1,18 +1,7 @@
 /**
- * 提交门槛自检:把 scripts/check-react-updater-purity.cjs 当黑盒跑在临时
- * fixtures 上,验证「React 函数式 setState updater 里不许放副作用裸调用」
- * 这条硬规则(ISSUE #141)真的会阻断提交,而不是只写在文档里。
- *
- * 背景:ISSUE #141 报出 "Cannot update a component (ExtractModelSelect) while
- * rendering a different component (DarkSelect)" —— DarkSelect 把副作用
- * emitOpenChange(!value) 塞进了 setOpen((value) => {...}) 的函数式 updater。
- * React 的函数式 updater 是纯函数,会在渲染/调度阶段被求值;在其中调用外部
- * 函数触发别的组件 setState,就是渲染期改父组件 state 的告警源。
- *
- * 为什么把 fixtures 放临时目录、脚本用位置参数指向它:本脚本 require("typescript"),
- * 只有从仓库根跑才能解析到 node_modules;而 fixtures 又不能污染仓库 src/,
- * 故测试把坏/好样例写进 tmp,再用 node scripts/check-react-updater-purity.cjs <dir>
- * 调用同一脚本(等价于真实门禁的解析路径)。
+ * 提交门槛自检：把 `scripts/check-react-updater-purity.cjs` 当黑盒跑在临时 fixtures 上，验证「React 函数式
+ * setState updater 里不许放副作用裸调用」真会阻断提交（ISSUE #141：DarkSelect 把 emitOpenChange 塞进 setOpen 的
+ * updater，在渲染/调度期改父组件 state）。fixtures 进 tmp 再按位置参数调用：脚本须在仓库根解析 typescript，且不污染 src/。
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";

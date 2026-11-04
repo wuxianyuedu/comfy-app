@@ -1,32 +1,7 @@
 /**
- * 三层注入层（store / React Flow / 整屏容器）的**契约判据**
- *（ISSUE #1381 续，规范 16 §16.2.3.10）。
- *
- * 为什么需要它：`data-sources.tsx` 那条（`tests/storybook-data-sources.test.ts`）
- * 守住了「值源不许是假数据」，而这一批的三层守的是同一件事在**另外三个方向**上
- * 的形态 —— 失效时同样没有任何东西会红：
- *
- *  · 往 store 场景里塞一份手捏的 `LogEntry[]` —— 解析、分桶、计数三条链路一起
- *    被跳过，画布上照样有内容（那正是 §16.2.3.9 判断「不给假形态」的反面）；
- *  · 拿一段原文冒充三条通道 —— 每块必须按**自己那条通道的格式**解析，
- *    否则「来源」那一列会整列同名，分桶与计数等于没验；
- *  · 画布场景里写死 `zoom` 却绕过真 `ReactFlow` —— 端点几何 / 缩放订阅 /
- *    视口尺寸全是假的，而那三样正是这一族 story 存在的理由；
- *  · 整屏容器里塞 `<div>占位</div>` —— 画布上看的是「外壳围着占位符」，
- *    证明不了「外壳 + 真视图」这回事。
- *
- * 判的是**接线与形状**，不是语义（语义那一半由真浏览器逐 story 渲染核对）：
- *  1. 三个模块都在 `.storybook/` 下、都有真出口；
- *  2. store 场景的名字不认识时**抛错**、每块带 `origin`、且走 `parseFileLogs`；
- *  3. 画布场景的名字不认识时**抛错**、带 `viewport`，且注入层用的是真
- *     `ReactFlowProvider` / `ReactFlow`（不是自绘的假画布）；
- *  4. 整屏容器用的是真 `AppShell` / 真 `WorkspaceFrame`，且项目经真 action
- *     (`createProject`) 建 —— 手拼 `CanvasProject` 字面量会被这条拦下；
- *  5. 三个注入层都挂在 `preview.tsx` 的装饰器链上（没挂 = 判据"在场"而 story
- *     走的还是真实单例，表现是「story 里 store 空着」）。
- *
- * 真浏览器逐 story 渲染核对是另一半（那一维是「有没有真的画出来」，
- * 用例到不了）—— 本批 35 条相关 story 全部逐条在无头 Chromium 里打开过。
+ * 三层注入层（store / React Flow / 整屏容器）的**契约判据**（ISSUE #1381 续，规范 16 §16.2.3.10）：失效时没有任何东西会红 ——
+ * 手捏 `LogEntry[]`、一段原文冒充三条通道、写死 `zoom` 绕过真 `ReactFlow`、容器塞占位，都证明不了「接线 + 真视图」；语义由无头 Chromium 逐 story 核对。
+ * 判形状与接线：三模块有真出口、场景名不认识即抛错且带 `origin`/`viewport`、真 `ReactFlowProvider`/`AppShell`/`WorkspaceFrame`、三层都挂在 `preview.tsx` 装饰器链上。
  */
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -141,28 +116,10 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
   });
 
   it("画布层：场景里每条边引用的 handle，在该档真正的节点渲染器上真的挂着", () => {
-    /* 这条判据的来由是**两处同族真错**（ISSUE #1381）：
-       ① `screen-frame.tsx` 的 `filledProject` 第一版把三条边写成
-          `sourceHandle: "1:text"` / `targetHandle: "2:prompt"`（形如真画布的
-          `nodeSeqOf()` 短序号，看着很像）；
-       ② `flow-canvas.tsx` 的 `twoNodes` / `fanOut` / `mixedKinds` 三档一直写着
-          `"1:model"` / `"2:images"` 这种**既不是输出端 `out:<name>`、也不是输入端
-          `ioKey`** 的第三种形状 —— 于是那三档在画布上**一条线都没画出来**，
-          而 `fanOut` 的名字与 `about` 一直在说「一个源节点扇出三条连线」。
-
-       React Flow 对**不认识 handle 的边是静默丢弃**：不报错、控制台干净、画布
-       只是少几条线。所以它必须由判据守着 —— 构建退出码与 tsc 都说明不了这件事。
-
-       ## 判法：两侧**现算交集**，不抄第三份端口表
-       上一条版本按「一张手写的真端口表」判，只认 `output` / `inputImage` 那对
-       条件端口 —— 它拦住了 ①（写错端口名），却完整漏掉 ②（整个换成另一套 handle
-       口径），因为后者根本不在那张表的取值域里。**把端口表当事实源，就是这次漏掉
-       一半的原因。** 现在改成问两侧各自的事实：
-         · 场景侧：`flow-canvas.tsx` 里每条边声明的 `sourceHandle` / `targetHandle`；
-         · 渲染器侧：消费这份场景的 story 文件里，节点渲染器实际挂的 `<PortHandle id>`。
-       两侧取值必须对得上，且**都得非空**（空集会让 `every` 恒真 = 判据空转）。
-       前缀常量取自真出处（`OUTPUT_PORT_HANDLE_PREFIX`），不另写字面量。
-     */
+    /* 来由：两处同族真错（ISSUE #1381）—— `screen-frame.tsx` 的 handle 写错、`flow-canvas.tsx` 三档用了既非 `out:<name>`
+       也非 `ioKey` 的第三种形状，画布一条线都没画出来。React Flow 对不认识 handle 的边**静默丢弃**（不报错、控制台干净），
+       只能由判据守着。判法：两侧**现算交集**而非手抄端口表（上一版正是被那张表的取值域挡住漏掉第二种），场景侧读边的
+       `sourceHandle`/`targetHandle`、渲染器侧读 `<PortHandle id>`，两侧都得非空；前缀取自 `OUTPUT_PORT_HANDLE_PREFIX`。 */
     const prefixSrc = readFileSync(
       join(ROOT, "src/components/studio/canvas/flow-focus-endpoints.ts"),
       "utf8",

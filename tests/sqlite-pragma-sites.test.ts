@@ -1,21 +1,7 @@
 /**
- * PRAGMA / 等锁预算的「站点同源」判据（ISSUE #1250）。
- *
- * 这里判的是两件各自会**静默失效**的事：
- *
- * 1. **漂移**：库级 PRAGMA 有四处站点要一致（Next 主库、工坊库、执行宿主、非 TS 的
- *    启动器）。三处 TS 侧 import 同一份清单是编译期同源；启动器引不到它，只能照抄，
- *    所以由本文件按清单**逐条**核对。
- * 2. **形状错**：等锁预算曾经也放进那份清单里，看着像「四处都设了」，实测却只对
- *    其中一条连接生效 —— `@libsql/client` 的 `file:` 客户端是**连接池**，池上限
- *    `Math.max(1, config.concurrency)` 在未配 `concurrency` 时是 `NaN`，也就是
- *    「永远没到上限」，于是池随时会新开一条**没见过开机那条 PRAGMA** 的连接。
- *    桌包实演读到的正是这个后果：宿主的 4 次终态重试挤在 0.6 秒里跑完（每次都秒抛），
- *    而不是每次等满预算。正确形状是客户端的 `timeout` 选项，由驱动在**建立每条连接**
- *    时设好。下面第 4、5 条用例就是当场把这两种形状量出来，而不是留一句注释相信它。
- *
- * 预算给在宿主（250ms）而不给 Next 侧，是签字决定，理由写进 `src/lib/sqlite-pragmas.ts`
- * 文件头：libsql 的语句执行是同步的，等锁多少毫秒，本进程的事件循环就停摆多少毫秒。
+ * PRAGMA / 等锁预算的「站点同源」判据（ISSUE #1250）：①**漂移** —— 库级 PRAGMA 有四处站点（Next 主库、工坊库、执行宿主、非 TS 启动器）要一致，三处 TS 侧 import 同一份清单，启动器只能照抄，故这里逐条核对。
+ * ②**形状错** —— 等锁预算放进清单看似「四处都设了」，但 `@libsql/client` 的 `file:` 客户端是**连接池**，`Math.max(1, config.concurrency)` 未配时是 `NaN`（永远没到上限）⇒ 随时新开没见过开机 PRAGMA 的连接；正确形状是客户端 `timeout` 选项，由驱动在建立每条连接时设好。
+ * 预算给宿主 250ms 而不给 Next 侧是签字决定，理由见 `src/lib/sqlite-pragmas.ts` 文件头（libsql 语句执行同步，等锁多少毫秒事件循环就停摆多少毫秒）；下面第 4、5 条用例当场把这两种形状量出来。
  */
 import { mkdirSync, readFileSync, readdirSync, rmSync, rmdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -191,20 +177,14 @@ describe("库级 PRAGMA 清单只有一份定义", () => {
  * 而不是某条用例红（那种红长得像判据写坏了）。 */
 
 /**
- * 被量子进程数。
- *
- * 7 是照 #1282 当时的现场取的（`next build` 打印 `Collecting page data using 7 workers`）。
- * 2026-10-01 同一台机器、`next` 已升到 16.3.8 的那次构建读到的是 **`using 15 workers`** ——
- * 这个数会随 CPU 与版本变，别把它当常量信仰。这里仍按 7 跑是**偏保守**的一侧：进程更少
- * ⇒ 窗口更容易错开 ⇒ 更容易「一次都不抛」，正是它需要多轮的原因之一。
+ * 被量子进程数。7 是照 #1282 现场取的（`next build` 打印 `Collecting page data using 7 workers`）；2026-10-01 同机、`next` 升到 16.3.8 时读到 `using 15 workers` —— 这个数随 CPU 与版本变，别当常量信仰。
+ * 仍按 7 跑是**偏保守**一侧：进程更少 ⇒ 窗口更易错开 ⇒ 更易「一次都不抛」，正是它需要多轮的原因之一。
  */
 const RACE_PROCS = 7;
 
 /**
- * 等 N 个子进程全部到位的上限。本机 tsx 冷启一轮实测 7.4s、热启 2.2–2.8s，满载更久。
- * 上一版写死 10s 且**超时也继续发令**，而那批进程错开起跑的形状恰好是「一次都不抛」=
- * 假红（#1337 的一条待分辨可能，本机没触发但它是条会静默降级的通道）。现在到位不足会
- * 明确报出来，不再装作量到了。
+ * 等 N 个子进程全部到位的上限。本机 tsx 冷启实测 7.4s、热启 2.2–2.8s，满载更久。上一版写死 10s 且**超时也继续发令**，而错开起跑的形状恰好是「一次都不抛」= 假红（#1337 的一条待分辨可能）。
+ * 现在到位不足会明确报出来，不再装作量到了。
  */
 const ARRIVAL_DEADLINE_MS = 25_000;
 
@@ -222,29 +202,9 @@ const RACE_CASE_TIMEOUT_MS = RACE_CONTROL_ROUNDS * (ARRIVAL_DEADLINE_MS + 20_000
 type RaceRound = { arrived: number; outcomes: Array<string> };
 
 /**
- * `applySqlitePragmas` 的**撞锁重试**当场量出来（ISSUE #1282，形状重定于 #1337）。
- *
- * 原始现场：`next build` 的 collect-page-data 会起多个 worker 进程，每个都 import
- * `src/server/db.ts`、于是每个都跑一遍开机 PRAGMA，而**一份全新的库文件**上
- * `PRAGMA journal_mode = WAL` 要独占锁 —— 实测会抛 `SQLITE_BUSY`（#1282 那轮记的是
- * 3/8），异常从模块顶层 await 浮出 worker 就被 Next 聚合成 `Failed to collect page data`，
- * 报错行还落在无关路由上。现场形态是「干净检出上第一次 `pnpm build` 必失败、再跑一次就好」。
- *
- * **为什么这一组只剩一条断言的一半**（#1337 的归因，读数都是本机 2026-10-01 量的）：
- * 「几个进程同时抢那份独占转换窗口」这件事本身是**亚毫秒窗口上的概率事件** —— 同形状跑
- * 5 轮，每轮抛的次数是 1 / 3 / 0 / 2 / 4；也就是说单轮「一次都没抛」的概率约 1/5，而它
- * 并不指示任何回归。把它当判决用，代价是这条判据会在没坏的时候红（实测真用例 3 跑 2 绿 1 红），
- * 而红不可归因的判据久了就没人看（ISSUE #1179 记的就是这个下场）。
- *
- * 所以形状改成两半各归其位：
- *   · **因果交给下面那个 describe**（单元层注入 BUSY，确定性地量「裸循环第一次就抛 /
- *     出口会等且最终成功 / 非锁族一次都不重试 / 穷尽照样抛」）—— 判决不再依赖运气；
- *   · **现场保真留在这一组**：仍然真起 N 个独立进程互撞，但改成**多轮、见一次抛就停**
- *     （P50 成本与单轮一样，只有真出问题的那次才会跑满）。它现在的角色是「这台机器上
- *     这个窗口还在」，不再单独扛因果。
- *
- * 红话必须分得开两种「一次都没抛」：**没齐步**（错开起跑，量到的是启动抖动）与
- * **每轮都齐了却没人撞锁**（转换形状真的变了）—— 这两件事的下一步动作完全不同。
+ * `applySqlitePragmas` 的**撞锁重试**当场量出来（ISSUE #1282，形状重定于 #1337）。原始现场：`next build` 的 collect-page-data 起多个 worker、各自 import `src/server/db.ts` 都跑开机 PRAGMA，而全新库文件上 `PRAGMA journal_mode = WAL` 要独占锁 ⇒ 抛 `SQLITE_BUSY`（3/8），被聚合成 `Failed to collect page data` 且报错落在无关路由（干净检出上首次 `pnpm build` 必失败、再跑就好）。
+ * 抢锁是亚毫秒窗口上的概率事件（同形状 5 轮每轮抛 1/3/0/2/4 次），拿它扛判决会在没坏时红且不可归因（#1179）。故**因果交给下面 describe**（单元层注入 BUSY，只取决于代码形状）；**现场保真留在这一组**：真起 N 个独立进程互撞，但多轮、见一次抛就停，角色只是「这台机器上窗口还在」。
+ * 红话必须分得开两种「一次都没抛」：**没齐步**（错开起跑，量到启动抖动）与**每轮都齐了却没人撞锁**（转换形状真的变了）—— 下一步动作完全不同。
  */
 describe("开机 PRAGMA 撞锁有界重试，当场量出来", () => {
   it(
@@ -296,15 +256,10 @@ describe("开机 PRAGMA 撞锁有界重试，当场量出来", () => {
 });
 
 /* ── 单元层：把 BUSY **注入**进来，确定性地量「出口与裸循环的差别」──────────
- *
- * 为什么这一层要存在（#1337）：上面那组进程互撞的窗口是亚毫秒级的概率事件（同形状 5 轮
- * 实测每轮抛 1 / 3 / 0 / 2 / 4 次），拿它扛判决就会在什么都没坏的时候红。因果改由这里钉：
- * 结果只取决于代码形状，不取决于时机。两半各归其位之后，进程层那一组才回归它真正的角色
- * —— 「这台机器上这个窗口还在」。
- *
- * 四条用例对着 `applySqlitePragmas` 的四个分支：重试到成功 / 非锁族一次都不重试 /
- * 穷尽照样抛（且抛的是原错误）/ 同一形状下裸循环第一次就抛。最后那条就是「量具没坏」
- * 在单元层的等价物 —— 它不需要任何运气。 */
+ * 为什么这一层要存在（#1337）：进程互撞的窗口是亚毫秒概率事件（同形状 5 轮抛 1/3/0/2/4 次），
+ * 拿它扛判决会在什么都没坏时红。因果改由这里钉：结果只取决于代码形状，不取决于时机。
+ * 四条用例对着四个分支：重试到成功 / 非锁族一次都不重试 / 穷尽照样抛（抛原错误）/
+ * 同形状下裸循环第一次就抛（量具没坏的等价物，不需要任何运气）。 */
 
 /** 一条会按脚本抛错的假连接。 */
 function scriptedTarget(
@@ -393,27 +348,19 @@ describe("撞锁重试的因果（单元层：注入 BUSY，不赌时机）", ()
 });
 
 /* ── 竞态量具：N 个**独立进程**同时把一份新库切到 WAL（ISSUE #1282，形状重定于 #1337）─
- *
- * 为什么必须跨进程：同进程内的多条连接会被驱动自己串行化（实测 7 条连接跑同一个
- * 循环全绿），只有独立进程才复现得出「别人正拿独占锁」那一档。`next build` 的
- * collect-page-data worker 正是独立进程。
- *
- * 顺带记一条**已被实测否掉**的替代方案（免得下一个人再想一遍）：想用「另一个进程持住
- * `BEGIN EXCLUSIVE`」造出确定性的撞锁是不成立的 —— 本机真测：持锁方在时攻方执行
- * `PRAGMA journal_mode = WAL` 直接返回 `wal`，既不抛也不静默 no-op。这条通道上唯一
- * 能挡住 WAL 转换的就是**另一个进程正在同一瞬间转换**，而那本质是概率事件 —— 所以
- * 因果交给单元层注入，进程层只负责「现场还在」。 */
+ * 必须跨进程：同进程多条连接会被驱动自己串行化（实测 7 条跑同一个循环全绿），只有独立进程才
+ * 复现「别人正拿独占锁」那一档（`next build` 的 collect-page-data worker 正是独立进程）。
+ * 已实测否掉的替代方案：让另一进程持 `BEGIN EXCLUSIVE` 造确定性撞锁不成立 —— 持锁时攻方执行
+ * `PRAGMA journal_mode = WAL` 直接返回 `wal`，既不抛也不 no-op。故因果交单元层，进程层只负责「现场还在」。 */
 let raceRoundSeq = 0;
 
 const raceSandbox = path.join(ROOT, "node_modules", ".cache", `sqlite-pragma-race-${process.pid}`);
 
-/** 子进程脚本源码：`mode=bare` 是修复前的形状（裸循环），`mode=retry` 走真出口。
- *
- *  被测的是**真模块**（不是复制一份逻辑）：复制逻辑等于量一个副本，改了真文件也不会红。
- *  路径用**相对仓库根**的那条（`../../../src/lib/...`），不用 `~/lib/...`：子进程脚本
- *  落在 `node_modules/.cache` 下，tsx 的 paths 解析认的是「离文件最近的 tsconfig」——
- *  在 `node_modules` 里这条路不通。语法用 ESM：脚本是 `.mts`，顶层 await 才成立
- *  （esbuild 对 `.ts` 在非 module 包下按 CJS 转译，直接报 Top-level await 不支持）。 */
+/** 子进程脚本源码：`mode=bare` 是修复前的形状（裸循环），`mode=retry` 走真出口。被测的是**真模块**
+ * （不是复制一份逻辑：复制等于量一个副本，改了真文件也不会红）。路径用相对仓库根那条
+ * （`../../../src/lib/...`）而非 `~/lib/...`：脚本落在 `node_modules/.cache`，tsx 的 paths 认
+ * 「离文件最近的 tsconfig」，在 `node_modules` 里这条路不通。语法用 ESM：脚本是 `.mts`，顶层 await
+ * 才成立（esbuild 对 `.ts` 在非 module 包下按 CJS 转译，直接报 Top-level await 不支持）。 */
 const RACE_WORKER_SOURCE = `
 import { existsSync, writeFileSync } from "node:fs";
 import { createClient } from "@libsql/client";
@@ -453,12 +400,10 @@ try {
 /** 被量子进程加载的模块：**绝对 file: URL**（见 worker 源码里那段说明）。 */
 const PRAGMA_MODULE_URL = pathToFileURL(path.join(ROOT, "src", "lib", "sqlite-pragmas.ts")).href;
 
-/** 跑一轮 N 进程竞态，返回每个进程的结论（`ok` / `fail:CODE` / `exit:N`）**以及实际到位数**。
- *
- *  流程：起 N 个子进程（它们各自在 `while (!existsSync(startFile))` 上自旋等发令）→
- *  等所有子进程各回一个 `.arrived.<pid>` → 落盘 `startFile`（= 发令）→ 收结论。
- *  少了齐步这一步，量到的是「启动抖动」而不是「抢锁」（实测会一次都不抛）。
- *  到位数一并返回：#1337 之后它属于判据的一部分 —— 「没齐也发令」的那一轮不能算量到了。 */
+/** 跑一轮 N 进程竞态，返回每个进程的结论（`ok` / `fail:CODE` / `exit:N`）**以及实际到位数**。流程：
+ * 起 N 个子进程（各自在 `while (!existsSync(startFile))` 上自旋等发令）→ 等各回一个 `.arrived.<pid>`
+ * → 落盘 `startFile`（发令）→ 收结论。少了齐步，量到的是「启动抖动」而不是「抢锁」（实测会一次
+ * 都不抛）。到位数一并返回：#1337 之后它属于判据的一部分 ——「没齐也发令」的那一轮不能算量到了。 */
 async function racePragmaBoot(mode: "bare" | "retry"): Promise<RaceRound> {
   /* 每一轮一个**独立目录**：库文件、齐步文件、到位标记、子进程脚本都关在里面 ——
    * 共用目录时上一轮的 `.arrived.*` 会被这一轮数进来，「人都齐了」就是假的。
@@ -484,12 +429,8 @@ async function racePragmaBoot(mode: "bare" | "retry"): Promise<RaceRound> {
 }
 
 /**
- * 等 `expectCount` 个 `.arrived.<pid>` 出现，返回**实际到位数**。
- *
- * 上一版是「上限 10s，超时也继续」且不回报 —— 于是 tsx 冷启（本机实测 7.4s）或满载
- * 逼近上限时，这一轮会在只有部分进程就绪时发令，而那批进程错开起跑的形状恰好是
- * 「一次都不抛」（文件里另一处注释早就点过这个形态）。到位数现在进 `RaceRound`，
- * 由用例判它自己那条结论还成不成立。
+ * 等 `expectCount` 个 `.arrived.<pid>` 出现，返回**实际到位数**。上一版是「上限 10s，超时也继续」且不回报 —— tsx 冷启（实测 7.4s）或满载逼近上限时，这一轮会在只有部分进程就绪时发令，而那批错开起跑的形状恰好是「一次都不抛」。
+ * 到位数现在进 `RaceRound`，由用例判它自己那条结论还成不成立。
  */
 async function waitForArrivals(startFile: string, expectCount: number): Promise<number> {
   const dir = path.dirname(startFile);
@@ -515,15 +456,9 @@ function runOnce(
   mode: string,
 ): Promise<string> {
   return new Promise((resolve) => {
-    /* 子进程**直接由 node 起 tsx**，不经 `pnpm exec`：Windows 上 `pnpm` 是 `.cmd`/`.ps1`
-     * 壳，而 Node ≥ 24 起批处理必须先经过 shell —— `spawn("pnpm.cmd", …)` 一律
-     * `EINVAL`（本仓为这件事记过账，ISSUE #638，`scripts/check-format.cjs` 文件头就是它）。
-     * 这一组要同时起 7 个进程抢同一个新库，所以也不能改成「复用 `pnpmInvocation()`」——
-     * 那条在本机会解析成 pwsh 起 `pnpm.ps1`，每个子进程多一层 shell 启动抖动，
-     * 而这套量具量的正是几毫秒窗口里的 PRAGMA 竞态（文件里另一处注释已经在抱怨启动抖动）。
-     * tsx 的入口按**它自己的 exports 表**解析（`tsx/cli`），不硬编码 `dist/cli.mjs`。
-     * CWD 仍是仓库根 —— 只有这样才能加载真模块（`src/lib/sqlite-pragmas.ts` 还要 import
-     * `~/lib/**`，别名由仓库根的 tsconfig 解析）。 */
+    /* 子进程**直接由 node 起 tsx**，不经 `pnpm exec`：Windows 上 `pnpm` 是 `.cmd`/`.ps1` 壳，而 Node ≥ 24 起批处理必须先经过 shell —— `spawn("pnpm.cmd", …)` 一律 `EINVAL`（ISSUE #638，`scripts/check-format.cjs` 文件头就是它）。
+     * 也不能改成复用 `pnpmInvocation()`：那条在本机解析成 pwsh 起 `pnpm.ps1`，每个子进程多一层 shell 启动抖动，而这里量的正是几毫秒窗口里的 PRAGMA 竞态。
+     * tsx 的入口按**它自己的 exports 表**解析（`tsx/cli`），不硬编码 `dist/cli.mjs`；CWD 仍是仓库根 —— 只有这样才能加载真模块（`src/lib/sqlite-pragmas.ts` 还要 import `~/lib/**`，别名由仓库根 tsconfig 解析）。 */
     const child = spawn(process.execPath, [TSX_CLI, worker, moduleUrl, startFile, file, mode], {
       cwd: ROOT,
       stdio: ["ignore", "pipe", "inherit"],

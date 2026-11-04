@@ -1,17 +1,7 @@
 /**
- * 函数长度门禁自检：把 `scripts/check-function-length.cjs` 当黑盒跑在临时
- * 工作区上，验证它真能认出「超长函数」并**阻断**（硬闸）。
- *
- * 规范：docs/standards/12-代码组织与文件结构.md §12.13
- *
- * 为什么值得有门禁：文件行数有 R5 守着，**函数**没有 —— 于是 2186 行的单函数
- * （`settings/SettingsPageView.tsx` 的 `SettingsPageView`）一路合法存在，任何
- * 改动都要先在这两千行里定位，而「能不能拆」没有任何机器信号。
- *
- * ISSUE #570 第 7 项补齐了另一半：无名字的块体（IIFE / 回调 / 闭包）**同受约束**
- * —— 否则「把 300 行塞进 IIFE 里」能整条绕过本门禁，而这正是本仓库真实发生过
- * 的事（`lifecycle.ts` 的 `ensureComfyUiReady` 里挂了一个 288 行 IIFE 与三个
- * 40 行事件回调）。见下方「匿名块体」一组用例。
+ * 函数长度门禁自检：把 `scripts/check-function-length.cjs` 当黑盒跑在临时工作区，验证它真能认出「超长函数」并阻断。
+ * 为什么：文件行数有 R5 守着、**函数**没有 —— 2186 行的 `SettingsPageView` 一路合法，拆不拆没有任何机器信号。
+ * ISSUE #570 第 7 项补齐另一半：无名块体（IIFE / 回调 / 闭包）同受约束 —— 否则「300 行塞进 IIFE」能绕过（`lifecycle.ts` 约 288 行 IIFE）。
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";

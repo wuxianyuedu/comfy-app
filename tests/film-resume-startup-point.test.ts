@@ -1,17 +1,7 @@
 /**
- * 成片监看恢复扫描的启动点与「一处、只一处」的源形态判据（P3 §5 ADR 5-A）。
- *
- * 为什么钉源形态而不是行为：这一刀的失败形态全是**静默**的 ——
- *   · 谁都没起扫描 → 重启后影片永远停在 `GENERATING`，界面是一个转不完的圈，
- *     而没有任何一行日志说「没人监看它」；
- *   · 起两处 → 同一部影片两条循环并存，两条都会调 `composeFilm`，
- *     而 `markComposing` 是无条件写 ⇒ 同一部片被 ffmpeg 合成两次；
- *   · 在飞表以另一种形态长回来（模块级 `Set`）→ dev 热重启后旧循环还在飞，
- *     新模块看不见它，第二条照样起来。
- * 这三条都没有可单测的运行期入口（要等真进程重启），所以与
- * `tests/dispatch-startup-points.test.ts`、`tests/reaper-side-effect.test.ts` 同族，
- * 钉在源码形状上。判决本身（捡哪些状态、COMPOSING 为何判掉）在
- * `src/server/film/orchestrator.test.ts` 的 `resumeStalledFilms` 组里。
+ * 成片监看恢复扫描的启动点与「一处、只一处」的源形态判据（P3 §5 ADR 5-A）。失败全静默：没人起扫描 → 重启后
+ * 停在 `GENERATING` 无日志；起两处 → 同一片被 `composeFilm` 合成两次；在飞表换成模块级 `Set` → 热重启后旧循环还在飞。
+ * 没有运行期入口，故钉源码形态；判决本身见 `src/server/film/orchestrator.test.ts` 的 `resumeStalledFilms` 组。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";

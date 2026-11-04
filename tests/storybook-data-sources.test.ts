@@ -1,29 +1,7 @@
 /**
- * 「Args → 数据源」注入层的**契约判据**（ISSUE #1381 续，规范 16 §16.2.3.6）。
- *
- * 为什么需要它：注入层（`.storybook/data-sources.tsx`）是 story 的**公共依赖**，
- * 而它守的那条口径（「不给数据依赖型组件 mock 假形态」）恰好是**最容易悄悄失效**的
- * 一类 —— 失效时没有任何东西会红：
- *
- *  · 有人往 `DATA_SOURCES` 里加一份手写的示例对象 → 所有依赖它的 story 一起
- *    变成「看着正常、真机上不对」，而画布上完全看不出来（这正是上一轮不给它们写
- *    story 的理由）；
- *  · 有人把 `media` 源的名字清单与磁盘上的真文件脱钩 → 名字指向的文件不存在，
- *    画布上组件渲染的是它的失败兜底，读的人会以为「设计就是这样」；
- *  · 有人把手写清单从 `DATA_SOURCES` 里删掉、改成 story 里各写各的 → 注册表空转，
- *    判据「在场」而什么都没判（与本仓 §16.2.3 反复记着的那族形态同源）。
- *
- * 判的是**形状与连接**，不是语义：
- *  1. 注册表非空，且每个源都有 `about` / `names` / `load` 三件；
- *  2. 名字不认识时 `load` **抛错**（静默回退到空值会让「源名写错了」看不出来）；
- *  3. `media` 源的名字清单与磁盘上的真文件**双向对得上** —— 这是这一层唯一能被
- *     自动核对的那半（`json` 的载荷是代码里的真报文形状，没有第二份可比）；
- *  4. 注入层用的是 Storybook 的 staticDirs 目录，**不是 `public/`** —— 后者会随
- *     `next build` 进 standalone 产物、被 `build-desktop` 内嵌进桌包
- *     （`scripts/check-standalone-contents.cjs` 的顶层白名单）。
- *
- * 注入层的**运行期行为**由真浏览器逐 story 渲染核对（那是「有没有真的画出来」这一
- * 维度，用例到不了）；这里守的是「它的接线还在不在」。
+ * 「Args → 数据源」注入层的**契约判据**（ISSUE #1381 续，规范 16 §16.2.3.6）。失效时没有东西会红：手写示例对象
+ * 混进 `DATA_SOURCES`、`media` 名字与磁盘脱钩、清单被删改成 story 各写各的 —— 画布上都看着正常而真机不对。判**形状与连接**：
+ * 注册表非空且每源有 `about`/`names`/`load`；未知名字 `load` 抛错；`media` 清单与磁盘双向对得上；注入层用 staticDirs 而非 `public/`（后者会进桌包）。
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -40,10 +18,8 @@ const main = readFileSync(MAIN, "utf8");
 
 /**
  * 从源码里读出一份 `as const` 的字符串清单。
- *
- * 为什么读源码而不是 import 那个 `.tsx`：它是 React 组件模块（import 会把
- * Storybook 的 `@storybook/nextjs` 一起拉进 vitest 的 node 环境）。这里判的正是
- * 「那份清单与磁盘对不对得上」，读文本足够且不引入运行期依赖。
+ * 为什么读源码而不是 import 那个 `.tsx`：它是 React 组件模块（import 会把 `@storybook/nextjs` 一起拉进
+ * vitest 的 node 环境）。这里判的正是「清单与磁盘对不对得上」，读文本足够且不引入运行期依赖。
  */
 function readConstArray(name: string): Array<string> {
   const re = new RegExp(`export const ${name} = \\[([\\s\\S]*?)\\] as const;`);

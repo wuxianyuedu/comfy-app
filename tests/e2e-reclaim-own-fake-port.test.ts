@@ -1,25 +1,7 @@
 /**
- * 「上一跑漏下的替身还占着端口」这一格的判据 —— `e2e/support/reclaim-ports.mjs`。
- *
- * 立案现场（`cnb-ooc-1k52laqqh`）：平台上 `E2E 关键流程` 第二次真跑到最后一步时，
- * 日志第一次露出来，红在 Playwright 自己的一句话上：
- *
- *     [e2e-run] 起 Playwright 前：应用端口 空 / 替身端口 有人
- *     Error: http://127.0.0.1:18188/system_stats …（Playwright 报的「已有人应答」）
- *
- * （那句的原文还有后半截，给的是「确认没人跑 / 打开复用」两条出路 —— 本档两条都不采纳。）
- *
- * pre-flight 说的是「起 Playwright 之前就有人」，而 CI 档 `reuseExistingServer`
- * 是 false ⇒ Playwright 直接抛，连会说清「谁在那儿」的 `globalSetup` 都到不了。
- * 占位者是同一台自托管节点上**上一跑漏下的替身**（那一跑 15 分钟前、同一条命令、
- * 同一节点，中间还夹着两条 `cancel` 的构建）。
- *
- * 这一层的判据分三头，缺一条就可能杀错进程：
- *   ① **两条证据都要**：命令行点名本仓替身脚本 **且** 它答出来的 `/system_stats`
- *      是替身的形状。只判一条都会误伤（见下）；
- *   ② **收的是整棵树**（提交给 `killProcessTree` 的唯一出口，AGENTS 硬规则 3），
- *      而不是自己拼一条 `taskkill` / `process.kill`；
- *   ③ **端口空着时不付任何代价**（不起子进程、不 fetch）。
+ * 「上一跑漏下的替身还占着端口」的判据 —— `e2e/support/reclaim-ports.mjs`（现场 `cnb-ooc-1k52laqqh`：E2E 第二次跑到最后一步，
+ * pre-flight 报「替身端口有人」，CI 档 `reuseExistingServer=false` ⇒ Playwright 直接抛、连 `globalSetup` 都到不了）。
+ * 判据三头：两条证据都要（命令行点名本仓替身 + `/system_stats` 是替身形状，只判一条会误伤）；收整棵树（`killProcessTree` 是唯一出口，AGENTS 硬规则 3）；端口空时零代价。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -190,12 +172,9 @@ describe("接线在位：这一步真的挂在起 Playwright 之前（§13.5.12�
   });
 
   it("收完**重算** pre-flight：带进 globalSetup 的必须是收之后的事实", () => {
-    /* 不重算的话，`globalSetup` 会拿着「起之前有人」这条**已经过期**的结论，
-     * 把「本轮自己起的替身」说成「复用」。
-     *
-     * 判据要的是「重算发生在回收之内、编码之前」这个**相对位置**，不是「这两句
-     * 都在文件里」—— 后者在删掉重算那一行时照样成立（编码那一句本来还在）。
-     * 所以从回收那一句起截一段，在那一段里找重算。 */
+    /* 不重算的话，`globalSetup` 会拿着「起之前有人」这条**已经过期**的结论，把「本轮自己起的替身」说成「复用」。
+     * 判据要的是「重算发生在回收之内、编码之前」这个**相对位置**，不是「这两句都在文件里」——后者在删掉
+     * 重算那一行时照样成立。所以从回收那一句起截一段，在那一段里找重算。 */
     const reclaimAt = run.indexOf("await reclaimOwnFakePort(");
     const encodeAt = run.indexOf("env[E2E_PREFLIGHT_ENV_KEY] = encodePreflight(preflight)");
     expect(reclaimAt).toBeGreaterThan(-1);
@@ -216,17 +195,10 @@ describe("接线在位：这一步真的挂在起 Playwright 之前（§13.5.12�
 });
 
 /* ── 应用端口那一格（ISSUE #1977 第十三处）────────────────────────────────
- *
- * 替身那一格修好之后，红往左挪到了**应用端口**上：同一条 WebServer 链的第一个
- * 子进程也是 `shell: true` 下面的孙子进程，上一跑被 stage 墙钟 kill 时同样收不到
- * teardown。判据与替身那格同构，但**换两条证据**：
- *
- *   ① 命令行是本检出应用服务的自证（`isAppDevServerCmdline`：含检出根 + 本仓启动脚本）
- *   ② 它此刻答出来的 `/api/health` 是本应用的形状
- *
- * ① 挡「别的程序恰好从检出目录起来」，② 挡「这是另一个检出的应用服务」——
- * `isAppDevServerCmdline` 只认「本仓的应用服务」，**认不出是哪一份检出**。
- */
+ * 替身那格修好后，红往左挪到**应用端口**：同一条 WebServer 链的第一个子进程也是 `shell: true` 下的孙子
+ * 进程，上一跑被 stage 墙钟 kill 时同样收不到 teardown。判据同构但**换两条证据**：① 命令行是本检出应用服务的
+ * 自证（`isAppDevServerCmdline`：含检出根 + 本仓启动脚本）；② 它答出的 `/api/health` 是本应用形状。
+ * ① 挡「别的程序恰好从检出目录起来」，② 挡「另一个检出的应用服务」—— 后者该函数认不出。 */
 describe("应用端口占位者的识别：两条证据缺一不可", () => {
   const ROOT = "/repo";
   /** 「本检出应用服务」的假命令行（含检出根 + 本仓启动脚本）。 */

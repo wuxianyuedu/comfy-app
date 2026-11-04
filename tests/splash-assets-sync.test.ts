@@ -1,19 +1,7 @@
 /**
- * 回归护栏：启动页副本的同步 —— `splash.html` 与 `index.html` 必须**一起**到位。
- *
- * 现场：`cargo build` 之后工作区里总会多出一个「被修改」的**入库**文件
- * `src-tauri/splash-assets/index.html`，`tests/check-file-structure.test.ts` 的
- * 「三份启动页副本一致」因此常年是红的。根因不在 `build.rs`（它在编译期把两份
- * 都刷新），而在 **`dev-launcher.mjs` 那份同步只写了 `splash.html`**：每次启动
- * 把一份刷成最新、另一份留在旧版，于是「最后一次跑的是谁」决定了工作区是干净
- * 还是脏 —— 这类「少写一个名字」的失误没有任何提示。
- *
- * 本组用例钉死三条契约（反向验证：把 dev-launcher 改回手写一份副本名，
- * 「不再知道副本叫什么」与「都调共享实现」两条必失败）：
- *   · 副本清单只有一处定义（`launcher-core/splash-assets.mjs`），两个调用方都走它；
- *   · 同步写**全部**副本名，且内容与源逐字一致；
- *   · 内容没变就不写盘 —— `shellStaleWarning` 比的正是该目录下的最新 mtime，
- *     每次启动无脑刷一遍会让「正在运行旧版桌面壳」每次都报。
+ * 回归护栏：启动页副本 `splash.html` 与 `index.html` 必须**一起**到位。现场是 `cargo build` 后入库的 `splash-assets/index.html`
+ * 总显示「被修改」（`check-file-structure` 红），根因在 `dev-launcher.mjs` 只同步了 `splash.html`：一份刷新一份留旧，「最后跑的是谁」定脏净。
+ * 钉三条：副本清单只有一处定义（`launcher-core/splash-assets.mjs`）、同步写全部副本且逐字一致、内容未变不写盘（`shellStaleWarning` 比最新 mtime）。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -110,16 +98,9 @@ describe("真仓库：清单与目录内容对得上，且两个调用方都经�
     /* 真正「调共享实现」这件事在链路里成立（主文件经 `shell-ops.mjs` 中转）。 */
     expect(launcherChainSource()).toContain("syncSplashAssets(");
     /**
-     * **判的是「副本名清单只有一处」，不是「某个文件里不许出现这两个字符串」**。
-     *
-     * 这两件事在编排器拆分（ISSUE #1811 第四刀）之前恰好同形，拆分之后不再是：
-     * `shell-ops.mjs` 的接线层有一句「未找到 public/splash.html」的日志文案 ——
-     * 那是**源文件**的名字（它确实叫这个），不是副本清单。而副本清单的机器形态是
-     * 「一份同时列出两个名字的清单」（`SPLASH_ASSET_NAMES`），那句文案命中不了。
-     *
-     * 所以判据取**清单形状**：整条编排链路上列出副本名的地方必须只有共享实现那一处 ——
-     * 回潮的形态是「接线层又手写一份只同步 `splash.html` 的清单」，那正是这条用例
-     * 立案时的现场。
+     * **判的是「副本名清单只有一处」**，不是「某文件里不许出现这两个字符串」。ISSUE #1811 第四刀前它们同形，之后不同：
+     * `shell-ops.mjs` 接线层有句「未找到 public/splash.html」——那是**源文件**名、命中不了清单。故判据取**清单形状**：整条链路
+     * 列出副本名处只能有共享实现一处 —— 回潮形态是「接线层又手写一份只同步 `splash.html` 的清单」，正是立案现场。
      */
     const chain = launcherChainSource();
     /* 清单形状 = `SPLASH_ASSET_NAMES` 那一行（两个名字同现）。数它出现几次：

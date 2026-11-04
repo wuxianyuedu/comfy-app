@@ -1,20 +1,7 @@
 /**
- * ISSUE #1164 的判据：起 Python 子进程的两条链路都必须把解释器锁在 UTF-8。
- *
- * 为什么这条必须用**源码形状**判而不是跑一次：本机的 `python-venv/comfy-cli` 与
- * ComfyUI 安装都是用户自备件，用例不能假装它们存在（规范硬规则：写日志/起进程的
- * 用例只碰自己的临时目录）。而这件事的失效方式是静默的 —— 少给一个 env 键，
- * 面板只是变成乱码，任务只是偶发失败，没有任何类型或断言会红。
- *
- * 取证（中文 Windows / CP936，实测于 python-venv/comfy-cli 那一份解释器）：
- *   不注入            → `sys.stdout.encoding = gbk`，输出按 UTF-8(fatal) 解**解不动**（= 乱码）
- *   只给 PYTHONIOENCODING=utf-8 → stdio 变 utf-8，但 `open()` 仍按 gbk 读，
- *                              读我们写的 UTF-8 工作流文件直接 `UnicodeDecodeError`、exit=1
- *   给 PYTHONUTF8=1            → stdio 与 `open()` 两边都是 utf-8，中文复原
- *   ⇒ 两个都要给；只给 `PYTHONIOENCODING` 是半个修复（本条第二用例钉的就是这一手）。
- *
- * 注释要先剥掉再匹配（`./helpers/strip-comments`）：本文件与被扫文件都会用中文解释
- * 「为什么要这么写」，拿原文去匹配就会红在一行文档上。
+ * ISSUE #1164 的判据：起 Python 子进程的两条链路都必须把解释器锁在 UTF-8。用**源码形状**判而不是跑一次 ——
+ * 本机 `python-venv/comfy-cli` 与 ComfyUI 安装都是用户自备件（硬规则：起进程的用例只碰自己的临时目录），而失效是静默的（少一个 env 键只是乱码 / 偶发失败）。
+ * 实测（中文 Windows / CP936）：不注入 → `gbk`、UTF-8 解不动；只给 `PYTHONIOENCODING=utf-8` → `open()` 仍 gbk、读写 UTF-8 文件 `UnicodeDecodeError`；`PYTHONUTF8=1` → 两边都对 ⇒ 两个都要给（第二用例钉「半个修复」）。匹配前先过 `./helpers/strip-comments`，否则会红在解释性注释上。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -26,11 +13,9 @@ import { stripComments } from "./helpers/strip-comments";
 const ROOT = path.resolve(__dirname, "..");
 
 /**
- * 取出「喂给 spawn 的那一份 env 字面量」里的键名。
- * 两条链路给它起的名字不一样（comfy-cli 是 `env:`，ComfyUI 本体是 `stdioEnv:`），
- * 所以按**大括号配平**扫出所有这类对象字面量，再挑出装着 `PYTHON*` 键的那一个 ——
- * 用「含 PYTHONUNBUFFERED」当选择器是错的（ComfyUI 那一份没有这个键），
- * 第一版就是这么判的、直接把另一条链路判成「找不到」。
+ * 取出「喂给 spawn 的那一份 env 字面量」里的键名。两条链路名不同（comfy-cli 是 `env:`，
+ * ComfyUI 本体是 `stdioEnv:`），故按**大括号配平**扫出所有这类字面量，再挑装着 `PYTHON*` 键的那一个。
+ * 用「含 PYTHONUNBUFFERED」当选择器是错的（ComfyUI 那份没有该键），第一版就这么把另一条链路判成找不到。
  */
 function pythonEnvKeys(rel: string): { keys: Array<string>; name: string } {
   const src = stripComments(readFileSync(path.join(ROOT, rel), "utf8")).replaceAll("\r\n", "\n");

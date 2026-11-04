@@ -1,10 +1,7 @@
 /**
- * `affected-launch-noise-reporter.mjs` 的判据 + `spawnVitest` 噪音过滤的端到端判据。
- *
- * 为什么要测：这条过滤一旦把「真红」也吞掉，CI 就退化成「绿 ≠ 跑过」—— 这正是本仓反复在
- * 收的那一族的反面形态。所以这里用**反向对照**钉死边界：给一组「已知良性噪音」与一组「真红 /
- * 真挂死 / 真超时」原文，前者一律 `isNoiseLine === true`、后者一律 `false`；再端到端验证
- * `spawnVitest` 真的把噪音行从 stdout/stderr 里抠掉、但把真红原文留下。
+ * `affected-launch-noise-reporter.mjs` 的判据 + `spawnVitest` 噪音过滤的端到端判据。为什么要测：
+ * 过滤一旦把「真红」也吞掉，CI 就退化成「绿 ≠ 跑过」。用**反向对照**钉边界：一组「已知良性噪音」全部 `isNoiseLine === true`，
+ * 一组「真红 / 真挂死 / 真超时」全部 `false`；再端到端验证 `spawnVitest` 把噪音行从 stdout/stderr 抠掉、真红原文留下。
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

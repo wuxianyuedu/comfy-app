@@ -1,36 +1,7 @@
 /**
- * 跨宿主地基层模块：在**真 Node 进程**里必须加载得起来（ISSUE #1961 / #1959 第七跑）。
- *
- * ## 与 `esm-cross-host-imports.test.ts` 的分工
- *
- * 那一份把这件事判得比本判据细（叶子性 + 说明符形态 + 真加载一次），本判据不重抄
- * 它的任何一条。这里只补它**结构上判不到**的那一格 —— 落地时逐格实测过：
- *
- *   把 `src/lib/process/python-candidates.ts` 改回「说明符不带 .ts」⇒ 它红（那正是
- *   它的立案现场，做得对）；但把**目标文件改名**（`…-TYPO.ts`）它**照样绿**，
- *   而 `node scripts/e2e-run.mjs` 一跑仍退 1。原因不是它写得差，是它的判据 ②
- *   在 **vitest 里** `import()` —— 那条路对 `.mjs` 宿主尊重 Node 语义、抓得住
- *   「说明符找不到」，但抓不住「说明符指得着、模块自己加载不起来」。
- *
- * ## 本判据只判一件事，而它只有真 Node 判得了
- *
- * 「跨宿主地基层模块**自己**在真 Node 进程里加载得起来」。三种形态落在这里：
- *   · 被误标成 §18.4 第二类（顶层 `import "server-only"`，它的入口就是一句 throw）——
- *     **实测**：给 `python-candidates.ts` 加上它，真 Node 抛
- *     `This module cannot be imported from a Client Component module`，而
- *     `esm-cross-host-imports` / `lib-node-only-declarations` **双双照绿**。
- *     本仓好几位作者在头注释里专门解释过「这里加 server-only 会让启动编排直接崩」
- *     （`executable-resolve.ts` / `python-resolve.ts` / `process-launch.ts`）——
- *     一句靠人记得的注释，正是要变成机器判据的那类东西。
- *   · 顶层副作用抛错（加载期读库 / 读环境，§18.4 / 硬规则 16）；
- *   · 依赖缺失（`.ts` 里 import 了一个没装的包）。
- *
- * ## 为什么起子进程，而不是在用例里 `import()`
- *
- * 本判据的**立案前提**就是「vitest 内的 `import()` 与真 Node 不是同一条路」——
- * 用它自己那套机制去判它判不到的那一格，等于把判据的前提写反。所以加载动作交给
- * `spawnSync(process.execPath, ["-e", "import(…)"])`：不注册 loader，
- * 那正是平台侧跑 `node scripts/e2e-run.mjs` 时发生的那一跳。
+ * 跨宿主地基层模块在**真 Node 进程**里必须加载得起来（ISSUE #1961 / #1959 第七跑）。与 `esm-cross-host-imports.test.ts` 的分工：它判不到
+ * 「说明符指得着、模块自己加载不起来」（目标文件改名照样绿，`node scripts/e2e-run.mjs` 仍退 1）。本判据只判这一格：误标 server-only
+ * （入口即 throw）、顶层副作用抛错、依赖缺失；故起子进程而非 vitest 内 `import()`（立案前提正是两者不同路），复现跑 e2e 那一跳。
  */
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";

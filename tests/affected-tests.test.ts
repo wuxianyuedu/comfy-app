@@ -28,15 +28,9 @@ import { KNOWN_FAILED_FILES } from "../scripts/quality-gate-shared.mjs";
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 /**
- * 起子进程时用的环境：**把两枚着色共识旗标摘掉**。
- *
- * 为什么（PR #2990 的 `cnb-fvg-1k6botkg5`）：宿主带着 `FORCE_COLOR` 时，被 spawn 的
- * `affected-tests.mjs` 会给**整屏**加 ANSI 色号（平台日志就是要带颜色才读得动），
- * 而下面几条用例的 `maxBuffer` 按「不开色」的量级给（64 MiB 的量级余量刚够一份
- * 九千条的清单）。同一次跑里还有别的进程在抢核，读起来就是一条 `Test timed out`——
- * 与「清单太长」的真实故障长得一模一样。这里把输入面的噪声收成常量，
- * 与 `tests/ci-heavy-gates.test.ts` 的 `runHeavyChild` 同一条口径（它反过来：那边
- * 要**故意**开启色号，所以那里的注释写的是「摘掉环境里那一份，自己给」）。
+ * 起子进程时用的环境：**摘掉两枚着色共识旗标**。宿主带 `FORCE_COLOR` 时被 spawn 的 `affected-tests.mjs`
+ * 会给整屏加 ANSI 色号，而下面几条用例的 `maxBuffer` 按「不开色」量级给（64 MiB 刚够九千条清单）——
+ * 同一次跑里还有别的进程抢核，读起来就是一条 `Test timed out`，与「清单太长」的真实故障同形（PR #2990 `cnb-fvg-1k6botkg5`）。
  */
 const SPAWN_ENV: NodeJS.ProcessEnv = (() => {
   const env: NodeJS.ProcessEnv = { ...process.env, FORCE_COLOR: "0" };
@@ -350,12 +344,9 @@ describe("affected-tests：兜底方向", () => {
   });
 
   /**
-   * wide 话术里那句「为什么不兜底跑全量」（ISSUE #1393）。
-   *
-   * 旧文本写「全量当前带别线基线红」，而重测下来真断言红是 0 条 —— 假前提每遇到一次
-   * wide 提交就当着重印，就会变成所有人不动兜底的默认解释，所以它跟判据一样要有执行者。
-   * 两条一起看：第一条钉文本内容，第二条钉「CLI 真的在打印这个函数」，
-   * 否则第一条只是在守一段死代码。
+   * wide 话术里那句「为什么不兜底跑全量」（ISSUE #1393）。旧文本写「全量当前带别线基线红」，而重测真断言红是 0 条；
+   * 假前提每遇到 wide 提交就重印一遍，会变成所有人不动兜底的默认解释，所以它跟判据一样要有执行者 ——
+   * 两条一起看：第一条钉文本内容，第二条钉「CLI 真的在打印这个函数」，否则第一条只是在守死代码。
    */
   it("wide 话术只写实测的拦路石，不许回到「带别线基线红」那句假前提", () => {
     const note = wideFallbackNote("门槛自身", 20, 5);
@@ -399,14 +390,9 @@ describe("affected-tests：兜底方向", () => {
   });
 
   /**
-   * 边④「按路径引用」的比对面必须是**剥注释之后**的代码文本（ISSUE #2022）。
-   *
-   * 这一条挡的是本仓自己造出来、又被自己踩中的形态：硬规则 15 要求门禁自测在文件头
-   * 引用规范章节，于是「注释里写着这份文档的路径」与「运行期读了这份文档」在原文里
-   * 逐字同形。实测只提交文档时，`docs/standards/13-提交与-code-review.md` 一个路径
-   * 把 7 份门禁自测拉进增量面（上次账本逐文件读数合计 480.7s：`check-reformat-only`
-   * 278.9s、`check-bundle-budget` 101.2s、`check-format` 52.0s…），而那七份里没有一份
-   * 在运行期读那份 `.md` —— 「改到哪、测到哪」被反向用成了「改一句注释就陪跑九分钟」。
+   * 边④「按路径引用」的比对面必须是**剥注释之后**的代码文本（ISSUE #2022）。挡的是本仓自造又自踩的形态：
+   * 硬规则 15 要求门禁自测在文件头引用规范章节，于是「注释里写着文档路径」与「运行期读了文档」逐字同形。
+   * 实测只提交一份文档时，7 份门禁自测被拉进增量面（合计 480.7s：`check-reformat-only` 278.9s、`check-bundle-budget` 101.2s…）。
    */
   it("边④：注释里的路径引用不算消费方（文档提交不再陪跑门禁自测）", () => {
     const run = harness({
@@ -592,14 +578,10 @@ describe("affected-tests：改动的**面**归因（拆小的那把尺）", () =
   });
 
   it("归因的数**本身**是对的：拿手工数得出来的夹具硬钉，不靠与主链互证", () => {
-    // 上一条钉的是「两处不漂」，它对**两边同时错**是瞎的（实测：把「按路径引用」
-    // 那一档整体跳过，对拍照样全绿）。所以这一条拿一个能手算的图，把期望值写死。
-    //
-    // 图（箭头 = import）：
-    //   hub.ts        ← hub.test.ts        （兄弟测试 + 闭包 1 跳）
-    //   hub.ts        ← mid.tsx ← mid.test.tsx（闭包 2 跳）
-    //   hub.ts        ← 被 notes.test.ts **按路径字面量**引用（不是 import，闭包抓不到）
-    //   leaf.ts       ← leaf.test.ts
+    // 上一条钉的是「两处不漂」，它对**两边同时错**是瞎的（实测：把「按路径引用」档整体跳过，对拍照样全绿）。
+    // 所以这一条拿一个能手算的图，把期望值写死（箭头 = import）：
+    //   hub.ts ← hub.test.ts（兄弟测试 + 闭包 1 跳）；hub.ts ← mid.tsx ← mid.test.tsx（闭包 2 跳）
+    //   hub.ts ← 被 notes.test.ts **按路径字面量**引用（不是 import，闭包抓不到）；leaf.ts ← leaf.test.ts
     const files = {
       "src/lib/hub.ts": "export const h = 1;\n",
       "src/lib/hub.test.ts": "import { h } from '../../lib/hub';\n",
@@ -666,24 +648,9 @@ describe("affected-tests：改动的**面**归因（拆小的那把尺）", () =
 });
 
 /**
- * 改动面清单的**载体**（ISSUE #2240）。
- *
- * ## 现场
- *
- * 平台「受影响用例」那一格把整份改动面**逐个铺进 argv** 送给 `affected-tests.mjs`
- * ⇒ 改动面大到几千条时（实测 2672 条 / 172796 字符）那个子进程**根本起不来**
- * （`spawnSync` 报 `ENAMETOOLONG`、`status=null`）⇒ 这一格红在
- * 「清单解析失败（退出码 信号）」，**后面 22 个 stage 全 `skipped`**。
- *
- * 同一个上限在这个仓里早被写在 `scripts/affected-tests.mjs` 的文件头里，只是认错了对象：
- * 那句讲的是**全量清单**走 argv（为此造了 `--full` 那条显式通道），
- * 而**改动面清单**走的是同一条 argv —— 没人看见。
- *
- * 现在改动面走 **stdin**。这一组钉四件事：
- *   ① 两种载体**给同一份清单**时结果逐字相同（判决链一个字没改）；
- *   ② 清单长到超过 Windows 的命令行上限时，stdin 那条**仍然跑得起来**；
- *   ③ 启动器**不许**再把改动面铺进 argv（形状钉，防回潮）；
- *   ④ 失败话术分得开「起不来」与「判红」，并念出条数（对账用）。
+ * 改动面清单的**载体**（ISSUE #2240）：平台把整份改动面逐个铺进 argv（实测 2672 条 / 172796 字符），子进程
+ * 报 `ENAMETOOLONG` / `status=null`，这一格红在「清单解析失败」、后面 22 个 stage 全 skipped。现在走 stdin；
+ * 钉四件事：① 两载体同清单结果逐字相同 ② 超 Windows 命令行上限仍跑得起来 ③ 启动器不许再铺进 argv ④ 失败话术分得开并念条数。
  */
 describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2240）", () => {
   const CLI = path.join(ROOT, "scripts", "affected-tests.mjs");
@@ -745,18 +712,10 @@ describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2
   });
 
   it("`--dry-run` 的 return 排在 `resolveVitestEntry()` **之前**（读数档不许依赖 node_modules）", () => {
-    /* 现场：`--dry-run` 的两处 return 曾排在 `resolveVitestEntry()` **之后**，而那是这个
-     * 启动器里第一个依赖 `node_modules` 的调用（解析不到就 `throw`）。于是「不起 vitest 的
-     * 读数档」反而成了唯一必须装好依赖的一档 —— 干净检出 / 只读沙箱上它红在
-     * 「解析不到 vitest 入口」，而它的全部用途（对账清单份数、问一句跑得起来吗）一个都用不上。
-     *
-     * 判据为什么是**源码顺序**而不是真起进程：`resolvePackageBinEntry` 按
-     * `createRequire(root)` 解析，而 vitest 进程内（哪怕 `root` 是 `/tmp` 的夹具）那条
-     * require 仍沿 `node_modules` 向上找到本仓那份 —— 于是「跑一次 `--full --dry-run`」
-     * 在改前改后**都**绿，这条用例就成了恒绿判据（本仓最狠的那一族）。顺序是唯一可判形态。
-     *
-     * ⚠️ 必须找**调用**（`= resolveVitestEntry()`）而不是裸名字：那份出口在本文件里
-     * 先被 `export { … }` 提了一次，按裸名字取 `indexOf` 会落到导出那一行上（实测）。 */
+    /* 现场：`--dry-run` 的两处 return 曾排在 `resolveVitestEntry()` 之后 —— 那是启动器里第一个依赖 `node_modules`
+     * 的调用（解析不到就 throw），于是「不起 vitest 的读数档」反而成了唯一必须装好依赖的一档，干净检出 / 只读沙箱上
+     * 红在「解析不到 vitest 入口」。判源码顺序而非真起进程：进程内 `require` 会沿 `node_modules` 找到本仓那份，改前改后都绿。
+     * 必须找**调用**（`= resolveVitestEntry()`）而不是裸名字：该出口先被 `export { … }` 提过，按裸名取会落到导出那一行。 */
     const src = fs.readFileSync(LAUNCHER, "utf8");
     const CALL = "= resolveVitestEntry()";
     for (const anchor of ['argv.includes("--full")', "const files = collectList()"]) {
@@ -817,11 +776,9 @@ describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2
 });
 
 /**
- * 启动器的**旗标面**：`--changed-stdin` 真消费，读不到/空清单**退 2**（ISSUE #2869）。
- *
- * 现场：`node scripts/run-affected-tests.mjs --changed-stdin < 清单` 早先被**静默忽略**
- * —— 旗标进了 argv、没有分支读它，改动面仍取暂存区 / `COMFY_AFFECTED_CHANGED`，
- * 于是本地预检只跑固定清单，**看着绿、这一份改动对应的用例一条没跑**。
+ * 启动器的**旗标面**：`--changed-stdin` 真消费，读不到 / 空清单**退 2**（ISSUE #2869）。现场：该旗标早先被静默忽略 ——
+ * 进了 argv 但没有分支读它，改动面仍取暂存区 / `COMFY_AFFECTED_CHANGED`，于是本地预检只跑固定清单，
+ * **看着绿、这一份改动对应的用例一条没跑**。
  */
 describe("启动器消费 --changed-stdin，读不到就显式降级（ISSUE #2869）", () => {
   const LAUNCHER = path.join(ROOT, "scripts", "run-affected-tests.mjs");

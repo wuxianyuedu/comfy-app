@@ -1,25 +1,7 @@
 /**
- * 构建期「干净检出」回归护栏（ISSUE #489）
- * ===========================================================================
- *
- * 背景：`next build` 的 collect-page-data / prerender 阶段会为每条路由起
- * worker 加载模块图，**模块级副作用也在此时执行**。最典型的是 ComfyUI 孤儿
- * 任务回收（`src/lib/comfyui/reaper.ts`，由 `enqueue.ts` 裸副作用导入挂在
- * 启动路径）：它在加载时立刻读 `task` 表，而干净检出（CI / 新克隆）只跑了
- * `pnpm install`、没有 `pnpm db:push`，于是 build 期抛 `no such table: task`
- * 把构建打死，且报错行号落在与该库无关的路由文件上。
- *
- * 本用例不去跑真实 build（分钟级、且要在无库状态下），而是把两条**结构性
- * 契约**钉死——它们正是上面那条故障成立的条件：
- *
- *   1. 启动路径上的模块级副作用必须先做就绪判断，不能直接读库；
- *      判据模块本身在「表不存在 / 库不存在」时必须返回 false 而不是抛。
- *   2. 会被 `next-code-frame` 渲染到的构建期模块保持纯 ASCII —— Next 按字节
- *      切串，高亮端点落在多字节字符内部时 Rust 侧 panic，整个 build 被
- *      `Error: Panic in async function` 带走（见规范 §5 对应条目）。
- *
- * 反向验证：把 `reaper.ts` 的 sweepOnce 守卫去掉、或给
- * `db-schema-ready.ts` 加回中文注释，对应用例即失败。
+ * 构建期「干净检出」回归护栏（ISSUE #489）：`next build` 的 prerender 加载模块图即触发模块级副作用 ——
+ * `reaper.ts`（经 `enqueue.ts` 裸副作用导入）在无 `pnpm db:push` 的检出上读 `task` 表即抛 `no such table`；
+ * 契约①副作用先判就绪（缺表/缺库返回 false 不抛）；②`next-code-frame` 渲染模块须纯 ASCII（多字节切串致 Rust panic）。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";

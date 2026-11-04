@@ -1,17 +1,7 @@
-// Film Studio 编排的**判决面**测试（ISSUE #572：`film/**` 此前 7.5% 覆盖）。
-//
-// 这个模块 656 行、全是「拉起生成 → 轮询 → 收口 → 合成」的编排，覆盖率长期只有
-// 个位数。但其中真正会出错、且出错后**用户只看到一句「失败」**的，是三类判决：
-//
-//   1. `cancelFilm`：取消时哪些镜头要撤、什么状态该落 —— 少撤一个就是「点了取消，
-//      任务还在跑并写进历史」；
-//   2. `composeFilm`：没有 ffmpeg / 没有可用镜头时的出口必须落 FAILED 且带可行动
-//      文案 —— 否则影片永远停在「合成中」；
-//   3. `createFilm`：镜头参数（帧数 / 帧率 / 尺寸）与画幅的折算 —— 写错的表现是
-//      「出来的片子和设置不一样」，而没有任何报错。
-//
-// 编排的 IO 全部经注入点桩掉（仓储 / 任务队列 / LLM / ffmpeg），因此这些判决可以
-// 直接断言，不必起真 ComfyUI、不必真的调 ffmpeg。
+// Film Studio 编排的**判决面**测试（ISSUE #572：`film/**` 此前 7.5% 覆盖）。模块是「拉生成 → 轮询 → 收口 → 合成」，
+// 真会出错且用户只看到一句「失败」的是三类判决：`cancelFilm` 少撤镜头 = 点了取消任务仍在跑并写进历史；
+// `composeFilm` 无 ffmpeg/无可用镜头须落 FAILED 并带可行动文案，否则影片停在「合成中」；`createFilm` 的帧数/帧率/尺寸
+// 折算写错 = 片子与设置不符而无报错。IO 全经注入点桩掉（仓储/队列/LLM/ffmpeg），不必起真 ComfyUI、不必真调 ffmpeg。
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
@@ -577,12 +567,11 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
   it("「已终态但没有 taskId」的镜头不算等待，否则影片永不收口", async () => {
     rowsByStatus([{ id: "f-term", status: "GENERATING" }]);
     filmRepo.findById.mockResolvedValue({ id: "f-term", status: "GENERATING" });
-    /* 两个镜头都已终态、都没有 taskId：一个是历史行（成功过），一个是「逐镜提交时
-     * catch 掉了」的（`markFailed` 不落 taskId）。旧顺序先判 `!shot.taskId`，于是它们
-     * 都被数成等待 ⇒ `pending` 永不为 0 ⇒ 既不合成也不判失败，一路轮询到预算耗尽
-     * 才落一句「生成超时」（dev 实测：影片停在 progress 50 不动）。
-     * 第二次 `listByFilm` 是合成侧的「取可用镜头」，给它空数组 ⇒ `composeFilm` 在建
-     * 临时目录**之前**就早退，用例不往仓库 `public/` 里写任何东西。 */
+    /* 两个镜头都已终态、都无 taskId：一个是历史行（成功过），一个是「逐镜提交时 catch 掉了」的
+     * （`markFailed` 不落 taskId）。旧顺序先判 `!shot.taskId`，于是都被数成等待 ⇒ `pending` 永不为 0
+     * ⇒ 既不合成也不判失败，一路轮询到预算耗尽才落「生成超时」（dev 实测：影片停在 progress 50）。
+     * 第二次 `listByFilm` 是合成侧「取可用镜头」，给它空数组 ⇒ `composeFilm` 在建临时目录**之前**早退，
+     * 用例不往仓库 `public/` 里写任何东西。 */
     shotRepo.listByFilm
       .mockResolvedValueOnce([
         {

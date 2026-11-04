@@ -1,11 +1,7 @@
 // ── 影片工坊编排器 ─────────────────────────────────
-// 一键完整影片管线：
-//   剧本 → 自动分镜（镜头）→ 逐镜头视频生成
-//  （复用 ComfyUI 视频工作流）→ ffmpeg 拼接（+ 字幕 / BGM）
-//   → 一部成片。
-//
-// 每个镜头走与手动「视频」页签同一条库工作流链（工作流库 id +
-// 封装），所以不需要任何内置模板。
+// 一键完整影片管线：剧本 → 自动分镜（镜头）→ 逐镜视频生成（复用 ComfyUI 视频工作流）
+//  → ffmpeg 拼接（+ 字幕 / BGM）→ 一部成片。
+// 每个镜头走与手动「视频」页签同一条库工作流链（工作流库 id + 封装），所以不需要任何内置模板。
 
 import { clamp } from "~/lib/clamp";
 import { sleep } from "~/lib/with-timeout";
@@ -338,12 +334,10 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
 }
 
 // ── 生成一个视频镜头 ──────────────────────────────────────
-// 视频这一跳没有内置模板（内置 img2video / txt2video 与 `__PROMPT__` 系列
-// token 替换已移除）：镜头 params 里必须带**工作流库视频工作流 id**。
-// 没有首帧时，用同一份 params 里的**图类工作流 id** 本地合成一张再喂给视频图。
-// 种子口径与 Agent 逐镜生图一致：这条 autopilot 每次自主出图都带一个新的随机
-// seed，且只经「种子」对外参数下发（落作者连的 seed / noise_seed 端口，没连则
-// 进 unmatched、用工作流图内 seed），运行期绝不改写工作流节点。
+// 视频这一跳没有内置模板（内置 img2video / txt2video 与 `__PROMPT__` token 替换已移除）：镜头 params
+// 必须带**工作流库视频工作流 id**；没有首帧时用同一份 params 的**图类工作流 id** 本地合成一张再喂。
+// 种子口径与 Agent 逐镜生图一致：每次自主出图带新随机 seed，且只经「种子」对外参数下发（落已连的
+// seed / noise_seed 端口，未连则进 unmatched 用图内 seed），运行期绝不改写工作流节点。
 async function generateVideoShot(
   userId: string,
   shot: { negative?: string | null; params?: unknown; prompt: string },
@@ -440,12 +434,10 @@ const WATCH_POLL_MS = 4000;
 const WATCH_MAX_ITER = 240;
 const WATCH_BUDGET_MIN = Math.round((WATCH_POLL_MS * WATCH_MAX_ITER) / 60_000);
 
-/* **监看在飞表**（跨模块实例）。`watchFilm` 是被 `void` 起来的常驻循环，而
- * dev 的热重启不会杀掉旧模块那条 promise 链 —— 旧循环还在跑，本模块的新实例
- * 又会被下面的 boot 扫描再起一条，于是同一部影片有两个监看同时在写进度、
- * 并且都会调 `composeFilm`（`markComposing` 是无条件写）⇒ 同一部片被 ffmpeg
- * 合成两次。所以「谁在监看这部影片」必须放在跨 HMR 仍然活着的地方。
- * 键名带版本号是既定的坑：`??=` 只认键名，不会给旧单例补字段（同 `runner-state`）。 */
+/* **监看在飞表**（跨模块实例）：`watchFilm` 是被 `void` 起的常驻循环，dev 热重启不杀旧 promise 链，
+ * 新实例又会被 boot 扫描起一条 ⇒ 同一部影片两个监看同时写进度、都调 `composeFilm`（`markComposing`
+ * 无条件写）⇒ 被 ffmpeg 合成两次。所以必须放在跨 HMR 仍活着的地方。键名带版本号是既定的坑：`??=`
+ * 只认键名，不会给旧单例补字段（同 `runner-state`）。 */
 declare global {
   var filmWatchInFlight_v1: Set<string> | undefined;
 }
@@ -507,14 +499,10 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
      * 就是 2N 次往返（N = 镜头数），跑满 240 轮是上万次查询。 */
     const awaiting: Array<(typeof shots)[number]> = [];
     for (const shot of shots) {
-      /* **先判终态、再判有没有 taskId**，顺序是判据不是风格：这一趟原先是
-       * `if (!shot.taskId) { pending++; continue }` 打头，于是「已终态但没有任务」
-       * 的镜头被数成还在等 —— 而那种行是真实存在的：逐镜提交时 `catch` 落的是
-       * `markFailed(shot.id)`（没有 taskId），成片重跑/续跑时也可能带着已完成的旧镜头。
-       * 后果不是显示不准，是**永不收口**：`pending` 永远不为 0，于是既不合成、
-       * 也不判失败，一路轮询到预算耗尽才落一句「生成超时」（实测：夹具里一个
-       * SUCCEEDED 无 taskId 的镜头就让影片停在 progress 50）。
-       * 真正「没任务又不是终态」的（IDLE / 提交前就崩的 QUEUED）照旧算等待。 */
+      /* **先判终态、再判 taskId**，顺序是判据：原先是 `if (!shot.taskId) { pending++; continue }` 打头，
+       * 于是「已终态但没有任务」的镜头被数成还在等 —— 那种行真实存在（提交 catch 落的 `markFailed`
+       * 无 taskId、重跑也带已完成旧镜头）。后果是**永不收口**：pending 恒非 0 ⇒ 不合成也不判失败，
+       * 轮询到预算耗尽才落「生成超时」（实测一个 SUCCEEDED 无 taskId 就让影片停在 progress 50）。 */
       if (shot.status === "SUCCEEDED" || shot.status === "FAILED") {
         if (shot.status === "SUCCEEDED") {
           done++;
@@ -623,24 +611,17 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
 }
 
 /**
- * 进程重启后的恢复扫描：把丢了监看主体的影片接回去（P3 §5 ADR 的 5-A）。
- *
- * 为什么需要它：`startFilm` 末尾那条 `void watchFilm()` 只活在**当前进程**里，
- * 而 dev 的热重启与桌包的重启都会让它消失 —— 镜头对应的任务却还在库里由执行侧
- * 推进（宿主不跟着 Next 一起死，ADR §14 D1）。没人监看 ⇒ 影片永远停在
- * `GENERATING`：既不出片也不失败，界面上是一个转不完的圈。返回值只给日志与用例
- * 用，调用方不据它做决策。
+ * 进程重启后的恢复扫描：把丢了监看主体的影片接回去（P3 §5 ADR 的 5-A）。`startFilm` 末尾的
+ * `void watchFilm()` 只活在**当前进程**，dev 热重启与桌包重启都会让它消失 —— 而任务还在库里由执行侧
+ * 推进（宿主不跟 Next 一起死，ADR §14 D1）。没人监看 ⇒ 影片永远停在 `GENERATING`；返回值只给日志与用例。
  */
 export async function resumeStalledFilms(): Promise<{
   abandoned: Array<string>;
   resumed: Array<string>;
 }> {
-  /* 表还没建就整轮跳过，与回收器同一口径（`sweepOnce` 也判这一条）。哨兵表是
-   * `task`，而首启是一次把整套 DDL 应用上去的 ⇒ `task` 在时 `filmProject` 也在。
-   * 「表在、查询失败」不在这里被吞：那走下面的 catch，Warn 出来但仍不炸启动。
-   *
-   * 这条扫描是**一次性**的（不像回收器每 30s 一轮），跳过了就得等下一次重启才有人
-   * 接片，所以必须留痕 —— 否则现场只能看到「影片停在生成中」而读不到任何原因。 */
+  /* 表还没建就整轮跳过，与回收器同一口径（`sweepOnce` 也判这条）：哨兵表是 `task`，首启一次应用整套
+   * DDL ⇒ `task` 在时 `filmProject` 也在。「表在、查询失败」不在这里吞，走下面的 catch、Warn 但仍不炸
+   * 启动。这条扫描是**一次性**的，跳过了要等下次重启才有人接片，所以必须留痕，否则现场只看到影片停在生成中。 */
   if (!isSchemaReady()) {
     logger.info("[film] 重启恢复扫描跳过（表还没建就绪）");
     return { resumed: [], abandoned: [] };

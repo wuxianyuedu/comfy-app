@@ -1,47 +1,7 @@
 /**
- * 跑 e2e 期间的**说话人**：把「谁在替身 / 应用端口上」说清楚（ISSUE #1756 / #1766）。
- *
- * ## 它在守哪一格
- *
- * 假 ComfyUI 与真 ComfyUI 是**两个不同的东西**，而 Playwright 的
- * `reuseExistingServer` 只问「这个地址上有没有人应答」——它不区分谁在应答。
- * 于是「8188 上是真件」这件事此前**没有任何执行者**，表现是一堆依赖替身
- * 脚本化收口的用例报成「功能红」（`main-journey` 的话术甚至在说「执行器收口
- * 失败」，而真因是下游替身一行都没跑）。
- *
- * 修复取向见 `e2e/support/fake-comfyui-endpoint.mjs` 的文件头：**替身换到
- * 自己的端口**（不必要求任何人停掉真件），本文件补的是那之后仍然存在的一格
- * ——替身端口上万一坐着别人（有人把 ComfyUI 配到了 `18188`），也要当场说清，
- * 而不是让用例静默红。
- *
- * ## 为什么判据不挂在这里（ISSUE #1766 的订正）
- *
- * 本文件曾经把**两半**判据都挂在这里，而那是一条必然自击的机关：Playwright 的
- * 顺序是「**起 webServer 并等它可访问** → 跑 `globalSetup`」（上游
- * `runGlobalSetup()` 把 webServer 作为 plugin 的 `setup()` 先跑完，`globalSetup`
- * 是那一刻之后的任务），所以到这一步时**本轮自己起的 server 一定已经在跑**：
- *
- *   · 应用端口那半 → `reused` 恒真 → `if (reused && !CI) throw` 在本地全量跑上
- *     一条用例都没跑就红在启动；
- *   · 替身端口那半 → 判成 `fake` → 每次都打「替身已在运行（复用）」，而那不是复用。
- *
- * 判据要问的是「**在我起 server 之前**那个端口上有没有别人」——那它就不能活在这
- * 个时机里。现在那条判据在 `scripts/e2e-run.mjs` 的 pre-flight
- * （`e2e/support/preflight-ports.mjs`，跑在 `spawn` Playwright 之前），结论经
- * `E2E_PREFLIGHT` 带到本文件。
- *
- * ## 本文件还剩的两件事
- *
- *   ① **说话**：替身端口有人应答时，说清「是本轮自己起的」还是「起之前就在的」
- *      ——后者才叫复用，也才需要提醒「它的 history 带着上一轮的产物」；
- *   ② **兜底**：拿不到 pre-flight 结论时（有人手工 `pnpm exec playwright test`），
- *      仍然把「替身端口上坐着的不是替身」这一格当场阻断 —— 那是 pre-flight 那条
- *      路径覆盖不到的一格，而不是它的重复。
- *
- * ## 它不做的事
- *
- * **不失败在「真件在跑」上**：8188 上有真 ComfyUI 是**正常状态**，不是故障
- * ——本 ISSUE 的取向就是不要求任何人停它（见上）。这里只判替身自己那个口。
+ * 跑 e2e 期间的**说话人**：说清「谁在替身 / 应用端口上」（ISSUE #1756 / #1766）。Playwright 先起 webServer 再
+ * 跑 `globalSetup`，所以判「起之前有没有别人」不能活在这里（会恒判复用）；那条在 `scripts/e2e-run.mjs` 的
+ * pre-flight（经 `E2E_PREFLIGHT` 带进来）。这里只剩：说清端口上是本轮自起还是起前就在、拿不到结论时仍阻断陌生服务；不因真件在跑而失败。
  */
 import { resolveAppPort, resolveRepoRoot } from "../scripts/app-port.mjs";
 import { E2E_PREFLIGHT_ENV_KEY, decodePreflight } from "./support/preflight-ports.mjs";
@@ -66,25 +26,9 @@ export type FakeSlotObservation = {
 };
 
 /**
- * 探一次替身端口，把「谁在那儿」收成一个判决。
- *
- * 抽成导出函数是为了让判决能被真跑一次（`tests/e2e-fake-comfyui-endpoint.test.ts`
- * 拿一个临时 HTTP 服务喂它），而不是只在 Playwright 起得来时才被执行。
- *
- * ## 「端口空着」与「没来得及答」必须分开（ISSUE #1961）
- *
- * 它们此前都落进 `status: 0` ⇒ `classifyFakeSlot` 判 `free`。而在 CPU 争用下
- * （平台侧 `--coverage` + 多 worker 一起跑）一个**已经监听**的本地服务也可能
- * 在预算内答不上来，于是探针把「有人、但我没等到」当成「没人」—— 实测复现：
- * 8 核机上把 CPU 占满，同一个已监听的临时服务探出来是
- * `status 0 / The operation was aborted due to timeout`，判 `free`。
- *
- * 这一格的代价不对称：`free` 会让 `assertFakeSlotFree()` 放行，而「真件坐在
- * 替身端口上」那一格本意是要**当场阻断**的（见本文件头）—— 判成 `free` 等于
- * 把这条判据在负载高的时候静默关掉。所以这里按 `err.cause` 分岔：
- * 只有**连接层确实被拒**（`ECONNREFUSED` / `ENOTFOUND` / `EHOSTUNREACH`）才是
- * 「空着」，预算耗尽的 `TimeoutError` 归 `unknown`（判据会拦，并说清是「没等到
- * 应答」而不是「端口上有人」）。
+ * 探一次替身端口，把「谁在那儿」收成判决（导出以便用临时 HTTP 服务真跑一次）。「端口空着」与「没来得及答」
+ * 必须分开（ISSUE #1961）：CPU 争用下已监听的本地服务也会超时 ⇒ `status: 0` 被判 `free`，而 `free` 会放行
+ * 本应阻断的那格 —— 只有连接层被拒（`ECONNREFUSED`/`ENOTFOUND`/`EHOSTUNREACH`）算空着，`TimeoutError` 归 `unknown`。
  */
 export async function probeFakeComfySlot(
   options: { timeoutMs?: number; url?: string } = {},
@@ -118,12 +62,8 @@ export async function probeFakeComfySlot(
 }
 
 /**
- * 这一下 `fetch` 失败是不是「连接层确实被拒」？
- *
- * Node 的 `fetch`（undici）把底层的 `ECONNREFUSED` 一族包在 `err.cause` 里，
- * 而把预算耗尽报成 `TimeoutError`（`DOMException`，`name` 是 `TimeoutError`）。
- * 两者此前都只是「抛了」，于是同一个 `status: 0` 同时表示「没人」与「没等到」。
- *
+ * 这一下 `fetch` 失败是不是「连接层确实被拒」？Node 的 `fetch`（undici）把 `ECONNREFUSED` 一族包在 `err.cause`，
+ * 把预算耗尽报成 `TimeoutError`（`DOMException`）；此前两者都只是「抛了」，同一个 `status: 0` 同时表示「没人」与「没等到」。
  * @param {unknown} err
  */
 function connectionRefused(err: unknown): boolean {
@@ -151,21 +91,9 @@ function connectionRefused(err: unknown): boolean {
 }
 
 /**
- * 应用 server 那一边：**起 Playwright 之前**那个端口上有别人吗？
- *
- * ⚠️ 本函数**不再自己探测**（ISSUE #1766）。它曾经拿一次即时探测的结论当判据，
- * 而本文件跑在 webServer 之后 —— 那个探测必然探到**本轮自己起的** server，
- * 于是「复用」二字成了对自起服务的误判。
- *
- * 现在它只把 pre-flight（`scripts/e2e-run.mjs` 在 spawn 之前跑的）结论读出来，
- * 并**把「起之前有人」与「本轮自己起的」分开**：`globalSetup` 跑在 webServer
- * 之后，只凭「有人应答」永远分不开这两件事，而 pre-flight 那条事实正好补上另一半。
- *
- * 拿不到 pre-flight 结论（手工 `pnpm exec playwright test`）时返回 `null`：
- * 那一格是「不知道」而不是「没有」，调用方据此保持沉默（不阻断、也不误报复用）。
- *
- * @param {Record<string, string | undefined>} [env]
- * @returns {{occupiedBefore: boolean} | null}
+ * 应用 server 那一边：**起 Playwright 之前**端口上有人吗？本函数**不再自己探测**（#1766）：它跑在 webServer
+ * 之后，即时探测必探到本轮自起的 server；现在只读 `scripts/e2e-run.mjs` 的 pre-flight 结论，把「起前有人」
+ * 与「自起」分开；拿不到结论（手工跑）返回 `null` =「不知道」，调用方据此保持沉默。
  */
 export function readAppServerPreflight(
   env: Record<string, string | undefined> = process.env,
@@ -178,14 +106,9 @@ export function readAppServerPreflight(
 }
 
 /**
- * 替身端口这一边：**起 Playwright 之前**它上面有人吗？
- *
- * 与 `readAppServerPreflight` 同形（同一份 pre-flight 结论的另一栏）。判据是
- * 「起之前有人 ⇒ 这一轮会走复用」，而不是「现在有人应答」—— 后者在
- * `globalSetup` 这个时机上恒真（本轮自己起的）。
- *
- * @param {Record<string, string | undefined>} [env]
- * @returns {{occupiedBefore: boolean} | null}
+ * 替身端口这一边：**起 Playwright 之前**它上面有人吗？与 `readAppServerPreflight` 同形（同一份 pre-flight
+ * 结论的另一栏）。判据是「起之前有人 ⇒ 这一轮会走复用」，而非「现在有人应答」—— 后者在 `globalSetup`
+ * 这个时机恒真（本轮自己起的）。
  */
 export function readFakeSlotPreflight(
   env: Record<string, string | undefined> = process.env,
@@ -208,12 +131,9 @@ export default async function globalSetup(): Promise<void> {
     throw new Error(describeAppReuseConflict({ port: resolveAppPort(resolveRepoRoot()) }));
   }
 
-  /* 替身端口这一格分两层：
-   *   ① pre-flight 说「起之前就有人」⇒ 这一轮是**真复用**，说一声（替身的
-   *      history 是进程内存，跨次复用会带着上一轮的产物行）；
-   *   ② 现在应答的不是替身（真件 / 陌生服务）⇒ 无论起之前是什么，都当场阻断
-   *      —— 这是 pre-flight 覆盖不到的兜底（手工跑 Playwright 时它不在）。
-   * 两者不重复：① 说的是「谁的进程」，② 说的是「那个进程是什么」。 */
+  /* 替身端口这一格分两层：① pre-flight 说「起之前就有人」⇒ 真复用，说一声（替身的 history 是进程内存，
+   *   跨次复用会带着上一轮产物行）；② 现在应答的不是替身（真件 / 陌生服务）⇒ 无论起前是什么都当场阻断
+   *   —— 这是 pre-flight 覆盖不到的兜底。两者不重复：① 说的是「谁的进程」，② 说的是「它是什么」。 */
   const observed = await probeFakeComfySlot({
     url: fakeComfyuiStatsUrl({ host, port }),
   });

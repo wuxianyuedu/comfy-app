@@ -1,15 +1,7 @@
 /**
- * tools/start/run-tests.ps1 的回归护栏：把「tools 里有没有能单独跑 vitest 的入口」
- * 这条约定机器化，避免它随重构悄悄消失（只跑测试的路径此前不存在，门禁脚本
- * verify-quality.ps1 只能三项串联整档跑）。
- *
- * 规范：docs/standards/11-测试与可观测性.md §11.12、launch-and-build.md §8
- *   - 入口只做「定位项目根 → 调用逻辑脚本 → 收尾」，逻辑在 scripts/ 下；
- *   - 参数要能透传给 vitest（指定单个文件 / 复现基线失败用 -Full）；
- *   - 已知基线失败清单只有一份来源（scripts/quality-gate.ps1），不许在两处各抄一份。
- *
- * 无 pwsh 的环境（Linux CI）只做文本与结构断言：入口/逻辑是否存在、参数是否透传、
- * 清单是否共用。真实执行在 Windows 侧。
+ * `tools/start/run-tests.ps1` 回归护栏：机器化「tools 里有没有能单独跑 vitest 的入口」（此前只跑测试的路径不存在，
+ * `verify-quality.ps1` 只能三项串联整档跑）。规范 `docs/standards/11-测试与可观测性.md` §11.12、`launch-and-build.md` §8：
+ * 入口只做定位项目根 → 调逻辑脚本 → 收尾（逻辑在 `scripts/`）；参数透传 vitest；基线失败清单唯一来源 `scripts/quality-gate.ps1`。无 pwsh 的 CI 只做文本/结构断言。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -85,11 +77,9 @@ describe("tools 里的 vitest 单跑入口", () => {
 });
 
 /**
- * 跨平台一致性：端口推导对同一输入必须给出同一端口。CI 是 Linux、开发者是
- * Windows，"F:/…" 这类盘符路径若交给平台相关的 path.resolve，在 POSIX 上会被
- * 拼到 cwd 前面，同一检出算出两个端口（多检出并行的前提当场失效）。
- * 这里按语言无关的方式锁住：把 four-way 锚点 f:/ai/other/comfy-app-t3-branch
- * 的推导结果钉死（PowerShell / Python / Rust 侧写的是同一个值）。
+ * 跨平台一致性：同一输入必须推出同一端口。CI 是 Linux、开发者是 Windows，`F:/…` 这类盘符路径若交给平台相关的
+ * `path.resolve`，在 POSIX 上会被拼到 cwd 前面，同一检出算出两个端口（多检出并行的前提当场失效）。故把 four-way 锚点
+ * `f:/ai/other/comfy-app-t3-branch` 的推导结果按语言无关方式钉死（PowerShell / Python / Rust 侧是同一个值）。
  */
 describe("app-port 跨平台一致性", () => {
   const MJS = readFileSync(join(process.cwd(), "scripts", "app-port.mjs"), "utf8");

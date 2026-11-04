@@ -3,44 +3,9 @@ import { expect, test, type Page } from "@playwright/test";
 import { isTerminalTaskStatus } from "../src/lib/task-state";
 
 /**
- * 主链路 E2E：**登录 → 建项目 → 出图**（ISSUE #1621 阶段二 2-2）。
- *
- * ## 它补的是哪一格
- *
- * 在它之前，`e2e/` 里没有任何一条用例走完这条主链路：
- * `critical-flows.spec.ts` 的登录用例明写「不假装认证成功」，登录后的视图全靠
- * `route.fulfill` 桩；于是「壳起不来 / 会话过期 / 中间件改写」这类**只在真实
- * HTTP 栈上成立**的缺陷没有执行者（台账 E3″）。本文件里的每一步都走真件：
- *
- * | 步 | 真在哪 | 桩在哪 |
- * | --- | --- | --- |
- * | 登录 | better-auth 真注册 + 真会话 cookie（本地 SQLite） | 无 |
- * | 建项目 | `project.upsert` 真写库，断言的是**库里有这一行** | 无 |
- * | 出图 | 执行器真被派出、真收口到 `SUCCEEDED`，产物真落盘 | **下游 ComfyUI + comfy-cli** 是替身 |
- *
- * ## 「出图」那一跳为什么能算真的（ISSUE #1621 §三 的三选一）
- *
- * 三个选项里选的是第二个：**起一个最小 fake ComfyUI**。它不是「快一点」的取舍，
- * 是这条链路上唯一能真跑的形状 —— 本应用的任务**只经 comfy-cli 执行**
- * （`executor-cli.ts` 起 `python -m comfy_cli run --workflow …`），提交、进度、
- * 收口判定全部读它的 stdout 协议；而收口那一刻会回到 ComfyUI 的
- * `GET /history/{prompt_id}` 找产物、`GET /api/view` 下字节。两段都在**服务端**
- * （不经浏览器），`page.route` 一条都栏不到。
- *
- * 代价写清楚：替身是**第二份实现**，要跟着真件的对外契约走。但它复刻的是
- * comfy-cli / ComfyUI 的**外部协议**，本仓库的执行器逻辑一行都没抄 —— §12.12
- * 的孪生判据判的是「仓库内两份同样实现」，不是被替身掉的外部程序。
- *
- * 走完的真实程度：`RUNNING → SUCCEEDED` 由真执行器写、`TaskImage` 行由真收口写、
- * 磁盘上的 PNG 由真 `getView` 下载写。**没有覆盖**的只有「ComfyUI 真的采样出图」
- * 与「torch 真的在跑」——那是 GPU 层的事，不该是 e2e 的门槛。
- *
- * ## 失败路径为什么也有执行者
- *
- * 只有成功路径的用例会把「永远报成功」的缺陷放过去。第二条用例用假 comfy-cli 的
- * **哨兵触发**（工作流里出现某个词 → 回放失败序列），断言链路真的能把失败**写成
- * 一个说得清的终态**（`FAILED` + error 里有假 CLI 给的原因），而不是超时后报别的
- * —— 这正是 ISSUE #1621 验收标准 3 要的那一格。
+ * 主链路 E2E：**登录 → 建项目 → 出图**（ISSUE #1621 阶段二 2-2）。此前 `e2e/` 无一条用例走完这条链（登录用例明写「不假装认证成功」、登录后视图靠 `route.fulfill` 桩），于是「壳起不来 / 会话过期 / 中间件改写」这类只在真实 HTTP 栈上成立的缺陷没有执行者（台账 E3″）。
+ * 真件：better-auth 真注册 + 真会话 cookie（本地 SQLite）、`project.upsert` 真写库（断言库里有这一行）、执行器真派出且收口到 `SUCCEEDED`、产物真由 `getView` 写到磁盘；**下游 ComfyUI + comfy-cli 是替身**。本应用任务只经 `executor-cli.ts` 起 `python -m comfy_cli run` 并读其 stdout 协议，收口回 `GET /history/{prompt_id}` 与 `GET /api/view` 都在服务端（`page.route` 拦不到），故最小假 ComfyUI 是唯一能真跑的形状（ISSUE #1621 §三）；替身只复刻外部协议，§12.12 判的是仓内两份同样实现。
+ * 未覆盖的只有「ComfyUI 真采样 / torch 真在跑」（GPU 层，不该是 e2e 门槛）。第二条用例用假 comfy-cli 的哨兵触发（工作流出现某词 → 回放失败序列），断言失败被写成说得清的终态（`FAILED` + error 带假 CLI 原因）而非超时后报别的 —— ISSUE #1621 验收标准 3。
  */
 
 /** 假 comfy-cli 的失败触发词：工作流里出现它 → 回放失败序列。
@@ -87,19 +52,8 @@ function rawWorkflow(text: string) {
 }
 
 /**
- * 调一条 tRPC procedure（query / mutation 共用），返回它的**返回值**。
- *
- * 形态照 `httpBatchStreamLink` 的真协议（`src/trpc/link.ts`）：
- *   · query：`GET /api/trpc/<proc>?batch=1&input=<superjson 载荷>`
- *   · mutation：`POST /api/trpc/<proc>?batch=1`，载荷在 body 里
- *   · 请求头 `trpc-accept: application/jsonl` —— 服务端据此走 Streaming 那一支，
- *     回的是逐行 JSON（**不写它会被判 400 "Streaming requests must be batched"**）
- *   · 响应体前几行是 head / result / data 的 promise 递进，**最后一行才是真数据**
- *     （逐行含义见 `e2e/support/trpc-stub.ts` 的文件头）
- *
- * 为什么不经 `page.evaluate` 调应用自己的 vanilla client：那会把「用例怎么发请求」
- * 与「界面怎么发请求」绑死，重构客户端就红一片；这里要断言的只是**服务端真的收到
- * 了这条调用、真的落了库**，请求用最朴素的形式发最接近事实。
+ * 调一条 tRPC procedure（query / mutation 共用），返回它的**返回值**。形态照 `src/trpc/link.ts`：query `GET /api/trpc/<proc>?batch=1&input=<superjson 载荷>`、mutation `POST ...?batch=1` 载荷在 body；必须带 `trpc-accept: application/jsonl`（否则 400 "Streaming requests must be batched"）；响应前几行是 head/result/data 的 promise 递进、**最后一行才是真数据**（见 `e2e/support/trpc-stub.ts` 文件头）。
+ * 不经 `page.evaluate` 调应用自己的 client：那会把「用例怎么发请求」与「界面怎么发请求」绑死（重构客户端就红一片）；这里要断言的只是服务端真收到这条调用、真落了库，请求用最朴素的形式最接近事实。
  */
 async function trpcCall(
   page: Page,
@@ -239,15 +193,11 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
     const taskId = submitted?.taskId;
     expect(taskId, "generate.generate 必须回一个 taskId").toBeTruthy();
 
-    /* 轮询任务详情直到**终态**。**为什么断言终态而不是「界面显示生成中」**：
-     * 后者在桩后端下也成立，而这条链路要证明的是**执行器真的把这一轮跑完了**
-     * ——终态由 `executor-finalize` 写，产物由它下载落盘。
-     *
-     * ⚠️ 判据必须是「**已到终态**」，不是「不再是 RUNNING」：后者对 `QUEUED`
-     * 也成立 —— 提交后那一瞬任务正在排队，`expect.poll` 立刻命中、直接去断言
-     * `SUCCEEDED`，于是**红了但错的不是被测链路**（ISSUE #1727 第 2 条：executor
-     * 其实跑成功、产物也落了盘，报出来的却是 `QUEUED`）。终态判据取 `src` 的
-     * 唯一出处 `isTerminalTaskStatus()`，不在用例里再抄一份三个字面量。 */
+    /* 轮询任务详情直到**终态**。断言终态而非「界面显示生成中」：后者在桩后端下也成立，而这条链路要证明
+       执行器真跑完这一轮 —— 终态由 `executor-finalize` 写、产物由它下载落盘。⚠️ 判据必须是「已到终态」，
+       不是「不再是 RUNNING」：后者对 `QUEUED` 也成立（提交后一瞬在排队，`expect.poll` 立刻命中、直接去
+       断言 `SUCCEEDED`，红了却不是被测链路的问题，ISSUE #1727 第 2 条）。终态判据取 `src` 唯一出处
+       `isTerminalTaskStatus()`，不在用例里再抄一份三个字面量。 */
     const terminal = await expect
       .poll(
         async () => {

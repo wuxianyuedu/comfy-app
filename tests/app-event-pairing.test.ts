@@ -1,43 +1,7 @@
 /**
- * `AppEvents` 表里每一条事件**两端都得在场** —— 有派发方，也有订阅方。
- *
- * ## 为什么这一条值得机械化
- *
- * `~/lib/app-events` 把「事件名与载荷类型定义在同一行」已经做完了，但它管不到
- * **有没有人用这一行**。而事件通道的两种坏掉方式全都是静默的：
- *
- *   · **派发方没了、监听器还挂着** —— 表现是「界面该刷新的时候没刷新」。
- *     没有任何构建、测试会报它；注释还会继续写着「某某按钮通过它请求打开详情」，
- *     于是下一个读代码的人顺着这句话去找按钮，找不到，然后以为是自己看错了。
- *   · **订阅方没了、广播还在发** —— 比第一种更隐蔽：`refreshCustomNodes()` 曾经
- *     每次解析完都发一条 `custom-nodes:updated`，而它的订阅侧（画布的添加节点
- *     菜单）早已不在库里。代码照常执行、事件照常派发、什么都没发生。
- *
- * 装机时实测到的存量正是这两类的三个实例（`open-task` 与
- * `comfyapp:local-workflows-path-changed` 只有订阅，`custom-nodes:updated` 只有派发），
- * 三处都逐条处置在同一次提交里：死端删除、欠账记进台账 E9。
- *
- * ## 口径
- *
- * - **测试文件不算任何一端**。「只有用例在调的口」不等于安全，是「可以烂掉而没人红」
- *   —— 口径同 E3′ 的消费方维度（`tests/trpc-surface-executors.test.ts`）。
- * - **认两种写法**：`emitAppEvent("a:b", …)` 的字面量形态，以及
- *   `emitAppEvent(SOME_CONST, …)` 的常量间接形态（先在全库把
- *   `const SOME_CONST = "a:b"` 解成名字再比）。只认字面量会误报后者 ——
- *   而误报一片的判据会被当噪音关掉，那比没有判据更糟。
- * - **`app-events` 自己不算端**：那是定义处。
- * - **同一个文件里的派发 + 订阅不算两端**（自环）：自己给自己广播，代码照常执行、
- *   事件照常派发、什么都没发生 —— 与「订阅方没了」是同一种静默，但这条更危险，
- *   因为它**长得像**两端齐全。要成对就得有两个不同的模块：派发方只负责把结论
- *   记下来并喊一声，订阅方住在真正要重算的那一侧（实例见
- *   `src/config/custom-nodes.ts` 与 `src/components/studio/canvas/use-custom-nodes-registry.ts`）。
- * - 先过 `stripComments`：注释里举例提到某个事件名不是派发。
- *
- * ## 与既有判据的分工（§12.18：新增守卫前先查有没有更强的一条）
- *
- * P61（`scripts/check-ui-primitives.cjs`）管的是**反方向**：不许绕过出口裸写
- * `new CustomEvent("…")` / `addEventListener("a:b")`。两条判据不重叠，
- * 也不该合并 —— 一条查「有没有走出口」，一条查「出口两端齐不齐」。
+ * `AppEvents` 每条事件**两端都得在场**（有派发、有订阅）。`~/lib/app-events` 只管「名字与载荷同行」，管不到有没有人用；两种坏法都静默：派发方没了而监听器仍挂着（该刷新时不刷新），订阅方没了而广播照发（`refreshCustomNodes()` 的 `custom-nodes:updated` 即此）。
+ * 装机实测三个实例：`open-task`、`comfyapp:local-workflows-path-changed` 只有订阅，`custom-nodes:updated` 只有派发。口径：测试文件不算端（同 E3′）、认字面量与常量间接、`app-events` 自身不算端、**同文件的派发+订阅不算两端**（自环，静默但长得像齐全）、先过 `stripComments`。
+ * 与 P61（`check-ui-primitives.cjs`）不重叠：它管「有没有走出口」，本条管「出口两端齐不齐」。
  */
 
 import fs from "node:fs";
@@ -132,12 +96,9 @@ function readNameConstants(sources: Array<SourceFile>): Map<string, string> {
 }
 
 /**
- * 把一次调用的首个实参解析成事件名。
- *
- * 字面量形态（正则的第 1 组）拿到的**已经不带引号**，直接就是名字；
- * 标识符形态（第 2 组）要过一遍常量表。解不出名字的那些（来自 `pickKey()` 这类
- * 别处的值）返回 null —— 不许算成端，否则「把事件名塞进变量再随便传」
- * 就绕开了整条判据。
+ * 把一次调用的首个实参解析成事件名：字面量形态（正则第 1 组）已不带引号，标识符形态（第 2 组）
+ * 要过常量表。解不出名字的（来自 `pickKey()` 这类别处的值）返回 null —— 不许算成端，否则
+ * 「把事件名塞进变量再随便传」就绕开了整条判据。
  */
 function resolveEventName(
   literal: string | undefined,
@@ -184,11 +145,9 @@ type PairingRow = {
 };
 
 /**
- * 两端不齐 —— 含「一端都没有」与「只有自环」两种。
- *
- * 判据是「存在一对**不同文件**的派发方与订阅方」，不是「两处都非空」：
- * 后者会被同一个文件里的 `emitAppEvent(x)` + `subscribeAppEvent(x)` 蒙过去，
- * 那是自己给自己广播（现场表现与没有订阅方一模一样，而静态上看不出）。
+ * 两端不齐 —— 含「一端都没有」与「只有自环」两种。判据是「存在一对**不同文件**的派发方与订阅方」，
+ * 不是「两处都非空」：后者会被同文件的 `emitAppEvent(x)` + `subscribeAppEvent(x)` 蒙过去，
+ * 那是自己给自己广播（表现与没有订阅方一样，静态上看不出）。
  */
 function isUnpaired(row: PairingRow): boolean {
   return !row.emitters.some((emitter) =>

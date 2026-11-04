@@ -1,31 +1,7 @@
 /**
- * 「环境前提」那一步的判据（ISSUE #1959）。
- *
- * ## 它守的是哪一格
- *
- * 用户那一句诉求是「**别等到执行几十分钟后才发现环境安装不上**」。缺件那一半已经
- * 由 `工具链自证` / `Python 可用性` 在最便宜的位置答了（判据在
- * `tests/ci-toolchain-selfcheck.test.ts`）。**在，但版本不对**与**配置配错了**这两半
- * 此前没人答，而它们的红法恰好是「晚」：
- *
- *   · 解释器低于本仓下限（Python 3.10）时**没有任何一步会红** —— 门禁的 Python 侧
- *     以「探测不到」的名义退出四侧比对、那几条真跑的用例走 `env` 档跳过并登记，
- *     也就是「版本不对」与「装好了」在日志里**逐字同形**；
- *   · `.cnb.yml` 里写了 host 侧 PowerShell（5.1）认不了的语法（`?.` / `??`）时，
- *     它**不在解析期报错**，只在跑到那一段时整段炸 —— 实测红在 `Install dependencies`，
- *     而那时前面的预算已经花掉了。
- *
- * ## 两处判据都**不重写**（这一条比本文件判什么更要紧）
- *
- *   · 「解释器在哪」走 `ci-toolchain-python.mjs` 的 `findPython()`（与
- *     `Python 可用性` 同一份候选表、同一个探针 —— §12.18 不造第二轮子）；
- *   · 「`.cnb.yml` 有没有 host 认不了的语法」复用
- *     `tests/no-platform-ci-config.test.ts` 导出那一份 `ps7OnlySyntaxIn`。
- *
- * 但那一份是 `.ts`、本步跑在**任何依赖安装之前**（那时 `node_modules` 还没有），
- * 所以 `scripts/ci-env-probe.mjs` 里留了一份**文本副本** —— 与本仓既有的
- * `check-app-port-vectors.cjs` ⇄ `python-candidates.ts` 同一处置（`.cjs` 也 import
- * 不到那份 `.ts`）。本文件第一组用例就是**对账那一份副本**：漂了就红。
+ * 「环境前提」那一步的判据（ISSUE #1959）：别等到执行几十分钟后才发现环境装不上。缺件已由 `ci-toolchain-selfcheck.test.ts` 答了。
+ * 这里答「在但版本不对」（解释器低于 Python 3.10 时那些用例走 `env` 档跳过，与「装好了」日志同形）与「配置配错」：host PowerShell 5.1
+ * 认不了 `?.` / `??`，不在解析期报错、跑到那段整段炸。判据不重写（`findPython()` / `ps7OnlySyntaxIn` 各一处）；`.ts` 在装依赖前 import 不到，故留文本副本、第一组用例对账。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -152,10 +128,8 @@ describe("环境前提：解释器版本下限（低于下限时没有任何一�
 describe("环境前提：判定面的两个方向（红了要红在「几秒就能问出来」的位置）", () => {
   /**
    * 一份「解释器达标、pnpm 起得来、配置干净、浏览器落点已就位」的注入面。
-   *
-   * ⚠️ **浏览器那两格必须显式注入**（不是可选的省事）：缺省实现会去读真落点、
-   * 真发 HEAD 请求 —— 那会让这一组用例的结论取决于「跑它的这台机器出不出得去外网」，
-   * 也就是一条**看着绿、实际什么都没判**的判据（本仓最反对的那一类）。
+   * ⚠️ 浏览器那两格必须显式注入：缺省实现会读真落点、真发 HEAD —— 那样结论取决于这台机器出不出得去外网，
+   * 成了一条看着绿、实际什么都没判的判据（本仓最反对的那一类）。
    */
   function greenPorts(overrides: Record<string, unknown> = {}) {
     return {
@@ -471,15 +445,9 @@ describe("环境前提：浏览器那一格的两个消费者不许各写一份�
   });
 
   it("量的是**真资源**不是裸根：根回 4xx 而资源 2xx/3xx ⇒ 判通（ISSUE #1966）", () => {
-    /* 这一条是那次误报的**回归判据**。现场：`环境前提` 在 41 秒处当场红说
-     * 「一个下载根都到不了」，而 `.cnb.yml` 里配着的那个根好着 —— 整条流水线
-     * 后 30 步全 skipped。
-     *
-     * 根因是探测拿**裸根**去 HEAD：实测 `https://cdn.npmmirror.com/binaries/playwright`
-     * （配置里那个根）回 **404**，而它下面真资源的路径回 **200**；
-     * `https://cdn.playwright.dev` 同理（裸根 400 / 真资源 307）。
-     * 所以这里钉住两件事：探测打到的是**带资源路径**的 URL，且**根自己的结论
-     * 不参与 `ok`**。 */
+    /* 那次误报的**回归判据**：`环境前提` 在 41 秒处红说「一个下载根都到不了」，而 `.cnb.yml` 配的根好着 ——
+     * 根因是探测拿**裸根**去 HEAD（`cdn.npmmirror.com/binaries/playwright` 裸根 404、真资源 200；
+     * `cdn.playwright.dev` 裸根 400、真资源 307）。所以钉两件事：探测打的是**带资源路径**的 URL，根自己的结论不参与 `ok`。 */
     const asked: Array<string> = [];
     const root = "https://cdn.npmmirror.com/binaries/playwright";
     const verdicts = playwrightReachabilityVerdicts({
@@ -529,12 +497,9 @@ describe("环境前提：流水线上真的在跑它，且排在装依赖之前"
     )?.[1];
     expect(block, "解析不出「环境前提」那一步的 script").toBeTruthy();
     const command = String(block).trim();
-    /* ⚠️ 脚本那一行的开头**已经不一定**是 `node …`（2026-10-16 起每个 stage 都在
-     * 前面挂一句 `[Console]::OutputEncoding=…`，外面还包着 `ci-cp936-exit.mjs`
-     * —— ISSUE #1977 的 CP936 出口；`unwrapCp936()` 剥掉最后那一层）：
-     * 平台的 stage shell 是 PowerShell，它默认按 CP936 解子进程的 UTF-8 输出，
-     * 于是所有中文日志在平台侧都是乱码。所以这里判「这一段命令里点到的是哪个入口」，
-     * 而不是「它是不是从第一个字符就开始」（那是排版，不是接线）。 */
+    /* ⚠️ 脚本那一行的开头**已经不一定**是 `node …`（2026-10-16 起每个 stage 前面挂 `[Console]::OutputEncoding=…`，
+     * 外面还包着 `ci-cp936-exit.mjs`，`unwrapCp936()` 剥掉最后那一层 —— ISSUE #1977 的 CP936 出口：PowerShell 默认按
+     * CP936 解 UTF-8 输出，中文日志在平台侧全是乱码）。所以判「这段命令点到哪个入口」，不是「是否从第一个字符起」。 */
     expect(
       command,
       "「环境前提」的脚本里没有给 PowerShell 设 UTF-8 输出编码 —— 平台日志会全是乱码",
@@ -546,20 +511,9 @@ describe("环境前提：流水线上真的在跑它，且排在装依赖之前"
 });
 
 /**
- * 「量的是**这一步会真用的那个根**」—— ISSUE #1966 之后那一跑买来的（`cnb-ald-1k51g8dt9`）。
- *
- * 那一次 `环境前提` 报绿（「下载根有 5/5 条到得了」），30 分钟后 `浏览器安装` 从
- * **同一个根**下载、`timed out after 120000ms`（0 字节）。病在这两步问的不是同一个
- * 问题：前者问「**某个**根通不通」，而它存在的理由是回答「**这一趟**装得成吗」。
- *
- * `PLAYWRIGHT_DOWNLOAD_HOST` 设在 `浏览器安装` 那一步的 `env` 上，本步的 stage 看不到
- * 它 —— 但本步**读得到那份配置**（判语法面时已经读了），所以判据是**配置里那一个根**。
- *
- * ## 两处解析不许各写一份答案
- *
- * 从 `.cnb.yml` 摘 stage 块的那一段与 `tests/no-platform-ci-config.test.ts` 的
- * `stageBlock()` 是**同一个解析**的两份文本副本（那一份是 `.ts`，本步跑在装依赖之前，
- * import 不到 —— 处置与 `ps7OnlySyntaxIn` 逐字相同）。这一组第一条就是对账它。
+ * 「量的是**这一步会真用的那个根**」（ISSUE #1966，`cnb-ald-1k51g8dt9`）：旧判据问「某个根通不通」，而 `浏览器安装` 从同一个根下载却 120s 超时（0 字节）。
+ * `PLAYWRIGHT_DOWNLOAD_HOST` 设在别步 `env` 上、本步看不到，但读得到配置，所以判配置里那一个根。摘 stage 块的解析是
+ * `no-platform-ci-config.test.ts` 的 `stageBlock()` 的文本副本（那份 `.ts` 在装依赖前 import 不到）；这一组第一条对账它。
  */
 describe("环境前提：浏览器那一格量的是「配置里那个根」（ISSUE #1966）", () => {
   /* 形状按**现役 `.cnb.yml`**：stage 项是**顶格锚点列表的直接子项**（恰好两空格），
@@ -590,15 +544,9 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
   });
 
   it("两份解析同一份答案：现役配置按**活的**形态对账，注释态回退拿夹具对账", () => {
-    /* `stageBlockIn()` 从 ISSUE #1966 起**活的没有就看注释态**，那一支与 `.ts` 侧
-     * `commentedStageBlock()` 必须同口径（与上一条同源：两份文本副本 + 一条对账判据）。
-     *
-     * ⚠️ 现役 `.cnb.yml` 上**题在 2026-10-16 换了**：那两段以顶格注释留着的原文
-     * 被取消失效（`浏览器安装` / `E2E 关键流程` 恢复成 active），所以现在要对账的
-     * 是**活的**形态 —— 活的那一支（`stageBlockIn` 的 `^ {2}-`）同样是「两份文本
-     * 副本」的一半，一样会漂。
-     * 注释态那一支改拿**夹具**对账：它判的是「两份实现同口径」，与「现役配置里还有
-     * 没有停用项」无关 —— 靠现役配置出题会让这条用例随停用清单一起失效。 */
+    /* `stageBlockIn()` 从 ISSUE #1966 起活的不见就看注释态，那一支与 `.ts` 侧 `commentedStageBlock()` 必须同口径
+     * （两份文本副本 + 一条对账判据）。现役 `.cnb.yml` 在 2026-10-16 换了题：两段注释原文被取消失效，所以活的那支
+     * （`^ {2}-`）才是要对账的形态；注释态那支改拿夹具，靠现役配置出题会让用例随停用清单一起失效。 */
     const live = readPipelineConfig(ROOT) ?? "";
     /* 两格各代表一种形状：`每日浏览器安装` 带 `env:` 块，`Install dependencies` 是
      * `script: |` 的多行体（2026-10-19 之前第二个名字用的是 PR 的 `E2E 关键流程`，
@@ -712,13 +660,9 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
   });
 
   /**
-   * 第三格：**配了一条这条路径根本不支持的路**（任务级 `image:`）。
-   *
-   * 实测 `cnb-cqk-1k550gpp2`（PR #2003 首跑）：`.cnb.yml` 给 `浏览器安装` 加了
-   * `image: mcr.microsoft.com/playwright:v1.63.0-noble`，那一格 70 毫秒就红在
-   * `Runner does not enable Docker` 上 —— 脚本一行都没执行，前面三十三步全绿。
-   * 所以「有人又加了一格」这件事必须红在**便宜的位置**（装依赖之前），
-   * 而不是整条流水线倒数第二步。
+   * 第三格：**配了一条这条路径根本不支持的路**（任务级 `image:`）。实测 `cnb-cqk-1k550gpp2`（PR #2003 首跑）：
+   * `.cnb.yml` 给 `浏览器安装` 加了 `image: mcr.microsoft.com/playwright:v1.63.0-noble`，那一格 70 毫秒就红在
+   * `Runner does not enable Docker`，脚本一行未执行、前面三十三步全绿。所以这种改动必须红在便宜的位置（装依赖前）。
    */
   describe("环境前提：`.cnb.yml` 里不许有 stage 带 `image:`（自托管起不来容器）", () => {
     const WITH_IMAGE = [

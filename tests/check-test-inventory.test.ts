@@ -1,25 +1,7 @@
 /**
- * `scripts/check-test-inventory.cjs` 的判据自证（2026-10-21 立档）。
- *
- * 这一步要拦的是「在盘上、但一条用例都不会被收集」的测试文件。它的失效方向是**静默的**：
- * 那份文件照样被 eslint / tsc / prettier 扫、照样出现在 PR 的 diff 里，只是再也没人跑它。
- * 立档当天是先由人跑了一遍 `vitest list` 与磁盘集合对差（794/794 全绿）才发现
- * **这件事此前没有任何判据在看**——本文件与它守护的那条判据一起把「人跑一次」换成
- * 「每次提交都判」。
- *
- * 四组探针，各自防一种「看起来还在、实际不判」：
- *
- *   ① **绿侧**：两边一致 ⇒ 退 0（判据不是恒放行的对照组）；
- *   ② **红侧**：磁盘有、收集面没有 ⇒ 退 1，且报出那个文件（判据真的会拦）；
- *   ③ **重叠侧**：两个档都接住 ⇒ 退 1（第二种收集面病害，漏了它 glob 写重没人知道）；
- *   ④ **fail-closed 侧**：配置解析不到 ⇒ 退 1，不许退回「没有档」＝判据静默消失。
- *
- * ⚠️ 判据**不跑** `vitest list`（那要起一次 vite，60s 量级，与钩子 D 组的墙钟预算冲突），
- * 它从 `vitest.config.ts` 的 `include` / `exclude` 离线算收集面。所以这里全部用
- * **自写的精简配置**做夹具 —— 用真仓库那份配置反而造不出「漏收」（`src/**` 全覆盖），
- * 而造不出红侧的判据自证等于没证（同 §11.12.1 那只绿侧对照组）。
- *
- * 夹具用 `tests/helpers/gate-repo.ts` 的 `defineGateRepo`（§11.16.1），不手搓临时仓库。
+ * `scripts/check-test-inventory.cjs` 的判据自证（2026-10-21 立档）：拦「在盘上但永远不会被收集」的测试文件 —— 失效是静默
+ * 的（照样被 lint/tsc 扫、照样进 diff，只是没人跑），当天对差 794/794 才发现此前无人看。四组探针：绿侧退 0、红侧漏收退 1
+ * 并报文件、重叠退 1、fail-closed 退 1。判据不跑 `vitest list`（约 60s，超钩子 D 组预算），只离线读 `include`/`exclude`，夹具用自写精简配置。
  */
 import { describe, expect, it } from "vitest";
 
@@ -27,12 +9,9 @@ import { judgeCoverage } from "../scripts/check-test-inventory.cjs";
 import { defineGateRepo } from "./helpers/gate-repo";
 
 /**
- * 夹具用的 `vitest.config.ts` —— 形状与真配置同族（`projects` 两个档、
- * `include: DOM_TEST_GLOBS` 的标识符写法也保留），但 glob **故意写窄**，
- * 好让「漏收」与「重叠」都造得出来。
- *
- * ⚠️ 不 import `vitest/config`：判据只读这份文件的**文本**（`vitest-projects.cjs`
- * 的 `loadProjects()`），从不求值它；临时仓库里也没有 node_modules 可引。
+ * 夹具用的 `vitest.config.ts`：形状与真配置同族（`projects` 两档、`include: DOM_TEST_GLOBS` 写法保留），但
+ * glob **故意写窄**，好让「漏收」与「重叠」都造得出来。
+ * ⚠️ 不 import `vitest/config`：判据只读文本（`vitest-projects.cjs` 的 `loadProjects()`），从不求值，且临时仓库里没有 node_modules。
  */
 const FIXTURE_CONFIG = `const DOM_TEST_GLOBS = [
   "src/components/**/*.test.{ts,tsx}",

@@ -1,24 +1,7 @@
 /**
- * 启动编排「下游进程提前退出」判据的回归护栏（ISSUE #553 / #489）。
- *
- * 背景：双击链路的收尾路径是「壳退出 → 连带回收 dev server 整棵进程树」，
- * 被强制收走的进程没有收尾机会，dev server 落到判定点是 exit=0 且几乎无输出。
- * 用户「关掉启动页 = 放弃本次启动」走的就是这条路（壳按约定 exit(0)），而把它
- * 与真正的启动失败写成同一句「Next.js dev server 提前退出（exit=0）」，会让：
- *   - 一次主动取消被报成红色「启动失败」；
- *   - 真正由壳侧引起的中断被引向「查 dev server 编译错」这条死路（stderr 里只有
- *     pnpm 回显的启动命令行，怎么查都查不出东西）。
- *
- * 判据现在收在 **scripts/launcher-core/downstream-exit.mjs**（跨平台启动编排的唯一
- * 实现 `scripts/dev-launcher.mjs` 的判据子模块，入口文件只再导出，见 §12.6 R5 的
- * 姊妹档对入口长度的约束）：
- *   `downstreamExitKind()` 的判决表 + `describeDownstreamExit()` 的文案；
- * 判据本身只认壳侧写下的**正标记**（launch abandoned / exiting with non-zero
- * code），不看退出码 —— 「壳也退出了」是四种成因的共同现象，由现象反推成因会把
- * 真故障说成设计内行为。
- *
- * 这一组断言此前锚在 scripts/dev-launcher.ps1 上（Windows 专属实现）；编排
- * 统一到 mjs 之后，判据与文案随之迁移，语义一条都没放宽。
+ * 启动编排「下游进程提前退出」判据的回归护栏（ISSUE #553 / #489）：壳退出会连带回收 dev server 进程树，被收走的
+ * 进程 exit=0 且几乎无输出 —— 用户「关掉启动页 = 放弃启动」即此路；写成「提前退出（exit=0）」会把主动取消报成失败、
+ * 把壳侧中断引向「查 dev server 编译错」。判据收在 `launcher-core/downstream-exit.mjs`，只认壳侧**正标记**（launch abandoned / exiting with non-zero），不看退出码。
  */
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -185,16 +168,9 @@ describe("编排器下游退出判据（launcher-core/downstream-exit.mjs）", (
 
 describe("失败出口给出的是**本次运行**的日志，不是按名字猜的旧文件（ISSUE #576）", () => {
   /**
-   * 现场：启动页弹「应用启动失败：启动进程 dev-launcher.mjs 提前退出（exit=1）」，
-   * 正文里 `最近 stdout` 与「完整输出见 …」指的却是**上一次运行**留下的文件
-   * （`nextjs-stdout-<旧时间戳>.log`），用户照过去看自然「看不出哪里有问题」。
-   *
-   * 根因：`concludeDownstreamExit()` 当时按文件名重找「最近一份」（`lastNextLog`），
-   * 而它取 `readdirSync(...).sort().reverse()` 的**字典序**。目录里同时存在
-   * 历史命名（`…<date>_<time>.log`）与现命名（`…<date>T<time>.log`）时，
-   * `_`（0x5F）排在 `T`（0x54）之后 —— 「最新」永远落到旧命名那份上。
-   *
-   * 契约：本次的路径本来就是已知量，必须**传进去**，不许再按名字猜一次。
+   * 现场：启动页弹「启动失败：dev-launcher.mjs 提前退出（exit=1）」，但「最近 stdout」指的是**上一次运行**的
+   * 文件（`nextjs-stdout-<旧时间戳>.log`），用户照去看自然查不出问题。根因：`concludeDownstreamExit` 按文件名
+   * 字典序重找（`lastNextLog`）：`_`（0x5F）排在 `T`（0x54）之后，「最新」永远落到旧命名。契约：本次路径必须**传进去**，不许猜。
    */
   it("concludeDownstreamExit 接收并转发本次的 stdout/stderr 路径", () => {
     /* 收尾函数体：从它的定义处切到**下一处顶层导出**为止。切末点不写死成某个

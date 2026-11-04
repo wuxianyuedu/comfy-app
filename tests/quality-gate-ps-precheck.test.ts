@@ -1,27 +1,7 @@
 /**
- * `quality-gate.ps1` 的依赖预检（ISSUE #1338）。
- *
- * 这里判的是一件**双重的**事：
- *
- * 1. **判决必须走 Node 侧那份语义比较器**，不许自己比文件哈希。pnpm 复制到
- *    `node_modules\.pnpm\lock.yaml` 的那份与仓库根 `pnpm-lock.yaml` **本就不同形**
- *    （本机实测 12910 行 vs 13068 行：顶层键顺序不同、根文件里含 `---` 分隔的第二段，
- *    而两者由同一次 install 写下、mtime 只差 1 秒）⇒ 哈希比对恒为「不一致」，于是
- *    Windows 那一侧的一键门禁**不论依赖新不新鲜都停在预检**，一条门禁都跑不到。
- *    而它下面打印的差异明细走的就是语义比较器，结论恰好是「实质一致」—— 同一段里
- *    两个结论互相矛盾，本条把它钉成一次真跑。
- * 2. **「判不了」不等于「不一致」**。判据自己跑不起来（缺文件、node 起不来）时，
- *    Node 的默认退出码是 1，而 1 在这份契约里是「判出了实质差异」—— 不分开的话，
- *    机器会指着人说「去重装」，而真实原因是判据没了（这正是本条实测到的形态）。
- *
- * 后来这个文件成了 `quality-gate.ps1` 的**执行者**，覆盖面因此不止预检：还管运行器
- * `Invoke-Check` 的「没跑起来 ≠ 通过」（ISSUE #1345，见下面那两组），以及「每份 `.ps1`
- * 都得能解析」那条 sweep。两层各自的失效形状不同，注释里分开写，别混成一条。
- *
- * 无 PowerShell 的环境（Linux CI）只做静态断言：真实执行在 Windows 侧。
- * 断言一律打在 ASCII 标签（`[DEP-DRIFT]` / `[DEP-JUDGE]`）与 ASCII 的差异明细上 ——
- * `Write-Host` 的中文经 `powershell.exe` 管道出来是 GBK 乱码，认中文子串的用例会
- * 随宿主与代码页变红（同一条坑在 §8.1 记过）。
+ * `quality-gate.ps1` 的依赖预检（ISSUE #1338）：判决必须走 Node 侧语义比较器，不许自己比文件哈希 ——
+ * 复制到 `node_modules\.pnpm\lock.yaml` 那份与仓库根 `pnpm-lock.yaml` 本就不同形（12910 vs 13068 行），哈希
+ * 恒判「不一致」⇒ 门禁都停在预检；「判不了」≠「不一致」（退出码 1）。本文件也成了执行者：管 `Invoke-Check`（#1345）与 `.ps1` sweep。
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -53,13 +33,9 @@ const hasPs = psExe !== "";
 const tmpDirs: Array<string> = [];
 
 /**
- * 从**当前真锁文件**里取一个 `overrides` 条目并把版本号改掉 —— 这是「造一条实质漂移」的变异点。
- *
- * 为什么不能把 `"  brace-expansion@1: 1.1.20"` 这种整行写进用例：`String.replace` 找不到时
- * **静默 no-op** —— 「造一条漂移」变成「什么都没改」，于是红以「`[DEP-DRIFT]` 没出现」这种
- * 完全指不到根因的形态出现。实测就是这么撞上的：依赖升级把 `brace-expansion@1` 从 1.1.20
- * 变成 1.1.21（#1638），同一批次里这条用例就红了，而红话在说预检坏了。
- * 现在找不到键就**当场抛**并写明找的是哪个键 —— 依赖可以升，夹具不许悄悄变成空转。
+ * 从**当前真锁文件**里取一个 `overrides` 条目并改掉版本 —— 「造一条实质漂移」的变异点。不把整行写进
+ * 用例：`String.replace` 找不到时静默 no-op，「造漂移」变成「什么都没改」，红以「`[DEP-DRIFT]` 没出现」
+ * 出现、指不到根因（实测：依赖升级把 `brace-expansion@1` 从 1.1.20 变 1.1.21（#1638）时就这样红过）。
  */
 function driftOneOverride(real: string, key: string): string {
   const escaped = key.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
@@ -81,10 +57,8 @@ afterAll(() => {
 });
 
 /**
- * 造一份**假检出**：只放预检要看的那几样。
- *
- * 不在真仓库里改 `pnpm-lock.yaml` 来验反向：本仓允许并行会话共用同一台机器，
- * 一瞬间的锁文件改动会喂给别人的门禁（同族纪律见 §13.6.2「别线的红不许为它放宽」）。
+ * 造一份**假检出**：只放预检要看的那几样。不在真仓库里改 `pnpm-lock.yaml` 验反向：本仓允许并行会话
+ * 共用同一台机器，一瞬间的锁文件改动会喂给别人的门禁（同族纪律见 §13.6.2「别线的红不许为它放宽」）。
  */
 function makeFakeRepo(
   opts: {
@@ -254,14 +228,9 @@ describe.skipIf(!hasPs)("依赖预检真跑（Windows / 有 PowerShell 时）", 
 });
 
 /**
- * 运行器（`Invoke-Check`）的判据（ISSUE #1345）。
- *
- * 上面那组管的是**预检**这一层；这一组管**门禁本体**那一层，两层的失效形状不同：
- * `Invoke-Check` 旧代码对 `pnpm|npm|node` 一律拼 `.cmd`（本机 `node.cmd` 不存在，node 是
- * 真 exe），`&` 起不来时 PowerShell 只发一条非终止错误、**不写 `$LASTEXITCODE`**，于是读到
- * 预检那次成功调用留下的 0 ⇒ 零子进程输出却打「通过」（那一行从未执行过）、整体退 0。
- * 同一条链上还有第三层：子进程的 stdout 默认进函数输出流，和 `return $code` 拼成数组，
- * 所以判决既不是纯退出码、输出也看不见 —— 实测 `Object[] ["child-marker-line", 0]`。
+ * 运行器（`Invoke-Check`）的判据（ISSUE #1345）：上面管预检，这一组管门禁本体。旧代码对 `pnpm|npm|node`
+ * 一律拼 `.cmd`（本机 `node.cmd` 不存在），`&` 起不来时只发非终止错误、**不写 `$LASTEXITCODE`**，于是读到
+ * 预检留下的 0 ⇒ 零输出却打「通过」。同链第三层：stdout 与 `return $code` 拼成数组（实测 `Object[] ["child-marker-line", 0]`）。
  */
 const NOEXEC_MUTATION = {
   /* 路径用 `/`（#3095）：ps1 的 `Args` 全部改成跨平台分隔符，这条变异锚点跟着同形。 */

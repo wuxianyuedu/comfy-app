@@ -1,26 +1,7 @@
 /**
- * 画布构造的载荷 ↔ `generate.generate` 的入参判据（台账 E4 的第四格）。
- *
- * 这一格修之前长这样：客户端把载荷拼成 `Record<string, unknown>`，在传输前塞一句
- * `payload as GenerateInput`；重试那一头把**任务行 `params` 列里存的旧载荷**原样
- * 送回同一个 cast。类型别名本身不是漂移面（`RouterInputs["generate"]["generate"]`
- * 由 schema 反向派生，字段改名会当场编译红），**那两条 cast 才是**：它们让客户端
- * 这一侧在运行时对「线上要什么形状」一无所知，于是少一个必填键、发一个服务端已经
- * 不收的旧字段，全都到服务端才炸，而界面上只剩一句「生成失败」。
- *
- * 所以这里判的是四件事，缺一不可：
- *   ① 画布**真构造出来的那一形**被**真 router** 收下，并原样落进 `params` 列
- *      （不造夹具载荷 —— 造一份「我以为画布会拼出什么」就等于把「两边各测各的」
- *      那个老毛病搬进判据自己家里）；
- *   ② 缺必填 `workflow` 时，router 与客户端预检**同一份判据同拒**（这条挡的是
- *      「画布那条界面 guard 撤掉之后没人拦」—— 拒的信号必须来自 schema 而不是 guard）；
- *   ③ 从库里翻出来的载荷再走一次入参判据仍然过，而且**第二次真建得出任务**
- *      （重试的幂等前提：写进去的是转换之后的形状，读出来直接重发）；
- *   ④ 旧形状被拒时给的是能读的中文，而不是 zod 的英文原文。
- *
- * mock 边界与同族那份（`tests/task-detail-images-wire-contract.test.ts`）同一套：
- * 只替传输层的依赖（内存库、会话、日志、派发），router、仓储、入参 schema、
- * 画布那侧的三个映射助手全部真实跑。
+ * 画布载荷 ↔ `generate.generate` 入参判据（台账 E4 第四格）。漂移面是两处 `as GenerateInput`：
+ * 客户端对线上形状一无所知，少必填键 / 发已弃旧字段都到服务端才炸。四件事：真构造形落 `params`，不造
+ * 夹具；缺 `workflow` 时 router 与预检同拒；读回载荷再判仍过且能真建任务；旧形状报中文而非 zod 原文。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as LoggerModule from "~/lib/core/logger";

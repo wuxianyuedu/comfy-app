@@ -1,28 +1,7 @@
 /**
- * 契约：**版本化迁移与 `db:push` 产出同一份 schema**（ISSUE #1624 验收第 2 条）。
- *
- * 为什么要单独钉这一条：`drizzle/0000_*.sql` 是**生成物**，而生成它的那一刻
- * `schema.ts` 是什么样、用的 drizzle-kit 是哪一版，都可能与「下一次有人跑
- * `db:push`」不同。两条路一旦漂开，`db:migrate` 建出来的库就与代码期望的结构
- * 不一致 —— 而它**不会报错**（表都在、列名都对得上大半），只在某个业务写入上炸。
- *
- * 判据取**逐表逐列**的结构比对，不是「表数相同」：后者挡不住「少一列 / 类型不对 /
- * NOT NULL 丢了」这一类 —— 而那正是本仓反复踩过的形态（`db-push.mjs` 的
- * 第二次复核就是为「有表但结构不对」加的）。
- *
- * ⚠️ **「逐列」比的是列集，不是列的物理顺序**（ISSUE #2655）：`db:migrate` 给老表补新列
- * 只能走 `ALTER TABLE ADD COLUMN`（追加在表尾），`db:push` 按 `schema.ts` 的声明序建表 ——
- * 两条路**结构等价却永远产不出同一个顺序**。SQLite 里列序没有语义（本仓读侧全部按名取列，
- * drizzle 的 select 生成的也是列名列表），所以这一维不算劣化；名称 / 类型 / NOT NULL / 主键
- * 四维一个都没撤（`diffColumns` 报的是「谁缺了哪些 token」）。放弃那一维是否真的无损，
- * 由下面两条自证：一条拿构造样本钉「少列 / 换类型 / 丢 NOT NULL / 丢 PK 照样报」，
- * 一条往两个库各插**同一行**、按各自的物理序 SELECT、再按列名归一后逐字段比。
- * 这条放松因此不是「为了变绿把比较面改松」——`## Fixed` 那一类改动不许走那条路（§13.10.9）。
- *
- * 两条真跑路径都要付出起 drizzle 的代价（各 ~3-5s），所以这里**共用一次临时目录**
- * 与**一次** `db:push`：用例本身不是热路径，重复跑两遍 drizzle 只会让这个文件
- * 在 CI 上无谓地变慢（`check-test-concurrency` 也盯着并发档，别用 `it.concurrent`
- * 绕成本）。
+ * 契约：**版本化迁移与 `db:push` 产出同一份 schema**（ISSUE #1624 验收第 2 条）。`drizzle/0000_*.sql` 是生成物，生成那刻的 `schema.ts` 与 drizzle-kit 版本都可能与下次 `db:push` 不同；漂开后 `db:migrate` 建的库与代码期望不一致**却不报错**，只在某处业务写入炸。判据逐表逐列（不是「表数相同」，那挡不住少一列 / 类型不对 / 丢 NOT NULL，见 `db-push.mjs` 第二次复核）。
+ * 比的是列**集**不是物理顺序（ISSUE #2655：`ALTER TABLE ADD COLUMN` 只能追加表尾、`db:push` 按声明序建表，结构等价却永远不同序；SQLite 列序无语义，名称 / 类型 / NOT NULL / 主键四维一个没撤）。放松由自证兜住：构造样本验「少列 / 换类型 / 丢 NOT NULL / 丢 PK 照样报」，另往两个库各插同一行、按列名归一后逐字段比；不是为变绿改松（§13.10.9）。
+ * 两条真跑路径各要起 drizzle ~3-5s，所以**共用一次临时目录与一次 `db:push`**：重复两遍只让这个文件在 CI 无谓变慢（`check-test-concurrency` 盯并发档，别用 `it.concurrent` 绕成本）。
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -76,20 +55,9 @@ function readShape(file: string): Record<string, TableShape> {
 }
 
 /**
- * 两条路的列集比对（ISSUE #2655）：报「谁缺了哪些列」，**不比列的物理顺序**。
- *
- * 每个 token 的形状是 `名:类型 [NOT NULL] [PK]` —— 名称 / 类型 / NOT NULL / 主键
- * 四个语义维都在这一个串里，所以「按 token 比集合」一维没撤；撤掉的只有
- * 「这些 token 的排列」。那一维在 SQLite 里没有语义：`ALTER TABLE ADD COLUMN`
- * 只能把新列追加在表尾，而 `db:push` 按 `schema.ts` 的声明序建表 ——
- * 两条路**结构等价却永远产不出同一个顺序**，把它算成不等价就是比较器的过严维度。
- *
- * 报 `missing` / `extra` 而不是「整串不等」：读者要能立刻看出少的是哪一列，
- * 而一条「两个长串不相等」的读数答不出这个问题（本仓 `db-push.mjs` 的第二次复核
- * 就是为了「有表但结构不对」那一族加的，这里同理）。
- *
- * @param leftCols `db:migrate` 那一侧的 token 串（物理序）
- * @param rightCols `db:push` 那一侧的 token 串（物理序）
+ * 两条路的列集比对（ISSUE #2655）：token 形状 `名:类型 [NOT NULL] [PK]`，四维都在集合里，撤掉的只有「排列」——`ALTER TABLE ADD COLUMN` 只能追加表尾、
+ * `db:push` 按声明序建表，结构等价却永远不同序（SQLite 列序无语义）。报 `missing` / `extra` 而非「整串不等」，读者才看得出少的是哪一列（同 `db-push.mjs` 第二次复核）。
+ * @param leftCols `db:migrate` 侧 / @param rightCols `db:push` 侧 —— 各自那一份物理序 token 串。
  */
 function diffColumns(
   leftCols: string,
@@ -105,12 +73,9 @@ function diffColumns(
 }
 
 /**
- * 真 `drizzle/` 的独占锁（与 `tests/db-migrate-noninteractive.test.ts` 共用一把）。
- *
- * 那一份判「前提不成立」时要把真迁移目录整个挪开，而本文件两次 `db-migrate` 都**要靠
- * 它在场** —— 两个文件在不同 worker 里并行时，本文件的 `beforeAll` 会读到一个被改名走的
- * `drizzle/`，表现是「一条断言都没红、整个文件在 setup 里挂，话术写着没有可应用的迁移」。
- * 实测见规范 §11.19.2 与本轮的 `check:all` 日志。
+ * 真 `drizzle/` 的独占锁（与 `tests/db-migrate-noninteractive.test.ts` 共用一把）。那份判「前提不成立」时要把真迁移目录整个挪开，而本文件
+ * 两次 `db-migrate` 都**要靠它在场**：不同 worker 并行时 `beforeAll` 会读到被改名走的 `drizzle/`，表现为「一条断言都没红、整个文件在 setup 里挂，
+ * 话术写着没有可应用的迁移」。实测见规范 §11.19.2 与本轮 `check:all` 日志。
  */
 let releaseDrizzle: (() => void) | null = null;
 

@@ -1,40 +1,7 @@
 /**
- * **类型层契约**：`expectTypeOf` 的落点（规范 11 §11.20）。
- *
- * ── 为什么这份文件必须存在 ──────────────────────────────────────────────
- *
- * 仓里有 20 多处「`as const` 元组 → 派生联合 → 用它当索引键的 `Record`」
- * 或「派生联合 → 类型守卫 `value is Xxx`」的形状。它们**全都有一个静默失效
- * 方向**，而且它不需要有人写错代码就会发生：
- *
- *   ① `SHOT_STATUSES` 这类 `as const` 被摘掉（prettier 折行重排、或有人觉得
- *      「`as const` 是多余的」）→ `ShotStatus` 从六个字面量变成 **`string`**；
- *   ② `isProductionStage(value): value is ProductionStage` 于是变成
- *      `value is string` —— 交集类型守卫的语义**整个消失**，而 tsc 完全接受；
- *   ③ 消费点大多把清单当 `readonly string[]` 用（`.includes` / `.indexOf` /
- *      `.length`），**宽化在那条路径上无感**。
- *
- * 实测过三条判据各自的态度（vitest 5.0.3）：
- *
- *   · `vitest run`     —— 运行时行为与摘掉 `as const` **完全一致**（`z.enum`
- *                        两种写法的 parse 结果逐条相同），所以**运行时断言永远
- *                        看不出这件事**；
- *   · `@ts-expect-error` —— 它管的是「这里必须有错」。宽化是**去掉**了错误，
- *                         没有错可抑制，那个指令反而自己报红 —— 报出的信息
- *                         与「类型契约被破坏」对不上；
- *   · `expectTypeOf`   —— 正向断言「就是这六个字面量，不是 `string`」。这是
- *                         唯一对得上的判据。
- *
- * ── ⚠️ 这份文件里的断言**借 `tsc` 当执行者** ───────────────────────────
- *
- * `expectTypeOf` 在 vitest 里**没有牙**：实测
- * `expectTypeOf<string>().toEqualTypeOf<number>()` 在 `vitest run` 下
- * **Tests 1 passed**（vitest 只擦类型，不做类型检查）。它的执行者只有
- * `tsc --noEmit`（pre-commit A 组），而 tsc 按 `tsconfig.json` 的 include 面收文件。
- *
- * 所以这份文件的「有执行者」这件事由 `scripts/check-type-assertion-executor.cjs`
- * 守着（pre-commit D 组）—— 站点一旦落到 include 面之外，全仓的断言会**同时
- * 变成装饰品且没有任何一处报错**。
+ * **类型层契约**（规范 11 §11.20）：`as const` + 派生联合 + `Record` / 类型守卫都有静默失效方向 —— 摘掉 `as const` 就
+ * 宽化成 `string`、守卫退成 `value is string`，消费点按 `readonly string[]` 用无感；`vitest run` 与 `@ts-expect-error` 都看不出，
+ * 唯一有效是 `expectTypeOf`（vitest 里没牙）；执行者 `tsc --noEmit`，include 面由 `scripts/check-type-assertion-executor.cjs` 守。
  */
 import { describe, expectTypeOf, it } from "vitest";
 
@@ -76,12 +43,9 @@ describe("as const 元组 → 派生联合：宽化成 string 必须编译不过
 
 describe("用派生联合当索引键的 Record：宽化会让「漏成员」静默通过", () => {
   /**
-   * 这是本文件里最值钱的一条。
-   *
-   * `Record<WindowButtonKind, string>` 的**全部价值**是「漏一个成员就报错」。
-   * 实测：`as const` 一旦被摘掉，`WindowButtonKind` 变成 `string`，于是
-   * `Record<string, string>` 收下一份**只有一半键**的字面量对象 ——
-   * 漏成员的守卫**当场退化成装饰品**，而 tsc 一个字都不说。
+   * 这是本文件最值钱的一条：`Record<WindowButtonKind, string>` 的全部价值是「漏一个成员就报错」。
+   * 实测摘掉 `as const` 后 kind 变成 `string`，`Record<string, string>` 会收下一份只有一半键的字面量 ——
+   * 漏成员守卫当场退化成装饰品，而 tsc 一个字都不说。
    */
   it("WindowButtonKind 是四个字面量（Record 守卫才有意义）", () => {
     expectTypeOf<WindowButtonKind>().toEqualTypeOf<"minimize" | "maximize" | "restore" | "close">();

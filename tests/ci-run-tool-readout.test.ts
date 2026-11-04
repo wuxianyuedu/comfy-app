@@ -1,16 +1,7 @@
 /**
- * 「类型检查」那一格的读数（`scripts/ci-run-tool.mjs`，ISSUE #3041 跟笔）。
- *
- * 这一格过去只念得出二进制与判决面，念不出「按哪一棵树判」。平台 PR 档检出的是
- * **合成合并预览**（`HEAD` = 目标分支 ⊕ 本 PR），`CNB_COMMIT` 才是本 PR 顶端；
- * 两者不同时 `tsc` 报错的行号属于合并后的树 —— 目标分支那一段别人的提交把行号
- * 挪过，拿 PR 顶端逐行核对必然「对不上」（#2990 的六条现场）。
- *
- * 这里用夹具钉三件（负控制就在第一条：报错行号在夹具里根本不存在，读数仍能自证
- * 它属于哪棵树）：
- *   ① `CNB_COMMIT ≠ HEAD` ⇒ 念出两个 sha，并明写「合并后的树，别拿 PR 顶端逐行对照」；
- *   ② 没有 `CNB_COMMIT`（本地）⇒ 念出 HEAD，并明写「报错行号属于这棵树」；
- *   ③ 判决面把 `include` 与 `exclude` 两条 glob 都念出来。
+ * 「类型检查」那一格的读数（`scripts/ci-run-tool.mjs`，ISSUE #3041）：过去念不出「按哪一棵树判」。平台 PR 检出的是**合成合并预览**
+ * （`HEAD` = 目标分支 ⊕ 本 PR），`CNB_COMMIT` 才是 PR 顶端；两者不同时 `tsc` 行号属合并树，拿 PR 顶端核对必然对不上（#2990）。
+ * 夹具钉三件：两 sha 不同 ⇒ 明写「合并后的树」；无 `CNB_COMMIT` ⇒ 念 HEAD 并明写「行号属这棵树」；判决面念 `include`/`exclude` 两条 glob。
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";

@@ -1,24 +1,7 @@
-/**
- * Turbopack「别追踪这条算出来的路径」注解的护栏（ISSUE #489）
- * ===========================================================================
- *
- * 背景：`next build`（Turbopack）对无法静态收敛的路径访问（`path.resolve` /
- * `path.join` 的参数依赖 `process.cwd()` / `process.env` / 目录项 / HTTP 入参）
- * 会放弃静态追踪、把**整个项目**算作 server code 的依赖复制进
- * `.next/standalone`，并对每个调用点打
- * `Dynamic filesystem access causes tracing of the whole project`。
- *
- * 逃逸手段是注解，但**位置才是坑**：Turbopack 看的是**算出路径的那个表达式**，
- * 不是消费它的 `fs.*` 调用。把注解塞在调用参数里会被静默忽略 —— 这正是
- * 涉及的路由与模块：api/dev/build-id / api/update-check / comfyui/status / db-schema-ready 等
- * `server/workshop/db` 明明「有注解」却一直告警的原因。
- *
- * 本用例把「注解必须落在路径表达式上」变成硬判据：五个调用点逐个断言
- * ① 注解在 `path.resolve(...)` / `path.join(...)` 的参数列表里（展开形式），
- * ② 没有沿用「塞在 fs 调用参数里」的旧写法，
- * ③ 注解只有一个来源（不得各自再声明一份，否则改一处漏五处）。
- *
- * 反向验证：把任一处改回「注解塞在 fs 调用参数里」或删掉展开，对应用例即失败。
+/** Turbopack「别追踪这条算出来的路径」注解的护栏（ISSUE #489）：`next build` 对无法静态收敛的路径访问会把
+ * **整个项目**复制进 `.next/standalone` 并告警；注解必须落在**算出路径的表达式**上（`path.resolve/join`
+ * 参数内、展开形式），塞进消费它的 `fs.*` 参数会被静默忽略（api/update-check、comfyui/status、
+ * `server/workshop/db` 即「有注解却一直告警」）。用例另钉注解单一来源；改回旧写法或删展开即失败。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";

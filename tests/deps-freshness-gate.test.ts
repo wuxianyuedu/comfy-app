@@ -1,34 +1,7 @@
 /**
- * check-deps-freshness.mjs 的契约测试（规范 §13.5.6 同族：判据自己也要有判据）。
- *
- * 它判的是**「远端改过依赖而本地没同步」能不能被看见**这件事本身，所以用例必须在
- * 真 git 仓库上跑 —— 「远端」不是一个可 mock 的模块，它就是一条
- * `refs/remotes/<remote>/master` 引用加它自己的 reflog（远端名按引用现算，
- * 不假定叫 `origin` —— 本仓的远端实测叫 `cnb`，见 R12-01）。夹具用共享的
- * `defineGateRepo`（§11.16.1），`setup` 里把它 `git init` 好、造一次提交、
- * 再把那条远端引用指过去。
- *
- * 覆盖的分界（都是「一眼看着该红、其实绿」或反过来的那种）：
- *   1. 远端改了 `package.json` 的版本声明 → 红，且话术里有可执行出口；
- *   2. 远端改了 lockfile 的**解析结果** → 红，且明细指到具体包与版本；
- *   3. 远端只动 lockfile 的注释 / 顺序 → **不报**（实质 diff，不是字符串比）；
- *   4. 没有远端引用 / 没有取证时间 → `[未校验]`，**不给出**「一致」这个结论；
- *   5. `--offline` 不读 git → 只判本地自洽那一层；
- *   6. 不是 git 检出 → exit 2（环境故障，不是「依赖没问题」），且 ③ 的读数照旧打出来；
- *   7. `--staged` 的触发面：没碰依赖面 → 零输出退 0；碰了 → 照判并点出文件名；
- *   8. **合并已解完、提交还没落地**（`MERGE_HEAD` 在场）→ ② 不判（远端那份依赖面就在
- *      这次合并里），而不是给解冲突的人一条**永远解不开**的红。
- *   9. ③ 的**第二维**（ISSUE #1721）：两份 lockfile 逐字对得上、而某个被声明的包在这棵
- *      树上**解析不到**（只以传递依赖的旧版本落在包自己的私有层里）→ 红，且话术说的是
- *      「解析不到」而**不是**「安装记录与声明对不上」（后者会把人送去核对一份本来就对的
- *      文件）。反向对照两条：依赖压根没装（`no-install`）与依赖树完好时不误报。
- *
- * 外加两条**远端引用本身**的分界（R12-01）：远端命名为 `cnb` 时 ② 照判且话术点名比对的是
- * 哪条引用；以及引用**不领先于 HEAD** 时报「判过（已核对）」而不是回落成 `[未校验]`
- * ——「没看」与「看了且没有」必须分得开，这条判据存在的理由就在于此。
- *
- * 再加一条**基准**用例：分叉之后自己在分支上加依赖，不算「远端改过依赖」——
- * 那正是 ② 取分叉点而不取 `origin/master` 的理由（拿后者会反向误报）。
+ * `check-deps-freshness.mjs` 的契约测试（规范 §13.5.6 同族：判据自己也要有判据）。判「远端改过依赖而本地
+ * 没同步」能否被看见，故在真 git 仓库跑（「远端」= `refs/remotes/<remote>/master` + reflog，名按引用现算，本仓
+ * 实测 `cnb`，R12-01）。分界：① 版本变⇒红 ② 解析变⇒红 ③ 只动注释⇒不报 ④ 无取证⇒`[未校验]` ⑤ `--offline` 只判本地 ⑥ `MERGE_HEAD`⇒不判 ⑦ 解析不到⇒红（#1721）。
  */
 import { defineGateRepo, describe } from "./helpers/gate-repo";
 
@@ -76,13 +49,10 @@ type FreshnessReport = {
 };
 
 /**
- * 解析 `--json` 输出。
- *
- * 不写成 `JSON.parse(output) as FreshnessReport`：那是**类型断言**，它只是让编译器
- * 闭嘴、解析出来的东西仍然可以是任意形状（§05 对 `as` 的口径）。这里走运行时收窄 ——
- * 判据改坏了形状时用例会在这一行就红，而不是在后面某个 `undefined` 上。
- * （`remoteDrifts` 的元素形状不逐项核：用例要断言的是**它空不空**与**点到哪个文件**，
- * 逐项建 schema 只会多一份要跟着判据改的清单。） */
+ * 解析 `--json` 输出。不写成 `JSON.parse(output) as FreshnessReport`：类型断言只让编译器闭嘴，解析结果
+ * 仍可以是任意形状（§05 对 `as` 的口径）。这里走运行时收窄，判据改坏形状时用例在这一行就红，而不是在
+ * 后面某个 `undefined` 上。（`remoteDrifts` 元素不逐项核：要断言的是它空不空与点到哪个文件。）
+ */
 function parseReport(output: string): FreshnessReport {
   const raw: unknown = JSON.parse(output);
   if (typeof raw !== "object" || raw === null) {
@@ -283,25 +253,16 @@ describe("check-deps-freshness 契约", () => {
     expect(report.installDrift?.state).toBe("no-install");
   });
 
-  /* ── ③ 的第二维：声明了、却解析不到（ISSUE #1721）──────────────────────────
-   *
-   * 立案现场：本地依赖树停在「装 axe-core 之前」—— 它只以传递依赖的旧版本被
-   * `@storybook/addon-a11y` 拖进来、落在**包自己的私有层**，顶层既没有提升出来的
-   * 那一份、也没有任何可解析路径。而 ③ 原来的口径是**两份 lockfile 的文本 diff**，
-   * 那一格在这种情况下是绿的：`node_modules/.pnpm/lock.yaml` 与仓库那份逐字相同。
-   *
-   * 夹具因此按真实布局摆三层：顶层 `node_modules/`（声明依赖解析的就是它）、
-   * `node_modules/.pnpm/lock.yaml`（③ 文本层的输入）、`node_modules/.modules.yaml`
-   * （「装过」的证据，也是解析层决定要不要表态的开关）。探针包固定是
-   * `typescript` / `next` / `axe-core` 三条，所以要造的正是这三者里**少一个**。
-   */
+  /* ── ③ 的第二维：声明了、却解析不到（ISSUE #1721）—— 立案现场：本地依赖树停在「装 axe-core 之前」，
+   * 它只以传递依赖的旧版本被 `@storybook/addon-a11y` 拖进来、落在**包自己的私有层**，顶层既没提升出来
+   * 的那份、也没有可解析路径。而 ③ 原来是两份 lockfile 的**文本 diff**，那一格在这种情况下是绿的
+   * （`node_modules/.pnpm/lock.yaml` 与仓库逐字相同）。夹具按真实布局摆三层：顶层 `node_modules/`（解析层）、
+   * `.pnpm/lock.yaml`（③ 文本层）、`.modules.yaml`（「装过」证据与解析层表态开关）；探针包三条要造「少一个」。 */
 
   /**
-   * 让工作区看起来「装过」，且**两份 lockfile 逐字一致**（③ 的文本层判 fresh）。
-   *
-   * 一致性这一步是这一组用例的前提，不是顺手：③ 的文本层也写 `state`，两侧同时漂移
-   * 时拿到的是 `drift` 而不是 `unresolved` —— 那样测的就是「文本层还在不在」，
-   * 而不是本组要问的「解析层单独能不能报红」。
+   * 让工作区看起来「装过」，且**两份 lockfile 逐字一致**（③ 的文本层判 fresh）。一致性是这组用例的前提，
+   * 不是顺手：③ 的文本层也写 `state`，两侧同时漂移时拿到的是 `drift` 而不是 `unresolved` —— 那样测的是
+   * 「文本层还在不在」，而不是本组要问的「解析层单独能不能报红」。
    */
   const markInstalled = (repo: { write: (rel: string, content: string) => void }) => {
     repo.write("node_modules/.modules.yaml", "nodeLinker: hoisted\n");

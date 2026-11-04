@@ -1,18 +1,7 @@
 /**
- * pre-commit 耗时账（规范 §13.5.8.3）的在位判据。
- *
- * 这一族要防的失效形态是**静默**的：账本少记一条、记错刻度、或者根本没被钩子调用 ——
- * 三种都**不会让任何提交红**（记账本来就刻意不阻断）。所以判据只能落在形态上：
- *
- *   ① 记账/读账的往返（写进去什么、读出来什么、渲染成什么样）；
- *   ② 账本落点（`.git/`、不入库 —— 写进版本库会让同仓并行检出互相污染）；
- *   ③ 钩子的接线（`timing.sh` 被三处 source、`run()` **只定义一份**且走 `timed_step`、
- *      `LOGD` 导出）；
- *   ④ **记账不改变退出码**（这是这一族最该守住的一条：一条记账线路变成提交的必经
- *      之路，迟早有人为它 `--no-verify`）。
- *
- * 不真跑一次完整的 pre-commit（那是分钟级、且要装齐依赖）：④ 用「喂一份读不出的
- * 账本」的输入端判 —— 记账失败时退出码仍是 0。
+ * pre-commit 耗时账（§13.5.8.3）的在位判据。这一族失效是**静默**的：少记一条 / 记错刻度 / 钩子没调用，都不让提交红，
+ * 所以判形态：① 记账读账往返 ② 落点 `.git/` 不入库（写进版本库会污染并行检出）③ 钩子接线（三处 source、`run()` 只定义一份且走 `timed_step`）
+ * ④ 记账不改退出码 —— 喂一份读不出的账本，失败仍退 0（不真跑完整 pre-commit，那是分钟级且要装齐依赖）。
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -29,16 +18,9 @@ const HOOK = join(REPO_ROOT, ".githooks", "pre-commit");
 const TIMING_SH = join(REPO_ROOT, ".githooks", "timing.sh");
 
 /**
- * 跑一次脚本（黑盒）。返回退出码与 stdout/stderr —— 本档判的是 CLI 契约，
- * 不 import 模块内部函数（那会与「脚本仍能单独跑」这条契约脱节）。
- *
- * 用 `spawnSync` 而不是 `execFileSync`：结论有一半在 stderr 上（「没能落盘 ——
- * 不影响提交」），而 `execFileSync` 成功时只回 stdout —— 第一版因此在「退出码 0 +
- * 往 stderr 说了一句」那条路径上什么也读不到。`spawnSync` 三样都给，与退出码无关。
- *
- * @param {string[]} args
- * @param {string} [cwd]
- * @returns {{code: number, out: string, err: string}}
+ * 跑一次脚本（黑盒），返回退出码与 stdout/stderr —— 判 CLI 契约，不 import 内部函数（会与「脚本仍能单独跑」脱节）。
+ * 用 `spawnSync` 而非 `execFileSync`：结论有一半在 stderr（「没能落盘 —— 不影响提交」），后者成功时只回 stdout。
+ * @param {string[]} args  @param {string} [cwd]  @returns {{code: number, out: string, err: string}}
  */
 function run(args: Array<string>, cwd = REPO_ROOT) {
   const r = spawnSync(process.execPath, [SCRIPT, ...args], {
@@ -68,12 +50,9 @@ type LedgerRun = {
 };
 
 /**
- * 读 `--json` 的输出。用一个显式的收窄而不是裸 `JSON.parse`：后者给 `any`，
- * eslint 的 `no-unsafe-*` 那一族（类型化规则）会逐行报 —— 本仓零警告口径下
- * 那就是 11 条 error。收窄写成 `unknown` → 断言成已知形状，形状漂了由用例断言兜。
- *
- * @param {{out: string}} result
- * @returns {LedgerRun[]}
+ * 读 `--json` 的输出。用显式收窄而不是裸 `JSON.parse`：后者给 `any`，eslint 的 `no-unsafe-*` 族会逐行报
+ * （本仓零警告下就是 11 条 error）。收窄成 `unknown` → 断言成已知形状，形状漂了由用例断言兜。
+ * @param {{out: string}} result  @returns {LedgerRun[]}
  */
 function readLedger(result: { out: string }): Array<LedgerRun> {
   /* SAFETY: 类型断言已复核 */
@@ -81,15 +60,9 @@ function readLedger(result: { out: string }): Array<LedgerRun> {
 }
 
 /**
- * 读一条记录（用例几乎都只看「最近那条」）。
- *
- * 这里**显式判空并抛**，而不是 `runs[0]!`：本仓禁用非空断言
- * （`check-non-null-assertions.cjs`，硬闸），而 `runs[0].totalMs` 在
- * `noUncheckedIndexedAccess` 下是 `Object is possibly 'undefined'`。
- * 判空之后抛一句「账本是空的」比一个 `!` 有用：真的空掉时读得懂是哪一步错了。
- *
- * @param {{out: string}} result
- * @returns {LedgerRun}
+ * 读一条记录（用例几乎都只看「最近那条」）。显式判空并抛而不是 `runs[0]!`：本仓禁用非空断言（`check-non-null-assertions.cjs`），
+ * 且 `noUncheckedIndexedAccess` 下它是 possibly undefined；抛「账本是空的」比一个 `!` 有用，真空掉时读得懂哪一步错了。
+ * @param {{out: string}} result  @returns {LedgerRun}
  */
 function firstRun(result: { out: string }): LedgerRun {
   const [run] = readLedger(result);
@@ -297,14 +270,9 @@ describe("pre-commit 耗时账：钩子的接线", () => {
   });
 
   it("失败那一条自己也进账（`set -e` 不许在 printf 之前把组截掉）", () => {
-    /* 立案现场：本轮第一次拿这份账当证据时，一份坏 changelog 碎片的红里只有它**前面**三步
-     * 的读数 —— `timed_step` 里裸跑 `"$@"`，`set -e` 在那一行就把整个组截断了，下面的
-     * printf 根本没执行。于是「哪一步把我拦下了」这个账本唯一要回答的问题，正好落在缺失的
-     * 那一行上，而组的墙钟与步之和也对不上（差的就是那一条）。
-     * 修法是把命令放进 `||` 的右侧：那里不触发 `set -e`，退出码照旧由 `return` 带出去
-     * ⇒ **阻断语义一字未变**，只是失败那一条也留下读数。
-     * 这里判源码形态而不是真起一次 sh：起 sh 要依赖 `sh` 在 PATH 上（CI 的 PowerShell
-     * stage 不保证），而「拿环境早退换一条会绿的用例」正是 §11.17 明令禁止的那种绿。 */
+    /* 立案现场：一份坏 changelog 碎片的红里只有它**前面**三步的读数 —— `timed_step` 裸跑 `"$@"`，`set -e` 当场截断组，
+     * 下面 printf 没执行；「哪一步把我拦下了」正好落在缺失那行，组墙钟与步之和也对不上。修法是把命令放进 `||` 右侧
+     * （不触发 `set -e`，退出码由 `return` 带出，阻断语义未变）。判源码形态而非真起 sh：CI 的 PowerShell stage 不保证有 sh。 */
     const timing = readFileSync(TIMING_SH, "utf8");
     expect(
       timing.includes('"$@" || _ts_rc=$?'),
@@ -353,14 +321,9 @@ describe("pre-commit 耗时账：钩子的接线", () => {
 });
 
 /**
- * 一份最小可用的 vitest junit 输出。
- *
- * 形状按实测写：外层 `<testsuites name="vitest tests">` 是**汇总**（它的 `time` 是各
- * suite 之和，不是墙钟、更不是某个文件），每个文件是一个内层
- * `<testsuite name="tests/x.test.ts" time="0.33">`。判据若只喂「一个 testsuite」的简化
- * 形状，就正好漏掉这条坑：把汇总当成一个文件，读数凭空多一份。
- *
- * @param {[string, number][]} rows `[文件, 秒]`
+ * 一份最小可用的 vitest junit 输出。外层 `<testsuites name="vitest tests">` 是**汇总**（`time` 是各 suite 之和，
+ * 不是墙钟也不是某个文件），每个文件才是内层 `<testsuite name="tests/x.test.ts">`；只喂单个 testsuite 的形状
+ * 会把汇总当成一个文件、读数凭空多一份。@param {[string, number][]} rows `[文件, 秒]`
  */
 function junitXml(rows: Array<[string, number]>) {
   const suites = rows
@@ -381,7 +344,6 @@ function junitXml(rows: Array<[string, number]>) {
 
 /**
  * 落一个「组 C 读数」目录：清单（分母）+ 每块每遍各一个 XML。
- *
  * @param {string[]} files 这次要跑的清单
  * @param {Record<string, [string, number][]>} xmls 文件名 → 该文件里的 suite
  */

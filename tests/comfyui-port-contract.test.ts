@@ -1,30 +1,7 @@
 /**
- * ComfyUI 端口口径一致性（ISSUE #534 P1）
- * ===========================================================================
- *
- * 「同一个事实有多份实现」是本仓库反复出事故的模式（因此有了端口向量一致性、
- * 主题色棘轮、端点收口等门禁）。ComfyUI 的**默认端口**此前正是这样一处：
- *
- *   · 连接侧 `resolveComfyBase()` 把 `comfyuiPort: 0` 判为「未配置」→ 用 8188
- *     作为探测起点，而 8188 是**硬编码**在 client.ts 里的；
- *   · 拉起侧 `resolveEffectiveLaunch()` / `buildSpawnArgs()` 也把 `0` 当
- *     「未配置」→ 不传 `--port`，ComfyUI 用它自己的默认端口启动；
- *   · 另外还有第三、第四份：`lib/core/config.ts` 的 schema 默认值写了
- *     `http://127.0.0.1:8188`，错误提示文案里也各写了一遍。
- *
- * 四处都写 8188，看着「一致」，但**没有一条断言**把它们绑在一起：任何一处单独
- * 改动（改常量、改硬编码、改 schema 默认值）都不会有测试变红，只会在真机上
- * 表现成「探到了、但不是你要的那个实例」——随后报出的是上传失败 / 端口漂移
- * 这类**现象**，根因被埋掉（规范 §5 最忌讳的那类故障）。
- *
- * 本文件补上这层断言：
- *   ① 默认端口单点定义，连接侧 / 拉起侧共用同一常量（不各写一份数字）；
- *   ② 「配置端口为空」在两侧都落到同一个默认端口；
- *   ③ `buildSpawnArgs` 的口径：只在有效端口 ≠ 默认端口时才补 `--port`；
- *   ④ `config.ts` 的 ComfyUI 兜底地址由端点模块拼出，不再写裸地址。
- *
- * 脚本版（不装依赖也能跑）见 `scripts/check-comfyui-port-contract.cjs`，
- * 已接入 pre-commit 与 CI。
+ * ComfyUI 端口口径一致性（ISSUE #534 P1）。「同一事实多份实现」是反复出事故的模式：8188 原散在 `resolveComfyBase()` 硬编码、
+ * `resolveEffectiveLaunch()`/`buildSpawnArgs()` 的「0 = 未配置」、`config.ts` schema 默认值与错误文案四处，改一处都不变红，只在真机
+ * 表现成「探到了但不是你要的实例」。补断言：① 单点定义两侧共用；② 空配置同默认端口；③ 仅有效端口 ≠ 默认才补 `--port`；④ config 兜底由端点模块拼出。脚本版 `check-comfyui-port-contract.cjs` 已接 pre-commit 与 CI。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";

@@ -1,20 +1,7 @@
 /**
- * 分发产物卫生护栏（ISSUE #489）
- * ===========================================================================
- *
- * 背景：`next build` 会把仓库根的 `.env` 与 `db.sqlite` 一起复制进
- * `.next/standalone` —— 前者是 Next standalone 的环境加载行为（实测
- * `outputFileTracingExcludes` 写 `./.env` 也删不掉），后者是动态路径 tracing。
- * 两者随 `scripts/build-desktop.mjs` 组装的 `src-tauri/static` 被**编译期内嵌
- * 进 exe**，后果不是「多带了个文件」：
- *   1) `.env` 里的 `BETTER_AUTH_SECRET` / OAuth client secret 明文随包分发；
- *   2) 壳以 `current_dir(res_dir)` 启动 sidecar，而 `resolveDbPath` 按
- *      `process.cwd()` 解析 `db.sqlite` —— 被带进包的开发库就是应用首次启动时
- *      读写的那个库，开发者本机数据变成出厂数据。
- *
- * CI 不跑 `build-desktop`（也不该跑），所以这条口子只能靠「清单 + 产物层检查」
- * 两道守：本用例锁清单还在（改坏了先红），`check-standalone-contents.cjs`
- * 在构建后真去数文件（清单还在 ≠ 清单生效）。
+ * 分发产物卫生护栏（ISSUE #489）：`next build` 会把 `.env` 与 `db.sqlite` 复制进 `.next/standalone`
+ * （前者是 Next standalone 的环境加载行为，`outputFileTracingExcludes` 删不掉），再随 `src-tauri/static`
+ * 编译期内嵌进 exe —— secret 明文分发、开发库变成出厂数据；CI 不跑 `build-desktop`，只能靠「清单 + 产物层检查」两道守。
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -65,13 +52,9 @@ function allowedScriptsFromChecker(source: string): Array<string> {
 }
 
 /**
- * 收集某个模块的**相对 import 闭包**（只跟 `scripts/` 下的 `.mjs`，返回相对 `scripts/` 的路径）。
- *
- * 判据为什么是源码解析而不是 `import()` 真加载：真加载会执行编排器的顶层代码
- * （它会跑预检、写会话锚点），那份代价与风险不该由一条清单判据承担 —— 这里要回答的
- * 只是「产物里重编排时会不会缺件」，静态说明符出现即成立（ESM 加载期解析整张图）。
- * 行注释必须先剥掉：JSDoc 里的 `import("../lockfile/lock-diff.d.mts")` 是类型引用，
- * 不是运行期依赖（登记它反而违背「运行时真的会读」这条判据）。
+ * 收集某模块的相对 import 闭包（只跟 `scripts/` 下的 `.mjs`，返回相对 `scripts/` 的路径）。为什么要源码
+ * 解析而非 `import()`：真加载会执行编排器顶层（预检、写会话锚点）；这里只问「重编排会不会缺件」，静态
+ * 说明符出现即成立（ESM 加载期解析整张图）。行注释须先剥掉：JSDoc 的 `import("../lockfile/lock-diff.d.mts")` 是类型引用。
  */
 function collectRelativeClosure(entry: string): Array<string> {
   const scriptsRoot = join(process.cwd(), "scripts");
@@ -264,14 +247,9 @@ describe("开发期文件与内部门禁脚本的白名单剔除", () => {
 });
 
 /**
- * `check-standalone-contents.cjs` 的导出面（**真 require**，不是解析源码文本）。
- *
- * 为什么 require 而不是正则扫源码：那份清单里的条目会被 prettier 折行（实测
- * `["开发期配置", …]` 就是被折的那条），按文本取要么随格式无谓变红、要么把
- * `[^/]` 这种「字符类里的斜杠」切成半条正则（本文件前一版就是这么炸的：
- * `Invalid regular expression: Unterminated character class`）。require 拿到的是
- * **RegExp 对象本身**与**真函数**，比对与调用才作数。
- * 该脚本在 `require.main !== module` 时不会 `process.exit`（见文件尾的守卫）。
+ * `check-standalone-contents.cjs` 的导出面（**真 require**，不是解析源码文本）：清单条目会被 prettier
+ * 折行，按文本取要么随格式无谓变红、要么把 `[^/]` 这种字符类里的斜杠切成半条正则（前一版就是
+ * `Unterminated character class` 炸的）。require 拿到 **RegExp 对象本身**与**真函数**；脚本在 `require.main !== module` 时不 exit。
  */
 type CheckerExports = {
   ALLOWED_SRC_FILES: Array<string>;
@@ -320,22 +298,18 @@ describe("check-standalone-contents：scripts/ 白名单与运行时缺件", () 
   });
 
   /**
-   * 两份清单是同一件事的两个视角：剔除侧决定「产物里留什么」，检查侧决定
-   * 「产物里出现什么算违规」。漂移的两种表现都很难查：剔除侧漏了 → 产物缺件、
-   * 重编排起不来（表现只是「双击没反应」）；检查侧漏了 → 构建后检查把合法产物
-   * 判成违规，而剔除明明保留了它。
+   * 两份清单是同一件事的两个视角：剔除侧决定「留什么」，检查侧决定「什么算违规」。漂移两头都难查 ——
+   * 剔除侧漏了：产物缺件、重编排起不来（表现只是「双击没反应」）；检查侧漏了：构建后检查把剔除侧
+   * 明明保留的合法产物判成违规。
    */
   it("两份白名单集合相同（漏在一处 = 剔除与检查互相打架）", () => {
     expect(new Set(allowedScriptsFromChecker(checker))).toEqual(new Set(RUNTIME_SCRIPTS));
   });
 
   /**
-   * `src/` 逐文件白名单两侧同源（ISSUE #2567）：剔除侧 `RUNTIME_SRC`
-   * （standalone-private-inputs.mjs）决定产物里留哪些 `src/` 叶子，检查侧
-   * `ALLOWED_SRC_FILES`（check-standalone-contents.cjs）决定产物里出现哪些
-   * 算违规。两侧必须逐字相等，否则新增跨宿主链节点会静默漏登一侧 ——
-   * PR #2565 的 `pnpm-js-entry.ts` 就双侧都漏了，只因那一笔整体回滚才没出事故。
-   * 退化防护：任一侧自己空掉时下面「相等」会静默变成「什么都没核对」。
+   * `src/` 逐文件白名单两侧同源（ISSUE #2567）：剔除侧 `RUNTIME_SRC`（standalone-private-inputs.mjs）
+   * 与检查侧 `ALLOWED_SRC_FILES`（check-standalone-contents.cjs）必须逐字相等，否则新增跨宿主链节点会静默
+   * 漏登一侧（PR #2565 的 `pnpm-js-entry.ts` 双侧都漏，只因整体回滚才没出事故）。任一侧空掉时「相等」变「没核对」。
    */
   it("src 逐文件白名单两侧同源（RUNTIME_SRC ↔ ALLOWED_SRC_FILES）", () => {
     const { ALLOWED_SRC_FILES } = checkerExports();
@@ -344,10 +318,9 @@ describe("check-standalone-contents：scripts/ 白名单与运行时缺件", () 
   });
 
   /**
-   * 清单的判据是**编排器的相对 import 闭包**，不是「看着像运行时的都写上」：
-   * `dev-launcher.mjs` 顶层是静态 import，ESM 加载期解析整张图 —— 少一份不是
-   * 「那一步跳过」，而是整个编排器起不来。此前 `env-preflight` / `corepack` /
-   * `splash-assets` / `lockfile/*` 就是这样漏在清单外的（登记靠人记，必漏）。
+   * 清单的判据是**编排器的相对 import 闭包**，不是「看着像运行时的都写上」：`dev-launcher.mjs` 顶层
+   * 静态 import，ESM 加载期解析整张图 —— 少一份不是「那步跳过」，而是整个编排器起不来。
+   * `env-preflight` / `corepack` / `splash-assets` / `lockfile/*` 当年就是这样漏在清单外的（靠人记，必漏）。
    */
   it("清单覆盖编排器的相对 import 闭包（新增内部分件漏登记即失败）", () => {
     const closure = collectRelativeClosure(join(process.cwd(), "scripts", "dev-launcher.mjs"));
@@ -384,11 +357,9 @@ describe("check-standalone-contents：scripts/ 白名单与运行时缺件", () 
 });
 
 /* ── 形状级剔除：测试文件 / 变更碎片 / 依赖包自带的文档 ────────────────────
- *
- * 为什么按目录名删（DEV_ARTIFACTS）不够：这三类有一大块不在产物根，而是藏在
- * `build-desktop` 解引用之后的依赖包里 —— 实测 `src-tauri/static` 里有 472 个
- * `node_modules/<pkg>/docs/` 下的 .md、24 个 `src/` 下的 .test.tsx，都不是「某个根目录」。
- * 而 `outputFileTracingExcludes` 里同形状的条目写了也不减（规范 §7.2）。
+ * 按目录名删（DEV_ARTIFACTS）不够：这三类大块藏在 `build-desktop` 解引用后的依赖包里 —— 实测
+ * `src-tauri/static` 有 472 个 `node_modules/<pkg>/docs/*.md`、24 个 `src/*.test.tsx`，都不在某个根目录下；
+ * 而 `outputFileTracingExcludes` 里同形状条目写了也不减（规范 §7.2）。
  */
 
 describe("产物层的形状级剔除（stripForbiddenShapes）", () => {
@@ -461,10 +432,9 @@ describe("产物层的形状级剔除（stripForbiddenShapes）", () => {
   });
 
   /**
-   * 这条是**安全**判据，不是清洁度判据：`.next/standalone/node_modules/<pkg>` 实测是
-   * 指向本仓库 `node_modules/.pnpm/...` 的链接，顺着链接删会把开发机的依赖删掉
-   * （4.3M 的 `next/dist/docs` 在产物清单里出现就是这么来的 —— 那是开发机的文件，
-   * 不是产物的）。剔除侧必须按 `lstat` 停住，产物探针同理。
+   * 这条是**安全**判据，不是清洁度判据：`.next/standalone/node_modules/<pkg>` 实测是指向本仓库
+   * `node_modules/.pnpm/...` 的链接，顺着删会把开发机的依赖删掉（4.3M `next/dist/docs` 就是这么来的）。
+   * 剔除侧必须按 `lstat` 停住，产物探针同理。
    */
   it("绝不穿符号链接删：链接背后的开发机 store 内容不受影响", () => {
     const store = mkdtempSync(join(tmpdir(), "comfyapp-store-"));
@@ -529,11 +499,9 @@ describe("产物层的形状级剔除（stripForbiddenShapes）", () => {
 });
 
 /* ── 「必须有的」反向检查：两层产物都要数（规范 §7.4）─────────────────────
- *
- * 此前这段只在 `label === "standalone"` 时跑，而最终被编译期内嵌进 exe 的是
- * `build-desktop` 组装后的 `src-tauri/static` —— 整树 `dereference: true` 拷贝与白名单
- * 剪枝全发生在 standalone 那一次检查**之后**。缺 `app-route-turbo` 在 exe 里的表现与在
- * 构建目录里一模一样（页面正常、接口全 500），所以「构建期过了」推不出「出厂件也在」。
+ * 此前这段只在 `label === "standalone"` 时跑，而真正被内嵌进 exe 的是 `build-desktop` 组装后的
+ * `src-tauri/static` —— 整树 `dereference: true` 拷贝与白名单剪枝都发生在 standalone 检查**之后**。
+ * 缺 `app-route-turbo` 在 exe 与在构建目录里表现相同（页面正常、接口全 500），「构建期过了」推不出「出厂件也在」。
  */
 describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
   const NAMES: [string, string, string] = [
@@ -543,12 +511,9 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
   ];
 
   /**
-   * 造一份「确实是个产物」的最小目录：有 `server.js`，运行时脚本按传入子集铺。
-   *
-   * 宿主那三件与桌包载荷那三件也一并铺齐 —— `checkDir` 里那条 `missingHost` 与
-   * `missingPayload` 同样以「有 server.js」为前提，不铺齐的话本用例报出来的红就不是
-   * 我们要验的那一条（变量必须只有一个）。它们各自的内容与「同形」由
-   * `tests/standalone-runtime.test.ts` 与 `tests/executor-host-artifact.test.ts` 守。
+   * 造一份「确实是个产物」的最小目录：有 `server.js`，运行时脚本按传入子集铺。宿主三件与桌包载荷三件
+   * 也铺齐 —— `checkDir` 的 `missingHost` / `missingPayload` 同样以「有 server.js」为前提，不铺齐则本用例的红
+   * 不是我们要验的那一条（变量必须只有一个）。其内容与「同形」由 `standalone-runtime` / `executor-host-artifact` 测试守。
    */
   function makeProduct(dir: string, present: Array<string>): void {
     const mod = checkerExports();
@@ -580,11 +545,9 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
   });
 
   /**
-   * 这条是**本次修复的本体**：同一份缺件目录，label 传 `"static"` 也必须报。
-   *
-   * 判据落在行为上（真调用 `checkDir` 并捕输出），而不是「源码里还有没有那个
-   * `if (label === …)`」—— 结构断言在别人换一种写法时会无谓变红，或反过来在检查
-   * 真的被删掉时变成无谓的绿。
+   * 这条是**本次修复的本体**：同一份缺件目录，label 传 `"static"` 也必须报。判据落在行为上
+   * （真调用 `checkDir` 并捕输出），而不是源码里还有没有那个 `if (label === …)` —— 结构断言会在换写法时
+   * 无谓变红，也会在检查真被删掉时变成无谓的绿。
    */
   it("static（真正被内嵌进 exe 的那一层）也报缺件", () => {
     const dir = mkdtempSync(join(tmpdir(), "comfyapp-static-req-"));
@@ -618,13 +581,9 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
   });
 
   /**
-   * 投毒验收（台账 R5-01 / ISSUE #1953）的**可执行形态**：往装配后的 static 里
-   * 放一个 `db.sqlite`，判据必须点名。2026-10 现场复现过的那两条是「顶层白名单外
-   * 条目」+「开发库文件」一起响 —— 少任何一条，这个形状就从缝里漏出去。
-   *
-   * 它与出厂链路上那次真敲（`build-desktop.mjs` 装配后同批调用）的分工：这条锁
-   * 「判据认得出投毒」，接线由下面那条形态用例锁；两者合起来才等于「装配之后
-   * 确实数过一次」—— 单有前者不证明链路敲了它，单有后者不证明判据有牙。
+   * 投毒验收（台账 R5-01 / ISSUE #1953）的**可执行形态**：装配后的 static 里放一个 `db.sqlite`，判据必须点名
+   * （2026-10 现场是「顶层白名单外条目」+「开发库文件」一起响）。与出厂链路上那次真敲的分工：这条锁
+   * 「判据认得出投毒」，接线由下面那条形态用例锁；两者合起来才等于「装配之后确实数过一次」。
    */
   it("往 static 里放一个 db.sqlite → 两条违规一起点名（投毒验收）", () => {
     const dir = mkdtempSync(join(tmpdir(), "comfyapp-static-poison-"));
@@ -655,18 +614,9 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
   });
 
   /**
-   * 「不是装配产物就别当装配产物数」（ISSUE #2629）—— 两侧同批钉。
-   *
-   * 现场不是理论：`scripts/shell-gate.mjs` 为了满足 `cargo test` 的编译前提，
-   * 在 `src-tauri/static/` 里写过一枚 `.cargo-test-placeholder`，于是**本机跑过一次壳的
-   * cargo test 之后，`pnpm build` 恒红在产物层**（报的就是「顶层出现白名单外的条目」，
-   * 读起来像谁把脏文件塞进了出厂件）。而这一格在平台档上从不出现 —— CI 不跑
-   * pre-commit、工作区每次被整棵删掉，所以「每日/PR 都是绿的」替不了它。
-   *
-   * 上面那半件（不再往那层写文件）由 `tests/shell-gate.test.ts` 钉；这一条钉的是
-   * **判据自己的边界**：那三条「缺件」检查早就只认「装配过的层」（`server.js` 在场），
-   * 只有顶层白名单这一条漏了这道门 —— 于是它把「从来没装配过」的目录当成出厂件数。
-   * 两侧都要：只钉「不判」会掩盖「装配过的层照样要红」那一半。
+   * 「不是装配产物就别当装配产物数」（ISSUE #2629）：`shell-gate.mjs` 为 `cargo test` 编译前提在
+   * `src-tauri/static/` 写过 `.cargo-test-placeholder`，本机跑过壳 cargo test 后 `pnpm build` 恒红在产物层；
+   * 平台每次整棵删工作区、不跑 pre-commit 替不了它；边界：缺件检查早只认装配层（`server.js` 在场），唯顶层白名单漏了此门。
    */
   it("未装配的 static 层不判顶层，但念出「这一格不判」；补上 server.js 照样红", () => {
     const dir = mkdtempSync(join(tmpdir(), "comfyapp-static-unassembled-"));
@@ -701,10 +651,9 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
   });
 
   /**
-   * 接线的形态判据（R5-01 的另一半）：判据在 `.next/standalone` 层早有执行者
-   * （`pnpm build` 收尾那一步），而 `src-tauri/static` 此前只有「人手工跑一次
-   * 自查入口」—— 出厂链路上没有执行者。这条锁三件事：真的敲了、敲的就是数
-   * static 那一份、且排在 sidecar 之前（排在 `tauri build` 之后等于从来不检查）。
+   * 接线的形态判据（R5-01 的另一半）：`.next/standalone` 层早有执行者（`pnpm build` 收尾），而
+   * `src-tauri/static` 此前只有「人手工跑一次自查入口」，出厂链路无执行者。锁三件事：真的敲了、
+   * 敲的是数 static 那一份、且排在 sidecar 之前（排在 `tauri build` 之后等于不检查）。
    */
   it("出厂链路在装配后同批敲数产物判据，且排在 sidecar 之前", () => {
     const check = buildDesktop.indexOf("check-standalone-contents.cjs");
@@ -715,10 +664,9 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
   });
 
   /**
-   * 两个口径的分工也得钉住，否则下次有人「统一成一份清单」就会一边假红一边假绿：
-   * standalone 的 `node_modules/next` 是指向 pnpm store 的**链接**，
-   * 「必须有的」按可达判（经链接 require 得到就算在位），
-   * 「不该有的」按真文件判（不穿链接，否则把开发机内容算成产物内容）。
+   * 两个口径的分工也得钉住，否则下次有人「统一成一份清单」就会一边假红一边假绿：standalone 的
+   * `node_modules/next` 是指向 pnpm store 的**链接** ——「必须有的」按可达判（经链接 require 得到即算在位），
+   * 「不该有的」按真文件判（不穿链接，否则把开发机内容算成产物）。
    */
   it("判「必须有的」穿链接可达即算在位，判「不该有的」不穿", () => {
     const store = mkdtempSync(join(tmpdir(), "comfyapp-store-rt-"));
@@ -754,16 +702,10 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
 });
 
 /* ── 顶层默认拒绝（ISSUE #1217）──────────────────────────────────────────
- * 判据方向与 FORBIDDEN 相反：那份是黑名单，每多一个被 tracing 带进来的目录就要有人
- * 记得补一条，**漏掉是静默的**。实测同一次构建走 Turbopack 时
- * `outputFileTracingExcludes` 对整目录条目一条都不减 —— 40 个顶层条目 / 19274 个真文件，
- * 里面躺着 `src-tauri` 8516 个、`python-venv` 5356 个、`db.sqlite`+WAL/SHM、`.env`，
- * 还有仓库根那个 `Comfy APP.lnk`；而**跑完当时那套按名字的剔除清单之后仍然剩 19 个顶层
- * 条目**（`log/` 100 份开发日志、`tests`、`e2e`、`tools`、`build-launcher`、`run`、`temp`、
- * 两份 `*.config.*`、那个 `.lnk` 全活着）。所以这一格改成「只允许运行时必需那几件」。
- *
- * 三条用例各钉一件事：两份清单逐字同源（漂移两头都白跑）、凭空多一个顶层条目必须红
- * （反向对照证明它不是恒红）、剔除侧真删得动。 */
+ * 与 FORBIDDEN 相反：黑名单每多一个被 tracing 带进来的目录就得有人补一条，**漏掉是静默的**。Turbopack 实测
+ * 一跑 `outputFileTracingExcludes` 对整目录条目一条都不减 —— 40 个顶层条目 / 19274 个文件里躺着 `src-tauri`(8516)、
+ * `python-venv`(5356)、`db.sqlite`+WAL/SHM、`.env`、根 `.lnk`，按名字剔除后仍剩 19 个 ⇒ 改成「只允许运行时必需那几件」。
+ */
 describe("产物顶层的默认拒绝（ISSUE #1217）", () => {
   it("检查侧与剔除侧的顶层清单逐字同源，且不是空清单", () => {
     const mod = checkerExports();

@@ -1,15 +1,7 @@
 /**
- * `scripts/worktree-remove.mjs` —— 收掉 linked worktree 时**先摘 `node_modules` 链接、
- * 确认链接本体没了，再让 git 注销登记**（ISSUE #2997）。
- *
- * 判的是什么：临时 worktree 的 `node_modules` 可以是 junction，也可以是 symlink
- * （MSYS `ln -s`）。同一条外部命令（`cmd /c rmdir`）对两者的结果不同 —— junction 摘得掉，
- * MSYS symlink 退 145 且链接仍在；收尾脚本常把退出码丢掉。留下的链接随后被
- * `git worktree remove --force` 顺着走进主检出，把依赖树删空。本入口用 Node 原语
- * 走同一条路径，两形结果必须一致。
- *
- * 每一条都在 `mkdtempSync` 的夹具里做（自带 repo + worktree），**不拿运行它的那份
- * 检出做实验**；主树的 `node_modules/.bin/next` 是哨兵，收尾后必须逐字还在。
+ * `scripts/worktree-remove.mjs` —— 收掉 linked worktree 时**先摘 `node_modules` 链接、确认链接本体没了，再让 git 注销登记**（ISSUE #2997）。
+ * 链接可能是 junction 或 symlink（MSYS `ln -s`）：同一条 `cmd /c rmdir` 摘得掉 junction，对 MSYS symlink 退 145 且链接仍在（收尾脚本常丢退出码），留下的链接被 `git worktree remove --force` 走进主检出删空依赖树；本入口用 Node 原语走同一路径，两形结果须一致。
+ * 每条都在 `mkdtempSync` 夹具（自带 repo + worktree）里做，不拿运行它的检出做实验；主树 `node_modules/.bin/next` 是哨兵，收尾后须逐字还在。
  */
 import { spawnSync } from "node:child_process";
 import {

@@ -1,25 +1,7 @@
 /**
- * `scripts/python-probe.mjs` 的判据（ISSUE #1961）。
- *
- * ## 它答的是「论据」，不是「结论」
- *
- * 缺 Python 时那几条用例按既有口径走 `env` 档**跳过并登记**（`tests/helpers/python-exe.ts`
- * 的 `hasPython()`）—— 也就是说它们**不会让任何门禁变红**，缺件在日志里是隐身的。
- * `--python-only` 只答「门禁要的那个解释器在不在」，答不了「另外几个命令在哪」，
- * 而后者恰好是下一动作的分岔所在：
- *
- *   · `python` 起不来、`py` 起得来 —— 两者都是「有解释器」（`py` 是官方启动器，
- *     判据是 `py -3 --version`；裸 `py` 是「列出已装版本」并退非零）；
- *   · 三个都起不来、盘上找得到安装根 —— 「装过、这个执行账号 PATH 里没有它」；
- *   · 三个都起不来、安装根零命中 —— 才是「这台机真没装」。
- *
- * 两种情形在 `CommandNotFoundException` 里**逐字同形**，处置却相反（改 PATH vs 去装）。
- *
- * ## 判据只钉住「它不许自己再写一份候选表」
- *
- * 这本文件最容易烂的地方不是输出格式，而是**它自己去探了另一份候选**——那正是
- * #1959 第二轮红过的形态（同一步里探的面与门禁探的不是同一份）。所以判据盯的是
- * 结构：它必须走 `ci-toolchain-python.mjs` 的 `findPython`。
+ * `scripts/python-probe.mjs` 的判据（ISSUE #1961）。缺 Python 时用例走 `env` 档跳过并登记（`hasPython()`），不让门禁变红，缺件在日志里隐身。
+ * `--python-only` 只答门禁解释器在不在，判不了另几个命令在哪：`python` 起不来而 `py` 起得来（`py -3 --version`）＝有；全起不来但盘上有安装根＝装了、PATH 无；全起不来且零命中＝真没装。
+ * 前两种报错逐字同形（`CommandNotFoundException`）、处置相反（改 PATH vs 去装）。判据只钉结构：走 `ci-toolchain-python.mjs` 的 `findPython`，不许自探候选（#1959）。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";

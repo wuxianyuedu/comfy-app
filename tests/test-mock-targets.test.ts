@@ -1,24 +1,7 @@
 /**
- * 「死 mock」门禁：`vi.mock("<路径>")` 的说明符必须解析到**真实存在的模块**
- * （现场：2026-09-23 用户反馈「ComfyUI 莫名退出」）。
- *
- * 现场链条：`src/lib/comfyui/lifecycle.test.ts` 里写的是
- * `vi.mock("../log-paths", { SERVICES_LOG_DIR: "/tmp" })`，而真实模块是
- * `src/lib/log/log-paths.ts` —— 从该测试文件出发，`"../log-paths"` 解析到
- * `src/lib/log-paths`，**不存在**。`vi.mock` 对解析不到的路径**不报错**（工厂被
- * 注册在一个无人 import 的路径上），于是 mock 静默失效、真实模块照用：夹具会话
- * （`cmd: "python", baseArgs: ["-s", "/x/main.py"]`）被写进仓库真实的
- * `log/services/comfyui-runtime.log` 与 `comfyui-last-session.json`，那条记录
- * 「有开始、没结束」→ 下一次真机启动报「上一次 ComfyUI 会话（pid=未知）开始于 …，
- * 却没有退出记录」，用户读成「ComfyUI 莫名退出」（而它根本没被拉起过）。
- *
- * 这类缺陷的共同点：**测试全绿**，只有真实环境（下一次启动）才露出来，且露出的
- * 位置（启动日志）与出错位置（某个单测的 mock 说明符）隔着一整个进程 —— 因此把
- * 判据落在源码形态上：**可解析的 `vi.mock` / `vi.doMock` 说明符必须命中一个真实
- * 文件**（含 `.ts` / `.tsx` / 目录 `index` 等入口）。
- *
- * 只查本仓库内的说明符：相对路径（`.` 起）与 `~/`（→ `src/`）。裸包名
- * （`node:fs` / `vitest` / `child_process`）与 CSS 等非本仓模块不归本门禁管。
+ * 「死 mock」门禁：`vi.mock`/`vi.doMock` 说明符必须解析到真实模块（现场：2026-09-23「ComfyUI 莫名退出」）。
+ * 解析失败时 `vi.mock` 不报错、工厂注册在无人 import 的路径 → 夹具写进真实 `log/services`，
+ * 测试全绿、下次启动才报「上次会话无退出记录」。只查本仓说明符：`.` 起相对路径与 `~/`（→ `src/`）。
  */
 import fs from "node:fs";
 import path from "node:path";

@@ -1,40 +1,7 @@
 /**
- * `.mjs` 入口经 Node ESM 直接加载 `src/**` 的那条路：**相对说明符必须带扩展名**。
- *
- * ## 立案现场（ISSUE #1959，平台侧第七跑）
- *
- * `E2E 关键流程` 那一步崩在 **897ms**，报的是「找不到模块」：
- *
- *     Error [ERR_MODULE_NOT_FOUND]: Cannot find module  ← 找不到那个模块
- *       '…/workspace/src/lib/process/executable-resolve'  ← 缺的正是它
- *       imported from …/src/lib/process/python-resolve.ts  ← 从它里面 import 的
- *
- * 起因是 `python-resolve.ts` / `python-candidates.ts` 里三条**无后缀**的相对 import
- * （`"./executable-resolve"` / `"./python-candidates"`）。而这两个模块正是被
- * `e2e/support/preflight-python.mjs` / `fake-comfyui-executor-env.mjs` **直接静态
- * import** 的（Node 24 的类型擦除）—— Node 的 ESM 解析器对相对说明符**不做扩展名
- * 猜测**，找不到就是找不到。
- *
- * ## 为什么它躲过了所有既有判据
- *
- * `tsc`（`moduleResolution: Bundler`）、`eslint`、**vitest**（Vite 解析）三处都认无
- * 后缀说明符 —— 于是：
- *
- *   · `tests/e2e-python-preflight.test.ts` 直接 import 那个 `.mjs`，**一直是绿的**；
- *   · `node scripts/e2e-run.mjs` 一跑就退 1，而它只在 `E2E 关键流程` 这个 stage 上跑。
- *
- * 也就是「用例绿、真实入口崩」—— 判据与被判的对象不是同一条解析链。这类形态没有
- * 第二条出路：**判据必须自己按 Node 的口径走一遍**，而不是复用打包器的解析。
- *
- * ## 判据做什么
- *
- * 从 `scripts/**` / `e2e/**` / `tools/**` 下的 `.mjs` / `.cjs` 入口出发，沿
- * **静态说明符**做闭包（含 `../`、`./`、以及它们指向的 `.ts`）；凡是「由 `.mjs`
- * 这条链上加载到的」`.ts` 模块，其**相对说明符**都必须显式带 `.ts` 后缀。
- *
- * 刻意**不**去 `import()` 真入口（那会执行它们的主流程：起 Playwright、装依赖……
- * 判据不该有副作用），走的是与 Node 同一套**解析规则**的静态复算 —— 上面那条崩溃
- * 信息里的路径逐字复现过。
+ * `.mjs` 入口经 Node ESM 直接加载 `src/**`：**相对说明符必须带扩展名**（ISSUE #1959 立案：E2E 关键流程在 897ms 崩 `ERR_MODULE_NOT_FOUND`）。
+ * 起因是 `python-resolve.ts` 等三处无后缀 import，而它们被 `e2e/support/*.mjs` 直接静态加载 —— Node ESM 不猜扩展名，而 tsc / eslint / vitest 都认，
+ * 于是「用例绿、真实入口崩」。判据按 Node 口径静态复算：从 `scripts`/`e2e`/`tools` 的 `.mjs`/`.cjs` 入口沿说明符闭包，凡该链加载到的 `.ts` 都须显式带 `.ts`；不 `import()` 真入口（有副作用）。
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
@@ -85,17 +52,8 @@ function listFiles(dir: string, out: Array<string> = []): Array<string> {
 }
 
 /**
- * 从入口目录出发，算「被 Node 直接加载到的」模块里那些**不带后缀的相对说明符**。
- *
- * 两步走：① 入口 = 三个目录下的 `.mjs` / `.cjs`（「Node 直接跑」的形态）；
- * ② 沿**每一个**相对说明符继续走 —— 不管它带不带后缀（不带后缀的照样要看：
- * Node 会当场停在那里，而**判据要继续走才能把整张图收全**；只在「重新戴上后缀
- * 解析得出来是真 `.ts`」时才记一笔违规）。
- *
- * ⚠️ 这里踩过一次：第一版对 `.mjs` 直接 `continue`（「只扫 `.ts`」），于是
- * **入口那一跳根本没走出去** —— 判据恒绿，而把原始 bug 放回去它也不红。
- * 反向复算（`sed` 摘掉三个 `.ts` 后缀，见本文件末尾那条自证）就是为它准备的。
- *
+ * 从入口目录出发，算「被 Node 直接加载到」的模块里**不带后缀的相对说明符**：入口是 `scripts`/`e2e`/`tools` 的 `.mjs`/`.cjs`，沿**每一个**
+ * 相对说明符继续走（不带后缀的也走：Node 当场停，但判据得收全图），仅在「补后缀能解出真 `.ts`」时记违规。⚠️ 第一版对 `.mjs` 直接 `continue` ⇒ 入口那一跳没走出去、判据恒绿（末尾反向复算为此准备）。
  * @returns 每条 `{ file, spec }` —— 一个文件里一个不带后缀、且真解析得到 `.ts` 的说明符。
  */
 export function extensionlessTsSpecifiers(root: string = ROOT): Array<{

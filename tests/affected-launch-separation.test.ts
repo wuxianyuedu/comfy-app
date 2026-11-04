@@ -1,12 +1,7 @@
 /**
- * `planSeparatedLaunches` / `resolveAffectedSegment` 与 `runChunk` 透传 `filterLine` 的判据。
- *
- * 这条分离是为了把「固定清单（含最吵的 a11y 故事测试）」与「受影响用例」分到不同的 vitest
- * 启动里，让噪音被收进固定清单那一段、且两块各有独立抬头（见 `run-affected-tests.mjs` 文件头）。
- * 判据守住两条：① 分离后**不丢不重**（并集逐字等于输入）；② 两遍 spawn 都把 `filterLine`
- * 透传下去（本地不设 `COMFY_AFFECTED_NOISE_FILTER` 时第三参数为空，与改动前逐字一致）。
- * 段开关（ISSUE #2845）把两段升级成两个 CI stage：`resolveAffectedSegment` 那一组钉它的
- * 取值面 —— 不设=both（逐字旧行为）、认不出=invalid（不许静默吞成 both）。
+ * `planSeparatedLaunches` / `resolveAffectedSegment` 与 `runChunk` 透传 `filterLine` 的判据：固定清单（含最吵的 a11y 故事测试）与受影响用例分开启动，
+ * 噪音收进固定清单那段（见 `run-affected-tests.mjs` 头注）。守住两条：① 分离后**不丢不重**（并集逐字等于输入）；② 两遍 spawn 都透传 `filterLine`。
+ * 段开关（ISSUE #2845）钉 `resolveAffectedSegment` 的取值面：不设=both（逐字旧行为）、认不出=invalid（不许静默吞成 both）。
  */
 import fs, { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -140,12 +135,9 @@ describe("耗时台账排序（ISSUE #2863 的 ③：重块排前）", () => {
   });
 });
 
-/* 量纲那一格（ISSUE #3030）。这组钉的不是数值，是**两个量纲不同的数不许直接比较**
- * 这条 —— 而它的失效形态是静默的：排序照旧在跑，只是把便宜的文件供到了前面。
- *
- * 现场读数（同一批文件、同一台机）：`tests/check-commit-claims.test.ts` 批跑入账 169.1s、
- * 隔离单跑 1.8s；`tests/gate-executors.test.ts` 48.1s / 2.7s。前者在整段里排第三，
- * 实测它是最便宜的一份 —— 判据反了。 */
+/* 量纲那一格（ISSUE #3030）：钉的不是数值，是「两个量纲不同的数不许直接比较」—— 失效形态是静默的，
+ * 排序照旧在跑，只是把便宜的文件供到了前面。现场读数（同一批文件、同一台机）：`tests/check-commit-claims.test.ts`
+ * 批跑 169.1s / 隔离 1.8s，`tests/gate-executors.test.ts` 48.1s / 2.7s —— 前者整段排第三，实测却最便宜，判据反了。 */
 describe("耗时台账的量纲：批跑墙钟当不了单份成本（ISSUE #3030）", () => {
   it("`isolated` 给实测档位，`batch` 落在**比任何实测都低**的那一档", () => {
     expect(sortTier({ ms: 1800, source: "isolated" })).toBe(1800);

@@ -1,20 +1,7 @@
 /**
- * 提交门槛自检：格式化提交必须与行为改动分离（ISSUE #575 第 9 项 / 规范 §13.5）。
- *
- * 这条门禁的判据是「把改动前的**整份文件**交给 oxfmt 重排，看是否逐字等于
- * 改动后」—— 踩过两个坑，用例把两坑都钉住：
- *   ① 判据若用「抹掉空白后逐行比对」，格式化器的**重新断行**与 Tailwind 类名重排
- *      （prettier 时代靠 `prettier-plugin-tailwindcss`，oxfmt 内置）都看不见（实测漏报）；
- *   ② 若把 `git diff` 的 **hunk 片段**单独交给格式化器，会 `SyntaxError`
- *      （片段不是完整的语法单元）—— 那样每个文件都「无法判定」，门禁静默失效。
- * 所以这里必须真跑 git + oxfmt（临时仓库 + 真提交），不能靠桩。
- *
- * 临时仓库走共享夹具 `defineGateRepo`（§11.16.1）—— 手搓的那套四件套收在一处。
- * 本文件的形状比多数门禁自测重：既要 `git init` + 真提交，又要把仓库的
- * `node_modules` 软链进工作区（脚本按「向上找 node_modules」解析 oxfmt）。
- * 两项都通过夹具的 `setup` / `copy` 选项声明，不回到「自己 beforeEach 里搭」。
- *
- * 规范：docs/standards/13-提交与-code-review.md §13.5
+ * 提交门槛自检（ISSUE #575 / §13.5）：格式化提交必须与行为改动分离。判据是「整份文件交给 oxfmt 重排，
+ * 看是否逐字等于改动后」—— 抹空白后逐行比对看不见重新断行与 Tailwind 重排，单独喂 `git diff` 的 hunk
+ * 片段会 `SyntaxError`（整份文件都「无法判定」），故必须真跑 git + oxfmt（临时仓库 + 真提交，夹具 `defineGateRepo`）。
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -62,12 +49,9 @@ const { perCommitShapeOf } = require("../scripts/check-reformat-only.cjs") as {
 vi.setConfig({ testTimeout: 300_000, hookTimeout: 300_000 });
 
 /**
- * oxfmt 的 **JS 入口**（不是 `node_modules/.bin/oxfmt`）。
- *
- * `.bin/` 下那个是启动 shell 包装（Windows 上是 .cmd），`node <它>` 会
- * `SyntaxError: Invalid or unexpected token`；而临时目录里没有 node_modules，
- * 也不能直接执行它。走 `require.resolve` 拿真实包根再拼 `bin/oxfmt`（`bin/oxfmt`
- * 本身不在包的 `exports` 里，直接 resolve 会被挡），`node <它>` 才成立。
+ * oxfmt 的 **JS 入口**（不是 `.bin/oxfmt`）：`.bin/` 下是 shell 包装（Windows 上是 .cmd），
+ * `node <它>` 会 `SyntaxError`。故走 `require.resolve("oxfmt/package.json")` 拿真实包根再拼
+ * `bin/oxfmt`（`bin/oxfmt` 不在包的 `exports` 里，直接 resolve 会被挡）。
  */
 const OXFMT_PKG_DIR = dirname(require.resolve("oxfmt/package.json"));
 const OXFMT_ENTRY = join(OXFMT_PKG_DIR, "bin", "oxfmt");
@@ -86,20 +70,9 @@ afterEach(() => {
 });
 
 /**
- * 夹具：`scripts/` 下放被测判据脚本，工作区里备好它跑起来真正依赖的那几样。
- *
- * `copy` 的两项都是「不带就 exit 2」的硬依赖（缺了的表现是「门禁坏了」，
- * 实际是夹具少一块）：
- *   · `scripts/launcher-core/` —— 格式化器形态判据模块按**相对脚本的路径**动态
- *     `import()`（`launcher-core/shell.mjs`），缺了脚本以 exit 2 结束；
- *     递归拷整个目录而不是软链单文件（`shell.mjs` 还依赖同目录的 `command-echo.mjs`，
- *     且 Windows 下 `fs.symlink(文件)` 普通用户 100% EPERM）。
- *   · `src/lib/process/executable-resolve.ts` 与它自己的依赖
- *     `src/lib/process/platform.ts` —— `shell.mjs` 静态 import 前者
- *     （ISSUE #1327），而前者又 import 后者：**链上的每一份都要在**
- *     （只抄第一份等于把「链」抄成「一个点」，漏的那一份同样让临时仓库里的
- *     `shell.mjs` 在**加载阶段**就 `ERR_MODULE_NOT_FOUND` —— 实测踩过，见
- *     ISSUE #1961）。
+ * 夹具：`scripts/` 下放被测脚本并备齐运行时硬依赖 —— `copy` 两项不带就 exit 2（缺了表现成「门禁坏了」）；
+ * `launcher-core/` 按相对路径 `import()`，故递归拷整个目录（Windows `fs.symlink(文件)` 100% EPERM）；
+ * `executable-resolve.ts` 与其 import 的 `platform.ts` 必须整条链都在，否则加载即 `ERR_MODULE_NOT_FOUND`（#1327/#1961）。
  */
 const { test, expect } = defineGateRepo({
   script: "check-reformat-only.cjs",
@@ -165,10 +138,8 @@ const { test, expect } = defineGateRepo({
 });
 
 /**
- * 工作区 HEAD 的提交哈希 —— 造 `MERGE_HEAD` 那档要一个**真实存在**的提交。
- *
- * 夹具的 `repo.git()` 只转 `stdio: "ignore"`（它服务的是「造状态」而不是「读数」），
- * 所以读数要自己起一次 git 把 stdout 拿回来。
+ * 工作区 HEAD 的提交哈希 —— 造 `MERGE_HEAD` 那档要一个**真实存在**的提交。夹具的 `repo.git()`
+ * 只转 `stdio: "ignore"`（服务「造状态」而非「读数」），故读数要自己起一次 git 拿 stdout。
  */
 function headSha(repo: GateRepo): string {
   return execFileSync("git", ["rev-parse", "HEAD"], {
@@ -178,11 +149,8 @@ function headSha(repo: GateRepo): string {
 }
 
 /**
- * 提交当前工作区的全部改动。
- *
- * 夹具的 `repo.commit()` 只做 commit（`git add` 留给调用点显式写 —— 分支守卫那
- * 一族要的是「精确暂存某几个文件」）。本文件的语义是「把这一批文件整体提交成基线」，
- * 所以每次都先 `add -A`：写在一处，避免十几条用例各抄一遍 add。
+ * 提交当前工作区的全部改动：`repo.commit()` 只做 commit（`git add` 留给调用点显式写，
+ * 分支守卫那族要「精确暂存某几个文件」），故这里统一先 `add -A`，避免十几条用例各抄一遍。
  */
 function commitAll(repo: GateRepo, message: string): void {
   repo.git("add", "-A");
@@ -196,11 +164,8 @@ function commitAllReturningSha(repo: GateRepo, message: string): string {
 }
 
 /**
- * 在临时仓库里对文件跑 oxfmt —— 用**仓库真实那一版**格式化器。
- *
- * 夹具造出来的「改动后」这一侧必须是**格式化器真的给出的形态**：手写一份（prettier
- * 时代就是这么写的）在换格式化器之后会变成「手写的那一份」，判据与夹具各说一套，
- * 而用例还全绿 —— 那是最难看的一类失效。所以夹具与判据走**同一个入口**。
+ * 在临时仓库里对文件跑 oxfmt —— 用**仓库真实那一版**格式化器：夹具造的「改动后」必须是
+ * 格式化器真给出的形态，否则换格式化器后判据与夹具各说一套而用例全绿（最难看的一类失效）。
  */
 function formatInPlace(repo: GateRepo, rel: string | Array<string>): void {
   /* 路径可以是**一批**：`oxfmt a b c…` 一次做完，而每条路径各起一次进程是本文件
@@ -216,10 +181,8 @@ function formatInPlace(repo: GateRepo, rel: string | Array<string>): void {
 }
 
 /**
- * 把一段源码交给 oxfmt，拿回它的规范形态（不落进仓库）。
- *
- * 直接喂 `classifyReformatOnly` 的那几条用例要自己给「改动后」这一侧，理由同
- * `formatInPlace`：**那一侧必须是格式化器真给的形态**。
+ * 把一段源码交给 oxfmt，拿回它的规范形态（不落进仓库）。直接喂 `classifyReformatOnly` 的用例
+ * 要自己给「改动后」，理由同 `formatInPlace`：那一侧必须是格式化器真给的形态。
  */
 function oxfmtText(text: string, ext = "ts"): string {
   const dir = mkdtempSync(join(tmpdir(), "reformat-probe-"));
@@ -236,19 +199,9 @@ function oxfmtText(text: string, ext = "ts"): string {
 }
 
 /**
- * 把临时仓库里那份 oxfmt 换成一个**计数 wrapper**：命中一次 = 「格式化器被起了一次」。
- *
- * 为什么能换掉：脚本按「从自己所在目录向上找 `node_modules`」解析 `oxfmt/package.json`
- * 再拼 `bin/oxfmt`，而**被检查的那份脚本**就放在临时仓库的 `scripts/` 下 —— 于是临时
- * 仓库里的 `node_modules` 才是它命中的那一处（真仓库那一份换不掉，`HERE` 就是真仓库；
- * 这正是这几条用例要把脚本从临时仓库里 `require` 进来的原因）。
- *
- * `failFirst`:整批那一次故意以非 0 退出 —— 用来验「批量没给结论时，是不是每个文件
- * 都退回了逐文件那一档」。`bin/oxfmt` 只有一行 `import "../dist/cli.js"`，所以
- * wrapper 转发的是 `dist/cli.js` 这个真身（ESM，用 `type: "module"` 让 extensionless
- * 的入口按 ESM 加载 —— 真的那份就是这么跑起来的）。
- *
- * @returns 读调用次数的函数
+ * 把临时仓库里那份 oxfmt 换成**计数 wrapper**：命中一次 = 格式化器被起一次。能换掉是因为脚本向上找
+ * `node_modules` 再拼 `bin/oxfmt`，被检查脚本就在临时仓库的 `scripts/` 下，真仓库 `HERE` 那份换不掉
+ * （故用例要从临时仓库 `require`）。`failFirst` 让整批那次非 0 退出；入口只 `import "../dist/cli.js"`。
  */
 function instrumentOxfmt(repo: GateRepo, failFirst = false): () => number {
   const counter = join(configDir, "oxfmt-calls.txt");
@@ -366,14 +319,9 @@ describe("格式化提交与行为改动分离", { timeout: 300_000 }, () => {
 });
 
 /**
- * 换格式化器那一笔的显式出口：`format-migration:` 尾注（#2541）。
- *
- * 两条硬闸在这件事上**互锁**：格式判据是硬闸且没有基线 ⇒ 全量重排必须与切换同批；
- * 而本判据的阈值又会拦住同批里的重排 —— 迁移没有可落地的形状。所以给了声明这条
- * 路，但**它是两道护栏之后才成立**的，这组用例锁的正是「护栏真的会拦」：
- *   ① 区间里**每个**提交都要声明（漏一条就不认）；
- *   ② **逐提交**看，重排要么不到阈值、要么那条提交整条都是重排。
- * 少任何一道都回到阻断那一支 —— 否则这条尾注就成了「格式化随便夹带」的万能钥匙。
+ * 换格式化器那一笔的显式出口：`format-migration:` 尾注（#2541）。两条硬闸互锁：格式判据无基线 ⇒
+ * 全量重排必须与切换同批，而本判据阈值又拦住同批重排 —— 故给这条声明路，但**两道护栏之后才
+ * 成立**：① 区间里每个提交都要声明；② 逐提交看重排要么不到阈值、要么该提交整条都是重排。
  */
 describe("格式化器迁移的声明（`format-migration:`）", { timeout: 300_000 }, () => {
   /** 一条带迁移尾注的提交正文（尾注写在正文里，与标题分行）。 */
@@ -411,16 +359,10 @@ describe("格式化器迁移的声明（`format-migration:`）", { timeout: 300_
     expect(r.output).toContain("不按迁移读");
   });
 
-  /* **三点区间（`A...B`）必须与两点判出同一个答案**（ISSUE #3024）。
-   *
-   * 现场：平台 `重档静态判据` 那一格红在「格式化提交分离 —— 本次改动 162 个源文件，
-   * 其中纯格式化 120 个」，而**同一批改动**在本地按两点区间判也是 120 个。判据没报错，
-   * 报得也对 —— 错的是另一处：CI 盘点是按 `A...B` 调的，而入口按 `".."` 裸切，
-   * 切出 `["A", ".B"]`，于是每一份文件的「改动后」都取不到，**全部**被
-   * `collectPairs` 按「任一侧取不到」跳过。它既不报错也不说「没判」，屏幕上是一句
-   * 干干净净的 `[ok] 本次改动 … 没有纯格式化的` —— 恒绿的判据。
-   *
-   * 这一条把两个区间形式钉成同一份判决：三点若不等于两点，说明 `after` 那一侧又丢了。 */
+  /* **三点区间（`A...B`）必须与两点判出同一个答案**（ISSUE #3024）。入口按 `".."` 裸切会把
+   * `A...B` 切成 `["A", ".B"]`，于是每份文件的「改动后」都取不到，`collectPairs` 全部按
+   * 「任一侧取不到」跳过 —— 屏幕上一句干净的 `[ok] … 没有纯格式化的`，恒绿的判据。
+   * 三点若不等于两点，说明 `after` 那一侧又丢了。 */
   test("三点区间（`A...B`）与两点区间判出同一个结论", ({ repo }) => {
     seedDirty(repo, 12);
     formatInPlace(
@@ -437,13 +379,10 @@ describe("格式化器迁移的声明（`format-migration:`）", { timeout: 300_
     expect(threeDots.output).toContain("纯格式化 12 个");
   });
 
-  /* **区间两侧是同一个提交 ⇒ 必须是 `skip`，不是「没有纯格式化」**（ISSUE #3026）。
-   *
-   * 现场：平台那一跑给的区间两侧取成了**同一个 sha**（`#3022` 那条修法里起点用的
-   * 目标 sha 恰是 HEAD），于是每一份配对的 `before` / `after` 都取不到、
-   * `classifyReformatOnly` 连 oxfmt 都没起过 —— 屏幕上却是一句
-   * `[ok] 本次改动 N 个源文件，没有纯格式化的`。那两句在终端里一模一样，而一句是
-   * 「判过了」、一句是「没判」，三态口径（§13.5.25）在这里塌成了两态。 */
+  /* **区间两侧是同一个提交 ⇒ 必须是 `skip`，不是「没有纯格式化」**（ISSUE #3026）。平台给的
+   * 两侧取成同一个 sha（#3022 起点用的目标 sha 恰是 HEAD），所有配对取不到、oxfmt 都没起过，
+   * 屏幕上却写 `[ok] … 没有纯格式化的` —— 与「判过了」在终端里一模一样，三态口径（§13.5.25）
+   * 塌成两态。 */
   test("区间两侧是同一个提交 ⇒ 报「没判」，不冒充「没有纯格式化」", ({ repo }) => {
     seedDirty(repo, 12);
     formatInPlace(
@@ -460,22 +399,11 @@ describe("格式化器迁移的声明（`format-migration:`）", { timeout: 300_
     expect(r.output).not.toContain("没有纯格式化的");
   });
 
-  /* 「逐提交的读数取不到」≠「这条提交干净」（ISSUE #2990 的 `cnb-rmn-1k6bqsdfg`）。
-   *
-   * 现场：平台那一格判的是**合成合并预览**，护栏 ② 一个 offender 都没点名（屏幕上是
-   * 空的），而汇总仍报一批纯格式化 ⇒ 判决落进「声明了但重排没独占」那一支 ——
-   * 话术指着一件没发生的事，读者只能去猜。
-   *
-   * 根因在取数：**「这条提交没改文件」与「这条提交的 diff 没读到」折成同一支**（空
-   * patch 就 `continue`）—— 后者是**没测**，却被 `offenders` 读成了「干净」。`ok`
-   * 只看 `offenders`，于是护栏 ② 在「一条都没读到」时照样说通过。
-   *
-   * ⚠️ 这一条打的是判据导出的 `perCommitShapeOf`：`--range` 那一跳会先
-   * `git diff <A>..<B>`，而区间两端都要能解析成**提交**，这一档的父恰恰读不到
-   * （`fatal: Invalid revision range`）—— 于是那一格在进程外根本没有入口。入口本身是
-   * 薄的：它把这条提交交给同一份逐提交循环。
-   *
-   * 变异证明：撤掉「父对象读不到 ⇒ unknown」那条判定之后这一条当场红。 */
+  /* 「逐提交的读数取不到」≠「这条提交干净」（ISSUE #2990 的 `cnb-rmn-1k6bqsdfg`）：`ok` 只看
+   * `offenders`，而「没改文件」与「diff 没读到」折成同一支（空 patch 就 `continue`）—— 后者是
+   * **没测**却被读成干净，于是护栏 ② 在一条都没读到时报通过。⚠️ 打的是导出的 `perCommitShapeOf`：
+   * `--range` 那跳要先 `git diff <A>..<B>`，两端都得解析成**提交**，这一档的父读不到
+   * （`fatal: Invalid revision range`）。变异证明：撤掉「父读不到 ⇒ unknown」后这一条当场红。 */
   test("逐提交取不到 diff → 记 unknown，不许被读成干净（护栏 ②）", ({ repo }) => {
     seedDirty(repo, 12);
     repo.write("src/lib/feature.ts", "export const FEATURE = 1;\n");
@@ -514,12 +442,9 @@ describe("格式化器迁移的声明（`format-migration:`）", { timeout: 300_
     expect(got.offenders.join("、")).toContain("取不到与父提交的 diff");
   });
 
-  /* 护栏 ① 只问**含重排**的提交（ISSUE #3054）：与迁移无关的功能提交不该被它判。
-   *
-   * 现场：PR #2990 是 `printWidth` 迁移，而它的生命周期里追加了 5 笔**修判据本身**的
-   * 功能提交（2~8 个文件、零重排）。`every()` 口径要求它们也写 `format-migration:`，
-   * 于是一个合规的迁移 PR 被 `172 份里 118 份` 判红（本格平台的现场读数）。
-   * 那 5 笔没碰重排、也不该撒谎写迁移尾注 ⇒ 它们不参与这一关。 */
+  /* 护栏 ① 只问**含重排**的提交（ISSUE #3054）：PR #2990 是 `printWidth` 迁移，生命周期里追加
+   * 5 笔修判据本身的功能提交（2~8 个文件、零重排）。`every()` 要求它们也写 `format-migration:`，
+   * 合规迁移 PR 因此被 `172 份里 118 份` 判红；它们没碰重排、也不该撒谎写尾注 ⇒ 不参与这一关。 */
   test("功能提交没声明、但**含重排**的那几笔都声明了 ⇒ 按迁移放行（护栏 ①）", ({ repo }) => {
     seedDirty(repo, 12);
     repo.write("src/lib/feature.ts", "export const FEATURE = 1;\n");
@@ -548,14 +473,10 @@ describe("格式化器迁移的声明（`format-migration:`）", { timeout: 300_
     expect(r.output).toContain("格式化提交分离");
   });
 
-  /* **空提交不参与护栏 ①**（ISSUE #3034）。
-   *
-   * 现场：`pnpm ship --rerun-ci` 推的那笔空提交正文固定为
-   * `ci: rerun (ship --rerun-ci)`、不带任何尾注，而它进的是 PR 区间。PR #2990
-   * 重跑三次之后，一个原本合规的迁移 PR 被 `166 份里 118 份纯格式化` 判红
-   * （构建 `cnb-4ig-1k6csckqj`）；同一个区间把三笔 rerun 摘掉就 `[ok] 按迁移放行`。
-   * 空提交一份文件都没碰，对「这次重排有没有独占」不提供任何信息 ⇒ 不许它否决
-   * 整个人证（护栏 ② 那边空提交天然是 0/0、自动干净，两处口径由此一致）。 */
+  /* **空提交不参与护栏 ①**（ISSUE #3034）：`pnpm ship --rerun-ci` 推的空提交正文固定
+   * `ci: rerun (ship --rerun-ci)`、无尾注却进 PR 区间；PR #2990 重跑三次后合规迁移 PR 被
+   * `166 份里 118 份纯格式化` 判红（`cnb-4ig-1k6csckqj`），摘掉三笔 rerun 就 `[ok] 按迁移放行`。
+   * 空提交没碰文件，对「重排有没有独占」无信息 ⇒ 不许它否决（护栏 ② 那边天然 0/0，口径一致）。 */
   test("区间里夹着没尾注的**空提交**（如 --rerun-ci）⇒ 仍按迁移放行", ({ repo }) => {
     seedDirty(repo, 12);
     repo.write("src/lib/feature.ts", "export const FEATURE = 1;\n");
@@ -573,14 +494,10 @@ describe("格式化器迁移的声明（`format-migration:`）", { timeout: 300_
     expect(r.output).toContain("按迁移放行");
   });
 
-  /* 平台侧那条流水线跑的是**合并预览**：`HEAD` 是合并提交，于是 `HEAD~1..HEAD`
-   * 覆盖的是**整个 PR 区间**而不是「一条提交」（这正是 CI 那一格的现场 —— 不带
-   * `--range`、也没有暂存区，脚本落到「判 HEAD~1..HEAD」那一支）。
-   *
-   * ISSUE #3035 起合并提交**入表**（重排恰恰常坐在合并那一笔里），但合并行对目标侧
-   * 的 diff 是「分支的全部净工作」—— 其中被更早提交判定过的重排要**去重**，否则
-   * #3054 刚修好的「合规迁移 PR 被永久拦红」换个方向复发。这一条钉：合并行在场、
-   * 去重读数点名、判决仍是放行。 */
+  /* 平台侧流水线跑**合并预览**：`HEAD` 是合并提交，`HEAD~1..HEAD` 覆盖整个 PR 区间而非「一条提交」。
+   * ISSUE #3035 起合并提交入表（重排常坐在合并那一笔里），但合并行对目标侧的 diff 是分支全部净工作，
+   * 被更早判定过的重排要**去重**，否则 #3054「合规迁移 PR 被永久拦红」换个方向复发。
+   * 这条钉：合并行在场、去重读数点名、判决仍是放行。 */
   test("合并预览（HEAD 是合并提交）⇒ 合并行入表、与已判行去重、读数点名", ({ repo }) => {
     seedDirty(repo, 12);
     repo.write("src/lib/feature.ts", "export const FEATURE = 1;\n");
@@ -712,13 +629,10 @@ describe("合并提交自己承担重排（ISSUE #3035）", { timeout: 300_000 }
 });
 
 describe("pre-commit 现场：必须判「暂存区」而不是上一次提交", { timeout: 300_000 }, () => {
-  /* 这组用例守的是一条**真实发生过的**失效：脚本接在 pre-commit 里，而
-   * pre-commit 在提交对象生成**之前**运行，此时 `HEAD` 仍是上一次提交。
-   * 早先实现无条件取 `HEAD~1..HEAD`，于是：
-   *   · 本次暂存内容一个都没参与判定；
-   *   · 只要上一次提交恰好是格式化提交（master 上的存量治理就是这样），
-   *     门禁就把那次**已合并**的提交当成「本次」拦下，后续每个提交都过不去。
-   * 现场表现是「我什么都没格式化，门禁却报 563 个纯格式化文件」。 */
+  /* 真实发生过的失效：pre-commit 在提交对象生成**之前**运行，此时 `HEAD` 仍是上一次提交。
+   * 早先无条件取 `HEAD~1..HEAD` ⇒ 本次暂存内容全不参与判定；且只要上一次是格式化提交
+   * （master 存量治理即如此），门禁就把那次已合并提交当成「本次」拦下，后续每个提交都过不去
+   * （现场：「我什么都没格式化，却报 563 个纯格式化文件」）。 */
 
   test("上一次提交是格式化提交、本次暂存是真实改动 → 放行（不被上一次污染）", ({ repo }) => {
     seedDirty(repo, 12);
@@ -798,27 +712,11 @@ describe("pre-commit 现场：必须判「暂存区」而不是上一次提交",
     expect(r.output).toContain("合并提交");
   });
 
-  /* 合并**预览**（ISSUE #3022 / #3035）：平台那一格没有暂存区，判据落到「判 HEAD
-   * 这一次提交」那一支，而那个区间的两侧不能是 `HEAD~1..HEAD`。
-   *
-   * ## 为什么是一对用例，而不是一条
-   *
-   * 平台拼出来的合并提交**不保证把本分支放在第一父**：现场（`cnb-3lk-1k6d2lm2l`）
-   * 第一父是**目标分支**那一侧，于是 `HEAD~1..HEAD` 里全是主干带来的提交（它们没有
-   * `format-migration:` 尾注），日志是一屏「声明了但重排没独占」，而本次改动是什么
-   * 与那条红毫无关系。而 #3022 早先的修法是「起点换成平台给的目标 sha、终点仍是
-   * `HEAD`」—— 那条只在「第一父 = 本 PR」时对，反过来就把**主干那批**算进分母
-   * （两种拼法各红过好几十次）。
-   *
-   * ⇒ 现在两侧都取自合成提交的父关系（`changed-scope.mjs` 的
-   * `reconcileSyntheticMergeFace()`）：区间恒为「第一父..第一父名下的那个 sha」，
-   * 与拼法无关。两条用例各演一种拼法。
-   *
-   * ## 场景（两种拼法共用）
-   *
-   * 主干那边有一笔**别的**重排（没有尾注），本分支上是「声明了迁移的重排」，
-   * 平台把两者合成一个合并提交。真结论只有一个：按迁移放行。
-   */
+  /* 合并**预览**（ISSUE #3022 / #3035）：平台那格无暂存区，判据落到「判 HEAD 这次提交」一支，
+   * 两侧不能是 `HEAD~1..HEAD`。#3022 的修法只在「第一父 = 本 PR」时对；现场（`cnb-3lk-1k6d2lm2l`）
+   * 第一父是目标分支那侧，`HEAD~1..HEAD` 全是主干提交（无尾注），与本次改动无关。⇒ 两侧都取自
+   * 合成提交的父关系（`changed-scope.mjs` 的 `reconcileSyntheticMergeFace()`），与拼法无关。
+   * 场景：主干一笔无尾注重排 + 本分支声明迁移的重排 ⇒ 真结论只有「按迁移放行」。 */
   /** 造出「主干一笔无尾注重排 + 分支一笔声明了迁移的重排」，返回两个 sha。 */
   function twoSidedHistory(repo: GateRepo) {
     seedDirty(repo, 12); // 自带一次提交 ⇒ 未格式化版本进历史
@@ -839,24 +737,14 @@ describe("pre-commit 现场：必须判「暂存区」而不是上一次提交",
   }
 
   /**
-   * 区间**终点**不许取合成提交（ISSUE #3038 的第二处，现场 `cnb-o9p-1k6d5ohhj`）。
-   *
-   * `第一父..合成提交` 在「第一父 = 目标分支」那种拼法下正好是**整个 PR 区间**：
-   * 逐提交口径看不出问题（合成提交自己会被 `--no-merges` 摘掉），可它把「本 PR 那条线」
-   * 与「这次合并带进来的主干那一批」混成一段，`report()` 的汇总口径按整段算分母 ——
-   * 实测 170 份里 118 份被判纯格式化，而同一区间逐提交复算只有一条 offender。
-   * ⇒ 终点取**第二父**（本 PR 那一侧的 tip）。
-   *
-   * 造法：主干上有一笔**没有尾注的重排**（它只该出现在「整段」口径里），本分支上是一笔
-   * 声明了迁移的重排。若终点错取合成提交，主干那一笔会进分母 ⇒ 判成「不按迁移读」。
+   * 区间**终点**不许取合成提交（ISSUE #3038 第二处，现场 `cnb-o9p-1k6d5ohhj`）：「第一父..合成
+   * 提交」在「第一父 = 目标分支」拼法下正是整个 PR 区间，`report()` 按整段算分母（实测 170 份里
+   * 118 份被判纯格式化）⇒ 终点取**第二父**；造法：主干一笔无尾注重排 + 本分支声明迁移重排，错取即判不按迁移读。
    */
   /**
-   * 区间**两端**的取法（ISSUE #3038 的第二处，现场 `cnb-o9p-1k6d5ohhj`）。
-   *
-   * 这一条**直接钉机制层的返回值**，不走端到端：端到端只能看出「绿了没有」，而这里
-   * 要钉的是「区间是哪两个端点」—— 取错了可能照样绿（主干那批恰好没跨过阈值），
-   * 那种绿正是这次事故的形状（平台上 170 份里 118 份被判纯格式化，而逐提交复算
-   * 只有一条 offender）。
+   * 区间**两端**的取法（ISSUE #3038 第二处，现场 `cnb-o9p-1k6d5ohhj`）：直接钉机制层返回值，
+   * 不走端到端 —— 端到端只看得见「绿了没有」，而取错端点可能照样绿（主干那批没跨过阈值），
+   * 那种绿正是事故形状（平台 170 份里 118 份被判纯格式化，逐提交复算只有一条 offender）。
    */
   test("区间两端：起点取分叉点、终点取第二父（不取合成提交）", () => {
     const calls: Array<string> = [];
@@ -991,17 +879,10 @@ describe("pre-commit 现场：必须判「暂存区」而不是上一次提交",
 });
 
 describe("判定成本：整批一次 oxfmt，不按文件各起一次", { timeout: 300_000 }, () => {
-  /* 这条用例守的是一条**真实发生过的**失效：早先的实现对每个文件各起一次
-   * `prettier --stdin-filepath`，而格式化器的启动 + 插件加载是主要成本
-   * （实测单文件约 400ms，与文件大小几乎无关）—— 12 个文件 ≈ 5s，正好把
-   * vitest 默认的 testTimeout 顶穿。现场表现是 `Test timed out in 5000ms`，
-   * 报在别的门禁用例上，看起来像「测试写得慢」，实际是门禁自身的调用形态
-   * 在文件数上线性叠加（真人「批量格式化」提交改几十个文件时只会更慢）。
-   *
-   * 判据用**计数**而不是耗时：耗时在负载波动下必然抖动，而「格式化器起了
-   * 几次」是确定的。整批口径下 batch 恰好一次（外加逐文件兜底，正常路径上为 0），
-   * 逐文件口径下是「文件数 + 1」。用包装脚本记调用次数，
-   * 断言与阈值无关的形态：次数远小于文件数。 */
+  /* 真实发生过的失效：早先对每个文件各起一次 `prettier --stdin-filepath`，启动 + 插件加载是
+   * 主要成本（实测单文件约 400ms，与大小几乎无关）—— 12 文件 ≈ 5s，顶穿 vitest 默认
+   * testTimeout，却报在别的门禁用例上。判据用**计数**而非耗时（耗时随负载抖动）：整批口径
+   * batch 恰好一次（逐文件兜底正常为 0），逐文件口径是「文件数 + 1」；断言次数远小于文件数。 */
   test("12 个文件的改动 → oxfmt 调用次数远小于文件数（整批口径）", ({ repo }) => {
     seedDirty(repo, 12);
     formatInPlace(
@@ -1023,14 +904,9 @@ describe("判定成本：整批一次 oxfmt，不按文件各起一次", { timeo
 });
 
 /**
- * 「回读比对」这一档的两端（真起 oxfmt，不打桩 —— 被锁的正是「谁来给答案」）。
- *
- * oxfmt 时代没有「格式化器输出了什么」可解析（prettier 时代那份 `(unchanged)` 标记就是
- * 这一类 —— 它把判据绑死在输出文案上，换一次工具就得重写一次）。现在判的是**写盘前
- * 留快照、写盘后回读比对**：结论只依赖文件内容。于是「改动前本来就规范」与「改动后
- * 正是它的规范形态」这两种形状都必须由**格式化器真给出来的形态**造 —— 手写一份
- * （旧用例就是这么写的）在换格式化器之后会变成「手写的那一份」，判据与夹具各说一套，
- * 而用例还全绿。
+ * 「回读比对」这一档的两端（真起 oxfmt，不打桩 —— 被锁的正是「谁来给答案」）。oxfmt 无可解析的
+ * 输出文案（prettier 的 `(unchanged)` 标记那一类会把判据绑死、换工具就得重写），现在判的是**写盘前
+ * 留快照、写盘后回读比对**：结论只依赖文件内容，故两种形状都必须由格式化器真给的形态造。
  */
 describe("回读比对：本来就规范 / 改动后正是规范形态", { timeout: 300_000 }, () => {
   /** 真仓库里那份判据（`HERE` 就是真仓库，oxfmt 解析不受临时仓库影响）。 */
@@ -1067,14 +943,9 @@ describe("回读比对：本来就规范 / 改动后正是规范形态", { timeo
 });
 
 /**
- * 批量那一档的两件事：**退出 0 ⇒ 每个文件都拿到了结论**（改写与否交给回读比对），
- * **非 0 ⇒ 没有结论**，此时每个文件都要退回逐文件那一档再判一次。
- *
- * 判据是**格式化器被起了几次**而不是耗时：次数在负载波动下是确定的，耗时不是。
- * 计数靠换掉**临时仓库里那份 oxfmt 的入口**（见 `instrumentOxfmt`），而**被检查的
- * 那份脚本也要从临时仓库里 `require`** —— 真仓库那一份的 `HERE` 就是真仓库，换不掉。
- *
- * 真起 oxfmt 而不打桩：被锁的正是「谁来给答案」。
+ * 批量那一档：**退出 0 ⇒ 每个文件都拿到结论**（改写与否交给回读比对），**非 0 ⇒ 没有结论**，
+ * 则每个文件退回逐文件档再判。判据是**格式化器被起了几次**而非耗时（次数确定、耗时抖动）：靠换掉
+ * 临时仓库那份 oxfmt 入口（`instrumentOxfmt`）且被检查脚本也从临时仓库 `require`；真起不打桩（被锁的是「谁来给答案」）。
  */
 describe("批量那一档：退出 0 一次给全部结论，非 0 逐文件兜底", { timeout: 300_000 }, () => {
   /**
@@ -1168,14 +1039,9 @@ describe("补丁解析（纯函数，不跑 git）", () => {
 });
 
 /**
- * `--staged` 的扫描面（ISSUE #1993 / 规范 §13.5.21）。
- *
- * 这条判据在**只改文档 / 只改 `changelog.d/`** 的提交上一份源文件都列不出来，却仍要
- * 把暂存区与 `HEAD` 各取一遍、对每个文件跑一次 oxfmt。收窄之后那些提交直接跳过。
- *
- * 收窄最坏的失效形态是**静默漏判**：根清单写窄了，某一处的纯格式化提交从此不再触发
- * 这条判据，而没有任何东西会红。所以这里不做「清单里有几个元素」这种空转断言 ——
- * 每条用例都**真起脚本**，看它判没判到。
+ * `--staged` 的扫描面（ISSUE #1993 / 规范 §13.5.21）：只改文档 / `changelog.d/` 的提交列不出
+ * 源文件，收窄后直接跳过。最坏的失效是**静默漏判**（根清单写窄 ⇒ 某处纯格式化提交不再被触发
+ * 且无物会红），故不做「清单有几个元素」的空转断言 —— 每条用例都真起脚本，看它判没判到。
  */
 describe("`--staged`：面上没有源文件时跳过，有源文件时照旧判", () => {
   test("只暂存文档 / 碎片 ⇒ 跳过，而且不碰格式化器", ({ repo }) => {

@@ -1,14 +1,8 @@
-// 服务端 AI 评审执行器（Phase 8 · P8-1a）。
-//
-// 消费 P8-1a 的判定模型（`review-types`）与提示词构建器（`llm/prompts`），把「让模型对已生成的
-// 文本内容（分镜镜头 / 角色卡）给一份过/不过判定」落成一次可测的服务端调用：读 `production` →
-// 提炼待评审文本 → 结构化补全 → 归一判定 → 写回实体记录（`shot.review` / `character.review`）。
-// 不合格时的重生成动作也在这里落地：
-//   · gacha（抽卡）  —— 保留提示词，走 `applyShotRedo`（清产物 + rev 自增）让规划器重新纳入、换种子重出；
-//   · reprompt（改提示词）—— 先让模型据评审意见产出改进提示词，再 `applyReprompt`（换 prompt + 退回）。
-//
-// 只写内容列（`patchContent`），不碰 run / progress —— 字段所有权：评审改的是镜头/角色内容，
-// run 仍由控制端点写。视觉内容（镜头图 / 成片）评审依赖多模态地基，留待后续（P8-2）。
+// 服务端 AI 评审执行器（Phase 8 · P8-1a）：消费 `review-types` 判定模型与 `llm/prompts` 构建器，把
+// 「对分镜镜头 / 角色卡给过/不过判定」落成可测调用：读 `production` → 提炼文本 → 结构化补全 → 归一判定
+// → 写回 `shot.review` / `character.review`。重生成：gacha 走 `applyShotRedo`（清产物 + rev 自增，
+// 换种子重出）；reprompt 先据意见产出提示词再 `applyReprompt`。只写内容列（`patchContent`），不碰 run / progress。
+// 视觉评审（镜头图/成片）依赖多模态地基，留待 P8-2。
 import "server-only";
 
 import { z } from "zod";
@@ -203,10 +197,9 @@ export async function reviewContent(
 }
 
 /**
- * 视觉评审一条镜头的**生图**（P8-2 多模态评审）：看图 + 该镜出场角色定妆照，按生图
- * rubric（与提示词对齐 / 角色一致性 / 构图景别 / 画面瑕疵）打分，判定写回 `shot.imageReview`
- * （与文本 `shot.review` 分开存，互不打扰）。输入 = 产物图 + 提示词 + 定妆照 + 景别设定。
- * 没图 / 找不到镜头 → 抛可行动错误（不静默）。
+ * 视觉评审一条镜头的生图（P8-2 多模态）：看图 + 角色定妆照，按 rubric（提示词对齐 / 角色一致性 /
+ * 构图景别 / 画面瑕疵）打分，写回 `shot.imageReview`（与文本 `shot.review` 分开存）。
+ * 输入 = 产物图 + 提示词 + 定妆照 + 景别；没图 / 找不到镜头 → 抛可行动错误（不静默）。
  */
 /**
  * 评审内核（#2612 自动优选抽出）：给定镜头上下文与**任意一张**图 → 判定。
@@ -309,11 +302,9 @@ export type AutoselectResult = {
 };
 
 /**
- * 抽卡优选：对同一镜头的 2~4 个候选任务逐张打分（评审内核），均分最高者为
- * 赢家（平分取提交序在先者）。**不写 production**——赢家 imageUrl / taskId 由
- * 客户端经镜头草稿回写（草稿自动保存是镜头内容真值，服务端直写会被反向覆盖）；
- * 赢家判定另经 `applyImageReview` 落 `shot.imageReview`（与原入口同一落点、
- * 同受 #2615 记录的工坊覆盖隐患约束）。
+ * 抽卡优选：同镜头 2~4 个候选逐张打分（评审内核），均分最高者胜（平分取提交序在先）。
+ * **不写 production**：赢家 imageUrl / taskId 由客户端经镜头草稿回写（草稿是内容真值，服务端直写会被反向覆盖）；
+ * 赢家判定经 `applyImageReview` 落 `shot.imageReview`（与原入口同落点，同受 #2615 工坊覆盖隐患约束）。
  */
 export async function autoselectShotImage(
   userId: string,
@@ -429,10 +420,9 @@ export async function reviewScript(
 }
 
 /**
- * 按评审判定**定向改写**剧本（FR-QA-07 ④ · #2478）：消费上一轮评审的低分维度与逐条缺陷，
- * 让模型产出一版改进后的完整剧本；改写前的旧版本压进 `scriptReview.revisions` 留档
- * （人可回看/接管，AI 下一轮从人改的版本继续）。没有可依据的评审位（没评过）时拒改——
- * 定向改写的「定向」来自评审意见，凭空改 = 退化成整篇重生成。
+ * 按评审判定定向改写剧本（FR-QA-07 ④ · #2478）：消费上一轮低分维度与逐条缺陷产出改进版；旧版压进
+ * `scriptReview.revisions` 留档（人可回看/接管，AI 下轮从人改的版本继续）。没评过就拒改 ——
+ * 「定向」来自评审意见，凭空改会退化成整篇重生成。
  */
 export async function reviseScript(userId: string, projectId: string): Promise<string> {
   const row = await loadRow(userId, projectId);
@@ -471,12 +461,9 @@ export async function reviseScript(userId: string, projectId: string): Promise<s
 }
 
 /**
- * 评审不合格后的重生成动作（镜头）：
- *   · gacha    —— `applyShotRedo`：保留提示词，清产物 + rev 自增 → 规划器重新纳入、换种子重出；
- *   · reprompt —— 未显式给 `newPrompt` 时先让模型据评审意见产出改进提示词，再 `applyReprompt`
- *                 （换 prompt + 退回重做）。
- * 只写内容列。镜头不存在 / 无评审意见可依据（reprompt 但记录上没 review）时按情况处理：reprompt
- * 无 newPrompt 且无已存判定 → 用记录当前文本 + 空意见仍产出改写（不阻断），保持动作始终可用。
+ * 评审不合格后的重生成动作（镜头）：gacha → `applyShotRedo`（保留提示词，清产物 + rev 自增换种子重出）；
+ * reprompt → 未给 `newPrompt` 时先让模型据意见产出提示词，再 `applyReprompt`（换 prompt + 退回）。
+ * 只写内容列；reprompt 且无新提示词、无已存判定时用当前文本 + 空意见仍产出改写（不阻断）。
  */
 export async function regenerateShot(
   userId: string,

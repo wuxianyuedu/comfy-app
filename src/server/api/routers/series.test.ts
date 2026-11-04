@@ -1,15 +1,7 @@
 /**
- * series.router 集成测试（FR-SR-01/02，#2477）。
- *
- * 覆盖：系列 / 季 / 集 的 CRUD + 项目挂载（assignProject / byProject），
- * 以及跨用户归属（FORBIDDEN）—— 与 project.test.ts 同一套越权判据口径。
- * 同时让 `tests/trpc-surface-executors.test.ts` 的「每条 procedure 都有执行者」
- * 判据对本 router 全部通过。
- *
- * mock 边界：~/server/db（内存库 + 真 Drizzle）、~/server/better-auth、~/lib/core/logger。
- *
- * 注意：`createCaller(seriesRouter)` 的 procedure 在本 router 内是**顶层命名**
- * （`caller.create` / `caller.createSeason` …），挂载到 root 后才成为 `series.create` 路径。
+ * series.router 集成测试（FR-SR-01/02，#2477）：覆盖系列/季/集 CRUD + 项目挂载、跨用户 FORBIDDEN
+ * （同 project.test.ts 口径）、trpc-surface-executors 执行者判据全通过；mock ~/server/db（内存库）、better-auth、logger。
+ * 注意 `createCaller(seriesRouter)` 的 procedure 为顶层命名（`caller.create`…），挂 root 后才成 `series.create` 路径。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";

@@ -1,21 +1,8 @@
 // ── 会话 ⇄ 界面真值桥（#2482 · FR-AG-01③）────────────────────
-// 让 MCP 会话与界面共享**同一份** production：会话绑定一个 proj_*（即
-// production.id），内容权威读在 production；`workshopSession` 的内容列退化为
-// 写时镜像，idea / stage / projectId 才是会话行自己的权威字段。
-//
-// 为什么不直接用 `~/lib/core` 的仓储：那一层带 `import "server-only"`，在
-// MCP stdio / 独立 HTTP 的纯 Node 进程里会抛错（目录注释同款约束）。本模块
-// 与 `./db` 一样直连同一份 libsql 库、复用同一份 Drizzle schema——**表是同一批
-// 表**，Next 侧（画布 / 工坊 / run 引擎）与 MCP 侧读写的是同一行。
-//
-// 归属口径：production.userId 非空且外键到 user。会话的 userId 可空（外部 AI
-// 通常不带）→ 显式给 userId 时必须存在；缺省落「本机最早创建的用户」（本地
-// 单机应用的确定性选择）；一个用户都没有时给可行动错误（先在应用内完成一次
-// 初始化 / 登录）。
-//
-// 遗留会话（桥之前创建、projectId 为 NULL）的处置：**首次写时桥接**——以当时
-// 的会话内容为初始值建/绑项目，此后与界面同一份真值；只读不写的遗留会话保持
-// 原读法（不会凭空长出项目）。
+// 会话绑定 proj_*（即 production.id），内容权威读在 production；`workshopSession` 内容列只是写时镜像，
+// idea / stage / projectId 才是会话行的权威字段。本模块与 `./db` 一样直连 libsql、复用同一份 Drizzle schema
+// （表是同一批），因 `~/lib/core` 带 `import "server-only"`，在 MCP stdio / 纯 Node 进程里会抛错。归属：
+// userId 可空（外部 AI 通常不带），显式给时必须存在，缺省落本机最早创建的用户；遗留会话（projectId 为 NULL）首次写时桥接，只读保持原读法。
 import { asc, eq } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 

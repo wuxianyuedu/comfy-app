@@ -1,21 +1,7 @@
 /**
- * 读 `.githooks/pre-commit` 的**执行编排**（组、组内 `run` 步骤）的共享件。
- *
- * 为什么单独成一份：三处判据问的是同一件事 —— 「某条判据此刻在不在门禁链里、在哪个组、
- * 命令逐字是什么」：
- *   · `tests/doc-check-hook-wiring.test.ts` 核「某几步在钩子里、且 flag 没被抹掉」；
- *   · `tests/precommit-timing.test.ts` 核「每个 `sh -c` 块都接了同一份计时」；
- *   · `tests/hook-affected-launch.test.ts` 核「C 组的正文真的敲的是那个启动器」。
- * 各写一份解析就会漂，而漂的表现不是红，是**同一份钩子在三个判据里长成三个形状**
- * （§12.12 / §12.18：抽共用件的那一侧要真有三个消费点，不是 preemptive 抽象）。
- *
- * 三条口径，缺一条判据就退化成「在注释上命中也算在场」：
- *   ① **只认步骤行**、不认全文 —— 有人把那行前头加个 `# ` 注掉，`toContain` 照样绿；
- *      立案现场见 `tests/doc-check-hook-wiring.test.ts` 的文件头。
- *   ② 组的正文取 `run_group <id> "…" sh -c '<正文>'` 里那段 shell，按**第一个闭合单引号**
- *      收尾。这条同时定义了「块内不许出现单引号」这个书写约束 —— 它是被解析器判出来的，
- *      不是靠人记住（引号混进来时该组会被**静默截断**，而判据读到的是半块）。
- *   ③ 步骤行的两空格缩进就是组内 shell 的形态，行首锚定即「真调用」。
+ * 读 `.githooks/pre-commit` 执行编排（组、组内 `run` 步骤）的共享件。三处判据（doc-check-hook-wiring / precommit-timing /
+ * hook-affected-launch）各写一份解析必然漂成三个形状（§12.12 / §12.18）。口径：① 只认步骤行不认全文（`# ` 注掉后 `toContain`
+ * 照样绿）；② 组正文按第一个闭合单引号收尾，块内禁单引号否则静默截断；③ 步骤行两空格缩进即真调用（立案见 `doc-check-hook-wiring` 文件头）。
  */
 export type HookStep = { cmd: string; label: string };
 

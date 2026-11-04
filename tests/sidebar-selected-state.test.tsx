@@ -1,13 +1,7 @@
 /**
- * 侧栏选中态的**接线**判据（ISSUE #1291）。
- *
- * 对比度判据在 `tests/sidebar-state-contrast.test.ts`（量 token 的相对亮度），
- * 这里只管一件事：`isActive` 这条线有没有真的接到「选中档」上。
- *
- * 为什么单独需要这一条：修复前 `isActive` 与 `hover` 共用同一个 class
- * （`data-active:bg-sidebar-accent`）—— prop 一直接得好好的，视觉上却与「指针
- * 路过」没有区别。所以「选中走的是选中档、不是悬停档」必须由用例盯着，
- * 光看 prop 有没有传是判不出来的。
+ * 侧栏选中态的**接线**判据（ISSUE #1291）：对比度在 `tests/sidebar-state-contrast.test.ts`，
+ * 这里只管 `isActive` 是否真接到「选中档」。修复前 `isActive` 与 `hover` 共用
+ * `data-active:bg-sidebar-accent`——prop 传得对，视觉却与「指针路过」无异，故必须由用例盯着。
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";

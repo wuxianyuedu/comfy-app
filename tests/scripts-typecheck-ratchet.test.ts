@@ -1,22 +1,8 @@
 /**
- * 脚本档类型检查棘轮的自证（ISSUE #2524 / 规范 §13.5.14.1）。
- *
- * 这一档要钉住的不是「tsc 会不会报错」（那是 tsc 自己的事），而是**判据自己的三件事**：
- *
- *   ① **判决面是全量**：`tsconfig.scripts.json` 展开的 `.mjs` 必须覆盖盘上每一份
- *      （非点目录、非 exclude）—— 本案的病正是「面比它自称的小」，所以这一条要拿
- *      **两套独立算法**对账（用例自己走盘 ⇄ 判据用 TS 的 glob 引擎展开）；
- *   ② **存量只降不升**：新增格子红、`--update` 拒涨且**不改写基线**、下降只提示；
- *   ③ **被截断的一跑不许冒充结论**：tsc 报完语法层的错就不做语义检查（实测），
- *      那一跑必须红，且**不许**照它重写基线（那等于把棘轮清空）；
- *   ④ **账本只有一本账**：`(文件, TS 码)` 与总数之外没有第三个字段 —— 尤其是那句
- *      「判了多少份」，它曾经是 `face` 这个手写副本、漂一次就红一次无关的人
- *      （2026-11-01 一天修了 8 次），现在由判据从 `git ls-files` 现算（ISSUE #2984）。
- *
- * 现场全部落在**临时夹具仓库**里（口径同 `tests/check-doc-references.test.ts` 的
- * `DOC_RENDER_ROOT`，ISSUE #2415：**判据的用例不写真仓库** —— 本文件一次也不动
- * `scripts/.scripts-typecheck-baseline.json`，也不动任何入库文件）。
- */
+ * 脚本档类型检查棘轮的自证（ISSUE #2524 / 规范 §13.5.14.1）。钉的不是「tsc 会不会报错」，而是判据自己：①判决面
+ * 必须全量（`tsconfig.scripts.json` 展开的 `.mjs` 覆盖盘上每一份，非点目录、非 exclude），本案病正是「面比自称的小」，
+ * 故用两套独立算法对账（用例走盘 ⇄ 判据用 TS glob 展）；②存量只降不升（新增红、`--update` 拒涨且不改写基线）；
+ * ③被截断的一跑不许冒充结论（tsc 报完语法错就不做语义检查，那一跑必须红且不许重写基线，否则等于清空棘轮）；④账本只有一本（`(文件, TS 码)` + 总数之外无第三字段，「判了多少份」由 `git ls-files` 现算，ISSUE #2984）。场景全在临时夹具仓库（ISSUE #2415：不动任何入库文件）。 */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, mkdtempSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -30,16 +16,10 @@ const REPO_ROOT = resolve(process.cwd());
 const CHECK = join(REPO_ROOT, "scripts", "check-scripts-typecheck.cjs");
 
 /**
- * 在临时夹具里起一次 git（`git ls-files` / `git commit` 那一半的取数要靠真仓库）。
- *
- * 为什么**必须**经 `gitSandboxEnv()`（`tests/helpers/git-sandbox-env.ts`，本仓测试夹具
- * 的隔离核心，§12.18「写之前先查」）：这个环境里 `commit.gpgsign = true`，于是「在临时
- * 仓库里造一个提交」会直接死在 `error: gpg failed to sign the data` —— 本地实测同一句
- * 补上签名开关就过、不补就炸。那是一层「夹具依赖宿主配置」：CI 上绿、配了签名的开发机
- * 上红，而红的原因与本用例判的东西毫无关系（ISSUE #2756 的现场）。
- * 同理它还剥掉继承来的 `GIT_DIR` 一族（钩子里跑时会把临时仓库的操作**打到真仓库**上）
- * 与 `core.autocrlf` 那一串 warning。
- */
+ * 在临时夹具里起一次 git（`git ls-files` / `git commit` 那一半的取数要靠真仓库）。为什么**必须**经
+ * `gitSandboxEnv()`（隔离核心，§12.18）：该环境里 `commit.gpgsign = true`，于是「在临时仓库造一个提交」会死在
+ * `error: gpg failed to sign the data`（本地实测：补签名开关就过、不补就炸）—— 这是一层「夹具依赖宿主配置」，
+ * CI 绿而配了签名的开发机红，且红的原因与本用例判的东西无关（ISSUE #2756）。同理剥掉继承的 `GIT_DIR` 一族（钩子里跑时会打到真仓库）与 `core.autocrlf` 那串 warning。 */
 function gitInTempRepo(args: Array<string>, cwd: string): string {
   const argv = args[0] === "commit" ? ["-c", "core.hooksPath=", ...args] : args;
   return execFileSync("git", argv, {
@@ -106,14 +86,10 @@ function commitFixture(): void {
 }
 
 /**
- * 往夹具里写一份文件。`rel` 一律是**相对夹具根**的路径。
- *
- * 传绝对路径进来的话，`join(fixture, rel)` 会把夹具根拼两遍，拼出一个
- * `G:\Temp\x\G:\Temp\x\scripts` 这样的畸形路径 —— 而两条平台在这一步分道：
- * POSIX 的 `mkdir -p` 会照着拼坏的路径真把目录一层层建出来（用例照样绿），
- * Windows 的路径里 `:` 非法、直接 `ENOENT`。于是同一个 bug 只在 CI 上红，
- * 本地跑多少遍都看不见（#2953 的现场）。所以这里当场拒，不靠人眼盯十个调用点。
- */
+ * 往夹具里写一份文件。`rel` 一律是**相对夹具根**的路径。传绝对路径会让 `join(fixture, rel)` 把夹具根拼两遍，
+ * 拼出 `G:\Temp\x\G:\Temp\x\scripts` 这样的畸形路径 —— 两条平台在此分道：POSIX 的 `mkdir -p` 照拼坏路径真建出
+ * 目录（用例照样绿），Windows 路径里 `:` 非法、直接 `ENOENT`，于是同一个 bug 只在 CI 上红、本地看不见（#2953
+ * 的现场）。所以这里当场拒，不靠人眼盯十个调用点。 */
 function write(rel: string, body: string): string {
   if (isAbsolute(rel)) {
     throw new Error(`write() 只收相对夹具根的路径，收到绝对路径：${rel}`);
@@ -331,12 +307,9 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
   }
 
   /**
-   * 「面里有、git 清单里没有」的那几份 —— 只在账本读数与实跑对不上时才算
-   * （正常绿跑不付这次 git 调用）。
-   *
-   * 为什么需要它：只给「账上 X 处 / 实跑 Y 处」两个数时，读的人分不出这是
-   * 「谁新加了一份没记账」还是「磁盘上多了一份没入库的产物」—— 而这两者的修法相反
-   * （前者记账、后者归到 exclude 或删掉）。ISSUE #2572 撞的就是第二种形态。
+   * 「面里有、git 清单里没有」的那几份 —— 只在账本读数与实跑对不上时才算（正常绿跑不付这次 git 调用）。为什么需要
+   * 它：只给「账上 X 处 / 实跑 Y 处」两个数，读的人分不出「谁新加了一份没记账」还是「磁盘上多了一份没入库的产物」，
+   * 而两者修法相反（前者记账、后者归到 exclude 或删掉）。ISSUE #2572 撞的就是第二种形态。
    */
   function driftReading(face: Array<string>): string {
     let tracked: Set<string>;
@@ -363,19 +336,10 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
   }
 
   /**
-   * `scripts/eslint-gate-canary.mjs` 落临时样本用的目录前缀 —— **从它的源码里对账取回来**。
-   *
-   * 为什么这一格必须认得它：eslint@10 的 project service 要求样本**落在 tsconfig 项目里**
-   * （`--stdin --stdin-filename` 会报 was not found by the project service），所以 canary
-   * 只能在 `scripts/` 下落一份 `eslint-canary-<pid>-<时间戳>/` 的真目录、跑完 `finally` 删；
-   * 而「受影响用例」那一格是**并发**跑的（`--maxWorkers=2`），下面那条「盘上没有未入库的
-   * `.mjs`」于是会撞上同一次运行里另一份用例正在用的样本 —— 2026-10-30 PR #2783 的实测
-   * 现场就是 `scripts/eslint-canary-151192-1793363720066/` 下那两份。
-   *
-   * 前缀不在这里写死（与 `tests/ci-daily-failure-issue.test.ts` 拿 `check-bundle-budget.cjs`
-   * 源码对账判决行同一条口径 —— 两处各写一遍必然漂）：canary 改了命名 ⇒ 这里取不到 ⇒
-   * 调用那侧把这一格判成「没判」，而不是当成「没有残留」。
-   */
+   * `scripts/eslint-gate-canary.mjs` 落临时样本用的目录前缀 —— **从它的源码里对账取回来**。eslint@10 的 project
+   * service 要求样本**落在 tsconfig 项目里**（`--stdin --stdin-filename` 会报 not found），故 canary 只能在
+   * `scripts/` 下落 `eslint-canary-<pid>-<时间戳>/` 的真目录、`finally` 删；而「受影响用例」**并发**跑（`--maxWorkers=2`），
+   * 「盘上没有未入库的 `.mjs`」会撞上同一次运行里另一份用例的样本（PR #2783 实测）。前缀不写死（与对账`check-bundle-budget.cjs` 同口径，写两遍必漂）：取不到就判「没判」，不是「没有残留」。 */
   function canaryScratchPrefix(): string | null {
     const src = readFileSync(join(REPO_ROOT, "scripts", "eslint-gate-canary.mjs"), "utf8");
     return /([A-Za-z0-9_-]*canary-)/.exec(src)?.[1] ?? null;
@@ -481,13 +445,10 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
 });
 
 /**
- * 面 ⇄ 入库清单：未入库的产物不进账（ISSUE #2681）。
- *
- * 立案读数：平台那一跑展开 212 份而账上 210、本地是 211 = `git ls-files '*.mjs'` 的数，
- * 红只给两个数 —— 「差一份」有两种相反的修法（该记账 vs 该把它归进 exclude）。
- * 现在的口径：账记的是**这份提交**里有多少脚本，所以求交在判据里做、判据自己点名，
- * 用例这一侧读的是**同一份实现**（`trackedMjs` + `splitTrackedFace`），不抄第二遍。
- */
+ * 面 ⇄ 入库清单：未入库的产物不进账（ISSUE #2681）。立案读数：平台展开 212 份而账上 210、本地 211 =
+ * `git ls-files '*.mjs'` 的数，红只给两个数 ——「差一份」有两种相反修法（该记账 vs 该归进 exclude）。现在账记的是
+ * **这份提交**里有多少脚本，所以求交在判据里做、判据自己点名，用例这一侧读**同一份实现**（`trackedMjs` +
+ * `splitTrackedFace`），不抄第二遍。 */
 describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
   const judge = createRequire(import.meta.url)("../scripts/check-scripts-typecheck.cjs") as {
     splitTrackedFace: (
@@ -555,13 +516,9 @@ describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
 });
 
 /**
- * 「筛不了」必须分两种原因（ISSUE #2965）。
- *
- * 立案现场：平台上一跑「230 vs 229」的红说不出来历 —— `trackedMjs()` 把
- * 「不是 git 顶层（真·夹具形态）」与「git 命令失败（真故障）」归成同一个 `null`，
- * 后者被静默折成「面 = 磁盘展开」。现在的口径：真故障退 2（没结论）并念出
- * stderr 首行，只有夹具形态才走「没按入库清单筛」那一档。
- */
+ * 「筛不了」必须分两种原因（ISSUE #2965）。立案现场：平台一跑「230 vs 229」的红说不出来历 —— `trackedMjs()` 把
+ * 「不是 git 顶层（真·夹具形态）」与「git 命令失败（真故障）」归成同一个 `null`，后者被静默折成「面 = 磁盘展开」。
+ * 现在的口径：真故障退 2（没结论）并念出 stderr 首行，只有夹具形态才走「没按入库清单筛」那一档。 */
 describe("取不到 git 清单要分两种原因（ISSUE #2965）", () => {
   /* SAFETY: 类型断言已复核 */
   const judge = createRequire(import.meta.url)("../scripts/check-scripts-typecheck.cjs") as {

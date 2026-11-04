@@ -1,33 +1,16 @@
 /**
- * Storybook 基建的**契约判据**（ISSUE #1381）。
- *
- * 为什么需要它：Storybook 的配置错法全都**不报错**——
- *  · `stories` glob 写错 → 侧栏空着，但构建成功（`build:storybook` 退出 0）；
- *  · 漏引 `globals.css` → 组件渲染成无样式裸 DOM，画布上看着像「设计就是这样」；
- *  · 漏掉主题装饰器 → 只有 dark 一态，`light` 的 token 分支无人走过；
- *  · 启动脚本忘了注入 `SKIP_ENV_VALIDATION` → 每个缺 `.env` 的检出上直接崩在
- *    `next.config.js` 的 `import "./src/env.js"`，而这是别人克隆后的第一印象。
- *
- * 上面四条都能被一次「跑起来看一眼」发现，但没有任何 *自动* 判据会红——于是修好
- * 之后又会被下一个人改回去。这里把「配置契约」机器化：只读文本与 AST 能判的判据
- * 放在这里，真渲染由 `storybook:build` + 人工/截图负责。
+ * Storybook 基建的**契约判据**（ISSUE #1381）。配置错法全不报错：`stories` glob 写错 ⇒ 侧栏空着但构建退 0；
+ * 漏 `globals.css` ⇒ 无样式裸 DOM；漏主题装饰器 ⇒ 只走 dark；启动脚本漏 `SKIP_ENV_VALIDATION` ⇒ 缺 `.env`
+ * 的检出崩在 `next.config.js` 的 `import "./src/env.js"`。自动判据不红就会被改回去，所以把文本/AST 能判的契约机器化。
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * Storybook 自己的那把「补后缀」尺子（Node ESM loader 在加载 `.storybook/main.ts`
- * 时用的同一个函数）。
- *
- * 为什么直接用它、而不是在本文件里抄一份正则：判据要量的就是「**Storybook 会不会
- * 为这次加载打 deprecation**」，而那条规则由它实现定义。抄一份的结果是规则变了 ours
- * 还在绿 —— 那是第二个事实来源（§12.18 的反面）。
- *
- * 为什么带 `@ts-expect-error`：storybook 的 package.json `exports` 对这条子路径只给了
- * `default` 条件（产物是 esbuild 打的 JS，没有随包类型），直接 import 会 TS7016。
- * 这里把用到的那**一个**函数按签名声明一次，调用点仍受类型检查；哪天 Storybook 补上
- * 类型，这条指令会自己变成「未被使用」而报错 —— 那正是该改判据的信号。
+ * Storybook 自己的「补后缀」尺子（Node ESM loader 加载 `.storybook/main.ts` 用的同一个函数）。直接用它而非
+ * 抄正则：判据量的就是「Storybook 会不会为这次加载打 deprecation」，规则由它实现定义，抄一份会规则变了还绿（§12.18）。
+ * 带 `@ts-expect-error`：`exports` 只有 `default` 条件、无随包类型 ⇒ 直接 import 会 TS7016；补类型后该指令自报未使用。
  */
 // @ts-expect-error -- storybook 未随包提供该子路径的类型声明（exports 只有 default 条件）
 import * as storybookLoader from "storybook/internal/bin/loader";
@@ -132,23 +115,11 @@ describe("Storybook 配置契约（ISSUE #1381）", () => {
   });
 
   it("配置与注入层的相对 import 一律带后缀（否则每次启动都刷一串 deprecation）", () => {
-    /* 这条判的是**加载链路**，不是风格偏好。
-     *
-     * Storybook 10 用一个 Node ESM loader 加载 `.storybook/main.ts`（ESM 的解析
-     * 规则要求完整说明符），loader 会在 esbuild 转译后把无后缀的相对 import 补上
-     * 后缀 —— 能跑，但**每补一次打一条 deprecation**：
-     *   "One or more extensionless imports detected: "./x" in file "...main.ts""。
-     * 它的坏处是遮蔽：真正的启动报错混在一串告警里，而这条 deprecation 本身在下一个
-     * Storybook 大版本里会变成硬错误（届时是「工作台起不来」，不是「一条告警」）。
-     *
-     * 判据**直接用 Storybook 自己的那个函数**（`storybook/internal/bin/loader` 的
-     * `addExtensionsToRelativeImports`，走 package.json 的 exports 声明）：它「要改写
-     * 源码」就等价于「启动时会打那条 deprecation」。另抄一份正则看着更轻，实际是第二
-     * 个事实来源 —— Storybook 改了补写规则 ours 会继续绿。
-     *
-     * 这条判据的**边界**：loader 只在「无后缀 **且** 目标文件真实存在」时才补写（它要
-     * 按候选后缀列目录）。所以「无后缀 + 文件根本不存在」那种 import 本条抓不到 ——
-     * 那由 tsc 的 TS2307 抓（提交门槛 A 组），两条门禁各管一头，不重不漏。 */
+    /* 判的是**加载链路**：Storybook 10 的 Node ESM loader 会为无后缀相对 import 补后缀，能跑但每补一次打
+     * 一条 deprecation（"One or more extensionless imports detected…"），它遮蔽真启动错误，且下个 Storybook
+     * 大版本会变硬错误。判据直接用 `storybook/internal/bin/loader` 的 `addExtensionsToRelativeImports`（「要
+     * 改写源码」⇔「启动会打告警」），另抄正则就成了第二个事实来源。边界：loader 只在无后缀且目标真实存在时
+     * 补写；不存在的 import 由 tsc TS2307 抓（A 组），两条门禁各管一头。 */
     const files = storybookSources();
     // 扫描面非空：目录读空了，下面那条相等断言会在空集上假绿。
     expect(files.length).toBeGreaterThan(0);
@@ -168,15 +139,10 @@ describe("Storybook 配置契约（ISSUE #1381）", () => {
   });
 
   it("判据自身可反证：无后缀说明符确实会被 loader 改写（否则上面那条是空转）", () => {
-    /* 与本文件其余判据同源的形状：先证明「被测的那条规则真的会红」，再把它当成门禁。
-     *
-     * 两条说明符都必须指向 `.storybook/` 下**真实存在**的模块 —— loader 是按候选后缀
-     * 列目录才决定补不补的，指向一个不存在的文件时它原样放行（那类 import 由 tsc 的
-     * TS2307 负责，见上面那条判据的边界说明）。
-     *
-     * 断言分两半，缺一不可：`./app-origin-defaults` 被补成 `.ts`（规则真的会红），
-     * 而已经写全的 `./app-origin-reader.ts` 原样不动（判据量的不是「源码被改动」这件
-     * 无关的事 —— 否则把文件整体重排版也会红）。 */
+    /* 同源形状：先证明「被测规则真的会红」，再把它当门禁。两条说明符都必须指向 `.storybook/` 下真实存在
+     * 的模块 —— loader 只在目标存在时才补写，否则原样放行（那类由 tsc TS2307 负责）。断言分两半：
+     * `./app-origin-defaults` 被补成 `.ts`（规则真会红），而写全的 `./app-origin-reader.ts` 原样不动
+     * （判据量的不是「源码被改动」，否则整体重排版也会红）。 */
     const patched = addExtensionsToRelativeImports(
       `import { APP_ORIGIN_DEFAULTS } from "./app-origin-defaults";\n` +
         `import { APP_ORIGIN_ENV_KEYS } from "./app-origin-reader.ts";\n`,

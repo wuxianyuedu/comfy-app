@@ -1,15 +1,7 @@
 /**
- * 桌面壳提交门禁（`scripts/shell-gate.mjs`）的判据。
- *
- * 这一步只在暂存改动命中壳输入时才做事，所以它的**触发面**比它的实现更容易出错：
- * 窄了 = 改了壳没人管（就是此前壳里那批 `#[test]` 从不跑、硬规则 5 只靠人记的那个状态）；
- * 宽了 = 每个前端提交都要付一次 Rust 编译（冷实测 430s），那会让人直接 `--no-verify`，
- * 判据反而归零。本文件守的就是这两头，外加「别自己重抄一份比时间戳的逻辑」。
- *
- * 另有一半是 ISSUE #1356 才补上的：**判决本身**。此前 `runGate` 的四条出口（cargo 缺失 /
- * cargo 失败 / 壳陈旧 / 没编出壳）与「判出问题 ⇒ 非零退出」这条传导从来没有用例执行过，
- * 只有一段抠源码文本的断言顶着 —— 那是「源码长这样」，不是「跑起来会退 1」。现在由
- * `runGate 的四条判决分支真跑` 那组用夹具（一次性检出 + 受控 mtime + 注入的 cargoRunner）执行。
+ * 桌面壳提交门禁（`scripts/shell-gate.mjs`）的判据。触发面比实现更易错：窄了 = 改了壳没人管（`#[test]` 从不跑、
+ * 硬规则 5 靠人记）；宽了 = 每个前端提交付一次 Rust 编译（冷 430s）⇒ 人直接 `--no-verify`，判据归零。
+ * 另半（ISSUE #1356）是**判决本身**：`runGate` 四条出口与「判出问题 ⇒ 非零退出」过去只有抠源码断言，现由夹具组真跑。
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import {
@@ -58,11 +50,8 @@ function read(rel: string): string {
 }
 
 /**
- * D 组步骤 = 钩子里 `  run "<标签>" <命令>` 那些行（行首锚定只认真调用：
- * `run() { … }` 的函数定义、被 `#` 注掉的行都不算）。
- * 与 `tests/doc-check-hook-wiring.test.ts` 的 `dGroupSteps` 同一份形态。
- * @param {string} hookText
- * @returns {{label: string, cmd: string}[]}
+ * D 组步骤 = 钩子里行首锚定的 `  run "<标签>" <命令>`（`run() { … }` 定义与 `#` 注释行不算）。
+ * 与 `tests/doc-check-hook-wiring.test.ts` 的 `dGroupSteps` 同一形态。
  */
 function dGroupSteps(hookText: string) {
   return [...hookText.matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) => ({
@@ -191,12 +180,9 @@ describe("桌面壳提交门禁的触发面（§11.10.4 / 硬规则 5）", () =>
 });
 
 /**
- * 合并提交下「原样采纳对方那侧」的壳输入不该触发重编判据。
- *
- * 现场：一个纯前端 PR 拉了 master，master 上早已编好发版的 `splash-assets/` 被自动
- * 合并进来；`git diff --cached` 把它算成本次改动，于是本地编不出壳的机器（Linux
- * 容器 / 非 Windows）上，这个 PR 被永久拦死 —— 而它一个壳文件都没创作。
- * 这里用真实临时仓库跑出 `git merge` 的三种形态，守的是「该放行的放行、该拦的仍拦」。
+ * 合并提交下「原样采纳对方那侧」的壳输入不该触发重编判据。现场：纯前端 PR 拉了 master，master 上早已编好的
+ * `splash-assets/` 被自动合并进来，`git diff --cached` 算成本次改动 ⇒ 本地编不出壳的机器上这个 PR 被永久拦死。
+ * 用真临时仓库跑 `git merge` 三种形态，守「该放行的放行、该拦的仍拦」。
  */
 describe("合并提交的壳采纳过滤（dropAdoptedShellInputs）", () => {
   const temps: Array<string> = [];
@@ -321,15 +307,9 @@ describe("合并提交的壳采纳过滤（dropAdoptedShellInputs）", () => {
 });
 
 /* ── 判决与传导的真跑（ISSUE #1356）───────────────────────────────────────
- *
- * 上面那组钉的是**触发面**（哪些文件算壳输入）与**合并采纳过滤**（真造 git 合并态）。
- * 这一组钉的是另一半：`runGate` 的四条出口与「判出问题 ⇒ 非零退出」这条传导。
- *
- * 为什么单独补：旧版把判决写在 `main()` 的 print 语句之间，所以这四条从来没有用例跑过，
- * 只有一段抠源码文本的断言顶着（`toContain("whichCommand")` 加
- * `toMatch(/return 1;\s*\n\s*\}\s*\n\s*if \(code !== 0\)/)`）—— 那是「源码长这样」，
- * 不是「跑起来会退 1」。同族事故：#1345 把脚本自己打的 label 当成执行记录、
- * #1350 把陈旧 `$LASTEXITCODE` 当成败。**源码文本不是执行记录。**
+ * 上面那组钉**触发面**与**合并采纳过滤**（真造 git 合并态）；这一组钉另一半：`runGate` 四条出口与「判出问题
+ * ⇒ 非零退出」这条传导。旧版判决写在 `main()` 的 print 之间，四条从未被用例跑过，只有抠源码文本的断言顶着 ——
+ * 那是「源码长这样」，不是「跑起来会退 1」；同族 #1345 / #1350 说明**源码文本不是执行记录**。
  */
 describe("runGate 的四条判决分支真跑（夹具）", () => {
   const temps: Array<string> = [];
@@ -343,11 +323,9 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
   const HOUR = 3_600_000;
 
   /**
-   * 造一份最小壳检出：四类输入齐，`exe` 决定壳二进制的新旧。
-   *
-   * - `newer` = 编过了（该放行）；`older` = 改了壳忘了重编（该拦）；`none` = 根本没编出来（该拦 + 给命令）。
-   * - `app.exe` 与 `app` 两个名字都放：`defaultShellExe()` 按平台选，两个都有就不必给 CI 分叉。
-   * - 时间差给足 1 小时：文件系统 mtime 粒度在某些卷上是秒级，差几十毫秒的比较不稳。
+   * 造一份最小壳检出：四类输入齐，`exe` 决定壳二进制新旧 —— `newer` 该放行 / `older` 改了忘重编 / `none`
+   * 根本没编出（该拦 + 给命令）。`app.exe` 与 `app` 都放：`defaultShellExe()` 按平台选，免 CI 分叉。
+   * 时间差给足 1 小时：某些卷的 mtime 粒度是秒级，差几十毫秒比较不稳。
    */
   function shellFixture(exe: "newer" | "older" | "none"): string {
     const dir = mkdtempSync(path.join(tmpdir(), "shell-gate-fixture-"));
@@ -423,15 +401,9 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
   }
 
   /**
-   * cargo 的寻址判据（ISSUE #1555）。
-   *
-   * 立案现场：CI / 容器镜像**精修过 PATH**，`~/.cargo/bin` 常常不在 —— 本仓开发
-   * 容器实测 `which cargo` 为空，而同一台机器上 `~/.cargo/bin/cargo` 与
-   * `~/.rustup/toolchains/<版本>/bin/cargo` 都在。此时改一行 Rust 会被判成
-   * 「编不了」，真因却只是「探针比 cargo 装得更苛刻」。
-   *
-   * 这一组用一个**假 home**（临时目录里造 `~/.cargo/bin/cargo`）把回退路径真跑出来：
-   * 判据是「找不到就说找不到、找得到就返回那一个」，而不是「源码里有 readdirSync」。
+   * cargo 的寻址判据（ISSUE #1555）。现场：CI / 容器镜像精修过 PATH，`~/.cargo/bin` 常不在 —— 本仓开发容器
+   * 实测 `which cargo` 为空，而 `~/.cargo/bin/cargo` 与 `~/.rustup/toolchains/<版本>/bin/cargo` 都在，改一行
+   * Rust 就被判「编不了」，真因只是探针比 cargo 苛刻。这组用**假 home** 真跑回退路径。
    */
   describe("cargo 寻址：PATH 优先、工具链默认安装位兜底（ISSUE #1555）", () => {
     const temps: Array<string> = [];
@@ -442,9 +414,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
     });
 
     /**
-     * 造一个假 home，按 `dirs` 放 `cargo`。
-     *
-     * 只造文件不造内容：`findCargo` 判的是「这条路径上有没有那个可执行文件」，
+     * 造一个假 home，按 `dirs` 放 `cargo`。只造文件不造内容：`findCargo` 判的是「路径上有无可执行文件」，
      * 真起不起来由 `runCargoTest` 的注入参数管（那是另一格）。
      */
     function fakeHome(dirs: Array<string>): string {
@@ -548,15 +518,9 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
       const bin = mkdtempSync(path.join(tmpdir(), "shell-gate-pathbin-"));
       temps.push(bin);
       const onPath = path.join(bin, cargoName);
-      /* PATH 那一支与安装位那几支**判据不同层**：安装位只查「那条路径在不在」，
-       * 而 PATH 走 `whichCommand()`，它会**真起一次**确认（`spawnSync` + `--version`）。
-       * 所以这里造的那份必须在本机真的起得来 —— Windows 上 Node 不解析 shebang
-       * （libuv 直接把路径交给 CreateProcess），写一个 `#!/bin/sh` 的假 cargo 只会被
-       * 判成「起不来」，于是 PATH 那份永远命中不了、判据落回假 home，
-       * 表现是「这条在 POSIX 绿、在 Windows 恒红」（台账 E12 / E13 记的正是这一族：
-       * 红的不是判据，是夹具在这台机器上根本搭不起来）。
-       * 借当前宿主造一份真能起的二进制：`process.execPath` 必然在场、必然可 spawn，
-       * 而判据只看「拿到的是不是 PATH 目录里那一份」，与它是什么程序无关。 */
+      /* PATH 与安装位**判据不同层**：安装位只查「路径在不在」，PATH 走 `whichCommand()` 会**真起一次**
+         （`spawnSync` + `--version`）。Windows 上 Node 不解析 shebang（libuv 交给 CreateProcess），`#!/bin/sh` 的假
+         cargo 只会被判「起不来」⇒ 恒红（台账 E12 / E13）。故借 `process.execPath` 造必然可 spawn 的二进制。 */
       if (process.platform === "win32") {
         copyFileSync(process.execPath, onPath);
       } else {
@@ -612,14 +576,9 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
   });
 
   /**
-   * `CARGO_HOME` 那一处要真的命中（ISSUE #2293 的平台现场）。
-   *
-   * 现场读数：`.cnb.yml` 给 `重档静态判据` 配了 `CARGO_HOME` / `RUSTUP_HOME`，
-   * 而 runner 的 PATH 是**固定的**、不会跟着这两个变量长出来 ⇒ `whichCommand("cargo")`
-   * 必然落空，整格按「没跑起来」收（退 2）。那时唯一的出路就是这条回退。
-   *
-   * 这一组判的是**回退真的命中了那一个文件**，以及「值的形状不许决定命不命中」——
-   * 引号、相对路径、尾部分隔符三种写法都得走到同一个落点。
+   * `CARGO_HOME` 那一处要真的命中（ISSUE #2293）：`.cnb.yml` 给 `重档静态判据` 配了 `CARGO_HOME` / `RUSTUP_HOME`，
+   * 而 runner 的 PATH 固定、不随它们长 ⇒ `whichCommand("cargo")` 必落空、整格按「没跑起来」收（退 2），
+   * 那时唯一出路就是这条回退。判的是回退真命中，且引号 / 相对路径 / 尾部分隔符都落同一处。
    */
   describe("CARGO_HOME 的落点要真的进判据（ISSUE #2293）", () => {
     const temps: Array<string> = [];
@@ -663,15 +622,9 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
     });
 
     it("找不到时要说得出探了哪几处、每一处为什么没命中（不许只说「找不到」）", () => {
-      /* 这一格的被测形状是「候选**全部**没命中」，所以它必须把候选的每一条来源都注入掉
-         （ISSUE #2416）。候选有四处：`PATH` → `CARGO_HOME/bin` → rustup 记着的
-         `cargo_home/bin` → `~/.cargo/bin`（`home` 与 `$USERPROFILE` / `$HOME` 各一份）
-         → `~/.rustup/toolchains`，而后三处**都从家目录派生**。过去这里只注了 `PATH`
-         与 `CARGO_HOME`，`home` 取了进程的真实家目录 ⇒ 在装过 rustup 的开发机上
-         `~/.rustup/toolchains` 必然命中，这一格恒红；而 runner 的服务账号下那个目录
-         不存在，它反倒恒绿。「本地红 / 平台绿」这种**方向相反**的组合最容易被读成
-         「我这边环境坏了」而没人立案 —— 判据侧（#2376 加第三处候选）是对的，
-         缺的是用例侧的隔离。 */
+      /* 被测形状是「候选**全部**没命中」，必须注入候选的每一条来源（ISSUE #2416）：`PATH` → `CARGO_HOME/bin` →
+         rustup 记着的 `cargo_home/bin` → `~/.cargo/bin` → `~/.rustup/toolchains`，后三处都从家目录派生。过去只注
+         前两处、`home` 取真实家目录 ⇒ 开发机恒红、服务账号恒绿，「方向相反」的假红假绿没人立案。 */
       const fakeUserHome = tempDir("shell-gate-no-cargo-home-");
       temps.push(fakeUserHome);
       const got = findCargoLookup({
@@ -694,17 +647,11 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
       ).toBe(true);
     });
 
-    /* ── 目录在、而 `fs` 判那个名字不存在（ISSUE #2368 的平台现场）───────────
-     *
-     * 平台 runner 的 `CARGO_HOME` 是 `G:\.cargo`，而 `G:` 是 **subst 出来的盘符**：
-     * Node 的 `fs` 走 Win32 long-path 前缀，subst 映射是**每登录会话**的 ⇒ 同一份
-     * cargo 对 `fs` 不存在、对 `Get-Command` 存在。旧判据只做
-     * `existsSync(<dir>/cargo.exe)`，于是在「装好了」的机器上永远「一个都没命中」，
-     * 整格按「没跑起来」收 —— 红的原因是判据自己，不是代码。
-     *
-     * 判据退一步问「这个目录在不在、里面有没有这个名字」：`existsSync` 说没有、
-     * 而 `readdirSync` 里有 ⇒ 记成 `unreadable` 并把目录读数写进取证，**不再**
-     * 冒充「盘上没有这个文件」，也不假装命中（那会拿一个跑不起来的路径去 cargo test）。 */
+    /* ── 目录在、而 `fs` 判那个名字不存在（ISSUE #2368）─────────────────────
+     * 平台 `CARGO_HOME` 是 `G:\.cargo`，`G:` 是**每登录会话**的 subst 盘符 ⇒ 同一份 cargo 对 Node 的 `fs` 不存在、
+     * 对 `Get-Command` 存在；旧 `existsSync(<dir>/cargo.exe)` 判据在「装好了」的机器上永远「一个都没命中」。
+     * 新判据问「目录在不在、里面有没有这名字」：`readdirSync` 里有而 `existsSync` 没有 ⇒ 记 `unreadable` 取证，不冒充缺件。
+     */
     it("目录里有 cargo 而 `fs` 判它不在 ⇒ 取证要说得出，不许写成「盘上没有」", () => {
       const home = mkdtempSync(path.join(tmpdir(), "shell-gate-subst-"));
       temps.push(home);
@@ -743,15 +690,9 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
     });
 
     /* ── 「装在哪」不许只从环境变量推（ISSUE #2374）─────────────────────────
-     *
-     * 立案现场：用户报了 cargo 的真路径 `G:\.cargo\bin\cargo.exe`，而探针说找不到。
-     * 旧回退面只从环境变量推落点 —— `$CARGO_HOME/bin` 随 `CARGO_HOME` 一起消失，
-     * `~/.cargo/bin` 只按 `os.homedir()` 求；于是「cargo 装在那个用户的
-     * `.cargo\bin`、而 CARGO_HOME 没传进这一格」这一形态**三处全空**，结论与
-     * 「没装」逐字同形，而盘上那份一直在。
-     *
-     * 现在候选多两条**事实来源**：rustup 的 `settings.toml` 记着的 `cargo_home`，
-     * 以及 `USERPROFILE` / `HOME` 与 `os.homedir()` 不一致时的另一种 `~/.cargo/bin`。
+     * 用户报 `G:\.cargo\bin\cargo.exe` 而探针说找不到。旧回退只从环境变量推 —— `$CARGO_HOME/bin` 随变量消失、
+     * `~/.cargo/bin` 只按 `os.homedir()` 求 ⇒ 「装在用户 `.cargo\bin` 而 CARGO_HOME 没传进来」三处全空、结论与「没装」同形。
+     * 现补两条事实来源：rustup `settings.toml` 的 `cargo_home`，与 `USERPROFILE` / `HOME` 异于 `os.homedir()` 时的另一份 `~/.cargo/bin`。
      */
     describe("「装在哪」读 rustup 记着的事实与用户家目录，不只读环境变量（ISSUE #2374）", () => {
       const temps: Array<string> = [];
@@ -941,11 +882,9 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
 });
 
 /**
- * `--base` 形态：以 PR diff 为判决面（ISSUE #2224）。
- *
- * 这一族治的是「平台上恒绿且无输出」：本地形态的判决面是**暂存区**，而平台流水线
- * 没有暂存区 ⇒ `touchesShell` 恒假 ⇒ 这一步退 0 且一个字都不打 ⇒ 硬规则 5 那两条
- * （改了壳必须重编 / 壳内那批 `#[test]`）在平台侧**没有执行者**，而账面全绿。
+ * `--base` 形态：以 PR diff 为判决面（ISSUE #2224）。这一族治的是「平台上恒绿且无输出」—— 本地判决面是
+ * **暂存区**，而平台流水线没有暂存区 ⇒ `touchesShell` 恒假 ⇒ 这一步退 0 且一个字都不打，硬规则 5 那两条
+ * （改了壳必须重编 / 壳内 `#[test]`）在平台侧没有执行者，而账面全绿。
  */
 describe("shell-gate —— `--base` 形态（平台侧以 PR diff 为判决面）", () => {
   const temps: Array<string> = [];
@@ -1027,15 +966,9 @@ describe("shell-gate —— `--base` 形态（平台侧以 PR diff 为判决面�
 });
 
 /**
- * 平台合成 merge 提交上的 `--base` 形态（ISSUE #2325 的现场）。
- *
- * 那一跑的读数：`HEAD 86a5a3b8864d (detached)` 而 `CNB_COMMIT = e1f8ea4f…`
- * ⇒ 平台检出的是「本 PR 并进目标分支（那一刻）」的 merge 提交，而基线是
- * `CNB_PULL_REQUEST_TARGET_SHA`。两者错位时三点 diff 的 merge-base 就是基线自己
- * ⇒ 「目标分支在基线之后自己落地的壳改动」进了本 PR 的改动面 ⇒ 要求 cargo ⇒
- * 那台 runner 没有 ⇒ 退 2。红与 PR 的代码无关，任何人撞上那个窗口都会中。
- *
- * 用例真造 git 仓库与真起 CLI：假 git 回放不出 merge 拓扑，而这一族判的就是拓扑。
+ * 平台合成 merge 提交上的 `--base` 形态（ISSUE #2325）：`HEAD 86a5a3b8864d (detached)` 而 `CNB_COMMIT` 不同，即
+ * 「本 PR 并进目标分支」的 merge 提交；错位时三点 diff 的 merge-base 就是基线 ⇒ 目标分支在基线后落地的壳改动
+ * 进了本 PR 改动面 ⇒ 要求 cargo ⇒ runner 没有 ⇒ 退 2，与 PR 代码无关（假 git 回放不出拓扑，用真仓库）。
  */
 describe("shell-gate —— 平台合成的 merge 提交不许把别人的壳改动算进来（#2325）", () => {
   const temps: Array<string> = [];
@@ -1129,12 +1062,9 @@ describe("shell-gate —— 平台合成的 merge 提交不许把别人的壳改
 });
 
 /**
- * `cargo test` 的编译前提落位（ISSUE #2192 的平台首跑现场）：
- * `tauri.conf.json` 声明的 `binaries/node`（externalBin）与 `static/`（resources）
- * 是 build script 的**存在性校验**对象，而真产物由 build-desktop 组装、被
- * `src-tauri/.gitignore` 忽略 ⇒ 平台侧全新 clone 上第一次 cargo test 就死在
- * build script（`resource path binaries\node-… doesn't exist`）。落位的是编译前提
- * 而不是真产物 —— 真产物归 build-desktop，两路不许互相冒充。
+ * `cargo test` 编译前提落位（ISSUE #2192）：`tauri.conf.json` 声明的 `binaries/node`（externalBin）与 `static/`（resources）
+ * 是 build script 的**存在性校验**对象，真产物却由 build-desktop 组装且被 `src-tauri/.gitignore` 忽略 ⇒ 全新 clone
+ * 首跑 cargo test 死在 build script。落位的是编译前提而非真产物，两路不许互相冒充。
  */
 describe("cargo test 编译前提落位（materializeCargoTestInputs）", () => {
   const VERSION_OUT = "cargo 1.98.0 (…)\nrelease: 1.98\nhost: x86_64-pc-windows-msvc\n";
@@ -1173,15 +1103,9 @@ describe("cargo test 编译前提落位（materializeCargoTestInputs）", () => 
     expect(r.lines.join("\n")).toContain("sidecar");
 
     /**
-     * 这一格是 #2629 的**边界本体**：`src-tauri/static/` 是
-     * `check-standalone-contents.cjs` 数的第二层（真被内嵌进 exe 的那份载荷根），
-     * 所以开发期的编译前提**不得往这里放任何东西**。
-     * 旧实现写了一个 `.cargo-test-placeholder`，后果是「本机跑过一次 cargo test ⇒
-     * `pnpm build` 恒红在产物层（顶层出现白名单外的条目）」，而平台那一跑永远
-     * 看不到这一格（CI 不跑 pre-commit）。
-     *
-     * 「空目录就够」不是推测：清空 `src-tauri/static/` 后 `cargo test --offline`
-     * 实测 `56 passed`（壳内全部 `#[test]` 的那个执行者，见 AGENTS 硬规则 5）。
+     * #2629 的**边界本体**：`src-tauri/static/` 是 `check-standalone-contents.cjs` 数的第二层（真内嵌进 exe 的载荷根），
+     * 开发期编译前提**不得往这里放任何东西**。旧实现写 `.cargo-test-placeholder` ⇒ 本机跑过 cargo test 后
+     * `pnpm build` 恒红在产物层，而平台不跑 pre-commit 看不到。「空目录就够」实测：清空后 `cargo test --offline` 56 passed。
      */
     const staticDir = path.join(srcTauri, "static");
     expect(existsSync(staticDir), "static/ 这个目录仍要建出来（resources 声明的输入）").toBe(true);

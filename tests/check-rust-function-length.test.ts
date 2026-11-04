@@ -1,12 +1,7 @@
 /**
- * Rust 函数长度门禁自检：把 `scripts/check-rust-function-length.cjs` 当黑盒跑在
- * 临时工作区上，验证它真能认出「超长函数」并**阻断**（硬闸）。
- *
- * 规范：docs/standards/12-代码组织与文件结构.md §12.13
- *
- * 为什么需要这条：§12.13 的 TS/TSX 门禁（`check-function-length.cjs`）**扫不到
- * Rust** —— 于是 `src-tauri/src/lib.rs` 的 `run()` 里塞了近 300 行的窗口 / 托盘 /
- * 协议 / sidecar 编排，而「能不能拆」在这条链路上没有任何机器信号（ISSUE #536 P4）。
+ * Rust 函数长度门禁自检：把 `scripts/check-rust-function-length.cjs` 当黑盒跑在临时工作区，验证它真能
+ * 认出「超长函数」并**阻断**（硬闸）。规范：docs/standards/12-代码组织与文件结构.md §12.13；为什么需要：
+ * 该门禁扫不到 Rust，`src-tauri/src/lib.rs` 的 `run()` 塞了近 300 行窗口 / 托盘 / 协议 / sidecar 编排，无机器信号（#536 P4）。
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";

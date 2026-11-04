@@ -1,27 +1,7 @@
 /**
- * `src/lib/**` 的 Node-only 声明规则（规范 §18.4「唯一口径」，ISSUE #572 第 1 项）。
- *
- * 背景：同一件事此前有**三套写法并存**且没有任何文档说明何时用哪个 ——
- *   `.server.ts` 后缀（7 个文件）/ 顶层 `import "server-only"`（21 个文件）/
- *   两者都没有（14+ 个顶层 `import fs` 的模块）。第三个形态不是风格问题：
- *   `log-session-scope.ts` 顶层 `node:fs` 被客户端组件引到，Turbopack 把
- *   `node:fs` 整图形入浏览器 chunk，`/login` 与 `/workspace` **整页 500**
- *   （ISSUE #317 / #282）。
- *
- * 本用例把 §18.4 的三分类**变成机器判据**：
- *
- *   A. 声明形态 → 最窄的那条路径**都引不到它**（`lib-*-only` 入口不可达）
- *   B. 纯模块   → 客户端可达图中也不能出现（webpack/turbopack 不采样该路径，
- *                只有真被引到才红）
- *   C. 纯 Node 宿主 → **显式登记**，且登记项会反向核对（清单只许变短）
- *
- * 为什么必须走「可达性」而不是「扫 `import fs` 就要求 `server-only`」：
- * `eslint-plugin-boundaries` 的 import 图**对服务端源码完全不采样**
- * （实测：给 `src/lib/log/log-paths.ts` 加 `import "server-only"` 后 `pnpm lint` 仍绿），
- * 于是「扫到 fs 就要求声明」的写法**没有任何门禁能替它兜底** —— 而 §18.4 的
- * 第三类（纯 Node 宿主）本来就不该带 `server-only`（它的入口是一句 `throw`，
- * 加上去 `scripts/*.mjs` 的启动编排会直接崩）。判据必须区分「真的可能被打包
- * 进浏览器」与「只由纯 Node 宿主加载」，这只有走依赖图才能知道。
+ * `src/lib/**` 的 Node-only 声明判据（规范 §18.4，ISSUE #572）：A 声明形态须在最窄入口不可达、B 纯模块
+ * 须不在客户端可达图（webpack/turbopack 不采样该路径）、C 纯 Node 宿主须显式登记且清单只许变短。走依赖图而非
+ * 「扫 import fs 就要求声明」：boundaries 对服务端源码不采样（#317/#282 让 node:fs 进浏览器 chunk 致整页 500），第三类加了会 throw。
  */
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
@@ -30,150 +10,84 @@ const REPO_ROOT = process.cwd();
 
 /** §18.4 第二类：纯 Node 宿主（由 `scripts/*.mjs` 动态加载，不经 Next 打包）。 */
 const PURE_NODE_HOSTS = [
-  // 壳侧启动链路的路径 / 行形态 / 常驻快照内容（ISSUE #784）：
-  //   · 它服务的两个消费方都**不是** Next 页面 —— 面板读同一份路径靠 Rust 侧的
-  //     对应实现（`src-tauri/src/shell_launch.rs`，两侧逐项同形），而「壳会往
-  //     哪写」是构建期已被嵌进 exe 的常量；
-  //   · 文件句柄（`mkdirSync` / `appendFileSync`）只由壳侧宿主进程触达，浏览器
-  //     侧不可能也做不到；
-  //   · 加 `server-only` 会把「这本模块是构建期/壳侧常量」这件事说反（它的入口
-  //     会 throw），因此按 §18.4 第三类登记。
+  // 壳侧启动链路的路径 / 行形态 / 常驻快照（ISSUE #784）：消费方都非 Next 页面 —— 面板读同一份路径靠
+  // Rust 侧 `src-tauri/src/shell_launch.rs` 逐项同形，写入点是构建期常量；句柄只由壳侧宿主触达。
+  // 加 `server-only` 会把「本模块是构建期/壳侧常量」说反（入口会 throw），按 §18.4 第三类登记。
   "src/lib/shell/launch-diagnostics.ts",
-  // reveal-path.ts（ISSUE #1365）：日志行里点路径 → 在文件管理器里定位。
-  // 顶层 Node 内建 value import 有 `child_process`（spawn explorer / open /
-  // xdg-open）与 `fs`（判路径存在）+ `path`（Linux 分支取父目录）。
-  // 消费方是 tRPC 路由（Next 服务端）——**加 `server-only` 也不会多保护什么**，
-  // 却会让「同一份实现被纯 Node 宿主加载」这条潜在路径直接 throw。
-  // 与 `open-in-browser.ts` 的区别不是分层，而是 `open-in-browser` 只被
-  // `src/server/**` 引（因此随 `lib→server` 越界登记表停在那一层），本模块的
-  // 兄弟件 `~/lib/log/log-path-tokens.ts` 是**纯函数**、被浏览器侧静态引，
-  // 两者必须能各自独立加载才谈得上「识别归浏览器、打开归本机」这条分层。
+  // reveal-path.ts（ISSUE #1365）：日志行里点路径 → 在文件管理器里定位。顶层 value import 有 `child_process`
+  // （spawn explorer/open/xdg-open）/ `fs`（判存在）/ `path`（Linux 取父目录），消费方是 tRPC 路由。加 `server-only`
+  // 不多保护什么，却会让「同一份实现被纯 Node 宿主加载」直接 throw；与 `open-in-browser.ts` 的区别只是后者仅被
+  // `src/server/**` 引（越界登记停在那一层），兄弟件 `~/lib/log/log-path-tokens.ts` 须能独立加载。
   "src/lib/shell/reveal-path.ts",
   "src/lib/process/kill-process-tree.ts",
   // workshop MCP：由 tools/mcp-{stdio,http}.ts 经 `tsx` 直接跑，**不经 Next**；
   // 它必须与 Next 侧共用同一份密文实现（`src/server/workshop/llm.ts` 也引它），
   // 因此不能带 server-only（那会让 MCP 宿主直接 throw）。
   "src/lib/llm/secrets.ts",
-  // P3 §5 ADR §14 D1：`runner-state.ts` 的 EventEmitter 已退役，它因此不再顶层
-  // import 任何 Node 内建值——按 scanner 视角它是「无需声明的纯模块」，登记随之
-  // 撤掉。**但「不许带 `server-only`」这条约束一字未变**：带上了 host 侧
-  // `bootRuntime()` 的注入链会在加载它时直接 throw（理由写在模块头部）。
-  // P3 迁移第 1 期·第三步（叶模块批）：以下三个都只有 Node 内建 value import
-  // （`child_process` / `fs` / `path`），完全**不引** server-only 侧模块；
-  // 摘掉 server-only 后按第三类登记。语义与 `kill-process-tree.ts` 同族——
-  // 都是「本机进程 / 环境探测」的地基层，本来就该被 Next server 与未来
-  // `scripts/executor-host.mjs` 双宿主加载。
-  //   · `gpu-vram.ts`：nvidia-smi 探测本机显存（供底部状态栏对照）。
-  //   · `launch-path.ts`：从 comfyuiPath 推导「源码根 + Python 解释器」的纯解析。
-  //   · `proc-detect.ts`：`/proc/net/tcp` + `netstat` 查 PID 监听端口，POSIX /
-  //     Windows 各自走本机自带工具，不依赖 lsof。
+  // P3 §5 ADR §14 D1：`runner-state.ts` 的 EventEmitter 已退役、不再顶层 import Node 内建值，登记随之撤掉；
+  // 但「不许带 `server-only`」不变 —— 带上会让 host 侧 `bootRuntime()` 注入链加载它时 throw。
+  // P3 迁移第 1 期·第三步（叶模块批）：以下三个只有 Node 内建 value import（`child_process`/`fs`/`path`），
+  // 不引 server-only 侧模块；与本机进程探测地基同族，须被 Next server 与未来 `scripts/executor-host.mjs` 双宿主加载。
+  // `gpu-vram.ts`（nvidia-smi 显存）/ `launch-path.ts`（comfyuiPath 推导源码根+解释器）/ `proc-detect.ts`（查监听端口）。
   "src/lib/comfyui/gpu-vram.ts",
   "src/lib/comfyui/launch-path.ts",
-  // comfy-cli-python.ts（ISSUE #1239）：与 `launch-path.ts` 同族的纯解析地基 ——
-  // 从设置项 `comfyCliPython` 推导 comfy-cli 解释器落点、按形态给「找不到」的提示。
-  // 只有 `node:path` 一条内建 value import、不引任何 server-only 侧模块；消费方是
-  // 本清单里的第三类 `executor-cli.ts`，在桌包里那条链跑在**纯 Node 宿主**。它和
-  // `launch-path.ts` 一样是「Next server 与执行宿主双宿主共用」的地基，所以按第三类
-  // 登记，而不是用 `server-only` 把自己说成「只能服务端用」。
+  // comfy-cli-python.ts（ISSUE #1239）：与 `launch-path.ts` 同族的纯解析地基 —— 从设置项 `comfyCliPython`
+  // 推导解释器落点、按形态给「找不到」提示。只有 `node:path` 一条 value import、不引 server-only 侧模块；
+  // 消费方是本清单第三类的 `executor-cli.ts`，桌包里跑在纯 Node 宿主，故按第三类登记而非 `server-only`。
   "src/lib/comfyui/comfy-cli-python.ts",
   "src/lib/comfyui/proc-detect.ts",
-  // trace.ts：诊断通道，落盘路径 `COMFYUI_TRACE_LOG` 从 `~/lib/log/log-paths`
-  // （server-only）拿。P3 迁移第 1 期·第三步把它改成**加载即 fire-and-forget 的
-  // 动态 import** 填模块内 ref；同时导出 `configureTraceLogPath(p)`，让未来
-  // executor host 显式注入路径、不必依赖那条 dynamic 边（在纯 Node 下它会撞
-  // log-paths 里的 server-only throw、被 `.catch(() => undefined)` 咽下）。
-  // trace() 保持同步，ref 未 ready 时静默 skip——与既有硬约束「诊断通道不得
-  // 因磁盘/权限把生成带崩」完全一致，旧行为里写盘失败也是 catch 掉不抛。
+  // trace.ts：诊断通道，落盘路径 `COMFYUI_TRACE_LOG` 从 server-only 的 `~/lib/log/log-paths` 拿。P3 第 1 期·
+  // 第三步改成加载即 fire-and-forget 的 dynamic import 填 ref，并导出 `configureTraceLogPath(p)` 供宿主注入；
+  // 纯 Node 下那条 dynamic 边会撞 server-only throw、被 `.catch` 咽下。trace() 保持同步，ref 未 ready 时静默 skip
+  // （硬约束「诊断通道不得把生成带崩」，旧行为写盘失败也是 catch 掉不抛）。
   "src/lib/comfyui/trace.ts",
-  // executor-finalize.ts：P3 第 1 期·第三步·收口批。摘掉 server-only 后本模块
-  // **自身**的静态边已解——taskRepository / getView / createAppRuntimeLogger
-  // 三条 server-only 侧依赖全改成「首次调用时 dynamic import + 允许
-  // `configureExecutorFinalize` 注入」。Node 内建 fs/path 值 import 保留。
-  // ⚠️ 但**传递闭包**里 `./client`、`./executor-history`、`./executor-continuation`
-  // 各自还静态引 server-only 侧（logger → app-runtime-log → server-only throw、
-  // client → logger 同链），因此登记进本清单**不是**「现在就能在纯 Node 里
-  // import 本模块」的承诺，只是「标迁移方向 + 消化 scanner 的 unguarded」；
-  // 后续 PR 把 client / executor-history / executor-continuation 拆完后，
-  // 本模块才能真正被纯 Node 宿主加载。
+  // executor-finalize.ts：P3 第 1 期·第三步·收口批。摘掉 server-only 后**自身**静态边已解 —— taskRepository /
+  // getView / createAppRuntimeLogger 三条改成首次调用时 dynamic import + `configureExecutorFinalize` 注入。
+  // ⚠️ 传递闭包里 `./client`、`./executor-history`、`./executor-continuation` 仍静态引 server-only 侧，
+  // 故登记**不是**「现在就能在纯 Node 里 import 本模块」的承诺，只是标迁移方向 + 消化 scanner 的 unguarded。
   "src/lib/comfyui/executor-finalize.ts",
-  // output-paths.ts：任务产物布局（落盘目录 / 产物 URL / 删除目标）的唯一一份定义。
-  // 它必须同时被**落盘侧**（上面那条 `executor-finalize.ts`，第三类宿主模块）与
-  // **读删侧**（`src/server/api/routers/task.ts` 的 openFolder / delete）静态 import：
-  // 布局一旦分成两处实现，就会出现「落盘认 `projects/<pid>/<tid>`、删除只认
-  // `<tid>`」这种分叉（本批修的就是它）。给落盘侧引的那条边挂 `server-only`
-  // 等于把这条约束重新拆开，而它只有 `path` 一条 Node 内建 value import，
-  // 「浏览器图别引我」同样由 scanner 的 clientReachable 判据盯。
+  // output-paths.ts：任务产物布局（落盘目录 / 产物 URL / 删除目标）的唯一一份定义，必须同时被落盘侧
+  // （`executor-finalize.ts`）与读删侧（`src/server/api/routers/task.ts` 的 openFolder / delete）静态 import：
+  // 布局分成两处就会出现「落盘认 `projects/<pid>/<tid>`、删除只认 `<tid>`」的分叉（本批修的就是它）。
+  // 给落盘侧那条边挂 `server-only` 等于把约束重新拆开；它只有 `path` 一条 value import，浏览器图由 clientReachable 盯。
   "src/lib/media/output-paths.ts",
-  // executor-cli.ts：P3 第 1 期·第三步·执行批。摘掉 server-only 后本模块**自身**
-  // 的静态边已解——logger（走加载即 fire-and-forget + `cliWarn` 静默 skip）、
-  // taskRepository / resolveComfyBase（在 `executeViaComfyCli` 顶部一次性
-  // resolve、下游 closure 沿用旧名）三条 lazy + `configureExecutorCli` 注入。
-  // 顶层 Node 内建值 import 有 `child_process` / `fs` / `path`（spawn comfy-cli
-  // 子进程 + 读写临时工作流文件），因此落进 unguarded、按第三类登记。
-  // 与 executor-finalize 同一族：传递闭包（./client / ../core/repository 各自
-  // 仍静态引 server-only 侧）留在后续 PR 拆完；本登记**不是**「现在能在纯 Node
-  // 里 import 本模块」的承诺。
+  // executor-cli.ts：P3 第 1 期·第三步·执行批。摘掉 server-only 后**自身**静态边已解 —— logger（fire-and-forget +
+  // `cliWarn` 静默 skip）、taskRepository / resolveComfyBase 两条 lazy + `configureExecutorCli` 注入。
+  // 顶层 value import 有 `child_process`/`fs`/`path`，落进 unguarded、按第三类登记。与 executor-finalize 同族：
+  // 传递闭包（./client / ../core/repository 仍静态引 server-only）留后续 PR，本登记不是「现在能纯 Node import」。
   "src/lib/comfyui/executor-cli.ts",
-  // log-paths.ts：P3 迁移第 1 期·lib 层地基批。摘掉 server-only 后本模块走
-  // §18.4 第三类——只有 `path` 一条 Node 内建值 import、其它全是 `path.join`
-  // 常量。它**是整链 logger 的地基**：`logger` 通过 `app-runtime-log` 静态
-  // 引它、`session-banner.server` / `capture-streams.server` 也引它、
-  // `comfyui/lifecycle` / `comfyui/trace` 也引它——只要 log-paths 带 server-only，
-  // 纯 Node 里 `await import("~/lib/core/logger")` 的 promise 会因这一层的
-  // throw 而 reject、上层 comfyui 各模块的 lazy 兜底接不进去。摘掉之后
-  // 整条 lazy 链能真跑起来（下一步：app-runtime-log 摘 server-only）。
-  // 「浏览器图别引我」的约束不再靠 server-only 兜——由 scanner 的 clientReachable
-  // 判据盯（`path` 命中即红），与 `kill-process-tree.ts` 同族。
+  // log-paths.ts：P3 迁移第 1 期·lib 层地基批，按 §18.4 第三类 —— 只有 `path` 一条 value import，其余是常量。
+  // 它**是整链 logger 的地基**（logger → app-runtime-log、`*.server`、`comfyui/lifecycle`、`comfyui/trace` 都引它）：
+  // 带 server-only 时纯 Node 里 `await import("~/lib/core/logger")` 会因这层 throw 而 reject、comfyui 的 lazy 兜底接不进去。
+  // 摘掉后整条 lazy 链能真跑（下一步 app-runtime-log）；浏览器图约束由 scanner 的 clientReachable 盯。
   "src/lib/log/log-paths.ts",
-  // app-runtime-log.ts：P3 迁移第 1 期·lib 层地基批的第二站。它是 logger
-  // 链最近的一层——`~/lib/core/logger` **静态引**本模块（把 ERROR 级消息镜像
-  // 落到 `log/services/app-runtime.log`，见规范 07 §7.11），只要它带
-  // server-only，`await import("~/lib/core/logger")` 在纯 Node 里就 throw、
-  // 前 3 批 comfyui 各模块（#1053 / #1068 / #1071）的 lazy 兜底接不进去。
-  // 上游 log-paths 已在 #1074 摘（本模块静态引它拿 APP_RUNTIME_LOG 常量），
-  // 本模块自身只有 `node:fs` / `node:path` + `~/lib/time-format` 三条依赖，
-  // 全部纯 Node 可加载，摘 server-only 走 §18.4 第三类登记。
+  // app-runtime-log.ts：P3 迁移第 1 期·lib 层地基批第二站，logger 链最近的一层 —— `~/lib/core/logger` **静态引**它
+  // 把 ERROR 镜像落到 `log/services/app-runtime.log`（规范 07 §7.11）。带 server-only 时纯 Node 里 logger 的
+  // import 会 throw，前 3 批 comfyui 模块（#1053/#1068/#1071）的 lazy 兜底接不进去。上游 log-paths 已在 #1074 摘，
+  // 本模块只有 `node:fs`/`node:path`/`~/lib/time-format`，全可纯 Node 加载，故走第三类登记。
   "src/lib/log/app-runtime-log.ts",
-  // P3 迁移第 1 期·lib 层地基批·二级叶模块（5 个）：
-  //   · `comfyui/instance-kind`：只依赖 `fs` / `path`。
-  //   · `comfyui/env-python`：`fs` / `os` / `path` + 纯函数 `~/lib/path-display`。
-  //   · `comfyui/lifecycle-exit`：`fs` + `./proc-detect` 的 type-only import。
-  //   · `comfyui/desktop-instance`：`fs` / `os` / `path` + 同批 instance-kind。
-  //   · `shell/open-in-browser`：`child_process` + 纯函数 `~/lib/error-message`。
-  // 全都不引 server-only 侧模块、也不引业务侧的 logger / repository，形态与
-  // `kill-process-tree` / `log-paths` 同族；这一批清完 comfyui 与 shell 目录下
-  // 的**二级叶**，client / status / lifecycle-launch 等**汇聚点**的传递边就能
-  // 自然解（它们静态引的就是这几个）。
+  // P3 迁移第 1 期·lib 层地基批·二级叶模块（5 个）：`comfyui/instance-kind`（fs/path）、`comfyui/env-python`
+  // （fs/os/path + `~/lib/path-display`）、`comfyui/lifecycle-exit`（fs + 同批 proc-detect 的 type-only）、
+  // `comfyui/desktop-instance`（fs/os/path + 同批 instance-kind）、`shell/open-in-browser`（child_process + 纯函数）。
+  // 全不引 server-only 侧模块与业务 logger/repository；这批清完 comfyui 与 shell 的二级叶，汇聚点的传递边自然解。
   "src/lib/comfyui/instance-kind.ts",
   "src/lib/comfyui/env-python.ts",
   "src/lib/comfyui/lifecycle-exit.ts",
   "src/lib/comfyui/desktop-instance.ts",
   "src/lib/shell/open-in-browser.ts",
-  // P3 迁移第 1 期·lib 层地基批·汇聚点（3 个）：
-  //   · `comfyui/status`：ComfyUI 运行态快照的**四路判据汇聚点**（HTTP 探测 /
-  //     进程表 / 桌面元数据 / 环境反查）。它的静态依赖全部在 comfyui 前 8 批
-  //     与本批前段（instance-kind / env-python / desktop-instance / log-paths /
-  //     app-runtime-log）中纯化了；logger 走 `~/lib/core/logger`（3rd class）。
-  //   · `comfyui/lifecycle-launch`：ComfyUI 拉起路径的**编排**（bound/keepAlive
-  //     两种模式），静态引 process-launch、log-paths、launch-path、proc-detect、
-  //     desktop-instance、lifecycle-exit、logger —— 全 3rd class 或 pure。
-  //     host（`LaunchHost`）注入是它既有的架构（不引 lifecycle.ts 避成环）。
-  //   · `process/process-launch`：与 `kill-process-tree.ts` 同目录同族的
-  //     **spawn 侧**（bound/keepAlive + PowerShell Start-Process 中介）。
-  //     这一批把 lifecycle-launch 的最后一颗钉子拆掉。
+  // P3 迁移第 1 期·lib 层地基批·汇聚点（3 个）：`comfyui/status` —— ComfyUI 运行态快照的四路判据汇聚点
+  // （HTTP 探测 / 进程表 / 桌面元数据 / 环境反查），静态依赖已在前 8 批与本批前段纯化，logger 走 3rd class
+  // `~/lib/core/logger`；`comfyui/lifecycle-launch` —— 拉起路径编排（bound/keepAlive），依赖全 3rd class 或 pure，
+  // host（`LaunchHost`）注入是既有架构（不引 lifecycle.ts 避成环）；`process/process-launch` —— 同族 spawn 侧
+  // （bound/keepAlive + PowerShell Start-Process 中介），本批把 lifecycle-launch 最后一颗钉子拆掉。
   "src/lib/comfyui/status.ts",
   "src/lib/comfyui/lifecycle-launch.ts",
   "src/lib/process/process-launch.ts",
-  // `comfyui/cpu-limit-apply.ts`（ISSUE #1959）：把 CPU 档位施加到已拉起的
-  // ComfyUI 子进程上 —— 只有 `child_process.execFile` 一条 Node 内建 value
-  // import（调 `renice` / `taskset` / PowerShell 的 WMI 优先级），不引任何
-  // server-only 侧模块。形态与同目录的 `proc-detect.ts`（查进程表 / 监听端口）
-  // 逐字同族：都是「本机进程能力的薄封装」地基层，本就该被 Next server 与
-  // 未来的 `scripts/executor-host.mjs` 双宿主加载，所以按第三类登记 ——
-  // 加 `server-only` 会把「它属于执行链地基」这件事说反，且会让那条宿主路径
-  // 在加载它时直接 throw。
-  // 判据（档位 → 命令）在纯模块 `./cpu-limit`，它零 Node 内建 import，
-  // 按 scanner 视角是「无需声明的纯模块」，**刻意不登记在这里**。
+  // `comfyui/cpu-limit-apply.ts`（ISSUE #1959）：把 CPU 档位施加到已拉起的 ComfyUI 子进程 —— 只有
+  // `child_process.execFile` 一条 value import（renice / taskset / WMI 优先级），不引 server-only 侧模块。
+  // 与同目录 `proc-detect.ts` 同族（本机进程能力薄封装），须被 Next server 与未来 `scripts/executor-host.mjs`
+  // 双宿主加载，加 `server-only` 会让那条宿主路径加载即 throw。判据（档位 → 命令）在纯模块 `./cpu-limit`，
+  // 零 Node 内建 import，刻意不登记。
   "src/lib/comfyui/cpu-limit-apply.ts",
   // `lifecycle.ts` 自身**不再**在册：它把那两件「加载即求值」的落盘活（上次会话
   // 标记的 `COMFY_SESSION_MARK`、本次 runtime 日志写入器）搬进了
@@ -187,64 +101,32 @@ const PURE_NODE_HOSTS = [
   // `lifecycle.ts` 一字不差的同一条静态边，形态按 §18.4 第三类，理由全同（见上面
   // 那条）；拆出来不给它换一种声明形态，否则「谁和谁同族」就成了拆文件时的副作用。
   "src/lib/comfyui/lifecycle-session-log.ts",
-  // db-schema-ready.ts：P3 lib 地基批·**reaper 侧最后一颗钉子**。它是 rule 16
-  // 的 `comment.language.asciiOnly` 白名单成员（`docs/reference-facts.md` 里
-  // 登记），文件本身保持纯 ASCII + 英文注释（`next-code-frame` 会渲染它、
-  // 多字节高亮偏移会 panic）——**这条与 §18.4 三选一的形态选择无关**。
-  // 摘掉 server-only 后按第三类登记：`node:sqlite` DatabaseSync（Node 22+
-  // 原生） + `node:path` + 纯函数 tracingIgnoreArgs；形态上与 kill-process-tree
-  // 同族。reaper 静态引 `isSchemaReady()`——只要本模块带 server-only，纯 Node
-  // executor host 加载 reaper 时**这里**就 throw、跑不到探针；摘掉之后整条
-  // reaper 边通了（下一步给 enqueue / reaper 的 taskRepository 静态边做 lazy）。
+  // db-schema-ready.ts：P3 lib 地基批·reaper 侧最后一颗钉子。它是 rule 16 `comment.language.asciiOnly` 白名单
+  // 成员（`docs/reference-facts.md` 登记），须保持纯 ASCII + 英文注释（`next-code-frame` 会渲染它，多字节高亮
+  // 偏移会 panic）——**与 §18.4 三选一无关**。摘掉 server-only 后按第三类登记：`node:sqlite` DatabaseSync +
+  // `node:path` + 纯函数；reaper 静态引 `isSchemaReady()`，带 server-only 时纯 Node host 加载即在这里 throw。
   "src/lib/db-schema-ready.ts",
-  /* 应用内控制台（ISSUE #1327）：`console-run.ts` 顶层
-   * `import { spawn } from "child_process"`（起用户敲的那条命令）。
-   * `console-registry.ts` 不在这里 —— 它只引 `./console-run` 与 `./console-limits`
-   * 两个纯模块、零 Node 内建 import，所以按 scanner 视角它是「无需声明的纯模块」
-   * （反向的登记会立刻被下面那条「登记项必须仍然成立」判红）。
-   *
-   * **为什么按第三类登记而不是给它们加 `server-only`**：
-   *   · 执行面的回收语义**必须**走 `~/lib/process/kill-process-tree`（硬规则 3），
-   *     而那个模块本身就是第三类（由 `scripts/reap-process.mjs` 在纯 Node 里
-   *     动态加载）—— 给本域挂 `server-only` 会把「它与回收地基同族」说反；
-   *   · 它的判据是「能不能在单测里喂**真进程**并断言输出/退出码/整树回收」
-   *     （见 `console-run.test.ts` 的孙进程用例）。带 `server-only` 的模块在
-   *     vitest 里要靠 `vi.mock("server-only")` 才加载得动，那正是 §18.4 点名过
-   *     的「仪式化声明」——声明了却什么也没拦住。
-   *
-   * 「浏览器图别引我」这条约束由 scanner 的 `clientReachable` 判据盯：本域里
-   * 客户端可达的只有 `console-catalog` / `console-limits` / `console-client` /
-   * `console-guard` 四个（零 Node 内建 import），执行面与运行槽不在那条路径上。 */
+  /* 应用内控制台（ISSUE #1327）：`console-run.ts` 顶层 `import { spawn } from "child_process"`。`console-registry.ts`
+   * 只引 `./console-run` 与 `./console-limits` 两个纯模块、零 Node 内建 import，属「无需声明的纯模块」，不登记。
+   * 按第三类而非 `server-only`：执行面回收必须走 `~/lib/process/kill-process-tree`（硬规则 3），那个模块本身是第三类，
+   * 挂 `server-only` 会说反「同族」；且它的判据是单测里喂真进程断言输出/退出码/整树回收，带 server-only 得靠
+   * `vi.mock("server-only")` 才加载得动，正是 §18.4 点名的「仪式化声明」。clientReachable 只盯到四个纯模块。 */
   "src/lib/console/console-run.ts",
-  // executable-resolve.ts（ISSUE #1327）：可执行形态判据的唯一实现在这里
-  // （`whichCommand` / `usableCommand` / `pnpmInvocation` / `resolveCommandInvocation`），
-  // 从 `scripts/launcher-core/shell.mjs` 搬下来 —— 因为同一个坑在应用内控制台又踩了
-  // 一次（那边直接 `spawn("pnpm")`，Windows 上回 ENOENT）。顶层 Node 内建值 import
-  // 有 `child_process`（`spawnSync` 真起一次确认候选跑不跑得起来）/ `fs`（读
-  // PATH × PATHEXT 候选、判形态）/ `path`。
-  // **必须能被 `.mjs` 静态 import**（Node 24 默认类型擦除）：`shell.mjs` 是纯 Node
-  // 启动编排的一环，`server-only` 的入口就是一句 throw，加上去会让 `pnpm dev`
-  // 整条编排崩在加载阶段。而它同时又必须能被单测直接喂真实文件与真实进程（造
-  // `.cmd` / `.ps1` / 无扩展名 shim 三种形态断言选中哪一个），`.server.ts` 的形态
-  // 在那类用例里会碍事。故按 §18.4 第三类登记。
-  // 「浏览器图别引我」由 scanner 的 `clientReachable` 判据盯：它的消费方是
-  // `console-run.ts`（第三类）与 `scripts/**`，两者都不在 `"use client"` 可达路径上。
+  // executable-resolve.ts（ISSUE #1327）：可执行形态判据的唯一实现（`whichCommand` / `usableCommand` /
+  // `pnpmInvocation` / `resolveCommandInvocation`），从 `scripts/launcher-core/shell.mjs` 搬下来 —— 同坑在应用内
+  // 控制台又踩一次（直接 `spawn("pnpm")` 在 Windows 回 ENOENT）。顶层 value import 有 `child_process`/`fs`/`path`。
+  // 必须能被 `.mjs` 静态 import（Node 24 类型擦除）：`shell.mjs` 是纯 Node 启动编排的一环，`server-only` 会让 `pnpm dev`
+  // 崩在加载阶段；又要能被单测喂真实 `.cmd`/`.ps1`/shim，`.server.ts` 碍事。消费方 `console-run.ts` 与 `scripts/**` 均非 client 可达。
   "src/lib/process/executable-resolve.ts",
-  // 上面那两块从 `executable-resolve.ts` 按职责拆出来（它越过文件长度硬闸时切的），
-  // 形态**完全相同**、所以登记也一起：`pnpm-resolve.ts` 顶层 import `fs` / `path`
-  // （读落点上那份 `package.json` 的 `bin` 字段），`version-compare.ts` 虽然零 Node
-  // 内建 import，但它是前者唯一的纯函数依赖 —— 登记在册是因为扫描器按「顶层 import
-  // Node 内建」判，它本来就不在 offenders 里；真正要登记的是 `pnpm-resolve.ts`。
-  // 两块都必须能被 `.mjs` 静态 import（同一条跨宿主链），`server-only` 会让启动
-  // 编排加载阶段就 throw，`.server.ts` 则会让「真喂文件与真起进程」的用例碍事。
+  // 上面两块从 `executable-resolve.ts` 按职责拆出（越过文件长度硬闸时切的），形态相同故一起登记：
+  // `pnpm-resolve.ts` 顶层 import `fs`/`path`（读 `package.json` 的 `bin`）；`version-compare.ts` 零 Node 内建
+  // import —— 扫描器按「顶层 import Node 内建」判，它本就不在 offenders 里，真正要登记的是前者。
+  // 两者都必须能被 `.mjs` 静态 import（同一条跨宿主链）：`server-only` 会让启动编排加载即 throw，`.server.ts` 碍事。
   "src/lib/process/pnpm-resolve.ts",
-  // `process/probe-exe.ts`（ISSUE #2316）：只依赖 `node:child_process` 的**叶子**
-  // —— 一次 `spawnSync` 回答「这个候选真起得来吗、还是只是退非零 / 没量到」。
-  // 消费方横跨三个世界：测试侧（`tests/check-file-structure.test.ts` 的两处「这台机器
-  // 上有没有 PowerShell / Python」）、脚本侧（`scripts/python-probe.mjs` 的逐候选读数）、
-  // 以及 `python-resolve.ts` 的失败形态类型。加 `server-only` 会让测试与纯 Node 脚本
-  // 起进程的那两处直接 throw；`.server.ts` 在那个用法下同样碍事，故按第三类登记。
-  // 「浏览器图别引我」由 scanner 的 `clientReachable` 判据盯（它顶层 import 了 Node 内建）。
+  // `process/probe-exe.ts`（ISSUE #2316）：只依赖 `node:child_process` 的叶子 —— 一次 `spawnSync` 回答
+  // 「这个候选真起得来吗、还是只是退非零 / 没量到」。消费方横跨测试侧（`tests/check-file-structure.test.ts`
+  // 两处「这台机器有没有 PowerShell/Python」）、脚本侧（`scripts/python-probe.mjs`）与 `python-resolve.ts` 的失败
+  // 形态类型；加 `server-only` 会让那两处起进程直接 throw，`.server.ts` 同样碍事，故按第三类登记。
   "src/lib/process/probe-exe.ts",
 ];
 

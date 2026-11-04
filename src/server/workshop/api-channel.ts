@@ -1,12 +1,8 @@
 // ── Workshop MCP 本地 API 通道（纯 Node 入口）─────────────────────────
-// 与 `~/lib/workshop/api-channel.server` 是同一套能力的两个入口：那个跑在
-// Next 里、必须 `import "server-only"`（配置与 apiKey 不能进浏览器包），
-// 这个跑在 MCP stdio 里、**不能**碰 server-only（非 Next 环境直接抛错）。
-//
-// 协议实现（请求体字段、超时、错误文案、响应提取）全部在
-// `api-channel-core.ts`，本文件只提供两处差异：
-//   · 上游响应体用 `res.json()`（Next 侧另有"非 JSON 即报错"的更严实现）；
-//   · 生图不做 remoteModel 表查询（纯 Node 没有这张表），只用通道设置。
+// 与 `~/lib/workshop/api-channel.server` 同能力双入口：那个跑 Next、必须 `import "server-only"`
+// （配置与 apiKey 不能进浏览器包）；这个跑 MCP stdio、**不能**碰 server-only（非 Next 环境直接抛错）。
+// 协议实现（请求体、超时、错误文案、响应提取）全在 `api-channel-core.ts`；本文件只供两处差异：
+// 上游用 `res.json()`（Next 侧另有"非 JSON 即报错"更严实现）、生图不查 remoteModel 表（纯 Node 没有）。
 import { readFileSync } from "node:fs";
 import path from "node:path";
 

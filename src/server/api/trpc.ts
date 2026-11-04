@@ -1,10 +1,6 @@
 /**
- * 除非属于下面两种情况，你大概不需要改这个文件：
- * 1. 想改请求上下文（见「1. 上下文」一节）。
- * 2. 想新增中间件或某一类 procedure（见「3. procedure 类型」一节）。
- *
- * 一句话说明：所有 tRPC 服务端的东西都在这里创建并接线；
- * 你需要的各个部件在文件末尾都有对应的说明。
+ * 除以下两种情况外一般不需要改：① 改请求上下文（「1. 上下文」）；② 新增中间件或某类 procedure（「3.」）。
+ * 所有 tRPC 服务端部件都在这里创建并接线，各部件说明见文件末尾。
  */
 
 import "server-only";
@@ -32,9 +28,7 @@ export type TRPCUser = {
 /**
  * 1. CONTEXT
  *
- * 从 better-auth 的会话里解析当前用户（有会话的话）。
- * 本地单用户模式的「演示用户兜底」由 `authedProcedure` 中间件处理 ——
- * 上下文本身只解析真实会话。
+ * 从 better-auth 会话解析当前用户；本地单用户模式的「演示用户兜底」由 `authedProcedure` 处理。
  */
 export const createTRPCContext = async (opts: { headers: Headers }) => {
   const session = await auth.api.getSession({
@@ -88,21 +82,9 @@ export const createCallerFactory = t.createCallerFactory;
 export const createTRPCRouter = t.router;
 
 /**
- * 给 procedure 执行计时的中间件。
- *
- * 面板可见日志只在「出问题」时才写：调用失败或耗时超过阈值视为问题。
- * 正常成功的调用仅走 pino `logger.debug`（落在 nextjs 文件日志，方便诊断），
- * 不写入面板可见的 app-runtime 通道，避免每条 query/mutation 都在面板累积成几千条噪音。
- *
- * ── 慢查询按「路径 + 时间桶」聚合（ISSUE #346）────────────────────────
- * 慢查询 warn 本身是必要的出口（「有问题的 query」唯一的面板出口，见规范 07
- * §7.13），但同一个查询在每一轮轮询里都慢时，每次都会写一条**内容完全相同**的
- * 行：面板上只剩满屏 `setting.comfyStatus 10457ms`，不仅刷屏，还把真正新增的
- * 业务日志挤出视野，用户读到的信息量是零。
- *
- * 同一路径在同一时间桶内只写**首条**，其余累计条数；桶满后写一条带 `×N` 的
- * 汇总行。这样「持续慢」从 N 条噪音压缩成 2 条可读记录：一条首次发生的时刻 +
- * 一条「发生了多少次」。
+ * procedure 计时中间件：仅失败或超阈值才写面板可见日志，成功只走 pino `logger.debug`（否则面板会被
+ * 每条 query/mutation 刷成噪音）。慢查询按「路径 + 时间桶」聚合（ISSUE #346）：同桶只写首条、其余计数，
+ * 桶满写 `×N` 汇总 —— 把「持续慢」从 N 条压成 2 条（首次时刻 + 次数；规范 07 §7.13 唯一面板出口）。
  */
 const SLOW_QUERY_THRESHOLD_MS = 1000;
 
@@ -180,19 +162,9 @@ const timingMiddleware = t.middleware(async ({ next, path, type }) => {
 export const publicProcedure = t.procedure.use(timingMiddleware);
 
 /**
- * 需要登录（并带演示用户兜底）的 procedure。
- *
- * 保证 ctx.user 不为 null。无会话时的放行与否由 `~/lib/auth-server` 的
- * `requireServerUser` 一处判决（`app-settings.json` 的 `loginRequired`
- * 是唯一开关）：
- *   - false（默认，本机单用户模式）→ 回落演示用户，与 REST 面一致；
- *   - true → 无会话抛 UNAUTHORIZED，**不再**无条件兜底。
- *
- * 此前这里自带一份「无条件兜底 + 整体缓存 demo 用户」的实现，既让
- * `loginRequired` 开关在 tRPC 面形同虚设（REST 面拦、tRPC 面放——约 200 个
- * procedure 匿名可用），也复刻了 `auth-server.ts` 点名修掉的「缓存越过
- * 数据库」缺陷（库行被重建/删除后仍返回不存在的 id）。收口到同一判决后，
- * 两个 API 面的鉴权语义由 `requireServerUser` 单点持有。
+ * 需登录（带演示用户兜底）的 procedure，保证 ctx.user 非 null；放行由 `~/lib/auth-server` 的 `requireServerUser`
+ * 一处判决（`loginRequired` 为唯一开关）：false → 回落演示用户（本机单用户，与 REST 一致）；true → UNAUTHORIZED。
+ * 旧实现自带「无条件兜底 + 缓存 demo 用户」，令开关在 tRPC 面形同虚设、并复刻了缓存越过数据库的缺陷。
  */
 export const authedProcedure = t.procedure.use(timingMiddleware).use(async ({ ctx, next }) => {
   const user = ctx.user ?? (await requireServerUser(ctx.session));
@@ -206,10 +178,8 @@ export const authedProcedure = t.procedure.use(timingMiddleware).use(async ({ ct
 });
 
 /**
- * 带限流的「需登录」procedure。
- *
- * 对敏感操作（提权、删除、导出等）按 userId 做滑动窗口限流，
- * 防脚本暴力调用。默认 10 秒窗口内 20 次，超限返回 429。
+ * 带限流的「需登录」procedure：对敏感操作（提权、删除、导出等）按 userId 做滑动窗口限流，防脚本暴力调用；
+ * 默认 10 秒窗口内 20 次，超限返回 429。
  */
 export const rateLimitedProcedure = authedProcedure.use(async ({ ctx, next }) => {
   // authedProcedure 已保证 ctx.user 非空（类型上也是），userId 是限流的唯一键。

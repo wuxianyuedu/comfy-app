@@ -1,19 +1,7 @@
 /**
- * 「鼠标点得开、键盘点不开」门禁自测（规范 06 §6.11）。
- *
- * 本文件自己**不进扫描面**（`scripts/check-click-keyboard.cjs` 的
- * `FIXTURE_SKIP`）：下面的被测字符串里有真的站点，判它等于判自己的量具
- * （§11.14.2 的通用口径，同 `tests/form-field-wiring-gate.test.ts`）。
- *
- * 逐条钉判定口径：
- *   ① 非原生元素 + `onClick` + 无键 → 站点，该拦
- *   ② 原生标签 / 首字母大写的组件 → 放行（键语义在别处）
- *   ③ 元素上有 `onKeyDown` 或 `{...simpleKeyHandler(...)}` → 放行
- *   ④ **其他展开不算覆盖**（`{...props}` / `{...hoverEvents}`）→ 仍算站点
- *   ⑤ 拖放容器（`onDrop` / `onDragOver` 同元素）→ 放行
- *   ⑥ `onClick` 体里只有 `stopPropagation` / `preventDefault` → 放行（守卫）
- *   ⑦ 一处都没有就放行（硬闸只看站点数是否为 0）
- *   ⑧ 翻闸后无基线可读：`--update` 不写任何 JSON
+ * 「鼠标点得开、键盘点不开」门禁自测（规范 06 §6.11）。本文件不进扫描面（脚本的 `FIXTURE_SKIP`），否则等于
+ * 判自己的量具（§11.14.2）。口径：①非原生 + `onClick` + 无键→拦；②原生标签/大写组件→放；③`onKeyDown` 或
+ * `simpleKeyHandler`→放；④`{...props}` 等展开不算覆盖→拦；⑤拖放容器→放；⑥仅守卫→放；⑦零站点→放；⑧`--update` 不写 JSON。
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";

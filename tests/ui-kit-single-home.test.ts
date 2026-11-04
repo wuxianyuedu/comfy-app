@@ -1,19 +1,7 @@
 /**
- * UI kit 的「单一驻地」契约（ISSUE #672 / 规范 16 §16.2.4）。
- *
- * 背景：库里长期有**四套 UI kit 目录**并行 —— `components/ui/`（shadcn 基元）、
- * `components/studio/ui/`（第二套）、`components/studio/shared/`（第三套的
- * 通用件）、`DynamicWorkflowForm/sections/`（第四套）。同一个「按钮 / 下拉 /
- * 空态 / 加载态」因此各有多份实现，而 §16.2.3 的棘轮当时**整体豁免**了后两处
- * —— 豁免的理由是「它们是迁移对象」，代价是那两处的存量不进基线、新增也没有
- * 判据（正是 §3.6.1「豁免必须显式」要防的失效模式）。
- *
- * 归并完成后，本文件把「去向」钉成判据：
- *   1. 那两个目录**不应再存在**（新的通用件只能进 `components/ui/`）；
- *   2. 白名单外的目录里不得再出现「第二套基元」（同名于 ui/ 基元的组件）。
- *
- * 为什么是判据而不是注释：`EXEMPT_DIRS` 撤掉只保证「再放进去的东西会被数」，
- * 挡不住下一个人 `mkdir studio/ui` 起一套新的 —— 目录本身的存在才是信号。
+ * UI kit 的「单一驻地」契约（ISSUE #672 / 规范 16 §16.2.4）：历史上四套并行 —— `ui/`、`studio/ui`、`studio/shared`、
+ * `DynamicWorkflowForm/sections`；后两处被 §16.2.3 棘轮整体豁免 ⇒ 存量不进基线、新增无判据（§3.6.1）。归并后钉这两个目录
+ * 不应再存在、白名单外不得再现同名基元 —— 撤 `EXEMPT_DIRS` 挡不住 `mkdir studio/ui`，目录存在本身才是信号。
  */
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
@@ -26,10 +14,8 @@ const RETIRED_KIT_DIRS = ["studio/ui", "studio/shared"];
 
 /**
  * 允许放「通用 UI」的目录（白名单）。
- *
- * `studio/workflow-form/` 里的 `DimensionControl` / `WorkflowFormControls` 等
- * 是**工作流参数表单专属**的复合件（域内共享，不是跨域基元），所以它留在
- * studio 域内 —— 这正是 §16.2.4 的分工：跨功能复用进 `ui/`，域内复用留本域。
+ * `studio/workflow-form/` 的 `DimensionControl` / `WorkflowFormControls` 等是**工作流参数表单专属**的复合件
+ * （域内共享，不是跨域基元），所以留在 studio 域内 —— §16.2.4 分工：跨功能复用进 `ui/`，域内复用留本域。
  */
 const ALLOWED_UI_DIRS = new Set(["ui"]);
 

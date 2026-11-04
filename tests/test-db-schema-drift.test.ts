@@ -1,23 +1,7 @@
 /**
- * `tests/helpers/test-db.ts` 的内联 DDL 必须跟 `src/server/db/schema.ts` 同步。
- *
- * 为什么要有这一条：测试库用的是那份**手写**的 `CREATE TABLE` 文本（不是从
- * schema 生成的），于是「给业务表加一列」这件事的第二轮子就在测试基建里——
- * 缺列时的报错是 `SqliteError: table task has no column named rawCli`，指向
- * drizzle 的 insert 栈，而真正要改的是那个 helper。实测踩过一次（P3 §5 ADR
- * §14 D1 的 4-B2 加 `claimedAt` / `rawCli`），一次红 + 一轮定位。
- *
- * 只比**列名集合**（缺列/多列都算），不比类型与可空性——那些由 drizzle 与
- * 真库（`pnpm db:push` 后的 `db.sqlite`）负责，测试基建的这份镜像只需覆盖到
- * 「有没有这一列」。JSON 列的 `{ mode: "json" }` 那一半（`jsonColumns` 集合）
- * 本判据**盖不住**：它的缺失表现是读回来是字符串而不是对象，得靠各自的用例断言
- * 形状（这里不硬造一个假判据）。
- *
- * 另有一类手写 DDL 是**刻意最小**的，不在本判据范围内：`tests/executor-host.test.ts`
- * 的临时库只建「领取与 reaper 实际触达的列」、`tests/db-push-noninteractive.test.ts`
- * 与 `src/lib/db-schema-ready.test.ts` 更是故意造残缺库来验失败路径。把它们一起
- * 扫进来会把「故意缺列」判成漂移、误报一片——那类判据的处置口径是精确化而不是
- * 放宽。加列时如果动到那些路径，改法看各自文件头的说明。
+ * `tests/helpers/test-db.ts` 的内联 DDL 必须跟 `src/server/db/schema.ts` 同步：测试库用的是手写 `CREATE TABLE`，加列时
+ * 漏改 helper 报 `SqliteError: table task has no column named rawCli` 却指向 drizzle 栈（ADR §14 D1 4-B2 踩过）。只比列名
+ * 集合；JSON `{ mode: "json" }` 盖不住；刻意精简/残缺的 DDL（`executor-host.test.ts` 等）不在范围内，扫进来会误报成漂移。
  */
 import { Table, getTableColumns, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -40,18 +24,11 @@ function tableNameOf(table: Table): string {
   return Reflect.get(table, Symbol.for("drizzle:Name")) as string;
 }
 
-/** 读一张表的实际列名。
- *  `TestDb` 把 `$reset` / `$tables` 挂在 drizzle 实例上、因此带一条
- *  `[key: string]: unknown` 的索引签名，`tdb.all` 在类型层面是 unknown——
- *  这里一次性收窄，而不是在循环里到处 cast。
- *
- *  两个形状是测试宿主换成 `sqlite-proxy` 之后才有的（ISSUE #2586）：
- *  - **要 `await`**：代理宿主的 `resultKind` 是 `async`，`db.all()` 返回的是 thenable
- *    而不是同步数组（`sqlite-core/db.cjs:281` 那三分叉）。同步宿主时代它直接给数组，
- *    所以这里曾经可以不 await 就成立。
- *  - **按下标取列**：`mapResultRow` 取值是 `row[columnIndex]`（`utils.cjs:62`），
- *    而这一条走的是「无 fields 的原样透传」，拿到的就是宿主给的**位置数组**。
- *    `PRAGMA table_info` 的列序是 `cid, name, type, notnull, dflt_value, pk` ⇒ 名字在 1。 */
+/** 读一张表的实际列名。`TestDb` 带 `[key: string]: unknown` 索引签名，`tdb.all` 类型是 unknown —— 这里一次性收窄。
+ *  两个形状来自换成 `sqlite-proxy` 宿主之后（ISSUE #2586）：**要 `await`** —— `resultKind` 是 async，`db.all()` 返回
+ *  thenable 而非同步数组（`sqlite-core/db.cjs:281`）；**按下标取列** —— `mapResultRow` 用 `row[columnIndex]`
+ *  （`utils.cjs:62`），而 `PRAGMA table_info` 列序是 `cid, name, type, notnull, dflt_value, pk` ⇒ 名字在 1。
+ */
 async function columnsOf(name: string): Promise<Array<string> | null> {
   /* SAFETY: 类型断言已复核 */
   const session = tdb as unknown as {

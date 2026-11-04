@@ -1,18 +1,8 @@
 import type * as LoggerModule from "~/lib/core/logger";
 /**
- * project.router 集成测试（台账 A3 这一族越权的判据）。
- *
- * 分工不是「把每个 procedure 都跑一遍」，而是把**归属**这条线钉死：本路由的 id
- * 全部由客户端生成（画布 localStorage 里的 `proj_*`，自动保存时随请求一起送），
- * 所以每个读 / 写 / 删都必须证明「越不过去」：
- *  · `upsert` 的 update 分支此前只按 id 定位行 → 任何人抄一个别人的项目 id 就能
- *    把对方的画布整幅覆盖掉（本批修的就是它）；
- *  · `delete` 走 `deleteForUser`（双条件），越界时必须是「什么都没删」而不是报错；
- *  · `get` / `patch` / `outputs` 三个读出口都要拒绝他人项目。
- *
- * mock 边界：~/server/db（内存库 + 真 Drizzle）、~/server/better-auth、
- * ~/lib/core/logger（静音，同时留一个可断言「拒绝要有日志」的句柄）。
- * repository 与限流中间件走真实实现。
+ * project.router 集成测试（台账 A3 越权判据）：id 全由客户端生成（localStorage `proj_*`），读/写/删都得证明越不过去。
+ * `upsert` update 分支曾只按 id 定位 → 抄 id 即可覆盖他人画布（本批修复）；`delete` 走 `deleteForUser`，越界须「什么都没删」
+ * 而非报错；`get`/`patch`/`outputs` 拒他人。mock 仅 db、better-auth、logger（静音，留「拒绝要有日志」句柄）。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 

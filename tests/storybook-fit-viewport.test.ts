@@ -1,38 +1,7 @@
 /**
- * 画布帧的视口口径：**装不下要显式认账**（ISSUE #1381 续，规范 16 §16.2.3.13）。
- *
- * ## 它守的那个坑
- *
- * `StorybookFlowCanvas` 的框高是**一个常量**（`CANVAS_FRAME_CLASS`，560px），
- * 而节点渲染器的尺寸是**消费方**的事 —— 同一档场景（`twoNodes`）在两种消费方下
- * 内容高度可以差一倍（十行端点的 `PortDemoNode` 399px vs React Flow 默认外观 ~80px）。
- *
- * 消费方的渲染器比框高时，钉住的视口会把内容切掉：`fanOut` 切 151px、`twoNodes`
- * 切 79px、`mixedKinds` 切 51px（真浏览器量的 `.react-flow__node` 下沿 vs 框下沿）。
- * 而这是**最不该漏的那一类**：`tsc` / `eslint` / 构建 / 既有门禁全绿，画布上只是
- * 少一截 —— 与 §16.2.3.12 那处「handle 写错、边静默不画」同族（都是「画布上看着
- * 有内容、而它证明的不是 story 说的那件事」）。
- *
- * ## 判据的形状：为什么是「装不下要显式认账」
- *
- * 修法有两条，各对应一种正当情形：
- *
- *  · 渲染器**比框高** → 传 `fit`，交回 React Flow 自己的 `fitView`（`ProjectCanvas`
- *    也是这套机制）把整场缩进框里；
- *  · 这一档**被测对象就是那个缩放**（细网格在阈值下淡出、放大档的端点像素尺度、
- *    密集负载下现算的标尺步长）→ 场景带 `pinZoom`，**不能**被 `fit` 缩走。
- *
- * 所以规则是：**传了 `nodeTypes`（尺寸未知）的消费方，要么传 `fit`、要么用 `pinZoom`
- * 场景**。两者都没有 = 没人回答过「装得下吗」—— 而那正是切掉一截的形态。
- * 不传 `nodeTypes` 的消费方不受约束（节点走 React Flow 默认外观，高度是它自己的口径）。
- *
- * 判据**按 AST 判，不按正则**：`<StorybookFlowCanvas>` 的属性顺序、换行、注释
- * 都不固定，正则会在「属性写在另一行」时整片漏掉（而漏掉的判据会被当成「已覆盖」）。
- *
- * ## 边界
- *
- * 它判的是**接线**，不是「像素真的没被切」——后者要真浏览器逐 story 量
- *（本轮 9 份画布 story 全部量过：切 0px）。用例到不了那一维，所以两半都要。
+ * 画布帧的视口口径：**装不下要显式认账**（ISSUE #1381 续，规范 16 §16.2.3.13）。框高是常量（`CANVAS_FRAME_CLASS` 560px）
+ * 而节点渲染器尺寸是消费方的事，比框高时会切掉内容且 tsc/lint/构建全绿（与 §16.2.3.12「handle 写错、边静默不画」同族）。
+ * 规则：传了 `nodeTypes` 的消费方要么传 `fit`、要么用 `pinZoom` 场景；两者都没有 = 没人回答「装得下吗」，不传不受约束。按 AST 判。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -63,9 +32,8 @@ function stringLiteralText(node: ts.Node): string | null {
 
 /**
  * 从 `flow-canvas.tsx` 的 `CANVAS_SCENES` 里读出**带 `pinZoom` 的场景名**。
- *
- * 场景注册表是注入层的**唯一**事实源 —— 所以从它现算，不另抄一份名单
- *（§12.14：会漂的读数不写死；§12.18：不在调用点重抄）。
+ * 场景注册表是注入层的**唯一**事实源 —— 从它现算，不另抄名单
+ * （§12.14：会漂的读数不写死；§12.18：不在调用点重抄）。
  */
 function pinnedScenes(): Set<string> {
   const source = parse(FLOW);

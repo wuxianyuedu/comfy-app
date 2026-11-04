@@ -3,19 +3,9 @@ import { expect, test, type Page } from "@playwright/test";
 import { openSettingsView } from "./support/settings-entry";
 
 /**
- * 设置是**一个视图**，不是盖在内容区上的一层浮层（@critical）。
- *
- * 为什么值得单独钉：改之前它是 workspace 里的一层 `FullScreenLayer`（`SettingsOverlay`），
- * 「当前在设置里」这件事只活在一个布尔值里 —— 没有页签、也不能一边开着设置一边看别处，
- * 而那层浮层的本职就是**盖住页签条**。这类"形态"问题不会让任何功能断言变红，
- * 只有直接判页签才拦得住下一次回潮。
- *
- * 判据读的是用户看得见的事实：从顶栏应用菜单打开设置（ISSUE #1784 把侧栏那两处
- * 入口撤掉了，入口只剩这一处，见 `support/settings-entry.ts`）→ 页签条上有一页
- * 「设置」并且是当前页；页签条本身仍可点（能切回首页）；屏面上没有对话框角色。
- *
- * 设置是**瞬时页签**（`NavItem.transient`）：切走就关、不常驻 —— 所以这份里
- * 「切回首页后设置那一页还在」的旧断言已经反过来，现在判的是「它退场了」。
+ * 设置是**一个视图**，不是盖在内容区上的浮层（@critical）：改前是 `FullScreenLayer`（`SettingsOverlay`），无页签、不能边开边看别处。
+ * 「在设置里」只活在布尔值里、浮层本职就盖住页签条 —— 形态问题不会让功能断言变红，只有判页签拦得住回潮。判据：顶栏菜单
+ * 开设置（#1784 后入口仅剩这一处，见 `support/settings-entry.ts`）→ 有「设置」页签且为当前、可点回首页、无对话框；瞬时页签切走即退场。
  */
 const stripOf = (page: Page) => page.getByRole("tablist", { name: "已打开的视图" });
 
@@ -56,12 +46,9 @@ test.describe("设置作为一个视图 @critical", () => {
     await openSettingsView(page);
     await expect(strip.getByRole("tab")).toHaveCount(2);
 
-    /* 页签条没被浮层盖住：还能点回首页。这条是这次改动的正面判据 ——
-       旧的 `SettingsOverlay` 是铺满内容区的 `FullScreenLayer`，页签在它下面。
-
-       ISSUE #1784 起设置是**瞬时页签**：切回首页时它**跟着退场**（用户原话
-       「有些项其实不需要保持打开，那些打开的标签随着切换关闭就行」）—— 所以
-       这里从「切回首页后设置仍在、只是未选中」改成「切回首页后设置整页关掉」。 */
+    /* 页签条没被浮层盖住：还能点回首页。旧 `SettingsOverlay` 是铺满内容区的 `FullScreenLayer`，页签在它下面。
+       ISSUE #1784 起设置是**瞬时页签**：切回首页时它跟着退场（用户原话「有些项其实不需要保持打开，那些打开
+       的标签随着切换关闭就行」）—— 所以这里从「切回首页后设置仍在、只是未选中」改成「切回首页后设置整页关掉」。 */
     const homeTab = strip.getByRole("tab").first();
     await expect(homeTab).toContainText("首页");
     await homeTab.click();

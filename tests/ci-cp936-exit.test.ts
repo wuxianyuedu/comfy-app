@@ -1,49 +1,7 @@
 /**
- * 「让子进程的每一个字节以 CP936 出口」那一格的判断面（ISSUE #1977）。
- *
- * ## 它守的是什么
- *
- * 平台抓取 stage 输出那一跳按**不与宿主联动的 CP936** 解码子进程的 UTF-8 字节
- * （三轮探针读数与「runner 自己打的行是好的、子进程每一行是乱的」那组对照，
- * 见 `scripts/ci-console-encoding.mjs` 头注与规范 §13.5.3.5）。仓库侧只剩一条出路：
- * **让每个字节以 CP936 出口** —— 本文件判的就是这条路**真的被执行**、且**字节是对的**。
- *
- * ## 这里能判什么、不能判什么
- *
- * **不能**判「平台侧读出来是不是可读」—— 解码发生在本进程之外，本进程看不到自己的
- * 字节被怎么解（与 `ci-console-encoding.test.ts` 同一条边界）。能判的是两件：
- *
- *   · **`encodeCp936Plan()` 产出的那段 PowerShell 做的是不是「按 936 写原始字节」**
- *     （形态判据 —— 本仓没有第二处能判它，抓取端在本进程之外）；
- *   · **这条链真能落对字节**（用 Node 自己的 `TextDecoder("gbk")` 反向复算：
- *     Node 没有 GBK **编码器**，但解码器是好的 —— 这就是「借 PS 编码、用 Node 复核」
- *     那句话的可行基础）；
- *   · **退出码转出去了**（外壳吞退出码是本仓踩过的坑：`ci-toolchain-selfcheck.mjs`
- *     的 `main()` 返回值被丢，那两步从来红不了）。
- *
- * ## 「Linux 检出上判不到」不是「不用判」—— 两条靠**形状**判
- *
- * ISSUE #1977 的第一次上平台在这条链上连红两次、而本地全绿，两处都是
- * 「只有 Windows 会走到、Linux 一次都到不了」的语句：
- *
- *   · `spawnSync(…, {encoding: "buffer"})` —— `encoding` 要的是**值 `Buffer`**；
- *     字符串 `"buffer"` 是 `ERR_UNKNOWN_ENCODING`。它在 `writeCp936` 的 Windows 分支里，
- *     而那一句在 Linux 上**直接 return 之前就出不去**（本文件在 Linux 跑不了真 PS）。
- *     ⇒ 这里判**注入面收到的那个 `encoding` 值**（`runImpl` 是它的注入面）。
- *   · 抓输出那一跳 `String(buffer)` —— 在 Windows 上按**宿主代码页（CP936）**解，
- *     于是子进程的 UTF-8 在进 PowerShell **之前**就已经乱了一遍，后面的转码只是
- *     把乱码换个编码存下来。Linux 的 `process.stdout` 是 UTF-8，这个 bug 在本机
- *     **永远不会显形**。⇒ 这里判「有显式 `setEncoding("utf8")` 那一跳」这个形状
- *     （能在地板上真起子进程的那条路同样判，见「真起一条子进程」那一组）。
- *   · **「该不该问 PATH」与「怎么起」被混成了一件**：`node_modules/.bin/tsc` 是
- *     **相对路径**，拿它问 PATH 当然「找不到」（问错了对象）；而把它**原样**交
- *     `spawn` 在 Windows 上照样起不来 —— pnpm 给 `.bin/<工具>` 摆的三个垫片
- *     （`.cmd` / `.ps1` / 无扩展名 shim）Node 一个都起不了。两半都要判：
- *     路径**不问 PATH**，但**要过形态判据**（`.ps1` 回退）。
- *   · **注入面能盖住「实现写错了」，盖不住「接错线了」**：判定「解析口改对了」的
- *     用例全都注入 `resolve`，而注入面是「输入什么就交回什么」的假实现 ——
- *     「默认值写错 / 只覆盖了一半形状」这两类在它下面全看不出来。⇒ 这里有两组
- *     **不注入 `resolve`** 的判据（默认解析口真的接在编排上、路径真的过分态判据）。
+ * 「让子进程的每一个字节以 CP936 出口」的判断面（ISSUE #1977）：抓取端在本进程之外，故只判三件 —— PS 形态、
+ * `TextDecoder("gbk")` 反算字节（Node 无 GBK 编码器）、退出码转出（外壳吞码踩过 `ci-toolchain-selfcheck.mjs` 的坑）；
+ * Linux 到不了的语句（`encoding: "buffer"` 值、`String(buffer)` 缺 `setEncoding`、`.bin` 垫片形态）只能按形状判。
  */
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -144,21 +102,11 @@ describe("CP936 出口：写字节（只读、失败不抛）", () => {
   });
 
   it('`encoding` 要的是**编码名或 `null`** —— `"buffer"` 与 `Buffer` **两者都会被拒**', () => {
-    /* 这条判据的根据是本仓第一次上平台的现场（`工具链自证` 直接红），报错原文：
-     *
+    /* 本仓第一次上平台的现场（`工具链自证` 红），报错原文（§12.4.6：错误原文保留英文、反引号包住，
+     * `check-comment-language.cjs` 只把反引号外的英文成句算进来）：
      *   `TypeError [ERR_UNKNOWN_ENCODING]: Unknown encoding: buffer`
-     *   `    at Buffer.from (node:buffer:339:12)`
-     *   `    at spawnSync (node:child_process:916:29)`
-     *   `    at scripts/ci-cp936-exit.mjs:121`
-     *
-     * （这几行按判据 §12.4.6 的「错误原文保留英文」处置，用反引号包住 ——
-     * `check-comment-language.cjs` 的启发式只把**反引号外的**英文成句算进来。）
-     *
-     * 这两笔是**同一个误解的两种写法**：想「拿到 Buffer」，于是写 `"buffer"`；
-     * 被拒之后自然会改成 `Buffer` —— **同样被拒**。这个位置只认
-     * 「编码名字符串」或 `null`（= 给我 Buffer），不认 `Buffer` 这个构造器。
-     * 两种错法都是**运行时**才炸（`spawnSync` 拿到 `input` 才走
-     * `Buffer.from(input, encoding)`），所以判据只能在「值传下去」这一层设。 */
+     * 两笔是同一误解的两种写法 —— `"buffer"` 与 `Buffer` 都被拒，此处只认编码名或 `null`；且都在运行时才炸，
+     * 判据只能设在「值传下去」这一层。 */
     /* 两种写法都不是编码名 —— 查表就是查不到。 */
     expect(Buffer.isEncoding("buffer")).toBe(false);
     /* SAFETY: 类型断言已复核 */
@@ -276,15 +224,10 @@ describe("CP936 出口：编排与退出码", () => {
   };
 
   it("抓子进程输出的那一跳**显式钉 `utf8`**（Linux 上永远看不见的那个 bug）", async () => {
-    /* `String(buffer)` 走 `buf.toString()`，默认编码取自 `process.stdout` 的
-     * `writableEncoding` —— 在 Windows 上那是**宿主代码页（CP936）**。于是子进程的
-     * UTF-8 字节在**进 PowerShell 之前**就被解错一遍，再按 936 编回去只是把乱码换个
-     * 编码存下来：转码链「先解对、再编回」两段，第一段在这里断。
-     *
-     * Linux 的 `process.stdout` 是 UTF-8，所以这个 bug 在本机**永远不会显形** ——
-     * 判据只能落在「这一跳有没有被显式钉住」这个形状上：真 `spawn` 出来的流有
-     * `setEncoding`，判它被以 `"utf8"` 调过（`ci-console-encoding.mjs` 钉的是
-     * 控制台那一半，这里钉的是抓子进程这一半）。 */
+    /* `String(buffer)` 走 `buf.toString()`，默认编码取自 `process.stdout.writableEncoding` —— Windows 上是宿主代码页
+     * （CP936），子进程的 UTF-8 在进 PowerShell **之前**就解错，转码「先解对、再编回」第一段即断。
+     * Linux 的 `process.stdout` 是 UTF-8，bug 永不明形 ⇒ 只判形状：真 `spawn` 出来的流被以 `"utf8"` 调过 `setEncoding`
+     * （`ci-console-encoding.mjs` 钉控制台那一半，这里钉抓子进程这一半）。 */
     const pinned: Array<string> = [];
     const mkStream = (out: string) => ({
       setEncoding(enc: string) {
@@ -348,13 +291,9 @@ describe("CP936 出口：编排与退出码", () => {
   };
 
   it("**没有退出码 ≠ 退出码是 0** —— 被信号终止的一转不许念成通过（ISSUE #2571）", async () => {
-    /* 本文件最坏的一格：`close` 的第二个形参没人接，于是 `code ?? 0` 把「这条命令
-     * 不是自己退出的」直接落成「通过」。当场复现（本机 Node 26.12.1，见下面那条
-     * 「真起子进程再 kill」）：子进程被 SIGTERM 终止时 `close` **照来**，带的是
-     * `code=null` + `signal=SIGTERM` —— 旧写法在那里转出去的是 **0**。
-     *
-     * 与 §13.6.4.1 那句「拿不到测量 ≠ 测量结果是红的」是同一条区分，只是方向相反：
-     * 拿到的既不是红，**也不许被念成绿**。 */
+    /* 本文件最坏的一格：`close` 第二个形参没人接，`code ?? 0` 把「不是自己退出的」落成「通过」。实测（Node 26.12.1）：
+     * 被 SIGTERM 终止时 `close` 照来，带 `code=null` + `signal=SIGTERM`，旧写法转出的是 **0**。
+     * 与 §13.6.4.1「拿不到测量 ≠ 测量是红的」同一条区分、方向相反：拿到的既不是红，也**不许被念成绿**。 */
     const printed: Array<string> = [];
     const child = fakeChild("半行输出", null, "SIGTERM");
     const code = await runWithCp936Exit(["--", "做点事"], {
@@ -435,12 +374,9 @@ describe("CP936 出口：编排与退出码", () => {
   });
 
   it("**真起一条长跑子进程再 kill** ⇒ 外壳转出的不是 0（假执行者判不到这一格）", async () => {
-    /* 这条是本档的**现场**，不是形状：`spawnProc` 交回的是真 `spawn` 出来的进程，
-     * 信号从外面发进去，收尾走的是生产那一条 `close` 回调。用它替换掉上面几条的
-     * 假子进程，是因为「`close` 到底带什么」这件事只有真进程能回答 —— 本文件的
-     * 头注此前就答错过一次（写的「被 kill 时 `close` 不会来」，实测会来）。
-     *
-     * `resolve` 注入「原样放行」：这里要判的是终止 → 退出码那一条链，不是解析层。 */
+    /* 这条是**现场**不是形状：`spawnProc` 交回真 `spawn` 的进程，信号从外面发，收尾走生产那条 `close` 回调 ——
+     * 「`close` 到底带什么」只有真进程能回答（本文件头注曾答错一次，写的「被 kill 时 `close` 不会来」）。
+     * `resolve` 注入原样放行：这里判终止 → 退出码那条链，不是解析层。 */
     let handle: ReturnType<typeof spawn> | undefined;
     const code = await runWithCp936Exit(
       ["--", process.execPath, "-e", "console.log('第一条读数');setInterval(() => {}, 999)"],
@@ -571,15 +507,10 @@ describe("CP936 出口：编排与退出码", () => {
   });
 
   it("**解析口收的是「名字」，不是「候选路径」** —— 原样退回候选就是把裸名字扔给 spawn", async () => {
-    /* 这是 `Install dependencies` 那一格真红的根因（ISSUE #1977 第三次上平台）：
-     * `commandInvocation()` 的契约是「**候选** → spawn 形态」，解析不出来时它
-     * **原样退回候选** —— 对一条盘上的路径是忠实的，对 `pnpm` 这种名字却等于
-     * `spawn("pnpm")`，在 Windows 上是 `ENOENT`（现场：
-     * `[cp936-exit] 起不了这条命令：pnpm`）。
-     *
-     * 正确的那一层是 `resolveCommandInvocation()`：收名字、交 `{command, args,
-     * resolved}`。这条用例把那个口径钉住 —— 生产解析口必须是后者，注入面也必须
-     * 交出这个形状。 */
+    /* `Install dependencies` 真红的根因（ISSUE #1977 第三次上平台）：`commandInvocation()` 的契约是「**候选** → spawn
+     * 形态」，解析不出来时原样退回候选 —— 对盘上路径忠实，对 `pnpm` 这种名字等于 `spawn("pnpm")`（Windows 上 ENOENT，
+     * 现场 `[cp936-exit] 起不了这条命令：pnpm`）。正确那层是 `resolveCommandInvocation()`：收名字、交
+     * `{command, args, resolved}` —— 生产解析口与注入面都必须交出这个形状。 */
     const seen: Array<{ args: Array<string>; cmd: string }> = [];
     const child = fakeChild("ok\n", 0);
     await runWithCp936Exit(["--", "some-thing", "x"], {
@@ -603,36 +534,20 @@ describe("CP936 出口：编排与退出码", () => {
   });
 
   it("**路径不进 PATH 查找**：`node_modules/.bin/tsc` 不是名字，别拿 PATH 去问它", () => {
-    /* 这一格是外壳第二次上平台的现场（ISSUE #1977）：
-     *
-     *   [cp936-exit] PATH 上找不到这条命令：node_modules/.bin/tsc
-     *
-     * `.cnb.yml` 的 stage 里**两类对象都真实存在** —— `scripts/check-*.cjs` 是**路径**
-     * （相对检出根），`pnpm` / `node` 是**名字**；这里拿 `node_modules/.bin/tsc` 当输入
-     * 是因为它**曾经**就是清单里的写法（ISSUE #1977 的现场），#2572 起那两格改成
-     * 直起包真身，但外壳对「一条盘上的垫片路径」这一形状的处理**没变** —— 判据判的是
-     * 外壳自己，不跟着清单改口径。
-     * 而 `resolveCommandInvocation()` 是**纯 PATH 查找**，对一条相对路径它当然报
-     * `resolved: false` —— 那不是「找不到」，是「这条不该问 PATH」。把两者混作
-     * 一谈，就会在类型检查那一格上**误红**（判据把该保守的方向用反了）。
-     *
-     * 两条判据：
-     *   · 路径的命令**不产出**「PATH 上找不到」（`resolved` 恒真）；
-     *   · 但它**仍要过形态判据** —— 「不问 PATH」只解决误报，命令本身在 Windows 上
-     *     照样要落 `.ps1` 回退才起得来（下一个用例判那一半）。 */
+    /* 第二次上平台的现场（ISSUE #1977）：`[cp936-exit] PATH 上找不到这条命令：node_modules/.bin/tsc`。
+     * `.cnb.yml` 的 stage 里**路径**（`scripts/check-*.cjs`）与**名字**（`pnpm`/`node`）都真实存在；这里拿
+     * `node_modules/.bin/tsc` 当输入（它曾是清单写法，#2572 起改直起包真身，外壳对垫片路径的处置未变）。
+     * 路径的命令**不产出**「PATH 上找不到」（`resolved` 恒真），但仍要过形态判据（见下一用例）；
+     * `resolveCommandInvocation()` 是纯 PATH 查找，把「找不到」与「不该问 PATH」混作一谈会在类型检查那格误红。 */
     const given = ["--noEmit"];
     const resolved = resolveShellInvocation(path.join("node_modules", ".bin", "tsc"), given);
     expect(resolved.resolved).toBe(true);
     /* 绝对化过 —— 证明它走的是「形态」那条路，不是原样透传。 */
     expect(path.isAbsolute(resolved.command)).toBe(true);
-    /* 参数原样转交，一个都不改写 —— 判的是**调用方给的那一串必须逐字落在尾部**，
-     * 而不是「整串就等于我给的」。后者把「写下来的那一条」当成「被执行的那一条」：
-     * `commandInvocation()` 的契约是交出**能直接 spawn 的整串**，Windows 上
-     * 宿主与 `-File <shim>` 就在 `args` 里（见 `usableCommand()` 那条
-     * 「`.ps1` 必须交宿主起」）—— 所以前缀本来就该**按机器出现**，
-     * 原来那句 `toEqual(given)` 在这台机器上必然红（实测：
-     * `expected ['-NoProfile', …(5)] to deeply equal ['--noEmit']`）。
-     * 尾部这一判在两个方向上都比原断言强：改写参数会红，把调用方的参数挤到中间也红。 */
+    /* 参数原样转交 —— 判的是「调用方给的那串必须逐字落在尾部」，不是「整串就等于我给的」：后者把「写下来的」
+     * 当成「被执行的」。`commandInvocation()` 契约是交出能直接 spawn 的整串，Windows 上宿主与 `-File <shim>` 就在
+     * `args` 里（见 `usableCommand()`），故前缀按机器出现，原 `toEqual(given)` 必红（实测
+     * `expected ['-NoProfile', …(5)] to deeply equal ['--noEmit']`）；尾部这一判两个方向上都更强。 */
     expect(resolved.args.slice(-given.length)).toEqual(given);
   });
 
@@ -645,13 +560,10 @@ describe("CP936 出口：编排与退出码", () => {
   });
 
   it("路径**仍要过形态判据**：Windows 上落同目录的 `.ps1`（`.bin/<工具>` 那一类垫片）", () => {
-    /* 「不问 PATH」只解决**误报**，不解决**起不来** —— pnpm 在 Windows 上给
-     * `node_modules/.bin/<工具>` 摆三个垫片（`.cmd` / `.ps1` / 无扩展名 shim），
-     * Node 一个都起不了（`.cmd` 只有 cmd.exe 解释、shim 是 shebang）。所以路径这一支
-     * 必须再走一次形态判据，让同目录的 `.ps1` 回退被找出来。
-     *
-     * 判据落在「落到了 PowerShell 宿主 + 同目录 `.ps1`」这个形状上，而不是「选中了
-     * 哪个文件」（后者由 `executable-resolve.ts` 那一侧的用例守）。 */
+    /* 「不问 PATH」只解决**误报**，不解决**起不来**：pnpm 在 `node_modules/.bin/<工具>` 摆 `.cmd` / `.ps1` / 无扩展名
+     * shim 三个垫片，Node 一个都起不了（`.cmd` 只有 cmd.exe 解释、shim 是 shebang），故路径这一支必须再走形态判据，
+     * 让同目录的 `.ps1` 回退被找出来。判据落在「PowerShell 宿主 + 同目录 `.ps1`」这个形状上，选中哪个文件由
+     * `executable-resolve.ts` 那侧守。 */
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cp936-bin-"));
     fs.writeFileSync(path.join(dir, "tsc"), "#!/bin/sh\necho hi\n", {
       mode: 0o755,
@@ -694,12 +606,10 @@ describe("CP936 出口：编排与退出码", () => {
      * —— 默认值写错、或压根没接上时，注入面自己把缺陷抹平、那几条照样绿。
      * 这一条因此**不注入 `resolve`**，判的就是那条线接上了没有。 */
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cp936-bin-"));
-    /* 夹具必须是**这台宿主真起得来**的东西。解析层判「能不能跑」的方式是真起一次
-     * （`usableCommand` 的探针），一个 shebang 文本在 Windows 上永远起不来 ⇒
-     * 结论会是「PATH 上查无此命令」，而**那句与「解析口压根没接上」在日志里同形**
-     * —— 正是 #1397 那一族说过的「mock 排的形状必须真机出得来」。
-     * Windows 上给它 `<dir>/pnpm.EXE`（`PATHEXT` 里那一档；复制当前 node 二进制
-     * 就是一个真能跑的 PE 映像），POSIX 上给无扩展名的 `<dir>/pnpm`。 */
+    /* 夹具必须是**这台宿主真起得来**的东西：解析层判「能不能跑」是真起一次（`usableCommand` 的探针），一个 shebang
+     * 文本在 Windows 上永远起不来 ⇒ 结论「PATH 上查无此命令」，而那句与「解析口压根没接上」在日志里同形
+     * （#1397「mock 排的形状必须真机出得来」）。Windows 给 `<dir>/pnpm.EXE`（`PATHEXT` 那一档，复制当前 node 二进制
+     * 即真 PE），POSIX 给无扩展名的 `<dir>/pnpm`。 */
     const fake = path.join(dir, process.platform === "win32" ? "pnpm.EXE" : "pnpm");
     fs.copyFileSync(process.execPath, fake);
     fs.chmodSync(fake, 0o755);
@@ -715,17 +625,10 @@ describe("CP936 出口：编排与退出码", () => {
     };
     await runWithCp936Exit(["--", "pnpm", "install"], {
       platform: "linux",
-      /* `env` 必须注入进来，而且**要靠这一跳生效**。这一格造的是自己那份假 PATH
-       * （上面那个 `dir`），而此前 `runWithCp936Exit` 递给解析口的是
-       * `resolve(command, args)` —— 一个 options 都不带，于是注入的 `env` 停在半路，
-       * 这一格实际问的是**这台机器的 PATH**：Windows 上解析到 corepack 那句
-       * `pnpm.ps1`、经宿主起，`seen[0]` 成了 `pwsh.EXE`
-       * （实测 `expected 'pwsh.EXE' to be 'pnpm'`）。
-       * 红本身有信息量，但它说明的是「注入面只管了一半」，不是「解析口没接上」——
-       * 所以补的是 `env` 那一跳，`platform` 仍只用于出口那一半（见实现里那条 ⚠️：
-       * 同文件那两条「模拟非 Windows」的用例真起 `echo`，把 platform 交给解析层
-       * 会把它们改成「判这台机器有没有一个叫 echo 的无扩展名文件」）。
-       * 补齐之后这一格的答案只由**注入进去的那张 PATH** 决定，换宿主不换结论。 */
+      /* `env` 必须注入且**靠这一跳生效**：此前 `runWithCp936Exit` 递给解析口的是 `resolve(command, args)`，不带
+       * options ⇒ 注入的 `env` 停在半路，这一格问的是**这台机器的 PATH**（Windows 上解析到 corepack 的 `pnpm.ps1`，
+       * `seen[0]` 成了 `pwsh.EXE`，实测 `expected 'pwsh.EXE' to be 'pnpm'`）。`platform` 仍只用于出口那一半（见实现
+       * 里的 ⚠️：两条「模拟非 Windows」用例真起 `echo`）；补齐后答案只由**注入的那张 PATH** 决定，换宿主不换结论。 */
       env: { PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
       /* SAFETY: 类型断言已复核 */
       spawnProc: ((cmd: string) => {
@@ -803,22 +706,11 @@ describe("CP936 出口：编排与退出码", () => {
   });
 
   it("**起不了那条出口要给真因**：失败码 + 解析后的路径 + 当前目录，一个都不能少", async () => {
-    /* 现场（ISSUE #1977 第四次上平台）：外壳只回一句
-     *
-     *   [cp936-exit] 起不了这条命令：node_modules/.bin/npx tsc --noEmit
-     *
-     * 而真因是那次调用把**两条命令**当成了一条 —— 盘上没有那个文件。
-     * 报错点与真因隔着一整层，读日志的人只能去猜。三样东西各回答一个问题：
-     *
-     *   · `err.code` —— `ENOENT`（盘上没有）与 `EACCES` / `EINVAL`（有，但起不来）
-     *     要做的处置完全不同（后者在 Windows 上就是「形态不对」，见 §2.1.1）；
-     *   · 解析口交回的**绝对路径** —— 一行 `module.exports` 的 shim 还是真可执行
-     *     文件，看路径一眼就知道；
-     *   · **当前目录 + 调用方的原文** —— 相对路径是相对谁的（stage 的工作目录由
-     *     平台给，本壳看不到），不写出来就只能猜。
-     *
-     * 这条判的是**这条出口本身**（纯函数，直接喂假错误码）：Linux 检出上
-     * `spawnSync` 起一条不存在的路径同样是 ENOENT，所以这里也能有一条端到端的。 */
+    /* 第四次上平台的现场（ISSUE #1977）：只回一句 `[cp936-exit] 起不了这条命令：node_modules/.bin/npx tsc --noEmit`，
+     * 真因却是把**两条命令**当成一条（盘上没有那文件），报错点与真因隔着一整层；本条判纯函数出口，Linux 也能端到端。
+     * 三样各回答一件事：`err.code`（`ENOENT` 盘上没有 vs `EACCES`/`EINVAL` 有但起不来，后者在 Windows 上就是形态不对，
+     * 见 §2.1.1）；解析口交回的**绝对路径**（shim 还是真可执行，一眼可辨）；**当前目录 + 调用方原文**（相对路径相对谁，
+     * stage 工作目录由平台给，本壳看不到）。 */
     const enoent = formatSpawnFailure({
       err: Object.assign(new Error("spawn x ENOENT"), { code: "ENOENT" }),
       command: "node_modules/.bin/npx tsc --noEmit",
@@ -873,23 +765,11 @@ describe("CP936 出口：编排与退出码", () => {
   });
 
   it("**转码成功后输出不许被吞**：stdout / stderr 直连本进程，而 stdin 留在管道上", async () => {
-    /* 第五次上平台的现场（ISSUE #1977）：那条 stage 在平台日志里**一个字都没有**，
-     * 而退出码照转 —— 「输出被吞」与「命令本来就没输出」在日志上完全同形。
-     *
-     * 根因：默认实现 `spawnSync(cmd, args, { input, encoding: null })` 里那个 `null`
-     * 是**对的**（要 Buffer 输出的唯一写法），可它同时意味着 `spawnSync` 的 `stdio`
-     * 仍是默认的 `pipe` —— PowerShell 编对的那批 936 字节落进 `r.stdout` 这个 Buffer，
-     * 然后整份丢掉。
-     *
-     * 正确取值是 `["pipe", "inherit", "inherit"]` —— **只把 stdout / stderr 接出去**，
-     * stdin 必须留在管道上：那份 UTF-8 原文就是从 stdin 递给 PowerShell 的（`input`），
-     * 而 `stdio: "inherit"` 配 `input` 用时会把 `input` **静默丢掉**（stdin 变成真
-     * 终端），`[Console]::In.ReadToEnd()` 读到空串 ⇒ **日志仍然一个字都没有**
-     * （修完第一次之后 `E2E 关键流程` 那一格的形态：退出 1、日志零行）。
-     * 「标准输出落日志」与「整个 stdio 都别管」是两句话。
-     *
-     * ⚠️ **这一格 Linux 上永远判不到**（`writeCp936` 非 Windows 直接 return），
-     * 所以判据钉在**形状**上：默认实现交出去的那三路到底是什么。 */
+    /* 第五次上平台的现场（ISSUE #1977）：stage 日志**一个字都没有**而退出码照转 ——「输出被吞」与「命令本来没输出」
+     * 在日志上完全同形。根因：`encoding: null` 是对的（要 Buffer 的唯一写法），但 `stdio` 仍是默认 `pipe`，编好的
+     * 936 字节落进 `r.stdout` 后整份丢掉。正确取值 `["pipe", "inherit", "inherit"]`：只接出 stdout/stderr，stdin 必须
+     * 留在管道上（`stdio: "inherit"` 会**静默丢掉** `input`，`[Console]::In.ReadToEnd()` 读空 ⇒ 日志仍零行）。
+     * ⚠️ Linux 判不到（`writeCp936` 非 Windows 直接 return），故只判默认实现交出去的那三路形状。 */
     const calls: Array<{ stdio: unknown }> = [];
     writeCp936("中文一二三", {
       platform: "win32",
@@ -909,14 +789,9 @@ describe("CP936 出口：编排与退出码", () => {
   });
 
   it("转码那一步**带墙钟预算** —— `spawnSync` 挂住不能把整条链停在那里", () => {
-    /* ISSUE #1977 第八轮。`writeCp936` 用的是 `spawnSync`（同步），而它跑在子进程
-     * `data` 回调里 —— 无 `timeout` 就是「挂住就一直挂」：子进程那一侧的管道很快
-     * 填满、它卡在 `write()` 上，`close` 永不到来，平台读到的就是**零行**
-     * （与「攒到 `close` 才发」那一处同形，但坏在更早的一跳）。
-     *
-     * ⚠️ 同样**在 Linux 上判不到落字节**，所以判据钉在形状上：默认实现交出去的
-     * `timeout` 是不是一个**有界**的值。反向复算：去掉那一行即红。
-     */
+    /* ISSUE #1977 第八轮：`writeCp936` 用同步 `spawnSync` 却跑在子进程 `data` 回调里 —— 无 `timeout` 就是「挂住就
+     * 一直挂」：管道很快填满、子进程卡在 `write()`、`close` 永不到来，平台读到的是**零行**。
+     * ⚠️ Linux 上判不到落字节，故钉形状：默认实现的 `timeout` 是否**有界**（去掉那行即红）。 */
     const calls: Array<{ timeout: unknown }> = [];
     writeCp936("中文一二三", {
       platform: "win32",
@@ -959,13 +834,9 @@ describe("CP936 出口：编排与退出码", () => {
   });
 
   it("**真跑一次那三路**：`input` 送得到 stdin，而子进程的输出真的落到本进程 stdout", () => {
-    /* 上两条判「形状」，这条判**那个形状真的能用** —— 拿 `process.execPath` 假冒
-     * PowerShell（把 stdin 原样回吐到 stdout），跑的就是默认实现的那三路。
-     *
-     * 它要挡的是一个**只在运行时才显形**的错法：`stdio: "inherit"` 单独一个字符串
-     * 会连 stdin 一起接走，于是 `input` **静默失效**（不是抛错、是那份原文没送到），
-     * 子进程读到空串、一个字节都不发 —— 「改对了形状、照样吞输出」。
-     * 这条在 Linux 上判得动，是因为 `spawnSync` 的 stdio 语义与平台无关。 */
+    /* 上两条判「形状」，这条判**形状真能用**：拿 `process.execPath` 假冒 PowerShell（stdin 原样回吐），跑的正是默认
+     * 实现那三路。它挡的是只在运行时显形的错法：`stdio: "inherit"` 单字符串会连 stdin 一起接走，`input` **静默失效**
+     * （不抛错、原文没送到），子进程读空、一个字节不发。Linux 上判得动，因为 `spawnSync` 的 stdio 语义与平台无关。 */
     const child = spawnSync(
       process.execPath,
       [
@@ -997,9 +868,8 @@ describe("CP936 出口：**边到边发**（第六跑 —— 长跑 stage 的日
 
   /**
    * 假子进程：数据分几次推、`close` 可以**永远不来**（真实场景里被平台 kill 掉）。
-   *
-   * 与上面那个 `fakeChild` 的差别只有一处 —— 这里把 `data` 回调**留着**，
-   * 由用例自己决定什么时候送、送几块（判「送出去的时刻」必须能控制时刻）。
+   * 与上面 `fakeChild` 的差别只有一处 —— 这里把 `data` 回调**留着**，由用例决定何时送、送几块
+   * （判「送出去的时刻」必须能控制时刻）。
    */
   const streamingChild = () => {
     const dataHandlers: Array<(d: unknown) => void> = [];

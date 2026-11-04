@@ -1,10 +1,6 @@
-/* workflow 路由的 `list` procedure（从 workflow.ts 拆出）。
- *
- * 这一屏回答「库里的工作流 + 磁盘上还没导入的」两件事：DB 查询、本地目录
- * 递归扫描（带 30s 超时，防网络驱动器挂死整个请求）、按内容寻址的重命名
- * 重关联、类型/预览/IO 富化、以及「本地待导入」占位行。磁盘与路径判据
- * 全在 `./workflow-local-roots`（与导入守卫同一出处）。
- */
+/* workflow 路由的 `list` procedure（从 workflow.ts 拆出）：回答「库里的工作流 + 磁盘上还没导入的」——
+ * DB 查询、本地目录递归扫描（30s 超时，防网络驱动器挂死整个请求）、按内容寻址的改名重关联、
+ * 类型/预览/IO 富化、以及「本地待导入」占位行。磁盘与路径判据全在 `./workflow-local-roots`。 */
 import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
@@ -123,14 +119,10 @@ export const workflowListProcedures = {
       }> = [];
       let localAllFiles: Array<LocalWorkflowFile> = [];
       if (localRoots.length > 0) {
-        /* 递归扫描：ComfyUI 自己的 workflows/ 与桌面版的 user/default/workflows
-         * 都会分子目录（default/、image/…），用户给一个根就是要「这个目录下的都算」，
-         * 只扫一层会把它们全漏掉而界面上只显示「还没有工作流」。
-         *
-         * 加整体超时：某些特殊文件系统（网络驱动器 / WSL 路径 / 云盘占位符）可能
-         * 让 `fs.promises` 长时间挂起而不抛错，导致整个 `workflow.list` 请求一直
-         * 不返回，前端无限转圈。超时后抛 `TimeoutError`，由 tRPC 转成可展示错误，
-         * 用户至少能看到原因并重试。 */
+        /* 递归扫描：ComfyUI 的 workflows/ 与桌面版 user/default/workflows 都会分子目录（default/、image/…），
+         * 只扫一层会把它们全漏掉而界面只显示「还没有工作流」。加整体超时：某些文件系统（网络驱动器 /
+         * WSL 路径 / 云盘占位符）会让 `fs.promises` 长时间挂起而不抛错，请求一直不返回、前端无限转圈；
+         * 超时抛 `TimeoutError`，由 tRPC 转成可展示错误，用户至少能看到原因并重试。 */
         const SCAN_TIMEOUT_MS = 30_000;
         const { roots, allFiles } = await withTimeout(
           scanLocalWorkflowRoots(localRoots, { recursive: true }),

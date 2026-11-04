@@ -1,15 +1,7 @@
 /**
- * 回归护栏：运行期「陈旧路由表」自愈探测（**症状驱动 + 有界 + 懒归因**）。
- *
- * 判据只有一条：**曾经就绪过、现在连续 N 拍 `/api/health` 返回 404、且页面 `/`
- * 仍 200** → 轻量重启 dev server。其余一切状态都不动手。本用例钉死五条负例与
- * 两条边界：
- *   · health 200 → 零动作（HMR 已吸收的 pull 走的就是这条，探测毫不知情）；
- *   · 冷启动期（还没就绪过）的 404 → 不算「路由表坏了」；
- *   · 接口层非 404（连不上 / 503）→ 交给既有断开 / 恢复链路；
- *   · 页面 `/` 也非 200（服务半死）→ 不套用这条自愈；
- *   · 冷却期内不重复重启、超单会话上限后只提示不动手。
- * 归因是**懒的**：`describeRuntimeHealCause(root, null)` 不跑 git、直接退化为无归因。
+ * 回归护栏：运行期「陈旧路由表」自愈探测（症状驱动 + 有界 + 懒归因）—— 曾经就绪过、连续 N 拍 `/api/health` 返 404、
+ * 且页面 `/` 仍 200，才轻量重启 dev server。负例：health 200 零动作；冷启动 404 不算坏；非 404 交既有断开/恢复；
+ * 页面也非 200 不套用；冷却内不重启、超上限只提示。归因是**懒的**：`describeRuntimeHealCause(root, null)` 不跑 git、退化为无归因。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -208,14 +200,9 @@ describe("懒归因：拿不到起点就直接退化，绝不跑 git", () => {
 });
 
 /*
- * 接线形状：本探测的判据可单测，但「自愈动作」是 `dev-launcher.mjs` 里 `run()` 的
- * 闭包（`restartDevForReason`），外部拿不到实例 —— 于是这一层按仓库既有做法
- * （见 `tests/dev-launcher-dependency-sync.test.ts`）**读源码断形状**，把 v1/v2 都
- * 漏掉的实现要点钉住：
- *   · 就绪之后才挂探测（`armedInitially: true`），并复用 `classifyProbe` 的症状；
- *   · 自愈动作里**重启后重新武装退出监听**（否则「重启后 dev 崩了」不会被收尾）；
- *   · 归因经 `COMFYAPP_RESTART_DETAIL` 注入新进程；
- *   · 动作本身：清 `.next`（`syncNextCache`）+ 刷会话锚点（`writeSession`）。
+ * 接线形状：自愈动作是 `dev-launcher.mjs` 里 `run()` 的闭包（`restartDevForReason`），外部拿不到实例，于是按既有做法
+ * （见 `tests/dev-launcher-dependency-sync.test.ts`）**读源码断形状**：就绪后才挂探测（`armedInitially: true`）并复用 `classifyProbe`；
+ * 重启后重新武装退出监听（否则「重启后 dev 崩了」不会收尾）；归因经 `COMFYAPP_RESTART_DETAIL` 注入；动作清 `.next`（`syncNextCache`）+ 刷会话锚点（`writeSession`）。
  */
 describe("接线形状：探测挂在就绪之后，自愈动作完整且可归因", () => {
   const launcherSrc = fs.readFileSync(

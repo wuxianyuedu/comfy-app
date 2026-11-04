@@ -1,15 +1,7 @@
 /**
- * src 非空断言 `!` **硬闸**自检:把 `scripts/check-non-null-assertions.cjs`
- * 当黑盒跑在临时工作区上,验证它真能按 AST 认出 `NonNullExpression`、
- * 并**逐站点**放行已登记的合法形态（正则捕获组 / drizzle 判据构造）。
- *
- * 规范:docs/standards/13-提交与-code-review.md §13.5.6 与
- * docs/standards/18-lib层规范.md §18.6
- *
- * 为什么是硬闸:直接开 eslint `no-non-null-assertion` 一次报 160 处、评审全是噪声,
- * 所以本仓先以基线棘轮把存量清干净（ISSUE #1811 那批 160 → 0）,归零后翻成
- * 硬闸 —— 棘轮在 0 上只剩「手改 JSON 就能登记新违规」这条通道。
- * 合法例外走 `LEGIT_SITES` 逐条登记（唯一出口）,不是把判据调松。
+ * src 非空断言 `!` 硬闸自检：黑盒跑 `scripts/check-non-null-assertions.cjs`，验证按 AST 认出 `NonNullExpression`，
+ * 且只放行 `LEGIT_SITES` 登记的合法形态（正则捕获组 / drizzle 判据）。硬闸来由：直接开 eslint 一次报 160 处
+ * （ISSUE #1811 那批 160 → 0），归零后翻硬闸，例外只走唯一出口；规范 docs/standards/13-提交与-code-review.md §13.5.6、18-lib层规范.md §18.6。
  */
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";

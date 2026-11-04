@@ -1,22 +1,7 @@
 /**
- * 字阶档位的「当前渲染值」怎么读 —— 全仓只允许这一份读法（规范 §12.18），
- * 与 `radius-scale.ts` 对圆角做的事完全对称。
- *
- * 两份真源，**项目档覆盖默认档**：
- *   · `node_modules/tailwindcss/theme.css` 的 `--text-<名>: <rem>` —— Tailwind 自己的
- *     默认字阶（本仓库刻意**不覆盖** `xs` / `sm` / `base` / `lg` …，这一点由
- *     `tests/design-md-contract-sync.test.ts` 里那条「12px / 13px 只有一个名字」的
- *     反向断言钉着：默认档没了，归零判据会因为「这档不存在」而空绿）；
- *   · `src/app/globals.css` 的 `--text-*` —— 项目自己命名的档（`2xs` / `3xs` / `4xs`）。
- *
- * **标题那三颗（`section` / `page` / `stage`）不在本表里，而且两层理由各管一段**：
- * 它们乘 `--font-scale`，**没有单一渲染值**（14px 的 `section` 在 125% 档下是 17.5px ——
- * 拿 scale=1 的读数当等式去要求调用点改类名是错的）；而它们已经从 `@theme` 移到 `:root`，
- * 所以 Tailwind 根本不为它们生成 utility（`.u-title*` 是 components 层的类，不是工具类）。
- * 从前这里写的是「因为名字不是 t-shirt 形状才被挡在外面」—— 那只是**第二道**闸，
- * 第一道（`TEXT_DECL_RE` 不认 `calc()`）一直更有效；而「改名就入射程」那句是错的。
- * 名字形状那道闸仍然留着，它管的是**项目自加的常量档**：`cn()` 把不认识的
- * `text-<名字>` 归进颜色组，实测吃掉同行状态色，所以自造的名字必须是 t-shirt 形状。
+ * 字阶档位的「当前渲染值」怎么读 —— 全仓唯一读法（规范 §12.18），与 `radius-scale.ts` 对称。两份
+ * 真源（项目档覆盖默认档）：`theme.css` 的默认档（本仓不覆盖，靠 `design-md-contract-sync.test.ts`
+ * 的反向断言避免空绿）与 `globals.css` 的自命名档。标题三颗乘 `--font-scale`、已移出 `@theme`，不入表。
  */
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -31,13 +16,9 @@ function tailwindThemeCss(): string {
 const TEXT_DECL_RE = /^\s*--text-([a-z0-9]+)\s*:\s*([0-9.]+)(rem|px)\s*;/gm;
 
 /**
- * 档位的**配对行高**：Tailwind v4 里 `--text-<名>--line-height` 一旦存在，
- * 生成的 `text-<名>` 就连带锁 `line-height`（这正是 §3.10.1 那批「同一个字号两种行高」
- * 的来路）。默认表写的是 `calc(1.25 / 0.875)` 这种「行高 ÷ 字号」的比值形状，
- * 浏览器按比值乘字号算出行盒 —— 所以这里也按比值存，别在调用方凭印象写死像素。
- *
- * **认不出形状就抛错，不当「没有配对」**：静默漏掉一条配对，会让
- * 「按行高推理」的判据拿到一份缺东西的表，那比红更糟。
+ * 档位的**配对行高**：Tailwind v4 里 `--text-<名>--line-height` 存在就连带锁 `line-height`（§3.10.1
+ * 「同字号两种行高」的来路）。默认表是「行高 ÷ 字号」的比值形状，浏览器按比值乘字号，故这里也按
+ * 比值存。**认不出形状就抛错**：静默漏一条会让「按行高推理」的判据拿到缺表的读数。
  */
 const LINE_HEIGHT_RE = /^\s*--text-([a-z0-9]+)--line-height\s*:\s*([^;]+);\s*$/gm;
 
@@ -83,17 +64,9 @@ export type TextTiers = {
 };
 
 /**
- * 读两张表并按「项目覆盖默认」合并。
- *
- * **默认表全收、项目自加的档名才要 t-shirt 形状**：`TSHIRT_NAME` 那条限制的射程是
- * 「`cn()` 把不认识的 `text-<名字>` 归进颜色组」，而 Tailwind 自带的那批名字
- * （`xs` / `sm` / `base` / `lg` …）是 `cn` 原生认识的字号组成员，不受这个坑影响；
- * 受影响的是项目自己新造的名字（`section` / `page` / `stage`）。所以这里按来源分治，
- * 而不是拿一个正则把两批名字一起筛掉 —— 上一版就是这么把 `base` 误筛出去的
- * （由该判据自己的量具自验抓到：16px 查无档名）。
- *
- * **解不出任何一颗就抛错** —— 静默返回空集会让「等于档位值就红」那条判据永远绿，
- * 那比红更糟。
+ * 读两张表并按「项目覆盖默认」合并。**默认表全收，只有项目自加档名要 t-shirt 形状**（`cn()` 会把
+ * 不认识的 `text-*` 归进颜色组；上一版一个正则连 `base` 一起筛掉，被 16px 查无档名的自验抓到）。
+ * **解不出任何一颗就抛错** —— 静默空集会让「等于档位值就红」的判据永远绿。
  */
 export function parseTextTiers(globalsCss: string, tshirt: RegExp): TextTiers {
   const collected = new Map<string, number>();

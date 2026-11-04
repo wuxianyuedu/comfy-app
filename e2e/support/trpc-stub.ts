@@ -1,68 +1,20 @@
 import type { Page, Route } from "@playwright/test";
 import superjson from "superjson";
 
-/**
- * tRPC 桩：让 `route.fulfill` 出去的内容**真的进到** `httpBatchStreamLink`。
- *
- * ## 为什么直接 fulfill 一个 JSON 数组喂不进去
- *
- * 客户端用的是 `httpBatchStreamLink`（[`src/trpc/link.ts`](../../src/trpc/link.ts)），
- * 它按 **JSON Lines** 读响应体 —— 请求头 `trpc-accept: application/jsonl` 声明了这个
- * 协商结果，服务端由 `jsonlStreamProducer` 产出（见 `@trpc/server` 的
- * `resolveResponse`：`if (info.accept === "application/jsonl")` 那一支）。
- *
- * 真服务端回的是**逐行 JSON**（`content-type: application/json` +
- * `transfer-encoding: chunked`），四行就是一问一答的全部：
- *
- * ```
- * {"json":{"0":[[0],[null,0,0]]}}                  ← head：批里 0 号槽指向 0 号流
- * {"json":[0,0,[[{"result":0}],["result",0,1]]]}   ← 0 号流：槽位 → result 是个 promise
- * {"json":[1,0,[[{"data":0}],["data",0,2]]]}       ← 1 号流：result.data 也是个 promise
- * {"json":[2,0,[[{"tasks":[]}]]]}                  ← 2 号流：真数据（含 superjson meta）
- * ```
- *
- * 消费端 `jsonlStreamConsumer` 的契约是「**第一行**是 head（按 `batchIndex` 索引的
- * 对象），其后每行是 `[chunkId, status, data]` 的 async chunk 定义」。
- *
- * 所以喂一个数组进去时错在两处、且**都不抛错**（这正是 ISSUE #1442 记的
- * 「好 JSON 与坏 JSON 表现完全一致、控制台零报错」）：
- *   1. 数组里没有换行 → `createLineAccumulator` 把它整段当成**一行** → 当 head；
- *      而 head 本该是 `{"0": 信封}` 这种对象，拿到数组后 `Object.entries` 把
- *      `"0"` 索引进来的信封当成 chunk 定义去 `decodeChunkDefinition`，
- *      形状对不上（不是 `[path, type, chunkId]`）→ `type` 落空 → 槽位值
- *      `undefined`，上层静默拿不到数据；
- *   2. 就算手工拆成多行，**每行都必须是 `{"json": …}` 信封**（服务端
- *      `jsonlStreamProducer` 的最后一道 TransformStream 对每个 chunk 做
- *      `JSON.stringify` 前先 `serialize`，superjson 的外层就是它），裸数组行
- *      同样解不开。
- *
- * ## 用法
- *
- * ```ts
- * await stubTrpc(page, {
- *   "task.list": { tasks: [{ id: "a", createdAt: new Date(), … }], total: 1 },
- * });
- * ```
- *
- * 负载就是过程的**返回值本身**（`superjson` 能表示的任何东西）。`Date` / `Map` /
- * `Set` 都由 superjson 的 `meta` 带上（服务端实测同形），客户端能原样还原
- * ——所以不需要手工拼 `meta.values`。
- *
- * **同一个 URL 只能有一个处理器**（`page.route` 后注册者**先**被调用、它对不认识的
- * URL `continue()` 会把请求直接放去网络，先注册那条根本没机会应答）：所有过程一次
- * 登记在同一个 map 里，不要分两次调用。
- */
+/** tRPC 桩：让 `route.fulfill` 出去的内容**真的进到** `httpBatchStreamLink`（按 JSON Lines 读响应体）
+ * —— 第一行是 head（按 `batchIndex` 索引的对象），其后每行是 `[chunkId, status, data]` 的 async chunk，
+ * 且必须是 superjson 信封。喂数组错在两处且**都不抛错**（ISSUE #1442：好 JSON 与坏 JSON 表现一致、控制台
+ * 零报错）：无换行 ⇒ 整段当 head，`Object.entries` 把信封当 chunk 定义 ⇒ 槽位 undefined；裸数组行亦解不开。
+ * 负载即返回值（superjson meta 带 Date/Map/Set）；**同一 URL 只有一个处理器**（后注册者先应答、不认的 URL continue()）⇒ 过程一次登记。 */
 export function trpcJsonlBody(results: Array<unknown>): string {
   const head: Record<string, unknown> = {};
   const lines: Array<string> = [];
   let chunkId = 0;
 
-  /* 每一行都是 `superjson.serialize(整行)` 的外壳 —— 服务端 `jsonlStreamProducer`
-   * 的最后一道 TransformStream 就是这么做的（`serialize(chunk)` 之后才
-   * `JSON.stringify`），所以 `meta.values` 的路径是**相对整行**的
-   * （实测：`{"json":[2,0,[[{"tasks":…}]]],"meta":{"values":{"2.0.0.tasks.0.createdAt":["Date"]}}}`）。
-   * 只序列化内层数据再拼回 `[chunkId, status, …]` 会把 Date 的路径前缀丢掉，
-   * 客户端还原出来的 `createdAt` 就还是字符串。 */
+  /* 每一行都是 `superjson.serialize(整行)` 的外壳（服务端 `jsonlStreamProducer` 的最后一道 TransformStream
+   * 就是这样：`serialize(chunk)` 后才 `JSON.stringify`），所以 `meta.values` 的路径**相对整行**
+   * （实测 `"2.0.0.tasks.0.createdAt":["Date"]`）。只序列化内层数据再拼回外壳会丢掉 Date 的路径前缀，
+   * 客户端还原的 `createdAt` 就还是字符串。 */
   const line = (value: unknown) => JSON.stringify(superjson.serialize(value));
 
   results.forEach((result, index) => {
@@ -86,18 +38,10 @@ export function trpcJsonlBody(results: Array<unknown>): string {
 }
 
 /**
- * 从 `/api/trpc/<一段>` 里取出本次请求的过程名列表。
- *
- * 批请求把多个过程名用逗号拼在同一段路径里（实测
- * `/api/trpc/workflow.list,workflowModel.list`），而**响应体的槽位顺序必须与这个
- * 顺序逐一对应** —— 只回一个结果时，第二个过程的槽位会解成 `undefined`，而它
- * **不抛错**（与文件头那两条「好 JSON 与坏 JSON 表现一致」同源）。
- *
- * 不导出：唯一消费者是 {@link stubTrpc}，而这条「按顺序对齐」的约定正是它的私有契约。
- *
- * @param rawUrl 请求的完整 URL
- * @returns 过程名列表（不在 `/api/trpc/` 下返回空数组）
- */
+ * 从 `/api/trpc/<一段>` 里取出本次请求的过程名列表。批请求把多个过程名逗号拼在同一段路径（实测
+ * `/api/trpc/workflow.list,workflowModel.list`），而**响应体的槽位顺序必须逐一对应** —— 只回一个结果时
+ * 第二个过程解成 `undefined` 且**不抛错**（与文件头「好 JSON 与坏 JSON 表现一致」同源）。
+ * 不导出：唯一消费者是 {@link stubTrpc}，这条「按顺序对齐」是它的私有契约。@returns 过程名列表（不在 `/api/trpc/` 下为空数组） */
 function proceduresOf(rawUrl: string): Array<string> {
   const { pathname } = new URL(rawUrl);
   const prefix = "/api/trpc/";
@@ -107,22 +51,11 @@ function proceduresOf(rawUrl: string): Array<string> {
   return pathname.slice(prefix.length).split(",").filter(Boolean);
 }
 
-/**
- * 一条 tRPC 请求该被回什么 —— `null` 表示「不管它，继续打到真实服务端」。
- *
- * 抽成纯函数是为了让它可判：`stubTrpc` 的失效方式是**静默**的（回错了形状前端只是
- * 拿不到数据，与 #1442 记的那族同形），而「批请求按 URL 里的过程顺序逐一取结果」这条
- * 约定只能靠用例钉住。导出即可被 `tests/e2e-trpc-stub.test.ts` 直接执行。
- *
- * 规则：URL 里每个过程都得在 `handlers` 里找到一条（按 `Object.entries` 顺序**先匹配
- * 先赢**，所以片段要写具体），按**过程出现的顺序**给出结果数组。**只要有一个过程没有
- * 主就整条 `null`** —— 半桩的批请求比不桩更坏：另一个过程会拿到 `undefined` 槽位，
- * 静默、不报错。
- *
- * @param rawUrl 请求的完整 URL
- * @param handlers 过程名片段 → 返回值
- * @returns 按顺序对齐的结果数组；不该管这条请求时返回 `null`
- */
+/** 一条 tRPC 请求该被回什么 —— `null` 表示「不管它，继续打到真实服务端」。抽成纯函数是为了可判：
+ * `stubTrpc` 的失效方式是**静默**的（回错形状前端只是拿不到数据，同 #1442 那族）。规则：URL 里每个过程
+ * 都要在 `handlers` 找到一条（`Object.entries` 顺序**先匹配先赢**，片段写具体），按出现顺序给结果数组；
+ * **只要有一个没主就整条 `null`** —— 半桩比不桩更坏（另一个过程拿 `undefined` 槽位，静默）。导出即可被
+ * `tests/e2e-trpc-stub.test.ts` 直接执行。@returns 对齐结果数组，或 `null`（不该管这条请求） */
 export function planStubResults(
   rawUrl: string,
   handlers: Record<string, unknown>,
@@ -140,19 +73,11 @@ export function planStubResults(
   return results;
 }
 
-/**
- * 挂 `/api/trpc/**` 桩，把命中过程的响应做成真协议形态（JSON Lines）。
- *
- * @param page Playwright page
- * @param handlers 过程名片段 → 返回值。按 `Object.entries` 顺序**先匹配先赢**，
- *   所以片段要写得够具体（`"setting.get"` 而不是 `"setting"`）。
- *   没命中任何片段时 `route.continue()`，请求照旧打到真实服务端。
- *
- * ⚠️ **批请求按「URL 里的过程顺序」逐一取结果**：`/api/trpc/a,b` 会去找 `a` 与 `b`
- * 各自的 handler，按这个顺序拼响应体。**只要有一个过程没有 handler 就整条
- * `continue()`** —— 半桩的批请求比不桩更坏（另一个过程拿到的是 `undefined` 槽位，
- * 静默、不报错，与文件头那两条同源）。
- */
+/** 挂 `/api/trpc/**` 桩，把命中过程的响应做成真协议形态（JSON Lines）。@param page Playwright page；
+ * @param handlers 过程名片段 → 返回值，`Object.entries` 顺序**先匹配先赢**，片段写具体（`"setting.get"`
+ * 而不是 `"setting"`）；没命中时 `route.continue()`，请求照旧打到真实服务端。⚠️ **批请求按 URL 里的
+ * 过程顺序逐一取结果**，**只要有一个过程没有 handler 就整条 `continue()`** —— 半桩比不桩更坏（另一个
+ * 过程拿 `undefined` 槽位，静默、不报错，同文件头那两条）。 */
 export async function stubTrpc(page: Page, handlers: Record<string, unknown>): Promise<void> {
   await page.route("**/api/trpc/**", async (route: Route) => {
     const url = route.request().url();

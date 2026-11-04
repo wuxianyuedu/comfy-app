@@ -23,16 +23,10 @@ export const projectRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      /* 归属判定（台账 A3 的同族，此前漏网）：`id` 由客户端生成并随每次画布自动
-       * 保存一起送上来，而仓储的 update 分支只按 `id` 定位行 —— 于是任何人把别人
-       * 的项目 id 抄进请求，就能把对方的 `name/nodes/edges` 整幅覆盖掉。
-       * 与 `get` / `patch` 同口径先判归属：
-       *   · 行不存在 → 建（落在我名下）；
-       *   · 行存在且归我 → 覆盖（自动保存的正常路径）；
-       *   · 行存在但不归我 → FORBIDDEN，一行都不改。
-       * 前端这一路是「尽力而为的镜像」（localStorage 才是画布的事实源），被拒后
-       * 本地不受影响，所以这里必须留一行日志——否则「我的画布为什么不进服务端
-       * 列表」这类问题完全没有可查的出口（硬规则 4）。 */
+      /* 归属判定（台账 A3 同族，此前漏网）：`id` 由客户端生成、随自动保存一起送上来，而仓储 update 只按 `id`
+       * 定位行 —— 别人把项目 id 抄进请求就能覆盖对方的 `name/nodes/edges`。与 `get`/`patch` 同口径：
+       * 不存在→建（落我名下）、归我→覆盖、不归我→FORBIDDEN 一行不改。前端只是「尽力而为的镜像」
+       * （localStorage 才是事实源），被拒后本地不受影响，所以必须留一行日志（硬规则 4）。 */
       const existing = await projectRepository.findById(input.id);
       if (existing && existing.userId !== ctx.user.id) {
         logger.warn(

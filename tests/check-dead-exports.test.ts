@@ -1,12 +1,7 @@
 /**
- * 提交门槛自检：把 scripts/check-dead-exports.cjs 当成黑盒跑在临时工作区上，
- * 验证「地基层（src/lib + src/trpc）的零消费值导出」这条规范（§12.16）
- * 真的会阻断提交。
- *
- * 规范：docs/standards/12-代码组织与文件结构.md §12.16（ISSUE #573 第 9 项）
- *
- * 为什么用子进程跑：门禁由 pre-commit 以 `node scripts/xxx.cjs` 调用，且内部以
- * `process.cwd()` 定位扫描根 —— 复用同一调用方式才等价于真实门禁。
+ * 提交门槛自检：把 scripts/check-dead-exports.cjs 当黑盒跑在临时工作区上，验证地基层（src/lib +
+ * src/trpc）零消费值导出规范（§12.16 / ISSUE #573 第 9 项）真的会阻断提交。
+ * 为什么用子进程：门禁由 pre-commit 以 `node scripts/xxx.cjs` 调用，内部以 `process.cwd()` 定位扫描根。
  */
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";

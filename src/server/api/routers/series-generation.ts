@@ -128,10 +128,9 @@ export const seriesGenerationRouter = createTRPCRouter({
     }),
 
   /**
-   * 整季/跨集一次提交生成（FR-SR-04 ①②）：给定季与工作流，服务端遍历该季下每集的
-   * project → production.shots，按 `(projectId, shotId)` 的 task 存在性做幂等去重 ——
-   * 已有 SUCCEEDED / QUEUED / RUNNING 任务的镜**不重排**（断点续跑，不靠记忆），
-   * 只有失败 / 未生成的镜会被入队。返回 { enqueued, skipped }。
+   * 整季/跨集一次提交生成（FR-SR-04 ①②）：遍历该季每集 project → production.shots，按
+   * `(projectId, shotId)` 的 task 存在性幂等去重 —— 已有 SUCCEEDED / QUEUED / RUNNING 的镜不重排
+   * （断点续跑，不靠记忆），只入队失败 / 未生成的镜。返回 { enqueued, skipped }。
    */
   batchGenerateSeason: authedProcedure
     .input(z.object({ seasonId: z.string().min(1), workflowId: z.string().min(1) }))

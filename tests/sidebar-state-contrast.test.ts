@@ -1,20 +1,8 @@
 /**
- * 侧栏导航项三态的可分辨性（ISSUE #1291）。
- *
- * 背景：`--sidebar-accent` 一路转发到通用表面 token `--color-subtle`，而那颗
- * token 的浅色档是「白底上的极浅灰」。搬到深色侧栏（`--color-panel-deep`
- * `#0f0f16`）上时它取 `#141419` —— 与侧栏底只差 **1.04:1**，悬停/选中在
- * 深色下等于没有反馈；同时悬停与选中**共用同一档底色**，「选中偏弱」是必然。
- *
- * 这类故障 tsc / eslint / 主题色扫描器都看不见：色值全都来自 token、命名也
- * 没错，错的是**两颗 token 放在一起时的相对亮度**。所以判据必须是「真量对比度」，
- * 且要量在**编译产物**上（Tailwind 会 tree-shake 没被引用的 `@theme` 变量，
- * 拿源码正则匹配等于以为自己改了、其实产物里没有）。
- *
- * 取值口径：复用 `tests/helpers/theme-tokens.ts`（真编译 globals.css + 自己解析
- * `var()` 链）。**不要改回 `getComputedStyle`**：jsdom 不解析 `var()`，别名会返回
- * 字面量 `"var(--color-nav-hover)"`，断言变成误报。
- */
+ * 侧栏导航项三态的可分辨性（ISSUE #1291）：`--sidebar-accent` 转发到 `--color-subtle`，浅色档搬到深色侧栏
+ * （`--color-panel-deep` `#0f0f16`）时取 `#141419`，与底只差 **1.04:1**，且悬停与选中共用同一档底色 ⇒ 深色无反馈。
+ * tsc/eslint/色值扫描都看不见（错的是两颗 token 的相对亮度），故必须真量对比度、量在编译产物上（Tailwind 会 tree-shake 未引用变量）。
+ * 取值复用 `tests/helpers/theme-tokens.ts`；**别改回 `getComputedStyle`**：jsdom 不解析 `var()`，别名返回字面量。 */
 import { beforeAll, describe, expect, it } from "vitest";
 import { loadThemeTokens, type ThemeTokens } from "./helpers/theme-tokens";
 
@@ -61,10 +49,8 @@ function token(t: ThemeTokens, name: string): string {
 
 /* 三态底色相对**侧栏底**的最低可分辨下限。
  *
- * 为什么不是一个数：深浅两态的可行区间不同 —— 浅色侧栏底 `#f0f1f5` 本身已很浅，
- * 底色再压深就从「状态」变成「一块独立卡片」，所以浅色档刻意低一档，两态观感
- * 靠选中态的品牌指示条 + 字重拉齐（见 `globals.css` 的取值说明）。
- * 1.10 是下限：低于它实测在显示器上就是「看不出变化」（修复前深色是 1.04）。
+ * 深浅两态可行区间不同：浅色底 `#f0f1f5` 已很浅，再压深就从「状态」变成「独立卡片」，故浅色档刻意低一档，
+ * 靠选中态品牌指示条 + 字重拉齐（见 `globals.css`）。1.10 是下限：低于它实测「看不出变化」（修复前深色 1.04）。
  */
 const MIN_HOVER_VS_BASE = 1.1;
 /** 选中底色必须比悬停更明显 —— 否则「选中」与「指针路过」无从区分。 */

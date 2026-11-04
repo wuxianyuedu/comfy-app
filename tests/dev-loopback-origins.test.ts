@@ -1,25 +1,7 @@
 /**
- * dev 期「两种回环拼法都要连得上 HMR」（Next 16 的 dev 资源跨源闸门）。
- *
- * 撞车点：本仓把回环主机统一收成 `127.0.0.1`（§12.14 / 硬规则 20 —— Node fetch
- * 会把 `localhost` 先解析成 `::1`），而 `pnpm dev` 这条裸链路起的是
- * `next dev --turbo -p <port>`（**不带 `-H`**），此时 Next 认定的规范 dev 源是
- * `localhost:<port>`。于是从 `http://127.0.0.1:<port>` 打开页面时，它的
- * `/_next/hmr` WebSocket 被判成跨源并**直接撕掉连接**（实测该请求拿不到 101，
- * Chrome 侧是 `ERR_INVALID_HTTP_RESPONSE`）。HMR 客户端连不上就反复整页重载 ——
- * 表现是「页面自己一直刷、侧栏点了没反应」，而不是一条读得出的错误。
- *
- * 为什么判配置而不是判握手：真握手要一台起着的 dev server（端口、依赖、库状态
- * 都进来了），放进单测就是一条会在别人机器上红的用例。这里钉的是**那条被删掉
- * 就会复发的声明**；握手侧的实测结论记在下面这条用例的注释里，改动这颗键时
- * 按 `node scripts/dev.mjs -p <空闲端口>` 起一台、再拿带 `Origin` 的升级请求
- * 打 `/_next/hmr` 复看是否 101。
- *
- * 实测（同机两台并存）：
- *   · 裸 `node scripts/dev.mjs -p 3199`（无 `-H`）：`Origin: http://127.0.0.1:3199`
- *     补键前连接被撕、补键后 101；`Origin: http://localhost:3199` 两版都 101。
- *   · 启动器那条链（`next dev … -H 127.0.0.1`）：三种 `Origin`（含不带）全部 101
- *     —— 所以这条红只在裸链路上出现，也正是 README 写给「纯前端开发」的那个入口。
+ * dev 期「两种回环拼法都要连得上 HMR」（Next 16 dev 资源跨源闸门）。本仓回环统一收 `127.0.0.1`（§12.14 /
+ * 硬规则 20：Node fetch 会先把 localhost 解析成 `::1`），而 `pnpm dev` 裸链路不带 `-H`，Next 以 `localhost:<port>`
+ * 为规范源，从 `127.0.0.1` 打的 `/_next/hmr` 被判跨源撕掉（无 101，整页反复重载）。判配置不判握手：真握手要一台活 dev server，易在别人机器上红。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";

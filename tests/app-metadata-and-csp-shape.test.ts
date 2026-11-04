@@ -1,21 +1,7 @@
 /**
- * 应用外壳两处「用户可见但没人守」的形状：窗口元数据与 CSP 的求值时机。
- *
- * 两件事放在同一份用例里，是因为它们曾经是同一个病灶的两面 —— 一条是
- * create-t3-app 的原样残留（窗口标题写着 "Create T3 App"），一条是每次请求
- * 重拼一遍 CSP 字符串（纯浪费）。都不是功能 bug，所以**没有任何运行时行为
- * 会把它们照出来**，只能靠形状判据钉住。
- *
- * 为什么不真求值 `next.config.js`：它顶层 `import "./src/env.js"`，那条
- * 链路要 `.env`（缺了直接抛「缺少 .env 环境配置文件」）—— 放进单测就是一条
- * 依赖开发者本机环境的用例，与 `dev-loopback-origins.test.ts` 的取舍同源。
- * 所以这里钉的是「那颗常量在不在、`headers()` 有没有退回逐请求拼装」。
- *
- * 那次重构的等价性已经**实测过**（两个态各跑一次 `import("./next.config.js")`
- * 再取 `headers()[0]` 里那条 CSP，与改动前逐字节相同：prod 352 字节、
- * dev 366 字节）。实测要 `SKIP_ENV_VALIDATION=1` + 一个 `NODE_ENV`，所以它
- * 留在这次改动的验证记录里，不进用例 —— 但这也说明下面这几条不是在替一条
- * 「行为变了也没关系」的改动背书。
+ * 应用外壳两处「用户可见但没人守」的形状：窗口元数据（create-t3-app 残留 "Create T3 App"）与 CSP 求值时机
+ * （每请求重拼一遍字符串）。不真求值 `next.config.js`：它顶层 `import "./src/env.js"` 要 `.env`（缺了直接抛错），
+ * 进单测就是依赖本机环境。故只钉「常量在不在、`headers()` 不退回逐请求拼装」；等价性已实测（prod 352 / dev 366 字节，需 `SKIP_ENV_VALIDATION=1`）。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";

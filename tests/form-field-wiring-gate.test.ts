@@ -1,17 +1,7 @@
 /**
- * 「`<FormField>` 标签 ⇄ 控件接线」门禁自测（规范 §16.2.4.26）。
- *
- * 本文件自己**不进扫描面**（`scripts/check-form-field-wiring.cjs` 的
- * `FIXTURE_SKIP`）：下面的被测字符串里有真的 plain-children 站点，判它等于
- * 判自己的量具（§11.14.2 的通用口径，同 `tests/test-sleep-gate.test.ts`）。
- *
- * 逐条钉判定口径：
- *   ① plain children（普通子节点）→ 站点，该拦
- *   ② render-prop（箭头 / 函数表达式）→ 接线成立，放行
- *   ③ `label={null}` / 不给 `label` / 自闭合 → 没有标签行，放行
- *   ④ 棘轮：不超过基线就放行
- *   ⑤ `--update` 拒绝把基线往上涨
- *   ⑥ 非 `FormField` 的同名子节点（如 `<FormFieldRow>`）不算站点
+ * 「`<FormField>` 标签 ⇄ 控件接线」门禁自测（规范 §16.2.4.26）。本文件自己**不进扫描面**（`FIXTURE_SKIP`）：
+ * 被测字符串里有真 plain-children 站点，判它等于判自己的量具（§11.14.2，同 `tests/test-sleep-gate.test.ts`）。
+ * 口径：plain children 拦；render-prop 放行；`label={null}`/无 label/自闭合放行；棘轮不超基线、`--update` 拒涨基线；`<FormFieldRow>` 不算。
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -29,8 +19,7 @@ const SCRIPT = path.join(SCRIPTS_DIR, "check-form-field-wiring.cjs");
 /**
  * 在临时仓库里跑真脚本。
  * @param files 相对路径 → 文件内容
- * @param args 命令行参数（如 `--report`）
- * @param baseline 预置的棘轮基线（不传则无基线文件 = 起点 0 处）
+ * @param args 命令行参数（如 `--report`）；`baseline` 预置棘轮基线（不传 = 起点 0 处）
  */
 function gate(
   files: Record<string, string>,

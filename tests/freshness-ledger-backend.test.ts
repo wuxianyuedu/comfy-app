@@ -1,16 +1,7 @@
 /**
- * #2247 新鲜度账回写 / 机器分支回看 的判据。
- *
- * 核心口径（用户拍板）：本地与工作树账都可能是开发者「自己分支」上跑、带未合并改动的，
- * 与机器在 master / 干净态跑的不一定是同一份 —— 所以**机器账权威**：机器分支
- * `ci/freshness-ledger` 有这份账就以它为准，缺失才回退工作树。
- *
- * 这里用一个本地分支当「机器分支」替身（不真正推 origin），验证读取侧机器优先；
- * 并验证 `pushFreshnessLedger` 在没置 `FRESHNESS_LEDGER_PUSH=1` 时是 no-op（不误推）。
- *
- * 测试内的 git 操作都走 `-c core.hooksPath=/dev/null`，避免触发本仓库 pre-commit 钩子
- * （钩子里有 `scripts/**` 900 行硬闸等判据，会误拦测试的临时提交）。造分支用
- * `commit-tree` + `update-ref`，**不切换工作树**，避免把测试环境卡在分支上。
+ * #2247 新鲜度账回写 / 机器分支回看 的判据。本地与工作树账都可能带未合并改动，与机器在 master / 干净态跑
+ * 的不一定同一份 —— 所以**机器账权威**：`ci/freshness-ledger` 有就以它为准，缺失才回退工作树；测试用本地分支
+ * 当替身（不推 origin），未置 `FRESHNESS_LEDGER_PUSH=1` 时 push 是 no-op。git 操作走 `core.hooksPath=/dev/null` 避开 pre-commit 钩子（`scripts/**` 900 行硬闸）；造分支用 `commit-tree`+`update-ref`，不切工作树。
  */
 import { execSync } from "node:child_process";
 import fs from "node:fs";
@@ -37,15 +28,9 @@ const BRANCH = "ci/freshness-ledger-test";
 const PRISTINE = snapshotPaths([path.join(ROOT, E2E_REL)]);
 
 /**
- * 账里 `e2e` 那一档。
- *
- * 账的形状是 `Record<string, unknown>`（读账那层的既有契约），而这一档的形状是
- * `{ verifiedAt?: string }` —— `unknown` 上取成员过不去，此处**收窄**而不是 `as any`：
- * `as any` 让整条表达式退化成「不检查」的样子（`no-unsafe-member-access` 正是为它准备的），
- * 而这里是断言「这一档被读到了」的地方，恰恰不该不检查。
- *
- * @param ledger 读回来那份账（读不出时是 `null`）
- * @returns `e2e` 那一档；账里没有这一档时是 `undefined`
+ * 账里 `e2e` 那一档。账是 `Record<string, unknown>`（读账层的既有契约），这一档是 `{ verifiedAt?: string }` —— `unknown` 上取成员过不去，
+ * 此处**收窄**而不是 `as any`（后者让表达式退化成「不检查」，`no-unsafe-member-access` 正为它准备），而这里恰恰在断言「这一档被读到了」。
+ * @param ledger 读回来那份账（读不出时 `null`）；@returns `e2e` 档，没有时 `undefined`
  */
 function e2eTrack(ledger: Record<string, unknown> | null): { verifiedAt?: string } | undefined {
   /* SAFETY: 类型断言已复核 */
@@ -133,20 +118,9 @@ describe("freshness ledger 机器分支回看（#2247）", () => {
 });
 
 /**
- * 回写**失败**那两格的形状（ISSUE #2344）。
- *
- * 这一组全部走注入的 `run`，一次 git 都不真跑 —— 要钉的是「失败之后做什么」，
- * 而那种现场在真仓库里造出来就得污染这台机器（本文件的既有用例已经证明了造出来
- * 会红：每日那一跑就是它的现场）。
- *
- * 三条钉子各挡一件事：
- *   ① `commit` 失败 ⇒ 原因里必须带 git 的原文（过去只有 `commit-failed` 那个词，
- *      「为什么失败」在日志里**不存在**，硬规则 27 那一族）；
- *   ② 同一条路径 ⇒ 必须把 `add` 撤回去，否则同一跑后面**按暂存区判**的判据读的都是
- *      这一格留下的面（账面只红一条用例，脏的是整跑的输入）；
- *   ③ 撤回本身失败也要念出来 —— 那时索引仍然是脏的，不念就等于把第二件事藏起来。
- *   ④ 反向：`push` 失败时**不许**撤回（提交已经落地、索引是干净的，撤了会把已成功的
- *      改动重新 stage 成待提交 —— 那是第二次错）。
+ * 回写**失败**那两格的形状（ISSUE #2344）。这一组全走注入的 `run`，一次 git 都不真跑 —— 要钉的是「失败之后做什么」，
+ * 那种现场在真仓库里造出来就得污染这台机器（每日那一跑就是它的现场）。
+ * 钉子：① `commit` 失败 ⇒ 原因必须带 git 原文（过去只有 `commit-failed` 一个词，「为什么失败」不存在，硬规则 27）；② 同一条路径必须撤回 `add`（否则后面按暂存区判的判据读这一格的脏输入）；③ 撤回本身失败也要念；④ 反向：`push` 失败**不许**撤回（提交已落地，撤了会把成功改动重新 stage）。
  */
 describe("账回写失败：念出原因并撤回暂存（ISSUE #2344）", () => {
   const LEDGER_ENV = {

@@ -1,38 +1,7 @@
 /**
- * 平台侧自动触发的流水线配置：**要么没有，要么必须是「自托管 + 已登记」的那一份**。
- *
- * 这条判据经历过一次**决策反转**（ISSUE #623 → #1229 → #1959），反转的是结论、
- * 不是「要不要有判据」这件事本身，所以本文件改名不改职责。
- *
- * ── 三代形态（读这份文件前先看懂它为什么长这样）─────────────────────────
- *
- * 1. **#623**：额度约束下删掉 `.cnb.yml`（160 核时/月，`cpus: 8` 一个月约二十次
- *    PR 就吃光）→ 结论是「本仓不该有平台侧配置」；
- * 2. **#1229**：一份新的 `.cnb.yml` 被加了回来，却因为顶层直接写 `stages:` /
- *    `jobs:`（而非 CNB 的 `分支: { 事件: [流水线] }` 形态）**匹配不到任何事件**
- *    —— 静默失效，比删掉还糟。于是本文件把「别再补回从不触发的 CI 配置」做成机器判据；
- * 3. **#1959（当前）**：根组织接入了**自托管 Windows 构建节点**（标签 `win`）。
- *    官方文档「限制」一节写明自托管 Runner **不参与核时计费**，于是 #623 的全部
- *    推理（建立在计费上）**对这条件路径不再成立**，配置按完整流程回来了。
- *
- * ── 反转之后判据守什么（三类）─────────────────────────────────────────
- *
- * 反转不等于把守门拆掉 —— 恰恰因为 `.cnb.yml` 现在**真的在跑**，那份配置的形态
- * 变成了一条需要被判据钉住的事实（写错了会静默失效或静默花回核时）：
- *
- * 1. **形态**：顶层必须是 `分支: { 事件: [流水线] }`（#1229 的根因）；
- *    必须声明 `runner.namespace: group` + 非空 `tags`（漏掉 = 静默回落到计费的平台池）；
- *    必须声明 `pull_request` 与 `push` 两个事件。
- * 2. **反向注销**：`scripts/doc-facts.cjs` 现在**必须**把 `.cnb.yml` 登记成 path 类
- *    事实（它真的存在了），而规范正文**必须**留下「为什么这次能回来」的锚点句 ——
- *    缺了说明决策被悄悄推翻、文件面判据还没跟着变（与 #1229 那次同形，只是方向相反）。
- * 3. **不许等于「平台侧没有兜底」的旧口径**：仓库里任何地方再写「本仓没有 CI」
- *    都会与现状矛盾，所以那条旧锚点句必须已被改写（`scripts/check-doc-references.cjs`
- *    与本文档引用判据各自覆盖一半，这里只钉住最容易被抄的一句）。
- *
- * 扫描面本身由「判据不是空转」那组用例复算：掏空清单或把匹配逻辑改坏时，
- * 前面几条用例会一起变成恒绿，那是本文件最坏的失效形态。它守的是全库级不变量，
- * 因此登记在 `scripts/affected-tests.mjs` 的固定清单里，每次提交都跑。
+ * 平台侧自动触发的流水线配置：要么没有，要么必须是「自托管 + 已登记」的那一份（决策反转见 ISSUE #623 → #1229 → #1959，判据职责不变；本文件在每次提交都跑的固定清单里）。
+ * 守三类形态：#1229 的 `分支: { 事件: [流水线] }`；`runner.namespace: group` + 非空 `tags`（漏掉 = 静默回落到计费平台池）；`pull_request` 与 `push` 两事件。
+ * 反向注销：`scripts/doc-facts.cjs` 必须登记 `.cnb.yml`、规范留「为什么能回来」锚点；旧口径「本仓没有 CI」必须已改写（与 #1229 同形、方向相反）。
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -63,10 +32,8 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 
 /**
  * 自动触发型 CI 配置的仓库相对路径（确切名字，文件形态）。
- *
- * 只收「平台一读就无条件跑」的那些；`.cnb.yml` 与 `.github/workflows` 是本仓的
- * 当前形态（#2978 起双远端镜像并行），其余是「顺手换个平台」的等价形态 ——
- * 判据要拦的是**这件事**，不是某一个文件名。多出来的任何一项仍是违规。
+ * 只收「平台一读就无条件跑」的形态：`.cnb.yml` 与 `.github/workflows` 是当前形态（#2978 双远端镜像），其余只是「换个平台」的等价形态。
+ * 判据拦的是这件事，不是某个文件名；多出来的任何一项仍是违规。
  */
 const CI_CONFIG_FILES = [
   ".cnb.yml",
@@ -83,14 +50,8 @@ const CI_CONFIG_PATHS = [".github/workflows", ".buildkite/pipeline.yml"];
 
 /**
  * 本仓当前**登记在册**的 CI 配置（其余任何 CI 形态都不许出现）。
- *
- * 收成具名常量而不是 `[0]` 下标：本文件在提交门槛的固定清单里、每次提交都跑，
- * 而 `noUncheckedIndexedAccess` 下每个下标访问都是一次「可能 undefined」——
- * 那会把「这份配置叫什么」这件事摊成满文件的可选链，反而看不出意图。
- *
- * `.github/workflows`（ISSUE #2978）：双远端镜像（cnb 主）的 GitHub Actions 侧，
- * 定位是**旁路验证档** —— cnb 仍是合并守卫，GH 侧读数只对账不拦合并；
- * 它与 `.cnb.yml` 并行在场，退役时两处同批收。
+ * 具名常量而非 `[0]`：`noUncheckedIndexedAccess` 下每次下标访问都是「可能 undefined」，会把意图摊成满文件可选链。
+ * `.github/workflows`（#2978）是旁路验证档：cnb 仍是合并守卫，GH 读数只对账不拦；与 `.cnb.yml` 并行，退役两处同批收。
  */
 const REGISTERED_CI_CONFIG = ".cnb.yml";
 const REGISTERED_CI_CONFIGS: ReadonlyArray<string> = [REGISTERED_CI_CONFIG, ".github/workflows"];
@@ -110,18 +71,12 @@ function repoTopLevel(): Array<string> {
 }
 
 /**
- * 平台侧配置的**形态契约** —— 每一条都是「写错了不报错、只是静默不干该干的事」
- * 的那一类，所以必须由判据而不是由注释守。
- *
- * 以文本形态核对（不引 YAML 解析器：本文件在提交门槛的固定清单里，每次提交都跑，
- * 加依赖的代价与收益不成比例；下面每条的匹配面都窄到不会误伤注释里的措辞）。
+ * 平台侧配置的**形态契约** —— 每一条写错了都不报错、只是静默不干该干的事，所以必须由判据守。
+ * 以文本核对（不引 YAML 解析器：本文件每次提交都跑，加依赖不划算；匹配面窄到不误伤注释措辞）。
  */
 /**
- * 探针流水线（ISSUE #2363）的**有期限例外** —— 与上面 `CONFIG_SHAPE` 那条
- * 「每条流水线都要引用 `*common`」的判据配成一对，理由写在用到它的那条用例里。
- *
- * 两条都是字面量：名单不许泛化成「自带 runner 的都放行」（那等于把判据关掉），
- * 日期不许省（省了它，「临时」就只剩注释里的一句话）。
+ * 探针流水线（ISSUE #2363）的**有期限例外** —— 与 `CONFIG_SHAPE` 的「每条流水线引用 `*common`」判据配对，理由见用它的用例。
+ * 名单不许泛化成「自带 runner 的都放行」（等于关掉判据），日期不许省（省了「临时」就只剩一句话）。
  */
 /* SAFETY: 类型断言已复核 */
 const PROBE_PIPELINES = [
@@ -135,14 +90,8 @@ const PROBE_BY = "2026-11-09T00:00:00Z";
 
 /**
  * 探针里**被测的锁形态**逐条点名放过哪条规则（与 `PROBE_PIPELINES` 同一天到期）。
- *
- *   · `api_trigger_probe_a` —— `cancelFalse`: 那把锁要的正是 `cancel-in-progress: false`
- *     （问「第二条到达时是排队还是被掐掉」），而 R2 默认把「漏写」判红；
- *   · `api_trigger_probe_b` / `api_trigger_probe_c` —— `noLock`: 对照组**一条锁都不写**
- *     才是它的条件，写上一把就量不到「没有锁时会不会并行」。
- *
- * ⚠️ 这两件事都不是「放宽 R1/R2」：名单是字面量、逐条写明放过哪一条规则，
- * 且**判据仍然会问**另外那几条（key 字面量 / 不撞退化形状 / 一把锁只给一份清单）。
+ * `api_trigger_probe_a` → `cancelFalse`（要的正是 `cancel-in-progress: false`，而 R2 默认把漏写判红）。
+ * `api_trigger_probe_b` / `c` → `noLock`（对照组一条锁都不写才量得到「没有锁时会不会并行」）；这不是放宽 R1/R2，其余规则仍会问。
  */
 const PROBE_LOCK_EXEMPT: Array<{
   /** 这一条的锁**故意**不写 `cancel-in-progress`，锚点名写在这里（其余一条都不许借）。 */
@@ -203,21 +152,9 @@ const CONFIG_SHAPE: Array<{ mustMatch: RegExp; why: string }> = [
 ];
 
 /**
- * **stage script 用的 PowerShell 语法必须与宿主 5.1 兼容**。
- *
- * 为什么这条要有判据：`.cnb.yml` 的 stage script 在自托管 Windows 节点上默认由
- * **Windows PowerShell 5.1** 执行（与 `scripts/entry-common.ps1` 的
- * `#Requires -Version 5.1` 同一口径 —— 仓库两侧都支持，所以配置里不许只用 7 的语法）。
- * 而 PS 7 的好几种写法在 5.1 里是**解析期错误**：整段脚本**一行都不执行**就非零退出，
- * 报错还停在语法上，与这一步要回答的问题毫无关系。
- *
- * 实测栽过一次（#1959 第三次首跑）：`$winget = (Get-Command winget …)?.Source`
- * 里的 `?.`（null 条件运算符，PS 7 才有）让这一步在 **0.9 秒**就红，读数
- * `工具链自证 error [0.9s]`，连开头的 `== OS ==` 都没打出来 —— 形态与「宿主缺
- * 工具链」逐字同形，而真因是运算符不属于这个语言版本。
- *
- * 判据按**码位**扫 script 块的代码行（先剥行内注释），只认那几种「7 有、5.1 没有」
- * 的形状；每一条都是解析期错误、不会有「其实 5.1 也认」的中间态。
+ * **stage script 的 PowerShell 语法必须兼容宿主 5.1**：`.cnb.yml` 在自托管 Windows 节点上默认由 Windows PowerShell 5.1 执行（与 `scripts/entry-common.ps1` 的 `#Requires` 同口径）。
+ * PS 7 独有写法在 5.1 是**解析期错误**：整段脚本一行都不执行就非零退出，报错停在语法上；#1959 首跑 `?.` 让 `工具链自证` 0.9s 就红，形态与「宿主缺工具链」逐字同形。
+ * 判据按码位扫 script 代码行（先剥行内注释），只认「7 有、5.1 没有」的形状，每条都是解析期错误。
  */
 const PS7_ONLY: Array<{ instead: string; pattern: RegExp; what: string }> = [
   {
@@ -243,12 +180,8 @@ const PS7_ONLY: Array<{ instead: string; pattern: RegExp; what: string }> = [
 ];
 
 /**
- * 扫 `.cnb.yml` 的任务脚本块，回读「哪些行用了 PS 7 才有的语法」。
- *
- * `script: |` 之后的正文按**缩进**收口（回到同级或更浅的缩进即结束），
- * 这样只扫代码、不碰同一文件里别的键。行内注释先剥掉 —— 本文件的判据说明里
- * 正当地会写出这些形状（那条 ⚠️ 注释就是），把说明判成违规等于逼人删注释。
- *
+ * 扫 `.cnb.yml` 的 stage script 块，回读「哪些行用了 PS 7 才有的语法」。
+ * `script: |` 正文按**缩进**收口（回到同级或更浅即结束），只扫代码不碰别的键；行内注释先剥 —— 判据说明里正当地会写出这些形状。
  * @returns 每条违规的 `行号: 说明`
  */
 export function ps7OnlySyntaxIn(text: string): Array<string> {
@@ -282,22 +215,9 @@ export function ps7OnlySyntaxIn(text: string): Array<string> {
 }
 
 /**
- * `.cnb.yml` 的 `env` 里登记的 **stage 名有序清单**（`COMFYAPP_CI_GATES`）。
- *
- * 为什么把顺序做成**事实**而不是留在注释里：这条序有一条真的读错了会出事的约束
- * —— `单元测试` 必须排在 `Python 可用性` 之后。理由是实测出来的，
- * 不是风格偏好：`cnb-jt3-1k5071kou` 上 `单元测试` 一步跑到 **2h24m** 被平台
- * 8640s 的墙钟上限掐断（整条流水线只留下 `timeout of 8640000ms exceeded`，
- * 一条失败原因都读不到）；而缺 Python 时那一步**照旧往下跑**（相关的用例按既有
- * 口径走 `env` 档跳过并登记，不会红）—— 也就是说排在它后面的 stage 是
- * 「要么永远看不到，要么在最贵的位置才看到」。
- *
- * 解析：`>-
-` 折叠标量，缩进正文按 `,` 切成名字。返回 `[]` = 键不在，
- * 调用方据此判红（键被删掉同样属于「这条约束没人守了」）。
- *
- * @param text `.cnb.yml` 原文
- * @returns stage 名（已 trim）
+ * `.cnb.yml` 的 `env` 中 **stage 名有序清单**（`COMFYAPP_CI_GATES`）。顺序是事实：`单元测试` 必须排在 `Python 可用性` 之后 —— 缺 Python 时那一步照旧往下跑，
+ * 而 `单元测试` 实测跑满 2h24m 被 8640s 墙钟掐断（`cnb-jt3-1k5071kou`），只剩 `timeout … exceeded` ⇒ 后面的 stage 要么看不到、要么在最贵处才看到。
+ * 解析 `>-` 折叠标量、按 `,` 切名。@param text 原文；@returns stage 名（已 trim），`[]` = 键不在（调用方判红）。
  */
 /* 实现见 `scripts/ci-gate-names.mjs`（判据脚本与三处消费它的测试共用同一份解析，
  * 不各写一遍 —— §12.12 / §12.18）。 */
@@ -306,20 +226,9 @@ export function registeredGateOrder(text: string): Array<string> {
 }
 
 /**
- * `.cnb.yml` 的 `env` 里登记的**临时停用** stage 清单（`COMFYAPP_CI_DISABLED_GATES`）。
- *
- * 为什么它非有不可：屏蔽一个 stage 的两半 —— `.gates` 里把条目注释掉、从
- * `COMFYAPP_CI_GATES` 摘掉名字 —— **两半都不报错**（前者是 YAML 注释、后者只是数组
- * 少一项），于是「临时停用」与「永久删除」在配置里长得一模一样，而下一次评审的人
- * 只能靠猜。这一键把停用变成一句读得出来的事实：名字在这儿 = 它是**被停用的**，
- * 不在 `GATES` 也不在这儿 = 它是**被删掉的**（那条判据当场点名）。
- *
- * 与 `registeredGateOrder` 同一份解析形态（同一种折叠标量），只是键名不同。
- * 返回 `[]` = 键不在或为空 —— 调用方不能据此推断「没有停用的」（键被删掉本身就
- * 是要判的形态，见「停用登记」那两条用例）。
- *
- * @param text `.cnb.yml` 原文
- * @returns 被停用的 stage 名（已 trim）
+ * `.cnb.yml` 的 `env` 中**临时停用** stage 清单（`COMFYAPP_CI_DISABLED_GATES`）：屏蔽 stage 的两半（`.gates` 注释掉条目、从 `GATES` 摘名）都不报错，
+ * 于是「临时停用」与「永久删除」在配置里逐字同形、评审只能猜。名字在此 = 被停用；不在 `GATES` 也不在此 = 被删除（判据点名）。
+ * 与 `registeredGateOrder` 同一份折叠标量解析；`[]` = 键不在或为空，调用方不能据此推断「没有停用的」。
  */
 /* 实现见 `scripts/ci-gate-names.mjs`（同一份解析，三处消费共用）。 */
 export function registeredDisabledGates(text: string): Array<string> {
@@ -328,12 +237,8 @@ export function registeredDisabledGates(text: string): Array<string> {
 
 /**
  * 定时那一跑的清单（与 `.cnb.yml` 的 `COMFYAPP_CI_DAILY_GATES` 同一份，顺序即执行序）。
- *
- * ⚠️ 第一条是 `每日失败立案` —— 它立案的是**上一跑**，所以必须排在任何可能红的格之前；
- * 写在后面就会被前面那次红一起 `skipped`，而那正是它要治的形态（ISSUE #2274）。
- * ⚠️ 最后一条是 `每日单元测试` —— 那是刻意的（业主口径「最容易出问题的放最后」：
- * 它是这条上唯一会因本机负载而单条超时的格子，排在中间就把后面三格一起 skip 掉）。
- * 「它必须是最后一条」由下面那条判据钉住，不是这里的一份巧合。
+ * 第一条 `每日失败立案` 立案的是**上一跑**，必须排在任何可能红的格之前（否则被 `skipped`，ISSUE #2274）；
+ * 最后一条 `每日单元测试` 是刻意的（业主口径「最容易出问题的放最后」，它单独超时会把后三格一起 skip）；「必须最后」由下面判据钉住。
  */
 const DAILY_GATES = [
   "每日失败立案",
@@ -359,50 +264,26 @@ const DAILY_GATES = [
 ];
 
 /**
- * 2026-10-19 从 **PR 那一条撤到每日档**的几格：
- * `[PR 上的旧名, 每日档里的名字, 每日块必须点名的入口, 必须带的旗标]`。
- *
- * 业主口径是「只判断环境的那些不要每次都判断 —— 这个环境不会经常改动」（逐格代价：
- * `工具链自证` 13.8s、`Python 可用性` 2.8s、`Python 探针读数` 3.0s、`浏览器安装` 3.0s）。
- * 而**撤的是节奏，不是账**：这四个名字从此只出现在每日清单里，且每日那一格里
- * 必须真有一个格、点的仍是**同一个入口脚本与同一个旗标** ——
- * 少了这条判据，「从 PR 撤下」与「谁都不判了」在配置文件里逐字同形，
- * 而那正是本仓最不能有的形态（清单看着完整、执行面是空的）。
- *
- * ⚠️ 每日名是**写出来的**，不是拼出来的：真实名字是 `每日 Python 可用性`（中间有空格），
- * 用 `` `每日${旧名}` `` 拼会得到 `每日Python 可用性`，那条判据于是恒红 ——
- * 而它红的原因与配置对不对毫无关系（第一版就是这么错的）。
+ * 2026-10-19 从 **PR 那一条撤到每日档**的几格：`[PR 旧名, 每日名, 每日块入口, 旗标]`。
+ * 业主口径「只判断环境的不必每次都判断」（逐格 13.8s / 2.8s / 3.0s / 3.0s）；撤的是节奏不是账 —— 这四名只出现在每日清单，且每日格里必须真有一格、点同一入口与旗标。
+ * ⚠️ 每日名是**写出来的**：真实名 `每日 Python 可用性`（含空格），用 `每日${旧名}` 拼会得到 `每日Python 可用性` 让判据恒红（第一版就这么错）。
  */
 const PR_MOVED_TO_DAILY: Array<[string, string, string, string]> = [
   ["工具链自证", "每日工具链自证", "scripts/ci-toolchain-selfcheck.mjs", ""],
   ["Python 可用性", "每日 Python 可用性", "scripts/ci-toolchain-selfcheck.mjs", "--python-only"],
   ["Python 探针读数", "每日 Python 探针读数", "scripts/python-probe.mjs", ""],
   ["浏览器安装", "每日浏览器安装", "scripts/ci-toolchain-selfcheck.mjs", "--playwright-only"],
-  /* `ESLint 零警告` 是**另一条理由**（不是「节点事实」而是「起一堆子进程」：
-   * 它挂满过 8640s 与 20m 两次，且红的地方从来不是这次改动违规，而是这台机当时
-   * 腾不出核）。同一张表接住它，是因为要判的东西**逐字相同**：PR 清单里不许再有、
-   * 每日清单里必须有一格、那一格点的仍是同一条命令（`pnpm run lint` —— 扫描范围与
-   * `--max-warnings 0` 都在 `package.json` 的 `lint` 脚本里，见 `eslint.config.js`
-   * 顶部那节「命令口径只有一处」）。 */
+  /* `ESLint 零警告` 是**另一条理由**（起一堆子进程而非节点事实）：它挂满过 8640s 与 20m，红的地方不是这次改动违规而是这台机腾不出核。
+   * 同一张表接住它，因为要判的东西逐字相同：PR 清单不许再有、每日清单必须有一格、点的是 `pnpm run lint`（口径见 `package.json` 的 `lint` 与 `eslint.config.js` 顶部）。 */
   ["ESLint 零警告", "每日 ESLint 零警告", "pnpm run lint", ""],
-  /* `新鲜度账` 是**第三种理由**（ISSUE #2300 主体分权）：PR 上下文读的是**主干的账**
-   * （`FRESHNESS_TRACKS[*].subject` 三档都是 `master`，权威副本在机器分支
-   * `ci/freshness-ledger` 上），判的是「这台机器 / 主干怎么被调度」，不是任何一次
-   * PR 的缺陷 ⇒ 留在 PR 上只会把主干的红算到这次 PR 头上。
-   * 第四元组（旗标）留空：这一格**不共用**别的格的脚本，也没有任何分档参数；
-   * 每日那一格与它的差别在 **env**（`COMFY_CI_SUBJECT: "master"`），
-   * 而 env **不在这条判据的比较面里**（它只比 `script:` 那几行）。 */
+  /* `新鲜度账` 是**第三种理由**（ISSUE #2300 主体分权）：PR 上下文读的是**主干的账**（`FRESHNESS_TRACKS[*].subject` 三档都是 `master`，权威副本在 `ci/freshness-ledger`）。
+   * 它判的是「机器 / 主干怎么被调度」，不是某次 PR 的缺陷；第四元组留空（不共用脚本、无分档参数），每日那格的差别在 env（`COMFY_CI_SUBJECT`），env 不在比较面里。 */
   ["新鲜度账", "每日新鲜度账", "scripts/freshness-gate.mjs", ""],
 ];
 
 /**
- * 门格总账（#2640，2026-10-31）：每一格「在哪个档跑」的权威登记。
- *
- * 为什么要有这一份：§13.5.30 把「某一格该属哪一级」判成工程判断（三条门槛机器判不了），
- * 但「撤出某一档后必须登记在册、且登记的名字不许还在跑」可以判 —— 否则「悄悄删掉」与
- * 「降级登记」在 `.cnb.yml` 里逐字同形。下面的「门格总账」判据做两件事：
- *   ① 三份清单（PR / push / 每日）各自 ⇄ 总账双向相等（清单多/少一格而总账没同批改 ⇒ 红）；
- *   ② 记成 `retired` 的格：不许再出现在任何清单里（降级≠删除），且必须带理由。
+ * 门格总账（#2640，2026-10-31）：每格「在哪个档跑」的权威登记。§13.5.30 的档位归属是工程判断，但「撤出后必须登记、登记名不许还在跑」可以判（否则「悄悄删掉」与「降级登记」逐字同形）。
+ * 判据：① 三份清单（PR / push / 每日）各自 ⇄ 总账双向相等（清单多/少一格而总账没同批改 ⇒ 红）；② `retired` 的格不许再出现在任何清单里（降级≠删除）且必须带理由。
  * 三条门槛（确定性 / 快 / 本地可复现）仍只在规范 §13.5.30 由人判，本账不碰。
  */
 type GateTier = "PR" | "push" | "daily" | "retired";
@@ -543,15 +424,9 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
 ];
 
 /**
- * **同一份实现长在另一条流水线上**的那几格（另一档的名字 → PR 的名字），比的是逐字同形。
- *
- * 名字不同是刻意的（按名字取块的解析器会撞车），所以「同一件事」只能由 script 相同来保证。
- * 左边不一定是「每日」那一档：`安装依赖` 是 push 档（`master 合并复核`）的那一格 ——
- * 这条判据管的是「一条链被几条流水线各抄一份」这个形状，不管抄到第几条都得对账。
- *
- * ⚠️ 这一列**只留两边都还在的**。`Python 可用性` 与 `浏览器安装` 在 2026-10-19 撤出了
- * PR 清单（见上面 `PR_MOVED_TO_DAILY`），拿一个不存在的 PR 块来比相同性，得到的不是
- * 「两边漂了」而是「一边根本不在场」—— 那种红会教会人忽略红。它们由那条判据接住。
+ * **同一份实现长在另一条流水线上**的那几格（另一档名 → PR 名），比逐字同形：名字不同是刻意的（按名取块会撞车），同一件事只能由 script 相同保证。
+ * 左边不一定是每日档（`安装依赖` 是 push 档 `master 合并复核`）；判据管「一条链被几条流水线各抄一份」，不管抄到第几条都要对账。
+ * ⚠️ 只留两边都在的：`Python 可用性` / `浏览器安装` 已于 2026-10-19 撤出 PR（见 `PR_MOVED_TO_DAILY`），拿不存在的块比相同性只会教会人忽略红。
  */
 const CROSS_LANE_SCRIPT_MIRRORS: Array<[string, string]> = [
   // 多行块也在内：这一格是 `script: |` 的三行体，只比第一行会漏掉「第二行改了」这种漂移。
@@ -571,21 +446,9 @@ const CROSS_LANE_SCRIPT_MIRRORS: Array<[string, string]> = [
 ];
 
 /**
- * 两格 env 之间**唯一被登记过的差别**：`每日安装依赖` 那一格不接槽（ISSUE #2081）。
- *
- * ⚠️ 键是**按左边那个格子名**取的，所以「哪一格可以少这行」这件事一张表说得清：
- * 今天只有每日那一格在表里。push 档的 `安装依赖` **不在** —— 它与 PR 逐字相同、两侧都置着，
- * 因为「不接槽」那条理由的主语是「这一档后面有没有 `next build`」，不是档名
- * （push 清单里没有构建格，ISSUE #2851）。
- *
- * ⚠️ 这份名单**不是**「这几个键允许随便漂」，它钉的是一个更窄的形状：
- *  · 名单里的键，PR 那一侧必须**正好置着一行** `KEY: "1"`；
- *  · 每日那一侧必须**一个字都不出现** —— 写成 `COMFY_CI_SLOT: "0"` 也算违规，那是一条
- *    谁都不读「关掉的开关」，而下一次会有人把它当「这里本来就该有它」读回去；
- *  · 除此之外两侧的全部行仍**逐字相同**（下面那条 `toEqual` 一字未松）。
- *
- * 为什么不干脆让配置自己表达「这里可以不一样」：那样判据只能判「不相同」，判不出
- * 「不相同的那一行正是被允许的那一行」—— 第一次故意改与第一次手滑在账面上同形。
+ * 两格 env 之间**唯一被登记过的差别**：`每日安装依赖` 不接槽（ISSUE #2081）；键按左边格子名取，所以「哪格可少这行」一表说清。push 档 `安装依赖` 不在表里（与 PR 逐字相同，理由的主语是「后面有没有 `next build`」，#2851）。
+ * ⚠️ 钉的是更窄的形状：名单键在 PR 侧必须**正好置一行** `KEY: "1"`；每日侧**一个字都不出现**（写 `"0"` 也算违规）。
+ * 除此之外两侧全部行仍逐字相同（`toEqual` 未松），否则判不出「不相同的那一行正是被允许的那一行」。
  */
 const DAILY_ENV_ONLY_ON_PR: Record<string, Array<string>> = {
   每日安装依赖: ["COMFY_CI_SLOT"],
@@ -640,11 +503,8 @@ function stageBudgetMinutes(raw: string | undefined): number {
 }
 
 /**
- * 某一格里**真正会执行**的那些命令行（丢掉空行与 shell 注释）。
- *
- * 为什么不比整块：两格的散文解释本来就该不同（PR 那一格要讲「为什么这一步是前提」、
- * 定时那一格要讲「为什么每天一次」），要求逐字相同只会逼人删注释 —— 而漂移能藏的地方
- * 只有命令行。返回数组而不是拼好的字符串，红的时候两边的差是哪一行一眼可见。
+ * 某一格里**真正会执行**的命令行（丢掉空行与 shell 注释）：不比整块 —— 散文解释本就该不同，要求逐字只会逼人删注释，而漂移只藏在命令行。
+ * 返回数组而非拼好的字符串，红的时候差在哪一行一眼可见。
  */
 function executableScriptLines(text: string, name: string): Array<string> {
   return stageScriptLine(text, name)
@@ -654,20 +514,9 @@ function executableScriptLines(text: string, name: string): Array<string> {
 }
 
 /**
- * 「这一格会在作业里真构建」的命令形态。
- *
- * 为什么要有这一张表：接槽把作业的 `node_modules` 整棵接成**指向项目根之外**的 junction，
- * 而 Turbopack 对这一条有硬要求 —— 每日那一档因此按策略不接（ISSUE #2081 的 13.8s 死法）。
- * push 那一档接槽的全部依据就是「它清单里没有构建格」（ISSUE #2851），所以这句话必须有
- * 执行者：往那份清单里加一格构建的人，要当场被这一条拦住，而不是等那一跑 13.8s 就死、
- * 后面整片 `skipped` 那天再来查为什么。
- *
- * ⚠️ `tauri build` 这一枚是 ISSUE #2883 补的：桌包那一档的构建是**经 tauri CLI 间接触发**的
- * —— `打包·桌面成品构建` 那一格真正执行的是 `pnpm tauri build`，而"它调起 `build-desktop.mjs`"
- * 这件事写在 `src-tauri/tauri.conf.json` 的 `beforeBuildCommand` 里，以及 `.cnb.yml` 那一格的
- * **注释**里。注释不在这一族的输入面上（`executableScriptLines()` 明写「丢掉空行与 shell 注释」），
- * 所以旧的三枚标记判现役桌包档会给**假阴性**「没有构建格」—— 而这张表一旦被拿去判断跑的档
- * 接不接槽（#2853 期望 1 要做的正是这个动作），那个假阴性就直接把这条安全前提摘掉。
+ * 「这一格会在作业里真构建」的命令形态。接槽把 `node_modules` 接成指向项目根外的 junction，Turbopack 有硬要求 ⇒ 每日档不接（#2081 的 13.8s 死法）；push 档接槽的依据就是「无构建格」（#2851），加格者须被当场拦住。
+ * ⚠️ `tauri build`（#2883）：桌包档经 tauri CLI 间接触发（`pnpm tauri build`），`build-desktop.mjs` 只写在 `tauri.conf.json` 的 `beforeBuildCommand` 与 `.cnb.yml` 的**注释**里。
+ * 注释不在 `executableScriptLines()` 输入面上，旧三枚标记判现役桌包档会假阴性「没有构建格」，一旦用于 #2853 期望 1 就直接摘掉这条安全前提。
  */
 const BUILD_CONSUMER_MARKERS: Array<string> = [
   "ci-daily-build.mjs",
@@ -688,15 +537,9 @@ function stagesWithBuildConsumer(scripts: Map<string, Array<string>>): Array<str
 }
 
 /**
- * 取某一格 `env:` 下的**赋值行**（丢注释与空行），给镜像判据当第二条腿。
- *
- * 为什么要它：`浏览器安装` 那两行 env（下载根 + 连接超时）与它的命令行是一件事的两半 ——
- * 「从哪儿取那 120 MiB」写在 env 里，不在 script 里。只比 script 时，改了 PR 那格的根
- * 而没改每日那格（或反过来）是**逐字通过**的，而这条漂移的可见形态是「第二天 02:00 红」，
- * 离它最后一次被读已经隔了一整晚。
- *
- * 收的是 `KEY: value` 那种形状（`-` 开头的列表项与更深一层的结构一律不当赋值行），
- * 所以它不会把注释或下一格的键吞进来；`env:` 缺席时回空数组 = 两格都不许有 env。
+ * 取某格 `env:` 下的**赋值行**（丢注释与空行），给镜像判据当第二条腿：`浏览器安装` 的下载根与连接超时在 env 里，不在 script 里。
+ * 只比 script 时改动一侧是逐字通过，而可见形态是「第二天 02:00 红」，离最后一次被读已隔一整晚。
+ * 只收 `KEY: value`（`-` 列表项与更深结构不算）；`env:` 缺席回空数组 = 两格都不许有 env。
  */
 function stageEnvAssignments(text: string, name: string): Array<string> {
   const block = stageBlock(text, name);
@@ -727,9 +570,7 @@ function stageEnvAssignments(text: string, name: string): Array<string> {
 
 /**
  * 取某一格的 `script` 原文（去掉行首缩进与尾部空白）。
- *
- * 多行块（`script: |`）取整块 —— 只取第一行的话，「两格第一行相同、第二行不同」
- * 这种恰好是最坏形态的漂移会读成相同。
+ * 多行块取整块 —— 只取第一行会让「第一行相同、第二行不同」这种最坏漂移读成相同。
  */
 function stageScriptLine(text: string, name: string): string {
   const block = stageBlock(text, name);
@@ -759,19 +600,9 @@ function stageScriptLine(text: string, name: string): string {
 }
 
 /**
- * `.cnb.yml` 里的**定时任务事件键**（`"crontab: 0 3 * * *"`）原文清单。
- *
- * 为什么它要有判据：定时任务的键与 `push:` / `pull_request:` 不同 —— 它是**带引号的
- * 字符串键**，而且必须包含完整的五段 cron。写成 `crontab:`（映射）、`schedule:`、
- * 或段数不对时，平台侧**不会报任何错**，只是这条流水线永远不触发；
- * 而它在本地唯一的痕迹就是这份 YAML，没有任何一步会跑它（同 `pull_request` 键那一族
- * 的失效形态：写错了不报错、只是静默不干该干的事）。
- *
- * 同时把**分支键**带出去：官方 `zh/build/crontab.md` 明写定时任务不支持 glob、
- * 必须挂明确的单一分支名 —— 父键是 `master:` 才成立，挂在 `**` / `$` 下是配置错误。
- *
- * @param text `.cnb.yml` 原文
- * @returns {{branch: string, event: string, cron: string}[]} 顶层分支键 + 事件键 + cron 表达式
+ * `.cnb.yml` 的**定时任务事件键**（`"crontab: 0 3 * * *"`）原文清单：它是**带引号的字符串键**且必须含完整五段 cron，写成 `crontab:` 映射 / `schedule:` / 段数不对时平台不报错、只是永不触发。
+ * 同时带出**分支键**：定时任务不支持 glob、必须挂明确单一分支（父键 `master:` 才成立，挂 `**` / `$` 下是配置错误）。
+ * @param text 原文 @returns 顶层分支键 + 事件键 + cron 表达式
  */
 export function crontabEvents(
   text: string,
@@ -801,18 +632,9 @@ export function crontabEvents(
 }
 
 /**
- * `.cnb.yml` 的 `env` 里登记的**定时那一跑的 stage 名有序清单**
- * （`COMFYAPP_CI_DAILY_GATES`）。
- *
- * 为什么两条流水线的清单要分开登记：`COMFYAPP_CI_GATES` 答的是「PR 上跑什么」，
- * 而定时那一跑答的是「每天跑什么」—— 两者的差别正是 ISSUE #2010 要的答案
- * （生产构建每天一次）。混成一份之后，「今天这一跑该跑哪几格」就再也读不出来：
- * 把定时那格写进 PR 清单会让每个 PR 多跑一次构建，反过来则让每天那一跑跑满全套。
- *
- * 与 `registeredGateOrder()` 同一份折叠标量解析（同一个坑、同一种写法），只是键名不同。
- *
- * @param text `.cnb.yml` 原文
- * @returns stage 名（已 trim）；`[]` = 键不在（调用方据此判红）
+ * `.cnb.yml` 的 `env` 中**定时那一跑的 stage 名有序清单**（`COMFYAPP_CI_DAILY_GATES`）。
+ * 与 `COMFYAPP_CI_GATES`（PR 上跑什么）分开登记，差别正是 ISSUE #2010 的答案（生产构建每天一次）；混成一份后，「今天这一跑该跑哪几格」读不出来，且两侧都会多跑。
+ * 与 `registeredGateOrder()` 同一份折叠标量解析。@param text 原文 @returns stage 名（已 trim）；`[]` = 键不在（调用方判红）
  */
 export function registeredDailyGateOrder(text: string): Array<string> {
   const m =
@@ -830,18 +652,9 @@ export function registeredDailyGateOrder(text: string): Array<string> {
 }
 
 /**
- * push 档（`master 合并复核` 流水线）的清单（`COMFYAPP_CI_PUSH_GATES`，顺序即执行序）。
- *
- * 2026-10-28 起 push 档从「只有合并形态复核一格」扩成「树级校验档」（形态 + 前提安装 +
- * 文档链三格 + 工作区出处），判的是**合并后的树**，不是「这次改动」（PR 档）也不是
- * 「今天的 master 全量健康」（每日档）。2026-11-02 起多一格 `GitHub master 镜像`：
- * 它是这一档唯一的**出口动作**（把 master 推到 GitHub 镜像仓，那边的 schedule 才跑得到
- * 新树），不校验树，排在 `合并形态复核` 之后、`安装依赖` 之前。与每日清单同一份解析形态、同一个坑：
- * 声明与事实（`pipelineStageNames(text, "master 合并复核")`）双向核对，只读一份时
- * 另一份漂了没人红。
- *
- * @param text `.cnb.yml` 原文
- * @returns stage 名（已 trim）；`[]` = 键不在（调用方据此判红）
+ * push 档（`master 合并复核`）清单（`COMFYAPP_CI_PUSH_GATES`，顺序即执行序）：判的是**合并后的树**，既非单次改动（PR 档）也非 master 全量健康（每日档）。
+ * 2026-11-02 多一格 `GitHub master 镜像`：本档唯一**出口动作**（把 master 推到 GitHub 镜像仓），不校验树，排在 `合并形态复核` 后、`安装依赖` 前。
+ * 与每日清单同一份解析：声明 ⇄ `pipelineStageNames(text, "master 合并复核")` 双向核对，只读一份时另一份漂了没人红。
  */
 export function registeredPushGateOrder(text: string): Array<string> {
   const m =
@@ -859,19 +672,9 @@ export function registeredPushGateOrder(text: string): Array<string> {
 }
 
 /**
- * 某个**流水线**块里 `stages:` 的直接子项名字（按出现顺序）。
- *
- * 为什么要单独一个解析器：`registeredGateOrder()` 读的是 `env` 里那份**声明**，
- * 而「这一条流水线真的跑哪几格」是配置里的**事实**。两者需要双向核对 ——
- * 只读声明时，有人把 stage 从流水线里删掉、却把名字留在清单里，判据会全绿，
- * 而那一格其实没跑（正是本仓最不能有的形态：清单看着完整、执行面是空的）。
- *
- * 只在给定流水线名之后找（`- <<: *common` 那一行之后的 `name:` 与 `stages:`），
- * 且不接受注释行 —— 停用的条目是 `#` 形态，扫全文会把它当成在跑。
- *
- * @param text `.cnb.yml` 原文
- * @param pipelineName 流水线的 `name:` 值（如「每日生产构建」）
- * @returns stage 名；`[]` = 那条流水线没找到 / 没有 stages
+ * 某个**流水线**块里 `stages:` 的直接子项名字（按出现顺序）：读的是「这一条真的跑哪几格」这个**事实**，与 `registeredGateOrder()` 的声明双向核对。
+ * 只读声明时，删了 stage 却留着名字会全绿，而那一格其实没跑（清单完整、执行面为空）。
+ * 只在给定流水线名之后找，且不接受注释行 —— 停用条目是 `#` 形态，扫全文会当成在跑。@returns `[]` = 没找到 / 没有 stages
  */
 export function pipelineStageNames(text: string, pipelineName: string): Array<string> {
   const lines = text.split("\n");
@@ -934,13 +737,8 @@ export function pipelineStageNames(text: string, pipelineName: string): Array<st
 
 /**
  * 读一个顶层锚点（`.daily-gates: &daily_gates`）里的 stage 名单。
- *
- * 收尾按「**顶格**的一行」判：锚点块的正文一律带缩进，遇到第一条顶格行（下一个
- * `.keys:` / `master:`）就是块结束。注释行与空行跳过 —— 块里那些注释正当地要解释每一格。
- *
- * @param text `.cnb.yml` 原文
- * @param anchor `&` 后面那个名字
- * @returns stage 名；`[]` = 锚点不存在（调用方要把它当成「没找到」，不是「清单为空」）
+ * 收尾按**顶格行**判（锚点正文带缩进，遇到下一个 `.keys:` / `master:` 即结束）；注释与空行跳过，块里那些注释正当地解释每一格。
+ * @param text 原文 @param anchor `&` 后的名字 @returns `[]` = 锚点不存在（调用方当「没找到」，不是「清单为空」）
  */
 export function anchorStageNames(text: string, anchor: string): Array<string> {
   const lines = text.split("\n");
@@ -973,14 +771,8 @@ export function anchorStageNames(text: string, anchor: string): Array<string> {
 }
 
 /**
- * 一个 stage 名在 `.gates` 里是否**以注释形态**留着（停用的可恢复性依据）。
- *
- * 停用不等于删除 —— 恢复动作是「取消注释」而不是「重写一遍」。所以判据要求被停用的
- * 条目仍能在配置里 grep 回原文（`- name: <stage>` 那一行，允许被 `#` 注释掉）。
- * 少了这一条，「等测试流程好了再加回来」就只剩下一句注释里的话。
- *
- * @param text `.cnb.yml` 原文
- * @param name stage 名
+ * 一个 stage 名在 `.gates` 里是否**以注释形态**留着：停用≠删除，恢复动作是「取消注释」，所以必须 grep 得回 `- name: <stage>` 那一行。
+ * 少了这条，「等测试流程好了再加回来」就只剩一句注释。@param text 原文 @param name stage 名
  */
 export function stageKeptAsComment(text: string, name: string): boolean {
   const escaped = name.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
@@ -988,18 +780,9 @@ export function stageKeptAsComment(text: string, name: string): boolean {
 }
 
 /**
- * **合并键解析**（`<<: *anchor`）：`runner` 挂在锚点里、由两个事件各引用一次。
- *
- * 这一层单独判，是因为上面那组文本判据**答不了它**：文本里有 `namespace: group`，
- * 而 YAML 规范在 1.2 里把 `<<` 移出了核心（变成「可选类型」）——
- * 一个**不认合并键**的解析器会把 `<<: *common` 静默丢掉，得到一份「有 runner 键的
- * 文本、却解析不出 runner 的运行配置」。那正是本判据要拦的失效形态（配置看着对、
- * 实际回落到计费的平台池），且它在文本层面完全看不出来。
- *
- * 判法：自己把那份文本解析一遍（带合并键语义），断言这**两条**流水线都真的解析出了
- * `runner.namespace === "group"` 与非空 `tags`。不引第三方 YAML 解析器 ——
- * 本文件在提交门槛的固定清单里，每次提交都跑，加依赖不划算；这里只需要回答
- * 「锚点展开后那份配置里有没有 runner」这一个问题。
+ * **合并键解析**（`<<: *anchor`）：`runner` 挂在锚点里、两个事件各引用一次。文本判据答不了它 —— YAML 1.2 把 `<<` 移出核心，
+ * 不认合并键的解析器会静默丢掉 `<<: *common`，得到「有 runner 键的文本、却解析不出 runner」⇒ 回落到计费平台池，文本层面完全看不出。
+ * 判法：自己按合并键语义解析，断言这两条流水线都解析出 `runner.namespace === "group"` 与非空 `tags`；不引第三方解析器（每次提交都跑，加依赖不划算）。
  */
 export function resolveAnchoredRunner(
   text: string,
@@ -1021,33 +804,14 @@ export function resolveAnchoredRunner(
 }
 
 /**
- * `.cnb.yml` 的 stage 级 `timeout` 预算（stage 名 → 原文里的写法）。
- *
- * 为什么这件事必须有判据：`.cnb.yml` 里的**每一个 stage 默认都能跑满 2 小时**
- * （平台默认 Job 上限），而自托管节点只有一台。实测（ISSUE #1961）同一台机上
- * 三条流水线互相挤压时，`ESLint 零警告` 与 `单元测试` 各自挂到 **8640s（2h24m）**
- * 才被掐断，留下的只有一句 `timeout of 8640000ms exceeded` —— **一条失败原因都
- * 读不到**，人拿到的信息量是零，而成本是两小时机时。
- *
- * 所以「慢 stage 要有量级余量的预算」是一条真的会读错的约束（漏掉它，红法就从
- * 「20 分钟拿到一句可读的超时」退化成「两小时后拿到一句看不懂的超时」），
- * 且它是**增删 stage 时最容易忘**的那一条。
- *
- * 解析：只认 stage 列表项自己那一层（`  - name: X` 起、到下一个同级项为止），
- * 因此 `env` 里的东西不会被误当成预算。
- *
- * @param text `.cnb.yml` 原文
- * @returns stage 名 → timeout 写法（没写的不出现在结果里）
+ * `.cnb.yml` 的 stage 级 `timeout` 预算（stage 名 → 原文写法）：每个 stage 默认能跑满 2 小时（平台 Job 上限），而自托管节点只有一台。
+ * 实测（ISSUE #1961）`ESLint 零警告` 与 `单元测试` 各挂到 8640s 才被掐断、只剩 `timeout of 8640000ms exceeded` ⇒ 漏掉预算，红法就从「20 分钟可读超时」退化成「两小时看不懂的超时」，且增删 stage 时最容易忘。
+ * 只认 stage 列表项自己那层（到下一个同级项），env 不被误当预算；没写的 stage 不出现在结果里。
  */
 /**
  * 摘出某个 stage 那一项的原文（从它的 `- name:` 到下一项 / 下一个更浅的键）。
- *
- * 按**缩进收口**而不是正则一次匹配到底：stage 项里嵌着 `script: |` 块（里面有缩进
- * 更深的任意文本）与 `env:` 子映射，一次匹配很容易多吃或少吃。
- *
- * @param {string} text `.cnb.yml` 原文
- * @param {string} name stage 名
- * @returns {string | null}
+ * 按**缩进收口**而不是正则一次匹配到底：stage 项里嵌着 `script: |`（含更深缩进的任意文本）与 `env:` 子映射，一次匹配容易多吃或少吃。
+ * @param text 原文 @param name stage 名 @returns 那一项原文或 `null`
  */
 export function stageBlock(text: string, name: string): string | null {
   const lines = text.split("\n");
@@ -1084,16 +848,9 @@ export function stageBlock(text: string, name: string): string | null {
 }
 
 /**
- * 摘出**被注释掉的** stage 那一项的原文（停用形态：`# - name: X` 起）。
- *
- * 停用的恢复动作是「取消注释」，所以原文必须还 grep 得回来；而 `stageBlock()` 只认
- * 活的 `  - name: X`，停用之后它回 `null` —— 于是「那一项里写了什么」在停用期间没有
- * 任何判据看得见。这个辅助把 `# ` 前缀剥掉之后按同一套缩进口径收口，
- * 让「停用期间那两个键还在不在」仍然判得出来（与 `stageBlock` 同一口径，不造第二轮子）。
- *
- * @param {string} text `.cnb.yml` 原文
- * @param {string} name stage 名
- * @returns {string | null}
+ * 摘出**被注释掉的** stage 那一项的原文（`# - name: X` 起）：停用的恢复动作是取消注释，原文必须 grep 得回来。
+ * `stageBlock()` 只认活的 `- name: X`，停用后回 `null` ⇒ 「停用期间那两个键还在不在」没有判据看得见；这里剥 `# ` 前缀后按同一套缩进口径收口，不造第二轮子。
+ * @param text 原文 @param name stage 名 @returns 那一项原文或 `null`
  */
 export function commentedStageBlock(text: string, name: string): string | null {
   const lines = text.split("\n");
@@ -1176,19 +933,9 @@ export function stageTimeouts(text: string): Map<string, string> {
 }
 
 /**
- * `.cnb.yml` 的**流水线级 `lock`** 是否声明了 `cancel-in-progress: true`。
- *
- * 为什么这条也要判：自托管这一档是**一台**机器，而一次 PR 上连着推几个提交就会
- * 起几条**全量**流水线，全落到同一台机上（实测 `cnb-jt3-1k5071kou` /
- * `cnb-did-1k50659np` / `cnb-s61-1k50eo6p1` 三条并行，三条各自冻结）。
- * `lock.cancel-in-progress` 是唯一能把这堆重复运行收成一条的开关，而它
- * **漏掉时配置看起来与有它时一模一样** —— 典型的「写错了不报错」形态。
- *
- * 判法用锚点展开后的形态（与 `resolveAnchoredRunner` 同一层）：
- * `.common` 锚点块里必须出现 `lock:` 与其下的 `cancel-in-progress: true`。
- *
- * @param text `.cnb.yml` 原文
- * @returns 锚点块里有没有那两件
+ * `.cnb.yml` 的**流水线级 `lock`** 是否声明 `cancel-in-progress: true`：自托管只有一台机，一次 PR 连推几个提交就起多条全量流水线、全落到同一台（实测三条并行各自冻结）。
+ * 这个开关是唯一能把重复运行收成一条的，而它**漏掉时配置看起来与有它时一模一样**。
+ * 判法用锚点展开后的形态（同 `resolveAnchoredRunner`）：`.common` 里必须出现 `lock:` 与其下的 `cancel-in-progress: true`。
  */
 export function hasPipelineLockCancelInProgress(text: string): boolean {
   /* 收口到「下一个更浅缩进的键」或**文本末尾** —— 少了后半句，末尾没跟别的键的
@@ -1203,19 +950,9 @@ export function hasPipelineLockCancelInProgress(text: string): boolean {
 }
 
 /**
- * `.cnb.yml` 的流水线级 `lock.key` 原文（`null` = 没写，即吃平台默认值）。
- *
- * ⚠️ 这一格**不是风格**：平台默认 key 是 `分支名-流水线名`，而 `pull_request` 事件下
- * `CNB_BRANCH` 取的是**目标分支名**（官方 `build-in-env.md` §CNB_BRANCH）—— 于是
- * 「分支名」这一半在 PR 上恒等于 `master`，全仓所有 PR 共用一把锁。
- * `cancel-in-progress: true` 于是从「同分支只留最新那一跑」退化成
- * 「全仓只留最新那一跑」：任意两条并行 PR 互相掐停（现场：PR #1980 掐了 #1982）。
- * 代价不是「慢」，是**白跑一整条**。
- *
- * 判法用锚点展开后的形态（与 `hasPipelineLockCancelInProgress` 同一层）。
- *
- * @param text `.cnb.yml` 原文
- * @returns key 原文（未做变量替换）；没写 `key` 时回 `null`
+ * `.cnb.yml` 的流水线级 `lock.key` 原文（`null` = 没写，吃平台默认值）。⚠️ 不是风格：默认 key 是 `分支名-流水线名`，而 `pull_request` 下 `CNB_BRANCH` 取**目标分支**（官方 `build-in-env.md`）。
+ * 于是「分支名」在 PR 上恒等于 `master`、全仓 PR 共用一把锁，`cancel-in-progress: true` 退化成「全仓只留最新一跑」：任意两条并行 PR 互相掐停（现场 PR #1980 掐了 #1982），代价是白跑一整条。
+ * 判法同 `hasPipelineLockCancelInProgress`（锚点展开后）。@returns key 原文（未做变量替换），没写时 `null`
  */
 export function pipelineLockKeyTemplate(text: string): string | null {
   const anchor = /^\.common:\s*&\w+\s*$([\s\S]*?)(?=^\S|$(?![\s\S]))/m.exec(text);
@@ -1234,24 +971,15 @@ export function pipelineLockKeyTemplate(text: string): string | null {
 
 /**
  * `lock.key` 里允许出现的内置变量（**白名单**，缺一个就判红）。
- *
- * 收成白名单而不是黑名单，是因为这一格的失效形态是「代入了一个看起来对、实际被
- * 平台解析成别的东西的变量」—— 黑名单只能拦住已知的那一个。
+ * 用白名单而非黑名单：失效形态是「代入一个看起来对、实际被解析成别的东西的变量」，黑名单只能拦已知的那一个。
  */
 /* SAFETY: 类型断言已复核 */
 const LOCK_KEY_ALLOWED_VARS = ["CNB_PULL_REQUEST_IID"] as const;
 
 /**
- * 把 `lock.key` 原文按一次「事件 + 上下文」跑出**平台会算出来的那个 key**。
- *
- * 这是本条判据的核心：只看原文判不出「两条 PR 会不会撞」，必须把变量代进去。
- * 替换规则与官方 `build/env.md` §变量替换逐字同义 —— `$NAME` 与 `${NAME}` 都会替换，
- * 变量无值时替换成空字符串；**查不到的变量按空串算**，这样「用了一个平台不认识的
- * 变量」会表现为「key 退化成两档共用一个」，判据当场点名。
- *
- * @param template `pipelineLockKeyTemplate()` 的返回值
- * @param vars 这次构建里哪些变量有值（没列出的 = 无值）
- * @returns 平台算出来的锁键
+ * 把 `lock.key` 原文按一次「事件 + 上下文」跑出**平台会算出来的那个 key**：只看原文判不出「两条 PR 会不会撞」，必须把变量代进去。
+ * 与官方 `build/env.md` §变量替换同义：`$NAME` / `${NAME}` 都替换，无值换成空串；**查不到的变量按空串算**，于是平台不认识的变量会表现为「key 退化共用」，判据当场点名。
+ * @param template `pipelineLockKeyTemplate()` 的返回值 @param vars 有值的变量（没列出的 = 无值）@returns 平台算出来的锁键
  */
 export function resolveLockKey(template: string, vars: Record<string, string | undefined>): string {
   return template.replaceAll(
@@ -1285,16 +1013,9 @@ export function lockAnchorDefinitions(
 }
 
 /**
- * `master:` 块里每条流水线的**锁归属**与它引用的那份 stage 清单。
- *
- * 为什么按文本解析而不是 `js-yaml`：本文件的其余判据全是文本形状（同一口径），
- * 而且 `js-yaml` 不是本仓的直接依赖（它在 `.pnpm` 里是传递依赖，用例不该倚它）。
- *
- * 形状前提与 `resolveAnchoredRunner` 那族一致：分支键 2 空格、事件键下那条流水线项
- * 的 `name:` / `lock:` / `stages:` 都在 6 空格那一层。
- *
- * @param text `.cnb.yml` 原文
- * @returns 每条流水线一项（`lockRef === null` = 吃 `.common` 那条 = 要么真是 PR，要么忘了写覆盖）
+ * `master:` 块里每条流水线的**锁归属**与它引用的 stage 清单：按文本解析而非 `js-yaml`（本文件其余判据全用文本形状，且它不是本仓直接依赖）。
+ * 形状前提同 `resolveAnchoredRunner`：分支键 2 空格，项内 `name:` / `lock:` / `stages:` 在 6 空格那层。
+ * @returns 每条流水线一项（`lockRef === null` = 吃 `.common` 那条 = 要么真是 PR，要么忘写覆盖）
  */
 export function pipelineLockAssignments(text: string): Array<{
   event: string;
@@ -1333,12 +1054,9 @@ export function pipelineLockAssignments(text: string): Array<{
       event = eventKey[1].replaceAll(/^"|"$/g, "").trim();
       continue;
     }
-    /* 新的一项从**它自己的 `name:`** 起 —— 「判定换了一条流水线」认的是 `name:`，
-     * 而 `lock:` / `stages:` 只在**当前这一项之内**算数。少了这句，上一条流水线的
-     * `lock:` 会被带进下一条（探针那三条自己写 `runner`、不吃锚点，并且都带 `lock:`，
-     * 于是它们会各自继承**上一条**的锁归属 —— ISSUE #2363 那段注释早就点了这个
-     * 坏形态，判据这一侧到 2026-10-26 才算真的堵上）。
-     * 显式清空之后，「没写 `lock:` 的项」落到 R1 该有的读数上，不再看上一项的运气。 */
+    /* 新的一项从**它自己的 `name:`** 起：认的是 `name:`，而 `lock:` / `stages:` 只在**当前项之内**算数。少了这句，上一条的 `lock:` 会被带进下一条
+     * （探针三条自写 `runner`、不吃锚点且都带 `lock:`，会各自继承上一条的锁归属 —— ISSUE #2363 点过这个坏形态，判据侧到 2026-10-26 才堵上）。
+     * 显式清空之后，「没写 `lock:` 的项」落到 R1 该有的读数上。 */
     const itemStart = /^ {4}-[ \t]*(?:<<:)?[ \t]*/.exec(raw) !== null;
     if (itemStart) {
       name = "";
@@ -1368,34 +1086,9 @@ export function pipelineLockAssignments(text: string): Array<{
 }
 
 /**
- * 锁按触发类分开之后要成立的五件事，返回**违规清单**（空 = 都成立）。
- *
- * 判的不是风格。ISSUE #2114 记下的第二条死因是「所有非 PR 流水线共用一把退化成
- * `pr-` 的锁」，现场两次：`cnb-5j9-1k5bc4p4u`（每日最后一格与两笔 push 相差 3 秒被
- * `cancel`）与 `cnb-lm1-1k5h1otqt`（一次 `api_trigger_build` 跑到 244.06 秒被一次
- * 无关 push 掐掉，与那条 push 的 `createTime` 差 0.2 秒）。所以这里要钉住的是：
- *
- *  · **R1** 非 PR 的每条都显式写 `lock:` —— 靠 `<<: *common` 继承就是那次退化的入口；
- *  · **R2** 引用的那把类锁在场、**显式写了** `cancel-in-progress`、且 key 是**字面量**
- *    （带变量 = 又一次「某个事件上它无值就退化」，正是 #1981 那条教训）。
- *    「显式写了」与「值是 true」是两件事（ISSUE #2396）：`push` 那一档要的是
- *    **排队而不是终止**，它的判据是下面那条 R6；
- *  · **R3** 同一把锁只许给**同一份工作清单**（`stages:` 引用相同）——
- *    这条把「互掐」限制在「同一件事被重复排队」上：三条每日触发口允许（同一份
- *    `*daily_gates`），而「单跑构建」与「单跑 E2E」共用一把就是本条要拦的形态；
- *  · **R4** 任何一条非 PR 的 key 都不许等于退化后的那个 `pr-`，也不许等于 `pr-<iid>`；
- *  · **R5** PR 那一条仍然用带 `CNB_PULL_REQUEST_IID` 的模板（PR 粒度不许回退成
- *    「全仓一把」，那是 #1981 修掉的第一个 bug）；
- *  · **R6** `push` 那把锁必须是 `cancel-in-progress: false`（ISSUE #2396）。
- *    这一档的读数**逐提交**给：终止旧的一跑 = 把前一笔的结论删掉。2026-10-28 起
- *    这一档扩成了「树级校验档」（形态 + 安装 + 文档链 + 工作区出处，见
- *    `COMFYAPP_CI_PUSH_GATES`），重跑成本不再是当年的 20~35 秒 —— 这让 R6 **更不能松**：
- *    成本越高，终止销毁的结论越贵。（当年那句「若哪天它扩成多格、成本上去了，
- *    先改这一条与规范 §13.5.3.10」指的就是这次：判据本身不变，规范与本注释同批订正。）
- *
- * @param text `.cnb.yml` 原文
- * @param prIid 用来模拟一次 PR 事件的编号（默认任取一个，只用于比对形状）
- * @returns 每条违规的一句人话
+ * 锁按触发类分开后的六条规则（返回违规清单，空 = 都成立）。ISSUE #2114 第二条死因「非 PR 共用退化成 `pr-` 的锁」，现场 `cnb-5j9-1k5bc4p4u` 差 3 秒被 cancel、`cnb-lm1-1k5h1otqt` 244.06s 被无关 push 掐掉（差 0.2 秒）。
+ * R1 非 PR 每条显式写 `lock:`（继承 `*common` 即退化入口）；R2 类锁在场、显式写 `cancel-in-progress`、key 为字面量（#1981；与「值为 true」是两件事，#2396）；R3 一把锁只给同一份清单（三条每日口允许共用 `*daily_gates`）；R4 非 PR key 不许等于 `pr-` / `pr-<iid>`。
+ * R5 PR 仍用带 `CNB_PULL_REQUEST_IID` 的模板（不许回退「全仓一把」）；R6 `push` 锁必须 `cancel-in-progress: false`（#2396）—— 逐提交给读数，2026-10-28 起扩成树级校验档，成本更高更不能松。
  */
 export function lockClassViolations(text: string, prIid = "1982"): Array<string> {
   const bad: Array<string> = [];
@@ -1418,24 +1111,9 @@ export function lockClassViolations(text: string, prIid = "1982"): Array<string>
   /** 同一把工作清单 → 允许共用它的那些锁；反过来锁 → 它只能给一份清单。 */
   const lockToWork = new Map<string, Set<string | null>>();
 
-  /* 探针（ISSUE #2363）里**被测的就是锁本身**：A 的 `cancel-in-progress: false` 是它要问的
-   * 那个问题、B/C 的「一条锁都不写」是它的对照组 —— 两者都不是漏写的配置。所以 R1（必须
-   * 显式写 `lock:`）与 R2 的「必须显式写 `cancel-in-progress`」这一半对它们不成立。
-   *
-   * 但豁免是**逐条点名**的，不是「探针都放行」：
-   *   · `PROBE_PIPELINES` 是**到期日**与**不许吃锚点**那一半的名单（见下面那条用例）；
-   *   · `PROBE_LOCK_EXEMPT` 是**这一层**的名单，逐条写清「放过哪一条规则」。
-   * 探针仍然要过「key 是字面量」「不撞退化形状」「一把锁只给一份清单」。
-   *
-   * ⚠️ `cancel-in-progress: true` 在 A 那把锁上**不会**被本函数点名，而这是刻意的：
-   * 「写了 `true` 就等于终止旧的一跑」这条判据（R6）只对 `push` 那把锁成立，因为它
-   * 守的是「逐提交给读数」那一档。A 要的是 `false`，写成 `true` 等于把问题掐掉 ——
-   * 那一半由**下面那条用例**守着（它直接读配置原文断言 `cancel-in-progress: false`），
-   * 不在这里重复一遍。
-   *
-   * 两份名单都是字面量而不是 `PROBE_PIPELINES` 的投影：B/C 不吃锚点却也不该拿到
-   * 「A 那把 `false` 的锁」那张通行证 —— 投影会让「C 有了锁」与「A 的锁错了」在读数上
-   * 变成同一件事。 */
+  /* 探针（ISSUE #2363）里**被测的就是锁本身**：A 的 `cancel-in-progress: false` 是要问的问题、B/C 的「一条锁都不写」是对照组 ⇒ R1 与 R2 的「显式写」对它们不成立。
+   * 豁免**逐条点名**：`PROBE_PIPELINES` 是到期日与「不许吃锚点」名单，`PROBE_LOCK_EXEMPT` 是这一层的「放过哪条规则」名单；探针仍须过「key 字面量」「不撞退化形状」「一把锁只给一份清单」。
+   * ⚠️ A 写成 `true` 不会被本函数点名（R6 只对 `push` 成立），那一半由下面那条用例直接读原文断言；两份名单是字面量而非投影，否则「C 有了锁」与「A 的锁错了」会读成同一件事。 */
   const probeExempt = new Map(PROBE_LOCK_EXEMPT.map((e) => [e.event, e]));
 
   for (const row of rows) {
@@ -1552,16 +1230,9 @@ export function missingAnchors(
 }
 
 /**
- * `.cnb.yml` 的**顶层键**清单（缩进 0、非注释、非空行，取第一个 `:` 之前的部分）。
- *
- * 为什么要判这个：`master:` 这类事件容器出现**两次**时，YAML 不报错 —— 后一处静默
- * 覆盖前一处。而这份配置里 `master:` 下面挂着 `"crontab: 0 3 * * *"`，所以
- * 「新开一个 `master:` 好加几条流水线」这个动作会**当场让定时那一跑消失**，
- * 配置读起来却完全正常（与 ISSUE #2114 那句「账面认为有人判」同族的失效形态）。
- * 判据只判一件事：同一个顶层键不许出现第二行 —— 新事件一律作为已有 `master:` 的子键加。
- *
- * @param text `.cnb.yml` 原文
- * @returns 顶层键（按出现顺序，**允许重复**：重复就是要抓的东西）
+ * `.cnb.yml` 的**顶层键**清单（缩进 0、非注释、非空行，取第一个 `:` 之前）。`master:` 出现两次时 YAML 不报错，后一处静默覆盖前一处。
+ * 而 `master:` 下挂着 `"crontab: 0 3 * * *"`，所以「新开一个 `master:` 加几条流水线」会**当场让定时那一跑消失**，配置读起来却正常（#2114 同族失效形态）。
+ * 判据只判一件事：同一顶层键不许出现第二行 —— 新事件一律作为已有 `master:` 的子键加。@returns 顶层键（按出现顺序，**允许重复**）
  */
 export function topLevelKeys(text: string): Array<string> {
   const out: Array<string> = [];
@@ -1580,11 +1251,8 @@ export function topLevelKeys(text: string): Array<string> {
 }
 
 /**
- * 读登记在册的平台侧配置原文。
- *
- * 它**不存在时直接抛**：本文件所有调用点都建立在「这份配置在」这个前提上，
- * 回 `null` 只会把「文件没了」摊成每个调用点各自的一次 `!` 断言（那正是
- * 让 `tsc` 与评审都看不出意图的写法）。抛出去的信息里带上文件名。
+ * 读登记在册的平台侧配置原文。它**不存在时直接抛**：所有调用点都建立在「这份配置在」这个前提上，
+ * 回 `null` 只会把「文件没了」摊成每个调用点各自的 `!` 断言。抛出的信息里带文件名。
  */
 function readRegisteredConfig(): string {
   const rel = REGISTERED_CI_CONFIG;
@@ -1617,18 +1285,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     }
     expect(runner.namespace).toBe("group");
     expect(runner.tags?.length ?? 0).toBeGreaterThan(0);
-    // 每条流水线都必须引用那个锚点：少引用一条 = 那一条悄悄回落到计费的平台池
-    // （`runner.namespace: group` + `tags` 就在这个锚点里）。
-    // 引用形态 = 分支键下、事件键下的那一层 `- <<: *anchor`。两个锚点合在一个合并键里
-    // 也算（`- <<: [*common, *pr_fail_stage]`）—— 这条判据问的是「有没有哪条流水线漏接了
-    // `*common`」，而 `<<:` 在同一层写两次是**非法 YAML**（`Map keys must be unique`），
-    // 所以「一条流水线引用两个锚点」只有流式这一种合法写法。
-    //
-    // ⚠️ 这里**不再钉一个写死的条数**（过去钉的是 5，等于把「今天有几条流水线」当判据）：
-    // 加一条流水线（单跑那六条就是）会让它红，而红的不是任何缺陷 —— 这条判据要问的是
-    // 「有没有哪条流水线漏了引用」。基准改从文本里现推：一条流水线必然带且只带一个
-    // 顶层 `stages:` 键（六空格那一层，引用形态 `stages: *x` 与内联形态都算），
-    // 引用数与它对齐才算每条都接上了 runner。把某条的 `stages:` 删了同样红。
+    // 每条流水线都必须引用那个锚点：少引用一条 = 悄悄回落到计费的平台池（`runner.namespace: group` + `tags` 在锚点里）。
+    // 引用形态 = 分支键、事件键下那层 `- <<: *anchor`；两个锚点合在一个合并键里也算，而 `<<:` 同层写两次是非法 YAML，所以只有流式这一种合法写法。
+    // ⚠️ 不钉写死条数（过去钉 5 = 把「今天有几条流水线」当判据）：基准从文本现推，一条流水线必然带且只带一个 6 空格 `stages:`，引用数与它对齐；删某条 `stages:` 同样红。
     const refs = text.match(/^\s+-\s*<<:\s*(?:\[\s*)?\*\w+/gm) ?? [];
     const stageLists = text.match(/^ {6}stages:/gm) ?? [];
     /* 有期限的探针例外（ISSUE #2363）从两边**同额**扣掉：探针不吃锚点、也不吃
@@ -1647,19 +1306,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("探针例外有期限：在册的探针流水线不许吃 `*common`，且过了 `PROBE_BY` 必须删掉", () => {
-    /* 这一条是**有期限的例外**，不是放宽判据（ISSUE #2363 的探针）。
-     *
-     * 为什么那三条探针不许吃 `*common`：锚点自带的 `lock.key: pr-$CNB_PULL_REQUEST_IID`
-     * 在 `api_trigger` 上无值 ⇒ 三条会落回同一把字面 `pr-` 并互相掐停，那正是探针要量
-     * 的东西 —— 探针先得自己不成为变量。于是它们逐字写 `runner`，而上面那条
-     * 「每条都要引用锚点」的判据就没法同时成立。
-     *
-     * 处置方式刻意选了「例外 + 自毁」，不是「把判据放宽」：
-     *   · 例外的**名单**是字面量（`PROBE_PIPELINES`），不是「任何自带 runner 的都放行」；
-     *   · 例外**有到期日**（`PROBE_BY`），过了那一刻本用例当场变红、要求把整段删掉 ——
-     *     「临时」两个字不靠人的记性；
-     *   · 现役配置里**这三条一旦消失**，本用例照样绿（名单里没有 = 没有例外要判）
-     *     ⇒ 删掉探针不会留下一条只能靠改用例才能过的判据。
+    /* 这是**有期限的例外**，不是放宽判据（ISSUE #2363 探针）：锚点自带 `lock.key: pr-$CNB_PULL_REQUEST_IID` 在 `api_trigger` 上无值 ⇒ 三条落回同一把字面 `pr-` 并互相掐停，探针先得自己不成为变量。
+     * 处置是「例外 + 自毁」：名单字面量（`PROBE_PIPELINES`，不是「自带 runner 都放行」）、有到期日（`PROBE_BY`，过期即红要求删段）、探针消失后本用例照样绿（删探针不留只能靠改用例的判据）。
      */
     const text = readRegisteredConfig();
     const alive = PROBE_PIPELINES.filter((name) => text.includes(`  ${name}:\n`));
@@ -1830,16 +1478,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   /**
-   * 出勤判据认的那份流水线名 ⇄ 配置里真正跑 `*daily_gates` 的那些流水线（ISSUE #2873）。
-   *
-   * 为什么这一对要双向核对：`check-daily-attendance.mjs` 的 `DAILY_LANE_PIPELINES` 是它
-   * **认档**用的唯一名单（事件名前缀不够 —— 01:00 与 03:00 两条定时档共享 `crontab:` 前缀，
-   * 实测把桌包档死在平台 `Prepare` 念成了每日档的缺勤）。名单漂了两种方向都静默：
-   *   · 配置改了流水线名而名单没跟 ⇒ 判据从此「窗口内没有一条属于本档」，念成**永远缺勤**；
-   *   · 名单里留着一个已经不存在的名字 ⇒ 它照旧"认得出"，而那一档其实早就没了，
-   *     于是**永远出勤**。两种都不会让别的判据红。
-   * 比的是「跑哪份清单」（`stagesRef`），不是「挂在哪个事件名 / 几点」—— 后者是本文件反复
-   * 拒绝的那一类写法（小时在 10-22 一天内换过两次）。
+   * 出勤判据认的流水线名 ⇄ 配置里真正跑 `*daily_gates` 的流水线（ISSUE #2873）：`DAILY_LANE_PIPELINES` 是 `check-daily-attendance.mjs` 认档的唯一名单（事件名前缀不够，01:00 与 03:00 共享 `crontab:`）。
+   * 名单漂两个方向都静默：配置改名而名单没跟 ⇒ 永远缺勤；名单留着已不存在的名字 ⇒ 永远出勤。两种都不让别的判据红。
+   * 比的是「跑哪份清单」（`stagesRef`），不是「挂在哪个事件名 / 几点」（小时在 10-22 一天内换过两次）。
    */
   it("每日出勤判据认的流水线名，就是配置里跑 `*daily_gates` 的那几条（不多不少）", () => {
     const rows = pipelineLockAssignments(readRegisteredConfig());
@@ -1935,13 +1576,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
 
   it("`E2E 那一格已离开 PR（撤档，不是停用），而它的序约束整套挪到每日那一条", () => {
     const text = readRegisteredConfig();
-    /* 立案（`cnb-ob4-1k5828a36`，本 PR 自己那一跑）：撤掉 PR 上的 `生产构建` 之后，
-     * `E2E 关键流程` 红在 `[WebServer] Could not find a production build` ⇒
-     * `Timed out waiting 180000ms from config.webServer`。病根是 `playwright.config.ts`
-     * 旧那句 `CI || PNPM_START ⇒ pnpm start` 把「是不是 CI」与「工作区里有没有产物」
-     * 绑成了一件。两条出路里选了「整格挪到每日档」而不是「PR 改跑现场编译档」，
-     * 理由与那份实测读数写在 `.cnb.yml` 那段撤档说明里（dev 档在这台节点上从来没有读数，
-     * 而它历史形态是「冒烟集体超时」）。 */
+    /* 立案（`cnb-ob4-1k5828a36`）：撤掉 PR 上的 `生产构建` 后，`E2E 关键流程` 红在 `Could not find a production build` ⇒ `Timed out waiting 180000ms`。
+     * 病根是 `playwright.config.ts` 旧句 `CI || PNPM_START ⇒ pnpm start` 把「是不是 CI」与「工作区有没有产物」绑成一件。
+     * 两条出路选了「整格挪到每日档」而非「PR 改跑现场编译档」，理由与实测读数写在 `.cnb.yml` 撤档说明里（dev 档在这台节点上没有读数，历史形态是「冒烟集体超时」）。 */
     const order = registeredGateOrder(text);
     const disabled = registeredDisabledGates(text);
     expect(
@@ -1986,19 +1623,10 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
 
   it("`每日浏览器安装` 的入口在盘上（2026-10-19 起它是唯一的执行者）", () => {
     const text = readRegisteredConfig();
-    /* 那一步点名的入口必须真在盘上（同 `Python 探测入口` 那条口径：`script` 里的
-     * 路径写错了不会在配置解析期报错，只在真要用的那一刻答「文件不存在」）。
-     * **两种形态都要读得出来**：活的（锚点里那一项，`script:` 带缩进）
-     * 与被注释掉的（`# ` 前缀让 `- name:` 那一行不再是 stage 项，剥掉前缀后顶格）。
-     * ⚠️ 正则**必须容忍前导空白** —— ISSUE #1966 恢复这一格时，只认顶格的
-     * `^(?:#\s*)?script:` 把活的形态判成「解析不出 script」，而它要判的是
-     * 「入口在不在盘上」，不是那一行在第几列。
-     * 不从原文里做「紧邻下一行」的匹配：停用块在 `- name:` 与 `script:` 之间插了
-     * 一段说明，紧邻匹配会当场落空。
-     *
-     * 名字带「每日」是 2026-10-19 那次挪档的结果（PR 那一格撤到每日档，撤的是节奏
-     * 不是账）—— 下面那条「PR 撤掉的每一格必须在每日清单里有同名执行者」判的就是
-     * 这件事，所以这里不再回到 PR 那一份。 */
+    /* 那一步点名的入口必须真在盘上（同 `Python 探测入口` 口径：路径写错不在解析期报错，只在真用时答「文件不存在」）。
+     * **两种形态都要读得出来**：活的（锚点里 `script:` 带缩进）与被注释掉的（剥 `# ` 前缀后顶格）。
+     * ⚠️ 正则**必须容忍前导空白** —— ISSUE #1966 恢复这格时只认顶格 `^(?:#\s*)?script:` 把活的判成「解析不出 script」；也不做「紧邻下一行」匹配（停用块在 `- name:` 与 `script:` 间插了说明）。
+     * 名字带「每日」是 2026-10-19 挪档结果（撤节奏不撤账），由下面「PR 撤掉的格必须在每日清单有同名执行者」判。 */
     const blockText =
       stageBlock(text, "每日浏览器安装") ?? commentedStageBlock(text, "每日浏览器安装");
     const scriptLine = /^[ \t]*(?:#\s*)?script:[ \t]*(\S.*)$/m.exec(blockText ?? "");
@@ -2019,18 +1647,10 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
 
   it("`每日浏览器安装` 那一步把下载的套接字超时放宽了（180 MiB 撞 30s 是「没量完」）", () => {
     const text = readRegisteredConfig();
-    /* 现场（`cnb-rkr-1k510rsgg` 的 `浏览器安装` stage）：180 MiB 的包撞上 Playwright
-     * 默认的 30s **套接字**超时（`NET_DEFAULT_TIMEOUT`）被按时掐断：
-     *
-     *     （原文）Request to https://cdn.playwright.dev/…/win64/chrome-win64.zip
-     *     （原文）timed out after 30000ms
-     *
-     * 那不是「CDN 不通」的结论，是「这一次没量完」—— 两者的处置相反（换镜像 vs 放宽），
-     * 而日志里此前一个字都分不开它们。
-     *
-     * 这个键是本档**唯一**能碰到「下载」这件事的地方，而 `env` 的键写错了不会在配置
-     * 解析期报任何错，只会在下一次下载时以同一个形态再红一次 —— 所以这里按「块内必须
-     * 有这个键」判，而不是靠人记得。顺序/入口那一条在上面，这条只管下载预算。 */
+    /* 现场（`cnb-rkr-1k510rsgg` 的 `浏览器安装`）：180 MiB 包撞 Playwright 默认 30s **套接字**超时（`NET_DEFAULT_TIMEOUT`）被掐断（原文 `timed out after 30000ms`）。
+     * 那不是「CDN 不通」的结论，是「这一次没量完」—— 处置相反（换镜像 vs 放宽），而日志里此前分不开它们。
+     * 这个键是本档唯一能碰「下载」的地方，`env` 键写错不在解析期报错、只在下一次下载时同形再红 ⇒ 按「块内必须有这个键」判。
+     */
     /* **停用时读注释块**（`commentedStageBlock`）：那两个键仍在原文里，恢复时照抄
      * 的就是它们。停用不该让「下载预算配置得对不对」这件事失去判据 —— 否则停用
      * 期间有人把镜像那一行删掉，谁也不会知道，恢复时又回到「只调超时数字」那条错路。 */
@@ -2051,16 +1671,10 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toContain("PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT");
     expect(stage).toMatch(/PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT:\s*"[1-9]\d*"/);
 
-    /* 光放宽预算不够 —— 放宽到 120s 之后**照旧超时**（`cnb-gt1-1k513ill4` 的原文是
-     * `timed out after 120000ms`），那时结论就变了：这台节点真的到不了
-     * `cdn.playwright.dev`。所以镜像那一行也要在块里 —— 它才是让下载**到得了**的那一件，
-     * 少了它，这一步会以「超时」的形态一直红下去，而人只会不断去调那个超时数字。
-     *
-     * 而这一行之所以**推不出来、只能由这里给**：Playwright 自己那三个内置镜像
-     * **全是同一族**（`cdn.playwright.dev` / `playwright.download.prss.microsoft.com`），
-     * 它 `retryCount = 5` 的「回退」在同一张网里等于没有 —— 实测逐字打了 5 次同一个
-     * 域名，然后 `Download failure, code=1`（`runPlaywrightInstall` 侧对应的读数与
-     * 判据见 `tests/ci-toolchain-selfcheck.test.ts` 的「下载根由外面给」那一组）。 */
+    /* 光放宽预算不够：放宽到 120s 之后**照旧超时**（`cnb-gt1-1k513ill4`：`timed out after 120000ms`）⇒ 这台节点真到不了 `cdn.playwright.dev`，镜像那一行才是让下载**到得了**的那件。
+     * 少了它，这一步会以「超时」一直红，而人只会不断调那个数字；而它**推不出来**：Playwright 三个内置镜像全是同一族，`retryCount = 5` 的回退等于没有（实测 5 次同域名后 `Download failure, code=1`）。
+     * 对应读数与判据见 `tests/ci-toolchain-selfcheck.test.ts` 的「下载根由外面给」那组。
+     */
     expect(
       stage,
       "「每日浏览器安装」没设 `PLAYWRIGHT_DOWNLOAD_HOST` —— 自托管节点到不了 " +
@@ -2070,14 +1684,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("`每日单元测试` 排在 `每日 Python 可用性` 之后（声明清单那一份）", () => {
-    /* 这条原来是 PR 那一份的顺序判据（`单元测试` vs `Python 可用性`）。2026-10-19
-     * 两格一起挪到每日档之后，PR 清单里两个名字都没有了 ⇒ 顺序约束本身**没有消失**，
-     * 它换了一份清单：缺解释器时单测照旧往下跑（相关用例走 `env` 档跳过、不会红），
-     * 而它要跑到 2h24m 才可能被平台墙钟掐断（实测 `cnb-jt3-1k5071kou`）——
-     * 「要么看不到、要么在最贵的位置才看到」这个形态与挂在哪条流水线无关。
-     * 这里判的是**声明的那份清单**（`COMFYAPP_CI_DAILY_GATES`），而
-     * 「定时流水线里事实的 stage 顺序」由下面那条前提格判据判 —— 声明与事实两份，
-     * 只读一份时另一份漂了没人红（本仓一贯的双向核对）。 */
+    /* 这条原来是 PR 那份顺序判据（`单元测试` vs `Python 可用性`）；2026-10-19 两格挪到每日档，顺序约束**没消失**、只是换了清单：缺解释器时单测照旧往下跑，而它要 2h24m 才可能被墙钟掐断（`cnb-jt3-1k5071kou`）。
+     * 「要么看不到、要么在最贵的位置才看到」这个形态与挂哪条流水线无关。这里判**声明**（`COMFYAPP_CI_DAILY_GATES`），
+     * 事实顺序由下面那条前提格判据判 —— 声明与事实双向核对，只读一份时另一份漂了没人红。 */
     const order = registeredDailyGateOrder(readRegisteredConfig());
     expect(
       order.length,
@@ -2097,22 +1706,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("`每日单元测试` 是每日那一跑最后一个**会红的格**；其后只允许 `覆盖率上报` 这种报告型尾巴", () => {
-    /* 业主口径：「将每日单元测试放最后，最容易出问题的放最后，然后执行过的就不用重复执行了」。
-     * 这不是排序偏好，是**覆盖面**：CNB 的 stage 串行且**失败即停**，而这一格是这条
-     * 流水线上唯一会因**这台机器的负载**而红的格子 —— 实测 `cnb-b0l-1k59op66t`：
-     * 775 份里只 1 份红，红在 `Test timed out in 30000ms`（同一时刻另有两份检出在这台
-     * 16 核机上跑全量 vitest 与全量 eslint），而它后面三格的状态是 `skipped`。
-     * 也就是说：它排在中间时，一单条抖动就决定 `每日生产构建` / `每日浏览器安装` /
-     * `每日全量E2E` 这一天跑不跑 —— 那三格此前还没有任何一次执行记录。
-     *
-     * 判的是**事实**（流水线里 stage 的实际顺序），不是那份声明清单：声明与事实的
-     * 逐条相等由上面「跑的就是 `COMFYAPP_CI_DAILY_GATES` 那几格」那条判住，
-     * 这里再钉一次「最后会红的格」，两边就都动不了了。
-     *
-     * 2026-11-02 起 `覆盖率上报` 从 PR 档挪到每日档、接在 `每日单元测试` 之后（它读同跑
-     * 全量单测产出的 lcov 上报覆盖率）。它是**报告型、非关键**：`每日单元测试` 抖动了它
-     * 跟着被 skip 只是当天少一次覆盖率上报，不会把前面任何一格拖成 skipped，所以允许它
-     * 垫在最后。这一条判据的约束对象仍是「会红的格不许排在 `每日单元测试` 之后」。 */
+    /* 业主口径：「将每日单元测试放最后，最容易出问题的放最后」。这是**覆盖面**不是偏好：CNB stage 串行且失败即停，而这一格是唯一会因本机负载红的 ——
+     * 实测 `cnb-b0l-1k59op66t` 775 份只 1 份红在 `Test timed out in 30000ms`（同时另有两份在跑全量 vitest/eslint），其后三格全 `skipped` ⇒ 它排中间时一次抖动决定那三格这一天跑不跑。
+     * 判**事实**顺序；逐条相等由上面那条判住，这里钉「最后会红的格」。2026-11-02 起 `覆盖率上报` 接在其后（报告型、非关键，被 skip 只少一次上报），约束对象仍是「会红的格不许在其后」。 */
     const stages = pipelineStageNames(readRegisteredConfig(), "每日生产构建");
     const last = stages.at(-1);
     expect(
@@ -2180,15 +1776,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("`oxfmt 格式` 是**在跑**的那一档，不是停用（ISSUE #2010 改变了它的来路）", () => {
-    /* 这条 stage 的名字在停用清单里躺过一阵（2026-10-16 临时让位给 E2E 调试，
-     * 恢复条件是「E2E 一绿 + 平台日志中文可读」）。ISSUE #2010 把它从本地钩子
-     * **挪过来接管**：判据一字未改，改变的是「判据 ⇄ 执行者」的关系 —— 从此它在这里
-     * 是**唯一**执行者。于是那份停用清单里的同名条目必须出网，否则两句话对不上：
-     * 一边说「这一步不许跑」，一边说「这一步是那条判据的唯一执行者」。
-     *
-     * 为什么这条要单独判（`单元测试` 那条同款理由）：判据与 stage 的**在场**是两件事，
-     * 而「钩子撤掉 + 平台侧还在停用」组合起来的结果是「谁都没跑它」，且不会有
-     * 任何别的判据变红 —— 失效形态正是「谁都没跑它」。 */
+    /* 这格曾在停用清单里（2026-10-16 让位给 E2E 调试）；ISSUE #2010 把它从本地钩子**挪过来接管** —— 判据一字未改，改变的是「判据 ⇄ 执行者」关系，从此它是**唯一**执行者。
+     * 于是停用清单里的同名条目必须出网，否则「不许跑」与「唯一执行者」两句话对不上。
+     * 单独判的理由同 `单元测试`：判据与 stage 的**在场**是两件事，「钩子撤掉 + 平台侧仍停用」= 谁都没跑它，且不会有别的判据红。 */
     const text = readRegisteredConfig();
     const order = registeredGateOrder(text);
     const disabled = registeredDisabledGates(text);
@@ -2208,26 +1798,14 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   it("慢 stage 带着量级余量的 `timeout` 预算（不然卡死要等满 2h 才有人知道）", () => {
     const text = readRegisteredConfig();
     const timeouts = stageTimeouts(text);
-    /* 为什么是「点名这几个」而不是「所有 stage 都要有」：其余 stage 都是秒级
-     * （`node scripts/check-*.cjs` 一族），给它们加预算只是噪音；真正的成本
-     * 集中在下面这四个上，而它们恰好也是**实测挂过或最可能挂**的那几个。
-     *
-     * `单元测试` 被**临时停用**（`DISABLED_GATES`，ISSUE #1959）时它不在清单里，
-     * 于是这里也不要求它有预算 —— 预算跟着 stage 走。它一旦被加回来（不再出现在
-     * 停用清单里），这条要求**自动恢复**，不需要有人记得改回来。
-     *
-     * `生成态文档与源同步` 曾是那个名单的第五个（ISSUE #1981）：`--check --autofix`
-     * 红了要就地重渲染再判一次，不是一个 stage 能在秒级里做完的。2026-10-19 它收进了
-     * 聚合档 `重档静态判据`（理由见 `scripts/ci-heavy-gates.mjs` 头注），预算跟着搬到
-     * 那一格上 —— 而那一格的预算在下面被**单独**要求（`重档静态判据` 同在这份名单里，
-     * 这里不再点一个已经不存在的 stage 名，那只会是一句空话）。 */
+    /* 为什么点名这几格而不是所有 stage：其余都是秒级（`node scripts/check-*.cjs` 一族），加预算只是噪音；真正的成本集中在这四个，且它们恰好是实测挂过或最可能挂的。
+     * `单元测试` 被**临时停用**时不在清单里 ⇒ 这里也不要求预算，预算跟着 stage 走，加回来（不再出现在停用清单）即自动恢复。
+     * `生成态文档与源同步` 曾是第五个（#1981）：`--check --autofix` 要就地重渲染再判；2026-10-19 收进聚合档 `重档静态判据`，预算搬到那格并在此**单独**要求，不再点已不存在的 stage 名。
+     */
     const disabled = registeredDisabledGates(text);
-    /* ⚠️ `生产构建`（2026-10-18）与 `E2E 关键流程`（2026-10-19）**都从这一列摘掉了**，
-     * 而且不是因为预算可以不要：那两格离开了 PR 那一条，现在只在每日档
-     * （`每日生产构建` / `每日全量E2E`）。它们的预算由下面那条「定时那一跑」的判据钉，
-     * 入口是不是跑法脚本也由同一条钉 —— 这里再留两个不存在的名字只会变成一句空话。
-     * 「谁把它们加回 PR 却不给预算」由 `MUST_ALWAYS_RUN`（`ci-incremental-gates`）与
-     * `.gates` 里那两段撤档说明看着。 */
+    /* ⚠️ `生产构建`（2026-10-18）与 `E2E 关键流程`（2026-10-19）**都从这一列摘掉了**，不是因为预算可以不要：它们只在每日档（`每日生产构建` / `每日全量E2E`）。
+     * 它们的预算与入口形态由「定时那一跑」那条判据钉；这里再留两个不存在的名字只会是空话。
+     * 「谁加回 PR 却不给预算」由 `MUST_ALWAYS_RUN`（`ci-incremental-gates`）与 `.gates` 那两段撤档说明看着。 */
     const required = [
       "ESLint 零警告",
       "单元测试",
@@ -2326,16 +1904,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(template).not.toMatch(/\$[^{A-Za-z0-9_]/);
   });
 
-  /* ── 锁按**触发类**分开（ISSUE #2114 的第二条死因）───────────────────────
-   *
-   * 上面那一条判的是「PR 之间不许互掐」（#1981，那个 bug 的现场是 PR #1980 掐了 #1982）。
-   * 这一族判的是它的另一半：`CNB_PULL_REQUEST_IID` 在非 PR 事件上无值 ⇒ 所有非 PR
-   * 流水线落回同一把字面 `pr-`，而这份配置的非 PR 流水线从**一条**长到了**九条**
-   * （`master 合并复核` + 每日三条触发口 + 单跑六条），那句「这一档只有一条流水线，
-   * 不带分支名也不丢语义」的前提就是这么被推翻的 —— 而没人回来改它，因为它写在注释里。
-   * 两次现场读数：`cnb-5j9-1k5bc4p4u` 的 `每日单元测试` 被一次 push 掐掉（差 3 秒）、
-   * `cnb-lm1-1k5h1otqt` 的一次按需复验跑到 244.06 秒被一次无关 push 掐掉（差 0.2 秒）。
-   */
+  /* ── 锁按**触发类**分开（ISSUE #2114 第二条死因）─────────────────────── 上一条判「PR 之间不许互掐」（#1981：PR #1980 掐了 #1982）；这一族判另一半：
+   * `CNB_PULL_REQUEST_IID` 在非 PR 事件上无值 ⇒ 所有非 PR 落回同一把 `pr-`，而非 PR 流水线从一条长到九条（合并复核 + 每日三触发口 + 单跑六条），前提写在注释里被推翻。
+   * 现场：`cnb-5j9-1k5bc4p4u` 的每日单元测试差 3 秒被 push 掐掉；`cnb-lm1-1k5h1otqt` 的按需复验 244.06s 被无关 push 掐掉（差 0.2 秒）。 */
   it("非 PR 的每条流水线各有其类锁，且一把锁只挡「同一件事被重复排队」", () => {
     const text = readRegisteredConfig();
     expect(lockClassViolations(text), text).toEqual([]);
@@ -2365,12 +1936,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   /**
-   * 反向自检：这一族的五条规则各喂一个坏形状，都必须被抓到。
-   *
-   * 用一份**自带的最小配置**而不是去改现役 `.cnb.yml`：现役那份近两千行，
-   * 在它上面做字符串替换会把「替换没命中」伪装成「判据过了」（本仓栽过一次那种）。
-   * 这份夹具的五条流水线形状与现役一致（分支键 2 空格、项内 6 空格、`- <<: *common`），
-   * 所以它同时是**解析器本身**的活体证据 —— 那 4 条收不齐，后面每一条断言都无从谈起。
+   * 反向自检：这一族五条规则各喂一个坏形状，都必须被抓到。用**自带最小配置**而不是改现役 `.cnb.yml`（近两千行，替换没命中会被伪装成判据过了，本仓栽过）。
+   * 夹具的五条流水线形状与现役一致（分支键 2 空格、项内 6 空格、`- <<: *common`），所以它同时是**解析器本身**的活体证据 —— 那 4 条收不齐，后面每条断言都无从谈起。
    */
   it("锁按类分开那五条判据不是空转：五种坏形状各被点名，而现役配置一条都不被抓", () => {
     const fixture = [
@@ -2423,12 +1990,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect([...lockAnchorDefinitions(fixture).keys()]).toEqual(["lock_push", "lock_daily"]);
     expect(lockClassViolations(fixture)).toEqual([]);
 
-    /* ⑦ 探针那三条**不吃锚点**、各自带 `runner`，而 `lock:` 只在**当前这一项之内**
-     * 算数：解析器必须在它自己的 `name:` 上收口。少了这一句，上一条流水线的 `lock:`
-     * 会被带进下一条 —— 探针 A/B/C 会各自继承**上一条**的锁归属，于是「B/C 故意
-     * 一条锁都不写」这条例外根本没有对象，而探针 A 的 `false` 也测不到它自己要测的
-     * 那把锁（`.cnb.yml` 那段注释早就点了这个坏形态，判据这一侧据此补上）。
-     * 顺带钉住例外的**边界**：豁免只覆盖「漏写」与「一条都不写」，别的规则一条都不放过。 */
+    /* ⑦ 探针三条**不吃锚点**、各自带 `runner`，而 `lock:` 只在**当前项之内**算数：解析器必须在它自己的 `name:` 上收口，否则上一条的 `lock:` 会被带进下一条。
+     * 于是「B/C 故意一条锁都不写」没有对象、A 的 `false` 也测不到要测的锁（`.cnb.yml` 那段注释早点了这个坏形态）。
+     * 顺带钉住例外**边界**：豁免只覆盖「漏写」与「一条都不写」，别的规则一条都不放过。 */
     const probeFixture = (o: { cancel?: string | null; extra?: string; probeB?: string }) =>
       [
         ".common: &common",
@@ -2559,25 +2123,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("覆盖率上报那一档接回了上报链，且**没报告时不判红**（ISSUE #1990）", () => {
-    /* 这一条守的是一个已经发生过两次的形态：上报是 #623 删旧版流水线时被一起拿走的，
-     * #1959 按完整流程重建时没被带回来 —— 于是「洞察 → 单元测试覆盖率」永远是
-     * 「无 / 无」，而没有任何一步会红（页面读的是平台侧读数，配置里少一条执行者
-     * 与「还没跑过」长得一模一样）。
-     *
-     * 2026-10-19 起它不再是独立 stage，而是聚合档 `重档静态判据` 的一个条目
-     * （理由见 `scripts/ci-heavy-gates.mjs` 头注：平台单 stage 20m 与每格一次的
-     * job 开销）。两半仍然分开判：
-     *   ① 它在**条目表里**、点名的入口在盘上（不然接回去也只是一句注释）；
-     *   ② 它**必须**自己判「有没有报告」—— 缺 `coverage/lcov.info` 时只跳过。
-     *      理由不是「宽容」：`单元测试` 此刻是临时停用的，报告本来就不存在，
-     *      把它判红等于让停用这件事连带把整条流水线拦死。
-     *
-     * ⚠️ 2026-10-22 订正①：它**恢复成独立的活 stage**。理由与「文档面那三条」同款 ——
-     * 2026-10-20 那一笔把它的原文注释掉了（理由是「收进聚合档」），而聚合档读的是
-     * **钩子注册表**、它 2026-10-16 就已从钩子里撤走 ⇒ 那一格从来没跑它 ⇒
-     * 「平台侧的覆盖率读数」从那天起没人写了，而两张登记表互核却全绿。
-     * 现在它自己占一格（它是**报告型**，没有 `ifModify`：它读的不是「本次改动」，
-     * 收窄它等于「只在某类改动上才记覆盖率」）。 */
+    /* 这形态发生过两次：上报在 #623 删旧流水线时被一起拿走、#1959 重建时没带回来 ⇒「洞察 → 单元测试覆盖率」永远「无 / 无」而没有任何一步红（少一条执行者与「还没跑过」长得一样）。
+     * 2026-10-19 起它收进聚合档 `重档静态判据`：① 在条目表里且入口在盘上；② 缺 `coverage/lcov.info` 时只跳过不判红（`单元测试` 临时停用，判红会让停用连带拦死整条流水线）。
+     * ⚠️ 2026-10-22 订正：它**恢复成独立活 stage** —— 聚合档读钩子注册表，而它 2026-10-16 已从钩子撤走 ⇒ 那格从没跑它，平台覆盖读数从那天起没人写而两张登记表互核全绿；现为报告型、无 `ifModify`。 */
     const stageName = "覆盖率上报";
     const block = stageBlock(readRegisteredConfig(), stageName);
     expect(
@@ -2607,19 +2155,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("定时那一跑（crontab）挂在 master 下、每天一次，且跑的就是 `COMFYAPP_CI_DAILY_GATES` 那七格（ISSUE #2010 / #2018）", () => {
-    /* 用户的要求是「生产构建改为定时任务，每天 1 次」。这句话在配置里落成三件
-     * 互相独立的事实，缺任一件都会**静默失效**（不会报错，只是那条流水线不按
-     * 人想的那样跑）：
-     *
-     *   ① 事件键的形态：定时任务只认 `"crontab: <五段 cron>"` 这种**带引号的字符串键**
-     *      （官方 `zh/build/crontab.md`）。写成 `crontab:` 映射 / `schedule:` 时平台
-     *      不会报错，只是永远不触发 —— 与 #1229 那次「顶层写 stages: 匹配不到事件」同形。
-     *   ② 分支键：定时任务**不支持 glob**，必须挂明确的单一分支名。这里要求 `master`：
-     *      每天要证的是「master 的 HEAD 今天能不能构建出来」，挂到别的分支上是另一件事
-     *      （而且别的分支不会有这条配置被解析的机会）。
-     *   ③ 频率：**每天 1 次**。cron 的第 3 段是「日」、第 2 段是「时」—— 第 2 段一旦写成
-     *      `*`（每小时）或列表（`0 4,16 * * *`），「每天一次」就变成了「每天 N 次」，
-     *      而配置看起来仍然像一条正常的定时任务。判据只认「单一小时 + 单一分钟」。 */
+    /* 「生产构建改为定时任务，每天 1 次」落成三件互相独立的事实，缺任一件都会**静默失效**：
+     * ① 事件键只认 `"crontab: <五段 cron>"` 这种带引号字符串键（官方 `zh/build/crontab.md`），写成 `crontab:` 映射 / `schedule:` 永不触发（同 #1229 形态）；
+     * ② 分支键不支持 glob、必须挂明确单一分支（这里要 `master`，每天证「master HEAD 今天能不能构建」）；③ 频率每天 1 次：cron 第 2 段写 `*` 或列表就变成每天 N 次，判据只认「单一小时 + 单一分钟」。 */
     const text = readRegisteredConfig();
     const events = crontabEvents(text);
     expect(
@@ -2699,15 +2237,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("桌包那一档独立成档：自己的清单 + 自己的锁 + 两个触发口同一份（ISSUE #2503）", () => {
-    /* 业主口径的实质是「桌包独立一条，不要并进每日那张 `*daily_gates` 表里」——
-     * 他原话里带着当时的条数，**那个数不在这里记账**（#2878 那一族的同一口径：
-     * 条数写进注释/话术而判据不读它，漂了谁都不会红；要数就问 `.daily-gates` 锚点 ⇄
-     * `COMFYAPP_CI_DAILY_GATES` 那两份，见规范 §13.5.17）。
-     * 这句话在配置里落成三件各自会静默失效的事实：
-     *   ① 清单是**另一张锚点** —— 并进 `.daily-gates` 之后每日那一跑会多背一次 cargo 编译；
-     *   ② 锁是**另一把** —— 共用 `*lock_daily` 会让「手点一次桌包」把当日那一跑的某一格
-     *      掐停（#2114 记的那条死因换了个方向复发）；
-     *   ③ 定时与手点两个触发口引用**同一个锚点** —— 抄第二份的那一刻就开始漂。 */
+    /* 业主口径「桌包独立一条，不要并进每日 `*daily_gates` 表」；原话里的条数**不在这里记账**（#2878 同口径：写进注释而判据不读，漂了没人红；要数问 `.daily-gates` ⇄ `COMFYAPP_CI_DAILY_GATES`，见 §13.5.17）。
+     * 落成三件会静默失效的事实：① 清单是**另一张锚点**（并进 `.daily-gates` 后每日会多背一次 cargo 编译）；② 锁是**另一把**（共用 `*lock_daily` 会让手点桌包掐停当日某一格，#2114 换方向复发）；
+     * ③ 定时与手点两个触发口引用**同一个锚点** —— 抄第二份那一刻就开始漂。 */
     const text = readRegisteredConfig();
     const stages = pipelineStageNames(text, "桌面成品包");
     expect(
@@ -2880,20 +2412,10 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("主体=master 的档：它的执行者必须在每日清单里（判据主体分权，ISSUE #2300）", () => {
-    /* `FRESHNESS_TRACKS[*].subject` 答的是「**这一次是谁在判**」：`"pr"` = 本 PR
-     * （工作树那份账；PR 流水线与本地钩子都是它），`"master"` = 主干（每日档在
-     * master HEAD 上跑出来的那一份；机器分支 `ci/freshness-ledger` 上是它的权威副本）。
-     *
-     * ⚠️ **主体=master ⇒ 那一档的账是主干的账** ⇒ 它的执行者必须落在**每日档**上：
-     * 主干的账由每天 00:00 那一跑刷新，PR 流水线里没有、也不该有它的执行者。
-     * 少了后半句，「那一档就没人判了」这件事无人回答，而失效形态是「PR 拿主干的账
-     * 判红别人的提交」—— 那正是主体分权要治的那件事。
-     *
-     * ⚠️ 这里**不**断言「它不许出现在 PR 清单里」：`ciStage` 记的是**每日格名**
-     * （`每日生产构建` 之类），它本来就从不在 PR 清单里 ⇒ 那条断言恒真 = 判据空转
-     * （本仓最忌讳的形态）。PR 侧那个格名（`新鲜度账`）不许留在 PR 清单里这件事，
-     * 由本文件 `PR_MOVED_TO_DAILY` 那条与 `tests/doc-check-hook-wiring.test.ts`
-     * 的「每日侧有『每日新鲜度账』这一步」那条判。 */
+    /* `FRESHNESS_TRACKS[*].subject` 答「**这一次是谁在判**」：`"pr"` = 本 PR（工作树那份账，PR 流水线与本地钩子），`"master"` = 主干（每日档在 master HEAD 上跑出的那份，权威副本在 `ci/freshness-ledger`）。
+     * ⚠️ 主体=master ⇒ 那一档的账是主干的账 ⇒ 执行者必须落在**每日档**（每天 00:00 刷新），PR 流水线里没有也不该有；否则「那一档没人判」无人回答，失效形态是「PR 拿主干的账判红别人的提交」。
+     * ⚠️ **不**断言「它不许出现在 PR 清单」：`ciStage` 记的是每日格名，那条断言恒真 = 空转；PR 侧格名（`新鲜度账`）由 `PR_MOVED_TO_DAILY` 与 `tests/doc-check-hook-wiring.test.ts` 那条判。
+     */
     const text = readRegisteredConfig();
     const dailyOrder = registeredDailyGateOrder(text);
     expect(
@@ -2945,16 +2467,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   /**
-   * 「同一份实现长在几条流水线上」的对账（`CROSS_LANE_SCRIPT_MIRRORS`）。
-   *
-   * 比三样，一样都不能少：
-   *  · **命令行** —— 取「真正会执行的那些行」：块脚本里的 `#` 注释与空行不算，两格各自要
-   *    解释的事情本来就该不同（PR 那一格背着一整段「为什么这一步是前提」），把散文也要求
-   *    逐字相同只会逼人删解释，而漂移恰恰藏在命令行里；
-   *  · **env 赋值** —— 同一份脚本两侧各配一份 env，就是两条流水线各自判两件事；
-   *  · **`timeout`** —— 它是那条链上唯一「改了不会被任何一行命令读出来」的一行。
-   *    `.cnb.yml` 里「三份副本必须逐字相同」那两段注释一直声称 timeout 在比对面里，
-   *    而它此前**不在** —— 那句话现在才有执行者（ISSUE #2851 同批补上）。
+   * 「同一份实现长在几条流水线上」的对账（`CROSS_LANE_SCRIPT_MIRRORS`）：命令行 / env 赋值 / `timeout` 三样一样都不能少。
+   * 命令行取「真正会执行的那些行」（块脚本注释与空行不算，散文本就该不同，漂移藏在命令行）；env 赋值两侧各配一份就是各自判两件事；
+   * `timeout` 是唯一「改了不会被任何一行命令读出来」的一行 —— `.cnb.yml` 那两段注释一直声称它在比对面里而此前**不在**，现在才有执行者（#2851）。
    */
   it("跨档同形格：命令行 / env / timeout 三样逐字相同，唯一的 env 例外是登记过的那一行", () => {
     const text = readRegisteredConfig();
@@ -3035,12 +2550,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("「这一档有没有构建格」那张表不是空转：正例点得出格名，现役写法不误伤", () => {
-    /* 正例：构建那一跳以几种形态出现过（专用入口 / `pnpm build` 的字面 / 直接点 `build-desktop.mjs`
-     * / **经 tauri 间接触发**），每一种都要被认出来 —— 认不出来的那张表，等于给接槽的那条安全
-     * 前提留了一扇「加了构建格而没人红」的门。
-     * ⚠️ 第四例（ISSUE #2883）原先写的是理想形态 `node tools/build/build-desktop.mjs --release`，
-     * 而现役配置那一行是 `pnpm tauri build`（`build-desktop.mjs` 的名字在 `tauri.conf.json` 的
-     * `beforeBuildCommand` 里，也在 `.cnb.yml` 那一格的**注释**里 —— 两者都不在这一族的输入面上）。
+    /* 正例：构建那一跳出现过专用入口 / `pnpm build` 字面 / 直接点 `build-desktop.mjs` / **经 tauri 间接触发**，每一种都要被认出来 —— 认不出的表等于给接槽的安全前提留了「加了构建格而没人红」的门。
+     * ⚠️ 第四例（#2883）原写理想形态 `node tools/build/build-desktop.mjs --release`，而现役是 `pnpm tauri build`（`build-desktop.mjs` 名在 `tauri.conf.json` 的 `beforeBuildCommand` 与 `.cnb.yml` 的**注释**里，两者都不在输入面）。
      * 用例于是绿着，而它对现役配置的回答是假的：**正例必须长得像事实**。 */
     expect(
       stagesWithBuildConsumer(
@@ -3103,15 +2614,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("从 PR 撤下来的环境格，每一格在每日那一跑里都有同名执行者（撤拦 ≠ 撤账）", () => {
-    /* 2026-10-19 的口径：只判**节点**的那几格不必每个 PR 都判（`工具链自证` 13.8s /
-     * `Python 可用性` 2.8s / `Python 探针读数` 3.0s / `浏览器安装` 3.0s，逐格读数来自
-     * 合并前那一跑的 stage 表）。**撤的是节奏，不是账** —— 这条判据就是那一句的机器形式：
-     * 四个名字必须①不在 PR 清单里（否则它同时是两份执行者，镜像判据失去对象），
-     * ②在每日清单里有 `每日<名>` 那一格，③那一格点的仍是**同一个入口脚本**、
-     * 共用脚本时还带着**那个分档旗标**。
-     *
-     * 少了③，「撤到每日档」与「悄悄删掉」在配置文件里逐字同形：名字还在清单上、
-     * 块被换成一条别的命令，两边都是绿的 —— 而那一格其实谁都不判了。 */
+    /* 2026-10-19 口径：只判**节点**的格不必每个 PR 都判（13.8s / 2.8s / 3.0s / 3.0s，逐格读数来自合并前那一跑的 stage 表）。**撤的是节奏，不是账**，判据是这句的机器形式：
+     * ① 不在 PR 清单里（否则同时是两份执行者，镜像判据失去对象）；② 每日清单有 `每日<名>` 那格；③ 那格点的仍是**同一个入口脚本**、共用脚本时带**那个分档旗标**。
+     * 少了③，「撤到每日档」与「悄悄删掉」逐字同形：名字还在清单上、块换成别的命令，两边都绿而那一格谁都不判了。 */
     const text = readRegisteredConfig();
     const prOrder = registeredGateOrder(text);
     const dailyOrder = registeredDailyGateOrder(text);
@@ -3148,13 +2653,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("门格总账：每一格的档位登记 ⇄ 三份清单实际在跑的格名（双向相等，#2640）", () => {
-    /* §13.5.30 把「某一格该属哪一级」判成工程判断（三条门槛机器判不了），但「撤出某一档
-     * 后必须登记在册、且登记的名字不许还在跑」可以判。这份 `GATE_TIER_LEDGER` 就是那个
-     * 册子（每格的档位归属手写登记）。下面做两件事：
-     *   ① 三份清单各自 ⇄ 总账双向相等 —— 清单上多/少了一格而总账没同批改，或总账漏登记，
-     *      都红（这就是「清单↔流水线」双向判据在「两边一起被删」时仍绿的那一个洞：两边
-     *      同烧 = 全绿，而格其实谁都不判了）；
-     *   ② retired 的格不许再出现在任何清单里（降级≠删除），且必须带理由。 */
+    /* §13.5.30 把「某格该属哪一级」判成工程判断，但「撤出后必须登记、且登记名不许还在跑」可以判；`GATE_TIER_LEDGER` 就是册子（档位手写登记）。
+     * ① 三份清单 ⇄ 总账双向相等（清单多/少一格而总账没同批改、或总账漏登记都红 —— 这正是「两边一起被删」时仍绿的那个洞）；
+     * ② `retired` 的格不许再出现在任何清单里（降级≠删除），且必须带理由。 */
     const text = readRegisteredConfig();
     const prOrder = new Set(registeredGateOrder(text));
     const pushOrder = new Set(registeredPushGateOrder(text));
@@ -3189,13 +2690,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   /**
-   * 「每日档红 ⇒ 自动立案」这一格不能只在清单上有个名字（ISSUE #2274）。
-   *
-   * 上面那条判据管的是「从 PR 撤下来的格还在不在」，这条管的是**新加的那一格点的还是不是
-   * 同一个入口**：名字还在、块被换成别的命令，两边都绿，而自动立案其实谁都不做了 ——
-   * 那正是这一族（判据在场、执行者不在场）唯一的失效形态。
-   * 位置也在这一条里钉：它必须排在所有可能红的格**之前**，因为写在后面就会被前面那次红
-   * 一起 `skipped`（平台没有可依赖的条件语法，本文件里今天只有 `ifModify`）。
+   * 「每日档红 ⇒ 自动立案」这格不能只在清单上有个名字（ISSUE #2274）：上一条管「撤下的格还在不在」，这条管**新加那格点的还是同一个入口**。
+   * 名字还在、块被换成别的命令，两边都绿而自动立案谁都不做 —— 那是这一族（判据在场、执行者不在场）唯一的失效形态。
+   * 位置也钉：必须排在所有可能红的格**之前**，否则被前面那次红一起 `skipped`（平台没有可依赖的条件语法，今天只有 `ifModify`）。
    */
   it("每日链里必须有一格点的是 `ci-daily-failure-issue.mjs --no-block`，且排在最前", () => {
     const text = readRegisteredConfig();
@@ -3446,13 +2943,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
 
 describe("单跑口：三档重档各自一条，前提格的正文必须与每日那格逐字相同", () => {
   /**
-   * 某一格的**正文**（剥掉列表项自己那行 `name:`，再剥掉注释与空行，比的是
-   * `script` / `env` / `timeout`）。
-   *
-   * 两处刻意：① **名字不参与比较** —— 单跑那格本来就要另起一个不重名的名字
-   * （见下面那条判据），比名字等于比错的东西；② **注释不算漂移** ——
-   * `stageBlock()` 会把下一格前面的说明注释一起收进来（那是 2 空格的正常正文宽度），
-   * 而每日那几格带着大量取证注释、单跑那几格不该重抄一遍。要比的是命令、env、预算。
+   * 某一格的**正文**（剥掉列表项自己那行 `name:`，再剥注释与空行，比 `script` / `env` / `timeout`）。
+   * ① **名字不参与比较**：单跑那格本来就要另起不重名的名字，比名字等于比错的东西；
+   * ② **注释不算漂移**：`stageBlock()` 会把下一格前的说明注释一起收进来，而每日那几格带着大量取证注释、单跑不该重抄。要比的是命令、env、预算。
    */
   function stageBody(text: string, name: string): string | null {
     const block = stageBlock(text, name);
@@ -3471,12 +2964,8 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
   }
 
   /**
-   * 锚点列表里（恰好两空格缩进的 `- name:`）出现**两次以上**的格名。
-   *
-   * 只扫这一层是有范围的：`.daily-gates` / `.oneshot-*` / `.gates` 的 stage 项都在这一层，
-   * 而 `jobs:` 下的 Job 与所属 stage **同名是刻意的**（容器那格的形态），更深缩进的写法
-   * 因此不算违规。要防的是「两条流水线里有两个同名 stage」——那会让按名字取块的解析器
-   * 读到哪一个变成运气（`.cnb.yml` 里 `每日安装依赖` 那段注释记着同一件事）。
+   * 锚点列表里（恰好两空格缩进的 `- name:`）出现**两次以上**的格名：`.daily-gates` / `.oneshot-*` / `.gates` 的 stage 项都在这一层。
+   * `jobs:` 下的 Job 与所属 stage **同名是刻意的**（容器那格），更深缩进不算违规。要防「两条流水线里有两个同名 stage」——那会让按名取块的解析器读到哪个变成运气（`.cnb.yml` 里 `每日安装依赖` 那段注释记着同一件事）。
    */
   function duplicatedStageNames(text: string): Array<string> {
     const seen = new Map<string, number>();
@@ -3534,18 +3023,9 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
   });
 
   /**
-   * 接槽与构建消费者的那条线，**双向**都要有执行者（ISSUE #2853 / #2883 / #2851）：
-   *
-   *  · 一个方向是安全前提：置了 `COMFY_CI_SLOT` 的安装格，它所在那条档后面**不许**有会真构建的
-   *    格子（接槽把 `node_modules` 接成指向项目根之外的 junction，Turbopack 对此有硬要求 ——
-   *    #2081 那次 13.8s 就死 + 后面整片 `skipped`）；
-   *  · 另一个方向是防静默回退：注册表里指了 `source` 为接槽那一族的那些格，**必须真的**带着那枚
-   *    env —— 否则"按判据它该接"与"配置里它接了"两句话可以各自漂（摘掉那一行不会有任何一格红）。
-   *
-   * ⚠️ 这里刻意**不**判反过来的那一句（「没有构建格的档就必须接槽」）：`单跑E2E` 就是那条
-   * 不成立的逆命题 —— 它清单里没有构建消费者，但它后面那格带 `COMFY_E2E_SERVER: start`
-   * 而这一档没有构建格，`.next` 从哪来这件事没有读数（#2853 期望 2）。把"没判"写成"必须"
-   * 就是拿配置在场抵一次没跑过的前提。
+   * 接槽与构建消费者的线，**双向**都要有执行者（#2853 / #2883 / #2851）：① 安全前提 —— 置了 `COMFY_CI_SLOT` 的安装格，所在档后面**不许**有会真构建的格（junction 对 Turbopack 有硬要求，#2081 的 13.8s 死法）；
+   * ② 防静默回退 —— 注册表里 `source` 指接槽那一族的格**必须真的**带那枚 env，否则「按判据它该接」与「配置里它接了」各自漂（摘掉那行不会有任何格红）。
+   * ⚠️ 刻意**不**判逆命题（无构建格的档必须接槽）：`单跑E2E` 就是反例（无构建消费者，但后一格带 `COMFY_E2E_SERVER: start`，`.next` 从哪来没有读数，#2853 期望 2）；把「没判」写成「必须」就是拿配置在场抵一次没跑过的前提。
    */
   it("接槽开关与构建消费者两两对得上：置了的必须有没构建的格，注册表认了的必须真置着", () => {
     const text = readRegisteredConfig();

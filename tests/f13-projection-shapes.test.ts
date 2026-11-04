@@ -1,45 +1,17 @@
 /**
- * 「调用点的形状错误不许被咽掉」判据（台账 F13）。
- *
- * 起因是一次数据层迁移：仓储的投影参数被写成 `select?: unknown`，
- * 交给 Drizzle 时又写 `db.select(select as never)`。于是调用点留着迁移前的
- * 布尔投影（`{ id: true, status: true }`）时 **tsc 一声不响**，运行时生成空投影
- * → SQL 语法错 —— 一条 procedure（`train.cancel`，已随功能废弃删除）
- * 从那次迁移起**每次都 500**，而那条 procedure
- * 当时零执行者，所以没有任何一条红过。
- *
- * 同一族的第二处（本批一起修）：`workflowTemplateRepository.findByIdForUserSelect(userId, id, _select?: unknown)`
- * —— 参数名承诺投影，实现里是 `select()` 全列取，三个调用点还在传旧工具链形状的
- * `{ id: true, rawJson: true, … }`。这一支的后果是性能而不是 500：详情加载每次
- * 都把 `rawJson` 与 `positions` 两个大 JSON blob 整行拖出来。
- *
- * 三条判据都是**形状**而不是语义 —— 它们抓的是「编译器被叫停」这个动作本身：
- *  · `as never` 出现在非测试源码里 = 写的人在对 tsc 说「这里别查我」。它偶尔是对的
- *    （转发第三方 API 的签名时确实要给个交代），所以不是一刀切禁用，而是
- *    **逐处登记 + 写清为什么**；新增一条未登记的即红，登记的那处不存在了也红
- *    （`as never` 消失了却不删登记 = 这张表失去记账能力）。
- *  · 投影类参数（名字含 select / projection / columns）的类型不许是 `unknown` / `any`。
- *  · `.select(… as never)` 这一整个形状不许出现（它就是当年那句）。
- * 另加一条仓库层的：`src/lib/core/repository-*.ts` 的签名里不许有以 `_` 开头的参数 ——
- * 那条下划线正是「我知道它没人用，但我不想删」的写法，也就是空气参数的来源。
- *
- * 已知边界（不假装没有）：
- *  · 形状判据抓不到「类型是对的但语义错了」；那一半由执行者维度与逐入口用例负责
- *    （`tests/trpc-surface-executors.test.ts`）。
- *  · 登记表按**文件 + 该文件内的出现次数**记账，不按行号 —— 行号会在无关改动里漂，
- *    漂了的登记项等于一张对不上账的表。
+ * 「调用点的形状错误不许被咽掉」判据（台账 F13）。起因：投影参数写成 `select?: unknown` + `db.select(select as never)`，
+ * 调用点留布尔投影时 tsc 不响、运行时生空投影 → SQL 语法错（`train.cancel` 自那次迁移起每次 500，零执行者故无人发现）。
+ * 同族 `findByIdForUserSelect` 的 `_select` 是全列取；判形状：`as never` 逐处登记、投影参数不许 unknown/any、`.select(… as never)` 禁区。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { stripComments } from "./helpers/strip-comments";
 
-/** `as never` 的逐处登记：文件 → `{ 次数, 为什么 } }`。
- *
- *  要加一条进来，先答「为什么不能改成把类型收对」—— 本批刚把三处改掉了：
- *  LLM 回来的景别在**解析边界**用 `normalizeShotType` 收进清单（那里原本是
- *  `s.shotType as never`，等于「模型说什么存什么」）；仓储的投影参数改成了真列清单。
- *  剩下这两类是签名桥接，最后一类是真欠账（F13′）。 */
+/** `as never` 的逐处登记：文件 → `{ 次数, 为什么 }`。
+ *  要加一条进来，先答「为什么不能改成把类型收对」：本批已把三处改掉（LLM 景别在**解析边界**用
+ *  `normalizeShotType` 收进清单、仓储的投影参数改成真列清单）；剩下两处是签名桥接，最后一类是
+ *  真欠账（F13′）。 */
 const AS_NEVER_LEDGER: Record<string, { count: number; reason: string }> = {
   "src/lib/core/logger.ts": {
     count: 1,

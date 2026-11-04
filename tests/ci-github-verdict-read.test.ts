@@ -1,11 +1,7 @@
-/** `ci-github-verdict-read.mjs` 的用例（ISSUE #3051 期望第 3 条的前置：回读格先按读数档上线）。
- *
- *  双路径版：主路径 runs API（`event=repository_dispatch` 拉触发表，再用 display_title
- *  里的目标 sha 认领本跑）认不到本跑的 run 时回落兜底 checks API。
- *  假件按 URL 分流（`/actions/runs` → 主路径，其余 → 兜底），两条路径的回话可以分别编排。
- *
- *  全部走注入面：fetch / git / sleep / now 都是假件，**一次真网络请求都不发、
- *  一次真墙钟都不付**；令牌脱敏那条是硬规则 17 在这一格的落点。 */
+/** `ci-github-verdict-read.mjs` 用例（ISSUE #3051 期望第 3 条的前置：回读格先按读数档上线）。
+ * 双路径：主路径 runs API（`event=repository_dispatch` 拉触发表，按 display_title 里的目标 sha 认领本跑），
+ * 认不到时回落 checks API；假件按 URL 分流，两条路径回话可分别编排。
+ * 全部走注入面（fetch / git / sleep / now 都是假件）：一次真网络、一次真墙钟都不付；令牌脱敏是硬规则 17 的落点。 */
 import { describe, expect, it } from "vitest";
 import {
   NO_RUN_WINDOW_MS,
@@ -293,12 +289,10 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     const chainSteps = opts.chainSteps ? [...opts.chainSteps] : null;
     const runsSteps = opts.runsSteps ? [...opts.runsSteps] : null;
     const checksSteps = opts.checksSteps ? [...opts.checksSteps] : null;
-    /* 时钟只被 `sleep` 推进（真实轮次各 30s）：`now()` 是**纯读**。
-     *
-     * `nowStep` 是额外的读时步长，只给「预算耗尽」那几条用 —— 它们一轮就到点，
-     * 不陪它跑 90 轮。⚠️ 缺省**不**给缺省大步长：#3136 那批用例第一次是这么写坏的,
-     * 而 `now()` 一轮里会被问两次（算 deadline 一次、循环尾一次），步长挂在读上
-     * 就成了「跳一次睡一轮」的错拍，主路径三跳就到点。 */
+    /* 时钟只被 `sleep` 推进（真实轮次各 30s），`now()` 是**纯读**。`nowStep` 只给「预算耗尽」那几条用 ——
+     * 它们一轮就到点，不陪跑 90 轮。⚠️ 缺省**不**给大步长：#3136 那批第一次就是这么写坏的 ——
+     * `now()` 一轮被问两次（算 deadline 一次、循环尾一次），步长挂在读上就成了「跳一次睡一轮」的错拍，
+     * 主路径三跳就到点。 */
     const nowStep = opts.nowStep ?? 0;
     let clock = 0;
     const fetchImpl = (async (url: string | URL) => {

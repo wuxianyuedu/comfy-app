@@ -1,34 +1,7 @@
 /**
- * 「读 git 路径」必须拿到**原样路径**（ISSUE #2272）。
- *
- * ## 它守的是什么
- *
- * git 输出**含非 ASCII 字符**的路径时，默认（`core.quotePath=true`，git 的默认值）
- * 按 C 风格转义并**加引号** —— 实测输出是
- * `M\t"docs/standards/15-\351\231\204\345\275\225.md"`。本仓**38 份被跟踪文件的
- * 文件名带非 ASCII**（全在 `docs/` 下）⇒ 不关掉它，判决面里那一条就与真实路径对不上。
- *
- * ## 为什么这一族必须写成「机器之间不许有差别」
- *
- * 机器之间**本来就有差别**：本机全局配了 `core.quotepath=false`，而 CI runner 的 git
- * 是**全默认**（runner 检出后只 `git config --local` 配了身份与凭据，一条
- * `core.quotePath` 都没有 ⇒ 它的宿主**没有**全局 `.gitconfig`）。
- *
- * ⇒ 同一份代码，本机绿、平台红，而**红的那条读数完全正常**（"OK：本次没有……"）——
- * 这正是 ISSUE #2272 的现场（PR #2270 的「受影响用例」在平台上红 1 条，本机全绿）。
- *
- * 所以本文件的用例**不许依赖宿主机的 git 配置**：它们**强制** `core.quotePath=true`
- * （git 的默认值，也是 runner 的形态）再跑一遍 —— 复现靠配置，不靠「这台机器恰好
- * 配了什么」。
- *
- * ## 三条口径
- *
- *   ① **改动面**（`scripts/changed-scope.mjs`）——「受影响用例」选例、重档静态判据的
- *      按面收窄、`check-doc-mirror-pairing.cjs --base` 的判决面，全走它。
- *   ② **暂存面**（`scripts/gate-scan-read.cjs` 的 `readStagedPaths()`）——`--staged` 族
- *      门禁的「没命中扫描面就跳过」用它；路径被转义过 ⇒ **判据在场却没跑**。
- *   ③ **静态**：凡是读 git 路径的调用，必须带 `-c core.quotePath=false`（或 `-z`，
- *      NUL 分隔那一族天然不加引号）；豁免逐条登记并写明理由。
+ * 读 git 路径必须拿到**原样路径**（ISSUE #2272）：`core.quotePath=true`（默认）把非 ASCII 路径 C 风格转义加引号，
+ * 本仓 38 份 `docs/` 文件名受影响。本机全局关了、CI runner 全默认 ⇒ 同份代码本机绿平台红且读数正常（PR #2270）。
+ * 用例强制 `quotePath=true` 复现，不靠宿主机配置。三口径：改动面、`--staged` 暂存面、静态守卫（`-c core.quotePath=false` 或 `-z`，豁免登记）。
  */
 import { execFileSync } from "node:child_process";
 import {
@@ -56,10 +29,8 @@ const CN_SOURCE = "docs/standards/15-附录.md";
 const CN_TWIN = "docs/generated/15-附录.md";
 
 /**
- * 强制 git 走**默认**那套路径转义（`core.quotePath=true`）。
- *
- * 用 git 自己的 `GIT_CONFIG_COUNT` 机制注入：**它压得住全局 `.gitconfig`**，而
- * `git -c`（我们给的守卫）**又压得住它** —— 两层都验过（实测输出见文件头）。
+ * 强制 git 走**默认**那套路径转义（`core.quotePath=true`）。用 git 自己的 `GIT_CONFIG_COUNT` 注入：
+ * 它压得住全局 `.gitconfig`，而我们给的 `git -c` 又压得住它 —— 两层都验过（实测输出见文件头）。
  */
 function forceGitQuotePath(on: boolean): void {
   if (!on) {
@@ -165,10 +136,8 @@ const PATH_FLAG_TOKENS = [
 ] as const;
 
 /**
- * 豁免登记：**每一条都要写清为什么这一处不需要守卫**。
- *
- * 登记项是「文件 + 处数」的粒度（与条件性 skip 那套登记同型）：处数对不上就红 ——
- * 偷偷多一处没登记会红，登记了却已经修好也要红（豁免是负债，不是赦免名单）。
+ * 豁免登记：每一条都要写清为什么这一处不需要守卫。粒度是「文件 + 处数」（与条件性 skip 登记同型）：
+ * 处数对不上就红 —— 偷偷多一处没登记会红，登记了却已修好也要红（豁免是负债，不是赦免名单）。
  */
 const EXEMPT: Array<{ count: number; file: string; why: string }> = [
   {
@@ -186,10 +155,8 @@ function hasGuard(slice: string): boolean {
 }
 
 /**
- * 找出「读 git 路径」的调用点：数组字面量里有那个旗标、而数组里**没有**守卫。
- *
- * 取「**最内层**的数组」：`["-c", "core.quotePath=false", "diff", "--name-only", …]`
- * 这种形态里，旗标与守卫必须在**同一个**数组里 —— 而外层那个数组（`attempts = [ … ]`）
+ * 找出「读 git 路径」的调用点：数组字面量里有那个旗标、而数组里没有守卫。取**最内层**的数组：
+ * `["-c", "core.quotePath=false", "diff", …]` 里旗标与守卫必须在同一个数组 —— 外层 `attempts = [ … ]`
  * 装着好几条命令，不该替其中一条背书。
  */
 function unguardedSites(source: string): Array<string> {

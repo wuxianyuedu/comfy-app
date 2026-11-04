@@ -1,23 +1,7 @@
 /**
- * 流水线第一步「工具链自证」的判据（ISSUE #1959 第二轮）。
- *
- * ## 这一步坏过，而且坏得看不出真因
- *
- * 自托管流水线的首跑在第 8 秒就红掉了，红在**第一步**、排在后面的 27 个 stage
- * 一个都没跑，而报错话术与「这台机器压根没装 Python」逐字同形。真因是那段
- * 就地 PowerShell 里探的候选名与门禁 `check-app-port-vectors.cjs` 探的**不是同一份**。
- *
- * 所以本文件判三件事，缺一条那段逻辑就又一次没人看着：
- *
- *   ① **候选表只有一份答案** —— `scripts/ci-toolchain-selfcheck.mjs`、
- *      `scripts/check-app-port-vectors.cjs`、`src/lib/process/python-candidates.ts`
- *      三处的候选名、顺序、`py` 的 `-3` 必须逐项一致（前两份刻意不 import 那份 TS
- *      —— 理由写在各自文件头：一份是 `.cjs`、一份要在「Node 模块链还没被证明可用」
- *      的机器上也能给出可读输出。两份文本 + 一条判据，是这里选的形态）；
- *   ② **`engines.node` 的区间抄得对**（含 caret 的**上界**）—— 比下界就放过的
- *      `24.14.9` 这类形态，正是那种「不报错、只让某几条用例以奇怪方式红」的东西；
- *   ③ **`.cnb.yml` 真的在跑它**、且那段就地 PowerShell 已经撤掉（脚本存在而配置
- *      没接上 = 那一步又回到手写形态，本文件判的链就断了）。
+ * 流水线第一步「工具链自证」的判据（ISSUE #1959 第二轮）。首跑第 8 秒红在第一步、后 27 个 stage 全没跑，
+ * 且话术与「机器没装 Python」逐字同形 —— 真因是就地 PowerShell 与 `check-app-port-vectors.cjs` 探的候选名不是同一份。判三件事：
+ * ① 三处（`ci-toolchain-selfcheck.mjs`/`check-app-port-vectors.cjs`/`python-candidates.ts`）候选名、顺序与 `py -3` 一致；② `engines.node` 区间含 caret 上界；③ `.cnb.yml` 真在跑它、就地 PowerShell 已撤。
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -82,16 +66,9 @@ function requireVersion(text: string) {
 }
 
 /**
- * 断言「探了哪条路径」时用的**归一形态** —— 分隔符归一 + 折叠重复 + 小写。
- *
- * 被测脚本用平台的 `path.join` 拼落点，所以期望值**不能写成 POSIX 字面量**：
- * POSIX 宿主上 `path.join("/L", "Programs")` 给 `/L/Programs`，而 Windows 节点上
- * 给 `\\L\\Programs`（正斜杠被当成普通字符保留、反斜杠成了分隔符）。
- * 判的是「探了哪个落点」，不是「分隔符长什么样」—— 写死一侧等于让这条判据只在
- * 那一侧的宿主上成立（本文件最初就是这么写的，在自托管 Windows 节点上红了 6 条）。
- *
- * 用 `path.join` 拼期望值只是把问题挪了个位置（跨宿主跑时就对不上），所以这里
- * 统一按**归一后的正斜杠形态**比。
+ * 断言「探了哪条路径」用的**归一形态**（分隔符归一 + 折叠重复 + 小写）。
+ * 被测脚本用平台 `path.join` 拼落点，期望值写死一侧只在那一侧宿主成立（本文件最初这么写，自托管 Windows 红了 6 条）；
+ * 判的是「探了哪个落点」而非分隔符，而 `path.join` 拼期望只是把问题挪个位置 ⇒ 统一按归一后的正斜杠形态比。
  */
 function norm(p: string): string {
   return p
@@ -102,13 +79,8 @@ function norm(p: string): string {
 
 /**
  * 造一个**最小可用**的 zip（只带一个条目），给「自己读 zip」那条判据当夹具。
- *
- * 走 `node:zlib` 的 `deflateRawSync`：与实现读的那一档（`inflateRawSync`）对得上，
- * 且不必落一个二进制夹具进仓。local header 与 central directory 两段都写全
- * —— 实现走的是 central directory，而**数据偏移**那一列必须落在真 local header 上。
- *
- * @param {Array<{name: string, data: Buffer}>} files
- * @returns {Buffer}
+ * 走 `node:zlib` 的 `deflateRawSync`（与实现的 `inflateRawSync` 对得上），不落二进制夹具进仓；
+ * local header 与 central directory 都写全 —— 实现读 central directory，数据偏移须落在真 local header 上。
  */
 function makeZip(files: Array<{ data: Buffer; name: string }>): Buffer {
   const locals: Array<Buffer> = [];
@@ -245,12 +217,11 @@ describe("工具链自证：engines.node 的区间", () => {
       engines: { node: string };
     };
     const engines = pkg.engines.node;
-    /* 逐段核对：写死的范围与 `package.json` 声明的**同一批边界**。
-     * 不去解析语义版本区间（那要一个依赖，而这一步要在「什么都还没装好」的机器上
-     * 也能跑）；这里判的是「边界数字都对得上」这件事本身。
+    /* 逐段核对：写死的范围与 `package.json` 声明的**同一批边界**。不解析语义版本区间
+     * （那要一个依赖，而这一步要在「什么都还没装好」的机器上跑），只判「边界数字对得上」。
      *
-     * ⚠️ 这一串在 #2532 收紧成 `>=26.12.1` 时**没有**跟着改 ⇒ 本用例就此变红，
-     * 而它正是这一格唯一 能对得上两侧的判据（ISSUE #2552）。 */
+     * ⚠️ #2532 收紧成 `>=26.12.1` 时这串**没**跟着改 ⇒ 本用例因此变红，而它正是这一格
+     * 唯一能对上两侧的判据（ISSUE #2552）。 */
     for (const boundary of ["26.12.1"]) {
       expect(engines, `engines.node 里没有 ${boundary}`).toContain(boundary);
     }
@@ -276,12 +247,9 @@ describe("工具链自证：engines.node 的区间", () => {
 });
 
 /**
- * Rust 那一格的取证（ISSUE #2549）。
- *
- * 今天这一格失败时只有 `(cargo 不可用)` 五个字，而桌面成品包那一档 02:00 那一跑就是
- * 这么红的 —— 这台机上 cargo 明明装着，差的是**执行账号**（runner 是服务账号，而
- * `CARGO_HOME` / `G:\.cargo\bin` 都在开发者会话那一侧）。取证的用处是把「这个账号
- * 看不见」与「这台机没装」这两种处置完全相反的形态分开来。
+ * Rust 那一格的取证（ISSUE #2549）：今天失败只有 `(cargo 不可用)` 五个字，而桌面成品包
+ * 02:00 那一跑就是这么红的 —— 机上装着 cargo，差的是**执行账号**（runner 是服务账号，
+ * `CARGO_HOME` / `G:\\.cargo\\bin` 在开发者会话那侧）。取证把「这个账号看不见」与「没装」分开。
  */
 describe("工具链自证：Rust 那一格的取证（#2549）", () => {
   /** 把 `path.join` 的盘符形态归一化（Windows 上 join 出 `\`，posix 上出 `/`）。 */
@@ -448,21 +416,8 @@ describe("工具链自证：失败时的取证（#1959 第三轮）", () => {
 describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）", () => {
   /**
    * 把**三条通道的接缝全注入死**的公共夹具（#1959 第六轮）。
-   *
-   * 两个「判到哪一步」的用例此前只注入了 `findExe` —— 而 `installPython` 在一个
-   * `run` 全报成功的世界里会**继续往下走三条通道**，最后那条 embed 通道默认是
-   * **真去 python.org 下载、真解压、真写盘**：
-   *
-   *   · 自托管节点上它跑成了真动作 ⇒ `python-embeded/python.exe` 落进检出，
-   *     于是「两条 scope 都失败 ⇒ `installed === false`」这条断言在下一次运行里
-   *     读到**上一跑留下的目录**，实测红成 `expected true to be false`；
-   *   · 同一次运行里另一条只是慢：下载 + 解压墙钟随网络走，冷节点上一次跨过
-   *     全局 30s，红出来的形态是 `Test timed out in 30000ms` —— 与上一条是
-   *     同一个病（判据的动作泄漏到真网络 / 真盘），只是话术不同。
-   *
-   * 所以接缝按「会不会碰外部世界」列全：`run` / `findExe`（命令与查找）、
-   * `existing`（盘）、`download` / `unzip` / `mkdir` / `cwd`（第三条通道的落点）。
-   * 判据的结论从此只取决于用例自己造的东西。
+   * 只注入 `findExe` 时 `installPython` 仍会走完三条通道，末条 embed **真去 python.org 下载/解压/写盘**：残留 `python-embeded/` 让下一跑读到上一跑的目录（`expected true to be false`），冷节点上还撞 30s 全局超时。
+   * 故接缝按「会不会碰外部世界」列全：`run`/`findExe`、`existing`、`download`/`unzip`/`mkdir`/`cwd`（第三条通道的落点）。
    */
   const noExternalAction = {
     /* SAFETY: 类型断言已复核 */
@@ -615,15 +570,10 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
   });
 
   it("winget 那条路**也**经过注入面：两个接缝都注入后，链接目录里真放着解释器也读不到", () => {
-    /* 这一格是「接缝齐了、但有一处直呼模块实现」的现场：`findExe`（扫全部安装根）
-     * 与 `findExeUnder`（某个 root 下）双层都已可注入，而 `winget` 分支在
-     * 「按 winget 链接目录再找一遍」那一档**直接调**了模块级的 `findExeUnder` ——
-     * 又是**第二个通到真 fs 的口**。实测复现（两个接缝都注入 `() => null`）：
-     * 链接目录下**真放**一个 `python.exe` 时，`installed` 仍然是 `true`，
-     * path 指向那个真文件 —— 判据的结论又变回取决于「跑判据的机器上碰巧有什么」。
-     *
-     * 用真文件而不是 mock `fs`：这一格判的正是「还有没有人去问真 fs」，
-     * mock 掉 fs 等于把判据自己关掉。 */
+    /* 接缝齐了但有一处直呼实现：`winget` 分支在「按链接目录再找一遍」那档**直接调**模块级
+     * `findExeUnder` —— 第二个通真 fs 的口（注入的 `findExe` 管不到它）。实测两个接缝都注入
+     * `() => null`，链接目录里**真放**一个 `python.exe` 仍得 `installed === true`、path 指向真文件。
+     * 用真文件而不 mock `fs`：这一格判的正是「还有没有人去问真 fs」。 */
     const localAppData = mkdtempSync(path.join(tmpdir(), "selfcheck-links-"));
     try {
       const links = path.join(localAppData, "Microsoft", "WinGet", "Links");
@@ -728,18 +678,9 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
 });
 
 /**
- * 「pnpm 不可用」时的取证（ISSUE #1961）。
- *
- * ## 为什么加的是取证，不是又一条候选规则
- *
- * 那一步报 `pnpm 不可用` 之后，**两次猜测**都没修好它：先以为是「谁解析这个名字」
- * （加了 cmd.exe 退路，仍红），再以为是「扩展名候选不全」（`findPnpm` 补了 `.PS1`
- * 与同目录回退，仍红）。而**历史上**同一次构建里 `Install dependencies` 用
- * `pnpm install` 是跑得通的 —— 两条读数放在一起，「缺一条候选规则」解释不通。
- *
- * 缺的是一条**读数**：这一步看到的 `PATH` 是什么、逐条命中在哪些目录上。
- * 人答得出来而这里答不出来，只可能是执行上下文不同（服务账号读机器 PATH、
- * 子进程继承的 PATH 不是同一份）—— 取证把这件事变成可读的事实，而不是再猜一轮。
+ * 「pnpm 不可用」时的取证（ISSUE #1961）。两次猜测（cmd.exe 退路、`.PS1` 候选）都没修好，
+ * 而历史上同一次构建里 `pnpm install` 跑得通 ⇒ 「缺一条候选规则」解释不通。缺的是**读数**：
+ * 这一步看到的 `PATH` 是什么、逐条命中在哪 —— 人答得出而这里答不出，只可能是执行上下文（服务账号读机器 PATH、子进程继承的不是同一份）不同。
  */
 describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () => {
   it("逐条打印 PATH，并点名 pnpm* 在各目录的命中", () => {
@@ -819,14 +760,11 @@ describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () 
     expect(text).toContain("一个候选都没进到探测这一步");
   });
 
-  /* ── ISSUE #2281：失败日志必须能分开「三类同形结论」 ───────────────
+  /* ── ISSUE #2281：失败日志必须能分开「三类同形结论」────────────────
    *
-   * 起因是同一个 P0 单里的两处现场：一处日志写「PATH 各目录里 pnpm* 的命中:
-   * （一个都没命中）」，而那份取证**从没打印过它读到的 PATH 原文**；另一处
-   * 「本机 pnpm 忽然不见了」的结论，在同一台机上用 `where pnpm` / `pnpm -v` /
-   * `pnpm check:toolchain` 三次当场复算都不成立。两者共用一个形状：**读数里没有
-   * 「判据看到的那一串」**，于是「真没装」「键名不是 PATH」「分隔符读错」在日志里
-   * 逐字同形 —— 而这三者的下一动作完全不同（装 / 改键名 / 改切分）。 */
+   * 现场：一处只写「pnpm* 命中（一个都没命中）」而**从没打印读到的 PATH 原文**；另一处
+   * 「pnpm 忽然不见了」在同机上用 `where pnpm` / `pnpm -v` 当场复算三次都不成立。
+   * 共性：读数里没有「判据看到的那一串」，于是「真没装」「键名不是 PATH」「分隔符读错」逐字同形 —— 三者的下一动作完全不同（装 / 改键名 / 改切分）。 */
   it("取证里必须打 PATH **原文** —— 只打切出来的条目分不开那三类成因", () => {
     const text = pnpmForensics({
       platform: "win32",
@@ -881,23 +819,9 @@ describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () 
 });
 
 /**
- * 「浏览器安装」那一步的命令行（ISSUE #1961，自托管节点首次真跑到 E2E）。
- *
- * ## 这一格红过一次，而且红得最坏：**绿着不干活**
- *
- * `findPnpm()` 交出来的 `args` 是「**探一趟** pnpm」的完整形态 —— 宿主形态时它是
- * `[…] -File pnpm.ps1 -v`，直接命中时是 `["-v"]`。装浏览器那一步照着 `args` 拼，
- * 于是真跑的是：
- *
- *     pnpm -v exec playwright install chromium chromium-headless-shell
- *
- * 实测：那句只**打印版本号并退 0**（`12.11.2`），浏览器一个都没装。后果是这条 stage
- * 报绿、E2E 照旧报「浏览器二进制不在」—— 看日志的人会以为浏览器装好了，
- * 比让它直接红难查得多。
- *
- * 所以 `findPnpm()` 另外交一份 `prefixArgs`（**去掉探针参数**的宿主前缀），
- * 真命令一律用它拼。下面两条钉住这件事：一条判命令行里没有 `-v`，一条判宿主前缀
- * 一件不少（少了就变成「拿 .ps1 当可执行文件起」）。
+ * 「浏览器安装」那一步的命令行（ISSUE #1961，自托管节点首次真跑到 E2E）。`findPnpm()` 交的 `args`
+ * 是「**探一趟**」形态（`-File pnpm.ps1 -v`），照它拼真跑成 `pnpm -v exec playwright install …`：只打印版本、退 0，
+ * 浏览器一个没装 ⇒ 这一步报绿而 E2E 照旧说二进制不在（比直接红更难查）。故另交 `prefixArgs`（去掉探针、含完整宿主前缀），真命令一律用它。
  */
 describe("工具链自证：浏览器安装的命令行（ISSUE #1961）", () => {
   const hostPrefix = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "/bin/pnpm.PS1"];
@@ -970,12 +894,10 @@ describe("工具链自证：浏览器安装的命令行（ISSUE #1961）", () =>
   });
 
   it("装的是这一档真正要的那一件（多下的那件 205 MB 正是超时的那个）", () => {
-    /* 判的是「装了哪几件」，而这一串的**两个方向**都必须钉住：
-     *   · 少了 `chromium-headless-shell` ⇒ headless 档起不来（报 `Executable doesn't exist`）；
-     *   · 多了 `chromium` ⇒ 下的是 `chrome-win64.zip` **205 MB**，而 headless shell 是
-     *     120 MB —— 实测这台节点把前者拉到 120s 超时收场（`cnb-g9d-1k515kvrq`），
-     *     于是「多下一件以防万一」变成了这一步红、`E2E 关键流程` 一步都跑不到的唯一原因。
-     * 本仓 `playwright.config.ts` 只有一个 headless project，所以只需要后者。 */
+    /* 判的是「装了哪几件」，两个方向都要钉住：少了 `chromium-headless-shell` ⇒ headless 档报
+     * `Executable doesn't exist`；多了 `chromium` ⇒ 多下 `chrome-win64.zip` 205 MB（headless shell
+     * 才 120 MB），实测这台节点因此拉到 120s 超时（`cnb-g9d-1k515kvrq`），这一步红、
+     * `E2E 关键流程` 一步都跑不到。本仓 `playwright.config.ts` 只有一个 headless project ⇒ 只需后者。 */
     let args: Array<string> = [];
     runPlaywrightInstall({
       find: () => ({
@@ -1018,20 +940,9 @@ describe("工具链自证：`.cnb.yml` 真的在跑它", () => {
 });
 
 /**
- * 「注入面只堵了一半」的结构判据（ISSUE #1961）。
- *
- * ## 它挡的是什么
- *
- * `installPython` 是**三条按序**的通道，而「注入面」此前是按「用例传了什么」攒出来的
- * —— 攒漏一个，那一半就直取模块实现去读真 fs / 真网络。实测：只注入 `run` 时，
- * `viaScoop` 自己起 `spawnSync("scoop", …)` 并用**模块内**的 `findExeUnder` 读真 fs
- * （注入的 `findExe` 管不到它）。这类红的形态与「用例写慢了」逐字同形，所以缺的不是
- * 纪律。
- *
- * ## 为什么按**源码结构**判，而不是按用例数它传没传
- *
- * 后者要维护一张会过期的名单（「还有哪个接缝没堵」这件事本身没人看着），前者跟着
- * 实现走：只要通道内部出现了直取模块级实现，它就红。
+ * 「注入面只堵了一半」的结构判据（ISSUE #1961）。`installPython` 是**三条按序**的通道，而注入面
+ * 此前按「用例传了什么」攒 —— 漏一个那半就直取模块实现：只注入 `run` 时 `viaScoop` 自己起
+ * `spawnSync("scoop", …)` 并用模块内 `findExeUnder` 读真 fs。按**源码结构**判（按用例数要维护一张会过期的名单），只要通道内出现直取模块级实现就红。
  */
 describe("工具链自证：安装通道的注入面按结构判（ISSUE #1961）", () => {
   const script = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-python.mjs"), "utf8");
@@ -1092,44 +1003,14 @@ describe("工具链自证：安装通道的注入面按结构判（ISSUE #1961�
 });
 
 /**
- * 「工具链自证」的 pnpm 那一格（ISSUE #1961）。
- *
- * ## 现场
- *
- * 自托管 Windows 节点上第一步就红：
- *
- * ```
- * == OS ==    win32 x64 v24.20.0
- * == git ==   git version 2.53.0.windows.2
- * == node ==  v24.20.0
- * == pnpm ==  (pnpm 不可用)          ← 而同一台机器上 `pnpm install` 跑得好好的
- * == python == python : python Python 3.12.10
- * ```
- *
- * `git` / `node` / `python` 都答得出来，只有 `pnpm` 说没有 —— 于是整条流水线在
- * 第 1 秒停在一个**不成立的结论**上（后面 30 个 stage 全部 skipped）。
- *
- * ## 根因：裸起一个名字在 Windows 上问的不是同一个问题
- *
- * `run("pnpm", ["-v"])` 是把裸名字交给 CreateProcess —— 而 corepack 摆在盘上的
- * 形态里，Node **一个都起不来**：无扩展名 shim 是 `#!/usr/bin/env node`（libuv
- * 不解析 shebang）、`.cmd` 只有 cmd.exe 解释（实测 `EINVAL`）、唯一能用的 `.ps1`
- * 要 PowerShell 宿主。三个形态里能跑的那一个，恰好是最「绕」的那一个。
- *
- * 对照：`git` / `node` / `python` 都是 `.exe`，裸名字直接命中 —— 这也解释了
- * 为什么只有 pnpm 这一格红（同一个 `run()`，不同的可得形态）。
- *
- * 所以判据是「**按 PATH × 扩展名解析**，取第一个真的能起的形态」，与
- * `whichCommand()` 同一套；下判的是「`.ps1` 这一形态能不能被它找到并给出
- * 可 spawn 的命令」。
+ * 「工具链自证」的 pnpm 那一格（ISSUE #1961）。自托管 Windows 节点首跑就红在 `pnpm 不可用`，而同一台机上 `pnpm install` 跑得好好的 ⇒ 整条流水线停在不成立的结论上（后 30 个 stage 全 skipped）。
+ * 根因是裸名字交给 CreateProcess：corepack 的三种落盘形态 Node 一个都起不来 —— 无扩展名 shim 是 `#!/usr/bin/env node`（libuv 不解析 shebang）、`.cmd` 只有 cmd.exe 认（`EINVAL`）、只有 `.ps1` 要 PowerShell 宿主。
+ * 故判「按 PATH × 扩展名解析、取第一个真能起的形态」（与 `whichCommand()` 同一套）；下判 `.ps1` 能被找到并给出可 spawn 的命令。
  */
 /**
- * 工具链自证那一格与主判据的**形态选择必须一致**（ISSUE #2562）。
- *
- * `findPnpm()` 刻意不 import 仓库内模块（理由见文件头：它要能在「Node 模块链还没被
- * 证明可用」的机器上给出可读输出），所以「包真身 JS 入口优先」这一条在两边各有一份
- * 实现。两份漂移的形态是**静默的**：一条链走 `process.execPath` + 入口，另一条继续走
- * PowerShell 宿主 —— 两边都绿，只是其中一边每跑一条命令都付一次宿主冷启动。
+ * 工具链自证那一格与主判据的**形态选择必须一致**（ISSUE #2562）。`findPnpm()` 刻意不 import 仓库内
+ * 模块（理由见文件头：要能在「Node 模块链还没被证明可用」的机器上给出可读输出），所以「包真身 JS
+ * 入口优先」两边各有一份实现；漂移是**静默的** —— 一边走 `process.execPath` + 入口、另一边继续起 PowerShell 宿主，两边都绿，只是后者每条命令多付一次宿主冷启动。
  */
 describe("工具链自证：pnpm 优先跑包真身的 JS 入口（ISSUE #2562）", () => {
   /** 造一个「只有垫片 + 包真身」的落点（Windows 现场的形状）。 */
@@ -1293,17 +1174,10 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
   });
 
   it("探 `.ps1` 时**把 `-v` 一并交给垫片**（少了它，唯一能用的形态会被判成起不来）", () => {
-    /* ── 这一格是「修完候选表、红的形状原地复现」的现场 ────────────────────────
-     *
-     * `findPnpm()` 把 `.ps1` 找出来之后，`usablePnpm` 会**真起一次**它 ——
-     * 而第一次写这段时只把宿主前缀（`-NoProfile … -File <shim>`）交了过去，
-     * **忘了把探针的 `-v` 接在后面**。于是垫片收到的是**空参数**：
-     * corepack 的 `pnpm.ps1` 裸跑会打 usage 并**退非零**（实测无参数 `pnpm` 退
-     * 非零、`pnpm -v` 退 0），而 `runProbe` 正是以退出码判「起没起来」——
-     * 唯一能用的那个形态被否掉，最后照旧报「pnpm 不可用」。
-     *
-     * 单测当时全绿，因为注入的 `probeRun` 一律返回成功 —— **探针参数对不上**这件事
-     * 只有真机看得见。所以这一条判的就是那串参数本身：`.ps1` 那一支必须带着 `-v`。 */
+    /* `findPnpm()` 找出 `.ps1` 后 `usablePnpm` 会**真起一次**它；第一次写时只交了宿主前缀、
+     * **忘了接 `-v`** ⇒ 垫片收到空参数，corepack 的 `pnpm.ps1` 裸跑打 usage 并**退非零**
+     * （实测无参数退非零、`pnpm -v` 退 0），而 `runProbe` 按退出码判 ⇒ 唯一能用的形态被否掉。
+     * 注入的 `probeRun` 一律成功，故探针参数对不上只有真机看得见 —— 这一条判的就是那串参数。 */
     const dir = "/bin";
     const ps1 = path.join(dir, "pnpm.PS1");
     const hostExe = path.join("/host", "pwsh.EXE");
@@ -1431,16 +1305,9 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
 });
 
 /**
- * 「装完必须复验」那一层（ISSUE #1961）。
- *
- * `playwright install` 是一条**下载**命令，而下载有三种「退 0 但东西没落地」的形态：
- * 传输被截断、落点不可写、CDN 回了一份错误页（HTTP 200 的 HTML，Playwright 不解析它
- * ——既没报错也没装上）。自托管节点是台长期存在的机器，盘满与代理拦都不是稀奇事。
- *
- * 所以装完有一条**活判据**（按落点找 headless shell），与 `installAndReverify()` 的
- * 「装完回到 `findPython()` 再探一遍」逐字同一条口径：**装与判是两件事**。
- * 这一组把两个方向都真跑一次，并钉住「复验那一行永远到得了」（`return 0` 提前返回
- * 是这类守卫最常见的失效形态）。
+ * 「装完必须复验」那一层（ISSUE #1961）。`playwright install` 是**下载**命令，有三种「退 0 但东西
+ * 没落地」：传输截断、落点不可写、CDN 回错误页（HTTP 200 的 HTML，Playwright 不解析）。
+ * 所以装完有一条**活判据**（按落点找 headless shell），与「装完回到 `findPython()` 再探」同一口径：装与判是两件事。这一组两个方向都真跑，并钉「复验那一行永远到得了」（`return 0` 提前返回是这类守卫最常见的失效形态）。
  */
 describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
   it("落点里有 headless shell ⇒ 判过；没有 / 读不到 ⇒ 判不过", async () => {
@@ -1499,13 +1366,10 @@ describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
 
   it("落点根按平台推（不写死盘符 / 认环境变量）", async () => {
     const { playwrightBrowsersRoot } = await import("../scripts/ci-toolchain-selfcheck.mjs");
-    /* ⚠️ 期望值一律用**目标平台**的 join 拼，不用宿主的 `path.join`（`node:path`
-     * 是宿主那一份）。判据是可注入的 `platform`，所以这组会**在一种平台上判另一种
-     * 平台** —— 拿宿主 `path.join` 去拼会跟着跑判据的那台机器变：平台侧实测报过
-     *
-     * 断言原文是「`expected` 一个反斜杠路径、`to be` 一个正斜杠路径」那句。
-     * （Windows 节点上拼 `darwin` 得到的全反斜杠），而那与被判的实现无关。
-     * 这与 `executable-resolve.ts` 那句「大小写不敏感只按目标平台」是同一条口径。 */
+    /* ⚠️ 期望值一律用**目标平台**的 join 拼（`node:path` 是**宿主**那一份）。判据可注入 `platform`，
+     * 这组会**在一种平台上判另一种平台** —— 拿宿主 `path.join` 会随跑判据的机器变（平台侧实测报
+     * 「`expected` 反斜杠路径、`to be` 正斜杠路径」）。与 `executable-resolve.ts` 那句「大小写不敏感
+     * 只按目标平台」同一口径。 */
     /* 包成箭头函数：直接传 `path.win32.join` 会被 `unbound-method` 判为「方法与
      * 自己的对象分了家」（`path.join` 本身不读 `this`，但规则看不出来）。 */
     const win = (...parts: Array<string>) => path.win32.join(...parts);
@@ -1543,12 +1407,9 @@ describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
       src.indexOf("export function browserExecutableExists("),
     );
     const installAt = body.indexOf("runPlaywrightInstall({");
-    /* ⚠️ **从 `installAt` 之后找**，别从函数头找：函数里现在有**两处**
-     * `browserExecutableExists` —— 一处是装**之前**「已装就跳过下载」那一支
-     * （它排在 `installAt` **前面**），一处才是装完的复验。从函数头 `indexOf`
-     * 会命中前面那个，于是这条判据答的是「跳过那一支在装之前」，
-     * 与它要守的「复验在装之后」是两件事 —— 而它**照样会绿**。
-     * 这类「判据指到了同形的邻居上」正是本仓反复记的那一格（判据在，但判错了对象）。 */
+    /* ⚠️ **从 `installAt` 之后找**：函数里有两处 `browserExecutableExists` —— 一处是装**之前**
+     * 「已装就跳过」（排在 `installAt` 前），一处才是复验。从函数头 `indexOf` 会命中前者，
+     * 于是这条判据答的是「跳过那一支在装之前」而**照样会绿** —— 判据指到了同形的邻居上。 */
     const verifyAt = body.indexOf("browserExecutableExists({ env })", installAt);
     expect(installAt).toBeGreaterThan(0);
     expect(
@@ -1563,15 +1424,9 @@ describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
 });
 
 /**
- * 「退出码真的转出去了」（ISSUE #1961，本文件自己的第二个坑）。
- *
- * 守卫此前是裸 `main();`，而 `main()` 的返回值就是退出码 —— 于是
- * `--python-only` / `--playwright-only` 里那些 `return 1` **全部被吞掉**，进程恒退 0。
- * 实测：把 `浏览器安装` 的复验指到一个空落点，它明明打了「报了成功，但那一件二进制
- * 不在盘上」并 `return 1`，**退出码仍是 0** —— 那一段话是给人看的，判据读的是退出码。
- *
- * 这与本文件反复在修的形态**是同一个**：`Python 可用性` 与 `浏览器安装` 这两步
- * 存在的全部意义就是「缺件时红」，而它们**从来红不了**。
+ * 「退出码真的转出去了」（ISSUE #1961，本文件自己的第二个坑）。守卫此前是裸 `main();`，而它的
+ * 返回值就是退出码 ⇒ `--python-only` / `--playwright-only` 里的 `return 1` **全被吞掉**，进程恒退 0。
+ * 实测：复验指到空落点时它打了「报了成功，但那一件二进制不在盘上」并 `return 1`，退出码仍是 0 —— 那段话是给人看的，判据读的是退出码；这两步存在的意义就是「缺件时红」，而它们从来红不了。
  */
 describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
   it("守卫把 `main()` 的返回值交给 `process.exit()`", () => {
@@ -1586,14 +1441,9 @@ describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
   });
 
   it("真起一次进程：`--playwright-only` 判不过时**退出码是 1**", () => {
-    /* 真起子进程跑一次（不 import）：退出码只在**进程**那一层看得见，
-     * 而这正是本组要判的东西。用「落点指到一个空目录」造出「install 报成功、
-     * 二进制不在盘上」那一态 —— 判据是复验，不动真落点。
-     *
-     * 判的是**两条**：装那一步假成功、复验指到一个空落点，然后看进程的退出码。
-     * 补丁只打在 `ci-toolchain-browser.mjs` 上（那两句都在那一份里）；而
-     * `ci-toolchain-selfcheck.mjs` 的守卫（`process.exit(main())`）走**真实现**
-     * —— 这正是本组要验的那一段。 */
+    /* 真起子进程跑一次（不 import）：退出码只在**进程**那一层看得见。用「落点指空目录」造出
+     * 「install 报成功、二进制不在盘上」那一态。补丁只打在 `ci-toolchain-browser.mjs`（两句都在
+     * 那一份里），`ci-toolchain-selfcheck.mjs` 的守卫（`process.exit(main())`）走**真实现**。 */
     const empty = mkdtempSync(path.join(tmpdir(), "pw-empty-"));
     const browserProbe = path.join(ROOT, "scripts", "ci-toolchain-browser.mjs");
     const probe = path.join(ROOT, "scripts", ".tmp-exitcode-probe.mjs");
@@ -1622,12 +1472,11 @@ describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
             "  const already = browserExecutableExists({ env });",
             "  const already = { ok: false, out: '(probe: 不跳过)' };",
           )
-          // ①″ **自取成功那一支的提前返回**同病、更隐蔽：它同样按**真落点**判。
-          //     本仓的 Linux 检出与自托管节点都可能**预装**了那一件，于是自取一「成」
-          //     它就当场返回 0 —— 补丁只打在 `already` 上时，这一条的现场被它顶掉
-          //     （实测：`STATUS: 0`，而输出停在「自取成功：已就位」）。
-          //     锚点取**条件那半句**：`curly` 给单语句体补 `{}` 之后这里是两行，
-          //     钉整句（含 ` return 0;`）会静默 no-op —— 那正是下面对账要抓的形态。
+          // ①″ **自取成功那一支的提前返回**同病、更隐蔽：同样按**真落点**判，而本仓的 Linux 检出
+          //     与自托管节点可能**预装**那一件 ⇒ 自取一「成」就当场返回 0，把「补丁只打在 `already`
+          //     上」的现场顶掉（实测 `STATUS: 0`，输出停在「自取成功：已就位」）。
+          //     锚点取**条件那半句**：`curly` 补 `{}` 后这里是两行，钉整句（含 ` return 0;`）会静默 no-op
+          //     —— 那正是下面对账要抓的形态。
           .replace(
             "if (seeded.ok && browserExecutableExists({ env }).ok) {",
             "if (false && seeded.ok && browserExecutableExists({ env }).ok) {",
@@ -1691,22 +1540,9 @@ describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
 });
 
 /**
- * 装浏览器失败时给的是**读数**（ISSUE #1961，同一格上的第五个面）。
- *
- * 上面那组把「退码转不转得出去」收干净之后，`浏览器安装` 这一格就**会红**了 ——
- * 而红的时候日志里得能读出**为什么**。此前那句话只有「常见成因：网络到 CDN 不通、
- * 或磁盘满」，而那两种成因的处置完全相反：
- *
- *   · 「不通」要换镜像（`PLAYWRIGHT_DOWNLOAD_HOST`）；
- *   · 「没量完」要放宽多久算超时（`PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT`）。
- *
- * 现场那一跑（`cnb-rkr-1k510rsgg`）正是后一种 —— 180 MiB 的包撞上 Playwright 默认
- * 的 30s **套接字**超时（`NET_DEFAULT_TIMEOUT`）：
- *
- *     （原文）Error: Request to https://cdn.playwright.dev/…/win64/chrome-win64.zip timed out after 30000ms
- *
- * 判据两条：真撞上「下载失败」时逐条点出试过的地址 + 两个出口；别的失败形态
- * （pnpm 不可用、盘满）不许被塞这两条建议 —— 凑上去只会让人往错的方向看。
+ * 装浏览器失败时给的是**读数**（ISSUE #1961，同一格第五个面）。此前只有「网络到 CDN 不通、或磁盘满」，而两种处置相反：
+ * 不通要换镜像（`PLAYWRIGHT_DOWNLOAD_HOST`），没量完要放宽超时（`PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT`）。现场 `cnb-rkr-1k510rsgg` 是后者 —— 180 MiB 撞上 Playwright 默认 30s 套接字超时（`NET_DEFAULT_TIMEOUT`，原文 `timed out after 30000ms`）。
+ * 判两条：真撞上下载失败时逐条点出试过的地址 + 两个出口；别的失败形态（pnpm 不可用、盘满）不许被塞这两条建议。
  */
 describe("工具链自证：下载失败的读数是读数，不是又一句「装不上」（ISSUE #1961）", () => {
   it("下载超时的现场：逐条地址 + 两个环境变量出口", () => {
@@ -1763,13 +1599,9 @@ describe("工具链自证：下载失败的读数是读数，不是又一句「�
   });
 
   /**
-   * **读数不许推荐已经做过的动作**（ISSUE #1966 的续集，现场 `cnb-ald-1k51g8dt9`）。
-   *
-   * 那一次：`.cnb.yml` **已经**配了 `PLAYWRIGHT_DOWNLOAD_HOST`、**已经**把套接字超时
-   * 放宽到 120000，而失败的那一趟用的**就是**那个根、超时**就是** 120000ms。旧话术
-   * 却照旧说「30s 是默认套接字超时」并建议「放宽到 120000」—— 两句话各自都指回一个
-   * **做过的**动作。照它做一遍，形状逐字不变地再红一次（本仓对「读数必须指向下一动作」
-   * 已有明账：§13.5.3.5.1）。
+   * **读数不许推荐已经做过的动作**（ISSUE #1966 续集，现场 `cnb-ald-1k51g8dt9`）。那一次 `.cnb.yml`
+   * 已配 `PLAYWRIGHT_DOWNLOAD_HOST`、超时已放宽到 120000，而失败那趟用的**就是**那个根与 120000ms；
+   * 旧话术照旧说「30s 是默认」并建议「放宽到 120000」，两句都指回做过的动作 ⇒ 照做再红一次（§13.5.3.5.1）。
    */
   it("配着的第三方根失败了 ⇒ 那两条常用出口点名为「已经做过」，并给出剩下的出路", () => {
     const out = [
@@ -1846,23 +1678,13 @@ describe("工具链自证：下载失败的读数是读数，不是又一句「�
 });
 
 /**
- * 「已装就不下载」那一支（ISSUE #1961 第三次红）。
- *
- * 第三次红的性质与前两次不同：**它不是配置写错，也不是判据缺失** —— 1732s 的门禁
- * 全绿，最后红在这一步的下载上，而那时机器上**什么都不缺**（浏览器早就在盘上，
- * 只是这一步无条件又去下了一遍）。
- *
- * 所以判据要钉两层：装过的**不装**（跳过而不是重下），且跳过这一支判的仍然是
- * 「东西落地了」那一条 —— 它不许把「只装了一半」放过去。
+ * 「已装就不下载」那一支（ISSUE #1961 第三次红）。这一跑 1732s 门禁全绿，最后红在这步下载，
+ * 而机器上**什么都不缺**（浏览器早在盘上，只是这一步无条件又下了一遍）。判两层：装过的**不装**
+ * （跳过而非重下），且跳过这一支仍判「东西落地了」—— 不许把「只装了一半」放过去。
  */
 /**
- * 静音的打印三件套 —— 只判行为、不判话术的那些用例用。
- *
- * 收成一个函数而不是各处写 `() => {}`：空箭头会被 `no-empty-function` 判红，
- * 而这几条用例关心的是**起没起进程**，不是打了什么。
- *
- * @returns {{log: (line: string) => void, logError: (line: string) => void,
- *            section: (title: string) => void}}
+ * 静音的打印三件套 —— 只判行为、不判话术的那些用例用。收成函数而不是各处写 `() => {}`：
+ * 空箭头会被 `no-empty-function` 判红，而这几条关心的是**起没起进程**，不是打了什么。
  */
 function silentPorts() {
   /* 用 `String` 当实现：它是**真调用**（不是空函数体），所以
@@ -1929,11 +1751,9 @@ describe("工具链自证：装过的就不装（ISSUE #1961）", () => {
           args: ["-v"],
           out: "12.4.1",
         }),
-        /* ⚠️ **自取那条通道必须一起注入成「不装」**：它的缺省实现会去 CDN 真取 120 MiB
-         * （分片那条路在这台机器上 23 秒就能取完、把 headless shell 装进这个临时落点），
-         * 于是这条用例量到的是「自取成功 ⇒ 跳过老路」，与它要判的
-         * 「只装了完整 chromium 时**不许跳过**」是两件事 —— 而它照样会红/绿。
-         * 这类「判据指到了同形的邻居上」本仓已记过好几次（见上面「复验在装之后」那条）。
+        /* ⚠️ **自取那条通道必须一起注入成「不装」**：缺省实现会去 CDN 真取 120 MiB（分片那条路
+         * 在这台机器上 23 秒取完、装进这个临时落点），于是这条量到的是「自取成功 ⇒ 跳过老路」，
+         * 与它要判的「只装了完整 chromium 时**不许跳过**」是两件事 —— 而它照样会红/绿。
          * 判据里也不许出网：`pnpm test` 在离线容器里要绿。 */
         seed: () => ({
           ok: false,
@@ -1958,12 +1778,9 @@ describe("工具链自证：装过的就不装（ISSUE #1961）", () => {
 });
 
 /**
- * 「下载根从哪来」那一档（ISSUE #1961）。
- *
- * `PLAYWRIGHT_DOWNLOAD_HOST` 设了就**只用它**：那说明人已经知道该走哪儿，不必再陪
- * Playwright 挨个试三档不通的内置镜像。没设时回一条空宿主 = 走它的默认行为，
- * **不替它挑一个第三方镜像写进代码** —— 那等于把「哪面墙怎么过」写死在仓里，
- * 换台机器就静默失效。
+ * 「下载根从哪来」那一档（ISSUE #1961）。`PLAYWRIGHT_DOWNLOAD_HOST` 设了就**只用它**（人已知道该
+ * 走哪儿，不必再陪 Playwright 挨试三档不通的内置镜像）；没设则回空宿主 = 走默认行为，**不替它挑**
+ * 第三方镜像 —— 那等于把「哪面墙怎么过」写死在仓里，换台机器就静默失效。
  */
 describe("工具链自证：下载根由外面给，不由本仓猜（ISSUE #1961）", () => {
   it("设了就只用它；没设就回退到 Playwright 的默认（不发明第二个镜像）", () => {
@@ -1974,24 +1791,9 @@ describe("工具链自证：下载根由外面给，不由本仓猜（ISSUE #196
   });
 
   /**
-   * **「只用它」是一条判据，不是一句注释**（ISSUE #1961，这一格的第四次红）。
-   *
-   * 现场（`cnb-g9d-1k515kvrq`）：日志里逐字两条「正在从同一个根下载 chromium 的
-   * win64 zip」（就是外面给的那个 npmmirror 根），然后 `timed out after 120000ms`
-   * —— **同一个根被拆成两条**。而外面给的那个根替不掉的正是它自己那一族，
-   * 所以「再接着试内置族」既不是多一条出路，还把 `playwrightInstallHints()`
-   * 那两档读数搅坏（实测那一档再也不成立，下一动作被指反）。
-   *
-   * 上面那条用例只钉两个函数的返回值，**钉不住 `runPlaywrightInstall()` 怎么用它们**
-   * —— 把 `playwrightHostsToTry(env)` 换回循环里，两个函数照旧各自正确、行为却回去了。
-   * 这一条改判**真响了几次**：设了根、且那个根量不到时，就恰好一次，且那次就是它。
-   *
-   * ## 这一组有**两个**分支，两条都要判（`pickPlaywrightRoots()` 那一层）
-   *
-   * 本笔给这一步补了「先量一次再挑根」之后，上面那句话的**前提**变细了：
-   * 只试一个根的形态从「配了根」变成「配了根**且它量得到**」。两条分支的处置相反，
-   * 所以各判一条 —— 少了下面那条，把「量得到也去试候选」写回来不会红；
-   * 少了这条，把「量不到就把候选铺开」写回去也不会红。
+   * **「只用它」是一条判据，不是一句注释**（ISSUE #1961 第四次红）。现场 `cnb-g9d-1k515kvrq` 两条「正在从同一个根下载」后 `timed out after 120000ms` —— 同一个根被拆成两条。
+   * 外面给的根替不掉它自己那一族，再试内置族不是多一条出路，还把 `playwrightInstallHints()` 两档读数搅坏；上面那条用例只钉函数返回值，钉不住 `runPlaywrightInstall()` 怎么用它们（换回循环里行为就回去）。
+   * 故这一条改判**真响了几次**：设了根且量不到时恰好一次且就是它；补「先量一次再挑根」后前提变细 —— 只试一个根从「配了根」变成「配了根**且**量得到」，两分支处置相反、各判一条（`pickPlaywrightRoots()`）。
    */
   it("配着的根量得到 ⇒ 仍然只起一次、且用的就是它（别去试那些不通的）", () => {
     /** @type {Array<string | undefined>} */
@@ -2026,21 +1828,9 @@ describe("工具链自证：下载根由外面给，不由本仓猜（ISSUE #196
   });
 
   /**
-   * 另一半：**配着的那个根量不到时，候选表接过去**（ISSUE #1959 第六跑，本格的
-   * 第六次红）。
-   *
-   * 现场（`cnb-t3f-1k51ho0k2`）逐字是这两句，中间隔了四十秒：
-   *
-   *     环境前提 ✓（它量到 cdn.npmmirror.com → HTTP 200、cdn.playwright.dev → HTTP 307）
-   *     浏览器安装 ✗ timed out after 120000ms（同一个根、同一台机器、同一分钟）
-   *
-   * 也就是说：**「哪个根到得了」这条读数早就有了，而它与「装」那一步之间没有任何
-   * 执行者** —— 探测的结论只落在一行会随日志滚过去的读数里，装照旧去试配着的那个根。
-   * 于是同一句 `timed out after 120000ms` 连着红了三次（`cnb-gt1-1k513ill4` /
-   * `cnb-g9d-1k515kvrq` / `cnb-t3f-1k51ho0k2`）。
-   *
-   * 这与「给上了就只用它」并不冲突：那条反对的是**盲目重试同族**，而这里试的根
-   * 是**量出来的**（先 HEAD 一次，2xx 才进候选）。
+   * 另一半：**配着的那个根量不到时，候选表接过去**（ISSUE #1959 第六跑，本格第六次红）。现场 `cnb-t3f-1k51ho0k2` 的 `环境前提 ✓`（`cdn.npmmirror.com` 200 / `cdn.playwright.dev` 307），四十秒后 `浏览器安装 ✗ timed out after 120000ms` —— 同一根、同一机、同一分钟。
+   * 「哪个根到得了」早有读数，却与「装」之间没有执行者（结论只落在一行会滚走的读数里），同一句超时连着红三次（`cnb-gt1-1k513ill4` / `cnb-g9d-1k515kvrq` / `cnb-t3f-1k51ho0k2`）。
+   * 这与「给上了就只用它」不冲突：那条反对**盲目重试同族**，这里试的根是**量出来的**（先 HEAD 一次，2xx 才进候选）。
    */
   it("配着的根量不到 ⇒ 量得到的那个接过去（这一步从「配一次」变成「量一次」）", () => {
     /** @type {Array<string | undefined>} */
@@ -2127,16 +1917,9 @@ describe("工具链自证：下载根由外面给，不由本仓猜（ISSUE #196
 });
 
 /**
- * 失败后**当场量一次**「这台机器出得去哪些下载域」（ISSUE #1961 第四跑）。
- *
- * 这一条治的是**本格最贵的那次教训**：镜像那一行是**在别处**量出来能用的
- * （`cdn.npmmirror.com` 回 200、15s 收到 99 MiB），而它在平台节点上照旧
- * `timed out after 120000ms` —— 于是「换个镜像」这个动作**看起来做了、实际没解决**，
- * 下一次红的形态与前一次逐字相同、只换了个域名。
- *
- * 所以缺的不是「再猜一个镜像」，而是一条**关于这台机器的事实**。判据三条：
- * 每个候选都出一条结论（不吞）、三条结论分得开（超时 / 解析不了）、
- * 且它**只打印不阻断**（真正的判据仍是「装完能起才放行」那一条）。
+ * 失败后**当场量一次**「这台机器出得去哪些下载域」（ISSUE #1961 第四跑）。镜像那行是在别处量出来能用的（`cdn.npmmirror.com` 回 200、15s 收到 99 MiB），
+ * 而平台节点上照旧 `timed out after 120000ms` ⇒「换个镜像」看起来做了、实际没解决。缺的不是再猜一个镜像，而是**一条关于这台机器的事实**。
+ * 判据三条：每个候选都出一条结论（不吞）、三条结论分得开（超时 / 解析不了）、且**只打印不阻断**（真判据仍是「装完能起才放行」）。
  */
 describe("工具链自证：下载失败时当场量「到得了哪」（ISSUE #1961）", () => {
   it("逐个候选都出一条结论，且「超时」与「解析不了」分得开", () => {
@@ -2210,50 +1993,14 @@ describe("工具链自证：下载失败时当场量「到得了哪」（ISSUE #
 });
 
 /**
- * 「这个下载根**到不到得了**」那一层：判据必须**真把字节取回来**（ISSUE #1966 的续集）。
- *
- * ## 立案现场（`cnb-ald-1k51g8dt9`）
- *
- * 这一步此前是 `httpHeadStatus()` —— 一个 HEAD。而 HEAD 答的是「这个 URL
- * **允不允许**被取」，不是「**取得下来吗**」。两者的分岔在那一次落到反面：
- *
- *     （HEAD 读数）…/binaries/playwright/builds/cft/…/chrome-headless-shell-win64.zip → HTTP 200
- *     （真实下载）Downloading … from 同一个 URL …… 然后 timed out after 120000ms（**0 字节**）
- *
- * 于是 `环境前提` 报绿、把 30 分钟后的 `浏览器安装` 失败**原样放行** —— 而那一步
- * 存在的全部理由就是「别等几十分钟才发现」。
- *
- * ## 为什么在**真 HTTP 服务**上判（不用注入）
- *
- * 这一层唯一的产出就是「对真协议栈发什么、怎么读回结论」，注入掉 `probe` 就把要判的
- * 东西整个换掉了（本仓对「探针必须真起一次」有先例：`--playwright-only` 的退出码
- * 那一组）。四种现场都造出来：
- *
- *   · 206 + 一段 body       ⇒ 判通，且**只取一小段**就收手；
- *   · 302 → 真资源          ⇒ 跟随（Playwright 自己也跟随，裸看会把 302 读成「没量到」）；
- *   · 响应头给了、body 不给 ⇒ 现场那一档：「连上了但 0 字节」，必须与「连不上」分开；
- *   · 404                   ⇒ 不通，且**不许**因为「拿到了响应头」就当通。
- *
- * ⚠️ **服务必须起在子进程里**，不能起在跑用例的这个进程里：探测本身是
- * `spawnSync(node, ["-e", …])` 起的**另一个进程**，而在本仓的沙箱 / CI 容器里
- * 子进程够不到父进程监听的 localhost 端口（实测：同一进程里 `fetch` 通、`spawnSync`
- * 起来的那个进程 `ECONNRESET`）。两个**兄弟**子进程之间是通的 —— 所以服务由
- * `spawn` 起、探测由 `spawnSync` 起，判的仍是真协议栈。
+ * 「这个下载根**到不到得了**」：判据必须**真把字节取回来**（ISSUE #1966 续集）。立案现场 `cnb-ald-1k51g8dt9` —— HEAD 答的是「允不允许被取」。
+ * HEAD 给 200，真实下载同一个 URL 却 `timed out after 120000ms`（**0 字节**），于是 `环境前提` 报绿、30 分钟后的失败原样放行。故在**真 HTTP 服务**上判（注入 `probe` 等于换掉要判的东西）：四种现场都造（206 / 302 / 有头无 body / 404），且 206 只取一小段、302 跟随、有头无 body 与连不上分开、404 有响应头也不算通。
+ * ⚠️ 服务须起在**子进程**里：探测是 `spawnSync` 起的另一个 node 进程，容器里子进程够不到父进程监听的 localhost（实测同进程 `fetch` 通、`spawnSync` 起 `ECONNRESET`），兄弟子进程才通 ⇒ 服务用 `spawn` 起、探测用 `spawnSync` 起。
  */
 /**
- * **等一条来自子进程 stdout 的读数，并给它一个失败上限** —— 这一组夹具共用的一处。
- *
- * ## 为什么它是一条 `sleep-ok` 声明而不是「等条件收敛」
- *
- * `expect.poll` 那套等的是「**同一进程里**某个值变成真」；这里等的东西根本不在本进程
- * 里（父亲够不到子进程的 stdout，只能收它推进来的那一行）。所以真时间在这里不是
- * 「赌多久能成」，而是**失败上限**：`match` 一旦命中就立刻 `clearTimeout` 返回，
- * 上限只负责让「子进程压根没起来」这件事有一个可读的失败、不把用例挂死。
- *
- * @param {import("node:child_process").ChildProcess} child
- * @param {RegExp} match 命中哪一行（`1` 号捕获组当结果）
- * @param {{timeoutMs?: number, what: string}} options `what` 进失败话术
- * @returns {Promise<string>}
+ * **等一条来自子进程 stdout 的读数，并给它一个失败上限**。`expect.poll` 等的是**同一进程**里的值，
+ * 而这里的读数不在本进程（父亲够不到子进程的 stdout）；故真时间不是「赌多久能成」而是失败上限 ——
+ * `match`（`1` 号捕获组当结果）一命中就 `clearTimeout` 返回，上限只负责让「子进程压根没起来」有可读失败、不挂死用例。
  */
 function firstStdoutMatch(
   child: ChildProcess,
@@ -2299,10 +2046,8 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
   };
 
   /**
-   * 起一个**子进程**服务，把它的端口交给 `body`，一定收掉。
-   *
-   * 端口由服务自己选（`listen(0)`）再打在 stdout 上，用例不猜端口 —— 猜端口会在
-   * 并行 / 端口被占时变成一条**看起来像判据红**的假红（本仓对这类形态有先例）。
+   * 起一个**子进程**服务，把它的端口交给 `body`，一定收掉。端口由服务 `listen(0)` 自选后再打在
+   * stdout 上，用例不猜端口 —— 猜端口在并行 / 端口被占时会变成一条**看起来像判据红**的假红。
    */
   async function withServer(kind: keyof typeof SERVER_CASES, body: (base: string) => void) {
     const script = `
@@ -2361,18 +2106,10 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
   });
 
   it("首跳重定向后面那一段卡住 ⇒ 仍然判得出「连上了但 0 字节」，且不拖过下一档的总时限", async () => {
-    /* 这一条治的是**重定向之后**那一跳：镜像根常常先回 302/307（`registry.npmmirror.com`
-     * 实测就是 302），真资源在下一跳。如果超时只看「第一跳有没有响应」，
-     * 卡在第二跳的那条链路要么被读成「第一跳超时」（指错方向），要么把这一步拖到
-     * 每跳一个满额超时 × 重定向次数。
-     *
-     * 判据两条：结论**不算到得了**（`isReachableVerdict` 为假）；总耗时不超过
-     * `timeoutMs × (maxRedirects + 1)` —— 那是这一档的**总闸**，不是每跳各给一份。
-     *
-     * ⚠️ 这里刻意**不**断言那句话术长什么样：本机实测这一档会走到 `res` 的 `error`
-     * 回调上（而不是 `end`），读数形如「响应出错了但 0 字节（200）」。要守的是
-     * 「一个字节都没到 ⇒ 不许判通」，而**话术随时间会变**（上一版就把「已收到字节后
-     * 就断了」印在了一条 0 字节的链路上）。 */
+    /* 这一条治**重定向之后**那一跳：镜像根常先回 302/307（`registry.npmmirror.com` 实测 302），真资源在下一跳。
+     * 超时只看第一跳的话，卡在第二跳的链路会被读成「第一跳超时」（指错方向），或拖成每跳一个满额超时 × 重定向次数。
+     * 判两条：结论**不算到得了**；总耗时 ≤ `timeoutMs × (maxRedirects + 1)`（**总闸**，不是每跳各给一份）。
+     * ⚠️ 刻意**不**断言话术：本机实测这一档走 `res` 的 `error` 回调（而非 `end`），读数形如「响应出错了但 0 字节（200）」；要守的是「一个字节都没到 ⇒ 不许判通」，话术随时间会变。 */
     await withServer("redirectStall", (base) => {
       const started = Date.now();
       const verdict = httpDownloadProbe(`${base}/root/builds/cft/1/win64/x.zip`, {
@@ -2452,12 +2189,10 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
   });
 
   it("候选表按本档那一件的 `mirrors` 来，不许抄三档内置镜像那张表（否则恒 400）", () => {
-    /* 上游对本档（Chromium 的 CfT 包）走的是 `cftUrl()`，它的 `mirrors` **只有
-     * `https://cdn.playwright.dev` 一条**；那张三档的 `PLAYWRIGHT_CDN_MIRRORS`
-     * （含两条 `…/dbazure/download/playwright`）服务的是老的
-     * `builds/chromium/<revision>/…` 形状。给后两条接上 `builds/cft/…` 得到的地址
-     * 永远供不上这一件（实测跟到最后是 400）—— 而人照读数「换一个能通的根」就会
-     * 换到那里去（现场 `cnb-oqf-1k51ifhis` 那两条逐字是 400）。 */
+    /* 上游对本档（Chromium 的 CfT 包）走 `cftUrl()`，它的 `mirrors` **只有 `cdn.playwright.dev` 一条**；
+     * 三档那张 `PLAYWRIGHT_CDN_MIRRORS`（含两条 `…/dbazure/download/playwright`）服务的是老的
+     * `builds/chromium/<revision>/…` 形状 —— 给它们接上 `builds/cft/…` 永远供不上（实测 400），
+     * 而人照读数「换一个能通的根」就会换到那里去（现场 `cnb-oqf-1k51ifhis` 那两条逐字是 400）。 */
     const candidates /** @type {string[]} */ = /** @type {unknown} */ browserCandidates;
     for (const legacy of [
       "https://cdn.playwright.dev/dbazure/download/playwright",
@@ -2491,39 +2226,15 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
 });
 
 /**
- * 「自取那一件浏览器（分片 + 续传）」那一层（ISSUE #1959 第七跑）。
- *
- * ## 立案现场
- *
- * `浏览器安装` 在这一格上红了七跑，形态逐字相同：
- *
- *     环境前提 / 装之前的探测 → 三个候选根**全部** HTTP 206（实收几千~一万五字节）
- *     playwright install      → 同一个根，timed out after 120000ms，Download failure
- *
- * 也就是说「先量一次再挑根」那条路（上一笔）在这一跑上**根本没有更好的根可挑** ——
- * 三个都量得到。根因不在挑根上，在 Playwright 自己那份下载**没有续传**：
- * `browserFetcher.ts` 每个 URL 重试 `retryCount = 5` 次，而每次失败都
- * `unlink(zipPath)` + `removeFolders(browserDirectory)`，**从第 0 字节重来**。
- * 一条「能握手、能吐前几 KB、然后在大 body 上停住」的链路因此永远到不了 114 MiB 的尽头。
- *
- * ## 判据的形状
- *
- * 分片那一条用一个**只吐固定字节数就挂起**的假链路判（它的形状就是现场那条）：
- * 片长必须能自适应地退到最小档，且**已落盘的字节一个都不丢** —— 整包最终要**逐字节**
- * 等于声明长度（少一片或多一片都要红）。**服务起在子进程里**：分片取字节是
- * `spawnSync` 起的另一个进程，`spawnSync` 会阻塞父进程的事件循环，
- * 在同一个进程里起服务**必然**连不上（第一版就是这么写错的）。
- *
- * zip 那一层判的是**可移植性**：不再押「Windows 自带的 tar 认 zip」
- * （GNU tar 对同一个包直接报 This does not look like a tar archive）。
+ * 「自取那一件浏览器（分片 + 续传）」那一层（ISSUE #1959 第七跑）。这一格红了七跑、形态逐字相同：三个候选根全部 HTTP 206（实收几千~一万五字节），而 `playwright install` 同一个根 `timed out after 120000ms` —— 没有更好的根可挑。
+ * 根因是 Playwright 自己那份下载**没有续传**：`browserFetcher.ts` 每次失败都 `unlink(zipPath)` + `removeFolders(browserDirectory)`，**从第 0 字节重来** ——「能握手、能吐前几 KB、然后停住」的链路永远到不了 114 MiB 尽头。
+ * 故用只吐固定字节数就挂起的假链路判：片长须自适应退到最小档、已落盘字节一个不丢、整包**逐字节**等于声明长度；服务须在**子进程**（`spawnSync` 阻塞父进程事件循环）。zip 那层判可移植性：不再押「Windows 自带 tar 认 zip」（GNU tar 报 not a tar archive）。
  */
 describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑）", () => {
   /**
-   * 起一个「每次请求只稳吐 `burst` 字节、其余挂起」的假链路（**子进程**里）。
-   *
-   * 这就是现场那条链路的形状：小响应老老实实发完，大响应吐一小段就停住。
-   * `burst` 小于片长时，只有**片长退到 burst 以下**才可能整片走完 —— 自适应那一档
-   * 因此被这条夹具真的量到，而不是靠注入假装。
+   * 起一个「每次请求只稳吐 `burst` 字节、其余挂起」的假链路（**子进程**里）—— 现场那条链路的形状。
+   * `burst` 小于片长时，只有**片长退到 `burst` 以下**才可能整片走完，自适应那一档因此被真量到，
+   * 而不是靠注入假装。
    */
   async function withStallingLink(
     total: number,
@@ -2562,15 +2273,10 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
     }
   }
 
-  /* 这一格的墙钟成本 = 停顿的片数 × `chunkTimeoutMs`（假链路对 `> BURST` 的请求只吐
-   * 一段就挂住），所以它天生是一格**慢用例**：本机空载隔离单跑实测 **17.9s**，
-   * 而每日档带着 4 个 worker 并发跑同一格时实测 **40.4s** —— 全局 `testTimeout` 是 30s，
-   * 于是它在第二种场合必红，而那句红什么也没说（`cnb-vue-1k59blt4c` 之后本机复现）。
-   * 处置分两半，顺序要紧：**先降成本**（`chunkTimeoutMs` 700ms → 200ms，35.4s → 17.9s，
-   * 判据一字未改 —— 见下面那一处注释），**再登记预算**（这一行）：登记的依据是
-   * 上面那两个实测数，不是「让它过去」的意愿（§11.13 明令禁止的是拿预算换绿；
-   * 与 `tests/check-a11y-rules.test.ts` 的 `CONFIG_BUDGET` / `CLI_BUDGET` 同一处置）。
-   * 120s 与同一 describe 里那些「真起子进程」的格同档，且远小于 stage 的墙钟。 */
+  /* 这一格墙钟 = 停顿片数 × `chunkTimeoutMs`，天生**慢用例**：本机空载隔离单跑 17.9s、每日档 4 worker 并发 40.4s，
+   * 而全局 `testTimeout` 是 30s ⇒ 后者必红且红得什么也没说（`cnb-vue-1k59blt4c`）。处置顺序要紧：**先降成本**
+   * （700ms → 200ms，35.4s → 17.9s，判据一字未改），**再登记预算**（依据是上面两个实测数，不是「让它过去」；§11.13 禁的是拿预算换绿，与 `check-a11y-rules.test.ts` 的 `CONFIG_BUDGET` 同一处置）。120s 与同 describe 里「真起子进程」的格同档。
+   */
   it(
     "**片长自适应地退档**：一条每次只吐 20 KB 的链路也能走完整包（逐字节对上）",
     { timeout: 120_000 },
@@ -2581,14 +2287,10 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
         try {
           const res = fetchUrlResumable(`${base}/x.zip`, dest, {
             chunkBytes: 128 * 1024,
-            /* 这条的墙钟成本 = **停顿的片数 × `chunkTimeoutMs`**（假链路对 `> BURST`
-             * 的请求只吐 20 KB 就挂住，客户端只能等自己的超时 —— 见 `withStallingLink`
-             * 那句 120 秒不结束的 `setTimeout`）。按 700ms 实测**隔离单跑 35.4s**，
-             * 而全局 `testTimeout` 是 30s ⇒ 它在任何机器上都必然红（这就是每日全量档
-             * 第一次有执行者时照出来的那条，`cnb-vue-1k59blt4c`）。
-             * 处置是**降成本**而不是抬预算（§11.13）：这一格判的是「片长退档 + 半成品
-             * 不留在盘上」，那条结论只要求「片段在超时内收不齐」，与超时具体是 700 还是
-             * 200 无关。降到 200ms 之后实测约 10s，30s 预算里留三倍余量。 */
+            /* 墙钟 = **停顿片数 × `chunkTimeoutMs`**（假链路对 `> BURST` 只吐 20 KB 就挂住，只能等客户端超时）。
+             * 按 700ms 实测**隔离单跑 35.4s** > 全局 `testTimeout` 30s ⇒ 必然红（`cnb-vue-1k59blt4c`）。
+             * 处置是**降成本**而非抬预算（§11.13）：判的是「片长退档 + 半成品不留盘」，只要求「片段在超时内收不齐」，
+             * 与 700 还是 200 无关；降到 200ms 后实测约 10s，30s 预算留三倍余量。 */
             chunkTimeoutMs: 200,
             retries: 2,
           });
@@ -2614,15 +2316,10 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
     },
   );
 
-  /* 这一格的墙钟成本同样 = **停顿的片数 × `chunkTimeoutMs`**（同上面那一格），而它没有
-   * 自己的预算登记 ⇒ 用的是全局 `testTimeout` 30s。「已落盘 64 KiB / 整包 128 KiB」这个
-   * 用量决定了它要退两轮（64 KiB → 32 KiB → 16 KiB），从半路接时 16 KiB 一片正好 8 片、
-   * 每片 2 次 × 700ms ⇒ 本机空载就 **11.2s**，负载下的平台机器直接撞上 30s 那一档
-   * （`cnb-7t8-1k60klj0p` 的「受影响用例」一格，唯一一条红）。
-   * 处置与上一格同一形状：**先降成本**（`chunkTimeoutMs` 700ms → 200ms，判据一字未改 ——
-   * 这条判的是「第一次请求的偏移没有回到 0」「已落盘的前缀没被覆盖」，与超时是 700 还是
-   * 200 无关；片数与内容断言照样量得到），**再登记预算**（120s，与同一 describe 里那些
-   * 「真起子进程」的格同档）。§11.13 明令禁止的是拿预算换绿，不是禁止登记量到的成本。 */
+  /* 墙钟同样是**停顿片数 × `chunkTimeoutMs`**（没有自己的预算登记 ⇒ 用全局 30s）。「已落盘 64 KiB /
+   * 整包 128 KiB」决定要退两轮（64 → 32 → 16 KiB），从半路接时 16 KiB 一片正好 8 片、每片 2 次 × 700ms
+   * ⇒ 本机空载 11.2s，负载下直接撞 30s（`cnb-7t8-1k60klj0p` 唯一一条红）。处置同一形状：先降成本
+   * （700ms → 200ms，判的是「偏移没回到 0」「前缀没被覆盖」，与超时无关），再登记预算（120s，同档）。 */
   it(
     "**断了接着来**：已落盘的前缀不被重下（第二次调用从半路接）",
     { timeout: 120_000 },
@@ -2788,15 +2485,11 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
   });
 
   it("自取成功 + 落点复验通过 ⇒ **不再交给老路**（它会顺手拉 ffmpeg，而那件取不回）", () => {
-    /* 现场（`cnb-7oo-1k51r518b`，恢复那一格之后的第一跑）：自取**成功了** ——
-     * 119 MiB 的 headless shell 落到落点、标记也写了 —— 而 `playwright install`
-     * 照旧要碰网去拉 **ffmpeg**（chromium 的依赖，~2.5 MB），那一件在同一条链路上
-     * 5 次 `timed out after 120000ms`、0 字节 ⇒ 这一格红在一件**已经装好的浏览器**
-     * 旁边，读起来像「浏览器没装成」。
-     *
-     * 所以判据是「自取成功了**且**落点复验通过（同一个 `browserExecutableExists()`）
-     * ⇒ 直接放行」——本档真正要的是 headless shell，而 ffmpeg 只有录视频才用得上
-     * （`playwright.config.ts` 没开 `video`）。 */
+    /* 现场 `cnb-7oo-1k51r518b`：自取**成功**（119 MiB headless shell 落到落点、标记也写了），而
+     * `playwright install` 照旧碰网拉 **ffmpeg**（chromium 依赖 ~2.5 MB），那一件在同一条链路 5 次
+     * `timed out after 120000ms`、0 字节 ⇒ 红在一件已经装好的浏览器旁边，读起来像「浏览器没装成」。
+     * 故判据：自取成功**且**落点复验通过（同一个 `browserExecutableExists()`）⇒ 直接放行；本档只要
+     * headless shell，ffmpeg 只有录视频才用得上（`playwright.config.ts` 没开 `video`）。 */
     const dir = mkdtempSync(path.join(tmpdir(), "pw-seeded-"));
     try {
       const exe =

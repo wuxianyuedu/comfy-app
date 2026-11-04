@@ -1,13 +1,7 @@
 /**
- * 「读源码做形态断言」的用例需要先把控制流花括号归一化（见 `tests/helpers/source-shape.ts`
- * 头注），否则 `curly` 这类加括号规则会让 `toContain('if (cond) stmt;')` 失配。这件事的
- * **唯一一份**实现是 `tests/helpers/source-shape.ts`（§12.18 复用优先）。
- *
- * 这条判据只做零行为变化的两件事（与 `strip-comments-single-source.test.ts` 同款范式）：
- *  ① **不许再长**：新文件里出现本地副本 = 红。各线确认要本地特化时，先从台账删再改。
- *  ② **收敛了就要收紧台账**：台账里某份已经没有本地定义了 = 红，避免台账变 stale。
- *
- * 拼接待搜串是为了不让本文件把自己算成命中（自匹配是这类判据的第一个失效模式）。
+ * 「读源码做形态断言」需先归一化控制流花括号（见 `tests/helpers/source-shape.ts` 头注），否则 `curly` 会让
+ * `toContain('if (cond) stmt;')` 失配；唯一实现即该助手（§12.18）。只判两件事：新文件出现本地副本 = 红；
+ * 台账里某份已无本地定义 = 红（防 stale）。拼接待搜串以免本文件把自己算成命中（自匹配是首个失效模式）。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";

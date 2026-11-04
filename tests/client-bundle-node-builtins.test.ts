@@ -1,35 +1,7 @@
 /**
- * 客户端 bundle 不得含 Node-only 模块（ISSUE #317 定位的 P0 回归）。
- *
- * 背景：`src/lib/log/log-session-scope.ts` 顶层 `import fs from "node:fs"`，而
- * 客户端组件 `LogProvider.tsx`（"use client"）只是想要它的纯函数
- * `clampLogTime`。Turbopack 编译浏览器 chunk 时把 `node:fs` 整图形入，报
- * 表现为 the chunking context does not support external modules (request: node:fs)
- * 并让 endpoint 编译失败——**`/login` 与 `/workspace` 整页 500**，应用完全
- * 打不开。这与 `app-runtime-log.ts` 的历史回归（ISSUE #282 / 规范 07 §7.12）
- * 同源，只是这次走的是「纯逻辑模块混进了 IO」这条更隐蔽的路。
- *
- * ── 判据的归属（ISSUE #569 第 2 项 / 规范 §18.4 的判定反模式）──────────────
- *
- * 这条判据**只有一份实现**：`scripts/lib-node-only-scan.mjs`。本文件此前把
- * 「哪些算 Node 内建 / 怎么解析 import / 从哪几个入口做 DFS」又抄了一份，于是
- * 同一件事有两份会各自漂移的判据 —— 而且**两份的盲区还不一样**（实测）：
- *
- *   · 旧的本文件：入口只取 `src/app/**` 与 `src/components/**` 里的
- *     `"use client"` 文件 —— `src/lib/llm/browser.ts`、`src/trpc/react.tsx`
- *     等 4 个 `"use client"` 入口**根本不在入口集里**；
- *   · 旧扫描器：入口是全 `src/**` 的 `"use client"`（更全），但 `reach()` 在
- *     **任何**已声明模块处就停 —— 而 `"use client"` 不是服务端边界，它是同一张
- *     客户端图里的另一个节点。于是 `src/trpc/query-client.ts`（只从
- *     `src/trpc/react.tsx` 可达）对扫描器**不可见**，对本文件反而可见。
- *
- * 两份判据各差一块、谁也不包含谁。修法不是「两边一起改」，而是**合并成一份**：
- * 扫描器的 `reach()` 改为只在 `server-only` / `.server.ts` 处停（`"use client"`
- * 继续走），入口取全 `src/**`；本文件改为**消费**扫描器的 JSON 输出，并把
- * 「客户端图要能穿过 `"use client"` 边界」这条反向验证钉住。
- *
- * 为什么不用 Turbopack 自己报错：那要跑完整构建（分钟级）且只在构建期可见；
- * 本用例调用扫描器是毫秒级、能给出引用链、可在 pre-commit 跑。
+ * 客户端 bundle 不得含 Node-only 模块（ISSUE #317 的 P0 回归）：`log-session-scope.ts` 顶层 `import fs`，被只想用
+ * `clampLogTime` 的 `LogProvider.tsx`（"use client"）拖进浏览器 chunk，`/login`、`/workspace` 整页 500（同 #282 / §7.12）。
+ * 判据只有一份实现（`scripts/lib-node-only-scan.mjs`，#569 / §18.4）；本文件改为消费其 JSON，并钉住「客户端图能穿过 `"use client"` 边界」的反向验证。
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -63,21 +35,10 @@ function stripComments(src: string): string {
 }
 
 /**
- * 两枚反向验证探针跑在**夹具树**上（ISSUE #2663）。
- *
- * 它们此前把 `import fs from "node:fs"` 注进真实入库文件
- * （`src/lib/shell/shell-tabs-store.ts` 与 `src/trpc/query-client.ts`）再在 `finally`
- * 里还原。#2593 管住了「还原的凭据」（不许拿 git 索引当凭据），**管不住读的那一侧**：
- * vitest 按文件并行，而 `tests/lib-node-only-declarations.test.ts` 在同一时刻扫的
- * 正是同一棵真实树 —— 探针写入的那一瞬被别人读成仓库事实。当场现场：
- * build `cnb-c25-1k62nch99` 报 `× src/lib/shell/shell-tabs-store.ts`
- * （那份文件在 `master` 上只有 `import { create } from "zustand"`），
- * 同一分支不改内容只重派生一次即绿（`cnb-8h5-1k62o407o`）。
- *
- * 出路只有「换一棵树」：独占 / 串行只把窗口调窄，第三份读同一棵真实树的用例出现时
- * 照撞（规范 §11.19 那条「并发与真实资源的隔离要一起改」是同一件事的另一半）。
- * 夹具树里「写」与「别人读」不是同一棵，窗口不存在。
- */
+ * 两枚反向验证探针跑在**夹具树**上（ISSUE #2663）：此前往真实入库文件（`shell-tabs-store.ts` / `query-client.ts`）注
+ * `import fs` 再在 `finally` 还原；#2593 只管还原凭据，**管不住读的那一侧** —— vitest 按文件并行，
+ * `tests/lib-node-only-declarations.test.ts` 同时扫同一棵真树，写入那一瞬被读成仓库事实（build `cnb-c25-1k62nch99` 报
+ * `shell-tabs-store.ts`，不改内容重跑即绿）。独占/串行只调窄窗口；夹具树里写与读不是同一棵。 */
 function runScanOnFixture(files: Record<string, string>): Report {
   const { repo, dispose } = createGateRepo({
     script: "lib-node-only-scan.mjs",

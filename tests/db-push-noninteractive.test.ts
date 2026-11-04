@@ -1,18 +1,7 @@
 /**
- * 回归护栏：**Linux / CI 首次上手链路的两个静默失败**（ISSUE #489）。
- *
- * 缺陷 2：`pnpm db:push` 在无 TTY 环境下报 `Interactive prompts require a TTY
- * terminal` 后 **exit 0**，并把 `db.sqlite` 留成 **0 字节**。调用方看到「成功」，
- * 随后 `/`、`/api/health` 都 200，只有真实业务路由 500（`no such table`）。
- *
- * 两条契约：
- *   1. `pnpm db:push` 走 `scripts/db-push.mjs`（不是裸 `drizzle-kit push`）——
- *      裸命令会在无 TTY 上静默失败，脚本以 `--force` 运行并**复核库里有没有表**；
- *   2. 探测判据同源：`.mjs`（dev/start 用）与 `.ts`（应用用）必须认同一张哨兵表、
- *      同一套路径锚点，否则「入口说没建、应用说建了」会互相打架。
- *
- * 用例走**真跑**：造真实 sqlite 文件驱动两边探测，不 mock fs（探测逻辑本身就是
- * 「路径 + sqlite_master」，mock 掉等于什么都没验）。
+ * 回归护栏：**Linux / CI 首次上手链路的两个静默失败**（ISSUE #489）。缺陷 2：`pnpm db:push` 无 TTY 时报
+ * `Interactive prompts require a TTY terminal` 后 **exit 0**、`db.sqlite` 留成 **0 字节** —— 调用方看到「成功」、
+ * `/` 与 `/api/health` 都 200，只有业务路由 500。契约：① 走 `scripts/db-push.mjs`（`--force` 复核有无表）；② `.mjs`/`.ts` 探测同源。
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -122,14 +111,9 @@ describe("pnpm db:push 非交互可用", () => {
 
 describe("db:push 的空转档：库已经是这一版 schema 建的就不再起 drizzle", () => {
   /**
-   * 平台侧每条 PR 都会跑 `同步数据库表结构`，而绝大多数 PR 一行 schema 都没碰 ——
-   * 那一趟 drizzle 只会回一句 `No changes detected`，却要十几秒（CI 节点上更久）。
-   *
-   * 判据收在 `probeSchemaFresh()`（只读、毫秒级），两种形态必须都是**照跑**：
-   *   · 指纹对不上 ⇒ 不知道要不要改，交给 drizzle 说；
-   *   · 判据失效（库不在 / 读不到指纹 / 读不到 schema 源）⇒ 「拿不到结论」不是
-   *     「已经一致」，不许据此跳过。
-   * 用例真造 sqlite 文件来驱动它，不 mock。
+   * 平台侧每条 PR 都跑 `同步数据库表结构`，而绝大多数 PR 一行 schema 都没碰 —— 那一趟 drizzle 只回
+   * `No changes detected`，却要十几秒（CI 更久）。判据收在 `probeSchemaFresh()`（只读、毫秒级）：指纹对不上
+   * ⇒ 交给 drizzle 说；判据失效（库不在 / 读不到指纹 / 读不到 schema 源）⇒「拿不到结论」不是「已一致」。
    */
   it("库里登记的指纹与源码一致 ⇒ synced（空转档的判据）", async () => {
     const state = await import("../scripts/db-schema-state.mjs");
@@ -219,17 +203,9 @@ describe("探测判据跨实现同源", () => {
 
 describe("构建期缺 DATABASE_URL 不得把构建打死", () => {
   /**
-   * CI 的 Build 步骤跑的是 `SKIP_ENV_VALIDATION=1 pnpm build`，**不注入
-   * `DATABASE_URL`**：`env.js` 跳过校验后 `env.DATABASE_URL` 是 `undefined`，
-   * 于是 `src/server/db.ts::resolveDbPath` 里的 `url.startsWith(...)` 抛
-   * `Cannot read properties of undefined` —— 而 `db.ts` 会被每条路由的模块图
-   * 拉到，build 死在 `Collecting page data` 阶段，报错行号落在与库无关的路由上
-   * （实测：`/api/debug/source`、`/api/logs/history`）。这与 ISSUE #489 的
-   * 「干净检出上 `pnpm build` 必挂」同源、且是同一族里**之前没被发现的一档**。
-   *
-   * 契约：模块级就绪判断不依赖 env 校验是否开启 —— 缺值时退到与 drizzle-kit
-   * 同一锚点的默认库文件，把「表可能还没建」交给运行期的可读出口
-   * （`/api/health` 的 503 + `db: empty`）而不是构建期崩溃。
+   * CI 的 Build 跑 `SKIP_ENV_VALIDATION=1 pnpm build`，**不注入 `DATABASE_URL`**：`env.js` 跳过校验后
+   * `env.DATABASE_URL` 是 `undefined`，`resolveDbPath` 里 `url.startsWith(...)` 抛 TypeError —— `db.ts` 被每条
+   * 路由的模块图拉到，build 死在 `Collecting page data`。契约：缺值时退到 drizzle-kit 同一锚点默认库文件。
    */
   it("resolveDbPath 的判据对缺值/空值都成立（源码级，避免真起 next build）", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "src", "server", "db.ts"), "utf8");
@@ -247,13 +223,10 @@ describe("构建期缺 DATABASE_URL 不得把构建打死", () => {
   it("db-push 与 db.ts 认同一套默认库文件锚点", () => {
     const pushSrc = fs.readFileSync(path.join(process.cwd(), "scripts", "db-push.mjs"), "utf8");
     const dbSrc = fs.readFileSync(path.join(process.cwd(), "src", "server", "db.ts"), "utf8");
-    /* 默认锚点（`file:./db.sqlite`）的**唯一实现**在 `db-schema-state.mjs` 的
-     * `resolveSqlitePath` —— `db-push.mjs` 与 `db-migrate.mjs` 都 import 它。
-     * 本用例此前断言的是「`db-push.mjs` 的源码里含这个字面量」，那是在**钉住
-     * 实现所在的位置**而不是意图：锚点一经收口（ISSUE #1624 顺手收掉了一份
-     * 逐字重复的 `resolveDbPath`），这条就红了 —— 而两处其实仍然认同一个锚点。
-     * 改成按意图断言三件：① 共享实现里那份字面量在；② 两个入口都 import 它；
-     * ③ TS 侧那份默认值逐字相同。 */
+    /* 默认锚点（`file:./db.sqlite`）的**唯一实现**在 `db-schema-state.mjs` 的 `resolveSqlitePath` ——
+       `db-push.mjs` 与 `db-migrate.mjs` 都 import 它。此前断言「`db-push.mjs` 源码里含这个字面量」是在钉
+       实现位置而非意图：锚点一经收口（ISSUE #1624 收掉一份逐字重复的 `resolveDbPath`）这条就红了，而两处
+       仍认同一个锚点。改成按意图断言：① 共享实现里有字面量；② 两入口都 import；③ TS 侧默认值逐字相同。 */
     const stateSrc = fs.readFileSync(
       path.join(process.cwd(), "scripts", "db-schema-state.mjs"),
       "utf8",

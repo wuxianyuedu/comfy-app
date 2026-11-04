@@ -1,19 +1,7 @@
 /**
- * 回归护栏：Build-Guard.ps1 的产物目录占用者清单要报得足够细。
- *
- * 背景：build-all / 打包启动器前置检查报「产物目录被占用」时，旧实现只列
- * `PID + 进程名 + 被映射的 dll`，用户看不出「这孤儿是谁的子孙、该连带杀哪棵子树」，
- * 只能照 PID 盲杀（AGENTS 硬规则 3 反对单杀）。本次给每个占用者补上
- * **命令行 + 父 PID + 父进程名 + 可执行文件路径**（命令行 / 父 PID 只有
- * Win32_Process(CIM) 有，Get-Process 拿不到）。
- *
- * 钉死：
- *   1. Get-ProductDirHolder 经 Get-CimInstance Win32_Process 取 CommandLine / ParentProcessId；
- *   2. 命中对象带 CommandLine / ParentId 字段；
- *   3. 补充信息抽成 Write-HolderDetail 一处，**所有**报占用者的出口都调用它
- *      —— 避免两处各抄一份、日后漂移。当前唯一的出口是「目录清理失败」
- *      （Assert-LauncherNotRunning 那条「打包第二层启动器 exe」的出口已随
- *      ISSUE #784 移除：不再有 onedir 产物目录需要独占）。
+ * 回归护栏：Build-Guard.ps1 的产物目录占用者清单要报得足够细。旧实现只列 PID + 进程名 + 映射的 dll，看不出孤儿是谁的子孙、该连带杀哪棵子树（AGENTS 硬规则 3 反对单杀）。
+ * 命令行 / 父 PID 只有 Win32_Process(CIM) 有（Get-Process 拿不到）；钉死：Get-ProductDirHolder 经 CIM 取 CommandLine/ParentProcessId 且命中对象带这两字段。
+ * 补充信息集中在唯一出口 Write-HolderDetail（当前仅「目录清理失败」；Assert-LauncherNotRunning 那出口已随 ISSUE #784 移除）。
  */
 import fs from "node:fs";
 import path from "node:path";

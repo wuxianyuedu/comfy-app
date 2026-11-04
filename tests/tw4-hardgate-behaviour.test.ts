@@ -1,25 +1,8 @@
 /**
- * tw4 两份「CSS 等价改写」判据的**硬闸行为**自检（ISSUE #1811 的 tw4 项）。
- *
- * 为什么这一族需要**行为**用例，而不是只有 `tests/tw4-canonical-ratchet.test.ts`
- * 那份形态守卫：那一份读的是文本（判定档在不在、放宽通道有没有被加回来），它
- * **判不出**「判定档真的会退 1」—— 一个把 `--check` 分支写成永远 `exit(0)` 的
- * 版本同样能满足「`--check` 在场 + 有 `process.exit(1)` 字样」。这里把两份工具
- * 当黑盒跑在临时工作区上，正面钉住：
- *
- *   · 干净输入 → 判定档退 0；
- *   · 塞一条真候选 → 判定档退 1，且点出是哪个文件；
- *   · 注释里的示例（`!bg-subtle` 与下面夹具那条 px 任意值）**不算**候选 —— 这是
- *     `tw4-scan-core.mjs` 剥注释那一层的回归；
- *   · `--update` 这个出口已经不存在：传了既不落盘 JSON、也不放宽判定（断头用例）。
- *
- * 为什么夹具要链 `node_modules`：这两份是 **ESM** 的 `import "tailwindcss"`，而
- * `NODE_PATH` 对 ESM 解析无效（只按脚本自身位置向上找）——链一份回真仓库是唯一
- * 走得通的路（`symlinkDir` = Windows 免特权那一档）。`src/app/globals.css` 是
- * design system 的输入，缺它脚本直接 ENOENT。
- *
- * 单次预算：起 Tailwind 引擎约 5s，一格跑 1–2 次，按实测登记（口径同 §11.13）。
- */
+ * tw4 两份「CSS 等价改写」判据的**硬闸行为**自检（ISSUE #1811 的 tw4 项）。形态守卫（`tw4-canonical-ratchet`）读文本，
+ * 判不出「判定档真的会退 1」—— 把 `--check` 写成永远 `exit(0)` 的版本照样满足「`--check` 在场 + 有 `process.exit(1)`
+ * 字样」。故把工具当黑盒跑在临时工作区：干净退 0、真候选退 1 并点名文件、注释示例不算候选（剥注释层回归）、`--update`
+ * 已不存在。夹具链 `node_modules` 因 `NODE_PATH` 对 ESM 无效，`globals.css` 缺失即 ENOENT；单次约 5s（§11.13）。 */
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect } from "vitest";
@@ -37,15 +20,10 @@ const ENGINE_TIMEOUT = 120_000;
 const PX_LITERAL_CLASS = "h-" + "[22px]";
 
 /**
- * 「判定档退 1 且**点名是哪个文件**」这条断言的读法。
- *
- * 两份工具打的是 `path.relative()` 的结果，Windows 上就是 `src\Dirty.tsx`，
- * 而这一格要钉的是**有没有点名**、不是路径分隔符。从前它写成
- * `toContain("src/Dirty.tsx")`，于是在 Windows 检出上恒红：本地钩子拦下每一个
- * 提交，而 PR 是平台侧 squash 合并、不跑钩子，#623 之后也没有 CI 兜底 ——
- * 这条红是**直接从 master 落进仓库**的。与台账 R12-01「判据不许假定读者的 git
- * 配置」同一族：**判据也不许假定读者的路径分隔符**。
- */
+ * 「判定档退 1 且**点名是哪个文件**」这条断言的读法：工具打的是 `path.relative()` 结果，Windows 上是 `src\Dirty.tsx`，
+ * 而这一格钉的是「有没有点名」、不是分隔符。从前写成 `toContain("src/Dirty.tsx")`，于是在 Windows 检出上恒红 ——
+ * 本地钩子拦下每个提交，而 PR 是平台侧 squash 合并、不跑钩子，#623 之后也无 CI 兜底，这条红直接落进 master。
+ * 与台账 R12-01 同族：判据不许假定读者的 git 配置，也不许假定分隔符。 */
 function namesFile(output: string, relPosix: string): boolean {
   return output.replaceAll("\\", "/").includes(relPosix);
 }

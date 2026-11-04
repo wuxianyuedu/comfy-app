@@ -1,15 +1,8 @@
-// 服务端 run 执行引擎（Phase 6 · P6-2）。
-//
-// 消费 P6-1 的 run + 规划器，把「AI 自主把整条流水线跑到成片」落成一次**可重入的推进循环**：
-// 每一步都**重读当前 `production` + run**，据此决定动作、执行、写回，再按 `approvalMode` 决定
-// 是否停下等点头。因为状态每次都从库里重读：
-//   · 用户在画布/工坊点了「暂停 / 取消」→ 下一 tick 见 status≠running 即让位（自主循环在服务器跑，
-//     不随视图切换而死 —— 这是把引擎放服务端而非工坊 agent 里的原因）。
-//   · 用户改了某镜（rev 变新）→ 规划器把该镜重新纳入待办，基于改后的内容续跑，不覆盖手改。
-// 引擎只做「推进到下一个停点」，由 `run.start / resume / approve` 以 fire-and-forget 方式拉起。
-//
-// LLM 阶段与 ComfyUI 生图/合成的真实产出需在有模型/ComfyUI 的环境端到端验证；本模块的循环控制
-// （计划→执行→审批/暂停/字段所有权）以 mock 单测覆盖。
+// 服务端 run 执行引擎（Phase 6 · P6-2）：消费 P6-1 的 run + 规划器，把「AI 自主把整条流水线跑到成片」
+// 落成一次**可重入的推进循环**。每步重读 `production` + run 再决定动作、执行、写回，按 `approvalMode`
+// 决定是否停下；于是用户「暂停/取消」下一 tick 见 status≠running 即让位（引擎在服务端，不随视图切换
+// 而死），改镜（rev 变新）则重新纳入待办、不覆盖手改。由 `run.start / resume / approve` fire-and-forget
+// 拉起。LLM/ComfyUI 真实产出需端到端验证；循环控制（计划→执行→审批/暂停/字段所有权）由 mock 单测覆盖。
 import "server-only";
 
 import { z } from "zod";
@@ -321,13 +314,9 @@ async function execImages(
 }
 
 /**
- * 剧本评审执行器（FR-QA-07 ④ · #2478）：调 `reviewScript` 出判定（同时落库
- * `production.scriptReview` 列，含轮次历史），按「pass 且维度均分达线」判达标：
- *   · 达标 / 已达 `REVIEW_MAX_RETRY` 上限 → 写剧本指纹快照（收口，规划器不再纳入；
- *     达上限保留当前结果与镜头评审同口径）；
- *   · 不达标且未达上限 → `scriptRevisionPending=true`，规划器下一步出 `revise_script`；
- *     改写后剧本变（指纹变）→ 又回到待评审，直到达标或轮次封顶。
- * 每轮判定与分数已由 `reviewScript` 落库，曲线可回看。
+ * 剧本评审执行器（FR-QA-07 ④ · #2478）：`reviewScript` 出判定并落库 `production.scriptReview`（含轮次历史），按「pass 且维度均分达线」判达标。
+ * 达标或达 `REVIEW_MAX_RETRY` 上限 → 写剧本指纹快照收口（规划器不再纳入；达上限保留当前结果，与镜头评审同口径）；不达标且未达上限 → `scriptRevisionPending=true`、下一步 `revise_script`。
+ * 改写后指纹变 → 重回待评审，直到达标或封顶；每轮判定与分数已落库，曲线可回看。
  */
 async function execReviewScript(
   userId: string,
@@ -403,17 +392,9 @@ async function execReviseScript(
 }
 
 /**
- * 自动评审执行器（Phase 8 · P8-1c + P8-2）：逐镜做「文本 + 图」双裁判——
- *   · 文本评审（`reviewContent` → `shot.review`）：评提示词写得好不好；
- *   · 视觉评审（`reviewShotImage` → `shot.imageReview`，仅镜头已出图时）：看图评对题/崩没崩；
- *   两者**都过**才算通过（图没过 = 不过，FR-QA-07⑤）。
- * 据此：
- *   · 通过 → 记 `reviewedShotRev[id]=rev`（定稿，规划器不再纳入）；
- *   · 不合格且未达重试上限 → `reviewAttempts[id]++` + `applyShotRedo`（清图 + rev 自增）→ 回到待生图，
- *     重出后文本+视觉再双审，直到通过或达上限；
- *   · 不合格但已达 `REVIEW_MAX_RETRY` → 记 `reviewedShotRev[id]=rev` 保留当前结果、停止返工（保证收敛，转人工）。
- * 任一侧评审失败（传输/模型异常）按「定稿保留」兜底，避免反复重试坏镜；真的图崩会由模型给出
- * pass=false 触发返工。文本意见仍供 reprompt 改写用。
+ * 自动评审执行器（Phase 8 · P8-1c + P8-2）：逐镜「文本 + 图」双裁判 —— `reviewContent` → `shot.review`、`reviewShotImage` → `shot.imageReview`（仅已出图），**都过**才算通过（FR-QA-07⑤）。
+ * 通过 → 记 `reviewedShotRev[id]=rev` 定稿；不合格且未达上限 → `reviewAttempts[id]++` + `applyShotRedo`（清图 + rev 自增）回到待生图重审；已达 `REVIEW_MAX_RETRY` → 同样定稿保留、停止返工（保证收敛转人工）。
+ * 评审本身失败（传输/模型异常）按「定稿保留」兜底，避免反复重试坏镜；文本意见仍供 reprompt 改写用。
  */
 async function execReviewShots(
   userId: string,

@@ -1,9 +1,7 @@
 /**
- * `scripts/app-service-exit.mjs` 写侧的落盘契约（ISSUE #1692）。
- *
- * 这份记录是「应用服务为什么断了」在**事后唯一还能读到的证据**：探活走的是刚死掉
- * 那个服务自己的 HTTP，事后问不到。所以写侧的形态（落点、字段、无 BOM、不因为
- * 退出码 / 信号拿不到而编一个值）每一条都是判据，不是实现细节。
+ * `scripts/app-service-exit.mjs` 写侧的落盘契约（ISSUE #1692）：这份记录是「应用服务为什么断了」
+ * 事后唯一可读的证据（探活走的是刚死那个服务自己的 HTTP，事后问不到）。故写侧形态 —— 落点、
+ * 字段、无 BOM、不因退出码 / 信号拿不到而编值 —— 每条都是判据，不是实现细节。
  */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

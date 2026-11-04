@@ -1,31 +1,8 @@
-/**
- * `docs/DESIGN.md` 与 `src/app/globals.css` 的同步判据 —— 设计契约的执行者。
- *
- * 为什么这条必须有执行者：契约正文引用了上百颗 token 名和一串具体取值，而
- * `docs/` 根级的 `.md` **不在** `doc:check` 的遍历面上（`doc-facts.cjs` 的
- * `SCOPED_DOC_DIRS` 只含 `docs/standards` 与 `docs/guides`）。也就是说「改了
- * token 的名字或值、忘了改文档」不会让任何东西变红 —— 那是零执行者判据那一族
- * （规范 §13.5.8），表现不是红，而是**文档又开始说谎而全绿**。
- *
- * 两格各管一件事：
- * ① **引用面**：文档里「整个行内代码就是一颗裸 token 名」的写法，必须在编译产物
- *    里有声明。这是规范 §3.6.1.1②「幽灵 token」判据的反方向 —— 那条管代码引用
- *    查无此名，这条管**文档**引用查无此名。
- * ② **取值面**：Colors 表里「单元格正好是一颗 `#rrggbb`」的那些行，两态取值必须
- *    等于产物解析出来的值。`同值` 表示该态等于浅色档。
- *
- * 刻意**不**管的边界（写成判据会误报一片，或本身就是另一条路的断言）：
- * - frontmatter 的 `colors` / `components` 值。它们的名字是**角色名**
- *   （`hairline`）、不是 CSS 名（`--color-border`），且透明档 `/15` 压成 `rgba`、
- *   oklch 压成 sRGB 都只近似 —— 拿近似值做等值断言等于造一台假红机。
- * - 一格单元格里并列多颗 token（`--color-surface` / `--color-card`）或写成
- *   `oklch(…) ⇒ #hex` 的行：解析不到单一形态就跳过，不猜。
- * - `docs/standards/**` 的样式章节由 `doc:check` 管，这里不重复。
- *
- * 取值口径：复用 `tests/helpers/theme-tokens.ts`（真编译 `globals.css` + 自己解析
- * `var()` 链）。**不要改回 `getComputedStyle`，也不要正则读源码**：jsdom 不解析
- * `var()`，而源码正则看不见 Tailwind 的 tree-shake 与层叠胜负（理由见该文件头部）。
- */
+/** `docs/DESIGN.md` ↔ `src/app/globals.css` 同步判据（设计契约执行者）。docs/ 根级 .md 不在 `doc:check` 遍历面
+ * （`SCOPED_DOC_DIRS` 仅 standards/guides），改名改值忘改文档不会红 —— 零执行者判据族（§13.5.8），文档继续说谎而全绿。
+ * 两格：① 整段行内代码为裸 token 名 ⇒ 产物须有声明（§3.6.1.1② 幽灵 token 反方向）；② Colors 表正好 `#rrggbb`
+ * 的单元格须等于产物解析值（`同值`=浅色档）。不判 frontmatter 角色名/近似色（/15→rgba、oklch→sRGB）、并列多 token、
+ * standards 章节；取值复用 theme-tokens.ts（真编译解 var()），勿改回 getComputedStyle 或正则读源码。 */
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -241,12 +218,9 @@ describe("docs/DESIGN.md 的 Colors 表与两态取值", () => {
 });
 
 /* ── 调用侧：契约里的档位必须真的被用上 ──────────────────────────────
-   上面两格判的是「文档说的值 = CSS 定义的值」。这一格补另一半：
-   **调用点有没有真的用档位**。圆角这一刀落地后暴露出缺口 —— T4 只看
-   `globals.css` 的定义，看不见 `className="rounded-[ 16px ]"` 这种「把档位
-   当前渲染值重抄一遍」的写法：它此刻像素正确，但设置页改基数时不跟手，
-   等于在总闸旁边开了个旁通。字号同理（契约 §Typography 明写不要写
-   字面字号，而调用点还有几百处存量）。 */
+   上面两格判「文档说的值 = CSS 定义的值」，这一格补另一半：**调用点有没有真的用档位**。圆角落地后暴露缺口 ——
+   T4 只看 `globals.css` 的定义，看不见 `className="rounded-[ 16px ]"` 这种「把档位当前渲染值重抄一遍」：此刻像素
+   正确，但设置页改基数时不跟手，等于在总闸旁边开了个旁通。字号同理（§Typography 明写不要字面字号，存量数百处）。 */
 
 const SRC_DIR = fileURLToPath(new URL("../src", import.meta.url));
 const GLOBALS_PATH = fileURLToPath(new URL("../src/app/globals.css", import.meta.url));
@@ -290,38 +264,16 @@ function scanProduct(pattern: RegExp): Array<{ file: string; value: string }> {
   return hits;
 }
 
-/**
- * 屏级副说明的**最低档**：`.u-title-page` 之后 4 行内的第一个 `<p>` 不许低于
- * `text-sm`(14px)。三枚候选就是 Tailwind 里低于默认正文（`text-sm`）的那些具名档。
- *
- * 为什么按「偏低」判而不是按「等于 text-xs」判：这一档**只需挡住写小的**，
- * 更大的档（`text-base` 及以上）不是这个判据要管的事 —— 它管的是「副说明被写成
- * 了小字」，也就是用户在「模式契约 / 模型适配」两屏上抱怨的那件事。
- */
+/** 屏级副说明的**最低档**：`.u-title-page` 之后 4 行内第一个 `<p>` 不许低于 `text-sm`(14px)；三枚候选即 Tailwind
+ * 里低于默认正文的那些具名档。按「偏低」判而非「等于 text-xs」：这一档只需挡住写小的，更大的档不是它要管的事 ——
+ * 它管的是「副说明被写成小字」，即用户在「模式契约 / 模型适配」两屏上抱怨的那件事。 */
 const BELOW_BODY_TIERS = /\btext-(xs|2xs|3xs)\b/;
 
-/**
- * 扫「屏级标题之下那行副说明」被写成小字的落点（ISSUE #1751）。
- *
- * 形状是两件在**同一段行邻域**内同现，缺一不算：
- *   ① 一枚 `.u-title-page` 的屏级标题（P83 已要求的那一档）；
- *   ② 它之后 **4 行内**出现的**第一个** `<p>` 开标签，且那枚 `<p>` 的 class
- *      里写着低于 `text-sm` 的档（`text-xs` / `text-2xs` / `text-3xs`）。
- *
- * ## 为什么这条与 P86 是互补而不是重复
- *
- * P86 锚的是「`.u-title-page` + 一行 `mt-1 text-sm` 副说明」**同现** ——
- * 它要 `text-sm` 才起跳。于是**把档写低反而绕过了它**：两屏此前是
- * `h3` + `.u-title` + `p.text-xs`，连 `.u-title-page` 都没有，P86 天然看不见。
- * 这条换一头锚：只认「标题档 + 后面那个 `<p>`」，**不看那枚 `<p>` 的间距档**
- * （`mt-1` / `mt-2` 都算），于是「档写低」这件事本身成了唯一的判据对象。
- *
- * ## 只认第一个 `<p>`
- *
- * 页头之后的第一枚 `<p>` 就是副说明那一行；再往后可能是正文段落（自有其档）。
- * 认「4 行内第一个」而不是「4 行内任意一个」，是为了不让屏头之后的第三、四行
- * 正文段落把这条判据叫响 —— 那正是 ISSUE 里点名的「宽判据会误伤一片」。
- */
+/** 扫「屏级标题之下那行副说明」被写成小字的落点（ISSUE #1751）：同一段行邻域内 ① 一枚 `.u-title-page` 屏级标题，
+ * ② 其后 **4 行内第一个** `<p>` 的 class 写着低于 `text-sm` 的档（text-xs / 2xs / 3xs）—— 两件同现才算。
+ * 与 P86 互补而非重复：P86 要 `text-sm` 才起跳，档写低反而绕过它（两屏此前是 `h3` + `.u-title` + `p.text-xs`，
+ * 连 `.u-title-page` 都没有）；这条**不看间距档**（`mt-1`/`mt-2` 都算），让「档写低」本身成为唯一判据对象。
+ * 只认第一个 `<p>`：页头之后第一枚才是副说明，再往后可能是自带档位的正文段落（宽判据会误伤一片，ISSUE 点名）。 */
 function firstSubtitleViolation(text: string): Array<number> {
   const hits: Array<number> = [];
   const lines = text.split(/\r?\n/);
@@ -362,14 +314,9 @@ const TEXT_LITERAL = /\btext-\[(\d+(?:\.\d+)?)px\]/g;
 /** `@theme` 的档名允许的 t-shirt 形状（xs / sm / md / lg / xl 与 2xs…9xl）。 */
 const TSHIRT_NAME = /^(?:xs|sm|md|lg|xl|[2-9](?:xs|sm|md|lg|xl))$/;
 
-/**
- * 类型 chip 的形状标记 —— 六个标记**全命中**才算同一枚 chip。
- *
- * 为什么按标记集合、不按先后顺序：和序号圆那条同理（类名在源码里的排列是实现
- * 细节，`px-* py-*` 由 size 三元式给、就排在 `font-semibold` 之后）；也正因为
- * 要「全命中」，`ParamOwnerTag` 那枚带描边的 `px-1.5 py-px font-medium` 不会被
- * 误抓 —— 它本来就是一枚不同的东西，故意没并进来。
- */
+/** 类型 chip 的形状标记 —— 六个标记**全命中**才算同一枚 chip。按标记集合而非先后顺序：类名排列是实现细节
+ *（`px-* py-*` 由 size 三元式给、排在 `font-semibold` 之后，与序号圆那条同理）。也正因为要「全命中」，
+ * `ParamOwnerTag` 那枚带描边的 `px-1.5 py-px font-medium` 不会被误抓 —— 它本就是另一枚东西，故意没并进来。 */
 const TYPE_CHIP_MARKS = [
   /inline-flex/,
   /items-center/,
@@ -392,12 +339,9 @@ const NODE_PILL_MARKS = [
   /px-2(?![\w.])/,
 ];
 
-/**
- * 区头那一行的标记。刻意**不**单拿计数胶囊当判据：`WorkflowIOPreviewPanel.tsx:206`
- * 也有一枚同款计数，只是底色走 `bg-subtle`（它坐在 `bg-panel` 的浮层上）—— 那是
- * 「同一形状、不同表面」的合理分叉，不是要收的孪生。这四枚标记要**全命中**才认，
- * 于是只描述那一行，不误伤那一枚孤立的计数。
- */
+/** 区头那一行的标记。刻意**不**单拿计数胶囊当判据：`WorkflowIOPreviewPanel.tsx:206` 也有同款计数，只是底色走
+ * `bg-subtle`（它坐在 `bg-panel` 浮层上）—— 「同一形状、不同表面」的合理分叉，不是要收的孪生。这四枚要**全命中**
+ * 才认，于是只描述那一行，不误伤那一枚孤立的计数。 */
 const SECTION_HEADER_MARKS = [
   /size-2 shrink-0 rounded-full/,
   /text-3xs font-semibold tracking-wider uppercase/,
@@ -405,17 +349,10 @@ const SECTION_HEADER_MARKS = [
   /border-t border-dashed bg-transparent/,
 ];
 
-/**
- * 面板里铺满居中的轻量占位（`EmptyState` 的第四档）。
- *
- * 这一族的标记**只许按单行判**（下面 `scope: "line"`），这是量出来的、不是洁癖：
- * 这七枚标记每一枚都很常见，按整文件全命中判会误抓三处无关文件
- * （实测整文件口径命中 9 个文件，其中 `HistoryPanel.tsx` 的 `flex h-full` 在第 69 行、
- * `justify-center` 在第 230 行；`ProjectGate.tsx` 命中的 `text-ink-fainter` 其实是
- * `placeholder:text-ink-fainter`；`ShellTabs.tsx` 那一处是页签诊断卡、不是空态）。
- * 收到「同一枚 class 字符串」上，实测严格同形正好 5 处、零误抓 —— 判据描述的形状
- * 与「一个人手抄会抄下的东西」同宽：手抄的人抄的就是这一整串。
- */
+/** 面板里铺满居中的轻量占位（`EmptyState` 第四档）。这七枚标记**只许按单行判**（`scope: "line"`），是量出来的：
+ * 每枚都常见，按整文件全命中会误抓三处无关文件（实测 9 个文件，`HistoryPanel.tsx` 的 `flex h-full` 在 69 行、
+ * `justify-center` 在 230 行；`ProjectGate.tsx` 命中的其实是 `placeholder:text-ink-fainter`；`ShellTabs.tsx` 是页签
+ * 诊断卡不是空态）。收到「同一枚 class 字符串」上实测严格同形正好 5 处、零误抓 —— 与「人手抄会抄下的东西」同宽。 */
 const PANEL_MARKS = [
   /\btext-ink-fainter\b/,
   /\bflex h-full\b/,
@@ -426,38 +363,21 @@ const PANEL_MARKS = [
   /\btext-sm\b/,
 ];
 
-/**
- * 段级小标题那一行（标题 + 同行 hint）的标记 —— 出口是
- * `~/components/ui/section-label` 的 `<SectionLabel>`。
- *
- * 三枚要**全命中**才认，而每一枚都常见，所以收窄靠的是「三枚同现」这件事本身：
- * 实测（`stripComments` 后按文件全命中）恰好只有实现自己一处 —— 另外几处看着
- * 像的都被挡在门外：
- *   · `ComfyuiStoragePaths` 那行有同样的 wrapper 与 hint 档，但标题是
- *     `font-medium`（不是 `font-semibold`）⇒ 它是另一档，**刻意不同形**；
- *   · `AppearanceSection` 的 wrapper 是 `gap-2`（不是 `gap-x-2`）；
- *   · `FinalComposer` / `WorkshopAside` 只有那枚 `text-ink text-sm font-semibold`
- *     的 `<span>`，没有段级小标题的 wrapper。
- */
+/** 段级小标题那一行（标题 + 同行 hint）的标记 —— 出口是 `~/components/ui/section-label` 的 `<SectionLabel>`。三枚要
+ * **全命中**才认，而每枚都常见，收窄靠「三枚同现」：实测（剥注释后按文件全命中）恰只有实现自己一处。近邻挡在门外：
+ * `ComfyuiStoragePaths` wrapper 与 hint 档相同但标题 `font-medium`（刻意不同形）；`AppearanceSection` 是 `gap-2` 而非
+ * `gap-x-2`；`FinalComposer` / `WorkshopAside` 只有那枚 `text-ink text-sm font-semibold` 的 `<span>`、无段级 wrapper。 */
 const SECTION_LABEL_MARKS = [
   /mb-2 flex flex-wrap items-baseline gap-x-2/,
   /text-ink text-sm font-semibold/,
   /text-muted-foreground text-xs/,
 ];
 
-/**
- * 节点底部那枚「▶ 用此工作流生成」（全宽渐变 + 跟品牌走的投影）。
- *
- * 收它的原因与前面几族不同：这不是「两个屏各抄一份」，而是**同一枚按钮在三处
- * 各写一套参数** —— 高度一枚写成 43px 的字面量、两枚写 `h-10.75`（同为 43px，但只有后者
- * 跟着 `--spacing` 走）；投影一枚进 class、一枚进 `style`（进 `style` 的那枚不吃
- * `color-mix` 的类内转义，改档要改两处）；hover 一档 95 一档 90；variant 一枚 `ghost`
- * 两枚 `primary-solid`。这些差异每一个都「看着无所谓」，合起来就是四处漂移。
- *
- * **只描同一行里的那份基础形状**（`scope: "line"`）：`corner` 那一档分叉刻意不进标记 ——
- * 它是「卡片裁切不裁切」的宿主差异，唯一出处里带两个形态是设计的一部分，把它写进标记
- * 等于要求判据去抓一个本来就该分叉的东西。
- */
+/** 节点底部那枚「▶ 用此工作流生成」（全宽渐变 + 跟品牌走的投影）。收它与前面几族不同：不是两屏各抄一份，而是
+ * **同一枚按钮三处各写一套参数** —— 高度一枚 43px 字面量、两枚 `h-10.75`（同 43px，但只有后者跟 `--spacing`）；
+ * 投影一枚进 class、一枚进 `style`（后者不吃 `color-mix` 类内转义，改档要改两处）；hover 95/90；variant ghost /
+ * primary-solid。每处都「看着无所谓」，合起来就是四处漂移。**只描同一行里的基础形状**（`scope: "line"`）：
+ * `corner` 分叉刻意不入标记 —— 那是「卡片裁不裁」的宿主差异，唯一出处带两形态是设计的一部分。 */
 const GENERATE_BUTTON_MARKS = [
   /from-primary to-accent/,
   /\bh-10\.75\b/,
@@ -491,44 +411,17 @@ const GLOW_TOKENS = [
 ];
 
 describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", () => {
-  /** 棘轮基线：本轮清理后实测的存量，只许降不许升（要升得改用例并写理由）。
-   *  21→12 是类型 chip 收进 `~/components/studio/TypeChip`（10 处调用点各写一份 →
-   *  只剩实现里那一处 + `ParamOwnerTag` 那一枚异类）；12→10 是节点右侧胶囊的两处
-   *  手写改走早已存在的 `WorkflowNodePill`（§12.18：有等价实现就先 import）；
-   *  **10→7 是逐角色判定的收口**：两处 2px 并到 `rounded-xs`（实测产物里
-   *  `--radius-xs: 0.125rem` ⇒ 逐字节同值、零像素），项目卡 18px 并到 `rounded-xl`
-   *  （`studio/HomePage.tsx` 那一页本来就有 7 处用它）。剩下的 7 处每件都有自己的
-   *  理由，枚举在契约 §Shapes，别当漏网清掉。
-   *  字号 302→298 是同上的 `text-3xs` 归一；**298→201 是「同一个 12px 有两种行高」
-   *  定档**：103 处 `text-[12px]`（12px + 继承的 1.5 ⇒ 18px）统一成 `text-xs`
-   *  （12px + 16px，全库 289 处已在用的那一档）。那条归零判据见下面一条。
-   *  **201→140 是同一条口径的第二半**：62 处 `text-[ 13px ]` 并入 `text-sm`（14px，
-   *  契约认的「应用默认正文」档）。这一批**带着行高一起变**（19.5 → 16px），
-   *  所以 `log-virtual.ts` 的行高常量与它的两处用例是同批改的，不是两件事。 */
+  /** 棘轮基线：本轮清理后实测存量，只许降不许升（要升得改用例并写理由）。21→12 类型 chip 收进 `TypeChip`（10 处
+   *  调用点 → 实现 + `ParamOwnerTag` 一枚异类）；12→10 节点右侧胶囊改走既有 `WorkflowNodePill`（§12.18）；
+   *  **10→7 逐角色收口**：两处 2px → `rounded-xs`（实测零像素差）、项目卡 18px → `rounded-xl`；剩 7 处各有理由、
+   *  枚举在契约 §Shapes，别当漏网清掉。字号 302→298（`text-3xs` 归一）；**298→201**：103 处 `text-[12px]` → `text-xs`；
+   *  **201→140**：62 处 `text-[ 13px ]` 并入 `text-sm`（带行高 19.5→16），`log-virtual.ts` 常量与两处用例同批改。 */
   const RADIUS_BASELINE = 7;
-  /**
-   * **140→122 是同一条「一个尺寸一个名字」口径的第三半**：圆角那条「字面 px 等于某档
-   * 当前渲染值就红」此前只判圆角，字号侧只归零了 12 / 13px —— 于是 17 处 14px 的字面量
-   * （逐字等于 `text-sm` 的渲染值）与 1 处 18px 的字面量（等于 `text-lg`）长期合法。
-   * 这一批**带着行高一起变**（字面量吃继承的 1.5 ⇒ 21px / 27px，档位自带 20px / 28px
-   * ⇒ 实际 −1px / +1px；配对值由下面那条行高判据守着，别凭印象改这里），
-   * 与 13px 那批同理：改动点所在行是否由文字定高，按结构判（同族最高兄弟元素 ≥ 新行盒），
-   * 不靠眼睛。17px 那枚字面量不在射程内 —— 它等于 `--text-stage`，而标题那三颗
-   * **根本不是档位**：它们住在 `:root`（不在 `@theme`，因此不生成 utility）、乘
-   * `--font-scale` 所以没有单一渲染值，只经 `.u-title*` 使用（从前这里写的是
-   * 「改名成 t-shirt 形状就会自动纳入射程」—— 那句不成立：读法只解常量声明，
-   * `calc()` 形状它看不见；射程的真正边界是「有没有单一渲染值」，不是档名形状）。
-   * 本注释刻意**不写完整的候选名**：被扫到的正文里每写全一枚，产物 CSS 就多一条
-   * 没人用的规则（口径见规范 03 §3.6.2），而这一批刚被清零。
-   * **122→67 是 10.5px 那一批**：52 处里只有 1 处落在 `h3` 上，其余全是 `<p>` / `<span>`
-   * / `<div>` 的元信息行 —— 正是 `text-2xs`(11px) 登记的角色，所以整批并进去、并像
-   * 12 / 13px 那样另签一条**归零等式**。方向取「并大」（ISSUE #1751 的结论是「档写低了」），
-   * 逐处结构判与 +0.5px 的代价都在下面那条 `it` 里。
-   * **67→49 是 9px 立档**（`--text-4xs: 9px`，t-shirt 刻度往下、单调：4xs < 3xs=10 < 2xs=11）。
-   * 差的 4 枚是刻意的账：grep 层面这批 22 处里有 4 处在注释里（`ui/badge` 的 `xs` 档说明
-   * 与 `ui/list-badge` 的分工表），而棘轮走的是**剥注释**的扫描 —— 注释本来就不计数，
-   * 所以只降 18。改注释是为了让产物里那条 9px 规则真的没有出处（口径见契约 §Colors 的
-   * 扫描边界：`docs/**` 与 `tests/**` 也一起被扫）。 */
+  /** **140→122**（「一个尺寸一个名字」第三半）：圆角那条「字面 px 等于某档渲染值就红」此前只判圆角，字号侧只归零
+   *  12/13px ⇒ 17 处 14px（=`text-sm`）、1 处 18px（=`text-lg`）长期合法；这批带行高一起变（1.5 ⇒ 21/27px 对档位
+   *  20/28px ⇒ −1/+1px，配对值由下面行高判据守着）。17px 不在射程：等于 `--text-stage`，而标题三颗不在 `@theme`、乘
+   *  `--font-scale` 无单一渲染值 —— 射程边界是「有无单一渲染值」，不是档名形状。**122→67**：10.5px 52 处仅 1 落 `h3`，
+   *  余为元信息行 = `text-2xs`(11px) 角色，整批并大；**67→49** 为 9px 立档（`--text-4xs`），注释内 4 枚剥注释不计 ⇒ 只降 18。 */
   const TEXT_BASELINE = 49;
 
   it("没有一处把圆角档位值重抄成字面 px（抄了就脱离设置页的总闸）", () => {
@@ -642,18 +535,11 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     ).toBeLessThanOrEqual(TEXT_BASELINE);
   });
 
-  /**
-   * 词汇表：住在 `@theme` 之外的每一枚字号，都要有一句「它是干什么的」。
-   *
-   * 判的是**形状**而不是处数（处数归上面那条 `TEXT_BASELINE` 棘轮）。理由是三处来路的机制
-   * 各不相同 —— 调用点的 arbitrary、`globals.css` 里 `@theme` 之外的裸声明、markdown 渲染器
-   * 拼的内联样式串 —— 而只有第一处被 Tailwind 的类名机制看得见。缺了这张表，第二、第三处
-   * 就是「文档里两句旧话 + 没人数的剩下十几处」；本文上一版正是那个形状（只记了两条来路、
-   * 三枚值）。
-   *
-   * ⚠️ 这里的键是**值的字面形式**（`"12.5"` 而不是任何完整类名）：本文件也在 Tailwind 的
-   * 扫描面里，写全一枚就多一条死规则（口径见 `tests/docs-candidate-hygiene.test.ts`）。
-   */
+  /** 词汇表：住在 `@theme` 之外的每一枚字号，都要有一句「它是干什么的」。判**形状**而非处数（处数归 `TEXT_BASELINE`
+   * 棘轮）：三处来路机制各异 —— 调用点 arbitrary、`globals.css` 里 `@theme` 之外的裸声明、markdown 渲染器拼的内联样式串 ——
+   * 只有第一处被 Tailwind 类名机制看得见；缺表则后两处成了「文档两句旧话 + 没人数的十几处」（本文上一版正是那样）。
+   * ⚠️ 键是**值的字面形式**（`"12.5"` 而非完整类名）：本文件也在 Tailwind 扫描面里，写全一枚就多一条死规则
+   *（口径见 `tests/docs-candidate-hygiene.test.ts`）。 */
   const OUT_OF_THEME_SIZES: Record<string, string> = {
     "7.5": "uppercase 微标（workflow-library/SettingsParts）",
     "8.5": "圆点徽标里的计数（rounded-full 那种窄胶囊）",
@@ -755,14 +641,11 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
   });
 
   it("12px / 13px 只有一个名字：调用点不许再写字面量档", () => {
-    /* 这一档不是棘轮、是**归零等式**：`text-xs`(12) 与 `text-sm`(14) 是已存在的两档，
-       而 `text-[ 12px ]` / `text-[ 13px ]` 字号贴着它们、行高却各走一套（字面量只出字号，
-       行高吃继承的 1.5 ⇒ 18px / 19.5px；档位自带的配对值是 16px / 20px —— 所以 13px 那批
-       并入 `text-sm` 的真实行盒变化是 19.5 → 20，不是 19.5 → 16（见下面那条行高判据）。「同一个字号
-       两种行高」= 同一把尺上两个名字，所以两批字面量都签字归一（12px→text-xs 289 处那档、
-       13px→text-sm 正文那档），再出现字面量就是重新分裂。要更松的行高请显式写 `leading-*`。
-       13px 那 62 处并入时，`log-virtual.ts` 的 27/18 两个行高常量与两处用例是**同一批**改的
-       —— 那对常量与 class 是同一件事的两面，漏一侧就是滚动位置与内容错位。 */
+    /* 这一档不是棘轮、是**归零等式**：`text-xs`(12) 与 `text-sm`(14) 已是存在两档，而 `text-[ 12px ]` / `text-[ 13px ]` 贴着它们、
+       行高却各走一套（字面量只出字号，行高吃继承的 1.5 ⇒ 18/19.5px；档位配 16/20px —— 故 13px 并入 `text-sm` 的真实行盒
+       变化是 19.5→20，不是 19.5→16）。「同一字号两种行高」= 一把尺上两个名字，两批都签字归一（12→text-xs、13→text-sm），
+       再出现字面量就是重新分裂；要更松的行高请显式写 `leading-*`。13px 那 62 处并入时 `log-virtual.ts` 的 27/18 行高
+       常量与两处用例同批改 —— 常量与 class 是一件事的两面，漏一侧就是滚动位置与内容错位。 */
     const smallLiteral = /\btext-\[1[23]px\]/g;
     /* 自己先验一次量具：这条是「等式为 0」的判据，正则写漂了会永远绿。
        样本串**拆开拼**：一整条候选名出现在被扫正文里就会生成进产物，而这两档的调用点
@@ -793,16 +676,11 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
   });
 
   it("10.5px 不是一个档：调用点不许再写它（已并入 text-2xs）", () => {
-    /* 也是**归零等式**，与上面那条同形。规范 03 §3.10 曾把「h2 / h3 保留 10.5–14px 的
-       几档微排版」登记成例外，量下来对不上：52 处里只有 1 处落在 `h3` 上，主体是
-       `<p>` / `<span>` / `<div>` 的元信息行 —— 那正是 `text-2xs`(11px) 登记的角色
-       （副说明下的元信息、密集列表行）。所以它不是「第五个档」，而是「比 2xs 小半像素」
-       的漂移值：t-shirt 刻度在 3xs(10) 与 2xs(11) 之间给不出名字，硬造一颗既过不了
-       档名形状判据、又给「改一档全站跟手」多一个没人维护的落点。
-       方向选**并大**不选并小：ISSUE #1751 量出来的结论是「档写低了」而不是「字太大」，
-       而这一批全是说明性文字。+0.5px 逐处按结构判过 —— 52 处没有一处落在 `h-*` / `size-*`
-       固定高度里（6 处自带 `h-auto`、2 处是 `max-h-32 overflow-y-auto` 可滚），
-       宽度受限的 10 处本来就带 `min-w-0 truncate` / `max-w-*`：收不下是截断，不是溢出。 */
+    /* 也是**归零等式**，与上面同形。规范 03 §3.10 曾把「h2 / h3 保留 10.5–14px 微排版」登记为例外，量下来对不上：52 处
+       仅 1 处落 `h3`，主体是 `<p>` / `<span>` / `<div>` 的元信息行 = `text-2xs`(11px) 的角色。它不是「第五个档」，而是
+      「比 2xs 小半像素」的漂移值：3xs(10) 与 2xs(11) 之间刻度给不出名字，硬造一颗既过不了档名形状判据、又多一个
+       没人维护的「改一档全站跟手」落点。方向选**并大**（#1751 的结论是「档写低了」，这批全是说明性文字）；+0.5px 逐处
+       按结构判过：52 处无一落在 `h-*` / `size-*` 固定高度（6 处自带 `h-auto`、2 处可滚），宽度受限的 10 处本就带截断。 */
     const driftLiteral = /\btext-\[10\.5px\]/g;
     expect(
       [...("text-" + "[10.5px] 与 text-" + "[10.5px]").matchAll(driftLiteral)].length,
@@ -824,15 +702,11 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
   });
 
   it("档位的配对行高由这张表给：文档与推理都不许凭印象写数字", () => {
-    /* §11.8 撤的是**页面级像素基线**；组件那一侧仍然有人管的两件里，这一件就是
-     * 「具体的 token / 尺寸值对不对」（`getComputedStyle` 类断言）。行高恰好是
-     * 第 3、4 刀全部推理的支点（「字面量吃继承的 1.5，档位自带配对值」），
-     * 而它此前没有任何判据守着 —— 于是文档里一个错的配对值活了很久，
-     * 还被写进两次提交的因果句：`text-sm` 的配对是 **20px**（依赖里
-     * `--text-sm--line-height: calc(1.25 / 0.875)` × 14px），从前到处写的是 16px
-     * （那是 `text-xs` 的）。真 Chromium 读数（Storybook 沙箱，加载的就是这份编译
-     * 产物）：xs 12/16、sm 14/20、lg 18/28、2xs 11/16.5、3xs 10/15 —— 后两档的
-     * 16.5 / 15 是**继承来的 1.5 倍**，不是配对。 */
+    /* §11.8 撤的是**页面级像素基线**；组件侧仍有人管的两件里，这一件是「具体 token / 尺寸值对不对」（`getComputedStyle` 类
+       断言）。行高是第 3、4 刀全部推理的支点（「字面量吃继承 1.5，档位自带配对值」）却此前无判据守着 —— 于是文档里
+       一个错的配对值活了很久，还被写进两次提交的因果句：`text-sm` 的配对是 **20px**（`--text-sm--line-height:`
+       calc(1.25 / 0.875)` × 14px），从前到处写 16px（那是 `text-xs` 的）。真 Chromium（Storybook 沙箱，加载的就是这份
+       编译产物）：xs 12/16、sm 14/20、lg 18/28、2xs 11/16.5、3xs 10/15 —— 后两档的 16.5/15 是**继承来的 1.5 倍**。 */
     const tiers = parseTextTiers(readFileSync(GLOBALS_PATH, "utf8"), TSHIRT_NAME);
     /* SAFETY: 类型断言已复核 */
     for (const [name, px] of [
@@ -868,13 +742,10 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
   });
 
   it("标题那三颗 token 不是工具类：产品代码里不许出现同名 class", () => {
-    /* 定义侧由 `tests/theme-token-single-source.test.ts` 的 T6 钉（不得住在 `@theme`）；
-     * 这一条钉调用侧。从前「别在 JSX 里用 text-section / text-page」只写在注释里，
-     * 而 P83 还把 `text-page` 列为合规出口之二 —— 等于判据自己给那个坑开了扇门：
-     * `cn()` 把不认识的 `text-<名字>` 归进颜色组，挂了它的元素会**静默丢掉同行状态色**。
-     * token 移到 `:root` 之后 Tailwind 不再为它们生成 utility（编译对账：产物里那三条
-     * 从 3 条变 0 条），所以这条归零判据现在只是防「有人把 token 搬回 @theme 之后
-     * 又照着旧写法调用点挂类名」。 */
+    /* 定义侧由 `tests/theme-token-single-source.test.ts` 的 T6 钉（不得住在 `@theme`），这一条钉调用侧。从前「别在 JSX 里用
+       text-section / text-page」只写在注释里，P83 还把 `text-page` 列为合规出口 —— 等于判据自己给坑开门：`cn()` 把不认识
+       的 `text-<名字>` 归进颜色组，挂了它的元素会**静默丢掉同行状态色**。token 移到 `:root` 后 Tailwind 不再为它们生成
+       utility（产物里那三条 3→0），所以这条归零判据现在只是防「有人把 token 搬回 @theme 之后又照旧写法挂类名」。 */
     const titleClass = /\btext-(?:section|page|stage)\b/g;
     expect(
       [...("text-" + "page 与 text-" + "section").matchAll(titleClass)].length,
@@ -892,19 +763,11 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
   });
 
   it("浮层上限只许走那两档常量；行内图标的 align-[ -Npx ] 只许留在文本流那一处", () => {
-    /* 两条都是**归零等式 + 具名出处白名单**（形状与光晕那条同：按 owner 放行）。
-       浮层侧：85vh 是量出来的事实档（6 处：居中模态、图片看全、弹层面板），
-       `78vh` / `90vh` 各 1 处是同一角色上的漂移值 —— 差那 5–7 个百分点没有任何一处
-       文档说过为什么；`70vh`（3 处）是**另一个角色**：页面里自滚动的卡片区，上限要留
-       出周围内容的呼吸。两档收进 `ui/overlay-max-height.ts`，调用点一律 import。
-       为什么不做成 `@theme` 的 `--max-height-*`：实测 `cn("max-h-[85vh]", "max-h-overlay")`
-       **两条都留** —— tailwind-merge 认不出自定义名字属于哪一族，于是「谁覆写谁」变成
-       看 Tailwind 的输出顺序，正是 `dialog-width.ts` 文件头记着的那类静默失效；存 class
-       串则同族冲突照常生效（实测两条 arbitrary 只留后一条）。
-       图标侧：11 处 `inline align-[ -Npx ]` 里有 10 处坐在 `Button` / `flex` 容器里，而
-       `vertical-align` 对 flex item 不起作用 —— 真 Chromium 实测：带与不带，图标的行内
-       偏移都是 4.5px；同一份声明放进 inline 文本流才有效（12px 图标 5px→6px）。
-       那 10 处是抄来的零效果声明，删；只剩文本流那一枚，理由写在那一处的注释里。 */
+    /* 两条都是**归零等式 + 具名出处白名单**（按 owner 放行）。浮层侧：85vh 是实测事实档（6 处），`78vh`/`90vh` 各 1 处是
+       同一角色上的漂移值（差 5–7 个百分点，无一处文档说过为什么）；`70vh`(3) 是**另一角色**：页面内自滚卡片区。两档收进
+       `ui/overlay-max-height.ts`、调用点一律 import。不做 `@theme --max-height-*`：实测 `cn("max-h-[85vh]","max-h-overlay")`
+       **两条都留**（tailwind-merge 认不出自定义名属哪一族，「谁覆写谁」看输出顺序，即 `dialog-width.ts` 头注那类静默失效）。
+       图标侧：11 处 `inline align-[ -Npx ]` 中 10 处在 `Button`/`flex` 里 `vertical-align` 无效（实测有无都 4.5px）⇒ 删，只剩文本流那枚。 */
     /* 两条正则都必须带**捕获组 1**（数值本身）：`scanProduct` 只收 `m[1]` 有值的命中，
      * 没有捕获组它会一条都不记 —— 于是白名单与调用点一起「扫不到」，判据对着空集绿着。
      * 上面那两条「owner 在册必须扫得到」的断言就是抓这个的。 */
@@ -963,13 +826,10 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
   });
 
   it("屏级标题之下那行副说明（`.u-title-page` 后 4 行内第一个 `<p>`）不许低于 text-sm", () => {
-    /* **归零等式**（ISSUE #1751）：P86 要 `text-sm` 才起跳，所以「把档写低」反而
-       绕过了它 —— 两屏此前正是 `h3` + `.u-title` + `p.text-xs`。这条补的就是
-       那一格：标题档在后 4 行内有第一个 `<p>`、而那枚 `<p>` 写着 `text-xs` /
-       `text-2xs` / `text-3xs` 就算违规，**不看间距档**（`mt-1` / `mt-2` 都算）。
-
-       三向自证在下面（正例必抓 / `text-sm` 不抓 / `titleSuffix` 那枚 `<span>`
-       不抓）—— 等式为 0 的判据若正则写漂会永远绿，量具必须先自证能抓。 */
+    /* **归零等式**（ISSUE #1751）：P86 要 `text-sm` 才起跳，故「把档写低」反绕过它 —— 两屏此前正是 `h3` + `.u-title` +
+       `p.text-xs`。这条补那一格：标题档后 4 行内第一个 `<p>` 写着 `text-xs` / `text-2xs` / `text-3xs` 即违规，**不看间距档**
+      （`mt-1` / `mt-2` 都算）。三向自证在下面（正例必抓 / `text-sm` 不抓 / `titleSuffix` 的 `<span>` 不抓）—— 等式为 0
+       的判据正则写漂会永远绿，量具必须先自证能抓。 */
     const offenders = scanTitleSubtitleBelowBody();
     expect(
       offenders,
@@ -1051,12 +911,10 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
   });
 
   it("@theme 的 --text-* 档名必须是 t-shirt 尺寸（否则 cn() 把它当颜色吃掉）", () => {
-    /* 实测：cn("text-ink-muted", "text-micro") 只剩 text-micro —— 不认识的
-       `text-<名字>` 被归进颜色组，同行的语义文字色被静默合并掉（这条是钩子
-       红了 4 条 StatusBadge 用例才暴露的）。t-shirt 形状才落在 font-size 组。
-       豁免那三颗是历史形态：它们只经 `.u-title-*` 在 CSS 里用，从没进过 JSX。
-       （从前还有第四颗 `hero` —— 首页欢迎区撤掉时它连同 `--text-hero` 一起退役，
-       豁免名单跟着撤：留一个不存在的名字，等于给「以后又加回这一档」预先放行。） */
+    /* 实测：`cn("text-ink-muted","text-micro")` 只剩 text-micro —— 不认识的 `text-<名字>` 被归进颜色组，同行的语义文字色被
+       静默合并掉（钩子红了 4 条 StatusBadge 用例才暴露）。只有 t-shirt 形状才落在 font-size 组。豁免那三颗是历史形态：
+       它们只经 `.u-title-*` 在 CSS 里用、从没进过 JSX。当年还有第四颗 `hero`，随首页欢迎区撤掉与 `--text-hero` 一起退役，
+       名单跟着撤：留一个不存在的名字等于给「以后又加回这一档」预先放行。 */
     const EXEMPT = new Set(["section", "page", "stage"]);
     const names = [
       ...readFileSync(GLOBALS_PATH, "utf8").matchAll(/^\s*--text-([a-z0-9]+)\s*:/gm),
@@ -1302,12 +1160,10 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
         'className="text-ink-fainter flex h-full flex-col items-center justify-center gap-3"',
         "面板内铺满居中的占位",
       ],
-      /* 段级小标题那一族的两个反向样本 —— 都是「同屏相邻、看着像」的东西：
-         ① **屏级页头**（`ui/page-header`）走的是另一档（`.u-title-page` 24px +
-         `mt-1 text-sm` 副说明），不是段级那一行，不许被这组标记抓到；
-         ② **段头胶囊**（`DynamicWorkflowForm/SectionHeader`）是「圆点 + 大写标签
-         + 计数胶囊 + 虚线」那一族，连字号档都不同（`text-3xs` 大写标签）。
-         两者被抓到就说明这组标记太松、判据成了「拦下了一切」。 */
+      /* 段级小标题那一族的两个反向样本 —— 都是「同屏相邻、看着像」：① **屏级页头**（`ui/page-header`）走另一档
+         （`.u-title-page` 24px + `mt-1 text-sm` 副说明），不许被这组标记抓到；② **段头胶囊**
+         （`DynamicWorkflowForm/SectionHeader`）是「圆点 + 大写标签 + 计数胶囊 + 虚线」那一族，字号档都不同
+         （`text-3xs` 大写标签）。两者被抓到就说明标记太松、判据成了「拦下一切」。 */
       [
         '<h1 className="font-title u-title-page min-w-0 truncate">{title}</h1>' +
           '<p className="text-ink-muted mt-1 text-sm">{description}</p>',

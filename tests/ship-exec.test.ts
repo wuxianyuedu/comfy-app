@@ -1,9 +1,7 @@
 /**
- * `ship-exec.mjs` 的取数形状 —— 这里只钉 `buildSnFromOutput()`（ISSUE #2378）。
- *
- * 「写动作成没成」只认回读到的对象：start-build 真起了一跑时输出里必有一个 `sn`，
- * 而 403 / scope 不足那一族 cnb **照旧退 0** —— 消费方若只看退出码，那条红就静默了。
- * 这组用例钉住「什么形状读得回 sn」，委托口与探针口都靠它。
+ * `ship-exec.mjs` 的取数形状 —— 只钉 `buildSnFromOutput()`（ISSUE #2378）。「写动作成没成」只认回读到的
+ * 对象：start-build 真起一跑时输出里必有 `sn`，而 403 / scope 不足那一族 cnb 照旧退 0 —— 只看退出码
+ * 那条红就静默了。委托口与探针口都靠它。
  */
 import { describe, expect, it } from "vitest";
 

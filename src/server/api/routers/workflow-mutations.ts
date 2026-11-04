@@ -231,18 +231,10 @@ export const workflowMutationProcedures = {
       if (input.defaultMode !== undefined) {
         patch.defaultMode = input.defaultMode;
       }
-      /* 「重置布局」= 直接清除本视图的坐标覆盖。
-       *
-       *  为什么不是「把快照写回去」：客户端拿到的 `detail.positions` 是
-       *  服务端把**原始坐标**与**用户拖拽覆盖**合并后的结果，客户端分不清
-       *  哪个键是覆盖。照着重写一遍等于把覆盖值当成原始值再存一次 —— 用户
-       *  看到的正是「重置之后位置回不到原始布局」「再改一次反而回归到一个
-       *  错误位置」。删除覆盖键之后，读路径自然只剩原始坐标，语义才对得上
-       *  「重置位置 = 清除所有更改过的位置」。
-       *
-       *  只删当前命名空间的键：顶层把裸 id / `grp:bpin:*` 全部清掉；子图只清
-       *  `<host>:<inner>` 这一层（`4:5:1670` 属于更深一层，用 `4:` 前缀匹配，
-       *  由 `runtimeInnerId` 同口径判定）。别的层级与别的命名空间原样保留。 */
+      /* 「重置布局」= 清除本视图的坐标覆盖。不能「把快照写回去」：`detail.positions` 已是原始坐标
+       *  与用户覆盖合并后的结果，客户端分不清哪个键是覆盖，照抄一遍等于把覆盖值当原始值再存（症状：
+       *  重置后回不到原始布局）。故只删当前命名空间：顶层清裸 id 与 `grp:bpin:*`，子图只清
+       *  `<host>:<inner>`（`4:5:1670` 属更深一层，靠 `4:` 前缀、与 `runtimeInnerId` 同口径）。 */
       if (input.resetPositionsScope !== undefined) {
         const scope = input.resetPositionsScope;
         /* 重置是「删除覆盖」这一件事本身，与写入互斥：同时传 positions 时

@@ -1,31 +1,7 @@
 /**
- * 「参数化用例 `it.for` ⇄ `it.each`」门禁自测（规范 §11.15）。
- *
- * 本文件自己**不进扫描面**（`scripts/check-test-it-each.cjs` 的 `FIXTURE_SKIP`）：
- * 下面的被测字符串里就有真的 `it.each(...)`，判它等于判自己的量具
- * （§11.14.2 的通用口径，同 `tests/test-sleep-gate.test.ts` 的取舍）。
- *
- * 逐条钉判定口径（本判据是**硬闸**：无基线、无 `--update`）：
- *   ① `it.each` / `describe.each` 都是站点（按名字收窄会漏）→ 该拦
- *   ② 一处都没有 → 放行
- *   ③ 本地同名 helper（不是 vitest 导入的）→ 整文件不看
- *   ④ 夹具字符串 / 注释里的 `.each(` → 不算站点
- *   ⑤ 判据自己的夹具文件 → 跳过
- *   ⑥ 翻闸后无基线文件可读：`--update` 走的是「未知参数」旧路，不写任何 JSON
- *
- * ## 为什么这份改用了共享夹具（ISSUE #2405）
- *
- * 过去它自己写 `gate()`：`execFileSync` 包 `try/catch`，把结果折成
- * `{ ok: boolean, output, root }`。那个 `ok` 判的是「子进程有没有抛」，于是
- * 「判据判出违规」与「判据**根本没跑起来**」在账面上逐字同形 —— 而后者的退出码
- * 也是 1（node 报 `Cannot find module`）。`expect(r.ok).toBe(false)` 在第二类上
- * **照样绿**。现场（ISSUE #2405）：PR #2404 的 `受影响用例` 那一格红成
- * `expected false to be true`（就是下面 ②′ 这一格），而同两个文件本地复算
- * `Tests 10 passed (10)` —— **那一跑究竟属于哪一类，当时没有读数可以分辨**，
- * 本文件改到这个形状要买的就是「下一次能分辨」，不是「那一次已经查清」。
- * 现在 `ran / status / spawnError / signal` 由 `helpers/gate-repo` 一处交出，
- * 每条断言前先 `expectGateRan(r)`（口径同 §13.6.4「拿不到测量 ≠ 测量结果是红的」）；
- * 依赖补齐归 `copyGateDeps`，本文件不再手写 `DEP`。
+ * 「参数化用例 `it.for` ⇄ `it.each`」门禁自测（§11.15）；本文件不进扫描面（`FIXTURE_SKIP`，被测串含真 `it.each`）。
+ * 硬闸口径（无基线）：`it.each`/`describe.each` 是站点、无站点放行、本地同名 helper 整文件不看、夹具与注释不算、
+ * 夹具文件跳过。共享夹具（#2405）：旧 `ok` 把「判出违规」与「没跑起来」（同样退 1）混同，现断言前先 `expectGateRan`（§13.6.4）。
  */
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -184,15 +160,11 @@ describe("it.each 门禁：翻闸后不再有收紧档（§11.15）", () => {
 
 describe("it.each 门禁：扫描期间文件消失（并发探针）", () => {
   test("读不到的文件返回 null，而不是把整个 D 组带崩", () => {
-    /* 现场：`tests/global-setup-cleanup.test.ts` 会在 `tests/` 下临时造
-       `.setup-cleanup-probe-<pid>-<ts>.test.tsx` 再删掉。同一份工作树里有两个
-       vitest 在跑时（并行会话，或本钩子的 C 组还没退干净），本判据就会
-       **「列到名字、读时已经没了」** —— 于是 D 组不是报出站点，而是带着一个
-       Node 栈崩掉（`ENOENT … .setup-cleanup-probe-….test.tsx`），表现成
-       「提交被拦下、报错里没有一个字指向改动」。
-       一个已经不存在的文件没有站点可言 ⇒ 返回 null 让调用方计数；
-       计数必须进结论行（`collect` 的 `vanished` 与 OK 那行的「另有 N 份未读」），
-       静默跳过就是 §13.5.12 那一族「判据自称在跑、实际没跑」。 */
+    /* 现场：`tests/global-setup-cleanup.test.ts` 会在 `tests/` 下临时造 `.setup-cleanup-probe-*.test.tsx` 再删掉；
+       同工作树两个 vitest 并发时（并行会话或 C 组未退干净），本判据会「列到名字、读时已没了」—— D 组带着
+       `ENOENT` 栈崩掉，报错里没有一个字指向改动。已不存在的文件没有站点 ⇒ 返回 null 让调用方计数；
+       计数必须进结论行（`collect` 的 `vanished`、OK 行的「另有 N 份未读」），
+       静默跳过即 §13.5.12 那族「判据自称在跑、实际没跑」。 */
     const gone = path.resolve(__dirname, "..", "tests", `.setup-cleanup-probe-0-0.test.tsx`);
     expect(existsSync(gone), "夹具路径本身不该存在").toBe(false);
     expect(scanFile(gone)).toBeNull();

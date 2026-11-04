@@ -1,17 +1,7 @@
 /**
- * `scripts/ci-step-verdict.mjs` 的判据（ISSUE #3102）。
- *
- * 它要治的形态是用户截图里那一格：Actions 界面上只有 `✗ 分支守卫` 与
- * `Process completed with exit code 1`，**为什么红要翻日志**。所以这个外壳干两件事：
- *
- *   ① 把首条原因压进 `::error::` / `::warning::` 注解，折叠状态就看得见；
- *   ② 把「退出码 + 命中行 + 末尾」写进 `$GITHUB_STEP_SUMMARY`。
- *
- * 还有一条**最容易写错**的：exit 2（本仓的「没判」）能不能折成非红。判据是——
- * **只有子进程自己打了那段不判结论**才折。无条件折会把「判据根本没跑起来」
- * （`ci-heavy-gates.mjs` 的 missing 也走 2）读成绿，那正是本仓最不能有的形态。
- *
- * 这里两向都钉住：带标记 ⇒ exit 0 + `::warning::`；不带标记 ⇒ 原样红 + `::error::`。
+ * `scripts/ci-step-verdict.mjs` 的判据（ISSUE #3102）：治「Actions 上只有 `✗ 分支守卫` + exit code 1、为什么红要翻日志」——① 首条原因压进 `::error::` / `::warning::`，② 退出码 + 命中行 + 末尾写进 `$GITHUB_STEP_SUMMARY`。
+ * 最易写错的是 exit 2（本仓「没判」）能否折成非红：**只有子进程自己打了那段不判结论**才折；无条件折会把「判据没跑起来」（`ci-heavy-gates.mjs` 的 missing 也走 2）读成绿。
+ * 两向都钉：带标记 ⇒ exit 0 + `::warning::`；不带标记 ⇒ 原样红 + `::error::`。
  */
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";

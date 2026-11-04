@@ -1,19 +1,7 @@
-/**
- * auth/会话边界 + authedProcedure demo 兜底与 loginRequired 开关 + rateLimitedProcedure 限流契约测试（Issue #11）。
- *
- * 覆盖：
- * - createTRPCContext 的会话边界（未登录 → user null / 已有用户 → 取库中 / 新邮箱 → 自动建号）。
- * - authedProcedure 的 demo-user 兜底（ctx.user 为 null 时注入 demo@comfy.app）。
- * - authedProcedure 与 REST 面共用的 `loginRequired` 判决：开关打开且无会话
- *   → UNAUTHORIZED；已登录照常放行（此前 tRPC 面无条件兜底，开关形同虚设）。
- * - rateLimitedProcedure 超窗返回 TOO_MANY_REQUESTS、不同 key 相互独立。
- *
- * mock 边界：~/server/db（内存测试库）、~/server/better-auth（可控 getSession）、
- * ~/lib/core/logger（静音）、~/lib/app-settings/app-settings.server（可控
- * loginRequired 开关，同 auth-server.test.ts 的口径）。鉴权/限流中间件均走真实实现。
- *
- * 说明：限流「超窗测试」先用同一模块的 `checkRateLimit` 预填桶（二者共享限流桶），
- * 以最少真实 tRPC 调用确定性地命中「超窗 → TOO_MANY_REQUESTS」路径。
+/** auth/会话边界＋authedProcedure demo 兜底＋`loginRequired` 开关＋rateLimitedProcedure 限流契约（Issue #11）。
+ * 钉 `loginRequired` 为 tRPC 与 REST 共用判决（此前 tRPC 面无条件兜底、开关形同虚设）；mock 只到 db /
+ * better-auth / logger / app-settings，鉴权与限流中间件走真实实现；超窗用同模块 `checkRateLimit` 预填共享桶，
+ * 以最少真实调用确定性命中 TOO_MANY_REQUESTS。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type * as AppSettingsModule from "~/lib/app-settings/app-settings.server";

@@ -1,33 +1,7 @@
 /**
- * 「假 comfy-cli 怎么被起」的**唯一落点**（跨平台）。
- *
- * ## 它修的那一格
- *
- * 本应用只经 comfy-cli 执行任务：`executor-cli.ts` 起
- * `spawn(comfyCliPython, ["-m", "comfy_cli", "run", …])`。e2e 要让「出图」这条
- * 链路真跑通，就得让这个解释器起得来、且能 import 到我们的替身包。
- *
- * 此前这件事靠一份 POSIX shim（`e2e/support/fake-comfyui/python.sh`，本模块落地时已删除）实现：
- * 它只是 `PYTHONPATH=<替身目录> exec python3 "$@"`。这份 shim 在 Linux / macOS 上
- * 成立（内核认 shebang），而 **Windows 上必然起不来** —— Node 的 `spawn` 走
- * CreateProcess，只有 `.exe` 与经 cmd.exe 的 `.cmd` / `.bat` 会被执行，
- * `.sh` / `.ps1` / 无扩展名脚本一律 `EINVAL`/`ENOENT`（本仓库自己的判据见
- * `src/lib/process/executable-resolve.ts` 的文件头，硬规则 12 也据此禁 `.bat`/`.cmd`）。
- * 症状是**两条 `@critical` 主链路用例在 Windows 开发机上必红**，而报错话术在说
- * 「执行器收口失败」——真因是这一份替身根本没起来。
- *
- * ## 修法的取向：不 shim 解释器，改喂 `PYTHONPATH`
- *
- * shim 存在的唯一理由是「给子进程带上 `PYTHONPATH`」，而 `PYTHONPATH` 本来就是
- * 一个**环境变量**：直接从 `webServer.env` 喂下去即可。于是：
- *
- *   · `COMFY_CLI_PYTHON` = 一个**真**解释器（按平台探测，见 {@link pythonCandidates}）；
- *   · `PYTHONPATH` = 替身包所在目录（`comfy_cli/` 的父目录）；
- *   · 两个平台走**同一条**路径，没有任何需要 `fs.existsSync` 分叉的形态。
- *
- * 为什么可以给整个 Next server 进程加 `PYTHONPATH`：它只影响 Python 的模块解析，
- * 与 Next 自己的 import 无关；而 e2e 里除了这份替身不跑别的 Python——假 ComfyUI
- * 在 `/system_stats` 上应答，`resolveComfyBase()` 探得通，真件不会被自动拉起。
+ * 「假 comfy-cli 怎么被起」的唯一落点（跨平台）。本应用只经 comfy-cli 执行任务：`executor-cli.ts` 起 `spawn(comfyCliPython,
+ * ["-m", "comfy_cli", "run", …])`。旧 POSIX shim（`fake-comfyui/python.sh`，已删）在 Windows 必然起不来（Node `spawn` 只认 `.exe` 与经 cmd.exe 的 `.cmd`/`.bat`，
+ * 见 `executable-resolve.ts`、硬规则 12），两条 `@critical` 主链路在开发机必红。修法：不 shim，直接喂 `PYTHONPATH`（只影响 Python 模块解析）。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -48,10 +22,8 @@ export const FAKE_CLI_FAIL_SENTINEL_KEY = "E2E_FAKE_CLI_FAIL_SENTINEL";
 export const FAKE_CLI_FAIL_SENTINEL_VALUE = "E2E_FAKE_CLI_FAIL_SENTINEL";
 
 /**
- * 可注入的可用性探针（`seed` 那几个用例要用它把「选中了谁」与「真起一次」分开）。
- * 形状取自 `executable-resolve.ts` 的 `UsabilityProbe`——这里不 import 那个类型，
- * 因为 `.mjs` 侧只需要它的结构（判据仍由 `whichCommand` 与 `resolvePython` 持有）。
- *
+ * 可注入的可用性探针（`seed` 用例用它把「选中了谁」与「真起一次」分开）。形状取自 `executable-resolve.ts` 的
+ * `UsabilityProbe`，这里不 import 那个类型：`.mjs` 侧只需要结构（判据仍由 `whichCommand` / `resolvePython` 持有）。
  * @typedef {{ access(candidate: string): void, spawn(candidate: string, args: string[]): string | null }} PythonProbe
  */
 
@@ -59,33 +31,18 @@ export const FAKE_CLI_FAIL_SENTINEL_VALUE = "E2E_FAKE_CLI_FAIL_SENTINEL";
 export const COMFY_CLI_PYTHON_KEY = "COMFY_CLI_PYTHON";
 
 /**
- * 按平台给解释器候选名 —— **转发** `src/lib/process/python-candidates.ts`。
- *
- * 这里此前自己写了一份，而门禁脚本与流水线的「工具链自证」各又写一份；三份在
- * 「Windows 先试 `python` 还是先试 `python3`」「`py` 要不要带 `-3`」这两件事上
- * 必然漂移（ISSUE #1959 第二轮首跑现场就是它）。复用在先（硬规则 24）：候选表
- * 与启动参数都只有那一处，本模块只保留「e2e 视角」的转发与文档。
- *
- * @param {NodeJS.Platform} [platform]
- * @returns {string[]}
- */
+ * 按平台给解释器候选名 —— **转发** `src/lib/process/python-candidates.ts`。此前这里自己写一份、门禁脚本与
+ * 「工具链自证」各又写一份，三份在「`python` 还是 `python3` 先试」「`py` 要不要带 `-3`」上必然漂移
+ * （ISSUE #1959 第二轮首跑现场）。复用在先（硬规则 24）：候选表与启动参数只有那一处。
+ * @param {NodeJS.Platform} [platform] @returns {string[]} */
 export function pythonCandidates(platform = process.platform) {
   return sharedPythonCandidates(platform);
 }
 
 /**
- * 挑一个**真能跑**的解释器（绝对路径）；PATH 上一个都没有时返回 `null`。
- *
- * 转发 `src/lib/process/python-resolve.ts` —— 候选顺序、`py` 的 `-3`、以及
- * 「真起一次确认」这三件事都在那一份里。本模块只保留 e2e 需要的形状
- * （`probe` 可注入，好让两个平台的候选顺序在本机被逐条断言）。
- *
- * @param {{
- *   env?: Record<string, string | undefined>,
- *   platform?: NodeJS.Platform,
- *   probe?: PythonProbe,
- * }} [options]
- * @returns {string | null}
+ * 挑一个**真能跑**的解释器（绝对路径）；PATH 上一个都没有时返回 `null`。转发 `src/lib/process/python-resolve.ts` ——
+ * 候选顺序、`py` 的 `-3`、「真起一次确认」都在那一份里；本模块只保留 e2e 需要的形状（`probe` 可注入，逐条断言候选顺序）。
+ * @param {{env?: Record<string, string | undefined>, platform?: NodeJS.Platform, probe?: PythonProbe}} [options] @returns {string | null}
  */
 export function resolveFakeCliPython({
   env = process.env,
@@ -105,22 +62,9 @@ export function resolveFakeCliPython({
 }
 
 /**
- * 本模块给出的那份 `webServer.env` 补丁。
- *
- * 三种「给不出来」的分岔都必须说清（都在返回值里，调用方不需要再判一次）：
- *   · 替身包目录不在（浅克隆 / 有人删了）→ `env` 为空，且 `reason` 非空；
- *   · PATH 上没有可用的 Python → 同上。**没有它也不该让全套 e2e 起不来**
- *     （视觉档、冒烟档都不碰执行链路），缺件时主链路用例会按「执行器起不来」
- *     失败，报错指向这一行的 `reason`。
- *
- * @param {{
- *   env?: Record<string, string | undefined>,
- *   platform?: NodeJS.Platform,
- *   probe?: PythonProbe,
- *   moduleRoot?: string,
- *   exists?: (p: string) => boolean,
- * }} [options]
- * @returns {{ env: Record<string, string>, reason: string | null, python: string | null }}
+ * 本模块给出的那份 `webServer.env` 补丁。三种「给不出来」都在返回值里说清：替身包目录不在（浅克隆 / 被删）→ `env` 空且 `reason` 非空；
+ * PATH 上没有可用 Python → 同上。缺件不该让全套 e2e 起不来（视觉档、冒烟档都不碰执行链路），主链路用例按 `reason` 指向这一行。
+ * @param {{env?: Record<string, string | undefined>, platform?: NodeJS.Platform, probe?: PythonProbe, moduleRoot?: string, exists?: (p: string) => boolean}} [options] @returns {{env: Record<string, string>, reason: string | null, python: string | null}}
  */
 export function fakeExecutorEnv({
   env = process.env,
@@ -129,12 +73,9 @@ export function fakeExecutorEnv({
   moduleRoot = FAKE_CLI_MODULE_ROOT,
   exists = fs.existsSync,
 } = {}) {
-  /* 分隔符与 join 口径**跟着注入的 platform 走**，不跟宿主：这份模块存在的理由就是
-   * 「两个平台同一条形状」可以在任一开发机上被判（判据是 `tests/e2e-fake-comfyui-executor-env.test.ts`）。
-   * 用宿主 `path` 时，在 Windows 上判 `platform: "linux"` 会拼出反斜杠路径、
-   * 注入的 `exists` 永不命中 ⇒ 那条形状判据实际只在 POSIX 上自证过。
-   * 真实调用方不受影响：`platform` 缺省就是 `process.platform`，win32 拿 `path.win32`、
-   * POSIX 拿 `path.posix`，与改动前逐字相同。 */
+  /* 分隔符与 join 口径**跟着注入的 platform 走**，不跟宿主：这份模块存在的理由就是「两个平台同一形状」可在任一开发机上被判
+   * （判据 `tests/e2e-fake-comfyui-executor-env.test.ts`）。用宿主 `path` 时在 Windows 上判 `platform: "linux"` 会拼出反斜杠、
+   * 注入的 `exists` 永不命中 ⇒ 形状判据只在 POSIX 自证过。真实调用方不受影响：`platform` 缺省 `process.platform`。 */
   const p = platform === "win32" ? path.win32 : path.posix;
   if (!exists(p.join(moduleRoot, "comfy_cli", "__main__.py"))) {
     return {

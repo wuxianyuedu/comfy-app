@@ -1,24 +1,7 @@
 /**
- * 「应用服务为什么断了」的**跨侧同源**判据（ISSUE #1692）。
- *
- * 这件事的写入侧与读取侧分居两个进程、两种语言：启动编排（`scripts/*.mjs`）
- * 在服务死的那一刻落盘，应用服务恢复应答之后由 `src/lib/shell/app-service-exit.ts`
- * 读回并讲给用户听。两侧之间**没有编译器**，只有一组字面量（文件名、字段名、
- * 成因取值）—— 任何一侧单独改名都是一次静默失效：记录照写、界面读不懂，
- * 而现场恰好是最需要看清的那一次。
- *
- * 因此这一组断言把「同源」变成可失败的判据：
- *   ① 文件名两侧逐字相同；
- *   ② TS 的成因联合类型与写入侧实际会写的取值集合完全一致（不是「包含」——
- *      写入侧能写一个 TS 认不出的取值、或 TS 声明一个没人会写的取值，都是漂移）；
- *   ③ 写入侧真的把这些字段写进了 JSON（字段名与 TS 的读取键同源）。
- *
- * 写入侧有**两处**、两种语言：启动编排（`scripts/app-service-exit.mjs`，dev /
- * prebuilt 链路）与桌面壳（`src-tauri/src/shell_launch.rs`，standalone sidecar
- * 档——壳活着、内嵌服务没了，正是「窗口还在、页面全连不上」那一档）。Rust 那侧
- * 同样只有一组字面量可共享，因此同样拿进来核：文件名、字段名、成因取值三者各有
- * 一条判据。Rust 源码是**读文本**核（本容器无 cargo，编译期保证由 `shell-gate` 的
- * `cargo test` 在 Windows 侧承担，两边各管一段、都不重复对方的活）。
+ * 「应用服务为什么断了」的**跨侧同源**判据（ISSUE #1692）。写入侧（`scripts/*.mjs`）与读取侧（`src/lib/shell/app-service-exit.ts`）
+ * 分居两个进程、两种语言，中间**没有编译器**只有一组字面量（文件名 / 字段名 / 成因取值）—— 任何一侧单独改名都是静默失效：
+ * 记录照写、界面读不懂。故断言：① 文件名逐字相同；② TS 成因联合类型与写入侧实际取值集合完全一致；③ 字段真写进 JSON。Rust 侧（`shell_launch.rs`）同核这三者，读文本验。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -60,15 +43,9 @@ function tsKindUnion(): Array<string> {
 }
 
 /**
- * 写入侧（JS）真会写出的成因集合。
- *
- * 直接读 `kind:` 后面的字面量是不够的 —— 启动编排传的是 `kind` **变量**，它的取值
- * 来自 `downstreamExitKind` 的返回字面量。所以判据要落在**那个函数体**上：它 return
- * 什么，就是这份记录可能被写成什么。只查「传参处有没有字面量」会让这条断言在
- * 真实形态下恒为空（自测时就是这样），变成一条永远绿的假判据。
- *
- * 运行期那一档（`runtimeExitRecord`）写的是固定字面量 `dev-server`，同样收进来：
- * 它是「服务起来之后自己没了」唯一有记录的一档（ISSUE #1692 的第二半）。
+ * 写入侧（JS）真会写出的成因集合。直接查 `kind:` 后的字面量不够：启动编排传的是 `kind` **变量**，取值来自
+ * `downstreamExitKind` 的 return 字面量 —— 判据必须落在**那个函数体**上；只查传参处有没有字面量会让断言恒为空
+ * （自测即如此、永远绿），运行期 `runtimeExitRecord` 写固定字面量 `dev-server` 也收进来（ISSUE #1692 第二半）。
  */
 function writtenKinds(source: string): Array<string> {
   const fn = /export function downstreamExitKind\([\s\S]*?\n\}/.exec(source)?.[0];

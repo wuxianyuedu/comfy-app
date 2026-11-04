@@ -1,17 +1,7 @@
 /**
- * 「不进钩子的按需档 ⇄ 执行者」双向判据的门禁自测（规范 §13.5.4）。
- *
- * 判据 `scripts/check-on-demand-duties.cjs` 的价值全在**两个方向**都成立上：
- *   ① 索引里点名的机器事实必须仍然存在（档被删 / 改名 / 已接进钩子 ⇒ 过期承诺）；
- *   ② 每一个机器事实都必须被索引登记（新增一档却忘了登记 ⇒ 那一档**谁都不判**，
- *      正是 §13.5.12 的立案现场：判据的覆盖面与它自称的不符）。
- *
- * 两个方向各一组，外加「判据自己不许静默降级」那一档（索引解析不出 / 行数塌到
- * 下限以下时不许退化成「0 行、全绿」，同 §11.18.3 首版那个 `include: []` 退 0）。
- *
- * 事实从**既有出处**现算（`FRESHNESS_TRACKS` / `quality-gate.mjs` 的 `run:false` /
- * 按需召唤台账）—— 所以夹具必须把这三份**真的**摆好，判据才读得到（抄一份假的
- * 就等于在测另一个东西）。
+ * 「不进钩子的按需档 ⇄ 执行者」双向判据的门禁自测（规范 §13.5.4）：①索引点名的机器事实必须仍在（档删除 / 改名 / 已接钩子 = 过期承诺）；
+ * ②每个机器事实都必须被登记（新档漏登记 ⇒ 无人判，§13.5.12）。另判「不许静默降级」：解析不出 / 行数塌到下限也不许退成 0 行全绿
+ * （§11.18.3 的 `include: []`）。事实从既有出处现算（`FRESHNESS_TRACKS` / `quality-gate.mjs` 的 `run:false` / 按需台账），夹具须摆真件。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -25,15 +15,10 @@ const { test, expect } = defineGateRepo({
   /* 判据靠 `__dirname/..` 定位仓库根，所以脚本必须落在 `scripts/` 下。 */
   dir: "scripts",
   workdir: "on-demand-duties",
-  /* 两份「既有出处」要从源码仓库拷进来，判据才知道有哪些机器事实：
-   *   · `freshness-ledger.mjs` —— 新鲜度档的键（判据 `import` 它）；它按 `scripts/**` 900 行
-   *     硬闸把「机器分支回看 / 回写」拆到了 `freshness-ledger-sync.mjs`，所以那份也得一并
-   *     拷进来，否则 `import` 链到半路 `ERR_MODULE_NOT_FOUND`、整组用例红。
-   *   · `quality-gate.mjs`    —— `run: false` 的门禁项。
-   *
-   * **按需召唤台账刻意不拷真件**：那两份 tw4 条目只需一条在场就够（夹具要的是
-   * 「台账里有东西」这个形状，不是那两份文件本身）。拷真件再覆盖的顺序由夹具决定
-   * （`files` 在后），但那会让「夹具提供了什么」这件事不可读 —— 直接写更清楚。 */
+  /* 两份「既有出处」要从源码仓库拷进来，判据才知道有哪些机器事实：`freshness-ledger.mjs` —— 新鲜度档的键（判据
+   * `import` 它）；它按 `scripts/**` 900 行硬闸把机器分支回看 / 回写拆到 `freshness-ledger-sync.mjs`，那份也得拷，
+   * 否则 `import` 链半路 `ERR_MODULE_NOT_FOUND`、整组红。`quality-gate.mjs` —— `run: false` 的门禁项。**按需台账
+   * 刻意不拷真件**：只需一条在场（要的是「台账里有东西」的形状，不是文件），拷真件再覆盖会让「夹具提供了什么」不可读。 */
   copy: [
     { from: "scripts/freshness-ledger.mjs", to: "scripts/freshness-ledger.mjs" },
     { from: "scripts/freshness-ledger-sync.mjs", to: "scripts/freshness-ledger-sync.mjs" },

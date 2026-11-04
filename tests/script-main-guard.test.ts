@@ -1,45 +1,7 @@
 /**
- * `scripts/**` 的「是不是被直接执行」守卫：**不许拼 `file://${argv[1]}`**。
- *
- * ## 立案现场（ISSUE #1961 的最后一格：CI 红在 E2E，而真因在第一步）
- *
- * 自托管 Windows 节点上的读数长这样：
- *
- * ```
- * 工具链自证    exit code: 0, duration: 544ms   ← 一行输出都没有
- * Python 可用性 exit code: 0, duration: 597ms   ← 一行输出都没有
- * 单元测试      9431 passed | 38 skipped        ← 38 = 缺 Python 的档位
- * E2E 关键流程  ❌ PATH 上没有可用的 Python
- * ```
- *
- * 两步「工具链自证」**各自的第一行**（`== OS ==` / `== python ==`）本该无条件打出来，
- * 却一个字都没有 —— 因为它们**根本没跑**：
- *
- * ```
- * 守卫：import.meta.url 与「拼出来的 file:// 串」做相等比较 → 才调 main()
- * ```
- *
- * `import.meta.url` 在 Windows 上是 `file:///F:/…/x.mjs`（三斜杠 + 正斜杠 + 盘符），
- * 而拼出来的是 `file://F:\…\x.mjs`（两斜杠 + 反斜杠）—— **恒不相等**。于是 `main()`
- * 一次都不跑，进程**正常退出 0**。
- *
- * ## 代价不对称，这才是它必须变成判据的理由
- *
- * 两处探针的设计意图是「缺 Python 在**最便宜的位置**报出来」（§13.5.3.9：`Python 可用性`
- * 被提到所有慢 stage 之前）。守卫失效之后，这个意图**静默地**没了：缺件一路滑到
- * 18 分钟后的 `E2E 关键流程`，以「执行器收口失败」的功能红暴露 —— 一件事报成两条，
- * 报错不指向真因。**是「一步没跑」被读成了「这一步过了」。**
- *
- * 本仓另三处（`check-merge-parents.mjs` / `check-merged-side-loss.mjs` /
- * `check-pending-merge-loss.mjs`）早已为这同一形态写了注释，只是没有判据守着 ——
- * 靠注释传的约定，下一次新增脚本时必然再犯一次。
- *
- * ## 判据的形状
- *
- * 按**代码行**扫 `scripts/**` / `tools/**` 的 `.mjs` / `.cjs`（先剥注释与字符串里的
- * 同形文本），命中「`import.meta.url` 与拼接出来的 `file://` 串做相等比较」即红。
- * 正确的写法是**两侧都过 `path.resolve`**（或 `pathToFileURL(...).href`），
- * 后者在两种平台上都成立。
+ * `scripts/**` 的「是否被直接执行」守卫：**不许拼 `file://${argv[1]}`**（ISSUE #1961 最后一格）。Windows 上 `import.meta.url` 是 `file:///F:/…`（三斜杠 + 正斜杠），拼出来的是 `file://F:\…`（两斜杠 + 反斜杠）——**恒不相等**，于是 `main()` 一次不跑、进程正常退出 0。
+ * 两步探针（`== OS ==` / `== python ==`）一字未出，缺 Python 一路滑到 18 分钟后的 E2E 才以功能红暴露 ——「一步没跑」被读成「这一步过了」。本仓另三处（`check-merge-parents.mjs` 等）有注释无判据，靠注释传的约定下次新增脚本必再犯。
+ * 判据按**代码行**扫 `scripts/**` / `tools/**` 的 `.mjs`/`.cjs`（先剥注释与字符串），命中「与 `import.meta.url` 比较」即红；正确写法两侧都过 `path.resolve`（或 `pathToFileURL(...).href`）。
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
@@ -70,12 +32,9 @@ function collect(dir: string, out: Array<string> = []): Array<string> {
 }
 
 /**
- * 剥掉注释与字符串字面量，只留「会被执行到的代码」。
- *
- * 为什么非剥不可：本仓另三处的注释里**正当地**写着这个坏形态（作为反面教材，
- * 例如 `check-merged-side-loss.mjs` 那句「拼 `file://${argv[1]}` 在 Windows 上
- * 恒不相等」）。不剥注释，判据会把「写了这条警告的文件」判红 —— 那是**反向**的，
- * 而且会让下一个人把注释删掉让它变绿。
+ * 剥掉注释与字符串字面量，只留「会被执行到的代码」。为什么非剥不可：本仓另三处的注释里**正当地**
+ * 写着这个坏形态（当反面教材，如 `check-merged-side-loss.mjs`），不剥会把「写了警告的文件」判红 ——
+ * 那是**反向**的，且会让下一个人删掉注释让它变绿。
  */
 function stripCommentsAndStrings(src: string): string {
   let out = "";
@@ -157,15 +116,8 @@ function stripCommentsAndStrings(src: string): string {
 }
 
 /**
- * 坏形态：拿拼接出的 `file://` 串与 `import.meta.url` 做相等比较。
- *
- * 收两种拼法（都在自托管节点上恒不相等）：
- *   · `file://${process.argv[1]}` —— argv[1] 是绝对路径、但分隔符是反斜杠；
- *   · `file://${path.resolve(process.argv[1])}` —— 更常见的写法，同样带反斜杠。
- *
- * **只判「与 `import.meta.url` 比较」这一形态**，不是禁掉所有 `file://${…}`
- * （`src/server/workshop/comfyui.ts` 里拼 `file://` 是给前端用的图片 URL，
- * 与「是不是直接执行」无关）。
+ * 坏形态：拿拼接出的 `file://` 串与 `import.meta.url` 做相等比较。收两种拼法（自托管节点上恒不相等）：`file://${process.argv[1]}`（绝对路径但分隔符是反斜杠）、`file://${path.resolve(process.argv[1])}`。
+ * **只判「与 `import.meta.url` 比较」这一形态**，不禁所有 `file://${…}`（`src/server/workshop/comfyui.ts` 拼 `file://` 是给前端的图片 URL，与直接执行无关）。
  */
 const BAD_PATTERNS: Array<{ re: RegExp; what: string }> = [
   {

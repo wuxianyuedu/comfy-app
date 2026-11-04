@@ -1,14 +1,7 @@
 /**
- * 依赖漏洞扫描门禁的契约测试（ISSUE #1331，规范 §13.5）。
- *
- * 这条门禁的全部价值在**台账形状**上，所以用例都不碰网络：registry 的返回按最小形状
- * 手工构造，判据函数直接喂数据。真跑 `pnpm audit` 的那一路另有两条「形态」用例守着
- * （拿不到 registry 判「未扫描」、输出不是 JSON 判红），都用注入的假 runner 完成 ——
- * 拿真 registry 当测试依赖会让这盏灯随外部世界变红，那就又回到「红不可归因」。
- *
- * 三条判据形状分别对应脚本头里的三条刻意设计：按 `(包名, advisory id)` 记账、
- * 双向拦、每条基线必须有 reason。`--update` 只许降那条是**验收点名要求的**，
- * 所以它跑的是真脚本（子进程 + 临时仓库），不是把逻辑再实现一遍。
+ * 依赖漏洞扫描门禁的契约测试（ISSUE #1331，规范 §13.5）。价值全在**台账形状**上，故用例不碰网络：registry 返回按最小形状手工构造、判据函数直接喂数据；真跑 `pnpm audit` 那一路另有两条形态用例（拿不到 registry 判「未扫描」、输出非 JSON 判红），用注入假 runner —— 拿真 registry 当依赖会让灯随外部世界变红，又回到「红不可归因」。
+ * 三条判据对应脚本头的刻意设计：按 `(包名, advisory id)` 记账、双向拦、每条基线必须有 reason。
+ * `--update` 只许降是**验收点名要求**，故跑真脚本（子进程 + 临时仓库），不是把逻辑再实现一遍。
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";

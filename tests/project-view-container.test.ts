@@ -1,21 +1,7 @@
 /**
- * 「项目内视图收进统一容器」这条约定的执行者。
- *
- * 收口做完如果不配判据，下一个视图会照着旁边那个文件的写法再手抄一遍 div，
- * 两周后形状又变成八份。所以这里判的不是「容器对不对」（那由
- * `src/components/studio/ViewContainer.test.tsx` 在 DOM 上判），而是
- * **视图有没有绕开容器**：
- *   · 清单里的视图必须真的引了容器；
- *   · 视图源码里不许再出现手写的「外层滚动 + 居中列 + 宽度上限」那一串；
- *   · 传给容器的 `className` 里不许写 `max-w-*`（宽度只从 `width` 档位进来；
- *     两份类并存时谁生效取决于样式表顺序，那是未定义行为）；
- *   · 传给容器的 `className` 里必须带**无变体的左右内边距**（`px-*`）—— 容器
- *     刻意不管内边距（那是布局决定，见 `ViewContainer` 文件头），于是漏写的表现
- *     不是报错而是**内容贴死容器边缘**：窗口窄到 `max-w-wide` 不封顶时，居中列
- *     就等于整条滚动区的宽度，左右留白一起归零。
- *
- * 判源码而不是判渲染结果：这些是「别再手写」的约束，渲染结果判不出「有人手写」。
- * 工作区型那一半（画布 / 成片 / 工坊 / 工作流库）随它那一刀一起进来。
+ * 「项目内视图收进统一容器」的执行者：判**视图有没有绕开容器**（容器本身由 `src/components/studio/ViewContainer.test.tsx` 在 DOM 上判）。
+ * 理由：不配判据，下一个视图会照旁边文件再手抄一遍 div，形状又变成八份。钉四件事：清单视图真引了容器；源码里不许出现手写的
+ * 「外层滚动 + 居中列 + 宽度上限」；`className` 不许 `max-w-*`（宽度只从 `width` 档位进来，两份类并存时生效取决于样式表顺序 = 未定义行为）；必须带无变体 `px-*`——容器刻意不管内边距（见 `ViewContainer` 文件头），漏写的表现是内容贴死容器边缘、窗口窄到 `max-w-wide` 不封顶时留白归零。判源码而非渲染结果：渲染判不出「有人手写」。
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -45,24 +31,15 @@ const DOCUMENT_VIEWS = [
 
 /** 已收口的工作区型视图。
  *
- * 画布（`ProjectCanvas`）与成片（`FilmStudio`）**刻意不在清单上**，各有各的理由，
- * 两处都不是「顺手改一下」：
- *   · 成片根上挂着一层 `absolute inset-0` 的光斑，它现在锚的是更外层的定位祖先；
- *     容器带 `relative`，套上去会让那层改锚到外框（少盖住页签条那一条）——
- *     这是外观决定，得单独看；
- *   · 画布那一层是 ReactFlow 的尺寸父级兼拖放目标（`onDragOver` / `onDrop` 在它身上），
- *     它没有重复的形状可收，套壳只是多一层。
+ * 画布（`ProjectCanvas`）与成片（`FilmStudio`）**刻意不在清单上**：成片根上有 `absolute inset-0` 光斑，锚的是更外层定位祖先，容器带 `relative` 会让它改锚到外框（少盖住页签条那一条），属外观决定；画布是 ReactFlow 的尺寸父级兼拖放目标（`onDragOver` / `onDrop` 在它身上），没有重复形状可收，套壳只是多一层。
  */
 const WORKSPACE_VIEWS = [
   path.join(STUDIO, "workflow-library", "WorkflowLibrary.tsx"),
   path.join("src", "components", "workshop", "WorkshopPipeline.tsx"),
-  /* 这一屏从文档型挪到工作区型：换壳是布局决定（模式清单收成左侧树形页签之后，
-     文档型那层「整屏一条滚动条 + 居中窄栏」会让树随正文一起被推走、且没有可依附的
-     定高边界），见 `ModeContractView.tsx` 文件头（ISSUE #1870 / #1871）。
-     于是上面那条「传给容器的 className 必须带无变体 `px-`」对它**不再适用**，而不是
-     「被豁免」—— 它判的是「居中列没封顶时留白归零」，这一屏没有居中列。留白的归属
-     下移到屏内那一层，实测在 `ModeContractEditorView.tsx` 的页眉与两栏容器上
-     （`px-4 sm:px-8`），那一层现在自己就是判据看得见的调用点。 */
+  /* 这一屏从文档型挪到工作区型（换壳是布局决定，见 `ModeContractView.tsx` 文件头，ISSUE #1870 / #1871）：模式清单收成
+     左侧树形页签后，文档型那层「整屏一条滚动条 + 居中窄栏」会让树随正文被推走且没有可依附的定高边界。于是上面那条「className
+     必须带无变体 `px-`」对它**不再适用**（不是豁免）——它判的是居中列没封顶时留白归零，这屏没有居中列；留白下移到屏内，
+     实测在 `ModeContractEditorView.tsx` 的页眉与两栏容器（`px-4 sm:px-8`），那层本身是判据看得见的调用点。 */
   path.join("src", "components", "workshop", "mode-contract", "ModeContractView.tsx"),
 ];
 

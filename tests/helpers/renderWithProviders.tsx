@@ -1,20 +1,6 @@
 /**
- * tests/helpers/renderWithProviders.tsx — 前端集成测试的渲染入口。
- *
- * 把被测组件包进「隔离的」QueryClient + 指向 `/api/trpc` 的真实 tRPC React client
- * （`~/trpc/react` 的 `api`，组件 import 的就是这个实例）。底层 httpBatchStreamLink
- * 打到 `/api/trpc`，由 MSW（见 trpc-msw.ts）拦截并转发到测试 router —— 因此组件里
- * useQuery/useMutation 的 loading → data → error、缓存失效走的是**真实管线**，而不是
- * `vi.mock("~/trpc/vanilla")` 的「永不 resolve pending」桩。
- *
- * 约定：
- *   - 每个 `renderWithProviders` 都新建 QueryClient（retry:false、即时 gc），避免用例间
- *     缓存污染。
- *   - 被测组件必须消费 `~/trpc/react` 的 `api`（即真实路由）；测试文件需自行
- *     `setupTrpcServer(mockRouter)` 并 listen（mockRouter 暴露被测组件用到的真实路径）。
- *   - 若要自建任意路由的集成层自检，可组合 `createTestQueryClient()` + `localApi.Provider`
- *     自行包一层（见 tests/integration/renderWithProviders.integration.test.tsx）。
- *
+ * 隔离 QueryClient + 真实 `~/trpc/react` 的 `api` 打到 `/api/trpc`，由 MSW（`trpc-msw.ts`）转发到测试 router，
+ * 故数据态走真实管线而非「永不 resolve」桩。约定：每次新建 QueryClient（retry:false、即时 gc）；组件须消费该 api 且自行 `setupTrpcServer` 后 listen。
  * @module tests/helpers/renderWithProviders — 前端集成测试的渲染入口
  */
 import React from "react";

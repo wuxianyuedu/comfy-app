@@ -1,13 +1,7 @@
 /**
- * 回归判据：「这份检出是谁」的取值链（ISSUE #2355）。
- *
- * 这一格过去是三个读者各自回答一遍（`ship` 念「未配」、`ship-claim` 直接退 2、
- * `env-init` 补一个空值），照提示做过一遍的人最后仍然没有名字。本用例钉四件事：
- *
- *   · 顺位：人填的（进程环境 / `.env`）→ 平台运行身份 → `git config user.name` → `cnb`；
- *   · **不取平台账号昵称**：`CNB_BUILD_USER_NICKNAME` 是人，不是这份检出的名字；
- *   · `env-init` 往 `.env` 里写的是**取到的值**，且与 `ship` 念的同源；
- *   · 机器自起的账用自己的名字（`machineHandle`），宿主有 NPC 名时带上它。
+ * 回归判据：「这份检出是谁」的取值链（ISSUE #2355）。过去三个读者各有答案（`ship` 念「未配」、`ship-claim` 退 2、
+ * `env-init` 补空值），照提示做完仍没有名字。钉四件：顺位＝人填（进程环境 / `.env`）→ 平台运行身份 → `git config user.name` →
+ * `cnb`；不取平台账号昵称（`CNB_BUILD_USER_NICKNAME` 是人不是检出名）；`env-init` 与 `ship` 同源；机器账用 `machineHandle`。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -166,12 +160,10 @@ describe("readDevHandleWithSource：ship 念的那一格与取值链同源", () 
   });
 });
 
-/* ── 链接 worktree 的 `.env` 回落（ISSUE #2833）──────────────────────────────
- * 现场：为隔离并行工作流用 `git worktree add` 挂分支收尾时，worktree 里**天然没有**
- * `.gitignore` 掉的 `.env`，取值链跌到 `git config user.name` —— 「我是谁」答错人，
- * 关单收尾的自动释放被跳过。修法：本检出根读不到该键时，顺着 `git rev-parse
- * --git-common-dir` 找主检出的 `.env` 再读一次；source 说出来路，仍算「人填的」。
- * 判据用**真 git**（spawn 那一刀不在注入面上，mock 它等于没测到 common-dir 的判据）。 */
+/* ── 链接 worktree 的 `.env` 回落（ISSUE #2833）─────────────────────────────
+ * 现场：`git worktree add` 的 worktree 里天然没有 gitignore 掉的 `.env`，取值链跌到 `git config user.name`
+ * ——「我是谁」答错人、关单自动释放被跳过。修法：本检出根读不到该键时顺 `git rev-parse --git-common-dir`
+ * 找主检出的 `.env` 再读，source 说出来路、仍算「人填的」。判据用**真 git**（spawn 那一刀不在注入面上）。 */
 describe("链接 worktree 的 .env 回落（ISSUE #2833）", () => {
   let mainRoot: string;
   let wtRoot: string;

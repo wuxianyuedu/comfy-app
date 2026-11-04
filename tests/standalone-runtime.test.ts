@@ -1,16 +1,7 @@
 /**
- * 桌包 standalone 形态的判据（P3 §5 · ISSUE #1216，3-E2a）。
- *
- * 这一刀的每条判据都来自一次真跑，而且**每条失败的表现都是同一个**：用户双击桌包后
- * 窗口停在启动页，或页面 200 而接口全 500。桌包链路既不在 pre-commit 也不在 CI，
- * 构建期一片绿是常态——所以判据必须落在「跑得到、且改回去就红」的形态上：
- *   · 形态层（永远跑）：顶层白名单的默认拒绝、私有输入剔除、运行期 env 装配、
- *     首启建表，以及「装配 / 打包配置 / 产物层检查三者同形」。
- *   · 入口层：用**桩 server** 在临时目录里真起一次入口（不起真 Next），验 boot 行 /
- *     建表 / 退出码透传 / 缺件时大声失败。「文件名里的冒号」这类只有真跑才暴露的问题
- *     就是这么抓到的（本刀第一版栽在 Windows 非法文件名上）。
- * 真 Next server 那一跑（`/`、`/workspace`、`/api/health` 全 200）不在这里：它要一次
- * 全量构建。它的构建期等价物是 `scripts/build-desktop.mjs` §载荷实体化 的三条模块解析断言。
+ * 桌包 standalone 形态的判据（P3 §5 · ISSUE #1216，3-E2a）。每条都来自一次真跑，而失败表现**都是同一个**：双击后停在启动页，或页面 200 而接口全 500。桌包链路既不在 pre-commit 也不在 CI，构建期一片绿是常态 ⇒ 判据须落在「跑得到、改回去就红」。
+ * 形态层（永远跑）：顶层白名单默认拒绝、私有输入剔除、运行期 env 装配、首启建表，以及装配/打包配置/产物层检查三者同形。入口层：用**桩 server** 在临时目录真起一次入口（不起真 Next），验 boot 行/建表/退出码透传/缺件大声失败（「文件名里的冒号」只有真跑才暴露）。
+ * 真 Next 那一跑（`/`、`/workspace`、`/api/health`）不在这里：它要全量构建，构建期等价物是 `scripts/build-desktop.mjs` §载荷实体化 的三条模块解析断言。
  */
 import { DatabaseSync } from "node:sqlite";
 import {
@@ -142,21 +133,11 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
   });
 
   it("随包脚本 import 的那几份 TS 必须都在清单里（漏登记 = 桌包脚本加载即断）", () => {
-    // 入口面是 `RUNTIME_SCRIPTS` **全部** `.mjs`，不是「记得列进来的那几个」：
-    // 上一版只列了 3 份文件，于是第 4 份随包脚本 import 一份新的 `src/*.ts` 时这条用例
-    // 一个字都不会说 —— 那正是 ISSUE #2158 第 7 条问的那件事（产物里被剔掉的 90 个
-    // `src/` 文件，「运行期若有人 import 其中之一会怎样」当时没有一格在看）。
-    // 实测读数：全部入口可达 `src/` 61 个，其中 58 个是 `PREBUNDLED_SRC_ROOTS` 那一
-    // 份闭包（构建期已打进 `scripts/executor-host.runtime.mjs`），**净 3 个 = 本清单**。
-    // 载荷里的 src/ 是默认拒绝的，所以清单与这些说明符必须**逐字相等**（多了也是错：
-    // 清单里挂一份没人读的，等于放宽了「默认不进」那条口径）。
-    // 相对深度两种写法都要认（`../` 与 `../../`）。
-    //
-    // **链要跟着走**（ISSUE #1961）：只数「脚本直接 import 的那一层」会漏掉被它
-    // import 的模块自己再 import 的东西 —— 而逐文件放行的语义是「一个都不能少」：
-    // 漏了不是「那一步跳过」，是整个编排器加载即 `ERR_MODULE_NOT_FOUND`。
-    // 实测踩过：`executable-resolve.ts` 多了个叶子 `platform.ts`，上面那层数字一个
-    // 没变，而产物里少一份就等于桌包启动即断（这条用例当场红了才看见）。
+    // 入口面是 `RUNTIME_SCRIPTS` **全部** `.mjs`，不是「记得列进来的那几个」：上一版只列 3 份，第 4 份随包
+    // 脚本 import 新 `src/*.ts` 时这条用例一字不说（ISSUE #2158 第 7 条）。实测入口可达 `src/` 61 个，58 个
+    // 在 `PREBUNDLED_SRC_ROOTS` 闭包内，**净 3 个 = 本清单**；载荷里的 src/ 默认拒绝，故清单与说明符必须
+    // **逐字相等**（多了也是错），相对深度 `../` 与 `../../` 都要认。**链要跟着走**（ISSUE #1961）：只数直接
+    // import 会漏掉传递依赖，逐文件放行是「一个都不能少」—— 漏了即整个编排器加载 `ERR_MODULE_NOT_FOUND`。
     /** 整行注释先剥掉：JSDoc 里点名的路径不是运行期依赖（与
      *  `tests/dist-artifact-hygiene.test.ts` 那条 `scripts/` 闭包判据同一口径）。 */
     const stripCommentLines = (src: string): string =>
@@ -593,13 +574,11 @@ describe("装配、打包配置与产物判据三者同形", () => {
   });
 
   it("只编壳的那条路也补齐 static 占位（bundle.resources 编译期校验）", () => {
-    // 实测（ISSUE #1247）：全新克隆上跑「一键发布构建」（build-all.ps1 →
-    // build-tauri-release.ps1，只编 release 壳、不跑 build-desktop.mjs），
-    // cargo build 在 app 的 build script 里 panic：
+    // 实测（ISSUE #1247）：全新克隆上跑「一键发布构建」（build-all.ps1 → build-tauri-release.ps1，只编 release
+    // 壳、不跑 build-desktop.mjs），cargo build 在 app 的 build script 里 panic：
     //   tauri build failed: resource path `static` doesn't exist
-    // externalBin 的报错在前（sidecar 那条已修），但两者是**同一条判据**：
-    // tauri-build 每次编译都校验 conf 里声明的路径存在，而这些路径是构建产物、
-    // 不入库，所以两条都要有补齐步。
+    // externalBin 的报错在前（sidecar 那条已修），但两者是**同一条判据**：tauri-build 每次编译都校验 conf
+    // 里声明的路径存在，而这些是构建产物、不入库，所以两条都要有补齐步。
     const script = read("tools/scripts/build-tauri-release.ps1");
     expect(script).toContain('$resDir = Join-Path $TAURI_DIR "static"');
     expect(script).toContain("Test-Path $resDir");

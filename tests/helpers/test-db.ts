@@ -1,32 +1,8 @@
 /**
- * tests/helpers/test-db.ts — Drizzle 内存测试库（测试基建，不触碰 src 源码）
- * ===========================================================================
- *
- * mock 策略：
- * - 测试文件通过 `vi.mock("~/server/db", () => ({ db: createTestDb() }))` 把
- *   `~/server/db`（即 `@/lib/db`）的 `db` 替换成本文件创建的「内存 SQLite +
- *   Drizzle」实例。Repository 层与 tRPC ctx 直接复用同一实例，src 源码零改动。
- * - 用的是真实 Drizzle API（`db.select().from(task)` …），因此 repository 的
- *   任何改写都能在集成测试里真实跑通，而非 mock 一套假语义。
- * - 内存库 `:memory:` 每次测试文件新建，建表用 CREATE_SQL（与 schema.ts 对齐），
- *   测试间用 `$reset()` 清空。
- *
- * 兼容旧测试 API（不破坏 generate.test.ts / workflow.test.ts）：
- * - `getTestDb()` 返回带 `$reset()` 与 `$tables` 的对象；`$tables.X` 是同步行数组
- *   （JSON 列已自动解析回对象），断言沿用 `tdb.$tables.tasks.find(...)` 等写法。
- * - `seedUser` / `seedWorkflowTemplate` / `seedTask` / `seedProject` 用底层同步
- *   写入（better-sqlite3），保持与原同步 seed 调用一致。
- *
- * drizzle 那一层为什么走 `sqlite-proxy` 而不是 `drizzle-orm/better-sqlite3`（ISSUE #2586）：
- * 后者把事务回调直接交给 better-sqlite3 的 `transaction()`，而它**不等 promise** ——
- * 生产代码里的 `await db.transaction(async (tx) => …)` 会在第一个 await 之前就 COMMIT，
- * 原子性静默失效（同一形状见 `tests/tw4-*` 那批与规范 §6.1 的读数）。代理层的
- * `SQLiteRemoteSession.transaction` 是 `await transaction(tx)`，`begin`/`commit`/`rollback`
- * 也走同一个回调 ⇒ 同一份生产代码在测试宿主上拿到的是**真的**事务，而不是一个看着正常的空壳。
- * 同步门面（`$reset` / `$tables` / 六个 `seed*`）不经过这一层，仍直接打 `Database` 实例。
- *
- * @module tests/helpers/test-db — Drizzle 内存测试库（测试基建，不触碰 src 源码）
- */
+ * tests/helpers/test-db.ts — Drizzle 内存测试库（测试基建，不触碰 src 源码）。测试经 `vi.mock("~/server/db", () => ({ db: createTestDb() }))` 换成这里建的「内存 SQLite + Drizzle」实例，repository 与 tRPC ctx 共用同一实例、src 零改动，且用真实 Drizzle API，故改写能在集成测试里真跑。
+ * `:memory:` 每文件新建（建表用 CREATE_SQL，与 schema.ts 对齐），测试间 `$reset()` 清空；同步门面 `$tables` / 六个 `seed*` 仍直接打 `Database`，兼容旧同步 seed 写法。
+ * 走 `sqlite-proxy` 而非 `drizzle-orm/better-sqlite3`（ISSUE #2586）：后者把事务回调交给 better-sqlite3 的 `transaction()`，它**不等 promise** —— `await db.transaction(async (tx) => …)` 会在第一个 await 之前就 COMMIT，原子性静默失效。
+ * 代理层 `SQLiteRemoteSession.transaction` 是 `await transaction(tx)`，`begin`/`commit`/`rollback` 走同一回调 ⇒ 同一份生产代码在测试宿主上拿到的是**真的**事务，而不是看着正常的空壳。 @module tests/helpers/test-db — Drizzle 内存测试库（测试基建，不触碰 src 源码） */
 import Database from "better-sqlite3";
 import { drizzle, type RemoteCallback } from "drizzle-orm/sqlite-proxy";
 import * as schema from "~/server/db/schema";
@@ -354,15 +330,10 @@ function getRow(table: string, id: string): Row {
 }
 
 /**
- * 语句级注入点（ISSUE #2586 用它的唯一理由：验「中途失败 ⇒ 已提交的写不留痕」）。
- *
- * 为什么要有：`sqlite-proxy` 的宿主回调是本仓**唯一**一处「所有 SQL 都经过、且能改行为」
- * 的地方，而事务回滚这件事在没有这个口子时无法测——真库里造一条「第二条必失败」的输入
- * 要么依赖巧合（约束冲突面已被仓储挡掉），要么就得往生产代码里塞测试钩子。
- *
- * 生命周期：钩子挂在模块上，由 `$reset()`（每个用例的 `beforeEach` 都调它）摘干净，
- * 所以它的作用域就是**一条用例**。忘了摘也不会传染下一条。
- */
+ * 语句级注入点（ISSUE #2586 用它的唯一理由：验「中途失败 ⇒ 已提交的写不留痕」）。`sqlite-proxy` 的宿主回调是
+ * 本仓唯一「所有 SQL 都经过、且能改行为」的地方 —— 没有这个口子就无法测事务回滚：真库里造「第二条必失败」
+ * 要么依赖巧合（约束冲突面已被仓储挡掉），要么得往生产代码塞测试钩子。生命周期：钩子挂在模块上，由 `$reset()`
+ * （每个用例的 `beforeEach` 都调）摘干净，作用域就是**一条用例**，忘了摘也不会传染下一条。 */
 type StatementHook = {
   hits: number;
   left: number;
@@ -375,12 +346,9 @@ const sqlTrace: Array<string> = [];
 
 /**
  * 让接下来匹配这条谓词的语句抛错（默认只拦一次，之后原样放行）。
- *
- * @param makeError 造错误用的工厂。**默认给一个非锁族错误**：那样 #2586 的有界重试
- *        会「认不出原因就原样抛」，测到的是回滚而不是重试。要测撞锁那条路，
- *        自己造 `cause.code = "SQLITE_BUSY"` 的错误（`sqlite-error.ts` 沿 cause 链取码）。
- * @returns `hits()` 读到这条钩子实际拦下几次——「第二条失败 ⇒ 只试了一次」这类断言靠它。
- */
+ * @param makeError 造错误用的工厂。**默认给非锁族错误**：那样 #2586 的有界重试会「认不出原因就原样抛」，测到的
+ *        是回滚而不是重试。要测撞锁那条路，自己造 `cause.code = "SQLITE_BUSY"` 的错误（`sqlite-error.ts` 沿 cause 链取码）。
+ * @returns `hits()` 读到这条钩子实际拦下几次 —— 「第二条失败 ⇒ 只试了一次」这类断言靠它。 */
 export function armStatementFailure(
   match: (sql: string, method: string) => boolean,
   makeError: () => Error = () => new Error("测试注入：这条语句被用例挡住"),
@@ -391,31 +359,11 @@ export function armStatementFailure(
   return { hits: () => hook.hits };
 }
 
-/**
- * drizzle 的 `sqlite-proxy` 宿主：把 better-sqlite3 的同步语句包成代理层要的异步形状。
- *
- * `method` 的四种返回形状是照 `sqlite-proxy/session.cjs` 的实现取的，不是照它的类型取的
- * （`AsyncRemoteCallback` 声明 `rows: any[]`，而 `mapGetResult` 把 `clientResult.rows`
- * **整个当一行用** —— `const row = rows`）：
- *   · `get` ⇒ `{ rows: 单行 | undefined }`（不是数组；写成数组会让 `.get()` 恒拿到 undefined）
- *   · `all` / `values` ⇒ `{ rows: 行数组 }`
- *   · `run` ⇒ `{ rows: [] }`：`RemotePreparedQuery` 没覆写 `mapRunResult`（基类是原样透传），
- *     所以这里返回什么就是调用方拿到什么。全仓不读 `.changes` / `lastInsertRowid`
- *     （`src/server/workshop/repository.ts:237` 那句注释记的正是这件事），
- *     于是这里不透出 better-sqlite3 的 RunResult，免得测试宿主与生产再多一处形状差别。
- *
- * ⚠️ **行必须是 `raw()` 的位置数组，不能是列名对象**：`mapResultRow` 取值那一行是
- * `const rawValue = row[columnIndex]`（`utils.cjs:62`）——按**列序**取。返回对象的话
- * 每一列都读成 `undefined`，表现不是「查不到」而是
- * `SyntaxError: "undefined" is not valid JSON`（JSON 列的 decoder 先炸），
- * 看着像数据坏了、实际是宿主形状错了。`drizzle-orm/better-sqlite3` 那份会话走的正是
- * `stmt.raw()`，所以两边本来就要求同一个形状。
- *
- * ⚠️ 而 `raw()` **只能对会返数据的语句调**（better-sqlite3 的原话是
- * `The raw() method is only for statements that return data`）：`run` 那一支
- * （`delete` / 不带 `returning` 的 `insert` / `update`，以及事务的 `begin`/`commit`/`rollback`）
- * 若也走 `stmt.raw()` 会当场抛，表现是一批删除与写入用例红、且红在宿主里而不是被测代码上。
- */
+/** drizzle 的 `sqlite-proxy` 宿主：把 better-sqlite3 的同步语句包成代理层要的异步形状。`method` 四种返回形状照
+ * `sqlite-proxy/session.cjs` 的实现取（不是照类型）：`get` ⇒ `{ rows: 单行 | undefined }`（写成数组会让 `.get()` 恒拿 undefined）、
+ * `all` / `values` ⇒ 行数组，`run` ⇒ `{ rows: [] }`（全仓不读 `.changes` / `lastInsertRowid`，不透出 RunResult）。
+ * ⚠️ 行必须是 `raw()` 的位置数组：`mapResultRow` 按列序取 `row[columnIndex]`（`utils.cjs:62`），返回对象会让每列读成 undefined，
+ * 先炸 `SyntaxError: "undefined" is not valid JSON`（看似数据坏、实为宿主形状错）；且 `raw()` 只能对会返数据的语句调，`run` 那支若也调会当场抛。 */
 function sqliteProxyHost(client: Database.Database) {
   return (
     sql: string,
@@ -453,12 +401,10 @@ export function createTestDb(): TestDb {
   sqlite.pragma("foreign_keys = OFF"); // 内存库独立插入，放宽外键
   sqlite.exec(CREATE_SQL);
   currentSqlite = sqlite;
-  /* 这一处双断言是**库的类型在说谎**，不是我们的宿主在将就：
-   * `AsyncRemoteCallback` 声明返回 `Promise<{ rows: any[] }>`，而 `mapGetResult`
-   * 把 `clientResult.rows` 整个当**一行**用（`const row = rows`）——`get` 那一支
-   * 返回的是单行对象。按声明写会把 `.get()` 恒读成 undefined（宿主形状错、报错却
-   * 指不到宿主，正是 #2586 这一族）。断言的目标类型取 `RemoteCallback`，
-   * 让「哪里不对」只出现在这一行。 */
+  /* 这一处双断言是**库的类型在说谎**，不是我们的宿主在将就：`AsyncRemoteCallback` 声明返回
+   * `Promise<{ rows: any[] }>`，而 `mapGetResult` 把 `clientResult.rows` 整个当**一行**用（`const row = rows`）——
+   * `get` 那一支返回的是单行对象。按声明写会把 `.get()` 恒读成 undefined（宿主形状错、报错却指不到宿主，正是
+   * #2586 这一族）。断言的目标类型取 `RemoteCallback`，让「哪里不对」只出现在这一行。 */
   /* SAFETY: 类型断言已复核 */
   const db = drizzle(sqliteProxyHost(sqlite) as unknown as RemoteCallback, { schema });
 
@@ -702,13 +648,10 @@ export function seedTask(_tdb: TestDb, input: SeedTaskInput): Row {
 }
 
 /**
- * 种一条项目。两个易踩的坑在这里收掉：
- *  · `nodes` / `edges` 在 schema 里是 `NOT NULL DEFAULT '[]'` —— 缺省给 `null`
- *    会被 `insertInto` 原样写进去（`undefined` 才跳过），于是「按默认值种项目」
- *    直接撞约束；
- *  · 排序判据（`project.list` 按 `updatedAt` 倒序）用的是 `updatedAt`，
- *    所以调用方传的日期必须落到那一列，否则传多少日期都是同一时刻、断言变成掷硬币。
- */
+ * 种一条项目。两个易踩的坑在这里收掉：`nodes` / `edges` 在 schema 里是 `NOT NULL DEFAULT '[]'` —— 缺省给
+ * `null` 会被 `insertInto` 原样写进去（`undefined` 才跳过），于是「按默认值种项目」直接撞约束；排序判据
+ * （`project.list` 按 `updatedAt` 倒序）用的是 `updatedAt`，所以调用方传的日期必须落到那一列，否则传多少
+ * 日期都是同一时刻、断言变成掷硬币。 */
 export function seedProject(
   _tdb: TestDb,
   input: {
@@ -770,11 +713,9 @@ export function seedProduction(
 }
 
 /**
- * 种一条成片。给归属类用例用（`films/<id>.mp4` 的落点名字里就是成片行 id），
- * 其余列一律吃 schema 默认值 —— 这些用例只关心 `userId` 那一格。
- * 与 `filmRepository.create` 的取舍：那条会生成 cuid，路径断言就得先读回 id；
- * 这里允许调用方钉死 id，才写得清「猜得到别人的成片 id」这个攻击形状。
- */
+ * 种一条成片。给归属类用例用（`films/<id>.mp4` 的落点名字里就是成片行 id），其余列吃 schema 默认值 —— 这些
+ * 用例只关心 `userId` 那一格。与 `filmRepository.create` 的取舍：那条会生成 cuid，路径断言就得先读回 id；这里
+ * 允许调用方钉死 id，才写得清「猜得到别人的成片 id」这个攻击形状。 */
 export function seedFilm(
   _tdb: TestDb,
   input: {

@@ -1,13 +1,8 @@
 // ── Workshop MCP 本地 DB 客户端 ────────────────────────────────
-// 独立的 @libsql/client 连接（与 Next 进程的 ~/server/db 解耦），
-// 这样 MCP stdio / 独立 HTTP 进程无需启动 Next、也不触碰 `~/env`。
-// 复用同一份 schema（含 workshopSession 表），数据库文件路径锚定
-// 与 drizzle-kit push 一致（相对进程 CWD 解析），避免 Windows 盘符根错误。
-//
-// 与 ~/server/db 同步换 driver：better-sqlite3 的同步语义会把整个事件循环
-// 卡在同一份慢 SQL 上；libsql 保持同 file: 布局、异步不阻塞。
-//
-// 注意：刻意不 import "server-only" —— 该包在普通 Node 进程里会抛错。
+// 独立的 @libsql/client 连接（与 Next 进程的 ~/server/db 解耦）：MCP stdio / 独立 HTTP
+// 进程无需启动 Next、也不触碰 `~/env`；路径与 drizzle-kit push 一致（相对 CWD 解析），
+// 避免 Windows 盘符根错误。换 libsql 而非 better-sqlite3：后者同步语义会把事件循环卡在
+// 同一份慢 SQL 上。刻意不 import "server-only" —— 该包在普通 Node 进程里会抛错。
 import path from "node:path";
 
 import { createClient } from "@libsql/client";
@@ -29,16 +24,11 @@ const dbUrl = process.env.DATABASE_URL ?? "file:./db.sqlite";
 const client = createClient({
   url: `file:${resolveDbPath(dbUrl)}`,
 });
-// 与 `~/server/db` 共用同一份 PRAGMA 清单（`~/lib/sqlite-pragmas`）：以前两边各写
-// 两行，加一条就要记得加两处。清单里只有**库级**那两条；等锁预算是**每条连接**的
-// 客户端选项（`timeout`），本侧刻意不给 —— 等锁是同步的，会把服务界面的这个进程
-// 一起停住那么久（判据与实测见 `sqlite-pragmas` 文件头，ISSUE #1250）。
-// 模块顶层 await 让首次查询前一定就位。
-//
-// 应用走 `applySqlitePragmas`：开机这几条要容忍「别的进程正在同时切 WAL」——
-// `next build` 的 collect-page-data 会起 7 个 worker，每个都 import 这条链，
-// 而一份全新的库文件只让其中一个拿到独占锁（实测 3/8 抛 SQLITE_BUSY），
-// 异常从模块顶层 await 浮出就把整个构建带走了（ISSUE #1282）。
+// PRAGMA 清单与 `~/server/db` 共用（`~/lib/sqlite-pragmas`），加一条不必改两处；等锁预算
+// （`timeout`）是**每条连接**的客户端选项，本侧刻意不给 —— 等锁是同步的，会把这个服务
+// 进程一起停住（判据与实测见该文件头，ISSUE #1250）。模块顶层 await 保证首次查询前就位；
+// 走 `applySqlitePragmas` 以容忍「别的进程正在同时切 WAL」：`next build` 起 7 个 worker
+// 每个都 import 这条链，全新库文件只让一个拿到独占锁（实测 3/8 抛 SQLITE_BUSY，ISSUE #1282）。
 await applySqlitePragmas(client);
 
 export const workshopDb = drizzle(client, { schema });

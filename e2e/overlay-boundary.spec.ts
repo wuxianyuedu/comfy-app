@@ -1,25 +1,9 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /**
- * 锚定浮层不许被应用级标题行吃掉（ISSUE #1377）。
- *
- * 现场：桌面壳里窗口顶部是自绘的标题行（`TitleBarTabs`，页签 + 拖拽区 + 窗口
- * 按钮），它按 `z-chrome`(2000) 立在最上。TopBar 那排按钮落在 y≈46，气泡默认
- * 往上摆（`side="top"`）时顶部落在 y≈14 —— **视口内绰绰有余**，于是 Base UI 的
- * `flip` 不翻转；而气泡是 `z-popup`(100)，比标题行低一个数量级，于是它的上半截
- * **被标题行盖掉**（画在它下面，不是被裁）。用户看到的是「一条白边 + 一个朝下的
- * 箭头，文字全没了」。实测 TopBar 上四个入口（搜索 / 深浅色 / 消息 / 菜单）全中招。
- *
- * 这里钉的是**结果**：壳态下把 TopBar 每个入口悬停一遍，气泡的几何必须整体
- * 落在标题行下沿之下、并且命中测试真的打到气泡自己（没被任何东西盖住）。
- *
- * 为什么不钉 `side`：翻转是定位引擎的输出，写死它会锁住实现；「有没有被盖住」
- * 才是用户看到的那件事。
- *
- * ⚠️ 壳态是**打 `__TAURI_INTERNALS__` 全局标记**造出来的 —— 它就是
- * `isDesktopShell()` 读的那个键，于是 `ShellTabs` 会真的渲染 `TitleBarTabs`、
- * `data-shell` 与侧栏让位一起生效（比手改 DOM 忠实：手改会在水合前动 DOM，
- * React 直接报 #418 并丢掉客户端树）。
+ * 锚定浮层不许被应用级标题行吃掉（ISSUE #1377）。桌面壳顶部自绘标题行（`TitleBarTabs`）按 `z-chrome`(2000) 立在最上，而气泡 `z-popup`(100) 低一个数量级：TopBar 按钮落 y≈46、气泡 `side="top"` 顶部 y≈14 仍在视口内，Base UI 的 `flip` 不翻转，于是上半截**被标题行盖掉**（画在它下面，不是被裁），实测四个入口全中招。
+ * 这里只钉**结果**：每个入口悬停一遍，气泡几何整体落在标题行下沿之下、且命中测试真的打到气泡自己（不钉 `side`——翻转是定位引擎的输出，写死会锁实现）。
+ * ⚠️ 壳态是打 `__TAURI_INTERNALS__` 全局标记（`isDesktopShell()` 读的那个键），`TitleBarTabs` / `data-shell` / 侧栏让位都真的生效；比手改 DOM 忠实（手改会在水合前动 DOM，React 报 #418 并丢客户端树）。
  */
 async function openInShell(page: Page) {
   await page.addInitScript(() => {
@@ -32,28 +16,19 @@ async function openInShell(page: Page) {
   await page.waitForSelector('[data-slot="sidebar-trigger"]');
   /* 标题行确实在（它是本用例的让位对象；不在就没得验）。 */
   await expect(page.locator('[data-slot="title-bar"]')).toBeVisible();
-  /* ⚠️ **还要等测点自己到位**：上面那两枚锚点在**服务端 HTML 里就有**
-   * （`data-shell` 与 `title-bar` 都由 `useTitleBarTabsActive()` 的 SSR 首帧
-   * 决定），而顶栏那排入口是客户端树水合之后才挂上的。只等前两枚就把「导航回来了」
-   * 读成「页面就绪」，在并发高的时候会读到一个**半截水合**的页面：
-   * `header` 与 `main` 都还没有、`header button[aria-label]` 数出来是 0，
-   * 于是下面那条 `count > 0` 当场红（实测 8 并发下 ~25% ~40% 命中，
-   * 平台侧 3 次重试全红 —— 自愈只是水合慢，不是水合失败：等一等入口就回来了）。
-   * 这条等待是**测点的前提**而不是判据：它不改变任何断言的取值，只是把
-   * 「还没渲染完」与「渲染出来是空的」分开 —— 后者才是本用例要拦的那件事。 */
+  /* ⚠️ **还要等测点自己到位**：上面两枚锚点在**服务端 HTML 里就有**（`data-shell` 与 `title-bar` 由
+   * `useTitleBarTabsActive()` 的 SSR 首帧决定），而顶栏入口是水合后才挂上的；只等前两枚会把「导航回来了」
+   * 读成「页面就绪」，并发高时读到半截水合（`header button[aria-label]` 数出 0，下面 `count > 0` 当场红，
+   * 实测 8 并发 ~25%~40% 命中、平台 3 次重试全红；自愈只是水合慢）。这条等待是**测点的前提**而非判据：
+   * 它不改任何断言取值，只把「还没渲染完」与「渲染出来是空的」分开 —— 后者才是本用例要拦的那件事。 */
   await expect(page.locator("header button[aria-label]").first()).toBeVisible();
 }
 
-/** 把鼠标从远处挪进来并停在目标上 —— Base UI 的 hover 要一次指针移动。
- *
- * 传 **`Locator` 而不是标签字符串**：顶栏那排 `aria-label` 里有**动态**的
- * （`MessageCenterButton.tsx:27` 在有未读时会变成「系统消息，N 条未读」）。
- * 原先的写法是「先把属性值抓成字符串，再拿它精确重查」——两次动作之间只要落一条
- * 系统消息，那个字符串就当场失效，locator 一直等到 60s 用例超时（实测红过两条）。
- *
- * 只认**当前打开的那一枚**气泡（`[data-open]`）：上一枚在退场动画里会以
- * `data-closed` 继续挂在 DOM 上，全局 `[data-slot="tooltip-content"]` 会一次命中
- * 两枚（strict mode violation），而探针的 `querySelector` 会拿到「上一入口的气泡」。 */
+/** 把鼠标从远处挪进来并停在目标上 —— Base UI 的 hover 要一次指针移动。传 **`Locator` 而不是标签字符串**：
+ * 顶栏 `aria-label` 有**动态**的（`MessageCenterButton.tsx:27` 有未读时变「系统消息，N 条未读」），原先
+ * 「先抓属性值成字符串再精确重查」在两次动作间只要落一条系统消息就失效，locator 等到 60s 超时（实测红过
+ * 两条）。只认**当前打开的那一枚**气泡（`[data-open]`）：上一枚退场动画里以 `data-closed` 仍挂在 DOM，
+ * 全局 `[data-slot="tooltip-content"]` 会命中两枚（strict mode violation），探针会拿到上一入口的气泡。 */
 async function hoverHint(page: Page, trigger: Locator) {
   await page.mouse.move(400, 700);
   const box = await trigger.boundingBox();

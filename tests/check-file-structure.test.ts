@@ -1,28 +1,8 @@
-/**
- * 提交门槛自检：把 scripts/check-file-structure.cjs 当成黑盒跑在临时工作区上，
- * 验证「Windows 入口 .ps1 化」这条硬规则（R7/R8，ISSUE #23）真的会阻断提交，
- * 而不是只写在文档里。
- *
- * 规范：docs/standards/launch-and-build.md §8
- *   - R7 仓库内禁止 .bat / .cmd / .vbs 入口（历史惨案：cmd 走 GBK 代码页，
- *     中文提示与子进程 UTF-8 输出必然乱码，入口被迫做成不含中文的哑壳）
- *   - R8 scripts/ tools/ 下含中文的 .ps1 必须 UTF-8 BOM（无 BOM 会被 PS 5.1
- *     按 GBK 解码，与 .bat 乱码同源）
- *   - R9 根目录禁止散落 .ps1 双击入口（ISSUE #29）：入口归入 tools/<分类>/，
- *     启动类归 tools/start/；根目录只留工程配置
- *   - R10 注释里禁止「历史流水」（日期 / 改动编号 / 任务批次号，ISSUE #46）：
- *     作者与修改日期归 git log，写进注释会随代码搬迁过期失真
- *   - R11 Next 16 起代理约定名是 src/proxy.ts（`middleware` 已废弃，ISSUE #489）：
- *     文件被删 / 改回旧名 / 挪离 src 根都阻断
- *   - R12 src/ 源码禁止内嵌控制字符（NUL 等，规范 §12.11）：带 NUL 的文件会被
- *     git / diff / grep / 编辑器判成二进制，改动从此无法 Review
- *   - R5 超 900 行的文件即阻断（**硬闸**，ISSUE #536 立口径 / #575 加棘轮 /
- *     #1811 翻硬闸）：扫描范围是**整个 `src/`**、不分层不分文件类型；只扫
- *     `src/components/`（历史口径）会让最大的那个文件与逻辑文件都不设防
- *
- * 为什么用子进程跑而不是 import：该脚本被 pre-commit 以 `node scripts/xxx.cjs`
- * 调用，且内部用 process.cwd() 定位扫描根；复用同一调用方式才等价于真实门禁。
- */
+/** 提交门槛自检：黑盒跑 `scripts/check-file-structure.cjs`（子进程 = pre-commit 的 `node scripts/*.cjs` + cwd 定位扫描根），
+ * 钉的是「入口/结构硬规则真阻断提交」而非只写在文档里（launch-and-build.md §8）。坐标：R7/R8 禁 .bat/.cmd/.vbs、
+ * 中文 .ps1 必须 UTF-8 BOM（cmd/PS5.1 走 GBK 必乱码，#23）；R9 根目录禁 .ps1 双击入口（#29）；R10 注释禁历史流水（#46）；
+ * R11 代理约定名 src/proxy.ts（#489）；R12 src/ 禁控制字符（NUL 会让 git/diff/grep 判成二进制）；R5 超 900 行即阻断、
+ * 扫全 `src/` 不分层（#536 / #575 / #1811）。 */
 import {
   existsSync,
   mkdtempSync,
@@ -42,14 +22,9 @@ import { pythonCandidates } from "../src/lib/process/python-candidates";
 import { copyGateDeps } from "./helpers/gate-repo";
 import { stripComments } from "./helpers/strip-comments";
 
-/**
- * 两处「这台机器上有没有某个解释器」的候选表与探测参数 —— 顺序取自各自的判据，
- * 本文件不抄第二份。
- *
- * `powershell` 在前：Windows PowerShell 5.1 是每台 Windows 都有的那个，`pwsh`（7）
- * 是可选安装。反过来先试 `pwsh` 只会在装了 7 的机器上多起一次进程。
- * `python` 那一条走 `pythonCandidates()`（平台差异在原处回答，见那份模块的头注）。
- */
+/** 「这台机器上有没有某个解释器」的候选表与探测参数 —— 顺序取自各自判据，本文件不抄第二份。
+ * `powershell` 在前：Windows PowerShell 5.1 每台 Windows 都有，`pwsh`(7) 是可选安装；反过来先试 `pwsh` 只会在
+ * 装了 7 的机器上多起一次进程。`python` 那条走 `pythonCandidates()`（平台差异在原处回答，见那份模块头注）。 */
 /* SAFETY: 类型断言已复核 */
 const POWER_SHELL_CANDIDATES = ["powershell", "pwsh"] as const;
 /** 探测与真跑共用同一条参数形态：探测要回答的正是「这条形态跑得通吗」。 */
@@ -73,17 +48,11 @@ function run(): { code: number; output: string } {
   return runWith([]);
 }
 
-/**
- * 「这台机器上有没有某个解释器」的判据与它的读数 —— **收在 `src/lib/process/probe-exe.ts`**。
- *
- * 此前这里是本文件自己写的一份 `try { execFileSync } catch`，只认「spawn 抛没抛错」。
- * 判据其实要「起得来**且**解释得了参数」两件：盘上一个同名的别的可执行文件 spawn 得起来、
- * 却把 `-NoProfile` 当成自己的参数退 2，旧写法把它判成「在场」，随后用例照跑、断言等满
- * 20s 以超时形态红 —— 一句「我这台机器判不了」被记成了「这条判据红了」（ISSUE #2316）。
- * 那份实现搬到地基层是**复用**而不是搬屋：`scripts/python-probe.mjs` 与
- * `python-resolve.ts` 的失败形态同用一条判据；`tests/skip-probe-readings-gate` 守的正是
- * 「探不到时要打逐候选读数」这件事（本文件两处调用点都走同一个入口，没有第二份写法）。
- */
+/** 「这台机器上有没有某个解释器」的判据收在 `src/lib/process/probe-exe.ts`：要「起得来**且**解释得了参数」——
+ * 旧写法只认 spawn 抛没抛错，盘上一个同名的别的可执行文件 spawn 得起来却把 `-NoProfile` 当自己的参数退 2，
+ * 被判成在场 ⇒ 用例照跑、断言等满 20s 以超时红，一句「这台机器判不了」记成了「判据红了」（ISSUE #2316）。
+ * 搬到地基层是复用不是搬屋：`scripts/python-probe.mjs` 与 `python-resolve.ts` 同用一条判据，
+ * `tests/skip-probe-readings-gate` 守「探不到时打逐候选读数」；本文件两处调用点走同一入口。 */
 
 /** 带参数的调用（R5 的翻闸断头用例要传 `--update` 正面证明它不存在，规范 §12.6）。 */
 function runWith(args: Array<string>): { code: number; output: string } {
@@ -111,13 +80,10 @@ function runWith(args: Array<string>): { code: number; output: string } {
 beforeEach(() => {
   workdir = mkdtempSync(join(tmpdir(), "structure-gate-"));
   copyFileSync(SCRIPT, join(workdir, "check-file-structure.cjs"));
-  /* 判据走 `require("./gate-scan-read.cjs")` 取扫描面的共用读取器（容错遍历，
-   * 口径见那份文件的文件头）—— 临时仓库只放被测那一份时，跑起来是
-   * `MODULE_NOT_FOUND`，那条红长得像「判据坏了」，实际是夹具少带一个文件。
-   * 这份用例还没迁进 `defineGateRepo`（§11.16.1 的门禁只判「`tmpdir()` + 从
-   * `workdir` 拉脚本 + 没 import 共享件」三条同时成立；这份造的是「缓冲内容」而不是
-   * 临时仓库、也没从工作区拉脚本，所以不在那条判据的靶子里），自己调
-   * `copyGateDeps` 把同目录依赖补齐 —— 与夹具内那一层同一件事。 */
+  /* 判据走 `require("./gate-scan-read.cjs")` 取共用读取器（容错遍历，口径见该文件头）：临时仓库只放被测那一份时
+   * 是 `MODULE_NOT_FOUND`，红得像「判据坏了」，实际是夹具少带一个文件。本用例不在 `defineGateRepo` 的靶子里
+   *（§11.16.1 要求 `tmpdir()` + 从 `workdir` 拉脚本 + 不 import 共享件三条同时成立；这里造的是「缓冲内容」、也没
+   * 从工作区拉脚本），所以自己调 `copyGateDeps` 补齐同目录依赖 —— 与夹具内那一层同一件事。 */
   copyGateDeps(join(workdir, "check-file-structure.cjs"));
   // 脚本无条件扫描 src/（R1-R6 规则），临时工作区必须存在该目录
   mkdirSync(join(workdir, "src"));
@@ -403,11 +369,9 @@ describe("check-file-structure.cjs（提交门槛）", () => {
   });
 
   // ── R12：src/ 源码里不得内嵌控制字符（规范 §12.11）──
-  // 判据来自一次真实事故：当年的自研 markdown 渲染器（`lib/comfyui/markdown.ts`，
-  // ISSUE #1329 后整块迁到 `lib/markdown/`）曾用真的 NUL 字节做占位符哨兵
-  //（`\0CODE<n>\0`），于是整个文件被 git / diff / grep / 编辑器当二进制：
-  // `git diff` 只回「Binary files differ」、`git show --stat` 显示 bin、
-  // `grep -rn` 静默跳过。哨兵改成可打印形式后，这条规则负责防回潮。
+  // 判据来自真实事故：`lib/comfyui/markdown.ts`（ISSUE #1329 后迁到 `lib/markdown/`）曾用真 NUL 字节做占位符哨兵，
+  // 于是 git / diff / grep / 编辑器都当二进制：`git diff` 只回「Binary files differ」、`grep -rn` 静默跳过。
+  // 哨兵改可打印形式后，这条规则负责防回潮。
   describe("R12：源码内嵌控制字符被阻断（规范 §12.11）", () => {
     /* NUL 只能用**转义**写进用例源码——直接嵌一个真字节会把本测试文件自己也
      * 变成二进制（正是 R12 要拦的形态）。写进临时文件时才还原成真字节。 */
@@ -451,11 +415,9 @@ describe("check-file-structure.cjs（提交门槛）", () => {
   });
 
   /* ── R13/R14：src/lib 的域归属纪律（ISSUE #565 / 规范 §12.5.3）──
-   *
-   * 这两条的价值全在「新增模块会被要求先回答归属」——而它们最容易的失效方式
-   * 是「判定永远为绿」（比如只看目录名、不递归看顶层文件）。因此这里既测
-   * 「该拦的拦」，也测「豁免清单里的单例不被误伤」，还把「域目录名未登记」
-   * 单独钉住：漏登记会让 R13 的归属判据形同虚设。 */
+   * 价值全在「新增模块会被要求先回答归属」，而最容易的失效方式是「判定永远为绿」（如只看目录名、不递归看
+   * 顶层文件）。所以这里既测「该拦的拦」、也测「豁免清单里的单例不被误伤」，还把「域目录名未登记」单独钉住：
+   * 漏登记会让 R13 的归属判据形同虚设。 */
   describe("R13/R14：src/lib 子域纪律（规范 §12.5.3）", () => {
     const writeLib = (rel: string, body = "export const x = 1;\n") => {
       const abs = join(workdir, rel);
@@ -495,20 +457,10 @@ describe("check-file-structure.cjs（提交门槛）", () => {
   });
 
   // ── R5：超 900 行的文件即阻断（硬闸，ISSUE #536 立口径 / #575 加棘轮 / #1811 翻硬闸）──
-  // 历史口径只扫 `src/components/` 且只认 .tsx，于是**全仓库最大的那个文件**
-  //（`settings/SettingsPageView.tsx` 2499 行）与逻辑文件
-  //（`lib/comfyui/lifecycle.ts` 1041 行）都不在任何护栏里。这里把范围钉死：
-  // 整个 `src/`、不分层不分文件类型。
-  //
-  // 「只提醒」（ISSUE #536 那版）挡不住新增长文件 —— 提醒是输出里的一行字，没有人
-  // 会因为一行提示去拆文件。于是 ISSUE #575 加了棘轮（存量进基线、只许降不许升），
-  // 存量清零后 ISSUE #1811 把棘轮也收掉：基线为 0 时 `--update` 无余地、`--strict`
-  // 恒绿，留下的只剩「手改那份 JSON 就能把新超限文件登记成已知存量」这条通道 ——
-  // 那正是硬闸类本来没有的中间态（§13.6.2）。**连带收掉 `baselineRev` 那套
-  // 「按格式时代同口径重数」的机制**（ISSUE #637）：它存在只为让基线那一刻的行数与
-  // 今天的行数可比，没有基线就没有两个格式时代要拉平。
-  //
-  // 下面这一组是翻闸后的形态：一份超限文件即退 1，`--update` 这个出口不存在。
+  // 范围钉死为整个 `src/`、不分层不分文件类型：历史口径只扫 `src/components/*.tsx`，让最大的
+  // `settings/SettingsPageView.tsx`(2499) 与 `lib/comfyui/lifecycle.ts`(1041) 都不设防。
+  // 「只提醒」(#536) 挡不住新增长文件；#575 棘轮在 #1811 存量清零后收掉（只剩「手改 JSON 登记存量」
+  // 这条中间态，§13.6.2），连带收掉 `baselineRev` 重数机制（#637）；翻闸后一份超限即退 1，无 `--update`。
   describe("R5：超 900 行的文件即阻断（ISSUE #536 / #575 / #1811）", () => {
     /** 造一个恰好 `lines` 行的源文件。 */
     const writeLines = (rel: string, lines: number) => {
@@ -578,12 +530,10 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     });
 
     it("`--update` 被传进来时，R1–R12 照判（那是另一条车道，不跟着失效）", () => {
-      /* 「翻闸」只该关掉 R5 的放宽通道，不该连**结构硬规则本身**一起放过：
-       * 传 `--update` 走的是 R5 那条早已删掉的分支，但 R1–R12 的判定与参数无关。
-       * 这一格防的是「有人把某条规则也挂进 ARGS 判断、顺手把主判定短路了」——
-       * 那种形态下前一条断头用例照样绿（它只看 R5 的超限文件），红的是这一格。
-       * 探针取 R9（根目录 .ps1 双击入口）而不是 R1：实测该脚本对根目录的 .ps1
-       * 报的就是 R9，写 R1 会得到一条「断言的是另一条规则」的假绿。 */
+      /* 「翻闸」只该关掉 R5 的放宽通道，不该连结构硬规则本身一起放过：传 `--update` 走 R5 那条已删
+       * 分支，但 R1–R12 的判定与参数无关。这一格防「有人把某规则挂进 ARGS 判断、顺手短路了主判定」——
+       * 那种形态下前一条断头用例照样绿，红的是这一格。探针取 R9（根目录 .ps1 双击入口）而非 R1：
+       * 实测脚本对根目录 .ps1 报的就是 R9，写 R1 会得到「断言的是另一条规则」的假绿。 */
       writeFileSync(
         join(workdir, "start-web.ps1"),
         Buffer.concat([BOM, Buffer.from('Write-Host "启动"\n')]),
@@ -632,22 +582,15 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
    * 20s——只影响本 describe，不掩盖其它文件的真实挂起。 */
   vi.setConfig({ testTimeout: 20_000 });
   /**
-   * 复现并锁住「cargo 覆盖 target\release\app.exe 时拒绝访问 (os error 5)」这条
-   * 已知故障路径（规范 §5）：壳还在跑 → 覆盖被拒 → 整轮编译白跑。
-   * 守卫的判据是「进程 exe 路径落在本仓库 src-tauri\target\{release,debug}\」，
-   * 因此这里用 PowerShell 打桩 Get-CimInstance，喂两类进程验证筛选：
-   *   - 本仓库 target 下的 app.exe（含大小写/相对段差异）→ 必须命中
-   *   - 别处路径的 app.exe、命令行恰好含项目根但路径在外的 app.exe → 必须不命中
-   */
-  // Windows PowerShell 5.1 与 PowerShell 7 都可用；非 Windows 平台（Linux CI）没有
-  // powershell，相关用例跳过，规则本身由 scripts/check-file-structure.cjs 与
-  // 本文件其它用例覆盖。
-  // 「在场」必须由 `firstRunnableOrEmpty()` 判 —— 判据是「起得来**且**解释得了参数」，
-  // 不是「spawn 没抛错」（ISSUE #2316）：盘上一个同名但不是 PowerShell 的可执行文件
-  // 让这一格照跑，随后 `spawnSync(candidate, ["-NoProfile", …])` 起来却退 2，守卫脚本的
-  // `HITS=` 一个都不出现 ⇒ 断言等满 20s 才以「超时」红，报错行指不到真因。
-  // 探不到时它打一行**逐候选读数**：下一个人只看到一片 skip 时要能说出是没装、
-  // 还是那个名字被别的东西占了（两者下一动作不同）。
+   * 复现并锁住「cargo 覆盖 target\release\app.exe 拒绝访问 (os error 5)」（规范 §5）：壳还在跑 →
+   * 覆盖被拒 → 整轮编译白跑。判据是「进程 exe 路径落在本仓库 src-tauri\target\{release,debug}」，
+   * 故用 PowerShell 打桩 Get-CimInstance、喂两类进程：本仓库 target 下的 app.exe（含大小写/相对段
+   * 差异）必须命中；别处路径、或命令行恰含项目根但路径在外的 app.exe 必须不命中。 */
+  // Windows PowerShell 5.1 与 7 都可用；非 Windows（Linux CI）没有 powershell，相关用例跳过，
+  // 规则本身由 scripts/check-file-structure.cjs 与本文件其它用例覆盖。
+  // 「在场」必须由 `firstRunnableOrEmpty()` 判 —— 判据是「起得来**且**解释得了参数」（ISSUE #2316）：
+  // 同名的别的可执行文件让这一格照跑，`spawnSync(candidate,["-NoProfile",…])` 退 2 ⇒ 守卫脚本 `HITS=`
+  // 一个都不出现 ⇒ 等满 20s 以超时红、指不到真因；探不到时它打逐候选读数（区分「没装」与「名字被占」）。
   const psExe = firstRunnableOrEmpty({
     candidates: POWER_SHELL_CANDIDATES,
     probeArgs: () => POWER_SHELL_PROBE_ARGS,
@@ -674,14 +617,11 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
     return `${proc.stdout ?? ""}${proc.stderr ?? ""}`;
   };
 
-  // 打桩 Get-CimInstance（进程枚举）与 taskkill（回收动作）：既用来验证筛选规则，
-  // 也用来验证「陈旧壳 / 非交互构建自动回收后继续」与「用户可能正开着应用才中止」
-  // 这两条 ISSUE #412 的判据——不真的动本机进程。
-  //
-  // 造数据用 `{ Id, Path, Cmd, Name }`：Name 是被按名过滤的进程名（桌面壳只有
-  // `app.exe`）。`Name='xxx'` 按名过滤；`ProcessId=<n>` 用来回答
-  // 「我是谁 / 我爹是谁」（`Test-UnattendedBuild` 靠它判是否资源管理器双击），
-  // 桩件查自身时如实回 `$PID`，查父进程时回 `opts.parent`。
+  // 打桩 Get-CimInstance（进程枚举）与 taskkill（回收）：验证筛选规则，也验证 ISSUE #412 的两条判据
+  //（陈旧壳 / 非交互构建自动回收后继续；用户可能正开着应用才中止）—— 不真的动本机进程。
+  // 造数据 `{ Id, Path, Cmd, Name }`：Name 按名过滤（桌面壳只有 `app.exe`）；`ProcessId=<n>` 回答
+  //「我是谁 / 我爹是谁」（`Test-UnattendedBuild` 靠它判是否资源管理器双击）；桩件查自身回 `$PID`、
+  // 查父进程回 `opts.parent`。
   const guardScript = (
     procsJson: string,
     opts: { parent?: string; processes?: Array<unknown> } = {},
@@ -783,14 +723,10 @@ foreach ($h in $hits) { Write-Output ("HIT=" + $h.Id) }
   });
 
   /**
-   * ISSUE #412：用户双击 build-all 时一上来就被「目标文件被占用」挡下，
-   * 提示「请先关闭桌面窗口」——可窗口早就关了，照做也关不掉，卡成死循环。
-   *
-   * 判据收敛成：陈旧壳（其 exe 路径已指不到本仓库 = 提权实例 / 老式命令行残留）与
-   * 非交互构建下的占用自动回收后继续；只有「用户可能正开着应用」才中止。
-   * 这里用打桩进程表把三条判据各锁一次（陈旧壳回收 / 有人在守则中止 / 非交互自动回收，
-   * 回收动作走 Write-Output 便于断言）。
-   */
+   * ISSUE #412：双击 build-all 一上来被「目标文件被占用」挡下、提示「请先关闭桌面窗口」——可窗口
+   * 早就关了，照做也关不掉，卡成死循环。判据收敛成：陈旧壳（exe 路径已指不到本仓库 = 提权实例 /
+   * 老式命令行残留）与非交互构建下的占用自动回收后继续；只有「用户可能正开着应用」才中止。这里用
+   * 打桩进程表把三条各锁一次（回收动作走 Write-Output 便于断言）。 */
   // 结论走 stdout、守卫日志走 stderr（同 dev-launcher 用例的套路）：`Log` 若也写
   // stdout，正文会与 `CODE=` 挤在同一行，断言被日志粘住而失衡。
   // KILLED 计数用 `$global:`（Assert-ShellNotRunning 有自己的作用域，`$script:` 改不到）。
@@ -876,22 +812,11 @@ Write-Output ("|END")
 });
 
 describe("启动链路「不抢前台」判据（唯一的入口是壳）", () => {
-  /**
-   * 应用启动要几十秒，用户很可能切去别的窗口干活；加载完成若是照直把窗口顶到
-   * 最前面，正在看的内容就被打断（ISSUE #359）。判据现在只在**壳**里：
-   * `shell_launch::decide_front_when_self_launched()` 默认 false（双击启动不给
-   * 前台，窗口进任务栏 + 闪烁提醒），`read_foreground_env()` 只让显式注入的
-   * `COMFYAPP_FOREGROUND` 覆盖它（脚本 / 终端调用场景）。
-   *
-   * 「唤起已有实例」不再走「猜前台」这条路：壳的第二个进程经
-   * `single_instance::another_instance_running()` 找到运行中的实例、发焦点事件，
-   * `spawn_focus_waiter` 收到后以 `request_focus = true` 显示主窗——用户显式
-   * 意图，必须给前台。两条判据各管一段，互不重叠。
-   *
-   * 为什么断言源码而不是真跑：Win32 前台窗口在 Linux / CI 上取不到，而这两个
-   * 函数是编译期常量决策，源码就是判据本体（历史实现是 python 启动器的
-   * `decide_foreground()` + PowerShell 桩件真跑，启动器已随 ISSUE #784 移除）。
-   */
+  /** ISSUE #359：启动要几十秒，用户常已切走，加载完顶窗即打断；判据只在壳里 ——
+   * `decide_front_when_self_launched()` 默认 false（双击不给前台，进任务栏+闪烁），仅显式注入的
+   * `COMFYAPP_FOREGROUND` 覆盖；唤起已有实例则经 `another_instance_running()` 发焦点事件、
+   * `spawn_focus_waiter` 以 `request_focus=true` 显示（显式意图必须给前台）；断言源码因 Win32 前台在
+   * CI 取不到，而二者是编译期常量决策（python 启动器已随 #784 移除）。 */
   const rust = readFileSync(join(process.cwd(), "src-tauri", "src", "shell_launch.rs"), "utf8");
 
   it("双击启动默认**不**抢前台（判据是常量 false，不是查进程表）", () => {
@@ -919,20 +844,11 @@ describe("启动链路「不抢前台」判据（唯一的入口是壳）", () =
 });
 
 describe("窗口交接时刻的前台归属复核（独立进程，ISSUE #359 回归）", () => {
-  /**
-   * 启动期判决只回答了「双击之后用户是不是马上走开了」；用户切去干别的可以持续
-   * 几分钟，等应用真正冒出来时「双击入口还在前台」已经失真。更关键的是窗口交接
-   * 那一刻：启动页窗口带 WS_EX_TOOLWINDOW，关闭它之后主窗任务栏按钮重建，Windows
-   * 会把前台**自动放行**给主窗——壳里任何 set_focus() 都「成功」，「不打断用户」
-   * 的策略当场被架空（用户回报的「构建后启动仍然抢前台」）。
-   *
-   * 因此交接时刻要再裁定一次，判据收敛在 scripts/win32-window-focus.py 的纯函数
-   * decide_handoff：只有启动期判决允许给前台才给（give），系统自动放行的前台要还
-   * 回去（restore），前台本来就是别的应用就什么都不做（leave）。
-   *
-   * Win32 部分在 Linux CI 上跑不到，这里按本文件既有套路抽出源码打桩后断言判决表，
-   * 锁住这条用户可感知的行为不再回退。
-   */
+  /** ISSUE #359 回归：启动期判决只管「双击后是否立刻走开」，用户一走几分钟即失真。真正要紧的是交接
+   * 时刻 —— 启动页带 WS_EX_TOOLWINDOW，关掉它主窗任务栏按钮重建，Windows 会把前台**自动放行**给主窗，
+   * 壳里任何 set_focus() 都「成功」，策略当场被架空（用户回报的「构建后启动仍抢前台」）。故交接再裁定
+   * 一次：`scripts/win32-window-focus.py` 的 `decide_handoff` 只有启动期允许才 give、系统自动放行要
+   * restore、前台本是别的应用则 leave；此处抽出源码打桩断言判决表（Win32 在 Linux CI 跑不到）。 */
   /* 与上面 `psExe` 同一形态（ISSUE #2316 的「同形同批」）：这里是 `python` 那一处。
    * 判据要的是「起得来**且**解释得了 `-c`」，所以探测用的就是真跑那一条
    * `["-c", "import sys; sys.exit(0)"]` —— 冒牌同名文件在这里退非零，如实判「不在场」。 */
@@ -1040,14 +956,10 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
   });
 
   it("启动页首次可见时被带到前台（双击的直接反馈，不是「别打断」那一档）", () => {
-    // 现场（ISSUE #576）：双击启动入口，启动页被文件资源管理器压住，用户看到的是
-    // 「双击了没反应」。根因是**同一套「不抢前台」策略被套在了启动页上**——那套
-    // 策略针对的是几十秒后才冒出来的**应用窗口**（用户可能早已切走）；启动页是
-    // 用户刚刚点下去的直接反馈，必须出现在前面。
-    //
-    // 启动器移除后这一段的执行者换成壳自己：`setup_splash_window` 里
-    // `bring_splash_to_front`，判据（`should_front_splash` / `run_bring_splash`）
-    // 仍留在复核脚本里，供需要它的一方派发。
+    // 现场（ISSUE #576）：双击启动，启动页被文件资源管理器压住 →「双击了没反应」。根因是**同一套
+    //「不抢前台」策略套在了启动页**：那套针对几十秒后才冒出的应用窗口（用户可能早已切走），而启动页是
+    // 刚点下去的直接反馈，必须在前。启动器移除后执行者换成壳（`setup_splash_window` 的
+    // `bring_splash_to_front`），判据（`should_front_splash` / `run_bring_splash`）留在复核脚本供派发。
     const lib = readFileSync(join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
     const focus = readFileSync(FOCUS_SCRIPT, "utf8");
     expect(lib).toContain("fn bring_splash_to_front(");
@@ -1061,22 +973,11 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
     expect(focus).toContain("两套判据");
   });
 
-  /**
-   * ISSUE #730：启动后有一段「未连接」状态——主窗先露 WebView2 空白 / 内嵌
-   * Edge「无法访问此页面」错误页，几秒后才变成 workspace。
-   *
-   * 这条与 §5 对照表里那条「壳编译时没带 custom-protocol」**同族但不同档**：
-   * 那条是导航目标错了（devUrl），这条是导航目标对、但**首帧还没画出来**。
-   * 启动页探测到应用端口可响应就调 navigate_to_app，而导航一发起主窗画面就离开
-   * 启动页：dev 模式下要等 next dev 首次编译（十几秒），这段等待里主窗就是
-   * 空白 / 错误页；而主窗是 `decorations: false`（标题行前端接管），页面没画出来
-   * 时连右上角的关闭按钮都不存在——用户看到的就是「窗口没有关闭按钮」。
-   *
-   * 修法的判据是「**启动等待期的画面只有一个出口**」：
-   *   · 应用首帧之前，能看到的东西只能是壳注入的加载占位（壳侧注入、应用侧收尾）；
-   *   · TCP 可达性校验（url_reachable）不足以防住这条 —— 连接被接受但首编译未完成
-   *     时，on_page_load(Finished) 照样触发，交换窗口就把错误页/空白顶给了用户。
-   */
+  /** ISSUE #730：启动后有一段「未连接」——主窗先露 WebView2 空白 / Edge 错误页，几秒后才成 workspace。
+   * 与 §5「壳编译没带 custom-protocol」同族不同档：那条导航目标错（devUrl），这条目标对但**首帧未画**；
+   * dev 下要等 next dev 首编译，这期间主窗 `decorations: false` 又无页面接管标题行 ⇒ 用户看到「窗口
+   * 没有关闭按钮」。判据：启动等待期的画面只有一个出口 —— 首帧前只许壳注入的加载占位；TCP 可达
+   * （url_reachable）不足以防住，连接被接受但首编译未完成时 on_page_load(Finished) 照样触发并换掉画面。 */
   it("主窗首帧之前由壳注入加载占位，应用挂载时收尾（ISSUE #730）", () => {
     const rust = readFileSync(join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
     // ① 注入端：占位必须由壳侧 eval 注入（导航一发起 WebView2 就已切走画面，
@@ -1153,17 +1054,11 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
       "utf8",
     );
     const READ = 'std::env::var("COMFYAPP_LAUNCH_MODE")';
-    /**
-     * 判据本体：启动模式**谁读、谁写**的形态，而不是某句字面出现几次。
-     *
-     * 这里原先钉的是「`lib.rs` 里 `READ` 恰好出现 3 次，第三处在 `collect()`」。
-     * 那次计数后来把一个**有意的修复**判成了回归：`collect()` 不再自己读环境变量，
-     * 改为收 `launch_mode` 参数，值取自 `run()` 调 `ensure_launch_mode()` 的返回 ——
-     * 而「自己读」那一轮恰恰发生在写入之前（旧缺陷，见 `lib.rs` 里 collect 的注释）。
-     * 计数与不变式在这里不是一回事，所以改成方向性判据：净效果比原来**更严**
-     * （多了「collect 不许自读」「写入点全仓唯一且不在 lib.rs」两条），
-     * 且不再依赖「第三处读在哪里」这种实现细节。
-     */
+    /* 判据本体是启动模式**谁读、谁写**的形态，不是某句字面出现几次。原先钉「lib.rs 里 READ 恰 3 次、
+     * 第三处在 `collect()`」；那次计数把一个有意的修复判成回归（`collect()` 改收 `launch_mode` 参数，
+     * 值取自 `run()` 调 `ensure_launch_mode()` 的返回 —— 自读那一轮发生在写入之前，旧缺陷见 lib.rs
+     * 注释）。计数与不变式不是一回事，故改方向性判据：净效果更严（多「collect 不许自读」「写入点全仓
+     * 唯一且不在 lib.rs」两条），也不再依赖「第三处读在哪」。 */
     expect(
       rust,
       "collect 必须收 launch_mode 参数（值来自 ensure_launch_mode 的返回），不要再自己读",
@@ -1231,24 +1126,11 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
   });
 });
 
-/**
- * ISSUE #730 的 release 壳构建失败（`cargo build --release --features custom-protocol`）。
- *
- * 当年现场是两条**互不相干**的编译错误（用户日志里同时出现，容易被当成一件事）：
- *
- * 1. `generate_context!` 报一条「解析插件全局 API 脚本路径失败」（脚本被格式化工具
- *    折行、serde_json 读到尾随逗号）—— 这一条的判据（根级 `.prettierignore` 兜住
- *    `src-tauri/target/`）随 #2541 删 prettier 一起退役（ISSUE #2602）：oxfmt 的
- *    扫描面只有 `package.json` 里点名的两个 glob（`src/**` 与 `.storybook/**`），
- *    天然不碰 `target/`，「谁在忽略」的答案写在 `scripts/check-format.cjs` 头注里。
- * 2. 「上限 × 间隔」的两个常量相乘报 `expected u32, found u64`
- *    + `cannot multiply u32 by u64` —— 同一处表达式里的两个常量类型不同档。
- *    这一条随 #2192 退役：首帧看护的预算改由 `poll_clock::PollClock` 以 `Duration`
- *    持有，拍数不再是一个常量，于是那个相乘的形状从源码里消失了（详见下面那条用例）。
- *
- * 两条的共同点是「本地跑 lint / tsc / 单测全绿，只有真编 release 壳才暴露」，
- * 所以判据只能落在「编译前提」这一层。第 1 条退役之后，本组只剩一条钉住回溯的用例。
- */
+/** ISSUE #730 的 release 壳构建失败（`cargo build --release --features custom-protocol`）当年是两条互不相干的
+ * 编译错误：① `generate_context!` 报插件全局 API 脚本路径解析失败（折行 + serde_json 尾随逗号），判据随
+ * #2541 删 prettier 退役（#2602；oxfmt 只扫 `src/**` 与 `.storybook/**`，见 `scripts/check-format.cjs` 头注）；
+ * ② 「上限 × 间隔」两常量相乘报 `expected u32, found u64`，随 #2192 退役（预算改由 `poll_clock::PollClock` 持
+ * `Duration`）。共同点：本地 lint/tsc/单测全绿，只有真编 release 才暴露 ⇒ 判据只能落在「编译前提」。 */
 describe("release 壳构建的地雷（ISSUE #730）", () => {
   it("首帧看护的超时预算由 poll_clock 持有 —— 「两常数相乘」的旧形状不得回潮（#2328 / #2192）", () => {
     const rust = readFileSync(join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
@@ -1267,24 +1149,11 @@ describe("release 壳构建的地雷（ISSUE #730）", () => {
 });
 
 describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自绘标题行）", () => {
-  /**
-   * 启动页的日志面板是「一行一条日志」的不折行布局（`white-space: pre`，见
-   * docs/standards/07-日志系统.md §7.18.6），所以**窗口宽度就是可读宽度**：
-   * 窗口太窄日志每行都被切成两截（旧的 1280 就是这么来的）。
-   *
-   * 但「给得宽」的旧做法走到了另一个极端（ISSUE #412）：窗口按 1680×1000 开，
-   * 而内容卡片只有 720/1400 宽、收起日志时垂直方向更是大片留白——用户在 2K/4K
-   * 屏上看到的是一大块没有任何用途的空白区域。现在的取向是**窗口即内容**：
-   *
-   * - 开窗 = 紧凑档（够放下收起日志时的内容，见 SPLASH_WINDOW_SIZE）；
-   * - 展开日志 = 壳把窗口调到展开档（SPLASH_WINDOW_SIZE_EXPANDED），页面只把
-   *   「展开 / 收起」告诉壳（`set_splash_compact`），不自己写第二份尺寸常量；
-   * - 两档都按当前显示器收敛（小屏不越界）；
-   * - 窗口 `decorations: false`（无原生标题栏），最小化 / 关闭由启动页自身
-   *   右上角的按钮提供。
-   *
-   * 改动三份启动页副本、tauri.conf.json 或 src-tauri/src/lib.rs 时先看这条。
-   */
+  /** 启动页日志是 `white-space: pre` 一行一条（07 §7.18.6）⇒ 窗口宽度即可读宽度，太窄每行被切；「给得宽」
+   * 也走极端（#412：1680×1000 开窗而卡片只有 720/1400，2K/4K 大片空白）。现取向 **窗口即内容**：开窗紧凑档
+   * （SPLASH_WINDOW_SIZE）、展开日志由壳调 SPLASH_WINDOW_SIZE_EXPANDED（页面只 `set_splash_compact`，不写
+   * 第二份尺寸常量）、两档按显示器收敛；`decorations: false`，最小化/关闭由启动页按钮提供。改三份副本 /
+   * tauri.conf.json / lib.rs 前先看这条。 */
   const CONF = join(process.cwd(), "src-tauri", "tauri.conf.json");
   const LIB_RS = join(process.cwd(), "src-tauri", "src", "lib.rs");
   const SPLASH_COPIES = [
@@ -1377,23 +1246,11 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     expect(html).toContain("-webkit-app-region: no-drag");
   });
 
-  /**
-   * ISSUE #608：启动页**拖不动**。
-   *
-   * 窗口没有原生标题栏（`decorations: false`），拖拽区只能自己声明。
-   * 两个成因，任一没修都仍然「按住不动」：
-   *
-   * 1. **权限**：启动页来自内嵌本地源，而 `core:default` **不含**
-   *    `core:window:allow-start-dragging`。未授权时窗口侧发起的拖拽会被 ACL
-   *    静默拒绝——页面看起来完全正常，就是不动。主窗之所以能拖，是因为
-   *    `capabilities/{default,remote}.json` 各自显式补了这条（见 07 §7.18.7）。
-   * 2. **拖拽区**：此前只有 `.titlebar` 一条是 drag（十几像素高，右侧还被
-   *    按钮占掉），窗口其余大片区域按下去都不动。现在由页面脚本统一接管：
-   *    落点不在交互件上就调 `startDragging()`，于是整窗（含内边距）都能拖。
-   *
-   * 因此判据是「权限 + 显式拖拽路径 + 交互件被排除」三件套，缺一个都还是拖不动。
-   * 改动启动页布局或 capabilities 时先看这条。
-   */
+  /** ISSUE #608：启动页**拖不动**。无原生标题栏（`decorations: false`）⇒ 拖拽区只能自声明，两成因缺一仍不动：
+   * ① 权限 —— 启动页来自内嵌本地源，`core:default` **不含** `core:window:allow-start-dragging`，未授权时拖拽被
+   * ACL 静默拒绝（页面正常就是不动）；主窗能拖是因为 `capabilities/{default,remote}.json` 各自补了（07 §7.18.7）。
+   * ② 拖拽区 —— 此前只有 `.titlebar`（十几像素、右侧被按钮占），现由页面脚本统一接管：落点不在交互件上就
+   * `startDragging()`。判据即「权限 + 显式拖拽路径 + 交互件排除」三件套。 */
   it("启动页能拖动位置：显式 startDragging + 交互件排除 + 拖拽权限", () => {
     const html = readFileSync(SPLASH_COPIES[0] ?? "", "utf8");
 
@@ -1459,20 +1316,11 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     ).toContain('"allow-set-splash-compact"');
   });
 
-  /**
-   * 「窗口按钮点了没反应」的第一道闸：**按钮必须真的能调到窗口能力**。
-   *
-   * ISSUE #412 的第二次回报就是这个症状（最小化 / 关闭都没效果）。这类问题的
-   * 成因不在按钮画得对不对，而在「点击之后调用了什么」：
-   *
-   * - 事件监听没绑上 / 被顶掉时，内联 onclick 仍要能把动作递出去；
-   * - 壳过期（改了 src-tauri 没重编）时，Tauri window API 可能整块不可用，
-   *   此时要有**应用自建命令**这条兜底（win_minimize / win_close，随壳一起走
-   *   ACL 三处同步），并在都不可用时给出可见提示，而不是静默无反应；
-   * - 拖拽区与按钮必须分开声明「别被拖拽吞掉点击」。
-   *
-   * 改动启动页按钮或壳命令时先看这条。
-   */
+  /** 「窗口按钮点了没反应」的第一道闸：**按钮必须真能调到窗口能力**（ISSUE #412 二次回报：最小化 / 关闭无效）。
+   * 成因不在画得对不对，而在「点击后调用了什么」：监听没绑上/被顶掉时内联 onclick 仍要递出动作；壳过期
+   * （改了 src-tauri 没重编）时 Tauri window API 可能整块不可用，需**应用自建命令**兜底（win_minimize /
+   * win_close，随壳走 ACL 三处同步），都不可用时要可见提示而非静默；拖拽区与按钮须分开声明，别被拖拽吞点击。
+   * 改启动页按钮或壳命令时先看这条。 */
   it("启动页的窗口按钮有内联兜底，不是只靠 addEventListener", () => {
     const html = readFileSync(SPLASH_COPIES[0] ?? "", "utf8");
     // 内联 onclick 是「脚本没跑到绑定」时的第二道；两条路必须汇到同一个入口

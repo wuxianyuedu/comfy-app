@@ -1,16 +1,7 @@
 /**
- * 探针还原共享件的自证（ISSUE #2593）。
- *
- * 这一族要守的性质只有一句：**进用例之前就是脏的那份工作，跑完还得是那一版** ——
- * 也就是「还原的凭据是快照，不是 git 索引」。现场与因果写在
- * `tests/helpers/probe-restore.ts` 的文件头，这里判行为与接线。
- *
- * 前四格都落在**临时目录**上（口径同 ISSUE #2415 对 `doc:render` 那组的改造）：
- * 为了防丢工作而拿真实工作区测这件事，自己就成了那次丢工作。
- * 后四格反过来，扫的是 `tests/**` 的**文本** —— 性质「不许拿索引/HEAD 清工作区」
- * 若只住在注释里，下一个人换种写法就绕过去了（那正是 §11.23 那一族）。其中两格是
- * **量具自证**：被禁的三种形状各自要认得出（含 `git checkout HEAD -- <文件>` 这种
- * 字符串形 —— 本单的第二处现场就是它），相邻的正当写法不许误伤（误伤会让人绕开判据）。
+ * 探针还原共享件的自证（ISSUE #2593）：进用例之前就是脏的那份工作，跑完还得是那一版 —— 「还原的凭据是快照，不是 git 索引」；现场与因果见 `tests/helpers/probe-restore.ts` 文件头。
+ * 前四格落在**临时目录**（口径同 ISSUE #2415 对 `doc:render` 的改造）——为了防丢工作而拿真实工作区测这件事，自己就成了那次丢工作。
+ * 后四格扫 `tests/**` 的**文本**：性质只住注释里下一个换写法就绕过去（§11.23）；其中两格是量具自证，三种被禁形状各自要认得出（含 `git checkout HEAD -- <文件>`），相邻正当写法不许误伤。
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -130,15 +121,9 @@ describe("探针还原 —— 凭据是快照，不是索引", () => {
 
 describe("口径要有执行者 —— 拿索引/HEAD 清工作区这种写法不再出现", () => {
   /**
-   * 被禁的是「把某份入库文件退回索引 / HEAD」那两种带**路径参数**的 git 形态 ——
-   * 索引之上那一层正是人的未提交工作。三种形状都要认：
-   * `execFileSync` 的数组形（`"checkout", "--"`）、字符串形（`checkout HEAD -- <路径>`，
-   * 实测就是 `tests/freshness-ledger-backend.test.ts` 那一份的写法）、以及 `restore --`。
-   * 相邻写法不误伤：`checkout -b` / `checkout --quiet -b`（在**自己造的临时仓库**里切分支，
-   * 动不到任何人的工作树）、`checkout --track <远端>`（`--` 后还有字，不是路径分隔符）。
-   * 两个分支都要求那个 `--` 是**独立一格**（字符串形里后面跟空白、数组形里紧跟闭引号）——
-   * 少了这一条边界，`["checkout", "--quiet", "-b", …]` 会被当成 `checkout --`（实测：
-   * `tests/premerge-push-trigger.test.ts` 那份夹具仓库切分支的写法第一次就被误伤）。
+   * 被禁是「把入库文件退回索引/HEAD」带**路径参数**的 git 形态 —— 索引之上那层正是人的未提交工作。
+   * 三种形状要认：数组形 `"checkout", "--"`、字符串形 `checkout HEAD -- <路径>`（见 `freshness-ledger-backend.test.ts`）、`restore --`。
+   * 相邻写法（`checkout -b`、`--track <远端>`）不误伤；`--` 必须**独立一格**，否则 `["checkout","--quiet","-b",…]` 会被当成 `checkout --`（`premerge-push-trigger.test.ts` 被误伤过）。
    */
   const DESTRUCTIVE =
     /(?:checkout|restore)(?:\s+HEAD)?\s+--(?=\s|$)|(?:checkout|restore)["']\s*,\s*["']--(?=["']|\s|$)/;

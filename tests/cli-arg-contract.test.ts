@@ -1,14 +1,7 @@
 /**
- * 破坏性入口的参数契约（`scripts/cli-arg-contract.mjs`）—— 判据本身。
- *
- * 立案现场见 ISSUE #1956 / #2096：两个默认**写库**的入口原先一句 `argv` 都不读，
- * `--dry-run` 于是被当成「没有参数的那一次调用」，库照改、账照记、还退 0。
- * 两个入口各自那条「真的没落库」的判据在
- * `tests/db-push-noninteractive.test.ts` 与 `tests/db-migrate-noninteractive.test.ts`，
- * 本文件只判这一份共用件 —— 它现在有两个调用方（§12.18），所以值得独立钉。
- *
- * 判的是**形状与方向**，不判具体话术：正文里该写哪句因果只有入口自己知道，
- * 这里负责的是「认不出就别作动」与「认得的不得被一起拦」。
+ * 破坏性入口的参数契约（`scripts/cli-arg-contract.mjs`）—— 判据本身。立案 ISSUE #1956 / #2096：两个默认**写库**的入口原先不读 `argv`，
+ * `--dry-run` 被当成「没有参数的那一次调用」，库照改、账照记、还退 0。各入口「真的没落库」的判据在 `tests/db-push-noninteractive.test.ts` 与 `tests/db-migrate-noninteractive.test.ts`。
+ * 本文件只判这份共用件（两个调用方，§12.18）：判形状与方向，不判话术 ——「认不出就别作动」与「认得的不得被一起拦」。
  */
 import { describe, expect, it } from "vitest";
 

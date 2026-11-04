@@ -1,25 +1,7 @@
 /**
- * `task.detail` 的 `images` ↔ 客户端镜像的线上契约（台账 E4 的第二格）。
- *
- * 这一格修之前长什么样：`src/lib/media/task-images-client.ts` 用一处
- * `as unknown as RawTaskImage[]` 把服务端返回的图片行**当**成本地那个手写 `type`。
- * 手写 type 在运行时不存在，所以没有任何东西知道「客户端读了哪几列」——
- * 服务端把 `localPath` 改名、或那一份关系装载换列时：tsc 绿、eslint 绿、
- * 那份只 `vi.mock("~/trpc/vanilla")` 返回固定对象的单测也绿，而表现是
- * **相册永远空**（`parseTaskImageRows` 把每一行都判成不合法而丢掉），
- * 与 E4 第一格（`task.list` 的 `videoPath` 恒 `undefined`、下载按钮一次都没出现过）同形。
- *
- * 所以这份用例钉四件事：
- *   ① 镜像声明的每一列，服务端真实发出的行里都在（方向是镜像 → 线上，就是漏掉的那一维）；
- *   ② 反向：线上发的列**不**全在镜像里（镜像是收窄，不是逐字复制 —— 断了这一条，
- *      ①会被一份「把整行列全抄进镜像」的实现无痛满足）；
- *   ③ `fetchTaskImages` 的返回值来自**真 router 经一次 JSON 传输**，而排序是服务端给的
- *      （`isCover desc, sortIndex asc`）—— 客户端不重排，视图的第一张才是封面；
- *   ④ 反向验证：把那一列改名，红的必须是「相册空了 + 契约缺列」这种看得见的结论。
- *
- * mock 边界与第一格逐字同一份：只换传输层（`~/trpc/vanilla`）与 `~/server/db`（内存库）、
- * `~/server/better-auth`（会话）、`~/lib/core/logger`（静音）。router、仓储、关系装载
- * 全走真实实现 —— 契约测试的价值恰恰在「真的把两边接起来跑一次」。
+ * `task.detail` 的 `images` ↔ 客户端镜像的线上契约（台账 E4 第二格）。修前 `task-images-client.ts`
+ * 用 `as unknown as RawTaskImage[]` 把服务端行当成本地手写 type（运行时不存在）：改名/换列时 tsc/eslint/固定 mock 单测全绿而**相册永远空**，与 E4 第一格同形。钉四件事：
+ * ① 镜像每列线上都有；② 线上列不全在镜像里（收窄，否则①可被「整行抄镜像」满足）；③ `fetchTaskImages` 经真 router/一次 JSON 且排序由服务端给（`isCover desc, sortIndex asc`）；④ 改名后红的是「相册空了 + 契约缺列」。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as LoggerModule from "~/lib/core/logger";

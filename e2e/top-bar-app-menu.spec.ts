@@ -1,20 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
-/**
- * 顶栏「应用菜单」真的能点开（ISSUE #1384 / @critical）。
- *
- * 这条必须在**真浏览器**里判：jsdom 那侧连一个光秃秃的 `DropdownMenuTrigger`
- * 都点不开（base-ui 的开合挂在 pointerdown 上，jsdom 的合成事件走不到那一步），
- * 所以「菜单能不能开」这件事 jsdom 给不出证据 —— 在那边写成用例只会得到一条
- * 永远绿的假判据。
- *
- * 缺陷形态是**两个 trigger 叠在同一个元素上、里层那个被外层吞掉**：
- * `DropdownMenuTrigger` 把自己那套触发 props 以 props 形式灌进 `render` 收到的
- * 元素，而 `Hint` 只吃 `label` / `side` / `accessibleName` / `wrap` / `children`、
- * 不转发任意 props —— 于是 menu 的 pointerdown / `aria-haspopup` 全落在 `Hint`
- * 上被丢掉，按钮长着一颗按钮的样子却什么都不做。`aria-haspopup="menu"` 是这件事
- * 最贴题的现场证据（`data-slot` 被 tooltip 接管属于**已知且无害**的副作用，
- * 见 `ui/hint` 与规范 16 §16.2.3.2，别拿它当判据）。
+/** 顶栏「应用菜单」真的能点开（ISSUE #1384 / @critical）。必须真浏览器：base-ui 开合挂在 pointerdown，
+ * jsdom 合成事件走不到，那边写成用例只会得到恒绿的假判据。缺陷形态：两个 trigger 叠在同一元素、里层被
+ * 外层吞掉 —— `Hint` 不转发任意 props，menu 的 pointerdown 与 `aria-haspopup` 被丢掉；故以
+ * `aria-haspopup="menu"` 为现场证据（`data-slot` 被 tooltip 接管属已知无害副作用，别当判据，规范 16 §16.2.3.2）。
  */
 async function openWorkspace(page: Page) {
   await page.goto("/workspace");

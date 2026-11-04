@@ -1,18 +1,7 @@
 /**
- * `check-tsc-artifact-hint.cjs` 的判据（ISSUE #1182 的方案 3）。
- *
- * 这条判据的价值全在**不误报**上：组 A 也会因别的原因红（真类型错、OOM、参数错），
- * 那时还给「删掉 .next 重跑」就是把人往错方向带 —— 哭一次狼，之后这条提示就没人信了。
- * 所以正反两向都要有用例，且正向用**真实的 tsc 输出**：
- * ① 现场原文（#1182 的两行，含 Windows 反斜杠形态）；
- * ② 本地复演读数 —— 把 `.next/dev/types/validator.ts` 复制一份、在第 79 行的
- *    `type __IsExpected<Specific extends AppPageConfig` 处截断，`pnpm exec tsc --noEmit
- *    --incremental false` 给出的是单行 `.next/dev/types/validator.ts(79,51): error
- *    TS1005: '>' expected.`（exit 1）。
- *
- * 顺带把提示里那条处置命令的前提也钉住：整目录删除**不会**引出新的红 —— 同一份截断件
- * 在 `.next/dev/types` 整目录不存在时 tsc 为 exit 0，`next-env.d.ts` 虽然 import 了
- * 同目录的 `routes.d.ts`，缺生成目录并不报错（所以脚本才敢把 `rm -rf` 印给用户）。
+ * `check-tsc-artifact-hint.cjs` 的判据（ISSUE #1182 方案 3）：价值全在**不误报** —— 组 A 会因真类型错 / OOM /
+ * 参数错变红，此时再叫人「删 .next 重跑」就是哭狼。故正反两向都有用例，正向用真实 tsc 输出：① #1182 现场两行（含反斜杠）；
+ * ② 截断 `validator.ts` 第 79 行得 `(79,51): error TS1005`；整目录删除不引出新红（故 `rm -rf` 才敢印）。
  */
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";

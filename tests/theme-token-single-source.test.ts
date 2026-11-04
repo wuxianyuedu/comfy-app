@@ -1,39 +1,7 @@
 /**
- * 主题 token 的「单一事实来源」判据（ISSUE #672，机器强制）。
- *
- * 背景：本项目的颜色有两条命名体系 ——
- *
- * - **项目 token**：`--color-*`（`--color-surface` / `--color-ink-muted` …），
- *   在 `@theme` 与 `.dark` 里两态各自赋值，是**唯一事实来源**；
- * - **shadcn 别名**：`--card` / `--border` / `--muted` …，shadcn 生成的基元
- *   要的是这几个名字。
- *
- * 收口之前两边**各写一份字面量**，于是同一个颜色在库里有两到三份拷贝：
- * 改 `--color-surface` 对 `bg-card` 不生效 —— 这正是 ISSUE #672 要修的
- * 「样式不好改」。更隐蔽的是 `@theme inline` 把 `--color-primary` /
- * `--color-accent` / `--color-muted` / `--color-border` 四行**重定向回别名**：
- * 编译产物里 `--color-X` 同名出现两次、后一处（层内靠后的别名）获胜，
- * 于是**项目 token 的含义被静默换成了别名**，而 tsc / eslint / 主题色扫描器
- * 全绿。实测后果：`var(--color-muted)`（写的人当「弱文字」用）在浅色下拿到
- * `#f7f8fa`（近白表面），`.u-chip` / `.u-ghost` 与 `WorkflowNodeJsonPopover`
- * 的那些小字在浅色下几乎看不见。
- *
- * 本文件守四条性质，任何一条破了都会让「改一处样式、全站生效」失效：
- *
- * - **T1（单向）**：别名不许写字面量 —— 只能是 `var(--color-*)` 转发。
- *   别名自己写死色值时，「改品牌色」要点名到别名这一层。
- * - **T2（不重名）**：`@theme inline` 里不许出现 `@theme` 已有的名字。
- *   重名 = 项目 token 被别名顶掉（上面那个静默 bug 的形状）。
- * - **T3（无环）**：`var()` 引用链必须无环、且不得漏到未定义的名字。
- *   `--color-X: var(--X)` 配 `--X: var(--color-X)` 会让两边都变成无效值。
- * - **T4（圆角刻度）**：`--radius-*` 只能有一处定义，且必须是 `var(--radius)`
- *   的系数或 ±px 偏移派生。T2 的比对只认 `--color-` 前缀，圆角命名空间一直在它覆盖面
- *   之外 —— 于是 `@theme` 里那四行字面量被 `@theme inline` 静默顶掉了很久
- *   （注释说 16px、实渲染 12px）。圆角的正确形状是「基数 × 系数表」而不是
- *   `var()` 转发，所以它需要自己的判据，不只是把 T2 的前缀加长。
- *
- * 判据读的是**编译产物**（Tailwind 真编 `globals.css`），不是源码文本 ——
- * 源码文本看不出「同名两处谁赢」，那正是上面那个 bug 逃过所有检查的原因。
+ * 主题 token 单一来源判据（ISSUE #672）：别名只许 `var(--color-*)` 转发。守 T1 无字面量 / T2 `@theme
+ * inline` 不重名 / T3 `var()` 无环 / T4 `--radius-*` 仅一处且由 `var(--radius)` 派生。判据读**编译产物**：
+ * `@theme inline` 曾把四个 `--color-*` 重定向回别名，同名两处后者获胜 ⇒ 项目 token 被静默顶掉（源码看不出谁赢）。
  */
 import { beforeAll, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -45,13 +13,9 @@ import { parseDerivations, parseRadiusScale, renderRadiusPx } from "./helpers/ra
 const sourceCss = readFileSync(path.resolve(__dirname, "../src/app/globals.css"), "utf8");
 
 /**
- * 按**花括号配对**取一个块的内部。
- *
- * 为什么要有它：以前这里用的是「从起始标记一路切到下一个标记」的取法，而
- * `@theme` 块里本来就写着注释 —— 用 `/* Immersive` 收尾会把块截到第 56 行，
- * 于是扫描面只剩前 26 个 `--color-*`，字体/容器/间距那一半从来没被比过。
- * 判据长得像在全查、实际只查了一角 —— 这类「执行者覆盖面比规则的措辞窄」的差，
- * 比没有判据更危险，因为它给所有人一个已经防住的错觉。
+ * 按**花括号配对**取一个块的内部。曾用「从起始标记切到下一个标记」，而 `@theme` 块里本就有注释：
+ * 用 `/* Immersive` 收尾会把块截到第 56 行 ⇒ 只扫到前 26 个 `--color-*`，字体/容器/间距从未被比过。
+ * 「执行者覆盖面比规则措辞窄」比没有判据更危险 —— 它给人一个已经防住的错觉。
  */
 function braceBlock(source: string, startMarker: string): string {
   const marker = source.indexOf(startMarker);
@@ -192,7 +156,7 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
       "--gradient-",
       "--xy-", // React Flow 变量
       "--json-view-", // json 查看器主题
-      "--shimmer-", // 骨架微光
+      "--shimmer-",
       "--card-spacing", // 卡片内距（ui/card 工具生成的局部变量）
       "--panel-right-width", // 右侧栏宽
       "--shadow-card", // 浮层卡片投影（Tailwind shadow 命名空间）
@@ -403,12 +367,9 @@ describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Sh
 });
 
 /* ── T5：字体命名空间也得走同一套（#1434）──────────────────────────────
-   全站正文一度落在浏览器默认字体上：`@theme inline` 里那行
-   `--font-sans: var(--font-sans)` 与 `@theme` 的真定义重名，而 inline 块不向
-   `:root` 发射变量 —— 于是 `font-sans` 工具类内联成一句指向空气的自引用。
-   编译产物的级联求解器当场报 `token 引用成环：--font-sans → --font-sans`，
-   但 T2 的扫描面被截断在块的前 26 个名字上、T3 又只走别名清单，两条都没碰到它。
-   这里补的是**产物侧**那半：字体链必须解得出具体值，且解出来的是设计那串栈。 */
+   全站正文曾落在浏览器默认字体上：`@theme inline` 的 `--font-sans: var(--font-sans)` 与真定义重名且
+   inline 块不向 `:root` 发射变量 ⇒ 工具类内联成自引用，求解器报「引用成环」。T2 扫描面被截在前 26 个
+   名字、T3 只走别名，都没碰到它；这里补产物侧：字体链必须解得出具体值（设计那串栈）。 */
 
 /* SAFETY: 类型断言已复核 */
 const FONT_CHAIN = ["--font-sans", "--font-heading", "--font-title", "--font-mono"] as const;
@@ -458,24 +419,17 @@ describe("T5 字体链在编译产物里必须解得出具体的栈（#1434）",
   });
 });
 /* ── T6 标题字阶三颗的住处 ────────────────────────────────────────────
-   它们必须住在 `:root`，**不能住进 `@theme`**。理由不是风格：`@theme` 的 `--text-*`
-   命名空间会被 Tailwind 顺带生成成工具类（实测产物里曾有 `.text-page` /
-   `.text-section` / `.text-stage` 三条，JSX 侧零消费者），而这三颗乘 `--font-scale`、
-   只该经 `.u-title*` 使用。一旦成了 JSX 类名就同时踩两个坑：`cn()` 把不认识的
-   `text-<名字>` 归进**颜色**组、吃掉同一行真正的状态色；调用点写下的还是「一个会随
-   设置页变的字号」。所以「别在 JSX 里用它们」从前只写在注释里，现在由「那个类根本
-   不存在」保证 —— P83 也同步不再认 `text-page` 是合规出口。 */
+   它们必须住 `:root`、**不能住进 `@theme`**：`--text-*` 会被 Tailwind 生成成 `.text-*` 工具类（JSX
+   零消费者），而 `cn()` 会把不认识的 `text-<名字>` 归进颜色组、吃掉同一行真正的状态色。所以「别在
+   JSX 里用它们」从注释保证变成「那个类根本不存在」—— P83 也同步不再认 `text-page` 是合规出口。 */
 const TITLE_TOKENS = ["--text-section", "--text-page", "--text-stage"];
 
 describe("T6 标题字阶三颗住在 :root，不得被 @theme 生成成工具类", () => {
   it("三颗都还在（移到 :root ≠ 删掉），且基准仍由 --font-scale 给", () => {
     for (const name of TITLE_TOKENS) {
-      /* 不能用 `braceBlock(sourceCss, ":root")`：`:root` 这个字串先出现在 @theme 的
-         注释里（讲「浅色档不得用裸 :root」那一段），取到的块根本不是声明所在那个。
-         改成直接匹配形状 —— 它同时钉住「住在 :root」与「基准跟着字阶档」。
-         求解器在编译产物里会把 `var(--font-scale, 1)` 代成缺省值 1，所以「跟着变」
-         这一半只能在源码上判；产物那一半判的是「解得出一个具体长度」—— 读不到值的
-         形态是 h1 字号退回继承，那才是这条要防的事。 */
+      /* 不能用 `braceBlock(sourceCss, ":root")`：`:root` 先出现在 @theme 的注释里，取到的不是声明那个块。
+         改直接匹配形状 —— 同时钉住「住在 :root」与「基准跟着字阶档」；求解器会把 `var(--font-scale, 1)`
+         代成 1，所以「跟着变」只能在源码判，产物那半判「解得出具体长度」（读不到值是 h1 退回继承）。 */
       const shape = new RegExp(`:root\\s*\\{[^}]*${name}:\\s*calc\\([^;]*var\\(--font-scale`);
       expect(
         shape.test(sourceCss),

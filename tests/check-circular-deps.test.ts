@@ -1,11 +1,7 @@
 /**
- * 提交门槛自检：把 scripts/check-circular-deps.cjs 当成黑盒跑在临时工作区上，
- * 验证「模块循环依赖」这条规范（§12.7）真的会阻断提交，而不是只写在文档里。
- *
- * 规范：docs/standards/12-代码组织与文件结构.md §12.7（循环依赖预防，ISSUE #574）
- *
- * 为什么用子进程跑而不是 import：该脚本被 pre-commit 以 `node scripts/xxx.cjs`
- * 调用，且内部用 process.cwd() 定位扫描根；复用同一调用方式才等价于真实门禁。
+ * 提交门槛自检：黑盒跑 `scripts/check-circular-deps.cjs`，验证「模块循环依赖」（§12.7，ISSUE #574）
+ * 真的阻断提交，而不只是写在文档里。
+ * 用子进程而非 import：pre-commit 以 `node scripts/xxx.cjs` 调用、脚本靠 `process.cwd()` 定位扫描根，复刻同一种调用才等价。
  */
 import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";

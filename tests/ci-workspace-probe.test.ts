@@ -20,16 +20,9 @@ const LEDGER = path.join(os.tmpdir(), "probe-ledger.json");
 const NOW = 1_800_000_000_000;
 
 /**
- * 会被 CP936 吃掉的码位 —— 实测来源是 PowerShell 的 `[Text.Encoding]::GetEncoding(936)`
- * 对本脚本全文做「编码 → 解码」往返，落不回原形的就这三枚（`⇒` / `⚠` / 变体选择符）。
- *
- * **为什么判据用名单，而不是「拿 GBK 编一遍看坏没坏」**：Node 没有 GBK **编码器**
- * （`TextEncoder("gbk")` 静默落回 UTF-8 —— 那正是 `scripts/ci-cp936-exit.mjs` 存在的理由），
- * 而用例在任何宿主上都要给同一个答案，所以不能去起 PowerShell。
- *
- * **怎么扩**：往这一档的打印文案里加生僻符号时，先跑一次那个往返（`.cnb.yml` 头注第 6 条
- * 记着整条链为什么是 CP936），把新的坏字符补进这里。这条判据要挡的病很具体：**红的时候
- * 最该读的那几行正好是非 ASCII**，而 `⇒` 被打成 `?` 那次就是这一档自己的下一动作读不出来。
+ * 会被 CP936 吃掉的码位：`[Text.Encoding]::GetEncoding(936)` 对本脚本全文往返，落不回原形的只有三枚 —— `⇒` / `⚠` /
+ * 变体选择符。判据用名单而非「GBK 编一遍」：Node 无 GBK **编码器**（`TextEncoder("gbk")` 静默落回 UTF-8，故有
+ * `scripts/ci-cp936-exit.mjs`），且各宿主须给同一答案、不能起 PowerShell —— 红时最该读的正是非 ASCII 那几行。
  */
 const CP936_UNENCODABLE = [0x21_d2, 0x26_a0, 0xfe_0f];
 
@@ -75,7 +68,6 @@ function fakeRun(facts: Record<string, string> = GIT_FACTS) {
 
 /**
  * 一台假文件系统：只按**显式列出的路径**回答 stat，其余一律 ENOENT。
- *
  * `ledgerBody` 是账本文件的既有内容（不存在就别给，读它会抛 —— 那正是「第一跑」的形态）。
  * 写进去的内容收在 `written` 里，用例据此判「这一跑到底有没有把对照记下来」。
  */

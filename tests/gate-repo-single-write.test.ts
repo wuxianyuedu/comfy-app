@@ -1,21 +1,7 @@
 /**
- * 门禁夹具的**落盘契约**：同一条工作区路径只被写一次（ISSUE #2380）。
- *
- * 立案现场是 PR #2377 的「受影响用例」一格：临时仓库里那份
- * `scripts/lockfile/lock-diff.mjs` 整行是 NUL 填充，模块加载期直接
- * `SyntaxError: Invalid or unexpected token` —— 报错指向临时目录里那一份，
- * 读起来像判据坏了。根因是 `createGateRepo()` 里两条写入路径（用例声明的
- * 整目录 `copy` 与按 import 追出来的同目录依赖）指到同一个落点，各写一遍。
- *
- * 为什么这个契约要有一条用例守着：它红的样子**不在夹具里**，而在四十份消费方的
- * 某一条断言上（「expected … to contain '[未校验]'」），而那条断言一个字都没错。
- * 于是「夹具又写重了一次」的形状必须在这里就地读得出来 —— 判的是**落盘次数**，
- * 不是顺序：把顺序换个方向只是把雷埋起来，判据将来在目录里加一个 import 就再炸一次。
- *
- * 两条口径：
- *   ① 走 `copy` 整目录拷 + 判据 import 该目录里的文件（#2380 的现场形状）→ 目录里
- *      每个文件**只落一次**，且内容与源一致；
- *   ② 依赖链与 `copy` 不相交时照旧自动补齐（回归面：收口不能把「自动带依赖」关掉）。
+ * 门禁夹具的**落盘契约**：同一条工作区路径只被写一次（ISSUE #2380，现场是 PR #2377）。根因：`createGateRepo()` 的
+ * `copy` 与按 import 追出的同目录依赖两条写入路径指到同一落点（现场 `lock-diff.mjs` 整行 NUL 致加载期 SyntaxError）。
+ * 红在四十份消费方断言上，故判**落盘次数**（不是顺序）：copy+import ⇒ 只落一次且与源一致；依赖链不相交时照旧自动补齐。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -42,16 +28,9 @@ function repo(options: Parameters<typeof createGateRepo>[0]): GateRepoHandle {
 
 describe("门禁夹具：同一条路径只写一次", () => {
   /**
-   * 观测点选的是**源码里的落盘口径**，不是运行期计数。
-   *
-   * 为什么不去数 `fs.cpSync` 被调了几次：夹具用的是 static import 绑定，
-   * 宿主侧的 `fs.cpSync = spy` 对它无效（实测明明落盘了也数到 0）—— 那种用例会
-   * 永远绿，而它自称在判「写了两次」。这里换成能真判的形态：
-   *
-   *   ① 现场形状（#2380）：`copy` 整目录拷 + 判据又 import 目录里的文件 ⇒ 那个文件
-   *      内容与源逐字一致、长度一致（覆盖写出 NUL 填充 / 半写时必红）；
-   *   ② 收口本身：`createGateRepo` 里**只有一处** `cpSync(`，且 `copy` 与
-   *      `copyGateDeps` 共用它 —— 反过来说，两条各自落盘的写法会让这条红。
+   * 观测点选的是**源码里的落盘口径**，不是运行期计数：夹具用 static import 绑定，宿主侧
+   * `fs.cpSync = spy` 无效（实测落盘了也数到 0），那种用例永远绿。两条真判的：① 现场（#2380）
+   * `copy` + import 同目录 ⇒ 文件与源逐字、长度一致（NUL 填充/半写必红）；② `createGateRepo` 只有一处 `cpSync(`。
    */
   it("整目录 copy 与依赖链重叠时，那个文件与源逐字一致", () => {
     const { repo: gate } = repo({

@@ -1,25 +1,7 @@
 /**
- * llm.router 的闸门用例（体检清单 ⑨ 第二刀）。
- *
- * 这一层此前**没有执行者**：脱敏与密钥三态的判决在 `lib/llm/server` 与
- * `repository.test.ts` 里判着，而「请求方给的东西能不能走到写库那一步」的
- * router 层 zod 闸一条都没钉 —— 台账 A 系列几批复算的共同结论就是：
- * 「一个 router 没有执行者」的实际含义是「它的闸门坏了没人红」。这里按闸门组织：
- *
- *   · **地址闸**（A5 同族）：`baseUrl` 只许 http/https，非法值必须在 `upsertSingleton`
- *     之前挡下 —— 写进库的地址会被服务端拿去发请求，那是 SSRF 的入口；
- *   · **枚举闸**（`provider` / `taskType` / 契约口 id）：静默回退比报错更坏
- *     （旧代码把垃圾 provider 按 local 误路由）；
- *   · **候选清单的拆分**：字符串 = 本地 ollama 候选、对象 = 远端模型，两类不能混存。
- *     没给 `extraModels` 时必须是 `undefined` 一路透传（「这次不给意见」），
- *     一旦把它折成空数组，就等于替用户清空全部远端模型 —— 与 A11 同族的数据丢失。
- *     拆分与两张表的写入范围都在仓库层那一个入口里（ISSUE #2592），所以这一组的
- *     远端那一半**断言落在库里有什么**，不是「哪个方法被调了」。
- *
- * mock 边界：`~/server/db`（内存库，`as never` 那类形状错误会当场现形）、
- * `~/lib/llm/server`（会真发 LLM 请求）、`~/lib/workshop/mode-contract.server`（会读写
- * `data/workshop-mode-contracts.json` 那份本机覆盖）、`llmConfigRepository.upsertSingleton`
- * 用 spy 记账但保留真实现、`~/server/better-auth`、`~/lib/core/logger`。
+ * llm.router 的闸门用例（体检清单 ⑨ 第二刀）：router 层 zod 闸此前没有执行者。地址闸只许 http/https，非法
+ * `baseUrl` 必须在 `upsertSingleton` 前挡下（SSRF 入口）；枚举闸静默回退比报错更坏；`extraModels` 缺省须 `undefined`
+ * 透传，折成空数组 = 清空远端模型（ISSUE #2592）。mock：内存库/真 LLM/本机覆盖文件，spy 保真实现。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

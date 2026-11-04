@@ -1,15 +1,7 @@
 /**
- * `app-runtime` 跨进程补齐通道的**跨语言一致性**。
- *
- * launcher（`.mjs`）与 dev server（TS）要落在**同一份**文件上：预检提醒
- * （壳过期 / pnpm 不匹配）发生在 dev server 就绪**之前**，走不了
- * `POST /api/logs/app-runtime`，只能由 launcher 自己落盘，而随后整段应用日志
- * 由 `src/lib/log/app-runtime-log.ts` 写。两侧的名字若不同形，用户读到的
- * 「本次启动日志」就永远缺开头那两句 —— 而面板看起来两条通道都正常。
- *
- * 这是本仓库反复踩过的那一类：**同一个值在两处各写一遍**（`db-backup-core.mjs`
- * 与 `runtime-log-file.ts` 也有同样的成对关系）。两侧都有真实现、也能在同一个
- * 进程里 import，所以这里做**真跑**的对拍，而不是只锁「都引了同一份向量」。
+ * `app-runtime` 跨进程补齐通道的跨语言一致性：预检提醒发生在 dev server 就绪**之前**，走不了
+ * `POST /api/logs/app-runtime`，只能由 launcher（`.mjs`）落盘，随后日志由 `app-runtime-log.ts` 续写；
+ * 两侧名字不同形则启动日志永远缺开头那两句（面板仍显示两条通道正常）。属「同一个值写两处」，故真跑对拍。
  */
 import fs from "node:fs";
 import path from "node:path";

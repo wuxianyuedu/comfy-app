@@ -1,26 +1,7 @@
 /**
- * `task.list` 的线上契约 ↔ 两份前端镜像（住在 tests/ 是因为契约测试要 import 真实 router，
- * 而 `src/lib/**` 不得依赖 `src/server/**` —— 那条判据就是本批装机时把它从 lib 里逼出来的）。
- *
- * 视频队列客户端的契约：`task.list` 的**线上真实行** ↔ 本模块的 zod 镜像 ↔ 视图要的那两样。
- *
- * 这一族此前是怎么坏的：镜像声明了一个线上从来不发的列
- * （`RouterOutputs[...] & { images?: … }` —— 交叉类型只会**加**列，不会发现少列），
- * 于是「取视频产物路径」那一句读到的永远是 `undefined`，`video` 恒为 `null`。
- * 表现不是报错，是「缩略图位上永远是占位图标、下载按钮一次都没出现过」，
- * 而 tsc、eslint、全量用例、覆盖率门槛全绿。
- *
- * 所以这份用例钉三件事，缺一不可：
- *   ① 镜像声明的每一列，服务端真实产出的行里都在（**方向是镜像 → 线上**，
- *      这正是当初漏掉的那一维）；
- *   ② 客户端拿到的 `video` 是「从真 router 出发、经一次 JSON 传输」得到的
- *      （§11.2.1 镜像那一口的第 ② 条：断言值不抄实现，期望来自库里那行本身）；
- *   ③ 少发那一列时整行被**判掉**（列表变空看得见），而不是 `.default(null)`
- *      把契约分叉抹成「每个任务都没有视频」。
- *
- * mock 边界：只换 `~/trpc/vanilla`（本模块的传输层）与 `~/server/db`（内存库）、
- * `~/server/better-auth`（会话）、`~/lib/core/logger`（静音）。router、仓储、
- * 投影 SQL 全走真实实现 —— 契约测试的价值恰恰在「真的把两边接起来跑一次」。
+ * `task.list` 线上契约 ↔ 前端镜像（住 tests/ 因要 import 真实 router，而 `src/lib/**` 不得依赖 `src/server/**`）。坏过的形状：
+ * 镜像声明线上从不发的列（交叉类型 `RouterOutputs[...] & { images?: … }` 只**加**列）⇒ 产物路径恒 undefined、`video` 恒 `null`，
+ * 表现只是占位图标/下载按钮从不出现而各静态门槛全绿。故钉：① 镜像每列都在真实行里；② `video` 经真 router+JSON 成立；③ 少发一列整行判掉。mock 只换传输层/db/会话/logger。
  */
 import type * as LoggerModule from "~/lib/core/logger";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -238,9 +219,7 @@ describe("parseVideoRows 的缺省口径", () => {
 });
 
 /**
- * 「submitGeneration」一组随「批量提交」页签整格撤掉而退役（ISSUE #2169，
- * 2026-10-25 业主拍板）：它是那条从未成功过的通路的客户端出口（每条草稿缺必填
- * workflow，#2159 之后在本地就被拒），唯一消费者是 VideoQueueModal 的草稿页签，
- * 页签撤掉后该函数成为零消费导出一并移除。判据本体（generateInputSchema 的
- * 必填列）仍在 workflow-generate-input 与服务端那一侧。
+ * 「submitGeneration」随「批量提交」页签整格撤掉而退役（ISSUE #2169，2026-10-25 业主拍板）：它是那条从未
+ * 成功过的通路的客户端出口（每条草稿缺必填 workflow，#2159 之后在本地就被拒），唯一消费者是 VideoQueueModal
+ * 草稿页签，页签撤掉后成零消费导出，一并移除；判据本体（generateInputSchema 必填列）仍在 workflow-generate-input。
  */

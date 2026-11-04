@@ -1,25 +1,7 @@
 /**
- * 回归护栏：**仓储只有一种取用法**（ISSUE #568）。
- *
- * 背景（实测）：仓库里曾并存两条取用仓储的路 ——
- *   · `container.resolve("projectRepository")`（2 个 router / 10 处调用）
- *   · `import { taskRepository } from "@/lib/core/repository"`（29 个文件）
- * 而 `container.ts` 的注释承诺「业务代码只通过 container 取用，不直接 new、
- * 不直接 import 具体单例」——**它的现状与承诺恰好相反**，容器是少数派。
- *
- * 裁决（ISSUE #568）：**移除容器，统一直接 import**。判据不是「哪个注释更像
- * 架构」，而是下面显式写出的那两条；换句话说，做这个决定不需要引入任何新抽象。
- *
- * 本用例把裁决的两个前提钉住（任一条被推翻，就该重新裁决，而不是让它悄悄漂移）：
- *
- *   ① **容器与直接 import 取到的是同一个对象**：`container.register("x", () => x)`
- *      的工厂返回的就是模块单例本身，没有「每个 resolve 一个新实例」的语义 ——
- *      所谓「可替换单例」在本仓库从未被用（没有任何一处 `register(..., mock)`）。
- *   ② **直接 import 是多数派且是全仓既有形态**：仓储模块 `import "server-only"`，
- *      本身就是进程级单例（`export const xRepository = new XRepository()`）。
- *
- * 反向断言（防止「改回来」）：`src/` 里不许再出现 `container.resolve(` /
- * `lib/core/container`。新增取用一律走 `@/lib/core/repository`。
+ * 回归护栏：**仓储只有一种取用法**（ISSUE #568）。曾并存 `container.resolve("projectRepository")`（12 处）与直接 import（29 个文件），`container.ts`
+ * 的注释却承诺「只通过 container 取用」—— 现状恰好相反。裁决：**移除容器、统一直接 import**；`src/` 里不许再出现 `container.resolve(` /
+ * `lib/core/container`，新增取用走 `@/lib/core/repository`。两个前提（任一被推翻就该重裁）：① 两者取到同一对象（工厂返回模块单例，`register(..., mock)` 从未被用）；② 直接 import 是多数派且是全仓既有形态。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -51,13 +33,10 @@ describe("仓储取用只有一个入口（ISSUE #568）", () => {
     const offenders: Array<string> = [];
     for (const file of walk(SRC)) {
       const rel = relative(ROOT, file).split("\\").join("/");
-      /* 判据只认代码：注释里说明「为什么没有容器」是允许的。用唯一实现
-       * （`./helpers/strip-comments`，默认档 = 块注释 + 整行注释）。旧形那条**不跟引号状态**
-       * 的块注释正则会把 `accept: "image/*"` 之后的真代码一路吃到下一个「星号紧跟斜杠」——
-       * 实测 src/** 里 23 份文件的 199 行就是这么消失的，于是 `container.resolve`
-       * 写进那一段里就永远看不见（ISSUE #2969）。旧的第二跳还顺手剔掉以星号开头的行，
-       * 那是给没剥干净的块注释续行兜底的：helper 整段剥掉，不需要这一条（全仓实测那样的行 1 处，
-       * 且不含本判据的针脚）。 */
+      /* 判据只认代码：注释里说明「为什么没有容器」是允许的。用唯一实现 `./helpers/strip-comments`
+       * （默认档 = 块注释 + 整行注释）：旧形那条**不跟引号状态**的块注释正则会从 `accept: "image/*"` 一路吃到
+       * 下一个「星号紧跟斜杠」—— 实测 src/** 里 23 份文件、199 行就这么消失（ISSUE #2969）；
+       * 旧的第二跳剔「以星号开头的行」是给没剥干净的续行兜底，helper 整段剥掉，不需要这一条。 */
       const code = stripComments(readFileSync(file, "utf8"));
       if (
         /(^|[^\w.])container\.resolve\s*\(/.test(code) ||

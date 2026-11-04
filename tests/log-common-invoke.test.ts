@@ -1,17 +1,7 @@
 /**
- * `tools/scripts/Log-Common.ps1` 的 `Invoke-Logged()`（ISSUE #1350）。
- *
- * 这份内核是**发布构建的三个双击入口**唯一的判决来源
- * （`build-standalone.ps1:57` / `build-tauri-release.ps1:127` / `rebuild-static.ps1:26`），
- * 而它此前**零执行者**：`grep -rl "Log-Common" tests/` 是 0 命中，`.ps1` 的 ParserError sweep
- * 只能证明「语法过」，证明不了「这一步执行过」（同一条口径见 #1345 的 `[GATE-NOEXEC]`）。
- *
- * 抓的是那一条假绿：`&` 起不来时 PowerShell **不写 `$LASTEXITCODE`**，于是读回来的是
- * **上一次成功调用留下的 0**（实测 pwsh 7 与 powershell 5.1 一致）⇒ 工具链不在 PATH 时
- * 脚本会跳过中止、一路打印「全部完成 / 可双击 app.exe」，而那个 exe 并不存在。
- *
- * 两种宿主都跑：双击的默认宿主是 `powershell.exe` 5.1，而这条通道的行为正是**跨宿主**的，
- * 只测一边等于给另一边留盲区。日志目录给一次性临时目录 —— 别让用例往仓库 `log/` 写字。
+ * `tools/scripts/Log-Common.ps1` 的 `Invoke-Logged()`（ISSUE #1350）：三个双击发布入口的唯一判决来源（`build-standalone.ps1:57`
+ * / `build-tauri-release.ps1:127` / `rebuild-static.ps1:26`），此前零执行者（ParserError sweep 只证语法过）。抓的假绿：`&` 起不来
+ * 时 PowerShell 不写 `$LASTEXITCODE`，读回上次成功的 0 ⇒ 跳过中止、打印「全部完成」而 exe 不存在；两宿主都跑（默认 5.1），日志用临时目录。
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -48,14 +38,9 @@ afterAll(() => {
 });
 
 /**
- * 一次性 harness：dot-source 内核，按顺序跑四态并把结论打成 `CODE|<label>|<值>`。
- *
- * 参数走 **env** 而不是 `-Root <path>`：5.1 的 `-File` 传参在上一轮探针里把变量绑成了空值
- * （`Join-Path` 收到 null 直接炸），env 两个宿主同形、也不会有引号嵌套的转义坑。
- *
- * 顺序是有讲究的：**成功（退 0）之后立刻跑一条起不来的命令** —— 那条才是决定性的，
- * 因为「起不来」若沿用陈旧码，读回来的就是 0，看着像通过。反过来先跑一条退 3 的再跑
- * 起不来的，陈旧值也是 3、非零，用例反而会绿着放过这个洞。
+ * 一次性 harness：dot-source 内核，顺序跑四态、结论打成 `CODE|<label>|<值>`。参数走 env 而非 `-Root <path>`：5.1 的 `-File`
+ * 传参曾把变量绑成空值（`Join-Path` 收到 null 炸），env 两宿主同形且无引号坑。顺序有讲究：成功退 0 后立刻跑一条起不来的 ——
+ * 起不来若沿用陈旧码会读回 0、看着像通过；反向（先退 3 再起不来）陈旧值非零，用例会绿着放过这个洞。
  */
 const HARNESS = [
   "$PROJECT_ROOT = $env:JUDGE_ROOT",

@@ -1,59 +1,8 @@
 // @vitest-environment jsdom
 /**
- * a11y 自动化的**执行者**（台账 E6 第三格）：把 `src/components/ui/*.stories.tsx` 的每个故事
- * 按 Storybook 的语义渲染，在 jsdom 里跑 axe-core，判真实的无障碍违规。
- *
- * ── 它补的是哪一格 ─────────────────────────────────────────────
- *
- * 本仓早就有一道 a11y 判据（`scripts/check-a11y-rules.cjs`，规范 06 §6.12），但它判的是
- * **规则开关 ⇄ 台账**那一层：官方 recommended 有没有被悄悄关掉、方言与就地豁免登记全不全。
- * 那句话回答不了「界面**真的**违规了吗」—— 规则开着、代码照样能渲染出一枚没有名字的按钮。
- * 这一份就是那一半：**运行时**判，输入是 Storybook 的故事（本仓「全部已声明状态」的唯一出处，
- * 不另写夹具、不长出第二份组件清单）。
- *
- * ── 五条口径是实测逼出来的，别改回省事的那一档 ─────────────────
- *
- * ① **逐故事隔离**。第一版把 276 个故事全渲染进同一个 `document.body`、`cleanup()` 放在
- *    `afterEach`（它只在**整条用例**结束后跑一次），于是 axe 每跑一遍就把前面所有故事的问题
- *    重计一次，量出来 `region: 8566`、`button-name: 3587` —— 那**不是存量，是重复计数**。
- *    改成每个故事渲染 → 跑 axe → 立刻卸载之后，数字才是可以登记的。
- * ② **页面级规则显式关掉**。`region` / `landmark-*` 判的是「整页有没有唯一 main、标题层级对不对」，
- *    而这里渲染的是**一枚组件**，不是页面：裸挂进 body 时它必然报「内容不在 landmark 里」。
- *    那种红既不是缺陷也修不掉（要修的是测试构造），所以列进 `PAGE_SCOPE_RULES_OFF` 并写明理由；
- *    页面级的那一档真要做，落点在 e2e（台账 E3″ 现在连执行者都没有），不在这里。
- * ③ **渲不出来也要记账，不许默默跳过**。故事渲染抛错、或 `render` 不返回节点时，
- *    把它们登记成 `unrenderable`：新增一个渲染不出来的故事 ⇒ 红；故事修好能渲了但登记
- *    还在 ⇒ 也红（双向不陈旧）。原因**只打印不进账**（错误文案会随实现漂）。
- *    **不登记就等于在说「这一档把所有故事都判过了」，而它其实漏了一批。**
- * ④ **渲染按 Storybook 的语义来**：`story.render ?? meta.render`，两者都没有才退回
- *    `<Component {...args} />`；args 是 `{ ...meta.args, ...story.args }` 的**浅合并**。
- *    这两条不是「更讲究一点」，是第一版把两者都写错了，代价是**假覆盖 + 假噪音**两样：
- *    故事里的 `render:` 被整个忽略、直接拿 `meta.component` 配 `story.args` 去渲，
- *    于是 `Default: Story = {}` 这种「输入全在 meta 上」的故事拿到空 props（`unrenderable`
- *    名单里很大一块是这个原因，不是「需要 provider」），而 `ui/slider` 这种「受控 `value`
- *    由 `render` 用 `defaultValue` 补上」的故事拿到 `value=undefined`
- *    ⇒ base-ui 的 `clamp(undefined, 0, 100)` 算出 `NaN` ⇒ React 打
- *    `Received NaN for the value attribute`。那两行噪音**不是缺陷**，是这一档在渲一个
- *    Storybook 里并不存在的形态。浅合并的形状抄自 Storybook 自己的 `prepareStory`
- *    （`{...project.args, ...meta.args, ...story.args}`）；它还会把 `argTypes[x].defaultValue`
- *    折进 args —— 那一档本仓为空，由下面 `argTypeDefaultHits` 那条判据正面盯着，
- *    不是「假设它一直为空」。
- * ⑤ **要真实绘制的规则不许让 jsdom 判**（`PAINT_SCOPE_RULES_OFF`）。jsdom 没有字体度量、
- *    没有伪元素的 computed style、`getBoundingClientRect` 恒为 0，而这一档也不注入应用的
- *    样式表 ⇒ 本仓的 Tailwind class 在这棵树里不出现在 computed style 上（这两条前提之一
- *    由下面 `cssProbe` 那一格正面判，不写在注释里相信）。让 axe 带着这些缺口去判
- *    颜色对比，结果是 `incomplete`（本用例只收 `violations`，`incomplete` 被丢掉）——
- *    也就是**结构性的假通过**，外加两条 `Not implemented` 噪音。规则关掉、理由逐条写在
- *    常量上；噪音那一层的处置（精确白名单 + 计数 + 其余原样转发）在
- *    `tests/helpers/jsdom-capability.ts`，接线在 `tests/setup.ts`。
- *
- * ── 名单怎么改 ─────────────────────────────────────────────
- *
- * 没有 `--update`：`scripts/.a11y-axe-known.json` 是要人读过并粘贴的**负债登记表**。
- * 判红时会打印一份逐字可粘的新清单（含每一条的组件文件、规则与命中节点数），
- * 并附每个 `unrenderable` 的**当轮失败原因**（原因只打印，不进登记表 —— 错误文案会随实现漂，
- * 把它写进账里等于每次改文案都 stale 一次）。
- * 新增违规 ⇒ 红；修掉了却还留着登记 ⇒ 也红。
+ * a11y 自动化的**执行者**（台账 E6 第三格）：把 `src/components/ui/*.stories.tsx` 每个故事按 Storybook 语义渲染、在 jsdom 跑 axe-core，
+ * 补齐 `check-a11y-rules.cjs`（只判规则开关 ⇄ 台账）答不了的「界面真的违规吗」。五条实测口径：逐故事隔离（否则重复计数）、页面级规则显式关掉、
+ * 渲不出来登记 `unrenderable`（双向）、按 `story.render ?? meta.render` + args 浅合并、`PAINT_SCOPE_RULES_OFF`（jsdom 无绘制事实 ⇒ 假通过）。台账 `scripts/.a11y-axe-known.json` 无 `--update`，增删皆红。
  */
 import { cleanup, render } from "@testing-library/react";
 import { createElement, type ComponentType, type ReactElement, type ReactNode } from "react";
@@ -105,25 +54,9 @@ const PAGE_SCOPE_RULES_OFF = [
 ];
 
 /**
- * 需要**真实绘制**的规则：jsdom 给不了它们要的事实，硬判的结果是「探测失败 ⇒
- * `incomplete` ⇒ 本用例按 `violations` 收时恰好丢掉」这种假通过（见文件头第 ⑤ 条）。
- * 逐条理由（调用点按 axe-core 4.x 的源码点名，规则改名/拆分时这三行要跟着重核）：
- *
- * - `color-contrast`：`matches` 经 `hasRealTextChildren` → `_isIconLigature` 要 canvas
- *   度量；`evaluate` 经 `getPseudoElementArea` 要伪元素 `content`、经
- *   `boundingClientRect` 算背景覆盖面积 —— 三样在 jsdom 里分别是 `null`、
- *   not-implemented、恒 0。且 vitest 默认 `css: false`，前景/背景色压根没进
- *   computed style，这一格在 jsdom 里从来没有过判点。
- * - `label-content-name-mismatch`：比对可见文本与无障碍名时显式传
- *   `visibleVirtual({ ignoreIconLigature: true, pixelThreshold })`，前者要 canvas，
- *   后者是像素阈值 —— 都是绘制事实。
- * - `link-in-text-block`：`hasPseudoContent` 要 `getComputedStyle(node, "::before")`，
- *   `isBlock` 要真实 `display`。
- *
- * ⚠️ 关掉不等于覆盖到了。落点说清楚：这三条要**真浏览器 + 生效的 CSS**，
- * 本仓那一档的执行者是 Storybook 的 a11y 面板（`@storybook/addon-a11y`，同一个
- * axe-core 在真浏览器里跑）—— 它是**人现场看某一棵树**的，不是机器判据。
- * 「绘制层的 a11y 有没有机器执行者」这一格仍按空记在台账 E6，不在这里冒充。
+ * 需要**真实绘制**的规则（`PAINT_SCOPE_RULES_OFF`）：jsdom 给不了它们要的事实，硬判得到「探测失败 ⇒ `incomplete` ⇒ 按 `violations` 收时丢掉」的假通过。
+ * 三条理由（按 axe-core 4.x 调用点，规则改名/拆分时要重核）：`color-contrast` 要 canvas 度量 + 伪元素 `content` + 真实 `boundingClientRect`（jsdom 分别 null / 未实现 / 恒 0，且默认 `css: false`）；
+ * `label-content-name-mismatch` 要 `visibleVirtual({ pixelThreshold })` 的像素阈值；`link-in-text-block` 要 `::before` 与真实 `display`。⚠️ 关掉≠覆盖，落点在 Storybook a11y 面板（人看，非机器判据），台账 E6 仍记空。
  */
 const PAINT_SCOPE_RULES_OFF = [
   "color-contrast",

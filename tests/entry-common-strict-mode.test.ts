@@ -1,29 +1,7 @@
 /**
- * 回归护栏：**入口公共库 `scripts/entry-common.ps1` 在 StrictMode 下不得引用
- * 未声明的变量**。
- *
- * 背景（ISSUE #564，实测复现）：`Invoke-Entry` 里有一处 `if ($NodeScript) { … }`
- * ——`$NodeScript` 只是注释块里的一个 `.PARAMETER` 说明，**从未进过 `param()`
- * 的参数表，也从未被任何入口传过**。本库顶部写着
- * `Set-StrictMode -Version Latest`，而 StrictMode 的「Latest」档会把
- * 「引用不存在的变量」从「$null」升级成**终止性错误**：
- *
- * 典型现场：Invoke-Entry 报错指向 tools\start\run-local.ps1:32
- *     无法检索变量 '$NodeScript'，因为尚未设置该变量。
- *
- * 因为这条分支在 `Invoke-Entry` 的**主路径**上（不是 else 分支），它让
- * 涉及的入口：run-local / verify-quality / run-tests / generate-docs 这几个 .ps1
- * / `sync-lint.ps1` / `register-comfyapp-protocol.ps1` 等**每一个**走
- * `Invoke-Entry` 的双击入口在调起逻辑脚本之前就炸掉；而 `start-web.ps1` /
- * `start-tauri-dev.ps1` 虽然传的是 `dev-launcher.ps1`（一个现在只会定位→转交
- * 的薄壳），也一并被这条无关的旧分支拦下。
- *
- * 为什么静态断言不够、还要真跑一遍：`.ps1` 里引用未声明变量**在解析期不报错**，
- * 只有执行到那一行才炸；`pnpm lint` / `tsc` / 任何 Node 侧门禁都读不到它，
- * 现有的结构门禁（R7/R8）只看后缀与 BOM。而它在真实机器上是「十一个入口同时
- * 不可用」这种量级的故障。
- *
- * 无 pwsh 的环境（Linux CI）只做静态断言：真实执行在 Windows 侧。
+ * 回归护栏：**入口公共库 `scripts/entry-common.ps1` 在 StrictMode 下不得引用未声明的变量**（ISSUE #564，实测复现）：`Invoke-Entry` 的 `if ($NodeScript)` 只是个 `.PARAMETER` 注释，从未进 `param()`、从未被传过。
+ * `Set-StrictMode -Version Latest` 把「引用不存在的变量」从 `$null` 升成**终止性错误**，而这条分支在主路径上 ⇒ 十一个走 `Invoke-Entry` 的入口（run-local / run-tests / start-web 等）在调起逻辑脚本前就炸。
+ * 为什么还要真跑：`.ps1` 引用未声明变量解析期不报错、只有执行到才炸，`pnpm lint` / `tsc` / R7-R8 都读不到；无 pwsh 的环境（Linux CI）只做静态断言。
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -57,9 +35,8 @@ afterEach(() => {
 
 /**
  * 取出 `function <name>` 的「`param()` 参数表 + 函数体」文本。
- *
- * 不用「\$\w+ 出现即算引用」这种粗判据：本库的注释块（`.PARAMETER` / `.DESCRIPTION`）
- * 里本来就会提到变量名，把它们算进来会把「注释里解释过」误判成「声明了」。
+ * 不用「\$\w+ 出现即算引用」这种粗判据：本库注释块（`.PARAMETER` / `.DESCRIPTION`）本来就会提到变量名，
+ * 算进来会把「注释里解释过」误判成「声明了」。
  */
 function declarationText(text: string, name: string): string {
   const head = text.indexOf(`function ${name} {`);
@@ -143,10 +120,9 @@ describe("entry-common.ps1：StrictMode 下不得引用未声明的变量", () =
 });
 
 /**
- * 真跑一遍：StrictMode 的报错只在**执行到那行**才出现，静态断言容易漏掉
- * 「参数表 vs 函数体」之外的形态（例如函数外的作用域引用）。这里在一个最小
- * 检出副本里调 Invoke-Entry，断言「它至少走到了『未找到逻辑脚本』这条出口」——
- * 那正是「主路径没被任何未声明变量拦下」的证据。
+ * 真跑一遍：StrictMode 的报错只在**执行到那行**才出现，静态断言容易漏掉「参数表 vs 函数体」之外的形态
+ * （例如函数外的作用域引用）。在最小检出副本里调 Invoke-Entry，断言「至少走到了『未找到逻辑脚本』
+ * 这条出口」—— 那正是「主路径没被任何未声明变量拦下」的证据。
  */
 describe.runIf(psExe !== "")("entry-common.ps1 真跑（有 PowerShell 的环境）", () => {
   const runInMinimalCheckout = (): string => {

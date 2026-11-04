@@ -1,9 +1,7 @@
 /**
- * `check-mirror-attendance.mjs` 的用例（ISSUE #3046）。
- *
- * 一次网络请求都不发：`run` 全是假件，「现在」由 `now` 钉住 —— 沿用
- * `tests/check-daily-attendance.test.ts` 那条纪律（不钉住 now，这一档就会随真实时间
- * 自己变红，变成「随时间漂移的平台状态判据」）。
+ * `check-mirror-attendance.mjs` 的用例（ISSUE #3046）：`run` 全用假件、一次网络请求都不发；
+ * 「现在」由 `now` 钉住（沿用 `tests/check-daily-attendance.test.ts` 的纪律）—— 不钉住它这一档
+ * 就会随真实时间自己变红，成为「随时间漂移的平台状态判据」。
  */
 import { describe, expect, it } from "vitest";
 import {

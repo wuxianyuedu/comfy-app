@@ -1,23 +1,9 @@
 import { expect, test, type Browser, type Locator } from "@playwright/test";
 
 /**
- * 左轨让位在真浏览器里的形态（@critical）。
- *
- * 单元层（`src/lib/layout-budget.test.ts` + `sidebar-auto-collapse.test.tsx`）钉的是
- * 算式与推导；这里钉的是**确实落到了布局上**：窄一档收起、宽一档展开，而且收起真的
- * 让出了宽度 —— 只断言 `data-state` 的话，「属性改了但宽度没跟着改」这种半截实现会漏过去。
- *
- * 两档取值刻意跨在阈值两侧（阈值 1280，算式在 `~/lib/layout-budget`）。
- *
- * ⚠️ 状态一律用**可重试断言**取：首帧由服务端快照决定（按非窄窗渲染），客户端对账排在
- * 提交之后 —— 一次性 `getAttribute` 会读在那之前，得到假的「没生效」（实测踩过）。
- *
- * 让位要经过两步：**客户端判据成立**（`data-narrow="true"`，即 `useNarrowNavState`
- * 真的量到了窄窗）→ **生效态落盘**（`data-state="collapsed"`）。两步分开报，红了才
- * 分得清是「判据没到」（还在水合 / 首帧对账没落地）还是「判据到了而状态没跟着落」
- * （`resolveRailCollapsed` 那条推导断了）—— 两者修法完全不同（ISSUE #1267）。
- * 判据那条属性由 `sidebar.tsx` 的 wrapper 出，**不是**给用例看的调试口，
- * 它同时也是这份状态唯一的可观测出口。
+ * 左轨让位在真浏览器里的形态（@critical）：单元层钉算式，这里钉**确实落到布局上** —— 收起真的让出宽度，只断言 `data-state` 会漏掉半截实现。
+ * 两档跨阈值两侧（1280，算式在 `~/lib/layout-budget`）；状态用可重试断言（首帧由服务端快照决定、对账在提交之后），读早了会得到假的「没生效」。
+ * 分两步报 `data-narrow` → `data-state`（ISSUE #1267），`data-narrow` 由 `sidebar.tsx` wrapper 出，是唯一可观测出口。
  */
 async function openAtWidth(browser: Browser, width: number) {
   const ctx = await browser.newContext({ viewport: { width, height: 900 } });

@@ -1,23 +1,7 @@
-/**
- * ReactFlow Provider 测试包装 — 供画布节点组件（CanvasNode / FlowNode /
- * WorkflowSubgraphNode 等）在脱离 <ReactFlow> 画布时独立渲染。
- *
- * 为什么需要 Provider：
- *   - `useReactFlow()` / `Handle` / `useStore()`（如 NodeFrost.FrostLayer）
- *     都从 @xyflow/react 的 StoreContext 取值；没有 Provider 时会抛
- *     error001（"React Flow hooks must be used within <ReactFlowProvider>"）。
- *   - ReactFlowProvider 本身只创建 store + context，不渲染视口，
- *     因此不会触发 jsdom 下 <ReactFlow> 的尺寸测量（ResizeObserver /
- *     MeasureScroll 循环告警）。
- *
- * 固定尺寸容器：
- *   外层包一个 800×600 的 div，让任何基于 offsetParent / clientWidth 的
- *   内部测量拿到稳定的非零值，避免 jsdom（默认 0×0）下的无限重测告警。
- *
- * 用法：
- *   用法示例：renderWithFlow(<CanvasNode {...props} />)
- *   返回值与 RTL render 完全一致（container / rerender / unmount / queries）。
- *   rerender 时同样走 Provider 包装。
+/** ReactFlow Provider 测试包装 — 画布节点组件（CanvasNode / FlowNode / WorkflowSubgraphNode 等）脱离 <ReactFlow>
+ * 独立渲染：`useReactFlow()` / `Handle` / `useStore()` 从 @xyflow/react 的 StoreContext 取值，无 Provider 抛 error001；
+ * ReactFlowProvider 只建 store + context、不渲染视口，故不触发 jsdom 尺寸测量告警；外层 800×600 div 让测量拿到
+ * 非零值避免 0×0 无限重测。用法 renderWithFlow(<CanvasNode/>)，返回值同 RTL render，rerender 也走 Provider 包装。
  */
 import React from "react";
 import { render, type RenderOptions, type RenderResult } from "@testing-library/react";

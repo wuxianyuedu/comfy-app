@@ -1,9 +1,6 @@
 /**
- * `compose-steps` 纯函数契约测试。
- *
- * 重点锁住「两份孪生 ffmpeg 参数合并为一」：带字幕与无字幕两次调用只差
- * `subtitles=` 滤镜，其余编码参数必须逐字相同——此前它们是手抄的两段数组，
- * 改一段忘改另一段就会让有无字幕走出不同的编码参数。
+ * `compose-steps` 纯函数契约测试：锁住「两份孪生 ffmpeg 参数合并为一」—— 带/无字幕两次调用只差
+ * `subtitles=` 滤镜，其余编码参数必须逐字相同（原为手抄两段数组，改一段忘另一段就会走出不同参数）。
  */
 import path from "node:path";
 import { describe, expect, it } from "vitest";

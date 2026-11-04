@@ -1,14 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
-/**
- * 外观两档（圆角 / 标题字阶）在真浏览器里的效果（@critical）。
- *
- * 这是仓库里第一次有「运行时改全局 CSS 变量」的控制面，所以判据必须落在
- * **计算样式**上，而不是只判"按钮点过了"：
- *   · 圆角：改 `--radius` 后，卡片与按钮的圆角要按各自系数一起变（不是只有一处动）；
- *   · 字阶：改 `--font-scale` 后标题要变，而**正文不许变** —— 界面文案就是这么承诺的，
- *     承诺和现实不符比没有这档更糟；
- *   · 刷新后仍然生效（偏好挂在根布局的引导里，跨路由成立）。
+/** 外观两档（圆角 / 标题字阶）在真浏览器里的效果（@critical）。首次有「运行时改全局 CSS 变量」的控制面，
+ * 故判据落在**计算样式**而非「按钮点过了」：圆角改 `--radius` 后卡片与按钮按各自系数一起变；字阶改
+ * `--font-scale` 后标题变而正文不许变（界面文案的承诺，不符比没有这档更糟）；刷新后仍生效（偏好挂在
+ * 根布局引导里，跨路由成立）。
  */
 const radiusGroup = (page: Page) => page.getByRole("radiogroup", { name: "圆角" });
 const scaleGroup = (page: Page) => page.getByRole("radiogroup", { name: "标题字阶" });

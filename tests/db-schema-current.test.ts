@@ -1,21 +1,7 @@
 /**
- * 启动链路的 schema 自检（`scripts/db-schema-state.mjs::ensureSchemaCurrent`）。
- *
- * 要钉住的是「拉了含 schema 变更的代码之后**不必记得**跑 `pnpm db:push`」这件事
- * 的三条出口 —— 而它们的判据全都反直觉，靠人读代码看不出对错：
- *
- *   1. 指纹一致 → 毫秒级通过，**不许起 drizzle**（每起一轮约十几秒）；
- *   2. 指纹不一致 + 待执行的语句全是「加表 / 加索引 / 加列」→ 自动应用；
- *   3. 指纹不一致 + 含「删列 / 重建表」→ **不许自动应用**，交人工。
- *
- * 第 3 条是这次的核心：`drizzle.config.ts` 开着 `strict: true`，而无 TTY 环境里
- * 它「列出语句 → 要求确认 → 原地退出、库不动」。于是那一次输出恰好是一份
- * dry-run，白名单判据就建在它上面（判据的失败方向必须是「不自动应用」——
- * drizzle 换了输出格式最多让用户多跑一次命令，不会让我们替他把列删了）。
- *
- * `push` 一律注入 stub：这里要验的是**分类与分支**，真实 drizzle 的 diff 行为
- * 另有 `tests/db-push-noninteractive.test.ts` 与手测覆盖（跑一次十几秒，
- * 放进单测等于每次 `pnpm test` 都多等半分钟）。
+ * 启动链路 schema 自检（`scripts/db-schema-state.mjs::ensureSchemaCurrent`）：钉「拉含 schema 变更的代码后**不必记得**跑 `pnpm db:push`」的三条出口 —— ①指纹一致毫秒过、不起 drizzle；②不一致且只增表/索引/列 → 自动应用；③不一致且含删列/重建表 → **不许自动应用**，交人工。
+ * ③是核心：`drizzle.config.ts` 开 `strict: true`，无 TTY 时列出语句→要求确认→原地退出，于是那输出就是 dry-run，白名单建在它上面；失败方向必须是「不自动应用」（格式变了最多多跑一次命令，不会替人删列）。
+ * `push` 一律注入 stub：这里验分类与分支，真实 diff 行为另有 `tests/db-push-noninteractive.test.ts` 与手测（跑一次十几秒，放进单测等于每次 `pnpm test` 多等半分钟）。
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -61,13 +47,8 @@ const NO_CHANGES_OUTPUT = `[✓] Pulling schema from database...
 `;
 
 /**
- * **空库**上 `drizzle-kit push`（不带 `--force`）的真实输出形态（实测于本机
- * drizzle-kit 0.31.10）：先把待执行的语句列出来，再被无 TTY 挡下、库不动。
- *
- * 这一档是 ISSUE 的实际现场：库文件在、一张表都没有（`drizzle-kit` 在无 TTY 上
- * 留下的就是 0 字节文件），过去 `ensureSchemaCurrent` 直接 `return missing`，
- * 于是 `/api/health` 恒返回 503、启动器空等满 180s 回收整棵树。现在它必须能被
- * 自动建起来 —— 首次建表只会产生下面这两类语句，全在自动应用的白名单里。
+ * **空库**上 `drizzle-kit push`（不带 `--force`）的真实输出（实测 drizzle-kit 0.31.10）：先列待执行语句，再被无 TTY 挡下、库不动。这一档是 ISSUE 现场：库文件在、一张表都没有（无 TTY 上留下的就是 0 字节文件）。
+ * 过去 `ensureSchemaCurrent` 直接 `return missing` ⇒ `/api/health` 恒 503、启动器空等 180s 再回收整棵树；现在必须能自动建起来 —— 首次建表只产生下面这两类语句，全在自动应用白名单里。
  */
 const FRESH_DB_DRY_RUN_OUTPUT = `No config path provided, using default 'drizzle.config.ts'
 Reading config file 'drizzle.config.ts'
@@ -168,14 +149,8 @@ afterEach(() => {
 });
 
 /**
- * 把 `ensureSchemaCurrent` 的进度回吐**收进数组**，别让它写到 worker 的 stdout。
- *
- * 为什么必须收：那几句是**给用户看的启动进度**（「数据库里还没有表，正在按 schema 建表…」/
- * 「数据库结构与当前 schema 不一致，正在核对…」/「这批变更不涉及丢数据，自动应用…」），
- * 而 vitest 会把 worker 的 stdout 原样转进跑批日志。平台对超长日志只保留**尾部**，
- * 被挤掉的正是「哪条红、红在哪一行」。
- *
- * 收进来的那份不是丢掉 —— 调用点照样能断言「说了哪一句」，只是不再污染屏幕。
+ * 把 `ensureSchemaCurrent` 的进度回吐**收进数组**，别写到 worker 的 stdout：那几句是给用户看的启动进度（「数据库里还没有表…」「结构与 schema 不一致…」「不涉及丢数据，自动应用…」），而 vitest 会把 worker stdout 原样转进跑批日志。
+ * 平台对超长日志只保留**尾部**，被挤掉的正是「哪条红、红在哪一行」；收进来的不是丢掉 —— 调用点照样能断言「说了哪一句」，只是不再污染屏幕。
  */
 function collectForward(): { forward: (chunk: string) => void; lines: Array<string> } {
   const lines: Array<string> = [];

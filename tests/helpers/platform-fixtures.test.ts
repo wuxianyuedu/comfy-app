@@ -1,22 +1,15 @@
 /**
- * fixture 层自己的判据（改 `platform-fixtures.ts` 先跑这里）。
- *
- * 为什么它需要自己的用例：fixture 失灵的表现**不是「这里红」**，而是「消费它的
- * 那些用例悄悄少跑了几档」—— 那是台账 E7 记的那个形状（零执行者比红更糟）。
- * 所以这一份钉三件事：`asPlatform` 真的切到了、**收尾真的恢复了**（用例中途
- * throw 也一样）、以及 `onWindows` 与 `realPlatform` 不分叉。
+ * fixture 层自己的判据（改 `platform-fixtures.ts` 先跑这里）。它失灵的表现**不是「这里红」**，而是
+ * 消费它的用例悄悄少跑几档（台账 E7 的形状：零执行者比红更糟）。故钉三件事：`asPlatform` 真的切到
+ * 了、**收尾真的恢复了**（用例中途 throw 也一样）、`onWindows` 与 `realPlatform` 不分叉。
  */
 import { describe, expect } from "vitest";
 import { test } from "./platform-fixtures";
 
 /**
- * 与**这台宿主都不同**的两个平台名。
- *
- * 为什么不能写死 `"win32"`：本文件钉的是「`asPlatform` 真的把值切走了」，而
- * 在 Windows 开发机上 `asPlatform("win32")` 是一次**空切** —— 于是「读到新值」那两条
- * 恒真（假绿灯），「不等于真平台」那条恒假（在唯一能修它的机器上直接红）。
- * 两头都是本文件头那条纪律的形状：「不可能红的绿」比 skip 更糟。
- * 平台维度要的从来是「与宿主不同」，那这个「不同」就必须由宿主推出来。
+ * 与**这台宿主都不同**的两个平台名。不能写死 `"win32"`：本文件钉「`asPlatform` 真的把值切走了」，而在 Windows
+ * 开发机上 `asPlatform("win32")` 是一次**空切** —— 「读到新值」恒真（假绿灯）、「不等于真平台」恒假（唯一能修它的机器上
+ * 直接红）。两头都是文件头那条纪律：不可能红的绿比 skip 更糟；「与宿主不同」必须由宿主推出来。
  */
 function foreignPair(real: NodeJS.Platform): [NodeJS.Platform, NodeJS.Platform] {
   const pool: Array<NodeJS.Platform> = ["win32", "linux", "darwin"];

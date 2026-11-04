@@ -1,22 +1,7 @@
 /**
- * `src/lib` 的分层边界（ISSUE #575 第 1 项 / 规范 §18.3）。
- *
- * 背景：`eslint-plugin-boundaries` 的 `elements` 此前只声明了 `src/server`、
- * `src/lib/core`、`src/lib/db`、`src/components`、`src/features`——
- * `src/lib/comfyui`、`workshop`、`film`、`llm` **不属于任何 element**，
- * 靠 `default: allow` 放行。于是「lib 不得 import components（H1 依赖倒置）」
- * 这条只写在注释与规范里，**没有任何机器判据**，实测确有两处倒置悄悄存在。
- *
- * 本测试锁两件事：
- *   ① 配置层：`src/lib/**` 是 element `lib`，且 `lib` → `components` 被显式禁止；
- *   ② **元素顺序**：更具体的 `src/lib/core/**`、`src/lib/db/**` 必须排在
- *      `src/lib/**` 之前 —— boundaries 按声明顺序取第一个匹配的 element，
- *      顺序反了会让数据层被重新归类成 `lib`，`server → components` 的既有约束
- *      **静默失效**（没有报错，只是不再拦）。
- *   ③ 事实层：真实仓库里 `src/lib/**` 没有 import `src/components/**`、`src/app/**`。
- *
- * 为什么配置也要断言：这类「顺序是语义」的配置改错了不会让任何既有用例变红，
- * 只会在某次越界时才发现门禁没生效。用测试把顺序钉住，比写注释可靠。
+ * `src/lib` 分层边界（ISSUE #575 第 1 项 / 规范 §18.3）。elements 曾漏 `src/lib/{comfyui,workshop,film,llm}`（`default: allow` 放行），
+ * 故 H1「lib 不得 import components」无机器判据（实测确有两处倒置）。本测试锁：`lib` → `components` 显式禁止、`src/lib/{core,db}/**`
+ * 须排 `src/lib/**` 之前（顺序是语义，反了数据层归 `lib` 致 `server → components` 静默失效），以及真实仓库无越界 import。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -31,7 +16,6 @@ type Policy = {
 
 /**
  * 从 **oxlint 判决配置**里取出 boundaries 那一节（含 elements 声明与策略）。
- *
  * #2777 PR-B 起 boundaries 的生效面在 oxlint（jsPlugin `boundaries`）；
  * `eslint.config.js` 只剩 14 条 oxlint 没有等价实现的策略，不再承载分层边界。
  */

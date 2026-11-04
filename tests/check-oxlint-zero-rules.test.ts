@@ -1,14 +1,7 @@
 /**
- * `check-oxlint-zero-rules.mjs` 的契约测试（ISSUE #3016；台账属 #2777）。
- *
- * 判的是「已清零 oxlint 规则集」这扇防回潮闸自己可信：
- *   正控 —— 全仓档跑一遍，清单内 41 条规则 0 命中、退 0；
- *           （顺带钉住「没跑起来退 2」那一族的分界：退码只能是 0/1/2 三态之一）
- *   负控 —— 仓外临时目录造一个明知回潮的夹具（`x !== undefined ? x : 兜底`，
- *           即 #3016 判空三元的反面形态），路径档必须判红、退 1，且输出里
- *           能指回夹具位置与 `unicorn(no-negated-condition)` 这条诊断码。
- * 负控刻意只选语法级规则：路径档不挂 `--type-aware`（夹具没有 tsconfig 可挂，
- * 见脚本文件头），类型感知规则在仓外夹具上判不出。
+ * `check-oxlint-zero-rules.mjs` 的契约测试（ISSUE #3016；台账 #2777）：判「已清零规则集」防回潮闸自身可信。
+ * 正控：全仓档跑一遍，41 条规则 0 命中、退 0（并钉住退码只 0/1/2 三态：「没跑起来」退 2）。
+ * 负控：仓外临时目录造回潮夹具（`x !== undefined ? x : 兜底`，#3016 判空三元反面），路径档须判红退 1、指回夹具与 `unicorn(no-negated-condition)`；只选语法级规则（路径档不挂 `--type-aware`，夹具无 tsconfig）。
  */
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";

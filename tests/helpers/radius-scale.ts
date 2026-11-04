@@ -1,13 +1,7 @@
 /**
- * 圆角刻度的解析口径 —— `--radius` 基数与「由它派生的各档」这件事，全仓只允许有
- * 一份读法（规范 §12.18）。两处判据共用：
- *   · `tests/theme-token-single-source.test.ts` 的 T4（判定义侧：刻度对不对）；
- *   · `tests/design-md-contract-sync.test.ts`（判调用侧：有没有把档位值重抄成字面 px）。
- *
- * 读的是 `src/app/globals.css` 的**源码文本**而不是编译产物，这是刻意的：
- * `@theme inline` 的语义是「值内插进工具类」，未被 `var()` 引用的档位根本不会
- * 出现在产物 `:root` 里（实测只有 `--radius-md` / `--radius-lg` 存活），
- * 拿产物当判据会看不见其余五档。定义侧的唯一事实来源仍然是 globals.css 本身。
+ * 圆角刻度的解析口径 —— `--radius` 基数与派生各档全仓只允许一份读法（规范 §12.18），两处判据共用：
+ * `theme-token-single-source.test.ts` 的 T4（定义侧）、`design-md-contract-sync.test.ts`（调用侧是否重抄字面 px）。
+ * 读 `src/app/globals.css` 源码而非产物是刻意的：`@theme inline` 未被 `var()` 引用的档位不进产物 `:root`（实测只剩 md/lg），拿产物当判据会漏五档。
  */
 
 /** 一颗派生式：`渲染值 = 基数 × coef + offset`。 */

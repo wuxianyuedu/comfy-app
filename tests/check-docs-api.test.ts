@@ -1,24 +1,7 @@
 /**
- * `scripts/check-docs-api.cjs` 的判据（ISSUE #1329 收尾 → **ISSUE #2231 改判据对象**）。
- *
- * 这一步现在要拦的东西换了。上一版拦的是「`docs/api/**` 生成物静默过期」——
- * 它进 git、被 AGENTS 与主规范 §9 承诺「随构建链更新」，而构建链里没有任何一处调用
- * `pnpm docs`，于是产物停在最初那两次提交上（收尾时实测 2627 个文件差异，还留着指向
- * 已删模块的 `lib_comfyui_markdown.html`）。
- *
- * ISSUE #2231 把那份产物**从 git 里搬走**了（`.gitignore` 的 `docs/api/`），于是
- * 「提交进 git 的那份与源同不同步」这个问题**没有对象**了 —— 判据改成三件能答的事：
- *
- *   1. **触发面**：窄了 = 改了会改产物的东西却没触发（判据白挂）；宽了 = 每个前端提交
- *      付一整轮重生成（数十秒级，然后没人愿意用；现值取法见规范 §13.5.17）。
- *      它是 typedoc `entryPoints` 的**直接映射** ∪ 闭包叶子集，
- *      不是启发式，所以这里逐条钉住边界（含 `.test.ts` 也在入口 glob 里这件事）。
- *   2. **骨架齐全 + 可移植**：产物缺了默认主题每一页都引用的那几份 = 读者打开就是坏的；
- *      产物里烤进本机绝对路径 = 这份副本换台机器就不成立。
- *   3. **`--autofix` 不再被接受**：产物不进 git ⇒ 没有「自动修完再提交」的对象；而
- *      「自动修 + 再判」这个形状正是让「产物陈旧」在 CI 上隐形的那一格（#2231 的现场）。
- *
- * 用一次性目录做夹具，不碰仓库里的 `docs/api`。
+ * `scripts/check-docs-api.cjs` 的判据（ISSUE #1329 收尾 → **ISSUE #2231 改判据对象**）。上一版拦「`docs/api/**` 生成物静默过期」——它进 git 且被承诺随构建链更新，构建链却不调 `pnpm docs`。
+ * #2231 把产物**从 git 搬走**（`.gitignore` 的 `docs/api/`）后该问题没了对象，改判三件事：① 触发面 = typedoc `entryPoints` **直接映射** ∪ 闭包叶子集（逐条钉边界，含 `.test.ts`）；
+ * ② 骨架齐全且可移植（缺主题文件=打开即坏、烤进本机绝对路径=换机器不成立）；③ `--autofix` 不再接受（「自动修+再判」正是让陈旧在 CI 隐形那格）。夹具用一次性目录，不碰仓库 `docs/api`。
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -229,10 +212,8 @@ describe("--autofix 这一档已经不存在了（ISSUE #2231）", () => {
 });
 
 /**
- * typedoc 收尾日志的结论判读（ISSUE #2444）—— 四种形态各一条：
- * 总结行在场有账（红）、总结行 0/0（绿）、总结行缺席但有 html generated（绿，
- * 0 warning 时 typedoc 不打总结行 —— 本地实测过）、两者都缺（红）。
- * ANSI 色码是平台日志的原生形态，夹具里带上它，判读必须先剥色。
+ * typedoc 收尾日志的结论判读（ISSUE #2444）—— 四种形态各一条：总结行有账（红）、0/0（绿）、缺席但有 html generated
+ * （绿，0 warning 时 typedoc 不打总结行，本地实测）、两者都缺（红）。ANSI 色码是平台日志的原生形态，夹具带上它，判读必须先剥色。
  */
 describe("judgeTypedocTail：typedoc 收尾日志的结论判读（#2444）", () => {
   it("总结行报了 errors / warnings ⇒ 红，且红话里带数", () => {

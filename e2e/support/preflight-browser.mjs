@@ -1,43 +1,12 @@
 /**
- * 起 Playwright **之前**探一次「这一档要用的浏览器真的能起来吗」。
- *
- * ## 它修的那一格（ISSUE #1948 现场）
- *
- * `pnpm test:e2e` 在只装了「完整 chrome」的机器 / 容器上会**全档 81 条全红**，
- * 每条都报同一个 `browserType.launch` 失败，期望路径形如
- * `/opt/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell`
- * （下面那一段是它的原文，本文件只在错误分支里转发）。
- *
- * 根因不在配置：Playwright 1.63 里 `chromium` 与 `chromium-headless-shell` 是
- * `browsers.json` 里**两个**条目、各自 `installByDefault: true`，而 **headless 档
- * 用的是后者** —— 于是「装过浏览器」与「这一档跑得起来」之间差了半件东西，
- * 而 `chromium.executablePath()` 返回的是前者（实测：它给出
- * `…/chromium-1243/chrome-linux64/chrome`，与 headless 真正要的那个不同）。
- *
- * ## 为什么判据是「真起一次」而不是「按路径猜一下」
- *
- * 因为「要哪一个二进制」是 Playwright 的**内部决议**：headless / headed、channel、
- * host platform 一起决定它，`browsers.json` 的 revision 又会随版本漂。本模块此前
- * 按 `executablePath()` 判 —— 实测那个值在 headless 档**判错方向**（报 ready、
- * 实际缺件），正是本节要修的那档「清单会静默失效」。真起一次拿到的就是同一份
- * 决议，且失败时 Playwright 自己把那**唯一正确的路径**打在错误里。
- *
- * 代价可接受：绿的那一侧是毫秒级的一次 launch（判完即关），红的那一侧实测 9ms
- * 就返回。相比「81 条用例各报一遍」，这一次 launch 便宜到不值得为它省。
- *
- * ## 它不做的事
- *
- * **不自动下载**。缺件的出口是一条命令，而不是在 `pnpm test:e2e` 里静默拉 100+ MiB
- * —— 「跑一次测试顺手改机器状态」会让「这台机器为什么突然慢了」变成一个查不出来
- * 的问题。缺件要么被命令补上、要么被人看见，两条路都比静默下载清楚。
+ * 起 Playwright 之前探一次「这一档的浏览器真能起来吗」：缺件时 81 条用例全红在同一个 `browserType.launch`，
+ * 而 headless 档要的是 `chromium-headless-shell`（与 `executablePath()` 给的 `chromium` 不是同一份；ISSUE #1948）。
+ * 判据是**真起一次**（要哪个二进制是 Playwright 内部决议，清单会随版本漂）；且**不自动下载**，缺件只给命令。
  */
 
 /**
- * 缺件时给用户的那条命令。
- *
- * 写成「这一档要用的那两件」而不是裸 `playwright install`：后者会把三种浏览器
- * 全量拉下来（数百 MiB），而本仓库的 project 只跑 chromium。两个都写是因为
- * `chromium` 自己那一份也可能缺（headed / 断言截图一类路径要它）。
+ * 缺件时给用户的那条命令。写成「这一档要用的那两件」而非裸 `playwright install`（后者会全量拉三种浏览器、
+ * 数百 MiB），而本仓只跑 chromium；两个都写是因为 `chromium` 那份也可能缺（headed / 断言截图路径要它）。
  */
 export const BROWSER_INSTALL_HINT = "pnpm exec playwright install chromium chromium-headless-shell";
 
@@ -47,11 +16,8 @@ export const BROWSER_INSTALL_HINT = "pnpm exec playwright install chromium chrom
  */
 
 /**
- * 「起一次浏览器」的默认实现 —— 真起、真关。
- *
- * 抽成可注入的（`launch` 是参数）是为了让两个方向都能被真跑一次：
- * 缺件那一侧在**任何**机器上都可以用「喂一个会抛的 launch」复核。
- *
+ * 「起一次浏览器」的默认实现 —— 真起、真关。`launch` 抽成参数是为了两个方向都能被真跑：
+ * 缺件那一侧在**任何**机器上都能用「喂一个会抛的 launch」复核。
  * @returns {Promise<{ok: true} | {ok: false, error: Error}>}
  */
 async function defaultLaunch() {
@@ -66,11 +32,7 @@ async function defaultLaunch() {
 }
 
 /**
- * 从 Playwright 的报错里抠出「它期望的那个可执行文件路径」。
- *
- * Playwright 的话术是 `Executable doesn't exist at <path>`（本机实测逐字如此）。
- * 抠不出来时返回 null —— 那段话就退化成 Playwright 的原文，**不猜**。
- *
+ * 从 Playwright 的报错里抠出「它期望的那个可执行文件路径」（话术 `Executable doesn't exist at <path>`，本机实测逐字如此）；抠不出返回 null，退化成原文，**不猜**。
  * @param {string} message
  * @returns {string | null}
  */
@@ -81,8 +43,7 @@ export function parseMissingExecutable(message) {
 }
 
 /**
- * 判「这一档的浏览器能不能起来」。
- *
+ * 判「这一档的浏览器能不能起来」；`launch` 可注入，便于复核两个方向。
  * @param {{launch?: typeof defaultLaunch}} [options]
  * @returns {Promise<BrowserPreflight>}
  */
@@ -126,10 +87,7 @@ export async function checkBrowserReady(options = {}) {
 }
 
 /**
- * 缺件时给人看的那段话（`e2e-run.mjs` 直接打印它）。
- *
- * 收在这里而不是调用点：与判决同源，改一处就够（§12.12）。
- *
+ * 缺件时给人看的那段话（`e2e-run.mjs` 直接打印它）。收在这里与判决同源，改一处就够（§12.12）。
  * @param {BrowserPreflight & {raw?: string}} preflight
  * @returns {string}
  */

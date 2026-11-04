@@ -1,17 +1,7 @@
 /**
- * 模态遮罩（scrim）的可见性 —— 「弹窗背后真的被压暗了吗」（ISSUE #1742）。
- *
- * 背景：`ui/dialog` 的 `DialogContent` 一度**只铺 Portal + Popup**，不渲染带色的
- * `Backdrop` —— 基元自动注入的那层 `InternalBackdrop` 是 `role="presentation"`
- * 的**透明**层（只用于外部点击判定），肉眼看不见。于是绝大多数弹窗背后又亮又像
- * 能点：用户分不清哪块是活的、也看不出「这是个要先处理掉的对话框」。
- *
- * 这类故障 tsc / eslint / 主题色扫描器都看不见 —— 色值全都来自 token、命名也没错，
- * 错的是**遮罩压在本应用背景上之后还剩多少对比**。所以判据必须是「真量」，
- * 并且量在**编译产物**上（Tailwind 会 tree-shake 没被引用的 `@theme` 变量）。
- *
- * 取值口径：复用 `tests/helpers/theme-tokens.ts`（真编译 globals.css + 解析 `var()` 链）。
- * `bg-scrim` 已登记进它的 `PINNED_UTILITY_CLASSES`，产物里必须有这条 utility。
+ * 模态遮罩（scrim）可见性判据（ISSUE #1742）：`DialogContent` 曾只铺 Portal + Popup，基元注入的 `InternalBackdrop` 是透明层
+ * （`role="presentation"`，只判外部点击），弹窗背后又亮又像能点；色值全来自 token、命名也对，tsc/eslint 看不见，错的是
+ * 遮罩压上去后的**对比**，故须真量且量在编译产物（Tailwind 会 tree-shake 未引用 `@theme`）；取值走 `theme-tokens`（`bg-scrim` 已 pin）。
  */
 import { beforeAll, describe, expect, it } from "vitest";
 import { loadThemeTokens, type ThemeTokens } from "./helpers/theme-tokens";

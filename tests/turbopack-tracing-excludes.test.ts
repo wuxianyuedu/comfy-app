@@ -1,28 +1,7 @@
 /**
- * 构建期「全项目追踪」告警的清单护栏 + 产物级探针（ISSUE #489）
- * ===========================================================================
- *
- * 背景：`next build`（Turbopack）对无法静态收敛的动态路径访问（`path.resolve` /
- * `path.join` 的参数依赖 `process.cwd()` / `process.env` / 目录项 / HTTP 入参）
- * 会打 `Dynamic filesystem access causes tracing of the whole project`，并把
- * **整个项目**当作 server code 的依赖复制进 `.next/standalone`。本仓库实测
- * standalone 62MB，`standalone/src` 里连 142 个 `*.test.ts` 都在。
- *
- * **为什么不是靠注解**：`/*turbopackIgnore: true*​/` 只作用于动态 `import()` /
- * `require()`，对 `fs.*` 的路径访问一概无效（四种写法逐一实测均无效，见规范
- * `launch-and-build.md` §7.2）。仓库里现有那些注解从未生效，不能当「已修」。
- * 因此本用例锁 `next.config.js` 的 `outputFileTracingExcludes` **清单不被静默删项**。
- *
- * ⚠️ 但「清单在」不等于「清单减掉了东西」——实测这份清单对「全项目 tracing」带进来
- * 的文件**不做减法**：`./changelog.d/`、`./src/` 下的测试文件、`./src-tauri/` 都写在
- * 里面，产物里仍有对应数量的真文件。真正把文件拿掉的是产物层显式删除
- * （`scripts/standalone-private-inputs.mjs` 的 DEV_ARTIFACTS + 形状剔除），所以下面那组
- * **产物级探针**才是这条口子的判据，本文件的清单断言只是「意图声明」的一半。规范 §7.2。
- *
- * 本用例只锁「防线还在、且没被静默改坏」这三件事：
- *   ① excludes 在**顶层**键位（历史事故：挂在 `experimental` 下完全不生效）；
- *   ② 关键目录清单齐全（删项 = 这份意图被静悄悄抹掉，且没有任何提示）；
- *   ③ 没有用 `turbopack.ignoreIssue` 遮这条告警（那是关信号而非修问题）。
+ * 构建期「全项目追踪」告警的清单护栏 + 产物级探针（ISSUE #489）：动态路径访问会让整个项目被复制进
+ * `.next/standalone`（实测 62MB，连 142 个 `*.test.ts` 都在）；`turbopackIgnore` 注解对 `fs.*` 一概无效（§7.2）。
+ * 清单不做减法（真删靠 `standalone-private-inputs.mjs`），故产物探针才是判据；清单只守 ① 顶层键位 ② 目录齐全 ③ 不用 ignoreIssue。
  */
 import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -137,47 +116,17 @@ describe("outputFileTracingExcludes：动态路径访问的真正防线", () => 
 });
 
 /* ── 产物级探针：真看 .next/standalone 里有没有不该有的东西 ──────────────
- *
- * 上面的用例只锁「配置清单还在」，看不到「清单是否真的起了作用」——而清单
- * 失效正是历史上发生过的事（键位曾挂在 experimental 下，一个字都没被读，
- * 却因为没有任何用例去数产物里的文件而无人察觉）。
- *
- * 这条探针在**构建产物存在时**真去数：standalone 里不得出现测试文件、变更
- * 碎片与文档。没有产物（如只跑单测的检出）时整组跳过 —— 它守的是构建结果，
- * 不是单元逻辑。
- *
- * ⚠️ 两个细节决定这组用例是「守卫」还是「陷阱」：
- *
- * ① **文件顶层不得调用 listFiles**。`describe.skipIf` 的求解发生在收集期，
- *    describe 回调体内的语句**也会在收集期执行**（与 skipIf 的求解同处一个
- *    阶段，且先于任何用例运行）。原实现在回调体首行直接 `listFiles(STANDALONE)`
- *    ——即使 skipIf 已经判定要跳过，那行 scandir 照样跑，于是「产物缺失」从
- *    「应当跳过」变成整份文件 `Failed Suites: ENOENT: scandir .../.next/standalone`
- *    （0 个用例）。实测形态：CI 的 `pnpm run test` 排在 Build 之前，产物必然
- *    不存在，因此每次必挂；而本机因为 `.next` 恰好存在而全绿，呈现成
- *    「本地绿、CI 红」。修法是把调用**放在同一个条件里**（`exists ? list()
- *    : []`），而不是仅靠 describe.skipIf 拦。
- * ② **判据先求值、再传入**（`standaloneExists` 常量），不要在 skipIf 里
- *    现算——收集期与回调体两次求值之间的状态差异会让跳过与否不可预期。
- *
- * 反向验证：构造一个不含 `.next/standalone` 的工作目录，本组必须**全跳过且
- * 0 失败**（而不是 ENOENT）；构造一个含 `src/*.test.ts` 的假产物，必须报出它。
- */
+ * 产物存在时才数（守的是构建结果），没有则整组跳过。① 文件顶层不得调用 listFiles：describe 回调体在收集期
+ * 执行，跳过判定救不了那行 scandir ⇒ 产物缺失时整份文件 ENOENT（CI test 排在 Build 前必挂，本机有 .next 全绿）。
+ * ② 判据先求值再传入 `standaloneExists` 常量，不在 skipIf 里现算（两次求值差异会让跳过不可预期）。 */
 function standaloneDir(): string {
   return join(process.cwd(), ".next", "standalone");
 }
 
 /**
- * 递归列出目录下所有相对路径（只在目录存在时调用）。
- *
- * **不穿符号链接**（按 `lstatSync` 判类型，链接本身算一项、不进去数它背后的文件）：
- * standalone 的 `node_modules/<pkg>` 是指向本仓库 pnpm store 的链接，顺着数会把
- * **开发机的依赖内容**记成产物内容 —— 实测那 456 个 `next/dist/docs/*.md` 就是这么
- * 出现在「产物」清单里的，而产物层根本不能顺链接删它们（那会损坏开发机依赖，
- * 见 `scripts/standalone-private-inputs.mjs` 的形状剔除为什么用 lstat）。
- * 依赖包内容真正变成产物里的真文件，是 `build-desktop.mjs` 用 `dereference: true`
- * 拷进 `src-tauri/static` 之后 —— 那一层由 `check-standalone-contents.cjs` 用同一份
- * 口径数（它在那里实测到 472 个真文档）。
+ * 递归列出目录下所有相对路径（只在目录存在时调用）。不穿符号链接（`lstatSync` 判类型）：standalone 的
+ * `node_modules/<pkg>` 指向 pnpm store，顺链接会把开发机依赖记成产物（实测 456 个 `next/dist/docs/*.md`），
+ * 而产物层不能顺链接删（会损坏开发机依赖）；真文件在 `build-desktop.mjs` `dereference: true` 拷进后才有。
  */
 function listFiles(dir: string, prefix = ""): Array<string> {
   const out: Array<string> = [];
@@ -230,14 +179,8 @@ describe.skipIf(!standaloneExists)(".next/standalone 产物里不得有测试 / 
 
 /* ── 守卫自身的可运行性：产物缺失时不得让整份文件失败 ────────────────────
  *
- * 上面那组探针「有产物才有意义」，但它的**缺失处理**本身必须可靠 —— 这正是
- * 本轮修掉的缺陷：产物不存在时整份文件收集失败，于是 CI 的 `pnpm run test`
- * （排在 Build 之前）每次必挂，而本机因 `.next` 存在而全绿。
- *
- * 判据落在**结构**上而不是「再跑一遍 vitest」：真正要守住的是「listFiles 的
- * 调用挂在判据之下」。用子进程重跑本文件需要完整的最小检出（alias、setup、
- * node_modules 解析），一旦仓库结构变化就先坏在无关处，反而更容易被删掉；
- * 而结构断言直接指向那个会出错的写法，改回去即红。
+ * 缺陷原形：产物不存在时整份文件收集失败，CI 的 `pnpm run test`（排在 Build 之前）每次必挂。
+ * 判据落在结构上而非「再跑一遍 vitest」：只守「listFiles 调用挂在判据之下」，不依赖最小检出。
  */
 describe("产物缺失时的跳过逻辑（守卫自身的可运行性）", () => {
   const source = readFileSync(
@@ -269,17 +212,9 @@ describe("产物缺失时的跳过逻辑（守卫自身的可运行性）", () =
 
 /* ── 构建期配置配对不变式：`useTypeScriptCli: false` ⇔ 解析到的必须是 TS6 ────
  *
- * 官方文档（`experimental.useTypeScriptCli`）明写：关掉它、回退到 TypeScript 的
- * JavaScript 编译器 API 之后，**若 Next 解析到的是 TypeScript 7，`next build` 会直接退出**。
- * 本仓库把这颗 opt-out 当钉死项（AGENTS 硬规则 2），理由写在 `next.config.js` 旁边：
- * `typescript` 别名到 `@typescript/typescript6`，其 `bin/` 只有 `tsc6`、没有 `bin/tsc`，
- * CLI 模式会误报「typescript 未安装」并把 dev server 的所有请求挂死。
- *
- * ⇒ 这颗 opt-out 的安全性**寄生在「解析到的 `typescript` 主版本 < 7」上**，而它此前
- * 没有执行者：把别名翻成 TS7 是一次看起来正常的依赖动作，坏的消息要等到有人真跑
- * `next build` 才以「进程退出」的形态出现，而那句话完全指不出是这两个值不配对。
- * 这里把它变成一条点名两侧出口的断言（要么留在 TS6，要么切 TS7 时把这颗 opt-out 去掉）。
- */
+ * 官方文档：关掉它回退到 JS 编译器 API 后，若 Next 解析到 TypeScript 7，`next build` 直接退出；
+ * 本仓库 `typescript` 别名到 `@typescript/typescript6`（其 `bin/` 只有 `tsc6`，AGENTS 硬规则 2）。
+ * 该 opt-out 的安全性寄生在「主版本 < 7」上；这里把它变成点名两侧出口的断言（留 TS6 或切 TS7 时去掉它）。 */
 import { createRequire } from "node:module";
 
 describe("useTypeScriptCli 与解析到的 TypeScript 版本必须配对", () => {

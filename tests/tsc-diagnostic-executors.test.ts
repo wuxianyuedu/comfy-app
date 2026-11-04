@@ -1,16 +1,7 @@
 /**
- * 「类型层声明 ⇄ 执行者」判据的门禁自测（规范 §13.5.14 / ISSUE #1591）。
- *
- * 判据 `scripts/check-tsc-diagnostic-executors.cjs` 的三向口径逐条钉住：
- *   ① 每条登记项的执行者在场（读者存在 + 与姊妹索引 `scripts/.declaration-readers.json` 逐行同源）
- *   ② 未登记的声明不许新增（零增量）
- *   ③ 登记项与事实脱钩即红（落点没了 / 关键词找不到了）
- *
- * 走项目共享的门禁自测夹具（`tests/helpers/gate-repo.ts`，§11.16.1）——
- * 不手搓临时仓库样板。
- *
- * ⚠️ 本判据的输入面**只有两份台账 + 被扫目录**，`import` 图一概追不到 ——
- * 所以「该拦的每一档」都只能在这里钉住，也必须进 C 组固定清单（`affected-tests.mjs`）。
+ * 「类型层声明 ⇄ 执行者」判据的门禁自测（规范 §13.5.14 / ISSUE #1591）。判据 `scripts/check-tsc-diagnostic-executors.cjs`
+ * 的三向口径：① 执行者在场（读者存在 + 与姊妹索引 `scripts/.declaration-readers.json` 逐行同源）；② 未登记声明零增量；③ 登记项脱钩即红。
+ * 走共享夹具 `tests/helpers/gate-repo.ts`（§11.16.1）。⚠️ 输入面只有两份台账 + 被扫目录，import 图追不到，所以每档都只能在这里钉住，也必须进 C 组固定清单（`affected-tests.mjs`）。
  */
 import { defineGateRepo } from "./helpers/gate-repo";
 import type { GateRepo } from "./helpers/gate-repo";
@@ -65,9 +56,8 @@ const { test, expect } = defineGateRepo({
 
 /**
  * 造一份「声明行数已知」的源文件，让对照可以逐字算。
- *
- * 第一行必须带上 `MARKER`：判据同时核「关键词还在不在」，只造裸声明会让
- * 每一条用例都先在那一格红掉、而看不见本用例真正要测的那一档。
+ * 第一行必须带 `MARKER`：判据同时核「关键词还在不在」，只造裸声明会让每条用例先红在那一格，
+ * 看不见本用例真正要测的档。
  */
 const MARKER = "__MARKER__";
 const DECL = `export const ${MARKER} = 1;\nexport function f() {}\nexport const x = 1;\n`;
@@ -78,10 +68,9 @@ function writeBoth(repo: GateRepo, ledger: Ledger, readers = REAL_READERS) {
 }
 
 /**
- * 真台账里那条「只含一个文件」的条目 —— 造变异时以它为骨架最省事。
- *
- * 用 `!` 而不是 `as Entry`：断言在这里只是把「`find` 可能返回 undefined」压下去，
- * 而真台账确实有这一条（下面「真台账非空」那条用例兜着它）。
+ * 真台账里那条「只含一个文件」的条目 —— 造变异时以它为骨架。
+ * 用 `!` 而不是 `as Entry`：这里只是压下「`find` 可能返回 undefined」，真台账确有这一条
+ * （「真台账非空」那条用例兜着）。
  */
 const SAMPLE = REAL_LEDGER.entries.find((e) => e.id === "expect-type-of")!;
 

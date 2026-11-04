@@ -1,9 +1,6 @@
 /**
- * 「一次运行一包」日志布局的判据（ISSUE #1326）。
- *
- * 这些用例钉死的是**布局契约**，不是实现细节：目录名形状、归档后 current/
- * 仍在、崩溃标记、保留策略、zip 包结构、根目录只许那几样。改布局前先读
- * 规范 §4 —— 它们红了就是布局变了。
+ * 「一次运行一包」日志布局的判据（ISSUE #1326）：钉的是**布局契约**而非实现细节 —— 目录名形状、归档后 current/
+ * 仍在、崩溃标记、保留策略、zip 包结构、根目录只许那几样。改布局前先读规范 §4，它们红了就是布局变了。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -476,16 +473,10 @@ describe("四份 runtime 日志：一次启动一份文件（ISSUE #1326）", ()
     }
   });
 
-  /** 源码里的**代码**部分（剥掉注释）：判据只看「还在不在用」，不看解释文字。
-   *
-   * 不剥注释的话，一段「这里曾经有 X、现在没有」的迁移说明会把判据判红 ——
-   * 而那正是本仓库要求写的东西（§12.4.2 禁止的是日期/编号式的历史流水，不是
-   * 「为什么改」）。
-   *
-   * 用唯一实现（`./helpers/strip-comments`）而不是本地那份**无锚**的行跳：旧形从字符串里
-   * 第一个双斜杠一路吃到行尾，实测把 `src/lib/drizzle-studio/lifecycle.ts` 的
-   * `export const DRIZZLE_STUDIO_HOST = "https://local.drizzle.studio";` 削成半行 ——
-   * 于是下面那一圈 `includes(…) === false` 对「同一行引号之后又把旧写法写回去」是瞎的（ISSUE #2969）。 */
+  /** 源码里的**代码**部分（剥注释）：判据只看「还在不在用」，不看解释文字 —— 不剥的话，一段「这里曾经有 X、现在没有」
+   * 的迁移说明会把判据判红，而那正是本仓库要求写的（§12.4.2 禁的是日期/编号式历史流水，不是「为什么改」）。
+   * 用唯一实现 `./helpers/strip-comments` 而非本地无锚行跳：旧形从字符串里第一个双斜杠吃到行尾，实测把
+   * `lifecycle.ts` 的 `DRIZZLE_STUDIO_HOST = "https://…"` 削成半行，于是 `includes(…) === false` 对「引号后又写回旧写法」是瞎的（ISSUE #2969）。 */
   function code(name: string): string {
     return stripComments(name, { trailing: true });
   }

@@ -1,30 +1,7 @@
 /**
- * 把「控制流花括号」归一化掉，让「读源码做形态断言」的契约测试对 oxlint `curly`
- * （以及任何会给单语句体加 `{}` 的规则）免疫。
- *
- * 背景：本仓有大量门禁用例读 `scripts/**` / `src/**` 的源码，再用 `toContain` /
- * `toMatch` 比对**字面形态**（见 `tests/helpers/strip-comments.ts` 头注里那类
- * 「拿正则断言源码形状」的用例）。`curly` 把 `if (cond) stmt;` 改成
- * `if (cond) {\n  stmt;\n}`，这种断言就失配 —— 但语义并没变，断言只是在钉
- * 「这条控制流存在」，不在乎有没有括号。
- *
- * 为什么必须走解析器、不能用正则：
- *   · 正则分不清**块括号**和**对象字面量括号**。`if (a) return { x: 1 };` 里的
- *     `{ x: 1 }` 是对象字面量，绝不能剥；而 `if (a) { b(); }` 里的 `{` 是块。
- *     本仓的 `strip-comments` 头注自己就写过「它**不是**词法分析器，够门禁用」。
- *     这里要的是真·分块，所以直接用 `typescript`（已在依赖里）解析 AST，只折
- *     「单语句控制流块」（if / else / for / for-of / for-in / while / do），
- *     对象字面量与多语句块原样保留。
- *
- * 归一化形态：`if (cond) { stmt; }` → `if (cond) stmt;`（单行体），幂等。
- * 多次迭代直到文本稳定，处理嵌套（`if (a) { if (b) { g(); } }` → `if (a) if (b) g();`）。
- *
- * 适用范围：JS / TS 家族源码（`.ts/.tsx/.mjs/.cjs/.js`）。非 JS 家族（`.rs`、`.ps1`）
- * 的源码别调它 —— 直接原样返回，避免被 TS 解析器误当成 JS 而错折。
- *
- * ── 唯一实现（§12.18 复用优先）──────────────────────────────────────────────
- * 本函数是这件事的唯一一份实现，`tests/source-shape-single-source.test.ts` 那条
- * 台账判着：新出现的本地副本直接红。要改行为给它加模式，别再抄一份。
+ * 把「控制流花括号」归一化，让读源码做形态断言的契约测试对 oxlint `curly`（及任何给单语句体加 `{}` 的规则）免疫 —— 语义没变，只是
+ * `if (cond) stmt;` 变带块后字面断言失配。必须走 AST（`typescript`）不能用正则：正则分不清块括号与对象字面量（`if (a) return { x: 1 };`）。
+ * 只折 if/else/for(-of/-in)/while/do 的单语句体并迭代到稳定；仅 JS/TS 家族，`.rs`/`.ps1` 原样返回。唯一实现（§12.18），`tests/source-shape-single-source.test.ts` 判本地副本红。
  */
 import * as ts from "typescript";
 
@@ -40,11 +17,9 @@ function scriptKindOf(fileName: string): ts.ScriptKind {
 }
 
 /**
- * 把源码里所有「单语句控制流块」折成单行体，使 `curly` 这类加括号规则不再影响
- * 字面形态断言。非 JS 家族源码直接原样返回。
- *
- * @param src 读到的源码文本
- * @param fileName 文件名（含扩展名），用于推断解析器方言；默认按 `.ts` 处理
+ * 把所有「单语句控制流块」折成单行体，使 `curly` 这类加括号规则不影响字面形态断言；非 JS 家族原样返回。
+ * @param src 源码文本
+ * @param fileName 含扩展名的文件名，用于推断解析器方言（默认按 `.ts`）
  */
 export function normalizeControlFlow(src: string, fileName = "source.ts"): string {
   if (!/\.(tsx?|m?jsx?|m?cjs)$/.test(fileName)) {

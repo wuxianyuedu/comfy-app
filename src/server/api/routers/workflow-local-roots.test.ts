@@ -1,11 +1,8 @@
 // workflow-local-roots 的单一出处测试。
 //
-// 钉住的是一次真实缺陷：`getLocalWorkflowRoots`（list 的磁盘扫描）与
-// `getAllowedLocalWorkflowRoots`（create 的导入安全边界）读
-// `LOCAL_WORKFLOWS_PATH` 的方式不同——前者经 `readEnvVar` 实时读 .env 文件、
-// 后者读 `process.env` 启动快照。.env 新增目录后，界面扫得出「待导入」项、
-// 点击导入却被守卫以「只允许导入配置目录下的文件」拒绝。现在两者必须
-// 同走一份出处：改其一，这里就红。
+// 钉住真实缺陷：`getLocalWorkflowRoots`（list 磁盘扫描）经 `readEnvVar` 实时读 .env，
+// `getAllowedLocalWorkflowRoots`（create 导入边界）读 `process.env` 启动快照；.env 新增目录后
+// 界面扫得出「待导入」、导入却被「只允许配置目录下文件」拒绝。两者必须同走一份出处：改其一这里就红。
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

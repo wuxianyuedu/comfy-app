@@ -1,15 +1,7 @@
 /**
- * `Install dependencies` 那一跳的**墙钟出口**（ISSUE #2360）。
- *
- * 现场：平台那一跑上它挂到 **8640s 硬上限**才被掐断（`cnb-c6r-1k5osfdl8`），整格日志
- * 19 行、pnpm 的输出一行都没有（前一步的 `check-pnpm-available` 刚在同一秒打印过
- * pnpm 12.4.1），而同机同链上一跑是 `Done in 2m 42.7s`。那一句话
- * `timeout of 8640000ms exceeded` 既不说是谁挂的，也不给下一动作。
- *
- * 这一组钉的是**收场方式**，不是耗时数字：
- *   · 超时 ⇒ 退 2（**未判定**，不是红也不是绿，§13.6.2）、打印卡在第几秒、把子进程收掉；
- *   · 跑完 ⇒ 退出码原样透出（判据一个字不改）；
- *   · 起不来 ⇒ 也归 2，且带上错误原文（「跑完但非零」与「没起来」是两档）。
+ * `Install dependencies` 那一跳的**墙钟出口**（ISSUE #2360）：现场挂到 8640s 硬上限才被掐断（`cnb-c6r-1k5osfdl8`），19 行日志里 pnpm 一行输出都没有。
+ * `timeout of 8640000ms exceeded` 也不给下一动作。这里钉**收场方式**而非耗时：超时 ⇒ 退 2（未判定，§13.6.2）并报卡在第几秒；
+ * 跑完 ⇒ 退出码原样透出；起不来 ⇒ 也归 2 并带错误原文。
  */
 import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
