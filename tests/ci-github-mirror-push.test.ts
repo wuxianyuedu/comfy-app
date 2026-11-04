@@ -51,6 +51,11 @@ import {
   resolvePrTitle,
   RUN_TITLE_LIMIT,
 } from "../scripts/ci-mirror-payload.mjs";
+/* 重试面比话术面宽一族，两个判据都从实现所在的模块直接取（与主文件的转出口同源）。 */
+import {
+  isTransientRemoteFailure,
+  shouldRetryGitFailure,
+} from "../scripts/ci-mirror-failure-report.mjs";
 
 const TOKEN = "gh-token-secret-value";
 const SHA = "26a3c3ed06deb679974200d68005ff583178d63f";
@@ -321,6 +326,35 @@ describe("纯函数", () => {
     );
     expect(isEgressFailure("fatal: Invalid username or token")).toBe(false);
     expect(isEgressFailure("remote: Repository access blocked")).toBe(false);
+  });
+
+  it("现场四种失败原话：egress 三形认、远端 5xx 只进重试面不进话术", () => {
+    /* 2026-11-04 三跑「重试=0 次」的现场原话，逐字取自镜像格日志。 */
+    const reset =
+      "fatal: unable to access 'https://github.com/wuxianyuedu/comfy-app.git/': Recv failure: Connection was reset";
+    const schannel =
+      "fatal: unable to access 'https://github.com/wuxianyuedu/comfy-app.git/': schannel: server closed abruptly (missing close_notify)";
+    expect(isEgressFailure(reset)).toBe(true);
+    expect(isEgressFailure(schannel)).toBe(true);
+    /* 话术跟着纠偏：不再被念成「令牌活不活」（出勤读数因此从 token-scope 回 egress）。 */
+    expect(explainRemoteProbeFailure(reset)).toContain("这一跳没通");
+    expect(explainRemoteProbeFailure(reset)).not.toContain("令牌活不活");
+
+    const fiveHundred =
+      "remote: Internal Server Error\n[remote rejected] HEAD -> cnb-pr-3157 (Internal Server Error)";
+    /* 服务端 500 到了 GitHub，不是节点出网：话术不认它，重试认它。 */
+    expect(isEgressFailure(fiveHundred)).toBe(false);
+    expect(isTransientRemoteFailure(fiveHundred)).toBe(true);
+    expect(shouldRetryGitFailure(fiveHundred)).toBe(true);
+    expect(shouldRetryGitFailure(reset)).toBe(true);
+    /* 反控制：认证 / 仓库三族在放宽后的重试面里仍一次都不试。 */
+    for (const text of [
+      "remote: Repository not found.\nfatal: Authentication failed",
+      "fatal: Invalid username or token",
+      "remote: Repository access blocked",
+    ]) {
+      expect(shouldRetryGitFailure(text)).toBe(false);
+    }
   });
 
   it("exitCodeFor：读数档折的是退码那一位数，三态原值另说", () => {
@@ -1086,6 +1120,43 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(heard.join("\n")).toContain("cnb-pr-2649");
   });
 
+  it("探活撞上现场 `Connection was reset` 第一次、第二次通 ⇒ 退 0（cnb-95h 那形）", async () => {
+    const { io, pushes, calls, heard, sleeps, probeCalls } = harness({
+      probeResults: [
+        {
+          code: 128,
+          stderr:
+            "fatal: unable to access 'https://github.com/wuxianyuedu/comfy-app.git/': Recv failure: Connection was reset",
+        },
+        { code: 0, stdout: `${REMOTE_REF}\n` },
+      ],
+    });
+    expect(await runMirror(io)).toBe(CODE.OK);
+    expect(probeCalls()).toBe(2);
+    expect(sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
+    expect(pushes).toHaveLength(1);
+    expect(calls).toHaveLength(1);
+    expect(heard.join("\n")).toContain("次没通（可重试类）");
+  });
+
+  it("推送撞上 GitHub `Internal Server Error` 重试一次后通 ⇒ 退 0，派发照发", async () => {
+    const { io, pushes, calls, heard, sleeps } = harness({
+      pushResults: [
+        {
+          code: 1,
+          stderr:
+            "remote: Internal Server Error\n[remote rejected] HEAD -> cnb-pr-3157 (Internal Server Error)",
+        },
+        { code: 0 },
+      ],
+    });
+    expect(await runMirror(io)).toBe(CODE.OK);
+    expect(pushes).toHaveLength(PUSH_MAX_ATTEMPTS);
+    expect(sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
+    expect(calls).toHaveLength(1);
+    expect(heard.join("\n")).toContain("次没通（可重试类）");
+  });
+
   it("探活第一次 egress 抖动、第二次通 ⇒ 退 0：推与派发照发，日志留重试行与退避读数", async () => {
     /* `cnb-pe2-1k6e1uhj8` 的形态：15s 无回话是抖动不是硬阻断 —— 放宽到 30s 再试一次就该通。 */
     const { io, pushes, calls, heard, sleeps, probeCalls } = harness({
@@ -1101,7 +1172,7 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(pushes).toHaveLength(1);
     expect(calls).toHaveLength(1);
     const all = heard.join("\n");
-    expect(all).toContain(`探活第 1/${PROBE_MAX_ATTEMPTS} 次没通（egress 类）`);
+    expect(all).toContain(`探活第 1/${PROBE_MAX_ATTEMPTS} 次没通（可重试类）`);
     expect(all).toContain("已推");
   });
 
@@ -1153,7 +1224,7 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(pushes).toHaveLength(PUSH_MAX_ATTEMPTS);
     expect(sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
     expect(calls).toHaveLength(1);
-    expect(heard.join("\n")).toContain(`推送第 1/${PUSH_MAX_ATTEMPTS} 次没通（egress 类）`);
+    expect(heard.join("\n")).toContain(`推送第 1/${PUSH_MAX_ATTEMPTS} 次没通（可重试类）`);
   });
 
   it("推送撞上认证类失败 ⇒ 不重试：只推一次，退 1", async () => {

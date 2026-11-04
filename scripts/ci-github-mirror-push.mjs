@@ -52,14 +52,12 @@
  * 7. **`GIT_DIR` / `GIT_WORK_TREE` 一律不从环境继承**（同上）：平台 `prepare` 里有
  *    `export GIT_DIR=…` 的做法（本仓 `scripts/ci-*.mjs` 就有几处），那一形态下子进程里的
  *    `git push` 会推到别的树上 —— 这一格的每一条 git 调用都显式清掉这两个变量，只吃 `cwd`。
- * 8. **网络抖动的韧性**（2026-11-02，build `cnb-pe2-1k6e1uhj8`）：镜像格两次跑都死在
- *    探活那一跳 —— `git ls-remote` 15s 无回话；而同日 19:47 同一台 runner（orange-connector）
- *    探活通过并成功推过 PR ref ⇒ 节点到 github.com:443 是**间歇抖动**不是硬阻断，且令牌 /
- *    仓库 / 配置三层都被那次成功证好。所以：探活单次上限放宽到 30s、至多试 3 次
- *    （退避 5s / 10s）；推送**只对 egress 类失败**（与 `explainRemoteProbeFailure` 同一组
- *    判据）重试 1 次。认证 / 权限 / 仓库不存在类**一律不重试** —— 重试它们只是把真问题
- *    拖慢几分钟，还把「令牌坏了」读成「网络不好」。三态退码与 `--readout` 语义一字未动：
- *    重试耗尽仍是原来的 exit 2 / exit 1，读数档照旧不折进流水线判决。
+ * 8. **网络抖动的韧性**（2026-11-02 `cnb-pe2-1k6e1uhj8` 起，2026-11-04 按现场补判据）：
+ *    同一台 runner 时通时不通 ⇒ github.com:443 是间歇抖动而非硬阻断。探活单次 30s、
+ *    至多 3 次（退避 5s / 10s），推送至多 2 次；**只重试** `shouldRetryGitFailure()` 认下的
+ *    egress 与远端 5xx 两族（认证 / 权限 / 仓库不存在一律不重试，重试只会把真问题拖慢）。
+ *    2026-11-04 补漏字：旧判据只写 `connection reset`，认不出 `Connection was reset` /
+ *    `schannel: server closed abruptly` / `Internal Server Error`；退码与 `--readout` 未动。
  * 9. **refs 推完还有第二跳：LFS 对象**（第二批，字体真身那一族）。镜像仓若只有指针文件，
  *    GitHub 侧 `checkout` 开 `lfs: true` 就撞「拉不到对象」的红，所以内容推送成功后补一跳
  *    `git lfs push <镜像> HEAD`：**不带 `--all`**（增量由 git-lfs 对账，存量历史不重复计
@@ -119,6 +117,7 @@ import process from "node:process";
 import {
   isEgressFailure,
   renderMirrorSummary,
+  shouldRetryGitFailure,
   writeDispatchState,
 } from "./ci-mirror-failure-report.mjs";
 import { pushLfsObjects } from "./ci-mirror-lfs-push.mjs";
@@ -434,9 +433,9 @@ export function realRunGit(args) {
 export const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * 带有限重试的一跳（文件头第 8 条）：**只有 egress 类失败**才消耗重试 ——
- * 认证 / 权限 / 仓库不存在这类回话「再试一百次也一样」，一次就交账，不拖时间也不
- * 把真问题读成网络抖动。
+ * 带有限重试的一跳（文件头第 8 条）：**只有 `shouldRetryGitFailure()` 认下的 egress ∪
+ * 远端 5xx** 才消耗重试；认证 / 权限 / 仓库不存在一律一次交账。判据在
+ * `ci-mirror-failure-report.mjs`，话术仍只认 egress（5xx 不该被念成节点出网问题）。
  *
  * 每一次重试都留一行读数（第几次、等多久），重试耗尽后交回**最后一次**的结果 ——
  * 退码与后续话术与没有重试时逐字同形（探活仍是 exit 2、推送仍是 exit 1）。
@@ -450,13 +449,13 @@ export async function runGitWithRetry(args, ctx) {
   let attempts = 1;
   let result = runGit(args);
   for (let attempt = 2; attempt <= maxAttempts && result.code !== 0; attempt += 1) {
-    if (!isEgressFailure(`${result.stdout}\n${result.stderr}`)) {
+    if (!shouldRetryGitFailure(`${result.stdout}\n${result.stderr}`)) {
       break;
     }
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- 下标越界时运行时为 undefined（未开 noUncheckedIndexedAccess），退避表长度不随 maxAttempts 变
     const wait = RETRY_BACKOFF_MS[attempt - 2] ?? RETRY_BACKOFF_MS.at(-1) ?? 5000;
     log(
-      `[${prefix}] ${label}第 ${String(attempt - 1)}/${String(maxAttempts)} 次没通（egress 类）⇒ ${String(wait / 1000)}s 后试第 ${String(attempt)} 次（网络抖动重试；认证 / 权限类不重试）`,
+      `[${prefix}] ${label}第 ${String(attempt - 1)}/${String(maxAttempts)} 次没通（可重试类）⇒ ${String(wait / 1000)}s 后试第 ${String(attempt)} 次（网络抖动 / 远端 5xx 重试；认证 / 权限类不重试）`,
     );
     await sleep(wait);
     attempts = attempt;
