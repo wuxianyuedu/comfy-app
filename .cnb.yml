@@ -2722,38 +2722,22 @@ master:
         - https://cnb.cool/moon-read/GITHUB_MIRROR_TOKEN/-/blob/main/envs.yml
       stages: *push_stages
 
-  # 每天一次的定时任务（官方 `zh/build/crontab.md`）：`0 0 * * *` = 每天 01:00
-  # （平台时区 `Asia/Shanghai`）。分支键必须是**明确的单一分支名** —— 定时任务
-  # 不支持 glob，挂多分支会静默失效。所以它挂在 `master:` 下，取的是 master 的 HEAD。
+  # ── 定时档的执行者已从这台机迁到 GitHub Actions ──────────────────────────────
   #
-  # ⚠️ 这一条的 stage 清单是 `env.COMFYAPP_CI_DAILY_GATES`（不是上面那份 `GATES`）：
-  # 两份清单对应两条不同的事件，混成一份之后「谁在什么时候跑」就再也读不出来了。
-  "crontab: 0 1 * * *":
-    - <<: *common
-      name: 每日生产构建
-      lock: *lock_daily
-      stages: *daily_gates
-
-  # ── 桌包那一档的定时口（ISSUE #2503）：02:00，与上面那一条**错开两小时** ──────────
+  # 这里刻意**不再挂** `"crontab: …"` 事件：每日那批判据与桌包那一档由
+  # `.github/workflows/daily.yml` / `package-desktop.yml` 的 schedule 承担，跑的是
+  # GitHub 镜像仓的默认分支（由 push 档的 `GitHub master 镜像` 格跟住 master）。
+  # 自托管节点是本机，定时重档（生产构建 / 全量E2E / 全量单测 / cargo 冷编译）
+  # 与日常开发抢核；而「同一台机上并发在场时墙钟不可读」正是这一族要避开的失真，
+  # 桌包那条还要整棵依赖树冷编译，单机满载时连单测的超时都不构成代码结论。
   #
-  # 为什么错开、而不是紧接着：这一档会把这台机压到满载（cargo 一段 + WiX `light` 一段，
-  # 而 `src-tauri/target` 不在任何缓存槽里 ⇒ 每跑都是整棵依赖树的冷编译）。01:00 那一跑
-  # 的 `每日单元测试` 是「唯一会因这台机器的负载而红的格子」（业主口径把它排在最后），
-  # 两跑叠在一起得到的不是两条结论，是一份不可信的读数（§13.6.4.1「并发在场时墙钟不可读」）。
+  # ⚠️ 下面的手动 / API 触发口**刻意保留**：它们不自动触发，不占机器；只在有人
+  # 明确要一份本机产物、或要复验某一格时才跑同一份 `*daily_gates` / `*package_gates`。
+  # 清单与锚点因此一字不动 —— 判据仍按它们核对「这一档跑什么」，只是不再由时钟起它。
   #
-  # 为什么它**不吃 `*daily_gates`**：业主口径是「独立一档」。清单与锁都是自己的
-  # （`.package-gates` / `.lock-package`，理由写在那两个锚点头注里）—— 判据
-  # `tests/no-platform-ci-config.test.ts` 双向钉：桌包那几格不许出现在每日清单里，
-  # 而定时与手点两个触发口必须引用同一个 `*package_gates`。
-  #
-  # `*package_fail_stage` 是这一档**独有**的那一格 `endStages`（ISSUE #2550：这一档红了
-  # 以前没有任何自动立案口）。写法与 `pull_request` 那条同形 —— 两个锚点写在一个合并键里，
-  # 拆成两行 `<<:` 是非法 YAML（理由见 `pull_request` 那条同一处注释）。
-  "crontab: 0 3 * * *":
-    - <<: [*common, *package_fail_stage]
-      name: 桌面成品包
-      lock: *lock_package
-      stages: *package_gates
+  # ⚠️ 也不留一条「空的 crontab」占位：平台不报错、只是永远不触发，而配置看上去
+  # 仍像有定时档，那正是「在册 ≠ 出勤」那一族要治的静默失效。「这里没有定时」
+  # 由 `tests/no-platform-ci-config.test.ts` 反向钉住，不是靠这段注释声明。
 
   # ── 手动触发那一条：与 01:00 那一跑**同一份七格**（按钮在 `.cnb/web_trigger.yml`）──
   #

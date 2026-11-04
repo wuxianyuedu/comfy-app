@@ -144,10 +144,11 @@ const CONFIG_SHAPE: Array<{ mustMatch: RegExp; why: string }> = [
     why: "必须挂 push（master 合并形态复核）",
   },
   {
-    mustMatch: /^ {2}"crontab: [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+":\s*$/m,
+    mustMatch: /定时档的执行者已从这台机迁到 GitHub Actions/,
     why:
-      "必须挂一条 crontab（生产构建每天一次，ISSUE #2010）：定时任务的分支键只认**明确的单一分支名**，" +
-      '而事件键必须写成 `"crontab: <5 段 POSIX cron>"` —— 写成 `crontab:` 映射或 `schedule` 都不会报错，只是永远不触发',
+      "定时重档已迁 GitHub Actions：这条锚点句在配置里，说明「这里没有 crontab」是**被说明过的决策**，" +
+      "不是谁顺手删了两行。定时是否真的不存在、GA 侧两条 schedule 是否真的在，" +
+      "由「定时档不在本机、在 GA」那条反向用例逐项钉住 —— 不在这里用一条正则两头顾",
   },
 ];
 
@@ -1404,25 +1405,24 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toEqual([]);
   });
 
-  it("定时 / 手点 / API 三个触发口跑的是同一份清单，而按钮与事件键两两对上", () => {
-    /* 手动触发那一口解决的是「想知道答案的人不该等到下一次定时那一跑」；它必须与定时那一条
-     * 是**同一件事**，否则「手点一遍每日档」这句话就没有确定含义（两种漂法各自都有过：
-     * 复制一份 stage 清单 ⇒ 加格子时只加一边；按钮指到一个 PR 清单 ⇒ 手点的根本不是每日档）。
-     * API 那一口同理 —— 它存在的理由恰恰是「按钮要一双手」，见下面那条事件名前缀的判据。 */
+  it("手点 / API 两个触发口跑的是同一份清单，而按钮与事件键两两对上", () => {
+    /* 定时那一口已迁 GitHub Actions（见「定时档不在本机、在 GA」那条）。留在 CNB 的
+     * 手点 / API 两口不自动触发、不占这台机，只在有人明确要复验某一格或要一份本机
+     * 产物时才跑。它们仍必须与 `COMFYAPP_CI_DAILY_GATES` 是**同一件事**，否则
+     * 「手点一遍每日档」这句话就没有确定含义（复制一份 stage 清单 ⇒ 加格子时只加一边；
+     * 按钮指到一个 PR 清单 ⇒ 手点的根本不是每日档）。 */
     const text = readRegisteredConfig();
-    const viaCron = pipelineStageNames(text, "每日生产构建");
     const viaButton = pipelineStageNames(text, "每日档（手动触发）");
     const viaApi = pipelineStageNames(text, "每日档（API 触发）");
     const declared = registeredDailyGateOrder(text);
     expect(declared.length, "每日清单解析为空 —— 后面的比较就没有对象了").toBeGreaterThan(0);
-    expect(viaCron, "定时那一条的 stage 名单与 `COMFYAPP_CI_DAILY_GATES` 不一致").toEqual(declared);
     expect(
       viaButton,
-      "手点那一条与定时那一条跑的**不是同一份**清单 —— 它应当引用同一个 `*daily_gates` 锚点",
+      "手点那一条的 stage 名单与 `COMFYAPP_CI_DAILY_GATES` 不一致 —— 它应当引用 `*daily_gates` 锚点",
     ).toEqual(declared);
     expect(
       viaApi,
-      "API 那一条与定时那一条跑的**不是同一份**清单 —— 同一个锚点，不另抄一份",
+      "API 那一条与手点那一条跑的**不是同一份**清单 —— 同一个锚点，不另抄一份",
     ).toEqual(declared);
 
     /* 事件名必须是 `api_trigger` 或其前缀 —— 这是**服务端**的硬要求（实测 400
@@ -1494,24 +1494,15 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         "配置那侧改了名（或加了一个触发口）而名单没跟，出勤判据就会静默变成恒缺勤或恒出勤",
     ).toEqual(dailyNames.sort());
 
-    /* 另一定时档必须在名单**之外**：这是 #2873 的那条实质。取「跑的不是 `*daily_gates`
-     * 的定时类流水线」而不是取某个具体名字，所以桌包改天再拆一条出来也在这条的量程里。 */
+    /* 定时档已迁 GA ⇒ CNB 配置里**不许再有** `crontab:` 流水线。这一条是反向的：
+     * 删掉定时口这件事本身必须被判据看见，否则「配置看着还像有定时、平台其实没人起」
+     * 就是 #1229 那一族的静默失效，而自托管机又是本机，负载白扛了也没人知道。
+     * GA 侧两条 schedule 是否真的在，由「定时档不在本机、在 GA」那条钉。 */
     const cronRows = rows.filter((r) => r.event.startsWith("crontab:"));
     expect(
-      cronRows.length,
-      "配置里只解析出一条定时流水线 —— 这条判据就没有对象了（第二条定时档就是 #2873 的由来）",
-    ).toBeGreaterThanOrEqual(2);
-    const otherCron = cronRows.filter((r) => r.stagesRef !== "*daily_gates");
-    expect(
-      otherCron.length,
-      "定时类里没有「不跑每日清单」的那一条，判据的空转形态",
-    ).toBeGreaterThan(0);
-    for (const r of otherCron) {
-      expect(
-        DAILY_LANE_PIPELINES,
-        `定时档「${r.name}」（事件 ${r.event}）被算进了每日出勤的名单 —— 两档会互相替对方作证`,
-      ).not.toContain(r.name);
-    }
+      cronRows.map((r) => `${r.event}|${r.name}`),
+      "`.cnb.yml` 里又出现了 crontab 定时流水线 —— 定时重档的执行者是 GA，这台机不该再被时钟起",
+    ).toEqual([]);
   });
 
   it("规范正文确实写着这次的决策反转（反向锚点）", () => {
@@ -1708,12 +1699,12 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   it("`每日单元测试` 是每日那一跑最后一个**会红的格**；其后只允许 `覆盖率上报` 这种报告型尾巴", () => {
     /* 业主口径：「将每日单元测试放最后，最容易出问题的放最后」。这是**覆盖面**不是偏好：CNB stage 串行且失败即停，而这一格是唯一会因本机负载红的 ——
      * 实测 `cnb-b0l-1k59op66t` 775 份只 1 份红在 `Test timed out in 30000ms`（同时另有两份在跑全量 vitest/eslint），其后三格全 `skipped` ⇒ 它排中间时一次抖动决定那三格这一天跑不跑。
-     * 判**事实**顺序；逐条相等由上面那条判住，这里钉「最后会红的格」。2026-11-02 起 `覆盖率上报` 接在其后（报告型、非关键，被 skip 只少一次上报），约束对象仍是「会红的格不许在其后」。 */
-    const stages = pipelineStageNames(readRegisteredConfig(), "每日生产构建");
+     * 判**事实**顺序；逐条相等由上面那条判住，这里钉「最后会红的格」。2026-11-02 起 `覆盖率上报` 接在其后（报告型、非关键，被 skip 只少一次上报），约束对象仍是「会红的格不许在其后」。定时口迁 GA 后顺序判在手点那一口（同一份 `*daily_gates`）。 */
+    const stages = pipelineStageNames(readRegisteredConfig(), "每日档（手动触发）");
     const last = stages.at(-1);
     expect(
       stages.length,
-      "crontab 那条流水线里解析不出 stage —— 这条判据没有对象了",
+      "手点那一口解析不出 stage —— 这条顺序判据没有对象了",
     ).toBeGreaterThan(0);
     const idx = stages.indexOf("每日单元测试");
     expect(idx, "每日那一跑必须有 `每日单元测试`").toBeGreaterThanOrEqual(0);
@@ -1921,9 +1912,10 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(rows.filter((r) => r.event === "pull_request").length).toBe(1);
     expect(rows.filter((r) => r.event !== "pull_request").length).toBeGreaterThanOrEqual(9);
     /* 三条每日触发口仍然同一把（那份互斥是刻意保留的，不是被这次改动顺手拆掉的）。
-     * 这里**不钉事件名清单** —— 时刻那一格由 crontab 那几条判据管，这里只管锁。 */
+     * 这里**不钉事件名清单** —— 「有没有定时口」由「定时档不在本机、在 GA」那条管，
+     * 这里只管锁。定时口迁走之后 `lock_daily` 归手点 / API 两口共用，仍是同一件事。 */
     const daily = rows.filter((r) => r.lockRef === "lock_daily");
-    expect(daily.length).toBe(3);
+    expect(daily.length).toBe(2);
     expect(new Set(daily.map((r) => r.stagesRef)).size).toBe(1);
     expect(daily.every((r) => r.event !== "pull_request")).toBe(true);
     /* 单跑：同一档的 web 与 api 各引用同一把、且引用同一份 stage 清单。 */
@@ -2154,65 +2146,54 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     );
   });
 
-  it("定时那一跑（crontab）挂在 master 下、每天一次，且跑的就是 `COMFYAPP_CI_DAILY_GATES` 那七格（ISSUE #2010 / #2018）", () => {
-    /* 「生产构建改为定时任务，每天 1 次」落成三件互相独立的事实，缺任一件都会**静默失效**：
-     * ① 事件键只认 `"crontab: <五段 cron>"` 这种带引号字符串键（官方 `zh/build/crontab.md`），写成 `crontab:` 映射 / `schedule:` 永不触发（同 #1229 形态）；
-     * ② 分支键不支持 glob、必须挂明确单一分支（这里要 `master`，每天证「master HEAD 今天能不能构建」）；③ 频率每天 1 次：cron 第 2 段写 `*` 或列表就变成每天 N 次，判据只认「单一小时 + 单一分钟」。 */
+  it("定时档不在本机、在 GA：CNB 无 crontab，GA 两条 schedule 在，手动口仍跑同一份清单", () => {
+    /* 定时重档的执行者从这台自托管机迁到 GitHub Actions 之后，「有没有每天跑一次」
+     * 换了地方，判据不能跟着松掉 —— 三件各自会静默失效的事实仍要逐项钉：
+     *
+     *   ① CNB 配置里**不许**再有 `crontab:` 事件。留一条空占位最危险：平台不报错、
+     *      只是永远不触发，而配置看上去仍像有定时档（#1229 那一族）；本机白扛负载
+     *      或两边都不跑，账面一条红都不会有。
+     *   ② GA 侧 `daily.yml` / `package-desktop.yml` 必须各有 `schedule`，且 cron 对位
+     *      北京 01:00 / 03:00（GitHub cron 用 UTC ⇒ 17:00 / 19:00 前一天）。少一条 =
+     *      本机已撤定时、那边又没人起，这一档就真的没有执行者了。
+     *   ③ 留在 CNB 的手点口仍跑 `COMFYAPP_CI_DAILY_GATES` 那份清单，跑法脚本与
+     *      timeout 预算一字不动 —— 撤的是「时钟起它」，不是把判据本身撤掉。 */
     const text = readRegisteredConfig();
-    const events = crontabEvents(text);
     expect(
-      events.length,
-      '`.cnb.yml` 里的 `"crontab: …"` 事件键应恰好两条：每日那一档 + 桌包那一档' +
-        "（ISSUE #2503 要求它**独立成档**，既不进 `.daily-gates` 那张表，也不与每日档共用一把锁）。" +
-        "少一条 = 生产构建又只剩 PR 那一条，或桌包档被并进了每日档；多一条 = 有第二条没人认领的定时任务",
-    ).toBe(2);
+      crontabEvents(text),
+      "`.cnb.yml` 里又出现了 crontab 事件 —— 定时重档已迁 GA，本机不该再被时钟起",
+    ).toEqual([]);
     expect(
-      new Set(events.map((e) => e.cron)).size,
-      `两条定时任务的 cron 逐字相同（${events.map((e) => e.cron).join(" / ")}）—— 那一跑会同时起两条，` +
-        "而桌包那一档要的是「与每日那一跑**错开**」（它会把这台机压到满载）",
-    ).toBe(events.length);
-    for (const event of events) {
-      expect(
-        event.branch,
-        "定时任务的分支键必须是明确的单一分支名（官方：不支持 glob）—— 这里要的是 master",
-      ).toBe("master");
-      const cron = event.cron.split(/\s+/);
-      expect(cron, `cron 表达式不是五段：${event.cron}`).toHaveLength(5);
-      const [minute, hour, dom, month, dow] = cron;
-      /* 每天一次 = 分钟固定、小时固定，日 / 月 / 周都是通配。 */
-      /* SAFETY: 类型断言已复核 */
-      for (const [field, name] of [
-        [minute, "分钟"],
-        [hour, "小时"],
-      ] as const) {
-        expect(
-          /^\d+$/.test(field ?? ""),
-          `cron 的${name}段（"${field}"）不是单值 —— 「每天 1 次」要求它固定到一个点上；` +
-            `写成 \`*\` / 列表 / 区间都意味着一天跑多次`,
-        ).toBe(true);
-      }
-      /* SAFETY: 类型断言已复核 */
-      for (const [field, name] of [
-        [dom, "日"],
-        [month, "月"],
-        [dow, "周"],
-      ] as const) {
-        expect(field, `cron 的${name}段应当是 \`*\`：${event.cron}`).toBe("*");
-      }
-    }
+      text,
+      "配置里少了「定时档已迁 GA」的说明锚点 —— 撤定时是决策，不是顺手删两行",
+    ).toMatch(/定时档的执行者已从这台机迁到 GitHub Actions/);
 
-    /* ③ 那一跑跑的是每日清单那七格（四格前提 + 三档重档），每一格都是**跑法脚本**
-     * （不是裸 `pnpm run build` / 裸 vitest）。全跑门禁不是定时任务要做的事（那是
-     * `pull_request` 那条流水线的差事），而裸跑 = 跑了不记账
-     * （`scripts/.artifact-freshness.json` 一个字不变）。 */
-    const daily = pipelineStageNames(text, "每日生产构建");
+    const dailyYml = readFileSync(path.join(ROOT, ".github/workflows/daily.yml"), "utf8");
+    const packageYml = readFileSync(
+      path.join(ROOT, ".github/workflows/package-desktop.yml"),
+      "utf8",
+    );
+    expect(dailyYml, "`.github/workflows/daily.yml` 没有 schedule —— 每日档从此无人执行").toMatch(
+      /^\s*schedule:\s*$/m,
+    );
+    expect(dailyYml, "每日档的 cron 不是北京 01:00（UTC 17:00）").toMatch(
+      /cron:\s*"0 17 \* \* \*"/,
+    );
+    expect(packageYml, "`.github/workflows/package-desktop.yml` 没有 schedule").toMatch(
+      /^\s*schedule:\s*$/m,
+    );
+    expect(packageYml, "桌包档的 cron 不是北京 03:00（UTC 19:00）").toMatch(
+      /cron:\s*"0 19 \* \* \*"/,
+    );
+
+    const daily = pipelineStageNames(text, "每日档（手动触发）");
     expect(
       daily,
-      "crontab 那条流水线里解析不出 stage —— 名字被改了，或者 stages 的形状变了",
+      "手点那一口解析不出 stage —— 「撤定时不撤判据」这句话就没有对象了",
     ).toEqual(registeredDailyGateOrder(text));
     expect(
       registeredDailyGateOrder(text),
-      "`COMFYAPP_CI_DAILY_GATES` 与定时流水线里的 stage 对不上 —— 那一跑跑什么就没有事实源了",
+      "`COMFYAPP_CI_DAILY_GATES` 与手点那一口的 stage 对不上 —— 那一档跑什么就没有事实源了",
     ).toEqual(DAILY_GATES);
     const stage = stageBlock(text, "每日生产构建");
     expect(stage, "`.cnb.yml` 里找不到「每日生产构建」那一项").toBeTruthy();
@@ -2241,10 +2222,12 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 落成三件会静默失效的事实：① 清单是**另一张锚点**（并进 `.daily-gates` 后每日会多背一次 cargo 编译）；② 锁是**另一把**（共用 `*lock_daily` 会让手点桌包掐停当日某一格，#2114 换方向复发）；
      * ③ 定时与手点两个触发口引用**同一个锚点** —— 抄第二份那一刻就开始漂。 */
     const text = readRegisteredConfig();
-    const stages = pipelineStageNames(text, "桌面成品包");
+    /* 定时口已迁 GA，这里改从**手点那一口**取同一份 `*package_gates`：
+     * 清单与锚点一字未动，撤的只是时钟。 */
+    const stages = pipelineStageNames(text, "桌面成品包（手动触发）");
     expect(
       stages.length,
-      "「桌面成品包」那条流水线解析不出 stage —— 锚点没接上，或者流水线名被改了",
+      "「桌面成品包（手动触发）」解析不出 stage —— 锚点没接上，或者流水线名被改了",
     ).toBeGreaterThan(0);
     for (const name of stages) {
       expect(
@@ -2286,7 +2269,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const prefetchEntry = "scripts/tauri-tools-cache.mjs";
     expect(prefetch, `预置那一格点的应是 ${prefetchEntry}`).toContain(prefetchEntry);
     expect(existsSync(path.join(ROOT, prefetchEntry)), `${prefetchEntry} 不在盘上`).toBe(true);
-    const packageStages = pipelineStageNames(text, "桌面成品包");
+    const packageStages = pipelineStageNames(text, "桌面成品包（手动触发）");
     expect(
       packageStages.indexOf("打包·桌包工具预置"),
       "「打包·桌包工具预置」没在清单里 —— 那一格丢了就等于回到「构建期现下 GitHub release」",
@@ -2299,11 +2282,11 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const rows = pipelineLockAssignments(text).filter((r) => r.stagesRef === "*package_gates");
     expect(
       rows.map((r) => r.event).sort(),
-      "桌包档应有两个触发口：`crontab` 与 `web_trigger_package`（按钮在 `.cnb/web_trigger.yml`）",
-    ).toEqual(["crontab: 0 3 * * *", "web_trigger_package"]);
+      "桌包档在 CNB 只剩 `web_trigger_package` 一个触发口（定时已迁 GA；按钮在 `.cnb/web_trigger.yml`）",
+    ).toEqual(["web_trigger_package"]);
     expect(
       new Set(rows.map((r) => r.lockRef)).size,
-      "两个触发口点的不是同一把锁 —— 同一件事会被排成两次互掐",
+      "同一份清单的触发口点的不是同一把锁 —— 同一件事会被排成两次互掐",
     ).toBe(1);
     expect(
       rows.every((r) => r.lockRef === "lock_package"),
@@ -2577,10 +2560,10 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     /* 对**现役配置**判一次，而不是只对夹具判一次（这一句才是上面那枚标记的执行者）：
      * 桌包那一档必须被认成"有构建格"。取不到格名 ⇒ 先断言取到了，否则下面那条会退成恒真的空判。 */
     const configText = readRegisteredConfig();
-    const packageStages = pipelineStageNames(configText, "桌面成品包");
+    const packageStages = pipelineStageNames(configText, "桌面成品包（手动触发）");
     expect(
       packageStages.length,
-      "解析不出「桌面成品包」那条流水线的 stage 名单 —— 下面那条判据就没有对象了",
+      "解析不出桌包手点那一口的 stage 名单 —— 下面那条判据就没有对象了",
     ).toBeGreaterThan(0);
     expect(
       stagesWithBuildConsumer(
@@ -3033,8 +3016,10 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
     const laneInstall = [
       { pipeline: "质量门禁", install: "Install dependencies" },
       { pipeline: "master 合并复核", install: "安装依赖" },
-      { pipeline: "每日生产构建", install: "每日安装依赖" },
-      { pipeline: "桌面成品包", install: "打包·安装依赖" },
+      /* 两条定时口已迁 GA；接槽开关的形状判在留下来的**手点口**上，
+       * 它们引用的是同一份 `*daily_gates` / `*package_gates`，结论不变。 */
+      { pipeline: "每日档（手动触发）", install: "每日安装依赖" },
+      { pipeline: "桌面成品包（手动触发）", install: "打包·安装依赖" },
       { pipeline: "单跑生产构建（手动触发）", install: "单跑构建·安装依赖" },
       { pipeline: "单跑全量E2E（手动触发）", install: "单跑E2E·安装依赖" },
       { pipeline: "单跑全量单测（手动触发）", install: "单跑单测·安装依赖" },
