@@ -72,6 +72,15 @@
  *    **index** 取（实测：删光 `refs/**` 之后它照样给得出 OID），不经过任何 ref 解析。
  *    回退通了就是通（原路径的 ref 枚举失败不构成结论）；回退也失败才按下面那条交账。
  *    清单为空（本地压根没有 LFS 对象）⇒ 回退没有对象，按原失败交账。
+ * 10. **入口那一层也要有终点**（`861623ced` 带进来的回归）：`--master` 的执行面在
+ *     `ci-github-mirror-master.mjs`、靠动态 `import` 取；那一份反过来静态 import 本文件。
+ *     入口若用**顶层** `await import(...)`，两侧求值互等（本文件求值要等 master，
+ *     master 求值要等本文件）⇒ Promise 永不 settle，事件循环空转后 Node 报
+ *     `Detected unsettled top-level await` 并以 exit 13 收场：一格红，日志里没有一句
+ *     三态读数。所以入口改成 `.then()` 收口（求值同步做完，环自然解开）；那一跳**装载**
+ *     另挂显式上限 {@link MIRROR_ENTRY_TIMEOUT_MS} —— 到点按 exit 2 明念「在等什么 /
+ *     等了多久 / 最后读数」，不靠 Node 的兜底退码。**只界装载那一跳**：跑起来之后的探活 /
+ *     推送 / LFS 各自已有上限（见常量注释），外框 10m 包的是它们的最坏墙钟。
  *
  * ## `--master`：push 档（`master 合并复核`）的主干镜像
  *
@@ -754,18 +763,136 @@ export function exitCodeFor(code, readout) {
   return readout ? CODE.OK : code;
 }
 
+/**
+ * 入口**装载**那一跳的墙钟上限（文件头第 10 条，`861623ced` 的回归）。
+ *
+ * 只界「动态 import `ci-github-mirror-master.mjs`」这一个最无终点的等待：它是本地盘上
+ * 的模块装载（正常 <1s），30s 给的是冷启动 / 杀软扫描的余量。
+ * **为什么不界整层**：跑起来之后的探活 ≈105s、推送 ≈485s 各自都有上限，且在
+ * `.cnb.yml` 那格 `timeout: 10m` 的外框里；再压一个更小的数会把「慢但活着」误判成
+ * 悬挂，压一个更大的数又落在 10m 之外 ⇒ 形同虚设（这条上限必须是「装载」的）。
+ *
+ * @type {number}
+ */
+export const MIRROR_ENTRY_TIMEOUT_MS = 30_000;
+
+/**
+ * 入口的注入面。全部可缺省：生产路径吃 `.cnb.yml` 那一格的实际形态，
+ * 用例吃假件（假定时器 / 永不 settle 的假装载）。
+ *
+ * @typedef {object} MirrorEntryIo
+ * @property {(handle: unknown) => void} [clearTimer] 清超时定时器（缺省 `clearTimeout`）
+ * @property {boolean} [dryRun]
+ * @property {Record<string, string | undefined>} [env]
+ * @property {() => Promise<{runMasterMirror: MirrorRunner}>} [importMaster] 取 `--master` 档执行面（缺省动态 import）
+ * @property {(line: string) => void} [log]
+ * @property {boolean} [master]
+ * @property {boolean} [readout]
+ * @property {MirrorRunner} [runPr] PR 档执行面（缺省 {@link runMirror}）
+ * @property {(cb: () => void, ms: number) => unknown} [setTimer] 超时定时器（缺省 `setTimeout`）
+ */
+
+/**
+ * 执行面（`runMirror` / `runMasterMirror`）的统一形状。
+ *
+ * @typedef {(io: {dryRun: boolean, env: Record<string, string | undefined>, log: (line: string) => void, readout: boolean}) => Promise<number>} MirrorRunner
+ */
+
+/**
+ * 入口：跑完 PR 档或 `--master` 档，并保证**每一次等待都有终点**（文件头第 10 条）。
+ *
+ * 1. **不再是顶层 await**：求值同步收尾 ⇒ `ci-github-mirror-master.mjs` 里那句静态
+ *    import 本文件不再与本文件的动态 import 互等（那一形是 ESM 循环顶层 await 死锁，
+ *    Promise 永不 settle，Node 只在事件循环空转后报 `Detected unsettled top-level await`
+ *    并退 13 —— 红在日志里一个字都对不上）。
+ * 2. **装载那一跳显式到期**：到点退 `2` 并明念「在等什么 / 等了多久 / 最后读数」。
+ *    悬挂不属于三态任何一形，所以这一档**不经 `exitCodeFor` 折零** ——
+ *    `--readout` 的折零以「已经拿到读数」为前提；一个字都没有的等待不是读数。
+ *
+ * @param {MirrorEntryIo} [io] 注入面（用例用；生产走缺省）
+ * @returns {Promise<number>} 交给进程的退出码
+ */
+export async function runMirrorEntry(io = {}) {
+  const { dryRun = false, master = false, readout = false } = io;
+  const env = io.env ?? process.env;
+  const log =
+    io.log ??
+    ((line) => {
+      console.log(line);
+    });
+  const setTimer = io.setTimer ?? ((cb, ms) => setTimeout(cb, ms));
+  const clearTimer =
+    io.clearTimer ??
+    ((handle) => {
+      clearTimeout(/** @type {ReturnType<typeof setTimeout>} */ (handle));
+    });
+  /* `--master` 那一档的执行面在另一份文件（#3148 为回到 900 行闸切出去的）。动态取它：
+   * 那一份反过来要 import 本文件的判据与话术，静态互相 import 会成环。 */
+  /** @type {() => Promise<{runMasterMirror: MirrorRunner}>} */
+  const importMaster = io.importMaster ?? (() => import("./ci-github-mirror-master.mjs"));
+  const runPr = io.runPr ?? runMirror;
+  const prefix = master ? "mirror-master" : "mirror";
+  /* 「最后读数」：超时那一刻手里只有日志末行 —— 它是唯一能指认卡在哪一跳的自证。 */
+  let lastLine = "";
+  /** @param {string} line */
+  const track = (line) => {
+    lastLine = line;
+    log(line);
+  };
+  const runIo = { dryRun, env, log: track, readout };
+  /** @type {unknown} 定时器句柄（`setTimeout` 的返回形态由注入面决定） */
+  let timer = null;
+  /** @type {number} */
+  let code = CODE.NO_FACT;
+  try {
+    if (master) {
+      /** @type {Promise<{kind: "timeout"}>} */
+      const deadline = new Promise((resolve) => {
+        timer = setTimer(() => {
+          resolve({ kind: "timeout" });
+        }, MIRROR_ENTRY_TIMEOUT_MS);
+      });
+      /* 装载完成前不落任何读数：这一支正常情况下一条日志都不打。 */
+      const loaded = await Promise.race([importMaster().then((mod) => ({ mod })), deadline]);
+      clearTimer(timer);
+      timer = null;
+      if (!("mod" in loaded)) {
+        log(`[${prefix}] 结论：exit 2 —— 等待超时：装载 --master 的执行面（没拿到三态任何一形）`);
+        log(`[${prefix}]   在等什么：动态 import ./ci-github-mirror-master.mjs`);
+        log(
+          `[${prefix}]   等了多久：${Math.round(MIRROR_ENTRY_TIMEOUT_MS / 1000)}s（到点；上限 MIRROR_ENTRY_TIMEOUT_MS，外框 10m 之内）`,
+        );
+        log(`[${prefix}]   最后读数：${lastLine === "" ? "（还没打出任何读数：卡在模块装载）" : lastLine}`);
+        log(`[${prefix}]   为什么退非零：等待没有终点不属于三态任何一形；--readout 折零以「已拿到读数」为前提`);
+        return CODE.NO_FACT;
+      }
+      code = await loaded.mod.runMasterMirror(runIo);
+    } else {
+      code = await runPr(runIo);
+    }
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    log(`[${prefix}] 结论：exit 2 —— 入口抛错（${detail}）`);
+    log(`[${prefix}]   在等什么：${master ? "动态 import ./ci-github-mirror-master.mjs 与 runMasterMirror" : "runMirror"}`);
+    log(`[${prefix}]   最后读数：${lastLine === "" ? "（还没打出任何读数）" : lastLine}`);
+    log(`[${prefix}]   为什么退非零：抛错不属于三态任何一形，进程故障不冒充这一格的判决`);
+    return CODE.NO_FACT;
+  } finally {
+    if (timer !== null) {
+      clearTimer(timer);
+    }
+  }
+  /* 正常收工才折读数档（ISSUE #3051 / #3106）。 */
+  return exitCodeFor(code, readout);
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   const dryRun = process.argv.includes("--dry-run");
   const readout = process.argv.includes("--readout");
   const master = process.argv.includes("--master");
-  /* `--master` 那一档的执行面在 `ci-github-mirror-master.mjs`（#3148 为回到 900 行闸内切出去的）。
-   * 这里**动态**取它：那一份反过来要 import 本文件的判据与话术，静态互相 import 会成环。 */
-  const code = master
-    ? await (
-        await import("./ci-github-mirror-master.mjs")
-      ).runMasterMirror({ dryRun, env: process.env, readout })
-    : await runMirror({ dryRun, env: process.env, readout });
-  /* 读数档的「不影响流水线结论」并进收尾小结那一行（ISSUE #3106）—— 折的是对外那一位
-   * 退出码，失败类别与下一动作照旧在小结里，不再单起一行把最关键的那句顶离结尾。 */
-  process.exit(exitCodeFor(code, readout));
+  /* 入口**不再**是顶层 await（文件头第 10 条）：求值同步收尾，跨文件那个环自然解开；
+   * 等待的终点交给 `runMirrorEntry` 的显式超时，而不是 Node 的 exit 13 兜底。 */
+  runMirrorEntry({ dryRun, env: process.env, master, readout }).then((code) => {
+    process.exit(code);
+  });
 }

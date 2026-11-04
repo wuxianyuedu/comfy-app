@@ -2,11 +2,14 @@
  *
  *  全部走注入面：git 执行器与 fetch 都是假件，**一次真网络请求都不发**；
  *  令牌脱敏那条是硬规则 17 在这一格的落点 —— 任何回显里出现令牌原值即红。 */
+import { spawnSync } from "node:child_process";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   CODE,
   DEFAULT_REPO,
   MASTER_REF,
+  MIRROR_ENTRY_TIMEOUT_MS,
   PROBE_MAX_ATTEMPTS,
   PUSH_MAX_ATTEMPTS,
   PUSH_TIMEOUT_MS,
@@ -33,6 +36,7 @@ import {
   resolveContext,
   resolveMasterContext,
   runMirror,
+  runMirrorEntry,
   sanitize,
 } from "../scripts/ci-github-mirror-push.mjs";
 /* `--master` 那一档的执行面单独一份（#3148：为回到 §12.6 R5 的 900 行闸内切出去的）。 */
@@ -1190,5 +1194,126 @@ describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
     expect(last).not.toContain("派发=");
     /* 类别行与结尾小结**两处都有**：翻到结尾不必回滚，翻不到结尾也能读到类。 */
     expect(heard.join("\n")).toContain(`类别=${LFS_FAILURE_KINDS.LOCAL_REFS}`);
+  });
+});
+
+/** 入口那一层的终点（`861623ced` 的回归）。
+ *
+ *  现场：`ci-github-mirror-push.mjs:765` 顶层 `await import('./ci-github-mirror-master.mjs')`
+ *  —— 那一份**静态** import 本文件 ⇒ ESM 循环顶层 await 互等，Promise 永不 settle；
+ *  事件循环空转后 Node 报 `Warning: Detected unsettled top-level await` 并退 13，
+ *  日志里没有一句三态读数（`.cnb.yml` 那格 10m 一次都没走到）。
+ *
+ *  这里钉三件事：装载悬挂 ⇒ 假定时器到点退 2 并念清楚在等什么；执行面抛错 ⇒ 退 2 且
+ *  `--readout` 不折零；以及真进程不再落到 exit 13 那档兜底。 */
+describe("runMirrorEntry（入口的终点）", () => {
+  /** 假定时器：`armed[0].cb()` 就是「到点」，一次真分钟都不等。 */
+  function fakeTimers() {
+    const armed: Array<{ cb: () => void; ms: number }> = [];
+    const cleared: Array<unknown> = [];
+    return {
+      armed,
+      cleared,
+      clearTimer: (handle: unknown) => {
+        cleared.push(handle);
+      },
+      setTimer: (cb: () => void, ms: number) => {
+        armed.push({ cb, ms });
+        return `timer-${String(armed.length)}`;
+      },
+    };
+  }
+
+  it("上限短于镜像格外框（10m），否则超时形同虚设", () => {
+    expect(MIRROR_ENTRY_TIMEOUT_MS).toBeLessThan(10 * 60_000);
+    expect(MIRROR_ENTRY_TIMEOUT_MS).toBeGreaterThan(0);
+  });
+
+  it("master 档装载悬挂 ⇒ 假时钟到点退 2，并念「在等什么 / 等了多久 / 最后读数 / 为什么非零」", async () => {
+    const timers = fakeTimers();
+    const heard: string[] = [];
+    const pending = runMirrorEntry({
+      clearTimer: timers.clearTimer,
+      env: {},
+      /* 永不 settle 的装载：体内那句 `0` 只是让「空函数」那条 lint 判据闭嘴。 */
+      importMaster: () => new Promise<never>(() => 0),
+      log: (line: string) => heard.push(line),
+      master: true,
+      readout: true,
+      setTimer: timers.setTimer,
+    });
+    /* 定时器是同步挂上的 —— 「每一次等待都有终点」的落点就在这一颗。 */
+    expect(timers.armed).toHaveLength(1);
+    expect(timers.armed[0]?.ms).toBe(MIRROR_ENTRY_TIMEOUT_MS);
+    timers.armed[0]?.cb();
+    const code = await pending;
+    /* 悬挂不属于三态任何一形：`--readout` 折零以「已拿到读数」为前提 ⇒ 这里**必须**退 2。 */
+    expect(code).toBe(CODE.NO_FACT);
+    expect(timers.cleared).toHaveLength(1);
+    const all = heard.join("\n");
+    expect(all).toContain("结论：exit 2 —— 等待超时：装载 --master 的执行面");
+    expect(all).toContain("在等什么：动态 import ./ci-github-mirror-master.mjs");
+    expect(all).toContain("等了多久：30s（到点；上限 MIRROR_ENTRY_TIMEOUT_MS，外框 10m 之内）");
+    expect(all).toContain("最后读数：（还没打出任何读数：卡在模块装载）");
+    expect(all).toContain("--readout 折零以「已拿到读数」为前提");
+  });
+
+  it("装载完成 ⇒ 定时器立刻清掉，跑完照旧折读数档（退 0）", async () => {
+    const timers = fakeTimers();
+    const heard: string[] = [];
+    const code = await runMirrorEntry({
+      clearTimer: timers.clearTimer,
+      env: {},
+      importMaster: async () => ({
+        runMasterMirror: async (runIo) => {
+          runIo.log("[mirror-master] DRY-RUN：没推，计划如上");
+          return CODE.OK;
+        },
+      }),
+      log: (line: string) => heard.push(line),
+      master: true,
+      readout: true,
+      setTimer: timers.setTimer,
+    });
+    expect(code).toBe(CODE.OK);
+    expect(timers.cleared).toHaveLength(1);
+    expect(heard.join("\n")).not.toContain("等待超时");
+  });
+
+  it("执行面抛错 ⇒ 退 2（`--readout` 不折零），最后读数念出抛错前那一行", async () => {
+    const timers = fakeTimers();
+    const heard: string[] = [];
+    const code = await runMirrorEntry({
+      clearTimer: timers.clearTimer,
+      env: {},
+      log: (line: string) => heard.push(line),
+      readout: true,
+      runPr: async (runIo) => {
+        runIo.log("[mirror] 卡在推送这一跳");
+        throw new Error("git push spawn 失败");
+      },
+      setTimer: timers.setTimer,
+    });
+    expect(code).toBe(CODE.NO_FACT);
+    const all = heard.join("\n");
+    expect(all).toContain("结论：exit 2 —— 入口抛错（git push spawn 失败）");
+    expect(all).toContain("最后读数：[mirror] 卡在推送这一跳");
+  });
+
+  it("真进程回归：--master --dry-run 不再落到 Node 的 exit 13 兜底", () => {
+    /* 现场那一跑就是这颗：`Detected unsettled top-level await` + EXITCODE=13。
+     * 令牌留空 ⇒ 走 fail-closed 的 exit 2，不发任何网络请求。 */
+    const script = path.resolve(import.meta.dirname, "..", "scripts", "ci-github-mirror-push.mjs");
+    const result = spawnSync(process.execPath, [script, "--master", "--dry-run"], {
+      cwd: path.resolve(import.meta.dirname, ".."),
+      encoding: "utf8",
+      env: { ...process.env, GITHUB_MIRROR_TOKEN: "" },
+    });
+    const stderr = result.stderr ?? "";
+    const stdout = result.stdout ?? "";
+    expect(stderr).not.toContain("unsettled top-level await");
+    expect(result.status).not.toBe(13);
+    expect(result.status).toBe(CODE.NO_FACT);
+    expect(stdout).toContain("[mirror-master] 结论：exit 2");
   });
 });
