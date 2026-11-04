@@ -65,7 +65,7 @@ export const LFS_FAILURE_SHORT_ACTIONS = {
   EGRESS: "出网问题在节点侧：查 DNS / 代理",
   LFS_DISABLED: "去仓库 Settings → Options 开 Git LFS",
   LFS_MISSING: "先在节点装 git-lfs",
-  LOCAL_REFS: "改按 `--object-id` 推（或先落本地 ref）；重试无用",
+  LOCAL_REFS: "已自动回退 --object-id 仍败：查检出形态；重试无用",
   OTHER: "看上一行 git-lfs 原话",
   QUOTA: "去 Settings → Billing 查配额 / 买 data pack",
 };
@@ -105,7 +105,7 @@ export function classifyLfsPushFailure(text) {
       kind: "LOCAL_REFS",
       label: LFS_FAILURE_KINDS.LOCAL_REFS,
       short: LFS_FAILURE_SHORT_ACTIONS.LOCAL_REFS,
-      next: "git-lfs 在本次检出里枚举不到本地 refs（`Error getting local refs.`）⇒ 这是检出形态问题（平台合成的合并提交 / 工作区形态），不是网络也不是配额：先 `git rev-parse HEAD` + `git for-each-ref` 确认，再按指针清单改用 `git lfs push --object-id`（或先落一条本地 ref 再推）；重试不会变好",
+      next: "git-lfs 在本次检出里枚举不到本地 refs（`Error getting local refs.`）⇒ 这是检出形态问题（平台合成的合并提交 / 工作区形态），不是网络也不是配额。镜像格**已自动回退**按 `git lfs push --object-id` 重推（清单取自 `git lfs ls-files --long`，按 index 取、不经 ref 解析）—— 走到这句说明回退也没成：先 `git rev-parse HEAD` + `git for-each-ref` 看这次检出的形态，再查回退那句的原话；重试不会变好",
     };
   }
   if (/\b402\b|quota|bandwidth|storage limit|data pack/i.test(raw)) {
@@ -117,7 +117,11 @@ export function classifyLfsPushFailure(text) {
       next: "镜像仓的 LFS 配额撞墙（GitHub 免费档 1 GiB 存储 + 1 GiB/月带宽，每次 checkout 拉取都计带宽）⇒ 去仓库 Settings → Billing 看配额 / 买 data pack，与代码无关",
     };
   }
-  if (/\b401\b|\b403\b|authentication failed|invalid username or token|could not read username|bad credentials|permission denied|not authorized/i.test(raw)) {
+  if (
+    /\b401\b|\b403\b|authentication failed|invalid username or token|could not read username|bad credentials|permission denied|not authorized/i.test(
+      raw,
+    )
+  ) {
     return {
       evidence,
       kind: "AUTH",
@@ -126,7 +130,11 @@ export function classifyLfsPushFailure(text) {
       next: "令牌被拒或没有这个仓库的写权（`Authentication failed` / 403 这一族）⇒ 换/补 `GITHUB_MIRROR_TOKEN` 的 `contents:write` 与仓库访问范围；权限类重试不会变好",
     };
   }
-  if (/repository or object not found|repository not found|lfs.{0,24}(not enabled|disabled|not supported)|\b404\b/i.test(raw)) {
+  if (
+    /repository or object not found|repository not found|lfs.{0,24}(not enabled|disabled|not supported)|\b404\b/i.test(
+      raw,
+    )
+  ) {
     return {
       evidence,
       kind: "LFS_DISABLED",
@@ -217,7 +225,11 @@ export function renderMirrorSummary({
 }) {
   const label = readout ? "读数档：不影响流水线结论" : "判决";
   const lfsText =
-    lfs === null ? "没跑（wire 没通，还没到这一跳）" : lfs ? "通" : `败（类别：${failure?.label ?? LFS_FAILURE_KINDS.OTHER}）`;
+    lfs === null
+      ? "没跑（wire 没通，还没到这一跳）"
+      : lfs
+        ? "通"
+        : `败（类别：${failure?.label ?? LFS_FAILURE_KINDS.OTHER}）`;
   const next =
     lfs === null
       ? "先让 wire 那一跳通过，LFS 与派发才有对象"
