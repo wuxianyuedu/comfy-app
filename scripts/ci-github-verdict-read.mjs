@@ -33,9 +33,14 @@
  * ## 边界
  *
  * 1. **fail-closed 的三态**：令牌 / 请求 ID / HEAD 取不到 ⇒ exit 2；两条路径都 401/403
- *    ⇒ exit 2（权限前提没落地，不是 GitHub 判出了红）；egress 重试耗尽 ⇒ exit 2；轮询
- *    预算耗尽 ⇒ exit 2（「没跑完」不许被读成「判红」，也不许被读成「什么都没发生」）。
- *    只有拿到完整结论才出 0 / 1。
+ *    ⇒ exit 2（**两条路径都被拒**才算权限前提没落地，不是 GitHub 判出了红）；
+ *    egress 重试耗尽 ⇒ exit 2；轮询预算耗尽 ⇒ exit 2（「没跑完」不许被读成「判红」，
+ *    也不许被读成「什么都没发生」）。只有拿到完整结论才出 0 / 1。
+ *    **`empty` 不是权限问题**：主路径读到 0 条 = 令牌够、只是 GitHub 侧还没起跑（或
+ *    display_title 还没认领本跑），这一形**继续按 30s 轮询到预算耗尽**，不因同一轮兜底
+ *    403 提前交账 —— 那一形曾经被读成「两条路径的权限都没够上」（ISSUE #3136 的现场：
+ *    3.8s 退掉，45m 预算一秒没用）。预算耗尽仍 0 条时原因写「读到 0 条（GitHub 侧没起跑）」，
+ *    兜底的 403 只作降级事实记录（「兜底不可用（无 checks: read，仅降级）」），不催办。
  * 2. **主列读数档**（与镜像格同一族）：`.cnb.yml` 给它 `--readout`，三态照旧打点、对外
  *    恒退 0。翻承重的条件：本格读数稳定后单独一次决定，同时摘镜像格的 `--readout`
  *    （#3051 期望第 3 条）—— 不在本批。
@@ -455,6 +460,61 @@ function reportEgressDown(log, label, error) {
 }
 
 /**
+ * 预算耗尽的交账：exit 2，原因按**这一轮主路径读到了什么**分开说。
+ *
+ * `empty`（读到 0 条）与「读到一个还没跑完的结论」不是一回事：前者是 GitHub 侧
+ * 还没起跑（或 display_title 还没认领本跑），后者是起跑了但没跑完。两句话术分开，
+ * 是为了让线上那一眼直接看出该查排队还是该查卡住。
+ *
+ * @param {(line: string) => void} log 日志出口
+ * @param {"empty" | "pending"} shape 这一轮主路径的形状
+ * @param {string} fbNote 兜底路径本轮的状态（仅作降级读数记录）
+ * @returns {number} 仓内三态退码
+ */
+function reportBudgetSpent(log, shape, fbNote) {
+  const minutes = String(POLL_BUDGET_MS / 60_000);
+  if (shape === "empty") {
+    log(
+      `[verdict] 结论：exit 2 —— ${minutes}m 轮询预算耗尽，主路径（runs API）**读到 0 条**：GitHub 侧没起跑，或 dispatch 触发表里认不出本跑（display_title 无目标 sha）。${fbNote}`,
+    );
+    log(
+      "[verdict]   这不是权限问题（主路径能读到就是读到了），也不是「GitHub 侧判了红」——" +
+        "下一动作是查 GitHub 侧那一跑派发了没有 / 排队卡在哪。",
+    );
+    return CODE.NO_FACT;
+  }
+  log(
+    `[verdict] 结论：exit 2 —— ${minutes}m 轮询预算耗尽还没拿到完整判决（没跑完 ≠ 判红；去查 GitHub 侧那一跑是不是卡住了）`,
+  );
+  return CODE.NO_FACT;
+}
+
+/**
+ * 两条路径都 401/403 的交账：exit 2（**主路径也没读到任何东西**的前提下的权限结论）。
+ *
+ * 只在主路径本身被拒时才有资格说「权限」；主路径读到 0 条而兜底被拒是另一回事
+ * （令牌够、只是 GitHub 侧还没起跑），那一形走 {@link reportBudgetSpent}。
+ *
+ * @param {(line: string) => void} log 日志出口
+ * @param {number} mainStatus 主路径被拒的 HTTP 状态
+ * @param {number} fbStatus 兜底被拒的 HTTP 状态
+ * @returns {number} 仓内三态退码
+ */
+function reportBothDenied(log, mainStatus, fbStatus) {
+  log(
+    `[verdict] 主路径（runs API）被拒 HTTP ${String(mainStatus)}，兜底（checks API）也被拒 HTTP ${String(fbStatus)} ——` +
+      "两条路径这枚令牌都没够上。",
+  );
+  log(
+    "[verdict]   下一动作：给这枚 fine-grained PAT 追加 `actions: read`（优先，主路径 runs API）" +
+      "或 `checks: read`（兜底，Checks API）—— 任一即可、两条都给最稳；" +
+      "并把新值同步进密钥仓库 moon-read/GITHUB_MIRROR_TOKEN（PR / push 两条流水线都从那里 imports）。",
+  );
+  log("[verdict] 结论：exit 2 —— 前提没落地（权限），不是 GitHub 侧判出了红");
+  return CODE.NO_FACT;
+}
+
+/**
  * 执行回读：上下文收口 → 每轮先试主路径、读不到任何 run 再回落兜底，
  * 直到拿到完整结论 / 预算耗尽。
  *
@@ -489,20 +549,31 @@ export async function runVerdict(io) {
   }
   const reqIo = { fetchImpl, log, sleep, token: ctx.token };
   const deadline = now() + POLL_BUDGET_MS;
+  /** 兜底路径本轮的读数（**只作降级事实记录**，不参与结论）：主路径读到 0 条而兜底
+   *  不可用时，它只用来解释「这一形为什么连读数的影子都没有」。 */
+  let fbNote = "";
   for (;;) {
+    /** 这一轮主路径的形状（`reportBudgetSpent` 的话术按它分岔）：empty = 读到 0 条
+     *  （还没起跑）；pending = 读到了但没跑完 —— 含「只有兜底读数」那一形。
+     *  @type {"empty" | "pending"} */
+    let mainShape = "empty";
+    /** 主路径被拒的 HTTP 状态（0 = 没被拒）—— 决定「权限」这句有没有资格说。 */
+    let mainAuthStatus = 0;
     const main = await readMainPath(reqIo, ctx);
     /** @type {{completed: boolean, failing: string[], ok: string[], pending: string[], total: number} | null} */
     let summary = null;
     let pathLabel = "主路径（runs API）";
     if (main.state === "data") {
       summary = summarizeWorkflowRuns(main.runs);
+      mainShape = "pending";
     } else if (main.state === "auth") {
+      mainAuthStatus = main.status;
       log(
         `[verdict] 主路径（runs API）被拒 HTTP ${String(main.status)} —— 令牌没给 actions: read ⇒ 本轮回落兜底（checks API）`,
       );
     } else if (main.state === "empty") {
       log(
-        "[verdict] 主路径（runs API）的 dispatch 触发表里没认出本跑（display_title 无目标 sha / GitHub 侧还没起跑）⇒ 本轮回落兜底（checks API）",
+        "[verdict] 主路径（runs API）的 dispatch 触发表里没认出本跑（display_title 无目标 sha / GitHub 侧还没起跑）⇒ 本轮回落兜底（checks API）；主路径本身读通了（不是权限问题），继续轮询",
       );
     } else if (main.state === "http") {
       return reportHttpReject(log, "主路径（runs API）", main.status, main.body);
@@ -512,27 +583,34 @@ export async function runVerdict(io) {
     if (summary === null) {
       const fb = await readChecksPath(reqIo, ctx);
       if (fb.state === "data") {
-        pathLabel = "兜底（checks API）";
-        summary = summarizeCheckRuns(fb.runs);
+        fbNote = "";
+        /* 主路径**被拒**时兜底才是唯一读数 ⇒ 用它的条目；主路径读到 0 条时兜底读到
+         * 什么都不改变「本跑还没起跑」那一判（check-run 可能挂在别的 sha 上，且这一路径
+         * 当前 workflow 根本不建 check-run）—— 它只是降级事实，不许顶掉主路径的形状。 */
+        if (mainAuthStatus > 0 && fb.runs.length > 0) {
+          pathLabel = "兜底（checks API）";
+          summary = summarizeCheckRuns(fb.runs);
+        }
       } else if (fb.state === "auth") {
-        log(`[verdict] 兜底（checks API）也被拒 HTTP ${String(fb.status)} —— 两条路径的权限这枚令牌都没够上。`);
+        fbNote = `（兜底（checks API）不可用：HTTP ${String(fb.status)}，无 checks: read，仅降级读数）`;
         log(
-          "[verdict]   下一动作：给这枚 fine-grained PAT 追加 `actions: read`（优先，主路径 runs API）" +
-            "或 `checks: read`（兜底，Checks API）—— 任一即可、两条都给最稳；" +
-            "并把新值同步进密钥仓库 moon-read/GITHUB_MIRROR_TOKEN（PR / push 两条流水线都从那里 imports）。",
+          `[verdict] 兜底（checks API）被拒 HTTP ${String(fb.status)} —— 无 checks: read，**仅降级读数**（不参与结论、不需补权限）`,
         );
-        log("[verdict] 结论：exit 2 —— 前提没落地（权限），不是 GitHub 侧判出了红");
-        return CODE.NO_FACT;
+        if (mainAuthStatus > 0) {
+          return reportBothDenied(log, mainAuthStatus, fb.status);
+        }
       } else if (fb.state === "http") {
         return reportHttpReject(log, "兜底（checks API）", fb.status, fb.body);
       } else {
         return reportEgressDown(log, "兜底（checks API）", fb.error);
       }
     }
-    if (summary.total === 0) {
+    if (summary?.total === 0) {
+      /* 只有主路径被拒时才可能走到这里用兜底；那种形状已经不是「读到 0 条」了。 */
+      mainShape = "pending";
       const what = pathLabel === "兜底（checks API）" ? "check-run" : "workflow run";
       log(`[verdict] ${pathLabel}：这一笔 sha 上还没有任何 ${what}（GitHub 侧可能还没起跑）—— 继续等`);
-    } else if (summary.completed) {
+    } else if (summary?.completed) {
       for (const line of summary.ok) {
         log(`[verdict]   ✓ ${line}`);
       }
@@ -549,16 +627,13 @@ export async function runVerdict(io) {
         `[verdict] ✓ 结论：exit 0 —— ${pathLabel}对同一笔 sha 的 ${String(summary.total)} 个全部完成且没有红`,
       );
       return CODE.OK;
-    } else {
+    } else if (summary) {
       log(
         `[verdict] ${pathLabel}：${String(summary.total)} 个条目：${String(summary.pending.length)} 个还在跑（${summary.pending.join("、")}）—— 继续等`,
       );
     }
     if (now() >= deadline) {
-      log(
-        `[verdict] 结论：exit 2 —— ${String(POLL_BUDGET_MS / 60_000)}m 轮询预算耗尽还没拿到完整判决（没跑完 ≠ 判红；去查 GitHub 侧那一跑是不是卡住了）`,
-      );
-      return CODE.NO_FACT;
+      return reportBudgetSpent(log, mainShape, fbNote);
     }
     await sleep(POLL_INTERVAL_MS);
   }
