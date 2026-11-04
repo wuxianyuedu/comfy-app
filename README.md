@@ -86,8 +86,8 @@ Comfy-APP-T3/
 | `next.config.js`                          | Next.js 配置，含 `output: 'standalone'`（供桌面壳打包）与产物排除清单                                                                                               |
 | `scripts/standalone-private-inputs.mjs`   | 从产物里剥掉开发机私有输入（`.env` / `db.sqlite*`），由 `pnpm build` 与 `build-desktop.mjs` 共用                                                                    |
 | `tsconfig.json`                           | TypeScript 配置                                                                                                                                                     |
-| `oxlint.parity.config.mjs` `oxlint.config.ts` | 通用 lint 的判决配置（oxlint；`lint:oxlint`）。最终架构与策略守卫的 16 条清单见 [AGENTS.md](AGENTS.md) |
-| `eslint.config.js` `prettier.config.js`   | 策略守卫的 16 条配置（`lint:policy`）与格式化                                                                                                                       |
+| `oxlint.parity.config.mjs` `oxlint.config.ts` | 通用 lint 的判决配置（oxlint；`lint:oxlint`）。最终架构与策略守卫的 14 条清单见 [AGENTS.md](AGENTS.md) |
+| `eslint.config.js` `prettier.config.js`   | 策略守卫的 14 条配置（`lint:policy`）与格式化                                                                                                                       |
 | `postcss.config.js`                       | Tailwind CSS v4 接入                                                                                                                                                |
 | `vitest.config.ts` `playwright.config.ts` | 测试配置                                                                                                                                                            |
 | `typedoc.json`                            | API 文档生成配置                                                                                                                                                    |

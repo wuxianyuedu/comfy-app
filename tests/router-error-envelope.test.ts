@@ -6,7 +6,8 @@
  *      否则本文件的注释里那些「裸 `throw new Error`」叙述会把自己判红）。
  *      同时断言**扫描面非空**：路径写错时「零命中」看起来就像「全都修好了」，
  *      这是这一类清单最典型的死法。
- *   ② **配置在写** —— `eslint.config.js` 里确实有针对该 glob 的 `no-restricted-syntax`，
+ *   ② **配置在写** —— `oxlint.parity.config.mjs` 里确实有针对该 glob 的
+ *      `eslint-js/no-restricted-syntax`（#2777 从 eslint 迁到 oxlint jsPlugin），
  *      规则条目直接从**导入的配置对象**里取（不在这里重抄一份，否则改了配置而测试还绿）。
  *   ③ **selector 真的会响** —— 拿 eslint 自带的 `Linter` 在最小片段上跑**行为断言**：
  *      裸 `throw new Error` 必须报、`throw new TRPCError` 必须不报；并且 router 目录里
@@ -20,7 +21,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { Linter } from "eslint";
 
-import eslintConfig from "../eslint.config.js";
+import oxlintConfig from "../oxlint.parity.config.mjs";
 import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = process.cwd();
@@ -32,8 +33,8 @@ const BARE_THROW = /throw\s+new\s+(?!TRPCError\b)[A-Za-z_$][\w$]*\s*\(/;
 
 type RestrictedSyntaxEntry = { message: string; selector: string };
 type ConfigBlock = {
+  excludeFiles?: Array<string> | string;
   files?: Array<string> | string;
-  ignores?: Array<string>;
   rules?: Record<string, unknown>;
 };
 
@@ -43,15 +44,18 @@ function routerSources(): Array<string> {
     .map((f) => path.join(ROUTER_DIR, f));
 }
 
-/** 从真实配置里取 router 那一档生效的规则条目（配置变了，这里跟着变）。 */
+/** 从真实判决配置里取 router 那一档生效的规则条目（配置变了，这里跟着变）。 */
 function routerRestrictedSyntax(): { block: ConfigBlock; entries: Array<RestrictedSyntaxEntry> } {
-  const blocks = (eslintConfig as unknown as Array<ConfigBlock>).filter((block) =>
+  const overrides = (oxlintConfig as unknown as { overrides?: Array<ConfigBlock> }).overrides ?? [];
+  const blocks = overrides.filter((block) =>
     Array.isArray(block.files) && block.files.includes(ROUTER_GLOB),
   );
   expect(blocks).toHaveLength(1);
   const block = blocks[0];
-  if (!block) throw new Error(`eslint.config.js 里没有 ${ROUTER_GLOB} 这一档（glob 改过？）`);
-  const rules = block.rules?.["no-restricted-syntax"];
+  if (!block) {
+    throw new Error(`oxlint.parity.config.mjs 里没有 ${ROUTER_GLOB} 这一档（glob 改过？）`);
+  }
+  const rules = block.rules?.["eslint-js/no-restricted-syntax"];
   expect(Array.isArray(rules)).toBe(true);
   const entries = (rules as Array<unknown>).slice(1) as Array<RestrictedSyntaxEntry>;
   return { block, entries };
@@ -102,7 +106,10 @@ describe("② + ③ router 档的规则条目：两层同时生效，且真的�
     expect(selectors.filter((s) => s.includes("STORE_SELECTOR") || s.includes("CallExpression[callee.name=")))
       .toHaveLength(2);
     // 测试夹具要模拟裸 Error，必须留在豁免面外。
-    expect(block.ignores).toContain("src/server/api/routers/**/*.test.ts");
+    const exclude = block.excludeFiles;
+    expect(Array.isArray(exclude) ? exclude : [exclude]).toContain(
+      "src/server/api/routers/**/*.test.ts",
+    );
   });
 
   it("行为：裸 Error / TypeError 报，TRPCError 不报", () => {

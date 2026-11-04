@@ -27,7 +27,7 @@
  * ── 判决主体切到 oxlint 之后（#2777 PR-B）────────────────────────
  *
  * 台账的**出处**已换成 oxlint 判决配置（`loadOxlintConfig()`），不再读
- * `eslint.config.js`（那份只剩 16 条 oxlint 没有等价实现的策略）。
+ * `eslint.config.js`（那份只剩 14 条 oxlint 没有等价实现的策略）。
  *
  * ── 取数口径：oxlint CLI（#2777 PR-C）─────────────────────────────
  *

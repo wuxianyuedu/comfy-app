@@ -3,12 +3,16 @@ import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 import tsParser from "@typescript-eslint/parser";
 
-/* ── #2777 PR-B：eslint 侧只保留 oxlint **没有等价实现**的 16 条 ────────────
+/* ── #2777 PR-B：eslint 侧只保留 oxlint **没有等价实现**的 14 条 ────────────
  *
  * 判决主体已经切到 `oxlint.parity.config.mjs`（`pnpm run lint` 先跑 `lint:oxlint`）。
- * 本文件只剩「oxlint 补不上的那批」：两条 `no-restricted-syntax` 策略、
- * 一条 `no-restricted-imports`、12 条 `react-hooks/*`、`react/no-deprecated`、
+ * 本文件只剩「oxlint 补不上的那批」：12 条 `react-hooks/*`、`react/no-deprecated`、
  * `@next/next/no-location-assign-relative-destination`。
+ *
+ * 三条策略守卫（store selector 形态、router 只许 `TRPCError`、UI/features 禁直连
+ * Drizzle orm）已随 #2777 迁到 oxlint jsPlugin：前两条经 `eslint-js/no-restricted-syntax`、
+ * 第三条经 `eslint-js/no-restricted-imports`，条目与判据面见 `oxlint.parity.config.mjs`
+ * （对拍用例 `tests/oxlint-policy-rules.test.ts`）。
  *
  * 它**不再是**全量 eslint 配置：
  *   · 只 `import` 三个插件包（`@next/eslint-plugin-next` / `eslint-plugin-react` /
@@ -26,46 +30,6 @@ import tsParser from "@typescript-eslint/parser";
  * ⚠️ 别把 oxlint 已覆盖的规则加回来：同一个判决立两个执行者，下次口径不一致时
  *   没人知道该信哪一个（AGENTS 硬规则 28 ③）。
  */
-
-/** 视图层做**精确订阅**的 store hook 名单（单一出处之一）。
- *
- *  用途见下面「视图层 store selector 形态」那段 lint。这份清单只收
- *  **zustand store 的订阅 hook** —— 判断标准是「它的回调参数是 store state、
- *  返回值的引用稳定性直接决定重渲染」。普通 React hook（`useState` / `useMemo` /
- *  `useCallback`）**不在内**。
- *
- *  `oxlint.parity.config.mjs` 里有同一份清单（那边是生效的那个闸）；
- *  `tests/store-selector-shape.test.ts` 会核两份逐字一致 + 清单与真实 store 一致。
- */
-const STORE_SELECTOR_HOOKS = [
-  "useDebugStore",
-  "useLogCategoryStore",
-  "useLogPanel",
-  "useLogStore",
-  "useMessageCenterStore",
-  "useShellTabs",
-  "useUpdateCheckStore",
-];
-
-/** store selector 两条 `no-restricted-syntax` 条目（单一出处之一）。
- *
- *  单独抽成常量是为了让 router 那份配置能**带上它们**再追加 router 自己的
- *  selector —— 扁平配置里后一个匹配对象的 `no-restricted-syntax` 会整条替换掉
- *  前一个的数组，不合并就必然「后一层把前一层盖掉」（#2777 实测：router 那条
- *  因此从未生效）。
- */
-const STORE_SELECTOR_ENTRIES = [
-  {
-    selector: `CallExpression[callee.name=/^(${STORE_SELECTOR_HOOKS.join("|")})$/] > ArrowFunctionExpression[body.type="ObjectExpression"]`,
-    message:
-      "store selector 里现拼对象字面量 = 每次 store 写入都返回新引用（字段没变也重渲染）。改成只返回原始值/稳定引用，或把派生下沉进 store；useShallow 是最后手段（规范 01 §1.2 / 07 §7.15.1）。",
-  },
-  {
-    selector: `CallExpression[callee.name=/^(${STORE_SELECTOR_HOOKS.join("|")})$/] > ArrowFunctionExpression CallExpression[callee.property.name=/^(map|filter|slice|concat|sort|split)$/]`,
-    message:
-      "store selector 里用 .map/.filter/.slice 造新数组 = 每次求值都是新引用（字段没变也重渲染）。把它下沉进 store 或抽成 store 内的稳定切片（规范 01 §1.2）。",
-  },
-];
 
 /* ── 扫描范围：**白名单**（Include > Exclude）──
  *
@@ -122,7 +86,7 @@ export default [
       "src-tauri/**",
     ],
   },
-  /* ── 16 条保留规则（oxlint 无等价实现）──────────────────────────────────── */
+  /* ── 14 条保留规则（oxlint 无等价实现）──────────────────────────────────── */
   {
     files: LINT_FILES,
     languageOptions: {
@@ -148,63 +112,6 @@ export default [
       "react-hooks/use-memo": "error",
       "react/no-deprecated": "error",
       "@next/next/no-location-assign-relative-destination": "error",
-    },
-  },
-  /* ── Drizzle orm 兜底：UI/features 不得直接 import drizzle-orm ──
-   *  boundaries 的「外部包」匹配在 oxlint 闸里由 `boundaries/dependencies` 承担，
-   *  这一条是 pnpm 下 `module.source` 为 null 时补的 scoped 兜底（保留在 eslint 侧）。 */
-  {
-    files: ["src/components/**", "src/features/**"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              group: ["drizzle-orm", "drizzle-orm/*"],
-              message: "UI/features 不得直接依赖 Drizzle orm,请经 src/lib/core 仓储访问数据。",
-            },
-          ],
-        },
-      ],
-    },
-  },
-  /* ── 视图层 store selector 形态：禁止现拼对象 / 现造新数组（ISSUE #1780）────
-   *
-   * zustand 的 selector 是「每次 store 写入后重新求值、用 Object.is 比较结果」的：
-   * selector 里写对象字面量或 `.map` / `.filter` 这类造新数组的调用，**每次求值都是
-   * 新引用** ⇒ 该字段没变也照样重渲染。正确的两条路见规范 01 §1.2、07 §7.15.1。
-   */
-  {
-    files: LINT_FILES,
-    rules: {
-      "no-restricted-syntax": ["error", ...STORE_SELECTOR_ENTRIES],
-    },
-  },
-  /* ── router 层的错误信封只许 TRPCError（台账 E8 的防线，2026-10-01）──────────
-   * 裸 `throw new Error("…")` 在 tRPC 里不是「一个 400/404」，而是
-   * **INTERNAL_SERVER_ERROR**。selector 的语义与被扫存量由
-   * `tests/router-error-envelope.test.ts` 守着（含「扫描面不能是空的」那一条）。
-   *
-   * ⚠️ 这份对象必须排在 store selector 那份**之后**：扁平配置里后一个匹配对象的
-   * `no-restricted-syntax` 会**整条替换**前一个的数组。所以这里显式带上
-   * `STORE_SELECTOR_ENTRIES` 再追加 router 那条 —— 两层才同时生效。
-   *
-   * `*.test.ts` 排除在外：测试夹具要模拟「下游抛裸 Error」来断言信封。
-   */
-  {
-    files: ["src/server/api/routers/**/*.ts"],
-    ignores: ["src/server/api/routers/**/*.test.ts"],
-    rules: {
-      "no-restricted-syntax": [
-        "error",
-        ...STORE_SELECTOR_ENTRIES,
-        {
-          selector: 'ThrowStatement > NewExpression[callee.name!="TRPCError"]',
-          message:
-            "router 里请抛 new TRPCError({ code, message })：裸 Error 会被 tRPC 归成 INTERNAL_SERVER_ERROR，客户端就分不出「不存在 / 越权 / 重名」（规范 §11.2.1 第七条、台账 E8）。",
-        },
-      ],
     },
   },
   /* 兜底匹配：`lint:policy` 按目录扫描时会带上 `.js` / `.mjs` / `.cjs`

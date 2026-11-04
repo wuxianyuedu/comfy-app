@@ -241,7 +241,7 @@ export default defineConfig({
         "next.config.js", // 抽样 5 / 复述 0（10 处：CSP / tracing 的现场与因果）
         "playwright.config.ts", // 抽样 5 / 复述 0（10 处：并发档与超时的实测来历）
         "oxlint.config.ts", // 抽样 7 / 复述 0（改前 7 处；本文件例外说明即理由）
-        "eslint.config.js", // 抽样 6 / 复述 0（6 处：16 条策略的边界与历史）
+        "eslint.config.js", // 抽样 6 / 复述 0（14 条策略的边界与历史）
         "src/config/custom-nodes.ts", // 抽样 5 / 复述 0（5 处）
         "src/config/custom-nodes.test.ts", // 抽样 4 / 复述 0（4 处）
         "src/instrumentation.ts", // 抽样 4 / 复述 0（4 处）
@@ -271,6 +271,25 @@ export default defineConfig({
             selector: 'ThrowStatement > NewExpression[callee.name!="TRPCError"]',
             message:
               "router 里请抛 new TRPCError({ code, message })：裸 Error 会被 tRPC 归成 INTERNAL_SERVER_ERROR，客户端就分不出「不存在 / 越权 / 重名」（规范 §11.2.1 第七条、台账 E8）。",
+          },
+        ],
+      },
+    },
+    /* UI/features 不得直连 Drizzle orm（#2777 从 eslint 迁来；判决配置里同一档在
+     * `oxlint.parity.config.mjs` 的 overrides 尾部）。 */
+    {
+      files: ["src/components/**", "src/features/**"],
+      rules: {
+        "eslint-js/no-restricted-imports": [
+          "error",
+          {
+            patterns: [
+              {
+                group: ["drizzle-orm", "drizzle-orm/*"],
+                message:
+                  "UI/features 不得直接依赖 Drizzle orm,请经 src/lib/core 仓储访问数据。",
+              },
+            ],
           },
         ],
       },

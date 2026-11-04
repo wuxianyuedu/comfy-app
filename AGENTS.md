@@ -97,23 +97,29 @@
 | 档 | 命令 | 配置 | 管什么 |
 | --- | --- | --- | --- |
 | 通用 lint | `pnpm run lint:oxlint` | `oxlint.parity.config.mjs`（判决配置；`oxlint.config.ts` 是同源的 IDE 面） | 133 条规则的全量面：`src` / `tests` / `scripts` / `e2e` / `tools` / `.storybook` / 根配置文件 |
-| 策略守卫 | `pnpm run lint:policy` | `eslint.config.js`（**只有 16 条**） | oxlint 没有等价实现的策略；`files` 只匹配 TS 源码面，不跑整份历史 eslint 配置 |
+| 策略守卫 | `pnpm run lint:policy` | `eslint.config.js`（**只有 14 条**） | oxlint 没有等价实现的策略；`files` 只匹配 TS 源码面，不跑整份历史 eslint 配置 |
 
 两侧的零警告语义都保留（oxlint `--deny-warnings`、eslint `--max-warnings 0`），
 `--fix` 由 `pnpm run lint:fix` 分别落到两档。平台格子的名字仍叫「ESLint（零警告）」——
 那是一个稳定标识（改名会打断历史读数），但它跑的就是这条 `lint` 链。
 
-### `lint:policy` 那 16 条（为什么还留在 eslint 侧）
+### `lint:policy` 那 14 条（为什么还留在 eslint 侧）
 
 | 规则 | 留住它的理由 |
 | --- | --- |
 | `react-hooks/config`、`error-boundaries`、`gating`、`globals`、`immutability`、`preserve-manual-memoization`、`purity`、`set-state-in-render`、`static-components`、`use-memo`（10 条 error） | React Compiler 族，oxlint 未实现等价规则 |
 | `react-hooks/incompatible-library`、`react-hooks/unsupported-syntax`（2 条 warn） | 同上；warn 是上游档位，不升级 |
-| `no-restricted-syntax`（store selector 两条 selector，ISSUE #1780） | selector 里现拼对象 / 现造新数组 ⇒ 每次求值新引用、字段没变也重渲染；oxlint 无等价 selector 判据 |
-| `no-restricted-syntax`（router 只许 `TRPCError`，台账 E8） | 裸 `new Error` 会被 tRPC 归成 INTERNAL_SERVER_ERROR；判据是行为断言（`tests/router-error-envelope.test.ts`） |
-| `no-restricted-imports`（`src/components` 与视图层 features 目录禁 `drizzle-orm`） | pnpm 下 `module.source` 为 null 时 `boundaries/dependencies` 匹配不到，这是 scoped 兜底 |
 | `react/no-deprecated` | oxlint 未实现 |
 | `@next/next/no-location-assign-relative-destination` | oxlint 未实现 |
+
+原先也住在这里的三条策略守卫已迁到 oxlint jsPlugin（#2777），条目与作用面都在
+`oxlint.parity.config.mjs`，行为对拍在 `tests/oxlint-policy-rules.test.ts`：
+
+| 已迁规则（oxlint 侧名） | 判什么 | 原 eslint 规则 |
+| --- | --- | --- |
+| `eslint-js/no-restricted-syntax` | store selector 里现拼对象 / 现造新数组（ISSUE #1780） | `no-restricted-syntax`（两条 selector） |
+| `eslint-js/no-restricted-syntax` | router 只许抛 `TRPCError`（台账 E8） | `no-restricted-syntax`（router 档） |
+| `eslint-js/no-restricted-imports` | `src/components` 与 features 视图层禁直连 Drizzle orm | `no-restricted-imports` |
 
 ### 依赖最小集
 

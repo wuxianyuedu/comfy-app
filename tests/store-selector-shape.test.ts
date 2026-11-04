@@ -9,7 +9,8 @@
  *      断言没有「selector 里写对象字面量 / 用 .map·.filter 造新数组」的形状。
  *      同时断言**扫描面非空** —— 路径写错时「零命中」看起来就像「全都修好了」，
  *      这是这一类清单最典型的死法。
- *   ② **清单与仓库同步** —— `eslint.config.js` 的 `STORE_SELECTOR_HOOKS` 必须
+ *   ② **清单与仓库同步** —— `oxlint.parity.config.mjs`（#2777 起判决主体）的
+ *      `STORE_SELECTOR_HOOKS` 必须
  *      覆盖仓库里**全部** `create<...>()` 出来的 zustand store（漏登记 = 新 store
  *      不受判据保护，而 lint 那边一点反应都没有）。
  *   ③ **selector 真的会响** —— 拿 eslint 自带 `Linter` 在最小片段上验一次：
@@ -17,7 +18,7 @@
  *      字符串」—— 本仓库已经付过学费：**「有配置 ≠ 配置在跑」**（§11.7）。
  *
  * 为什么 selector 必须按**名字**限定（而不是 `/^use[A-Z]/` 泛匹配）：见
- * `eslint.config.js` 那段注释 —— `useMemo(() => rows.slice(0, 8), [])` 与
+ * `oxlint.parity.config.mjs` 那段注释 —— `useMemo(() => rows.slice(0, 8), [])` 与
  * `useState(() => ({ ... }))` 都是合法且常见的写法，泛匹配会全报出来。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -29,7 +30,10 @@ import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = process.cwd();
 const SRC = path.join(ROOT, "src");
-const CONFIG = path.join(ROOT, "eslint.config.js");
+/** #2777：这条规则的生效面已切到 oxlint 判决配置（`eslint.config.js` 不再承载）。 */
+const CONFIG = path.join(ROOT, "oxlint.parity.config.mjs");
+/** 全量评估尺里也有一份同名清单（两份必须逐字一致，见下面 ② 的用例）。 */
+const RULER_CONFIG = path.join(ROOT, "oxlint.config.ts");
 
 /** 递归收集 `src/**` 下的全部 `.ts` / `.tsx`（跳过用例与 story）。 */
 function sourceFiles(dir = SRC): Array<string> {
@@ -75,9 +79,9 @@ const EXTRA_SUBSCRIBERS = [
   "useLogPanel",
 ];
 
-/** 从 `eslint.config.js` 源码取 `STORE_SELECTOR_HOOKS` 清单（不在此重抄一份）。 */
-function configuredHooks(): Array<string> {
-  const src = readFileSync(CONFIG, "utf8");
+/** 从配置源码取 `STORE_SELECTOR_HOOKS` 清单（不在此重抄一份）。 */
+function configuredHooks(file = CONFIG): Array<string> {
+  const src = readFileSync(file, "utf8");
   const block = /const STORE_SELECTOR_HOOKS = \[([\s\S]*?)\];/.exec(src)?.[1];
   if (block === undefined || block === "") {
     return [];
@@ -140,6 +144,10 @@ describe("② 清单与仓库同步：漏登记新 store 会红", () => {
 
   it("清单有多条（扫描面不是空的）", () => {
     expect(configuredHooks().length).toBeGreaterThan(3);
+  });
+
+  it("判决配置与全量评估尺的清单逐字一致（两份都是闸的输入）", () => {
+    expect(configuredHooks(RULER_CONFIG)).toEqual(configuredHooks());
   });
 });
 

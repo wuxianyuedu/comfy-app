@@ -33,7 +33,7 @@ type Policy = {
  * 从 **oxlint 判决配置**里取出 boundaries 那一节（含 elements 声明与策略）。
  *
  * #2777 PR-B 起 boundaries 的生效面在 oxlint（jsPlugin `boundaries`）；
- * `eslint.config.js` 只剩 16 条 oxlint 没有等价实现的策略，不再承载分层边界。
+ * `eslint.config.js` 只剩 14 条 oxlint 没有等价实现的策略，不再承载分层边界。
  */
 function boundariesSection(): { elements: Array<ElementDef>; policies: Array<Policy> } {
   /* SAFETY: 类型断言已复核 */

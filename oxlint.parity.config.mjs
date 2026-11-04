@@ -8,8 +8,12 @@
  *
  * 生成口径：eslint --print-config 的 14 份读数并集（台账
  * `log/tools/eslint-oxlint-parity.md`），逐条映射到 oxlint 规则名。PR-B 起它是
- * `pnpm run lint` 的**第一判定口**；eslint 侧只剩 16 条 oxlint 没有等价实现的规则
+ * `pnpm run lint` 的**第一判定口**；eslint 侧只剩 14 条 oxlint 没有等价实现的规则
  * （`eslint.config.js`，命令 `pnpm run lint:policy`），两者串行、都拦。
+ *
+ * 三条策略守卫也从 eslint 迁到了这里（#2777）：store selector 形态与 router 只许
+ * `TRPCError` 经 `eslint-js/no-restricted-syntax`，UI/features 禁直连 `drizzle-orm`
+ * 经 `eslint-js/no-restricted-imports`（后者见文件尾那条 override）。
  *
  * 为什么保留文件名里的 `parity`：它是台账号（`log/tools/eslint-oxlint-parity.md`）
  * 的锚，改名会把 29 处依赖点里的文档引用全部打散；语义已由本节头更新。
@@ -440,6 +444,27 @@ export default defineConfig({
             selector: 'ThrowStatement > NewExpression[callee.name!="TRPCError"]',
             message:
               "router 里请抛 new TRPCError({ code, message })：裸 Error 会被 tRPC 归成 INTERNAL_SERVER_ERROR，客户端就分不出「不存在 / 越权 / 重名」（规范 §11.2.1 第七条、台账 E8）。",
+          },
+        ],
+      },
+    },
+    {
+      /* UI/features 不得直连 Drizzle orm（#2777：从 eslint 的 `no-restricted-imports`
+       * 迁来）。`boundaries/dependencies` 在 pnpm 下 `module.source` 为 null 时会落空，
+       * 这一档是 scoped 兜底；文案与 eslint 侧逐字一致（对拍见
+       * `tests/oxlint-policy-rules.test.ts`）。 */
+      files: ["src/components/**", "src/features/**"],
+      rules: {
+        "eslint-js/no-restricted-imports": [
+          "error",
+          {
+            patterns: [
+              {
+                group: ["drizzle-orm", "drizzle-orm/*"],
+                message:
+                  "UI/features 不得直接依赖 Drizzle orm,请经 src/lib/core 仓储访问数据。",
+              },
+            ],
           },
         ],
       },
