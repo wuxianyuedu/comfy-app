@@ -220,6 +220,7 @@ export function readDispatchState(readFile, root) {
   try {
     const raw = readFile(path.join(root, DISPATCH_STATE_DIR, DISPATCH_STATE_FILE), "utf8");
     const parsed = /** @type {{dispatched?: unknown, reason?: unknown}} */ (JSON.parse(raw));
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- parsed 来自 JSON.parse（文件内容是外部数据，可以是 null / 标量），类型标注按对象非空，保留 ?. 防线
     if (typeof parsed?.dispatched !== "boolean") {
       return null;
     }
