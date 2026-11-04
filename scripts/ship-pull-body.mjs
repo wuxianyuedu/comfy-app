@@ -95,7 +95,7 @@ export function buildPullBody({ root, fragments, diffstat, handle = null }) {
     const body = withCommentHeader(
       [
         ...head,
-        "## 改动量（`git diff --stat` 对上游）",
+        "## 改动量（`git diff --stat` 对 PR 的目标分支）",
         "",
         "```",
         capped.text,

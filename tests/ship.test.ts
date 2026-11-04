@@ -4044,6 +4044,9 @@ describe("readPullVerdict：字段缺省时不抛，缺键走 unknown 三态（I
       /* squash 标题那一格（ISSUE #2806）要读的字段：缺省同样是安全默认（空串 ⇒
        * 推导退回 branch-first），不是 undefined 漏到标题里。 */
       title: "",
+      /* 标题与 diffstat 的区间基线（ISSUE #3021）：`base.ref` 缺键给空串 ——
+       * 调用方按「目标分支取不到」退回 upstream，不猜成主干。 */
+      baseBranch: "",
     });
     expect(
       readPullVerdict({
@@ -6752,6 +6755,96 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       expect(post, "没建 PR，或标题没进 argv").toContain("--title fix(x): 主体的那一笔");
       expect(post).not.toContain("--title Merge branch");
       expect(heard.join("\n")).toContain("标题取自 branch-first");
+      expect(code).toBe(CODE.GREEN);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("栈式 PR：标题区间跟平台回读的 base.ref，不跟本地 upstream（ISSUE #3021）", async () => {
+    /* 现场（PR #3017）：本地 upstream 是父分支的远端副本，那段区间里混着父分支上
+     * **别人**的提交；平台侧这条 PR 的 `base.ref` 是父分支，真实 diff 只有自己那一笔。
+     * 取数必须按平台的 `base.ref` —— 否则标题会是别人的提交，`--close-issue` 的推定
+     * 也会指向另一张单子。 */
+    const { tmpRoot, gitDir } = proofRoot("stacked-base");
+    try {
+      const heard: Array<string> = [];
+      const base = fake({ chain: true });
+      const run = (cmd: string, args: Array<string>): FakeResult => {
+        const key = args.join(" ");
+        if (cmd === "git" && key.includes("log --no-merges")) {
+          return key.includes("cnb/feat/parent..HEAD")
+            ? { status: 0, stdout: "fix(x): 我这一笔", stderr: "", error: null }
+            : { status: 0, stdout: "fix(parent): 别人的一笔 (#2955)", stderr: "", error: null };
+        }
+        if (cmd === "cnb" && key.includes("get-pull")) {
+          return {
+            status: 0,
+            stdout: JSON.stringify({
+              status: 200,
+              data: {
+                number: 777,
+                title: "",
+                base: { ref: "refs/heads/feat/parent" },
+                is_merged: true,
+                mergeable_state: "mergeable",
+              },
+            }),
+            stderr: "",
+            error: null,
+          };
+        }
+        return base.run(cmd, args);
+      };
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--merge"],
+      });
+      const all = heard.join("\n");
+      const merge = base.calls.find((c) => c.includes("merge-pull")) ?? "";
+      expect(merge, "标题取了别人的提交（区间跟的是本地 upstream）").toContain(
+        "--commit-title fix(x): 我这一笔 (#777)",
+      );
+      expect(all).toContain("比对区间跟 PR 的目标分支：cnb/feat/parent");
+      expect(all).toContain("本地 upstream 是 cnb/master，不是目标分支");
+      expect(all).not.toContain("别人的一笔 (#2955)");
+      expect(code).toBe(CODE.GREEN);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("非栈式：标题与 diffstat 仍按主干，且取数前先刷新目标分支（ISSUE #3021 不回归）", async () => {
+    const { tmpRoot, gitDir } = proofRoot("diff-base-master");
+    try {
+      const heard: Array<string> = [];
+      const base = fake();
+      const run = overrideRun(base, {
+        "list-pulls": '{"status":200,"data":[]}',
+        "post-pull": '{"status":201,"data":{"number":2999}}',
+      });
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--no-wait"],
+      });
+      const post = base.calls.find((c) => c.includes("post-pull")) ?? "";
+      expect(post).toContain("--title fix(x): 主体的那一笔");
+      expect(post).toContain("--base master");
+      const diff = base.calls.find((c) => c.includes("diff --stat")) ?? "";
+      expect(diff).toBe("git diff --stat cnb/master...HEAD");
+      /* 顺序也是判据：先刷新、再取数。过期的远端跟踪引用正是那条缺陷的真因。 */
+      const fetchAt = base.calls.findIndex((c) => c === "git fetch cnb master");
+      expect(fetchAt, "取数前没有刷新目标分支的远端跟踪引用").toBeGreaterThan(-1);
+      expect(fetchAt).toBeLessThan(base.calls.findIndex((c) => c.includes("diff --stat")));
+      expect(heard.join("\n")).toContain("比对区间跟 PR 的目标分支：cnb/master");
       expect(code).toBe(CODE.GREEN);
     } finally {
       fs.rmSync(tmpRoot, { recursive: true, force: true });
