@@ -17,7 +17,6 @@ import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 import {
   collectCommits,
   formatReport,
-  main,
   runSteps,
 } from "../scripts/session-report.mjs";
 
@@ -52,7 +51,7 @@ function runScript(args: Array<string>, cwd: string) {
     };
   } catch (error) {
     /* SAFETY: 类型断言已复核 */
-    const e = error as { status?: number; stdout?: string; stderr?: string };
+    const e = error as { status?: number; stderr?: string; stdout?: string };
     return { stdout: String(e.stdout ?? "") + String(e.stderr ?? ""), status: e.status ?? -1 };
   }
 }
@@ -111,12 +110,12 @@ describe("session-report —— 排版：五节在场、顺序稳定（他人照
           {
             label: "脚本档类型检查",
             argv: "node scripts/check-scripts-typecheck.cjs",
-            ms: 12400,
+            ms: 12_400,
             code: 1,
             tail: "scripts/x.mjs(1,1): error TS7006: 基线 0 → 当前 1（新增 1 处）",
           },
         ],
-        totalMs: 13700,
+        totalMs: 13_700,
       },
     });
     expect(md).toContain("红的在下面点名");

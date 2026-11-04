@@ -144,20 +144,28 @@ export function collectCommits(cwd, range) {
  * 编排既有执行者，不发明第二套判定；效应不许只转述 stdout）。
  *
  * @param {Array<{label: string, argv: string[]}>} steps
- * @param {{cwd: string, runner?: (argv: string[], cwd: string) => {status: number | null, stdout?: string, stderr?: string, error?: unknown}}} [opts]
+ * @param {{cwd?: string, runner?: (argv: string[], cwd: string) => {status: number | null, stdout?: string, stderr?: string, error?: unknown}}} [opts]
  *   `runner` 给用例注入（不真起子进程）；缺省 `spawnSync`，命令失败（起不来）按
  *   「没跑起来」记退码 -1 —— 与 base-check 的 127 那一档同一条边界。
  * @returns {{results: Array<{label: string, argv: string, ms: number, code: number, tail: string}>, totalMs: number}}
  */
 export function runSteps(steps, opts = {}) {
-  const cwd = opts.cwd ?? process.cwd();
+  /** @type {{cwd?: string, runner?: (argv: string[], cwd: string) => {status: number | null, stdout?: string, stderr?: string, error?: unknown}}} */
+  const o = opts ?? {};
+  const cwd = o.cwd ?? process.cwd();
+  /** @type {(argv: string[], dir: string) => {status: number | null, stdout?: string, stderr?: string, error?: unknown}} */
   const runner =
-    opts.runner ??
-    ((argv, dir) => spawnSync(argv[0], argv.slice(1), {
-      cwd: dir,
-      encoding: "utf8",
-      maxBuffer: 64 * 1024 * 1024,
-    }));
+    o.runner ??
+    ((argv, dir) => {
+      /* noUncheckedIndexedAccess 下 `argv[0]` 是 `string | undefined`；真给空数组时
+       * 命令按空串起（spawnSync 报 ENOENT ⇒ status null ⇒ 那一步按「没跑起来」记）。 */
+      const cmd = argv[0] ?? "";
+      return spawnSync(cmd, argv.slice(1), {
+        cwd: dir,
+        encoding: "utf8",
+        maxBuffer: 64 * 1024 * 1024,
+      });
+    });
   /** @type {Array<{label: string, argv: string, ms: number, code: number, tail: string}>} */
   const results = [];
   const t0 = performance.now();
@@ -274,6 +282,7 @@ const USAGE =
  * @returns {number} 0 = 汇报已产出；2 = 参数读不出 / 没跑起来（不是「红」，是没结论）
  */
 export function main(argv, cwd = process.cwd()) {
+  /** @param {string} name */
   const valueOf = (name) => {
     const i = argv.indexOf(name);
     return i === -1 ? undefined : argv[i + 1];
@@ -298,8 +307,10 @@ export function main(argv, cwd = process.cwd()) {
       }
       steps = parsed.steps;
     } catch (error) {
+      /* SAFETY: 类型断言已复核 */
+      const e = /** @type {{message: string}} */ (error);
       process.stderr.write(
-        `[session-report] --steps-file 读不出（${error.message}）—— 不冒充「跑过标准批」。\n`,
+        `[session-report] --steps-file 读不出（${e.message}）—— 不冒充「跑过标准批」。\n`,
       );
       return 2;
     }
