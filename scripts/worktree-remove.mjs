@@ -28,8 +28,15 @@ import { unlinkDependencies } from "./base-check.mjs";
 
 const ROOT = process.cwd();
 
-/** 大小写与分隔符对齐（git 输出是正斜杠；Windows 路径比较不分大小写）。 */
+/**
+ * 大小写与分隔符对齐（git 输出是正斜杠；Windows 路径比较不分大小写）。
+ *
+ * @param {string} a
+ * @param {string} b
+ * @returns {boolean}
+ */
 function samePath(a, b) {
+  /** @type {(p: string) => string} */
   const norm = (p) => path.resolve(p).replaceAll("\\", "/");
   const left = norm(a);
   const right = norm(b);
@@ -58,7 +65,12 @@ function listWorktrees() {
   return entries;
 }
 
-/** 链接本体还在不在：`existsSync` 对断链为假，所以只认 lstat。 */
+/**
+ * 链接本体还在不在：`existsSync` 对断链为假，所以只认 lstat。
+ *
+ * @param {string} link
+ * @returns {boolean}
+ */
 function linkStillThere(link) {
   try {
     fs.lstatSync(link);
@@ -68,7 +80,13 @@ function linkStillThere(link) {
   }
 }
 
-/** 0/1/2 三种退码，原文写出去；不吞退出码。 */
+/**
+ * 0/1/2 三种退码，原文写出去；不吞退出码。
+ *
+ * @param {number} code
+ * @param {string} message
+ * @returns {number}
+ */
 function fail(code, message) {
   process.stderr.write(`[worktree-remove] ✗ ${message}\n`);
   return code;
@@ -100,7 +118,8 @@ function main(argv) {
         "别直接删目录",
     );
   }
-  if (samePath(worktrees[0], target)) {
+  const mainWorktree = worktrees[0];
+  if (mainWorktree && samePath(mainWorktree, target)) {
     return fail(2, `目标是主 worktree 本身（${target}）：这里只收 linked worktree`);
   }
   if (!fs.existsSync(target)) {
