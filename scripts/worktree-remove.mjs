@@ -53,13 +53,9 @@ function listWorktrees() {
     return null;
   }
   const entries = [];
-  let current = null;
   for (const line of res.stdout.split("\n")) {
     if (line.startsWith("worktree ")) {
-      current = line.slice("worktree ".length).trim();
-      entries.push(current);
-    } else if (line.trim() === "") {
-      current = null;
+      entries.push(line.slice("worktree ".length).trim());
     }
   }
   return entries;
