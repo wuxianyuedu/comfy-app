@@ -324,6 +324,22 @@ describe("handle id 就是条目 id（拖线落库的那条链）", () => {
   });
 });
 
+/* 背景板尺寸 —— ISSUE #596「全屏时，下方区域有空白却不是画布」。
+ * fitView 按节点包围盒缩放：内容比视口矮时只放大到内容高度，画布底边以下落回面板
+ * 底色。背景板把包围盒撑到「视口与内容取大」，最优缩放永远是「等比铺满视口」。
+ * 两个方向都要取大：只按内容算高 → 面板高时下方留白；只按内容算宽 → 面板窄时右列
+ * （对外输出参数）被挤出视野。 */
+const SIZING = {
+  paramsWidth: 220,
+  outputsWidth: 200,
+  hostWidth: 380,
+  columnGap: 96,
+  originX: 0,
+  originY: 0,
+  envelopeHeight: 720,
+  fillHeight: 720,
+};
+
 describe("三列布局", () => {
   it("左 → 宿主 → 右依次排开，列间留出走线的空间", () => {
     const at = layoutLibraryNodes({
@@ -349,22 +365,6 @@ describe("三列布局", () => {
     expect(at[LIB_NODE_BACKDROP]).toEqual(at[LIB_NODE_PARAMS]);
   });
 });
-
-/* 背景板尺寸 —— ISSUE #596「全屏时，下方区域有空白却不是画布」。
- * fitView 按节点包围盒缩放：内容比视口矮时只放大到内容高度，画布底边以下落回面板
- * 底色。背景板把包围盒撑到「视口与内容取大」，最优缩放永远是「等比铺满视口」。
- * 两个方向都要取大：只按内容算高 → 面板高时下方留白；只按内容算宽 → 面板窄时右列
- * （对外输出参数）被挤出视野。 */
-const SIZING = {
-  paramsWidth: 220,
-  outputsWidth: 200,
-  hostWidth: 380,
-  columnGap: 96,
-  originX: 0,
-  originY: 0,
-  envelopeHeight: 720,
-  fillHeight: 720,
-};
 
 describe("背景板尺寸：视口与内容取大", () => {
   it("面板比内容高时按视口给高（这才是不留白的那一条）", () => {

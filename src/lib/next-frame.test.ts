@@ -17,6 +17,8 @@ import { afterNextPaint, onNextFrame } from "./next-frame";
 let frames: Array<FrameRequestCallback> = [];
 let nextId = 1;
 
+let cancelled = new Set<number>();
+
 beforeEach(() => {
   frames = [];
   nextId = 1;
@@ -31,7 +33,6 @@ beforeEach(() => {
   });
 });
 
-let cancelled = new Set<number>();
 beforeEach(() => {
   cancelled = new Set();
 });

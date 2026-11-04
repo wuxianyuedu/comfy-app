@@ -347,6 +347,7 @@ export function resolveAffectedTests({
     picked.add(rel);
     reasons[rel] = reasons[rel] ? `${reasons[rel]} + ${why}` : why;
   };
+  const changed = new Set();
   /**
    * 固定清单并入 —— 空集是最危险的形态：`vitest run` 不带位置参数就是跑全量。
    *
@@ -364,6 +365,7 @@ export function resolveAffectedTests({
    * @param {string} [note]
    * @returns {Resolution}
    */
+
   const withFixed = (mode, extra, note) => {
     /* 改动清单为空 ⇒ **不过筛**。这一格与 `wide` 那种兜底不同源但同一取向：空清单在这里
      * 分不清「什么都没改」与「拿不到清单」（`stagedPaths()` 两条路都回 `[]`/`null`），
@@ -384,7 +386,6 @@ export function resolveAffectedTests({
     return out;
   };
 
-  const changed = new Set();
   /** @type {string[]} */
   const wide = [];
   for (const raw of changedPaths) {

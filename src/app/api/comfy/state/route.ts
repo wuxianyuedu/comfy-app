@@ -5,6 +5,9 @@ import { getComfyStateChange, waitForComfyStateChange } from "~/lib/comfyui/stat
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/** 长轮询窗口（毫秒）。 */
+const LONG_POLL_MS = 25_000;
+
 /**
  * 端点：GET /api/comfy/state —— 「ComfyUI 运行态变了」的长轮询通道：不用 SSE 是因为同一条通道要服务浏览器与桌面壳，
  * 普通 `fetch` 即可、`since` 在查询串里断线重连只再发一次请求。帧：200 `{seq,at,kind,detail}` / 204 窗口内无变化（该再发一轮）/
@@ -18,9 +21,6 @@ export async function GET(request: Request): Promise<Response> {
   }
   return NextResponse.json(change);
 }
-
-/** 长轮询窗口（毫秒）。 */
-const LONG_POLL_MS = 25_000;
 
 /** 读 `?since=`：不是非负整数一律当 0（首帧 / 坏参数都落到「先给我快照」）。 */
 function readSince(request: Request): number {

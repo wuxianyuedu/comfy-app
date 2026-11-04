@@ -28,6 +28,11 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { SETTINGS_DB_WRITE } from "~/lib/retry-policy";
 import { runWithSqliteBusyRetry } from "~/lib/sqlite-busy-retry";
 import type { DbExecutor } from "./repository-executor-types";
+import {
+  parseRemoteModeAdapters,
+  type RemoteModeAdapter,
+} from "~/lib/workshop/model-mode-contract";
+import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 
 export class UserRepository {
   async findByEmail(email: string): Promise<User | null> {
@@ -190,12 +195,6 @@ export class LlmConfigRepository {
     return decryptRow(firstRowOfExisting(rows, "LLM 配置不存在"));
   }
 }
-
-import {
-  parseRemoteModeAdapters,
-  type RemoteModeAdapter,
-} from "~/lib/workshop/model-mode-contract";
-import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 
 // ── 远端独立模型仓储（option C：远端模型独立成表，不与本地 ollama 候选混存）──
 

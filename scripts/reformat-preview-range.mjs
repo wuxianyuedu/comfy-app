@@ -107,6 +107,21 @@ export function previewRangeEnds(deps) {
     return firstParent === rows.length;
   };
   /**
+   * `base.ref` 能不能当「目标分支那一侧的 tip」（ISSUE #3035）：它得真是 `HEAD` 的
+   * 祖先（分叉线上的 ref 当 landed 会把别线整批算进对账）。`rev-list --count` 用
+   * **输出可辨**的那一形态 —— `--is-ancestor` 成功与失败都不出字，`gitOrEmpty` 分不开。
+   *
+   * @param {{ok: boolean, ref?: string}} base `resolveBaseRef` 的返回值（两侧形状各取所需）
+   * @returns {string}
+   */
+  const landedIfTracked = (base) => {
+    if (!base.ok || base.ref === undefined || base.ref === "") {
+      return "";
+    }
+    return gitOrEmpty(["rev-list", "--count", `HEAD..${base.ref}`]).trim() === "0" ? base.ref : "";
+  };
+
+  /**
    * 合并预览、但对不上账：按拓扑把区间钉成「PR 引入的那一段」。
    *
    * @param {string[]} parents `HEAD` 的父提交（`rev-list --parents` 那一行，首项是 HEAD 自己）
@@ -132,20 +147,6 @@ export function previewRangeEnds(deps) {
       "合并不对账（认不出本 PR 那一段），按 HEAD~1..HEAD 判 —— 这一档的读数与本次改动对不上账",
     );
     return plain;
-  };
-  /**
-   * `base.ref` 能不能当「目标分支那一侧的 tip」（ISSUE #3035）：它得真是 `HEAD` 的
-   * 祖先（分叉线上的 ref 当 landed 会把别线整批算进对账）。`rev-list --count` 用
-   * **输出可辨**的那一形态 —— `--is-ancestor` 成功与失败都不出字，`gitOrEmpty` 分不开。
-   *
-   * @param {{ok: boolean, ref?: string}} base `resolveBaseRef` 的返回值（两侧形状各取所需）
-   * @returns {string}
-   */
-  const landedIfTracked = (base) => {
-    if (!base.ok || base.ref === undefined || base.ref === "") {
-      return "";
-    }
-    return gitOrEmpty(["rev-list", "--count", `HEAD..${base.ref}`]).trim() === "0" ? base.ref : "";
   };
   const parents = gitOrEmpty(["rev-list", "--parents", "-n", "1", "HEAD"]).trim().split(/\s+/);
   if (parents.length < 3) {

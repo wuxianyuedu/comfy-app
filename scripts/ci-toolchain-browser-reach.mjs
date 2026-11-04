@@ -389,82 +389,6 @@ export function isReachableVerdict(verdict) {
 }
 
 /**
- * 对**真资源**发一次带 `Range` 的 GET，回一句可读的结论（不回抛 —— 失败是一种读数）。
- *
- * ## 为什么不是 HEAD（`pickPlaywrightRoots()` 全建在这条读数上，HEAD 会骗它）
- *
- * 这一层此前是 `httpHeadStatus()` —— 发一个 HEAD，看状态码。而 HEAD 答的是
- * 「这个 URL **允不允许**被取」，不是「**取得下来吗**」。两者的分岔在一次现场里
- * 正好落到反面（`cnb-ald-1k51g8dt9`）：
- *
- *     （HEAD 读数）https://cdn.npmmirror.com/binaries/playwright/builds/cft/…/chrome-headless-shell-win64.zip → HTTP 200
- *     （真实下载）Downloading … from 同一个 URL …… 然后 timed out after 120000ms（**0 字节**）
- *
- * 也就是说：**HEAD 会把一条取不下字节的链路判成好链路**。这条读数现在有两个消费者，
- * 而它对两个都致命 —— `环境前提` 会拿它报绿（把 30 分钟后的失败原样放行）；
- * `pickPlaywrightRoots()` 会拿它把那条**卡死在大 body 上**的根排到第一位、
- * 于是「机器自己挑一条真能通的根」挑中的恰好是那条走不动的
- * （现场 `cnb-t3f-1k51ho0k2` 就是它：HEAD 量得到、装 120 MiB 时 0 字节）。
- *
- * ## 判据的形状
- *
- *   · `GET` + `Range: bytes=0-<chunkBytes-1>` —— 只取开头一段，够证明「字节流得过」；
- *   · `Accept-Encoding: identity` —— 别让 gzip 把「多少字节算到」搅浑；
- *   · **跟随最多 3 次 3xx**（与 Playwright 自己的 `httpRequest` 同口径）：候选根里
- *     `registry.npmmirror.com/-/binary/playwright` 就回 302，裸看不跟随会把它读成
- *     「HTTP 302，没量到东西」；
- *   · **收到第一批字节就收手**（`res.destroy()`）：这一步是**判通不通**，不是下载
- *     —— 早停让它几秒内出结论，也让它与「真下载」量的是同一件事（字节到底流不流）；
- *   · **按 URL 的协议挑模块**：候选根全是 https，但这一层不该只认一种（用例正是拿
- *     本地 http 服务判它的四种现场）。
- *
- * ⚠️ 它**仍然不是**「拉完整个包」那一次测量（那是 120 MiB，本步不做）。它把
- * 「响应头能回」推进到「**字节真流过**」，而现场那一档（连上了但 0 字节）正好被它分开。
- *
- * ## 用户那一句「`playwright install` 很慢」：慢的是**装**，不是**量**
- *
- * 本文件只回答「这个根到不到得了、先试哪个」—— 它取 64 KiB 就走，几秒内出结论。
- * 真正慢的那一段（~120 MiB 的包）在两条通道里：`playwright install`（没有续传）
- * 与 `ci-toolchain-browser-fetch.mjs` 的分片自取。`PLAYWRIGHT_DOWNLOAD_HOST`
- * 换的是**从哪儿取**，换不动「怎么取」—— 所以换源之后仍慢，要看的是后者。
- *
- * ## 「超时」这一档要分得开两种
- *
- *   · `超时（连上了但 0 字节，Nms 内没有响应）` —— 现场那一档：TCP / TLS 都成了，
- *     响应头也可能来了，**body 一个字节都没有**。处置在宿主机 / 网络侧；
- *   · `超时（Nms 内没有响应）` —— 连都没连上 / 响应头都没来。
- *
- * 两种在 `ok` 那一层同属「这一次到不了」（{@link isReachableVerdict}），在
- * {@link probeGrade} 那一层同属 `timeout`；但打印里必须分开 —— 处置不同，
- * 糊成一句「不通」等于把下一动作留给人猜。
- *
- * 走 `spawnSync` 起一个短命 node 子进程，而不是在本进程里用回调：**这一步是在失败
- * 分支里同步跑的**（`playwrightOnly` 的退出码要立刻返回）。子进程里只碰 `node:http(s)`
- * —— 本文件「只 import `node:*`」的同一条约束（见文件头）。
- *
- * 子进程的输入走 `process.argv`（URL、超时、分片大小、重定向上限四件），不拼进
- * `-e` 的源码里：拼串会把引号与转义交给运气，而这里比原先多了一个 `Range` 头与
- * 一个重定向计数，风险随参数一起长。
- *
- * @param {string} url
- * @param {{timeoutMs?: number, chunkBytes?: number, maxRedirects?: number}} [options]
- * @returns {string}
- */
-export function httpDownloadProbe(
-  url,
-  { timeoutMs = 8000, chunkBytes = 65_536, maxRedirects = 3 } = {},
-) {
-  const r = spawnSync(
-    process.execPath,
-    ["-e", DOWNLOAD_PROBE_SCRIPT, url, String(timeoutMs), String(chunkBytes), String(maxRedirects)],
-    { encoding: "utf8", windowsHide: true, timeout: timeoutMs + 4000 },
-  );
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout / stderr 实测为 undefined，@types/node 按 string 标
-  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
-  return out || "（子进程没有输出）";
-}
-
-/**
  * {@link httpDownloadProbe} 在子进程里跑的载荷 —— 独立成常量（不是拼进函数体的
  * 字符串）只有一个理由：它太长，留在函数里会把「做什么」压过「怎么做」，
  * 而它读起来本来就是一段自足的小程序。
@@ -599,6 +523,82 @@ const DOWNLOAD_PROBE_SCRIPT = `
   };
   attempt(target0, maxRedirects);
 `;
+
+/**
+ * 对**真资源**发一次带 `Range` 的 GET，回一句可读的结论（不回抛 —— 失败是一种读数）。
+ *
+ * ## 为什么不是 HEAD（`pickPlaywrightRoots()` 全建在这条读数上，HEAD 会骗它）
+ *
+ * 这一层此前是 `httpHeadStatus()` —— 发一个 HEAD，看状态码。而 HEAD 答的是
+ * 「这个 URL **允不允许**被取」，不是「**取得下来吗**」。两者的分岔在一次现场里
+ * 正好落到反面（`cnb-ald-1k51g8dt9`）：
+ *
+ *     （HEAD 读数）https://cdn.npmmirror.com/binaries/playwright/builds/cft/…/chrome-headless-shell-win64.zip → HTTP 200
+ *     （真实下载）Downloading … from 同一个 URL …… 然后 timed out after 120000ms（**0 字节**）
+ *
+ * 也就是说：**HEAD 会把一条取不下字节的链路判成好链路**。这条读数现在有两个消费者，
+ * 而它对两个都致命 —— `环境前提` 会拿它报绿（把 30 分钟后的失败原样放行）；
+ * `pickPlaywrightRoots()` 会拿它把那条**卡死在大 body 上**的根排到第一位、
+ * 于是「机器自己挑一条真能通的根」挑中的恰好是那条走不动的
+ * （现场 `cnb-t3f-1k51ho0k2` 就是它：HEAD 量得到、装 120 MiB 时 0 字节）。
+ *
+ * ## 判据的形状
+ *
+ *   · `GET` + `Range: bytes=0-<chunkBytes-1>` —— 只取开头一段，够证明「字节流得过」；
+ *   · `Accept-Encoding: identity` —— 别让 gzip 把「多少字节算到」搅浑；
+ *   · **跟随最多 3 次 3xx**（与 Playwright 自己的 `httpRequest` 同口径）：候选根里
+ *     `registry.npmmirror.com/-/binary/playwright` 就回 302，裸看不跟随会把它读成
+ *     「HTTP 302，没量到东西」；
+ *   · **收到第一批字节就收手**（`res.destroy()`）：这一步是**判通不通**，不是下载
+ *     —— 早停让它几秒内出结论，也让它与「真下载」量的是同一件事（字节到底流不流）；
+ *   · **按 URL 的协议挑模块**：候选根全是 https，但这一层不该只认一种（用例正是拿
+ *     本地 http 服务判它的四种现场）。
+ *
+ * ⚠️ 它**仍然不是**「拉完整个包」那一次测量（那是 120 MiB，本步不做）。它把
+ * 「响应头能回」推进到「**字节真流过**」，而现场那一档（连上了但 0 字节）正好被它分开。
+ *
+ * ## 用户那一句「`playwright install` 很慢」：慢的是**装**，不是**量**
+ *
+ * 本文件只回答「这个根到不到得了、先试哪个」—— 它取 64 KiB 就走，几秒内出结论。
+ * 真正慢的那一段（~120 MiB 的包）在两条通道里：`playwright install`（没有续传）
+ * 与 `ci-toolchain-browser-fetch.mjs` 的分片自取。`PLAYWRIGHT_DOWNLOAD_HOST`
+ * 换的是**从哪儿取**，换不动「怎么取」—— 所以换源之后仍慢，要看的是后者。
+ *
+ * ## 「超时」这一档要分得开两种
+ *
+ *   · `超时（连上了但 0 字节，Nms 内没有响应）` —— 现场那一档：TCP / TLS 都成了，
+ *     响应头也可能来了，**body 一个字节都没有**。处置在宿主机 / 网络侧；
+ *   · `超时（Nms 内没有响应）` —— 连都没连上 / 响应头都没来。
+ *
+ * 两种在 `ok` 那一层同属「这一次到不了」（{@link isReachableVerdict}），在
+ * {@link probeGrade} 那一层同属 `timeout`；但打印里必须分开 —— 处置不同，
+ * 糊成一句「不通」等于把下一动作留给人猜。
+ *
+ * 走 `spawnSync` 起一个短命 node 子进程，而不是在本进程里用回调：**这一步是在失败
+ * 分支里同步跑的**（`playwrightOnly` 的退出码要立刻返回）。子进程里只碰 `node:http(s)`
+ * —— 本文件「只 import `node:*`」的同一条约束（见文件头）。
+ *
+ * 子进程的输入走 `process.argv`（URL、超时、分片大小、重定向上限四件），不拼进
+ * `-e` 的源码里：拼串会把引号与转义交给运气，而这里比原先多了一个 `Range` 头与
+ * 一个重定向计数，风险随参数一起长。
+ *
+ * @param {string} url
+ * @param {{timeoutMs?: number, chunkBytes?: number, maxRedirects?: number}} [options]
+ * @returns {string}
+ */
+export function httpDownloadProbe(
+  url,
+  { timeoutMs = 8000, chunkBytes = 65_536, maxRedirects = 3 } = {},
+) {
+  const r = spawnSync(
+    process.execPath,
+    ["-e", DOWNLOAD_PROBE_SCRIPT, url, String(timeoutMs), String(chunkBytes), String(maxRedirects)],
+    { encoding: "utf8", windowsHide: true, timeout: timeoutMs + 4000 },
+  );
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout / stderr 实测为 undefined，@types/node 按 string 标
+  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
+  return out || "（子进程没有输出）";
+}
 
 /**
  * 一个探测结论的**三态**：到得了（`ok`）/ 没量完（`timeout`）/ 到不了（`worse`）。

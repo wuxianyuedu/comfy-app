@@ -49,6 +49,17 @@ export function buildCharacterNegative(_c: Character, style?: StyleRef): string 
 }
 
 /* 依据场景 + 角色 + 风格，拼出分镜镜头的提示词。 */
+const SHOT_KEYWORDS: Record<string, string> = {
+  extreme_wide: "extreme wide shot, vast landscape, epic scale",
+  wide: "wide shot, full environment",
+  full: "full body shot",
+  medium: "medium shot, waist-up",
+  close: "close-up shot",
+  extreme_close: "extreme close-up, detailed face",
+  poi: "low angle shot, looking up",
+  pod: "high angle shot, looking down",
+};
+
 export function buildShotPrompt(
   shot: Pick<Shot, "description" | "shotType">,
   scene: Scene | undefined,
@@ -114,17 +125,6 @@ export function buildShotNegative(characters: Array<Character>, style?: StyleRef
   }
   return [...new Set(neg)].join(", ");
 }
-
-const SHOT_KEYWORDS: Record<string, string> = {
-  extreme_wide: "extreme wide shot, vast landscape, epic scale",
-  wide: "wide shot, full environment",
-  full: "full body shot",
-  medium: "medium shot, waist-up",
-  close: "close-up shot",
-  extreme_close: "extreme close-up, detailed face",
-  poi: "low angle shot, looking up",
-  pod: "high angle shot, looking down",
-};
 
 /* 合并风格与角色各自的推荐参数；冲突时以角色为准。 */
 export function mergeParams(style?: StyleRef, character?: Character): Record<string, unknown> {

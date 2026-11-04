@@ -296,6 +296,16 @@ export function parseAppServiceExitRaw(raw: string | null): AppServiceExitRecord
 }
 
 /**
+ * 「刚刚这么写下的记录算不算这一次断开的」——{@link isCurrentDisconnectExit}
+ * 在没有 runId 可比时用的新鲜度窗口。
+ *
+ * 取 10 分钟：断开判定要连续失败两拍（≈4 秒）才成立，写侧也在那一刻前后落盘，
+ * 因此正常现场里这个差是**秒级**；窗口放大到分钟级只为容下「用户盯着不动的窗口
+ * 过了几分钟才被后台节流影响」这类延迟，同时仍能挡住「盘上留着昨天那份」。
+ */
+export const RECENT_EXIT_WINDOW_MS = 10 * 60 * 1000;
+
+/**
  * 记录「是不是**这一次**断开留下的」——断开那一刻读回时用的判据。
  *
  * 与 {@link isPreviousRunExit} 恰好相反：那条判的是「记录说的是上一份进程」
@@ -328,16 +338,6 @@ export function isCurrentDisconnectExit(
   /* 负值 = 时钟漂移 / 记录来自另一台机器写的文件，同样不可用作「刚刚」。 */
   return age >= 0 && age <= RECENT_EXIT_WINDOW_MS;
 }
-
-/**
- * 「刚刚这么写下的记录算不算这一次断开的」——{@link isCurrentDisconnectExit}
- * 在没有 runId 可比时用的新鲜度窗口。
- *
- * 取 10 分钟：断开判定要连续失败两拍（≈4 秒）才成立，写侧也在那一刻前后落盘，
- * 因此正常现场里这个差是**秒级**；窗口放大到分钟级只为容下「用户盯着不动的窗口
- * 过了几分钟才被后台节流影响」这类延迟，同时仍能挡住「盘上留着昨天那份」。
- */
-export const RECENT_EXIT_WINDOW_MS = 10 * 60 * 1000;
 
 /**
  * 断开那一刻读回「这一次为什么断」——优先走壳的 IPC。
