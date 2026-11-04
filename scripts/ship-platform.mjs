@@ -46,7 +46,7 @@ import {
   readPullCreateError,
   readPullVerdict,
 } from "./ship-core.mjs";
-import { buildPullBody, PULL_BODY_LIMIT } from "./ship-pull-body.mjs";
+import { planCreateBody, updatePullBodyOnReuse } from "./ship-pr-body.mjs";
 import { diffBaseRef, pickTitle } from "./ship-title.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
 import { reportConflictStage, reportStage } from "./ship-stage.mjs";
@@ -286,15 +286,29 @@ function reportPullConflict({ run, log, slug, number, baseRef, via }) {
  *   baseBranch: string | null,
  *   explicitTitle?: string | null,
  *   handle?: string | null,
+ *   prBody?: string | null,
  * }} ctx
  * @returns {{number: any, stop: number | null}} PR 号与收口码。`stop` 非 null 时
  *   调用方直接以此码收尾：冲突（`CODE.CONFLICT`，ISSUE #3083，出口话术这一格已念）、
  *   已落地守卫（`CODE.GUARD_REFUSED`，ISSUE #2250）、建不出来（`CODE.NOT_RUN`）。
  *   `stop` 为 null 时 `number` 一定拿得到（继续往下走）。
+ *   `prBody` 是 `--pr-body-file` 读进来的原文：建 PR 时注入；复用已有 PR 时
+ *   **整篇更新**（不给就一个字节都不动，见 `ship-pr-body.mjs` 的口径）。
  */
 export function createOrReusePull(ctx) {
-  const { run, log, mkTmp, root, slug, branch, frags, baseRef, baseBranch, explicitTitle, handle } =
-    ctx;
+  const {
+    run,
+    log,
+    mkTmp,
+    root,
+    slug,
+    branch,
+    baseRef,
+    baseBranch,
+    explicitTitle,
+    handle,
+    prBody = null,
+  } = ctx;
   /* 开放清单按页扫（ISSUE #2964）：只看第一页的匹配在「目标 PR 被更新的条目挤出
    * 首页」时静默失效 —— 开放 PR 一多，最老那条永远匹配不到，幂等退化成「没就建」，
    * 撞平台 409 才露头。页界与落地判定同一口径，命中行为不变。 */
@@ -305,6 +319,12 @@ export function createOrReusePull(ctx) {
   let number = open.hit;
   if (number) {
     log(`[ship] 已有开放 PR #${number} ⇒ 复用，不重建（幂等）`);
+    /* 给了 `--pr-body-file` 就整篇更新（口径见 `ship-pr-body.mjs`）；写没落地就停在这里，
+     * 不带着一份旧正文去等 CI（那等于让人照着过期正文评审）。 */
+    const bodyStop = updatePullBodyOnReuse({ ...ctx, prBody, number });
+    if (bodyStop !== null) {
+      return { number, stop: bodyStop };
+    }
     stampHandlerLabel({ run, log, slug, number, handle, root });
     return {
       number,
@@ -362,16 +382,9 @@ export function createOrReusePull(ctx) {
     );
     return { number: null, stop: CODE.NOT_RUN };
   }
-  const body = buildPullBody({
-    root,
-    fragments: frags,
-    handle,
-    /* 基线取不到时这一格就是空 —— 宁缺：拿 `HEAD...HEAD` 会得到一份「什么都没有」
-     * 的 diffstat，而 PR 正文里那句「这次改了哪些文件」正是读者判断成本的入口。 */
-    diffstat: baseForDiff
-      ? run("git", ["diff", "--stat", `${baseForDiff}...HEAD`]).stdout.trim()
-      : "",
-  });
+  /* 正文拼装在 `ship-pr-body.mjs`：`--pr-body-file` 注进来的那一份在**前**，
+   * 自动事实段在后（分隔与口径见那一份文件头）。不给旗标时输出与从前逐字节相同。 */
+  const plan = planCreateBody({ ...ctx, baseForDiff });
   /* 守卫排在落临时文件**之前**：`mkTmp` 的回收挂在 `main` 的 `finally` 上，
    * 先建再退虽然不会留垃圾，但会让「这次没建 PR」那一次也在盘上写过一份
    * 提交信息原文 —— 而 #2037 修的就是这类东西不该留在盘上。 */
@@ -382,16 +395,13 @@ export function createOrReusePull(ctx) {
     );
     return { number: null, stop: CODE.NOT_RUN };
   }
-  /* 正文仍然超上限 ⇒ 一次网络往返都不发。到这里 diffstat 已经被裁过，剩下的只会是
-   * 碎片清单那一段（几千份碎片的形态本就说明这次该拆），而发出去只会拿到一条 400：
-   * 已经量到的上限不该押给执行者去替我重新发现（ISSUE #2248）。 */
-  if (body.length > PULL_BODY_LIMIT) {
-    log(
-      `[ship] PR 正文拼出来 ${body.length} 字节，超过上限 ${PULL_BODY_LIMIT} ⇒ 不建 PR：` +
-        "这一格没有执行者（不是「已建」）。出口是把这次变更拆小，或自己写正文手工建一条。",
-    );
-    return { number: null, stop: CODE.NOT_RUN };
+  /* 正文仍然超上限 ⇒ 一次网络往返都不发（ISSUE #2248）：已经量到的上限不该押给
+   * 执行者去替我重新发现。`plan.reason` 会把「人写的正文有多大」一起念出来。 */
+  if (plan.stop !== null) {
+    log(plan.reason);
+    return { number: null, stop: plan.stop };
   }
+  const body = plan.body;
   const bf = mkTmp("ship-pr-body", body);
   if (!bf) {
     /* 正文可能上千行，`--body <串>` 会撞上 Windows 的 32k argv 上限，

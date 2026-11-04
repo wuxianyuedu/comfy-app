@@ -91,7 +91,7 @@ import {
 import { runPushStage, runRerunCiStage } from "../scripts/ship-local.mjs";
 /* 旗标层单独一份（ISSUE #2491）：这一族的用例读的是「命令行长什么样」，不是「执行者给了什么读数」。 */
 import { parseArgs, parseIssueNumberToken } from "../scripts/ship-args.mjs";
-import { buildPullBody, capDiffstat, PULL_BODY_LIMIT } from "../scripts/ship-pull-body.mjs";
+import { buildPullBody, capDiffstat, mentionsCloses, PULL_BODY_LIMIT } from "../scripts/ship-pull-body.mjs";
 import {
   claimNumbersFromTitle,
   closeIssues,
@@ -370,6 +370,10 @@ describe("parseArgs：拼错的旗标不许被静默忽略", () => {
     expect(parseArgs(["--comment", "2719", "--comment", "2720"]).commentBad.length).toBe(1);
     expect(parseArgs(["--body-file", ".git/c.md"]).bodyFile).toBe(".git/c.md");
     expect(parseArgs(["--body-file=.git/c.md"]).bodyFile).toBe(".git/c.md");
+    /* PR 正文那一枚与评论正文是**两个对象**（名字里带 `pr-`），两种写法走同一支。 */
+    expect(parseArgs(["--pr-body-file", ".git/pr.md"]).prBodyFile).toBe(".git/pr.md");
+    expect(parseArgs(["--pr-body-file=.git/pr.md"]).prBodyFile).toBe(".git/pr.md");
+    expect(parseArgs([]).prBodyFile).toBeNull();
     expect(parseArgs(["--commentt"]).unknown).toEqual(["--commentt"]);
   });
 
@@ -4316,6 +4320,7 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
       newIssue: true,
       comment: true,
       diagnose: true,
+      prBodyFile: true,
     })) {
       const m = /^cnb (\w+) ([\w-]+)/.exec(line);
       if (m) {
@@ -4478,8 +4483,10 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
    *  `--page N`（ISSUE #2964：复用判定必须翻页，量具得能按页给不同的答案）。 */
   function pullHarness(
     env: {
+      echoBody?: boolean;
       getPull?: FakeResult;
       openPullsPages?: Array<string>;
+      patchPull?: FakeResult;
       postPull?: FakeResult;
       stat?: string;
     } = {},
@@ -4497,7 +4504,28 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
         }
         return ok('{"status":200,"data":[]}');
       }
+      if (cmd === "cnb" && key.includes("patch-pull")) {
+        return env.patchPull ?? ok('{"status":200,"data":{}}');
+      }
       if (cmd === "cnb" && key.includes("get-pull")) {
+        if (env.echoBody) {
+          /* 平台形状：目标分支在 `base.ref`，正文在 `body`。回读拿到的就是刚
+           * `mkTmp` 落过的那一份 —— 与真平台「写什么读什么」同形。 */
+          return ok(
+            JSON.stringify({
+              status: 200,
+              data: {
+                number: 2649,
+                base: { ref: "refs/heads/master" },
+                mergeable_state: "mergeable",
+                blocked_on: "",
+                is_merged: false,
+                state: "open",
+                body: bodies.at(-1) ?? "",
+              },
+            }),
+          );
+        }
         /* 不给就回空（回读没跑起来）—— 正好也是「按未知处理、不拦」的夹具（#3083）。 */
         return env.getPull ?? ok("");
       }
@@ -4686,6 +4714,142 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
     expect(unreadOut.number).toBe(3002);
     expect(unreadOut.stop).toBeNull();
     expect(unread.heard.join("\n")).toContain("按「未知」处理，不拦");
+  });
+
+  it("--pr-body-file：不给旗标 ⇒ 输出与旧形态逐字节相同（回归断言）", () => {
+    /* 这一条钉的是「不给旗标 ⇒ 行为与现在**逐字**相同」：把整篇输出写成字面量，
+     * 任何一处排版（多一个空行、少一句尾巴）动了，都会在这里红。 */
+    const expected = [
+      "**[评论人：未配]**",
+      "",
+      "## 本 PR 带的变更碎片（`changelog.d/`）",
+      "",
+      "",
+      "## 改动量（`git diff --stat` 对 PR 的目标分支）",
+      "",
+      "```",
+      " 1 file changed",
+      "```",
+      "",
+      "> 本段由 `pnpm ship` 拼装，内容全部是它当场量到的事实（碎片标题与 diffstat）。",
+      "> 判断、读数与因果请写在下面的正文里 —— 脚本不代写；开头那行「评论人」只是这一跑的留痕，不是对正文的判断背书。",
+      "",
+    ].join("\n");
+    const noFlag = buildPullBody({ root: process.cwd(), fragments: [], diffstat: " 1 file changed" });
+    expect(noFlag).toBe(expected);
+    expect(noFlag, "缺省值与显式 null 必须是同一支").toBe(
+      buildPullBody({ root: process.cwd(), fragments: [], diffstat: " 1 file changed", userBody: null }),
+    );
+  });
+
+  it("--pr-body-file：人写的正文在前、自动事实段在后，中间有分隔线", () => {
+    const userBody = "## 根因\n\n读数：这一格此前只有碎片清单。\n";
+    const body = buildPullBody({
+      root: process.cwd(),
+      fragments: ["changelog.d/0-x.md"],
+      diffstat: " 1 file changed",
+      handle: "yuedu-win",
+      userBody,
+    });
+    expect(body.startsWith("**[评论人：yuedu-win]**\n\n## 根因")).toBe(true);
+    expect(body).toContain("\n\n---\n\n");
+    expect(body).toContain("以下为 `pnpm ship` 自动拼装的事实段");
+    expect(body.indexOf("## 根因")).toBeLessThan(body.indexOf("## 本 PR 带的变更碎片"));
+    /* 尾巴要改成「上面」：注入之后「下面的正文」已经没有正文了。 */
+    expect(body).toContain("写在**上面那份正文**里");
+    expect(body).not.toContain("写在下面的正文里");
+  });
+
+  it("mentionsCloses：只认整词 Closes（Refs / encloses 不算）", () => {
+    expect(mentionsCloses("Closes #123")).toBe(true);
+    expect(mentionsCloses("closes #1")).toBe(true);
+    expect(mentionsCloses("Refs #123\n\n不关单")).toBe(false);
+    expect(mentionsCloses("encloses #1")).toBe(false);
+    expect(mentionsCloses("")).toBe(false);
+  });
+
+  it("建 PR：--pr-body-file 的正文与自动事实段都进 post-pull 的正文文件", () => {
+    const { calls, bodies, io } = pullHarness();
+    const out = createOrReusePull({ ...io, prBody: "## 根因\n\n读数：注入正文。" });
+    expect(out.number).toBe(3002);
+    expect(calls.some((c) => c.includes("post-pull"))).toBe(true);
+    const [body = ""] = bodies;
+    expect(body).toContain("## 根因");
+    expect(body).toContain("## 本 PR 带的变更碎片");
+    expect(body.indexOf("## 根因")).toBeLessThan(body.indexOf("## 本 PR 带的变更碎片"));
+  });
+
+  it("复用 PR + --pr-body-file：整篇更新经 patch-pull 写入，回读一致 ⇒ stop:null", () => {
+    const { calls, bodies, heard, io } = pullHarness({
+      openPullsPages: [
+        '{"data":[{"head":{"ref":"refs/heads/feat/big"},"number":2649}],"status":200}',
+      ],
+      echoBody: true,
+    });
+    const out = createOrReusePull({ ...io, prBody: "## 改动\n\n读数：复用这一跳要把正文换掉。" });
+    expect(out.number).toBe(2649);
+    expect(out.stop).toBeNull();
+    expect(calls.some((c) => c.includes("patch-pull"))).toBe(true);
+    expect(calls.some((c) => c.includes("post-pull")), "复用命中还发 post-pull 会长出第二条 PR").toBe(
+      false,
+    );
+    expect(bodies.length).toBe(1);
+    expect(bodies[0]).toContain("## 改动");
+    expect(heard.join("\n")).toContain("正文已更新并回读一致");
+  });
+
+  it("复用 PR 但没给 --pr-body-file：一个字节都不写（不发 patch-pull）", () => {
+    const { calls, bodies, io } = pullHarness({
+      openPullsPages: [
+        '{"data":[{"head":{"ref":"refs/heads/feat/big"},"number":2649}],"status":200}',
+      ],
+      echoBody: true,
+    });
+    const out = createOrReusePull(io);
+    expect(out.number).toBe(2649);
+    expect(out.stop).toBeNull();
+    expect(calls.some((c) => c.includes("patch-pull"))).toBe(false);
+    expect(bodies, "不给旗标却写了一次正文文件").toEqual([]);
+  });
+
+  it("复用 PR 回写后回读不一致 ⇒ stop=1（有写入但没落地是红，不是「没跑起来」）", () => {
+    const { io } = pullHarness({
+      openPullsPages: [
+        '{"data":[{"head":{"ref":"refs/heads/feat/big"},"number":2649}],"status":200}',
+      ],
+      getPull: ok(
+        '{"status":200,"data":{"number":2649,"base":{"ref":"refs/heads/master"},"mergeable_state":"mergeable","body":"上一跑的旧正文"}}',
+      ),
+    });
+    const out = createOrReusePull({ ...io, prBody: "## 新正文" });
+    expect(out.number).toBe(2649);
+    expect(out.stop).toBe(CODE.RED);
+  });
+
+  it("复用 PR 回读缺 body 键 ⇒ stop=2（没有落地证明，不当作「没落地」）", () => {
+    const { io } = pullHarness({
+      openPullsPages: [
+        '{"data":[{"head":{"ref":"refs/heads/feat/big"},"number":2649}],"status":200}',
+      ],
+      getPull: ok(
+        '{"status":200,"data":{"number":2649,"base":{"ref":"refs/heads/master"},"mergeable_state":"mergeable"}}',
+      ),
+    });
+    const out = createOrReusePull({ ...io, prBody: "## 新正文" });
+    expect(out.number).toBe(2649);
+    expect(out.stop).toBe(CODE.NOT_RUN);
+  });
+
+  it("--pr-body-file 自己就顶穿上限 ⇒ 一次写入都不发，并念出正文自己的长度", () => {
+    const { calls, bodies, heard, io } = pullHarness();
+    const huge = `## 正文\n\n${"x".repeat(PULL_BODY_LIMIT)}`;
+    const out = createOrReusePull({ ...io, prBody: huge });
+    expect(out.number).toBeFalsy();
+    expect(calls.some((c) => c.includes("post-pull"))).toBe(false);
+    expect(bodies).toEqual([]);
+    const all = heard.join("\n");
+    expect(all).toContain("超过上限");
+    expect(all).toContain(`--pr-body-file\` ${huge.length} 字节`);
   });
 
   it("readPullCreateError：只认 errcode / errmsg 这两个键名，成功响应一律回 null", () => {
@@ -6688,6 +6852,81 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
         readdirSync(tmpRoot).filter((n) => n !== "gitdir"),
         "往工作区里写了东西",
       ).toEqual([]);
+    } finally {
+      rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("整链：复用已有 PR + --pr-body-file ⇒ 整篇经 patch-pull 写入，回读一致才收 0", async () => {
+    const { tmpRoot, gitDir } = proofRoot("prbody-reuse");
+    try {
+      const prFile = path.join(tmpRoot, "pr.md");
+      fs.writeFileSync(prFile, "## 根因\n\n读数：这条 PR 的正文由 ship 注入。\n", "utf8");
+      const base = fake({ chain: true });
+      /** `fake()` 里的 `ok` 是闭包内的，这里补一份同形的应答。 */
+      const answer = (stdout: string): FakeResult => ({ status: 0, stdout, stderr: "", error: null });
+      let written = "";
+      const run = (cmd: string, args: Array<string>): FakeResult => {
+        const key = args.join(" ");
+        if (cmd === "cnb" && key.includes("patch-pull")) {
+          const at = args.indexOf("--body-file");
+          /* 文件会在 `main` 的 finally 里被回收，所以在伸手那一瞬读 —— 这也正是
+           * 「写出去的正文就是这一份」的唯一可观察点。 */
+          written = fs.readFileSync(args[at + 1] ?? "", "utf8");
+          return answer('{"status":200,"data":{}}');
+        }
+        if (cmd === "cnb" && key.includes("get-pull") && written !== "") {
+          return answer(
+            JSON.stringify({
+              status: 200,
+              data: {
+                number: 777,
+                is_merged: true,
+                mergeable_state: "mergeable",
+                base: { ref: "refs/heads/master" },
+                body: written,
+              },
+            }),
+          );
+        }
+        return base.run(cmd, args);
+      };
+      const heard: Array<string> = [];
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--pr-body-file", prFile, "--no-wait"],
+      });
+      expect(code).toBe(0);
+      /* `written` 只在 `patch-pull` 那一支被赋值（wrapper 在 `base.run` 之前返回，
+       * 所以 `base.calls` 里看不到这一跳）。非空 = 那一跳伸了手，且正文就是这一份。 */
+      expect(written).toContain("## 根因");
+      expect(written.indexOf("## 根因")).toBeLessThan(written.indexOf("## 本 PR 带的变更碎片"));
+      expect(heard.join("\n")).toContain("正文已更新并回读一致");
+    } finally {
+      rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("整链：复用已有 PR 但没给 --pr-body-file ⇒ 一个字节都不写（不发 patch-pull）", async () => {
+    const { tmpRoot, gitDir } = proofRoot("prbody-silent");
+    try {
+      const base = fake({ chain: true });
+      const code = await main({
+        root: tmpRoot,
+        run: base.run,
+        log: () => undefined,
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--no-wait"],
+      });
+      expect(code).toBe(0);
+      expect(base.calls.some((c) => c.includes("patch-pull"))).toBe(false);
+      /* 判的是「建 PR」那一跳本身；`post-pull-labels` 也含这个前缀，不能拿 includes 判。 */
+      expect(base.calls.some((c) => c.startsWith("cnb pulls post-pull "))).toBe(false);
     } finally {
       rmSync(tmpRoot, { recursive: true, force: true });
     }

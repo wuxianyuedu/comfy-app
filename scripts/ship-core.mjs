@@ -30,6 +30,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { resolveGitDir } from "./git-dir.mjs";
+import { prBodyPlanLines } from "./ship-pull-body.mjs";
 import { CODE } from "./ship-codes.mjs";
 
 /* 退出码表的**唯一出处**是 `ship-codes.mjs`（ISSUE #3083：三态扩成 0–7 的分型表，
@@ -676,11 +677,10 @@ export function looksNewlineMangled(msg) {
  * 这是量具自证：计划与执行分叉，说明有人在两处各写一遍（`tests/ship.test.ts`
  * 拿「模块+工具对同集合」逐条对账钉着这件事）。
  *
- * ⚠️ 它**不**保证恒退 0：dry-run 免掉的是「执行写动作」，不免掉「报出阻塞」。
- * 正在 `master` 上、或缺 `changelog.d/` 碎片时照样退 1 —— 一个会藏掉阻塞事实的
- * 预览比不预览更糟。
+ * ⚠️ 它**不**保证恒退 0：dry-run 免掉的是「执行写动作」，不免掉「报出阻塞」。正在
+ * `master` 上、或缺 `changelog.d/` 碎片时照样退 1 —— 一个会藏掉阻塞事实的预览比不预览更糟。
  *
- * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,asMerged?:number|null,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,comment?:boolean,branches?:boolean,newIssue?:boolean,diagnose?:boolean,stageLog?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null}} st 当前状态
+ * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,asMerged?:number|null,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,comment?:boolean,branches?:boolean,newIssue?:boolean,diagnose?:boolean,stageLog?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null,prBodyFile?:boolean}} st 当前状态
  * @returns {string[]} 逐条命令
  */
 export function planCommands(st) {
@@ -713,6 +713,7 @@ export function planCommands(st) {
   p.push(`cnb pulls list-pulls --repo ${st.slug} --state open -v`);
   p.push(
     `cnb pulls post-pull --repo ${st.slug} --base ${trunk} --head ${st.branch} --head-repo ${st.slug} --title … --body-file <git目录>/comfy-ship-tmp/ship-pr-body-<pid>.tmp -v`,
+    ...(st.prBodyFile ? prBodyPlanLines(st.slug) : []),
   );
   /* 标签与回读是**一对**：只写「打标签」就把「回执即结论」教给读者，而这一族
    * 从不采信回执（ISSUE #2204）。未配留痕时这两条都不执行，所以按 handle 出现。

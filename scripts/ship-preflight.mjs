@@ -319,6 +319,7 @@ export async function runPreflightStage(ctx) {
       remote: up.remote,
       baseBranch,
       handle: handle ?? null,
+      prBodyFile: Boolean(opt.prBodyFile),
     })) {
       log(`        $ ${c}`);
     }

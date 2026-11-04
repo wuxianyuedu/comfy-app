@@ -29,6 +29,23 @@ export const PULL_BODY_LIMIT = 65_535;
 export const DIFFSTAT_SAMPLE_MAX = 40;
 
 /**
+ * `--pr-body-file` 在 `--dry-run` 计划里的那一组命令（复用已有 PR 时才会发生）。
+ *
+ * 与 `post-pull` 成组出现：写后回读是这一格的**一半**，只写「更新」会把
+ * 「回执即结论」教给读计划的人。放在这里而不是 `ship-core`：`planCommands` 那一段
+ * 已经贴着 900 行硬闸，而这一组命令的描述属于「PR 正文」这一格。
+ *
+ * @param {string} slug `owner/repo`
+ * @returns {string[]} 计划行
+ */
+export function prBodyPlanLines(slug) {
+  return [
+    `cnb pulls patch-pull --repo ${slug} --number <n> --body-file <git目录>/comfy-ship-tmp/ship-pr-body-<pid>.tmp -v`,
+    `cnb pulls get-pull --repo ${slug} --number <n> -v`,
+  ];
+}
+
+/**
  * 把一份 diffstat 裁成「样本 + 总计数行 + 一句省略说明」。
  *
  * @param {string} diffstat `git diff --stat` 的原文
@@ -64,6 +81,22 @@ export function capDiffstat(diffstat, sampleMax = DIFFSTAT_SAMPLE_MAX) {
 }
 
 /**
+ * 注入正文里有没有「单条 PR 自己关单」的写法（`Closes …`）。
+ *
+ * 项目的关单是**统一动作**（合并验真之后由 `--close-issue` 收，§13.10.9），单条 PR
+ * 不该在正文里顺带关单 —— 那一笔画在别的字段上，而 PR 正文里的 `Closes` 既没有
+ * 执行者、又会让「谁关的、什么时候关的」对不上账。这里**只认、不改写**：原文照旧
+ * 注入，人自己决定要不要删（脚本替人改正文，就是把判断换成了它的）。
+ *
+ * @param {string | null | undefined} text 正文原文
+ * @returns {boolean} 出现 `Closes`（大小写不敏感、只认整词）
+ */
+export function mentionsCloses(text) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- text 是文件原文（外部输入），string 只是声明
+  return /\bcloses\b/i.test(String(text ?? ""));
+}
+
+/**
  * 把 `changelog.d/` 里的碎片标题拼成 PR 正文的**事实部分**。
  *
  * 只搬「盘上已有的字」：段落标题 + 碎片文件名。不写因果、不写「已验证」那类声明
@@ -73,12 +106,33 @@ export function capDiffstat(diffstat, sampleMax = DIFFSTAT_SAMPLE_MAX) {
  * 变成「PR 建不出来」（ISSUE #2248）。装不下时样本数继续减半，所以
  * 「正文长度与改动面无关」是**做出来的**，不是「40 条大概够用」的乐观假设。
  *
- * @param {{root:string,fragments:string[],diffstat:string,handle?:string|null}} input 量到的事实
+ * **`userBody` 是 `--pr-body-file` 注进来的那一份**（给了就整篇更新：人写的正文在
+ * 前、自动事实段在后，中间用一条分隔线 + 一句「以下由脚本拼装」隔开，不让两段
+ * 混成一坨）。不给时输出与从前**逐字节相同** —— 「不给旗标 ⇒ 行为不变」是这一格
+ * 的硬约束，回归用例钉住开头/结尾两种形态。
+ *
+ * @param {{root:string,fragments:string[],diffstat:string,handle?:string|null,userBody?:string|null}} input 量到的事实
  *   与这一跑的留痕短名（ISSUE #2204：正文开头一行 `**[评论人：<短名>]**`，未配写「未配」）
  * @returns {string} 正文
  */
-export function buildPullBody({ root, fragments, diffstat, handle = null }) {
-  const head = ["## 本 PR 带的变更碎片（`changelog.d/`）", ""];
+export function buildPullBody({ root, fragments, diffstat, handle = null, userBody = null }) {
+  /* 空串按「没给」处理：一份空文件注入进来只会把自动段顶到最上面，与不给旗标同形 ——
+   * 而调用方已经先把「给了但为空」判成用法错，这里只是第二道兜底。 */
+  const injected = String(userBody ?? "").replace(/\s+$/, "");
+  const head = [
+    ...(injected
+      ? [
+          injected,
+          "",
+          "---",
+          "",
+          "> 以下为 `pnpm ship` 自动拼装的事实段（碎片清单 + diffstat），不是上面那份正文的一部分。",
+          "",
+        ]
+      : []),
+    "## 本 PR 带的变更碎片（`changelog.d/`）",
+    "",
+  ];
   for (const f of fragments) {
     // 首行的读法只有一处（`fragmentHead`）：两处各读各的，就会开始对同一份碎片给两种答案。
     head.push(`- \`${f}\` → ${fragmentHead(root, f) || "(读不到)"}`);
@@ -86,8 +140,11 @@ export function buildPullBody({ root, fragments, diffstat, handle = null }) {
   head.push("");
   const tail = [
     "> 本段由 `pnpm ship` 拼装，内容全部是它当场量到的事实（碎片标题与 diffstat）。",
-    "> 判断、读数与因果请写在下面的正文里 —— 脚本不代写；开头那行「评论人」只是" +
-      "这一跑的留痕，不是对正文的判断背书。",
+    injected
+      ? "> 判断、读数与因果请写在**上面那份正文**里（`--pr-body-file` 注进来的）—— 脚本不代写；" +
+        "开头那行「评论人」只是这一跑的留痕，不是对正文的判断背书。"
+      : "> 判断、读数与因果请写在下面的正文里 —— 脚本不代写；开头那行「评论人」只是" +
+        "这一跑的留痕，不是对正文的判断背书。",
   ];
   let sampleMax = DIFFSTAT_SAMPLE_MAX;
   for (;;) {
