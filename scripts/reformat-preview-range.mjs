@@ -32,9 +32,10 @@
  *      （两条口径各治一形，见 `clean()`）。都过不了才退回 `HEAD~1`，并**把这件事念出来**
  *      —— 静默换一个面比多说一句更贵。
  *
- * ⚠️ **这一档不许豁免**：合并提交本身已由 `perCommitShape` 的 `--no-merges` 摘出
- * 逐提交那张表，汇总口径只在「重排独占**整段**」时才放行，所以这里给的是「PR 带来的
- * 那一整段」，不是「合并这一笔」。
+ * ⚠️ **这一档不许豁免**：ISSUE #3035 起合并提交**入**逐提交那张表（重排恰恰常坐在
+ * 合并那一笔里；合并行按「目标侧 .. 合并」取补丁、与已判行去重 —— 见
+ * `reformat-per-commit.mjs` 的头注），汇总口径只在「重排独占**整段**」时才放行，
+ * 所以这里给的是「PR 带来的那一整段」，不是「合并这一笔」。
  *
  * ## 这一份不做什么
  *
@@ -60,12 +61,14 @@ import process from "node:process";
  *   reconcile: (ref: string, deps: {env: Record<string, string | undefined>}) =>
  *     {used: false, why: string} | {used: true, firstParent: string, head: string},
  * }} deps 入口注入面
- * @returns {{before: string, after: string}} 普通提交形态回 `HEAD~1` / `HEAD`
+ * @returns {{before: string, after: string, landed: string}} 普通提交形态回 `HEAD~1` / `HEAD`；
+ *   `landed` 是**目标分支那一侧的 tip**（ISSUE #3035：汇总分母与合并行的「目标侧」都要
+ *   用它），认不出的形态给空串 —— 调用方退回「区间起点」那一侧（与改动前逐字一致）。
  */
 export function previewRangeEnds(deps) {
   const { gitOrEmpty, env = process.env } = deps;
   /** 普通提交形态：与改动前逐字一致。 */
-  const plain = { before: "HEAD~1", after: "HEAD" };
+  const plain = { before: "HEAD~1", after: "HEAD", landed: "" };
   /**
    * `A..HEAD` 能不能当「本次改动」—— 两条口径，**任一成立即可**。
    *
@@ -107,7 +110,7 @@ export function previewRangeEnds(deps) {
    * 合并预览、但对不上账：按拓扑把区间钉成「PR 引入的那一段」。
    *
    * @param {string[]} parents `HEAD` 的父提交（`rev-list --parents` 那一行，首项是 HEAD 自己）
-   * @returns {{before: string, after: string}}
+   * @returns {{before: string, after: string, landed: string}}
    */
   const adopted = (parents) => {
     const base = deps.resolveBaseRef({ env });
@@ -121,7 +124,7 @@ export function previewRangeEnds(deps) {
     candidates.push(parents[1] ?? "");
     for (const candidate of candidates) {
       if (clean(candidate)) {
-        return { before: candidate, after: "HEAD" };
+        return { before: candidate, after: "HEAD", landed: landedIfTracked(base) };
       }
     }
     /* 两条候选都不成立 ⇒ 没有可信的判决面。退回 `HEAD~1`，但把原因念出来。 */
@@ -129,6 +132,20 @@ export function previewRangeEnds(deps) {
       "合并不对账（认不出本 PR 那一段），按 HEAD~1..HEAD 判 —— 这一档的读数与本次改动对不上账",
     );
     return plain;
+  };
+  /**
+   * `base.ref` 能不能当「目标分支那一侧的 tip」（ISSUE #3035）：它得真是 `HEAD` 的
+   * 祖先（分叉线上的 ref 当 landed 会把别线整批算进对账）。`rev-list --count` 用
+   * **输出可辨**的那一形态 —— `--is-ancestor` 成功与失败都不出字，`gitOrEmpty` 分不开。
+   *
+   * @param {{ok: boolean, ref?: string}} base `resolveBaseRef` 的返回值（两侧形状各取所需）
+   * @returns {string}
+   */
+  const landedIfTracked = (base) => {
+    if (!base.ok || base.ref === undefined || base.ref === "") {
+      return "";
+    }
+    return gitOrEmpty(["rev-list", "--count", `HEAD..${base.ref}`]).trim() === "0" ? base.ref : "";
   };
   const parents = gitOrEmpty(["rev-list", "--parents", "-n", "1", "HEAD"]).trim().split(/\s+/);
   if (parents.length < 3) {
@@ -139,9 +156,8 @@ export function previewRangeEnds(deps) {
     const face = deps.reconcile(base.ref, { env });
     if (face.used) {
       /* ⚠️ **终点不许取 `face.head`（= 合成提交）**：合成提交的另一个父就是目标分支，
-       * 于是 `第一父..合成提交` 正好是**整个 PR 区间** —— 逐提交口径下它没问题（合并
-       * 自身被 `--no-merges` 摘掉），可它把「PR 自己那条线」与「这次合并带进来的主干
-       * 那一批」混成一段，`report()` 的汇总口径就按整段算分母（实测 170 份里 118 份
+       * 于是 `第一父..合成提交` 正好是**整个 PR 区间** —— 它把「PR 自己那条线」与「这次
+       * 合并带进来的主干那一批」混成一段，`report()` 的汇总口径就按整段算分母（实测 170 份里 118 份
        * 被判纯格式化，而逐提交复算只有 `8d052468` 一条 offender）。
        *
        * 该判的是**本 PR 自己那条线**：`第一父 .. 第二父`（源分支 tip）。平台给的
@@ -154,7 +170,13 @@ export function previewRangeEnds(deps) {
        * 之后落过提交（主干那批）—— 拿它当起点会把那批算进本 PR 的分母。分叉点算不出来
        * 才退回 `第一父`。 */
       const forkPoint = gitOrEmpty(["merge-base", face.firstParent, after]).trim();
-      return { before: forkPoint === "" ? face.firstParent : forkPoint, after };
+      /* landed = 第一父（目标分支那一侧的 tip，ISSUE #3035）：汇总分母取它，
+       * 主干在分叉点之后落过的那批就不进分母；合并行的「目标侧父」也由它定位。 */
+      return {
+        before: forkPoint === "" ? face.firstParent : forkPoint,
+        after,
+        landed: face.firstParent,
+      };
     }
   }
   return adopted(parents);
@@ -210,7 +232,8 @@ export function previewRangeEnds(deps) {
  *
  * @param {{cwd?: string, env?: Record<string, string | undefined>}} [deps]
  *   `cwd` 缺省是**本模块所在仓库**（与 `previewRangeEnds()` 的注入面同一条约定）
- * @returns {{ok: true, range: string} | {ok: false, reason: string}}
+ * @returns {{ok: true, range: string, landed: string} | {ok: false, reason: string}}
+ *   `landed` 是目标分支那一侧的 tip（ISSUE #3035：汇总分母与合并行「目标侧」的定位件）。
  */
 export function syntheticMergeRange(deps) {
   const cwd = deps?.cwd ?? path.resolve(import.meta.dirname, "..");
@@ -259,12 +282,13 @@ export function syntheticMergeRange(deps) {
       };
     }
     /* ⚠️ **终点取 `source`（本 PR 那一侧的 tip），不是 `HEAD`（合成提交）**：
-     * `另一父..HEAD` 正好是**整个 PR 区间** —— 逐提交口径看不出问题（合成提交自己被
-     * `--no-merges` 摘掉），可它把「本 PR 那条线」与「这次合并带进来的主干那一批」混成
-     * 一段，`report()` 的汇总口径按整段算分母（现场 `cnb-o9p-1k6d5ohhj`：170 份里 118 份
+     * `另一父..HEAD` 正好是**整个 PR 区间** —— 它把「本 PR 那条线」与「这次合并带进来的
+     * 主干那一批」混成一段，`report()` 的汇总口径按整段算分母（现场 `cnb-o9p-1k6d5ohhj`：170 份里 118 份
      * 被判纯格式化，而同一区间逐提交复算只有一条 offender）。 */
     const forkPoint = forkPointOf(source);
-    return { ok: true, range: `${forkPoint === "" ? other : forkPoint}..${source}` };
+    /* landed = 另一父（目标分支那一侧的 tip，ISSUE #3035）—— 汇总分母取它，
+     * 主干在分叉点之后落过的那批就不进分母。 */
+    return { ok: true, range: `${forkPoint === "" ? other : forkPoint}..${source}`, landed: other };
   }
 
   /* ── 形态二：PR 头检出（`HEAD` 就是本 PR 那一侧的 tip）── */
@@ -289,11 +313,49 @@ export function syntheticMergeRange(deps) {
         reason: `HEAD（${head.slice(0, 8)}）不是一个提交对象 ⇒ 没有可用的判决面`,
       };
     }
-    return { ok: true, range: `${forkPoint}..${head}` };
+    return { ok: true, range: `${forkPoint}..${head}`, landed: target };
   }
 
   return {
     ok: false,
     reason: `HEAD（${head.slice(0, 8)}）与 CNB_COMMIT（${source.slice(0, 8)}）对不上，认不出这一跑的形态 ⇒ 没有可用的判决面`,
   };
+}
+
+/**
+ * 「目标分支那一侧的 tip」—— `--range` 那一档的 `landed`（ISSUE #3035）。
+ *
+ * `previewRangeEnds()` / `syntheticMergeRange()` 在各自的返回里带了 `landed`，但
+ * 显式 `--range` 那一路（复合档换发 / 本地复盘）只有一个 `A..B`，区间本身不含
+ * 目标侧 —— 平台工作区里它仍在 env 与 `HEAD` 的父关系里，这里按与
+ * `syntheticMergeRange()` **同一套形态判据**把它取出来：
+ *
+ *   · **合成合并预览**（`HEAD` 父数 ≥ 2、`CNB_COMMIT` 是其中一父）⇒ 另一父；
+ *   · **PR 头检出**（`HEAD` 就是 `CNB_COMMIT`）⇒ `CNB_PULL_REQUEST_TARGET_SHA`；
+ *   · 认不出（本地没有平台 env / 拓扑对不上）⇒ 空串 —— 调用方退回「区间起点」
+ *     那一侧（与改动前逐字一致），读数不冒充。
+ *
+ * 与 `syntheticMergeRange()` 分两份写是刻意的：那一份答「区间是什么」（认不出要
+ * 记成没判），这一份只答「landed 是谁」（认不出就退回旧行为）—— 失败语义不同，
+ * 收在同一个函数里就要靠旗标分叉。
+ *
+ * @param {{env?: Record<string, string | undefined>, gitOrEmpty: (args: string[]) => string}} deps
+ * @returns {string} 认不出给空串
+ */
+export function landedTipOf({ env = process.env, gitOrEmpty }) {
+  const source = String(env.CNB_COMMIT ?? "").trim();
+  const row = gitOrEmpty(["rev-list", "--parents", "-n", "1", "HEAD"]).trim();
+  const parts = row.split(/\s+/).filter(Boolean);
+  const head = parts[0] ?? "";
+  const parents = parts.slice(1);
+  /* 形态一：合成合并预览 —— 另一父就是目标分支那一侧。 */
+  if (source !== "" && parents.length >= 2 && parents.includes(source)) {
+    return parents.find((p) => p !== source) ?? "";
+  }
+  /* 形态二：PR 头检出 —— 平台给的目标 sha 就是目标侧的 tip。 */
+  const target = String(env.CNB_PULL_REQUEST_TARGET_SHA ?? "").trim();
+  if (target !== "" && source !== "" && head === source) {
+    return target;
+  }
+  return "";
 }
