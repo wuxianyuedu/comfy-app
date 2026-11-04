@@ -168,10 +168,14 @@ function stripJsoncComments(raw) {
  * 或读不到就回 `null`，日志上只落「内容读不到」—— 这是读数那一格，不是判据，
  * 不许为了读数把 JSONC 写成第二份完整实现。
  *
+ * `include` / `exclude` 既可以是数组也可以是**单个字符串**（tsconfig 两种都合法）。
+ * 字符串必须原样念出来：只认数组会把它读成「未给」，于是一份明明给了 `include`
+ * 的配置在读数里印着 `（未给 ⇒ tsc 默认全收）`（ISSUE #3163 的边角）。
+ *
  * @param {string} faceFile `projectFaceOf()` 给出的 tsconfig 文件路径
  * @returns {{include: string | null, exclude: string | null}} 两条 glob 的逗号拼接；
- *   没给（或空数组）⇒ 空串，含义分开写（include 空 = 按 tsc 默认全收，exclude 空 =
- *   不排除）；文件读不到 / parse 失败 ⇒ 两条都 null
+ *   没给（或空数组 / 空串）⇒ 空串，含义分开写（include 空 = 按 tsc 默认全收，
+ *   exclude 空 = 不排除）；文件读不到 / parse 失败 ⇒ 两条都 null
  */
 function faceGlobsOf(faceFile) {
   try {
@@ -179,11 +183,15 @@ function faceGlobsOf(faceFile) {
     const noComments = stripJsoncComments(raw);
     const noTrail = noComments.replaceAll(/,(\s*[}\]])/g, "$1");
     const parsed = JSON.parse(noTrail);
-    const join = (/** @type {unknown} */ value) =>
-      Array.isArray(value) && value.length > 0
-        ? value.map((/** @type {unknown} */ item) => String(item)).join(", ")
-        : "";
-    return { include: join(parsed.include), exclude: join(parsed.exclude) };
+    const readGlob = (/** @type {unknown} */ value) => {
+      if (Array.isArray(value)) {
+        return value.length > 0
+          ? value.map((/** @type {unknown} */ item) => String(item)).join(", ")
+          : "";
+      }
+      return typeof value === "string" ? value : "";
+    };
+    return { include: readGlob(parsed.include), exclude: readGlob(parsed.exclude) };
   } catch {
     return { include: null, exclude: null };
   }
