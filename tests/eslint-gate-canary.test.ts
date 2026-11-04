@@ -1,7 +1,7 @@
 /**
- * `eslint-gate-canary.mjs` 判据 = eslint 档位**阳性对照**（ISSUE #2541 三批之后补闸）：#2541 是「空集意义上的 0 警」，
- * tseslint recommended 不含 core 面，`no-control-regex` 等上报 0 却从未跑过；三批后 0 警仍是**状态**而非能力（规则没生效 /
- * 配置顺序反 / `files` 面收窄，见 #2614）。故造已知违例真跑 eslint 断言命中；`--sabotage` 在守规则必须退 1。
+ * `eslint-gate-canary.mjs` 判据 = lint 档位**阳性对照**（ISSUE #2541 三批之后补闸，#2777 PR-B 起由 oxlint 承担）：
+ * #2541 是「空集意义上的 0 警」，当时 core 面规则上报 0 却从未跑过；三批后 0 警仍是**状态**而非能力（规则没生效 /
+ * 配置顺序反 / `files` 面收窄，见 #2614）。故造已知违例真跑 oxlint 断言命中；`--sabotage` 在守规则必须退 1。
  */
 import { spawnSync } from "node:child_process";
 import path from "node:path";
@@ -10,11 +10,9 @@ import { describe, expect, it } from "vitest";
 const ROOT = path.resolve(import.meta.dirname, "..");
 const CANARY = "scripts/eslint-gate-canary.mjs";
 
-/* 600s 的依据（实测，不是拍的）：判据起 **eslint 子进程**，project service 冷启动才是大头 —— 单次约 30s
- * （出处 `changelog.d/2862-*` 的 A/B，本机非并发），默认档两次冷启动 80s、并成一次后 28s。⚠️ 并发在场时
- * 这些数不可引用：同文件在「受影响用例」格被挤着跑读到 279s（单跑 147s 的 1.9 倍），只能判「谁在最前」。
- * 600s 留的是沙箱 + 共享机 + 争抢叠起来的极端，不是给慢用例兜底（§11.13 不许靠抬超时掩盖）。
- * 这也是 canary 支持 `--sabotage` 最小集的原因：把调用次数压到最低（全档 3 次，同族教训见 #2606）。 */
+/* 120s 的依据（实测，不是拍的）：判据起 **oxlint 子进程**，判决配置与 jsPlugin 加载是大头；⚠️ 并发在场时
+ * 这些数不可引用（同文件在「受影响用例」格被挤着跑会显著变慢），只能判「谁在最前」。
+ * 这是 canary 支持 `--sabotage` 最小集的原因：把调用次数压到最低（全档 1 次，同族教训见 #2606）。 */
 const CASE_TIMEOUT = 120_000;
 
 function runCanary(args: Array<string> = []) {
@@ -42,8 +40,8 @@ describe("scripts/eslint-gate-canary.mjs", () => {
       // 样本被删空却还退 0，是这条判据自己的失效形态（恒绿）
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       expect(n, `样本数不达标，实际：${r.stdout ?? ""}`).toBeGreaterThanOrEqual(10);
-      /* 两批文件（tests 面与 scripts 面）必须在**同一次** eslint 调用里判完
-       * （ISSUE #2862：这一格的墙钟几乎全是冷启动次数，单次约 30s）。
+      /* 两批文件（tests 面与 scripts 面）必须在**同一次** oxlint 调用里判完
+       * （ISSUE #2862：这一格的墙钟几乎全是加载次数）。
        * 拆回两次调用，功能断言一条都不会红 —— 所以次数要由这里钉住。 */
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       expect(oxlintCalls(r.stdout ?? ""), `实际：${r.stdout ?? ""}`).toBe(1);

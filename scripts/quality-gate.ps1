@@ -89,10 +89,10 @@ function Get-VitestKnownFailureArgs {
 $Blocks = @(
   @{ Name = "typecheck"; Label = "Typecheck (tsc --noEmit)"; Cmd = "pnpm";
      Args = @("typecheck"); Run = $true }
-  # eslint 的扫描范围（白名单目录）与参数收在 package.json 的 `lint` 脚本里：
+  # lint 的扫描范围（白名单目录）与参数收在 package.json 的 `lint` 脚本里：
   # 本门禁、.githooks/pre-commit 第 7 步、quality-gate.mjs、CI 共用同一份命令，
-  # 各自的目录清单与 `--cache` 参数不再各抄一遍（抄一遍就会漂移；范围口径与
-  # `--cache-strategy content` 的理由见 eslint.config.js 顶部那节）。
+  # 各自的目录清单与参数不再各抄一遍（抄一遍就会漂移；范围与规则面口径见
+  # `oxlint.parity.config.mjs` 顶部那节。#3157 起 eslint 已退役，只剩 oxlint 一档）。
   @{ Name = "lint";      Label = "ESLint zero error / zero warning";
      Cmd = "pnpm"; Args = @("run","lint"); Run = $true }
   @{ Name = "format";    Label = "oxfmt format ratchet (scripts/check-format.cjs)";

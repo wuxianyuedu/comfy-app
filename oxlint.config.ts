@@ -20,8 +20,8 @@ function parseReactVersion(): string {
   return match[1];
 }
 
-/** 视图层做**精确订阅**的 store hook 名单（单一出处，与 eslint.config.js 同口径）。
- *  见 eslint.config.js 顶部注释：新增 store 时同步加一行，
+/** 视图层做**精确订阅**的 store hook 名单（单一出处，与 `oxlint.parity.config.mjs` 同口径）。
+ *  <#3157 起 eslint 已退役，判决面只有这两份 oxlint 配置>：新增 store 时同步加一行，
  *  `tests/store-selector-shape.test.ts` 会核清单完整性。 */
 const STORE_SELECTOR_HOOKS = [
   "useDebugStore",
@@ -36,7 +36,7 @@ const STORE_SELECTOR_HOOKS = [
 /* ── 分层边界（替 eslint-plugin-boundaries；oxlint 下用该原插件经 `jsPlugins` 跑，
  *  官方有 oxlint-integration 示例 / Sanity 生产配置这么干）。
  *
- *  元素表与 `eslint.config.js` 逐字对应（更具体的 server 子目录必须排在
+ *  元素表与 `oxlint.parity.config.mjs` 逐字对应（更具体的 server 子目录必须排在
  *  `src/lib/**` 之前，否则会被先按 lib 归类，server 的既有约束随之失效）。
  *  `default: "allow"` + 4 条 disallow 策略（components→server、server→components、
  *  features→server、lib→components）与现状完全等价。
@@ -267,7 +267,7 @@ export default defineConfig({
         "next.config.js", // 抽样 5 / 复述 0（10 处：CSP / tracing 的现场与因果）
         "playwright.config.ts", // 抽样 5 / 复述 0（10 处：并发档与超时的实测来历）
         "oxlint.config.ts", // 抽样 7 / 复述 0（改前 7 处；本文件例外说明即理由）
-        "eslint.config.js", // 抽样 6 / 复述 0（14 条策略的边界与历史）
+        "oxlint.parity.config.mjs", // 抽样 6 / 复述 0（判决面与历史）
         "src/config/custom-nodes.ts", // 抽样 5 / 复述 0（5 处）
         "src/config/custom-nodes.test.ts", // 抽样 4 / 复述 0（4 处）
         "src/instrumentation.ts", // 抽样 4 / 复述 0（4 处）

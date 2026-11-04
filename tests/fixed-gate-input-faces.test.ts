@@ -183,8 +183,8 @@ describe("输入面登记的形状", () => {
 
 describe("模式匹配的三种形状", () => {
   it("精确路径、目录前缀、同段通配各自的行为", () => {
-    expect(faceMatches("eslint.config.js", "eslint.config.js")).toBe(true);
-    expect(faceMatches("src/App.tsx", "eslint.config.js")).toBe(false);
+    expect(faceMatches("oxlint.parity.config.mjs", "oxlint.parity.config.mjs")).toBe(true);
+    expect(faceMatches("src/App.tsx", "oxlint.parity.config.mjs")).toBe(false);
     expect(faceMatches(".githooks/pre-commit", ".githooks/**")).toBe(true);
     expect(faceMatches(".githooks/x/y", ".githooks/**")).toBe(true);
     /* 目录前缀不许吞同名兄弟：`scripts/x/**` 不匹配 `scripts/x2/y` —— 那种漂法会把
@@ -232,7 +232,7 @@ describe("切分与接线", () => {
 
   it("后补面的四条各按自己的触发面回来，且不互相带起（#2793）", () => {
     const cases: Array<[string, string]> = [
-      ["eslint.config.js", "tests/eslint-gate-canary.test.ts"],
+      ["oxlint.parity.config.mjs", "tests/eslint-gate-canary.test.ts"],
       ["scripts/check-commit-claims.mjs", "tests/check-commit-claims.test.ts"],
       ["scripts/changed-scope.mjs", "tests/changed-scope.test.ts"],
       ["src/components/ui/button.tsx", "tests/a11y-axe-stories.test.ts"],

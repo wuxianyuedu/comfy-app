@@ -3,7 +3,7 @@
 /**
  * UI / 逻辑分离护栏 —— 规范见 docs/standards/17-UI与逻辑分离.md
  *
- * 背景：本项目已有 eslint 的 server/components 分层边界(eslint.config.js)，
+ * 背景：本项目已有 oxlint 的 server/components 分层边界（`oxlint.parity.config.mjs`），
  * 但「UI 与业务逻辑混写」没有机器判定——组件里直接 fetch、直接调 tRPC、
  * 内联 async 处理器，导致逻辑无法单测、界面无法由工具重生成。
  * 本脚本按 §16.2.1 的四层范式（配置/逻辑/视图/容器）判定 —— **全部是硬闸**：

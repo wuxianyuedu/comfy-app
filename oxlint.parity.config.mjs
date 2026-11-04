@@ -8,8 +8,8 @@
  *
  * 生成口径：eslint --print-config 的 14 份读数并集（台账
  * `log/tools/eslint-oxlint-parity.md`），逐条映射到 oxlint 规则名。PR-B 起它是
- * `pnpm run lint` 的**第一判定口**；eslint 侧只剩 14 条 oxlint 没有等价实现的规则
- * （`eslint.config.js`，命令 `pnpm run lint:policy`），两者串行、都拦。
+ * `pnpm run lint` 的**唯一判定口**；#3157 起 eslint 侧整体退役（`eslint.config.js`
+ * 与 `lint:policy` 一并删除），这里与 `oxlint.config.ts` 是唯一的判决面。
  *
  * 三条策略守卫也从 eslint 迁到了这里（#2777）：store selector 形态与 router 只许
  * `TRPCError` 经 `eslint-js/no-restricted-syntax`，UI/features 禁直连 `drizzle-orm`

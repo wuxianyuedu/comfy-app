@@ -320,12 +320,6 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 只在受影响时跑等于专挑它不在的时机跑。本批它抓到的两处都是「画布上有内容、
   // 而看的不是真形态」：失败行与整条链路差九个多小时、以及日志绕过 store 去重/截尾。
   "tests/storybook-workflow-run-sources.test.ts",
-  // 「eslint 增量缓存的依赖指纹」：`--cache` 的缓存键不含依赖树，而 `no-unsafe-*`
-  // 是类型化规则 —— 依赖一变旧判决被整片重放，假红拦死提交、假绿洗掉真违规
-  // （ISSUE #1399）。它的执行者是 `postinstall` 那一步，而改 `.githooks/**` 会让
-  // 本层**放弃收窄、只跑固定清单**；接线断掉的那一刻正是这条判据要拦的动作，
-  // 所以必须与本次暂存改动无关也必须响。
-  "tests/eslint-cache-fingerprint.test.ts",
   // 「类型程序里 import 了一份不入库的生成件」（台账 E15 / ISSUE #1409）：注入层要的
   // 应用 origin 按检出路径现算、整目录 gitignore，而 `.storybook` 那两条通配在 tsconfig
   // 的 include 里 —— 两份决定各自都对，叠起来是「没跑过 storybook 的检出 tsc 必红」
@@ -445,8 +439,7 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 故进固定清单。
   "tests/theme-tokens-compile-source.test.ts",
   // 「jsx-a11y 的规则开关 ⇄ 判据」（规范 06 §6.12）：这个插件装着 39 条规则、
-  // 而 `eslint-config-next` 只启用 6 条 —— 「半开」这件事此前没有任何东西在数
-  //（`grep -c jsx-a11y eslint.config.js` 是 0，配置在 next 里）。本判据四向核：
+  // 而历史配置只启用 6 条 —— 「半开」这件事此前没有任何东西在数。本判据四向核：
   // 官方 recommended 集合全开、本仓与官方默认的每一处不同都在台账里登记、
   // 官方两份配置谁都没提到又未废弃的规则必须有一笔裁决、台账双向拦。
   // 它同时是判据自己的门禁自测 —— 该拦的（悄悄关掉一条、登记了却没关、
@@ -696,11 +689,11 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `.githooks/**` wide 兜底（改钩子 → `withFixed("all")` 跑全固定清单），加一步的那条 PR
   // 自己就会跑这份测试、当场抓到条数不符 —— 红在正确的地方，不再全员冻结。
   "tests/commit-gate-tier.test.ts",
-  // eslint 档位的**阳性对照**（ISSUE #2541 收尾）：三批之后全仓又回到 0 警，而
+  // lint 档位的**阳性对照**（ISSUE #2541 收尾）：三批之后全仓又回到 0 警，而
   // 「0 警」是**状态**不是**能力** —— #2541 的本质正是「空集意义上的 0 警」
-  //（core 面规则一条都没跑过，却报了 0 条）。这条造已知违例真跑一次 eslint，
+  //（core 面规则一条都没跑过，却报了 0 条）。这条造已知违例真跑一次 oxlint，
   // 断言守着的那几条会拦；再靠 `--sabotage` 钉住「它会红」（恒绿的对照不是对照）。
-  // 触发面是「有人动 `eslint.config.js`」，而配置住在仓库根、本判据住在 tests/，
+  // 触发面是「有人动 `oxlint.parity.config.mjs`」，而配置住在仓库根、本判据住在 tests/，
   // import 图追不到；更关键的是那种改动**往往正是为了关掉某条规则**（加白名单 /
   // 收 `files` 面），此时「只在受影响时才跑」恰好把自己排除在外 —— 与
   // `tests/spawn-shell-scan.test.ts`（改完静态闸要补阳性对照，ISSUE #2562 缺口 1）

@@ -6,7 +6,7 @@
  *
  * ── 立案现场：装了 39 条 a11y 规则，只启用 6 条 ────────────────────────
  *
- * `eslint-plugin-jsx-a11y` 装着 **39** 条规则，`eslint.config.js`（经
+ * `eslint-plugin-jsx-a11y` 装着 **39** 条规则，`eslint.config.js`（**历史**：当时经
  * `eslint-config-next`）只启用 6 条。剩下那批里，和本项目真实形态最相关的是
  * `no-static-element-interactions` / `click-events-have-key-events` /
  * `no-noninteractive-element-interactions` —— 它们判的是同一件事：

@@ -235,17 +235,17 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
     );
   });
 
-  it("三个模块都在 tsc / eslint 的扫描面里", () => {
-    /* `.storybook/**` 是以点开头的目录 —— TS 与 ESLint 的 glob 默认都跳过它，
+  it("三个模块都在 tsc / lint 的扫描面里", () => {
+    /* `.storybook/**` 是以点开头的目录 —— TS 与 lint 的 glob 默认都跳过它，
        不显式列就是「写了没人看」（ISSUE #1405 抓到的第一处）。 */
     const tsconfig = readFileSync(join(ROOT, "tsconfig.json"), "utf8");
-    const eslint = readFileSync(join(ROOT, "eslint.config.js"), "utf8");
+    const oxlintConfig = readFileSync(join(ROOT, "oxlint.parity.config.mjs"), "utf8");
     expect(tsconfig).toContain(".storybook/**/*.tsx");
-    expect(eslint).toContain(".storybook/**/*.{ts,tsx,mts,cts}");
+    expect(oxlintConfig).toContain(".storybook/**/*.{ts,tsx,mts,cts}");
     for (const file of ["store-sources", "flow-canvas", "screen-frame"]) {
       expect(
         file,
-        `${file} 的模块名出现在 tsconfig / eslint 的通配范围内即可，不需要逐个列出`,
+        `${file} 的模块名出现在 tsconfig / lint 的通配范围内即可，不需要逐个列出`,
       ).toBeTruthy();
     }
   });
