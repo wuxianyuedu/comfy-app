@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, asc, desc, eq } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
 import { TRPCError } from "@trpc/server";
 import { createId } from "@paralleldrive/cuid2";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
@@ -122,7 +122,7 @@ async function seasonSeriesId(ctx: Ctx, seasonId: string): Promise<string | null
 }
 
 /** tRPC ctx 的子集（仅取 router 需要的 db / user）。 */
-type Db = LibSQLDatabase<typeof schema>;
+type Db = SqliteRemoteDatabase<typeof schema>;
 type Ctx = { db: Db; user: { id: string } };
 
 /** 载入系列；不存在返回 null。 */

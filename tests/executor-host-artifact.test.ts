@@ -55,18 +55,20 @@ describe("构建链顺序：预编译 → 剪枝 → 冒烟", () => {
 });
 
 describe("预编译的形态判据", () => {
-  /** 只留三类件 external：带原生/可选二进制的、以及必须与 server 同实例的。
+  /** 只留两类件 external：带可选二进制的、以及必须与 server 同实例的。
    *  反过来 `drizzle-orm` / `zod` / `@paralleldrive/cuid2` 是纯 JS，但 standalone
    *  的 node_modules 顶层**没有**它们（Next 把它们编进 server chunk 了），留
-   *  external 就是运行期 ERR_MODULE_NOT_FOUND —— 实测数过产物目录才定下的清单。 */
+   *  external 就是运行期 ERR_MODULE_NOT_FOUND —— 实测数过产物目录才定下的清单。
+   *  `@libsql/client` 也不该回来：运行时已迁到 Node 内置的 node:sqlite（#3171），
+   *  `node:*` 那条通配负责放行，留一个不再被任何代码 import 的原生件只会是死重量。 */
   it("外部件清单是显式白名单，且不含纯 JS 的那三个", () => {
     const externals = /const EXTERNAL_PACKAGES = \[([\s\S]*?)\];/.exec(buildScript)?.[1];
     expect(externals, "找不到 EXTERNAL_PACKAGES").toBeTruthy();
-    for (const keep of ["@libsql/client", "ws", "pino"]) {
+    for (const keep of ["ws", "pino"]) {
       expect(externals).toContain(keep);
     }
-    for (const pure of ["drizzle-orm", "zod", "@paralleldrive/cuid2"]) {
-      expect(externals).not.toContain(pure);
+    for (const gone of ["@libsql/client", "drizzle-orm", "zod", "@paralleldrive/cuid2"]) {
+      expect(externals).not.toContain(gone);
     }
   });
 

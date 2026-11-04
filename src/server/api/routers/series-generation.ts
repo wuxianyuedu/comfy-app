@@ -4,7 +4,7 @@
  */
 import { z } from "zod";
 import { and, asc, eq, inArray } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import type * as schema from "~/server/db/schema";
@@ -13,7 +13,7 @@ import { workflowTemplateRepository, taskRepository } from "~/lib/core/repositor
 import { kickQueue } from "~/lib/comfyui/executor-continuation";
 import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
 
-type Db = LibSQLDatabase<typeof schema>;
+type Db = SqliteRemoteDatabase<typeof schema>;
 type Ctx = { db: Db; user: { id: string } };
 
 /** 断言当前用户拥有该季（沿 series 校验归属）。 */

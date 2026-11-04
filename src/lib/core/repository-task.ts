@@ -356,7 +356,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
         resultImages: task.resultImages,
         // 3-C（ADR §13 D1/D2）：SSE 单源化后轮询要读节点进度与日志增量。
         // 「轻量投影」的边界随之从「不含大列」改为「不含 workflowSnapshot」——
-        // 本机 libsql 异步驱动、单用户个位数活跃流，3s 一次可承受。
+        // 本机 sqlite-proxy（node:sqlite）单连接、单用户个位数活跃流，3s 一次可承受。
         progressNode: task.progressNode,
         logs: task.logs,
       })

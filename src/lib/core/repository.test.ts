@@ -1528,10 +1528,11 @@ describe("RemoteModelRepository", () => {
       (e as { code?: string }).code = "SQLITE_BUSY";
       return e;
     };
-    /* 前 maxAttempts-1 次让 `begin` 撞锁，第三次放行：既验「认锁码才重试」，
-     * 也验重试的是**整条事务**而不是某一条语句（每次重试都重新起一次 begin）。 */
+    /* 前 maxAttempts-1 次让 `begin immediate` 撞锁，第三次放行：既验「认锁码才重试」，
+     * 也验重试的是**整条事务**而不是某一条语句（每次重试都重新起一次 begin）。
+     * 事务显式 `immediate` 是 #3171 的条件 1（node:sqlite 单连接没有租约，必须一开始就拿写锁）。 */
     const gate = armStatementFailure(
-      (sql) => sql.trim().toLowerCase() === "begin",
+      (sql) => sql.trim().toLowerCase() === "begin immediate",
       busy,
       SETTINGS_DB_WRITE.maxAttempts - 1,
     );
@@ -1574,7 +1575,8 @@ describe("RemoteModelRepository", () => {
  *
  * ⚠️ 单子期望 3 里那句「并发两次保存」在这里只能是**串行**：宿主是一条
  * `:memory:` 连接，第二次 `begin` 会直接撞上第一条还没提交的事务并报 SQLite 自己的
- * 错 —— 那是测试的形状，不是生产的并发语义（libsql 每次事务绑连接池里的不同连接）。
+ * 错 —— 那是测试的形状，不是生产的并发语义（生产是每进程一条 node:sqlite 连接，
+ * 同一进程里的语句按事件循环串行；跨进程才靠 SQLite 的写锁）。
  * 真正要的那条性质（「别的保存在这两次写之间插不进来」）由下面那条 trace 用例证明：
  * 一次保存的 `begin…commit` 之间语句连续、且不出现第二个 begin。 */
 describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事务里落定", () => {
@@ -1716,7 +1718,8 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
       return e;
     };
     const gate = armStatementFailure(
-      (sql) => sql.trim().toLowerCase() === "begin",
+      /* 与 #2586 那条同形；`immediate` 是 #3171 条件 1 的显式事务行为。 */
+      (sql) => sql.trim().toLowerCase() === "begin immediate",
       busy,
       SETTINGS_DB_WRITE.maxAttempts - 1,
     );
@@ -1753,8 +1756,9 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
   /* 期望 2「单例那次读也落在同一个 executor 上」在**本宿主里只能按身份判**：
    * 测试宿主是一条 `:memory:` 连接，`db` 与 `tx` 打的是同一个实例，所以「读走模块级
    * 连接还是走事务」在 SQL trace 上**看不出区别** —— 上面那条 trace 用例证明不了它。
-   * 生产侧这个区别是实的：libsql 的 `file:` 客户端是连接池，整条事务绑其中一条连接，
-   * 另一条只会读到提交前的旧行。于是这条钉的是「传进来的到底是谁」。 */
+   * 生产侧这个区别现在也是**接口约定**而不是「另一条连接」：sqlite-proxy 的 `tx` 与
+   * 模块级 `db` 共用同一条 node:sqlite 连接（#3171），把 `tx` 传下去才是让这次读参与
+   * 当前事务边界、而不是碰巧同库。于是这条钉的是「传进来的到底是谁」。 */
   it("单例的 read-modify-write 把事务对象交给读，而不是让它回落模块级连接", async () => {
     await seedState();
     const original = llmConfigRepository.findSingleton.bind(llmConfigRepository);

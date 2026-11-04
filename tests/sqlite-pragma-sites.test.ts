@@ -1,7 +1,6 @@
 /**
- * PRAGMA / 等锁预算的「站点同源」判据（ISSUE #1250）：①**漂移** —— 库级 PRAGMA 有四处站点（Next 主库、工坊库、执行宿主、非 TS 启动器）要一致，三处 TS 侧 import 同一份清单，启动器只能照抄，故这里逐条核对。
- * ②**形状错** —— 等锁预算放进清单看似「四处都设了」，但 `@libsql/client` 的 `file:` 客户端是**连接池**，`Math.max(1, config.concurrency)` 未配时是 `NaN`（永远没到上限）⇒ 随时新开没见过开机 PRAGMA 的连接；正确形状是客户端 `timeout` 选项，由驱动在建立每条连接时设好。
- * 预算给宿主 250ms 而不给 Next 侧是签字决定，理由见 `src/lib/sqlite-pragmas.ts` 文件头（libsql 语句执行同步，等锁多少毫秒事件循环就停摆多少毫秒）；下面第 4、5 条用例当场把这两种形状量出来。
+ * PRAGMA / 等锁预算的「站点同源」判据（ISSUE #1250，驱动形状重定于 #3171）：①**漂移** —— 库级 PRAGMA 有四处站点（Next 主库、工坊库、执行宿主、非 TS 启动器）要一致，三处 TS 侧 import 同一份清单，启动器只能照抄，故这里逐条核对。
+ * ②**形状** —— 运行时已从 `@libsql/client`（`file:` 客户端是连接池，开机 PRAGMA 只落在当时借到的那条连接上）换成 `node:sqlite`（一个进程只有一条 `DatabaseSync` 连接，ISSUE #3171）。单连接下 `PRAGMA busy_timeout` 本身就能覆盖每一条后续语句，所以宿主侧预算已改回顾 PRAGMA；Next 侧仍然不设。下面第 4、5 条用例当场把「有预算 / 没预算」两种形状量出来。
  */
 import { mkdirSync, readFileSync, readdirSync, rmSync, rmdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -9,7 +8,6 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
-import { createClient } from "@libsql/client";
 import { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -86,43 +84,36 @@ function runHolder(holdMs: number): Promise<void> {
 const EXTERNAL_HOLD_MS = 1500;
 const BUDGET_MS = 5000;
 
-/** 用**同一个客户端**开一个不提交的读事务，占住池里那条连接，
- *  逼后面那次写去新开一条 —— 只有新开的那条才区分得出「开机 PRAGMA」与
- *  「客户端 timeout 选项」：前者跟不到它身上，后者由驱动在建立时设好。
- *  （上一版把占用者放进了另一个 client，被测 client 的池始终是空的，
- *  于是「PRAGMA 形状」量出来是写成功，把要判的漂移直接量没了。） */
-async function attemptWith(shape: "pragma" | "option") {
-  const url = `file:${dbFile}`;
-  const client =
-    shape === "option" ? createClient({ url, timeout: BUDGET_MS }) : createClient({ url });
+/** 用**一条** `node:sqlite` 连接去撞外部进程按住的写锁（#3171 之后的真形状：
+ *  `DatabaseSync` 一个进程一条连接，`PRAGMA busy_timeout` 对它之后的每条语句都生效）。
+ *  `none` 是「不设预算」的对照（默认 0ms，撞锁立刻抛）；`pragma` 把 5000ms 写进连接。
+ *  两者唯一的差别就是那条 PRAGMA —— 量的东西因此可归因。 */
+async function attemptWith(shape: "none" | "pragma") {
+  const db = new DatabaseSync(dbFile);
   if (shape === "pragma") {
-    for (const pragma of [...SQLITE_PRAGMAS, `PRAGMA busy_timeout = ${BUDGET_MS}`]) {
-      await client.execute(pragma);
-    }
+    db.exec(`PRAGMA busy_timeout = ${BUDGET_MS}`);
   }
-  const blocker = await client.transaction("read");
   await runHolder(EXTERNAL_HOLD_MS);
   const started = Date.now();
   let outcome: "ok" | "busy" = "ok";
   try {
-    await client.execute("UPDATE t SET v = 'contended' WHERE id = 1");
+    db.prepare("UPDATE t SET v = 'contended' WHERE id = 1").run();
   } catch {
     outcome = "busy";
   }
   const elapsed = Date.now() - started;
-  await blocker.rollback().catch(() => undefined);
-  client.close();
+  db.close();
   return { outcome, elapsed };
 }
 
 describe("库级 PRAGMA 清单只有一份定义", () => {
   it("清单本身只有 WAL 与外键，且**不含** busy_timeout（预算不该混进来）", () => {
     expect(SQLITE_PRAGMAS).toEqual(["PRAGMA journal_mode = WAL", "PRAGMA foreign_keys = ON"]);
-    /* 这条不是洁癖：把预算放进清单 = 让「四处都设了」这句话重新变成假的
-     * （池后开的连接读不到它），而假的判据比没有判据更坏。 */
+    /* 这条不是洁癖：把预算放进清单 = 让 Next 两处也无声地背上 250ms 同步停摆，
+     * 而「Next 侧不设预算」是签字决定；假的覆盖比没有覆盖更坏。 */
     expect(
       SQLITE_PRAGMAS.some((p) => p.includes("busy_timeout")),
-      "等锁预算必须由客户端 timeout 选项给，不许回到 PRAGMA 清单",
+      "等锁预算是连接级属性，由宿主站点自己以 PRAGMA 给，不许回到共用清单",
     ).toBe(false);
     expect(SQLITE_BUSY_TIMEOUT_MS).toBe(250);
   });
@@ -147,9 +138,10 @@ describe("库级 PRAGMA 清单只有一份定义", () => {
     }
   });
 
-  it("等锁预算只在执行宿主那一侧，且走的是 timeout 选项", () => {
+  it("等锁预算只在执行宿主那一侧，且走的是 PRAGMA busy_timeout", () => {
     const host = code("src/lib/comfyui/host-runtime.ts");
-    expect(host).toContain("timeout: SQLITE_BUSY_TIMEOUT_MS");
+    // node:sqlite 单连接下 PRAGMA 就是正确形状（#3171），所以这里钉的是它而不是客户端选项。
+    expect(host).toContain("`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS}`");
     /* Next 两处的「不设」同样是签字决定，所以要被钉住：回潮就会把界面请求变成
      * 最长 250ms 的同步停摆，而那条停摆既不在本 issue 的收口路径上、也没有测试。 */
     for (const rel of ["src/server/db.ts", "src/server/workshop/db.ts"]) {
@@ -348,7 +340,7 @@ describe("撞锁重试的因果（单元层：注入 BUSY，不赌时机）", ()
 });
 
 /* ── 竞态量具：N 个**独立进程**同时把一份新库切到 WAL（ISSUE #1282，形状重定于 #1337）─
- * 必须跨进程：同进程多条连接会被驱动自己串行化（实测 7 条跑同一个循环全绿），只有独立进程才
+ * 必须跨进程：同进程只有一条 node:sqlite 连接（#3171），串行执行天然不抢锁；只有独立进程才
  * 复现「别人正拿独占锁」那一档（`next build` 的 collect-page-data worker 正是独立进程）。
  * 已实测否掉的替代方案：让另一进程持 `BEGIN EXCLUSIVE` 造确定性撞锁不成立 —— 持锁时攻方执行
  * `PRAGMA journal_mode = WAL` 直接返回 `wal`，既不抛也不 no-op。故因果交单元层，进程层只负责「现场还在」。 */
@@ -363,7 +355,7 @@ const raceSandbox = path.join(ROOT, "node_modules", ".cache", `sqlite-pragma-rac
  * 才成立（esbuild 对 `.ts` 在非 module 包下按 CJS 转译，直接报 Top-level await 不支持）。 */
 const RACE_WORKER_SOURCE = `
 import { existsSync, writeFileSync } from "node:fs";
-import { createClient } from "@libsql/client";
+import { DatabaseSync } from "node:sqlite";
 
 /* 被测模块的**绝对路径**由父进程作为 argv[1] 传来：写成脚本里的相对路径就要数
  * 「这个脚本相对仓库根有几层」—— 那个数会随沙箱目录深度漂移，实测正是它把
@@ -384,16 +376,19 @@ while (!existsSync(startFile)) spin(2);
 /* 抢占窗口只有几毫秒：再多等一小会儿，让最后一个进程也到位。 */
 spin(30);
 
-const client = createClient({ url: "file:" + file });
+/* #3171 之后的真形状：一个进程一条 node:sqlite 连接，PRAGMA 直接走 exec。 */
+const db = new DatabaseSync(file);
 try {
   if (mode === "retry") {
-    await applySqlitePragmas(client);
+    await applySqlitePragmas({ execute: (sql) => db.exec(sql) });
   } else {
-    for (const pragma of SQLITE_PRAGMAS) await client.execute(pragma);
+    for (const pragma of SQLITE_PRAGMAS) db.exec(pragma);
   }
   console.log("ok");
 } catch (err) {
   console.log("fail:" + (err?.code ?? err?.message ?? "unknown"));
+} finally {
+  db.close();
 }
 `;
 
@@ -479,17 +474,17 @@ function runOnce(
 }
 
 describe("等锁预算的两种形状，当场量出来", () => {
-  it("开机 PRAGMA 覆盖不到池里新开的连接（那种形状等于没设）", async () => {
-    const { outcome, elapsed } = await attemptWith("pragma");
-    expect(outcome, "PRAGMA 形状不该写成功 —— 量具坏了").toBe("busy");
+  it("不设预算：撞上外部写锁立刻抛（fail-fast 是 Next 侧刻意保留的形状）", async () => {
+    const { outcome, elapsed } = await attemptWith("none");
+    expect(outcome, "不设预算却不抛 —— 量具坏了").toBe("busy");
     expect(
       elapsed,
-      `PRAGMA 形状等了 ${elapsed}ms：说明它覆盖到了，本文件的前提已不成立`,
+      `不设预算却等了 ${elapsed}ms：说明有一条我们没设过的预算，本文件的前提已不成立`,
     ).toBeLessThan(EXTERNAL_HOLD_MS);
   });
 
-  it("timeout 选项覆盖每一条连接：短锁被等到并写成功", async () => {
-    const { outcome, elapsed } = await attemptWith("option");
+  it("PRAGMA busy_timeout 覆盖单连接上的每一条语句：短锁被等到并写成功", async () => {
+    const { outcome, elapsed } = await attemptWith("pragma");
     expect(outcome).toBe("ok");
     expect(elapsed, "写成功却几乎没等：说明外部根本没按住，量具坏了").toBeGreaterThanOrEqual(300);
   });

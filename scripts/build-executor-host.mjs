@@ -54,11 +54,10 @@ const RUNTIME_ENTRY = path.join(
 const BUNDLE_REL = path.join("scripts", "executor-host.runtime.mjs");
 const MANIFEST_REL = path.join("scripts", "executor-host.build.json");
 
-/** 必须留在外面的包：@libsql/client 带平台绑定，ws/pino 有可选加速原生模块，还有
- *  与服务端共享的进程级单例。三份都已被 Next 的 tracing 带进产物（由清单核对）。 */
+/** 必须留在外面的包：ws/pino 有可选加速原生模块，还有与服务端共享的进程级单例。
+ *  （`@libsql/client` 与 `@libsql/client/node` 已随运行时迁移到 node:sqlite 退场，
+ *  ISSUE #3171：node:sqlite 是 Node 内置模块，由下面的 `node:*` 通配放行。） */
 const EXTERNAL_PACKAGES = [
-  "@libsql/client",
-  "@libsql/client/node",
   "ws",
   "pino",
 ];
