@@ -1675,6 +1675,7 @@ describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
           "而这一步存在全部意义就是「缺件时红」",
       ).toBe(1);
       expect(
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
         `${r.stdout ?? ""}${r.stderr ?? ""}`,
         "判不过时得把那句话打出来（退出码与话术两件都要有）",
       ).toContain("不在盘上");

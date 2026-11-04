@@ -63,6 +63,7 @@ describe("createProbeTree —— 一次性克隆带进工作树的脏，且不�
 
   afterAll(() => {
     tree?.dispose();
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- beforeAll 失败时 fixture 仍未赋值，teardown 照样会跑，保留 ?.
     fixture?.dispose();
   });
 

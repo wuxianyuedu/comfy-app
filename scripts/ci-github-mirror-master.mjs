@@ -26,13 +26,14 @@ import {
   PUSH_MAX_ATTEMPTS,
   hasRemoteRefs,
   pushArgs,
-  pushLfsObjects,
   realRunGit,
   realSleep,
   resolveMasterContext,
   runGitWithRetry,
   sanitize,
 } from "./ci-github-mirror-push.mjs";
+/* LFS 那一跳自 #3146 起单独一份（900 行闸）：它反过来要 import 主文件的判据，故主文件不转出它。 */
+import { pushLfsObjects } from "./ci-mirror-lfs-push.mjs";
 import { renderMirrorSummary } from "./ci-mirror-failure-report.mjs";
 
 /**
@@ -138,6 +139,8 @@ export async function runMasterMirror(io) {
     log,
     prefix: "mirror-master",
     runGit,
+    runGitWithRetry,
+    sanitize,
     sleep,
     token: ctx.token,
     url,

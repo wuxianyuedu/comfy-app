@@ -166,7 +166,7 @@ describe("三档的登记形状（§11.8）", () => {
      * `tests/doc-check-hook-wiring.test.ts` 的「每日侧有『每日新鲜度账』这一步」那条判
      * —— 三处各管一段，不在这里抄第二份清单解析器（§12.12 / §12.18）。 */
     for (const [kind, track] of Object.entries(FRESHNESS_TRACKS)) {
-      const subject = String(track.subject ?? "").trim();
+      const subject = String(track.subject).trim();
       expect(
         ["pr", "master"],
         `${kind}.subject 写成了「${subject}」—— 只认 pr / master（主体答的是「这一次是谁在判」）`,
@@ -175,7 +175,7 @@ describe("三档的登记形状（§11.8）", () => {
         continue;
       }
       expect(
-        String(track.ciStage ?? "")
+        String(track.ciStage)
           .trim()
           .startsWith("每日"),
         `${kind}（主体=master）的执行者 ${track.ciStage} 不在每日档上 —— 主干的账只能由` +
@@ -440,7 +440,7 @@ describe("「改了就当天跑」：dirty 档的判决（§11.8 / §13.5.4）",
 describe("ciStage：执行者在平台侧的那些档（§11.8 / §13.5.23）", () => {
   it("① 三档都登记了非空 `ciStage`，且判决把它带回来给调用方", () => {
     for (const kind of ["e2e", "full", "artifact"]) {
-      const stage = String(freshnessTrack(kind).ciStage ?? "").trim();
+      const stage = String(freshnessTrack(kind).ciStage).trim();
       expect(stage, `${kind} 没有登记平台侧执行者`).toBeTruthy();
       expect(
         asRegistered(kind, {}, {}).ciStage,

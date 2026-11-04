@@ -64,6 +64,7 @@ const tmpDirs: Array<string> = [];
 function driftOneOverride(real: string, key: string): string {
   const escaped = key.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   const hit = new RegExp(`^  ${escaped}: (\\S+)$`, "m").exec(real);
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- RegExp.exec 无匹配时运行期返回 null，规则按非空标，保留 ?. 防线
   if (hit?.[1] === undefined || hit?.[1] === "") {
     throw new Error(
       `pnpm-lock.yaml 的 overrides 里找不到 "${key}" —— 变异点必须由内容现取，` +
@@ -140,6 +141,7 @@ function runGate(root: string): { out: string; status: number } {
     ],
     { cwd: root, encoding: "utf8", timeout: 180_000 },
   );
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
   return { status: r.status ?? -1, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
 }
 
@@ -291,6 +293,7 @@ describe.skipIf(!hasPs)("运行器真跑：判决必须来自子进程真的执�
       ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", GATE_PS1, "-Mode", "dependencyAudit"],
       { cwd: ROOT, encoding: "utf8", timeout: 240_000 },
     );
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
     expect(out).toContain("[dep-audit]");
     expect(out).not.toContain("（没跑起来：");

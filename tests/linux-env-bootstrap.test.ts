@@ -130,7 +130,9 @@ function runEnvInitIn(files: Record<string, string>): {
   });
   return {
     status: r.status,
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     stdout: r.stdout ?? "",
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     stderr: r.stderr ?? "",
     scriptPath,
   };
@@ -149,6 +151,7 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
     const r = runEnvInitIn({
       ".env.example": fs.readFileSync(EXAMPLE, "utf8"),
     });
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
 
     const envPath = path.join(tmp, ".env");
@@ -199,6 +202,7 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
       .replace(/^COMFYAPP_DEV_HANDLE=.*$/m, "")
       .replace(/^LOG_LEVEL=.*$/m, 'LOG_LEVEL="debug"');
     const r = runEnvInitIn({ ".env.example": example, ".env": mine });
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
     const after = fs.readFileSync(path.join(tmp, ".env"), "utf8");
     const parsed = parseEnvFile(after);
@@ -226,6 +230,7 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
       .replace(/^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m, 'BETTER_AUTH_GITHUB_CLIENT_SECRET="mine"')
       .replace(/^COMFYAPP_DEV_HANDLE=.*$/m, "");
     const r = runEnvInitIn({ ".env.example": example, ".env": mine });
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
     const after = fs.readFileSync(path.join(tmp, ".env"), "utf8");
     const parsed = parseEnvFile(after);
@@ -244,6 +249,7 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
       .replace(/^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m, "")
       .replace(/^COMFYAPP_DEV_HANDLE=.*$/m, "");
     const r = runEnvInitIn({ ".env.example": example, ".env": stripped });
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
     const parsed = parseEnvFile(fs.readFileSync(path.join(tmp, ".env"), "utf8"));
     for (const key of REQUIRED_ENV_KEYS) {
@@ -572,6 +578,7 @@ describe("dev/start 在起 Next 之前预检", () => {
       timeout: 60_000,
     });
     expect(r.status, "缺 .env 时必须非零退出").not.toBe(0);
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
     expect(out).toContain("env-preflight");
     expect(out).toContain("env:init");

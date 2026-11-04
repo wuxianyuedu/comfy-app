@@ -1008,10 +1008,10 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
       }),
     });
     const result = await collectors.schema();
-    expect(result?.abort).toContain("含丢数据语句");
-    expect(result?.abort).toContain("DROP TABLE loraTrainingJob");
+    expect(result.abort).toContain("含丢数据语句");
+    expect(result.abort).toContain("DROP TABLE loraTrainingJob");
     // 出口是可执行的：`pnpm db:push`（不是一句「请同步数据库」）。
-    expect(result?.abort).toContain("pnpm db:push");
+    expect(result.abort).toContain("pnpm db:push");
   });
 
   it("浏览器 ready / 拿不到结论都只是读数，不拦", async () => {
@@ -1028,8 +1028,8 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
         browser: async () => verdict,
       });
       const result = await collectors.browser();
-      expect(result?.abort).toBeUndefined();
-      expect(result?.say).toContain("浏览器预检");
+      expect(result.abort).toBeUndefined();
+      expect(result.say).toContain("浏览器预检");
     }
   });
 });

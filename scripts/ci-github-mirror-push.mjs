@@ -65,6 +65,13 @@
  *    `git lfs push <镜像> HEAD`：**不带 `--all`**（增量由 git-lfs 对账，存量历史不重复计
  *    带宽）。失败 ⇒ exit 1 且**不派发**（派出去只会让 GitHub 侧拿指针文件跑出一格假红）。
  *    七类失败话术、配额风险与收尾小结见 `ci-mirror-failure-report.mjs` 模块头（#3106）。
+ *    **之一（#3138）**：`git lfs push <url> HEAD` 有两处依赖「本地 ref 可枚举」——
+ *    按 ref 对账该推哪些对象、以及参数 `HEAD` 本身要能解析。平台合成的合并提交 / 工作区
+ *    形态下这两件都可能不成立（现场 `Error getting local refs.`）。这一类失败**自动回退**
+ *    按对象 OID 推（`git lfs push --object-id`）：清单由 `git lfs ls-files --long` 按
+ *    **index** 取（实测：删光 `refs/**` 之后它照样给得出 OID），不经过任何 ref 解析。
+ *    回退通了就是通（原路径的 ref 枚举失败不构成结论）；回退也失败才按下面那条交账。
+ *    清单为空（本地压根没有 LFS 对象）⇒ 回退没有对象，按原失败交账。
  *
  * ## `--master`：push 档（`master 合并复核`）的主干镜像
  *
@@ -101,12 +108,14 @@ import path from "node:path";
 import process from "node:process";
 
 import {
-  classifyLfsPushFailure,
   isEgressFailure,
-  parseLfsObjectCount,
   renderMirrorSummary,
   writeDispatchState,
 } from "./ci-mirror-failure-report.mjs";
+import { pushLfsObjects } from "./ci-mirror-lfs-push.mjs";
+
+/* LFS 那一族搬去 `ci-mirror-lfs-push.mjs`（#3146 的 900 行闸）；仍从这里转出，导入面不用改。 */
+export { lfsObjectIdPushArgs, lfsPushArgs, parseLfsObjectIds } from "./ci-mirror-lfs-push.mjs";
 
 /* 这几件实现搬去 `ci-mirror-failure-report.mjs`（#3106 的 900 行闸）；仍从这里转出，导入面不用改。 */
 export {
@@ -200,21 +209,6 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  */
 export function pushArgs(url, ref) {
   return ["-c", "core.hooksPath=", "push", "--force", url, `HEAD:${ref}`];
-}
-
-/**
- * 第二跳（LFS 对象推送）的完整参数表（文件头第 9 条）。
- *
- * 与 {@link pushArgs} 同一纪律：`-c core.hooksPath=` 不带本仓钩子（pre-push 那一条
- * 对「在镜像仓写对象」没有管辖权）。**不带 `--all`**：`git lfs push <url> HEAD` 的语义
- * 是「HEAD 可达且远端还没有的对象」—— 增量由 git-lfs 自己按 LFS API 对账，存量历史
- * 不重复计带宽。`HEAD` 本地可解析（PR 事件上是平台合成的 merge 提交，工作区跑的就是它）。
- *
- * @param {string} url 带凭据的推送 URL（与内容推送同一条认证路径）
- * @returns {string[]} git 参数表
- */
-export function lfsPushArgs(url) {
-  return ["-c", "core.hooksPath=", "lfs", "push", url, "HEAD"];
 }
 
 /**
@@ -530,54 +524,6 @@ export function explainRemoteProbeFailure(text) {
 }
 
 /**
- * 内容推送成功后那一跳：把 LFS 对象也送过去（文件头第 9 条）。
- *
- * 失败 ⇒ `CODE.FAIL`，由调用方**不派发**：refs 已在而对象不在，GitHub 侧 checkout
- * 开 `lfs: true` 的那几格会拿指针文件跑出一格假红。重试与超时与内容推送同一套
- * （egress 类重试一次、`PUSH_TIMEOUT_MS` 墙钟）。
- *
- * @param {{log: (line: string) => void, prefix: string, runGit: typeof realRunGit,
- *   sleep: (ms: number) => Promise<void>, token: string, url: string}} ctx
- * @returns {Promise<{attempts: number, code: number, elapsedMs: number,
- *   failure: ReturnType<typeof classifyLfsPushFailure> | null, objects: string | null}>}
- *   仓内三态退码（这一跳只有 OK / FAIL 两态：前提那一层已由探活挡过）+ 收尾小结要的读数
- */
-export async function pushLfsObjects(ctx) {
-  const { log, prefix, runGit, sleep, token, url } = ctx;
-  const startedAt = Date.now();
-  const lfs = await runGitWithRetry(lfsPushArgs(url), {
-    label: "LFS 推送",
-    log,
-    maxAttempts: PUSH_MAX_ATTEMPTS,
-    prefix,
-    runGit,
-    sleep,
-  });
-  const elapsedMs = Date.now() - startedAt;
-  const text = sanitize(`${lfs.stdout}\n${lfs.stderr}`, token);
-  const objects = parseLfsObjectCount(text);
-  if (lfs.code !== 0) {
-    const failure = classifyLfsPushFailure(text);
-    log(
-      `[${prefix}] LFS 推送失败（exit ${String(lfs.code)}，重试 ${String(lfs.attempts - 1)} 次）：类别=${failure.label}；最终错因=${failure.evidence || "（原文没读到）"}；${failure.next}`,
-    );
-    for (const line of text.split("\n")) {
-      if (line.trim()) {
-        log(`[${prefix}]   原文：${line}`);
-      }
-    }
-    log(
-      `[${prefix}] 结论：exit 1 —— refs 已推但 LFS 对象没送过去 ⇒ 不派发（派出去只会让 GitHub 侧拿指针文件当红）`,
-    );
-    return { attempts: lfs.attempts, code: CODE.FAIL, elapsedMs, failure, objects };
-  }
-  log(
-    `[${prefix}] LFS 推送：通（增量：只推该 ref 可达且远端还没有的对象，已在场的由 git-lfs 自己跳过）`,
-  );
-  return { attempts: lfs.attempts, code: CODE.OK, elapsedMs, failure: null, objects };
-}
-
-/**
  * 执行镜像：先问「仓库在不在」→ 推 HEAD → 派发。每一跳各自独立成读数，前一跳没通后一跳不发。
  *
  * @param {{env: Record<string, string | undefined>, fetchImpl?: typeof fetch, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, dryRun?: boolean, log?: (line: string) => void, readout?: boolean, root?: string, writeFileSync?: (file: string, data: string) => void}} io
@@ -705,6 +651,8 @@ export async function runMirror(io) {
     log,
     prefix: "mirror",
     runGit,
+    runGitWithRetry,
+    sanitize,
     sleep,
     token: ctx.token,
     url,
@@ -782,6 +730,12 @@ export async function runMirror(io) {
   );
   return CODE.OK;
 }
+
+/**
+ * `--master` 那一档的执行面（`runMasterMirror`）在 `ci-github-mirror-master.mjs`
+ * （#3148：两份文件都在 §12.6 R5 的 900 行闸内）。它反过来要 import 本文件的判据与话术，
+ * 静态互相 import 会成环 ⇒ 入口那段**动态**取它，这里不转出。
+ */
 
 /**
  * 退码出口：读数档与承重档之间的那**唯一一道**分界（ISSUE #3051）。

@@ -4995,7 +4995,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     const { code, output } = repo.run();
     expect(code, output).not.toBe(0);
     /* 两处：`ChevronLeftIcon` 命中 `*Icon` 后缀、`svg` 是原生内建。 */
-    const line = output.split(/\r?\n/).find((l) => l.includes("] P81 ") ?? l.includes("P81 →"));
+    const line = output.split(/\r?\n/).find((l) => l.includes("] P81 "));
     expect(line ?? output).toMatch(/P81/);
     expect(output).toContain("P81IconSuffix.tsx");
   });

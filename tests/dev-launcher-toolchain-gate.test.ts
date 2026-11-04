@@ -622,6 +622,7 @@ describe("pnpm check:toolchain 真跑", () => {
         env: env ?? process.env,
       },
     );
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
     expect(r.stdout).toContain("pnpm 可用");
   });
@@ -632,6 +633,7 @@ describe("pnpm check:toolchain 真跑", () => {
       [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
       { encoding: "utf8", env: env ?? process.env },
     );
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
     // 这句是判据本身：它把「依赖在」与「三条门禁可跑」连在一起，
     // 否则读者只会看到「node_modules 已装」这句与门禁无关的话（ISSUE #1568）。
@@ -657,6 +659,7 @@ describe("pnpm check:toolchain 真跑", () => {
       [path.join(ROOT, "scripts", "check-pnpm-available.mjs"), "--deps-root", emptyRoot],
       { encoding: "utf8", env: env ?? process.env },
     );
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
     // 依赖未装只是「还没装」：自检仍以 0 退出（它判的是工具链可用性），
     // 但必须把可行动作与「可装」这个结论摆出来。
@@ -691,6 +694,7 @@ describe("pnpm check:toolchain 真跑", () => {
       },
     );
     expect(r.status).not.toBe(0);
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
     expect(out).toContain("corepack");
     expect(out).not.toContain("<项目版本>");
@@ -711,6 +715,7 @@ describe("pnpm check:toolchain 真跑", () => {
       },
     );
     expect(r.status).not.toBe(0);
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
     expect(out, "探不到 pnpm 时没有留下读取到的 PATH 原文").toContain("PATH 原文");
     expect(out).toContain(badPath);
@@ -769,6 +774,7 @@ describe("pnpm check:toolchain：版本不一致时复用启动器的对齐口�
       [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
       { encoding: "utf8", env: { ...process.env, PATH: bin, PATHEXT: "" } },
     );
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     return { status: r.status, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
   }
 
@@ -850,7 +856,9 @@ describe("pnpm check:toolchain：打印探测身份，版本漂移可自解释",
         env: envWithPnpm() ?? process.env,
       },
     );
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(`${r.stdout ?? ""}${r.stderr ?? ""}`).toContain("选中的 pnpm：");
   });
 });
@@ -1330,6 +1338,7 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
           env: { ...(envWithPnpm() ?? process.env), COMFYAPP_NODE_VERSION: "v20.9.0" },
         },
       );
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
       expect(r.stdout).toContain("不在声明范围内");
       expect(r.stdout).toContain("坏的是测试档");
@@ -1361,6 +1370,7 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
         [path.join(ROOT, "scripts", "check-pnpm-available.mjs"), "--deps-root", tmp],
         { encoding: "utf8", env: envWithPnpm() ?? process.env },
       );
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       expect(r.status, `stdout=${r.stdout ?? ""} stderr=${r.stderr ?? ""}`).toBe(0);
       expect(r.stdout).toContain("Node 下限这条判据没跑起来");
       expect(r.stdout).toContain("依赖没装");
@@ -1382,6 +1392,7 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
       [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
       { encoding: "utf8", env },
     );
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
     expect(r.stdout).toContain("在声明范围内");
   });

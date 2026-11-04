@@ -71,6 +71,7 @@ function loadInRealNode(absPath: string): { message: string; ok: boolean } {
   if (r.status === 0) {
     return { ok: true, message: "" };
   }
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
   const message = `${r.stderr ?? ""}${r.stdout ?? ""}`.trim();
   return { ok: false, message: message || `(无输出，退出码 ${r.status})` };
 }

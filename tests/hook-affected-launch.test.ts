@@ -1161,6 +1161,7 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
       cwd: ROOT,
       encoding: "utf8",
     });
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(full.status, `${full.stdout ?? ""}${full.stderr ?? ""}`).toBe(0);
     expect(full.stderr).toContain("--full：按名字要全量");
     // 增量档那句「N 个用例 / M 次启动」在全量档里**不该出现** —— 出现了说明它先解析了清单。
@@ -1170,6 +1171,7 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
       cwd: ROOT,
       encoding: "utf8",
     });
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(inc.status, `${inc.stdout ?? ""}${inc.stderr ?? ""}`).toBe(0);
     expect(inc.stdout, "增量档应当给出清单与启动次数").toMatch(/个用例 \/ \d+ 次启动/);
     expect(inc.stderr, "两档的话术必须可分辨").not.toContain("--full：按名字要全量");

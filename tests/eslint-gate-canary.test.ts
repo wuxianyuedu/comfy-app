@@ -66,13 +66,17 @@ describe("scripts/eslint-gate-canary.mjs", () => {
     "本仓开着的那几条规则真的会拦下违例（全仓 0 警 ≠ 闸在工作）",
     () => {
       const r = runCanary();
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       expect(r.status, `stdout=${r.stdout ?? ""}\nstderr=${r.stderr ?? ""}`).toBe(0);
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       const n = Number(/samples=(\d+)/.exec(r.stdout ?? "")?.[1] ?? "0");
       // 样本被删空却还退 0，是这条判据自己的失效形态（恒绿）
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       expect(n, `样本数不达标，实际：${r.stdout ?? ""}`).toBeGreaterThanOrEqual(10);
       /* 两批文件（tests 面与 scripts 面）必须在**同一次** eslint 调用里判完
        * （ISSUE #2862：这一格的墙钟几乎全是冷启动次数，单次约 30s）。
        * 拆回两次调用，功能断言一条都不会红 —— 所以次数要由这里钉住。 */
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       expect(oxlintCalls(r.stdout ?? ""), `实际：${r.stdout ?? ""}`).toBe(1);
     },
     CASE_TIMEOUT,
@@ -82,9 +86,12 @@ describe("scripts/eslint-gate-canary.mjs", () => {
     "闸会红：临时关掉一条在守的规则 ⇒ 必须非零退出（恒绿的对照不是对照）",
     () => {
       const r = runCanary(["--sabotage", "unicorn/no-new-array"]);
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       expect(r.status, `stdout=${r.stdout ?? ""}\nstderr=${r.stderr ?? ""}`).toBe(1);
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       expect(`${r.stderr ?? ""}${r.stdout ?? ""}`).toContain("unicorn/no-new-array");
       // 失败路径也要报得出次数（红的时候读不到它，就等于这一格没有这一项读数）。
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       expect(oxlintCalls(`${r.stderr ?? ""}${r.stdout ?? ""}`)).toBe(1);
     },
     CASE_TIMEOUT,
@@ -94,7 +101,9 @@ describe("scripts/eslint-gate-canary.mjs", () => {
     "闸门不误伤：关掉一条不相干的规则 ⇒ 其余对照照旧命中（退 0）",
     () => {
       const r = runCanary(["--sabotage", "no-console"]);
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       expect(r.status, `stdout=${r.stdout ?? ""}\nstderr=${r.stderr ?? ""}`).toBe(0);
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       expect(oxlintCalls(r.stdout ?? "")).toBe(1);
     },
     CASE_TIMEOUT,

@@ -414,6 +414,7 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
                 continue;
               }
               for (const r of rules) {
+                // oxlint-disable-next-line typescript/no-unnecessary-condition -- Playwright evaluate 里的 DOM 节点 textContent 运行期可为 null（lib.dom 声明 string|null），规则未建模，保留兜底
                 if (r.cssText?.includes("--xy-background-pattern-color-props")) {
                   n++;
                 }

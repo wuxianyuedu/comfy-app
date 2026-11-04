@@ -949,6 +949,7 @@ describe("CP936 出口：编排与退出码", () => {
       }) as never,
       /* SAFETY: 类型断言已复核 */
       write: ((_text: string, opts: { stdio?: unknown }) => {
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 该回调第二参在部分调用点省略，运行期可为 undefined，保留 ?. 防线
         seen.push(opts?.stdio);
         return { ok: true };
       }) as never,
@@ -1130,6 +1131,7 @@ describe("CP936 出口：**边到边发**（第六跑 —— 长跑 stage 的日
       spawnProc: (() => child) as never,
       /* SAFETY: 类型断言已复核 */
       write: ((text: string, opts: { stdio?: unknown }) => {
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 该回调第二参在部分调用点省略，运行期可为 undefined，保留 ?. 防线
         seen.push({ text, stdio: opts?.stdio });
         return { ok: true };
       }) as never,

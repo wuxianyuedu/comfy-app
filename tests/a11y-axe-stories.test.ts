@@ -290,6 +290,7 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
                * 「缺的是可见文本 / 缺 aria-label / 需要的子角色没渲染」。两个都留。 */
               nodeSamples.set(
                 pair,
+                // oxlint-disable-next-line typescript/no-unnecessary-condition -- axe 回包节点形状按非空标，运行期可能缺省，保留 ?. 防线
                 `${first?.failureSummary ?? "?"} ⟵ ${first?.target?.join(" ") ?? "?"}`.slice(
                   0,
                   300,

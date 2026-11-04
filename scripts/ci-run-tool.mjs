@@ -162,27 +162,88 @@ function stripJsoncComments(raw) {
 }
 
 /**
- * 读判决面文件的 `include` 摘要（读数尽力而为）。
+ * 读判决面文件的 `include` / `exclude` 摘要（读数尽力而为）。
  *
  * tsconfig 是 **JSONC** ⇒ 先剥注释再 parse（`stripJsoncComments()`）；parse 不过
  * 或读不到就回 `null`，日志上只落「内容读不到」—— 这是读数那一格，不是判据，
  * 不许为了读数把 JSONC 写成第二份完整实现。
  *
  * @param {string} faceFile `projectFaceOf()` 给出的 tsconfig 文件路径
- * @returns {string | null} `include` 数组的逗号拼接；没给 include ⇒ 空串
- *   （＝按 tsc 默认全收）；文件读不到 / parse 失败 ⇒ null
+ * @returns {{include: string | null, exclude: string | null}} 两条 glob 的逗号拼接；
+ *   没给（或空数组）⇒ 空串，含义分开写（include 空 = 按 tsc 默认全收，exclude 空 =
+ *   不排除）；文件读不到 / parse 失败 ⇒ 两条都 null
  */
-function includeSummaryOf(faceFile) {
+function faceGlobsOf(faceFile) {
   try {
     const raw = fs.readFileSync(faceFile, "utf8");
     const noComments = stripJsoncComments(raw);
     const noTrail = noComments.replaceAll(/,(\s*[}\]])/g, "$1");
     const parsed = JSON.parse(noTrail);
-    if (!Array.isArray(parsed.include) || parsed.include.length === 0) return "";
-    return parsed.include.map((/** @type {unknown} */ item) => String(item)).join(", ");
+    const join = (/** @type {unknown} */ value) =>
+      Array.isArray(value) && value.length > 0
+        ? value.map((/** @type {unknown} */ item) => String(item)).join(", ")
+        : "";
+    return { include: join(parsed.include), exclude: join(parsed.exclude) };
   } catch {
-    return null;
+    return { include: null, exclude: null };
   }
+}
+
+const SHORT_SHA = 12;
+
+/**
+ * 这棵树当前 `HEAD` 的 sha（读数尽力而为；取不到回 `null`）。
+ *
+ * @param {string} cwd 本次调用的工作目录
+ * @returns {string | null}
+ */
+function headShaOf(cwd) {
+  const res = spawnSync("git", ["rev-parse", "HEAD"], {
+    cwd,
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  const sha = String(res.stdout ?? "").trim();
+  return res.status === 0 && /^[0-9a-f]{40}$/i.test(sha) ? sha : null;
+}
+
+/**
+ * @param {string} sha
+ * @returns {string}
+ */
+function shortSha(sha) {
+  return sha.slice(0, SHORT_SHA);
+}
+
+/**
+ * 「这一跑读的是哪棵树」的读数（ISSUE #3041 跟笔）。
+ *
+ * 平台 PR 档检出的是**合成合并预览**（`HEAD` = 目标分支 ⊕ 本 PR），`CNB_COMMIT` 才是
+ * 本 PR 的顶端。两者不同时，`tsc` 报错的行号属于**合并后的树** —— 目标分支那一段别人
+ * 的提交把同一份文件的行号挪过，拿 PR 顶端逐行核对必然对不上（#2990 的六条就是这样）。
+ * 读数把这两个 sha 与它们的等否念出来，报错行号归谁就不用再推一遍。
+ *
+ * @param {string} cwd 本次调用的工作目录（被判的那棵树）
+ * @param {Record<string, string | undefined>} env 进程环境（`CNB_COMMIT` 由平台注入）
+ * @returns {string}
+ */
+function treeReadoutOf(cwd, env) {
+  const head = headShaOf(cwd);
+  if (head === null) {
+    return "读取的树：HEAD 取不到（报错行号属于哪一棵无法自证）";
+  }
+  const cnb = String(env.CNB_COMMIT ?? "").trim();
+  if (cnb === "") {
+    return `读取的树：HEAD ${shortSha(head)}（非平台检出：报错行号属于这棵树）`;
+  }
+  if (cnb.toLowerCase() === head.toLowerCase()) {
+    return `读取的树：HEAD ${shortSha(head)}（= CNB_COMMIT，报错行号属于本 SHA）`;
+  }
+  const label = /^[0-9a-f]{40}$/i.test(cnb) ? shortSha(cnb) : cnb;
+  return (
+    `读取的树：HEAD ${shortSha(head)} · CNB_COMMIT ${label}` +
+    `（≠ HEAD：平台合成合并预览，报错行号属于合并后的树，别拿 PR 顶端逐行对照）`
+  );
 }
 
 /**
@@ -304,10 +365,17 @@ process.stdout.write(`[ci-run-tool] 实际执行：node ${entry}${pkgLabel ? `�
  * 这件事只存在于 tsc 的默认行为里，日志上看不见 ⇒ 念出来。 */
 if (name === "tsc" || name === "tsgo") {
   const face = projectFaceOf(args, process.cwd());
-  const summary = includeSummaryOf(face.face);
+  const globs = faceGlobsOf(face.face);
   const via = face.explicit ? "点名" : "tsc 默认（cwd 的 tsconfig.json）";
-  const tail = summary === null ? "；内容读不到" : summary === "" ? "" : `；include: ${summary}`;
+  const tail =
+    globs.include === null
+      ? "；内容读不到"
+      : `；include: ${globs.include === "" ? "（未给 ⇒ tsc 默认全收）" : globs.include}` +
+        `；exclude: ${globs.exclude === "" ? "（未给）" : globs.exclude}`;
   process.stdout.write(`[ci-run-tool] 判决面：${face.face}（${via}${tail}）\n`);
+  /* sha 读数（ISSUE #3041 跟笔）：判决面只说「按哪份配置判」，不说「按哪一棵树判」；
+   * 平台合成合并预览下两者的差别正是行号对不上 PR 顶端的原因 ⇒ 一起念。 */
+  process.stdout.write(`[ci-run-tool] ${treeReadoutOf(process.cwd(), process.env)}\n`);
   /* 程序图读数（ISSUE #3049）：主面对 `.mjs` 的覆盖走的是 allowJs+checkJs 的 import
    * 通道（登记见 §13.5.14.1），它只存在于 tsc 的 program 行为里 —— #3041 的误诊现场
    * 就是照「主面不含 `.mjs`」这句去推的。红跑之后把 program 里的 .mjs 念出来，

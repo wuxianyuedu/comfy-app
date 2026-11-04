@@ -68,7 +68,7 @@ export const LFS_FAILURE_SHORT_ACTIONS = {
   EGRESS: "出网问题在节点侧：查 DNS / 代理",
   LFS_DISABLED: "去仓库 Settings → Options 开 Git LFS",
   LFS_MISSING: "先在节点装 git-lfs",
-  LOCAL_REFS: "改按 `--object-id` 推（或先落本地 ref）；重试无用",
+  LOCAL_REFS: "已自动回退 --object-id 仍败：查检出形态；重试无用",
   OTHER: "看上一行 git-lfs 原话",
   QUOTA: "去 Settings → Billing 查配额 / 买 data pack",
 };
@@ -108,7 +108,7 @@ export function classifyLfsPushFailure(text) {
       kind: "LOCAL_REFS",
       label: LFS_FAILURE_KINDS.LOCAL_REFS,
       short: LFS_FAILURE_SHORT_ACTIONS.LOCAL_REFS,
-      next: "git-lfs 在本次检出里枚举不到本地 refs（`Error getting local refs.`）⇒ 这是检出形态问题（平台合成的合并提交 / 工作区形态），不是网络也不是配额：先 `git rev-parse HEAD` + `git for-each-ref` 确认，再按指针清单改用 `git lfs push --object-id`（或先落一条本地 ref 再推）；重试不会变好",
+      next: "git-lfs 在本次检出里枚举不到本地 refs（`Error getting local refs.`）⇒ 这是检出形态问题（平台合成的合并提交 / 工作区形态），不是网络也不是配额。镜像格**已自动回退**按 `git lfs push --object-id` 重推（清单取自 `git lfs ls-files --long`，按 index 取、不经 ref 解析）—— 走到这句说明回退也没成：先 `git rev-parse HEAD` + `git for-each-ref` 看这次检出的形态，再查回退那句的原话；重试不会变好",
     };
   }
   if (/\b402\b|quota|bandwidth|storage limit|data pack/i.test(raw)) {

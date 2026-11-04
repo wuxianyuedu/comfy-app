@@ -81,7 +81,7 @@ describe("允许写脏的名单", () => {
      * outputs 都在派生名单里**（一个不少），且名单里没有任何登记外的来源。 */
     const prefixes = writerPrefixes();
     for (const duty of AUTOFIX_DUTIES) {
-      for (const out of duty.outputs ?? []) {
+      for (const out of duty.outputs) {
         expect(prefixes, `${duty.stage} 的 ${out} 不在派生名单里`).toContain(out);
       }
     }

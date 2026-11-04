@@ -89,6 +89,7 @@ describe("e2e Python 前置：可用时给出绝对路径", () => {
         args: ["-3"],
       }),
       which: (name, options) => {
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 该回调第二参在部分调用点省略，运行期可为 undefined，保留 ?. 防线
         calls.push({ name, args: options?.probeArgs ?? [] });
         return String.raw`C:\Windows\py.exe`;
       },
