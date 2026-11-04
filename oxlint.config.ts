@@ -210,6 +210,59 @@ export default defineConfig({
       },
     },
     {
+      /* #2924 收官包：`.storybook/**`、根配置面、`src/trpc/**`、`src/config/**`、
+       * `src/(根)`、`tools/**` 关掉 `awesomeness/no-novel-comments`。
+       *
+       * 与前三批同一口径：全仓复扫实测 214 处 / 30 份，按**文件**分层抽 **119 条**，
+       * 逐条判「复述代码行为」vs「为什么 / 契约 / 证据 / 模块头」，
+       * 结果**复述型 0/119（0%）**：构建/覆盖率阈值的推导与实测留痕、配置项之间
+       * 「只写一处就会静默失效」的因果、Storybook 注入层「为什么必须真数据」、
+       * `src/env.js` / 启动入口的 runtime 边界，全部是删掉之后最难重建的那类。
+       *
+       * 例外**按文件逐个登记**（不写 `.storybook/**` / `src/trpc/**` 这类目录通配）：
+       * 新增文件**不自动继承** —— 先抽样、再登记，复述型占比高于 0 的文件走「删复述」。
+       * `oxlint.config.ts` / `oxlint.parity.config.mjs` 自身也在命中面里：这些例外说明
+       * 注释就是「为什么」，登记而不是自删理由。
+       *
+       * ⚠️ 证据支撑的例外，不是永久豁免：评审发现复述型即删；任一文件复述型回升到
+       * 30% 以上时，撤掉它那一行 glob。 */
+      files: [
+        "vitest.config.ts", // 抽样 28 / 复述 0（64 处：覆盖率门槛的实测推导与留痕）
+        ".storybook/store-sources.tsx", // 抽样 7 / 复述 0（17 处）
+        ".storybook/message-center-sources.tsx", // 抽样 6 / 复述 0（16 处）
+        ".storybook/flow-canvas.tsx", // 抽样 6 / 复述 0（15 处）
+        ".storybook/data-sources.tsx", // 抽样 5 / 复述 0（11 处）
+        ".storybook/screen-frame.tsx", // 抽样 4 / 复述 0（9 处）
+        ".storybook/workflow-run-sources.tsx", // 抽样 3 / 复述 0（8 处）
+        ".storybook/main.ts", // 抽样 2 / 复述 0（4 处）
+        ".storybook/preview.tsx", // 抽样 1 / 复述 0（3 处）
+        ".storybook/app-origin-defaults.ts", // 抽样 1 / 复述 0（1 处）
+        ".storybook/app-origin-reader.ts", // 抽样 1 / 复述 0（1 处）
+        "next.config.js", // 抽样 5 / 复述 0（10 处：CSP / tracing 的现场与因果）
+        "playwright.config.ts", // 抽样 5 / 复述 0（10 处：并发档与超时的实测来历）
+        "oxlint.config.ts", // 抽样 7 / 复述 0（改前 7 处；本文件例外说明即理由）
+        "eslint.config.js", // 抽样 6 / 复述 0（6 处：16 条策略的边界与历史）
+        "src/config/custom-nodes.ts", // 抽样 5 / 复述 0（5 处）
+        "src/config/custom-nodes.test.ts", // 抽样 4 / 复述 0（4 处）
+        "src/instrumentation.ts", // 抽样 4 / 复述 0（4 处）
+        "src/proxy.ts", // 抽样 3 / 复述 0（3 处）
+        "src/trpc/base-url.ts", // 抽样 3 / 复述 0（3 处）
+        "src/env.js", // 抽样 2 / 复述 0（2 处）
+        "src/proxy.test.ts", // 抽样 2 / 复述 0（2 处）
+        "src/trpc/react.tsx", // 抽样 2 / 复述 0（2 处）
+        "drizzle.config.ts", // 抽样 1 / 复述 0（1 处）
+        "oxlint.parity.config.mjs", // 抽样 1 / 复述 0（1 处：判决配置的职责边界）
+        "src/sentry.edge.config.ts", // 抽样 1 / 复述 0（1 处）
+        "src/trpc/link.ts", // 抽样 1 / 复述 0（1 处）
+        "src/trpc/vanilla.ts", // 抽样 1 / 复述 0（1 处）
+        "tools/measure-log-store.ts", // 抽样 1 / 复述 0（1 处）
+        "tools/workshop-mcp-http.ts", // 抽样 1 / 复述 0（1 处）
+      ],
+      rules: {
+        "awesomeness/no-novel-comments": "off",
+      },
+    },
+    {
       files: ["src/server/api/routers/**/*.ts"],
       rules: {
         "eslint-js/no-restricted-syntax": [
