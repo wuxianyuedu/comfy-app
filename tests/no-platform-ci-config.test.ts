@@ -343,6 +343,9 @@ const DAILY_GATES = [
   "每日令牌权限读数",
   "每日工具链自证",
   "每日安装依赖",
+  /* ISSUE #3063（档位 ②）：GH workflows 的真解析，只挂每日档 —— 二进制钉在节点常驻根，
+   * 取用零网络（`scripts/ci-actionlint.mjs`）。 */
+  "每日 YAML 真解析",
   "每日 Python 可用性",
   "每日 Python 探针读数",
   "每日同步数据库表结构",
@@ -460,6 +463,7 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   { name: "每日令牌权限读数", tier: "daily" },
   { name: "每日工具链自证", tier: "daily" },
   { name: "每日安装依赖", tier: "daily" },
+  { name: "每日 YAML 真解析", tier: "daily" },
   { name: "每日 Python 可用性", tier: "daily" },
   { name: "每日 Python 探针读数", tier: "daily" },
   { name: "每日同步数据库表结构", tier: "daily" },

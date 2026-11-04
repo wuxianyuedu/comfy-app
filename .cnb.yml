@@ -449,8 +449,8 @@
     #   留在 PR 上的那一问是「这台机跑不动整条链吗」，由 `Install dependencies` 里的
     #   `check-pnpm-available.mjs` 判 —— 它一秒就有答案，且每个 PR 都需要。
     COMFYAPP_CI_DAILY_GATES: >-
-      每日失败立案, 每日令牌权限读数, 每日工具链自证, 每日安装依赖, 每日 Python 可用性,
-      每日 Python 探针读数, 每日同步数据库表结构, 每日新鲜度账, 每日生产构建,
+      每日失败立案, 每日令牌权限读数, 每日工具链自证, 每日安装依赖, 每日 YAML 真解析,
+      每日 Python 可用性, 每日 Python 探针读数, 每日同步数据库表结构, 每日新鲜度账, 每日生产构建,
       每日 ESLint 零警告, 每日浏览器安装, 每日全量E2E, 每日单元测试, 覆盖率上报
     # ⚠️ `每日浏览器安装` 与 `每日全量E2E` 的相对顺序不许动：装那一件要下 ~120 MiB
     #   （分钟级），而判「装没装成」是零成本的。2026-10-19 起这一格是**唯一**的执行者
@@ -922,6 +922,26 @@
       $ErrorActionPreference = "Stop"
       node scripts/ci-cp936-exit.mjs -- node scripts/check-pnpm-available.mjs
       node scripts/ci-cp936-exit.mjs -- node scripts/ci-install-deps.mjs
+  # ── GH workflows 的**真解析**（ISSUE #3063，档位 ②：只挂每日档）────────────
+  #
+  # `check:ci-yaml` 只判三件：YAML 能解析、锚点 / 别名合法、CNB 每格有 `name` + `script`。
+  # 它在 YAML 层全是合法字符串的那一类错里抓不到 GH Actions 的语义错（非法 `on:` /
+  # 未知 step 键 / `uses` 形态 / 表达式语法）—— 那些要等平台起跑才红。这一格用
+  # actionlint 补上这一层，**只判 `.github/workflows/*.yml`**；`.cnb.yml` 没有公开
+  # schema，手写一份的维护成本高于它能抓到的错（#3063 的结论），仍走 `check:ci-yaml`。
+  #
+  # 取用**零网络**：二进制钉在节点常驻根（`ci-tools/actionlint-1.7.7`，与 #2525 的
+  # 桌包工具同一条 `resolveToolRoot` 路），版本与 sha256 写在 `scripts/ci-actionlint.mjs`
+  # 顶部。常驻根里没有 / 哈希不符 ⇒ 退 2 / 退 1 并在末行念出出口，**绝不现下** ——
+  # 节点到 github.com 本就抖动（#3046），现下会把「今天取不到工具」伪装成「workflow 有错」。
+  # 末行是结论（平台日志页只看得到末尾时仍读得到）。
+  #
+  # 为什么只挂每日档：`.cnb.yml` / workflows 的改动频率低（#3063 选档的结论），
+  # 而每条 PR 都付一格是另一笔账；真解析要的 actionlint 也只是这一件事在用。
+  - name: 每日 YAML 真解析
+    timeout: 5m
+    script: |
+      node scripts/ci-cp936-exit.mjs -- node scripts/ci-actionlint.mjs
   - name: 每日 Python 可用性
     # ── **必须排在「每日单元测试」之前**（这条顺序原来是 PR 上的，2026-10-19 随两格一起搬来）──
     #
