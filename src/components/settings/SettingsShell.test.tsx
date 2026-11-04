@@ -52,6 +52,7 @@ describe("SettingsShell", () => {
     renderShell();
     const labels = within(nav())
       .getAllByRole("button")
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留空值兜底
       .map((el) => el.textContent?.trim());
     /* 集合式比对是**刻意**的：分组可以把项排成另一段（「诊断」段就与
        `SETTINGS_SECTIONS` 的自然顺序无关），但**一项都不许丢、一项都不许重**。
@@ -84,6 +85,7 @@ describe("SettingsShell", () => {
        同一种词，这一条正是为了「层级读得出来」而立的）。 */
     const buttonTexts = within(nav())
       .getAllByRole("button")
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留空值兜底
       .map((el) => el.textContent?.trim() ?? "");
     for (const label of groupLabels) {
       expect(buttonTexts).not.toContain(label);

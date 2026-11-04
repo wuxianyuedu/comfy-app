@@ -87,6 +87,7 @@ export function parseLfsObjectIds(text) {
   /** @type {string[]} */
   const out = [];
   const seen = new Set();
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 入参 text 是 git push 的原始输出（外部数据），运行期可为 undefined；规则按非空 string 标
   for (const line of String(text ?? "").split("\n")) {
     const m = /^\s*([0-9a-f]{64})\b/.exec(line);
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- exec 的 groups 面在两种分支下都可能为空

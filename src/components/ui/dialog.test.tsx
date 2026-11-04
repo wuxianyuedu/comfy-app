@@ -127,6 +127,7 @@ describe("ui/dialog 的关闭按钮", () => {
        的「一枚」不是靠少渲染内容蒙对的。 */
     const closes = popup.querySelectorAll(CLOSE_MARK);
     expect(closes).toHaveLength(2);
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留 ?. 防线
     const names = [...closes].map((el) => el.textContent?.trim());
     expect(names).toContain("Close");
     expect(names).toContain("我自己关");

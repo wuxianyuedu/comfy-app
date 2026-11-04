@@ -106,7 +106,7 @@ function runningFilm(id = "f-1") {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.clearAllTimers?.();
+  vi.clearAllTimers();
   // 默认无活跃项目 → 回落剧本模式（既有 create() 用例不受来源逻辑影响）。
   getActiveIdMock.mockReturnValue(null);
   fetchProductionMock.mockResolvedValue(null);

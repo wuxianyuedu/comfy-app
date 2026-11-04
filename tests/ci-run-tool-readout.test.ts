@@ -75,6 +75,7 @@ function runReadout(fixture: Fixture, overrides: Record<string, string>): string
     env,
   });
   expect(res.status).toBe(1);
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 出参：子进程起不来 / 无输出时 stdout 实测为 null，@types/node 按非空标，保留空串兜底
   const stdout = String(res.stdout ?? "");
   /* 转发本身也是判据的一部分：读数是加法，不许把子进程的输出吞掉。 */
   expect(stdout).toContain("error TS9999");
