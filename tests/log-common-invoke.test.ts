@@ -87,6 +87,7 @@ function runHarness(host: string): Record<string, string> {
     timeout: 180_000,
     env: { ...process.env, JUDGE_ROOT: dir, JUDGE_LOG_COMMON: LOG_COMMON },
   });
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
   const codes: Record<string, string> = {};
   for (const line of out.split(/\r?\n/)) {

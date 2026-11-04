@@ -34,6 +34,7 @@ function git(args: Array<string>, cwd: string): string {
   if (r.status !== 0) {
     throw new Error(`git ${args.join(" ")} 失败：${r.stderr || r.status}`);
   }
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
   return String(r.stdout ?? "").trim();
 }
 

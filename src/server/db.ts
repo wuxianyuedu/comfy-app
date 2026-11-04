@@ -62,7 +62,7 @@ function resolveDbPath(url: string): string {
 // libsql's file: URL wants the resolved absolute path so hot reloads and
 // drizzle-kit keep pointing at the same file regardless of process CWD shifts.
 const client = createClient({
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- env 在 SKIP_ENV_VALIDATION 下可缺 DATABASE_URL（见上方注释），zod 类型标成必填，`??` 是 build 期唯一防线
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- env may lack DATABASE_URL under SKIP_ENV_VALIDATION (see the comment above); zod declares it required, so this ?? is the only build-time guard
   url: `file:${resolveDbPath(env.DATABASE_URL ?? DEFAULT_DB_FILE)}`,
 });
 

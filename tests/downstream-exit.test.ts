@@ -55,8 +55,11 @@ describe("runtimeExitRecord：运行期退出要不要写记录", () => {
 
   it("原因说清「它是在运行中退出的、此后一直不可达」（不是「启动失败」）", () => {
     const record = runtimeExitRecord(DEV_DIED);
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- runtimeExitRecord 对 who=shell 返回 null（本文件 80 行断言 toBeNull），规则按非空标，保留 ?.
     expect(record?.reason).toContain("运行中");
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- runtimeExitRecord 对 who=shell 返回 null（本文件 80 行断言 toBeNull），规则按非空标，保留 ?.
     expect(record?.reason).toContain("不可达");
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- runtimeExitRecord 对 who=shell 返回 null（本文件 80 行断言 toBeNull），规则按非空标，保留 ?.
     expect(record?.reason).toContain("exit=1");
   });
 
@@ -67,10 +70,12 @@ describe("runtimeExitRecord：运行期退出要不要写记录", () => {
       devSignal: "SIGKILL",
     });
     expect(record).toMatchObject({ code: null, signal: "SIGKILL" });
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- runtimeExitRecord 对 who=shell 返回 null（本文件 80 行断言 toBeNull），规则按非空标，保留 ?.
     expect(record?.reason).toContain("signal=SIGKILL");
   });
 
   it("退出码拿不到就是 null，不拿 0 顶（0 是「正常退出」这个具体结论）", () => {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- runtimeExitRecord 对 who=shell 返回 null（本文件 80 行断言 toBeNull），规则按非空标，保留 ?.
     expect(runtimeExitRecord({ who: "dev", devCode: null })?.code).toBeNull();
   });
 

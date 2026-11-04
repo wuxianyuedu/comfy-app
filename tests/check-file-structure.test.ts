@@ -670,6 +670,7 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
       ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psUtf8Prelude + script],
       { encoding: "utf8" },
     );
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     return `${proc.stdout ?? ""}${proc.stderr ?? ""}`;
   };
 
@@ -958,6 +959,7 @@ exec(compile(ast.Module(body=blocks, type_ignores=[]), "<stub>", "exec"), namesp
 print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
 `;
     const proc = spawnSync(python, ["-c", script], { encoding: "utf8" });
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     return `${proc.stdout ?? ""}${proc.stderr ?? ""}`;
   };
 

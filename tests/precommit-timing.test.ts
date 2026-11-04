@@ -48,7 +48,9 @@ function run(args: Array<string>, cwd = REPO_ROOT) {
   });
   return {
     code: typeof r.status === "number" ? r.status : -1,
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     out: String(r.stdout ?? ""),
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     err: String(r.stderr ?? ""),
   };
 }

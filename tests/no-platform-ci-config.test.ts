@@ -2728,7 +2728,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(
       stageBlock(text, "打包·桌面成品构建"),
       "打包那一格必须点既有的执行者 `pnpm tauri build`（本单只补发布那一格，不抄第二份打桌包脚本）",
-    )?.toContain("pnpm tauri build");
+    ).toContain("pnpm tauri build");
     /* 由上面那一行直接推出来的那条安全前提（ISSUE #2883 把它变成判据，#2853 的期望 1 曾想反过来）：
      * 这一档**有**会真构建的格子 ⇒ 它的安装格**不许**接依赖缓存槽。接槽形态下 `node_modules` 是
      * 指向项目根之外的 junction，而 Turbopack 对这一条有硬要求（#2081 那次 13.8s 就死 + 后面整片
@@ -2866,7 +2866,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "定时清单解析不出来 —— 这条判据一旦取不到清单就会恒放行，先看解析器",
     ).toBeTruthy();
     for (const [kind, track] of Object.entries(FRESHNESS_TRACKS)) {
-      const stage = String(track.ciStage ?? "").trim();
+      const stage = String(track.ciStage).trim();
       expect(
         stage,
         `\`${kind}\` 没有登记 ciStage，而本地又不拦 —— 那一档现在没有任何执行者`,
@@ -2901,12 +2901,12 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "解析不出 COMFYAPP_CI_DAILY_GATES —— 这条判据就没有对象了",
     ).toBeGreaterThan(0);
     for (const [kind, track] of Object.entries(FRESHNESS_TRACKS)) {
-      const subject = String(track.subject ?? "").trim();
+      const subject = String(track.subject).trim();
       expect(
         ["pr", "master"],
         `${kind}.subject 写成了「${subject}」—— 只认 pr / master（主体答的是「这一次是谁在判」）`,
       ).toContain(subject);
-      const stage = String(track.ciStage ?? "").trim();
+      const stage = String(track.ciStage).trim();
       expect(
         stage,
         `\`${kind}\` 没有登记平台侧执行者（ciStage）—— 那一档现在没有任何执行者`,
@@ -3484,7 +3484,7 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
       const name = m[1] ?? "";
       seen.set(name, (seen.get(name) ?? 0) + 1);
     }
-    return [...seen].filter(([, n]) => n > 1).map(([k]) => k ?? "");
+    return [...seen].filter(([, n]) => n > 1).map(([k]) => k);
   }
 
   it("每档的 web 与 api 两条清单相同，且等于注册表的「最小前提 + 目标」", () => {
@@ -3585,6 +3585,7 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
     /* 注册表指了 `source` 的那些格：它们跟着的是**接槽那一族**，就必须真把那枚开关置成 1。 */
     const followingSlotFamily = ONESHOT_TARGETS.flatMap((t) =>
       (Array.isArray(t.prereqs) ? t.prereqs : [])
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 值来自 JSON/`as` 断言后的外部形状，类型按非空标，保留运行期防线
         .filter((p) => typeof p?.source === "string" && p.source !== "")
         .map((p) => p.oneshot),
     );

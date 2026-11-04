@@ -63,6 +63,7 @@ function scanner(files: Record<string, string>) {
     );
     return {
       ok: res.status === 0,
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       output: `${res.stdout ?? ""}${res.stderr ?? ""}`,
     };
   };
@@ -547,6 +548,7 @@ describe("跨面相等主张（给裸色值背书的「与品牌 token 同值」
       cwd: root,
       encoding: "utf8",
     });
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     const output = `${res.stdout ?? ""}${res.stderr ?? ""}`;
     expect(res.status).toBe(1);
     expect(output).toContain("背书");

@@ -585,6 +585,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
           { timeout: 5000 },
         )
         .toBe(true);
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- box 在 expect.poll 闭包里赋值，规则看不到写入点，量不到时仍是 null
       if (box === null) {
         throw new Error("弹层几何始终量不到，无法判定可点性");
       }
@@ -1084,6 +1085,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
       const headerFirstRow = await page
         .locator("div.flex.min-h-14")
         .first()
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- Playwright evaluate 里的 DOM 节点 textContent 运行期可为 null（lib.dom 声明 string|null），规则未建模，保留兜底
         .evaluate((el) => el.firstElementChild!.textContent ?? "");
       expect(headerFirstRow).toContain("应用日志");
       expect(headerFirstRow).not.toMatch(/警告 \d+/);
@@ -1151,6 +1153,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
             await consoleOption.evaluate((el) => {
               const nodes = [...el.querySelectorAll(".sr-only")];
               const summary =
+                // oxlint-disable-next-line typescript/no-unnecessary-condition -- Playwright evaluate 里的 DOM 节点 textContent 运行期可为 null（lib.dom 声明 string|null），规则未建模，保留兜底
                 nodes.map((n) => n.textContent?.trim() ?? "").find((t) => /^\d+ 条/.test(t)) ?? "";
               return /^(\d+) 条/.exec(summary)?.[1] ?? "0";
             }),
@@ -1187,6 +1190,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
            * 只有那个**以数字开头**的才是整行的纯文本摘要。 */
           const nodes = [...el.querySelectorAll(".sr-only")];
           const summary = nodes
+            // oxlint-disable-next-line typescript/no-unnecessary-condition -- Playwright evaluate 里的 DOM 节点 textContent 运行期可为 null（lib.dom 声明 string|null），规则未建模，保留兜底
             .map((n) => n.textContent?.trim() ?? "")
             .find((t) => /^\d+ 条/.test(t));
           return /^(\d+) 条/.exec(summary ?? "")?.[1] ?? "0";
@@ -1196,6 +1200,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
         optionOf(label).evaluate((el) => {
           const nodes = [...el.querySelectorAll(".sr-only")];
           const summary =
+            // oxlint-disable-next-line typescript/no-unnecessary-condition -- Playwright evaluate 里的 DOM 节点 textContent 运行期可为 null（lib.dom 声明 string|null），规则未建模，保留兜底
             nodes.map((n) => n.textContent?.trim() ?? "").find((t) => /^\d+ 条/.test(t)) ?? "";
           const num = (re: RegExp) => Number(re.exec(summary)?.[1] ?? "0");
           return {
@@ -1244,14 +1249,17 @@ test.describe("应用页签与全屏视图 @critical", () => {
           const num = (text: string | null | undefined, re: RegExp) =>
             re.exec(text ?? "")?.[1] ?? "";
           const option = [...document.querySelectorAll('[role="option"]')].find((el) =>
+            // oxlint-disable-next-line typescript/no-unnecessary-condition -- Playwright evaluate 里的 DOM 节点 textContent 运行期可为 null（lib.dom 声明 string|null），规则未建模，保留兜底
             el.textContent?.includes("全部来源（按条去重）"),
           );
           const summary = [...(option?.querySelectorAll(".sr-only") ?? [])]
+            // oxlint-disable-next-line typescript/no-unnecessary-condition -- Playwright evaluate 里的 DOM 节点 textContent 运行期可为 null（lib.dom 声明 string|null），规则未建模，保留兜底
             .map((n) => n.textContent?.trim() ?? "")
             .find((t) => /^\d+ 条/.test(t));
           /* 页脚那句「… · 面板共保留 N 条」。这个数只在页脚出现一处，直接取
              最内层命中它的节点即可（祖先会连着把整行文本都带进来，正则仍能取到）。 */
           const footer = [...document.querySelectorAll("span, div, p")].find((el) =>
+            // oxlint-disable-next-line typescript/no-unnecessary-condition -- Playwright evaluate 里的 DOM 节点 textContent 运行期可为 null（lib.dom 声明 string|null），规则未建模，保留兜底
             /面板共保留 \d+ 条/.test(el.textContent ?? ""),
           );
           return {

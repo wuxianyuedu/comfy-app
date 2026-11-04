@@ -933,6 +933,7 @@ describe("formatOutcome：running 那一支把进度念出来", () => {
 
   it("一格都没在飞时念「没有一格在飞」，不念成绿", () => {
     const idle = structuredClone(RUNNING_BUILD);
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 值来自 JSON/`as` 断言后的外部形状，类型按非空标，保留运行期防线
     const stage = idle.data.pipelinesStatus["b1-001"]?.stages?.[1];
     expect(stage, "夹具形状变了（找不到第二格）").toBeTruthy();
     if (stage) {

@@ -49,6 +49,7 @@ function run(script: string, args: Array<string> = [], cwd = REPO_ROOT) {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
   return { code: r.status ?? 1, output: `${r.stdout ?? ""}${r.stderr ?? ""}` };
 }
 
@@ -268,6 +269,7 @@ function probeRepo(): {
       });
       return {
         code: r.status ?? 1,
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
         output: `${r.stdout ?? ""}${r.stderr ?? ""}`,
       };
     },
