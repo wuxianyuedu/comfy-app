@@ -123,17 +123,17 @@ export function collectCommits(cwd, range) {
     let ins = 0;
     let del = 0;
     for (const line of (body[0] ?? "").split("\n")) {
-      const m = /^(\d+|-)\t(\d+|-)\t(.+)$/.exec(line.trim());
+      const m = /^(?<ins>\d+|-)\t(?<del>\d+|-)\t(?<rest>.+)$/.exec(line.trim());
       if (!m) {
         continue;
       }
       files += 1;
-      ins += m[1] === "-" ? 0 : Number(m[1]);
-      del += m[2] === "-" ? 0 : Number(m[2]);
+      ins += m.groups?.ins === "-" ? 0 : Number(m.groups?.ins);
+      del += m.groups?.del === "-" ? 0 : Number(m.groups?.del);
     }
     /* squash 标题尾部的 `(#N)` 是本仓的落地行形状；裸 `#N`（引用，不是认领）不算 ——
      * 与 ship 关单那一条同一把尺（ISSUE #2646）。 */
-    const pr = /(?:\(#(\d+)\)\s*)$/.exec(subject)?.[1] ?? "";
+    const pr = /(?:\(#(?<prNo>\d+)\)\s*)$/.exec(subject)?.groups?.prNo ?? "";
     out.push({ sha, subject, pr, files, ins, del });
   }
   return out;
@@ -307,8 +307,7 @@ export function main(argv, cwd = process.cwd()) {
       }
       steps = parsed.steps;
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      const e = /** @type {{message: string}} */ (error);
+      const e = error instanceof Error ? error : new Error(String(error));
       process.stderr.write(
         `[session-report] --steps-file 读不出（${e.message}）—— 不冒充「跑过标准批」。\n`,
       );
