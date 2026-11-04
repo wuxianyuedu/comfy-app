@@ -38,9 +38,9 @@ describe("workshop repository 映射", () => {
   it("stateToRow 反向映射", () => {
     const s = rowToState(row);
     const r = stateToRow(s);
-    expect(r?.title).toBe("标题");
-    expect(r?.idea).toBe("灵感");
-    expect(r?.stage).toBe("script");
+    expect(r.title).toBe("标题");
+    expect(r.idea).toBe("灵感");
+    expect(r.stage).toBe("script");
   });
 
   it("isStage 校验合法阶段", () => {

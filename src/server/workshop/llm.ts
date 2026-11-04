@@ -44,11 +44,11 @@ export async function getWorkshopLLMConfig(): Promise<WorkshopLLMConfig> {
       if (row.apiKey !== null && row.apiKey !== "") {
         cfg.apiKey = decryptLlmKey(row.apiKey);
       }
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+      // oxlint-disable-next-line eqeqeq, typescript/no-unnecessary-condition -- 同时判 null 与 undefined；列按 notNull 标，但历史行/旧库可能给 null，保留「有没有值」判断
       if (row.temperature != null) {
         cfg.temperature = row.temperature;
       }
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+      // oxlint-disable-next-line eqeqeq, typescript/no-unnecessary-condition -- 同上：maxTokens 列运行期可能为 null，显式判空是唯一防线
       if (row.maxTokens != null) {
         cfg.maxTokens = row.maxTokens;
       }
@@ -72,7 +72,7 @@ export async function completeWorkshopLLM(
   cfg: WorkshopLLMConfig,
   messages: Array<LLMMessage>,
 ): Promise<string> {
-  if (!cfg.model?.trim()) {
+  if (!cfg.model.trim()) {
     throw new Error(
       "尚未配置生效模型：请先在「设置 → 本地模型/远程模型」中选择或填写要使用的模型名",
     );

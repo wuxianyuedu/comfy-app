@@ -537,7 +537,7 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
     await expect
       .poll(() => filmRepo.markFailed, { message: "markFailed 的调用现场" })
       .toHaveBeenCalledWith("f-gen", "没有可继续的镜头");
-    const msgs = filmRepo.appendLog.mock.calls.map((c) => c[1]?.msg ?? "");
+    const msgs = filmRepo.appendLog.mock.calls.map((c) => c[1].msg);
     expect(msgs.some((m) => m.includes("进程重启后续跑监看"))).toBe(true);
   });
 

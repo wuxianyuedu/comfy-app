@@ -15,11 +15,11 @@ import { workshopDb } from "./db";
 /** 纯函数：线上草稿 → 可写行（不含 id / 时间戳）。 */
 export function draftToRow(draft: WorkshopDraftDto): Partial<WorkshopDraftInsert> {
   return {
-    title: draft.meta.title ?? "",
-    type: draft.meta.type ?? "short_video",
-    tone: draft.meta.tone ?? "",
-    logline: draft.meta.logline ?? "",
-    scriptMarkdown: draft.scriptMarkdown ?? "",
+    title: draft.meta.title,
+    type: draft.meta.type,
+    tone: draft.meta.tone,
+    logline: draft.meta.logline,
+    scriptMarkdown: draft.scriptMarkdown,
     scenes: draft.scenes,
     characters: draft.characters,
     shots: draft.shots,
@@ -111,11 +111,11 @@ export async function upsertDraft(
   const insertRow: WorkshopDraftInsert = {
     id,
     userId: userId ?? null,
-    title: draft.meta.title ?? "",
-    type: draft.meta.type ?? "short_video",
-    tone: draft.meta.tone ?? "",
-    logline: draft.meta.logline ?? "",
-    scriptMarkdown: draft.scriptMarkdown ?? "",
+    title: draft.meta.title,
+    type: draft.meta.type,
+    tone: draft.meta.tone,
+    logline: draft.meta.logline,
+    scriptMarkdown: draft.scriptMarkdown,
     scenes: draft.scenes,
     characters: draft.characters,
     shots: draft.shots,
@@ -127,5 +127,6 @@ export async function upsertDraft(
 export async function deleteDraft(id: string): Promise<boolean> {
   const result = await workshopDb.delete(workshopDraft).where(eq(workshopDraft.id, id));
   // libsql 的 ResultSet 用 rowsAffected（better-sqlite3 的 RunResult.changes 已不存在）。
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 驱动声明按 number 标，但部分语句（DDL/PRAGMA 路径）运行期不给 rowsAffected，`?? 0` 是唯一回落
   return (result.rowsAffected ?? 0) > 0;
 }

@@ -68,6 +68,7 @@ describe("audit 审计日志契约", () => {
     const fields = loggerErrorMock.mock.calls[0]?.[0] as {
       event?: string;
     };
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- fields 来自 mock.calls 经 `as` 断言，calls[0] 缺位时运行期为 undefined，`?.` 是防线
     expect(fields?.event).toBe("role_changed");
   });
 });

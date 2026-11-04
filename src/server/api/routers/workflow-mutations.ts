@@ -320,6 +320,7 @@ export const workflowMutationProcedures = {
               "id" in nd ? (nd as { id?: unknown }).id : undefined;
             const pid =
               typeof rawId === "string" ? rawId : typeof rawId === "number" ? String(rawId) : "";
+            // oxlint-disable-next-line typescript/no-unnecessary-condition -- posMap 是 `input.positions as Record<…>`：tRPC 入参可以不带 positions，断言只改类型，`?.` 是运行期防线
             if (pid && posMap?.[pid]) {
               nodes[i] = { ...nd, pos: posMap[pid] };
             }
@@ -425,9 +426,9 @@ export const workflowMutationProcedures = {
       rawJson: result.update.rawJson ?? existing.rawJson,
       paramMap: result.update.paramMap ?? existing.paramMap,
       positions: result.update.positions ?? existing.positions,
-      sourceMtime: result.update.sourceMtime ?? existing.sourceMtime,
-      sourceChecksum: result.update.sourceChecksum ?? existing.sourceChecksum,
-      taskType: result.update.taskType ?? existing.taskType,
+      sourceMtime: result.update.sourceMtime,
+      sourceChecksum: result.update.sourceChecksum,
+      taskType: result.update.taskType,
     });
     /* 详情缓存的 TTL 是 30s：不清的话用户点完「同步」再进详情还是旧内容，
      * 而磁盘标记已经翻回「无更新」—— 那是最难解释的一种自相矛盾。

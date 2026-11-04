@@ -42,11 +42,12 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
   });
 
   let user: TRPCUser | null = null;
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- better-auth 的 getSession 运行期可返回 null（本仓单测正是按 null 打桩），类型声明未带 null，`session?.` 是唯一防线
   if (session?.user?.email !== undefined && session.user.email !== "") {
     let dbUser = await userRepository.findByEmail(session.user.email);
     dbUser ??= await userRepository.createUser({
       email: session.user.email,
-      name: session.user.name ?? null,
+      name: session.user.name,
       password: "oauth-not-used",
     });
     user = { id: dbUser.id, email: dbUser.email, name: dbUser.name ?? null };
@@ -207,11 +208,12 @@ export const authedProcedure = t.procedure.use(timingMiddleware).use(async ({ ct
 /**
  * 带限流的「需登录」procedure。
  *
- * 对敏感操作（提权、删除、导出等）按 userId/IP 做滑动窗口限流，
+ * 对敏感操作（提权、删除、导出等）按 userId 做滑动窗口限流，
  * 防脚本暴力调用。默认 10 秒窗口内 20 次，超限返回 429。
  */
 export const rateLimitedProcedure = authedProcedure.use(async ({ ctx, next }) => {
-  const key = ctx.user.id ?? ctx.headers.get("x-forwarded-for") ?? "anon";
+  // authedProcedure 已保证 ctx.user 非空（类型上也是），userId 是限流的唯一键。
+  const key = ctx.user.id;
   if (!checkRateLimit(key)) {
     throw new TRPCError({
       code: "TOO_MANY_REQUESTS",

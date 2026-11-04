@@ -156,7 +156,7 @@ describe("project.get", () => {
   it("返回自己的项目", async () => {
     seedProject(tdb, { id: "p1", userId: "user-a", name: "我的" });
     const res = await createCaller(makeCtx()).get({ projectId: "p1" });
-    expect(res?.name).toBe("我的");
+    expect(res.name).toBe("我的");
   });
 
   it("他人项目 / 不存在 → 同一个错误信封，且码是 NOT_FOUND（不给探测 id 用）", async () => {
@@ -168,6 +168,7 @@ describe("project.get", () => {
       p.then(
         () => "OK",
         (error: { code?: string; message?: string }) =>
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- rejection 值是外部抛出的任意值，回调参数按 { code?; message? } 标窄，`?.` 是运行期防线
           `${error?.code ?? "?"}|${error?.message ?? "?"}`,
       );
     const foreign = await envelope(caller.get({ projectId: "p-b" }));

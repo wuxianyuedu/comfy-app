@@ -120,6 +120,7 @@ describe("会话桥：create / update / get 与界面同一份真值", () => {
       .where(eq(workshopSession.id, sessionId));
     const row = rows[0]!;
     const prodId = row.projectId;
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- projectId 列类型只含 string|null；`=== undefined` 是缺省列的历史形态，保留整段联合判断
     if (prodId === undefined || prodId === null) {
       throw new Error("绑定失败：会话行没有 projectId");
     }

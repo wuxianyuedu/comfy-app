@@ -81,6 +81,7 @@ export const seriesGenerationRouter = createTRPCRouter({
             where: eq(production.id, ep.projectId),
           });
           /* SAFETY: 类型断言已复核 */
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- prod 是 findFirst 结果，关联项目行可能缺失；类型按非空标，`prod?.` 是运行期防线
           const shots = Array.isArray(prod?.shots) ? (prod?.shots as Array<{ id?: string }>) : [];
           total = shots.length;
           const shotIds = shots
@@ -175,6 +176,7 @@ export const seriesGenerationRouter = createTRPCRouter({
           where: eq(production.id, ep.projectId),
         });
         /* SAFETY: 类型断言已复核 */
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- prod 是 findFirst 结果，关联项目行可能缺失；类型按非空标，`prod?.` 是运行期防线
         const shots = Array.isArray(prod?.shots) ? (prod?.shots as Array<{ id?: string }>) : [];
         for (const s of shots) {
           const sid = s.id;

@@ -514,7 +514,7 @@ describe("task.setImageFeedback（人工评分 / 收藏）", () => {
       isFavorite: true,
     });
     const detail = await createCaller(makeCtx()).detail({ id: "task-fb" });
-    expect(detail?.images[0]).toMatchObject({
+    expect(detail.images[0]).toMatchObject({
       id: "img-fb",
       humanRating: 4,
       isFavorite: true,
@@ -525,7 +525,7 @@ describe("task.setImageFeedback（人工评分 / 收藏）", () => {
       isFavorite: false,
     });
     const cleared = await createCaller(makeCtx()).detail({ id: "task-fb" });
-    expect(cleared?.images[0]).toMatchObject({
+    expect(cleared.images[0]).toMatchObject({
       humanRating: null,
       isFavorite: false,
     });

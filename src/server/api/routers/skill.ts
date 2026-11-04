@@ -29,6 +29,7 @@ export const skillRouter = createTRPCRouter({
         let tags: unknown;
         try {
           /* SAFETY: 类型断言已复核 */
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- tags 是 DB json 列，运行期可为 null；`as string` 只改类型，`?? "[]"` 负责兜底
           tags = JSON.parse((obj.tags as string) ?? "[]");
         } catch {
           tags = [];

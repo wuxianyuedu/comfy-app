@@ -75,6 +75,7 @@ function applyContentToState(
       ...state.meta,
       title: content.title,
       /* SAFETY: 类型断言已复核 */
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- content.type 经 `as ProjectMeta["type"]` 断言，来源是运行期数据，`?? state.meta.type` 是兜底
       type: (content.type as ProjectMeta["type"]) ?? state.meta.type,
       tone: content.tone,
       logline: content.logline,
@@ -93,6 +94,7 @@ export function rowToState(row: WorkshopSession): WorkshopSessionState {
     meta: {
       title: row.title,
       /* SAFETY: 类型断言已复核 */
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- row.type 是 DB 列经 `as ProjectMeta["type"]`，历史行可能不在枚举内，`?? "short_video"` 是兜底
       type: (row.type as ProjectMeta["type"]) ?? "short_video",
       tone: row.tone,
       logline: row.logline,
@@ -119,8 +121,8 @@ function summarize(row: WorkshopSession): WorkshopSessionSummary {
     tone: row.tone,
     logline: row.logline,
     stage: isStage(row.stage) ? row.stage : "script",
-    ideaLength: (row.idea ?? "").length,
-    scriptLength: (row.scriptMarkdown ?? "").length,
+    ideaLength: row.idea.length,
+    scriptLength: row.scriptMarkdown.length,
     sceneCount: Array.isArray(row.scenes) ? row.scenes.length : 0,
     characterCount: Array.isArray(row.characters) ? row.characters.length : 0,
     shotCount: Array.isArray(row.shots) ? row.shots.length : 0,
@@ -228,5 +230,6 @@ export async function updateState(id: string, state: WorkshopSessionState): Prom
 export async function deleteSession(id: string): Promise<boolean> {
   const result = await workshopDb.delete(workshopSession).where(eq(workshopSession.id, id));
   // libsql 的 ResultSet 用 rowsAffected（better-sqlite3 的 RunResult.changes 已不存在）。
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 驱动声明按 number 标，但部分语句路径运行期不给 rowsAffected，`?? 0` 是唯一回落
   return (result.rowsAffected ?? 0) > 0;
 }

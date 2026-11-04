@@ -123,14 +123,14 @@ describe("authedProcedure demo-user 兜底", () => {
   it("ctx.user 非空时透传，不注入 demo", async () => {
     const caller = createCaller(makeCtx());
     const res = await caller.authedWhoami();
-    expect(res.user?.id).toBe("user-a");
+    expect(res.user.id).toBe("user-a");
   });
 
   it("ctx.user 为 null（本地单用户/未登录）→ 注入 demo@comfy.app", async () => {
     const caller = createCaller(makeCtx({ user: null }));
     const res = await caller.authedWhoami();
     expect(res.user).not.toBeNull();
-    expect(res.user?.email).toBe("demo@comfy.app");
+    expect(res.user.email).toBe("demo@comfy.app");
   });
 
   it("loginRequired=true 且无会话 → UNAUTHORIZED（开关不再被 tRPC 面绕过）", async () => {
@@ -147,7 +147,7 @@ describe("authedProcedure demo-user 兜底", () => {
     loginRequired = true;
     const caller = createCaller(makeCtx());
     const res = await caller.authedWhoami();
-    expect(res.user?.id).toBe("user-a");
+    expect(res.user.id).toBe("user-a");
   });
 });
 
