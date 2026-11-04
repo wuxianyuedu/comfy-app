@@ -44,7 +44,7 @@ import { spawnSync } from "node:child_process";
  *  纯类型/常量模块没法机械识别 —— v8 对它们要么不产 DA 条目（天然出局），要么
  *  逐文件读数里可见，不靠路径猜。 */
 const DENOMINATOR_EXCLUDES = [
-  /\.test\.(ts|tsx)$/, // 测试自己（约定形状 `foo.test.ts`）
+  /\.test\.(?:ts|tsx)$/, // 测试自己（约定形状 `foo.test.ts`）
   /\.d\.ts$/, // 声明文件
   /^src\/generated\//, // 生成物
   /^docs\/api\//, // 生成物（typedoc）
@@ -71,7 +71,7 @@ export function inDenominator(rel) {
  */
 function isCodeLine(line) {
   const t = line.trim();
-  return t !== "" && !/^(\/\/|\/\*|\*|\*\/)/.test(t);
+  return t !== "" && !/^(?:\/\/|\/\*|\*|\*\/)/.test(t);
 }
 
 /**
@@ -99,9 +99,9 @@ export function parseChangedLines(diffText) {
     if (rawLine.startsWith("+++ ") || rawLine.startsWith("--- ")) {
       continue;
     }
-    const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(rawLine);
+    const hunk = /^@@ -\d+(?:,\d+)? \+(?<newStart>\d+)(?:,(?<count>\d+))? @@/.exec(rawLine);
     if (hunk) {
-      newLine = Number(hunk[1]);
+      newLine = Number(hunk.groups?.newStart ?? 0);
       continue;
     }
     if (file === "") {
@@ -296,14 +296,14 @@ export function main(argv, cwd = process.cwd()) {
     const walk = (dir) => {
       /** @type {string[]} */
       let found = [];
-      /** @type {import("node:fs").Dirent[]} */
-      let entries = [];
+      /** @type {import("node:fs").Dirent[] | undefined} */
+      let entries;
       try {
         entries = fs.readdirSync(dir, { withFileTypes: true });
       } catch {
         return found;
       }
-      for (const e of entries) {
+      for (const e of entries ?? []) {
         const p = path.join(dir, e.name);
         if (e.isDirectory()) {
           found = [...found, ...walk(p)];

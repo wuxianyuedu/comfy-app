@@ -50,9 +50,15 @@ function runScript(args: Array<string>, cwd: string) {
       status: 0,
     };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as { status?: number; stderr?: string; stdout?: string };
-    return { stdout: String(e.stdout ?? "") + String(e.stderr ?? ""), status: e.status ?? -1 };
+    /* execFileSync 失败抛的是带 status/stdout/stderr 的普通对象。#3167 开的
+     * no-unsafe-type-assertion 只放行「守卫后收窄」——所以这里用谓词而不是断言。 */
+    const isExecError = (v: unknown): v is { status?: number; stderr?: string; stdout?: string } =>
+      typeof v === "object" && v !== null;
+    const e = isExecError(error) ? error : {};
+    return {
+      stdout: String(e.stdout ?? "") + String(e.stderr ?? ""),
+      status: e.status ?? -1,
+    };
   }
 }
 
