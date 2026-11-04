@@ -7436,8 +7436,10 @@ node scripts/check-tsc-diagnostic-executors.cjs --update   # 把基线收紧到�
 主面看不到未引用的入口，棘轮不给主面那份「当场修」的账。
 
 **别照「主面不含 `.mjs`」这句话去归因**（#3041 的误诊现场：两条根因候选都从这句推出，
-全不成立）：`.mjs` 报错先看「类型检查」格的两行读数 —— `[ci-run-tool] 判决面`
-（判的是哪份 tsconfig、哪把 tsc）与红跑之后的 `[ci-run-tool] 程序图里的 .mjs`
+全不成立）：`.mjs` 报错先看「类型检查」格的三行读数 —— `[ci-run-tool] 判决面`
+（判的是哪份 tsconfig、它的 include / exclude、哪把 tsc）、`[ci-run-tool] 读取的树`
+（`HEAD` 与 `CNB_COMMIT` 两个 sha；不相等 ⇒ 平台合成合并预览，报错行号属于**合并后的树**，
+别拿 PR 顶端逐行对照）与红跑之后的 `[ci-run-tool] 程序图里的 .mjs`
 （通道在不在场、这份文件是不是被引到的），再下结论。
 
 **面上还要过一次「入库」这道闸（ISSUE #2681）**：上面那句里的「展开」走的是 TS 的 glob
