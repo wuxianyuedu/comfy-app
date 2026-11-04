@@ -39,7 +39,6 @@ import {
   combineShipCodes,
   conflictAdviceLines,
   decideCleanBranch,
-  deriveTitle,
   findMergedPullForHeadSha,
   findPullForBranch,
   LIST_MAX_PAGES,
@@ -48,6 +47,7 @@ import {
   readPullVerdict,
 } from "./ship-core.mjs";
 import { buildPullBody, PULL_BODY_LIMIT } from "./ship-pull-body.mjs";
+import { diffBaseRef, pickTitle } from "./ship-title.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
 import { reportConflictStage, reportStage } from "./ship-stage.mjs";
 import { DEV_HANDLE_ENV_KEY, handlerLabel } from "./ship-ticket.mjs";
@@ -71,47 +71,6 @@ import { DEV_HANDLE_ENV_KEY, handlerLabel } from "./ship-ticket.mjs";
  * @property {string | null} base 基线引用（如 `origin/master`）
  * @property {string} source 来源档位（`upstream` / `sole-remote` / `origin` / `none`）
  */
-
-/**
- * 标题的取数（PR 标题与 squash 那一行共用这一份），并把来源念出口。
- *
- * 为什么不在调用点各写一遍 `git log -1 --pretty=%s`：那一格取的是分支**当前顶端**那一笔，
- * 于是「先把 master 合进来再 `--merge`」把主干那一行写成 `Merge branch 'master' into …`，
- * 「最后补一笔碎片」把它写成 `docs(changelog): …` —— 两条都已上了主干（#2057 / #2055）。
- * 推导本身在 `ship-core.mjs` 的 `deriveTitle`（纯函数），这里只负责取读数。
- *
- * 念出口排在返回**之前**：标题坏了要当场看得见，而不是等 squash 落进历史再回头读 log。
- *
- * @param {{
- *   run: PlatformIO["run"],
- *   log: PlatformIO["log"],
- *   baseRef: string | null,
- *   explicit?: string | null,
- *   platform?: string | null,
- * }} ctx
- *   `platform` 是平台上这条 PR 的现标题（只有合并那一跳回读得到，建 PR 时没有；
- *   给了它，它排在 branch-first 推导之前，ISSUE #2806）
- * @returns {{title:string,source:string}} 标题与它的来源
- */
-function pickTitle({ run, log, baseRef, explicit = null, platform = null }) {
-  const subjects = baseRef
-    ? run("git", [
-        "log",
-        "--no-merges",
-        "--reverse",
-        "--format=%s",
-        `${baseRef}..HEAD`,
-      ]).stdout.split("\n")
-    : [];
-  const head = run("git", ["log", "-1", "--pretty=%s"]).stdout.trim();
-  const t = deriveTitle({ subjects, head, explicit, platform });
-  log(
-    `[ship] 标题取自 ${t.source}${baseRef ? `（比的是 ${baseRef}..HEAD）` : ""}：${
-      t.title || "(空)"
-    }`,
-  );
-  return t;
-}
 
 /**
  * 给 PR 补 `处理人:<短名>` 标签，并**独立回读**再下结论（ISSUE #2204）。
@@ -381,10 +340,19 @@ export function createOrReusePull(ctx) {
         "缺读数不新增结论、也不撤销结论（「取不到」不等于「没落地」）。",
     );
   }
-  const { title } = pickTitle({
+  /* 区间跟 PR 的目标分支走（ISSUE #3021）：新建时目标就是下面 `--base` 传出去的那条，
+   * 取数前先刷新它的远端跟踪引用 —— 过期的 `origin/<父分支>` 会把别人的提交算进来。 */
+  const baseForDiff = diffBaseRef({
     run,
     log,
     baseRef,
+    targetBranch: baseBranch,
+    remote: baseRef ? (baseRef.split("/")[0] ?? null) : null,
+  });
+  const { title } = pickTitle({
+    run,
+    log,
+    baseRef: baseForDiff,
     explicit: explicitTitle,
   });
   if (!title) {
@@ -400,7 +368,9 @@ export function createOrReusePull(ctx) {
     handle,
     /* 基线取不到时这一格就是空 —— 宁缺：拿 `HEAD...HEAD` 会得到一份「什么都没有」
      * 的 diffstat，而 PR 正文里那句「这次改了哪些文件」正是读者判断成本的入口。 */
-    diffstat: baseRef ? run("git", ["diff", "--stat", `${baseRef}...HEAD`]).stdout.trim() : "",
+    diffstat: baseForDiff
+      ? run("git", ["diff", "--stat", `${baseForDiff}...HEAD`]).stdout.trim()
+      : "",
   });
   /* 守卫排在落临时文件**之前**：`mkTmp` 的回收挂在 `main` 的 `finally` 上，
    * 先建再退虽然不会留垃圾，但会让「这次没建 PR」那一次也在盘上写过一份
@@ -686,6 +656,9 @@ export function mergeAndVerify(ctx) {
    * 那一行，主干上就落一条「标题与内容不符」的历史 —— 评审在平台上读到的标题与
    * `git log` 里那一行本该是同一句。没给 `--title` 才回读：给了就以人为准，省一次往返。 */
   let platformTitle = null;
+  /* 标题要用的区间基线：复用的 PR 可能指向另一条特性分支（栈式 PR），
+   * 这时本地 upstream 不是它的目标分支 —— 以平台回读的 `base.ref` 为准（ISSUE #3021）。 */
+  let baseForTitle = baseRef;
   if (!(explicitTitle ?? "").trim()) {
     const prNow = cnbJson(run, [
       "pulls",
@@ -696,7 +669,15 @@ export function mergeAndVerify(ctx) {
       String(number),
       "-v",
     ]);
-    platformTitle = prNow ? readPullVerdict(prNow.json).title : null;
+    const pvNow = prNow ? readPullVerdict(prNow.json) : null;
+    platformTitle = pvNow ? pvNow.title : null;
+    baseForTitle = diffBaseRef({
+      run,
+      log,
+      baseRef,
+      targetBranch: pvNow ? pvNow.baseBranch : null,
+      remote: up.remote,
+    });
     if (!prNow) {
       /* 「回读没跑起来」与「这条 PR 没在平台上改过标题」必须在屏幕上长得不一样：
        * 前者是读数缺失（退回 branch-first 是权宜，标题可能真的被人改过），
@@ -710,7 +691,7 @@ export function mergeAndVerify(ctx) {
   const { title } = pickTitle({
     run,
     log,
-    baseRef,
+    baseRef: baseForTitle,
     explicit: explicitTitle,
     platform: platformTitle,
   });
