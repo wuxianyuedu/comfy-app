@@ -130,6 +130,20 @@ describe("受影响用例的启动器 —— 「大改动拆小」这条建议�
     );
   });
 
+  it("归因那一跳用跨进程心跳（spawnSync 阻塞主线程，进程内定时器不跳）", () => {
+    /* 归因要重建一次反向 import 图，`spawnSync` 期间本进程的定时器整段不跳 ——
+     * 进程内那条 `startProgress` 在这里只能打首尾两行。所以必须走跨进程那条，
+     * 而且失败分支也要在 `finally` 里收尾。 */
+    const fnStart = adviceSrc.indexOf("export function collectAttribute() {");
+    expect(fnStart, "解不出 collectAttribute").toBeGreaterThan(-1);
+    const fnBody = adviceSrc.slice(fnStart, adviceSrc.indexOf("\n}\n", fnStart));
+    expect(adviceSrc, "没接同一入口").toContain('from "./progress-heartbeat.mjs"');
+    expect(fnBody, "必须是跨进程那条").toContain("startProgressSync(");
+    expect(fnBody, "要报出当前段名").toContain("progress.step(");
+    expect(fnBody, "失败分支也必须收尾").toContain("finally {");
+    expect(fnBody).toContain("progress.done(");
+  });
+
   it("它**不改变退出码**（代价不是结论）—— 打印点自己不许 return", () => {
     /* 这条是本档最容易做坏的一格：把「这次的面很大」顺手写成非零退出码，
      * 大改动就从此提交不了，而大改动有时**不可分**（一次接口重命名天然横跨几十个文件）。

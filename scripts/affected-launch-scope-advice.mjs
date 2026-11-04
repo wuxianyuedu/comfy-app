@@ -34,6 +34,10 @@ import { changedFromEnv, spawnAffected } from "./affected-launch-changed-list.mj
 /* 「毫秒→秒」的格式归话术层（`affected-launch-rerun-report.mjs`）—— 抄一份的漂移形态是
  * 静默的：一处改了进位、另一处照旧，而同一次收尾里会同时出现两种写法。 */
 import { fmtSec } from "./affected-launch-rerun-report.mjs";
+/* 这一跳的外部命令是 `spawnSync`（见 `affected-launch-changed-list.mjs` 的
+ * `spawnAffected`）：主线程被阻塞期间进程内定时器不跳，所以进度心跳只能来自另一个
+ * 进程 —— `startProgressSync`（ISSUE #3144）。它只往 stderr 加「进行中」那一行。 */
+import { startProgressSync } from "./progress-heartbeat.mjs";
 
 /**
  * 调 `affected-tests.mjs --attribute` 拿「每个改动文件各自影响多少份」。
@@ -44,26 +48,35 @@ import { fmtSec } from "./affected-launch-rerun-report.mjs";
  * @returns {Array<{file?: string, affected?: number}>}
  */
 export function collectAttribute() {
-  const res = spawnAffected(["--attribute"], changedFromEnv());
-  if (res.status !== 0) {
-    process.stderr.write(
-      "[affected-launch] 改动面归因拿不到（仅影响下面那条建议，不影响本次判定）\n",
-    );
-    return [];
-  }
+  /* 归因那一跳要重建一次反向 import 图，是 `spawnSync`：主线程阻塞期间本进程的
+   * 定时器不跳，所以进度心跳交给子进程（`startProgressSync`）。这里只多一行 stderr
+   * 读数，下面的返回值与失败话术一个字都没动。 */
+  const progress = startProgressSync({ label: "改动面归因", total: 1 });
+  progress.step("affected-tests --attribute");
   try {
-    /* `res.stdout` 是 `spawnSync` 出参，起不来时实测是 `undefined`（`@types/node` 按泛型
-     * 声明成非空）—— 这处 `??` 是给运行时用的，不是给编译器用的。 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- `spawnSync` 起不来时 stdout 实测为 undefined，`@types/node` 按泛型声明成非空
-    const parsed = JSON.parse(String(res.stdout ?? "[]"));
-    if (!Array.isArray(parsed)) {
-      throw new Error("不是数组");
+    const res = spawnAffected(["--attribute"], changedFromEnv());
+    if (res.status !== 0) {
+      process.stderr.write(
+        "[affected-launch] 改动面归因拿不到（仅影响下面那条建议，不影响本次判定）\n",
+      );
+      return [];
     }
-    /** @type {Array<{file?: string, affected?: number}>} */
-    return parsed;
-  } catch {
-    process.stderr.write("[affected-launch] 改动面归因输出读不懂（仅影响下面那条建议）\n");
-    return [];
+    try {
+      /* `res.stdout` 是 `spawnSync` 出参，起不来时实测是 `undefined`（`@types/node` 按泛型
+       * 声明成非空）—— 这处 `??` 是给运行时用的，不是给编译器用的。 */
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- `spawnSync` 起不来时 stdout 实测为 undefined，`@types/node` 按泛型声明成非空
+      const parsed = JSON.parse(String(res.stdout ?? "[]"));
+      if (!Array.isArray(parsed)) {
+        throw new Error("不是数组");
+      }
+      /** @type {Array<{file?: string, affected?: number}>} */
+      return parsed;
+    } catch {
+      process.stderr.write("[affected-launch] 改动面归因输出读不懂（仅影响下面那条建议）\n");
+      return [];
+    }
+  } finally {
+    progress.done();
   }
 }
 

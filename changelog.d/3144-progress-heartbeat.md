@@ -9,5 +9,8 @@
   `scripts/ci-install-deadline.mjs`（原 30s 心跳改走同一入口）、`scripts/ship.mjs` 的
   CI 轮询，以及 `.githooks` 组 D 的逐步步骤（经 `--label … -- <cmd>` 透传退出码；
   D0 是 16s 快档，不导出该开关、零开销）。
-- `build-desktop.mjs` / `affected-launch-scope-advice.mjs` 里的 elapsed 是「一次性的
-  完成读数」而非等待中的心跳，语义不同；本次不动，留作后续项。
+- 后续项已补齐：`scripts/build-desktop.mjs`（12 个阶段：build / 装配 / 剪枝 / 建表 /
+  实体化 / 体积 / 出厂计数 / sidecar）与 `scripts/affected-launch-scope-advice.mjs`
+  的归因那一跳也接进同一入口。这两处的外部命令与整树拷贝都是**阻塞式**
+  （`spawnSync` / `cpSync`），所以用的是跨进程心跳 `startProgressSync`；
+  `build-desktop` 原有的「耗时 …」完成读数保持不变（它走 `time-format.ts` 那一份）。
