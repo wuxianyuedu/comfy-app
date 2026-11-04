@@ -1593,7 +1593,6 @@
   # `Install dependencies` 里的 `check-pnpm-available.mjs` —— 「这台机跑不动整条链吗」
   # 才是每个 PR 都需要有人回答的那一问。逐格代价与这次决定的原文见
   # `COMFYAPP_CI_GATES` 上面那段与 §13.5.23。
-
   # ── 镜像身份（**读数，恒不退非零**；ISSUE #1993）──
   #
   # 这一步回答的是上一版答不出的那一格：**这台机器长自哪张镜像、哪一版**。
@@ -1729,6 +1728,10 @@
   # 令牌那一系一字未动：`GITHUB_MIRROR_TOKEN`（平台侧注入，仓库外配置）缺席 ⇒ 内部照旧判
   # 「没跑起来」并留下读数，只是读数档不把它折成流水线的红；令牌值一个字节都不回显
   # （脚本内先脱敏，硬规则 17）。
+  # ⚠️ 这一格的**结论会落在工作区的 `.comfy-ci/mirror-dispatch.json`**（#3148）：
+  # 主列末尾的 `GitHub 判决回读` 读它，从而在「本跑根本没派发」时不再空转满 45m。
+  # 两格共用一个工作区（本流水线单 job 串行），所以这一跳只是一次写文件 + 一次读文件。
+  # 落盘失败不影响本格三态（回读格读不到就退回「自己猜」的老行为）。
   - name: GitHub 镜像同步
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs --readout
     # 三跳 git 调用各自带超时并对 egress 类失败带退避重试（`scripts/ci-github-mirror-push.mjs`
@@ -1955,7 +1958,6 @@
   # 基类纯度` 两格的执行者正是这一族的固定清单，随之记成 retired（每日全量单测覆盖）。
   # 降级登记见 `tests/no-platform-ci-config.test.ts` 的 `GATE_TIER_LEDGER`。执行者
   # `scripts/ci-affected-tests.mjs` 保留（仍可手动 / 单跑口复用）。
-
 
   # ── ESLint 零警告（ISSUE #2022 起恢复；停用期间的历史与两条恢复条件见下面这段）──
   # 停用期的理由（2026-10-16）：它跑得通，但那一轮它在每一格 E2E 调绿的提交里都重跑一遍，
@@ -2388,6 +2390,18 @@
   # 留给 GitHub 完成的窗口越大；且本格只做 API 读数、零构建，挂在最后不会挡住
   # 任何一格的墙钟。轮询总预算 45 分钟（`POLL_BUDGET_MS`，取法见脚本文件头）——
   # 正常情况第一读就接近完整，预算耗尽按「没跑起来」exit 2 交账，**不判红**。
+  #
+  # ⚠️ **45m 是上限，不是每次都该花完**（ISSUE #3148）。两种「等下去没有意义」的形态
+  # 各有自己的提前收工判据，都在 `scripts/ci-github-verdict-read.mjs` 里：
+  #   ① **上游派发没发生**：镜像格把结论落在工作区的 `.comfy-ci/mirror-dispatch.json`
+  #      （`writeDispatchState`）。推送 / LFS / 派发任意一跳失败 ⇒ 本跑永远不会有 run，
+  #      回读格读到 `dispatched: false` 就**一秒不轮询**、exit 2 并把上游原因念出来。
+  #      两格共用一个工作区，所以这一跳只需要一次读文件。
+  #   ② **认领锚点恒假**：触发表里有 run、但没有一条的 `display_title` 含目标 sha
+  #      （`run-name` 没渲染出 payload 的 sha / 不是同一笔 sha，#3142 的两条候选）。
+  #      `run-name` 是 run 创建时定死的 ⇒ 等不出新事实。连续 `CLAIM_MISS_STREAK_TO_ABORT`
+  #      轮这一形 ⇒ 提前 exit 2，并把触发表的标题样本念出来（两种候选当场可分）。
+  # 零条 run 那一形（GitHub 侧压根还没起跑）**照旧吃满预算** —— 它可能随时起跑（#3136）。
   #
   # ⚠️ **读数档**（`--readout`）：三态照常打点，退码恒 0 —— 它坏了既不许把门禁的
   # 红洗成绿，也不许把自己的红叠进门禁的账（与镜像格同一条规矩）。翻成承重档
