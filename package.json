@@ -74,6 +74,7 @@
     "storybook:build": "node scripts/storybook.mjs build",
     "doc:check": "node scripts/check-doc-references.cjs",
     "doc:toc": "node scripts/doc-toc.mjs",
+    "report:session": "node scripts/session-report.mjs",
     "gates:which": "node scripts/gates-which.mjs",
     "theme:scan": "node scripts/check-theme-colors.cjs --report",
     "ui:primitives": "node scripts/check-ui-primitives.cjs",
