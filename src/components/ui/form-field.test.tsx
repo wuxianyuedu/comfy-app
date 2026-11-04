@@ -66,6 +66,7 @@ describe("FormField", () => {
         {(a11y) => <input {...a11y} />}
       </FormField>,
     );
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留空值兜底
     const text = container.textContent ?? "";
     expect(text.indexOf("留空则跟随全局")).toBeLessThan(text.indexOf("地址不合法"));
   });

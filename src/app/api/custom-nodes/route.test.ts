@@ -922,6 +922,7 @@ describe("GET 的 lastReport：原样透传，读不出来时按 null", () => {
     const events = await getEvents();
     expect(eventOf(events, "summary").lastReport).toBeNull();
     /* SAFETY: 类型断言已复核 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 值来自 JSON.parse 后 as 断言出的外部形状，类型按非空标，保留 ?. 防线
     expect((eventOf(events, "summary").summary as Record<string, unknown>)?.totalNodes).toBe(2);
   });
 

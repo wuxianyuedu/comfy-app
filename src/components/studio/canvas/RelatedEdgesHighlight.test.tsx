@@ -234,8 +234,8 @@ describe("useRelatedEdgesHighlight 写回端口行级别", () => {
     toggleSelected(sink, "2", false);
     for (const node of sink.nodes) {
       const data = node.data;
-      expect(data?.[NODE_PORT_FOCUS_DATA_KEY]).toBeUndefined();
-      expect(data?.[NODE_PORT_FOCUS_ACTIVE_KEY]).toBeUndefined();
+      expect(data[NODE_PORT_FOCUS_DATA_KEY]).toBeUndefined();
+      expect(data[NODE_PORT_FOCUS_ACTIVE_KEY]).toBeUndefined();
     }
   });
 

@@ -621,6 +621,7 @@ export function formatFileTimings(runs, opts = {}) {
   const nth = Math.max(1, Math.round(Number(opts.last) || 1));
   const top = Math.max(0, Math.round(Number(opts.top) || 0));
   const run = runs.slice(-nth)[0];
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- runs 为空时 slice(-nth)[0] 运行期是 undefined；规则未建模 noUncheckedIndexedAccess，保留出口
   if (!run) {
     return (
       `[precommit-timing] 账本里没有第 ${nth} 次记录（共 ${runs.length} 条）—— ` +

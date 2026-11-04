@@ -220,6 +220,7 @@ export function runSceneError(name: string): string | undefined {
 function requireScene(name: string): WorkflowRunScene {
   /* SAFETY: 类型断言已复核 */
   const scene: WorkflowRunScene | undefined = WORKFLOW_RUN_SCENES[name as RunSceneName];
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 场景名来自 Storybook parameters（手写的不可信输入），查不到时运行期是 undefined；规则把标注判成无重叠，保留抛错出口
   if (scene === undefined) {
     throw new Error(
       `运行场景里没有叫「${name}」的那种。现有的：${WORKFLOW_RUN_SCENE_NAMES.join(" / ")}`,

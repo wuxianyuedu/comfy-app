@@ -134,6 +134,7 @@ function entry(id: string, time: number, origin: LogEntry["origin"] = "app-runti
     level: "info",
     message: `msg-${id}`,
     source: "system",
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- origin 是夹具可选参数，空串也是合法取值（表示未指定来源），规则按非空 string 判成恒真
     ...(origin ? { origin } : {}),
   };
 }

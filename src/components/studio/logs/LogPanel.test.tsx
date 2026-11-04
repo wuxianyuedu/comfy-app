@@ -170,6 +170,7 @@ describe("LogPanel 日志面板", () => {
     seed(20);
     render(<LogPanel />);
     const stamps = [...document.querySelectorAll<HTMLElement>("time")].map(
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留空值兜底
       (el) => el.textContent ?? "",
     );
     expect(stamps).not.toHaveLength(0);
@@ -256,6 +257,7 @@ describe("LogPanel 日志面板", () => {
     /* 收缩面板本来就窄：这里报一遍每个来源多少条，只是把宽度再挤掉一块，
      * 而左侧级别按钮上已经写着同样的数字（用户反馈第 4 条）。 */
     const trigger = document.querySelector('[data-slot="select-trigger"]');
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留 ?. 防线
     const label = trigger?.textContent?.replaceAll(/[\s\u25b2\u25bc\u200b]/g, "") ?? "";
     /* 扳机上只有这一项的名字——「（按条去重）」是它的一部分，不是数字：
      * 来源下拉的候选里有六个「各数各的那一份」的分项，而「全部来源」是**日志
@@ -312,6 +314,7 @@ describe("LogPanel 日志面板", () => {
     render(<LogPanel />);
 
     /* 该分类出现在下拉选项里（带它自己的计数），而不是只在「全部来源」下能看见。 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留空值兜底
     const optionTexts = () => screen.queryAllByRole("option").map((o) => o.textContent ?? "");
     expect(useLogStore.getState().countsByOrigin.console.all).toBe(1);
 
@@ -344,8 +347,10 @@ describe("LogPanel 日志面板", () => {
      * 空串兜底会把「没等到」伪装成「内容不符」。先显式等 option 出现。 */
     await expect.poll(() => screen.getAllByRole("option").length).toBeGreaterThan(0);
     const optionOf = (label: string) =>
-      screen.queryAllByRole("option").find((option) => (option.textContent ?? "").startsWith(label))
-        ?.textContent ?? "";
+      screen
+        .queryAllByRole("option")
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留空值兜底
+        .find((option) => (option.textContent ?? "").startsWith(label))?.textContent ?? "";
 
     /* 「应用服务」有 2 警告 1 错误；「启动器」一条警告都没有——切换过去是空
      * 列表这件事，在切换之前就已经写在选项里了。零条目读「无」，与「这一项

@@ -50,7 +50,9 @@ function renderViewer(onClose: () => void = () => undefined) {
     ...view,
     /* SAFETY: 类型断言已复核 */
     canvas: () => view.getByTestId("image-viewer-canvas") as HTMLDivElement,
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留 ?. 防线
     percent: () => view.getByTestId("image-viewer-percent").textContent?.trim() ?? "",
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留 ?. 防线
     mode: () => view.getByTestId("image-viewer-mode").textContent?.trim() ?? "",
   };
 }

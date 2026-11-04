@@ -161,6 +161,7 @@ async function consumeSettingsStream(
   const discoveredByParent: Record<string, Array<DiscoveredSubpkg>> = {};
   const paths: Array<string> = [];
 
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 流式读循环，只有 done 才 break；规则把字面量 true 判成恒真，保留原写法
   while (true) {
     const { done, value } = await reader.read();
     if (done) {
@@ -488,6 +489,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buf = "";
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 流式读循环，只有 done 才 break；规则把字面量 true 判成恒真，保留原写法
     while (true) {
       const { done, value } = await reader.read();
       if (done) {

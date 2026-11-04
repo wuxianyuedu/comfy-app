@@ -560,7 +560,7 @@ function printMergeStateReport({ json, summary, into, intoSha, headSha, rows }) 
   }
   for (const r of rows) {
     process.stdout.write(
-      `  · ${r.mergeCode === 0 ? "绿" : (r.verdict ?? "红")}  ${r.label}` +
+      `  · ${r.mergeCode === 0 ? "绿" : r.verdict}  ${r.label}` +
         `（本检出 ${r.currentCode} / 合并态 ${r.mergeCode ?? "未跑"}）\n`,
     );
     if (r.didNotRun) {
@@ -789,6 +789,7 @@ function main(argv) {
   const cleaned = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- argv 下标越界时运行期是 undefined；规则未建模 noUncheckedIndexedAccess，保留跳过出口
     if (a === undefined) {
       /* `noUncheckedIndexedAccess` 下的形状兜底：进程给不出这一位时没有词可摘。 */
       continue;

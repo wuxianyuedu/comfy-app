@@ -45,6 +45,7 @@ function resolveCiSlotCacheRoot() {
       cwd: process.cwd(),
       encoding: "utf8",
     });
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 出参：起不来 / 无输出时 stdout 实测为 null，@types/node 按非空标，保留空串兜底
     const store = String(res.stdout ?? "").trim();
     if (res.status !== 0 || !store) {
       return null;

@@ -278,6 +278,7 @@ function programMjsOf(entry, faceFile) {
   if (probe.error || (probe.status ?? 1) !== 0) {
     return null;
   }
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 出参：起不来 / 无输出时 stdout 实测为 null，@types/node 按非空标，保留空串兜底
   const all = String(probe.stdout ?? "")
     .split(/\r?\n/)
     .filter((line) => line.toLowerCase().endsWith(".mjs"));

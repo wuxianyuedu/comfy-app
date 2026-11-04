@@ -40,7 +40,7 @@ describe("useTaskLogStream", () => {
     expect(watchTaskMock).toHaveBeenCalledTimes(1);
     expect(watchTaskMock).toHaveBeenCalledWith("t-1", expect.anything());
     /* 订阅要带落定回调：没有它，弹窗徽标永远停在打开那一刻的状态。 */
-    expect(handlers?.onSettled).toBeTypeOf("function");
+    expect(handlers.onSettled).toBeTypeOf("function");
     act(() => {
       handlers.onLog?.(logEntry("第一行"));
       handlers.onLog?.(logEntry("第二行"));
@@ -69,7 +69,7 @@ describe("useTaskLogStream", () => {
     });
     expect(result.current.started).toBe(true);
     act(() => {
-      handlers.onSettled?.({ ok: false, message: "CUDA out of memory" });
+      handlers.onSettled({ ok: false, message: "CUDA out of memory" });
     });
     expect(result.current.settled).toEqual({
       ok: false,
@@ -83,7 +83,7 @@ describe("useTaskLogStream", () => {
     });
     act(() => {
       handlers.onLog?.(logEntry("旧任务的日志"));
-      handlers.onSettled?.({ ok: true });
+      handlers.onSettled({ ok: true });
     });
     expect(result.current.logs).toHaveLength(1);
 
@@ -121,7 +121,7 @@ describe("useTaskLogStream", () => {
     expect(closer).toHaveBeenCalledTimes(1);
     expect(() => {
       handlers.onLog?.(logEntry("迟到的帧"));
-      handlers.onSettled?.({ ok: true });
+      handlers.onSettled({ ok: true });
     }).not.toThrow();
   });
 });

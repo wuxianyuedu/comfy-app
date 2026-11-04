@@ -249,6 +249,7 @@ export function runCiActionlint(io = {}) {
   const res = (io.spawn ?? spawnSync)(exePath, files, { cwd, encoding: "utf8" });
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- 注入面可缺，类型按非空标
   const status = res?.status ?? null;
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 注入面可缺（io.spawn 是测试替换点），类型按非空标，保留 ?. 防线
   const output = `${res?.stdout ?? ""}${res?.stderr ?? ""}`.trimEnd();
   if (output) {
     log(output);

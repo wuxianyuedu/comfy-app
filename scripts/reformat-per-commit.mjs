@@ -271,6 +271,7 @@ export function perCommitShapeOf(rev, spec) {
       offenders: [`${rev.slice(0, 8)}(读不到这条提交)`],
     };
   }
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- matchAll 的捕获组在规则眼里非空，但 tsc 的 noUncheckedIndexedAccess 仍给 string|undefined，保留空串兜底
   const parents = [...raw.matchAll(/^parent ([0-9a-f]{40})$/gm)].map((m) => m[1] ?? "");
   if (parents.length === 0) {
     return {

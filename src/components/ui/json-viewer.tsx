@@ -203,6 +203,7 @@ function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number,
       const lower = text.toLowerCase();
       let count = 0;
       let p = 0;
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 逐段扫描循环，indexOf 返回 -1 才 break；规则把字面量 true 判成恒真，保留原写法
       while (true) {
         const j = lower.indexOf(q, p);
         if (j === -1) {
