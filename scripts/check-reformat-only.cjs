@@ -150,7 +150,9 @@ const SOURCE_RE = /\.(ts|tsx|js|jsx|mjs|cjs|css|scss|json|md|mdx)$/;
 
 /* git 取数件收在 `reformat-scan-core.mjs`（ISSUE #3035 拆出：本文件加合并行的取数与
  * 读数后越过 900 行硬闸，而这一组自包含、以 `perCommitDeps` 注入机制层 —— 这里是
- * 那份注入的唯一出处）。`parseRange` 同批搬走（与区间端点有关的一切在同一个模块里）。 */
+ * 那份注入的唯一出处）。`parseRange` 同批搬走（与区间端点有关的一切在同一个模块里）。
+ * 判决面旗标 `--staged` / `--strict` / `--range` 的识别也在那边（`parseFaceArgs()`，
+ * ISSUE #3163）—— 本文件只消费解析结果。 */
 const {
   makeScanFns,
   parseRange,
