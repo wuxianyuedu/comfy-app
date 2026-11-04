@@ -35,6 +35,7 @@ function openPanel() {
 /** 面板里的某个选项按钮。触发器在面板外，按文案找也不会混淆。 */
 function option(panel: Element, label: string): HTMLElement {
   const el = [...panel.querySelectorAll<HTMLElement>("button")].find(
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留 ?. 防线
     (button) => button.textContent?.trim() === label,
   );
   expect(el, `面板里应当有「${label}」选项`).not.toBeUndefined();
