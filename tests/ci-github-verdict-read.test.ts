@@ -144,11 +144,11 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
   /** 收口假件与量具；`runsSteps` / `checksSteps` 按各自路径的调用次序出假回话/假异常，耗尽后落各自的 `fallback`。 */
   function harness(
     opts: {
-      checksFallback?: Response;
+      checksFallback?: Response | (() => Response);
       checksSteps?: Array<Response | Error>;
       env?: Record<string, string | undefined>;
       nowStep?: number;
-      runsFallback?: Response;
+      runsFallback?: Response | (() => Response);
       runsSteps?: Array<Response | Error>;
     } = {},
   ) {
@@ -157,31 +157,46 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     const sleeps: Array<number> = [];
     const runsSteps = opts.runsSteps ? [...opts.runsSteps] : null;
     const checksSteps = opts.checksSteps ? [...opts.checksSteps] : null;
+    /* 时钟只被 `sleep` 推进（真实轮次各 30s）：`now()` 是**纯读**。
+     *
+     * `nowStep` 是额外的读时步长，只给「预算耗尽」那几条用 —— 它们一轮就到点，
+     * 不陪它跑 90 轮。⚠️ 缺省**不**给缺省大步长：#3136 那批用例第一次是这么写坏的,
+     * 而 `now()` 一轮里会被问两次（算 deadline 一次、循环尾一次），步长挂在读上
+     * 就成了「跳一次睡一轮」的错拍，主路径三跳就到点。 */
+    const nowStep = opts.nowStep ?? 0;
     let clock = 0;
     const fetchImpl = (async (url: string | URL) => {
-      calls.push(String(url));
-      const isRuns = String(url).includes("/actions/runs");
+      calls.push(String(url));      const isRuns = String(url).includes("/actions/runs");
       const head = (isRuns ? runsSteps : checksSteps)?.shift();
       if (head instanceof Error) {
         throw head;
       }
-      /* 缺省形态：主路径零条（⇒ 回落），兜底全绿 —— 只关心兜底行为的老用例不用改造。 */
-      return (
-        head ??
-        (isRuns
-          ? opts.runsFallback ?? new Response(runsBodyOf([]), { status: 200 })
-          : opts.checksFallback ?? new Response(checksBodyOf(ALL_GREEN), { status: 200 }))
-      );
+      /* 缺省形态：两条路径都读通、都读到 0 条（＝ GitHub 侧还没起跑）。**不**把兜底
+       * 默认成 200 全绿 —— 那是 #3136 修之前那种「读到 0 条就当作有结论」的替身，
+       * 留着它会让每条老用例都被「兜底兜住了」掩盖掉真实的轮询形状。 */
+      /* fallback 每次**新造**一份：`Response` 的 body 只能读一次，复用同一个对象
+       * 会在第二轮抛「Body has already been read」而被误诊成 egress 故障 ——
+       * 「读到 0 条 ⇒ 继续轮询」这条语义恰恰要靠第二轮及以后才测得出。 */
+      const fresh = () =>
+        isRuns
+          ? new Response(runsBodyOf([]), { status: 200 })
+          : new Response(checksBodyOf([]), { status: 200 });
+      if (head) {
+        return head;
+      }
+      const pick = (fallback: Response | (() => Response) | undefined) =>
+        fallback === undefined ? null : typeof fallback === "function" ? fallback() : fallback;
+      return pick(isRuns ? opts.runsFallback : opts.checksFallback) ?? fresh();
     }) as unknown as typeof fetch;
     const io = {
       env: opts.env ?? okEnv,
       fetchImpl,
       log: (line: string) => heard.push(line),
-      /* 时钟假件：`now` 每被问一次走 `nowStep`，`sleep` 把等待记量并拨钟 ——
-       * 预算耗尽那条用 `nowStep` 大跳，一轮就到点，不陪它跑 90 轮。 */
+      /* 时钟假件：`sleep` 把等待记量并拨钟（真实轮次），`now()` 只额外叠加 `nowStep`
+       * —— 预算耗尽那条用 `nowStep` 大跳，一轮就到点，不陪它跑 90 轮。 */
       now: () => {
         const t = clock;
-        clock += opts.nowStep ?? 0;
+        clock += nowStep;
         return t;
       },
       runGit: gitOk,
@@ -194,7 +209,10 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
   }
 
   it("主路径全绿 ⇒ 退 0：一跳拿全，根本不发兜底请求", async () => {
-    const { calls, heard, io } = harness({ runsFallback: new Response(runsBodyOf(ALL_GREEN), { status: 200 }) });
+    const { calls, heard, io } = harness({
+      nowStep: 0,
+      runsFallback: new Response(runsBodyOf(ALL_GREEN), { status: 200 }),
+    });
     const code = await runVerdict(io);
     expect(code).toBe(CODE.OK);
     expect(calls).toEqual([workflowRunsUrl(REPO)]);
@@ -207,6 +225,7 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
 
   it("主路径有红（含 startup_failure）⇒ 退 1，红的逐条念出来", async () => {
     const { heard, io } = harness({
+      nowStep: 0,
       runsFallback: new Response(
         runsBodyOf([
           run("static-gates", "completed", "success"),
@@ -229,6 +248,7 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
 
   it("主路径 pending 跨轮询转 completed ⇒ 退 0：有 run 就不回落，间隔按 POLL_INTERVAL 等", async () => {
     const { calls, heard, io, sleeps } = harness({
+      nowStep: 0,
       runsSteps: [
         new Response(
           runsBodyOf([run("static-gates", "completed", "success"), run("heavy-gates", "in_progress")]),
@@ -244,41 +264,60 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     expect(heard.join("\n")).toContain("还在跑");
   });
 
-  it("主路径零条 run ⇒ 同轮回落兜底，兜底全绿 ⇒ 退 0；日志点名两条路径与回落原因", async () => {
-    const { calls, heard, io } = harness();
+  it("主路径零条 run ⇒ 读到 0 条，按 POLL_INTERVAL 继续轮询；迟到的 run 仍被认领 ⇒ 退 0", async () => {
+    /* 每一轮都造一份**新的** Response：body 只能读一次，复用同一个对象会当场
+     * 「Body has already been read」—— 那会把「读到 0 条」误诊成 egress 故障。 */
+    const empty = () => new Response(runsBodyOf([]), { status: 200 });
+    const { calls, heard, io, sleeps } = harness({
+      nowStep: 0,
+      runsSteps: [empty(), empty(), new Response(runsBodyOf(ALL_GREEN), { status: 200 })],
+    });
     const code = await runVerdict(io);
     expect(code).toBe(CODE.OK);
-    expect(calls).toEqual([workflowRunsUrl(REPO), checkRunsUrl(REPO, SHA)]);
+    /* 三轮主路径：前两轮 0 条、第三轮认领到本跑（预算为这一段窗口而存在）。 */
+    expect(calls.filter((u) => u === workflowRunsUrl(REPO))).toHaveLength(3);
+    expect(sleeps).toEqual([POLL_INTERVAL_MS, POLL_INTERVAL_MS]);
     const all = heard.join("\n");
     expect(all).toContain("没认出本跑");
-    expect(all).toContain("本轮回落兜底（checks API）");
-    expect(all).toContain("兜底（checks API）");
+    expect(all).toContain("主路径本身读通了（不是权限问题）");
     expect(all).toContain("全部完成且没有红");
     expect(all).toContain("结论：exit 0");
   });
 
-  it("主路径拉到了别跑的 run（display_title 无本跑 sha）⇒ 认不出本跑，同轮回落兜底", async () => {
+  it("主路径拉到了别跑的 run（display_title 无本跑 sha）⇒ 认不出本跑，继续轮询而不是读成结论", async () => {
     /* dispatch 触发表是共享的：别个 PR 的 run 也在里面。认领不上 = 本跑还没起，
      * 不是「有 run 就行」—— 这条用例钉住「按 display_title 认领，不是按表非空」。 */
     const { calls, heard, io } = harness({
-      runsFallback: new Response(
-        runsBodyOf([
-          { conclusion: "failure", display_title: "PR #9999 · 别个 PR 的 sha", name: "static-gates", status: "completed" },
-        ]),
-        { status: 200 },
-      ),
+      /* 每轮额外跳三分之一预算 ⇒ 三轮到点；sleep 每轮也只拨 30s，两者相加必然越线。 */
+      nowStep: POLL_BUDGET_MS / 3,
+      runsFallback: () =>
+        new Response(
+          runsBodyOf([
+            { conclusion: "failure", display_title: "PR #9999 · 别个 PR 的 sha", name: "static-gates", status: "completed" },
+          ]),
+          { status: 200 },
+        ),
     });
     const code = await runVerdict(io);
-    expect(code).toBe(CODE.OK);
-    expect(calls).toEqual([workflowRunsUrl(REPO), checkRunsUrl(REPO, SHA)]);
+    expect(code).toBe(CODE.NO_FACT);
+    expect(calls.filter((u) => u === workflowRunsUrl(REPO)).length).toBeGreaterThan(1);
     const all = heard.join("\n");
     expect(all).toContain("没认出本跑");
-    expect(all).toContain("本轮回落兜底（checks API）");
-    expect(all).toContain("结论：exit 0");
+    /* 别跑的 run 是红的，但它不是本跑的判决 —— 不许折成 exit 1。 */
+    expect(all).not.toContain("结论：exit 1");
+    /* 耗尽的交账：主路径这一整轮都停在「读到 0 条」那一形。 */
+    expect(all).toContain("读到 0 条");
+    expect(all).toContain("GitHub 侧没起跑");
   });
 
   it("主路径 403（缺 actions: read）⇒ 同轮回落兜底，兜底全绿 ⇒ 退 0；日志点名缺的权限", async () => {
-    const { calls, heard, io } = harness({ runsFallback: new Response("no", { status: 403 }) });
+    /* 兜底条目只在**主路径被拒**时才承重（那时它是唯一读数）—— 这是它与 #3136 那一形
+     * （主路径读到 0 条、兜底读到什么都不改变「还没起跑」）的分界线。 */
+    const { calls, heard, io } = harness({
+      checksFallback: new Response(checksBodyOf(ALL_GREEN), { status: 200 }),
+      nowStep: 0,
+      runsFallback: new Response("no", { status: 403 }),
+    });
     const code = await runVerdict(io);
     expect(code).toBe(CODE.OK);
     expect(calls).toEqual([workflowRunsUrl(REPO), checkRunsUrl(REPO, SHA)]);
@@ -288,8 +327,10 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     expect(all).toContain("结论：exit 0");
   });
 
-  it("兜底有红 ⇒ 退 1，红的那几个逐条念出来", async () => {
+  it("兜底有红（主路径被拒那一形）⇒ 退 1，红的那几个逐条念出来", async () => {
     const { heard, io } = harness({
+      nowStep: 0,
+      runsFallback: new Response("no", { status: 403 }),
       checksFallback: new Response(
         checksBodyOf([run("static-gates", "completed", "success"), run("heavy-gates", "completed", "failure")]),
         { status: 200 },
@@ -302,8 +343,10 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     expect(all).toContain("结论：exit 1");
   });
 
-  it("兜底 pending 跨轮询转 completed ⇒ 退 0：每轮都先试主路径，第二轮拿到完整结论", async () => {
+  it("兜底 pending 跨轮询转 completed ⇒ 退 0（主路径被拒那一形：每轮都先试主路径）", async () => {
     const { calls, heard, io, sleeps } = harness({
+      nowStep: 0,
+      runsFallback: new Response("no", { status: 403 }),
       checksSteps: [
         new Response(
           checksBodyOf([run("static-gates", "completed", "success"), run("heavy-gates", "in_progress")]),
@@ -324,7 +367,7 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     expect(heard.join("\n")).toContain("还在跑");
   });
 
-  it("两条路径都零条 ⇒ 预算耗尽退 2：没跑起来 ≠ 判红", async () => {
+  it("两条路径都零条 ⇒ 预算耗尽退 2：原因写「读到 0 条」，不写权限", async () => {
     const { heard, io } = harness({
       checksFallback: new Response(checksBodyOf([]), { status: 200 }),
       nowStep: POLL_BUDGET_MS,
@@ -332,9 +375,10 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     const code = await runVerdict(io);
     expect(code).toBe(CODE.NO_FACT);
     const all = heard.join("\n");
-    expect(all).toContain("还没有任何 check-run");
+    expect(all).toContain("读到 0 条");
     expect(all).toContain("预算耗尽");
     expect(all).toContain("结论：exit 2");
+    expect(all).not.toContain("moon-read/GITHUB_MIRROR_TOKEN");
   });
 
   it("一直 pending ⇒ 预算耗尽退 2（GitHub 侧卡住不许被读成红）", async () => {
@@ -348,8 +392,11 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
   });
 
   it("读数第一次 egress 抖动、第二次通 ⇒ 退 0：网络类失败消耗一次重试", async () => {
+    /* 主路径被拒（兜底是唯一读数）那一形：抖动落在兜底这一跳上。 */
     const { calls, heard, io, sleeps } = harness({
       checksSteps: [new Error("fetch failed"), new Response(checksBodyOf(ALL_GREEN), { status: 200 })],
+      nowStep: 0,
+      runsFallback: new Response("no", { status: 403 }),
     });
     const code = await runVerdict(io);
     expect(code).toBe(CODE.OK);
@@ -398,6 +445,61 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
       expect(all).toContain("checks: read");
       expect(all).toContain("moon-read/GITHUB_MIRROR_TOKEN");
     }
+  });
+
+  /* ── ISSUE #3136：`empty` 不许被兜底的 403 吞掉 ────────────────────────── */
+  /* 现场：主路径 200 但读到 0 条（令牌够 —— 403 时日志会直接写「被拒」），同一轮兜底
+   * checks 403（没有 checks: read）⇒ 旧实现把这两件拼成「两条路径的权限都没够上」，
+   * 3.8s 就退掉，45m 预算一秒没用。判据按行为写：不许提前退、不许催补权限。 */
+
+  it("主路径读到 0 条 + 兜底 403 ⇒ 不退，按 POLL_INTERVAL 继续轮询主路径（ISSUE #3136）", async () => {
+    const { calls, heard, io, sleeps } = harness({
+      checksFallback: new Response("no", { status: 403 }),
+      nowStep: POLL_BUDGET_MS / 3,
+    });
+    const code = await runVerdict(io);
+    expect(code).toBe(CODE.NO_FACT);
+    const all = heard.join("\n");
+    /* 轮询了不止一次：主路径每轮都试（两轮之间 sleep 过 POLL_INTERVAL）。 */
+    expect(sleeps).toContain(POLL_INTERVAL_MS);
+    expect(calls.filter((u) => u === workflowRunsUrl(REPO)).length).toBeGreaterThan(1);
+    /* 兜底 403 只作降级事实记录，不许被读成结论。 */
+    expect(all).toContain("仅降级读数");
+    expect(all).not.toContain("两条路径的权限这枚令牌都没够上");
+    expect(all).not.toContain("前提没落地（权限）");
+  });
+
+  it("读到 0 条、兜底 403、预算耗尽 ⇒ exit 2 且原因是「读到 0 条 / GitHub 侧没起跑」，不是权限", async () => {
+    const { heard, io } = harness({
+      checksFallback: new Response("no", { status: 403 }),
+      nowStep: POLL_BUDGET_MS,
+    });
+    const code = await runVerdict(io);
+    expect(code).toBe(CODE.NO_FACT);
+    const all = heard.join("\n");
+    expect(all).toContain("读到 0 条");
+    expect(all).toContain("GitHub 侧没起跑");
+    expect(all).toContain("这不是权限问题");
+    /* 旧的误催：不许再出现。 */
+    expect(all).not.toContain("去补");
+    expect(all).not.toContain("两条路径的权限这枚令牌都没够上");
+    expect(all).not.toContain("moon-read/GITHUB_MIRROR_TOKEN");
+  });
+
+  it("读到 0 条、兜底 403 ⇒ 迟到的 run 仍能认领到（预算内继续轮询，不是一退到底）", async () => {
+    /* 第三跳才起跑：主路径两次 0 条、第三次拿到完整结论 —— 正是 45m 预算要买的那段窗口。 */
+    const empty = () => new Response(runsBodyOf([]), { status: 200 });
+    const { calls, heard, io } = harness({
+      checksFallback: () => new Response("no", { status: 403 }),
+      nowStep: 0,
+      runsSteps: [empty(), empty(), new Response(runsBodyOf(ALL_GREEN), { status: 200 })],
+    });
+    const code = await runVerdict(io);
+    expect(code).toBe(CODE.OK);
+    expect(calls.filter((u) => u === workflowRunsUrl(REPO))).toHaveLength(3);
+    const all = heard.join("\n");
+    expect(all).toContain("全部完成且没有红");
+    expect(all).not.toContain("前提没落地（权限）");
   });
 
   it("其余 HTTP 错误（422：sha 没到 / 形状不对）⇒ 不重试、不回落，退 2，body 脱敏后回显", async () => {
