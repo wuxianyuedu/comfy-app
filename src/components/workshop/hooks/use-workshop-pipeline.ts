@@ -234,6 +234,9 @@ export type WorkshopPipelineController = {
   workflowOptions: Array<WorkshopWorkflowOption>;
 };
 
+/** 结构化执行日志保留上限（P2：只追加不裁剪会随长流程无限增长）。 */
+const EXTRACT_LOG_MAX_ENTRIES = 2000;
+
 /** 创建一个收在 controller 的提取会话（state + 稳定动作）。
  *  在工坊控制器内调用两次（角色卡 / 分镜），动作经 useCallback 保持稳定，
  *  即使阶段组件卸载期间后台 async 仍能安全调用更新。 */
@@ -289,9 +292,6 @@ export function useExtractSession(
   }, []);
   return [session, { patch, appendProgress, appendLog, setLog }];
 }
-
-/** 结构化执行日志保留上限（P2：只追加不裁剪会随长流程无限增长）。 */
-const EXTRACT_LOG_MAX_ENTRIES = 2000;
 
 export function useWorkshopPipeline(): WorkshopPipelineController {
   const [tab, setTab] = React.useState<Tab>("script");

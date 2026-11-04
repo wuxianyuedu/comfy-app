@@ -1106,3 +1106,43 @@ describe("`--staged`：面上没有源文件时跳过，有源文件时照旧判
     expect(r.output).not.toContain("未触及扫描面");
   });
 });
+
+/**
+ * 未知旗标不许静默换判决面（ISSUE #3163）：旧行为把 `--base` 当没看见、照默认面判，
+ * 屏幕上给一句干净的 `[ok]` —— 「你以为判的是 X、它判的是 Y」与正常放行逐字相同。
+ * 这里钉住四件：不认识的旗标非零、缺取值的 `--range` 非零、解析不成区间的 `--range`
+ * 不再落到 HEAD 面、三个合法旗标照旧。
+ */
+describe("判决面参数：不认识的旗标 / 缺取值的 `--range` ⇒ 非零（不给结论）", () => {
+  test("`--base`（不认识的旗标）⇒ exit 2，念出旗标、实际判决面与合法写法", ({ repo }) => {
+    seedEmpty(repo);
+    const r = repo.run(["--base", "origin/master"]);
+    expect(r.code).toBe(2);
+    expect(r.output).toContain("收到不认识的旗标「--base」");
+    expect(r.output).toContain("当前实际判决面：暂存区");
+    expect(r.output).toContain("--range <before>..<after>");
+    /* 不能再给结论：那句 `[ok]` 正是「静默换判决面」的假绿。 */
+    expect(r.output).not.toContain("没有纯格式化");
+  });
+
+  test("`--range` 不带值 ⇒ exit 2，念出缺取值与合法写法", ({ repo }) => {
+    seedEmpty(repo);
+    const r = repo.run(["--range"]);
+    expect(r.code).toBe(2);
+    expect(r.output).toContain("「--range」缺少取值");
+    expect(r.output).toContain("--range <before>..<after>");
+  });
+
+  test("`--range` 取值解析不成区间 ⇒ exit 2（不再静默落到 HEAD 面）", ({ repo }) => {
+    seedEmpty(repo);
+    const r = repo.run(["--range", "HEAD~1"]);
+    expect(r.code).toBe(2);
+    expect(r.output).toContain("解析不成区间");
+  });
+
+  test("三个合法旗标照旧放行（`--staged` / `--strict` / `--range <值>`）", ({ repo }) => {
+    seedEmpty(repo);
+    const r = repo.run(["--staged", "--strict", "--range", "HEAD..HEAD"]);
+    expect(r.code).toBe(0);
+  });
+});

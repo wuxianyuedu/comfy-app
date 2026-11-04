@@ -14,14 +14,12 @@ const SCRIPT = path.resolve(import.meta.dirname, "..", "scripts", "ci-run-tool.m
 /** 夹具：一棵真 git 仓 + 一份 tsconfig + 一个「报错行号不属于本树」的假编译器。 */
 type Fixture = { face: string; fakeCompiler: string; head: string; root: string };
 
-function makeFixture(): Fixture {
+function makeFixture(
+  faceConfig: Record<string, unknown> = { include: ["**/*.ts"], exclude: ["node_modules"] },
+): Fixture {
   const root = mkdtempSync(path.join(tmpdir(), "ci-run-tool-"));
   const face = path.join(root, "tsconfig.json");
-  writeFileSync(
-    face,
-    JSON.stringify({ include: ["**/*.ts"], exclude: ["node_modules"] }, null, 2),
-    "utf8",
-  );
+  writeFileSync(face, JSON.stringify(faceConfig, null, 2), "utf8");
   const fakeCompiler = path.join(root, "node_modules", "fake-tsc", "bin", "tsc.mjs");
   mkdirSync(path.dirname(fakeCompiler), { recursive: true });
   writeFileSync(
@@ -99,5 +97,17 @@ describe("#3041：类型检查格的树读数", () => {
     expect(stdout).toContain(
       `读取的树：HEAD ${fixture.head.slice(0, 12)}（= CNB_COMMIT，报错行号属于本 SHA）`,
     );
+  });
+
+  it("④ include / exclude 写成单个字符串时念出真值，不读成「未给」（#3163 边角）", () => {
+    const fixture = makeFixture({ include: "**/*.ts", exclude: "node_modules" });
+    const stdout = runReadout(fixture, { CNB_COMMIT: fixture.head }).replaceAll("\\", "/");
+    expect(stdout).toContain("include: **/*.ts；exclude: node_modules");
+  });
+
+  it("⑤ include / exclude 都没给 ⇒ 念出「未给」的两种含义", () => {
+    const fixture = makeFixture({});
+    const stdout = runReadout(fixture, { CNB_COMMIT: fixture.head });
+    expect(stdout).toContain("include: （未给 ⇒ tsc 默认全收）；exclude: （未给）");
   });
 });

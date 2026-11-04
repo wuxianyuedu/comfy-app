@@ -278,53 +278,6 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
   /** 本轮命中执行缓存的节点数（ISSUE #1278）。 */
   let cachedNodes = 0;
 
-  const handleLine = (line: string): void => {
-    if (!line) {
-      return;
-    }
-    let ev: unknown;
-    try {
-      ev = JSON.parse(line);
-    } catch {
-      // 非 JSON 行也要露面：comfy-cli 打印 Python traceback / import error
-      // 时用户才能看见。带上限，避免合法 verbose 输出刷屏。
-      deps.rawCli?.(taskId, `[comfy-cli stdout] ${line}`);
-      nonJsonLines++;
-      doTrace("cli", taskId, "stdout 非 JSON 行", { line });
-      if (nonJsonLines <= MAX_NON_JSON_LINES) {
-        const trimmed =
-          line.length > NON_JSON_LINE_CHARS ? `${line.slice(0, NON_JSON_LINE_CHARS)}…` : line;
-        log(taskId, "info", `[comfy-cli stdout] ${trimmed}`);
-      } else if (nonJsonLines === MAX_NON_JSON_LINES + 1) {
-        log(taskId, "info", `[comfy-cli stdout] …后续非 JSON 行已省略（查看后端日志）`);
-      }
-      return;
-    }
-    if (typeof ev !== "object" || ev === null) {
-      doTrace("cli", taskId, "stdout JSON 非对象", { line });
-      return;
-    }
-    /* comfy-cli 返回的原始内容也进面板：事件行会被折叠成面向用户的摘要
-     * （envelope / progress / execution_success 甚至整行不露面），排障时
-     * 「ComfyUI 到底回了什么」此前只能翻 trace 文件。带行数与单行截断
-     * 上限，原文仍完整落 trace。 */
-    rawJsonLines++;
-    /* 原始行**完整**进面板（不按单行截断）：面板把它折成一行，展开后经
-     * JsonViewer 显示完整 JSON —— 排障要看被截掉的那一段（envelope 尾部的
-     * 大对象、hint 里的逐节点明细）。同一份原文另存进 rawCli 缓冲，交给
-     * 「查看完整输出」弹窗按需整体拉取。 */
-    deps.rawCli?.(taskId, `[comfy-cli 原始] ${line}`);
-    if (rawJsonLines <= MAX_RAW_JSON_LINES) {
-      log(taskId, "info", `[comfy-cli 原始] ${line}`);
-    } else if (rawJsonLines === MAX_RAW_JSON_LINES + 1) {
-      log(taskId, "info", `[comfy-cli 原始] …后续原始行已省略（完整内容见后端 trace）`);
-    }
-    /* 已解析事件也原样落 trace：面板会按事件类型折叠成一行，这里保留原文。 */
-    doTrace("cli", taskId, "stdout 事件", { event: ev });
-    /* SAFETY: 类型断言已复核 */
-    dispatchEvent(ev as JsonRecord);
-  };
-
   const dispatchEvent = (evt: JsonRecord): void => {
     if (evt.type === "queued" && typeof evt.prompt_id === "string" && evt.prompt_id) {
       deps.onPromptId(evt.prompt_id);
@@ -411,6 +364,53 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
           : `▶ comfy-cli 节点${who} 开始执行`,
       );
     }
+  };
+
+  const handleLine = (line: string): void => {
+    if (!line) {
+      return;
+    }
+    let ev: unknown;
+    try {
+      ev = JSON.parse(line);
+    } catch {
+      // 非 JSON 行也要露面：comfy-cli 打印 Python traceback / import error
+      // 时用户才能看见。带上限，避免合法 verbose 输出刷屏。
+      deps.rawCli?.(taskId, `[comfy-cli stdout] ${line}`);
+      nonJsonLines++;
+      doTrace("cli", taskId, "stdout 非 JSON 行", { line });
+      if (nonJsonLines <= MAX_NON_JSON_LINES) {
+        const trimmed =
+          line.length > NON_JSON_LINE_CHARS ? `${line.slice(0, NON_JSON_LINE_CHARS)}…` : line;
+        log(taskId, "info", `[comfy-cli stdout] ${trimmed}`);
+      } else if (nonJsonLines === MAX_NON_JSON_LINES + 1) {
+        log(taskId, "info", `[comfy-cli stdout] …后续非 JSON 行已省略（查看后端日志）`);
+      }
+      return;
+    }
+    if (typeof ev !== "object" || ev === null) {
+      doTrace("cli", taskId, "stdout JSON 非对象", { line });
+      return;
+    }
+    /* comfy-cli 返回的原始内容也进面板：事件行会被折叠成面向用户的摘要
+     * （envelope / progress / execution_success 甚至整行不露面），排障时
+     * 「ComfyUI 到底回了什么」此前只能翻 trace 文件。带行数与单行截断
+     * 上限，原文仍完整落 trace。 */
+    rawJsonLines++;
+    /* 原始行**完整**进面板（不按单行截断）：面板把它折成一行，展开后经
+     * JsonViewer 显示完整 JSON —— 排障要看被截掉的那一段（envelope 尾部的
+     * 大对象、hint 里的逐节点明细）。同一份原文另存进 rawCli 缓冲，交给
+     * 「查看完整输出」弹窗按需整体拉取。 */
+    deps.rawCli?.(taskId, `[comfy-cli 原始] ${line}`);
+    if (rawJsonLines <= MAX_RAW_JSON_LINES) {
+      log(taskId, "info", `[comfy-cli 原始] ${line}`);
+    } else if (rawJsonLines === MAX_RAW_JSON_LINES + 1) {
+      log(taskId, "info", `[comfy-cli 原始] …后续原始行已省略（完整内容见后端 trace）`);
+    }
+    /* 已解析事件也原样落 trace：面板会按事件类型折叠成一行，这里保留原文。 */
+    doTrace("cli", taskId, "stdout 事件", { event: ev });
+    /* SAFETY: 类型断言已复核 */
+    dispatchEvent(ev as JsonRecord);
   };
 
   return {

@@ -70,6 +70,12 @@ export function ImageGenerationPanel({
    * 本组件只负责生成交互；生成开始（d.taskId 就绪）时通过 setActiveTaskId()
    * 把当前任务交给全局面板，由其统一订阅 SSE、展示日志与结构化校验错误。 */
 
+  // 把`patch` 放在 ref 里，好让取消处理器（由异步
+  // 回调触发）总能读到最新的值，而不必被重建。
+  const patchRef = useRef(patch);
+  // oxlint-disable-next-line react/refs -- 渲染期把最新 props 写入 ref，供异步取消回调读取最新值（刻意模式）
+  patchRef.current = patch;
+
   /* stuck-task cancel affordance —— 按钮的
    * 「取消中…」态与失败回滚都在 useCancelTask 里（视图零 IO）。 */
   const { cancelling, cancel: onCancel } = useCancelTask({
@@ -78,12 +84,6 @@ export function ImageGenerationPanel({
       patchRef.current({ status: "error", error: reason });
     },
   });
-
-  // 把`patch` 放在 ref 里，好让取消处理器（由异步
-  // 回调触发）总能读到最新的值，而不必被重建。
-  const patchRef = useRef(patch);
-  // oxlint-disable-next-line react/refs -- 渲染期把最新 props 写入 ref，供异步取消回调读取最新值（刻意模式）
-  patchRef.current = patch;
 
   /* 节点拿到 taskId（生成开始）时，设为全局面板活跃
    * 任务，使 GlobalStepLogPanel 自动跟随。ImageGenerationPanel 仅在选中节点时

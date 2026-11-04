@@ -295,6 +295,15 @@ function required(what) {
 function noopSection() {}
 
 /**
+ * Playwright 下载时的**缺省**套接字超时（`NET_DEFAULT_TIMEOUT`）。
+ *
+ * 抄它只为**读话术**：判断「放宽超时」那一条出口是不是已经走过了。真正的超时算法
+ * 在 Playwright 里（`+(PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT || "0") ||
+ * NET_DEFAULT_TIMEOUT`），本仓不重实现它 —— 这里只拿它当那条线的位置。
+ */
+export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30_000;
+
+/**
  * 装浏览器失败时那几条**读数**（而不是又一句「网络不通或磁盘满」）。
  *
  * ## 现场（`cnb-rkr-1k510rsgg` 的 `浏览器安装` stage）
@@ -402,15 +411,6 @@ export function playwrightInstallHints(out, facts = {}) {
     "------------------------------------",
   ];
 }
-
-/**
- * Playwright 下载时的**缺省**套接字超时（`NET_DEFAULT_TIMEOUT`）。
- *
- * 抄它只为**读话术**：判断「放宽超时」那一条出口是不是已经走过了。真正的超时算法
- * 在 Playwright 里（`+(PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT || "0") ||
- * NET_DEFAULT_TIMEOUT`），本仓不重实现它 —— 这里只拿它当那条线的位置。
- */
-export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30_000;
 
 /**
  * 「这一跑里已经做过的动作」—— {@link playwrightInstallHints} 的话术据此分岔。

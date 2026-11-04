@@ -24,15 +24,16 @@ vi.mock("~/server/db", async () => {
 vi.mock("~/lib/comfyui/executor-continuation", () => ({
   kickQueue: kickMock,
 }));
+
+const wfRepoStub = vi.hoisted(() => ({
+  findByIdForUser: vi.fn(),
+}));
+
 /* `repository` 是 server-only 的 Drizzle 实现（import 即读库），本用例只想验
  * 编排判决，故两个仓储整体换桩（与 server/film/orchestrator.test.ts 同一口径）。 */
 vi.mock("~/lib/core/repository", () => ({
   workflowTemplateRepository: wfRepoStub,
   taskRepository: taskRepo,
-}));
-
-const wfRepoStub = vi.hoisted(() => ({
-  findByIdForUser: vi.fn(),
 }));
 
 import { createWorkflowRunTask } from "./workflow-run.server";

@@ -149,6 +149,11 @@ const { gateFail, gatePass, indentItems } = require("./ci-log.mjs");
  * 取 ESM 判据模块（`launcher-core/shell.mjs`）的那段动态 import 随之删除：
  * 本脚本不再需要 pnpm 形态判定，`main()` 保持 async 只为收尾顺序不变。 */
 
+/* 扫描根取 cwd:门禁在仓库根被调用,而 prettier / git 都按 cwd 解析仓库
+ * (与 check-circular-deps.cjs 同口径)。基线取 __dirname 旁,与脚本同目录。 */
+const ROOT = process.cwd();
+const ARGS = new Set(process.argv.slice(2));
+
 /** oxfmt 入口的三级解析（见上）。取不到返回 null，由 `main()` 以 exit 2 收尾。 */
 function resolveOxfmtEntry() {
   const fromEnv = process.env.COMFYAPP_OXFMT_ENTRY;
@@ -168,10 +173,6 @@ function resolveOxfmtEntry() {
   }
 }
 
-/* 扫描根取 cwd:门禁在仓库根被调用,而 prettier / git 都按 cwd 解析仓库
- * (与 check-circular-deps.cjs 同口径)。基线取 __dirname 旁,与脚本同目录。 */
-const ROOT = process.cwd();
-const ARGS = new Set(process.argv.slice(2));
 const REPORT_ONLY = ARGS.has("--report");
 const STAGED = ARGS.has("--staged");
 const CHANGED = ARGS.has("--changed");
