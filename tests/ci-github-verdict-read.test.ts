@@ -9,12 +9,16 @@
 import { describe, expect, it } from "vitest";
 import {
   CHECK_RUNS_TIMEOUT_MS,
+  CLAIM_MISS_STREAK_TO_ABORT,
   POLL_BUDGET_MS,
   POLL_INTERVAL_MS,
   REQUEST_MAX_ATTEMPTS,
   checkRunsUrl,
   isRetryableRequestFailure,
+  isUnclaimedNonEmpty,
   matchesTargetSha,
+  readDispatchState,
+  renderTitleSamples,
   runVerdict,
   summarizeCheckRuns,
   summarizeWorkflowRuns,
@@ -84,7 +88,9 @@ describe("纯函数", () => {
 
   it("isRetryableRequestFailure：网络类认、其余不认", () => {
     expect(isRetryableRequestFailure(new Error("fetch failed"))).toBe(true);
-    expect(isRetryableRequestFailure(new Error("主路径（runs API）读数超时（>30000 ms）"))).toBe(true);
+    expect(isRetryableRequestFailure(new Error("主路径（runs API）读数超时（>30000 ms）"))).toBe(
+      true,
+    );
     expect(isRetryableRequestFailure(new Error("Connection reset by peer"))).toBe(true);
     expect(
       isRetryableRequestFailure(Object.assign(new Error("boom"), { cause: { code: "ENOTFOUND" } })),
@@ -115,7 +121,10 @@ describe("纯函数", () => {
     ]);
     expect(red.completed).toBe(true);
     expect(red.failing).toHaveLength(5);
-    const pending = summarizeWorkflowRuns([run("static-gates", "in_progress"), run("heavy-gates", "queued")]);
+    const pending = summarizeWorkflowRuns([
+      run("static-gates", "in_progress"),
+      run("heavy-gates", "queued"),
+    ]);
     expect(pending.completed).toBe(false);
     expect(pending.pending).toHaveLength(2);
   });
@@ -135,8 +144,60 @@ describe("纯函数", () => {
     expect(POLL_BUDGET_MS).toBe(45 * 60_000);
     expect(CHECK_RUNS_TIMEOUT_MS).toBe(30_000);
     /* 最坏一轮（一条路径 3 次请求 + 退避）远在轮询间隔量级之内 ⇒ 节奏不会被重试自己打乱。 */
-    const worstRound = REQUEST_MAX_ATTEMPTS * CHECK_RUNS_TIMEOUT_MS + RETRY_BACKOFF_MS[0]! + RETRY_BACKOFF_MS[1]!;
+    const worstRound =
+      REQUEST_MAX_ATTEMPTS * CHECK_RUNS_TIMEOUT_MS + RETRY_BACKOFF_MS[0]! + RETRY_BACKOFF_MS[1]!;
     expect(worstRound).toBeLessThan(POLL_BUDGET_MS);
+  });
+
+  it("renderTitleSamples：念出触发表里的标题原值，截断超长项，空表给「零条」", () => {
+    expect(renderTitleSamples([])).toBe("触发表里零条 run");
+    const line = renderTitleSamples([
+      { display_title: "PR #2649 · abc" },
+      { display_title: "" },
+      { display_title: "x".repeat(200) },
+    ]);
+    expect(line).toContain("触发表 3 条");
+    expect(line).toContain("PR #2649 · abc");
+    expect(line).toContain("(无标题)");
+    /* 长标题截断并标注省略号（日志里刷一整页没有意义）。 */
+    expect(line).toContain("…");
+    expect(line).not.toContain("x".repeat(120));
+    /* 超过 5 条只念 5 条，余数单独交代（样本要够判形，但不能把日志淹掉）。 */
+    const many = renderTitleSamples(
+      Array.from({ length: 8 }, (_, i) => ({ display_title: `PR #${String(i)}` })),
+    );
+    expect(many).toContain("另有 3 条未念");
+  });
+
+  it("isUnclaimedNonEmpty：只有「读到过非空触发表、且一条都认不上」才算", () => {
+    expect(
+      isUnclaimedNonEmpty({ items: [{ display_title: "PR #9999 · 别个 sha" }], state: "empty" }),
+    ).toBe(true);
+    /* 零条 run（GitHub 侧还没起跑）是真·等待，不属于提前夭折那一形。 */
+    expect(isUnclaimedNonEmpty({ items: [], state: "empty" })).toBe(false);
+    expect(isUnclaimedNonEmpty({ state: "empty" })).toBe(false);
+    /* 认上了走 data 态，不计入连击。 */
+    expect(
+      isUnclaimedNonEmpty({ runs: [{ display_title: `PR #2649 · ${SHA}` }], state: "data" }),
+    ).toBe(false);
+    expect(isUnclaimedNonEmpty({ state: "auth", status: 403 })).toBe(false);
+  });
+
+  it("readDispatchState：读得到就返回，读不到 / 形状不对一律 null（增益而非判据）", () => {
+    const read = (raw: string) => readDispatchState(() => raw, "/repo");
+    expect(read(JSON.stringify({ dispatched: false, reason: "推送失败" }))).toEqual({
+      dispatched: false,
+      reason: "推送失败",
+    });
+    expect(read(JSON.stringify({ dispatched: true, reason: "已派发" }))?.dispatched).toBe(true);
+    /* 缺字段 / 不是 JSON / 文件不在：都返回 null，让调用方退回老行为。 */
+    expect(read(JSON.stringify({ reason: "没有 dispatched" }))).toBeNull();
+    expect(read("not json")).toBeNull();
+    expect(
+      readDispatchState(() => {
+        throw new Error("ENOENT");
+      }, "/repo"),
+    ).toBeNull();
   });
 });
 
@@ -146,6 +207,8 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     opts: {
       checksFallback?: Response | (() => Response);
       checksSteps?: Array<Response | Error>;
+      /** 上游派发形状那份落盘（#3148）：缺省 = 读不到，退回「自己猜」的老行为。 */
+      dispatchState?: { dispatched: boolean; reason: string } | null;
       env?: Record<string, string | undefined>;
       nowStep?: number;
       runsFallback?: Response | (() => Response);
@@ -166,7 +229,8 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     const nowStep = opts.nowStep ?? 0;
     let clock = 0;
     const fetchImpl = (async (url: string | URL) => {
-      calls.push(String(url));      const isRuns = String(url).includes("/actions/runs");
+      calls.push(String(url));
+      const isRuns = String(url).includes("/actions/runs");
       const head = (isRuns ? runsSteps : checksSteps)?.shift();
       if (head instanceof Error) {
         throw head;
@@ -192,6 +256,13 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
       env: opts.env ?? okEnv,
       fetchImpl,
       log: (line: string) => heard.push(line),
+      readFile: (file: string, encoding: "utf8") => {
+        if (file.includes("mirror-dispatch.json") && opts.dispatchState) {
+          return JSON.stringify(opts.dispatchState);
+        }
+        throw new Error(`ENOENT: ${file}（${encoding}）`);
+      },
+      root: "/repo",
       /* 时钟假件：`sleep` 把等待记量并拨钟（真实轮次），`now()` 只额外叠加 `nowStep`
        * —— 预算耗尽那条用 `nowStep` 大跳，一轮就到点，不陪它跑 90 轮。 */
       now: () => {
@@ -251,7 +322,10 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
       nowStep: 0,
       runsSteps: [
         new Response(
-          runsBodyOf([run("static-gates", "completed", "success"), run("heavy-gates", "in_progress")]),
+          runsBodyOf([
+            run("static-gates", "completed", "success"),
+            run("heavy-gates", "in_progress"),
+          ]),
           { status: 200 },
         ),
         new Response(runsBodyOf(ALL_GREEN), { status: 200 }),
@@ -278,36 +352,49 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     expect(calls.filter((u) => u === workflowRunsUrl(REPO))).toHaveLength(3);
     expect(sleeps).toEqual([POLL_INTERVAL_MS, POLL_INTERVAL_MS]);
     const all = heard.join("\n");
-    expect(all).toContain("没认出本跑");
+    expect(all).toContain("零条 run");
     expect(all).toContain("主路径本身读通了（不是权限问题）");
     expect(all).toContain("全部完成且没有红");
     expect(all).toContain("结论：exit 0");
   });
 
-  it("主路径拉到了别跑的 run（display_title 无本跑 sha）⇒ 认不出本跑，继续轮询而不是读成结论", async () => {
+  it("主路径拉到了别跑的 run（display_title 无本跑 sha）⇒ 认领不上连击到门槛就提前收工（#3148）", async () => {
     /* dispatch 触发表是共享的：别个 PR 的 run 也在里面。认领不上 = 本跑还没起，
-     * 不是「有 run 就行」—— 这条用例钉住「按 display_title 认领，不是按表非空」。 */
-    const { calls, heard, io } = harness({
-      /* 每轮额外跳三分之一预算 ⇒ 三轮到点；sleep 每轮也只拨 30s，两者相加必然越线。 */
-      nowStep: POLL_BUDGET_MS / 3,
+     * 不是「有 run 就行」—— 这条用例钉住「按 display_title 认领，不是按表非空」，
+     * 且钉住「表里有 run 而认不上」不再吃满 45m（run-name 创建时就定死，等不出新事实）。 */
+    const { calls, heard, io, sleeps } = harness({
       runsFallback: () =>
         new Response(
           runsBodyOf([
-            { conclusion: "failure", display_title: "PR #9999 · 别个 PR 的 sha", name: "static-gates", status: "completed" },
+            {
+              conclusion: "failure",
+              display_title: "PR #9999 · 别个 PR 的 sha",
+              name: "static-gates",
+              status: "completed",
+            },
           ]),
           { status: 200 },
         ),
     });
     const code = await runVerdict(io);
     expect(code).toBe(CODE.NO_FACT);
-    expect(calls.filter((u) => u === workflowRunsUrl(REPO)).length).toBeGreaterThan(1);
+    /* 门槛轮就收工：一共 CLAIM_MISS_STREAK_TO_ABORT 次主路径读数，睡的门槛-1 次。 */
+    expect(calls.filter((u) => u === workflowRunsUrl(REPO))).toHaveLength(
+      CLAIM_MISS_STREAK_TO_ABORT,
+    );
+    expect(sleeps).toHaveLength(CLAIM_MISS_STREAK_TO_ABORT - 1);
     const all = heard.join("\n");
-    expect(all).toContain("没认出本跑");
+    expect(all).toContain("认领不上本跑");
+    expect(all).toContain("提前收工");
     /* 别跑的 run 是红的，但它不是本跑的判决 —— 不许折成 exit 1。 */
     expect(all).not.toContain("结论：exit 1");
-    /* 耗尽的交账：主路径这一整轮都停在「读到 0 条」那一形。 */
-    expect(all).toContain("读到 0 条");
-    expect(all).toContain("GitHub 侧没起跑");
+    /* 样本要念出来：#3142 正文那两条候选（标题里没 sha / 是别的 sha）靠它当场可分。 */
+    expect(all).toContain("PR #9999 · 别个 PR 的 sha");
+    /* 这一形不许被念成权限问题。 */
+    expect(all).not.toContain("两条路径的权限这枚令牌都没够上");
+    /* 认不上时两种下一动作都点名：run-name 没渲染出 sha / 不是同一笔 sha（#3142 候选）。 */
+    expect(all).toContain("run-name");
+    expect(all).toContain("不是同一笔");
   });
 
   it("主路径 403（缺 actions: read）⇒ 同轮回落兜底，兜底全绿 ⇒ 退 0；日志点名缺的权限", async () => {
@@ -332,7 +419,10 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
       nowStep: 0,
       runsFallback: new Response("no", { status: 403 }),
       checksFallback: new Response(
-        checksBodyOf([run("static-gates", "completed", "success"), run("heavy-gates", "completed", "failure")]),
+        checksBodyOf([
+          run("static-gates", "completed", "success"),
+          run("heavy-gates", "completed", "failure"),
+        ]),
         { status: 200 },
       ),
     });
@@ -349,7 +439,10 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
       runsFallback: new Response("no", { status: 403 }),
       checksSteps: [
         new Response(
-          checksBodyOf([run("static-gates", "completed", "success"), run("heavy-gates", "in_progress")]),
+          checksBodyOf([
+            run("static-gates", "completed", "success"),
+            run("heavy-gates", "in_progress"),
+          ]),
           { status: 200 },
         ),
         new Response(checksBodyOf(ALL_GREEN), { status: 200 }),
@@ -394,7 +487,10 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
   it("读数第一次 egress 抖动、第二次通 ⇒ 退 0：网络类失败消耗一次重试", async () => {
     /* 主路径被拒（兜底是唯一读数）那一形：抖动落在兜底这一跳上。 */
     const { calls, heard, io, sleeps } = harness({
-      checksSteps: [new Error("fetch failed"), new Response(checksBodyOf(ALL_GREEN), { status: 200 })],
+      checksSteps: [
+        new Error("fetch failed"),
+        new Response(checksBodyOf(ALL_GREEN), { status: 200 }),
+      ],
       nowStep: 0,
       runsFallback: new Response("no", { status: 403 }),
     });
@@ -467,6 +563,45 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     expect(all).toContain("仅降级读数");
     expect(all).not.toContain("两条路径的权限这枚令牌都没够上");
     expect(all).not.toContain("前提没落地（权限）");
+  });
+
+  it("上游派发格留下「派发没发生」⇒ 一秒不轮询、不退 2 成「还没起跑」，把上游原因念出来（#3148）", async () => {
+    /* 用户现场（#3142）：镜像格的 LFS 那一跳失败 ⇒ 刻意不派发 ⇒ 本跑永远不会有 run。
+     * 上游自己知道这件事，回读格不该再拿 45m 去猜。 */
+    const { calls, heard, io, sleeps } = harness({
+      dispatchState: {
+        dispatched: false,
+        reason: "refs 已推但 LFS 对象没送过去（本地 ref 读取失败（检出形态））⇒ 刻意不派发",
+      },
+    });
+    const code = await runVerdict(io);
+    expect(code).toBe(CODE.NO_FACT);
+    expect(calls).toHaveLength(0);
+    expect(sleeps).toHaveLength(0);
+    const all = heard.join("\n");
+    expect(all).toContain("派发没发生");
+    expect(all).toContain("本地 ref 读取失败");
+    expect(all).toContain("一秒不轮询");
+    /* 它既不是权限问题，也不是 GitHub 判了红 —— 两种话术都不许出现。 */
+    expect(all).not.toContain("两条路径的权限这枚令牌都没够上");
+    expect(all).not.toContain("结论：exit 1");
+  });
+
+  it("上游派发成功 ⇒ 照常轮询（落盘那一跳只用来掐掉「必然等不到」的那一形）", async () => {
+    const { calls, heard, io } = harness({
+      dispatchState: {
+        dispatched: true,
+        reason: "已派发 cnb-pr-sync（wuxianyuedu/comfy-app:refs/heads/cnb-pr-2649 @ 26a3c3ed）",
+      },
+      runsFallback: new Response(runsBodyOf(ALL_GREEN), { status: 200 }),
+    });
+    const code = await runVerdict(io);
+    expect(code).toBe(CODE.OK);
+    expect(calls).toEqual([workflowRunsUrl(REPO)]);
+    const all = heard.join("\n");
+    expect(all).toContain("上游派发格的读数");
+    expect(all).toContain("已派发");
+    expect(all).toContain("结论：exit 0");
   });
 
   it("读到 0 条、兜底 403、预算耗尽 ⇒ exit 2 且原因是「读到 0 条 / GitHub 侧没起跑」，不是权限", async () => {

@@ -30,10 +30,11 @@ import {
   renderMirrorSummary,
   resolveContext,
   resolveMasterContext,
-  runMasterMirror,
   runMirror,
   sanitize,
 } from "../scripts/ci-github-mirror-push.mjs";
+/* `--master` 那一档的执行面单独一份（#3148：为回到 §12.6 R5 的 900 行闸内切出去的）。 */
+import { runMasterMirror } from "../scripts/ci-github-mirror-master.mjs";
 
 const TOKEN = "gh-token-secret-value";
 const SHA = "26a3c3ed06deb679974200d68005ff583178d63f";
@@ -57,6 +58,13 @@ const gitOk = (args: Array<string>) => {
   }
   return { code: 0, stdout: "", stderr: "" };
 };
+
+/** 从落盘假件的量具里取出**最后一份**派发形状（#3148 给回读格的输入）。 */
+function dispatchedState(written: Array<string>): { dispatched?: boolean; reason?: string } {
+  const last = written.at(-1) ?? "";
+  const json = last.slice(last.indexOf("\n") + 1).trim();
+  return json === "" ? {} : (JSON.parse(json) as { dispatched?: boolean; reason?: string });
+}
 
 describe("纯函数", () => {
   it("mirrorRefFor：按请求 ID 收口成专属 ref 名", () => {
@@ -97,7 +105,14 @@ describe("纯函数", () => {
     const args = lfsPushArgs("https://example.invalid/x.git");
     expect(args.slice(0, 2)).toEqual(["-c", "core.hooksPath="]);
     expect(args.indexOf("-c")).toBeLessThan(args.indexOf("lfs"));
-    expect(args).toEqual(["-c", "core.hooksPath=", "lfs", "push", "https://example.invalid/x.git", "HEAD"]);
+    expect(args).toEqual([
+      "-c",
+      "core.hooksPath=",
+      "lfs",
+      "push",
+      "https://example.invalid/x.git",
+      "HEAD",
+    ]);
     expect(args).not.toContain("--all");
     /* 超时档位：lfs 与内容推送同量级（对象可以有几 MB），必须吃 PUSH_TIMEOUT_MS 而不是不限时。 */
     expect(gitSubcommand(args)).toBe("lfs");
@@ -172,7 +187,9 @@ describe("纯函数", () => {
   });
 
   it("parseLfsObjectCount：读得到就给 n/m，读不到给 null（不编数字）", () => {
-    expect(parseLfsObjectCount("Uploading LFS objects: 100% (3/3), 8.6 MB | 0 B/s, done.")).toBe("3/3");
+    expect(parseLfsObjectCount("Uploading LFS objects: 100% (3/3), 8.6 MB | 0 B/s, done.")).toBe(
+      "3/3",
+    );
     expect(parseLfsObjectCount("exit status 1\nError getting local refs.")).toBeNull();
     expect(parseLfsObjectCount("LFS objects already present")).toBeNull();
   });
@@ -208,7 +225,13 @@ describe("纯函数", () => {
     expect(readout).toContain("读数档：不影响流水线结论");
     expect(readout).toContain(`LFS=败（类别：${LFS_FAILURE_KINDS.AUTH}）`);
     /* 通那一档不给「下一步」编动作。 */
-    const ok = renderMirrorSummary({ elapsedMs: 300, lfs: true, objects: "2/2", prefix: "mirror-master", wire: "通（refs/heads/master @ 26a3c3ed）" });
+    const ok = renderMirrorSummary({
+      elapsedMs: 300,
+      lfs: true,
+      objects: "2/2",
+      prefix: "mirror-master",
+      wire: "通（refs/heads/master @ 26a3c3ed）",
+    });
     expect(ok).toContain("LFS=通");
     expect(ok).toContain("对象数=2/2");
     expect(ok).toContain("下一步=无需");
@@ -238,9 +261,9 @@ describe("纯函数", () => {
     expect(egress).toContain("这一跳没通");
     expect(egress).not.toContain("令牌活不活");
     /* 本仓自己给的超时（`gitTimeoutFor` 那两支）归同一类，而不是「git 回了个非零」。 */
-    expect(explainRemoteProbeFailure("git ls-remote 超时（>15000 ms）：这一跳没拿到任何回话")).toContain(
-      "这一跳没通",
-    );
+    expect(
+      explainRemoteProbeFailure("git ls-remote 超时（>15000 ms）：这一跳没拿到任何回话"),
+    ).toContain("这一跳没通");
     expect(explainRemoteProbeFailure("fatal: unable to access: Could not resolve host")).toContain(
       "这一跳没通",
     );
@@ -275,7 +298,9 @@ describe("纯函数", () => {
     expect(isEgressFailure("git ls-remote 超时（>30000 ms）：这一跳没拿到任何回话")).toBe(true);
     expect(isEgressFailure("fatal: unable to access: Could not resolve host")).toBe(true);
     /* 这三类「再试一百次也一样」⇒ 不许消耗重试（文件头第 8 条）。 */
-    expect(isEgressFailure("remote: Repository not found.\nfatal: Authentication failed")).toBe(false);
+    expect(isEgressFailure("remote: Repository not found.\nfatal: Authentication failed")).toBe(
+      false,
+    );
     expect(isEgressFailure("fatal: Invalid username or token")).toBe(false);
     expect(isEgressFailure("remote: Repository access blocked")).toBe(false);
   });
@@ -401,7 +426,11 @@ describe("runMirror（git 与 fetch 全假件）", () => {
           return { code: lfsHead.code, stdout: lfsHead.stdout ?? "", stderr: lfsHead.stderr ?? "" };
         }
         if ((opts.lfsCode ?? 0) !== 0) {
-          return { code: opts.lfsCode ?? 1, stdout: opts.lfsStdout ?? "", stderr: opts.lfsStderr ?? "" };
+          return {
+            code: opts.lfsCode ?? 1,
+            stdout: opts.lfsStdout ?? "",
+            stderr: opts.lfsStderr ?? "",
+          };
         }
         return { code: 0, stdout: opts.lfsStdout ?? "LFS objects already present", stderr: "" };
       }
@@ -436,6 +465,8 @@ describe("runMirror（git 与 fetch 全假件）", () => {
         status: opts.dispatchStatus ?? 204,
       });
     }) as unknown as typeof fetch;
+    /* 落盘假件（#3148）：一次真文件都不写，只把「留给回读格的那份派发形状」记进量具。 */
+    const written: Array<string> = [];
     const io = {
       env: opts.env ?? okEnv,
       fetchImpl,
@@ -445,14 +476,20 @@ describe("runMirror（git 与 fetch 全假件）", () => {
         sleeps.push(ms);
       },
       log: (line: string) => heard.push(line),
+      root: "/repo",
+      writeFileSync: (file: string, data: string) => {
+        written.push(`${file}\n${data}`);
+      },
     };
-    return { io, pushes, lfsPushes, calls, heard, sleeps, probeCalls: () => probeCalls };
+    return { io, pushes, lfsPushes, calls, heard, sleeps, written, probeCalls: () => probeCalls };
   }
 
   it("推成 + 204 ⇒ 退 0；push 用 --force 打到专属 ref；payload 与请求一致", async () => {
-    const { io, pushes, lfsPushes, calls, heard } = harness();
+    const { io, pushes, lfsPushes, calls, heard, written } = harness();
     const code = await runMirror(io);
     expect(code).toBe(CODE.OK);
+    /* 派发成功 ⇒ 给回读格留 `dispatched: true`（#3148：它据此知道「值得等」）。 */
+    expect(dispatchedState(written)).toMatchObject({ dispatched: true });
     expect(pushes[0]?.[0]).toBe("-c");
     expect(pushes[0]?.[1]).toBe("core.hooksPath=");
     expect(pushes[0]).toContain("--force");
@@ -477,12 +514,14 @@ describe("runMirror（git 与 fetch 全假件）", () => {
   });
 
   it("LFS 推送失败 ⇒ 退 1，一跳都不派发（派出去只会让 GitHub 侧拿指针文件跑假红）", async () => {
-    const { io, pushes, lfsPushes, calls, heard } = harness({
+    const { io, pushes, lfsPushes, calls, heard, written } = harness({
       lfsCode: 1,
       lfsStderr: `batch request: exit status 1 (token ${TOKEN})`,
     });
     const code = await runMirror(io);
     expect(code).toBe(CODE.FAIL);
+    /* 派发没发生这件事要留给回读格（#3148）：它据此一秒不轮询，而不是空转 45m。 */
+    expect(dispatchedState(written)).toMatchObject({ dispatched: false });
     /* refs 推送照发（它在前一跳已成功），但派发一次都不许发。 */
     expect(pushes).toHaveLength(1);
     expect(lfsPushes).toHaveLength(1);
@@ -492,6 +531,28 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(all).toContain("不派发");
     /* 硬规则 17 在第二跳同样成立：git-lfs 的回话先过脱敏再回显。 */
     expect(all).not.toContain(TOKEN);
+  });
+
+  it("推送失败 / 探活失败 ⇒ 同样留 `dispatched: false`（回读格据此提前收工）", async () => {
+    /* 推送失败那一跳：refs 都没到镜像仓，GitHub 侧不可能有 run。 */
+    const pushFail = harness({
+      pushCode: 128,
+      pushStderr: "fatal: schannel: server closed abruptly",
+    });
+    expect(await runMirror(pushFail.io)).toBe(CODE.FAIL);
+    expect(dispatchedState(pushFail.written)).toMatchObject({ dispatched: false });
+    expect(dispatchedState(pushFail.written).reason).toContain("推送失败");
+
+    /* 探活失败那一跳：连仓库都没问到，同样不会有 run。 */
+    const probeFail = harness({ probeCode: 128, probeStderr: "fatal: unable to access" });
+    expect(await runMirror(probeFail.io)).toBe(CODE.NO_FACT);
+    expect(dispatchedState(probeFail.written)).toMatchObject({ dispatched: false });
+    expect(dispatchedState(probeFail.written).reason).toContain("探活");
+
+    /* 前提没配齐那一跳（令牌缺席）：一条都没发。 */
+    const noToken = harness({ env: { CNB_PULL_REQUEST_IID: "2649" } });
+    expect(await runMirror(noToken.io)).toBe(CODE.NO_FACT);
+    expect(dispatchedState(noToken.written)).toMatchObject({ dispatched: false });
   });
 
   it("LFS 推送撞上「没装 git-lfs」⇒ 话术指去装 git-lfs，不是网络问题", async () => {
@@ -715,7 +776,10 @@ describe("runMirror（git 与 fetch 全假件）", () => {
   it("推送 egress 失败重试一次后通 ⇒ 退 0，派照常发", async () => {
     const { io, pushes, calls, heard, sleeps } = harness({
       pushResults: [
-        { code: 128, stderr: "Failed to connect to github.com port 443: Could not connect to server" },
+        {
+          code: 128,
+          stderr: "Failed to connect to github.com port 443: Could not connect to server",
+        },
         { code: 0 },
       ],
     });
@@ -953,7 +1017,9 @@ describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
     expect(lfsPushes).toHaveLength(1);
     expect(lfsPushes[0]).toContain("lfs");
     expect(lfsPushes[0]).not.toContain("--all");
-    expect(heard.some((l) => l.startsWith("[mirror-master]") && l.includes("LFS 推送：通"))).toBe(true);
+    expect(heard.some((l) => l.startsWith("[mirror-master]") && l.includes("LFS 推送：通"))).toBe(
+      true,
+    );
   });
 
   it("master 档 LFS 推送失败 ⇒ 退 1，与 PR 档同一族话术", async () => {

@@ -41,6 +41,15 @@
  *    403 提前交账 —— 那一形曾经被读成「两条路径的权限都没够上」（ISSUE #3136 的现场：
  *    3.8s 退掉，45m 预算一秒没用）。预算耗尽仍 0 条时原因写「读到 0 条（GitHub 侧没起跑）」，
  *    兜底的 403 只作降级事实记录（「兜底不可用（无 checks: read，仅降级）」），不催办。
+ * 1b. **「认不上」提前夭折**（ISSUE #3148）：`empty` 有两种，此前被混成一种、一起吃满
+ *    45m —— 一种是真的零条 run（GitHub 侧还没起跑，会随时起跑，就该等）；另一种是
+ *    **触发表里有 run、但没有一条的 `display_title` 含目标 sha**（`run-name` 没渲染出
+ *    payload 的 sha / 不是同一笔 sha，#3142 的现场）。后者再等也等不出新事实：`run-name`
+ *    是 run **创建时**定死的，不是跑完才写。所以连续 {@link CLAIM_MISS_STREAK_TO_ABORT} 轮
+ *    这一形 ⇒ 提前 exit 2，并把触发表的 `display_title` 样本念出来（{@link renderTitleSamples}），
+ *    让「标题里没 sha」与「是别的 sha」当场可分。零条 run 那一形**照旧吃满预算**。
+ *    另一条同形的等待也归这里：上游镜像格失败 ⇒ 派发没发生 ⇒ 本跑永远不会有 run；
+ *    那一形要缩的是 `.cnb.yml` 侧（把镜像格的失败读数交给本格判，属 #3148 期望第 1 条的另一半）。
  * 2. **主列读数档**（与镜像格同一族）：`.cnb.yml` 给它 `--readout`，三态照旧打点、对外
  *    恒退 0。翻承重的条件：本格读数稳定后单独一次决定，同时摘镜像格的 `--readout`
  *    （#3051 期望第 3 条）—— 不在本批。
@@ -67,10 +76,13 @@
  * `CNB_PULL_REQUEST_IID`（PR 流水线注入）。
  */
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import {
   CODE,
+  DISPATCH_STATE_DIR,
+  DISPATCH_STATE_FILE,
   RETRY_BACKOFF_MS,
   exitCodeFor,
   isEgressFailure,
@@ -106,11 +118,37 @@ export const POLL_INTERVAL_MS = 30_000;
 export const POLL_BUDGET_MS = 45 * 60_000;
 
 /**
+ * 认领不上时**提前夭折**的门槛：连续这么多轮「触发表里有 run、但一条 `display_title`
+ * 都不含目标 sha」⇒ 判为「认不上了」，不再把 45m 预算花完（ISSUE #3148）。
+ *
+ * 取 4 轮（= 2 分钟）的理由：迟到的 dispatch 是**排队**造成的，而排队中的 run 一出现
+ * 就带着 payload 的「pr_number / head_sha」渲染出的 `display_title`（`run-name` 是 run
+ * 创建时就定死的，不是跑完才写）⇒ 「表里有 run 而认不上」不是迟到，是锚点恒假。
+ * 4 轮只是给「GitHub 侧刚建 run、标题还没落」留一格余量；再多就只是把墙钟还给平台。
+ *
+ * ⚠️ 只有**读到过非空触发表**才累计：零条 run 的 `empty`（GitHub 侧压根没起跑）是
+ * 真·等待，那一形照旧吃满预算 —— 它可能随时起跑，#3136 专门为此放开了 45m。
+ */
+export const CLAIM_MISS_STREAK_TO_ABORT = 4;
+
+/** 触发表样本里最多念几条（只进日志，不进判据）。 */
+const SAMPLE_TITLES_LIMIT = 5;
+
+/** `display_title` 在日志里截断到的长度（够看清「有没有 sha」，又不会把一整页刷满）。 */
+const SAMPLE_TITLE_MAX_CHARS = 80;
+
+/**
  * 主路径结论里算「红」的那一档（GitHub workflow-run conclusion 词表内）。
  * 其余 completed 结论（success / neutral / skipped）算绿 —— skipped 与 neutral 是
  * GitHub 自己的「不用跑」，与代码对错无关。
  */
-const RED_RUN_CONCLUSIONS = new Set(["action_required", "cancelled", "failure", "startup_failure", "timed_out"]);
+const RED_RUN_CONCLUSIONS = new Set([
+  "action_required",
+  "cancelled",
+  "failure",
+  "startup_failure",
+  "timed_out",
+]);
 
 /**
  * 兜底路径结论里算「红」的那一档（GitHub check-run conclusion 词表内 ——
@@ -120,6 +158,15 @@ const RED_CHECK_CONCLUSIONS = new Set(["action_required", "cancelled", "failure"
 
 /** 本仓检出根（`scripts/` 的上一层）—— git 子进程在这里跑，不靠继承的工作目录。 */
 const ROOT = path.resolve(import.meta.dirname, "..");
+
+/**
+ * 真身读文件（用例注入 `io.readFile` 的假件，一次真磁盘都不碰）。
+ *
+ * @param {string} file 文件路径
+ * @param {"utf8"} encoding 固定 utf8（这一族只读 JSON）
+ * @returns {string} 文件内容
+ */
+const realReadFile = (file, encoding) => String(readFileSync(file, encoding));
 
 /**
  * git 子进程的环境：清掉 `GIT_DIR` / `GIT_WORK_TREE`（与镜像格文件头第 7 条同因）。
@@ -162,6 +209,27 @@ function realRunGit(args) {
 const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * 读上游镜像格留下的派发形状（ISSUE #3148）。**读不到不是错**：那说明本跑没写过
+ * （老版本 / 干净检出 / 落盘失败），此时退回「自己猜」的老行为 —— 这一跳是增益，不是判据。
+ *
+ * @param {(file: string, encoding: "utf8") => string} readFile 注入面（用例不读真文件）
+ * @param {string} root 检出根
+ * @returns {{dispatched: boolean, reason: string} | null} 上游结论；`null` = 没有这个事实
+ */
+export function readDispatchState(readFile, root) {
+  try {
+    const raw = readFile(path.join(root, DISPATCH_STATE_DIR, DISPATCH_STATE_FILE), "utf8");
+    const parsed = /** @type {{dispatched?: unknown, reason?: unknown}} */ (JSON.parse(raw));
+    if (typeof parsed?.dispatched !== "boolean") {
+      return null;
+    }
+    return { dispatched: parsed.dispatched, reason: String(parsed.reason ?? "") };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 主路径读数的 URL。
  *
  * 不用 `?head_sha=`：repository_dispatch 触发的 run，其 `head_sha` 落**默认分支 HEAD**
@@ -190,6 +258,50 @@ export function matchesTargetSha(run, sha) {
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- run 是 API 回话里的 unknown 条目，运行时可缺/为 null，断言不承重
   const title = String(/** @type {{display_title?: unknown}} */ (run)?.display_title ?? "");
   return title.includes(sha);
+}
+
+/**
+ * 触发表里的 `display_title` 样本：给「认领不上」那一形留一眼可分的事实
+ * （ISSUE #3142 期望第 1 条 / #3148）。
+ *
+ * 两件事要让线上那一眼分得开：
+ *   · **表里有 run、标题里没有 sha** ⇒ `run-name` 没渲染出 payload 的 sha（锚点恒假）；
+ *   · **表里有 run、标题里是别的 sha** ⇒ 本跑推的那一笔与 dispatch payload 不是同一笔。
+ * 只念标题不念条目全名：`display_title` 是 `run-name` 的产物、里面本来就只有 PR 号 + sha。
+ *
+ * @param {Array<unknown>} runs runs API 回话里的 `workflow_runs`（**全部**，不只是认领上的）
+ * @returns {string} 一行样本（空表时给「零条」）
+ */
+export function renderTitleSamples(runs) {
+  if (runs.length === 0) {
+    return "触发表里零条 run";
+  }
+  const titles = runs.slice(0, SAMPLE_TITLES_LIMIT).map((item) => {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- item 是 API 回话里的 unknown 条目，运行时可缺/为 null，断言不承重
+    const raw = String(/** @type {{display_title?: unknown}} */ (item)?.display_title ?? "").trim();
+    const text = raw === "" ? "(无标题)" : raw;
+    return text.length > SAMPLE_TITLE_MAX_CHARS
+      ? `${text.slice(0, SAMPLE_TITLE_MAX_CHARS)}…`
+      : text;
+  });
+  const more =
+    runs.length > SAMPLE_TITLES_LIMIT
+      ? `（另有 ${String(runs.length - SAMPLE_TITLES_LIMIT)} 条未念）`
+      : "";
+  return `触发表 ${String(runs.length)} 条，标题样本：${titles.join(" ｜ ")}${more}`;
+}
+
+/**
+ * 「这一轮读到了触发表，但一条都认领不上」——提前夭折判据的那一位（ISSUE #3148）。
+ *
+ * 零条 run 是「GitHub 侧还没起跑」，那是真·等待（#3136 为它放开了整段预算），
+ * 不属于这一形：本函数只在 `items` 非空时成立。
+ *
+ * @param {{state: string, items?: Array<unknown>, runs?: Array<unknown>, status?: number}} read 主路径本轮读数
+ * @returns {boolean} true ⇒ 这一轮计入「认不上」的连击
+ */
+export function isUnclaimedNonEmpty(read) {
+  return read.state === "empty" && (read.items ?? []).length > 0;
 }
 
 /**
@@ -253,9 +365,12 @@ async function fetchWithTimeout(fetchImpl, url, token, label) {
     });
   } catch (error) {
     if (controller.signal.aborted) {
-      throw new Error(`${label}读数超时（>${String(CHECK_RUNS_TIMEOUT_MS)} ms）：这一跳没拿到任何回话`, {
-        cause: error,
-      });
+      throw new Error(
+        `${label}读数超时（>${String(CHECK_RUNS_TIMEOUT_MS)} ms）：这一跳没拿到任何回话`,
+        {
+          cause: error,
+        },
+      );
     }
     throw error;
   } finally {
@@ -369,7 +484,7 @@ export function summarizeCheckRuns(runs) {
 
 /**
  * @typedef {{state: "auth", status: number} | {state: "http", status: number, body: string} | {state: "egress", error: string}} FailRead
- * @typedef {{state: "data", runs: Array<unknown>} | {state: "empty"} | FailRead} PathRead
+ * @typedef {{state: "data", runs: Array<unknown>} | {state: "empty", items?: Array<unknown>} | FailRead} PathRead
  * @typedef {{state: "data", runs: Array<unknown>} | FailRead} ChecksRead
  */
 
@@ -405,7 +520,9 @@ async function readMainPath(io, ctx) {
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- body 是 API 回话 JSON，运行时可缺/为 null，断言不承重
     const all = Array.isArray(body?.workflow_runs) ? body.workflow_runs : [];
     const runs = all.filter((r) => matchesTargetSha(r, ctx.headSha));
-    return runs.length > 0 ? { runs, state: "data" } : { state: "empty" };
+    /* 认不上时把**触发表原样**带出去（`items`，样本渲染与提前夭折判据都要它）：
+     * 只念一句「没认出本跑」分不开「标题里没 sha」与「是别的 sha」两种形（#3142 的现场）。 */
+    return runs.length > 0 ? { runs, state: "data" } : { items: all, state: "empty" };
   }
   return failState(res);
 }
@@ -454,8 +571,36 @@ function reportHttpReject(log, label, status, body) {
  * @returns {number} 仓内三态退码
  */
 function reportEgressDown(log, label, error) {
-  log(`[verdict] ${label}读数没跑起来（egress 类，${String(REQUEST_MAX_ATTEMPTS)} 次都没通）：${error}`);
+  log(
+    `[verdict] ${label}读数没跑起来（egress 类，${String(REQUEST_MAX_ATTEMPTS)} 次都没通）：${error}`,
+  );
   log("[verdict] 结论：exit 2 —— 节点到 api.github.com 这一跳没通（出网问题在节点侧），与判据无关");
+  return CODE.NO_FACT;
+}
+
+/**
+ * 「认不上」提前夭折的交账：exit 2，**不把 45m 预算花完**（ISSUE #3148）。
+ *
+ * 这一形的事实是：`dispatch` 触发表里有 run，但它们**一条都不是本跑**。两种候选原因
+ * （#3142 正文列的那两条）在这一眼里就已经可分，下一动作不同 —— 所以样本必须念出来，
+ * 正文也必须点名「不是权限、不是红」：它既没读到权限被拒，也读到过别人的 run。
+ *
+ * @param {(line: string) => void} log 日志出口
+ * @param {string} headSha 要认领的那一笔（截断成短 sha 进正文）
+ * @returns {number} 仓内三态退码
+ */
+function reportClaimMissed(log, headSha) {
+  log(
+    `[verdict] 结论：exit 2 —— 连续 ${String(CLAIM_MISS_STREAK_TO_ABORT)} 轮认领不上本跑 @ ${headSha.slice(0, 8)}，提前收工（不再空转满 ${String(POLL_BUDGET_MS / 60_000)}m）`,
+  );
+  log(
+    "[verdict]   两种下一动作（样本见上一行）：① 标题里**没有** sha ⇒ `pr-gate.yml` 的 `run-name` 没渲染出 payload 的 head_sha，" +
+      "改 GitHub 侧的 run-name；② 标题里是**别的** sha ⇒ dispatch payload 与本格推的 HEAD 不是同一笔，改认领锚点。",
+  );
+  log(
+    "[verdict]   这不是权限问题（主路径能读到就是读到了），也不是「GitHub 侧判了红」——" +
+      "另一种同形是上游派发没发生（镜像格失败 ⇒ 本跑永远不会有 run，见 #3046 / #3146）。",
+  );
   return CODE.NO_FACT;
 }
 
@@ -475,7 +620,7 @@ function reportBudgetSpent(log, shape, fbNote) {
   const minutes = String(POLL_BUDGET_MS / 60_000);
   if (shape === "empty") {
     log(
-      `[verdict] 结论：exit 2 —— ${minutes}m 轮询预算耗尽，主路径（runs API）**读到 0 条**：GitHub 侧没起跑，或 dispatch 触发表里认不出本跑（display_title 无目标 sha）。${fbNote}`,
+      `[verdict] 结论：exit 2 —— ${minutes}m 轮询预算耗尽，主路径（runs API）**读到 0 条 run**：GitHub 侧没起跑（派发没发生 / 还在排队）。${fbNote}`,
     );
     log(
       "[verdict]   这不是权限问题（主路径能读到就是读到了），也不是「GitHub 侧判了红」——" +
@@ -518,7 +663,7 @@ function reportBothDenied(log, mainStatus, fbStatus) {
  * 执行回读：上下文收口 → 每轮先试主路径、读不到任何 run 再回落兜底，
  * 直到拿到完整结论 / 预算耗尽。
  *
- * @param {{env: Record<string, string | undefined>, fetchImpl?: typeof fetch, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, now?: () => number, dryRun?: boolean, log?: (line: string) => void}} io
+ * @param {{env: Record<string, string | undefined>, fetchImpl?: typeof fetch, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, now?: () => number, dryRun?: boolean, log?: (line: string) => void, readFile?: (file: string, encoding: "utf8") => string, root?: string}} io
  * @returns {Promise<number>} 仓内三态退码
  */
 export async function runVerdict(io) {
@@ -547,11 +692,30 @@ export async function runVerdict(io) {
     log("[verdict] DRY-RUN：没发任何请求，计划如上");
     return CODE.OK;
   }
+  /* 上游自己知道「本跑派发了没有」（镜像格落的 `mirror-dispatch.json`）。派发没发生 ⇒
+   * 本跑永远不会有 run，再等 45m 也只是等一个不存在的东西（#3148 的现场）。 */
+  const upstream = readDispatchState(io.readFile ?? realReadFile, io.root ?? ROOT);
+  if (upstream && !upstream.dispatched) {
+    log(`[verdict] 上游派发格留下的读数：派发没发生 —— ${upstream.reason}`);
+    log(
+      "[verdict] 结论：exit 2 —— 本跑不会有 GitHub 侧那一跑（派发没发生，不是认领锚点的问题），一秒不轮询",
+    );
+    log(
+      "[verdict]   下一动作：修上游那一跳（形状见 `GitHub 镜像同步` 格的小结与原文行；" +
+        "egress / 令牌 / LFS / 派发各是各的下一动作，见 #3046 / #3146），修好后本格自然能读到判决。",
+    );
+    return CODE.NO_FACT;
+  }
+  if (upstream) {
+    log(`[verdict] 上游派发格的读数：${upstream.reason}`);
+  }
   const reqIo = { fetchImpl, log, sleep, token: ctx.token };
   const deadline = now() + POLL_BUDGET_MS;
   /** 兜底路径本轮的读数（**只作降级事实记录**，不参与结论）：主路径读到 0 条而兜底
    *  不可用时，它只用来解释「这一形为什么连读数的影子都没有」。 */
   let fbNote = "";
+  /** 连续「触发表里有 run、一条都认不上」的轮数（`CLAIM_MISS_STREAK_TO_ABORT` 的计数）。 */
+  let missStreak = 0;
   for (;;) {
     /** 这一轮主路径的形状（`reportBudgetSpent` 的话术按它分岔）：empty = 读到 0 条
      *  （还没起跑）；pending = 读到了但没跑完 —— 含「只有兜底读数」那一形。
@@ -564,6 +728,7 @@ export async function runVerdict(io) {
     let summary = null;
     let pathLabel = "主路径（runs API）";
     if (main.state === "data") {
+      missStreak = 0;
       summary = summarizeWorkflowRuns(main.runs);
       mainShape = "pending";
     } else if (main.state === "auth") {
@@ -572,9 +737,22 @@ export async function runVerdict(io) {
         `[verdict] 主路径（runs API）被拒 HTTP ${String(main.status)} —— 令牌没给 actions: read ⇒ 本轮回落兜底（checks API）`,
       );
     } else if (main.state === "empty") {
-      log(
-        "[verdict] 主路径（runs API）的 dispatch 触发表里没认出本跑（display_title 无目标 sha / GitHub 侧还没起跑）⇒ 本轮回落兜底（checks API）；主路径本身读通了（不是权限问题），继续轮询",
-      );
+      /* 读到过非空触发表、却一条都没认领上 —— 与「零条 run」（GitHub 侧还没起跑）不是同一件事：
+       * 前者再等也等不出新事实（锚点恒假），后者可能随时起跑。分开说、分开计时（#3148）。 */
+      if (isUnclaimedNonEmpty(main)) {
+        missStreak += 1;
+        log(
+          `[verdict] 主路径（runs API）认领不上本跑（第 ${String(missStreak)}/${String(CLAIM_MISS_STREAK_TO_ABORT)} 轮）：${renderTitleSamples(main.items ?? [])}`,
+        );
+        if (missStreak >= CLAIM_MISS_STREAK_TO_ABORT) {
+          return reportClaimMissed(log, ctx.headSha);
+        }
+      } else {
+        missStreak = 0;
+        log(
+          "[verdict] 主路径（runs API）的 dispatch 触发表里零条 run（GitHub 侧还没起跑）⇒ 本轮回落兜底（checks API）；主路径本身读通了（不是权限问题），继续轮询",
+        );
+      }
     } else if (main.state === "http") {
       return reportHttpReject(log, "主路径（runs API）", main.status, main.body);
     } else {
@@ -609,7 +787,9 @@ export async function runVerdict(io) {
       /* 只有主路径被拒时才可能走到这里用兜底；那种形状已经不是「读到 0 条」了。 */
       mainShape = "pending";
       const what = pathLabel === "兜底（checks API）" ? "check-run" : "workflow run";
-      log(`[verdict] ${pathLabel}：这一笔 sha 上还没有任何 ${what}（GitHub 侧可能还没起跑）—— 继续等`);
+      log(
+        `[verdict] ${pathLabel}：这一笔 sha 上还没有任何 ${what}（GitHub 侧可能还没起跑）—— 继续等`,
+      );
     } else if (summary?.completed) {
       for (const line of summary.ok) {
         log(`[verdict]   ✓ ${line}`);
