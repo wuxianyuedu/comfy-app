@@ -15,8 +15,11 @@
  * `classifyLfsPushFailure` 要拿它判「对象传输或网络中断」这一类 —— 两处各写一份正则会漂成
  * 「话术说是 egress、重试却不认」的孪生形态。
  *
- * @module scripts/ci-mirror-failure-report — 镜像格的失败分类（egress / LFS）与收尾小结
+ * @module scripts/ci-mirror-failure-report — 镜像格的失败分类（egress / LFS）、收尾小结与派发形状落盘
  */
+import { mkdirSync } from "node:fs";
+import path from "node:path";
+
 /**
  * egress 类失败的判据（TCP / DNS / 代理层，含本仓自己给的超时那一句）。
  *
@@ -246,4 +249,40 @@ export function renderMirrorSummary({
     `下一步=${next}`,
   ];
   return `[${prefix}] 小结（${label}）：${parts.join("｜")}`;
+}
+
+/**
+ * 上游派发形状的落盘根（ISSUE #3148）：**同一工作区上的下一格**（`GitHub 判决回读`）
+ * 靠它知道「这一跑的派发到底发生没发生」。
+ *
+ * 为什么要有这一跳：镜像格与回读格隔着二十多格、几个小时地跑在主列的两端，而回读格
+ * 一直在拿 API 猜「GitHub 侧起跑没有」—— 它猜的那件事，**上游自己已经知道答案**。
+ * 派发失败（推送 / LFS / 派发任意一跳）时本跑永远不会有 run，回读格照样把 45m
+ * 轮询预算花完（#3138 的现场：用户看到的就是「GitHub 那边没 action，CNB 这边死等」）。
+ *
+ * 落在工作区的 `.comfy-ci/` 下（不是 `log/`：这一族是**给下一格的输入**，不是给人翻的日志；
+ * 位置相对检出根、跨 step 稳定，且不影响任何产物）。
+ */
+export const DISPATCH_STATE_DIR = ".comfy-ci";
+export const DISPATCH_STATE_FILE = "mirror-dispatch.json";
+
+/**
+ * 把本跑的派发形状写成一行 JSON 留给回读格（写失败不改变本格的三态 —— 落盘是**增益**，
+ * 不是判据；拿不到它时回读格退回「自己猜」的老行为）。
+ *
+ * @param {(file: string, data: string) => void} writeFileSync 注入面（用例不落真文件）
+ * @param {string} root 检出根
+ * @param {{dispatched: boolean, reason: string}} state 这一跳的结论
+ * @returns {void}
+ */
+export function writeDispatchState(writeFileSync, root, state) {
+  try {
+    mkdirSync(path.join(root, DISPATCH_STATE_DIR), { recursive: true });
+    writeFileSync(
+      path.join(root, DISPATCH_STATE_DIR, DISPATCH_STATE_FILE),
+      `${JSON.stringify({ ...state, at: new Date().toISOString() })}\n`,
+    );
+  } catch {
+    /* 落盘失败只影响「回读格能不能提前收工」，不许把这一格自己判红。 */
+  }
 }

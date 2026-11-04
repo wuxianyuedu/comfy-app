@@ -103,10 +103,15 @@
  * （后两件只属 PR 模式；`--master` 不读它们）。
  */
 import { spawnSync } from "node:child_process";
+import { writeFileSync as realWriteFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-import { isEgressFailure, renderMirrorSummary } from "./ci-mirror-failure-report.mjs";
+import {
+  isEgressFailure,
+  renderMirrorSummary,
+  writeDispatchState,
+} from "./ci-mirror-failure-report.mjs";
 import { pushLfsObjects } from "./ci-mirror-lfs-push.mjs";
 
 /* LFS 那一族搬去 `ci-mirror-lfs-push.mjs`（#3146 的 900 行闸）；仍从这里转出，导入面不用改。 */
@@ -115,12 +120,15 @@ export { lfsObjectIdPushArgs, lfsPushArgs, parseLfsObjectIds } from "./ci-mirror
 /* 这几件实现搬去 `ci-mirror-failure-report.mjs`（#3106 的 900 行闸）；仍从这里转出，导入面不用改。 */
 export {
   classifyLfsPushFailure,
+  DISPATCH_STATE_DIR,
+  DISPATCH_STATE_FILE,
   explainLfsPushFailure,
   isEgressFailure,
   LFS_FAILURE_KINDS,
   LFS_FAILURE_SHORT_ACTIONS,
   parseLfsObjectCount,
   renderMirrorSummary,
+  writeDispatchState,
 } from "./ci-mirror-failure-report.mjs";
 
 /**
@@ -403,7 +411,7 @@ export function gitTimeoutFor(args) {
  * @param {string[]} args git 参数表
  * @returns {{code: number, stderr: string, stdout: string}}
  */
-function realRunGit(args) {
+export function realRunGit(args) {
   const timeout = gitTimeoutFor(args);
   const r = spawnSync("git", args, { cwd: ROOT, encoding: "utf8", env: gitEnv(), timeout });
   /* 念出来的是子命令而不是 `args[0]` —— 推送那一跳的 `args[0]` 是 `-c`。 */
@@ -434,7 +442,7 @@ function realRunGit(args) {
  * @param {number} ms 等多久
  * @returns {Promise<void>}
  */
-const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+export const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * 带有限重试的一跳（文件头第 8 条）：**只有 egress 类失败**才消耗重试 ——
@@ -448,7 +456,7 @@ const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * @param {{runGit: typeof realRunGit, sleep: (ms: number) => Promise<void>, log: (line: string) => void, prefix: string, label: string, maxAttempts: number}} ctx
  * @returns {Promise<{attempts: number, code: number, stderr: string, stdout: string}>} 最后一次尝试的结果 + 实际消耗的次数
  */
-async function runGitWithRetry(args, ctx) {
+export async function runGitWithRetry(args, ctx) {
   const { label, log, maxAttempts, prefix, runGit, sleep } = ctx;
   let attempts = 1;
   let result = runGit(args);
@@ -518,7 +526,7 @@ export function explainRemoteProbeFailure(text) {
 /**
  * 执行镜像：先问「仓库在不在」→ 推 HEAD → 派发。每一跳各自独立成读数，前一跳没通后一跳不发。
  *
- * @param {{env: Record<string, string | undefined>, fetchImpl?: typeof fetch, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, dryRun?: boolean, log?: (line: string) => void, readout?: boolean}} io
+ * @param {{env: Record<string, string | undefined>, fetchImpl?: typeof fetch, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, dryRun?: boolean, log?: (line: string) => void, readout?: boolean, root?: string, writeFileSync?: (file: string, data: string) => void}} io
  * @returns {Promise<number>} 仓内三态退码
  */
 export async function runMirror(io) {
@@ -534,6 +542,13 @@ export async function runMirror(io) {
   const summarize = (fields) => {
     log(renderMirrorSummary({ prefix: "mirror", readout, ...fields }));
   };
+  /* 派发形状落盘（ISSUE #3148）：主列末尾那一格 `GitHub 判决回读` 读它，从而在「本跑
+   * 根本没派发」时不再把 45m 轮询预算花完。落盘失败不改本格三态。 */
+  const { root = ROOT, writeFileSync = realWriteFileSync } = io;
+  /** @param {boolean} d @param {string} r */
+  const leave = (d, r) => {
+    writeDispatchState(writeFileSync, root, { dispatched: d, reason: r });
+  };
   const fetchImpl = io.fetchImpl ?? fetch;
   const runGit = io.runGit ?? realRunGit;
   const sleep = io.sleep ?? realSleep;
@@ -544,6 +559,7 @@ export async function runMirror(io) {
     }
     log("[mirror] 结论：exit 2 —— 有一步没跑起来（不等于通过，也不等于「没有要同步的」）");
     summarize({ lfs: null, wire: "没跑（前提没配齐）" });
+    leave(false, "前提没配齐（令牌 / IID / HEAD 取不到）⇒ 派发没发生");
     return CODE.NO_FACT;
   }
   const url = buildPushUrl(ctx.repo, ctx.token, (env.GITHUB_MIRROR_USER ?? "").trim() || "oauth2");
@@ -602,6 +618,10 @@ export async function runMirror(io) {
       retries: probe.attempts - 1,
       wire: `没跑（exit ${String(probe.code)}）`,
     });
+    leave(
+      false,
+      `推送前的探活没通（exit ${String(probe.code)}：egress / 仓库 / 令牌三层之一）⇒ 派发没发生`,
+    );
     return CODE.NO_FACT;
   }
   /* 推送同样只对 egress 类失败重试一次（PUSH_MAX_ATTEMPTS）；认证 / 权限类一次就交账。 */
@@ -621,6 +641,7 @@ export async function runMirror(io) {
       }
     }
     summarize({ lfs: null, retries: push.attempts - 1, wire: `败（exit ${String(push.code)}）` });
+    leave(false, `refs 推送失败（exit ${String(push.code)}）⇒ 派发没发生`);
     return CODE.FAIL;
   }
   /* refs 已在 ⇒ 第二跳把 LFS 对象送过去（文件头第 9 条）。它挂了照样是红，且**不派发**：
@@ -645,6 +666,10 @@ export async function runMirror(io) {
       retries: lfs.attempts - 1,
       wire: wireNote,
     });
+    leave(
+      false,
+      `refs 已推但 LFS 对象没送过去（${lfs.failure?.label ?? "类别见上一行"}）⇒ 刻意不派发`,
+    );
     return lfs.code;
   }
   let res;
@@ -670,6 +695,7 @@ export async function runMirror(io) {
       retries: lfs.attempts - 1,
       wire: wireNote,
     });
+    leave(false, "派发请求在网络层没跑起来 ⇒ 派发没发生");
     return CODE.NO_FACT;
   }
   if (res.status !== 204) {
@@ -686,6 +712,7 @@ export async function runMirror(io) {
       retries: lfs.attempts - 1,
       wire: wireNote,
     });
+    leave(false, `派发被拒（HTTP ${String(res.status)}）⇒ GitHub 侧没有这一跑`);
     return CODE.FAIL;
   }
   log(`[mirror] ✓ 已推 ${ctx.repo}:${ctx.ref} @ ${ctx.headSha.slice(0, 8)} · 已派发 ${EVENT_TYPE}`);
@@ -697,139 +724,18 @@ export async function runMirror(io) {
     retries: lfs.attempts - 1,
     wire: wireNote,
   });
+  leave(
+    true,
+    `已派发 ${EVENT_TYPE}（${ctx.repo}:refs/heads/${ctx.ref} @ ${ctx.headSha.slice(0, 8)}）`,
+  );
   return CODE.OK;
 }
 
 /**
- * `--master` 模式的执行面：探活 → 推 `HEAD:refs/heads/master`，**没有派发那一跳**
- * （这一推服务的是 GitHub 侧的 schedule workflow —— 它们跑默认分支，推完即就位，
- * 没有要叫醒的对象）。探活与推送两跳的话术与 {@link runMirror} 同一族，
- * 前缀换成 `[mirror-master]`（文件头「--master」一节第 3 条）。
- *
- * @param {{env: Record<string, string | undefined>, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, dryRun?: boolean, log?: (line: string) => void, readout?: boolean}} io
- * @returns {Promise<number>} 仓内三态退码
+ * `--master` 那一档的执行面（`runMasterMirror`）在 `ci-github-mirror-master.mjs`
+ * （#3148：两份文件都在 §12.6 R5 的 900 行闸内）。它反过来要 import 本文件的判据与话术，
+ * 静态互相 import 会成环 ⇒ 入口那段**动态**取它，这里不转出。
  */
-export async function runMasterMirror(io) {
-  const { dryRun = false, env } = io;
-  const log =
-    io.log ??
-    ((line) => {
-      console.log(line);
-    });
-  const readout = io.readout ?? false;
-  /** 收尾小结（ISSUE #3106）—— master 档没有派发那一跳，`dispatch` 传 `null`。
-   *  @param {MirrorSummaryFields} fields */
-  const summarize = (fields) => {
-    log(renderMirrorSummary({ prefix: "mirror-master", readout, ...fields }));
-  };
-  const runGit = io.runGit ?? realRunGit;
-  const sleep = io.sleep ?? realSleep;
-  const ctx = resolveMasterContext({ env, runGit });
-  if (!ctx.ok) {
-    for (const reason of ctx.reasons) {
-      log(`[mirror-master] 没跑起来的原因：${reason}`);
-    }
-    log("[mirror-master] 结论：exit 2 —— 有一步没跑起来（不等于通过，也不等于「没有要同步的」）");
-    summarize({ lfs: null, wire: "没跑（前提没配齐）" });
-    return CODE.NO_FACT;
-  }
-  const url = buildPushUrl(ctx.repo, ctx.token, (env.GITHUB_MIRROR_USER ?? "").trim() || "oauth2");
-  log(
-    `[mirror-master] 计划：HEAD ${ctx.headSha.slice(0, 8)} → ${ctx.repo}:${ctx.ref} · LFS 增量推送（不派发）`,
-  );
-  if (dryRun) {
-    log(
-      "[mirror-master] DRY-RUN：没推，计划如上（实跑时内容推送后还有一跳 LFS 增量推送，不带 --all）",
-    );
-    return CODE.OK;
-  }
-  /* 推送前那一问与 PR 模式同一跳、同一份判读、同一套重试（文件头第 5 / 8 条）。 */
-  const probe = await runGitWithRetry(["ls-remote", url], {
-    label: "探活",
-    log,
-    maxAttempts: PROBE_MAX_ATTEMPTS,
-    prefix: "mirror-master",
-    runGit,
-    sleep,
-  });
-  const probeText = sanitize(`${probe.stdout}\n${probe.stderr}`, ctx.token);
-  log(
-    probe.code === 0
-      ? "[mirror-master] 推送前这一读：通（空仓库 ⇒ 零条 ref 也是通的）"
-      : `[mirror-master] 推送前这一读没通（exit ${probe.code}）：${explainRemoteProbeFailure(probeText)}`,
-  );
-  if (probe.code === 0 && !hasRemoteRefs(probe.stdout)) {
-    log("[mirror-master]   目标仓库是空的（零条 ref）—— `--force` 推 master 正是它该有的第一笔");
-  }
-  if (probe.code !== 0) {
-    for (const line of probeText.split("\n")) {
-      if (line.trim()) {
-        log(`[mirror-master]   ${line}`);
-      }
-    }
-    log(
-      "[mirror-master] 结论：exit 2 —— 前提没落地（egress / 目标仓库 / 令牌这三层之一，看上面那句是哪一种；不是这一格判出的红）",
-    );
-    summarize({
-      lfs: null,
-      retries: probe.attempts - 1,
-      wire: `没跑（exit ${String(probe.code)}）`,
-    });
-    return CODE.NO_FACT;
-  }
-  /* 与 PR 模式同一套：egress 类失败重试一次，认证 / 权限类一次就交账。 */
-  const push = await runGitWithRetry(pushArgs(url, `refs/heads/${ctx.ref}`), {
-    label: "推送",
-    log,
-    maxAttempts: PUSH_MAX_ATTEMPTS,
-    prefix: "mirror-master",
-    runGit,
-    sleep,
-  });
-  if (push.code !== 0) {
-    log(`[mirror-master] 推送失败（exit ${push.code}）：`);
-    for (const line of `${push.stdout}\n${push.stderr}`.split("\n")) {
-      if (line.trim()) {
-        log(`[mirror-master]   ${sanitize(line, ctx.token)}`);
-      }
-    }
-    summarize({ lfs: null, retries: push.attempts - 1, wire: `败（exit ${String(push.code)}）` });
-    return CODE.FAIL;
-  }
-  /* 与 PR 档同一跳（文件头第 9 条）：master 服务的 daily / 桌包两档 checkout 也开 lfs:true，
-   * 对象没送过去那边照样是「指针文件」的假红。 */
-  const wireNote = `通（refs/heads/${ctx.ref} @ ${ctx.headSha.slice(0, 8)}）`;
-  const lfs = await pushLfsObjects({
-    log,
-    prefix: "mirror-master",
-    runGit,
-    runGitWithRetry,
-    sanitize,
-    sleep,
-    token: ctx.token,
-    url,
-  });
-  if (lfs.code !== CODE.OK) {
-    summarize({
-      elapsedMs: lfs.elapsedMs,
-      failure: lfs.failure,
-      lfs: false,
-      objects: lfs.objects,
-      retries: lfs.attempts - 1,
-      wire: wireNote,
-    });
-    return lfs.code;
-  }
-  log(`[mirror-master] ✓ 已推 ${ctx.repo}:${ctx.ref} @ ${ctx.headSha.slice(0, 8)}`);
-  summarize({
-    elapsedMs: lfs.elapsedMs,
-    lfs: true,
-    objects: lfs.objects,
-    retries: lfs.attempts - 1,
-    wire: wireNote,
-  });
-  return CODE.OK;
-}
 
 /**
  * 退码出口：读数档与承重档之间的那**唯一一道**分界（ISSUE #3051）。
@@ -852,8 +758,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.met
   const dryRun = process.argv.includes("--dry-run");
   const readout = process.argv.includes("--readout");
   const master = process.argv.includes("--master");
+  /* `--master` 那一档的执行面在 `ci-github-mirror-master.mjs`（#3148 为回到 900 行闸内切出去的）。
+   * 这里**动态**取它：那一份反过来要 import 本文件的判据与话术，静态互相 import 会成环。 */
   const code = master
-    ? await runMasterMirror({ dryRun, env: process.env, readout })
+    ? await (
+        await import("./ci-github-mirror-master.mjs")
+      ).runMasterMirror({ dryRun, env: process.env, readout })
     : await runMirror({ dryRun, env: process.env, readout });
   /* 读数档的「不影响流水线结论」并进收尾小结那一行（ISSUE #3106）—— 折的是对外那一位
    * 退出码，失败类别与下一动作照旧在小结里，不再单起一行把最关键的那句顶离结尾。 */
