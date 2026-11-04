@@ -76,6 +76,9 @@ function namedActions(opt, self) {
     ["comment", opt.comment != null || opt.commentBad.length > 0, "--comment"],
     // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     ["bodyFile", opt.bodyFile != null, "--body-file"],
+    /* `--pr-body-file` 是主流程那一段的输入（建 / 复用 PR 时注入正文），只读那几条
+     * 动作没有执行者 —— 与其它主流程旗标同一档：不静默收下。 */
+    ["prBodyFile", opt.prBodyFile !== null, "--pr-body-file"],
     ["rerunCi", opt.rerunCi, "--rerun-ci"],
   ];
   return table
