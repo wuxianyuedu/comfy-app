@@ -55,9 +55,13 @@ const boundariesElements = [
 export default defineConfig({
   extends: [awesomeness],
   /* 显式声明插件（不写就只开 `unicorn` / `typescript` / `oxc`，预设里其余插件的规则会
-   * 静默失效）。这一串与预设自身的 `plugins` 逐字一致 —— 覆盖时不增不减，避免把预设
-   * 没声明的插件拉进来制造噪声。 */
-  plugins: ["import", "jsx-a11y", "nextjs", "node", "oxc", "promise", "react", "typescript", "unicorn"],
+   * 静默失效）。前 9 个与预设自身的 `plugins` 逐字一致 —— 覆盖时不增不减，避免把预设
+   * 没声明的插件拉进来制造噪声。
+   *
+   * `vitest` 是**唯一**的追加（2026-11-04）：oxlint 原生插件（73 条规则，`node_modules`
+   * 里没有独立包，不需要装依赖），只在评估尺注册、**规则一条未开** —— 试跑读数与
+   * 「开哪几条」的建议见 `docs/audits/2026-11-04-oxlint-t1-burndown.md` §六，等口径后再进判决面。 */
+  plugins: ["import", "jsx-a11y", "nextjs", "node", "oxc", "promise", "react", "typescript", "unicorn", "vitest"],
   // `eslint` 是 oxlint 原生保留名，oxlint-plugin-eslint 必须显式别名成 eslint-js。
   // eslint-plugin-boundaries 经 jsPlugins 跑（用 resolver 解析别名导入）。
   jsPlugins: [
@@ -134,6 +138,21 @@ export default defineConfig({
         unnamedComponents: ["function-expression", "arrow-function"],
       },
     ],
+    /* ── T1 语义规则批（2026-11-04，与 `oxlint.parity.config.mjs` 同步）────────
+     * 判决面按**文件级挂账**把存量豁免掉了，评估尺这边**不挂账**：它本来就是
+     * 「全量还剩多少」的读数面，挂账会让读数变成 0、失去评估意义。
+     *
+     * 开了 5 条：`no-await-in-loop`、`no-use-before-define`（`functions: false`，
+     * 只判 TDZ 真隐患，不判合法的函数前向引用）、`eslint/prefer-named-capture-group`、
+     * `typescript/require-await`、`typescript/no-unsafe-type-assertion`。
+     * 六条里的 `typescript/strict-void-return` **没开**：981 处里 546 处是 TS 合法的
+     * 「返回值函数传给 void 回调」，规则只有 `allowReturnAny` 一个选项，收不干净。
+     * 逐条证据与批次见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
+    "no-await-in-loop": "error",
+    "no-use-before-define": ["error", { functions: false }],
+    "eslint/prefer-named-capture-group": "error",
+    "typescript/require-await": "error",
+    "typescript/no-unsafe-type-assertion": "error",
   },
   /* router 层的错误信封只许 TRPCError（台账 E8 的防线）。
    * 仅作用于 routers 目录（裸 `throw new Error` 在别处合法，必须文件作用域）。

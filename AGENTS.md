@@ -96,7 +96,7 @@
 
 | 档 | 命令 | 配置 | 管什么 |
 | --- | --- | --- | --- |
-| 通用 lint | `pnpm run lint:oxlint` | `oxlint.parity.config.mjs`（判决配置；`oxlint.config.ts` 是同源的 IDE 面） | **379 条规则**的全量面：`src` / `tests` / `scripts` / `e2e` / `tools` / `.storybook` / 根配置文件（208 条 eslint 口径 + 171 条预设 0 命中免费档） |
+| 通用 lint | `pnpm run lint:oxlint` | `oxlint.parity.config.mjs`（判决配置；`oxlint.config.ts` 是同源的 IDE 面） | **384 条规则**的全量面：`src` / `tests` / `scripts` / `e2e` / `tools` / `.storybook` / 根配置文件（208 条 eslint 口径 + 171 条预设 0 命中免费档 + 5 条 T1 语义规则，后者存量按文件挂账、分批次清，见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`） |
 
 零警告语义由 oxlint `--deny-warnings` 承担。**#3157 起 eslint 不再作为 lint 执行器**：
 eslint.config.js、`lint:policy` 与 `@typescript-eslint/parser` / `eslint-plugin-react-hooks`
