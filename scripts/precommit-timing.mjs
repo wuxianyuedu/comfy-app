@@ -38,7 +38,9 @@
  * `--total-ms` / `--exit` / `--staged` 标量与成对的 `--group <id>=<ms>`、
  * `--step <标签>=<ms>`。
  *
- * 读账侧（人看）四种形态：裸跑打最近 10 次的表；`--last N` 看更多；
+ * 读账侧（人看）五种形态：裸跑打最近 10 次的表；`--last N` 看更多；
+ * `--files [--last N] [--top N]` 打**某一次**的组 C 全量逐份排名（ISSUE #2769 ——
+ * `--last` 在这一档里是「从末尾数的第 N 次」，`--top N` 显式砍线，默认全量）；
  * `--json` 给机器可读的原始记录；`--clear` 清空账本。
  */
 import fs from "node:fs";
@@ -373,17 +375,18 @@ export function failingSuiteTextsFromJunit(xml) {
  * **一次都没被计时**。所以缺多少必须说出来，不能只打表。
  *
  * @param {{dir: string, fsLike?: FsView}} input
- * @returns {{files: {name: string, ms: number}[], expected: number, missing: number, dropped: number}}
+ * @returns {{files: {name: string, ms: number}[], expected: number, missing: number, dropped: number, deduped: number}}
  */
 export function collectFileTimings({ dir, fsLike = realFs }) {
   /** @type {Map<string, number>} */
   const byName = new Map();
   let dropped = 0;
+  let deduped = 0;
   let names;
   try {
     names = fsLike.readdirSync(dir);
   } catch {
-    return { files: [], expected: 0, missing: 0, dropped: 0 };
+    return { files: [], expected: 0, missing: 0, dropped: 0, deduped: 0 };
   }
   const xmls = names
     .filter((n) => n.startsWith(C_FILES_PREFIX) && n.endsWith(".xml"))
@@ -408,6 +411,13 @@ export function collectFileTimings({ dir, fsLike = realFs }) {
       dropped += 1;
     }
     for (const e of entries) {
+      /* 同名 entry **后写覆盖先写**是有意的（复跑是更隔离条件下的另一组读数，
+       * 只留最后一遍 —— `hook-affected-launch` 那 7 条分文件用例钉的就是这个形状）。
+       * 但「盖了几份」这件事读侧要知道：清单对不上时它是一个可能的真因，
+       * 读侧把它念出来（ISSUE #2769），不靠人去猜。 */
+      if (byName.has(e.name)) {
+        deduped += 1;
+      }
       byName.set(e.name, e.ms);
     }
   }
@@ -425,7 +435,7 @@ export function collectFileTimings({ dir, fsLike = realFs }) {
     expected = 0;
   }
   const missing = expected > 0 ? Math.max(0, expected - byName.size) : 0;
-  return { files, expected, missing, dropped };
+  return { files, expected, missing, dropped, deduped };
 }
 
 /**
@@ -584,6 +594,93 @@ export function formatReport(runs, opts = {}) {
   return `${lines.join("\n")}\n`;
 }
 
+/**
+ * 「**这一次**的逐份耗时」—— `--files` 那一档的排版（ISSUE #2769）。
+ *
+ * `formatReport` 的组 C 段是**跨多次的中位数、封顶前 10**（一屏读不完的表等于没人读），
+ * 而「我刚跑的这一次，哪几份最贵、各多久」是另一个问句 —— 这一格补的就是它的出口：
+ * 打**指定的某一次**的**全量**逐份排名，自带分母与对账。三条边界与既有形态同源：
+ *
+ *   · **不新增判定**：取数仍走 `collectFileTimings` 落下的 `files[]`，排序就是降序，
+ *     不另算一份；
+ *   · **读不到就说读不到**：账本里那一次没有 `files[]`（钩子没递 `--junit-dir`、
+ *     组 C 没跑、或账本被 `--clear` 过）⇒ 明写「没有逐份读数」，**不打一张空表
+ *     冒充「每份都很快」**（§13.6.4.1 的口径）；
+ *   · **不许被读成墙钟**：合计那句必须是「各份相加」（并发下它们在同时跑），
+ *     与 §13.5.8.3 第九笔账那条口径一致。
+ *
+ * `--top N` 封顶时**必须念出省了多少行** —— 这一格的默认是全量，砍线是显式动作，
+ * 与 `formatReport` 那种「默认封顶」方向相反。
+ *
+ * @param {Record<string, unknown>[]} runs 账本原文（新 → 旧以数组序为准，末条最新）
+ * @param {{last?: number, top?: number}} [opts] `last` = 从末尾数的第几次（1 起，
+ *   默认 1 = 最近一次）；`top` = 只打最贵前 N 名（0 / 缺省 = 全量）
+ * @returns {string}
+ */
+export function formatFileTimings(runs, opts = {}) {
+  const nth = Math.max(1, Math.round(Number(opts.last) || 1));
+  const top = Math.max(0, Math.round(Number(opts.top) || 0));
+  const run = runs.slice(-nth)[0];
+  if (!run) {
+    return (
+      `[precommit-timing] 账本里没有第 ${nth} 次记录（共 ${runs.length} 条）—— ` +
+      "先提交一次就会有。\n"
+    );
+  }
+  const at = String(run.at ?? "?")
+    .replace("T", " ")
+    .slice(0, 19);
+  const files = Array.isArray(run.files) ? run.files : [];
+  if (files.length === 0) {
+    return (
+      `[precommit-timing] 这一次（${at}）**没有逐份读数** —— 钩子没递 \`--junit-dir\`` +
+      "（组 C 没跑 / junit 没落盘）、组 C 清单为空，或账本被 `--clear` 过。\n" +
+      "  这**不是**「每份都很快」，是「这一次没有分文件的账」。\n"
+    );
+  }
+  const ranked = files
+    .filter((f) => f && typeof f.name === "string")
+    .map((f) => ({ name: String(f.name), ms: Number(f.ms) || 0 }))
+    .sort((a, b) => b.ms - a.ms);
+  const expected = Number(run.filesExpected) || 0;
+  const missing = Number(run.filesMissing) || 0;
+  const deduped = Number(run.filesDeduped) || 0;
+  const cGroup = groupsOf(run).find((g) => g.name === "C");
+  const sumMs = ranked.reduce((s, r) => s + r.ms, 0);
+  const shown = top > 0 ? ranked.slice(0, top) : ranked;
+  const lines = [
+    `[precommit-timing] 组 C 逐份耗时 —— 最近第 ${nth} 次（${at}；账本 .git/${LEDGER_NAME}，本机、不入库）`,
+    `  共 ${ranked.length} 份有读数${
+      expected > 0 ? ` / 清单 ${expected} 份` : ""
+    }${missing > 0 ? `，缺 ${missing} 份**没有读数 —— 不是 0 秒**` : ""}${
+      deduped > 0 ? `；同名读数后写覆盖先写，去重 ${deduped} 份（复跑那遍赢，更隔离）` : ""
+    }`,
+    "",
+  ];
+  for (const f of shown) {
+    lines.push(`  ${secs(f.ms).padStart(7)}  ${f.name}`);
+  }
+  if (top > 0 && ranked.length > shown.length) {
+    lines.push(
+      `  ……（--top ${top}：只打最贵 ${top} 名，省了 ${ranked.length - shown.length} 行）`,
+    );
+  }
+  if (cGroup) {
+    lines.push(
+      `  对账：各份相加 ${secs(sumMs)} ⇄ 组 C 墙钟 ${secs(cGroup.ms)} —— ` +
+        `差 ${secs(Math.max(0, cGroup.ms - sumMs))} 是 vitest 启动 + 收集/transform + ` +
+        "worker 拉起（junit 的 time 只算测试阶段，且并发下各份在同时跑）—— " +
+        "所以这一列用来**排序**，相加**不是**墙钟",
+    );
+  } else {
+    lines.push(
+      `  各份相加 ${secs(sumMs)}（那一次的记录里没有组 C 的墙钟可对账 —— ` +
+        "并发下各份在同时跑，相加**不是**墙钟）",
+    );
+  }
+  return `${lines.join("\n")}\n`;
+}
+
 // ── CLI ─────────────────────────────────────────────────────────────────
 
 /**
@@ -660,7 +757,7 @@ export function recordRun(argv, cwd = process.cwd()) {
   const junitDir = value(argv, "--junit-dir") ?? "";
   const cRead = junitDir
     ? collectFileTimings({ dir: junitDir })
-    : { files: [], expected: 0, missing: 0, dropped: 0 };
+    : { files: [], expected: 0, missing: 0, dropped: 0, deduped: 0 };
 
   const record = {
     at: new Date().toISOString(),
@@ -672,6 +769,10 @@ export function recordRun(argv, cwd = process.cwd()) {
     files: cRead.files,
     filesExpected: cRead.expected,
     filesMissing: cRead.missing,
+    /* 同名 entry 后写覆盖先写的份数（ISSUE #2769）：写侧记下、读侧念出 ——
+     * 清单对不上时它是一个可能的真因，不该靠人去猜。旧记录没有这一格 ⇒
+     * 读侧只在 >0 时念。 */
+    filesDeduped: cRead.deduped,
   };
   const { ok, reason } = appendRun({ gitDir, record });
   if (!ok) {
@@ -716,6 +817,18 @@ function viewRun(argv) {
     return 0;
   }
   const runs = readRuns(gitDir);
+  if (flag(argv, "--files")) {
+    /* `--files`（ISSUE #2769）：打某一次的**全量**逐份排名。`--last` 在这一档里
+     * 的语义从「看最近 N 次的汇总」变成「取从末尾数的第 N 次」—— 同一个旗标
+     * 两档各说各的，读数那一行会点名是第几次。`--top N` 显式砍线（默认全量）。 */
+    process.stdout.write(
+      formatFileTimings(runs, {
+        last: Number(value(argv, "--last")) || 1,
+        top: Number(value(argv, "--top")) || 0,
+      }),
+    );
+    return 0;
+  }
   if (flag(argv, "--json")) {
     process.stdout.write(`${JSON.stringify(runs, null, 2)}\n`);
     return 0;

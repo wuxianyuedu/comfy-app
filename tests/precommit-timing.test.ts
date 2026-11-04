@@ -486,3 +486,104 @@ describe("组 C 的分文件读数：自带分母与对账，否则它只是另�
     expect(hook).not.toContain("testsuite");
   });
 });
+
+describe("组 C 逐份读数的「本机问一句」出口（--files，ISSUE #2769）", () => {
+  /* 「我刚跑的这一次，哪几份最贵、各多久」是另一个问句 —— formatReport 的组 C 段
+   * 回答的是「跨多次的中位数前 10」，且刻意封顶（一屏读不完的表等于没人读）。
+   * 这一格补的是它自己的出口：全量、降序、自带分母与对账。 */
+  it("全量逐份按降序 + 分母 + 对账（各份相加不是墙钟）", () => {
+    const repo = makeRepo();
+    const many = Array.from(
+      { length: 12 },
+      (_unused, i) => `tests/f${String(i).padStart(2, "0")}.test.ts`,
+    );
+    const dir = makeCDir(many, {
+      "comfy-c-0-1.xml": many.map(
+        /* SAFETY: 类型断言已复核 */
+        (name, i) => [name, i + 1] as [string, number],
+      ),
+    });
+    run(
+      ["record", "--total-ms", "30000", "--exit", "0", "--group", "C=20000", "--junit-dir", dir],
+      repo,
+    );
+    const r = run(["--files"], repo);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain("组 C 逐份耗时 —— 最近第 1 次");
+    expect(r.out).toContain("共 12 份有读数 / 清单 12 份");
+    /* 全量：12 行都在（formatReport 那一屏只打前 10 —— 这一档不砍线）。 */
+    expect(r.out).toContain("tests/f11.test.ts");
+    expect(r.out).toContain("tests/f01.test.ts");
+    expect(r.out).toContain("tests/f00.test.ts");
+    /* 降序：最贵那行出现在最便宜那行之前。 */
+    expect(r.out.indexOf("tests/f11.test.ts")).toBeLessThan(r.out.indexOf("tests/f00.test.ts"));
+    /* 对账口径逐字：各份相加（并发下它们在同时跑），不是墙钟。 */
+    expect(r.out).toContain("各份相加 78.0s ⇄ 组 C 墙钟 20.0s");
+    expect(r.out).toContain("相加**不是**墙钟");
+  });
+
+  it("那一次没有 files[] ⇒ 明写「没有逐份读数」，不打空表冒充读过", () => {
+    const repo = makeRepo();
+    run(["record", "--total-ms", "9000", "--exit", "0"], repo);
+    const r = run(["--files"], repo);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain("**没有逐份读数**");
+    expect(r.out).toContain("不是**「每份都很快」");
+    /* 不许打一张空表冒充「判过了」。 */
+    expect(r.out).not.toContain("共 0 份有读数");
+  });
+
+  it("--top N 封顶时念出省了多少行（砍线是显式动作，默认全量）", () => {
+    const repo = makeRepo();
+    const many = Array.from(
+      { length: 12 },
+      (_unused, i) => `tests/f${String(i).padStart(2, "0")}.test.ts`,
+    );
+    const dir = makeCDir(many, {
+      "comfy-c-0-1.xml": many.map(
+        /* SAFETY: 类型断言已复核 */
+        (name, i) => [name, i + 1] as [string, number],
+      ),
+    });
+    run(["record", "--total-ms", "30000", "--exit", "0", "--junit-dir", dir], repo);
+    const r = run(["--files", "--top", "5"], repo);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain("只打最贵 5 名，省了 7 行");
+    expect(r.out).toContain("tests/f11.test.ts");
+    expect(r.out).not.toContain("tests/f01.test.ts");
+  });
+
+  it("--last N 取从末尾数的第 N 次（读数点名是第几次）", () => {
+    const repo = makeRepo();
+    const dirA = makeCDir(["tests/a.test.ts"], {
+      "comfy-c-0-1.xml": [["tests/a.test.ts", 1]],
+    });
+    const dirB = makeCDir(["tests/b.test.ts"], {
+      "comfy-c-0-1.xml": [["tests/b.test.ts", 2]],
+    });
+    run(["record", "--total-ms", "9000", "--exit", "0", "--junit-dir", dirA], repo);
+    run(["record", "--total-ms", "9100", "--exit", "0", "--junit-dir", dirB], repo);
+    const latest = run(["--files"], repo);
+    expect(latest.out, latest.out).toContain("tests/b.test.ts");
+    expect(latest.out).not.toContain("tests/a.test.ts");
+    const older = run(["--files", "--last", "2"], repo);
+    expect(older.out).toContain("最近第 2 次");
+    expect(older.out).toContain("tests/a.test.ts");
+    expect(older.out).not.toContain("tests/b.test.ts");
+  });
+
+  it("同名读数后写覆盖先写 ⇒ 去重份数被点名（清单对不上时的真因之一）", () => {
+    const repo = makeRepo();
+    const dir = makeCDir(["tests/a.test.ts"], {
+      "comfy-c-0-1.xml": [["tests/a.test.ts", 6]],
+      "comfy-c-0-2.xml": [["tests/a.test.ts", 1]],
+    });
+    run(["record", "--total-ms", "9000", "--exit", "0", "--junit-dir", dir], repo);
+    const r = run(["--files"], repo);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain("去重 1 份");
+    /* 留下的是复跑那遍（更隔离）—— 覆盖方向由 collectFileTimings 钉，这里钉读数。 */
+    expect(r.out).toContain("1.0s");
+    expect(r.out).not.toContain("6.0s");
+  });
+});
