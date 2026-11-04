@@ -72,6 +72,13 @@ export function parseIssueNumberToken(token) {
  * `--body-file` 只服务这一条动作：`--new-issue` 的正文旗标仍叫 `--issue-body-file`（对象不同：
  * 那是单子本体，这是评论正文），两枚都不许单独出现。
  *
+ * **`--pr-body-file <文件>`**：建 PR / 复用已有 PR 时**注入人写的正文**。它与
+ * `--body-file`（评论）与 `--issue-body-file`（单子本体）是三个对象：这一枚写的是
+ * **PR 的正文**。口径见 `ship-pull-body.mjs` 的 `buildPullBody`：给了就更新整篇
+ * （人写的正文 + 自动事实段），不给就一个字节都不动 —— 不做的理由是「漂移」：
+ * 「只更新自动段」会让同一份正文里的一半来自这一跑、另一半来自上一跑，读的人
+ * 分不出哪句是现在的。正文只从文件读（argv 内联那一族被反引号挖过洞，§13.6）。
+ *
  * **`--stage-log [<sn>] <格名|格 id>`**（ISSUE #2455）：只读取「某一格念了什么」，绿跑也能用。
  * 它后面跟的是**自由文本**（格名里有空格），所以把紧跟的非旗标 token 全收进来再拼 ——
  * 只取一个 token 的话，未加引号的 `API 文档生成与自检` 会被切成两截，反查必然落空，
@@ -79,10 +86,10 @@ export function parseIssueNumberToken(token) {
  * 首段像构建号形状（`BUILD_SN_SHAPE`）才当构建号收下，否则整串都是格名（走按 HEAD 归属）。
  *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],rerunCi:boolean,only:string|null,unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],rerunCi:boolean,only:string|null,unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],rerunCi:boolean,only:string|null,unknown:string[]}} */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],rerunCi:boolean,only:string|null,unknown:string[]}} */
   const out = {
     message: null,
     messageFile: null,
@@ -112,6 +119,7 @@ export function parseArgs(argv) {
     comment: null,
     commentBad: [],
     bodyFile: null,
+    prBodyFile: null,
     priority: null,
     diagnose: false,
     diagnoseSn: null,
@@ -233,6 +241,8 @@ export function parseArgs(argv) {
       }
     } else if (a === "--body-file") {
       out.bodyFile = argv[++i] ?? "";
+    } else if (a === "--pr-body-file") {
+      out.prBodyFile = argv[++i] ?? "";
     } else if (a === "--close-issue") {
       out.closeIssue = true;
       while (i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")) {
@@ -312,6 +322,8 @@ export function parseArgs(argv) {
       } else {
         out.releaseBad.push(`重复的 --release（前一张 #${out.release}）`);
       }
+    } else if (a.startsWith("--pr-body-file=")) {
+      out.prBodyFile = a.slice("--pr-body-file=".length);
     } else if (a.startsWith("--comment=") || a.startsWith("--body-file=")) {
       if (a.startsWith("--body-file=")) {
         out.bodyFile = a.slice("--body-file=".length);

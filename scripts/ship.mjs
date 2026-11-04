@@ -50,6 +50,9 @@
  *   · `ship-pull-body.mjs`—— **PR 正文那一格**：碎片清单 + `git diff --stat` 的摘要与封顶。
  *     它只回答「发给平台的正文长什么样」，与 `ship-core` 那些「外部执行者的形状」各自变化；
  *     #2248 落地时 `ship-core` 又到了 906 行，按上面 #2189 那条同一口径拆（拆法按职责）。
+ *   · `ship-pr-body.mjs`  —— **正文注入那一格**（`--pr-body-file`）：建 PR 与复用 PR 时的
+ *     整篇拼装、长度封顶、`patch-pull` 写入与独立回读。拼装在 `ship-pull-body.mjs`，
+ *     取数与写平台在这里 —— 两半各自变化，合一起会顶穿 `ship-platform.mjs` 的 900 行。
  *   · `ship-local.mjs`    —— **本地两段**：commit 与 push（含工作树三列状态的读法）。
  *     不碰 cnb、不需要平台回读，动的是本地 ref 与远端同名分支 —— 与 `ship-platform` 那几段
  *     正相反。（搬出去的直接原因是 #2189：加上「只补关」那格之后本文件 928 行，
@@ -189,6 +192,10 @@
  *                                              # 往已有单子补一条读数：post-issue-comment（正文文件 +
  *                                              #   开头署名）→ 独立 list-issue-comments 逐字回读；
  *                                              #   正文只从文件来（`--issue-body-file` 是建单那格）
+ *   pnpm ship --pr-body-file .git/pr.md        # 建 PR 时把这份正文注入到自动事实段**之前**
+ *                                              #   （碎片清单 + diffstat 在后，用分隔线隔开）；
+ *                                              #   复用已有 PR 时**整篇更新**（给了就覆盖、不给完全不动）；
+ *                                              #   不自动加 `Closes`（有就念一行提示，不改写）
  *   pnpm ship --diagnose [sn]                  # 只读：CI 红了就看那一跑的失败格 + 失败行 +
  *                                              #   末 40 行 + 完整日志链接（不给号按 HEAD 归属）
  *   pnpm ship --diagnose --dry-run             # 只打印它会读的那三条命令
@@ -223,6 +230,7 @@ import { closeIssues } from "./ship-close.mjs";
 import { runCommitStage, runPushStage } from "./ship-local.mjs";
 import { runPreflightStage } from "./ship-preflight.mjs";
 import { runStandaloneAction } from "./ship-standalone.mjs";
+import { mentionsCloses } from "./ship-pull-body.mjs";
 
 /**
  * 对外入口：跑一遍编排，**无论走到哪个出口都清掉自己写的临时文件**。
@@ -587,6 +595,40 @@ async function runFlow(deps, tmpFiles) {
     const newSha = run("git", ["rev-parse", "HEAD"]).stdout.trim();
 
     if (want("pull-request")) {
+      /* `--pr-body-file` 是**输入端**：只读一处，读完把原文交给平台段（建 PR 与复用
+       * 更新都吃同一份）。读不到 / 空文件在这里停（2）—— 给了旗标却发一份空正文，
+       * 在屏幕上与「不给旗标」分不开，而这两件的本意正相反。
+       * 原文里的 `Closes` 只提示、不改写：关单是统一动作（合并后 `--close-issue`），
+       * 但删不删是人的判断，脚本不替他改正文。 */
+      let prBody = null;
+      if (opt.prBodyFile) {
+        const bodyPath = path.resolve(root, opt.prBodyFile);
+        try {
+          prBody = fs.readFileSync(bodyPath, "utf8");
+        } catch {
+          log(
+            `[ship] --pr-body-file 读不到（${bodyPath}）⇒ 正文没有落点，PR 不建也不更新（${codeTag(
+              CODE.NOT_RUN,
+            )}）。`,
+          );
+          codes.push(CODE.NOT_RUN);
+          return finish(codes);
+        }
+        if (!prBody.trim()) {
+          log(
+            `[ship] --pr-body-file 给的是空文件（${bodyPath}）⇒ 不把「空」当成「没给」：` +
+              `这一格按用法错停下（${codeTag(CODE.NOT_RUN)}）。`,
+          );
+          codes.push(CODE.NOT_RUN);
+          return finish(codes);
+        }
+        if (mentionsCloses(prBody)) {
+          log(
+            "[ship] --pr-body-file 的正文里有 `Closes`：本项目的关单是统一动作" +
+              "（合并验真之后由 `--close-issue` 收），单条 PR 不自己关单 —— 已按原文注入、不改写。",
+          );
+        }
+      }
       const { number, stop } = createOrReusePull({
         run,
         log,
@@ -599,6 +641,7 @@ async function runFlow(deps, tmpFiles) {
         baseBranch,
         explicitTitle: opt.title,
         handle,
+        prBody,
       });
       /* ISSUE #3083：收口码由那一格给（冲突 ⇒ 3 / 已落地守卫 ⇒ 6 / 建不出来 ⇒ 2），
        * 出口话术在那一格已经念过；冲突的 PR 平台不会派生 CI，往下走（轮询最长
