@@ -175,6 +175,11 @@ describe("session-report —— collectCommits：事实段的契约（真 git �
     const before = git("rev-parse", "HEAD~2");
     const after = git("rev-parse", "HEAD");
     const rows = collectCommits(repo, { before, after });
+    /* 主面 tsc 对 rows 的 `Array | null` 不收窄 —— 先把「取得到」钉成显式前提，
+     * 取不到是取数的锅，不是断言的事。 */
+    if (!rows) {
+      throw new Error("collectCommits 取不到 —— 先修取数，不是断言的事");
+    }
     expect(rows).toHaveLength(2);
     /* `--reverse` 没用，序随 git log（新 → 旧）：第一行是第二笔。 */
     expect(rows[0]?.subject).toContain("第二笔");
