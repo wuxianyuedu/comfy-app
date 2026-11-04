@@ -122,6 +122,9 @@ import {
   writeDispatchState,
 } from "./ci-mirror-failure-report.mjs";
 import { pushLfsObjects } from "./ci-mirror-lfs-push.mjs";
+import { buildRunName, dispatchPayload, EVENT_TYPE, resolvePrTitle } from "./ci-mirror-payload.mjs";
+/* 纯拼装切出去之后仍从这里转出，用例与调用方的导入面不用动（见该模块「为什么单独一份」）。 */
+export { dispatchPayload };
 
 /* LFS 那一族搬去 `ci-mirror-lfs-push.mjs`（#3146 的 900 行闸）；仍从这里转出，导入面不用改。 */
 export { lfsObjectIdPushArgs, lfsPushArgs, parseLfsObjectIds } from "./ci-mirror-lfs-push.mjs";
@@ -194,9 +197,6 @@ export const DEFAULT_REPO = "wuxianyuedu/comfy-app";
 
 /** `--master` 模式推的目标分支（GitHub 侧的默认分支；CNB `master` 的唯一镜像出口）。 */
 export const MASTER_REF = "master";
-
-/** 派发的事件名，与 `.github/workflows/pr-gate.yml` 的 `types:` 逐字配对。 */
-export const EVENT_TYPE = "cnb-pr-sync";
 
 /** 本仓检出根（`scripts/` 的上一层）—— 所有 git 子进程在这里跑，不靠继承的工作目录。 */
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -271,26 +271,6 @@ export function sanitize(text, secret) {
  */
 export function buildPushUrl(repo, token, user = "oauth2") {
   return `https://${user}:${token}@github.com/${repo}.git`;
-}
-
-/**
- * 组装派发 payload（形状与 `.github/workflows/pr-gate.yml` 的
- * `client_payload` 消费面一一对应）。
- *
- * @param {{ref: string, headSha: string, baseSha: string, cnbCommit: string, prNumber: string}} args
- * @returns {{event_type: string, client_payload: Record<string, string>}}
- */
-export function dispatchPayload({ baseSha, cnbCommit, headSha, prNumber, ref }) {
-  return {
-    client_payload: {
-      base_sha: baseSha,
-      branch: ref,
-      cnb_commit: cnbCommit,
-      head_sha: headSha,
-      pr_number: prNumber,
-    },
-    event_type: EVENT_TYPE,
-  };
 }
 
 /**
@@ -535,7 +515,9 @@ export function explainRemoteProbeFailure(text) {
 /**
  * 执行镜像：先问「仓库在不在」→ 推 HEAD → 派发。每一跳各自独立成读数，前一跳没通后一跳不发。
  *
- * @param {{env: Record<string, string | undefined>, fetchImpl?: typeof fetch, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, dryRun?: boolean, log?: (line: string) => void, readout?: boolean, root?: string, writeFileSync?: (file: string, data: string) => void}} io
+ * @param {{env: Record<string, string | undefined>, fetchImpl?: typeof fetch, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, dryRun?: boolean, log?: (line: string) => void, readout?: boolean, root?: string, writeFileSync?: (file: string, data: string) => void, cnbJson?: (run: any, args: string[]) => any}} io
+ *   `cnbJson` 是 PR 标题回读的取数动作（`ci-mirror-payload.mjs`；用例给假件，
+ *   缺省走真 `cnb` 子进程）。
  * @returns {Promise<number>} 仓内三态退码
  */
 export async function runMirror(io) {
@@ -572,18 +554,27 @@ export async function runMirror(io) {
     return CODE.NO_FACT;
   }
   const url = buildPushUrl(ctx.repo, ctx.token, (env.GITHUB_MIRROR_USER ?? "").trim() || "oauth2");
+  /* PR 标题：读不到就留空，不判红、不改三态（`ci-mirror-payload.mjs` 口径 1）。
+   * dry-run 刻意不读平台 —— 它承诺「不发任何请求」，那一档看到的是回落格式。 */
+  const prTitle = dryRun ? "" : resolvePrTitle({ cnbJson: io.cnbJson, env, iid: ctx.iid, log });
   const payload = dispatchPayload({
     baseSha: ctx.baseSha,
     cnbCommit: ctx.cnbCommit,
     headSha: ctx.headSha,
     prNumber: ctx.iid,
     ref: ctx.ref,
+    title: prTitle,
   });
   const baseNote = ctx.baseSha
     ? ` · base ${ctx.baseSha.slice(0, 8)}`
     : " · base 缺席（payload 留空）";
   log(
     `[mirror] 计划：HEAD ${ctx.headSha.slice(0, 8)} → ${ctx.repo}:${ctx.ref} · LFS 增量推送 · 派发 ${EVENT_TYPE}${baseNote}`,
+  );
+  /* 派发前的自证：这一跑在 GitHub run 列表里会叫什么（与 workflow 的 run-name 同口径）。
+   * 读不到标题时这一行就是老格式 —— 一眼能看出「标题没读到」而不是「标题渲染坏了」。 */
+  log(
+    `[mirror] GitHub run 标题：${buildRunName({ prNumber: ctx.iid, sha: ctx.headSha, title: prTitle })}`,
   );
   if (dryRun) {
     log("[mirror] DRY-RUN：没推也没派发，payload 如下 ——");

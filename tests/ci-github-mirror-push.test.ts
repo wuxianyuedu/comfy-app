@@ -3,6 +3,7 @@
  *  全部走注入面：git 执行器与 fetch 都是假件，**一次真网络请求都不发**；
  *  令牌脱敏那条是硬规则 17 在这一格的落点 —— 任何回显里出现令牌原值即红。 */
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -41,6 +42,15 @@ import {
 } from "../scripts/ci-github-mirror-push.mjs";
 /* `--master` 那一档的执行面单独一份（#3148：为回到 §12.6 R5 的 900 行闸内切出去的）。 */
 import { runMasterMirror } from "../scripts/ci-github-mirror-master.mjs";
+/* 派发 payload 的 PR 标题那一格（run 列表可读性）。 */
+import {
+  buildRunName,
+  normalizeRunTitle,
+  pullTitleArgs,
+  readPullTitle,
+  resolvePrTitle,
+  RUN_TITLE_LIMIT,
+} from "../scripts/ci-mirror-payload.mjs";
 
 const TOKEN = "gh-token-secret-value";
 const SHA = "26a3c3ed06deb679974200d68005ff583178d63f";
@@ -50,6 +60,8 @@ const okEnv = {
   GITHUB_MIRROR_USER: "",
   CNB_PULL_REQUEST_IID: "2649",
   CNB_PULL_REQUEST_TARGET_SHA: "26a3c3eddeadbeefdeadbeefdeadbeefdeadbeef",
+  /* 平台注入的仓库路径：PR 标题回读（`ci-mirror-payload.mjs`）用它拼 get-pull 的 --repo。 */
+  CNB_REPO_SLUG: "root/comfy-app",
 };
 
 /* 假仓库的 ref 行：`ls-remote` 非空 ⇒ 「仓库在」（推送前那一问的通形态）。 */
@@ -336,7 +348,165 @@ describe("纯函数", () => {
       cnb_commit: "b".repeat(40),
       head_sha: SHA,
       pr_number: "2649",
+      /* 不给标题 ⇒ 键在、值为空串：workflow 的 run-name 据此退回老格式
+       * `PR #号 · sha`（与没有这个键的老 payload 渲染出同一句）。 */
+      pr_title: "",
     });
+    /* 给了标题就原样进 payload（归一在 `ci-mirror-payload.mjs` 那一侧做，这里不做二次改写）。 */
+    expect(
+      dispatchPayload({
+        baseSha: "",
+        cnbCommit: "",
+        headSha: SHA,
+        prNumber: "2649",
+        ref: mirrorRefFor("2649"),
+        title: "fix(ci): run 标题带上 PR 标题",
+      }).client_payload.pr_title,
+    ).toBe("fix(ci): run 标题带上 PR 标题");
+  });
+});
+
+/** PR 标题那一格：run 列表的可读性（`pr-gate.yml` 的 run-name）。
+ *
+ *  GitHub 侧的真渲染在本地跑不出来 ⇒ 这里钉的是**本仓那一侧**能钉的部分：
+ * 归一口径、缺标题的回落、超长截断、以及 workflow 与 `buildRunName` 的**同形契约**。 */
+describe("PR 标题（ci-mirror-payload）", () => {
+  it("normalizeRunTitle：控制字符→空格、空白折叠、去首尾；非字符串回空串", () => {
+    /* 换行 / 制表符落进 run 标题只会把同一句读成好几行 ⇒ 一律压成单行。 */
+    expect(normalizeRunTitle("fix(ci): run 标题\n带上\tPR 标题")).toBe(
+      "fix(ci): run 标题 带上 PR 标题",
+    );
+    /* 控制字符先换空格再折叠 —— 反过来会粘成 `ab`，那是改写内容而不是排版。 */
+    expect(normalizeRunTitle("a\u0007b")).toBe("a b");
+    expect(normalizeRunTitle("  #3156 · 中文 (括号)  ")).toBe("#3156 · 中文 (括号)");
+    expect(normalizeRunTitle(undefined)).toBe("");
+    expect(normalizeRunTitle(null)).toBe("");
+    expect(normalizeRunTitle("   \n\t ")).toBe("");
+    /* `(`、`#`、中文都是普通字符：不转义、不删改（run-name 是表达式插值，不是再解析一遍的 YAML）。 */
+    expect(normalizeRunTitle("fix(#3156): 标题 (mirror)")).toBe("fix(#3156): 标题 (mirror)");
+  });
+
+  it("normalizeRunTitle：超长截到 RUN_TITLE_LIMIT（含省略号），边界前后各留一例", () => {
+    const exact = "标".repeat(RUN_TITLE_LIMIT);
+    expect(normalizeRunTitle(exact)).toBe(exact);
+    expect(normalizeRunTitle(`${exact}超`)).toBe(`${"标".repeat(RUN_TITLE_LIMIT - 1)}…`);
+    expect(normalizeRunTitle(`${exact}超`).length).toBe(RUN_TITLE_LIMIT);
+    /* 前缀 + 标题 + ` · ` + 40 位 sha 必须落在 run-name 的 256 上限之内。 */
+    const preview = buildRunName({ prNumber: "3156", sha: SHA, title: `${exact}超` });
+    expect(preview.length).toBeLessThan(256);
+    /* sha 放在末尾、不截断：回读格靠整 sha 子串认领本跑。 */
+    expect(preview.endsWith(SHA)).toBe(true);
+  });
+
+  it("readPullTitle：只认 `data.title` 的字符串；缺键 / 非字符串 ⇒ 空串（不编标题）", () => {
+    expect(readPullTitle({ data: { title: "fix(ci): 标题" } })).toBe("fix(ci): 标题");
+    expect(readPullTitle({ data: { title: "  a\n b  " } })).toBe("a b");
+    expect(readPullTitle({ data: {} })).toBe("");
+    expect(readPullTitle({ data: { title: 42 } })).toBe("");
+    expect(readPullTitle({})).toBe("");
+    expect(readPullTitle(null)).toBe("");
+  });
+
+  it("pullTitleArgs：与 ship 那一族的 get-pull 形状一致（-v 才是带 data.title 的应答）", () => {
+    expect(pullTitleArgs("root/comfy-app", "2649")).toEqual([
+      "pulls",
+      "get-pull",
+      "--repo",
+      "root/comfy-app",
+      "--number",
+      "2649",
+      "-v",
+    ]);
+  });
+
+  it("buildRunName：有标题 `PR #n · 标题 · sha`；没标题回落到老格式 `PR #n · sha`", () => {
+    expect(buildRunName({ prNumber: "3156", sha: SHA, title: "fix(ci): 本跑在修什么" })).toBe(
+      `PR #3156 · fix(ci): 本跑在修什么 · ${SHA}`,
+    );
+    /* 缺失 / 空串都退回老格式 —— 不会出现 `PR #3156 ·  · sha` 这种空标题。 */
+    expect(buildRunName({ prNumber: "3156", sha: SHA })).toBe(`PR #3156 · ${SHA}`);
+    expect(buildRunName({ prNumber: "3156", sha: SHA, title: "   " })).toBe(`PR #3156 · ${SHA}`);
+    /* 手动派发那一档：pr_number 缺席时前缀是 `manual`（与 workflow 的 `|| 'manual'` 同口径）。 */
+    expect(buildRunName({ prNumber: "", sha: SHA })).toBe(`PR #manual · ${SHA}`);
+  });
+
+  it("resolvePrTitle：读到标题就归一后返回，并念一行读数", () => {
+    const heard: string[] = [];
+    const seen: Array<Array<string>> = [];
+    const got = resolvePrTitle({
+      cnbJson: (_run: unknown, args: string[]) => {
+        seen.push(args);
+        return { json: { data: { title: "fix(ci): run 标题\n带上 PR 标题" } } };
+      },
+      env: okEnv,
+      iid: "2649",
+      log: (line: string) => heard.push(line),
+    });
+    expect(got).toBe("fix(ci): run 标题 带上 PR 标题");
+    expect(seen[0]).toEqual(pullTitleArgs("root/comfy-app", "2649"));
+    expect(heard.join("\n")).toContain("[mirror] PR 标题：fix(ci): run 标题 带上 PR 标题");
+  });
+
+  it("resolvePrTitle：三种「没有标题」都留一行读数、都回空串（不改三态）", () => {
+    /* ① slug 缺席：平台注入没给 ⇒ 连 get-pull 都不发。 */
+    const noSlug: string[] = [];
+    let calls = 0;
+    const missingSlug = resolvePrTitle({
+      cnbJson: () => {
+        calls += 1;
+        return { json: { data: { title: "不该被读到" } } };
+      },
+      env: { ...okEnv, CNB_REPO_SLUG: "" },
+      iid: "2649",
+      log: (line: string) => noSlug.push(line),
+    });
+    expect(missingSlug).toBe("");
+    expect(calls).toBe(0);
+    expect(noSlug.join("\n")).toContain("CNB_REPO_SLUG` 缺席");
+
+    /* ② get-pull 没跑起来（cnbJson 回 null）：读数缺失，不是「平台标题为空」。 */
+    const noRead: string[] = [];
+    const failed = resolvePrTitle({
+      cnbJson: () => null,
+      env: okEnv,
+      iid: "2649",
+      log: (line: string) => noRead.push(line),
+    });
+    expect(failed).toBe("");
+    expect(noRead.join("\n")).toContain("回读没跑起来");
+    expect(noRead.join("\n")).toContain("root/comfy-app#2649");
+
+    /* ③ 平台标题本身为空：不编标题。 */
+    const empty: string[] = [];
+    expect(
+      resolvePrTitle({
+        cnbJson: () => ({ json: { data: { title: "" } } }),
+        env: okEnv,
+        iid: "2649",
+        log: (line: string) => empty.push(line),
+      }),
+    ).toBe("");
+    expect(empty.join("\n")).toContain("平台上是空的");
+  });
+
+  it("workflow 契约：run-name 的 pr_title 在 sha 之前、缺席时回落老格式（生成源在本仓）", () => {
+    /* 镜像仓的 `.github/workflows/pr-gate.yml` 由本仓 `--master` 镜像那一跳送过去
+     * ⇒ 源在这里；改这里才是改源，只改镜像仓的生成物下一次推送就被覆盖回去。 */
+    const yml = readFileSync(
+      path.resolve(import.meta.dirname, "..", ".github", "workflows", "pr-gate.yml"),
+      "utf8",
+    );
+    const line = yml.split("\n").find((item) => item.trimStart().startsWith("run-name:")) ?? "";
+    expect(line).not.toBe("");
+    /* 标题段用 `|| ''` 兜住「键缺失 / null」，用 `&& ' · '` 做**只在有标题时**出现的分隔符
+     * （两者一起才排得出「空串 ⇒ `PR #号 · sha`」而不是双空格）。 */
+    expect(line).toContain("client_payload.pr_title || ''");
+    expect(line).toContain("client_payload.pr_title && ' · '");
+    /* sha 全量留在标题里，且排在标题之后（认领靠整 sha 子串匹配，截断动不到它）。 */
+    expect(line).toContain("client_payload.head_sha");
+    expect(line.indexOf("pr_title")).toBeLessThan(line.indexOf("head_sha"));
+    /* 单行：run-name 是单行展示面，换行落进去会把标题读成好几行。 */
+    expect(line).not.toContain("\n");
   });
 });
 
@@ -385,6 +555,8 @@ describe("runMirror（git 与 fetch 全假件）", () => {
   /** 收口假件与日志的量具。 */
   function harness(
     opts: {
+      /* PR 标题回读的假件（缺省回 null ⇒「回读没跑起来」，标题留空、照旧派发）。 */
+      cnbJson?: (run: unknown, args: string[]) => unknown;
       dispatchBody?: string;
       dispatchStatus?: number;
       env?: Record<string, string | undefined>;
@@ -408,6 +580,7 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     const pushes: Array<Array<string>> = [];
     const lfsPushes: Array<Array<string>> = [];
     const lfsLists: Array<Array<string>> = [];
+    const titleCalls: Array<Array<string>> = [];
     const calls: Array<{ bodyText: string; init: RequestInit; url: string }> = [];
     const heard: Array<string> = [];
     const sleeps: Array<number> = [];
@@ -495,6 +668,11 @@ describe("runMirror（git 与 fetch 全假件）", () => {
       env: opts.env ?? okEnv,
       fetchImpl,
       runGit,
+      /* PR 标题那一格的取数假件：记下调用面，缺省回 null（一次 cnb 子进程都不起）。 */
+      cnbJson: (run: unknown, args: string[]) => {
+        titleCalls.push(args);
+        return opts.cnbJson ? opts.cnbJson(run, args) : null;
+      },
       /* 退避假件：一次真墙钟都不付，只把「等了多久」记进量具。 */
       sleep: async (ms: number) => {
         sleeps.push(ms);
@@ -514,6 +692,7 @@ describe("runMirror（git 与 fetch 全假件）", () => {
       heard,
       sleeps,
       written,
+      titleCalls,
       probeCalls: () => probeCalls,
     };
   }
@@ -545,6 +724,46 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(lfsPushes[0]).toContain(buildPushUrl(DEFAULT_REPO, TOKEN));
     expect(lfsPushes[0]).not.toContain("--all");
     expect(heard.some((l) => l.includes("LFS 推送：通"))).toBe(true);
+  });
+
+  it("派发 payload 带上 PR 标题；run 标题读数同口径（PR #号 · 标题 · sha）", async () => {
+    const { io, calls, heard, titleCalls } = harness({
+      cnbJson: () => ({ json: { data: { title: "fix(ci): run 标题带上 PR 标题" } } }),
+    });
+    const code = await runMirror(io);
+    expect(code).toBe(CODE.OK);
+    /* 只读一次、参数与 ship 那一族同形（-v 才带 data.title）。 */
+    expect(titleCalls).toHaveLength(1);
+    expect(titleCalls[0]).toEqual(pullTitleArgs("root/comfy-app", "2649"));
+    const body = JSON.parse(calls[0]?.bodyText ?? "") as {
+      client_payload?: { pr_title?: string };
+    };
+    expect(body.client_payload?.pr_title).toBe("fix(ci): run 标题带上 PR 标题");
+    /* 派发前的自证行与 workflow 的 run-name 同口径（sha 在末尾、不截断）。 */
+    expect(heard.join("\n")).toContain(
+      `[mirror] GitHub run 标题：PR #2649 · fix(ci): run 标题带上 PR 标题 · ${SHA}`,
+    );
+  });
+
+  it("PR 标题读不到 ⇒ payload 留空、run 标题回落老格式，派发照旧、退 0（不判红）", async () => {
+    const { io, calls, heard } = harness();
+    const code = await runMirror(io);
+    expect(code).toBe(CODE.OK);
+    const body = JSON.parse(calls[0]?.bodyText ?? "") as {
+      client_payload?: { pr_title?: string };
+    };
+    expect(body.client_payload?.pr_title).toBe("");
+    /* 没有标题时不能出现 `PR #2649 ·  · sha` 的双空格。 */
+    expect(heard.join("\n")).toContain(`[mirror] GitHub run 标题：PR #2649 · ${SHA}`);
+    expect(heard.join("\n")).toContain("回读没跑起来");
+  });
+
+  it("dry-run：一次 PR 标题回读都不发（那一档不读平台），标题展示回落格式", async () => {
+    const { io, titleCalls, heard } = harness();
+    const code = await runMirror({ ...io, dryRun: true });
+    expect(code).toBe(CODE.OK);
+    expect(titleCalls).toHaveLength(0);
+    expect(heard.join("\n")).toContain(`[mirror] GitHub run 标题：PR #2649 · ${SHA}`);
   });
 
   it("LFS 推送失败 ⇒ 退 1，一跳都不派发（派出去只会让 GitHub 侧拿指针文件跑假红）", async () => {
