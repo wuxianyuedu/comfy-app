@@ -308,6 +308,12 @@ export function stripArgvSeparator(argv) {
 }
 
 /**
+ * 现场编译档的并发 —— `playwright.config.ts` 里那个数的**同一个值**（两处由
+ * `tests/e2e-runtime-budget.test.ts` 核一致）。它只用于**报读数**，不参与判决。
+ */
+export const COLD_COMPILE_WORKERS = 2;
+
+/**
  * 本趟跑的是哪一档 webServer（`playwright.config.ts` 的 `resolveWebServerCommand()`
  * 判的是**同一件事**，读的是同一个键）。
  *
@@ -371,12 +377,6 @@ export function resolveServerMode(env) {
   }
   return { start: false, workers: COLD_COMPILE_WORKERS };
 }
-
-/**
- * 现场编译档的并发 —— `playwright.config.ts` 里那个数的**同一个值**（两处由
- * `tests/e2e-runtime-budget.test.ts` 核一致）。它只用于**报读数**，不参与判决。
- */
-export const COLD_COMPILE_WORKERS = 2;
 
 /**
  * 这一跑该不该记账 —— 抽成纯入口，好让「红了不记」这条边界能被真跑一次。

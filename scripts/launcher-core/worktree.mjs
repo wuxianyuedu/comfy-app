@@ -276,6 +276,10 @@ export function pruneTimestampedLogs(dir, prefixes, keep = 5) {
 // `node_modules/.pnpm/lock.yaml`。差异明细复用 `scripts/lockfile/lock-diff.mjs`
 // （唯一实现，质量门禁同源）。
 
+/** lockfile 漂移判定的短路缓存（键是两份文件的 size+mtime 指纹）。 */
+/** @type {{ repoStamp: string | null, modulesStamp: string | null, result: { state: "fresh" | "no-install" | "no-lockfile" | "drift", modulesLock: string | null, diff?: import("../lockfile/lock-diff.d.mts").LockDiff | null } } | null} */
+let driftCache = null;
+
 /**
  * lockfile 漂移判定。
  *
@@ -329,10 +333,6 @@ export function lockfileDrift(root) {
     return { state: "no-install", modulesLock: null };
   }
 }
-
-/** lockfile 漂移判定的短路缓存（键是两份文件的 size+mtime 指纹）。 */
-/** @type {{ repoStamp: string | null, modulesStamp: string | null, result: { state: "fresh" | "no-install" | "no-lockfile" | "drift", modulesLock: string | null, diff?: import("../lockfile/lock-diff.d.mts").LockDiff | null } } | null} */
-let driftCache = null;
 
 /** 文件指纹：size + 毫秒级 mtime（读不到返回 null）。 */
 /** @param {string} file @returns {string | null} */

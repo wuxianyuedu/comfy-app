@@ -43,6 +43,11 @@ import { registerLazyViewLoader, startLazyViewPrefetch } from "./lazy-view-prefe
 /** 由 `lazyView` 自己登记的懒加载视图 —— 它们的「界面打开」日志在内容挂载点写。 */
 const LAZY_VIEWS = new Set<WorkspaceView>();
 
+/** 一个永不 settle 的 promise（见 `lazyView` 里刷新的那一跳）。 */
+const NEVER_SETTLES = new Promise<never>(() => {
+  /* 故意不给 resolve / reject：页面正在被换掉，这个 promise 不该有任何结算。 */
+});
+
 function lazyView<P extends object>(
   view: WorkspaceView,
   loader: () => Promise<ComponentType<P>>,
@@ -69,11 +74,6 @@ function lazyView<P extends object>(
     { ssr: false },
   );
 }
-
-/** 一个永不 settle 的 promise（见 `lazyView` 里刷新的那一跳）。 */
-const NEVER_SETTLES = new Promise<never>(() => {
-  /* 故意不给 resolve / reject：页面正在被换掉，这个 promise 不该有任何结算。 */
-});
 
 /* ── 懒加载视图组件，好让初始包体保持小 ── */
 /* 只有 HomePage / AuroraBackground / VideoQueueModal（在页面侧）是即时加载的。 */

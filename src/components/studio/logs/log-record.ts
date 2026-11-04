@@ -66,6 +66,15 @@ export type RawRecord = {
  */
 export const stripSgr = (text: string) => stripSgrFromAnsi(text);
 
+/** 明显缩进的行（`"inputs",` 这类数组元素在 pretty-print 里至少缩两格）。 */
+const INDENTED_RE = /^\s{2,}/;
+
+/**
+ * 「正文另起一行才开始打印 payload」的形态：整行只有一个 `{` 或 `[`。单独成行的裸 `{` / `[` 不可能是
+ * 独立的一条日志行，因此这个判据不会误吞内容；反过来它正是「消息一行、JSON 从下一行顶格开始」的入口。
+ */
+const PAYLOAD_START_RE = /^\s*[{[]\s*$/;
+
 /**
  * 物理行 → 记录序列。`isRecordStart` 由调用方注入（解析层知道哪三种形态算「带时刻的记录头」）：
  * 只要一行是记录头，它就**无条件**开启新记录——包括括号仍开着的时候，保证「上一条没闭合」不会吞掉下一条日志。
@@ -139,12 +148,3 @@ export function splitLogRecords(
   flush();
   return records;
 }
-
-/** 明显缩进的行（`"inputs",` 这类数组元素在 pretty-print 里至少缩两格）。 */
-const INDENTED_RE = /^\s{2,}/;
-
-/**
- * 「正文另起一行才开始打印 payload」的形态：整行只有一个 `{` 或 `[`。单独成行的裸 `{` / `[` 不可能是
- * 独立的一条日志行，因此这个判据不会误吞内容；反过来它正是「消息一行、JSON 从下一行顶格开始」的入口。
- */
-const PAYLOAD_START_RE = /^\s*[{[]\s*$/;

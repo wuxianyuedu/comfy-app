@@ -245,88 +245,6 @@ export function fetchUrlResumable(
 }
 
 /**
- * 真取一段字节，**整片走完才**追加到 `dest`（走到一半就断的那一片由调用方丢掉）。
- *
- * ## 为什么不让子进程直接往 `dest` 上追加
- *
- * 子进程是边读边写的，而「超时 / 被断开」正好发生在写到一半的时候。那样一来到最后
- * 一片失败时，文件里留下的是一截**半成品**，调用方按 `written` 重试就会与它重叠 ——
- * 实测把 1 MiB 的包写成了 3.6 MiB（比声明的总长还长，收尾那一片永远等不到）。
- *
- * 所以：片先落到 `<dest>.part`（覆盖写），成功才把它接到 `dest` 尾巴上。失败走开时
- * `dest` 仍是「最后一个完整边界」的样子 —— 这正是「续传」成立的前提。
- *
- * ## 走的还是 `spawnSync` 起短命子进程
- *
- * 理由见文件头（同步退出码路径 + `node:http` 是回调式）。六件输入按 argv 传：
- * URL、脚手架文件、偏移、长度、超时、是否只要总长。
- *
- * `probeOnly` 那一档只问 `content-range` / `content-length`，**不落盘**
- * —— 「这条链路通不通 + 总长多少」那次读数量的是它。
- *
- * @param {string} url
- * @param {string} dest
- * @param {number} offset
- * @param {number} size
- * @param {number} timeoutMs
- * @param {{probeOnly?: boolean}} [options]
- * @returns {{bytes: number, total: number | null, out: string}}
- */
-export function fetchRangeToFile(url, dest, offset, size, timeoutMs, { probeOnly = false } = {}) {
-  const scratch = `${dest}.part`;
-  const r = spawnSync(
-    process.execPath,
-    [
-      "-e",
-      FETCH_CHUNK_SCRIPT,
-      url,
-      scratch,
-      String(offset),
-      String(size),
-      String(timeoutMs),
-      probeOnly ? "1" : "0",
-    ],
-    { encoding: "utf8", windowsHide: true, timeout: timeoutMs + 5000 },
-  );
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout / stderr 实测为 undefined，@types/node 按 string 标
-  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
-  /* 子进程把结论打成一行 `OK <bytes> <total>` / `ERR <原因>` —— 解析在这里、
-   * 取证在网上那一次。解析不到（被砍 / 崩了）当成「这一片没成」。 */
-  const line = out.split("\n").find((l) => /^(OK|ERR)\b/.test(l.trim()));
-  if (!line) {
-    rmSync(scratch, { force: true });
-    return { bytes: -1, total: null, out: out || "（子进程没有输出）" };
-  }
-  const [tag, a, b] = line.trim().split(/\s+/);
-  if (tag === "ERR") {
-    rmSync(scratch, { force: true });
-    return { bytes: -1, total: null, out };
-  }
-  const bytes = Number(a);
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- split 下标越界时运行时是 undefined，类型按 string 标窄
-  const total = b === undefined || b === "null" ? null : Number(b);
-  if (probeOnly) {
-    rmSync(scratch, { force: true });
-    return { bytes, total, out };
-  }
-  /* 整片走完才接上去 —— 这一支就是「续传」的边界。 */
-  try {
-    const part = readFileSync(scratch);
-    mkdirSync(path.dirname(dest), { recursive: true });
-    writeFileSync(dest, part, { flag: "a" });
-    rmSync(scratch, { force: true });
-    return { bytes: part.length, total, out };
-  } catch (error) {
-    rmSync(scratch, { force: true });
-    return {
-      bytes: -1,
-      total: null,
-      out: `接片失败：${error instanceof Error ? error.message : String(error)}`,
-    };
-  }
-}
-
-/**
  * {@link fetchRangeToFile} 在子进程里跑的载荷 —— 独立成常量，理由与
  * `DOWNLOAD_PROBE_SCRIPT` 逐字相同（它本来就自足，留在函数里只会把「做什么」压过
  * 「怎么做」）。
@@ -433,6 +351,88 @@ export const FETCH_CHUNK_SCRIPT = `
   req.on("error", (e) => done("ERR " + ((e && e.code) || "ERROR") + "：" + ((e && e.message) || "")));
   req.end();
 `;
+
+/**
+ * 真取一段字节，**整片走完才**追加到 `dest`（走到一半就断的那一片由调用方丢掉）。
+ *
+ * ## 为什么不让子进程直接往 `dest` 上追加
+ *
+ * 子进程是边读边写的，而「超时 / 被断开」正好发生在写到一半的时候。那样一来到最后
+ * 一片失败时，文件里留下的是一截**半成品**，调用方按 `written` 重试就会与它重叠 ——
+ * 实测把 1 MiB 的包写成了 3.6 MiB（比声明的总长还长，收尾那一片永远等不到）。
+ *
+ * 所以：片先落到 `<dest>.part`（覆盖写），成功才把它接到 `dest` 尾巴上。失败走开时
+ * `dest` 仍是「最后一个完整边界」的样子 —— 这正是「续传」成立的前提。
+ *
+ * ## 走的还是 `spawnSync` 起短命子进程
+ *
+ * 理由见文件头（同步退出码路径 + `node:http` 是回调式）。六件输入按 argv 传：
+ * URL、脚手架文件、偏移、长度、超时、是否只要总长。
+ *
+ * `probeOnly` 那一档只问 `content-range` / `content-length`，**不落盘**
+ * —— 「这条链路通不通 + 总长多少」那次读数量的是它。
+ *
+ * @param {string} url
+ * @param {string} dest
+ * @param {number} offset
+ * @param {number} size
+ * @param {number} timeoutMs
+ * @param {{probeOnly?: boolean}} [options]
+ * @returns {{bytes: number, total: number | null, out: string}}
+ */
+export function fetchRangeToFile(url, dest, offset, size, timeoutMs, { probeOnly = false } = {}) {
+  const scratch = `${dest}.part`;
+  const r = spawnSync(
+    process.execPath,
+    [
+      "-e",
+      FETCH_CHUNK_SCRIPT,
+      url,
+      scratch,
+      String(offset),
+      String(size),
+      String(timeoutMs),
+      probeOnly ? "1" : "0",
+    ],
+    { encoding: "utf8", windowsHide: true, timeout: timeoutMs + 5000 },
+  );
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout / stderr 实测为 undefined，@types/node 按 string 标
+  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
+  /* 子进程把结论打成一行 `OK <bytes> <total>` / `ERR <原因>` —— 解析在这里、
+   * 取证在网上那一次。解析不到（被砍 / 崩了）当成「这一片没成」。 */
+  const line = out.split("\n").find((l) => /^(OK|ERR)\b/.test(l.trim()));
+  if (!line) {
+    rmSync(scratch, { force: true });
+    return { bytes: -1, total: null, out: out || "（子进程没有输出）" };
+  }
+  const [tag, a, b] = line.trim().split(/\s+/);
+  if (tag === "ERR") {
+    rmSync(scratch, { force: true });
+    return { bytes: -1, total: null, out };
+  }
+  const bytes = Number(a);
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- split 下标越界时运行时是 undefined，类型按 string 标窄
+  const total = b === undefined || b === "null" ? null : Number(b);
+  if (probeOnly) {
+    rmSync(scratch, { force: true });
+    return { bytes, total, out };
+  }
+  /* 整片走完才接上去 —— 这一支就是「续传」的边界。 */
+  try {
+    const part = readFileSync(scratch);
+    mkdirSync(path.dirname(dest), { recursive: true });
+    writeFileSync(dest, part, { flag: "a" });
+    rmSync(scratch, { force: true });
+    return { bytes: part.length, total, out };
+  } catch (error) {
+    rmSync(scratch, { force: true });
+    return {
+      bytes: -1,
+      total: null,
+      out: `接片失败：${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
 
 /**
  * 「把这一件浏览器**取到落点**」—— 取包 → 复验大小 → 解压 → 写完成标记。

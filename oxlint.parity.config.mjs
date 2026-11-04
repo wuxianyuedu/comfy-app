@@ -780,63 +780,6 @@ export default defineConfig({
       rules: { "no-control-regex": "off" },
     },
     {
-      /* `eslint/no-use-before-define（functions:false）` 存量挂账（清账批次 `B1`）：48 份 / 75 处 —— 根目录
-       * --type-aware 探针实测（2026-11-04），不是估读。下面每行 = 一份文件 + 该文件存量处数
-       * （「存量 N 处 · 清账目标 B1 · 新代码不禁用」）；名单是逐字路径而不是 glob，
-       * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
-      files: [
-        String.raw`src/app/api/tasks/\[id\]/stream/route.ts`, // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/components/studio/canvas/NodeFrost.stories.tsx", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/components/studio/WorkspaceViewStack.tsx", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/components/studio/workflow-form/DynamicWorkflowForm/hooks/use-dynamic-workflow-form.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/components/studio/project-canvas/ImageGenerationPanel.tsx", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/components/studio/workflow-editor/workflow-editor-build-nodes.ts", // 存量 5 处 · 清账目标 B1 · 新代码不禁用
-        "src/lib/media/mime-ext.ts", // 存量 2 处 · 清账目标 B1 · 新代码不禁用
-        "src/lib/shell/app-service-exit.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/components/workshop/hooks/use-workshop-pipeline.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/components/studio/workflow-editor/workflow-editor-topbar-config.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "scripts/ci-toolchain-browser.mjs", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/app/api/comfy/state/route.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "scripts/ci-toolchain-browser-reach.mjs", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "scripts/ci-toolchain-browser-fetch.mjs", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "scripts/reformat-preview-range.mjs", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/components/workshop/VideoStudio.parts.tsx", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/components/studio/logs/log-record.ts", // 存量 2 处 · 清账目标 B1 · 新代码不禁用
-        "scripts/dev-launcher.mjs", // 存量 7 处 · 清账目标 B1 · 新代码不禁用
-        "src/components/studio/workflow-editor/HoverElevation.tsx", // 存量 3 处 · 清账目标 B1 · 新代码不禁用
-        "src/lib/comfy/comfy-stats-store.test.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/components/studio/hooks/use-css-color-token.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/components/studio/workflow-library/workflow-library-wire-graph.test.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "tests/ps1-consistency.test.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "scripts/affected-tests.mjs", // 存量 2 处 · 清账目标 B1 · 新代码不禁用
-        "src/lib/workshop/workflow-run.server.test.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "tests/sqlite-pragma-sites.test.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/components/ui/dialog.test.tsx", // 存量 3 处 · 清账目标 B1 · 新代码不禁用
-        "src/lib/comfyui/executor-cli-stream.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/components/ui/use-item-errors.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "scripts/e2e-run.mjs", // 存量 4 处 · 清账目标 B1 · 新代码不禁用
-        "src/lib/workshop/prompt-builder.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.tsx", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/lib/workshop/model-mode-contract.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/components/code-update/CodeUpdateWatcher.tsx", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/lib/workshop/generation-client.watch-task.test.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/lib/time-format.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/components/studio/logs/LogPanelOriginSelect.tsx", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/lib/next-frame.test.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/components/ui/segment-popover.tsx", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "scripts/storybook-checks/story-surface.mjs", // 存量 2 处 · 清账目标 B1 · 新代码不禁用
-        "src/app/api/custom-nodes/route.test.ts", // 存量 3 处 · 清账目标 B1 · 新代码不禁用
-        "scripts/launcher-core/worktree.mjs", // 存量 4 处 · 清账目标 B1 · 新代码不禁用
-        "scripts/check-format.cjs", // 存量 2 处 · 清账目标 B1 · 新代码不禁用
-        "src/lib/core/repository-user.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/lib/comfyui/raw.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "src/lib/comfyui/lifecycle-exit.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "scripts/ci-build-readout.mjs", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-        "tests/check-ui-primitives.test.ts", // 存量 1 处 · 清账目标 B1 · 新代码不禁用
-      ],
-      rules: { "no-use-before-define": "off" },
-    },
-    {
       /* `no-await-in-loop` 存量挂账（清账批次 `B2`）：122 份 / 303 处 —— 根目录
        * --type-aware 探针实测（2026-11-04），不是估读。下面每行 = 一份文件 + 该文件存量处数
        * （「存量 N 处 · 清账目标 B2 · 新代码不禁用」）；名单是逐字路径而不是 glob，
@@ -961,6 +904,7 @@ export default defineConfig({
         "tests/esm-cross-host-imports.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
         "tests/helpers/repo-drizzle-lock.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
         "tests/hook-affected-launch.test.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
+        "tests/progress-heartbeat.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
         "tests/ship.test.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
         "tests/sqlite-pragma-sites.test.ts", // 存量 4 处 · 清账目标 B2 · 新代码不禁用
         "tests/test-db-schema-drift.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用

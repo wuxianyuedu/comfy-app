@@ -48,6 +48,13 @@ function realEntryPaths(): Array<string> {
   return out;
 }
 
+const cleanup: Array<string> = [];
+afterEach(() => {
+  for (const dir of cleanup.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 /** 在临时仓库里跑门禁（只需要被它读的那几个文件）。 */
 function runGuard(overrides: Record<string, string | null>): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ps1-consistency-"));
@@ -136,12 +143,6 @@ function runGuard(overrides: Record<string, string | null>): string {
   }
 }
 
-const cleanup: Array<string> = [];
-afterEach(() => {
-  for (const dir of cleanup.splice(0)) {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
 
 describe("跨平台动作对照表（规范 §9.5）", () => {
   it("真仓库通过（对照表两侧齐全、脚本都存在、清单单点定义）", () => {

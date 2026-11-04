@@ -66,6 +66,12 @@ const CLOCK_FORMAT: Intl.DateTimeFormatOptions = {
   second: "2-digit",
 };
 
+/** 入参：毫秒数 / ISO 串 / `Date`（比 {@link timeAgo} 宽一档，`Date` 直接用）。 */
+export type TimeInput = string | number | Date;
+
+/** 统一的入参归一 —— 调用处不必自己 `new Date(...)`。 */
+const toDate = (value: TimeInput): Date => (value instanceof Date ? value : new Date(value));
+
 /**
  * 时刻 → `HH:mm:ss`（`millis` 时带 `.SSS`）。入参与 {@link timeAgo} 同口径：
  * 毫秒数或 ISO 串，调用处不必自己 `new Date(...)`。
@@ -91,12 +97,6 @@ export function formatClock(value: TimeInput, opts: { millis?: boolean } = {}): 
  */
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
-
-/** 入参：毫秒数 / ISO 串 / `Date`（比 {@link timeAgo} 宽一档，`Date` 直接用）。 */
-export type TimeInput = string | number | Date;
-
-/** 统一的入参归一 —— 调用处不必自己 `new Date(...)`。 */
-const toDate = (value: TimeInput): Date => (value instanceof Date ? value : new Date(value));
 
 /**
  * 日期 → `YYYY-MM-DD`（**只写日期**那一档）。

@@ -42,6 +42,29 @@ const GROUP_GAP_CLASS: Record<TopBarDensity, string> = {
 };
 
 /**
+ * 按钮语义态 → 类。只承载「底盘 + 交互色」，尺寸与收缩规则一律走
+ * `topBarButtonClass`，避免同一件事在两处各写一份（历史上的变形正是因为尺寸类散落在
+ * 每个 `<button>` 上，改一处漏一片）。
+ */
+export type TopBarTone = "outline" | "solid" | "ghost" | "ioOn" | "ioPreviewOn";
+
+const TOP_BAR_TONE_CLASS: Record<TopBarTone, string> = {
+  /* 中性底盘：边框 + 半透明底，hover 提亮。 */
+  outline:
+    "border-border-strong bg-subtle text-ink-bright hover:bg-surface-2 rounded-lg border font-semibold transition-colors",
+  /* 主按钮（保存）：实心品牌底。 */
+  solid:
+    "rounded-lg bg-primary-500 font-semibold text-primary-foreground transition-colors hover:bg-primary-600",
+  /* 无底色的次级入口（调试开关）。 */
+  ghost: "text-ink-soft hover:text-ink rounded-md font-medium transition-colors",
+  /* 「编辑 IO」激活态：警告色高亮。 */
+  ioOn: "rounded-lg border border-warning/60 bg-warning/20 font-semibold text-warning-strong transition-colors hover:bg-warning/30",
+  /* 「预览 IO」激活态：信息色高亮。 */
+  ioPreviewOn:
+    "rounded-lg border border-info/60 bg-info/20 font-semibold text-info-strong transition-colors hover:bg-info/30",
+};
+
+/**
  * 拼一个顶栏按钮的完整 class 串。
  * @param tone 按钮语义态（默认底 / 激活态 / 主按钮）；@param density 顶栏密度；
  * @param extra 该按钮自己的补充类（如 `disabled:opacity-40`）。
@@ -89,26 +112,3 @@ export const TOP_BAR_BREADCRUMB_CLASS = `flex ${TOP_BAR_BREADCRUMB_MIN_WIDTH_CLA
  */
 export const TOP_BAR_ROOT_CLASS =
   "border-border-strong bg-panel flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-3";
-
-/**
- * 按钮语义态 → 类。只承载「底盘 + 交互色」，尺寸与收缩规则一律走
- * `topBarButtonClass`，避免同一件事在两处各写一份（历史上的变形正是因为尺寸类散落在
- * 每个 `<button>` 上，改一处漏一片）。
- */
-export type TopBarTone = "outline" | "solid" | "ghost" | "ioOn" | "ioPreviewOn";
-
-const TOP_BAR_TONE_CLASS: Record<TopBarTone, string> = {
-  /* 中性底盘：边框 + 半透明底，hover 提亮。 */
-  outline:
-    "border-border-strong bg-subtle text-ink-bright hover:bg-surface-2 rounded-lg border font-semibold transition-colors",
-  /* 主按钮（保存）：实心品牌底。 */
-  solid:
-    "rounded-lg bg-primary-500 font-semibold text-primary-foreground transition-colors hover:bg-primary-600",
-  /* 无底色的次级入口（调试开关）。 */
-  ghost: "text-ink-soft hover:text-ink rounded-md font-medium transition-colors",
-  /* 「编辑 IO」激活态：警告色高亮。 */
-  ioOn: "rounded-lg border border-warning/60 bg-warning/20 font-semibold text-warning-strong transition-colors hover:bg-warning/30",
-  /* 「预览 IO」激活态：信息色高亮。 */
-  ioPreviewOn:
-    "rounded-lg border border-info/60 bg-info/20 font-semibold text-info-strong transition-colors hover:bg-info/30",
-};

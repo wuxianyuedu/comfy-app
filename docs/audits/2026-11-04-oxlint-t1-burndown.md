@@ -9,13 +9,13 @@
 
 | 批次 | 规则 | 存量处数 | 涉及文件 | 状态 |
 |---|---|---|---|---|
-| B1 | `eslint/no-use-before-define（functions:false）` | 75 | 48 | 挂账中 |
-| B2 | `no-await-in-loop` | 303 | 122 | 挂账中 |
+| B1 | `eslint/no-use-before-define（functions:false）` | 75 | 48 | 已清（75 处/48 份） |
+| B2 | `no-await-in-loop` | 304 | 123 | 挂账中 |
 | B3 | `typescript/require-await` | 754 | 188 | 挂账中 |
 | B4 | `eslint/prefer-named-capture-group` | 1094 | 332 | 挂账中 |
 | B5 | `typescript/no-unsafe-type-assertion` | 1496 | 608 | 挂账中 |
 
-合计：**3722 处 / 1298 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
+合计：**3723 处 / 1251 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
 ## 二、开/不开口径
 
@@ -34,54 +34,54 @@
 
 | 文件 | 存量处数 | 状态 |
 |---|---|---|
-| `src/app/api/tasks/[id]/stream/route.ts` | 1 | 挂账 |
-| `src/components/studio/canvas/NodeFrost.stories.tsx` | 1 | 挂账 |
-| `src/components/studio/WorkspaceViewStack.tsx` | 1 | 挂账 |
-| `src/components/studio/workflow-form/DynamicWorkflowForm/hooks/use-dynamic-workflow-form.ts` | 1 | 挂账 |
-| `src/components/studio/project-canvas/ImageGenerationPanel.tsx` | 1 | 挂账 |
-| `src/components/studio/workflow-editor/workflow-editor-build-nodes.ts` | 5 | 挂账 |
-| `src/lib/media/mime-ext.ts` | 2 | 挂账 |
-| `src/lib/shell/app-service-exit.ts` | 1 | 挂账 |
-| `src/components/workshop/hooks/use-workshop-pipeline.ts` | 1 | 挂账 |
-| `src/components/studio/workflow-editor/workflow-editor-topbar-config.ts` | 1 | 挂账 |
-| `scripts/ci-toolchain-browser.mjs` | 1 | 挂账 |
-| `src/app/api/comfy/state/route.ts` | 1 | 挂账 |
-| `scripts/ci-toolchain-browser-reach.mjs` | 1 | 挂账 |
-| `scripts/ci-toolchain-browser-fetch.mjs` | 1 | 挂账 |
-| `scripts/reformat-preview-range.mjs` | 1 | 挂账 |
-| `src/components/workshop/VideoStudio.parts.tsx` | 1 | 挂账 |
-| `src/components/studio/logs/log-record.ts` | 2 | 挂账 |
-| `scripts/dev-launcher.mjs` | 7 | 挂账 |
-| `src/components/studio/workflow-editor/HoverElevation.tsx` | 3 | 挂账 |
-| `src/lib/comfy/comfy-stats-store.test.ts` | 1 | 挂账 |
-| `src/components/studio/hooks/use-css-color-token.ts` | 1 | 挂账 |
-| `src/components/studio/workflow-library/workflow-library-wire-graph.test.ts` | 1 | 挂账 |
-| `tests/ps1-consistency.test.ts` | 1 | 挂账 |
-| `scripts/affected-tests.mjs` | 2 | 挂账 |
-| `src/lib/workshop/workflow-run.server.test.ts` | 1 | 挂账 |
-| `tests/sqlite-pragma-sites.test.ts` | 1 | 挂账 |
-| `src/components/ui/dialog.test.tsx` | 3 | 挂账 |
-| `src/lib/comfyui/executor-cli-stream.ts` | 1 | 挂账 |
-| `src/components/ui/use-item-errors.ts` | 1 | 挂账 |
-| `scripts/e2e-run.mjs` | 4 | 挂账 |
-| `src/lib/workshop/prompt-builder.ts` | 1 | 挂账 |
-| `src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.tsx` | 1 | 挂账 |
-| `src/lib/workshop/model-mode-contract.ts` | 1 | 挂账 |
-| `src/components/code-update/CodeUpdateWatcher.tsx` | 1 | 挂账 |
-| `src/lib/workshop/generation-client.watch-task.test.ts` | 1 | 挂账 |
-| `src/lib/time-format.ts` | 1 | 挂账 |
-| `src/components/studio/logs/LogPanelOriginSelect.tsx` | 1 | 挂账 |
-| `src/lib/next-frame.test.ts` | 1 | 挂账 |
-| `src/components/ui/segment-popover.tsx` | 1 | 挂账 |
-| `scripts/storybook-checks/story-surface.mjs` | 2 | 挂账 |
-| `src/app/api/custom-nodes/route.test.ts` | 3 | 挂账 |
-| `scripts/launcher-core/worktree.mjs` | 4 | 挂账 |
-| `scripts/check-format.cjs` | 2 | 挂账 |
-| `src/lib/core/repository-user.ts` | 1 | 挂账 |
-| `src/lib/comfyui/raw.ts` | 1 | 挂账 |
-| `src/lib/comfyui/lifecycle-exit.ts` | 1 | 挂账 |
-| `scripts/ci-build-readout.mjs` | 1 | 挂账 |
-| `tests/check-ui-primitives.test.ts` | 1 | 挂账 |
+| `src/app/api/tasks/[id]/stream/route.ts` | 1 | 已清 |
+| `src/components/studio/canvas/NodeFrost.stories.tsx` | 1 | 已清 |
+| `src/components/studio/WorkspaceViewStack.tsx` | 1 | 已清 |
+| `src/components/studio/workflow-form/DynamicWorkflowForm/hooks/use-dynamic-workflow-form.ts` | 1 | 已清 |
+| `src/components/studio/project-canvas/ImageGenerationPanel.tsx` | 1 | 已清 |
+| `src/components/studio/workflow-editor/workflow-editor-build-nodes.ts` | 5 | 已清 |
+| `src/lib/media/mime-ext.ts` | 2 | 已清 |
+| `src/lib/shell/app-service-exit.ts` | 1 | 已清 |
+| `src/components/workshop/hooks/use-workshop-pipeline.ts` | 1 | 已清 |
+| `src/components/studio/workflow-editor/workflow-editor-topbar-config.ts` | 1 | 已清 |
+| `scripts/ci-toolchain-browser.mjs` | 1 | 已清 |
+| `src/app/api/comfy/state/route.ts` | 1 | 已清 |
+| `scripts/ci-toolchain-browser-reach.mjs` | 1 | 已清 |
+| `scripts/ci-toolchain-browser-fetch.mjs` | 1 | 已清 |
+| `scripts/reformat-preview-range.mjs` | 1 | 已清 |
+| `src/components/workshop/VideoStudio.parts.tsx` | 1 | 已清 |
+| `src/components/studio/logs/log-record.ts` | 2 | 已清 |
+| `scripts/dev-launcher.mjs` | 7 | 已清 |
+| `src/components/studio/workflow-editor/HoverElevation.tsx` | 3 | 已清 |
+| `src/lib/comfy/comfy-stats-store.test.ts` | 1 | 已清 |
+| `src/components/studio/hooks/use-css-color-token.ts` | 1 | 已清 |
+| `src/components/studio/workflow-library/workflow-library-wire-graph.test.ts` | 1 | 已清 |
+| `tests/ps1-consistency.test.ts` | 1 | 已清 |
+| `scripts/affected-tests.mjs` | 2 | 已清 |
+| `src/lib/workshop/workflow-run.server.test.ts` | 1 | 已清 |
+| `tests/sqlite-pragma-sites.test.ts` | 1 | 已清 |
+| `src/components/ui/dialog.test.tsx` | 3 | 已清 |
+| `src/lib/comfyui/executor-cli-stream.ts` | 1 | 已清 |
+| `src/components/ui/use-item-errors.ts` | 1 | 已清 |
+| `scripts/e2e-run.mjs` | 4 | 已清 |
+| `src/lib/workshop/prompt-builder.ts` | 1 | 已清 |
+| `src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.tsx` | 1 | 已清 |
+| `src/lib/workshop/model-mode-contract.ts` | 1 | 已清 |
+| `src/components/code-update/CodeUpdateWatcher.tsx` | 1 | 已清 |
+| `src/lib/workshop/generation-client.watch-task.test.ts` | 1 | 已清 |
+| `src/lib/time-format.ts` | 1 | 已清 |
+| `src/components/studio/logs/LogPanelOriginSelect.tsx` | 1 | 已清 |
+| `src/lib/next-frame.test.ts` | 1 | 已清 |
+| `src/components/ui/segment-popover.tsx` | 1 | 已清 |
+| `scripts/storybook-checks/story-surface.mjs` | 2 | 已清 |
+| `src/app/api/custom-nodes/route.test.ts` | 3 | 已清 |
+| `scripts/launcher-core/worktree.mjs` | 4 | 已清 |
+| `scripts/check-format.cjs` | 2 | 已清 |
+| `src/lib/core/repository-user.ts` | 1 | 已清 |
+| `src/lib/comfyui/raw.ts` | 1 | 已清 |
+| `src/lib/comfyui/lifecycle-exit.ts` | 1 | 已清 |
+| `scripts/ci-build-readout.mjs` | 1 | 已清 |
+| `tests/check-ui-primitives.test.ts` | 1 | 已清 |
 
 ### B2 · `no-await-in-loop`
 
@@ -709,6 +709,7 @@
 | `tests/precommit-timing.test.ts` | 1 | 挂账 |
 | `tests/project-view-container.test.ts` | 1 | 挂账 |
 | `tests/ps1-consistency.test.ts` | 1 | 挂账 |
+| `tests/progress-heartbeat.test.ts` | 1 | 挂账 |
 | `tests/ratchet-update-guards.test.ts` | 7 | 挂账 |
 | `tests/reduced-motion-tiers.test.ts` | 2 | 挂账 |
 | `tests/repository-base-purity.test.ts` | 3 | 挂账 |

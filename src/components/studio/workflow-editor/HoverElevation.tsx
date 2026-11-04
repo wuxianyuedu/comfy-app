@@ -21,6 +21,10 @@ export type HoverElevation = {
   hoverRef: (element: HTMLElement | null) => void;
 };
 
+/** 承载悬浮态的属性名。CSS 侧的对应选择器在 globals.css：
+ *  `.react-flow__node[data-hovered="true"]`（抬 z-index，压住连线）。 */
+export const HOVER_ATTRIBUTE = "data-hovered";
+
 /** 给节点接上「悬浮即置顶」的能力。
  *
  *  状态挂在**被悬浮的节点自己**身上，所以鼠标进出只重渲染那一个节点；
@@ -62,7 +66,3 @@ export function useHoverElevation(): HoverElevation {
 
   return { hovered, hoverHandlers: { onMouseEnter, onMouseLeave }, hoverRef };
 }
-
-/** 承载悬浮态的属性名。CSS 侧的对应选择器在 globals.css：
- *  `.react-flow__node[data-hovered="true"]`（抬 z-index，压住连线）。 */
-export const HOVER_ATTRIBUTE = "data-hovered";

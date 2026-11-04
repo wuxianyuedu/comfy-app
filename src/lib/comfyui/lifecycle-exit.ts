@@ -190,13 +190,18 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
   let startedAt: number | null = null;
   let seenPid: number | null = null;
   let missCount = 0;
+  /* 句柄收在一个可变对象里：`stop` 的闭包要用它，而赋值发生在 `tick` 定义之后
+   * （`setTimer` 的回调引 `tick`，先定义 tick 才不会踩 TDZ）。 */
+  const timer: { handle?: ReturnType<typeof setTimer> } = {};
 
   const stop = () => {
     if (stopped) {
       return;
     }
     stopped = true;
-    clearTimer(handle);
+    if (timer.handle !== undefined) {
+      clearTimer(timer.handle);
+    }
   };
 
   const tick = async () => {
@@ -247,7 +252,7 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
     startedAt ??= now();
   };
 
-  const handle = setTimer(() => {
+  timer.handle = setTimer(() => {
     // tick 里同步调用 `deps.isStopped()`、`deps.onExit()` 与异步 `findPid()`；
     // 任何一处抛都会让 `void tick()` 变 unhandledRejection。本模块刻意保持
     // 「纯逻辑 + 依赖注入」、不引 logger，兜底就留在回调里：监督器自己炸不能
@@ -262,9 +267,9 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
   /* 监督器不该成为「进程退不出去」的原因（Node 里未 unref 的 interval 会吊住
    * 事件循环）。 */
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- handle 来自可注入的 deps.setTimer（类型只声明 Timeout），注入实现可能给出非对象句柄，判空是运行期防御
-  if (typeof handle === "object" && handle !== null && "unref" in handle) {
+  if (typeof timer.handle === "object" && timer.handle !== null && "unref" in timer.handle) {
     /* SAFETY: 类型断言已复核 */
-    (handle as { unref: () => void }).unref();
+    (timer.handle as { unref: () => void }).unref();
   }
 
   return { stop };

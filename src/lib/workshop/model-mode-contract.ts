@@ -535,26 +535,6 @@ export function derivedModeContract(mode: string): ModeContract {
   };
 }
 
-/** ── 成品配置：编译进源码的那份契约注册表 ────────────────────────────────
- *
- * 过去契约是**入库的文件**（`config/workshop-mode-contracts.json`）：每个检出
- *  与每个桌包都读同一份，代价是「要改它得先找到那个文件」。现在它回到源码里 ——
- *  每种模式的口清单与输出类别由 `derivedModeContract` 现算，这一份就是全部默认：
- *  仓库里没有第二个地方定义「T2I 有哪些口」。
- *
- *  仍然保留的编辑入口（ISSUE #632 的「哪个口必备应该能配」）写的是**本机覆盖**
- *  （`mode-contract.server.ts`），不改这一份 —— 成品配置跟着构建走，覆盖跟着这台
- *  机器走，两者都在而不互相污染。
- *
- *  哪些模式进来：`ALL_MODES` 由调用方给（纯函数层不引工作流类型表，避免把
- *  `workflow-types` 这张大表拖进每个读者）；调用点见
- *  `mode-contract-config.ts` 的 `CONTRACT_MODES`（= 生成类模式）。 */
-export function configuredModeContracts(
-  modes: ReadonlyArray<string> = ALL_CONTRACT_MODES,
-): Array<ModeContract> {
-  return modes.map((mode) => derivedModeContract(mode));
-}
-
 /** 成品配置覆盖的模式码（生成类模式全集）。
  *
  *  取值与 `~/lib/workflow/workflow-types` 的 `ALL_WORKFLOW_TYPES` 里
@@ -590,6 +570,25 @@ export const ALL_CONTRACT_MODES: ReadonlyArray<string> = [
   "T2S",
 ];
 
+/** ── 成品配置：编译进源码的那份契约注册表 ────────────────────────────────
+ *
+ * 过去契约是**入库的文件**（`config/workshop-mode-contracts.json`）：每个检出
+ *  与每个桌包都读同一份，代价是「要改它得先找到那个文件」。现在它回到源码里 ——
+ *  每种模式的口清单与输出类别由 `derivedModeContract` 现算，这一份就是全部默认：
+ *  仓库里没有第二个地方定义「T2I 有哪些口」。
+ *
+ *  仍然保留的编辑入口（ISSUE #632 的「哪个口必备应该能配」）写的是**本机覆盖**
+ *  （`mode-contract.server.ts`），不改这一份 —— 成品配置跟着构建走，覆盖跟着这台
+ *  机器走，两者都在而不互相污染。
+ *
+ *  哪些模式进来：`ALL_MODES` 由调用方给（纯函数层不引工作流类型表，避免把
+ *  `workflow-types` 这张大表拖进每个读者）；调用点见
+ *  `mode-contract-config.ts` 的 `CONTRACT_MODES`（= 生成类模式）。 */
+export function configuredModeContracts(
+  modes: ReadonlyArray<string> = ALL_CONTRACT_MODES,
+): Array<ModeContract> {
+  return modes.map((mode) => derivedModeContract(mode));
+}
 /** 校验并归一化一份注册表（去重、剔非法口、模式大写）。
  *
  *  口的合法性用 isModeContractInputId —— 与 modeContractsSave 的入参校验同源。

@@ -195,6 +195,9 @@ export function fetchStageDetail(run, slug, sn, pipelineId, stageId) {
   };
 }
 
+/** 一次最多展开几格失败日志（再多就该直接看完整日志了）。 */
+export const MAX_DETAIL_STAGES = 3;
+
 /**
  * 把每一格的**平台原话**填进 `get-build-status` 那份读数（ISSUE #2406）。
  *
@@ -266,9 +269,6 @@ export function enrichStageErrors(run, slug, sn, json) {
 export function pipelineForStage(outcome, stageId) {
   return outcome.pipelines.find((p) => p.diagnosable.some((s) => s.id === stageId)) ?? null;
 }
-
-/** 一次最多展开几格失败日志（再多就该直接看完整日志了）。 */
-export const MAX_DETAIL_STAGES = 3;
 
 /**
  * 把失败格的日志摘要写出来：格头 + 失败行（带行号）+ 尾部 + 完整日志链接。
