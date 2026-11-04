@@ -47,9 +47,18 @@
  *    payload 的 sha / 不是同一笔 sha，#3142 的现场）。后者再等也等不出新事实：`run-name`
  *    是 run **创建时**定死的，不是跑完才写。所以连续 {@link CLAIM_MISS_STREAK_TO_ABORT} 轮
  *    这一形 ⇒ 提前 exit 2，并把触发表的 `display_title` 样本念出来（{@link renderTitleSamples}），
- *    让「标题里没 sha」与「是别的 sha」当场可分。零条 run 那一形**照旧吃满预算**。
+ *    让「标题里没 sha」与「是别的 sha」当场可分。零条 run 那一形走 1c 的短窗口（#3153）。
  *    另一条同形的等待也归这里：上游镜像格失败 ⇒ 派发没发生 ⇒ 本跑永远不会有 run；
  *    那一形要缩的是 `.cnb.yml` 侧（把镜像格的失败读数交给本格判，属 #3148 期望第 1 条的另一半）。
+ * 1c. **零条 run 的短窗口 + 结构正证据**（ISSUE #3153）：`empty` 里**零条 run** 那一形不再
+ *    一律吃满 45m。第一次读到零条时先做一次结构判定（仓库身份可查 / `pr-gate.yml` 存在且
+ *    workflow 为 active / 该 workflow 仍监听 `repository_dispatch` / 分支过滤现状），任一证据
+ *    明确「结构上不会有 run」⇒ 当场 exit 2 并明念是哪一条。判不出（读不到 / 都在）⇒
+ *    按 {@link NO_RUN_WINDOW_MS}（5 分钟）短窗口继续轮询；到点仍零条 ⇒ exit 2，读数写
+ *    「没找到对应 run（不是 run 未到终态）」并附判定依据。45m 预算**只留给**「确实读到本跑
+ *    （`data` 态）、但 `status` 还没 completed」那一形 —— 迟到 4 分钟的 run 仍在短窗口内被认领
+ *    （用例钉着）。上游 `mirror-dispatch.json` 缺失是**独立一形**：单独读数、同样 5m 短界，
+ *    不并入「零条 run」，也不冒充「没找到对应 run」（缺「派发已发生」这条正证据）。
  * 2. **主列读数档**（与镜像格同一族）：`.cnb.yml` 给它 `--readout`，三态照旧打点、对外
  *    恒退 0。翻承重的条件：本格读数稳定后单独一次决定，同时摘镜像格的 `--readout`
  *    （#3051 期望第 3 条）—— 不在本批。
@@ -89,6 +98,13 @@ import {
   resolveContext,
   sanitize,
 } from "./ci-github-mirror-push.mjs";
+import {
+  NO_RUN_WINDOW_MS,
+  probeDispatchChain,
+  reportDispatchStateMissing,
+  reportNoRunFound,
+  reportNoRunStructural,
+} from "./ci-github-verdict-chain.mjs";
 
 /**
  * 单次请求（runs / checks 两条路径同一份）的墙钟上限：与镜像格探活同一量级
@@ -126,8 +142,8 @@ export const POLL_BUDGET_MS = 45 * 60_000;
  * 创建时就定死的，不是跑完才写）⇒ 「表里有 run 而认不上」不是迟到，是锚点恒假。
  * 4 轮只是给「GitHub 侧刚建 run、标题还没落」留一格余量；再多就只是把墙钟还给平台。
  *
- * ⚠️ 只有**读到过非空触发表**才累计：零条 run 的 `empty`（GitHub 侧压根没起跑）是
- * 真·等待，那一形照旧吃满预算 —— 它可能随时起跑，#3136 专门为此放开了 45m。
+ * ⚠️ 只有**读到过非空触发表**才累计：零条 run 的 `empty`（GitHub 侧压根没起跑）走
+ * {@link NO_RUN_WINDOW_MS} 的短窗口，不吃满 45m（ISSUE #3153）。
  */
 export const CLAIM_MISS_STREAK_TO_ABORT = 4;
 
@@ -606,31 +622,17 @@ function reportClaimMissed(log, headSha) {
 }
 
 /**
- * 预算耗尽的交账：exit 2，原因按**这一轮主路径读到了什么**分开说。
- *
- * `empty`（读到 0 条）与「读到一个还没跑完的结论」不是一回事：前者是 GitHub 侧
- * 还没起跑（或 display_title 还没认领本跑），后者是起跑了但没跑完。两句话术分开，
- * 是为了让线上那一眼直接看出该查排队还是该查卡住。
+ * **45m 预算**耗尽的交账：exit 2。这一档只服务「确实读到本跑、但 `status` 还没
+ * completed」那一形（ISSUE #3153）—— 零条 run / 派发读数缺失各有自己的短窗口与话术。
  *
  * @param {(line: string) => void} log 日志出口
- * @param {"empty" | "pending"} shape 这一轮主路径的形状
  * @param {string} fbNote 兜底路径本轮的状态（仅作降级读数记录）
  * @returns {number} 仓内三态退码
  */
-function reportBudgetSpent(log, shape, fbNote) {
+function reportPendingBudgetSpent(log, fbNote) {
   const minutes = String(POLL_BUDGET_MS / 60_000);
-  if (shape === "empty") {
-    log(
-      `[verdict] 结论：exit 2 —— ${minutes}m 轮询预算耗尽，主路径（runs API）**读到 0 条 run**：GitHub 侧没起跑（派发没发生 / 还在排队）。${fbNote}`,
-    );
-    log(
-      "[verdict]   这不是权限问题（主路径能读到就是读到了），也不是「GitHub 侧判了红」——" +
-        "下一动作是查 GitHub 侧那一跑派发了没有 / 排队卡在哪。",
-    );
-    return CODE.NO_FACT;
-  }
   log(
-    `[verdict] 结论：exit 2 —— ${minutes}m 轮询预算耗尽还没拿到完整判决（没跑完 ≠ 判红；去查 GitHub 侧那一跑是不是卡住了）`,
+    `[verdict] 结论：exit 2 —— ${minutes}m 轮询预算耗尽还没拿到完整判决（读到本跑但没到终态；没跑完 ≠ 判红，去查 GitHub 侧那一跑是不是卡住了）${fbNote}`,
   );
   return CODE.NO_FACT;
 }
@@ -639,7 +641,7 @@ function reportBudgetSpent(log, shape, fbNote) {
  * 两条路径都 401/403 的交账：exit 2（**主路径也没读到任何东西**的前提下的权限结论）。
  *
  * 只在主路径本身被拒时才有资格说「权限」；主路径读到 0 条而兜底被拒是另一回事
- * （令牌够、只是 GitHub 侧还没起跑），那一形走 {@link reportBudgetSpent}。
+ * （令牌够、只是 GitHub 侧还没起跑），那一形走短窗口交账（#3153）。
  *
  * @param {(line: string) => void} log 日志出口
  * @param {number} mainStatus 主路径被拒的 HTTP 状态
@@ -687,7 +689,7 @@ export async function runVerdict(io) {
     return CODE.NO_FACT;
   }
   log(
-    `[verdict] 计划：轮询 ${ctx.repo} @ ${ctx.headSha.slice(0, 8)}（镜像 ref ${ctx.ref}）· 主路径 runs API（event=repository_dispatch + display_title 认领本跑，需 actions: read），认不到本跑的 run 回落 checks API（需 checks: read，且需 workflow 主动建 check 才有效 —— 当前未建，兜底仅作降级读数）· 间隔 ${String(POLL_INTERVAL_MS / 1000)}s · 预算 ${String(POLL_BUDGET_MS / 60_000)}m`,
+    `[verdict] 计划：轮询 ${ctx.repo} @ ${ctx.headSha.slice(0, 8)}（镜像 ref ${ctx.ref}）· 主路径 runs API（event=repository_dispatch + display_title 认领本跑，需 actions: read），认不到本跑的 run 回落 checks API（需 checks: read，且需 workflow 主动建 check 才有效 —— 当前未建，兜底仅作降级读数）· 间隔 ${String(POLL_INTERVAL_MS / 1000)}s · 预算：读到本跑 ${String(POLL_BUDGET_MS / 60_000)}m / 零条 run ${String(NO_RUN_WINDOW_MS / 60_000)}m`,
   );
   if (dryRun) {
     log("[verdict] DRY-RUN：没发任何请求，计划如上");
@@ -711,17 +713,24 @@ export async function runVerdict(io) {
     log(`[verdict] 上游派发格的读数：${upstream.reason}`);
   }
   const reqIo = { fetchImpl, log, sleep, token: ctx.token };
-  const deadline = now() + POLL_BUDGET_MS;
+  /* 两档窗口从同一时刻起算（只读一次钟面，避免假时钟把两档 deadline 错拍）：
+   * 45m 只给「读到本跑、但没到终态」；5m 给零条 run / 派发读数缺失（ISSUE #3153）。 */
+  const startedAt = now();
+  const pendingDeadline = startedAt + POLL_BUDGET_MS;
+  const noRunDeadline = startedAt + NO_RUN_WINDOW_MS;
   /** 兜底路径本轮的读数（**只作降级事实记录**，不参与结论）：主路径读到 0 条而兜底
    *  不可用时，它只用来解释「这一形为什么连读数的影子都没有」。 */
   let fbNote = "";
   /** 连续「触发表里有 run、一条都认不上」的轮数（`CLAIM_MISS_STREAK_TO_ABORT` 的计数）。 */
   let missStreak = 0;
+  /** 读到过本跑（`data` 态，含主路径被拒时兜底读到的条目）⇒ 45m 预算。 */
+  let sawRun = false;
+  /** 主路径被拒（没给 `actions: read`）：主路径读不到，退回老的 45m 行为。 */
+  let mainUnreadable = false;
+  /** 零条 run 的结构判定（只探一次；`null` = 还没探）。 */
+  /** @type {Awaited<ReturnType<typeof probeDispatchChain>> | null} */
+  let chain = null;
   for (;;) {
-    /** 这一轮主路径的形状（`reportBudgetSpent` 的话术按它分岔）：empty = 读到 0 条
-     *  （还没起跑）；pending = 读到了但没跑完 —— 含「只有兜底读数」那一形。
-     *  @type {"empty" | "pending"} */
-    let mainShape = "empty";
     /** 主路径被拒的 HTTP 状态（0 = 没被拒）—— 决定「权限」这句有没有资格说。 */
     let mainAuthStatus = 0;
     const main = await readMainPath(reqIo, ctx);
@@ -730,10 +739,11 @@ export async function runVerdict(io) {
     let pathLabel = "主路径（runs API）";
     if (main.state === "data") {
       missStreak = 0;
+      sawRun = true;
       summary = summarizeWorkflowRuns(main.runs);
-      mainShape = "pending";
     } else if (main.state === "auth") {
       mainAuthStatus = main.status;
+      mainUnreadable = true;
       log(
         `[verdict] 主路径（runs API）被拒 HTTP ${String(main.status)} —— 令牌没给 actions: read ⇒ 本轮回落兜底（checks API）`,
       );
@@ -750,8 +760,20 @@ export async function runVerdict(io) {
         }
       } else {
         missStreak = 0;
+        /* 零条 run：第一次先做一次结构判定（仓库身份 / workflow / 事件条件），
+         * 任一证据明确「不会有 run」⇒ 当场收工；判不出就走 5m 短窗口（#3153）。 */
+        if (chain === null) {
+          chain = await probeDispatchChain(
+            (url, label) => requestJson(reqIo, url, label),
+            ctx,
+          );
+          log(`[verdict] 零条 run 的结构判定：${chain.note}`);
+          if (chain.structural !== "") {
+            return reportNoRunStructural(log, chain);
+          }
+        }
         log(
-          "[verdict] 主路径（runs API）的 dispatch 触发表里零条 run（GitHub 侧还没起跑）⇒ 本轮回落兜底（checks API）；主路径本身读通了（不是权限问题），继续轮询",
+          `[verdict] 主路径（runs API）的 dispatch 触发表里零条 run（GitHub 侧还没起跑 / 结构上没建）⇒ 本轮回落兜底（checks API）；主路径本身读通了（不是权限问题），按 ${String(NO_RUN_WINDOW_MS / 60_000)}m 短窗口继续轮询`,
         );
       }
     } else if (main.state === "http") {
@@ -768,6 +790,7 @@ export async function runVerdict(io) {
          * 当前 workflow 根本不建 check-run）—— 它只是降级事实，不许顶掉主路径的形状。 */
         if (mainAuthStatus > 0 && fb.runs.length > 0) {
           pathLabel = "兜底（checks API）";
+          sawRun = true;
           summary = summarizeCheckRuns(fb.runs);
         }
       } else if (fb.state === "auth") {
@@ -786,7 +809,6 @@ export async function runVerdict(io) {
     }
     if (summary?.total === 0) {
       /* 只有主路径被拒时才可能走到这里用兜底；那种形状已经不是「读到 0 条」了。 */
-      mainShape = "pending";
       const what = pathLabel === "兜底（checks API）" ? "check-run" : "workflow run";
       log(
         `[verdict] ${pathLabel}：这一笔 sha 上还没有任何 ${what}（GitHub 侧可能还没起跑）—— 继续等`,
@@ -813,8 +835,23 @@ export async function runVerdict(io) {
         `[verdict] ${pathLabel}：${String(summary.total)} 个条目：${String(summary.pending.length)} 个还在跑（${summary.pending.join("、")}）—— 继续等`,
       );
     }
+    /* 窗口按**已读到的形状**分档（ISSUE #3153）：读到本跑（或主路径本身读不到）才配
+     * 45m；零条 run / 派发读数缺失各走 5m，到点按那一形自己的话术交账。 */
+    const deadline = sawRun || mainUnreadable ? pendingDeadline : noRunDeadline;
     if (now() >= deadline) {
-      return reportBudgetSpent(log, mainShape, fbNote);
+      if (sawRun || mainUnreadable) {
+        return reportPendingBudgetSpent(log, fbNote);
+      }
+      if (chain === null) {
+        chain = await probeDispatchChain((url, label) => requestJson(reqIo, url, label), ctx);
+        log(`[verdict] 零条 run 的结构判定：${chain.note}`);
+        if (chain.structural !== "") {
+          return reportNoRunStructural(log, chain);
+        }
+      }
+      return upstream === null
+        ? reportDispatchStateMissing(log, chain)
+        : reportNoRunFound(log, ctx.headSha, chain, upstream);
     }
     await sleep(POLL_INTERVAL_MS);
   }

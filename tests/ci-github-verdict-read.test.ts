@@ -8,6 +8,13 @@
  *  一次真墙钟都不付**；令牌脱敏那条是硬规则 17 在这一格的落点。 */
 import { describe, expect, it } from "vitest";
 import {
+  NO_RUN_WINDOW_MS,
+  dispatchBranchFilter,
+  repoUrl,
+  workflowFileUrl,
+  workflowsUrl,
+} from "../scripts/ci-github-verdict-chain.mjs";
+import {
   CHECK_RUNS_TIMEOUT_MS,
   CLAIM_MISS_STREAK_TO_ABORT,
   POLL_BUDGET_MS,
@@ -64,6 +71,37 @@ const gitOk = (args: Array<string>) => {
   }
   return { code: 0, stdout: "", stderr: "" };
 };
+
+/* ── ISSUE #3153 的结构判定假件：默认给「三件正证据都在」的合形态 ──────────
+ * 零条 run 的用例都会先走一次结构判定；默认合形态让老用例保持「判不出 ⇒ 短窗口」
+ * 那一形，只有显式编排 `chainSteps` 的用例才落进「结构上不会有 run」。 */
+const WORKFLOW_PATH = ".github/workflows/pr-gate.yml";
+
+const PR_GATE_WORKFLOW = [
+  "name: pr-gate",
+  "on:",
+  "  repository_dispatch:",
+  "    types: [pr-gate]",
+  "jobs:",
+  "  gate:",
+  "    runs-on: ubuntu-latest",
+].join("\n");
+
+const repoBodyOf = (defaultBranch = "main") =>
+  JSON.stringify({ default_branch: defaultBranch });
+
+const workflowsBodyOf = (state = "active") =>
+  JSON.stringify({
+    total_count: 1,
+    workflows: [{ id: 1, name: "pr-gate", path: WORKFLOW_PATH, state }],
+  });
+
+const workflowFileBodyOf = (text = PR_GATE_WORKFLOW) =>
+  JSON.stringify({
+    content: Buffer.from(text, "utf8").toString("base64"),
+    encoding: "base64",
+    path: WORKFLOW_PATH,
+  });
 
 describe("纯函数", () => {
   it("workflowRunsUrl：主路径按 event=repository_dispatch 拉 dispatch 触发表，单页 100 条（不用 ?head_sha= —— dispatch 触发的 run 其 head_sha 落默认分支 HEAD，按它过滤恒得零条）", () => {
@@ -199,12 +237,46 @@ describe("纯函数", () => {
       }, "/repo"),
     ).toBeNull();
   });
+
+  it("结构判定的三个读数目标：仓库身份 / workflow 清单 / 默认分支上的 workflow 文件（#3153）", () => {
+    expect(repoUrl(REPO)).toBe(`https://api.github.com/repos/${REPO}`);
+    expect(workflowsUrl(REPO)).toBe(
+      `https://api.github.com/repos/${REPO}/actions/workflows?per_page=100`,
+    );
+    expect(workflowFileUrl(REPO, "main")).toBe(
+      `https://api.github.com/repos/${REPO}/contents/${WORKFLOW_PATH}?ref=main`,
+    );
+  });
+
+  it("dispatchBranchFilter：没有 branches / 块状列表 / 行内数组三种写法都读得出（只作读数，不判死）", () => {
+    expect(dispatchBranchFilter(PR_GATE_WORKFLOW)).toBeNull();
+    expect(
+      dispatchBranchFilter(
+        ["on:", "  repository_dispatch:", "    branches:", "      - main", "      - cnb-pr-2649"].join(
+          "\n",
+        ),
+      ),
+    ).toEqual(["main", "cnb-pr-2649"]);
+    expect(
+      dispatchBranchFilter(
+        ["on:", "  repository_dispatch:", "    branches: [main, 'cnb-pr-2649']"].join("\n"),
+      ),
+    ).toEqual(["main", "cnb-pr-2649"]);
+  });
+
+  it("NO_RUN_WINDOW_MS：短窗口 5 分钟，且大于 4 分钟的迟到用例（#3153）", () => {
+    expect(NO_RUN_WINDOW_MS).toBe(5 * 60_000);
+    expect(NO_RUN_WINDOW_MS).toBeGreaterThan(4 * 60_000);
+    expect(NO_RUN_WINDOW_MS).toBeLessThan(POLL_BUDGET_MS);
+  });
 });
 
 describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两条路径）", () => {
   /** 收口假件与量具；`runsSteps` / `checksSteps` 按各自路径的调用次序出假回话/假异常，耗尽后落各自的 `fallback`。 */
   function harness(
     opts: {
+      /** 结构判定（#3153）三跳的编排次序：仓库身份 → workflow 清单 → workflow 文件。 */
+      chainSteps?: Array<Response | Error>;
       checksFallback?: Response | (() => Response);
       checksSteps?: Array<Response | Error>;
       /** 上游派发形状那份落盘（#3148）：缺省 = 读不到，退回「自己猜」的老行为。 */
@@ -218,6 +290,7 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     const calls: Array<string> = [];
     const heard: Array<string> = [];
     const sleeps: Array<number> = [];
+    const chainSteps = opts.chainSteps ? [...opts.chainSteps] : null;
     const runsSteps = opts.runsSteps ? [...opts.runsSteps] : null;
     const checksSteps = opts.checksSteps ? [...opts.checksSteps] : null;
     /* 时钟只被 `sleep` 推进（真实轮次各 30s）：`now()` 是**纯读**。
@@ -230,10 +303,28 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     let clock = 0;
     const fetchImpl = (async (url: string | URL) => {
       calls.push(String(url));
-      const isRuns = String(url).includes("/actions/runs");
-      const head = (isRuns ? runsSteps : checksSteps)?.shift();
+      const addr = String(url);
+      const isRuns = addr.includes("/actions/runs");
+      const isChecks = addr.includes("/check-runs");
+      const isWorkflows = addr.includes("/actions/workflows");
+      const isContents = addr.includes("/contents/");
+      const isChain = isWorkflows || isContents || (!isRuns && !isChecks);
+      const head = (isChain ? chainSteps : isRuns ? runsSteps : checksSteps)?.shift();
       if (head instanceof Error) {
         throw head;
+      }
+      if (head) {
+        return head;
+      }
+      if (isChain) {
+        /* 默认合形态：仓库可查、pr-gate active、默认分支上的文件仍监听 repository_dispatch。 */
+        if (isWorkflows) {
+          return new Response(workflowsBodyOf(), { status: 200 });
+        }
+        if (isContents) {
+          return new Response(workflowFileBodyOf(), { status: 200 });
+        }
+        return new Response(repoBodyOf(), { status: 200 });
       }
       /* 缺省形态：两条路径都读通、都读到 0 条（＝ GitHub 侧还没起跑）。**不**把兜底
        * 默认成 200 全绿 —— 那是 #3136 修之前那种「读到 0 条就当作有结论」的替身，
@@ -245,9 +336,6 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
         isRuns
           ? new Response(runsBodyOf([]), { status: 200 })
           : new Response(checksBodyOf([]), { status: 200 });
-      if (head) {
-        return head;
-      }
       const pick = (fallback: Response | (() => Response) | undefined) =>
         fallback === undefined ? null : typeof fallback === "function" ? fallback() : fallback;
       return pick(isRuns ? opts.runsFallback : opts.checksFallback) ?? fresh();
@@ -460,7 +548,7 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     expect(heard.join("\n")).toContain("还在跑");
   });
 
-  it("两条路径都零条 ⇒ 预算耗尽退 2：原因写「读到 0 条」，不写权限", async () => {
+  it("两条路径都零条 + 派发读数缺失 ⇒ 独立一形：短窗口到点退 2，念「上游派发读数不可用」，不写权限（#3153）", async () => {
     const { heard, io } = harness({
       checksFallback: new Response(checksBodyOf([]), { status: 200 }),
       nowStep: POLL_BUDGET_MS,
@@ -468,20 +556,26 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     const code = await runVerdict(io);
     expect(code).toBe(CODE.NO_FACT);
     const all = heard.join("\n");
-    expect(all).toContain("读到 0 条");
-    expect(all).toContain("预算耗尽");
+    expect(all).toContain("上游派发读数不可用");
+    expect(all).toContain("mirror-dispatch.json");
+    expect(all).toContain("不判「没找到对应 run」");
     expect(all).toContain("结论：exit 2");
     expect(all).not.toContain("moon-read/GITHUB_MIRROR_TOKEN");
+    expect(all).not.toContain("两条路径的权限这枚令牌都没够上");
+    /* 它不许把「45m 预算耗尽」当成结论（那一档只给「读到本跑但没到终态」）。 */
+    expect(all).not.toContain(`${String(POLL_BUDGET_MS / 60_000)}m 轮询预算耗尽`);
   });
 
-  it("一直 pending ⇒ 预算耗尽退 2（GitHub 侧卡住不许被读成红）", async () => {
+  it("一直 pending ⇒ 45m 预算耗尽退 2（GitHub 侧卡住不许被读成红）", async () => {
     const { heard, io } = harness({
-      checksFallback: new Response(checksBodyOf([run("heavy-gates", "queued")]), { status: 200 }),
       nowStep: POLL_BUDGET_MS,
+      runsFallback: () => new Response(runsBodyOf([run("heavy-gates", "queued")]), { status: 200 }),
     });
     const code = await runVerdict(io);
     expect(code).toBe(CODE.NO_FACT);
-    expect(heard.join("\n")).toContain("预算耗尽");
+    const all = heard.join("\n");
+    expect(all).toContain(`${String(POLL_BUDGET_MS / 60_000)}m 轮询预算耗尽`);
+    expect(all).toContain("没跑完 ≠ 判红");
   });
 
   it("读数第一次 egress 抖动、第二次通 ⇒ 退 0：网络类失败消耗一次重试", async () => {
@@ -506,8 +600,8 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     const { calls, heard, io, sleeps } = harness({ checksSteps: [down, down, down] });
     const code = await runVerdict(io);
     expect(code).toBe(CODE.NO_FACT);
-    /* 主路径一跳（零条）+ 兜底三次尝试。 */
-    expect(calls).toHaveLength(1 + REQUEST_MAX_ATTEMPTS);
+    /* 主路径一跳（零条）+ 结构判定三跳（#3153）+ 兜底三次尝试。 */
+    expect(calls).toHaveLength(1 + 3 + REQUEST_MAX_ATTEMPTS);
     expect(sleeps).toEqual([...RETRY_BACKOFF_MS]);
     expect(heard.join("\n")).toContain("api.github.com 这一跳没通");
   });
@@ -551,7 +645,7 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
   it("主路径读到 0 条 + 兜底 403 ⇒ 不退，按 POLL_INTERVAL 继续轮询主路径（ISSUE #3136）", async () => {
     const { calls, heard, io, sleeps } = harness({
       checksFallback: new Response("no", { status: 403 }),
-      nowStep: POLL_BUDGET_MS / 3,
+      nowStep: 0,
     });
     const code = await runVerdict(io);
     expect(code).toBe(CODE.NO_FACT);
@@ -563,6 +657,8 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     expect(all).toContain("仅降级读数");
     expect(all).not.toContain("两条路径的权限这枚令牌都没够上");
     expect(all).not.toContain("前提没落地（权限）");
+    /* #3153 之后：零条那一形按 5m 短窗口收工，仍不许被读成「权限」或「红」。 */
+    expect(all).toContain(`${String(NO_RUN_WINDOW_MS / 60_000)}m 内触发表零条 run`);
   });
 
   it("上游派发格留下「派发没发生」⇒ 一秒不轮询、不退 2 成「还没起跑」，把上游原因念出来（#3148）", async () => {
@@ -604,25 +700,27 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     expect(all).toContain("结论：exit 0");
   });
 
-  it("读到 0 条、兜底 403、预算耗尽 ⇒ exit 2 且原因是「读到 0 条 / GitHub 侧没起跑」，不是权限", async () => {
+  it("读到 0 条、派发已确认、短窗口到点 ⇒ exit 2 念「没找到对应 run（不是 run 未到终态）」，不是权限（#3153）", async () => {
     const { heard, io } = harness({
       checksFallback: new Response("no", { status: 403 }),
+      dispatchState: { dispatched: true, reason: "镜像格已派发" },
       nowStep: POLL_BUDGET_MS,
     });
     const code = await runVerdict(io);
     expect(code).toBe(CODE.NO_FACT);
     const all = heard.join("\n");
-    expect(all).toContain("读到 0 条");
-    expect(all).toContain("GitHub 侧没起跑");
+    expect(all).toContain("没找到对应 run（不是 run 未到终态）");
+    expect(all).toContain("判定依据：");
     expect(all).toContain("这不是权限问题");
-    /* 旧的误催：不许再出现。 */
+    /* 旧的误判/误催：不许再出现。 */
     expect(all).not.toContain("去补");
     expect(all).not.toContain("两条路径的权限这枚令牌都没够上");
     expect(all).not.toContain("moon-read/GITHUB_MIRROR_TOKEN");
+    expect(all).not.toContain(`${String(POLL_BUDGET_MS / 60_000)}m 轮询预算耗尽`);
   });
 
-  it("读到 0 条、兜底 403 ⇒ 迟到的 run 仍能认领到（预算内继续轮询，不是一退到底）", async () => {
-    /* 第三跳才起跑：主路径两次 0 条、第三次拿到完整结论 —— 正是 45m 预算要买的那段窗口。 */
+  it("读到 0 条、兜底 403 ⇒ 迟到的 run 仍能认领到（短窗口内继续轮询，不是一退到底）", async () => {
+    /* 第三跳才起跑：主路径两次 0 条、第三次拿到完整结论 —— 正是短窗口要买的那段。 */
     const empty = () => new Response(runsBodyOf([]), { status: 200 });
     const { calls, heard, io } = harness({
       checksFallback: () => new Response("no", { status: 403 }),
@@ -635,6 +733,132 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     const all = heard.join("\n");
     expect(all).toContain("全部完成且没有红");
     expect(all).not.toContain("前提没落地（权限）");
+  });
+
+  it("零条 run + 派发已确认 + 链上证据齐全 ⇒ 5m 短窗口到点退 2，念「没找到对应 run」与判定依据（#3153）", async () => {
+    const { calls, heard, io, sleeps } = harness({
+      checksFallback: () => new Response(checksBodyOf([]), { status: 200 }),
+      dispatchState: { dispatched: true, reason: "镜像格已派发" },
+      nowStep: 0,
+    });
+    const code = await runVerdict(io);
+    expect(code).toBe(CODE.NO_FACT);
+    const all = heard.join("\n");
+    expect(all).toContain("没找到对应 run（不是 run 未到终态）");
+    expect(all).toContain("判定依据：");
+    expect(all).toContain("dispatched=true");
+    /* 结构判定只探一次（11 轮零条里各跳各一条）。 */
+    expect(calls.filter((u) => u === repoUrl(REPO))).toHaveLength(1);
+    expect(calls.filter((u) => u === workflowsUrl(REPO))).toHaveLength(1);
+    expect(calls.filter((u) => u === workflowFileUrl(REPO, "main"))).toHaveLength(1);
+    /* 5m / 30s = 10 次 sleep，后按短窗口收工（不吃满 45m）。 */
+    expect(sleeps).toHaveLength(10);
+    expect(all).not.toContain(`${String(POLL_BUDGET_MS / 60_000)}m 轮询预算耗尽`);
+  });
+
+  it("run 晚到 4 分钟仍能等到（短窗口必须大于 4 分钟，别把迟到误判成没 run）（#3153）", async () => {
+    const empty = () => new Response(runsBodyOf([]), { status: 200 });
+    const { calls, heard, io, sleeps } = harness({
+      dispatchState: { dispatched: true, reason: "镜像格已派发" },
+      nowStep: 0,
+      runsSteps: [
+        ...Array.from({ length: 8 }, () => empty()),
+        new Response(runsBodyOf(ALL_GREEN), { status: 200 }),
+      ],
+    });
+    const code = await runVerdict(io);
+    expect(code).toBe(CODE.OK);
+    /* 第 9 跳（t=240s，仍在 300s 窗口内）认领到，随后按常规判绿。 */
+    expect(calls.filter((u) => u === workflowRunsUrl(REPO))).toHaveLength(9);
+    expect(sleeps).toHaveLength(8);
+    expect(heard.join("\n")).toContain("全部完成且没有红");
+  });
+
+  it("仓库认不到（HTTP 404）⇒ 结构上不会有 run：不轮询、当场退 2 并念仓库证据（#3153）", async () => {
+    const { calls, heard, io, sleeps } = harness({
+      chainSteps: [new Response("{}", { status: 404 })],
+      dispatchState: { dispatched: true, reason: "镜像格已派发" },
+      nowStep: 0,
+    });
+    const code = await runVerdict(io);
+    expect(code).toBe(CODE.NO_FACT);
+    const all = heard.join("\n");
+    expect(all).toContain("结构上不会有 run");
+    expect(all).toContain("认不到");
+    expect(all).toContain("404");
+    expect(sleeps).toEqual([]);
+    expect(calls.filter((u) => u === repoUrl(REPO))).toHaveLength(1);
+    expect(calls.filter((u) => u === workflowsUrl(REPO))).toHaveLength(0);
+  });
+
+  it("workflow 被禁用 ⇒ 结构上不会有 run：不轮询、当场退 2 并念 state（#3153）", async () => {
+    const { calls, heard, io, sleeps } = harness({
+      chainSteps: [
+        new Response(repoBodyOf(), { status: 200 }),
+        new Response(workflowsBodyOf("disabled_manually"), { status: 200 }),
+      ],
+      dispatchState: { dispatched: true, reason: "镜像格已派发" },
+      nowStep: 0,
+    });
+    const code = await runVerdict(io);
+    expect(code).toBe(CODE.NO_FACT);
+    const all = heard.join("\n");
+    expect(all).toContain("结构上不会有 run");
+    expect(all).toContain("disabled_manually");
+    expect(sleeps).toEqual([]);
+    expect(calls.filter((u) => u === workflowFileUrl(REPO, "main"))).toHaveLength(0);
+  });
+
+  it("默认分支上没有 pr-gate.yml（contents 404）⇒ 结构上不会有 run，念默认分支（#3153）", async () => {
+    const { heard, io, sleeps } = harness({
+      chainSteps: [
+        new Response(repoBodyOf(), { status: 200 }),
+        new Response(workflowsBodyOf(), { status: 200 }),
+        new Response("{}", { status: 404 }),
+      ],
+      dispatchState: { dispatched: true, reason: "镜像格已派发" },
+      nowStep: 0,
+    });
+    const code = await runVerdict(io);
+    expect(code).toBe(CODE.NO_FACT);
+    const all = heard.join("\n");
+    expect(all).toContain("结构上不会有 run");
+    expect(all).toContain("默认分支 main 上没有");
+    expect(sleeps).toEqual([]);
+  });
+
+  it("workflow 不再监听 repository_dispatch ⇒ 结构上不会有 run，念事件条件（#3153）", async () => {
+    const { heard, io, sleeps } = harness({
+      chainSteps: [
+        new Response(repoBodyOf(), { status: 200 }),
+        new Response(workflowsBodyOf(), { status: 200 }),
+        new Response(workflowFileBodyOf(["name: pr-gate", "on:", "  push:", "    branches: [main]"].join("\n")), {
+          status: 200,
+        }),
+      ],
+      dispatchState: { dispatched: true, reason: "镜像格已派发" },
+      nowStep: 0,
+    });
+    const code = await runVerdict(io);
+    expect(code).toBe(CODE.NO_FACT);
+    const all = heard.join("\n");
+    expect(all).toContain("结构上不会有 run");
+    expect(all).toContain("没有 repository_dispatch");
+    expect(sleeps).toEqual([]);
+  });
+
+  it("派发已确认 + 读到本跑但一直未到终态 ⇒ 仍按 45m 预算（短窗口只管零条那一形）（#3153）", async () => {
+    const { heard, io } = harness({
+      dispatchState: { dispatched: true, reason: "镜像格已派发" },
+      nowStep: POLL_BUDGET_MS,
+      runsFallback: () => new Response(runsBodyOf([run("heavy-gates", "queued")]), { status: 200 }),
+    });
+    const code = await runVerdict(io);
+    expect(code).toBe(CODE.NO_FACT);
+    const all = heard.join("\n");
+    expect(all).toContain(`${String(POLL_BUDGET_MS / 60_000)}m 轮询预算耗尽`);
+    expect(all).toContain("读到本跑但没到终态");
+    expect(all).not.toContain("没找到对应 run");
   });
 
   it("其余 HTTP 错误（422：sha 没到 / 形状不对）⇒ 不重试、不回落，退 2，body 脱敏后回显", async () => {
