@@ -70,60 +70,6 @@ const SECTION_GROUP_CLASS = "flex w-full flex-col items-stretch gap-2";
 const ITEM_CLASS =
   "nodrag nopan h-auto min-w-13 flex-col gap-1 rounded-md border-0 bg-transparent px-1.5 py-1.5 text-2xs font-normal text-ink-muted hover:bg-subtle hover:text-ink-bright data-pressed:bg-primary/20 data-pressed:text-ink-bright data-pressed:ring-1 data-pressed:ring-primary/55 data-pressed:hover:bg-primary/20";
 
-export function MultiSegmentPopover({
-  triggerContent,
-  sections,
-  align = "left",
-  ariaLabel,
-  footer,
-  disabled,
-}: {
-  align?: "left" | "right";
-  ariaLabel?: string;
-  /** 所属表单禁用时，置灰并阻止打开。 */
-  disabled?: boolean;
-  /** 可选插槽，渲染在浮层卡片里各分组的下方。
-   *  用于百万像素「对齐倍数」步进器（一种连续数值控件，不符合
-   *  `SegmentSection` 的形状）。刻意保持通用，好让后续场景
-   * （如视频码率 / 帧率覆盖）复用同一套管线。 */
-  footer?: React.ReactNode;
-  sections: Array<SegmentSection>;
-  triggerContent: React.ReactNode;
-}) {
-  const hasFooter = Boolean(footer);
-  return (
-    <Popover>
-      <PopoverTrigger
-        aria-label={ariaLabel}
-        disabled={disabled}
-        render={
-          <Button
-            /* h-auto 覆盖基元写死的 h-8；`hover:bg-*` 交给基元的 ghost，
-               其余边框 / 底色沿用本控件原来的形态。 */
-            className="nodrag nopan border-primary/35 bg-canvas-deep text-ink-bright hover:bg-canvas-deep hover:border-primary/70 focus-visible:border-primary/70 h-auto w-full justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs"
-            variant="ghost"
-          />
-        }
-      >
-        <span className="min-w-0 flex-1 truncate">{triggerContent}</span>
-        <ChevronDown className="text-ink-muted shrink-0" size={10} />
-      </PopoverTrigger>
-      <PopoverContent
-        align={align === "right" ? "end" : "start"}
-        /* 面板自身滚动：段数与选项数都不固定，给高度封顶。
-           `p-3` 是该面板原来的内距，`gap-0` 抵消基元默认的 `gap-2.5`。 */
-        className="bg-panel ring-border-strong max-h-[min(60vh,460px)] w-[min(92vw,360px)] gap-0 overflow-y-auto rounded-xl p-3 shadow-2xl ring-1 shadow-black/10"
-        sideOffset={6}
-      >
-        {sections.map((section, i) => (
-          <Section first={i === 0} key={`${section.label}:${section.value}`} section={section} />
-        ))}
-        {hasFooter ? <div className="border-border-strong mt-3 border-t pt-3">{footer}</div> : null}
-      </PopoverContent>
-    </Popover>
-  );
-}
-
 /* 把内部的分组渲染器拆出来，让（可能较重的）子分组归并只在输入真正变化时重跑。
  *  此前的内联 `.map` 会在 CreatePanel 每敲一次键时重建 Map 与数组；
  *  叠加 `onChange` 回调每次重建，切换预设会感到发黏。 */
@@ -202,3 +148,57 @@ const Section = React.memo(function Section({
     </div>
   );
 });
+
+export function MultiSegmentPopover({
+  triggerContent,
+  sections,
+  align = "left",
+  ariaLabel,
+  footer,
+  disabled,
+}: {
+  align?: "left" | "right";
+  ariaLabel?: string;
+  /** 所属表单禁用时，置灰并阻止打开。 */
+  disabled?: boolean;
+  /** 可选插槽，渲染在浮层卡片里各分组的下方。
+   *  用于百万像素「对齐倍数」步进器（一种连续数值控件，不符合
+   *  `SegmentSection` 的形状）。刻意保持通用，好让后续场景
+   * （如视频码率 / 帧率覆盖）复用同一套管线。 */
+  footer?: React.ReactNode;
+  sections: Array<SegmentSection>;
+  triggerContent: React.ReactNode;
+}) {
+  const hasFooter = Boolean(footer);
+  return (
+    <Popover>
+      <PopoverTrigger
+        aria-label={ariaLabel}
+        disabled={disabled}
+        render={
+          <Button
+            /* h-auto 覆盖基元写死的 h-8；`hover:bg-*` 交给基元的 ghost，
+               其余边框 / 底色沿用本控件原来的形态。 */
+            className="nodrag nopan border-primary/35 bg-canvas-deep text-ink-bright hover:bg-canvas-deep hover:border-primary/70 focus-visible:border-primary/70 h-auto w-full justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs"
+            variant="ghost"
+          />
+        }
+      >
+        <span className="min-w-0 flex-1 truncate">{triggerContent}</span>
+        <ChevronDown className="text-ink-muted shrink-0" size={10} />
+      </PopoverTrigger>
+      <PopoverContent
+        align={align === "right" ? "end" : "start"}
+        /* 面板自身滚动：段数与选项数都不固定，给高度封顶。
+           `p-3` 是该面板原来的内距，`gap-0` 抵消基元默认的 `gap-2.5`。 */
+        className="bg-panel ring-border-strong max-h-[min(60vh,460px)] w-[min(92vw,360px)] gap-0 overflow-y-auto rounded-xl p-3 shadow-2xl ring-1 shadow-black/10"
+        sideOffset={6}
+      >
+        {sections.map((section, i) => (
+          <Section first={i === 0} key={`${section.label}:${section.value}`} section={section} />
+        ))}
+        {hasFooter ? <div className="border-border-strong mt-3 border-t pt-3">{footer}</div> : null}
+      </PopoverContent>
+    </Popover>
+  );
+}

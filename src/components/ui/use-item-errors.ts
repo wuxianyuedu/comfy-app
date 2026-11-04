@@ -32,6 +32,12 @@ export type ItemErrors = {
   report: (key: ErrorScope) => (kind: "ok" | "err", detail: string) => void;
 };
 
+/** 表内部的键：`null` 换成哨兵 —— `Record` 的键只能是字符串。 */
+const SCOPE_NONE = "\u0000__none__";
+function scopeKey(key: ErrorScope): string {
+  return key ?? SCOPE_NONE;
+}
+
 /**
  * 按条目挂错误的错误表。`keys` 用来**收敛生命周期**：它给出「当前屏幕上真正存在的条目」，被删掉那条的
  * 错误随之消失 —— 否则删一条失败后会留下指向已不存在条目的错误条，用户找不到它说的是什么。传
@@ -115,10 +121,4 @@ export function useItemErrors(keys?: ReadonlyArray<string>): ItemErrors {
     }),
     [get, visible, report, clear, clearAll],
   );
-}
-
-/** 表内部的键：`null` 换成哨兵 —— `Record` 的键只能是字符串。 */
-const SCOPE_NONE = "\u0000__none__";
-function scopeKey(key: ErrorScope): string {
-  return key ?? SCOPE_NONE;
 }

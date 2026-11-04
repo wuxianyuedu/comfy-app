@@ -292,23 +292,6 @@ export function useDynamicWorkflowForm(
     [values, onChange],
   );
 
-  /* 图片输入选择器：隐藏 input、「点谁去触发」与「选完复位 value」收进
-   *  `ui/file-picker` —— 此前本 hook 自己持 ref、自己 click、自己在
-   *  onChange 里复位 `event.target.value`（同一套样板全库 9 份）。 */
-  const uploadPicker = useFilePicker({
-    accept: "image/*",
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    onPick: (file) => void onFile(file),
-  });
-
-  const pickFile = useCallback(
-    (ioKey: string) => {
-      setUploadTarget(ioKey);
-      uploadPicker.open();
-    },
-    [uploadPicker],
-  );
-
   const onFile = useCallback(
     async (file: File) => {
       const target = uploadTarget;
@@ -343,6 +326,23 @@ export function useDynamicWorkflowForm(
       }
     },
     [uploadTarget, set, onUploadError, onUploadProgress],
+  );
+
+  /* 图片输入选择器：隐藏 input、「点谁去触发」与「选完复位 value」收进
+   *  `ui/file-picker` —— 此前本 hook 自己持 ref、自己 click、自己在
+   *  onChange 里复位 `event.target.value`（同一套样板全库 9 份）。 */
+  const uploadPicker = useFilePicker({
+    accept: "image/*",
+    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
+    onPick: (file) => void onFile(file),
+  });
+
+  const pickFile = useCallback(
+    (ioKey: string) => {
+      setUploadTarget(ioKey);
+      uploadPicker.open();
+    },
+    [uploadPicker],
   );
 
   /* 本地预览地址（仅当用户刚选过这张图时有值）；没有则回退到按值算出的

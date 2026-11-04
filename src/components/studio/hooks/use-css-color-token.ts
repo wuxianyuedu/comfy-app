@@ -12,6 +12,10 @@ import { useCallback, useSyncExternalStore } from "react";
 const listeners = new Set<() => void>();
 let observer: MutationObserver | null = null;
 
+/* token 值只随 `<html>` 的 class 变化，所以在两次 class 变化之间缓存即可。
+ * `class` 一改，MutationObserver 清空缓存并通知订阅者 —— 缓存因此不会过期。 */
+const tokenCache = new Map<string, string | null>();
+
 function ensureObserver(): void {
   if (observer || typeof window === "undefined") {
     return;
@@ -36,10 +40,6 @@ function subscribe(onStoreChange: () => void): () => void {
     listeners.delete(onStoreChange);
   };
 }
-
-/* token 值只随 `<html>` 的 class 变化，所以在两次 class 变化之间缓存即可。
- * `class` 一改，MutationObserver 清空缓存并通知订阅者 —— 缓存因此不会过期。 */
-const tokenCache = new Map<string, string | null>();
 
 /** 读取 `--color-*` 的解析值并归一成 `#rrggbb`；读不到时返回 null。 */
 export function readCssColorToken(name: string): string | null {

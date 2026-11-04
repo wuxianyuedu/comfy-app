@@ -104,6 +104,13 @@ export { spawnInGroup, whichCommand } from "./launcher-core/shell.mjs";
 export { orchestratePnpm, probePnpm, packageManagerVersion } from "./launcher-core/corepack.mjs";
 
 /** 工具链门禁留下的 pnpm 修复提示（供启动页横幅 / 测试取值）。 */
+/** 工具链门禁认定的 pnpm 修复提示（非 null 时会被记进启动页横幅）。
+ *
+ *  为什么要在模块里留一份：门禁跑在**弹壳之前**，那一刻启动页还不存在，
+ *  无法把提示交出去；而这条提示恰恰是「服务起不来」现场里最该被看到的一句。
+ *  落进 launch-status 的 stale_shell 通道（启动页已有的横幅），用户不必先去翻日志。 */
+let lastPnpmTip = /** @type {string | null} */ (null);
+
 /** @returns {string | null} */
 export function pnpmToolchainTip() {
   return lastPnpmTip;
@@ -195,16 +202,18 @@ export function log(message, level = "INFO") {
 /** @type {import("node:child_process").ChildProcess[]} */
 const spawned = [];
 
-/** 工具链门禁认定的 pnpm 修复提示（非 null 时会被记进启动页横幅）。
- *
- *  为什么要在模块里留一份：门禁跑在**弹壳之前**，那一刻启动页还不存在，
- *  无法把提示交出去；而这条提示恰恰是「服务起不来」现场里最该被看到的一句。
- *  落进 launch-status 的 stale_shell 通道（启动页已有的横幅），用户不必先去翻日志。 */
-let lastPnpmTip = /** @type {string | null} */ (null);
-
 // ── 预检 ────────────────────────────────────────────────────────────────────
 // 实现搬到 `launcher-core/preflight.mjs`（ISSUE #1811 拆 R5 超限文件），这里只做
 // **同名薄包装**：导出面一字不变，`shell-gate.mjs` 与各用例照旧。
+
+/** 预检层的注入上下文（日志出口 / 启动戳 / pnpm 提示的落点）。 */
+const preflightCtx = {
+  log,
+  stamp: launchStamp,
+  setPnpmTip: (/** @type {string | null} */ tip) => {
+    lastPnpmTip = tip;
+  },
+};
 
 /** 工具链门禁（实现见 `launcher-core/preflight.mjs`）。
  * @param {string} [root] @returns {string | null} */
@@ -227,15 +236,6 @@ export function appendRuntimeWarning(message, root = ROOT) {
   preflightAppendRuntimeWarning(preflightCtx, message, root);
 }
 
-/** 预检层的注入上下文（日志出口 / 启动戳 / pnpm 提示的落点）。 */
-const preflightCtx = {
-  log,
-  stamp: launchStamp,
-  setPnpmTip: (/** @type {string | null} */ tip) => {
-    lastPnpmTip = tip;
-  },
-};
-
 // ── 端口 / 回收 ────────────────────────────────────────────────────────────
 // 实现搬到 `launcher-core/port-reap.mjs`（ISSUE #1811 拆 R5 超限文件），这里只
 // 做**同名薄包装**。需要模块状态的三个函数把 `log` / `spawned` / `root` 注入进去。
@@ -245,6 +245,13 @@ const preflightCtx = {
 // 下方 `shellOpsCtx` 里也引用它，同一份实现、不抄第二遍）。
 
 export { reapProcessTree, scanPorts };
+
+/** 回收层的注入上下文（与桌面壳层同源的三样状态 / 能力）。 */
+const portReapCtx = {
+  log,
+  spawned,
+  root: ROOT,
+};
 
 /** 回收本次会话拉起的整棵进程树（实现见 `launcher-core/port-reap.mjs`）。 */
 export function reapAll() {
@@ -265,13 +272,6 @@ export { processCommandLine, isAppDevServerCmdline } from "./launcher-core/port-
 export function reconcilePort(port, root = ROOT, options = {}) {
   return portReapReconcilePort(portReapCtx, port, root, options);
 }
-
-/** 回收层的注入上下文（与桌面壳层同源的三样状态 / 能力）。 */
-const portReapCtx = {
-  log,
-  spawned,
-  root: ROOT,
-};
 
 // ── 桌面壳 ──────────────────────────────────────────────────────────────────
 // 实现搬到 `launcher-core/shell-ops.mjs`（ISSUE #1811 拆 R5 超限文件），这里只
@@ -389,6 +389,7 @@ export async function run(argv = process.argv.slice(2)) {
   const headAtBoot = readGitHead(ROOT);
   const explicitPort = Number.parseInt(args.port ?? "", 10);
   const portOrNull = Number.isInteger(explicitPort) && explicitPort > 0 ? explicitPort : null;
+  let currentPort = portOrNull;
   /** 进度快照 + 提醒字段（一次运行内共享）。 */
   /**
    * 写一次进度快照。
@@ -397,6 +398,7 @@ export async function run(argv = process.argv.slice(2)) {
    * @param {string} message 给用户看的说明
    *  @param {Partial<import("./launcher-core/orchestrator.mjs").LaunchStatusPayload>} [extra] 附加上报字段
    */
+
   const status = (phase, progress, message, extra = {}) =>
     writeLaunchStatus(ROOT, {
       phase,
@@ -406,8 +408,6 @@ export async function run(argv = process.argv.slice(2)) {
       startedAt,
       ...extra,
     });
-  let currentPort = portOrNull;
-
   // 0~2) 预检桥段（孤儿回收 → 环境/工具链门禁 → 依赖对齐 → 备份恢复 → 端口）
   // 实现见 `launcher-core/startup-gates.mjs`（ISSUE #1811 拆 R5 超限文件）；
   // 那一段的**内部顺序是契约**（回收在起进程前、换库在开库前），见模块注释。

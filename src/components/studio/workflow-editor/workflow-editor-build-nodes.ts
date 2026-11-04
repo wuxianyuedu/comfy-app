@@ -1,14 +1,3 @@
-/**
- * 画布节点内部的相对层级（**不是**视口刻度），只在本容器层叠上下文里比较：
- * 便签 / 组底板（常被节点压住的背景板）< 普通节点 < 子图卡片（紫色描边要读得出）
- * < 宿主内部的暴露口（必须浮在宿主卡片描边之上）。起点取 `Z.base`，逐档 +1。
- */
-const GROUP_Z = Z.base;
-const NOTE_Z = Z.base + 5;
-const NODE_Z = Z.base;
-const SUBGRAPH_Z = Z.base + 1;
-const IO_PORT_Z = Z.base + 1;
-
 /* 纯函数：接收派生上下文对象，返回 React Flow 节点数组。无 hook / 无组件状态，
  * useMemo 由调用方持有（见 wf-editor-inner.tsx 中的 buildInitialNodes 用法）。 */
 import type { Node } from "@xyflow/react";
@@ -43,6 +32,17 @@ import {
   GROUP_PAD_Y_BOTTOM,
   GROUP_RAIL_COLOR,
 } from "./WorkflowEditorNodes";
+
+/**
+ * 画布节点内部的相对层级（**不是**视口刻度），只在本容器层叠上下文里比较：
+ * 便签 / 组底板（常被节点压住的背景板）< 普通节点 < 子图卡片（紫色描边要读得出）
+ * < 宿主内部的暴露口（必须浮在宿主卡片描边之上）。起点取 `Z.base`，逐档 +1。
+ */
+const GROUP_Z = Z.base;
+const NOTE_Z = Z.base + 5;
+const NODE_Z = Z.base;
+const SUBGRAPH_Z = Z.base + 1;
+const IO_PORT_Z = Z.base + 1;
 
 /** `WorkflowDetail.graph` 的一个条目（从工作流原件派生的节点条目）。shared 的
  *  detail 类型把它声明成 `graph: Record<string, ApiWorkflowNode>`；这里在不改共享类型的

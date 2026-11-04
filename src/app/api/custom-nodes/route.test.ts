@@ -219,6 +219,12 @@ function argv(i = 0): Array<string> {
  */
 const ORDER = pythonCandidates();
 
+/** 本条用例是否已经指定过扫描根（没指定时 `getEvents` 自动补一条，避免跨用例串味）。 */
+let armed = false;
+
+/** 记一次 Date.now 的替身（只在「缓存过期」那一档用）。 */
+let nowSpy: { mockRestore(): void } | null = null;
+
 beforeEach(() => {
   vi.clearAllMocks();
   /* `clearAllMocks` 清的是调用记录，**不清 `mockImplementationOnce` 的队列** ——
@@ -534,8 +540,6 @@ const BASE_MTIME = 1_760_000_000_000;
 let mtime = BASE_MTIME;
 /** 每条 GET 用例自己的扫描根序号（见 `coldRoot`）。 */
 let rootSeq = 0;
-/** 本条用例是否已经指定过扫描根（没指定时 `getEvents` 自动补一条，避免跨用例串味）。 */
-let armed = false;
 
 /**
  * 给本条用例一个别人的父目录都不沾的扫描根。`discoverCache` 挂在模块作用域跨用例存活（TTL 5s），
@@ -549,9 +553,6 @@ function coldRoot(): string {
   armed = true;
   return `${root}/custom_nodes`;
 }
-
-/** 记一次 Date.now 的替身（只在「缓存过期」那一档用）。 */
-let nowSpy: { mockRestore(): void } | null = null;
 
 /** 把清单登记成「存在且可读」，并按 `size` / `mtimeMs` 决定指纹。 */
 function putManifest(value: unknown, over: StubFile = {}): void {

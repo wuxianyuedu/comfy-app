@@ -30,6 +30,9 @@ function seedBaseline(repo: GateRepo): void {
   expect(code, output).toBe(0);
 }
 
+/** 读脚本里 `HARD_GATE_RULES` 的声明段（下面那条用例用它算条数，不写字面量）。 */
+const DECL_RE = /const HARD_GATE_RULES = new Set\(\[([\s\S]*?)\]\);/;
+
 /**
  * 把临时工作区里那份脚本改成「这几条仍走棘轮」的形态 —— 只把 rule id 从 `HARD_GATE_RULES` 摘掉，判据一字不动。
  * 为什么要造：现网各条**全部**是硬闸，而「冻结存量 → 只许降 → --strict 收紧 → --update 拒绝放宽」这套棘轮语义
@@ -63,9 +66,6 @@ function demoteToRatchet(repo: GateRepo, ...ids: Array<string>): void {
   }
   repo.write(rel, head + body + tail);
 }
-
-/** 读脚本里 `HARD_GATE_RULES` 的声明段（下面那条用例用它算条数，不写字面量）。 */
-const DECL_RE = /const HARD_GATE_RULES = new Set\(\[([\s\S]*?)\]\);/;
 
 const BUTTON_VIEW = 'export function V() {\n  return <button type="button">ok</button>;\n}\n';
 const PORTAL_VIEW =

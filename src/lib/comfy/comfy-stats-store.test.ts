@@ -36,12 +36,13 @@ vi.mock("~/lib/comfy/comfy-liveness-client", () => ({
   },
 }));
 
+const busyFlag = vi.hoisted(() => ({ value: false }));
+
 /* 「忙不忙」的单点也桩掉：本文件测的是系统指标持有者的行为，不是那条账的语义
    （它自己的用例在 comfy-busy-store.test.ts）。 */
 vi.mock("~/lib/comfy/comfy-busy-store", () => ({
   getComfyBusy: () => busyFlag.value,
 }));
-const busyFlag = vi.hoisted(() => ({ value: false }));
 
 /* 记录 startPollTimer 的调用与每次返回的「停表」函数：轮询该不该起、起几条、
    什么时候停，全看这里。 */

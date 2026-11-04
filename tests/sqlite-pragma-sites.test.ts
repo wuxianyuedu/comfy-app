@@ -447,6 +447,10 @@ async function waitForArrivals(startFile: string, expectCount: number): Promise<
   return arrived;
 }
 
+/** tsx 的 CLI 入口：按包自己的 exports 表解析（`tsx/cli`），不硬编码 `dist/cli.mjs`，
+ *  也不去碰 `pnpm` 那个平台分叉的壳 —— 见 `runOnce` 里那段 EINVAL 的说明（ISSUE #638）。 */
+const TSX_CLI = createRequire(import.meta.url).resolve("tsx/cli");
+
 /** 起一个进程跑 worker，取它 stdout 的第一行；非零退出也算一条结论。 */
 function runOnce(
   worker: string,
@@ -473,10 +477,6 @@ function runOnce(
     });
   });
 }
-
-/** tsx 的 CLI 入口：按包自己的 exports 表解析（`tsx/cli`），不硬编码 `dist/cli.mjs`，
- *  也不去碰 `pnpm` 那个平台分叉的壳 —— 见 `runOnce` 里那段 EINVAL 的说明（ISSUE #638）。 */
-const TSX_CLI = createRequire(import.meta.url).resolve("tsx/cli");
 
 describe("等锁预算的两种形状，当场量出来", () => {
   it("开机 PRAGMA 覆盖不到池里新开的连接（那种形状等于没设）", async () => {

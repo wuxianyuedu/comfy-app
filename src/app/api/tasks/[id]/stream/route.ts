@@ -39,6 +39,34 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       };
       let sentLogCount = 0;
 
+      /* 两条退出路径 —— 轮询读到终态、客户端 abort —— 必须收进同一个
+       * cleanup：只清一条，剩下的那条会让 3s 的 DB 轮询在流关闭之后继续跑
+       * （3-C 前还有 emitter 终态这条，订阅通道已随单源化退役）。
+       * 句柄收在一个可变对象里：cleanup 既被定时器回调调用、也被 `send`
+       * 抛错路径调用，`const` 各自声明会踩 TDZ（历史注释保留原委）。 */
+      const handles: {
+        heartbeat?: ReturnType<typeof setInterval>;
+        poll?: ReturnType<typeof setInterval>;
+      } = {};
+      let closed = false;
+      const cleanup = () => {
+        if (closed) {
+          return;
+        }
+        closed = true;
+        if (handles.heartbeat !== undefined) {
+          clearInterval(handles.heartbeat);
+        }
+        if (handles.poll !== undefined) {
+          clearInterval(handles.poll);
+        }
+        try {
+          controller.close();
+        } catch {
+          /* 流已经关了 —— 忽略 */
+        }
+      };
+
       // 初始状态（覆盖「订阅之前任务就已经结束」的情形）。
       taskRepository
         .findById(id)
@@ -81,6 +109,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
             lastSent.status = task.status;
             lastSent.progress = task.progress;
             lastSent.nodeKey = JSON.stringify(task.progressNode ?? null);
+
             /*  回放之前任务就已终态：轮询那条「与上次发出的快照不同才动作」的判据
              * 刚被这次回放喂成了恒假，于是再没有别的退出路径 —— 只能在这里收口
              * （日志与终态 state 都已回放完毕，此时关闭不丢数据）。 */
@@ -92,34 +121,6 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         .catch(() => {
           /* 初始回放失败可忽略 — 订阅与轮询随后仍会推送状态 */
         });
-
-      /* 两条退出路径 —— 轮询读到终态、客户端 abort —— 必须收进同一个
-       * cleanup：只清一条，剩下的那条会让 3s 的 DB 轮询在流关闭之后继续跑
-       * （3-C 前还有 emitter 终态这条，订阅通道已随单源化退役）。
-       * 句柄收在一个可变对象里：cleanup 既被定时器回调调用、也被 `send`
-       * 抛错路径调用，`const` 各自声明会踩 TDZ（历史注释保留原委）。 */
-      const handles: {
-        heartbeat?: ReturnType<typeof setInterval>;
-        poll?: ReturnType<typeof setInterval>;
-      } = {};
-      let closed = false;
-      const cleanup = () => {
-        if (closed) {
-          return;
-        }
-        closed = true;
-        if (handles.heartbeat !== undefined) {
-          clearInterval(handles.heartbeat);
-        }
-        if (handles.poll !== undefined) {
-          clearInterval(handles.poll);
-        }
-        try {
-          controller.close();
-        } catch {
-          /* 流已经关了 —— 忽略 */
-        }
-      };
 
       /* SSE 心跳：空闲 30–60s 后 OS/代理会悄悄掐掉 socket，EventSource 自动重连会刷屏。
        * 注释行 `: hb\n\n` 对 onmessage 不可见但能刷新 TCP 空闲计时器；

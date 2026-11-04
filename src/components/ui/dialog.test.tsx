@@ -82,6 +82,9 @@ function Demo({
   );
 }
 
+const CLOSE_MARK = '[data-slot="dialog-close"]';
+const CONTENT_MARK = '[data-slot="dialog-content"]';
+
 /** 点开关并把弹层等出来，返回 `data-slot="dialog-content"` 那个元素。 */
 async function openDialog(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "打开设置" }));
@@ -103,9 +106,6 @@ function alreadyOpenPopup(): HTMLElement {
   }
   return el;
 }
-
-const CLOSE_MARK = '[data-slot="dialog-close"]';
-const CONTENT_MARK = '[data-slot="dialog-content"]';
 
 /** 取最近一次 onOpenChange 的第一实参（新状态）与 reason（关闭原因）。 */
 function lastCall(onOpenChange: ReturnType<typeof vi.fn>) {

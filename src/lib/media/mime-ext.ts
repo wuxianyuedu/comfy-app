@@ -34,41 +34,6 @@
 /** 浏览器侧的「不知道类型就当图片」兜底（上传/落盘路径的默认值）。 */
 export const DEFAULT_IMAGE_MIME = "image/png";
 
-/**
- * 扩展名（带或不带前导点，大小写不敏感）→ MIME。
- *
- * **媒体档**（image / video / audio）—— 非媒体类型不在这里：产物流路由要
- * 服务磁盘上的任意文件（`.txt` / `.json`），那是它自己的域需求。返回 `null`
- * 表示「这不是一个已知的媒体扩展名」，由调用处决定兜底（`?? "application/octet-stream"`
- * 还是 `?? DEFAULT_IMAGE_MIME`）。
- */
-export function mimeForExt(ext: string | null | undefined): string | null {
-  if (ext === undefined || ext === null || ext === "") {
-    return null;
-  }
-  return EXT_TO_MIME[ext.replace(/^\./, "").toLowerCase()] ?? null;
-}
-
-/**
- * MIME → 落盘扩展名（**不带点**，可直接拼进文件名）。
- *
- * 返回 `null` 表示未知类型 —— 调用处需显式给兜底（`?? "png"` 是「当图片存」、
- * `?? ""` 是「不加后缀」）。刻意**不**在出口里塞默认值：这个默认值在
- * 「素材库落盘」与「ComfyUI input 上传」两处语义相同（都当图片），但在别的
- * 语境下未必 —— 让调用处写出来，差异才看得见。
- */
-export function extForMime(mime: string | null | undefined): string | null {
-  if (mime === undefined || mime === null || mime === "") {
-    return null;
-  }
-  /* `content-type` 常带参数（`image/png; charset=utf-8`），先切干净。 */
-  const bare = mime.split(";")[0]?.trim().toLowerCase();
-  if (bare === undefined || bare === "") {
-    return null;
-  }
-  return MIME_TO_EXT[bare] ?? null;
-}
-
 /* ── 两张表（互为反函数的部分）─────────────────────────────────────────
  * 用两张手写表而不是「一张 + 反转」：`jpeg` 与 `jpg` 两个扩展名映到同一个
  * MIME，反转时只该保留一个（`jpg`）—— 反转会产出不确定的结果。
@@ -130,6 +95,41 @@ const MIME_TO_EXT: Record<string, string> = {
   "audio/flac": "flac",
   "audio/aac": "aac",
 };
+
+/**
+ * 扩展名（带或不带前导点，大小写不敏感）→ MIME。
+ *
+ * **媒体档**（image / video / audio）—— 非媒体类型不在这里：产物流路由要
+ * 服务磁盘上的任意文件（`.txt` / `.json`），那是它自己的域需求。返回 `null`
+ * 表示「这不是一个已知的媒体扩展名」，由调用处决定兜底（`?? "application/octet-stream"`
+ * 还是 `?? DEFAULT_IMAGE_MIME`）。
+ */
+export function mimeForExt(ext: string | null | undefined): string | null {
+  if (ext === undefined || ext === null || ext === "") {
+    return null;
+  }
+  return EXT_TO_MIME[ext.replace(/^\./, "").toLowerCase()] ?? null;
+}
+
+/**
+ * MIME → 落盘扩展名（**不带点**，可直接拼进文件名）。
+ *
+ * 返回 `null` 表示未知类型 —— 调用处需显式给兜底（`?? "png"` 是「当图片存」、
+ * `?? ""` 是「不加后缀」）。刻意**不**在出口里塞默认值：这个默认值在
+ * 「素材库落盘」与「ComfyUI input 上传」两处语义相同（都当图片），但在别的
+ * 语境下未必 —— 让调用处写出来，差异才看得见。
+ */
+export function extForMime(mime: string | null | undefined): string | null {
+  if (mime === undefined || mime === null || mime === "") {
+    return null;
+  }
+  /* `content-type` 常带参数（`image/png; charset=utf-8`），先切干净。 */
+  const bare = mime.split(";")[0]?.trim().toLowerCase();
+  if (bare === undefined || bare === "") {
+    return null;
+  }
+  return MIME_TO_EXT[bare] ?? null;
+}
 
 /**
  * 从文件名 / 路径取扩展名（**不带点**，小写）；取不到返回 `""`。

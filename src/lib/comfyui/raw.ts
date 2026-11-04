@@ -470,6 +470,46 @@ export function pairWidgetValues(
   return map;
 }
 
+/* 拿不到 /object_info 时，给常见节点类用的控件映射兜底表。
+ * 这里的顺序只按「控件输入」的显示顺序排（不含连接），
+ * 与 `widgets_values` 在磁盘上的序列化顺序一致。 */
+const FALLBACK_WIDGETS: Record<string, Array<string>> = {
+  KSampler: ["seed", CONTROL_SENTINEL, "steps", "cfg", "sampler_name", "scheduler", "denoise"],
+  KSamplerAdvanced: [
+    "add_noise",
+    "noise_seed",
+    CONTROL_SENTINEL,
+    "steps",
+    "cfg",
+    "sampler_name",
+    "scheduler",
+    "start_at_step",
+    "end_at_step",
+    "return_with_leftover_noise",
+  ],
+  CLIPTextEncode: ["text"],
+  CheckpointLoaderSimple: ["ckpt_name"],
+  LoraLoader: ["lora_name", "strength_model", "strength_clip"],
+  LoraLoaderModelOnly: ["lora_name", "strength_model"],
+  EmptyLatentImage: ["width", "height", "batch_size"],
+  EmptySD3LatentImage: ["width", "height", "batch_size"],
+  VAEEncode: [],
+  VAEDecode: [],
+  SaveImage: ["filename_prefix"],
+  SaveImageAdvanced: ["filename_prefix", "output_type"],
+  PreviewImage: [],
+  LoadImage: ["image"],
+  ImageScale: ["width", "height", "upscale_method", "crop"],
+  ImageScaleBy: ["scale_by", "upscale_method"],
+  VAELoader: ["vae_name"],
+  CLIPSetLastLayer: ["stop_at_clip_layer"],
+  CLIPVisionLoader: ["clip_name"],
+  DualCLIPLoader: ["clip_name1", "clip_name2", "type", "device"],
+  UNETLoader: ["unet_name", "weight_dtype"],
+  ControlNetLoader: ["control_net_name"],
+  UpscaleModelLoader: ["upscale_model_name"],
+};
+
 /** 画布 raw_inputs 配对用的「classType → 控件名顺序表」。
  *
  *  object_info 可达时逐类解析，否则退回内置的 `FALLBACK_WIDGETS`。
@@ -569,43 +609,3 @@ function resolveWidgetOrder(cls: ObjectInfoClassDef | undefined): Array<string> 
   }
   return out;
 }
-
-/* 拿不到 /object_info 时，给常见节点类用的控件映射兜底表。
- * 这里的顺序只按「控件输入」的显示顺序排（不含连接），
- * 与 `widgets_values` 在磁盘上的序列化顺序一致。 */
-const FALLBACK_WIDGETS: Record<string, Array<string>> = {
-  KSampler: ["seed", CONTROL_SENTINEL, "steps", "cfg", "sampler_name", "scheduler", "denoise"],
-  KSamplerAdvanced: [
-    "add_noise",
-    "noise_seed",
-    CONTROL_SENTINEL,
-    "steps",
-    "cfg",
-    "sampler_name",
-    "scheduler",
-    "start_at_step",
-    "end_at_step",
-    "return_with_leftover_noise",
-  ],
-  CLIPTextEncode: ["text"],
-  CheckpointLoaderSimple: ["ckpt_name"],
-  LoraLoader: ["lora_name", "strength_model", "strength_clip"],
-  LoraLoaderModelOnly: ["lora_name", "strength_model"],
-  EmptyLatentImage: ["width", "height", "batch_size"],
-  EmptySD3LatentImage: ["width", "height", "batch_size"],
-  VAEEncode: [],
-  VAEDecode: [],
-  SaveImage: ["filename_prefix"],
-  SaveImageAdvanced: ["filename_prefix", "output_type"],
-  PreviewImage: [],
-  LoadImage: ["image"],
-  ImageScale: ["width", "height", "upscale_method", "crop"],
-  ImageScaleBy: ["scale_by", "upscale_method"],
-  VAELoader: ["vae_name"],
-  CLIPSetLastLayer: ["stop_at_clip_layer"],
-  CLIPVisionLoader: ["clip_name"],
-  DualCLIPLoader: ["clip_name1", "clip_name2", "type", "device"],
-  UNETLoader: ["unet_name", "weight_dtype"],
-  ControlNetLoader: ["control_net_name"],
-  UpscaleModelLoader: ["upscale_model_name"],
-};

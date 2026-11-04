@@ -599,6 +599,9 @@ function isReturnTypePosition(node) {
   return false;
 }
 
+/** `XProps` 形态的接口名（`Props` 结尾、且不是 `ComponentProps` 那种工具类型）。 */
+const TS_PROPS_NAME = /^[A-Z][A-Za-z0-9]*Props$/;
+
 /**
  * 组件文件里**被引用到的** props 接口名（`XProps` / `ComponentProps<typeof C>`）。
  *
@@ -697,9 +700,6 @@ function siblingTypeSources(componentFile) {
   }
   return out;
 }
-
-/** `XProps` 形态的接口名（`Props` 结尾、且不是 `ComponentProps` 那种工具类型）。 */
-const TS_PROPS_NAME = /^[A-Z][A-Za-z0-9]*Props$/;
 
 /** 类型里含 `undefined`（`string | undefined` / `undefined`）即视为可缺省。
  *  @param {ts.TypeNode} type @returns {boolean} */

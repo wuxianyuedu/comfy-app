@@ -64,6 +64,14 @@ export function describeDevServerRestart(
   };
 }
 
+/** 依赖面各形态的「为什么」（与 `DepsFreshnessState` 一一对应）。 */
+const DEPS_STALE_WHY: Record<DepsFreshnessState, string> = {
+  drift: "安装时的依赖清单与仓库 pnpm-lock.yaml 已不一致（多半是刚拉到的新代码动了依赖面）",
+  "no-install": "本地依赖没有装好（缺安装记录）",
+  unresolved: "本地依赖树里有个别声明的依赖解析不到（树停在它们被加入之前）",
+  fresh: "依赖面与代码一致",
+};
+
 /**
  * 「依赖面已落后于代码」那一档的文案（`state` 给出具体形态）。
  * 导出理由同 `describeDevServerRestart`（story 侧现算、不手抄）。只给「怎么做」而不
@@ -85,14 +93,6 @@ export function describeDepsStale(state: DepsFreshnessState): {
       "不重装的后果是：新代码引用的依赖解析不到，接口会持续报错。",
   };
 }
-
-/** 依赖面各形态的「为什么」（与 `DepsFreshnessState` 一一对应）。 */
-const DEPS_STALE_WHY: Record<DepsFreshnessState, string> = {
-  drift: "安装时的依赖清单与仓库 pnpm-lock.yaml 已不一致（多半是刚拉到的新代码动了依赖面）",
-  "no-install": "本地依赖没有装好（缺安装记录）",
-  unresolved: "本地依赖树里有个别声明的依赖解析不到（树停在它们被加入之前）",
-  fresh: "依赖面与代码一致",
-};
 
 /* ── 通知合并：一次自愈只留一条可行动消息 ──────────────────────────────── */
 

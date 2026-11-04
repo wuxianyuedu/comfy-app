@@ -15,6 +15,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { watchTask, type TaskWatchHandlers } from "./generation-client";
 
+let instances: Array<FakeEventSource> = [];
+
 class FakeEventSource {
   static readonly CONNECTING = 0;
   static readonly OPEN = 1;
@@ -35,8 +37,6 @@ class FakeEventSource {
     this.onmessage?.({ data: JSON.stringify(obj) });
   }
 }
-
-let instances: Array<FakeEventSource> = [];
 
 beforeEach(() => {
   instances = [];

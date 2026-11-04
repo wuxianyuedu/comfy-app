@@ -142,6 +142,13 @@ export function ChannelSwitch({
   );
 }
 
+/* 片段状态 → 文案。与镜头状态同源（只多一档「片段就绪」），配色同样走
+ * `ui/status-badge`（规范 16 §16.2.4.5）。 */
+const CLIP_STATUS_LABEL = {
+  ...SHOT_STATUS_LABEL,
+  done: "片段就绪",
+} satisfies Record<NonNullable<Shot["clipStatus"]>, string>;
+
 /* ── 某镜头片段生成的状态药丸 ── */
 export function ClipBadge({ status }: { status: NonNullable<Shot["clipStatus"]> }) {
   return (
@@ -153,13 +160,6 @@ export function ClipBadge({ status }: { status: NonNullable<Shot["clipStatus"]> 
     />
   );
 }
-
-/* 片段状态 → 文案。与镜头状态同源（只多一档「片段就绪」），配色同样走
- * `ui/status-badge`（规范 16 §16.2.4.5）。 */
-const CLIP_STATUS_LABEL = {
-  ...SHOT_STATUS_LABEL,
-  done: "片段就绪",
-} satisfies Record<NonNullable<Shot["clipStatus"]>, string>;
 
 /* ── 单个镜头行：首帧、提示词、时长 / 运动控件、生成 ── */
 export function ShotCard({

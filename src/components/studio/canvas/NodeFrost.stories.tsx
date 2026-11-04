@@ -93,6 +93,8 @@ export const ModeColors: Story = {
   ),
 };
 
+const FROST_NODE_TYPES = { story: FrostDemoNode };
+
 /**
  * 真画布里的 `FrostLayer`：缩放来自 `useStore`，不是 props ——
  * 这份 story 的存在就是为了让「缩放订阅挪到独立一层」这个设计在真上下文里成立。
@@ -131,5 +133,3 @@ function FrostDemoNode() {
     </div>
   );
 }
-
-const FROST_NODE_TYPES = { story: FrostDemoNode };
