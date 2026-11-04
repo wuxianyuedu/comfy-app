@@ -45,7 +45,7 @@ function samePath(a, b) {
 
 /** `git worktree list --porcelain` 里登记在案的路径；第一条是主 worktree。 */
 function listWorktrees() {
-  const res = spawnSync("git", ["worktree", "list", "--porcelain"], {
+  const res = spawnSync("git", ["-c", "core.quotePath=false", "worktree", "list", "--porcelain"], {
     cwd: ROOT,
     encoding: "utf8",
   });

@@ -459,7 +459,10 @@ function evaluateMergeState({ commands, into, ref, keep = false, json = false })
      * 工作树与索引已经是那棵树，跑判据足够。 */
     const merge = git(["merge", "--no-commit", "--no-ff", headSha], worktreePath);
     if (!merge.ok) {
-      const conflicts = git(["diff", "--name-only", "--diff-filter=U"], worktreePath).stdout;
+      const conflicts = git(
+        ["-c", "core.quotePath=false", "diff", "--name-only", "--diff-filter=U"],
+        worktreePath,
+      ).stdout;
       const conflictFiles = conflicts.split("\n").filter(Boolean);
       const conflictList = `${conflictFiles.slice(0, 5).join("、")}${conflictFiles.length > 5 ? " …" : ""}`;
       const why =
