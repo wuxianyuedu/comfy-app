@@ -56,6 +56,31 @@ describe("build-desktop 念得出每一步多久（ISSUE #2574）", () => {
     }
   });
 
+  /* #3144 的进行中读数：本脚本每一跳都是阻塞式（`spawnSync` 起 pnpm / drizzle-kit /
+   * 产物检查，`cpSync` 搬整树），进程内定时器在那些时段整段不跳 —— 所以必须用跨进程
+   * 那条（`startProgressSync`），而且每个长耗时阶段都要有打点，不能只打首尾两行。 */
+  it("每个长耗时阶段都进同一条跨进程进度线（不是只打首尾两行）", () => {
+    expect(src).toContain('from "./progress-heartbeat.mjs"');
+    expect(src).toMatch(/startProgressSync\(\{ label: "build-desktop"/);
+    for (const stage of [
+      "1/4 pnpm build",
+      "2/4 组装 static",
+      "2.1 启动脚本同步",
+      "2.1 白名单装配",
+      "2.2 分发卫生",
+      "2.3 首启建表",
+      "2.4 载荷实体化",
+      "2.4 静态资源与启动页",
+      "2.5 体积护栏",
+      "2.6 出厂计数",
+      "3/4 sidecar",
+      "4/4 完成",
+    ]) {
+      expect(src, `「${stage}」没有进度打点`).toContain(`progress.step("${stage}")`);
+    }
+    expect(src, "正常收尾要把进度线收掉").toContain("progress.done(");
+  });
+
   /* `filter` 的计数口径是这条读数的全部价值：白名单在场时「挡得对不对」只有这两个数能证。
    * ⚠️ `cpSync` 的 filter 对**每一个将要复制的路径**（目录与文件都算）各调一次，
    * 所以念的是「条目数」。谁把它改口成「文件数」，这条当场红 —— 那不是一个字之差，

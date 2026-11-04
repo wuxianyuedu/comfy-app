@@ -75,6 +75,12 @@ import { dirname, join, relative, sep } from "node:path";
 // 所以这里不在脚本里再写一份格式化（AGENTS 硬规则 24 / §12.18）。
 import { formatDurationMs } from "../src/lib/time-format.ts";
 
+// 进行中读数（ISSUE #3144）：本脚本每一跳都是阻塞式（`spawnSync` 起 pnpm /
+// drizzle-kit / 产物检查，`cpSync` 搬整树），进程内的定时器在那些时段整段不跳，
+// 所以进度心跳只能来自另一个进程 —— `startProgressSync` 把「当前段 + 已跑」交给
+// 一个只读状态文件的子进程去写 stderr。完成读数仍走上面的 `formatDurationMs`。
+import { startProgressSync } from "./progress-heartbeat.mjs";
+
 import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 // 启动页副本（`splash.html` + `index.html`）的清单与同步：与 dev-launcher 共用
@@ -111,6 +117,11 @@ const scriptStartedAt = performance.now();
 function elapsedSince(since) {
   return formatDurationMs(performance.now() - since) ?? "取不到时长";
 }
+
+/* 进行中读数（ISSUE #3144）：一条跨进程进度线，段数 = 下面 12 个打点。
+ * 它只写 stderr，stdout 与退出码保持不变；`done()` 挂在文件末尾的正常收尾上，
+ * 而中途 `fail()`/异常退出由 `startProgressSync` 注册的 exit 钩子负责收掉子进程。 */
+const progress = startProgressSync({ label: "build-desktop", total: 12 });
 
 function targetTriple() {
   if (process.platform === "win32") {
@@ -183,6 +194,7 @@ function dirSize(dir) {
 }
 
 // ── 1/4 next build（standalone）────────────────────────────
+progress.step("1/4 pnpm build");
 console.log("[build-desktop] 1/4 执行 pnpm build（Next standalone 输出）...");
 const step1At = performance.now();
 // pnpm 的可执行形态由 shell.mjs 一处判定（规范 §2.1.1 / §9.5）：`execSync("pnpm …")`
@@ -220,12 +232,14 @@ if (!existsSync(join(nextOut, "server.js"))) {
 console.log(`[build-desktop]   1/4 完成（耗时 ${elapsedSince(step1At)}）`);
 
 // ── 2/4 组装 src-tauri/static ──────────────────────────────
+progress.step("2/4 组装 static");
 console.log("[build-desktop] 2/4 组装 src-tauri/static ...");
 const step2At = performance.now();
 rmSync(staticDir, { recursive: true, force: true });
 mkdirSync(staticDir, { recursive: true });
 
 // ── 2.1 §10.2 自动同步启动脚本 ─────────────────────────────
+progress.step("2.1 启动脚本同步");
 // 桌面包之外还要能被「开发/救援」链路重新编排一次（壳找不到 dev server 时，
 // 用户会去双击项目里的启动入口）。因此启动编排器与它的运行期依赖（会话锚点、
 // 端口解析、跨平台回收器）都要进 static/scripts —— 缺一份，桌面包里的启动
@@ -285,6 +299,7 @@ const staticAllowed = (abs) => isStaticPathAllowed(relative(nextOut, abs));
  * 交叉证人：`挡掉 M 条` 与下面 `pruneStaticToAllowList` 打印的「已剔除…顶层条目」应当同向
  * （0 挡 ⇒ 0 剔）—— 哪天两者不一致，就是白名单或计数漂了。#2678 那条「账与产物对不上」
  * 正是被这两行一起读出来的。 */
+progress.step("2.1 白名单装配");
 let cpSeen = 0;
 let cpRejected = 0;
 const cpAt = performance.now();
@@ -339,6 +354,7 @@ rmSync(join(staticDir, "node_modules", ".cache"), {
 //      就是应用首次启动时读写的那一个，开发者本机数据会变成出厂数据。
 // 因此这里**显式删除**这两类文件（含 SQLite 的 WAL/SHM 边车文件）：
 // 分发产物必须是「干净安装」，配置文件由用户侧自行提供。
+progress.step("2.2 分发卫生");
 stripPrivateInputs(staticDir, (name) => {
   console.log(`[build-desktop]   §分发卫生 已剔除开发机私有输入 static/${name}`);
 });
@@ -350,6 +366,7 @@ stripDevArtifacts(staticDir, (name) => {
   console.log(`[build-desktop]   §分发卫生 已剔除开发期文件 static/${name}`);
 });
 // ── 2.3 §首启建表：把 schema 的 DDL 随包带出去 ──
+progress.step("2.3 首启建表");
 // 为什么需要（ISSUE #1216 实测）：载荷里的 node_modules 只有生产依赖，**drizzle-kit 不在
 // 其中**，桌包首启因此没有任何办法建表。把载荷跑起来后的现场是 `/workspace` 200、
 // `/api/health` 503，而 hint 让人去「执行 pnpm db:push」——桌面用户既没有 pnpm 也没有
@@ -425,6 +442,7 @@ for (const payloadFile of [
   }
 }
 // ── 2.4 §载荷实体化：把 pnpm 的软链结构摊平成可分发的真实目录 ──
+progress.step("2.4 载荷实体化");
 // 为什么必须做（ISSUE #1216 实测）：`.next/standalone/node_modules` 的**顶层条目是指向
 // 仓库 store 的绝对软链**（`next -> <repo>/node_modules/.pnpm/next@…/node_modules/next`），
 // Next 的追踪只把被引用的那份文件拷进 `.pnpm/` 里。于是 `cpSync({dereference:true})`
@@ -523,6 +541,7 @@ if (existsSync(storeDir)) {
   console.log(`[build-desktop]   §载荷实体化 可解析性断言通过（${mustResolve.join(", ")}）`);
 }
 
+progress.step("2.4 静态资源与启动页");
 cpSync(join(root, ".next", "static"), join(staticDir, ".next", "static"), {
   recursive: true,
 });
@@ -564,6 +583,7 @@ console.log(
   "[build-desktop]   static 组装完成（standalone + .next/static + public + splash.html + index.html fallback）",
 );
 // ── 2.5 §整治：体积护栏 ──
+progress.step("2.5 体积护栏");
 // 若 static 仍超过阈值，说明 Next standalone file tracing 再次失控（把整仓库
 // 根塞了进来）。立即失败并列出 Top 目录，绝不把 >GB 级副本打包进 exe。
 const MAX_STATIC_GB = 1.5;
@@ -594,6 +614,7 @@ console.log(
 );
 
 // ── 2.6 §出厂计数：装配后的 static 再数一次（AGENTS 硬规则 18 / 台账 R5-01）──
+progress.step("2.6 出厂计数");
 // 「产物要数两层」的第二层此前是空的：`pnpm build` 收尾那次
 // `check-standalone-contents.cjs` 数的是 `.next/standalone` 与**组装前**的中间态，
 // 而本文件的 §载荷实体化（上提 + 删 .pnpm）与上面的尺寸守卫全部发生在**之后** ——
@@ -628,6 +649,7 @@ console.log(
 }
 
 // ── 3/4 Node 运行时 sidecar ────────────────────────────────
+progress.step("3/4 sidecar");
 console.log(`[build-desktop]   2/4 完成（耗时 ${elapsedSince(step2At)}）`);
 console.log("[build-desktop] 3/4 复制 Node 运行时为 sidecar ...");
 const step3At = performance.now();
@@ -645,9 +667,11 @@ console.log(
 );
 
 // ── 4/4 完成 ───────────────────────────────────────────────
+progress.step("4/4 完成");
 // 4/4 本身只做这一行打印，所以它念的量是**全程**（1/4 + 2/4 + 3/4 之和，
 // 不含随后由 tauri 自己跑的 `pnpm tauri build`）。
 console.log(
   `[build-desktop] 4/4 完成（全程 ${elapsedSince(scriptStartedAt)}，不含 pnpm tauri build）。` +
     "请执行 pnpm tauri build 打出安装包。",
 );
+progress.done("build-desktop 装配完成");
