@@ -67,17 +67,67 @@ export function linkDependencies(from, to) {
  * reparse point **只删链接**（同一实测里主树毫发无损），所以顺序固定为：
  * **先摘链、后摘 worktree**。
  *
+ * **两种形态走同一条路径**（ISSUE #2997）：同是「指向目录的链接」，junction 与 symlink
+ * 在**外部命令**里的结果不同 —— 一次 `cmd /c rmdir` 摘得掉 junction，对 MSYS `ln -s`
+ * 的 symlink 退 145 且链接仍在；收尾那串命令又常把退出码丢掉，留下的链接随后被
+ * `git worktree remove --force` 穿进主检出。所以这里改走 Node 的原语阶梯
+ * （`rmSync` → `rmdirSync` → `unlinkSync`），并且**只认 `lstat` 的在场/不在场**：
+ * `existsSync` 对断链为假，不能当「摘掉了」的结论。
+ *
  * @param {string | null} link {@link linkDependencies} 建出来的链接路径
+ * @returns {boolean} 链接本体是否已经不在了（真目录或摘不掉 = false，调用方据此别再往下删）
  */
 export function unlinkDependencies(link) {
   if (!link) {
-    return;
+    return true;
   }
+  let stat;
   try {
-    fs.rmSync(link, { recursive: false, force: true });
+    stat = fs.lstatSync(link);
   } catch {
-    /* 摘不掉也不能继续走 `git worktree remove --force`：那一下会删到调用者的树。
-     * 宁可乐意留下一个临时目录（在系统临时区，重启即清），也不许把销毁工作树
-     * 当成一次复算的代价。 */
+    return true; // 本来就不在 = 已摘
+  }
+  if (!stat.isSymbolicLink()) {
+    return false; // 真目录：不碰（可能已是别人装出来的树）
+  }
+  const primitives = [
+    () => {
+      fs.rmSync(link, { recursive: false, force: true });
+    },
+    () => {
+      fs.rmdirSync(link);
+    },
+    () => {
+      fs.unlinkSync(link);
+    },
+  ];
+  for (const attempt of primitives) {
+    try {
+      attempt();
+    } catch {
+      /* 换下一个原语：两形在 Windows 上认的实现不同；POSIX 上第一个就够了。 */
+    }
+    if (!linkStillThere(link)) {
+      return true;
+    }
+  }
+  /* 摘不掉也不能继续走 `git worktree remove --force`：那一下会删到调用者的树。
+   * 宁可乐意留下一个临时目录（在系统临时区，重启即清），也不许把销毁工作树
+   * 当成一次复算的代价。 */
+  return false;
+}
+
+/**
+ * `existsSync` 对断链为假；这一格要问的是「链接本体还在不在」。
+ *
+ * @param {string} link 链接路径
+ * @returns {boolean}
+ */
+function linkStillThere(link) {
+  try {
+    fs.lstatSync(link);
+    return true;
+  } catch {
+    return false;
   }
 }
