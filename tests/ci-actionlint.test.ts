@@ -50,9 +50,8 @@ afterEach(() => {
 
 describe("落点与判的面", () => {
   it("常驻根里一个版本一个目录（升版本是多一份，不是覆盖旧的）", () => {
-    expect(toolDir(String.raw`D:\ci-tools\comfy-app-t3`)).toBe(
-      String.raw`D:\ci-tools\comfy-app-t3\actionlint-1.7.7`,
-    );
+    const root = String.raw`D:\ci-tools\comfy-app-t3`;
+    expect(toolDir(root)).toBe(path.join(root, "actionlint-1.7.7"));
   });
 
   it("只认 `.github/workflows/` 下的 yml / yaml，排过序", () => {
