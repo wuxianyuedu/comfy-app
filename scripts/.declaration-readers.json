@@ -202,7 +202,7 @@
     {
       "id": "a11y-rule-switch",
       "name": "jsx-a11y 的规则开关（哪条开着 / 关着 / 就地豁免）",
-      "declaredAt": "eslint.config.js 的 a11yRecommendedRules() + 方言两档 + scripts/.a11y-rule-ledger.json",
+      "declaredAt": "oxlint.parity.config.mjs 的 a11y 生效档位 + 方言两档 + scripts/.a11y-rule-ledger.json",
       "reader": "scripts/check-a11y-rules.cjs",
       "executor": {
         "kind": "hook-step",

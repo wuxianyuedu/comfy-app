@@ -5,7 +5,7 @@
  *
  * ── 立案现场：装了 39 条规则，只启用 6 条，而「装了没用」这件事没有判据 ────
  *
- * `eslint-plugin-jsx-a11y@6.10.2` **装着 39 条规则**，`eslint.config.js`（经
+ * `eslint-plugin-jsx-a11y@6.10.2` **装着 39 条规则**，`eslint.config.js`（**历史**：当时经
  * `eslint-config-next`）只启用 **6 条**、且全是 `warn`。剩下那批里有一批
  * **本来会响的真形态**：
  *
@@ -19,7 +19,7 @@
  *     本轮之前由 `check-click-keyboard.cjs`（§6.11）在守，现在两条并存。
  *
  * 也就是说：这个插件此前是**半开的**，而「半开」这件事**没有任何东西在数**
- * —— `grep -c jsx-a11y eslint.config.js` 是 0（配置在 `eslint-config-next`
+ * —— `grep -c jsx-a11y eslint.config.js` 当年是 0（配置在 `eslint-config-next`
  * 里）、`grep -c a11y scripts/check-*.cjs` 只有 `check-click-keyboard` 那一处
  * 形态判据。规则开关本身（哪条开着、哪条关着、关的理由是谁在守）一个执行者
  * 都没有。这与 §13.5.12 的立案现场（判据自称在跑、实际没有执行者）同族，
@@ -48,7 +48,7 @@
  *
  * ── 成本 ──────────────────────────────────────────────────────────────
  *
- * 纯本地：读 `eslint.config.js`（动态 import）、读台账、比数组。零网络、零子进程。
+ * 纯本地：读 `oxlint.parity.config.mjs`（动态 import）、读台账、比数组。零网络、零子进程。
  * **但那次求值的量级不是常数，取决于这份检出有没有被起过 Next**：
  *
  *   · `next build` / `next dev` 之后 `.next/` 在：Turbopack 的 transform 缓存命中，
@@ -91,46 +91,28 @@ const ROOT = path.resolve(__dirname, "..");
 /** CLI 形态下的入参：只在 `require.main === module` 那一支被读（见文件尾）。 */
 const CLI_ARGS = parseArgs(process.argv.slice(2));
 
-const ESLINT_CONFIG = path.join(ROOT, "eslint.config.js");
-/** #2777 PR-B：jsx-a11y 规则的**生效面**已切到 oxlint 判决配置。 */
+/** #2777 PR-B：jsx-a11y 规则的**生效面**已切到 oxlint 判决配置（#3157 起它是唯一判决面）。 */
 const OXLINT_CONFIG = path.join(ROOT, "oxlint.parity.config.mjs");
 /** 官方 recommended / strict / 全部规则元数据仍从插件对象取（不手抄规则表）。
  *  #2777 PR-C：直接依赖 `eslint-plugin-jsx-a11y`，不再经 `eslint-config-next` 中转。 */
 const A11Y_PLUGIN_SPEC = "eslint-plugin-jsx-a11y";
 
 /**
- * `eslint.config.js` 的**求值缓存**。
+ * `oxlint.parity.config.mjs` 判据配置的**求值缓存**（同一进程只读一次）。
  *
- * 求值这份配置是本判据全部成本所在。**#2777 PR-C 之前**它 import 了整个
- * `eslint-config-next`，**首次**求值没有常数可言 —— 用户侧实测（8 核 / 16G、干净检出）
- * 40s 以上，被 Next 起过之后 ~1.1–1.7s（PR-C 起只剩四个小包，那笔钱不再付）。
- * 派生链与「为什么它是这条链上唯一的成本」写在规范 §11.19.1 的档 E 里，这里只记结论。
- *
- * 于是有两条纪律：
- *
- * ① 只留**一个**读面。那份配置的四个读点（生效规则表 / 官方 recommended /
- *    全部规则元数据 / 「两份配置都没提到」）此前各写一遍 `import()` + `flat()`，
- *    读代码的人看不出「这四张表来自同一份配置、可以只算一次」。
- * ② 失败**不进**「已求值」缓存。`import()` 自己会把失败的模块从缓存里摘掉
- *    （实测：失败后下一次调用会重新求值），所以把失败也缓存成 `null` 等于
- *    让一次瞬时 I/O 错误把整个进程钉死在自己的错误结论上。
+ * 四个读点（生效规则表 / 官方 recommended / 全部规则元数据 / 「两份配置都没提到」）
+ * 共用这一份单飞；此前各写一遍 `import()` + `flat()`，读代码的人看不出这四张表来自
+ * 同一份配置、可以只算一次。失败**不进**缓存：`import()` 自己会把失败的模块从缓存里
+ * 摘掉（实测失败后下一次调用会重新求值），把失败也缓存成 `null` 等于让一次瞬时 I/O
+ * 错误把整个进程钉死在自己的错误结论上。
  */
 /** @type {Promise<any> | undefined} 未装载时是 undefined —— 不用 `null` 当哨兵，`!` 就能同时管住两种空值 */
 let configPromise;
 
-/** 读一次真正的 `eslint.config.js`（扁平配置数组，**未** `flat()`）。 */
-function loadEslintConfig() {
-  configPromise ??= import(pathToFileURL(ESLINT_CONFIG).href).then((mod) => mod.default);
-  return configPromise;
-}
-
-/** `oxlint.parity.config.mjs` 的求值缓存（同一进程只读一次）。 */
-let oxlintConfigPromise;
-
 /** 读一次真正的 oxlint 判决配置（`defineConfig` 的返回对象，含 `overrides`）。 */
 function loadOxlintConfig() {
-  oxlintConfigPromise ??= import(pathToFileURL(OXLINT_CONFIG).href).then((mod) => mod.default);
-  return oxlintConfigPromise;
+  configPromise ??= import(pathToFileURL(OXLINT_CONFIG).href).then((mod) => mod.default);
+  return configPromise;
 }
 
 /** jsx-a11y 插件对象的求值缓存（官方集合与废弃状态的唯一出处）。 */
@@ -180,7 +162,7 @@ function parseArgs(argv) {
 const PREFIX = "jsx-a11y/";
 
 /**
- * 读出「生效的 jsx-a11y 规则表」：**求值真的 `eslint.config.js`**，而不是
+ * 读出「生效的 jsx-a11y 规则表」：**求值真的 `oxlint.parity.config.mjs`**，而不是
  * 在这里再解析一遍它。
  *
  * 为什么要走真的那份配置（实测踩出来的）：第一版在这里自己 `import` 插件、
@@ -354,8 +336,8 @@ function normalize(setting) {
  * 配置事实的**每进程一次**缓存（单飞：并发调用共享同一个在途 Promise）。
  *
  * 为什么要有：`effectiveRules` / `officialRecommended` / `officialRuleMap` /
- * `rulesInNeitherConfig` 四处各自 `await import()` 同一份 `eslint.config.js` ——
- * 模块求值 Node 会缓存，但 `flat()` 与那三次插件遍历不会（本机实测每进程 ~9s，
+ * `rulesInNeitherConfig` 四处各自 `await import()` 同一份 `oxlint.parity.config.mjs` ——
+ * 模块求值 Node 会缓存，但插件遍历与规则表合并不会（本机实测每进程 ~9s，
  * 机器满载时 ~20s）。CLI 一次跑只付一遍，代价本来看不见；门禁自测在**一个进程里
  * 判 12 份台账**之后，这 12×4 次遍历就成了本文件墙钟的绝大部分。
  *
@@ -380,7 +362,7 @@ async function configFacts() {
  * 判一次：入参全是显式的（**台账对象** / 只出清单），返回值就是判决结果。
  *
  * 这个形状存在的唯一理由是**自测**：`--ledger <path>` 那批用例要拿十来份台账各判
- * 一次，而每条用例起一个子进程 = 十来次 `eslint.config.js` 求值（冷检出上 40s+
+ * 一次，而每条用例起一个子进程 = 十来次 `oxlint.parity.config.mjs` 求值（冷检出上 40s+
  * 一次，本机实测单进程 ~9s）。改成本函数在进程内被调十来次、配置只求值一次，
  * 省下来的正是那笔钱；而「问题清单 + 汇总」这个读数与真子进程那一条**逐字同义**
  * （`main()` 只是把它翻成退出码），所以断言不用分成两套写法。
@@ -493,7 +475,7 @@ async function judge(ledger) {
    * 这是本批补的那一半洞。原来只判「官方 recommended 里被关掉的」（③），
    * 而「压根没被列进任何一份配置」这件事没人管 —— 实测 5 条，其中 3 条官方
    * 标了 deprecated（不提是对的，跳过），剩下 3 条要么**开着**（本仓做了决定、
-   * 写进 eslint.config.js 的第三档），要么**在台账里登记为关着**（含 keeper）。
+   * 写进 oxlint.parity.config.mjs 的第三档），要么**在台账里登记为关着**（含 keeper）。
    * 两条都不满足 = 没有人决定过 —— 与「没登记就关掉一条真判据」同罪。 */
   for (const name of inNeither) {
     const meta = official.get(name);
@@ -510,7 +492,7 @@ async function judge(ledger) {
     problems.push(
       `${name} 既不在官方 recommended、也不在官方 strict（而它**没有**被标记废弃）——` +
         "本仓对它的裁决没有任何痕迹。\n" +
-        "    → 要么在 eslint.config.js 里明确开出这一档，要么在\n" +
+        "    → 要么在 oxlint.parity.config.mjs 里明确开出这一档，要么在\n" +
         "      scripts/.a11y-rule-ledger.json 的 dialect 里写明「为什么不开」与「谁在守它」。\n" +
         "      （新建规则时插件常先不加进两份配置 —— 正是「没人决定过」的高发处。）",
     );
@@ -584,7 +566,6 @@ const VERIFIED_SURFACES = Object.freeze({
   judge: "门禁自测（共进程判十来份台账）+ bin 形态",
   readLedger: "bin 形态（读 `--ledger <path>`）与门禁自测（台账归一形状）",
   normalize: '门禁自测（规则档位的归一：`"error"` 与 `["error"]` 同义）',
-  loadEslintConfig: "门禁自测（`eslint.config.js` 求值失败时的失败路径）",
   loadOxlintConfig: "`check-eslint-exemptions.cjs`（读文件级豁免台账）+ 门禁自测（生效档位表）",
   effectiveRules: "门禁自测（真配置里的 jsx-a11y 档位表）",
   officialRecommended: "门禁自测（官方 recommended 的有效集合，从插件对象算）",
@@ -596,9 +577,9 @@ const VERIFIED_SURFACES = Object.freeze({
  * 导出面 —— **判据本体**（`judge` 与它那几张表）+ 四个纯函数。
  *
  * 为什么要导：门禁自测（`tests/a11y-rules-gate.test.ts`）在**同一个进程里**拿十来份
- * 台账各判一次，于是 `eslint.config.js` 的求值从「每条用例一次」塌成「整个文件一次」
+ * 台账各判一次，于是 `oxlint.parity.config.mjs` 的求值从「每条用例一次」塌成「整个文件一次」
  * （冷检出上那是 40s × N → 40s × 1，见文件头「成本」）。这是本判据唯一付得起的那一半
- * —— eslint 那一侧的成本（求值配置）判据本体没得选。
+ * —— 配置求值那一侧的成本判据本体没得选。
  *
  * 导出之后**每一格都要有执行者**：那一份执行者是
  * `tests/a11y-rules-gate.test.ts` 与 `tests/check-a11y-rules.test.ts` 自己，
@@ -615,7 +596,6 @@ module.exports = {
   officialRecommended,
   officialRuleMap,
   rulesInNeitherConfig,
-  loadEslintConfig,
   loadOxlintConfig,
   VERIFIED_SURFACES,
 };

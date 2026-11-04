@@ -1,15 +1,15 @@
 /**
  * 三条策略守卫「迁到 oxlint 之后仍然真的会响」的对拍用例（#2777）：执行者从 eslint 的 `Linter` 换成 oxlint jsPlugin，
  * 判据一个字没变（同一个 selector / 同一句 message）。做法：① 从 `oxlint.parity.config.mjs` 读规则条目，不在测试里重抄；
- * ② 现生成最小探针配置（`node_modules/.cache/`，跑完即删）；③ 仓外临时目录造正反样本，断言命中集合与文案逐字一致。另外钉「迁移本身」：`eslint.config.js` 已删干净只剩 14 条；router 面排除 `*.test.ts`、drizzle 面只覆盖 components/features 仍落在判决配置里。
+ * ② 现生成最小探针配置（`node_modules/.cache/`，跑完即删）；③ 仓外临时目录造正反样本，断言命中集合与文案逐字一致。
+ * #3157 起 eslint 已退役，这三条规则只住在判决配置里；router 面排除 `*.test.ts`、drizzle 面只覆盖 components/features。
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import eslintConfig from "../eslint.config.js";
 import oxlintConfig from "../oxlint.parity.config.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -26,7 +26,6 @@ type Override = {
   rules?: Record<string, unknown>;
 };
 type OxlintConfig = { overrides?: Array<Override> };
-type EslintBlock = { files?: Array<string> | string; rules?: Record<string, unknown> };
 
 const storeSelectorMessage =
   "store selector 里现拼对象字面量 = 每次 store 写入都返回新引用（字段没变也重渲染）。改成只返回原始值/稳定引用，或把派生下沉进 store；useShallow 是最后手段（规范 01 §1.2 / 07 §7.15.1）。";
@@ -171,27 +170,6 @@ describe("① oxlint 侧真的会响：store selector / router / drizzle 三条�
       rmSync(dir, { recursive: true, force: true });
       if (existsSync(probeConfig)) rmSync(probeConfig, { force: true });
     }
-  });
-});
-
-describe("② 迁移完成：eslint 侧只剩 14 条，不再承载这三条", () => {
-  it("eslint.config.js 的规则名集合恰为 14 条，且不含 no-restricted-*", () => {
-    const blocks = eslintConfig as unknown as Array<EslintBlock>;
-    const names = new Set<string>();
-    for (const block of blocks) {
-      for (const name of Object.keys(block.rules ?? {})) names.add(name);
-    }
-    expect(names.size).toBe(14);
-    expect(names.has("no-restricted-syntax")).toBe(false);
-    expect(names.has("no-restricted-imports")).toBe(false);
-    expect(names.has("react/no-deprecated")).toBe(true);
-    expect(names.has("@next/next/no-location-assign-relative-destination")).toBe(true);
-  });
-
-  it("三条规则的原文只住在判决配置里（eslint 侧不再有 selector / patterns 条目）", () => {
-    const eslintSource = readFileSync(path.join(ROOT, "eslint.config.js"), "utf8");
-    expect(eslintSource).not.toContain("selector:");
-    expect(eslintSource).not.toContain("drizzle-orm");
   });
 });
 

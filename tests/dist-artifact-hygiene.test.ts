@@ -179,7 +179,6 @@ describe("开发期文件与内部门禁脚本的白名单剔除", () => {
       '"AGENTS.md"',
       '"CHANGELOG.md"',
       '"README.md"',
-      '"eslint.config.js"',
       '"playwright.config.ts"',
       '"vitest.config.ts"',
       '"tsconfig.json"',

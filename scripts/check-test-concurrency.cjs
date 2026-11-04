@@ -49,9 +49,10 @@
  * 上面三条说的都是「并发不安全 / 不划算」，还有第四种形态是这一轮实测撞出来的：
  * **并发把一次性成本从「一次」变成「N 次」**。
  *
- * 现场是 `tests/a11y-rules-gate.test.ts`：它的被测输入是**真的 `eslint.config.js`**
- * （经 `eslint-config-next` 求值整个 next 配置），**首次**求值在干净检出上 40s+、
- * 被 Next 起过之后 ~1.1–1.7s。33418b72 把「每条用例 spawn 一个子进程」改成异步
+ * 现场是 `tests/a11y-rules-gate.test.ts`：它的被测输入是真的判决配置（现在住
+ * `oxlint.parity.config.mjs`）。**#2777 PR-C 之前**那份配置经 `eslint-config-next`
+ * 求值整个 next 配置，**首次**求值在干净检出上 40s+、被 Next 起过之后 ~1.1–1.7s。
+ * 33418b72 把「每条用例 spawn 一个子进程」改成异步
  * `execFile` + `it.concurrent` —— 稳态（`.next/` 热）下确实买到了墙钟（19.5s → 6.2s），
  * 但冷检出上十来个子进程**各自**求值一遍，于是「并发」把十来次 40s 的等待
  * 首尾相接变成了一起等在同一份加载上、一起越过 `testTimeout`。而钩子每次提交都是

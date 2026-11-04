@@ -11,7 +11,7 @@
 - [ ] `tsc --noEmit` 通过（类型检查零错误）- 跑门禁前先确认依赖在：`pnpm check:toolchain`；`node_modules` 缺失 = **先装**
       （`pnpm install --frozen-lockfile`，冷装约 8 分钟），**不是**「本机跑不了门禁」。
       禁止以此为由跳过本清单里任何一条，见 [13.6.3](#1363-环境里跑不到门禁不是结论--先-pnpm-installissue-1568)
-- [ ] `pnpm run lint` 零错误零警告（`--max-warnings 0`；扫描范围是白名单，见 `eslint.config.js` 顶部）；无 `set-state-in-effect` 违规（React 19，见 [8.6](08-异步与副作用.md#86-避免-useeffect-内-setstate-触发循环)）
+- [ ] `pnpm run lint` 零错误零警告（`--deny-warnings`；扫描范围与规则面见 `oxlint.parity.config.mjs` 顶部）；无 `set-state-in-effect` 违规（React 19，见 [8.6](08-异步与副作用.md#86-避免-useeffect-内-setstate-触发循环)）
 - [ ] 新增/修改的组件有对应测试或手动验证记录
 - [ ] 无 `console.log` 遗留（生产代码；`LogProvider` 拦截的 `console` 除外）
 - [ ] 无 `eslint-disable` 新增（确需禁用须单行 + 原因注释）
@@ -4692,22 +4692,20 @@ E2E 只红在 `launch` 那一跳、指不到真正缺的那一格）。它同时
 
 两件事同批，缺一件都只治一半：
 
-1. **命令口径写宽了**。那一格写的是 `eslint .`，而本仓的扫描范围**只有一处出处**：
-   `package.json` 的 `lint` 脚本（`eslint src tests scripts e2e tools .storybook *.config.*`
-   `--max-warnings 0 --cache --cache-strategy content`，白名单口径见 `eslint.config.js`
-   顶部那节）。钩子 B 组、`quality-gate.mjs`、`quality-gate.ps1` 用的都是它，
-   平台侧这一格是第四个调用点 —— 也是唯一一个没跟上的。差的两半都在现场量得出来：
-   `eslint .` 多扫 `docs/**` 与仓库其它 `.ts/.js` 面；`--cache` 只在脚本里有，
-   而冷跑时它本来也不生效（见第 2 点）。
-2. **档位**。`--cache` 在这条路径上是**恒定失效**的：缓存键含 `eslint.config.js` 的
-   绝对路径，而平台每个作业都是新目录（`工作区复用读数` 已把形态定成 ①）⇒ 路径每跑都换。
+1. **命令口径写宽了**。那一格写的是 `eslint .`（当时还是 eslint 两档之一），而本仓的
+   扫描范围**只有一处出处**：`package.json` 的 `lint` 脚本（#3157 起是 oxlint 单档，
+   `--deny-warnings`；范围与规则面见 `oxlint.parity.config.mjs` 顶部那节）。钩子 B 组、
+   `quality-gate.mjs`、`quality-gate.ps1` 用的都是它，平台侧这一格是第四个调用点 ——
+   也是唯一一个没跟上的。
+2. **档位（历史）**。那一档当年带 `--cache`，在平台上**恒定失效**：缓存键含
+   `eslint.config.js` 的绝对路径，而平台每个作业都是新目录 ⇒ 路径每跑都换。
    让它热起来要常驻工作区，而那件事的前提是 `工作区出处` 那套判据先成立
-   （`scripts/ci-workspace-provenance.mjs` 头注）。所以只要还在 PR 上跑，它就是一次
-   **全仓冷跑**，而它是这台机上仅有的几档「起一堆子进程」的格子之一（类型感知规则要真起
-   ts 宿主）。按 `每日生产构建` / `每日单元测试` 同一条理由（§13.5.21：并行 PR 下墙钟
+   （`scripts/ci-workspace-provenance.mjs` 头注）。#3157 起 eslint 退役，缓存这一步
+   整体删除（`scripts/eslint-cache-fingerprint.mjs` 与其用例一并移除），当前读数按
+   oxlint 单档计。按 `每日生产构建` / `每日单元测试` 同一条理由（§13.5.21：并行 PR 下墙钟
    读数不可信），它现在是 `每日 ESLint 零警告`，30m 预算。
 
-判据一字未改：仍是 `--max-warnings 0`（在 `lint` 脚本里），仍是同一个入口。
+判据一字未改：仍是 `--deny-warnings`（在 `lint:oxlint` 脚本里），仍是同一个入口。
 `tests/no-platform-ci-config.test.ts` 把它加进 `PR_MOVED_TO_DAILY`（PR 清单里不许再有、
 每日清单里必须有一格、那一格点的仍是 `pnpm run lint`），`.gates` 里那段原文以注释形态
 留着（停用 ≠ 删除）。
@@ -6980,7 +6978,7 @@ high/critical**（其中 1 条是 `next` 的 **critical**），**全部有同 ma
 并补一条「量具自己没坏」的对照用例（同一形状的 `wired` / `muted` 两段源码，前者真、后者假）。
 这与 13.5.8 末尾那条「在场判据要解析、不要 `toContain`」是同一条纪律的第二个载体。
 
-#### 13.5.11 eslint 增量缓存的依赖指纹失效（`scripts/eslint-cache-fingerprint.mjs`，ISSUE #1399）
+#### 13.5.11 eslint 增量缓存的依赖指纹失效（`scripts/eslint-cache-fingerprint.mjs`，ISSUE #1399；#3157 起已退役）
 
 **它补的是「缓存的已知边界由谁执行」这一步。** `pnpm run lint` 带
 `--cache --cache-location node_modules/.cache/eslint --cache-strategy content`，而
@@ -7017,7 +7015,9 @@ eslint 的缓存键 =「**文件内容 + 解析后的 eslint 配置**」—— �
 | `node_modules/.pnpm/lock.yaml` | 实际装上了什么 | 与上面那份**不同形**（实测 13068 vs 12910 行，见 13.5.9）—— 只比一份会把「lockfile 改了但没重装」读成「依赖已更新」 |
 | `tsconfig.json`                | 类型解析口径   | 口径变了，同一份源码的类型判决就该重算                                                                              |
 
-**刻意不含 `eslint.config.js`**：它在 eslint 自己的缓存键里，重复登记等于给
+**#3157 起这一节整体退役**：eslint 的 `--cache` 不再存在，`scripts/eslint-cache-fingerprint.mjs`
+与其用例一并删除。下面保留原始记录，只作为历史口径（行文按当时形态，不再当作现行判据）。
+当时**刻意不含 `eslint.config.js`**：它在 eslint 自己的缓存键里，重复登记等于给
 「改了配置却删不掉缓存」这种假象留口子。缺失的文件记成 `<missing>` 而**不是跳过** ——
 跳过会让「lockfile 被删掉」这种拓扑变化哈希不变，正好是「依赖树变了但判决被重放」
 的极端形态。指纹**要落盘**（`node_modules/.cache/eslint-fingerprint.json`）：只在内存里
@@ -7043,9 +7043,9 @@ eslint 的缓存键 =「**文件内容 + 解析后的 eslint 配置**」—— �
 `pnpm install`（lockfile 没动）不触发。**一次冷跑的墙钟曾不可用**（跑期间机器休眠、
 计时成了 537 分钟）—— 上面那个 316s 取自随后一次 `--no-cache` 全仓跑，不是取自那次冷跑。
 
-**自查入口**：`node scripts/eslint-cache-fingerprint.mjs --check` 只报结论、不动缓存
-（不落指纹），供「这盏灯现在是什么颜色」的定位用。判据由
-`tests/eslint-cache-fingerprint.test.ts` 钉住（两个方向各一组：**变了 → 真删**、
+**#3157 起自查入口与用例一并移除**：`node scripts/eslint-cache-fingerprint.mjs --check`
+与 `tests/eslint-cache-fingerprint.test.ts` 都不再存在（eslint 退役，缓存这一步整体删除）。
+下面保留原始判据形状，只作为历史口径：指纹由用例钉住（两个方向各一组：**变了 → 真删**、
 **没变 → 保留**；反向验证：把 `runFingerprint` 改成永远不删，前一组的「缓存已消失」
 即失败），并登记在 `scripts/affected-tests.mjs` 的固定清单里 —— 改 `.githooks/**`
 会让增量层放弃收窄，而「接线断掉」正是它要拦的动作。
@@ -8789,7 +8789,7 @@ PR 一轮的墙钟按上面的数约 ~20 分钟，且 `单元测试` 那格的 4
 
 **「CI 那格有没有比本地宽」这件事被验过，不是假定**：拿本地同一条 eslint 跑一份**旧内容**
 （平台上报 `no-floating-promises` 的那份文件，改动前版本），报的正是同样两处、同样两条规则、
-退 1 ⇒ 平台 `eslint . --max-warnings 0` 与本地 B 组 `pnpm run lint` 判的是同一件事，
+退 1 ⇒ 平台 `eslint . --max-warnings 0`（现在叫 `ESLint 零警告` 那一格，跑的是 `pnpm run lint`）与本地 B 组 `pnpm run lint` 判的是同一件事，
 降档既没把 lint 弄宽也没弄窄。**为什么必须这么验**：恢复一格的正当理由是「本地不再跑了，
 它从重复变成唯一执行者」，而这句话的失效形态是——那一格与本地判的根本不是同一件事，于是
 「唯一执行者」是个假话。用旧内容 × 本地命令复算，是唯一能当场证伪它的形状。
@@ -9362,16 +9362,16 @@ PR 档随之卸下这四格。判据面：新增 push 档「声明与事实双�
 接在 `每日单元测试` 之后）—— PR 上产出 lcov 的两格测试格同批撤走，数据源不在了，
 留守就只剩空转。
 
-#### 13.5.31 eslint 文件级豁免台账 ⇄ 真违例（ISSUE #2607 第 3 条）
+#### 13.5.31 lint 文件级豁免台账 ⇄ 真违例（ISSUE #2607 第 3 条）
 
-`eslint.config.js` 里有一批「某条 core 规则对**指定文件**关掉」的台账（形状是
+`oxlint.parity.config.mjs` 里有一批「某条 core 规则对**指定文件**关掉」的台账（形状是
 `{ files: [...], rules: { "<规则>": "off" } }`）。那份台账自己的注释写着**何时可移除**
 （`no-control-regex` 那一片的原话是「若某文件改用非正则方案处理控制字符，可把该文件从这里
 摘掉」）—— 而这句话此前没有任何执行者：文件改干净了，台账那一行照样躺着，一条都不会红。
 这仍是本仓那一型（**判据在场、执行者不在场**，§13.5.8 / §11.23），只是这次「判据」是
 一条 npm 包里的规则，而欠账形式是**多登记的豁免**。
 
-**执行者**：`.githooks/pre-commit` D 组那一步 `eslint 文件级豁免台账⇄真违例（§13.5.31）`
+**执行者**：`.githooks/pre-commit` D 组那一步 `lint 文件级豁免台账⇄真违例（§13.5.31）`
 （`node scripts/check-eslint-exemptions.cjs`，与 `jsx-a11y 规则开关⇄判据（§6.12）`
 同族同档），加上 `tests/eslint-exemption-staleness.test.ts`（在 `FIXED_STRUCTURAL_TESTS` 里，
 它那条 bin 用例起真子进程跑真配置 —— 平台侧的执行者是这一条，与 a11y 那件的落地形状一致）。
@@ -9380,20 +9380,21 @@ PR 档随之卸下这四格。判据面：新增 push 档「声明与事实双�
 
 | 方向                       | 谁在执行                                   |
 | -------------------------- | ------------------------------------------ |
-| **漏登记**（有命中而没登记） | `pnpm run lint` 本体（`ESLint 零警告` 那一格，`--max-warnings 0`）——**不再实现第二遍**（硬规则 28 ③） |
+| **漏登记**（有命中而没登记） | `pnpm run lint` 本体（`ESLint 零警告` 那一格，`--deny-warnings`）——**不再实现第二遍**（硬规则 28 ③） |
 | **多登记 / 陈旧豁免**        | 本判据（此前没有任何东西在读）              |
 
 **取数必须用规则本体**，不许自写正则近似：实测自写「找 `\xNN` 转义」那把尺量出 **42 份**，
 而规则真报 **13 份**（转义也会出现在字符串与注释里，规则只管正则字面量）——
 拿 42 那份集合建判据会把 29 处正当写法判红。同理，读台账用
-`scripts/check-a11y-rules.cjs` 已经导出的 `loadEslintConfig()`（每进程一次的去重单飞，
+`scripts/check-a11y-rules.cjs` 已经导出的 `loadOxlintConfig()`（每进程一次的去重单飞，
 **不另写第二份配置加载器**，硬规则 24）取那块 `files` 数组本身，而不是抠配置文本。
 
-**三把尺的实测**（同一个判决，本机）：真配置 CLI **27.8s** / 最小配置 CLI
+**三把尺的实测（eslint 侧，历史）**：真配置 CLI **27.8s** / 最小配置 CLI
 （`--no-config-lookup -c <临时件>`）**1.9s** / 同进程 `Linter` + 内联 flat 配置 **755ms**，
 三份读数**逐字相同**（19 处 / 13 份）。取第三把，端到端实测 **10.4 / 10.9 / 11.6s**
 —— 大头是 `eslint.config.js` 自己的求值（同族件记的是进程内首值 36.4s、真子进程 57.1s、
-冷检出 40s+），所以用例里那条 bin 的预算与 a11y 取同一档（`{ timeout: 120_000 }`），
+冷检出 40s+）。**#2777 PR-C 起取数改走 oxlint CLI**（读 `oxlint.parity.config.mjs`，不再求值
+eslint 配置）：本机 1s 级；用库里那条 bin 的预算仍与 a11y 同档（`{ timeout: 120_000 }`），
 不是给慢用例兜底（口径见 §11.13）。
 ⚠️ 这也意味着「把它并进 a11y 那一跑、共用同一次求值」能省下约 10s，但代价是改写那份件
 自己的范围声明（它的名字、`.a11y-rule-ledger.json` 与 §6.12 都按 jsx-a11y 写）——
@@ -10061,7 +10062,7 @@ into …` 字样，所以 `check-merge-parents`（§13.6.1）在 squash 之后�
 | ----------------------------------- | ------------------------------------------------- |
 | `pnpm install --frozen-lockfile`    | exit 0，冷装约 8 分钟（无私有源、无额外构建工具） |
 | `pnpm exec tsc --noEmit`            | exit 0，零行输出                                  |
-| `pnpm run lint`                     | exit 0（`--max-warnings 0`，零警告）              |
+| `pnpm run lint`                     | exit 0（`--deny-warnings`，零警告）               |
 | `pnpm exec vitest run <受影响文件>` | 全绿                                              |
 
 **代价不对称**：装一次依赖是八分钟；而「跳过 tsc / eslint / vitest + 在提交信息里

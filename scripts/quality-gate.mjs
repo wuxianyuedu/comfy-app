@@ -103,8 +103,8 @@ export const GATES = {
     /* 扫描范围（白名单目录）与参数（`--max-warnings 0` / `--cache-strategy
      * content`）收在 package.json 的 `lint` 脚本里：四个调用点（.githooks/
      * pre-commit 第 7 步 / 本文件 / quality-gate.ps1 / CI）共用同一份命令，
-     * 各自的目录清单与 `--cache` 参数不再各抄一遍（抄一遍就会漂移）。
-     * 范围口径与 `content` 策略的理由见 `eslint.config.js` 顶部那节。 */
+     * 各自的目录清单与参数不再各抄一遍（抄一遍就会漂移）。
+     * 范围与规则面口径见 `oxlint.parity.config.mjs` 顶部那节（#3157 起只剩 oxlint 一档）。 */
     args: ["run", "lint"],
   },
   /**

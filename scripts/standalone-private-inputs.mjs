@@ -81,8 +81,8 @@ export function stripPrivateInputs(dir, onRemoved) {
  * 复制进 `.next/standalone`（Turbopack 退化为「全项目追踪」的产物，见 §7.2）：
  *
  *   AGENTS.md / CHANGELOG.md / README.md           内部规范与变更史
- *   eslint.config.js / playwright.config.ts /      开发与门禁配置
- *   例如 vitest.config.ts / typedoc.json 等开发期文件
+ *   playwright.config.ts / vitest.config.ts /      开发与门禁配置
+ *   typedoc.json 等
  *   scripts/**（46 个文件 / 544K，含 16 个 *.cjs 门禁脚本）+ __pycache__
  *
  * 它们随 static 被编译期内嵌进 exe —— 解包即得内部规范全文与全部门禁脚本。
@@ -527,7 +527,6 @@ export const DEV_ARTIFACTS = [
   "README.md",
   "components.json",
   "drizzle.config.ts",
-  "eslint.config.js",
   "playwright.config.ts",
   "pnpm-lock.yaml",
   "pnpm-workspace.yaml",

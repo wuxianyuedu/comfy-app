@@ -32,7 +32,7 @@
 | 允许                                            | 禁止                                                     | 判据 / 门禁                                                               |
 | ----------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------- |
 | 纯函数、类型、常量                              | React（`.tsx`、`useState`、JSX）                         | R4 禁 `.tsx`；`check-ui-logic-separation.cjs` H2 禁 `src/lib/**` 用 React |
-| 浏览器与服务端共用的逻辑                        | `import` 视图层（`src/components/**`、`src/app/**`）     | `eslint.config.js` 的 `boundaries`：`lib` → `components` 阻断（18.3）     |
+| 浏览器与服务端共用的逻辑                        | `import` 视图层（`src/components/**`、`src/app/**`）     | `oxlint.parity.config.mjs` 的 `boundaries`：`lib` → `components` 阻断（18.3）     |
 | Node-only 领域编排（须声明，见 18.4）           | 反向依赖：被 `lib` 依赖的模块再回头依赖 `lib` 之外的视图 | 同上 + 规范 §12.7（循环依赖预防）                                         |
 | 网络客户端（`<domain>-client.ts`，§17.2 第②层） | 直接读 `process.env`（应收口，见 ISSUE #568）            | 本批次登记项，尚无机器判据                                                |
 | 子域目录（`lib/<domain>/**`）                   | 根目录散放普通模块（只有顶层单例可在根，见 §18.12）      | R13′ / R14（`check-file-structure.cjs`，§12.5.3）                         |
@@ -44,7 +44,7 @@
 
 ### 18.3 分层边界：`lib` 是一个 element（机器强制）
 
-`eslint.config.js` 的 `boundaries/elements` 现在显式声明 `src/lib/**`：
+`oxlint.parity.config.mjs` 的 `boundaries/elements` 现在显式声明 `src/lib/**`：
 
 ```js
 "boundaries/elements": [
@@ -463,7 +463,7 @@ llmConfigRepository.upsertSingleton({ ... });            // 写 2：这里失败
 
 三条落地形状，都是为了让「第二个保存入口漏掉事务」这件事不发生：
 
-1. **`db.transaction(` 不许写在 `llm.ts` 里**。不是因为违规 —— `eslint.config.js` 的
+1. **`db.transaction(` 不许写在 `llm.ts` 里**。不是因为违规 —— `oxlint.parity.config.mjs` 的
    `boundaries` 只拦 components ⇄ server 两个方向，同属 server 的路由直发语句它不判
    （反例既有：`src/server/api/routers/series.ts` 一整批 `ctx.db` 写）—— 而是那样每条
    调用链都要自己决定事务范围，漏一条就回到本单的症状。取向写在这里，**没有机器判据**，

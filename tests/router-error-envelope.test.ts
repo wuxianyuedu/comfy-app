@@ -1,14 +1,14 @@
 /**
  * 「router 层的错误信封只许 TRPCError」判据自身的用例（台账 E8）。三层缺一都会静默失效：
  * ① 真扫 `src/server/api/routers/**`（先 `stripComments`，否则本文件注释里的裸 `throw new Error` 会把自己判红）并断言扫描面非空 —— 路径写错时「零命中」看起来就像「全都修好了」，这是这类清单最典型的死法；
- * ② 规则条目从 `oxlint.parity.config.mjs` 的导入对象取（#2777 迁 oxlint jsPlugin，不在测试里重抄）；③ 用 eslint `Linter` 最小片段验行为：裸 `throw new Error` 报、`throw new TRPCError` 不报，store selector 那条同样在响（#2777 修层覆盖前，后一层会整条替换前一层）——「有配置 ≠ 配置在跑」（§11.7 / 台账 E2）。
+ * ② 规则条目从 `oxlint.parity.config.mjs` 的导入对象取（#2777 迁 oxlint jsPlugin，不在测试里重抄）；③ 用真 oxlint CLI 最小探针验行为：裸 `throw new Error` 报、`throw new TRPCError` 不报，store selector 那条同样在响（#2777 修层覆盖前，后一层会整条替换前一层）——「有配置 ≠ 配置在跑」（§11.7 / 台账 E2）。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { Linter } from "eslint";
 
 import oxlintConfig from "../oxlint.parity.config.mjs";
+import { probeRules } from "./helpers/oxlint-probe";
 import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = process.cwd();
@@ -48,15 +48,9 @@ function routerRestrictedSyntax(): { block: ConfigBlock; entries: Array<Restrict
   return { block, entries };
 }
 
-/** 用真实条目跑一次 Linter —— 这就是「判据是否真的会响」的行为断言。 */
-function lintWith(entries: Array<RestrictedSyntaxEntry>, code: string): Array<string> {
-  const linter = new Linter();
-  return linter
-    .verify(code, {
-      languageOptions: { ecmaVersion: 2022, sourceType: "module" },
-      rules: { "no-restricted-syntax": ["error", ...entries] },
-    })
-    .map((m) => m.ruleId ?? "");
+/** 用真实条目真跑一次 oxlint —— 这就是「判据是否真的会响」的行为断言。 */
+function flagged(entries: Array<RestrictedSyntaxEntry>, samples: Record<string, string>) {
+  return probeRules({ "eslint-js/no-restricted-syntax": ["error", ...entries] }, samples);
 }
 
 describe("① 存量为零：router 里不许有裸 throw", () => {
@@ -101,23 +95,23 @@ describe("② + ③ router 档的规则条目：两层同时生效，且真的�
 
   it("行为：裸 Error / TypeError 报，TRPCError 不报", () => {
     const { entries } = routerRestrictedSyntax();
-    expect(lintWith(entries, `export const a = () => {\n  throw new Error("x");\n};`)).toContain(
-      "no-restricted-syntax",
-    );
-    expect(
-      lintWith(entries, `export const a = () => {\n  throw new TypeError("x");\n};`),
-    ).toContain("no-restricted-syntax");
-    expect(
-      lintWith(entries, `export const a = () => {\n  throw new TRPCError({ code: "NOT_FOUND" });\n};`),
-    ).not.toContain("no-restricted-syntax");
+    const hits = flagged(entries, {
+      "bare.ts": `export const a = () => {\n  throw new Error("x");\n};`,
+      "typeerror.ts": `export const a = () => {\n  throw new TypeError("x");\n};`,
+      "trpc.ts": `export const a = () => {\n  throw new TRPCError({ code: "NOT_FOUND" });\n};`,
+    });
+    expect(hits.has("bare.ts"), "裸 Error 必须报").toBe(true);
+    expect(hits.has("typeerror.ts"), "裸 TypeError 必须报").toBe(true);
+    expect(hits.has("trpc.ts"), "TRPCError 不该报").toBe(false);
   });
 
   it("行为：router 文件里的 store selector 同类形态照样报（没被 router 层盖掉）", () => {
     const { entries } = routerRestrictedSyntax();
-    const storeSelectorSample = `export const value = useLogStore((s) => ({ a: s.a }));`;
-    expect(lintWith(entries, storeSelectorSample)).toContain("no-restricted-syntax");
-    expect(
-      lintWith(entries, `export const value = useLogStore((s) => s.a);`),
-    ).not.toContain("no-restricted-syntax");
+    const hits = flagged(entries, {
+      "store-object.ts": `export const value = useLogStore((s) => ({ a: s.a }));`,
+      "store-ok.ts": `export const value = useLogStore((s) => s.a);`,
+    });
+    expect(hits.has("store-object.ts"), "router 档里的 store selector 必须报").toBe(true);
+    expect(hits.has("store-ok.ts"), "只取原始值不该报").toBe(false);
   });
 });
