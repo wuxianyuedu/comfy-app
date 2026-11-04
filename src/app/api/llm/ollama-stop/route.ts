@@ -100,11 +100,15 @@ export async function POST(_req: NextRequest) {
   // 等端口真正释放，给界面状态行一个确定的结果 —— 次数与间隔走
   // `~/lib/retry-policy` 的 OLLAMA_STOP_PROBE（10 次 × 500ms = 5s，见 §16.2.4.49）。
   for (let i = 0; i < OLLAMA_STOP_PROBE.maxAttempts; i++) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     if (!(await ollamaUp())) {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await appendOllamaLog("■ Ollama 已手动关闭");
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await appendOllamaLog("[state] Ollama 已关闭");
       return NextResponse.json({ ok: true, detail: "Ollama 已关闭" });
     }
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await sleep(500);
   }
   const msg = "关闭命令已发送，但 Ollama 仍在响应，请手动确认进程已退出";

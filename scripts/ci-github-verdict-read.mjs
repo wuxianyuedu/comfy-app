@@ -413,10 +413,13 @@ async function requestJson(io, url, label) {
   let lastError = "";
   for (let attempt = 1; attempt <= REQUEST_MAX_ATTEMPTS; attempt += 1) {
     try {
+      // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
       const res = await fetchWithTimeout(fetchImpl, url, token, label);
       if (res.status === 200) {
+        // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
         return { body: await res.json(), ok: true };
       }
+      // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
       const text = await res.text().catch(() => "");
       const kind = res.status === 401 || res.status === 403 ? "auth" : "http";
       return { body: sanitize(text, token), kind, ok: false, status: res.status };
@@ -430,6 +433,7 @@ async function requestJson(io, url, label) {
       log(
         `[verdict] ${label}读数第 ${String(attempt)}/${String(REQUEST_MAX_ATTEMPTS)} 次没通（egress 类）⇒ ${String(wait / 1000)}s 后试第 ${String(attempt + 1)} 次（网络抖动重试；认证 / 权限类不重试）`,
       );
+      // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
       await sleep(wait);
     }
   }
@@ -734,6 +738,7 @@ export async function runVerdict(io) {
   for (;;) {
     /** 主路径被拒的 HTTP 状态（0 = 没被拒）—— 决定「权限」这句有没有资格说。 */
     let mainAuthStatus = 0;
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const main = await readMainPath(reqIo, ctx);
     /** @type {{completed: boolean, failing: string[], ok: string[], pending: string[], total: number} | null} */
     let summary = null;
@@ -764,6 +769,7 @@ export async function runVerdict(io) {
         /* 零条 run：第一次先做一次结构判定（仓库身份 / workflow / 事件条件），
          * 任一证据明确「不会有 run」⇒ 当场收工；判不出就走 5m 短窗口（#3153）。 */
         if (chain === null) {
+          // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
           chain = await probeDispatchChain(
             (url, label) => requestJson(reqIo, url, label),
             ctx,
@@ -783,6 +789,7 @@ export async function runVerdict(io) {
       return reportEgressDown(log, "主路径（runs API）", main.error);
     }
     if (summary === null) {
+      // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
       const fb = await readChecksPath(reqIo, ctx);
       if (fb.state === "data") {
         fbNote = "";
@@ -844,6 +851,7 @@ export async function runVerdict(io) {
         return reportPendingBudgetSpent(log, fbNote);
       }
       if (chain === null) {
+        // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
         chain = await probeDispatchChain((url, label) => requestJson(reqIo, url, label), ctx);
         log(`[verdict] 零条 run 的结构判定：${chain.note}`);
         if (chain.structural !== "") {
@@ -854,6 +862,7 @@ export async function runVerdict(io) {
         ? reportDispatchStateMissing(log, chain)
         : reportNoRunFound(log, ctx.headSha, chain, upstream);
     }
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     await sleep(POLL_INTERVAL_MS);
   }
 }

@@ -234,6 +234,7 @@ export async function waitForLoadToSettle(options = {}) {
       `[affected-launch] 每核负载 ${load.toFixed(2)}（阈值 ${SAFE_LOAD_PER_CORE}）—— ` +
         "等它回落再复跑，不让「这一刻机器多满」变成结论\n",
     );
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     await sleepFn(pollMs);
     hops += 1;
     load = loadPerCore(probe);

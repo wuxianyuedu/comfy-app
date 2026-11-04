@@ -61,6 +61,7 @@ describe("会话闸", () => {
 describe("形状闸 —— 拒绝必须发生在交给上游之前", () => {
   it("缺 filename（含只有空白的）→ 400", async () => {
     for (const query of ["", "?filename=", "?filename=%20%20"]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       expect((await GET(get(query))).status).toBe(400);
     }
     expect(getView).not.toHaveBeenCalled();
@@ -73,6 +74,7 @@ describe("形状闸 —— 拒绝必须发生在交给上游之前", () => {
       "?filename=a.png&subfolder=x/y",
       "?filename=a.png&subfolder=..",
     ]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       expect((await GET(get(query))).status).toBe(400);
     }
     expect(getView).not.toHaveBeenCalled();

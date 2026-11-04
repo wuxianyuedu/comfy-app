@@ -344,6 +344,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
         if (!mountedRef.current) {
           return;
         }
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await pollSource(source);
       }
     } finally {

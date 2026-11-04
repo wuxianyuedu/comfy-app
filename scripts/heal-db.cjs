@@ -54,6 +54,7 @@ async function clearTempTables() {
     for (const row of result.rows) {
       const t = row.name;
       try {
+        // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
         await db.execute(`DROP TABLE IF EXISTS "${t}"`);
       } catch {
         /* 忽略个别残留表的删除失败 */
@@ -122,6 +123,7 @@ async function healIndexes(out) {
       } // 跳过 drizzle-kit 重复发出的第二条
       seen.add(key);
       try {
+        // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
         await db.execute(
           `CREATE ${unique}INDEX IF NOT EXISTS "${idx}" ON "${tbl}" (${cols})`,
         );
@@ -161,11 +163,14 @@ async function main() {
   const MAX = 4;
   while (res.status !== 0 && attempts < MAX) {
     // 先补列，索引才能建得上
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const healedCol = await healMissingColumn(out);
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const healedIdx = await healIndexes(out);
     if (!healedCol && !healedIdx) {
       break;
     }
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     await clearTempTables();
     res = runPush();
     // 同上：空串拼接语义。

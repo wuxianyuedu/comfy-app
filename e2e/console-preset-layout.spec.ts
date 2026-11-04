@@ -29,6 +29,7 @@ test.describe("控制台 · 常用命令分组头排布 @critical", () => {
     expect(count).toBeGreaterThan(3);
 
     for (let i = 0; i < count; i += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       const box = (await headers.nth(i).boundingBox())!;
       /* 组头要么与列表同宽（`flex-wrap` 正常换行时触发开关会短一点 —— 条数
          占掉右侧十来像素），要么至少是列表宽度的一半以上。塌成几十像素就是

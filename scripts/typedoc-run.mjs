@@ -299,6 +299,7 @@ export async function runTypedoc({
   for (let attempt = 1; attempt <= total; attempt += 1) {
     const before = snapshotOutput(outDir);
     const startedAt = Date.now();
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const run = await spawnImpl(entry, outDir, root);
     const after = snapshotOutput(outDir);
     const verdict = judgeRun(run, { after, startedAt });
@@ -319,6 +320,7 @@ export async function runTypedoc({
     }
     onProgress(`attempt ${attempt}/${total} failed: ${verdict.reason}`);
     if (attempt < total) {
+      // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
       await sleep(backoff[Math.min(attempt - 1, backoff.length - 1)] ?? 0);
     }
   }

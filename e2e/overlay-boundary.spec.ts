@@ -54,8 +54,11 @@ test.describe("锚定浮层让出窗口标题行 @critical", () => {
     for (let i = 0; i < count; i += 1) {
       const trigger = triggers.nth(i);
       /* 标签逐轮重新读一次，只用于失败话术；判据本身不依赖它。 */
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       const label = (await trigger.getAttribute("aria-label")) ?? `第 ${i + 1} 个入口`;
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       await hoverHint(page, trigger);
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       const probe = await page.evaluate(() => {
         /* 只认当前打开的那一枚（`[data-open]`）——上一枚退场时仍挂在 DOM 里。 */
         const popup = document.querySelector('[data-slot="tooltip-content"][data-open]');

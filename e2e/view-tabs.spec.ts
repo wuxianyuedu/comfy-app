@@ -72,6 +72,7 @@ test.describe("视图页签条 @critical", () => {
     /* 三个视图容器都在 DOM 里（`data-view` 是各页 wrapper 的锚），
        当前那一页可见、另外两页带 `hidden`。 */
     for (const view of ["home", "models", "history"]) {
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       await expect(
         page.locator(`[data-view="${view}"]`),
         `${view} 那一页被卸载了 —— 切回去会重新挂载`,
@@ -105,11 +106,13 @@ test.describe("视图页签条 @critical", () => {
     await expect(strip.getByRole("tab")).toHaveCount(2);
 
     for (const dark of [true, false]) {
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       await page.evaluate((d) => {
         document.documentElement.classList.toggle("dark", d);
       }, dark);
       const label = dark ? "暗色" : "浅色";
 
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       const states = await strip.getByRole("tab").evaluateAll((els) =>
         els.map((el) => {
           const after = getComputedStyle(el, "::after");

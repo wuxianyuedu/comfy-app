@@ -76,11 +76,13 @@ export async function runningAppInstances(root) {
 
   const held = [];
   for (const port of scanPorts(resolveAppPort(root))) {
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const pids = await listeningPidsOnPort(port);
     if (pids.length === 0) {
       continue;
     }
     // 命令行按一次批量查询取回（Windows 上逐 PID 起 PowerShell 是 0.5~1.5s 的冷启动）。
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const lines = await processCommandLines(pids);
     for (const pid of pids) {
       if (isAppDevServerCmdline(lines.get(pid) ?? "", root)) {
@@ -131,6 +133,7 @@ export async function reapAll(ctx) {
     }
     try {
       if (child.pid) {
+        // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
         const via = await reapProcessTree({
           pid: child.pid,
           detached: !isWindows(),
@@ -178,6 +181,7 @@ export async function reapStaleSession(root = process.cwd()) {
     return null;
   }
   for (const pid of alive) {
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     await reapProcessTree({ pid, detached: !isWindows(), force: true });
   }
   clearSession(root);
@@ -258,6 +262,7 @@ export async function reconcilePort(ctx, port, root = process.cwd(), { explicit 
   for (const p of scanPorts(port)) {
     // 自证只对「本次真正要用的那个端口」成立：扫描范围内的 +1/+2 是「Next 会不会
     // 顺延」的探测位，本次并不打算用它们，谈不上回收。
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const verdict = await inspectPort(p, {
       listenPids: listeningPidsOnPort,
       belongsToRoot: pidBelongsToRoot,
@@ -267,7 +272,9 @@ export async function reconcilePort(ctx, port, root = process.cwd(), { explicit 
      * `cmdlineOf`，Windows 上那是每 PID 一次 PowerShell 冷启动（0.5~1.5s）；
      * 合并为一条 CIM 查询后回填进 Map，回调只查表（契约不变，仍是逐 PID 取）。 */
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- verdict 由可注入的 inspectPort 依赖产出（用例可注入替身），运行时可能缺 pids
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const commandLines = await processCommandLines(verdict.pids ?? []);
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const decision = await portOwnershipVerdict({
       requestedPort: explicit && p === port ? port : null,
       verdict,
@@ -286,6 +293,7 @@ export async function reconcilePort(ctx, port, root = process.cwd(), { explicit 
         "WARN",
       );
       for (const pid of decision.ownPids) {
+        // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
         const via = await reapProcessTree({
           pid,
           detached: !isWindows(),

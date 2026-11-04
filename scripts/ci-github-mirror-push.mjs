@@ -458,6 +458,7 @@ export async function runGitWithRetry(args, ctx) {
     log(
       `[${prefix}] ${label}第 ${String(attempt - 1)}/${String(maxAttempts)} 次没通（egress 类）⇒ ${String(wait / 1000)}s 后试第 ${String(attempt)} 次（网络抖动重试；认证 / 权限类不重试）`,
     );
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     await sleep(wait);
     attempts = attempt;
     result = runGit(args);

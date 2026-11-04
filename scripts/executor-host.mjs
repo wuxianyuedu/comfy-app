@@ -216,6 +216,7 @@ async function reconcileCancelled(runtime) {
   // oxlint-disable-next-line unicorn/no-useless-spread -- 快照，见上
   for (const taskId of [...cliProcs.keys()]) {
     try {
+      // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
       const st = await hostRepo.findStatusAndPromptById(taskId);
       if (st?.status !== "CANCELLED") {
         continue;
@@ -236,6 +237,7 @@ async function reconcileCancelled(runtime) {
        * 就会「取消后继续出图」。失败不致命：状态已经是 CANCELLED。 */
       let interruptState = "sent";
       try {
+        // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
         await runtime.interrupt();
       } catch (error) {
         /* 同一个文件里另一处 catch（`claim-tick 异常` 那一句）用的就是这条判据，

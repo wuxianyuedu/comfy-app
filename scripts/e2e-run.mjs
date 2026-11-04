@@ -236,6 +236,7 @@ export async function runPreflightReadings({ collect }) {
    * 不是同一件事）：端口（毫秒）→ Python（毫秒）→ schema（秒级，空库那档要付一轮
    * drizzle）→ 浏览器（毫秒，但缺件才是要早报的那一格）。 */
   for (const step of /** @type {const} */ (["ports", "python", "schema", "browser"])) {
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const result = await collect(step);
     if (!result) {
       continue;
