@@ -14,7 +14,7 @@
  * | `base-check` | 105.9s | ✅ | `scripts/base-check.mjs` + `.githooks/**` |
  * | `tw4-hardgate-behaviour` | 54.5s | ✅ | 四份 tw4 工具 + `src/app/globals.css` |
  * | `check-bundle-budget` | 51.7s | ✅ | 判据本体 + `scripts/.bundle-budget-baseline.json` |
- * | `a11y-rules-gate` | 47.5s | ✅ | `eslint.config.js` + 判据本体 + 真台账 |
+ * | `a11y-rules-gate` | 47.5s | ✅ | `oxlint.parity.config.mjs` + 判据本体 + 真台账 |
  * | `check-reformat-only` | 166.7s | ❌ 走 import 图 | —— 已经是有条件的，不动它 |
  * | `ci-toolchain-selfcheck` | 67.0s | ❌ 走 import 图 | —— 同上 |
  *
@@ -98,12 +98,12 @@ export const INPUT_FACES = [
     face: [
       "scripts/check-a11y-rules.cjs",
       "scripts/.a11y-rule-ledger.json",
-      "eslint.config.js",
+      "oxlint.parity.config.mjs",
       "tests/fixtures/a11y-rule-ledger.sample.json",
       "tests/helpers/a11y-effective-config.ts",
       "tests/a11y-rules-gate.test.ts",
     ],
-    why: "被测输入里最贵的一件是真的 `eslint.config.js`（它 import 了整个配置图），其余是判据本体与两份台账；业务组件改多少都不会让「规则开关 ⇄ 台账」这条漂",
+    why: "被测输入里最贵的一件是判决配置 `oxlint.parity.config.mjs` 的求值，其余是判据本体与两份台账；业务组件改多少都不会让「规则开关 ⇄ 台账」这条漂",
   },
   /* 下面这批是「拿真子进程 / 真 git / 真渲染」的判据自测：它们的触发面都窄到能写成面 ——
    * 进固定清单的理由是 import 图追不到，不是「必须每次跑」。#2793 先登记了耗时榜上最贵的
@@ -116,11 +116,11 @@ export const INPUT_FACES = [
   {
     test: "tests/eslint-gate-canary.test.ts",
     face: [
-      "eslint.config.js",
+      "oxlint.parity.config.mjs",
       "scripts/eslint-gate-canary.mjs",
       "tests/eslint-gate-canary.test.ts",
     ],
-    why: "样本文件写进 `tests/` 与 `scripts/` 的临时目录，再用**本仓的 `eslint.config.js`** 真跑 eslint；样本要落在 tsconfig 的项目里，所以配置、被测脚本或项目声明任一变判决都可能变（后两者与插件版本同属 wide 触发面，轮不到这一层）",
+    why: "样本文件写进 `tests/` 与 `scripts/` 的临时目录，再用**本仓的判决配置 `oxlint.parity.config.mjs`** 真跑 oxlint；样本要落在 tsconfig 的项目里，所以配置、被测脚本或项目声明任一变判决都可能变（后两者与插件版本同属 wide 触发面，轮不到这一层）",
   },
   {
     test: "tests/check-commit-claims.test.ts",
@@ -189,7 +189,7 @@ export const INPUT_FACES = [
   {
     test: "tests/eslint-exemption-staleness.test.ts",
     face: [
-      "eslint.config.js",
+      "oxlint.parity.config.mjs",
       "scripts/check-eslint-exemptions.cjs",
       "scripts/check-a11y-rules.cjs",
       "scripts/check-docs-api.cjs",
@@ -207,7 +207,7 @@ export const INPUT_FACES = [
       "tests/no-platform-ci-config.test.ts",
       "tests/eslint-exemption-staleness.test.ts",
     ],
-    why: "台账写在 `eslint.config.js` 里，加载器是 `check-a11y-rules.cjs`；bin 那一条拿真配置逐份 lint 台账点名的文件 —— 任一文件不再需要豁免，读数就变",
+    why: "台账写在 `oxlint.parity.config.mjs` 里，加载器是 `check-a11y-rules.cjs`；bin 那一条拿真配置逐份 lint 台账点名的文件 —— 任一文件不再需要豁免，读数就变",
   },
   {
     test: "tests/scripts-typecheck-ratchet.test.ts",

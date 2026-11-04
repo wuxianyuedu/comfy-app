@@ -1,7 +1,7 @@
 /**
  * 「jsx-a11y 规则开关 ⇄ 判据」门禁自测（规范 06 §6.12）。`scripts/check-a11y-rules.cjs` 五向：官方 recommended 全开且 options 逐字一致、
- * 方言双向、被关掉的须登记、就地豁免写全理由与 keeper、两份官方配置未提及的非废弃规则须有裁决。真 `eslint.config.js` 首次求值 40s+
- * （#2777 PR-C 前 import 整个 `eslint-config-next`；冷检出并发起子进程曾 10/10 超时），故共进程一次真加载；除「CLI 绿」「`--report` 恒 0」外不起子进程；夹具与真台账解耦。
+ * 方言双向、被关掉的须登记、就地豁免写全理由与 keeper、两份官方配置未提及的非废弃规则须有裁决。判据配置（`oxlint.parity.config.mjs`）
+ * 每进程只求值一次，故共进程一次真加载；除「CLI 绿」「`--report` 恒 0」外不起子进程；夹具与真台账解耦。
  */
 import { execFile } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -15,7 +15,7 @@ import type { Ledger } from "./helpers/a11y-effective-config";
 const run = promisify(execFile);
 
 /* 判据模块**只经这一个入口**拿（`tests/helpers/a11y-effective-config.ts`）：
-   同一个 module graph 才共享实例，于是 `eslint.config.js` 整个进程只求值一次。 */
+   同一个 module graph 才共享实例，于是判据配置整个进程只求值一次。 */
 const { judge } = loadJudgeModule();
 
 /** 夹具台账的**形状样本**（落盘在 `tests/fixtures/`、与真台账解耦，见文件头）。 */
@@ -68,7 +68,7 @@ async function runWithLedger(ledger: Ledger, args: Array<string> = []) {
 }
 /**
  * **在本进程里**判一份台账（与 `runWithLedger` 同一套 `{ok, output}` 形状，用例体不用改、只是不再起子进程）：判据成本几乎全在求值
- * `eslint.config.js` 连同 `eslint-config-next`，每进程只该付一次 —— 实测单子进程 ~9s，12 份台账各起一次 = 133s，并发则顶穿 30s 预算（实测 90.1s / 11 条超时，红的是排队不是判据）。
+ * `oxlint.parity.config.mjs`，每进程只该付一次 —— 12 份台账各起一次子进程则要把同一次求值重付 12 遍，并发时顶穿 30s 预算（红的是排队不是判据）。
  * 只把「CLI 绿」与「`--report` 恒 0」留成真跑——退出码与旗标语义只有起进程才成立；⚠️ 不捕获 stdout，`console.*` 归 bin 形态。
  */
 async function judgeWith(ledger: Ledger) {
@@ -236,7 +236,7 @@ test("⑩ `--ledger` 缺路径 → 退 2（不许静默退回真台账）", asyn
      用例以为在判自己的夹具、其实在判真库 —— 绿得毫无意义。
      ⚠️ 这一格**必须**走真子进程：它判的是 CLI 解析（`parseArgs` + `process.exit(2)`），
      而那不是进程内可观测的东西。它付的也只是「起一次 node」的钱 —— 那条路径在
-     `process.exit(2)` 上停住，**不会**去求值 `eslint.config.js`（实测 ~60ms）。 */
+     `process.exit(2)` 上停住，**不会**去求值判据配置（实测 ~60ms）。 */
   const bad = await run(process.execPath, [SCRIPT, "--ledger"], {
     cwd: REAL_ROOT,
     encoding: "utf8",

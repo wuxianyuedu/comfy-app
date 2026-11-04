@@ -27,7 +27,7 @@
  * ── 判决主体切到 oxlint 之后（#2777 PR-B）────────────────────────
  *
  * 台账的**出处**已换成 oxlint 判决配置（`loadOxlintConfig()`），不再读
- * `eslint.config.js`（那份只剩 14 条 oxlint 没有等价实现的策略）。
+ * `eslint.config.js`（#3157 起它已删除，判决面只剩 oxlint）。
  *
  * ── 取数口径：oxlint CLI（#2777 PR-C）─────────────────────────────
  *
@@ -84,7 +84,7 @@ const FILE_LEVEL_EXEMPTIONS = [
 ];
 
 /**
- * 一条文件级豁免块（从 `eslint.config.js` 的扁平数组里认出来的那种形状）。
+ * 一条文件级豁免块（从 `oxlint.parity.config.mjs` 的 `overrides` 里认出来的那种形状）。
  * @typedef {Object} ConfigBlock
  * @property {string | string[]} [files]
  * @property {Record<string, unknown>} [rules]

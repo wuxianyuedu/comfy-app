@@ -65,32 +65,10 @@ if (!git(["rev-parse", "--is-inside-work-tree"]).ok) {
   );
 }
 
-// ── 顺带失效 eslint 增量缓存（ISSUE #1399）───────────────────────────────────
-//
-// 为什么并在这里而不是往 `postinstall` 再挂一条命令：`postinstall` 的形状受
-// `launcher-core/node-runner.mjs::checkPostinstall()` 约束（必须逐字以
-// `node scripts/install-git-hooks.mjs` 开头，禁止 `&&` / `||` / `sh`）—— 那条契约
-// 拦的正是 #636 的事故形态（拼接命令在 Windows 的 cmd.exe 语义下直接崩）。
-// 本入口的定义就是「任何一步失败都只提示、`exit 0`、不阻断安装」，把这一步并进来
-// 既满足同一条契约，也不用新增第二个 postinstall 执行者。
-//
-// 为什么需要它：eslint 的 `--cache` 缓存键**不含依赖树**，而 `no-unsafe-*` 是
-// 类型化规则 —— 依赖一变，旧判决会被整片重放（假红拦死提交 / 假绿洗掉违规）。
-// 详见 `scripts/eslint-cache-fingerprint.mjs` 的文件头与 ISSUE #1399。
-//
-// 失败语义与上面一致：检索引擎算不出指纹、缓存删不掉，都只提示，绝不让
-// `pnpm install` 挂掉。
-try {
-  const { runFingerprint } = await import("./eslint-cache-fingerprint.mjs");
-  runFingerprint({ root, log: say });
-} catch (error) {
-  say(`警告：eslint 缓存指纹失效这一步被跳过（${String(error)}）`);
-}
-
 // ── 顺带补上 Storybook 的类型输入（台账 E15）─────────────────────────────────
 //
 // `tsconfig.json` 的 include **显式列着** `.storybook/**/*.tsx`（点目录不在 glob
-// 的默认展开范围里，不列就是 tsc 与 eslint 的双重盲区，那边注释写着理由），
+// 的默认展开范围里，不列就是 tsc 与 lint 的双重盲区，那边注释写着理由），
 // 而注入层读的两样东西都是**现生成且不入库**的：`./generated/app-origin`（端口按
 // 检出路径推导，写死的值在别人的 checkout 上必然错）与 `.storybook/assets/` 那三张
 // 真图（media 值源要指向磁盘上的文件名）。两件事叠在一起的结果：**没跑过

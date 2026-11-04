@@ -77,7 +77,7 @@ const CRITERION = "改用非正则方案就可以摘掉（夹具文案）";
 
 /**
  * bin 那条的预算：登记实测成本 + 同族件冷价，不是给慢用例兜底（§11.13）。本机隔离实测 10.4 / 10.9 / 11.6s（三跑），
- * 而同份 `eslint.config.js` 在同族件（`tests/check-a11y-rules.test.ts` 头注）记的是进程内首值 36.4s / 真子进程
+ * 而同族件（`tests/check-a11y-rules.test.ts` 头注）记的是当时那份 `eslint.config.js` 的冷价：进程内首值 36.4s / 真子进程
  * 57.1s（冷检出 40s+），这笔钱这份判据也要付 ⇒ 取同一档余量（默认 30s 会被 CPU 满载首值顶穿，§13.6.4）。
  */
 const CLI_BUDGET = { timeout: 120_000 };

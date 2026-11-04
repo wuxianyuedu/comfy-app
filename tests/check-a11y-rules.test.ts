@@ -1,6 +1,6 @@
 /**
  * `scripts/check-a11y-rules.cjs` 的加载与入口自测（ISSUE #1623）。与 `a11y-rules-gate.test.ts` 分工：那份判
- * 台账五向口径；这份判「判据怎么被加载」——① 真加载只求值一次（§11.19.1 档 E，首价在收集期付掉）、
+ * 台账五向口径；这份判「判据怎么被加载」——① 真加载只求值一次（判据配置只求值一次、后续命中同一实例）、
  * ② 导出面每个都能调用、③ 求值失败时给出结论或带原因冒出，不许把半张表当结论。
  */
 import { execFileSync } from "node:child_process";
@@ -10,74 +10,58 @@ import { expect, test } from "vitest";
 import { loadJudgeModule, REAL_ROOT, SCRIPT } from "./helpers/a11y-effective-config";
 
 /**
- * 本文件里真读仓库根 `eslint.config.js` 的用例的显式预算（PR-C 前它 import 整个 `eslint-config-next`）。
- * 登记的是**实测成本，不是给慢用例兜底**（§11.13）：进程内首值 36.4s（冷检出 40s+）、bin 形态真子进程 57.1s，
- * 都顶穿默认 30s 档；此前用例没带预算，钩子必冷时红的是「没记账的成本」。⚠️ 120s 只对子进程档还有意义（暖机搬走了进程内那笔，`CLI_BUDGET`）。
- */
-const CONFIG_BUDGET = { timeout: 120_000 };
-
-/**
  * 「bin 形态」真起子进程用例的显式预算。它非起进程不可（判 `CLI_ARGS` ← `process.argv` → `judge` →
- * `process.exit(code)`），而子进程有自己的模块缓存、借不到本进程暖机：热检出 3.5s、满载 11s+、隔离 57.1s。
- * 与 `a11y-rules-gate` 的 `CLI_BUDGET` 同源给足；30s 全局是给真进程的余量，不是给慢用例兜底（§11.13）。
+ * `process.exit(code)`），而子进程有自己的模块缓存、借不到本进程暖机：热检出 3.5s、满载 11s+。
+ * 30s 全局是给真进程的余量，不是给慢用例兜底（§11.13）。
  */
 const CLI_BUDGET = { timeout: 120_000 };
 
-  /* 收集期暖机一次：把「每进程只付一次」的真加载放在用例计时之外。否则谁排第一条就替全文件付那 3408ms
-   * （冷检出 40s+），而它恰恰叫「只求值一次」—— 99% CPU 下实测红成 `Test timed out in 30000ms`（§13.6.4 负载假红）。
+  /* 收集期暖机一次：把「每进程只付一次」的真加载放在用例计时之外，否则谁排第一条就替全文件付那笔。
    * `a11y-rules-gate.test.ts` 早有这一步（`await judgeWith(REAL_LEDGER)`）；暖机不替用例断言，失败时抛、整份文件红。 */
-await loadJudgeModule().loadEslintConfig();
+await loadJudgeModule().loadOxlintConfig();
 
-test("真加载：求值的是仓库根那份 `eslint.config.js`，且只求值一次", CONFIG_BUDGET, async () => {
-  const { loadEslintConfig } = loadJudgeModule();
+test("真加载：求值的是仓库根那份 `oxlint.parity.config.mjs`，且只求值一次", async () => {
+  const { loadOxlintConfig } = loadJudgeModule();
 
   /* 暖机已经在收集期把这一笔付掉了，所以这里的 `firstMs` 通常就是 0ms ——
    * 它**只**作为下面那条话术的读数，不当断言：首次求值的墙钟是机器读数，
-   * 不是判据的性质（热检出 3.4s、冷检出 40s+、`.next/` 命中 1.1–1.7s）。 */
+   * 不是判据的性质。 */
   const first = Date.now();
   /* SAFETY: 类型断言已复核 */
-  const flat = (await loadEslintConfig()) as Array<{
-    rules?: unknown;
-  }>;
+  const config = (await loadOxlintConfig()) as {
+    overrides?: Array<unknown>;
+  };
   const firstMs = Date.now() - first;
 
   // 第二次必须是「同一份」且是常数时间 —— 共进程的全部收益都在这一条上。
   const second = Date.now();
   /* SAFETY: 类型断言已复核 */
-  const again = (await loadEslintConfig()) as Array<{
-    rules?: unknown;
-  }>;
+  const again = (await loadOxlintConfig()) as {
+    overrides?: Array<unknown>;
+  };
   const secondMs = Date.now() - second;
 
-  expect(Array.isArray(flat)).toBe(true);
-  expect(flat.length).toBeGreaterThan(0);
-  expect(again).toBe(flat);
+  expect(Array.isArray(config.overrides)).toBe(true);
+  expect((config.overrides ?? []).length).toBeGreaterThan(0);
+  expect(again).toBe(config);
   /* 第三次拿到的还是同一个实例 —— 「只求值一次」这一半判据是**与机器快慢无关**的：
-   * 去掉记忆化（每次都重新 `import()` 再 flatten）会在这里当场红。
-   * 原先这一格写的是 `firstMs > 0`，它在冷进程里恒真、在暖进程里恒假
-   * （`Date.now()` 粒度下缓存命中的耗时就是 0）—— 一条会随机器状态翻向的断言
-   * 正是本文件要防的形态，而它想证明的「拿到过一份真配置」已由上面两条覆盖。 */
-  expect(await loadEslintConfig()).toBe(flat);
-  /* 第二次不许再走一遍求值：给它一个**很宽**的上限（100ms / 首次通常 40ms–1.7s，
-   * 冷检出上 40s+），只要不是「又一次真加载」就够 —— 这里刻意不把首次的时间
-   * 当成断言（那会把「机器快慢」判成回归）。 */
+   * 去掉记忆化（每次都重新 `import()`）会在这里当场红。 */
+  expect(await loadOxlintConfig()).toBe(config);
+  /* 第二次不许再走一遍求值：给它一个**很宽**的上限（100ms），只要不是「又一次真加载」就够 ——
+   * 这里刻意不把首次的时间当成断言（那会把「机器快慢」判成回归）。 */
   expect(secondMs, `第二次读配置不该再走一遍 import 求值（首值实测 ${firstMs}ms）`).toBeLessThan(
     100,
   );
 });
 
-test(
-  "真加载：那份配置里确实装着 jsx-a11y 插件（判据的四张表都从它读）",
-  CONFIG_BUDGET,
-  async () => {
-    const { officialRuleMap, effectiveRules } = loadJudgeModule();
-    const rules = await officialRuleMap();
-    const effective = await effectiveRules();
-    expect(rules.size).toBeGreaterThan(0);
-    expect([...rules.keys()].every((n) => n.startsWith("jsx-a11y/"))).toBe(true);
-    expect(Object.keys(effective).length).toBeGreaterThan(0);
-  },
-);
+test("真加载：那份配置里确实装着 jsx-a11y 插件（判据的四张表都从它读）", async () => {
+  const { officialRuleMap, effectiveRules } = loadJudgeModule();
+  const rules = await officialRuleMap();
+  const effective = await effectiveRules();
+  expect(rules.size).toBeGreaterThan(0);
+  expect([...rules.keys()].every((n) => n.startsWith("jsx-a11y/"))).toBe(true);
+  expect(Object.keys(effective).length).toBeGreaterThan(0);
+});
 
 test("导出面：每个导出都是可调用的（不是「导了没人用」的空壳）", () => {
   /* SAFETY: 类型断言已复核 */
@@ -93,16 +77,18 @@ test("导出面：每个导出都是可调用的（不是「导了没人用」�
   expect(typeof VERIFIED_SURFACES).toBe("object");
 });
 
-test("失败路径：真加载失败时带给原因冒出去，不吞（更不把半张表当结论）", CONFIG_BUDGET, () => {
-  /* 这一格的**真站点**在 bin 形态里（`.next/` 陈旧、插件包缺失这类加载错误），但它在**共进程**里没有身份：
+test("失败路径：真加载失败时带给原因冒出去，不吞（更不把半张表当结论）", () => {
+  /* 这一格的**真站点**在 bin 形态里（插件包缺失这类加载错误），但它在**共进程**里没有身份：
    * `createRequire` / `import()` 都走该脚本的模块缓存，「子进程必失败、缓存后必成功」的样本没法在同一进程里两形态各测一次。
-   * 所以这里钉的是判据对本进程那份配置的态度：`loadEslintConfig()` 要么给真扁平配置、要么抛，
+   * 所以这里钉的是判据对本进程那份配置的态度：`loadOxlintConfig()` 要么给真配置对象、要么抛，
    * 不许回「空的/半张」配置让上层四向判据静默全绿（§11.23「判据在场 ≠ 判据在跑」）。 */
-  const { loadEslintConfig } = loadJudgeModule();
-  return loadEslintConfig().then(
-    (flat) => {
-      expect(Array.isArray(flat)).toBe(true);
-      expect(flat).not.toHaveLength(0);
+  const { loadOxlintConfig } = loadJudgeModule();
+  return loadOxlintConfig().then(
+    (config) => {
+      /* SAFETY: 类型断言已复核 */
+      const { overrides } = config as { overrides?: Array<unknown> };
+      expect(Array.isArray(overrides)).toBe(true);
+      expect(overrides).not.toHaveLength(0);
     },
     (error: unknown) => {
       // 抛是可以接受的那一支，但**必须**带原因（裸 throw 等于吞掉根因）。
@@ -135,5 +121,5 @@ test("bin 形态的脚本头两块注释与事实同源（成本那一节的判�
   expect(src).toContain("await configFacts()");
   /* 配置读面只留一个：四个读点不许再各自 `import()` 一遍（那正是成本被乘的地方）。 */
   expect(src.match(/function configFacts\(/g)).toHaveLength(1);
-  expect(src).toContain("loadEslintConfig");
+  expect(src).toContain("loadOxlintConfig");
 });

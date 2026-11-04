@@ -24,7 +24,7 @@ const SCRIPTS = [
       readLedger:
         "tests/a11y-rules-gate.test.ts（bin 形态读 `--ledger <path>` 那一格）与 tests/check-a11y-rules.test.ts（台账归一形状）",
       normalize: 'tests/a11y-rules-gate.test.ts（规则档位归一："error" 与 ["error"] 同义）',
-      loadEslintConfig: "tests/check-a11y-rules.test.ts 的「真加载」那两条（配置求值 + 失败路径）",
+      loadOxlintConfig: "tests/check-a11y-rules.test.ts 的「真加载」那两条（配置求值 + 失败路径）",
       effectiveRules: "tests/check-a11y-rules.test.ts（生效档位表）",
       officialRecommended: "tests/check-a11y-rules.test.ts（官方 recommended 有效集合）",
       officialRuleMap: "tests/check-a11y-rules.test.ts（插件规则 + 废弃标记）",

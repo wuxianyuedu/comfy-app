@@ -85,7 +85,7 @@
       "verifiedSurfaces": [
         "judge",
         "normalize",
-        "loadEslintConfig",
+        "loadOxlintConfig",
         "effectiveRules",
         "officialRecommended",
         "officialRuleMap",

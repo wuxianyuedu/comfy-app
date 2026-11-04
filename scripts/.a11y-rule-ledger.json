@@ -1,5 +1,5 @@
 {
-  "why": "jsx-a11y 的规则开关 ⇄ 判据的索引（规范 06 §6.12）。口径：官方 recommended 集合**全开**（由 eslint.config.js 从插件对象算出来，不手抄）；本仓与官方默认不同的每一处（关掉、改选项、就地豁免）都必须在这里登记，并答出「谁在守它」—— 判据 scripts/check-a11y-rules.cjs 双向核：开了没登记 = 判据睡着；登记了却没开 = 假声明。",
+  "why": "jsx-a11y 的规则开关 ⇄ 判据的索引（规范 06 §6.12）。口径：官方 recommended 集合**全开**（由 oxlint.parity.config.mjs 从插件对象算出来，不手抄）；本仓与官方默认不同的每一处（关掉、改选项、就地豁免）都必须在这里登记，并答出「谁在守它」—— 判据 scripts/check-a11y-rules.cjs 双向核：开了没登记 = 判据睡着；登记了却没开 = 假声明。",
   "dialect": [
     {
       "rule": "jsx-a11y/no-autofocus",

@@ -434,7 +434,6 @@ const AGENTS_ROOT_FILES = new Set([
   "package.json",
   "pnpm-workspace.yaml",
   "next.config.js",
-  "eslint.config.js",
   "tsconfig.json",
   "vitest.config.ts",
   ".env.example",

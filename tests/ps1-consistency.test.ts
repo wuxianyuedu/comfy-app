@@ -259,16 +259,19 @@ describe("跨平台动作的实现契约", () => {
       expect.soft(squash(ps1), `quality-gate.ps1 缺 ${needle}`).toContain(needle);
       expect.soft(squash(mjs), `quality-gate.mjs 缺 ${needle}`).toContain(needle);
     }
-    // lint 的 `--max-warnings` 唯一真源在 package.json，别让它静默丢失（否则
-    // 零警告门禁形同虚设却没人发现）。
+    // lint 的零警告语义由 oxlint `--deny-warnings` 承担，唯一真源在 package.json，
+    // 别让它静默丢失（否则零警告门禁形同虚设却没人发现）。
     /* SAFETY: 类型断言已复核 */
     const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
       scripts?: Record<string, string>;
     };
+    expect(pkg.scripts?.lint, "package.json 的 lint 必须委托给 lint:oxlint").toBe(
+      "pnpm run lint:oxlint",
+    );
     expect(
-      `${pkg.scripts?.lint ?? ""} ${pkg.scripts?.["lint:policy"] ?? ""}`,
-      "package.json 的 lint 脚本缺 --max-warnings（零警告门槛丢失）",
-    ).toContain("--max-warnings");
+      pkg.scripts?.["lint:oxlint"] ?? "",
+      "package.json 的 lint:oxlint 缺 --deny-warnings（零警告门槛丢失）",
+    ).toContain("--deny-warnings");
     // 两侧的三项门禁名必须一致（增减门禁时只改一侧 = 两个平台给出不同结论）
     for (const key of ["typecheck", "lint", "test"]) {
       expect.soft(mjs).toContain(`${key}:`);

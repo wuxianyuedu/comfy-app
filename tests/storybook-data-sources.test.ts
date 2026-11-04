@@ -104,15 +104,16 @@ describe("Storybook 数据源注入层的契约（ISSUE #1381）", () => {
     }
   });
 
-  it("点目录进了 tsc 与 eslint 的扫描面（否则这一层是双重盲区）", () => {
+  it("点目录进了 tsc 与 lint 的扫描面（否则这一层是双重盲区）", () => {
     const tsconfig = readFileSync(join(ROOT, "tsconfig.json"), "utf8");
-    const eslint = readFileSync(join(ROOT, "eslint.config.js"), "utf8");
+    const oxlintConfig = readFileSync(join(ROOT, "oxlint.parity.config.mjs"), "utf8");
     expect(
       tsconfig,
       "`.storybook/**` 不在 tsconfig 的 include 里 —— TS 的 `**/*.ts` 会跳过点目录",
     ).toContain(".storybook/**/*.ts");
-    expect(eslint, "`.storybook/**` 不在 LINT_FILES 里 —— 同一个目录两种检查都看不到").toContain(
-      ".storybook/**/*.{ts,tsx,mts,cts}",
-    );
+    expect(
+      oxlintConfig,
+      "`.storybook/**` 不在判决配置的 TS 档里 —— 同一个目录两种检查都看不到",
+    ).toContain(".storybook/**/*.{ts,tsx,mts,cts}");
   });
 });

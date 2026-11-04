@@ -274,7 +274,7 @@ const PR_MOVED_TO_DAILY: Array<[string, string, string, string]> = [
   ["Python 探针读数", "每日 Python 探针读数", "scripts/python-probe.mjs", ""],
   ["浏览器安装", "每日浏览器安装", "scripts/ci-toolchain-selfcheck.mjs", "--playwright-only"],
   /* `ESLint 零警告` 是**另一条理由**（起一堆子进程而非节点事实）：它挂满过 8640s 与 20m，红的地方不是这次改动违规而是这台机腾不出核。
-   * 同一张表接住它，因为要判的东西逐字相同：PR 清单不许再有、每日清单必须有一格、点的是 `pnpm run lint`（口径见 `package.json` 的 `lint` 与 `eslint.config.js` 顶部）。 */
+   * 同一张表接住它，因为要判的东西逐字相同：PR 清单不许再有、每日清单必须有一格、点的是 `pnpm run lint`（口径见 `package.json` 的 `lint` 与 `oxlint.parity.config.mjs` 顶部）。 */
   ["ESLint 零警告", "每日 ESLint 零警告", "pnpm run lint", ""],
   /* `新鲜度账` 是**第三种理由**（ISSUE #2300 主体分权）：PR 上下文读的是**主干的账**（`FRESHNESS_TRACKS[*].subject` 三档都是 `master`，权威副本在 `ci/freshness-ledger`）。
    * 它判的是「机器 / 主干怎么被调度」，不是某次 PR 的缺陷；第四元组留空（不共用脚本、无分档参数），每日那格的差别在 env（`COMFY_CI_SUBJECT`），env 不在比较面里。 */

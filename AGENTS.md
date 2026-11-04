@@ -89,32 +89,28 @@
 | 复用/去重与常量收口                                                   | 抽共享模块、加/改默认地址与端口、写新的质量门禁、**动手前查有无现成实现 / 缺能力补地基**、**同一串手工命令被敲到第二次就收成入口**                                                                                            | §12.18（复用优先·写之前先查）、**§12.20（能做成工具的就做成工具）**、§12.12（跨文件重复）、§12.13（函数长度）、§12.14（端点收口）                                                                                                                                                                |
 | 提交 / PR / 合并这条流程本身                                          | `scripts/ship*.mjs`、`.cnb.yml`（PR 与每日两跑的清单）、`.qoder/skills/ship/SKILL.md`                                                                                                                                       | §13.6（`pnpm ship` 那四条红线）、§13.5.25（本地跑哪几条）、§13.10（碎片与单子）、§13.6.5（**删分支前**：落地与否只认 PR 的 `is_merged`，三点 diff 不是判据）                                                                                                                                                                                                                   |
 
-## lint 判据：oxlint 判决 + 策略守卫（#2777 收尾后的最终架构）
+## lint 判据：oxlint 唯一判决（#2777 收尾后的最终架构）
 
-`pnpm run lint` 是唯一判决口，实现是**两档串行**（`lint:policy` 不在 `lint` 里单独降级，
-`check:premerge` 继承 `lint`，所以 pre-push 与平台那一跑都跟着走）：
+`pnpm run lint` 是唯一判决口，实现是**一档** `lint:oxlint`（`check:premerge` 继承 `lint`，
+所以 pre-push 与平台那一跑都跟着走）：
 
 | 档 | 命令 | 配置 | 管什么 |
 | --- | --- | --- | --- |
 | 通用 lint | `pnpm run lint:oxlint` | `oxlint.parity.config.mjs`（判决配置；`oxlint.config.ts` 是同源的 IDE 面） | **208 条规则**的全量面：`src` / `tests` / `scripts` / `e2e` / `tools` / `.storybook` / 根配置文件 |
-| 策略守卫 | `pnpm run lint:policy` | `eslint.config.js`（**只有 14 条**） | oxlint 没有等价实现的策略；`files` 只匹配 TS 源码面，不跑整份历史 eslint 配置 |
 
-两侧的零警告语义都保留（oxlint `--deny-warnings`、eslint `--max-warnings 0`），
-`--fix` 由 `pnpm run lint:fix` 分别落到两档。平台格子的名字仍叫「ESLint（零警告）」——
-那是一个稳定标识（改名会打断历史读数），但它跑的就是这条 `lint` 链。
+零警告语义由 oxlint `--deny-warnings` 承担。**#3157 起 eslint 不再作为 lint 执行器**：
+eslint.config.js、`lint:policy` 与 `@typescript-eslint/parser` / `eslint-plugin-react-hooks`
+均已删除，`--fix` 只落到 oxlint 这一档。`eslint` 包本身**保留**（理由见下方「依赖最小集」），
+只当两个 jsPlugin 的运行时宿主。平台格子的名字仍叫「ESLint（零警告）」—— 那是一个稳定标识
+（改名会打断历史读数），但它跑的就是这条 `lint` 链。
 
-### `lint:policy` 那 14 条（为什么还留在 eslint 侧）
+### 退役时删掉的 React Compiler 族 12 条（原 `lint:policy` 的全部剩余）
 
-| 规则 | 留住它的理由 |
-| --- | --- |
-| `react-hooks/config`、`error-boundaries`、`gating`、`globals`、`immutability`、`preserve-manual-memoization`、`purity`、`set-state-in-render`、`static-components`、`use-memo`（10 条 error） | React Compiler 族，oxlint 未实现等价规则 |
-| `react-hooks/incompatible-library`、`react-hooks/unsupported-syntax`（2 条 warn） | 同上；warn 是上游档位，不升级 |
-| `react/no-deprecated` | oxlint 原生未实现，已由 `eslint-plugin-react` 经 jsPlugin 承接（PR-1）；eslint 侧保留到 PR-2 退役 |
-| `@next/next/no-location-assign-relative-destination` | oxlint 原生未实现，已由 `@next/eslint-plugin-next` 经 jsPlugin 承接（PR-1）；eslint 侧保留到 PR-2 退役 |
-
-`react-hooks/config` 与 `gating` **不迁**：两引擎（ESLint `Linter` 与 oxlint jsPlugin）
-在无 options 时均 0 诊断，而本仓不传编译器 options —— 迁上来是纯空转；实测启用会让
-全仓 lint 从 34s 涨到 64s（+80%），零收益。退役时随 eslint 侧一并删。
+`react-hooks/*` 12 条随 eslint 一并删除。其中 `config` / `gating` **已证空转**：两引擎
+（ESLint `Linter` 与 oxlint jsPlugin）在无 options 时均 0 诊断，而本仓不传编译器 options
+—— 迁上来是纯空转；实测启用会让全仓 lint 从 34s 涨到 64s（+80%），零收益。
+其余 10 条在退役前的全仓读数里 0 诊断，且 oxlint 无等价实现。若要重新承重，
+门槛是先有等价实现或独立判据，再按本仓口径评估启用。
 
 > **134 → 208 是怎么来的（#2777 PR-1）**：判决配置此前没写 `plugins` 字段，oxlint 只
 > 默认启用 `unicorn` / `typescript` / `oxc`，`react` / `nextjs` / `jsx_a11y` / `import`
@@ -132,21 +128,21 @@
 
 ### 依赖最小集
 
-`eslint.config.js` 只直接依赖 `@typescript-eslint/parser` 与三个插件包
-（`eslint-plugin-react` / `eslint-plugin-react-hooks` / `@next/eslint-plugin-next`），
-不再经 `eslint-config-next` 中转，也不需要 `@eslint/compat` 的补丁层；
-`eslint-plugin-jsx-a11y` 只服务 `scripts/check-a11y-rules.cjs` 读官方规则表。
-`eslint-plugin-boundaries` / `eslint-import-resolver-oxc` / `eslint-plugin-unused-imports`
-被 oxlint 的 `jsPlugins` / `settings` 复用 —— 留着它们**不是因为 eslint 还在跑**。
+eslint.config.js 已删。以下插件包留着**不是**因为 eslint 还在跑，而是被 oxlint 的
+`jsPlugins` / `settings` 复用：`eslint-plugin-react`、`@next/eslint-plugin-next`、
+`oxlint-plugin-eslint`、`eslint-plugin-boundaries`、`eslint-plugin-unused-imports`、
+`eslint-import-resolver-oxc`；`eslint-plugin-jsx-a11y` 只服务 `scripts/check-a11y-rules.cjs`
+读官方规则表。`eslint` 包本身也保留，但只作**运行时宿主**：`eslint-plugin-react` 加载时
+`require("eslint/package.json")`、`eslint-plugin-unused-imports` 要
+`eslint/use-at-your-own-risk` —— 删包会让 `oxlint.parity.config.mjs` 直接加载失败（#3157 实测）。
+`@typescript-eslint/parser`、`eslint-plugin-react-hooks` 已移除。
 
-### 复审条件（什么时候可以彻底拆掉策略守卫）
+### 复审条件（什么时候可以再收紧）
 
 `react/no-deprecated` 与 `@next/next/no-location-assign-relative-destination` 已由
-jsPlugin 承接（PR-1），`react-hooks/config` / `gating` 已证空转、随退役一并删 ——
-剩下的门槛只有 `react-hooks/*` 那 12 条。它们迁走或拍板放弃后，`eslint.config.js`
-与 `lint:policy` 一起删（**连 eslint 本体和上表插件依赖一起**），`lint` 收成单档
-`lint:oxlint`。逐条对齐矩阵与缺口复核口径在 `log/tools/eslint-oxlint-parity.md`
-（本地台账，不入仓）。
+jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。若要恢复 React Compiler 族判据，
+门槛是 oxlint 提供等价实现（或给出独立判据）。逐条对齐矩阵与缺口复核口径在
+`log/tools/eslint-oxlint-parity.md`（本地台账，不入仓）。
 
 ### 已知限制
 

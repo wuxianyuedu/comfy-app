@@ -1,18 +1,18 @@
 /**
  * 「视图层 store selector 不许现拼对象 / 现造新数组」判据自身的用例（ISSUE #1780），与 router 信封那份同构：三层缺一都会静默失效。
  * ① 真扫 `src/**` 按名字匹配 store 订阅 hook，断言无对象字面量 / `.map`·`.filter` 造数组，并断言扫描面非空（路径写错时「零命中」像「全修好了」）；② `oxlint.parity.config.mjs`（#2777 起判决主体）的 `STORE_SELECTOR_HOOKS` 必须覆盖全部 `create<...>()` 出来的 zustand store（漏登记 = 新 store 失去保护）。
- * ③ 用 eslint `Linter` 最小片段验行为：反模式必须报、合法写法必须不报 ——「有配置 ≠ 配置在跑」（§11.7）。按**名字**限定而非 `/^use[A-Z]/` 泛匹配的理由见判决配置注释（`useMemo`/`useState` 的合法写法会被泛匹配全报）。
+ * ③ 用真 oxlint CLI 最小探针验行为：反模式必须报、合法写法必须不报 ——「有配置 ≠ 配置在跑」（§11.7）。按**名字**限定而非 `/^use[A-Z]/` 泛匹配的理由见判决配置注释（`useMemo`/`useState` 的合法写法会被泛匹配全报）。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { Linter } from "eslint";
 
+import { probeRules } from "./helpers/oxlint-probe";
 import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = process.cwd();
 const SRC = path.join(ROOT, "src");
-/** #2777：这条规则的生效面已切到 oxlint 判决配置（`eslint.config.js` 不再承载）。 */
+/** #2777：这条规则的生效面已切到 oxlint 判决配置（#3157 起 eslint 已退役，它是唯一出处）。 */
 const CONFIG = path.join(ROOT, "oxlint.parity.config.mjs");
 /** 全量评估尺里也有一份同名清单（两份必须逐字一致，见下面 ② 的用例）。 */
 const RULER_CONFIG = path.join(ROOT, "oxlint.config.ts");
@@ -159,38 +159,34 @@ describe("③ selector 真的会响", () => {
   it("反模式报、合法写法不报", () => {
     const selectors = realSelectors();
     expect(selectors.length).toBe(2);
-    const linter = new Linter();
-    const verify = (code: string) =>
-      linter.verify(code, {
-        languageOptions: { ecmaVersion: 2022, sourceType: "module" },
-        rules: {
-          "no-restricted-syntax": [
-            "error",
-            ...selectors.map((selector) => ({ selector, message: "x" })),
-          ],
-        },
-      });
-    const flagged = (code: string) => verify(code).some((m) => m.ruleId === "no-restricted-syntax");
-
-    // 反模式：对象字面量 / 造新数组
-    expect(
-      flagged(`const a = useShellTabs((s) => ({ tabs: s.tabs, active: s.activeTabId }));`),
-    ).toBe(true);
-    expect(
-      flagged(`const b = useMessageCenterStore((s) => s.messages.filter((m) => !m.read));`),
-    ).toBe(true);
-
-    // 合法：原始值 / store 里已固化的引用 / reduce 成原始值
-    expect(flagged(`const c = useShellTabs((s) => s.activeTabId);`)).toBe(false);
-    expect(flagged(`const d = useLogCategoryStore((s) => s.enabled);`)).toBe(false);
-    expect(
-      flagged(
-        `const e = useMessageCenterStore((s) => s.messages.reduce((n, m) => n + (m.read ? 0 : 1), 0));`,
-      ),
-    ).toBe(false);
-
-    // 普通 React hook 造对象**不在拦的范围**（泛匹配 `use[A-Z]` 会误报一片）
-    expect(flagged(`const f = useMemo(() => ({ n: 1 }), []);`)).toBe(false);
-    expect(flagged(`const g = useState(() => rows.slice(0, 8));`)).toBe(false);
+    const hits = probeRules(
+      {
+        "eslint-js/no-restricted-syntax": [
+          "error",
+          ...selectors.map((selector) => ({ selector, message: "x" })),
+        ],
+      },
+      {
+        // 反模式：对象字面量 / 造新数组
+        "object.ts": `const a = useShellTabs((s) => ({ tabs: s.tabs, active: s.activeTabId }));`,
+        "new-array.ts":
+          `const b = useMessageCenterStore((s) => s.messages.filter((m) => !m.read));`,
+        // 合法：原始值 / store 里已固化的引用 / reduce 成原始值
+        "primitive.ts": `const c = useShellTabs((s) => s.activeTabId);`,
+        "store-value.ts": `const d = useLogCategoryStore((s) => s.enabled);`,
+        "reduce.ts":
+          `const e = useMessageCenterStore((s) => s.messages.reduce((n, m) => n + (m.read ? 0 : 1), 0));`,
+        // 普通 React hook 造对象**不在拦的范围**（泛匹配 `use[A-Z]` 会误报一片）
+        "use-memo.ts": `const f = useMemo(() => ({ n: 1 }), []);`,
+        "use-state.ts": `const g = useState(() => rows.slice(0, 8));`,
+      },
+    );
+    expect(hits.has("object.ts"), "对象字面量必须报").toBe(true);
+    expect(hits.has("new-array.ts"), "造新数组必须报").toBe(true);
+    expect(hits.has("primitive.ts"), "只取原始值不该报").toBe(false);
+    expect(hits.has("store-value.ts"), "取 store 里已固化的引用不该报").toBe(false);
+    expect(hits.has("reduce.ts"), "reduce 成原始值不该报").toBe(false);
+    expect(hits.has("use-memo.ts"), "useMemo 造对象不在拦的范围").toBe(false);
+    expect(hits.has("use-state.ts"), "useState 造数组不在拦的范围").toBe(false);
   });
 });
