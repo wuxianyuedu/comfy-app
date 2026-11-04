@@ -164,3 +164,92 @@ export function parseRange(range) {
   }
   return { before: beforeRaw, after: afterRaw === "" ? "HEAD" : afterRaw, dots: ".." };
 }
+
+/**
+ * 判决面参数的**唯一解析处**（ISSUE #3163）。认识的只有三个：`--staged`（收窄）、
+ * `--strict`（阈值降为 1）、`--range <before>..<after>`。
+ *
+ * 不认识的旗标 / 缺取值的 `--range` 都记成问题，由 `faceArgRefusal()` 念清「实际
+ * 判的是哪个面」后以 **2** 退出（2 = 没有给出结论，不是「判红」）。旧行为是静默
+ * 忽略：传 `--base` 时判据照样按暂存区 / `HEAD` 给一句干净的 `[ok]` —— 判决面在
+ * 没人说话的情况下换了，而屏幕上看不出来。现有调用方逐处核过（`package.json` 的
+ * `format:reformat-guard` 不带旗标、钩子只传 `--staged`、`ci-heavy-gates.mjs` 换发
+ * `--range <值>`），没有一处传未知旗标，所以这一档收紧不会误伤。
+ *
+ * @param {string[]} args `process.argv.slice(2)`
+ * @returns {{unknown: string[], rangeMissing: boolean, range: string | null, strict: boolean}}
+ */
+export function parseFaceArgs(args) {
+  const unknown = [];
+  let rangeMissing = false;
+  let range = null;
+  let strict = false;
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    /* `noUncheckedIndexedAccess` 下索引访问可能是 undefined；`args` 来自 argv，
+     * 理论上不会有空位，留一行收窄即可。 */
+    if (typeof arg !== "string") {
+      continue;
+    }
+    if (arg === "--staged") {
+      continue;
+    }
+    if (arg === "--strict") {
+      strict = true;
+      continue;
+    }
+    if (arg === "--range") {
+      const value = args[i + 1];
+      /* 缺值 / 下一项是另一个旗标 ⇒ 不消费它，让它按自己的旗标判（`--range --strict`
+       * 于是同时报「缺值」与保留 `--strict`）。 */
+      if (typeof value !== "string" || value === "" || value.startsWith("-")) {
+        rangeMissing = true;
+        continue;
+      }
+      range = value;
+      i += 1;
+      continue;
+    }
+    unknown.push(arg);
+  }
+  return { unknown, rangeMissing, range, strict };
+}
+
+/**
+ * 把 `parseFaceArgs()` 记下的问题变成一段自证的拒绝话术；没有问题回 `null`。
+ *
+ * 三件必须都在：① 哪个旗标/参数不认识（或 `--range` 缺了什么）；② **当前实际判决面**
+ * 是什么；③ 怎么传才叫对。只写「invalid flag」等于让下一个人继续猜。
+ *
+ * @param {ReturnType<typeof parseFaceArgs>} parsed
+ * @returns {string | null}
+ */
+export function faceArgRefusal(parsed) {
+  const problems = [];
+  if (parsed.rangeMissing) {
+    problems.push("「--range」缺少取值（未被识别为有效参数）");
+  }
+  if (parsed.range !== null && parseRange(parsed.range) === null) {
+    problems.push(`「--range」的取值「${parsed.range}」解析不成区间（要 <before>..<after>）`);
+  }
+  for (const arg of parsed.unknown) {
+    problems.push(`收到不认识的${arg.startsWith("-") ? "旗标" : "参数"}「${arg}」（未被识别）`);
+  }
+  if (problems.length === 0) {
+    return null;
+  }
+  let face = "暂存区（无暂存改动时回落 HEAD 这一次提交）";
+  if (parsed.range !== null) {
+    face =
+      parseRange(parsed.range) === null
+        ? "（无法确定：--range 的取值解析不成区间）"
+        : `--range ${parsed.range}（改动前取起点、改动后取终点）`;
+  }
+  return [
+    ...problems.map((problem) => `[reformat] ${problem}`),
+    `[reformat] 当前实际判决面：${face}`,
+    "[reformat] 合法写法：node scripts/check-reformat-only.cjs [--staged] [--strict] [--range <before>..<after>]",
+    "[reformat] 例：node scripts/check-reformat-only.cjs --range origin/master..HEAD",
+    "[reformat] 判据面不确定 ⇒ 不给结论（exit 2，不是「判红」）。ISSUE #3163",
+  ].join("\n");
+}
