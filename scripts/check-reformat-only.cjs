@@ -50,9 +50,15 @@
  * CI(`--range`)与本地盘点的行为都不变,pre-commit 拿到的是它真正该看的东西。
  *
  * 用法:
- *   node scripts/check-reformat-only.cjs            # 判暂存区；无暂存改动则判 HEAD
- * 用法示例：node scripts/check-reformat-only.cjs --range A..B
- *   node scripts/check-reformat-only.cjs --strict   # 阈值降为 1(排查/盘点用)
+ *   node scripts/check-reformat-only.cjs                 # 判暂存区；无暂存改动则判 HEAD
+ *   node scripts/check-reformat-only.cjs --staged        # 面上没有源文件时跳过（ISSUE #1993）
+ *   node scripts/check-reformat-only.cjs --strict        # 阈值降为 1(排查/盘点用)
+ *   node scripts/check-reformat-only.cjs --range A..B    # 按显式区间判（CI / 盘点）
+ *
+ * **不认识的旗标 / `--range` 缺取值 / 区间写法解析不出来 ⇒ exit 2**，并念出
+ * 「实际判决面」与合法写法（ISSUE #3163）。过去这些形状被静默忽略、判据仍按默认面
+ * 给结论 —— 「你以为判的是 X、它判的是 Y」在屏幕上与正常放行逐字相同，是这条判据
+ * 最贵的一型（假绿）。判据面不确定 ⇒ 不给结论。
  */
 const fs = require("node:fs");
 const os = require("node:os");
@@ -145,7 +151,12 @@ const SOURCE_RE = /\.(ts|tsx|js|jsx|mjs|cjs|css|scss|json|md|mdx)$/;
 /* git 取数件收在 `reformat-scan-core.mjs`（ISSUE #3035 拆出：本文件加合并行的取数与
  * 读数后越过 900 行硬闸，而这一组自包含、以 `perCommitDeps` 注入机制层 —— 这里是
  * 那份注入的唯一出处）。`parseRange` 同批搬走（与区间端点有关的一切在同一个模块里）。 */
-const { makeScanFns, parseRange } = require("./reformat-scan-core.mjs");
+const {
+  makeScanFns,
+  parseRange,
+  parseFaceArgs,
+  faceArgRefusal,
+} = require("./reformat-scan-core.mjs");
 const { gitOrEmpty, collectChangedFiles, collectPairs } = makeScanFns(ROOT, SOURCE_RE);
 
 /**
@@ -481,6 +492,12 @@ function headRangeEnds() {
 }
 
 async function main() {
+  const faceArgs = parseFaceArgs(process.argv.slice(2));
+  const refusal = faceArgRefusal(faceArgs);
+  if (refusal !== null) {
+    console.error(`${refusal}\n`);
+    process.exit(2);
+  }
   await loadShell();
   await loadChangedScope();
   /* **合并提交豁免**：合并会把上游整批（含它们在别处做的格式化）一次性带进来，
@@ -494,15 +511,13 @@ async function main() {
    *  在那种检出里**永不点火**（ISSUE #2785；同一形状在 `check-format.cjs` 里已经收口过一次）。 */
   const { hasInProgressMerge } = require("./git-dir.mjs");
   const mergeHeadPresent = hasInProgressMerge(ROOT);
-  if (!process.argv.includes("--range") && mergeHeadPresent) {
+  if (faceArgs.range === null && mergeHeadPresent) {
     gateSkip("格式化提交分离", "合并提交（MERGE_HEAD 存在），「格式化与行为改动分离」不适用");
     return;
   }
 
-  const args = process.argv.slice(2);
-  const limit = args.includes("--strict") ? 1 : LIMIT;
-  const rangeIdx = args.indexOf("--range");
-  const range = rangeIdx === -1 ? null : args[rangeIdx + 1];
+  const limit = faceArgs.strict ? 1 : LIMIT;
+  const range = faceArgs.range;
 
   /* 收窄（`--staged`，见 `STAGED_GATE` 的注释）：暂存里一份源文件都没有时，
    * 下面的每一支都只会得出「没有文件改动，跳过」—— 那就不必先跑一遍 prettier。
