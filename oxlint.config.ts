@@ -1,5 +1,24 @@
+import { readFileSync } from "node:fs";
+
 import awesomeness from "oxlint-config-awesomeness";
 import { defineConfig } from "oxlint";
+
+/** react 的实际版本（去掉 `^` / `~` 前缀）。
+ *
+ * `eslint-plugin-react` 的 `no-deprecated` 靠 `settings.react.version` 判「这条 API 在这个
+ * 版本是否已废弃」；oxlint 只接受**具体版本号**（写 `"detect"` 会报 invalid major version）。
+ * 判决配置与这份评估尺用同一段读法，读数由 `tests/oxlint-jsplugin-rules.test.ts` 对拍。 */
+const REACT_VERSION = parseReactVersion();
+
+function parseReactVersion(): string {
+  const match = /"react"\s*:\s*"[^\d]*([\d.]+)"/.exec(
+    readFileSync(new URL("package.json", import.meta.url), "utf8"),
+  );
+  if (match?.[1] === undefined) {
+    throw new Error("package.json 里读不到 react 版本");
+  }
+  return match[1];
+}
 
 /** 视图层做**精确订阅**的 store hook 名单（单一出处，与 eslint.config.js 同口径）。
  *  见 eslint.config.js 顶部注释：新增 store 时同步加一行，
@@ -35,11 +54,17 @@ const boundariesElements = [
 
 export default defineConfig({
   extends: [awesomeness],
+  /* 显式声明插件（不写就只开 `unicorn` / `typescript` / `oxc`，预设里其余插件的规则会
+   * 静默失效）。这一串与预设自身的 `plugins` 逐字一致 —— 覆盖时不增不减，避免把预设
+   * 没声明的插件拉进来制造噪声。 */
+  plugins: ["import", "jsx-a11y", "nextjs", "node", "oxc", "promise", "react", "typescript", "unicorn"],
   // `eslint` 是 oxlint 原生保留名，oxlint-plugin-eslint 必须显式别名成 eslint-js。
   // eslint-plugin-boundaries 经 jsPlugins 跑（用 resolver 解析别名导入）。
   jsPlugins: [
     { name: "boundaries", specifier: "eslint-plugin-boundaries" },
     { name: "eslint-js", specifier: "oxlint-plugin-eslint" },
+    { name: "nextjs-js", specifier: "@next/eslint-plugin-next" },
+    { name: "react-js", specifier: "eslint-plugin-react" },
   ],
   settings: {
     // eslint-plugin-boundaries 的元素表（根级 settings）。
@@ -48,6 +73,7 @@ export default defineConfig({
     "import/resolver": {
       "eslint-import-resolver-oxc": {},
     },
+    react: { version: REACT_VERSION },
   },
   rules: {
     "boundaries/dependencies": [
@@ -292,6 +318,35 @@ export default defineConfig({
             ],
           },
         ],
+      },
+    },
+    /* #2777 退役前置：2 条从 eslint 接过来的 jsPlugin 规则（与判决配置同一清单，
+     * 正反样本对拍见 `tests/oxlint-jsplugin-rules.test.ts`）。
+     * `react-hooks/config` 与 `gating` 不迁：无 options 时两引擎均 0 诊断，而启用会让
+     * 全仓 lint 从 34s 涨到 64s（+80%），依据同时写在判决配置的 TS 档。
+     *
+     * 只落在 TS 源码面：`globals` 声明放这一档而不是根级 —— `.cjs` 门禁脚本里自造
+     * `window` / `self` 变量，根级全局声明会让 `no-redeclare` 误报一片。 */
+    {
+      files: [
+        "src/**/*.{ts,tsx,mts,cts}",
+        "tests/**/*.{ts,tsx,mts,cts}",
+        "scripts/**/*.{ts,tsx,mts,cts}",
+        "e2e/**/*.{ts,tsx,mts,cts}",
+        "tools/**/*.{ts,tsx,mts,cts}",
+        ".storybook/**/*.{ts,tsx,mts,cts}",
+        "*.config.{ts,tsx,mts,cts}",
+      ],
+      globals: {
+        document: "readonly",
+        globalThis: "readonly",
+        location: "readonly",
+        self: "readonly",
+        window: "readonly",
+      },
+      rules: {
+        "nextjs-js/no-location-assign-relative-destination": "error",
+        "react-js/no-deprecated": "error",
       },
     },
   ],

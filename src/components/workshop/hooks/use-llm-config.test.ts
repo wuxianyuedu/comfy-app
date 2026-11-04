@@ -57,10 +57,10 @@ function makeWrapper(qc: QueryClient) {
     return createElement(
       QueryClientProvider,
       { client: qc },
-      // oxlint-disable-next-line react/no-children-prop -- createElement 的第三参即 children
       createElement(TRPCProvider, {
         trpcClient: client,
         queryClient: qc,
+        // oxlint-disable-next-line react/no-children-prop -- createElement 的第三参即 children
         children,
       }),
     );

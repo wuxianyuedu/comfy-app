@@ -96,7 +96,7 @@
 
 | 档 | 命令 | 配置 | 管什么 |
 | --- | --- | --- | --- |
-| 通用 lint | `pnpm run lint:oxlint` | `oxlint.parity.config.mjs`（判决配置；`oxlint.config.ts` 是同源的 IDE 面） | 133 条规则的全量面：`src` / `tests` / `scripts` / `e2e` / `tools` / `.storybook` / 根配置文件 |
+| 通用 lint | `pnpm run lint:oxlint` | `oxlint.parity.config.mjs`（判决配置；`oxlint.config.ts` 是同源的 IDE 面） | **208 条规则**的全量面：`src` / `tests` / `scripts` / `e2e` / `tools` / `.storybook` / 根配置文件 |
 | 策略守卫 | `pnpm run lint:policy` | `eslint.config.js`（**只有 14 条**） | oxlint 没有等价实现的策略；`files` 只匹配 TS 源码面，不跑整份历史 eslint 配置 |
 
 两侧的零警告语义都保留（oxlint `--deny-warnings`、eslint `--max-warnings 0`），
@@ -109,8 +109,17 @@
 | --- | --- |
 | `react-hooks/config`、`error-boundaries`、`gating`、`globals`、`immutability`、`preserve-manual-memoization`、`purity`、`set-state-in-render`、`static-components`、`use-memo`（10 条 error） | React Compiler 族，oxlint 未实现等价规则 |
 | `react-hooks/incompatible-library`、`react-hooks/unsupported-syntax`（2 条 warn） | 同上；warn 是上游档位，不升级 |
-| `react/no-deprecated` | oxlint 未实现 |
-| `@next/next/no-location-assign-relative-destination` | oxlint 未实现 |
+| `react/no-deprecated` | oxlint 原生未实现，已由 `eslint-plugin-react` 经 jsPlugin 承接（PR-1）；eslint 侧保留到 PR-2 退役 |
+| `@next/next/no-location-assign-relative-destination` | oxlint 原生未实现，已由 `@next/eslint-plugin-next` 经 jsPlugin 承接（PR-1）；eslint 侧保留到 PR-2 退役 |
+
+`react-hooks/config` 与 `gating` **不迁**：两引擎（ESLint `Linter` 与 oxlint jsPlugin）
+在无 options 时均 0 诊断，而本仓不传编译器 options —— 迁上来是纯空转；实测启用会让
+全仓 lint 从 34s 涨到 64s（+80%），零收益。退役时随 eslint 侧一并删。
+
+> **134 → 208 是怎么来的（#2777 PR-1）**：判决配置此前没写 `plugins` 字段，oxlint 只
+> 默认启用 `unicorn` / `typescript` / `oxc`，`react` / `nextjs` / `jsx_a11y` / `import`
+> 的 72 条规则**静默失效**（配置里写着、`--rules` 里却不注册）。补全后 134 → 208 条，
+> 一并暴露 8 条存量违例（6 条禁用注释贴错行 + 2 条真问题），已在本 PR 修完。
 
 原先也住在这里的三条策略守卫已迁到 oxlint jsPlugin（#2777），条目与作用面都在
 `oxlint.parity.config.mjs`，行为对拍在 `tests/oxlint-policy-rules.test.ts`：
@@ -132,10 +141,12 @@
 
 ### 复审条件（什么时候可以彻底拆掉策略守卫）
 
-oxlint 支持 `react-hooks/*` 那 12 条的等价实现后，`eslint.config.js` 与 `lint:policy`
-一起删（**连 eslint 本体和上表插件依赖一起**），`lint` 收成单档 `lint:oxlint`；
-`react/no-deprecated` / `@next/next/*` 同理。逐条对齐矩阵与缺口复核口径在
-`log/tools/eslint-oxlint-parity.md`（本地台账，不入仓）。
+`react/no-deprecated` 与 `@next/next/no-location-assign-relative-destination` 已由
+jsPlugin 承接（PR-1），`react-hooks/config` / `gating` 已证空转、随退役一并删 ——
+剩下的门槛只有 `react-hooks/*` 那 12 条。它们迁走或拍板放弃后，`eslint.config.js`
+与 `lint:policy` 一起删（**连 eslint 本体和上表插件依赖一起**），`lint` 收成单档
+`lint:oxlint`。逐条对齐矩阵与缺口复核口径在 `log/tools/eslint-oxlint-parity.md`
+（本地台账，不入仓）。
 
 ### 已知限制
 

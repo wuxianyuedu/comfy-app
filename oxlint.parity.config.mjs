@@ -15,10 +15,39 @@
  * `TRPCError` 经 `eslint-js/no-restricted-syntax`，UI/features 禁直连 `drizzle-orm`
  * 经 `eslint-js/no-restricted-imports`（后者见文件尾那条 override）。
  *
+ * `plugins` 必须显式列全（#2777 收尾时补上）：缺省只开 `unicorn` / `typescript` /
+ * `oxc` 三个，`react` / `nextjs` / `jsx_a11y` / `import` 的规则会**静默失效** ——
+ * 配置里写着、`--rules` 里却不注册，`0 诊断` 于是变成一句空话。
+ *
+ * 另有 2 条改由 jsPlugin 承接（`eslint-plugin-react` 的 `no-deprecated`、
+ * `@next/eslint-plugin-next` 的 `no-location-assign-relative-destination`）：这条退役路线
+ * 让 oxlint 侧先具备等价判据，eslint 侧随后整份下线（`tests/oxlint-jsplugin-rules.test.ts`
+ * 对拍正反样本）。`react-hooks/config` 与 `gating` 不迁（空转 + 全仓 +30s，见 TS 档注释）。
+ *
  * 为什么保留文件名里的 `parity`：它是台账号（`log/tools/eslint-oxlint-parity.md`）
  * 的锚，改名会把 29 处依赖点里的文档引用全部打散；语义已由本节头更新。
  */
+import { readFileSync } from "node:fs";
+
 import { defineConfig } from "oxlint";
+
+/** react 的实际版本（去掉 `^` / `~` 前缀）。
+ *
+ * `eslint-plugin-react` 的 `no-deprecated` 靠 `settings.react.version` 判「这条 API 在这个
+ * 版本是否已废弃」；oxlint 只接受**具体版本号**（写 `"detect"` 会报 invalid major version），
+ * 所以这里直接读 `package.json` —— 升级 react 时配置无需手改，读数由
+ * `tests/oxlint-jsplugin-rules.test.ts` 与 `package.json` 对拍。 */
+const REACT_VERSION = parseReactVersion();
+
+function parseReactVersion() {
+  const match = /"react"\s*:\s*"[^\d]*([\d.]+)"/.exec(
+    readFileSync(new URL("package.json", import.meta.url), "utf8"),
+  );
+  if (match?.[1] === undefined) {
+    throw new Error("package.json 里读不到 react 版本");
+  }
+  return match[1];
+}
 
 const STORE_SELECTOR_HOOKS = [
   "useDebugStore",
@@ -62,14 +91,21 @@ export default defineConfig({
     nursery: "off",
     pedantic: "off",
   },
+  /* 原生插件**只列本文件真正用到的**：多开的插件不产生诊断，但会让「开了什么」
+   * 与规则面脱节。`react` 同时承接 `react-hooks/*` 的原生别名（rules-of-hooks /
+   * exhaustive-deps 等；插件名写 `jsx-a11y`，规则前缀沿用仓内的 `jsx_a11y/` 别名）。 */
+  plugins: ["import", "jsx-a11y", "nextjs", "oxc", "react", "typescript", "unicorn"],
   jsPlugins: [
     { name: "boundaries", specifier: "eslint-plugin-boundaries" },
     { name: "eslint-js", specifier: "oxlint-plugin-eslint" },
+    { name: "nextjs-js", specifier: "@next/eslint-plugin-next" },
+    { name: "react-js", specifier: "eslint-plugin-react" },
     { name: "unused-imports", specifier: "eslint-plugin-unused-imports" },
   ],
   settings: {
     "boundaries/elements": boundariesElements,
     "import/resolver": { "eslint-import-resolver-oxc": {} },
+    react: { version: REACT_VERSION },
   },
   overrides: [
     {
@@ -242,7 +278,18 @@ export default defineConfig({
     },
     {
       files: ["src/**/*.{ts,tsx,mts,cts}","tests/**/*.{ts,tsx,mts,cts}","scripts/**/*.{ts,tsx,mts,cts}","e2e/**/*.{ts,tsx,mts,cts}","tools/**/*.{ts,tsx,mts,cts}",".storybook/**/*.{ts,tsx,mts,cts}","*.config.{ts,tsx,mts,cts}"],
-      rules: {
+      /* `@next/next/no-location-assign-relative-destination` 靠 `sourceCode.scopeManager`
+       * 的全局作用域判 `location` 是不是全局引用；不声明这些全局名，规则会**永远不报**
+       * （`isGlobalReference` 直接落空）。只落在 TS 档：`.cjs` 门禁脚本里有自造的
+       * `window` / `self` 变量，声明成全局会让 `no-redeclare` 误报一片。 */
+      globals: {
+        document: "readonly",
+        globalThis: "readonly",
+        location: "readonly",
+        self: "readonly",
+        window: "readonly",
+      },
+    rules: {
       "boundaries/dependencies": ["error",{"default":"allow","policies":[{"from":{"element":{"type":"components"}},"disallow":{"to":{"element":{"type":"server"}}}},{"from":{"element":{"type":"server"}},"disallow":{"to":{"element":{"type":"components"}}}},{"from":{"element":{"type":"features"}},"disallow":{"to":{"element":{"type":"server"}}}},{"from":{"element":{"type":"lib"}},"disallow":{"to":{"element":{"type":"components"}}}}]}],
       "for-direction": "error",
       "import/no-anonymous-default-export": "warn",
@@ -278,6 +325,9 @@ export default defineConfig({
       "jsx_a11y/role-supports-aria-props": "error",
       "jsx_a11y/scope": "error",
       "jsx_a11y/tabindex-no-positive": "error",
+      /* 从 eslint 侧接过来的 4 条（#2777 退役前置）：插件名带 `-js` 后缀是 oxlint 的
+       * 别名约定 —— 原生侧已有 `react` / `nextjs` 命名空间，直接同名会和内置规则冲突。 */
+      "nextjs-js/no-location-assign-relative-destination": "error",
       "nextjs/google-font-display": "error",
       "nextjs/google-font-preconnect": "error",
       "nextjs/inline-script-id": "error",
@@ -342,6 +392,11 @@ export default defineConfig({
       "prefer-rest-params": "error",
       "prefer-spread": "error",
       "preserve-caught-error": "error",
+      /* `react-hooks/config` 与 `react-hooks/gating` **未迁**：两引擎（ESLint `Linter`
+       * 与 oxlint jsPlugin）在无 options 时都返回 0 诊断，而本仓不传编译器 options ——
+       * 迁上来是纯空转；实测启用后全仓 lint 从 34s 涨到 64s（+80%），零收益。
+       * 退役时随 eslint 侧一并删（依据同此段，changelog 有记录）。 */
+      "react-js/no-deprecated": "error",
       "react/display-name": "error",
       "react/exhaustive-deps": "error",
       "react/jsx-key": "error",

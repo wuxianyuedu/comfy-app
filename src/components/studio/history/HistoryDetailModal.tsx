@@ -165,6 +165,7 @@ export function HistoryDetailModal({
                       注册
                       <code className="text-warning-strong">comfyapp://</code>
                       协议（仅本机、无需管理员）， 或直接
+                      {/* oxlint-disable-next-line next/no-html-link-for-pages -- `/api/helper/install` 是 API 端点而非页面路由；下载需原生 `<a>` 语义，换 `Link` 会走客户端路由、破坏下载。 */}
                       <a className="hover:text-warning-strong underline" href="/api/helper/install">
                         下载安装脚本
                       </a>

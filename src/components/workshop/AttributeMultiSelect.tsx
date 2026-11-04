@@ -34,6 +34,7 @@ export function AttributeMultiSelect({
   className = "",
 }: AttributeMultiSelectProps) {
   const panelId = useId();
+  const listboxId = `${panelId}-listbox`;
   const [open, setOpen] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [custom, setCustom] = useState("");
@@ -115,6 +116,8 @@ export function AttributeMultiSelect({
           open={open}
         >
           <PopoverTrigger
+            aria-controls={listboxId}
+            aria-expanded={open}
             className="border-border text-muted-foreground hover:border-primary hover:text-primary ml-1 inline-flex h-auto items-center gap-1 rounded-full border border-dashed px-2 py-0.5 text-xs transition-colors disabled:opacity-40"
             disabled={disabled}
             id={panelId}
@@ -150,6 +153,7 @@ export function AttributeMultiSelect({
             <div
               aria-multiselectable="true"
               className="max-h-56 overflow-y-auto px-1 py-1"
+              id={listboxId}
               role="listbox"
             >
               {visibleGroups.length === 0 ? (
