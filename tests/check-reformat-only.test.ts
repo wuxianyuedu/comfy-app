@@ -577,11 +577,11 @@ describe("格式化器迁移的声明（`format-migration:`）", { timeout: 300_
    * 覆盖的是**整个 PR 区间**而不是「一条提交」（这正是 CI 那一格的现场 —— 不带
    * `--range`、也没有暂存区，脚本落到「判 HEAD~1..HEAD」那一支）。
    *
-   * 合并提交相对第一父提交的 diff 就是整份 PR：把它算进「逐提交」那张表，等于把
-   * 汇总又请回分母（切换那一笔的判据脚本 / 文档进分母 ⇒ 32/56），护栏 ② 当场自锁；
-   * 它自动生成的正文也不会带尾注 ⇒ 护栏 ① 同样不成立。所以两条都按 `--no-merges`
-   * 摘掉它，只判区间里那些真有人做了改动的提交。 */
-  test("合并预览（HEAD 是合并提交）⇒ 合并提交不进逐提交那张表", ({ repo }) => {
+   * ISSUE #3035 起合并提交**入表**（重排恰恰常坐在合并那一笔里），但合并行对目标侧
+   * 的 diff 是「分支的全部净工作」—— 其中被更早提交判定过的重排要**去重**，否则
+   * #3054 刚修好的「合规迁移 PR 被永久拦红」换个方向复发。这一条钉：合并行在场、
+   * 去重读数点名、判决仍是放行。 */
+  test("合并预览（HEAD 是合并提交）⇒ 合并行入表、与已判行去重、读数点名", ({ repo }) => {
     seedDirty(repo, 12);
     repo.write("src/lib/feature.ts", "export const FEATURE = 1;\n");
     commitAll(repo, declared("migrate the formatter"));
@@ -599,6 +599,115 @@ describe("格式化器迁移的声明（`format-migration:`）", { timeout: 300_
     const r = repo.run();
     expect(r.code).toBe(0);
     expect(r.output).toContain("按迁移放行");
+    expect(r.output).toContain("合并行，与已判提交去重 12 份");
+  });
+});
+
+describe("合并提交自己承担重排（ISSUE #3035）", { timeout: 300_000 }, () => {
+  /** 一条带迁移尾注的提交正文（尾注写在正文里，与标题分行）。 */
+  const declared = (title: string) => `${title}\n\nformat-migration: prettier → oxfmt`;
+
+  /* T1：同步 master 的合并行 —— 它对目标侧的 diff 是「分支的全部净工作」，其中
+   * 120 份（这里 12 份）重排已被更早的行判定过 ⇒ 去重后这一笔自己带的是 0 份新重排，
+   * 不再读成夹带（现场 `a1eb6022`：159 份里 120 份是 `8d052468` 已判过的重排）。 */
+  test("同步 master 的合并行与已判行去重 ⇒ 不判成夹带，读数点名减了几份", ({ repo }) => {
+    seedDirty(repo, 24); // 24 份脏：A-12 给分支侧重排、B-12 给 master 侧重排
+    const filesA = Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`);
+    const filesB = Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i + 12}.ts`);
+    const fork = headSha(repo);
+
+    // master 侧：重排 B-12（另一条 PR 的迁移，声明）。
+    repo.git("checkout", "-q", "-b", "master-side", fork);
+    formatInPlace(repo, filesB);
+    commitAll(repo, declared("master reformat"));
+
+    // 分支侧：重排 A-12（声明）+ 功能一条。
+    repo.git("checkout", "-q", fork);
+    formatInPlace(repo, filesA);
+    commitAll(repo, declared("branch reformat"));
+    repo.write("src/lib/feature.ts", "export const FEATURE = 1;\n");
+    commitAll(repo, declared("branch feature"));
+
+    // 同步合并（两侧动了不相交的文件 ⇒ 自动合并）。
+    repo.git("merge", "--no-ff", "-q", "master-side", "-m", "merge: sync master-side");
+
+    const r = repo.run(["--range", `${fork}..HEAD`]);
+    expect(r.code, r.output).toBe(0);
+    expect(r.output).toContain("合并行，与已判提交去重 12 份");
+    expect(r.output).toContain("按迁移放行");
+  });
+
+  /* T2：合并行**自己**带新重排 + 功能改动（手工解冲突混进去）⇒ 照拦。
+   * 去重只减「此前行判定过的」—— 合并节点上新出现的重排（12 份）与功能改动
+   * 混在同一笔里，护栏 ② 点名 offender，护栏 ① 也缺声明（合并正文没带尾注）。 */
+  test("合并行自己混入新重排与功能改动 ⇒ 照拦（去重不吞新账）", ({ repo }) => {
+    seedDirty(repo, 24);
+    const filesA = Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`);
+    const filesB = Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i + 12}.ts`);
+    const fork = headSha(repo);
+
+    repo.git("checkout", "-q", "-b", "master-side", fork);
+    formatInPlace(repo, filesA);
+    commitAll(repo, declared("master reformat"));
+
+    repo.git("checkout", "-q", fork);
+    repo.write("src/lib/feature.ts", "export const FEATURE = 1;\n");
+    commitAll(repo, declared("branch feature"));
+
+    // 合并 --no-commit，手工把 B-12 重排 + 一处功能改动塞进合并节点。
+    repo.git("merge", "--no-commit", "--no-ff", "master-side");
+    formatInPlace(repo, filesB);
+    repo.write("src/lib/merge-feature.ts", "export const MERGE_FEATURE = 1;\n");
+    commitAll(repo, "merge: 手工解冲突（顺手带进重排与功能改动，无尾注）");
+
+    const r = repo.run(["--range", `${fork}..HEAD`]);
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).toContain("不按迁移读");
+    expect(r.output).toContain("12 个纯格式化");
+  });
+
+  /* T3：汇总分母取 landed（目标分支那一侧）—— master 侧在分叉点之后落过、经同步
+   * 合并带进来的重排**不进分母**（现场 `cnb-o9p-1k6d5ohhj` 的 118 份就是这么混进
+   * fork 面的）。模拟平台形态：HEAD = 合并提交、`CNB_COMMIT` = 分支侧 tip。 */
+  test("汇总分母取 landed：master 侧的重排不进分母（读数点名）", ({ repo }) => {
+    seedDirty(repo, 24);
+    const filesA = Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`);
+    const filesB = Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i + 12}.ts`);
+    const fork = headSha(repo);
+
+    repo.git("checkout", "-q", "-b", "master-side", fork);
+    formatInPlace(repo, filesB);
+    commitAll(repo, declared("master reformat"));
+
+    repo.git("checkout", "-q", fork);
+    formatInPlace(repo, filesA);
+    commitAll(repo, declared("branch reformat"));
+    const branchTip = headSha(repo);
+    repo.git("merge", "--no-ff", "-q", "master-side", "-m", "merge: sync master-side");
+
+    const savedCommit = process.env.CNB_COMMIT;
+    const savedTarget = process.env.CNB_PULL_REQUEST_TARGET_SHA;
+    process.env.CNB_COMMIT = branchTip;
+    delete process.env.CNB_PULL_REQUEST_TARGET_SHA;
+    try {
+      const r = repo.run(["--range", `${fork}..${branchTip}`]);
+      expect(r.code, r.output).toBe(0);
+      expect(r.output).toContain("汇总分母取目标分支那一侧");
+      // 分母只算分支自己那批（12）；master 侧经合并带进来的 12 份不进分母。
+      expect(r.output).toContain("纯格式化 12 个");
+      expect(r.output).not.toContain("纯格式化 24 个");
+    } finally {
+      if (savedCommit === undefined) {
+        delete process.env.CNB_COMMIT;
+      } else {
+        process.env.CNB_COMMIT = savedCommit;
+      }
+      if (savedTarget === undefined) {
+        delete process.env.CNB_PULL_REQUEST_TARGET_SHA;
+      } else {
+        process.env.CNB_PULL_REQUEST_TARGET_SHA = savedTarget;
+      }
+    }
   });
 });
 
