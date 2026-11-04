@@ -20,11 +20,9 @@ import {
   inDenominator,
   main,
   mergeLcovMaps,
-  parseChangedLines,
   parseLcov,
 } from "../scripts/check-patch-coverage.mjs";
 
-const SCRIPT = join(process.cwd(), "scripts", "check-patch-coverage.mjs");
 const tmpDirs: Array<string> = [];
 afterEach(() => {
   for (const dir of tmpDirs.splice(0)) {
