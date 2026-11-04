@@ -227,7 +227,7 @@ export function baseCheck({ argv, label, ref, keep = false, json = false, mergeS
  *   `onTiming` 是**可选的逐格计时回调**（ISSUE #2832）：本检出每条门、快照建树、快照侧每条门
  *   各回调一次（`label` 带「本检出:/快照:」前缀区分两侧，快照建树单独一格）。只记账、
  *   不参与任何判决 —— 不给就是没有这一格，行为与改动前逐字一致。
- * @param {{commands: Array<{argv: string[], label: string, baseSide?: boolean}>, ref: string, keep?: boolean, json?: boolean, shape?: "single" | "batch", onTiming?: (label: string, ms: number) => void}} input
+ * @param {{commands: Array<{argv: string[], label: string, baseSide?: boolean}>, ref: string, keep?: boolean, json?: boolean, shape?: "single" | "batch", onTiming?: (label: string, ms: number) => void, onProgress?: (label: string, index: number, count: number) => void}} input
  * @returns {number} 退出码（0 = 事实已复算；1 = 复算过程失败）
  */
 export function baseCheckMany({
@@ -237,12 +237,14 @@ export function baseCheckMany({
   json = false,
   shape = "batch",
   onTiming = undefined,
+  onProgress = undefined,
 }) {
   /* 本检出那一侧：**先跑、先收**（不建 worktree 就能判掉的情形不付这笔 —— 同
    * `baseCheck` 的旧口径）。 */
   /** @type {Array<{code: number, output: string}>} */
   const current = [];
-  for (const c of commands) {
+  for (const [i, c] of commands.entries()) {
+    onProgress?.(`本检出:${c.label}`, i + 1, commands.length);
     const t0 = performance.now();
     current.push(runGate(c.argv, ROOT));
     onTiming?.(`本检出:${c.label}`, performance.now() - t0);
@@ -315,6 +317,7 @@ export function baseCheckMany({
     const rows = [];
     for (const [i, c] of commands.entries()) {
       const cur = current[i]?.code ?? 127;
+      onProgress?.(`快照:${c.label}`, i + 1, commands.length);
       /* `baseSide: false` ⇒ **不在快照上跑**（理由见 `CHAINED_STEPS` 那条注释）：
        * 它的 `baseCode` 记 `null`（= 未跑），判决只看本检出那一侧。 */
       const baseT0 = performance.now();

@@ -71,6 +71,7 @@ import {
 import { localTierLabels } from "./base-check/hook-steps.mjs";
 import { renderVerdict } from "./ci-log.mjs";
 import { formatTimingSummary, recordTimingLedger } from "./premerge-timing.mjs";
+import { startProgressSync } from "./progress-heartbeat.mjs";
 import { performance } from "node:perf_hooks";
 
 const HERE = import.meta.dirname;
@@ -420,7 +421,12 @@ function main(argv) {
    * 收尾一次性落台账并念 top-5 —— 记账失败不影响任何退出码（§13.5.8.3 口径）。 */
   const gateTimings = [];
   let ledgerRef = "n/a";
+  /* 进度线（ISSUE #3144）：段起点与 base 段的逐条循环都往这里报，终端原地刷新、
+   * CI 每 15 秒一行心跳。这一跳用的是**跨进程**版本 —— 底下 `spawnSync` 一阻塞，
+   * 进程内定时器整段不跳。它只写 stderr，`--json` 的 stdout 一个字不受影响。 */
+  const progress = startProgressSync({ label: "premerge", total: wanted.length });
   for (const [key, seg] of wanted) {
+    progress.step(seg.label);
     /* `seg` 的联合类型由 `SEGMENTS` 的 JSDoc 给出；两处用法各自收窄（见下）。 */
     if (seg.kind === "base") {
       /* **直接 import 既有实现**，不在这里重写「建快照 / 归属 / 话术」那一套 ——
@@ -487,6 +493,9 @@ function main(argv) {
           keep: false,
           json: false,
           onTiming: (label, ms) => gateTimings.push({ label, ms }),
+          onProgress: (label, index, count) => {
+            progress.step(`${label}（${index}/${count}）`);
+          },
         }),
       );
       const summary = lastSummary(captured.output);
@@ -586,6 +595,8 @@ function main(argv) {
     const r = runScript(scripted.script, scripted.args);
     results.push({ key, label: seg.label, code: r.code, output: r.output });
   }
+
+  progress.done();
 
   const timingOk = recordTimingLedger({
     at: new Date().toISOString(),

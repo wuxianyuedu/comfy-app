@@ -44,6 +44,8 @@
 import { spawn } from "node:child_process";
 import process from "node:process";
 
+import { startProgress } from "./progress-heartbeat.mjs";
+
 /** 默认预算：平台硬上限的 1/12（见文件头「预算取多少」）。 */
 export const DEFAULT_INSTALL_BUDGET_MS = 12 * 60 * 1000;
 
@@ -110,17 +112,24 @@ export function runInstallWithBudget(io) {
     budgetMs = DEFAULT_INSTALL_BUDGET_MS,
     heartbeatMs = HEARTBEAT_MS,
     spawnImpl = spawn,
-    write = (s) => process.stdout.write(s),
+    write = (s) => process.stderr.write(s),
     now = Date.now,
   } = io;
   const started = now();
+  /* 心跳走统一入口（ISSUE #3144）：这里只报「还在跑多久」，预算与退出码一个字不动。 */
+  const progress = startProgress({
+    label: "ci-install-deps",
+    note: "pnpm 尚未收场",
+    intervalMs: heartbeatMs,
+    write,
+    now,
+  });
+  progress.step("pnpm install");
   return new Promise((resolve) => {
     let settled = false;
     let timedOut = false;
     /** @type {ReturnType<typeof setTimeout> | null} */
     let timer = null;
-    /** @type {ReturnType<typeof setInterval> | null} */
-    let heartbeat = null;
 
     const finish = (/** @type {{code: number, error: string | null}} */ out) => {
       if (settled) {
@@ -130,9 +139,7 @@ export function runInstallWithBudget(io) {
       if (timer) {
         clearTimeout(timer);
       }
-      if (heartbeat) {
-        clearInterval(heartbeat);
-      }
+      progress.done();
       resolve({ ...out, timedOut, elapsedMs: now() - started });
     };
 
@@ -182,13 +189,6 @@ export function runInstallWithBudget(io) {
     /* 定时器不该独自把宿主吊在这里：真正的收场由 close / 预算那支决定。 */
     if (typeof timer.unref === "function") {
       timer.unref();
-    }
-
-    heartbeat = setInterval(() => {
-      write(`[ci-install-deps] …已跑 ${secs(now() - started)}（pnpm 尚未收场）\n`);
-    }, heartbeatMs);
-    if (typeof heartbeat.unref === "function") {
-      heartbeat.unref();
     }
   });
 }

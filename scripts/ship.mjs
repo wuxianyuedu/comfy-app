@@ -226,6 +226,7 @@ import { handleFromProcessEnv, readDevHandleWithSource } from "./ship-ticket.mjs
 import { reapCheckoutInstances, readAppInstances } from "./ship-reap.mjs";
 import { cleanBranch, createOrReusePull, mergeAndVerify, reportVerdict } from "./ship-platform.mjs";
 import { pollUntilTerminal } from "./ship-poll.mjs";
+import { startProgress } from "./progress-heartbeat.mjs";
 import { closeIssues } from "./ship-close.mjs";
 import { runCommitStage, runPushStage } from "./ship-local.mjs";
 import { runPreflightStage } from "./ship-preflight.mjs";
@@ -662,16 +663,24 @@ async function runFlow(deps, tmpFiles) {
         codes.push(CODE.GREEN);
         return finish(codes);
       }
-      const poll = await pollUntilTerminal({
-        run,
-        log,
-        slug,
-        newSha,
-        now,
-        sleep,
-        number,
-        baseRef,
-      });
+      /* 轮询是这条链上最长的等待（ISSUE #3144）：段内读数由 `pollUntilTerminal`
+       * 自己打，这条线补的是「它已经等了多久」—— 一段 20 秒没动静时读得出。 */
+      const pollProgress = startProgress({ label: "CI 轮询", intervalMs: 20_000 });
+      let poll;
+      try {
+        poll = await pollUntilTerminal({
+          run,
+          log,
+          slug,
+          newSha,
+          now,
+          sleep,
+          number,
+          baseRef,
+        });
+      } finally {
+        pollProgress.done();
+      }
       if (poll.stop !== null) {
         codes.push(poll.stop);
         return finish(codes);

@@ -83,5 +83,12 @@ timed_step() {
 run() {
   _run_label="$1"; shift
   echo "── check: $_run_label"
-  timed_step "$_run_label" "$LOGD/steps.ms" "$@"
+  # 组 D 的进度线（ISSUE #3144）：D 组在后台串行跑、输出落组日志，某一步卡住时
+  # 只有「已跑多久」这一行能区分「卡住」与「真就这么慢」。D0 是 16s 的快档，
+  # 不付这层开销（开关由钩子在 D 块里显式导出）。
+  if [ -n "$COMFY_STEP_PROGRESS" ]; then
+    timed_step "$_run_label" "$LOGD/steps.ms" node scripts/progress-heartbeat.mjs --label "$_run_label" -- "$@"
+  else
+    timed_step "$_run_label" "$LOGD/steps.ms" "$@"
+  fi
 }
