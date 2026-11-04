@@ -75,8 +75,7 @@ export function diffBaseRef({ run, log, baseRef, targetBranch, remote }) {
   const branch = (targetBranch ?? "").trim();
   if (!branch || !remote) {
     log(
-      `[ship] PR 的目标分支取不到 ⇒ 比对区间退回 ${baseRef ?? "(取不到)"}：` +
-        "这一格没有跟随 `base.ref`，读数可能串味（栈式 PR 会算进上游那一段别人的提交）。",
+      `[ship] PR 的目标分支取不到 ⇒ 比对区间退回 ${baseRef ?? "(取不到)"}：这一格没有跟随 \`base.ref\`，读数可能串味（栈式 PR 会算进上游那一段别人的提交）。`,
     );
     return baseRef;
   }
@@ -87,9 +86,7 @@ export function diffBaseRef({ run, log, baseRef, targetBranch, remote }) {
   if (usable) {
     const differs = baseRef !== null && ref !== baseRef;
     log(
-      `[ship] 比对区间跟 PR 的目标分支：${ref}..HEAD` +
-        (differs ? `（本地 upstream 是 ${baseRef}，不是目标分支）` : "") +
-        (fetched ? "（已 fetch 刷新）" : "（fetch 没跑起来，用的是本地那份远端跟踪引用）"),
+      `[ship] 比对区间跟 PR 的目标分支：${ref}..HEAD${differs ? `（本地 upstream 是 ${baseRef}，不是目标分支）` : ""}${fetched ? "（已 fetch 刷新）" : "（fetch 没跑起来，用的是本地那份远端跟踪引用）"}`,
     );
     return ref;
   }
