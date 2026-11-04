@@ -73,7 +73,7 @@ export function isTransientRemoteFailure(text) {
  *
  * 与 `isEgressFailure()` 刻意不是同一个函数：`explainRemoteProbeFailure()` /
  * `classifyLfsPushFailure()` 只认 egress 那一族来选话术与下一动作，而重试面要宽一层。
- * 「话术判据 ⊂ 重试判据」不是两份会漂的正则 —— 窄的那一份被宽的那一份直接调用，
+ * 「话术判据是重试判据的子集」不是两份会漂的正则 —— 窄的那一份被宽的那一份直接调用，
  * 认证 / 权限 / 仓库不存在三族在两边都仍然不消耗重试。
  *
  * @param {string} text git 那一跳的 stdout + stderr（未脱敏）
