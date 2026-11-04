@@ -20,7 +20,16 @@
  * —— 判据可以随便毁夹具，但不许拿调用方的工作树做实验（那正是被测事故本身的形态）。
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -91,6 +100,34 @@ function addWorktree(
 
 const shimOf = (root: string) => join(root, "node_modules", ".bin", "next");
 
+/**
+ * 造一条指向 `checkout/node_modules` 的链接 —— `junction` 与 `dir`（symlink）两形都走这里，
+ * 这样两条用例判的是同一个东西（ISSUE #2997：两形在外部命令里摘链结果不同）。
+ */
+function makeLink(checkout: string, type: "junction" | "dir"): string {
+  const parent = mkdtempSync(join(tmpdir(), `base-check-snap-${type}-`));
+  dirs.push(parent);
+  const link = join(parent, "node_modules");
+  symlinkSync(join(checkout, "node_modules"), link, type);
+  return link;
+}
+
+/** 本机能不能造 `dir` 形态的 symlink（Windows 要开发者模式）；造不出就如实跳过那一向。 */
+function canMakeDirSymlink(): boolean {
+  const dir = mkdtempSync(join(tmpdir(), "base-check-probe-symlink-"));
+  try {
+    mkdirSync(join(dir, "target"));
+    symlinkSync(join(dir, "target"), join(dir, "link"), "dir");
+    return true;
+  } catch {
+    return false;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const DIR_SYMLINK_OK = canMakeDirSymlink();
+
 describe("复算快照的依赖链接：谁在链上、收尾谁先走", () => {
   it("①不摘链接就 `git worktree remove --force` ⇒ 链出去的那半边被删穿（win32 机制在案）", () => {
     // POSIX 上 `git` 把符号链接当**链接**摘掉，不走进目标；这一跳只在 Windows 上存在。
@@ -155,5 +192,43 @@ describe("复算快照的依赖链接：谁在链上、收尾谁先走", () => {
     expect(removeAt).toBeGreaterThan(-1);
     expect(unlinkAt < removeAt, "顺序反了：先摘 worktree 就会穿 junction 删进本检出").toBe(true);
     expect(src).toContain("dependencyLink = linkDependencies(ROOT, worktreePath)");
+  });
+
+  it("⑤junction 与 symlink 摘链结果一致：只摘链接本体、目标 shim 仍在（ISSUE #2997）", () => {
+    /* 判据只认 lstat：`existsSync` 对断链为假，会把「链接还在」读成「已经摘掉」。
+     * junction 这一向每个平台都判；`dir` symlink 在造不出来的机器上另立一条（下面）。 */
+    const checkout = makeFakeCheckout("forms-junction");
+    const link = makeLink(checkout, "junction");
+    expect(lstatSync(link).isSymbolicLink(), "夹具不是链接 ⇒ 这一向判空").toBe(true);
+
+    expect(unlinkDependencies(link), "junction 没摘掉").toBe(true);
+    expect(() => lstatSync(link), "junction 本体还在").toThrow();
+    expect(existsSync(shimOf(checkout)), "摘 junction 时删到了目标").toBe(true);
+    expect(readFileSync(shimOf(checkout), "utf8")).toBe("shim\n");
+
+    expect(unlinkDependencies(link), "已经摘掉的链接再摘一次要判「已摘」").toBe(true);
+  });
+
+  it.skipIf(!DIR_SYMLINK_OK)(
+    "⑥dir symlink：与 junction 同一条结果 —— 只摘链接本体、目标 shim 仍在（ISSUE #2997）",
+    () => {
+      /* 现场是 MSYS `ln -s` 那一形：一条 `cmd /c rmdir` 对 junction 有效、对它退 145
+       * 且链接仍在。这里钉的是「我们不再靠外部命令，两形都走同一条原语阶梯」。 */
+      const checkout = makeFakeCheckout("forms-symlink");
+      const link = makeLink(checkout, "dir");
+      expect(lstatSync(link).isSymbolicLink(), "夹具不是链接 ⇒ 这一向判空").toBe(true);
+
+      expect(unlinkDependencies(link), "symlink 没摘掉").toBe(true);
+      expect(() => lstatSync(link), "symlink 本体还在").toThrow();
+      expect(existsSync(shimOf(checkout)), "摘 symlink 时删到了目标").toBe(true);
+      expect(readFileSync(shimOf(checkout), "utf8")).toBe("shim\n");
+    },
+  );
+
+  it("⑦真目录不是链接：`unlinkDependencies` 判 false 且一个文件都不碰（ISSUE #2997）", () => {
+    /* 这一向是「别人装出来的树」：摘链函数没有资格删它 —— 返回值让调用方停手。 */
+    const checkout = makeFakeCheckout("forms-real");
+    expect(unlinkDependencies(join(checkout, "node_modules")), "真目录被当成链接了").toBe(false);
+    expect(existsSync(shimOf(checkout)), "真目录里的文件被删了").toBe(true);
   });
 });

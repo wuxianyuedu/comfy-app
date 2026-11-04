@@ -66,6 +66,7 @@
     "qoder:ignore:check": "node scripts/qoder-ignore.mjs --check",
     "ship": "node scripts/ship.mjs",
     "test:coverage": "vitest run --coverage",
+    "worktree:remove": "node scripts/worktree-remove.mjs",
     "coverage:readout": "node scripts/coverage-readout.mjs",
     "mcp:stdio": "tsx tools/workshop-mcp-stdio.ts",
     "mcp:http": "tsx tools/workshop-mcp-http.ts",

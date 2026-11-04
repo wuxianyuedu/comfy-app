@@ -215,7 +215,8 @@ export function runJobLifecycle(io = {}) {
  * 作业里是一棵真树时返回 `false` 且不碰 —— 那种情况交回普通那条路，本模块没有资格
  * 动别人装出来的东西。
  *
- * @param {string} jobRoot @returns {boolean} 是否真的摘掉了一条链
+ * @param {string} jobRoot
+ * @returns {boolean} 是否真的摘掉了一条链
  */
 export function clearJobLink(jobRoot) {
   const link = path.join(jobRoot, "node_modules");
@@ -228,8 +229,9 @@ export function clearJobLink(jobRoot) {
   if (!stat.isSymbolicLink()) {
     return false;
   }
-  unlinkDependencies(link);
-  return true;
+  /* 结论取 `unlinkDependencies` 的返回值（只认 lstat，不认 `existsSync`）：
+   * 两形链接走同一条原语阶梯（ISSUE #2997），真摘掉了才报 true。 */
+  return unlinkDependencies(link);
 }
 
 /**
