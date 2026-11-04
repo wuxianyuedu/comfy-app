@@ -371,8 +371,8 @@ export function baseCheckMany({
        * `node_modules/.bin` 连根上的受版本控制文件一起没了（复算工具销毁了它正在
        * 复算的那棵树）。摘不掉就**不摘 worktree**：宁可留下一个临时目录并说清楚，
        * 也不拿销毁工作树换一次复算的整洁。 */
-      unlinkDependencies(dependencyLink);
-      if (dependencyLink && fs.existsSync(dependencyLink)) {
+      const linkGone = unlinkDependencies(dependencyLink);
+      if (dependencyLink && !linkGone) {
         process.stderr.write(
           "[base-check] 快照里的 node_modules 链接没摘掉 —— **跳过 worktree 清理**：" +
             "继续删会穿链接删进本检出。请手工删除这个目录：" +
@@ -526,8 +526,8 @@ function evaluateMergeState({ commands, into, ref, keep = false, json = false })
       /* 顺序与 `baseCheckMany` 同一条铁律：先摘 node_modules 链接再摘登记 ——
        * `git worktree remove --force` 会穿 junction 删进本检出（那次实测连根拔了
        * 主树的 node_modules）。摘不掉链接就跳过清理并点名，不拿工作树换整洁。 */
-      unlinkDependencies(dependencyLink);
-      if (dependencyLink && fs.existsSync(dependencyLink)) {
+      const linkGone = unlinkDependencies(dependencyLink);
+      if (dependencyLink && !linkGone) {
         process.stderr.write(
           "[base-check] 快照里的 node_modules 链接没摘掉 —— **跳过 worktree 清理**：" +
             `继续删会穿链接删进本检出。请手工删除这个目录：${worktreePath}\n`,

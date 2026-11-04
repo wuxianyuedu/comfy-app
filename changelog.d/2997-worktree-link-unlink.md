@@ -1,0 +1,3 @@
+## Fixed
+
+- **收 worktree 时只摘 `node_modules` 链接本体，不再顺着链接删空主检出的依赖**（ISSUE #2997）：临时 worktree 的 `node_modules` 有两种形态 —— `mklink /J` / `symlink(...,"junction")` 的 junction，与 MSYS `ln -s` / `symlink(...,"dir")` 的 symlink。同一条外部命令 `cmd /c rmdir` 对两者结果不同（junction 摘得掉，MSYS symlink 退 145 且链接仍在），而收尾那串命令常把退出码丢掉；留下的链接随后被 `git worktree remove --force` 顺着走进主检出，把依赖树删空。`unlinkDependencies` 现在走同一条 Node 原语阶梯（`rmSync` → `rmdirSync` → `unlinkSync`），**只认 `lstat`** 判断「链接本体还在不在」（`existsSync` 对断链为假，不能当结论），真目录一律不碰；`base-check` 与 `ci-slot-apply` 的调用方按这个返回值决定要不要继续删。新增 `pnpm worktree:remove <路径>`：先摘链、确认链接本体没了，再让 `git worktree remove --force` 注销登记，收尾回读链接目标仍在 —— 摘不掉就不摘 worktree。
