@@ -181,7 +181,7 @@ function faceGlobsOf(faceFile) {
   try {
     const raw = fs.readFileSync(faceFile, "utf8");
     const noComments = stripJsoncComments(raw);
-    const noTrail = noComments.replaceAll(/,(\s*[}\]])/g, "$1");
+    const noTrail = noComments.replaceAll(/,(?<tail>\s*[}\]])/g, "$<tail>");
     const parsed = JSON.parse(noTrail);
     const readGlob = (/** @type {unknown} */ value) => {
       if (Array.isArray(value)) {

@@ -128,14 +128,7 @@ function runOxlint(files) {
   OXLINT_CALLS += 1;
   const res = spawnSync(
     process.execPath,
-    [
-      OXLINT_BIN,
-      "--config",
-      SABOTAGE_CONFIG || OXLINT_CONFIG,
-      "--format",
-      "json",
-      ...files,
-    ],
+    [OXLINT_BIN, "--config", SABOTAGE_CONFIG || OXLINT_CONFIG, "--format", "json", ...files],
     { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
   );
   if (res.error) {
@@ -164,11 +157,12 @@ function normalizeRule(code) {
   if (typeof code !== "string") {
     return undefined;
   }
-  const m = /^(\w+)\((.+)\)$/.exec(code);
+  const m = /^(?<plugin>\w+)\((?<rule>.+)\)$/.exec(code);
   if (!m) {
     return code;
   }
-  const [, plugin, rule] = m;
+  const plugin = m.groups?.plugin ?? "";
+  const rule = m.groups?.rule ?? "";
   /* oxlint 把「core / eslint 插件」都记成 `eslint(...)`；TS 插件记成 `typescript(...)`。 */
   return plugin === "eslint" ? rule : `${plugin}/${rule}`;
 }
@@ -242,9 +236,7 @@ function main() {
       ...scriptFiles.map((f) => f.abs),
       ...(scriptFiles.length ? [noUndefAbs] : []),
     ];
-    const run = lintTargets.length
-      ? runOxlint(lintTargets)
-      : { diagnostics: [], status: 0 };
+    const run = lintTargets.length ? runOxlint(lintTargets) : { diagnostics: [], status: 0 };
 
     const byFile = new Map();
     for (const entry of run.diagnostics) {

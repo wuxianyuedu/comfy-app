@@ -30,7 +30,7 @@ const SRC = path.join(ROOT, "src");
 
 /** Node 内建模块名（评测口径与 `tests/client-bundle-node-builtins.test.ts` 一致）。 */
 const NODE_BUILTINS =
-  /^(node:)?(fs|fs\/promises|path|child_process|os|url|module|crypto|stream|util|events|net|tls|http|https|zlib|worker_threads|perf_hooks|readline|assert|dns|querystring|string_decoder|tty|v8|vm)$/;
+  /^(?:node:)?(?:fs|fs\/promises|path|child_process|os|url|module|crypto|stream|util|events|net|tls|http|https|zlib|worker_threads|perf_hooks|readline|assert|dns|querystring|string_decoder|tty|v8|vm)$/;
 
 /** 第二类声明后缀（§18.4）：同一领域的服务端拆件。 */
 const SERVER_SUFFIX = ".server.ts";
@@ -52,17 +52,18 @@ function stripComments(src) {
 function parseImports(src) {
   /** @type {Array<{ clause: string, spec: string }>} */
   const out = [];
-  const fromRe = /import\s+([\s\S]*?)\s+from\s+["']([^"']+)["']/g;
+  const fromRe = /import\s+(?<clause>[\s\S]*?)\s+from\s+["'](?<spec>[^"']+)["']/g;
   let m;
   while ((m = fromRe.exec(src))) {
-    /* 两个捕获组都是正则要求成立的（`from` 与引号内说明符都在模式里），
-     * 解构默认值只是把这件事写给类型检查器 —— 不是运行期分支。 */
-    const [, clause = "", spec = ""] = m;
+    /* 两个命名组都是正则要求成立的（`from` 与引号内说明符都在模式里），
+     * 默认值只是把这件事写给类型检查器 —— 不是运行期分支。 */
+    const clause = m.groups?.clause ?? "";
+    const spec = m.groups?.spec ?? "";
     out.push({ clause: clause.replaceAll(/\s+/g, " ").trim(), spec });
   }
-  const bareRe = /(?:^|\n)\s*import\s+["']([^"']+)["']/g;
+  const bareRe = /(?:^|\n)\s*import\s+["'](?<spec>[^"']+)["']/g;
   while ((m = bareRe.exec(src))) {
-    const [, spec = ""] = m;
+    const spec = m.groups?.spec ?? "";
     out.push({ clause: "", spec });
   }
   return out;
@@ -106,7 +107,7 @@ function listModules(dir, out = []) {
       listModules(full, out);
       continue;
     }
-    if (!/\.(ts|tsx)$/.test(name) || /\.test\.(ts|tsx)$/.test(name)) {
+    if (!/\.(?:ts|tsx)$/.test(name) || /\.test\.(?:ts|tsx)$/.test(name)) {
       continue;
     }
     out.push(full);
@@ -291,7 +292,7 @@ function analyze() {
   const clientEntries = files.filter((f) => decls.get(f) === "use-client");
   const clientReachable = reach(
     clientEntries,
-    (file) => nodeImports.has(file) && !/^src\/(server|api)\//.test(rel(file)),
+    (file) => nodeImports.has(file) && !/^src\/(?:server|api)\//.test(rel(file)),
   );
 
   const unguarded = [...nodeImports]

@@ -179,9 +179,10 @@ export function commentedStageNames(text) {
   const out = new Set();
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- 实参源自 .cnb.yml 读文件，类型按 string 标窄
   for (const line of String(text ?? "").split("\n")) {
-    const m = /^\s*#\s*-\s+name:\s*(\S.*?)\s*$/.exec(line);
-    if (m?.[1]) {
-      out.add(m[1]);
+    const m = /^\s*#\s*-\s+name:\s*(?<name>\S.*?)\s*$/.exec(line);
+    const name = m?.groups?.name;
+    if (name) {
+      out.add(name);
     }
   }
   return out;

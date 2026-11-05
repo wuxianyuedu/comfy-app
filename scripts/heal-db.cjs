@@ -75,15 +75,15 @@ function runPush() {
 }
 
 async function healMissingColumn(out) {
-  const colMatch = out.match(/no such column:\s*"?([\w]+)"?/i);
+  const colMatch = out.match(/no such column:\s*"?(?<column>[\w]+)"?/i);
   if (!colMatch) {
     return false;
   }
-  const col = colMatch[1];
+  const col = colMatch.groups?.column ?? "";
   const re = new RegExp(
     `INSERT\\s+INTO\\s+[\`"]__new_(\\w+)[\`"]\\s*\\([\\s\\S]*?\\)\\s*SELECT[\\s\\S]*?[\`"]${
       col
-      }[\`"]`,
+    }[\`"]`,
     "i",
   );
   const tblMatch = out.match(re);
@@ -108,17 +108,18 @@ async function healMissingColumn(out) {
 
 async function healIndexes(out) {
   // 提取 push 计划中全部 CREATE [UNIQUE] INDEX "idx" ON "tbl" (cols)，以 IF NOT EXISTS 补齐
-  const re = /CREATE\s+(UNIQUE\s+)?INDEX\s+[`"]?(\w+)[`"]?\s+ON\s+[`"]?(\w+)[`"]?\s*\(([^)]*)\)/gi;
+  const re =
+    /CREATE\s+(?<unique>UNIQUE\s+)?INDEX\s+[`"]?(?<idx>\w+)[`"]?\s+ON\s+[`"]?(?<table>\w+)[`"]?\s*\((?<columns>[^)]*)\)/gi;
   let m;
   let changed = false;
   const db = openDb();
   const seen = new Set();
   try {
     while ((m = re.exec(out))) {
-      const unique = m[1] ? "UNIQUE " : "";
-      const idx = m[2];
-      const tbl = m[3];
-      const cols = m[4];
+      const unique = m.groups?.unique ? "UNIQUE " : "";
+      const idx = m.groups?.idx;
+      const tbl = m.groups?.table;
+      const cols = m.groups?.columns;
       const key = `${idx}@${tbl}`;
       if (seen.has(key)) {
         continue;
@@ -126,9 +127,7 @@ async function healIndexes(out) {
       seen.add(key);
       try {
         // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
-        await db.execute(
-          `CREATE ${unique}INDEX IF NOT EXISTS "${idx}" ON "${tbl}" (${cols})`,
-        );
+        await db.execute(`CREATE ${unique}INDEX IF NOT EXISTS "${idx}" ON "${tbl}" (${cols})`);
         changed = true;
       } catch {
         /* 列不存在等情形忽略，交由下一轮补列后再试 */

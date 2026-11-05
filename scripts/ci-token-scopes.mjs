@@ -66,7 +66,7 @@ import process from "node:process";
 export const CODE = { OK: 0, NO_FACT: 2 };
 
 /** 平台「scope 不够」的那一句原话里，缺项就在冒号后面。 */
-const SCOPE_PATTERN = /Missing required scopes?:?\s*([^\s",}]*)/i;
+const SCOPE_PATTERN = /Missing required scopes?:?\s*(?<scope>[^\s",}]*)/i;
 
 /**
  * 一条探针：`domain` 是读数里的分组，`scope` 是它背后那枚权限（**已知需要**，
@@ -275,19 +275,19 @@ export function classifyReply(raw, transport = {}) {
      * 平台拒了这次请求，但没把那枚 scope 的名字写出来。 */
     return {
       state: "denied",
-      scope: missing[1] || "（原话里没写出 scope 名）",
+      scope: missing.groups?.scope || "（原话里没写出 scope 名）",
     };
   }
   const status = typeof transport.status === "number" ? transport.status : null;
   /* 2xx = 平台认了这次请求。业务层的 404 走 `status` 是 404 那一档 —— 见 ③ 里的分支，
    * 而它的**判据不是状态码本身**：下面先判「有没有平台信封」，再看码。 */
-  const envelope = /"errcode"\s*:\s*(\d+)/.exec(text);
+  const envelope = /"errcode"\s*:\s*(?<code>\d+)/.exec(text);
   /* ⚠️ 业务层的「对象不在」有两种码：`errcode: 5`（`Resource not found.`）与
    * `errcode: 404`（`not found`，PR #1 不存在走的就是这一支）。两者都是**平台认了
    * 这次请求、只是那个对象没有** —— 判据是「不是权限问题」而不是「码等于几」，
    * 所以这里认的是 `5` 与 `4xx` 两族，且都要求**没有**那句 `Missing required scopes`
    * （有的话上面那一支已经返回了）。 */
-  const code = envelope ? Number(envelope[1]) : null;
+  const code = envelope ? Number(envelope.groups?.code) : null;
   if (code === 5 || (code !== null && code >= 400 && code < 500)) {
     return { state: "granted", status: status ?? code };
   }
@@ -304,12 +304,12 @@ export function classifyReply(raw, transport = {}) {
       why: `没有响应正文（HTTP ${status ?? "?"}）`,
     };
   }
-  const errmsg = /"errmsg"\s*:\s*"([^"]{1,160})"/.exec(text);
+  const errmsg = /"errmsg"\s*:\s*"(?<message>[^"]{1,160})"/.exec(text);
   if (errmsg) {
     return {
       state: "unknown",
       status: status ?? undefined,
-      why: `平台回了 ${status ?? "?"}：${errmsg[1]?.replaceAll('"', "'")}`,
+      why: `平台回了 ${status ?? "?"}：${errmsg.groups?.message?.replaceAll('"', "'")}`,
     };
   }
   return {

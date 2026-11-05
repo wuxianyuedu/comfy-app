@@ -24,7 +24,7 @@ import { runPnpmSync } from "./launcher-core/shell.mjs";
  *  @param {string} output drizzle-kit 的输出（stdout 与 stderr 拼在一起）
  *  @returns {boolean} */
 export function pushSettled(output) {
-  return /(No changes detected|Changes applied)/i.test(output);
+  return /(?:No changes detected|Changes applied)/i.test(output);
 }
 
 /** 「库结构与 schema 已经一致、无需再改」的判据。
@@ -52,7 +52,7 @@ export function pushBlockedByTty(output) {
  * 换了输出格式、我们漏认了某类语句时，黑名单会把它当安全语句**直接执行**，
  * 白名单只会让用户多跑一次命令。
  */
-const SAFE_STATEMENT = /^(ALTER TABLE `[^`]+` ADD|CREATE TABLE\b|CREATE (UNIQUE )?INDEX\b)/i;
+const SAFE_STATEMENT = /^(?:ALTER TABLE `[^`]+` ADD|CREATE TABLE\b|CREATE (?:UNIQUE )?INDEX\b)/i;
 
 /**
  * 「这一行看起来是一条 SQL」—— 只收这些行。
@@ -62,7 +62,7 @@ const SAFE_STATEMENT = /^(ALTER TABLE `[^`]+` ADD|CREATE TABLE\b|CREATE (UNIQUE 
  * 但功能整个失效。漏认的代价仍然落在安全一侧 —— 语句形态变了就收不到，
  * `canAutoApply` 判 false，交人工。
  */
-const SQL_LINE = /^(ALTER|CREATE|DROP|INSERT|UPDATE|DELETE|PRAGMA|RENAME)\b/i;
+const SQL_LINE = /^(?:ALTER|CREATE|DROP|INSERT|UPDATE|DELETE|PRAGMA|RENAME)\b/i;
 
 /**
  * 从 drizzle-kit 的输出里取出「它打算执行、但还没执行」的语句。
@@ -87,7 +87,7 @@ export function pendingStatements(output) {
     const text = line.trim();
     /* 状态行（`[✓] Changes applied` / `[i] No changes detected` /
      * 下一次 `Reading config`）是这段列表的结束标志；空行只是分隔。 */
-    if (/^(\[|Reading config|Warning\b|No changes detected|Changes applied)/i.test(text)) {
+    if (/^(?:\[|Reading config|Warning\b|No changes detected|Changes applied)/i.test(text)) {
       break;
     }
     if (SQL_LINE.test(text)) {
@@ -134,9 +134,9 @@ export function describeRiskyChanges(statements) {
   /** 被 drizzle 用 `__new_` 三件套重建的表名。@type {Set<string>} */
   const recreated = new Set();
   for (const s of statements) {
-    const m = s.match(/^CREATE\s+TABLE\s+`__new_([^`]+)`/i);
+    const m = s.match(/^CREATE\s+TABLE\s+`__new_(?<table>[^`]+)`/i);
     if (m) {
-      recreated.add(m[1]);
+      recreated.add(m.groups?.table ?? "");
     }
   }
   /** @type {string[]} */
@@ -148,12 +148,14 @@ export function describeRiskyChanges(statements) {
     const sql = raw.replace(/;+\s*$/, "");
     let desc = null;
     let m;
-    if ((m = sql.match(/^ALTER\s+TABLE\s+`([^`]+)`\s+DROP\s+COLUMN\s+`([^`]+)`$/i))) {
-      desc = `${m[1]}.${m[2]}（删列，该列的数据会丢）`;
-    } else if ((m = sql.match(/^DROP\s+TABLE\s+`([^`]+)`$/i))) {
-      desc = recreated.has(m[1])
-        ? `${m[1]}（重建表，对不上的列的数据会丢）`
-        : `${m[1]}（删表，整张表的数据会丢）`;
+    if (
+      (m = sql.match(/^ALTER\s+TABLE\s+`(?<table>[^`]+)`\s+DROP\s+COLUMN\s+`(?<column>[^`]+)`$/i))
+    ) {
+      desc = `${m.groups?.table ?? ""}.${m.groups?.column ?? ""}（删列，该列的数据会丢）`;
+    } else if ((m = sql.match(/^DROP\s+TABLE\s+`(?<table>[^`]+)`$/i))) {
+      desc = recreated.has(m.groups?.table ?? "")
+        ? `${m.groups?.table ?? ""}（重建表，对不上的列的数据会丢）`
+        : `${m.groups?.table ?? ""}（删表，整张表的数据会丢）`;
     } else if (/__new_/.test(sql)) {
       continue; /* 重建表的搬运 / 改名步骤，上面那条已经讲过 */
     }

@@ -135,7 +135,7 @@ export function classifyLfsPushFailure(text) {
     };
   }
   if (
-    /repository or object not found|repository not found|lfs.{0,24}(not enabled|disabled|not supported)|\b404\b/i.test(
+    /repository or object not found|repository not found|lfs.{0,24}(?:not enabled|disabled|not supported)|\b404\b/i.test(
       raw,
     )
   ) {
@@ -188,8 +188,10 @@ export function explainLfsPushFailure(text) {
  */
 export function parseLfsObjectCount(text) {
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- 入参 text 是子进程原始输出（外部数据），运行期可为 undefined；规则按非空 string 标
-  const m = /Uploading LFS objects:.{0,40}?\((\d+)\/(\d+)\)/i.exec(String(text ?? ""));
-  return m ? `${m[1]}/${m[2]}` : null;
+  const m = /Uploading LFS objects:.{0,40}?\((?<done>\d+)\/(?<total>\d+)\)/i.exec(
+    String(text ?? ""),
+  );
+  return m ? `${m.groups?.done}/${m.groups?.total}` : null;
 }
 
 /**

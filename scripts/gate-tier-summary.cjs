@@ -34,7 +34,7 @@ const ROOT = path.resolve(__dirname, "..");
 const HOOK = path.join(ROOT, ".githooks", "pre-commit");
 
 /** `run_group <id> "<说明>"` 的单行形态（五个调用点都是这一形，包括多行 `sh -c` 的那三个）。 */
-const GROUP_CALL = /^run_group ([A-Z0-9]+) "([^"]*)"/gm;
+const GROUP_CALL = /^run_group (?<id>[A-Z0-9]+) "(?<desc>[^"]*)"/gm;
 
 /**
  * 从钩子文本取各组自己的说明（**不**在脚本里另立一份名单 —— 那正是 §12.12 要拦的孪生形态）。
@@ -44,8 +44,8 @@ const GROUP_CALL = /^run_group ([A-Z0-9]+) "([^"]*)"/gm;
  */
 function groupLabels(hookText) {
   const labels = new Map();
-  for (const [, id, desc] of hookText.matchAll(GROUP_CALL)) {
-    labels.set(id, desc);
+  for (const m of hookText.matchAll(GROUP_CALL)) {
+    labels.set(m.groups?.id ?? "", m.groups?.desc ?? "");
   }
   return labels;
 }

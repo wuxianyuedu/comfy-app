@@ -57,7 +57,7 @@ const RUNNING_STATES = new Set(["running", "pending", "queued", "waiting", "crea
  * 也是「一格都没跑到」时**唯一**的证人。`end` / `beforeEnd` / `debugDetection` 仍不认
  * —— 它们不承载本仓任何判据。
  */
-const CONFIGURED_STAGE_ID = /^(stage-\d+|prepare)$/;
+const CONFIGURED_STAGE_ID = /^(?:stage-\d+|prepare)$/;
 
 /**
  * `endStages` 那一族的 id 形状（ISSUE #3047）。
@@ -211,7 +211,7 @@ export function classifyStages(stages) {
  * 认不出形状时这一格**不说话**，交给格状态去判，绝不因为原话认不出就把它读成终止。
  */
 const TERMINATED_MARKERS = [
-  /got lock:\s*(\S+)/i,
+  /got lock:\s*(?:\S+)/i,
   /pipeline was stop+ed/i,
   /current pipeline is terminated/i,
   /has been manually terminated/i,
@@ -253,14 +253,16 @@ export function cancelledCause(stage) {
   let byLock = false;
   /* 「谁抢的锁」只认 `got lock:` 后面那一格 —— 不能拿「任意一条 marker 有捕获组」去判，
      否则锁 key（`…-push`）会被当成流水线 id 念出来。 */
-  const lockHit = error.match(/got lock:\s*([^\s，,。]+)/i);
-  if (lockHit?.[1]) {
-    holder = lockHit[1].replace(/\.$/, "");
+  const lockHit = error.match(/got lock:\s*(?<holder>[^\s，,。]+)/i);
+  const lockHolder = lockHit?.groups?.holder;
+  if (lockHolder) {
+    holder = lockHolder.replace(/\.$/, "");
     /* 锁 key 里没有 `cnb-` 前缀，而抢锁的是**某一条流水线**：`got lock` 的原话里
        永远带着那条流水线的 id 或构建号（实测两种都出现过），优先认 `cnb-` 打头的那个。 */
-    const snHit = error.match(/\b(cnb-[\w-]+?-\d{3,})\b/);
-    if (snHit?.[1]) {
-      holder = pipelineSn(snHit[1]);
+    const snHit = error.match(/\b(?<sn>cnb-[\w-]+?-\d{3,})\b/);
+    const sn = snHit?.groups?.sn;
+    if (sn) {
+      holder = pipelineSn(sn);
     }
     byLock = true;
   }
@@ -308,8 +310,9 @@ export function pipelineSn(pipelineId) {
   const id = String(pipelineId ?? "").trim();
   /* 流水线 id 的形状是 `<构建号>-<序号>`，而构建号自己是 `cnb-<短码>-<轮次>` ⇒
      先解到 `cnb-` 打头的那一段，再去掉尾部序号。`-\d+` 这条尾巴是唯一的收尾信号。 */
-  const m = id.match(/^(cnb-.*?)-\d+$/);
-  return m?.[1] ? m[1] : id;
+  const m = id.match(/^(?<sn>cnb-.*?)-\d+$/);
+  const sn = m?.groups?.sn;
+  return sn ? sn : id;
 }
 
 /**

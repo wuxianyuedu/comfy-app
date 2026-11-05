@@ -38,40 +38,32 @@ function gateChainScripts() {
    * @param {string} text
    */
   const collect = (text) => {
-    for (const m of text.matchAll(
-      /scripts[\\/]+([A-Za-z0-9_.-]+\.(?:cjs|mjs))/g,
-    )) {
-      out.add(m[1]);
+    for (const m of text.matchAll(/scripts[\\/]+(?<script>[A-Za-z0-9_.-]+\.(?:cjs|mjs))/g)) {
+      out.add(m.groups?.script);
     }
   };
 
   // ① 钩子的 `run "<标签>" <命令>` 步骤行（与 tests/doc-check-hook-wiring.test.ts 同款解析）。
   const hook = path.join(ROOT, ".githooks/pre-commit");
   if (fs.existsSync(hook)) {
-    for (const m of fs
-      .readFileSync(hook, "utf8")
-      .matchAll(/^ {2}run "[^"]+" (.+)$/gm)) {
-      collect(m[1] ?? "");
+    for (const m of fs.readFileSync(hook, "utf8").matchAll(/^ {2}run "[^"]+" (?<command>.+)$/gm)) {
+      collect(m.groups?.command ?? "");
     }
   }
 
   // ② `quality-gate.mjs` 的 gate 表项。
   const qm = path.join(ROOT, "scripts/quality-gate.mjs");
   if (fs.existsSync(qm)) {
-    for (const m of fs
-      .readFileSync(qm, "utf8")
-      .matchAll(/args:\s*\[([^\]]*)\]/g)) {
-      collect(m[1] ?? "");
+    for (const m of fs.readFileSync(qm, "utf8").matchAll(/args:\s*\[(?<args>[^\]]*)\]/g)) {
+      collect(m.groups?.args ?? "");
     }
   }
 
   // ③ `quality-gate.ps1` 的 `$Blocks` 表项（`Cmd = "node"; Args = @("scripts\x.cjs")`）。
   const qp = path.join(ROOT, "scripts/quality-gate.ps1");
   if (fs.existsSync(qp)) {
-    for (const m of fs
-      .readFileSync(qp, "utf8")
-      .matchAll(/Args\s*=\s*@\(([^)]*)\)/g)) {
-      collect(m[1] ?? "");
+    for (const m of fs.readFileSync(qp, "utf8").matchAll(/Args\s*=\s*@\((?<args>[^)]*)\)/g)) {
+      collect(m.groups?.args ?? "");
     }
   }
 

@@ -235,7 +235,7 @@ export function isAppDevServerCmdline(cmdline, root = process.cwd()) {
   if (text.includes(`${base}/scripts/${APP_START_SCRIPT_MARKER}`)) {
     return true;
   }
-  if (/next(\.cmd|\.ps1)?\s+(dev|start)\b/.test(text)) {
+  if (/next(?:\.cmd|\.ps1)?\s+(?:dev|start)\b/.test(text)) {
     return true;
   }
   return false;

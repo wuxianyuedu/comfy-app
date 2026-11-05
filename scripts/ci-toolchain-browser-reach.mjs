@@ -380,11 +380,11 @@ export function playwrightReachabilityVerdicts({
  */
 export function isReachableVerdict(verdict) {
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- verdict 由子进程读数组装，类型按 string 标窄
-  const m = /^HTTP\s+(\d{3})\b/.exec(String(verdict ?? "").trim());
+  const m = /^HTTP\s+(?<code>\d{3})\b/.exec(String(verdict ?? "").trim());
   if (!m) {
     return false;
   }
-  const code = Number(m[1]);
+  const code = Number(m.groups?.code);
   return code >= 200 && code < 400;
 }
 
@@ -629,11 +629,11 @@ export function probeGrade(verdict) {
   if (text.startsWith("超时")) {
     return "timeout";
   }
-  const m = /^HTTP\s+(\d{3})\b/.exec(text);
+  const m = /^HTTP\s+(?<code>\d{3})\b/.exec(text);
   if (!m) {
     return "worse";
   }
-  const code = Number(m[1]);
+  const code = Number(m.groups?.code);
   /* 3xx 也算「量得完」：`cdn.playwright.dev` 那一族回的就是 307（它自己再跟一跳）。
    * 与 {@link isReachableVerdict} 同一条口径 —— 两处判「什么算到得了」必须一致。 */
   return code >= 200 && code < 400 ? "ok" : "worse";

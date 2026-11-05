@@ -140,11 +140,11 @@ export function issueTitle(stage, lane = "pr") {
  */
 export function prIidFromUrl(url) {
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- url 是平台 eventUrl（外部输入），空值兜底保留
-  const m = /\/pulls?\/(\d+)/.exec(String(url ?? ""));
+  const m = /\/pulls?\/(?<pr>\d+)/.exec(String(url ?? ""));
   if (!m) {
     return null;
   }
-  const n = Number(m[1]);
+  const n = Number(m.groups?.pr);
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 

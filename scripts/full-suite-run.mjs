@@ -321,13 +321,13 @@ export function suiteRanking(xmlText, { limit = 10, file = "", diag } = {}) {
 export function parseJunitPhaseCosts(xml) {
   /** @type {{name: string, totalMs: number, testsMs: number, cases: number}[]} */
   const out = [];
-  for (const m of String(xml ?? "").matchAll(/<testsuite\b([^>]*)>([\s\S]*?)<\/testsuite>/g)) {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- RegExpExecArray 的分组可缺，规则读成非空
-    const attrs = m[1] ?? "";
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上
-    const body = m[2] ?? "";
-    const name = /\bname="([^"]*)"/.exec(attrs)?.[1];
-    const total = /\btime="([^"]*)"/.exec(attrs)?.[1];
+  for (const m of String(xml ?? "").matchAll(
+    /<testsuite\b(?<attrs>[^>]*)>(?<body>[\s\S]*?)<\/testsuite>/g,
+  )) {
+    const attrs = m.groups?.attrs ?? "";
+    const body = m.groups?.body ?? "";
+    const name = /\bname="(?<name>[^"]*)"/.exec(attrs)?.groups?.name;
+    const total = /\btime="(?<total>[^"]*)"/.exec(attrs)?.groups?.total;
     if (!name || total === undefined) {
       continue;
     }
@@ -337,8 +337,8 @@ export function parseJunitPhaseCosts(xml) {
     }
     let testsMs = 0;
     let cases = 0;
-    for (const c of body.matchAll(/<testcase\b[^>]*?\btime="([0-9.eE+-]+)"/g)) {
-      const secs = Number(c[1]);
+    for (const c of body.matchAll(/<testcase\b[^>]*?\btime="(?<time>[0-9.eE+-]+)"/g)) {
+      const secs = Number(c.groups?.time);
       if (!Number.isFinite(secs) || secs < 0) {
         continue;
       }

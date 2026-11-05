@@ -334,7 +334,7 @@ function readTsconfigInclude() {
   } catch (error) {
     throw new Error(`读不到 tsconfig.json：${error.message}`, { cause: error });
   }
-  const stripped = blankJsonComments(raw).replaceAll(/,(\s*[}\]])/g, "$1");
+  const stripped = blankJsonComments(raw).replaceAll(/,(?<tail>\s*[}\]])/g, "$<tail>");
   let json;
   try {
     json = JSON.parse(stripped);
@@ -468,24 +468,28 @@ function main() {
 
   if (totalSites === 0) {
     console.log(
-      `[type-assertion] OK —— 0 处 expectTypeOf/assertType 站点（本判据是纯闸门：对象是「下一次有人加类型层断言」）。${
-        vanishedNote(vanished)}`,
+      `[type-assertion] OK —— 0 处 expectTypeOf/assertType 站点（本判据是纯闸门：对象是「下一次有人加类型层断言」）。${vanishedNote(
+        vanished,
+      )}`,
     );
     return 0;
   }
 
   if (offenders.length === 0) {
     console.log(
-      `[type-assertion] OK —— ${totalSites} 处类型层断言，全部落在 tsconfig 的 include 面里（执行者 = \`tsc --noEmit\`）。${
-        vanishedNote(vanished)}`,
+      `[type-assertion] OK —— ${totalSites} 处类型层断言，全部落在 tsconfig 的 include 面里（执行者 = \`tsc --noEmit\`）。${vanishedNote(
+        vanished,
+      )}`,
     );
     return 0;
   }
 
   console.error(
-    `${REPORT_ONLY
-      ? `[type-assertion] 盘点：${offenders.length} 处无执行者（--report 不判失败）`
-      : `[ERROR] 有 ${offenders.length} 处类型层断言**没有执行者**`}：\n`,
+    `${
+      REPORT_ONLY
+        ? `[type-assertion] 盘点：${offenders.length} 处无执行者（--report 不判失败）`
+        : `[ERROR] 有 ${offenders.length} 处类型层断言**没有执行者**`
+    }：\n`,
   );
   for (const o of offenders) {
     console.error(`  · ${o.rel}:${o.line} —— ${o.why}`);
@@ -498,8 +502,7 @@ function main() {
       `\n修法二选一：` +
       `\n  · 把该文件放回 include 面（通常是 \`**/*.ts\` 已经覆盖的 src/ 或 tests/）；` +
       `\n  · 确实是只给 tsc 看的类型用例 → 命名成 \`.test-d.ts\` 并确认仍落在 include 面里。` +
-      `\n口径见 docs/standards/11-测试与可观测性.md §11.20。${
-      vanishedNote(vanished)}`,
+      `\n口径见 docs/standards/11-测试与可观测性.md §11.20。${vanishedNote(vanished)}`,
   );
   return REPORT_ONLY ? 0 : 1;
 }

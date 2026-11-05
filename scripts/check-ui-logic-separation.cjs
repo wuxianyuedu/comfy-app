@@ -159,15 +159,14 @@ function collect() {
       // 里那些 .tsx 是「点击复制路径」的调试用字符串常量，不是依赖。
       if (r.endsWith(".ts")) {
         const specs = [
-          ...(t.match(/\bimport\s+(?:type\s+)?[^;]*?\bfrom\s*["']([^"']+)["']/g) ?? []),
-          ...(t.match(/\bexport\s+(?:\*|\{[^}]*\})\s*from\s*["']([^"']+)["']/g) ?? []),
-          ...(t.match(/\bimport\s*\(\s*["']([^"']+)["']\s*\)/g) ?? []),
+          ...(t.match(/\bimport\s+(?:type\s+)?[^;]*?\bfrom\s*["'](?:[^"']+)["']/g) ?? []),
+          ...(t.match(/\bexport\s+(?:\*|\{[^}]*\})\s*from\s*["'](?:[^"']+)["']/g) ?? []),
+          ...(t.match(/\bimport\s*\(\s*["'](?:[^"']+)["']\s*\)/g) ?? []),
         ]
           .map(
             (stmt) =>
-              (stmt.match(/["']([^"']+)["'](?!.*\bfrom\b)/) ??
-                stmt.match(/["']([^"']+)["']/) ??
-                [])[1],
+              stmt.match(/["'](?<specifier>[^"']+)["'](?!.*\bfrom\b)/)?.groups?.specifier ??
+              stmt.match(/["'](?<specifier>[^"']+)["']/)?.groups?.specifier,
           )
           .filter((s) => typeof s === "string" && s.endsWith(".tsx"));
         if (specs.length) {

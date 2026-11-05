@@ -130,7 +130,7 @@ const TAG_COLORS = {
  * 中括号里可以是空的：色带每一行都有一格标签位，没有标签的行留空 —— 这样
  * 「标签列」在整块日志里是**一条竖线**，读者的眼睛能顺着它往下扫。
  */
-const TAG_RE = /\[([^[^\]\s]{1,12})\]/g;
+const TAG_RE = /\[(?<tag>[^[^\]\s]{1,12})\]/g;
 
 /** 色带外层的空白与竖线色。 */
 const COLOR_BAND = "90";
@@ -221,7 +221,7 @@ export function bandLine(line, { enabled = true, color } = {}) {
  */
 export function tagColorOf(line) {
   for (const m of String(line ?? "").matchAll(TAG_RE)) {
-    const key = `[${m[1]}]`;
+    const key = `[${m.groups?.tag}]`;
     if (TAG_COLORS[key]) {
       return TAG_COLORS[key];
     }

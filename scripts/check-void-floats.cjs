@@ -85,7 +85,7 @@ function collectFiles(dir, out = []) {
       collectFiles(rel, out);
       continue;
     }
-    if (!/\.(ts|tsx)$/.test(entry.name)) {
+    if (!/\.(?:ts|tsx)$/.test(entry.name)) {
       continue;
     }
     if (entry.name.endsWith(".d.ts")) {
@@ -250,9 +250,9 @@ function main(parsed) {
   }
   if (problems.length > 0) {
     console.error(
-      `[void-floats] src/lib 里新增 \`void someFn(...)\` 语句(§18 lib 规范 + 类型安全审查 src/lib H-6):\n${
-        problems.join("\n")
-        }\n  默认修法:改用 \`fireAndForget(someFn(), (e) => { /* 明确失败通道 */ })\` ——\n` +
+      `[void-floats] src/lib 里新增 \`void someFn(...)\` 语句(§18 lib 规范 + 类型安全审查 src/lib H-6):\n${problems.join(
+        "\n",
+      )}\n  默认修法:改用 \`fireAndForget(someFn(), (e) => { /* 明确失败通道 */ })\` ——\n` +
         `  见 src/lib/async-action.ts。若被调函数**内部已经 catch**、这里就是刻意悬空,\n` +
         `  也请在评审里说明这一点再 \`--update\` 收紧基线,不要悄悄写下。\n` +
         `  \`void fetch(...)\` / \`void someFn().catch(...)\` 这类形态不在本判据内,\n` +
@@ -265,10 +265,9 @@ function main(parsed) {
     .map(([rel, base]) => [rel, current[rel] ?? 0, base])
     .filter(([, cur, base]) => cur < base);
   if (dropped.length > 0) {
-    const msg =
-      `[void-floats] 检测到 ${dropped.length} 个文件下降,请收紧基线:\n  ${
-      dropped.map(([rel, cur, base]) => `${rel}: ${base} → ${cur}`).join("\n  ")
-      }\n  执行 node scripts/check-void-floats.cjs --update`;
+    const msg = `[void-floats] 检测到 ${dropped.length} 个文件下降,请收紧基线:\n  ${dropped
+      .map(([rel, cur, base]) => `${rel}: ${base} → ${cur}`)
+      .join("\n  ")}\n  执行 node scripts/check-void-floats.cjs --update`;
     if (STRICT) {
       console.error(msg);
       process.exit(1);
