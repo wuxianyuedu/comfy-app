@@ -1,0 +1,62 @@
+# master-gate.yml —— 镜像仓 master 的树级文档链（任务 3 并行期，2026-11-06）
+#
+# 为什么单独一份：CNB push 档「master 合并复核」里的 `生成态文档与源同步` /
+# `文档引用与权威源一致` 是树级文本判据，与自托管节点的平台事实无关。它们挪到
+# GitHub Actions 之后，CNB push 只剩「合并形态复核 → GitHub master 镜像 → 工作区出处」
+# 三格（切换是下一笔 PR）。**本次只加这一侧**：CNB push 档三格一个字节不动，两侧并行跑、
+# 逐格比对结论，出问题时才能分清是谁红。
+#
+# 触发口径：
+#   · 只在 `push` 到 master 上跑 —— 镜像格 `git push --force HEAD:refs/heads/master`
+#     之后，判的就是被推上去的那一笔。「force push 是否必定触发 push 事件」目前是
+#     推断、未经真机实测：第一跑要在镜像推送成功之后才会出现。
+#   · 不复刻 CNB 的 `ifModify: docs/**`：两条命令都是纯文本读，秒级；按路径过滤会在
+#     「代码改动破坏文档引用」时漏判（那类红的因在 docs 之外）。
+#   · `cancel-in-progress: false` 对位 push 锁语义：master 上每一笔都要有自己的读数，
+#     后一笔不许把前一笔的结论掐掉。
+#
+# 失败可见性：不回传 CNB、不改 ship 判据（用户已定）。红只出现在镜像仓的 Actions
+# 列表 + GitHub 通知；要看现场日志用 `pnpm ship --gh-logs <run-id|pr号>`。
+#
+# `uses:` 版本口径同 pr-gate.yml / daily.yml（有 v7 上 v7；pnpm/action-setup 最新只到 v6）。
+
+name: master-gate
+
+on:
+  push:
+    branches: [master]
+
+concurrency:
+  group: push-master
+  cancel-in-progress: false
+
+jobs:
+  doc-chain:
+    # 钉 24.04 不跟浮动标签的理由见 pr-gate.yml 同名注释。
+    runs-on: ubuntu-24.04
+    # 冷装约 8 分钟 + 两条命令秒级；给 30 分钟，避免装依赖抖动被读成判据红。
+    timeout-minutes: 30
+    steps:
+      - name: 检出（全历史 + LFS：镜像格把两个父提交的历史一并推上来）
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
+        uses: pnpm/action-setup@v6
+
+      - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: 安装依赖（allowBuilds 清单见 pnpm-workspace.yaml）
+        run: pnpm install --frozen-lockfile
+
+      - name: 生成态文档与源同步（CNB push 档同款判据、同款旗标）
+        run: node scripts/render-doc-placeholders.cjs --check --autofix
+
+      - name: 文档引用与权威源一致（CNB push 档同款判据一字不改）
+        run: node scripts/check-doc-references.cjs
