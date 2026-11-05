@@ -163,17 +163,14 @@ function section(title) {
  */
 export function parseVersion(text) {
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- text 是组件自己测出来的版本串（外部输入），类型按 string 标窄
-  const m = /(\d+)\.(\d+)\.(\d+)/.exec(text ?? "");
+  const m = /(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)/.exec(text ?? "");
   if (!m) {
     return null;
   }
   return {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则必需分组在 noUncheckedIndexedAccess 下仍是 string | undefined，兜底只服务于 tsc
-    major: Number(m[1] ?? 0),
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上一行：必需分组按下标取在 tsc 里是 string | undefined
-    minor: Number(m[2] ?? 0),
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上一行：必需分组按下标取在 tsc 里是 string | undefined
-    patch: Number(m[3] ?? 0),
+    major: Number(m.groups?.major ?? 0),
+    minor: Number(m.groups?.minor ?? 0),
+    patch: Number(m.groups?.patch ?? 0),
   };
 }
 
@@ -289,7 +286,7 @@ export function cargoForensics({
   }
   const cargoHome = String(env.CARGO_HOME ?? "")
     .trim()
-    .replace(/^"(.*)"$/, "$1");
+    .replace(/^"(?<inner>.*)"$/, "$<inner>");
   if (cargoHome) {
     /* 候选扩展名**串行拼接**：`.exe` 排在无扩展名之前 —— 写成 `["", ".exe"]` 时无扩展名
      * 那个候选（`cargo`）会先入列，去重之后 `.exe` 那一份反而被挡掉，于是「盘上有哪个代理」

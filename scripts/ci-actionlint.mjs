@@ -80,7 +80,7 @@ export function toolDir(root) {
  */
 export function workflowFiles(dir, readDir = (d) => fs.readdirSync(d)) {
   return readDir(dir)
-    .filter((name) => /\.(yml|yaml)$/.test(name))
+    .filter((name) => /\.(?:yml|yaml)$/.test(name))
     .sort()
     .map((name) => path.posix.join(".github", "workflows", name));
 }
@@ -221,7 +221,9 @@ export function runCiActionlint(io = {}) {
   });
   log(`[actionlint] 常驻工具根：${resolved.root ?? "取不到"}（来源：${resolved.from}）`);
   if (!resolved.root) {
-    log(`[actionlint] **没有结论**：问不出工具根 —— 配 ${TOOLS_ROOT_ENV} 是出口（本脚本不联网取用）`);
+    log(
+      `[actionlint] **没有结论**：问不出工具根 —— 配 ${TOOLS_ROOT_ENV} 是出口（本脚本不联网取用）`,
+    );
     return CODE.NO_FACT;
   }
   if (args.seed) {
@@ -255,13 +257,16 @@ export function runCiActionlint(io = {}) {
     log(output);
   }
   if (status === null) {
-    log(renderVerdict({ code: CODE.NO_FACT, files, reason: "actionlint 起不来（spawn 没拿到退码）" }));
+    log(
+      renderVerdict({ code: CODE.NO_FACT, files, reason: "actionlint 起不来（spawn 没拿到退码）" }),
+    );
     return CODE.NO_FACT;
   }
-  const firstLine = output
-    .split("\n")
-    .map((line) => line.trim())
-    .find((line) => line !== "") ?? "";
+  const firstLine =
+    output
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => line !== "") ?? "";
   log(renderVerdict({ code: status === 0 ? CODE.OK : CODE.FAIL, files, firstLine }));
   return status === 0 ? CODE.OK : CODE.FAIL;
 }

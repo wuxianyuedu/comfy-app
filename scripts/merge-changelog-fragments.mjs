@@ -104,7 +104,7 @@ function readFragments() {
 }
 
 /** 来源锚 —— `<!-- since: <commit> — <slug> -->`(规范 §13.10.6)。 */
-const ANCHOR_RE = /<!--\s*since:\s*([0-9a-f]{7,40})\s*(?:—|--|-)\s*(.+?)\s*-->/;
+const ANCHOR_RE = /<!--\s*since:\s*(?<rev>[0-9a-f]{7,40})\s*(?:—|--|-)\s*(?<slug>.+?)\s*-->/;
 
 /**
  * 这个标题是不是「待发段落」——`## [Unreleased]`,外加仓库自己写过的 `## [未发布]`。
@@ -164,10 +164,10 @@ function pendingSections(lines) {
     if (inFence) {
       return;
     }
-    const m = /^##\s+(.+?)\s*$/.exec(line);
-    /* 解构 + 真值判据：`m[1]` 是 `string | undefined`，而 `isPendingTitle(…)` 要的
+    const m = /^##\s+(?<title>.+?)\s*$/.exec(line);
+    /* 解构 + 真值判据：`m.groups?.title` 是 `string | undefined`，而 `isPendingTitle(…)` 要的
      * 是 `string` —— 在这里收掉，比在下面两处（判据与 `out.push`）各写一遍强。 */
-    const [, title] = m ?? [];
+    const title = m?.groups?.title;
     if (!title || !isPendingTitle(title)) {
       return;
     }
@@ -178,10 +178,8 @@ function pendingSections(lines) {
     for (const probe of lines.slice(i + 1, i + 7)) {
       const a = ANCHOR_RE.exec(probe);
       if (a) {
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- ANCHOR_RE 捕获组不参与匹配时运行时为 undefined
-        rev = a[1] ?? null;
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上
-        slug = a[2] ?? null;
+        rev = a.groups?.rev ?? null;
+        slug = a.groups?.slug ?? null;
         break;
       }
     }
@@ -271,8 +269,8 @@ function mergeInto(changelogText, fragments, version, anchorRev) {
   };
   let current = null;
   for (const line of lines.slice(start + 1, end)) {
-    const [, name] = line.match(/^###\s+(.+)$/) ?? [];
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则不匹配时上一行 `?? []` 让 name 运行时为 undefined
+    const name = line.match(/^###\s+(?<name>.+)$/)?.groups?.name;
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则不匹配时 name 运行时为 undefined
     const section = name?.trim();
     if (section && SECTIONS.includes(section)) {
       current = section;
@@ -347,10 +345,9 @@ const bySection = fragments.reduce(
   /** @type {Record<string, string[]>} */ ({}),
 );
 console.log(
-  `[merge-changelog] 待并入 ${fragments.length} 个碎片:${
-    Object.entries(bySection)
-      .map(([s, ns]) => `\n  ${s}: ${ns.join(", ")}`)
-      .join("")}`,
+  `[merge-changelog] 待并入 ${fragments.length} 个碎片:${Object.entries(bySection)
+    .map(([s, ns]) => `\n  ${s}: ${ns.join(", ")}`)
+    .join("")}`,
 );
 
 /* 锚:**本轮条目里最早的那个提交**。显式给的优先,否则取当前 HEAD —— 碎片是随那次

@@ -125,8 +125,8 @@ function run(cmd, args) {
  */
 function pathDrives(env) {
   const drives = new Set();
-  for (const m of String(env.PATH ?? "").matchAll(/(^|;)([A-Za-z]:)[\\/]/g)) {
-    drives.add(`${m[2]}\\`);
+  for (const m of String(env.PATH ?? "").matchAll(/(?:^|;)(?<drive>[A-Za-z]:)[\\/]/g)) {
+    drives.add(`${m.groups?.drive}\\`);
   }
   return [...drives];
 }

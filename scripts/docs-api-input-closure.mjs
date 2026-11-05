@@ -69,7 +69,7 @@ const TYPEDOC_CONFIG = "typedoc.json";
  * 「先试无扩展名」的第一步，不是文件 ⇒ 用这一条剔掉。`.js` / `.mjs` 也在内：
  * `src/env.js` 就是 typedoc 会读、而三根罩不住的那种文件（ISSUE #2223 的现场之一）。
  */
-const NODE_EXT_RE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|json)$/;
+const NODE_EXT_RE = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs|json)$/;
 
 /**
  * 读一个文件；读不到（不存在 / 是目录 / 权限）返回 `null`。
@@ -225,8 +225,8 @@ export function entryPointExtension(entryPoint) {
  * @returns {string | null}
  */
 export function negatedBasenamePattern(entryPoint) {
-  const m = /!\(([^)]*)\)/.exec(entryPoint);
-  return m?.[1] ?? null;
+  const m = /!\((?<pattern>[^)]*)\)/.exec(entryPoint);
+  return m?.groups?.pattern ?? null;
 }
 
 /**
@@ -257,8 +257,8 @@ export function isGlobEntryPoint(entryPoint) {
  * @returns {string}
  */
 export function rootOfEntryPoint(entryPoint) {
-  const m = /^([^*?[{]+)/.exec(entryPoint);
-  return (m?.[1] ?? entryPoint).replace(/\/+$/, "");
+  const m = /^(?<prefix>[^*?[{]+)/.exec(entryPoint);
+  return (m?.groups?.prefix ?? entryPoint).replace(/\/+$/, "");
 }
 
 /**

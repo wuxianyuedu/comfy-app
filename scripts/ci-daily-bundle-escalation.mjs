@@ -17,10 +17,7 @@ import {
   fetchStageDetail,
   findStageMatches,
 } from "./ci-build-readout.mjs";
-import {
-  fetchBuildsCoveringWindow,
-  isDailyDispatch,
-} from "./check-daily-attendance.mjs";
+import { fetchBuildsCoveringWindow, isDailyDispatch } from "./check-daily-attendance.mjs";
 
 /**
  * 预算闸那一格在每日链里的格名。`LANE_STAGES` 的键与值都是它，所以只在这里写一次。
@@ -67,37 +64,30 @@ export const BUNDLE_GATE_RED_STREAK_DAYS = 2;
  */
 export function readBundleAccount(text) {
   const body = typeof text === "string" ? text : "";
-  if (body.trim() === "")
-    {return {
+  if (body.trim() === "") {
+    return {
       marker: "unknown",
       stale: { kind: "unknown" },
       note: "那一格的日志正文没取到",
-    };}
+    };
+  }
   const enforced = body.includes(BUNDLE_GATE_MARKERS.enforced);
   const suspended = body.includes(BUNDLE_GATE_MARKERS.suspended);
   const marker =
-    enforced && suspended
-      ? "unknown"
-      : enforced
-        ? "enforced"
-        : suspended
-          ? "suspended"
-          : "none";
+    enforced && suspended ? "unknown" : enforced ? "enforced" : suspended ? "suspended" : "none";
   /* 归因行两形：`基线修订号：dd8d4647（其后本检出上有 87 次提交）` 与
    * `… 改按基线日期 … 归因：src/ 侧其后有 N 次主干提交`。前者是常态，后者是
    * 基线修订号不可达（squash 合入的常态）时判据自己走的第二通道。 */
   const since =
-    /基线修订号：([0-9a-f]{8})[^\n]*?其后本检出上有\s*(\d+)\s*次提交/.exec(
-      body,
-    );
-  const byDate = /改按基线日期[^\n]*?其后有\s*(\d+)\s*次主干提交/.exec(body);
+    /基线修订号：(?<rev>[0-9a-f]{8})[^\n]*?其后本检出上有\s*(?<commits>\d+)\s*次提交/.exec(body);
+  const byDate = /改按基线日期[^\n]*?其后有\s*(?<commits>\d+)\s*次主干提交/.exec(body);
   /** @type {{kind:"commits"|"source-commits", n:number, rev:string|null}|{kind:"unknown"}} */
   let stale = { kind: "unknown" };
-  if (since)
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- since 是正则捕获组数组，末尾组可能缺位，rev 的 null 兜底是类型必需
-    {stale = { kind: "commits", n: Number(since[2]), rev: since[1] ?? null };}
-  else if (byDate)
-    {stale = { kind: "source-commits", n: Number(byDate[1]), rev: null };}
+  if (since) {
+    stale = { kind: "commits", n: Number(since.groups?.commits), rev: since.groups?.rev ?? null };
+  } else if (byDate) {
+    stale = { kind: "source-commits", n: Number(byDate.groups?.commits), rev: null };
+  }
   const note =
     marker === "unknown"
       ? enforced && suspended
@@ -125,7 +115,8 @@ export function composeEscalation({ account, streak, why }) {
     account.stale.kind === "unknown"
       ? "- 陈旧度：**读不出**（判据的归因行里没有可解析的那一段）"
       : `- 陈旧度：基线 \`${account.stale.rev ?? "(按日期归因)"}\` 其后**${account.stale.n} 次提交**${
-        account.stale.kind === "source-commits" ? "（src/ 侧主干提交）" : ""}`;
+          account.stale.kind === "source-commits" ? "（src/ 侧主干提交）" : ""
+        }`;
   const streakLine =
     streak.days === "unknown"
       ? `- 连续：**读不出**（${streak.note}）`
@@ -160,38 +151,42 @@ export function judgeBundleEscalation({
   staleCommits = BUNDLE_BASELINE_STALE_COMMITS,
   streakDays = BUNDLE_GATE_RED_STREAK_DAYS,
 }) {
-  if (account.marker === "suspended")
-    {return {
+  if (account.marker === "suspended") {
+    return {
       fired: false,
       reason:
         "预算闸今天没判（开发期暂撤，ISSUE #2634 —— 读数在、不参与判定）⇒ 触发器只认「真红」那一档",
       section: null,
-    };}
-  if (account.marker === "none")
-    {return {
+    };
+  }
+  if (account.marker === "none") {
+    return {
       fired: false,
       reason: "预算闸这一跑没有违规读数 ⇒ 没有可升的账",
       section: null,
-    };}
-  if (account.marker !== "enforced")
-    {return {
+    };
+  }
+  if (account.marker !== "enforced") {
+    return {
       fired: false,
       reason: `预算闸读数认不出（${account.note}）⇒ 不构成结论`,
       section: null,
-    };}
+    };
+  }
   const staleN = account.stale.kind === "unknown" ? null : account.stale.n;
   const streakN = streak.days === "unknown" ? null : streak.days;
   const byStale = staleN !== null && staleN >= staleCommits;
   const byStreak = streakN !== null && streakN >= streakDays;
   if (!byStale && !byStreak) {
-    if (staleN === null && streakN === null)
-      {return {
+    if (staleN === null && streakN === null) {
+      return {
         fired: false,
         reason:
           `两个门限都读不出（陈旧度：${account.note}；连续天数：${streak.note}）` +
           "⇒ 不构成结论（不是「没过门限」）",
         section: null,
-      };}
+      };
+    }
     return {
       fired: false,
       reason:
@@ -236,16 +231,20 @@ export function fetchBundleRedStreak({
 }) {
   const windowHours = need * 24 + 12;
   const win = fetchBuildsCoveringWindow({ run, slug, windowHours, now });
-  if (win.list === null) {return { days: "unknown", note: "取不到构建列表" };}
-  if (!win.covered)
-    {return { days: "unknown", note: `没盖住 ${windowHours}h 窗口（${win.note}）` };}
+  if (win.list === null) {
+    return { days: "unknown", note: "取不到构建列表" };
+  }
+  if (!win.covered) {
+    return { days: "unknown", note: `没盖住 ${windowHours}h 窗口（${win.note}）` };
+  }
   const daily = win.list.filter(isDailyDispatch);
   const at = daily.findIndex((b) => String(b?.sn ?? "") === fromSn);
-  if (at === -1)
-    {return {
+  if (at === -1) {
+    return {
       days: "unknown",
       note: `上一跑 ${fromSn} 不在宽窗口的派发列表里`,
-    };}
+    };
+  }
   const wanted = new Set(lanes);
   /* 本档派发的取数上限：宽窗口里会混进别的档（桌包 02:00 那条），跳过它们不算“看过一跑”。
    * 上限按 `need` 推，不另立常量 —— 门限一改，这里跟着改。 */
@@ -255,59 +254,65 @@ export function fetchBundleRedStreak({
   let red = 0;
   for (let i = at; i < daily.length && examined < need; i += 1) {
     const sn = String(daily[i]?.sn ?? "");
-    if (sn === "") {continue;}
+    if (sn === "") {
+      continue;
+    }
     const reuse = known?.sn === sn ? known : null;
-    if (!reuse && fetched >= fetchCap)
-      {return {
+    if (!reuse && fetched >= fetchCap) {
+      return {
         days: "unknown",
         note: `本档派发不足 ${need} 跑（看了 ${fetched} 跑就撞到取数上限）`,
-      };}
+      };
+    }
     /** @type {any} */
     let json = reuse ? reuse.json : null;
     if (!json) {
       json = fetchBuildStatus(run, slug, sn);
       fetched += 1;
     }
-    if (!json) {return { days: "unknown", note: `${sn} 的逐格读数取不到` };}
+    if (!json) {
+      return { days: "unknown", note: `${sn} 的逐格读数取不到` };
+    }
     const outcome = classifyBuildOutcome(json);
-    if (outcome.state === "running" || outcome.state === "unknown")
-      {return {
+    if (outcome.state === "running" || outcome.state === "unknown") {
+      return {
         days: "unknown",
         note: `${sn} 没有终态（${outcome.state}）`,
-      };}
-    if (wanted.size > 0 && !outcome.pipelines.some((p) => wanted.has(p.name)))
-      {continue;}
+      };
+    }
+    if (wanted.size > 0 && !outcome.pipelines.some((p) => wanted.has(p.name))) {
+      continue;
+    }
     examined += 1;
     const { hits } = findStageMatches(outcome, BUNDLE_GATE_STAGE);
-    if (hits.length !== 1)
-      {return {
+    if (hits.length !== 1) {
+      return {
         days: "unknown",
         note:
           hits.length === 0
             ? `${sn} 里认不出「${BUNDLE_GATE_STAGE}」这一格`
             : `${sn} 里「${BUNDLE_GATE_STAGE}」命中 ${hits.length} 格（不替你挑一格）`,
-      };}
+      };
+    }
     const hit = hits[0];
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- 上方 hits.length !== 1 已拦空，守卫防该判据改动后静默穿透
-    if (!hit) {return { days: "unknown", note: `${sn} 的预算闸那一格认不出` };}
-    if (String(hit.stage.status).toLowerCase() === "skipped")
-      {return { days: "unknown", note: `${sn} 那一格没跑（skipped）` };}
+    if (!hit) {
+      return { days: "unknown", note: `${sn} 的预算闸那一格认不出` };
+    }
+    if (String(hit.stage.status).toLowerCase() === "skipped") {
+      return { days: "unknown", note: `${sn} 那一格没跑（skipped）` };
+    }
     /** @type {string | null} */
     let text = reuse && typeof reuse.text === "string" ? reuse.text : null;
     if (text === null) {
-      const detail = fetchStageDetail(
-        run,
-        slug,
-        sn,
-        String(hit.pipeline.id),
-        String(hit.stage.id),
-      );
+      const detail = fetchStageDetail(run, slug, sn, String(hit.pipeline.id), String(hit.stage.id));
       fetched += 1;
-      if (!detail)
-        {return {
+      if (!detail) {
+        return {
           days: "unknown",
           note: `${sn} 的「${BUNDLE_GATE_STAGE}」日志取不到`,
-        };}
+        };
+      }
       text = detail.text;
     }
     const marker = readBundleAccount(text).marker;
@@ -315,18 +320,20 @@ export function fetchBundleRedStreak({
       red += 1;
       continue;
     }
-    if (marker === "suspended" || marker === "none")
-      {return {
+    if (marker === "suspended" || marker === "none") {
+      return {
         days: red,
         note: `${sn} 那一跑预算闸没有判红 ⇒ 连续在这里断`,
-      };}
+      };
+    }
     return { days: "unknown", note: `${sn} 的预算闸读数认不出` };
   }
-  if (examined < need)
-    {return {
+  if (examined < need) {
+    return {
       days: "unknown",
       note: `本档派发只有 ${examined} 跑（要 ${need} 跑）`,
-    };}
+    };
+  }
   return { days: red, note: `逐日回看 ${need} 跑：${red} 跑判红` };
 }
 
@@ -352,9 +359,7 @@ export function judgeBundleStageReading({
   details = [],
   lanes = [],
 }) {
-  const stageFailed = outcome.failed.some(
-    (f) => (f.name || f.id) === BUNDLE_GATE_STAGE,
-  );
+  const stageFailed = outcome.failed.some((f) => (f.name || f.id) === BUNDLE_GATE_STAGE);
   /** @type {string | null} */
   let bundleText = null;
   if (stageFailed) {
@@ -365,7 +370,9 @@ export function judgeBundleStageReading({
       if (hits.length === 1) {
         const hit = hits[0];
         // oxlint-disable-next-line typescript/no-unnecessary-condition -- 上方 hits.length === 1 已守住非空，守卫防该判据改动后静默穿透
-        if (!hit) {return { fired: false, reason: "预算闸那一格认不出", section: "" };}
+        if (!hit) {
+          return { fired: false, reason: "预算闸那一格认不出", section: "" };
+        }
         const detail = fetchStageDetail(
           run,
           slug,

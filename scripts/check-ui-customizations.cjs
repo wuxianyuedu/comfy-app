@@ -50,7 +50,7 @@ const MARKER_MAX_LINE = 3;
 /** 标记行的形状(只认标记本身,不认正文里的引用)。 */
 const MARKER_RE = /ui-customized\s*:/;
 /** 台账表格行的第一列:`| `button.tsx` | …`。 */
-const LEDGER_ROW_RE = /^\|\s*`([^`]+)`/;
+const LEDGER_ROW_RE = /^\|\s*`(?<name>[^`]+)`/;
 
 const REPORT_ONLY = new Set(process.argv.slice(2)).has("--report");
 
@@ -66,7 +66,7 @@ function listUiFiles() {
   return entries
     .filter((e) => e.isFile())
     .map((e) => e.name)
-    .filter((name) => /\.(tsx|ts)$/.test(name) && !/\.test\./.test(name))
+    .filter((name) => /\.(?:tsx|ts)$/.test(name) && !/\.test\./.test(name))
     .map((name) => `${UI_DIR}/${name}`)
     .sort();
 }
@@ -118,7 +118,7 @@ function parseLedger(markdown) {
   for (const line of section) {
     const m = LEDGER_ROW_RE.exec(line.trim());
     if (m) {
-      names.add(m[1].trim());
+      names.add((m.groups?.name ?? "").trim());
     }
   }
   return names;

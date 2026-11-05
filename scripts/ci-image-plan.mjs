@@ -154,16 +154,15 @@ export const PYTHON_TOOLING = ["comfy-cli", "aiohttp"];
  */
 export function nodeFloor(range) {
   const floors = [
-    ...String(range ?? "").matchAll(/\^(\d+)\.(\d+)\.(\d+)|>=(\d+)\.(\d+)\.(\d+)/g),
+    ...String(range ?? "").matchAll(
+      /\^(?<caretMajor>\d+)\.(?<caretMinor>\d+)\.(?<caretPatch>\d+)|>=(?<gteMajor>\d+)\.(?<gteMinor>\d+)\.(?<gtePatch>\d+)/g,
+    ),
   ].map((m) => ({
     /* 两条分支各占三个分组，取到的那一支之外全是 undefined —— 这些 `??` 是真的；
      * 规则把 `RegExpExecArray` 的索引读成非空（实测连 `.ts` 也一样），按 §5.10 的 C 格落账。 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则分组可缺，规则读成非空
-    major: Number(m[1] ?? m[4]),
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上
-    minor: Number(m[2] ?? m[5]),
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上
-    patch: Number(m[3] ?? m[6]),
+    major: Number(m.groups?.caretMajor ?? m.groups?.gteMajor),
+    minor: Number(m.groups?.caretMinor ?? m.groups?.gteMinor),
+    patch: Number(m.groups?.caretPatch ?? m.groups?.gtePatch),
   }));
   if (floors.length === 0) {
     throw new Error(
@@ -200,13 +199,13 @@ export function pickNodeVersion(index, floor) {
     if (typeof version !== "string") {
       continue;
     }
-    const m = /^v(\d+)\.(\d+)\.(\d+)$/.exec(version);
+    const m = /^v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$/.exec(version);
     if (!m) {
       continue;
     }
     parsed.push({
       version,
-      parts: [Number(m[1]), Number(m[2]), Number(m[3])],
+      parts: [Number(m.groups?.major), Number(m.groups?.minor), Number(m.groups?.patch)],
     });
   }
   const ok = parsed

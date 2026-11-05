@@ -39,12 +39,12 @@ export function parseEnvFile(content) {
     if (!line || line.startsWith("#")) {
       continue;
     }
-    const m = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+    const m = /^(?<key>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?<value>.*)$/.exec(line);
     if (!m) {
       continue;
     }
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- m[2] 是必需捕获组，noUncheckedIndexedAccess 下仍是 string | undefined
-    let value = (m[2] ?? "").trim();
+    const key = m.groups?.key ?? "";
+    let value = (m.groups?.value ?? "").trim();
     // 去掉成对引号（.env.example / prepare-local-run.ps1 都写成 KEY="..."）。
     if (
       (value.startsWith('"') && value.endsWith('"') && value.length >= 2) ||
@@ -52,7 +52,7 @@ export function parseEnvFile(content) {
     ) {
       value = value.slice(1, -1);
     }
-    out.set(m[1], value);
+    out.set(key, value);
   }
   return out;
 }

@@ -62,9 +62,9 @@
 
 /** 提交标记行：`@` + 纯十六进制 sha。路径本身叫 `@<40 位十六进制>` 的情况按「不可能」处理，
  *  真出现时它只会落进「读不懂 ⇒ 退 2」那一格，不会静默当成文件。 */
-const COMMIT_LINE = /^@([0-9a-f]{4,64})$/;
+const COMMIT_LINE = /^@(?<sha>[0-9a-f]{4,64})$/;
 /** `--batch-check` 的一行：`<对象 sha> <类型> <字节数>`。 */
-const BATCH_LINE = /^([0-9a-f]{4,64}) \S+ -?\d+$/;
+const BATCH_LINE = /^(?<sha>[0-9a-f]{4,64}) \S+ -?\d+$/;
 
 /**
  * 一次批量解析把 `<rev>:<path>` 请求表换成对象 sha 表。
@@ -105,7 +105,7 @@ export function resolveBlobs(run, specs) {
       continue;
     }
     const hit = BATCH_LINE.exec(line);
-    const blobSha = hit ? hit[1] : undefined;
+    const blobSha = hit?.groups?.sha;
     if (!blobSha) {
       return null;
     }
@@ -154,7 +154,7 @@ export function historyByFile(run, { ref, files }) {
     }
     const marker = COMMIT_LINE.exec(line);
     if (marker) {
-      cur = marker[1];
+      cur = marker.groups?.sha;
       continue;
     }
     if (cur && set.has(line)) {

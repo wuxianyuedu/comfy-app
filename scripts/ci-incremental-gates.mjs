@@ -372,9 +372,10 @@ export function parseStageIfModify(text) {
 
   for (const raw of lines) {
     // stage 列表项：恰好两空格缩进的 `- name: X`（`stages:` 的直接子项）。
-    const item = /^ {2}-\s+name:\s*(\S.*?)\s*$/.exec(raw);
-    if (item?.[1] !== undefined) {
-      current = item[1];
+    const item = /^ {2}-\s+name:\s*(?<name>\S.*?)\s*$/.exec(raw);
+    const itemName = item?.groups?.name;
+    if (itemName !== undefined) {
+      current = itemName;
       mode = null;
       continue;
     }
@@ -387,9 +388,9 @@ export function parseStageIfModify(text) {
     }
 
     // `ifModify:` 开一行（缩进 4 空格，与 `script:` / `timeout:` 同级）。
-    const head = /^ {4}ifModify:\s*(.*?)\s*$/.exec(raw);
+    const head = /^ {4}ifModify:\s*(?<inline>.*?)\s*$/.exec(raw);
     if (head) {
-      const inline = head[1];
+      const inline = head.groups?.inline ?? "";
       if (inline && !inline.startsWith("#")) {
         // 单行标量形态（`ifModify: "src/**"`）—— 去掉可能有的引号。
         mode = null;
@@ -402,9 +403,10 @@ export function parseStageIfModify(text) {
       continue;
     }
     if (mode === "list") {
-      const li = /^ {6}-\s+(\S.*?)\s*$/.exec(raw);
-      if (li?.[1] !== undefined) {
-        out.get(current)?.push(li[1].replaceAll(/^["']|["']$/g, ""));
+      const li = /^ {6}-\s+(?<glob>\S.*?)\s*$/.exec(raw);
+      const glob = li?.groups?.glob;
+      if (glob !== undefined) {
+        out.get(current)?.push(glob.replaceAll(/^["']|["']$/g, ""));
         continue;
       }
       /* 非列表项的行 = 这一段结束了（下一键 / 缩进变化 / 注释）。注释行不算结束 ——

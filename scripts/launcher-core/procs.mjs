@@ -160,7 +160,7 @@ function listeningPidsPosix(port) {
       } catch {
         continue;
       }
-      const inode = /^socket:\[(\d+)\]$/.exec(link)?.[1];
+      const inode = /^socket:\[(?<inode>\d+)\]$/.exec(link)?.groups?.inode;
       if (inode && inodes.has(inode)) {
         pids.push(Number.parseInt(entry, 10));
         break;

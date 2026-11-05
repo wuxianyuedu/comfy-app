@@ -372,7 +372,7 @@ function looksLikeScript(candidate) {
   if (head.startsWith("#!")) {
     return true;
   }
-  if (/^@?\s*(echo|setlocal)\b/i.test(head) || head.startsWith("@")) {
+  if (/^@?\s*(?:echo|setlocal)\b/i.test(head) || head.startsWith("@")) {
     return false;
   }
   /* `#` 起头而**非** `#!`：Corepack 缓存里的**占位文本**（首行注释写着「请走
