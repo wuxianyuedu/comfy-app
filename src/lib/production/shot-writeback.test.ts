@@ -16,10 +16,10 @@ import { recordCanvasShotGeneration, requestShotRedo } from "./shot-writeback";
 
 vi.mock("~/lib/production/production-client", () => ({
   fetchProduction: vi.fn(),
-  pushProduction: vi.fn(async () => undefined),
+  pushProduction: vi.fn(() => Promise.resolve(undefined)),
 }));
 vi.mock("~/lib/workshop/draft-sync-client", () => ({
-  pushServerDraft: vi.fn(async () => undefined),
+  pushServerDraft: vi.fn(() => Promise.resolve(undefined)),
 }));
 
 const fetchProdMock = vi.mocked(fetchProduction);

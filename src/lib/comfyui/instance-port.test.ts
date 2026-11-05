@@ -95,11 +95,13 @@ describe("queryInstanceByPath — 直接从配置路径拿事实", () => {
     ]);
     let call = 0;
     // 第 1 次 = main.py（落空），第 2 次 = 解释器候选（命中）
-    vi.mocked(findPidForMainPyDetailed).mockImplementation(async () => {
+    vi.mocked(findPidForMainPyDetailed).mockImplementation(() => {
       call += 1;
-      return call === 1
-        ? { pid: null, failed: false } // main.py 落空
-        : { pid: 900, failed: false }; // 解释器候选命中
+      return Promise.resolve(
+        call === 1
+          ? { pid: null, failed: false } // main.py 落空
+          : { pid: 900, failed: false }, // 解释器候选命中
+      );
     });
     vi.mocked(findPidListeningPort).mockResolvedValue(8188);
     const q = await queryInstanceByPath(String.raw`C:\Comfy`);
@@ -112,11 +114,13 @@ describe("queryInstanceByPath — 直接从配置路径拿事实", () => {
       { exe: String.raw`C:\uv\other\python.exe`, via: "实例环境的解释器" },
     ]);
     let call = 0;
-    vi.mocked(findPidForMainPyDetailed).mockImplementation(async () => {
+    vi.mocked(findPidForMainPyDetailed).mockImplementation(() => {
       call += 1;
-      return call === 1
-        ? { pid: null, failed: false } // main.py 落空
-        : { pid: 555, failed: false }; // 候选命中
+      return Promise.resolve(
+        call === 1
+          ? { pid: null, failed: false } // main.py 落空
+          : { pid: 555, failed: false }, // 候选命中
+      );
     });
     vi.mocked(findPidListeningPort).mockResolvedValue(8188);
     const q = await queryInstanceByPath(String.raw`C:\Comfy`);

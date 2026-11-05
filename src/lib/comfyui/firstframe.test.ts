@@ -26,15 +26,15 @@ const mocks = vi.hoisted(() => {
   const rows: Array<unknown> = [];
   return {
     rows,
-    progress: vi.fn(async () => {
+    progress: vi.fn(() => {
       const row = rows.shift();
       return row === undefined
         ? { status: "RUNNING", progress: 0, resultImages: null, error: null }
         : row;
     }),
-    createTask: vi.fn(async () => ({ taskId: "ff-task" })),
-    upload: vi.fn(async () => ({ name: "ff_ff-task.png" })),
-    readFile: vi.fn(async () => Buffer.from("png-bytes")),
+    createTask: vi.fn(() => ({ taskId: "ff-task" })),
+    upload: vi.fn(() => ({ name: "ff_ff-task.png" })),
+    readFile: vi.fn(() => Buffer.from("png-bytes")),
   };
 });
 

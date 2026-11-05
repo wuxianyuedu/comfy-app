@@ -34,7 +34,7 @@ type FetchCall = readonly [RequestInfo | URL, RequestInit?];
 
 /** 记一次 fetch 的出口：拿到请求 URL 与init，并决定这一轮怎么回。 */
 function stubFetch(reply: { body?: unknown; ok?: boolean } | { throws: unknown }) {
-  const spy = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => {
+  const spy = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => {
     if ("throws" in reply) {
       throw reply.throws;
     }
@@ -205,7 +205,7 @@ describe("saveLogExport —— 导出到本机", () => {
   it("服务端回了非 JSON（比如网关的 HTML 错误页）同样收成失败而不是抛", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response("<html>502</html>", { status: 502 })),
+      vi.fn(() => new Response("<html>502</html>", { status: 502 })),
     );
     await expect(saveLogExport("面板", "正文")).resolves.toMatchObject({
       ok: false,
@@ -252,7 +252,7 @@ describe("saveDiagnosticsPackage —— 打包整份诊断现场", () => {
   it("服务端回了非 JSON（网关的 HTML 错误页）同样收成失败而不是抛", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response("<html>504</html>", { status: 504 })),
+      vi.fn(() => new Response("<html>504</html>", { status: 504 })),
     );
     await expect(saveDiagnosticsPackage()).resolves.toMatchObject({
       ok: false,

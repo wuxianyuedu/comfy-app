@@ -16,7 +16,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { REMOTE_MODEL_KINDS } from "~/lib/llm/types";
 
 vi.mock("~/lib/llm/server", () => ({
-  getLLMConfig: vi.fn(async () => ({
+  getLLMConfig: vi.fn(() => ({
     provider: "remote",
     baseUrl: "https://global/v1",
     model: "m",
@@ -83,8 +83,8 @@ function jsonResponse(body: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
-    json: async () => body,
-    text: async () => JSON.stringify(body),
+    json: () => Promise.resolve(body),
+    text: () => Promise.resolve(JSON.stringify(body)),
   } as unknown as Response;
 }
 
@@ -92,11 +92,11 @@ function jsonResponse(body: unknown, status = 200): Response {
 function reqOf(body: unknown, opts: { throw?: boolean } = {}): Request {
   /* SAFETY: 类型断言已复核 */
   return {
-    json: async () => {
+    json: () => {
       if (opts.throw === true) {
-        throw new Error("bad json");
+        return Promise.reject(new Error("bad json"));
       }
-      return body;
+      return Promise.resolve(body);
     },
   } as unknown as Request;
 }
@@ -263,9 +263,7 @@ describe("readPayload / httpFailureDetail / parseExtraJson / chatTextFrom", () =
     const html = {
       ok: false,
       status: 502,
-      json: async () => {
-        throw new Error("not json");
-      },
+      json: () => Promise.reject(new Error("not json")),
     } as unknown as Response;
     expect(await readPayload(html)).toBeNull();
   });
@@ -364,7 +362,7 @@ describe("callChat", () => {
     fetchMock.mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => "纯文本",
+      json: () => Promise.resolve("纯文本"),
     } as unknown as Response);
     await expect(callChat(UP, "m", "q", {})).resolves.toMatchObject({
       ok: false,

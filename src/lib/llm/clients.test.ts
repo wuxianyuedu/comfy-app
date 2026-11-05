@@ -51,8 +51,8 @@ function jsonResponse(body: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
-    json: async () => body,
-    text: async () => JSON.stringify(body),
+    json: () => Promise.resolve(body),
+    text: () => Promise.resolve(JSON.stringify(body)),
   } as unknown as Response;
 }
 
@@ -102,7 +102,7 @@ describe("ollama-client", () => {
     fetchMock.mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => {
+      json: () => {
         throw new Error("not json");
       },
     } as unknown as Response);
@@ -131,7 +131,7 @@ describe("ollama-client", () => {
     fetchMock.mockResolvedValue({
       ok: false,
       status: 500,
-      json: async () => {
+      json: () => {
         throw new Error("x");
       },
     } as unknown as Response);
@@ -193,9 +193,7 @@ describe("model-catalog-client", () => {
     fetchMock.mockResolvedValue({
       ok: false,
       status: 502,
-      json: async () => {
-        throw new Error("html");
-      },
+      json: () => Promise.reject(new Error("html")),
     } as unknown as Response);
     await expect(fetchLocalModels()).resolves.toEqual({
       ok: false,
@@ -295,9 +293,7 @@ describe("usage-test-client", () => {
     fetchMock.mockResolvedValue({
       ok: false,
       status: 500,
-      json: async () => {
-        throw new Error("html");
-      },
+      json: () => Promise.reject(new Error("html")),
     } as unknown as Response);
     await expect(testModelUsage(INPUT)).resolves.toMatchObject({
       ok: false,
@@ -346,7 +342,7 @@ describe("saveMediaToLocalTemp（本地落盘，失败一律静默）", () => {
       fetchMock.mockResolvedValue({
         ok: true,
         status: 200,
-        arrayBuffer: async () => new TextEncoder().encode("binary").buffer,
+        arrayBuffer: () => Promise.resolve(new TextEncoder().encode("binary").buffer),
       } as unknown as Response);
 
       const dest = await saveMediaToLocalTemp("image", "my model/x", "https://i/a.png");
@@ -381,7 +377,7 @@ describe("saveMediaToLocalTemp（本地落盘，失败一律静默）", () => {
       fetchMock.mockResolvedValue({
         ok: false,
         status: 404,
-        arrayBuffer: async () => new ArrayBuffer(0),
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
       } as unknown as Response);
       await expect(saveMediaToLocalTemp("video", "m", "https://v/x.mp4")).resolves.toBeNull();
 
@@ -389,7 +385,7 @@ describe("saveMediaToLocalTemp（本地落盘，失败一律静默）", () => {
       fetchMock.mockResolvedValue({
         ok: true,
         status: 200,
-        arrayBuffer: async () => new ArrayBuffer(0),
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
       } as unknown as Response);
       await expect(saveMediaToLocalTemp("video", "m", "https://v/x.mp4")).resolves.toBeNull();
 

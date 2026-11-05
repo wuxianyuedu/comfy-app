@@ -33,7 +33,7 @@ function makeCharacter(id: string, portraitUrl?: string): Character {
  *  文件名与 URL 绑定而不是与调用序绑定，「出场序」的断言才有意义；
  *  各用例用独立 URL 前缀，避免 helper 的会话内缓存跨用例串味。 */
 function mockPrepare(prefix: string, failUrls: ReadonlySet<string> = new Set()) {
-  const mock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+  const mock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
     const raw = typeof init?.body === "string" ? init.body : "{}";
     /* SAFETY: 类型断言已复核 */
     const body = JSON.parse(raw) as {
@@ -41,14 +41,18 @@ function mockPrepare(prefix: string, failUrls: ReadonlySet<string> = new Set()) 
     };
     const image = body.image ?? "";
     if (failUrls.has(image)) {
-      return new Response(JSON.stringify({ error: "上传失败" }), {
-        status: 500,
-      });
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: "上传失败" }), {
+          status: 500,
+        }),
+      );
     }
     const tail = image.split("/").pop() ?? "x";
-    return new Response(JSON.stringify({ filename: `up-${prefix}-${tail}` }), {
-      status: 200,
-    });
+    return Promise.resolve(
+      new Response(JSON.stringify({ filename: `up-${prefix}-${tail}` }), {
+        status: 200,
+      }),
+    );
   });
   globalThis.fetch = mock;
   return mock;

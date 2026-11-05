@@ -52,8 +52,8 @@ function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {
   return {
     ok: init.ok ?? (status >= 200 && status < 300),
     status,
-    json: async () => body,
-    text: async () => JSON.stringify(body),
+    json: () => Promise.resolve(body),
+    text: () => Promise.resolve(JSON.stringify(body)),
     body: null,
   } as unknown as Response;
 }
@@ -66,14 +66,16 @@ function streamResponse(chunks: Array<string>): Response {
   return {
     ok: true,
     status: 200,
-    json: async () => ({}),
-    text: async () => "",
+    json: () => Promise.resolve({}),
+    text: () => Promise.resolve(""),
     body: {
       getReader: () => ({
-        read: async () =>
-          i < chunks.length
-            ? { done: false, value: encoder.encode(chunks[i++]) }
-            : { done: true, value: undefined },
+        read: () =>
+          Promise.resolve(
+            i < chunks.length
+              ? { done: false, value: encoder.encode(chunks[i++]) }
+              : { done: true, value: undefined },
+          ),
       }),
     },
   } as unknown as Response;
@@ -443,8 +445,8 @@ describe("completeLLM（一次性补全）", () => {
     fetchMock.mockResolvedValue({
       ok: false,
       status: 502,
-      text: async () => "",
-      json: async () => ({}),
+      text: () => Promise.resolve(""),
+      json: () => Promise.resolve({}),
     } as unknown as Response);
     await expect(completeLLM(CFG(), [])).rejects.toThrow(/LLM 请求失败 \(502\)$/);
   });
@@ -486,8 +488,8 @@ describe("streamLLM（流式补全）", () => {
       ok: true,
       status: 200,
       body: null,
-      json: async () => ({}),
-      text: async () => "",
+      json: () => Promise.resolve({}),
+      text: () => Promise.resolve(""),
     } as unknown as Response);
     await expect(streamLLM(CFG(), [], noop)).rejects.toThrow(/未返回数据流/);
   });

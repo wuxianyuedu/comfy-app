@@ -144,7 +144,7 @@ describe("resolveMediaBytes —— 内联 data URL", () => {
 function stubFetch(
   reply: { body?: BodyInit; contentType?: string | null; status?: number } | { throws: unknown },
 ) {
-  const spy = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => {
+  const spy = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => {
     if ("throws" in reply) {
       throw reply.throws;
     }

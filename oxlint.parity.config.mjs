@@ -858,53 +858,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B3 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/lib/comfyui/desktop-instance.test.ts", // 存量 2 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/desktop-storage-paths.server.test.ts", // 存量 12 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/enqueue.test.ts", // 存量 10 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/executor-cli.test.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/executor-dispatch.test.ts", // 存量 27 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/executor-finalize.test.ts", // 存量 2 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/executor-write-retry.test.ts", // 存量 6 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/executor-ws.test.ts", // 存量 17 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/firstframe.test.ts", // 存量 4 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/importSource.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/instance-port.test.ts", // 存量 2 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/lifecycle-launch.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/lifecycle-wait.test.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/lifecycle.test.ts", // 存量 3 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/probe.test.ts", // 存量 2 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/queue-status.server.test.ts", // 存量 6 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/reaper-decisions.test.ts", // 存量 7 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/reaper.test.ts", // 存量 4 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/runner-state.test.ts", // 存量 10 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/status.test.ts", // 存量 6 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/workflow-detail-io.test.ts", // 存量 14 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/comfyui/workflow-detail-raw.test.ts", // 存量 2 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/console/console-client.test.ts", // 存量 7 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/core/repository.test.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/drizzle-studio/lifecycle.test.ts", // 存量 3 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/drizzle-studio/lifecycle.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/film/bgm-client.test.ts", // 存量 2 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/llm/browser.test.ts", // 存量 27 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/llm/clients.test.ts", // 存量 9 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/llm/ollama-client.test.ts", // 存量 2 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/llm/server.test.ts", // 存量 9 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/llm/usage-test.server.test.ts", // 存量 6 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/llm/video-task-util.test.ts", // 存量 10 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/log/log-file-client.test.ts", // 存量 3 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/media/materials-client.test.ts", // 存量 12 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/media/materials.test.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/production/production-client.test.ts", // 存量 2 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/production/shot-writeback.test.ts", // 存量 2 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/project-canvas/canvas-api.test.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/shell/app-update-client.test.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/sqlite-busy-retry.test.ts", // 存量 7 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/workshop/api-channel-client.test.ts", // 存量 7 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/workshop/api-channel-core.test.ts", // 存量 20 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/workshop/generation-client.test.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/workshop/media-source.server.test.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/lib/workshop/workflow-run.server.test.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/server/agent/review.test.ts", // 存量 6 处 · 清账目标 B3 · 新代码不禁用
         "src/server/agent/run-engine.test.ts", // 存量 11 处 · 清账目标 B3 · 新代码不禁用
         "src/server/api/routers/film.test.ts", // 存量 6 处 · 清账目标 B3 · 新代码不禁用
         "src/server/api/routers/llm.test.ts", // 存量 4 处 · 清账目标 B3 · 新代码不禁用

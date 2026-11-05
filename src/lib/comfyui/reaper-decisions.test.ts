@@ -123,7 +123,7 @@ type ReaperInternals = {
 function stubComfyIdle() {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (url: string) => {
+    vi.fn((url: string) => {
       if (String(url).includes("/queue")) {
         return new Response(JSON.stringify({ queue_running: [], queue_pending: [] }), {
           status: 200,
@@ -199,7 +199,7 @@ describe("QUEUED 死信判决矩阵（ISSUE #1204 起：只判没有任何宿主
     repoMock("listStaleUnownedQueued").mockResolvedValue([queuedRow("t-inflight")]);
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (url: string) => {
+      vi.fn((url: string) => {
         if (String(url).includes("/queue")) {
           return new Response(
             JSON.stringify({
@@ -224,7 +224,7 @@ describe("QUEUED 死信判决矩阵（ISSUE #1204 起：只判没有任何宿主
     repoMock("listStaleUnownedQueued").mockResolvedValue([queuedRow("t-unreachable")]);
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => {
+      vi.fn(() => {
         throw new Error("ECONNREFUSED");
       }),
     );
@@ -244,7 +244,7 @@ describe("QUEUED 死信判决矩阵（ISSUE #1204 起：只判没有任何宿主
     repoMock("listStaleUnownedQueued").mockResolvedValue([queuedRow("t-dead")]);
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (url: string) => {
+      vi.fn((url: string) => {
         if (String(url).includes("/queue")) {
           return new Response(JSON.stringify({ queue_running: [], queue_pending: [] }), {
             status: 200,
@@ -271,7 +271,7 @@ describe("QUEUED 死信判决矩阵（ISSUE #1204 起：只判没有任何宿主
     const reaper = await loadReaper();
     repoMock("listStaleUnownedQueued").mockResolvedValue([queuedRow("t-a"), queuedRow("t-b")]);
     const fetchSpy = vi.fn(
-      async () =>
+      () =>
         new Response(JSON.stringify({ queue_running: [], queue_pending: [] }), {
           status: 200,
         }),
@@ -381,7 +381,7 @@ describe("RUNNING reaper 判决矩阵", () => {
     let call = 0;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (url: string) => {
+      vi.fn((url: string) => {
         call += 1;
         if (String(url).includes("/history/")) {
           if (!routes.history) {
@@ -591,7 +591,7 @@ describe("防抖定时器不跨用例泄漏", () => {
     }).not.toThrow();
   });
 
-  it("取消是幂等的，重复调用安全", async () => {
+  it("取消是幂等的，重复调用安全", () => {
     expect(() => {
       cancelPersistLogs("never-scheduled");
     }).not.toThrow();

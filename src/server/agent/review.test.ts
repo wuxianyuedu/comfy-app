@@ -6,12 +6,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { completeLLM, completeLLMStructured, getLLMConfig, getVisionLLMConfig } = vi.hoisted(() => ({
-  completeLLM: vi.fn(async (_cfg: unknown, _msgs: unknown) => "## 场景1 · 街道（夜）· 改写版"),
+  completeLLM: vi.fn((_cfg: unknown, _msgs: unknown) => "## 场景1 · 街道（夜）· 改写版"),
   completeLLMStructured: vi.fn<(cfg: unknown, msgs: unknown, schema: unknown) => Promise<unknown>>(
-    async () => ({ pass: true, issues: [], suggestion: "" }),
+    () => Promise.resolve({ pass: true, issues: [], suggestion: "" }),
   ),
-  getLLMConfig: vi.fn(async () => ({})),
-  getVisionLLMConfig: vi.fn(async () => ({ model: "vision" })),
+  getLLMConfig: vi.fn(() => ({})),
+  getVisionLLMConfig: vi.fn(() => ({ model: "vision" })),
 }));
 vi.mock("~/lib/llm/server", () => ({
   getLLMConfig,
@@ -25,7 +25,7 @@ vi.mock("~/server/db", async () => {
   return { db: createTestDb() };
 });
 vi.mock("~/server/better-auth", () => ({
-  auth: { api: { getSession: vi.fn(async () => null) } },
+  auth: { api: { getSession: vi.fn(() => null) } },
 }));
 
 import { productionRepository } from "~/lib/core/repository-production";
@@ -423,12 +423,14 @@ describe("autoselectShotImage", () => {
 
   beforeEach(() => {
     // 默认判定带一个维度分（mean = score）；各用例再按需覆盖。
-    completeLLMStructured.mockImplementation(async () => ({
-      pass: true,
-      issues: [],
-      suggestion: "",
-      scores: { 对齐: { score: 3, note: "" } },
-    }));
+    completeLLMStructured.mockImplementation(() =>
+      Promise.resolve({
+        pass: true,
+        issues: [],
+        suggestion: "",
+        scores: { 对齐: { score: 3, note: "" } },
+      }),
+    );
   });
 
   it("逐候选打分，均分最高者为赢家；imageUrl/taskId 不被服务端直写（草稿回写口径）", async () => {

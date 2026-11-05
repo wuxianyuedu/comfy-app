@@ -112,7 +112,7 @@ describe("saveMediaToLocalTemp · 失败一律静默", () => {
   it("HTTP 非 2xx 返回 null", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response("nope", { status: 500 })),
+      vi.fn(() => new Response("nope", { status: 500 })),
     );
     const { saveMediaToLocalTemp } = await import("./video-task-util");
     expect(await saveMediaToLocalTemp("video", "m", "https://cdn.example/a.mp4")).toBeNull();
@@ -121,7 +121,7 @@ describe("saveMediaToLocalTemp · 失败一律静默", () => {
   it("空文件返回 null（不留下 0 字节产物）", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(new Uint8Array(0), { status: 200 })),
+      vi.fn(() => new Response(new Uint8Array(0), { status: 200 })),
     );
     const { saveMediaToLocalTemp } = await import("./video-task-util");
     expect(await saveMediaToLocalTemp("video", "m", "https://cdn.example/a.mp4")).toBeNull();
@@ -131,7 +131,7 @@ describe("saveMediaToLocalTemp · 失败一律静默", () => {
   it("fetch 抛错（超时 / 断网）返回 null 而不外抛", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => {
+      vi.fn(() => {
         throw new Error("network down");
       }),
     );
@@ -144,7 +144,7 @@ describe("saveMediaToLocalTemp · 失败一律静默", () => {
   it("远端 URL 正常时按 URL 扩展名落盘", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(new Uint8Array([1, 2, 3]), { status: 200 })),
+      vi.fn(() => new Response(new Uint8Array([1, 2, 3]), { status: 200 })),
     );
     const { saveMediaToLocalTemp } = await import("./video-task-util");
     const dest = await saveMediaToLocalTemp("video", "m", "https://cdn.example/a.mp4?token=1");
@@ -156,12 +156,13 @@ describe("saveMediaToLocalTemp · 失败一律静默", () => {
 
 describe("pollRemoteVideoTask", () => {
   it("第一个候选地址就绪即返回该 URL（不再等满窗口）", async () => {
-    const fetchMock = vi.fn<typeof fetch>(
-      async () =>
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      Promise.resolve(
         new Response(JSON.stringify({ url: "https://cdn.example/out.mp4" }), {
           status: 200,
           headers: { "content-type": "application/json" },
         }),
+      ),
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -184,7 +185,7 @@ describe("pollRemoteVideoTask", () => {
     const seen: Array<string> = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (url: string) => {
+      vi.fn((url: string) => {
         seen.push(String(url));
         if (String(url).includes("agnesapi")) {
           return new Response(
@@ -213,7 +214,7 @@ describe("pollRemoteVideoTask", () => {
     let call = 0;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => {
+      vi.fn(() => {
         call += 1;
         if (call === 1) {
           throw new Error("connection reset");
@@ -240,7 +241,7 @@ describe("pollRemoteVideoTask", () => {
   it("窗口耗尽仍未就绪返回 null（调用方据此报 pending）", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(JSON.stringify({ status: "pending" }), { status: 200 })),
+      vi.fn(() => new Response(JSON.stringify({ status: "pending" }), { status: 200 })),
     );
     const { pollRemoteVideoTask, VIDEO_POLL_TOTAL_MS } = await import("./video-task-util");
     vi.useFakeTimers();
@@ -253,7 +254,7 @@ describe("pollRemoteVideoTask", () => {
     let call = 0;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => {
+      vi.fn(() => {
         call += 1;
         if (call < 2) {
           // 首次两个候选都 404，轮空之后第二轮给结果。
@@ -272,11 +273,12 @@ describe("pollRemoteVideoTask", () => {
   });
 
   it("请求头原样透传（鉴权不能丢）", async () => {
-    const fetchMock = vi.fn<typeof fetch>(
-      async () =>
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      Promise.resolve(
         new Response(JSON.stringify({ url: "https://cdn.example/x.mp4" }), {
           status: 200,
         }),
+      ),
     );
     vi.stubGlobal("fetch", fetchMock);
     const { pollRemoteVideoTask } = await import("./video-task-util");
