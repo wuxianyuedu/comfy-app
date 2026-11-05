@@ -190,6 +190,12 @@ const DOMAIN_EXEMPT = new Set([
    * 一处：`busy_timeout` 是**每条连接**的等待预算，漏在哪一侧就那一侧照旧撞锁报错
    * —— 与 `endpoints` / `retry-policy` 同款：顶层单例。 */
   "src/lib/sqlite-pragmas.ts",
+  /* 「把一条 node:sqlite 连接包成 drizzle 的 async 回调」的唯一适配器（ISSUE #3171）：
+   * 三处连接站点（`src/server/db.ts`、`src/server/workshop/db.ts`、
+   * `src/lib/comfyui/host-runtime.ts`）都用它，且它是 `src/server` 与 `src/lib/comfyui`
+   * 两侧共用的**驱动面**（不是某个业务域的形状）—— 放进任何一侧的子域都会让其余侧
+   * 反向依赖那个域。与 `sqlite-pragmas` / `sqlite-error` 同款：顶层单例。 */
+  "src/lib/sqlite-driver.ts",
   /* 「SQLite 写失败的原因怎么取出来、哪一族值得等一等再试」（ISSUE #1250）：
    * 收口写重试（`src/lib/comfyui/executor-write-retry.ts`）是现在的消费方，但判据是
    * **驱动的错误码族**、不是执行域的形状 —— 放进 `comfyui/` 会让「锁」这个 SQLite
@@ -434,10 +440,7 @@ const SCAN_ROOTS = ["src", "scripts", "tools"];
 const ROOT_SCRIPT_GLOBS = ["*.ps1", "*.bat", "*.cmd", "*.vbs", "*.ts", "*.tsx"];
 
 /** `ifModify` 形态的触发面（`ci-incremental-gates.mjs` 直接用它）。 */
-const TRIGGER_GLOBS = [
-  ...ROOT_SCRIPT_GLOBS,
-  ...SCAN_ROOTS.map((dir) => `${dir}/**`),
-];
+const TRIGGER_GLOBS = [...ROOT_SCRIPT_GLOBS, ...SCAN_ROOTS.map((dir) => `${dir}/**`)];
 const SCAN_EXCLUDED = [
   "node_modules/",
   ".git/",
