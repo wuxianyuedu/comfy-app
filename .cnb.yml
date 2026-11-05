@@ -371,7 +371,8 @@
       镜像身份, 工作区复用读数, 缓存槽读数, GitHub 镜像同步, 环境前提, Install dependencies, 分支守卫, 提交声明核对, 同步数据库表结构,
       类型检查, 标题行让位, 文件结构硬规则, 跨平台动作对照, import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块,
       函数长度 TS, 函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
-      UI/逻辑分离, lib Node-only 声明, oxfmt 格式, 格式化提交分离, 零消费导出, 重档静态判据, GitHub 判决回读
+      UI/逻辑分离, lib Node-only 声明, oxfmt 格式, 格式化提交分离, 零消费导出, 重档静态判据, GitHub 判决回读,
+      日志分块 1/3, 日志分块 2/3, 日志分块 3/3, GitHub 判决判定
     # master 合并复核那条流水线（push 档）自己的 stage 清单 —— 第三份，按档登记。
     # 2026-10-28 起这一档从「只有合并形态复核一格」扩成「树级校验档」：判的是**合并后的
     # 树**一致不一致、这次运行的事实是什么，不是「这次改动能不能过」（那由 PR 档判），
@@ -2411,10 +2412,68 @@
   #      仓库 `moon-read/GITHUB_MIRROR_TOKEN`（本流水线从那里 imports）；
   #   ② 自托管节点到 `api.github.com:443` 的出网（与镜像格同一条 egress，它通这一格
   #      才有意义）。
+  # ── 为什么全量日志**没有**走附件（2026-11-05 实测否掉）──
+  #
+  # 回读格不会把几十 MB 的 job 日志直接打进 stage：**CNB 单 stage 日志封顶 102400 字节**
+  # （实测 build `cnb-5le-1k6l64o12`：超界时 stage 仍是 success，平台保留头部 + 一行
+  # `The log length exceeds the limit(102400)` + `......` + 尾部 —— 静默截断，不是整行丢弃）。
+  #
+  # 「落文件 + 附件」那条路在这一档上**不可用**：`cnbcool/attachments` 这类插件要 docker，
+  # 而自托管节点没开容器能力 —— 实测 build `cnb-l4r-1k6lcffnv` 的附件格 0s 就红，
+  # 平台给的原因是 `Runner does not enable Docker.`（此前那次「附件成功」的探针
+  # 走的是平台池，不是这条件路径）。
+  #
+  # 所以 stage 里给的是**能直接排障的那一段**：哪条 run / 哪个 job / 哪个 step 失败、
+  # `##[error]` 注解、失败 step 的原始窗口（预算 60 KiB，整个 stage 共用、按剩余字节分配），
+  # 再加**全量日志的下载端点**（`GET /repos/<owner>/<repo>/actions/jobs/<job_id>/logs`，
+  # 需 `actions: read`）与本地落盘路径（`.comfy-ci/tmp/github-verdict-logs/verdict-logs.txt`，
+  # 已在 `.gitignore` 内、每次回读先清空旧文件）。
   - name: GitHub 判决回读
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-verdict-read.mjs
+    # `--decision-out`：这一格只**读数 + 落盘**，退码恒 0 —— 判定交给后面最后一格。
+    # 理由：CNB 的 stage 串行，这一格若直接退 1，后面「日志分块」那几格根本跑不到，
+    # 而「判红」恰恰是最需要看日志的那一形。判定文件读不到 ⇒ 判定格退 2（fail-closed）。
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-verdict-read.mjs --decision-out .comfy-ci/tmp/github-verdict-logs/decision.json
     # 包住 45m 轮询预算 + 进程开销；与 GitHub 侧最重格的外框同级。
     timeout: 60m
+
+  # ── 失败日志的全量通道：**gzip + base64 + 分块打印**（2026-11-05 按实测重做）──
+  #
+  # 为什么不是「附件」：`cnbcool/attachments` 那类格是**插件**（`image` + `settings`），要
+  # docker；自托管节点没开容器能力 —— 实测 build `cnb-l4r-1k6lcffnv` 该格 0s 红
+  # `Runner does not enable Docker.`（此前那次「附件成功」的探针走的是平台池，不是这条路径）。
+  # **必红的格不许留**，所以整格删掉，换成本档这套纯 node 的通道。
+  #
+  # 为什么不是「把全量直接打进 stage 日志」：单 stage 封顶 **102400 字节**（实测 build
+  # `cnb-5le-1k6l64o12`），超界时 stage 仍是 success、平台保留头 + 一行
+  # `The log length exceeds the limit(102400)` + 尾 —— 静默截断，真因恰好被吞。
+  #
+  # 现形态：回读格把**失败 job**（不是整 run 全部 job）的脱敏正文压成
+  # `chunk-<i>.b64`（每块 ≤ 90000 base64 字节）+ `manifest.json`（块数 / 整包 sha256 /
+  # 尺寸），下面固定三格各打一块 —— 读者按 `chunk-1..N` 顺序拼接（去换行）→ base64 解码
+  # → gunzip → 核对 sha256，即可**逐字重建**那份全量。
+  # 体积实测：两条判红 run / 4 个失败 job 的脱敏正文 616395 字节 → gzip 118375 →
+  # base64 157836 → **2 块**（三格够用且有余量）；块数超过三格时只印前 3 块并明念
+  # 「其余见上面每个 job 的下载端点」（不静默丢）。
+  #
+  # 这三格**不许变成必红**：清单读不到 / 这一块不存在 / 块文件缺失，都只各念一行、退 0；
+  # 判决由最后一格退码，日志取不到不改变三态与退码（用例钉着）。
+  - name: 日志分块 1/3
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-print-log-chunk.mjs 1
+    timeout: 2m
+  - name: 日志分块 2/3
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-print-log-chunk.mjs 2
+    timeout: 2m
+  - name: 日志分块 3/3
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-print-log-chunk.mjs 3
+    timeout: 2m
+
+  # ── 判决判定：**承重**。把回读格留下的 `decision.json` 换成流水线真退码。
+  #
+  # 读不到 / 不是合法 JSON / 形状不对 ⇒ exit 2（判不了就拦合，fail-closed）；exit 1 ⇒ 拦合；
+  # **只有**明确写着 exit 0 才放行 —— 与回读格那套三态一字不差，本格不做第二次判读。
+  - name: GitHub 判决判定
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-verdict-decide.mjs .comfy-ci/tmp/github-verdict-logs/decision.json
+    timeout: 2m
 
   # ── 构建与产物：**这一格 2026-10-18 起不在 PR 上跑了**（口径见 §13.5.23）──
   #
