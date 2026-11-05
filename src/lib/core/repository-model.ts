@@ -85,6 +85,7 @@ export class ModelRepository extends DrizzleRepository<Model> {
     }
     for (let start = 0; start < inputs.length; start += UPSERT_CHUNK) {
       const chunk = inputs.slice(start, start + UPSERT_CHUNK);
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await db
         .insert(model)
         .values(

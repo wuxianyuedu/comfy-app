@@ -96,6 +96,7 @@ export async function applyComfyCpuLimit(input: {
     if (!cmd) {
       continue;
     }
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const r = await executed(cmd.command, cmd.args);
     results.push({ describe: cmd.describe, ok: r.ok, detail: r.detail });
   }

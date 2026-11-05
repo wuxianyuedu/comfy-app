@@ -89,6 +89,7 @@ describe("ollama-client", () => {
   it("2xx 但 models 缺失 / 不是数组 → 运行中但 0 个模型", async () => {
     for (const body of [{}, { models: "x" }]) {
       fetchMock.mockResolvedValue(jsonResponse(body));
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await expect(probeOllama("http://x/v1")).resolves.toEqual({
         up: true,
         models: [],

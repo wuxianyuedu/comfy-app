@@ -182,6 +182,7 @@ export async function runConsoleCommand(opts: RunConsoleOptions): Promise<RunCon
   let buffer = "";
   try {
     for (;;) {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const { done, value } = await reader.read();
       if (done) {
         break;

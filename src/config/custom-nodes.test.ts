@@ -188,6 +188,7 @@ describe("失败三相：哪一档该说话", () => {
   it("401 / 403（未登录）→ 必须留痕：这一档用户能自己修", async () => {
     for (const status of [401, 403]) {
       fetchReturns(status);
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await refreshCustomNodes();
       expect(getCustomNodesRegistryState().detail).toContain("未登录");
     }

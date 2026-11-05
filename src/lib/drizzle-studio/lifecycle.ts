@@ -300,7 +300,9 @@ export async function stopDrizzleStudio(
   logger.info(`[drizzle-studio] 回收进程树：${kill.via}`);
   st.child = undefined;
   for (let i = 0; i < DRIZZLE_STOP_PROBE.maxAttempts; i++) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await sleep(DRIZZLE_STOP_PROBE.baseMs);
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     if (!(await probeDrizzleStudio(port))) {
       return { ok: true, detail: "Drizzle Studio 已关闭" };
     }

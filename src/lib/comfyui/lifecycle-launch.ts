@@ -184,10 +184,12 @@ async function resolveAndApplyCpuLimitForKeepAlive(input: {
   }
   for (let attempt = 0; attempt < KEEPALIVE_CPU_PID_ATTEMPTS; attempt++) {
     if (attempt > 0) {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await new Promise((r) => setTimeout(r, KEEPALIVE_CPU_PID_INTERVAL_MS));
     }
     let pid: number | null;
     try {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       pid = (await findPidForMainPyDetailed(input.mainPy)).pid;
     } catch {
       /* 查询本身抛错（极罕见）：当作这一轮没查到，下一轮再试。 */

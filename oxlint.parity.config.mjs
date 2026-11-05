@@ -785,47 +785,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B2 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/components/studio/workflow-library/CustomNodesSettings/hooks/use-custom-nodes-settings.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/components/ui/hint.test.tsx", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/components/workshop/hooks/use-workshop-agent.ts", // 存量 3 处 · 清账目标 B2 · 新代码不禁用
-        "src/components/workshop/ShotStudio.tsx", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/components/workshop/useStoryboardPlanner.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/components/workshop/VideoStudio.tsx", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/config/custom-nodes.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/agent/client.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/async-pool.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfy/comfy-queue-store.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfy/comfy-readiness-client.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfy/comfy-state-client.test.ts", // 存量 3 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfy/comfy-stats-store.test.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfyui/client.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfyui/cpu-limit-apply.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfyui/cpu-limit-apply.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfyui/desktop-storage-paths.server.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfyui/executor-finalize.ts", // 存量 9 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfyui/executor-history.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfyui/executor-ws.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfyui/firstframe.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfyui/lifecycle-launch.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfyui/lifecycle-wait.ts", // 存量 3 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfyui/lifecycle.test.ts", // 存量 3 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfyui/lifecycle.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfyui/localWorkflows.ts", // 存量 3 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfyui/reaper.ts", // 存量 11 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfyui/status.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfyui/workflow-detail-io.ts", // 存量 3 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfyui/workflow-detail-raw-inputs.ts", // 存量 5 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/comfyui/workflow-detail.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/console/console-client.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/core/repository-model.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/core/repository-task-impl.test.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/core/repository.test.ts", // 存量 3 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/drizzle-studio/lifecycle.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/llm/browser.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/llm/clients.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/llm/server.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/llm/server.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/llm/video-task-util.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
         "src/lib/llm/video-task-util.ts", // 存量 3 处 · 清账目标 B2 · 新代码不禁用
         "src/lib/log/capture-streams.server.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
         "src/lib/log/log-file-client.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用

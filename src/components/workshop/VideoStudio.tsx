@@ -149,7 +149,9 @@ export function VideoStudio({
   async function pollApiVideo(shotId: string, remoteTaskId: string): Promise<void> {
     const deadline = Date.now() + 10 * 60 * 1000;
     while (Date.now() < deadline) {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await sleep(3000);
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const r = await apiPollVideo(remoteTaskId);
       if (r.url !== undefined && r.url !== "") {
         patchShot(shotId, { clipStatus: "done", clipUrl: r.url });

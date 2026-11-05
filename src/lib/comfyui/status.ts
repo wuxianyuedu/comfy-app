@@ -408,6 +408,7 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
       return {
         running: true,
         pid: lookup.pid,
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         port: await resolvePortFast(lookup.pid, configuredPort, configuredPortUp),
         via: candidate.via,
         unverified: false,

@@ -10,7 +10,7 @@
 | 批次 | 规则 | 存量处数 | 涉及文件 | 状态 |
 |---|---|---|---|---|
 | B1 | `eslint/no-use-before-define（functions:false）` | 75 | 48 | 已清（75 处/48 份） |
-| B2 | `no-await-in-loop` | 304 | 123 | 挂账中 |
+| B2 | `no-await-in-loop` | 304 | 123 | 挂账中（子批1+2：82 份 / 199 处已转逐行理由） |
 | B3 | `typescript/require-await` | 754 | 188 | 挂账中 |
 | B4 | `eslint/prefer-named-capture-group` | 1094 | 332 | 挂账中 |
 | B5 | `typescript/no-unsafe-type-assertion` | 1496 | 608 | 挂账中 |
@@ -128,47 +128,47 @@
 | `src/components/studio/logs/LogPanel.test.tsx` | 1 | 保留（逐行理由） |
 | `src/components/studio/logs/LogProvider.tsx` | 1 | 保留（逐行理由） |
 | `src/components/studio/project-canvas/hooks/use-material-library.ts` | 1 | 保留（逐行理由） |
-| `src/components/studio/workflow-library/CustomNodesSettings/hooks/use-custom-nodes-settings.ts` | 2 | 挂账 |
-| `src/components/ui/hint.test.tsx` | 1 | 挂账 |
-| `src/components/workshop/hooks/use-workshop-agent.ts` | 3 | 挂账 |
-| `src/components/workshop/ShotStudio.tsx` | 1 | 挂账 |
-| `src/components/workshop/useStoryboardPlanner.ts` | 2 | 挂账 |
-| `src/components/workshop/VideoStudio.tsx` | 2 | 挂账 |
-| `src/config/custom-nodes.test.ts` | 1 | 挂账 |
-| `src/lib/agent/client.test.ts` | 1 | 挂账 |
-| `src/lib/async-pool.ts` | 1 | 挂账 |
-| `src/lib/comfy/comfy-queue-store.test.ts` | 1 | 挂账 |
-| `src/lib/comfy/comfy-readiness-client.ts` | 2 | 挂账 |
-| `src/lib/comfy/comfy-state-client.test.ts` | 3 | 挂账 |
-| `src/lib/comfy/comfy-stats-store.test.ts` | 2 | 挂账 |
-| `src/lib/comfyui/client.ts` | 1 | 挂账 |
-| `src/lib/comfyui/cpu-limit-apply.test.ts` | 1 | 挂账 |
-| `src/lib/comfyui/cpu-limit-apply.ts` | 1 | 挂账 |
-| `src/lib/comfyui/desktop-storage-paths.server.ts` | 2 | 挂账 |
-| `src/lib/comfyui/executor-finalize.ts` | 9 | 挂账 |
-| `src/lib/comfyui/executor-history.ts` | 2 | 挂账 |
-| `src/lib/comfyui/executor-ws.test.ts` | 1 | 挂账 |
-| `src/lib/comfyui/firstframe.ts` | 2 | 挂账 |
-| `src/lib/comfyui/lifecycle-launch.ts` | 2 | 挂账 |
-| `src/lib/comfyui/lifecycle-wait.ts` | 3 | 挂账 |
-| `src/lib/comfyui/lifecycle.test.ts` | 3 | 挂账 |
-| `src/lib/comfyui/lifecycle.ts` | 2 | 挂账 |
-| `src/lib/comfyui/localWorkflows.ts` | 3 | 挂账 |
-| `src/lib/comfyui/reaper.ts` | 11 | 挂账 |
-| `src/lib/comfyui/status.ts` | 1 | 挂账 |
-| `src/lib/comfyui/workflow-detail-io.ts` | 3 | 挂账 |
-| `src/lib/comfyui/workflow-detail-raw-inputs.ts` | 5 | 挂账 |
-| `src/lib/comfyui/workflow-detail.ts` | 1 | 挂账 |
-| `src/lib/console/console-client.ts` | 1 | 挂账 |
-| `src/lib/core/repository-model.ts` | 1 | 挂账 |
-| `src/lib/core/repository-task-impl.test.ts` | 2 | 挂账 |
-| `src/lib/core/repository.test.ts` | 3 | 挂账 |
-| `src/lib/drizzle-studio/lifecycle.ts` | 2 | 挂账 |
-| `src/lib/llm/browser.ts` | 1 | 挂账 |
-| `src/lib/llm/clients.test.ts` | 1 | 挂账 |
-| `src/lib/llm/server.test.ts` | 1 | 挂账 |
-| `src/lib/llm/server.ts` | 1 | 挂账 |
-| `src/lib/llm/video-task-util.test.ts` | 1 | 挂账 |
+| `src/components/studio/workflow-library/CustomNodesSettings/hooks/use-custom-nodes-settings.ts` | 2 | 保留（逐行理由） |
+| `src/components/ui/hint.test.tsx` | 1 | 保留（逐行理由） |
+| `src/components/workshop/hooks/use-workshop-agent.ts` | 3 | 保留（逐行理由） |
+| `src/components/workshop/ShotStudio.tsx` | 1 | 保留（逐行理由） |
+| `src/components/workshop/useStoryboardPlanner.ts` | 2 | 保留（逐行理由） |
+| `src/components/workshop/VideoStudio.tsx` | 2 | 保留（逐行理由） |
+| `src/config/custom-nodes.test.ts` | 1 | 保留（逐行理由） |
+| `src/lib/agent/client.test.ts` | 1 | 保留（逐行理由） |
+| `src/lib/async-pool.ts` | 1 | 保留（逐行理由） |
+| `src/lib/comfy/comfy-queue-store.test.ts` | 1 | 保留（逐行理由） |
+| `src/lib/comfy/comfy-readiness-client.ts` | 2 | 保留（逐行理由） |
+| `src/lib/comfy/comfy-state-client.test.ts` | 3 | 保留（逐行理由） |
+| `src/lib/comfy/comfy-stats-store.test.ts` | 2 | 保留（逐行理由） |
+| `src/lib/comfyui/client.ts` | 1 | 保留（逐行理由） |
+| `src/lib/comfyui/cpu-limit-apply.test.ts` | 1 | 保留（逐行理由） |
+| `src/lib/comfyui/cpu-limit-apply.ts` | 1 | 保留（逐行理由） |
+| `src/lib/comfyui/desktop-storage-paths.server.ts` | 2 | 保留（逐行理由） |
+| `src/lib/comfyui/executor-finalize.ts` | 9 | 保留（逐行理由） |
+| `src/lib/comfyui/executor-history.ts` | 2 | 保留（逐行理由） |
+| `src/lib/comfyui/executor-ws.test.ts` | 1 | 保留（逐行理由） |
+| `src/lib/comfyui/firstframe.ts` | 2 | 保留（逐行理由） |
+| `src/lib/comfyui/lifecycle-launch.ts` | 2 | 保留（逐行理由） |
+| `src/lib/comfyui/lifecycle-wait.ts` | 3 | 保留（逐行理由） |
+| `src/lib/comfyui/lifecycle.test.ts` | 3 | 保留（逐行理由） |
+| `src/lib/comfyui/lifecycle.ts` | 2 | 保留（逐行理由） |
+| `src/lib/comfyui/localWorkflows.ts` | 3 | 保留（逐行理由） |
+| `src/lib/comfyui/reaper.ts` | 11 | 保留（逐行理由） |
+| `src/lib/comfyui/status.ts` | 1 | 保留（逐行理由） |
+| `src/lib/comfyui/workflow-detail-io.ts` | 3 | 保留（逐行理由） |
+| `src/lib/comfyui/workflow-detail-raw-inputs.ts` | 5 | 保留（逐行理由） |
+| `src/lib/comfyui/workflow-detail.ts` | 1 | 保留（逐行理由） |
+| `src/lib/console/console-client.ts` | 1 | 保留（逐行理由） |
+| `src/lib/core/repository-model.ts` | 1 | 保留（逐行理由） |
+| `src/lib/core/repository-task-impl.test.ts` | 2 | 保留（逐行理由） |
+| `src/lib/core/repository.test.ts` | 3 | 保留（逐行理由） |
+| `src/lib/drizzle-studio/lifecycle.ts` | 2 | 保留（逐行理由） |
+| `src/lib/llm/browser.ts` | 1 | 保留（逐行理由） |
+| `src/lib/llm/clients.test.ts` | 1 | 保留（逐行理由） |
+| `src/lib/llm/server.test.ts` | 1 | 保留（逐行理由） |
+| `src/lib/llm/server.ts` | 1 | 保留（逐行理由） |
+| `src/lib/llm/video-task-util.test.ts` | 1 | 保留（逐行理由） |
 | `src/lib/llm/video-task-util.ts` | 3 | 挂账 |
 | `src/lib/log/capture-streams.server.ts` | 1 | 挂账 |
 | `src/lib/log/log-file-client.test.ts` | 1 | 挂账 |

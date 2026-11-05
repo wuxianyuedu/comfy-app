@@ -187,6 +187,7 @@ export function useStoryboardPlanner(props: Props) {
          * 把 `noUncheckedIndexedAccess` 加上的 `undefined` 抹掉。 */
         for (const [i, scene] of scenes.entries()) {
           setAiProgress(`正在拆镜 ${i + 1}/${scenes.length} · ${scene.heading}`);
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           const full = await streamChat({
             messages: buildStoryboardMessages(scene, charNames),
             /* onToken 不传即「无需逐 token 处理」（streamChat 内部 onToken?.() 调用） */
@@ -297,6 +298,7 @@ export function useStoryboardPlanner(props: Props) {
      * `useItemAction`，这里是「整批」，两者形态不同、并用。 */
     await polishAllBusy.run(async () => {
       for (const shot of shots) {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await polishOne(shot);
       }
     });

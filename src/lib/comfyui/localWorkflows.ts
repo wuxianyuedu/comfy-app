@@ -98,6 +98,7 @@ async function statMany(paths: Array<string>): Promise<Array<fs.Stats | null>> {
         continue;
       }
       try {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         out[index] = await fs.promises.stat(target);
       } catch {
         /* 单个条目读不到就跳过 —— 不中断整趟扫描 */
@@ -185,6 +186,7 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
       const fullPath = path.join(dir, ent.name);
       if (ent.isDirectory()) {
         if (recursive) {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           await visit(fullPath);
         }
         continue;
@@ -404,6 +406,7 @@ export async function scanLocalWorkflowChecksums(
         continue;
       }
 
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const result = await checksumOfFile(file.absPath, file.size, file.mtimeMs);
 
       if (result) {

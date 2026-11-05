@@ -219,6 +219,7 @@ describe("不带 prompt_id 的帧也要留证（ISSUE #1315）", () => {
   it("类型数到上限后停止留证（这个集合不许无界增长）", async () => {
     vi.mocked(traceMock).mockClear();
     for (let i = 0; i < 40; i++) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await mod.handleMessage(JSON.stringify({ type: `p1315-cap-${i}`, data: { x: 1 } }));
     }
     // 前面那条用例已经占掉两个类型，这里再灌 40 种 ⇒ 只补到上限 32。
