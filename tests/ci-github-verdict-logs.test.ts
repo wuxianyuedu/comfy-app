@@ -172,7 +172,7 @@ describe("全量通道：gzip + base64 + 分块（可拼接 / 有校验和 / 单
     expect(pack.rawBytes).toBe(Buffer.byteLength(text, "utf8"));
     expect(pack.sha256).toHaveLength(64);
     /* 折行只加换行：拆掉换行必须与原 base64 逐字相同（复制的读者靠这一条才拼得对）。 */
-    expect(wrapBase64(joined).replace(/\n/gu, "")).toBe(joined);
+    expect(wrapBase64(joined).replaceAll("\n", "")).toBe(joined);
   });
 
   it("超长单行（20 万字符）照样能拼回（分块按字节切，不按行切）", () => {

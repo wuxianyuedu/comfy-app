@@ -805,7 +805,10 @@ export function writeDecisionFile(file, payload, io = {}) {
   const abs = path.isAbsolute(file) ? file : path.join(io.root ?? ROOT, file);
   const mkdir = io.mkdir ?? ((dir) => mkdirSync(dir, { recursive: true }));
   const writeFile =
-    io.writeFile ?? ((target, text) => writeFileSync(target, text, "utf8"));
+    io.writeFile ??
+    ((target, text) => {
+      writeFileSync(target, text, "utf8");
+    });
   try {
     mkdir(path.dirname(abs));
     writeFile(

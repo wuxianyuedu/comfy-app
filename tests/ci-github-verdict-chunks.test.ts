@@ -28,7 +28,7 @@ const MANIFEST = {
 
 /** 假盘：按路径给文本（其余一律抛 ENOENT，模拟「没落盘」）。路径先归一，跨平台同一套键。 */
 const fakeDisk = (files: Record<string, string>) => (file: string) => {
-  const key = path.normalize(file).replace(/\\/gu, "/");
+  const key = path.normalize(file).replaceAll("\\", "/");
   const hit = files[key];
   if (hit === undefined) {
     throw new Error(`ENOENT: ${key}`);
