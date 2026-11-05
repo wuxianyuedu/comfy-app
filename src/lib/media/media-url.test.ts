@@ -7,17 +7,11 @@
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  comfyImageUrl,
-  mediaPreviewUrl,
-  mediaReferenceFilename,
-} from "./media-url";
+import { comfyImageUrl, mediaPreviewUrl, mediaReferenceFilename } from "./media-url";
 
 describe("comfyImageUrl", () => {
   it("拼出带 type=input 的代理地址", () => {
-    expect(comfyImageUrl({ filename: "abc.png" })).toBe(
-      "/api/images?filename=abc.png&type=input",
-    );
+    expect(comfyImageUrl({ filename: "abc.png" })).toBe("/api/images?filename=abc.png&type=input");
   });
 
   it("subfolder 只在给定时出现", () => {
@@ -51,15 +45,11 @@ describe("comfyImageUrl", () => {
 
 describe("mediaPreviewUrl", () => {
   it("以 / 开头 = 已是应用内绝对路径，原样返回", () => {
-    expect(mediaPreviewUrl("/api/generated/x/img_0.png")).toBe(
-      "/api/generated/x/img_0.png",
-    );
+    expect(mediaPreviewUrl("/api/generated/x/img_0.png")).toBe("/api/generated/x/img_0.png");
   });
 
   it("裸文件名走 /api/images 代理", () => {
-    expect(mediaPreviewUrl("abc.png")).toBe(
-      "/api/images?filename=abc.png&type=input",
-    );
+    expect(mediaPreviewUrl("abc.png")).toBe("/api/images?filename=abc.png&type=input");
   });
 
   it("空引用返回 null（与 comfyImageUrl 同口径）", () => {
@@ -70,12 +60,10 @@ describe("mediaPreviewUrl", () => {
   });
 
   it("ComfyUI 媒体引用对象 {filename,subfolder,type} 也出预览地址（封装节点 IMAGE 输入落值形态）", () => {
-    expect(
-      mediaPreviewUrl({ filename: "a.png", subfolder: "sub", type: "input" }),
-    ).toBe("/api/images?filename=a.png&subfolder=sub&type=input");
-    expect(mediaPreviewUrl({ filename: "a.png" })).toBe(
-      "/api/images?filename=a.png&type=input",
+    expect(mediaPreviewUrl({ filename: "a.png", subfolder: "sub", type: "input" })).toBe(
+      "/api/images?filename=a.png&subfolder=sub&type=input",
     );
+    expect(mediaPreviewUrl({ filename: "a.png" })).toBe("/api/images?filename=a.png&type=input");
   });
 
   it("ComfyUI IMAGE 值数组 [filename,subfolder,type] 也出预览地址", () => {

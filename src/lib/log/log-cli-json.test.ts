@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  isCliJsonLine,
-  parseCliJsonLine,
-  splitCliLogLine,
-} from "./log-cli-json";
+import { isCliJsonLine, parseCliJsonLine, splitCliLogLine } from "./log-cli-json";
 
 describe("comfy-cli 原文日志行解析", () => {
   it("拆出 tag 与载荷（剥掉前缀）", () => {

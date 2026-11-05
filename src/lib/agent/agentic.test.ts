@@ -70,9 +70,7 @@ describe("chatAgent：LLM 路径", () => {
       () =>
         new Response(
           JSON.stringify({
-            choices: [
-              { message: { content: '{"ready": false, "reply": "几秒？"}' } },
-            ],
+            choices: [{ message: { content: '{"ready": false, "reply": "几秒？"}' } }],
           }),
           { status: 200 },
         ),
@@ -83,18 +81,13 @@ describe("chatAgent：LLM 路径", () => {
   });
 
   it("没有 JSON 的纯文本回复 → 原样带出，ready=false", async () => {
-    mockFetch(
-      () =>
-        new Response(JSON.stringify({ content: "你说啥？" }), { status: 200 }),
-    );
+    mockFetch(() => new Response(JSON.stringify({ content: "你说啥？" }), { status: 200 }));
     const res = await chatAgent([{ role: "user", content: "x" }]);
     expect(res).toEqual({ reply: "你说啥？", ready: false });
   });
 
   it("空回复 → 给可见占位，不返回空串（界面会看起来卡住）", async () => {
-    mockFetch(
-      () => new Response(JSON.stringify({ content: "" }), { status: 200 }),
-    );
+    mockFetch(() => new Response(JSON.stringify({ content: "" }), { status: 200 }));
     const res = await chatAgent([{ role: "user", content: "x" }]);
     expect(res.reply).toBe("（无回复）");
     expect(res.ready).toBe(false);
@@ -121,9 +114,7 @@ describe("chatAgent：LLM 路径", () => {
           status: 200,
         }),
     );
-    await expect(
-      chatAgent([{ role: "user", content: "x" }]),
-    ).resolves.toBeDefined();
+    await expect(chatAgent([{ role: "user", content: "x" }])).resolves.toBeDefined();
   });
 });
 
@@ -182,9 +173,7 @@ describe("chatAgent：离线状态机（未配置 LLM 时的兜底）", () => {
 
   it("assistant 消息不参与类型判定（只读 user）", async () => {
     mockFetch(() => Promise.reject(new Error("no llm")));
-    const res = await chatAgent([
-      { role: "assistant", content: "要视频还是图片？" },
-    ]);
+    const res = await chatAgent([{ role: "assistant", content: "要视频还是图片？" }]);
     // 没有 user 消息 → 回到首个问题
     expect(res.reply).toContain("图片");
   });
@@ -196,8 +185,7 @@ describe("expandIdea：单轮展开", () => {
       () =>
         new Response(
           JSON.stringify({
-            content:
-              '{"ready": true, "spec": {"prompt": "海边", "kind": "image"}}',
+            content: '{"ready": true, "spec": {"prompt": "海边", "kind": "image"}}',
           }),
           { status: 200 },
         ),
@@ -207,10 +195,7 @@ describe("expandIdea：单轮展开", () => {
   });
 
   it("没有 spec（模型没整理出来）→ 用离线兜底方案，不返回空提示词", async () => {
-    mockFetch(
-      () =>
-        new Response(JSON.stringify({ content: "再想想" }), { status: 200 }),
-    );
+    mockFetch(() => new Response(JSON.stringify({ content: "再想想" }), { status: 200 }));
     const spec = await expandIdea("  落日  ");
     expect(spec.prompt).toContain("落日");
     expect(spec.prompt.trim()).not.toBe("");
