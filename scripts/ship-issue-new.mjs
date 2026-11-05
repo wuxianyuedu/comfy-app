@@ -41,6 +41,7 @@ import {
   withCommentHeader,
 } from "./ship-ticket.mjs";
 import { readIssue } from "./ship-claim.mjs";
+import { cnbData } from "./cnb-fields.mjs";
 
 /** `--priority` 的词表（平台原生字段；不认别的写法）。 */
 const PRIORITY_WORDS = ISSUE_PRIORITIES.split("|");
@@ -330,7 +331,7 @@ export function runNewIssue({
     log(
       `[ship] --dry-run：将创建「${plan.title}」（正文 ${bodyFile}，长度 ${read.text.length} 字，` +
         `优先级 ${plan.priority ?? "平台默认"}）${
-        label ? `，再按 ${label}，最后 get-issue 回读` : "，不回读标签（未配留痕）"
+          label ? `，再按 ${label}，最后 get-issue 回读` : "，不回读标签（未配留痕）"
         }；一条都没写。`,
     );
     return CODE.GREEN;
@@ -352,8 +353,10 @@ export function runNewIssue({
     ...(plan.priority ? ["--priority", plan.priority] : []),
     "-v",
   ]);
-  const d = got?.json && typeof got.json === "object" ? got.json.data : null;
-  const number = Number(d && typeof d === "object" ? (d.number ?? d?.issue?.number) : Number.NaN);
+  const d = cnbData(got?.json);
+  const number = d
+    ? Number(d.number ?? /** @type {{issue?: {number?: unknown}}} */ (d).issue?.number)
+    : Number.NaN;
   if (!Number.isInteger(number) || number <= 0) {
     log(
       "[ship] 建单的回执里没有可用的单号 ⇒ 不念「已建成」。" +
@@ -406,11 +409,13 @@ export function runNewIssue({
   }
   if (label && landed) {
     log(
-      `[ship] ✓ 留痕已补：${label}${explicitHandle || isExplicitSource(handleSource)
+      `[ship] ✓ 留痕已补：${label}${
+        explicitHandle || isExplicitSource(handleSource)
           ? "（你填的）。"
           : handleSource
             ? `（短名取自 ${handleSource}，换机器会变；要固定就在 .env 里填一行 \`COMFYAPP_DEV_HANDLE\`。）`
-            : "。"}`,
+            : "。"
+      }`,
     );
   } else if (label) {
     log(
