@@ -21,19 +21,66 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 
 /**
- * egress 类失败的判据（TCP / DNS / 代理层，含本仓自己给的超时那一句）。
+ * egress 类失败的判据（TCP / DNS / 代理 / TLS 中途断流，含本仓自己给的超时那一句）。
  *
  * 这一组判据有两个消费面，必须同源：`explainRemoteProbeFailure()` 拿它选话术，
  * `runGitWithRetry()` 拿它决定**值不值得再试一次** —— 两处各写一份正则，迟早漂成
- * 「话术说是 egress、重试却不认」的孪生形态。
+ * 「话术说是 egress、重试却不认」的孪生形态。还有第三个间接消费面：
+ * `check-mirror-attendance.mjs` 按前者的输出给这一跑分类，判据漏一个字就会被念成
+ * `token-scope`（现场 `cnb-95h-1k6in94fu` 原文是网络重置，出勤读数却记成令牌问题）。
+ *
+ * 2026-11-04 按现场原话补三形（此前都落「一次就交账、重试=0 次」）：
+ *   · `Recv failure: Connection was reset` —— 旧正则写的是 `connection reset`，
+ *     中间那个 `was` 让它当场漏掉（curl / schannel 的常见措辞）；
+ *   · `schannel: server closed abruptly (missing close_notify)` —— TLS 层断流；
+ *   · `Recv failure` 前缀本身（配别的错因时仍属传输层）。
+ * 认证 / 权限 / 仓库不存在三族一个字都没放宽：它们「再试一百次也一样」。
+ *
+ * ⚠️ 本函数**不认** GitHub 服务端的 5xx：那不是出网问题，归 {@link isTransientRemoteFailure}。
+ * 硬塞进来的话话术会把服务端 500 念成「节点侧白名单没配」，人就去查错的层。
  *
  * @param {string} text git 那一跳的 stdout + stderr（未脱敏）
- * @returns {boolean} true ⇒ 网络根本没到 GitHub，重试有意义
+ * @returns {boolean} true ⇒ 网络根本没到 GitHub（或中途断流），重试有意义
  */
 export function isEgressFailure(text) {
-  return /failed to connect|could not connect to server|couldn't connect to host|could not resolve host|connection reset|connection timed out|name resolution|getaddrinfo|empty reply from server|超时/i.test(
+  return /failed to connect|could not connect to server|couldn't connect to host|could not resolve host|connection\s+(?:was\s+)?reset|connection timed out|name resolution|getaddrinfo|empty reply from server|server closed abruptly|recv failure|超时/i.test(
     text,
   );
+}
+
+/**
+ * 到了 GitHub、但**服务端自己给了一记瞬时错**（5xx 那一族）的判据。
+ *
+ * 现场 `cnb-idl-1k6j33rql`：`remote: Internal Server Error` +
+ * `[remote rejected] HEAD -> cnb-pr-3157 (Internal Server Error)`。TCP / TLS 都通了、
+ * 包也到了，是 GitHub 侧那一跑没接住 —— 所以它不是 egress，不许被
+ * `explainRemoteProbeFailure()` 念成「节点侧出网问题」。
+ *
+ * 但**重试对它有意义**：推的是 IID 专属 ref 且带 `--force`，重推一次是幂等的，
+ * 换一次请求就可能成。于是单列一族，只在 {@link shouldRetryGitFailure} 与 egress 合并。
+ *
+ * @param {string} text git 那一跳的 stdout + stderr（未脱敏）
+ * @returns {boolean} true ⇒ 远端瞬时错误，值得再试一次
+ */
+export function isTransientRemoteFailure(text) {
+  return /internal server error|service unavailable|bad gateway|gateway time-?out|remote:\s*HTTP\s*5\d\d\b/i.test(
+    text,
+  );
+}
+
+/**
+ * 重试决策的**唯一**入口：egress（网络没到 / 中途断流）∪ 远端 5xx（到了但没接住）。
+ *
+ * 与 `isEgressFailure()` 刻意不是同一个函数：`explainRemoteProbeFailure()` /
+ * `classifyLfsPushFailure()` 只认 egress 那一族来选话术与下一动作，而重试面要宽一层。
+ * 「话术判据是重试判据的子集」不是两份会漂的正则 —— 窄的那一份被宽的那一份直接调用，
+ * 认证 / 权限 / 仓库不存在三族在两边都仍然不消耗重试。
+ *
+ * @param {string} text git 那一跳的 stdout + stderr（未脱敏）
+ * @returns {boolean} true ⇒ 再试一次有意义
+ */
+export function shouldRetryGitFailure(text) {
+  return isEgressFailure(text) || isTransientRemoteFailure(text);
 }
 
 /**
@@ -272,14 +319,20 @@ export const DISPATCH_STATE_FILE = "mirror-dispatch.json";
  * 把本跑的派发形状写成一行 JSON 留给回读格（写失败不改变本格的三态 —— 落盘是**增益**，
  * 不是判据；拿不到它时回读格退回「自己猜」的老行为）。
  *
+ * 建目录与写文件同属注入面：用例给的 `root` 是假根（如 `/repo`），若这里仍调真的
+ * `mkdirSync`，Linux runner 没有 `/` 写权限会抛错被吞，`writeFileSync` 连试都没试，
+ * 派发形状就读成空对象；而 Windows 上那个相对盘符的路径恰好建得出来，同一份用例
+ * 于是在 Windows 假绿、在 GA 的 ubuntu 上红。两跳都注入，用例才真的「一次真文件都不写」。
+ *
  * @param {(file: string, data: string) => void} writeFileSync 注入面（用例不落真文件）
  * @param {string} root 检出根
  * @param {{dispatched: boolean, reason: string}} state 这一跳的结论
+ * @param {(dir: string, opts: { recursive: boolean }) => void} [mkdir] 注入面（默认真建目录）
  * @returns {void}
  */
-export function writeDispatchState(writeFileSync, root, state) {
+export function writeDispatchState(writeFileSync, root, state, mkdir = mkdirSync) {
   try {
-    mkdirSync(path.join(root, DISPATCH_STATE_DIR), { recursive: true });
+    mkdir(path.join(root, DISPATCH_STATE_DIR), { recursive: true });
     writeFileSync(
       path.join(root, DISPATCH_STATE_DIR, DISPATCH_STATE_FILE),
       `${JSON.stringify({ ...state, at: new Date().toISOString() })}\n`,

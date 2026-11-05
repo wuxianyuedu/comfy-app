@@ -92,15 +92,37 @@ export const CODE = { PRESENT: 0, ABSENT: 1, NO_VERDICT: 2 };
  * 把它算进「每日出勤」就是两档互相替对方作证（那正是本判据要拦的假绿）。
  */
 export const DAILY_LANE_PIPELINES = Object.freeze([
-  "每日生产构建",
   "每日档（手动触发）",
   "每日档（API 触发）",
 ]);
 
 /**
+ * 已退役、但**仍要认**的历史流水线名。
+ *
+ * 定时档迁到 GitHub Actions 之前，每天那一跑在平台列表里叫「每日生产构建」。
+ * 本判据读的是平台**历史**构建，窗口跨过迁移点时这些派发仍在窗口内；不认它们，
+ * 就会把「迁移前一天还绿过」念成缺勤 —— 那是一次由改名造成的假红。
+ * 它们不在 `.cnb.yml` 里，所以**不进** `DAILY_LANE_PIPELINES`：那份名单由
+ * `tests/no-platform-ci-config.test.ts` 与配置里跑 `*daily_gates` 的流水线双向核对，
+ * 收一个已不存在的名字就等于账面替它作证。
+ */
+export const DAILY_LANE_RETIRED_PIPELINES = Object.freeze(["每日生产构建"]);
+
+/** 出勤判定实际用的认档名单 = 现役口 + 历史别名。 */
+export const DAILY_ATTENDANCE_LANES = Object.freeze([
+  ...DAILY_LANE_PIPELINES,
+  ...DAILY_LANE_RETIRED_PIPELINES,
+]);
+
+/**
  * 这一条构建算不算「每日那一跑」的一次派发。
  *
- * 按前缀认 `crontab:`（事件名里带小时 ⇒ 换时刻不需要改这里），外加两条手点 / API 触发口。
+ * 定时档的执行者已迁 GitHub Actions：`.cnb.yml` 不再有 `crontab:` 事件，每天那一跑由
+ * `.github/workflows/daily.yml` 的 schedule 起。**但这里仍认 `crontab:` 前缀** ——
+ * 本判据读的是平台**历史**构建列表，迁移前的派发确实以那个事件名留着；把它删掉
+ * 等于让窗口跨过迁移点时少掉一半样本，念出一次假缺勤。认候选与「现在谁在执行」
+ * 是两件事：后者由 `DAILY_LANE_PIPELINES` 与 GA 侧出勤判据答。
+ * 两条手点 / API 触发口留在 CNB，不自动触发，只在有人明确要复验时才算一次派发。
  *
  * @param {any} build 平台列表里的一项
  * @returns {boolean} 是不是每日类
@@ -185,14 +207,14 @@ function pipelineNamesOf(detail) {
  * 「它没跑」）逼出来的，不是多余条件。
  *
  * @param {{builds: any[], details?: Array<{sn?: string, json?: any} | null | undefined>, lanes?: ReadonlyArray<string | null | undefined>}} input
- *   候选 + 逐格详情 + 这一档的流水线名名单（缺省取 `DAILY_LANE_PIPELINES`，那是 frozen 的，
- *   所以这一栏写 `readonly string[]` 而不是 `string[]`）
+ *   候选 + 逐格详情 + 这一档的流水线名名单（缺省取 `DAILY_ATTENDANCE_LANES`：现役口 +
+ *   已退役的历史别名，那是 frozen 的，所以这一栏写 `readonly string[]` 而不是 `string[]`）
  * @returns {{found: true, build: any, outcome: ReturnType<typeof classifyBuildOutcome>,
  *   pipelineNames: string[], strays: Stray[]} | {found: false, strays: Stray[], undetailed: string[]}}
  *   两种挑法靠 `found` 这个字面量判别（不靠 `build` 是不是 null：`build` 是 `any`，
  *   拿它做判别式的话类型上收不回来，实测会报「`outcome` 不存在」）
  */
-export function pickDailySubject({ builds, details = [], lanes = DAILY_LANE_PIPELINES }) {
+export function pickDailySubject({ builds, details = [], lanes = DAILY_ATTENDANCE_LANES }) {
   const wanted = new Set((Array.isArray(lanes) ? lanes : []).map((l) => String(l ?? "").trim()));
   const bySn = new Map(
     (Array.isArray(details) ? details : []).map((d) => [String(d?.sn ?? ""), d?.json]),
@@ -236,7 +258,7 @@ export function pickDailySubject({ builds, details = [], lanes = DAILY_LANE_PIPE
  * @property {Array<{sn: string, json: any}>} [details] `sn → get-build-status -v 那份 JSON` 的配对；可为空 ⇒ 判「取不到逐格」
  * @property {number} now 现在时刻（毫秒）
  * @property {number} [windowHours] 窗口小时数，缺省取 `DEFAULT_WINDOW_HOURS`
- * @property {readonly string[]} [lanes] 这一档的流水线名名单，缺省取 `DAILY_LANE_PIPELINES`（用例可注入别的档）
+ * @property {readonly string[]} [lanes] 这一档的流水线名名单，缺省取 `DAILY_ATTENDANCE_LANES`（用例可注入别的档）
  *
  * @typedef {object} AttendanceVerdict
  * @property {"present" | "absent" | "cancelled" | "running" | "unknown"} verdict 落在哪一档
@@ -254,7 +276,7 @@ export function judgeAttendance({
   details = [],
   now,
   windowHours = DEFAULT_WINDOW_HOURS,
-  lanes = DAILY_LANE_PIPELINES,
+  lanes = DAILY_ATTENDANCE_LANES,
 }) {
   /* 候选（事件那一层）→ 档身份（流水线名那一层）两步走：只走第一步就会把别档的死法
    * 念成这一档的结论（ISSUE #2873 的现场），所以判决从这里开始不再碰 `latestDailyDispatch`。 */

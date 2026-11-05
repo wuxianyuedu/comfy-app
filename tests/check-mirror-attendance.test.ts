@@ -12,6 +12,7 @@ import {
   main,
   readMirrorCell,
 } from "../scripts/check-mirror-attendance.mjs";
+import { explainRemoteProbeFailure } from "../scripts/ci-github-mirror-push.mjs";
 
 /* 钉住的「现在」：2026-11-02T06:00:00Z。窗口内的读数都按它算。 */
 const NOW = Date.parse("2026-11-02T06:00:00.000Z");
@@ -52,6 +53,15 @@ describe("classifyMirrorText：七类形状各有下一动作，不许念成同�
     expect(classifyMirrorText("[mirror] 推送前这一读没通：egress 无关的一句 fatal: 403").shape).toBe(
       "token-scope",
     );
+  });
+
+  it("现场 `Connection was reset` 走完探针话术 ⇒ egress，不许落成 token-scope", () => {
+    const raw =
+      "fatal: unable to access 'https://github.com/wuxianyuedu/comfy-app.git/': Recv failure: Connection was reset";
+    /* cnb-95h-1k6in94fu / cnb-sji-1k6iu657n：修判据前这句落默认话术，出勤被记成令牌问题。
+     * 这条把「原话 → explainRemoteProbeFailure → classifyMirrorText」整条链钉在一起。 */
+    const text = `[mirror] 推送前这一读没通（exit 128）：${explainRemoteProbeFailure(raw)}`;
+    expect(classifyMirrorText(text).shape).toBe("egress");
   });
 
   it("推送那一跳与派发那一跳各自成形状（探针通了之后断点会在更后面一跳）", () => {
