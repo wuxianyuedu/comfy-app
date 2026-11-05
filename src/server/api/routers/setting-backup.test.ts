@@ -123,6 +123,7 @@ describe("setting.backupRestore", () => {
       "not-a-backup.sqlite",
       "db-backup-19990101-000000.sqlite",
     ]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const result = await caller.backupRestore({ name: bad });
       expect(result.ok, `${bad} 不该被接受`).toBe(false);
     }

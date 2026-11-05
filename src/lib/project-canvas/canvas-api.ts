@@ -196,6 +196,7 @@ export async function pollTask(
       };
     }
     try {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const task = await vanillaApi.task.detail.query({ id: taskId });
       /* 把 0..100 的进度透到画布上。
        * 此前被丢掉了 —— pollTask 只读 status 与 images，于是画布的图片/影片预览
@@ -263,6 +264,7 @@ export async function pollTask(
     } catch {
       /* 暂时性失败 —— 继续轮询 */
     }
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await sleep(2000);
   }
 }

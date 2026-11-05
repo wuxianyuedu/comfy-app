@@ -103,13 +103,16 @@ export async function pollRemoteVideoTask(
   const pollUrls = [rest, ...(agnes === null ? [] : [agnes])];
   const deadline = Date.now() + VIDEO_POLL_TOTAL_MS;
   while (Date.now() < deadline) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await sleep(VIDEO_POLL_INTERVAL_MS);
     for (const pollUrl of pollUrls) {
       try {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         const pollRes = await fetch(pollUrl, {
           headers,
           signal: AbortSignal.timeout(30_000),
         });
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         const pollPayload: unknown = await pollRes.json().catch(() => null);
         if (pollRes.ok) {
           const url = extractMediaUrl(pollPayload);

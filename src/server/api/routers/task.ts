@@ -117,6 +117,7 @@ export const taskRouter = createTRPCRouter({
       type Card = Awaited<ReturnType<typeof scanOnce>>[number];
       const matched: Array<Card> = [];
       for (let round = 0; round < MAX_ROUNDS; round += 1) {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         const page = await scanOnce(round * PAGE);
         for (const card of page) {
           if (card.mediaType === input.media) {

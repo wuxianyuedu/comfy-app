@@ -46,7 +46,9 @@ function wireClientToRealRoute(
 /** 让在途那一拍跑完（长轮询链是「请求完成 → 立刻再发」）。 */
 async function settle(times = 2): Promise<void> {
   for (let i = 0; i < times; i += 1) {
+    // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
     await Promise.resolve();
+    // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 }
@@ -54,6 +56,7 @@ async function settle(times = 2): Promise<void> {
 /** 等到条件成立（最多若干轮），不等就按失败处理 —— 不靠「赌一拍够不够」。 */
 async function settleUntil(condition: () => boolean, rounds = 50): Promise<boolean> {
   for (let i = 0; i < rounds; i += 1) {
+    // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
     await settle(1);
     if (condition()) {
       return true;

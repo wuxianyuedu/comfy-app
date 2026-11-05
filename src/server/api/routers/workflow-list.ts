@@ -186,6 +186,7 @@ export const workflowListProcedures = {
           const oldName = lastSegments(w.sourcePath, 1) || w.sourcePath;
           const newName = lastSegments(hit.absPath, 1) || hit.absPath;
           try {
+            // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
             await workflowTemplateRepository.relinkSourcePath(w.id, {
               sourcePath: hit.absPath,
               sourceMtime: Math.floor(hit.mtimeMs / 1000),

@@ -781,6 +781,7 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
     const codes: Array<number> = [];
     for (const s of [settledLow, () => Promise.resolve(settled)]) {
       const { spawn } = fakeSpawn([TIMEOUT, TIMEOUT]);
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const { code } = await runCapturing({
         entry: "vitest.mjs",
         spawn,
@@ -883,6 +884,7 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
       [TIMEOUT, REAL_RED],
     ];
     for (const results of cases) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       codes.push((await once(results)).code);
     }
     expect(codes).toEqual([0, 0, 0, 1, 1]);

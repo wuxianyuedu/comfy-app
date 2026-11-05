@@ -91,6 +91,7 @@ describe("openUrlInBrowser 的协议闸门", () => {
 
   it("畸形地址（不是合法 URL）→ 拒绝，不起进程", async () => {
     for (const url of ["http://  ", "not a url", ""]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const res = await openUrlInBrowser(url);
       expect(res.ok).toBe(false);
     }

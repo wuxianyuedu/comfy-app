@@ -107,6 +107,7 @@ describe("skill.create —— 重名的码与形状闸", () => {
   it("slug 带大写或空格 → BAD_REQUEST，且一次数据库都不查", async () => {
     const find = vi.spyOn(skillRepository, "findBySlug");
     for (const bad of ["My-Skill", "有中文", "a b", ""]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       expect(await envelope(caller().create(newSkill({ slug: bad })))).toBe("BAD_REQUEST");
     }
     expect(find).not.toHaveBeenCalled();

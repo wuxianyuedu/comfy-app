@@ -716,6 +716,7 @@ export const seriesRouter = createTRPCRouter({
         if (!name) {
           continue;
         }
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         const [existing] = await ctx.db
           .select()
           .from(character)
@@ -723,6 +724,7 @@ export const seriesRouter = createTRPCRouter({
           .limit(1);
         let charId: string;
         if (existing) {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           await ctx.db
             .update(character)
             .set(productionCharacterToLibrary(pc))
@@ -730,6 +732,7 @@ export const seriesRouter = createTRPCRouter({
           updated += 1;
           charId = existing.id;
         } else {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           const [row] = await ctx.db
             .insert(character)
             .values({ id: createId(), seriesId: epSeriesId, ...productionCharacterToLibrary(pc) })
@@ -741,6 +744,7 @@ export const seriesRouter = createTRPCRouter({
           charId = row.id;
         }
         if (!linkedIds.has(charId)) {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           await ctx.db
             .insert(episodeCharacter)
             .values({ id: createId(), episodeId: ep.id, characterId: charId, role: "" })

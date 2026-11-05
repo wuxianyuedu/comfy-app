@@ -63,6 +63,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
   it("baseUrl 走非 http(s) 协议 → BAD_REQUEST，且一个字都不写库", async () => {
     const upsert = vi.spyOn(llmConfigRepository, "upsertSingleton");
     for (const bad of ["javascript:alert(1)", "file:///etc/passwd", "http://", "not-a-url"]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       expect(await codeOf(caller().configSave({ baseUrl: bad }))).toBe("BAD_REQUEST");
     }
     expect(upsert).not.toHaveBeenCalled();

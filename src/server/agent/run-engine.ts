@@ -288,6 +288,7 @@ async function execImages(
     // 连好的 seed / noise_seed 端口上；作者没连这一口 → 落进 unmatched、不写任何节点，工作流用它
     // 图内自带的 seed。运行期绝不直接改写工作流节点（不动 control_after_generate、不注图内 seed）。
     try {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const path = await synthesizeFirstFrame({
         userId,
         workflowId: run.imageWorkflowId,
@@ -430,11 +431,13 @@ async function execReviewShots(
       pass = false;
     } else {
       try {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         const textVerdict = await reviewContent(userId, projectId, "shot", shotId);
         // 视觉裁判：仅镜头已出图时跑（没图就只看文本，退化回旧行为）。
         let imagePass: boolean | null = null;
         if (hasImage) {
           try {
+            // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
             imagePass = (await reviewShotImage(userId, projectId, shotId)).pass;
             imageReviewed++;
           } catch {
@@ -524,6 +527,7 @@ async function execFilm(
 export async function advanceRunLoop(userId: string, projectId: string): Promise<void> {
   try {
     for (let tick = 0; tick < MAX_TICKS; tick++) {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const row = await productionRepository.getForUser(userId, projectId);
       if (!row) {
         return;
@@ -540,6 +544,7 @@ export async function advanceRunLoop(userId: string, projectId: string): Promise
         return;
       }
       if (action.kind === "done") {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await saveRun(userId, projectId, {
           ...appendRunStep(run, {
             ts: nowIso(),
@@ -556,34 +561,42 @@ export async function advanceRunLoop(userId: string, projectId: string): Promise
       let res: ExecResult = { ok: true };
       switch (action.kind) {
         case "generate_script": {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           res = await execScript(userId, projectId, run, row);
           break;
         }
         case "review_script": {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           res = await execReviewScript(userId, projectId, run, row);
           break;
         }
         case "revise_script": {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           res = await execReviseScript(userId, projectId, run);
           break;
         }
         case "extract_characters": {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           res = await execCharacters(userId, projectId, row);
           break;
         }
         case "plan_storyboard": {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           res = await execStoryboard(userId, projectId, run, row);
           break;
         }
         case "render_images": {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           res = await execImages(userId, projectId, run, row, view, action.shotIds);
           break;
         }
         case "review_shots": {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           res = await execReviewShots(userId, projectId, run, view, action.shotIds);
           break;
         }
         case "render_film": {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           res = await execFilm(userId, projectId, run);
           break;
         }
@@ -603,6 +616,7 @@ export async function advanceRunLoop(userId: string, projectId: string): Promise
         });
       }
       if (!res.ok) {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await saveRun(userId, projectId, {
           ...run,
           status: "failed",
@@ -613,13 +627,16 @@ export async function advanceRunLoop(userId: string, projectId: string): Promise
 
       // 出片这一步不 gate：起片后睡一拍再看 rendered（合成完由 syncFilmToProject 回写）。
       if (action.kind === "render_film") {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await saveRun(userId, projectId, run);
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await sleep(TICK_MS);
         continue;
       }
 
       const stage = gateStageFor(action) ?? run.stage;
       if (run.approvalMode !== "auto") {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await saveRun(userId, projectId, {
           ...run,
           stage,
@@ -628,6 +645,7 @@ export async function advanceRunLoop(userId: string, projectId: string): Promise
         });
         return;
       }
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await saveRun(userId, projectId, { ...run, stage });
     }
     // 步数耗尽仍 running → 落 failed，避免僵尸 run。
