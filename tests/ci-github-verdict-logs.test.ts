@@ -93,7 +93,7 @@ describe("纯函数：脱敏 / 截断 / 失败窗口", () => {
   });
 
   it("truncateJobLog：含超长单行时该行被压到 4000 字符，整体仍遵守上限读数", () => {
-    const huge = `${"y".repeat(20000)}\n`;
+    const huge = `${"y".repeat(20_000)}\n`;
     const cut = truncateJobLog(huge, 1000);
     expect(cut.truncated).toBe(true);
     expect(cut.text).toContain("本行已截到 4000 字符");
@@ -244,7 +244,7 @@ describe("dumpFailingRunLogs（日志取不到不改判决 / 全量落盘 / 窗�
     const { heard, io } = harness({ logs: () => new Response(huge, { status: 200 }) });
     await dumpFailingRunLogs(io, REPO, [runOf()], RED);
     const all = heard.join("\n");
-    expect(all).toMatch(new RegExp("已截到 \\d+ 行 / 上限 \\d+ 字节（全量见附件）", "u"));
+    expect(all).toMatch(new RegExp(String.raw`已截到 \d+ 行 / 上限 \d+ 字节（全量见附件）`, "u"));
     expect(all).toContain("##[error]Process completed with exit code 1.");
   });
 
@@ -278,7 +278,8 @@ describe("dumpFailingRunLogs（日志取不到不改判决 / 全量落盘 / 窗�
       ...heard.join("\n").matchAll(/已截到 \d+ 行 \/ 上限 (?<bytes>\d+) 字节/gu),
     ].map((m) => Number(m.groups?.bytes ?? ""));
     expect(caps).toHaveLength(2);
-    expect(caps[1]).toBeLessThan(caps[0]);
+    const [firstCap, secondCap] = caps;
+    expect(secondCap ?? 0).toBeLessThan(firstCap ?? 0);
   });
 
   it("落盘抛异常也只是少一份附件：不向上抛、判决读数照旧", async () => {

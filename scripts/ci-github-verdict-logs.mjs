@@ -177,7 +177,7 @@ export function extractFailureWindow(text) {
   const lines = String(text ?? "").split("\n");
   const errors = lines.filter((line) => line.includes("##[error]"));
   const errIdx = lines.findIndex((line) => line.includes("##[error]"));
-  if (errIdx < 0) {
+  if (errIdx === -1) {
     const start = Math.max(0, lines.length - FAILURE_WINDOW_TAIL_LINES);
     return { errors, lines: lines.slice(start), startLine: start + 1 };
   }
@@ -244,7 +244,7 @@ export function capStageWindow(win, maxBytes = STAGE_WINDOW_MAX_BYTES) {
   }
   if (bytesOf(lines) > maxBytes && tail.length > 0) {
     /* 只剩一行仍超界（单行几 MB 那种）：硬压这一行，压到进预算为止。 */
-    let line = String(tail[tail.length - 1] ?? "");
+    let line = String(tail.at(-1) ?? "");
     while (line.length > 0 && bytesOf([...head, marker, line]) > maxBytes) {
       line = line.slice(0, Math.max(0, line.length - 500));
     }
