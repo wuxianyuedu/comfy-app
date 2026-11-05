@@ -24,7 +24,7 @@ afterEach(() => {
 
 describe("useOpenServerProject", () => {
   it("先把服务端那一行落进本机，再设为活跃并跳到项目主页", async () => {
-    hydrateProjectFromServer.mockImplementation(async (id: string) => {
+    hydrateProjectFromServer.mockImplementation((id: string) => {
       calls.push(`hydrate:${id}`);
       return { id, name: "只在服务端的项目" };
     });

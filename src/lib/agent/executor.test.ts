@@ -304,11 +304,13 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
 
   it("render_film：有 renderFilm handler 时透传其结果", async () => {
     const { handlers } = makeMockContext();
-    const renderFilm = vi.fn(async () => ({
-      ok: true,
-      summary: "已启动成片",
-      detail: "film-42",
-    }));
+    const renderFilm = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        summary: "已启动成片",
+        detail: "film-42",
+      }),
+    );
     const res = await resolveAgentTool("render_film", "{}", {
       ...handlers,
       renderFilm,

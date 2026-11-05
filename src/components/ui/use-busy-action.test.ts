@@ -40,7 +40,7 @@ describe("useBusyAction", () => {
     const { result } = renderHook(() => useBusyAction());
     await act(async () => {
       await expect(
-        result.current.run(async () => {
+        result.current.run(() => {
           throw new Error("boom");
         }),
       ).rejects.toThrow("boom");
@@ -53,7 +53,7 @@ describe("useBusyAction", () => {
     let caught: unknown = null;
     await act(async () => {
       try {
-        await result.current.run(async () => {
+        await result.current.run(() => {
           throw new Error("保存失败");
         });
       } catch (error) {

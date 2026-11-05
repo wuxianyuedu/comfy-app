@@ -9,7 +9,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { VideoQueueModal } from "./VideoQueueModal";
 import type { VideoTask } from "~/lib/media/video-queue-client";
 
-const fetchVideoTasksMock = vi.fn<() => Promise<Array<VideoTask>>>(async () => []);
+const fetchVideoTasksMock = vi.fn<() => Promise<Array<VideoTask>>>(() => Promise.resolve([]));
 vi.mock("~/lib/media/video-queue-client", () => ({
   fetchVideoTasks: () => fetchVideoTasksMock(),
 }));

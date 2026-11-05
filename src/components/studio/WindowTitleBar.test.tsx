@@ -14,7 +14,7 @@ function setShellForm(on: boolean) {
   if (on) {
     Object.defineProperty(window, "__TAURI_INTERNALS__", {
       configurable: true,
-      value: { invoke: async () => null, transformCallback: () => 0 },
+      value: { invoke: () => null, transformCallback: () => 0 },
     });
   } else {
     /* SAFETY: 类型断言已复核 */

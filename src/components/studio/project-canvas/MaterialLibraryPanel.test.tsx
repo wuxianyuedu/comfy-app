@@ -10,7 +10,7 @@ function mockFetch(body: unknown, ok = true) {
   const fetchMock = vi.fn().mockResolvedValue({
     ok,
     status: ok ? 200 : 500,
-    json: async () => body,
+    json: () => body,
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;

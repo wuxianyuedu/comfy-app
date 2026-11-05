@@ -267,7 +267,7 @@ describe("useWorkflowLibrary", () => {
     await expect.poll(() => result.current.loadError).toContain("数据库不可用");
 
     behavior = { workflows: [row()], localPending: [], tags: [] };
-    await act(async () => {
+    act(() => {
       result.current.load();
     });
     await expect.poll(() => result.current.loadError).toBeNull();
@@ -293,7 +293,7 @@ describe("useWorkflowLibrary", () => {
     // 关键点：后台刷新成功，动作错误必须还在（否则提示条一闪就没，
     // 用户会以为删除成功了 —— §17.5.4 记录的就是这个坑）。
     behavior = { ...behavior, deleteError: undefined };
-    await act(async () => {
+    act(() => {
       result.current.load();
     });
     await expect.poll(() => result.current.workflows).toHaveLength(1);
@@ -341,7 +341,7 @@ describe("useWorkflowLibrary", () => {
     expect(result.current.loadStalled).toBe(false);
 
     // 推进到刚好触发 stalled 超时
-    await act(async () => {
+    act(() => {
       vi.advanceTimersByTime(LIST_STALL_MS + 50);
     });
 

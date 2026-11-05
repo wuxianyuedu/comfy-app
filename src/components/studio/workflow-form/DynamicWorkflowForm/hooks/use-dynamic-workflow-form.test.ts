@@ -499,9 +499,9 @@ describe("useDynamicWorkflowForm — 图片上传", () => {
   });
 
   it("等待 ComfyUI 启动：进行态上抛给调用方，不静默等待", async () => {
-    vi.mocked(uploadImageFile).mockImplementation(async (_file, opts) => {
+    vi.mocked(uploadImageFile).mockImplementation((_file, opts) => {
       opts?.onProgress?.("正在启动 ComfyUI…");
-      return "ok.png";
+      return Promise.resolve("ok.png");
     });
     const onUploadProgress = vi.fn();
     const { result } = renderFormWithPicker(baseProps({ onUploadProgress }));

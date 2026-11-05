@@ -19,7 +19,7 @@ function stubFetch(answers: Array<{ body?: unknown; status: number }>): () => nu
   let i = 0;
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (url: string) => {
+    vi.fn((url: string) => {
       fetches.push(String(url));
       const answer = answers[Math.min(i, answers.length - 1)]!;
       i += 1;
@@ -123,7 +123,7 @@ describe("subscribeComfyStateChanges", () => {
   it("网络异常静默降级到下一轮（这条通道只负责「更快」，坏了不打扰界面）", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => {
+      vi.fn(() => {
         throw new Error("ECONNREFUSED");
       }),
     );

@@ -171,7 +171,9 @@ describe("probeComfyEmbeddable — 取事实（IO）", () => {
   });
 
   it("探测请求必须带 Origin（否则测不出跨源拦截）", async () => {
-    const fetchImpl = vi.fn<typeof fetch>(async () => res({ "access-control-allow-origin": "*" }));
+    const fetchImpl = vi.fn<typeof fetch>(() =>
+      Promise.resolve(res({ "access-control-allow-origin": "*" })),
+    );
     await probeComfyEmbeddable(COMFY, HOST, fetchImpl);
     const init = fetchImpl.mock.calls[0]?.[1];
     /* SAFETY: 类型断言已复核 */
@@ -179,8 +181,8 @@ describe("probeComfyEmbeddable — 取事实（IO）", () => {
   });
 
   it("ComfyUI 已开 CORS（带 Access-Control-Allow-Origin）→ 可嵌", async () => {
-    const v = await probeComfyEmbeddable(COMFY, HOST, async () =>
-      res({ "access-control-allow-origin": "*" }),
+    const v = await probeComfyEmbeddable(COMFY, HOST, () =>
+      Promise.resolve(res({ "access-control-allow-origin": "*" })),
     );
     expect(v.embeddable).toBe(true);
   });
@@ -188,21 +190,21 @@ describe("probeComfyEmbeddable — 取事实（IO）", () => {
   /* 下面这条是本次更正的**现场**：未开 CORS 的 ComfyUI 对跨源返回 403，
    * 响应体为空 —— 页签里就是一片空白。此前把它误记成 X-Frame-Options DENY。 */
   it("跨源被 origin-only 中间件拦下（403）→ 不可嵌并点明该开什么开关", async () => {
-    const v = await probeComfyEmbeddable(COMFY, HOST, async () => res({}, 403));
+    const v = await probeComfyEmbeddable(COMFY, HOST, () => Promise.resolve(res({}, 403)));
     expect(v.embeddable).toBe(false);
     expect(v.reason).toContain("403");
     expect(v.reason).toContain("--enable-cors-header");
   });
 
   it("读到 X-Frame-Options: DENY → 不可嵌", async () => {
-    const v = await probeComfyEmbeddable(COMFY, HOST, async () =>
-      res({ "x-frame-options": "DENY" }),
+    const v = await probeComfyEmbeddable(COMFY, HOST, () =>
+      Promise.resolve(res({ "x-frame-options": "DENY" })),
     );
     expect(v.embeddable).toBe(false);
   });
 
   it("读不到响应（连不上 / 超时）→ 不可嵌并带原因", async () => {
-    const v = await probeComfyEmbeddable(COMFY, HOST, async () => {
+    const v = await probeComfyEmbeddable(COMFY, HOST, () => {
       throw new Error("ECONNREFUSED");
     });
     expect(v.embeddable).toBe(false);

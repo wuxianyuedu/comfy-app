@@ -117,9 +117,9 @@ function makeCtrl(block: ParentBlock): CustomNodesSettingsController {
       replace: vi.fn(),
       collapseAll: vi.fn(),
     },
-    onParseAll: async () => undefined,
-    onParseSingle: async () => undefined,
-    onParseAllParent: async () => undefined,
+    onParseAll: () => Promise.resolve(),
+    onParseSingle: () => Promise.resolve(),
+    onParseAllParent: () => Promise.resolve(),
     parentBlocks: [block],
     totalAcrossParents: { loaded: 1, outdated: 0, unimported: 0, total: 1 },
   };

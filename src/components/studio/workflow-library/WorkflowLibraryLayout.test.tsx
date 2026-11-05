@@ -34,10 +34,10 @@ const meta: MetaEditorController = {
   modelTags: [],
   allModelTags: [],
   busy: false,
-  patchModes: async () => undefined,
-  patchModelTags: async () => undefined,
-  patchSeedMode: async () => undefined,
-  patchParamMap: async () => undefined,
+  patchModes: () => Promise.resolve(),
+  patchModelTags: () => Promise.resolve(),
+  patchSeedMode: () => Promise.resolve(),
+  patchParamMap: () => Promise.resolve(),
 };
 
 /** 详情头部要的是一整行 `WorkflowRow`（不是「几字段就够」的窄接口），

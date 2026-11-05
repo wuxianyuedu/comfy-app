@@ -35,7 +35,7 @@ describe("useItemAction", () => {
     const { result } = renderHook(() => useItemAction());
     await act(async () => {
       await expect(
-        result.current.run("a", async () => {
+        result.current.run("a", () => {
           throw new Error("boom");
         }),
       ).rejects.toThrow("boom");

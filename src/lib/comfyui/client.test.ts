@@ -51,10 +51,10 @@ const plan = {
 
 /** 只让指定端口应答 `/system_stats`，其余连接一律拒绝。 */
 function respondOn(ports: Array<number>) {
-  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input: unknown) => {
+  return vi.spyOn(globalThis, "fetch").mockImplementation((input: unknown) => {
     const url = String(input);
     if (ports.some((p) => url.includes(`:${p}/`))) {
-      return new Response("{}", { status: 200 });
+      return Promise.resolve(new Response("{}", { status: 200 }));
     }
     throw new Error("ECONNREFUSED");
   });
@@ -241,18 +241,20 @@ describe("getView — 取字节的地址组装与失败形状", () => {
    *  `no-base-to-string`；`input: unknown` 的写法与本文件顶部的 `respondOn` 一致）。 */
   function viewReply(reply: { bytes?: Array<number>; status: number }) {
     const seen: Array<string> = [];
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: unknown) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input: unknown) => {
       const url = new URL(String(input));
       if (url.pathname !== "/api/view") {
-        return new Response("{}", { status: 200 });
+        return Promise.resolve(new Response("{}", { status: 200 }));
       }
       seen.push(url.search);
       if (reply.status !== 200) {
-        return new Response("nope", { status: reply.status });
+        return Promise.resolve(new Response("nope", { status: reply.status }));
       }
-      return new Response(new Uint8Array(reply.bytes ?? [1, 2, 3]), {
-        status: 200,
-      });
+      return Promise.resolve(
+        new Response(new Uint8Array(reply.bytes ?? [1, 2, 3]), {
+          status: 200,
+        }),
+      );
     });
     return seen;
   }

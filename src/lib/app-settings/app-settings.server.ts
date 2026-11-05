@@ -155,8 +155,8 @@ export function getSettingsSync(): AppSettings {
   return cache;
 }
 
-export async function getSettings(): Promise<AppSettings> {
-  return getSettingsSync();
+export function getSettings(): Promise<AppSettings> {
+  return Promise.resolve(getSettingsSync());
 }
 
 /* 合并一次局部更新并落盘，返回合并后的完整设置。 */

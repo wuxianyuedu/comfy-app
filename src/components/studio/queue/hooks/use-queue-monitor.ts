@@ -156,7 +156,7 @@ export function useQueueMonitor(): QueueMonitorController {
          * 文件目录」），调用处不该再抄一遍 —— 此前这里只读 `opened`、把
          * `comfyappUrl` 丢掉，于是报的是一句与事实无关的成功。 */
         const result = await revealTaskFolder(row.id);
-        await runAsyncAction(async () => result, {
+        await runAsyncAction(() => Promise.resolve(result), {
           report,
           failureText: "未能打开输出目录，可在任务详情里复制文件路径",
         });
@@ -171,7 +171,7 @@ export function useQueueMonitor(): QueueMonitorController {
         /* 成败由复制出口的返回值表达（它不抛）：让「复制失败」走失败分支，
          * 而不是被 try 当成成功。 */
         const copied = await copyText(reprintText(row));
-        await runAsyncAction(async () => copied, {
+        await runAsyncAction(() => Promise.resolve(copied), {
           report,
           failureText: "复制失败，请检查是否允许访问剪贴板",
           successText: "后端没有重试接口，已复制本次提交内容 —— 回画布改完参数再投一次",

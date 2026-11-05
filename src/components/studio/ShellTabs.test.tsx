@@ -15,7 +15,7 @@ function setShellForm(on: boolean) {
   if (on) {
     Object.defineProperty(window, "__TAURI_INTERNALS__", {
       configurable: true,
-      value: { invoke: async () => null, transformCallback: () => 0 },
+      value: { invoke: () => null, transformCallback: () => 0 },
     });
   } else {
     /* SAFETY: 类型断言已复核 */
@@ -56,7 +56,7 @@ beforeEach(() => {
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
     // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    value: { writeText: async (text: string) => void written.push(text) },
+    value: { writeText: (text: string) => void written.push(text) },
   });
 });
 
