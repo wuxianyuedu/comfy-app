@@ -6,3 +6,7 @@
 - 降档依据（回放同 40 次 master 改动）：旧面触发 40%、新面 98%；CI 中位 40.9s、p95 136.8s，占 140.2s 串行流水线的 30.6%。
 - 失败可见：定时那一跑（GA `daily.yml` 的 01:00 schedule）红了即 daily 红 job；CNB 手动 / API 口由 `每日失败立案` 立案 —— 与既有 daily 失败同一条通道。
 - 元测试守住新形态：push 侧收窄名单里不再有它、每日档那一格不许挂 `ifModify`、每日清单里它位于 `每日单元测试` 之前；#2537 的「触发面 = typedoc 派生面」对账保留。
+
+## Fixed
+
+- `check-format.cjs` 的点名档（`--changed` / `--staged`）不再复用全量档的 `keepScanned()`：那会把落在 `IGNORE_GLOBS`（`scripts/**` / `tests/**` 等）里的命中静默滤成「命中 0 个」。这是 ISSUE #2979 的漏项（改动面本应只认 `GLOBS`），由本次 CI 的受影响用例暴露；两条把「面外」样本误写成 `scripts/*` 的单元用例同批订正为 `docs/*`。

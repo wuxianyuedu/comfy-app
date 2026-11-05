@@ -1719,10 +1719,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 判**事实**顺序；逐条相等由上面那条判住，这里钉「最后会红的格」。2026-11-02 起 `覆盖率上报` 接在其后（报告型、非关键，被 skip 只少一次上报），约束对象仍是「会红的格不许在其后」。定时口迁 GA 后顺序判在手点那一口（同一份 `*daily_gates`）。 */
     const stages = pipelineStageNames(readRegisteredConfig(), "每日档（手动触发）");
     const last = stages.at(-1);
-    expect(
-      stages.length,
-      "手点那一口解析不出 stage —— 这条顺序判据没有对象了",
-    ).toBeGreaterThan(0);
+    expect(stages.length, "手点那一口解析不出 stage —— 这条顺序判据没有对象了").toBeGreaterThan(0);
     const idx = stages.indexOf("每日单元测试");
     expect(idx, "每日那一跑必须有 `每日单元测试`").toBeGreaterThanOrEqual(0);
     expect(
@@ -2212,10 +2209,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       crontabEvents(text),
       "`.cnb.yml` 里又出现了 crontab 事件 —— 定时重档已迁 GA，本机不该再被时钟起",
     ).toEqual([]);
-    expect(
-      text,
-      "配置里少了「定时档已迁 GA」的说明锚点 —— 撤定时是决策，不是顺手删两行",
-    ).toMatch(/定时档的执行者已从这台机迁到 GitHub Actions/);
+    expect(text, "配置里少了「定时档已迁 GA」的说明锚点 —— 撤定时是决策，不是顺手删两行").toMatch(
+      /定时档的执行者已从这台机迁到 GitHub Actions/,
+    );
 
     const dailyYml = readFileSync(path.join(ROOT, ".github/workflows/daily.yml"), "utf8");
     const packageYml = readFileSync(
@@ -2236,10 +2232,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     );
 
     const daily = pipelineStageNames(text, "每日档（手动触发）");
-    expect(
-      daily,
-      "手点那一口解析不出 stage —— 「撤定时不撤判据」这句话就没有对象了",
-    ).toEqual(registeredDailyGateOrder(text));
+    expect(daily, "手点那一口解析不出 stage —— 「撤定时不撤判据」这句话就没有对象了").toEqual(
+      registeredDailyGateOrder(text),
+    );
     expect(
       registeredDailyGateOrder(text),
       "`COMFYAPP_CI_DAILY_GATES` 与手点那一口的 stage 对不上 —— 那一档跑什么就没有事实源了",

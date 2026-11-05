@@ -483,7 +483,15 @@ function collectUnformattedFiles(entry, files) {
     const batch = files.slice(i, i + CHUNK);
     const subject = `点名 ${batch.length} 份（第 ${Math.floor(i / CHUNK) + 1} 批）`;
     for (const f of oxfmtCheckTargets(entry, batch, subject)) {
-      keepScanned(f, found);
+      /* 点名档的面 = `GLOBS` 减**空**（不过 `IGNORE_GLOBS`，ISSUE #2979）：
+       * `IGNORE_GLOBS` 是**全量档的存量豁免**（#2710 的迁移账），不是「这类文件
+       * 永远不许查」。这里若复用 `keepScanned()`，`scripts/**` / `tests/**` 的命中会被
+       * 静默滤掉，整张清单悄悄变成「命中 0 个」—— 正是 #2979 要治的那一格
+       * （单元用例 `tests/check-format.test.ts` 的「暂存 scripts/*.cjs」钉着）。 */
+      const rel = toPosix(path.relative(ROOT, path.resolve(ROOT, f)));
+      if (isChangedFaceFile(rel)) {
+        found.add(rel);
+      }
     }
   }
   return [...found].sort();
