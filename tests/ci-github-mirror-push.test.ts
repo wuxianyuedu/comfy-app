@@ -55,6 +55,7 @@ import {
 import {
   isTransientRemoteFailure,
   shouldRetryGitFailure,
+  writeDispatchState,
 } from "../scripts/ci-mirror-failure-report.mjs";
 
 const TOKEN = "gh-token-secret-value";
@@ -90,6 +91,42 @@ function dispatchedState(written: Array<string>): { dispatched?: boolean; reason
 }
 
 describe("纯函数", () => {
+  it("writeDispatchState：建目录与写文件都走注入面，假根不碰真文件系统", () => {
+    /* 回归 GA 的 ubuntu 假绿：真 mkdirSync("/repo/.comfy-ci") 抛 EACCES 被吞后，
+     * 写入假件连试都没试，回读格拿到的派发形状成了空对象。两跳都注入，且路径
+     * 用宿主 join 判（这条用例本身不许再写死路径分隔符）。 */
+    const dirs: Array<string> = [];
+    const written: Array<{ data: string; file: string }> = [];
+    writeDispatchState(
+      (file, data) => written.push({ file, data }),
+      "/repo",
+      { dispatched: true, reason: "已派发" },
+      (dir) => dirs.push(dir),
+    );
+    expect(dirs).toEqual([path.join("/repo", ".comfy-ci")]);
+    expect(written).toHaveLength(1);
+    expect(written[0]?.file).toBe(path.join("/repo", ".comfy-ci", "mirror-dispatch.json"));
+    expect(JSON.parse(written[0]?.data ?? "{}")).toMatchObject({
+      dispatched: true,
+      reason: "已派发",
+    });
+  });
+
+  it("writeDispatchState：建目录抛错不外抛，落盘是增益不是判据", () => {
+    expect(() => {
+      writeDispatchState(
+        () => {
+          throw new Error("目录没建成时不该走到写入");
+        },
+        "/repo",
+        { dispatched: false, reason: "探活没通" },
+        () => {
+          throw new Error("EACCES");
+        },
+      );
+    }).not.toThrow();
+  });
+
   it("mirrorRefFor：按请求 ID 收口成专属 ref 名", () => {
     expect(mirrorRefFor("2649")).toBe("cnb-pr-2649");
   });
@@ -713,6 +750,9 @@ describe("runMirror（git 与 fetch 全假件）", () => {
       },
       log: (line: string) => heard.push(line),
       root: "/repo",
+      /* 建目录与写文件同属注入面：不注入时真 mkdirSync("/repo/.comfy-ci") 在 Linux
+         runner 上会抛 EACCES 被吞，写入假件连试都没试，派发形状就读成空对象。 */
+      mkdirSync: () => undefined,
       writeFileSync: (file: string, data: string) => {
         written.push(`${file}\n${data}`);
       },

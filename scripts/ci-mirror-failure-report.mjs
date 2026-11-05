@@ -319,14 +319,20 @@ export const DISPATCH_STATE_FILE = "mirror-dispatch.json";
  * 把本跑的派发形状写成一行 JSON 留给回读格（写失败不改变本格的三态 —— 落盘是**增益**，
  * 不是判据；拿不到它时回读格退回「自己猜」的老行为）。
  *
+ * 建目录与写文件同属注入面：用例给的 `root` 是假根（如 `/repo`），若这里仍调真的
+ * `mkdirSync`，Linux runner 没有 `/` 写权限会抛错被吞，`writeFileSync` 连试都没试，
+ * 派发形状就读成空对象；而 Windows 上那个相对盘符的路径恰好建得出来，同一份用例
+ * 于是在 Windows 假绿、在 GA 的 ubuntu 上红。两跳都注入，用例才真的「一次真文件都不写」。
+ *
  * @param {(file: string, data: string) => void} writeFileSync 注入面（用例不落真文件）
  * @param {string} root 检出根
  * @param {{dispatched: boolean, reason: string}} state 这一跳的结论
+ * @param {(dir: string, opts: { recursive: boolean }) => void} [mkdir] 注入面（默认真建目录）
  * @returns {void}
  */
-export function writeDispatchState(writeFileSync, root, state) {
+export function writeDispatchState(writeFileSync, root, state, mkdir = mkdirSync) {
   try {
-    mkdirSync(path.join(root, DISPATCH_STATE_DIR), { recursive: true });
+    mkdir(path.join(root, DISPATCH_STATE_DIR), { recursive: true });
     writeFileSync(
       path.join(root, DISPATCH_STATE_DIR, DISPATCH_STATE_FILE),
       `${JSON.stringify({ ...state, at: new Date().toISOString() })}\n`,

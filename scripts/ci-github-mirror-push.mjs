@@ -110,7 +110,7 @@
  * （后两件只属 PR 模式；`--master` 不读它们）。
  */
 import { spawnSync } from "node:child_process";
-import { writeFileSync as realWriteFileSync } from "node:fs";
+import { mkdirSync as realMkdirSync, writeFileSync as realWriteFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -514,7 +514,7 @@ export function explainRemoteProbeFailure(text) {
 /**
  * 执行镜像：先问「仓库在不在」→ 推 HEAD → 派发。每一跳各自独立成读数，前一跳没通后一跳不发。
  *
- * @param {{env: Record<string, string | undefined>, fetchImpl?: typeof fetch, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, dryRun?: boolean, log?: (line: string) => void, readout?: boolean, root?: string, writeFileSync?: (file: string, data: string) => void, cnbJson?: (run: any, args: string[]) => any}} io
+ * @param {{env: Record<string, string | undefined>, fetchImpl?: typeof fetch, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, dryRun?: boolean, log?: (line: string) => void, readout?: boolean, root?: string, writeFileSync?: (file: string, data: string) => void, mkdirSync?: (dir: string, opts: object) => void, cnbJson?: (run: any, args: string[]) => any}} io
  *   `cnbJson` 是 PR 标题回读的取数动作（`ci-mirror-payload.mjs`；用例给假件，
  *   缺省走真 `cnb` 子进程）。
  * @returns {Promise<number>} 仓内三态退码
@@ -534,10 +534,10 @@ export async function runMirror(io) {
   };
   /* 派发形状落盘（ISSUE #3148）：主列末尾那一格 `GitHub 判决回读` 读它，从而在「本跑
    * 根本没派发」时不再把 45m 轮询预算花完。落盘失败不改本格三态。 */
-  const { root = ROOT, writeFileSync = realWriteFileSync } = io;
+  const { root = ROOT, writeFileSync = realWriteFileSync, mkdirSync = realMkdirSync } = io;
   /** @param {boolean} d @param {string} r */
   const leave = (d, r) => {
-    writeDispatchState(writeFileSync, root, { dispatched: d, reason: r });
+    writeDispatchState(writeFileSync, root, { dispatched: d, reason: r }, mkdirSync);
   };
   const fetchImpl = io.fetchImpl ?? fetch;
   const runGit = io.runGit ?? realRunGit;
