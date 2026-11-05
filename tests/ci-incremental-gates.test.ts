@@ -19,86 +19,11 @@ import {
 import { HEAVY_GATES } from "../scripts/ci-heavy-gates.mjs";
 import { parseStageScripts } from "../scripts/ci-autofix-duties.mjs";
 import { INPUT_GLOBS, INPUT_RES, matchedInputs } from "../scripts/check-docs-api.cjs";
-import { filesUnder } from "../scripts/docs-api-input-closure.mjs";
 import { SCAN_ROOTS, TRIGGER_GLOBS } from "../scripts/file-structure-rules.cjs";
 import { globToRe } from "../scripts/vitest-projects.cjs";
 import { stageBlock } from "./no-platform-ci-config.test";
 
 const CONFIG = readCnbConfig();
-
-/**
- * 一个路径是否被某条 glob 罩住。glob → 正则**复用** `scripts/vitest-projects.cjs` 已导出的那一份
- * （同一套 `**` / `*` / `{a,b}` 口径且带锚点）—— 不在本文件写第二套 glob 匹配（§12.12 / §12.18）。
- * @param rel 仓库相对路径；@param globs glob 清单
- */
-function coveredBy(rel: string, globs: ReadonlyArray<string>): boolean {
-  return globs.some((g) => globToRe(g).test(rel));
-}
-
-/**
- * 一条输入面正则的「字面前缀」= 第一个通配符之前的那段（正则锚定到仓库根）：例如 `src/lib/a.ts` 那条的前缀是
- * `src/lib`；整条都是字面量时（如 `typedoc.json`）前缀就是那个文件本身。通配出现在第一段里时返回 `null`（没法枚举）。
- * @param re 输入面正则
- */
-function literalPrefixOf(re: RegExp): string | null {
-  const src = re.source.replace(/^\^/, "").replace(/\$$/, "");
-  let out = "";
-  let sawWildcard = false;
-  for (let i = 0; i < src.length; i += 1) {
-    const ch = src.charAt(i);
-    /* 转义符把下一个字符当**字面量**（`\/` 是斜杠、`\.` 是点），不是通配。 */
-    if (ch === "\\") {
-      const next = src[i + 1];
-      if (next === undefined) {
-        break;
-      }
-      out += next;
-      i += 1;
-      continue;
-    }
-    if (".*+?()[]{}|^$".includes(ch)) {
-      sawWildcard = true;
-      break;
-    }
-    out += ch;
-  }
-  if (!sawWildcard) {
-    return out;
-  }
-  const cut = out.lastIndexOf("/");
-  return cut === -1 ? null : out.slice(0, cut);
-}
-
-/**
- * 目录枚举的缓存 —— 同一次运行里同一个前缀只列一次（三根加起来 600 多个文件，
- * 而这条用例是**每次提交都跑**的固定清单成员）。
- */
-const filesUnderCache = new Map<string, Array<string>>();
-
-/**
- * 一条输入面正则命中的、**盘上真实存在**的文件清单：前缀是文件 ⇒ 就是它；是目录 ⇒ 把该目录下候选文件逐个过正则
- * （目录遍历复用 `scripts/docs-api-input-closure.mjs` 已导出的 `filesUnder`，不在本文件抄第二份遍历）。
- * @param re 输入面正则
- */
-function filesMatchedBy(re: RegExp): Array<string> {
-  const prefix = literalPrefixOf(re);
-  if (prefix === null || prefix === "") {
-    return [];
-  }
-  const abs = path.join(process.cwd(), prefix);
-  if (!fs.existsSync(abs)) {
-    return [];
-  }
-  if (fs.statSync(abs).isFile()) {
-    return re.test(prefix) ? [prefix] : [];
-  }
-  let listed = filesUnderCache.get(prefix);
-  if (listed === undefined) {
-    listed = filesUnder(prefix);
-    filesUnderCache.set(prefix, listed);
-  }
-  return listed.filter((f) => re.test(f));
-}
 
 describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", () => {
   it("真仓一致：登记表与 .cnb.yml 逐字同源", () => {
@@ -223,12 +148,17 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       "那一格又带上了 `--autofix` —— 产物不再进 git，没有「自动修完再提交」的对象；" +
         "而「自动修 + 再判」这个形状正是让「产物陈旧」在 CI 上隐形的那一格（#2231 的现场）",
     ).not.toContain("--autofix");
-    /* 判据认的每一类输入面（三条 entryPoint 目录 + 两份配置 + 锁文件）都得被认下来 ——
+    /* 判据认的每一类输入面（解析根覆盖的目录 + 根级文件 + 锁文件）都得被认下来 ——
      * 这一半是「判据自己的触发面声明还在」的读数，与它挂在哪一格无关。 */
     for (const f of [
       "src/lib/a.ts",
       "src/server/a.ts",
       "src/trpc/a.ts",
+      /* ISSUE #2537：这些文件也在 typedoc 的解析面里，旧面漏判的就是它们。 */
+      "src/app/page.tsx",
+      "tests/publish-desktop-bundle.test.ts",
+      "scripts/publish-desktop-bundle.mjs",
+      "e2e/a.ts",
       "typedoc.json",
       "package.json",
       "pnpm-lock.yaml",
@@ -237,25 +167,12 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     ]) {
       expect(matchedInputs([f]), `判据不认 ${f}，这条用例的样本已经过期`).toEqual([f]);
     }
-    /* ⚠️ 两侧形态不许分叉 —— 核的是「**罩住**」而非「前缀沾边」（ISSUE #2223 的现场：旧写法只比第一段前缀，
-     * `scripts/db-backup-core.mjs` 的 `scripts` 前缀被 `scripts/check-docs-api.cjs` 的 glob 满足 ⇒ 任何 `scripts/` 下文件
-     * 都「已覆盖」⇒ 面判窄而没人看见）。现在逐文件核：每条正则取它锚定的字面前缀，前缀下的文件逐个过正则，
-     * `INPUT_RES` 命中的每个文件都必须被某条 glob 真罩住。 */
-    for (const re of INPUT_RES) {
-      const prefix = literalPrefixOf(re);
-      expect(
-        prefix,
-        `判据的输入面 \`${re.source}\` 没法枚举（通配出现在第一段里）—— ` +
-          "请把它改成锚定到某个目录或某个文件的形式",
-      ).not.toBeNull();
-      for (const f of filesMatchedBy(re)) {
-        expect(
-          coveredBy(f, INPUT_GLOBS),
-          `判据的输入面 \`${re.source}\` 命中的 ${f} 没有被任何一条 glob 罩住 —— ` +
-            "改输入面时必须同批改 `INPUT_GLOBS`（面判窄了 = 漏判，而漏判是静默的）",
-        ).toBe(true);
-      }
-    }
+    /* 只改文档的 PR 不许被「顺带」认成输入面（ISSUE #2537：不得把面放宽成全库）。 */
+    expect(matchedInputs(["docs/standards/13-提交与-code-review.md", "README.md"])).toEqual([]);
+    /* 形态同源：`INPUT_RES` 是 `INPUT_GLOBS` 的机械转换，不另写一份窄面 —— 两份会漂，
+     * 漂的形态就是「判据改了触发面、配置没跟」（ISSUE #2223 的漏判形态）。逐条对上。
+     * 「面罩得住事实面」的逐文件对账在 `tests/docs-api-input-closure.test.ts`（那边算 TS 程序）。 */
+    expect(INPUT_RES).toEqual(INPUT_GLOBS.map((g) => globToRe(g)));
   });
 
   it("`oxfmt 格式` 的触发面盖住判据面（改动面 ∩ GLOBS，ISSUE #2979）", () => {

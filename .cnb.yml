@@ -727,34 +727,31 @@
       - "docs/**"
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/render-doc-placeholders.cjs --check --autofix
   - name: API 文档生成与自检
-    # 收窄面**不是手抄的，也不在这里记条数**：算的那一份是
-    # `scripts/docs-api-input-closure.mjs`，核的那一份是 `tests/ci-incremental-gates.test.ts`
-    # —— 闭包里多出任何一个文件、而这里没有它 ⇒ 当场红。别在这里手加一条（那正是
-    # ISSUE #2223 的漏判形态）。要条数就问判据，别抄注释：这一行曾写着「17 条」而那份面是 18 条，
-    # 而判据只比「面 ⇄ 闭包」、不读注释里的数字 —— 谁都不会因此红（ISSUE #2878）。
+    # 收窄面**不是手抄的**：它由 `scripts/docs-api-input-closure.mjs` 的
+    # `docsApiTriggerGlobs()` 从 typedoc 的解析根（`tsconfig.json` 展开 ∩ git 跟踪文件）
+    # 派生，核的是 `tests/docs-api-input-closure.test.ts`（ISSUE #2537：旧面按 `entryPoints`
+    # 算，`scripts/publish-desktop-bundle.mjs` 这类「被 tests import 进程序」的文件漏在外面
+    # ⇒ `ifModify` 静默跳格）。面不是手写的：新增路径落在已有目录里会被 `dir/**` 自动罩住；
+    # 落在新顶层目录时，`tests/docs-api-input-closure.test.ts` 会红并要求这里同步（不是静默）。
     # ⚠️ 产物面 `docs/api/**` 不在收窄面里（ISSUE #2231）；这一格不带 `--autofix`：
     # 产物不再进 git，没有「自动修完再提交」的对象，而「自动修 + 再判」正是让
     # 「产物陈旧」在 CI 上隐形的那一格（#2231 的现场：master 上差 9 处而平台报绿）。
     # 判据的形状见 `scripts/check-docs-api.cjs` 的文件头。
     ifModify:
-      - "src/lib/**"
-      - "src/server/**"
-      - "src/trpc/**"
-      - "typedoc.json"
-      - "package.json"
+      - ".storybook/**"
+      - "e2e/**"
+      - "scripts/**"
+      - "src/**"
+      - "tests/**"
+      - "tools/**"
+      - "*.cjs"
+      - "*.js"
+      - "*.json"
+      - "*.jsx"
+      - "*.mjs"
+      - "*.ts"
+      - "*.tsx"
       - "pnpm-lock.yaml"
-      - "scripts/check-docs-api.cjs"
-      - "scripts/typedoc-run.mjs"
-      - "scripts/db-backup-core.mjs"
-      - "scripts/db-push-core.mjs"
-      - "scripts/db-schema-state.mjs"
-      - "scripts/launcher-core/command-echo.mjs"
-      - "scripts/launcher-core/shell.mjs"
-      - "scripts/launcher-core/worktree.mjs"
-      - "scripts/lockfile/lock-diff.d.mts"
-      - "scripts/lockfile/lock-diff.mjs"
-      - "src/config/custom-nodes.ts"
-      - "src/env.js"
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs
   - name: 文档引用与权威源一致
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-doc-references.cjs
