@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  isLoopbackHost,
-  isLoopbackOrigin,
-  isLoopbackRequest,
-} from "./console-guard";
+import { isLoopbackHost, isLoopbackOrigin, isLoopbackRequest } from "./console-guard";
 
 /** 用普通 map 拼一个 `headers.get` 形状（本模块只看这两个键）。 */
 function headers(init: Record<string, string | undefined>) {
@@ -67,17 +63,13 @@ describe("isLoopbackOrigin", () => {
 describe("isLoopbackRequest", () => {
   it("同源（带回环 Origin）放行", () => {
     expect(
-      isLoopbackRequest(
-        headers({ host: "127.0.0.1:3100", origin: "http://127.0.0.1:3100" }),
-      ),
+      isLoopbackRequest(headers({ host: "127.0.0.1:3100", origin: "http://127.0.0.1:3100" })),
     ).toBe(true);
   });
 
   it("无 Origin（curl / 服务端调用）也放行 —— 它们带的是会话那道闸", () => {
     expect(isLoopbackRequest(headers({ host: "127.0.0.1:3100" }))).toBe(true);
-    expect(
-      isLoopbackRequest(headers({ host: "localhost:3100", origin: "" })),
-    ).toBe(true);
+    expect(isLoopbackRequest(headers({ host: "localhost:3100", origin: "" }))).toBe(true);
   });
 
   it("Host 不是回环即拒（别的机器用本机 IP 访问）", () => {
@@ -96,10 +88,8 @@ describe("isLoopbackRequest", () => {
   });
 
   it("Host 回环但 Origin 指向外部即拒（跨源脚本从别的站点打本机）", () => {
-    expect(
-      isLoopbackRequest(
-        headers({ host: "127.0.0.1:3100", origin: "https://evil.com" }),
-      ),
-    ).toBe(false);
+    expect(isLoopbackRequest(headers({ host: "127.0.0.1:3100", origin: "https://evil.com" }))).toBe(
+      false,
+    );
   });
 });

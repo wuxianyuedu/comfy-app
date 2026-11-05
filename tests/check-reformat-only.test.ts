@@ -602,29 +602,18 @@ describe("合并提交自己承担重排（ISSUE #3035）", { timeout: 300_000 }
     const branchTip = headSha(repo);
     repo.git("merge", "--no-ff", "-q", "master-side", "-m", "merge: sync master-side");
 
-    const savedCommit = process.env.CNB_COMMIT;
-    const savedTarget = process.env.CNB_PULL_REQUEST_TARGET_SHA;
-    process.env.CNB_COMMIT = branchTip;
-    delete process.env.CNB_PULL_REQUEST_TARGET_SHA;
-    try {
-      const r = repo.run(["--range", `${fork}..${branchTip}`]);
-      expect(r.code, r.output).toBe(0);
-      expect(r.output).toContain("汇总分母取目标分支那一侧");
-      // 分母只算分支自己那批（12）；master 侧经合并带进来的 12 份不进分母。
-      expect(r.output).toContain("纯格式化 12 个");
-      expect(r.output).not.toContain("纯格式化 24 个");
-    } finally {
-      if (savedCommit === undefined) {
-        delete process.env.CNB_COMMIT;
-      } else {
-        process.env.CNB_COMMIT = savedCommit;
-      }
-      if (savedTarget === undefined) {
-        delete process.env.CNB_PULL_REQUEST_TARGET_SHA;
-      } else {
-        process.env.CNB_PULL_REQUEST_TARGET_SHA = savedTarget;
-      }
-    }
+    /* 平台形状由 `overrides.env` 显式给（ISSUE #3218）：`gate-repo.run()` 的基座
+     * 走 `gitSandboxEnv()`，它按 PLATFORM_RUN_ENV_KEYS 剥掉继承的 CNB_COMMIT——
+     * 写进 `process.env` 的那一份到不了子进程。`overrides.env` 在剥离**之后**落，
+     * 所以这里给的值是子进程唯一看得见的来源。 */
+    const r = repo.run(["--range", `${fork}..${branchTip}`], {
+      env: { CNB_COMMIT: branchTip },
+    });
+    expect(r.code, r.output).toBe(0);
+    expect(r.output).toContain("汇总分母取目标分支那一侧");
+    // 分母只算分支自己那批（12）；master 侧经合并带进来的 12 份不进分母。
+    expect(r.output).toContain("纯格式化 12 个");
+    expect(r.output).not.toContain("纯格式化 24 个");
   });
 });
 

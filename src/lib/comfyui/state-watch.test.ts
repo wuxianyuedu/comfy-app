@@ -68,9 +68,7 @@ describe("noteComfyStateChange", () => {
     subscribeComfyState(() => {
       reached += 1;
     });
-    expect(() =>
-      noteComfyStateChange("exit", "ComfyUI 进程退出"),
-    ).not.toThrow();
+    expect(() => noteComfyStateChange("exit", "ComfyUI 进程退出")).not.toThrow();
     expect(reached).toBe(1);
   });
 });

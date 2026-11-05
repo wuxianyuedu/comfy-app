@@ -39,9 +39,7 @@ describe("toExternalResult", () => {
       ok: true,
       detail: "即将重启",
     });
-    expect(toExternalResult({ triggered: false, detail: "下载失败" }).ok).toBe(
-      false,
-    );
+    expect(toExternalResult({ triggered: false, detail: "下载失败" }).ok).toBe(false);
   });
 
   it("两个字段都没有时按失败处理（不是「默认成功」）", () => {
@@ -51,12 +49,8 @@ describe("toExternalResult", () => {
   });
 
   it("`error` 与 `detail` 都能当说明（服务端两种都出现过）", () => {
-    expect(toExternalResult({ ok: false, error: "目录不存在" }).detail).toBe(
-      "目录不存在",
-    );
-    expect(
-      toExternalResult({ ok: false, detail: "详情", error: "错误" }).detail,
-    ).toBe("详情");
+    expect(toExternalResult({ ok: false, error: "目录不存在" }).detail).toBe("目录不存在");
+    expect(toExternalResult({ ok: false, detail: "详情", error: "错误" }).detail).toBe("详情");
   });
 
   it("成功也带说明（用户据此确认「点了有反应」）", () => {
@@ -96,9 +90,9 @@ describe("detectFolderHelper", () => {
     const helper = detectFolderHelper(onHandled, 2000);
     window.dispatchEvent(new Event("blur"));
     expect(onHandled).toHaveBeenCalledTimes(1);
-    await expect(
-      vi.advanceTimersByTimeAsync(2000).then(() => helper.settle()),
-    ).resolves.toBe("handled");
+    await expect(vi.advanceTimersByTimeAsync(2000).then(() => helper.settle())).resolves.toBe(
+      "handled",
+    );
   });
 
   it("窗口内没有失焦 → missing（助手未注册，必须给出安装引导）", async () => {
