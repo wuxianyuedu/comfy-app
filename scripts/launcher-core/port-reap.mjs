@@ -76,7 +76,8 @@ export async function runningAppInstances(root) {
 
   const held = [];
   for (const port of scanPorts(resolveAppPort(root))) {
-    const pids = listeningPidsOnPort(port);
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
+    const pids = await listeningPidsOnPort(port);
     if (pids.length === 0) {
       continue;
     }
