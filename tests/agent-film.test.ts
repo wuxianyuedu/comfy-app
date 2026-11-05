@@ -13,7 +13,7 @@ import {
   validateArgs,
 } from "../scripts/agent-film.mjs";
 
-const noopSleep = async () => undefined;
+const noopSleep = () => Promise.resolve(undefined);
 
 describe("parseArgs", () => {
   it("默认值：approval=auto、url 兜底、dry-run=false", () => {

@@ -150,7 +150,7 @@ describe("轮转选择（纯函数）", () => {
 });
 
 describe("createBackup：真的备份，且验得动", () => {
-  it("产出一致性单文件快照：integrity_check 读通、表数据在、不带 -wal/-shm", async () => {
+  it("产出一致性单文件快照：integrity_check 读通、表数据在、不带 -wal/-shm", () => {
     seedDb(["hello", "world"]);
     const result = createBackup(root, { databaseUrl });
     expect(result.ok, JSON.stringify(result)).toBe(true);

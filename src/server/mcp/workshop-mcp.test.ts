@@ -19,35 +19,35 @@ const seen = vi.hoisted(() => ({
 }));
 
 const orchestrator = vi.hoisted(() => ({
-  createSession: vi.fn(async () => "sess_1"),
-  listSessions: vi.fn(async () => [{ id: "sess_1" }]),
-  getSession: vi.fn(async () => ({ id: "sess_1", characters: [], shots: [] })),
-  deleteSession: vi.fn(async () => true),
-  setMeta: vi.fn(async () => ({ ok: true })),
-  setIdea: vi.fn(async () => ({ ok: true })),
-  generateScript: vi.fn(async () => "# 剧本"),
-  setScript: vi.fn(async () => ({ ok: true })),
-  extractCharacters: vi.fn(async () => ({ added: 1, skipped: 0, total: 1 })),
-  setCharacters: vi.fn(async (_id: string, list: Array<unknown>) => {
+  createSession: vi.fn(() => "sess_1"),
+  listSessions: vi.fn(() => [{ id: "sess_1" }]),
+  getSession: vi.fn(() => ({ id: "sess_1", characters: [], shots: [] })),
+  deleteSession: vi.fn(() => true),
+  setMeta: vi.fn(() => ({ ok: true })),
+  setIdea: vi.fn(() => ({ ok: true })),
+  generateScript: vi.fn(() => "# 剧本"),
+  setScript: vi.fn(() => ({ ok: true })),
+  extractCharacters: vi.fn(() => ({ added: 1, skipped: 0, total: 1 })),
+  setCharacters: vi.fn((_id: string, list: Array<unknown>) => {
     seen.characters = list;
     return [{ id: "c1" }];
   }),
-  buildStoryboard: vi.fn(async () => ({ shotCount: 1 })),
-  setStoryboard: vi.fn(async (_id: string, list: Array<unknown>) => {
+  buildStoryboard: vi.fn(() => ({ shotCount: 1 })),
+  setStoryboard: vi.fn((_id: string, list: Array<unknown>) => {
     seen.shots = list;
     return [{ id: "s1" }];
   }),
-  generateImage: vi.fn(async () => ({ taskId: "t1" })),
-  submitVideo: vi.fn(async () => ({ clipTaskId: "ct1" })),
-  pollVideo: vi.fn(async () => ({ status: "done" })),
-  composeFinal: vi.fn(async () => ({ filmUrl: "/api/generated/f.mp4" })),
-  setComfyWorkflow: vi.fn(async () => ({ ok: true })),
+  generateImage: vi.fn(() => ({ taskId: "t1" })),
+  submitVideo: vi.fn(() => ({ clipTaskId: "ct1" })),
+  pollVideo: vi.fn(() => ({ status: "done" })),
+  composeFinal: vi.fn(() => ({ filmUrl: "/api/generated/f.mp4" })),
+  setComfyWorkflow: vi.fn(() => ({ ok: true })),
 }));
 
 /* 桩必须回一个能 `JSON.stringify` 出字符串的值：`json(undefined)` 会让
  * `text: undefined` 进结果信封，SDK 报的是「Invalid tools/call result」，
  * 那是桩的形状问题而不是被测代码的问题。 */
-const saveComfySettings = vi.hoisted(() => vi.fn(async () => ({ saved: true })));
+const saveComfySettings = vi.hoisted(() => vi.fn(() => ({ saved: true })));
 
 vi.mock("~/server/workshop/orchestrator", () => orchestrator);
 vi.mock("~/server/workshop/comfyui", () => ({ saveComfySettings }));

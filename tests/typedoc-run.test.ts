@@ -121,9 +121,9 @@ describe("runTypedoc：静默失败会重试，救回来算成功", () => {
       outDir,
       attempts: 3,
       backoff: [0, 0],
-      spawnImpl: async () => {
+      spawnImpl: () => {
         calls += 1;
-        return silentRun();
+        return Promise.resolve(silentRun());
       },
       onProgress: quiet,
     });
@@ -142,12 +142,12 @@ describe("runTypedoc：静默失败会重试，救回来算成功", () => {
       outDir,
       attempts: 3,
       backoff: [0, 0],
-      spawnImpl: async (_bin: string, dir: string) => {
+      spawnImpl: (_bin: string, dir: string) => {
         calls += 1;
         if (calls >= 2) {
           writeProbe(dir);
         }
-        return silentRun();
+        return Promise.resolve(silentRun());
       },
       onProgress: quiet,
     });
@@ -164,9 +164,9 @@ describe("runTypedoc：静默失败会重试，救回来算成功", () => {
       outDir,
       attempts: 1,
       backoff: [0, 0],
-      spawnImpl: async () => {
+      spawnImpl: () => {
         calls += 1;
-        return silentRun();
+        return Promise.resolve(silentRun());
       },
       onProgress: quiet,
     });

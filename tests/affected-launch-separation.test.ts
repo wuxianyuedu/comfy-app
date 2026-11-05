@@ -314,7 +314,7 @@ describe("runChunk 透传 filterLine 到两遍 spawn", () => {
     chunkId: 0,
     junitDir: dir,
     spawn,
-    settle: async () => ({ settled: true, load: 0, waitedMs: 0 }),
+    settle: () => Promise.resolve({ settled: true, load: 0, waitedMs: 0 }),
     stageBudget: { deadline: 0, budgetMs: 0 },
     waitBudget: { deadline: 0 },
   });

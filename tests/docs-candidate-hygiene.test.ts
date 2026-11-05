@@ -213,7 +213,7 @@ describe("量具本身：候选形状会不会进产物，当场问引擎", () =
   /** 钉给 Tailwind 的绝对路径（CSS 字符串里用正斜杠，Windows 反斜杠会被当转义）。 */
   let source = "";
 
-  beforeAll(async () => {
+  beforeAll(() => {
     mkdirSync(dir, { recursive: true });
     /* 三种形状之间必须用 ASCII 空白隔开：实测把候选名紧贴在全角冒号后面时，
      * 引擎的取值器根本抽不出这枚候选 —— 那会让这一格「假绿」。所以这里刻意写

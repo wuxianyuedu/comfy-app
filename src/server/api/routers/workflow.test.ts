@@ -13,7 +13,9 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
 
 const { getSessionMock } = vi.hoisted(() => ({
-  getSessionMock: vi.fn<(args: { headers: Headers }) => Promise<unknown>>(async () => null),
+  getSessionMock: vi.fn<(args: { headers: Headers }) => Promise<unknown>>(() =>
+    Promise.resolve(null),
+  ),
 }));
 
 vi.mock("~/server/db", async () => {
@@ -55,7 +57,7 @@ vi.mock("~/lib/comfyui/importSource", async (importOriginal) => ({
  * 不是本机此刻有没有 ComfyUI。 */
 vi.mock("~/lib/comfyui/raw", async (importOriginal) => ({
   ...(await importOriginal<typeof RawModule>()),
-  fetchObjectInfo: vi.fn(async () => null),
+  fetchObjectInfo: vi.fn(() => null),
 }));
 
 import { createCallerFactory, createTRPCContext } from "~/server/api/trpc";

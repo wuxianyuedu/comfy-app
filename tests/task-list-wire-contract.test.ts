@@ -19,10 +19,14 @@ import {
 } from "~/lib/media/video-queue-client";
 
 const { queryMock, mutateMock } = vi.hoisted(() => ({
-  queryMock: vi.fn<(input: { take?: number }) => Promise<unknown>>(async () => ({ tasks: [] })),
-  mutateMock: vi.fn<(input: unknown) => Promise<unknown>>(async () => ({
-    taskId: "gen-1",
-  })),
+  queryMock: vi.fn<(input: { take?: number }) => Promise<unknown>>(() =>
+    Promise.resolve({ tasks: [] }),
+  ),
+  mutateMock: vi.fn<(input: unknown) => Promise<unknown>>(() =>
+    Promise.resolve({
+      taskId: "gen-1",
+    }),
+  ),
 }));
 
 vi.mock("~/trpc/vanilla", () => ({

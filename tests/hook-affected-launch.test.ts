@@ -1188,7 +1188,7 @@ describe("组 C 的分文件读数：写的一侧与读的一侧必须是同一�
             ? { status: 1, output: "Test timed out in 30000ms" }
             : { status: 0, output: "" };
         },
-        settle: async () => ({ settled: true, load: 0.1, waitedMs: 1 }),
+        settle: () => Promise.resolve({ settled: true, load: 0.1, waitedMs: 1 }),
       }),
     );
     expect(calls).toHaveLength(2);
@@ -1215,7 +1215,7 @@ describe("组 C 的分文件读数：写的一侧与读的一侧必须是同一�
             ? { status: 1, output: "Test timed out in 30000ms" }
             : { status: 0, output: "" };
         },
-        settle: async () => ({ settled: true, load: 0.1, waitedMs: 1 }),
+        settle: () => Promise.resolve({ settled: true, load: 0.1, waitedMs: 1 }),
       }),
     );
     expect(calls).toHaveLength(2);

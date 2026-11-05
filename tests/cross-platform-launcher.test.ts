@@ -560,7 +560,7 @@ describe("classifyProbe（就绪三态：区分「没起来」与「起来了但
   it("2xx → ready", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({ ok: true, status: 200 })),
+      vi.fn(() => ({ ok: true, status: 200 })),
     );
     expect(await classifyProbe({ port: 3100 })).toBe("ready");
   });
@@ -568,7 +568,7 @@ describe("classifyProbe（就绪三态：区分「没起来」与「起来了但
   it("404 → route-404（服务活着、路由没进编译图：陈旧路由表的确切签名）", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({ ok: false, status: 404 })),
+      vi.fn(() => ({ ok: false, status: 404 })),
     );
     expect(await classifyProbe({ port: 3100 })).toBe("route-404");
   });
@@ -576,7 +576,7 @@ describe("classifyProbe（就绪三态：区分「没起来」与「起来了但
   it("其它非 2xx（如 500 真故障）→ not-up，绝不误判成路由失效去清缓存", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({ ok: false, status: 500 })),
+      vi.fn(() => ({ ok: false, status: 500 })),
     );
     expect(await classifyProbe({ port: 3100 })).toBe("not-up");
   });
@@ -584,10 +584,10 @@ describe("classifyProbe（就绪三态：区分「没起来」与「起来了但
   it("连接上但库是空的（503 + db=empty）→ schema-not-ready 单独一档", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
+      vi.fn(() => ({
         ok: false,
         status: 503,
-        json: async () => ({
+        json: () => ({
           status: "error",
           db: "empty",
           hint: "数据库表还没建：执行 pnpm db:push",
@@ -600,10 +600,10 @@ describe("classifyProbe（就绪三态：区分「没起来」与「起来了但
   it("503 但 db=down（库真起不来）→ not-up：不许把真故障说成「表还没建」", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
+      vi.fn(() => ({
         ok: false,
         status: 503,
-        json: async () => ({ status: "error", db: "down" }),
+        json: () => ({ status: "error", db: "down" }),
       })),
     );
     expect(await classifyProbe({ port: 3100 })).toBe("not-up");
@@ -612,10 +612,10 @@ describe("classifyProbe（就绪三态：区分「没起来」与「起来了但
   it("503 响应体读不出 JSON → not-up（判不出就不下结论）", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
+      vi.fn(() => ({
         ok: false,
         status: 503,
-        json: async () => {
+        json: () => {
           throw new Error("Unexpected token < in JSON");
         },
       })),
@@ -626,7 +626,7 @@ describe("classifyProbe（就绪三态：区分「没起来」与「起来了但
   it("连不上（fetch 抛错）→ not-up", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => {
+      vi.fn(() => {
         throw new Error("ECONNREFUSED");
       }),
     );

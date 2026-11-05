@@ -224,9 +224,9 @@ describe("fetchNodePlan：现取而不是猜", () => {
       /* 只喂这一层真正会读的两格（`ok` / `json()`）：造一个完整的 `Response`
        * 会让这条判据测到 `fetch` 的形状而不是本层的解析。 */
       /* SAFETY: 类型断言已复核 */
-      fetchImpl: (async () => ({
+      fetchImpl: (() => ({
         ok: true,
-        json: async () => [
+        json: () => [
           { version: "v24.22.0", files: ["linux-x64"] },
           { version: "v24.1.0", files: ["linux-x64"] },
         ],
@@ -241,7 +241,7 @@ describe("fetchNodePlan：现取而不是猜", () => {
       fetchNodePlan({
         enginesRange: "^24.15.0",
         /* SAFETY: 类型断言已复核 */
-        fetchImpl: (async () => ({
+        fetchImpl: (() => ({
           ok: false,
           status: 404,
         })) as unknown as typeof fetch,

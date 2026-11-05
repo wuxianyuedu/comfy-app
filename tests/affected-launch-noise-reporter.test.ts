@@ -111,7 +111,7 @@ describe("spawnVitest end-to-end —— 真起 node 验证过滤写入", () => {
     vi.restoreAllMocks();
   });
 
-  it("回吐的 stdout/stderr 里噪音行被抠掉、真红原文留下", async () => {
+  it("回吐的 stdout/stderr 里噪音行被抠掉、真红原文留下", () => {
     dir = mkdtempSync(path.join(tmpdir(), "noise-"));
     const entry = path.join(dir, "emit.mjs");
     writeFileSync(

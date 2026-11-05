@@ -74,19 +74,19 @@ describe("替身端口占位者的识别：两条证据缺一不可", () => {
 
 describe("收的方式与边界", () => {
   it("端口空着 ⇒ 一条进程都不起、也不回收", async () => {
-    const listeningPids = vi.fn(async () => []);
-    const reap = vi.fn(async () => ({ ok: true }));
+    const listeningPids = vi.fn(() => Promise.resolve([]));
+    const reap = vi.fn(() => Promise.resolve({ ok: true }));
     const result = await reclaimOwnFakePort(18_188, { listeningPids, reap });
     expect(result).toEqual({ reclaimed: [], foreign: [], free: true });
     expect(reap).not.toHaveBeenCalled();
   });
 
   it("两条证据都齐 ⇒ 交出那个 PID 回收（**整棵树**走仓里唯一出口）", async () => {
-    const reap = vi.fn(async () => ({ ok: true }));
+    const reap = vi.fn(() => Promise.resolve({ ok: true }));
     const result = await reclaimOwnFakePort(18_188, {
-      listeningPids: async () => [4242],
-      readCmdlines: async (pids) => new Map(pids.map((p) => [p, OUR_CMDLINE])),
-      answersFake: async () => true,
+      listeningPids: () => Promise.resolve([4242]),
+      readCmdlines: (pids) => Promise.resolve(new Map(pids.map((p) => [p, OUR_CMDLINE]))),
+      answersFake: () => Promise.resolve(true),
       reap,
     });
     expect(result.reclaimed).toEqual([4242]);
@@ -106,11 +106,11 @@ describe("收的方式与边界", () => {
   });
 
   it("认不出的占位者 ⇒ **一个都不收**，但如实报出来是哪几个", async () => {
-    const reap = vi.fn(async () => ({ ok: true }));
+    const reap = vi.fn(() => Promise.resolve({ ok: true }));
     const result = await reclaimOwnFakePort(18_188, {
-      listeningPids: async () => [7],
-      readCmdlines: async (pids) => new Map(pids.map((p) => [p, FOREIGN_CMDLINE])),
-      answersFake: async () => true,
+      listeningPids: () => Promise.resolve([7]),
+      readCmdlines: (pids) => Promise.resolve(new Map(pids.map((p) => [p, FOREIGN_CMDLINE]))),
+      answersFake: () => Promise.resolve(true),
       reap,
     });
     expect(result).toEqual({ reclaimed: [], foreign: [7], free: false });
@@ -118,16 +118,18 @@ describe("收的方式与边界", () => {
   });
 
   it("命令行走形之后才付那次 `/system_stats` 探测（不相关的占位者不必被 fetch）", async () => {
-    const answersFake = vi.fn(async () => true);
+    const answersFake = vi.fn(() => Promise.resolve(true));
     await reclaimOwnFakePort(18_188, {
-      listeningPids: async () => [1, 2],
-      readCmdlines: async () =>
-        new Map([
-          [1, OUR_CMDLINE],
-          [2, FOREIGN_CMDLINE],
-        ]),
+      listeningPids: () => Promise.resolve([1, 2]),
+      readCmdlines: () =>
+        Promise.resolve(
+          new Map([
+            [1, OUR_CMDLINE],
+            [2, FOREIGN_CMDLINE],
+          ]),
+        ),
       answersFake,
-      reap: async () => ({ ok: true }),
+      reap: () => Promise.resolve({ ok: true }),
     });
     expect(answersFake).toHaveBeenCalledTimes(1);
     expect(answersFake).toHaveBeenCalledWith(1);
@@ -276,9 +278,9 @@ describe("应用端口占位者的识别：两条证据缺一不可", () => {
   });
 
   it("端口空着 ⇒ 一条进程都不起、也不回收", async () => {
-    const reap = vi.fn(async () => ({ ok: true }));
+    const reap = vi.fn(() => Promise.resolve({ ok: true }));
     const result = await reclaimOwnAppPort(3311, ROOT, {
-      listeningPids: async () => [],
+      listeningPids: () => Promise.resolve([]),
       reap,
     });
     expect(result).toEqual({ reclaimed: [], foreign: [], free: true });
@@ -286,11 +288,11 @@ describe("应用端口占位者的识别：两条证据缺一不可", () => {
   });
 
   it("两条证据都齐 ⇒ 交出那个 PID 回收（整棵树走仓里唯一出口）", async () => {
-    const reap = vi.fn(async () => ({ ok: true }));
+    const reap = vi.fn(() => Promise.resolve({ ok: true }));
     const result = await reclaimOwnAppPort(3311, ROOT, {
-      listeningPids: async () => [4242],
-      readCmdlines: async (pids) => new Map(pids.map((p) => [p, OUR_APP])),
-      answersApp: async () => true,
+      listeningPids: () => Promise.resolve([4242]),
+      readCmdlines: (pids) => Promise.resolve(new Map(pids.map((p) => [p, OUR_APP]))),
+      answersApp: () => Promise.resolve(true),
       reap,
     });
     expect(result.reclaimed).toEqual([4242]);
@@ -305,11 +307,11 @@ describe("应用端口占位者的识别：两条证据缺一不可", () => {
   });
 
   it("认不出的占位者 ⇒ 一个都不收，但如实报出来是哪几个", async () => {
-    const reap = vi.fn(async () => ({ ok: true }));
+    const reap = vi.fn(() => Promise.resolve({ ok: true }));
     const result = await reclaimOwnAppPort(3311, ROOT, {
-      listeningPids: async () => [7],
-      readCmdlines: async (pids) => new Map(pids.map((p) => [p, FOREIGN])),
-      answersApp: async () => true,
+      listeningPids: () => Promise.resolve([7]),
+      readCmdlines: (pids) => Promise.resolve(new Map(pids.map((p) => [p, FOREIGN]))),
+      answersApp: () => Promise.resolve(true),
       reap,
     });
     expect(result).toEqual({ reclaimed: [], foreign: [7], free: false });
@@ -317,16 +319,18 @@ describe("应用端口占位者的识别：两条证据缺一不可", () => {
   });
 
   it("命令行走形之后才付那次 `/api/health` 探测，且它是**端口级**的一次", async () => {
-    const answersApp = vi.fn(async () => true);
+    const answersApp = vi.fn(() => Promise.resolve(true));
     await reclaimOwnAppPort(3311, ROOT, {
-      listeningPids: async () => [1, 2],
-      readCmdlines: async () =>
-        new Map([
-          [1, OUR_APP],
-          [2, FOREIGN],
-        ]),
+      listeningPids: () => Promise.resolve([1, 2]),
+      readCmdlines: () =>
+        Promise.resolve(
+          new Map([
+            [1, OUR_APP],
+            [2, FOREIGN],
+          ]),
+        ),
       answersApp,
-      reap: async () => ({ ok: true }),
+      reap: () => Promise.resolve({ ok: true }),
     });
     /* 探一次、入参是**端口** —— 判据问的是「那个口上坐着的是不是一个在应答的
      * 本应用」，而端口上可能同时有好几层进程。 */
@@ -335,13 +339,13 @@ describe("应用端口占位者的识别：两条证据缺一不可", () => {
   });
 
   it("① 一个都没命中 ⇒ **一次 HTTP 都不发**（不相关的占位者不必被 fetch）", async () => {
-    const answersApp = vi.fn(async () => true);
+    const answersApp = vi.fn(() => Promise.resolve(true));
     await reclaimOwnAppPort(3311, ROOT, {
-      listeningPids: async () => [7],
-      readCmdlines: async (pids) => new Map(pids.map((p) => [p, FOREIGN])),
-      belongsToRoot: async () => false,
+      listeningPids: () => Promise.resolve([7]),
+      readCmdlines: (pids) => Promise.resolve(new Map(pids.map((p) => [p, FOREIGN]))),
+      belongsToRoot: () => Promise.resolve(false),
       answersApp,
-      reap: async () => ({ ok: true }),
+      reap: () => Promise.resolve({ ok: true }),
     });
     expect(answersApp).not.toHaveBeenCalled();
   });

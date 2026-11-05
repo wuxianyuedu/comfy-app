@@ -705,7 +705,7 @@ describe("CP936 出口：编排与退出码", () => {
     expect(printed.join("")).toContain("不存在的命令");
   });
 
-  it("**起不了那条出口要给真因**：失败码 + 解析后的路径 + 当前目录，一个都不能少", async () => {
+  it("**起不了那条出口要给真因**：失败码 + 解析后的路径 + 当前目录，一个都不能少", () => {
     /* 第四次上平台的现场（ISSUE #1977）：只回一句 `[cp936-exit] 起不了这条命令：node_modules/.bin/npx tsc --noEmit`，
      * 真因却是把**两条命令**当成一条（盘上没有那文件），报错点与真因隔着一整层；本条判纯函数出口，Linux 也能端到端。
      * 三样各回答一件事：`err.code`（`ENOENT` 盘上没有 vs `EACCES`/`EINVAL` 有但起不来，后者在 Windows 上就是形态不对，
@@ -764,7 +764,7 @@ describe("CP936 出口：编排与退出码", () => {
     expect(text).toContain(process.cwd());
   });
 
-  it("**转码成功后输出不许被吞**：stdout / stderr 直连本进程，而 stdin 留在管道上", async () => {
+  it("**转码成功后输出不许被吞**：stdout / stderr 直连本进程，而 stdin 留在管道上", () => {
     /* 第五次上平台的现场（ISSUE #1977）：stage 日志**一个字都没有**而退出码照转 ——「输出被吞」与「命令本来没输出」
      * 在日志上完全同形。根因：`encoding: null` 是对的（要 Buffer 的唯一写法），但 `stdio` 仍是默认 `pipe`，编好的
      * 936 字节落进 `r.stdout` 后整份丢掉。正确取值 `["pipe", "inherit", "inherit"]`：只接出 stdout/stderr，stdin 必须

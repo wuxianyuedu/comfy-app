@@ -41,7 +41,7 @@ const mockRouter = t.router({
       }
       return { tags: behavior.tags };
     }),
-    add: t.procedure.input(z.object({ name: z.string().min(1) })).mutation(async ({ input }) => {
+    add: t.procedure.input(z.object({ name: z.string().min(1) })).mutation(({ input }) => {
       behavior.tags = [...behavior.tags, input.name];
       return { tags: behavior.tags };
     }),

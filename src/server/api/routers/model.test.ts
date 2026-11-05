@@ -7,13 +7,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { scan, comfy } = vi.hoisted(() => ({
   scan: {
-    syncModels: vi.fn(async (_userId: string) => 7),
-    modelCountsByFolder: vi.fn(async () => ({ checkpoints: 3 })),
+    syncModels: vi.fn((_userId: string) => 7),
+    modelCountsByFolder: vi.fn(() => ({ checkpoints: 3 })),
   },
   comfy: {
     listModelFolders: vi.fn(
       /* SAFETY: 类型断言已复核 */
-      async () => ["vae", "checkpoints"] as Array<string>,
+      () => ["vae", "checkpoints"] as Array<string>,
     ),
     comfyBase: vi.fn(() => "http://127.0.0.1:8188"),
   },
@@ -24,7 +24,7 @@ vi.mock("~/server/db", async () => {
   return { db: createTestDb() };
 });
 vi.mock("~/server/better-auth", () => ({
-  auth: { api: { getSession: vi.fn(async () => null) } },
+  auth: { api: { getSession: vi.fn(() => null) } },
 }));
 vi.mock("~/lib/core/logger", () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -64,7 +64,7 @@ beforeEach(() => {
   seedUser(tdb, { id: "user-b", email: "b@test.dev" });
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => new Response("", { status: 200 })),
+    vi.fn(() => new Response("", { status: 200 })),
   );
 });
 

@@ -253,7 +253,7 @@ describe("运行器：命令解析与「没跑起来」（静态）", () => {
 });
 
 describe.skipIf(!hasPs)("运行器真跑：判决必须来自子进程真的执行（ISSUE #1345）", () => {
-  it("真状态 -Mode dependencyAudit：要看见子进程自己的 [dep-audit] 标记", async () => {
+  it("真状态 -Mode dependencyAudit：要看见子进程自己的 [dep-audit] 标记", () => {
     // 跑**真仓库**而不是假检出：这条要钉的就是「这台机器上的真门禁真的执行了」。
     // `[dep-audit]` 前缀在脚本的三条出口（有新增/无新增/拿不到 registry）里都会打，
     // 所以它只在「进程根本没起来」时缺席 —— 正是本条要抓的那一种。

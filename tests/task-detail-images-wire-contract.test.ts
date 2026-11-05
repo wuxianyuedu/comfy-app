@@ -18,7 +18,7 @@ import { makeCtx } from "./helpers/trpc";
 import { missingFromWire, throughJsonWire } from "./helpers/wire-contract";
 
 const { detailMock } = vi.hoisted(() => ({
-  detailMock: vi.fn<(input: { id: string }) => Promise<unknown>>(async () => ({})),
+  detailMock: vi.fn<(input: { id: string }) => Promise<unknown>>(() => Promise.resolve({})),
 }));
 
 vi.mock("~/trpc/vanilla", () => ({

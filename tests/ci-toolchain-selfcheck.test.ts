@@ -2282,7 +2282,7 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
     { timeout: 120_000 },
     async () => {
       const TOTAL = 256 * 1024;
-      await withStallingLink(TOTAL, 20 * 1024, async (base) => {
+      await withStallingLink(TOTAL, 20 * 1024, (base) => {
         const dest = path.join(mkdtempSync(path.join(tmpdir(), "cnb-fetch-")), "x.bin");
         try {
           const res = fetchUrlResumable(`${base}/x.zip`, dest, {
@@ -2330,7 +2330,7 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
         /* 第一次：只在盘上放前 64 KiB（模拟「上一次走到一半就被掐了」）。 */
         writeFileSync(dest, Buffer.alloc(64 * 1024, 5));
         const TOTAL = 128 * 1024;
-        await withStallingLink(TOTAL, 16 * 1024, async (base) => {
+        await withStallingLink(TOTAL, 16 * 1024, (base) => {
           /** @type {number[]} */
           const offsets: Array<number> = [];
           const res = fetchUrlResumable(`${base}/x.zip`, dest, {
@@ -2390,7 +2390,7 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
     }
   });
 
-  it("zip 解压**不押 Windows 的 tar**（GNU tar 不读 zip，实测就是这个错）", async () => {
+  it("zip 解压**不押 Windows 的 tar**（GNU tar 不读 zip，实测就是这个错）", () => {
     /* `ci-toolchain-python.mjs` 那条路走 `tar -xf`（押的是 Windows 10 自带的 bsdtar
      * 认 zip）。而这一步是**全平台**的，GNU tar 对同一个包直接报
      * `This does not look like a tar archive`。所以这里自己读 zip 的 central directory。 */
