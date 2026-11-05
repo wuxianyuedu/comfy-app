@@ -35,31 +35,4 @@ describe("CI YAML 独立解析校验", () => {
     expect(checkYamlFile(dir, ".cnb.yml").join("\n")).toContain("缺非空 script");
   });
 
-  it("插件形态：image + settings、没有 script ⇒ 不是缺 script（如 cnbcool/attachments）", () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "ci-yaml-"));
-    writeFileSync(
-      path.join(dir, ".cnb.yml"),
-      [
-        "main:",
-        "  stages:",
-        "    - name: 上传附件",
-        "      image: cnbcool/attachments:latest",
-        "      settings:",
-        "        attachments:",
-        "          - out.txt",
-      ].join("\n"),
-      "utf8",
-    );
-    expect(checkYamlFile(dir, ".cnb.yml")).toEqual([]);
-  });
-
-  it("负控制：只有 image、没有 settings ⇒ 仍按缺 script 红（插件形态不是免检）", () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "ci-yaml-"));
-    writeFileSync(
-      path.join(dir, ".cnb.yml"),
-      "main:\n  stages:\n    - name: 半拉插件\n      image: cnbcool/attachments:latest\n",
-      "utf8",
-    );
-    expect(checkYamlFile(dir, ".cnb.yml").join("\n")).toContain("缺非空 script");
-  });
 });

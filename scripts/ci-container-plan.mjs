@@ -297,47 +297,6 @@ export function parseVolume(spec) {
  * @returns {Array<{ name: string, image: string }>}
  */
 export function stageLevelImages(text) {
-  /* 插件格（`image:` + `settings:`、没有 `script`）不是「写错层」：`cnbcool/attachments`
-   * 那类插件在自托管节点上实测能跑（`cnb-6od-1k6l6mgun` 上传成功），而作出这个判断
-   * 要先看完整格 —— `settings:` 通常写在 `image:` **之后**，所以先扫一遍收标志。 */
-  /** @type {Set<string>} */
-  const pluginStages = new Set();
-  /** @type {Map<string, { settings: boolean, script: boolean }>} */
-  const flags = new Map();
-  /** @type {{ name: string, indent: number } | null} */
-  let scan = null;
-  for (const raw of blankComments(text).split("\n")) {
-    const body = raw.trim();
-    const indent = raw.length - raw.trimStart().length;
-    if (indent === 0 && body !== "") {
-      scan = null;
-      continue;
-    }
-    if (body.startsWith("- name:")) {
-      const item = { name: body.slice("- name:".length).trim(), indent };
-      if (scan === null || indent <= scan.indent) {
-        scan = item;
-      }
-      continue;
-    }
-    if (scan === null || indent !== scan.indent + 2) {
-      continue;
-    }
-    const key = `${String(scan.indent)}|${scan.name}`;
-    const cur = flags.get(key) ?? { settings: false, script: false };
-    if (body.startsWith("settings:")) {
-      cur.settings = true;
-    } else if (body.startsWith("script:")) {
-      cur.script = true;
-    }
-    flags.set(key, cur);
-  }
-  for (const [key, flag] of flags) {
-    if (flag.settings && !flag.script) {
-      pluginStages.add(key);
-    }
-  }
-
   /** @type {Array<{ name: string, image: string }>} */
   const out = [];
   /** @type {{ name: string, indent: number } | null} */
@@ -366,9 +325,6 @@ export function stageLevelImages(text) {
       .replaceAll(/^["']|["']$/g, "");
     /* 只认 stage 项自己那一层（更深的是 Job 的 `image:`，那是**对**的那一层）。 */
     if (value !== "" && indent === stage.indent + 2) {
-      if (pluginStages.has(`${String(stage.indent)}|${stage.name}`)) {
-        continue;
-      }
       out.push({ name: stage.name, image: value });
     }
   }

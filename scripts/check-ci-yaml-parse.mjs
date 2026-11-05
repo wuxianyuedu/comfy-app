@@ -11,9 +11,7 @@
  *      重复键都会在这里报错）；
  *   ② **锚点 / 别名引用合法**——`toJS()` 解析时未知别名、断掉的锚点直接抛错，
  *      这恰是 `.cnb.yml` 大量用 `&gates` / `*gates` 的结构风险点；
- *   ③ 基本形态：每处 `stages:` 数组里每格都有非空的 `name`，且**要么**有非空 `script`，
- *      **要么**是插件形态（非空 `image` + 非空 `settings` 对象 —— CNB 的 docker 即插件，
- *      如 `cnbcool/attachments` 上传附件，这类 stage 本来就没有 script）。
+ *   ③ 基本形态：每处 `stages:` 数组里每格都有非空的 `name` 与非空 `script`
  *      （GitHub workflows 的 `steps` 不做这层要求，只要求可解析）。
  *
  * 跑法：`pnpm check:ci-yaml`（或 `node scripts/check-ci-yaml-parse.mjs`）。
@@ -108,18 +106,8 @@ export function checkYamlFile(root, rel) {
       const scriptOk =
         (typeof script === "string" && script.trim() !== "") ||
         (Array.isArray(script) && script.length > 0);
-      /* 插件形态：`image` + `settings`，没有 script（如 `cnbcool/attachments` 上传附件；
-       * 2026-11-05 实测这一形态在 CNB 上可跑，images 的 entrypoint 读 settings 干活）。 */
-      const settings = stageMap.settings;
-      const pluginOk =
-        typeof stageMap.image === "string" &&
-        stageMap.image.trim() !== "" &&
-        typeof settings === "object" &&
-        settings !== null &&
-        !Array.isArray(settings) &&
-        Object.keys(settings).length > 0;
-      if (!scriptOk && !pluginOk) {
-        problems.push(`${rel}: stage「${String(stageMap.name)}」缺非空 script（也不是 image + settings 的插件形态）`);
+      if (!scriptOk) {
+        problems.push(`${rel}: stage「${String(stageMap.name)}」缺非空 script`);
       }
     });
   }

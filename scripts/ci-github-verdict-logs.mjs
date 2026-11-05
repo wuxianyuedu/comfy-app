@@ -15,12 +15,15 @@
  * - 6 个 stage 各自独立封顶：**上限是按 stage 计的**，不是整条流水线共享。
  *
  * 失败 job 的日志动辄几 MB —— 直接往 stage 日志里打，用户看到的只会是「头 + 省略 + 尾」，
- * 中间的真因恰好被吞。所以这里的通道是：**全量脱敏后落文件 → 由后续 `上传附件` stage
- * 作为 CNB commit attachment 上传**；stage 日志里只打**摘要 + 失败注解 + 失败 step 窗口**，
- * 且窗口总字节压在 {@link STAGE_WINDOW_MAX_BYTES}（60 KiB）以内，保证它自己不被截。
+ * 中间的真因恰好被吞。所以这里的通道是：**stage 里给能直接排障的那一段**（摘要 + 失败注解 +
+ * 失败 step 窗口，窗口总字节压在 {@link STAGE_WINDOW_MAX_BYTES} = 60 KiB 内），**全量给
+ * GA 自己的日志端点**（`GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs`，需
+ * `actions: read`）+ 一份本地脱敏落盘（构建结束即回收）。
  *
- * （另一条候选「按行切块、分多条 stage 打印」被否决：30 MB 的日志 ÷ 100 KB ≈ 300 个 stage，
- * `.cnb.yml` 是静态清单，无法按日志大小动态起 stage；而附件通道一次就能装下。）
+ * 「落文件 + 附件」那条路在这一档上**实测不可用**（2026-11-05，build `cnb-l4r-1k6lcffnv`）：
+ * `cnbcool/attachments` 那类上传格要 docker，自托管节点没开容器能力，0s 红
+ * `Runner does not enable Docker.`。「按行切块、分多条 stage 打印」同样不成立：30 MB ÷
+ * 100 KB ≈ 300 个 stage，而 `.cnb.yml` 是静态清单、不会按日志大小长出来。
  *
  * ## 边界
  *
@@ -32,14 +35,16 @@
  *    不进仓库），**每次回读先清空上一次的文件**（单 run 只留一份，防大文件堆积）。
  * 4. **stage 里始终直接可见**：哪条 run / 哪个 job / 哪个 step 失败、全部 `##[error]` 注解、
  *    以及失败 step 的原始日志窗口。窗口超 {@link STAGE_WINDOW_MAX_BYTES} 时保留首尾并
- *    明示「已截到 N 行 / 上限 M 字节（全量见附件）」。
+ *    明示「已截到 N 行 / 上限 M 字节（全量见下载端点）」，每个失败 job 另打一行下载端点。
  * 5. **只回读主路径（runs API）**：Checks API 的 check-run 没有 job 日志端点。
  */
+import { createHash } from "node:crypto";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { gzipSync } from "node:zlib";
 import { requestJson, requestText } from "./ci-github-verdict-request.mjs";
 
-/** 附件里单 job 日志的字节上限（64 MiB）：正常失败日志远小于它，超界时保留首尾并明示。 */
+/** 落盘文件里单 job 日志的字节上限（64 MiB）：正常失败日志远小于它，超界时保留首尾并明示。 */
 export const JOB_LOG_FILE_MAX_BYTES = 64 * 1024 * 1024;
 
 /** 一次回读落盘的总量上限（256 MiB）：多 job 都超界时也不至于把磁盘写爆。 */
@@ -63,8 +68,39 @@ export const WINDOW_TAIL_LINES = 160;
 /** 落盘目录（相对检出根，`.comfy-ci/` 在 `.gitignore` 内）。 */
 export const JOB_LOGS_DIR_REL = ".comfy-ci/tmp/github-verdict-logs";
 
-/** 落盘文件名（一个 run 一份，附件只传这一个文件）。 */
+/** 落盘文件名（一次回读一份）。 */
 export const JOB_LOGS_FILE_NAME = "verdict-logs.txt";
+
+/** 判定文件（回读格只**写**它、退码 0；`ci-github-verdict-decide.mjs` 读它、退真码）。 */
+export const VERDICT_DECISION_FILE_NAME = "decision.json";
+
+/**
+ * 压缩分块的单块 base64 字节上限：**90000**。
+ *
+ * 取法：CNB 单 stage 日志封顶 102400 字节（实测），一块还要摊上首部读数（块号 / 校验和 /
+ * 整包尺寸，约 200 字节）与 base64 按 120 字符折行带来的约 0.8% 换行开销
+ * （90000 × 1.008 ≈ 90720）⇒ 单 stage 合计约 91 KiB，留 11 KiB 余量给平台自己那行。
+ */
+export const LOG_CHUNK_MAX_BYTES = 90_000;
+
+/** base64 每行字符数（折行只为让日志可读 / 可复制，不改变字节语义）。 */
+export const LOG_CHUNK_WRAP_CHARS = 120;
+
+/**
+ * 静态分块 stage 的块数（`.cnb.yml` 里就这么多格）——**别搞出几十个**。
+ *
+ * 取法（2026-11-05 用真实失败 job 日志实测）：两条判红 run / 4 个失败 job 的全量脱敏正文本
+ * **616395 字节** → gzip 118375 → base64 157836 → **2 块**。3 块 = 270000 base64 字节
+ * ≈ 200 KB gzip ≈ 按实测 5.2:1 的压缩比约 **1 MB 原文**，覆盖到现实现场之上还有余量；
+ * 超出的那一档照实念「只有前 3 块」，全量仍走每个 job 的下载端点（不静默丢）。
+ */
+export const LOG_CHUNK_STATIC_STAGES = 3;
+
+/** 分块落地目录（相对检出根，与全量正文同一个 `tmp` 子树，gitignore 内）。 */
+export const LOG_CHUNKS_DIR_REL = `${JOB_LOGS_DIR_REL}/chunks`;
+
+/** 分块清单文件名（块数 / 整包 sha256 / 尺寸都在它里面）。 */
+export const LOG_MANIFEST_FILE_NAME = "manifest.json";
 
 /** `ghp_…` / `github_pat_…` 这类令牌形状（脱敏兜底；精确令牌值另有一跳）。 */
 const TOKEN_SHAPES = [/\bgithub_pat_[A-Za-z0-9_]{20,}\b/gu, /\bgh[pousr]_[A-Za-z0-9]{20,}\b/gu];
@@ -199,7 +235,7 @@ export function extractFailureWindow(text) {
 }
 
 /**
- * 把失败窗口压进 stage 预算：超界保留首尾，写「已截到 N 行 / 上限 M 字节（全量见附件）」。
+ * 把失败窗口压进 stage 预算：超界保留首尾，写「已截到 N 行 / 上限 M 字节（全量见下载端点）」。
  *
  * `maxBytes` 是**这一格还剩多少**预算（多 run / 多失败 job 共用同一个 stage）——
  * 缺省是 {@link STAGE_WINDOW_MAX_BYTES}，但调用方必须传剩余值：否则第二个窗口会把
@@ -224,7 +260,7 @@ export function capStageWindow(win, maxBytes = STAGE_WINDOW_MAX_BYTES) {
   const maxLines = Math.max(1, Math.min(WINDOW_TAIL_LINES, win.lines.length - 1));
   /** 先取尾（失败 step 的真因就在尾部），再按剩余字节补头部。 */
   const tail = win.lines.slice(-maxLines);
-  const marker = `…（失败窗口中间省略 ${String(win.lines.length)} 行；全量见附件）…`;
+  const marker = `…（失败窗口中间省略 ${String(win.lines.length)} 行；全量见下载端点）…`;
   let head = win.lines.slice(0, WINDOW_HEAD_LINES);
   let lines = [...head, marker, ...tail];
   /**
@@ -301,12 +337,107 @@ function writeLogsFile(text) {
 }
 
 /**
+ * base64 折行（纯函数）：只换行、不改字符 —— 拼回来必须与原串逐字相同。
+ *
+ * @param {string} text base64 正文
+ * @param {number} [width] 每行字符数
+ * @returns {string} 折行后的正文
+ */
+export function wrapBase64(text, width = LOG_CHUNK_WRAP_CHARS) {
+  const raw = String(text ?? "");
+  /** @type {string[]} */
+  const lines = [];
+  for (let i = 0; i < raw.length; i += width) {
+    lines.push(raw.slice(i, i + width));
+  }
+  return lines.join("\n");
+}
+
+/**
+ * 把全量正文压成可打印的分块包（纯函数）：`gzip` → `base64` → 按
+ * {@link LOG_CHUNK_MAX_BYTES} 切块。
+ *
+ * 为什么是「只取失败 job 的日志」而不是整 run：`dumpFailingRunLogs` 交进来的
+ * `archiveText` 本来就只含**判红 job** 的正文（成功的 job 不进这份），所以这里压的是
+ * 真因那一半，体积与压缩比都按它算。
+ *
+ * 校验和取 **gzip 包**的 sha256（不是原文的）：拼回那一步只要「拼接 base64 → decode →
+ * 对 sha256」，不必先解压再核对；解压后再拿 `rawBytes` 核字数即可。
+ *
+ * @param {string} text 已脱敏的全量正文
+ * @returns {{base64Bytes: number, chunks: string[], gzipBytes: number, rawBytes: number, sha256: string}} 分块包
+ */
+export function packFailingLogs(text) {
+  const raw = String(text ?? "");
+  const gzip = gzipSync(Buffer.from(raw, "utf8"), { level: 9 });
+  const base64 = Buffer.from(gzip).toString("base64");
+  /** @type {string[]} */
+  const chunks = [];
+  for (let i = 0; i < base64.length; i += LOG_CHUNK_MAX_BYTES) {
+    chunks.push(base64.slice(i, i + LOG_CHUNK_MAX_BYTES));
+  }
+  return {
+    base64Bytes: base64.length,
+    chunks,
+    gzipBytes: gzip.length,
+    rawBytes: Buffer.byteLength(raw, "utf8"),
+    sha256: createHash("sha256").update(gzip).digest("hex"),
+  };
+}
+
+/**
+ * 分块清单（纯函数）：块数 / 印几块 / 整包 sha256 / 尺寸 / 拼回命令，一次写全。
+ *
+ * 清单要能回答三个问题，缺一个就没法重建：**一共几块**（少一块就拼不回去）、
+ * **这一跑只印了几块**（超出静态格数时不许假装齐了）、**拼回来该是什么**（校验和）。
+ *
+ * @param {{base64Bytes: number, chunks: string[], gzipBytes: number, rawBytes: number, sha256: string}} pack 分块包
+ * @param {number} [printed] 静态 stage 能印的块数
+ * @returns {{base64Bytes: number, chunkCount: number, gzipBytes: number, printedChunks: number, rawBytes: number, reconstruct: string, sha256: string, truncated: boolean, version: number}} 清单
+ */
+export function buildChunkManifest(pack, printed = LOG_CHUNK_STATIC_STAGES) {
+  const chunkCount = pack.chunks.length;
+  const printedChunks = Math.min(chunkCount, printed);
+  return {
+    version: 1,
+    chunkCount,
+    printedChunks,
+    truncated: chunkCount > printedChunks,
+    rawBytes: pack.rawBytes,
+    gzipBytes: pack.gzipBytes,
+    base64Bytes: pack.base64Bytes,
+    sha256: pack.sha256,
+    reconstruct:
+      "按 chunk-1.b64 … chunk-N.b64 顺序拼接（去掉换行）→ base64 解码 → gunzip → 取 sha256 核对",
+  };
+}
+
+/**
+ * 真身落分块：与全量正文同一个 `tmp` 子树，**每次先清空上一次的块**（单 run 只留一份）。
+ *
+ * @param {{base64Bytes: number, chunks: string[], gzipBytes: number, rawBytes: number, sha256: string}} pack 分块包
+ * @param {ReturnType<typeof buildChunkManifest>} manifest 清单
+ * @returns {string} 清单落盘路径（相对检出根）
+ */
+function writeChunkFiles(pack, manifest) {
+  const dir = path.join(ROOT, LOG_CHUNKS_DIR_REL);
+  rmSync(dir, { force: true, recursive: true });
+  mkdirSync(dir, { recursive: true });
+  pack.chunks.forEach((chunk, i) => {
+    writeFileSync(path.join(dir, `chunk-${String(i + 1)}.b64`), wrapBase64(chunk), "utf8");
+  });
+  writeFileSync(path.join(dir, LOG_MANIFEST_FILE_NAME), JSON.stringify(manifest, null, 2), "utf8");
+  return `${LOG_CHUNKS_DIR_REL}/${LOG_MANIFEST_FILE_NAME}`;
+}
+
+/**
  * 判红那一跑的回读入口：**永不抛异常、永不改判据**。
  *
  * stage 日志里打摘要 + 注解 + 窗口（总量压在 {@link STAGE_WINDOW_MAX_BYTES} 内）；
- * 全量脱敏正文落一份文件，交给后续附件 stage。落盘失败也只是少一份附件，不改判决。
+ * 全量正文脱敏后落一份本地文件（构建结束即回收），并逐个 job 打 GA 的日志下载端点。
+ * 落盘失败也只是少一份本地文件，不改判决。
  *
- * @param {{token: string, log: (line: string) => void, fetchImpl: typeof fetch, sleep: (ms: number) => Promise<void>, writeLogFile?: (text: string) => string, root?: string}} io 注入面
+ * @param {{token: string, log: (line: string) => void, fetchImpl: typeof fetch, sleep: (ms: number) => Promise<void>, writeLogFile?: (text: string) => string, writeLogChunks?: (pack: ReturnType<typeof packFailingLogs>, manifest: ReturnType<typeof buildChunkManifest>) => string, root?: string}} io 注入面
  * @param {string} repo `owner/repo`
  * @param {Array<unknown>} runs 主路径读到的本跑（`main.runs`）
  * @param {ReadonlySet<string>} redConclusions 判红词表（与主路径同一份，不抄第二份）
@@ -334,7 +465,7 @@ export async function dumpFailingRunLogs(io, repo, runs, redConclusions) {
     /** stage 日志里还能打多少字节窗口（避免把这一段自己顶到 CNB 的 102400 上限）。 */
     let stageBudget = STAGE_WINDOW_MAX_BYTES;
     io.log(
-      `[verdict] ── 回读失败 job 日志：${String(redRuns.length)} 条判红的 run（stage 窗口上限 ${String(STAGE_WINDOW_MAX_BYTES / 1024)} KiB，全量走附件）──`,
+      `[verdict] ── 回读失败 job 日志：${String(redRuns.length)} 条判红的 run（stage 窗口上限 ${String(STAGE_WINDOW_MAX_BYTES / 1024)} KiB，全量见每个 job 的下载端点）──`,
     );
     for (const run of redRuns) {
       if (!isRecord(run)) {
@@ -400,6 +531,11 @@ export async function dumpFailingRunLogs(io, repo, runs, redConclusions) {
           continue;
         }
         const clean = redactSecrets(logRes.text, io.token);
+        /* 全量通道 = GA 的日志端点本身（这一档上没 docker：`cnbcool/attachments` 那类上传格
+         * 0s 就红 `Runner does not enable Docker.`）。给 URL，不再把正文印第二遍。 */
+        io.log(
+          `[verdict]     全量下载：${jobLogUrl(repo, String(job.id))}（需 actions: read；共 ${String(clean.split("\n").length)} 行 / ${String(Buffer.byteLength(clean, "utf8"))} 字节）`,
+        );
         if (archiveBytes < RUN_LOGS_TOTAL_MAX_BYTES) {
           const cut = truncateJobLog(clean, JOB_LOG_FILE_MAX_BYTES);
           archiveBytes += cut.bytes;
@@ -432,11 +568,11 @@ export async function dumpFailingRunLogs(io, repo, runs, redConclusions) {
         }
         if (shownErrors < raw.errors.length) {
           io.log(
-            `[verdict]     其余 ${String(raw.errors.length - shownErrors)} 条注解不再打（stage 预算用尽；全量见附件）`,
+            `[verdict]     其余 ${String(raw.errors.length - shownErrors)} 条注解不再打（stage 预算用尽；全量见下载端点）`,
           );
         }
         if (stageBudget <= 0) {
-          io.log(`[verdict]   失败窗口不再打（stage 预算已用尽；全量见附件）`);
+          io.log(`[verdict]   失败窗口不再打（stage 预算已用尽；全量见下载端点）`);
           continue;
         }
         const win = capStageWindow(raw, stageBudget);
@@ -448,7 +584,7 @@ export async function dumpFailingRunLogs(io, repo, runs, redConclusions) {
         );
         if (win.truncated) {
           io.log(
-            `[verdict]   已截到 ${String(win.shownLines)} 行 / 上限 ${String(win.maxBytes)} 字节（全量见附件）`,
+            `[verdict]   已截到 ${String(win.shownLines)} 行 / 上限 ${String(win.maxBytes)} 字节（全量见下载端点）`,
           );
         }
         for (const line of win.lines) {
@@ -458,16 +594,37 @@ export async function dumpFailingRunLogs(io, repo, runs, redConclusions) {
       }
     }
     if (archiveFiles === 0) {
-      io.log("[verdict] 没有取到任何 job 日志正文 —— 不落盘、不产附件（判决不受影响）");
+      io.log("[verdict] 没有取到任何 job 日志正文 —— 不落盘（判决不受影响）");
       return;
     }
     const archiveText = archive.join("\n");
     const file = writeLogFile(archiveText);
     const absPath = path.isAbsolute(file) ? file : path.join(io.root ?? ROOT, file);
     io.log(
-      `[verdict] 全量日志已落盘：${absPath}（${String(archiveFiles)} 份 job / ${String(archiveBytes)} 字节）—— 由 ` +
-        `「GA 失败日志附件」stage 作为 commit attachment 上传（相对路径 ${file}）`,
+      `[verdict] 全量日志已落盘：${absPath}（${String(archiveFiles)} 份 job / ${String(archiveBytes)} 字节）—— ` +
+        `构建结束后工作区回收，跨跑请用上面每个 job 的「全量下载」端点（需 actions: read）`,
     );
+    /* 全量**也**走 stage 日志：gzip → base64 → 按块进 `日志分块 1..N` 那几格。
+     * 为什么要这几格：下载端点要一枚带 `actions: read` 的令牌才读得到，而「CI 上直接看见」
+     * 不该再额外依赖一枚令牌；分块 + sha256 让读者能把日志里那几段拼回原文件再核对。
+     * 为什么不是「几十个 stage」：单 stage 封顶 102400 字节（实测），块数按实测体积定 3；
+     * 超出时只印前 3 块并明念「其余见下载端点」（不静默丢）。 */
+    const pack = packFailingLogs(archiveText);
+    const manifest = buildChunkManifest(pack);
+    const writeChunks = io.writeLogChunks ?? writeChunkFiles;
+    const manifestPath = writeChunks(pack, manifest);
+    io.log(
+      `[verdict] 全量可重建：原文 ${String(pack.rawBytes)} 字节 → gzip ${String(pack.gzipBytes)} → base64 ${String(pack.base64Bytes)} → ${String(manifest.chunkCount)} 块 ` +
+        `（静态 ${String(LOG_CHUNK_STATIC_STAGES)} 格；整包 sha256 ${manifest.sha256}）`,
+    );
+    io.log(
+      `[verdict]   分块清单：${manifestPath}；拼回：按 chunk-1..${String(manifest.chunkCount)}.b64 顺序拼接（去换行）→ base64 解码 → gunzip → 核对 sha256`,
+    );
+    if (manifest.truncated) {
+      io.log(
+        `[verdict]   ⚠️ 本次 ${String(manifest.chunkCount)} 块超过静态 ${String(LOG_CHUNK_STATIC_STAGES)} 格：**只印前 ${String(manifest.printedChunks)} 块**，其余全量见上面每个 job 的下载端点`,
+      );
+    }
 
   } catch (error) {
     /* 这一格只加读数：任何意外都折成一行脱敏读数，绝不改变调用方的退码。 */

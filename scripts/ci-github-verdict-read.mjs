@@ -78,14 +78,21 @@
  * node scripts/ci-github-verdict-read.mjs               # 三态退码（本地自查 / 将来承重那一档）
  * node scripts/ci-github-verdict-read.mjs --readout     # 读数档：三态照打点，退码恒 0（CI 主列那一格）
  * node scripts/ci-github-verdict-read.mjs --dry-run     # 只打印计划，不发任何请求
+ * node scripts/ci-github-verdict-read.mjs --decision-out <文件>  # 承重档（CI 现役形态，见下）
  * ```
+ *
+ * **`--decision-out` 是 `.cnb.yml` 现役那一格用的形态**：三态照常打点，结论另写一份
+ * 判定文件，本格**退 0** —— 为的是让后面的 `日志分块 1..N` 那几格还跑得到（CNB 的 stage
+ * 串行，前一格红后面就不跑，而「判红」恰恰最需要看日志）。真正的退码由
+ * `ci-github-verdict-decide.mjs` 读那份文件给出，**fail-closed** 一字不差（读不到判定
+ * 文件 ⇒ exit 2）。`--readout` 与它都不要和 `--dry-run` 混用。
  *
  * 环境变量：`GITHUB_MIRROR_TOKEN`（必填；`actions: read` 主路径 / `checks: read` 兜底，
  * 任一即可、两条都给最稳）、`GITHUB_MIRROR_REPO`（缺省 `wuxianyuedu/comfy-app`）、
  * `CNB_PULL_REQUEST_IID`（PR 流水线注入）。
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import {
@@ -768,12 +775,88 @@ export async function runVerdict(io) {
   }
 }
 
+/**
+ * 取一个带值的命令行选项（`--name value`；缺值 / 没有这一项 ⇒ `null`）。
+ *
+ * @param {string[]} argv 参数表
+ * @param {string} name 选项名
+ * @returns {string | null} 选项值
+ */
+export function readOption(argv, name) {
+  const at = argv.indexOf(name);
+  if (at === -1 || at === argv.length - 1) {
+    return null;
+  }
+  return argv[at + 1] ?? null;
+}
+
+/**
+ * 写判定文件（`--decision-out`）：三态与那条结论原样落盘，交给
+ * `ci-github-verdict-decide.mjs` 退码。落盘失败**不吞**（调用方退 2，fail-closed）。
+ *
+ * @param {string} file 目标路径（绝对或相对检出根）
+ * @param {{code: number, exitCode: number, line: string}} payload 判定
+ * @param {{root?: string,
+ *          mkdir?: (dir: string) => void,
+ *          writeFile?: (target: string, text: string) => void}} [io] 注入面
+ * @returns {boolean} true ⇒ 落盘成功
+ */
+export function writeDecisionFile(file, payload, io = {}) {
+  const abs = path.isAbsolute(file) ? file : path.join(io.root ?? ROOT, file);
+  const mkdir = io.mkdir ?? ((dir) => mkdirSync(dir, { recursive: true }));
+  const writeFile =
+    io.writeFile ?? ((target, text) => writeFileSync(target, text, "utf8"));
+  try {
+    mkdir(path.dirname(abs));
+    writeFile(
+      abs,
+      JSON.stringify(
+        {
+          version: 1,
+          code: payload.code,
+          exitCode: payload.exitCode,
+          line: payload.line,
+          writtenAt: new Date().toISOString(),
+        },
+        null,
+        2,
+      ),
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   const dryRun = process.argv.includes("--dry-run");
   const readout = process.argv.includes("--readout");
-  const code = await runVerdict({ dryRun, env: process.env });
+  const decisionOut = readOption(process.argv, "--decision-out");
+  /* 收集本格打过的行：判定文件里要带上那条「结论：exit N —— …」原文，让判定格不用再猜。 */
+  /** @type {string[]} */
+  const printed = [];
+  const code = await runVerdict({
+    dryRun,
+    env: process.env,
+    log: (line) => {
+      printed.push(line);
+      console.log(line);
+    },
+  });
+  const exitCode = exitCodeFor(code, readout);
+  if (decisionOut !== null) {
+    /* 承重档（CI 现役）：本格退 0，把退码交给判定格 —— 否则后面那几格「日志分块」
+     * 在判红那一形上根本跑不到（CNB stage 串行，前一格红后面不跑）。 */
+    const line = printed.filter((text) => text.includes("结论")).at(-1) ?? "";
+    if (!writeDecisionFile(decisionOut, { code, exitCode, line })) {
+      console.log("[verdict] 判定文件没写成 —— fail-closed：本格退 2（判定格读不到任何东西）");
+      process.exit(2);
+    }
+    console.log(`[verdict] 判定已落盘：${decisionOut}（三态 = exit ${String(exitCode)}；退码由 ci-github-verdict-decide.mjs 给出）`);
+    process.exit(0);
+  }
   if (readout && code !== CODE.OK) {
     console.log("[verdict] 读数档：上面那一行是三态原值；这一格不折进流水线判决（--readout）");
   }
-  process.exit(exitCodeFor(code, readout));
+  process.exit(exitCode);
 }

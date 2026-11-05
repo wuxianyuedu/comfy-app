@@ -2,24 +2,33 @@
  * 全部走注入面（fetch / sleep / writeLogFile 都是假件）：一次真网络、一次真墙钟、一次真磁盘都不付；
  * 令牌脱敏与「日志取不到不改判决」是这一拍的两条硬边界，各有用例钉着。
  *
- * 另有一条**契约断言**：`.cnb.yml` 里必须有一个附件 stage，路径与脚本落盘路径同源 ——
- * 否则落盘的文件没人上传，等于白落。 */
+ * 另有一条**契约断言**：`.cnb.yml` 不许回退到「附件」通道 —— 自托管节点没 docker，
+ * `cnbcool/attachments` 那类格 0s 就红（`Runner does not enable Docker.`）。 */
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   JOB_LOGS_DIR_REL,
   JOB_LOGS_FILE_NAME,
+  LOG_CHUNKS_DIR_REL,
+  LOG_CHUNK_MAX_BYTES,
+  LOG_CHUNK_STATIC_STAGES,
+  LOG_MANIFEST_FILE_NAME,
   STAGE_WINDOW_MAX_BYTES,
+  buildChunkManifest,
   capStageWindow,
   dumpFailingRunLogs,
   extractFailureWindow,
   jobLogUrl,
+  packFailingLogs,
   redactSecrets,
   runJobsUrl,
   truncateJobLog,
+  wrapBase64,
 } from "../scripts/ci-github-verdict-logs.mjs";
 import { CODE } from "../scripts/ci-github-mirror-push.mjs";
 import { runVerdict } from "../scripts/ci-github-verdict-read.mjs";
+import { gunzipSync } from "node:zlib";
 
 /* 占位形状（§12.13）：**不用**能被当成真凭据的字面量来拼 —— 与
  * `check-tracked-secrets.test.ts` 同一写法（前缀与随机段分开拼）。 */
@@ -115,14 +124,14 @@ describe("纯函数：脱敏 / 截断 / 失败窗口", () => {
     expect(win.startLine).toBe(1);
   });
 
-  it("capStageWindow：恰好 60 KiB 不截；+1 字节截到首尾并写「全量见附件」", () => {
+  it("capStageWindow：恰好 60 KiB 不截；+1 字节截到首尾并写「全量见下载端点」", () => {
     const exact = "z".repeat(STAGE_WINDOW_MAX_BYTES);
     const win = { errors: [], lines: [exact], startLine: 1 };
     expect(capStageWindow(win).truncated).toBe(false);
     const big = Array.from({ length: 1000 }, () => "z".repeat(100)).join("\n");
     const capped = capStageWindow({ errors: [], lines: big.split("\n"), startLine: 1 });
     expect(capped.truncated).toBe(true);
-    expect(capped.lines.join("\n")).toContain("全量见附件");
+    expect(capped.lines.join("\n")).toContain("全量见下载端点");
     expect(capped.shownLines).toBeLessThan(capped.totalLines);
   });
 
@@ -138,6 +147,56 @@ describe("纯函数：脱敏 / 截断 / 失败窗口", () => {
       `https://api.github.com/repos/${REPO}/actions/runs/123/jobs?per_page=100`,
     );
     expect(jobLogUrl(REPO, 456)).toBe(`https://api.github.com/repos/${REPO}/actions/jobs/456/logs`);
+  });
+});
+
+describe("全量通道：gzip + base64 + 分块（可拼接 / 有校验和 / 单块不超 stage 上限）", () => {
+  /** 高熵正文（逐行 sha256 的十六进制）：压缩比压不下来，才测得出「多块」与切块边界。 */
+  const noise = (lines: number): string =>
+    Array.from({ length: lines }, (_, i) =>
+      createHash("sha256").update(String(i)).digest("hex"),
+    ).join("\n");
+
+  it("分块能**逐字**拼回（去换行 → base64 解码 → gunzip 与原文本一致），sha256 在清单里", () => {
+    const text = noise(8000);
+    const pack = packFailingLogs(text);
+    expect(pack.chunks.length).toBeGreaterThan(1);
+    /* 切块边界：除最后一块外，每块都顶满 LOG_CHUNK_MAX_BYTES（否则「块数可控」是假的）。 */
+    for (const chunk of pack.chunks.slice(0, -1)) {
+      expect(chunk.length).toBe(LOG_CHUNK_MAX_BYTES);
+    }
+    expect(pack.chunks.at(-1)?.length ?? 0).toBeLessThanOrEqual(LOG_CHUNK_MAX_BYTES);
+    const joined = pack.chunks.join("");
+    expect(Buffer.from(joined, "base64")).toHaveLength(pack.gzipBytes);
+    expect(gunzipSync(Buffer.from(joined, "base64")).toString("utf8")).toBe(text);
+    expect(pack.rawBytes).toBe(Buffer.byteLength(text, "utf8"));
+    expect(pack.sha256).toHaveLength(64);
+    /* 折行只加换行：拆掉换行必须与原 base64 逐字相同（复制的读者靠这一条才拼得对）。 */
+    expect(wrapBase64(joined).replace(/\n/gu, "")).toBe(joined);
+  });
+
+  it("超长单行（20 万字符）照样能拼回（分块按字节切，不按行切）", () => {
+    const text = `HEAD\n${"y".repeat(200_000)}\nTAIL`;
+    const pack = packFailingLogs(text);
+    const back = gunzipSync(Buffer.from(pack.chunks.join(""), "base64")).toString("utf8");
+    expect(back).toBe(text);
+  });
+
+  it("buildChunkManifest：块数多于静态格数时**明写** truncated，不多印也不假装齐了", () => {
+    const pack = {
+      base64Bytes: 0,
+      chunks: ["a", "b", "c", "d"],
+      gzipBytes: 0,
+      rawBytes: 0,
+      sha256: "0".repeat(64),
+    };
+    const manifest = buildChunkManifest(pack);
+    expect(manifest.chunkCount).toBe(4);
+    expect(manifest.printedChunks).toBe(LOG_CHUNK_STATIC_STAGES);
+    expect(manifest.truncated).toBe(true);
+    expect(manifest.reconstruct).toContain("gunzip");
+    const few = buildChunkManifest({ ...pack, chunks: ["a"] });
+    expect(few.truncated).toBe(false);
   });
 });
 
@@ -178,6 +237,7 @@ describe("dumpFailingRunLogs（日志取不到不改判决 / 全量落盘 / 窗�
       },
       sleep: () => Promise.resolve(),
       token: EXACT_TOKEN,
+      writeLogChunks: () => `${LOG_CHUNKS_DIR_REL}/${LOG_MANIFEST_FILE_NAME}`,
       writeLogFile: (text: string) => {
         written.push(text);
         return handlers.write ? handlers.write(text) : `${JOB_LOGS_DIR_REL}/${JOB_LOGS_FILE_NAME}`;
@@ -186,7 +246,7 @@ describe("dumpFailingRunLogs（日志取不到不改判决 / 全量落盘 / 窗�
     return { heard, io, written };
   };
 
-  it("失败 job ⇒ step / 注解 / 原始窗口进 stage，全量脱敏落盘且附件路径念出来", async () => {
+  it("失败 job ⇒ step / 注解 / 原始窗口 / 全量下载端点进 stage，全量脱敏落盘", async () => {
     const { heard, io, written } = harness({});
     await dumpFailingRunLogs(io, REPO, [runOf()], RED);
     const all = heard.join("\n");
@@ -196,7 +256,13 @@ describe("dumpFailingRunLogs（日志取不到不改判决 / 全量落盘 / 窗�
     expect(all).toContain("失败注解：##[error]Process completed with exit code 1.");
     expect(all).toContain("失败窗口");
     expect(all).toContain("##[group]Run pnpm lint");
-    expect(all).toContain(`${JOB_LOGS_DIR_REL}/${JOB_LOGS_FILE_NAME}`);
+    expect(all).toContain("全量日志已落盘");
+    expect(all).toContain(JOB_LOGS_FILE_NAME);
+    /* 全量通道 = GA 自己的日志端点（这一档没 docker，附件格起不来）。 */
+    expect(all).toContain(jobLogUrl(REPO, "456"));
+    /* 全量**也**进 stage 日志：分块摘要 + 清单路径 + 逐字重建说明。 */
+    expect(all).toContain("全量可重建");
+    expect(all).toContain(`${LOG_CHUNKS_DIR_REL}/${LOG_MANIFEST_FILE_NAME}`);
     /* 落盘正文是全量、已脱敏：令牌形状一个都不许出现。 */
     expect(written).toHaveLength(1);
     expect(written[0]).toContain("job「static-gates」");
@@ -234,7 +300,7 @@ describe("dumpFailingRunLogs（日志取不到不改判决 / 全量落盘 / 窗�
     expect(heard.join("\n")).not.toContain("取不到：");
   });
 
-  it("失败窗口超 60 KiB ⇒ 保留首尾并写「已截到 N 行 / 上限 M 字节（全量见附件）」", async () => {
+  it("失败窗口超 60 KiB ⇒ 保留首尾并写「已截到 N 行 / 上限 M 字节（全量见下载端点）」", async () => {
     const huge = [
       "##[group]Run heavy",
       ...Array.from({ length: 5000 }, (_, i) => `line-${String(i)}-${"q".repeat(30)}`),
@@ -244,7 +310,7 @@ describe("dumpFailingRunLogs（日志取不到不改判决 / 全量落盘 / 窗�
     const { heard, io } = harness({ logs: () => new Response(huge, { status: 200 }) });
     await dumpFailingRunLogs(io, REPO, [runOf()], RED);
     const all = heard.join("\n");
-    expect(all).toMatch(new RegExp(String.raw`已截到 \d+ 行 / 上限 \d+ 字节（全量见附件）`, "u"));
+    expect(all).toMatch(new RegExp(String.raw`已截到 \d+ 行 / 上限 \d+ 字节（全量见下载端点）`, "u"));
     expect(all).toContain("##[error]Process completed with exit code 1.");
   });
 
@@ -282,7 +348,7 @@ describe("dumpFailingRunLogs（日志取不到不改判决 / 全量落盘 / 窗�
     expect(secondCap ?? 0).toBeLessThan(firstCap ?? 0);
   });
 
-  it("落盘抛异常也只是少一份附件：不向上抛、判决读数照旧", async () => {
+  it("落盘抛异常也只是少一份本地文件：不向上抛、判决读数照旧", async () => {
     const { heard, io } = harness({
       write: () => {
         throw new Error(`磁盘满了 ${TOKEN}`);
@@ -330,6 +396,7 @@ describe("runVerdict 集成：判红 + job 日志取不到 ⇒ 退码不变", ()
       runGit: gitOk,
       sleep: () => Promise.resolve(),
       now: () => 1,
+      writeLogChunks: () => `${LOG_CHUNKS_DIR_REL}/${LOG_MANIFEST_FILE_NAME}`,
       writeLogFile: () => `${JOB_LOGS_DIR_REL}/${JOB_LOGS_FILE_NAME}`,
     };
     return { calls, heard, io };
@@ -345,11 +412,26 @@ describe("runVerdict 集成：判红 + job 日志取不到 ⇒ 退码不变", ()
   });
 });
 
-describe("契约：.cnb.yml 的附件 stage 与落盘路径同源", () => {
-  it("有「GA 失败日志附件」stage，上传的正是脚本写的那个相对路径", () => {
+describe("契约：.cnb.yml 的全量通道**不许依赖 docker**", () => {
+  it("没有 `cnbcool/attachments` 这类插件格；分块三格 + 判定格在役且入口对得上", () => {
     const yml = readFileSync(new URL("../.cnb.yml", import.meta.url), "utf8");
-    expect(yml).toContain("GA 失败日志附件");
-    expect(yml).toContain("cnbcool/attachments");
-    expect(yml).toContain(`${JOB_LOGS_DIR_REL}/${JOB_LOGS_FILE_NAME}`);
+    /* 实测 cnb-l4r-1k6lcffnv：`cnbcool/attachments` 那格要 docker，自托管节点 0s 红
+     * `Runner does not enable Docker.` —— 必红的格一个都不许留（注释里记由来不算）。 */
+    const live = yml
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("#"))
+      .join("\n");
+    expect(live).not.toContain("cnbcool/attachments");
+    expect(yml).toContain("日志分块 1/3");
+    expect(yml).toContain("日志分块 2/3");
+    expect(yml).toContain("日志分块 3/3");
+    expect(yml).toContain("ci-print-log-chunk.mjs");
+    expect(yml).toContain("GitHub 判决判定");
+    expect(yml).toContain("ci-github-verdict-decide.mjs");
+    /* 回读格退码 0、判定交给后面那格：`--decision-out` 必须在场。 */
+    expect(yml).toContain("--decision-out");
+    /* 分块格数必须与模块常量同源（多一格 / 少一格都红）。 */
+    const chunkStages = ["1", "2", "3"].filter((i) => yml.includes(`日志分块 ${i}/3`));
+    expect(chunkStages).toHaveLength(LOG_CHUNK_STATIC_STAGES);
   });
 });
