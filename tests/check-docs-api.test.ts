@@ -1,6 +1,7 @@
 /**
  * `scripts/check-docs-api.cjs` 的判据（ISSUE #1329 收尾 → **ISSUE #2231 改判据对象**）。上一版拦「`docs/api/**` 生成物静默过期」——它进 git 且被承诺随构建链更新，构建链却不调 `pnpm docs`。
- * #2231 把产物**从 git 搬走**（`.gitignore` 的 `docs/api/`）后该问题没了对象，改判三件事：① 触发面 = typedoc `entryPoints` **直接映射** ∪ 闭包叶子集（逐条钉边界，含 `.test.ts`）；
+ * #2231 把产物**从 git 搬走**（`.gitignore` 的 `docs/api/`）后该问题没了对象，改判三件事：① 触发面 = typedoc 的**解析面**
+ * （TS 程序：`tsconfig.json` 展开的根 ∪ 沿 import 走到的文件，ISSUE #2537 —— 旧面按 `entryPoints` 算，系统性偏窄）；
  * ② 骨架齐全且可移植（缺主题文件=打开即坏、烤进本机绝对路径=换机器不成立）；③ `--autofix` 不再接受（「自动修+再判」正是让陈旧在 CI 隐形那格）。夹具用一次性目录，不碰仓库 `docs/api`。
  */
 import { execFileSync } from "node:child_process";
@@ -52,13 +53,18 @@ afterEach(() => {
   }
 });
 
-describe("触发面 = typedoc 的输入面（不是启发式收窄）", () => {
-  it("入口 glob 覆盖的三个目录里的源码都触发", () => {
+describe("触发面 = typedoc 的解析面（TS 程序，不是 entryPoints 那几页）", () => {
+  it("解析根覆盖的目录里的源码都触发（含 src/app 与前端组件）", () => {
     for (const f of [
       "src/lib/markdown/render.ts",
       "src/lib/core/config.ts",
       "src/server/workshop/comfyui.ts",
       "src/trpc/routers/workflow.ts",
+      "src/components/workshop/WorkshopStageBody.tsx",
+      "src/app/page.tsx",
+      /* ISSUE #2537 / 事故 #2528：被 tests 静态 import 进 TS 程序、旧面漏掉的那一类。 */
+      "tests/publish-desktop-bundle.test.ts",
+      "scripts/publish-desktop-bundle.mjs",
     ]) {
       expect(matchedInputs([f]), `${f} 应触发`).toEqual([f]);
     }
@@ -70,14 +76,15 @@ describe("触发面 = typedoc 的输入面（不是启发式收窄）", () => {
     }
   });
 
-  it("与产物无关的改动不触发（不给普通提交加一整轮重生成）", () => {
+  it("不是 typedoc 解析面的改动不触发（只改文档不给普通提交加一整轮重生成）", () => {
+    /* 注意：`src/app` / `src/components` / `tests/**` / `scripts/**` **在**解析面里
+     * （tsconfig 的 `include` 覆盖它们，typedoc 的 TS 程序读它们），所以它们触发 ——
+     * 见上一条。这里只列真的不在程序里的路径。 */
     for (const f of [
-      "src/components/workshop/WorkshopStageBody.tsx",
-      "src/app/page.tsx",
       "docs/standards/13-提交与-code-review.md",
-      "tests/check-docs-api.test.ts",
-      "scripts/check-file-structure.cjs",
+      "docs/api/index.html",
       "README.md",
+      "CHANGELOG.md",
     ]) {
       expect(matchedInputs([f]), `${f} 不该触发`).toEqual([]);
     }
@@ -91,11 +98,14 @@ describe("触发面 = typedoc 的输入面（不是启发式收窄）", () => {
     }
   });
 
-  it("入口 glob 是 `!(*.test).ts`，所以 src/lib 下的 .test.ts 也在面内", () => {
-    // 这条看着反直觉，但它是「直接映射」的证据：typedoc 的入口写的是
-    // `src/lib/**/!(*.test).ts`，`*` 不跨目录，所以嵌套测试文件本来就在展开集合里。
-    // 收窄成「排除 *.test.ts」是**多写的启发式**，与配置脱钩（配置改了它不会跟）。
+  it("`tests/**` 的测试文件也在面内（它们进 TS 程序，typedoc 解析它们）", () => {
+    /* 旧口径只收 `src/lib/**\/*.ts` 那一批；ISSUE #2537 起面按 TS 程序的解析根算 ——
+     * tsconfig 的 include 覆盖 `tests/**`，而 typedoc 正是拿它的展开结果建程序 ⇒ `tests/**`
+     * 里的文件（含 `.test.ts`）改了就会改解析结果。#2528 的漏判正是从这儿来的。 */
     expect(matchedInputs(["src/lib/endpoints.test.ts"])).toEqual(["src/lib/endpoints.test.ts"]);
+    expect(matchedInputs(["tests/check-docs-api.test.ts"])).toEqual([
+      "tests/check-docs-api.test.ts",
+    ]);
     expect(INPUT_RES.some((re) => re.test("src/lib/x.ts"))).toBe(true);
   });
 
@@ -107,7 +117,7 @@ describe("触发面 = typedoc 的输入面（不是启发式收窄）", () => {
 
   it("多文件清单只回命中项，顺序保持", () => {
     expect(matchedInputs(["README.md", "src/lib/a.ts", "pnpm-lock.yaml", "src/app/x.tsx"])).toEqual(
-      ["src/lib/a.ts", "pnpm-lock.yaml"],
+      ["src/lib/a.ts", "pnpm-lock.yaml", "src/app/x.tsx"],
     );
   });
 

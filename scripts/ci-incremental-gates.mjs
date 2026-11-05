@@ -139,10 +139,14 @@ const { TRIGGER_GLOBS: FILE_STRUCTURE_TRIGGER_GLOBS } = createRequire(import.met
  *     而它**不是上界** —— typedoc 沿 import 走，三根之外的文件也会进产物
  *     （`BackupResult` 定义在 `scripts/db-backup-core.mjs`，它出现在 `docs/api/**` 里）。
  *     面判窄了 = **漏判**，而漏判是静默的（这一格被 `ifModify` 跳过，与「判过且通过」
- *     在读数上无差别）。现在那份面 = 三根 ∪ **闭包叶子集**，而叶子集**不是手抄的**：
- *     真相由 `scripts/docs-api-input-closure.mjs` 算出（从 `typedoc.json` 的
- *     `entryPoints` 出发沿静态 import 走），由 `tests/ci-incremental-gates.test.ts`
- *     双向核对 —— 闭包里多出任何一个文件、而面里没有它 ⇒ 当场红。
+ *     在读数上无差别）。
+ *     ⚠️ **2026-11-05 再订正（ISSUE #2537 / 事故 #2528）**：只按 `entryPoints` 走的闭包
+ *     仍然偏窄 —— typedoc **解析**的是 TS 程序（`tsconfig.json` 展开的根 ∪ 沿 import
+ *     走到的文件），`entryPoints` 只决定渲染哪几页。`scripts/publish-desktop-bundle.mjs`
+ *     正是被 `tests/**` import 进程序、却不在旧面里的那类 ⇒ 那一格静默跳格。
+ *     现在面由 `scripts/docs-api-input-closure.mjs` 的 `docsApiTriggerGlobs()` **从解析根
+ *     派生**（tsconfig 展开 ∩ git 跟踪文件 → `dir/**` + 根级 `*.<ext>`），由
+ *     `tests/docs-api-input-closure.test.ts` 双向对账（事实面罩不住 ⇒ 红；面被改窄 ⇒ 红）。
  *   · `生成态文档与源同步` ⇒ `doc-facts.cjs` 的 `SCOPED_DOCS`（源）与 `docs/generated/**`
  *     （产物）；源与产物**都在 `docs/**` 下面**，故取上界 `docs/**`（逐条抄 32 个路径
  *     就是第二份会漂的副本 —— 抄一份的漂移形态是「新增一篇文档忘了加进收窄面」）。
@@ -314,11 +318,12 @@ const DOC_PLACEHOLDER_GLOBS = ["docs/**"];
     script: "scripts/check-docs-api.cjs",
     why:
       "它判的是「**这一轮生成的** `docs/api/**` 可不可用」（跑得通 / 骨架齐全 / 可移植），" +
-      "所以面就是**它的输入面**（`check-docs-api.cjs` 自己的 `INPUT_GLOBS` = 三根 ∪ " +
-      "**闭包叶子集**：三根之外、改了会改产物的那批文件）。" +
-      "⚠️ 那份叶子集**不是手抄的**：真相由 `scripts/docs-api-input-closure.mjs` 算出" +
-      "（从 `typedoc.json` 的 `entryPoints` 出发沿静态 import 走），" +
-      "`tests/ci-incremental-gates.test.ts` 双向核对（ISSUE #2223：面判窄了 = 漏判，漏判是静默的）。" +
+      "所以面就是**它的输入面**：`check-docs-api.cjs` 的 `INPUT_GLOBS` 由 " +
+      "`docs-api-input-closure.mjs` 的 `docsApiTriggerGlobs()` **从 typedoc 的解析根派生**" +
+      "（`tsconfig.json` 展开 ∩ git 跟踪文件 → `dir/**` + 根级 `*.<ext>`），不是第二份手抄 glob。" +
+      "⚠️ ISSUE #2537（事故 #2528）：旧面按 `typedoc.json` 的 `entryPoints` 算，系统性偏窄 —— " +
+      "`scripts/publish-desktop-bundle.mjs` 被 `tests/**` import 进 TS 程序，旧面里没有它 ⇒ 静默跳格。" +
+      "`tests/docs-api-input-closure.test.ts` 双向对账（事实面里每个文件都必须被面罩住；面被改窄 ⇒ 红）。" +
       "⚠️ **产物面 `docs/api/**` 不在面里**（ISSUE #2231）：产物不再进 git ⇒ 它既不在变更" +
       "文件清单里、也不会被谁改坏 ⇒ 留在面里只是白占一行。" +
       "⚠️ 这一格是全流水线最贵的一格（自托管节点实测 201.8s），所以收窄不是优化而是**能不能常驻**的前提；" +
