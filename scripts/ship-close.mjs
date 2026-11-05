@@ -37,6 +37,7 @@ import { cnbJson, short } from "./ship-exec.mjs";
 import { finishIssueWork } from "./ship-claim.mjs";
 import { reportStage } from "./ship-stage.mjs";
 import { issueItemShapes } from "./ship-ticket.mjs";
+import { cnbData } from "./cnb-fields.mjs";
 
 /**
  * 一行文字里点名的 issue 号（`#2070` / `(#2070)` 两种写法都认，按出现顺序去重）。
@@ -422,7 +423,7 @@ export function fetchPullMergeProof({ run, slug, prNumber }) {
     String(prNumber),
     "-v",
   ]);
-  const d = got?.json?.data ?? null;
+  const d = cnbData(got?.json);
   if (!d || typeof d !== "object") {
     return unreadable;
   }
@@ -501,7 +502,11 @@ export function closeIssues(ctx) {
       asMergedProof = fetchPullMergeProof({ run, slug, prNumber: asMerged });
       log(
         `[ship] 落地证明改由人点名那条 PR 出：PR #${asMerged} 回读 is_merged=${
-          asMergedProof.state === "merged" ? "true" : asMergedProof.state === "not-merged" ? "false" : "(取不到)"
+          asMergedProof.state === "merged"
+            ? "true"
+            : asMergedProof.state === "not-merged"
+              ? "false"
+              : "(取不到)"
         }（标题「${asMergedProof.title || "(空/取不到)"}」）`,
       );
     } else {
@@ -615,7 +620,7 @@ export function closeIssues(ctx) {
       String(number),
       "-v",
     ]);
-    const d = back?.json?.data ?? null;
+    const d = cnbData(back?.json);
     /* ISSUE #3059：回读没跑起来 / 缺 `state` 键 ⇒ 关没关成**没有读数**（退 5），
      * 不按「没关成」落红（行为变更：这两种此前退 1，混在「平台说没关成」里）。 */
     const stateMissing = !d || d.state === undefined || d.state === null;
@@ -623,9 +628,11 @@ export function closeIssues(ctx) {
     const reason = d?.state_reason ?? "(无)";
     const at = d?.closed_at ?? "(无)";
     log(
-      `[ship] #${number} 回读：state=${state} state_reason=${reason} closed_at=${at}${landed?.sha
+      `[ship] #${number} 回读：state=${state} state_reason=${reason} closed_at=${at}${
+        landed?.sha
           ? ` · 落地那一行 sha=${short(landed.sha)}`
-          : ` · 落地证明：${plan.sources.get(number) ?? "(未标注)"}`}`,
+          : ` · 落地证明：${plan.sources.get(number) ?? "(未标注)"}`
+      }`,
     );
     /* 「走到哪了」（ISSUE #3083）：关单这一格的身份是 issue 号 + 回读的 state 两件
      * 原值 —— 关没关成从这一行就看得见，不用等到「结论：exit N」。 */
@@ -635,8 +642,9 @@ export function closeIssues(ctx) {
     if (typeof d?.body === "string") {
       const s = issueItemShapes(d.body);
       log(
-        `[ship] #${number} 条目读数：\`###\` 小节 ${s.headings} · 复选 未勾 ${s.unchecked}/已勾 ${s.checked} · 序号 ${s.ordered}${s.total === 0 ? "（正文里没数出条目形态）" : ""
-          } —— 关的是**整张单**，这些条目的处置不随之判定；一条诉求一张单见规范 §13.10.9。` +
+        `[ship] #${number} 条目读数：\`###\` 小节 ${s.headings} · 复选 未勾 ${s.unchecked}/已勾 ${s.checked} · 序号 ${s.ordered}${
+          s.total === 0 ? "（正文里没数出条目形态）" : ""
+        } —— 关的是**整张单**，这些条目的处置不随之判定；一条诉求一张单见规范 §13.10.9。` +
           `这一格是读数，不改退码。`,
       );
     } else {

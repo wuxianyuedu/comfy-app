@@ -32,6 +32,7 @@ import path from "node:path";
 import { resolveGitDir } from "./git-dir.mjs";
 import { prBodyPlanLines } from "./ship-pull-body.mjs";
 import { CODE } from "./ship-codes.mjs";
+import { cnbData, cnbRecords } from "./cnb-fields.mjs";
 
 /* 退出码表的**唯一出处**是 `ship-codes.mjs`（ISSUE #3083：三态扩成 0–7 的分型表，
  * 「没跑起来」细分为冲突 / 排队 / 读数缺失 / 守卫 / 预检五类，2 的压栈语义不变）。
@@ -472,7 +473,9 @@ export function classifyIsMerged(v) {
  *   `isMerged` 是 `isMergedTri === "merged"` 的派生展示值；判读走 `isMergedTri`（ISSUE #3059）。
  */
 export function readPullVerdict(json) {
-  const d = json?.data ?? {};
+  /* 信封解包走单一出处（ISSUE #3060）：「data 缺了」与「拆错层」在这里分型。 */
+  /* 信封解包走单一出处（ISSUE #3060）；返回值按 JSDoc 的既有形状收窄。 */
+  const d = /** @type {import("./cnb-fields.mjs").CnbPullData | null} */ (cnbData(json)) ?? {};
   const tri = classifyIsMerged(d.is_merged);
   return {
     number: d.number === undefined ? null : Number(d.number),
@@ -578,16 +581,13 @@ export function readPullCreateError(json) {
  * @returns {any | null} 命中的那条记录（`number` / `is_merged` / `state` / `merged_by` 都从它读）
  */
 export function pullRecordForBranch(json, branch) {
-  const raw = json?.data;
-  const list = Array.isArray(raw)
-    ? raw
-    : raw && Array.isArray(raw.data)
-      ? raw.data
-      : Array.isArray(json)
-        ? json
-        : [];
+  const list = cnbRecords(json);
   for (const p of list) {
-    const ref = String(p?.head?.ref ?? "");
+    /* head 是平台给的（形状不在本仓手里），按信封收窄后取 ref。 */
+    const head = /** @type {{ref?: string} | null} */ (
+      typeof p.head === "object" && p.head !== null ? p.head : null
+    );
+    const ref = typeof head?.ref === "string" ? head.ref : "";
     if (ref === `refs/heads/${branch}`) {
       return p;
     }
