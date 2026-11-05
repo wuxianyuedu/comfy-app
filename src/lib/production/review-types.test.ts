@@ -303,6 +303,29 @@ describe("剧本评审位 · 改写留档与低分维度（#2478）", () => {
     expect(dirty.revisions).toEqual([{ at: "t2", markdown: "ok" }]);
   });
 
+  it("维度分解析只收「有限数字分 + 非空 key」，其余条目丢弃（不抛）", () => {
+    /* 模型给回的 JSON 是自由形状：key 全空白、分不是数字、分是 NaN、条目不是对象
+       都在真机上出现过。宽容口径是「丢掉这一条」，不是让整份判定读不出来。 */
+    const v = normalizeReviewVerdict({
+      pass: true,
+      issues: [],
+      suggestion: "",
+      scoredAt: "t",
+      scores: {
+        "  ": { score: 3, note: "" },
+        broken: "不是对象",
+        nan: { score: Number.NaN, note: "" },
+        ok: { score: 9, note: " 越界夹取 " },
+      },
+    });
+    expect(v?.scores).toEqual({ ok: { score: 5, note: "越界夹取" } });
+    // 一条可用的都没有 → 整层按「未评分」缺席
+    expect(
+      normalizeReviewVerdict({ pass: true, issues: [], suggestion: "", scoredAt: "t", scores: {} })
+        ?.scores,
+    ).toBeUndefined();
+  });
+
   it("weakScoreEntries：低分维度升序（最差先改）；未评分 → 空数组", () => {
     expect(weakScoreEntries(verdict)).toEqual([{ key: "structure", score: 2, note: "无高潮" }]);
     expect(
