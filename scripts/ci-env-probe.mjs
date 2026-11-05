@@ -329,7 +329,8 @@ export function stagesWithImage(text) {
     if (block === null) {
       continue;
     }
-    const found = block.split("\n").some((raw) => /^ {4}image:\s*\S/.test(raw));
+    const blockLines = block.split("\n");
+    const found = blockLines.some((raw) => /^ {4}image:\s*\S/.test(raw));
     if (found && !out.includes(name)) {
       out.push(name);
     }

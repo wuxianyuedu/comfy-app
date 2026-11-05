@@ -11,8 +11,8 @@
  *      重复键都会在这里报错）；
  *   ② **锚点 / 别名引用合法**——`toJS()` 解析时未知别名、断掉的锚点直接抛错，
  *      这恰是 `.cnb.yml` 大量用 `&gates` / `*gates` 的结构风险点；
- *   ③ 基本形态：每处 `stages:` 数组里每格都有非空的 `name` 与 `script`
- *      （CNB 的 stage 形态；GitHub workflows 的 `steps` 不做这层要求，只要求可解析）。
+ *   ③ 基本形态：每处 `stages:` 数组里每格都有非空的 `name` 与非空 `script`
+ *      （GitHub workflows 的 `steps` 不做这层要求，只要求可解析）。
  *
  * 跑法：`pnpm check:ci-yaml`（或 `node scripts/check-ci-yaml-parse.mjs`）。
  * 判据测试在 `tests/ci-yaml-parse.test.ts`。

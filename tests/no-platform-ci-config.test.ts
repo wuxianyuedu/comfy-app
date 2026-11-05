@@ -333,6 +333,15 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
    * 同一笔 head_sha，GitHub Actions 跑完没有、结论是什么。有结论且红 ⇒ 拦合；没跑起来 ⇒
    * exit 2 同样拦合；只有读到绿才放行。无跨档对应物，不进 CROSS_LANE_SCRIPT_MIRRORS。 */
   { name: "GitHub 判决回读", tier: "PR" },
+  /* 判红那一形的**全量日志通道**（2026-11-05 按实测重做）：回读格把失败 job 的脱敏正文压成
+   * gzip+base64 分块，这三格各打一块（每块 ≤ 90000 base64 字节，单 stage 封顶 102400）；
+   * 块数 / 整包 sha256 / 尺寸在 manifest 里，拼回来能逐字核对。这三格**不许红**（读不到就
+   * 各念一行、退 0），所以它们不是「判据」而是读数 —— 但仍然必须登记，否则闸序对不上。 */
+  { name: "日志分块 1/3", tier: "PR" },
+  { name: "日志分块 2/3", tier: "PR" },
+  { name: "日志分块 3/3", tier: "PR" },
+  /* 承重的那一格挪到分块之后：读回读格留下的 decision.json 并退真码（读不到 ⇒ exit 2）。 */
+  { name: "GitHub 判决判定", tier: "PR" },
   // ── push 档（COMFYAPP_CI_PUSH_GATES，树级校验档 + 镜像出口格）──
   { name: "合并形态复核", tier: "push" },
   { name: "GitHub master 镜像", tier: "push" },
