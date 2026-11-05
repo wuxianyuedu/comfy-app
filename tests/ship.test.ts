@@ -4419,6 +4419,10 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
   function pullHarness(
     env: {
       echoBody?: boolean;
+      /** `echoBody` 时平台回读的 `base.ref`（默认主干；栈式用例给父分支）。 */
+      echoBodyBase?: string;
+      /** `git fetch` 退非 0 且 stdout 无可解析内容 —— 引用可能过期那一格。 */
+      fetchFail?: boolean;
       getPull?: FakeResult;
       /** 首拉就取不到（stdout 里没有可解析 JSON）—— `scanPullPages` 的 `ran=false` 那一格。 */
       openPullsFail?: boolean;
@@ -4426,6 +4430,8 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
       patchPull?: FakeResult;
       postPull?: FakeResult;
       stat?: string;
+      /** 目标分支的远端跟踪引用在本地解析不到（`rev-parse --verify` 退非 0）。 */
+      targetRefMissing?: boolean;
     } = {},
   ) {
     const calls: Array<string> = [];
@@ -4445,6 +4451,17 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
         }
         return ok('{"status":200,"data":[]}');
       }
+      if (env.fetchFail === true && cmd === "git" && key.startsWith("fetch")) {
+        return { status: 1, stdout: "", stderr: "network down", error: null };
+      }
+      if (
+        env.targetRefMissing === true &&
+        cmd === "git" &&
+        key.includes("rev-parse") &&
+        key.includes("cnb/feat/parent")
+      ) {
+        return { status: 1, stdout: "", stderr: "", error: null };
+      }
       if (cmd === "cnb" && key.includes("patch-pull")) {
         return env.patchPull ?? ok('{"status":200,"data":{}}');
       }
@@ -4457,7 +4474,7 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
               status: 200,
               data: {
                 number: 2649,
-                base: { ref: "refs/heads/master" },
+                base: { ref: env.echoBodyBase ?? "refs/heads/master" },
                 mergeable_state: "mergeable",
                 blocked_on: "",
                 is_merged: false,
@@ -4850,6 +4867,66 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
     // 没有 errcode 的旧形状不猜：那一格仍由响应原文转述，不由这里编一个理由。
     expect(readPullCreateError({ status: 400, data: { message: "title invalid" } })).toBeNull();
     expect(readPullCreateError(null)).toBeNull();
+  });
+
+  it("栈式复用正文：diffstat 跟平台 base.ref，不是本地 upstream（ISSUE #3021）", () => {
+    /* 复用那一跳拿的是平台上这条 PR 的 `base.ref`（父分支）。正文里的 diffstat 若按
+     * 本地 upstream（`cnb/master`）算，就会把父分支整段算进「本 PR 改了哪些文件」。 */
+    const { calls, heard, io } = pullHarness({
+      echoBody: true,
+      echoBodyBase: "refs/heads/feat/parent",
+      openPullsPages: [
+        '{"status":200,"data":[{"number":2649,"head":{"ref":"refs/heads/feat/big"},"base":{"ref":"refs/heads/master"}}]}',
+      ],
+      stat: " a.ts | 1 +\n 1 file changed, 1 insertion(+)",
+    });
+    const out = createOrReusePull({ ...io, prBody: "人工正文" });
+    expect(out.number).toBe(2649);
+    const diff = calls.find((c) => c.includes("diff --stat")) ?? "";
+    expect(diff).toBe("git diff --stat cnb/feat/parent...HEAD");
+    expect(diff).not.toContain("cnb/master");
+    const fetchAt = calls.findIndex((c) => c === "git fetch cnb feat/parent");
+    expect(fetchAt).toBeGreaterThan(-1);
+    expect(fetchAt).toBeLessThan(calls.findIndex((c) => c.includes("diff --stat")));
+    expect(heard.join("\n")).toContain("本地 upstream 是 cnb/master，不是目标分支");
+    expect(calls.some((c) => c.includes("patch-pull"))).toBe(true);
+  });
+
+  it("平台 base.ref 解析不到 ⇒ 退回 upstream 并明念「没有跟随 base.ref」（ISSUE #3021）", () => {
+    const { calls, heard, io } = pullHarness({
+      echoBody: true,
+      echoBodyBase: "refs/heads/feat/parent",
+      openPullsPages: [
+        '{"status":200,"data":[{"number":2649,"head":{"ref":"refs/heads/feat/big"},"base":{"ref":"refs/heads/master"}}]}',
+      ],
+      targetRefMissing: true,
+    });
+    const out = createOrReusePull({ ...io, prBody: "人工正文" });
+    expect(out.number).toBe(2649);
+    const diff = calls.find((c) => c.includes("diff --stat")) ?? "";
+    expect(diff, "目标分支解析不到时应退回本地基线").toBe("git diff --stat cnb/master...HEAD");
+    const all = heard.join("\n");
+    expect(all).toContain("在本地解析不到");
+    expect(all).toContain("这一格没有跟随 PR 的 base.ref");
+    expect(calls.some((c) => c.includes("patch-pull"))).toBe(true);
+  });
+
+  it("fetch 没跑起来但引用可用 ⇒ 念「可能过期 / 建议重跑」，不阻断正文更新（ISSUE #3021）", () => {
+    const { calls, heard, io } = pullHarness({
+      echoBody: true,
+      fetchFail: true,
+      openPullsPages: [
+        '{"status":200,"data":[{"number":2649,"head":{"ref":"refs/heads/feat/big"},"base":{"ref":"refs/heads/master"}}]}',
+      ],
+    });
+    const out = createOrReusePull({ ...io, prBody: "人工正文" });
+    expect(out.number).toBe(2649);
+    const all = heard.join("\n");
+    expect(all).toContain("这份引用可能过期");
+    expect(all).toContain("别人 force-push / 本地久未 fetch");
+    expect(all).toContain("标题与 diffstat 可能跨到别人的提交");
+    expect(all).toContain("建议重跑");
+    expect(calls.some((c) => c.includes("patch-pull")), "念风险不等于阻断写入").toBe(true);
   });
 });
 
@@ -7032,6 +7109,54 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       expect(fetchAt, "取数前没有刷新目标分支的远端跟踪引用").toBeGreaterThan(-1);
       expect(fetchAt).toBeLessThan(base.calls.findIndex((c) => c.includes("diff --stat")));
       expect(heard.join("\n")).toContain("比对区间跟 PR 的目标分支：cnb/master");
+      expect(code).toBe(CODE.GREEN);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("栈式建 PR：标题与 diffstat 都按父分支区间，不出现 master 的数字（ISSUE #3021）", async () => {
+    /* 与上一条同一条纪律，但这次是**建 PR**那一跳：本地 upstream 是 `cnb/feat/parent`，
+     * 平台 `--base` 也是 `feat/parent`。diffstat 必须取 `cnb/feat/parent...HEAD` ——
+     * 取成 master 区间，正文里的「改了哪些文件」就会算进父分支那一段。 */
+    const { tmpRoot, gitDir } = proofRoot("stacked-diff-stat");
+    try {
+      const heard: Array<string> = [];
+      const calls: Array<string> = [];
+      const base = fake({ upstream: "cnb/feat/parent" });
+      const run = (cmd: string, args: Array<string>): FakeResult => {
+        const key = args.join(" ");
+        calls.push([cmd, ...args].join(" "));
+        if (cmd === "git" && key.includes("log --no-merges")) {
+          return key.includes("cnb/feat/parent..HEAD")
+            ? { status: 0, stdout: "feat(x): 我这一笔", stderr: "", error: null }
+            : { status: 0, stdout: "fix(parent): 别人的一笔 (#2955)", stderr: "", error: null };
+        }
+        if (cmd === "cnb" && key.includes("post-pull")) {
+          return { status: 201, stdout: '{"status":201,"data":{"number":2999}}', stderr: "", error: null };
+        }
+        return base.run(cmd, args);
+      };
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--no-wait"],
+      });
+      const post = calls.find((c) => c.includes("post-pull")) ?? "";
+      expect(post).toContain("--base feat/parent");
+      expect(post).toContain("--title feat(x): 我这一笔");
+      const diff = calls.find((c) => c.includes("diff --stat")) ?? "";
+      expect(diff, "diffstat 取了 master 区间，栈式 PR 会算进父分支的提交").toBe(
+        "git diff --stat cnb/feat/parent...HEAD",
+      );
+      expect(diff).not.toContain("cnb/master");
+      const fetchAt = calls.findIndex((c) => c === "git fetch cnb feat/parent");
+      expect(fetchAt, "取数前没有刷新父分支的远端跟踪引用").toBeGreaterThan(-1);
+      expect(fetchAt).toBeLessThan(calls.findIndex((c) => c.includes("diff --stat")));
+      expect(heard.join("\n")).toContain("比对区间跟 PR 的目标分支：cnb/feat/parent");
       expect(code).toBe(CODE.GREEN);
     } finally {
       fs.rmSync(tmpRoot, { recursive: true, force: true });

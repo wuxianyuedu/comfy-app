@@ -85,8 +85,14 @@ export function diffBaseRef({ run, log, baseRef, targetBranch, remote }) {
   const usable = run("git", ["rev-parse", "--verify", "--quiet", ref]).status === 0;
   if (usable) {
     const differs = baseRef !== null && ref !== baseRef;
+    /* fetch 没跑起来时**念但不阻断**：引用仍在、仍指向目标分支，一次网络抖动不必然
+     * 让结论错，挡住这一跳会把离线 / 平台抽风直接变成 ship 失败；但这份本地引用可能
+     * 过期（别人 force-push / 本地久未 fetch），后果要说清楚，由人决定要不要重跑。 */
+    const stale =
+      "（fetch 没跑起来，用的是本地那份远端跟踪引用 —— 这份引用可能过期" +
+      "（别人 force-push / 本地久未 fetch）⇒ 标题与 diffstat 可能跨到别人的提交；建议重跑）";
     log(
-      `[ship] 比对区间跟 PR 的目标分支：${ref}..HEAD${differs ? `（本地 upstream 是 ${baseRef}，不是目标分支）` : ""}${fetched ? "（已 fetch 刷新）" : "（fetch 没跑起来，用的是本地那份远端跟踪引用）"}`,
+      `[ship] 比对区间跟 PR 的目标分支：${ref}..HEAD${differs ? `（本地 upstream 是 ${baseRef}，不是目标分支）` : ""}${fetched ? "（已 fetch 刷新）" : stale}`,
     );
     return ref;
   }
