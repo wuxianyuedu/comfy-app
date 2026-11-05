@@ -2873,7 +2873,50 @@ Prepare；终止换来的不是省时间，是**销毁读数**。于是它成为
 > 形态复核 + 安装依赖 + 文档链三格 + 工作区出处），整条不再只有一格、成本也不再是
 > 20~35 秒 —— 而这正是当年那句「若哪天它扩成多格、成本上去了，先改判据与本节」所指的
 > 时刻。**结论不变、理由加重**：成本越高，终止销毁的结论越贵，`cancel-in-progress: false`
-> 比以前更不能松。判据本体一字未改（`tests/no-platform-ci-config.test.ts` R6）。
+> 比以前更不能松。
+
+###### `cancel-in-progress: false` 单独在场**不等于排队**：这把锁还缺 `wait: true`（ISSUE #3207）
+
+上面那一节把「不终止旧的一跑」修掉了，可它自己留下了一个没被读出来的前提：
+**「不终止」不等于「会等」**。官方 `grammar.md#pipeline-lock` 那一行是两个参数：
+
+| 参数                 | 默认值   | 说明                       |
+| ------------------ | ----- | ------------------------ |
+| `cancel-in-progress` | false | 终止占用锁**或等待锁**的流水线          |
+| `wait`               | false | 锁被占用时是否**等待**             |
+
+两个默认值叠起来是「既不终止、也不等」—— 于是两跑重叠时**后到那一跑的读数被销毁**，
+而 #2396 要的是「**两笔都该有结论**」。现场是同一分钟内的一对（2026-11-05）：
+
+| 构建                | createTime | 时长     | 终态    | Prepare 原文 |
+| ----------------- | ---------- | ------ | ----- | ---------- |
+| `cnb-310-1k6m7jap1` | 16:10:17Z  | 110274ms | success | `get lock moon-read/comfy-app-t3-push` 之后 6 格全绿 |
+| `cnb-o1g-1k6m7jj8q` | 16:10:26Z  | 405ms  | **error** | `Pipeline init error: The lock (moon-read/comfy-app-t3-push) is occupied and the current process is terminated.` |
+
+后到那一跑 6 格全 `skipped`、连一格都没跑。**最常见的产生方式不是人手连推**：
+合并后紧跟一次「删源分支」就是第二笔 `push`（`branch.delete` 用默认分支的代码与配置
+跑，见 `trigger-rule.md` §Branch 事件），而它是平台自己发起的 —— 没人会去补跑那笔，
+缺的读数就永久缺着。用户侧的观感正是「合并后触发的 push ci 被中断」。
+
+修法是把那个参数补上（`wait: true`，与 `cancel-in-progress: false` **不冲突**，
+官方 schema 里两者是同一张表的两个键）：
+
+```yaml
+.lock-push: &lock_push
+  key: push
+  cancel-in-progress: false   # 别终止旧的那一跑（#2396）
+  wait: true                  # 别掐掉新来的那一跑（#3207）
+```
+
+判据随之扩成两条，都在 **R6**（`tests/no-platform-ci-config.test.ts`）：`key: push`
+那把必须 `cancel-in-progress: false` **且** `wait: true`。反向复算三种：写回 `true`
+⇒ 点名「逐提交读数被销毁」；摘掉 `wait: true`、或写成 `wait: false`（与漏写同义，
+平台默认就是 `false`）⇒ 点名「后到那一跑在 Prepare 里直接被判 `the lock … is occupied`」。
+
+⚠️ 不要顺手把 `wait: true` 抄到 `daily` / `oneshot-*` 那几把上：那几档要的正是
+「同一台机上不要同时压两遍」（§13.5.3.8 / §13.5.21），排队会把互斥换成高峰时段的堆积。
+`wait` 的代价在这里是可以承受的 —— push 档两跑重叠时后到者只是**等**一条 110s 级的
+流水线（Prepare 大头的全量 clone 在等锁**之前**已经做完），而不是被销毁。
 
 ⚠️ 这是**这一档**的取舍，不是「`cancel-in-progress` 不好」：`daily` 与 `oneshot-*`
 那几档照旧终止（同一台机上不要同时压两遍那几格重档，见 §13.5.3.8 / §13.5.21）。
@@ -2885,8 +2928,10 @@ Prepare；终止换来的不是省时间，是**销毁读数**。于是它成为
 squash 不同分支 = 连续两次落 master = 两条 `push` 流水线，第二笔终止第一笔。
 
 判据在同一条用例里：**R2** 从「必须 `cancel-in-progress: true`」改成「必须**显式写了**
-这一行」（`null` = 漏写，两件事不同），**R6** 判 `key: push` 那把必须是 `false`。
-反向复算两种：把 `push` 那把写回 `true` ⇒ 点名「逐提交读数被销毁」；
+这一行」（`null` = 漏写，两件事不同），**R6** 判 `key: push` 那把必须是 `false`
+**且** `wait: true`（后一半见下一小节）。
+反向复算三种：把 `push` 那把写回 `true` ⇒ 点名「逐提交读数被销毁」；摘掉 `wait: true`
+⇒ 点名「后到那一跑在 Prepare 里直接被判 occupied」；
 把 `daily` 那把的 `cancel-in-progress` 删掉 ⇒ 点名「没有显式写」。
 
 **它不推翻 §13.5.21 那条「不动 `lock.key`、先有车道再分锁」的决定** —— 那条拒的是
@@ -2907,10 +2952,12 @@ squash 不同分支 = 连续两次落 master = 两条 `push` 流水线，第二�
 （一把锁挡的是「同一件事被重复排队」，不是「所有非 PR 的事」）；
 **R4** 任何一条非 PR 的 key 都不许等于退化形状 `pr-` 或 PR 那把；
 **R5** PR 那一条的 key 仍随 PR 编号变（#1981 那一半不许回退）；
-**R6** `key: push` 那把必须是 `cancel-in-progress: false`（#2396，理由见上一节）。
-反向复算实测过八种红形态：删掉 `key` 那一行 / 换回 `$CNB_BRANCH-质量门禁` /
+**R6** `key: push` 那把必须是 `cancel-in-progress: false` **且** `wait: true`
+（#2396 + #3207，理由见上面两小节 —— 前者管「别终止旧的」，后者管「别掐掉新的」）。
+反向复算实测过十种红形态：删掉 `key` 那一行 / 换回 `$CNB_BRANCH-质量门禁` /
 **去掉某条的 `lock:` 覆盖** / 两类并成一把 / 类锁漏掉 `cancel-in-progress` /
-`push` 那把写回 `cancel-in-progress: true` / 类锁里放变量 / 类锁写成 `pr-` ——
+`push` 那把写回 `cancel-in-progress: true` / **`push` 那把摘掉 `wait: true`** /
+**`push` 那把写成 `wait: false`**（与漏写同义）/ 类锁里放变量 / 类锁写成 `pr-` ——
 以及「解析器收不出流水线时必须出声」（恒空转的判据比没有判据更坏，见 §13.5.12）。
 
 ###### 同一族的一个面：**探针参数**不合格，「有 Python」会被判成「没有」
