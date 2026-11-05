@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @ts-nocheck -- 提交门槛脚本:API 文档生成与自检(由平台侧 .cnb.yml 调用,ISSUE #2231)
+// @ts-nocheck -- 提交门槛脚本:API 文档生成与自检(由平台侧 .cnb.yml 每日档调用,ISSUE #2231/#2537)
 /**
  * check-docs-api.cjs — API 文档（`docs/api/**`）的**生成 + 自检**判据（ISSUE #2231）。
  *
@@ -30,11 +30,13 @@
  *
  * ── 「产物与源脱节」那一族没有被放过，只是换了主人 ─────────────────────────
  *
- *   · 「改了什么会让产物变」= **输入面** ⇒ `INPUT_RES` / `INPUT_GLOBS` 仍然管着平台侧
- *     的 `ifModify` 收窄。但输入面**不再按 `entryPoints` 算**（ISSUE #2537）：typedoc
+ *   · 「改了什么会让产物变」= **输入面** ⇒ `INPUT_RES` / `INPUT_GLOBS` 仍供判据自己的
+ *     `--staged` 档与元测试使用。但输入面**不再按 `entryPoints` 算**（ISSUE #2537）：typedoc
  *     真正解析的是 TS 程序（`tsconfig.json` 展开的根 ∪ 沿 import 走到的文件），
  *     `entryPoints` 只决定渲染哪几页。面由 `scripts/docs-api-input-closure.mjs` 的
  *     `docsApiTriggerGlobs()` 从那份根派生，`tests/docs-api-input-closure.test.ts` 双向对账。
+ *     ⚠️ 2026-11-05 起它**不再喂 PR/合并侧的 `ifModify`**：那一格已降到每日档、每跑必判
+ *     （ISSUE #2537，见下面「执行者在哪」）。
  *   · 「产物本身过期」= **不存在了** —— 没有提交进 git 的产物，就没有「过期」这回事；
  *     每一轮生成的副本都是**这一轮**的（typedoc 的 `cleanOutputDir` 默认开 ⇒ 输出目录
  *     先被清空再写，上一轮的孤儿页面不可能留在里面；本判据把这条当成不变量来用，
@@ -51,12 +53,15 @@
  * （而那正是 #2231 让它在 CI 上失去意义的原因）。撞上它直接退 1 并说明为什么，
  * 而不是「静默忽略」—— 静默忽略一个旗标正是本仓最恨的那族（脚自称与实际不一致）。
  *
- * ── 执行者在哪（ISSUE #1975 改了，别照着旧注释去找）─────────────────────────
+ * ── 执行者在哪（ISSUE #1975 改了执行者，ISSUE #2537 改了档位）─────────────────
  *
- * 它挂在 `.cnb.yml` 的「API 文档生成与自检」那一格（平台侧、全量档）。本地出口是
+ * 它挂在 `.cnb.yml` 的「**每日 API 文档生成与自检**」那一格（每日档、全量档，每跑必判；
+ * GA `.github/workflows/daily.yml` 的 01:00 schedule 与 CNB 的手动/API 口都跑它）。
+ * **PR/合并侧不再即时判**：最晚次日 01:00 暴露，暴露窗口 ≤24h（实测：新输入面 98%
+ * 触发率、CI 中位 40.9s、占 140.2s 串行流水线的 30.6%）。本地出口是
  * `pnpm run docs`（只生成、不自检）与 `pnpm docs:check`（生成 + 自检）—— 但**都不是
  * 任何一次提交的必经产物**：产物不进 git，本地跑不跑都不影响提交。
- * 口径与逐条实测见规范 §13.5.17。
+ * 口径与逐条实测见规范 §13.5.17 / §13.5.23。
  */
 const fs = require("node:fs");
 const path = require("node:path");
