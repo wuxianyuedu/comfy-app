@@ -1,5 +1,5 @@
 // ── 会话 ⇄ 界面真值桥的落库行为（内存 SQLite + 真 Drizzle）──────
-// 桥（#2482）的正确性全在「表是同一批表」上：mock 掉 ./db 的 libsql 客户端、
+// 桥（#2482）的正确性全在「表是同一批表」上：mock 掉 ./db 的 node:sqlite 客户端、
 // 换成 tests/helpers/test-db 的内存库，仓储 / 桥 / 编排器写读的都是它。
 // 验收主轴是 FR-AG-01①③：AI 写 → production（界面可见）；界面改 → AI 下一次
 // get 读到（这里用「直接改 production 行」模拟界面侧写入）。

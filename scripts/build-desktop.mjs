@@ -518,11 +518,12 @@ if (existsSync(storeDir)) {
   // 载荷可解析性断言：这些是 server 启动路径上**必定**要解析的模块，其中
   // `@swc/helpers/_/_interop_require_default` 就是本次实测最先炸掉的那一个。
   // 缺件在这里失败 = 构建期就拦住；放过去就是用户双击时「窗口停在启动页」。
+  // `@libsql/client` 已随运行时迁到 Node 内置的 node:sqlite 退出本清单（#3171）：
+  // 它不再是启动路径上的模块，留在断言里会让 `--prod` 安装下的构建误红。
   const requireFromPayload = createRequire(join(staticDir, "package.json"));
   const mustResolve = [
     "next/dist/server/next.js",
     "@swc/helpers/_/_interop_require_default",
-    "@libsql/client",
   ];
   const unresolved = mustResolve.filter((spec) => {
     try {

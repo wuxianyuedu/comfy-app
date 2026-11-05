@@ -72,12 +72,13 @@ function useTempCwd(): { restore: () => void } {
 /**
  * 扫掉**上一轮**留下的临时目录。
  *
- * 为什么不在这里删自己那份：libsql 的 sqlite 句柄由它的工作线程持有，
- * `client.close()` 既不返回 Promise，实测句柄还要 **1–9s** 才释放（并行负载下
- * 更久且没有上界）—— 本文件此前在 `afterEach` 里带 `maxRetries` 删，就是在赌这个
- * 不确定的窗口，安静机赶得上、108 文件一起跑就赶不上（表现为只在钩子里红一次的
- * EPERM，隔离跑反而绿）。进程内「等到能删为止」是把不确定量搬进关键路径；改成
- * 下一轮开头扫一次，既不留垃圾，也永远不会因为锁而红。
+ * 为什么不在这里删自己那份：本文件还会打开测试宿主（better-sqlite3）的句柄，而且
+ * 同机可能另有一条 vitest 正在用同一前缀的临时目录 —— 在 `afterEach` 里带
+ * `maxRetries` 删，就是在赌一个不确定的释放窗口（隔离跑绿、108 文件一起跑就在钩子里
+ * 红一次的 EPERM）。运行时换成 node:sqlite 后 `closeDb()` 是同步的（ISSUE #3171），
+ * 但「释放是同步的」只覆盖我们自己那一条句柄，不覆盖同机别的进程；进程内
+ * 「等到能删为止」是把不确定量搬进关键路径，改成下一轮开头扫一次，既不留垃圾，
+ * 也永远不会因为锁而红。
  *
  * 只认自己的前缀，且跳过 60s 内还在写的目录（同机可能另有一条 vitest 正在用）。
  */
@@ -208,7 +209,7 @@ describe("reaper 模块级副作用", () => {
      * `Test timed out in 30000ms`（CI 读数就是这个），真因与超时毫无关系。 */
     const { stopReaper } = await import("./comfyui/reaper");
     stopReaper();
-    /* 这一组真的打开了 `~/server/db` 的 libsql 连接（指向临时库）。不关的话
+    /* 这一组真的打开了 `~/server/db` 的 node:sqlite 连接（指向临时库）。不关的话
      * Windows 上文件句柄不释放，文件级 afterEach 的 `rmSync` 会 EPERM。 */
     const { closeDb } = await import("~/server/db");
     closeDb();

@@ -5,7 +5,7 @@
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
 
 vi.mock("~/server/db", async () => {
   const { createTestDb } = await import("../../../../tests/helpers/test-db");
@@ -40,7 +40,7 @@ import { makeCtx } from "../../../../tests/helpers/trpc";
 const createCaller = createCallerFactory(seriesRouter);
 const createGenCaller = createCallerFactory(seriesGenerationRouter);
 const tdb = getTestDb();
-const tdbDb = tdb as unknown as LibSQLDatabase<typeof schema>;
+const tdbDb = tdb as unknown as SqliteRemoteDatabase<typeof schema>;
 const userCaller = () => createCaller(makeCtx());
 const otherCaller = () =>
   createCaller(makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } }));

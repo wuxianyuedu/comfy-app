@@ -7,8 +7,8 @@
 //   inline/未设 → **骨架形态（2-B 原样）**：boot + 心跳 + SIGTERM 干净收尾，
 //     不碰 DB、不 import 任何 TS。2-B 的三条契约测钉的就是这个形态。
 //   host → **运行时形态（3-B0 地基 / 3-B1 接流量）**：boot 跑注入链——
-//     tsx 加载 TS → libsql file 客户端（与 `src/server/db.ts` 同一锚点规则）→
-//     `createTaskRepoImpl(drizzle(client))` → **七条 seam 全注入**（deps 复用
+//     tsx 加载 TS → node:sqlite 文件库（与 `src/server/db.ts` 同一锚点规则）→
+//     `createTaskRepoImpl(drizzle(proxy))` → **七条 seam 全注入**（deps 复用
 //     Next 侧同一份实现，理由见 `bootRuntime` 文件头注释）→ Q2 首扫（只扫
 //     host 片）→ 主循环每 `CLAIM_TICK_MS` 领一行（`claimNextQueued("host",1)`
 //     → 由 `execPayload` 重建 Job → 与 Next 共用 `executor-dispatch.ts` 那一条 pull）

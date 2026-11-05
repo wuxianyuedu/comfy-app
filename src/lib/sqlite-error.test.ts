@@ -142,3 +142,37 @@ describe("isSqliteBusyError", () => {
     expect(isSqliteBusyError(42)).toBe(false);
   });
 });
+
+describe("node:sqlite 的锁族字段", () => {
+  /* 运行时驱动迁到 node:sqlite 后（ISSUE #3171），字符串 `code` 一律是
+   * `ERR_SQLITE_ERROR`，锁族信息只在数字 `errcode`（5=BUSY、6=LOCKED）与
+   * `errstr` 上；不把这两个字段收进判据，生产撞锁会被当成真故障而放弃重试。 */
+  it("errcode=5 / 6 判锁族，并把 errstr 落进原因", () => {
+    for (const [errcode, name] of [
+      [5, "SQLITE_BUSY"],
+      [6, "SQLITE_LOCKED"],
+    ] as const) {
+      const err = drizzleWrapped({
+        code: "ERR_SQLITE_ERROR",
+        errcode,
+        errstr: "database is locked",
+        message: "Failed to execute statement",
+      });
+      expect(isSqliteBusyError(err), `errcode=${errcode} 应判锁族`).toBe(true);
+      const text = describeSqliteWriteError(err, "f");
+      expect(text).toContain(name);
+      expect(text, "errstr 必须落进原因").toContain("database is locked");
+    }
+  });
+
+  it("非锁族 errcode 不重试，但 errstr 仍然可见", () => {
+    const err = drizzleWrapped({
+      code: "ERR_SQLITE_ERROR",
+      errcode: 1,
+      errstr: "no such table: task",
+      message: "Failed to execute statement",
+    });
+    expect(isSqliteBusyError(err)).toBe(false);
+    expect(describeSqliteWriteError(err, "f")).toContain("no such table: task");
+  });
+});

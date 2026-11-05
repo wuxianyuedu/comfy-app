@@ -1,6 +1,6 @@
 // ── 会话 ⇄ 界面真值桥（#2482 · FR-AG-01③）────────────────────
 // 会话绑定 proj_*（即 production.id），内容权威读在 production；`workshopSession` 内容列只是写时镜像，
-// idea / stage / projectId 才是会话行的权威字段。本模块与 `./db` 一样直连 libsql、复用同一份 Drizzle schema
+// idea / stage / projectId 才是会话行的权威字段。本模块与 `./db` 一样直连 node:sqlite、复用同一份 Drizzle schema
 // （表是同一批），因 `~/lib/core` 带 `import "server-only"`，在 MCP stdio / 纯 Node 进程里会抛错。归属：
 // userId 可空（外部 AI 通常不带），显式给时必须存在，缺省落本机最早创建的用户；遗留会话（projectId 为 NULL）首次写时桥接，只读保持原读法。
 import { asc, eq } from "drizzle-orm";

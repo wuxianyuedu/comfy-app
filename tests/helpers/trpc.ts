@@ -1,17 +1,19 @@
 /**
  * `tests/helpers/trpc.ts` — tRPC 集成测试的 context / caller 基建。`makeCtx` 按 createTRPCContext 形状手工
  * 造 ctx（db / session / user / headers）；`user: null` 走 authedProcedure 的 demo-user 兜底。PR-35 起
- * `~/server/db` 换成 libsql（异步）；测试仍用 test-db.ts 的同步 in-memory，仅 makeCtx 用 `as unknown as TestDb` 对接。
+ * `~/server/db` 换成异步驱动的 sqlite-proxy（#3171 起是 node:sqlite）；测试仍用 test-db.ts 的同步 in-memory，
+ * 仅 makeCtx 用 `as unknown as TestDb` 对接。
  */
-import type { Client } from "@libsql/client";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
 import type * as schema from "~/server/db/schema";
 import type { TRPCUser } from "~/server/api/trpc";
 import { getTestDb } from "./test-db";
 
-/** 与 `createTRPCContext` 返回形状一致的 db 类型（Drizzle libsql 实例）。 */
-export type TestDb = LibSQLDatabase<typeof schema> & {
-  $client: Client;
+/** 与 `createTRPCContext` 返回形状一致的 db 类型（Drizzle sqlite-proxy 实例）。
+ *  `$client` 是 `~/server/db` 为测试保留的句柄出口（原 libsql 驱动同名属性），
+ *  测试用它释放 Windows 上的库文件句柄。 */
+export type TestDb = SqliteRemoteDatabase<typeof schema> & {
+  $client: { close(): void };
 };
 
 /** 构造一个默认测试用户（id 固定为 user-a，可与 seedUser 对齐）。 */
