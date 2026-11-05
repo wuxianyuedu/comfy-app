@@ -199,7 +199,7 @@ describe("快照与背压", () => {
             deferred.resolve = resolve;
           }),
       )
-      .mockImplementationOnce(async () => second);
+      .mockImplementationOnce(() => second);
 
     const firstCall = refreshComfyStats();
     const secondCall = refreshComfyStats();

@@ -32,7 +32,7 @@ function Harness() {
 function jsonFile(name: string, content: unknown): File {
   const text = JSON.stringify(content);
   const file = new File([text], name, { type: "application/json" });
-  Object.defineProperty(file, "text", { value: async () => text });
+  Object.defineProperty(file, "text", { value: () => text });
   return file;
 }
 

@@ -70,11 +70,11 @@ describe("打开子图时的自动聚焦调度", () => {
     expect(applied).toEqual(["__root__"]);
 
     /* ① 下钻切到子图：排下一帧 rAF（此刻还没触发）。 */
-    await act(async () => {
+    act(() => {
       rerender(<FitHarness applied={applied} graphKey="4#subgraph:uid" nodeCount={3} />);
     });
     /* ② 同一个 macrotask 内节点整批同步：聚焦 effect 重跑，cleanup 取消 ① 的 rAF。 */
-    await act(async () => {
+    act(() => {
       rerender(<FitHarness applied={applied} graphKey="4#subgraph:uid" nodeCount={90} />);
     });
     await flushFrame();
@@ -90,7 +90,7 @@ describe("打开子图时的自动聚焦调度", () => {
     expect(applied).toHaveLength(1);
 
     /* 用户增删节点：effect 重跑，但这份图已聚焦过，不得再抢视角。 */
-    await act(async () => {
+    act(() => {
       rerender(<FitHarness applied={applied} graphKey="g1" nodeCount={9} />);
     });
     await flushFrame();
@@ -102,7 +102,7 @@ describe("打开子图时的自动聚焦调度", () => {
     const { rerender } = render(<FitHarness applied={applied} graphKey="g-sub" nodeCount={5} />);
     await flushFrame();
 
-    await act(async () => {
+    act(() => {
       rerender(<FitHarness applied={applied} graphKey="__root__" nodeCount={12} />);
     });
     await flushFrame();

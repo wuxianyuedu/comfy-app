@@ -253,7 +253,7 @@ describe("WorkflowIOPreviewPanel — 拖拽调整参数顺序（ISSUE #349）", 
 });
 
 describe("WorkflowIOPreviewPanel — seed 行取名（ISSUE #349）", () => {
-  it("写入某个模式的 seed 行为后，行名仍是作者命名而不是槽位别名 value_1", async () => {
+  it("写入某个模式的 seed 行为后，行名仍是作者命名而不是槽位别名 value_1", () => {
     const io: IOMap = {
       "1512::widget::value_1": wrapperSeedEntry(),
       "1512::widget::value": boolEntry(),
@@ -277,14 +277,14 @@ describe("WorkflowIOPreviewPanel — seed 行取名（ISSUE #349）", () => {
 
     /* 点开「控件后行为」并选「递增值」——这一步把 seedMode 写进当前模式的
      * 覆盖层，行随之按模式派生拷贝（{...entry, seedMode}）。 */
-    await act(async () => {
+    act(() => {
       fireEvent.click(document.querySelector('[title="控件后行为 · CONTROL AFTER GENERATE"]')!);
     });
-    await act(async () => {
+    act(() => {
       fireEvent.click(screen.getAllByText("递增值")[0]!);
     });
     /* 面板的 workflowIO 由 store 订阅下发（生产路径）：重新渲染拿着新 state。 */
-    await act(async () => {
+    act(() => {
       view.rerender(
         <WFStoresProvider stores={stores}>
           <WorkflowIoPreviewPanel

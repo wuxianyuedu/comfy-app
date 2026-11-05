@@ -71,7 +71,7 @@ function positionerOf(popup: HTMLElement): HTMLElement {
 }
 
 describe("ui/select 的定位层", () => {
-  it(`默认把层级给在 Positioner 上（\`z-popup isolate\`），而不是给在 Popup 上`, async () => {
+  it(`默认把层级给在 Positioner 上（\`z-popup isolate\`），而不是给在 Popup 上`, () => {
     render(<Demo />);
     const popup = openPopup();
     const positioner = positionerOf(popup);

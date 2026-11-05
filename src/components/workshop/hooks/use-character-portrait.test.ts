@@ -223,7 +223,7 @@ describe("useCharacterPortrait 生成", () => {
     const { result } = renderHook(() => useHarness("p1"));
 
     let pending!: Promise<void>;
-    await act(async () => {
+    act(() => {
       pending = result.current.actions.generate(character, {
         localWorkflowId: "wf-1",
       });
@@ -293,7 +293,7 @@ describe("useCharacterPortrait 生成", () => {
     const { result } = renderHook(() => useHarness("p1"));
 
     let first!: Promise<void>;
-    await act(async () => {
+    act(() => {
       first = result.current.actions.generate(character, {
         localWorkflowId: "wf-1",
       });
@@ -325,7 +325,7 @@ describe("useCharacterPortrait 生成", () => {
     );
 
     let pending!: Promise<void>;
-    await act(async () => {
+    act(() => {
       pending = result.current.actions.generate(character, {
         localWorkflowId: "wf-1",
       });
@@ -426,7 +426,7 @@ describe("useCharacterPortrait 导入", () => {
     const { result } = renderHook(() => useHarness("p1"));
 
     let pending!: Promise<void>;
-    await act(async () => {
+    act(() => {
       pending = result.current.actions.generate(character, {
         localWorkflowId: "wf-1",
       });

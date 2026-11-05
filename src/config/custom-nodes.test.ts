@@ -60,7 +60,7 @@ function fetchReturns(status: number, body?: unknown): void {
   vi.stubGlobal(
     "fetch",
     vi.fn(
-      async () =>
+      () =>
         new Response(body === undefined ? "" : JSON.stringify(body), {
           status,
         }),
@@ -72,7 +72,7 @@ function fetchReturns(status: number, body?: unknown): void {
 function fetchReturnsText(status: number, text: string): void {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => new Response(text, { status })),
+    vi.fn(() => new Response(text, { status })),
   );
 }
 
@@ -80,7 +80,7 @@ function fetchReturnsText(status: number, text: string): void {
 function fetchRejects(error: Error): void {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => {
+    vi.fn(() => {
       throw error;
     }),
   );
@@ -438,7 +438,7 @@ describe("地址与载荷形状", () => {
     const seen: Array<string> = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: unknown) => {
+      vi.fn((input: unknown) => {
         seen.push(String(input));
         return new Response(JSON.stringify(EMPTY_MANIFEST), { status: 200 });
       }),
@@ -452,7 +452,7 @@ describe("地址与载荷形状", () => {
     const seen: Array<string> = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: unknown) => {
+      vi.fn((input: unknown) => {
         seen.push(String(input));
         return new Response(JSON.stringify(EMPTY_MANIFEST), { status: 200 });
       }),

@@ -37,14 +37,16 @@ describe("runWithConcurrency", () => {
 
   it("limit 被夹取：0 按串行处理，超出条数的 limit 不空转", async () => {
     const counts: Array<number> = [];
-    await runWithConcurrency([1, 2], 0, async (item) => {
+    await runWithConcurrency([1, 2], 0, (item) => {
       counts.push(item);
+      return Promise.resolve();
     });
     expect(counts).toEqual([1, 2]);
 
     let calls = 0;
-    await runWithConcurrency([1, 2], 99, async () => {
+    await runWithConcurrency([1, 2], 99, () => {
       calls += 1;
+      return Promise.resolve();
     });
     expect(calls).toBe(2);
   });
@@ -52,11 +54,12 @@ describe("runWithConcurrency", () => {
   it("worker 抛错：整个池立即 reject，其余 runner 仍跑完各自队列", async () => {
     const processed: Array<number> = [];
     await expect(
-      runWithConcurrency([1, 2, 3, 4], 2, async (item) => {
+      runWithConcurrency([1, 2, 3, 4], 2, (item) => {
         if (item === 1) {
           throw new Error("第一条炸了");
         }
         processed.push(item);
+        return Promise.resolve();
       }),
     ).rejects.toThrow("第一条炸了");
     /* runner2 的队列（2、4）不因 runner1 的抛错而丢 —— 只是调用方不再等待它。
@@ -78,8 +81,9 @@ describe("runWithConcurrency", () => {
 
   it("空列表：直接 resolve，worker 不被调用", async () => {
     let calls = 0;
-    await runWithConcurrency([], 4, async () => {
+    await runWithConcurrency([], 4, () => {
       calls += 1;
+      return Promise.resolve();
     });
     expect(calls).toBe(0);
   });

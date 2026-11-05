@@ -62,7 +62,7 @@ describe("useCharacterReview", () => {
       await result.current.review("c1");
     });
     expect(result.current.verdict).not.toBeNull();
-    await act(async () => {
+    act(() => {
       result.current.reset();
     });
     expect(result.current.verdict).toBeNull();

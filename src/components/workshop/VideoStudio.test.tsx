@@ -30,7 +30,7 @@ vi.mock("~/lib/workshop/generation-client", async (importOriginal) => {
 /* 轮询节奏可控：sleep 替换为即时，apiPollVideo 的返回序列由用例编排。 */
 vi.mock("~/lib/with-timeout", async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, sleep: vi.fn(async () => undefined) };
+  return { ...actual, sleep: vi.fn(() => undefined) };
 });
 
 const mockedSubmit = vi.mocked(apiSubmitVideo);

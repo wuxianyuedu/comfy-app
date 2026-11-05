@@ -17,8 +17,8 @@ const { stat, open, readCalls, disk, userMock, loginRequiredMock, foreignMock } 
     disk: { bytes: Buffer.from("") },
     userMock: vi.fn<() => Promise<{ id: string } | null>>(),
     loginRequiredMock: vi.fn<() => boolean>(() => false),
-    foreignMock: vi.fn<(segments: Array<string>, userId: string) => Promise<boolean>>(
-      async () => false,
+    foreignMock: vi.fn<(segments: Array<string>, userId: string) => Promise<boolean>>(() =>
+      Promise.resolve(false),
     ),
   }),
 );
@@ -66,12 +66,12 @@ function get(path: Array<string> | undefined, range?: string) {
 /** 种一份「磁盘上的文件」：`stat` 报它的长度，`open` 之后按请求的位置与长度读它。 */
 function putFile(bytes: Uint8Array | string) {
   disk.bytes = typeof bytes === "string" ? Buffer.from(bytes) : Buffer.from(bytes);
-  stat.mockImplementation(async () => ({
+  stat.mockImplementation(() => ({
     isFile: () => true,
     size: disk.bytes.length,
   }));
-  open.mockImplementation(async () => ({
-    read: async (buf: Buffer, offset: number, length: number, position: number) => {
+  open.mockImplementation(() => ({
+    read: (buf: Buffer, offset: number, length: number, position: number) => {
       readCalls.push({ length, position });
       disk.bytes.subarray(position, position + length).copy(buf, offset);
       return {
@@ -79,7 +79,7 @@ function putFile(bytes: Uint8Array | string) {
         buffer: buf,
       };
     },
-    close: async () => undefined,
+    close: () => undefined,
   }));
 }
 
@@ -170,7 +170,7 @@ describe("闸门顺序：每一种拒绝都发生在碰磁盘之前", () => {
   });
 
   it("路径段解析回根目录本身时不去 open 目录（404，不是 500）", async () => {
-    stat.mockImplementation(async () => ({ isFile: () => false, size: 0 }));
+    stat.mockImplementation(() => ({ isFile: () => false, size: 0 }));
     const res = await get(["."]);
     expect(res.status).toBe(404);
     expect(await res.text()).toBe("Not found");
@@ -230,12 +230,12 @@ describe("整份读（没有 Range）", () => {
     // 没有 Range 的那一支也要能短读 —— 少了这条，「短读只处理分段路径」这种半修
     // 会在 Coverage 的分支上留痕（这里刻意断言**没有** Content-Range：整份请求
     // 客户端没要窗口，给它一个 206 的形状才是真错）。
-    open.mockImplementationOnce(async () => ({
-      read: async (buf: Buffer, offset: number) => {
+    open.mockImplementationOnce(() => ({
+      read: (buf: Buffer, offset: number) => {
         Buffer.from("01").copy(buf, offset);
         return { bytesRead: 2, buffer: buf };
       },
-      close: async () => undefined,
+      close: () => undefined,
     }));
     const res = await get(["t1", "a.png"]);
     expect(res.status).toBe(200);
@@ -245,13 +245,13 @@ describe("整份读（没有 Range）", () => {
 
   it("读完必须 close 句柄（漏了它，Windows 上产物会被自己锁住，重生成即失败）", async () => {
     let closed = 0;
-    open.mockImplementationOnce(async () => ({
-      read: async (buf: Buffer, offset: number, length: number, position: number) => {
+    open.mockImplementationOnce(() => ({
+      read: (buf: Buffer, offset: number, length: number, position: number) => {
         readCalls.push({ length, position });
         disk.bytes.subarray(position, position + length).copy(buf, offset);
         return { bytesRead: length, buffer: buf };
       },
-      close: async () => {
+      close: () => {
         closed += 1;
       },
     }));
@@ -261,11 +261,11 @@ describe("整份读（没有 Range）", () => {
 
   it("读取抛错时也必须把已经拿到的句柄闭上（finally 那条路）", async () => {
     let closed = 0;
-    open.mockImplementationOnce(async () => ({
-      read: async () => {
+    open.mockImplementationOnce(() => ({
+      read: () => {
         throw new Error("EIO");
       },
-      close: async () => {
+      close: () => {
         closed += 1;
       },
     }));
@@ -317,9 +317,9 @@ describe("Range：三种结论翻成三个状态码", () => {
   });
 
   it("一个字节都没读到（文件被裁到起点之前）→ 404，而不是回一个空体的 206", async () => {
-    open.mockImplementationOnce(async () => ({
-      read: async (buf: Buffer) => ({ bytesRead: 0, buffer: buf }),
-      close: async () => undefined,
+    open.mockImplementationOnce(() => ({
+      read: (buf: Buffer) => ({ bytesRead: 0, buffer: buf }),
+      close: () => undefined,
     }));
     expect((await get(["t1", "a.png"], "bytes=2-5")).status).toBe(404);
   });
@@ -350,13 +350,13 @@ describe("Range：三种结论翻成三个状态码", () => {
   });
 
   it("文件在一次请求内被换短：按实际读到的字节回，别让长度比正文长", async () => {
-    open.mockImplementationOnce(async () => ({
-      read: async (buf: Buffer, offset: number) => {
+    open.mockImplementationOnce(() => ({
+      read: (buf: Buffer, offset: number) => {
         // 只给得出 2 个字节，尽管要 6 个（同名产物被重新生成的那一刻）
         Buffer.from("ab").copy(buf, offset);
         return { bytesRead: 2, buffer: buf };
       },
-      close: async () => undefined,
+      close: () => undefined,
     }));
     const res = await get(["t1", "a.png"], "bytes=0-5");
     expect(res.status).toBe(206);

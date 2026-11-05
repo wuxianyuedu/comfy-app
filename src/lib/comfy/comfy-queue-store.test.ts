@@ -50,7 +50,7 @@ function queueRes(payload: unknown): Response {
   /* SAFETY: 类型断言已复核 */
   return {
     ok: true,
-    json: async () => payload,
+    json: () => payload,
   } as unknown as Response;
 }
 
@@ -148,7 +148,7 @@ describe("comfy-queue-store", () => {
     off();
   });
 
-  it("SSE 只建一条：两个订阅者共用同一个连接", async () => {
+  it("SSE 只建一条：两个订阅者共用同一个连接", () => {
     const a = mod.subscribeComfyQueue(vi.fn());
     const b = mod.subscribeComfyQueue(vi.fn());
     expect(FakeEventSource.created).toBe(1);

@@ -53,7 +53,7 @@ function renderTopBar() {
           } as never
         }
         error=""
-        fetchDetail={vi.fn(async () => undefined)}
+        fetchDetail={vi.fn(() => Promise.resolve())}
         forceReloadDetail={noop}
         handleSave={noop}
         onClose={noop}

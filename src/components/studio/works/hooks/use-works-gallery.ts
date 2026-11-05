@@ -94,9 +94,9 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
     setPendingDeleteId(null);
   }, [deleting]);
 
-  const confirmDelete = useCallback(async (): Promise<string | null> => {
+  const confirmDelete = useCallback((): Promise<string | null> => {
     if (pendingDeleteId === null || pendingDeleteId === "") {
-      return null;
+      return Promise.resolve(null);
     }
     const target = projects.find((project) => project.id === pendingDeleteId);
     const id = pendingDeleteId;
@@ -110,7 +110,7 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
        * 服务端列表里把它带回来直到删除落定 —— 所以这里本地先摘掉，
        * 免得好几秒内列表上它还挂着（用户以为没删掉、又点一次）。 */
       setProjects((prev) => prev.filter((project) => project.id !== id));
-      return target?.name ?? "未命名";
+      return Promise.resolve(target?.name ?? "未命名");
     } finally {
       setDeleting(false);
       setPendingDeleteId(null);

@@ -13,7 +13,7 @@ describe("useExternalAction", () => {
     const report = vi.fn();
     const { result } = renderHook(() => useExternalAction({ target: "browser", report }));
     await act(async () => {
-      await result.current.run(async () => ({ ok: true, detail: "已打开" }));
+      await result.current.run(() => Promise.resolve({ ok: true, detail: "已打开" }));
     });
     expect(report).toHaveBeenCalledWith("ok", "已打开");
     expect(result.current.busy).toBe(false);
@@ -23,7 +23,7 @@ describe("useExternalAction", () => {
     const report = vi.fn();
     const { result } = renderHook(() => useExternalAction({ target: "update", report }));
     await act(async () => {
-      await result.current.run(async () => ({ triggered: true }));
+      await result.current.run(() => Promise.resolve({ triggered: true }));
     });
     expect(report.mock.calls[0]?.[0]).toBe("ok");
   });
@@ -32,7 +32,7 @@ describe("useExternalAction", () => {
     const report = vi.fn();
     const { result } = renderHook(() => useExternalAction({ target: "folder", report }));
     await act(async () => {
-      await result.current.run(async () => {
+      await result.current.run(() => {
         throw new Error("ECONNREFUSED");
       });
     });
@@ -48,7 +48,7 @@ describe("useExternalAction", () => {
     const report = vi.fn();
     const { result } = renderHook(() => useExternalAction({ target: "folder", report }));
     await act(async () => {
-      await result.current.run(async () => {
+      await result.current.run(() => {
         throw new Error("");
       });
     });
@@ -69,7 +69,7 @@ describe("useExternalAction", () => {
 
   it("runWithTarget：有目标时把目标交给 action", async () => {
     const report = vi.fn();
-    const action = vi.fn(async () => ({ ok: true, detail: "ok" }));
+    const action = vi.fn(() => Promise.resolve({ ok: true, detail: "ok" }));
     const { result } = renderHook(() => useExternalAction({ target: "browser", report }));
     await act(async () => {
       await result.current.runWithTarget("https://x", action);
@@ -107,7 +107,7 @@ describe("useExternalAction", () => {
     const action = vi.fn();
     const { result } = renderHook(() => useExternalAction({ target: "browser", report }));
     await act(async () => {
-      await result.current.run(action, async () => false);
+      await result.current.run(action, () => Promise.resolve(false));
     });
     expect(action).not.toHaveBeenCalled();
     expect(report).not.toHaveBeenCalled();

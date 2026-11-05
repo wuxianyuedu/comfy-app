@@ -34,7 +34,7 @@ vi.mock("~/components/workshop/LLMContext", () => ({
 }));
 
 vi.mock("~/lib/llm/browser", () => ({
-  streamChat: vi.fn(async () => {
+  streamChat: vi.fn(() => {
     return JSON.stringify([{ name: "小满", appearance: "短黑发,清秀,白色连衣裙" }]);
   }),
 }));

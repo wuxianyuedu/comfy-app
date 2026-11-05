@@ -35,7 +35,7 @@ vi.mock("./hooks/use-project-outputs", () => ({
   useProjectOutputs: () => ({
     outputs: outputsMock(),
     loading: false,
-    refetch: async () => undefined,
+    refetch: () => undefined,
   }),
 }));
 /* 页面还读项目索引（项目下拉/封面名）。这里只测网格，索引给最小单项目。 */
