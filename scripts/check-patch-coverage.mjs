@@ -220,12 +220,13 @@ export function computePatchCoverage({ diffText, lcovMaps }) {
     const missing = daLines === undefined;
     /** 代码行（非空、非纯注释）——两条口径在 isCodeLine 汇合。 */
     const codeLines = [...lineMap.entries()].filter(([, text]) => isCodeLine(text));
-    const denom = missing
-      ? codeLines
-      : codeLines.filter(([n]) => daLines.has(n));
+    const denom = missing ? codeLines : codeLines.filter(([n]) => daLines.has(n));
     const uncoveredLines = missing
       ? codeLines.map(([n]) => n)
-      : denom.filter(([n]) => (daLines.get(n) ?? 0) === 0).map(([n]) => n).sort((a, b) => a - b);
+      : denom
+          .filter(([n]) => (daLines.get(n) ?? 0) === 0)
+          .map(([n]) => n)
+          .sort((a, b) => a - b);
     perFile.push({
       file,
       changed: denom.length,
@@ -356,7 +357,7 @@ export function main(argv, cwd = process.cwd()) {
   process.stdout.write(
     `[patch-coverage] 改动文件 ${perFile.length} 份在分母内${
       missingCount > 0 ? `（其中 ${missingCount} 份无覆盖读数——从未被任何用例加载）` : ""
-    }；改动代码行 ${total}，已覆盖 ${covered}${pct === null ? "" : ` = ${(pct).toFixed(1)}%`}\n`,
+    }；改动代码行 ${total}，已覆盖 ${covered}${pct === null ? "" : ` = ${pct.toFixed(1)}%`}\n`,
   );
   const offenders = perFile.filter((f) => f.uncoveredCount > 0);
   if (offenders.length === 0) {
@@ -378,7 +379,7 @@ export function main(argv, cwd = process.cwd()) {
   );
   if (strictPct !== null && pct !== null && pct < strictPct) {
     process.stderr.write(
-      `[patch-coverage] --strict ${strictPct}：实覆盖 ${(pct).toFixed(1)}% 低于阈值 ⇒ 红。\n`,
+      `[patch-coverage] --strict ${strictPct}：实覆盖 ${pct.toFixed(1)}% 低于阈值 ⇒ 红。\n`,
     );
     return 1;
   }

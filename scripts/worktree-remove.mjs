@@ -136,13 +136,12 @@ function main(argv) {
     const removed = unlinkDependencies(link);
     if (!removed || linkStillThere(link)) {
       /* 摘不掉就不摘 worktree：`git worktree remove --force` 会穿链接删进目标。 */
-      return fail(
-        1,
-        `链接没摘掉（${link}）⇒ **跳过 worktree 清理**，请手工处理这个链接后重跑`,
-      );
+      return fail(1, `链接没摘掉（${link}）⇒ **跳过 worktree 清理**，请手工处理这个链接后重跑`);
     }
   } else if (stat) {
-    process.stdout.write(`[worktree-remove] ${link} 是真目录，不是链接 ⇒ 不动它（随 worktree 一起收）\n`);
+    process.stdout.write(
+      `[worktree-remove] ${link} 是真目录，不是链接 ⇒ 不动它（随 worktree 一起收）\n`,
+    );
   }
 
   const removed = spawnSync("git", ["worktree", "remove", "--force", target], {

@@ -27,10 +27,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import {
-  LOG_CHUNKS_DIR_REL,
-  LOG_MANIFEST_FILE_NAME,
-} from "./ci-github-verdict-logs.mjs";
+import { LOG_CHUNKS_DIR_REL, LOG_MANIFEST_FILE_NAME } from "./ci-github-verdict-logs.mjs";
 
 /** 本仓检出根（`scripts/` 的上一层）。 */
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -109,8 +106,7 @@ export function renderChunk({ index, manifest, chunk }) {
   const head =
     `[chunk ${String(index)}/${String(manifest.chunkCount)}] 失败日志全量（gzip+base64）· 整包 sha256=${manifest.sha256} · ` +
     `gzip ${String(manifest.gzipBytes)} 字节 / 原文 ${String(manifest.rawBytes)} 字节 · 本跑印 ${String(manifest.printedChunks)} 块`;
-  const howto =
-    `[chunk ${String(index)}/${String(manifest.chunkCount)}] 拼回：按 chunk-1..${String(manifest.chunkCount)}.b64 顺序拼接（去换行）→ base64 解码 → gunzip → 核对上面的 sha256`;
+  const howto = `[chunk ${String(index)}/${String(manifest.chunkCount)}] 拼回：按 chunk-1..${String(manifest.chunkCount)}.b64 顺序拼接（去换行）→ base64 解码 → gunzip → 核对上面的 sha256`;
   if (chunk === undefined || chunk === "") {
     return `${head}\n${howto}\n[chunk ${String(index)}/${String(manifest.chunkCount)}] ⚠️ 块文件缺失（清单说有、盘上没有）—— 这一块只能走下载端点`;
   }
@@ -177,7 +173,8 @@ export function renderChunkFromDisk(index, io = {}) {
  * @returns {{index: number, usage: string}} 块号（0 = 参数不对）
  */
 export function parseIndex(argv) {
-  const usage = "用法：node scripts/ci-print-log-chunk.mjs <i>（i 从 1 起，与 .cnb.yml 的「日志分块 i/N」对齐）";
+  const usage =
+    "用法：node scripts/ci-print-log-chunk.mjs <i>（i 从 1 起，与 .cnb.yml 的「日志分块 i/N」对齐）";
   const [first] = argv;
   const index = Number(first ?? "");
   if (!Number.isInteger(index) || index < 1) {

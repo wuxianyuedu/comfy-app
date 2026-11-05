@@ -33,9 +33,8 @@ afterEach(() => {
 /** 一段最小的 lcov 文本。 */
 function lcov(entries: Array<[string, Array<[number, number]>]>): string {
   return entries
-    .map(
-      ([file, das]) =>
-        [`SF:${file}`, ...das.map(([ln, h]) => `DA:${ln},${h}`), "end_of_record"].join("\n"),
+    .map(([file, das]) =>
+      [`SF:${file}`, ...das.map(([ln, h]) => `DA:${ln},${h}`), "end_of_record"].join("\n"),
     )
     .join("\n");
 }
@@ -76,7 +75,20 @@ describe("patch coverage —— 分母口径（写死在判据里，#2687）", (
         lines: ["const a = 1;", "", "// 注释行", "const b = 2; // 行尾注释算代码"],
       },
     ]);
-    const lcovMaps = [parseLcov(lcov([["src/lib/x.ts", [[11, 1], [13, 0], [14, 2]]]]))];
+    const lcovMaps = [
+      parseLcov(
+        lcov([
+          [
+            "src/lib/x.ts",
+            [
+              [11, 1],
+              [13, 0],
+              [14, 2],
+            ],
+          ],
+        ]),
+      ),
+    ];
     const r = computePatchCoverage({ diffText, lcovMaps });
     expect(r.perFile).toHaveLength(1);
     /* 整行注释出局（即使夹具给它塞了 DA 条目——真 lcov 不会有，形状口径不靠它）；
@@ -114,7 +126,7 @@ describe("patch coverage —— lcov 形状", () => {
 
   it("不在分母的文件直接出局（tests/ 自己改了不算账）", () => {
     const diffText = diffOf([
-      { file: "tests/helpers/probe.test.ts", newStart: 1, lines: ["it(\"x\", () => {})"] },
+      { file: "tests/helpers/probe.test.ts", newStart: 1, lines: ['it("x", () => {})'] },
     ]);
     const r = computePatchCoverage({ diffText, lcovMaps: [] });
     expect(r.total).toBe(0);
@@ -138,7 +150,10 @@ describe("patch coverage —— CLI 三态", () => {
     execFileSync("git", ["init", "-q", "-b", "main", "."], { cwd: repo, env: gitSandboxEnv() });
     execFileSync("git", ["config", "user.email", "t@t"], { cwd: repo, env: gitSandboxEnv() });
     execFileSync("git", ["config", "user.name", "t"], { cwd: repo, env: gitSandboxEnv() });
-    execFileSync("git", ["commit", "--allow-empty", "-q", "-m", "base"], { cwd: repo, env: gitSandboxEnv() });
+    execFileSync("git", ["commit", "--allow-empty", "-q", "-m", "base"], {
+      cwd: repo,
+      env: gitSandboxEnv(),
+    });
     const base = git("rev-parse", "HEAD");
     mkdirSync(join(repo, "src"), { recursive: true });
     writeFileSync(join(repo, "src", "probe.ts"), "export const p = 1;\n", "utf8");
