@@ -102,14 +102,20 @@ export default {
 
 /** 跑一次 oxlint，返回「文件名 → 诊断文案」的映射。 */
 function runProbe(probeConfig: string, fixtures: Array<string>): Map<string, Array<string>> {
-  const r = spawnSync(process.execPath, [OXLINT_BIN, "--config", probeConfig, "-f", "json", ...fixtures], {
-    cwd: ROOT,
-    encoding: "utf8",
-    maxBuffer: 32 * 1024 * 1024,
-  });
+  const r = spawnSync(
+    process.execPath,
+    [OXLINT_BIN, "--config", probeConfig, "-f", "json", ...fixtures],
+    {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 32 * 1024 * 1024,
+    },
+  );
   const out = r.stdout;
   expect(out, `oxlint 没输出 JSON：${r.stderr}`).toBeTruthy();
-  const report = JSON.parse(out) as { diagnostics?: Array<{ filename?: string; message?: string }> };
+  const report = JSON.parse(out) as {
+    diagnostics?: Array<{ filename?: string; message?: string }>;
+  };
   const map = new Map<string, Array<string>>();
   for (const diag of report.diagnostics ?? []) {
     const name = path.basename(diag.filename ?? "");
@@ -138,7 +144,8 @@ describe("① oxlint 侧真的会响：store selector / router / drizzle 三条�
         "import-drizzle.ts": 'import { eq } from "drizzle-orm";\nexport const g = eq;\n',
         "import-drizzle-sub.ts":
           'import { pgTable } from "drizzle-orm/pg-core";\nexport const h = pgTable;\n',
-        "import-core.ts": 'import { listProjects } from "~/lib/core/projects";\nexport const i = listProjects;\n',
+        "import-core.ts":
+          'import { listProjects } from "~/lib/core/projects";\nexport const i = listProjects;\n',
       };
       const fixtures: Array<string> = [];
       for (const [name, code] of Object.entries(samples)) {

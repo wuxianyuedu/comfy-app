@@ -46,12 +46,18 @@ import { parseRange } from "./reformat-scan-core.mjs";
  *  顺序按「便宜在前、最贵收尾」，读的人先看到快的都绿了。 */
 const DEFAULT_STEPS = [
   { label: "文件结构硬规则", argv: ["node", "scripts/check-file-structure.cjs"] },
-  { label: "infra 尺寸（scripts+tools ≤900 行）", argv: ["node", "scripts/check-infra-file-size.cjs"] },
+  {
+    label: "infra 尺寸（scripts+tools ≤900 行）",
+    argv: ["node", "scripts/check-infra-file-size.cjs"],
+  },
   { label: "函数长度", argv: ["node", "scripts/check-function-length.cjs"] },
   { label: "changelog 碎片形态", argv: ["node", "scripts/check-changelog-fragments.cjs"] },
   { label: "CP936 字形登记", argv: ["node", "scripts/check-cp936-glyphs.cjs"] },
   { label: "已清零 oxlint 规则集", argv: ["node", "scripts/check-oxlint-zero-rules.mjs"] },
-  { label: "脚本档类型检查（.mjs 全量面棘轮）", argv: ["node", "scripts/check-scripts-typecheck.cjs"] },
+  {
+    label: "脚本档类型检查（.mjs 全量面棘轮）",
+    argv: ["node", "scripts/check-scripts-typecheck.cjs"],
+  },
   { label: "文档引用与权威源一致", argv: ["node", "scripts/check-doc-references.cjs"] },
 ];
 
@@ -73,12 +79,14 @@ function secs(ms) {
  */
 function runGit(cwd, args) {
   try {
-    return spawnSync("git", args, {
-      cwd,
-      encoding: "utf8",
-      maxBuffer: 64 * 1024 * 1024,
-      stdio: ["ignore", "pipe", "ignore"],
-    }).stdout?.trim() ?? null;
+    return (
+      spawnSync("git", args, {
+        cwd,
+        encoding: "utf8",
+        maxBuffer: 64 * 1024 * 1024,
+        stdio: ["ignore", "pipe", "ignore"],
+      }).stdout?.trim() ?? null
+    );
   } catch {
     return null;
   }
@@ -265,7 +273,7 @@ export function formatReport(input) {
   lines.push("");
   lines.push(
     "<!-- 人填：还没立案的事项，逐条按下面的命令形状立案（立案动作归 ship，本工具不写平台）：\n" +
-      "pnpm ship --new-issue \"<标题>\" --issue-body-file <正文> --priority P0|P1|P2|P3 -->",
+      'pnpm ship --new-issue "<标题>" --issue-body-file <正文> --priority P0|P1|P2|P3 -->',
   );
   lines.push("");
   return `${lines.join("\n")}\n`;

@@ -20,12 +20,10 @@ import {
 /** 每一轮 `log()` 都打到这里（`runCiActionlint` 的正文全部走 stdout）。 */
 function capture(fn: () => number): { code: number; text: string } {
   const chunks: Array<string> = [];
-  const spy = vi
-    .spyOn(process.stdout, "write")
-    .mockImplementation((chunk: string | Uint8Array) => {
-      chunks.push(String(chunk));
-      return true;
-    });
+  const spy = vi.spyOn(process.stdout, "write").mockImplementation((chunk: string | Uint8Array) => {
+    chunks.push(String(chunk));
+    return true;
+  });
   try {
     const code = fn();
     return { code, text: chunks.join("") };
@@ -88,7 +86,11 @@ describe("取用：缺件 / 哈希不符 / 可用，三种结论各有退码", (
 describe("种进常驻根（--seed）：只拷、不下载", () => {
   it("源不在场 ⇒ 退 2", () => {
     const { code, text } = capture(() =>
-      seedBinary({ hashOf: () => "x", source: path.join(tmpDir(), "nope.exe"), toolRoot: tmpDir() }),
+      seedBinary({
+        hashOf: () => "x",
+        source: path.join(tmpDir(), "nope.exe"),
+        toolRoot: tmpDir(),
+      }),
     );
     expect(code).toBe(CODE.NO_FACT);
     expect(text).toContain("种失败：源不在场");
@@ -134,7 +136,7 @@ describe("结论行：绿 / 红 / 没判，且必须落在最后一行", () => {
     const line = renderVerdict({
       code: CODE.FAIL,
       files: [".github/workflows/pr-gate.yml"],
-      firstLine: "pr-gate.yml:12:9: unexpected key \"permisions\"",
+      firstLine: 'pr-gate.yml:12:9: unexpected key "permisions"',
     });
     expect(line).toContain("结论：红");
     expect(line).toContain("permisions");
