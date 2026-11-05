@@ -298,8 +298,9 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   { name: "镜像身份", tier: "PR" },
   { name: "工作区复用读数", tier: "PR" },
   { name: "缓存槽读数", tier: "PR" },
-  /* #3051 从 `endStages` 前移进主列（为的是起跑时机，不是判决），形态是**读数格**：
-   * 带 `--readout`，恒不退非零。总账里它就在 `缓存槽读数` 之后、`环境前提` 之前 ——
+  /* #3051 从 `endStages` 前移进主列（为的是起跑时机，不是判决），现已翻承重
+   * （#3051 期望第 3 条落地）：`--readout` 已摘除，退码生效、推不出去/派发失败即拦合。
+   * 总账里它就在 `缓存槽读数` 之后、`环境前提` 之前 ——
    * 与 `.gates` 的实际执行序同处（下面那条「双向相等」判据比的是名字集合，顺序由
    * `registeredGateOrder` 与 stage 序另一条判据钉）。 */
   { name: "GitHub 镜像同步", tier: "PR" },
@@ -328,9 +329,9 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   { name: "格式化提交分离", tier: "PR" },
   { name: "零消费导出", tier: "PR" },
   { name: "重档静态判据", tier: "PR" },
-  /* 主列末尾的读数档（`--readout`，ISSUE #3051 期望第 3 条前半步）：镜像格派发的
-   * 同一笔 head_sha，GitHub Actions 跑完没有、结论是什么。无跨档对应物，
-   * 不进 CROSS_LANE_SCRIPT_MIRRORS。 */
+  /* 主列末尾的承重档（已摘 `--readout`，ISSUE #3051 期望第 3 条已落地）：镜像格派发的
+   * 同一笔 head_sha，GitHub Actions 跑完没有、结论是什么。有结论且红 ⇒ 拦合；没跑起来 ⇒
+   * exit 2 同样拦合；只有读到绿才放行。无跨档对应物，不进 CROSS_LANE_SCRIPT_MIRRORS。 */
   { name: "GitHub 判决回读", tier: "PR" },
   // ── push 档（COMFYAPP_CI_PUSH_GATES，树级校验档 + 镜像出口格）──
   { name: "合并形态复核", tier: "push" },
