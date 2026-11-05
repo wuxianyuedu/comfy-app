@@ -83,8 +83,7 @@ const PR_GATE_WORKFLOW = [
   "    runs-on: ubuntu-latest",
 ].join("\n");
 
-const repoBodyOf = (defaultBranch = "main") =>
-  JSON.stringify({ default_branch: defaultBranch });
+const repoBodyOf = (defaultBranch = "main") => JSON.stringify({ default_branch: defaultBranch });
 
 const workflowsBodyOf = (state = "active") =>
   JSON.stringify({
@@ -248,9 +247,13 @@ describe("纯函数", () => {
     expect(dispatchBranchFilter(PR_GATE_WORKFLOW)).toBeNull();
     expect(
       dispatchBranchFilter(
-        ["on:", "  repository_dispatch:", "    branches:", "      - main", "      - cnb-pr-2649"].join(
-          "\n",
-        ),
+        [
+          "on:",
+          "  repository_dispatch:",
+          "    branches:",
+          "      - main",
+          "      - cnb-pr-2649",
+        ].join("\n"),
       ),
     ).toEqual(["main", "cnb-pr-2649"]);
     expect(
@@ -295,7 +298,7 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
      * 主路径三跳就到点。 */
     const nowStep = opts.nowStep ?? 0;
     let clock = 0;
-    const fetchImpl = (async (url: string | URL) => {
+    const fetchImpl = ((url: string | URL) => {
       calls.push(String(url));
       const addr = String(url);
       const isRuns = addr.includes("/actions/runs");
@@ -353,9 +356,10 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
         return t;
       },
       runGit: gitOk,
-      sleep: async (ms: number) => {
+      sleep: (ms: number) => {
         sleeps.push(ms);
         clock += ms;
+        return Promise.resolve();
       },
     };
     return { calls, heard, io, sleeps };
@@ -827,9 +831,14 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
       chainSteps: [
         new Response(repoBodyOf(), { status: 200 }),
         new Response(workflowsBodyOf(), { status: 200 }),
-        new Response(workflowFileBodyOf(["name: pr-gate", "on:", "  push:", "    branches: [main]"].join("\n")), {
-          status: 200,
-        }),
+        new Response(
+          workflowFileBodyOf(
+            ["name: pr-gate", "on:", "  push:", "    branches: [main]"].join("\n"),
+          ),
+          {
+            status: 200,
+          },
+        ),
       ],
       dispatchState: { dispatched: true, reason: "镜像格已派发" },
       nowStep: 0,

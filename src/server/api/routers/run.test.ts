@@ -10,23 +10,23 @@ vi.mock("~/server/db", async () => {
   return { db: createTestDb() };
 });
 vi.mock("~/server/better-auth", () => ({
-  auth: { api: { getSession: vi.fn(async () => null) } },
+  auth: { api: { getSession: vi.fn(() => null) } },
 }));
 // start/approve/resume 会 fire-and-forget 拉起执行引擎；端点测试只验状态回显，mock 掉引擎避免真跑。
 vi.mock("~/server/agent/run-engine", () => ({
-  advanceRunLoop: vi.fn(async () => undefined),
+  advanceRunLoop: vi.fn(() => undefined),
 }));
 // 评审 / 重生成的落库逻辑在 review.test.ts 覆盖；此处只验端点的入参校验 + 委派 seam。
 const { reviewContent, regenerateShot, reviewScript, reviewShotImage, reviseScript } = vi.hoisted(
   () => ({
-    reviewContent: vi.fn(async () => ({
+    reviewContent: vi.fn(() => ({
       pass: false,
       issues: ["含混"],
       suggestion: "更具体",
       scoredAt: "t",
     })),
-    regenerateShot: vi.fn(async () => undefined),
-    reviewScript: vi.fn(async () => ({
+    regenerateShot: vi.fn(() => undefined),
+    reviewScript: vi.fn(() => ({
       verdict: {
         pass: true,
         issues: [],
@@ -37,7 +37,7 @@ const { reviewContent, regenerateShot, reviewScript, reviewShotImage, reviseScri
       },
       history: [],
     })),
-    reviewShotImage: vi.fn(async () => ({
+    reviewShotImage: vi.fn(() => ({
       pass: true,
       issues: [],
       suggestion: "",
@@ -45,11 +45,11 @@ const { reviewContent, regenerateShot, reviewScript, reviewShotImage, reviseScri
       scores: { artifacts: { score: 4, note: "无崩" } },
       rubricVersion: "shotImage-v1",
     })),
-    reviseScript: vi.fn(async () => "# 改写后的剧本"),
+    reviseScript: vi.fn(() => "# 改写后的剧本"),
   }),
 );
 vi.mock("~/server/agent/review", () => ({
-  autoselectShotImage: vi.fn(async () => ({
+  autoselectShotImage: vi.fn(() => ({
     winnerTaskId: "task-w",
     winnerImageUrl: "/generated/task-w/1.png",
     winnerVerdict: { pass: true, issues: [], suggestion: "", scoredAt: "" },

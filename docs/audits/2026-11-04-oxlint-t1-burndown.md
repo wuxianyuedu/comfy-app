@@ -11,7 +11,7 @@
 |---|---|---|---|---|
 | B1 | `eslint/no-use-before-define（functions:false）` | 75 | 48 | 已清（75 处/48 份） |
 | B2 | `no-await-in-loop` | 304 | 123 | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
-| B3 | `typescript/require-await` | 754 | 188 | 清账中（子批1–3：141 份 / 514 处已清，剩 47 份 / 240 处） |
+| B3 | `typescript/require-await` | 754 | 188 | 已清（754 处 / 188 份，子批1–4） |
 | B4 | `eslint/prefer-named-capture-group` | 1094 | 332 | 挂账中 |
 | B5 | `typescript/no-unsafe-type-assertion` | 1496 | 608 | 挂账中 |
 
@@ -355,53 +355,53 @@
 | `src/lib/workshop/media-source.server.test.ts` | 1 | 已清 |
 | `src/lib/workshop/workflow-run.server.test.ts` | 1 | 已清 |
 | `src/server/agent/review.test.ts` | 6 | 已清 |
-| `src/server/agent/run-engine.test.ts` | 11 | 挂账 |
-| `src/server/api/routers/film.test.ts` | 6 | 挂账 |
-| `src/server/api/routers/llm.test.ts` | 4 | 挂账 |
-| `src/server/api/routers/model.test.ts` | 5 | 挂账 |
-| `src/server/api/routers/project.test.ts` | 1 | 挂账 |
-| `src/server/api/routers/run.test.ts` | 8 | 挂账 |
-| `src/server/api/routers/series.test.ts` | 1 | 挂账 |
-| `src/server/api/routers/setting-backup.test.ts` | 1 | 挂账 |
-| `src/server/api/routers/setting.test.ts` | 14 | 挂账 |
-| `src/server/api/routers/setting.ts` | 3 | 挂账 |
-| `src/server/api/routers/skill.test.ts` | 1 | 挂账 |
-| `src/server/api/routers/task.test.ts` | 3 | 挂账 |
-| `src/server/api/routers/workflow-model.test.ts` | 1 | 挂账 |
-| `src/server/api/routers/workflow.test.ts` | 2 | 挂账 |
-| `src/server/api/trpc.test.ts` | 1 | 挂账 |
-| `src/server/film/orchestrator.test.ts` | 26 | 挂账 |
-| `src/server/mcp/workshop-mcp.test.ts` | 18 | 挂账 |
-| `src/server/workshop/comfyui.test.ts` | 3 | 挂账 |
-| `src/server/workshop/orchestrator.test.ts` | 17 | 挂账 |
-| `tests/affected-launch-noise-reporter.test.ts` | 1 | 挂账 |
-| `tests/affected-launch-separation.test.ts` | 1 | 挂账 |
-| `tests/agent-film.test.ts` | 1 | 挂账 |
-| `tests/ci-cp936-exit.test.ts` | 2 | 挂账 |
-| `tests/ci-github-mirror-push.test.ts` | 6 | 挂账 |
-| `tests/ci-github-verdict-read.test.ts` | 2 | 挂账 |
-| `tests/ci-image-plan.test.ts` | 3 | 挂账 |
-| `tests/ci-token-scopes.test.ts` | 4 | 挂账 |
-| `tests/ci-toolchain-selfcheck.test.ts` | 3 | 挂账 |
-| `tests/cross-platform-launcher.test.ts` | 10 | 挂账 |
-| `tests/db-backup.test.ts` | 1 | 挂账 |
-| `tests/dev-launcher-runtime-heal.test.ts` | 14 | 挂账 |
-| `tests/docs-candidate-hygiene.test.ts` | 1 | 挂账 |
-| `tests/e2e-fake-comfyui-endpoint.test.ts` | 1 | 挂账 |
-| `tests/e2e-reclaim-own-fake-port.test.ts` | 33 | 挂账 |
-| `tests/e2e-run.test.ts` | 7 | 挂账 |
-| `tests/executor-host.test.ts` | 1 | 挂账 |
-| `tests/helpers/wire-mock-boundary.ts` | 1 | 挂账 |
-| `tests/hook-affected-launch.test.ts` | 2 | 挂账 |
-| `tests/integration/renderWithProviders.integration.test.tsx` | 1 | 挂账 |
-| `tests/linux-env-bootstrap.test.ts` | 2 | 挂账 |
-| `tests/quality-gate-ps-precheck.test.ts` | 1 | 挂账 |
-| `tests/ship.test.ts` | 8 | 挂账 |
-| `tests/sqlite-pragma-sites.test.ts` | 1 | 挂账 |
-| `tests/task-detail-images-wire-contract.test.ts` | 1 | 挂账 |
-| `tests/task-list-wire-contract.test.ts` | 2 | 挂账 |
-| `tests/trpc-surface-executors.test.ts` | 1 | 挂账 |
-| `tests/typedoc-run.test.ts` | 3 | 挂账 |
+| `src/server/agent/run-engine.test.ts` | 11 | 已清 |
+| `src/server/api/routers/film.test.ts` | 6 | 已清 |
+| `src/server/api/routers/llm.test.ts` | 4 | 已清 |
+| `src/server/api/routers/model.test.ts` | 5 | 已清 |
+| `src/server/api/routers/project.test.ts` | 1 | 已清 |
+| `src/server/api/routers/run.test.ts` | 8 | 已清 |
+| `src/server/api/routers/series.test.ts` | 1 | 已清 |
+| `src/server/api/routers/setting-backup.test.ts` | 1 | 已清 |
+| `src/server/api/routers/setting.test.ts` | 14 | 已清 |
+| `src/server/api/routers/setting.ts` | 3 | 已清 |
+| `src/server/api/routers/skill.test.ts` | 1 | 已清 |
+| `src/server/api/routers/task.test.ts` | 3 | 已清 |
+| `src/server/api/routers/workflow-model.test.ts` | 1 | 已清 |
+| `src/server/api/routers/workflow.test.ts` | 2 | 已清 |
+| `src/server/api/trpc.test.ts` | 1 | 已清 |
+| `src/server/film/orchestrator.test.ts` | 26 | 已清 |
+| `src/server/mcp/workshop-mcp.test.ts` | 18 | 已清 |
+| `src/server/workshop/comfyui.test.ts` | 3 | 已清 |
+| `src/server/workshop/orchestrator.test.ts` | 17 | 已清 |
+| `tests/affected-launch-noise-reporter.test.ts` | 1 | 已清 |
+| `tests/affected-launch-separation.test.ts` | 1 | 已清 |
+| `tests/agent-film.test.ts` | 1 | 已清 |
+| `tests/ci-cp936-exit.test.ts` | 2 | 已清 |
+| `tests/ci-github-mirror-push.test.ts` | 6 | 已清 |
+| `tests/ci-github-verdict-read.test.ts` | 2 | 已清 |
+| `tests/ci-image-plan.test.ts` | 3 | 已清 |
+| `tests/ci-token-scopes.test.ts` | 4 | 已清 |
+| `tests/ci-toolchain-selfcheck.test.ts` | 3 | 已清 |
+| `tests/cross-platform-launcher.test.ts` | 10 | 已清 |
+| `tests/db-backup.test.ts` | 1 | 已清 |
+| `tests/dev-launcher-runtime-heal.test.ts` | 14 | 已清 |
+| `tests/docs-candidate-hygiene.test.ts` | 1 | 已清 |
+| `tests/e2e-fake-comfyui-endpoint.test.ts` | 1 | 已清 |
+| `tests/e2e-reclaim-own-fake-port.test.ts` | 33 | 已清 |
+| `tests/e2e-run.test.ts` | 7 | 已清 |
+| `tests/executor-host.test.ts` | 1 | 已清 |
+| `tests/helpers/wire-mock-boundary.ts` | 1 | 已清 |
+| `tests/hook-affected-launch.test.ts` | 2 | 已清 |
+| `tests/integration/renderWithProviders.integration.test.tsx` | 1 | 已清 |
+| `tests/linux-env-bootstrap.test.ts` | 2 | 已清 |
+| `tests/quality-gate-ps-precheck.test.ts` | 1 | 已清 |
+| `tests/ship.test.ts` | 8 | 已清 |
+| `tests/sqlite-pragma-sites.test.ts` | 1 | 已清 |
+| `tests/task-detail-images-wire-contract.test.ts` | 1 | 已清 |
+| `tests/task-list-wire-contract.test.ts` | 2 | 已清 |
+| `tests/trpc-surface-executors.test.ts` | 1 | 已清 |
+| `tests/typedoc-run.test.ts` | 3 | 已清 |
 
 ### B4 · `eslint/prefer-named-capture-group`
 

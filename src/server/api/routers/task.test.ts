@@ -9,10 +9,10 @@ import path from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const { statMock, rmMock } = vi.hoisted(() => ({
-  statMock: vi.fn<(path: string) => Promise<unknown>>(async () => {
+  statMock: vi.fn<(path: string) => Promise<unknown>>(() => {
     throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
   }),
-  rmMock: vi.fn<(path: string, opts?: unknown) => Promise<void>>(async () => undefined),
+  rmMock: vi.fn<(path: string, opts?: unknown) => Promise<void>>(() => Promise.resolve(undefined)),
 }));
 
 vi.mock("~/server/db", async () => {
@@ -20,7 +20,7 @@ vi.mock("~/server/db", async () => {
   return { db: createTestDb() };
 });
 vi.mock("~/server/better-auth", () => ({
-  auth: { api: { getSession: vi.fn(async () => null) } },
+  auth: { api: { getSession: vi.fn(() => null) } },
 }));
 vi.mock("~/lib/core/logger", async (importOriginal) => ({
   ...(await importOriginal<typeof LoggerModule>()),

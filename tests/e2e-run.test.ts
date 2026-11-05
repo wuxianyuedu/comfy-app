@@ -731,12 +731,13 @@ describe("开跑前的三档前置（ISSUE #1948）", () => {
      * （本机实测：它给 `…/chromium-1243/chrome-linux64/chrome`，而真缺的是
      * `chromium_headless_shell-1243/…`）。所以这里喂一个真的会抛的 launch。 */
     const missing = await checkBrowserReady({
-      launch: async () => ({
-        ok: false,
-        error: new Error(
-          "browserType.launch: Executable doesn't exist at /tmp/x/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell\nCall log: ...",
-        ),
-      }),
+      launch: () =>
+        Promise.resolve({
+          ok: false,
+          error: new Error(
+            "browserType.launch: Executable doesn't exist at /tmp/x/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell\nCall log: ...",
+          ),
+        }),
     });
     expect(missing.verdict).toBe("missing");
     expect(missing.executablePath).toBe(
@@ -750,16 +751,17 @@ describe("开跑前的三档前置（ISSUE #1948）", () => {
     expect(text).toContain(missing.installHint);
 
     // 起得来 ⇒ ready，且不产生任何话术噪音（happy path 上不打扰）。
-    expect(await checkBrowserReady({ launch: async () => ({ ok: true }) })).toEqual({
+    expect(await checkBrowserReady({ launch: () => Promise.resolve({ ok: true }) })).toEqual({
       verdict: "ready",
     });
 
     // 不是缺文件（权限 / 缺系统库）也归这一档，但**不猜路径** —— 抠不出来就报原文。
     const other = await checkBrowserReady({
-      launch: async () => ({
-        ok: false,
-        error: new Error("browserType.launch: Target page, context or browser has been closed"),
-      }),
+      launch: () =>
+        Promise.resolve({
+          ok: false,
+          error: new Error("browserType.launch: Target page, context or browser has been closed"),
+        }),
     });
     expect(other.verdict).toBe("missing");
     expect(other.executablePath).toBeUndefined();
@@ -885,9 +887,9 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
   it("三步各说一句；全绿时一条都不拦", async () => {
     touched.length = 0;
     const { abort } = await runPreflightReadings({
-      collect: async (step) => {
+      collect: (step) => {
         touched.push(step);
-        return { say: `[${step}]\n` };
+        return Promise.resolve({ say: `[${step}]\n` });
       },
     });
     expect(abort).toBeNull();
@@ -897,12 +899,12 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
   it("第一条阻断就停，且它之前那几步的读数**已经说过了**", async () => {
     touched.length = 0;
     const { abort } = await runPreflightReadings({
-      collect: async (step) => {
+      collect: (step) => {
         touched.push(step);
         if (step === "schema") {
-          return { abort: "库没建齐" };
+          return Promise.resolve({ abort: "库没建齐" });
         }
-        return { say: `[${step}]\n` };
+        return Promise.resolve({ say: `[${step}]\n` });
       },
     });
     expect(abort).toBe("库没建齐");
@@ -913,9 +915,9 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
   it("`collect` 回 null 的步骤被跳过（端口那条已在别处算过，不重复探）", async () => {
     touched.length = 0;
     await runPreflightReadings({
-      collect: async (step) => {
+      collect: (step) => {
         touched.push(step);
-        return step === "ports" ? null : { say: "x\n" };
+        return Promise.resolve(step === "ports" ? null : { say: "x\n" });
       },
     });
     expect(touched).toContain("ports");
@@ -935,14 +937,14 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
       }),
     });
     const { abort } = await runPreflightReadings({
-      collect: async (step) => (step === "python" ? collectors.python() : null),
+      collect: (step) => Promise.resolve(step === "python" ? collectors.python() : null),
     });
     expect(abort).toContain("没有解释器");
     // 缺件那一档也要把结论带过去：否则 `playwright.config.ts` 退回「不知道」。
     expect(env[PYTHON_PREFLIGHT_ENV_KEY]).toBeTruthy();
   });
 
-  it("schema 判成 abort ⇒ 拦下，且逐条列出丢数据的语句", async () => {
+  it("schema 判成 abort ⇒ 拦下，且逐条列出丢数据的语句", () => {
     const collectors = makePreflightCollectors({
       /* SAFETY: 类型断言已复核 */
       env: {} as NodeJS.ProcessEnv,
@@ -972,7 +974,7 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
         /* SAFETY: 类型断言已复核 */
         env: {} as NodeJS.ProcessEnv,
         cwd: ROOT,
-        browser: async () => verdict,
+        browser: () => Promise.resolve(verdict),
       });
       // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const result = await collectors.browser();

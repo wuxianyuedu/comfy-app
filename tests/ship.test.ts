@@ -61,7 +61,12 @@ import {
 import { runPushStage, runRerunCiStage } from "../scripts/ship-local.mjs";
 /* 旗标层单独一份（ISSUE #2491）：这一族的用例读的是「命令行长什么样」，不是「执行者给了什么读数」。 */
 import { parseArgs, parseIssueNumberToken } from "../scripts/ship-args.mjs";
-import { buildPullBody, capDiffstat, mentionsCloses, PULL_BODY_LIMIT } from "../scripts/ship-pull-body.mjs";
+import {
+  buildPullBody,
+  capDiffstat,
+  mentionsCloses,
+  PULL_BODY_LIMIT,
+} from "../scripts/ship-pull-body.mjs";
 import {
   claimNumbersFromTitle,
   closeIssues,
@@ -297,9 +302,7 @@ describe("ISSUE #3083：码表对账 —— 出口散落了谁的码，这条先
     /* 与三态时代同一口径：「没拿到测量」不许被「另有几步红了」盖掉。
      * 新码（3–7）都在没跑起来家族里，压栈行为对旧码 {0,1,2} 逐字等价。 */
     expect(combineShipCodes([CODE.RED, CODE.CONFLICT])).toBe(CODE.CONFLICT);
-    expect(combineShipCodes([CODE.GREEN, CODE.PREFLIGHT, CODE.CI_PENDING])).toBe(
-      CODE.PREFLIGHT,
-    );
+    expect(combineShipCodes([CODE.GREEN, CODE.PREFLIGHT, CODE.CI_PENDING])).toBe(CODE.PREFLIGHT);
     expect(combineShipCodes([CODE.GREEN, CODE.RED])).toBe(CODE.RED);
     expect(combineShipCodes([CODE.GREEN])).toBe(CODE.GREEN);
   });
@@ -2890,7 +2893,7 @@ describe("reapCheckoutInstances：只收 via port 那批，session 那一档不�
     const calls: Array<string> = [];
     const log: Array<string> = [];
     let n = 0;
-    const read = async (_root: string): Promise<Live> => {
+    const read = (_root: string): Promise<Live> => {
       const one = n++ === 0 ? before : after;
       if (one instanceof Error) {
         throw one;
@@ -2898,7 +2901,7 @@ describe("reapCheckoutInstances：只收 via port 那批，session 那一档不�
       if (one === null) {
         throw new Error("判据返回了空形状");
       }
-      return one;
+      return Promise.resolve(one);
     };
     const run = (_cmd: string, args: Array<string>) => {
       calls.push(args.join(" "));
@@ -3154,7 +3157,7 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
       run,
       polls: () => i,
       now: () => 0,
-      sleep: async () => undefined,
+      sleep: () => undefined,
     };
   }
 
@@ -3402,7 +3405,7 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
       log: (s) => log.push(s),
       ...base,
       now: () => 0,
-      sleep: async () => undefined,
+      sleep: () => undefined,
     });
     expect(out.stop).toBeNull();
     expect(out.buildState).toBe("green");
@@ -3449,7 +3452,7 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
       log: (s) => log.push(s),
       ...base,
       now: () => 0,
-      sleep: async () => undefined,
+      sleep: () => undefined,
     });
     expect(out.stop).toBeNull();
     expect(out.buildState).toBe("green");
@@ -3601,7 +3604,7 @@ describe("被取消的那一跑：结论是「没有结论」，不是「CI 红�
       slug: "org/repo",
       newSha: SHA,
       now: () => 0,
-      sleep: async () => undefined,
+      sleep: () => undefined,
     });
     expect(out.stop).toBeNull();
     expect(out.buildState).toBe("cancelled");
@@ -4044,7 +4047,12 @@ describe("ISSUE #3059：is_merged / state 缺键三态分型（缺键 ≠ false�
       stderr: "",
       error: null,
     });
-    const outFalse = findMergedPullProofs({ run: runFalse, slug: "a/b", numbers: [3059], pages: 1 });
+    const outFalse = findMergedPullProofs({
+      run: runFalse,
+      slug: "a/b",
+      numbers: [3059],
+      pages: 1,
+    });
     expect(outFalse.proofs.size).toBe(0);
     expect(outFalse.unknown.size).toBe(0);
   });
@@ -4630,7 +4638,10 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
     expect(out.number).toBe(3002);
     const openCalls = calls.filter((c) => c.includes("list-pulls") && c.includes("--state open"));
     expect(openCalls.length, "页界是 5 页，第 6 页一次都不该发").toBe(5);
-    expect(calls.some((c) => c.includes("post-pull")), "撞上界后仍要能建 PR").toBe(true);
+    expect(
+      calls.some((c) => c.includes("post-pull")),
+      "撞上界后仍要能建 PR",
+    ).toBe(true);
     const all = heard.join("\n");
     expect(all).toContain("已扫 5 页 / 100 条仍未命中");
     expect(all).toContain("可能撞 409");
@@ -4733,10 +4744,19 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
       "> 判断、读数与因果请写在下面的正文里 —— 脚本不代写；开头那行「评论人」只是这一跑的留痕，不是对正文的判断背书。",
       "",
     ].join("\n");
-    const noFlag = buildPullBody({ root: process.cwd(), fragments: [], diffstat: " 1 file changed" });
+    const noFlag = buildPullBody({
+      root: process.cwd(),
+      fragments: [],
+      diffstat: " 1 file changed",
+    });
     expect(noFlag).toBe(expected);
     expect(noFlag, "缺省值与显式 null 必须是同一支").toBe(
-      buildPullBody({ root: process.cwd(), fragments: [], diffstat: " 1 file changed", userBody: null }),
+      buildPullBody({
+        root: process.cwd(),
+        fragments: [],
+        diffstat: " 1 file changed",
+        userBody: null,
+      }),
     );
   });
 
@@ -4788,9 +4808,10 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
     expect(out.number).toBe(2649);
     expect(out.stop).toBeNull();
     expect(calls.some((c) => c.includes("patch-pull"))).toBe(true);
-    expect(calls.some((c) => c.includes("post-pull")), "复用命中还发 post-pull 会长出第二条 PR").toBe(
-      false,
-    );
+    expect(
+      calls.some((c) => c.includes("post-pull")),
+      "复用命中还发 post-pull 会长出第二条 PR",
+    ).toBe(false);
     expect(bodies.length).toBe(1);
     expect(bodies[0]).toContain("## 改动");
     expect(heard.join("\n")).toContain("正文已更新并回读一致");
@@ -4926,7 +4947,10 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
     expect(all).toContain("别人 force-push / 本地久未 fetch");
     expect(all).toContain("标题与 diffstat 可能跨到别人的提交");
     expect(all).toContain("建议重跑");
-    expect(calls.some((c) => c.includes("patch-pull")), "念风险不等于阻断写入").toBe(true);
+    expect(
+      calls.some((c) => c.includes("patch-pull")),
+      "念风险不等于阻断写入",
+    ).toBe(true);
   });
 });
 
@@ -4968,7 +4992,7 @@ describe("ship 阶段 0：`.env` 缺键的读数与启动器同一份实现（IS
         slug: "moon-read/comfy-app-t3",
         cnbOk: true,
         handle: null,
-        readInstances: async () => ({ running: false }),
+        readInstances: () => Promise.resolve({ running: false }),
         platform: "linux",
       });
       const text = logs.join("\n");
@@ -5162,7 +5186,7 @@ describe("ship 阶段 0 的依赖新鲜度那一格：读数分档，不再只�
       slug: "moon-read/comfy-app-t3",
       cnbOk: true,
       handle: null,
-      readInstances: async () => ({ running: false }),
+      readInstances: () => Promise.resolve({ running: false }),
       platform: "linux",
     });
     return { res, text: logs.join("\n") };
@@ -5654,7 +5678,10 @@ describe("--diagnose：只读取回失败格与日志摘要", () => {
     expect(text).toContain("pnpm ship");
     /* 诊断仍是只读：分型只多看两眼（list-pulls / get-pull），一条写动作都不发。 */
     for (const write of ["post-", "merge-pull", "update-issue", "delete-", "create-issue"]) {
-      expect(f.calls.some((c) => c.includes(write)), `发了写动作：${write}`).toBe(false);
+      expect(
+        f.calls.some((c) => c.includes(write)),
+        `发了写动作：${write}`,
+      ).toBe(false);
     }
   });
 
@@ -6891,7 +6918,12 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       fs.writeFileSync(prFile, "## 根因\n\n读数：这条 PR 的正文由 ship 注入。\n", "utf8");
       const base = fake({ chain: true });
       /** `fake()` 里的 `ok` 是闭包内的，这里补一份同形的应答。 */
-      const answer = (stdout: string): FakeResult => ({ status: 0, stdout, stderr: "", error: null });
+      const answer = (stdout: string): FakeResult => ({
+        status: 0,
+        stdout,
+        stderr: "",
+        error: null,
+      });
       let written = "";
       const run = (cmd: string, args: Array<string>): FakeResult => {
         const key = args.join(" ");
@@ -7135,7 +7167,12 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
             : { status: 0, stdout: "fix(parent): 别人的一笔 (#2955)", stderr: "", error: null };
         }
         if (cmd === "cnb" && key.includes("post-pull")) {
-          return { status: 201, stdout: '{"status":201,"data":{"number":2999}}', stderr: "", error: null };
+          return {
+            status: 201,
+            stdout: '{"status":201,"data":{"number":2999}}',
+            stderr: "",
+            error: null,
+          };
         }
         return base.run(cmd, args);
       };
@@ -7595,7 +7632,9 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
           "[ship] ▶ 复用 PR | pr=777 | title=fix(ship): 阶段进度 (#3083) | state=open",
         );
         expect(all).toContain("[ship] ▶ 等 CI | build=cnb-267-1k5h0qvib | sha=d02ec963 | pr=777");
-        expect(all).toContain("[ship] ▶ 合并 | pr=777 | form=squash | sha=906bce4c | target=master");
+        expect(all).toContain(
+          "[ship] ▶ 合并 | pr=777 | form=squash | sha=906bce4c | target=master",
+        );
         expect(all).toContain(
           "[ship] ▶ 关单 | issue=3083 | state=closed | state_reason=completed | closed_at=2026-11-03T01:02:03.000Z",
         );
@@ -8044,7 +8083,7 @@ describe("停摆读数：start 格 + endTime 不大于 startTime（ISSUE #2901�
       slug: "org/repo",
       newSha: "d02ec96364d5f3713b77c91b0d3fe789878f1747",
       now: () => 0,
-      sleep: async () => undefined,
+      sleep: () => undefined,
     });
     const all = log.join("\n");
     expect(all).toContain("疑似 runner 失联");

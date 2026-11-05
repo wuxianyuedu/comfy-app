@@ -13,7 +13,7 @@ export async function dbMockBoundary() {
 
 /** 会话替身：`auth.api.getSession` 恒回 `null`（未登录那一支由用例自己走真 router）。 */
 export function sessionMockBoundary() {
-  return { auth: { api: { getSession: vi.fn(async () => null) } } };
+  return { auth: { api: { getSession: vi.fn(() => null) } } };
 }
 
 /**

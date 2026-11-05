@@ -33,61 +33,79 @@ const {
   spawnMock: vi.fn(),
   /** 让「取检出根」那一次 `realpath` 抛错的开关（探针在每次调用开头读它）。 */
   fsState: { failRoot: false },
-  probeMock: vi.fn<() => Promise<{ embeddable: boolean; reason: string }>>(async () => ({
-    embeddable: true,
-    reason: "ok",
-  })),
-  getSettingsMock: vi.fn<() => Promise<Record<string, unknown>>>(async () => ({
-    comfyuiPort: 8188,
-    comfyuiPath: "",
-  })),
+  probeMock: vi.fn<() => Promise<{ embeddable: boolean; reason: string }>>(() =>
+    Promise.resolve({
+      embeddable: true,
+      reason: "ok",
+    }),
+  ),
+  getSettingsMock: vi.fn<() => Promise<Record<string, unknown>>>(() =>
+    Promise.resolve({
+      comfyuiPort: 8188,
+      comfyuiPath: "",
+    }),
+  ),
   getSettingsSyncMock: vi.fn<() => Record<string, unknown>>(() => ({
     comfyuiPort: 8188,
     comfyuiPath: "C:/ComfyUI",
     comfyuiAutoStart: true,
   })),
   saveSettingsMock: vi.fn<(partial: Record<string, unknown>) => Promise<Record<string, unknown>>>(
-    async (partial) => ({ comfyuiPort: 8188, ...partial }),
+    (partial) => Promise.resolve({ comfyuiPort: 8188, ...partial }),
   ),
   clearManualStopMock: vi.fn<() => void>(),
   clearAutoStartFailureMock: vi.fn<() => void>(),
-  ensureReadyMock: vi.fn<() => Promise<{ detail: string; ok: boolean }>>(async () => ({
-    ok: true,
-    detail: "已就绪",
-  })),
-  statusMock: vi.fn<() => Promise<Record<string, unknown>>>(async () => ({
-    up: true,
-    base: "http://127.0.0.1:8188",
-    starting: false,
-    probing: false,
-    stopping: false,
-    port: null,
-    via: "external",
-  })),
-  openComfyMock: vi.fn<() => Promise<{ detail: string; ok: boolean }>>(async () => ({
-    ok: true,
-    detail: "已打开",
-  })),
-  stopComfyMock: vi.fn<() => Promise<{ ok: boolean }>>(async () => ({
-    ok: true,
-  })),
+  ensureReadyMock: vi.fn<() => Promise<{ detail: string; ok: boolean }>>(() =>
+    Promise.resolve({
+      ok: true,
+      detail: "已就绪",
+    }),
+  ),
+  statusMock: vi.fn<() => Promise<Record<string, unknown>>>(() =>
+    Promise.resolve({
+      up: true,
+      base: "http://127.0.0.1:8188",
+      starting: false,
+      probing: false,
+      stopping: false,
+      port: null,
+      via: "external",
+    }),
+  ),
+  openComfyMock: vi.fn<() => Promise<{ detail: string; ok: boolean }>>(() =>
+    Promise.resolve({
+      ok: true,
+      detail: "已打开",
+    }),
+  ),
+  stopComfyMock: vi.fn<() => Promise<{ ok: boolean }>>(() =>
+    Promise.resolve({
+      ok: true,
+    }),
+  ),
   describeInstanceMock: vi.fn<() => { kind: string }>(() => ({
     kind: "portable",
   })),
   /* 存储目录读盘在 `desktop-storage-paths.server` 里（它自己有用例），这里只判
    * 「用配置路径调它、非桌面如实返回 null」这条接线。 */
-  resolveStorageMock: vi.fn<(dir: string) => Promise<unknown>>(async () => null),
-  studioProbeMock: vi.fn<(port: number) => Promise<boolean>>(async () => true),
+  resolveStorageMock: vi.fn<(dir: string) => Promise<unknown>>(() => Promise.resolve(null)),
+  studioProbeMock: vi.fn<(port: number) => Promise<boolean>>(() => Promise.resolve(true)),
   studioStartingMock: vi.fn<() => boolean>(() => false),
-  studioEnsureMock: vi.fn<() => Promise<{ ok: boolean }>>(async () => ({
-    ok: true,
-  })),
-  studioStopMock: vi.fn<() => Promise<{ ok: boolean }>>(async () => ({
-    ok: true,
-  })),
-  studioOpenMock: vi.fn<() => Promise<{ ok: boolean }>>(async () => ({
-    ok: true,
-  })),
+  studioEnsureMock: vi.fn<() => Promise<{ ok: boolean }>>(() =>
+    Promise.resolve({
+      ok: true,
+    }),
+  ),
+  studioStopMock: vi.fn<() => Promise<{ ok: boolean }>>(() =>
+    Promise.resolve({
+      ok: true,
+    }),
+  ),
+  studioOpenMock: vi.fn<() => Promise<{ ok: boolean }>>(() =>
+    Promise.resolve({
+      ok: true,
+    }),
+  ),
 }));
 
 vi.mock("~/server/db", async () => {
@@ -95,7 +113,7 @@ vi.mock("~/server/db", async () => {
   return { db: createTestDb() };
 });
 vi.mock("~/server/better-auth", () => ({
-  auth: { api: { getSession: vi.fn(async () => null) } },
+  auth: { api: { getSession: vi.fn(() => null) } },
 }));
 vi.mock("child_process", () => ({ spawn: spawnMock }));
 /**
@@ -188,10 +206,12 @@ beforeEach(() => {
     comfyuiPath: "C:/ComfyUI",
     comfyuiAutoStart: true,
   });
-  saveSettingsMock.mockImplementation(async (partial) => ({
-    comfyuiPort: 8188,
-    ...partial,
-  }));
+  saveSettingsMock.mockImplementation((partial) =>
+    Promise.resolve({
+      comfyuiPort: 8188,
+      ...partial,
+    }),
+  );
   probeMock.mockResolvedValue({ embeddable: true, reason: "ok" });
   statusMock.mockResolvedValue({
     up: true,

@@ -7,7 +7,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import type * as AppSettingsModule from "~/lib/app-settings/app-settings.server";
 
 const { getSessionMock } = vi.hoisted(() => ({
-  getSessionMock: vi.fn<() => Promise<unknown>>(async () => null),
+  getSessionMock: vi.fn<() => Promise<unknown>>(() => Promise.resolve(null)),
 }));
 
 vi.mock("~/server/db", async () => {

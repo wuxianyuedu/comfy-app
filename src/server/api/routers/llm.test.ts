@@ -7,14 +7,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { llmServer, contracts } = vi.hoisted(() => ({
   llmServer: {
-    getConfigForClient: vi.fn(async () => ({
+    getConfigForClient: vi.fn(() => ({
       provider: "remote",
       hasApiKey: true,
     })),
   },
   contracts: {
-    loadModeContracts: vi.fn(async () => [{ mode: "TXT2IMG" }]),
-    saveModeContracts: vi.fn(async (c: unknown) => c),
+    loadModeContracts: vi.fn(() => [{ mode: "TXT2IMG" }]),
+    saveModeContracts: vi.fn((c: unknown) => c),
   },
 }));
 
@@ -23,7 +23,7 @@ vi.mock("~/server/db", async () => {
   return { db: createTestDb() };
 });
 vi.mock("~/server/better-auth", () => ({
-  auth: { api: { getSession: vi.fn(async () => null) } },
+  auth: { api: { getSession: vi.fn(() => null) } },
 }));
 vi.mock("~/lib/core/logger", () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
