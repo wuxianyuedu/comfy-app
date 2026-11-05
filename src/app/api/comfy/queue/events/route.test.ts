@@ -40,7 +40,7 @@ function frameOf(chunk: string): Record<string, unknown> {
 
 describe("GET /api/comfy/queue/events", () => {
   it("是 SSE：Content-Type / no-cache / 关闭反代缓冲", async () => {
-    const res = await GET();
+    const res = GET();
     expect(res.headers.get("Content-Type")).toContain("text/event-stream");
     expect(res.headers.get("Cache-Control")).toContain("no-cache");
     expect(res.headers.get("X-Accel-Buffering")).toBe("no");
@@ -48,7 +48,7 @@ describe("GET /api/comfy/queue/events", () => {
   });
 
   it("连上即推一帧：客户端立刻去拉当前态", async () => {
-    const res = await GET();
+    const res = GET();
     const frame = frameOf(await readOnce(res));
     expect(frame).toMatchObject({ changed: true });
     expect(typeof frame.at).toBe("number");
@@ -56,7 +56,7 @@ describe("GET /api/comfy/queue/events", () => {
   });
 
   it("队列变化一到就推出去", async () => {
-    const res = await GET();
+    const res = GET();
     await expect.poll(() => subscribers.length).toBe(1);
     await readOnce(res); // 先吃掉连上的那一帧
     subscribers[0]!(); // 模拟一次「队列变了」

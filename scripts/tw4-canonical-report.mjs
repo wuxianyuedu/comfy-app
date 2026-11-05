@@ -117,12 +117,13 @@ function readStyle(file) {
  * @param {string} base
  * @returns {Promise<StyleFile>}
  */
-async function loadStylesheet(id, base) {
+function loadStylesheet(id, base) {
   const file =
     id === "tailwindcss"
       ? path.join(ROOT, "node_modules", "tailwindcss", "index.css")
       : path.resolve(base, id);
-  return readStyle(file);
+  // 回调契约定的是 Promise（Tailwind 允许同步返回，这里保住标注形态，免得下游 await 被改判）
+  return Promise.resolve(readStyle(file));
 }
 
 const globals = read(path.join(SRC, "app", "globals.css"));

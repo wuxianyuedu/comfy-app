@@ -689,7 +689,7 @@ export async function GET() {
    * 前端会崩在「读取 undefined 的 paths 属性」这类报错上，
    * 真实原因反而看不到。现在错误以 { error } JSON 返回，前端可读展示。 */
   try {
-    return await buildGetResponse();
+    return buildGetResponse();
   } catch (error) {
     return errorResponse(
       new AppError(apiErrorDetail(error, "读取配置失败"), "custom_nodes.read_failed", 500),
@@ -697,7 +697,7 @@ export async function GET() {
   }
 }
 
-async function buildGetResponse(): Promise<Response> {
+function buildGetResponse(): Response {
   const paths = getPaths();
   const localWorkflowPaths = getLocalWorkflowPaths();
   const summary = readManifestSummary();

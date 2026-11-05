@@ -14,7 +14,7 @@ const auth = vi.hoisted((): { user: { id: string } | null } => ({
   user: { id: "u1" },
 }));
 vi.mock("~/server/auth/request-user", () => ({
-  requireRequestUser: async () => auth.user,
+  requireRequestUser: () => auth.user,
 }));
 
 import { getTestDb, seedUser } from "../../../../tests/helpers/test-db";
@@ -33,7 +33,7 @@ function putRequest(body: unknown) {
   /* SAFETY: 类型断言已复核 */
   return {
     nextUrl: new URL("http://localhost/api/production"),
-    json: async () => body,
+    json: () => body,
   } as never;
 }
 

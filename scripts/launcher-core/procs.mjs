@@ -58,9 +58,9 @@ export function isWindows(platform = process.platform) {
  *  这是编排器回收残留实例的**唯一入口**：Windows 走 `netstat -ano`（系统自带，
  *  无需 PowerShell 启动开销），POSIX 读 `/proc/net/tcp{,6}` 的 LISTEN inode
  *  再与 `/proc/<pid>/fd` 的 `socket:[…]` 求交集。
- *  @param {number} port @returns {Promise<number[]>} */
-export async function listeningPidsOnPort(port) {
-  const raw = isWindows() ? await listeningPidsWindows(port) : await listeningPidsPosix(port);
+ *  @param {number} port @returns {number[]} */
+export function listeningPidsOnPort(port) {
+  const raw = isWindows() ? listeningPidsWindows(port) : listeningPidsPosix(port);
   return [...new Set(raw)].sort((a, b) => a - b);
 }
 
@@ -73,8 +73,8 @@ const NETSTAT_SNAPSHOT_TTL_MS = 1000;
 let netstatSnapshot = { at: 0, text: "" };
 let netstatInFlight = null;
 
-/** @returns {Promise<string>} */
-async function netstatTcpSnapshot() {
+/** @returns {string} */
+function netstatTcpSnapshot() {
   if (Date.now() - netstatSnapshot.at < NETSTAT_SNAPSHOT_TTL_MS) {
     return netstatSnapshot.text;
   }
@@ -86,9 +86,9 @@ async function netstatTcpSnapshot() {
   return netstatInFlight;
 }
 
-/** @param {number} port @returns {Promise<number[]>} */
-async function listeningPidsWindows(port) {
-  const out = await netstatTcpSnapshot();
+/** @param {number} port @returns {number[]} */
+function listeningPidsWindows(port) {
+  const out = netstatTcpSnapshot();
   /** @type {number[]} */
   const pids = [];
   for (const line of out.split(/\r?\n/)) {
@@ -108,8 +108,8 @@ async function listeningPidsWindows(port) {
   return pids;
 }
 
-/** @param {number} port @returns {Promise<number[]>} */
-async function listeningPidsPosix(port) {
+/** @param {number} port @returns {number[]} */
+function listeningPidsPosix(port) {
   const inodes = new Set();
   for (const file of ["/proc/net/tcp", "/proc/net/tcp6"]) {
     let text;

@@ -65,13 +65,13 @@ describe("POST /api/comfy/ensure", () => {
     probeComfyUi.mockResolvedValueOnce(null);
     // 真实实现会往 `onLog` 里灌进度；这里照它的契约调一次，既覆盖这个回调，
     // 也钉住「拉起过程必须落日志」（AGENTS 硬规则 4：失败路径与长路径都要可追）。
-    ensureComfyUiReady.mockImplementationOnce(async (options) => {
+    ensureComfyUiReady.mockImplementationOnce((options) => {
       options.onLog("正在拉起 ComfyUI…");
-      return {
+      return Promise.resolve({
         ok: true,
         base: "http://127.0.0.1:8189",
         detail: "已启动并就绪",
-      };
+      });
     });
     const { POST } = await import("./route");
     const res = await POST();

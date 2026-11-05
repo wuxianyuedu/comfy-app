@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  * （探活走 server-id，服务不在时必然不通），故不做「启动时清掉」；记录带结束那次的 runId 供调用方区分新旧。读不到文件回
  * `{ record: null }` 而非 404：「没原因」是正常状态，回 404 会被显示成接口挂了（§10.3.1）。
  */
-export async function GET() {
+export function GET() {
   const file = path.join(process.cwd(), "run", APP_SERVICE_EXIT_FILE);
   let record: unknown;
   try {

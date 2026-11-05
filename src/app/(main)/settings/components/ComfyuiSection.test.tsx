@@ -35,7 +35,7 @@ function controller(
     comfyInstance: instance,
     comfyStorage: null,
     saving: false,
-    savePrefs: vi.fn(async () => undefined),
+    savePrefs: vi.fn(() => undefined),
     patchSettings: vi.fn(),
     drafts: {
       settings: {

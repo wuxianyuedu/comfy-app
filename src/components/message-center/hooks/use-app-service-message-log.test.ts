@@ -34,7 +34,7 @@ function stubExitEndpoint({
   const calls = { lastExit: 0 };
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: RequestInfo | URL) => {
+    vi.fn((input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       if (!url.includes("/api/dev/last-exit")) {
         return new Response("{}", { status: 404 });
@@ -57,7 +57,7 @@ function stubExitEndpoint({
  * `isDesktopShell()` 为假，真实实现自己回 null；每个用例开始时重置回 null。
  */
 const shell = vi.hoisted(() => ({
-  readAppServiceExitRecord: vi.fn(async (): Promise<string | null> => null),
+  readAppServiceExitRecord: vi.fn((): Promise<string | null> => Promise.resolve(null)),
 }));
 vi.mock("~/lib/shell/desktop-shell-client", () => ({
   readAppServiceExitRecord: shell.readAppServiceExitRecord,
@@ -370,7 +370,7 @@ describe("useAppServiceMessageLog：原因读不到时", () => {
     unmount();
     /* 应答在卸载之后才回来：`act` 的异步形态负责把这条 await 链与它之后的
      * React 提交一起排空，不需要挂钟。 */
-    await act(async () => {
+    act(() => {
       release?.(
         new Response(JSON.stringify({ record: EXIT_RECORD, currentRunId: "run-new" }), {
           status: 200,
@@ -412,7 +412,7 @@ describe("useAppServiceMessageLog：每条消息盖「启动戳」", () => {
     expect(messages()[1]!.runId, "断开属于正在死的那一次").toBe("old0001");
   });
 
-  it("把「当前是哪一次启动」同步进 store：别的生产方据此盖戳（不必各接一次探活）", async () => {
+  it("把「当前是哪一次启动」同步进 store：别的生产方据此盖戳（不必各接一次探活）", () => {
     stubExitEndpoint();
     const { rerender } = mount({ currentRunId: "a1b2c3" });
     expect(useMessageCenterStore.getState().currentRunId).toBe("a1b2c3");

@@ -19,10 +19,10 @@ const { userMock, writes } = vi.hoisted(() => ({
 
 vi.mock("fs", () => ({
   promises: {
-    mkdir: async (dir: string) => {
+    mkdir: (dir: string) => {
       writes.mkdir.push(dir);
     },
-    writeFile: async (file: string) => {
+    writeFile: (file: string) => {
       writes.writeFile.push(file);
     },
   },

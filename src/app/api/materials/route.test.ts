@@ -25,7 +25,7 @@ const { dirEntries, fileStats, disk, userMock } = vi.hoisted(() => ({
 
 vi.mock("fs", () => ({
   promises: {
-    readdir: async (dir: string, opts?: { withFileTypes?: boolean }) => {
+    readdir: (dir: string, opts?: { withFileTypes?: boolean }) => {
       disk.reads.push(`readdir:${dir}`);
       const entry = dirEntries.get(dir);
       if (!entry) {
@@ -39,7 +39,7 @@ vi.mock("fs", () => ({
       }
       return entry.names ?? [];
     },
-    stat: async (p: string) => {
+    stat: (p: string) => {
       disk.reads.push(`stat:${p}`);
       const f = fileStats.get(p);
       if (!f) {
@@ -47,19 +47,19 @@ vi.mock("fs", () => ({
       }
       return { isFile: () => true, size: f.size, mtime: f.mtime };
     },
-    mkdir: async (p: string) => {
+    mkdir: (p: string) => {
       disk.mkdir.push(p);
     },
-    writeFile: async (p: string) => {
+    writeFile: (p: string) => {
       disk.writeFile.push(p);
     },
-    unlink: async (p: string) => {
+    unlink: (p: string) => {
       if (!fileStats.has(p)) {
         throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
       }
       disk.unlink.push(p);
     },
-    access: async (p: string) => {
+    access: (p: string) => {
       if (!fileStats.has(p)) {
         throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
       }
@@ -273,7 +273,7 @@ describe("POST /api/materials —— 上传", () => {
     });
     /* SAFETY: 类型断言已复核 */
     const res = await POST({
-      formData: async () => form,
+      formData: () => form,
     } as unknown as NextRequest);
     expect(res.status).toBe(400);
     expect(disk.writeFile).toEqual([]);

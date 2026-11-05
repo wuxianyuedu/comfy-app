@@ -37,7 +37,7 @@ function moduleFingerprints(): string {
  * 另回 bootId（只有它变才是真重启）、restartReason/restartDetail（重启原因，归因失败为 null）、
  * depsStale/depsState（依赖面陈旧与否，不随重启变，无法判定为 null）。
  */
-export async function GET() {
+export function GET() {
   const bootId = getServerBootId();
   const buildId = `${bootId}|${moduleFingerprints()}`;
   const restartReason = process.env.COMFYAPP_RESTART_REASON ?? null;

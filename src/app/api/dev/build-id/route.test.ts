@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { GET } from "./route";
 
 async function buildId(): Promise<string> {
-  const res = await GET();
+  const res = GET();
   expect(res.headers.get("Cache-Control")).toBe("no-store");
   /* SAFETY: 类型断言已复核 */
   const data = (await res.json()) as {

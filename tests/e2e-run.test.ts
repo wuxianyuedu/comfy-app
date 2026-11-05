@@ -954,7 +954,7 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
         risky: ["DROP TABLE loraTrainingJob"],
       }),
     });
-    const result = await collectors.schema();
+    const result = collectors.schema();
     expect(result.abort).toContain("含丢数据语句");
     expect(result.abort).toContain("DROP TABLE loraTrainingJob");
     // 出口是可执行的：`pnpm db:push`（不是一句「请同步数据库」）。

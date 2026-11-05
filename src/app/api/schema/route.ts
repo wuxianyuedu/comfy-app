@@ -11,7 +11,7 @@ import { SCHEMA_SYNC_STATUS_FILE } from "~/lib/log/log-paths";
  */
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export function GET() {
   const file = SCHEMA_SYNC_STATUS_FILE;
   /* 「立即同步」按钮能不能显示：执行件在不在。桌包载荷刻意不带
    * `scripts/db-sync.mjs`（那里没有 drizzle-kit，跑了也没用，见

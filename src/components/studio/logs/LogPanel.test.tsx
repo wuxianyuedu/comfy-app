@@ -198,7 +198,7 @@ describe("LogPanel 日志面板", () => {
     expect(screen.queryByRole("button", { name: /有 \d+ 条新的日志/ })).toBeNull();
   });
 
-  it("按来源筛选能滤掉启动行，只看应用运行日志", async () => {
+  it("按来源筛选能滤掉启动行，只看应用运行日志", () => {
     act(() => {
       useLogStore
         .getState()
@@ -730,9 +730,9 @@ describe("LogPanel 日志面板", () => {
     /* 面板此前只有浏览器下载：桌面壳里是否落盘由宿主决定，用户点完常常本地
      * 什么都没有（ISSUE #609 第 3 条）。这里断言接线——点一下会把当前筛选的
      * 文本 POST 给导出端点，并把服务端回的路径显示出来。 */
-    const fetchMock = vi.fn(async () => ({
+    const fetchMock = vi.fn(() => ({
       ok: true,
-      json: async () => ({
+      json: () => ({
         ok: true,
         path: String.raw`F:\proj\log\exports\logs-all-20260101-100000.txt`,
         relativePath: "exports/logs-all-20260101-100000.txt",
@@ -769,9 +769,9 @@ describe("LogPanel 日志面板", () => {
      *   「打包诊断」  = 服务端把 current/ + 最近几次 runs/ 打成 zip（run.json
      *                  与环境信息在面板上根本看不到）。
      * 这里断言后者走的是它自己的端点、且不需要带 body（服务端自己找现场）。 */
-    const fetchMock = vi.fn(async () => ({
+    const fetchMock = vi.fn(() => ({
       ok: true,
-      json: async () => ({
+      json: () => ({
         ok: true,
         path: String.raw`F:\proj\log\exports\diagnostics-20260101-100000-a1b2c3.zip`,
         relativePath: "exports/diagnostics-20260101-100000-a1b2c3.zip",

@@ -786,54 +786,7 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B3 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "e2e/overlay-boundary.spec.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "scripts/check-format.cjs", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "scripts/e2e-run.mjs", // 存量 2 处 · 清账目标 B3 · 新代码不禁用
-        "scripts/launcher-core/port-reap.mjs", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "scripts/launcher-core/procs.mjs", // 存量 2 处 · 清账目标 B3 · 新代码不禁用
-        "scripts/launcher-core/run.mjs", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "scripts/qoder-ignore.mjs", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "scripts/tw4-canonical-report.mjs", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "scripts/tw4-spacing-canonical.mjs", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/(main)/settings/components/BackupSection.test.tsx", // 存量 4 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/(main)/settings/components/ComfyuiSection.test.tsx", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/(main)/settings/hooks/use-remote-model-dialogs.test.ts", // 存量 7 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/(main)/settings/hooks/use-settings-page.test.ts", // 存量 3 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/comfy/ensure/route.test.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/comfy/liveness/route.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/comfy/queue/events/route.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/custom-nodes/manifest/route.test.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/custom-nodes/route.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/dev/build-id/route.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/dev/last-exit/route.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/dev/server-id/route.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/film/bgm/route.test.ts", // 存量 2 处 · 清账目标 B3 · 新代码不禁用
         String.raw`src/app/api/generated/\[...path\]/route.test.ts`, // 存量 21 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/health/route.test.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/helper/install/route.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/helper/status/route.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/images/route.test.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/logs/diagnostics/route.test.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/logs/export/route.test.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/materials/route.test.ts", // 存量 7 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/production/route.test.ts", // 存量 2 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/schema/push/route.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/schema/route.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/app/api/update-check/route.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/components/agent-run/RunControlBar.test.tsx", // 存量 5 处 · 清账目标 B3 · 新代码不禁用
-        "src/components/message-center/hooks/use-app-service-message-log.test.ts", // 存量 4 处 · 清账目标 B3 · 新代码不禁用
-        "src/components/studio/canvas/use-custom-nodes-registry.test.ts", // 存量 2 处 · 清账目标 B3 · 新代码不禁用
-        "src/components/studio/comfyui/ComfyuiControlView.test.tsx", // 存量 6 处 · 清账目标 B3 · 新代码不禁用
-        "src/components/studio/comfyui/hooks/use-comfyui-control.test.ts", // 存量 7 处 · 清账目标 B3 · 新代码不禁用
-        "src/components/studio/history/hooks/use-history-detail-actions.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/components/studio/history/hooks/use-image-redraw.test.ts", // 存量 4 处 · 清账目标 B3 · 新代码不禁用
-        "src/components/studio/hooks/use-dev-server-liveness.test.ts", // 存量 7 处 · 清账目标 B3 · 新代码不禁用
-        "src/components/studio/hooks/use-film-studio.test.ts", // 存量 3 处 · 清账目标 B3 · 新代码不禁用
-        "src/components/studio/library/hooks/use-resource-library.test.ts", // 存量 2 处 · 清账目标 B3 · 新代码不禁用
-        "src/components/studio/library/ResourceLibrary.test.tsx", // 存量 2 处 · 清账目标 B3 · 新代码不禁用
-        "src/components/studio/logs/LogPanel.test.tsx", // 存量 5 处 · 清账目标 B3 · 新代码不禁用
-        "src/components/studio/logs/RuntimeLogBox.test.tsx", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
-        "src/components/studio/project-canvas/hooks/use-cancel-task.test.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
         "src/components/studio/project-canvas/hooks/use-open-server-project.test.ts", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
         "src/components/studio/project-canvas/MaterialLibraryPanel.test.tsx", // 存量 1 处 · 清账目标 B3 · 新代码不禁用
         "src/components/studio/ProjectOutputs.test.tsx", // 存量 1 处 · 清账目标 B3 · 新代码不禁用

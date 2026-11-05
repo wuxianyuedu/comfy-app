@@ -76,8 +76,7 @@ export async function runningAppInstances(root) {
 
   const held = [];
   for (const port of scanPorts(resolveAppPort(root))) {
-    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
-    const pids = await listeningPidsOnPort(port);
+    const pids = listeningPidsOnPort(port);
     if (pids.length === 0) {
       continue;
     }
@@ -278,7 +277,7 @@ export async function reconcilePort(ctx, port, root = process.cwd(), { explicit 
     const decision = await portOwnershipVerdict({
       requestedPort: explicit && p === port ? port : null,
       verdict,
-      cmdlineOf: async (pid) => commandLines.get(pid) ?? "",
+      cmdlineOf: (pid) => commandLines.get(pid) ?? "",
       isAppProcess: (_pid, cmdline) => isAppDevServerCmdline(cmdline, root),
     });
     if (decision.ownership === PORT_OWNERSHIP.free) {

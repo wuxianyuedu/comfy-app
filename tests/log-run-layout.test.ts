@@ -311,14 +311,14 @@ describe("保留策略", () => {
 describe("zip 写入器与诊断包", () => {
   itWithPython(
     "打出来的包能被系统解压工具读（compress_size 与 uncompressed_size 分开写）",
-    async () => {
+    () => {
       const dir = path.join(root, "src");
       fs.mkdirSync(dir, { recursive: true });
       // 高可压缩内容：store 模式下两个 size 字段恰好相等，**只有这条路径会露馅**
       fs.writeFileSync(path.join(dir, "a.log"), "A".repeat(5000));
       fs.writeFileSync(path.join(dir, "b.bin"), Buffer.from([0, 1, 2, 3, 255]));
       const out = path.join(root, "out.zip");
-      await zipDirectory(dir, out);
+      zipDirectory(dir, out);
 
       const listing = unzip([out]);
       expect(listing[0]).toBe("OK");

@@ -137,7 +137,7 @@ describe("成功路径：原文直出，不经第二轮解析", () => {
 });
 
 describe("构建期取数口径", () => {
-  it("每次请求真读盘：runtime=nodejs、dynamic=force-dynamic", async () => {
+  it("每次请求真读盘：runtime=nodejs、dynamic=force-dynamic", () => {
     // 少了这两行，Next 可以把清单烘成静态响应 —— 于是「解析完不重进页面就不更新」
     // 会以另一种形态回来，而且这一次连 fetch 都是 200。
     expect(runtime).toBe("nodejs");

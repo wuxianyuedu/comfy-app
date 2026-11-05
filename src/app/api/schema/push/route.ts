@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 /** 同进程内的并发闸：spawn 与子进程写下 `syncing` 之间有个窗口，双击会撞上。 */
 let spawning = false;
 
-export async function POST() {
+export function POST() {
   if (spawning) {
     return NextResponse.json({ ok: false, error: "已有一次同步在发起中" }, { status: 409 });
   }

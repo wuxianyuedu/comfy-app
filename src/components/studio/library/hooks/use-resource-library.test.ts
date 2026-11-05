@@ -8,7 +8,7 @@ function mockFetch(body: unknown) {
   const fetchMock = vi.fn().mockResolvedValue({
     ok: true,
     status: 200,
-    json: async () => body,
+    json: () => body,
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -53,7 +53,7 @@ describe("useResourceLibrary", () => {
       .toBe(true);
   });
 
-  it("没有活跃项目时 projectId 为 null（页面据此给引导）", async () => {
+  it("没有活跃项目时 projectId 为 null（页面据此给引导）", () => {
     mockFetch(BODY);
     const { result } = renderHook(() => useResourceLibrary());
     expect(result.current.projectId).toBeNull();

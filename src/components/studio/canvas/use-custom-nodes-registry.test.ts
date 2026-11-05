@@ -15,7 +15,7 @@ import { useCustomNodesRegistryVersion } from "./use-custom-nodes-registry";
 function fetchManifest(manifest: unknown): void {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => new Response(JSON.stringify(manifest), { status: 200 })),
+    vi.fn(() => new Response(JSON.stringify(manifest), { status: 200 })),
   );
 }
 
@@ -163,7 +163,7 @@ describe("失败相不许把画布叫醒", () => {
 
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response("", { status: 404 })),
+      vi.fn(() => new Response("", { status: 404 })),
     );
     await act(async () => {
       await refreshCustomNodes();

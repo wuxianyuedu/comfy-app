@@ -9,7 +9,7 @@ async function openInShell(page: Page) {
   await page.addInitScript(() => {
     Object.defineProperty(window, "__TAURI_INTERNALS__", {
       configurable: true,
-      value: { invoke: async () => null, transformCallback: () => 0 },
+      value: { invoke: () => null, transformCallback: () => 0 },
     });
   });
   await page.goto("/workspace", { waitUntil: "domcontentloaded" });

@@ -39,7 +39,7 @@ async function readOnce(res: Response): Promise<string> {
 
 describe("GET /api/comfy/liveness", () => {
   it("是 SSE：Content-Type / no-cache / 关闭反代缓冲", async () => {
-    const res = await GET();
+    const res = GET();
     expect(res.headers.get("Content-Type")).toContain("text/event-stream");
     expect(res.headers.get("Cache-Control")).toContain("no-cache");
     expect(res.headers.get("X-Accel-Buffering")).toBe("no");
@@ -54,14 +54,14 @@ describe("GET /api/comfy/liveness", () => {
       userStopped: false,
     };
     snapshot.mockReturnValue({ seq: 7, last: seen });
-    const res = await GET();
+    const res = GET();
     expect(await readOnce(res)).toBe(`data: ${JSON.stringify(seen)}\n\n`);
     await res.body!.cancel();
   });
 
   it("seq 为 0 时不补发假事件（「无事发生」不该被下游当成一次崩溃）", async () => {
     snapshot.mockReturnValue({ seq: 0, last: null });
-    const res = await GET();
+    const res = GET();
     const reader = res.body!.getReader();
     /* 没有任何帧可读 —— `read()` 会一直挂着。用「已有订阅者」当「流已起来」的
        证据（补发那一句在它之前），比给 `read()` 设超时确定得多。 */
@@ -71,7 +71,7 @@ describe("GET /api/comfy/liveness", () => {
   });
 
   it("事件一到就推出去", async () => {
-    const res = await GET();
+    const res = GET();
     await expect.poll(() => subscribers.length).toBe(1);
     const reader = res.body!.getReader();
     const signal = {

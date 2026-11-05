@@ -305,7 +305,7 @@ export const PORT_OWNERSHIP = {
  * **只回收属于本检出的实例**：别的检出的 dev server、用户自己的程序占着端口时
  * 一律不碰 —— 判据不清时「猜着杀」比「说清楚怎么办」危险得多。
  * @param {number} port
- * @param {{ listenPids: (port: number) => Promise<number[]>,
+ * @param {{ listenPids: (port: number) => number[] | Promise<number[]>,
  *           belongsToRoot: (pid: number, root: string) => Promise<boolean>,
  *           root: string }} deps
  * @returns {Promise<{ ownership: string, pids: number[], ownPids: number[], foreignPids: number[] }>}
@@ -374,7 +374,7 @@ export const APP_START_SCRIPT_MARKER = "start.mjs";
  *
  * @param {{ requestedPort: number | null,
  *           verdict: { ownership: string, ownPids?: number[], foreignPids?: number[] },
- *           cmdlineOf: (pid: number) => Promise<string>,
+ *           cmdlineOf: (pid: number) => string | Promise<string>,
  *           isAppProcess: (pid: number, cmdline: string) => boolean }} deps
  * @returns {Promise<{ ownership: string, ownPids: number[], foreignPids: number[], reclaimed: boolean }>}
  */

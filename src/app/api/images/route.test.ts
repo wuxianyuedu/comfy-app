@@ -19,7 +19,7 @@ const { userMock, getView, FakeViewError } = vi.hoisted(() => {
   }
   return {
     userMock: vi.fn<() => Promise<{ id: string } | null>>(),
-    getView: vi.fn(async () => Buffer.from("bytes")),
+    getView: vi.fn(() => Buffer.from("bytes")),
     FakeViewError,
   };
 });

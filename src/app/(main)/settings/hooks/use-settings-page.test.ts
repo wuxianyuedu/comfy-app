@@ -496,7 +496,7 @@ describe("useSettingsPage", () => {
       expect(result.current.ollamaStarting).toBe(false);
 
       let starting: Promise<void> = Promise.resolve();
-      await act(async () => {
+      act(() => {
         starting = result.current.startOllama();
       });
       // 推进轮询的 2s 间隔定时器直到探测到 up（第三轮探测）
@@ -528,7 +528,7 @@ describe("useSettingsPage", () => {
       expect(result.current.ollamaStatus).toBe("down");
 
       let starting: Promise<void> = Promise.resolve();
-      await act(async () => {
+      act(() => {
         starting = result.current.startOllama();
       });
       expect(result.current.ollamaStatus).toBe("starting");
@@ -581,7 +581,7 @@ describe("useSettingsPage", () => {
     expect(errors[0]?.msg).toContain("数据库被锁");
 
     // 重试后失败不变 → 不重复记
-    await act(async () => {
+    act(() => {
       result.current.retry();
     });
     /* SAFETY: 类型断言已复核 */

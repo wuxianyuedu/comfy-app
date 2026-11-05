@@ -38,7 +38,7 @@ function controller(over: Partial<RuntimeLogController> = {}): RuntimeLogControl
     total: 1,
     active: false,
     selectSession: vi.fn(),
-    refresh: vi.fn(async () => undefined),
+    refresh: vi.fn(() => Promise.resolve()),
     ...over,
   };
 }

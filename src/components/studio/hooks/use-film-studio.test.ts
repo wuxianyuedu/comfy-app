@@ -35,7 +35,7 @@ vi.mock("~/lib/film/bgm-client", () => ({
  * （回落剧本模式，既有 create() 用例行为不变）；来源相关用例在用例内改写返回值。 */
 const getActiveIdMock = vi.hoisted(() => vi.fn<() => string | null>(() => null));
 const fetchProductionMock = vi.hoisted(() =>
-  vi.fn<(id: string) => Promise<unknown>>(async () => null),
+  vi.fn<(id: string) => Promise<unknown>>(() => Promise.resolve(null)),
 );
 vi.mock("~/lib/project-canvas/canvas-store", () => ({
   getActiveId: getActiveIdMock,
@@ -203,7 +203,7 @@ describe("useFilmStudio", () => {
       expect(result.current.running).toBe(true);
 
       // 推进一次轮询周期：详情回包变成 DONE → 停止轮询
-      await act(async () => {
+      act(() => {
         vi.advanceTimersByTime(3100);
       });
       await waitFor(() => {
@@ -211,7 +211,7 @@ describe("useFilmStudio", () => {
       });
 
       const callsAfterDone = vanilla.film.detail.query.mock.calls.length;
-      await act(async () => {
+      act(() => {
         vi.advanceTimersByTime(9000);
       });
       // 停止后不再继续拉详情

@@ -516,7 +516,7 @@ function judge(current, scope) {
   gatePass("oxfmt 格式", `扫描完成：命中 0 个（${scope}）`);
 }
 
-async function main() {
+function main() {
   /* 两档收窄（`--staged` / `--changed`）的短路点都在**入口解析之前**：「这次根本
    * 没带来靶子内的文件」与「oxfmt 装没装」无关，不该被后者带崩（否则把依赖问题
    * 伪装成这一步的形态）。`--report` 与默认全库档照旧先解析入口。 */

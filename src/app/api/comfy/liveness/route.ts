@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
  * 服务端，用 SSE 推出去；连上先补发当前快照（`seq` 为 0 不发事件帧）。帧头/心跳/收尾在
  * `~/app/api/sse-stream`。只推送「进程退出」，不做存活轮询（否则又做成另一条轮询）。
  */
-export async function GET(): Promise<Response> {
+export function GET(): Response {
   return createSseResponse(({ send, onClose }) => {
     /* 补发当前快照：`seq === 0` 表示本进程一次退出都没记过，此时没有可发的
      * 事件（发一个 `seq:0` 的假事件会让客户端把「无事发生」当成一次崩溃）。 */

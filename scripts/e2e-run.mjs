@@ -132,8 +132,8 @@ export const E2E_DIR = "e2e";
  * }} input
  * @returns {{
  *   schemaVerdict: SchemaVerdict | null,
- *   python: () => Promise<{say?: string, abort?: string}>,
- *   schema: () => Promise<{say?: string, abort?: string}>,
+ *   python: () => {say?: string, abort?: string},
+ *   schema: () => {say?: string, abort?: string},
  *   browser: () => Promise<{say?: string, abort?: string}>,
  * }}
  */
@@ -153,7 +153,7 @@ export function makePreflightCollectors({
    * 必须等那一步跑过再读（`main` 就是在它返回之后读的）。 */
   const collectors = {
     schemaVerdict: /** @type {SchemaVerdict | null} */ (null),
-    async python() {
+    python() {
       const verdict = python({ env });
       env[PYTHON_PREFLIGHT_ENV_KEY] = encodePythonPreflight(verdict);
       if (verdict.verdict === "missing") {
@@ -161,7 +161,7 @@ export function makePreflightCollectors({
       }
       return { say: `[e2e-run] Python 预检：${verdict.detail}\n` };
     },
-    async schema() {
+    schema() {
       const verdict = schema(cwd);
       collectors.schemaVerdict = verdict;
       if (verdict.verdict === "abort") {

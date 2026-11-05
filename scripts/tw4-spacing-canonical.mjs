@@ -73,12 +73,13 @@ async function loadDesignSystem() {
     );
   }
   /** @param {string} id @param {string} base */
-  const loadStylesheet = async (id, base) => {
+  const loadStylesheet = (id, base) => {
     const file =
       id === "tailwindcss"
         ? path.join(ROOT, "node_modules", "tailwindcss", "index.css")
         : path.resolve(base, id);
-    return { path: file, base: path.dirname(file), content: read(file) };
+    // 回调契约是 Promise（Tailwind 允许同步返回，保住标注形态即可）
+    return Promise.resolve({ path: file, base: path.dirname(file), content: read(file) });
   };
   return __unstable__loadDesignSystem('@import "tailwindcss";', {
     base: ROOT,
@@ -277,7 +278,8 @@ for (const { file, changes } of touched) {
 }
 console.log(
   `\n${shouldWrite ? "已改写" : "待改写"} ${total} 处（${touched.length} 个文件）${
-    shouldWrite ? "" : "；加 --write 落盘"}`,
+    shouldWrite ? "" : "；加 --write 落盘"
+  }`,
 );
 
 /* ── 判定档（--check）：候选数须为 0 ────────────────────────────────────

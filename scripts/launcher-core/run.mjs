@@ -566,9 +566,9 @@ export async function pruneRuns(root, { now = Date.now(), delete: del } = {}) {
  * 「导出诊断包」那一下直接不可用。deflate 走 `node:zlib`，零新依赖。
  * @param {string} dir
  * @param {string} outFile
- * @returns {Promise<string>}
+ * @returns {string}
  */
-export async function zipDirectory(dir, outFile) {
+export function zipDirectory(dir, outFile) {
   const files = collectFiles(dir);
   const local = [];
   const central = [];

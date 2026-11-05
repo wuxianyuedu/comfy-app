@@ -81,9 +81,9 @@ vi.mock("~/lib/log/log-file-client", () => {
     return (await res.json()) as unknown;
   });
   return {
-    fetchFileLogSlice: vi.fn(async () => null),
+    fetchFileLogSlice: vi.fn(() => null),
     fetchLogSessions,
-    postAppRuntimeLog: vi.fn(async () => undefined),
+    postAppRuntimeLog: vi.fn(() => undefined),
   };
 });
 
@@ -120,7 +120,7 @@ let comfyOpenCalls = 0;
 const t = createTestTRPC();
 const mockRouter = t.router({
   setting: t.router({
-    comfyStatus: t.procedure.query(async () => {
+    comfyStatus: t.procedure.query(() => {
       comfyStatusCalls += 1;
       return {
         // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
@@ -304,7 +304,7 @@ describe("useComfyuiControl", () => {
 
     /* 服务端那侧真报一次变化：handler 把当前快照发给客户端，与真实服务端
      * 同一口径（`?since=` 比当前纪元旧 → 回那一次变化）。 */
-    await act(async () => {
+    act(() => {
       noteComfyStateChange("ready", "ComfyUI 已就绪");
       window.dispatchEvent(new Event("focus"));
     });
@@ -407,7 +407,7 @@ describe("useComfyuiControl", () => {
     await expect.poll(() => result.current.log.text).not.toBe("");
     expect(result.current.log.sessions).toHaveLength(2);
 
-    await act(async () => {
+    act(() => {
       result.current.log.selectSession("12");
     });
     await expect.poll(() => result.current.log.text).toBe("第一次启动的输出");
@@ -528,7 +528,7 @@ describe("useComfyuiControl", () => {
     });
     await expect.poll(() => result.current.log.text).toBe("本次运行的内容");
 
-    await act(async () => {
+    act(() => {
       result.current.log.selectSession(archived);
     });
     await expect.poll(() => result.current.log.text).toBe("上一包的内容");
@@ -578,7 +578,7 @@ describe("useComfyuiControl", () => {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.status).not.toBeNull();
-    await act(async () => {
+    act(() => {
       result.current.log.selectSession("12");
     });
     await expect.poll(() => result.current.log.text).toBe("第一次启动的输出");

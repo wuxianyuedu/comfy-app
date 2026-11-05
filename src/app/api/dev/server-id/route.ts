@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * 与本次启动 runId（launcher 产出，消息中心按「每一次启动」分组；须与 bootId 同一次探测回来，
  * 否则刚恢复时会拿旧 runId 盖错组）。拿不到 runId 给 null（没走 launcher），不编值。
  */
-export async function GET() {
+export function GET() {
   return NextResponse.json({
     bootId: getServerBootId(),
     runId: getServerRunId(),

@@ -11,7 +11,7 @@
 |---|---|---|---|---|
 | B1 | `eslint/no-use-before-define（functions:false）` | 75 | 48 | 已清（75 处/48 份） |
 | B2 | `no-await-in-loop` | 304 | 123 | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
-| B3 | `typescript/require-await` | 754 | 188 | 挂账中 |
+| B3 | `typescript/require-await` | 754 | 188 | 清账中（子批1：47 份 / 104 处已清） |
 | B4 | `eslint/prefer-named-capture-group` | 1094 | 332 | 挂账中 |
 | B5 | `typescript/no-unsafe-type-assertion` | 1496 | 608 | 挂账中 |
 
@@ -214,54 +214,54 @@
 
 | 文件 | 存量处数 | 状态 |
 |---|---|---|
-| `e2e/overlay-boundary.spec.ts` | 1 | 挂账 |
-| `scripts/check-format.cjs` | 1 | 挂账 |
-| `scripts/e2e-run.mjs` | 2 | 挂账 |
-| `scripts/launcher-core/port-reap.mjs` | 1 | 挂账 |
-| `scripts/launcher-core/procs.mjs` | 2 | 挂账 |
-| `scripts/launcher-core/run.mjs` | 1 | 挂账 |
-| `scripts/qoder-ignore.mjs` | 1 | 挂账 |
-| `scripts/tw4-canonical-report.mjs` | 1 | 挂账 |
-| `scripts/tw4-spacing-canonical.mjs` | 1 | 挂账 |
-| `src/app/(main)/settings/components/BackupSection.test.tsx` | 4 | 挂账 |
-| `src/app/(main)/settings/components/ComfyuiSection.test.tsx` | 1 | 挂账 |
-| `src/app/(main)/settings/hooks/use-remote-model-dialogs.test.ts` | 7 | 挂账 |
-| `src/app/(main)/settings/hooks/use-settings-page.test.ts` | 3 | 挂账 |
-| `src/app/api/comfy/ensure/route.test.ts` | 1 | 挂账 |
-| `src/app/api/comfy/liveness/route.ts` | 1 | 挂账 |
-| `src/app/api/comfy/queue/events/route.ts` | 1 | 挂账 |
-| `src/app/api/custom-nodes/manifest/route.test.ts` | 1 | 挂账 |
-| `src/app/api/custom-nodes/route.ts` | 1 | 挂账 |
-| `src/app/api/dev/build-id/route.ts` | 1 | 挂账 |
-| `src/app/api/dev/last-exit/route.ts` | 1 | 挂账 |
-| `src/app/api/dev/server-id/route.ts` | 1 | 挂账 |
-| `src/app/api/film/bgm/route.test.ts` | 2 | 挂账 |
+| `e2e/overlay-boundary.spec.ts` | 1 | 已清 |
+| `scripts/check-format.cjs` | 1 | 已清 |
+| `scripts/e2e-run.mjs` | 2 | 已清 |
+| `scripts/launcher-core/port-reap.mjs` | 1 | 已清 |
+| `scripts/launcher-core/procs.mjs` | 2 | 已清 |
+| `scripts/launcher-core/run.mjs` | 1 | 已清 |
+| `scripts/qoder-ignore.mjs` | 1 | 已清 |
+| `scripts/tw4-canonical-report.mjs` | 1 | 已清 |
+| `scripts/tw4-spacing-canonical.mjs` | 1 | 已清 |
+| `src/app/(main)/settings/components/BackupSection.test.tsx` | 4 | 已清 |
+| `src/app/(main)/settings/components/ComfyuiSection.test.tsx` | 1 | 已清 |
+| `src/app/(main)/settings/hooks/use-remote-model-dialogs.test.ts` | 7 | 已清 |
+| `src/app/(main)/settings/hooks/use-settings-page.test.ts` | 3 | 已清 |
+| `src/app/api/comfy/ensure/route.test.ts` | 1 | 已清 |
+| `src/app/api/comfy/liveness/route.ts` | 1 | 已清 |
+| `src/app/api/comfy/queue/events/route.ts` | 1 | 已清 |
+| `src/app/api/custom-nodes/manifest/route.test.ts` | 1 | 已清 |
+| `src/app/api/custom-nodes/route.ts` | 1 | 已清 |
+| `src/app/api/dev/build-id/route.ts` | 1 | 已清 |
+| `src/app/api/dev/last-exit/route.ts` | 1 | 已清 |
+| `src/app/api/dev/server-id/route.ts` | 1 | 已清 |
+| `src/app/api/film/bgm/route.test.ts` | 2 | 已清 |
 | `src/app/api/generated/[...path]/route.test.ts` | 21 | 挂账 |
-| `src/app/api/health/route.test.ts` | 1 | 挂账 |
-| `src/app/api/helper/install/route.ts` | 1 | 挂账 |
-| `src/app/api/helper/status/route.ts` | 1 | 挂账 |
-| `src/app/api/images/route.test.ts` | 1 | 挂账 |
-| `src/app/api/logs/diagnostics/route.test.ts` | 1 | 挂账 |
-| `src/app/api/logs/export/route.test.ts` | 1 | 挂账 |
-| `src/app/api/materials/route.test.ts` | 7 | 挂账 |
-| `src/app/api/production/route.test.ts` | 2 | 挂账 |
-| `src/app/api/schema/push/route.ts` | 1 | 挂账 |
-| `src/app/api/schema/route.ts` | 1 | 挂账 |
-| `src/app/api/update-check/route.ts` | 1 | 挂账 |
-| `src/components/agent-run/RunControlBar.test.tsx` | 5 | 挂账 |
-| `src/components/message-center/hooks/use-app-service-message-log.test.ts` | 4 | 挂账 |
-| `src/components/studio/canvas/use-custom-nodes-registry.test.ts` | 2 | 挂账 |
-| `src/components/studio/comfyui/ComfyuiControlView.test.tsx` | 6 | 挂账 |
-| `src/components/studio/comfyui/hooks/use-comfyui-control.test.ts` | 7 | 挂账 |
-| `src/components/studio/history/hooks/use-history-detail-actions.ts` | 1 | 挂账 |
-| `src/components/studio/history/hooks/use-image-redraw.test.ts` | 4 | 挂账 |
-| `src/components/studio/hooks/use-dev-server-liveness.test.ts` | 7 | 挂账 |
-| `src/components/studio/hooks/use-film-studio.test.ts` | 3 | 挂账 |
-| `src/components/studio/library/hooks/use-resource-library.test.ts` | 2 | 挂账 |
-| `src/components/studio/library/ResourceLibrary.test.tsx` | 2 | 挂账 |
-| `src/components/studio/logs/LogPanel.test.tsx` | 5 | 挂账 |
-| `src/components/studio/logs/RuntimeLogBox.test.tsx` | 1 | 挂账 |
-| `src/components/studio/project-canvas/hooks/use-cancel-task.test.ts` | 1 | 挂账 |
+| `src/app/api/health/route.test.ts` | 1 | 已清 |
+| `src/app/api/helper/install/route.ts` | 1 | 已清 |
+| `src/app/api/helper/status/route.ts` | 1 | 已清 |
+| `src/app/api/images/route.test.ts` | 1 | 已清 |
+| `src/app/api/logs/diagnostics/route.test.ts` | 1 | 已清 |
+| `src/app/api/logs/export/route.test.ts` | 1 | 已清 |
+| `src/app/api/materials/route.test.ts` | 7 | 已清 |
+| `src/app/api/production/route.test.ts` | 2 | 已清 |
+| `src/app/api/schema/push/route.ts` | 1 | 已清 |
+| `src/app/api/schema/route.ts` | 1 | 已清 |
+| `src/app/api/update-check/route.ts` | 1 | 已清 |
+| `src/components/agent-run/RunControlBar.test.tsx` | 5 | 已清 |
+| `src/components/message-center/hooks/use-app-service-message-log.test.ts` | 4 | 已清 |
+| `src/components/studio/canvas/use-custom-nodes-registry.test.ts` | 2 | 已清 |
+| `src/components/studio/comfyui/ComfyuiControlView.test.tsx` | 6 | 已清 |
+| `src/components/studio/comfyui/hooks/use-comfyui-control.test.ts` | 7 | 已清 |
+| `src/components/studio/history/hooks/use-history-detail-actions.ts` | 1 | 已清 |
+| `src/components/studio/history/hooks/use-image-redraw.test.ts` | 4 | 已清 |
+| `src/components/studio/hooks/use-dev-server-liveness.test.ts` | 7 | 已清 |
+| `src/components/studio/hooks/use-film-studio.test.ts` | 3 | 已清 |
+| `src/components/studio/library/hooks/use-resource-library.test.ts` | 2 | 已清 |
+| `src/components/studio/library/ResourceLibrary.test.tsx` | 2 | 已清 |
+| `src/components/studio/logs/LogPanel.test.tsx` | 5 | 已清 |
+| `src/components/studio/logs/RuntimeLogBox.test.tsx` | 1 | 已清 |
+| `src/components/studio/project-canvas/hooks/use-cancel-task.test.ts` | 1 | 已清 |
 | `src/components/studio/project-canvas/hooks/use-open-server-project.test.ts` | 1 | 挂账 |
 | `src/components/studio/project-canvas/MaterialLibraryPanel.test.tsx` | 1 | 挂账 |
 | `src/components/studio/ProjectOutputs.test.tsx` | 1 | 挂账 |

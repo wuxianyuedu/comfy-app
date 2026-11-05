@@ -37,7 +37,7 @@ describe("GET /api/schema", () => {
       "utf8",
     );
     const { GET } = await import("./route");
-    const res = await GET();
+    const res = GET();
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       ok: true,
@@ -57,7 +57,7 @@ describe("GET /api/schema", () => {
     );
     const { GET } = await import("./route");
     /* SAFETY: 类型断言已复核 */
-    const body = (await (await GET()).json()) as {
+    const body = (await GET().json()) as {
       phase: string;
     };
     expect(body.phase).toBe("syncing");
@@ -66,7 +66,7 @@ describe("GET /api/schema", () => {
   it("文件不在时回 unknown 而不是报错（没提示 ≠ 出错）", async () => {
     fs.rmSync(statusFile, { force: true });
     const { GET } = await import("./route");
-    const res = await GET();
+    const res = GET();
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       ok: false,
@@ -80,14 +80,14 @@ describe("GET /api/schema", () => {
     const { GET } = await import("./route");
 
     fs.writeFileSync(statusFile, "{ 这不是 JSON", "utf8");
-    await expect((await GET()).json()).resolves.toEqual({
+    await expect(GET().json()).resolves.toEqual({
       ok: false,
       phase: "unknown",
       canPush: true,
     });
 
     fs.writeFileSync(statusFile, '"synced"', "utf8");
-    await expect((await GET()).json()).resolves.toEqual({
+    await expect(GET().json()).resolves.toEqual({
       ok: false,
       phase: "unknown",
       canPush: true,

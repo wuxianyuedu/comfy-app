@@ -173,9 +173,9 @@ export function diffIgnore(current, wanted) {
 
 /**
  * @param {string[]} [argv]
- * @returns {Promise<number>} 退出码
+ * @returns {number} 退出码
  */
-export async function main(argv = process.argv.slice(2)) {
+export function main(argv = process.argv.slice(2)) {
   const wanted = renderIgnore();
   if (argv.includes("--print")) {
     process.stdout.write(wanted);

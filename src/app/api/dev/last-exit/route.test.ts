@@ -34,7 +34,7 @@ function writeRecord(body: unknown): void {
 }
 
 async function get(): Promise<{ currentRunId: unknown; record: unknown }> {
-  const res = await GET();
+  const res = GET();
   expect(res.headers.get("Cache-Control")).toBe("no-store");
   /* SAFETY: 类型断言已复核 */
   return (await res.json()) as {
@@ -62,7 +62,7 @@ describe("GET /api/dev/last-exit", () => {
 
   it("没有记录时回 record: null 而不是 404（「没原因可讲」是正常状态）", async () => {
     fs.rmSync(FILE, { force: true });
-    const res = await GET();
+    const res = GET();
     expect(res.status).toBe(200);
     /* SAFETY: 类型断言已复核 */
     expect(((await res.json()) as { record: unknown }).record).toBeNull();
@@ -71,7 +71,7 @@ describe("GET /api/dev/last-exit", () => {
   it("记录坏掉时按「没有原因可讲」处理，不 500（消费者是已经出故障时的界面）", async () => {
     fs.mkdirSync(path.dirname(FILE), { recursive: true });
     fs.writeFileSync(FILE, "{ 这不是 JSON", "utf8");
-    const res = await GET();
+    const res = GET();
     expect(res.status).toBe(200);
     /* SAFETY: 类型断言已复核 */
     expect(((await res.json()) as { record: unknown }).record).toBeNull();

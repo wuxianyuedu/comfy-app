@@ -114,7 +114,7 @@ export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): History
          * 收口前这里是一句写死的「无法连接服务器」—— 网络层原文
          *（服务重启窗口的 `Failed to fetch`）被整个丢掉了。 */
         await runAsyncAction(
-          async () => {
+          () => {
             throw error;
           },
           { report, failureText: "打开目录失败" },

@@ -114,7 +114,7 @@ function diffGroup(
   return { dirty: files.length > 0, files: files.sort() };
 }
 
-export async function GET() {
+export function GET() {
   const currentBaseline = baseline;
   const groups = [
     {

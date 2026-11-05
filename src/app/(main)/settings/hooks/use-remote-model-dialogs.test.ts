@@ -14,8 +14,8 @@ function makeController(over: Record<string, unknown> = {}) {
   /* SAFETY: 类型断言已复核 */
   return {
     saving: false,
-    addRemoteModel: vi.fn(async () => ({ ok: true })),
-    updateRemoteModel: vi.fn(async () => ({ ok: true })),
+    addRemoteModel: vi.fn(() => ({ ok: true })),
+    updateRemoteModel: vi.fn(() => ({ ok: true })),
     ...over,
   } as unknown as ReadySettingsPageController;
 }
@@ -34,7 +34,7 @@ const formDefaults = {
 
 describe("useRemoteModelDialogs —— 字段级校验出口", () => {
   it("名称为空时提交：不出网络请求，错误挂在 model 字段上", async () => {
-    const addRemoteModel = vi.fn(async () => ({ ok: true }));
+    const addRemoteModel = vi.fn(() => ({ ok: true }));
     const { result } = setup({ addRemoteModel });
 
     act(() => {
@@ -50,7 +50,7 @@ describe("useRemoteModelDialogs —— 字段级校验出口", () => {
   });
 
   it("名称只填空格同样拦下（trim 后判定）", async () => {
-    const addRemoteModel = vi.fn(async () => ({ ok: true }));
+    const addRemoteModel = vi.fn(() => ({ ok: true }));
     const { result } = setup({ addRemoteModel });
 
     act(() => {
@@ -68,7 +68,7 @@ describe("useRemoteModelDialogs —— 字段级校验出口", () => {
   });
 
   it("填了名称即放行到网络层，且字段错误被清空", async () => {
-    const addRemoteModel = vi.fn(async () => ({ ok: true }));
+    const addRemoteModel = vi.fn(() => ({ ok: true }));
     const { result } = setup({ addRemoteModel });
 
     act(() => {
@@ -86,7 +86,7 @@ describe("useRemoteModelDialogs —— 字段级校验出口", () => {
   });
 
   it("集合级「重名」错位到 model 字段，而不是只给横幅", async () => {
-    const addRemoteModel = vi.fn(async () => ({
+    const addRemoteModel = vi.fn(() => ({
       ok: false,
       error: "模型「gpt-4o」已在列表中",
     }));
@@ -107,7 +107,7 @@ describe("useRemoteModelDialogs —— 字段级校验出口", () => {
   });
 
   it("没有对应字段的集合级失败仍走横幅（不硬塞给某个输入框）", async () => {
-    const addRemoteModel = vi.fn(async () => ({
+    const addRemoteModel = vi.fn(() => ({
       ok: false,
       error: "配置未就绪，请稍后重试",
     }));

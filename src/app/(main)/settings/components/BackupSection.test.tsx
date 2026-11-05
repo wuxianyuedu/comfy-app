@@ -23,8 +23,8 @@ function controller(
     backupListLoading: false,
     backupBusy: false,
     restoreBusy: false,
-    createBackupNow: vi.fn(async () => undefined),
-    restoreFrom: vi.fn(async () => undefined),
+    createBackupNow: vi.fn(() => undefined),
+    restoreFrom: vi.fn(() => undefined),
     ...overrides,
   } as unknown as ReadySettingsPageController;
 }
@@ -55,7 +55,7 @@ describe("备份清单", () => {
 
 describe("恢复是两步，界面必须说清", () => {
   it("点恢复先确认，不直接登记", async () => {
-    const restoreFrom = vi.fn(async () => undefined);
+    const restoreFrom = vi.fn(() => Promise.resolve());
     render(<BackupSection c={controller({ backups: oneBackup, restoreFrom })} />);
 
     await userEvent.click(screen.getByRole("button", { name: "用这一份恢复" }));
@@ -68,7 +68,7 @@ describe("恢复是两步，界面必须说清", () => {
   });
 
   it("取消就真的不登记", async () => {
-    const restoreFrom = vi.fn(async () => undefined);
+    const restoreFrom = vi.fn(() => Promise.resolve());
     render(<BackupSection c={controller({ backups: oneBackup, restoreFrom })} />);
     await userEvent.click(screen.getByRole("button", { name: "用这一份恢复" }));
     await userEvent.click(screen.getByRole("button", { name: "取消" }));

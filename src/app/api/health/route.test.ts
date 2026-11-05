@@ -15,7 +15,7 @@ vi.mock("~/lib/db-schema-ready", () => ({
 // 否则 call `undefined` 会落进 catch 而把所有用例都判成 503。
 // 出口给的是 Promise（异步驱动），所以替身也照 Promise 形状来：既能 mock 成功，
 // 也能 mock 成 rejection —— 后者正是「路由有没有 await」这件事唯一看得见的地方。
-const pingDatabase = vi.fn<() => Promise<unknown>>(async () => undefined);
+const pingDatabase = vi.fn<() => Promise<unknown>>(() => Promise.resolve(undefined));
 
 vi.mock("~/server/db", () => ({
   db: { run: vi.fn() },

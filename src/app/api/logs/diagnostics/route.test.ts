@@ -27,8 +27,7 @@ vi.mock("~/lib/log/log-paths", async () => {
 
 let authed = true;
 vi.mock("~/server/auth/request-user", () => ({
-  requireRequestUser: async () =>
-    authed ? { id: "u1", email: "t@example.com", name: null } : null,
+  requireRequestUser: () => (authed ? { id: "u1", email: "t@example.com", name: null } : null),
 }));
 
 const { POST } = await import("./route");
