@@ -220,13 +220,15 @@ describe("注释语言棘轮在钩子里（ISSUE #1451）", () => {
 });
 
 /**
- * API 文档生成与自检：已从 D 组挪到平台侧（#1329 收尾 → #1975），#2231 又改了判据对象。它带的 `--staged`
- * 输入面是 `src/lib|server|trpc`（最高频提交类别）⇒ 跳过几乎不生效，改一份 `src/lib` 照旧走满一轮，曾是 D 组最贵一步（§13.5.17）。
- * 判两半：钩子里不再有它、平台侧那一步在且**不带 `--staged`**；#2231 后也不带 `--autofix`（产物不进 git，自动修+再判让陈旧隐形）。
+ * API 文档生成与自检：已从 D 组挪到平台侧（#1329 收尾 → #1975），#2231 改了判据对象，
+ * 2026-11-05 又从 push **降到每日档**（ISSUE #2537：最晚次日 01:00 暴露，窗口 ≤24h）。它带的
+ * `--staged` 输入面是 typedoc 的解析根（几乎任何源码/脚本/用例改动）。
+ * 判两半：钩子里不再有它、平台侧那一步在且**不带 `--staged`**；#2231 后也不带 `--autofix`
+ * （产物不进 git，自动修+再判让陈旧隐形）。
  */
 const DOCS_API = join(REPO_ROOT, "scripts", "check-docs-api.cjs");
 
-describe("API 文档生成与自检（ISSUE #1329 收尾 → ISSUE #1975 挪执行者 → ISSUE #2231 改判据对象）", () => {
+describe("API 文档生成与自检（#1329 收尾 → #1975 挪执行者 → #2231 改判据对象 → #2537 降每日档）", () => {
   const hook = readFileSync(HOOK, "utf8");
   const steps = hookGateSteps(hook);
 
@@ -235,17 +237,17 @@ describe("API 文档生成与自检（ISSUE #1329 收尾 → ISSUE #1975 挪执�
     expect(
       hit,
       `门禁链 ${steps.length} 步里又有 docs-api 同步了 —— 它已随 ISSUE #1975 挪到平台侧 ` +
-        "（`.cnb.yml` 的「API 文档生成与自检」）。要么把它从钩子里去掉，要么同步改本判据",
+        "（`.cnb.yml` 每日档的「每日 API 文档生成与自检」）。要么把它从钩子里去掉，要么同步改本判据",
     ).toBeUndefined();
   });
 
   it("平台侧那一步在，且是**全量档**（`--staged` 在平台侧恒跳过 = 白挂）", () => {
-    const executor = platformExecutor("API 文档生成与自检");
+    const executor = platformExecutor("每日 API 文档生成与自检");
     expect(
       executor,
-      "平台侧（`.cnb.yml` 的 stage 清单与聚合档 `重档静态判据` 的条目表）都没有" +
-        "「API 文档生成与自检」—— 钩子撤掉 + 平台侧没加 = 这一格又回到" +
-        "「没人跑」的形态（§13.5.17）",
+      "平台侧（`.cnb.yml` 的每日档 stage 清单与聚合档 `重档静态判据` 的条目表）都没有" +
+        "「每日 API 文档生成与自检」—— 钩子撤掉 + 每日档没加 = 这一格又回到" +
+        "「没人跑」的形态（§13.5.17 / ISSUE #2537）",
     ).not.toBeNull();
     expect(executor?.command, "平台侧那一步的原文块解析不出来（名字被改了？）").toBeTruthy();
     expect(
@@ -260,9 +262,9 @@ describe("API 文档生成与自检（ISSUE #1329 收尾 → ISSUE #1975 挪执�
      * 「修好了」与「本来就对」同形 ⇒ 漂移在 CI 隐形。产物搬出 git 后该格改判「本轮产物可不可用」，自动修旗标必须摘掉。
      * ⚠️ 只核那一行的 `script:`（整块里注释出现旗标字面量不等于这一格带着它），解析口径复用 `parseStageScripts()`。 */
     const script = parseStageScripts(readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8")).get(
-      "API 文档生成与自检",
+      "每日 API 文档生成与自检",
     );
-    expect(script, "配置里解析不出「API 文档生成与自检」那一行的 script").toBeDefined();
+    expect(script, "配置里解析不出「每日 API 文档生成与自检」那一行的 script").toBeDefined();
     expect(
       script,
       "平台侧那一步又带上了 `--autofix` —— 产物不再进 git，没有「自动修完再提交」的对象",
@@ -289,7 +291,7 @@ describe("API 文档生成与自检（ISSUE #1329 收尾 → ISSUE #1975 挪执�
   });
 
   it("脚本头写明它现在由**平台侧**调用（挪了执行者，承诺要跟着改）", () => {
-    /* 反向要求：这句话**现在**是真的（`.cnb.yml` 里有那一步）。脚本头原先写的是
+    /* 反向要求：这句话**现在**是真的（`.cnb.yml` 每日档里有那一步）。脚本头原先写的是
      * 「供 .githooks/pre-commit 调用」—— 挪到平台侧之后那句就成了假承诺，而
      * 「脚自称在哪跑」与「它真在哪跑」不一致正是本文件立案的那族形态（§13.5.12）。
      * 判据只要求**指向平台侧那一份**，不钉具体措辞。 */
@@ -458,7 +460,8 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
     const workflow = readFileSync(join(REPO_ROOT, ".github", "workflows", "pr-gate.yml"), "utf8");
     /* 断言取的是**那一行 `run:`**，不是整个 workflow（文件里写满了为什么这样排的理由），
      * 拿全文去 `not.toContain("--autofix")` 会红在自己的解释文字上。 */
-    const scriptLine = /^[ \t]*run:\s*node scripts\/check-format\.cjs.*$/m.exec(workflow)?.[0] ?? "";
+    const scriptLine =
+      /^[ \t]*run:\s*node scripts\/check-format\.cjs.*$/m.exec(workflow)?.[0] ?? "";
     expect(
       scriptLine,
       "GA 的工作流里找不到 `check-format.cjs` 的 `run:` 行 —— 读不到命令就当没带旗标，" +

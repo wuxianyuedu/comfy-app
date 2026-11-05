@@ -111,13 +111,14 @@
 #
 #   质量门禁        pull_request（不合并就不该结束）
 #   master 合并复核  push（只复核「确实是 PR 合并进来的」，不重跑全套）
-#   每日生产构建     "crontab: 0 1 * * *"（每天 01:00；机器空着、没有并发 PR、
-#                    **且这台机那时刻醒着**才拿得到的那一跑（出勤实测见 ISSUE #2114）
-#                    —— 全量单测 / 构建 / 全量 E2E 都在这条上，
-#                    口径见 §13.5.23。「今天 master 的 HEAD 行不行」与
-#                    「这次改动能不能构建」是两个问题，而 2026-10-19 起第二个问题
-#                    在平台侧没有执行者了：PR 那一条不再跑构建、也不跑端到端）
-#   每日档（手动触发） web_trigger_daily（**同一份七格**，人想现在就知道答案时点一下；
+#   每日生产构建     GA `.github/workflows/daily.yml` 的 schedule（每天 01:00，北京时间；
+#                    2026-11-05 起从这台机的 `crontab` 迁到 GitHub Actions）——
+#                    全量单测 / 构建 / 全量 E2E / API 文档自检都在这条上，口径见 §13.5.23。
+#                    CNB 那侧的手动 / API 口跑的仍是 `.daily-gates` 这份清单。
+#                    「今天 master 的 HEAD 行不行」与「这次改动能不能构建」是两个问题，
+#                    而 2026-10-19 起第二个问题在平台侧没有执行者了：PR 那一条不再跑
+#                    构建，也不跑端到端。
+#   每日档（手动触发） web_trigger_daily（**同一份清单**，人想现在就知道答案时点一下；
 #                    按钮定义在 `.cnb/web_trigger.yml`，与这里的事件键靠名字对上。
 #                    它与定时那一条的**两处**不同 —— 执行身份是按按钮的人、
 #                    取的是按下那一刻的 master HEAD —— 写在下面那一格上面）
@@ -385,8 +386,10 @@
     # master 合并复核那条流水线（push 档）自己的 stage 清单 —— 第三份，按档登记。
     # 2026-10-28 起这一档从「只有合并形态复核一格」扩成「树级校验档」：判的是**合并后的
     # 树**一致不一致、这次运行的事实是什么，不是「这次改动能不能过」（那由 PR 档判），
-    # 也不是「今天的 master 全量健康」（那由每日档判）。撤进来的四格入口与旗标一字未改，
-    # 只是换了档位。`覆盖率上报` 不在 push 档（push 不跑测试，挪过去只会静默空转）；
+    # 也不是「今天的 master 全量健康」（那由每日档判）。撤进来的那几格入口与旗标一字未改，
+    # 只是换了档位；2026-11-05 起 `API 文档生成与自检` 不再在 PR/合并侧即时判，降到每日档
+    # （见 `COMFYAPP_CI_DAILY_GATES`，ISSUE #2537：最晚次日 01:00 暴露，窗口 ≤24h）。
+    # `覆盖率上报` 不在 push 档（push 不跑测试，挪过去只会静默空转）；
     # 它 2026-11-02 从 PR 档挪到了**每日档**：每日单元测试 跑 `pnpm run test:coverage` 产出
     # lcov，这一格接在它后面上报（见 `COMFYAPP_CI_DAILY_GATES` 与 `*daily_gates` 末尾）。
     # 名字在这儿 = 那一格必须一字不差地出现在 `master 合并复核` 流水线里（判据
@@ -396,8 +399,9 @@
     # GitHub 侧的 schedule（daily / package-desktop）跑镜像仓的默认分支，CNB 的
     # master 不推过去它们就每天跑一棵旧树（理由全文在 `.push-stages` 里那格的注释上）。
     COMFYAPP_CI_PUSH_GATES: >-
-      合并形态复核, GitHub master 镜像, 安装依赖, 生成态文档与源同步, API 文档生成与自检, 文档引用与权威源一致, 工作区出处
-    # 定时那一跑（`master."crontab: …"`）自己的 stage 清单 —— **另一个流水线，另一份清单**。
+      合并形态复核, GitHub master 镜像, 安装依赖, 生成态文档与源同步, 文档引用与权威源一致, 工作区出处
+    # 每日那一跑自己的 stage 清单 —— **另一个流水线，另一份清单**（定时口 2026-11-05 起由
+    # GA `.github/workflows/daily.yml` 的 schedule 起，CNB 这侧只剩手动 / API 两口，跑的是同一份）。
     # 它刻意**不**与上面那一条共用：上面那份是「PR 上跑什么」，这一份是「每天跑什么」，
     # 而这两问的答案如今分在两处：会自己起一堆子进程的那两档（全量单测、`next build`）
     # 只在每天 01:00 这一跑，同一台机上并发 PR 会让它们的读数不可信（§13.5.21），
@@ -461,7 +465,7 @@
     COMFYAPP_CI_DAILY_GATES: >-
       每日失败立案, 每日令牌权限读数, 每日工具链自证, 每日安装依赖, 每日 YAML 真解析,
       每日 Python 可用性, 每日 Python 探针读数, 每日同步数据库表结构, 每日新鲜度账, 每日生产构建,
-      每日 ESLint 零警告, 每日浏览器安装, 每日全量E2E, 每日单元测试, 覆盖率上报
+      每日 ESLint 零警告, 每日浏览器安装, 每日全量E2E, 每日 API 文档生成与自检, 每日单元测试, 覆盖率上报
     # ⚠️ `每日浏览器安装` 与 `每日全量E2E` 的相对顺序不许动：装那一件要下 ~120 MiB
     #   （分钟级），而判「装没装成」是零成本的。2026-10-19 起这一格是**唯一**的执行者
     #   （PR 上那一格同日撤到这里）—— 撤的理由是 PR 上再没有任何一步用浏览器
@@ -545,8 +549,10 @@
 #     ISSUE #2979 起 `GLOBS` 含 mjs/cjs、改动面不过 `IGNORE_GLOBS`）。2026-11-05 起
 #     它整格在 GA 上跑，没有 `ifModify`（每次 PR 都判），收窄面由判据自己算 ——
 #     原先那两份表达（手写 glob ⇄ GLOBS）的对账随之取消，不再是配置面的风险。
-#   · 判据脚本**自己的触发面** —— `API 文档生成与自检` 的 globs 由
-#     `check-docs-api.cjs` 的 `INPUT_RES` 机械反推，不手抄第二份。
+#   · 判据脚本**自己的触发面** —— `API 文档生成与自检` 已于 2026-11-05 从 push 撤到每日档
+#     （ISSUE #2537），它在那一档**不带 `ifModify`**（每跑必判）；`docsApiTriggerGlobs()`
+#     仍是触发面的唯一派生处（从 typedoc 的解析根派生），供判据自己的 `--staged` 档与
+#     元测试使用，不手抄第二份。
 #
 # ⚠️ **「哪几条被收窄了」只有一处出处**：`scripts/ci-incremental-gates.mjs` 的
 # `INCREMENTAL_GATES`（每条都写着它守的是哪份脚本、为什么这条收窄安全）。
@@ -558,10 +564,11 @@
 #
 # 判定门槛（哪类能进登记表、哪类绝对不行）逐条写在 `scripts/ci-incremental-gates.mjs`
 # 的文件头；口径与边界见规范 §13.5.18。
-# ── 每日那七格：定时与手动触发**共用这一份**（`.daily-gates` 锚点）────────────
+# ── 每日那一份：定时与手动触发**共用这一份**（`.daily-gates` 锚点）────────────
 #
 # 为什么做成锚点而不是两处各写一遍：这条清单现在有**三个触发口** ——
-# ① `"crontab: 0 1 * * *"`（每天 01:00，无人值守）；② `web_trigger_daily`
+# ① GA `.github/workflows/daily.yml` 的 schedule（每天 01:00，北京时间；2026-11-05 起
+#    从 CNB 的 `crontab` 迁过去）；② `web_trigger_daily`
 # （人在页面上手点，按钮定义在 `.cnb/web_trigger.yml`）；③ `api_trigger_daily`
 # （CLI / API：`cnb build start-build --event api_trigger_daily`，服务端只认
 # `api_trigger` 前缀，所以那个按钮**点不动**自动化这条路 —— 见下面那格的注释）。
@@ -571,7 +578,7 @@
 # §12.12 的孪生形态，只是它长在配置里。判据钉的是「三条解析出来的 stage 名单**逐字相同**
 # 且等于 `COMFYAPP_CI_DAILY_GATES`」（`tests/no-platform-ci-config.test.ts`）。
 #
-# 与 `.gates`（PR 那三十七格）同理，这里也刻意**不带 `ifModify`**：这七格是「重跑一遍」
+# 与 `.gates`（PR 那三十七格）同理，这里也刻意**不带 `ifModify`**：这一档是「重跑一遍」
 # 的语义，按改动面跳过就不是每日档了。
 
 # ── 锁按**触发类**分：`push` / `daily` / 单跑三档各一把 ────────────────────────
@@ -670,12 +677,14 @@
 # （把 master 镜像到 GitHub，那边的 schedule 才跑得到新树），取舍写在那格的注释里。
 # 顺序有讲究：
 #   · `合并形态复核` 排最前：形态不对（非合并提交）时后面全部 skipped，
-#     别在没资格的工作区上花 typedoc 的钱；
+#     别在没资格的工作区上花文档链的钱；
 #   · `GitHub master 镜像` 紧随其后：它不吃 node_modules，排在前提格之前没有成本；
 #     排在它后面反而会让「文档链红了」连带「镜像不推」—— 那不是想要的对偶；
-#   · `安装依赖` 是前提格：`API 文档生成与自检` 要跑 typedoc，而 push 是全新 job 目录、
-#     `node_modules` 恒不在场（与每日档同一形态，理由见 `每日安装依赖` 那段）。
-#     缺了它，这一档会以「找不到 typedoc」的形态红 —— 与每日档当年「找不到 next」同一族。
+#   · `安装依赖` 是前提格：这一档的 `生成态文档与源同步` 要吃 `node_modules`，而 push 是
+#     全新 job 目录、`node_modules` 恒不在场（与每日档同一形态，理由见 `每日安装依赖` 那段）。
+#     缺了它，这一档会以「找不到依赖」的形态红 —— 与每日档当年「找不到 next」同一族。
+#     `API 文档生成与自检` 2026-11-05 撤到每日档后不再吃这一格，但它在每日档同样排在
+#     `每日安装依赖` 之后。
 #     **这一格接槽**（ISSUE #2851）。判「哪一档能接」的那条线不是档名，是**后面有没有
 #     `next build`**：接槽把作业的 `node_modules` 整棵接成指向项目根之外的 junction，而
 #     Turbopack 对这一条有硬要求（每日那一档因此不接，理由与两臂读数见 `每日安装依赖` 上面那段）。
@@ -737,33 +746,6 @@
     ifModify:
       - "docs/**"
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/render-doc-placeholders.cjs --check --autofix
-  - name: API 文档生成与自检
-    # 收窄面**不是手抄的**：它由 `scripts/docs-api-input-closure.mjs` 的
-    # `docsApiTriggerGlobs()` 从 typedoc 的解析根（`tsconfig.json` 展开 ∩ git 跟踪文件）
-    # 派生，核的是 `tests/docs-api-input-closure.test.ts`（ISSUE #2537：旧面按 `entryPoints`
-    # 算，`scripts/publish-desktop-bundle.mjs` 这类「被 tests import 进程序」的文件漏在外面
-    # ⇒ `ifModify` 静默跳格）。面不是手写的：新增路径落在已有目录里会被 `dir/**` 自动罩住；
-    # 落在新顶层目录时，`tests/docs-api-input-closure.test.ts` 会红并要求这里同步（不是静默）。
-    # ⚠️ 产物面 `docs/api/**` 不在收窄面里（ISSUE #2231）；这一格不带 `--autofix`：
-    # 产物不再进 git，没有「自动修完再提交」的对象，而「自动修 + 再判」正是让
-    # 「产物陈旧」在 CI 上隐形的那一格（#2231 的现场：master 上差 9 处而平台报绿）。
-    # 判据的形状见 `scripts/check-docs-api.cjs` 的文件头。
-    ifModify:
-      - ".storybook/**"
-      - "e2e/**"
-      - "scripts/**"
-      - "src/**"
-      - "tests/**"
-      - "tools/**"
-      - "*.cjs"
-      - "*.js"
-      - "*.json"
-      - "*.jsx"
-      - "*.mjs"
-      - "*.ts"
-      - "*.tsx"
-      - "pnpm-lock.yaml"
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs
   - name: 文档引用与权威源一致
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-doc-references.cjs
   - name: 工作区出处
@@ -1174,6 +1156,33 @@
       COMFY_E2E_SERVER: start
       COMFY_CI_SUBJECT: "master"
     timeout: 45m
+  # ── API 文档生成与自检（每天一次；2026-11-05 从 push 撤到这一档）──────────
+  #
+  # 为什么不再在 PR/合并侧即时判（ISSUE #2537）：这一格判的是「typedoc 全量生成后产物
+  # 可不可用」，与「这次改动能不能过」是两问。旧面按 `entryPoints` 算，
+  # `scripts/publish-desktop-bundle.mjs` 这一型「被 tests import 进程序」的文件漏在外面
+  # ⇒ 静默跳格（#2528 型漏判）；改成从 typedoc 解析根派生的同源面之后，触发率从 **40%**
+  # 升到 **98%**（回放同 40 次 master 改动）。而它在 CI 上中位 **40.9s**（p95 136.8s）、
+  # 占 140.2s 串行流水线的 **30.6%** —— 每个 PR 都付这一笔，只换来「文档站今天能不能
+  # 生成」的答案。降到这里之后：**不再在 PR 侧即时判**，最晚次日 01:00 暴露，
+  # **暴露窗口 ≤24h**。
+  #
+  # ⚠️ 失败**不许掉进静默**：定时那一跑（GA `.github/workflows/daily.yml` 的 schedule）
+  #   红了即那次 daily 红 job；CNB 的手动 / API 那一跑则由**整份清单最前面**那格
+  #   `每日失败立案` 在下一跑立案（`--lane 每日生产构建`）—— 与既有 daily 失败同一条通道。
+  #
+  # 位置：排在 `每日全量E2E` **之后**、`每日单元测试` **之前**。不是随手放的：
+  #   `每日单元测试` 必须是整份清单里**最后一个会红的格**（业主口径「最容易出问题的放最后」，
+  #   判据 `tests/no-platform-ci-config.test.ts`），所以这一格只能进在它之前；而它与 E2E
+  #   互不依赖 —— 那一格红了 skip 掉这一格的代价只是「今天没有 API 文档结论」。
+  #
+  # ⚠️ 这一格**不带 `ifModify`**：每日档是「重跑一遍」的语义，按改动面跳过就不是每日档了
+  #   （§13.5.23；反向判据在 `tests/ci-incremental-gates.test.ts` 的 `MUST_ALWAYS_RUN`）。
+  # 触发面本身没有收窄：`docsApiTriggerGlobs()` 保持不变，仍是从 typedoc tsconfig 派生的
+  # 同源定义 —— 改的只是「谁在什么时候调用它」（ISSUE #2537）。
+  # ⚠️ 不带 `--autofix`（ISSUE #2231）：产物不进 git，没有「自动修完再提交」的对象。
+  - name: 每日 API 文档生成与自检
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs
   # ── 全量单测（每天一次；为什么不在 PR 上跑，见上面 `COMFYAPP_CI_DAILY_GATES` 那段）──
   #
   # ⚠️ **它排在整份清单里所有「会红的格」的最后**（业主口径：「最容易出问题的放最后，然后

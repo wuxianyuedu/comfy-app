@@ -82,11 +82,15 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       /* ⚠️ `格式化提交分离` **2026-10-17 从这一列挪出去了**（ISSUE #1993）：它判「这次提交里有多少文件只是被 prettier
        * 重排过」，本体是逐文件跑一次 prettier，面是「源文件扩展名」而非全仓 ⇒ 属「扫描面封闭」那一档，已登记进
        * `INCREMENTAL_GATES`。这一格是收窄口径本身的回归面：谁把它挪回这一列，反向那条会红。 */
-      /* ⚠️ 文档面三条里**只剩一条**在这一列（ISSUE #1981）：
+      /* ⚠️ 文档面里**只剩一条**在这一列（ISSUE #1981）：
        * · `生成态文档与源同步` —— 两侧输入面都能点清（`SCOPED_DOCS` 全在 `docs/**`，`FACTS` 源是 `src/**` 与三份配置），
-       *   且带 `--autofix`（§13.5.19）；`API 文档生成与自检` 由 `INPUT_RES` 机械反推收窄面（最贵一格，201.8s / 12m14s
-       *   的 27.5%；2026-10-23 起产物面 `docs/api/**` 已去掉，#2231）；`文档引用与权威源一致` 判全库，收窄成子集即漏判。 */
+       *   且带 `--autofix`（§13.5.19）；`文档引用与权威源一致` 判全库，收窄成子集即漏判。
+       * · `API 文档生成与自检` 2026-11-05 **撤到每日档**（ISSUE #2537：新面 98% 触发率、
+       *   中位 40.9s、占 30.6%），名字仍留在这一列 —— 它防的是「有人把它加回 push 并顺手挂
+       *   `ifModify`」（那一跑会红）。它的每日档新名同样在这一列：每日档那一格也不许收窄。 */
       "文档引用与权威源一致",
+      "API 文档生成与自检",
+      "每日 API 文档生成与自检",
       "core 骨架单一事实源",
       "零消费导出",
       "core 出口纪律与基类纯度",
@@ -113,40 +117,49 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     expect(inRegistry, `登记表里混进了全仓级 stage：${inRegistry.join(", ")}`).toEqual([]);
   });
 
-  it("`API 文档生成与自检` 自己占一格、收窄挂在**那一格**上，且输入面只有一处出处", () => {
-    /* 三段历史各留一个形状：2026-10-19 收进聚合档 `重档静态判据` ⇒ `ifModify` 按整格跳过、这层不再存在；10-20 原文被
-     * 注释而聚合档读钩子注册表（该档 10-16 已从钩子撤走）⇒ 两次搬动对穿，这一档无人执行，`docs/api/**` 漂了 32 份；
-     * 10-22 恢复成独立 stage、收窄挂在**那一格**（复合执行者一条都不许挂，见 `COMPOUND_EXECUTORS`）；10-23（#2231）
-     * 改名并改判产物可用性、不再带 `--autofix`。于是本条判三件事：① 那一格真的活着（不是注释形态）；② 收窄逐字等于
-     * `INPUT_RES`；③ 判定门不带 `--autofix`（「自动修 + 再判」正是让产物陈旧在 CI 上隐形的那一格）。 */
+  it("`API 文档生成与自检` 已降到每日档：PR/合并侧不再判它，每日档每跑必判", () => {
+    /* ISSUE #2537（事故 #2528）的收口：这一格的触发面不再是 PR/合并侧的 `ifModify`
+     * （面本身仍由 `docsApiTriggerGlobs()` 从 typedoc 解析根派生）。2026-11-05 起它不再在
+     * PR 侧即时判 —— 旧面 40% / 新面 98% 触发率（回放同 40 次 master 改动）、中位 40.9s、
+     * 占 140.2s 串行流水线的 30.6%；降频到每日档（最晚次日 01:00 暴露，窗口 ≤24h）。
+     * 本条判三件事：
+     *   ① PR/合并侧的触发面里**不再有它**（谁把它加回 push 并挂 `ifModify` 要红）；
+     *   ② 每日档里**有**这一格、判定门逐字在，且**不带 `ifModify`**（每日档是重跑语义）；
+     *   ③ 触发面的派生与对账**没被削弱**：`INPUT_RES` 仍是 `INPUT_GLOBS` 的机械转换，
+     *      判据认的每一类输入面照旧（逐文件「面罩得住事实面」的对账在
+     *      `tests/docs-api-input-closure.test.ts`，不在本条）。
+     */
     const stageName = "API 文档生成与自检";
-    const globs = parseStageIfModify(CONFIG).get(stageName);
     expect(
-      globs,
-      `配置里没有「${stageName}」这一格的 \`ifModify\` —— 它要么被注释掉了（= 没有执行者），` +
-        "要么收窄被摘了（那一格会每次都付 201.8s）",
-    ).toBeDefined();
-    /* 收窄的形状 = 判据自己那份声明（`INPUT_GLOBS`，**上界**形态）。
-     * 判据改了输入面而这里没跟，当场红 —— 这就是「机械导出」的那道对账。
-     * ⚠️ **产物面 `docs/api/**` 不在里面**（ISSUE #2231）：产物不再进 git。 */
+      INCREMENTAL_GATE_NAMES.has(stageName),
+      "登记表里又出现了「API 文档生成与自检」—— 它 2026-11-05 已撤到每日档（无 ifModify）；" +
+        "加回 push 收窄面就是把 98% 触发率的成本重新背回关键路径（ISSUE #2537）",
+    ).toBe(false);
     expect(
-      globs,
-      "那一格的收窄与判据自己声明的输入面不一致 —— 改判据的触发面时必须同批改这里",
-    ).toEqual([...INPUT_GLOBS]);
-    /* 判定门逐字在那一格里：只写不判 = 恒绿；而**不许带 `--autofix`** ——
-     * 产物不进 git ⇒ 没有「自动修完再提交」的对象，自动修登记表也不认它了。
-     * ⚠️ 核的是**那一行的 `script:`**，不是整块 —— 整块里还有注释，而注释里出现
-     * 旗标字面量**不**等于「这一格带着那个旗标」。解析口径复用
-     * `scripts/ci-autofix-duties.mjs` 的 `parseStageScripts()`（自动修登记表核的也是那一行）。 */
-    const block = stageBlock(CONFIG, stageName);
-    expect(block, `配置里解析不出「${stageName}」这一格`).toBeTruthy();
+      parseStageIfModify(CONFIG).has(stageName),
+      "`API 文档生成与自检` 又带上了 `ifModify` —— PR/合并侧不该再即时判它（ISSUE #2537）",
+    ).toBe(false);
+
+    const dailyName = "每日 API 文档生成与自检";
+    const block = stageBlock(CONFIG, dailyName);
+    expect(
+      block,
+      `配置里解析不出「${dailyName}」这一格 —— 每日档没有执行者，等于把这条判据删了`,
+    ).toBeTruthy();
     expect(block).toContain("scripts/check-docs-api.cjs");
-    const scriptLine = parseStageScripts(CONFIG).get(stageName) ?? "";
-    expect(scriptLine, `配置里解析不出「${stageName}」那一行的 script`).not.toBe("");
+    expect(
+      parseStageIfModify(CONFIG).has(dailyName),
+      "每日档那一格挂上了 `ifModify` —— 每日档是「重跑一遍」的语义，按改动面跳过就不是每日档",
+    ).toBe(false);
+    /* 判定门不带 `--autofix`（ISSUE #2231）：产物不进 git，没有「自动修完再提交」的对象，
+     * 而「自动修 + 再判」正是让产物陈旧在 CI 上隐形的那一格。
+     * 核的是**那一行的 `script:`**，不是整块 —— 注释里出现旗标字面量不算「带着那个旗标」。 */
+    const scriptLine = parseStageScripts(CONFIG).get(dailyName) ?? "";
+    expect(scriptLine, `配置里解析不出「${dailyName}」那一行的 script`).not.toBe("");
+    expect(scriptLine).toContain("scripts/check-docs-api.cjs");
     expect(
       scriptLine,
-      "那一格又带上了 `--autofix` —— 产物不再进 git，没有「自动修完再提交」的对象；" +
-        "而「自动修 + 再判」这个形状正是让「产物陈旧」在 CI 上隐形的那一格（#2231 的现场）",
+      "那一格又带上了 `--autofix` —— 产物不进 git，没有「自动修完再提交」的对象（#2231）",
     ).not.toContain("--autofix");
     /* 判据认的每一类输入面（解析根覆盖的目录 + 根级文件 + 锁文件）都得被认下来 ——
      * 这一半是「判据自己的触发面声明还在」的读数，与它挂在哪一格无关。 */

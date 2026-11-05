@@ -260,6 +260,10 @@ const DAILY_GATES = [
   "每日 ESLint 零警告",
   "每日浏览器安装",
   "每日全量E2E",
+  /* 2026-11-05 从 push 撤到每日档（ISSUE #2537）：新面 98% 触发率、中位 40.9s、
+   * 占 140.2s 串行流水线的 30.6%。位置同 CNB 每日档：E2E 之后、单元测试之前
+   * （后者必须是最后一个会红的格）。 */
+  "每日 API 文档生成与自检",
   "每日单元测试",
   "覆盖率上报",
 ];
@@ -330,7 +334,6 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   { name: "GitHub master 镜像", tier: "push" },
   { name: "安装依赖", tier: "push" },
   { name: "生成态文档与源同步", tier: "push" },
-  { name: "API 文档生成与自检", tier: "push" },
   { name: "文档引用与权威源一致", tier: "push" },
   { name: "工作区出处", tier: "push" },
   // ── 每日档（COMFYAPP_CI_DAILY_GATES）──
@@ -347,9 +350,15 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   { name: "每日 ESLint 零警告", tier: "daily" },
   { name: "每日浏览器安装", tier: "daily" },
   { name: "每日全量E2E", tier: "daily" },
+  { name: "每日 API 文档生成与自检", tier: "daily" },
   { name: "每日单元测试", tier: "daily" },
   { name: "覆盖率上报", tier: "daily" },
   // ── retired（降级登记，必须带理由；§13.5.30）──
+  {
+    name: "API 文档生成与自检",
+    tier: "retired",
+    note: "2026-11-05 从 push 撤到每日档「每日 API 文档生成与自检」（ISSUE #2537 / 事故 #2528）：新触发面 98% 触发率、CI 中位 40.9s、占 140.2s 串行流水线的 30.6%，PR 侧不再即时判；最晚次日 01:00 暴露，暴露窗口 ≤24h，失败走既有 daily 红 build / 每日失败立案通道",
+  },
   {
     name: "受影响用例",
     tier: "retired",
@@ -418,10 +427,22 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   // ── 2026-11-05 薄化：GA `.github/workflows/pr-gate.yml` 承接（同一个 PR 事件、
   //    同一个镜像仓；PR 档只留平台读数 + 判决链，结论由 `GitHub 判决判定` 承重读回）。
   //    逐项归属与「为什么不在这边跑」写在 `.cnb.yml` 的 `.gates` 顶部那段。──
-  { name: "Install dependencies", tier: "retired", note: "GA 各 job 自己的 `安装依赖` step；PR 档此后没有吃 node_modules 的格" },
-  { name: "分支守卫", tier: "retired", note: "GA `分支守卫` job（`check-branch-guard.cjs --pr-check`）" },
+  {
+    name: "Install dependencies",
+    tier: "retired",
+    note: "GA 各 job 自己的 `安装依赖` step；PR 档此后没有吃 node_modules 的格",
+  },
+  {
+    name: "分支守卫",
+    tier: "retired",
+    note: "GA `分支守卫` job（`check-branch-guard.cjs --pr-check`）",
+  },
   { name: "提交声明核对", tier: "retired", note: "GA `提交声明核对` job" },
-  { name: "同步数据库表结构", tier: "retired", note: "GA `同步数据库表结构` job（每日档另有 `每日同步数据库表结构`）" },
+  {
+    name: "同步数据库表结构",
+    tier: "retired",
+    note: "GA `同步数据库表结构` job（每日档另有 `每日同步数据库表结构`）",
+  },
   { name: "类型检查", tier: "retired", note: "GA `类型检查` job（`tsc --noEmit`）" },
   { name: "标题行让位", tier: "retired", note: "GA `静态判据` job 的同名 step" },
   { name: "文件结构硬规则", tier: "retired", note: "GA `静态判据` job 的同名 step" },
@@ -438,7 +459,11 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   { name: "主题色扫描", tier: "retired", note: "GA `静态判据` job 的同名 step" },
   { name: "UI/逻辑分离", tier: "retired", note: "GA `静态判据` job 的同名 step" },
   { name: "lib Node-only 声明", tier: "retired", note: "GA `静态判据` job 的同名 step" },
-  { name: "oxfmt 格式", tier: "retired", note: "GA `oxfmt 格式` step（`check-format.cjs --changed`，每次 PR 都跑、无 ifModify）" },
+  {
+    name: "oxfmt 格式",
+    tier: "retired",
+    note: "GA `oxfmt 格式` step（`check-format.cjs --changed`，每次 PR 都跑、无 ifModify）",
+  },
   { name: "重档静态判据", tier: "retired", note: "GA `重档静态判据` job（`ci-heavy-gates.mjs`）" },
 ];
 
@@ -1378,21 +1403,19 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         "（缺一格 = 声明在吹牛；多一格 = 没登记就上了线）",
     ).toEqual(declared);
 
-    /* 顺序约束（前提格先于吃 node_modules 的格子，与每日档同一族）：
-     * `API 文档生成与自检` 要跑 typedoc，而 push 是全新 job 目录、`node_modules`
-     * 恒不在场 —— 安装格必须排在它前面。两个名字都必须取到：取不到就是这一格
-     * 被从清单里删了，顺序判据会退化成永远成立的空判。 */
+    /* 顺序约束（前提格先于吃 node_modules 的格子）：这一档过去举的例子是
+     * `API 文档生成与自检`（要跑 typedoc，而 push 是全新 job 目录、`node_modules`
+     * 恒不在场）。2026-11-05 它已撤到每日档（ISSUE #2537）—— push 侧今天没有吃
+     * `node_modules` 的判据格，但 `安装依赖` 仍是后面镜像出口格的前提，必须在前。 */
     const installAt = declared.indexOf("安装依赖");
-    const apiDocsAt = declared.indexOf("API 文档生成与自检");
     expect(installAt, "push 清单里没有「安装依赖」—— 前提格被删了").toBeGreaterThanOrEqual(0);
+
+    /* ISSUE #2537：这一格**不许**回到 PR/合并侧的即时判里 —— 它今天只在每日档
+     * （`COMFYAPP_CI_DAILY_GATES` 的「每日 API 文档生成与自检」）。有人改回去要在这里红。 */
     expect(
-      apiDocsAt,
-      "push 清单里没有「API 文档生成与自检」—— 这一格如今谁都不判",
-    ).toBeGreaterThanOrEqual(0);
-    expect(
-      installAt < apiDocsAt,
-      "「安装依赖」必须排在「API 文档生成与自检」之前 —— 否则 typedoc 跑在没有 node_modules 的检出上",
-    ).toBe(true);
+      declared,
+      "「API 文档生成与自检」又回到了 push 清单 —— 2026-11-05 起它只在每日档（ISSUE #2537：98% 触发率、40.9s 中位、占 30.6%）",
+    ).not.toContain("API 文档生成与自检");
 
     /* `覆盖率上报` 不在 push 档（push 不跑测试，放进去只会静默空转）；它 2026-11-02 从
      * PR 档挪到了**每日档** —— 每日档的 `每日单元测试` 跑 `pnpm run test:coverage` 产出
@@ -1715,10 +1738,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 判**事实**顺序；逐条相等由上面那条判住，这里钉「最后会红的格」。2026-11-02 起 `覆盖率上报` 接在其后（报告型、非关键，被 skip 只少一次上报），约束对象仍是「会红的格不许在其后」。定时口迁 GA 后顺序判在手点那一口（同一份 `*daily_gates`）。 */
     const stages = pipelineStageNames(readRegisteredConfig(), "每日档（手动触发）");
     const last = stages.at(-1);
-    expect(
-      stages.length,
-      "手点那一口解析不出 stage —— 这条顺序判据没有对象了",
-    ).toBeGreaterThan(0);
+    expect(stages.length, "手点那一口解析不出 stage —— 这条顺序判据没有对象了").toBeGreaterThan(0);
     const idx = stages.indexOf("每日单元测试");
     expect(idx, "每日那一跑必须有 `每日单元测试`").toBeGreaterThanOrEqual(0);
     expect(
@@ -1731,6 +1751,38 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         "把 `每日单元测试` 挪回中间 = 让一单条负载超时决定后面几格跑不跑；" +
         "要动这条顺序，先把「超时指纹 ⇒ 隔离复跑」那一档补上（任务里记着）",
     ).toBe("覆盖率上报");
+  });
+
+  it("`API 文档生成与自检` 只在每日档：push 侧不再即时判，每日档排在单元测试之前（ISSUE #2537）", () => {
+    /* 2026-11-05 的口径变更：这一格从 push 撤到每日档 —— **PR 侧不再即时判**，
+     * 最晚次日 01:00 暴露，暴露窗口 ≤24h。判三件事：
+     *   ① push 清单里没有旧名（有人改回去要红）；
+     *   ② 每日清单里有新名，且**在 `每日单元测试` 之前**（后者必须是最后一个会红的格）；
+     *   ③ 每日块真的在、点的是同一份判据。
+     * ⚠️「触发面 = typedoc 派生面」的对账**没有因为挪档而削弱**：它在
+     * `tests/ci-incremental-gates.test.ts`（`INPUT_RES` 形态）与
+     * `tests/docs-api-input-closure.test.ts`（面罩得住事实面）里照旧判着。 */
+    const text = readRegisteredConfig();
+    expect(
+      registeredPushGateOrder(text),
+      "「API 文档生成与自检」回到了 push 清单 —— 2026-11-05 起它只在每日档（ISSUE #2537：98% 触发率、40.9s 中位、占 30.6%）",
+    ).not.toContain("API 文档生成与自检");
+
+    const daily = registeredDailyGateOrder(text);
+    const at = daily.indexOf("每日 API 文档生成与自检");
+    const lastRed = daily.indexOf("每日单元测试");
+    expect(
+      at,
+      "每日清单里没有「每日 API 文档生成与自检」—— 降频之后这一格没有执行者了",
+    ).toBeGreaterThanOrEqual(0);
+    expect(lastRed, "每日清单里没有「每日单元测试」").toBeGreaterThanOrEqual(0);
+    expect(
+      at,
+      "「每日 API 文档生成与自检」必须排在「每日单元测试」之前 —— 后者必须是最后一个会红的格",
+    ).toBeLessThan(lastRed);
+    const block = stageBlock(text, "每日 API 文档生成与自检");
+    expect(block, "每日档里解析不出「每日 API 文档生成与自检」这一格").toBeTruthy();
+    expect(block).toContain("scripts/check-docs-api.cjs");
   });
 
   it("被停用的 stage 在 `COMFYAPP_CI_DISABLED_GATES` 里登记了，且原文以注释形态留着", () => {
@@ -2181,10 +2233,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       crontabEvents(text),
       "`.cnb.yml` 里又出现了 crontab 事件 —— 定时重档已迁 GA，本机不该再被时钟起",
     ).toEqual([]);
-    expect(
-      text,
-      "配置里少了「定时档已迁 GA」的说明锚点 —— 撤定时是决策，不是顺手删两行",
-    ).toMatch(/定时档的执行者已从这台机迁到 GitHub Actions/);
+    expect(text, "配置里少了「定时档已迁 GA」的说明锚点 —— 撤定时是决策，不是顺手删两行").toMatch(
+      /定时档的执行者已从这台机迁到 GitHub Actions/,
+    );
 
     const dailyYml = readFileSync(path.join(ROOT, ".github/workflows/daily.yml"), "utf8");
     const packageYml = readFileSync(
@@ -2205,10 +2256,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     );
 
     const daily = pipelineStageNames(text, "每日档（手动触发）");
-    expect(
-      daily,
-      "手点那一口解析不出 stage —— 「撤定时不撤判据」这句话就没有对象了",
-    ).toEqual(registeredDailyGateOrder(text));
+    expect(daily, "手点那一口解析不出 stage —— 「撤定时不撤判据」这句话就没有对象了").toEqual(
+      registeredDailyGateOrder(text),
+    );
     expect(
       registeredDailyGateOrder(text),
       "`COMFYAPP_CI_DAILY_GATES` 与手点那一口的 stage 对不上 —— 那一档跑什么就没有事实源了",

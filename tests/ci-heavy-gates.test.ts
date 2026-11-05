@@ -230,23 +230,29 @@ describe("复合档 —— 逐条按面收窄（ISSUE #2255）", () => {
     /* 2026-11-05 薄化后，原来这批收窄登记的静态判据（`主题色扫描` / `CHANGELOG 碎片` …）
      * 随 PR 档一起搬到 GA —— `.cnb.yml` 里没有同名 stage 了，登记表不能再收它们
      * （`tests/ci-incremental-gates.test.ts` 的「登记 ⇄ 配置」会当场红）。所以这里
-     * 直接判**机制**：面取自仍登记在表里的判据（`scripts/check-docs-api.cjs`），
+     * 直接判**机制**：面取自仍登记在表里的判据（`scripts/render-doc-placeholders.cjs`），
      * 改动面落在面外 ⇒ 跳过，并把那组 glob 念出来（跳过不是判过）。 */
-    const step = { label: "API 文档生成与自检", argv: ["node", "scripts/check-docs-api.cjs"] };
-    const decision = narrowingDecision(step, { files: ["changelog.d/1-x.md"] });
+    const step = {
+      label: "生成态文档与源同步",
+      argv: ["node", "scripts/render-doc-placeholders.cjs"],
+    };
+    const decision = narrowingDecision(step, { files: ["src/app/x.tsx"] });
     expect(decision.skip).toBe(true);
     if (!decision.skip) {
       return;
     }
-    expect(decision.stage).toBe("API 文档生成与自检");
+    expect(decision.stage).toBe("生成态文档与源同步");
     expect(decision.globs, "跳过的理由必须把面念出来").toEqual(
-      narrowingEntryForScript("scripts/check-docs-api.cjs")?.globs,
+      narrowingEntryForScript("scripts/render-doc-placeholders.cjs")?.globs,
     );
   });
 
   it("改动面碰到了那条的面 ⇒ 这一条照跑（不跳）", () => {
-    const step = { label: "API 文档生成与自检", argv: ["node", "scripts/check-docs-api.cjs"] };
-    const decision = narrowingDecision(step, { files: ["src/app/x.tsx"] });
+    const step = {
+      label: "生成态文档与源同步",
+      argv: ["node", "scripts/render-doc-placeholders.cjs"],
+    };
+    const decision = narrowingDecision(step, { files: ["docs/README.md"] });
     expect(decision.skip).toBe(false);
   });
 
@@ -267,12 +273,14 @@ describe("复合档 —— 逐条按面收窄（ISSUE #2255）", () => {
 
   it("面取自**收窄登记表**，不是手抄的第二份", () => {
     /* 反查：登记表里那一条的脚本 ⇒ 它的面就是登记表里那组 glob。 */
-    const entry = INCREMENTAL_GATES.find((e) => e.script === "scripts/check-docs-api.cjs");
-    expect(entry, "收窄登记表里没有「API 文档生成与自检」这一条").toBeTruthy();
+    const entry = INCREMENTAL_GATES.find((e) => e.script === "scripts/render-doc-placeholders.cjs");
+    expect(entry, "收窄登记表里没有「生成态文档与源同步」这一条").toBeTruthy();
     if (!entry) {
       return;
     }
-    expect(narrowingEntryForScript("scripts/check-docs-api.cjs")?.globs).toEqual(entry.globs);
+    expect(narrowingEntryForScript("scripts/render-doc-placeholders.cjs")?.globs).toEqual(
+      entry.globs,
+    );
     /* 不在登记表里的判据（这里拿一条没有收窄面的）⇒ 查不到 ⇒ 不许收窄。 */
     expect(narrowingEntryForScript("scripts/check-gate-executors.cjs")).toBeNull();
   });
@@ -290,12 +298,12 @@ describe("复合档 —— 逐条按面收窄（ISSUE #2255）", () => {
 
   it("收窄**不能**把一条该跑的判据吞掉：面碰到 ⇒ 不跳（反向验证）", () => {
     const step = {
-      label: "API 文档生成与自检",
-      argv: ["node", "scripts/check-docs-api.cjs"],
+      label: "生成态文档与源同步",
+      argv: ["node", "scripts/render-doc-placeholders.cjs"],
     };
-    const skipped = narrowingDecision(step, { files: ["changelog.d/1-x.md"] });
+    const skipped = narrowingDecision(step, { files: ["src/app/x.tsx"] });
     expect(skipped.skip).toBe(true);
-    const ran = narrowingDecision(step, { files: ["src/app/x.tsx"] });
+    const ran = narrowingDecision(step, { files: ["docs/README.md"] });
     expect(ran.skip).toBe(false);
   });
 
