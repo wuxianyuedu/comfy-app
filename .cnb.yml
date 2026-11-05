@@ -721,11 +721,12 @@
   # 文件头「--master」一节。令牌经 push 流水线的 `imports:` 注入（与 PR 那条同一枚）。
   - name: GitHub master 镜像
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs --master --readout
-    # 与 PR 那一格同一档外框：探活 30s×至多 3 次、推送 240s×至多 2 次都在脚本里各自
-    # 限时并对 egress 类失败带退避重试（REMOTE_PROBE_TIMEOUT_MS / PUSH_TIMEOUT_MS /
-    # PROBE_MAX_ATTEMPTS，2026-11-02 起 —— `cnb-pe2-1k6e1uhj8` 连续两跑死在探活 15s
-    # 无回话，同日 19:47 同 runner 却探活通过，是间歇抖动不是硬阻断）。10m 是包住
-    # 最坏墙钟（探活 ≈105s + 推送 ≈485s）与节点冷启动的余量。
+    # 与 PR 那一格同一档外框：探活 30s×至多 3 次、内容推送整档吃 4 分钟墙钟预算（至多 10 次、
+    # 退避 5s→50s）、LFS 第二跳单独吃 60s 预算（至多 5 次）。2026-11-05 从「按次数」
+    # （推送 2 次 / LFS 2 次 + 5s 退避）改过来 —— 现场 `Connection was reset` 是瞬时失败，
+    # 一次 0.3s，按次数收口时整格 6s 就交账。常量与理由在 `scripts/ci-mirror-retry-policy.mjs`。
+    # 10m 包住最坏账（探活 ≈105s + 内容推送 240s + LFS 首刀 240s = 585s）与冷启动余量；
+    # LFS 首刀**不裁**超时（60s 预算只管重试），免得把一次「慢但正常」的对象上传掐死。
     timeout: 10m
   - name: 安装依赖
     # 与 `每日安装依赖` 的**命令行 / env / timeout 三样都逐字相同**
@@ -1743,8 +1744,10 @@
   # —— 翻承重后这半句从「死规矩」变成「活判据」。
   #
   # egress 间歇断流不再致命：三跳 git 调用各自带超时并对 egress 类失败带退避重试
-  # （脚本 `REMOTE_PROBE_TIMEOUT_MS 30s×3` / `PUSH_TIMEOUT_MS 240s×2`），真实抖动下重试一次即通
-  # （PR #3162 第二跑 8.5s 派发成功、重试 1 次）；只有**持续**不通/令牌被拒才真正退非零。
+  # （脚本 `REMOTE_PROBE_TIMEOUT_MS 30s×3` / 内容推送 `PUSH_RETRY_BUDGET_MS 240s`、至多 10 次 /
+  # LFS `LFS_PUSH_RETRY_BUDGET_MS 60s`、至多 5 次），真实抖动下重试几次即通
+  # （PR #3162 第二跑 8.5s 派发成功、重试 1 次）；只有**持续**不通 /
+  # 令牌被拒才真正退非零。
   #
   # 令牌那一系一字未动：`GITHUB_MIRROR_TOKEN`（平台侧注入，仓库外配置）缺席/被拒 ⇒ 内部判
   # 「没跑起来」留读数，翻承重后**这个读数现在折成流水线的红（即拦合）** —— 这正是 #3051 第 3 条
@@ -1756,10 +1759,11 @@
   # 落盘失败不影响本格三态（回读格读不到就退回「自己猜」的老行为）。
   - name: GitHub 镜像同步
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs
-    # 三跳 git 调用各自带超时并对 egress 类失败带退避重试（`scripts/ci-github-mirror-push.mjs`
-    # 的 REMOTE_PROBE_TIMEOUT_MS 30s×3 / PUSH_TIMEOUT_MS 240s×2 —— 没有限时就得吃 git 自己
-    # 那个 21s 的 connect 超时，而那一形过去只被念成「令牌活不活」；重试的立案依据见
-    # 脚本文件头第 8 条）。10m 是外框，包住最坏墙钟（≈105s + ≈485s×2）与冷启动余量。
+    # 三跳 git 调用各自带超时：探活 30s×3、内容推送整档 240s 墙钟预算（至多 10 次、退避
+    # 5s→50s）、LFS 第二跳整档 60s 预算（至多 5 次）—— 同一份阶梯、两档窗口，常量与理由在
+    # `scripts/ci-mirror-retry-policy.mjs`；没有限时就得吃 git 自己那个 21s 的 connect 超时，
+    # 而那一形过去只被念成「令牌活不活」。按时间而非按次数收口的立案依据见脚本文件头第 8 条。
+    # 10m 是外框：最坏账 ≈105s + 240s + LFS 首刀 240s = 585s（LFS 首刀不裁，见上面的理由）。
     timeout: 10m
 
   # ── 环境前提（**必须排在 `GitHub 判决回读` 之前**，ISSUE #1959）──

@@ -17,7 +17,10 @@
  * 3. **不打令牌值**（硬规则 17）：失败回话体先过 `sanitize`；成功回话（含日志正文）
  *    由调用方再过 `redactSecrets`（`ci-github-verdict-logs.mjs`）。
  */
-import { RETRY_BACKOFF_MS, isEgressFailure, sanitize } from "./ci-github-mirror-push.mjs";
+import { isEgressFailure, sanitize } from "./ci-github-mirror-push.mjs";
+/* 退避表自 2026-11-05 起单独一份（主文件贴着 900 行闸，不再转出这一组常量）。
+ * 这一格只吃表的前两项（`REQUEST_MAX_ATTEMPTS` = 3），与改口径前逐值相同。 */
+import { RETRY_BACKOFF_MS } from "./ci-mirror-retry-policy.mjs";
 
 /** 单次请求的墙钟上限（同原 `ci-github-verdict-read.mjs`）。 */
 export const CHECK_RUNS_TIMEOUT_MS = 30_000;
