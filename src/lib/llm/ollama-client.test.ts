@@ -12,7 +12,7 @@ function jsonRes(status: number, body: unknown): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
-    json: async () => body,
+    json: () => body,
   } as unknown as Response;
 }
 
@@ -70,7 +70,7 @@ describe("probeOllama", () => {
       vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
-        json: async () => {
+        json: () => {
           throw new Error("Unexpected token <");
         },
       }),

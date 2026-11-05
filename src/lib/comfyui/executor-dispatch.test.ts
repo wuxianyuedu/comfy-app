@@ -41,8 +41,8 @@ const { state, MAX_CONCURRENCY } = runner;
  * 未注入那条路），所以不先把注入侧补上，每个用例都会留一串 unhandled rejection
  * （与 `enqueue.test.ts` 同一处置）。 */
 const runnerPersist = {
-  replaceLogs: vi.fn(async () => undefined),
-  replaceRawCli: vi.fn(async () => undefined),
+  replaceLogs: vi.fn(() => Promise.resolve(undefined)),
+  replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
 };
 const runnerWarn = vi.fn();
 
@@ -57,13 +57,13 @@ type ExecJobRow = {
 function fakeRepo(overrides: Record<string, unknown> = {}) {
   return {
     /* SAFETY: 类型断言已复核 */
-    claimNextQueued: vi.fn(async () => [] as Array<string>),
+    claimNextQueued: vi.fn(() => Promise.resolve([] as Array<string>)),
     /* SAFETY: 类型断言已复核 */
-    findExecJob: vi.fn(async () => null as ExecJobRow),
+    findExecJob: vi.fn(() => Promise.resolve(null as ExecJobRow)),
     /* SAFETY: 类型断言已复核 */
-    finalizeFailure: vi.fn(async () => "written" as const),
+    finalizeFailure: vi.fn(() => Promise.resolve("written" as const)),
     /* SAFETY: 类型断言已复核 */
-    listQueuedIds: vi.fn(async () => [] as Array<string>),
+    listQueuedIds: vi.fn(() => Promise.resolve([] as Array<string>)),
     ...overrides,
   };
 }
@@ -120,7 +120,7 @@ afterEach(() => {
 
 describe("就绪门控：不就绪就不领行", () => {
   it("WS 未 OPEN 时不领取，但把「在等什么」写进还在排队的行", async () => {
-    const repo = fakeRepo({ listQueuedIds: vi.fn(async () => ["t-wait"]) });
+    const repo = fakeRepo({ listQueuedIds: vi.fn(() => Promise.resolve(["t-wait"])) });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
     expect(await mod.claimAndDispatchOnce()).toBeNull();
@@ -131,7 +131,7 @@ describe("就绪门控：不就绪就不领行", () => {
   });
 
   it("同一条等待提示只写一次：2s 节拍反复撞不就绪也不能刷屏", async () => {
-    const repo = fakeRepo({ listQueuedIds: vi.fn(async () => ["t-once"]) });
+    const repo = fakeRepo({ listQueuedIds: vi.fn(() => Promise.resolve(["t-once"])) });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
     await mod.claimAndDispatchOnce();
@@ -143,7 +143,7 @@ describe("就绪门控：不就绪就不领行", () => {
 
   it("多条排队行各自都有提示（不是只提示最旧那条）", async () => {
     const repo = fakeRepo({
-      listQueuedIds: vi.fn(async () => ["t-a", "t-b"]),
+      listQueuedIds: vi.fn(() => Promise.resolve(["t-a", "t-b"])),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
@@ -190,7 +190,7 @@ describe("槽位判据", () => {
     );
     wrapped.cause = { code: "SQLITE_BUSY", message: "database is locked" };
     const repo = fakeRepo({
-      claimNextQueued: vi.fn(async () => {
+      claimNextQueued: vi.fn(() => {
         throw wrapped;
       }),
     });
@@ -214,12 +214,14 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
     openWs();
     const rawJson = { nodes: [{ id: "1", type: "KSampler" }] };
     const repo = fakeRepo({
-      claimNextQueued: vi.fn(async () => ["t-raw"]),
-      findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
-        execPayload: rawJson,
-        params: { workflowInputs: [{ nodeId: "1", name: "seed", value: 42 }] },
-      })),
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-raw"])),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({
+          workflowName: "w",
+          execPayload: rawJson,
+          params: { workflowInputs: [{ nodeId: "1", name: "seed", value: 42 }] },
+        }),
+      ),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
@@ -242,14 +244,16 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
   it("把 workflowInputs 全量打进任务日志（dev 重启后日志是唯一现场）", async () => {
     openWs();
     const repo = fakeRepo({
-      claimNextQueued: vi.fn(async () => ["t-log"]),
-      findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
-        execPayload: { nodes: [] },
-        params: {
-          workflowInputs: [{ nodeId: "1", name: "text", value: "a cat" }],
-        },
-      })),
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-log"])),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({
+          workflowName: "w",
+          execPayload: { nodes: [] },
+          params: {
+            workflowInputs: [{ nodeId: "1", name: "text", value: "a cat" }],
+          },
+        }),
+      ),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
@@ -262,13 +266,15 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
 
   it("等待提示在同一条被领走之后仍在：缓冲重开时接回本轮排队期的行", async () => {
     const repo = fakeRepo({
-      claimNextQueued: vi.fn(async () => ["t-rerun"]),
-      listQueuedIds: vi.fn(async () => ["t-rerun"]),
-      findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
-        execPayload: { nodes: [] },
-        params: {},
-      })),
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-rerun"])),
+      listQueuedIds: vi.fn(() => Promise.resolve(["t-rerun"])),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({
+          workflowName: "w",
+          execPayload: { nodes: [] },
+          params: {},
+        }),
+      ),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
     state().settled.add("t-rerun");
@@ -297,7 +303,7 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
   it("排队期的登记只兑现一次：领取之后就结束，不会被下一轮复用", async () => {
     openWs();
     const repo = fakeRepo({
-      claimNextQueued: vi.fn(async () => ["t-once-seed"]),
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-once-seed"])),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
     state().queuedEntries.set("t-once-seed", [
@@ -313,12 +319,14 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
   it("行没有执行载荷：判失败并归还槽位，不留 RUNNING 僵尸", async () => {
     openWs();
     const repo = fakeRepo({
-      claimNextQueued: vi.fn(async () => ["t-empty"]),
-      findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
-        execPayload: null,
-        params: {},
-      })),
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-empty"])),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({
+          workflowName: "w",
+          execPayload: null,
+          params: {},
+        }),
+      ),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
@@ -335,8 +343,8 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
   it("载荷读不到（行已被删/收口）：不提交、槽位归还", async () => {
     openWs();
     const repo = fakeRepo({
-      claimNextQueued: vi.fn(async () => ["t-gone"]),
-      findExecJob: vi.fn(async () => null),
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-gone"])),
+      findExecJob: vi.fn(() => Promise.resolve(null)),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
@@ -354,11 +362,13 @@ describe("提交异常必须归还槽位", () => {
     const repo = fakeRepo({
       // 领过的行在库里已是 RUNNING，不会再被领到——用 Once 表达这件事
       claimNextQueued: vi.fn().mockResolvedValueOnce(["t-err"]).mockResolvedValue([]),
-      findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
-        execPayload: { "1": {} },
-        params: {},
-      })),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({
+          workflowName: "w",
+          execPayload: { "1": {} },
+          params: {},
+        }),
+      ),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
@@ -375,11 +385,13 @@ describe("提交异常必须归还槽位", () => {
     vi.mocked(fin.finalizeFailure).mockRejectedValue(new Error("db down"));
     const repo = fakeRepo({
       claimNextQueued: vi.fn().mockResolvedValueOnce(["t-err-db"]).mockResolvedValue([]),
-      findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
-        execPayload: { "1": {} },
-        params: {},
-      })),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({
+          workflowName: "w",
+          execPayload: { "1": {} },
+          params: {},
+        }),
+      ),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
@@ -396,12 +408,14 @@ describe("提交异常必须归还槽位", () => {
   it("正常启动时不写「启动异常」，槽位留给后续收口归还", async () => {
     openWs();
     const repo = fakeRepo({
-      claimNextQueued: vi.fn(async () => ["t-ok"]),
-      findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
-        execPayload: { "1": {} },
-        params: {},
-      })),
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-ok"])),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({
+          workflowName: "w",
+          execPayload: { "1": {} },
+          params: {},
+        }),
+      ),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
@@ -416,7 +430,7 @@ describe("提交异常必须归还槽位", () => {
 describe("叶子总线接线（这一刀把它从一条回调扩成两条）", () => {
   it("dispatch 加载即注册续跑与广播；广播写给本归属片里排队的行", async () => {
     const repo = fakeRepo({
-      listQueuedIds: vi.fn(async () => ["t-q1", "t-q2"]),
+      listQueuedIds: vi.fn(() => Promise.resolve(["t-q1", "t-q2"])),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "host" });
 

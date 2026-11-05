@@ -857,13 +857,15 @@ describe("已有实例在跑但 HTTP 暂未响应：不重复拉起，等待接�
     vi.mocked(spawnManaged).mockClear();
     mainPyPid = null;
     const { findPidForMainPyDetailed } = await import("./proc-detect");
-    vi.mocked(findPidForMainPyDetailed).mockImplementation(async () => ({
-      pid: mainPyPid,
-      failed: false,
-    }));
+    vi.mocked(findPidForMainPyDetailed).mockImplementation(() =>
+      Promise.resolve({
+        pid: mainPyPid,
+        failed: false,
+      }),
+    );
   });
 
-  afterEach(async () => {
+  afterEach(() => {
     // 等待超时/判死会落自动启动失败闩锁（globalThis 单例），别污染后面的用例。
     clearComfyAutoStartFailure();
   });
@@ -889,12 +891,12 @@ describe("已有实例在跑但 HTTP 暂未响应：不重复拉起，等待接�
     // 入口那次探测（第 1 次）返回 null 且**不动进程表**——快照必须仍看到进程在，
     // 才会走进接管等待；从等待循环的第 1 次探测（第 2 次调用）起进程消失。
     let probeCalls = 0;
-    vi.mocked(probeComfyBase).mockImplementation(async () => {
+    vi.mocked(probeComfyBase).mockImplementation(() => {
       probeCalls += 1;
       if (probeCalls >= 2) {
         mainPyPid = null;
       }
-      return null;
+      return Promise.resolve(null);
     });
 
     const r = await ensureComfyUiReady({ timeoutMs: 30_000 });

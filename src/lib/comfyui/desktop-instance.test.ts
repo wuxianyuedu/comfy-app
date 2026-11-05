@@ -139,11 +139,12 @@ describe("resolveEffectiveLaunch", () => {
         kind: "desktop",
         instanceIdFile: "C:/desktop/.comfyui-desktop-2",
       }),
-      resolveDesktop: async () => ({
-        port: 8311,
-        args: ["--enable-manager"],
-        envVars: { PYTHONUTF8: "1" },
-      }),
+      resolveDesktop: () =>
+        Promise.resolve({
+          port: 8311,
+          args: ["--enable-manager"],
+          envVars: { PYTHONUTF8: "1" },
+        }),
     });
     expect(r.port).toBe(8311);
     expect(r.extraArgs).toEqual(["--enable-manager"]);
@@ -159,7 +160,7 @@ describe("resolveEffectiveLaunch", () => {
         kind: "desktop",
         instanceIdFile: "C:/desktop/.comfyui-desktop-2",
       }),
-      resolveDesktop: async () => null,
+      resolveDesktop: () => Promise.resolve(null),
     });
     expect(r.port).toBe(0); // 0 → 调用方按默认 8188
     expect(r.extraArgs).toEqual([]);

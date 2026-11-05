@@ -95,13 +95,13 @@ const wrapperWorkflow = {
   },
 } as unknown as RawWorkflow;
 
-async function noCombo(): Promise<undefined> {
-  return undefined;
+function noCombo(): Promise<undefined> {
+  return Promise.resolve(undefined);
 }
 
 /** 没有 object_info 声明时的多行查询桩：判定只剩「值很长」那条数据判据。 */
-async function noMultiline(): Promise<undefined> {
-  return undefined;
+function noMultiline(): Promise<undefined> {
+  return Promise.resolve(undefined);
 }
 
 describe("buildRawInputs — 子工作流封装节点的 proxyField 暂存", () => {

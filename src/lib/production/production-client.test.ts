@@ -11,7 +11,7 @@ function mockFetch(body: unknown, ok = true) {
   vi.stubGlobal(
     "fetch",
     vi.fn(
-      async () =>
+      () =>
         new Response(JSON.stringify(body), {
           status: ok ? 200 : 500,
         }),
@@ -49,7 +49,7 @@ describe("fetchProduction", () => {
   it("请求抛错 → null（静默降级，不抛给调用方）", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => {
+      vi.fn(() => {
         throw new Error("network down");
       }),
     );

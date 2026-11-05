@@ -861,7 +861,7 @@ async function launchBoundMode(host: LaunchHost, ctx: EnsureCtx): Promise<Ensure
         : null,
     probe: () => probeChildReady(child),
     /* 子进程句柄被清掉（= 进程已退出）→ 用留底给出可行动的报错。 */
-    isDead: async () => (st.child === child ? null : buildEarlyExitDetail(ledger.lines)),
+    isDead: () => Promise.resolve(st.child === child ? null : buildEarlyExitDetail(ledger.lines)),
   });
   if (!result.ok) {
     note(result.detail);

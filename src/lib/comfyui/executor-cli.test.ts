@@ -405,7 +405,7 @@ describe("configureExecutorCli 接缝", () => {
     }).not.toThrow();
     expect(() => {
       mod.configureExecutorCli({
-        resolveComfyBase: async () => "http://127.0.0.1:8188",
+        resolveComfyBase: () => Promise.resolve("http://127.0.0.1:8188"),
       });
     }).not.toThrow();
   });

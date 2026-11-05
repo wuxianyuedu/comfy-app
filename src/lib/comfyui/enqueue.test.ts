@@ -20,13 +20,13 @@ import type { TaskWriteOutcome } from "../core/repository-task-impl";
 vi.mock("~/lib/db", () => ({ db: {} }));
 vi.mock("../core/repository", () => ({
   taskRepository: {
-    findStatusAndPromptById: vi.fn(async () => null),
-    cancel: vi.fn(async () => undefined),
+    findStatusAndPromptById: vi.fn(() => null),
+    cancel: vi.fn(() => undefined),
   },
 }));
 vi.mock("./client", () => ({
-  interrupt: vi.fn(async () => undefined),
-  resolveComfyBase: vi.fn(async () => "http://127.0.0.1:8188"),
+  interrupt: vi.fn(() => undefined),
+  resolveComfyBase: vi.fn(() => "http://127.0.0.1:8188"),
 }));
 vi.mock("~/lib/core/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
@@ -48,9 +48,9 @@ const cli = await import("./executor-cli");
 describe("configureEnqueue 接缝", () => {
   it("接受 Partial<EnqueueDeps>、两次调用是合并语义", () => {
     const fakeRepo = {
-      findStatusAndPromptById: async () => null,
+      findStatusAndPromptById: () => Promise.resolve(null),
       /* SAFETY: 类型断言已复核 */
-      cancel: async () => "written" as const,
+      cancel: () => Promise.resolve("written" as const),
     };
     expect(() => {
       mod.configureEnqueue({ taskRepo: fakeRepo });
@@ -89,10 +89,10 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
     const { cancelOutcome = "written", inFlight = false } = options;
     const taskId = `cancel-${(seq += 1)}`;
     const repo = {
-      findStatusAndPromptById: vi.fn(async () => row),
-      cancel: vi.fn(async () => cancelOutcome),
-      replaceLogs: vi.fn(async () => undefined),
-      replaceRawCli: vi.fn(async () => undefined),
+      findStatusAndPromptById: vi.fn(() => Promise.resolve(row)),
+      cancel: vi.fn(() => Promise.resolve(cancelOutcome)),
+      replaceLogs: vi.fn(() => Promise.resolve(undefined)),
+      replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
     };
     mod.configureEnqueue({ taskRepo: repo });
     runnerState.configureRunner({ taskRepo: repo, log: runnerLog });

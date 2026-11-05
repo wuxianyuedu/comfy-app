@@ -17,9 +17,9 @@ function makeParams(
     graph: {},
     nodeTitleById: {},
     nodeTypeById: {},
-    comboOptionsForClassField: async () => undefined,
-    comboOptionsForFieldName: async () => undefined,
-    multilineForClassField: async () => undefined,
+    comboOptionsForClassField: () => Promise.resolve(undefined),
+    comboOptionsForFieldName: () => Promise.resolve(undefined),
+    multilineForClassField: () => Promise.resolve(undefined),
     ...extra,
   };
 }
@@ -175,7 +175,7 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           },
         ],
       },
-      comboOptionsForClassField: async () => VALID,
+      comboOptionsForClassField: () => Promise.resolve(VALID),
     });
   }
 
@@ -845,8 +845,8 @@ describe("enrichWorkflowIO — 真实封装节点工作流的端到端取名（I
 
     const { rawInputsById } = await buildRawInputs(
       raw,
-      async () => undefined,
-      async () => undefined,
+      () => Promise.resolve(undefined),
+      () => Promise.resolve(undefined),
     );
     const read = async (label?: string) =>
       (
@@ -924,8 +924,8 @@ describe("enrichWorkflowIO — 封装节点作者名整体回收不到时的取�
   it("类型 / 类名随条目下发；label 直读、本层作者名作为事实下发", async () => {
     const { rawInputsById } = await buildRawInputs(
       raw,
-      async () => undefined,
-      async () => undefined,
+      () => Promise.resolve(undefined),
+      () => Promise.resolve(undefined),
     );
     const io = await enrichWorkflowIO(
       makeParams(
@@ -959,8 +959,8 @@ describe("enrichWorkflowIO — 封装节点作者名整体回收不到时的取�
     own.nodes[0]!.inputs![0]!.label = "我的种子";
     const { rawInputsById } = await buildRawInputs(
       own,
-      async () => undefined,
-      async () => undefined,
+      () => Promise.resolve(undefined),
+      () => Promise.resolve(undefined),
     );
     const io = await enrichWorkflowIO(
       makeParams(
@@ -1065,8 +1065,8 @@ describe("enrichWorkflowIO — slotLabel 下发（别名判定的第二判据）
   it("本层作者名随富化条目下发（供「本地存的是不是机器名」判定）", async () => {
     const { rawInputsById } = await buildRawInputs(
       raw,
-      async () => undefined,
-      async () => undefined,
+      () => Promise.resolve(undefined),
+      () => Promise.resolve(undefined),
     );
     const io = await enrichWorkflowIO(
       makeParams(
@@ -1116,8 +1116,8 @@ describe("enrichWorkflowIO — slotLabel 下发（别名判定的第二判据）
     } as unknown as RawWorkflow;
     const { rawInputsById } = await buildRawInputs(
       plain,
-      async () => undefined,
-      async () => undefined,
+      () => Promise.resolve(undefined),
+      () => Promise.resolve(undefined),
     );
     const io = await enrichWorkflowIO(
       makeParams(

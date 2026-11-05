@@ -249,16 +249,18 @@ export async function ensureDrizzleStudioUp(
       readyDetail: `Drizzle Studio 已就绪（端口 ${port}）`,
       intervalMs: 500,
       probe: async () => ((await probeDrizzleStudio(port)) ? `127.0.0.1:${port}` : null),
-      isDead: async () => {
+      isDead: () => {
         if (st.child === child) {
-          return null;
+          return Promise.resolve(null);
         }
         const modErr = /Cannot find module '([^']+)'|Cannot find package '([^']+)'/.exec(
           ledger.lines.join("\n"),
         );
-        return modErr
-          ? `Drizzle Studio 启动后立即退出：缺少依赖（${modErr[1] ?? modErr[2]}）——请确认已安装 drizzle-kit（pnpm install），详见 log/services/drizzle-studio-runtime.log`
-          : "Drizzle Studio 进程启动后立即退出，详见 log/services/drizzle-studio-runtime.log";
+        return Promise.resolve(
+          modErr
+            ? `Drizzle Studio 启动后立即退出：缺少依赖（${modErr[1] ?? modErr[2]}）——请确认已安装 drizzle-kit（pnpm install），详见 log/services/drizzle-studio-runtime.log`
+            : "Drizzle Studio 进程启动后立即退出，详见 log/services/drizzle-studio-runtime.log",
+        );
       },
     });
     return { ok: r.ok, port, detail: r.detail };

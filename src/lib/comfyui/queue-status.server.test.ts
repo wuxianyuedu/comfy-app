@@ -33,13 +33,15 @@ const stub = vi.hoisted(() => {
   };
   return {
     state,
-    findRunning: vi.fn(async (): Promise<unknown> => state.running),
-    countQueued: vi.fn(async () => state.queued),
-    getQueue: vi.fn(async (): Promise<unknown> => ({
-      queue_running: [{ prompt_id: "p1" }],
-      queue_pending: [{ prompt_id: "p2" }, { prompt_id: "p3" }],
-    })),
-    getSnapshot: vi.fn(async () => state.snapshot),
+    findRunning: vi.fn((): Promise<unknown> => Promise.resolve(state.running)),
+    countQueued: vi.fn(() => state.queued),
+    getQueue: vi.fn((): Promise<unknown> =>
+      Promise.resolve({
+        queue_running: [{ prompt_id: "p1" }],
+        queue_pending: [{ prompt_id: "p2" }, { prompt_id: "p3" }],
+      }),
+    ),
+    getSnapshot: vi.fn(() => state.snapshot),
   };
 });
 
@@ -98,10 +100,12 @@ beforeEach(() => {
   // 三条句柄在用例间不清零的话，「各发一次」那条会累计成 8 次。
   stub.findRunning.mockClear();
   stub.countQueued.mockClear();
-  stub.getQueue.mockReset().mockImplementation(async () => ({
-    queue_running: [{ prompt_id: "p1" }],
-    queue_pending: [{ prompt_id: "p2" }, { prompt_id: "p3" }],
-  }));
+  stub.getQueue.mockReset().mockImplementation(() =>
+    Promise.resolve({
+      queue_running: [{ prompt_id: "p1" }],
+      queue_pending: [{ prompt_id: "p2" }, { prompt_id: "p3" }],
+    }),
+  );
   stub.getSnapshot.mockClear();
 });
 
@@ -222,7 +226,7 @@ describe("状态栏那一格的全部来源都是库", () => {
     expect(stub.getQueue).toHaveBeenCalledTimes(1);
   });
 
-  it("源形态：这一格不再从执行进程的内存取数（这一刀的判据本身）", async () => {
+  it("源形态：这一格不再从执行进程的内存取数（这一刀的判据本身）", () => {
     const source = stripComments(
       readFileSync(path.resolve(process.cwd(), "src/lib/comfyui/queue-status.server.ts"), "utf8"),
     );
