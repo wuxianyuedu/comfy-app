@@ -111,9 +111,9 @@ export function dispatchBranchFilter(text) {
       break;
     }
     if (!inBranches) {
-      const head = line.match(/^\s*branches:\s*(.*)$/u);
+      const head = line.match(/^\s*branches:\s*(?<inline>.*)$/u);
       if (head) {
-        const inline = (head[1] ?? "").trim();
+        const inline = (head.groups?.inline ?? "").trim();
         if (inline.startsWith("[") && inline.endsWith("]")) {
           for (const item of inline.slice(1, -1).split(",")) {
             const branch = item.trim().replaceAll(/^["']|["']$/gu, "");
@@ -134,9 +134,9 @@ export function dispatchBranchFilter(text) {
       inBranches = false;
       continue;
     }
-    const item = line.match(/^\s*-\s*(.+)$/u);
+    const item = line.match(/^\s*-\s*(?<branch>.+)$/u);
     if (item) {
-      const branch = (item[1] ?? "").trim().replaceAll(/^["']|["']$/gu, "");
+      const branch = (item.groups?.branch ?? "").trim().replaceAll(/^["']|["']$/gu, "");
       if (branch !== "") {
         branches.push(branch);
       }
@@ -246,10 +246,7 @@ export async function probeDispatchChain(readJson, ctx) {
     out.defaultBranch !== "" &&
     out.structural === ""
   ) {
-    const fileRead = await readJson(
-      workflowFileUrl(ctx.repo, out.defaultBranch),
-      "workflow 文件",
-    );
+    const fileRead = await readJson(workflowFileUrl(ctx.repo, out.defaultBranch), "workflow 文件");
     const fileStatus = fileRead.status ?? 0;
     if (fileRead.ok) {
       const body = /** @type {{content?: unknown, encoding?: unknown}} */ (fileRead.body);

@@ -67,7 +67,7 @@ export function parseHeadings(text) {
   let fence = null;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? "";
-    const fenceMark = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
+    const fenceMark = /^\s*(?<fenceMark>`{3,}|~{3,})/.exec(line)?.groups?.fenceMark;
     if (fenceMark !== undefined) {
       if (fence === null) {
         fence = fenceMark;
@@ -83,15 +83,13 @@ export function parseHeadings(text) {
      * 列表项里（两个空格），少了这一段，`13.6.2.1` 这一层会整层消失 ——
      * 目录照样完整、只是少了几小节，而「少的那几节」恰好是最常被问到的细则。
      * 四个空格起是缩进代码块，按 Markdown 的定义不是标题。 */
-    const m = /^ {0,3}(#{1,6})[ \t]+(.+?)[ \t]*$/.exec(line);
+    const m = /^ {0,3}(?<hashes>#{1,6})[ \t]+(?<title>.+?)[ \t]*$/.exec(line);
     if (!m) {
       continue;
     }
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- m[1] 是必需捕获组，noUncheckedIndexedAccess 下仍是 string | undefined
-    const hashes = m[1] ?? "";
+    const hashes = m.groups?.hashes ?? "";
     /* ATX 标题允许以 `#` 收尾（`## 标题 ##`），那些是装饰不是标题的一部分。 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- m[2] 是必需捕获组，noUncheckedIndexedAccess 下仍是 string | undefined
-    const title = (m[2] ?? "").replace(/[ \t]+#+[ \t]*$/, "").trim();
+    const title = (m.groups?.title ?? "").replace(/[ \t]+#+[ \t]*$/, "").trim();
     if (title === "") {
       continue;
     }

@@ -53,10 +53,12 @@ const BACKUP_PREFIX = "db-backup-";
 
 /** 名字里的时刻段（紧凑日期 + 时分秒），与 `runtime-log-file.ts` 同口径
  *  （无冒号 —— Windows 下 `:` 是非法文件名字符）。 */
-const STAMP_RE = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/;
+const STAMP_RE =
+  /^(?<year>\d{4})(?<month>\d{2})(?<day>\d{2})-(?<hour>\d{2})(?<minute>\d{2})(?<second>\d{2})$/;
 
 /** 名字形态：`db-backup-<时刻>[-<第几次>].sqlite`。 */
-const BACKUP_FILE_RE = /^db-backup-(\d{4}\d{2}\d{2}-\d{2}\d{2}\d{2})(?:-(\d+))?\.sqlite$/;
+const BACKUP_FILE_RE =
+  /^db-backup-(?<stampText>\d{4}\d{2}\d{2}-\d{2}\d{2}\d{2})(?:-(?<ordinal>\d+))?\.sqlite$/;
 
 /** 一次备份落点的绝对目录。
  *  @param {string} root 应用根
@@ -110,20 +112,20 @@ export function parseBackupFileName(name) {
   if (!m) {
     return null;
   }
-  const [, stampText, ordinalText] = m;
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- stampText 是捕获组按下标取，noUncheckedIndexedAccess 下仍是 string | undefined
-  const sm = STAMP_RE.exec(stampText ?? "");
+  const stampText = m.groups?.stampText ?? "";
+  const ordinalText = m.groups?.ordinal;
+  const sm = STAMP_RE.exec(stampText);
   if (!sm) {
     return null;
   }
-  const [, y, mo, d, h, mi, s] = sm;
+  const { year, month, day, hour, minute, second } = sm.groups ?? {};
   const startedAt = new Date(
-    Number(y),
-    Number(mo) - 1,
-    Number(d),
-    Number(h),
-    Number(mi),
-    Number(s),
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
   ).getTime();
   const ordinal = ordinalText ? Number(ordinalText) : 1;
   return {

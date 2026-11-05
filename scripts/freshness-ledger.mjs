@@ -213,7 +213,7 @@ export function contextSubject() {
  */
 export function freshnessTrack(kind) {
   const track = FRESHNESS_TRACKS[kind];
-  if (!track) { // oxlint-disable-line typescript/no-unnecessary-condition -- kind 来自调用方（含环境变量），运行时可能不是登记键，守卫必须留
+  if (!track) {
     throw new Error(
       `[freshness-ledger] 未登记的新鲜度档：${kind}（可选：${Object.keys(FRESHNESS_TRACKS).join(" / ")}）`,
     );
@@ -291,7 +291,7 @@ export function isUsableSkipReason(reason) {
   if (text.length < 8) {
     return false;
   }
-  return !/^(稍后|待定|下次|回头|todo|tbd|na|n\/a)$/i.test(text);
+  return !/^(?:稍后|待定|下次|回头|todo|tbd|na|n\/a)$/i.test(text);
 }
 
 /** 这一跑**是不是整档**——三档跑法（e2e / 全量单测 / 产物）共用的一条形状判据。
@@ -421,14 +421,14 @@ export function freshnessVerdict({ track, at, now, dirtySince }) {
   if (since && at.getTime() >= since.getTime()) {
     return null;
   }
-  if ((track.dirty ?? []).length === 0) { // oxlint-disable-line typescript/no-unnecessary-condition -- 同上：漏填 dirty 的登记项运行时为 undefined
+  if ((track.dirty ?? []).length === 0) {
     return `今天还没有自证 —— 上一次跑绿在 "${at.toISOString()}"，不是今天。${how}`;
   }
   if (since) {
     return (
       `今天的提交动过这一档的输入面（${track.dirty.join(" / ")}），而它还没有自证 —— ` +
       `上一次跑绿在 "${at.toISOString()}"，早于当天的第一次改动。${
-      how
+        how
       }${track.dirtyHow ? `\n              若这次改动确实不吃这一档：\`${track.dirtyHow}\`。` : ""}`
     );
   }
@@ -439,7 +439,7 @@ export function freshnessVerdict({ track, at, now, dirtySince }) {
   return (
     `已经 ${days} 天没有自证（上一次跑绿在 "${at.toISOString()}"），` +
     `超过了 ${Math.round(track.graceMs / 86_400_000)} 天的宽限。${
-    how
+      how
     }${track.dirtyHow ? `\n              若近期改动确实不吃这一档：\`${track.dirtyHow}\`。` : ""}`
   );
 }
@@ -478,7 +478,6 @@ export function checkFreshnessLedger(
    * 一条写着「由 e2e 跑法证过」而挂在 full 账上的记录照样要红。
    * 而「平台侧那一格真的在场」由 `tests/daily-tracks.test.ts` 判（每个非空 `ciStage`
    * 必须出现在 `COMFYAPP_CI_DAILY_GATES` 里）—— 没有那一条，这里就变成「谁都不跑」。 */
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 合成档/漏填 ciStage 的登记项运行时可为 undefined（用例按机制造档）
   const ciOwned = String(track.ciStage ?? "").trim() !== "";
   for (const key of required) {
     const entry = ledger[key];
@@ -516,7 +515,8 @@ export function checkFreshnessLedger(
           `${track.label}（${key}）的新鲜度记录里 ${field} 没写清（"${value}"）—— ${
             field === "how"
               ? "这一栏要写**能照着重跑的那条命令**（写「稍后」「已复核」等于没写）。"
-              : "这一栏是这条账存在的全部意义：谁、什么时候、按哪条命令复核的。"}`,
+              : "这一栏是这条账存在的全部意义：谁、什么时候、按哪条命令复核的。"
+          }`,
         );
       }
     }
@@ -627,11 +627,13 @@ export function checkFreshnessLedger(
           const stale = freshnessVerdict({ track, at: at2, now, dirtySince });
           if (stale) {
             problems.push(
-              `${track.label}（${key}）${stale}${waiver
+              `${track.label}（${key}）${stale}${
+                waiver
                   ? `\n        （上一条是${waiver === "dirtyReason" ? "「不吃这一档」" : "豁免"}、写在 "${at}" —— ` +
                     `上面那句里的日期是**那次回答的时刻**，不是跑绿的凭证。` +
                     `豁免只替它写在的那一天作证；过了当天，这一档回到自己的口径上判。）`
-                  : ""}`,
+                  : ""
+              }`,
             );
           }
         }

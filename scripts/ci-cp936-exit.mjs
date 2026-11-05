@@ -326,8 +326,10 @@ export function parseInvocation(argv) {
  * @returns {string}
  */
 export function unwrapCp936(command) {
-  const m = /(?:^|;)\s*node\s+scripts\/ci-cp936-exit\.mjs\s+--\s+(.*)$/.exec(command.trim());
-  return m?.[1]?.trim() ?? command;
+  const m = /(?:^|;)\s*node\s+scripts\/ci-cp936-exit\.mjs\s+--\s+(?<inner>.*)$/.exec(
+    command.trim(),
+  );
+  return m?.groups?.inner?.trim() ?? command;
 }
 
 /**

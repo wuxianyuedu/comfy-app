@@ -449,7 +449,7 @@ function collect() {
        *     整体跳过会让出口的消费点无从校验 —— 所以本批三条不走 `ui/` 豁免。 */
       const inUi = rel.startsWith("src/components/ui/");
       const inHooks = /\/hooks\//.test(rel);
-      const inLib = /^src\/(lib|server)\//.test(rel);
+      const inLib = /^src\/(?:lib|server)\//.test(rel);
       const text = fs.readFileSync(path.join(ROOT, rel), "utf8");
       for (const [id, rule] of Object.entries(RULES)) {
         if (isExemptFile(id, rel)) {
@@ -560,9 +560,9 @@ function main() {
   const tierBad = tierProblems();
   if (tierBad.length) {
     console.error(
-      `[ui-primitives] 判据分档自检失败（每条 rule id 必须恰好落在一档里）：\n  ${
-        tierBad.join("\n  ")
-        }\n  改法：在脚本的 RULE_TIERS 里给这条判据登记 CORE（基元层）或 SURFACE（业务面），` +
+      `[ui-primitives] 判据分档自检失败（每条 rule id 必须恰好落在一档里）：\n  ${tierBad.join(
+        "\n  ",
+      )}\n  改法：在脚本的 RULE_TIERS 里给这条判据登记 CORE（基元层）或 SURFACE（业务面），` +
         `\n  口径见文件头「分层」一节。`,
     );
     process.exit(1);
@@ -578,8 +578,9 @@ function main() {
     const gate = hardGateHits(now);
     if (gate.length) {
       console.error(
-        `[ui-primitives] 拒绝更新基线：硬闸判据未清零（${HARD_GATE_RULES.size} 条，全部须为 0）。\n  ${gate.join("\n  ")
-          }\n  改法：视图里不再写 \`::-webkit-scrollbar\` 外观（改用 globals.css 的 .custom-scrollbar / .soft-scrollbar）、` +
+        `[ui-primitives] 拒绝更新基线：硬闸判据未清零（${HARD_GATE_RULES.size} 条，全部须为 0）。\n  ${gate.join(
+          "\n  ",
+        )}\n  改法：视图里不再写 \`::-webkit-scrollbar\` 外观（改用 globals.css 的 .custom-scrollbar / .soft-scrollbar）、` +
           `不再自写剪贴板与 Blob 下载（改用 ~/lib/browser-io 的 copyText / downloadText / downloadJson）、` +
           `不再裸写 <img> / <video>（改用 ~/components/ui/media-thumbnail 的 MediaThumbnail）、` +
           `不再手写媒体拖拽源（改用 ~/components/ui/media-drag-source 的 useMediaDragSource）、` +
@@ -748,11 +749,10 @@ function main() {
         .filter((id) => HARD_GATE_RULES.has(id)),
     );
     console.log(
-      `[ui-primitives] 命中分档：${
-        TIER_ORDER.map((tier) => {
-          const ids = [...hitIds].filter((id) => tierOf(id) === tier);
-          return `${tier} ${ids.length ? ids.join("/") : "0"}`;
-        }).join(" · ")}`,
+      `[ui-primitives] 命中分档：${TIER_ORDER.map((tier) => {
+        const ids = [...hitIds].filter((id) => tierOf(id) === tier);
+        return `${tier} ${ids.length ? ids.join("/") : "0"}`;
+      }).join(" · ")}`,
     );
   }
 
@@ -809,10 +809,9 @@ function main() {
   }
 
   if (dropped.length) {
-    const msg =
-      `[ui-primitives] 检测到 ${dropped.length} 处下降，请收紧基线：\n  ${
-      dropped.join("\n  ")
-      }\n  执行 node scripts/check-ui-primitives.cjs --update`;
+    const msg = `[ui-primitives] 检测到 ${dropped.length} 处下降，请收紧基线：\n  ${dropped.join(
+      "\n  ",
+    )}\n  执行 node scripts/check-ui-primitives.cjs --update`;
     if (STRICT) {
       console.error(msg);
       process.exit(1);

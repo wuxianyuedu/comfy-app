@@ -860,61 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B4 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "scripts/check-type-assertion-executor.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-ui-customizations.cjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-ui-logic-separation.cjs", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-ui-primitives.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-void-floats.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-actionlint.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-autofix-duties.mjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-build-classify.mjs", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-console-encoding.mjs", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-cp936-exit.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-daily-bundle-escalation.mjs", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-env-probe.mjs", // 存量 6 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-gate-names.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-github-verdict-chain.mjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-github-verdict-read.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-image-identity.mjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-image-plan.mjs", // 存量 9 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-incremental-gates.mjs", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-log.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-mirror-failure-report.mjs", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-mirror-lfs-push.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-pr-failure-issue.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-run-tool.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-token-scopes.mjs", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-toolchain-browser-fetch.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-toolchain-browser-reach.mjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-toolchain-browser.mjs", // 存量 6 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-toolchain-pnpm.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-toolchain-python.mjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-toolchain-selfcheck.mjs", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ci-workspace-probe.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/db-backup-core.mjs", // 存量 8 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/db-push-core.mjs", // 存量 9 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/dev-drive-probe.mjs", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/doc-facts.cjs", // 存量 12 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/doc-toc.mjs", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/docs-api-input-closure.mjs", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/env-preflight.mjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/eslint-gate-canary.mjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/file-structure-rules.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/freshness-ledger.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/full-suite-run.mjs", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/gate-chain-scripts.cjs", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/gate-tier-summary.cjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/gates-which.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/heal-db.cjs", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/launcher-core/corepack.mjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/launcher-core/node-runner.mjs", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/launcher-core/port-reap.mjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/launcher-core/procs.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/lib-node-only-scan.mjs", // 存量 8 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/lockfile/lock-diff.mjs", // 存量 8 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/lockfile/render-lock-diff.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/merge-changelog-fragments.mjs", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/merged-side-loss-git.mjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
         "scripts/node-engines.mjs", // 存量 6 处 · 清账目标 B4 · 新代码不禁用
         "scripts/package-bin-entry.mjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
         "scripts/precommit-timing.mjs", // 存量 4 处 · 清账目标 B4 · 新代码不禁用

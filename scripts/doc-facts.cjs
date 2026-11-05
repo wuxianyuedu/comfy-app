@@ -83,11 +83,11 @@ function exists(p) {
   return fs.existsSync(path.join(ROOT, p));
 }
 function splitHostPort(url) {
-  const m = url.match(/\/\/([^:/]+):(\d+)/);
+  const m = url.match(/\/\/(?<host>[^:/]+):(?<port>\d+)/);
   if (!m) {
     throw new Error(`无法从 URL 提取 host:port: ${url}`);
   }
-  return { host: m[1], port: Number(m[2]) };
+  return { host: m.groups?.host ?? "", port: Number(m.groups?.port) };
 }
 
 // ---- 权威值提取（运行时从源码/配置动态读取） ----
@@ -105,10 +105,10 @@ function extractDevHostPort() {
       .split(/\r?\n/)
       .filter((l) => !/^\s*#/.test(l))
       .join("\n")
-      .match(/COMFYAPP_PORT\s*=\s*["']?([0-9]+)["']?/);
-    if (m && Number(m[1]) !== port) {
+      .match(/COMFYAPP_PORT\s*=\s*["']?(?<port>[0-9]+)["']?/);
+    if (m && Number(m.groups?.port) !== port) {
       throw new Error(
-        `端口权威源冲突：tauri.conf.json devUrl=${port} 但 .env.example COMFYAPP_PORT=${m[1]}`,
+        `端口权威源冲突：tauri.conf.json devUrl=${port} 但 .env.example COMFYAPP_PORT=${m.groups?.port}`,
       );
     }
   }
@@ -163,11 +163,11 @@ function extractDerivedAppPort() {
  *  「壳的产物名没了」。 */
 function extractShellAppExe() {
   const src = readText("scripts/launcher-core/shell-ops.mjs");
-  const m = src.match(/"(src-tauri\/target\/release\/([^"/]+))\.exe"/);
+  const m = src.match(/"(?:src-tauri\/target\/release\/(?<file>[^"/]+))\.exe"/);
   if (!m) {
     throw new Error("无法从 scripts/launcher-core/shell-ops.mjs 的 defaultShellExe 提取壳文件名");
   }
-  return `${m[2]}.exe`;
+  return `${m.groups?.file}.exe`;
 }
 function extractSplash() {
   const conf = readJson("src-tauri/tauri.conf.json");
@@ -179,31 +179,31 @@ function extractSplash() {
 function extractRegistryPort() {
   // shadcn 团队 Registry 服务端口，权威源 tools/scripts/start-shadcn-registry.ps1 的 $Port = <n>。
   const t = readText("tools/scripts/start-shadcn-registry.ps1");
-  const m = t.match(/\$Port\s*=\s*(\d+)/);
+  const m = t.match(/\$Port\s*=\s*(?<port>\d+)/);
   if (!m) {
     throw new Error("无法从 tools/scripts/start-shadcn-registry.ps1 提取 Port");
   }
-  return m[1];
+  return m.groups?.port;
 }
 function extractRegistryDir() {
   // shadcn 团队 Registry 的**内容目录**（在仓库外，本机自建），权威源同上脚本的
   // $RegistryDir。它此前没有事实登记：文档里直接抄了开发机的绝对路径
   // `D:/dev/Comfy-APP-T3/registry`，换机器 / 换用户即失真（ISSUE #1926）。
   const t = readText("tools/scripts/start-shadcn-registry.ps1");
-  const m = t.match(/\$RegistryDir\s*=\s*"([^"]+)"/);
+  const m = t.match(/\$RegistryDir\s*=\s*"(?<dir>[^"]+)"/);
   if (!m) {
     throw new Error("无法从 tools/scripts/start-shadcn-registry.ps1 提取 RegistryDir");
   }
-  return m[1];
+  return m.groups?.dir;
 }
 function extractMcpHttpPort() {
   // Workshop MCP HTTP 服务端口，权威源 tools/workshop-mcp-http.ts 的 MCP_HTTP_PORT ?? 4300。
   const t = readText("tools/workshop-mcp-http.ts");
-  const m = t.match(/MCP_HTTP_PORT\s*\?\?\s*(\d+)/);
+  const m = t.match(/MCP_HTTP_PORT\s*\?\?\s*(?<port>\d+)/);
   if (!m) {
     throw new Error("无法从 tools/workshop-mcp-http.ts 提取 MCP_HTTP_PORT 默认值");
   }
-  return m[1];
+  return m.groups?.port;
 }
 /**
  * 产品版本号：权威源是 `package.json` 的 `version`（D7 / 规范 launch-and-build §7.1.1）。
@@ -214,11 +214,11 @@ function extractMcpHttpPort() {
  */
 function extractAppVersion() {
   const t = readText("package.json");
-  const m = /^\s*"version"\s*:\s*"([^"]*)"/m.exec(t);
+  const m = /^\s*"version"\s*:\s*"(?<version>[^"]*)"/m.exec(t);
   if (!m) {
     throw new Error("无法从 package.json 提取 version");
   }
-  return m[1];
+  return m.groups?.version;
 }
 
 function extractComfyUIPort() {
@@ -228,12 +228,12 @@ function extractComfyUIPort() {
    * 因为设置页视图也要读它，而 app-settings.ts 顶层 import fs 会让浏览器图
    * 整页 500）。app-settings.ts 只再导出同名，因此这里必须读**定义处**。 */
   const t = readText("src/lib/endpoints.ts");
-  const m = t.match(/export\s+const\s+COMFYUI_DEFAULT_PORT\s*=\s*(\d+)/);
+  const m = t.match(/export\s+const\s+COMFYUI_DEFAULT_PORT\s*=\s*(?<port>\d+)/);
   if (!m) {
     throw new Error("无法从 src/lib/endpoints.ts 的 COMFYUI_DEFAULT_PORT 提取 ComfyUI 默认端口");
   }
 
-  return m[1];
+  return m.groups?.port;
 }
 
 // --------------------------------------------------------------------------
@@ -270,8 +270,8 @@ function extractAsciiOnlyModules() {
     // 因此 `[^`]+?` 天然不会把它吃进来 —— 不需要按「（」二次切分。
     const cell = line.split("|")[2] ?? "";
     const paths = [
-      ...cell.matchAll(/`((?:src|scripts|e2e|tests)\/[^`]+?\.(?:ts|tsx|mjs|cjs))`/g),
-    ].map((m) => m[1]);
+      ...cell.matchAll(/`(?<path>(?:src|scripts|e2e|tests)\/[^`]+?\.(?:ts|tsx|mjs|cjs))`/g),
+    ].map((m) => m.groups?.path ?? "");
     // 名单可以为**空**（棘轮基线归零是这条规则的目标形态），但「读不到登记行」
     // 必须报错：一个永远返回空数组的解析器会让所有断言全绿（§12.16 的同款教训）。
     // 判据因此落在「登记行在不在」上，而不是「解析出几项」。
@@ -306,7 +306,7 @@ function extractResolveProbes() {
     // 取「探针」那一格（第 2 列），逐项提取反引号包裹的包名。括号里的说明
     // （「跑门禁时无论如何都会解析到」这类）写在反引号之外，天然不被吃进来。
     const cell = line.split("|")[2] ?? "";
-    const names = [...cell.matchAll(/`([^`]+?)`/g)].map((m) => m[1]);
+    const names = [...cell.matchAll(/`(?<name>[^`]+?)`/g)].map((m) => m.groups?.name ?? "");
     // 与 §1.5 同一条口径：名单可以为空不是目标形态，但**读不到登记行**必须报错 ——
     // 一个永远返回空数组的解析器会让「探针清单没人守」这件事静默通过。
     if (names.length) {

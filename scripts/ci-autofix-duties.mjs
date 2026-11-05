@@ -127,9 +127,10 @@ export function parseStageScripts(text) {
   let current = null;
 
   for (const raw of text.split("\n")) {
-    const item = /^ {2}-\s+name:\s*(\S.*?)\s*$/.exec(raw);
-    if (item?.[1] !== undefined) {
-      current = item[1];
+    const item = /^ {2}-\s+name:\s*(?<name>\S.*?)\s*$/.exec(raw);
+    const itemName = item?.groups?.name;
+    if (itemName !== undefined) {
+      current = itemName;
       continue;
     }
     // 同级或更浅的键 = 这一项结束了（`env:` / 顶层 `master:` 等）。
@@ -140,9 +141,10 @@ export function parseStageScripts(text) {
       continue;
     }
 
-    const script = /^ {4}script:\s*(\S.*)$/.exec(raw);
-    if (script?.[1] !== undefined) {
-      out.set(current, script[1]);
+    const script = /^ {4}script:\s*(?<script>\S.*)$/.exec(raw);
+    const scriptText = script?.groups?.script;
+    if (scriptText !== undefined) {
+      out.set(current, scriptText);
     }
   }
   return out;

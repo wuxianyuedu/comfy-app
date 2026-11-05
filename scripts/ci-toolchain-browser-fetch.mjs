@@ -400,7 +400,7 @@ export function fetchRangeToFile(url, dest, offset, size, timeoutMs, { probeOnly
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
   /* 子进程把结论打成一行 `OK <bytes> <total>` / `ERR <原因>` —— 解析在这里、
    * 取证在网上那一次。解析不到（被砍 / 崩了）当成「这一片没成」。 */
-  const line = out.split("\n").find((l) => /^(OK|ERR)\b/.test(l.trim()));
+  const line = out.split("\n").find((l) => /^(?:OK|ERR)\b/.test(l.trim()));
   if (!line) {
     rmSync(scratch, { force: true });
     return { bytes: -1, total: null, out: out || "（子进程没有输出）" };

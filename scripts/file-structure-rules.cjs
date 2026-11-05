@@ -14,7 +14,7 @@
  */
 
 /** R7 禁用的 Windows 入口后缀(ISSUE #23 / launch-and-build.md §8)。 */
-const FORBIDDEN_SCRIPT_EXT = /\.(bat|cmd|vbs)$/i;
+const FORBIDDEN_SCRIPT_EXT = /\.(?:bat|cmd|vbs)$/i;
 /** R8 需 UTF-8 BOM 的目录:入口与逻辑脚本都在这里,含中文的是绝大多数。 */
 const BOM_REQUIRED_DIRS = ["scripts/", "tools/"];
 /** R8 只校验含非 ASCII 字符的 .ps1 —— 纯 ASCII 脚本没有解码歧义,不强求 BOM。 */

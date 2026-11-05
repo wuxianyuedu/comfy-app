@@ -366,14 +366,18 @@ export function playwrightInstallHints(out, facts = {}) {
   }
   const observed = observedTimeoutMs(text) ?? facts.timeoutMs ?? null;
   const host = stringOrNull(facts.host);
-  const urls = [...new Set([...text.matchAll(/Request to (\S+?) timed out/g)].map((m) => m[1]))];
+  const urls = [
+    ...new Set(
+      [...text.matchAll(/Request to (?<url>\S+?) timed out/g)].map((m) => m.groups?.url ?? ""),
+    ),
+  ];
   /* `Downloading … from <url>` 里给的是**真资源 URL**（根 + `builds/cft/<版本>/<档>/<包>`），
    * 而配置面给的是**根** —— 拿前者去和 `PLAYWRIGHT_DOWNLOAD_HOST` 比逐字比对恒不相等
    * （这个形态真的错过一次：话术于是把「配了根、且正是它失败」读成了「还没配」）。 */
   const triedRoots = [
     ...new Set(
-      [...text.matchAll(/Downloading ([^\n]+?) from (\S+)/g)]
-        .map((m) => downloadRootOf(m[2]))
+      [...text.matchAll(/Downloading (?:[^\n]+?) from (?<root>\S+)/g)]
+        .map((m) => downloadRootOf(m.groups?.root ?? ""))
         .filter((h) => typeof h === "string"),
     ),
   ];
@@ -520,11 +524,11 @@ export function playwrightInstallHintFacts(env = {}) {
  */
 function observedTimeoutMs(text) {
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- text 是子进程原始输出，类型按 string 标窄
-  const m = /timed out after (\d+)ms/.exec(text ?? "");
+  const m = /timed out after (?<ms>\d+)ms/.exec(text ?? "");
   if (!m) {
     return null;
   }
-  const n = Number(m[1]);
+  const n = Number(m.groups?.ms);
   return Number.isFinite(n) ? n : null;
 }
 
@@ -539,7 +543,7 @@ function observedTimeoutMs(text) {
  */
 function isPlaywrightFamilyRoot(root) {
   try {
-    return /(^|\.)(playwright\.dev|prss\.microsoft\.com)$/.test(new URL(root).hostname);
+    return /(?:^|\.)(?:playwright\.dev|prss\.microsoft\.com)$/.test(new URL(root).hostname);
   } catch {
     /* 不是一个能解析的 URL（Playwright 换了话术 / 输出被截断）⇒ 不认这一档，
      * 退到通用出口。**猜错方向比不猜更贵**。 */

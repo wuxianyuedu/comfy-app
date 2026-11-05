@@ -327,8 +327,10 @@ export function probeDevDrive(volume, platform) {
   if (/access is denied|拒绝访问/i.test(text)) {
     return { ...empty, label: "未知（需要管理员才能查）" };
   }
-  const filterMatch = text.match(/filters currently attached[^\n]*:\s*\r?\n\s*([^\r\n]+)/i);
-  const filters = (filterMatch?.[1] ?? "")
+  const filterMatch = text.match(
+    /filters currently attached[^\n]*:\s*\r?\n\s*(?<filters>[^\r\n]+)/i,
+  );
+  const filters = (filterMatch?.groups?.filters ?? "")
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
@@ -356,7 +358,9 @@ function physicalClusters(file) {
   if (!result.ok) {
     return null;
   }
-  const matches = [...result.stdout.matchAll(/LCN:\s*(0x[0-9a-f]+)/g)].map((m) => m[1]);
+  const matches = [...result.stdout.matchAll(/LCN:\s*(?<lcn>0x[0-9a-f]+)/g)].map(
+    (m) => m.groups?.lcn ?? "",
+  );
   return matches.length > 0 ? matches.join(",") : null;
 }
 
@@ -450,10 +454,9 @@ export function probePnpmStore(platform) {
   let importMethod = null;
   try {
     const workspaceConfig = fs.readFileSync(path.join(ROOT, "pnpm-workspace.yaml"), "utf8");
-    const matched = workspaceConfig.match(/^\s*package-import-method:\s*(\S+)/m);
+    const matched = workspaceConfig.match(/^\s*package-import-method:\s*(?<method>\S+)/m);
     if (matched) {
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- matched[1] 是必需捕获组，noUncheckedIndexedAccess 下仍是 string | undefined
-      importMethod = matched[1] ?? null;
+      importMethod = matched.groups?.method ?? null;
     }
   } catch {
     importMethod = null;

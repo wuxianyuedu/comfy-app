@@ -173,14 +173,13 @@ export const PYTHON_MIN_TEXT = `${PYTHON_MIN_VERSION[0]}.${PYTHON_MIN_VERSION[1]
 export function parseVersionTriple(text) {
   /* 大版本可以单写（`3` / `Python 3`）—— 缺的那几段按 0 算，与
    * `ci-toolchain-selfcheck.mjs` 的 `cmpVersion` 同口径。 */
-  const m = /(\d+)(?:\.(\d+))?(?:\.(\d+))?/.exec(String(text ?? ""));
+  const m = /(?<major>\d+)(?:\.(?<minor>\d+))?(?:\.(?<patch>\d+))?/.exec(String(text ?? ""));
   if (!m) {
     return null;
   }
-  /* `m[2]` / `m[3]` 是可缺分组（`(?:…)?`）—— 它们的 `undefined` 是真的，
-   * 这一行的 `?? 0` 就是「缺的那几段按 0 算」那条口径。规则不建模正则分组，按 §5.10 的 C 格留注释。 */
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 可选分组在类型上是 string|undefined，规则不建模
-  return [Number(m[1]), Number(m[2] ?? 0), Number(m[3] ?? 0)];
+  /* `minor` / `patch` 是可缺分组 —— 它们的 `undefined` 是真的，
+   * 这一行的 `?? 0` 就是「缺的那几段按 0 算」那条口径。 */
+  return [Number(m.groups?.major ?? 0), Number(m.groups?.minor ?? 0), Number(m.groups?.patch ?? 0)];
 }
 
 /**
@@ -253,15 +252,15 @@ export function stageBlockIn(text, name) {
    * （人改的就是那一行），所以「这一步会拿到哪个下载根」在停用期间同样要答得出。
    * ⚠️ 这与 `tests/no-platform-ci-config.test.ts` 的 `stageBlock()` **同一口径** ——
    * 那份 `.ts` 侧的停用读取在 `commentedStageBlock()`（下面这一支是它的对等物）。 */
-  const live = /^ {2}-\s+name:\s*(\S.*?)\s*$/;
-  const commented = /^#\s+-\s+name:\s*(\S.*?)\s*$/;
+  const live = /^ {2}-\s+name:\s*(?<name>\S.*?)\s*$/;
+  const commented = /^#\s+-\s+name:\s*(?<name>\S.*?)\s*$/;
   let start = -1;
   /** @type {(l: string) => string} */
   let strip = (l) => l;
   for (let i = 0; i < lines.length; i += 1) {
     const raw = lines[i] ?? "";
     const item = live.exec(raw);
-    if (item?.[1] === name) {
+    if (item?.groups?.name === name) {
       start = i;
       break;
     }
@@ -269,7 +268,7 @@ export function stageBlockIn(text, name) {
   if (start < 0) {
     for (let i = 0; i < lines.length; i += 1) {
       const item = commented.exec(lines[i] ?? "");
-      if (item?.[1] === name) {
+      if (item?.groups?.name === name) {
         start = i;
         strip = (l) => l.replace(/^#\s?/, "");
         break;
@@ -321,8 +320,8 @@ export function stagesWithImage(text) {
   /** @type {string[]} */
   const out = [];
   for (let i = 0; i < lines.length; i += 1) {
-    const item = /^ {2}-\s+name:\s*(\S.*?)\s*$/.exec(lines[i] ?? "");
-    const name = item?.[1];
+    const item = /^ {2}-\s+name:\s*(?<name>\S.*?)\s*$/.exec(lines[i] ?? "");
+    const name = item?.groups?.name;
     if (name === undefined) {
       continue;
     }

@@ -351,7 +351,7 @@ export function isRetryableRequestFailure(error) {
     /fetch failed|network|socket|econnreset|econnrefused|enotfound|etimedout|eai_again/i.test(
       text,
     ) ||
-    /^(ENOTFOUND|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN)$/i.test(code)
+    /^(?:ENOTFOUND|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN)$/i.test(code)
   );
 }
 
@@ -770,10 +770,7 @@ export async function runVerdict(io) {
          * 任一证据明确「不会有 run」⇒ 当场收工；判不出就走 5m 短窗口（#3153）。 */
         if (chain === null) {
           // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
-          chain = await probeDispatchChain(
-            (url, label) => requestJson(reqIo, url, label),
-            ctx,
-          );
+          chain = await probeDispatchChain((url, label) => requestJson(reqIo, url, label), ctx);
           log(`[verdict] 零条 run 的结构判定：${chain.note}`);
           if (chain.structural !== "") {
             return reportNoRunStructural(log, chain);
