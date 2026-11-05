@@ -51,11 +51,7 @@ describe("跨块的多字节字符不许被劈成两半（ISSUE #1959 的乱码�
       for (let b = a; b <= bytes.length; b++) {
         let carry: Uint8Array = new Uint8Array(0);
         let out = "";
-        for (const seg of [
-          bytes.subarray(0, a),
-          bytes.subarray(a, b),
-          bytes.subarray(b),
-        ]) {
+        for (const seg of [bytes.subarray(0, a), bytes.subarray(a, b), bytes.subarray(b)]) {
           const r = decodeIncremental(carry, seg);
           out += r.text;
           carry = r.carry;

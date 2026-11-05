@@ -62,9 +62,10 @@ describe("readNaturalSize", () => {
   });
 
   it("同时有两组读数时优先 natural*（图片宿主上 video* 恒为 0）", () => {
-    expect(
-      readNaturalSize({ naturalWidth: 10, naturalHeight: 5, videoWidth: 99 }),
-    ).toEqual({ width: 10, height: 5 });
+    expect(readNaturalSize({ naturalWidth: 10, naturalHeight: 5, videoWidth: 99 })).toEqual({
+      width: 10,
+      height: 5,
+    });
   });
 });
 

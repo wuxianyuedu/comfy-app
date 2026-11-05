@@ -27,15 +27,13 @@ describe("guessMediaKind", () => {
 
 describe("extractBase64DataUrl", () => {
   it("已带 data: 前缀原样返回", () => {
-    expect(
-      extractBase64DataUrl({ b64_json: "data:image/png;base64,AAA" }),
-    ).toBe("data:image/png;base64,AAA");
+    expect(extractBase64DataUrl({ b64_json: "data:image/png;base64,AAA" })).toBe(
+      "data:image/png;base64,AAA",
+    );
   });
 
   it("裸 base64 包裹为默认 mime", () => {
-    expect(extractBase64DataUrl({ base64: "AAA" })).toBe(
-      "data:image/png;base64,AAA",
-    );
+    expect(extractBase64DataUrl({ base64: "AAA" })).toBe("data:image/png;base64,AAA");
   });
 
   it("无字符串可提取 → null", () => {
@@ -53,15 +51,13 @@ describe("extractSavedOutputs", () => {
   });
 
   it("单字符串 → 单元素数组", () => {
-    expect(extractSavedOutputs("/a.png")).toEqual([
-      { url: "/a.png", kind: "image" },
-    ]);
+    expect(extractSavedOutputs("/a.png")).toEqual([{ url: "/a.png", kind: "image" }]);
   });
 
   it("对象条目取 localPath/url 与 mediaType", () => {
-    expect(
-      extractSavedOutputs([{ localPath: "/c.jpg", mediaType: "image" }]),
-    ).toEqual([{ url: "/c.jpg", kind: "image" }]);
+    expect(extractSavedOutputs([{ localPath: "/c.jpg", mediaType: "image" }])).toEqual([
+      { url: "/c.jpg", kind: "image" },
+    ]);
   });
 
   it("无 localPath 的对象跳过", () => {
@@ -80,9 +76,9 @@ describe("resolveImagesGenerationsEndpoint", () => {
       "https://x.com/v1/images/generations",
     );
     // 已含完整动作段 → 原样（回归：曾被再拼一次打到 /v1/images/images/generations）
-    expect(
-      resolveImagesGenerationsEndpoint("https://x.com/v1/images/generations"),
-    ).toBe("https://x.com/v1/images/generations");
+    expect(resolveImagesGenerationsEndpoint("https://x.com/v1/images/generations")).toBe(
+      "https://x.com/v1/images/generations",
+    );
     // 尾部斜杠归一
     expect(resolveImagesGenerationsEndpoint("https://x.com/v1/")).toBe(
       "https://x.com/v1/images/generations",
