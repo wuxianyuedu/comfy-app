@@ -178,19 +178,19 @@ export function siblingVariantInstalled(nodeModules, linkText) {
    * （`..\..\..\@libsql+darwin-arm64@0.5.29\node_modules\@libsql\darwin-arm64`），
    * `.pnpm` 那层在**解析后的绝对路径**里、不在文本里 —— 照着文本找 `.pnpm`
    * 一条都匹配不到，于是每条变体死链都被当成缺件（实测：判据改完仍 exit 1）。 */
-  const m = /(?:^|[\\/])([^\\/]+)[\\/]node_modules[\\/](.+)$/.exec(linkText);
+  const m = /(?:^|[\\/])(?<pnpmEntry>[^\\/]+)[\\/]node_modules[\\/](?<rest>.+)$/.exec(linkText);
   if (!m) {
     return false;
   }
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则捕获组在部分匹配形态下运行时为 undefined
-  const x = m[1] ?? "";
+  const x = m.groups?.pnpmEntry ?? "";
   const plus = x.lastIndexOf("+");
   if (plus <= 0) {
     return false;
   }
   const base = x.slice(0, plus);
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则捕获组在部分匹配形态下运行时为 undefined
-  const rest = (m[2] ?? "").split(/[\\/]/).filter(Boolean);
+  const rest = (m.groups?.rest ?? "").split(/[\\/]/).filter(Boolean);
   if (rest.length === 0) {
     return false;
   }
@@ -344,7 +344,8 @@ export function runLinkRepair(nodeModules, deps = {}) {
   const variantDead = broken.filter((b) => b.variantDead);
   const lines = [
     `[standalone-links] 扫描 ${scanned} 条符号链接${
-      repaired > 0 ? `，重建其中不可跟随的 ${repaired} 条` : "，全部可跟随"}`,
+      repaired > 0 ? `，重建其中不可跟随的 ${repaired} 条` : "，全部可跟随"
+    }`,
   ];
   if (variantDead.length > 0) {
     lines.push(

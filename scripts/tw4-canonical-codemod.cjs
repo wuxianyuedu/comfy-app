@@ -15,26 +15,26 @@ for (const file of process.argv.slice(2)) {
   const before = fs.readFileSync(file, "utf8");
   let count = 0;
   const after = before
-    .replaceAll(/\/\[0\.(\d+)\]/g, (_, digits) => {
+    .replaceAll(/\/\[0\.(?<digits>\d+)\]/g, (_, digits) => {
       count++;
       return `/${String(Number.parseFloat(`0.${digits}`) * 100)}`;
     })
-    .replaceAll(/bg-gradient-to-([a-z]+)/g, (_, dir) => {
+    .replaceAll(/bg-gradient-to-(?<dir>[a-z]+)/g, (_, dir) => {
       count++;
       return `bg-linear-to-${dir}`;
     })
-    .replaceAll(/-\[var\(--([a-zA-Z0-9-]+)\)\]/g, (_, v) => {
+    .replaceAll(/-\[var\(--(?<varName>[a-zA-Z0-9-]+)\)\]/g, (_, v) => {
       count++;
       return `-(--${v})`;
     })
     .replaceAll(
-      /(^|[\s"'`])(-[a-z][a-z0-9]*)-\[([0-9][^\]]*)\]/g,
+      /(?<pre>^|[\s"'`])(?<util>-[a-z][a-z0-9]*)-\[(?<value>[0-9][^\]]*)\]/g,
       (_m, pre, util, value) => {
         count++;
         return `${pre}${util.slice(1)}-[-${value}]`;
       },
     )
-    .replaceAll(/\bz-\[(\d+)\]/g, (_, n) => {
+    .replaceAll(/\bz-\[(?<z>\d+)\]/g, (_, n) => {
       count++;
       return `z-${n}`;
     })

@@ -61,7 +61,7 @@ const explicit = argv.filter((a) => !a.startsWith("--"));
  * **注释之外**扫描（注释里用反引号引的示例与 className 同形，不剥会让 `--check`
  * 报出不存在的候选、`--write` 去改注释）。下面这条正则只剩一个用途：`.css` / `.snap`
  * 不是 JS，没有注释语法可剥，直接按字面量粗取。 */
-const LITERAL_IN_NON_JS = /(["'`])((?:\\[\s\S]|(?!\1)[^\\])*?)\1/g;
+const LITERAL_IN_NON_JS = /(?<quote>["'`])(?<content>(?:\\[\s\S]|(?!\k<quote>)[^\\])*?)\k<quote>/g;
 /** 粗筛：像类名的 token 才值得问引擎（省掉把散文喂进去）。
  *
  *  注意别把字符类写窄：早先写成「尾部只允许 `! / [ ] ( ) . , % # -`」时，
@@ -164,7 +164,7 @@ function* walk(dir) {
  *  所以 `--write` 默认不碰测试文件（报告里单列），确认过要同步再加 `--with-tests`。
  *  @param {string} file
  *  @returns {boolean} */
-const isTestFile = (file) => /\.(test|spec)\.tsx?$|__tests__[\\/]/.test(file);
+const isTestFile = (file) => /\.(?:test|spec)\.tsx?$|__tests__[\\/]/.test(file);
 
 const files = explicit.length > 0 ? explicit.map((f) => path.resolve(ROOT, f)) : [...walk(SRC)];
 
@@ -185,7 +185,7 @@ for (const file of files) {
     ? stringLiterals(read(file))
     : [...read(file).matchAll(LITERAL_IN_NON_JS)].map((m) => ({
         // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则捕获组在不参与匹配时运行时为 undefined
-        content: m[2] ?? "",
+        content: m.groups?.content ?? "",
       }));
   for (const match of literals) {
     for (const token of match.content.split(/\s+/)) {
@@ -266,7 +266,7 @@ if (shouldWrite) {
     const before = read(file);
     /* 走共享内核：注释里的示例不会被改写（`--write` 只动真会被应用的类名）。 */
     const { text: after, changed } = rewriteLiterals(before, (content) => {
-      const pieces = content.split(/(\s+)/);
+      const pieces = content.split(/(?<separator>\s+)/);
       let hit = false;
       for (let i = 0; i < pieces.length; i += 2) {
         /* 取出来再判：`pieces[i]` 在 noUncheckedIndexedAccess 下是 `string | undefined`，

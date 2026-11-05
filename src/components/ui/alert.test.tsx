@@ -32,8 +32,8 @@ describe("Alert", () => {
     "variant=%s 的边框 / 底色走语义 token",
     (variant) => {
       const cls = alertOf({ variant }).className;
-      expect(cls).toMatch(/\bborder-(warning|info|success|destructive)\/30\b/);
-      expect(cls).toMatch(/\bbg-(warning|info|success|destructive)\/10\b/);
+      expect(cls).toMatch(/\bborder-(?:warning|info|success|destructive)\/30\b/);
+      expect(cls).toMatch(/\bbg-(?:warning|info|success|destructive)\/10\b/);
     },
   );
 
@@ -47,7 +47,7 @@ describe("Alert", () => {
     /* SAFETY: 类型断言已复核 */
     for (const variant of ["warning", "info", "success", "danger"] as const) {
       expect(alertOf({ variant }).className).toMatch(
-        /\btext-(warning|info|success|danger)-strong\b/,
+        /\btext-(?:warning|info|success|danger)-strong\b/,
       );
       cleanup();
     }

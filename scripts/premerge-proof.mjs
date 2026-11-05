@@ -139,7 +139,7 @@ function normalizeRemoteUrl(raw) {
   return text
     .replace(/\/+$/, "")
     .replace(/\.git$/i, "")
-    .replace(/^(\w+):\/\//, (_m, scheme) => `${String(scheme).toLowerCase()}://`);
+    .replace(/^(?<scheme>\w+):\/\//, (_m, scheme) => `${String(scheme).toLowerCase()}://`);
 }
 
 /**
@@ -288,7 +288,8 @@ export function readRevisions(gitDir, cwd = ROOT) {
   return {
     headSha: run(["rev-parse", "HEAD"]),
     // `run()` 失败时给空串，这里要的是 null：`||` 把两种空值并成同一个「拿不到」。
-    upstreamSha: (upstreamRef ? run(["rev-parse", "--verify", "--quiet", upstreamRef]) : "") || null,
+    upstreamSha:
+      (upstreamRef ? run(["rev-parse", "--verify", "--quiet", upstreamRef]) : "") || null,
   };
 }
 
@@ -463,7 +464,9 @@ function readRemoteUrls(cwd) {
   /** @type {string[]} */
   const urls = [];
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程起不来时 stdout 实测为 undefined（@types/node 声明偏窄）
-  for (const name of String(names.stdout ?? "").split("\n").map((s) => s.trim())) {
+  for (const name of String(names.stdout ?? "")
+    .split("\n")
+    .map((s) => s.trim())) {
     if (!name) {
       continue;
     }

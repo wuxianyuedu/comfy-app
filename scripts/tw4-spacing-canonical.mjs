@@ -50,9 +50,9 @@ const targets = argv.filter((arg) => !arg.startsWith("--"));
 const BASE_SPACING_PX = 0.25 * 16;
 
 /** 候选形态：`(变体:)*工具-[值]` + 可选的 important 后缀。 */
-const TOKEN = /^((?:[a-zA-Z][\w-]*:)*[a-zA-Z][\w-]*-)\[([^\]\s]+)\](!?)$/;
+const TOKEN = /^(?<base>(?:[a-zA-Z][\w-]*:)*[a-zA-Z][\w-]*-)\[(?<value>[^\]\s]+)\](?<bang>!?)$/;
 /** 只处理 px 任意值（rem / % / calc 不做换算：它们的等价性另有条件）。 */
-const PX_VALUE = /^(\d+(?:\.\d+)?)px$/;
+const PX_VALUE = /^(?<value>\d+(?:\.\d+)?)px$/;
 /* 字符串字面量的取法只有一处：`tw4-scan-core.mjs` 的 `stringLiterals()` ——
  * 它先在**注释之外**扫描。注释里用反引号引的示例（`` `min-h-[22px]` ``）与真的
  * className 同形，不剥会让 `--check` 报出不存在的候选、`--write` 去改注释里的示例
@@ -114,12 +114,14 @@ function canonicalize(token) {
   /* 三个捕获组都给了默认值：`TOKEN` 里它们都是必选的，但在 `noUncheckedIndexedAccess`
    * 下解构出来仍是 `string | undefined`，而这一串值要进 `PX_VALUE.exec(…)`、`Number(…)`
    * 与拼 `to` 的那个模板串 —— 留 undefined 进去就是往候选里写一串 "undefined"。 */
-  const [, base = "", value = "", bang = ""] = match;
+  const base = match.groups?.base ?? "";
+  const value = match.groups?.value ?? "";
+  const bang = match.groups?.bang ?? "";
   const px = PX_VALUE.exec(value);
   if (!px) {
     return null;
   }
-  const k = Number(px[1]) / BASE_SPACING_PX;
+  const k = Number(px.groups?.value) / BASE_SPACING_PX;
   if (!Number.isFinite(k) || k <= 0) {
     return null;
   }
@@ -141,8 +143,8 @@ function canonicalize(token) {
  *
  *  只认**数字**值（与 P80 判据同口径）。`w-full h-full` 这类关键字值不合并：
  *  它不是本次要修的东西（IDE 不提示），做进去等于顺手发起另一场 size 化治理。 */
-const W_TOKEN = /^w-(\d+(?:\.\d+)?!?)$/;
-const H_TOKEN = /^h-(\d+(?:\.\d+)?!?)$/;
+const W_TOKEN = /^w-(?<value>\d+(?:\.\d+)?!?)$/;
+const H_TOKEN = /^h-(?<value>\d+(?:\.\d+)?!?)$/;
 
 /**
  * 改写一段字符串字面量的内容（按空白切 token，天然按边界匹配）。
@@ -153,7 +155,7 @@ const H_TOKEN = /^h-(\d+(?:\.\d+)?!?)$/;
  * @param {string} content
  * @param {Change[]} changes @returns {string} */
 function rewriteStringContent(content, changes) {
-  const pieces = content.split(/(\s+)/);
+  const pieces = content.split(/(?<separator>\s+)/);
   for (let i = 0; i < pieces.length; i += 2) {
     const piece = pieces[i];
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- 守卫为 noUncheckedIndexedAccess 收窄服务（删掉 tsc 红）
@@ -180,11 +182,11 @@ function rewriteStringContent(content, changes) {
     }
     const w = W_TOKEN.exec(piece);
     if (w) {
-      wSlots.set(w[1], i);
+      wSlots.set(w.groups?.value ?? "", i);
     }
     const h = H_TOKEN.exec(piece);
     if (h) {
-      hSlots.set(h[1], i);
+      hSlots.set(h.groups?.value ?? "", i);
     }
   }
   let merged = false;

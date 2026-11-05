@@ -178,11 +178,12 @@ function readDeclaredTarget(shimPath) {
   } catch {
     return null;
   }
-  const m = /^# cmd-shim-target=(\S.*)$/m.exec(text);
-  if (m?.[1] === undefined) {
+  const m = /^# cmd-shim-target=(?<target>\S.*)$/m.exec(text);
+  const rawTarget = m?.groups?.target;
+  if (rawTarget === undefined) {
     return null;
   }
-  const target = path.resolve(m[1].trim());
+  const target = path.resolve(rawTarget.trim());
   return fs.existsSync(target) ? target : null;
 }
 
@@ -222,7 +223,7 @@ function readShimTarget(shimPath) {
     if (!isCmd && !isSh) {
       continue;
     }
-    const rel = isCmd ? token.split("%~dp0").pop() : token.replace(/^\$basedir(_win)?/, "");
+    const rel = isCmd ? token.split("%~dp0").pop() : token.replace(/^\$basedir(?:_win)?/, "");
     if (rel === undefined || rel === "") {
       continue;
     }

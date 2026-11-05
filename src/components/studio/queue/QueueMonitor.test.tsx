@@ -81,7 +81,7 @@ describe("QueueMonitor", () => {
       }),
     );
     render(<QueueMonitor onOpenComfyui={vi.fn()} />);
-    const lines = screen.getAllByText(/^工作流 (early|late)$/);
+    const lines = screen.getAllByText(/^工作流 (?:early|late)$/);
     expect(lines.map((el) => el.textContent)).toEqual(["工作流 early", "工作流 late"]);
     expect(screen.getByText("第 1 位")).toBeInTheDocument();
     expect(screen.getByText("第 2 位")).toBeInTheDocument();

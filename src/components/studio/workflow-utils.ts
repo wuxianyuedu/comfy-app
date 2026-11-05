@@ -69,9 +69,9 @@ export function extractNoteTitle(text: string, fallback?: string): string {
   }
   const lines = text.split(/\r?\n/);
   for (const line of lines) {
-    const match = /^#{1,3}\s+(.+?)\s*$/.exec(line);
+    const match = /^#{1,3}\s+(?<heading>.+?)\s*$/.exec(line);
     if (match) {
-      return match[1]!;
+      return match.groups?.heading ?? "";
     }
   }
   for (const line of lines) {

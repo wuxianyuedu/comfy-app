@@ -86,14 +86,14 @@ export function junitExecutedCount(xml) {
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上行：外部数据，string 只是声明
   for (const m of String(xml ?? "").matchAll(/<testsuite\b[^>]*>/g)) {
     const tag = m[0];
-    const t = /tests="(\d+)"/.exec(tag);
+    const t = /tests="(?<count>\d+)"/.exec(tag);
     if (!t) {
       continue;
     }
     saw = true;
-    const s = /skipped="(\d+)"/.exec(tag);
-    tests += Number(t[1]);
-    skipped += s ? Number(s[1]) : 0;
+    const s = /skipped="(?<count>\d+)"/.exec(tag);
+    tests += Number(t.groups?.count);
+    skipped += s ? Number(s.groups?.count) : 0;
   }
   return saw ? tests - skipped : null;
 }

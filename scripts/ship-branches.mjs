@@ -138,7 +138,7 @@ export function readLocalRefs(run, remote = "origin") {
   const remoteRefs = new Set(
     remoteList.status === 0
       ? remoteList.stdout.split(/\r?\n/).flatMap((l) => {
-          const name = /refs\/heads\/(.+)$/.exec(l.trim())?.[1];
+          const name = /refs\/heads\/(?<name>.+)$/.exec(l.trim())?.groups?.name;
           return name ? [name] : [];
         })
       : [],
@@ -169,9 +169,7 @@ export function readListHasMore(json) {
     return null;
   }
   /* 键可能在 data 层、也可能贴着信封顶层；data 是数组（清单本体）时不算候选。 */
-  const bags = [json.data, json].filter(
-    (b) => b && typeof b === "object" && !Array.isArray(b),
-  );
+  const bags = [json.data, json].filter((b) => b && typeof b === "object" && !Array.isArray(b));
   for (const bag of bags) {
     for (const key of ["has_more", "hasMore"]) {
       if (typeof bag[key] === "boolean") {
@@ -273,7 +271,11 @@ export function fetchPullsForBranches(run, slug, opts = {}) {
       /* 空页必停（防退化无限翻的硬保证）：平台没喊「还有」⇒ 正常取满；
        * 喊了「还有」却给空页 ⇒ 平台说谎，按取不满如实报。 */
       return more === true
-        ? done(false, "empty-page", `第 ${page} 页是空页，而平台 has-more 键仍说还有 ⇒ 不信它，按取不满收`)
+        ? done(
+            false,
+            "empty-page",
+            `第 ${page} 页是空页，而平台 has-more 键仍说还有 ⇒ 不信它，按取不满收`,
+          )
         : done(true, "empty-page", null);
     }
     if (more === false) {
@@ -372,16 +374,18 @@ export function runBranches(ctx) {
     log(
       `  ${r.verdict.padEnd(18)} ${VERDICT_TEXT[r.verdict]} · ${r.name} · ${pr} is_merged=${r.isMerged === null ? "?" : String(r.isMerged)}` +
         ` merged_by=${r.mergedBy ? "有" : "无"} 远端=${r.remote ? "在" : "无"}${
-        r.current ? " · ← 当前分支" : ""
+          r.current ? " · ← 当前分支" : ""
         } (sha ${r.sha.slice(0, 8)})`,
     );
   }
   log(
     `[ship] 取数覆盖：翻了 ${fetched.pages} 页 / ${fetched.pulls.length} 条 PR${
       fetched.oldest === null ? "" : ` · 最老 #${fetched.oldest}`
-      }${fetched.windowComplete
+    }${
+      fetched.windowComplete
         ? " · 窗口取满"
-        : ` · **没取满**${fetched.note ? ` —— ${fetched.note}` : ""}`}`,
+        : ` · **没取满**${fetched.note ? ` —— ${fetched.note}` : ""}`
+    }`,
   );
   const landed = rows.filter((r) => r.verdict === "landed" && !r.current);
   const open = rows.filter((r) => r.verdict === "not-merged");

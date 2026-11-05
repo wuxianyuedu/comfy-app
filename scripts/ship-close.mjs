@@ -54,8 +54,8 @@ export function issueNumbersFromText(text) {
   /** @type {number[]} */
   const out = [];
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- text 是平台给的标题/正文（外部数据），string 只是声明
-  for (const m of String(text ?? "").matchAll(/#\s?(\d{2,})/g)) {
-    out.push(Number(m[1]));
+  for (const m of String(text ?? "").matchAll(/#\s?(?<issue>\d{2,})/g)) {
+    out.push(Number(m.groups?.issue));
   }
   return [...new Set(out)];
 }
@@ -82,8 +82,8 @@ export function claimNumbersFromTitle(text) {
   /** @type {number[]} */
   const out = [];
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- text 是平台给的标题本体（外部数据），string 只是声明
-  for (const m of String(text ?? "").matchAll(/\(\s*#\s?(\d{2,})\s*\)/g)) {
-    out.push(Number(m[1]));
+  for (const m of String(text ?? "").matchAll(/\(\s*#\s?(?<issue>\d{2,})\s*\)/g)) {
+    out.push(Number(m.groups?.issue));
   }
   return [...new Set(out)];
 }
@@ -501,7 +501,11 @@ export function closeIssues(ctx) {
       asMergedProof = fetchPullMergeProof({ run, slug, prNumber: asMerged });
       log(
         `[ship] 落地证明改由人点名那条 PR 出：PR #${asMerged} 回读 is_merged=${
-          asMergedProof.state === "merged" ? "true" : asMergedProof.state === "not-merged" ? "false" : "(取不到)"
+          asMergedProof.state === "merged"
+            ? "true"
+            : asMergedProof.state === "not-merged"
+              ? "false"
+              : "(取不到)"
         }（标题「${asMergedProof.title || "(空/取不到)"}」）`,
       );
     } else {
@@ -623,9 +627,11 @@ export function closeIssues(ctx) {
     const reason = d?.state_reason ?? "(无)";
     const at = d?.closed_at ?? "(无)";
     log(
-      `[ship] #${number} 回读：state=${state} state_reason=${reason} closed_at=${at}${landed?.sha
+      `[ship] #${number} 回读：state=${state} state_reason=${reason} closed_at=${at}${
+        landed?.sha
           ? ` · 落地那一行 sha=${short(landed.sha)}`
-          : ` · 落地证明：${plan.sources.get(number) ?? "(未标注)"}`}`,
+          : ` · 落地证明：${plan.sources.get(number) ?? "(未标注)"}`
+      }`,
     );
     /* 「走到哪了」（ISSUE #3083）：关单这一格的身份是 issue 号 + 回读的 state 两件
      * 原值 —— 关没关成从这一行就看得见，不用等到「结论：exit N」。 */
@@ -635,8 +641,9 @@ export function closeIssues(ctx) {
     if (typeof d?.body === "string") {
       const s = issueItemShapes(d.body);
       log(
-        `[ship] #${number} 条目读数：\`###\` 小节 ${s.headings} · 复选 未勾 ${s.unchecked}/已勾 ${s.checked} · 序号 ${s.ordered}${s.total === 0 ? "（正文里没数出条目形态）" : ""
-          } —— 关的是**整张单**，这些条目的处置不随之判定；一条诉求一张单见规范 §13.10.9。` +
+        `[ship] #${number} 条目读数：\`###\` 小节 ${s.headings} · 复选 未勾 ${s.unchecked}/已勾 ${s.checked} · 序号 ${s.ordered}${
+          s.total === 0 ? "（正文里没数出条目形态）" : ""
+        } —— 关的是**整张单**，这些条目的处置不随之判定；一条诉求一张单见规范 §13.10.9。` +
           `这一格是读数，不改退码。`,
       );
     } else {

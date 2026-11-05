@@ -249,11 +249,12 @@ module.exports = {
       if (/from "~\/components\/ui\/use-busy-action"/.test(t2)) {
         return 0;
       }
-      const decl = /const\s*\[\s*\w+\s*,\s*(set[A-Z][\w$]*)\s*\]\s*=\s*(?:React\.)?useState\s*\(/g;
+      const decl =
+        /const\s*\[\s*\w+\s*,\s*(?<setter>set[A-Z][\w$]*)\s*\]\s*=\s*(?:React\.)?useState\s*\(/g;
       const setters = new Set();
       let m;
       while ((m = decl.exec(t2)) !== null) {
-        setters.add(m[1]);
+        setters.add(m.groups?.setter ?? "");
       }
       let hits = 0;
       for (const setter of setters) {
@@ -312,19 +313,22 @@ module.exports = {
       if (/from "~\/components\/ui\/use-reentrancy-lock"/.test(t2)) {
         return 0;
       }
-      const decl = /(?:const|let)\s+(\w+)\s*=\s*(?:React\.)?useRef\s*\(/g;
+      const decl = /(?:const|let)\s+(?<name>\w+)\s*=\s*(?:React\.)?useRef\s*\(/g;
       let m;
       let hits = 0;
       while ((m = decl.exec(t2)) !== null) {
-        const name = m[1];
+        const name = m.groups?.name ?? "";
         /* 只认「闸门语义」的名字 —— 镜像 ref / 计数 ref 不算。 */
         if (!/busy|pending|inflight|locked|running|checked/i.test(name)) {
           continue;
         }
         const window = t2.slice(m.index, m.index + 900);
-        const writes = (window.match(new RegExp(String.raw`\b` + name + String.raw`\.current\s*=`, "g")) ?? [])
-          .length;
-        const reads = (window.match(new RegExp(String.raw`!?\b` + name + String.raw`\.current`, "g")) ?? []).length;
+        const writes = (
+          window.match(new RegExp(String.raw`\b` + name + String.raw`\.current\s*=`, "g")) ?? []
+        ).length;
+        const reads = (
+          window.match(new RegExp(String.raw`!?\b` + name + String.raw`\.current`, "g")) ?? []
+        ).length;
         if (writes >= 1 && reads >= 2) {
           hits++;
         }

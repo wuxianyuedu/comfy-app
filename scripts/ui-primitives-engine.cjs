@@ -169,10 +169,10 @@ function stripP71AllowBlocks(text) {
  */
 function countNestedMinMax(text) {
   let n = 0;
-  const re = /\bMath\.(max|min)\s*\(/g;
+  const re = /\bMath\.(?<kind>max|min)\s*\(/g;
   let m;
   while ((m = re.exec(text)) !== null) {
-    const outer = m[1];
+    const outer = m.groups?.kind;
     const inner = outer === "max" ? "min" : "max";
     /* 从外层的左括号开始，扫到**它自己**的右括号为止；
      * 中途遇到 `Math.<inner>(` 即命中（该处夹取由外层负责数）。 */
@@ -466,7 +466,7 @@ function classifyTitleValue(prop) {
   }
   if (raw.startsWith("{")) {
     const expr = raw.slice(1).replace(/}$/, "").trim();
-    if (/^(undefined|null|void\s+0|)$/.test(expr)) {
+    if (/^(?:undefined|null|void\s+0|)$/.test(expr)) {
       return "empty";
     }
     return "dynamic";
