@@ -87,7 +87,7 @@ describe("downloadAndInstallUpdate", () => {
   it("有更新时下载并安装，透出进度事件", async () => {
     withShell(true);
     const updateObj = {
-      downloadAndInstall: vi.fn(async (cb: (e: unknown) => void) => {
+      downloadAndInstall: vi.fn((cb: (e: unknown) => void) => {
         cb({ event: "Started", data: { contentLength: 100 } });
         cb({ event: "Progress", data: { chunkLength: 30 } });
         cb({ event: "Finished" });

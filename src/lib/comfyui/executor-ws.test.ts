@@ -21,26 +21,26 @@ vi.mock("~/lib/core/logger", () => ({
 }));
 vi.mock("../core/repository", () => ({
   taskRepository: {
-    updateProgress: vi.fn(async () => true),
-    markRunning: vi.fn(async () => true),
-    findStatusAndPromptById: vi.fn(async () => null),
-    cancel: vi.fn(async () => undefined),
-    listStaleUnownedQueued: vi.fn(async () => []),
-    listStaleRunning: vi.fn(async () => []),
-    finalizeFailure: vi.fn(async () => undefined),
-    finalizeFromReaper: vi.fn(async () => undefined),
-    finalizeSuccess: vi.fn(async () => undefined),
-    createImages: vi.fn(async () => []),
-    replaceLogs: vi.fn(async () => undefined),
+    updateProgress: vi.fn(() => true),
+    markRunning: vi.fn(() => true),
+    findStatusAndPromptById: vi.fn(() => null),
+    cancel: vi.fn(() => undefined),
+    listStaleUnownedQueued: vi.fn(() => []),
+    listStaleRunning: vi.fn(() => []),
+    finalizeFailure: vi.fn(() => undefined),
+    finalizeFromReaper: vi.fn(() => undefined),
+    finalizeSuccess: vi.fn(() => undefined),
+    createImages: vi.fn(() => []),
+    replaceLogs: vi.fn(() => undefined),
   },
 }));
 vi.mock("./client", () => ({
-  resolveComfyBase: vi.fn(async () => "http://127.0.0.1:8188"),
-  interrupt: vi.fn(async () => undefined),
+  resolveComfyBase: vi.fn(() => "http://127.0.0.1:8188"),
+  interrupt: vi.fn(() => undefined),
 }));
 vi.mock("./lifecycle", () => ({
   isComfyStarting: vi.fn().mockReturnValue(false),
-  ensureComfyUiReady: vi.fn(async () => ({ ok: true })),
+  ensureComfyUiReady: vi.fn(() => ({ ok: true })),
   isComfyAutoStartSuppressed: vi.fn().mockReturnValue(false),
   COMFYUI_AUTOSTART_TIMEOUT_MS: 420_000,
 }));
@@ -61,7 +61,7 @@ const { state } = await import("./runner-state");
 
 describe("configureExecutorWs 接缝", () => {
   it("接受 Partial<ExecutorWsDeps>、两次调用是合并语义", () => {
-    const fakeRepo = { updateProgress: async () => true };
+    const fakeRepo = { updateProgress: () => Promise.resolve(true) };
     expect(() => {
       mod.configureExecutorWs({ taskRepo: fakeRepo });
     }).not.toThrow();
@@ -101,9 +101,9 @@ describe("进度帧认节点类名（ISSUE #1202）", () => {
     const calls: Array<[string, number, unknown]> = [];
     mod.configureExecutorWs({
       taskRepo: {
-        updateProgress: async (id: string, pct: number, node?: unknown) => {
+        updateProgress: (id: string, pct: number, node?: unknown) => {
           calls.push([id, pct, node]);
-          return true;
+          return Promise.resolve(true);
         },
       },
     });
@@ -190,7 +190,7 @@ describe("不带 prompt_id 的帧也要留证（ISSUE #1315）", () => {
     vi.mocked(traceMock).mock.calls.filter((c) => c[2] === "WS 帧不带 prompt_id（跳过归属）");
 
   it("每类只落第一帧，且不碰执行侧", async () => {
-    const updateProgress = vi.fn(async () => true);
+    const updateProgress = vi.fn(() => Promise.resolve(true));
     mod.configureExecutorWs({ taskRepo: { updateProgress } });
     vi.mocked(traceMock).mockClear();
 

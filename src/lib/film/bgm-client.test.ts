@@ -11,7 +11,7 @@ function jsonRes(status: number, body: unknown): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
-    json: async () => body,
+    json: () => body,
   } as unknown as Response;
 }
 
@@ -64,7 +64,7 @@ describe("uploadBgm", () => {
       vi.fn<typeof fetch>().mockResolvedValue({
         ok: false,
         status: 502,
-        json: async () => {
+        json: () => {
           throw new SyntaxError("Unexpected token <");
         },
       } as unknown as Response),

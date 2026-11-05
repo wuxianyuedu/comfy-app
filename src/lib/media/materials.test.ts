@@ -39,7 +39,7 @@ const { owners, findById } = vi.hoisted(() => {
   const owners = new Map<string, string>();
   return {
     owners,
-    findById: async (scope: string) => (owners.has(scope) ? { userId: owners.get(scope)! } : null),
+    findById: (scope: string) => (owners.has(scope) ? { userId: owners.get(scope)! } : null),
   };
 });
 vi.mock("~/lib/core/repository-project", () => ({

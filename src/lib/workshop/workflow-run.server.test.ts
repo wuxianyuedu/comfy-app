@@ -13,7 +13,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const { kickMock, taskRepo } = vi.hoisted(() => ({
   kickMock: vi.fn<(job: unknown) => void>(() => undefined),
   taskRepo: {
-    createQueued: vi.fn(async (_input: unknown) => ({ id: "task-1" })),
+    createQueued: vi.fn((_input: unknown) => ({ id: "task-1" })),
   },
 }));
 

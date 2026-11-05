@@ -78,7 +78,7 @@ export function checksum(text: string): string {
  * 与 POST /api/workflows 的流水线保持一致，让「首次导入」与「实时重新导入」
  * behave identically.
  */
-export async function parseWorkflowContent(
+export function parseWorkflowContent(
   content: string,
   opts: {
     defaultName?: string;
@@ -128,7 +128,7 @@ export async function parseWorkflowContent(
     logger.info(`[importSource] Unknown taskType "${taskType}", allowing as custom type`);
   }
 
-  return { rawJson, positions, taskType, warnings, format: "raw" };
+  return Promise.resolve({ rawJson, positions, taskType, warnings, format: "raw" });
 }
 
 export type ImportedFromFile = {

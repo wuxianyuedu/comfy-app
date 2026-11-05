@@ -1562,7 +1562,7 @@ describe("RemoteModelRepository", () => {
     expect(parseAdaptersJson('{"a":1}')).toEqual([]);
   });
 
-  it("seedRemoteModel 落库的是密文（测试基建与生产写入同形）", async () => {
+  it("seedRemoteModel 落库的是密文（测试基建与生产写入同形）", () => {
     seedRemoteModel(tdb, { name: "甲", apiKey: "sk-seed" });
     /* SAFETY: 类型断言已复核 */
     const raw = tdb.$tables.remoteModels[0]!.apiKey as string;

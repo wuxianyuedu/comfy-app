@@ -13,8 +13,8 @@ import type { LogEntry } from "./runner-state";
 // 具体断言靠 configureRunner 注入的**第二层**替身完成，这两份 mock 只是「默认侧
 // 的兜底哨兵」，用来证明「configureRunner 一覆盖，就走不到它们」。
 const defaultTaskRepoMock = {
-  replaceLogs: vi.fn(async () => undefined),
-  replaceRawCli: vi.fn(async () => undefined),
+  replaceLogs: vi.fn(() => Promise.resolve(undefined)),
+  replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
 };
 const defaultLoggerMock = {
   warn: vi.fn(),
@@ -48,11 +48,11 @@ describe("runner-state 的宿主依赖注入接缝（P3 第 1 期·第二步）"
 
   it("configureRunner({ taskRepo }) 之后 persistLogs 走注入侧、不再打默认 taskRepository", async () => {
     const mod = await loadRunnerState();
-    const injectedReplace = vi.fn(async () => undefined);
+    const injectedReplace = vi.fn(() => Promise.resolve(undefined));
     mod.configureRunner({
       taskRepo: {
         replaceLogs: injectedReplace,
-        replaceRawCli: vi.fn(async () => undefined),
+        replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
       },
     });
 
@@ -65,14 +65,14 @@ describe("runner-state 的宿主依赖注入接缝（P3 第 1 期·第二步）"
 
   it("注入的 taskRepo 抛错时，configureRunner({ log }) 的 warn 收到「落库失败」消息", async () => {
     const mod = await loadRunnerState();
-    const injectedReplace = vi.fn(async () => {
+    const injectedReplace = vi.fn(() => {
       throw new Error("db-on-fire");
     });
     const injectedWarn = vi.fn();
     mod.configureRunner({
       taskRepo: {
         replaceLogs: injectedReplace,
-        replaceRawCli: vi.fn(async () => undefined),
+        replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
       },
       log: { warn: injectedWarn },
     });
@@ -93,12 +93,12 @@ describe("runner-state 的宿主依赖注入接缝（P3 第 1 期·第二步）"
 
   it("configureRunner 传 Partial 时未覆盖的一侧仍沿用默认（防止误清空）", async () => {
     const mod = await loadRunnerState();
-    const injectedReplace = vi.fn(async () => undefined);
+    const injectedReplace = vi.fn(() => Promise.resolve(undefined));
     // 只注入 taskRepo；log 一侧留空。
     mod.configureRunner({
       taskRepo: {
         replaceLogs: injectedReplace,
-        replaceRawCli: vi.fn(async () => undefined),
+        replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
       },
     });
 
@@ -152,10 +152,11 @@ describe("logWhileQueued / takeQueuedEntries", () => {
     const written: Array<Array<unknown>> = [];
     mod.configureRunner({
       taskRepo: {
-        replaceLogs: vi.fn(async (_taskId: string, entries: Array<LogEntry>) => {
+        replaceLogs: vi.fn((_taskId: string, entries: Array<LogEntry>) => {
           written.push(entries.map((e) => e.msg));
+          return Promise.resolve(undefined);
         }),
-        replaceRawCli: vi.fn(async () => undefined),
+        replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
       },
     });
     /* 复刻真实时序：`complete()` 先 await persistLogs 落整包，**之后**才打

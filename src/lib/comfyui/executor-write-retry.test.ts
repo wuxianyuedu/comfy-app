@@ -22,8 +22,8 @@ import { configureRunner, isDispatchedHere, markDispatched, state } from "./runn
 
 configureRunner({
   taskRepo: {
-    replaceLogs: async () => undefined,
-    replaceRawCli: async () => undefined,
+    replaceLogs: () => Promise.resolve(undefined),
+    replaceRawCli: () => Promise.resolve(undefined),
   },
   log: { warn: () => undefined },
 });
@@ -46,13 +46,13 @@ describe("writeTerminal —— 终态那一次库写不再被静默吞掉", () =
   it("撞锁后重试成功：槽位仍归本进程，且「重试中」只写一行", async () => {
     markDispatched("t-retry");
     let calls = 0;
-    const outcome = await writeTerminal("t-retry", "失败收口", async () => {
+    const outcome = await writeTerminal("t-retry", "失败收口", () => {
       calls += 1;
       if (calls < 3) {
         throw busyError();
       }
       /* SAFETY: 类型断言已复核 */
-      return "written" as const;
+      return Promise.resolve("written" as const);
     });
 
     expect(outcome).toBe("written");
@@ -70,7 +70,7 @@ describe("writeTerminal —— 终态那一次库写不再被静默吞掉", () =
      * 因为 `fail()` 在 `writeTerminal` 抛出后再没机会清 `executedWorkflow`
      * （ISSUE #1250 的「接管」那一半）。所以这里断言的是回收器那句判据本身。 */
     state().executedWorkflow.set("t-exhaust", { nodes: [] });
-    const write = vi.fn<() => Promise<"written">>(async () => {
+    const write = vi.fn<() => Promise<"written">>(() => {
       throw busyError();
     });
 
@@ -92,7 +92,7 @@ describe("writeTerminal —— 终态那一次库写不再被静默吞掉", () =
 
   it("不是锁族的错误一次都不重试：真故障不该被拖成四次同样的写入", async () => {
     markDispatched("t-real");
-    const write = vi.fn<() => Promise<"written">>(async () => {
+    const write = vi.fn<() => Promise<"written">>(() => {
       throw new Error("no such table: task");
     });
 
@@ -108,7 +108,7 @@ describe("writeTerminal —— 终态那一次库写不再被静默吞掉", () =
       "t-clean",
       "成功收口",
       /* SAFETY: 类型断言已复核 */
-      async () => "written" as const,
+      () => Promise.resolve("written" as const),
     );
     expect(state().logs.has("t-clean")).toBe(false);
     expect(isDispatchedHere("t-clean")).toBe(true);

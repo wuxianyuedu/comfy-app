@@ -66,9 +66,9 @@ describe("waitForComfyReady（单一等待循环 + 策略注入）", () => {
   it("deadline 到点即超时，文案只有一份（两条路径共用同一句）", async () => {
     let t = 0;
     const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => t);
-    const probe = vi.fn(async () => {
+    const probe = vi.fn(() => {
       t += 5000; // 每轮推进时钟，让第二轮超过 deadline
-      return null;
+      return Promise.resolve(null);
     });
     const r = await waitForComfyReady({
       deadline: 1000,

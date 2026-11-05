@@ -5,7 +5,7 @@ import { probeBaseOnce } from "./probe";
 function fetchStub(status: number, ok = status >= 200 && status < 300) {
   return vi.fn(
     /* SAFETY: 类型断言已复核 */
-    async () =>
+    () =>
       ({
         ok,
         status,
@@ -29,7 +29,7 @@ describe("probeBaseOnce — 存活探针（连通即存活，#685）", () => {
   it("连接失败（ECONNREFUSED）→ 返回 null（实例确实不在）", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => {
+      vi.fn(() => {
         throw new Error("ECONNREFUSED");
       }),
     );

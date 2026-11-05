@@ -31,11 +31,11 @@ vi.mock("./env-python", () => ({ collectComfyPythonCandidates: vi.fn() }));
  * `/probe` 与 `./client` 分别 mock：`probeComfyAtPort` 是零依赖叶子（§12.7 断环时
  * 从 `client.ts` 下沉出去），而 status 只经它取「已知端口是否应答」。 */
 vi.mock("./probe", () => ({
-  probeComfyAtPort: vi.fn(async () => null),
+  probeComfyAtPort: vi.fn(() => null),
 }));
 vi.mock("./client", () => ({
-  probeComfyBase: vi.fn(async () => null),
-  resolveComfyBase: vi.fn(async () => "http://127.0.0.1:8188"),
+  probeComfyBase: vi.fn(() => null),
+  resolveComfyBase: vi.fn(() => "http://127.0.0.1:8188"),
   resetComfyBase: vi.fn(),
 }));
 vi.mock("~/lib/core/logger", () => ({
@@ -126,8 +126,10 @@ describe("getComfyRuntimeSnapshot — 外部实例也要认出来", () => {
 
   it("解释器候选落空但 setup 登记的启动器命中（Comfy Desktop / uv 起法）", async () => {
     // 主 main.py 查询成功返回「没有」，登记的启动器命中。
-    vi.mocked(findPidForMainPyDetailed).mockImplementation(async (needle: string) =>
-      needle.includes("uv.exe") ? { pid: 777, failed: false } : { pid: null, failed: false },
+    vi.mocked(findPidForMainPyDetailed).mockImplementation((needle: string) =>
+      Promise.resolve(
+        needle.includes("uv.exe") ? { pid: 777, failed: false } : { pid: null, failed: false },
+      ),
     );
     vi.mocked(findPidListeningPort).mockResolvedValue(8190);
     // 把登记启动器伪装成 uv.exe：用一个真实存在的小文件承载 .comfy-cli 内容。
@@ -169,10 +171,12 @@ describe("getComfyRuntimeSnapshot — 外部实例也要认出来", () => {
     vi.mocked(collectComfyPythonCandidates).mockReturnValue([
       { exe: uvExe, via: "standalone-env 的 pyvenv.cfg" },
     ]);
-    vi.mocked(findPidForMainPyDetailed).mockImplementation(async (needle: string) =>
-      needle.includes(String.raw`uv\python`)
-        ? { pid: 888, failed: false }
-        : { pid: null, failed: false },
+    vi.mocked(findPidForMainPyDetailed).mockImplementation((needle: string) =>
+      Promise.resolve(
+        needle.includes(String.raw`uv\python`)
+          ? { pid: 888, failed: false }
+          : { pid: null, failed: false },
+      ),
     );
     vi.mocked(findPidListeningPort).mockResolvedValue(8188);
 
@@ -186,8 +190,10 @@ describe("getComfyRuntimeSnapshot — 外部实例也要认出来", () => {
 
   it("第 5 级也要在「配置路径的 main.py 查询失败」时照常兜底", async () => {
     // main.py 那次查询超时（unverified）不能提前 return：反查命中仍应报在跑。
-    vi.mocked(findPidForMainPyDetailed).mockImplementation(async (needle: string) =>
-      needle.includes("uv.exe") ? { pid: 999, failed: false } : { pid: null, failed: true },
+    vi.mocked(findPidForMainPyDetailed).mockImplementation((needle: string) =>
+      Promise.resolve(
+        needle.includes("uv.exe") ? { pid: 999, failed: false } : { pid: null, failed: true },
+      ),
     );
     vi.mocked(collectComfyPythonCandidates).mockReturnValue([
       { exe: String.raw`C:\uv\uv.exe`, via: "uv 托管的解释器" },

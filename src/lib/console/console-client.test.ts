@@ -174,12 +174,13 @@ describe("clampOutput", () => {
 
 describe("runConsoleCommand", () => {
   it("非 2xx 读服务端信封的文案 → rejected（这是用户能修的那一类）", async () => {
-    const restore = stubFetch(
-      async () =>
+    const restore = stubFetch(() =>
+      Promise.resolve(
         new Response(JSON.stringify({ error: "已有一条命令在运行：pnpm test" }), {
           status: 409,
           headers: { "Content-Type": "application/json" },
         }),
+      ),
     );
     const events: Array<unknown> = [];
     const outcome = await runConsoleCommand({
@@ -195,7 +196,9 @@ describe("runConsoleCommand", () => {
   });
 
   it("非 JSON 的失败体也给可读文案（不吐 `Unexpected token '<'`）", async () => {
-    const restore = stubFetch(async () => new Response("<!DOCTYPE html>", { status: 500 }));
+    const restore = stubFetch(() =>
+      Promise.resolve(new Response("<!DOCTYPE html>", { status: 500 })),
+    );
     const outcome = await runConsoleCommand({ command: "x", onEvent: noop });
     expect(outcome.kind).toBe("rejected");
     expect(outcome.kind === "rejected" && outcome.reason).toContain("500");
@@ -203,8 +206,8 @@ describe("runConsoleCommand", () => {
   });
 
   it("正常流：逐帧回调，最后 flush 掉不完整帧（尾行不丢）", async () => {
-    const restore = stubFetch(
-      async () =>
+    const restore = stubFetch(() =>
+      Promise.resolve(
         new Response(
           streamFrom([
             frame({
@@ -219,6 +222,7 @@ describe("runConsoleCommand", () => {
             'data: {"type":"exit","code":0,"killed":false,"durationMs":5}',
           ]),
         ),
+      ),
     );
     const events: Array<unknown> = [];
     const outcome = await runConsoleCommand({
@@ -248,7 +252,7 @@ describe("runConsoleCommand", () => {
   });
 
   it("用户中止 → aborted（不是 failed —— 界面不该报红）", async () => {
-    const restore = stubFetch(async () => {
+    const restore = stubFetch(() => {
       const e = new Error("aborted");
       e.name = "AbortError";
       throw e;
@@ -259,7 +263,7 @@ describe("runConsoleCommand", () => {
   });
 
   it("网络错误 → failed 且翻成人话（不是把浏览器原文甩给用户）", async () => {
-    const restore = stubFetch(async () => {
+    const restore = stubFetch(() => {
       throw new Error("Failed to fetch");
     });
     const outcome = await runConsoleCommand({ command: "x", onEvent: noop });
@@ -275,15 +279,15 @@ describe("runConsoleCommand", () => {
   });
 
   it("响应没有 body → failed（有出口，不静默卡住）", async () => {
-    const restore = stubFetch(async () => new Response(null, { status: 200 }));
+    const restore = stubFetch(() => Promise.resolve(new Response(null, { status: 200 })));
     const outcome = await runConsoleCommand({ command: "x", onEvent: noop });
     expect(outcome.kind).toBe("failed");
     restore();
   });
 
   it("读流中途出错 → failed", async () => {
-    const restore = stubFetch(
-      async () =>
+    const restore = stubFetch(() =>
+      Promise.resolve(
         new Response(
           new ReadableStream<Uint8Array>({
             pull() {
@@ -291,6 +295,7 @@ describe("runConsoleCommand", () => {
             },
           }),
         ),
+      ),
     );
     const outcome = await runConsoleCommand({ command: "x", onEvent: noop });
     expect(outcome).toEqual({ kind: "failed", reason: "stream broke" });
