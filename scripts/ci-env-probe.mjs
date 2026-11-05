@@ -293,7 +293,10 @@ export function stageBlockIn(text, name) {
 }
 
 /**
- * `.cnb.yml` 里**带了任务级 `image:` 的 stage**（名字，按出现顺序；空数组 = 一格都没有）。
+ * `.cnb.yml` 里**带了任务级 `image:` 的脚本格**（名字，按出现顺序；空数组 = 一格都没有）。
+ *
+ * **插件格不算**：`image:` + `settings:` 且没有 `script` 的那类（`cnbcool/attachments` 等）
+ * 在自托管节点上实测能跑（`cnb-6od-1k6l6mgun` 上传成功）；它们不是「起容器跑脚本」。
  *
  * ## 为什么这一条会红
  *
@@ -329,8 +332,17 @@ export function stagesWithImage(text) {
     if (block === null) {
       continue;
     }
-    const found = block.split("\n").some((raw) => /^ {4}image:\s*\S/.test(raw));
-    if (found && !out.includes(name)) {
+    const blockLines = block.split("\n");
+    const found = blockLines.some((raw) => /^ {4}image:\s*\S/.test(raw));
+    /* 插件形态（`image:` + `settings:`、**没有** `script`）不是「这一格进容器跑脚本」：
+     * `cnbcool/attachments` 那类插件在自托管节点上**实测能跑**（`cnb-6od-1k6l6mgun`，
+     * 上传成功）。这条判据只拦「脚本格声明 `image:`」那种 70ms 必红的形态 ——
+     * 形态判据与 `scripts/check-ci-yaml-parse.mjs` 是同一个（image + settings 对象即可）。 */
+    const pluginForm =
+      found &&
+      blockLines.some((raw) => /^ {4}settings:/.test(raw)) &&
+      !blockLines.some((raw) => /^ {4}script:/.test(raw));
+    if (found && !pluginForm && !out.includes(name)) {
       out.push(name);
     }
   }
@@ -509,7 +521,7 @@ export function envProbe({
     const withImage = stagesWithImage(configText);
     if (withImage.length > 0) {
       problems.push(
-        `这些 stage 带了任务级 \`image:\`：${withImage.join(" / ")} —— ` +
+        `这些脚本格带了任务级 \`image:\`：${withImage.join(" / ")} —— ` +
           "自托管节点上**没有 docker daemon**，平台连「起容器」都做不到，这些格子会在 " +
           "70ms 内红在 `Runner does not enable Docker` 上（实测 cnb-cqk-1k550gpp2，" +
           "脚本一行都没执行）。\n" +

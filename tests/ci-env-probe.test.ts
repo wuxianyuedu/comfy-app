@@ -694,7 +694,24 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
       expect(stagesWithImage(fixture)).toEqual(["A"]);
     });
 
-    it("现役 `.cnb.yml` **一格都没有**（上一次加的两格已在 2026-10-17 撤掉）", () => {
+    it("`stagesWithImage()` 不把**插件格**（image + settings、没有 script）算成容器脚本格", () => {
+      const fixture = [
+        ".gates: &gates",
+        "  - name: 插件格",
+        "    image: cnbcool/attachments:latest",
+        "    settings:",
+        "      attachments:",
+        "        - out/log.txt",
+        "  - name: 脚本格",
+        "    image: node:24",
+        "    script: echo hi",
+        "",
+      ].join("\n");
+      /* 插件形态在自托管节点上实测能跑（cnb-6od-1k6l6mgun）；只有脚本格声明 image 才是 70ms 必红。 */
+      expect(stagesWithImage(fixture)).toEqual(["脚本格"]);
+    });
+
+    it("现役 `.cnb.yml` **一格脚本格都没有**（上一次加的两格已在 2026-10-17 撤掉）", () => {
       expect(stagesWithImage(readPipelineConfig(ROOT) ?? "")).toEqual([]);
     });
 
