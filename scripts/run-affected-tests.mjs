@@ -506,8 +506,7 @@ async function main(argv) {
      * 出来的事实**，用它判「剩下这几块还开不起来」才不含猜的成分。 */
     const perFileMs = doneFiles > 0 && doneMs > 0 ? Math.round(doneMs / doneFiles) : 0;
     const chunkStartedAt = Date.now();
-    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
-    const code = await runChunk(chunk.files, {
+    const code = await runChunk(chunk.files, { // oxlint-disable-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
       entry,
       workers,
       quiet,
