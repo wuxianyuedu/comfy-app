@@ -516,8 +516,10 @@ describe("POST discover —— parent 同样过闸门", () => {
       { action: "discover", parents: [] },
       { action: "discover", parents: "ComfyUI-Foo" },
     ]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const res = await post(body);
       expect(res.status).toBe(200);
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       expect(await res.json()).toEqual({ ok: true, packages: [] });
     }
     // 旧行为：空批照样按 python3 → python → py 轮三遍（各带一次超时与一次进程启动）

@@ -29,6 +29,7 @@ afterEach(() => {
 async function drainIdle(): Promise<void> {
   while (idleQueue.length > 0) {
     idleQueue.shift()?.();
+    // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
     await flush();
   }
 }

@@ -369,6 +369,7 @@ export async function probeAll(opts) {
       /* `oidc` 那一问的请求体含令牌 ⇒ 只有它带 `body`，且**只从 env 取、不回显**。 */
       const extra =
         probe === OIDC_PROBE ? { method: "POST", body: '{"aud":"ci-token-scopes"}' } : {};
+      // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
       const r = await opts.fetchFact(ctx, probe.path, extra);
       rows.push({
         domain: probe.domain,

@@ -191,6 +191,7 @@ describe("useModelLibrary", () => {
      * 引用上，这里会随之线性增长。 */
     for (let i = 0; i < 5; i++) {
       rerender();
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await act(async () => {
         await Promise.resolve();
       });

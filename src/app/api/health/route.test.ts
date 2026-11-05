@@ -99,6 +99,7 @@ describe("GET /api/health 跨域面（D5）", () => {
       "http://tauri.localhost",
       "https://tauri.localhost",
     ]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const res = await GET(new Request(url, { headers: { origin } }));
       expect(res.headers.get("access-control-allow-origin"), origin).toBe(origin);
       /* 回显源 + `Vary` 两件都要：只给前者时，链路上的缓存会把第一个访问者的头
@@ -111,6 +112,7 @@ describe("GET /api/health 跨域面（D5）", () => {
     probeSchemaSync.mockReturnValue("ready");
     const { GET } = await import("./route");
     for (const origin of ["https://evil.example", "null"]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const res = await GET(new Request(url, { headers: { origin } }));
       expect(res.headers.get("access-control-allow-origin"), origin).toBeNull();
     }

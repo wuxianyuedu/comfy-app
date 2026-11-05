@@ -41,6 +41,7 @@ async function expectViewRendered(page: Page, entryLabel: string, contentAnchors
    * （ISSUE #1423 / #1711）里改成 `SectionLabel`「短名 + 同义说明」：原句「选择远端模型（生图 / 视频）」
    * 拆成 `<h4>远端模型</h4>` 与 `hint`。判据锚**短名**，别锚被拆掉的长句 —— 否则会红在无关的文案调整上。 */
   for (const anchor of contentAnchors) {
+    // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
     await expect(
       page.getByText(anchor).first(),
       `${entryLabel} 视图里缺「${anchor}」`,

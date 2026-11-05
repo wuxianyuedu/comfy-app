@@ -120,6 +120,7 @@ export function useSettingsOllama({
             // 轮询等就绪再交回控制权：期间保持「启动中…」按钮禁用。
             for (let i = 0; i < OLLAMA_START_POLL_TIMES; i++) {
               if (llmBaseUrl) {
+                // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
                 const probe = await probeOllamaClient(llmBaseUrl);
                 if (probe.up) {
                   setModels(probe.models);
@@ -127,6 +128,7 @@ export function useSettingsOllama({
                   return;
                 }
               }
+              // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
               await sleep(OLLAMA_START_POLL_INTERVAL_MS);
             }
             throw new Error(

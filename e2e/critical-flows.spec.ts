@@ -101,12 +101,14 @@ test.describe("工作区链路 @critical", () => {
      * 标签重复一份，而不是 import 那份常量：e2e 的断言应当只看屏幕上有无这些东西，
      * 拿 React 侧常量当数据源会让「常量与渲染不一致」这种真故障变成用例里的自洽。 */
     for (const label of ["首页", "模型", "历史", "队列", "工作流库"]) {
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       await expect(page.getByRole("button", { name: label, exact: true }).first()).toBeVisible();
     }
 
     /* 「工作流库」下面那两项是**应用级浮层入口**（模型适配 / 模式契约）：它们不切视图、
      * 只开弹窗，且与项目无关，所以留在侧栏而不进工坊那个项目内视图。 */
     for (const label of ["模型适配", "模式契约"]) {
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       await expect(page.getByRole("button", { name: label, exact: true }).first()).toBeVisible();
     }
 
@@ -815,6 +817,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
       const labels = ["全部", "调试", "信息", "警告", "错误"];
       const boxes = [];
       for (const label of labels) {
+        // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
         const box = await page
           .getByTitle(new RegExp(`^当前来源的${label}：`))
           .first()
@@ -853,12 +856,14 @@ test.describe("应用页签与全屏视图 @critical", () => {
       /* ① 按钮不被裁：内容宽度不超过可视宽度（被切成 `警…` 时 scrollWidth 会反超）。 */
       for (const label of ["全部", "调试", "信息", "警告", "错误"]) {
         const button = page.getByTitle(new RegExp(`^当前来源的${label}：`)).first();
+        // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
         const box = await button.boundingBox();
         expect(box).not.toBeNull();
         /* 「两字标签 + 四位数字」的固有宽度在 60px 上下：低于 56px 说明按钮
          * 被压到放不下内容（老形态就是在这里把「警告」切成「警…」的）。 */
         expect(box!.width).toBeGreaterThanOrEqual(56);
 
+        // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
         const overflow = await button.evaluate((el) => {
           /* SAFETY: 类型断言已复核 */
           const nodes = [el, ...el.children] as Array<HTMLElement>;
@@ -942,6 +947,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
          `arrivalKey` 收成一条（下面「不重复」断言守的就是它），而同名文本会撞上浏览器自己打的
          console.error，计数随机器/时序漂。 */
       for (let i = 1; i <= 3; i += 1) {
+        // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
         await page.evaluate((n) => {
           console.error(`e2e 控制台样本 ${n}`);
         }, i);
@@ -1027,6 +1033,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
       /* ① 逐来源内部守恒：四个级别之和 = 该来源的条数。这条把「按钮上写 2、
        *    切过去只剩 1」挡在门外（两者共用 `matchesSearch` + `bucketOf`）。 */
       for (const label of buckets) {
+        // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
         const c = await levelsOf(label);
         expect(`${label} ${c.info + c.warn + c.error}`).toBe(`${label} ${c.all}`);
       }

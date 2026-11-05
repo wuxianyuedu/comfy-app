@@ -167,10 +167,12 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
 
   test("两态下 CONSUMED_TOKENS 全部解析得到具体颜色", async ({ page }) => {
     for (const dark of [false, true]) {
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       await setTheme(page, dark);
       const label = dark ? "暗色" : "浅色";
       const bad: Array<string> = [];
       for (const name of CONSUMED_TOKENS) {
+        // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
         const v = await readToken(page, name);
         if (!v.raw) {
           bad.push(`${label} ${name} 声明值为空（被 shake 或名字不对）`);
@@ -193,10 +195,13 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
   test("图标 token 对它实际所托的表面 ≥3:1（两态各自验）", async ({ page }) => {
     const lines: Array<string> = [];
     for (const dark of [false, true]) {
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       await setTheme(page, dark);
       const label = dark ? "暗色" : "浅色";
       for (const { token, surfaceClass } of CONTRAST_PAIRS) {
+        // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
         const fg = await readToken(page, token);
+        // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
         const surface = await readSurface(page, surfaceClass);
         const ratio = contrastRatio(fg.fill, surface);
         lines.push(
@@ -214,9 +219,13 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
 
   test("两档不是空话：同一颗 token 在两态下取值必须不同", async ({ page }) => {
     for (const { token } of CONTRAST_PAIRS) {
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       await setTheme(page, false);
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       const lightValue = (await readToken(page, token)).raw;
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       await setTheme(page, true);
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       const darkValue = (await readToken(page, token)).raw;
       expect(
         lightValue !== darkValue,
@@ -241,9 +250,11 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
         {} as never;
 
       for (const dark of [false, true]) {
+        // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
         await setTheme(page, dark);
         /* SAFETY: 类型断言已复核 */
         const key = dark ? ("dark" as const) : ("light" as const);
+        // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
         const got = await page.evaluate(
           ({ expr: e, token }) => {
             const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -359,7 +370,9 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
 
     const expr = gridLineColor(0.14);
     for (const dark of [false, true]) {
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       await setTheme(page, dark);
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       const got = await page.evaluate((e) => {
         const wrap = document.createElement("div");
         wrap.style.setProperty("--xy-background-pattern-color-props", e);
@@ -437,8 +450,10 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
      h1 的计算字体是 UA 默认 "Times New Roman"，而 tsc / eslint / 主题色扫描 / 别名判据全绿。只有真浏览器能判「实际用在哪」。 */
   test("正文与标题真的用上设计那串字体栈（两态各自验）", async ({ page }) => {
     for (const dark of [false, true]) {
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       await setTheme(page, dark);
       const label = dark ? "暗色" : "浅色";
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       const fonts = await page.evaluate(() => {
         const rootStyle = getComputedStyle(document.documentElement);
         /* 标题档不靠「这一屏恰好有 h1」—— 挂一个用同一个工具类的探针元素，判的是

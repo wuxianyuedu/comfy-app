@@ -170,12 +170,14 @@ export async function waitForReady({
     if (isAlive && !isAlive()) {
       return false;
     }
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     if ((await classifyProbe({ port, host, path: probePath })) === "ready") {
       return true;
     }
     if (onTick) {
       onTick(Math.round((deadline - Date.now()) / 1000));
     }
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     await new Promise((r) => setTimeout(r, 1000));
   }
   return false;
@@ -321,6 +323,7 @@ export async function inspectPort(port, { listenPids, belongsToRoot, root }) {
   const ownPids = [];
   const foreignPids = [];
   for (const pid of pids) {
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     if (await belongsToRoot(pid, root)) {
       ownPids.push(pid);
     } else {
@@ -409,6 +412,7 @@ export async function portOwnershipVerdict({ requestedPort, verdict, cmdlineOf, 
   const appPids = [];
   const restPids = [];
   for (const pid of verdict.foreignPids ?? []) {
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const cmdline = await cmdlineOf(pid);
     if (cmdline && isAppProcess(pid, cmdline)) {
       appPids.push(pid);

@@ -130,6 +130,7 @@ describe("GET /api/logs/current 增量读取", () => {
   it("runtime 来源不下发会话起点（一份文件只属于一次启动）", async () => {
     writeLines(1);
     for (const source of ["app-runtime"]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const data = await read(source, 0);
       expect(data.sessionStart).toBeNull();
     }
@@ -141,6 +142,7 @@ describe("GET /api/logs/current 增量读取", () => {
   it("覆盖重建的来源（launcher / dev-launcher）不下发会话起点", async () => {
     fs.writeFileSync(path.join(tmp, "dev-launcher.log"), "x", "utf8");
     for (const source of ["launcher", "dev-launcher", "dev"]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const data = await read(source, 0);
       expect(data.sessionStart).toBeNull();
     }
@@ -154,6 +156,7 @@ describe("GET /api/logs/current 增量读取", () => {
     fs.writeFileSync(shellLogFile, "x", "utf8");
     fs.writeFileSync(shellLaunchLogFile, "x", "utf8");
     for (const source of ["shell", "shell-launch"]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const data = await read(source, 0);
       expect(data.sessionStart).toBeNull();
     }
