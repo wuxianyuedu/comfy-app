@@ -141,11 +141,12 @@ function normalizeOxlintCode(code) {
   if (typeof code !== "string") {
     return undefined;
   }
-  const m = /^(\w+)\((.+)\)$/.exec(code);
+  const m = /^(?<plugin>\w+)\((?<rule>.+)\)$/.exec(code);
   if (!m) {
     return code;
   }
-  const [, plugin, rule] = m;
+  const plugin = m.groups?.plugin;
+  const rule = m.groups?.rule;
   return plugin === "eslint" ? rule : `${plugin}/${rule}`;
 }
 

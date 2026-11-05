@@ -104,8 +104,11 @@ function hookStepLabels() {
   const src = fs.readFileSync(HOOK, "utf8");
   const out = new Set();
   // 步骤行形如：  run "标签" node scripts/x.cjs …
-  for (const m of src.matchAll(/^\s*run\s+"([^"]+)"/gm)) {
-    out.add(m[1]);
+  for (const m of src.matchAll(/^\s*run\s+"(?<label>[^"]+)"/gm)) {
+    const label = m.groups?.label;
+    if (label !== undefined) {
+      out.add(label);
+    }
   }
   return out;
 }
@@ -156,7 +159,7 @@ function fixedStructuralTests() {
     return null;
   }
   const body = src.slice(open + 1, end);
-  return new Set([...body.matchAll(/"([^"\n]+)"/g)].map((x) => x[1]));
+  return new Set([...body.matchAll(/"(?<name>[^"\n]+)"/g)].map((x) => x.groups?.name ?? ""));
 }
 
 /**
@@ -266,18 +269,16 @@ if (carriers) {
 
 if (REPORT_ONLY) {
   process.stdout.write(
-    `声明 ⇄ 读者索引（${carriers?.length ?? 0} 行）：\n${
-      report.map((l) => `  ${l}`).join("\n")
-      }\n`,
+    `声明 ⇄ 读者索引（${carriers?.length ?? 0} 行）：\n${report.map((l) => `  ${l}`).join("\n")}\n`,
   );
   process.exit(0);
 }
 
 if (problems.length > 0) {
   console.error(
-    `[declaration-readers] 声明 ⇄ 读者索引有 ${problems.length} 处问题（规范 §11.23）：\n${
-      problems.map((p) => `  · ${p}`).join("\n")
-      }\n`,
+    `[declaration-readers] 声明 ⇄ 读者索引有 ${problems.length} 处问题（规范 §11.23）：\n${problems
+      .map((p) => `  · ${p}`)
+      .join("\n")}\n`,
   );
   process.exit(1);
 }

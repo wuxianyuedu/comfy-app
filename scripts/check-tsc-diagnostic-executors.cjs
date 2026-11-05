@@ -153,9 +153,9 @@ function readLedger() {
 function isDeclarationLine(line) {
   const t = line.trim();
   if (t.startsWith("*")) {
-    return /^@(param|returns?|type)\b/.test(t.slice(1).trim());
+    return /^@(?:param|returns?|type)\b/.test(t.slice(1).trim());
   }
-  return /^(export\s+)?(function|const|interface|type)\b/.test(t);
+  return /^(?:export\s+)?(?:function|const|interface|type)\b/.test(t);
 }
 
 /**
@@ -383,7 +383,11 @@ if (entries) {
         problems.push(`「${e.name}」的 verifiedSurfaces 里 ${face} 重复了`);
       }
       seenFace.add(face);
-      if (!new RegExp(`\\b${face.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}\\b`).test(readerSrc)) {
+      if (
+        !new RegExp(`\\b${face.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}\\b`).test(
+          readerSrc,
+        )
+      ) {
         problems.push(
           `「${e.name}」声称核过的面 \`${face}\` 在 ${e.reader} 里找不到 —— ` +
             "台账的这句话与事实脱钩之后，它只会让人以为有人在守",
@@ -448,17 +452,17 @@ if (UPDATE) {
   if (bloated.length > 0) {
     process.stderr.write(
       `[tsc-diagnostic-executors] ✗ 拒绝写入：下列行的实测值比基线**大** —— ` +
-        `--update 只许降不许升（上涨就是「新写了一处没人回答过谁在敲的声明」）：\n${
-        bloated.map((l) => `  · ${l}`).join("\n")
-        }\n`,
+        `--update 只许降不许升（上涨就是「新写了一处没人回答过谁在敲的声明」）：\n${bloated
+          .map((l) => `  · ${l}`)
+          .join("\n")}\n`,
     );
     process.exit(2);
   }
   if (problems.length > 0) {
     process.stderr.write(
-      `[tsc-diagnostic-executors] ✗ 先修掉这些问题再收紧基线（--update 不代替判决）：\n${
-        problems.map((p) => `  · ${p}`).join("\n")
-        }\n`,
+      `[tsc-diagnostic-executors] ✗ 先修掉这些问题再收紧基线（--update 不代替判决）：\n${problems
+        .map((p) => `  · ${p}`)
+        .join("\n")}\n`,
     );
     process.exit(1);
   }
@@ -489,23 +493,24 @@ if (UPDATE) {
 
 if (REPORT_ONLY) {
   process.stdout.write(
-    `类型层声明 ⇄ 执行者（${entries?.length ?? 0} 条）：\n${
-      report.map((l) => `  ${l}`).join("\n")
-      }\n`,
+    `类型层声明 ⇄ 执行者（${entries?.length ?? 0} 条）：\n${report
+      .map((l) => `  ${l}`)
+      .join("\n")}\n`,
   );
   process.exit(0);
 }
 
 if (problems.length > 0) {
   console.error(
-    `[tsc-diagnostic-executors] 类型层「声明 ⇄ 执行者」有 ${problems.length} 处问题（§13.5.14）：\n${
-      problems.map((p) => `  · ${p}`).join("\n")
-      }\n`,
+    `[tsc-diagnostic-executors] 类型层「声明 ⇄ 执行者」有 ${problems.length} 处问题（§13.5.14）：\n${problems
+      .map((p) => `  · ${p}`)
+      .join("\n")}\n`,
   );
   process.exit(1);
 }
 
 process.stdout.write(
-  `类型层声明 ⇄ 执行者：${entries?.length ?? 0} 条声明的执行者都在场（零增量）\n${
-    vanishedNote(vanishedScan)}`,
+  `类型层声明 ⇄ 执行者：${entries?.length ?? 0} 条声明的执行者都在场（零增量）\n${vanishedNote(
+    vanishedScan,
+  )}`,
 );

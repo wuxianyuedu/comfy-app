@@ -183,14 +183,16 @@ function gateChainScripts() {
     /* 形态一：`scripts/<x>`（钩子的 `run "…" node scripts/<x>`、`quality-gate` 的
      * `args: ["../scripts/<x>"]`、`$Blocks` 的 `Args`）—— 与 `check-gate-executors`
      * 的 `gateChainScripts()` 逐字同口径。 */
-    for (const m of src.matchAll(/scripts[\\/]+([A-Za-z0-9_.-]+\.(?:cjs|mjs))/g)) {
-      out.add(m[1]);
+    for (const m of src.matchAll(/scripts[\\/]+(?<script>[A-Za-z0-9_.-]+\.(?:cjs|mjs))/g)) {
+      out.add(m.groups?.script ?? "");
     }
     /* 形态二：聚合档表项里的裸 `script: "<x>"`（`run-ast-gates.cjs` 的 `GATES`）
      * —— 这里**没有** `scripts/` 前缀，因为聚合档按 basename import 它们。
      * 不收这一形态的后果实测过：经聚合档真在跑的两条被误报成「无落点」。 */
-    for (const m of src.matchAll(/\bscript:\s*["'`]([A-Za-z0-9_.-]+\.(?:cjs|mjs))["'`]/g)) {
-      out.add(m[1]);
+    for (const m of src.matchAll(
+      /\bscript:\s*["'`](?<script>[A-Za-z0-9_.-]+\.(?:cjs|mjs))["'`]/g,
+    )) {
+      out.add(m.groups?.script ?? "");
     }
   }
   return out;
@@ -337,7 +339,7 @@ function scriptFiles() {
   if (scriptFilesCache === null) {
     scriptFilesCache = fs
       .readdirSync(path.join(ROOT, SCRIPT_DIR))
-      .filter((f) => /\.(cjs|mjs)$/.test(f))
+      .filter((f) => /\.(?:cjs|mjs)$/.test(f))
       .sort();
   }
   return scriptFilesCache;
@@ -371,24 +373,27 @@ function baselineOwners() {
   const dir = path.join(ROOT, SCRIPT_DIR);
   /** 基线名 → 脚本名（一个脚本可能落多份，一个基线也可能……不可能属于两个脚本）。 */
   const map = new Map();
-  const baseName = (text) => /"(\.[^"]+\.json)"/.exec(text)?.[1];
+  const baseName = (text) => /"(?<base>\.[^"]+\.json)"/.exec(text)?.groups?.base;
   for (const file of scriptFiles()) {
     const src = fs.readFileSync(path.join(dir, file), "utf8");
     /* 声明：`const B = path.join(<根>, …, ".x.json")`。 */
     const declared = new Map();
     for (const m of src.matchAll(
-      /(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*=\s*path\.join\(([^;]{0,300}?)\)/g,
+      /(?:const|let|var)\s+(?<name>[A-Za-z0-9_$]+)\s*=\s*path\.join\((?<args>[^;]{0,300}?)\)/g,
     )) {
-      const name = baseName(m[2] ?? "");
-      if (m[1] && name) {
-        declared.set(m[1], name);
+      const name = baseName(m.groups?.args ?? "");
+      if (m.groups?.name && name) {
+        declared.set(m.groups?.name, name);
       }
     }
     /* 真被当写入目标的变量名。 */
     const written = new Set();
-    for (const m of src.matchAll(/(?:fs\.)?write(?:File|FileSync)\(\s*([A-Za-z0-9_$]+)/g)) {
-      if (m[1]) {
-        written.add(m[1]);
+    for (const m of src.matchAll(
+      /(?:fs\.)?write(?:File|FileSync)\(\s*(?<varName>[A-Za-z0-9_$]+)/g,
+    )) {
+      const varName = m.groups?.varName;
+      if (varName) {
+        written.add(varName);
       }
     }
     for (const [varName, name] of declared) {
@@ -398,10 +403,10 @@ function baselineOwners() {
     }
     /* 直接把路径拼在写入调用里的写法（不走变量）。 */
     for (const m of src.matchAll(
-      /(?:fs\.)?write(?:File|FileSync)\(\s*path\.join\([^;]{0,300}?"(\.[^"]+\.json)"/g,
+      /(?:fs\.)?write(?:File|FileSync)\(\s*path\.join\([^;]{0,300}?"(?<json>\.[^"]+\.json)"/g,
     )) {
-      if (m[1]) {
-        map.set(m[1], file);
+      if (m.groups?.json) {
+        map.set(m.groups?.json, file);
       }
     }
   }
@@ -420,20 +425,21 @@ function ratchetTableScripts() {
   const out = new Set();
   for (const table of ["COVERED_LOCALLY", "RETIRED_RATCHETS", "NOT_A_RATCHET"]) {
     /* 键 = 基线文件名（表里就以它当键）。 */
-    for (const m of tableBody(table).matchAll(/["'`](\.[^"'`]+\.json)["'`]\s*:/g)) {
-      const script = owners.get(m[1]);
+    for (const m of tableBody(table).matchAll(/["'`](?<baseline>\.[^"'`]+\.json)["'`]\s*:/g)) {
+      const baseline = m.groups?.baseline ?? "";
+      const script = owners.get(baseline);
       if (script) {
         out.add(script);
       } else {
-        out.add(`(基线 ${m[1]} 今天没有任何脚本写回去)`);
+        out.add(`(基线 ${baseline} 今天没有任何脚本写回去)`);
       }
     }
   }
   /* `RATCHETS` 是数组、行里有显式 `script:` 字段。 */
   for (const m of tableBody("RATCHETS").matchAll(
-    /\bscript:\s*["'`]([a-z0-9-]+\.(?:cjs|mjs))["'`]/g,
+    /\bscript:\s*["'`](?<script>[a-z0-9-]+\.(?:cjs|mjs))["'`]/g,
   )) {
-    out.add(m[1]);
+    out.add(m.groups?.script ?? "");
   }
   return [...out].sort();
 }
@@ -442,9 +448,9 @@ function ratchetTableScripts() {
 function flipsScripts() {
   const out = [];
   for (const m of tableBody("HARD_GATE_FLIPS").matchAll(
-    /["'`]([a-z0-9-]+\.(?:cjs|mjs))["'`]\s*:/g,
+    /["'`](?<script>[a-z0-9-]+\.(?:cjs|mjs))["'`]\s*:/g,
   )) {
-    out.push(m[1]);
+    out.push(m.groups?.script ?? "");
   }
   return out.sort();
 }

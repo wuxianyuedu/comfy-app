@@ -144,7 +144,7 @@ const PROSE_ONLY_SCRIPTS = [
  * @param {Set<string>} chain
  */
 function isGateScript(name, chain) {
-  if (!/\.(cjs|mjs)$/.test(name)) {
+  if (!/\.(?:cjs|mjs)$/.test(name)) {
     return false;
   }
   if (chain.has(name)) {
@@ -218,7 +218,7 @@ function executorSources() {
       vanishedTests += 1;
       continue;
     }
-    if (/\b(execFileSync|execFile|spawnSync|spawn)\s*\(/.test(src)) {
+    if (/\b(?:execFileSync|execFile|spawnSync|spawn)\s*\(/.test(src)) {
       testSources.push({
         rel: path.relative(ROOT, full).replaceAll("\\", "/"),
         text: src,

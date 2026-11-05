@@ -53,7 +53,7 @@ const SCAN_DIR = "src";
 if (STAGED && !REPORT_ONLY) {
   skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[duplication]" });
 }
-const SOURCE_EXT = /\.(ts|tsx)$/;
+const SOURCE_EXT = /\.(?:ts|tsx)$/;
 
 /** 判据阈值。
  *

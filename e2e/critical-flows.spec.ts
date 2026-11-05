@@ -974,7 +974,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
               const summary =
                 // oxlint-disable-next-line typescript/no-unnecessary-condition -- Playwright evaluate 里的 DOM 节点 textContent 运行期可为 null（lib.dom 声明 string|null），规则未建模，保留兜底
                 nodes.map((n) => n.textContent?.trim() ?? "").find((t) => /^\d+ 条/.test(t)) ?? "";
-              return /^(\d+) 条/.exec(summary)?.[1] ?? "0";
+              return /^(?<count>\d+) 条/.exec(summary)?.groups?.count ?? "0";
             }),
           ),
         )
@@ -1001,7 +1001,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
             // oxlint-disable-next-line typescript/no-unnecessary-condition -- Playwright evaluate 里的 DOM 节点 textContent 运行期可为 null（lib.dom 声明 string|null），规则未建模，保留兜底
             .map((n) => n.textContent?.trim() ?? "")
             .find((t) => /^\d+ 条/.test(t));
-          return /^(\d+) 条/.exec(summary ?? "")?.[1] ?? "0";
+          return /^(?<count>\d+) 条/.exec(summary ?? "")?.groups?.count ?? "0";
         });
       /** 摘要里的「全部 / 信息 / 警告 / 错误」四个数（不读自绘的列）。 */
       const levelsOf = async (label: string) =>
@@ -1010,12 +1010,12 @@ test.describe("应用页签与全屏视图 @critical", () => {
           const summary =
             // oxlint-disable-next-line typescript/no-unnecessary-condition -- Playwright evaluate 里的 DOM 节点 textContent 运行期可为 null（lib.dom 声明 string|null），规则未建模，保留兜底
             nodes.map((n) => n.textContent?.trim() ?? "").find((t) => /^\d+ 条/.test(t)) ?? "";
-          const num = (re: RegExp) => Number(re.exec(summary)?.[1] ?? "0");
+          const num = (re: RegExp) => Number(re.exec(summary)?.groups?.count ?? "0");
           return {
-            all: num(/^(\d+) 条/),
-            info: num(/信息 (\d+)/),
-            warn: num(/警告 (\d+)/),
-            error: num(/错误 (\d+)/),
+            all: num(/^(?<count>\d+) 条/),
+            info: num(/信息 (?<count>\d+)/),
+            warn: num(/警告 (?<count>\d+)/),
+            error: num(/错误 (?<count>\d+)/),
           };
         });
 
@@ -1045,7 +1045,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
       const readTotalsInOneTurn = () =>
         page.evaluate(() => {
           const num = (text: string | null | undefined, re: RegExp) =>
-            re.exec(text ?? "")?.[1] ?? "";
+            re.exec(text ?? "")?.groups?.count ?? "";
           const option = [...document.querySelectorAll('[role="option"]')].find((el) =>
             // oxlint-disable-next-line typescript/no-unnecessary-condition -- Playwright evaluate 里的 DOM 节点 textContent 运行期可为 null（lib.dom 声明 string|null），规则未建模，保留兜底
             el.textContent?.includes("全部来源（按条去重）"),
@@ -1061,8 +1061,8 @@ test.describe("应用页签与全屏视图 @critical", () => {
             /面板共保留 \d+ 条/.test(el.textContent ?? ""),
           );
           return {
-            dropdown: num(summary, /^(\d+) 条/),
-            footer: num(footer?.textContent, /面板共保留 (\d+) 条/),
+            dropdown: num(summary, /^(?<count>\d+) 条/),
+            footer: num(footer?.textContent, /面板共保留 (?<count>\d+) 条/),
           };
         });
       await expect
@@ -1264,7 +1264,9 @@ test.describe("应用页签与全屏视图 @critical", () => {
       const body = await page.locator("[data-log-text]").allInnerTexts();
       expect(body.length).toBeGreaterThan(0);
       for (const text of body) {
-        expect(text).not.toMatch(/\[\d{2}:\d{2}:\d{2}\]\s*\[(INFO|STEP|OK|WARN|ERROR|DEBUG)\s*\]/);
+        expect(text).not.toMatch(
+          /\[\d{2}:\d{2}:\d{2}\]\s*\[(?:INFO|STEP|OK|WARN|ERROR|DEBUG)\s*\]/,
+        );
       }
 
       /* 级别标签与正文分开：`INFO` / `ERROR` 出现在级别徽标里，而不是正文里。

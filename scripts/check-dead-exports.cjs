@@ -102,8 +102,8 @@ const SCAN_ROOTS = [path.join(SRC, "lib"), path.join(SRC, "trpc")];
 const USAGE_ROOTS = ["src", "scripts", "e2e"];
 /** 同域单测的后缀:与声明处同目录、同基名的测试文件。它们算消费方。 */
 const TEST_CONSUMER_EXT = [".test.ts", ".test.tsx"];
-const SKIP_RE = /\.(test|spec)\.(ts|tsx)$|\.d\.ts$/;
-const TEST_FILE_RE = /\.(test|spec)\.(ts|tsx)$/;
+const SKIP_RE = /\.(?:test|spec)\.(?:ts|tsx)$|\.d\.ts$/;
+const TEST_FILE_RE = /\.(?:test|spec)\.(?:ts|tsx)$/;
 
 /**
  * 语料的文件形状：必须含 `.mjs` / `.cjs` —— `USAGE_ROOTS` 里 `scripts` 全是这两种后缀，而
@@ -112,7 +112,7 @@ const TEST_FILE_RE = /\.(test|spec)\.(ts|tsx)$/;
  * 「有消费方」判成零消费——与本文件头那句「值导出在 src/scripts/e2e 里零引用」
  * 相反（§12.17：注释与判据相反，下一个人照注释写只会多一条不生效的口径）。
  */
-const CORPUS_FILE_RE = /\.(ts|tsx|mjs|cjs)$/;
+const CORPUS_FILE_RE = /\.(?:ts|tsx|mjs|cjs)$/;
 /** 本判据额外不进去的目录（`gate-scan-read.cjs` 默认只跳 `node_modules`）。 */
 const WALK_SKIP_DIRS = new Set(["node_modules", ".next", ".git"]);
 
@@ -144,15 +144,15 @@ function stripComments(src) {
 function exportedValues(src) {
   const out = [];
   const re =
-    /^export\s+(?:declare\s+)?(?:async\s+)?(?:function|const|let|var|class|enum)\s+([A-Za-z_$][\w$]*)/gm;
+    /^export\s+(?:declare\s+)?(?:async\s+)?(?:function|const|let|var|class|enum)\s+(?<name>[A-Za-z_$][\w$]*)/gm;
   let m;
   while ((m = re.exec(src))) {
-    out.push(m[1]);
+    out.push(m.groups?.name ?? "");
   }
   // `export { a, b as c }` 具名清单：只要别名（外部能引到的那个名字）
-  const listRe = /^export\s*\{([^}]*)\}/gm;
+  const listRe = /^export\s*\{(?<names>[^}]*)\}/gm;
   while ((m = listRe.exec(src))) {
-    for (const part of m[1].split(",")) {
+    for (const part of (m.groups?.names ?? "").split(",")) {
       const seg = part.trim();
       if (!seg) {
         continue;
@@ -186,10 +186,10 @@ function moduleKeys(absPathNoExt) {
 /** 从源码抽出**归一后的 import 说明符**（与旧 `importsModule` 同一过滤 + 归一）。 */
 function importSpecs(src) {
   const out = [];
-  const re = /(?:from|import)\s*\(?\s*["']([^"']+)["']/g;
+  const re = /(?:from|import)\s*\(?\s*["'](?<specifier>[^"']+)["']/g;
   let m;
   while ((m = re.exec(src))) {
-    const spec = m[1];
+    const spec = m.groups?.specifier ?? "";
     if (
       !spec ||
       (!spec.startsWith(".") &&
@@ -414,8 +414,7 @@ function main() {
       hint:
         `修法：① 真的要用 → 接线到消费方；② 确认是死代码 → 删掉（§12.15 第二条：留着的理由\n` +
         `必须写得出「谁在什么时候用它」，「以后可能会用」不是理由）。\n` +
-        `本判据是硬闸（无基线、无 --update）：零消费导出的存量已清零，新增即阻断。${
-        note}`,
+        `本判据是硬闸（无基线、无 --update）：零消费导出的存量已清零，新增即阻断。${note}`,
     });
     process.exit(1);
   }

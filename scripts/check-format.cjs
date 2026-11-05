@@ -413,7 +413,7 @@ function oxfmtCheckTargets(entry, targets, subject) {
     // 有差异行形如 `src/foo.ts (12ms)`；其余是 `Checking formatting...` /
     // `Format issues found in above N files.` / `Finished in ...` 这类摘要行，
     // 认不出的行一律丢掉（宁可漏报也不许把摘要行当成文件名）。
-    .map((line) => line.match(/^(.+?)\s+\(\d+(?:\.\d+)?(?:ms|s)\)$/)?.[1] ?? null)
+    .map((line) => line.match(/^(?<label>.+?)\s+\(\d+(?:\.\d+)?(?:ms|s)\)$/)?.groups?.label ?? null)
     .filter((line) => line && !line.startsWith("["));
   if (res.status !== 0 && res.status !== 1) {
     console.error(

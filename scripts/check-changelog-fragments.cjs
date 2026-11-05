@@ -38,7 +38,7 @@ const FRAGMENT_DIR = "changelog.d";
 /** 允许的段落标题 —— Keep a Changelog 的固定段落集(规范 §13.10.4)。 */
 const SECTIONS = ["Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"];
 /** 碎片文件名:`<issue号>-<slug>.md`;issue 号允许 `#` 前缀,slug 用小写字母数字与连字符。 */
-const FILE_RE = /^#?(\d+)-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/;
+const FILE_RE = /^#?(?:\d+)-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/;
 /** 非「一条变更」的文件:目录说明文档不参与形态校验。 */
 const IGNORED_FILES = new Set(["README.md"]);
 

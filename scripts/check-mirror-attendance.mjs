@@ -45,11 +45,7 @@
  * ```
  */
 import { cnbJson, makeRunner } from "./ship-exec.mjs";
-import {
-  classifyBuildOutcome,
-  fetchStageDetail,
-  findStageMatches,
-} from "./ci-build-readout.mjs";
+import { classifyBuildOutcome, fetchStageDetail, findStageMatches } from "./ci-build-readout.mjs";
 import { CODE, fetchBuildsCoveringWindow } from "./check-daily-attendance.mjs";
 
 /** 被问的那一格的名字（`.cnb.yml` 主列，#3051 起）。认格名而不是认 id：id 会随位置漂。 */
@@ -116,20 +112,20 @@ export function classifyMirrorText(text, stageStatus = "") {
     return { shape: "dispatch-rejected", evidence: line(/派发被拒[^\n]*/) };
   }
   if (t.includes("推送失败")) {
-    return { shape: "push-failed", evidence: line(/(推送失败[^\n]*|fatal:[^\n]*)/) };
+    return { shape: "push-failed", evidence: line(/(?:推送失败[^\n]*|fatal:[^\n]*)/) };
   }
   if (t.includes("推送前这一读没通")) {
     /* 探针那一跳已经由 `explainRemoteProbeFailure()` 分成三类，这里照它写出的话术接住。 */
     if (t.includes("这一跳没通")) {
-      return { shape: "egress", evidence: line(/(这一跳没通[^\n]*|fatal:[^\n]*)/) };
+      return { shape: "egress", evidence: line(/(?:这一跳没通[^\n]*|fatal:[^\n]*)/) };
     }
     if (t.includes("先去建仓库") || t.includes("不存在")) {
-      return { shape: "repo-missing", evidence: line(/(目标仓库[^\n]*|fatal:[^\n]*)/) };
+      return { shape: "repo-missing", evidence: line(/(?:目标仓库[^\n]*|fatal:[^\n]*)/) };
     }
     if (t.includes("身份够不到")) {
-      return { shape: "token-scope", evidence: line(/(这枚令牌[^\n]*|fatal:[^\n]*)/) };
+      return { shape: "token-scope", evidence: line(/(?:这枚令牌[^\n]*|fatal:[^\n]*)/) };
     }
-    return { shape: "token-scope", evidence: line(/(推送前这一读没通[^\n]*|fatal:[^\n]*)/) };
+    return { shape: "token-scope", evidence: line(/(?:推送前这一读没通[^\n]*|fatal:[^\n]*)/) };
   }
   if (stageStatus === "skipped") {
     return { shape: "no-cell", evidence: "status=skipped（这一格在这跑根本没执行）" };
@@ -203,7 +199,7 @@ export function judgeMirrorAttendance({ builds, readings, windowHours, now }) {
   });
   /** @type {Record<string, number>} */
   const shapeCounts = {};
-  for (const r of (Array.isArray(readings) ? readings : [])) {
+  for (const r of Array.isArray(readings) ? readings : []) {
     shapeCounts[r.shape] = (shapeCounts[r.shape] ?? 0) + 1;
   }
   const seen = (Array.isArray(readings) ? readings : []).filter((r) => r.shape !== "no-cell");

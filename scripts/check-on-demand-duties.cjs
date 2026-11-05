@@ -120,9 +120,9 @@ function qualityGateModes() {
   const lines = text.split("\n");
   let current = null;
   for (const line of lines) {
-    const m = line.match(/^\s{2}([a-zA-Z][\w]*):\s*\{/);
+    const m = line.match(/^\s{2}(?<key>[a-zA-Z][\w]*):\s*\{/);
     if (m) {
-      current = m[1];
+      current = m.groups?.key;
       all.add(current);
       continue;
     }
@@ -179,9 +179,9 @@ async function main() {
         return [
           ...fs
             .readFileSync(path.join(__dirname, "base-check", "chained-steps.mjs"), "utf8")
-            .matchAll(/\{ script: "([^"]+)" \}/g),
+            .matchAll(/\{ script: "(?<script>[^"]+)" \}/g),
         ]
-          .map((m) => m[1])
+          .map((m) => m.groups?.script)
           .includes(fact.script);
       }
       default: {

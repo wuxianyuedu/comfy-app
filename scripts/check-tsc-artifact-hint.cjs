@@ -31,7 +31,8 @@
 const fs = require("node:fs");
 
 /** tsc 的一行报错：路径（可能带引号）+ (行,列) + error TS#### + 消息。 */
-const ERROR_LINE = /(?:^|[\s(])("([^"]+)"|([^\s(]+))\((\d+),(\d+)\):\s+error\s+TS(\d+)/g;
+const ERROR_LINE =
+  /(?:^|[\s(])(?:"(?<quotedPath>[^"]+)"|(?<barePath>[^\s(]+))\((?:\d+),(?:\d+)\):\s+error\s+TS(?:\d+)/g;
 
 /** 归一化路径分隔符：tsc 在 Windows 上给反斜杠，日志里也可能出现绝对路径。 */
 function toPosix(p) {
@@ -50,7 +51,7 @@ function toPosix(p) {
  */
 function isArtifact(filePath) {
   const p = toPosix(filePath);
-  return /(^|\/)\.next\//.test(p) || /(^|\/)\.storybook\/generated\//.test(p);
+  return /(?:^|\/)\.next\//.test(p) || /(?:^|\/)\.storybook\/generated\//.test(p);
 }
 
 /**
@@ -65,7 +66,7 @@ function classifyTscErrors(text) {
   let total = 0;
   for (const m of String(text).matchAll(ERROR_LINE)) {
     total += 1;
-    const file = m[3] ?? m[2] ?? "";
+    const file = m.groups?.barePath ?? m.groups?.quotedPath ?? "";
     if (file) {
       files.push(file);
     }

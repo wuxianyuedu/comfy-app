@@ -45,8 +45,8 @@ async function openQueue(page: Page) {
 async function headingCount(section: ReturnType<typeof waitingSection>) {
   const heading = (await section.getAttribute("aria-labelledby")) ?? "";
   const text = await section.page().locator(`#${heading}`).innerText();
-  const matched = /（(\d+)）/.exec(text);
-  return matched ? Number(matched[1]) : Number.NaN;
+  const matched = /（(?<count>\d+)）/.exec(text);
+  return matched ? Number(matched.groups?.count) : Number.NaN;
 }
 
 test.describe("队列与运行屏 @critical", () => {
@@ -107,7 +107,9 @@ test.describe("队列与运行屏 @critical", () => {
       .locator("li")
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- Playwright evaluate 里的 DOM 节点 textContent 运行期可为 null（lib.dom 声明 string|null），规则未建模，保留兜底
       .evaluateAll((nodes) => nodes.map((n) => n.textContent ?? ""));
-    expect(rows.map((t) => /第 (\d+) 位/.exec(t)?.[1] ?? "?").join(",")).toBe("1,2,3");
+    expect(rows.map((t) => /第 (?<count>\d+) 位/.exec(t)?.groups?.count ?? "?").join(",")).toBe(
+      "1,2,3",
+    );
     /* 最早提交的在最前面（方向反了时这里是「最后提交的」）。 */
     expect(rows[0]).toContain("最早提交的");
     expect(rows[0]).toContain("第 1 位");

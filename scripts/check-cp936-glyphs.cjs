@@ -59,10 +59,10 @@ const LOGGED_DIRS = ["scripts", "tests", "tools"];
 const LOGGED_FILES = [".cnb.yml"];
 
 /** 扫描面里 `src/**` 的那部分：**只有测试文件**（测试名会进 vitest 输出）。 */
-const SRC_TEST_RE = /^src[/\\].*\.(test|spec)\.[cm]?[jt]sx?$/;
+const SRC_TEST_RE = /^src[/\\].*\.(?:test|spec)\.[cm]?[jt]sx?$/;
 
 /** 目录扫描认的扩展名。 */
-const SCAN_EXT = /\.(mjs|cjs|js|jsx|ts|tsx|json|md|mdx|yml|yaml|ps1)$/;
+const SCAN_EXT = /\.(?:mjs|cjs|js|jsx|ts|tsx|json|md|mdx|yml|yaml|ps1)$/;
 
 /** 不进去的目录：依赖与产物。 */
 const SKIP_DIRS = new Set([

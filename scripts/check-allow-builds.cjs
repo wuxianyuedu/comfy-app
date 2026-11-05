@@ -146,9 +146,9 @@ function readAllowBuildsKeys(text) {
     if (trimmed === "" || trimmed.startsWith("#")) {
       continue;
     }
-    const matched = /^"?([^":]+)"?\s*:/.exec(trimmed);
+    const matched = /^"?(?<name>[^":]+)"?\s*:/.exec(trimmed);
     if (matched) {
-      keys.add(matched[1].trim());
+      keys.add(matched.groups?.name?.trim() ?? "");
     }
   }
   return { keys, blockFound: true };

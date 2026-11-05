@@ -195,8 +195,8 @@ function walk(dir) {
 
 /** 用例文件里声明的环境（文件头 `// @vitest-environment <name>`）。 */
 function declaredEnv(text) {
-  const m = /^\/\/\s*@vitest-environment\s+(\S+)\s*$/m.exec(text);
-  return m ? m[1] : null;
+  const m = /^\/\/\s*@vitest-environment\s+(?<env>\S+)\s*$/m.exec(text);
+  return m ? (m.groups?.env ?? null) : null;
 }
 
 /**
@@ -268,14 +268,12 @@ function main() {
   const { tiers, found, environments: envOfTier, configText } = projectGlobs();
   if (found < 2) {
     console.error(
-      `[ERROR] 解析 \`vitest.config.ts\` 的 \`projects\` 失败（拿到 ${
-        found
-        } 个档，期望 2）。\n${
+      `[ERROR] 解析 \`vitest.config.ts\` 的 \`projects\` 失败（拿到 ${found} 个档，期望 2）。\n${
         configText === null
           ? "        连 `vitest.config.ts` 都没读到 —— 那本身就是要判失败的故障，\n" +
             "        不许当「配置里没有 projects」处理。\n"
           : ""
-        }        本判据依赖那两个 project 的 \`include\` / \`exclude\` glob；\n` +
+      }        本判据依赖那两个 project 的 \`include\` / \`exclude\` glob；\n` +
         `        配置形状改了就要同批改这里 —— 静默退回「没有目录档」等于这条判据消失。`,
     );
     return 1;
@@ -424,9 +422,11 @@ function main() {
   }
 
   console.error(
-    `${REPORT_ONLY
-      ? `[test-env] 盘点：${all.length} 处待办（--report 不判失败）`
-      : `[ERROR] 用例的环境档有 ${all.length} 处问题`}：\n`,
+    `${
+      REPORT_ONLY
+        ? `[test-env] 盘点：${all.length} 处待办（--report 不判失败）`
+        : `[ERROR] 用例的环境档有 ${all.length} 处问题`
+    }：\n`,
   );
   for (const p of all) {
     console.error(`  · ${p.rel}${p.line ? `:${p.line}` : ""}  [${p.kind}]`);
@@ -441,8 +441,7 @@ function main() {
       `    别只改一边凑绿：那正是这条判据要照出来的改动。\n` +
       `  · 「冗余文件头」：删掉这一行 \`// @vitest-environment …\` 即可（目录档已给出同结论）。\n` +
       `    列清单：\`node scripts/check-test-environment.cjs --report\`。\n` +
-      `  口径见 docs/standards/11-测试与可观测性.md §11.17。${
-      note}`,
+      `  口径见 docs/standards/11-测试与可观测性.md §11.17。${note}`,
   );
   return REPORT_ONLY ? 0 : 1;
 }

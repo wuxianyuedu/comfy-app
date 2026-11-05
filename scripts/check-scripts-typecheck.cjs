@@ -408,7 +408,7 @@ function runTsc() {
   return { ok: true, code: r.status ?? 1, output };
 }
 
-const DIAG_RE = /^(.+?)\((\d+),(\d+)\): error (TS\d+):/;
+const DIAG_RE = /^(?<rel>.+?)\((?<line>\d+),(?:\d+)\): error (?<code>TS\d+):/;
 
 /**
  * 把 tsc 的输出切成「诊断行」与 `--listFiles` 那一段。
@@ -433,9 +433,9 @@ function parseOutput(output) {
     const m = DIAG_RE.exec(line);
     if (m) {
       diags.push({
-        rel: m[1].replaceAll("\\", "/"),
-        code: m[4],
-        line: Number(m[2]),
+        rel: (m.groups?.rel ?? "").replaceAll("\\", "/"),
+        code: m.groups?.code ?? "",
+        line: Number(m.groups?.line ?? 0),
       });
       continue;
     }

@@ -66,14 +66,14 @@ if (endpointsSrc == null) {
   fail(`找不到 ${ENDPOINTS}`);
 }
 const decl =
-  endpointsSrc && /export\s+const\s+COMFYUI_DEFAULT_PORT\s*=\s*(\d+)\s*;/.exec(endpointsSrc);
+  endpointsSrc && /export\s+const\s+COMFYUI_DEFAULT_PORT\s*=\s*(?<port>\d+)\s*;/.exec(endpointsSrc);
 if (!decl) {
   fail(
     `${ENDPOINTS} 里找不到 \`export const COMFYUI_DEFAULT_PORT = <数字>;\` —— ` +
       `默认端口必须在**零依赖**的常量层单点定义（否则浏览器图一 import 就整页 500）`,
   );
 }
-const defaultPort = decl ? Number(decl[1]) : null;
+const defaultPort = decl ? Number(decl.groups?.port) : null;
 
 /* app-settings 目录**不得再转手**默认端口（转手正是历史事故的诱因：视图层为了
  * 一个常量而 import 到一个顶层带 fs 的文件，浏览器图整页 500）。
@@ -206,7 +206,7 @@ function collectSourceFiles(dir, out = []) {
         continue;
       }
       collectSourceFiles(abs, out);
-    } else if (/\.(ts|tsx)$/.test(name) && !/\.test\.tsx?$/.test(name)) {
+    } else if (/\.(?:ts|tsx)$/.test(name) && !/\.test\.tsx?$/.test(name)) {
       out.push(abs);
     }
   }
@@ -236,9 +236,11 @@ for (const abs of collectSourceFiles(path.join(ROOT, "src"))) {
 }
 if (rawPortHits.length > 0) {
   fail(
-    `源码里出现裸 8188 字面量（默认端口必须走 COMFYUI_DEFAULT_PORT，规范 §12.14）：\n  ${
-      rawPortHits.slice(0, 10).join("\n  ")
-      }${rawPortHits.length > 10 ? `\n  …（其余 ${rawPortHits.length - 10} 处省略）` : ""}`,
+    `源码里出现裸 8188 字面量（默认端口必须走 COMFYUI_DEFAULT_PORT，规范 §12.14）：\n  ${rawPortHits
+      .slice(0, 10)
+      .join(
+        "\n  ",
+      )}${rawPortHits.length > 10 ? `\n  …（其余 ${rawPortHits.length - 10} 处省略）` : ""}`,
   );
 }
 

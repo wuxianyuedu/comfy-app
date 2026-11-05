@@ -134,8 +134,8 @@ function parsePairs() {
     // 否则写清楚用法的那一格会被漏掉，门禁就会对新增动作一声不吭。
     /* `matchAll` 的捕获组按下标取是 `string | undefined`；把空值收掉之后再进表，
      * 否则下面每一处 `f.endsWith(".ps1")` 都要重新问一遍「这会不会是 undefined」。 */
-    const files = [...line.matchAll(/`([\w./-]+\.(?:ps1|mjs|cjs|py))`/g)]
-      .map((m) => m[1])
+    const files = [...line.matchAll(/`(?<file>[\w./-]+\.(?:ps1|mjs|cjs|py))`/g)]
+      .map((m) => m.groups?.file)
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- 捕获组按下标取被标成 string，filter 防正则改动后的失配
       .filter((f) => f !== undefined);
     if (files.length === 0) {
@@ -160,7 +160,7 @@ function checkPairs() {
   }
   for (const row of rows) {
     const ps1s = row.filter((f) => f.endsWith(".ps1"));
-    const others = row.filter((f) => /\.(mjs|cjs|py)$/.test(f));
+    const others = row.filter((f) => /\.(?:mjs|cjs|py)$/.test(f));
     if (ps1s.length === 0 || others.length === 0) {
       problems.push(
         `跨平台动作对照表有一行只登记了一侧：${row.join(" / ") || "(解析不到脚本路径)"}` +
@@ -206,7 +206,7 @@ function checkSingleSource() {
   }
   for (const dir of ["scripts", "tools"]) {
     for (const rel of walk(dir)) {
-      if (!/\.(ps1|mjs)$/.test(rel)) {
+      if (!/\.(?:ps1|mjs)$/.test(rel)) {
         continue;
       }
       if (rel === SHARED_REL || rel === SELF_REL) {
@@ -290,9 +290,9 @@ function readmeSection(title) {
   const out = [];
   for (let i = start + 1; i < lines.length; i++) {
     const line = lines[i] ?? "";
-    const m = line.match(/^(#+)\s/);
+    const m = line.match(/^(?<hashes>#+)\s/);
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则只有一组捕获，`?? ""` 是 noUncheckedIndexedAccess 下的类型兜底
-    if (m && (m[1] ?? "").length <= level) {
+    if (m && (m.groups?.hashes ?? "").length <= level) {
       break;
     }
     out.push(line);
@@ -308,11 +308,11 @@ function readmeSection(title) {
  * 而它们混在同一格文字里。一刀切成「反引号里的都是路径」会把后两类全判成
  * 「文件不存在」。所以形状由各调用点的正则负责，这一层只做提取。
  * @param {string} text
- * @param {RegExp} re 必须带一个捕获组，取的就是那一组
+ * @param {RegExp} re 必须带一个命名为 `value` 的捕获组，取的就是那一组
  * @returns {string[]} */
 function pathsIn(text, re) {
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- 捕获组按下标取被标成 string，filter 防调用点正则失配
-  return [...text.matchAll(re)].map((m) => m[1]).filter((p) => p !== undefined);
+  return [...text.matchAll(re)].map((m) => m.groups?.value).filter((p) => p !== undefined);
 }
 
 /** 收集磁盘上真实存在的双击入口（`tools/**`，排除逻辑层）。 */
@@ -361,7 +361,7 @@ function checkReadmeEntryList() {
     [cross, "跨平台入口对照"],
   ];
   for (const [section, label] of sections) {
-    const found = pathsIn(section, /`((?:tools|scripts)\/[\w./-]+\.ps1)`/g);
+    const found = pathsIn(section, /`(?<value>(?:tools|scripts)\/[\w./-]+\.ps1)`/g);
     for (const rel of found) {
       if (!fs.existsSync(path.join(ROOT, rel))) {
         problems.push(
@@ -371,7 +371,7 @@ function checkReadmeEntryList() {
       }
     }
     // 通配形态单列：`tools/build/*.ps1` 必须真的命中脚本，否则那是张空承诺。
-    for (const pattern of pathsIn(section, /`(tools\/[\w-]+\/)\*\.ps1`/g)) {
+    for (const pattern of pathsIn(section, /`(?<value>tools\/[\w-]+\/)\*\.ps1`/g)) {
       const dir = path.join(ROOT, pattern);
       const hit = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith(".ps1")) : [];
       if (hit.length === 0) {
@@ -398,7 +398,7 @@ function checkReadmeEntryList() {
   // `docs` 也是内建命令（`pnpm docs <PACKAGE>` 打开某包的文档）—— 它**不是**
   // 本仓的脚本名，照脚本名核会误报（本仓要跑 TypeDoc 时写的是 `pnpm run docs`）。
   const PNPM_BUILTIN = new Set(["install", "dlx", "exec", "run", "docs"]);
-  for (const name of pathsIn(cross, /`pnpm\s+([\w:@.-]+)/g)) {
+  for (const name of pathsIn(cross, /`pnpm\s+(?<value>[\w:@.-]+)/g)) {
     if (PNPM_BUILTIN.has(name)) {
       continue;
     }
@@ -411,8 +411,8 @@ function checkReadmeEntryList() {
       );
     }
   }
-  for (const m of cross.matchAll(/`pnpm\s+run\s+([\w:@.-]+)/g)) {
-    const [, name] = m;
+  for (const m of cross.matchAll(/`pnpm\s+run\s+(?<name>[\w:@.-]+)/g)) {
+    const name = m.groups?.name;
     if (!name) {
       continue;
     } // 捕获组不可能缺（正则里它是必选的），这一句是写给检查器的
@@ -426,7 +426,7 @@ function checkReadmeEntryList() {
 
   // ── 3. 磁盘 → 两份清单（+ 豁免逐条给理由）──────────────────────────
   // dailyActions = README 那张表里的入口（我双击它做什么）。
-  const dailyActions = new Set(pathsIn(windows, /`(tools\/[\w./-]+\.ps1)`/g).map((p) => p));
+  const dailyActions = new Set(pathsIn(windows, /`(?<value>tools\/[\w./-]+\.ps1)`/g).map((p) => p));
   // index = `tools/README.md` 的「全目录视图」里的入口（全量，含按用途成组的那些）。
   // 两处的路径写法不同（README 表写 `tools/start/x.ps1`，tools/README.md 的目录表写
   // `start/x.ps1`），所以索引侧按「`tools/` 后面的尾段」认。
@@ -435,8 +435,11 @@ function checkReadmeEntryList() {
     problems.push(`缺少 ${TOOLS_INDEX_REL} —— 入口清单的第二站没了（README 明确把完整表指向它）`);
   }
   const indexed = new Set(
-    (indexText === null ? [] : [...indexText.matchAll(/`((?:tools\/)?[\w-]+\/[\w.-]+\.ps1)`/g)])
-      .map((m) => m[1])
+    (indexText === null
+      ? []
+      : [...indexText.matchAll(/`(?<value>(?:tools\/)?[\w-]+\/[\w.-]+\.ps1)`/g)]
+    )
+      .map((m) => m.groups?.value)
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- 捕获组按下标取被标成 string，filter 防正则改动后的失配
       .filter((p) => p !== undefined)
       .map((p) => (p.startsWith("tools/") ? p : `tools/${p}`)),

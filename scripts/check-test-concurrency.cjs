@@ -122,7 +122,7 @@ const EXPECT_POLL_RE = /expect\s*\.\s*poll\s*\(/g;
  * 隔离声明：一行注释，写明「为什么这个文件里的用例之间没有共享可变状态」。
  * 要有内容 —— 空声明（只有一个标签）不算，那与没有声明等价。
  */
-const ISOLATION_DECL_RE = /\/\/\s*并发档\s*[：:]\s*(\S.*)/;
+const ISOLATION_DECL_RE = /\/\/\s*并发档\s*[：:]\s*(?<reason>\S.*)/;
 
 /** 枚举扫描面（消失容错与「只降级 ENOENT」的口径在 `gate-scan-read.cjs`）。 */
 function walk(dir) {
@@ -352,7 +352,7 @@ function scanFile(abs) {
   for (const m of raw.matchAll(/\/\/.*$/gm)) {
     const hit = ISOLATION_DECL_RE.exec(m[0]);
     if (hit) {
-      isolationNotes.push(hit[1].trim());
+      isolationNotes.push(hit.groups?.reason?.trim() ?? "");
     }
   }
 
@@ -412,16 +412,19 @@ function main() {
     console.log(
       `[concurrency] OK —— ${concurrentSites} 处并发站点 / ${concurrentFiles.length} 份文件，` +
         `隔离声明齐全、无 \`expect.poll\` 冲突。${
-        /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。 */
-        vanishedNote(vanished)}`,
+          /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。 */
+          vanishedNote(vanished)
+        }`,
     );
     return 0;
   }
 
   console.error(
-    `${REPORT_ONLY
-      ? `[concurrency] 盘点：${problems.length} 处待办（--report 不判失败）`
-      : `[ERROR] 有 ${problems.length} 处并发档用法不合口径`}：\n`,
+    `${
+      REPORT_ONLY
+        ? `[concurrency] 盘点：${problems.length} 处待办（--report 不判失败）`
+        : `[ERROR] 有 ${problems.length} 处并发档用法不合口径`
+    }：\n`,
   );
   for (const p of problems) {
     console.error(`  · ${p}\n`);

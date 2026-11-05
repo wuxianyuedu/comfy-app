@@ -129,8 +129,7 @@ const STANDARDS_DIR = "docs/standards";
  *
  * 语序 A 里 `§` 与关键词之间的窗口；语序 B 同理（保留 → `§`）。
  */
-const SECTION_CONNECTOR =
-  String.raw`(?:[\s/、与和及]|§\s*[0-9]+(?:\.[0-9]+)*|两|三|四|各|一|处|节|章|条|插记|照旧|原文|该|这|那|的|新增|master)`;
+const SECTION_CONNECTOR = String.raw`(?:[\s/、与和及]|§\s*[0-9]+(?:\.[0-9]+)*|两|三|四|各|一|处|节|章|条|插记|照旧|原文|该|这|那|的|新增|master)`;
 
 /** 语序 A：`§<号>` …（连接物）… `保留` / `不出现`。 */
 const SECTION_KEEP_AFTER_RE = new RegExp(
@@ -154,7 +153,7 @@ const SECTION_KEEP_BEFORE_RE = new RegExp(
  * 取的是**匹配片段**里的全部 `§`号；语序 A 里最后那个 `§` 是**被保留的那个**，
  * 前面的并列项同属这一句的宾语，所以一起判（它们都该在）。
  */
-const SECTION_HEAD_RE = /§\s*([0-9]+(?:\.[0-9]+)*)/g;
+const SECTION_HEAD_RE = /§\s*(?<section>[0-9]+(?:\.[0-9]+)*)/g;
 
 /** 声明里出现「不出现」时，断言是**反向**的（章节必须缺席）。 */
 const SECTION_ABSENT_HINT = /不出现/;
@@ -174,7 +173,7 @@ const SECTION_ABSENT_HINT = /不出现/;
  * 一个不存在的「路径」不可能是「它没动」这个断言。
  */
 const PATH_UNTOUCHED_RE =
-  /(?:^|[\s（(「、,，])((?:[A-Za-z0-9][A-Za-z0-9_.-]*\/)+[A-Za-z0-9_.*/-]*[A-Za-z0-9_.*-]|[A-Za-z0-9][A-Za-z0-9_.-]*\.[A-Za-z0-9]+)([^\n]{0,30}?)(一个字没动|一条没动|没动过|不动了|没动)/g;
+  /(?:^|[\s（(「、,，])(?<target>(?:[A-Za-z0-9][A-Za-z0-9_.-]*\/)+[A-Za-z0-9_.*/-]*[A-Za-z0-9_.*-]|[A-Za-z0-9][A-Za-z0-9_.-]*\.[A-Za-z0-9]+)(?:[^\n]{0,30}?)(?:一个字没动|一条没动|没动过|不动了|没动)/g;
 
 /**
  * ③ 计数归零声明 —— **必须点名执行者**。
@@ -184,7 +183,7 @@ const PATH_UNTOUCHED_RE =
  * 「谁的读数」时才能复算，猜一个门禁等于误报一片（§11.23.4 的「不做」那一档）。
  */
 const COUNT_ZERO_RE =
-  /((?:scripts\/[\w.-]+\.(?:cjs|mjs))|(?:[\w-]+[\u4e00-\u9fa5]*))\s*(?:的|里)?\s*(\d+)\s*处[^\n]{0,40}?((?:收到|降到|归|收)\s*0)/g;
+  /(?<target>(?:scripts\/[\w.-]+\.(?:cjs|mjs))|(?:[\w-]+[\u4e00-\u9fa5]*))\s*(?:的|里)?\s*(?<count>\d+)\s*处[^\n]{0,40}?(?:收到|降到|归|收)\s*0/g;
 
 /* ── 事实取证：一律对着「那次提交的树」，不碰工作区 ──────────────────── */
 
@@ -307,7 +306,7 @@ function pathExistsInTree(commit, target) {
  * @returns {{count: number} | null}
  */
 function gateLineCount(target) {
-  const cmd = /\.(cjs|mjs|js)$/.test(target) ? "node" : target;
+  const cmd = /\.(?:cjs|mjs|js)$/.test(target) ? "node" : target;
   const argv = cmd === target ? [target] : [cmd, target];
   try {
     const out = execFileSync(cmd, argv.slice(1), {
@@ -449,7 +448,7 @@ export function extractClaims(message, commit) {
    * @param {boolean} absent
    */
   const pushSection = (raw, head, absent) => {
-    const nums = [...head.matchAll(SECTION_HEAD_RE)].map((n) => n[1]);
+    const nums = [...head.matchAll(SECTION_HEAD_RE)].map((n) => n.groups?.section);
     if (nums.length === 0) {
       return;
     }
@@ -488,7 +487,7 @@ export function extractClaims(message, commit) {
     }
     /* 第 1 组是必填分组，`PATH_UNTOUCHED_RE` 的形状保证它在场；`String()` 只为让类型收口
      * （收口出来的值过不了 `pathExistsInTree`，那一支本来也不该判成声明）。 */
-    const target = String(m[1]);
+    const target = String(m.groups?.target);
     if (!pathExistsInTree(commit, target)) {
       continue;
     }
@@ -499,8 +498,8 @@ export function extractClaims(message, commit) {
       continue;
     }
     /* 两个分组都是必填的（执行者 + 位数），形状上不会缺；`String()` 只为让类型收口。 */
-    const target = String(m[1]);
-    claims.push({ kind: "count", raw: m[0], target, count: Number(m[2]) });
+    const target = String(m.groups?.target);
+    claims.push({ kind: "count", raw: m[0], target, count: Number(m.groups?.count) });
   }
   return claims;
 }
@@ -742,14 +741,12 @@ function main(argv) {
 
   if (contradicted.length > 0) {
     process.stderr.write(
-      `[commit-claims] ${contradicted.length} 处声明与事实矛盾（规范 §11.23）：\n${
-        contradicted
-          .map(
-            ({ a, r }) =>
-              `  · ${a.commit.slice(0, 8)}：${r.detail}\n     原句：${r.claim.raw.trim()}`,
-          )
-          .join("\n")
-        }\n`,
+      `[commit-claims] ${contradicted.length} 处声明与事实矛盾（规范 §11.23）：\n${contradicted
+        .map(
+          ({ a, r }) =>
+            `  · ${a.commit.slice(0, 8)}：${r.detail}\n     原句：${r.claim.raw.trim()}`,
+        )
+        .join("\n")}\n`,
     );
     return 1;
   }

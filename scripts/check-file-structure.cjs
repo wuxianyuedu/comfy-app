@@ -131,7 +131,7 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
         problems.push(
           `R14 src/lib 子域目录未登记:${
             rel
-            }。新增域须同时登记到 scripts/check-file-structure.cjs 的 DOMAINS,` +
+          }。新增域须同时登记到 scripts/check-file-structure.cjs 的 DOMAINS,` +
             `并在 vitest.config.ts 按实测值设覆盖率门槛(规范 §18.6 / §12.5.3)`,
         );
       }
@@ -141,14 +141,14 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
       continue;
     }
     /* 测试伙伴文件跟着它的被测模块走:模块在豁免清单里,它的用例也在。 */
-    const moduleRel = rel.replace(/(\.windows)?\.test\.ts$/, ".ts");
+    const moduleRel = rel.replace(/(?:\.windows)?\.test\.ts$/, ".ts");
     if (DOMAIN_EXEMPT.has(moduleRel)) {
       continue;
     }
     problems.push(
       `R13 src/lib 根目录模块必须有子域目录:${
         rel
-        }。根目录只放顶层单例(DOMAIN_EXEMPT);分类到对应子域,或` +
+      }。根目录只放顶层单例(DOMAIN_EXEMPT);分类到对应子域,或` +
         `「新增域 + 登记 DOMAINS + 设覆盖率门槛」——后者是设计决定,见规范 §12.5.3`,
     );
   }
@@ -166,7 +166,7 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
       walk(p);
       continue;
     }
-    if (!/\.(tsx?|mjs|cjs|js)$/.test(e.name)) {
+    if (!/\.(?:tsx?|mjs|cjs|js)$/.test(e.name)) {
       continue;
     }
     const rel = p;
@@ -174,7 +174,7 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
     // 与本项目 R1(PascalCase)相反——本脚本对 src/components/ui/ 硬强制 kebab
     // (禁止大写开头,§12.6),不再豁免。
     const isUiDir = rel.startsWith("src/components/ui/");
-    const base = e.name.replace(/\.(tsx?|mjs|cjs|js)$/, "").replace(/\.test$/, "");
+    const base = e.name.replace(/\.(?:tsx?|mjs|cjs|js)$/, "").replace(/\.test$/, "");
     if (/\d{8}_\d{6}/.test(e.name)) {
       problems.push(`R3 时间戳备份文件:${rel}`);
     }
@@ -183,7 +183,10 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
      * 只看**约定文件本身**:`base` 上面已经把 `.test` 摘掉了(那是给 R2 命名规则
      * 用的),不清这一下会把 `src/proxy.test.ts` 判成「约定文件放错位置」——
      * 测试文件既不会被 Next 加载,也就无从「静默丢失」。 */
-    if ((base === "proxy" || base === "middleware") && !/\.test\.(tsx?|mjs|cjs|js)$/.test(e.name)) {
+    if (
+      (base === "proxy" || base === "middleware") &&
+      !/\.test\.(?:tsx?|mjs|cjs|js)$/.test(e.name)
+    ) {
       const canonical = `src/${base}.ts`;
       if (rel !== canonical) {
         problems.push(`R11 Next 约定文件位置错:${rel}(须在 ${canonical})`);
@@ -196,13 +199,13 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
     if (head === null) {
       vanished++;
     } else if (
-      /^\s*(\/\*|\/\/)\s*(eslint|oxlint)-disable @typescript-eslint\/no-explicit-any/.test(
+      /^\s*(?:\/\*|\/\/)\s*(?:eslint|oxlint)-disable @typescript-eslint\/no-explicit-any/.test(
         head.split("\n")[0] ?? "",
       )
     ) {
       problems.push(`R6 文件级 no-explicit-any 禁用头(战役已清零,禁止回流):${rel}`);
     }
-    if (/\.(tsx|mjs|cjs|js)$/.test(e.name) && rel.startsWith("src/")) {
+    if (/\.(?:tsx|mjs|cjs|js)$/.test(e.name) && rel.startsWith("src/")) {
       if (e.name.endsWith(".tsx")) {
         /* §12.6:目录索引 index.tsx 是 barrel,不承载组件实现,不受 R1 约束。
          *  src/components/ui/ 采用 shadcn 官方 kebab-case 约定(§12.6),
@@ -257,7 +260,7 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
         walkHints(p);
         continue;
       }
-      if (!/\.(ts|tsx|mjs|cjs|js)$/.test(e.name)) {
+      if (!/\.(?:ts|tsx|mjs|cjs|js)$/.test(e.name)) {
         continue;
       }
       if (/\.test\.[cm]?[jt]sx?$/.test(e.name) || e.name.endsWith(".d.ts")) {
@@ -367,7 +370,7 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
       }
       // `.css` 一并纳入:样式注释里的改动编号 / 日期同样是「历史流水」,
       // 且样式块常被整段搬运,过期的落点说明比代码里的更容易失真。
-      if (/\.(ts|tsx|css)$/.test(e.name)) {
+      if (/\.(?:ts|tsx|css)$/.test(e.name)) {
         files.push(p);
       }
     }
@@ -443,9 +446,7 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
         }
       }
       for (const hit of found) {
-        problems.push(
-          `R10 注释禁止历史流水(日期 / 编号 / 批次号归 git):${rel}:${i + 1} → ${hit}`,
-        );
+        problems.push(`R10 注释禁止历史流水(日期 / 编号 / 批次号归 git):${rel}:${i + 1} → ${hit}`);
       }
     });
   }
@@ -462,9 +463,7 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
   const proxyPath = "src/proxy.ts";
   const legacyPath = "src/middleware.ts";
   if (!fs.existsSync(proxyPath)) {
-    problems.push(
-      `R11 缺少 Next 16 代理约定文件:${proxyPath}(middleware 已废弃,勿删除本文件)`,
-    );
+    problems.push(`R11 缺少 Next 16 代理约定文件:${proxyPath}(middleware 已废弃,勿删除本文件)`);
   }
   if (fs.existsSync(legacyPath)) {
     problems.push(`R11 middleware 约定名已废弃(Next 16):${legacyPath} → 改名为 src/proxy.ts`);
@@ -506,7 +505,7 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
         walkControl(p);
         continue;
       }
-      if (/\.(ts|tsx)$/.test(e.name)) {
+      if (/\.(?:ts|tsx)$/.test(e.name)) {
         files.push(p);
       }
     }
@@ -528,13 +527,9 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
       }
       for (const hit of hits) {
         problems.push(
-          `R12 源码禁止内嵌控制字符(${
-            rel
-            }:${
-            i + 1
-            } → ${
+          `R12 源码禁止内嵌控制字符(${rel}:${i + 1} → ${
             hit
-            })。改可打印哨兵,见规范 §12.11;若确需 NUL 请显式写成转义 \`\\u0000\``,
+          })。改可打印哨兵,见规范 §12.11;若确需 NUL 请显式写成转义 \`\\u0000\``,
         );
       }
     });
@@ -547,9 +542,7 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
 // 不设排除清单:一份「这些文件不受本条约束」的白名单正是最容易静默失效的形状
 // (改名 / 挪目录就看不见 = 假绿;同 `check-infra-file-size.cjs` 的口径)。
 for (const [f, n] of Object.entries(oversizedFiles).sort((a, b) => b[1] - a[1])) {
-  problems.push(
-    `R5 超限文件(${f} → ${n} 行,阈值 ${SPLIT_HINT_LINES})。拆分(规范 §12.6 R5)`,
-  );
+  problems.push(`R5 超限文件(${f} → ${n} 行,阈值 ${SPLIT_HINT_LINES})。拆分(规范 §12.6 R5)`);
 }
 
 /**

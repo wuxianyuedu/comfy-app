@@ -567,9 +567,9 @@ export const DEV_ARTIFACTS = [
  * @type {Array<[string, RegExp]>}
  */
 export const FORBIDDEN_SHAPES = [
-  ["测试文件", /(^|\/)src\/.*\.test\.tsx?$/],
-  ["变更碎片", /(^|\/)changelog\.d\/.*\.md$/],
-  ["文档目录", /(^|\/)docs\/.*\.md$/],
+  ["测试文件", /(?:^|\/)src\/.*\.test\.tsx?$/],
+  ["变更碎片", /(?:^|\/)changelog\.d\/.*\.md$/],
+  ["文档目录", /(?:^|\/)docs\/.*\.md$/],
 ];
 
 /**
@@ -582,8 +582,8 @@ export const FORBIDDEN_SHAPES = [
  * 表现不是多个文件，而是**上一台机器的数据成为出厂数据**。
  */
 export const PRIVATE_SHAPES = [
-  ["开发机私有输入", /(^|\/)\.env(\.[^/]*)?$/],
-  ["开发库文件", /(^|\/)db\.sqlite(-wal|-shm)?$/],
+  ["开发机私有输入", /(?:^|\/)\.env(?:\.[^/]*)?$/],
+  ["开发库文件", /(?:^|\/)db\.sqlite(?:-wal|-shm)?$/],
 ];
 
 /**
@@ -799,10 +799,11 @@ function main() {
   const strayTop = topRemoved.filter((name) => !name.includes("/"));
   if (strayTop.length > 0) {
     console.log(
-      `[standalone-clean] 已剔除顶层白名单外条目 ${strayTop.length} 个：${
-        strayTop.slice(0, 12).join(" / ")
-        }${strayTop.length > 12 ? ` …其余 ${strayTop.length - 12} 个` : ""
-        }（要留下请同批登记 STANDALONE_ALLOWED_TOPLEVEL 与 check-standalone-contents.cjs，` +
+      `[standalone-clean] 已剔除顶层白名单外条目 ${strayTop.length} 个：${strayTop
+        .slice(0, 12)
+        .join(" / ")}${
+        strayTop.length > 12 ? ` …其余 ${strayTop.length - 12} 个` : ""
+      }（要留下请同批登记 STANDALONE_ALLOWED_TOPLEVEL 与 check-standalone-contents.cjs，` +
         `并写清谁在运行期读它）`,
     );
   }

@@ -48,7 +48,7 @@ const SCAN_DIR = "src";
 if (STAGED && !REPORT_ONLY) {
   skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[function-length]" });
 }
-const SOURCE_EXT = /\.(ts|tsx)$/;
+const SOURCE_EXT = /\.(?:ts|tsx)$/;
 const isTestFile = (rel) =>
   /\.test\.[cm]?[jt]sx?$/.test(rel) || rel.endsWith(".snap") || rel.includes("/__tests__/");
 
@@ -158,10 +158,10 @@ const relOf = (p) =>
 /** 具名函数头的**开头**：签名可能跨行（`export async function f(\n  opts…`），
  *  所以这里只认开头，函数体 `{` 由 findBodyBrace 向后配平 `()` 找。 */
 const NAMED_HEAD_RE =
-  /(?:^|[\s;{}()])(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*[(<]/;
+  /(?:^|[\s;{}()])(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(?<name>[A-Za-z_$][\w$]*)\s*[(<]/;
 /** `const f = (` / `const f = async (` / `const f: T = function (` 三种赋值形态。 */
 const ASSIGN_HEAD_RE =
-  /(?:^|[\s;{}()])(?:export\s+)?const\s+([A-Za-z_$][\w$]*)\s*(?::[^=\n]*?)?=\s*(?:async\s*)?(?:\(\s*\)|\([^()\n]*\)\s*(?::[^=\n]*?)?=>|function\b)/;
+  /(?:^|[\s;{}()])(?:export\s+)?const\s+(?<name>[A-Za-z_$][\w$]*)\s*(?::[^=\n]*?)?=\s*(?:async\s*)?(?:\(\s*\)|\([^()\n]*\)\s*(?::[^=\n]*?)?=>|function\b)/;
 
 /** 中文、字符串、模板与注释里的 `=>` / `function` / `const x = (` 会误报：
  *  采集前先把它们按字符换成空格（**保留长度与列号**，行号不受影响）。 */
@@ -316,7 +316,7 @@ function collectHeads(codeLines) {
       if (!brace) {
         continue;
       }
-      push({ decl: i, body: brace.line, name: m[1] });
+      push({ decl: i, body: brace.line, name: m.groups?.name });
       namedEnd = brace.line;
       break;
     }

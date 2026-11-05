@@ -41,17 +41,17 @@ const { skipUnlessStagedTouches } = require("./gate-scan-read.cjs");
 
 /** 扫描范围:应用源码与 e2e。`scripts/` 是 .mjs/.cjs 工具脚本区,不用 TS 别名。 */
 const SCAN_DIRS = ["src", "e2e"];
-const SOURCE_EXT = /\.(ts|tsx)$/;
+const SOURCE_EXT = /\.(?:ts|tsx)$/;
 
 const SPEC_PATTERNS = [
-  /\bfrom\s*["']([^"']+)["']/g,
-  /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g,
-  /\brequire\s*\(\s*["']([^"']+)["']\s*\)/g,
-  /\bvi\.(?:mock|importActual|doMock)\s*\(\s*["']([^"']+)["']/g,
+  /\bfrom\s*["'](?<specifier>[^"']+)["']/g,
+  /\bimport\s*\(\s*["'](?<specifier>[^"']+)["']\s*\)/g,
+  /\brequire\s*\(\s*["'](?<specifier>[^"']+)["']\s*\)/g,
+  /\bvi\.(?:mock|importActual|doMock)\s*\(\s*["'](?<specifier>[^"']+)["']/g,
 ];
 
 /** 整行注释:不参与判定(注释里解释漂移来由是 §12.4.1 要求的内容)。 */
-const isCommentLine = (line) => /^\s*(\/\/|\*|\/\*)/.test(line);
+const isCommentLine = (line) => /^\s*(?:\/\/|\*|\/\*)/.test(line);
 
 const problems = [];
 
@@ -82,7 +82,7 @@ function scanFile(abs, rel) {
       re.lastIndex = 0;
       let m;
       while ((m = re.exec(line)) !== null) {
-        const spec = m[1] ?? "";
+        const spec = m.groups?.specifier ?? "";
         if (!spec.startsWith("@/")) {
           continue;
         }
@@ -90,9 +90,7 @@ function scanFile(abs, rel) {
           continue;
         }
         seen.add(spec);
-        problems.push(
-          `${rel}:${i + 1} 别名用 @/ 而非 ~/ → ${spec}\n    → ${line.trim()}`,
-        );
+        problems.push(`${rel}:${i + 1} 别名用 @/ 而非 ~/ → ${spec}\n    → ${line.trim()}`);
       }
     }
   });

@@ -68,7 +68,7 @@ const isStateSetter = (callee) => {
   }
   // zustand：store.set(state => ...) / store.setState(state => ...)
   if (ts.isPropertyAccessExpression(callee)) {
-    return /^(set|setState)$/.test(callee.name.text);
+    return /^(?:set|setState)$/.test(callee.name.text);
   }
   return false;
 };
@@ -163,7 +163,7 @@ function walk(absDir, relDir, out = []) {
       walk(abs, rel, out);
       continue;
     }
-    if (!/\.(tsx?)$/.test(e.name)) {
+    if (!/\.(?:tsx?)$/.test(e.name)) {
       continue;
     }
     if (/\.test\./.test(e.name) || e.name.endsWith(".d.ts")) {
@@ -179,9 +179,9 @@ function main(parsed) {
   const problems = collect(parsed);
   if (problems.length) {
     console.error(
-      `[updater-purity] 违规:React 函数式 setState updater 内存在副作用裸调用(updater 必须纯函数,渲染期求值会触发 update-during-render 告警,见 ISSUE #141)\n  ${
-        problems.join("\n  ")
-        }\n修复:把副作用移出 updater,先用闭包/ref 算出 next 值,在 setState 之外再执行副作用`,
+      `[updater-purity] 违规:React 函数式 setState updater 内存在副作用裸调用(updater 必须纯函数,渲染期求值会触发 update-during-render 告警,见 ISSUE #141)\n  ${problems.join(
+        "\n  ",
+      )}\n修复:把副作用移出 updater,先用闭包/ref 算出 next 值,在 setState 之外再执行副作用`,
     );
     process.exit(1);
   }

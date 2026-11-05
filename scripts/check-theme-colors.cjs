@@ -84,7 +84,7 @@ const REPORT_ONLY = ARGS.has("--report");
 
 /** 只扫应用源码：src/**（含 .ts/.tsx），排除测试与快照。 */
 const SCAN_DIR = "src";
-const SOURCE_EXT = /\.(ts|tsx)$/;
+const SOURCE_EXT = /\.(?:ts|tsx)$/;
 const isTestFile = (rel) =>
   /\.test\.[cm]?[jt]sx?$/.test(rel) || rel.endsWith(".snap") || rel.includes("/__tests__/");
 
@@ -240,12 +240,12 @@ function scopeResolver(text) {
    * 名字后面紧跟 `:` / `=` / `(` / `{` 即视为声明开始，随后逐行按括号配对跟踪，
    * 直到配平（回到 depth 0）才关闭作用域。若在 depth 0 时又遇到新声明，直接切换。 */
   const DECL_RE =
-    /^\s*(?:export\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)\s*[:=({<]/;
+    /^\s*(?:export\s+)?(?:const|let|var|function|class)\s+(?<name>[A-Za-z_$][\w$]*)\s*[:=({<]/;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const decl = line.match(DECL_RE);
     if (depth === 0 && decl) {
-      current = decl[1];
+      current = decl.groups?.name;
     }
     scopeAtLine[i] = current;
     let opened = false;
@@ -320,8 +320,8 @@ function classifyFile(rel) {
  * 带兜底的 **0 处**（唯一那处就是刚被收掉的网格线）。早先只认属性形态时是 28 处 ——
  * 泛化把覆盖率放大到 6 倍而不引入任何误报。
  */
-const COLOR_VAR_REF_RE = /var\(\s*(--color-[\w-]+)\s*([),])/g;
-const CSS_VAR_DECL_RE = /^\s*(--color-[\w-]+)\s*:/gm;
+const COLOR_VAR_REF_RE = /var\(\s*(?<token>--color-[\w-]+)\s*(?<close>[),])/g;
+const CSS_VAR_DECL_RE = /^\s*(?<token>--color-[\w-]+)\s*:/gm;
 
 /**
  * ③ **拼接出来的 token 名** —— 上面那条幽灵判据唯一看不见的引用形态。
@@ -419,7 +419,7 @@ const BARE_VAR_CLASS_RES = [/-\(\s*--color-[\w-]+\s*\)/];
  * 它是函数实参、没有 `var(` 外壳；那两处调用点的 `#ffffff` 由豁免层放行（「混色种子值」）。
  */
 const FALLBACK_ON_DEFINED_RES =
-  /var\(\s*(--color-[\w-]+)\s*,\s*(?:#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(|hwb\(|lab\(|lch\(|oklab\(|oklch\(|color-mix\()/g;
+  /var\(\s*(?<token>--color-[\w-]+)\s*,\s*(?:#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(|hwb\(|lab\(|lch\(|oklab\(|oklch\(|color-mix\()/g;
 
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -462,7 +462,7 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
   }
   const css = stripComments(fs.readFileSync(abs, "utf8"));
   for (const m of css.matchAll(CSS_VAR_DECL_RE)) {
-    declaredColorVars.add(m[1]);
+    declaredColorVars.add(m.groups?.token ?? "");
   }
 }
 
@@ -514,14 +514,14 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
    * `m[2] === ","` 表示这行带兜底值 —— 渲染确定，但那是「装饰性 indirection」（④）。 */
   for (let i = 0; i < codeLines.length; i++) {
     for (const m of codeLines[i].matchAll(COLOR_VAR_REF_RE)) {
-      if (declaredColorVars.has(m[1])) {
+      if (declaredColorVars.has(m.groups?.token ?? "")) {
         continue;
       }
       ghosts.push({
         file: r,
         line: i + 1,
-        name: m[1],
-        fallback: m[2] === ",",
+        name: m.groups?.token ?? "",
+        fallback: m.groups?.close === ",",
         text: lines[i].trim(),
       });
     }
@@ -537,7 +537,7 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
     }
     /* ⑦ 已定义 token 上的装饰性兜底：与 ④ 互补 —— 没定义的那半在幽灵循环里已经报了。 */
     for (const m of codeLines[i].matchAll(FALLBACK_ON_DEFINED_RES)) {
-      if (!declaredColorVars.has(m[1])) {
+      if (!declaredColorVars.has(m.groups?.token ?? "")) {
         continue;
       }
       decorativeFallbacks.push({

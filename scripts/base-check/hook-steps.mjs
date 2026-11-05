@@ -72,7 +72,7 @@ export function resolveGateCommand(input, hookPath = HOOK) {
     if (words.length > 1) {
       return { ok: true, label: first, argv: words };
     }
-    if (/\.(cjs|mjs|js)$/.test(first)) {
+    if (/\.(?:cjs|mjs|js)$/.test(first)) {
       return { ok: true, label: first, argv: ["node", first] };
     }
   }
@@ -204,10 +204,10 @@ export function groupSteps(hookPath = HOOK) {
   }
   const out = [];
   /* `run_group <id> "<说明>" sh -c '<命令>'` —— 只认整行闭合的单引号，多行脚本不匹配。 */
-  const re = /^run_group\s+\S+\s+"([^"]+)"\s+sh -c '([^'\n]+)'\s*$/gm;
+  const re = /^run_group\s+\S+\s+"(?<label>[^"]+)"\s+sh -c '(?<command>[^'\n]+)'\s*$/gm;
   for (const m of text.matchAll(re)) {
-    const label = m[1];
-    const command = m[2];
+    const label = m.groups?.label;
+    const command = m.groups?.command;
     if (!label || !command) {
       continue;
     }
@@ -309,12 +309,12 @@ export function readHookSteps(hookPath = HOOK) {
   }
   const steps = [];
   for (const line of text.split("\n")) {
-    const m = line.match(/^\s*run\s+"([^"]+)"\s+(.+?)\s*$/);
+    const m = line.match(/^\s*run\s+"(?<label>[^"]+)"\s+(?<command>.+?)\s*$/);
     if (!m) {
       continue;
     }
-    const label = m[1];
-    const command = m[2];
+    const label = m.groups?.label;
+    const command = m.groups?.command;
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- 捕获组按下标取被标成 string；守卫防的是正则改动后的静默失配
     if (label === undefined || command === undefined) {
       continue;
@@ -357,9 +357,10 @@ export function localTierLabels(hookPath = HOOK) {
     if (line.startsWith("'")) {
       break;
     } // D0 那个 `sh -c '…'` 的收尾引号
-    const m = line.match(/^\s*run\s+"([^"]+)"/);
-    if (m?.[1] !== undefined) {
-      out.add(m[1]);
+    const m = line.match(/^\s*run\s+"(?<label>[^"]+)"/);
+    const label = m?.groups?.label;
+    if (label !== undefined) {
+      out.add(label);
     }
   }
   return out;

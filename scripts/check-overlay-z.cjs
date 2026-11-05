@@ -147,8 +147,8 @@ const RULES = {
     count: (t) => {
       const stripped = stripComments(t);
       let n = 0;
-      for (const m of stripped.matchAll(/\bz-(\d+)\b/g)) {
-        if (!NAMED_TONES.includes(m[1])) {
+      for (const m of stripped.matchAll(/\bz-(?<level>\d+)\b/g)) {
+        if (!NAMED_TONES.includes(m.groups?.level ?? "")) {
           n++;
         }
       }

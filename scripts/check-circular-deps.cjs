@@ -57,7 +57,7 @@ const REPORT_ONLY = ARGS.has("--report");
 /** 扫描目录(与门禁口径一致:只看应用源码,文档与脚本不参与)。 */
 const SCAN_DIRS = ["src"];
 /** 排除:用例、声明文件。用例之间雷同是正常的,声明文件没有运行时依赖。 */
-const SKIP_RE = /\.(test|spec)\.tsx?$|\.d\.ts$/;
+const SKIP_RE = /\.(?:test|spec)\.(?:ts|tsx)$|\.d\.ts$/;
 
 function walk(dir, out = []) {
   for (const name of fs.readdirSync(dir)) {
@@ -66,7 +66,7 @@ function walk(dir, out = []) {
       walk(full, out);
       continue;
     }
-    if (/\.(ts|tsx)$/.test(name) && !SKIP_RE.test(name)) {
+    if (/\.(?:ts|tsx)$/.test(name) && !SKIP_RE.test(name)) {
       out.push(full);
     }
   }
@@ -119,15 +119,15 @@ function depsOf(file) {
   const src = stripComments(fs.readFileSync(file, "utf8"));
   const deps = new Set();
   // 匹配 import … from "x" 与 export … from "x"
-  const fromRe = /(?:^|\n)\s*(?:import|export)\s[^;]*?from\s+["']([^"']+)["']/g;
+  const fromRe = /(?:^|\n)\s*(?:import|export)\s[^;]*?from\s+["'](?<specifier>[^"']+)["']/g;
   // 裸副作用 import "x"
-  const bareRe = /(?:^|\n)\s*import\s+["']([^"']+)["']/g;
+  const bareRe = /(?:^|\n)\s*import\s+["'](?<specifier>[^"']+)["']/g;
   // 动态 import("x")
-  const dynRe = /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g;
+  const dynRe = /\bimport\s*\(\s*["'](?<specifier>[^"']+)["']\s*\)/g;
   for (const re of [fromRe, bareRe, dynRe]) {
     let m;
     while ((m = re.exec(src))) {
-      const resolved = resolveSpec(m[1], file);
+      const resolved = resolveSpec(m.groups?.specifier ?? "", file);
       if (resolved) {
         deps.add(resolved);
       }

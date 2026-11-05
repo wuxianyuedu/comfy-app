@@ -94,28 +94,32 @@ type Color = { a: number; b: number; g: number; r: number };
 
 function parseColor(css: string): Color {
   const t = css.trim();
-  const space = /^color\(\s*srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\s*\)/i.exec(
-    t,
-  );
+  const space =
+    /^color\(\s*srgb\s+(?<r>[\d.]+)\s+(?<g>[\d.]+)\s+(?<b>[\d.]+)(?:\s*\/\s*(?<a>[\d.]+))?\s*\)/i.exec(
+      t,
+    );
   if (space) {
     return {
-      r: Number(space[1]) * 255,
-      g: Number(space[2]) * 255,
-      b: Number(space[3]) * 255,
-      a: space[4] === undefined ? 1 : Number(space[4]),
+      r: Number(space.groups?.r) * 255,
+      g: Number(space.groups?.g) * 255,
+      b: Number(space.groups?.b) * 255,
+      a: space.groups?.a === undefined ? 1 : Number(space.groups?.a),
     };
   }
-  const fn = /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)/i.exec(t);
+  const fn =
+    /^rgba?\(\s*(?<r>[\d.]+)[,\s]+(?<g>[\d.]+)[,\s]+(?<b>[\d.]+)(?:[,\s/]+(?<a>[\d.]+))?\s*\)/i.exec(
+      t,
+    );
   if (fn) {
     return {
-      r: Number(fn[1]),
-      g: Number(fn[2]),
-      b: Number(fn[3]),
-      a: fn[4] === undefined ? 1 : Number(fn[4]),
+      r: Number(fn.groups?.r),
+      g: Number(fn.groups?.g),
+      b: Number(fn.groups?.b),
+      a: fn.groups?.a === undefined ? 1 : Number(fn.groups?.a),
     };
   }
-  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(t);
-  const digits = hex?.[1];
+  const hex = /^#(?<digits>[0-9a-f]{3}|[0-9a-f]{6})$/i.exec(t);
+  const digits = hex?.groups?.digits;
   if (digits) {
     const full =
       digits.length === 3

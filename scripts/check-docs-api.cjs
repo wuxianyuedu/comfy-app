@@ -365,11 +365,11 @@ function judgeProduct(outDir, root = ROOT, typedocCfg = {}) {
  */
 function judgeTypedocTail(log) {
   const cleanLog = (log ?? "").replaceAll(/\u001b\[[0-9;]*m/g, "");
-  const summary = /Found (\d+) errors and (\d+) warnings/.exec(cleanLog);
+  const summary = /Found (?<errors>\d+) errors and (?<warnings>\d+) warnings/.exec(cleanLog);
   const generated = /\[info\] html generated/.test(cleanLog);
   if (summary) {
-    const errors = Number(summary[1]);
-    const warnings = Number(summary[2]);
+    const errors = Number(summary.groups?.errors ?? 0);
+    const warnings = Number(summary.groups?.warnings ?? 0);
     if (errors > 0 || warnings > 0) {
       return {
         problems: [

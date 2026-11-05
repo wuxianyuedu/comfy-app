@@ -177,7 +177,9 @@ function isGuardOnly(init) {
     return false;
   }
   return calls.every((c) =>
-    /^(e|ev|evt|event)?\.?(currentTarget|target)?\.?(stopPropagation|preventDefault)$/.test(c),
+    /^(?:e|ev|evt|event)?\.?(?:currentTarget|target)?\.?(?:stopPropagation|preventDefault)$/.test(
+      c,
+    ),
   );
 }
 
@@ -311,8 +313,9 @@ function main(parsed) {
     console.log(`[click-keyboard] 盘点：${total} 处 / ${sites.size} 份文件。`);
     for (const [rel, list] of [...sites.entries()].sort()) {
       console.log(
-        `  · ${rel}: ${list.length} 处\n${
-          list.map((s) => `      ${s.line}: <${s.tag}>`).join("\n")}`,
+        `  · ${rel}: ${list.length} 处\n${list
+          .map((s) => `      ${s.line}: <${s.tag}>`)
+          .join("\n")}`,
       );
     }
     const exempt = collectExempt(parsed);
@@ -323,8 +326,7 @@ function main(parsed) {
     for (const [rel, { reason, sites: list }] of [...exempt.entries()].sort()) {
       console.log(
         `  · ${rel}: ${list.length} 处\n` +
-          `      理由：${reason}\n${
-          list.map((s) => `      ${s.line}: <${s.tag}>`).join("\n")}`,
+          `      理由：${reason}\n${list.map((s) => `      ${s.line}: <${s.tag}>`).join("\n")}`,
       );
     }
     return 0;
@@ -354,11 +356,10 @@ function main(parsed) {
     );
     for (const [rel, list] of [...sites.entries()].sort()) {
       console.error(
-        `  · ${rel}: ${list.length} 处\n${
-          list
-            .slice(0, 8)
-            .map((s) => `      ${s.line}: <${s.tag}>`)
-            .join("\n")}`,
+        `  · ${rel}: ${list.length} 处\n${list
+          .slice(0, 8)
+          .map((s) => `      ${s.line}: <${s.tag}>`)
+          .join("\n")}`,
       );
     }
     console.error("\n口径见 docs/standards/06-无障碍访问-a11y.md §6.11。");

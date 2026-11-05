@@ -76,11 +76,11 @@ const CHANGELOG = path.join(ROOT, "CHANGELOG.md");
  * 「锚**之前**的已发布段落」就永远是空集 —— 那条判据会**静默失效**
  * (实测量过:把 `[0.1.0]` 当成待发段落,`earlier` 集合恒为 0)。
  */
-const VERSION_RE = /^\[(\d+\.\d+\.\d+[^\]]*)\]/;
+const VERSION_RE = /^\[(?<version>\d+\.\d+\.\d+[^\]]*)\]/;
 const UNRELEASED_RE = /^\[(?:unreleased|未发布)\]/i;
 
 /** 段落锚 —— 见 §13.10.6 的写法侧口径。 */
-const ANCHOR_RE = /<!--\s*since:\s*([0-9a-f]{7,40})\s*(?:—|--|-)\s*(.+?)\s*-->/;
+const ANCHOR_RE = /<!--\s*since:\s*(?<rev>[0-9a-f]{7,40})\s*(?:—|--|-)\s*(?<slug>.+?)\s*-->/;
 /**
  * 形状**写歪了的**锚 —— 任何 `<!-- since: … -->`(不看内容)。
  *
@@ -93,7 +93,7 @@ const ANCHOR_RE = /<!--\s*since:\s*([0-9a-f]{7,40})\s*(?:—|--|-)\s*(.+?)\s*-->
 const LOOSE_ANCHOR_RE = /<!--\s*since:/;
 
 /** 条目里点名的 ISSUE 号 —— 与 §13.10 的写法一致(`ISSUE #1234` / `(#1234)` / `#1234`)。 */
-const ISSUE_RE = /#(\d{1,5})\b/g;
+const ISSUE_RE = /#(?<issue>\d{1,5})\b/g;
 
 const problems = [];
 const report = [];
@@ -125,9 +125,9 @@ function parseSections(text) {
       }
       return;
     }
-    const m = /^##\s+(.+?)\s*$/.exec(line);
+    const m = /^##\s+(?<title>.+?)\s*$/.exec(line);
     if (m) {
-      const title = m[1];
+      const title = m.groups?.title ?? "";
       const isPending = UNRELEASED_RE.test(title);
       current = {
         title,
@@ -163,7 +163,10 @@ function issuesIn(body) {
   for (const line of body) {
     const stripped = line.replaceAll(/<!--[\s\S]*?-->/g, "");
     for (const m of stripped.matchAll(ISSUE_RE)) {
-      set.add(m[1]);
+      const issue = m.groups?.issue;
+      if (issue !== undefined) {
+        set.add(issue);
+      }
     }
   }
   return set;
@@ -197,7 +200,11 @@ function anchorLineOf(section) {
     const line = section.body[i];
     const m = ANCHOR_RE.exec(line);
     if (m) {
-      return { rev: m[1], slug: m[2], line: section.line + 1 + i };
+      return {
+        rev: m.groups?.rev,
+        slug: m.groups?.slug,
+        line: section.line + 1 + i,
+      };
     }
     if (LOOSE_ANCHOR_RE.test(line)) {
       return { malformed: true, text: line.trim(), line: section.line + 1 + i };
@@ -251,7 +258,7 @@ if (text !== null) {
     if (!m || !versionSections.includes(s)) {
       continue;
     }
-    const ver = m[1];
+    const ver = m.groups?.version;
     if (seenVersions.has(ver)) {
       problems.push(
         `版本号 ${ver} 在 CHANGELOG.md 里出现了两次(第 ${seenVersions.get(ver)} 行、` +

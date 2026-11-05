@@ -139,12 +139,12 @@ function staticSpecs(src) {
    *    `import { X } from "y"` 的文本几乎一样，而只有后者是真边。
    * ③ 裸副作用 `import "x"` 单独一条正则（它没有 `from`）。 */
   for (const m of src.matchAll(
-    /\b(?:import|export)\s(?!type\s)[^;=(]*?\bfrom\s*["']([^"']+)["']/g,
+    /\b(?:import|export)\s(?!type\s)[^;=(]*?\bfrom\s*["'](?<specifier>[^"']+)["']/g,
   )) {
-    out.add(m[1]);
+    out.add(m.groups?.specifier ?? "");
   }
-  for (const m of src.matchAll(/^\s*import\s*["']([^"']+)["']/gm)) {
-    out.add(m[1]);
+  for (const m of src.matchAll(/^\s*import\s*["'](?<specifier>[^"']+)["']/gm)) {
+    out.add(m.groups?.specifier ?? "");
   }
   return [...out];
 }
@@ -206,17 +206,17 @@ function runtimeDepsOf(modRel) {
   };
   /* 静态：import / export … from（排除 `import type`）。 */
   for (const m of src.matchAll(
-    /\b(?:import|export)\s(?!type\s)[^;=(]*?\bfrom\s*["']([^"']+)["']/g,
+    /\b(?:import|export)\s(?!type\s)[^;=(]*?\bfrom\s*["'](?<specifier>[^"']+)["']/g,
   )) {
-    bare(m[1]);
+    bare(m.groups?.specifier ?? "");
   }
   /* 裸副作用 import "x"。 */
-  for (const m of src.matchAll(/^\s*import\s*["']([^"']+)["']/gm)) {
-    bare(m[1]);
+  for (const m of src.matchAll(/^\s*import\s*["'](?<specifier>[^"']+)["']/gm)) {
+    bare(m.groups?.specifier ?? "");
   }
   /* 动态 `import("x")` 与 `require("x")` —— 懒加载也算「这个模块引了它」。 */
-  for (const m of src.matchAll(/\b(?:import|require)\s*\(\s*["']([^"']+)["']/g)) {
-    bare(m[1]);
+  for (const m of src.matchAll(/\b(?:import|require)\s*\(\s*["'](?<specifier>[^"']+)["']/g)) {
+    bare(m.groups?.specifier ?? "");
   }
   return [...out];
 }

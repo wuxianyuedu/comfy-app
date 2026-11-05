@@ -69,16 +69,16 @@ const SOURCES = [
     label: "package.json 的 version",
     file: "package.json",
     extract: (text) => {
-      const m = /^\s*"version"\s*:\s*"([^"]*)"/m.exec(text);
-      return m ? m[1] : null;
+      const m = /^\s*"version"\s*:\s*"(?<version>[^"]*)"/m.exec(text);
+      return m ? (m.groups?.version ?? null) : null;
     },
   },
   {
     label: "src-tauri/tauri.conf.json 的 version",
     file: "src-tauri/tauri.conf.json",
     extract: (text) => {
-      const m = /^\s*"version"\s*:\s*"([^"]*)"/m.exec(text);
-      return m ? m[1] : null;
+      const m = /^\s*"version"\s*:\s*"(?<version>[^"]*)"/m.exec(text);
+      return m ? (m.groups?.version ?? null) : null;
     },
   },
   {
@@ -100,9 +100,9 @@ const SOURCES = [
         if (!inPackage) {
           continue;
         }
-        const m = /^version\s*=\s*"([^"]*)"/.exec(line);
+        const m = /^version\s*=\s*"(?<version>[^"]*)"/.exec(line);
         if (m) {
-          return m[1];
+          return m.groups?.version ?? null;
         }
       }
       return null;
@@ -169,9 +169,9 @@ function main() {
 
   if (problems.length) {
     process.stderr.write(
-      `[app-version] ✗ 版本号三处必须同步（ISSUE #1611 阶段三 D7）：\n      · ${
-        problems.join("\n      · ")
-        }\n        ${SOURCES.map((s) => s.file).join(" / ")} 三处都写、且逐字相等。` +
+      `[app-version] ✗ 版本号三处必须同步（ISSUE #1611 阶段三 D7）：\n      · ${problems.join(
+        "\n      · ",
+      )}\n        ${SOURCES.map((s) => s.file).join(" / ")} 三处都写、且逐字相等。` +
         `\n        为什么不是「改一处就够」：tauri.conf.json 的版本在**编译期**内嵌进壳，` +
         `\n        也是 tauri-plugin-updater 判「更新新旧」的基准 —— 只升 package.json 时，` +
         `\n        安装包与更新判定还停在旧版本，用户会看到「已是最新」。` +

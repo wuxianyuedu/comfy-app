@@ -165,13 +165,13 @@ async function handle(req, res, headers, path) {
   }
   /* history：`/history/{id}`（本应用 client.ts 的口）。未登记的 prompt_id 回 `{}`
    * ——与真件同形，也是 `fetchHistoryEntry` 轮询等待的那一段。 */
-  const historyMatch = /^\/api\/history\/([^/]+)$/.exec(path);
+  const historyMatch = /^\/api\/history\/(?<historyId>[^/]+)$/.exec(path);
   if (historyMatch) {
     /* 解构一次而不是两处各按 `[1]` 取：那是同一个值被读两遍，而它在下标读法上是
      * `string | undefined` —— 一处报 `TS2345`（进不了 `decodeURIComponent`）、
      * 另一处报 `TS2464`（**全账唯一一格**：计算属性名要的是 string）。
      * 两个红同一个根因，收在取出的那一句里就同时消失。 */
-    const [, historyId = ""] = historyMatch;
+    const historyId = historyMatch.groups?.historyId ?? "";
     const entry = history.get(decodeURIComponent(historyId));
     sendJson(res, headers, 200, entry ? { [historyId]: entry } : {});
     return;

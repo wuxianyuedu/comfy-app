@@ -257,9 +257,9 @@ function stagedAddedLines() {
       line = 0;
       continue;
     }
-    const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(raw);
+    const hunk = /^@@ -\d+(?:,\d+)? \+(?<start>\d+)(?:,\d+)? @@/.exec(raw);
     if (hunk) {
-      line = Number(hunk[1]) - 1;
+      line = Number(hunk.groups?.start) - 1;
       continue;
     }
     if (!file) {

@@ -179,7 +179,7 @@ const WINDOW_MAX = 300;
  * 豁免声明：一条紧邻站点的注释，写明「为什么这里必须是真时间 / 不是赌时间」。
  * 要有内容 —— 只有标签、后面空着，与没有声明等价（同 §11.19 的隔离声明口径）。
  */
-const SLEEP_OK_RE = /\/\/\s*sleep-ok\s*[：:]\s*(\S.*)/;
+const SLEEP_OK_RE = /\/\/\s*sleep-ok\s*[：:]\s*(?<reason>\S.*)/;
 
 /**
  * 枚举扫描面。**两种消失窗口**（「列到名字、读时已没」与「枚举当场 `ENOENT`」）、
@@ -221,7 +221,7 @@ function nearbySleepOk(raw, siteIndex) {
   const ownLine = lines[line - 1] ?? "";
   const tail = ownLine.match(SLEEP_OK_RE);
   if (tail) {
-    return tail[1].trim();
+    return tail.groups?.reason.trim() ?? "";
   }
   /* ② 向上走。**能跨过「包着我的那一句的开头」** —— 站点常常长这样：
    *
@@ -245,7 +245,7 @@ function nearbySleepOk(raw, siteIndex) {
     }
     const hit = t.match(SLEEP_OK_RE);
     if (hit) {
-      return hit[1].trim();
+      return hit.groups?.reason.trim() ?? "";
     }
     const isComment = t.startsWith("//") || t.startsWith("*") || t.startsWith("/*");
     /* 续行：以 \`(\` / \`,\` / \`[\` / \`{\` 收尾 —— 它不构成一条独立语句。 */
@@ -369,7 +369,8 @@ function main() {
       `[test-sleep] OK —— 裸 sleep 0 处 / 声明豁免 ${exemptTotal} 处。${
         /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。静默让判据在没读过的
            目录上绿，是 §13.5.12 那一族「自称在跑、实际没跑」的入口。 */
-        vanishedNote(vanished)}`,
+        vanishedNote(vanished)
+      }`,
     );
     return 0;
   }
@@ -387,12 +388,10 @@ function main() {
   );
   for (const [rel, sites] of [...live.entries()].sort()) {
     console.error(
-      `  · ${rel}: ${sites.length} 处\n${
-        sites
-          .slice(0, 6)
-          .map((s) => `      ${s.line}: ${s.text}`)
-          .join("\n")
-        }${sites.length > 6 ? `\n      …另有 ${sites.length - 6} 处` : ""}`,
+      `  · ${rel}: ${sites.length} 处\n${sites
+        .slice(0, 6)
+        .map((s) => `      ${s.line}: ${s.text}`)
+        .join("\n")}${sites.length > 6 ? `\n      …另有 ${sites.length - 6} 处` : ""}`,
     );
   }
   console.error("\n口径见 docs/standards/11-测试与可观测性.md §11.14。");

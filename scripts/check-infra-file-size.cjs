@@ -52,7 +52,7 @@ const SPLIT_HINT_LINES = 900;
  * `scripts/` 是 Node 工具脚本区（`.cjs`/`.mjs`），`tools/` 是 Windows 双击入口区（`.ps1`）。
  */
 const SCAN_ROOTS = [
-  { dir: "scripts", ext: /\.(cjs|mjs)$/ },
+  { dir: "scripts", ext: /\.(?:cjs|mjs)$/ },
   { dir: "tools", ext: /\.ps1$/ },
 ];
 

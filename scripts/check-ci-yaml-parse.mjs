@@ -34,7 +34,7 @@ export function collectYamlFiles(root) {
   const wfDir = path.join(root, ".github", "workflows");
   try {
     for (const name of readdirSync(wfDir)) {
-      if (/\.(yml|yaml)$/.test(name)) {
+      if (/\.(?:yml|yaml)$/.test(name)) {
         files.push(path.posix.join(".github", "workflows", name));
       }
     }
@@ -129,7 +129,10 @@ export function main(cwd = process.cwd()) {
 }
 
 // oxlint-disable-next-line typescript/no-unnecessary-condition -- process.argv[1] 在 node -e / REPL 形态下实为 undefined，@types/node 标成 string
-if (process.argv[1] !== undefined && import.meta.url === new URL(`file://${path.resolve(process.argv[1])}`).href) {
+if (
+  process.argv[1] !== undefined &&
+  import.meta.url === new URL(`file://${path.resolve(process.argv[1])}`).href
+) {
   const problems = main();
   if (problems.length > 0) {
     console.error(`[check:ci-yaml] ✗ ${problems.length} 处问题：`);
@@ -138,5 +141,7 @@ if (process.argv[1] !== undefined && import.meta.url === new URL(`file://${path.
     }
     process.exit(1);
   }
-  console.log(`[check:ci-yaml] ✓ ${collectYamlFiles(process.cwd()).length} 份 YAML 全部可解析、锚点合法、stage 形态完整。`);
+  console.log(
+    `[check:ci-yaml] ✓ ${collectYamlFiles(process.cwd()).length} 份 YAML 全部可解析、锚点合法、stage 形态完整。`,
+  );
 }

@@ -4,11 +4,7 @@ import { withThemeByClassName } from "@storybook/addon-themes";
 /* 相对 import 一律**带文件后缀**，不写 `./x` —— 理由见 `main.ts` 那段说明。
    本文件由 webpack 打进浏览器 bundle（不吃 Node 那条 loader 的 deprecation），
    但仍按同一条口径写：`.storybook/**` 只有一种写法，判据也只有一条。 */
-import {
-  appOriginChoices,
-  withAppProviders,
-  withTrpcApp,
-} from "./data-sources.tsx";
+import { appOriginChoices, withAppProviders, withTrpcApp } from "./data-sources.tsx";
 import { withMessageScene } from "./message-center-sources.tsx";
 import { withStoreScene } from "./store-sources.tsx";
 import { withWorkflowRunScene } from "./workflow-run-sources.tsx";
@@ -54,12 +50,10 @@ const preview: Preview = {
       toolbar: {
         icon: "link",
         title: "应用 origin",
-        items: Object.entries(appOriginChoices(appOrigin)).map(
-          ([title, value]) => ({
-            title: `${title}（${value}）`,
-            value,
-          }),
-        ),
+        items: Object.entries(appOriginChoices(appOrigin)).map(([title, value]) => ({
+          title: `${title}（${value}）`,
+          value,
+        })),
         dynamicTitle: true,
       },
     },
@@ -97,7 +91,7 @@ const preview: Preview = {
     appOrigin,
     controls: {
       matchers: {
-        color: /(background|color)$/i,
+        color: /(?:background|color)$/i,
         date: /Date$/i,
       },
     },

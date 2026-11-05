@@ -51,7 +51,7 @@ const HINT_LINES = 120;
  *  `pub async fn name(`, `unsafe fn name(` 等。刻意只认有名字的函数 ——
  *  闭包/匿名块不在本规则射程内(它们由所在函数的长度间接约束)。 */
 const DECLARATION =
-  /^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?(?:extern\s+"[^"]*"\s+)?fn\s+([A-Za-z_]\w*)/;
+  /^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?(?:extern\s+"[^"]*"\s+)?fn\s+(?<name>[A-Za-z_]\w*)/;
 
 /** 逐字符状态机: 计算每行结束时的括号深度,跳过字符串 / 字符字面量 / 注释
  *  里的括号(Rust 的 `"}"` / `'{'` / 注释里的括号若不跳过,函数尾会被切错)。
@@ -176,7 +176,7 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
     if (!m) {
       continue;
     }
-    const name = m[1];
+    const name = m.groups?.name;
     const startDepth = depthAtLine[i - 1] ?? 0;
     let end = -1;
     for (let j = i; j < lines.length; j++) {
@@ -224,9 +224,7 @@ if (longFunctions.length) {
   );
   console.error(
     `[rust-function-length] 超长 Rust 函数（规范 §12.13）：\n` +
-      `  判据：函数体超过 ${
-      HINT_LINES
-      } 行即应拆分（按职责切子函数），\n` +
+      `  判据：函数体超过 ${HINT_LINES} 行即应拆分（按职责切子函数），\n` +
       `  不是靠「在一个函数里加注释分段」。\n` +
       `  本判据是硬闸（无基线、无 --update）：超长函数存量已清零，新增即阻断。`,
   );

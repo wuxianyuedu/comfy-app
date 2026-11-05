@@ -860,61 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B4 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        ".storybook/preview.tsx", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "e2e/critical-flows.spec.ts", // 存量 9 处 · 清账目标 B4 · 新代码不禁用
-        "e2e/queue-monitor.spec.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "e2e/support/fake-comfyui-server.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "e2e/support/preflight-browser.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "e2e/theme-token-consumers.spec.ts", // 存量 9 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/affected-launch-noise-reporter.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/affected-tests.mjs", // 存量 6 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/base-check/hook-steps.mjs", // 存量 6 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-allow-builds.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-app-version.cjs", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-barrel-heavy-deps.cjs", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-changelog-fragments.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-changelog-versions.cjs", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-ci-yaml-parse.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-circular-deps.cjs", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-click-keyboard.cjs", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-code-duplication.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-comfyui-port-contract.cjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-comment-language.cjs", // 存量 9 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-commit-claims.mjs", // 存量 8 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-cp936-glyphs.cjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-dead-exports.cjs", // 存量 8 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-declaration-readers.cjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-doc-gate-refs.cjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-doc-references.cjs", // 存量 8 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-docs-api.cjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-eslint-exemptions.cjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-file-structure.cjs", // 存量 10 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-format.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-function-length.cjs", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-gate-executors.cjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-gate-flag-claims.cjs", // 存量 11 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-import-alias.cjs", // 存量 6 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-infra-file-size.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-mirror-attendance.mjs", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-non-null-assertions.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-on-demand-duties.cjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-overlay-z.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-ps1-consistency.mjs", // 存量 10 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-react-updater-purity.cjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-reformat-only.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-rust-function-length.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-scripts-typecheck.cjs", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-standalone-contents.cjs", // 存量 12 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-test-concurrency.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-test-environment.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-test-it-each.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-test-sleep.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-test-waitfor.cjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-theme-colors.cjs", // 存量 6 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-title-bar-clearance.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-tracked-secrets.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-tsc-artifact-hint.cjs", // 存量 8 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/check-tsc-diagnostic-executors.cjs", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
         "scripts/check-type-assertion-executor.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
         "scripts/check-ui-customizations.cjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
         "scripts/check-ui-logic-separation.cjs", // 存量 5 处 · 清账目标 B4 · 新代码不禁用

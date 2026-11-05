@@ -116,7 +116,7 @@ function importsVitestHosts(raw) {
     if (!/from\s*["']vitest["']/.test(m[0])) {
       continue;
     }
-    const names = m[0].match(/\{([^}]*)\}/)[1];
+    const names = m[0].match(/\{(?<names>[^}]*)\}/)?.groups?.names ?? "";
     for (const host of HOSTS) {
       if (new RegExp(`(?<![\\w$])${host}\\s*(?:,|$)`).test(names)) {
         return true;
@@ -208,11 +208,10 @@ function main() {
     );
     for (const [rel, list] of [...sites.entries()].sort()) {
       console.error(
-        `  · ${rel}: ${list.length} 处\n${
-          list
-            .slice(0, 8)
-            .map((s) => `      ${s.line}: ${s.text}`)
-            .join("\n")}`,
+        `  · ${rel}: ${list.length} 处\n${list
+          .slice(0, 8)
+          .map((s) => `      ${s.line}: ${s.text}`)
+          .join("\n")}`,
       );
     }
     console.error("\n口径见 docs/standards/11-测试与可观测性.md §11.15。");

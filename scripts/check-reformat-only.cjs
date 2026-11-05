@@ -146,7 +146,7 @@ const LIMIT = 10;
 const MIGRATION_RE = /^format-migration:/m;
 
 /** 只看这些扩展名:其余(图片、锁文件)不参与格式判定。 */
-const SOURCE_RE = /\.(ts|tsx|js|jsx|mjs|cjs|css|scss|json|md|mdx)$/;
+const SOURCE_RE = /\.(?:ts|tsx|js|jsx|mjs|cjs|css|scss|json|md|mdx)$/;
 
 /* git 取数件收在 `reformat-scan-core.mjs`（ISSUE #3035 拆出：本文件加合并行的取数与
  * 读数后越过 900 行硬闸，而这一组自包含、以 `perCommitDeps` 注入机制层 —— 这里是
@@ -173,7 +173,6 @@ const perCommitDeps = {
   gitOrEmpty,
 };
 
-
 /**
  * `--staged` 的扫描面（仓库根相对）。
  *
@@ -198,9 +197,6 @@ function stagedRoots(root = ROOT) {
    * 面上明明有源文件也会被跳过，而读数是「0 个落在 N 条根内」，看着像真的没有。 */
   return discernRoots(root).map((name) => name);
 }
-
-
-
 
 /**
  * 批量口径的**硬约束与三档判据边界**(实现见 `formatMany` 与 `formatOne`)。
@@ -474,7 +470,6 @@ function classifyReformatOnly(entries) {
   return reformatOnly;
 }
 
-
 /**
  * 「没有 `--range`、也没有暂存改动」那一支的**区间两侧** —— 平台合并预览下「本次改动」
  * 到底从哪算起（ISSUE #3022 / #3035 / #3038）。
@@ -576,10 +571,17 @@ async function main() {
      * 护栏 ① 也读它（「这一笔含不含重排」从这张表取，ISSUE #3054）⇒ 先算好再递。
      * 合并行按目标侧取补丁、与已判行去重（ISSUE #3035）：`landedRev` 定位目标侧，
      * `beforeRev`（区间起点）当空 patch 退路的基线。 */
-    const perCommit = perCommitShape(`${beforeRev}..${afterRev}`, limit, ROOT, perCommitDeps, null, {
-      landedTip: landedRev,
-      spanBase: beforeRev,
-    });
+    const perCommit = perCommitShape(
+      `${beforeRev}..${afterRev}`,
+      limit,
+      ROOT,
+      perCommitDeps,
+      null,
+      {
+        landedTip: landedRev,
+        spanBase: beforeRev,
+      },
+    );
     process.exit(
       report(
         files,

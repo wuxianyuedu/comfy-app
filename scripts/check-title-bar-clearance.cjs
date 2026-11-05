@@ -89,7 +89,7 @@ const IMPORT_LINE = /^\s*import\b/;
 /** 锚定浮层的定位层（base-ui 的 Positioner）—— 第三种让位形态的判定入口。
  * 锚 `.<` 与行尾（标签可能紧跟属性或直接换行）：`Positioner.Props` 这类**类型
  * 引用**不能被算进来（`Pick<…Positioner.Props, …>` 会误报）。 */
-const POSITIONER_OPEN = /<[A-Za-z]+Primitive\.Positioner(\s|>|$)/;
+const POSITIONER_OPEN = /<[A-Za-z]+Primitive\.Positioner(?:\s|>|$)/;
 /** 锚定浮层交出可用区域的那一行（`useOverlayBoundary` 的唯一消费形状）。 */
 const COLLISION_BOUNDARY = /collisionBoundary=\{boundary \?\? undefined\}/;
 
@@ -215,8 +215,9 @@ for (const dir of SCAN_DIRS) {
 
 if (notes.length) {
   console.log(
-    `[title-bar] 同文件已出现 top-title-bar（常量拼接的让位不在此静态扫描内，需人工确认）：\n  ${
-      notes.join("\n  ")}`,
+    `[title-bar] 同文件已出现 top-title-bar（常量拼接的让位不在此静态扫描内，需人工确认）：\n  ${notes.join(
+      "\n  ",
+    )}`,
   );
 }
 

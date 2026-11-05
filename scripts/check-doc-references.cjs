@@ -76,7 +76,7 @@ function checkFactKeysMatchDocs() {
       problems.push(`登记表缺少事实 key：${f.key}`);
     }
   }
-  const mdKeys = [...md.matchAll(/\| `([a-z][a-z0-9_.]+)` \|/g)].map((m) => m[1]);
+  const mdKeys = [...md.matchAll(/\| `(?<key>[a-z][a-z0-9_.]+)` \|/g)].map((m) => m.groups?.key);
   for (const k of mdKeys) {
     if (!FACTS.some((f) => f.key === k)) {
       problems.push(`登记表有多余/脚本未支持 key：${k}`);
@@ -142,10 +142,10 @@ function bareValueOccurs(text, value) {
 
 function extractDocHostPorts(text) {
   const ports = new Set();
-  const re = /(?:localhost|127\.0\.0\.1):(\d+)/g;
+  const re = /(?:localhost|127\.0\.0\.1):(?<port>\d+)/g;
   let m;
   while ((m = re.exec(text))) {
-    ports.add(Number(m[1]));
+    ports.add(Number(m.groups?.port));
   }
   return [...ports];
 }
@@ -223,7 +223,7 @@ function checkVerify(text, docPath, f) {
  * 这类说明当前规则的上下文。判据：该行同时出现纠正词（改为/修正/pnpm/禁止/违反）
  * 即视为说明而非可执行命令。
  */
-const NPM_CMD_RE = /(^|[\s`(（])(npm\s+run|npx)\b/;
+const NPM_CMD_RE = /(?:^|[\s`(（])(?:npm\s+run|npx)\b/;
 const NPM_CMD_EXPLAIN_RE = /改为|修正|修正为|pnpm|禁止|违反|原记录|不要用|应使用/;
 
 function checkLedgerCommands() {
@@ -575,12 +575,12 @@ function checkAgentsMdPaths() {
   lines.forEach((line, idx) => {
     const lineno = idx + 1;
     const candidates = [];
-    for (const m of line.matchAll(/`([^`\n]+)`/g)) {
-      candidates.push({ raw: m[1], source: "backtick" });
+    for (const m of line.matchAll(/`(?<raw>[^`\n]+)`/g)) {
+      candidates.push({ raw: m.groups?.raw ?? "", source: "backtick" });
     }
-    for (const m of line.matchAll(/\[[^\]]+\]\(([^)\s]+)\)/g)) {
+    for (const m of line.matchAll(/\[[^\]]+\]\((?<target>[^)\s]+)\)/g)) {
       // 链接目标允许带 #fragment；只核对 fragment 之前的路径部分
-      candidates.push({ raw: m[1].split("#")[0], source: "md-link" });
+      candidates.push({ raw: (m.groups?.target ?? "").split("#")[0], source: "md-link" });
     }
     for (const c of candidates) {
       const p = looksLikeRepoPath(c.raw);
@@ -617,8 +617,8 @@ function checkAgentsMdSectionAnchors() {
   // 「3 行窗口」：把当前行、上一行、下一行拼成一段——覆盖「同 bullet 跨行、
   // 文件在头行、§号在后行」这种 AGENTS.md 里常见的写法（如「改 src/lib/**
   // → docs/standards/18-lib层规范.md ... 尤其 §18.4 三选一的唯一口径」）。
-  const fileRe = /docs\/standards\/(\d+)-[^\s`)\]~]+\.md/g;
-  const sectionRe = /§(\d+(?:\.\d+){0,3})/g;
+  const fileRe = /docs\/standards\/(?<num>\d+)-[^\s`)\]~]+\.md/g;
+  const sectionRe = /§(?<section>\d+(?:\.\d+){0,3})/g;
   // 已报告过的 (path + §num) 组合，避免窗口重叠导致重复计数
   const reported = new Set();
   const targetCache = new Map();
@@ -637,14 +637,14 @@ function checkAgentsMdSectionAnchors() {
     let m;
     fileRe.lastIndex = 0;
     while ((m = fileRe.exec(window))) {
-      files.push({ num: m[1], path: m[0] });
+      files.push({ num: m.groups?.num, path: m[0] });
     }
     if (!files.length) {
       continue;
     }
     sectionRe.lastIndex = 0;
     while ((m = sectionRe.exec(window))) {
-      const full = m[1]; // 形如 "18" / "18.4" / "13.6.1"
+      const full = m.groups?.section ?? ""; // 形如 "18" / "18.4" / "13.6.1"
       const major = full.split(".")[0];
       const target = files.find((f) => f.num === major);
       if (!target) {

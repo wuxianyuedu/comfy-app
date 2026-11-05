@@ -160,17 +160,18 @@ export function specCandidates(spec, fromFile) {
 
 /** `vi.mock` / `jest.mock` 的说明符：`preProcessFile` 只认 import/require/export
  *  这几类语法，测试里的模块替身不在它那份结果里，所以这一条单独补。 */
-const MOCK_RE = /(?:vi|jest)\.mock\s*\(\s*["']([^"'\n]+)["']/g;
+const MOCK_RE = /(?:vi|jest)\.mock\s*\(\s*["'](?<specifier>[^"'\n]+)["']/g;
 
 /** `export * as ns from "x"`：扫描器对这一形态不报（实测 TS 6.0.3），而它确实是
  *  一条转出口 —— 漏了就是「闭包算少了」那一侧，单独补一条。 */
-const EXPORT_NS_RE = /\bexport\s+(?:type\s+)?\*\s+as\s+[\w$]+\s+from\s*["']([^"'\n]+)["']/g;
+const EXPORT_NS_RE =
+  /\bexport\s+(?:type\s+)?\*\s+as\s+[\w$]+\s+from\s*["'](?<specifier>[^"'\n]+)["']/g;
 
 /** JSDoc 里的类型引用 `import("x")`（`@param {import("…").T}` / `@type {import("…")}`）：
  *  扫描器只按 JS 语法走，注释不在它的结果里；而这类引用**是真的依赖** —— tsc 与
  *  typedoc 都沿它解析类型（`scripts/lockfile/lock-diff.d.mts` 就是 typedoc 输入面闭包
  *  里唯一一条靠它进图的文件）。所以按「落在注释里」把它补回来。 */
-const TYPE_IMPORT_RE = /\bimport\s*\(\s*["']([^"'\n]+)["']\s*\)/g;
+const TYPE_IMPORT_RE = /\bimport\s*\(\s*["'](?<specifier>[^"'\n]+)["']\s*\)/g;
 
 /**
  * 一份源码静态引用到的模块（候选路径集合，含 barrel 的 `dir/index.*` 形态）。
@@ -205,9 +206,9 @@ export function specifiersOf(text, fromFile) {
   const code = stripComments(text);
   for (const re of [MOCK_RE, EXPORT_NS_RE]) {
     for (const m of code.matchAll(re)) {
-      /* `m[1]` 在类型上仍是 `string | undefined`（TS 不认「正则里的必需分组在 matchAll 里
+      /* `m.groups?.specifier` 在类型上仍是 `string | undefined`（TS 不认「正则里的必需分组在 matchAll 里
        * 必定存在」）—— 这处 `??` 是给 tsc 看的，不是给运行时看的，删了会撞脚本档类型检查（§13.5.14）。 */
-      for (const cand of specCandidates(m[1] ?? "", fromFile)) {
+      for (const cand of specCandidates(m.groups?.specifier ?? "", fromFile)) {
         out.add(cand);
       }
     }
@@ -220,11 +221,11 @@ export function specifiersOf(text, fromFile) {
     if (code.slice(idx, idx + m[0].length).trim() !== "") {
       continue;
     }
-    /* `m[1]` 在类型上仍是 `string | undefined`（TS 不认「正则里的必需分组在 matchAll 里
+    /* `m.groups?.specifier` 在类型上仍是 `string | undefined`（TS 不认「正则里的必需分组在 matchAll 里
      * 必定存在」）—— 这处 `??` 是给 tsc 看的，不是给运行时看的，删了会撞脚本档类型检查（§13.5.14）。
      * 同一行的字面量索引就是 `noUncheckedIndexedAccess` 那一层，规则没建模，按 §5.10 的 C 格留注释。 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上一行：`m[1]` 是必需分组，运行时非 undefined，这处 `??` 只服务于 tsc
-    for (const cand of specCandidates(m[1] ?? "", fromFile)) {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上一行：`m.groups?.specifier` 是必需分组，运行时非 undefined，这处 `??` 只服务于 tsc
+    for (const cand of specCandidates(m.groups?.specifier ?? "", fromFile)) {
       out.add(cand);
     }
   }
@@ -419,7 +420,7 @@ export function resolveAffectedTests({
     } else {
       // 兄弟测试：`x.ts` ⇄ `x.test.ts(x)`。必须先剥掉源码自己的扩展名，
       // 否则 `x.tsx` 会拼成 `x.tsx.test.ts` 这种查无此文件的名字。
-      const stem = rel.replace(/\.(ts|tsx|mts|js|jsx|mjs)$/, "");
+      const stem = rel.replace(/\.(?:ts|tsx|mts|js|jsx|mjs)$/, "");
       if (stem !== rel) {
         add(`${stem}.test.ts`, "兄弟测试");
         add(`${stem}.test.tsx`, "兄弟测试");
@@ -436,10 +437,10 @@ export function resolveAffectedTests({
       }
     }
     // 门禁脚本按名字配它的回归测试。
-    const script = /^scripts\/(.+)\.(?:cjs|mjs|py)$/.exec(rel);
+    const script = /^scripts\/(?<stem>.+)\.(?:cjs|mjs|py)$/.exec(rel);
     if (script) {
-      add(`tests/${script[1]}.test.ts`, "脚本同名回归");
-      add(`tests/${script[1]}.test.tsx`, "脚本同名回归");
+      add(`tests/${script.groups?.stem}.test.ts`, "脚本同名回归");
+      add(`tests/${script.groups?.stem}.test.tsx`, "脚本同名回归");
     }
   }
 
@@ -701,7 +702,7 @@ export function changedPathsFrom(argv) {
 
 /** 参与 import 图的文件目录与扩展名：闭包要能穿过 `scripts/` 里的门禁脚本。 */
 const SOURCE_DIRS = ["src/", "tests/", "scripts/", "tools/"];
-const SOURCE_EXT_RE = /\.(ts|tsx|mts|js|jsx|mjs|cjs)$/;
+const SOURCE_EXT_RE = /\.(?:ts|tsx|mts|js|jsx|mjs|cjs)$/;
 
 /**
  * 一个 tracked 路径是否进 import 图（`.d.ts` 是纯声明，不做节点）。

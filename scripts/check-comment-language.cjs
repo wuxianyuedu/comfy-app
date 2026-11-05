@@ -68,7 +68,7 @@ const REPORT_ONLY = ARGS.has("--report");
 /** 扫描范围:应用源码、门槛脚本、测试、e2e。 */
 const SCAN_DIRS = ["src", "scripts", "tests", "e2e"];
 /** 扫描的扩展名:仓库里所有会写注释的代码形态。 */
-const SCAN_EXT = /\.(ts|tsx|mjs|cjs|js|jsx)$/;
+const SCAN_EXT = /\.(?:ts|tsx|mjs|cjs|js|jsx)$/;
 /** 不扫的目录:产物、依赖、运行时输出。 */
 const SKIP_DIRS = new Set([
   "node_modules",
@@ -101,7 +101,7 @@ const ENGLISH_WORD_RE = /[A-Za-z]{2,}/g;
  * 以免把「说明某个指令」的正常中文注释一起放行。
  */
 const TOOL_DIRECTIVE_RE =
-  /^\s*\*?\s*@?(vitest-environment|ts-ignore|ts-expect-error|ts-nocheck|ts-check|jsx|jsxRuntime|jsxImportSource|ts-expectError)\b|^\s*\*?\s*(eslint|oxlint)-(disable|enable)|^\s*\*?\s*turbopackIgnore\s*:/;
+  /^\s*\*?\s*@?(?:vitest-environment|ts-ignore|ts-expect-error|ts-nocheck|ts-check|jsx|jsxRuntime|jsxImportSource|ts-expectError)\b|^\s*\*?\s*(?:eslint|oxlint)-(?:disable|enable)|^\s*\*?\s*turbopackIgnore\s*:/;
 
 /**
  * JSDoc **结构行**豁免：`@param {T}` / `@returns {T}` / `@typedef {…}` /
@@ -119,7 +119,7 @@ const TOOL_DIRECTIVE_RE =
  * 于是「给类型行补中文说明」仍然是推荐写法（更好读），但**不再被门禁逼着写**。
  */
 const JSDOC_STRUCTURAL_RE =
-  /^\s*\*?\s*@(param|arg|argument|returns?|typedef|type|property|prop|template|generic|satisfies|satisfies|extends|implements|readonly|internal|private|public|protected|package|enum|this|typeParam)\b/;
+  /^\s*\*?\s*@(?:param|arg|argument|returns?|typedef|type|property|prop|template|generic|satisfies|satisfies|extends|implements|readonly|internal|private|public|protected|package|enum|this|typeParam)\b/;
 /**
  * 去掉「@tag + 可选类型块 + 可选参数名」后，是否还剩**散文**。
  *
@@ -129,11 +129,13 @@ const JSDOC_STRUCTURAL_RE =
  */
 /** 去掉类型语法与 @tag 后，是否出现「英文虚词 / 动词」（那就是说明句）。 */
 const JSDOC_PROSE_WORDS_RE =
-  /\b(the|a|an|is|are|was|were|be|been|being|to|of|for|with|and|or|not|no|when|which|that|this|these|those|it|its|so|than|then|via|from|by|as|at|in|on|into|onto|over|under|use|used|uses|using|call|calls|called|must|should|can|could|may|might|will|would|have|has|had|do|does|did|only|also|both|each|every|any|all|some|one|two|three|first|second|last|next|before|after|while|until|because|since|if|else|but|however|note|means|become|becomes|instead|still|just|never|always|default|whether|same|other|another|happen|happens|appear|appears|remain|remains|keep|keeps|stay|stays|make|makes|made|give|gives|given|take|takes|taken|get|gets|point|points|points?|hold|holds|held|return|returns|returning)\b/i;
+  /\b(?:the|a|an|is|are|was|were|be|been|being|to|of|for|with|and|or|not|no|when|which|that|this|these|those|it|its|so|than|then|via|from|by|as|at|in|on|into|onto|over|under|use|used|uses|using|call|calls|called|must|should|can|could|may|might|will|would|have|has|had|do|does|did|only|also|both|each|every|any|all|some|one|two|three|first|second|last|next|before|after|while|until|because|since|if|else|but|however|note|means|become|becomes|instead|still|just|never|always|default|whether|same|other|another|happen|happens|appear|appears|remain|remains|keep|keeps|stay|stays|make|makes|made|give|gives|given|take|takes|taken|get|gets|point|points|points?|hold|holds|held|return|returns|returning)\b/i;
 
 /** 剥掉类型块、`[...]` 名字、`@tag`，剩下的就是标识符与标点。 */
 function stripJsdocTypeSyntax(text) {
-  let rest = text.replaceAll(/\{[^{}]*(\{[^{}]*\}[^{}]*)*\}/g, " ").replaceAll(/\[[^\]]*\]/g, " ");
+  let rest = text
+    .replaceAll(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g, " ")
+    .replaceAll(/\[[^\]]*\]/g, " ");
   if (rest.includes("{")) {
     rest = rest.slice(0, rest.indexOf("{"));
   }
@@ -150,7 +152,8 @@ function stripJsdocTypeSyntax(text) {
  * typedef，ISSUE #2589 批 6 撞上）。可选字段写成 `@property {T} [name]` 时，
  * 方括号那一段已被 `stripJsdocTypeSyntax` 剥掉，这里不需要特判。
  */
-const PARAM_TAG_RE = /@(param|arg|argument|property|prop)\s+(?:\{[^{}]*\}\s+)?([A-Za-z_$][\w$]*)/;
+const PARAM_TAG_RE =
+  /@(?:param|arg|argument|property|prop)\s+(?:\{[^{}]*\}\s+)?(?<name>[A-Za-z_$][\w$]*)/;
 
 /**
  * 一行是否**本身就是** JSDoc 结构行（带 `@param` / `@typedef` 等 tag）。
@@ -170,9 +173,13 @@ function jsdocStructuralOnly(text) {
   } // 有中文说明 → 本就不计入
   let rest = stripJsdocTypeSyntax(text);
   const param = PARAM_TAG_RE.exec(text);
-  if (param?.[2]) {
+  const paramName = param?.groups?.name;
+  if (paramName !== undefined) {
     // 剥掉参数名那一处（整词），余下才是说明部分。
-    rest = rest.replace(new RegExp(`(^|\\s)${param[2].replaceAll(/[$]/g, String.raw`\$`)}(?=\\s|$)`), " ");
+    rest = rest.replace(
+      new RegExp(`(^|\\s)${paramName.replaceAll(/[$]/g, String.raw`\$`)}(?=\\s|$)`),
+      " ",
+    );
   }
   if (JSDOC_PROSE_WORDS_RE.test(rest)) {
     return false;
@@ -424,8 +431,7 @@ async function main() {
     `\n修法:把注释改成中文（专有名词 / 命令 / 路径 / 错误原文保留英文）。` +
       `\n  确实必须写英文的构建期模块 → 登记进 docs/reference-facts.md 的` +
       `\n  \`comment.language.asciiOnly\` 一行（规范 launch-and-build §9.6）。` +
-      `\n  本判据是硬闸（无基线、无 --update）：存量已清零，新增即阻断。${
-      note}`,
+      `\n  本判据是硬闸（无基线、无 --update）：存量已清零，新增即阻断。${note}`,
   );
   process.exit(1);
 }

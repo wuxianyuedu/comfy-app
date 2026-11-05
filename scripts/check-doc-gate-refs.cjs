@@ -167,8 +167,8 @@ const NON_D_GROUP_COMMANDS = new Set([
 
 /** 钩子 D 组的命令（行首锚定 = 只认真调用，被 `# ` 注掉的行不算在场）。 */
 function hookDGroupCommands(hookText) {
-  return [...hookText.matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) =>
-    (m[2] ?? "").replaceAll(/\s+/g, " ").trim(),
+  return [...hookText.matchAll(/^ {2}run "(?:[^"]+)" (?<command>.+)$/gm)].map((m) =>
+    (m.groups?.command ?? "").replaceAll(/\s+/g, " ").trim(),
   );
 }
 

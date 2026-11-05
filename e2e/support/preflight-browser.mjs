@@ -37,8 +37,8 @@ async function defaultLaunch() {
  * @returns {string | null}
  */
 export function parseMissingExecutable(message) {
-  const m = /Executable doesn't exist at (.+?)(?:\n|$)/.exec(message);
-  const captured = m?.[1];
+  const m = /Executable doesn't exist at (?<path>.+?)(?:\n|$)/.exec(message);
+  const captured = m?.groups?.path;
   return captured ? captured.trim() : null;
 }
 

@@ -86,7 +86,7 @@ export const NOISE_PATTERN =
  *     **源未定位**；按观察形态收，真读数不会是一行孤立的 `x`）。
  */
 export const FIXTURE_NOISE_PATTERN =
-  /^warning: in the working copy of |^Preparing worktree \(|^fatal: not a git repository \(or any of the parent directories\)|起不了 Playwright（|\*\*判据按设计造的失败\*\*|^\[(ports|python|schema|browser)\]\s*$|^\[ci-install-deps\] |One or more extensionless imports detected|^\s*│|]8;;|storybook\.js\.org\/docs\/faq|^x\s*$/;
+  /^warning: in the working copy of |^Preparing worktree \(|^fatal: not a git repository \(or any of the parent directories\)|起不了 Playwright（|\*\*判据按设计造的失败\*\*|^\[(?:ports|python|schema|browser)\]\s*$|^\[ci-install-deps\] |One or more extensionless imports detected|^\s*│|]8;;|storybook\.js\.org\/docs\/faq|^x\s*$/;
 
 /** 一行是不是良性噪音（CI 里应被屏蔽）。两张清单任一命中即算。 */
 export function isNoiseLine(line) {
