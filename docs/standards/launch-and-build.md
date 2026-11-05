@@ -1073,7 +1073,7 @@ POSIX 端口探测回归：`src/lib/comfyui/proc-detect.test.ts`（`/proc/net/tc
 - pnpm 已关闭 `verifyDepsBeforeRun`（见 §6）：任何 pnpm 命令都不会隐式
   补跑 install。dev server 运行期间不要手动跑 `pnpm install`
   （被活进程锁住的是运行时驱动那份原生件 `@libsql/win32-x64-msvc/index.node`，install 会
-  EPERM 连锁；`better-sqlite3` 自 §6.1 起只是测试基建的 dev-only 依赖，跑测试时才被锁）。
+  EPERM 连锁；`better-sqlite3` 与运行时无关（§6.1；#2579 已评估换 `node:sqlite`，结论与四件迁移条件同在那一节）。
   **这条现在有现场执行者，且两侧同一份判据**：`launcher-core/port-reap.mjs` 的
   `runningAppInstances(root)` 按**归属**回答「本检出的应用服务在不在跑」——会话锚点
   （`run/launcher-session.json` 心跳新鲜 + launcher PID 存活）或端口上的进程命令行命中
@@ -2065,6 +2065,27 @@ better-sqlite3 实例），而 `$reset` / `$tables` / 六个 `seed*` 本来就�
 清单写在那张单里（`file:` 客户端是连接池 ⇒ 开机 PRAGMA 只覆盖当时借到的那条连接、
 `createClient({ timeout })` 的等锁预算与 250ms 那格实测、`src/lib/sqlite-pragmas.ts` 的四处站点、
 宿主 external 三件的清单，以及 drizzle 无官方驱动 ⇒ 同样要 `sqlite-proxy` 适配 + 事务语义显式实现）。
+
+**#2579 的评估结论（2026-11-05，探针与本仓真构建实测）：换，按下面四件条件落地。**
+判定面是「换了以后那些靠 libsql 语义立起来的东西还站不站得住」，逐条实测如下
+（探针全部留在 `temp/sqlite-eval/` —— gitignored，结论与本节数字为准）：
+
+| 重验项 | 实测读数 | 结论 |
+| --- | --- | --- |
+| 原子领取单语句在 async proxy 下 | `drizzle-orm/sqlite-proxy` + `node:sqlite`：`UPDATE … WHERE id IN (SELECT … ORDER BY … LIMIT ?) RETURNING id` 返回被领的行 | **成立** —— 它是单语句、无事务，#2396 的「async 事务在 continuation 前 COMMIT」不在这一格 |
+| 事务语义 | `db.transaction(async tx => …)` 两语句一次提交、回调中途抛 ⇒ 半截不落（COMMIT/ROLLBACK 都等回调） | **成立** —— proxy 形状下是真事务；`tests/helpers/test-db.ts` 早已是同一宿主形状，整套测试都在跑生产代码 |
+| 事务的 BEGIN 档位 | §6.1 第 2 条：proxy **会读** `config.behavior` 拼进 `begin`；libsql 侧 `client.transaction()` 默认 `write`（= `BEGIN IMMEDIATE`），proxy 侧默认 deferred | **迁移改件①**：`repository-user.ts` 两处事务站点显式传 `behavior: "immediate"`，否则锁竞争窗口变大（两侧不对称的实测出处见上） |
+| 等锁预算的等价机制 | `PRAGMA busy_timeout = 250` 实测等 359ms 抛；构造器 `timeout: 400` 实测等 515ms 抛；**不设** ⇒ 默认 0、1ms 即抛（`busy_timeout` 读数 `{"timeout":0}`） | **机制存在且更简单**：单连接形状下 §7.6 那条「池后开连接没预算」的坑结构上消失；宿主侧给 250、Next 侧不设（fail-fast）与现行两族划分逐格对应 |
+| 锁码识别 | node:sqlite 的 `code` 是 `ERR_SQLITE_ERROR`（**不是** `SQLITE_BUSY`），锁族信息在 `errcode=5` + `errstr="database is locked"`；`message` 同文 | **迁移改件②**：`sqlite-error.ts` 的 `TRANSIENT_LOCK_PHRASES`（message 含 "database is locked"）已接得住，但 `TRANSIENT_LOCK_CODES` 一支落空 ⇒ `collect()` 取数面补 `errcode`（5=BUSY、6=LOCKED）与 `errstr` |
+| PRAGMA 四处站点 | 实际是 **3×libsql**（`db.ts` / `workshop/db.ts` / `host-runtime.ts`，走 `SqlitePragmaTarget.execute`）+ **1×node:sqlite**（`standalone-runtime-env.mjs` 早已是 `DatabaseSync`）；`db-schema-ready` / `db-backup-core` **不在**站点族（只读探针/备份，自开连接） | **迁移改件③**：`SqlitePragmaTarget` 增 `exec` 适配一处、三处调用点同批；launcher 那处零改。**不算证据**：`db-schema-ready` / 备份两处与主驱动不是一回事（单子明令） |
+| 宿主 external 与产物 | `build-executor-host.mjs` 的 `EXTERNAL_PACKAGES` 挂 `@libsql/client`×2；本轮真构建实测：standalone 层 `.pnpm` 内 5 包 **9,198 KB**（`.node` = 8,875,520 B）、桌包层 `node_modules/@libsql` **9,238 KB** + `.next/node_modules/@libsql` 159 KB（载荷全量 95,800 KB ⇒ @libsql ≈ 9.8%） | **迁移改件④**：`EXTERNAL_PACKAGES` 减两行、`check-standalone-contents.cjs` 必须项同批减；node:sqlite 内建 ⇒ 宿主 bundled inputs 反而少一截 |
+| §7.3 变体拷贝告警 | 本轮两跑（`pnpm build` / `build-desktop`）日志实测 **0 条**非本平台变体告警 —— pnpm 只物化本机平台 optional 依赖（`.pnpm` 里只有 win32-x64-msvc） | 迁移后该告警族**无对象**（CI 物化集合可能不同，但那批告警的宿主包整个不在运行时依赖里） |
+| install / EPERM 族 | 材料化差 ≈ 9.6 MB（5 包，其中 8.5 MB 是单个 `.node`）；EPERM 的正身 = dev server 持 `@libsql/win32-x64-msvc/index.node` | 运行时进程不再加载任何 SQLite 原生件 ⇒ **EPERM 族结构性消失**；`@libsql/client` 降级为 devDependencies（drizzle-kit@0.31.11 的 sqlite 驱动就是它，`db:push` / `db:migrate` / `db:studio` 零改动保留） |
+| 同步钉事件循环（db.ts 头注那条换 libsql 的原由） | 探针：点查 ×100 = 1.0ms；20 万行全表扫 14ms（心跳 0 次）；批写 500 行 5.6ms。而 **libsql `file:` 的语句执行同样同步**（§7.6 实测 2.2s 等锁 0 心跳） | **不是两驱动的差异轴** —— 两者语句执行都同步；awaitable 的 JS API 面是 proxy 给的。量级上典型业务查询 <0.02ms/条、最坏单语句 14ms，可接受 |
+
+**落地路径**：四件迁移改件（①事务 behavior ②锁码取数面 ③PRAGMA 站点适配 ④宿主/产物清单减项）
++ 一处宿主适配层（sqlite-proxy 回调，`test-db.ts` 同形已存在于仓）。迁移另立单子跟踪
+（见 #2579 关单评论里的号）；**主干在本单只落结论，不落迁移**。
 
 ## 7. 构建流程
 

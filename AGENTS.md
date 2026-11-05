@@ -252,8 +252,8 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。若要恢复 React 
    未命中会打印「未触及依赖面」而不是冒充结论。口径、为什么不读 lockfile、以及「缺 `node_modules`
    判红而不是跳过」见 §13.5.15。
 9. **dev server 运行期间不要执行 `pnpm install`**（运行时驱动 `@libsql/client` 的原生件
-   `@libsql/win32-x64-msvc/index.node` 被活进程锁定会 EPERM 连锁失败；`better-sqlite3` 早已
-   退成 dev-only 测试基建，只有跑测试的 worker 会锁它 —— 举例别再拿它当运行时那件，见 §6.1）。
+   `@libsql/win32-x64-msvc/index.node` 被活进程锁定会 EPERM 连锁失败；`better-sqlite3` 与
+   运行时无关（dev-only 测试基建，见 §6.1；#2579 已评估换 `node:sqlite`，结论与四件迁移条件同在那一节）。
    **这条现在有现场执行者**：判据是
    `scripts/launcher-core/port-reap.mjs` 的 `runningAppInstances(root)`，按**归属**回答
    「本检出的应用服务在不在跑」（会话锚点心跳 + 端口上进程的命令行命中本检出的
