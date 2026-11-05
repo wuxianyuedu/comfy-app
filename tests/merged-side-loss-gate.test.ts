@@ -213,8 +213,12 @@ describe("check-merged-side-loss —— 整份退回的事后复算", () => {
     repo.git("add", "-A");
     repo.git("commit", "-q", "-m", "chore: 单行 v1（后来的结果版与它逐字节相同）");
 
-    // 基线：把 g 链式化（等价于被格式化重排过）—— 内容没变，只有排版。
-    repo.write("src/g.ts", "export const g = call(\n  1,\n);\n");
+    /* 基线：把 g 链式化（等价于被格式化重排过）—— 内容没变，只有排版。
+     * ⚠️ 结尾**不许**多一个逗号：判别是「剥掉全部空白后逐字相等」，而逗号不是空白
+     * —— `call(\n  1,\n)` 剥完是 `call(1,)`，与结果版的 `call(1)` 不等，这一格会被判成
+     * 真退回（2026-11-05 GA 上这条用例就是这么红的）。夹具要钉的是「只差空白/断行」，
+     * 所以这里只能改断行。 */
+    repo.write("src/g.ts", "export const g = call(\n  1\n);\n");
     repo.git("add", "-A");
     repo.git("commit", "-q", "-m", "style: 链式排版");
     const good = out(repo.dir, "rev-parse", "HEAD");

@@ -158,13 +158,14 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 | ----------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
 | 本地              | `.githooks/pre-commit`（D0 形态前置档串行，A/B/C/D 四组并行；**默认档只跑 D0**，见 §13.5.25） | 分支守卫 + 形态前置那几条；tsc / eslint / 受影响用例 / 其余静态判据仍逐字在注册表里，由 `COMFY_HEAVY_GATES` 决定谁执行 | 只能 `--no-verify`（进历史，Review 可见） |
 | 平台（push 保护） | CNB **分支保护设置**                                                                          | `master` 的直接 push（放行 PR 合并）                                                                                   | 需管理员改设置                            |
-| 平台（流水线）    | 仓库根 `.cnb.yml` → 自托管节点（标签 `win`）                                                  | PR 上的门禁格（在场哪几格以 `.cnb.yml` 自己列的为准，见 §13.5.25）+ `master` 合并形态复核                              | 源分支删入口（见 13.6.1 服务端那两条）    |
+| 平台（代码判据）  | `.github/workflows/pr-gate.yml` → GitHub Actions                                                | 分支守卫 / 提交声明核对 / 同步数据库表结构 / 类型检查 / 十四格静态判据 / `oxfmt 格式` / `lib Node-only 声明` / 重档静态判据（2026-11-05 起这些格从 CNB 整格搬来，见 §13.5.33） | 无（PR 必跑）                             |
+| 平台（流水线）    | 仓库根 `.cnb.yml` → 自托管节点（标签 `win`）                                                  | **平台读数**（镜像身份 / 工作区复用读数 / 缓存槽读数 / 环境前提）+ **判决链**（GitHub 镜像同步 → 判决回读 → 日志分块 → 判决判定）+ `master` 合并形态复核 | 源分支删入口（见 13.6.1 服务端那两条）    |
 
 > **服务端形态重新有了调用方**：`scripts/check-branch-guard.cjs` 的
-> `--pr-check` / `--merge-commit` 由 `.cnb.yml` 调用（后者在 `push` 那条流水线里）。
-> 它们从来不是「为 CI 准备的第二份判据」——`tests/check-branch-guard.test.ts` 用
-> 真仓库跑三种拓扑，与本地门槛共用同一份实现。其中 `--merge-commit` 必须认得
-> squash，理由见上面那段。
+> `--pr-check` / `--merge-commit` 由 `.github/workflows/pr-gate.yml`（前者）与
+> `.cnb.yml` 的 push 流水线（后者）调用。它们从来不是「为 CI 准备的第二份判据」——
+> `tests/check-branch-guard.test.ts` 用真仓库跑三种拓扑，与本地门槛共用同一份实现。
+> 其中 `--merge-commit` 必须认得 squash，理由见上面那段。
 >
 > **`.cnb.yml` 的形态本身有判据**（`tests/no-platform-ci-config.test.ts`，在
 > 提交门槛的固定清单里）：顶层必须是分支键 → 事件键（#1229 的根因）、必须有
@@ -202,7 +203,7 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 ✅ node scripts/check-function-length.cjs --staged # 函数长度硬闸 TS/TSX（见 12 §12.13）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-rust-function-length.cjs # 函数长度硬闸 Rust 壳（见 12 §12.13.1）
 ✅ node scripts/check-infra-file-size.cjs --staged # 基础设施层文件长度**硬闸**：`scripts/**` 的 .cjs/.mjs 与 `tools/**` 的 .ps1，与 R5 同阈值同口径、另立一档（见 12 §12.8 R5 姊妹档）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-format.cjs --staged   # oxfmt 格式**硬闸**（无基线、无 `--update`）：2026-10-29 起回到 D0（见 13.5.1.1，ISSUE #2610）。红了当场 `pnpm exec oxfmt <它点名的文件>` —— **只点本次改的**，全库 `--write` 违 §13.7；平台侧「oxfmt 格式」那一格跑 `--changed`（改动面 ∩ `GLOBS`，ISSUE #2979 起 `GLOBS` 含 mjs/cjs、不过 `IGNORE_GLOBS`）作第二层，`--staged` 见下 13.5.8.2
+✅ node scripts/check-format.cjs --staged   # oxfmt 格式**硬闸**（无基线、无 `--update`）：2026-10-29 起回到 D0（见 13.5.1.1，ISSUE #2610）。红了当场 `pnpm exec oxfmt <它点名的文件>` —— **只点本次改的**，全库 `--write` 违 §13.7；平台侧「oxfmt 格式」那一格 2026-11-05 起由 GA `pr-gate.yml` 跑 `--changed`（改动面 ∩ `GLOBS`，ISSUE #2979 起 `GLOBS` 含 mjs/cjs、不过 `IGNORE_GLOBS`）作第二层，`--staged` 见下 13.5.8.2
 ✅ node scripts/shell-gate.mjs               # 桌面壳门禁：**只在暂存命中 src-tauri 四类壳输入时**
    # 才做事 —— 有 .rs 改动就跑 `cargo test`（壳内全部 #[test] 唯一的执行者；条数随源码
    # 变动，不在文档里记账），并复用
@@ -324,6 +325,9 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 > （这一族秒数在本仓只有**一份出处**，带取法与量具：见 §13.5.17 —— 不往各处抄现价，
 > 抄一份就会漂第二次，而账面一条红都不会出现）。判据一字未改，
 > 挪的只是执行者；平台侧那三步见 §13.5.17。
+> ⚠️ **2026-11-05 其中 `API 文档生成与自检` 再降一档到每日**（ISSUE #2537：新面 98%
+> 触发率、中位 40.9s、占 30.6%）：PR/合并侧不再即时判，最晚次日 01:00 暴露，窗口 ≤24h
+> （见 §13.5.23 第五处）。
 > 本地仍然是「按需召唤」那一层（由人 @ 评审 NPC 唤起，或改动命中对应范围时手动跑，
 > 逐条登记在 13.5.4）。**不要**把它们塞回每次 commit —— 那是本地提交速度的问题，
 > 与平台侧有没有执行者是两件事。
@@ -418,7 +422,7 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 | 位置                                     | 档位                                                            | 谁在跑                         |
 | ---------------------------------------- | --------------------------------------------------------------- | ------------------------------ |
 | `.githooks/pre-commit` 的 **D0**         | 输入面跳过（带 `--staged`）                                     | 每次提交，**第一层**           |
-| `.cnb.yml` 的「oxfmt 格式」           | **改动面**（`--changed`，`ifModify: src/ + .storybook/`） | `pull_request` 流水线，每次 PR |
+| `.github/workflows/pr-gate.yml` 的「oxfmt 格式」step | **改动面**（`--changed`，每次 PR 都跑，无 `ifModify`） | `pull_request`（GA 侧），每次 PR；2026-11-05 起从 CNB PR 档整格搬来（§13.5.33） |
 | `pnpm check:all` 的 `format` 项          | 改动面（`--changed`）                                          | 人的动作（完整验证那一档）     |
 | `pnpm format:check`（本地日常）          | 改动面（`--changed`，与平台同一条命令）                        | 人的动作                       |
 | `pnpm format:report`（存量盘点）         | 全量 `--report`（只列清单、退 0）                              | 人的动作，看欠账               |
@@ -5299,11 +5303,11 @@ CI 去执行」。答成「能，但**不是挪到 PR 那一条**」，理由有
 （匿名 `GET /repos/wuxianyuedu/comfy-app` = 404），唯一的证据躺在 cnb 那一格的日志正文里。
 
 ⚠️ **为什么只能从正文认，不能从格状态认**（这是 #3051 换来的一个必然后果，不是实现偷懒）：
-那一格自 #3051 起在主列，但形态是**读数档**（`ci-github-mirror-push.mjs --readout`，恒不退非零 ——
-主列某格 `error` 会把排在它后面的格整片 `skipped`，而 GitHub 那一跳坏了既不该拦合并、也不该被
-记成门禁的红）。于是它的 `status` 不再承载判决：实测 `cnb-vj3-1k6ddf69d` 那一格写的是
-`status=success`，正文却是 `推送失败（exit 128）：schannel: server closed abruptly`。
-拿 status 判出勤会把「推不通」念成「天天出勤」。
+那一格自 #3051 起在主列，2026-11-05 起翻成**承重**（摘除 `--readout`，推不出去即退非零、拦合）。
+但承重只改了「退码归谁」，没让 `status` 变成可读的形状 —— 它只回答「退没退非零」，而七类形状
+仍然只有正文里那一行才分得出来。下面这条读数就是它还是读数档时的现场：实测
+`cnb-vj3-1k6ddf69d` 那一格写的是 `status=success`，正文却是
+`推送失败（exit 128）：schannel: server closed abruptly`。拿 status 判出勤会把「推不通」念成「天天出勤」。
 
 - **判什么**：窗口内（默认 24h）PR 那些跑里，`GitHub 镜像同步` 这一格有没有至少一次
   「已推 · 已派发」；没有的话各是什么形状。形状是**七类**、各有自己的下一动作，
@@ -5463,6 +5467,12 @@ CI 往返，且红话指着那个人根本没碰过的文件 —— 与 §13.6.2
 
 ⚠️ **2026-10-23 订正（ISSUE #2231）：这一节判的东西换了 —— 产物不再进 git。**
 
+⚠️ **2026-11-05 再订正（ISSUE #2537）：执行者从 PR/合并侧降到每日档。** 它不再在 PR 侧
+即时判，**最晚次日 01:00 暴露，暴露窗口 ≤24h**；失败走既有 daily 红 build /
+`每日失败立案` 同一条通道（见 §13.5.23 末节）。降档的理由是「#2528 型漏判 vs 关键路径
+成本」：旧触发面 40%、新面 **98%**（回放同 40 次 master 改动），CI 中位 **40.9s**、
+占 140.2s 串行流水线的 **30.6%** —— 每个 PR 都付这笔，只换来「文档站今天能不能生成」。
+
 **它此前为什么是零判据的过期面**（历史，仍然成立）：AGENTS 与主规范 §9 都写着它
 「随构建链更新」，而实测**构建链里没有任何一处调用 `pnpm docs`**；
 `docs/reference-facts.md` 又把它作为「TypeDoc 自动生成」显式豁免出文档引用核对；
@@ -5498,27 +5508,27 @@ CI 往返，且红话指着那个人根本没碰过的文件 —— 与 §13.6.2
 
 **「产物与源脱节」那一族没有被放过，只是换了主人**：
 
-- 「改了什么会让产物变」= **输入面** ⇒ `INPUT_RES` / `INPUT_GLOBS` 仍然管着平台侧的
-  `ifModify` 收窄，而那份闭包叶子集由 `scripts/docs-api-input-closure.mjs` 算出
-  （从 `typedoc.json` 的 `entryPoints` 出发沿静态 import 走），由
-  `tests/ci-incremental-gates.test.ts` 双向核对（ISSUE #2223）。
+- 「改了什么会让产物变」= **输入面** ⇒ `INPUT_RES` / `INPUT_GLOBS` 供判据自己的 `--staged`
+  档与元测试使用（**2026-11-05 起不再喂 PR/合并侧的 `ifModify`**，见上）。那份面由
+  `scripts/docs-api-input-closure.mjs` 的 `docsApiTriggerGlobs()` **从 typedoc 的解析根派生**
+  （`tsconfig.json` 展开 ∩ git 跟踪文件 → `dir/**` + 根级 `*.<ext>`；ISSUE #2537 ——
+  `entryPoints` 只决定渲染哪几页，不是解析面），由
+  `tests/docs-api-input-closure.test.ts` 逐文件对账、`tests/ci-incremental-gates.test.ts` 核形态。
 - 「产物本身过期」= **不存在了** —— 每一轮生成的副本都是**这一轮**的（typedoc 的
   `cleanOutputDir` 默认开 ⇒ 输出目录先被清空再写，上一轮的孤儿页面不可能留在里面；
   本判据把这条当不变量用，并检查 `typedoc.json` 没有把它关掉）。
 
 **三个实现口径，都不是可有可无的**：
 
-1. **按输入面条件触发**（平台侧带 `ifModify`）。重生成一次是**数十秒级**，无条件挂上会给
-   **每个**前端提交加这么多（这一族秒数只有一份出处，含取法与量具：见 §13.5.17）。
-   触发面 = typedoc `entryPoints` 三条 glob 的直接映射
-   （`src/lib/**` / `src/server/**` / `src/trpc/**`）+ `typedoc.json` + 依赖声明
-   （`package.json` / `pnpm-lock.yaml`：typedoc 与 TS 版本会改变产物形态）**∪ 闭包叶子集**
-   （三根之外、改了会改产物的那批文件，见 ISSUE #2223）—— **不是启发式收窄**，
-   是「产物只由这些输入决定」的同义反复：输入没变产物不可能漂。
-   同款先例见 `scripts/shell-gate.mjs`（只碰了壳才付 Rust 编译那笔钱）。
-   单元用例把两条边界都钉住（宽了会拖慢所有人，窄了判据白挂），见
+1. **输入面是从解析根派生出来的，不是手抄的**（2026-11-05 起它在每日档、**不带 `ifModify`**、
+   每跑必判）。重生成一次是**数十秒级**，所以「谁在什么时候调用它」仍然重要 —— 但不再由改动面
+   决定，而是由档位决定。触发面本身 = `docsApiTriggerGlobs()` 从 typedoc 的解析根派生
+   （`tsconfig.json` 展开 ∩ git 跟踪 → `dir/**` + 根级 `*.<ext>`；ISSUE #2537 的旧面按
+   `entryPoints` 算，`scripts/publish-desktop-bundle.mjs` 这类被 tests import 的文件漏在外面
+   ⇒ 静默跳格）。派生只服务于判据自己的 `--staged` 档与元测试，**面没有被收窄**。
+   单元用例把两条边界都钉住（宽了会拖慢本地、窄了判据白挂），见
    `tests/check-docs-api.test.ts` 与 `tests/ci-incremental-gates.test.ts`。
-   ⚠️ **产物面 `docs/api/**` 已不在收窄面里**（2026-10-23）：产物不再进 git ⇒ 它既不在
+   ⚠️ **产物面 `docs/api/**` 已不在面里**（2026-10-23）：产物不再进 git ⇒ 它既不在
    变更文件清单里、也不会被谁改坏 ⇒ 留在面里只是白占一行。
 2. **重生成这一步按产物判，不按 typedoc 的退出码判**（`scripts/typedoc-run.mjs`，
    `pnpm run docs` 与 `pnpm docs:check` 共用同一份，跨平台动作见规范 §9.5 的
@@ -7963,11 +7973,13 @@ D 组里比它们贵、也同样「不必每次跑」的步骤还有的是（`ch
   > prettier** —— 面是「源文件扩展名」，不是「全仓任何一处改动」，所以它属于「扫描面封闭」
   > 那一档。**2026-10-19 起它随另外几条一起收进聚合执行者**（见下一段），于是登记表里也
   > 没有它了：它的执行者换了，而「收窄」这一层对一个装十条判据的格子不成立。
-- **文档面三条** —— `API 文档生成与自检` 的输入面是 typedoc 的入口 glob
-  （`src/lib|server|trpc`，域不是「改了 docs」），`文档引用与权威源一致` 判的是**全库**文档
+- **文档面三条** —— `API 文档生成与自检` 的输入面是从 typedoc 的解析根派生的
+  （`tsconfig.json` 展开 ∪ import 闭包，域远大于「改了 docs」；2026-11-05 起已降到每日档、
+  **不再挂 `ifModify`**，见 §13.5.23 第五处）；`文档引用与权威源一致` 判的是**全库**文档
   里的引用与权威源一致。`生成态文档与源同步` 曾是唯一被收窄的三条之一（ISSUE #1981：
   `SCOPED_DOCS` 全在 `docs/**`、`FACTS` 的提取源是 `src/**` 与三份配置），2026-10-19 起
-  与另两条一起进聚合执行者，收窄登记随之删掉。
+  与另两条一起进聚合执行者，收窄登记随之删掉；2026-10-22 恢复成独立 stage 后重新登记在
+  `INCREMENTAL_GATES`（面 = `docs/**`）。
 
 > **聚合执行者：`重档静态判据`（2026-10-19）**
 >
@@ -8501,6 +8513,42 @@ glob 真的罩住（枚举办法是从每条正则里取出它锚定的字面前
 **判据**：`tests/ci-install-deps.test.ts`（四个方向：该装 / 该跳 / 退 0 空清单 / 指纹
 不符）、`tests/db-push-noninteractive.test.ts`（`synced` / `outdated` / `unknown` 三档，
 真造 sqlite 文件）、`tests/ci-incremental-gates.test.ts`（双向同源 + 触发面同源）。
+
+##### 2026-11-05 第五处：`API 文档生成与自检` 降到每日档（ISSUE #2537）
+
+第四次决定（`ESLint` 撤档）之后，同一把尺落到 docs-api 那一格 —— 但它这次不只是「贵」，
+是「贵，而且旧面判得不准」。
+
+**为什么它不能留在 PR 侧即时判**：#2537 要治的是 #2528 型漏判 —— 旧触发面按
+`typedoc.json` 的 `entryPoints` 算，而 typedoc **解析**的是 TS 程序（`tsconfig.json` 展开的根
+∪ 沿 import 走到的文件），`entryPoints` 只决定渲染哪几页。`scripts/publish-desktop-bundle.mjs`
+被 `tests/**` import 进程序、却不在旧面里 ⇒ 改它不会触发那一格（判据在场、结论静默变成放行）。
+把面改成从解析根派生之后，实测（回放同 40 次 master 改动）：旧面触发 **40%**、新面触发
+**98%**；CI 中位 **40.9s**、p95 **136.8s**，占 140.2s 串行流水线的 **30.6%**。两件事同向：
+面越准，关键路径上付的钱越多。
+
+**处置：按业主口径降频，不改判据**（方案 A）。docs-api 这一格从
+`COMFYAPP_CI_PUSH_GATES` 撤出、接进 `COMFYAPP_CI_DAILY_GATES`（`每日 API 文档生成与自检`）。
+口径写在明处：**不再在 PR 侧即时判，最晚次日 01:00 暴露，暴露窗口 ≤24h**。位置排在
+`每日全量E2E` 之后、`每日单元测试` 之前 —— 后者必须是整份清单最后一个会红的格，而它与
+E2E 互不依赖。⚠️ 定时那一跑**稍晚**于 01:00 暴露（平台排队 + 流水线串行），所以「≤24h」
+是上限而不是承诺的精确时刻。
+
+**「跑了但没人看见」是这一格唯一要防的失败**：定时那一跑（GA `.github/workflows/daily.yml`
+的 schedule，2026-11-05 起 01:00 从 CNB `crontab` 迁过去）红了即那次 daily 红 job；CNB 的
+手点 / API 两口由整份清单**最前面**的 `每日失败立案`（上面那一节）在下一跑立案 ——
+与既有 daily 失败同一条通道，没有新开第二条。
+
+**触发面没有削弱，只是不再喂 `ifModify`**：`docsApiTriggerGlobs()` 的派生逻辑一字未改，
+`INPUT_GLOBS` / `INPUT_RES` 照旧；`tests/docs-api-input-closure.test.ts` 的「面罩得住事实面」
+对账照旧是红的来源。元测试守住新形态：`tests/ci-incremental-gates.test.ts` 断言 push 侧
+收窄名单与 `ifModify` 里**不再有**这一格、每日档那一格**不许挂 `ifModify`**；
+`tests/no-platform-ci-config.test.ts` 断言每日清单里有它且位于 `每日单元测试` 之前；
+旧名以 `retired` 进 `GATE_TIER_LEDGER`（必须带理由）。
+
+**每日档整体时长**：这一格给每日那一跑增加约 **40.9s**（中位；p95 136.8s），相对每日档
+现有的数百秒到十几分钟量级是「几十秒级」。它没有从账上消失 —— 从「每个 PR 一次」变成
+「每天一次」。
 
 ##### 每日档红了要有人知道：`每日失败立案`（ISSUE #2274）
 
@@ -9211,6 +9259,51 @@ stage 的 stdout 不是 TTY；而同一份正文里那枚绿色的 `Runner` 证�
 `API 文档生成与自检` 这一格是本轮的标本（业主给的那张图就是它）：`[info]` 从前是裸
 `console.log`，与「通过」同一种灰；现在中间读数走 `[info]`（带色），三种结论走
 `gateSkip`（按面未触及）/ `gateFail`（typedoc 生成失败、产物不可用）/ `gatePass`（生成并自检通过）。
+
+#### 13.5.33 2026-11-05 薄化：CNB PR 档只留「平台读数 + 判决链」
+
+**改的是执行者，不是判据。** CNB PR 档（`.cnb.yml` 的 `质量门禁`）此前和
+`.github/workflows/pr-gate.yml` 同时在同一个 PR 事件上跑同一批静态判据 —— 同一份结论算两遍，
+而 PR 档的墙钟正是这台自托管节点最紧的共享资源（§13.5.21）。薄化后两边分工成一句话：
+**GA 判「这次改动的代码行不行」，CNB 判「这台节点此刻能不能跑、以及 GA 那边到底判成了什么」。**
+
+CNB PR 档保留的两类（它们**不在** GA 覆盖面上，摘了就没有执行者）：
+
+| 类 | 格 | 为什么只能在这边 |
+| --- | --- | --- |
+| 平台读数 | `镜像身份` / `工作区复用读数` / `缓存槽读数` / `环境前提` | 问的都是**这台节点**的事实（runner 身份、工作区复用路径、pnpm 槽根、工具链在不在）；GA 的 runner 是另一台机器，读数在那里没有对象 |
+| 判决链 | `GitHub 镜像同步` → `GitHub 判决回读` → `日志分块 1/3…3/3` → `GitHub 判决判定` | 镜像仓派发由这边做；GA 的结论必须**回读**才进本跑的退码 |
+
+撤出的 24 格与它们现在的执行者（与 `.gates` 顶部那段同表，任一处改必须同批改另一处）：
+
+| 撤出格 | 现在的执行者 |
+| --- | --- |
+| `分支守卫` / `提交声明核对` / `同步数据库表结构` / `类型检查` | `pr-gate.yml` 各自的同名 job |
+| `标题行让位` / `文件结构硬规则` / `跨平台动作对照` / `import 别名统一` / `ComfyUI 端口口径` / `内联样式注入` / `跨文件重复块` / `函数长度 TS` / `函数长度 Rust` / `模块循环依赖` / `端口推导跨语言一致性` / `CHANGELOG 碎片` / `主题色扫描` / `UI/逻辑分离` / `lib Node-only 声明` | `pr-gate.yml` 的 `静态判据` job（同一条命令、逐格 step） |
+| `oxfmt 格式` | `pr-gate.yml` 的 `oxfmt 格式` step（`check-format.cjs --changed`，无 `ifModify`） |
+| `重档静态判据`（含 `格式化提交分离` / `零消费导出`） | `pr-gate.yml` 的 `重档静态判据` job（`ci-heavy-gates.mjs`） |
+| `Install dependencies` | 各 job 自己的 `安装依赖` step；PR 档此后没有吃 `node_modules` 的格 |
+
+**判决链的三条语义**（都已在 `.cnb.yml` 落地，退码归属不许混）：
+
+1. `GitHub 镜像同步` **承重**：推不出去/派发失败即退非零。理由是「推不出去 = 这跑没判过 =
+   不许合」（#3051 期望第 3 条）；它的三态原值照旧打在正文里，出勤读数仍从正文认
+   （§13.5.23 的 `check:mirror-attendance` 那一档），不按 `status` 判。
+2. `GitHub 判决回读` 带 `--decision-out <文件>`，**退码恒 0**：它只取数与落盘（run / job /
+   step / 注解 / 失败窗口），判定交给最后一格 —— 中间格红了会把后面的格整片 `skipped`，
+   而「取不到判决」与「判决是红」必须分开念。
+3. `GitHub 判决判定` **承重**：读那份 decision 文件，读不到 ⇒ `exit 2`（没判过 ≠ 判过）。
+   取不到日志**不改变**三态与退码 —— 日志是证据，不是判决。
+
+**日志通道为什么不是附件**：`cnbcool/attachments` 这类插件格要 Docker，而自托管节点没开
+（实测 build `cnb-l4r-1k6lcffnv`：0s 红，原文 `Runner does not enable Docker.`）。现在走的是
+**压缩 + 分块打印**：只取失败 job 的日志 → gzip → base64 → 按 CNB 单 stage 102400 字节上限
+切块，每块带 `chunk i/N` 与校验和，三块约 300 KB（30 MB 原始日志 gzip 后通常几 MB，
+base64 再 ×1.33）。附件 stage 已删除，**不留一个每次都红的格**。
+
+**恢复动作是两处同批**：把某一格从 GA 搬回 CNB，要同时删 `pr-gate.yml` 的 step、把 stage
+加回 `.gates`、把名字加回 `COMFYAPP_CI_GATES`；`tests/no-platform-ci-config.test.ts` 的总账
+（`GATE_TIER_LEDGER`）会当场点名只改一边的形态。
 
 ### 13.6 分支与合并策略
 

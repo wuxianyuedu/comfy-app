@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @ts-nocheck -- 提交门槛脚本:API 文档生成与自检(由平台侧 .cnb.yml 调用,ISSUE #2231)
+// @ts-nocheck -- 提交门槛脚本:API 文档生成与自检(由平台侧 .cnb.yml 每日档调用,ISSUE #2231/#2537)
 /**
  * check-docs-api.cjs — API 文档（`docs/api/**`）的**生成 + 自检**判据（ISSUE #2231）。
  *
@@ -30,10 +30,13 @@
  *
  * ── 「产物与源脱节」那一族没有被放过，只是换了主人 ─────────────────────────
  *
- *   · 「改了什么会让产物变」= **输入面** ⇒ `INPUT_RES` / `INPUT_GLOBS` 仍然管着平台侧
- *     的 `ifModify` 收窄，而那份闭包叶子集由 `scripts/docs-api-input-closure.mjs` 算出
- *     （从 `typedoc.json` 的 `entryPoints` 出发沿静态 import 走），由
- *     `tests/ci-incremental-gates.test.ts` 双向核对（ISSUE #2223）。
+ *   · 「改了什么会让产物变」= **输入面** ⇒ `INPUT_RES` / `INPUT_GLOBS` 仍供判据自己的
+ *     `--staged` 档与元测试使用。但输入面**不再按 `entryPoints` 算**（ISSUE #2537）：typedoc
+ *     真正解析的是 TS 程序（`tsconfig.json` 展开的根 ∪ 沿 import 走到的文件），
+ *     `entryPoints` 只决定渲染哪几页。面由 `scripts/docs-api-input-closure.mjs` 的
+ *     `docsApiTriggerGlobs()` 从那份根派生，`tests/docs-api-input-closure.test.ts` 双向对账。
+ *     ⚠️ 2026-11-05 起它**不再喂 PR/合并侧的 `ifModify`**：那一格已降到每日档、每跑必判
+ *     （ISSUE #2537，见下面「执行者在哪」）。
  *   · 「产物本身过期」= **不存在了** —— 没有提交进 git 的产物，就没有「过期」这回事；
  *     每一轮生成的副本都是**这一轮**的（typedoc 的 `cleanOutputDir` 默认开 ⇒ 输出目录
  *     先被清空再写，上一轮的孤儿页面不可能留在里面；本判据把这条当成不变量来用，
@@ -50,18 +53,30 @@
  * （而那正是 #2231 让它在 CI 上失去意义的原因）。撞上它直接退 1 并说明为什么，
  * 而不是「静默忽略」—— 静默忽略一个旗标正是本仓最恨的那族（脚自称与实际不一致）。
  *
- * ── 执行者在哪（ISSUE #1975 改了，别照着旧注释去找）─────────────────────────
+ * ── 执行者在哪（ISSUE #1975 改了执行者，ISSUE #2537 改了档位）─────────────────
  *
- * 它挂在 `.cnb.yml` 的「API 文档生成与自检」那一格（平台侧、全量档）。本地出口是
+ * 它挂在 `.cnb.yml` 的「**每日 API 文档生成与自检**」那一格（每日档、全量档，每跑必判；
+ * GA `.github/workflows/daily.yml` 的 01:00 schedule 与 CNB 的手动/API 口都跑它）。
+ * **PR/合并侧不再即时判**：最晚次日 01:00 暴露，暴露窗口 ≤24h（实测：新输入面 98%
+ * 触发率、CI 中位 40.9s、占 140.2s 串行流水线的 30.6%）。本地出口是
  * `pnpm run docs`（只生成、不自检）与 `pnpm docs:check`（生成 + 自检）—— 但**都不是
  * 任何一次提交的必经产物**：产物不进 git，本地跑不跑都不影响提交。
- * 口径与逐条实测见规范 §13.5.17。
+ * 口径与逐条实测见规范 §13.5.17 / §13.5.23。
  */
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
 const ROOT = path.resolve(__dirname, "..");
+
+/* 输入面的唯一权威在 `docs-api-input-closure.mjs`（ISSUE #2537）：它按 tsconfig 的
+ * 实际展开算 typedoc 的解析根。本文件只取它派生出的 glob / 正则，不手抄第二份面。
+ * 该模块是 ESM，本文件是 CJS —— 用 Node 的同步 `require(esm)`（同仓
+ * `check-allow-builds.cjs` 亦如此）。 */
+const { docsApiTriggerGlobs } = require("./docs-api-input-closure.mjs");
+/** glob → 正则**复用** `vitest-projects.cjs` 已导出的那一份（与平台侧同口径）。 */
+const { globToRe } = require("./vitest-projects.cjs");
+
 const OUT_REL = "docs/api";
 const OUT_ABS = path.join(ROOT, OUT_REL);
 const TAG = "[docs-api]";
@@ -77,99 +92,31 @@ const info = (text) => {
 };
 
 /**
- * **闭包叶子集** —— typedoc 输入面的「根外」那一部分（ISSUE #2223）。
+ * **输入面** —— 改哪些文件可能改 `docs/api/**`（ISSUE #2537 重定义的，别按旧注释理解）。
  *
- * 这些文件不在 `src/lib` / `src/server` / `src/trpc` 三根里，但**改它们会改
- * `docs/api/**`**：typedoc 沿 import 走，而根外的文件里有**被产物引用**的类型 ——
- * 例：`BackupResult` 定义在 `scripts/db-backup-core.mjs`，它出现在 `docs/api/**` 里。
+ * 上一版把面定义成「`typedoc.json` 的 `entryPoints` 三根 ∪ 沿它走的闭包叶子」。
+ * 那个口径**系统性偏窄**：typedoc 渲染哪几页由 `entryPoints` 决定，但它**解析**的是
+ * TS 程序 —— 程序根是 `tsconfig.json` 展开出的 `rootNames`，再沿 import 走到的一切
+ * 文件（含 `.test.ts` 与 `.mjs`）都进程序。事故 #2528 就是这类：新增的
+ * `scripts/publish-desktop-bundle.mjs` 不在三根、也不是 entryPoint，却被
+ * `tests/publish-desktop-bundle.test.ts` import ⇒ 在程序里 ⇒ 它的 JSDoc 坏掉，运行
+ * typedoc 那一格就红；而旧触发面里没有它 ⇒ **那一格根本没跑**（静默跳格）。
  *
- * 为什么它们必须在面内：面判窄了 = **漏判**，而漏判是静默的（`ifModify` 跳过的形态
- * 与「判过且通过」在读数上无差别）。2026-10-20 之前那批判据「一个执行者都没有」，
- * 而 `docs/api/**` 随后漂了 32 份 —— 同一个洞的两面。
+ * 现在的面**从解析根派生**（`scripts/docs-api-input-closure.mjs` 的
+ * `docsApiTriggerGlobs()`：tsconfig 展开 ∩ git 跟踪文件 → `dir/**` + 根级 `*.<ext>`，
+ * 再加大类配置 `pnpm-lock.yaml`）。改 tsconfig / typedoc.json 的输入面，面自动跟；
+ * 面被手工改窄 ⇒ 元测试红（`tests/docs-api-input-closure.test.ts`）。
  *
- * 这份名单**不是手抄的事实**：真相由 `scripts/docs-api-input-closure.mjs` 算出
- * （从 `typedoc.json` 的 `entryPoints` 出发沿静态 import 走），由
- * `tests/ci-incremental-gates.test.ts` 双向核对 —— 闭包里多出任何一个文件、而这里
- * 没有它 ⇒ 当场红。**本列表是「声明」，闭包模块是「事实」，两者对账。**
- *
- * ⚠️ 产物不再进 git（ISSUE #2231）**不动这份名单**：它管的是「改了什么会让产物变」，
- * 而产物仍然**由源决定**（只不过现在没人把它提交进 git 了）。
- *
- * @type {readonly string[]}
- */
-const CLOSURE_LEAVES = [
-  "scripts/db-backup-core.mjs",
-  "scripts/db-push-core.mjs",
-  "scripts/db-schema-state.mjs",
-  "scripts/launcher-core/command-echo.mjs",
-  "scripts/launcher-core/shell.mjs",
-  "scripts/launcher-core/worktree.mjs",
-  "scripts/lockfile/lock-diff.d.mts",
-  "scripts/lockfile/lock-diff.mjs",
-  "src/config/custom-nodes.ts",
-  "src/env.js",
-];
-
-/** 把一个路径变成「逐字匹配它自己」的正则（点号等元字符要转义）。 */
-function exactPathRe(p) {
-  return new RegExp(`^${p.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}$`);
-}
-
-/**
- * 决定产物的输入面（相对仓库根、正斜杠）。与 `typedoc.json` 的 `entryPoints` 同集合，
- * 另加「会改变产物形态」的两类：typedoc 配置自身与依赖声明；
- * 另加**闭包叶子集**（三根之外、但改它们会改产物的那批，见 ISSUE #2223）。
- */
-const INPUT_RES = [
-  /^src\/lib\/.*\.ts$/,
-  /^src\/server\/.*\.ts$/,
-  /^src\/trpc\/.*\.tsx?$/,
-  /^typedoc\.json$/,
-  /^package\.json$/,
-  /^pnpm-lock\.yaml$/,
-  /* 判据自身（ISSUE #1981）：改这份脚本或它共用的跑法，同样能改变「本步红不红」——
-   * 此前它改了自己不触发，于是「改了判据 → 推上去 → 没跑」是这类改动的默认形状。 */
-  /^scripts\/check-docs-api\.cjs$/,
-  /^scripts\/typedoc-run\.mjs$/,
-  ...CLOSURE_LEAVES.map(exactPathRe),
-];
-
-/**
- * 同一张输入面的 **glob 形态** —— 平台侧 `ifModify` 收窄的唯一出处。
- *
- * 为什么是**上界**而不是逐字等价的窄面：`ifModify` 的判据是「变更文件一个都不落在
- * 给定 glob 内 ⇒ 这一步不执行」（`scripts/ci-incremental-gates.mjs` 的口径），
- * **判宽只会少省几秒，判窄是漏判** —— 而 `INPUT_RES` 的窄面（只收 `.ts`）与它的
- * glob 形态（收该目录下的一切）不是一一等价的，抄一份窄的进来就等于把
- * 「改了 `src/lib` 下的非 `.ts` 文件」这一类改动放过头。
- *
- * 两条形态住在**同一个文件**里，而不是一份在判据、一份在登记表：跨文件抄一份就是
- * 第二份会漂的副本（§12.12 / §12.18），而漂的方向恰好是「判据改了触发面、配置没跟」
- * —— 那一格于是再也不跑，且没人看见。
- *
- * ⚠️ 两侧的对应关系由 `tests/ci-incremental-gates.test.ts` 核，**而且核的是「罩住」
- * 而不是「前缀沾边」**（ISSUE #2223 的现场：旧写法只比第一段前缀，于是
- * `scripts/db-backup-core.mjs` 的前缀 `scripts` 被 `scripts/check-docs-api.cjs`
- * 满足 ⇒ 任何 `scripts/` 下的新文件都「已覆盖」⇒ 面判窄了而没人看见）。
- * 现在那条用例做两件事：① 每条 `INPUT_RES` 命中的**每一个文件**都要被某条 glob
- * 真的罩住；② 闭包算出来的**每一个叶子**都要被某条 glob 罩住。
- *
- * ⚠️ **产物面 `docs/api/**` 不在这张表里**（ISSUE #2231）：产物不再进 git ⇒ 它既不在
- * 变更文件清单里、也不会被谁改坏 ⇒ 把它当收窄面只会白占一行。
+ * ⚠️ `ifModify` 的语义是「变更文件一个都不落在给定 glob 内 ⇒ 这步不执行」，
+ * **判宽只会多跑几秒，判窄是漏判** —— 而漏判是静默的。产物面 `docs/api/**` 仍不在
+ * 表里（产物不进 git，ISSUE #2231）。
  *
  * @type {readonly string[]}
  */
-const INPUT_GLOBS = [
-  "src/lib/**",
-  "src/server/**",
-  "src/trpc/**",
-  "typedoc.json",
-  "package.json",
-  "pnpm-lock.yaml",
-  "scripts/check-docs-api.cjs",
-  "scripts/typedoc-run.mjs",
-  ...CLOSURE_LEAVES,
-];
+const INPUT_GLOBS = Object.freeze(docsApiTriggerGlobs(ROOT));
+
+/** 同一张面的**正则形态**：由 glob 机械转换，不另写一份窄面（否则两份会漂）。 */
+const INPUT_RES = Object.freeze(INPUT_GLOBS.map((g) => globToRe(g)));
 
 /**
  * 产物必须有的那几份 —— **默认主题每一页都会引用**它们（默认主题的 `index.tsx`
@@ -476,7 +423,6 @@ if (require.main === module) {
 module.exports = {
   INPUT_RES,
   INPUT_GLOBS,
-  CLOSURE_LEAVES,
   SKELETON,
   matchedInputs,
   walk,

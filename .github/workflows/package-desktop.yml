@@ -6,10 +6,12 @@
 # 刻意不承接 / 不同形：
 #   · `打包·壳工具链自证`（--rust-only）是自托管宿主机事实读数；windows-latest 镜像
 #     自带 Rust 工具链，无需自证，cargo 缓存由 swatinem/rust-cache 承担。
-#   · ⚠️ **发布落点不同形（待确认的决策点）**：CNB 那一格 `publish-desktop-bundle.mjs`
-#     发布到**本机常驻目录**（留 2 份）；GitHub runner 是即弃机，等价物是
-#     `upload-artifact`（下方最后一步）。要 GitHub Releases / 仍回写那台机的常驻目录 /
-#     两者都要，是单独一次决定 —— 决定落地前这里先出 artifact。
+#   · **发布落点不同形（已定）**：CNB 那一格 `publish-desktop-bundle.mjs` 发布到
+#     **本机常驻目录**（留 2 份）；GitHub runner 是即弃机，回写那台机既没有通道也不该
+#     让一次 CI 反过来写开发机。所以这里是 `upload-artifact`（14 天，按 run 取）+
+#     滚动 `nightly` GitHub Release（按名字取，每天都指向最新一份）。两者各答一件事：
+#     「这一跑产了什么」与「现在要拿一个包去哪拿」。Release 用 runner 自带的 `gh`
+#     与 workflow 级 `permissions: contents: write`，不引第三方 action。
 #   · CNB 的 `ci-cp936-exit.mjs` 包裹是给 CP936 控制台的转码层；GitHub Windows runner
 #     的 pwsh 输出 UTF-8，直跑真命令。
 #
@@ -18,6 +20,11 @@
 # `uses:` 版本口径同 pr-gate.yml 文件头（有 v7 上 v7；pnpm/action-setup 与 rust-cache
 # 的最新主版本分别是 v6 与 v2）。
 name: Package desktop (mirror)
+
+# `nightly` 滚动 Release 要写 tag / 上传资产；其余格只需要读代码。
+# 不写成仓库级默认写权限 —— 这一档是唯一需要它的 workflow。
+permissions:
+  contents: write
 
 on:
   schedule:
@@ -104,3 +111,23 @@ jobs:
           name: comfyapp-desktop-bundle
           path: src-tauri/target/release/bundle/
           retention-days: 14
+
+      # 发布落点：CNB 那一格把成品留在本机常驻目录（留 2 份），GitHub runner 是即弃机，
+      # 等价物是 GitHub Releases 的滚动 `nightly` tag —— artifact 只活 14 天，而「现在
+      # 要拿一个包」的人不该先去翻某一次 run。用 runner 自带的 `gh`，不引第三方
+      # action（`uses:` 主版本要逐仓核 tag，这里没有需要它的能力）。
+      # `--clobber` 是滚动 tag 的关键：每天同一组资产名，没有它第二天就撞已存在。
+      - name: 发布到滚动 Release（nightly）
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view nightly >/dev/null 2>&1 || \
+            gh release create nightly --title "每日桌面成品" \
+              --notes "定时任务滚动更新，保留最新一份" --prerelease
+          mapfile -d '' files < <(find src-tauri/target/release/bundle -type f \( -name '*.exe' -o -name '*.msi' \) -print0)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "打包步没产出任何 .exe / .msi，滚动 Release 没有可上传的资产"
+            exit 1
+          fi
+          gh release upload nightly "${files[@]}" --clobber

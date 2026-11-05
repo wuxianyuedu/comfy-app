@@ -35,23 +35,10 @@ function hookGateSteps(hookText: string) {
 }
 
 /**
- * 平台侧 `.cnb.yml` 的 stage 清单（名字 + 原文块）。名字取自 `COMFYAPP_CI_GATES`（`env` 里的有序事实源），块
- * 复用 `stageBlock()`（不抄第二份解析器，§12.12 / §12.18）。按清单取而非扫全文：被 `#` 注释掉的 stage 不在清单
- * 里（扫全文会把停用的当在跑，正是 ISSUE #1975 的反面）。`stage === null` = 清单点名但 `.gates` 缺项 ⇒ 调用方判红。
- */
-function platformStages(): Array<{ name: string; stage: string | null }> {
-  const text = readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8");
-  return registeredGateOrder(text).map((name) => ({
-    name,
-    stage: stageBlock(text, name),
-  }));
-}
-
-/**
- * 每日那一条流水线的 stage 清单（`COMFYAPP_CI_DAILY_GATES`），与 `platformStages()` 同形状、同解析器
+ * 每日那一条流水线的 stage 清单（`COMFYAPP_CI_DAILY_GATES`），与 PR 档同形状、同解析器
  * （`registeredDailyGateOrder` + `stageBlock`；抄第二份就会静默漂，§12.12 / §12.18）。需要它是因为 ISSUE #2300：
  * 「新鲜度账」2026-10-23 从 PR 档撤到每日档，拿 PR 清单问会答「不在」，真相是「搬走了，不是不存在」。
- */
+ * PR 档那一条在 2026-11-05 薄化后只剩平台读数与判决链，因此这里不再有 `platformStages()` 那一份。 */
 function dailyStages(): Array<{ name: string; stage: string | null }> {
   const text = readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8");
   return registeredDailyGateOrder(text).map((name) => ({
@@ -233,13 +220,15 @@ describe("注释语言棘轮在钩子里（ISSUE #1451）", () => {
 });
 
 /**
- * API 文档生成与自检：已从 D 组挪到平台侧（#1329 收尾 → #1975），#2231 又改了判据对象。它带的 `--staged`
- * 输入面是 `src/lib|server|trpc`（最高频提交类别）⇒ 跳过几乎不生效，改一份 `src/lib` 照旧走满一轮，曾是 D 组最贵一步（§13.5.17）。
- * 判两半：钩子里不再有它、平台侧那一步在且**不带 `--staged`**；#2231 后也不带 `--autofix`（产物不进 git，自动修+再判让陈旧隐形）。
+ * API 文档生成与自检：已从 D 组挪到平台侧（#1329 收尾 → #1975），#2231 改了判据对象，
+ * 2026-11-05 又从 push **降到每日档**（ISSUE #2537：最晚次日 01:00 暴露，窗口 ≤24h）。它带的
+ * `--staged` 输入面是 typedoc 的解析根（几乎任何源码/脚本/用例改动）。
+ * 判两半：钩子里不再有它、平台侧那一步在且**不带 `--staged`**；#2231 后也不带 `--autofix`
+ * （产物不进 git，自动修+再判让陈旧隐形）。
  */
 const DOCS_API = join(REPO_ROOT, "scripts", "check-docs-api.cjs");
 
-describe("API 文档生成与自检（ISSUE #1329 收尾 → ISSUE #1975 挪执行者 → ISSUE #2231 改判据对象）", () => {
+describe("API 文档生成与自检（#1329 收尾 → #1975 挪执行者 → #2231 改判据对象 → #2537 降每日档）", () => {
   const hook = readFileSync(HOOK, "utf8");
   const steps = hookGateSteps(hook);
 
@@ -248,17 +237,17 @@ describe("API 文档生成与自检（ISSUE #1329 收尾 → ISSUE #1975 挪执�
     expect(
       hit,
       `门禁链 ${steps.length} 步里又有 docs-api 同步了 —— 它已随 ISSUE #1975 挪到平台侧 ` +
-        "（`.cnb.yml` 的「API 文档生成与自检」）。要么把它从钩子里去掉，要么同步改本判据",
+        "（`.cnb.yml` 每日档的「每日 API 文档生成与自检」）。要么把它从钩子里去掉，要么同步改本判据",
     ).toBeUndefined();
   });
 
   it("平台侧那一步在，且是**全量档**（`--staged` 在平台侧恒跳过 = 白挂）", () => {
-    const executor = platformExecutor("API 文档生成与自检");
+    const executor = platformExecutor("每日 API 文档生成与自检");
     expect(
       executor,
-      "平台侧（`.cnb.yml` 的 stage 清单与聚合档 `重档静态判据` 的条目表）都没有" +
-        "「API 文档生成与自检」—— 钩子撤掉 + 平台侧没加 = 这一格又回到" +
-        "「没人跑」的形态（§13.5.17）",
+      "平台侧（`.cnb.yml` 的每日档 stage 清单与聚合档 `重档静态判据` 的条目表）都没有" +
+        "「每日 API 文档生成与自检」—— 钩子撤掉 + 每日档没加 = 这一格又回到" +
+        "「没人跑」的形态（§13.5.17 / ISSUE #2537）",
     ).not.toBeNull();
     expect(executor?.command, "平台侧那一步的原文块解析不出来（名字被改了？）").toBeTruthy();
     expect(
@@ -273,9 +262,9 @@ describe("API 文档生成与自检（ISSUE #1329 收尾 → ISSUE #1975 挪执�
      * 「修好了」与「本来就对」同形 ⇒ 漂移在 CI 隐形。产物搬出 git 后该格改判「本轮产物可不可用」，自动修旗标必须摘掉。
      * ⚠️ 只核那一行的 `script:`（整块里注释出现旗标字面量不等于这一格带着它），解析口径复用 `parseStageScripts()`。 */
     const script = parseStageScripts(readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8")).get(
-      "API 文档生成与自检",
+      "每日 API 文档生成与自检",
     );
-    expect(script, "配置里解析不出「API 文档生成与自检」那一行的 script").toBeDefined();
+    expect(script, "配置里解析不出「每日 API 文档生成与自检」那一行的 script").toBeDefined();
     expect(
       script,
       "平台侧那一步又带上了 `--autofix` —— 产物不再进 git，没有「自动修完再提交」的对象",
@@ -302,7 +291,7 @@ describe("API 文档生成与自检（ISSUE #1329 收尾 → ISSUE #1975 挪执�
   });
 
   it("脚本头写明它现在由**平台侧**调用（挪了执行者，承诺要跟着改）", () => {
-    /* 反向要求：这句话**现在**是真的（`.cnb.yml` 里有那一步）。脚本头原先写的是
+    /* 反向要求：这句话**现在**是真的（`.cnb.yml` 每日档里有那一步）。脚本头原先写的是
      * 「供 .githooks/pre-commit 调用」—— 挪到平台侧之后那句就成了假承诺，而
      * 「脚自称在哪跑」与「它真在哪跑」不一致正是本文件立案的那族形态（§13.5.12）。
      * 判据只要求**指向平台侧那一份**，不钉具体措辞。 */
@@ -450,38 +439,47 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
     ).toEqual([]);
   });
 
-  it("平台侧 `.cnb.yml` 真的有这一步（挪走 ≠ 没人跑）", () => {
+  it("平台侧真的有这一步：2026-11-05 起执行者是 GA 的 `pr-gate.yml`（挪走 ≠ 没人跑）", () => {
+    /* 这一格两次搬家：ISSUE #2010 从本地钩子到 CNB；2026-11-05 薄化再从 CNB 到 GA。
+     * 判法跟着事实走：现在读 GA 的 workflow，而不是 CNB 的 stage 名 —— 继续对着
+     * `COMFYAPP_CI_GATES` 问只会要求一个「没人执行的 stage 留在配置里」。 */
+    const workflow = readFileSync(join(REPO_ROOT, ".github", "workflows", "pr-gate.yml"), "utf8");
     expect(
-      platformStages().some((x) => x.name === "oxfmt 格式"),
-      "`.cnb.yml` 里没有「oxfmt 格式」这一步 —— 钩子撤掉 + 平台侧没加 = " +
-        "这条判据一个执行者都没有（§13.5.1.1 与 §13.5.17 同一条两半判法）",
+      /run:\s*node scripts\/check-format\.cjs/.test(workflow),
+      "`.github/workflows/pr-gate.yml` 里没有 `check-format.cjs` 这一步 —— 钩子撤掉 + " +
+        "平台侧也没有 = 这条判据一个执行者都没有（§13.5.1.1 与 §13.5.17 同一条两半判法）",
     ).toBe(true);
     expect(
       registeredGateOrder(config),
-      "`oxfmt 格式` 不在 COMFYAPP_CI_GATES 里（在跑但不登记 = 在场没有执行者）",
-    ).toContain("oxfmt 格式");
+      "`oxfmt 格式` 又回到了 COMFYAPP_CI_GATES —— 2026-11-05 起它由 GA 执行，这边没有任何" +
+        "stage 会跑它；登记一份没人执行的格子会给「在场」记假账",
+    ).not.toContain("oxfmt 格式");
   });
 
-  it("平台侧那一步是**只判的全量档**：直接跑判据本体，不带 --staged、也不带 --autofix", () => {
-    const stage = platformStages().find((x) => x.name === "oxfmt 格式")?.stage;
-    expect(stage, "`.cnb.yml` 里解析不出「oxfmt 格式」这一步").toBeTruthy();
-    /* 断言取的是**那一行 `script:`**，不是整个 stage 块：块里现在写满了历史（为什么
-     * 撤掉 `--autofix`、当年那个旗标叫什么），拿整块去 `not.toContain("--autofix")`
-     * 会红在自己的解释文字上 —— 这正是「判据钉行形状而不是钉语义」那一族的老毛病。 */
-    const scriptLine = stage?.match(/^[ \t]*script:.*$/m)?.[0] ?? "";
+  it("GA 那一步是**只判的改动面档**：直接跑判据本体，带 --changed、不带 --staged / --autofix", () => {
+    const workflow = readFileSync(join(REPO_ROOT, ".github", "workflows", "pr-gate.yml"), "utf8");
+    /* 断言取的是**那一行 `run:`**，不是整个 workflow（文件里写满了为什么这样排的理由），
+     * 拿全文去 `not.toContain("--autofix")` 会红在自己的解释文字上。 */
+    const scriptLine =
+      /^[ \t]*run:\s*node scripts\/check-format\.cjs.*$/m.exec(workflow)?.[0] ?? "";
     expect(
       scriptLine,
-      "「oxfmt 格式」那一格里找不到 `script:` 行 —— 读不到命令就当没带旗标，" +
+      "GA 的工作流里找不到 `check-format.cjs` 的 `run:` 行 —— 读不到命令就当没带旗标，" +
         "是这条判据最坏的失效形态（它会把「挂了等于没挂」念成绿）",
     ).not.toBe("");
     expect(
       scriptLine,
-      "平台侧那一步带了 `--staged`：那里的工作区就是这次要判的那份源码，" +
+      "GA 那一步带了 `--staged`：那是镜像仓的工作区、不是这次要判的改动面，" +
         "`--staged` 读的是「本次暂存」、恒为空 ⇒ 这一步恒跳过（挂了等于没挂）",
     ).not.toContain("--staged");
     expect(
       scriptLine,
-      "平台侧那一步不再点名判据本体 —— #2610 起它直接跑 check-format.cjs，" +
+      "GA 那一步没有 `--changed` —— 它必须判「这次 PR 的改动面 ∩ GLOBS」，" +
+        "不带这个旗标会退化成全库扫描（白付一次）或什么都不判",
+    ).toContain("--changed");
+    expect(
+      scriptLine,
+      "GA 那一步不再点名判据本体 —— #2610 起它直接跑 check-format.cjs，" +
         "中间不再隔一层会写工作区的壳",
     ).toContain("scripts/check-format.cjs");
     /* #2610：`--autofix` 与委托回写整条摘掉。实测那一跳在 PR 事件上恒发不出去（令牌只有 repo-code:r，`start-build`

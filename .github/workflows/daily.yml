@@ -4,7 +4,7 @@
 # 工作区语义对齐：`每日生产构建` 的产物接着给 `每日全量E2E` 的 `COMFY_E2E_SERVER=start`
 # 用，拆成多 job 就要跨 job 传产物，那不是等价形态）：
 #   安装依赖 → 同步数据库表结构 → 新鲜度账 → 生产构建 → ESLint 零警告 →
-#   浏览器安装 → 全量E2E → 单元测试（排最后，与 CNB「最容易出问题的放最后」同口径）。
+#   浏览器安装 → 全量E2E → API 文档自检 → 单元测试（排最后，与 CNB「最容易出问题的放最后」同口径）。
 #
 # 刻意不承接（CNB 专有或自托管节点事实）：每日失败立案 / 每日令牌权限读数
 # （CNB API）/ 每日工具链自证 / 每日 Python 可用性 / 每日 Python 探针读数
@@ -113,5 +113,26 @@ jobs:
           COMFY_E2E_SERVER: "start"
         run: node scripts/e2e-run.mjs
 
+      - name: API 文档生成与自检（cnb 同款判据一字不改）
+        # 2026-11-05 从 CNB push 档撤到每日档（ISSUE #2537）：PR 侧不再即时判，
+        # 最晚次日 01:00 在这一跑暴露（窗口 ≤24h）。位置与 CNB 每日档同一处 ——
+        # 全量E2E 之后、单元测试之前（后者必须是最后一个会红的格）。
+        run: node scripts/check-docs-api.cjs
+
       - name: 单元测试（排最后：唯一会因机器负载而红的一档，同 CNB 口径）
         run: node scripts/full-suite-run.mjs
+
+      # 覆盖率上报的对位落点。CNB 那一格是 `ci-coverage-report.mjs`，走 `cnb` CLI
+      # 把 lcov 交给平台；GitHub runner 没有那个 CLI，判据本体不该为换平台重抄一遍。
+      # 这里退成**产物出口**：`full-suite-run.mjs` 已经产出 lcov / json-summary，
+      # 上传成 artifact 让「今天的覆盖率」有地方可取。
+      # `always()` + `warn` 对位 CNB 那格「没有报告时跳过而不是判红」的口径：
+      # 单测红了仍要能拿到报告，而报告缺席不许把这一格叠成第二个红。
+      - name: 覆盖率报告（artifact；对位 CNB 的 `覆盖率上报` 格）
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: comfyapp-coverage
+          path: coverage/
+          retention-days: 14
+          if-no-files-found: warn

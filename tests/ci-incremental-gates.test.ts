@@ -19,86 +19,11 @@ import {
 import { HEAVY_GATES } from "../scripts/ci-heavy-gates.mjs";
 import { parseStageScripts } from "../scripts/ci-autofix-duties.mjs";
 import { INPUT_GLOBS, INPUT_RES, matchedInputs } from "../scripts/check-docs-api.cjs";
-import { filesUnder } from "../scripts/docs-api-input-closure.mjs";
 import { SCAN_ROOTS, TRIGGER_GLOBS } from "../scripts/file-structure-rules.cjs";
 import { globToRe } from "../scripts/vitest-projects.cjs";
 import { stageBlock } from "./no-platform-ci-config.test";
 
 const CONFIG = readCnbConfig();
-
-/**
- * 一个路径是否被某条 glob 罩住。glob → 正则**复用** `scripts/vitest-projects.cjs` 已导出的那一份
- * （同一套 `**` / `*` / `{a,b}` 口径且带锚点）—— 不在本文件写第二套 glob 匹配（§12.12 / §12.18）。
- * @param rel 仓库相对路径；@param globs glob 清单
- */
-function coveredBy(rel: string, globs: ReadonlyArray<string>): boolean {
-  return globs.some((g) => globToRe(g).test(rel));
-}
-
-/**
- * 一条输入面正则的「字面前缀」= 第一个通配符之前的那段（正则锚定到仓库根）：例如 `src/lib/a.ts` 那条的前缀是
- * `src/lib`；整条都是字面量时（如 `typedoc.json`）前缀就是那个文件本身。通配出现在第一段里时返回 `null`（没法枚举）。
- * @param re 输入面正则
- */
-function literalPrefixOf(re: RegExp): string | null {
-  const src = re.source.replace(/^\^/, "").replace(/\$$/, "");
-  let out = "";
-  let sawWildcard = false;
-  for (let i = 0; i < src.length; i += 1) {
-    const ch = src.charAt(i);
-    /* 转义符把下一个字符当**字面量**（`\/` 是斜杠、`\.` 是点），不是通配。 */
-    if (ch === "\\") {
-      const next = src[i + 1];
-      if (next === undefined) {
-        break;
-      }
-      out += next;
-      i += 1;
-      continue;
-    }
-    if (".*+?()[]{}|^$".includes(ch)) {
-      sawWildcard = true;
-      break;
-    }
-    out += ch;
-  }
-  if (!sawWildcard) {
-    return out;
-  }
-  const cut = out.lastIndexOf("/");
-  return cut === -1 ? null : out.slice(0, cut);
-}
-
-/**
- * 目录枚举的缓存 —— 同一次运行里同一个前缀只列一次（三根加起来 600 多个文件，
- * 而这条用例是**每次提交都跑**的固定清单成员）。
- */
-const filesUnderCache = new Map<string, Array<string>>();
-
-/**
- * 一条输入面正则命中的、**盘上真实存在**的文件清单：前缀是文件 ⇒ 就是它；是目录 ⇒ 把该目录下候选文件逐个过正则
- * （目录遍历复用 `scripts/docs-api-input-closure.mjs` 已导出的 `filesUnder`，不在本文件抄第二份遍历）。
- * @param re 输入面正则
- */
-function filesMatchedBy(re: RegExp): Array<string> {
-  const prefix = literalPrefixOf(re);
-  if (prefix === null || prefix === "") {
-    return [];
-  }
-  const abs = path.join(process.cwd(), prefix);
-  if (!fs.existsSync(abs)) {
-    return [];
-  }
-  if (fs.statSync(abs).isFile()) {
-    return re.test(prefix) ? [prefix] : [];
-  }
-  let listed = filesUnderCache.get(prefix);
-  if (listed === undefined) {
-    listed = filesUnder(prefix);
-    filesUnderCache.set(prefix, listed);
-  }
-  return listed.filter((f) => re.test(f));
-}
 
 describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", () => {
   it("真仓一致：登记表与 .cnb.yml 逐字同源", () => {
@@ -157,11 +82,15 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       /* ⚠️ `格式化提交分离` **2026-10-17 从这一列挪出去了**（ISSUE #1993）：它判「这次提交里有多少文件只是被 prettier
        * 重排过」，本体是逐文件跑一次 prettier，面是「源文件扩展名」而非全仓 ⇒ 属「扫描面封闭」那一档，已登记进
        * `INCREMENTAL_GATES`。这一格是收窄口径本身的回归面：谁把它挪回这一列，反向那条会红。 */
-      /* ⚠️ 文档面三条里**只剩一条**在这一列（ISSUE #1981）：
+      /* ⚠️ 文档面里**只剩一条**在这一列（ISSUE #1981）：
        * · `生成态文档与源同步` —— 两侧输入面都能点清（`SCOPED_DOCS` 全在 `docs/**`，`FACTS` 源是 `src/**` 与三份配置），
-       *   且带 `--autofix`（§13.5.19）；`API 文档生成与自检` 由 `INPUT_RES` 机械反推收窄面（最贵一格，201.8s / 12m14s
-       *   的 27.5%；2026-10-23 起产物面 `docs/api/**` 已去掉，#2231）；`文档引用与权威源一致` 判全库，收窄成子集即漏判。 */
+       *   且带 `--autofix`（§13.5.19）；`文档引用与权威源一致` 判全库，收窄成子集即漏判。
+       * · `API 文档生成与自检` 2026-11-05 **撤到每日档**（ISSUE #2537：新面 98% 触发率、
+       *   中位 40.9s、占 30.6%），名字仍留在这一列 —— 它防的是「有人把它加回 push 并顺手挂
+       *   `ifModify`」（那一跑会红）。它的每日档新名同样在这一列：每日档那一格也不许收窄。 */
       "文档引用与权威源一致",
+      "API 文档生成与自检",
+      "每日 API 文档生成与自检",
       "core 骨架单一事实源",
       "零消费导出",
       "core 出口纪律与基类纯度",
@@ -188,47 +117,61 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     expect(inRegistry, `登记表里混进了全仓级 stage：${inRegistry.join(", ")}`).toEqual([]);
   });
 
-  it("`API 文档生成与自检` 自己占一格、收窄挂在**那一格**上，且输入面只有一处出处", () => {
-    /* 三段历史各留一个形状：2026-10-19 收进聚合档 `重档静态判据` ⇒ `ifModify` 按整格跳过、这层不再存在；10-20 原文被
-     * 注释而聚合档读钩子注册表（该档 10-16 已从钩子撤走）⇒ 两次搬动对穿，这一档无人执行，`docs/api/**` 漂了 32 份；
-     * 10-22 恢复成独立 stage、收窄挂在**那一格**（复合执行者一条都不许挂，见 `COMPOUND_EXECUTORS`）；10-23（#2231）
-     * 改名并改判产物可用性、不再带 `--autofix`。于是本条判三件事：① 那一格真的活着（不是注释形态）；② 收窄逐字等于
-     * `INPUT_RES`；③ 判定门不带 `--autofix`（「自动修 + 再判」正是让产物陈旧在 CI 上隐形的那一格）。 */
+  it("`API 文档生成与自检` 已降到每日档：PR/合并侧不再判它，每日档每跑必判", () => {
+    /* ISSUE #2537（事故 #2528）的收口：这一格的触发面不再是 PR/合并侧的 `ifModify`
+     * （面本身仍由 `docsApiTriggerGlobs()` 从 typedoc 解析根派生）。2026-11-05 起它不再在
+     * PR 侧即时判 —— 旧面 40% / 新面 98% 触发率（回放同 40 次 master 改动）、中位 40.9s、
+     * 占 140.2s 串行流水线的 30.6%；降频到每日档（最晚次日 01:00 暴露，窗口 ≤24h）。
+     * 本条判三件事：
+     *   ① PR/合并侧的触发面里**不再有它**（谁把它加回 push 并挂 `ifModify` 要红）；
+     *   ② 每日档里**有**这一格、判定门逐字在，且**不带 `ifModify`**（每日档是重跑语义）；
+     *   ③ 触发面的派生与对账**没被削弱**：`INPUT_RES` 仍是 `INPUT_GLOBS` 的机械转换，
+     *      判据认的每一类输入面照旧（逐文件「面罩得住事实面」的对账在
+     *      `tests/docs-api-input-closure.test.ts`，不在本条）。
+     */
     const stageName = "API 文档生成与自检";
-    const globs = parseStageIfModify(CONFIG).get(stageName);
     expect(
-      globs,
-      `配置里没有「${stageName}」这一格的 \`ifModify\` —— 它要么被注释掉了（= 没有执行者），` +
-        "要么收窄被摘了（那一格会每次都付 201.8s）",
-    ).toBeDefined();
-    /* 收窄的形状 = 判据自己那份声明（`INPUT_GLOBS`，**上界**形态）。
-     * 判据改了输入面而这里没跟，当场红 —— 这就是「机械导出」的那道对账。
-     * ⚠️ **产物面 `docs/api/**` 不在里面**（ISSUE #2231）：产物不再进 git。 */
+      INCREMENTAL_GATE_NAMES.has(stageName),
+      "登记表里又出现了「API 文档生成与自检」—— 它 2026-11-05 已撤到每日档（无 ifModify）；" +
+        "加回 push 收窄面就是把 98% 触发率的成本重新背回关键路径（ISSUE #2537）",
+    ).toBe(false);
     expect(
-      globs,
-      "那一格的收窄与判据自己声明的输入面不一致 —— 改判据的触发面时必须同批改这里",
-    ).toEqual([...INPUT_GLOBS]);
-    /* 判定门逐字在那一格里：只写不判 = 恒绿；而**不许带 `--autofix`** ——
-     * 产物不进 git ⇒ 没有「自动修完再提交」的对象，自动修登记表也不认它了。
-     * ⚠️ 核的是**那一行的 `script:`**，不是整块 —— 整块里还有注释，而注释里出现
-     * 旗标字面量**不**等于「这一格带着那个旗标」。解析口径复用
-     * `scripts/ci-autofix-duties.mjs` 的 `parseStageScripts()`（自动修登记表核的也是那一行）。 */
-    const block = stageBlock(CONFIG, stageName);
-    expect(block, `配置里解析不出「${stageName}」这一格`).toBeTruthy();
+      parseStageIfModify(CONFIG).has(stageName),
+      "`API 文档生成与自检` 又带上了 `ifModify` —— PR/合并侧不该再即时判它（ISSUE #2537）",
+    ).toBe(false);
+
+    const dailyName = "每日 API 文档生成与自检";
+    const block = stageBlock(CONFIG, dailyName);
+    expect(
+      block,
+      `配置里解析不出「${dailyName}」这一格 —— 每日档没有执行者，等于把这条判据删了`,
+    ).toBeTruthy();
     expect(block).toContain("scripts/check-docs-api.cjs");
-    const scriptLine = parseStageScripts(CONFIG).get(stageName) ?? "";
-    expect(scriptLine, `配置里解析不出「${stageName}」那一行的 script`).not.toBe("");
+    expect(
+      parseStageIfModify(CONFIG).has(dailyName),
+      "每日档那一格挂上了 `ifModify` —— 每日档是「重跑一遍」的语义，按改动面跳过就不是每日档",
+    ).toBe(false);
+    /* 判定门不带 `--autofix`（ISSUE #2231）：产物不进 git，没有「自动修完再提交」的对象，
+     * 而「自动修 + 再判」正是让产物陈旧在 CI 上隐形的那一格。
+     * 核的是**那一行的 `script:`**，不是整块 —— 注释里出现旗标字面量不算「带着那个旗标」。 */
+    const scriptLine = parseStageScripts(CONFIG).get(dailyName) ?? "";
+    expect(scriptLine, `配置里解析不出「${dailyName}」那一行的 script`).not.toBe("");
+    expect(scriptLine).toContain("scripts/check-docs-api.cjs");
     expect(
       scriptLine,
-      "那一格又带上了 `--autofix` —— 产物不再进 git，没有「自动修完再提交」的对象；" +
-        "而「自动修 + 再判」这个形状正是让「产物陈旧」在 CI 上隐形的那一格（#2231 的现场）",
+      "那一格又带上了 `--autofix` —— 产物不进 git，没有「自动修完再提交」的对象（#2231）",
     ).not.toContain("--autofix");
-    /* 判据认的每一类输入面（三条 entryPoint 目录 + 两份配置 + 锁文件）都得被认下来 ——
+    /* 判据认的每一类输入面（解析根覆盖的目录 + 根级文件 + 锁文件）都得被认下来 ——
      * 这一半是「判据自己的触发面声明还在」的读数，与它挂在哪一格无关。 */
     for (const f of [
       "src/lib/a.ts",
       "src/server/a.ts",
       "src/trpc/a.ts",
+      /* ISSUE #2537：这些文件也在 typedoc 的解析面里，旧面漏判的就是它们。 */
+      "src/app/page.tsx",
+      "tests/publish-desktop-bundle.test.ts",
+      "scripts/publish-desktop-bundle.mjs",
+      "e2e/a.ts",
       "typedoc.json",
       "package.json",
       "pnpm-lock.yaml",
@@ -237,55 +180,29 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     ]) {
       expect(matchedInputs([f]), `判据不认 ${f}，这条用例的样本已经过期`).toEqual([f]);
     }
-    /* ⚠️ 两侧形态不许分叉 —— 核的是「**罩住**」而非「前缀沾边」（ISSUE #2223 的现场：旧写法只比第一段前缀，
-     * `scripts/db-backup-core.mjs` 的 `scripts` 前缀被 `scripts/check-docs-api.cjs` 的 glob 满足 ⇒ 任何 `scripts/` 下文件
-     * 都「已覆盖」⇒ 面判窄而没人看见）。现在逐文件核：每条正则取它锚定的字面前缀，前缀下的文件逐个过正则，
-     * `INPUT_RES` 命中的每个文件都必须被某条 glob 真罩住。 */
-    for (const re of INPUT_RES) {
-      const prefix = literalPrefixOf(re);
-      expect(
-        prefix,
-        `判据的输入面 \`${re.source}\` 没法枚举（通配出现在第一段里）—— ` +
-          "请把它改成锚定到某个目录或某个文件的形式",
-      ).not.toBeNull();
-      for (const f of filesMatchedBy(re)) {
-        expect(
-          coveredBy(f, INPUT_GLOBS),
-          `判据的输入面 \`${re.source}\` 命中的 ${f} 没有被任何一条 glob 罩住 —— ` +
-            "改输入面时必须同批改 `INPUT_GLOBS`（面判窄了 = 漏判，而漏判是静默的）",
-        ).toBe(true);
-      }
-    }
+    /* 只改文档的 PR 不许被「顺带」认成输入面（ISSUE #2537：不得把面放宽成全库）。 */
+    expect(matchedInputs(["docs/standards/13-提交与-code-review.md", "README.md"])).toEqual([]);
+    /* 形态同源：`INPUT_RES` 是 `INPUT_GLOBS` 的机械转换，不另写一份窄面 —— 两份会漂，
+     * 漂的形态就是「判据改了触发面、配置没跟」（ISSUE #2223 的漏判形态）。逐条对上。
+     * 「面罩得住事实面」的逐文件对账在 `tests/docs-api-input-closure.test.ts`（那边算 TS 程序）。 */
+    expect(INPUT_RES).toEqual(INPUT_GLOBS.map((g) => globToRe(g)));
   });
 
-  it("`oxfmt 格式` 的触发面盖住判据面（改动面 ∩ GLOBS，ISSUE #2979）", () => {
-    /* 这一档自 ISSUE #2010 从本地钩子挪来；ISSUE #2979 起 `check-format.cjs` 有两份判面：全量 = `GLOBS` −
-     * `IGNORE_GLOBS`（只剩 `src/**` 与 `.storybook/**`），改动面（`--changed` / `--staged`）= 改动面 ∩ `GLOBS`
-     * （不过 `IGNORE_GLOBS` —— `scripts/**` 从前无人拦）。平台那格带 `--changed`，故手写 globs 必须盖住 GLOBS
-     * 每个目录，写窄即「改了却没人查格式」且无别的判据可见。判法不读实现：全量用 `isScanned()`、改动面用
-     * `isChangedFaceFile()` —— `GLOBS` 扩展名或 `IGNORE_GLOBS` 增删会在这里当场红。 */
-    const gate = INCREMENTAL_GATES.find((g) => g.name === "oxfmt 格式");
-    expect(
-      gate,
-      "登记表里没有「oxfmt 格式」这一档 —— 它已随 ISSUE #2010 挪到平台侧，" +
-        "却没有登记收窄面 = 每一个 PR 都白付一次全库扫描（或反过来，改了却没人查）",
-    ).toBeDefined();
-    expect(gate?.script).toBe("scripts/check-format.cjs");
-    /* 顺序不判（条目之间没有语义），逐条要对上。 */
-    expect([...(gate?.globs ?? [])].sort()).toEqual(
-      [
-        "src/**",
-        ".storybook/**",
-        "scripts/**",
-        "tests/**",
-        "tools/**",
-        "e2e/**",
-        "*.config.js",
-        "*.config.ts",
-        "*.config.mjs",
-        "*.config.cjs",
-      ].sort(),
+  it("`oxfmt 格式` 的判据面自洽，且 2026-11-05 起由 GA 每次 PR 跑（无收窄）", () => {
+    /* 这一档自 ISSUE #2010 从本地钩子挪到平台侧；2026-11-05 薄化把 CNB 那一格整格搬到
+     * `.github/workflows/pr-gate.yml`，于是「配置里的手写 glob 要盖住判据面」这条对账
+     * **失去对象**：GA 上没有 `ifModify`，每次 PR 都跑，收窄面由判据自己算（改动面 ∩ `GLOBS`）。
+     * 留下的是判据面的自检：`GLOBS` / `IGNORE_GLOBS` 增删时这里当场红，防止
+     * `check-format.cjs` 的两份判面（全量 / 改动面）自己漂开。 */
+    const workflow = fs.readFileSync(
+      path.join(process.cwd(), ".github", "workflows", "pr-gate.yml"),
+      "utf8",
     );
+    expect(
+      workflow,
+      "`.github/workflows/pr-gate.yml` 里没有 `check-format.cjs --changed` —— 撤出 CNB 后" +
+        "它是这条判据唯一的执行者，两边都没有 = 没人跑它",
+    ).toContain("node scripts/check-format.cjs --changed");
     /* SAFETY: 类型断言已复核 */
     // oxlint-disable-next-line typescript/no-require-imports
     const fmt = require("../scripts/check-format.cjs") as {
@@ -326,13 +243,21 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     }
   });
 
-  it("文件结构硬规则的触发面与判据自己的扫描根同源（不是手抄的一份）", () => {
-    /* 与上一条同形的漂，对象是 `check-file-structure.cjs`：有人加了新扫描根（比如 `e2e/`）而 `.cnb.yml` 的 `ifModify`
-     * 看起来一切正常 ⇒ 后续改动那目录时这一步一次都不跑，违规静默漏过。全部用注入样本复算：扫描根下每个目录、根
-     * 目录的每种入口扩展名，都要被 `TRIGGER_GLOBS` 认下。 */
-    const gate = INCREMENTAL_GATES.find((g) => g.name === "文件结构硬规则");
-    expect(gate, "登记表里没有这一档").toBeDefined();
-    expect(gate?.globs).toEqual(TRIGGER_GLOBS);
+  it("文件结构硬规则的扫描根与判据同源，且 GA 每次 PR 都跑它（无收窄）", () => {
+    /* 2026-11-05 之前这条钉的是「`.cnb.yml` 的 `ifModify` globs ⇄ `TRIGGER_GLOBS`」；
+     * 那一格搬到 GA 后没有 `ifModify`，对账失去对象，剩下两件仍然会坏的事：
+     * ① 判据真的遍历每一个扫描根（源码里的读取点是唯一证据）；
+     * ② `TRIGGER_GLOBS` 覆盖根目录那几种入口扩展名（万一以后有人把它接回某份配置，
+     *    「根目录多了一个 .cmd」不能漏）。另加一条：GA 上确实有无条件执行者。 */
+    const workflow = fs.readFileSync(
+      path.join(process.cwd(), ".github", "workflows", "pr-gate.yml"),
+      "utf8",
+    );
+    expect(
+      workflow,
+      "`.github/workflows/pr-gate.yml` 里没有 `check-file-structure.cjs` —— 撤出 CNB 后" +
+        "它是这条判据唯一的执行者",
+    ).toContain("node scripts/check-file-structure.cjs");
     /* 判据真的遍历每一个扫描根（源码里那一句 `})("<dir>")` / `walk("<dir>")`
      * 是它的读取点）—— 少了这一半，`SCAN_ROOTS` 写错也不会有东西响。 */
     const src = fs.readFileSync(

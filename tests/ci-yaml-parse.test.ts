@@ -34,4 +34,5 @@ describe("CI YAML 独立解析校验", () => {
     );
     expect(checkYamlFile(dir, ".cnb.yml").join("\n")).toContain("缺非空 script");
   });
+
 });

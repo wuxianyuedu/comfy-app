@@ -89,7 +89,7 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 import { findEarlierVersion, isGenerated } from "./merged-side-loss-core.mjs";
-import { historyByFile, resolveBlobs } from "./merged-side-loss-git.mjs";
+import { historyByFile, readBlobText, resolveBlobs } from "./merged-side-loss-git.mjs";
 
 /** 一条 git 命令；失败回 `null`（取不到 ≠ 空值，调用方据此判 `2`）。
  * @param {string[]} args
@@ -291,8 +291,8 @@ export function scan({ sha, baseline, own = null }) {
      * 两道判别共用**同一份内容读数**（每份命中各取结果 / 基线两次 `cat-file blob`，
      * 常规零命中的跑一次也不多付）；读不到 ⇒ 两道都不成立、保持命中 ——
      * fail-closed：没读到不许被读成扣过了（与 `own` 那一道同一条铁律）。 */
-    const resultText = git(["cat-file", "blob", result]);
-    const baselineText = resultText === null ? null : git(["cat-file", "blob", atBaseline]);
+    const resultText = readBlobText(git, result);
+    const baselineText = resultText === null ? null : readBlobText(git, atBaseline);
     if (resultText !== null && baselineText !== null) {
       if (sameModuloWhitespace(resultText, baselineText)) {
         relaidOut.push(f);

@@ -96,11 +96,12 @@
  * ── 能机械导出的就**不手抄**（ISSUE #1981 收尾）────────────────────────────
  *
  * 环境类的 globs 由上面的条件手写（「脚本里有 `SCAN_DIR`」正是它们的判据）；而
- * `API 文档生成与自检` 那一档**有**一份更硬的事实源：判据自己的 `INPUT_RES`
- * （`scripts/check-docs-api.cjs`，第 4 条写着「触发面 = typedoc 的输入面」）。
- * 手抄一份 glob 与它逐字等价，只会多一处会漂的副本 —— 所以那一档的 globs 由
- * `INPUT_RES` **反推**（`globFromInputRe`），改判据的触发面时配置跟着变，
- * 不需要有人记得改两份。
+ * `生成态文档与源同步` 那一档的面由 `docs/**` 直接给出（源与产物都在它下面）。
+ *
+ * ⚠️ **2026-11-05：`API 文档生成与自检` 已从 push 撤到每日档**（ISSUE #2537）——
+ * 那一档在每日档**不带 `ifModify`**（每跑必判），所以它的触发面**不再进这张表**。
+ * 触发面本身没有收窄：`docsApiTriggerGlobs()` 仍从 typedoc 的解析根派生，供判据自己的
+ * `--staged` 档与 `tests/docs-api-input-closure.test.ts` 使用（面照旧只有一处出处）。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -115,12 +116,18 @@ const ROOT = path.resolve(HERE, "..");
  * 那一档进了聚合执行者、不再有 `ifModify` 可反推。**别照着这段历史把它加回来**：
  * 「那一格还在跑、跑的仍是 `INPUT_RES` 认的那些输入」这件事现在由
  * `tests/ci-incremental-gates.test.ts` 直接对着 `HEAVY_GATES` 判（条目表还在、入口还在盘上、
- * 判定门是 `--check --autofix`），不再经过 glob 这一层。 */
-/* `文件结构硬规则` 的触发面同样**不手抄**：扫描根与根目录扩展名在判据自己的
- * 声明层（`file-structure-rules.cjs` 的 `TRIGGER_GLOBS`），那里改一处、这里跟着变。 */
-const { TRIGGER_GLOBS: FILE_STRUCTURE_TRIGGER_GLOBS } = createRequire(import.meta.url)(
-  "./file-structure-rules.cjs",
-);
+ * 判定门是 `--check --autofix`），不再经过 glob 这一层。
+ * 2026-11-05 它已从 push 撤到每日档（ISSUE #2537），那一档**不带 `ifModify`**（每跑必判），
+ * 触发面本身仍由 `docsApiTriggerGlobs()` 派生、由 `tests/docs-api-input-closure.test.ts`
+ * 双向对账 —— 只是不再喂给这张表。 */
+/* 2026-11-05 薄化：原本登记在这张表里的 14 条 PR 静态判据（标题行让位 / 文件结构硬规则 /
+ * import 别名统一 / ComfyUI 端口口径 / 内联样式注入 / 跨文件重复块 / 函数长度 TS /
+ * 函数长度 Rust / 模块循环依赖 / 主题色扫描 / 跨平台动作对照 / CHANGELOG 碎片 /
+ * 端口推导跨语言一致性 / oxfmt 格式）随各自 stage 一起搬到 `.github/workflows/pr-gate.yml`。
+ * 那边**没有 `ifModify`**（每次 PR 都跑），所以「配置里的手写 glob ⇄ 判据面」这条对账
+ * 没有对象了；仍要守的是判据自己的面（见 `tests/ci-incremental-gates.test.ts`）。
+ * 别照着历史把 `file-structure-rules.cjs` 的 `TRIGGER_GLOBS` 再取一遍 —— 取回来只会是
+ * 一份没人读的副本。 */
 
 /* ── 文档面那两条的触发面：同样**不手抄** ──────────────────────────────────────
  *
@@ -131,7 +138,7 @@ const { TRIGGER_GLOBS: FILE_STRUCTURE_TRIGGER_GLOBS } = createRequire(import.met
  *
  * 处置：恢复成各自的活 stage，`ifModify` 挂在这一格上（平台的 `ifModify` 是**按格**的，
  * 而复合执行者一条都不许挂 —— 见下面 `COMPOUND_EXECUTORS`）。触发面从判据自己那份
- * 声明里取，不在本表抄第二份：
+ * 声明里取，不在本表抄第二份（**2026-11-05 起本表只剩后一条**；前一条的历史保留作背景）：
  *   · `API 文档生成与自检` ⇒ `check-docs-api.cjs` 的 `INPUT_GLOBS`（它自己的
  *     输入面）。**产物面 `docs/api/**` 已不在面里**（ISSUE #2231）：产物不再进 git ⇒
  *     它既不在变更文件清单里、也不会被谁改坏 ⇒ 留在面里只是白占一行。
@@ -139,17 +146,20 @@ const { TRIGGER_GLOBS: FILE_STRUCTURE_TRIGGER_GLOBS } = createRequire(import.met
  *     而它**不是上界** —— typedoc 沿 import 走，三根之外的文件也会进产物
  *     （`BackupResult` 定义在 `scripts/db-backup-core.mjs`，它出现在 `docs/api/**` 里）。
  *     面判窄了 = **漏判**，而漏判是静默的（这一格被 `ifModify` 跳过，与「判过且通过」
- *     在读数上无差别）。现在那份面 = 三根 ∪ **闭包叶子集**，而叶子集**不是手抄的**：
- *     真相由 `scripts/docs-api-input-closure.mjs` 算出（从 `typedoc.json` 的
- *     `entryPoints` 出发沿静态 import 走），由 `tests/ci-incremental-gates.test.ts`
- *     双向核对 —— 闭包里多出任何一个文件、而面里没有它 ⇒ 当场红。
+ *     在读数上无差别）。
+ * ⚠️ **2026-11-05 再订正（ISSUE #2537 / 事故 #2528）**：只按 `entryPoints` 走的闭包
+ *     仍然偏窄 —— typedoc **解析**的是 TS 程序（`tsconfig.json` 展开的根 ∪ 沿 import
+ *     走到的文件），`entryPoints` 只决定渲染哪几页。`scripts/publish-desktop-bundle.mjs`
+ *     正是被 `tests/**` import 进程序、却不在旧面里的那类 ⇒ 那一格静默跳格。
+ *     现在面由 `scripts/docs-api-input-closure.mjs` 的 `docsApiTriggerGlobs()` **从解析根
+ *     派生**（tsconfig 展开 ∩ git 跟踪文件 → `dir/**` + 根级 `*.<ext>`），由
+ *     `tests/docs-api-input-closure.test.ts` 双向对账（事实面罩不住 ⇒ 红；面被改窄 ⇒ 红）。
+ *     **同日起这一档从 push 撤到每日档**（无 `ifModify`）⇒ 上面这份派生面不再写进本表，
+ *     但仍保留在判据的 `--staged` 档与上面那条对账里。
  *   · `生成态文档与源同步` ⇒ `doc-facts.cjs` 的 `SCOPED_DOCS`（源）与 `docs/generated/**`
  *     （产物）；源与产物**都在 `docs/**` 下面**，故取上界 `docs/**`（逐条抄 32 个路径
  *     就是第二份会漂的副本 —— 抄一份的漂移形态是「新增一篇文档忘了加进收窄面」）。
  */
-const { INPUT_GLOBS: DOCS_API_INPUT_GLOBS } = createRequire(import.meta.url)(
-  "./check-docs-api.cjs",
-);
 /** `生成态文档与源同步` 的面：源（`SCOPED_DOCS`）与产物（`docs/generated/**`）同在 `docs/**`。 */
 const DOC_PLACEHOLDER_GLOBS = ["docs/**"];
 
@@ -164,140 +174,6 @@ const DOC_PLACEHOLDER_GLOBS = ["docs/**"];
  * @type {ReadonlyArray<{name: string, globs: readonly string[], why: string, script: string}>}
  */ export const INCREMENTAL_GATES = [
   {
-    name: "标题行让位",
-    globs: ["src/components/**", "src/app/**"],
-    script: "scripts/check-title-bar-clearance.cjs",
-    why: '扫描面是 SCAN_DIRS = ["src/components", "src/app"]（本档唯一入口 full-screen-layer 的消费方也只能在这两处）。它判的是「顶层浮层必须让出标题行」，而浮层只可能写在视图层。',
-  },
-  {
-    name: "文件结构硬规则",
-    globs: FILE_STRUCTURE_TRIGGER_GLOBS,
-    script: "scripts/check-file-structure.cjs",
-    why:
-      "它扫的是**盘上的某一组目录**，不是整仓：R1–R5 / R10–R12 的扫描根是 `src/`，" +
-      "R7 / R8 在 `src/` `scripts/` `tools/` 三处（含中文的 .ps1 必须带 BOM），" +
-      "R9 的两形态（散落的入口 .ps1 + git 临时状态文件）都只可能出现在**仓库根**，" +
-      "R13 / R14 只看 `src/lib` 的顶层条目。触发面由那份声明层的 `TRIGGER_GLOBS` 机械导出" +
-      "（`SCAN_ROOTS` + 根目录扩展名），所以它不是第二份会漂的副本 ——" +
-      "改扫描根时配置跟着变。收窄安全的方向：这几处一个都没碰时，文件名 / 归属 / 注释流水 /" +
-      "控制字符这些判据不可能变（它不是「跨全仓的单一事实源」那类不变量）。" +
-      "⚠️ 代价写在明处：新增一条以别的目录为扫描根的规则时，必须同批更新" +
-      "`scripts/file-structure-rules.cjs` 的 `SCAN_ROOTS`。",
-  },
-  {
-    name: "import 别名统一",
-    globs: ["src/**", "e2e/**"],
-    script: "scripts/check-import-alias.cjs",
-    why: '扫描面是 SCAN_DIRS = ["src", "e2e"]（只看静态模块说明符，只可能出现在这两个目录的 .ts/.tsx 里）。',
-  },
-  {
-    name: "ComfyUI 端口口径",
-    globs: ["src/lib/comfyui/**", "src/lib/app-settings/**", "src/lib/endpoints.ts"],
-    script: "scripts/check-comfyui-port-contract.cjs",
-    why: "读的是 CLIENT / LIFECYCLE / DERIVE / DESKTOP 四份 comfyui 文件与 SETTINGS_PURE / SETTINGS_IO / ENDPOINTS 三处端口来源 —— 域就是这几个点，故 globs 列出它们所在的目录与文件。",
-  },
-  {
-    name: "内联样式注入",
-    globs: ["src/**"],
-    script: "scripts/check-inline-style.cjs",
-    why: '扫描面是 SCAN_DIR = "src"（渲染出的 <style> 只可能写在 src 下的 .ts/.tsx 里）。',
-  },
-  {
-    name: "跨文件重复块",
-    globs: ["src/**"],
-    script: "scripts/check-code-duplication.cjs",
-    why: '扫描面是 SCAN_DIR = "src"（孪生对只在 src 的应用代码里找，测试与快照被排除）。',
-  },
-  {
-    name: "函数长度 TS",
-    globs: ["src/**"],
-    script: "scripts/check-function-length.cjs",
-    why: '扫描面是 SCAN_DIR = "src"（脚本与用例的自查由 check-infra-file-size.cjs 另管，不在本判据里）。',
-  },
-  {
-    name: "函数长度 Rust",
-    globs: ["src-tauri/src/**"],
-    script: "scripts/check-rust-function-length.cjs",
-    why: "扫描面是 src-tauri/src/**（Rust 壳的源码，TS 侧文件一个都不看）。",
-  },
-  {
-    name: "模块循环依赖",
-    globs: ["src/**"],
-    script: "scripts/check-circular-deps.cjs",
-    why: '扫描面是 SCAN_DIRS = ["src"]（import 图只在 src 内求强连通分量）。',
-  },
-  {
-    name: "主题色扫描",
-    globs: ["src/**"],
-    script: "scripts/check-theme-colors.cjs",
-    why: '扫描面是 SCAN_DIR = "src"（写死的色值只可能出现在 src 下的 .ts/.tsx）。',
-  },
-  {
-    name: "跨平台动作对照",
-    globs: [
-      "package.json",
-      "tools/**",
-      "scripts/**",
-      "src-tauri/**",
-      "README.md",
-      "docs/standards/launch-and-build.md",
-    ],
-    script: "scripts/check-ps1-consistency.mjs",
-    why: "它核对的是「§9.5 对照表（住在 docs/standards/launch-and-build.md）⇄ 盘上的 .ps1 / .mjs 入口 / package.json 脚本 / tools 索引 / README 速查节」这几边，故域含那份文档与 README —— 少列一处就会在「只改 README 那一节」时漏跑。",
-  },
-  {
-    name: "CHANGELOG 碎片",
-    globs: ["changelog.d/**", "CHANGELOG.md"],
-    script: "scripts/check-changelog-fragments.cjs",
-    why: "只看 changelog.d/** 的碎片形态与 CHANGELOG.md 有没有被直接改（`[Unreleased]` 段落）。与本次代码改动无关时不该重跑。",
-  },
-  {
-    name: "端口推导跨语言一致性",
-    globs: [
-      "scripts/app-port.mjs",
-      "scripts/app-port.ps1",
-      "scripts/app_port.py",
-      "scripts/check-app-port-vectors.cjs",
-      "scripts/check-app-port-vectors.py",
-      "scripts/check-app-port-vectors.ps1",
-      "src-tauri/src/single_instance.rs",
-      "tests/fixtures/app-port-vectors.json",
-    ],
-    script: "scripts/check-app-port-vectors.cjs",
-    why:
-      "它判的是「同一份共享向量 ⇄ 四侧实现」的一致性，四侧实现各只有一个落点" +
-      "（Node 的 `app-port.mjs`、Python 的 `app_port.py`、PowerShell 的 `app-port.ps1`、" +
-      "Rust 的 `src-tauri/src/single_instance.rs`），向量只有一份" +
-      "（`tests/fixtures/app-port-vectors.json`）。这几处一个都没碰时，「四侧对同一路径给出" +
-      "同一端口」这件事不可能变 —— 它不读 `src/**` 的其余部分（判据脚本自己的读取点已逐条核过）。" +
-      "⚠️ 新增第五侧实现或换向量文件时**必须同批回来看这一行**，否则那一侧的漂移不再被这条闸看见。",
-  },
-  {
-    name: "oxfmt 格式",
-    globs: [
-      "src/**",
-      ".storybook/**",
-      "scripts/**",
-      "tests/**",
-      "tools/**",
-      "e2e/**",
-      "*.config.js",
-      "*.config.ts",
-      "*.config.mjs",
-      "*.config.cjs",
-    ],
-    script: "scripts/check-format.cjs",
-    why:
-      "平台那一格带 `--changed`，判的是「改动面 ∩ GLOBS」（ISSUE #2979 起 `GLOBS` 含 " +
-      "mjs/cjs、且改动面**不过** `IGNORE_GLOBS`）—— 所以触发面必须盖住 GLOBS 能点到的每一个目录：" +
-      "`src/**` + `.storybook/**`（全量档的扫描根）+ `scripts/**` `tests/**` `tools/**` `e2e/**` " +
-      "+ 根级 `*.config.*`（根级 config 也在改动面里，实测 drizzle/oxlint 两份还是存量）。" +
-      "这一步是 ISSUE #2010 从本地钩子**挪过来**的（判据一字未改）：它判的东西挡不住任何一次代码回归，" +
-      "而留在每一次提交里要付冷缓存 ~21s / 热缓存 ~4.5s。" +
-      "⚠️ 触发面与判据面的对账由 `tests/ci-incremental-gates.test.ts` 判（逐字）；" +
-      "`GLOBS` 的扩展名或扫描根变动时必须同批回来看这一条，否则「改了却没人查格式」或「白跑」。",
-  },
-  {
     name: "生成态文档与源同步",
     globs: DOC_PLACEHOLDER_GLOBS,
     script: "scripts/render-doc-placeholders.cjs",
@@ -307,22 +183,6 @@ const DOC_PLACEHOLDER_GLOBS = ["docs/**"];
       "逐条抄 32 个 `SCOPED_DOCS` 路径就是第二份会漂的副本，漂的形态是「新增一篇文档忘了加进收窄面」）。" +
       "⚠️ 代价写在明处：`SCOPED_DOCS` 与 `docs/**` 的包含关系由" +
       "`tests/ci-incremental-gates.test.ts` 核（源与产物两面都必须在面内）。",
-  },
-  {
-    name: "API 文档生成与自检",
-    globs: [...DOCS_API_INPUT_GLOBS],
-    script: "scripts/check-docs-api.cjs",
-    why:
-      "它判的是「**这一轮生成的** `docs/api/**` 可不可用」（跑得通 / 骨架齐全 / 可移植），" +
-      "所以面就是**它的输入面**（`check-docs-api.cjs` 自己的 `INPUT_GLOBS` = 三根 ∪ " +
-      "**闭包叶子集**：三根之外、改了会改产物的那批文件）。" +
-      "⚠️ 那份叶子集**不是手抄的**：真相由 `scripts/docs-api-input-closure.mjs` 算出" +
-      "（从 `typedoc.json` 的 `entryPoints` 出发沿静态 import 走），" +
-      "`tests/ci-incremental-gates.test.ts` 双向核对（ISSUE #2223：面判窄了 = 漏判，漏判是静默的）。" +
-      "⚠️ **产物面 `docs/api/**` 不在面里**（ISSUE #2231）：产物不再进 git ⇒ 它既不在变更" +
-      "文件清单里、也不会被谁改坏 ⇒ 留在面里只是白占一行。" +
-      "⚠️ 这一格是全流水线最贵的一格（自托管节点实测 201.8s），所以收窄不是优化而是**能不能常驻**的前提；" +
-      "但它一旦没有收窄，每一次 PR 都要付这笔 —— 2026-10-20 起它连执行者都没有了（见文件头那两笔搬动）。",
   },
 ];
 
