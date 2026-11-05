@@ -197,9 +197,6 @@ importers:
       '@hookform/resolvers':
         specifier: ^6.0.1
         version: 6.0.1(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.90.0(@types/react@19.3.0)(react@19.3.1))(zod@4.6.7)
-      '@libsql/client':
-        specifier: ^0.18.0
-        version: 0.18.0
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.2
         version: 1.32.2(supports-color@8.1.1)(zod@4.6.7)
@@ -315,6 +312,9 @@ importers:
         specifier: ^5.0.16
         version: 5.0.16(@types/react@19.3.0)(react@19.3.1)(use-sync-external-store@1.7.0(react@19.3.1))
     devDependencies:
+      '@libsql/client':
+        specifier: ^0.18.0
+        version: 0.18.0
       '@next/eslint-plugin-next':
         specifier: ^16.4.3
         version: 16.4.3(eslint@10.14.0(jiti@2.7.0)(supports-color@8.1.1))

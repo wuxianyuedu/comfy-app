@@ -119,9 +119,9 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
      *
      * 原子性由 SQLite「单写语句内子查询同语句求值」保证：inline/host 两个领取方
      * 各自最多领走互不重叠的行。刻意不用 `db.transaction` + 先 SELECT 后 UPDATE：
-     * 本实现要同时跑在三种宿主（better-sqlite3 同步测试库 / libsql http /
-     * libsql file）上，async 事务回调在同步驱动上于 continuation 之前就 COMMIT，
-     * 原子性静默失效。
+     * 本实现要同时跑在两种宿主（运行时 node:sqlite 的 sqlite-proxy / 测试 better-sqlite3
+     * 的 sqlite-proxy）上，事务语义要靠回调被 await；单语句领取不依赖任何一方的
+     * 事务实现。
      *
      * 归属谓词跟 ADR §6：host 只领显式 `'host'` 的行；inline 领 NULL（历史行与
      * 未带归属的建行）与 `'inline'`。领取时把 `claimedBy` 覆写为 `mode`，NULL
@@ -335,9 +335,9 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
  * 故意做成必填。
  *
  * `TaskRepoDb` 是结构最小约束（见 `./repository-task-impl-types`），只锁本
- * 文件用到的 `.select()/.update()/.insert()` 三条 builder；drizzle 的
- * libsql / better-sqlite3 两种 adapter 都天然满足，测试里可以直接把
- * `createTestDb()` 传进来（走 `as unknown as TaskRepoDb` 一次性断言）。
+ * 文件用到的 `.select()/.update()/.insert()` 三条 builder；sqlite-proxy（运行时
+ * node:sqlite，ISSUE #3171）与 better-sqlite3 两种 adapter 都天然满足，测试里
+ * 可以直接把 `createTestDb()` 传进来（走 `as unknown as TaskRepoDb` 一次性断言）。
  */
 
 export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMode }) {
@@ -352,8 +352,8 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
    *  进度帧每几秒一发，只有第一条把 `claimedAt` 从 NULL 落成时刻，之后的都不
    *  刷新——否则「已运行」永远接近零。
    *  参数给 **ISO 字符串而不是 `Date`**（实测两条都踩过才定下来）：`sql` 模板里的
-   *  值**不走**该列的 `toDriver`（那是给 `.set()` 直接赋值用的），而 better-sqlite3
-   *  与 libsql 都只能绑 primitive——给 `Date` 会死在
+   *  值**不走**该列的 `toDriver`（那是给 `.set()` 直接赋值用的），而 node:sqlite
+   *  与 libsql / better-sqlite3 都只能绑 primitive——给 `Date` 会死在
    *  `SQLite3 can only bind numbers, strings, …`。ISO 文本正是本列 `toDriver` 的
    *  产物，所以两种写法落库的形态一致。 */
   function claimStamp() {

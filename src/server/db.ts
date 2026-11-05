@@ -1,14 +1,20 @@
 /**
- * `db.ts` -- Drizzle over async `@libsql/client` (`file:./db.sqlite`); dev singleton on globalThis (hot reloads).
- * libsql replaced better-sqlite3 (sync driver pinned the event loop); same schema/pragmas. NOTE (ASCII-only):
- * code-frame spans are byte offsets and panic on multibyte chars, killing `next build` (standards sec.5).
+ * `db.ts` -- Drizzle over one `node:sqlite` connection (`file:./db.sqlite`);
+ * dev singleton on globalThis (hot reloads). The runtime driver moved from
+ * `@libsql/client` to the SQLite bundled with Node (ISSUE #3171): same schema,
+ * same PRAGMAs, one less 8.5 MB native addon in every process. NOTE
+ * (ASCII-only): code-frame spans are byte offsets and panic on multibyte chars,
+ * killing `next build` (standards sec.5).
  */
 import "server-only";
 import path from "node:path";
+
+import type { SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
+
 import { env } from "~/env";
+import { openNodeSqlite, type NodeSqliteHandle } from "~/lib/sqlite-driver";
 import { applySqlitePragmas } from "~/lib/sqlite-pragmas";
-import { createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
+import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { sql } from "drizzle-orm";
 import * as schema from "./db/schema";
 
@@ -27,43 +33,48 @@ function resolveDbPath(url: string): string {
   return path.resolve(/*turbopackIgnore: true*/ process.cwd(), raw || DEFAULT_DB_FILE);
 }
 
-// libsql's file: URL wants the resolved absolute path so hot reloads and
-// drizzle-kit keep pointing at the same file regardless of process CWD shifts.
-const client = createClient({
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- env may lack DATABASE_URL under SKIP_ENV_VALIDATION (see the comment above); zod declares it required, so this ?? is the only build-time guard
-  url: `file:${resolveDbPath(env.DATABASE_URL ?? DEFAULT_DB_FILE)}`,
-});
+// Absolutize here so hot reloads, the executor host and drizzle-kit keep
+// pointing at the same file regardless of process CWD shifts.
+const nodeSqlite = openNodeSqlite(resolveDbPath(env.DATABASE_URL ?? DEFAULT_DB_FILE));
 
 // Pragma init is awaited at top level so the exported `db` never runs a query before WAL/foreign_keys are on;
 // the list lives in `~/lib/sqlite-pragmas`, which deliberately holds only the two database-level pragmas and
 // leaves the lock-wait budget unset -- a contended write fails fast rather than stalling the event loop (#1250).
 // `applySqlitePragmas` survives a concurrent WAL switch: `next build` collects page data with 7 workers, a new
 // db file grants the lock to only one (measured 3/8 SQLITE_BUSY); the unhandled rejection kills the build (#1282).
-await applySqlitePragmas(client);
+await applySqlitePragmas(nodeSqlite);
 
 /* SAFETY: reviewed */
 const globalForDb = globalThis as unknown as {
-  db: ReturnType<typeof drizzle<typeof schema>> | undefined;
+  db: SqliteRemoteDatabase<typeof schema> | undefined;
 };
 
-export const db = globalForDb.db ?? drizzle(client, { schema });
+export const db = globalForDb.db ?? drizzle(nodeSqlite.proxy, { schema });
+
+/** The retired libsql driver exposed the client as `$client`; tests use that
+ *  property (and `closeDb`) to release the handle before unlinking a temp
+ *  database on Windows. Keep the shape without pretending the proxy has more
+ *  API than the handle. */
+/* SAFETY: reviewed */
+(db as SqliteRemoteDatabase<typeof schema> & { $client?: NodeSqliteHandle }).$client = nodeSqlite;
 
 if (env.NODE_ENV !== "production") {
   globalForDb.db = db;
 }
 
 /**
- * Close the underlying libsql client (tests only today); nothing in the app closes it. Tests pointing
- * `DATABASE_URL` at a temp file must release the handle first: Windows cannot unlink an open sqlite file
- * (`rmSync` fails with EPERM).
+ * Close the underlying `node:sqlite` handle (tests only today); nothing in the
+ * app closes it. Tests pointing `DATABASE_URL` at a temp file must release the
+ * handle first: Windows cannot unlink an open sqlite file (`rmSync` fails with
+ * EPERM).
  */
 export function closeDb(): void {
-  client.close();
+  nodeSqlite.close();
 }
 
 /** Liveness probe for the health route (keeps the route off `db` / `orm`, standards 1 sec.1.10); same `SELECT 1`.
  *
- *  It **returns the promise** and callers must await it: the async driver would otherwise report "db: up" for
+ *  It **returns the promise** and callers must await it: the async facade would otherwise report "db: up" for
  *  a broken database (route answers 200 while the rejection floats unserved). Kept ASCII: code-frame byte slicing
  *  panics on multibyte chars (AGENTS hard rule 16 / standards 12 sec.12.4.6). */
 export function pingDatabase(): Promise<unknown> {

@@ -193,8 +193,8 @@ export const SQLITE_PRAGMA_BOOT = {
  * （累计等待 40 + 80 = 120ms）。
  *
  * 对手是**另一个正占着写锁的事务**：`BEGIN IMMEDIATE` 撞锁时是**立刻**抛
- * `SQLITE_BUSY`（不是「等一会儿再抛」），因为 Next 侧刻意不给 `createClient({ timeout })`
- * —— libsql 的语句执行是同步的，等锁多少毫秒就是本进程停摆多少毫秒（实测与理由见
+ * `SQLITE_BUSY`（不是「等一会儿再抛」），因为 Next 侧刻意不给 `PRAGMA busy_timeout`
+ * —— node:sqlite 的语句执行是同步的（libsql 也一样），等锁多少毫秒就是本进程停摆多少毫秒（实测与理由见
  * 规范 §7.6 与 `sqlite-pragmas` 文件头）。所以这一族的等待预算只能落在重试这一层。
  *
  * 比 `TERMINAL_DB_WRITE` 少一次（3 vs 4）：那一族收的是「一行任务的终态」，拖在库里

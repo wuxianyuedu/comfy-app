@@ -358,7 +358,7 @@ export const PREBUNDLED_SRC_ROOTS = ["lib/comfyui/host-runtime.ts"];
  *
  * 理由与 static 同源（逐项见 `STATIC_ALLOWED_TOPLEVEL`），只少**装配步才产出**的三项
  * （`schema.sql` / `splash.html` / `index.html`）。也没有 `generated/`：规范 §7.2 那句
- * 退役技术栈的运行时残留（数据层现在是 drizzle + libsql / `node:sqlite`，
+ * 退役技术栈的运行时残留（数据层现在是 drizzle + `node:sqlite`，
  * 仓库根也不存在 `generated/`）。将来确需多放行一项时，**必须同批改这里与
  * `check-standalone-contents.cjs` 的那份**（两份逐字同源由用例核对），并写清谁在运行期读它。
  */

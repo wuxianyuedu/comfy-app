@@ -322,18 +322,17 @@ export class RemoteModelRepository {
    * 那一份语句体、把事务开在更大的范围上 —— 两个入口共用实现，不各写一份。
    */
   async replaceAll(entries: ReadonlyArray<RemoteModelEntry>): Promise<Array<RemoteModel>> {
-    /* 运行时这一侧本来就拿得到带写锁的事务：`db.transaction` 走 `drizzle-orm/libsql`
-     * → `client.transaction()`，默认 mode 是 `write`（= `BEGIN IMMEDIATE`），且整条事务
-     * 绑在连接池里的**同一条**连接上（正好避开 §7.6 那条「开机 PRAGMA 只覆盖当时借到的
-     * 那条连接」）。两侧都不显式传 `behavior`：libsql 会话把第二个参数整个丢掉，
-     * 而测试宿主那一侧（`drizzle-orm/sqlite-proxy`）会真把它拼进 `begin` —— 不传，
-     * 这条调用才在两侧都只依赖「回调被 await」这一件事。
+    /* 运行时这一侧要带写锁的事务（ISSUE #3171）：生产已从 `drizzle-orm/libsql`
+     * 换成 `drizzle-orm/sqlite-proxy`（node:sqlite 单连接），proxy 会话会把第二个
+     * 参数拼进 `begin`，所以这里显式给 `immediate`（= `BEGIN IMMEDIATE`）；不传就
+     * 退回默认的 deferred，撞锁时是「先读后写」才失败，晚了半拍。测试宿主
+     * （`tests/helpers/test-db.ts`）也是 sqlite-proxy，两侧同形。
      *
      * 旧注释里那句「测试基建跑 better-sqlite3（同步驱动）不接受 async 事务回调」描述的是
      * 换宿主之前的形状，那是**测试的形状、不是生产的约束**；测试宿主现在也接得住 async
      * 回调了（见 `tests/helpers/test-db.ts` 文件头），所以这条通道没有理由继续空着。 */
     await runWithSqliteBusyRetry(
-      () => db.transaction(async (tx) => syncRemoteModels(tx, entries)),
+      () => db.transaction(async (tx) => syncRemoteModels(tx, entries), { behavior: "immediate" }),
       { policy: SETTINGS_DB_WRITE },
     );
     return this.list();
@@ -406,17 +405,22 @@ export const remoteModelRepository = new RemoteModelRepository();
  */
 export async function saveLlmSettings(input: LlmConfigPatch): Promise<void> {
   const split = input.extraModels === undefined ? null : splitExtraModels(input.extraModels);
+  // 同样显式 `immediate`（ISSUE #3171）：sqlite-proxy 会把 behavior 拼进 `begin`，
+  // 生产与测试宿主一致；不传就退回 deferred，锁要等第一次写才拿。
   await runWithSqliteBusyRetry(
     () =>
-      db.transaction(async (tx) => {
-        if (split) {
-          await syncRemoteModels(tx, split.remoteEntries);
-        }
-        await llmConfigRepository.upsertSingleton(
-          { ...input, extraModels: split ? split.localNames : undefined },
-          tx,
-        );
-      }),
+      db.transaction(
+        async (tx) => {
+          if (split) {
+            await syncRemoteModels(tx, split.remoteEntries);
+          }
+          await llmConfigRepository.upsertSingleton(
+            { ...input, extraModels: split ? split.localNames : undefined },
+            tx,
+          );
+        },
+        { behavior: "immediate" },
+      ),
     { policy: SETTINGS_DB_WRITE },
   );
 }

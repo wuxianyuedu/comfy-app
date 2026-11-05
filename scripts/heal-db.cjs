@@ -16,7 +16,9 @@
 //        IF NOT EXISTS 幂等方式补齐到当前表上，使下次 push 无需重建表、不再重复建索引；
 //   4) 清理临时表后重试，直至成功或达到尝试上限。
 //
-// 驱动：与 ~/server/db 同步换成 @libsql/client（原生异步）。整个脚本走 async 结构，
+// 驱动：本脚本是**开发期**的 drizzle-kit 自愈路径（`pnpm db:push` 之后跑），
+// 仍走 @libsql/client（devDependencies，drizzle-kit@0.31.11 的 sqlite 驱动就是它）。
+// 运行时（~/server/db）已在 #3171 换成 node:sqlite，那条链与本脚本无关。
 // 每次操作独立开一个 libsql Client、用完 close —— 自愈路径低频，多开几次的开销可忽略。
 const fs = require("node:fs");
 const path = require("node:path");

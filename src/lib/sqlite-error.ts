@@ -3,9 +3,11 @@
  *
  * 现场：桌包（standalone + host）的宿主日志里只有一句
  *   `[comfyui] fail(pkg…) 缺解释器收口异常：Failed query: update "task" set … params: FAILED,…`
- * 这是 drizzle 的**包装**消息，真正的原因挂在 `error.cause` 上（libsql / node:sqlite 给的是
- * `SQLITE_BUSY: database is locked` 一类）。原因不落到日志，现场就只能猜「是没这张表，还是
- * 库被锁了」—— 而这两者的处置完全相反：前者要改代码，后者等一等就过。
+ * 这是 drizzle 的**包装**消息，真正的原因挂在 `error.cause` 上（libsql 给的是
+ * `SQLITE_BUSY: database is locked` 一类文案；node:sqlite（#3171）把锁族拆成
+ * `code=ERR_SQLITE_ERROR` + `errcode=5` + `errstr="database is locked"`）。原因不落到日志，
+ * 现场就只能猜「是没这张表，还是库被锁了」—— 而这两者的处置完全相反：前者要改代码，
+ * 后者等一等就过。
  *
  * 只做三件事，且都不碰 IO / 不引驱动：
  *   ①  {@link describeSqliteWriteError} 把 cause 链上的 code / message 拼回一句可读文本；
@@ -20,7 +22,7 @@
 import { errorText } from "~/lib/error-message";
 import { LOG_DETAIL_MAX, clampText } from "~/lib/text-clamp";
 
-/** cause 链最多走几层：drizzle → libsql → native 实际只有一两层，留出余量即可，
+/** cause 链最多走几层：drizzle → 驱动 → native 实际只有一两层，留出余量即可，
  *  再深就当作循环引用停手（抛值可以是任何东西，`unknown` 的纪律在这里同样成立）。 */
 const CAUSE_CHAIN_LIMIT = 5;
 
@@ -30,7 +32,14 @@ const TRANSIENT_LOCK_CODES = ["SQLITE_BUSY", "SQLITE_LOCKED", "SQLITE_PROTOCOL"]
 /** 同上，但有些驱动版本只在消息里给这句话、不给 `code`。 */
 const TRANSIENT_LOCK_PHRASES = ["database is locked", "database table is locked"];
 
-function fieldOf(value: unknown, key: "code" | "message" | "name"): string {
+/** node:sqlite 的数字锁码（`errcode`），ISSUE #3171：它的字符串 `code` 一律是
+ *  `ERR_SQLITE_ERROR`，锁族只能从 `errcode` 认（5=BUSY、6=LOCKED，实测）。 */
+const LOCK_ERRCODES: Readonly<Record<number, string>> = {
+  5: "SQLITE_BUSY",
+  6: "SQLITE_LOCKED",
+};
+
+function fieldOf(value: unknown, key: "code" | "message" | "name" | "errstr"): string {
   if (typeof value !== "object" || value === null) {
     return "";
   }
@@ -39,7 +48,22 @@ function fieldOf(value: unknown, key: "code" | "message" | "name"): string {
   return typeof raw === "string" ? raw : "";
 }
 
-/** 沿 cause 链收集 code / message（去重、保序）。 */
+/** node:sqlite 的 `errcode`（原生扩展码），取不到给 `null`。 */
+function errcodeOf(value: unknown): number | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  /* SAFETY: 类型断言已复核 */
+  const raw = (value as Record<string, unknown>).errcode;
+  return typeof raw === "number" ? raw : null;
+}
+
+/** 沿 cause 链收集 code / message / errstr（去重、保序）。
+ *
+ *  node:sqlite（ISSUE #3171）把锁族信息拆成两个驱动字段：字符串 `code` 恒为
+ *  `ERR_SQLITE_ERROR`，真正的锁码在 `errcode`（5=BUSY、6=LOCKED），人话在 `errstr`。
+ *  这里把数字锁码折回 `SQLITE_BUSY` / `SQLITE_LOCKED` 放进 `codes`，`errstr` 并进
+ *  `messages`，下游的 `isSqliteFailure` / `isSqliteBusyError` 因此不用认识两种驱动。 */
 function collect(error: unknown): { codes: Array<string>; messages: Array<string> } {
   const codes: Array<string> = [];
   const messages: Array<string> = [];
@@ -50,9 +74,19 @@ function collect(error: unknown): { codes: Array<string>; messages: Array<string
     if (code && !codes.includes(code)) {
       codes.push(code);
     }
+    const errcode = errcodeOf(node);
+    // nullish 而不是 `||`：errcode=0 不是锁，也不必查表。
+    const errcodeName = errcode === null ? "" : (LOCK_ERRCODES[errcode] ?? "");
+    if (errcodeName && !codes.includes(errcodeName)) {
+      codes.push(errcodeName);
+    }
     const message = fieldOf(node, "message");
     if (message && !messages.includes(message)) {
       messages.push(message);
+    }
+    const errstr = fieldOf(node, "errstr");
+    if (errstr && !messages.includes(errstr)) {
+      messages.push(errstr);
     }
     node =
       /* SAFETY: 类型断言已复核 */

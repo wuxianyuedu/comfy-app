@@ -12,29 +12,25 @@
  * #1250 a failed terminal write was never retried, which is how a finished task
  * stayed "generating" forever.
  *
- * TWO FAMILIES, DELIBERATELY SPLIT (measured, two processes, real driver):
+ * TWO FAMILIES, DELIBERATELY SPLIT:
  *
  * 1. `journal_mode` / `foreign_keys` describe the *database*: set once, they
  *    live in the file, so a PRAGMA at boot is the right shape and it is shared.
- * 2. The lock-waiting budget is a *connection* property, and a PRAGMA is the
- *    wrong place for it on this driver: `createClient({url: "file:"})` is a
- *    connection **pool**, and its size is `Math.max(1, config.concurrency)` --
- *    with `concurrency` unset that is `NaN`, i.e. "never at the limit", so the
- *    pool happily opens a second connection that never saw the boot PRAGMA.
- *    Measured: boot PRAGMA + one pooled connection busy -> contended write threw
- *    `SQLITE_BUSY` after 11 ms (no wait at all), while
- *    `createClient({ timeout })` -- which the driver applies when it *opens*
- *    every connection -- waited 2221 ms. That is also exactly what the
- *    packaged host did before this split: 4 retries burned 0.6 s because no
- *    connection actually had a budget.
+ * 2. The lock-waiting budget is a *connection* property. Since the runtime
+ *    driver moved from `@libsql/client` to `node:sqlite` (ISSUE #3171) each
+ *    process owns exactly ONE `DatabaseSync` connection, so
+ *    `PRAGMA busy_timeout` now covers every statement this process will ever
+ *    run -- the old libsql `file:` pool trap (boot PRAGMA lands on one borrowed
+ *    connection while later connections never saw it, measured 11 ms throw vs
+ *    2221 ms wait) is gone with the pool.
  *
- * So the budget is exported as `SQLITE_BUSY_TIMEOUT_MS` and passed as the
- * `timeout` **client option** where it is wanted, and it is deliberately NOT
- * put back into `SQLITE_PRAGMAS`: a PRAGMA there looks like coverage while
- * quietly being coverage for one connection only, which is the same silent
- * failure this issue is about.
+ * The budget is still exported as `SQLITE_BUSY_TIMEOUT_MS` and applied only
+ * where it is wanted (`host-runtime.ts`, as `PRAGMA busy_timeout`). It stays
+ * out of `SQLITE_PRAGMAS` on purpose: the Next server must keep failing fast,
+ * and putting it in the shared list would silently give the UI process a
+ * synchronous wait it never asked for.
  *
- * Budget shape (why 250 and why only the host): libsql runs statements
+ * Budget shape (why 250 and why only the host): sqlite runs statements
  * synchronously, so waiting for a lock stalls *this process's* event loop by
  * that many milliseconds -- measured: during a 2.2 s wait a 10 ms heartbeat
  * fired zero times (it should have fired ~220). The host is the process whose
@@ -63,8 +59,8 @@
 import { SQLITE_PRAGMA_BOOT } from "~/lib/retry-policy";
 import { runWithSqliteBusyRetry } from "~/lib/sqlite-busy-retry";
 
-/** Lock-waiting budget for one connection, in ms. Applied through the libsql
- *  client's `timeout` option, never through a PRAGMA (see the note above). */
+/** Lock-waiting budget for one connection, in ms. Applied at the host site
+ *  through `PRAGMA busy_timeout` (one connection per process, see above). */
 export const SQLITE_BUSY_TIMEOUT_MS = 250;
 
 /** Database-level PRAGMA list. Order is meaning: WAL first, then integrity. */
@@ -75,11 +71,11 @@ export const SQLITE_PRAGMAS: ReadonlyArray<string> = [
 
 /** 一次 PRAGMA 执行的最小形态。
  *
- *  只声明用到的那一个方法，调用方传 `@libsql/client` 的 `Client`（它有更多方法）
- *  或本测试里的假对象都成立 —— 这样本模块不必依赖驱动类型，`scripts/*.mjs` 那侧
- *  的可测性也不受影响。 */
+ *  只声明用到的那一个方法：调用方传 `~/lib/sqlite-driver` 的句柄（`execute`
+ *  走 `DatabaseSync.exec`，同步返回）或本测试里的假对象都成立 —— 这样本模块不必
+ *  依赖驱动类型，`scripts/*.mjs` 那侧的可测性也不受影响。 */
 export type SqlitePragmaTarget = {
-  execute(sql: string): Promise<unknown>;
+  execute(sql: string): unknown;
 };
 
 /**
@@ -100,10 +96,10 @@ export type SqlitePragmaTarget = {
  * 不把「只读挂载 / 磁盘满」一类真故障拖成几次同样的尝试（与 `executor-write-retry` 同纪律）。
  *
  * 站在这里而不是各站点自己包一层：三处站点要的是**同一件事**，各写一遍就必然漏一处
- * （执行宿主那侧今天有 `timeout` 预算，Next 两处刻意没有 —— 预算的取舍见文件头，
+ * （执行宿主那侧有 `PRAGMA busy_timeout` 预算，Next 两处刻意没有 —— 预算的取舍见文件头，
  * 与「开机这几条要不要重试」是两个独立决定，后者三处都要）。
  *
- * @param target 已建好的连接（`@libsql/client` 的 `Client`）。
+ * @param target 已建好的连接（`~/lib/sqlite-driver` 的 `NodeSqliteHandle`）。
  * @param pragmas 要应用的清单，默认就是本模块那份；只为测试留出注入点。
  * @throws 非锁族错误、或重试穷尽后，抛出原错误（调用方据此失败得看得见）。
  */
@@ -118,7 +114,7 @@ export async function applySqlitePragmas(
      * exhausted or the cause is not a lock, because "could not switch to WAL"
      * may be a read-only mount / full disk, and that must fail visibly.
      * Written in English: the NOTE at the top of this file says keep it ASCII. */
-    await runWithSqliteBusyRetry(() => target.execute(pragma), {
+    await runWithSqliteBusyRetry(() => Promise.resolve(target.execute(pragma)), {
       policy: SQLITE_PRAGMA_BOOT,
     });
   }

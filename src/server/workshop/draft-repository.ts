@@ -126,7 +126,8 @@ export async function upsertDraft(
 /** 删除某项目的镜像（前端删除项目时同步清掉，避免残留孤行）。 */
 export async function deleteDraft(id: string): Promise<boolean> {
   const result = await workshopDb.delete(workshopDraft).where(eq(workshopDraft.id, id));
-  // libsql 的 ResultSet 用 rowsAffected（better-sqlite3 的 RunResult.changes 已不存在）。
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 驱动声明按 number 标，但部分语句（DDL/PRAGMA 路径）运行期不给 rowsAffected，`?? 0` 是唯一回落
-  return (result.rowsAffected ?? 0) > 0;
+  // node:sqlite 的 sqlite-proxy run 结果给 changes（libsql ResultSet 的 rowsAffected 已随驱动退场，#3171）：
+  // drizzle 的 SqliteRemoteResult 类型只声明 rows，故按驱动实际返回形状收窄一次。
+  /* SAFETY: 类型断言已复核 */
+  return ((result as { changes?: number }).changes ?? 0) > 0;
 }
