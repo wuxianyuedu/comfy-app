@@ -852,8 +852,12 @@ export async function runMirrorEntry(io = {}) {
         log(
           `[${prefix}]   等了多久：${Math.round(MIRROR_ENTRY_TIMEOUT_MS / 1000)}s（到点；上限 MIRROR_ENTRY_TIMEOUT_MS，外框 10m 之内）`,
         );
-        log(`[${prefix}]   最后读数：${lastLine === "" ? "（还没打出任何读数：卡在模块装载）" : lastLine}`);
-        log(`[${prefix}]   为什么退非零：等待没有终点不属于三态任何一形；--readout 折零以「已拿到读数」为前提`);
+        log(
+          `[${prefix}]   最后读数：${lastLine === "" ? "（还没打出任何读数：卡在模块装载）" : lastLine}`,
+        );
+        log(
+          `[${prefix}]   为什么退非零：等待没有终点不属于三态任何一形；--readout 折零以「已拿到读数」为前提`,
+        );
         return CODE.NO_FACT;
       }
       code = await loaded.mod.runMasterMirror(runIo);
@@ -863,7 +867,9 @@ export async function runMirrorEntry(io = {}) {
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     log(`[${prefix}] 结论：exit 2 —— 入口抛错（${detail}）`);
-    log(`[${prefix}]   在等什么：${master ? "动态 import ./ci-github-mirror-master.mjs 与 runMasterMirror" : "runMirror"}`);
+    log(
+      `[${prefix}]   在等什么：${master ? "动态 import ./ci-github-mirror-master.mjs 与 runMasterMirror" : "runMirror"}`,
+    );
     log(`[${prefix}]   最后读数：${lastLine === "" ? "（还没打出任何读数）" : lastLine}`);
     log(`[${prefix}]   为什么退非零：抛错不属于三态任何一形，进程故障不冒充这一格的判决`);
     return CODE.NO_FACT;

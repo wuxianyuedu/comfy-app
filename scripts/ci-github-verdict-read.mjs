@@ -855,7 +855,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.met
       console.log("[verdict] 判定文件没写成 —— fail-closed：本格退 2（判定格读不到任何东西）");
       process.exit(2);
     }
-    console.log(`[verdict] 判定已落盘：${decisionOut}（三态 = exit ${String(exitCode)}；退码由 ci-github-verdict-decide.mjs 给出）`);
+    console.log(
+      `[verdict] 判定已落盘：${decisionOut}（三态 = exit ${String(exitCode)}；退码由 ci-github-verdict-decide.mjs 给出）`,
+    );
     process.exit(0);
   }
   if (readout && code !== CODE.OK) {
