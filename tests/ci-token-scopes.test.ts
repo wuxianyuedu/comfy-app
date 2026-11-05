@@ -43,8 +43,8 @@ const notFound = (): string => JSON.stringify({ errcode: 404, errmsg: "not found
 
 /** 按子路径分流；没点到的回 200。 */
 function fakeFetch(mapping: Record<string, FetchResult>): FetchFn {
-  return async (_ctx, subPath) =>
-    mapping[subPath] ?? { ok: true, status: 200, body: ok(), error: null };
+  return (_ctx, subPath) =>
+    Promise.resolve(mapping[subPath] ?? { ok: true, status: 200, body: ok(), error: null });
 }
 const reply = (body: string, status = 200): FetchResult => ({
   ok: status >= 200 && status < 300,
@@ -114,9 +114,9 @@ describe("probeAll：每一条探针都只读，且只用平台无条件注入�
 
   it("OIDC 那一问默认不发；`oidc: true` 才进清单，且它是唯一带请求体的一条", async () => {
     const seen: Array<{ hasBody: boolean; path: string }> = [];
-    const fn: FetchFn = async (_ctx, subPath, extra) => {
+    const fn: FetchFn = (_ctx, subPath, extra) => {
       seen.push({ path: subPath, hasBody: Boolean(extra?.body) });
-      return reply(ok(), 200);
+      return Promise.resolve(reply(ok(), 200));
     };
     const base = { repo: "a/b", base: "https://api.example", token: "t", fetchFact: fn };
 
@@ -186,7 +186,7 @@ describe("formatReadout：三档措辞各自代表不同的事实", () => {
       repo: "a/b",
       base: "https://api.example",
       token: "t",
-      fetchFact: async () => dead,
+      fetchFact: () => Promise.resolve(dead),
     });
     const lines = formatReadout(rows, { repo: "a/b", event: "pull_request", branch: "master" });
     const groupLines = lines.filter((l) => /^ {2}\S+\s{2,}/.test(l));
@@ -262,12 +262,13 @@ describe("main：退码、缺件的出口、以及「不打凭据」", () => {
   });
 
   it("一条明确答复都没有 ⇒ --strict 退 2（这一格自己坏了），默认仍退 0", async () => {
-    const dead: FetchFn = async () => ({
-      ok: false,
-      status: -1,
-      body: "",
-      error: "ECONNREFUSED",
-    });
+    const dead: FetchFn = () =>
+      Promise.resolve({
+        ok: false,
+        status: -1,
+        body: "",
+        error: "ECONNREFUSED",
+      });
     expect(await run(["--strict"], {}, dead)).toBe(CODE.NO_FACT);
     // 那句「自己坏了」是**紧接着的最后一行**，先收下来再看（下一跑会覆盖 `heard`）。
     const strictOut = heard.join("\n");

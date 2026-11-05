@@ -6,11 +6,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { completeLLM, completeLLMStructured, getLLMConfig } = vi.hoisted(() => ({
-  completeLLM: vi.fn(async (_cfg: unknown, _msgs: unknown) => "# 生成的剧本"),
+  completeLLM: vi.fn((_cfg: unknown, _msgs: unknown) => "# 生成的剧本"),
   completeLLMStructured: vi.fn<
     (cfg: unknown, msgs: unknown, schema: unknown) => Promise<Array<unknown>>
-  >(async () => []),
-  getLLMConfig: vi.fn(async () => ({})),
+  >(() => Promise.resolve([])),
+  getLLMConfig: vi.fn(() => ({})),
 }));
 vi.mock("~/lib/llm/server", () => ({
   getLLMConfig,
@@ -20,20 +20,18 @@ vi.mock("~/lib/llm/server", () => ({
 vi.mock("~/lib/llm/prompts", () => ({
   buildScriptMarkdownMessages: () => [{ role: "user", content: "x" }],
 }));
-const synthesizeFirstFrame = vi.hoisted(() =>
-  vi.fn(async (_opts: unknown) => "/api/generated/shot.png"),
-);
+const synthesizeFirstFrame = vi.hoisted(() => vi.fn((_opts: unknown) => "/api/generated/shot.png"));
 vi.mock("~/lib/comfyui/firstframe", () => ({ synthesizeFirstFrame }));
 // 引擎经服务端成片编排起片（createFilmFromProject + startFilm），mock 掉避免真跑管线。
 vi.mock("~/server/film/orchestrator", () => ({
-  createFilmFromProject: vi.fn(async () => ({ id: "film-1", shots: 1 })),
-  startFilm: vi.fn(async () => undefined),
+  createFilmFromProject: vi.fn(() => ({ id: "film-1", shots: 1 })),
+  startFilm: vi.fn(() => undefined),
 }));
 // 自动评审执行器调 reviewContent / reviewScript / reviseScript / reviewShotImage（LLM 判定与改写）——
 // mock 掉，按用例返回。默认文本与视觉都通过，只测「循环控制」本身；双裁判语义见下方专用用例。
 const reviewContent = vi.hoisted(() =>
   vi.fn(
-    async (
+    (
       _u: string,
       _p: string,
       _k: string,
@@ -43,12 +41,12 @@ const reviewContent = vi.hoisted(() =>
       pass: boolean;
       scoredAt: string;
       suggestion: string;
-    }> => ({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
+    }> => Promise.resolve({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
   ),
 );
 const reviewShotImage = vi.hoisted(() =>
   vi.fn(
-    async (
+    (
       _u: string,
       _p: string,
       _id: string,
@@ -57,12 +55,12 @@ const reviewShotImage = vi.hoisted(() =>
       pass: boolean;
       scoredAt: string;
       suggestion: string;
-    }> => ({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
+    }> => Promise.resolve({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
   ),
 );
 const reviewScript = vi.hoisted(() =>
   vi.fn(
-    async (
+    (
       _u: string,
       _p: string,
     ): Promise<{
@@ -73,13 +71,14 @@ const reviewScript = vi.hoisted(() =>
         scoredAt: string;
         suggestion: string;
       };
-    }> => ({
-      verdict: { pass: true, issues: [], suggestion: "", scoredAt: "t" },
-      history: [],
-    }),
+    }> =>
+      Promise.resolve({
+        verdict: { pass: true, issues: [], suggestion: "", scoredAt: "t" },
+        history: [],
+      }),
   ),
 );
-const reviseScript = vi.hoisted(() => vi.fn(async (_u: string, _p: string) => "# 改写后的剧本"));
+const reviseScript = vi.hoisted(() => vi.fn((_u: string, _p: string) => "# 改写后的剧本"));
 vi.mock("~/server/agent/review", () => ({
   reviewContent,
   reviewScript,
@@ -92,7 +91,7 @@ vi.mock("~/server/db", async () => {
   return { db: createTestDb() };
 });
 vi.mock("~/server/better-auth", () => ({
-  auth: { api: { getSession: vi.fn(async () => null) } },
+  auth: { api: { getSession: vi.fn(() => null) } },
 }));
 
 import { productionRepository } from "~/lib/core/repository-production";

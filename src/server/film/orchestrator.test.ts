@@ -10,18 +10,18 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
  * 于是「给 mock 塞入参」「读 mock.calls[0]」两侧都通不过 tsc（零 any 口径下不许断言绕过）。 */
 const filmRepo = vi.hoisted(() => ({
   findById: vi.fn<(id: string) => Promise<unknown>>(),
-  markComposing: vi.fn(async (_id: string) => undefined),
-  markFailed: vi.fn(async (_id: string, _detail?: string) => undefined),
-  markCancelled: vi.fn(async (_id: string) => undefined),
-  markDone: vi.fn(async (_id: string, _path: string) => undefined),
-  updateProgress: vi.fn(async (_id: string, _progress: number) => undefined),
-  markGenerating: vi.fn(async (_id: string) => undefined),
+  markComposing: vi.fn((_id: string) => undefined),
+  markFailed: vi.fn((_id: string, _detail?: string) => undefined),
+  markCancelled: vi.fn((_id: string) => undefined),
+  markDone: vi.fn((_id: string, _path: string) => undefined),
+  updateProgress: vi.fn((_id: string, _progress: number) => undefined),
+  markGenerating: vi.fn((_id: string) => undefined),
   create: vi.fn<(input: { size: string }) => Promise<{ id: string }>>(),
-  appendLog: vi.fn(async (_id: string, _entry: { level: string; msg: string }) => undefined),
+  appendLog: vi.fn((_id: string, _entry: { level: string; msg: string }) => undefined),
   /** 恢复扫描用的按状态查询（5-A）。默认「库里没有未收尾的影片」。 */
   listByStatus: vi.fn<
     (_statuses: ReadonlyArray<string>) => Promise<Array<{ id: string; status: string }>>
-  >(async () => []),
+  >(() => Promise.resolve([])),
 }));
 type ShotRow = { id: string; taskId: string | null };
 type CreatedShot = {
@@ -34,32 +34,32 @@ type CreatedShot = {
 };
 
 const shotRepo = vi.hoisted(() => ({
-  createMany: vi.fn<(filmId: string, shots: Array<CreatedShot>) => Promise<void>>(
-    async () => undefined,
+  createMany: vi.fn<(filmId: string, shots: Array<CreatedShot>) => Promise<void>>(() =>
+    Promise.resolve(undefined),
   ),
-  listByFilm: vi.fn<() => Promise<Array<unknown>>>(async () => []),
-  listActiveWithTask: vi.fn<() => Promise<Array<ShotRow>>>(async () => []),
-  markAllActiveFailed: vi.fn(async (_filmId: string) => undefined),
-  markQueued: vi.fn(async (_shotId: string, _taskId: string) => undefined),
-  markFailed: vi.fn(async (_shotId: string) => undefined),
-  updateFromTask: vi.fn(async (_shotId: string, _patch: unknown) => undefined),
+  listByFilm: vi.fn<() => Promise<Array<unknown>>>(() => Promise.resolve([])),
+  listActiveWithTask: vi.fn<() => Promise<Array<ShotRow>>>(() => Promise.resolve([])),
+  markAllActiveFailed: vi.fn((_filmId: string) => undefined),
+  markQueued: vi.fn((_shotId: string, _taskId: string) => undefined),
+  markFailed: vi.fn((_shotId: string) => undefined),
+  updateFromTask: vi.fn((_shotId: string, _patch: unknown) => undefined),
 }));
 const taskRepo = vi.hoisted(() => ({
-  createQueued: vi.fn(async (_input: unknown) => ({ id: "task-1" })),
-  findExecutionProgress: vi.fn(async (_taskId: string) => null),
+  createQueued: vi.fn((_input: unknown) => ({ id: "task-1" })),
+  findExecutionProgress: vi.fn((_taskId: string) => null),
   /** 监看一轮**只发一次**批量进度查询（`watchLoop` 无条件调它，空数组由仓储侧
    *  早退）；缺这个键的话循环会在这一行 reject，把「收没收到口」演成「静默死掉」。 */
-  findExecutionProgressMany: vi.fn<(_ids: Array<string>) => Promise<Array<unknown>>>(
-    async () => [],
+  findExecutionProgressMany: vi.fn<(_ids: Array<string>) => Promise<Array<unknown>>>(() =>
+    Promise.resolve([]),
   ),
 }));
 const skillRepo = vi.hoisted(() => ({
-  findBySlug: vi.fn(async (_slug: string) => null),
+  findBySlug: vi.fn((_slug: string) => null),
 }));
 const prodRepo = vi.hoisted(() => ({
   getForUser: vi.fn<(userId: string, id: string) => Promise<unknown>>(),
-  upsertForUser: vi.fn<(userId: string, data: Record<string, unknown>) => Promise<unknown>>(
-    async () => undefined,
+  upsertForUser: vi.fn<(userId: string, data: Record<string, unknown>) => Promise<unknown>>(() =>
+    Promise.resolve(undefined),
   ),
 }));
 
@@ -72,11 +72,11 @@ const createRunTaskMock = vi.hoisted(() =>
       values: { seed?: number } & Record<string, unknown>;
       workflowId: string;
     }) => Promise<{ taskId: string; taskType: string; workflowName: string }>
-  >(async () => ({ taskId: "task-1", workflowName: "wf", taskType: "T2V" })),
+  >(() => Promise.resolve({ taskId: "task-1", workflowName: "wf", taskType: "T2V" })),
 );
 const synthFirstFrameMock = vi.hoisted(() =>
-  vi.fn<(opts: { seed?: number } & Record<string, unknown>) => Promise<string>>(
-    async () => "firstframe.png",
+  vi.fn<(opts: { seed?: number } & Record<string, unknown>) => Promise<string>>(() =>
+    Promise.resolve("firstframe.png"),
   ),
 );
 
@@ -92,7 +92,7 @@ vi.mock("~/lib/core/repository-production", () => ({
 vi.mock("~/lib/workshop/workflow-run.server", () => ({
   createWorkflowRunTask: createRunTaskMock,
 }));
-const cancelTaskMock = vi.hoisted(() => vi.fn(async (_taskId: string) => undefined));
+const cancelTaskMock = vi.hoisted(() => vi.fn((_taskId: string) => Promise.resolve(undefined)));
 const enqueueMock = vi.hoisted(() => vi.fn((_payload: unknown) => undefined));
 vi.mock("~/lib/comfyui/enqueue", () => ({
   enqueue: enqueueMock,
@@ -104,8 +104,10 @@ vi.mock("~/lib/comfyui/firstframe", () => ({
 vi.mock("~/lib/workshop/script-parser", () => ({
   parseIdeaToScenes: vi.fn(() => []),
 }));
-const llmConfig = vi.hoisted(() => vi.fn(async () => ({})));
-const llmStructured = vi.hoisted(() => vi.fn<() => Promise<Array<unknown>>>(async () => []));
+const llmConfig = vi.hoisted(() => vi.fn(() => ({})));
+const llmStructured = vi.hoisted(() =>
+  vi.fn<() => Promise<Array<unknown>>>(() => Promise.resolve([])),
+);
 vi.mock("~/lib/llm/server", () => ({
   getLLMConfig: llmConfig,
   completeLLMStructured: llmStructured,
@@ -508,8 +510,8 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
   /** 把 `listByStatus` 桩成「按传入的状态返回对应行」。扫描是分两次查的
    * （GENERATING 一次、COMPOSING 一次），对参数偷懒会让两个判决互相串味。 */
   function rowsByStatus(rows: Array<{ id: string; status: string }>) {
-    filmRepo.listByStatus.mockImplementation(async (statuses) =>
-      rows.filter((r) => statuses.includes(r.status)),
+    filmRepo.listByStatus.mockImplementation((statuses) =>
+      Promise.resolve(rows.filter((r) => statuses.includes(r.status))),
     );
   }
 

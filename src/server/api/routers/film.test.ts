@@ -7,18 +7,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { orchestrator, composeFilm, ffmpegAvailable } = vi.hoisted(() => ({
   orchestrator: {
-    createFilm: vi.fn(async (_args: Record<string, unknown>) => ({
+    createFilm: vi.fn((_args: Record<string, unknown>) => ({
       id: "film-new",
       shots: [],
     })),
-    createFilmFromProject: vi.fn(async (_args: Record<string, unknown>) => ({
+    createFilmFromProject: vi.fn((_args: Record<string, unknown>) => ({
       id: "film-from-proj",
       shots: [],
     })),
-    startFilm: vi.fn(async (_id: string) => undefined),
+    startFilm: vi.fn((_id: string) => undefined),
   },
-  composeFilm: vi.fn(async (_id: string) => undefined),
-  ffmpegAvailable: vi.fn(async () => true),
+  composeFilm: vi.fn((_id: string) => undefined),
+  ffmpegAvailable: vi.fn(() => true),
 }));
 
 vi.mock("~/server/db", async () => {
@@ -26,7 +26,7 @@ vi.mock("~/server/db", async () => {
   return { db: createTestDb() };
 });
 vi.mock("~/server/better-auth", () => ({
-  auth: { api: { getSession: vi.fn(async () => null) } },
+  auth: { api: { getSession: vi.fn(() => null) } },
 }));
 vi.mock("~/lib/core/logger", () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },

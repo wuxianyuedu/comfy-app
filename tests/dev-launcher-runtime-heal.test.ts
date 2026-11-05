@@ -23,8 +23,8 @@ function makeWatch(overrides = {}) {
   const onHeal = vi.fn().mockResolvedValue(undefined);
   const watch = createRuntimeRouteWatch({
     log,
-    probeHealth: async () => "ready",
-    probeRoot: async () => true,
+    probeHealth: () => Promise.resolve("ready"),
+    probeRoot: () => Promise.resolve(true),
     onHeal,
     beatMs: NO_INTERVAL_MS,
     ...overrides,
@@ -49,7 +49,7 @@ describe("createRuntimeRouteWatch：只认「页面 200 且接口 404」这一�
   it("冷启动期（未就绪过）的 404 → 不算路由表坏，且不计失败拍", async () => {
     const { watch, onHeal } = makeWatch({
       armedInitially: false,
-      probeHealth: async () => "route-404",
+      probeHealth: () => "route-404",
       threshold: 2,
     });
     for (let i = 0; i < 5; i += 1) {
@@ -66,7 +66,7 @@ describe("createRuntimeRouteWatch：只认「页面 200 且接口 404」这一�
     let state = "route-404";
     const { watch } = makeWatch({
       armedInitially: false,
-      probeHealth: async () => state,
+      probeHealth: () => state,
     });
     await watch.tick();
     expect(watch.stats().armed).toBe(false);
@@ -80,7 +80,7 @@ describe("createRuntimeRouteWatch：只认「页面 200 且接口 404」这一�
     for (const state of ["not-up", "schema-not-ready"]) {
       const { watch, onHeal } = makeWatch({
         armedInitially: true,
-        probeHealth: async () => state,
+        probeHealth: () => state,
         threshold: 2,
       });
       for (let i = 0; i < 5; i += 1) {
@@ -96,8 +96,8 @@ describe("createRuntimeRouteWatch：只认「页面 200 且接口 404」这一�
   it("连续 N 拍 404 且页面仍 200 → 触发一次自愈重启", async () => {
     const { watch, onHeal } = makeWatch({
       armedInitially: true,
-      probeHealth: async () => "route-404",
-      probeRoot: async () => true,
+      probeHealth: () => "route-404",
+      probeRoot: () => true,
       threshold: 3,
     });
     await watch.tick();
@@ -112,8 +112,8 @@ describe("createRuntimeRouteWatch：只认「页面 200 且接口 404」这一�
   it("页面 `/` 也非 200（服务半死）→ 不套用这条自愈，失败拍清零", async () => {
     const { watch, onHeal, log } = makeWatch({
       armedInitially: true,
-      probeHealth: async () => "route-404",
-      probeRoot: async () => false,
+      probeHealth: () => "route-404",
+      probeRoot: () => false,
       threshold: 1,
     });
     await watch.tick();
@@ -128,8 +128,8 @@ describe("createRuntimeRouteWatch：只认「页面 200 且接口 404」这一�
     vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
     const { watch, onHeal } = makeWatch({
       armedInitially: true,
-      probeHealth: async () => "route-404",
-      probeRoot: async () => true,
+      probeHealth: () => "route-404",
+      probeRoot: () => true,
       threshold: 1,
       cooldownMs: 60_000,
       maxHeals: 10,
@@ -147,8 +147,8 @@ describe("createRuntimeRouteWatch：只认「页面 200 且接口 404」这一�
   it("超过单会话上限 → 只提示不再自动重启", async () => {
     const { watch, onHeal, log } = makeWatch({
       armedInitially: true,
-      probeHealth: async () => "route-404",
-      probeRoot: async () => true,
+      probeHealth: () => "route-404",
+      probeRoot: () => true,
       threshold: 1,
       cooldownMs: 0,
       maxHeals: 2,
@@ -163,7 +163,7 @@ describe("createRuntimeRouteWatch：只认「页面 200 且接口 404」这一�
   });
 
   it("stop() 之后 tick 不再探测（收尾后不该再动手）", async () => {
-    const probeHealth = vi.fn(async () => "route-404");
+    const probeHealth = vi.fn(() => "route-404");
     const { watch, onHeal } = makeWatch({
       armedInitially: true,
       probeHealth,

@@ -264,7 +264,7 @@ function scriptedTarget(
 ): { calls: Array<string>; execute(sql: string): Promise<unknown> } {
   const target: { calls: Array<string>; execute(sql: string): Promise<unknown> } = {
     calls: [],
-    async execute(sql: string): Promise<unknown> {
+    execute(sql: string): Promise<unknown> {
       target.calls.push(sql);
       if (target.calls.length <= failures) {
         throw Object.assign(
@@ -272,7 +272,7 @@ function scriptedTarget(
           err.code !== undefined && err.code !== "" ? { code: err.code } : {},
         );
       }
-      return { rows: [] };
+      return Promise.resolve({ rows: [] });
     },
   };
   return target;

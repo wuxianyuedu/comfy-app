@@ -121,7 +121,7 @@ describe("scripts/executor-host.mjs 骨架", () => {
     }
   }, 20_000);
 
-  it("未设 COMFYAPP_HOST_LOG 时默认路径写到 `log/current/services/`（不做写入、只测路径拼装）", async () => {
+  it("未设 COMFYAPP_HOST_LOG 时默认路径写到 `log/current/services/`（不做写入、只测路径拼装）", () => {
     // 骨架阶段不测「真的落到仓库 log/」——那条测试会污染仓库；直接读源码
     // 断默认分支即可（保持脚本文件与规范 §4「current/ 分区」契约一致）。
     const src = fs.readFileSync(HOST_SCRIPT, "utf8");

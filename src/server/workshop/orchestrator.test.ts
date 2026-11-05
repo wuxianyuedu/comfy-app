@@ -14,7 +14,7 @@ const { store } = vi.hoisted(() => ({
 }));
 
 vi.mock("./repository", () => {
-  const createSession = vi.fn(async (input: CreateSessionInput = {}) => {
+  const createSession = vi.fn((input: CreateSessionInput = {}) => {
     const id = `sess_${Math.random().toString(36).slice(2)}`;
     const state: WorkshopSessionState = {
       idea: input.idea ?? "",
@@ -35,12 +35,12 @@ vi.mock("./repository", () => {
     store.set(id, state);
     return id;
   });
-  const getSession = vi.fn(async (id: string) => store.get(id) ?? null);
-  const updateState = vi.fn(async (id: string, state: WorkshopSessionState) => {
+  const getSession = vi.fn((id: string) => store.get(id) ?? null);
+  const updateState = vi.fn((id: string, state: WorkshopSessionState) => {
     store.set(id, state);
   });
-  const listSessions = vi.fn(async () => []);
-  const deleteSession = vi.fn(async (id: string) => {
+  const listSessions = vi.fn(() => []);
+  const deleteSession = vi.fn((id: string) => {
     const had = store.has(id);
     store.delete(id);
     return had;
@@ -55,62 +55,68 @@ vi.mock("./repository", () => {
 });
 
 vi.mock("./llm", () => ({
-  getWorkshopLLMConfig: vi.fn(async (): Promise<WorkshopLLMConfig> => ({
-    baseUrl: "http://x",
-    model: "m",
-    apiKey: null,
-    temperature: 0.7,
-    maxTokens: 100,
-  })),
+  getWorkshopLLMConfig: vi.fn((): Promise<WorkshopLLMConfig> =>
+    Promise.resolve({
+      baseUrl: "http://x",
+      model: "m",
+      apiKey: null,
+      temperature: 0.7,
+      maxTokens: 100,
+    }),
+  ),
   completeWorkshopLLM: vi.fn(
-    async (_cfg: WorkshopLLMConfig, messages: Array<LLMMessage>): Promise<string> => {
+    (_cfg: WorkshopLLMConfig, messages: Array<LLMMessage>): Promise<string> => {
       const sys = typeof messages[0]?.content === "string" ? messages[0].content : "";
       if (sys.includes("编剧")) {
-        return "# 场景1 · 咖啡馆\nΔ 小满走进咖啡馆。\nV1 小满：今天天气真好。";
+        return Promise.resolve("# 场景1 · 咖啡馆\nΔ 小满走进咖啡馆。\nV1 小满：今天天气真好。");
       }
       if (sys.includes("剧本分析师")) {
-        return JSON.stringify([
-          {
-            name: "小满",
-            ageGender: "女,20岁",
-            appearance: "短发",
-            costume: "红裙",
-            personality: "活泼",
-            styleTags: ["厚涂"],
-          },
-        ]);
+        return Promise.resolve(
+          JSON.stringify([
+            {
+              name: "小满",
+              ageGender: "女,20岁",
+              appearance: "短发",
+              costume: "红裙",
+              personality: "活泼",
+              styleTags: ["厚涂"],
+            },
+          ]),
+        );
       }
       if (sys.includes("分镜师")) {
-        return JSON.stringify([
-          {
-            sceneHeading: "场景1 · 咖啡馆",
-            shotType: "wide",
-            description: "全景",
-            characterNames: ["小满"],
-            dialogue: "",
-          },
-        ]);
+        return Promise.resolve(
+          JSON.stringify([
+            {
+              sceneHeading: "场景1 · 咖啡馆",
+              shotType: "wide",
+              description: "全景",
+              characterNames: ["小满"],
+              dialogue: "",
+            },
+          ]),
+        );
       }
-      return "";
+      return Promise.resolve("");
     },
   ),
 }));
 
 vi.mock("./api-channel", () => ({
-  generateImageViaApi: vi.fn(async () => "http://img/1.png"),
-  submitVideoViaApi: vi.fn(async () => ({ remoteTaskId: "task123" })),
-  pollVideoViaApi: vi.fn(async () => ({
+  generateImageViaApi: vi.fn(() => "http://img/1.png"),
+  submitVideoViaApi: vi.fn(() => ({ remoteTaskId: "task123" })),
+  pollVideoViaApi: vi.fn(() => ({
     url: "http://vid/1.mp4",
     pending: false,
   })),
-  resolveMediaDataUrl: vi.fn(async (ref: string) => ref),
+  resolveMediaDataUrl: vi.fn((ref: string) => ref),
 }));
 
 vi.mock("./comfyui", () => ({
-  generateImageViaComfyUI: vi.fn(async () => "file://comfy/1.png"),
-  submitVideoViaComfyUI: vi.fn(async () => ({ url: "file://comfy/v.mp4" })),
-  saveComfySettings: vi.fn(async (p: unknown) => p),
-  resolveComfyBase: vi.fn(async () => "http://127.0.0.1:8188"),
+  generateImageViaComfyUI: vi.fn(() => "file://comfy/1.png"),
+  submitVideoViaComfyUI: vi.fn(() => ({ url: "file://comfy/v.mp4" })),
+  saveComfySettings: vi.fn((p: unknown) => p),
+  resolveComfyBase: vi.fn(() => "http://127.0.0.1:8188"),
 }));
 
 vi.mock("./final-compose", () => ({
@@ -133,8 +139,8 @@ vi.mock("./final-compose", () => ({
       dialogue: s.dialogue ?? "",
     })),
   })),
-  writeCompositionPlan: vi.fn(async () => "/data/workshop-compositions/x.json"),
-  renderComposition: vi.fn(async () => ({ ok: false, note: "no ffmpeg" })),
+  writeCompositionPlan: vi.fn(() => "/data/workshop-compositions/x.json"),
+  renderComposition: vi.fn(() => ({ ok: false, note: "no ffmpeg" })),
 }));
 
 import * as orchestrator from "./orchestrator";

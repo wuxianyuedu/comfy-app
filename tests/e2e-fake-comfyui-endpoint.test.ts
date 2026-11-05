@@ -500,7 +500,7 @@ describe("探测时机：判「起之前有没有别人」就不能挂在 global
     expect(setup).toContain("readFakeSlotPreflight");
   });
 
-  it("pre-flight 真的在 `spawn` Playwright **之前**跑（时机是全部意义）", async () => {
+  it("pre-flight 真的在 `spawn` Playwright **之前**跑（时机是全部意义）", () => {
     /* 判据判「接线在不在」：`scripts/e2e-run.mjs` 里 `runPreflight(...)` 必须出现在
      * 起 Playwright 那一跳之前 —— 反过来的话它探到的就是本轮自己起的服务，
      * 与挂在 `globalSetup` 上没有区别。 */

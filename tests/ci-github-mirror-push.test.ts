@@ -649,7 +649,7 @@ describe("runMirror（git 与 fetch 全假件）", () => {
       }
       return gitOk(args);
     };
-    const fetchImpl = (async (url: string | URL, init?: RequestInit) => {
+    const fetchImpl = ((url: string | URL, init?: RequestInit) => {
       calls.push({
         url: String(url),
         init: init ?? {},
@@ -674,8 +674,9 @@ describe("runMirror（git 与 fetch 全假件）", () => {
         return opts.cnbJson ? opts.cnbJson(run, args) : null;
       },
       /* 退避假件：一次真墙钟都不付，只把「等了多久」记进量具。 */
-      sleep: async (ms: number) => {
+      sleep: (ms: number) => {
         sleeps.push(ms);
+        return Promise.resolve();
       },
       log: (line: string) => heard.push(line),
       root: "/repo",
@@ -1275,8 +1276,9 @@ describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
       env: opts.env ?? { GITHUB_MIRROR_TOKEN: TOKEN },
       log: (line: string) => heard.push(line),
       runGit,
-      sleep: async (ms: number) => {
+      sleep: (ms: number) => {
         sleeps.push(ms);
+        return Promise.resolve();
       },
     };
     return { heard, io, pushes, lfsPushes, sleeps, probeCalls: () => probeCalls };
@@ -1478,12 +1480,13 @@ describe("runMirrorEntry（入口的终点）", () => {
     const code = await runMirrorEntry({
       clearTimer: timers.clearTimer,
       env: {},
-      importMaster: async () => ({
-        runMasterMirror: async (runIo) => {
-          runIo.log("[mirror-master] DRY-RUN：没推，计划如上");
-          return CODE.OK;
-        },
-      }),
+      importMaster: () =>
+        Promise.resolve({
+          runMasterMirror: (runIo) => {
+            runIo.log("[mirror-master] DRY-RUN：没推，计划如上");
+            return Promise.resolve(CODE.OK);
+          },
+        }),
       log: (line: string) => heard.push(line),
       master: true,
       readout: true,
@@ -1502,7 +1505,7 @@ describe("runMirrorEntry（入口的终点）", () => {
       env: {},
       log: (line: string) => heard.push(line),
       readout: true,
-      runPr: async (runIo) => {
+      runPr: (runIo) => {
         runIo.log("[mirror] 卡在推送这一跳");
         throw new Error("git push spawn 失败");
       },

@@ -241,7 +241,7 @@ export const settingRouter = createTRPCRouter({
    * 持有此库（内嵌 Next server、执行宿主、Drizzle Studio），在别人握句柄时覆盖 `db.sqlite` 是不可逆数据事故。 */
 
   /** 备份清单（可选份 + 有没有待恢复的请求），供设置页那一区渲染。 */
-  backupList: authedProcedure.query(async () => {
+  backupList: authedProcedure.query(() => {
     return {
       backups: listBackupEntries(process.cwd()),
       pending: readRestoreRequest(process.cwd()),
@@ -250,7 +250,7 @@ export const settingRouter = createTRPCRouter({
 
   /** 立即做一份备份（手动档）。失败**如实返回**原因而不是抛 —— 备份失败是
    *  可预期的一档（磁盘满 / 库被独占），界面上要能看见「为什么没成」。 */
-  backupCreate: authedProcedure.mutation(async () => {
+  backupCreate: authedProcedure.mutation(() => {
     return createBackup(process.cwd());
   }),
 
@@ -259,7 +259,7 @@ export const settingRouter = createTRPCRouter({
    *  与备份那条同款，界面据 `ok` 分档。 */
   backupRestore: authedProcedure
     .input(z.object({ name: z.string().min(1).max(255) }))
-    .mutation(async ({ input }) => {
+    .mutation(({ input }) => {
       return requestRestore(process.cwd(), input.name);
     }),
 });

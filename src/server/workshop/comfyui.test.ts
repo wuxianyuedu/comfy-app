@@ -68,7 +68,7 @@ describe("settings 文件的指纹 memo（手改文件要能被发现）", () =>
     expect(memo.load().checkpoint).toBe("hand_edited.safetensors");
   });
 
-  it("文件被删 ⇒ 缓存失效，load 回到空对象；仍不存在时不再反复重读", async () => {
+  it("文件被删 ⇒ 缓存失效，load 回到空对象；仍不存在时不再反复重读", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "comfy-memo-"));
     tmpDirs.push(dir);
     const file = path.join(dir, "workshop-comfy-settings.json");
@@ -87,8 +87,9 @@ describe("settings 文件的指纹 memo（手改文件要能被发现）", () =>
           return null;
         }
       },
-      write: async (f, content) => {
+      write: (f, content) => {
         writeFileSync(f, content, "utf8");
+        return Promise.resolve();
       },
     });
     expect(memo.load().checkpoint).toBe("a.safetensors");
@@ -110,8 +111,9 @@ describe("settings 文件的指纹 memo（手改文件要能被发现）", () =>
         return readFileSyncSync(f, "utf8");
       },
       fingerprint: () => null,
-      write: async (f, content) => {
+      write: (f, content) => {
         writeFileSync(f, content, "utf8");
+        return Promise.resolve();
       },
     });
     await memo.save({ checkpoint: "a.safetensors" });
