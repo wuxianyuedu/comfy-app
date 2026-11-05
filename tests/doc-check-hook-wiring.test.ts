@@ -573,6 +573,69 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
 });
 
 /**
+ * GA push 档 `master-gate.yml`（任务 3 并行期，2026-11-06 立）：文档链两格从 CNB push
+ * 挪到镜像仓 master 的 push 上，与 CNB 侧并行跑。判法只问「两条命令逐字在场 + 触发/并发/
+ * 检出面是 push 语义」—— 不在这份用例里问 CNB 三格（切换是下一笔 PR），也不问失败回传
+ * （用户已定：不回传 CNB、不改 ship 判据）。
+ */
+describe("GA push 档 `master-gate.yml`：文档链两格的并行执行者（任务 3 并行期）", () => {
+  const WORKFLOW = join(REPO_ROOT, ".github", "workflows", "master-gate.yml");
+  const workflow = readFileSync(WORKFLOW, "utf8");
+
+  it("只在镜像仓 master 的 push 上跑，且每一笔都有自己的读数（不互相取消）", () => {
+    expect(
+      workflow.includes("on:\n  push:\n    branches: [master]"),
+      "`master-gate.yml` 的触发不是 `on: push: branches: [master]` —— 镜像格推的是 " +
+        "`HEAD:refs/heads/master`，触发口径与它对齐才能判到被推上去的那一笔",
+    ).toBe(true);
+    expect(
+      workflow.includes("group: push-master") && workflow.includes("cancel-in-progress: false"),
+      "并发口径不是「push-master 不互相取消」—— push 锁的语义是 master 上每一笔都要有" +
+        "自己的读数，后一笔掐掉前一笔会让某次合并没有结论",
+    ).toBe(true);
+  });
+
+  it("两条文档链命令逐字在场（与 CNB push 档同一入口、同一旗标）", () => {
+    const renderLine =
+      /^[ \t]*run:\s*node scripts\/render-doc-placeholders\.cjs --check --autofix[ \t]*$/m.exec(
+        workflow,
+      )?.[0] ?? "";
+    expect(
+      renderLine,
+      "`master-gate.yml` 里找不到 `render-doc-placeholders.cjs --check --autofix` 那一行 —— " +
+        "并行期的口径是「同一入口、同一旗标」，换旗标等于换判据（§13.5.33 的撤档纪律）",
+    ).not.toBe("");
+    const refsLine =
+      /^[ \t]*run:\s*node scripts\/check-doc-references\.cjs[ \t]*$/m.exec(workflow)?.[0] ?? "";
+    expect(
+      refsLine,
+      "`master-gate.yml` 里找不到 `check-doc-references.cjs` 那一行 —— 文档链第二格只有一个" +
+        "执行者，这边读不到就等于挂了个空壳（与 §13.5.17「挪走 ≠ 没人跑」同一条判法）",
+    ).not.toBe("");
+  });
+
+  it("检出面够判据用（全历史 + LFS），且装依赖在场（不靠未验证的「无 node_modules 也能跑」）", () => {
+    expect(
+      workflow.includes("fetch-depth: 0") && workflow.includes("lfs: true"),
+      "检出不是 `fetch-depth: 0` + `lfs: true` —— 镜像格把两个父提交的历史与 LFS 对象一并" +
+        "推上来，缺一样都会让判据读到指针/浅历史而不是真内容",
+    ).toBe(true);
+    expect(
+      workflow.includes("pnpm install --frozen-lockfile"),
+      "`master-gate.yml` 里没有 `pnpm install --frozen-lockfile` —— 用户已定保留安装步，" +
+        "不要为省时间引入「无 node_modules 能否真跑」的未验证前提",
+    ).toBe(true);
+    /* 反向钉：不复刻 CNB 的 `ifModify: docs/**`。按路径过滤会在「代码改动破坏文档引用」
+     * 时漏判 —— 那类红的因在 docs 之外，而两条命令都是秒级文本读。 */
+    expect(
+      workflow.includes("paths:"),
+      "`master-gate.yml` 加了路径过滤 —— 文档引用那格必须每次 push 都跑，" +
+        "否则改脚本导致 docs 引用失效时这一侧恒绿",
+    ).toBe(false);
+  });
+});
+
+/**
  * 第二梯队全库扫描的「输入面跳过」接进 D 组（#1747 续）：14 步各扫全库一个子集，单项 0.27–1.85s、合计 ≈8.5s
  * （热缓存 8 核），扫描面全是固定前缀（`src/`、`src/lib`、`src/components`+`src/app`、`src-tauri/src`……）。抹掉
  * 一个 `--staged` 与「回到无条件全扫」等价，而**没有别的判据**会看见（只会慢一点，慢不报错）；`check-format` 那半已随 #2010 挪平台。
