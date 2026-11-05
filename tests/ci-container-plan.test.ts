@@ -208,6 +208,25 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
     expect(stageLevelImages(text)).toEqual([{ name: "X", image: "node:24" }]);
   });
 
+  it("插件格（image + settings、没有 script）不算写错层 —— 它在自托管上实测能跑", () => {
+    /* `cnbcool/attachments` 那类插件不是「起容器跑脚本」：`cnb-6od-1k6l6mgun` 上传成功。 */
+    const text = [
+      "master:",
+      "  push:",
+      "    - stages:",
+      "        - name: 插件格",
+      "          image: cnbcool/attachments:latest",
+      "          settings:",
+      "            attachments:",
+      "              - out/log.txt",
+      "        - name: 脚本格",
+      "          image: node:24",
+      "          script: echo x",
+      "",
+    ].join("\n");
+    expect(stageLevelImages(text)).toEqual([{ name: "脚本格", image: "node:24" }]);
+  });
+
   it("现役 `.cnb.yml` 没有写错层的 `image:`（这一条是那次 99ms 红的回归判据）", () => {
     /* 这条判据的存在理由只有一个：**写错层不报错，整格起不来**。它是本仓唯一
      * 一次「配置解析期就被平台挡下」的形态，而本地任何一条判据此前都看不见它。 */

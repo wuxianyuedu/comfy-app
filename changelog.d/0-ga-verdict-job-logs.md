@@ -29,3 +29,6 @@
 - `check-ci-yaml-parse.mjs` 的 stage 形态判据接受**插件形态**（非空 `image` + 非空
   `settings`、没有 `script`），不再把 `cnbcool/attachments` 这类上传 stage 判成红；
   「只有 image、没有 settings」仍按缺 script 红（判据不是免检）。
+- 同一形态在另外两处也认了：`ci-env-probe.stagesWithImage` 与
+  `ci-container-plan.stageLevelImages` 只把「脚本格」算作容器 / 写错层 —— 插件格在
+  自托管节点上实测能跑（`cnb-6od-1k6l6mgun`），此前会把整条流水线卡在「环境前提」。
