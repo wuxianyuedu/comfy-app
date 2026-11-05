@@ -400,6 +400,9 @@
     # master 不推过去它们就每天跑一棵旧树（理由全文在 `.push-stages` 里那格的注释上）。
     COMFYAPP_CI_PUSH_GATES: >-
       合并形态复核, GitHub master 镜像, 安装依赖, 生成态文档与源同步, 文档引用与权威源一致, 工作区出处
+    # `push 失败立案` 不在这一份里（ISSUE #2842）：它是 `endStages`（红也要跑的段），
+    # 不是 `stages` 里的一格 —— 与 PR 档的 `PR 失败立案` 同形，定义在 `.push-fail-stage`
+    # 锚点。`COMFYAPP_CI_PUSH_GATES` 列的是 `stages` 主列的格名清单。
     # 每日那一跑自己的 stage 清单 —— **另一个流水线，另一份清单**（定时口 2026-11-05 起由
     # GA `.github/workflows/daily.yml` 的 schedule 起，CNB 这侧只剩手动 / API 两口，跑的是同一份）。
     # 它刻意**不**与上面那一条共用：上面那份是「PR 上跑什么」，这一份是「每天跑什么」，
@@ -1597,7 +1600,32 @@
       timeout: 5m
     # 令牌权限读数：与 PR 那一格同一个入口、同一份理由（ISSUE #2551）。
     - name: 令牌权限读数
-      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs
+      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-token-scopes.mjs
+      timeout: 5m
+
+# ── push 档（master 合并复核）的失败立案（ISSUE #2842）─────────────────────────
+#
+# 这一档为什么也要有：push 档此前**只**引了 `*common` —— 没有 `endStages` 立案格。
+# 于是 master 合并复核红了之后，知道这件事的唯一办法是去翻构建列表：#2607 那一批
+# 漏登记 §13.1 一格，PR 全绿、合并全绿，master 上的 `doc:check` 红了 ≈20 分钟才被
+# 另一条分支的一次性探针撞见（ISSUE #2753 的立案现场）。
+#
+# 形态与 PR / 桌包那两格逐字同族（`endStages` 而不是 `stages` 的最后一格；理由见
+# 上面那个锚点），入口也是**同一个脚本**加一个 `--lane push`：
+#   · 那份读写链（定性 / 取逐格 / 摘录失败行 / 建单 → 补标签 → 独立回读）只写了一次，
+#     这里不抄第二份（§12.12）；
+#   · `--lane` 是「我就是这一档的立案口」的显式声明 —— 不给它，脚本按老规矩把非
+#     `pull_request` 事件判成「不归本格管」。
+# 去重键跟着 `--lane` 走 ⇒ 标题是 `ci(push): push 档红在「…」`，与 PR / 桌包两族互不相混。
+.push-fail-stage: &push_fail_stage
+  endStages:
+    - name: push 失败立案
+      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-pr-failure-issue.mjs --no-block --lane push
+      # 与 `PR 失败立案` 同一量级（三次读命令 + 一次写 + 一次回读）。
+      timeout: 5m
+    # 令牌权限读数：与 PR / 桌包那两格同一个入口、同一份理由（ISSUE #2551）。
+    - name: 令牌权限读数
+      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-token-scopes.mjs
       timeout: 5m
 
 .gates: &gates
@@ -2355,7 +2383,7 @@ master:
   # 判据双向核对）。若出现非合并提交（本地 --no-verify 就能做到），说明有变更绕过了
   # PR 与门禁 —— `合并形态复核` 一格红，失败即停，后面全部 skipped。
   push:
-    - <<: *common
+    - <<: [*common, *push_fail_stage]
       name: master 合并复核
       lock: *lock_push
       # 与 PR 那条同一枚镜像令牌（`GitHub master 镜像` 那一格要读它）。密钥文件里已声明
