@@ -44,9 +44,7 @@ const fakeFetch =
   (handler: (url: string) => Response | Promise<Response>): typeof fetch =>
   (input) =>
     Promise.resolve(
-      handler(
-        typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-      ),
+      handler(typeof input === "string" ? input : input instanceof URL ? input.href : input.url),
     );
 
 const runOf = (overrides: Record<string, unknown> = {}) => ({
@@ -310,7 +308,9 @@ describe("dumpFailingRunLogs（日志取不到不改判决 / 全量落盘 / 窗�
     const { heard, io } = harness({ logs: () => new Response(huge, { status: 200 }) });
     await dumpFailingRunLogs(io, REPO, [runOf()], RED);
     const all = heard.join("\n");
-    expect(all).toMatch(new RegExp(String.raw`已截到 \d+ 行 / 上限 \d+ 字节（全量见下载端点）`, "u"));
+    expect(all).toMatch(
+      new RegExp(String.raw`已截到 \d+ 行 / 上限 \d+ 字节（全量见下载端点）`, "u"),
+    );
     expect(all).toContain("##[error]Process completed with exit code 1.");
   });
 
@@ -323,13 +323,9 @@ describe("dumpFailingRunLogs（日志取不到不改判决 / 全量落盘 / 窗�
     ].join("\n");
     const { heard, io } = harness({
       jobs: () =>
-        new Response(
-          jobsBodyOf([
-            jobOf({ id: 456, name: "a" }),
-            jobOf({ id: 789, name: "b" }),
-          ]),
-          { status: 200 },
-        ),
+        new Response(jobsBodyOf([jobOf({ id: 456, name: "a" }), jobOf({ id: 789, name: "b" })]), {
+          status: 200,
+        }),
       logs: () => new Response(huge, { status: 200 }),
     });
     await dumpFailingRunLogs(io, REPO, [runOf()], RED);
@@ -340,9 +336,9 @@ describe("dumpFailingRunLogs（日志取不到不改判决 / 全量落盘 / 窗�
       .reduce((sum, line) => sum + Buffer.byteLength(line, "utf8") + 1, 0);
     expect(bodyBytes).toBeLessThanOrEqual(STAGE_WINDOW_MAX_BYTES);
     /* 第二窗拿的是**剩余**预算 ⇒ 它的「上限」比第一窗小（而不是各自再拿 60 KiB）。 */
-    const caps = [
-      ...heard.join("\n").matchAll(/已截到 \d+ 行 \/ 上限 (?<bytes>\d+) 字节/gu),
-    ].map((m) => Number(m.groups?.bytes ?? ""));
+    const caps = [...heard.join("\n").matchAll(/已截到 \d+ 行 \/ 上限 (?<bytes>\d+) 字节/gu)].map(
+      (m) => Number(m.groups?.bytes ?? ""),
+    );
     expect(caps).toHaveLength(2);
     const [firstCap, secondCap] = caps;
     expect(secondCap ?? 0).toBeLessThan(firstCap ?? 0);
@@ -363,7 +359,9 @@ describe("dumpFailingRunLogs（日志取不到不改判决 / 全量落盘 / 窗�
 
 describe("runVerdict 集成：判红 + job 日志取不到 ⇒ 退码不变", () => {
   const gitOk = (args: Array<string>) =>
-    args[0] === "rev-parse" ? { code: 0, stderr: "", stdout: `${SHA}\n` } : { code: 0, stderr: "", stdout: "" };
+    args[0] === "rev-parse"
+      ? { code: 0, stderr: "", stdout: `${SHA}\n` }
+      : { code: 0, stderr: "", stdout: "" };
 
   const harnessVerdict = (jobResponse: Response) => {
     const heard: string[] = [];

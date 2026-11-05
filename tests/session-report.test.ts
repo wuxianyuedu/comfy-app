@@ -14,11 +14,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
-import {
-  collectCommits,
-  formatReport,
-  runSteps,
-} from "../scripts/session-report.mjs";
+import { collectCommits, formatReport, runSteps } from "../scripts/session-report.mjs";
 
 const SCRIPT = join(process.cwd(), "scripts", "session-report.mjs");
 const tmpDirs: Array<string> = [];
@@ -81,8 +77,20 @@ describe("session-report —— 排版：五节在场、顺序稳定（他人照
       ],
       steps: {
         results: [
-          { label: "文件结构硬规则", argv: "node scripts/check-file-structure.cjs", ms: 1300, code: 0, tail: "" },
-          { label: "CP936 字形登记", argv: "node scripts/check-cp936-glyphs.cjs", ms: 2400, code: 0, tail: "" },
+          {
+            label: "文件结构硬规则",
+            argv: "node scripts/check-file-structure.cjs",
+            ms: 1300,
+            code: 0,
+            tail: "",
+          },
+          {
+            label: "CP936 字形登记",
+            argv: "node scripts/check-cp936-glyphs.cjs",
+            ms: 2400,
+            code: 0,
+            tail: "",
+          },
         ],
         totalMs: 3700,
       },
@@ -112,7 +120,13 @@ describe("session-report —— 排版：五节在场、顺序稳定（他人照
       commits: [],
       steps: {
         results: [
-          { label: "文件结构硬规则", argv: "node scripts/check-file-structure.cjs", ms: 1300, code: 0, tail: "" },
+          {
+            label: "文件结构硬规则",
+            argv: "node scripts/check-file-structure.cjs",
+            ms: 1300,
+            code: 0,
+            tail: "",
+          },
           {
             label: "脚本档类型检查",
             argv: "node scripts/check-scripts-typecheck.cjs",
@@ -207,10 +221,14 @@ describe("session-report —— CLI：边界与端到端", () => {
 
   it("端到端：temp 仓库 + 自定义验证批 ⇒ 汇报落 stdout，五节都在", () => {
     const repo = makeRepo();
-    execFileSync("git", ["commit", "--allow-empty", "-q", "-m", "chore: 更早的一笔（占住 HEAD~1）"], {
-      cwd: repo,
-      env: gitSandboxEnv(),
-    });
+    execFileSync(
+      "git",
+      ["commit", "--allow-empty", "-q", "-m", "chore: 更早的一笔（占住 HEAD~1）"],
+      {
+        cwd: repo,
+        env: gitSandboxEnv(),
+      },
+    );
     execFileSync("git", ["commit", "--allow-empty", "-q", "-m", "chore: 一次批次 (#3165)"], {
       cwd: repo,
       env: gitSandboxEnv(),

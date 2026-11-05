@@ -319,7 +319,9 @@ function noteReadFailure(log, what, res) {
     );
     return;
   }
-  log(`[verdict]   ${what}取不到：网络没通（${String(res.error ?? "未知")}）—— 缺的只是日志，判决不受影响`);
+  log(
+    `[verdict]   ${what}取不到：网络没通（${String(res.error ?? "未知")}）—— 缺的只是日志，判决不受影响`,
+  );
 }
 
 /**
@@ -477,7 +479,9 @@ export async function dumpFailingRunLogs(io, repo, runs, redConclusions) {
         io.log("[verdict]   run 回话里没有 id —— 跳过 job 日志（只回读 conclusion）");
         continue;
       }
-      io.log(`[verdict] ── run ${String(runId)} 的失败 job 日志${title === "" ? "" : `（${title}）`}──`);
+      io.log(
+        `[verdict] ── run ${String(runId)} 的失败 job 日志${title === "" ? "" : `（${title}）`}──`,
+      );
       // oxlint-disable-next-line no-await-in-loop -- 回读逐 run 串行，并行会把输出顺序打乱
       const res = await requestJson(io, runJobsUrl(repo, String(runId)), "job 列表");
       if (!res.ok) {
@@ -492,9 +496,7 @@ export async function dumpFailingRunLogs(io, repo, runs, redConclusions) {
       }
       const failed = jobs.filter(
         (job) =>
-          isRecord(job) &&
-          job.status === "completed" &&
-          redConclusions.has(String(job.conclusion)),
+          isRecord(job) && job.status === "completed" && redConclusions.has(String(job.conclusion)),
       );
       if (failed.length === 0) {
         io.log(`[verdict]   这条 run 的 ${String(jobs.length)} 个 job 里没有判红的（日志无对象）`);
@@ -625,7 +627,6 @@ export async function dumpFailingRunLogs(io, repo, runs, redConclusions) {
         `[verdict]   ⚠️ 本次 ${String(manifest.chunkCount)} 块超过静态 ${String(LOG_CHUNK_STATIC_STAGES)} 格：**只印前 ${String(manifest.printedChunks)} 块**，其余全量见上面每个 job 的下载端点`,
       );
     }
-
   } catch (error) {
     /* 这一格只加读数：任何意外都折成一行脱敏读数，绝不改变调用方的退码。 */
     io.log(
