@@ -57,6 +57,7 @@ describe("Hint", () => {
       ),
     );
     for (const name of ["甲", "乙", "丙"]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await user.hover(screen.getByRole("button", { name }));
       expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
     }

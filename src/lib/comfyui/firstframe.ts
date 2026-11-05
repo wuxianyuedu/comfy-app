@@ -66,6 +66,7 @@ export async function synthesizeFirstFrame(opts: {
 // 同一条），所以这里与 `/api/tasks/[id]/stream` 的轮询同形。
 async function waitForImage(taskId: string): Promise<string> {
   for (let attempt = 0; attempt < FIRST_FRAME_WAIT.maxAttempts; attempt++) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const row = await taskRepository.findExecutionProgress(taskId);
     /* 行读不到 = 这一跳的任务已被删（用户清了历史）。不静默续等：那样只会
      * 变成「首帧生成超时」，把一个明确的删除问题伪装成性能问题。 */
@@ -88,6 +89,7 @@ async function waitForImage(taskId: string): Promise<string> {
       }
       return first.localPath;
     }
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await new Promise((resolve) =>
       setTimeout(resolve, backoffDelayMs({ ...FIRST_FRAME_WAIT, attempt })),
     );

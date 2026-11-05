@@ -414,6 +414,7 @@ describe("completeLLM（一次性补全）", () => {
   it("choices 缺失 / 空数组 / content 缺失 → 回空串而不是崩", async () => {
     for (const payload of [{}, { choices: [] }, { choices: [{}] }]) {
       fetchMock.mockResolvedValue(jsonResponse(payload));
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       expect(await completeLLM(CFG(), [])).toBe("");
     }
   });

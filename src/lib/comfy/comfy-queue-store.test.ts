@@ -69,6 +69,7 @@ function deferred(): {
 /** 把挂着的微任务跑完（mock 的 fetch 是立刻 resolve 的，几拍就够）。 */
 async function flush(times = 5): Promise<void> {
   for (let i = 0; i < times; i += 1) {
+    // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 }

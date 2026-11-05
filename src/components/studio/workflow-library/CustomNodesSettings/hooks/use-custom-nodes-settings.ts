@@ -163,6 +163,7 @@ async function consumeSettingsStream(
 
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- 流式读循环，只有 done 才 break；规则把字面量 true 判成恒真，保留原写法
   while (true) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const { done, value } = await reader.read();
     if (done) {
       break;
@@ -491,6 +492,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     let buf = "";
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- 流式读循环，只有 done 才 break；规则把字面量 true 判成恒真，保留原写法
     while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const { done, value } = await reader.read();
       if (done) {
         break;

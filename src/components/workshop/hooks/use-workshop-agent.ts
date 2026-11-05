@@ -183,6 +183,7 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
       const maxRounds = 10;
 
       for (let round = 0; round < maxRounds; round++) {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         const response: AgentChatResponse = await sendAgentMessage({
           messages: currentMessages,
           draft: handlersRef.current.getDraft(),
@@ -223,6 +224,7 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
           ];
           const toolMessages: Array<AgentMessageLike> = [];
           for (const call of response.tool_calls) {
+            // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
             const toolMsg = await executeOneTool(call);
             toolMessages.push(toolMsg);
           }
@@ -234,6 +236,7 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
         if (response.fallback_instruction) {
           const instr = response.fallback_instruction;
           const action = typeof instr.action === "string" ? instr.action : "";
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           const toolMsg = await executeOneTool({
             id: `fallback-${toolRunId()}`,
             name: action,

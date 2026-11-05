@@ -273,7 +273,9 @@ export async function stopComfyUiProcess(): Promise<{
   // （«最后一轮是否仍可达» 即「关了没有」），避免把判据散在循环与收尾两处。
   const stopProbes: Array<string | null> = [];
   for (let i = 0; i < COMFY_STOP_PROBE.maxAttempts; i++) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await sleep(COMFY_STOP_PROBE.baseMs);
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const probe = await probeComfyUi(800);
     stopProbes.push(probe);
     if (probe === null) {

@@ -121,7 +121,9 @@ describe("updateProgress（compare-and-set：终态行不改写）", () => {
 
   it("三种终态（SUCCEEDED / FAILED / CANCELLED）都返 false、行不变（迟到进度帧被丢弃）", async () => {
     for (const status of ["SUCCEEDED", "FAILED", "CANCELLED"]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const id = await seed({ status, progress: 88 });
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       expect(await impl.updateProgress(id, 50), `status=${status}`).toBe(false);
       expect(readRow(id)?.progress).toBe(88);
     }

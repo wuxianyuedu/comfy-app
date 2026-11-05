@@ -554,6 +554,7 @@ describe("ModelRepository", () => {
       ["b.safetensors", "checkpoints"],
       ["a.safetensors", "checkpoints"],
     ] as const) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await modelRepository.upsertScanned({
         fileName,
         folder,
@@ -892,10 +893,12 @@ describe("TaskRepository 的状态栏 / 分页装载 / 领取三口", () => {
      * 而 SQL 一声不响。 */
     const ids: Array<string> = [];
     for (let i = 0; i < 3; i++) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const t = await taskRepository.createQueued({
         ...queued,
         prompt: `第 ${i} 条`,
       });
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await taskRepository.createImages(t.id, [
         {
           localPath: `${t.id}.png`,

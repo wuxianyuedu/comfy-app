@@ -234,6 +234,7 @@ export async function resolveComfyBase(): Promise<string> {
    * `_resolvedBase` 就记住了，本函数不会再走到这里。 */
   const targets = probeTargets(configuredPort);
   for (const target of targets.slice(1)) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     if (!(await probePort(host, target.port))) {
       continue;
     }

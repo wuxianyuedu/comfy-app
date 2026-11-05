@@ -59,6 +59,7 @@ async function readExtraPathsFile(
 ): Promise<{ content: string; file: string } | null> {
   for (const candidate of candidates) {
     try {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       return { file: candidate, content: await readFile(candidate, "utf8") };
     } catch {
       // 换下一个候选；全都不存在时返回 null（这不是错误：没有 yaml 就是没有共享目录）。
@@ -139,6 +140,7 @@ export async function resolveDesktopStoragePaths(
   let configBase: string | null = null;
   for (const cfg of configFiles) {
     try {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const parsed = parseExtraModelPathsYaml(await readFile(cfg, "utf8"));
       if (parsed.basePath !== null && configBase === null) {
         configBase = parsed.basePath;

@@ -425,12 +425,14 @@ export async function enrichWorkflowIO(
         if (ri?.comboOptions) {
           options = ri.comboOptions;
         } else {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           const byClass = await comboOptionsForClassField(nodeTypeById[canonicalNodeId], v.name);
           /* wrapper 节点（尤其是那些 `properties.proxyWidgets` 缺失或被隔离的
            *  `comfy-core` 子图）解析不出内部类型，导致上面的按类型查表什么也拿不到。
            *  此时回落到跨 object_info 的字段名扫描，
            *  为「名字唯一」的 COMBO 找回候选项
            *  （例如 `resolution_preset`）。 */
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           options = byClass ?? (await comboOptionsForFieldName(v.name));
         }
         /* ComfyUI 不可达时 object_info 查不到候选；若存档里上一次在线时存过
@@ -522,6 +524,7 @@ export async function enrichWorkflowIO(
        *  `prompt_width_of_thing` 这类单行输入不会被升级成 textarea，作者改过名的
        *  提示词框也不会因为名字里没「prompt」而掉回单行。 */
       ...(type === "STRING" &&
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       inferIsMultiline(await multilineForClassField(classType, v.name), defaultValue)
         ? { multiline: true }
         : {}),

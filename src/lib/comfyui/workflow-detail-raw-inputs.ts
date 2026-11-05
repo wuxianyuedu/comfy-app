@@ -374,6 +374,7 @@ async function enrichSubgraphProxyWidgets(input: {
         if (e.type !== "STRING" || e.multiline === true) {
           continue;
         }
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         const declared = await multilineForClassField(
           e.__comboClass ?? subNodeType,
           e.__comboField ?? e.name,
@@ -388,6 +389,7 @@ async function enrichSubgraphProxyWidgets(input: {
        *  消费方回落到普通文本控件。 */
       for (const e of updatedList) {
         if (e.type === "COMBO" && Boolean(e.__comboClass)) {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           const opts = await comboOptionsForClassField(e.__comboClass, e.__comboField ?? "");
           if (opts) {
             e.comboOptions = opts;
@@ -557,6 +559,7 @@ export async function buildRawInputs(
        *  不到任何参数。这里改用与 convertRawToApi 同源的控件顺序表反查下标。 */
       let byOrder: Array<{ name: string; value: unknown }> | null = null;
       if (rnWidgets.length > 0 && (widgetCounter < rnWidgets.length || legacyByName.size === 0)) {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         const table = await ensureWidgetOrderTable();
         byOrder = mapWidgetValuesByOrder(table[rnClassType], rnWidgets);
       }
@@ -634,6 +637,7 @@ export async function buildRawInputs(
         if (typeof inp.type === "string" && inp.type === "STRING") {
           if (
             inferIsMultiline(
+              // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
               await multilineForClassField(
                 typeof rn.type === "string" ? rn.type : undefined,
                 inp.name,
@@ -668,6 +672,7 @@ export async function buildRawInputs(
             widget: { name: w.name },
             widgetValue: w.value,
             ...(type === "STRING" &&
+            // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
             inferIsMultiline(await multilineForClassField(rnClassType, w.name), w.value)
               ? {
                   /* SAFETY: 类型断言已复核 */

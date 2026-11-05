@@ -280,6 +280,7 @@ describe("进程级判活（与 /api/comfy/queue 同口径）", () => {
 
     fetchMock.mockResolvedValue(ALIVE_BUT_NO_ANSWER);
     for (let i = 0; i < 5; i++) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await refreshComfyStats();
     } // 远超离线阈值也不该翻
 
@@ -293,6 +294,7 @@ describe("进程级判活（与 /api/comfy/queue 同口径）", () => {
     subscribeComfyStats(noop);
     fetchMock.mockResolvedValue(ALIVE_BUT_NO_ANSWER);
     for (let i = 0; i < 5; i++) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await refreshComfyStats();
     }
 

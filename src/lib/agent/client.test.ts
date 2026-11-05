@@ -86,6 +86,7 @@ describe("sendAgentMessage", () => {
   it("响应是原始值（字符串 / null / 数字）→ 给可见占位且 done=true", async () => {
     for (const body of ['"hello"', "null", "42"]) {
       mockFetch(() => new Response(body, { status: 200 }));
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const res = await sendAgentMessage(REQ);
       expect(res.done).toBe(true);
       expect(res.reply).toBe("（无有效响应）");

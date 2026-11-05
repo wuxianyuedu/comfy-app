@@ -47,6 +47,7 @@ export async function fetchHistoryEntry(promptId: string): Promise<ComfyHistoryE
   let lastErr: unknown = null;
   for (let i = 0; i < HISTORY_RETRIES; i++) {
     try {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const hist = await getHistory(promptId);
       lastRaw = hist;
       lastErr = null;
@@ -78,6 +79,7 @@ export async function fetchHistoryEntry(promptId: string): Promise<ComfyHistoryE
     } catch (error) {
       lastErr = error;
     }
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await sleep(HISTORY_RETRY_DELAY_MS);
   }
   /* 12 轮都没等到：把「最后一轮原始响应 / 最后一次网络错误 / ComfyUI 当前队列」
