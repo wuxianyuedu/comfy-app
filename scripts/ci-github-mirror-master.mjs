@@ -22,8 +22,6 @@ import {
   CODE,
   buildPushUrl,
   explainRemoteProbeFailure,
-  PROBE_MAX_ATTEMPTS,
-  PUSH_MAX_ATTEMPTS,
   hasRemoteRefs,
   pushArgs,
   realRunGit,
@@ -32,6 +30,13 @@ import {
   runGitWithRetry,
   sanitize,
 } from "./ci-github-mirror-push.mjs";
+/* 超时 / 次数 / 退避那一组常量单独一份（2026-11-05：主文件贴着 §12.6 R5 的 900 行闸，
+ * 加「推送墙钟预算」时切出去的；那一份的文件头写了为什么改按时间收口）。 */
+import {
+  PROBE_MAX_ATTEMPTS,
+  PUSH_MAX_ATTEMPTS,
+  PUSH_RETRY_BUDGET_MS,
+} from "./ci-mirror-retry-policy.mjs";
 /* LFS 那一跳自 #3146 起单独一份（900 行闸）：它反过来要 import 主文件的判据，故主文件不转出它。 */
 import { pushLfsObjects } from "./ci-mirror-lfs-push.mjs";
 import { renderMirrorSummary } from "./ci-mirror-failure-report.mjs";
@@ -113,8 +118,10 @@ export async function runMasterMirror(io) {
     });
     return CODE.NO_FACT;
   }
-  /* 与 PR 模式同一套：egress 类失败重试一次，认证 / 权限类一次就交账。 */
+  /* 与 PR 模式同一套：egress 类失败重试、整档吃一个墙钟预算（文件头第 8 条），
+   * 认证 / 权限类一次就交账。 */
   const push = await runGitWithRetry(pushArgs(url, `refs/heads/${ctx.ref}`), {
+    budgetMs: PUSH_RETRY_BUDGET_MS,
     label: "推送",
     log,
     maxAttempts: PUSH_MAX_ATTEMPTS,

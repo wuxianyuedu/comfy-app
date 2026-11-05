@@ -27,7 +27,9 @@ import {
   summarizeWorkflowRuns,
   workflowRunsUrl,
 } from "../scripts/ci-github-verdict-read.mjs";
-import { CODE, RETRY_BACKOFF_MS, exitCodeFor } from "../scripts/ci-github-mirror-push.mjs";
+import { CODE, exitCodeFor } from "../scripts/ci-github-mirror-push.mjs";
+/* 退避表自 2026-11-05 起单独一份（主文件贴着 900 行闸）；这一格只吃它的前两项。 */
+import { RETRY_BACKOFF_MS } from "../scripts/ci-mirror-retry-policy.mjs";
 
 const TOKEN = "gh-token-secret-value";
 const SHA = "26a3c3ed06deb679974200d68005ff583178d63f";
@@ -600,7 +602,7 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     expect(code).toBe(CODE.NO_FACT);
     /* 主路径一跳（零条）+ 结构判定三跳（#3153）+ 兜底三次尝试。 */
     expect(calls).toHaveLength(1 + 3 + REQUEST_MAX_ATTEMPTS);
-    expect(sleeps).toEqual([...RETRY_BACKOFF_MS]);
+    expect(sleeps).toEqual(RETRY_BACKOFF_MS.slice(0, REQUEST_MAX_ATTEMPTS - 1));
     expect(heard.join("\n")).toContain("api.github.com 这一跳没通");
   });
 
@@ -610,7 +612,7 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     const code = await runVerdict(io);
     expect(code).toBe(CODE.NO_FACT);
     expect(calls).toHaveLength(REQUEST_MAX_ATTEMPTS);
-    expect(sleeps).toEqual([...RETRY_BACKOFF_MS]);
+    expect(sleeps).toEqual(RETRY_BACKOFF_MS.slice(0, REQUEST_MAX_ATTEMPTS - 1));
     const all = heard.join("\n");
     expect(all).toContain("主路径（runs API）");
     expect(all).toContain("api.github.com 这一跳没通");
