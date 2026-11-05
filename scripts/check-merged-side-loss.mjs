@@ -53,9 +53,10 @@
  *
  *   · **本笔自身的增补**（ISSUE #3004）：一笔 N 行改动反向应用必回上一版 —— 那是
  *     恒等式不是退回（`ownDiffExplains()`）；
- *   · **同内容的另一种排版**（ISSUE #2999）：结果版与基线版剥掉全部空白后逐字相等
- *     —— printWidth 迁移把 80 列链式改回 100 列单行，逐字节正好等于格式化之前的
- *     某一版；相对基线非空白内容一个字没少，不是退回（`sameModuloWhitespace()`）；
+ *   · **同内容的另一种排版**（ISSUE #2999 / #3208）：结果版与基线版剥掉全部空白、
+ *     再去掉尾随逗号后逐字相等 —— printWidth 迁移把 80 列链式改回 100 列单行，
+ *     逐字节正好等于格式化之前的某一版；相对基线内容一个字没少，不是退回
+ *     （`sameModuloLayout()`）；
  *   · **台账类文件的空态**（ISSUE #2994）：结果版是 `entries: []` 的台账 —— 清零是
  *     棘轮判据（只许降）自己要求的收紧，而空台账逐字节等于建表那一刻的版本，
  *     在这一格上必然命中（`isLedgerZeroState()`）。
@@ -131,12 +132,23 @@ export function isAncestor(ancestor, descendant) {
 }
 
 /**
- * 两个 blob 的**非空白内容**是否逐字相同（ISSUE #2999 的判别件）。
+ * 两个 blob 的**内容**是否逐字相同（忽略排版差异；ISSUE #2999 / #3208 的判别件）。
  *
  * 为什么不用 `git diff -w`：那条只忽略**行内**空白，而 printWidth 迁移改的恰恰是
  * **断行结构**（链式拆行 ⇄ 单行）—— 行数都变了，`-w` 下仍是 9+/27- 的实差，
  * 治不了现场。把两侧内容各剥掉全部空白再比，链式与单行就折成同一个串；
  * 真退回（少了一段代码）剥完仍不等。
+ *
+ * **尾随逗号也属于排版**（ISSUE #3208）：80 列形态在列表最后一个元素后留逗号再
+ * 折行，100 列单行则整条去掉（`"文生图",\n)` ⇄ `"文生图")`）。#2999 只剥空白，
+ * 逗号不是空白 —— `call(1,)` 剥完是 `call(1,)`，与 `call(1)` 不等，于是真实现场
+ * （`src/lib/project-canvas/history-panel-types.test.ts`，结果版与 `4ac1816e3` 那一版
+ * 逐字节相同）被误判成「整份退回」。#3204 因此推不上去。
+ *
+ * 归一只在**逗号前面是能收尾表达式的记号**时成立：`[,]`（稀疏数组的洞）与
+ * `[1,,]` 里逗号前面是 `[` / `,`，删掉会抹平**语义差异**（数组长度变了），不归一。
+ * 字符串字面量里恰好出现 `,)` 的极端形态会跟着漏 —— 这是取值域的代价，不是
+ * 判据面放宽（命中仍要点名、仍算「需要人工看」）。
  *
  * 只在**命中之后**对命中的那几份调用；内容读数在 `scan()` 的命中环里取一次、
  * 与 #2994 的台账空态判别共用（那边见 `isLedgerZeroState()`）。
@@ -145,8 +157,21 @@ export function isAncestor(ancestor, descendant) {
  * @param {string} bText 基线版内容
  * @returns {boolean}
  */
-function sameModuloWhitespace(aText, bText) {
-  return aText.replaceAll(/\s+/g, "") === bText.replaceAll(/\s+/g, "");
+function sameModuloLayout(aText, bText) {
+  return normalizeLayout(aText) === normalizeLayout(bText);
+}
+
+/** 剥掉全部空白，再去掉列表收尾处的尾随逗号（`sameModuloLayout()` 的实现件）。
+ * @param {string} text @returns {string} */
+function normalizeLayout(text) {
+  return text
+    .replaceAll(/\s+/g, "")
+    .replaceAll(/,(?<closer>[)\]}])/g, (pair, closer, offset, whole) => {
+      /* 逗号前面是开括号或另一个逗号 ⇒ 那是**稀疏数组的洞**（`[,]` 长度 1、`[1,,]`
+       * 长度 2），删掉就把语义差异抹平了 —— 原样留下，让判据照旧命中。 */
+      const prev = offset > 0 ? whole.charAt(offset - 1) : "";
+      return ",([{".includes(prev) ? pair : closer;
+    });
 }
 
 /**
@@ -277,8 +302,9 @@ export function scan({ sha, baseline, own = null }) {
     /* **「同内容的另一种排版」不是退回**（ISSUE #2999）：现场是 printWidth 迁移 ——
      * 结果版（100 列单行）与基线版（80 列链式）逐字节不同、却与**格式化之前**的
      * 某一版逐字节相同，于是被读成「退回了基线之前的版本」。判据要抓的是
-     * 「丢了别线的成果」，而相对基线，结果版的**非空白内容一个字没少** ——
-     * 命中只是排版巧合。判别：两个 blob 去掉全部空白后逐字相等 ⇒ 减掉。
+     * 「丢了别线的成果」，而相对基线，结果版的**内容一个字没少** —— 命中只是
+     * 排版巧合。判别：两个 blob 去掉全部空白与收尾处的尾随逗号后逐字相等 ⇒ 减掉
+     * （尾随逗号那一格是 #3208 补的：只剥空白时 `call(1,)` 与 `call(1)` 不等）。
      *
      * **台账类文件的空态是棘轮自己的成功态**（ISSUE #2994）：`.dependency-audit-baseline.json`
      * 那一族（`{"ruleVersion":…,"entries":[…]}`）由它自己的判据管方向 ——
@@ -294,7 +320,7 @@ export function scan({ sha, baseline, own = null }) {
     const resultText = readBlobText(git, result);
     const baselineText = resultText === null ? null : readBlobText(git, atBaseline);
     if (resultText !== null && baselineText !== null) {
-      if (sameModuloWhitespace(resultText, baselineText)) {
+      if (sameModuloLayout(resultText, baselineText)) {
         relaidOut.push(f);
         continue;
       }
@@ -416,8 +442,8 @@ function main() {
    * 但命中发生过的这件事本身是读数 —— 不念，下一次排版巧合还会无声地走一遍。 */
   if (relaidOut.length > 0) {
     console.log(
-      `[merged-side-loss] 减掉 ${relaidOut.length} 份：结果版与基线版**只差空白/断行**` +
-        "（同一种内容的另一种排版，非空白内容一个字没少 —— 不是退回，ISSUE #2999）——",
+      `[merged-side-loss] 减掉 ${relaidOut.length} 份：结果版与基线版**只差空白/断行/尾随逗号**` +
+        "（同一种内容的另一种排版，内容一个字没少 —— 不是退回，ISSUE #2999 / #3208）——",
     );
     relaidOut.forEach((f) => {
       console.log(`  · ${f}`);

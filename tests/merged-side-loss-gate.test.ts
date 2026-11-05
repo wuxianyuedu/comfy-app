@@ -214,10 +214,8 @@ describe("check-merged-side-loss —— 整份退回的事后复算", () => {
     repo.git("commit", "-q", "-m", "chore: 单行 v1（后来的结果版与它逐字节相同）");
 
     /* 基线：把 g 链式化（等价于被格式化重排过）—— 内容没变，只有排版。
-     * ⚠️ 结尾**不许**多一个逗号：判别是「剥掉全部空白后逐字相等」，而逗号不是空白
-     * —— `call(\n  1,\n)` 剥完是 `call(1,)`，与结果版的 `call(1)` 不等，这一格会被判成
-     * 真退回（2026-11-05 GA 上这条用例就是这么红的）。夹具要钉的是「只差空白/断行」，
-     * 所以这里只能改断行。 */
+     * 这里只改断行、**不留**尾随逗号：本用例钉的是「只差空白/断行」这一格；
+     * 折行 + 尾随逗号 ⇄ 单行无逗号是 ⑭ 那一格（ISSUE #3208 把它也归入排版）。 */
     repo.write("src/g.ts", "export const g = call(\n  1\n);\n");
     repo.git("add", "-A");
     repo.git("commit", "-q", "-m", "style: 链式排版");
@@ -310,5 +308,66 @@ describe("check-merged-side-loss —— 整份退回的事后复算", () => {
     expect(output).toContain("src/k.ts");
     expect(output).toContain("台账类文件的**空态**");
     expect(output).toContain("ledger.json");
+  });
+
+  test("⑭ 基线折行 + 尾随逗号、结果版单行去掉逗号 ⇒ 排版减除放行（ISSUE #3208）", ({ repo }) => {
+    /* 现场形状（#3204 的 GA 读数）：结果版与 `4ac1816e3` 那一版逐字节相同，
+     * 基线（`e214ea393`）是 `3068e068d` 全库格式化留下的 80 列折行 + 尾随逗号。
+     * #2999 只剥空白 —— `toBe(\n  "文生图",\n)` 剥完是 `toBe("文生图",)`，与结果版的
+     * `toBe("文生图")` 不等，于是这一格被误判成整份退回、推送被 pre-push 挡下。
+     * 修后两侧归一到同一个串 ⇒ 放行，且减除读数要点名。 */
+    repo.write("src/g.ts", 'export const g = toBe("文生图");\n');
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "chore: 单行 v1（结果版将与它逐字节相同）");
+
+    repo.write("src/g.ts", 'export const g = toBe(\n  "文生图",\n);\n');
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "style: 80 列折行 + 尾随逗号");
+    const good = out(repo.dir, "rev-parse", "HEAD");
+
+    repo.write("src/g.ts", 'export const g = toBe("文生图");\n');
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "style: 100 列改回单行（oxfmt）");
+    const relaid = out(repo.dir, "rev-parse", "HEAD");
+
+    const { code, output } = repo.run([relaid, "--baseline", good]);
+    expect(code, `output=${output}`).toBe(0);
+    expect(output).toContain("只差空白/断行/尾随逗号");
+    expect(output).toContain("src/g.ts");
+  });
+
+  test("⑮ 尾随逗号归一只放行排版：少实参 / 少一行逻辑 / 改字面量 仍照拦（ISSUE #3208 的另一半）", ({
+    repo,
+  }) => {
+    /* 反向用例：结果版**确实**比基线少内容时，归一后的串必须仍不等。
+     * 三份各钉一种真丢失 —— ① 少一个实参、② 少一行逻辑、③ 改一个字面量；
+     * 探针条件与 ⑭ 同形（结果版逐字节等于某一版更早的 v1），所以走的正是
+     * 「命中 → 进减除」这条路，减除不生效才会照拦。 */
+    repo.write("src/m.ts", "export const m = f(1, 2);\n");
+    repo.write("src/n.ts", "export const n = 1;\n");
+    repo.write("src/s.ts", 'export const s = "A";\n');
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "chore: v1（三份将被退回的旧版）");
+
+    repo.write("src/m.ts", "export const m = f(1, 2, 3);\n");
+    repo.write("src/n.ts", "export const n = 1;\nexport const extra = 2;\n");
+    repo.write("src/s.ts", 'export const s = "B";\n');
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "feat: 主干前移（多实参 / 多一行 / 改字面量）");
+    const good = out(repo.dir, "rev-parse", "HEAD");
+
+    repo.write("src/m.ts", "export const m = f(1, 2);\n");
+    repo.write("src/n.ts", "export const n = 1;\n");
+    repo.write("src/s.ts", 'export const s = "A";\n');
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "fix: 三份一起退回成 v1");
+    const bad = out(repo.dir, "rev-parse", "HEAD");
+
+    const { code, output } = repo.run([bad, "--baseline", good]);
+    expect(code, `output=${output}`).toBe(1);
+    expect(output).toContain("src/m.ts");
+    expect(output).toContain("src/n.ts");
+    expect(output).toContain("src/s.ts");
+    expect(output).not.toContain("只差空白/断行");
   });
 });
