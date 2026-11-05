@@ -79,7 +79,7 @@ describe("useFlashState", () => {
     error.mockRestore();
   });
 
-  it("reset 立即复位，不等定时器", async () => {
+  it("reset 立即复位，不等定时器", () => {
     const { result } = renderHook(() => useFlashState(1000));
     act(() => {
       result.current.flash();

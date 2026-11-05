@@ -403,7 +403,7 @@ export function useWorkflowDetailLoader({
 
   /* 退出一层子图：回退子图栈并重拉对应层级。回退逻辑在 updater 之外做，
    *  避免 StrictMode 双调用 updater 时重复发请求。 */
-  const onExitSubgraph = useCallback(async () => {
+  const onExitSubgraph = useCallback(() => {
     setSubgraphLoading(true);
     const current = stackRef.current;
     if (current.length === 0) {

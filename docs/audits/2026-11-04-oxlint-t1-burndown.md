@@ -11,7 +11,7 @@
 |---|---|---|---|---|
 | B1 | `eslint/no-use-before-define（functions:false）` | 75 | 48 | 已清（75 处/48 份） |
 | B2 | `no-await-in-loop` | 304 | 123 | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
-| B3 | `typescript/require-await` | 754 | 188 | 清账中（子批1：47 份 / 104 处已清） |
+| B3 | `typescript/require-await` | 754 | 188 | 清账中（子批1+2：94 份 / 232 处已清） |
 | B4 | `eslint/prefer-named-capture-group` | 1094 | 332 | 挂账中 |
 | B5 | `typescript/no-unsafe-type-assertion` | 1496 | 608 | 挂账中 |
 
@@ -236,7 +236,7 @@
 | `src/app/api/dev/last-exit/route.ts` | 1 | 已清 |
 | `src/app/api/dev/server-id/route.ts` | 1 | 已清 |
 | `src/app/api/film/bgm/route.test.ts` | 2 | 已清 |
-| `src/app/api/generated/[...path]/route.test.ts` | 21 | 挂账 |
+| `src/app/api/generated/[...path]/route.test.ts` | 21 | 已清 |
 | `src/app/api/health/route.test.ts` | 1 | 已清 |
 | `src/app/api/helper/install/route.ts` | 1 | 已清 |
 | `src/app/api/helper/status/route.ts` | 1 | 已清 |
@@ -262,52 +262,52 @@
 | `src/components/studio/logs/LogPanel.test.tsx` | 5 | 已清 |
 | `src/components/studio/logs/RuntimeLogBox.test.tsx` | 1 | 已清 |
 | `src/components/studio/project-canvas/hooks/use-cancel-task.test.ts` | 1 | 已清 |
-| `src/components/studio/project-canvas/hooks/use-open-server-project.test.ts` | 1 | 挂账 |
-| `src/components/studio/project-canvas/MaterialLibraryPanel.test.tsx` | 1 | 挂账 |
-| `src/components/studio/ProjectOutputs.test.tsx` | 1 | 挂账 |
-| `src/components/studio/queue/hooks/use-queue-monitor.ts` | 2 | 挂账 |
-| `src/components/studio/ShellTabs.test.tsx` | 2 | 挂账 |
-| `src/components/studio/VideoQueueModal.test.tsx` | 1 | 挂账 |
-| `src/components/studio/WindowTitleBar.test.tsx` | 1 | 挂账 |
-| `src/components/studio/workflow-editor/FitOnOpen.test.tsx` | 4 | 挂账 |
-| `src/components/studio/workflow-editor/hooks/use-workflow-detail-loader.ts` | 1 | 挂账 |
-| `src/components/studio/workflow-editor/WorkflowEditorTopbar.test.tsx` | 1 | 挂账 |
-| `src/components/studio/workflow-form/DynamicWorkflowForm/DynamicWorkflowForm.image-upload.test.tsx` | 1 | 挂账 |
-| `src/components/studio/workflow-form/DynamicWorkflowForm/hooks/use-dynamic-workflow-form.test.ts` | 1 | 挂账 |
-| `src/components/studio/workflow-library/CustomNodesSettings/hooks/use-custom-nodes-settings.test.ts` | 5 | 挂账 |
-| `src/components/studio/workflow-library/CustomNodesSettings/NodesTab.test.tsx` | 3 | 挂账 |
-| `src/components/studio/workflow-library/hooks/use-workflow-library.test.ts` | 3 | 挂账 |
-| `src/components/studio/workflow-library/sections/EncapsulationTestForm.test.tsx` | 1 | 挂账 |
-| `src/components/studio/workflow-library/WorkflowLibraryLayout.test.tsx` | 4 | 挂账 |
-| `src/components/studio/WorkflowImportPanel.test.tsx` | 1 | 挂账 |
-| `src/components/studio/WorkflowIOPreviewPanel.test.tsx` | 3 | 挂账 |
-| `src/components/studio/works/hooks/use-works-gallery.ts` | 1 | 挂账 |
-| `src/components/studio/WorksGallery.test.tsx` | 1 | 挂账 |
-| `src/components/ui/select.test.tsx` | 1 | 挂账 |
-| `src/components/ui/use-busy-action.test.ts` | 2 | 挂账 |
-| `src/components/ui/use-external-action.test.ts` | 6 | 挂账 |
-| `src/components/ui/use-flash-state.test.ts` | 1 | 挂账 |
-| `src/components/ui/use-item-action.test.ts` | 1 | 挂账 |
-| `src/components/ui/use-overlay-boundary.test.tsx` | 1 | 挂账 |
-| `src/components/workshop/CharacterDesigner.extract.test.tsx` | 1 | 挂账 |
-| `src/components/workshop/hooks/use-character-portrait.test.ts` | 4 | 挂账 |
-| `src/components/workshop/hooks/use-character-review.test.ts` | 1 | 挂账 |
-| `src/components/workshop/hooks/use-workshop-pipeline-recovery.test.ts` | 6 | 挂账 |
-| `src/components/workshop/hooks/UseWorkshopPipelinePersistence.test.tsx` | 1 | 挂账 |
-| `src/components/workshop/ShotStudio.test.tsx` | 1 | 挂账 |
-| `src/components/workshop/VideoStudio.test.tsx` | 1 | 挂账 |
-| `src/config/custom-nodes.test.ts` | 5 | 挂账 |
-| `src/lib/agent/executor.test.ts` | 1 | 挂账 |
-| `src/lib/agent/executor.ts` | 4 | 挂账 |
-| `src/lib/app-settings/app-settings.server.ts` | 1 | 挂账 |
-| `src/lib/async-action.test.ts` | 13 | 挂账 |
-| `src/lib/async-pool.test.ts` | 4 | 挂账 |
-| `src/lib/comfy/comfy-embed.test.ts` | 5 | 挂账 |
-| `src/lib/comfy/comfy-queue-store.test.ts` | 2 | 挂账 |
-| `src/lib/comfy/comfy-readiness-client.test.ts` | 1 | 挂账 |
-| `src/lib/comfy/comfy-state-client.test.ts` | 2 | 挂账 |
-| `src/lib/comfy/comfy-stats-store.test.ts` | 1 | 挂账 |
-| `src/lib/comfyui/client.test.ts` | 2 | 挂账 |
+| `src/components/studio/project-canvas/hooks/use-open-server-project.test.ts` | 1 | 已清 |
+| `src/components/studio/project-canvas/MaterialLibraryPanel.test.tsx` | 1 | 已清 |
+| `src/components/studio/ProjectOutputs.test.tsx` | 1 | 已清 |
+| `src/components/studio/queue/hooks/use-queue-monitor.ts` | 2 | 已清 |
+| `src/components/studio/ShellTabs.test.tsx` | 2 | 已清 |
+| `src/components/studio/VideoQueueModal.test.tsx` | 1 | 已清 |
+| `src/components/studio/WindowTitleBar.test.tsx` | 1 | 已清 |
+| `src/components/studio/workflow-editor/FitOnOpen.test.tsx` | 4 | 已清 |
+| `src/components/studio/workflow-editor/hooks/use-workflow-detail-loader.ts` | 1 | 已清 |
+| `src/components/studio/workflow-editor/WorkflowEditorTopbar.test.tsx` | 1 | 已清 |
+| `src/components/studio/workflow-form/DynamicWorkflowForm/DynamicWorkflowForm.image-upload.test.tsx` | 1 | 已清 |
+| `src/components/studio/workflow-form/DynamicWorkflowForm/hooks/use-dynamic-workflow-form.test.ts` | 1 | 已清 |
+| `src/components/studio/workflow-library/CustomNodesSettings/hooks/use-custom-nodes-settings.test.ts` | 5 | 已清 |
+| `src/components/studio/workflow-library/CustomNodesSettings/NodesTab.test.tsx` | 3 | 已清 |
+| `src/components/studio/workflow-library/hooks/use-workflow-library.test.ts` | 3 | 已清 |
+| `src/components/studio/workflow-library/sections/EncapsulationTestForm.test.tsx` | 1 | 已清 |
+| `src/components/studio/workflow-library/WorkflowLibraryLayout.test.tsx` | 4 | 已清 |
+| `src/components/studio/WorkflowImportPanel.test.tsx` | 1 | 已清 |
+| `src/components/studio/WorkflowIOPreviewPanel.test.tsx` | 3 | 已清 |
+| `src/components/studio/works/hooks/use-works-gallery.ts` | 1 | 已清 |
+| `src/components/studio/WorksGallery.test.tsx` | 1 | 已清 |
+| `src/components/ui/select.test.tsx` | 1 | 已清 |
+| `src/components/ui/use-busy-action.test.ts` | 2 | 已清 |
+| `src/components/ui/use-external-action.test.ts` | 6 | 已清 |
+| `src/components/ui/use-flash-state.test.ts` | 1 | 已清 |
+| `src/components/ui/use-item-action.test.ts` | 1 | 已清 |
+| `src/components/ui/use-overlay-boundary.test.tsx` | 1 | 已清 |
+| `src/components/workshop/CharacterDesigner.extract.test.tsx` | 1 | 已清 |
+| `src/components/workshop/hooks/use-character-portrait.test.ts` | 4 | 已清 |
+| `src/components/workshop/hooks/use-character-review.test.ts` | 1 | 已清 |
+| `src/components/workshop/hooks/use-workshop-pipeline-recovery.test.ts` | 6 | 已清 |
+| `src/components/workshop/hooks/UseWorkshopPipelinePersistence.test.tsx` | 1 | 已清 |
+| `src/components/workshop/ShotStudio.test.tsx` | 1 | 已清 |
+| `src/components/workshop/VideoStudio.test.tsx` | 1 | 已清 |
+| `src/config/custom-nodes.test.ts` | 5 | 已清 |
+| `src/lib/agent/executor.test.ts` | 1 | 已清 |
+| `src/lib/agent/executor.ts` | 4 | 已清 |
+| `src/lib/app-settings/app-settings.server.ts` | 1 | 已清 |
+| `src/lib/async-action.test.ts` | 13 | 已清 |
+| `src/lib/async-pool.test.ts` | 4 | 已清 |
+| `src/lib/comfy/comfy-embed.test.ts` | 5 | 已清 |
+| `src/lib/comfy/comfy-queue-store.test.ts` | 2 | 已清 |
+| `src/lib/comfy/comfy-readiness-client.test.ts` | 1 | 已清 |
+| `src/lib/comfy/comfy-state-client.test.ts` | 2 | 已清 |
+| `src/lib/comfy/comfy-stats-store.test.ts` | 1 | 已清 |
+| `src/lib/comfyui/client.test.ts` | 2 | 已清 |
 | `src/lib/comfyui/desktop-instance.test.ts` | 2 | 挂账 |
 | `src/lib/comfyui/desktop-storage-paths.server.test.ts` | 12 | 挂账 |
 | `src/lib/comfyui/enqueue.test.ts` | 10 | 挂账 |

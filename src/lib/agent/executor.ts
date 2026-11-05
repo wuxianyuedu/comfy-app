@@ -156,18 +156,19 @@ export function resolveAgentTool(
         toolName: name,
         summary: "查看项目当前状态",
         argSummary,
-        execute: async () => ({
-          ok: true,
-          summary: `项目「${draft.meta.title}」：剧本${draft.scriptMarkdown ? "已就绪" : "待生成"}，角色卡 ${draft.characters.length} 个，镜头 ${draft.shots.length} 个（图 ${draft.shots.filter((s) => Boolean(s.imageUrl)).length} / 视频 ${draft.shots.filter((s) => Boolean(s.clipUrl)).length}）。`,
-          detail: JSON.stringify({
-            meta: draft.meta,
-            hasScript: !!draft.scriptMarkdown,
-            characterCount: draft.characters.length,
-            shotCount: draft.shots.length,
-            imageDone: draft.shots.filter((s) => Boolean(s.imageUrl)).length,
-            clipDone: draft.shots.filter((s) => Boolean(s.clipUrl)).length,
+        execute: () =>
+          Promise.resolve({
+            ok: true,
+            summary: `项目「${draft.meta.title}」：剧本${draft.scriptMarkdown ? "已就绪" : "待生成"}，角色卡 ${draft.characters.length} 个，镜头 ${draft.shots.length} 个（图 ${draft.shots.filter((s) => Boolean(s.imageUrl)).length} / 视频 ${draft.shots.filter((s) => Boolean(s.clipUrl)).length}）。`,
+            detail: JSON.stringify({
+              meta: draft.meta,
+              hasScript: !!draft.scriptMarkdown,
+              characterCount: draft.characters.length,
+              shotCount: draft.shots.length,
+              imageDone: draft.shots.filter((s) => Boolean(s.imageUrl)).length,
+              clipDone: draft.shots.filter((s) => Boolean(s.clipUrl)).length,
+            }),
           }),
-        }),
       };
     }
 
@@ -195,9 +196,9 @@ export function resolveAgentTool(
         toolName: name,
         summary: `更新项目元信息：${argSummary}`,
         argSummary,
-        execute: async () => {
+        execute: () => {
           hd.setMeta(patch);
-          return { ok: true, summary: `已更新项目信息（${keys}）` };
+          return Promise.resolve({ ok: true, summary: `已更新项目信息（${keys}）` });
         },
       };
     }
@@ -435,11 +436,12 @@ ${chars.map((c) => c.name).join("、") || "(无)"}`,
         toolName: name,
         summary: "生成镜头图片",
         argSummary,
-        execute: async () => ({
-          ok: false,
-          summary: "生图需在「镜头生图」页手动触发",
-          detail: "Agent MVP 暂不直接触发 ComfyUI 生图，请使用页面上的生图按钮",
-        }),
+        execute: () =>
+          Promise.resolve({
+            ok: false,
+            summary: "生图需在「镜头生图」页手动触发",
+            detail: "Agent MVP 暂不直接触发 ComfyUI 生图，请使用页面上的生图按钮",
+          }),
       };
     }
 
@@ -466,10 +468,11 @@ ${chars.map((c) => c.name).join("、") || "(无)"}`,
         toolName: name,
         summary: `未知工具：${name}`,
         argSummary,
-        execute: async () => ({
-          ok: false,
-          summary: `未知工具「${name}」`,
-        }),
+        execute: () =>
+          Promise.resolve({
+            ok: false,
+            summary: `未知工具「${name}」`,
+          }),
       };
     }
   }

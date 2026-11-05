@@ -138,7 +138,7 @@ describe("EncapsulationTestForm", () => {
   it("图片口选完立刻本地预览（上传失败 / ComfyUI 未启动也看得见所选图）", async () => {
     renderForm(I2V_ENTRIES, {
       scene: "video",
-      uploadImage: vi.fn(async () => {
+      uploadImage: vi.fn(() => {
         throw new Error("ComfyUI 未启动");
       }),
     });

@@ -19,18 +19,22 @@ const SCRIPT = "# 我的剧本\n场景一 小满出门";
 beforeEach(() => {
   localStorage.clear();
   vi.restoreAllMocks();
-  globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+  globalThis.fetch = vi.fn((input: RequestInfo | URL) => {
     const url = requestUrl(input);
     if (url.includes("/api/workshop/draft")) {
-      return new Response(JSON.stringify({ drafts: [], exists: false }), {
+      return Promise.resolve(
+        new Response(JSON.stringify({ drafts: [], exists: false }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify({ skills: [], models: [] }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
-      });
-    }
-    return new Response(JSON.stringify({ skills: [], models: [] }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+      }),
+    );
   });
 });
 

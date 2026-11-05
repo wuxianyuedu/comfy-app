@@ -45,7 +45,7 @@ function controller(over: Partial<WorksGalleryController> = {}): WorksGalleryCon
     requestDelete: () => undefined,
     pendingDelete: null,
     cancelDelete: () => undefined,
-    confirmDelete: async () => null,
+    confirmDelete: () => Promise.resolve(null),
     deleting: false,
     refresh: () => undefined,
     ...over,

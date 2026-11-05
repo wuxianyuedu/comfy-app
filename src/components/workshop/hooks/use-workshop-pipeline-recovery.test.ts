@@ -38,8 +38,8 @@ vi.mock("~/lib/workshop/generation-client", async (importOriginal) => {
     startLocalGenerate: vi.fn(),
     cancelLocalTask: vi.fn(),
     buildLibraryWorkflowInput: vi.fn(),
-    fetchApiChannels: vi.fn(async () => null),
-    fetchWorkshopWorkflows: vi.fn(async () => []),
+    fetchApiChannels: vi.fn(() => Promise.resolve(null)),
+    fetchWorkshopWorkflows: vi.fn(() => Promise.resolve([])),
   };
 });
 
@@ -95,12 +95,13 @@ beforeEach(() => {
   watchTaskMock.mockReset();
   fetchTaskSnapshotMock.mockReset();
   vi.mocked(cancelLocalTask).mockReset();
-  globalThis.fetch = vi.fn(
-    async () =>
+  globalThis.fetch = vi.fn(() =>
+    Promise.resolve(
       new Response(JSON.stringify({ skills: [], models: [] }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       }),
+    ),
   );
 });
 
@@ -200,13 +201,13 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
     const [calledTaskId, handler] = watchTaskMock.mock.calls[0]!;
     expect(calledTaskId).toBe("task-live");
     expect(typeof handler.onSettled).toBe("function");
-    await act(async () => {
+    act(() => {
       settle({ ok: true });
     });
     expect(result.current.shots[0]!.status).toBe("done");
   });
 
-  it("恢复是异步的：期间用户重新发起（taskId 已换），旧恢复不覆盖新任务的状态", async () => {
+  it("恢复是异步的：期间用户重新发起（taskId 已换），旧恢复不覆盖新任务的状态", () => {
     const project = createProject();
     seedDraft(project.id, [makeShot({ status: "running", taskId: "task-old" })]);
     let resolveSnapshot!: (v: unknown) => void;
@@ -224,7 +225,7 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
       );
     });
     /* 然后恢复结果才到达 —— 归属核对（taskId 已换）必须拦下这次回写。 */
-    await act(async () => {
+    act(() => {
       resolveSnapshot({
         status: "SUCCEEDED",
         outputs: [{ url: "/api/generated/old.png", kind: "image" }],
@@ -299,7 +300,7 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
     expect(result.current.shots[0]!.clipStatus).toBe("done");
   });
 
-  it("刷新恢复（视频）：恢复期间重新发起片段（clipTaskId 已换），旧恢复不覆盖", async () => {
+  it("刷新恢复（视频）：恢复期间重新发起片段（clipTaskId 已换），旧恢复不覆盖", () => {
     const project = createProject();
     seedDraft(project.id, [makeShot({ clipStatus: "running", clipTaskId: "clip-old" })]);
     let resolveSnapshot!: (v: unknown) => void;
@@ -315,7 +316,7 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
         prev.map((item) => (item.id === "shot-1" ? { ...item, clipTaskId: "clip-new" } : item)),
       );
     });
-    await act(async () => {
+    act(() => {
       resolveSnapshot({
         status: "SUCCEEDED",
         outputs: [{ url: "/api/generated/old.mp4", kind: "video" }],

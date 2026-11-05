@@ -7,7 +7,7 @@ import type { WorkflowIOMap } from "../../workflow-io";
 
 /* 模拟 ComfyUI 未启动：上传直接抛错。用于验证「选完图先出本地预览、不依赖上传成功」。 */
 vi.mock("~/lib/project-canvas/canvas-api", () => ({
-  uploadImageFile: vi.fn(async () => {
+  uploadImageFile: vi.fn(() => {
     throw new Error("ComfyUI 未启动");
   }),
 }));
