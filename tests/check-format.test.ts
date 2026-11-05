@@ -48,10 +48,10 @@ const CLEAN = "export const PROBE = { a: 1, b: 2 };\n";
 /* 另一种干净形态（`--staged` 判面收窄那条用例要暂存一份**干净的**改动）。 */
 const CLEAN2 = "export const PROBE = { b: 2, a: 1 };\n";
 
-  /**
-   * 「没有平台旗标」那一档的输入：**声明**不设它，而不是指望跑测试那一跳恰好没设。平台「受影响用例」运行器
-   * 给每个 stage 进程都注入 `CNB_PULL_REQUEST_TARGET_SHA`（ISSUE #2795）：继承来的基线在临时夹具仓库里不存在
-   * ⇒ 判据 fail-closed 退 2，于是「本机绿、平台恒红」，而报错一个字都不指向「继承」这件事。 */
+/**
+ * 「没有平台旗标」那一档的输入：**声明**不设它，而不是指望跑测试那一跳恰好没设。平台「受影响用例」运行器
+ * 给每个 stage 进程都注入 `CNB_PULL_REQUEST_TARGET_SHA`（ISSUE #2795）：继承来的基线在临时夹具仓库里不存在
+ * ⇒ 判据 fail-closed 退 2，于是「本机绿、平台恒红」，而报错一个字都不指向「继承」这件事。 */
 const NO_PLATFORM_TARGET = { env: { CNB_PULL_REQUEST_TARGET_SHA: undefined } };
 
 /** 读工作区 HEAD 的 sha（`--changed` 用例拿它当 `CNB_PULL_REQUEST_TARGET_SHA`）。 */
@@ -216,7 +216,9 @@ describe("oxfmt 格式判据 --staged 输入面跳过（ISSUE #1747）", () => {
     expect(r.output).not.toContain("运行 oxfmt");
   });
 
-  test("暂存 scripts/*.cjs → 改动面判它自己（不再被 IGNORE_GLOBS 豁免，ISSUE #2979）", ({ repo }) => {
+  test("暂存 scripts/*.cjs → 改动面判它自己（不再被 IGNORE_GLOBS 豁免，ISSUE #2979）", ({
+    repo,
+  }) => {
     /* #2979 的钉子：`IGNORE_GLOBS` 收着 `scripts/**`，改动面两档从前对它整类豁免
      * ——「本仓自己的脚本从来没被格式判据看过」。收窄之后改动面 = 改动面 ∩ GLOBS
      * （GLOBS 含 cjs），暂存的脏脚本要被点名并阻断；全量档照旧豁免它（存量迁移
@@ -408,9 +410,11 @@ describe("oxfmt 格式判据 --changed 改动面档", () => {
     repo.git("add", "-A");
     repo.commit("clean-baseline");
     const base = gitSha(repo.dir);
-    repo.write("scripts/probe.cjs", "module.exports = {a:1,   b:2}\n");
+    /* `scripts/**` 自 ISSUE #2979 起**在**改动面里（见上一条），所以「面外」要用
+     * `GLOBS` 本身不认的形状 —— `docs/*.md`。 */
+    repo.write("docs/probe.md", "随手写的说明\n");
     repo.git("add", "-A");
-    repo.commit("scripts-only");
+    repo.commit("docs-only");
     const r = repo.run(["--changed"], {
       env: { CNB_PULL_REQUEST_TARGET_SHA: base },
     });
@@ -419,13 +423,15 @@ describe("oxfmt 格式判据 --changed 改动面档", () => {
     expect(r.output).not.toContain("运行 oxfmt");
   });
 
-  test("改动面里混着白名单文件 → 只判扫描面内的那份", ({ repo }) => {
+  test("改动面里混着扫描面外的文件 → 只判扫描面内的那份", ({ repo }) => {
     repo.write("src/lib/keep.ts", CLEAN);
     repo.git("add", "-A");
     repo.commit("clean-baseline");
     const base = gitSha(repo.dir);
     repo.write("src/lib/fresh.ts", CLEAN);
-    repo.write("scripts/fresh.mjs", DIRTY);
+    /* 面外的脏文件不进 oxfmt 的目标集（`docs/**` 不在 GLOBS 里）；
+     * 面内那份是干净的 ⇒ 结论仍是 0。 */
+    repo.write("docs/fresh.md", "随手写的说明\n");
     repo.git("add", "-A");
     repo.commit("mixed");
     const r = repo.run(["--changed"], {
