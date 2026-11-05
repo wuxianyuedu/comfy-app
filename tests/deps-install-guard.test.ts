@@ -16,18 +16,31 @@ vi.mock("../scripts/launcher-core/port-reap.mjs", () => ({
   runningAppInstances: mocks.runningAppInstances,
 }));
 
-/** 跑一次 CLI 顶层，收走这一轮的退出码与全部输出。 */
+/** 跑一次 CLI 顶层，收走这一轮的退出码与全部输出。
+ *
+ *  `process.exit` 用 `Reflect.set` 顶住：既不能真结束测试进程，也不能抛哨兵
+ *  （CLI 把成功路径也包在 try 里，抛了会被它自己的 catch 念成「没给出结论」）。
+ *  这样零类型断言 —— 全库 lint 的 `no-unsafe-type-assertion` 不放过 `as never`。
+ */
 async function runGuard() {
-  const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+  const codes: Array<number | undefined> = [];
   const lines: string[] = [];
+  const originalExit = process.exit.bind(process);
+  Reflect.set(process, "exit", (code?: number) => {
+    codes.push(code);
+  });
   vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
     lines.push(args.map(String).join(" "));
   });
   vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
     lines.push(args.map(String).join(" "));
   });
-  await import("../scripts/deps-install-guard.mjs");
-  return { code: exit.mock.calls[0]?.[0] ?? null, text: lines.join("\n") };
+  try {
+    await import("../scripts/deps-install-guard.mjs");
+  } finally {
+    Reflect.set(process, "exit", originalExit);
+  }
+  return { code: codes[0] ?? null, text: lines.join("\n") };
 }
 
 beforeEach(() => {
