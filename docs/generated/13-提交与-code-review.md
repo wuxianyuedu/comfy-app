@@ -11324,6 +11324,39 @@ pnpm ship --stage-log 受影响用例                                # 不给 sn
 一条 build 命令 / `--dry-run` 只打印那三条读命令）与 `tests/ci-build-readout.test.ts` 的
 `findStageMatches` / `resolveBuildSn` 两组（后者含「下一动作那行念的是调用方那枚旗标」）。
 
+**GA 失败日志回读：`--gh-logs <run-id|pr号>`（本地直接读红）**
+
+`--diagnose` 读的是 CNB build 的失败格；GA（GitHub Actions）那一跑的失败 job / step / 注解在
+GitHub 上。过去要人工登录点开 run —— 本地 CLI 没有入口，CI 判红后只能看到「CNB 红」。这一格把
+GA 日志回读收进 ship（只读，与 `--diagnose` / `--stage-log` 同一条纪律；§12.20）：
+
+```bash
+pnpm ship --gh-logs 3195                         # PR 号：从 repository_dispatch 触发表里挑该 PR 最近的红 run
+pnpm ship --gh-logs run:4242                     # run id：直取
+pnpm ship --gh-logs https://github.com/.../actions/runs/4242
+```
+
+- **自动触发**：ship 轮询读到 build 红（含被它折算的 `blocked` 下游失败项）时，自动按 PR 号回读一次；
+  `--gh-logs` 是「不必等判红」的显式入口。裸数字按位数判（≥6 位当 run id，否则当 PR 号），
+  `run:` / `pr:` 可消歧。
+- 台面直接念出：run id + URL、失败 job 名、失败 step 名、该 step 的**全部** `##[error]` 注解、
+  失败 step 的原始日志窗口（head 20 + tail 120，带 `[head]` / `[tail]` 标记并写明省略行数）、
+  以及**一行结论**（环境侧 / 内容判据 / 混合 / 未判定 —— 按失败 step / job 名归类，不发明第二套判定）。
+- 全量日志落 `<系统临时目录>/comfy-ship-gh-logs/run-<id>.log`：**绝对路径**直接打印，不进仓库；
+  每次回读先清空上一次，屏幕上给清理提示。单 job 超过 64 MB 才按 `ci-github-verdict-logs.mjs`
+  的既有上限截断。
+- 令牌只从进程环境取：`GITHUB_MIRROR_TOKEN`（优先）/ `GITHUB_TOKEN`，权限 `actions: read`，
+  不写任何文件。**没有令牌只念一行**「未设置令牌 ⇒ 跳过 GH 日志回读」，一次网络都不发，
+  不判红、不改三态、不改退码。
+- 取不到日志 ≠ 判红：401/403、404、网络不通、run 不在、job 列表为空，都只多一行缺因
+  （带 HTTP / 网络原文），退码仍是 `0`。唯一退 `2` 的是**输入认不出**（用法错误）。
+- 脱敏在打印与落盘之前：精确令牌值、`ghp_…` / `github_pat_…`，以及日志里的 `KEY=value`
+  与 `{"key":"value"}` 的 env/secret 形状，一律 `<redacted>`（硬规则 17）。
+
+回归在 `tests/ship-gh-logs.test.ts`：判红（六件读数 + 绝对路径 + 文件内脱敏）、无令牌（一行 /
+fetch 零调用 / 退 0）、超长（head/tail 标记与省略行数自洽、单行超长）、取数失败（网络 / 401 /
+只多一行）、`run:` / `pr:` 与两种命令行写法、四条归因结论。
+
 #### 13.10.14 等 CI 那一格不要空等：那一轮改动的**回顾**（ISSUE #2454）
 
 提交推上去之后，整跑要跑几分钟到十几分钟（本仓实测 517s）。那段时间**不是等待，是最后
