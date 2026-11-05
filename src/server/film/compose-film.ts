@@ -198,10 +198,12 @@ export async function composeFilm(id: string) {
         const srtText = (
           shot.heading !== null && shot.heading !== "" ? shot.heading : shot.prompt
         ).slice(0, 80);
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await fs.writeFile(srtPath, buildSrtBody({ text: srtText, dur }), "utf8");
       }
 
       const tryWithSub = film.subtitleOn;
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       let res = await runFFmpeg(
         buildNormalizeArgs({
           clip,
@@ -213,7 +215,9 @@ export async function composeFilm(id: string) {
         tmpDir,
       );
       if (res.code !== 0 && tryWithSub) {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await appendFilmLog(id, "warn", `镜头 ${i + 1} 字幕烧录失败，重试（无字幕）`);
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         res = await runFFmpeg(
           buildNormalizeArgs({ clip, vf, dur, out: segOut, srtPath: null }),
           tmpDir,
@@ -224,6 +228,7 @@ export async function composeFilm(id: string) {
           `镜头 ${i + 1} 归一化失败：${clampText(res.stderr, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
         );
       }
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await appendFilmLog(id, "info", `镜头 ${i + 1}/${shots.length} 已就绪`);
     }
 

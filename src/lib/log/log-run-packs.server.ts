@@ -159,11 +159,13 @@ export async function scanRunPacks(options: ScanRunPacksOptions): Promise<{
   let total = 0;
   for (const name of sortPackNames(names)) {
     const dir = path.join(/*turbopackIgnore: true*/ runsDir, name);
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const files = await listPackSourceFiles(dir, sourceDir, source);
     if (files.length === 0) {
       continue;
     }
     total += files.length;
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const meta = await readPackMeta(dir, runJsonName);
     packs.push({
       name,

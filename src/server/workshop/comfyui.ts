@@ -138,6 +138,7 @@ export async function resolveComfyBase(): Promise<string> {
   }
   for (let offset = 0; offset <= 5; offset++) {
     const base = `http://${host}:${port + offset}`;
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     if ((await probeBaseOnce(base, 800)) !== null) {
       resolvedBase = base;
       return base;
@@ -384,6 +385,7 @@ export async function runComfyWorkflow(
   const deadline = Date.now() + 10 * 60_000;
   let history: Record<string, unknown> = {};
   while (Date.now() < deadline) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     history = await getComfyHistory(promptId).catch(() => ({}));
     /* SAFETY: 类型断言已复核 */
     const entry = history[promptId] as
@@ -394,6 +396,7 @@ export async function runComfyWorkflow(
     if (done || failed) {
       break;
     }
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await sleep(1500);
   }
 
@@ -411,9 +414,11 @@ export async function runComfyWorkflow(
     };
     const items = [...(rec.images ?? []), ...(rec.gifs ?? [])];
     for (const item of items) {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const buf = await getComfyView(item.filename, item.subfolder, item.type);
       const outName = `comfy-${promptId}-${files.length}-${item.filename}`;
       const outPath = path.join(outDir, safeFileNameSegment(outName));
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await fs.writeFile(outPath, buf);
       files.push(`file://${outPath}`);
     }

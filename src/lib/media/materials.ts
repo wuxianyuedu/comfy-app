@@ -168,6 +168,7 @@ export async function visibleMaterialScopes(
       if (scope === SHARED_SCOPE) {
         continue;
       } // 末尾统一补，避免重复
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       if ((await materialScopeOwnership(userId, scope)) !== "foreign") {
         out.push(scope);
       }
@@ -228,6 +229,7 @@ export async function listFolderItems(scope: string, folder: string): Promise<Ar
       continue;
     } // 跳过 .DS_Store 之类
     try {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const st = await fs.stat(
         /*turbopackIgnore: true*/ path.join(/*turbopackIgnore: true*/ dir, name),
       );
@@ -280,6 +282,7 @@ export async function collectByFolder(
   }
   for (const scope of scopes) {
     for (const f of MATERIAL_FOLDERS) {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const items = await listFolderItems(scope, f.id);
       if (items.length) {
         getOrCreate(map, f.id, () => []).push(...items);

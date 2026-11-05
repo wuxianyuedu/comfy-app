@@ -410,14 +410,18 @@ export async function startFilm(id: string) {
 
   for (const shot of shots) {
     try {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const taskId = await generateVideoShot(film.userId, {
         prompt: shot.prompt,
         negative: shot.negative,
         params: shot.params,
       });
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await filmShotRepository.markQueued(shot.id, taskId);
     } catch (error) {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await filmShotRepository.markFailed(shot.id);
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await appendFilmLog(id, "error", errorText(error, `镜头 ${shot.order + 1} 提交失败`));
     }
   }
@@ -468,6 +472,7 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
     await appendFilmLog(id, "info", `进程重启后续跑监看（本轮预算 ${WATCH_BUDGET_MIN} 分钟）`);
   }
   for (let i = 0; i < WATCH_MAX_ITER; i++) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const film = await filmRepository.findById(id);
     if (!film || film.status === "CANCELLED" || film.status === "FAILED") {
       return;
@@ -476,13 +481,16 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
       // 已经走掉了（例如合成已开始）
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const shots = await filmShotRepository.listByFilm(id);
     /* 一行镜头都没有的 GENERATING 只可能是「`markGenerating` 之后、逐镜提交之前」
      * 崩在这里。这条状态在本刀之前不可达（监看只由 `startFilm` 起，那时 shots 必然
      * 非空），而 boot 续跑扫描会把它捡起来 —— 不判掉就是 `0/0` 的 NaN 进度，
      * 然后带着一条空时间线去合成。 */
     if (!shots.length) {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await filmRepository.markFailed(id, "没有可继续的镜头");
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await appendFilmLog(
         id,
         "error",
@@ -525,6 +533,7 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
       }
     }
     const progressById = new Map(
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       (await taskRepository.findExecutionProgressMany(taskIds)).map(
         /* SAFETY: 类型断言已复核 */
         (row) => [row.id, row] as const,
@@ -574,6 +583,7 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
        * 轮次写进去的是与库里一模一样的值。 */
       const nextProgress = task.progress;
       if (shot.status !== next || shot.progress !== nextProgress) {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await filmShotRepository.updateFromTask(shot.id, {
           status: next,
           progress: nextProgress,
@@ -592,18 +602,23 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
 
     const total = shots.length;
     const progress = Math.round(((done + failed) / total) * 100);
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await filmRepository.updateProgress(id, progress);
 
     if (pending === 0) {
       if (failed > 0 && done === 0) {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await filmRepository.markFailed(id, `${failed} 个镜头生成失败`);
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await appendFilmLog(id, "error", `影片生成失败：${failed} 个镜头失败`);
         return;
       }
       // 成功（或部分成功）→ 合成
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await composeFilm(id);
       return;
     }
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await sleep(WATCH_POLL_MS);
   }
   await filmRepository.markFailed(id, "生成超时");
@@ -647,7 +662,9 @@ export async function resumeStalledFilms(): Promise<{
      * 判成 FAILED 才把出口接回来（FAILED 是 `composeFilm` 允许重跑的状态），
      * 而不是开机时静默重跑 ffmpeg（用户没要求却开始占 CPU 写文件）。 */
     for (const film of await filmRepository.listByStatus(["COMPOSING"])) {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await filmRepository.markFailed(film.id, "合成中断（进程在合成期间退出）");
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await appendFilmLog(
         film.id,
         "error",
@@ -676,6 +693,7 @@ export async function cancelFilm(id: string) {
   const shots = await filmShotRepository.listActiveWithTask(id);
   for (const s of shots) {
     if (s.taskId !== null && s.taskId !== "") {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await cancelTask(s.taskId).catch(() => undefined);
     }
   }

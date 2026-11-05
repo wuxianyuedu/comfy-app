@@ -111,10 +111,11 @@ export default defineConfig({
     "import/resolver": { "eslint-import-resolver-oxc": {} },
     react: { version: REACT_VERSION },
   },
-  /* ── T1 语义规则批（2026-11-04，口径见下方 5 块挂账）────────────────────
+  /* ── T1 语义规则批（2026-11-04，口径见下方挂账块）────────────────────
    * 六条 T1 里开 5 条（`strict-void-return` 单独不开：981 处里 546 处是 TS 合法的
    * 「返回值函数传给 void 回调」形态，规则没有对应选项，属结构性噪声，见台账）。
-   * 存量按文件挂账在下面 5 个 override 块；这里只放「新代码必须遵守」的规则本体。
+   * `no-await-in-loop`（B2）已清完：逐行禁用 + 一行理由，判决面不再有该规则的文件级豁免。
+   * 其余存量按文件挂账在下面 4 个 override 块；这里只放「新代码必须遵守」的规则本体。
    * 依据与读数：`docs/audits/2026-11-04-oxlint-t1-burndown.md`（根目录探针，2026-11-04）。 */
   rules: {
     "no-await-in-loop": "error",
@@ -778,56 +779,6 @@ export default defineConfig({
         "tests/ci-log.test.ts",
       ],
       rules: { "no-control-regex": "off" },
-    },
-    {
-      /* `no-await-in-loop` 存量挂账（清账批次 `B2`）：122 份 / 303 处 —— 根目录
-       * --type-aware 探针实测（2026-11-04），不是估读。下面每行 = 一份文件 + 该文件存量处数
-       * （「存量 N 处 · 清账目标 B2 · 新代码不禁用」）；名单是逐字路径而不是 glob，
-       * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
-      files: [
-        "src/lib/llm/video-task-util.ts", // 存量 3 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/log/capture-streams.server.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/log/log-file-client.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/log/log-run-packs.server.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/media/materials.ts", // 存量 3 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/project-canvas/canvas-api.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/shell/open-in-browser.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/sqlite-busy-retry.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/sqlite-pragmas.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/workshop/generation-client.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/workshop/generation-log.server.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/workshop/media-source.server.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/lib/workshop/mode-contract.server.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/server/agent/review.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/server/agent/run-engine.ts", // 存量 18 处 · 清账目标 B2 · 新代码不禁用
-        "src/server/api/routers/llm.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/server/api/routers/series-generation.ts", // 存量 4 处 · 清账目标 B2 · 新代码不禁用
-        "src/server/api/routers/series.ts", // 存量 4 处 · 清账目标 B2 · 新代码不禁用
-        "src/server/api/routers/setting-backup.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/server/api/routers/skill.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/server/api/routers/task.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/server/api/routers/task.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/server/api/routers/workflow-list.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/server/film/compose-film.ts", // 存量 5 处 · 清账目标 B2 · 新代码不禁用
-        "src/server/film/orchestrator.ts", // 存量 18 处 · 清账目标 B2 · 新代码不禁用
-        "src/server/lib/request-body.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/server/workshop/comfyui.ts", // 存量 5 处 · 清账目标 B2 · 新代码不禁用
-        "src/server/workshop/final-compose.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "tests/a11y-axe-stories.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "tests/ci-github-verdict-read.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "tests/comfy-state-envelope-contract.test.ts", // 存量 3 处 · 清账目标 B2 · 新代码不禁用
-        "tests/db-migrate-noninteractive.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "tests/dev-launcher-runtime-heal.test.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "tests/e2e-run.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "tests/esm-cross-host-imports.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "tests/helpers/repo-drizzle-lock.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "tests/hook-affected-launch.test.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "tests/progress-heartbeat.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "tests/ship.test.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "tests/sqlite-pragma-sites.test.ts", // 存量 4 处 · 清账目标 B2 · 新代码不禁用
-        "tests/test-db-schema-drift.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-      ],
-      rules: { "no-await-in-loop": "off" },
     },
     {
       /* `typescript/require-await` 存量挂账（清账批次 `B3`）：188 份 / 754 处 —— 根目录

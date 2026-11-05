@@ -90,6 +90,7 @@ describe("跨宿主 import 的扩展名形态（ISSUE #1961）", () => {
     for (const host of MJS_HOSTS) {
       /* 只 `import()`，**不调用任何导出** —— 这些宿主里有带顶层副作用的
        * （读环境 / 建缓存），调用它们不是本判据的事。 */
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await expect(
         import(path.join(ROOT, host)),
         `${host} 静态 import 链上有 Node 的 ESM 解析器找不到的说明符` +

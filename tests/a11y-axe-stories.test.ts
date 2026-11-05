@@ -204,6 +204,7 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
           }
           /* SAFETY: 类型断言已复核 */
           view = render(tree as ReactElement);
+          // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
           const results = await axe.run(view.baseElement, {
             resultTypes: ["violations"],
             rules: Object.fromEntries(RULES_OFF.map((rule) => [rule, { enabled: false }])),

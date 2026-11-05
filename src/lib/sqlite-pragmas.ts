@@ -114,6 +114,7 @@ export async function applySqlitePragmas(
      * exhausted or the cause is not a lock, because "could not switch to WAL"
      * may be a read-only mount / full disk, and that must fail visibly.
      * Written in English: the NOTE at the top of this file says keep it ASCII. */
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await runWithSqliteBusyRetry(() => Promise.resolve(target.execute(pragma)), {
       policy: SQLITE_PRAGMA_BOOT,
     });

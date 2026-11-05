@@ -45,6 +45,7 @@ describe("readJsonRecord", () => {
 
   it("字符串 / 数字 / null 正文同样回 400", async () => {
     for (const raw of ['"x"', "42", "null"]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const result = await readJsonRecord(reqWith(raw));
       expect(isErrorResponse(result), raw).toBe(true);
     }

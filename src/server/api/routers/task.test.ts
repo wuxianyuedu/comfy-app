@@ -482,6 +482,7 @@ describe("task.delete（rateLimitedProcedure）", () => {
     );
     // 前 20 次：命中 NOT_FOUND 分支（同时消耗限流配额）
     for (let i = 0; i < 20; i++) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await expect(caller.delete({ id: "task-a" })).rejects.toMatchObject({
         code: "NOT_FOUND",
       });

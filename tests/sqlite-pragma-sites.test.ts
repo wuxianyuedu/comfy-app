@@ -204,6 +204,7 @@ describe("开机 PRAGMA 撞锁有界重试，当场量出来", () => {
     async () => {
       const rounds: Array<RaceRound> = [];
       for (let round = 0; round < RACE_CONTROL_ROUNDS; round++) {
+        // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
         const r = await racePragmaBoot("bare");
         rounds.push(r);
         /* 见一次抛就收工：常态下第一轮就够（约 3s），只有「今天一直没抛」那种轮次才会跑满。 */
@@ -283,6 +284,7 @@ async function bareLoop(
   pragmas: ReadonlyArray<string>,
 ): Promise<void> {
   for (const pragma of pragmas) {
+    // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
     await target.execute(pragma);
   }
 }
@@ -437,6 +439,7 @@ async function waitForArrivals(startFile: string, expectCount: number): Promise<
     if (arrived >= expectCount) {
       return arrived;
     }
+    // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
     await sleep(10);
   }
   return arrived;

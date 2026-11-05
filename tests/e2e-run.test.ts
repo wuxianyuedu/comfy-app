@@ -974,6 +974,7 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
         cwd: ROOT,
         browser: async () => verdict,
       });
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const result = await collectors.browser();
       expect(result.abort).toBeUndefined();
       expect(result.say).toContain("浏览器预检");

@@ -240,6 +240,7 @@ describe("resolveMediaBytes 的 http(s) 分支", () => {
     /* 这一支的输入是用户粘的或上游给的地址。若允许 `file:`，
      * 「参考图」就变成「读本机任意文件」——工坊会把它编码成 data URL 发去远程通道。 */
     for (const src of ["file:///etc/passwd", "javascript:alert(1)", "ftp://x/a.png"]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await expect(resolveMediaBytes(src, "http://x")).rejects.toThrow("不支持的图片来源");
     }
   });

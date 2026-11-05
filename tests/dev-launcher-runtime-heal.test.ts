@@ -53,6 +53,7 @@ describe("createRuntimeRouteWatch：只认「页面 200 且接口 404」这一�
       threshold: 2,
     });
     for (let i = 0; i < 5; i += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await watch.tick();
     }
     expect(onHeal).not.toHaveBeenCalled();
@@ -83,6 +84,7 @@ describe("createRuntimeRouteWatch：只认「页面 200 且接口 404」这一�
         threshold: 2,
       });
       for (let i = 0; i < 5; i += 1) {
+        // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
         await watch.tick();
       }
       expect(onHeal).not.toHaveBeenCalled();

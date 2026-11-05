@@ -760,6 +760,7 @@ export async function preparePortraitReferences(
       continue;
     }
     try {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const filename = await prepareLocalInputImage(url);
       if (portraitRefCache.size >= PORTRAIT_REF_CACHE_MAX) {
         portraitRefCache.clear();

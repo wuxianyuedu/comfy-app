@@ -239,6 +239,7 @@ describe("同步模式（spawnSync 场景）", () => {
         if (predicate()) {
           return;
         }
+        // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
       throw new Error("等不到心跳行");

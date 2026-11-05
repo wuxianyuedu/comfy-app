@@ -204,6 +204,7 @@ describe("库地址形态：交给 drizzle-kit 的必须是 libsql 认的那一�
          * 否则第一档的常量会被 module 缓存带到后面四档去（那是自证式的假绿）。 */
         vi.resetModules();
         /* SAFETY: 类型断言已复核 */
+        // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
         const imported = (await import("../drizzle.config")) as {
           default?: { dbCredentials?: { url?: string } };
         };
