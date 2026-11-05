@@ -48,6 +48,13 @@ function isArray(v) {
 }
 
 /**
+ * @typedef {{number?: number | string, mergeable_state?: string, blocked_on?: string,
+ *   is_merged?: boolean, state?: string, title?: string,
+ *   base?: {ref?: string}}} CnbPullData
+ *   PR 记录的结论包形状（`readPullVerdict` / `readPullCreateError` 共用的字段面）。
+ */
+
+/**
  * 信封解包：`cnb … -v` 的 JSON → **结论包** `data`。
  *
  * @param {unknown} json `cnbJson` 交回的解析结果

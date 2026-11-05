@@ -24,6 +24,7 @@ import { asArray } from "./ship-build.mjs";
 import { appendComment, readCommentBodies } from "./ship-comment.mjs";
 import { CODE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
+import { cnbData } from "./cnb-fields.mjs";
 import {
   withCommentHeader,
   handlerLabel,
@@ -202,7 +203,7 @@ export function readIssue({ run, slug, number }) {
     String(number),
     "-v",
   ]);
-  const d = got?.json?.data;
+  const d = cnbData(got?.json);
   if (!d || typeof d !== "object" || Array.isArray(d)) {
     return null;
   }
@@ -416,7 +417,7 @@ function runClaim(ctx) {
         planned.length === 0
           ? `#${number} 已在 ${label} 与 ${participant} 名下 ⇒ 只会补一条「已接单」评论`
           : `#${number} 将 ${planned.join("、")}，再评论「开发者 ${handle} 已接单，正在开发中。」`
-        }；一条都没写。`,
+      }；一条都没写。`,
     );
     return CODE.GREEN;
   }
@@ -567,7 +568,8 @@ function runClaims(ctx) {
   }
   log(
     `[ship] 你领取中的单子（${label} · state=open）：${rows.length} 张${
-      truncated ? `（只看了前 ${pages * pageSize} 张，分页到顶）` : ""}`,
+      truncated ? `（只看了前 ${pages * pageSize} 张，分页到顶）` : ""
+    }`,
   );
   if (rows.length === 0) {
     log("[ship] 没有你领取中的单子。");
