@@ -85,8 +85,10 @@ describe("gates:which —— 门禁分堆（分档与收窄面都转述既有登
   const steps = [
     { label: "分支守卫", argv: ["node", "scripts/check-branch-guard.cjs"] },
     {
-      label: "CHANGELOG 碎片",
-      argv: ["node", "scripts/check-changelog-fragments.cjs", "--staged"],
+      /* 2026-11-05 薄化后 `CHANGELOG 碎片` 随静态判据搬到 GA，不再有 CNB stage 的
+       * `ifModify` ⇒ 它已从收窄登记表撤出，样本换成仍登记在表里的那一份。 */
+      label: "API 文档生成与自检",
+      argv: ["node", "scripts/check-docs-api.cjs"],
     },
     { label: "类型检查", argv: ["pnpm", "exec", "tsc", "--noEmit"] },
   ];
@@ -96,24 +98,24 @@ describe("gates:which —— 门禁分堆（分档与收窄面都转述既有登
   };
 
   test("碰到收窄面 ⇒ hit；没碰到 ⇒ skippable；没有登记 ⇒ noFace", () => {
-    const cls = classifyHeavySteps(["changelog.d/1-x.md"], deps);
+    const cls = classifyHeavySteps(["src/lib/x.ts"], deps);
     expect(cls.localTier).toBe(1);
     expect(cls.totalSteps).toBe(3);
     expect(cls.heavy).toBe(2);
-    expect(cls.hit.map((x) => x.label)).toEqual(["CHANGELOG 碎片"]);
+    expect(cls.hit.map((x) => x.label)).toEqual(["API 文档生成与自检"]);
     expect(cls.skippable).toEqual([]);
     expect(cls.noFace.map((x) => x.label)).toEqual(["类型检查"]);
 
-    const skipped = classifyHeavySteps(["src/lib/x.ts"], deps);
+    const skipped = classifyHeavySteps(["changelog.d/1-x.md"], deps);
     expect(skipped.hit).toEqual([]);
-    expect(skipped.skippable.map((x) => x.label)).toEqual(["CHANGELOG 碎片"]);
+    expect(skipped.skippable.map((x) => x.label)).toEqual(["API 文档生成与自检"]);
   });
 
   test("空改动面 ⇒ 当成「不知道」照跑（不读成「没改」）", () => {
     /* 这条与 `faceTouched()` 的语义同源：把空清单读成「没改」会让整批收窄判据静默消失，
      * 而本入口的输出里「可跳过」是要被读成「不用跑」的。 */
     const cls = classifyHeavySteps([], deps);
-    expect(cls.hit.map((x) => x.label)).toEqual(["CHANGELOG 碎片"]);
+    expect(cls.hit.map((x) => x.label)).toEqual(["API 文档生成与自检"]);
     expect(cls.skippable).toEqual([]);
   });
 

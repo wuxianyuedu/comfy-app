@@ -35,23 +35,10 @@ function hookGateSteps(hookText: string) {
 }
 
 /**
- * 平台侧 `.cnb.yml` 的 stage 清单（名字 + 原文块）。名字取自 `COMFYAPP_CI_GATES`（`env` 里的有序事实源），块
- * 复用 `stageBlock()`（不抄第二份解析器，§12.12 / §12.18）。按清单取而非扫全文：被 `#` 注释掉的 stage 不在清单
- * 里（扫全文会把停用的当在跑，正是 ISSUE #1975 的反面）。`stage === null` = 清单点名但 `.gates` 缺项 ⇒ 调用方判红。
- */
-function platformStages(): Array<{ name: string; stage: string | null }> {
-  const text = readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8");
-  return registeredGateOrder(text).map((name) => ({
-    name,
-    stage: stageBlock(text, name),
-  }));
-}
-
-/**
- * 每日那一条流水线的 stage 清单（`COMFYAPP_CI_DAILY_GATES`），与 `platformStages()` 同形状、同解析器
+ * 每日那一条流水线的 stage 清单（`COMFYAPP_CI_DAILY_GATES`），与 PR 档同形状、同解析器
  * （`registeredDailyGateOrder` + `stageBlock`；抄第二份就会静默漂，§12.12 / §12.18）。需要它是因为 ISSUE #2300：
  * 「新鲜度账」2026-10-23 从 PR 档撤到每日档，拿 PR 清单问会答「不在」，真相是「搬走了，不是不存在」。
- */
+ * PR 档那一条在 2026-11-05 薄化后只剩平台读数与判决链，因此这里不再有 `platformStages()` 那一份。 */
 function dailyStages(): Array<{ name: string; stage: string | null }> {
   const text = readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8");
   return registeredDailyGateOrder(text).map((name) => ({
@@ -450,38 +437,46 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
     ).toEqual([]);
   });
 
-  it("平台侧 `.cnb.yml` 真的有这一步（挪走 ≠ 没人跑）", () => {
+  it("平台侧真的有这一步：2026-11-05 起执行者是 GA 的 `pr-gate.yml`（挪走 ≠ 没人跑）", () => {
+    /* 这一格两次搬家：ISSUE #2010 从本地钩子到 CNB；2026-11-05 薄化再从 CNB 到 GA。
+     * 判法跟着事实走：现在读 GA 的 workflow，而不是 CNB 的 stage 名 —— 继续对着
+     * `COMFYAPP_CI_GATES` 问只会要求一个「没人执行的 stage 留在配置里」。 */
+    const workflow = readFileSync(join(REPO_ROOT, ".github", "workflows", "pr-gate.yml"), "utf8");
     expect(
-      platformStages().some((x) => x.name === "oxfmt 格式"),
-      "`.cnb.yml` 里没有「oxfmt 格式」这一步 —— 钩子撤掉 + 平台侧没加 = " +
-        "这条判据一个执行者都没有（§13.5.1.1 与 §13.5.17 同一条两半判法）",
+      /run:\s*node scripts\/check-format\.cjs/.test(workflow),
+      "`.github/workflows/pr-gate.yml` 里没有 `check-format.cjs` 这一步 —— 钩子撤掉 + " +
+        "平台侧也没有 = 这条判据一个执行者都没有（§13.5.1.1 与 §13.5.17 同一条两半判法）",
     ).toBe(true);
     expect(
       registeredGateOrder(config),
-      "`oxfmt 格式` 不在 COMFYAPP_CI_GATES 里（在跑但不登记 = 在场没有执行者）",
-    ).toContain("oxfmt 格式");
+      "`oxfmt 格式` 又回到了 COMFYAPP_CI_GATES —— 2026-11-05 起它由 GA 执行，这边没有任何" +
+        "stage 会跑它；登记一份没人执行的格子会给「在场」记假账",
+    ).not.toContain("oxfmt 格式");
   });
 
-  it("平台侧那一步是**只判的全量档**：直接跑判据本体，不带 --staged、也不带 --autofix", () => {
-    const stage = platformStages().find((x) => x.name === "oxfmt 格式")?.stage;
-    expect(stage, "`.cnb.yml` 里解析不出「oxfmt 格式」这一步").toBeTruthy();
-    /* 断言取的是**那一行 `script:`**，不是整个 stage 块：块里现在写满了历史（为什么
-     * 撤掉 `--autofix`、当年那个旗标叫什么），拿整块去 `not.toContain("--autofix")`
-     * 会红在自己的解释文字上 —— 这正是「判据钉行形状而不是钉语义」那一族的老毛病。 */
-    const scriptLine = stage?.match(/^[ \t]*script:.*$/m)?.[0] ?? "";
+  it("GA 那一步是**只判的改动面档**：直接跑判据本体，带 --changed、不带 --staged / --autofix", () => {
+    const workflow = readFileSync(join(REPO_ROOT, ".github", "workflows", "pr-gate.yml"), "utf8");
+    /* 断言取的是**那一行 `run:`**，不是整个 workflow（文件里写满了为什么这样排的理由），
+     * 拿全文去 `not.toContain("--autofix")` 会红在自己的解释文字上。 */
+    const scriptLine = /^[ \t]*run:\s*node scripts\/check-format\.cjs.*$/m.exec(workflow)?.[0] ?? "";
     expect(
       scriptLine,
-      "「oxfmt 格式」那一格里找不到 `script:` 行 —— 读不到命令就当没带旗标，" +
+      "GA 的工作流里找不到 `check-format.cjs` 的 `run:` 行 —— 读不到命令就当没带旗标，" +
         "是这条判据最坏的失效形态（它会把「挂了等于没挂」念成绿）",
     ).not.toBe("");
     expect(
       scriptLine,
-      "平台侧那一步带了 `--staged`：那里的工作区就是这次要判的那份源码，" +
+      "GA 那一步带了 `--staged`：那是镜像仓的工作区、不是这次要判的改动面，" +
         "`--staged` 读的是「本次暂存」、恒为空 ⇒ 这一步恒跳过（挂了等于没挂）",
     ).not.toContain("--staged");
     expect(
       scriptLine,
-      "平台侧那一步不再点名判据本体 —— #2610 起它直接跑 check-format.cjs，" +
+      "GA 那一步没有 `--changed` —— 它必须判「这次 PR 的改动面 ∩ GLOBS」，" +
+        "不带这个旗标会退化成全库扫描（白付一次）或什么都不判",
+    ).toContain("--changed");
+    expect(
+      scriptLine,
+      "GA 那一步不再点名判据本体 —— #2610 起它直接跑 check-format.cjs，" +
         "中间不再隔一层会写工作区的壳",
     ).toContain("scripts/check-format.cjs");
     /* #2610：`--autofix` 与委托回写整条摘掉。实测那一跳在 PR 事件上恒发不出去（令牌只有 repo-code:r，`start-build`

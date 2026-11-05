@@ -175,34 +175,21 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     expect(INPUT_RES).toEqual(INPUT_GLOBS.map((g) => globToRe(g)));
   });
 
-  it("`oxfmt 格式` 的触发面盖住判据面（改动面 ∩ GLOBS，ISSUE #2979）", () => {
-    /* 这一档自 ISSUE #2010 从本地钩子挪来；ISSUE #2979 起 `check-format.cjs` 有两份判面：全量 = `GLOBS` −
-     * `IGNORE_GLOBS`（只剩 `src/**` 与 `.storybook/**`），改动面（`--changed` / `--staged`）= 改动面 ∩ `GLOBS`
-     * （不过 `IGNORE_GLOBS` —— `scripts/**` 从前无人拦）。平台那格带 `--changed`，故手写 globs 必须盖住 GLOBS
-     * 每个目录，写窄即「改了却没人查格式」且无别的判据可见。判法不读实现：全量用 `isScanned()`、改动面用
-     * `isChangedFaceFile()` —— `GLOBS` 扩展名或 `IGNORE_GLOBS` 增删会在这里当场红。 */
-    const gate = INCREMENTAL_GATES.find((g) => g.name === "oxfmt 格式");
-    expect(
-      gate,
-      "登记表里没有「oxfmt 格式」这一档 —— 它已随 ISSUE #2010 挪到平台侧，" +
-        "却没有登记收窄面 = 每一个 PR 都白付一次全库扫描（或反过来，改了却没人查）",
-    ).toBeDefined();
-    expect(gate?.script).toBe("scripts/check-format.cjs");
-    /* 顺序不判（条目之间没有语义），逐条要对上。 */
-    expect([...(gate?.globs ?? [])].sort()).toEqual(
-      [
-        "src/**",
-        ".storybook/**",
-        "scripts/**",
-        "tests/**",
-        "tools/**",
-        "e2e/**",
-        "*.config.js",
-        "*.config.ts",
-        "*.config.mjs",
-        "*.config.cjs",
-      ].sort(),
+  it("`oxfmt 格式` 的判据面自洽，且 2026-11-05 起由 GA 每次 PR 跑（无收窄）", () => {
+    /* 这一档自 ISSUE #2010 从本地钩子挪到平台侧；2026-11-05 薄化把 CNB 那一格整格搬到
+     * `.github/workflows/pr-gate.yml`，于是「配置里的手写 glob 要盖住判据面」这条对账
+     * **失去对象**：GA 上没有 `ifModify`，每次 PR 都跑，收窄面由判据自己算（改动面 ∩ `GLOBS`）。
+     * 留下的是判据面的自检：`GLOBS` / `IGNORE_GLOBS` 增删时这里当场红，防止
+     * `check-format.cjs` 的两份判面（全量 / 改动面）自己漂开。 */
+    const workflow = fs.readFileSync(
+      path.join(process.cwd(), ".github", "workflows", "pr-gate.yml"),
+      "utf8",
     );
+    expect(
+      workflow,
+      "`.github/workflows/pr-gate.yml` 里没有 `check-format.cjs --changed` —— 撤出 CNB 后" +
+        "它是这条判据唯一的执行者，两边都没有 = 没人跑它",
+    ).toContain("node scripts/check-format.cjs --changed");
     /* SAFETY: 类型断言已复核 */
     // oxlint-disable-next-line typescript/no-require-imports
     const fmt = require("../scripts/check-format.cjs") as {
@@ -243,13 +230,21 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     }
   });
 
-  it("文件结构硬规则的触发面与判据自己的扫描根同源（不是手抄的一份）", () => {
-    /* 与上一条同形的漂，对象是 `check-file-structure.cjs`：有人加了新扫描根（比如 `e2e/`）而 `.cnb.yml` 的 `ifModify`
-     * 看起来一切正常 ⇒ 后续改动那目录时这一步一次都不跑，违规静默漏过。全部用注入样本复算：扫描根下每个目录、根
-     * 目录的每种入口扩展名，都要被 `TRIGGER_GLOBS` 认下。 */
-    const gate = INCREMENTAL_GATES.find((g) => g.name === "文件结构硬规则");
-    expect(gate, "登记表里没有这一档").toBeDefined();
-    expect(gate?.globs).toEqual(TRIGGER_GLOBS);
+  it("文件结构硬规则的扫描根与判据同源，且 GA 每次 PR 都跑它（无收窄）", () => {
+    /* 2026-11-05 之前这条钉的是「`.cnb.yml` 的 `ifModify` globs ⇄ `TRIGGER_GLOBS`」；
+     * 那一格搬到 GA 后没有 `ifModify`，对账失去对象，剩下两件仍然会坏的事：
+     * ① 判据真的遍历每一个扫描根（源码里的读取点是唯一证据）；
+     * ② `TRIGGER_GLOBS` 覆盖根目录那几种入口扩展名（万一以后有人把它接回某份配置，
+     *    「根目录多了一个 .cmd」不能漏）。另加一条：GA 上确实有无条件执行者。 */
+    const workflow = fs.readFileSync(
+      path.join(process.cwd(), ".github", "workflows", "pr-gate.yml"),
+      "utf8",
+    );
+    expect(
+      workflow,
+      "`.github/workflows/pr-gate.yml` 里没有 `check-file-structure.cjs` —— 撤出 CNB 后" +
+        "它是这条判据唯一的执行者",
+    ).toContain("node scripts/check-file-structure.cjs");
     /* 判据真的遍历每一个扫描根（源码里那一句 `})("<dir>")` / `walk("<dir>")`
      * 是它的读取点）—— 少了这一半，`SCAN_ROOTS` 写错也不会有东西响。 */
     const src = fs.readFileSync(

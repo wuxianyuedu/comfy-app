@@ -226,43 +226,53 @@ describe("复合档 —— 逐条按面收窄（ISSUE #2255）", () => {
     return { code, out: lines.join("\n") };
   };
 
-  it("改动面没碰到那条的面 ⇒ 这一条被跳过，且**逐条点名**", () => {
-    const got = one("主题色扫描", { files: ["docs/README.md"] });
-    /* 三态出口之后，跳过的那一行是 `[skip] <名字>（按面未触及：…）`——
-     * 前缀本身就在说「这一条没判」（ISSUE #2506）。 */
-    expect(got.out).toMatch(/\[skip\] 主题色扫描（按面未触及：/);
-    /* 跳过不是判过 ⇒ 那一格不许把它算成绿。 */
-    expect(got.out).toContain("判过 0");
-    expect(got.code).toBe(0);
+  it("改动面没碰到那条的面 ⇒ 判定为跳过，且面念得出来", () => {
+    /* 2026-11-05 薄化后，原来这批收窄登记的静态判据（`主题色扫描` / `CHANGELOG 碎片` …）
+     * 随 PR 档一起搬到 GA —— `.cnb.yml` 里没有同名 stage 了，登记表不能再收它们
+     * （`tests/ci-incremental-gates.test.ts` 的「登记 ⇄ 配置」会当场红）。所以这里
+     * 直接判**机制**：面取自仍登记在表里的判据（`scripts/check-docs-api.cjs`），
+     * 改动面落在面外 ⇒ 跳过，并把那组 glob 念出来（跳过不是判过）。 */
+    const step = { label: "API 文档生成与自检", argv: ["node", "scripts/check-docs-api.cjs"] };
+    const decision = narrowingDecision(step, { files: ["changelog.d/1-x.md"] });
+    expect(decision.skip).toBe(true);
+    if (!decision.skip) {
+      return;
+    }
+    expect(decision.stage).toBe("API 文档生成与自检");
+    expect(decision.globs, "跳过的理由必须把面念出来").toEqual(
+      narrowingEntryForScript("scripts/check-docs-api.cjs")?.globs,
+    );
   });
 
   it("改动面碰到了那条的面 ⇒ 这一条照跑（不跳）", () => {
-    const got = one("主题色扫描", { files: ["src/app/x.tsx"] });
-    expect(got.out).toMatch(/\[ok\] 主题色扫描/);
-    expect(got.out).not.toMatch(/按面未触及/);
-    expect(got.out).toContain("判过 1");
+    const step = { label: "API 文档生成与自检", argv: ["node", "scripts/check-docs-api.cjs"] };
+    const decision = narrowingDecision(step, { files: ["src/app/x.tsx"] });
+    expect(decision.skip).toBe(false);
   });
 
   it("改动面**取不到** ⇒ 一条都不跳（“不知道” ≠ “没改”）", () => {
-    const got = one("主题色扫描", null);
-    expect(got.out).toMatch(/\[ok\] 主题色扫描/);
+    /* 选一条**没有形态档前提**的判据：`格式化提交与行为改动分离` 除了收窄，还要
+     * `CNB_COMMIT` 才判得出合并预览（`CHANGED_SCOPED` 那一族），拿它当样本会先撞上
+     * 「没有判决面」那一跳。`CP936 字形登记` 是全仓不变量，只吃「改动面」这一个输入。 */
+    const got = one("CP936 字形登记（没字形的字符不许悄悄变问号）", null);
+    expect(got.out).toContain("[ok] CP936 字形登记");
     expect(got.out).not.toMatch(/按面未触及/);
   });
 
   it("改动面是**空清单** ⇒ 一条都不跳（空清单也是“不知道”）", () => {
-    const got = one("主题色扫描", { files: [] });
-    expect(got.out).toMatch(/\[ok\] 主题色扫描/);
+    const got = one("CP936 字形登记（没字形的字符不许悄悄变问号）", { files: [] });
+    expect(got.out).toContain("[ok] CP936 字形登记");
     expect(got.out).not.toMatch(/按面未触及/);
   });
 
   it("面取自**收窄登记表**，不是手抄的第二份", () => {
     /* 反查：登记表里那一条的脚本 ⇒ 它的面就是登记表里那组 glob。 */
-    const entry = INCREMENTAL_GATES.find((e) => e.script === "scripts/check-theme-colors.cjs");
-    expect(entry, "收窄登记表里没有「主题色扫描」这一条").toBeTruthy();
+    const entry = INCREMENTAL_GATES.find((e) => e.script === "scripts/check-docs-api.cjs");
+    expect(entry, "收窄登记表里没有「API 文档生成与自检」这一条").toBeTruthy();
     if (!entry) {
       return;
     }
-    expect(narrowingEntryForScript("scripts/check-theme-colors.cjs")?.globs).toEqual(entry.globs);
+    expect(narrowingEntryForScript("scripts/check-docs-api.cjs")?.globs).toEqual(entry.globs);
     /* 不在登记表里的判据（这里拿一条没有收窄面的）⇒ 查不到 ⇒ 不许收窄。 */
     expect(narrowingEntryForScript("scripts/check-gate-executors.cjs")).toBeNull();
   });
@@ -280,10 +290,10 @@ describe("复合档 —— 逐条按面收窄（ISSUE #2255）", () => {
 
   it("收窄**不能**把一条该跑的判据吞掉：面碰到 ⇒ 不跳（反向验证）", () => {
     const step = {
-      label: "主题色扫描",
-      argv: ["node", "scripts/check-theme-colors.cjs"],
+      label: "API 文档生成与自检",
+      argv: ["node", "scripts/check-docs-api.cjs"],
     };
-    const skipped = narrowingDecision(step, { files: ["docs/README.md"] });
+    const skipped = narrowingDecision(step, { files: ["changelog.d/1-x.md"] });
     expect(skipped.skip).toBe(true);
     const ran = narrowingDecision(step, { files: ["src/app/x.tsx"] });
     expect(ran.skip).toBe(false);

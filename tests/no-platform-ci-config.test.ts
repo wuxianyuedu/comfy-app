@@ -305,30 +305,8 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
    * `registeredGateOrder` 与 stage 序另一条判据钉）。 */
   { name: "GitHub 镜像同步", tier: "PR" },
   { name: "环境前提", tier: "PR" },
-  { name: "Install dependencies", tier: "PR" },
-  { name: "分支守卫", tier: "PR" },
-  { name: "提交声明核对", tier: "PR" },
-  { name: "同步数据库表结构", tier: "PR" },
-  { name: "类型检查", tier: "PR" },
-  { name: "标题行让位", tier: "PR" },
-  { name: "文件结构硬规则", tier: "PR" },
-  { name: "跨平台动作对照", tier: "PR" },
-  { name: "import 别名统一", tier: "PR" },
-  { name: "ComfyUI 端口口径", tier: "PR" },
-  { name: "内联样式注入", tier: "PR" },
-  { name: "跨文件重复块", tier: "PR" },
-  { name: "函数长度 TS", tier: "PR" },
-  { name: "函数长度 Rust", tier: "PR" },
-  { name: "模块循环依赖", tier: "PR" },
-  { name: "端口推导跨语言一致性", tier: "PR" },
-  { name: "CHANGELOG 碎片", tier: "PR" },
-  { name: "主题色扫描", tier: "PR" },
-  { name: "UI/逻辑分离", tier: "PR" },
-  { name: "lib Node-only 声明", tier: "PR" },
-  { name: "oxfmt 格式", tier: "PR" },
-  { name: "格式化提交分离", tier: "PR" },
-  { name: "零消费导出", tier: "PR" },
-  { name: "重档静态判据", tier: "PR" },
+  /* 2026-11-05 薄化：GA `pr-gate.yml` 已承接的格从 PR 清单撤出，档位登记在 retired 段
+   * （每一项的 note 写明「现在谁跑」）。这一档此后只剩平台读数与判决链。 */
   /* 主列末尾的承重档（已摘 `--readout`，ISSUE #3051 期望第 3 条已落地）：镜像格派发的
    * 同一笔 head_sha，GitHub Actions 跑完没有、结论是什么。有结论且红 ⇒ 拦合；没跑起来 ⇒
    * exit 2 同样拦合；只有读到绿才放行。无跨档对应物，不进 CROSS_LANE_SCRIPT_MIRRORS。 */
@@ -342,6 +320,11 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   { name: "日志分块 3/3", tier: "PR" },
   /* 承重的那一格挪到分块之后：读回读格留下的 decision.json 并退真码（读不到 ⇒ exit 2）。 */
   { name: "GitHub 判决判定", tier: "PR" },
+  /* 这两条**没有自己的 stage**（登记在 `COMFYAPP_CI_GATES_ELSEWHERE`）：原本由 PR 档的
+   * `重档静态判据` 那一格跑，2026-11-05 整格搬到 GA 的同名 job —— 名字仍在 PR 清单里，
+   * 因为它们在 PR 上仍然被判，只是换了一台 runner。 */
+  { name: "格式化提交分离", tier: "PR" },
+  { name: "零消费导出", tier: "PR" },
   // ── push 档（COMFYAPP_CI_PUSH_GATES，树级校验档 + 镜像出口格）──
   { name: "合并形态复核", tier: "push" },
   { name: "GitHub master 镜像", tier: "push" },
@@ -432,34 +415,54 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
     tier: "retired",
     note: "2026-10-19 撤成每日全量E2E：整档不带 --grep，@critical 是其子集",
   },
+  // ── 2026-11-05 薄化：GA `.github/workflows/pr-gate.yml` 承接（同一个 PR 事件、
+  //    同一个镜像仓；PR 档只留平台读数 + 判决链，结论由 `GitHub 判决判定` 承重读回）。
+  //    逐项归属与「为什么不在这边跑」写在 `.cnb.yml` 的 `.gates` 顶部那段。──
+  { name: "Install dependencies", tier: "retired", note: "GA 各 job 自己的 `安装依赖` step；PR 档此后没有吃 node_modules 的格" },
+  { name: "分支守卫", tier: "retired", note: "GA `分支守卫` job（`check-branch-guard.cjs --pr-check`）" },
+  { name: "提交声明核对", tier: "retired", note: "GA `提交声明核对` job" },
+  { name: "同步数据库表结构", tier: "retired", note: "GA `同步数据库表结构` job（每日档另有 `每日同步数据库表结构`）" },
+  { name: "类型检查", tier: "retired", note: "GA `类型检查` job（`tsc --noEmit`）" },
+  { name: "标题行让位", tier: "retired", note: "GA `静态判据` job 的同名 step" },
+  { name: "文件结构硬规则", tier: "retired", note: "GA `静态判据` job 的同名 step" },
+  { name: "跨平台动作对照", tier: "retired", note: "GA `静态判据` job 的同名 step" },
+  { name: "import 别名统一", tier: "retired", note: "GA `静态判据` job 的同名 step" },
+  { name: "ComfyUI 端口口径", tier: "retired", note: "GA `静态判据` job 的同名 step" },
+  { name: "内联样式注入", tier: "retired", note: "GA `静态判据` job 的同名 step" },
+  { name: "跨文件重复块", tier: "retired", note: "GA `静态判据` job 的同名 step" },
+  { name: "函数长度 TS", tier: "retired", note: "GA `静态判据` job 的同名 step" },
+  { name: "函数长度 Rust", tier: "retired", note: "GA `静态判据` job 的同名 step" },
+  { name: "模块循环依赖", tier: "retired", note: "GA `静态判据` job 的同名 step" },
+  { name: "端口推导跨语言一致性", tier: "retired", note: "GA `静态判据` job 的同名 step" },
+  { name: "CHANGELOG 碎片", tier: "retired", note: "GA `静态判据` job 的同名 step" },
+  { name: "主题色扫描", tier: "retired", note: "GA `静态判据` job 的同名 step" },
+  { name: "UI/逻辑分离", tier: "retired", note: "GA `静态判据` job 的同名 step" },
+  { name: "lib Node-only 声明", tier: "retired", note: "GA `静态判据` job 的同名 step" },
+  { name: "oxfmt 格式", tier: "retired", note: "GA `oxfmt 格式` step（`check-format.cjs --changed`，每次 PR 都跑、无 ifModify）" },
+  { name: "重档静态判据", tier: "retired", note: "GA `重档静态判据` job（`ci-heavy-gates.mjs`）" },
 ];
 
 /**
  * **同一份实现长在另一条流水线上**的那几格（另一档名 → PR 名），比逐字同形：名字不同是刻意的（按名取块会撞车），同一件事只能由 script 相同保证。
- * 左边不一定是每日档（`安装依赖` 是 push 档 `master 合并复核`）；判据管「一条链被几条流水线各抄一份」，不管抄到第几条都要对账。
+ * 左边不一定是每日档（这里现在是每日档，push 档 `安装依赖` 在右边）；判据管「一条链被几条流水线各抄一份」，不管抄到第几条都要对账。
  * ⚠️ 只留两边都在的：`Python 可用性` / `浏览器安装` 已于 2026-10-19 撤出 PR（见 `PR_MOVED_TO_DAILY`），拿不存在的块比相同性只会教会人忽略红。
+ * 2026-11-05 薄化后 PR 档不再有安装格，`Install dependencies` 那一对面换成「每日 ⇄ push」；
+ * `同步数据库表结构 ⇄ 每日同步数据库表结构` 随 PR 格撤出一起消失。
  */
 const CROSS_LANE_SCRIPT_MIRRORS: Array<[string, string]> = [
   // 多行块也在内：这一格是 `script: |` 的三行体，只比第一行会漏掉「第二行改了」这种漂移。
-  ["每日安装依赖", "Install dependencies"],
-  /* push 档那一格与 PR 档的**三样都必须一字不差**（命令行 / env / timeout，见下面那条判据），
-   * 所以它这里**没有**任何例外：`COMFY_CI_SLOT` 两侧都置着 —— 「不接槽」的理由是
-   * 「这一档后面背着 `next build`」（ISSUE #2081），而 push 清单里没有构建格（ISSUE #2851）。
-   * `DAILY_ENV_ONLY_ON_PR` 里给这一档登记一行豁免（那张表按**左边那个名字**取豁免键），
-   * 只动一边会被这条判据报成一堆行的差。 */
-  ["安装依赖", "Install dependencies"],
-  /* 浏览器那一格比的不只是命令行：它背着**两行 env**（下载根 + 连接超时），那是四次
-   * 取证读数换来的（`cnb-gt1-1k513ill4` 那一族）。只比命令行的话，「一边改了根、
-   * 另一边没改」会逐字通过，而红只在第二天 02:00 出现 —— 比这个正是最贵的一种漂。
-   * `每日全量E2E` **不在这一列**：它带的参数与 PR 那格**必须不同**（子集不记账），
-   * 那一条由下面单独的判据按「不许带收窄参数」判，而不是拿相同性判。 */
-  ["每日同步数据库表结构", "同步数据库表结构"],
+  ["每日安装依赖", "安装依赖"],
+  /* 这一对是「每日 ⇄ push」：push 清单里没有构建格（ISSUE #2851），所以两侧都置着
+   * `COMFY_CI_SLOT` —— 而 `DAILY_ENV_ONLY_ON_PR` 里给 `每日安装依赖` 登记一行豁免
+   * （那张表按**左边那个名字**取豁免键），只动一边会被这条判据报成一堆行的差。 */
 ];
 
 /**
- * 两格 env 之间**唯一被登记过的差别**：`每日安装依赖` 不接槽（ISSUE #2081）；键按左边格子名取，所以「哪格可少这行」一表说清。push 档 `安装依赖` 不在表里（与 PR 逐字相同，理由的主语是「后面有没有 `next build`」，#2851）。
- * ⚠️ 钉的是更窄的形状：名单键在 PR 侧必须**正好置一行** `KEY: "1"`；每日侧**一个字都不出现**（写 `"0"` 也算违规）。
- * 除此之外两侧全部行仍逐字相同（`toEqual` 未松），否则判不出「不相同的那一行正是被允许的那一行」。
+ * 两格 env 之间**唯一被登记过的差别**：`每日安装依赖` 不接槽（ISSUE #2081）；键按左边格子名取，所以「哪格可少这行」一表说清。push 档 `安装依赖` 不在表里（理由的主语是「后面有没有 `next build`」，#2851）。
+ * ⚠️ 钉的是更窄的形状：名单键在**右侧那一格**里必须**正好置一行** `KEY: "1"`；每日侧**一个字都不出现**（写 `"0"` 也算违规）。
+ * 2026-11-05 起右侧是 push 档（PR 档的安装格已撤到 GA），符号名沿用旧名以免牵动调用面，
+ * 语义看这条注释与 `CROSS_LANE_SCRIPT_MIRRORS` 的配对。`toEqual` 未松，否则判不出
+ * 「不相同的那一行正是被允许的那一行」。
  */
 const DAILY_ENV_ONLY_ON_PR: Record<string, Array<string>> = {
   每日安装依赖: ["COMFY_CI_SLOT"],
@@ -1776,23 +1779,29 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     }
   });
 
-  it("`oxfmt 格式` 是**在跑**的那一档，不是停用（ISSUE #2010 改变了它的来路）", () => {
-    /* 这格曾在停用清单里（2026-10-16 让位给 E2E 调试）；ISSUE #2010 把它从本地钩子**挪过来接管** —— 判据一字未改，改变的是「判据 ⇄ 执行者」关系，从此它是**唯一**执行者。
-     * 于是停用清单里的同名条目必须出网，否则「不许跑」与「唯一执行者」两句话对不上。
-     * 单独判的理由同 `单元测试`：判据与 stage 的**在场**是两件事，「钩子撤掉 + 平台侧仍停用」= 谁都没跑它，且不会有别的判据红。 */
-    const text = readRegisteredConfig();
-    const order = registeredGateOrder(text);
-    const disabled = registeredDisabledGates(text);
+  it("`oxfmt 格式` 是**在跑**的那一档，不是停用（2026-11-05 起执行者是 GA）", () => {
+    /* 这格曾在停用清单里（2026-10-16 让位给 E2E 调试）；ISSUE #2010 把它从本地钩子挪到平台侧接管，
+     * 2026-11-05 薄化再把它从 CNB PR 档搬到 `.github/workflows/pr-gate.yml`（同一句命令）。
+     * 两次搬的都是「判据 ⇄ 执行者」关系，判据本身一字未改。这里判三件事：
+     * ① GA 真的跑了它；② 它不在 CNB 的停用清单里（那是「不许跑」，与搬走是两件事）；
+     * ③ 它也不再以 stage 形态留在 PR 清单里 —— 留一份没人执行的 stage 正是这次要清掉的东西。 */
+    const workflow = readFileSync(path.join(ROOT, ".github/workflows/pr-gate.yml"), "utf8");
     expect(
-      order,
-      "`oxfmt 格式` 不在 COMFYAPP_CI_GATES 里 —— 它已随 ISSUE #2010 从本地钩子" +
-        "挪到平台侧，钩子里那一步同时撤掉了；两边都没有 = 这条判据一个执行者都没有",
-    ).toContain("oxfmt 格式");
+      workflow,
+      "`.github/workflows/pr-gate.yml` 里没有 `check-format.cjs --changed` —— 2026-11-05 把" +
+        "`oxfmt 格式` 从 CNB PR 档搬走后，它是这条判据唯一的执行者；两边都没有 = 没人跑它",
+    ).toContain("node scripts/check-format.cjs --changed");
+    const disabled = registeredDisabledGates(readRegisteredConfig());
     expect(
       disabled,
-      "`oxfmt 格式` 还在 `COMFYAPP_CI_DISABLED_GATES` 里 —— 那一项是 2026-10-16 的" +
-        "临时让位（恢复条件是 E2E 一绿 + 日志中文可读），与 ISSUE #2010 的「挪执行者」" +
-        "不是同一件事；此刻它是这条判据的唯一执行者，停用等于把它关掉",
+      "`oxfmt 格式` 还在 `COMFYAPP_CI_DISABLED_GATES` 里 —— 那一项是 2026-10-16 的临时" +
+        "让位（恢复条件是 E2E 一绿 + 日志中文可读），与「搬执行者」不是同一件事；" +
+        "此刻它是这条判据的唯一执行者，停用等于把它关掉",
+    ).not.toContain("oxfmt 格式");
+    expect(
+      registeredGateOrder(readRegisteredConfig()),
+      "`oxfmt 格式` 又出现在 `COMFYAPP_CI_GATES` 里 —— 2026-11-05 起它由 GA 执行，" +
+        "在 PR 清单里再登记一份等于给同一件事记两次执行者（而这边没有任何 stage 会跑它）",
     ).not.toContain("oxfmt 格式");
   });
 
@@ -1801,7 +1810,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const timeouts = stageTimeouts(text);
     /* 为什么点名这几格而不是所有 stage：其余都是秒级（`node scripts/check-*.cjs` 一族），加预算只是噪音；真正的成本集中在这四个，且它们恰好是实测挂过或最可能挂的。
      * `单元测试` 被**临时停用**时不在清单里 ⇒ 这里也不要求预算，预算跟着 stage 走，加回来（不再出现在停用清单）即自动恢复。
-     * `生成态文档与源同步` 曾是第五个（#1981）：`--check --autofix` 要就地重渲染再判；2026-10-19 收进聚合档 `重档静态判据`，预算搬到那格并在此**单独**要求，不再点已不存在的 stage 名。
+     * `生成态文档与源同步` 曾是第五个（#1981）：`--check --autofix` 要就地重渲染再判；2026-10-19 收进聚合档 `重档静态判据`。2026-11-05 那一格整格搬到 GA，本文件的预算判据不再点它（GA 的 job 自带 `timeout-minutes`）。
      */
     const disabled = registeredDisabledGates(text);
     /* ⚠️ `生产构建`（2026-10-18）与 `E2E 关键流程`（2026-10-19）**都从这一列摘掉了**，不是因为预算可以不要：它们只在每日档（`每日生产构建` / `每日全量E2E`）。
@@ -1810,7 +1819,6 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const required = [
       "ESLint 零警告",
       "单元测试",
-      "重档静态判据",
       /* `GitHub 判决回读` 墙钟上限就是它的轮询预算（45m）—— 零构建但**不**是秒级，
        * 节点 egress 抖动的现场它会顶满预算跑，预算缺席时卡死要等满 2h 才有人知道。 */
       "GitHub 判决回读",
@@ -3024,7 +3032,6 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
     const text = readRegisteredConfig();
     /** 每档：流水线名 → 它那一格的安装格名（名字逐字取自身配置，不做拼接）。 */
     const laneInstall = [
-      { pipeline: "质量门禁", install: "Install dependencies" },
       { pipeline: "master 合并复核", install: "安装依赖" },
       /* 两条定时口已迁 GA；接槽开关的形状判在留下来的**手点口**上，
        * 它们引用的是同一份 `*daily_gates` / `*package_gates`，结论不变。 */
