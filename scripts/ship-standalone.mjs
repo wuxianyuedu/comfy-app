@@ -1,6 +1,6 @@
 /**
  * 「**与主流程互斥的单件动作**」那一段：`--whoami` / `--diagnose` / `--stage-log` /
- * `--rerun-ci` / `--branches` / 单子的领取与结束 / 只补关。
+ * `--gh-logs` / `--rerun-ci` / `--branches` / 单子的领取与结束 / 只补关。
  *
  * ## 为什么它们单独一层
  *
@@ -29,6 +29,7 @@ import { closeIssues } from "./ship-close.mjs";
 import { runIssueAction } from "./ship-claim.mjs";
 import { runIssueComment, runNewIssue } from "./ship-issue-new.mjs";
 import { runDiagnose } from "./ship-diagnose.mjs";
+import { runGhLogs } from "./ship-gh-logs.mjs";
 import { runStageLog } from "./ship-stage-log.mjs";
 import { runRerunCiStage } from "./ship-local.mjs";
 import { whoamiLines } from "./ship-ticket.mjs";
@@ -50,6 +51,7 @@ function namedActions(opt, self) {
     ["whoami", opt.whoami, "--whoami"],
     ["diagnose", opt.diagnose, "--diagnose"],
     ["stageLog", opt.stageLog, "--stage-log"],
+    ["ghLogs", opt.ghLogs, "--gh-logs"],
     ["merge", opt.merge, "--merge"],
     ["closeIssue", opt.closeIssue, "--close-issue"],
     ["cleanBranch", opt.cleanBranch, "--clean-branch"],
@@ -81,9 +83,7 @@ function namedActions(opt, self) {
     ["prBodyFile", opt.prBodyFile !== null, "--pr-body-file"],
     ["rerunCi", opt.rerunCi, "--rerun-ci"],
   ];
-  return table
-    .filter(([key, on]) => on && key !== self)
-    .map(([, , label]) => label);
+  return table.filter(([key, on]) => on && key !== self).map(([, , label]) => label);
 }
 
 /**
@@ -102,12 +102,16 @@ function namedActions(opt, self) {
  *   explicitHandle: string | null,
  *   mkTmp: (name: string, text: string) => string | null,
  *   settle: (codes: number[]) => number,
+ *   env?: Record<string, string | undefined>,
+ *   fetchImpl?: typeof fetch,
+ *   sleep?: (ms: number) => void | Promise<void>,
  * }} io 全部由装配层注入 —— 本模块不自己解析命令行、不自己拼退出码。
- * @returns {{handled: true, code: number} | {handled: false, cnbOk: boolean}}
+ * @returns {Promise<{handled: true, code: number} | {handled: false, cnbOk: boolean}>}
  *   `handled` 为真表示这一跳已经结束（`code` 是退出码）；为假表示继续走主流程，
  *   同时把**这一次 probe** 的结果带出去（装配层后面还要用它，别 probe 第二遍）。
+ *   `--gh-logs` 要发网络请求，所以这一层现在是异步的（其余分支照旧同步兑现）。
  */
-export function runStandaloneAction(io) {
+export async function runStandaloneAction(io) {
   const {
     opt,
     run,
@@ -123,6 +127,9 @@ export function runStandaloneAction(io) {
     explicitHandle,
     mkTmp,
     settle,
+    env,
+    fetchImpl,
+    sleep,
   } = io;
   /* ── `--whoami`：只读自查口（ISSUE #2204）─────────────────────
    * 手工 `cnb pulls post-pull` / `cnb issues post-issue-comment` 不经过 ship，
@@ -142,9 +149,7 @@ export function runStandaloneAction(io) {
   if (opt.diagnose) {
     const clashes = namedActions(opt, "diagnose");
     if (clashes.length > 0) {
-      log(
-        `[ship] [ERROR] --diagnose 只读、一次只做一件：不与 ${clashes.join(" / ")} 同跑。`,
-      );
+      log(`[ship] [ERROR] --diagnose 只读、一次只做一件：不与 ${clashes.join(" / ")} 同跑。`);
       return { handled: true, code: CODE.NOT_RUN };
     }
     return {
@@ -172,9 +177,7 @@ export function runStandaloneAction(io) {
   if (opt.stageLog || opt.stageLogBad.length > 0) {
     const clashes = namedActions(opt, "stageLog");
     if (clashes.length > 0) {
-      log(
-        `[ship] [ERROR] --stage-log 只读、一次只做一件：不与 ${clashes.join(" / ")} 同跑。`,
-      );
+      log(`[ship] [ERROR] --stage-log 只读、一次只做一件：不与 ${clashes.join(" / ")} 同跑。`);
       return { handled: true, code: CODE.NOT_RUN };
     }
     if (opt.stageLogBad.length > 0) {
@@ -200,6 +203,39 @@ export function runStandaloneAction(io) {
       ]),
     };
   }
+  /* ── `--gh-logs <run-id|pr号>`：直接回读 GA 失败日志（规范 §13.6）──────────
+   * 与 `--diagnose` / `--stage-log` 同一条纪律：只读、一次只做一件、排在 preflight
+   * 之前。它**不依赖 cnb**（只走 GitHub API），也不必等 ship 判红 —— 显式入口就是
+   * 「先看一眼红在哪」。没有令牌时只念一行，不改退码。 */
+  if (opt.ghLogs || opt.ghLogsBad.length > 0) {
+    const clashes = namedActions(opt, "ghLogs");
+    if (clashes.length > 0) {
+      log(`[ship] [ERROR] --gh-logs 只读、一次只做一件：不与 ${clashes.join(" / ")} 同跑。`);
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    if (opt.ghLogsBad.length > 0) {
+      log(
+        `[ship] [ERROR] --gh-logs 收的是 run id 或 PR 号（${opt.ghLogsBad.join(" / ")}）：` +
+          "给一个，例如 pnpm ship --gh-logs 3195 或 pnpm ship --gh-logs run:4242。",
+      );
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    return {
+      handled: true,
+      code: settle([
+        await runGhLogs({
+          input: opt.ghLogsRef ?? "",
+          repo: slug,
+          env,
+          log,
+          fetchImpl,
+          sleep,
+          dryRun: opt.dryRun,
+        }),
+      ]),
+    };
+  }
+
   /* ── 「CI 失败重试」：在当前分支推一个空提交触发平台重新构建（#2289 现场踩出的需求）──
    * 平台 CI 是 push 触发的，没有「重跑按钮」：唯一能重新派生一条流水线的方式就是再推一次。
    * 这一格是**写动作**（commit + push），但只读 cnb、不创建 PR、不轮询 —— 与 `--diagnose`
