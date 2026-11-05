@@ -93,9 +93,7 @@ describe("fetchWorkshopStyles —— 取数口与形状收窄", () => {
     query.mockResolvedValue({ skills: "不是数组" });
     await expect(fetchWorkshopStyles()).resolves.toEqual([]);
     query.mockResolvedValue({ skills: [null, "字符串行", row({ slug: "x" })] });
-    await expect(fetchWorkshopStyles()).resolves.toEqual([
-      expect.objectContaining({ slug: "x" }),
-    ]);
+    await expect(fetchWorkshopStyles()).resolves.toEqual([expect.objectContaining({ slug: "x" })]);
   });
 
   it("口坏掉时把错误留给调用点（这里不自己吞成空列表）", async () => {

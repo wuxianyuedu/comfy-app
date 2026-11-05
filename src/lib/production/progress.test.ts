@@ -24,9 +24,10 @@ describe("isProductionStage", () => {
 
 describe("normalizeProductionProgress", () => {
   it("合法形状原样读出", () => {
-    expect(
-      normalizeProductionProgress({ stage: "shots", rendered: true }),
-    ).toEqual({ stage: "shots", rendered: true });
+    expect(normalizeProductionProgress({ stage: "shots", rendered: true })).toEqual({
+      stage: "shots",
+      rendered: true,
+    });
   });
 
   it("非法 stage / 缺字段回落默认", () => {
@@ -34,26 +35,16 @@ describe("normalizeProductionProgress", () => {
       stage: "script",
       rendered: false,
     });
-    expect(normalizeProductionProgress({})).toEqual(
-      DEFAULT_PRODUCTION_PROGRESS,
-    );
+    expect(normalizeProductionProgress({})).toEqual(DEFAULT_PRODUCTION_PROGRESS);
   });
 
   it("非对象（含 null / 字符串）→ 默认，不抛", () => {
-    expect(normalizeProductionProgress(null)).toEqual(
-      DEFAULT_PRODUCTION_PROGRESS,
-    );
-    expect(normalizeProductionProgress("x")).toEqual(
-      DEFAULT_PRODUCTION_PROGRESS,
-    );
+    expect(normalizeProductionProgress(null)).toEqual(DEFAULT_PRODUCTION_PROGRESS);
+    expect(normalizeProductionProgress("x")).toEqual(DEFAULT_PRODUCTION_PROGRESS);
   });
 
   it("rendered 只在严格 true 时为真", () => {
-    expect(
-      normalizeProductionProgress({ stage: "video", rendered: "yes" }).rendered,
-    ).toBe(false);
-    expect(
-      normalizeProductionProgress({ stage: "video", rendered: 1 }).rendered,
-    ).toBe(false);
+    expect(normalizeProductionProgress({ stage: "video", rendered: "yes" }).rendered).toBe(false);
+    expect(normalizeProductionProgress({ stage: "video", rendered: 1 }).rendered).toBe(false);
   });
 });

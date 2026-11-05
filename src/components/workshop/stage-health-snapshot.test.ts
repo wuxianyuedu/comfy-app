@@ -45,16 +45,11 @@ describe("buildHealthSnapshot", () => {
 
   it("成片只在 rendered 为真时算完成，其余段不受它影响", () => {
     const base = ctx({ scriptReady: true });
-    const notRendered = buildHealthSnapshot(
-      computeStageRatios(base, false),
-      base,
-    );
+    const notRendered = buildHealthSnapshot(computeStageRatios(base, false), base);
     const rendered = buildHealthSnapshot(computeStageRatios(base, true), base);
     expect(notRendered.find((row) => row.id === "render")?.pending).toBe(true);
     expect(rendered.find((row) => row.id === "render")?.pending).toBe(false);
-    expect(countPendingStages(rendered)).toBe(
-      countPendingStages(notRendered) - 1,
-    );
+    expect(countPendingStages(rendered)).toBe(countPendingStages(notRendered) - 1);
   });
 
   it("缩略名是全名的一部分、彼此不重复、且短到窄槽位放得下", () => {
