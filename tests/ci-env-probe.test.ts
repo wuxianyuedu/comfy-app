@@ -476,19 +476,22 @@ describe("环境前提：浏览器那一格的两个消费者不许各写一份�
   });
 });
 
-describe("环境前提：流水线上真的在跑它，且排在装依赖之前", () => {
-  it("`COMFYAPP_CI_GATES` 里登记了它，且它排在 `Install dependencies` 之前", () => {
+describe("环境前提：流水线上真的在跑它，且排在最长的等待之前", () => {
+  it("`COMFYAPP_CI_GATES` 里登记了它，且它排在 `GitHub 判决回读` 之前", () => {
+    /* 2026-11-05 薄化后 PR 档不再装依赖（GA 的 `安装依赖` step 接管），原先「排在
+     * `Install dependencies` 之前」的对象随之消失。仍然成立的语义是：这一格答的是
+     * 「这台节点此刻能力够不够」，而 `GitHub 判决回读` 要等 45m —— 排在那后面等于把
+     * 结论推到最后一刻，红了也没人来得及看。 */
     const order = registeredGateOrder(read(".cnb.yml"));
     expect(order.length, "解析不出 COMFYAPP_CI_GATES —— 键被删了？").toBeGreaterThan(0);
     const at = order.indexOf("环境前提");
-    const depsAt = order.indexOf("Install dependencies");
+    const waitAt = order.indexOf("GitHub 判决回读");
     expect(at, "`环境前提` 不在清单里 —— 那一步因此没有任何执行者").toBeGreaterThan(-1);
-    expect(depsAt).toBeGreaterThan(-1);
+    expect(waitAt).toBeGreaterThan(-1);
     expect(
       at,
-      "`环境前提` 必须排在 `Install dependencies` 之前：它要答的是「装得成装不成」的" +
-        "前提，排在后面 = 那些结论要等装完（或装失败）才看得到",
-    ).toBeLessThan(depsAt);
+      "`环境前提` 必须排在 `GitHub 判决回读` 之前：前提结论要在 45m 的等待开始前给出",
+    ).toBeLessThan(waitAt);
   });
 
   it("那一步点名的入口真的在盘上（脚本存在而配置没接上 = 这一步白写）", () => {
@@ -548,11 +551,10 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
      * （两份文本副本 + 一条对账判据）。现役 `.cnb.yml` 在 2026-10-16 换了题：两段注释原文被取消失效，所以活的那支
      * （`^ {2}-`）才是要对账的形态；注释态那支改拿夹具，靠现役配置出题会让用例随停用清单一起失效。 */
     const live = readPipelineConfig(ROOT) ?? "";
-    /* 两格各代表一种形状：`每日浏览器安装` 带 `env:` 块，`Install dependencies` 是
-     * `script: |` 的多行体（2026-10-19 之前第二个名字用的是 PR 的 `E2E 关键流程`，
-     * 那一格现在撤到每日档；`浏览器安装` 也一并撤到每日档 ⇒ 这里读的是它在每日档里的
-     * 名字。**换格不换判**：判的还是「两份解析同口径」）。 */
-    for (const name of [BROWSER_INSTALL_STAGE, "Install dependencies"]) {
+    /* 两格各代表一种形状：`每日浏览器安装` 带 `env:` 块，`每日安装依赖` 是
+     * `script: |` 的多行体（2026-11-05 PR 档的安装格撤到 GA 后，第二个名字从
+     * `Install dependencies` 换成每日档这一格。**换格不换判**：判的还是「两份解析同口径」）。 */
+    for (const name of [BROWSER_INSTALL_STAGE, "每日安装依赖"]) {
       const active = stageBlockIn(live, name);
       expect(active, `${name} 解析不出内容`).toBeTruthy();
       expect(active, `活的形态下两份解析漂了（${name}）`).toBe(stageBlockGate(live, name));

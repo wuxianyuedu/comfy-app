@@ -161,13 +161,14 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 | ----------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
 | 本地              | `.githooks/pre-commit`（D0 形态前置档串行，A/B/C/D 四组并行；**默认档只跑 D0**，见 §13.5.25） | 分支守卫 + 形态前置那几条；tsc / eslint / 受影响用例 / 其余静态判据仍逐字在注册表里，由 `COMFY_HEAVY_GATES` 决定谁执行 | 只能 `--no-verify`（进历史，Review 可见） |
 | 平台（push 保护） | CNB **分支保护设置**                                                                          | `master` 的直接 push（放行 PR 合并）                                                                                   | 需管理员改设置                            |
-| 平台（流水线）    | 仓库根 `.cnb.yml` → 自托管节点（标签 `win`）                                                  | PR 上的门禁格（在场哪几格以 `.cnb.yml` 自己列的为准，见 §13.5.25）+ `master` 合并形态复核                              | 源分支删入口（见 13.6.1 服务端那两条）    |
+| 平台（代码判据）  | `.github/workflows/pr-gate.yml` → GitHub Actions                                                | 分支守卫 / 提交声明核对 / 同步数据库表结构 / 类型检查 / 十四格静态判据 / `oxfmt 格式` / `lib Node-only 声明` / 重档静态判据（2026-11-05 起这些格从 CNB 整格搬来，见 §13.5.33） | 无（PR 必跑）                             |
+| 平台（流水线）    | 仓库根 `.cnb.yml` → 自托管节点（标签 `win`）                                                  | **平台读数**（镜像身份 / 工作区复用读数 / 缓存槽读数 / 环境前提）+ **判决链**（GitHub 镜像同步 → 判决回读 → 日志分块 → 判决判定）+ `master` 合并形态复核 | 源分支删入口（见 13.6.1 服务端那两条）    |
 
 > **服务端形态重新有了调用方**：`scripts/check-branch-guard.cjs` 的
-> `--pr-check` / `--merge-commit` 由 `.cnb.yml` 调用（后者在 `push` 那条流水线里）。
-> 它们从来不是「为 CI 准备的第二份判据」——`tests/check-branch-guard.test.ts` 用
-> 真仓库跑三种拓扑，与本地门槛共用同一份实现。其中 `--merge-commit` 必须认得
-> squash，理由见上面那段。
+> `--pr-check` / `--merge-commit` 由 `.github/workflows/pr-gate.yml`（前者）与
+> `.cnb.yml` 的 push 流水线（后者）调用。它们从来不是「为 CI 准备的第二份判据」——
+> `tests/check-branch-guard.test.ts` 用真仓库跑三种拓扑，与本地门槛共用同一份实现。
+> 其中 `--merge-commit` 必须认得 squash，理由见上面那段。
 >
 > **`.cnb.yml` 的形态本身有判据**（`tests/no-platform-ci-config.test.ts`，在
 > 提交门槛的固定清单里）：顶层必须是分支键 → 事件键（#1229 的根因）、必须有
@@ -205,7 +206,7 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 ✅ node scripts/check-function-length.cjs --staged # 函数长度硬闸 TS/TSX（见 12 §12.13）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-rust-function-length.cjs # 函数长度硬闸 Rust 壳（见 12 §12.13.1）
 ✅ node scripts/check-infra-file-size.cjs --staged # 基础设施层文件长度**硬闸**：`scripts/**` 的 .cjs/.mjs 与 `tools/**` 的 .ps1，与 R5 同阈值同口径、另立一档（见 12 §12.8 R5 姊妹档）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-format.cjs --staged   # oxfmt 格式**硬闸**（无基线、无 `--update`）：2026-10-29 起回到 D0（见 13.5.1.1，ISSUE #2610）。红了当场 `pnpm exec oxfmt <它点名的文件>` —— **只点本次改的**，全库 `--write` 违 §13.7；平台侧「oxfmt 格式」那一格跑 `--changed`（改动面 ∩ `GLOBS`，ISSUE #2979 起 `GLOBS` 含 mjs/cjs、不过 `IGNORE_GLOBS`）作第二层，`--staged` 见下 13.5.8.2
+✅ node scripts/check-format.cjs --staged   # oxfmt 格式**硬闸**（无基线、无 `--update`）：2026-10-29 起回到 D0（见 13.5.1.1，ISSUE #2610）。红了当场 `pnpm exec oxfmt <它点名的文件>` —— **只点本次改的**，全库 `--write` 违 §13.7；平台侧「oxfmt 格式」那一格 2026-11-05 起由 GA `pr-gate.yml` 跑 `--changed`（改动面 ∩ `GLOBS`，ISSUE #2979 起 `GLOBS` 含 mjs/cjs、不过 `IGNORE_GLOBS`）作第二层，`--staged` 见下 13.5.8.2
 ✅ node scripts/shell-gate.mjs               # 桌面壳门禁：**只在暂存命中 src-tauri 四类壳输入时**
    # 才做事 —— 有 .rs 改动就跑 `cargo test`（壳内全部 #[test] 唯一的执行者；条数随源码
    # 变动，不在文档里记账），并复用
@@ -424,7 +425,7 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 | 位置                                     | 档位                                                            | 谁在跑                         |
 | ---------------------------------------- | --------------------------------------------------------------- | ------------------------------ |
 | `.githooks/pre-commit` 的 **D0**         | 输入面跳过（带 `--staged`）                                     | 每次提交，**第一层**           |
-| `.cnb.yml` 的「oxfmt 格式」           | **改动面**（`--changed`，`ifModify: src/ + .storybook/`） | `pull_request` 流水线，每次 PR |
+| `.github/workflows/pr-gate.yml` 的「oxfmt 格式」step | **改动面**（`--changed`，每次 PR 都跑，无 `ifModify`） | `pull_request`（GA 侧），每次 PR；2026-11-05 起从 CNB PR 档整格搬来（§13.5.33） |
 | `pnpm check:all` 的 `format` 项          | 改动面（`--changed`）                                          | 人的动作（完整验证那一档）     |
 | `pnpm format:check`（本地日常）          | 改动面（`--changed`，与平台同一条命令）                        | 人的动作                       |
 | `pnpm format:report`（存量盘点）         | 全量 `--report`（只列清单、退 0）                              | 人的动作，看欠账               |
@@ -5305,11 +5306,11 @@ CI 去执行」。答成「能，但**不是挪到 PR 那一条**」，理由有
 （匿名 `GET /repos/wuxianyuedu/comfy-app` = 404），唯一的证据躺在 cnb 那一格的日志正文里。
 
 ⚠️ **为什么只能从正文认，不能从格状态认**（这是 #3051 换来的一个必然后果，不是实现偷懒）：
-那一格自 #3051 起在主列，但形态是**读数档**（`ci-github-mirror-push.mjs --readout`，恒不退非零 ——
-主列某格 `error` 会把排在它后面的格整片 `skipped`，而 GitHub 那一跳坏了既不该拦合并、也不该被
-记成门禁的红）。于是它的 `status` 不再承载判决：实测 `cnb-vj3-1k6ddf69d` 那一格写的是
-`status=success`，正文却是 `推送失败（exit 128）：schannel: server closed abruptly`。
-拿 status 判出勤会把「推不通」念成「天天出勤」。
+那一格自 #3051 起在主列，2026-11-05 起翻成**承重**（摘除 `--readout`，推不出去即退非零、拦合）。
+但承重只改了「退码归谁」，没让 `status` 变成可读的形状 —— 它只回答「退没退非零」，而七类形状
+仍然只有正文里那一行才分得出来。下面这条读数就是它还是读数档时的现场：实测
+`cnb-vj3-1k6ddf69d` 那一格写的是 `status=success`，正文却是
+`推送失败（exit 128）：schannel: server closed abruptly`。拿 status 判出勤会把「推不通」念成「天天出勤」。
 
 - **判什么**：窗口内（默认 24h）PR 那些跑里，`GitHub 镜像同步` 这一格有没有至少一次
   「已推 · 已派发」；没有的话各是什么形状。形状是**七类**、各有自己的下一动作，
@@ -9261,6 +9262,51 @@ stage 的 stdout 不是 TTY；而同一份正文里那枚绿色的 `Runner` 证�
 `API 文档生成与自检` 这一格是本轮的标本（业主给的那张图就是它）：`[info]` 从前是裸
 `console.log`，与「通过」同一种灰；现在中间读数走 `[info]`（带色），三种结论走
 `gateSkip`（按面未触及）/ `gateFail`（typedoc 生成失败、产物不可用）/ `gatePass`（生成并自检通过）。
+
+#### 13.5.33 2026-11-05 薄化：CNB PR 档只留「平台读数 + 判决链」
+
+**改的是执行者，不是判据。** CNB PR 档（`.cnb.yml` 的 `质量门禁`）此前和
+`.github/workflows/pr-gate.yml` 同时在同一个 PR 事件上跑同一批静态判据 —— 同一份结论算两遍，
+而 PR 档的墙钟正是这台自托管节点最紧的共享资源（§13.5.21）。薄化后两边分工成一句话：
+**GA 判「这次改动的代码行不行」，CNB 判「这台节点此刻能不能跑、以及 GA 那边到底判成了什么」。**
+
+CNB PR 档保留的两类（它们**不在** GA 覆盖面上，摘了就没有执行者）：
+
+| 类 | 格 | 为什么只能在这边 |
+| --- | --- | --- |
+| 平台读数 | `镜像身份` / `工作区复用读数` / `缓存槽读数` / `环境前提` | 问的都是**这台节点**的事实（runner 身份、工作区复用路径、pnpm 槽根、工具链在不在）；GA 的 runner 是另一台机器，读数在那里没有对象 |
+| 判决链 | `GitHub 镜像同步` → `GitHub 判决回读` → `日志分块 1/3…3/3` → `GitHub 判决判定` | 镜像仓派发由这边做；GA 的结论必须**回读**才进本跑的退码 |
+
+撤出的 24 格与它们现在的执行者（与 `.gates` 顶部那段同表，任一处改必须同批改另一处）：
+
+| 撤出格 | 现在的执行者 |
+| --- | --- |
+| `分支守卫` / `提交声明核对` / `同步数据库表结构` / `类型检查` | `pr-gate.yml` 各自的同名 job |
+| `标题行让位` / `文件结构硬规则` / `跨平台动作对照` / `import 别名统一` / `ComfyUI 端口口径` / `内联样式注入` / `跨文件重复块` / `函数长度 TS` / `函数长度 Rust` / `模块循环依赖` / `端口推导跨语言一致性` / `CHANGELOG 碎片` / `主题色扫描` / `UI/逻辑分离` / `lib Node-only 声明` | `pr-gate.yml` 的 `静态判据` job（同一条命令、逐格 step） |
+| `oxfmt 格式` | `pr-gate.yml` 的 `oxfmt 格式` step（`check-format.cjs --changed`，无 `ifModify`） |
+| `重档静态判据`（含 `格式化提交分离` / `零消费导出`） | `pr-gate.yml` 的 `重档静态判据` job（`ci-heavy-gates.mjs`） |
+| `Install dependencies` | 各 job 自己的 `安装依赖` step；PR 档此后没有吃 `node_modules` 的格 |
+
+**判决链的三条语义**（都已在 `.cnb.yml` 落地，退码归属不许混）：
+
+1. `GitHub 镜像同步` **承重**：推不出去/派发失败即退非零。理由是「推不出去 = 这跑没判过 =
+   不许合」（#3051 期望第 3 条）；它的三态原值照旧打在正文里，出勤读数仍从正文认
+   （§13.5.23 的 `check:mirror-attendance` 那一档），不按 `status` 判。
+2. `GitHub 判决回读` 带 `--decision-out <文件>`，**退码恒 0**：它只取数与落盘（run / job /
+   step / 注解 / 失败窗口），判定交给最后一格 —— 中间格红了会把后面的格整片 `skipped`，
+   而「取不到判决」与「判决是红」必须分开念。
+3. `GitHub 判决判定` **承重**：读那份 decision 文件，读不到 ⇒ `exit 2`（没判过 ≠ 判过）。
+   取不到日志**不改变**三态与退码 —— 日志是证据，不是判决。
+
+**日志通道为什么不是附件**：`cnbcool/attachments` 这类插件格要 Docker，而自托管节点没开
+（实测 build `cnb-l4r-1k6lcffnv`：0s 红，原文 `Runner does not enable Docker.`）。现在走的是
+**压缩 + 分块打印**：只取失败 job 的日志 → gzip → base64 → 按 CNB 单 stage 102400 字节上限
+切块，每块带 `chunk i/N` 与校验和，三块约 300 KB（30 MB 原始日志 gzip 后通常几 MB，
+base64 再 ×1.33）。附件 stage 已删除，**不留一个每次都红的格**。
+
+**恢复动作是两处同批**：把某一格从 GA 搬回 CNB，要同时删 `pr-gate.yml` 的 step、把 stage
+加回 `.gates`、把名字加回 `COMFYAPP_CI_GATES`；`tests/no-platform-ci-config.test.ts` 的总账
+（`GATE_TIER_LEDGER`）会当场点名只改一边的形态。
 
 ### 13.6 分支与合并策略
 

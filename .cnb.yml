@@ -274,8 +274,9 @@
     #     ① `单元测试` 必须排在 `Python 可用性` 之后 —— `cnb-jt3-1k5071kou` 上它跑到
     #        **2h24m** 被 8640s 墙钟掐断（只留下 `timeout of 8640000ms exceeded`），
     #        而那一步**照旧会往下跑**（缺 Python 只让它少判几格）；
-    #     ② `环境前提` 必须排在 `Install dependencies` 之前 —— 它答的就是「这次装得成
-    #        装不成」的前提，排在后面等于把结论推到自己要解释的那一步后面。
+    #     ② `环境前提` 必须排在 `GitHub 判决回读` 之前 —— 它答的是「这台节点此刻能力
+    #        够不够」，排在 45m 的判决等待后面等于把结论推到最后一刻（2026-11-05 起
+    #        PR 档不再装依赖，原先「排在 Install dependencies 之前」的对象随之消失）。
     #     两条都不是风格。判据分别在 `tests/no-platform-ci-config.test.ts` 与
     #     `tests/ci-env-probe.test.ts`。
     #   · `DISABLED_GATES` —— **临时停用**的 stage 名清单（此刻是 `单元测试` /
@@ -325,6 +326,12 @@
     # ⚠️ 这一格**必须**与 `COMFYAPP_CI_GATES` 双向对账：清单里的每个名字要么有自己的 stage、
     # 要么在这儿登记；而这儿登记的每个名字都要在清单里 —— 否则「执行者没了」与「换了执行者」
     # 在配置里分不开，账面全绿（这正是 ISSUE #2227 的现场）。
+    #
+    # 2026-11-05：`格式化提交分离` / `零消费导出` 的**执行者**随 `重档静态判据` 那一格
+    # 搬到了 GA（`pr-gate.yml` 的同名 job），而它们的入口路径没有变（`ci-heavy-gates.mjs`
+    # 的 `HEAVY_GATES` 条目 → 钩子步骤）。所以这两行照旧留在这里：这里的键是**入口路径**，
+    # 不是「哪条流水线在跑它」；名字继续留在 `COMFYAPP_CI_GATES`，因为它们仍然在 PR 上
+    # 被判，只是换了一台 runner（档位注释见 `GATE_TIER_LEDGER` 的同名条目）。
     COMFYAPP_CI_GATES_ELSEWHERE: >-
       格式化提交分离=scripts/check-reformat-only.cjs,
       零消费导出=scripts/check-dead-exports.cjs
@@ -352,14 +359,15 @@
     #      —— 即 `scripts/ci-cp936-exit.mjs` 那层包裹。它已经在 `类型检查` 与
     #      `工作区出处` 两格上拿到第一手证据：后者的中文读数在平台日志里逐字可读
     #      （`[工作区出处] 出处·红 HEAD=… 而…`，两条构建都读得出来）。
-    #      **带这一层的三格（`ESLint 零警告` / `单元测试` / `重档静态判据`）
-    #      都带这层** —— 不带它，红的时候读到的又是 GBK 乱码。
-    #      其中 `ESLint 零警告` 与 `单元测试` 2026-10-19 起在每日档上，那两格的
-    #      `script` 同样带这层（`每日 ESLint 零警告` / `每日单元测试`）。
+    #      **带这一层的格（`ESLint 零警告` / `单元测试`）都带这层** —— 不带它，红的
+    #      时候读到的又是 GBK 乱码。这两格 2026-10-19 起在每日档上，`script` 同样带这层
+    #      （`每日 ESLint 零警告` / `每日单元测试`）。`重档静态判据` 2026-11-05 起整格
+    #      搬到 GA（Linux runner，没有 CP936 这一层的问题），不再是这里的例子。
     #
     # ⚠️ `oxfmt 格式` 已从停用清单里出网（ISSUE #2010），但它不是按上面那套恢复动作
     # 回来的 —— 它是**从本地钩子挪过来接管**的（执行者关系变了），别拿上面两条条件去
-    # 判断它。同一族的事实在 §13.5.25 又出现一次：本地钩子的 A/B/C/D 四档这一批整体
+    # 判断它；2026-11-05 又随薄化整格搬到 GA `pr-gate.yml`（见 `.gates` 顶部归属表）。
+    # 同一族的事实在 §13.5.25 又出现一次：本地钩子的 A/B/C/D 四档这一批整体
     # 挪到平台，走的也不是「停用/恢复」那套，而是「步骤留在钩子里当注册表、由档位决定
     # 谁执行」—— 因为 `check-gate-executors.cjs` 不认 `.cnb.yml` 是执行者。
     #
@@ -368,12 +376,13 @@
     # 下面那一行 → 从本清单删掉，三件事同批做完。恢复的依据不是「节点网络修好了」，
     # 而是**取法换掉了**（分片自取：片长自适应、断了从已落盘的字节接着来），
     # 读数与判读见规范 §13.5.3.5 ⑩ 与 `.gates` 里那两段注释。
+    # 2026-11-05 薄化：GA `pr-gate.yml` 已承接的 24 格从这一份撤出（逐项归属写在
+    # `.gates` 顶部那段）。这一份此后只有两类：**平台专有读数**（这台节点的事实）与
+    # **判决链**（镜像派发 → 回读 GA → 承重退码）。
     COMFYAPP_CI_GATES: >-
-      镜像身份, 工作区复用读数, 缓存槽读数, GitHub 镜像同步, 环境前提, Install dependencies, 分支守卫, 提交声明核对, 同步数据库表结构,
-      类型检查, 标题行让位, 文件结构硬规则, 跨平台动作对照, import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块,
-      函数长度 TS, 函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
-      UI/逻辑分离, lib Node-only 声明, oxfmt 格式, 格式化提交分离, 零消费导出, 重档静态判据, GitHub 判决回读,
-      日志分块 1/3, 日志分块 2/3, 日志分块 3/3, GitHub 判决判定
+      镜像身份, 工作区复用读数, 缓存槽读数, GitHub 镜像同步, 环境前提, GitHub 判决回读,
+      日志分块 1/3, 日志分块 2/3, 日志分块 3/3, GitHub 判决判定,
+      格式化提交分离, 零消费导出
     # master 合并复核那条流水线（push 档）自己的 stage 清单 —— 第三份，按档登记。
     # 2026-10-28 起这一档从「只有合并形态复核一格」扩成「树级校验档」：判的是**合并后的
     # 树**一致不一致、这次运行的事实是什么，不是「这次改动能不能过」（那由 PR 档判），
@@ -451,8 +460,8 @@
     #   加上同名的一格** —— 判据 `tests/no-platform-ci-config.test.ts` 逐格双向核对
     #   （PR 清单里不许再有它、每日清单里必须有它、且那一格点的仍是同一个入口与
     #   同一面旗标）。少了这条判据，「撤到每日档」与「悄悄删掉」在配置文件里逐字同形。
-    #   留在 PR 上的那一问是「这台机跑不动整条链吗」，由 `Install dependencies` 里的
-    #   `check-pnpm-available.mjs` 判 —— 它一秒就有答案，且每个 PR 都需要。
+    #   2026-11-05 起 PR 档不再装依赖（GA 的安装 step 接管那个问题），本档只留
+    #   平台读数与判决链；撤下来的每一格都得先在每日/GA 侧有执行者，判据同一条。
     COMFYAPP_CI_DAILY_GATES: >-
       每日失败立案, 每日令牌权限读数, 每日工具链自证, 每日安装依赖, 每日 YAML 真解析,
       每日 Python 可用性, 每日 Python 探针读数, 每日同步数据库表结构, 每日新鲜度账, 每日生产构建,
@@ -532,14 +541,14 @@
 #     stage 都在这一档，包括每一条全库级不变量与全部前提步骤。
 #
 # ⚠️ 还有**两种**收窄不在 `ifModify` 这一档（它们的前半是前提，跳不得）：
-#   · `Install dependencies` 的**装的那一跳** —— 依赖面（锁文件 / `package.json` /
-#     `pnpm-workspace.yaml` / `next.config.js`）一项都没碰就不装，判定在
-#     `scripts/ci-install-deps.mjs`（`pnpm` 自证照旧每次都跑，判据见 §13.5.20）；
+#   · `安装依赖` 的**装的那一跳**（push / 单跑那几档；PR 档 2026-11-05 起不再装）——
+#     依赖面（锁文件 / `package.json` / `pnpm-workspace.yaml` / `next.config.js`）一项都
+#     没碰就不装，判定在 `scripts/ci-install-deps.mjs`（`pnpm` 自证照旧每次都跑，
+#     判据见 §13.5.20）；
 #   · `oxfmt 格式` 的**扫描面** —— 判据面是「改动面 ∩ `GLOBS`」（`check-format.cjs`，
-#     ISSUE #2979 起 `GLOBS` 含 mjs/cjs、改动面不过 `IGNORE_GLOBS`），而这一格的
-#     `ifModify` 是手写 glob，与判据面是两份表达 —— 对账在
-#     `scripts/ci-incremental-gates.mjs` 的登记条目里（双向判）。
-#     ⚠️ `GLOBS` 的扩展名或 `IGNORE_GLOBS`（全量档那半）增删时**必须同批回看这两处**；
+#     ISSUE #2979 起 `GLOBS` 含 mjs/cjs、改动面不过 `IGNORE_GLOBS`）。2026-11-05 起
+#     它整格在 GA 上跑，没有 `ifModify`（每次 PR 都判），收窄面由判据自己算 ——
+#     原先那两份表达（手写 glob ⇄ GLOBS）的对账随之取消，不再是配置面的风险。
 #   · 判据脚本**自己的触发面** —— `API 文档生成与自检` 已于 2026-11-05 从 push 撤到每日档
 #     （ISSUE #2537），它在那一档**不带 `ifModify`**（每跑必判）；`docsApiTriggerGlobs()`
 #     仍是触发面的唯一派生处（从 typedoc 的解析根派生），供判据自己的 `--staged` 档与
@@ -719,8 +728,9 @@
     # 最坏墙钟（探活 ≈105s + 推送 ≈485s）与节点冷启动的余量。
     timeout: 10m
   - name: 安装依赖
-    # 与 PR 那一格 `Install dependencies` 的**命令行 / env / timeout 三样都逐字相同**
-    # （判据 `tests/no-platform-ci-config.test.ts` 的 `CROSS_LANE_SCRIPT_MIRRORS`）。
+    # 与 `每日安装依赖` 的**命令行 / env / timeout 三样都逐字相同**
+    # （判据 `tests/no-platform-ci-config.test.ts` 的 `CROSS_LANE_SCRIPT_MIRRORS`；
+    # 2026-11-05 起 PR 档不再有安装格，这一对面换成「每日 ⇄ push」）。
     # 同一份脚本长在几条流水线上各配一份 env，就是几条流水线各自漂（§12.12 的孪生形态，
     # 只是它长在配置里）。墙钟那一行是给 `ci-install-deps.mjs` 自己的 12m 预算留的余量，
     # 不是「抬 timeout 换绿」（#2360 / §11.13）。
@@ -825,8 +835,8 @@
   # 13.8s（逐格读数见 `COMFYAPP_CI_GATES` 那段），而它问的是**节点事实** ——
   # 一次 PR 改不动 PATH、改不动 winget。今天卡住每日那一跑的三条基线红里就有一条
   # 长在这一族上（`ci-toolchain-selfcheck`），「每次都判」换到的是噪声而不是结论。
-  # 留在 PR 上的那一半是 `Install dependencies` 里的 `check-pnpm-available.mjs` ——
-  # 它判的是「这台机跑不动整条链吗」，那才是每个 PR 都需要有人回答的问题。
+  # 留在 PR 上的那一半（`check-pnpm-available.mjs`）2026-11-05 起随安装格一起交给
+  # GA：那一问仍然有人答，只是换了一个 runner。
   - name: 每日工具链自证
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
@@ -891,11 +901,11 @@
   # 两臂读数（同一台机、同一份 master，唯一变量就是这一行 env）见规范 §13.5.3.4.3 与
   # `docs/audits/2026-10-21-timing-baseline-refs-volume.md`：接槽命中 13.8s、不接槽 48.8s（暖）。
   # ⇒ 代价是**每天多付 ~35s**，换来的是整条每日档有一个能构建的工作区 —— 槽是优化不是前提。
-  # 例外不是「可以随便漂」：判据钉死「PR 那一侧必须置着 `COMFY_CI_SLOT`、每日这一侧一个字都不许出现」，
+  # 例外不是「可以随便漂」：判据钉死「另一侧（2026-11-05 起是 push 档）必须置着 `COMFY_CI_SLOT`、每日这一侧一个字都不许出现」，
   # 其余各行仍然逐字相同；改这条形状要走判据，不能只改这里。
   - name: 每日安装依赖
-    # 与 PR 那一格同一条链 ⇒ 同一个墙钟（ISSUE #2360）。`timeout` 也在「逐字相同」的
-    # 比对面里：这一行改成别的数，就是三份副本里第一份开始漂。
+    # 与 push 那一格 `安装依赖` 同一条链 ⇒ 同一个墙钟（ISSUE #2360）。`timeout` 也在
+    # 「逐字相同」的比对面里：这一行改成别的数，就是副本里第一份开始漂。
     timeout: 20m
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
@@ -1596,10 +1606,10 @@
   # `每日 Python 探针读数`），判据双向核对（少了执行者就红，见
   # `tests/no-platform-ci-config.test.ts` 那条「撤下来的每一格必须有每日的对应」）。
   # 为什么它们不属于「每个 PR 都判」：三份脚本问的都是**节点事实**（PATH、winget/scoop
-  # 装没装、解释器住哪），一次 PR 改不动它们；留在这一条上的是
-  # `Install dependencies` 里的 `check-pnpm-available.mjs` —— 「这台机跑不动整条链吗」
-  # 才是每个 PR 都需要有人回答的那一问。逐格代价与这次决定的原文见
-  # `COMFYAPP_CI_GATES` 上面那段与 §13.5.23。
+  # 装没装、解释器住哪），一次 PR 改不动它们。2026-11-05 薄化之后这一档**不再装依赖**
+  # （GA 的 `安装依赖` step 接管），所以「这台机跑不动整条链吗」也不再是这一档的问题；
+  # 留在这里的只剩平台读数与判决链（逐项归属见本锚点顶部那段）。逐格代价与这次决定的
+  # 原文见 `COMFYAPP_CI_GATES` 上面那段与 §13.5.23。
   # ── 镜像身份（**读数，恒不退非零**；ISSUE #1993）──
   #
   # 这一步回答的是上一版答不出的那一格：**这台机器长自哪张镜像、哪一版**。
@@ -1631,9 +1641,8 @@
   # 这两份脚本问的是**这台节点上解释器住哪、哪条链起得来** —— 一次 PR 改不动 PATH、
   # 改不动 winget 装没装，而它们每次跑都要在 PR 上占一格排队位。撤下之后仍然有人判
   # 同一件事：`每日单元测试` 之前必有 `每日 Python 可用性`（顺序有判据），
-  # 而 PR 侧「跑不动整条链」那一问由下面 `Install dependencies` 里的
-  # `check-pnpm-available.mjs` 接着（它判的是 host 解析面，与上面那条不是一条链，
-  # 也不该被压成一条）。
+  # 而 PR 侧「跑不动整条链」那一问 2026-11-05 起交给 GA 的 `安装依赖` step（这一档此后
+  # 不装依赖，也就不再有一条会因 pnpm 解析面而红的链）。
 
   # ── 工作区复用读数（**读数，恒不退非零**）──
   #
@@ -1692,9 +1701,11 @@
   # 那时的表现是依赖不对但门禁全绿。
   #
   # ⚠️ 这一格**只读数、不碰盘**：动作在执行档 `scripts/ci-slot-apply.mjs`，而它由
-  # `COMFY_CI_SLOT=1` 才拨 —— 开关的落点在下面那格 `Install dependencies`（本格不置它，
+  # `COMFY_CI_SLOT=1` 才拨 —— 开关的落点在 push / 单跑那几档的安装格（本格不置它，
   # 两格各判一件事：这里回答「会不会命中」，那里执行「命中就接」）。机制与开关分两批推，
   # 理由同 §13.5.25 那条纪律：那一格每次构建都要过，键算错一次的代价是所有 PR 装不上。
+  # 2026-11-05 薄化后 PR 档不再装依赖，这一格只回答「假如这一档装，会命中哪一档」——
+  # 读数本身仍是平台事实（槽根由 `pnpm store path` 决定），所以留下。
   #
   # **这里一个路径都不写**：槽根由 `resolveCacheRoot` 在作业时问
   # `pnpm store path`（同一条 cwd、同一条解析面，所以就是那次 install 真正会用的 store），
@@ -1714,11 +1725,12 @@
   # 树，读数才对得上账。
   #
   # ⚠️ 它从 `endStages` 前移到这里（#3051），改的是**起跑时机**：平台对 endStages 的语义是
-  # 「stages 跑完才执行」，而这条流水线实测整跑 **2546s**（全绿跑 `cnb-aju-1k6bpjnrk` 的逐格
+  # 「stages 跑完才执行」。薄化前这条流水线实测整跑 **2546s**（全绿跑 `cnb-aju-1k6bpjnrk` 的逐格
   # 读数：`固定结构用例` 873.2s / `Install dependencies` 446.4s / `受影响用例` 350.2s /
-  # `重档静态判据` 345.3s），于是 GitHub 那一跑最早只能在一个多小时之后开始 —— 等
-  # 「按同一笔 sha 读回 GitHub 判决」那一格上线，两条远端就成了串行。前移到
-  # `Install dependencies` **之前**，它吃的是 `Prepare` 之后那份已就位的树。
+  # `重档静态判据` 345.3s），于是 GitHub 那一跑最早只能在一个多小时之后开始（那几格
+  # 2026-11-05 已随薄化撤到 GA，见 `.gates` 顶部那段）。前移到主列开头，它吃的是
+  # `Prepare` 之后那份已就位的树 —— 且必须排在下面所有读数之前：GA 越早起跑，
+  # 末尾那格 45m 的判决等待越可能在预算内拿到结论。
   #
   # ⚠️ 前移**未改承重性**，且本批已把它翻成 **fail-closed**（#3051 期望第 3 条落地）：主列的退码
   # 是承重的 —— 某一格 `error` 会把排在它后面的格整片 `skipped`（本仓把同一条约束写成判据：
@@ -1750,7 +1762,7 @@
     # 脚本文件头第 8 条）。10m 是外框，包住最坏墙钟（≈105s + ≈485s×2）与冷启动余量。
     timeout: 10m
 
-  # ── 环境前提（**必须排在 `Install dependencies` 之前**，ISSUE #1959）──
+  # ── 环境前提（**必须排在 `GitHub 判决回读` 之前**，ISSUE #1959）──
   #
   # 上面三步答的是「四件工具在不在」「解释器住哪」，这一步答的是它们旁边那**三格**：
   #
@@ -1761,10 +1773,12 @@
   # 三格的共同形态正是 ISSUE #1959 里那句「别等到执行几十分钟后才发现环境不行」：
   # 第 ① 格**不会让哪一步变红**（门禁的 Python 侧以「探测不到」的名义退出比对、
   # 几条真跑的用例走 `env` 档跳过并登记 —— 与「装好了」在日志里逐字同形），
-  # 第 ② 格红在**几十步之后**（`Install dependencies` 那段 PowerShell 自己），
+  # 第 ② 格红在**几十步之后**（GA 那边 `安装依赖` 那段 PowerShell 自己），
   # 第 ③ 格红在**整条流水线的倒数第二步**（`浏览器安装`）；
   # 而第 ②③ 格在跑到那一步之前会先把预算是花掉 —— 实测第 ③ 格就是「前面三十步
   # 全绿、二十几分钟之后卡在下载上」（`cnb-gt1-1k513ill4` / `cnb-g9d-1k515kvrq`）。
+  # 2026-11-05 薄化后这一档不再装依赖，第 ② 格的对象是 GA 的安装 step；这里保留
+  # 第 ①②③ 三问是因为它们问的都是**这台节点**的事实（GA 的 runner 是另一台机器）。
   #
   # 判据不重写：解释器怎么找走 `ci-toolchain-python.mjs` 的 `findPython()`（与
   # `Python 可用性` 同一份候选表、同一个探针），`.cnb.yml` 的语法面复用
@@ -1774,8 +1788,8 @@
   # 同一次结论，不造第二轮子）。
   # 逻辑在 `scripts/ci-env-probe.mjs` —— **不在这里就地写 PowerShell**，理由与
   # `工具链自证` 逐字相同：配置里的逻辑一条判据都测不到它。
-  # 代价几秒（浏览器那格最坏是 4 个候选 × 8s 的 HEAD 串行），跑在**任何依赖安装
-  # 之前**（它只 import `node:*`，那时 `node_modules` 还没有）。
+  # 代价几秒（浏览器那格最坏是 4 个候选 × 8s 的 HEAD 串行），它只 import `node:*`，
+  # 因此在这一档（此后不再有安装格）排在任何长等待之前都能立刻给出结论。
   #
   # ⚠️ 第 ③ 格**只在前置判定**（它是判据、要快），与 `浏览器安装` 失败分支那份
   # 「四个域全量一遍供人定位」的取证刻意不同 —— 后者是失败之后给人看的现场。
@@ -1784,225 +1798,44 @@
   - name: 环境前提
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-env-probe.mjs
 
-  # ── 安装 ──
-  # 门禁用 pnpm（AGENTS 硬规则 1：npm 11 在本项目解析 typescript 别名链会崩）。
-  # --frozen-lockfile 保证装的就是锁文件里的版本。
-  # 刻意**不**开 corepack enable：自托管宿主机上 pnpm 是预装的，corepack 在
-  # 非交互环境里为解析 packageManager 去拉版本会挂住；裸 `pnpm -v` 的上一步
-  # 已经证明它可用。
+  # ── 2026-11-05 薄化：GA 承接的 24 格从 PR 档撤出 ──
   #
-  # ⚠️ **依赖面没动就跳过「装」那一跳**（ISSUE #1981 收尾）：
-  # `ifModify` 只能整步跳过，而本步前一半（`check-pnpm-available.mjs`）是**前提**
-  # 步骤（跳过它 = 后面几十步都建立在一个没验过的解析面上）。所以收窄放在**步内**：
-  # 锁文件与依赖面（`pnpm-workspace.yaml` / `next.config.js` / 补丁目录）一个都没碰时，
-  # `node_modules` 本来就在、`--frozen-lockfile` 是一次空操作 —— 这一跳省掉的是
-  # pnpm 自己那几秒（实测 59~61s 的绝大部分是后面的 `postinstall` 里那几条
-  # node 脚本与缓存刷新，见 §13.5.20）。`pnpm` 自证照旧每次都跑。
-  - name: Install dependencies
-    env:
-      # 开关（ISSUE #2022 第二步，机制见 §13.5.3.4.3）：**这一跑开始走槽**。
-      # 走与不走都由 `ci-install-deps.mjs` 自己打印（`✓ 走缓存槽（reuse）` /
-      # `走缓存槽（install-into-slot）` / `槽未接管（原因）⇒ 照常装`），所以三档收益的
-      # 读数是从它自己的那句话里取的，不是从「这格变快了」倒推的。
-      # 该比的两侧在同一格内就有：未命中那一跑量的就是冷装本身，命中那一跳根本没发生
-      # （同日三档实测外加一条普通装对照都在规范 §13.5.3.4.3 末那张表里，跨天不可引用）。
-      # ⚠️ **哪几档置它，判的是「这一档后面有没有 `next build`」，不是档名**：PR 这一格与
-      # push 那一格 `安装依赖` 置着；每日那一格按策略不接（ISSUE #2081：它后面背着
-      # `每日生产构建`，接槽形态下 Turbopack 拒指向项目根之外的 node_modules 链；#2521 已把
-      # 官方 `experimental.turbopackAdditionalRoots` 那扇门装上，但**每日那一档还没在它上面
-      # 跑过一次构建**，所以这条限制暂时原样留着 —— 撤它要先验，不是照 #2521 的在场就当我们验过了）。
-      # 每日那一侧的「一个字都不许出现」由 `tests/no-platform-ci-config.test.ts` 的
-      # `DAILY_ENV_ONLY_ON_PR` 登记；回退 = 摘掉这里这一行**并同批**把该键从那份名单里删掉，
-      # 只动一边会被那条判据当场点名（名单过期）。
-      COMFY_CI_SLOT: "1"
-    # ── 这一格自己带墙钟（ISSUE #2360）──────────────────────────────────────────
-    #
-    # 现场：`cnb-c6r-1k5osfdl8` 上这一格挂到**平台 8640s 硬上限**才被掐断 —— 整格日志
-    # 19 行、**pnpm 自己的输出一行都没有**（前一步 `check-pnpm-available` 刚在同一秒
-    # 打印过 pnpm 12.4.1），而同机同链的上一跑是 `Done in 2m 42.7s`（`cnb-1mr-1k5p4ihfr`）。
-    # 挂住的形态里 pnpm 的 stdout 是空的（它的进度条只在 TTY 上输出），所以「卡住」与
-    # 「还在跑」在日志上逐字同形 —— 等到平台掐断那一刻，仍然只留下一句
-    # `timeout of 8640000ms exceeded`，既不说是谁挂的，也不给下一动作。
-    #
-    # 两件事同批做掉，**判据一字未改**：
-    #   · 装那一跳自带预算（`scripts/ci-install-deadline.mjs`，默认 12 分钟 ≈ 平台上限的
-    #     1/12、节点读数 169s~275s 的 2.6~4.3 倍），用尽就收回子进程、退 **2（未判定）**，
-    #     并把「卡在第几秒、下一动作是什么」打在脸上；
-    #   · 每 30s 一行心跳，于是同一个死法下一次**读得出它在第几秒停住的**。
-    #
-    # 这一行的 20m 也是为此：要让**自己的**预算（12m）先到，而不是让平台先掐断。
-    # 它不是「抬 timeout 换绿」（§11.13 明令禁止那件事）—— 判据没松，改的是拿不到结论
-    # 时的收场方式；20m 仍然远小于平台的 8640s，卡死形态二十分钟内报出来。
-    # ⚠️ **这一行必须与 `每日安装依赖` / push 那一格 `安装依赖` 逐字相同**：判据
-    # `tests/no-platform-ci-config.test.ts` 的 `CROSS_LANE_SCRIPT_MIRRORS` 三样都比 ——
-    # 命令行、env 赋值、`timeout`（三份副本各漂一份就是这条链最难查的形态）。
-    # 那几格 `单跑*·安装依赖` / `打包·安装依赖` 不在这一对面里，它们由
-    # `scripts/ci-oneshot-gates.mjs` 逐格登记自己的真身：默认是 `每日安装依赖`（不接槽那一族），
-    # 而 `单跑单测·安装依赖` 登记的是**本格**（接槽那一族 —— 判的是「后面有没有真构建格」，
-    # 不是档名；#2853 换真身的那一步，注册表头注写着整段因果）。
-    timeout: 20m
-    script: |
-      $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
-      $ErrorActionPreference = "Stop"
-      # 动依赖面前先自证一件事：**这个宿主真的起得来 pnpm** —— 而它正好是这一步
-      # 的全部动作。放在这里而不是更早的 stage，是因为这条判据**在更早的位置上做不
-      # 出来**：`工具链自证` 那份探针刻意按形态解析（corepack 摆在盘上的 pnpm 有三个
-      # 形态，Node 只起得来其中一个，见 §2.1.1），而这一句走的是 host 自己的解析面 ——
-      # 两者不是同一条链，也不该被压成一条（脚本自己写着理由：判据全在
-      # `scripts/launcher-core/corepack.mjs`，它是薄壳）。
-      #
-      # 顺序要紧：**判在装之前**。装失败之后再判，红的位置就与原因分开了 —— 而
-      # 「pnpm 起不来」这条链上此前每一轮都是这个形态（第一步绿、几十步之后才以一个
-      # 看不懂的错收场，实测见 §13.5.3.6）。这里 1 秒就能问出来，且它跑在
-      # `Install dependencies` 本来的位置上，代价是零。
-      node scripts/ci-cp936-exit.mjs -- node scripts/check-pnpm-available.mjs
-      # 这一跳按语义判，不按「有没有 ifModify」判：空转的安装不该被跑，
-      # 而前提步骤不该被跳。判定口径与理由全在脚本头注（唯一实现）。
-      node scripts/ci-cp936-exit.mjs -- node scripts/ci-install-deps.mjs
+  # 撤的是**执行者**，不是判据：`.github/workflows/pr-gate.yml` 在同一个 PR 事件上逐格跑
+  # 同一批入口（镜像仓侧的 runner 不在这台 Windows 节点上），而这一档的结论已经改成
+  # 「镜像格派发 → 回读 GA 判决 → 判定格承重」—— GA 红，这一条就红。两边同时跑等于把
+  # 同一结论算两遍，而 PR 档的墙钟正是这台节点最紧的共享资源（§13.5.21）。
+  #
+  # 逐项归属（撤出格 → 现在的执行者 / 结论在哪读）：
+  #   分支守卫                  → pr-gate.yml `分支守卫` job
+  #   提交声明核对              → pr-gate.yml `提交声明核对` job
+  #   同步数据库表结构          → pr-gate.yml `同步数据库表结构` job
+  #   类型检查                  → pr-gate.yml `类型检查` job
+  #   标题行让位 / 文件结构硬规则 / 跨平台动作对照 / import 别名统一 / ComfyUI 端口口径 /
+  #   内联样式注入 / 跨文件重复块 / 函数长度 TS / 函数长度 Rust / 模块循环依赖 /
+  #   端口推导跨语言一致性 / CHANGELOG 碎片 / 主题色扫描 / UI/逻辑分离 / lib Node-only 声明
+  #                             → pr-gate.yml `静态判据` job（同一条命令、逐格 step）
+  #   oxfmt 格式                → pr-gate.yml `oxfmt 格式` step（`check-format.cjs --changed`）
+  #   格式化提交分离 / 零消费导出 → 原本就在复合格 `重档静态判据` 里，随该格一并到
+  #                             pr-gate.yml `重档静态判据` job（`ci-heavy-gates.mjs`）
+  #   重档静态判据              → pr-gate.yml `重档静态判据` job
+  #   Install dependencies      → 各 job 自己的 `安装依赖` step；PR 档此后没有吃
+  #                             `node_modules` 的格，这一格装完也没人用（446s/PR）
+  #
+  # 留在这一档的三类（它们**不在** GA 覆盖面上，摘了就没有执行者）：
+  #   · 平台读数：镜像身份 / 工作区复用读数 / 缓存槽读数 / 环境前提（问的都是这台节点的事实，
+  #     GA 的 runner 是另一台机器，读数在那里没有对象）；
+  #   · 派发：GitHub 镜像同步（GA 那条 workflow 由它触发）；
+  #   · 判决：GitHub 判决回读 / 日志分块 ×3 / GitHub 判决判定（承重退码）。
+  #
+  # ⚠️ 恢复动作不是「取消注释」：这些格的真身现在在 `pr-gate.yml`，要回到这一档得
+  # **两处同批**改（删 GA 的 step + 把 stage 加回这里并登记进 `COMFYAPP_CI_GATES`），
+  # 判据 `tests/no-platform-ci-config.test.ts` 的总账会当场点名只改一边的形态。
+  #
+  # ⚠️ 下面这段**不是**薄化撤出的一部分：`单元测试` 是 2026-10-19 起就停用（并发 PR 会
+  # 把带超时的读数变成不可信的红，§13.5.21），原文一直以注释形态留在这里供恢复 ——
+  # 它恰好落在那 24 格说过的那段文本里，整段替换时必须一起搬出来，**别顺手删掉**。
 
-  # ── 分支保护 ──
-  # 守在最前：分支不对时后续检查的结果最后都会被丢弃（与 pre-commit 同序）。
-  # 与 .githooks/pre-commit 用的是**同一个** scripts/check-branch-guard.cjs，
-  # 不另写一份「CI 专用」的分支名判断（会漂移的判据只许定义一次）。
-  # --target master 由配置写死传入：判定要的是**分支名**，而流水线里的
-  # CNB_PULL_REQUEST_TARGET_SHA 是 sha —— 拿它当 branch 用会静默失效。
-  - name: 分支守卫
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-branch-guard.cjs --pr-check --target master
-
-  # ── 提交声明核对（平台侧的第二个执行者，ISSUE #2070）──
-  #
-  # 判的是「提交信息里那句『§x.y 照旧保留』在那次提交的树里是不是真在」。这一格的
-  # 存在理由不是再判一遍，而是**换一个执行者**：本地那一段（`premerge-check.mjs` 的
-  # `claims` 段）只在推送那一刻跑一次，而它过去取的是**最近一次提交** —— 假声明长在
-  # 批次里较早那笔上时恰好看不见（`ad81a912` 就是这么进的主干：那句话在它自己的树里
-  # 不成立，`docs/standards/13` / `AGENTS.md` / `.githooks/pre-commit` 里都没有
-  # §13.5.13 / §13.6.3 两节，后来才被补回来）。
-  #
-  # 两件事同批做掉，判据本体一字未改：
-  #   · 扫描面从「最近一笔」改成 `<分叉点>..HEAD` = **本次带进来的那一批**；
-  #   · 取不到分叉点时那一段记 **2（没跑起来）并说明**，不再折成 0（绿的）。
-  #
-  # 平台上这一格跑的是**同一个入口**（`--only=claims`），不是第二份实现 ——
-  # 「目标那条线」在这里的来源是 `CNB_PULL_REQUEST_TARGET_SHA`（这台节点只 fetch
-  # 协商后的单 ref，未必有 `origin/master` 这个引用名；`受影响用例` 用的是同一个），
-  # 分叉点仍然要算 `merge-base`，不拿尖端充数。
-  #
-  # 代价（本机实测）：没有声明的提交只值一次 `git log`，30 笔 14 秒；贵的是**真带
-  # 声明**的那几笔（单条约 49 秒，要对每一节 `ls-tree` + 逐份 `git show`），
-  # 而一条 PR 通常 0~1 笔。墙钟给 10 分钟兜那一头。
-  - name: 提交声明核对
-    timeout: 10m
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/premerge-check.mjs --only=claims
-
-  # ── 新鲜度账判决（2026-10-23 从 PR 那一条撤到**每日档**；ISSUE #2300 主体分权）──
-  #
-  # 判据本体**一字未改**（仍是 `scripts/freshness-gate.mjs`，与本仓 `.githooks/pre-commit`
-  # 的 D 组「每档都有主」同一份，§13.5.17 同款）；改的只是**它在哪一条流水线上跑**。
-  #
-  # 为什么撤（这一条是主体分权的直接后果）：**PR 上下文读的是主干的账**。
-  # `FRESHNESS_TRACKS` 三档的 `subject` 现在都是 `master`
-  # （`scripts/freshness-ledger.mjs` 的 `contextSubject()` 读 `COMFY_CI_SUBJECT`，
-  # 空 ⇒ `"pr"`），而那一档的**权威账在机器自有分支 `ci/freshness-ledger` 上** ——
-  # 那是**主干**的账（每日档在 master HEAD 上跑出来的那一份）。
-  # 于是 PR 这一格判的是「这台机器 / 主干怎么被调度」，**不是任何一次 PR 的缺陷**
-  # （与 `.gates` 里「工作区复用读数」那段同一句原则）。留在 PR 上，它只会把主干的红
-  # 算到这次 PR 头上 —— 那正是「判据主体分权」要治的那件事。
-  #
-  # 每日那一格叫 `每日新鲜度账`（`.daily-gates` 里），`script` 与这里**逐字相同**，
-  # env 多带一行 `COMFY_CI_SUBJECT: "master"`（主体=master ⇒ 读机器分支那份权威账）。
-  # 判据钉住这一对：PR 清单里不许再有它、每日清单里必须有那一格、那一格点的仍是
-  # `scripts/freshness-gate.mjs`（`tests/no-platform-ci-config.test.ts` 的
-  # `PR_MOVED_TO_DAILY`；恢复动作与 `ESLint 零警告` 那条同款）。
-  #
-  # ⚠️ **位置约束整套搬到了每日那一条**：跑法脚本
-  # （`artifact-run.mjs` / `full-suite-run.mjs` / `e2e-run.mjs`）跑绿之后**会刷新自己那笔账**，
-  # 而同一分支的 stage 共享同一个工作区 —— 排在它后面时这一步读到的是**刚被这一次
-  # 运行改过的账**，于是「账是旧的」这件事**永远判不出来**（判据在场、结论恒放行，
-  # 正是本仓最不能有的形态）。
-  # 每日档里会刷新账的三格是 `每日生产构建` / `每日全量E2E` / `每日单元测试`
-  # ⇒ `每日新鲜度账` 排在它们**之前**（判据：`tests/doc-check-hook-wiring.test.ts`
-  # 的「每日档里凡刷新账的档都排在它之后」那一组）。
-  #
-  # 恢复动作：取消下面三行注释 → 名字挪回 `COMFYAPP_CI_GATES` → 从
-  # `COMFYAPP_CI_DISABLED_GATES` 删掉 → 删掉 `.daily-gates` 里的 `每日新鲜度账`
-  # 与 `COMFYAPP_CI_DAILY_GATES` 里的名字。
-  #   - name: 新鲜度账
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/freshness-gate.mjs
-  #   # 秒级；给 5m 只是「卡死要早报」这条量级余量（判据本身远小于它，不需要更宽）。
-  #   timeout: 5m
-
-  # ── 建库 ──
-  # 走 scripts/db-push.mjs —— 它复核库里到底有没有表，失败即非零退出。
-  # 后面的 E2E 要真的读到库（见 e2e/smoke.spec.ts 的「数据库链路」一组），
-  # 故必须放在最前。
-  - name: 同步数据库表结构
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/db-push.mjs
-
-  # ── 类型 / 静态检查 ──
-  #
-  # 「类型 / 静态检查」这一段的顺序里**没有先后约束**（都只读工作区、互不依赖），
-  # 唯一一条有位置约束的是 `新鲜度账`（必须排在任何会刷新账的跑法脚本之前，见那一格）。
-  #
-  # ⚠️ 这一格与下面 `lib Node-only 声明` 起本地 CLI 走 `scripts/ci-run-tool.mjs`，
-  #   **不写 `node_modules/.bin/<名字>`**（ISSUE #2572）：那三个垫片（`.cmd` / `.ps1` /
-  #   无扩展名 shim）是 pnpm 摆给**宿主 shell** 的，Node 一个都直接起不了，于是
-  #   `ci-cp936-exit.mjs` 只能回退去起同目录那份 `.ps1` —— 起一个仓里的编译器要绕一层
-  #   PowerShell 宿主。直起包真身之后那一层没有了，DEP0190 那类「开 shell + args 数组」
-  #   的弃用形态也不会从这里长回来（判据 `scripts/spawn-shell-scan.mjs`）。
-  #
-  # ⚠️ **按名字问，不按依赖名问**：本仓 `typescript` 是别名 `npm:@typescript/typescript6`
-  #   （`bin` 键 `tsc6`），而 `tsc` 这个名字归另一个包（`@typescript/native`，自报名
-  #   正是 `typescript`）。两份编译器各有名字、互不等价，所以「它跑的是哪一份」必须由
-  #   垫片自己回答 —— 口径与实测在 `scripts/package-bin-entry.mjs` 的
-  #   `resolveBinEntryByName` 上方，回归判据在 `tests/spawn-shell-scan.test.ts`。
-  - name: 类型检查
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-run-tool.mjs tsc --noEmit
-
-  # ── 受影响用例 / 固定结构用例：2026-11-02 从本档（PR）撤到每日全量单测 ──────────
-  #
-  # 两格在 PR 上慢且性价比低：本地实测 3.2~3.5 分钟，但冷节点 + 并发 PR 叠加会跑到
-  # 25m+（自带墙钟预算 25m、stage 预算 45m），且偶发 `AggregateError` 假红（worker /
-  # 模块装载炸了 ≠ 改动有回归）。判据面整份被 `每日单元测试` 全量套件覆盖（固定结构契约
-  # 测试那几个文件本就在全量套件里），与 §13.5.21「全量单测只留每日档」同口径：共享节点上
-  # PR 级测试读数不可信，每日档空机才可信。附带：`core 骨架单一事实源` / `core 出口纪律与
-  # 基类纯度` 两格的执行者正是这一族的固定清单，随之记成 retired（每日全量单测覆盖）。
-  # 降级登记见 `tests/no-platform-ci-config.test.ts` 的 `GATE_TIER_LEDGER`。执行者
-  # `scripts/ci-affected-tests.mjs` 保留（仍可手动 / 单跑口复用）。
-
-  # ── ESLint 零警告（ISSUE #2022 起恢复；停用期间的历史与两条恢复条件见下面这段）──
-  # 停用期的理由（2026-10-16）：它跑得通，但那一轮它在每一格 E2E 调绿的提交里都重跑一遍，
-  # 节点侧 256~274s 而**没有新信息** —— 因为当时本地钩子的 B 组每条提交都在跑同一条
-  # `pnpm run lint`。**那个前提今天反转了**：钩子默认只跑 D0 形态档，本地不再跑它，
-  # 于是这一格从「重复」变成「唯一执行者」。
-  # 当初的两条恢复条件现在都成立：① E2E 那两格已绿；② 平台日志中文可读 —— 依据是同一台
-  # 节点上 `工作区出处` 那格的读数在流水线日志里逐字可读（`[工作区出处] 出处·红 HEAD=…`），
-  # 而那条通道就是下面这层 `ci-cp936-exit.mjs`（它把子进程按 UTF-8 输出，退出码原样透传）。
-  # ⚠️ 恢复时**必须一起带上那层包裹**：不带它，红的时候读到的又是 GBK 乱码，
-  # 而「读不出原因」正是当初退回它的那一半理由。
-  #
-  # ⚠️ **命令口径只有一处**（2026-10-19 订正；#3157 收口）：这一格跑 `pnpm run lint`，
-  #   **不是** `eslint .`。扫描范围（白名单目录）与参数（`--deny-warnings`）收在
-  #   `package.json` 的 `lint` 脚本里 —— 本地钩子的 B 组、`scripts/quality-gate.mjs`、
-  #   `quality-gate.ps1` 用的都是它，这里是第四个（也是唯一一个曾经没跟上的）调用点。
-  #
-  #   现场（`cnb-hpl-1k5a0s6ss`，历史）：当时的 `eslint . --max-warnings 0` 在全仓上
-  #   跑满 20m、**零输出**被平台掐断（`Finished, code: 1` 来自强杀，不是规则报错）。两处
-  #   口径差的两半都在那一跑里量得出来：同一跑 `类型检查` 77.3s、`重档静态判据`（本地
-  #   串行实测 125s）都不超两分钟，而 `eslint .` 既多扫 `docs/**` 与仓库其它 `.ts/.js`
-  #   面，又没有缓存 ⇒ 每个文件都按类型感知规则从头算一遍。
-  #
-  #   #3157 起 eslint 已退役、只剩 oxlint 单档；缓存这一步（`--cache` 与
-  #   `scripts/eslint-cache-fingerprint.mjs`）整体删除，当前读数按 `pnpm run lint` 计。
-  # 命令口径已经收到 `pnpm run lint`（上面那段），但这一格**仍然撤到每日档**
-  # （2026-10-19，与 `生产构建` / `单元测试` 同一档、同一个理由）：
-  #
-  #   · 它是这台机上仅有的几档**起一堆子进程**的格子之一（类型感知规则要真起
-  #     `typescript` 宿主），而节点只有一台、没有并发旋钮 ⇒ 并行 PR 会让它的墙钟
-  #     读数不可信（§13.5.21）。现场已经有过两次：`cnb-jt3-1k5071kou` 挂到 8640s，
-  #     `cnb-hpl-1k5a0s6ss` 挂满 20m —— 两次都不是「规则报错」；
-  #   · 与 `生产构建` 同一条取舍：PR 那一格回答的是「这次改动能不能过 lint」，
-  #     而那件事在本地有执行者（`pnpm run lint` 一条命令、钩子的 B 组），
-  #     平台侧再跑一遍是第二个执行者、不是第二份信息。
+  # ── ESLint（**临时撤到每日档**，2026-10-19；本段与下一段都是停用原文，别删）──
   #
   # 每日那一档的名字是 `每日 ESLint 零警告`，命令与这里**逐字相同**（判据
   # `tests/no-platform-ci-config.test.ts` 的 `PR_MOVED_TO_DAILY` 钉住这一对：
@@ -2020,6 +1853,34 @@
   #   # ⚠️ 这条线**不是**用来兜「口径写宽了」的：上面那段那次 `eslint .` 就正好落在里面
   #   #   —— 它挂了整整 20m 才被掐断，而不是当场红。预算按设计只回答「卡死没有」。
   #   timeout: 20m
+
+  # ── 换了执行者的两格（原文以注释形态留着；2026-11-05 起执行者是 GA 的 `重档静态判据` job）──
+  #
+  # 它们从来没有自己的 stage：判据本体是 `scripts/ci-heavy-gates.mjs` 里的条目
+  # （执行面 = 钩子注册表），原先由 PR 档的 `重档静态判据` 那一格跑；2026-11-05 那一格
+  # 整格搬到 `.github/workflows/pr-gate.yml` 的同名 job，这两条的档位随之 retired
+  # （见 `GATE_TIER_LEDGER`）。原文留在这里有两个用处：
+  #   ① 恢复动作（真要拆回独立 stage：取消注释 → 从复合格条目表删同名条目 → 名字挪回
+  #      `COMFYAPP_CI_GATES` 并从 retired 段删）；
+  #   ② `scripts/.gate-executor-ledger.json` 里 `check-dead-exports.cjs` 的
+  #      「(无旗标)」那一形，认的就是这一行命令的形状 —— 删掉它，台账会报「这一形
+  #      没人跑」，而真正的原因是**证明形状的那份原文被删了**。
+  # - name: 格式化提交分离
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-reformat-only.cjs
+  # - name: 零消费导出
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-dead-exports.cjs
+
+  # ── 新鲜度账（**临时撤到每日档**，ISSUE #2300；停用原文，别删）──
+  #
+  # 每日那一格叫 `每日新鲜度账`（`.daily-gates` 里），`script` 与这里**逐字相同**，
+  # env 多带一行 `COMFY_CI_SUBJECT: "master"`（主体 = master ⇒ 读机器分支那份权威账）。
+  # 恢复动作：取消下面三行注释 → 名字挪回 `COMFYAPP_CI_GATES` → 从
+  # `COMFYAPP_CI_DISABLED_GATES` 删掉 → 删掉 `.daily-gates` 里的 `每日新鲜度账`
+  # 与 `COMFYAPP_CI_DAILY_GATES` 里的名字。
+  #   - name: 新鲜度账
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/freshness-gate.mjs
+  #   # 秒级；给 5m 只是「卡死要早报」这条量级余量（判据本身远小于它，不需要更宽）。
+  #   timeout: 5m
 
   # ── 测试（**临时停用**，ISSUE #1959）──
   #
@@ -2086,298 +1947,6 @@
   # 只有 `timeout of 8640000ms exceeded` —— 一条失败原因都读不到。
   # 给 45m：真跑得完的形态差三倍余量，卡死的形态 45m 报出来。
   # timeout: 45m
-
-  # ── 结构 / 一致性硬规则（与 .githooks/pre-commit 同一批脚本）──
-  # ⚠️ `ifModify` 的第一处示例（本档共 17 处，全部登记在
-  # `scripts/ci-incremental-gates.mjs`）：它只扫 `src/components` + `src/app`，
-  # 本次改动一个文件都没落在这两处时跳过。**每加一处都必须同批登记** ——
-  # 判据 `tests/ci-incremental-gates.test.ts` 双向核对，机制见上面 `.gates` 头注。
-  - name: 标题行让位
-    ifModify:
-      - src/components/**
-      - src/app/**
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-title-bar-clearance.cjs
-
-  # 收窄（ISSUE #2010）：它扫的是**盘上的某一组目录**，不是整仓 —— 根目录里散落的
-  # 入口脚本（R9 的第一形态）与 git 临时状态文件（第二形态）只可能出现在**仓库根**，
-  # 而 src/lib 的子域纪律（R13/R14）只可能被 `src/lib` 的目录改动破坏。这几处一个
-  # 都没碰时，「文件名 / 归属 / 注释流水 / 控制字符」这些判据不可能变。
-  #
-  # ⚠️ 与上面那些只扫 `src/**` 的判据不同，它的形态更复杂，所以 globs 点得更宽：
-  #   · 根级 `*.ps1 / *.bat / *.cmd / *.vbs / *.ts / *.tsx` —— R9 判的是「根目录里
-  #     多了个本该归 tools/ 的入口」，面就是根目录本身（不经 `src` / `scripts`）；
-  #   · `src/**` —— R1–R5 / R10–R12 的扫描根（`SCAN_ROOTS` 之一）；
-  #   · `scripts/**` + `tools/**` —— R7 / R8 的扫描根（含中文的 .ps1 必须 BOM）。
-  # 代价写在明处：**新增一条以别的目录为扫描根的规则时，必须同批回来看这一行**
-  # （否则改那个目录不会触发本步）。登记与理由的唯一出处是
-  # `scripts/ci-incremental-gates.mjs`。
-  - name: 文件结构硬规则
-    ifModify:
-      - "*.ps1"
-      - "*.bat"
-      - "*.cmd"
-      - "*.vbs"
-      - "*.ts"
-      - "*.tsx"
-      - src/**
-      - scripts/**
-      - tools/**
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-file-structure.cjs
-
-  - name: 跨平台动作对照
-    ifModify:
-      - package.json
-      - tools/**
-      - scripts/**
-      - src-tauri/**
-      - README.md
-      - docs/standards/launch-and-build.md
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-ps1-consistency.mjs
-
-  - name: import 别名统一
-    ifModify:
-      - src/**
-      - e2e/**
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-import-alias.cjs
-
-  - name: ComfyUI 端口口径
-    ifModify:
-      - src/lib/comfyui/**
-      - src/lib/app-settings/**
-      - src/lib/endpoints.ts
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-comfyui-port-contract.cjs
-
-  - name: 内联样式注入
-    ifModify:
-      - src/**
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-inline-style.cjs
-
-  - name: 跨文件重复块
-    ifModify:
-      - src/**
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-code-duplication.cjs
-
-  - name: 函数长度 TS
-    ifModify:
-      - src/**
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-function-length.cjs
-
-  - name: 函数长度 Rust
-    ifModify:
-      - src-tauri/src/**
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-rust-function-length.cjs
-
-  - name: 模块循环依赖
-    ifModify:
-      - src/**
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-circular-deps.cjs
-
-  # 收窄（ISSUE #1993）：它判的是「同一份向量 ⇄ 四侧实现」的一致性，四侧实现各有落点
-  # （`scripts/app-port.mjs` / `app_port.py` / `app-port.ps1` / `src-tauri/src/single_instance.rs`），
-  # 而向量只有一份（`tests/fixtures/app-port-vectors.json`）。这几处一个都没碰时，
-  # 「四侧对同一路径给出同一端口」这件事不可能变 —— 它不读 `src/**` 的其余部分。
-  - name: 端口推导跨语言一致性
-    ifModify:
-      - scripts/app-port.mjs
-      - scripts/app-port.ps1
-      - scripts/app_port.py
-      - scripts/check-app-port-vectors.cjs
-      - scripts/check-app-port-vectors.py
-      - scripts/check-app-port-vectors.ps1
-      - src-tauri/src/single_instance.rs
-      - tests/fixtures/app-port-vectors.json
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-app-port-vectors.cjs
-
-  - name: CHANGELOG 碎片
-    ifModify:
-      - changelog.d/**
-      - CHANGELOG.md
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-changelog-fragments.cjs
-
-  - name: 主题色扫描
-    ifModify:
-      - src/**
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-theme-colors.cjs
-
-  - name: UI/逻辑分离
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-ui-logic-separation.cjs
-
-  - name: lib Node-only 声明
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-run-tool.mjs vitest run tests/lib-node-only-declarations.test.ts
-
-  # oxfmt 格式硬闸（规范 §13.5.1）：**从本地钩子挪到这里**（ISSUE #2010）。
-  #
-  # 判据一个字没改，挪的只是执行者 —— 与 §13.5.17 那三条文档面判据同一条口径：
-  # **它的结论挡不住任何一次代码回归**。prettier 只格式化，格式漂了没有任何运行时
-  # 症状，最坏后果是下一次 `--write` 产出一份与本次改动无关的全文件 diff（§13.7），
-  # 而那一眼就看得出来、改回来也只是再跑一次格式化。它在**每一次提交**里的成本却是
-  # 实测的：冷缓存 ~21s、热缓存 ~4.5s（钩子那一档带 `--staged`，但 `src/**` 是最高频
-  # 的提交类别 —— 命中即扫全库，只省下「没碰到扫描面」那一半）。
-  #
-  # ⚠️ **不带 `--staged`**：平台侧的工作区就是这次要判的那份源码，`--staged` 在这里
-  # 读的是「本次暂存」、恒为空 ⇒ 这一步会恒跳过（挂了等于没挂）。这与
-  # `API 文档生成与自检` 那两条同一条处置，判据
-  # `tests/doc-check-hook-wiring.test.ts` 双向钉住（钩子里没有 + 平台侧有且是全量档）。
-  #
-  # ⚠️ 紧邻的 `格式化提交分离` **不许跟着挪**：那条判的是「这次提交有没有把真实改动
-  # 埋进几百个文件的重排里」，后果不可逆（blame 永久失真、squash 合并后本地再没有
-  # 拆分的机会），它必须留在提交那一刻；prettier 那一条判的只是「文件现在干不干净」。
-  #
-  # 历史：它曾在这份清单里**被临时停用**（随 `ESLint 零警告` 一起让位给 E2E 调试，
-  # 见 `COMFYAPP_CI_DISABLED_GATES` 的注释），本轮不是"恢复"而是"接管" —— 停用档的
-  # 恢复条件（E2E 一绿 + 平台日志中文可读）与这条无关，钩子那边同时也撤了。
-  - name: oxfmt 格式
-    ifModify:
-      - "src/**"
-      - ".storybook/**"
-      - "scripts/**"
-      - "tests/**"
-      - "tools/**"
-      - "e2e/**"
-      - "*.config.js"
-      - "*.config.ts"
-      - "*.config.mjs"
-      - "*.config.cjs"
-    # 触发面 = 判据面的上界（ISSUE #2979）：平台那一格带 `--changed`，判「改动面 ∩ GLOBS」
-    # （GLOBS 含 mjs/cjs、改动面不过 IGNORE_GLOBS）—— 触发面必须盖住 GLOBS 能点到的
-    # 每一个目录，否则「改了却没人查格式」（#2942 重跑现场：三份 scripts/ 的 .mjs/.cjs
-    # 被点名，而这一格在 #2979 之前根本不执行）。逐字对账在
-    # `scripts/ci-incremental-gates.mjs` 的登记条目里，别在这里单改。
-    # 口径变更（ISSUE #2610，业主拍板 2026-10-29）：**这一格只判，不再修也不再委托**。
-    # 此前它跑 `ci-format-fixup.mjs --check --autofix`：红 ⇒ 就地写文件 ⇒ 复判全绿 ⇒
-    # 把修复提交委托给 `api_trigger_formatfix`（可信事件、令牌 rw）回写。实测这条路在
-    # PR 事件上恒发不出去 —— 那一类事件的令牌只有 `repo-code:r`，`start-build` 当场
-    # `403 / errcode 10023 / Missing required scopes: repo-cnb-trigger:rw`
-    # （build `cnb-tb0-1k61hpvhf` 的 stage-25，2026-10-28），脚本 fail-closed 照旧退 1，
-    # 于是「自动修」这一段每次都白走、还让人以为差一个权限就通了。
-    # 修与判现在都落在**本地**：`.githooks/pre-commit` 的 D0 带 `--staged` 跑同一份
-    # `check-format.cjs`，红了人就 `pnpm exec oxfmt <点名的文件>`（只点本次改的）。
-    # 平台这一格留的是**第二层**：判据本体一字未改，判面用 `--changed`（改动面 ∩ 扫描面）
-    # —— printWidth 80→100 起全库档对未迁移的存量恒红（见 check-format.cjs 文件头），
-    # 平台这一格判的是「这次 PR 带来的那批」；基线取 `CNB_PULL_REQUEST_TARGET_SHA`
-    # （changed-scope 的既有口径），合成 merge 提交上的对账也在那一层。
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-format.cjs --changed
-
-  # 收窄（ISSUE #1993）：它判的是「这次提交里有多少个文件只是被 prettier 重排过」，
-  # 而判据本体是**逐文件跑 prettier**（每个改动过的源文件一次）。所以面就是
-  # 「`SOURCE_RE` 认的扩展名在仓库里可能出现的那几棵树」—— 由 `stagedRoots()` 现算，
-  # 这里写的是它现算的**上界**（顶层目录 + 根级配置名）；判宽只会少省几秒，判窄是漏判。
-
-  # ── 文档面与上报这几格：**各自一格，各带自己的收窄**（2026-10-22 恢复执行者）────
-  #
-  # ⚠️ 2026-10-20 那一笔（`0c6c8897`）把这几格的原文注释掉了，理由是「收进聚合档」。
-  # 但聚合档 `重档静态判据` 读的是**钩子注册表**（`.githooks/pre-commit` 的 `run` 步骤行），
-  # 而其中那三条在 2026-10-16（`8d0d0b23`）就已经从钩子里撤走了 —— 两次搬动方向相反、
-  # 在中间对穿 ⇒ 从 2026-10-20 起它们**一个执行者都没有**。
-  # （`覆盖率上报` 从没进过钩子：它是 10-19 才被收进条目表的，而条目表不执行任何东西。）
-  # 实测（平台日志 `cnb-n1k-1k5h6bnm6`）：`render-doc-placeholders` / `check-doc-references`
-  # 零命中，`check-docs-api.cjs` 只命中它自己的单测 —— 脚本本身一次没跑。
-  # 代价是实打实的：`docs/api/**` 在无人看管下漂了 32 份（`7aae1747` 等 5 笔 `src/lib`
-  # 提交之后没人重生成）。那一族漂移在 ISSUE #2231 之后**不再有对象**了 ——
-  # 产物已从 git 里搬走，见下面那一格。
-  #
-  # 处置：**恢复成各自的活 stage**，并给前两格挂上**按这一格算的收窄**。
-  # 为什么不是「进聚合档 + 格内收窄」：平台的 `ifModify` 是**按整格**的，而复合执行者
-  # 一条都不许挂（格内扫描面不同的判据一起静默放行 —— 见 `scripts/ci-incremental-gates.mjs`
-  # 的 `COMPOUND_EXECUTORS`）。⇒ 要按条目收窄，就得让它自己占一格。
-  #
-  # 收窄的形状与理由只有一处出处：`scripts/ci-incremental-gates.mjs` 的 `INCREMENTAL_GATES`
-  # （那里逐条写着「它守的是哪份脚本、为什么这条收窄是安全的」）。
-  # ── 2026-10-28：文档链三格撤到 push 档（树级校验）────────────────────────────
-  # `生成态文档与源同步` / `API 文档生成与自检` / `文档引用与权威源一致` 判的是
-  # 「**合并后的树**」一致不一致，不是「这次改动」⇒ 每次合并判一次就够，不必每个 PR
-  # 各判一遍。三格原文（入口、旗标、`ifModify`）整体搬到 `.push-stages` 锚点
-  # （清单在 `COMFYAPP_CI_PUSH_GATES`，判据双向核对），判据一字未改。
-  # ⚠️ `覆盖率上报` 从本档（PR）**挪到了每日档**（见 `*daily_gates` 末尾）：原来它读同跑
-  # `受影响用例` 产出的 coverage/lcov.info，而 `受影响用例` / `固定结构用例` 两测试格
-  # 2026-11-02 撤到每日全量单测后，PR 上不再有产出 lcov 的格子 ⇒ 这一格在 PR 上只会
-  # 静默空转。每日档的 `每日单元测试` 跑 `pnpm run test:coverage`，同一 job 产出 lcov，
-  # 这一格接在它后面上报。它仍是**报告型**（不判任何东西，报告不在时跳过而不判红），
-  # 没有 `ifModify`。
-  # ── 下面这几格**没有自己的 stage**：它们的执行者在别处 ──────────────────────
-  #
-  # 「停用 ≠ 删除」机制在**页内**的第四种形态（前三种见 `COMFYAPP_CI_DISABLED_GATES`
-  # 那两条注释与上面那段「收进聚合档」）：这几格的名字**仍在 `COMFYAPP_CI_GATES` 里**
-  # （它们没被停用，是换了执行者），但它们的原文是注释形态 —— 因为执行者是：
-  #   · `格式化提交分离` / `零消费导出` ⇒ 复合档 `重档静态判据` 里的条目
-  #     （执行面 = 钩子注册表，见 `scripts/ci-heavy-gates.mjs` 的头注）。
-  #   · `core 骨架单一事实源` / `core 出口纪律与基类纯度` 已在 2026-11-02 随固定结构用例
-  #     一道 retired（见 `GATE_TIER_LEDGER`）：它们的执行者正是固定结构清单，撤档后由
-  #     `每日单元测试` 全量套件覆盖，不再有 PR 执行者，故这一条不再列在这里。
-  # 恢复动作（真要拆回独立 stage）：取消注释 → 从复合档的条目表删掉同名条目。
-  #
-  # - name: 格式化提交分离
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-reformat-only.cjs
-  # - name: 零消费导出
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-dead-exports.cjs
-  # （`core 骨架单一事实源` / `core 出口纪律与基类纯度` 曾以同样的注释形态留在这里，
-  #  2026-11-02 随固定结构用例一道 retired —— 它们不再是 PR 档的「换执行者」形态，
-  #  改由 `每日单元测试` 全量套件覆盖，故此处不再列示例；见 `GATE_TIER_LEDGER`。）
-
-  # ⚠️ **执行面是钩子注册表，不是条目表**（两轮合并之后的口径）：这一格跑的命令是
-  # `node scripts/ci-heavy-gates.mjs`，而它读的正是 `.githooks/pre-commit` 里那些
-  # `run "<标签>" <命令>` 步骤行 —— 也正是 `scripts/check-gate-executors.cjs` 认的出处
-  # 之一。所以「把步骤从钩子里删掉」从来不是挪档的正确形态（那等于删执行者，而
-  # `.cnb.yml` 不被台账认作执行者），正确形态是**步骤留在钩子里、由档位决定谁执行**。
-  # `scripts/ci-heavy-gates.mjs` 里的 `HEAVY_GATES` 因此只剩**登记面**的角色（哪几条
-  # 判据会自己改工作区 / 哪一格被收窄），不再是跑批清单。
-  # 只剥那个「只看暂存区」的旗标（CI 没有暂存区，留着它判的是「空提交」= 一条恒绿的
-  # 判据），参数一律不改 —— 改一个参数就是改判据。
-  # 与上面几格同理带 cp936 那层：这一档红的时候必须读得出是哪一条判据、为什么。
-
-  # ── 重档静态判据：一格，一次 job，内部按顺序逐条跑 ─────────────────────────
-  #
-  # 这一格取代了原来那 8 条各自独立的 stage。**判据一条没少**：每一条仍是原来那份
-  # 脚本、原来那份参数，只是不再各占一个平台 stage。
-  #
-  # ⚠️ 2026-10-22 订正它的**成员名单**：原先记的是「那 8 条都收进了这一格」，而实际上
-  # 这一格的执行面是**钩子注册表**（`.githooks/pre-commit` 的 `run` 步骤行）——
-  # 那 8 条里有 4 条在 2026-10-16 就已经从钩子里撤走了，所以**这一格从来没跑过它们**
-  # （2026-10-20 又把它们在配置里的原文注释掉 ⇒ 那 4 条彻底没有执行者）。
-  # 现在：`生成态文档与源同步` / `API 文档生成与自检` / `覆盖率上报` /
-  # `文档引用与权威源一致` 恢复成各自的活 stage（见上面那段）；这一格只跑**钩子里
-  # 真有步骤行的那几条**（`格式化提交分离` / `零消费导出` / `CP936 字形登记` …），
-  # 而 `core` 那两条由「受影响用例」格的固定清单执行。
-  # 成员名单只有一处出处：`scripts/ci-heavy-gates.mjs` 的 `HEAVY_GATES`，而那一格
-  # **自证**「表里每一条都被它真跑」（表与钩子对不上 ⇒ 判红，见那个文件的头注）。
-  #
-  # 为什么合（2026-10-19 的现场）：`cnb-hpl-1k5a0s6ss` 上 `ESLint 零警告` 一步撞到平台的
-  # **20m stage 预算**被强杀（`任务超过最大执行时间而被强制关闭：20m0s`，脚本一行输出都没有），
-  # 整条流水线后面三十格全 skipped。而同一台机、同一份工作区，`cnb-smq-1k59vlk3l` 上同一步
-  # 是 305s 跑过的 —— 差的是**前面那二十几格各自付一次的 job 开销与盘上扫描**，不是 ESLint
-  # 变慢了。也就是说：把判据一条条摊成 stage，每一格都在替**别的格**付重复成本。
-  #
-  # 合起来之后：本次 job 只付一次开销，条目在**进程内**串行（`scripts/ci-heavy-gates.mjs`），
-  # 每条的墙钟、退出码、末若干行输出都打在同一份日志里 —— 红了照样一眼看出是哪一条，
-  # 且不再是「一条红、后面全 skipped」的形态。
-  #
-  # ⚠️ **`ifModify` 收窄全部撤掉了**（复合执行者一条都不许挂）。理由：`ifModify` 是按
-  # **整格**跳过的，一格装多条判据时它只能判成「本次没碰 → 全都不跑」，而那些判据的
-  # 扫描面并不相同 —— 那正是本仓最不能有的形态（判据在场、结论静默变成放行）。
-  # 现在格内**不跳**，代价是每次多跑几条秒级脚本；真要收窄要回到「按条目判扫描面」，
-  # 不是按格 —— 而平台的 `ifModify` 只能按格算 ⇒ **需要收窄的判据不进这一格**，
-  # 它自己占一格（上面那几格就是）。
-  #
-  # 判据与执行者的对应关系在 `scripts/ci-heavy-gates.mjs` 的条目表里，而那一格**自证**
-  # 「表里每一条都被它真跑」—— 表与钩子对不上就判红（2026-10-20 那次就是这样溜过去的：
-  # 表里写着、格子里没跑，而登记表之间互核全绿）。
-  - name: 重档静态判据
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-heavy-gates.mjs
-    # ── 壳门禁那一格（`桌面壳（改了 src-tauri 才跑）` → cargo test）要找得到 cargo ──
-    # runner 走**服务账号会话**：它的 PATH 与 `~/.cargo` 都够不着开发者会话的工具链
-    # （`CARGO_HOME` 是**用户级**变量，见 docs/guides/dev-drive-refs.md「Rust 依赖缓存」；
-    # findCargo 的三处回退在此全空）。两个值**成对**给，缺一探针照样失败：
-    # cargo 本体是 rustup 的代理（`G:\.cargo\bin\cargo.exe`），代理要 `RUSTUP_HOME`
-    # 才解析得到工具链 —— 只给 CARGO_HOME 时实测
-    # `could not create home directory …\.rustup: 拒绝访问`（ISSUE #2192 那条 PR 首跑现场）。
-    #
-    # ⚠️ 2026-10-28 起这两个值收进 `.cargo-env` 锚点（`#2549`）：桌面成品包那两格要的是
-    # **同一对**（同一台节点、同一个原因），写成两份就是它们开始漂的那一刻 ——
-    # 而今天那一跑的红恰好就是「那一档没带这对值」。换节点仍要跟着换。
-    env: *cargo_env
-    # 平台单 stage 默认预算 20m 是硬上限（实测强杀形态见上面那段），而这一格装的是原先
-    # 那几条各自独立跑的东西 —— 它的**合理**墙钟应当与原几格的总和同级。
-    timeout: 45m
 
   # ── GitHub 判决回读：主列末尾的**承重档**（ISSUE #3051 期望第 3 条已落地）──
   #

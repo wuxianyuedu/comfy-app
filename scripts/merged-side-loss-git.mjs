@@ -115,6 +115,21 @@ export function resolveBlobs(run, specs) {
 }
 
 /**
+ * 读一个已解析数据块的正文（`cat-file blob`）。
+ *
+ * `resolveBlobs` 只回对象 sha；执行者要对「结果版 / 基线版」做逐字节比较时还需要正文。
+ * 这一跳留在这里，是为了让「取证只走本模块」这条契约对执行者成立 —— 执行者里出现
+ * `["cat-file", …]` 就是回潮（`tests/merged-side-loss-git.test.ts` 钉着）。
+ *
+ * @param {(args: string[], input?: string) => (string | null)} run 跑一条 git 命令，失败回 null
+ * @param {string} oid 对象 sha
+ * @returns {string | null} 正文；读不到为 `null`（调用方按 fail-closed 保持命中）
+ */
+export function readBlobText(run, oid) {
+  return run(["cat-file", "blob", oid]);
+}
+
+/**
  * 一次遍历得到「`ref` 的历史上，每个被关心的文件被哪些非合并提交改过」。
  *
  * 返回的清单按 git 的日志序（新 → 旧），与逐文件 `git log -- <file>` 同序，
