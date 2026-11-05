@@ -330,6 +330,7 @@ export function ShotStudio({
     gachaAction.run(shot.id, async () => {
       const taskIds: Array<string> = [];
       for (let i = 0; i < count; i++) {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         const tid = await generateShot(shot);
         if (tid !== null && tid !== "") {
           taskIds.push(tid);

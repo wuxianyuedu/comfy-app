@@ -63,6 +63,7 @@ describe("saveMediaToLocalTemp · 路径落点", () => {
       "/absolute/path/model",
       "normal/../../../escape",
     ]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const dest = await saveMediaToLocalTemp("image", evil, "data:image/png;base64,aGVsbG8=");
       expect(dest).not.toBeNull();
       const rel = relative(join(sandbox, "temp", "usage-test"), dest!);

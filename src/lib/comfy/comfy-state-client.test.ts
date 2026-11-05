@@ -38,8 +38,11 @@ function stubFetch(answers: Array<{ body?: unknown; status: number }>): () => nu
 /** 让在途的那一拍跑完（长轮询链是「请求完成 → 立刻再发」）。 */
 async function settle(times = 1): Promise<void> {
   for (let i = 0; i < times; i++) {
+    // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
     await Promise.resolve();
+    // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
     await Promise.resolve();
+    // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 }

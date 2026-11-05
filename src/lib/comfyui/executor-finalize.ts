@@ -330,9 +330,11 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // Images
   for (const [i, im] of images.entries()) {
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- im 来自 ComfyUI /history 响应的 outputs，运行期可能不带 subfolder/type 字段
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const buf = await getView(im.filename, im.subfolder ?? "", im.type ?? "");
     const ext = path.extname(im.filename) || ".png";
     const fname = `img_${i}${ext}`;
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await fs.writeFile(path.join(dir, fname), buf);
     saved.push({ localPath: `${publicBase}/${fname}`, mediaType: "image" });
     log(taskId, "info", `下载第 ${i + 1} 张图像`);
@@ -340,9 +342,11 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // 视频（mp4 / gif / webm）
   for (const [i, v] of videos.entries()) {
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- v 来自 ComfyUI /history 响应的 outputs，运行期可能不带 subfolder/type 字段
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const buf = await getView(v.filename, v.subfolder ?? "", v.type ?? "");
     const ext = path.extname(v.filename) || ".mp4";
     const fname = `vid_${i}${ext}`;
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await fs.writeFile(path.join(dir, fname), buf);
     saved.push({ localPath: `${publicBase}/${fname}`, mediaType: "video" });
     log(taskId, "info", `下载第 ${i + 1} 个视频`);
@@ -350,9 +354,11 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // 音频（SaveAudio / AudioComposite）
   for (const [i, a] of audios.entries()) {
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- a 来自 ComfyUI /history 响应的 outputs，运行期可能不带 subfolder/type 字段
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const buf = await getView(a.filename, a.subfolder ?? "", a.type ?? "");
     const ext = path.extname(a.filename) || ".wav";
     const fname = `aud_${i}${ext}`;
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await fs.writeFile(path.join(dir, fname), buf);
     saved.push({ localPath: `${publicBase}/${fname}`, mediaType: "audio" });
     log(taskId, "info", `下载第 ${i + 1} 个音频`);
@@ -360,9 +366,11 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // 通用 3D / 未知文件产物（mesh、gltf、obj …）
   for (const [i, o] of others.entries()) {
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- o 来自 ComfyUI /history 响应的 outputs，运行期可能不带 subfolder/type 字段
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const buf = await getView(o.filename, o.subfolder ?? "", o.type ?? "");
     const ext = path.extname(o.filename) || ".bin";
     const fname = `file_${i}${ext}`;
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await fs.writeFile(path.join(dir, fname), buf);
     saved.push({ localPath: `${publicBase}/${fname}`, mediaType: "other" });
     log(taskId, "info", `下载第 ${i + 1} 个文件`);
@@ -370,6 +378,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // 文本产物（ShowText）：存成 .txt，结果可读可查。
   for (const [i, text] of texts.entries()) {
     const fname = `txt_${i}.txt`;
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await fs.writeFile(path.join(dir, fname), text, "utf8");
     saved.push({ localPath: `${publicBase}/${fname}`, mediaType: "text" });
     log(taskId, "info", `保存第 ${i + 1} 段文本`);

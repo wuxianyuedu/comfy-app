@@ -348,6 +348,7 @@ export async function reapStaleQueuedTasks(): Promise<void> {
          *  失败都视为「证据不足」，本轮跳过，等下一 tick 再对账（见本函数
          *  上方注释 ISSUE #378）。 */
         if (comfyEvidence === undefined) {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           comfyEvidence = await comfyHasActiveWorkflow(null);
         }
         const comfyActive = comfyEvidence;
@@ -367,12 +368,14 @@ export async function reapStaleQueuedTasks(): Promise<void> {
          *  §13-3C 起只读库，进程内合成事件那条通道随 §14 D1 退役了。这里也**不**调
          *  kickQueue()——被回收的行已经落终态、不会再被领一次，我们也不希望把一个
          *  未知工作流重新入队。尾部的 persistLogs 把原因行与终态同批落库。 */
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         const outcome = await taskRepository.finalizeFailure(t.id, reason);
         if (outcome !== "written") {
           /* SELECT 与 UPDATE 之间被执行方自己收口了（或归属已变）：正常的窄竞态，
            * 不是故障，但要留一行——没有它，「判了却没落库」在日志里是隐身的。 */
           logger.warn(`[comfyui] reaper: 跳过收口 ${t.id}（${outcome}），终态已由执行方落定`);
         }
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await persistLogs(t.id);
         /* 本进程若正握着这一条在飞，收口后必须归还槽位——否则一条被回收的死任务
          * 会把并发额度永久占住，领取循环从此不再往前走（内存队列时代这处只减计数器，
@@ -443,10 +446,12 @@ export async function reapStaleRunningTasks(): Promise<void> {
             continue;
           }
           const reason = `任务被领取后 ${ageSec}s 仍未回传 prompt_id，且连续两轮都无人认领它（执行宿主可能已崩溃）— 请重新执行`;
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           const outcome = await taskRepository.finalizeFailure(t.id, reason);
           if (outcome !== "written") {
             logger.warn(`[comfyui] reaper: 跳过无 promptId 行的收口 ${t.id}（${outcome}）`);
           }
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           await persistLogs(t.id);
           /* 本进程若正握着这一条在飞，收口后必须归还槽位——否则一条被回收的死任务
            * 会把并发额度永久占住，领取循环从此不再往前走（内存队列时代这处只减计数器，
@@ -475,9 +480,11 @@ export async function reapStaleRunningTasks(): Promise<void> {
         let verdict: "succeeded" | "failed" | "unknown" = "unknown";
         let reason = "";
         try {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           const r = await fetch(url, { signal: AbortSignal.timeout(5000) });
           if (r.status === 200) {
             /* SAFETY: 类型断言已复核 */
+            // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
             const data = (await r.json()) as Record<string, unknown> | null;
             /* SAFETY: 类型断言已复核 */
             const entry = data && (data[t.promptId] as Record<string, unknown> | undefined);
@@ -508,11 +515,13 @@ export async function reapStaleRunningTasks(): Promise<void> {
                *  也不在 queue_pending 里，那就等于丢了 → FAILED 孤儿。 */
               let inQueue = false;
               try {
+                // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
                 const q = await fetch(`${base}/queue`, {
                   signal: AbortSignal.timeout(3000),
                 });
                 if (q.ok) {
                   /* SAFETY: 类型断言已复核 */
+                  // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
                   const qd = (await q.json()) as {
                     queue_pending?: Array<{ prompt_id?: string }>;
                     queue_running?: Array<{ prompt_id?: string }>;
@@ -559,6 +568,7 @@ export async function reapStaleRunningTasks(): Promise<void> {
         }
         const finalStatus = verdict === "succeeded" ? "SUCCEEDED" : "FAILED";
         log(t.id, verdict === "succeeded" ? "success" : "error", reason);
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         const outcome = await taskRepository.finalizeFromReaper(
           t.id,
           finalStatus,
@@ -567,6 +577,7 @@ export async function reapStaleRunningTasks(): Promise<void> {
         if (outcome !== "written") {
           logger.warn(`[comfyui] reaper: 跳过对账收口 ${t.id}（${outcome}），终态已由执行方落定`);
         }
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await persistLogs(t.id);
         /* 本进程若正握着这一条在飞，收口后必须归还槽位——否则一条被回收的死任务
          * 会把并发额度永久占住，领取循环从此不再往前走（内存队列时代这处只减计数器，
