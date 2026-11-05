@@ -89,6 +89,7 @@ export async function latestPanelLogFile(dir = NEXTJS_LOG_DIR): Promise<string |
     const file = path.join(dir, name);
     let mtimeMs: number;
     try {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const stat = await fs.promises.stat(/*turbopackIgnore: true*/ file);
       mtimeMs = stat.mtimeMs;
     } catch {

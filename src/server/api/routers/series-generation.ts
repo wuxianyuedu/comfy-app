@@ -77,6 +77,7 @@ export const seriesGenerationRouter = createTRPCRouter({
         let running = 0;
         let pending = 0;
         if (ep.projectId !== null) {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           const prod = await ctx.db.query.production.findFirst({
             where: eq(production.id, ep.projectId),
           });
@@ -88,6 +89,7 @@ export const seriesGenerationRouter = createTRPCRouter({
             .map((s) => s.id)
             .filter((id): id is string => typeof id === "string" && id.length > 0);
           if (shotIds.length > 0) {
+            // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
             const tasks = await ctx.db
               .select({ shotId: task.shotId, status: task.status })
               .from(task)
@@ -171,6 +173,7 @@ export const seriesGenerationRouter = createTRPCRouter({
         if (ep.projectId === null) {
           continue;
         }
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         const prod = await ctx.db.query.production.findFirst({
           where: eq(production.id, ep.projectId),
         });
@@ -187,6 +190,7 @@ export const seriesGenerationRouter = createTRPCRouter({
             skipped++;
             continue;
           }
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           await taskRepository.createQueued({
             userId: ctx.user.id,
             type: tpl.taskType,

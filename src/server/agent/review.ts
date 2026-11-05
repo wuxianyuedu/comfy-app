@@ -329,6 +329,7 @@ export async function autoselectShotImage(
       continue;
     }
     seen.add(taskId);
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const task = await taskRepository.findByIdWithImages(taskId);
     /* 等价形态：`userId` 是必填 string，不存在「task 为 null 而 userId 也是
      * undefined」那一支（`prefer-optional-chain` 要的就是这一句）。 */
@@ -340,6 +341,7 @@ export async function autoselectShotImage(
       candidates.push({ taskId, imageUrl: null, verdict: null });
       continue;
     }
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const verdict = await scoreShotImage(row, rec, image.localPath);
     candidates.push({ taskId, imageUrl: image.localPath, verdict });
   }

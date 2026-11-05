@@ -6654,6 +6654,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     for (const phase of ["poll", "verdict", "merge"]) {
       const { run, calls } = fake();
       expect(
+        // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
         await main({ ...quiet, run, args: [`--only=${phase}`] }),
         `--only=${phase} 不该被当成「跑过了且没问题」`,
       ).toBe(CODE.NOT_RUN);
@@ -6711,6 +6712,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       const heard: Array<string> = [];
       const { run, calls } = fake();
       expect(
+        // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
         await main({
           root: process.cwd(),
           run,

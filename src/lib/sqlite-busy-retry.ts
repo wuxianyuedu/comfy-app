@@ -59,6 +59,7 @@ export async function runWithSqliteBusyRetry<T>(
   const { maxAttempts, ...backoff } = policy;
   for (let attempt = 0; ; attempt++) {
     try {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       return await op();
     } catch (error) {
       const lastTry = attempt + 1 >= maxAttempts;
@@ -67,6 +68,7 @@ export async function runWithSqliteBusyRetry<T>(
         throw error;
       }
       onBusy?.(attempt, error);
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await sleep(backoffDelayMs({ ...backoff, attempt }));
     }
   }

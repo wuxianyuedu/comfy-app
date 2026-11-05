@@ -10,7 +10,7 @@
 | 批次 | 规则 | 存量处数 | 涉及文件 | 状态 |
 |---|---|---|---|---|
 | B1 | `eslint/no-use-before-define（functions:false）` | 75 | 48 | 已清（75 处/48 份） |
-| B2 | `no-await-in-loop` | 304 | 123 | 挂账中（子批1+2：82 份 / 199 处已转逐行理由） |
+| B2 | `no-await-in-loop` | 304 | 123 | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3 | `typescript/require-await` | 754 | 188 | 挂账中 |
 | B4 | `eslint/prefer-named-capture-group` | 1094 | 332 | 挂账中 |
 | B5 | `typescript/no-unsafe-type-assertion` | 1496 | 608 | 挂账中 |
@@ -169,46 +169,46 @@
 | `src/lib/llm/server.test.ts` | 1 | 保留（逐行理由） |
 | `src/lib/llm/server.ts` | 1 | 保留（逐行理由） |
 | `src/lib/llm/video-task-util.test.ts` | 1 | 保留（逐行理由） |
-| `src/lib/llm/video-task-util.ts` | 3 | 挂账 |
-| `src/lib/log/capture-streams.server.ts` | 1 | 挂账 |
-| `src/lib/log/log-file-client.test.ts` | 1 | 挂账 |
-| `src/lib/log/log-run-packs.server.ts` | 2 | 挂账 |
-| `src/lib/media/materials.ts` | 3 | 挂账 |
-| `src/lib/project-canvas/canvas-api.ts` | 2 | 挂账 |
-| `src/lib/shell/open-in-browser.test.ts` | 1 | 挂账 |
-| `src/lib/sqlite-busy-retry.ts` | 2 | 挂账 |
-| `src/lib/sqlite-pragmas.ts` | 1 | 挂账 |
-| `src/lib/workshop/generation-client.ts` | 1 | 挂账 |
-| `src/lib/workshop/generation-log.server.ts` | 1 | 挂账 |
-| `src/lib/workshop/media-source.server.test.ts` | 1 | 挂账 |
-| `src/lib/workshop/mode-contract.server.ts` | 1 | 挂账 |
-| `src/server/agent/review.ts` | 2 | 挂账 |
-| `src/server/agent/run-engine.ts` | 18 | 挂账 |
-| `src/server/api/routers/llm.test.ts` | 1 | 挂账 |
-| `src/server/api/routers/series-generation.ts` | 4 | 挂账 |
-| `src/server/api/routers/series.ts` | 4 | 挂账 |
-| `src/server/api/routers/setting-backup.test.ts` | 1 | 挂账 |
-| `src/server/api/routers/skill.test.ts` | 1 | 挂账 |
-| `src/server/api/routers/task.test.ts` | 1 | 挂账 |
-| `src/server/api/routers/task.ts` | 1 | 挂账 |
-| `src/server/api/routers/workflow-list.ts` | 1 | 挂账 |
-| `src/server/film/compose-film.ts` | 5 | 挂账 |
-| `src/server/film/orchestrator.ts` | 18 | 挂账 |
-| `src/server/lib/request-body.test.ts` | 1 | 挂账 |
-| `src/server/workshop/comfyui.ts` | 5 | 挂账 |
-| `src/server/workshop/final-compose.ts` | 1 | 挂账 |
-| `tests/a11y-axe-stories.test.ts` | 1 | 挂账 |
-| `tests/ci-github-verdict-read.test.ts` | 1 | 挂账 |
-| `tests/comfy-state-envelope-contract.test.ts` | 3 | 挂账 |
-| `tests/db-migrate-noninteractive.test.ts` | 1 | 挂账 |
-| `tests/dev-launcher-runtime-heal.test.ts` | 2 | 挂账 |
-| `tests/e2e-run.test.ts` | 1 | 挂账 |
-| `tests/esm-cross-host-imports.test.ts` | 1 | 挂账 |
-| `tests/helpers/repo-drizzle-lock.ts` | 1 | 挂账 |
-| `tests/hook-affected-launch.test.ts` | 2 | 挂账 |
-| `tests/ship.test.ts` | 2 | 挂账 |
-| `tests/sqlite-pragma-sites.test.ts` | 4 | 挂账 |
-| `tests/test-db-schema-drift.test.ts` | 1 | 挂账 |
+| `src/lib/llm/video-task-util.ts` | 3 | 保留（逐行理由） |
+| `src/lib/log/capture-streams.server.ts` | 1 | 保留（逐行理由） |
+| `src/lib/log/log-file-client.test.ts` | 1 | 保留（逐行理由） |
+| `src/lib/log/log-run-packs.server.ts` | 2 | 保留（逐行理由） |
+| `src/lib/media/materials.ts` | 3 | 保留（逐行理由） |
+| `src/lib/project-canvas/canvas-api.ts` | 2 | 保留（逐行理由） |
+| `src/lib/shell/open-in-browser.test.ts` | 1 | 保留（逐行理由） |
+| `src/lib/sqlite-busy-retry.ts` | 2 | 保留（逐行理由） |
+| `src/lib/sqlite-pragmas.ts` | 1 | 保留（逐行理由） |
+| `src/lib/workshop/generation-client.ts` | 1 | 保留（逐行理由） |
+| `src/lib/workshop/generation-log.server.ts` | 1 | 保留（逐行理由） |
+| `src/lib/workshop/media-source.server.test.ts` | 1 | 保留（逐行理由） |
+| `src/lib/workshop/mode-contract.server.ts` | 1 | 保留（逐行理由） |
+| `src/server/agent/review.ts` | 2 | 保留（逐行理由） |
+| `src/server/agent/run-engine.ts` | 18 | 保留（逐行理由） |
+| `src/server/api/routers/llm.test.ts` | 1 | 保留（逐行理由） |
+| `src/server/api/routers/series-generation.ts` | 4 | 保留（逐行理由） |
+| `src/server/api/routers/series.ts` | 4 | 保留（逐行理由） |
+| `src/server/api/routers/setting-backup.test.ts` | 1 | 保留（逐行理由） |
+| `src/server/api/routers/skill.test.ts` | 1 | 保留（逐行理由） |
+| `src/server/api/routers/task.test.ts` | 1 | 保留（逐行理由） |
+| `src/server/api/routers/task.ts` | 1 | 保留（逐行理由） |
+| `src/server/api/routers/workflow-list.ts` | 1 | 保留（逐行理由） |
+| `src/server/film/compose-film.ts` | 5 | 保留（逐行理由） |
+| `src/server/film/orchestrator.ts` | 18 | 保留（逐行理由） |
+| `src/server/lib/request-body.test.ts` | 1 | 保留（逐行理由） |
+| `src/server/workshop/comfyui.ts` | 5 | 保留（逐行理由） |
+| `src/server/workshop/final-compose.ts` | 1 | 保留（逐行理由） |
+| `tests/a11y-axe-stories.test.ts` | 1 | 保留（逐行理由） |
+| `tests/ci-github-verdict-read.test.ts` | 1 | 保留（逐行理由） |
+| `tests/comfy-state-envelope-contract.test.ts` | 3 | 保留（逐行理由） |
+| `tests/db-migrate-noninteractive.test.ts` | 1 | 保留（逐行理由） |
+| `tests/dev-launcher-runtime-heal.test.ts` | 2 | 保留（逐行理由） |
+| `tests/e2e-run.test.ts` | 1 | 保留（逐行理由） |
+| `tests/esm-cross-host-imports.test.ts` | 1 | 保留（逐行理由） |
+| `tests/helpers/repo-drizzle-lock.ts` | 1 | 保留（逐行理由） |
+| `tests/hook-affected-launch.test.ts` | 2 | 保留（逐行理由） |
+| `tests/ship.test.ts` | 2 | 保留（逐行理由） |
+| `tests/sqlite-pragma-sites.test.ts` | 4 | 保留（逐行理由） |
+| `tests/test-db-schema-drift.test.ts` | 1 | 保留（逐行理由） |
 
 ### B3 · `typescript/require-await`
 

@@ -618,6 +618,7 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
         checksFallback: new Response("no", { status }),
         runsFallback: new Response("no", { status }),
       });
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const code = await runVerdict(io);
       expect(code).toBe(CODE.NO_FACT);
       /* 每条路径各一跳：「再试一百次也一样」⇒ 一个请求都不许多发。 */

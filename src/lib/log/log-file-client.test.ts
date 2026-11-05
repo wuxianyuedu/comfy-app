@@ -107,6 +107,7 @@ describe("fetchFileLogSlice —— 增量游标", () => {
       const fetchMock = stubFetch({
         body: { content: "", size: 0, offset: 0 },
       });
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await fetchFileLogSlice(kind, 0);
       expect(urlOf(fetchMock.mock.calls[0])).toContain(`source=${expected}`);
     }

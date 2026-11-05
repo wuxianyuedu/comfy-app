@@ -57,6 +57,7 @@ describe("测试库的表结构与 schema.ts 同步", () => {
       const name = tableNameOf(table);
       /* SAFETY: 类型断言已复核 */
       const columns = Object.keys(getTableColumns(table as never));
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const present = await columnsOf(name);
       if (present === null) {
         offenders.push(`${name}：测试库里没有这张表`);

@@ -71,6 +71,7 @@ export async function readGenerationLogs(
     for (const name of names) {
       let text: string;
       try {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         text = await fs.readFile(path.join(WORKSHOP_LOG_DIR, name), "utf8");
       } catch {
         continue; // 文件恰被轮转/锁住：跳过该天，继续回溯
