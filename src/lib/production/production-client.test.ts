@@ -1,7 +1,7 @@
 // fetchProduction 的契约（Phase 3c-1）：读回生产数据，失败/无行静默降级为 null。
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchProduction, fetchProductionProgress } from "./production-client";
+import { fetchProduction, fetchProductionProgress, pushProduction } from "./production-client";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -87,5 +87,56 @@ describe("fetchProductionProgress", () => {
     vi.stubGlobal("fetch", spy);
     expect(await fetchProductionProgress("")).toBeNull();
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe("pushProduction", () => {
+  const payload = {
+    characters: [],
+    logline: "一句话",
+    progress: { stage: "script" as const, rendered: false },
+    scenes: [],
+    scriptMarkdown: "# 剧本",
+    shots: [],
+    title: "T",
+    tone: "轻松",
+    type: "short_video",
+  };
+
+  it("PUT /api/production，body 里带 project + production 整份", async () => {
+    const spy = vi.fn((_url: string, _init: { body?: unknown; method?: string }) =>
+      Promise.resolve(new Response("{}", { status: 200 })),
+    );
+    vi.stubGlobal("fetch", spy);
+    await pushProduction("proj_1", payload);
+    expect(spy).toHaveBeenCalledTimes(1);
+    const url = spy.mock.calls[0]?.[0];
+    const init = spy.mock.calls[0]?.[1];
+    expect(url).toBe("/api/production");
+    expect(init?.method).toBe("PUT");
+    /* body 是本函数自己 `JSON.stringify` 出来的串 —— 先钉类型再读回；
+       不经 `String()`：那会把「body 被换成一个对象」的回归读成 `[object Object]` 照样过。 */
+    const body: unknown = init?.body;
+    if (typeof body !== "string") {
+      throw new TypeError(`body 应当是 JSON 串，实际是 ${typeof body}`);
+    }
+    expect(JSON.parse(body)).toEqual({ project: "proj_1", production: payload });
+  });
+
+  it("空 projectId → 不发请求（草稿本地缓存就是全部）", async () => {
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    await pushProduction("", payload);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("请求抛错 → 静默吞掉，不抛给调用方（下次自动保存再补推）", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => {
+        throw new Error("network down");
+      }),
+    );
+    await expect(pushProduction("proj_1", payload)).resolves.toBeUndefined();
   });
 });

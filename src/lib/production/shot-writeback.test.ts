@@ -10,6 +10,7 @@ import {
   writeWorkshopDraft,
 } from "~/lib/workshop/draft-store";
 import { pushServerDraft } from "~/lib/workshop/draft-sync-client";
+import { fireAndForget } from "~/lib/async-action";
 import { fetchProduction, pushProduction } from "~/lib/production/production-client";
 import type { Shot } from "~/lib/workshop/types";
 import { recordCanvasShotGeneration, requestShotRedo } from "./shot-writeback";
@@ -21,10 +22,23 @@ vi.mock("~/lib/production/production-client", () => ({
 vi.mock("~/lib/workshop/draft-sync-client", () => ({
   pushServerDraft: vi.fn(() => Promise.resolve(undefined)),
 }));
+vi.mock("~/lib/async-action", () => ({
+  /* 现场真实现（`task.catch(onError)`）+ 记账，两件事一处分清：
+     用例要的是「onError 被交给谁、它跑起来会不会抛」，不是「fireAndForget 自己怎么实现的」。 */
+  fireAndForget: vi.fn((task: Promise<unknown>, onError: (e: unknown) => void) => {
+    void task.catch(onError);
+  }),
+}));
 
 const fetchProdMock = vi.mocked(fetchProduction);
 const pushProdMock = vi.mocked(pushProduction);
 const pushDraftMock = vi.mocked(pushServerDraft);
+/* 两处 `fireAndForget(…, () => {…})` 的静默回调是「失败路径的唯一出口」，
+   把它们抓下来逐条断言：草稿已落本地缓存（用户的那一改没丢），镜像留给下次自动保存。 */
+/* SAFETY: 类型断言已复核 */
+const fireAndForgetMock = vi.mocked(fireAndForget) as unknown as {
+  mock: { calls: Array<[Promise<unknown>, (e: unknown) => void]> };
+};
 
 function shotA(over: Partial<Shot> = {}): Shot {
   return {
@@ -79,6 +93,24 @@ describe("recordCanvasShotGeneration", () => {
     expect(pushDraftMock).toHaveBeenCalledTimes(1);
     // production 镜像无该行 → 不推
     expect(pushProdMock).not.toHaveBeenCalled();
+  });
+
+  it("草稿镜像推送失败 → 静默兜底：本地草稿照样是新的", async () => {
+    /* `fireAndForget(pushServerDraft(…), () => {})` 的静默回调 —— 失败路径的唯一出口。
+       这里两件事一起判：① 唯一的兜底句真被执行（拒了的 promise 不许没人接）；
+       ② 用户那一改没有因为镜像失败而丢（本地缓存才是即时的那一份）。 */
+    pushDraftMock.mockRejectedValueOnce(new Error("镜像不可用"));
+    seedDraftWithShotA();
+    fetchProdMock.mockResolvedValue(null);
+
+    await recordCanvasShotGeneration("proj_1", "a", { status: "done", imageUrl: "/x.png" });
+
+    expect(fireAndForgetMock).toHaveBeenCalledTimes(1);
+    expect(pushDraftMock).toHaveBeenCalledTimes(1);
+    expect(readWorkshopDraft("proj_1").shots[0]).toMatchObject({
+      status: "done",
+      imageUrl: "/x.png",
+    });
   });
 
   it("production 命中镜头 → 读改写并保留 progress", async () => {
@@ -157,6 +189,76 @@ describe("requestShotRedo", () => {
       ],
     });
   }
+
+  it("production 侧读不到（服务不可用 → null）→ 只落草稿，不推 production", async () => {
+    /* 静默降级那一支：`fetchProduction` 在不可用 / 无记录时回 null，
+       此时草稿已写好、production 镜像留给工坊下次自动保存补推。 */
+    seedDraftWithDoneShotA();
+    fetchProdMock.mockResolvedValue(null);
+
+    await requestShotRedo("proj_1", "a");
+
+    expect(pushDraftMock).toHaveBeenCalledTimes(1);
+    expect(pushProdMock).not.toHaveBeenCalled();
+  });
+
+  it("退回路径的草稿镜像推送失败 → 静默兜底（那条 fireAndForget 的第二处调用点）", async () => {
+    pushDraftMock.mockRejectedValueOnce(new Error("镜像不可用"));
+    seedDraftWithDoneShotA();
+    fetchProdMock.mockResolvedValue(null);
+
+    await requestShotRedo("proj_1", "a");
+
+    expect(fireAndForgetMock).toHaveBeenCalledTimes(1);
+    /* SAFETY: 类型断言已复核 */
+    const drafted = readWorkshopDraft("proj_1").shots[0] as unknown as Record<string, unknown>;
+    expect(drafted).toMatchObject({ status: "idle", rev: 1 });
+  });
+
+  it("production 侧没有该镜头 → 不改写镜像（`patched === prodShots`）", async () => {
+    /* 另一支静默出口：production 里根本没有这个镜头 ⇒ 不该凭空塞一条进去
+       （那会在别人的画布上多出一张空镜）。 */
+    seedDraftWithDoneShotA();
+    fetchProdMock.mockResolvedValue({
+      title: "T",
+      type: "",
+      tone: "",
+      logline: "",
+      scriptMarkdown: "",
+      scenes: [],
+      characters: [],
+      shots: [],
+      progress: { stage: "render", rendered: false },
+    });
+
+    await requestShotRedo("proj_1", "a");
+
+    expect(pushDraftMock).toHaveBeenCalledTimes(1);
+    expect(pushProdMock).not.toHaveBeenCalled();
+  });
+
+  it("production 的 shots 不是数组（列被写脏）→ 按空处理，不改写镜像", async () => {
+    /* `Array.isArray(prod.shots) ? … : []` 的右半边：服务端 JSON 列没有形状约束
+       （route 原样透传），一行坏数据不该让整条退回链路抛错，也不该把别的镜头冲掉。 */
+    seedDraftWithDoneShotA();
+    fetchProdMock.mockResolvedValue({
+      title: "T",
+      type: "",
+      tone: "",
+      logline: "",
+      scriptMarkdown: "",
+      scenes: [],
+      characters: [],
+      /* SAFETY: 类型断言已复核 */
+      shots: "not-an-array" as unknown as Array<never>,
+      progress: { stage: "render", rendered: false },
+    });
+
+    await requestShotRedo("proj_1", "a");
+
+    expect(pushDraftMock).toHaveBeenCalledTimes(1);
+    expect(pushProdMock).not.toHaveBeenCalled();
+  });
 
   it("空 projectId / 空 shotId → 短路，不发 IO", async () => {
     await requestShotRedo("", "a");

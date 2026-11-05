@@ -94,6 +94,18 @@ describe("inheritDerivedFields（#2615 保存继承）", () => {
     expect(result[1]).toEqual(fresh);
   });
 
+  it("库里的垃圾记录（非对象 / id 非字符串）不进索引，也不影响正常继承", () => {
+    /* route 把 JSON 列原样读写，「库里那一列被人写脏」在真机上发生过（#2615 的同族）。
+       索引阶段跳过它们，是这一层唯一的防御 —— 漏了就是把 `null` 当 id。 */
+    const dirty = [null, 42, { id: 7, rev: 1 }, { id: "shot-1", rev: 3 }];
+    const result = inheritDerivedFields(
+      [{ id: "shot-1", prompt: "x" }],
+      dirty,
+      SHOT_DERIVED_FIELDS,
+    );
+    expect(result).toEqual([{ id: "shot-1", prompt: "x", rev: 3 }]);
+  });
+
   it("非对象记录原样穿过，不抛", () => {
     expect(
       inheritDerivedFields([null, 42, { id: "shot-1" }], existing, SHOT_DERIVED_FIELDS),
