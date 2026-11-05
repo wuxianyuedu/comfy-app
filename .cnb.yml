@@ -1698,7 +1698,7 @@
     # 与上面那格同量级（几次 stat）。秒级的事给 5m 只为「卡死要早报」。
     timeout: 5m
 
-  # ── GitHub 镜像同步（**读数，恒不退非零**；ISSUE #2978 / #3051）──
+  # ── GitHub 镜像同步（**已翻承重，退码生效**；ISSUE #2978 / #3051）──
   #
   # 双远端镜像（cnb 主）的推送跳：推 HEAD 到 `wuxianyuedu/comfy-app` 的 `cnb-pr-<IID>` 专属
   # ref，再补一跳 `git lfs push`（不带 --all，只推该 ref 可达且远端还没有的对象 —— 镜像仓若
@@ -1713,27 +1713,30 @@
   # 「按同一笔 sha 读回 GitHub 判决」那一格上线，两条远端就成了串行。前移到
   # `Install dependencies` **之前**，它吃的是 `Prepare` 之后那份已就位的树。
   #
-  # ⚠️ 前移**不许顺带改掉承重性**：主列的退码是承重的 —— 某一格 `error` 会把排在它后面的格
-  # 整片 `skipped`（本仓把同一条约束写成判据：「每日链里必须有一格排在所有可能红的格之前」，
-  # `tests/no-platform-ci-config.test.ts`）。而 GitHub 这一跳今天还不通（实测
-  # `Failed to connect to github.com port 443 after 21114 ms`，另有 #3014 的令牌被拒、
-  # #3003 的 LFS 缺件、#3027 的自家钩子拦下四形），所以这一格带 `--readout`：内部三态照旧
-  # 打点、对外恒不退非零，与上面 `镜像身份` / `工作区复用读数` / `缓存槽读数` 同一族。
-  # 原来那句「它坏了既不许把门禁的红洗成绿，也不许把自己的红叠进门禁的账」**搬的正是这个语义**
-  # —— 搬的是位置，不是那句话。
+  # ⚠️ 前移**未改承重性**，且本批已把它翻成 **fail-closed**（#3051 期望第 3 条落地）：主列的退码
+  # 是承重的 —— 某一格 `error` 会把排在它后面的格整片 `skipped`（本仓把同一条约束写成判据：
+  # 「每日链里必须有一格排在所有可能红的格之前」，`tests/no-platform-ci-config.test.ts`）。
+  # 之前这一跳因 GitHub egress 不稳（实测 `Failed to connect to github.com port 443 after
+  # 21114 ms`，另有 #3014 令牌被拒 / #3003 LFS 缺件 / #3027 自家钩子拦四形）而临时带
+  # `--readout`：内部三态照打点、对外恒不退非零，与上面 `镜像身份` / `工作区复用读数` /
+  # `缓存槽读数` 同一族。**现在 `--readout` 已摘除**，推不出去/派发失败就退非零、直接拦下 PR 合并。
+  # 原来那句「它坏了既不许把门禁的红洗成绿，也不许把自己的红叠进门禁的账」在这里**正是承重语义本身**
+  # —— 翻承重后这半句从「死规矩」变成「活判据」。
   #
-  # 什么时候翻成 fail-closed：等回读那一格上线之后（那时「推不出去」=「这一跑没判过」），
-  # 条件写在 #3051 期望第 3 条；不在本批。
+  # egress 间歇断流不再致命：三跳 git 调用各自带超时并对 egress 类失败带退避重试
+  # （脚本 `REMOTE_PROBE_TIMEOUT_MS 30s×3` / `PUSH_TIMEOUT_MS 240s×2`），真实抖动下重试一次即通
+  # （PR #3162 第二跑 8.5s 派发成功、重试 1 次）；只有**持续**不通/令牌被拒才真正退非零。
   #
-  # 令牌那一系一字未动：`GITHUB_MIRROR_TOKEN`（平台侧注入，仓库外配置）缺席 ⇒ 内部照旧判
-  # 「没跑起来」并留下读数，只是读数档不把它折成流水线的红；令牌值一个字节都不回显
+  # 令牌那一系一字未动：`GITHUB_MIRROR_TOKEN`（平台侧注入，仓库外配置）缺席/被拒 ⇒ 内部判
+  # 「没跑起来」留读数，翻承重后**这个读数现在折成流水线的红（即拦合）** —— 这正是 #3051 第 3 条
+  # 要的 fail-closed：推不出去 = 这跑没判过 = 不许合。令牌值一个字节都不回显
   # （脚本内先脱敏，硬规则 17）。
   # ⚠️ 这一格的**结论会落在工作区的 `.comfy-ci/mirror-dispatch.json`**（#3148）：
   # 主列末尾的 `GitHub 判决回读` 读它，从而在「本跑根本没派发」时不再空转满 45m。
   # 两格共用一个工作区（本流水线单 job 串行），所以这一跳只是一次写文件 + 一次读文件。
   # 落盘失败不影响本格三态（回读格读不到就退回「自己猜」的老行为）。
   - name: GitHub 镜像同步
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs --readout
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs
     # 三跳 git 调用各自带超时并对 egress 类失败带退避重试（`scripts/ci-github-mirror-push.mjs`
     # 的 REMOTE_PROBE_TIMEOUT_MS 30s×3 / PUSH_TIMEOUT_MS 240s×2 —— 没有限时就得吃 git 自己
     # 那个 21s 的 connect 超时，而那一形过去只被念成「令牌活不活」；重试的立案依据见
@@ -2369,7 +2372,7 @@
     # 那几条各自独立跑的东西 —— 它的**合理**墙钟应当与原几格的总和同级。
     timeout: 45m
 
-  # ── GitHub 判决回读：主列末尾的**读数档**（ISSUE #3051 期望第 3 条的前半步）──
+  # ── GitHub 判决回读：主列末尾的**承重档**（ISSUE #3051 期望第 3 条已落地）──
   #
   # 它回答一个问题：镜像格（主列开头那一格 `GitHub 镜像同步`）派发出去的那一笔
   # head_sha，GitHub Actions 那边跑完了没有、结论是什么。**主路径**轮询
@@ -2385,13 +2388,15 @@
   # 为什么排在**主列末尾**：镜像格一跑完 GitHub 那边才起跑，回读放得越靠后，
   # 留给 GitHub 完成的窗口越大；且本格只做 API 读数、零构建，挂在最后不会挡住
   # 任何一格的墙钟。轮询总预算 45 分钟（`POLL_BUDGET_MS`，取法见脚本文件头）——
-  # 正常情况第一读就接近完整，预算耗尽按「没跑起来」exit 2 交账，**不判红**。
+  # 正常情况第一读就接近完整；预算耗尽按「没跑起来」exit 2 交账 —— 翻承重后 exit 2 退非零、
+  # 直接拦合（它不自己发明一红，只是如实报「判不了」，由承重链路拦下）。
   #
   # ⚠️ **45m 是上限，不是每次都该花完**（ISSUE #3148）。两种「等下去没有意义」的形态
   # 各有自己的提前收工判据，都在 `scripts/ci-github-verdict-read.mjs` 里：
   #   ① **上游派发没发生**：镜像格把结论落在工作区的 `.comfy-ci/mirror-dispatch.json`
   #      （`writeDispatchState`）。推送 / LFS / 派发任意一跳失败 ⇒ 本跑永远不会有 run，
-  #      回读格读到 `dispatched: false` 就**一秒不轮询**、exit 2 并把上游原因念出来。
+  #      回读格读到 `dispatched: false` 就**一秒不轮询**、exit 2 并把上游原因念出来
+  #      （翻承重后 ⇒ 拦合：上游根本没派发，这跑没判过，不许合）。
   #      两格共用一个工作区，所以这一跳只需要一次读文件。
   #   ② **认领锚点恒假**：触发表里有 run、但没有一条的 `display_title` 含目标 sha
   #      （`run-name` 没渲染出 payload 的 sha / 不是同一笔 sha，#3142 的两条候选）。
@@ -2399,9 +2404,9 @@
   #      轮这一形 ⇒ 提前 exit 2，并把触发表的标题样本念出来（两种候选当场可分）。
   # 零条 run 那一形（GitHub 侧压根还没起跑）**照旧吃满预算** —— 它可能随时起跑（#3136）。
   #
-  # ⚠️ **读数档**（`--readout`）：三态照常打点，退码恒 0 —— 它坏了既不许把门禁的
-  # 红洗成绿，也不许把自己的红叠进门禁的账（与镜像格同一条规矩）。翻成承重档
-  # 与摘镜像格的 `--readout` 同属 #3051 期望第 3 条，是另一批。
+  # ⚠️ **承重档**（已摘 `--readout`，#3051 期望第 3 条落地）：三态照常打点，但退码**生效** ——
+  # 有结论且红 ⇒ exit 1 直接拦合；没跑起来/没结论 ⇒ exit 2 同样拦合；只有读到绿才放行。
+  # 它坏了既不许把门禁的红洗成绿，也不许漏过（与镜像格同一条 fail-closed 规矩）。
   #
   # ⚠️ 两件外部前提不落地，这一格永远只能交「没跑起来」（话术在脚本里会点名）：
   #   ① `GITHUB_MIRROR_TOKEN`（fine-grained PAT）追加 `actions: read`（优先，主路径）
@@ -2410,7 +2415,7 @@
   #   ② 自托管节点到 `api.github.com:443` 的出网（与镜像格同一条 egress，它通这一格
   #      才有意义）。
   - name: GitHub 判决回读
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-verdict-read.mjs --readout
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-verdict-read.mjs
     # 包住 45m 轮询预算 + 进程开销；与 GitHub 侧最重格的外框同级。
     timeout: 60m
 
@@ -2722,38 +2727,22 @@ master:
         - https://cnb.cool/moon-read/GITHUB_MIRROR_TOKEN/-/blob/main/envs.yml
       stages: *push_stages
 
-  # 每天一次的定时任务（官方 `zh/build/crontab.md`）：`0 0 * * *` = 每天 01:00
-  # （平台时区 `Asia/Shanghai`）。分支键必须是**明确的单一分支名** —— 定时任务
-  # 不支持 glob，挂多分支会静默失效。所以它挂在 `master:` 下，取的是 master 的 HEAD。
+  # ── 定时档的执行者已从这台机迁到 GitHub Actions ──────────────────────────────
   #
-  # ⚠️ 这一条的 stage 清单是 `env.COMFYAPP_CI_DAILY_GATES`（不是上面那份 `GATES`）：
-  # 两份清单对应两条不同的事件，混成一份之后「谁在什么时候跑」就再也读不出来了。
-  "crontab: 0 1 * * *":
-    - <<: *common
-      name: 每日生产构建
-      lock: *lock_daily
-      stages: *daily_gates
-
-  # ── 桌包那一档的定时口（ISSUE #2503）：02:00，与上面那一条**错开两小时** ──────────
+  # 这里刻意**不再挂** `"crontab: …"` 事件：每日那批判据与桌包那一档由
+  # `.github/workflows/daily.yml` / `package-desktop.yml` 的 schedule 承担，跑的是
+  # GitHub 镜像仓的默认分支（由 push 档的 `GitHub master 镜像` 格跟住 master）。
+  # 自托管节点是本机，定时重档（生产构建 / 全量E2E / 全量单测 / cargo 冷编译）
+  # 与日常开发抢核；而「同一台机上并发在场时墙钟不可读」正是这一族要避开的失真，
+  # 桌包那条还要整棵依赖树冷编译，单机满载时连单测的超时都不构成代码结论。
   #
-  # 为什么错开、而不是紧接着：这一档会把这台机压到满载（cargo 一段 + WiX `light` 一段，
-  # 而 `src-tauri/target` 不在任何缓存槽里 ⇒ 每跑都是整棵依赖树的冷编译）。01:00 那一跑
-  # 的 `每日单元测试` 是「唯一会因这台机器的负载而红的格子」（业主口径把它排在最后），
-  # 两跑叠在一起得到的不是两条结论，是一份不可信的读数（§13.6.4.1「并发在场时墙钟不可读」）。
+  # ⚠️ 下面的手动 / API 触发口**刻意保留**：它们不自动触发，不占机器；只在有人
+  # 明确要一份本机产物、或要复验某一格时才跑同一份 `*daily_gates` / `*package_gates`。
+  # 清单与锚点因此一字不动 —— 判据仍按它们核对「这一档跑什么」，只是不再由时钟起它。
   #
-  # 为什么它**不吃 `*daily_gates`**：业主口径是「独立一档」。清单与锁都是自己的
-  # （`.package-gates` / `.lock-package`，理由写在那两个锚点头注里）—— 判据
-  # `tests/no-platform-ci-config.test.ts` 双向钉：桌包那几格不许出现在每日清单里，
-  # 而定时与手点两个触发口必须引用同一个 `*package_gates`。
-  #
-  # `*package_fail_stage` 是这一档**独有**的那一格 `endStages`（ISSUE #2550：这一档红了
-  # 以前没有任何自动立案口）。写法与 `pull_request` 那条同形 —— 两个锚点写在一个合并键里，
-  # 拆成两行 `<<:` 是非法 YAML（理由见 `pull_request` 那条同一处注释）。
-  "crontab: 0 3 * * *":
-    - <<: [*common, *package_fail_stage]
-      name: 桌面成品包
-      lock: *lock_package
-      stages: *package_gates
+  # ⚠️ 也不留一条「空的 crontab」占位：平台不报错、只是永远不触发，而配置看上去
+  # 仍像有定时档，那正是「在册 ≠ 出勤」那一族要治的静默失效。「这里没有定时」
+  # 由 `tests/no-platform-ci-config.test.ts` 反向钉住，不是靠这段注释声明。
 
   # ── 手动触发那一条：与 01:00 那一跑**同一份七格**（按钮在 `.cnb/web_trigger.yml`）──
   #

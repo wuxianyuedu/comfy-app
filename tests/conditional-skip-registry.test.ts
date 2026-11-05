@@ -88,6 +88,24 @@ const REGISTERED: Array<Registration> = [
     why: "没有 Python 时，前台归属（Job Object 交接）那组判据跑不了",
   },
   {
+    file: "tests/base-check-snapshot-link.test.ts",
+    guard: "!DIR_SYMLINK_OK",
+    count: 1,
+    tier: "platform",
+    why:
+      "⑥dir symlink 那条要真建 `symlinkSync(..., 'dir')`（MSYS `ln -s` 形态），Windows 没开开发者模式时建不出来 ⇒ 这一向如实跳过；" +
+      "junction 形态与「摘链先于 worktree remove」的其余各条不分平台，始终在判",
+  },
+  {
+    file: "tests/worktree-remove.test.ts",
+    guard: "!DIR_SYMLINK_OK",
+    count: 1,
+    tier: "platform",
+    why:
+      "②dir symlink 与上一份同族：假 worktree 里要先真建一条目录符号链接，才判得了「移除只摘链接本体、目标 shim 仍在」；" +
+      "建不出来时这一向不判，junction 形态与清理三态始终在判",
+  },
+  {
     file: "tests/cross-platform-launcher.test.ts",
     guard: 'process.platform === "win32"',
     count: 1,

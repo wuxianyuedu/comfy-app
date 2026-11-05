@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import {
   CODE,
+  DAILY_ATTENDANCE_LANES,
   DAILY_LANE_PIPELINES,
   DEFAULT_WINDOW_HOURS,
   FETCH_MAX_PAGES,
@@ -323,9 +324,13 @@ describe("daily-attendance：两条定时档交错时，判的是每日那一档
       expect(got.code, got.headline).toBe(CODE.PRESENT);
       expect(got.sn).toBe(row.sn);
     }
-    /* 名单本身就是这三个（配置里跑 `*daily_gates` 的三个触发口）；对账由
-     * `tests/no-platform-ci-config.test.ts` 判，这里只钉住「名单不是只有一条」。 */
-    expect(DAILY_LANE_PIPELINES).toHaveLength(3);
+    /* 现役名单就是这两个（配置里跑 `*daily_gates` 的手点 / API 触发口；定时口已迁
+     * GitHub Actions）；与配置的双向对账由 `tests/no-platform-ci-config.test.ts` 判。
+     * ⚠️ 判决用的不是这份、是 `DAILY_ATTENDANCE_LANES` —— 它还要认迁移前的历史
+     * 流水线名，否则窗口跨过迁移点会念出一次假缺勤。两边都不许退化成只剩一条。 */
+    expect(DAILY_LANE_PIPELINES).toHaveLength(2);
+    expect(DAILY_ATTENDANCE_LANES.length).toBeGreaterThan(DAILY_LANE_PIPELINES.length);
+    expect(DAILY_ATTENDANCE_LANES).toContain("每日生产构建");
   });
 
   it("过滤用的是名单而不是硬编码那一条：把桌包名注进去，同一次派发就成了本档", () => {
