@@ -105,6 +105,20 @@ export const LOG_MANIFEST_FILE_NAME = "manifest.json";
 /** `ghp_…` / `github_pat_…` 这类令牌形状（脱敏兜底；精确令牌值另有一跳）。 */
 const TOKEN_SHAPES = [/\bgithub_pat_[A-Za-z0-9_]{20,}\b/gu, /\bgh[pousr]_[A-Za-z0-9]{20,}\b/gu];
 
+/**
+ * 敏感键名（`*_TOKEN` / `*_SECRET` / `PASSWORD` / `*_KEY` …）。
+ *
+ * 日志里除了一串裸令牌，还会出现 `.env` 形状（`GITHUB_TOKEN=…`）与 JSON 形状
+ * （`{"password":"…"}`）—— 只抹裸串的话，落盘文件里仍会留下可直接复用的凭据。
+ */
+const SECRET_KEY = String.raw`[A-Za-z0-9_]*(?:TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|APIKEY|PRIVATE_KEY|ACCESS_KEY|CREDENTIAL)[A-Za-z0-9_]*`;
+
+/** `KEY=value` 形状（env 文件 / 命令行回显）；值抹成 `<redacted>`，键名保留可读。 */
+const ENV_SECRET = new RegExp(String.raw`(${SECRET_KEY})(\s*=\s*)([^\s"'\x60]+)`, "giu");
+
+/** `{"key":"value"}` 形状（JSON 回显）；只抹值，引号与键名保留。 */
+const JSON_SECRET = new RegExp(String.raw`("${SECRET_KEY}"\s*:\s*")([^"]*)(")`, "giu");
+
 /** 本仓检出根（`scripts/` 的上一层）。 */
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -164,8 +178,14 @@ export function redactSecrets(text, token) {
     out = out.split(token).join("<redacted>");
   }
   for (const shape of TOKEN_SHAPES) {
-    out = out.replace(shape, "<redacted>");
+    out = out.replaceAll(shape, "<redacted>");
   }
+  /* env / JSON 形状：键名保留（读者要知道「哪个变量泄漏过」），值一律抹掉。 */
+  out = out.replaceAll(ENV_SECRET, (_all, key, sep) => `${String(key)}${String(sep)}<redacted>`);
+  out = out.replaceAll(
+    JSON_SECRET,
+    (_all, prefix, _value, suffix) => `${String(prefix)}<redacted>${String(suffix)}`,
+  );
   return out;
 }
 

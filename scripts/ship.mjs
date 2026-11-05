@@ -71,12 +71,15 @@
  *     单子读数、实例归属、依赖新鲜度）。它判的都是「这一份检出」的事实，与平台侧那几段
  *     正相反；叠在本文件里会把装配层推过 900 行（第二次撞上，首次见 #2189）。
  *   · `ship-standalone.mjs`—— **与主流程互斥的单件动作**：`--whoami` / `--diagnose` /
- *     `--stage-log` / `--rerun-ci` / `--branches` / 单子的领取与结束 / 只补关。它们的共同形状是
+ *     `--stage-log` / `--gh-logs` / `--rerun-ci` / `--branches` / 单子的领取与结束 / 只补关。它们的共同形状是
  *     「一次只做一件、不进主流程」，变化方向也不在阶段顺序上 —— 加一个独立动作不动阶段表。
  *     搬出去的直接原因：#2504 量的 898 行（900 硬闸余量 2 行，同一出口：拆）。
  *   · `ship-stage-log.mjs`  —— **`--stage-log` 的执行体**（ISSUE #2455）：按格名反查 `stageId`
  *     再取那一格的正文。取数与归一不写第二份，全走 `ci-build-readout.mjs`（与 `--diagnose`
  *     是同一个读者的两个入口，同一跑不许给出两种答案）。
+ *   · `ship-gh-logs.mjs`  —— **GA 失败日志回读**：`--gh-logs <run-id|pr号>` 与判红自动触发。
+ *     取数全走 `ci-github-verdict-logs.mjs`（重试/超时/脱敏不写第二份），本模块只认目标、
+ *     排版（run / job / step / 全部 `##[error]` / 窗口 / 一行归因）与落盘绝对路径。
  *   · 本文件              —— **装配**：阶段顺序、读数的落点，
  *     以及「谁跑了、各段结论是什么」的那一处记账（`codes` + `finish`）；
  *     收尾回收挂在 `main` 的唯一出口上（一轮可以从七八个出口结束，见那里）。
@@ -203,6 +206,11 @@
  *                                              #   日志行号）—— 绿跑也能用；按格名反查 stageId，
  *                                              #   认不出/命中多格都退 2，不替你挑一格
  *                                              #   （#2445 那类「弃用警告清零没有」的验收只能看绿跑）
+ *   pnpm ship --gh-logs 3195                  # 只读：按 PR 号回读 GA 失败日志 —— run / 失败 job / 失败 step /
+ *                                             #   全部 `##[error]` / 失败窗口（head 20 + tail 120，写明省略行数）/
+ *                                             #   一行结论；全量日志落系统临时目录并打印绝对路径
+ *   pnpm ship --gh-logs run:4242               # 按 run id 直取；`run:` / `pr:` 可消歧，裸数字按位数判。
+ *                                             #   ship 轮询判红时也会自动回读一次（无令牌只念一行跳过）
  *   pnpm ship --rerun-ci                       # CI 挂了想重跑：在当前 PR 分支推一个空提交触发新 build（平台侧没有 PR 重跑入口，
  *                                            # 不去 cnbcli 翻）。它同时带上 COMFY_INTENTIONAL_EMPTY_COMMIT —— D0 里有两步读当场暂存区，
  *                                            # 空索引本来被它们读成「取不到判决面」；口径与反滥用见规范 §13.5.5 末段
@@ -219,7 +227,14 @@ import { resolveGitDir } from "./git-dir.mjs";
 /* 旗标解析在 `ship-args.mjs`：它跟着「命令行长什么样」动，而 `ship-core` 跟着「外部执行者的
  * 读数形状」动（ISSUE #2491 把这一层拆出去的那条理由写在文件头）。 */
 import { parseArgs } from "./ship-args.mjs";
-import { CODE, codeTag, combineShipCodes, parseSlug, PHASES, resolveUpstream } from "./ship-core.mjs";
+import {
+  CODE,
+  codeTag,
+  combineShipCodes,
+  parseSlug,
+  PHASES,
+  resolveUpstream,
+} from "./ship-core.mjs";
 import { makeRunner, short, writeScratch } from "./ship-exec.mjs";
 import { reportStage } from "./ship-stage.mjs";
 import { handleFromProcessEnv, readDevHandleWithSource } from "./ship-ticket.mjs";
@@ -230,6 +245,7 @@ import { startProgress } from "./progress-heartbeat.mjs";
 import { closeIssues } from "./ship-close.mjs";
 import { runCommitStage, runPushStage } from "./ship-local.mjs";
 import { runPreflightStage } from "./ship-preflight.mjs";
+import { runGhLogsOnRed } from "./ship-gh-logs.mjs";
 import { runStandaloneAction } from "./ship-standalone.mjs";
 import { mentionsCloses } from "./ship-pull-body.mjs";
 
@@ -302,6 +318,7 @@ export async function main(deps = {}) {
  *   resolveGitDir?: (cwd?:string)=>string | null,
  *   log?: (s:string)=>void,
  *   sleep?: (ms:number)=>void,
+ *   fetchImpl?: typeof fetch,
  *   now?: ()=>number,
  *   args?: string[],
  *   env?: Record<string, string | undefined>,
@@ -474,7 +491,7 @@ async function runFlow(deps, tmpFiles) {
    * `--branches` / 单子那几格 / 只补关）—— 分派与各自的互斥守卫都收在
    * `ship-standalone.mjs`，这里只决定「这一跳还要不要往下走」以及把**这一次** probe 的
    * cnb 在场性带出去（后面每段都要它，别 probe 第二遍）。 */
-  const standalone = runStandaloneAction({
+  const standalone = await runStandaloneAction({
     opt,
     run,
     log,
@@ -489,6 +506,9 @@ async function runFlow(deps, tmpFiles) {
     explicitHandle,
     mkTmp,
     settle: (cs) => finish(cs),
+    env,
+    fetchImpl: deps.fetchImpl ?? globalThis.fetch,
+    sleep,
   });
   if (standalone.handled) {
     return standalone.code;
@@ -690,6 +710,19 @@ async function runFlow(deps, tmpFiles) {
       // ── 阶段 5：verdict ──────────────────────────────────────
       if (want("verdict")) {
         codes.push(reportVerdict({ run, log, slug, number, buildState, buildSn, baseRef }));
+        /* 判红 ⇒ 自动回读一次 GA 失败日志（规范 §13.6）：台面上直接给出 run / job /
+         * step / 注解 / 窗口 / 一行归因；没有令牌只念一行，不改三态（`runGhLogsOnRed`
+         * 的返回值刻意不进 `codes` —— 日志取不到不等于判红）。 */
+        await runGhLogsOnRed({
+          buildState,
+          number,
+          repo: slug,
+          env,
+          log,
+          fetchImpl: deps.fetchImpl ?? globalThis.fetch,
+          sleep,
+          dryRun: opt.dryRun,
+        });
       }
 
       // ── 阶段 6：merge（显式）─────────────────────────────────

@@ -86,10 +86,10 @@ export function parseIssueNumberToken(token) {
  * 首段像构建号形状（`BUILD_SN_SHAPE`）才当构建号收下，否则整串都是格名（走按 HEAD 归属）。
  *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],rerunCi:boolean,only:string|null,unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],rerunCi:boolean,only:string|null,unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],rerunCi:boolean,only:string|null,unknown:string[]}} */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],rerunCi:boolean,only:string|null,unknown:string[]}} */
   const out = {
     message: null,
     messageFile: null,
@@ -127,6 +127,9 @@ export function parseArgs(argv) {
     stageLogSn: null,
     stageLogRef: null,
     stageLogBad: [],
+    ghLogs: false,
+    ghLogsRef: null,
+    ghLogsBad: [],
     rerunCi: false,
     only: null,
     unknown: [],
@@ -188,6 +191,28 @@ export function parseArgs(argv) {
         out.stageLogBad.push("(缺点名哪一格)");
       } else {
         out.stageLogRef = ref;
+      }
+    } else if (a === "--gh-logs" || a.startsWith("--gh-logs=")) {
+      /* 与 `--diagnose` 同一档：只读、一次只做一件。目标只收**一个** token（run id
+       * 或 PR 号），所以这里不像 `--stage-log` 那样吃自由文本；两种写法（空格 / 等号）
+       * 共用这一支，避免「一种写法能用、另一种被当成未知旗标」。 */
+      out.ghLogs = true;
+      let tok = "";
+      if (a.startsWith("--gh-logs=")) {
+        tok = a.slice("--gh-logs=".length);
+      } else if (i + 1 < argv.length) {
+        const next = String(argv[i + 1] ?? "");
+        if (next.startsWith("-") === false) {
+          tok = next;
+          i += 1;
+        }
+      }
+      if (tok.trim() === "") {
+        out.ghLogsBad.push("(缺 run id / PR 号)");
+      } else if (out.ghLogsRef === null) {
+        out.ghLogsRef = tok;
+      } else {
+        out.ghLogsBad.push(`重复的 --gh-logs（前一个 ${out.ghLogsRef}）`);
       }
     } else if (a === "--rerun-ci") {
       out.rerunCi = true;
