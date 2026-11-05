@@ -4420,6 +4420,8 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
     env: {
       echoBody?: boolean;
       getPull?: FakeResult;
+      /** 首拉就取不到（stdout 里没有可解析 JSON）—— `scanPullPages` 的 `ran=false` 那一格。 */
+      openPullsFail?: boolean;
       openPullsPages?: Array<string>;
       patchPull?: FakeResult;
       postPull?: FakeResult;
@@ -4433,6 +4435,10 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
       const key = args.join(" ");
       calls.push(`${cmd} ${key}`);
       if (cmd === "cnb" && key.includes("list-pulls")) {
+        if (env.openPullsFail === true && key.includes("--state open")) {
+          /* 平台没答：`cnbJson` 只认 stdout 里的 `{`，不给 JSON 就是「取不到」。 */
+          return { status: 1, stdout: "boom", stderr: "list-pulls failed", error: null };
+        }
         if (env.openPullsPages && key.includes("--state open")) {
           const page = Number(/--page (?<page>\d+)/.exec(key)?.groups?.page ?? "1");
           return ok(env.openPullsPages[page - 1] ?? '{"status":200,"data":[]}');
@@ -4569,7 +4575,7 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
       { length: 20 },
       (_, i) => `{"number":${3000 - i},"head":{"ref":"refs/heads/feat/other-${i}"}}`,
     );
-    const { calls, io } = pullHarness({
+    const { calls, heard, io } = pullHarness({
       openPullsPages: [
         `{"status":200,"data":[${others.join(",")}]}`,
         /* 平台真实形状：`head.ref = "refs/heads/<分支名>"`（裸分支名比对会全条落空）。 */
@@ -4583,6 +4589,46 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
       calls.some((c) => c.includes("post-pull")),
       "复用命中还发 post-pull，长出来的就是第二条 PR",
     ).toBe(false);
+    /* 命中那一格不许念「没读到」/「撞上界」—— 那两句只在**没命中**时才成立。 */
+    const all = heard.join("\n");
+    expect(all).not.toContain("可能撞 409");
+    expect(all).not.toContain("无法判断是否已有 PR");
+  });
+
+  it("翻页撞上界：5 页 / 100 条仍未命中 ⇒ 明念上界与 409 风险，且仍走建 PR（ISSUE #2964）", () => {
+    /* 上界是 5 页 × 20 条（`LIST_MAX_PAGES` / `LIST_PAGE_SIZE`）。开放 PR 超过 100 条时，
+     * 目标 PR 可能永远扫不到 —— 这条缺陷的原始形态会回来。行为不变（照旧建 PR，平台 409
+     * 是最后一道防线），但屏幕必须能自证「这一格已经扫到上界、不是确实没有」。 */
+    const pages = Array.from({ length: 5 }, () =>
+      JSON.stringify({
+        status: 200,
+        data: Array.from({ length: 20 }, (_, i) => ({
+          number: 4000 - i,
+          head: { ref: `refs/heads/feat/other-${i}` },
+        })),
+      }),
+    );
+    const { calls, heard, io } = pullHarness({ openPullsPages: pages });
+    const out = createOrReusePull(io);
+    expect(out.number).toBe(3002);
+    const openCalls = calls.filter((c) => c.includes("list-pulls") && c.includes("--state open"));
+    expect(openCalls.length, "页界是 5 页，第 6 页一次都不该发").toBe(5);
+    expect(calls.some((c) => c.includes("post-pull")), "撞上界后仍要能建 PR").toBe(true);
+    const all = heard.join("\n");
+    expect(all).toContain("已扫 5 页 / 100 条仍未命中");
+    expect(all).toContain("可能撞 409");
+  });
+
+  it("开放清单一页都取不到 ⇒ 明念「无法判断是否已有 PR」且仍继续建 PR（ISSUE #2964）", () => {
+    /* 「取不到」不等于「没有」：缺读数不新增结论，也不撤销结论 —— 照旧往下走。
+     * 挡住这一跳会让一次平台抖动直接停掉 ship，而 409 本来就会在真正重复时露头。 */
+    const { calls, heard, io } = pullHarness({ openPullsFail: true });
+    const out = createOrReusePull(io);
+    expect(out.number).toBe(3002);
+    expect(calls.some((c) => c.includes("post-pull"))).toBe(true);
+    const all = heard.join("\n");
+    expect(all).toContain("无法判断是否已有 PR（不等于没有）");
+    expect(all).not.toContain("可能撞 409");
   });
 
   it("翻页扫满仍没见着这条分支 ⇒ 落回「建」那一支（翻页不许把建 PR 的路堵死）", () => {
