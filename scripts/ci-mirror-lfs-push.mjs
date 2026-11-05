@@ -26,14 +26,19 @@
  * 所以 `LOCAL_REFS` 这一形**自动回退**：回退通了就是通（原路径的 ref 枚举失败不构成
  * 结论）；回退也失败才 FAIL。清单为空（本地压根没有 LFS 对象）⇒ 回退没有对象，按原失败
  * 交账。认证 / 配额 / egress 那几类**不回退** —— `--object-id` 救不了它们。
+ *
+ * ## 重试窗口（2026-11-05 第二批）
+ *
+ * 这一跳原先是「至多 2 次 + 5s 退避」，与内容推送那次改动前同一个毛病：瞬时
+ * `Connection was reset` 一次 0.3s ⇒ **6s 就交账**。现在整档（主路径 + 可能的回退）
+ * 共用 `LFS_PUSH_RETRY_BUDGET_MS` = 60s、至多 5 次；常量与取法在
+ * `ci-mirror-retry-policy.mjs`。**两跳共用一个窗口**，不各领一份叠成 120s。
  */
 import { classifyLfsPushFailure, parseLfsObjectCount } from "./ci-mirror-failure-report.mjs";
+import { LFS_PUSH_MAX_ATTEMPTS, LFS_PUSH_RETRY_BUDGET_MS } from "./ci-mirror-retry-policy.mjs";
 
 /** 三态退码（与仓内其余档同口径）。 */
 const CODE = { FAIL: 1, OK: 0 };
-
-/** LFS 那一跳的重试上限（与内容推送同量级：只对 egress 类重试一次）。 */
-const LFS_PUSH_MAX_ATTEMPTS = 2;
 
 /**
  * 第二跳（LFS 对象推送）的完整参数表（文件头第 9 条）。
@@ -104,8 +109,9 @@ export function parseLfsObjectIds(text) {
  * 内容推送成功后那一跳：把 LFS 对象也送过去（文件头第 9 条）。
  *
  * 失败 ⇒ `CODE.FAIL`，由调用方**不派发**：refs 已在而对象不在，GitHub 侧 checkout
- * 开 `lfs: true` 的那几格会拿指针文件跑出一格假红。重试与超时与内容推送同一套
- * （egress 类重试一次；墙钟由调用方那次 `git` 调用的超时档位给）。
+ * 开 `lfs: true` 的那几格会拿指针文件跑出一格假红。重试用 LFS 自己的 60s 墙钟预算
+ * （`budgetMs` 由本函数按「整档还剩多少」算，主路径与回退共用，理由见文件头）；
+ * 首刀不裁超时，仍是 `PUSH_TIMEOUT_MS`。
  *
  * @param {{log: (line: string) => void, prefix: string, runGit: Function,
  *   sleep: (ms: number) => Promise<void>, token: string, url: string,
@@ -119,7 +125,10 @@ export function parseLfsObjectIds(text) {
 export async function pushLfsObjects(ctx) {
   const { log, prefix, runGit, sleep, token, url, runGitWithRetry, sanitize } = ctx;
   const startedAt = Date.now();
+  /** 整档（主路径 + 可能的 --object-id 回退）还剩下多少预算：两跳共用一份，不各领一份。 */
+  const budgetLeft = () => Math.max(0, LFS_PUSH_RETRY_BUDGET_MS - (Date.now() - startedAt));
   const lfs = await runGitWithRetry(lfsPushArgs(url), {
+    budgetMs: budgetLeft(),
     label: "LFS 推送",
     log,
     maxAttempts: LFS_PUSH_MAX_ATTEMPTS,
@@ -159,6 +168,7 @@ export async function pushLfsObjects(ctx) {
         `[${prefix}] LFS 推送：ref 枚举不到（\`Error getting local refs.\`）⇒ 回退改按对象 OID 推（清单 ${String(oids.length)} 个，取自 \`git lfs ls-files --long\`，不经 ref 解析）`,
       );
       const fb = await runGitWithRetry(fallbackArgs, {
+        budgetMs: budgetLeft(),
         label: "LFS 回退推送（--object-id）",
         log,
         maxAttempts: LFS_PUSH_MAX_ATTEMPTS,

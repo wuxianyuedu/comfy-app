@@ -11,11 +11,6 @@ import {
   DEFAULT_REPO,
   MASTER_REF,
   MIRROR_ENTRY_TIMEOUT_MS,
-  PROBE_MAX_ATTEMPTS,
-  PUSH_MAX_ATTEMPTS,
-  PUSH_TIMEOUT_MS,
-  REMOTE_PROBE_TIMEOUT_MS,
-  RETRY_BACKOFF_MS,
   buildPushUrl,
   classifyLfsPushFailure,
   dispatchPayload,
@@ -36,10 +31,24 @@ import {
   renderMirrorSummary,
   resolveContext,
   resolveMasterContext,
+  runGitWithRetry,
   runMirror,
   runMirrorEntry,
   sanitize,
 } from "../scripts/ci-github-mirror-push.mjs";
+/* 超时 / 次数 / 退避那一组常量自 2026-11-05 起单独一份（主文件贴着 900 行闸）。
+ * 从**实现所在的模块**取，而不是从主文件的转出口取 —— 那里不再转出它们。 */
+import {
+  LFS_PUSH_MAX_ATTEMPTS,
+  LFS_PUSH_RETRY_BUDGET_MS,
+  PROBE_MAX_ATTEMPTS,
+  PUSH_MAX_ATTEMPTS,
+  PUSH_RETRY_BUDGET_MS,
+  PUSH_TIMEOUT_MS,
+  REMOTE_PROBE_TIMEOUT_MS,
+  RETRY_BACKOFF_MS,
+  RETRY_MIN_ATTEMPT_MS,
+} from "../scripts/ci-mirror-retry-policy.mjs";
 /* `--master` 那一档的执行面单独一份（#3148：为回到 §12.6 R5 的 900 行闸内切出去的）。 */
 import { runMasterMirror } from "../scripts/ci-github-mirror-master.mjs";
 /* 派发 payload 的 PR 标题那一格（run 列表可读性）。 */
@@ -344,13 +353,82 @@ describe("纯函数", () => {
     );
     expect(gitTimeoutFor(["rev-parse", "HEAD"])).toBeUndefined();
     /* 探活单次上限 2026-11-02 从 15s 放宽到 30s：`cnb-pe2-1k6e1uhj8` 连续两跑 15s 无回话、
-     * 同日 19:47 同 runner 却探活通过 —— 15s 把「慢但活着」的抖动截成了「没通」。单次不再
-     * 要求小于 git 自己的 connect 超时（21114 ms），因为总账改由「次数 × 单次 + 退避」收口：
-     * 探活最坏 ≈105s、推送最坏 ≈485s，都远在 `.cnb.yml` 那一格 10m 外框之内。 */
+     * 同日 19:47 同 runner 却探活通过 —— 15s 把「慢但活着」的抖动截成了「没通」。 */
     expect(REMOTE_PROBE_TIMEOUT_MS).toBe(30_000);
     const probeWorst = PROBE_MAX_ATTEMPTS * REMOTE_PROBE_TIMEOUT_MS + 15_000;
-    const pushWorst = PUSH_MAX_ATTEMPTS * PUSH_TIMEOUT_MS + RETRY_BACKOFF_MS[0]!;
-    expect(probeWorst + pushWorst).toBeLessThan(10 * 60_000);
+    /* 推送档自 2026-11-05 起按**墙钟预算**收口（不再是「次数 × 单次」）：每次尝试的超时会被
+     * 裁到剩余预算，所以整档最坏就是预算本身，不叠加单跳上限。 */
+    expect(probeWorst + PUSH_RETRY_BUDGET_MS).toBeLessThan(10 * 60_000);
+  });
+
+  it("推送重试窗口：瞬时失败也要试满 3–5 分钟，不是 6s 就交账（2026-11-05 现场）", () => {
+    /* 现场那一形：`Recv failure: Connection was reset` 一次只要 0.3s，旧口径「2 次 + 5s 退避」
+     * ⇒ 整格 6s 收工，读起来就是「才 1.2 分钟就失败」。新口径的时长由退避阶梯攒出来。 */
+    const ladder = RETRY_BACKOFF_MS.slice(0, PUSH_MAX_ATTEMPTS - 1);
+    /* 表比次数短时 runGitWithRetry 按末项补齐，所以这里也要按次数补齐再求和。 */
+    const waits = Array.from(
+      { length: PUSH_MAX_ATTEMPTS - 1 },
+      (_v, i) => ladder[i] ?? ladder.at(-1)!,
+    );
+    const total = waits.reduce((sum, ms) => sum + ms, 0);
+    expect(total).toBeGreaterThanOrEqual(3 * 60_000);
+    /* 也不能超过预算 —— 否则后几次退避只是账面上的数，实际到点就被预算拦下。 */
+    expect(total).toBeLessThanOrEqual(PUSH_RETRY_BUDGET_MS);
+    /* 预算里还要留得下一次完整尝试，否则「试满」是假的。 */
+    expect(PUSH_RETRY_BUDGET_MS - total).toBeGreaterThanOrEqual(RETRY_MIN_ATTEMPT_MS);
+  });
+
+  it("推送预算真的会咬：挂住的那一跳不叠加成第二刀 240s，到点就按最后一次交账", async () => {
+    /* 假时钟：一次尝试「挂」满 200s 才回话。旧口径（2 × 240s）下这一形能连着付两刀；
+     * 有预算之后，第二刀发起前就得先问「剩下的够不够一次尝试」。 */
+    let t = 0;
+    const heard: Array<string> = [];
+    const result = await runGitWithRetry(
+      pushArgs("https://oauth2:t@github.com/x/y", "refs/heads/cnb-pr-1"),
+      {
+        budgetMs: PUSH_RETRY_BUDGET_MS,
+        label: "推送",
+        log: (line: string) => heard.push(line),
+        maxAttempts: PUSH_MAX_ATTEMPTS,
+        now: () => t,
+        prefix: "mirror",
+        runGit: () => {
+          t += 200_000;
+          return { code: 128, stderr: "Connection reset by peer", stdout: "" };
+        },
+        sleep: (ms: number) => {
+          t += ms;
+          return Promise.resolve();
+        },
+      },
+    );
+    expect(result.code).toBe(128);
+    expect(result.attempts).toBe(2);
+    expect(heard.join("\n")).toContain("重试预算用尽");
+    /* 整档墙钟不超过预算 —— 这是「预算」与「次数」之外真正承重的那一条。 */
+    expect(t).toBeLessThanOrEqual(PUSH_RETRY_BUDGET_MS + 200_000);
+  });
+
+  it("预算只裁重试、不裁首刀：LFS 首跳仍吃 240s，重试才按剩余预算裁", async () => {
+    /* 反控制：LFS 只有 60s 预算，若把首刀也裁到 60s，一次「慢但正常」的对象上传会被掐死。
+     * 这里用假时钟钉死剩余量，逐次记下传给 git 执行器的超时参数。 */
+    const seen: Array<{ timeout?: number } | undefined> = [];
+    const result = await runGitWithRetry(lfsPushArgs("https://example.invalid/x.git"), {
+      budgetMs: LFS_PUSH_RETRY_BUDGET_MS,
+      label: "LFS 推送",
+      log: () => undefined,
+      maxAttempts: 2,
+      now: () => 0,
+      prefix: "mirror",
+      runGit: (_args: string[], opts?: { timeout?: number }) => {
+        seen.push(opts);
+        return { code: 128, stderr: "Connection reset by peer", stdout: "" };
+      },
+      sleep: () => Promise.resolve(),
+    });
+    expect(result.attempts).toBe(2);
+    expect(seen[0]).toBeUndefined();
+    expect(seen[1]).toEqual({ timeout: LFS_PUSH_RETRY_BUDGET_MS - RETRY_BACKOFF_MS[0]! });
   });
 
   it("isEgressFailure：egress 那组判据与话术函数同源，认证 / 仓库类不认", () => {
@@ -1051,18 +1129,37 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(heard.join("\n")).toContain(`类别=${LFS_FAILURE_KINDS.AUTH}`);
   });
 
+  it("LFS 重试窗口：单独一份 60s 预算，比 wire 小一档、但不再是 6s 就交账", () => {
+    /* 2026-11-05 第二批：LFS 是同一格里的第二跳，前面已付过探活 105s + wire 240s，
+     * 再给 4 分钟会顶穿 10m 外框；但也不能退回「2 次 + 5s」那个瞬时失败 6s 收工的形态。 */
+    expect(LFS_PUSH_RETRY_BUDGET_MS).toBe(60_000);
+    expect(LFS_PUSH_RETRY_BUDGET_MS).toBeLessThan(PUSH_RETRY_BUDGET_MS);
+    const waits = RETRY_BACKOFF_MS.slice(0, LFS_PUSH_MAX_ATTEMPTS - 1);
+    expect(LFS_PUSH_MAX_ATTEMPTS).toBe(waits.length + 1);
+    const total = waits.reduce((sum, ms) => sum + ms, 0);
+    expect(total).toBeGreaterThanOrEqual(45_000);
+    expect(total).toBeLessThanOrEqual(LFS_PUSH_RETRY_BUDGET_MS);
+    expect(LFS_PUSH_RETRY_BUDGET_MS - total).toBeGreaterThanOrEqual(RETRY_MIN_ATTEMPT_MS);
+    /* 首刀不裁超时：60s 预算不许把一次「慢但正常」的 LFS 上传掐死。 */
+    expect(gitTimeoutFor(lfsPushArgs("https://example.invalid/x.git"))).toBe(PUSH_TIMEOUT_MS);
+  });
+
   it("LFS egress 重试耗尽 ⇒ 小结带重试次数与最终错因，退 1", async () => {
-    const down = { code: 128, stderr: "Connection reset by peer" };
-    const { io, heard, sleeps } = harness({ lfsResults: [down, down] });
+    /* 全程 egress（`lfsCode` 让每一次都失败，才谈得上「耗尽」），不是「挂两次就通」。 */
+    const { io, heard, lfsPushes, sleeps } = harness({
+      lfsCode: 128,
+      lfsStderr: "Connection reset by peer",
+    });
     const code = await runMirror(io);
     expect(code).toBe(CODE.FAIL);
-    expect(sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
+    expect(lfsPushes).toHaveLength(LFS_PUSH_MAX_ATTEMPTS);
+    expect(sleeps).toEqual(RETRY_BACKOFF_MS.slice(0, LFS_PUSH_MAX_ATTEMPTS - 1));
     const all = heard.join("\n");
     expect(all).toContain(`类别=${LFS_FAILURE_KINDS.EGRESS}`);
-    expect(all).toContain("重试 1 次");
+    expect(all).toContain(`重试 ${String(LFS_PUSH_MAX_ATTEMPTS - 1)} 次`);
     expect(all).toContain("最终错因=Connection reset by peer");
     const last = heard.at(-1) ?? "";
-    expect(last).toContain("重试=1 次");
+    expect(last).toContain(`重试=${String(LFS_PUSH_MAX_ATTEMPTS - 1)} 次`);
     expect(last).toContain(`LFS=败（类别：${LFS_FAILURE_KINDS.EGRESS}）`);
   });
 
@@ -1192,7 +1289,8 @@ describe("runMirror（git 与 fetch 全假件）", () => {
       ],
     });
     expect(await runMirror(io)).toBe(CODE.OK);
-    expect(pushes).toHaveLength(PUSH_MAX_ATTEMPTS);
+    /* 首跳 + 1 次重试就通 ⇒ 只推 2 次（上限是 10 次，别把「上限」当成「必然发生」）。 */
+    expect(pushes).toHaveLength(2);
     expect(sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
     expect(calls).toHaveLength(1);
     expect(heard.join("\n")).toContain("次没通（可重试类）");
@@ -1226,7 +1324,9 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     /* 重试不改变退码：耗尽了仍是「前提没落地」（2），不是「判出的红」（1）。 */
     expect(code).toBe(CODE.NO_FACT);
     expect(probeCalls()).toBe(PROBE_MAX_ATTEMPTS);
-    expect(sleeps).toEqual([...RETRY_BACKOFF_MS]);
+    /* 探活仍是 3 次（首跳 + 2 次重试），所以只吃退避表的前两项 —— 表自 2026-11-05 起为
+     * 推送的 4 分钟预算加长了，探活那边没有跟着变。 */
+    expect(sleeps).toEqual(RETRY_BACKOFF_MS.slice(0, PROBE_MAX_ATTEMPTS - 1));
     expect(pushes).toHaveLength(0);
     const all = heard.join("\n");
     expect(all).toContain("这一跳没通");
@@ -1262,7 +1362,7 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     });
     const code = await runMirror(io);
     expect(code).toBe(CODE.OK);
-    expect(pushes).toHaveLength(PUSH_MAX_ATTEMPTS);
+    expect(pushes).toHaveLength(2);
     expect(sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
     expect(calls).toHaveLength(1);
     expect(heard.join("\n")).toContain(`推送第 1/${PUSH_MAX_ATTEMPTS} 次没通（可重试类）`);
@@ -1281,15 +1381,20 @@ describe("runMirror（git 与 fetch 全假件）", () => {
   });
 
   it("推送重试耗尽仍 egress ⇒ 退 1，重试行与失败明细都留账", async () => {
-    const down = { code: 128, stderr: "Connection reset by peer" };
-    const { io, pushes, calls, heard, sleeps } = harness({ pushResults: [down, down] });
+    /* 全程 egress（不是「挂两次就通」）：`pushCode` 让每一次都失败，才谈得上「耗尽」。
+     * 自 2026-11-05 起次数上限是 10 次 + 4 分钟预算，所以这里断言的是**整条退避阶梯**
+     * 都被吃掉 —— 现场要的正是「别 6s 就交账」。 */
+    const { io, pushes, calls, heard, sleeps } = harness({
+      pushCode: 128,
+      pushStderr: "Connection reset by peer",
+    });
     const code = await runMirror(io);
     expect(code).toBe(CODE.FAIL);
     expect(pushes).toHaveLength(PUSH_MAX_ATTEMPTS);
-    expect(sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
+    expect(sleeps).toEqual(RETRY_BACKOFF_MS.slice(0, PUSH_MAX_ATTEMPTS - 1));
     expect(calls).toHaveLength(0);
     const all = heard.join("\n");
-    expect(all).toContain("推送第 1/2 次没通");
+    expect(all).toContain(`推送第 1/${PUSH_MAX_ATTEMPTS} 次没通`);
     expect(all).toContain("推送失败");
   });
 });
@@ -1478,11 +1583,11 @@ describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
     expect(auth.pushes).toHaveLength(1);
     expect(auth.sleeps).toHaveLength(0);
 
-    const down = { code: 128, stderr: "Connection timed out" };
-    const eg = harness({ pushResults: [down, down] });
+    /* 全程 egress（同 PR 档那条）：整条退避阶梯都要被吃掉，退码仍是「判出的红」。 */
+    const eg = harness({ pushCode: 128, pushStderr: "Connection timed out" });
     expect(await runMasterMirror(eg.io)).toBe(CODE.FAIL);
     expect(eg.pushes).toHaveLength(PUSH_MAX_ATTEMPTS);
-    expect(eg.sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
+    expect(eg.sleeps).toEqual(RETRY_BACKOFF_MS.slice(0, PUSH_MAX_ATTEMPTS - 1));
     expect(eg.heard.join("\n")).toContain("[mirror-master] 推送失败");
   });
 
