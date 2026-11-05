@@ -325,6 +325,7 @@ export async function pollUntilTerminal(ctx) {
       buildState = "unknown";
       break;
     }
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     await sleep(20_000);
   }
   return { buildState, buildSn, stop: null };

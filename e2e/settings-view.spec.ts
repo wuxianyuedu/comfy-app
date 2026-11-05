@@ -31,6 +31,7 @@ test.describe("设置作为一个视图 @critical", () => {
        把 renderCenter 的 case 删掉，判据照样绿。
        顺序要紧：这一段必须在「切回首页」之前判 —— 设置不在当前页时导航自然不在。 */
     for (const section of ["外观", "应用更新", "本地模型", "数据库"]) {
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       await expect(
         page.getByRole("button", { name: section, exact: true }).first(),
         `设置视图的分区导航里缺「${section}」`,

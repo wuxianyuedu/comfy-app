@@ -108,6 +108,7 @@ afterEach(async () => {
    * 两轮不再变化（该跑的回调都跑完了）再手工兜底清除，上限封顶防悬挂。 */
   let prevBody = "";
   for (let i = 0; i < 30; i++) {
+    // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
     await new Promise((resolve) => setTimeout(resolve, 0));
     const body = document.body.innerHTML;
     if (body === prevBody) {

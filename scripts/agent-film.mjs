@@ -249,8 +249,10 @@ export async function driveFilmRun(opts, deps) {
     if (Date.now() > deadline) {
       return { snapshot, timedOut: true, polls };
     }
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     await doSleep(opts.pollMs);
     polls++;
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     snapshot = parseSuperjsonEnvelope(await request(buildStatusCall(opts)));
     flushLog(snapshot);
   }

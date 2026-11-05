@@ -255,6 +255,7 @@ describe("POST /api/materials —— 上传", () => {
       { projectId: "", folder: "docs" },
     ];
     for (const init of cases) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       expect((await postWith(uploadForm(init))).status).toBe(400);
     }
     expect(disk.writeFile).toEqual([]);
@@ -310,6 +311,7 @@ describe("DELETE /api/materials —— 删除侧归属", () => {
 
   it("id 形状不对（段数 / 分类 / scope）→ 400，什么都不删", async () => {
     for (const id of ["", "a/b", "proj-a/../x.png", "proj-b/nope/mine.png"]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       expect((await DELETE(reqOf(urlOf(`?id=${encodeURIComponent(id)}`)))).status).toBe(400);
     }
     expect(disk.unlink).toEqual([]);

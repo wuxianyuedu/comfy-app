@@ -391,6 +391,7 @@ describe("跨包：列表含历史包里的份，正文按包取", () => {
       "a/b/c.log",
       "2026-10-04_140000-bbbbbb/",
     ]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const { status, data } = await get(
         `source=comfyui-runtime&session=${encodeURIComponent(dirty)}`,
       );

@@ -296,6 +296,7 @@ async function runDiscover(parentDirs: ReadonlyArray<unknown>): Promise<Array<un
   /* 候选名与顺序**不在这里写**（台账 A14）：字面量表一旦落在调用点，`py` 就少一个 `-3`，
    * 而 Windows 上的第一候选也不是 `python3`。见 `~/lib/process/python-run`。 */
   for (const attempt of pythonAttempts(args)) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const stdout = await spawnCapture(attempt.command, attempt.args);
     if (stdout === null) {
       continue;
@@ -759,6 +760,7 @@ async function buildGetResponse(): Promise<Response> {
             phase: "queue",
             msg: `📂 [${idx}/${paths.length}] ${parent}`,
           });
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           discoveredByParent[parent] = await runDiscoverStreaming(parent, send);
         }
         // 把伴随的 LOCAL_WORKFLOWS_PATH 列表沿同一条流送下去，

@@ -538,6 +538,7 @@ export async function pruneRuns(root, { now = Date.now(), delete: del } = {}) {
     const dir = path.join(runsDir(root), name);
     try {
       if (dirSize(dir) > RETENTION.zipAboveBytes && name.endsWith(".zip") === false) {
+        // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
         await zipDirectory(dir, `${dir}.zip`);
         zipped++;
       }

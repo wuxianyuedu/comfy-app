@@ -15,7 +15,7 @@
 | B4 | `eslint/prefer-named-capture-group` | 1094 | 332 | 挂账中 |
 | B5 | `typescript/no-unsafe-type-assertion` | 1496 | 608 | 挂账中 |
 
-合计：**3723 处 / 1251 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
+合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
 ## 二、开/不开口径
 
@@ -87,47 +87,47 @@
 
 | 文件 | 存量处数 | 状态 |
 |---|---|---|
-| `e2e/console-preset-layout.spec.ts` | 1 | 挂账 |
-| `e2e/critical-flows.spec.ts` | 7 | 挂账 |
-| `e2e/overlay-boundary.spec.ts` | 3 | 挂账 |
-| `e2e/overlay-entries-as-views.spec.ts` | 1 | 挂账 |
-| `e2e/settings-view.spec.ts` | 1 | 挂账 |
-| `e2e/support/reclaim-ports.mjs` | 4 | 挂账 |
-| `e2e/support/runtime-budget.ts` | 4 | 挂账 |
-| `e2e/theme-token-consumers.spec.ts` | 15 | 挂账 |
-| `e2e/view-tabs.spec.ts` | 3 | 挂账 |
-| `scripts/affected-launch-load-retry.mjs` | 1 | 挂账 |
-| `scripts/agent-film.mjs` | 2 | 挂账 |
-| `scripts/ci-github-mirror-push.mjs` | 1 | 挂账 |
-| `scripts/ci-github-verdict-read.mjs` | 9 | 挂账 |
-| `scripts/ci-token-scopes.mjs` | 1 | 挂账 |
-| `scripts/e2e-run.mjs` | 1 | 挂账 |
-| `scripts/executor-host.mjs` | 2 | 挂账 |
-| `scripts/heal-db.cjs` | 5 | 挂账 |
-| `scripts/launcher-core/orchestrator.mjs` | 4 | 挂账 |
-| `scripts/launcher-core/port-reap.mjs` | 8 | 挂账 |
-| `scripts/launcher-core/ready-wait.mjs` | 3 | 挂账 |
-| `scripts/launcher-core/run.mjs` | 1 | 挂账 |
-| `scripts/run-affected-tests.mjs` | 1 | 挂账 |
-| `scripts/ship-poll.mjs` | 1 | 挂账 |
-| `scripts/typedoc-run.mjs` | 2 | 挂账 |
-| `src/app/(main)/settings/hooks/use-settings-page-ollama.ts` | 2 | 挂账 |
-| `src/app/api/custom-nodes/route.test.ts` | 2 | 挂账 |
-| `src/app/api/custom-nodes/route.ts` | 2 | 挂账 |
-| `src/app/api/health/route.test.ts` | 2 | 挂账 |
-| `src/app/api/images/route.test.ts` | 2 | 挂账 |
-| `src/app/api/llm/ollama-stop/route.ts` | 4 | 挂账 |
-| `src/app/api/logs/current/route.test.ts` | 3 | 挂账 |
-| `src/app/api/logs/sessions/route.test.ts` | 1 | 挂账 |
-| `src/app/api/materials/route.test.ts` | 2 | 挂账 |
-| `src/app/api/materials/route.ts` | 1 | 挂账 |
-| `src/components/studio/hooks/use-comfy-stats.test.ts` | 2 | 挂账 |
-| `src/components/studio/hooks/use-model-folder-config.test.ts` | 1 | 挂账 |
-| `src/components/studio/hooks/use-model-library.test.ts` | 1 | 挂账 |
-| `src/components/studio/lazy-view-prefetch.test.ts` | 1 | 挂账 |
-| `src/components/studio/logs/LogPanel.test.tsx` | 1 | 挂账 |
-| `src/components/studio/logs/LogProvider.tsx` | 1 | 挂账 |
-| `src/components/studio/project-canvas/hooks/use-material-library.ts` | 1 | 挂账 |
+| `e2e/console-preset-layout.spec.ts` | 1 | 保留（逐行理由） |
+| `e2e/critical-flows.spec.ts` | 7 | 保留（逐行理由） |
+| `e2e/overlay-boundary.spec.ts` | 3 | 保留（逐行理由） |
+| `e2e/overlay-entries-as-views.spec.ts` | 1 | 保留（逐行理由） |
+| `e2e/settings-view.spec.ts` | 1 | 保留（逐行理由） |
+| `e2e/support/reclaim-ports.mjs` | 4 | 保留（逐行理由） |
+| `e2e/support/runtime-budget.ts` | 4 | 保留（逐行理由） |
+| `e2e/theme-token-consumers.spec.ts` | 15 | 保留（逐行理由） |
+| `e2e/view-tabs.spec.ts` | 3 | 保留（逐行理由） |
+| `scripts/affected-launch-load-retry.mjs` | 1 | 保留（逐行理由） |
+| `scripts/agent-film.mjs` | 2 | 保留（逐行理由） |
+| `scripts/ci-github-mirror-push.mjs` | 1 | 保留（逐行理由） |
+| `scripts/ci-github-verdict-read.mjs` | 9 | 保留（逐行理由） |
+| `scripts/ci-token-scopes.mjs` | 1 | 保留（逐行理由） |
+| `scripts/e2e-run.mjs` | 1 | 保留（逐行理由） |
+| `scripts/executor-host.mjs` | 2 | 保留（逐行理由） |
+| `scripts/heal-db.cjs` | 5 | 保留（逐行理由） |
+| `scripts/launcher-core/orchestrator.mjs` | 4 | 保留（逐行理由） |
+| `scripts/launcher-core/port-reap.mjs` | 8 | 保留（逐行理由） |
+| `scripts/launcher-core/ready-wait.mjs` | 3 | 保留（逐行理由） |
+| `scripts/launcher-core/run.mjs` | 1 | 保留（逐行理由） |
+| `scripts/run-affected-tests.mjs` | 1 | 保留（逐行理由） |
+| `scripts/ship-poll.mjs` | 1 | 保留（逐行理由） |
+| `scripts/typedoc-run.mjs` | 2 | 保留（逐行理由） |
+| `src/app/(main)/settings/hooks/use-settings-page-ollama.ts` | 2 | 保留（逐行理由） |
+| `src/app/api/custom-nodes/route.test.ts` | 2 | 保留（逐行理由） |
+| `src/app/api/custom-nodes/route.ts` | 2 | 保留（逐行理由） |
+| `src/app/api/health/route.test.ts` | 2 | 保留（逐行理由） |
+| `src/app/api/images/route.test.ts` | 2 | 保留（逐行理由） |
+| `src/app/api/llm/ollama-stop/route.ts` | 4 | 保留（逐行理由） |
+| `src/app/api/logs/current/route.test.ts` | 3 | 保留（逐行理由） |
+| `src/app/api/logs/sessions/route.test.ts` | 1 | 保留（逐行理由） |
+| `src/app/api/materials/route.test.ts` | 2 | 保留（逐行理由） |
+| `src/app/api/materials/route.ts` | 1 | 保留（逐行理由） |
+| `src/components/studio/hooks/use-comfy-stats.test.ts` | 2 | 保留（逐行理由） |
+| `src/components/studio/hooks/use-model-folder-config.test.ts` | 1 | 保留（逐行理由） |
+| `src/components/studio/hooks/use-model-library.test.ts` | 1 | 保留（逐行理由） |
+| `src/components/studio/lazy-view-prefetch.test.ts` | 1 | 保留（逐行理由） |
+| `src/components/studio/logs/LogPanel.test.tsx` | 1 | 保留（逐行理由） |
+| `src/components/studio/logs/LogProvider.tsx` | 1 | 保留（逐行理由） |
+| `src/components/studio/project-canvas/hooks/use-material-library.ts` | 1 | 保留（逐行理由） |
 | `src/components/studio/workflow-library/CustomNodesSettings/hooks/use-custom-nodes-settings.ts` | 2 | 挂账 |
 | `src/components/ui/hint.test.tsx` | 1 | 挂账 |
 | `src/components/workshop/hooks/use-workshop-agent.ts` | 3 | 挂账 |

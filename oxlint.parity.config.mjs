@@ -785,47 +785,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B2 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "e2e/console-preset-layout.spec.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "e2e/critical-flows.spec.ts", // 存量 7 处 · 清账目标 B2 · 新代码不禁用
-        "e2e/overlay-boundary.spec.ts", // 存量 3 处 · 清账目标 B2 · 新代码不禁用
-        "e2e/overlay-entries-as-views.spec.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "e2e/settings-view.spec.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "e2e/support/reclaim-ports.mjs", // 存量 4 处 · 清账目标 B2 · 新代码不禁用
-        "e2e/support/runtime-budget.ts", // 存量 4 处 · 清账目标 B2 · 新代码不禁用
-        "e2e/theme-token-consumers.spec.ts", // 存量 15 处 · 清账目标 B2 · 新代码不禁用
-        "e2e/view-tabs.spec.ts", // 存量 3 处 · 清账目标 B2 · 新代码不禁用
-        "scripts/affected-launch-load-retry.mjs", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "scripts/agent-film.mjs", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "scripts/ci-github-mirror-push.mjs", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "scripts/ci-github-verdict-read.mjs", // 存量 9 处 · 清账目标 B2 · 新代码不禁用
-        "scripts/ci-token-scopes.mjs", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "scripts/e2e-run.mjs", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "scripts/executor-host.mjs", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "scripts/heal-db.cjs", // 存量 5 处 · 清账目标 B2 · 新代码不禁用
-        "scripts/launcher-core/orchestrator.mjs", // 存量 4 处 · 清账目标 B2 · 新代码不禁用
-        "scripts/launcher-core/port-reap.mjs", // 存量 8 处 · 清账目标 B2 · 新代码不禁用
-        "scripts/launcher-core/ready-wait.mjs", // 存量 3 处 · 清账目标 B2 · 新代码不禁用
-        "scripts/launcher-core/run.mjs", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "scripts/run-affected-tests.mjs", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "scripts/ship-poll.mjs", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "scripts/typedoc-run.mjs", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/app/(main)/settings/hooks/use-settings-page-ollama.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/app/api/custom-nodes/route.test.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/app/api/custom-nodes/route.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/app/api/health/route.test.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/app/api/images/route.test.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/app/api/llm/ollama-stop/route.ts", // 存量 4 处 · 清账目标 B2 · 新代码不禁用
-        "src/app/api/logs/current/route.test.ts", // 存量 3 处 · 清账目标 B2 · 新代码不禁用
-        "src/app/api/logs/sessions/route.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/app/api/materials/route.test.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/app/api/materials/route.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/components/studio/hooks/use-comfy-stats.test.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
-        "src/components/studio/hooks/use-model-folder-config.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/components/studio/hooks/use-model-library.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/components/studio/lazy-view-prefetch.test.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/components/studio/logs/LogPanel.test.tsx", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/components/studio/logs/LogProvider.tsx", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
-        "src/components/studio/project-canvas/hooks/use-material-library.ts", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
         "src/components/studio/workflow-library/CustomNodesSettings/hooks/use-custom-nodes-settings.ts", // 存量 2 处 · 清账目标 B2 · 新代码不禁用
         "src/components/ui/hint.test.tsx", // 存量 1 处 · 清账目标 B2 · 新代码不禁用
         "src/components/workshop/hooks/use-workshop-agent.ts", // 存量 3 处 · 清账目标 B2 · 新代码不禁用
@@ -1446,6 +1405,7 @@ export default defineConfig({
         "tests/trpc-surface-executors.test.ts", // 存量 7 处 · 清账目标 B4 · 新代码不禁用
         "tests/turbopack-tracing-excludes.test.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
         "tests/workflow-row-shape.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
+        "scripts/session-report.mjs", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
       ],
       rules: { "eslint/prefer-named-capture-group": "off" },
     },
@@ -2063,6 +2023,8 @@ export default defineConfig({
         "tests/type-assertion-gate.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/workflow-disk-sync-single-writer.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/workshop-input-schema-derivation.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
+        "scripts/session-report.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
+        "tests/session-report.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
       ],
       rules: { "typescript/no-unsafe-type-assertion": "off" },
     },

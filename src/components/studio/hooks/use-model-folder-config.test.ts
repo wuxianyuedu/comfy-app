@@ -241,6 +241,7 @@ describe("useModelFolderConfig", () => {
     for (let i = 0; i < 5; i++) {
       rerender();
       // 逐轮推进微任务队列，模拟真实重渲染节奏
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await act(async () => {
         await Promise.resolve();
       });

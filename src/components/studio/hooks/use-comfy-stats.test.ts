@@ -142,6 +142,7 @@ describe("useComfyStats 进程级判活（与 /api/comfy/queue 同口径）", ()
 
     fetchMock.mockResolvedValue(aliveButNoAnswer);
     for (let i = 0; i < 5; i++) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await tick();
     } // 远超离线阈值，也不该翻离线
 
@@ -154,6 +155,7 @@ describe("useComfyStats 进程级判活（与 /api/comfy/queue 同口径）", ()
     fetchMock.mockResolvedValue(aliveButNoAnswer);
     const { result } = renderHook(() => useComfyStats());
     for (let i = 0; i < 5; i++) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await tick();
     }
 

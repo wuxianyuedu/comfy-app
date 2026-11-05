@@ -80,15 +80,19 @@ export async function collectSamples(
 ): Promise<Array<NavigationSample>> {
   const out: Array<NavigationSample> = [];
   for (let i = 0; i < ROUNDS; i++) {
+    // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
     const page = await context.newPage();
     try {
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       await page.goto(url, { waitUntil: "load" });
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       const s = await readNavigationSample(page);
       out.push({
         loadEventEnd: s.loadEventEnd ?? Number.NaN,
         firstContentfulPaint: s.firstContentfulPaint ?? Number.NaN,
       });
     } finally {
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       await page.close();
     }
   }

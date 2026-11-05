@@ -56,6 +56,7 @@ export async function reclaimOwnFakePort(port, options = {}) {
   const byCmdline = pids.filter((pid) => isFakeServerCmdline(cmdlines.get(pid) ?? ""));
   const answers = new Map();
   for (const pid of byCmdline) {
+    // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
     answers.set(pid, await answersFake(pid));
   }
   const own = pickOwnFakePids(pids, {
@@ -64,6 +65,7 @@ export async function reclaimOwnFakePort(port, options = {}) {
   });
   const foreign = pids.filter((pid) => !own.includes(pid));
   for (const pid of own) {
+    // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
     await reap({ pid, detached: platform !== "win32", force: true });
   }
   return { reclaimed: own, foreign, free: false };
@@ -150,6 +152,7 @@ export async function reclaimOwnAppPort(port, root, options = {}) {
   const candidates = [];
   for (const pid of pids) {
     const cmdline = cmdlines.get(pid) ?? "";
+    // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
     if (isAppDevServerCmdline(cmdline, root) || (await inRoot(pid, root))) {
       candidates.push(pid);
     }
@@ -167,6 +170,7 @@ export async function reclaimOwnAppPort(port, root, options = {}) {
   });
   const foreign = pids.filter((pid) => !own.includes(pid));
   for (const pid of own) {
+    // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
     await reap({ pid, detached: platform !== "win32", force: true });
   }
   return { reclaimed: own, foreign, free: false };
