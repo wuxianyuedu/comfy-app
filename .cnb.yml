@@ -2419,6 +2419,22 @@
     # 包住 45m 轮询预算 + 进程开销；与 GitHub 侧最重格的外框同级。
     timeout: 60m
 
+  # ── GA 失败日志附件：回读格落盘的全量日志 → commit attachment ──
+  #
+  # 为什么不在回读格直接打印全量：**CNB 单 stage 日志封顶 102400 字节**（2026-11-05 实测，
+  # build `cnb-5le-1k6l64o12`：超界时 stage 仍是 success，平台保留头部 + 一行
+  # `The log length exceeds the limit(102400)` + `......` + 尾部 —— 静默截断，不是整行丢弃）。
+  # 几十 MB 的 job 日志打进去只剩头尾，真因恰好被吞；所以回读格只打摘要 + 失败注解 +
+  # 失败 step 窗口（≤60 KiB），全量脱敏后落到 `.comfy-ci/tmp/github-verdict-logs/verdict-logs.txt`
+  # （gitignore 内），由这一格作为 commit attachment 上传（实测相对路径可用，附件 tab：
+  # `https://cnb.cool/<repo>/-/commit/<sha>?tab=attachments`）。
+  # 没判红 / 没取到日志时文件不存在：插件打印「检测不到上传文件」并以 success 收场（实测）。
+  - name: GA 失败日志附件
+    image: cnbcool/attachments:latest
+    settings:
+      attachments:
+        - .comfy-ci/tmp/github-verdict-logs/verdict-logs.txt
+
   # ── 构建与产物：**这一格 2026-10-18 起不在 PR 上跑了**（口径见 §13.5.23）──
   #
   # 旧形态（ISSUE #1979 立、#2010 补）：这里有一格 `生产构建`，跑 `artifact-run.mjs`

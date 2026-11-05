@@ -92,11 +92,8 @@ import {
   CODE,
   DISPATCH_STATE_DIR,
   DISPATCH_STATE_FILE,
-  RETRY_BACKOFF_MS,
   exitCodeFor,
-  isEgressFailure,
   resolveContext,
-  sanitize,
 } from "./ci-github-mirror-push.mjs";
 import {
   NO_RUN_WINDOW_MS,
@@ -105,19 +102,18 @@ import {
   reportNoRunFound,
   reportNoRunStructural,
 } from "./ci-github-verdict-chain.mjs";
+import { REQUEST_MAX_ATTEMPTS, requestJson } from "./ci-github-verdict-request.mjs";
+import { dumpFailingRunLogs } from "./ci-github-verdict-logs.mjs";
 
-/**
- * 单次请求（runs / checks 两条路径同一份）的墙钟上限：与镜像格探活同一量级
- * （`REMOTE_PROBE_TIMEOUT_MS`）。通的时候 api.github.com 这一读是亚秒级；
- * 30s 把「慢但活着」的抖动与「没通」分开。
- */
-export const CHECK_RUNS_TIMEOUT_MS = 30_000;
+/* 请求那一层拆到 `ci-github-verdict-request.mjs`（文件大小硬闸，见该模块头）；
+ * 这里保留再导出：既有用例与调用方读的仍是同一个入口，行为一字未变。 */
+export {
+  CHECK_RUNS_TIMEOUT_MS,
+  REQUEST_MAX_ATTEMPTS,
+  isRetryableRequestFailure,
+} from "./ci-github-verdict-request.mjs";
 
-/**
- * 单次读数的尝试上限：首跳 + 2 次重试（文件头第 3 条）。
- * 只有网络类失败才消耗重试；401/403 这类「再试一百次也一样」的回话一次就交账。
- */
-export const REQUEST_MAX_ATTEMPTS = 3;
+/** @typedef {import("./ci-github-verdict-request.mjs").JsonRead} JsonRead */
 
 /** 两轮轮询之间的间隔：30s —— GitHub 侧那一跑以十分钟计，读数不需要更密的采样。 */
 export const POLL_INTERVAL_MS = 30_000;
@@ -333,111 +329,6 @@ export function isUnclaimedNonEmpty(read) {
  */
 export function checkRunsUrl(repo, sha) {
   return `https://api.github.com/repos/${repo}/commits/${sha}/check-runs?per_page=100`;
-}
-
-/**
- * 这一次失败值不值得再试：egress 正则（与镜像格同源）之外，补 Node `fetch`
- * 在网络层抛出的那一族（`fetch failed` 与 `cause.code` 上的 `E*` 错误码）。
- *
- * @param {unknown} error `fetch` 抛出的异常
- * @returns {boolean} true ⇒ 网络根本没到 GitHub，重试有意义
- */
-export function isRetryableRequestFailure(error) {
-  const e = /** @type {{message?: unknown, cause?: {code?: unknown}} | null} */ (error);
-  const text = String(e?.message ?? error);
-  const code = String(e?.cause?.code ?? "");
-  return (
-    isEgressFailure(text) ||
-    /fetch failed|network|socket|econnreset|econnrefused|enotfound|etimedout|eai_again/i.test(
-      text,
-    ) ||
-    /^(?:ENOTFOUND|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN)$/i.test(code)
-  );
-}
-
-/**
- * 带单次上限的一次请求：到点 abort 并把异常翻成含「超时」字样的 Error ——
- * 那一形正好落进 `isEgressFailure` / `isRetryableRequestFailure` 的判据，
- * 与镜像格「本仓自己给的超时那一句」同一处理口径。
- *
- * @param {typeof fetch} fetchImpl fetch 实现（测试注入假件）
- * @param {string} url 请求目标
- * @param {string} token 令牌（只进请求头，不回显）
- * @param {string} label 路径名（只进超时那句日志，便于线上分清是哪条路径没通）
- * @returns {Promise<Response>} 响应
- */
-async function fetchWithTimeout(fetchImpl, url, token, label) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => {
-    controller.abort();
-  }, CHECK_RUNS_TIMEOUT_MS);
-  try {
-    return await fetchImpl(url, {
-      headers: {
-        Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${token}`,
-        "User-Agent": "comfy-app-cnb-verdict",
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (controller.signal.aborted) {
-      throw new Error(
-        `${label}读数超时（>${String(CHECK_RUNS_TIMEOUT_MS)} ms）：这一跳没拿到任何回话`,
-        {
-          cause: error,
-        },
-      );
-    }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/**
- * @typedef {{ok: true, body: unknown} | {ok: false, kind: "auth", status: number, body: string} | {ok: false, kind: "http", status: number, body: string} | {ok: false, kind: "egress", error: string}} JsonRead
- */
-
-/**
- * 带有限重试的一次读数（文件头第 3 条），runs / checks 两条路径共用。
- *
- * @param {{fetchImpl: typeof fetch, log: (line: string) => void, sleep: (ms: number) => Promise<void>, token: string}} io
- * @param {string} url 请求目标
- * @param {string} label 路径名（进重试与超时日志）
- * @returns {Promise<JsonRead>} 读数结果
- */
-async function requestJson(io, url, label) {
-  const { fetchImpl, log, sleep, token } = io;
-  let lastError = "";
-  for (let attempt = 1; attempt <= REQUEST_MAX_ATTEMPTS; attempt += 1) {
-    try {
-      // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
-      const res = await fetchWithTimeout(fetchImpl, url, token, label);
-      if (res.status === 200) {
-        // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
-        return { body: await res.json(), ok: true };
-      }
-      // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
-      const text = await res.text().catch(() => "");
-      const kind = res.status === 401 || res.status === 403 ? "auth" : "http";
-      return { body: sanitize(text, token), kind, ok: false, status: res.status };
-    } catch (error) {
-      lastError = String(error);
-      if (!isRetryableRequestFailure(error) || attempt === REQUEST_MAX_ATTEMPTS) {
-        break;
-      }
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 下标越界时运行时为 undefined（未开 noUncheckedIndexedAccess），退避表长度不随上限变
-      const wait = RETRY_BACKOFF_MS[attempt - 1] ?? RETRY_BACKOFF_MS.at(-1) ?? 5000;
-      log(
-        `[verdict] ${label}读数第 ${String(attempt)}/${String(REQUEST_MAX_ATTEMPTS)} 次没通（egress 类）⇒ ${String(wait / 1000)}s 后试第 ${String(attempt + 1)} 次（网络抖动重试；认证 / 权限类不重试）`,
-      );
-      // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
-      await sleep(wait);
-    }
-  }
-  return { error: lastError, kind: "egress", ok: false };
 }
 
 /**
@@ -826,6 +717,19 @@ export async function runVerdict(io) {
         log(`[verdict]   ✗ ${line}`);
       }
       if (summary.failing.length > 0) {
+        /* 判红时把失败 job 的**完整日志**变成可排障读数（job 清单 → 失败 step 注解 →
+         * 失败 step 窗口进 stage 日志 + 全量脱敏落盘走附件）。只加读数：取不到 / 空 /
+         * 落盘失败都不改下面的三态判定与退码（见 `ci-github-verdict-logs.mjs` 文件头）。 */
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- `main.runs` 只在 data 态存在，运行时按形状判
+        const mainRuns = /** @type {{runs?: Array<unknown>}} */ (main).runs;
+        if (Array.isArray(mainRuns)) {
+          // oxlint-disable-next-line no-await-in-loop -- 收口前只读一次，串行无并发需求
+          await dumpFailingRunLogs(reqIo, ctx.repo, mainRuns, RED_RUN_CONCLUSIONS);
+        } else {
+          log(
+            "[verdict] 兜底（checks API）没有 job 级日志端点 —— 只回读 conclusion（job 日志走主路径 runs API，需 actions: read）",
+          );
+        }
         log(
           `[verdict] 结论：exit 1 —— ${pathLabel}对同一笔 sha 的判决是红的（${String(summary.failing.length)}/${String(summary.total)} 个没过）`,
         );
