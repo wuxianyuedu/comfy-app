@@ -41,7 +41,7 @@ import {
   readPullVerdict,
 } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
-import { scanPullPages } from "./ship-platform.mjs";
+import { scanPullPages } from "./ship-scan.mjs";
 import {
   classifyBuildOutcome,
   describeFailedStages,

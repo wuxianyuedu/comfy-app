@@ -41,11 +41,10 @@ import {
   decideCleanBranch,
   findMergedPullForHeadSha,
   findPullForBranch,
-  LIST_MAX_PAGES,
-  LIST_PAGE_SIZE,
   readPullCreateError,
   readPullVerdict,
 } from "./ship-core.mjs";
+import { openScanReadout, scanPullPages } from "./ship-scan.mjs";
 import { planCreateBody, updatePullBodyOnReuse } from "./ship-pr-body.mjs";
 import { diffBaseRef, pickTitle } from "./ship-title.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
@@ -135,59 +134,6 @@ function stampHandlerLabel({ run, log, slug, number, handle, root }) {
       "这一格是读数、不改退码。手工补：",
   );
   log(`[ship]   cnb pulls post-pull-labels --repo ${slug} --number ${number} --labels ${label} -v`);
-}
-
-/**
- * 逐页扫 `list-pulls --state <state>`，每页跑一次 `visit`，命中即停。
- *
- * 为什么必须翻页（ISSUE #2964）：清单类接口都是分页的，只取第一页的匹配在
- * 「目标条目被更新的条目挤出首页」那一刻静默失效 —— 复用判定读不到它，
- * 行为退化成「没就建」，撞平台 409 才露头（实测开放 PR 11 条、页大小 10，
- * 最老那条永远不在首页）。页界与落地判定同一口径：有界扫，扫不到照实回，
- * **不假装「没有」**。
- *
- * @param {{run:(cmd:string,args:string[])=>import("./ship-exec.mjs").ExecResult, slug:string, pages?:number, pageSize?:number}} ctx
- * @param {{state: string, visit: (json: any) => number | null}} step 每页的匹配器（返回 PR 号或 null）
- * @returns {{hit: number | null, scanned: number, ran: boolean}} `ran` = 至少拿到过一页
- */
-export function scanPullPages(ctx, step) {
-  /* 页界取自 ship-core 那份共用的（`LIST_MAX_PAGES` / `LIST_PAGE_SIZE`）—— 与
-   * `resolveBuildSn` 同一口径，两处只留一份常量，改一处即两处（ISSUE #2964/#2950）。 */
-  const { pages = LIST_MAX_PAGES, pageSize = LIST_PAGE_SIZE, run, slug } = ctx;
-  let ran = false;
-  let scanned = 0;
-  for (let p = 1; p <= pages; p += 1) {
-    const got = cnbJson(run, [
-      "pulls",
-      "list-pulls",
-      "--repo",
-      slug,
-      "--state",
-      step.state,
-      "--page",
-      String(p),
-      "--page-size",
-      String(pageSize),
-      "-v",
-    ]);
-    if (!got) {
-      break;
-    }
-    ran = true;
-    const list = asArray(got.json);
-    if (!list || list.length === 0) {
-      break;
-    }
-    scanned += list.length;
-    const hit = step.visit(got.json);
-    if (hit) {
-      return { hit, ran, scanned };
-    }
-    if (list.length < pageSize) {
-      break;
-    }
-  }
-  return { hit: null, ran, scanned };
 }
 
 /**
@@ -316,6 +262,11 @@ export function createOrReusePull(ctx) {
     state: "open",
     visit: (json) => findPullForBranch(json, branch),
   });
+  /* 三种「没命中」分开念（ISSUE #2964）：读数与话术在 `ship-scan.mjs`，
+   * 这里只负责把它们原样打出来。 */
+  for (const line of openScanReadout(open)) {
+    log(line);
+  }
   let number = open.hit;
   if (number) {
     log(`[ship] 已有开放 PR #${number} ⇒ 复用，不重建（幂等）`);
