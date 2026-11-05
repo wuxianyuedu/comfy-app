@@ -184,14 +184,15 @@ describe("镜像身份：它是**读数**不是判据（三档都不许退非零
 });
 
 describe("镜像身份：流水线上真的在跑它（脚本存在而配置没接上 = 这一步白写）", () => {
-  it("`COMFYAPP_CI_GATES` 里登记了它，且排在 `Python 可用性` 之前", () => {
+  it("`COMFYAPP_CI_GATES` 里登记了它，且它是本档第一格", () => {
     const order = registeredGateOrder(read(".cnb.yml"));
     const at = order.indexOf("镜像身份");
-    /* 位置：紧跟 `工具链自证`（它读的正是那一步自证出来的那台机器），
-     * 且早于一切依赖安装 —— 与 `环境前提` 同一类「便宜且早」的步骤。 */
+    /* 位置：2026-11-05 薄化后它是这一档的第一格 —— 它问的是「这一跑到底跑在哪台
+     * runner 上」，后面每一格的读数都要以这个答案为前提；`工具链自证` / `Python 可用性`
+     * 早已撤到每日档，拿它们做顺序锚只会是空话。 */
     expect(at, "`镜像身份` 不在清单里 —— 那一步因此没有任何执行者").toBeGreaterThan(-1);
-    expect(at).toBe(order.indexOf("工具链自证") + 1);
-    expect(at).toBeLessThan(order.indexOf("Install dependencies"));
+    expect(at).toBe(0);
+    expect(at).toBeLessThan(order.indexOf("GitHub 判决回读"));
   });
 
   it("那一步点名的入口真的在盘上，且还包着 CP936 出口外壳", () => {

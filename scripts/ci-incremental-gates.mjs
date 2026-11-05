@@ -114,14 +114,20 @@ const ROOT = path.resolve(HERE, "..");
 /* ⚠️ 这里原来还有两件东西：`API 文档生成与自检` 的 `INPUT_RES` 反推（`globFromInputRe`
  * + 上面那个 `createRequire`）与那一档的登记项。它们随 2026-10-19 的合并一起删掉了 ——
  * 那一档进了聚合执行者、不再有 `ifModify` 可反推。**别照着这段历史把它加回来**：
- * 2026-11-05 它已从 push 撤到每日档，那一档**不带 `ifModify`**（每跑必判），
+ * 「那一格还在跑、跑的仍是 `INPUT_RES` 认的那些输入」这件事现在由
+ * `tests/ci-incremental-gates.test.ts` 直接对着 `HEAVY_GATES` 判（条目表还在、入口还在盘上、
+ * 判定门是 `--check --autofix`），不再经过 glob 这一层。
+ * 2026-11-05 它已从 push 撤到每日档（ISSUE #2537），那一档**不带 `ifModify`**（每跑必判），
  * 触发面本身仍由 `docsApiTriggerGlobs()` 派生、由 `tests/docs-api-input-closure.test.ts`
  * 双向对账 —— 只是不再喂给这张表。 */
-/* `文件结构硬规则` 的触发面同样**不手抄**：扫描根与根目录扩展名在判据自己的
- * 声明层（`file-structure-rules.cjs` 的 `TRIGGER_GLOBS`），那里改一处、这里跟着变。 */
-const { TRIGGER_GLOBS: FILE_STRUCTURE_TRIGGER_GLOBS } = createRequire(import.meta.url)(
-  "./file-structure-rules.cjs",
-);
+/* 2026-11-05 薄化：原本登记在这张表里的 14 条 PR 静态判据（标题行让位 / 文件结构硬规则 /
+ * import 别名统一 / ComfyUI 端口口径 / 内联样式注入 / 跨文件重复块 / 函数长度 TS /
+ * 函数长度 Rust / 模块循环依赖 / 主题色扫描 / 跨平台动作对照 / CHANGELOG 碎片 /
+ * 端口推导跨语言一致性 / oxfmt 格式）随各自 stage 一起搬到 `.github/workflows/pr-gate.yml`。
+ * 那边**没有 `ifModify`**（每次 PR 都跑），所以「配置里的手写 glob ⇄ 判据面」这条对账
+ * 没有对象了；仍要守的是判据自己的面（见 `tests/ci-incremental-gates.test.ts`）。
+ * 别照着历史把 `file-structure-rules.cjs` 的 `TRIGGER_GLOBS` 再取一遍 —— 取回来只会是
+ * 一份没人读的副本。 */
 
 /* ── 文档面那两条的触发面：同样**不手抄** ──────────────────────────────────────
  *
@@ -167,140 +173,6 @@ const DOC_PLACEHOLDER_GLOBS = ["docs/**"];
  *
  * @type {ReadonlyArray<{name: string, globs: readonly string[], why: string, script: string}>}
  */ export const INCREMENTAL_GATES = [
-  {
-    name: "标题行让位",
-    globs: ["src/components/**", "src/app/**"],
-    script: "scripts/check-title-bar-clearance.cjs",
-    why: '扫描面是 SCAN_DIRS = ["src/components", "src/app"]（本档唯一入口 full-screen-layer 的消费方也只能在这两处）。它判的是「顶层浮层必须让出标题行」，而浮层只可能写在视图层。',
-  },
-  {
-    name: "文件结构硬规则",
-    globs: FILE_STRUCTURE_TRIGGER_GLOBS,
-    script: "scripts/check-file-structure.cjs",
-    why:
-      "它扫的是**盘上的某一组目录**，不是整仓：R1–R5 / R10–R12 的扫描根是 `src/`，" +
-      "R7 / R8 在 `src/` `scripts/` `tools/` 三处（含中文的 .ps1 必须带 BOM），" +
-      "R9 的两形态（散落的入口 .ps1 + git 临时状态文件）都只可能出现在**仓库根**，" +
-      "R13 / R14 只看 `src/lib` 的顶层条目。触发面由那份声明层的 `TRIGGER_GLOBS` 机械导出" +
-      "（`SCAN_ROOTS` + 根目录扩展名），所以它不是第二份会漂的副本 ——" +
-      "改扫描根时配置跟着变。收窄安全的方向：这几处一个都没碰时，文件名 / 归属 / 注释流水 /" +
-      "控制字符这些判据不可能变（它不是「跨全仓的单一事实源」那类不变量）。" +
-      "⚠️ 代价写在明处：新增一条以别的目录为扫描根的规则时，必须同批更新" +
-      "`scripts/file-structure-rules.cjs` 的 `SCAN_ROOTS`。",
-  },
-  {
-    name: "import 别名统一",
-    globs: ["src/**", "e2e/**"],
-    script: "scripts/check-import-alias.cjs",
-    why: '扫描面是 SCAN_DIRS = ["src", "e2e"]（只看静态模块说明符，只可能出现在这两个目录的 .ts/.tsx 里）。',
-  },
-  {
-    name: "ComfyUI 端口口径",
-    globs: ["src/lib/comfyui/**", "src/lib/app-settings/**", "src/lib/endpoints.ts"],
-    script: "scripts/check-comfyui-port-contract.cjs",
-    why: "读的是 CLIENT / LIFECYCLE / DERIVE / DESKTOP 四份 comfyui 文件与 SETTINGS_PURE / SETTINGS_IO / ENDPOINTS 三处端口来源 —— 域就是这几个点，故 globs 列出它们所在的目录与文件。",
-  },
-  {
-    name: "内联样式注入",
-    globs: ["src/**"],
-    script: "scripts/check-inline-style.cjs",
-    why: '扫描面是 SCAN_DIR = "src"（渲染出的 <style> 只可能写在 src 下的 .ts/.tsx 里）。',
-  },
-  {
-    name: "跨文件重复块",
-    globs: ["src/**"],
-    script: "scripts/check-code-duplication.cjs",
-    why: '扫描面是 SCAN_DIR = "src"（孪生对只在 src 的应用代码里找，测试与快照被排除）。',
-  },
-  {
-    name: "函数长度 TS",
-    globs: ["src/**"],
-    script: "scripts/check-function-length.cjs",
-    why: '扫描面是 SCAN_DIR = "src"（脚本与用例的自查由 check-infra-file-size.cjs 另管，不在本判据里）。',
-  },
-  {
-    name: "函数长度 Rust",
-    globs: ["src-tauri/src/**"],
-    script: "scripts/check-rust-function-length.cjs",
-    why: "扫描面是 src-tauri/src/**（Rust 壳的源码，TS 侧文件一个都不看）。",
-  },
-  {
-    name: "模块循环依赖",
-    globs: ["src/**"],
-    script: "scripts/check-circular-deps.cjs",
-    why: '扫描面是 SCAN_DIRS = ["src"]（import 图只在 src 内求强连通分量）。',
-  },
-  {
-    name: "主题色扫描",
-    globs: ["src/**"],
-    script: "scripts/check-theme-colors.cjs",
-    why: '扫描面是 SCAN_DIR = "src"（写死的色值只可能出现在 src 下的 .ts/.tsx）。',
-  },
-  {
-    name: "跨平台动作对照",
-    globs: [
-      "package.json",
-      "tools/**",
-      "scripts/**",
-      "src-tauri/**",
-      "README.md",
-      "docs/standards/launch-and-build.md",
-    ],
-    script: "scripts/check-ps1-consistency.mjs",
-    why: "它核对的是「§9.5 对照表（住在 docs/standards/launch-and-build.md）⇄ 盘上的 .ps1 / .mjs 入口 / package.json 脚本 / tools 索引 / README 速查节」这几边，故域含那份文档与 README —— 少列一处就会在「只改 README 那一节」时漏跑。",
-  },
-  {
-    name: "CHANGELOG 碎片",
-    globs: ["changelog.d/**", "CHANGELOG.md"],
-    script: "scripts/check-changelog-fragments.cjs",
-    why: "只看 changelog.d/** 的碎片形态与 CHANGELOG.md 有没有被直接改（`[Unreleased]` 段落）。与本次代码改动无关时不该重跑。",
-  },
-  {
-    name: "端口推导跨语言一致性",
-    globs: [
-      "scripts/app-port.mjs",
-      "scripts/app-port.ps1",
-      "scripts/app_port.py",
-      "scripts/check-app-port-vectors.cjs",
-      "scripts/check-app-port-vectors.py",
-      "scripts/check-app-port-vectors.ps1",
-      "src-tauri/src/single_instance.rs",
-      "tests/fixtures/app-port-vectors.json",
-    ],
-    script: "scripts/check-app-port-vectors.cjs",
-    why:
-      "它判的是「同一份共享向量 ⇄ 四侧实现」的一致性，四侧实现各只有一个落点" +
-      "（Node 的 `app-port.mjs`、Python 的 `app_port.py`、PowerShell 的 `app-port.ps1`、" +
-      "Rust 的 `src-tauri/src/single_instance.rs`），向量只有一份" +
-      "（`tests/fixtures/app-port-vectors.json`）。这几处一个都没碰时，「四侧对同一路径给出" +
-      "同一端口」这件事不可能变 —— 它不读 `src/**` 的其余部分（判据脚本自己的读取点已逐条核过）。" +
-      "⚠️ 新增第五侧实现或换向量文件时**必须同批回来看这一行**，否则那一侧的漂移不再被这条闸看见。",
-  },
-  {
-    name: "oxfmt 格式",
-    globs: [
-      "src/**",
-      ".storybook/**",
-      "scripts/**",
-      "tests/**",
-      "tools/**",
-      "e2e/**",
-      "*.config.js",
-      "*.config.ts",
-      "*.config.mjs",
-      "*.config.cjs",
-    ],
-    script: "scripts/check-format.cjs",
-    why:
-      "平台那一格带 `--changed`，判的是「改动面 ∩ GLOBS」（ISSUE #2979 起 `GLOBS` 含 " +
-      "mjs/cjs、且改动面**不过** `IGNORE_GLOBS`）—— 所以触发面必须盖住 GLOBS 能点到的每一个目录：" +
-      "`src/**` + `.storybook/**`（全量档的扫描根）+ `scripts/**` `tests/**` `tools/**` `e2e/**` " +
-      "+ 根级 `*.config.*`（根级 config 也在改动面里，实测 drizzle/oxlint 两份还是存量）。" +
-      "这一步是 ISSUE #2010 从本地钩子**挪过来**的（判据一字未改）：它判的东西挡不住任何一次代码回归，" +
-      "而留在每一次提交里要付冷缓存 ~21s / 热缓存 ~4.5s。" +
-      "⚠️ 触发面与判据面的对账由 `tests/ci-incremental-gates.test.ts` 判（逐字）；" +
-      "`GLOBS` 的扩展名或扫描根变动时必须同批回来看这一条，否则「改了却没人查格式」或「白跑」。",
-  },
   {
     name: "生成态文档与源同步",
     globs: DOC_PLACEHOLDER_GLOBS,

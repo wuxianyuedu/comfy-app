@@ -137,7 +137,17 @@ export async function pushLfsObjects(ctx) {
     /* `HEAD` / ref 枚举不到 ⇒ 换按对象 OID 推（文件头第 9 条之二）。清单由
      * `git lfs ls-files --long` 按 index 取，不经过 ref 解析 —— 这正是那一形缺的东西。
      * 清单为空说明本地压根没有 LFS 对象，回退没有对象，按原失败交账。 */
-    const listed = runGit(["-c", "core.hooksPath=", "lfs", "ls-files", "--long"]);
+    /* `-c core.quotePath=false`：`--long` 的第三列是路径，转义过的路径读不出原样
+     * （ISSUE #2272）；这里只取第一列 OID，但守卫与全仓「读 git 路径的调用」同口径。 */
+    const listed = runGit([
+      "-c",
+      "core.quotePath=false",
+      "-c",
+      "core.hooksPath=",
+      "lfs",
+      "ls-files",
+      "--long",
+    ]);
     const oids = listed.code === 0 ? parseLfsObjectIds(sanitize(listed.stdout, token)) : [];
     const fallbackArgs = lfsObjectIdPushArgs(url, oids);
     if (fallbackArgs === null) {

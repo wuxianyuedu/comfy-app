@@ -696,20 +696,28 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
     expect(run(["scripts/ci-run-tool.mjs", "--root"]).status).toBe(2);
   });
 
-  it("`.cnb.yml` 不再直接起 `.bin` 垫片，那两格改走本入口", () => {
+  it("`.cnb.yml` 不再直接起 `.bin` 垫片，那两格在 GA 走本入口", () => {
     /* 这一条读磁盘文本，而 `.cnb.yml` **不被任何测试 import** ⇒ 它已经在固定清单里
      * （`scripts/fixed-structural-tests.mjs`，本文件那条理由登记在那儿）：改清单不会
      * 把这些用例带进增量面，不固定跑的表现不是红，是下一次又长出 `.bin/tsc`。 */
-    const yml = fs.readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
-    const commandLines = yml
-      .split("\n")
-      /* 注释行是说明，不是命令 —— 本文件里正当地写着「别再写 `node_modules/.bin/…`」
-       * 那一句；把它判成违例就是罚正在教人别这么写的那行（同 `stripComments` 的理由）。 */
-      .filter((l) => !/^\s*#/.test(l));
+    const stripComments = (text: string) =>
+      text
+        .split("\n")
+        /* 注释行是说明，不是命令 —— 本文件里正当地写着「别再写 `node_modules/.bin/…`」
+         * 那一句；把它判成违例就是罚正在教人别这么写的那行（同 `stripComments` 的理由）。 */
+        .filter((l) => !/^\s*#/.test(l));
+    const commandLines = stripComments(fs.readFileSync(path.join(ROOT, ".cnb.yml"), "utf8"));
     const offenders = commandLines.filter((l) => /node_modules[\\/]\.bin[\\/]/.test(l));
     expect(offenders, "清单里又出现了直接起垫片的写法").toEqual([]);
-    /* 反向：那两格确实用了新入口（只判「没有旧写法」的话，删掉两格也能绿）。 */
-    const joined = commandLines.join("\n");
+    /* 反向：那两格确实用了新入口（只判「没有旧写法」的话，删掉两格也能绿）。
+     * 2026-11-05 薄化后 `类型检查` / `lib Node-only 声明` 由 GA `pr-gate.yml` 执行，
+     * 命令一字未改 —— 所以这一半读 GA 的 workflow，不再读 CNB 的 stage。 */
+    const joined = [
+      ...commandLines,
+      ...stripComments(
+        fs.readFileSync(path.join(ROOT, ".github", "workflows", "pr-gate.yml"), "utf8"),
+      ),
+    ].join("\n");
     expect(joined).toContain("node scripts/ci-run-tool.mjs tsc --noEmit");
     expect(joined).toContain(
       "node scripts/ci-run-tool.mjs vitest run tests/lib-node-only-declarations.test.ts",

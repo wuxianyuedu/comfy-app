@@ -75,8 +75,8 @@
  * ## 用法
  *
  * ```text
- * node scripts/ci-github-verdict-read.mjs               # 三态退码（本地自查 / 将来承重那一档）
- * node scripts/ci-github-verdict-read.mjs --readout     # 读数档：三态照打点，退码恒 0（CI 主列那一格）
+ * node scripts/ci-github-verdict-read.mjs               # 三态退码（本地自查）
+ * node scripts/ci-github-verdict-read.mjs --readout     # 读数档：三态照打点、退码恒 0（本地诊断；PR 现役是下面那一形）
  * node scripts/ci-github-verdict-read.mjs --dry-run     # 只打印计划，不发任何请求
  * node scripts/ci-github-verdict-read.mjs --decision-out <文件>  # 承重档（CI 现役形态，见下）
  * ```
@@ -855,7 +855,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.met
       console.log("[verdict] 判定文件没写成 —— fail-closed：本格退 2（判定格读不到任何东西）");
       process.exit(2);
     }
-    console.log(`[verdict] 判定已落盘：${decisionOut}（三态 = exit ${String(exitCode)}；退码由 ci-github-verdict-decide.mjs 给出）`);
+    console.log(
+      `[verdict] 判定已落盘：${decisionOut}（三态 = exit ${String(exitCode)}；退码由 ci-github-verdict-decide.mjs 给出）`,
+    );
     process.exit(0);
   }
   if (readout && code !== CODE.OK) {

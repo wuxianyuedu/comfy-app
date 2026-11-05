@@ -20,14 +20,13 @@
  *    不冒充成功。第 5 条那一跳让「目标仓库还没有」也落进这一类 —— 它是**外部前提**
  *    没落地，不是这一格判出了红。
  * 2. **不打令牌值**（硬规则 17）：令牌只出现在进程参数里；一切回显先过脱敏。
- * 3. **它在主列，但按读数档跑**（ISSUE #2978 立案时放 `endStages`；#3051 前移进主列）：
- *    平台的 `endStages` 语义是「stages 跑完才执行」，而这条流水线实测整跑 2546s ⇒ GitHub
- *    那一跑最早只能在一个多小时后起跑，等「读回 GitHub 对同一笔 sha 的判决」那一格上线就
- *    成了串行。前移是为了并行；而主列的退码**承重**（某格 `error` 会把后面的格整片
- *    `skipped`），所以 `.cnb.yml` 给它的是 `--readout`：三态照旧打点、对外恒不退非零，
- *    与 `镜像身份` / `工作区复用读数` 同一族。**搬的是位置，不是那句「它坏了既不许把门禁的
- *    红洗成绿，也不许把自己的红叠进门禁的账」。** 翻成 fail-closed 的条件写在 #3051 期望
- *    第 3 条（等回读格上线），不在这一批。
+ * 3. **它在主列，且自 2026-11-05 起承重**（ISSUE #2978 立案时放 `endStages`；#3051 前移进主列，
+ *    同一单的期望第 3 条在回读格上线后落地）：平台的 `endStages` 语义是「stages 跑完才执行」，
+ *    而这条流水线实测整跑 2546s ⇒ GitHub 那一跑最早只能在一个多小时后起跑，等「读回 GitHub
+ *    对同一笔 sha 的判决」那一格上线就成了串行。前移是为了并行；主列的退码**承重**（某格
+ *    `error` 会把后面的格整片 `skipped`），所以这里的取舍是刻意的：**推不出去 = 这跑没判过
+ *    = 不许合**。`.cnb.yml` 主列那一格因此**不再带 `--readout`**；旗标还留给 push 档
+ *    （那里只报读数、合并闸由别处承重）。
  * 4. 推送用 `--force` 不用 `--force-with-lease`：lease 需要 expected 值（要先
  *    `ls-remote` 再推，两跳网络 + 竞态窗），而 ref 按 IID 专属、由并发锁保证
  *    同一 PR 同时只有一跑在推 —— 覆盖自己的旧值正是幂等语义。
@@ -99,8 +98,8 @@
  * ## 用法
  *
  * ```text
- * node scripts/ci-github-mirror-push.mjs               # 三态退码（本地自查 / 将来承重那一档）
- * node scripts/ci-github-mirror-push.mjs --readout     # 读数档：三态照打点，退码恒 0（CI 主列那一格）
+ * node scripts/ci-github-mirror-push.mjs               # 三态退码（CI 主列那一格：承重）
+ * node scripts/ci-github-mirror-push.mjs --readout     # 读数档：三态照打点、退码恒 0（push 档 / 本地自查）
  * node scripts/ci-github-mirror-push.mjs --dry-run     # 只打印计划与 payload，不发任何请求
  * node scripts/ci-github-mirror-push.mjs --master      # push 档那一格：推 master，不派发
  * ```
@@ -747,7 +746,7 @@ export async function runMirror(io) {
  * 推不出去/派发失败即退非零、直接拦合并 —— 这正是期望第 3 条要的 fail-closed。
  *
  * @param {number} code `runMirror()` 给出的三态
- * @param {boolean} readout 读数档（`.cnb.yml` 主列那一格用的形态）
+ * @param {boolean} readout 读数档（push 档 / 本地自查；PR 主列那一格 2026-11-05 起不带）
  * @returns {number} 交给进程的退出码
  */
 export function exitCodeFor(code, readout) {
@@ -853,8 +852,12 @@ export async function runMirrorEntry(io = {}) {
         log(
           `[${prefix}]   等了多久：${Math.round(MIRROR_ENTRY_TIMEOUT_MS / 1000)}s（到点；上限 MIRROR_ENTRY_TIMEOUT_MS，外框 10m 之内）`,
         );
-        log(`[${prefix}]   最后读数：${lastLine === "" ? "（还没打出任何读数：卡在模块装载）" : lastLine}`);
-        log(`[${prefix}]   为什么退非零：等待没有终点不属于三态任何一形；--readout 折零以「已拿到读数」为前提`);
+        log(
+          `[${prefix}]   最后读数：${lastLine === "" ? "（还没打出任何读数：卡在模块装载）" : lastLine}`,
+        );
+        log(
+          `[${prefix}]   为什么退非零：等待没有终点不属于三态任何一形；--readout 折零以「已拿到读数」为前提`,
+        );
         return CODE.NO_FACT;
       }
       code = await loaded.mod.runMasterMirror(runIo);
@@ -864,7 +867,9 @@ export async function runMirrorEntry(io = {}) {
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     log(`[${prefix}] 结论：exit 2 —— 入口抛错（${detail}）`);
-    log(`[${prefix}]   在等什么：${master ? "动态 import ./ci-github-mirror-master.mjs 与 runMasterMirror" : "runMirror"}`);
+    log(
+      `[${prefix}]   在等什么：${master ? "动态 import ./ci-github-mirror-master.mjs 与 runMasterMirror" : "runMirror"}`,
+    );
     log(`[${prefix}]   最后读数：${lastLine === "" ? "（还没打出任何读数）" : lastLine}`);
     log(`[${prefix}]   为什么退非零：抛错不属于三态任何一形，进程故障不冒充这一格的判决`);
     return CODE.NO_FACT;
