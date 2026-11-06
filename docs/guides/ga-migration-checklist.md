@@ -78,10 +78,10 @@
 
 - **现状（CNB 口径）**：自托管本地 LFS
 - **GA 实测表现**：GitHub LFS 1 GiB 存储 + 1 GiB/月带宽；每次拉取都计带宽；`checkout lfs: true` 会拉全部 LFS 对象
-- **影响判断**：master-gate.yml 的文档链命令不碰字体等 LFS 对象 → 之前 `lfs: true` 是纯开销（PR #3223 修复）；pr-gate.yml fixed-structural-tests 里有字体用例 `tests/unit/font.ts` → 必须 LFS
+- **影响判断**：master-gate.yml 的文档链命令不碰字体等 LFS 对象 → 之前 `lfs: true` 是纯开销（PR #3223 修复）；pr-gate.yml 里只有 fixed-structural-tests / affected-tests 会跑字体用例 `tests/embedded-title-font.test.ts` → 只这两格必须 LFS；static-gates / typecheck-db-format / heavy-gates 不读字体
 - **建议改法**：
   - master-gate.yml：已改为 `lfs: false`（PR #3223）
-  - pr-gate.yml：保持 `lfs: true`（static-gates / fixed-structural-tests 用例需要）
+  - pr-gate.yml：只有 fixed-structural-tests / affected-tests 保持 `lfs: true`；其余三格不开（checkout 默认 false，不再写 `lfs: true`）
   - daily.yml：全量单测需要字体用例，保持 `lfs: true`
   - 监控 LFS 配额消耗，如接近 1 GiB/月，评估缓存 LFS 对象或减少拉取
 - **优先级**：P2（当前配额充裕）
@@ -90,8 +90,9 @@
 
 - **现状（CNB 口径）**：自托管每次全量 clone（OverlayFS 不可用），fetch-depth 无意义
 - **GA 实测表现**：
-  - pr-gate.yml static-gates：`fetch-depth: 0`（三点 diff 必须）✅ 正确
-  - pr-gate.yml 其余 job：不独立 checkout，共享 static-gates 的检出面 ✅
+  - pr-gate.yml static-gates：`fetch-depth: 0` ✅ 保留（分支守卫 / 提交声明核对 / 补丁覆盖率要读 `origin/master`，浅克隆里没有这条 ref）
+  - pr-gate.yml typecheck-db-format / fixed-structural-tests / affected-tests：`0` → `2`（合成 merge 的两个父正是 base 与 head，判据基线是 payload 的 `CNB_PULL_REQUEST_TARGET_SHA`）✅ 本主题 PR
+  - pr-gate.yml heavy-gates：`fetch-depth: 0` ✅ 保留（依赖新鲜度按 `merge-base HEAD origin/master` 算，浅克隆没有 `origin/master`）
   - master-gate.yml：`fetch-depth: 0` → 1（PR #3223 修复）✅ 文档链命令只读当前树
   - daily.yml：`fetch-depth: 0` → 需评估（有三点 diff 吗？）
   - package-desktop.yml：`fetch-depth: 0` → 需评估
