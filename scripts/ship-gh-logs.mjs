@@ -33,6 +33,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { CODE } from "./ship-core.mjs";
+import { DEFAULT_REPO } from "./ci-github-mirror-push.mjs";
 import { requestJson, requestText } from "./ci-github-verdict-request.mjs";
 import {
   extractFailureWindow,
@@ -132,6 +133,22 @@ function asList(value) {
 export function resolveGhToken(env = {}) {
   const mirror = String(env?.GITHUB_MIRROR_TOKEN ?? "").trim();
   return mirror === "" ? String(env?.GITHUB_TOKEN ?? "").trim() : mirror;
+}
+
+/**
+ * GitHub 侧仓库坐标：`GITHUB_MIRROR_REPO` 优先，缺省复用镜像格的 {@link DEFAULT_REPO}。
+ *
+ * **不能拿 CNB origin 的 slug 顶替**：本地 origin 是 `https://cnb.cool/moon-read/comfy-app-t3`，
+ * 从中解析出的是 CNB 的 `<org>/<repo>`，拿去打 GitHub API 一律 404 —— 2026-11-05 的
+ * `pnpm ship --gh-logs 42121584357` 就是这条（run 本身在 `wuxianyuedu/comfy-app` 上）。
+ * 镜像仓是私有仓，两边的 slug 不会恰好同名，所以这里只认镜像那一枚环境变量。
+ *
+ * @param {Record<string, string | undefined>} [env] 进程环境
+ * @returns {string} `owner/repo`
+ */
+export function resolveGhRepo(env = {}) {
+  const repo = String(env?.GITHUB_MIRROR_REPO ?? "").trim();
+  return repo === "" ? DEFAULT_REPO : repo;
 }
 
 /**
