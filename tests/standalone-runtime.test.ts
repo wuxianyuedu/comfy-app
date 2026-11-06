@@ -143,7 +143,7 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
     const stripCommentLines = (src: string): string =>
       src
         .split("\n")
-        .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+        .filter((line) => !/^\s*(?:\/\/|\*|\/\*)/.test(line))
         .join("\n");
     /** 说明符 → 相对 `src/` 的路径（不含 `.ts`，落在 `src/` 之外返回 null）。 */
     const toSrcRel = (spec: string, fromFile: string): string | null => {
@@ -160,8 +160,8 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
      *  而 `.mjs` 侧必须带 —— 那正是 `platform.ts` 被拆出来的理由）。 */
     const relativeSpecifiers = (abs: string): Array<string> => {
       const code = stripCommentLines(readFileSync(abs, "utf8"));
-      return [...code.matchAll(/from "(\.[^"]+)"/g)]
-        .map((m) => m[1])
+      return [...code.matchAll(/from "(?<specifier>\.[^"]+)"/g)]
+        .map((m) => m.groups?.specifier)
         .filter((spec): spec is string => typeof spec === "string");
     };
     /** 从几个 `src/` 根出发，顺着它们自己的 import 走到底。 */
@@ -197,8 +197,9 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
     const seeds: Array<string> = [];
     for (const abs of entries) {
       const code = stripCommentLines(readFileSync(abs, "utf8"));
-      for (const m of code.matchAll(/"((?:\.\.\/)+src\/[^"]+)"/g)) {
-        const rel = m[1] === undefined ? null : toSrcRel(m[1], abs);
+      for (const m of code.matchAll(/"(?<specifier>(?:\.\.\/)+src\/[^"]+)"/g)) {
+        const spec = m.groups?.specifier;
+        const rel = spec === undefined ? null : toSrcRel(spec, abs);
         if (rel !== null && !seeds.includes(rel)) {
           seeds.push(rel);
         }
@@ -493,7 +494,7 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     const text = both(out);
     expect(out.status, text).toBe(0);
     expect(text).toMatch(/executor mode=host/);
-    const hostPid = /host pid=(\d+)/.exec(text)?.[1];
+    const hostPid = /host pid=(?<pid>\d+)/.exec(text)?.groups?.pid;
     expect(hostPid, text).toBeTruthy();
     // 桩宿主的输出：三项都必须落在同一个值上
     const echoed = hostStdout();
@@ -501,13 +502,13 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     // 绝对路径：宿主与 server 读同一个库文件，靠的就是这一条（相对路径 = 赌两侧锚点一致）。
     // 判据写成「绝对路径」而不是某个平台的形状：原实现只认 `[A-Za-z]:\`，
     // 那是把 Windows 当唯一平台（本仓库处处强调跨平台），在 POSIX 上必红。
-    const dbUrl = /db=(file:\S+)/.exec(echoed)?.[1] ?? "";
+    const dbUrl = /db=(?<url>file:\S+)/.exec(echoed)?.groups?.url ?? "";
     expect(dbUrl, `宿主没回显库路径：${echoed}`).not.toBe("");
     expect(path.isAbsolute(dbUrl.slice("file:".length))).toBe(true);
     // 子进程真的拿到 production（不是只在单测里成立）：pino 在别值时去找 pino-pretty，
     // 而那份 devDependency 不在载荷里 —— 桌包宿主退出 1 的现场就是这条。
     expect(echoed).toContain("node=production");
-    const stamp = /executor-host-stdout-(\S+?)\.log/.exec(text)?.[1];
+    const stamp = /executor-host-stdout-(?<stamp>\S+?)\.log/.exec(text)?.groups?.stamp;
     expect(stamp, `入口没打出宿主输出通道：${text}`).toBeTruthy();
     expect(echoed, `boot id 必须与本次日志同名（跨进程 grep 的唯一线索）：${echoed}`).toContain(
       `boot=${stamp}`,
@@ -544,7 +545,7 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     expect(out.status, text).toBe(0);
     expect(text).toMatch(/host exited code=7/);
     // 已经退掉的宿主不许再补一刀（那会在日志里留一行假的 reap FAILED）
-    const hostPid = /host pid=(\d+)/.exec(text)?.[1];
+    const hostPid = /host pid=(?<pid>\d+)/.exec(text)?.groups?.pid;
     expect(hostPid, text).toBeTruthy();
     expect(text).not.toContain(`reap pid=${hostPid}`);
   });

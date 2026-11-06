@@ -33,14 +33,16 @@ function read(rel: string): string {
 function staticSpecifiers(source: string): Array<string> {
   const code = stripComments(source);
   const specs: Array<string> = [];
-  for (const m of code.matchAll(/from\s+["']([^"']+)["']/g)) {
-    if (m[1] !== undefined && m[1] !== "") {
-      specs.push(m[1]);
+  for (const m of code.matchAll(/from\s+["'](?<specifier>[^"']+)["']/g)) {
+    const spec = m.groups?.specifier;
+    if (spec !== undefined && spec !== "") {
+      specs.push(spec);
     }
   }
-  for (const m of code.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)) {
-    if (m[1] !== undefined && m[1] !== "") {
-      specs.push(m[1]);
+  for (const m of code.matchAll(/\brequire\(\s*["'](?<specifier>[^"']+)["']\s*\)/g)) {
+    const spec = m.groups?.specifier;
+    if (spec !== undefined && spec !== "") {
+      specs.push(spec);
     }
   }
   return specs;

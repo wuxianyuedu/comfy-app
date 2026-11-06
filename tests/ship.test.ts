@@ -4247,8 +4247,10 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
       .join("\n");
     /** 从 `cnbJson(run, ["pulls", "post-pull", …])` 里抽出前两个字符串。 */
     const called = new Set<string>();
-    for (const m of src.matchAll(/cnbJson\(run,\s*\[\s*"(\w+)"\s*,\s*"([\w-]+)"/g)) {
-      called.add(`${m[1]} ${m[2]}`);
+    for (const m of src.matchAll(
+      /cnbJson\(run,\s*\[\s*"(?<module>\w+)"\s*,\s*"(?<tool>[\w-]+)"/g,
+    )) {
+      called.add(`${m.groups?.module ?? ""} ${m.groups?.tool ?? ""}`);
     }
     const planned = new Set<string>();
     /* 两个显式动作**都拨上**才是「源码里可能伸手的全部集合」：`--merge` 与
@@ -4269,9 +4271,9 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
       diagnose: true,
       prBodyFile: true,
     })) {
-      const m = /^cnb (\w+) ([\w-]+)/.exec(line);
+      const m = /^cnb (?<module>\w+) (?<tool>[\w-]+)/.exec(line);
       if (m) {
-        planned.add(`${m[1]} ${m[2]}`);
+        planned.add(`${m.groups?.module ?? ""} ${m.groups?.tool ?? ""}`);
       }
     }
     // 前置断言：提取本身要真的抓到东西（正则写漂会让两侧都成空集、于是恒绿）。

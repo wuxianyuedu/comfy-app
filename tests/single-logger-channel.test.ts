@@ -39,7 +39,7 @@ function walk(dir: string, out: Array<string> = []): Array<string> {
       walk(full, out);
       continue;
     }
-    if (/\.(ts|tsx)$/.test(name)) {
+    if (/\.(?:ts|tsx)$/.test(name)) {
       out.push(full);
     }
   }
@@ -52,14 +52,14 @@ describe("日志实现只有一处（ISSUE #568）", () => {
     for (const dir of SCAN_DIRS) {
       for (const file of walk(join(ROOT, dir))) {
         const rel = relative(ROOT, file).split("\\").join("/");
-        if (/\.test\.(ts|tsx)$/.test(rel)) {
+        if (/\.test\.(?:ts|tsx)$/.test(rel)) {
           continue;
         } // 用例自己会打点/断言输出
         if (CLIENT_ONLY.includes(rel)) {
           continue;
         } // 浏览器侧唯一通道，见上方清单
         const src = stripComments(readFileSync(file, "utf8"));
-        if (/\bconsole\s*\.\s*(log|info|warn|error|debug)\s*\(/.test(src)) {
+        if (/\bconsole\s*\.\s*(?:log|info|warn|error|debug)\s*\(/.test(src)) {
           offenders.push(rel);
         }
       }
@@ -80,7 +80,7 @@ describe("日志实现只有一处（ISSUE #568）", () => {
       const raw = readFileSync(join(ROOT, rel), "utf8");
       expect(raw.split("\n")[0]?.trim(), `${rel} 首行必须是 "use client"`).toBe('"use client";');
       expect(stripComments(raw), `${rel} 里应当有 console 调用`).toMatch(
-        /\bconsole\s*\.\s*(log|info|warn|error|debug)\s*\(/,
+        /\bconsole\s*\.\s*(?:log|info|warn|error|debug)\s*\(/,
       );
     }
   });
@@ -111,7 +111,7 @@ describe("日志实现只有一处（ISSUE #568）", () => {
     // 判据落在「实现特征」上，而不是文件清单：谁在 import pino / 谁在定义 redact 路径，
     // 谁就是实现处。两份实现只要出现，这条立刻红。
     const implementors = [...walk(join(SRC, "lib")), ...walk(join(SRC, "server"))]
-      .filter((f) => !/\.test\.(ts|tsx)$/.test(f))
+      .filter((f) => !/\.test\.(?:ts|tsx)$/.test(f))
       .filter((f) => /from\s+["']pino["']/.test(readFileSync(f, "utf8")))
       .map((f) => relative(ROOT, f).split("\\").join("/"));
     expect(
@@ -131,7 +131,7 @@ describe("日志实现只有一处（ISSUE #568）", () => {
 
   it("值形状守卫只有一份实现（两条通道都从 core 取）", () => {
     const files = [...walk(join(SRC, "lib")), ...walk(join(SRC, "server"))]
-      .filter((f) => !/\.test\.(ts|tsx)$/.test(f))
+      .filter((f) => !/\.test\.(?:ts|tsx)$/.test(f))
       .filter((f) => /export\s+function\s+redactSecretShaped/.test(readFileSync(f, "utf8")))
       .map((f) => relative(ROOT, f).split("\\").join("/"));
     expect(files).toEqual(["src/lib/core/redact-secret.ts"]);

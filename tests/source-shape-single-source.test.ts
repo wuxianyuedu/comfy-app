@@ -21,7 +21,7 @@ const SKIP_DIRS = new Set([
   "public",
   "out",
 ]);
-const SOURCE_EXT = /\.(ts|tsx|cjs|mjs)$/;
+const SOURCE_EXT = /\.(?:ts|tsx|cjs|mjs)$/;
 
 /** 唯一实现所在，它出现这个名字是允许的。 */
 const CANONICAL = "tests/helpers/source-shape.ts";

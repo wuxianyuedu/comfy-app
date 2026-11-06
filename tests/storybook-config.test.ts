@@ -82,7 +82,7 @@ describe("Storybook 配置契约（ISSUE #1381）", () => {
     expect(launcher).toContain("SKIP_ENV_VALIDATION");
     // 跨平台：命令与参数都得经 Node 起，不能是 `VAR=x cmd` 那种 cmd.exe 接不住的写法
     expect(launcher).toContain("spawnSync");
-    expect(launcher).not.toMatch(/^\s*(storybook|pnpm)\s/m);
+    expect(launcher).not.toMatch(/^\s*(?:storybook|pnpm)\s/m);
   });
 
   it("package.json 的 Storybook 脚本走 Node 启动器，且不写死 pnpm 包名", () => {

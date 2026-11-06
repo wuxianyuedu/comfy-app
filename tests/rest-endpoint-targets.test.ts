@@ -40,7 +40,7 @@ function collectTs(dir: string, out: Array<string> = []): Array<string> {
 function routeTable(appDir: string): Map<string, Array<RouteToken>> {
   const routes = new Map<string, Array<RouteToken>>();
   for (const file of collectTs(appDir)) {
-    if (!/(^|[\\/])route\.tsx?$/.test(path.basename(file))) {
+    if (!/(?:^|[\\/])route\.tsx?$/.test(path.basename(file))) {
       continue;
     }
     const dirs = path

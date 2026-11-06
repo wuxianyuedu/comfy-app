@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B4 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "tests/rest-endpoint-targets.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/script-main-guard.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/scripts-typecheck-ratchet.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/settings-hint-label-matches-page.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/shell-gate.test.ts", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "tests/ship.test.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "tests/sidebar-state-contrast.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/single-logger-channel.test.ts", // 存量 6 处 · 清账目标 B4 · 新代码不禁用
-        "tests/source-shape-single-source.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/splash-log-scroll-follow.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/standalone-runtime.test.ts", // 存量 7 处 · 清账目标 B4 · 新代码不禁用
-        "tests/store-selector-shape.test.ts", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "tests/storybook-config.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/storybook-data-sources.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/storybook-injection-layers.test.ts", // 存量 8 处 · 清账目标 B4 · 新代码不禁用
-        "tests/storybook-tsc-input.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/strip-comments-single-source.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/tailwind-source-roots.test.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "tests/test-config-inheritance.test.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "tests/test-mock-targets.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
         "tests/theme-dark-token-cascade.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
         "tests/theme-token-single-source.test.ts", // 存量 7 处 · 清账目标 B4 · 新代码不禁用
         "tests/theme-tokens-compile-source.test.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
