@@ -68,8 +68,11 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.inputs.head_sha || github.sha }}
-          # 每日档定时触发在 master HEAD，不做三点 diff / 不读 origin/master ⇒ 1 够。
-          fetch-depth: 1
+          # 全量单测里有按 git 历史现算的判据（tests/audits-doc-references.test.ts：
+          # `git log --all --diff-filter=D -- scripts/` 找已删的棘轮基线；浅克隆退化成
+          # 空集 ⇒ 那条「判据面非空」反向锚点必红，读数同 pr-gate.yml 的 fixed 格注释）
+          # ⇒ 全量档必须全历史，1 和 2 都不够。
+          fetch-depth: 0
           # 全量单测含字体用例（tests/embedded-title-font.test.ts，在固定结构清单里）：
           # 它要字体真身字节，只检 LFS 指针文件必红 ⇒ 这一格必须拉 LFS。
           # 对象由镜像那一格 `git lfs push` 送到；配额口径见 pr-gate.yml 同名注释。
