@@ -399,7 +399,9 @@ export function download({ mirror, dryRun, log, plan = NSIS_PLAN, run }) {
   }
   const zipAsset = plan.assets.zip;
   const dllAsset = plan.assets.dll;
-  log(`[工具缓存] 两件被钉的资产：\n[工具缓存]   zip ${zipAsset.url}\n[工具缓存]   dll ${dllAsset.url}`);
+  log(
+    `[工具缓存] 两件被钉的资产：\n[工具缓存]   zip ${zipAsset.url}\n[工具缓存]   dll ${dllAsset.url}`,
+  );
   if (dryRun) {
     log("[工具缓存] --dry-run：不落盘。");
     return 0;
@@ -496,7 +498,10 @@ export function download({ mirror, dryRun, log, plan = NSIS_PLAN, run }) {
     files,
   };
   try {
-    fs.writeFileSync(path.join(tree, TOOLS_MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}\n`);
+    fs.writeFileSync(
+      path.join(tree, TOOLS_MANIFEST_FILE),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+    );
     /* 整目录改名过去：常驻根里要么是没有这一份，要么是齐全的这一份，没有第三种。 */
     fs.mkdirSync(path.dirname(mirror), { recursive: true });
     fs.renameSync(tree, mirror);

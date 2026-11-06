@@ -88,8 +88,7 @@ export function bootDevServerStage(ctx, target) {
   // 逐值比对（ADR §14 D5）。
   /* 判据（进程 env → `.env` 回读 → 归一化）住在 `executor-mode.mjs`，由编排器
    * 注入 —— 门控形状不变：只认 `host`，未知值 warn 后走 inline 分支。 */
-  const { mode: executorMode, unknown: unknownExecutor } =
-    ctx.resolveExecutorMode();
+  const { mode: executorMode, unknown: unknownExecutor } = ctx.resolveExecutorMode();
   if (executorMode === "host") {
     const hostChild = ctx.spawnExecutorHost();
     log(

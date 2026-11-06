@@ -97,7 +97,9 @@ export function renderReport(report) {
   lines.push(
     `能力实测：硬链接 ${mark.ok} ｜ 块克隆 ${
       report.capabilities.blockCloneKnown
-        ? (report.capabilities.blockClone ? mark.ok : mark.blocked)
+        ? report.capabilities.blockClone
+          ? mark.ok
+          : mark.blocked
         : "?"
     } ｜ 稀疏文件 ${report.capabilities.sparse ? mark.ok : mark.na}`,
   );

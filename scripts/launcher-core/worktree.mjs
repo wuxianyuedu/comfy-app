@@ -310,10 +310,7 @@ export function lockfileDrift(root) {
    * `git pull` 都必然触碰文件、mtime 必变，缓存自然失效。 */
   const repoStamp = stampOf(repoLock);
   const modulesStamp = stampOf(modulesLock);
-  if (
-    driftCache?.repoStamp === repoStamp &&
-    driftCache.modulesStamp === modulesStamp
-  ) {
+  if (driftCache?.repoStamp === repoStamp && driftCache.modulesStamp === modulesStamp) {
     return driftCache.result;
   }
 

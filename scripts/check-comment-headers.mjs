@@ -178,11 +178,9 @@ export function main(deps = {}) {
     }
     const unreadable = tally["读不到"] ?? 0;
     log(
-      `[header-audit] 样本 ${rows.length} 条：${
-        SHADES.filter((s) => (tally[s] ?? 0) > 0)
-          .map((s) => `${s} ${tally[s]}`)
-          .join(" · ")
-        }${unreadable > 0 ? "（「读不到」不判成「缺」，也不因此变红）" : ""}`,
+      `[header-audit] 样本 ${rows.length} 条：${SHADES.filter((s) => (tally[s] ?? 0) > 0)
+        .map((s) => `${s} ${tally[s]}`)
+        .join(" · ")}${unreadable > 0 ? "（「读不到」不判成「缺」，也不因此变红）" : ""}`,
     );
   }
   return bad.some((r) => r.shape !== "读不到") ? CODE.RED : CODE.GREEN;

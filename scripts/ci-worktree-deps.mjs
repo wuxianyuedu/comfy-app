@@ -104,9 +104,9 @@ export function describeWorktreeDeps(readout, scope = "这一跑") {
     return `[deps-probe] ${scope}：${readout.lines.join("；")}\n`;
   }
   return (
-    `[deps-probe] × ${scope}的**前提**不成立（不是用例红）：\n${
-    readout.lines.map((l) => `  · ${l}\n`).join("")
-    }  下一动作：${readout.advice}\n` +
+    `[deps-probe] × ${scope}的**前提**不成立（不是用例红）：\n${readout.lines
+      .map((l) => `  · ${l}\n`)
+      .join("")}  下一动作：${readout.advice}\n` +
     `  ※ 这一档**不算绿也不算红**：拿它当「用例红」去查代码，查的是一件没发生的事。\n`
   );
 }

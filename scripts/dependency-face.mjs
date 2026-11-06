@@ -25,8 +25,4 @@
  * 装出来的东西都可能不同）。别按「有没有改 lockfile」一刀切 —— 远端只改
  * `allowBuilds` 那一档正是最容易被漏掉的。
  */
-export const DEPENDENCY_FILES = [
-  "package.json",
-  "pnpm-lock.yaml",
-  "pnpm-workspace.yaml",
-];
+export const DEPENDENCY_FILES = ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml"];

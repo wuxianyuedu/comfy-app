@@ -23,18 +23,11 @@ import process from "node:process";
 // 密钥与占位值的**单一定义点**在 launcher-core 那份（桌包 standalone 运行期也用它）：
 // 两侧各写一份的后果不是重复代码，而是「dev 检出的鉴权配置形状」与「桌包里的」悄悄
 // 不同——而两边都能正常启动，没有任何判据会红（§12.12）。
-import {
-  newAuthSecret,
-  OAUTH_PLACEHOLDER,
-} from "./launcher-core/standalone-runtime-env.mjs";
+import { newAuthSecret, OAUTH_PLACEHOLDER } from "./launcher-core/standalone-runtime-env.mjs";
 // `.env` 的解析也只有一份：`env-preflight.mjs` 那同一条最小子集（忽略 `#` 注释行、
 // 去成对引号与行尾注释）。在这里再写一个解析器就是第三份口径（第三份是 app-port 那份
 // 单键取值 —— 它只取一个键，形状不同，不并入）。
-import {
-  REQUIRED_ENV_KEYS,
-  missingEnvKeys,
-  parseEnvFile,
-} from "./env-preflight.mjs";
+import { REQUIRED_ENV_KEYS, missingEnvKeys, parseEnvFile } from "./env-preflight.mjs";
 // 留痕短名（`COMFYAPP_DEV_HANDLE`）的取值链也只有一处（`dev-handle.mjs`，ISSUE #2355）：
 // 这里写的值与 `ship` 念的值必须同源，否则「跑过 env:init」之后两边各说各的名字。
 import { DEV_HANDLE_ENV_KEY, devHandleForEnvFile } from "./dev-handle.mjs";
@@ -144,9 +137,7 @@ const hadRequired = hasRequiredValues(current);
 const filled = hadRequired ? current : fill(current);
 const additions = missingLines({ example: exampleText, current: filled });
 const next =
-  additions.length > 0
-    ? `${filled.replace(/\s*$/, "")}\n${additions.join("\n")}\n`
-    : filled;
+  additions.length > 0 ? `${filled.replace(/\s*$/, "")}\n${additions.join("\n")}\n` : filled;
 
 if (next !== current && !hasRequiredValues(next)) {
   // 自检（与生成分支同一条）：补齐没命中时当场暴露，而不是留下一个仍然起不来的 .env。

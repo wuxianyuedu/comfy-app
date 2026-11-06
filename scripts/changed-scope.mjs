@@ -380,8 +380,7 @@ function inheritFaceFromParents(firstParent, secondParent, deps = {}) {
   if (!got.ok) {
     return {
       ok: false,
-      reason:
-        `算不出两个父之间的分叉清单（${firstParent.slice(0, 8)}...${secondParent.slice(0, 8)}）`,
+      reason: `算不出两个父之间的分叉清单（${firstParent.slice(0, 8)}...${secondParent.slice(0, 8)}）`,
     };
   }
   return { ok: true, files: changedPathsFromNameStatus(got.stdout).paths };
