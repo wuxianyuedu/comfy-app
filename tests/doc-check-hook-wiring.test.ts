@@ -614,11 +614,15 @@ describe("GA push 档 `master-gate.yml`：文档链两格的并行执行者（�
     ).not.toBe("");
   });
 
-  it("检出面够判据用（全历史 + LFS），且装依赖在场（不靠未验证的「无 node_modules 也能跑」）", () => {
+  it("检出面按文档链的真实输入收窄（浅克隆、无 LFS），且装依赖在场（不靠未验证的「无 node_modules 也能跑」）", () => {
+    /* 2026-11-06 核对两格的真实输入面：`check-doc-references.cjs` 没有 git 调用、也不读文件内容
+     * （只判引用路径在不在）；`render-doc-placeholders.cjs` 只 `readFileSync` 当前树的文档与源文件。
+     * 两格都不做三点 diff，也不读字体 —— `.gitattributes` 的 LFS 面只有 `*.woff2` / `*.ttf`。
+     * 所以 `fetch-depth: 0` + `lfs: true` 对它们没有输入贡献，浅克隆即可（GA 冷装读数）。 */
     expect(
-      workflow.includes("fetch-depth: 0") && workflow.includes("lfs: true"),
-      "检出不是 `fetch-depth: 0` + `lfs: true` —— 镜像格把两个父提交的历史与 LFS 对象一并" +
-        "推上来，缺一样都会让判据读到指针/浅历史而不是真内容",
+      workflow.includes("fetch-depth: 1") && !workflow.includes("lfs: true"),
+      "检出面不是 `fetch-depth: 1` 且不开 LFS —— 文档链两格只读 HEAD 树，不做三点 diff、" +
+        "也不读字体等 LFS 对象；拉全历史 + LFS 对判据没有输入贡献",
     ).toBe(true);
     expect(
       workflow.includes("pnpm install --frozen-lockfile"),
