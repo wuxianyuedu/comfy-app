@@ -149,12 +149,10 @@ export function main(argv) {
   /* 「被预算砍」与「判据红」分开报（`launcher-core/shell.mjs` 一份实现）。 */
   if (classifyOutcome(res) === "aborted") {
     process.stderr.write(
-      `[artifact-run] ✗ ${
-        abortedAdvice({
-          label: "产物级护栏（build + 数产物）",
-          timeoutMs: ARTIFACT_TIMEOUT_MS,
-        })
-        }        （读数：退出码 ${res.status ?? "信号"}）\n`,
+      `[artifact-run] ✗ ${abortedAdvice({
+        label: "产物级护栏（build + 数产物）",
+        timeoutMs: ARTIFACT_TIMEOUT_MS,
+      })}        （读数：退出码 ${res.status ?? "信号"}）\n`,
     );
     return 1;
   }
@@ -163,12 +161,11 @@ export function main(argv) {
     /* **绿了但不记账**：这一跑透传了参数（`--help`、指到单个入口），跑的不是整档护栏。
      * 下面那条「✗ 未通过（退出码 0）」是红的话术，拿它打这一拍会自相矛盾。 */
     process.stderr.write(
-      `[artifact-run] ${
-        notWholeTrackNotice({
-          label: "产物级护栏",
-          command: "pnpm build:tracked",
-          why: isWholeTrackRun(extra).why,
-        })}`,
+      `[artifact-run] ${notWholeTrackNotice({
+        label: "产物级护栏",
+        command: "pnpm build:tracked",
+        why: isWholeTrackRun(extra).why,
+      })}`,
     );
     return 0;
   }

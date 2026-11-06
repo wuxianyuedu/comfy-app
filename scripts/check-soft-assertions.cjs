@@ -387,9 +387,11 @@ function main() {
   }
 
   console.error(
-    `${REPORT_ONLY
-      ? `[soft] 盘点：${offenders.length} 处待办（--report 不判失败）`
-      : `[ERROR] 有 ${offenders.length} 处 expect.soft 落在循环体之外`}：\n`,
+    `${
+      REPORT_ONLY
+        ? `[soft] 盘点：${offenders.length} 处待办（--report 不判失败）`
+        : `[ERROR] 有 ${offenders.length} 处 expect.soft 落在循环体之外`
+    }：\n`,
   );
   for (const o of offenders) {
     console.error(`  · ${o.rel}:${o.line}`);
@@ -403,8 +405,7 @@ function main() {
       `\n  · 顺序依赖 → 改回硬断言 \`expect(...)\`（它至少报得出真正的原因）；` +
       `\n  · 本来就是一张清单 → 写成 \`for (const x of LIST) expect.soft(...)\`。` +
       `\n列清单：\`node scripts/check-soft-assertions.cjs --report\`` +
-      `\n口径见 docs/standards/11-测试与可观测性.md §11.18。${
-      note}`,
+      `\n口径见 docs/standards/11-测试与可观测性.md §11.18。${note}`,
   );
   return REPORT_ONLY ? 0 : 1;
 }

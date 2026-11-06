@@ -521,10 +521,7 @@ if (existsSync(storeDir)) {
   // `@libsql/client` 已随运行时迁到 Node 内置的 node:sqlite 退出本清单（#3171）：
   // 它不再是启动路径上的模块，留在断言里会让 `--prod` 安装下的构建误红。
   const requireFromPayload = createRequire(join(staticDir, "package.json"));
-  const mustResolve = [
-    "next/dist/server/next.js",
-    "@swc/helpers/_/_interop_require_default",
-  ];
+  const mustResolve = ["next/dist/server/next.js", "@swc/helpers/_/_interop_require_default"];
   const unresolved = mustResolve.filter((spec) => {
     try {
       requireFromPayload.resolve(spec);
@@ -604,9 +601,9 @@ if (totalMB / 1024 > MAX_STATIC_GB) {
     .slice(0, 8);
   fail(
     `static 体积 ${(totalMB / 1024).toFixed(2)}GB 超过护栏阈值 ${MAX_STATIC_GB}GB，` +
-      `说明 Next standalone file tracing 再次失控。Top 目录: ${
-      top.map((t) => `${t.name}=${t.mb.toFixed(0)}MB`).join(", ")
-      }。请检查 next.config.js 的 outputFileTracingExcludes 是否覆盖了新的大目录。`,
+      `说明 Next standalone file tracing 再次失控。Top 目录: ${top
+        .map((t) => `${t.name}=${t.mb.toFixed(0)}MB`)
+        .join(", ")}。请检查 next.config.js 的 outputFileTracingExcludes 是否覆盖了新的大目录。`,
   );
 }
 console.log(

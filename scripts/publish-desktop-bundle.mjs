@@ -223,8 +223,9 @@ export function planRotation(releases, keep, log = () => {}) {
   });
   if (unstamped.length > 0) {
     log(
-      `[发布] ⚠ ${unstamped.length} 个目录读不到 manifest 的 builtAt（按目录 mtime 排）：${
-        unstamped.join(", ")}`,
+      `[发布] ⚠ ${unstamped.length} 个目录读不到 manifest 的 builtAt（按目录 mtime 排）：${unstamped.join(
+        ", ",
+      )}`,
     );
   }
   const sorted = stamped.sort((a, b) => b.at - a.at || b.name.localeCompare(a.name));

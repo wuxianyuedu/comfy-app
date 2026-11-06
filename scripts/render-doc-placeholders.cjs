@@ -66,7 +66,10 @@ function bannerFor(docRel) {
 // 移除编辑文档里特有的「占位符约定」引用块：生成文档已显示真实值，该段无意义。
 // 匹配以 "> **占位符约定**：" 开头、到空行结束的连续引用行。
 function stripPlaceholderNote(text) {
-  return text.replaceAll(/(?:\n)?> \*\*占位符约定\*\*：[^\n]*(?:\n> [^\n]*)*\n+(?=\n|> |#|$)/g, "\n");
+  return text.replaceAll(
+    /(?:\n)?> \*\*占位符约定\*\*：[^\n]*(?:\n> [^\n]*)*\n+(?=\n|> |#|$)/g,
+    "\n",
+  );
 }
 
 function buildPlaceholderMap() {
@@ -163,7 +166,7 @@ function writeAll(onlyList) {
       targets.length < SCOPED_DOCS.length
         ? `（--only：全量是 ${SCOPED_DOCS.length} 份，这一批只写了 ${targets.length} 份）`
         : ""
-      }。`,
+    }。`,
   );
   return generated;
 }

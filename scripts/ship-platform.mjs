@@ -564,7 +564,15 @@ export function mergeAndVerify(ctx) {
       log("[ship] 拒绝合并：CI 是红的 ⇒ 修红的那一格再重跑。");
       return CODE.RED;
     }
-    const pr = cnbJson(run, ["pulls", "get-pull", "--repo", slug, "--number", String(number), "-v"]);
+    const pr = cnbJson(run, [
+      "pulls",
+      "get-pull",
+      "--repo",
+      slug,
+      "--number",
+      String(number),
+      "-v",
+    ]);
     const pv = pr ? readPullVerdict(pr.json) : null;
     const cls = classifyPrMergeable(pv);
     if (cls === "conflict") {

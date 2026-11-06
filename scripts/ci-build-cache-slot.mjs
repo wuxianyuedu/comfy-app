@@ -214,11 +214,7 @@ export function linkBuildCache(io) {
   try {
     fs.mkdirSync(nextDir, { recursive: true });
     fs.mkdirSync(slotDir, { recursive: true });
-    fs.symlinkSync(
-      slotDir,
-      link,
-      process.platform === "win32" ? "junction" : "dir",
-    );
+    fs.symlinkSync(slotDir, link, process.platform === "win32" ? "junction" : "dir");
   } catch (error) {
     return { ...noop, why: `建链接失败（${errCode(error)}）⇒ 不接槽` };
   }
@@ -256,8 +252,7 @@ export function withBuildCacheSlot(run, io = {}) {
   const env = io.env ?? process.env;
   const log = io.log ?? ((line) => process.stdout.write(`${line}\n`));
   const runStorePath =
-    io.runStorePath ??
-    ((args, opts) => runPnpmSync(args, { ...opts, stdio: "pipe" }));
+    io.runStorePath ?? ((args, opts) => runPnpmSync(args, { ...opts, stdio: "pipe" }));
   /* 空间闸门的探针可注入：它答的是「卷上还够不够」，而用例不该因为某台机器当时盘满
      而红（那是环境事实，不是判据的结论）。 */
   const hasRoom = io.hasRoom ?? ((p) => hasRoomForSlot({ path: p }));

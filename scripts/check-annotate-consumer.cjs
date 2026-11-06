@@ -299,17 +299,19 @@ function main() {
     console.log(
       `[annotate] OK —— 0 处 \`ctx.annotate\` 站点` +
         `（本判据是纯闸门：对象是「下一次有人挂注释」；台账在场，${consumers.length} 条登记）。${
-        note}`,
+          note
+        }`,
     );
     return 0;
   }
 
   if (consumers === null || consumers.length === 0) {
     console.error(
-      `${REPORT_ONLY
-        ? `[annotate] 盘点：${sites.length} 处站点、无消费方登记（--report 不判失败）`
-        : `[ERROR] 有 ${sites.length} 处 \`ctx.annotate\` 站点，但 ${LEDGER} 里没有消费方`
-        }：\n`,
+      `${
+        REPORT_ONLY
+          ? `[annotate] 盘点：${sites.length} 处站点、无消费方登记（--report 不判失败）`
+          : `[ERROR] 有 ${sites.length} 处 \`ctx.annotate\` 站点，但 ${LEDGER} 里没有消费方`
+      }：\n`,
     );
     for (const s of sites) {
       console.error(`  · ${s.rel}:${s.line}`);
@@ -321,8 +323,7 @@ function main() {
         `所以「挂一把没人读的注释」比不写更坏：它让人以为这件事有人管。\n` +
         `修法二选一：\n  · 登记消费方：在 ${LEDGER} 的 \`consumers\` 里写明谁读、怎么读；\n` +
         `  · 或者不写这条注释 —— 当前没有消费方时它只是装饰。\n` +
-        `口径见 docs/standards/11-测试与可观测性.md §11.21。${
-        note}`,
+        `口径见 docs/standards/11-测试与可观测性.md §11.21。${note}`,
     );
     return REPORT_ONLY ? 0 : 1;
   }

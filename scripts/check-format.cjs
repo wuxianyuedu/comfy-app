@@ -85,8 +85,8 @@
  *
  * 白名单里的第二类是**非源码产物**:`src-tauri/target/` 下是 `cargo build` 的输出
  * (Rust 壳)。**现在谁在忽略它**（ISSUE #2602）:本门禁与 `format:check` / `format:write`
- * 的扫描面收口在 `SCAN_ROOTS` 两个目录（`src` 与 `.storybook`）——`target/` 天然不在
- * 面内,不存在「生成脚本被格式化工具折行 ⇒ serde_json 读到尾随逗号 ⇒ 整壳编译失败」
+ * 的扫描面收口在 `SCAN_ROOTS` 五个目录（`src`、`.storybook`、`scripts`、`tools`、`e2e`）
+ * ——`target/` 天然不在面内,不存在「生成脚本被格式化工具折行 ⇒ serde_json 读到尾随逗号 ⇒ 整壳编译失败」
  * 那一条(那是 prettier 时代的现场,当年的执行者是根级 `.prettierignore`,#2541 删
  * prettier 时一并删了;这条历史上的根因与取证见 ISSUE #730 / #638)。产物既不该被
  * 格式化 —— 下一次构建会覆盖它,也不该进棘轮计数。
@@ -108,16 +108,17 @@
  * 全库扫描实测 **17.6s**(热缓存,本机 8 核) —— 它在钩子的 D 组里曾是**单项最贵**的
  * 一步(这个读数正是 ISSUE #2010 里"挪到 CI"那笔账的一半)。
  *
- * 全量档的扫描面由既有配置算出来(实测:`git ls-files` 跟踪 5940 份,落在扫描面内的
- * 只有 **1596** 份):
+ * 全量档的扫描面由既有配置算出来(`git ls-files` 跟踪的全库,落在 `SCAN_ROOTS` 五个
+ * 目录里、又被 `GLOBS` 收口的那些):
  *   · `GLOBS` 收 `.ts/.tsx/.js/.jsx/.mjs/.cjs/.mdx` —— 连 `.md` 都不在其内,所以
  *     `docs/**` `changelog.d/**` `README.md` **本来就一份都不扫**;
- *   · `IGNORE_GLOBS` 在全量档上把 `scripts/` `tests/` `tools/` `e2e/` `public/`
- *     `docs/api/**` `docs/generated/**` `src-tauri/target/**` 与根级 `*.js` /
- *     `*.config.*` 整类剔掉;
- *   · 剩下的是 **`src/**`(1586 份)+ `.storybook/**`(10 份)**。
+ *   · `IGNORE_GLOBS` 在全量档上把 `tests/` `public/` `docs/api/**`
+ *     `docs/generated/**` `src-tauri/target/**` 与根级 `*.js` / `*.config.*` 整类剔掉
+ *     （`scripts/` `tools/` `e2e/` 原本也在此列，2026-11-06 清完存量后移出，ISSUE #3251）;
+ *   · 剩下的是 `src/**`、`.storybook/**`、`scripts/**`、`tools/**`、`e2e/**` 里
+ *     上述扩展名的那批。
  *
- * 「只加了 changelog 碎片 / 只改文档 / 只动 `scripts/` / 只碰 `tests/`」
+ * 「只加了 changelog 碎片 / 只改文档 / 只碰 `tests/`」
  * 这一大类提交,在**全量档**上是白付:那些文件根本不在 oxfmt 的靶子里,扫多少遍
  * 结论都一样(这一层收窄是 ISSUE #1747 加的,手法与 `check-docs-api.cjs --staged`
  * 逐字同源)。改动面两档(`--staged` / `--changed`)进一步把「判面」收窄到
@@ -126,9 +127,10 @@
  * ⚠️ **`IGNORE_GLOBS` 不进改动面两档**（ISSUE #2979）：它的立论是「高频 churn 路径
  * 纳入棘轮会让每次排障都产生格式 diff」—— 那是**棘轮时代**的话；翻成硬闸之后
  * （§13.5.1，#1811）改动面两档对存量本来就不红，白名单在那两档上剩下的唯一效果
- * 是「`scripts/**` 的格式没有任何一个判决面能拦到」（本地那步说「跳过」、平台那格
+ * 是「列在里面的目录没有任何一个判决面能拦到」（本地那步说「跳过」、平台那格
  * `ifModify` 不含 ⇒ 根本不执行，两处都不红 —— #2942 重跑现场点名的三份
- * `.mjs`/`.cjs` 全在 `scripts/`，说明判据面本该含它）。所以两档的扫描面是
+ * `.mjs`/`.cjs` 全在 `scripts/`，说明判据面本该含它；`scripts/` 已于 ISSUE #3251
+ * 与 `tools/` `e2e/` 一起从全量档白名单移出）。所以两档的扫描面是
  * **改动面 ∩ `GLOBS`**（`isChangedFaceFile()`，同一份 `GLOBS` 展开，不另抄清单），
  * `IGNORE_GLOBS` 只对全量档生效 —— 它是「存量迁移」的白名单，不是
  * 「这些文件不用管格式」的白名单。
@@ -188,27 +190,26 @@ const CHANGED = ARGS.has("--changed");
  * 它们不进面 = 「这一仓自己的脚本从来没被格式判据看过」。 */
 const GLOBS = ["**/*.{ts,tsx,js,jsx,mjs,cjs,mdx}"];
 
-/** oxfmt 的扫描根：`GLOBS` 减白名单后收口出的面就是 `src/**` + `.storybook/**`
- * （根上的 `*.config.*` / `scripts/**` / `tests/**` 等都在 IGNORE_GLOBS 里）。
+/** oxfmt 的扫描根：`GLOBS` 减白名单后收口出的面是 `src/**` + `.storybook/**` +
+ * `scripts/**` + `tools/**` + `e2e/**`（根上的 `*.config.*` / `*.js`、`tests/**`、
+ * `public/**` 等仍在 IGNORE_GLOBS 里）。
  * ⚠️ 这一半**只管全量档**（默认 / `--report`，ISSUE #2979）：它是「存量迁移」的白名单，
  * 不是「这些文件不用管格式」的白名单 —— 改动面两档（`--staged` / `--changed`）的
  * 扫描面是**改动面 ∩ `GLOBS`**，不过 `IGNORE_GLOBS`（见 `isChangedFaceFile()`）。
  * 传目录而非 glob：oxfmt 认 glob，但 glob 形态会把白名单里的目录也带进来，
  * 交给下面的 `isScanned()` 收口更直白（同一份真源，不另抄一份名单）。 */
-const SCAN_ROOTS = ["src", ".storybook"];
+const SCAN_ROOTS = ["src", ".storybook", "scripts", "tools", "e2e"];
 
 /** 白名单(glob,相对仓库根):① 高频 churn 路径;② 非源码产物(构建输出)。见文件头注释。
  * ⚠️ 它**只对全量档生效**（默认 / `--report`，ISSUE #2979）：改这两档立论的时候
  * （棘轮时代「高频 churn 不想每次排障都带格式 diff」）硬闸还没来；翻成硬闸之后
  * （§13.5.1，ISSUE #1811）这条理由对「判本次改动」的两档已经不成立 —— 那两档
- * 对存量本来就不红（改动面收窄），把 `scripts/**` 整目录列在这里的净效果是
- * 「本仓自己的脚本从来没被格式判据看过」。所以改动面两档（`--staged` /
+ * 对存量本来就不红（改动面收窄）。`scripts/` `tools/` `e2e/` 已于 ISSUE #3251
+ * 从这一份移出（存量清零，全量档要开始判它们）；剩下的条目是「存量还没迁完」的
+ * `tests/` `public/` 等，以及根级配置与非源码产物。所以改动面两档（`--staged` /
  * `--changed`）的扫描面不过这一份（`isChangedFaceFile()`），全量档照旧。 */
 const IGNORE_GLOBS = [
-  "scripts/**",
   "tests/**",
-  "tools/**",
-  "e2e/**",
   "public/**",
   "docs/api/**",
   "docs/generated/**",

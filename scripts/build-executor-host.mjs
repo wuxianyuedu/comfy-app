@@ -44,23 +44,14 @@ import { createRequire } from "node:module";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_TARGET = path.join(ROOT, ".next", "standalone");
-const RUNTIME_ENTRY = path.join(
-  ROOT,
-  "src",
-  "lib",
-  "comfyui",
-  "host-runtime.ts",
-);
+const RUNTIME_ENTRY = path.join(ROOT, "src", "lib", "comfyui", "host-runtime.ts");
 const BUNDLE_REL = path.join("scripts", "executor-host.runtime.mjs");
 const MANIFEST_REL = path.join("scripts", "executor-host.build.json");
 
 /** 必须留在外面的包：ws/pino 有可选加速原生模块，还有与服务端共享的进程级单例。
  *  （`@libsql/client` 与 `@libsql/client/node` 已随运行时迁移到 node:sqlite 退场，
  *  ISSUE #3171：node:sqlite 是 Node 内置模块，由下面的 `node:*` 通配放行。） */
-const EXTERNAL_PACKAGES = [
-  "ws",
-  "pino",
-];
+const EXTERNAL_PACKAGES = ["ws", "pino"];
 
 const SERVER_ONLY_STUB =
   'throw new Error("server-only: this module cannot be imported outside the Next server graph");\n';
@@ -152,9 +143,7 @@ export async function buildExecutorHostBundle(targetDir = DEFAULT_TARGET) {
   const externals = [
     ...new Set(
       [...(output?.imports ?? [])]
-        .filter(
-          (i) => i.kind === "import-statement" || i.kind === "dynamic-import",
-        )
+        .filter((i) => i.kind === "import-statement" || i.kind === "dynamic-import")
         .map((i) => i.path)
         .filter((p) => !p.startsWith("node:")),
     ),
@@ -188,14 +177,10 @@ export async function buildExecutorHostBundle(targetDir = DEFAULT_TARGET) {
 }
 
 const invokedDirectly =
-  process.argv[1] &&
-  path.resolve(process.argv[1]) ===
-    path.resolve(import.meta.filename);
+  process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename);
 
 if (invokedDirectly) {
-  const target = process.argv[2]
-    ? path.resolve(ROOT, process.argv[2])
-    : DEFAULT_TARGET;
+  const target = process.argv[2] ? path.resolve(ROOT, process.argv[2]) : DEFAULT_TARGET;
   try {
     const built = await buildExecutorHostBundle(target);
     console.log(

@@ -60,13 +60,11 @@ const EXEMPT_FILES = {
   P40: [
     {
       re: /^src\/lib\/browser-io\.ts$/,
-      reason:
-        "出口依赖的 IO 层 —— `copyText` 的定义就在这里（本判据数的是**调用**）。",
+      reason: "出口依赖的 IO 层 —— `copyText` 的定义就在这里（本判据数的是**调用**）。",
     },
     {
       re: /^src\/components\/ui\/use-copy-feedback\.ts$/,
-      reason:
-        "出口自身实现 —— 它当然要调 `copyText`；本判据数的是**绕过出口**的调用。",
+      reason: "出口自身实现 —— 它当然要调 `copyText`；本判据数的是**绕过出口**的调用。",
     },
     {
       re: /^src\/components\/studio\/logs\/log-export\.ts$/,
@@ -118,8 +116,7 @@ const EXEMPT_FILES = {
   P47: [
     {
       re: /^src\/lib\/media\/mime-ext\.ts$/,
-      reason:
-        "出口自身的实现（那张表当然就在这里；本判据数的是**别处**又记了一份）。",
+      reason: "出口自身的实现（那张表当然就在这里；本判据数的是**别处**又记了一份）。",
     },
   ],
   P48: [
@@ -133,8 +130,7 @@ const EXEMPT_FILES = {
   P49: [
     {
       re: /^src\/lib\/safe-name\.ts$/,
-      reason:
-        "出口自身的实现（那两条 `replace` 就在这里；本判据数的是**别处**又写了一遍）。",
+      reason: "出口自身的实现（那两条 `replace` 就在这里；本判据数的是**别处**又写了一遍）。",
     },
   ],
   P53: [
@@ -146,8 +142,7 @@ const EXEMPT_FILES = {
     },
     {
       re: /^src\/components\/ui\/simple-key-handler\.ts$/,
-      reason:
-        "出口自身的实现（它当然要读 `event.key`；本判据数的是调用处又手写键判别）。",
+      reason: "出口自身的实现（它当然要读 `event.key`；本判据数的是调用处又手写键判别）。",
     },
     {
       re: /^src\/components\/ui\/use-enter-commit\.tsx?$/,
@@ -182,8 +177,7 @@ const EXEMPT_FILES = {
   P50: [
     {
       re: /^src\/lib\/number-format\.ts$/,
-      reason:
-        "出口自身的实现（`fixed` 的 `toFixed` 就在这里；本判据数的是**别处**又写了一遍）。",
+      reason: "出口自身的实现（`fixed` 的 `toFixed` 就在这里；本判据数的是**别处**又写了一遍）。",
     },
   ],
   P51: [
@@ -231,8 +225,7 @@ const EXEMPT_FILES = {
   P58: [
     {
       re: /^src\/lib\/with-timeout\.ts$/,
-      reason:
-        "出口自身的实现（两个 race 就在这里；本判据数的是**别处**又写了一份）。",
+      reason: "出口自身的实现（两个 race 就在这里；本判据数的是**别处**又写了一份）。",
     },
   ],
   P59: [
@@ -280,8 +273,7 @@ const EXEMPT_FILES = {
   P41: [
     {
       re: /^src\/server\/lib\/request-body\.ts$/,
-      reason:
-        "出口自身的实现（`readJsonRecord` 的定义处，它当然要调 `req.json()`）。",
+      reason: "出口自身的实现（`readJsonRecord` 的定义处，它当然要调 `req.json()`）。",
     },
     {
       re: /^src\/lib\/is-record\.ts$/,
@@ -368,15 +360,13 @@ const EXEMPT_FILES = {
   P66: [
     {
       re: /^src\/components\/ui\/use-reentrancy-lock\.ts$/,
-      reason:
-        "出口自身的实现（`lockedRef` 就是这把闸门 —— 本判据数的是**别处**又自建了一份）。",
+      reason: "出口自身的实现（`lockedRef` 就是这把闸门 —— 本判据数的是**别处**又自建了一份）。",
     },
   ],
   P63: [
     {
       re: /^src\/lib\/page-window\.ts$/,
-      reason:
-        "出口自身的实现（三族窗口的算式就在这里；本判据数的是**别处**又写了一遍）。",
+      reason: "出口自身的实现（三族窗口的算式就在这里；本判据数的是**别处**又写了一遍）。",
     },
     {
       re: /^src\/lib\/path-display\.ts$/,

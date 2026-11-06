@@ -62,11 +62,7 @@ export function writeAppServiceExit(root, input) {
     const dir = path.join(root, "run");
     fs.mkdirSync(dir, { recursive: true });
     // 无 BOM（读取侧 JSON.parse 遇 BOM 会失败），与 launch-status.json 同口径。
-    fs.writeFileSync(
-      path.join(dir, APP_SERVICE_EXIT_FILE),
-      JSON.stringify(body),
-      "utf8",
-    );
+    fs.writeFileSync(path.join(dir, APP_SERVICE_EXIT_FILE), JSON.stringify(body), "utf8");
     return true;
   } catch {
     return false;

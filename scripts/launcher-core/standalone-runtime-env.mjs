@@ -68,18 +68,13 @@ export function readOrCreateAuthSecret(appRoot) {
       // 首启：还没有密钥文件。只有这一种情况才新建。
       const secret = newAuthSecret();
       mkdirSync(path.dirname(file), { recursive: true });
-      writeFileSync(
-        file,
-        `${JSON.stringify({ betterAuthSecret: secret }, null, 2)}\n`,
-        "utf8",
-      );
+      writeFileSync(file, `${JSON.stringify({ betterAuthSecret: secret }, null, 2)}\n`, "utf8");
       return secret;
     }
     // 其它读失败（权限 / 目录被删成半个）是真故障，必须报出来。
-    throw new Error(
-      `cannot read auth secret: ${file} (${error?.message ?? error})`,
-      { cause: error },
-    );
+    throw new Error(`cannot read auth secret: ${file} (${error?.message ?? error})`, {
+      cause: error,
+    });
   }
   // 以下三种「文件在但内容不能用」一律抛错，**不悄悄换一把**：换密钥等于把用户已有的
   // 会话全部作废（表现是莫名其妙被登出），而现场不会有任何线索指向密钥文件坏了。
@@ -89,13 +84,10 @@ export function readOrCreateAuthSecret(appRoot) {
   } catch {
     throw new Error(`auth secret is not valid JSON: ${file}`);
   }
-  const secret =
-    typeof parsed?.betterAuthSecret === "string" ? parsed.betterAuthSecret : "";
+  const secret = typeof parsed?.betterAuthSecret === "string" ? parsed.betterAuthSecret : "";
   // 32 是 src/env.js 的 schema 下限；短于它一定是被写坏或手工截断过。
   if (secret.length < 32) {
-    throw new Error(
-      `auth secret too short (${secret.length} chars, need >= 32): ${file}`,
-    );
+    throw new Error(`auth secret too short (${secret.length} chars, need >= 32): ${file}`);
   }
   return secret;
 }
@@ -124,17 +116,12 @@ export function standaloneDbFile(appRoot) {
  * @param {{ appRoot: string, dbFile?: string }} input
  * @returns {{ applied: boolean, tablesBefore: number, tablesAfter: number }}
  */
-export function ensureStandaloneSchema({
-  appRoot,
-  dbFile = standaloneDbFile(appRoot),
-}) {
+export function ensureStandaloneSchema({ appRoot, dbFile = standaloneDbFile(appRoot) }) {
   const schemaFile = path.join(appRoot, "schema.sql");
   const db = new DatabaseSync(dbFile);
   try {
     const count = () =>
-      db
-        .prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table'")
-        .get().n;
+      db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table'").get().n;
     const tablesBefore = Number(count());
     if (tablesBefore > 0) {
       return { applied: false, tablesBefore, tablesAfter: tablesBefore };
@@ -158,9 +145,7 @@ export function ensureStandaloneSchema({
     db.exec(readFileSync(schemaFile, "utf8"));
     const tablesAfter = Number(count());
     if (tablesAfter === 0) {
-      throw new Error(
-        `schema bootstrap ran but the library still has no table: ${schemaFile}`,
-      );
+      throw new Error(`schema bootstrap ran but the library still has no table: ${schemaFile}`);
     }
     return { applied: true, tablesBefore, tablesAfter };
   } finally {
@@ -180,11 +165,7 @@ export function ensureStandaloneSchema({
  * @param {{ appRoot: string, port: number, env?: NodeJS.ProcessEnv }} input
  * @returns {NodeJS.ProcessEnv}
  */
-export function buildStandaloneRuntimeEnv({
-  appRoot,
-  port,
-  env = process.env,
-}) {
+export function buildStandaloneRuntimeEnv({ appRoot, port, env = process.env }) {
   if (!Number.isInteger(port) || port < 1 || port > 65_535) {
     throw new Error(
       `standalone runtime needs a valid PORT from the shell, got: ${JSON.stringify(port)}`,

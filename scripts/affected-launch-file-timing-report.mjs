@@ -102,8 +102,9 @@ export function fileTimingReport(files, input) {
     );
   }
   lines.push(
-    `  用时前 ${head.length} 份（降序）：\n${
-      head.map((e) => `    ${secs(e.ms).padStart(7)}  ${e.name}\n`).join("")}`,
+    `  用时前 ${head.length} 份（降序）：\n${head
+      .map((e) => `    ${secs(e.ms).padStart(7)}  ${e.name}\n`)
+      .join("")}`,
   );
   if (rest > 0) {
     lines.push(
@@ -115,12 +116,11 @@ export function fileTimingReport(files, input) {
   if (unlisted.length > 0) {
     lines.push(
       `  ⚠ ${unlisted.length} 份**没有用时读数**（进了清单但 junit 里没有它 —— ` +
-        `加载即炸 / 被跳过 / reporter 没记上）：\n${
-        unlisted
+        `加载即炸 / 被跳过 / reporter 没记上）：\n${unlisted
           .slice(0, shownMax)
           .map((f) => `    · ${f}\n`)
-          .join("")
-        }${unlisted.length > shownMax ? `    ……另有 ${unlisted.length - shownMax} 份未列出\n` : ""
+          .join("")}${
+          unlisted.length > shownMax ? `    ……另有 ${unlisted.length - shownMax} 份未列出\n` : ""
         }    这一档拿不到它们的代价，别读成「它们很快」。\n`,
     );
   }

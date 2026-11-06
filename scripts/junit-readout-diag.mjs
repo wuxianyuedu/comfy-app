@@ -138,8 +138,8 @@ export function junitMissingLine(kind, file, diag) {
     ];
   }
   return [
-    `[full-suite-run] ${kind}读数：**没有** —— junit 未落盘或这一跑没跑到收尾${where}${diag
-        ? `（落点目录 realpath = ${diag.realDir}，与计算一致 ⇒ 这一跑 vitest 没写出 junit）`
-        : ""}`,
+    `[full-suite-run] ${kind}读数：**没有** —— junit 未落盘或这一跑没跑到收尾${where}${
+      diag ? `（落点目录 realpath = ${diag.realDir}，与计算一致 ⇒ 这一跑 vitest 没写出 junit）` : ""
+    }`,
   ];
 }

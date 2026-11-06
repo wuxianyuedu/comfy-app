@@ -134,12 +134,7 @@ import {
   ROOT,
 } from "./base-check/git-ref.mjs";
 import { resolveGateCommand, resolveMergeBatch, runGate } from "./base-check/hook-steps.mjs";
-import {
-  didNotRunSide,
-  judge,
-  judgeMergeState,
-  nextSteps,
-} from "./base-check/verdict.mjs";
+import { didNotRunSide, judge, judgeMergeState, nextSteps } from "./base-check/verdict.mjs";
 import { linkDependencies, unlinkDependencies } from "./base-check/snapshot-link.mjs";
 
 export {

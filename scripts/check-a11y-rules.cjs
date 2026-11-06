@@ -408,7 +408,9 @@ async function judge(ledger) {
       continue;
     }
     const got = normalize(effective[name]);
-    const gotLevel = normalize(Array.isArray(effective[name]) ? effective[name][0] : effective[name]);
+    const gotLevel = normalize(
+      Array.isArray(effective[name]) ? effective[name][0] : effective[name],
+    );
     const want = normalize(options === undefined ? "error" : ["error", options]);
     const wantLevel = normalize("error");
     if (gotLevel !== wantLevel || (Array.isArray(effective[name]) && got !== want)) {

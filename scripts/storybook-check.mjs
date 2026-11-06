@@ -104,28 +104,20 @@ function coverageViolations() {
 
   if (stat.covered.length < baseline.covered) {
     out.push(
-      `组件覆盖率下降：${
-        stat.covered.length
-        } 有 story，` +
-        `基线是 ${
-        baseline.covered
-        }（只许升不许降）\n` +
+      `组件覆盖率下降：${stat.covered.length} 有 story，` +
+        `基线是 ${baseline.covered}（只许升不许降）\n` +
         `    → 先看 \`git status\` 里有没有被删 / 改名的 \`.stories.tsx\`，` +
         `或组件文件改名后 story 的 import 没跟着改。\n` +
-        `    → 确属有意收窄（真的删掉了某个组件的 story）时，同批把 ${
-        rel(COVERAGE_BASELINE)
-        } 的 covered 改小并在提交说明里写清理由。`,
+        `    → 确属有意收窄（真的删掉了某个组件的 story）时，同批把 ${rel(
+          COVERAGE_BASELINE,
+        )} 的 covered 改小并在提交说明里写清理由。`,
     );
   }
   if (stat.total !== baseline.uiSurfaces) {
     out.push(
-      `\`ui/\` 的可预览文件数从基线的 ${
-        baseline.uiSurfaces
-        } 变成 ${
+      `\`ui/\` 的可预览文件数从基线的 ${baseline.uiSurfaces} 变成 ${
         stat.total
-        } —— 新增 / 删除了组件，同批把 ${
-        rel(COVERAGE_BASELINE)
-        } 的 uiSurfaces 改成新值\n` +
+      } —— 新增 / 删除了组件，同批把 ${rel(COVERAGE_BASELINE)} 的 uiSurfaces 改成新值\n` +
         `    → 新增的那个要回答「它为什么没有 story」：有界面形态就补一份，\n` +
         `      没有就写进 coverage-ledger.mjs 的 NO_STORY_REASON（逐条给理由）。`,
     );
@@ -152,26 +144,16 @@ function coverageViolations() {
    * 有人把已经干净的账留在表里；表空而覆盖率不满，说明有人把理由删掉了。 */
   if (NO_STORY_REASON.size === 0 && stat.uncovered.length > 0) {
     out.push(
-      `NO_STORY_REASON 是空表，但还有 ${
-        stat.uncovered.length
-        } 个组件没有 story（${
-        stat.uncovered.slice(0, 5).join(" / ")
-        }…）—— 要么补 story，要么把理由加回 coverage-ledger.mjs`,
+      `NO_STORY_REASON 是空表，但还有 ${stat.uncovered.length} 个组件没有 story（${stat.uncovered
+        .slice(0, 5)
+        .join(" / ")}…）—— 要么补 story，要么把理由加回 coverage-ledger.mjs`,
     );
   }
 
   process.stdout.write(
-    `[storybook] 组件覆盖率 ${
-      stat.covered.length
-      }/${
-      stat.total
-      }（基线 ${
-      baseline.covered
-      }/${
+    `[storybook] 组件覆盖率 ${stat.covered.length}/${stat.total}（基线 ${baseline.covered}/${
       baseline.uiSurfaces
-      }，理由表 ${
-      NO_STORY_REASON.size
-      } 条）\n`,
+    }，理由表 ${NO_STORY_REASON.size} 条）\n`,
   );
   return out;
 }
@@ -197,16 +179,14 @@ function surfaceViolations(changedFiles) {
 
   for (const file of stat.missingTitle) {
     violations.push(
-      `${file
-        } 没有 \`title\` —— Storybook 会按路径自动生成一个条目，它落在侧栏的哪个\n` +
+      `${file} 没有 \`title\` —— Storybook 会按路径自动生成一个条目，它落在侧栏的哪个\n` +
         `    分组里取决于推导规则，于是「按 UI/Studio/Workshop 分组浏览」这件事只在\n` +
         `    每份故事都写了 title 时成立。构建、覆盖率、画布渲染都不会因此报错。`,
     );
   }
   for (const file of stat.missingComponent) {
     violations.push(
-      `${file
-        } 没有把**真组件**接上 —— 本目录的组件既没被 import，也没在文件里用到。\n` +
+      `${file} 没有把**真组件**接上 —— 本目录的组件既没被 import，也没在文件里用到。\n` +
         `    → 常规写法是 \`component: <真组件>\`；要用适配件（受控状态 / 值源解析 /\n` +
         `      把复合件摆成一行）也可以，但适配件里必须真的渲染那个组件 ——\n` +
         `      口径见 \`scripts/storybook-checks/story-surface.mjs\` 文件头。`,
@@ -214,13 +194,9 @@ function surfaceViolations(changedFiles) {
   }
   for (const d of stat.groupDeviations) {
     violations.push(
-      `同目录的多数故事把分组写在 \`${
-        d.expected
-        }/\` 下，而 ${
-        d.file
-        } 写的是 \`${
+      `同目录的多数故事把分组写在 \`${d.expected}/\` 下，而 ${d.file} 写的是 \`${
         d.group
-        }\` —— 分组靠人写 \`title:\` 的字符串维系，没有判据时同一目录会长出两套前缀。`,
+      }\` —— 分组靠人写 \`title:\` 的字符串维系，没有判据时同一目录会长出两套前缀。`,
     );
   }
 
@@ -237,10 +213,7 @@ function surfaceViolations(changedFiles) {
       continue;
     }
     violations.push(
-      `${story.file
-        } 没给必填 props 的 \`args\`：${
-        missing.join(" / ")
-        }\n` +
+      `${story.file} 没给必填 props 的 \`args\`：${missing.join(" / ")}\n` +
         `    → 组件在画布上读到 \`undefined\`（表现与「侧栏有故事、画布一片空白」同形）。\n` +
         `      给了就是给了：写进 \`args\`，或在适配件 / \`render\` 里显式传（注入层\n` +
         `      解析出来的值也算）—— 判据按「story 文件里有没有这个名字的赋值点」认，\n` +
@@ -250,20 +223,11 @@ function surfaceViolations(changedFiles) {
 
   return {
     violations,
-    summary:
-      `故事面 ${
-      stat.stories.length
-      } 份（缺 title ${
-      stat.missingTitle.length
-      } / 未接真组件 ${
+    summary: `故事面 ${stat.stories.length} 份（缺 title ${stat.missingTitle.length} / 未接真组件 ${
       stat.missingComponent.length
-      } / 分组偏离 ${
-      stat.groupDeviations.length
-      }；本次动过 ${
-      changed.size
-      } 份里判过 args 的 ${
+    } / 分组偏离 ${stat.groupDeviations.length}；本次动过 ${changed.size} 份里判过 args 的 ${
       argsChecked
-      } 份）`,
+    } 份）`,
   };
 }
 

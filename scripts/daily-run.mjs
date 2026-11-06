@@ -77,7 +77,9 @@ export function writeLedgerNote({ root, kind, mode, reason, platform }) {
     process.stdout.write(`[daily-run] ${note}\n`);
     return 0;
   } catch (error) {
-    process.stderr.write(`[daily-run] ✗ ${error instanceof Error ? error.message : String(error)}\n`);
+    process.stderr.write(
+      `[daily-run] ✗ ${error instanceof Error ? error.message : String(error)}\n`,
+    );
     return 2;
   }
 }

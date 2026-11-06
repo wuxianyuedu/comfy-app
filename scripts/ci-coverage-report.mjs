@@ -101,9 +101,6 @@ function main() {
 }
 
 /* 只在被直接执行时跑 `main()`；被判据 import 时只拿纯函数。 */
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
   main();
 }

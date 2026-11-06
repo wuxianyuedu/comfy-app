@@ -146,14 +146,15 @@ export function filterSpawnOutput(stdout, stderr, filterLine) {
 
 export function spawnVitest(entry, args, options = {}) {
   const { timeoutMs, filterLine } = options;
-  const res = /** @type {{ status: number | null, signal?: string | null, stdout?: string,
-   *   stderr?: string, error?: NodeJS.ErrnoException }} */ (
-    spawnSync(process.execPath, [entry, ...args], {
-      encoding: "utf8",
-      maxBuffer: 64 * 1024 * 1024,
-      ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeout: timeoutMs } : {}),
-    })
-  );
+  const res =
+    /** @type {{ status: number | null, signal?: string | null, stdout?: string,
+     *   stderr?: string, error?: NodeJS.ErrnoException }} */ (
+      spawnSync(process.execPath, [entry, ...args], {
+        encoding: "utf8",
+        maxBuffer: 64 * 1024 * 1024,
+        ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeout: timeoutMs } : {}),
+      })
+    );
   /* 噪音屏蔽（CI）：`filterLine` 给的话，把 stdout / stderr 按行过滤后再回吐；不给时逐字回吐
    * （与改动前逐字一致）。注意：本函数体内**始终保留 `process.stdout.write` /
    * `process.stderr.write` 这两个字面 token** —— 那是「输出真被抓在手里、没有退化成

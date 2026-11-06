@@ -9,11 +9,7 @@
 // 与 `scripts/dev.mjs` 对称：同一套端口解析（scripts/app-port.mjs），
 // 保证「一处配置、两条链路一致」，多份检出并行时也各得其所。
 import { spawnSync } from "node:child_process";
-import {
-  APP_PORT_ENV_KEY,
-  resolveAppPortWithSource,
-  resolveRepoRoot,
-} from "./app-port.mjs";
+import { APP_PORT_ENV_KEY, resolveAppPortWithSource, resolveRepoRoot } from "./app-port.mjs";
 import { applyPendingRestoreAtBoot } from "./db-backup-core.mjs";
 import { spawnSchemaSync } from "./db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
@@ -32,7 +28,11 @@ const fromPortEnv = process.env.PORT;
 const port = fromPortEnv ?? resolved.port;
 const sourceLabel = fromPortEnv
   ? "环境变量 PORT"
-  : { env: `.env 的 ${APP_PORT_ENV_KEY}`, derived: "按检出路径推导（3200~3999）", fallback: "兜底 3100（路径推导不可用）" }[resolved.source];
+  : {
+      env: `.env 的 ${APP_PORT_ENV_KEY}`,
+      derived: "按检出路径推导（3200~3999）",
+      fallback: "兜底 3100（路径推导不可用）",
+    }[resolved.source];
 process.stdout.write(`[start.mjs] COMFYAPP_PORT=${port}（来源：${sourceLabel}）\n`);
 
 // 环境配置预检：失败就**在起 Next 之前**退出并给出可行动作。
@@ -77,13 +77,7 @@ if (!schema.started) {
  * 所以「谁在起这份产物」这件事在**仓库检出**里只有 `next start` 一个正确取值；
  * standalone 入口是**桌包链**的事（`standalone-runtime.mjs`，那边有完整载荷、
  * 静态资源与数据锚点都由它自己给）。 */
-const invocation = pnpmInvocation([
-  "exec",
-  "next",
-  "start",
-  "-p",
-  String(port),
-]);
+const invocation = pnpmInvocation(["exec", "next", "start", "-p", String(port)]);
 if (!invocation) {
   process.stderr.write(
     "[start.mjs] ✗ PATH 上找不到可用的 pnpm，无法启动 Next.js server。\n" +
@@ -109,8 +103,7 @@ if (!invocation) {
 maybeSpawnExecutorHost({
   root,
   runTimestamp: runStamp(),
-  logLine: (message, _level = "INFO") =>
-    process.stdout.write(`[start.mjs] ${message}\n`),
+  logLine: (message, _level = "INFO") => process.stdout.write(`[start.mjs] ${message}\n`),
   // _level 是接口形态的占位（调用方按级别挑通道时才有用）：本入口的通道是
   // stdout，不区分级别 —— 下划线前缀 = core no-unused-vars 的 argsIgnorePattern。
 });
