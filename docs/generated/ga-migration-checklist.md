@@ -230,7 +230,7 @@
   - 失败 job 的 `if: failure()` 里加 `actions/upload-artifact@v4`
   - artifact 命名规则：`pr-gate-${{ github.event.client_payload.pr_number || 'manual' }}-${{ job.name }}-logs`
   - CNB 侧判决回读格可额外拉 artifact 并附到 CI 失败日志
-- **优先级**：P0（当前 GA 红时无法诊断根因）
+- **优先级**：P0（当前 GA 红时无法诊断根因）✅ 已落地（本主题 PR）
 
 #### G-23：镜像仓 GA workflow 变更的镜像同步机制
 
