@@ -191,7 +191,8 @@ function analyze({
       `${line} ⇒ 源码与账不同步。这次是**${looser ? "变松（放宽判据）" : "变严"}**：${
         looser
           ? `要放宽就把账一起改成 ${got.value} 并写 movedFrom / movedIssue —— 让它在 diff 里显形，而不是只动源码`
-          : "收紧也要同批改账，否则下一次有人「顺手复原」就没人看得出来"}`,
+          : "收紧也要同批改账，否则下一次有人「顺手复原」就没人看得出来"
+      }`,
     );
   }
 
@@ -229,7 +230,15 @@ function analyze({
     if (text === null) {
       continue;
     }
-    const names = [...text.matchAll(CONST_DECL)].map((m) => /** @type {string} */ (m[1]));
+    /** @type {string[]} */
+    const names = [];
+    for (const m of text.matchAll(CONST_DECL)) {
+      const name = m[1];
+      if (name === undefined) {
+        continue;
+      }
+      names.push(name);
+    }
     if (names.length === 0) {
       continue;
     }
@@ -272,7 +281,7 @@ function analyze({
         problems.push(
           `${e.file}#${e.const} 相对主干是**放宽**（${prev.value} → ${e.value}），` +
             `但账上没有签字 —— 写 "movedFrom": ${
-            prev.value
+              prev.value
             }, "movedIssue": "#<issue号>" 再来（放宽判据要有一份说清为什么的单子，不是改个数字）。`,
         );
       }

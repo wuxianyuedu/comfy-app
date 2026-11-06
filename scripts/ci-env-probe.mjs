@@ -428,7 +428,7 @@ export function ensureDir(dir) {
     return {
       ok: false,
       created: false,
-      why: /** @type {Error} */ (error).message,
+      why: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -725,8 +725,9 @@ export function envProbe({
   } catch (error) {
     /* 探测本身出错时**不判红**（同 Python 那条：那是「不知道」，不是「不达标」）——
      * 但它要留一条读数，否则这一步会看起来像「浏览器那一格没在判」。 */
+    const message = error instanceof Error ? error.message : String(error);
     notes.push(
-      `浏览器前提探测本身出错：${/** @type {Error} */ (error).message} —— ` +
+      `浏览器前提探测本身出错：${message} —— ` +
         `本步不据此判红（那一格仍归 \`${BROWSER_INSTALL_STAGE}\`）`,
     );
   }

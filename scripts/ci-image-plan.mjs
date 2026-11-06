@@ -264,7 +264,10 @@ export function toolingVersionsFromLock(lockText, names) {
   if (starts.length === 0) {
     return out;
   }
-  const from = /** @type {number} */ (starts.at(-1));
+  const from = starts.at(-1);
+  if (from === undefined) {
+    return out;
+  }
   const block = [];
   for (let i = from + 1; i < lines.length; i++) {
     /* 顶格的行 = 又一个顶层键（`packages:` / `settings:` / `snapshots:`）。 */
@@ -820,7 +823,8 @@ if (invokedDirectly) {
       });
     }
   } catch (error) {
-    console.error(`[ci-image-plan] ${/** @type {Error} */ (error).message}`);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[ci-image-plan] ${message}`);
     process.exit(1);
   }
 }

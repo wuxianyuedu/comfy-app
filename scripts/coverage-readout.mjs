@@ -93,7 +93,7 @@ export function aggregateForGlob(glob, files) {
     }
   }
   /** @type {CovDim} */
-  const pct = /** @type {any} */ ({});
+  const pct = { lines: 0, statements: 0, functions: 0, branches: 0 };
   for (const dim of DIMENSIONS) {
     pct[dim] = tot[dim] === 0 ? 100 : (acc[dim] / tot[dim]) * 100;
   }
@@ -137,7 +137,7 @@ export async function buildCoverageReadout({ root = ROOT, summaryPath } = {}) {
       continue;
     }
     /** @type {CovDim} */
-    const gap = /** @type {any} */ ({});
+    const gap = { lines: 0, statements: 0, functions: 0, branches: 0 };
     let maxGap = 0;
     for (const dim of DIMENSIONS) {
       const g = reg[dim] - pct[dim];

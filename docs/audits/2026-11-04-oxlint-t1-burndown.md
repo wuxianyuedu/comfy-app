@@ -13,7 +13,7 @@
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
 | B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 已清（子批1–12，判决面文件级豁免已整块删除）       |
-| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1：20 份 / 49 处已清）                 |
+| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–2：40 份 / 88 处已清）               |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
@@ -765,26 +765,26 @@
 | `scripts/affected-launch-scope-advice.mjs`                                                           | 1        | 已清 |
 | `scripts/agent-film.mjs`                                                                             | 2        | 已清 |
 | `scripts/agent-index.mjs`                                                                            | 4        | 已清 |
-| `scripts/check-ci-yaml-parse.mjs`                                                                    | 1        | 挂账 |
-| `scripts/check-daily-attendance.mjs`                                                                 | 1        | 挂账 |
-| `scripts/check-eslint-exemptions.cjs`                                                                | 2        | 挂账 |
-| `scripts/check-gate-executors.cjs`                                                                   | 1        | 挂账 |
-| `scripts/check-gate-thresholds.cjs`                                                                  | 1        | 挂账 |
-| `scripts/check-known-failed-stale.mjs`                                                               | 1        | 挂账 |
-| `scripts/check-oxlint-zero-rules.mjs`                                                                | 1        | 挂账 |
-| `scripts/ci-cp936-exit.mjs`                                                                          | 1        | 挂账 |
-| `scripts/ci-env-probe.mjs`                                                                           | 2        | 挂账 |
-| `scripts/ci-github-mirror-push.mjs`                                                                  | 2        | 挂账 |
-| `scripts/ci-github-verdict-chain.mjs`                                                                | 5        | 挂账 |
-| `scripts/ci-github-verdict-read.mjs`                                                                 | 7        | 挂账 |
-| `scripts/ci-image-identity.mjs`                                                                      | 1        | 挂账 |
-| `scripts/ci-image-plan.mjs`                                                                          | 2        | 挂账 |
-| `scripts/ci-pr-failure-issue.mjs`                                                                    | 2        | 挂账 |
-| `scripts/ci-token-scopes.mjs`                                                                        | 1        | 挂账 |
-| `scripts/ci-toolchain-browser-reach.mjs`                                                             | 2        | 挂账 |
-| `scripts/ci-toolchain-selfcheck.mjs`                                                                 | 2        | 挂账 |
-| `scripts/ci-workspace-probe.mjs`                                                                     | 1        | 挂账 |
-| `scripts/coverage-readout.mjs`                                                                       | 2        | 挂账 |
+| `scripts/check-ci-yaml-parse.mjs`                                                                    | 1        | 已清 |
+| `scripts/check-daily-attendance.mjs`                                                                 | 1        | 已清 |
+| `scripts/check-eslint-exemptions.cjs`                                                                | 2        | 已清 |
+| `scripts/check-gate-executors.cjs`                                                                   | 1        | 已清 |
+| `scripts/check-gate-thresholds.cjs`                                                                  | 1        | 已清 |
+| `scripts/check-known-failed-stale.mjs`                                                               | 1        | 已清 |
+| `scripts/check-oxlint-zero-rules.mjs`                                                                | 1        | 已清 |
+| `scripts/ci-cp936-exit.mjs`                                                                          | 1        | 已清 |
+| `scripts/ci-env-probe.mjs`                                                                           | 2        | 已清 |
+| `scripts/ci-github-mirror-push.mjs`                                                                  | 2        | 已清 |
+| `scripts/ci-github-verdict-chain.mjs`                                                                | 5        | 已清 |
+| `scripts/ci-github-verdict-read.mjs`                                                                 | 7        | 已清 |
+| `scripts/ci-image-identity.mjs`                                                                      | 1        | 已清 |
+| `scripts/ci-image-plan.mjs`                                                                          | 2        | 已清 |
+| `scripts/ci-pr-failure-issue.mjs`                                                                    | 2        | 已清 |
+| `scripts/ci-token-scopes.mjs`                                                                        | 1        | 已清 |
+| `scripts/ci-toolchain-browser-reach.mjs`                                                             | 2        | 已清 |
+| `scripts/ci-toolchain-selfcheck.mjs`                                                                 | 2        | 已清 |
+| `scripts/ci-workspace-probe.mjs`                                                                     | 1        | 已清 |
+| `scripts/coverage-readout.mjs`                                                                       | 2        | 已清 |
 | `scripts/dev-launcher-session.mjs`                                                                   | 1        | 挂账 |
 | `scripts/force-ipv4-dns.cjs`                                                                         | 2        | 挂账 |
 | `scripts/freshness-gate.mjs`                                                                         | 1        | 挂账 |

@@ -244,7 +244,15 @@ export async function fetchFact(ctx, subPath, extra = {}) {
       ok: false,
       status: -1,
       body: "",
-      error: String(/** @type {any} */ (error)?.name ?? error),
+      error: String(
+        (typeof error === "object" || typeof error === "function") &&
+          error !== null &&
+          "name" in error &&
+          error.name !== undefined &&
+          error.name !== null
+          ? error.name
+          : error,
+      ),
       bodyLen: 0,
       ms: Date.now() - t0,
     };
