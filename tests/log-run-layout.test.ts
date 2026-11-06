@@ -425,7 +425,7 @@ describe("布局的单一出处（写方不得自己拼路径）", () => {
       const offenders = src
         .split("\n")
         .filter((line) =>
-          /"log",\s*"(launcher|nextjs|services|shell|tools|comfyui|workshop)"/.test(line),
+          /"log",\s*"(?:launcher|nextjs|services|shell|tools|comfyui|workshop)"/.test(line),
         );
       expect(offenders, `${rel} 里仍有绕过 current/ 的日志路径`).toEqual([]);
     }

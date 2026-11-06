@@ -56,7 +56,7 @@ function withEntryVersion(entry: string, version: string): string {
 
 const ZOD = importerEntry(lockBody(LOCK), "zod");
 /** zod 在**当前** lockfile 里解析到的版本：渲染用例要断言它出现在报告里。 */
-const ZOD_VERSION = /^ {8}version: (\S+)$/m.exec(ZOD)![1];
+const ZOD_VERSION = /^ {8}version: (?<version>\S+)$/m.exec(ZOD)?.groups?.version;
 
 describe("stripBundledSection（pnpm 自举段必须剔除，否则差异报告全是噪声）", () => {
   it("仓库 lockfile 头部那段 pnpm 自举内容被剔掉，只留依赖正文", () => {

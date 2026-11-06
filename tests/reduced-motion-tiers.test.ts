@@ -60,7 +60,11 @@ function reduceBlockOf(text: string): string | null {
 
 /** 块体内出现过的 `data-slot` 值（选择器里点名的那些）。 */
 function slotsNamedIn(block: string): Array<string> {
-  return [...new Set([...block.matchAll(/\[data-slot="([^"]+)"\]/g)].map((m) => m[1]!))];
+  return [
+    ...new Set(
+      [...block.matchAll(/\[data-slot="(?<slot>[^"]+)"\]/g)].map((m) => m.groups?.slot ?? ""),
+    ),
+  ];
 }
 
 /** 用到某个 class 的 `.tsx` 清单（只扫 `src/components` 与 `src/app`）。 */
@@ -124,7 +128,7 @@ describe("prefers-reduced-motion 三档分治（规范 06 §6.7）", () => {
   it("③ 短程反馈是刻意豁免：不许出现全局一把梭的写法", () => {
     const body = block ?? "";
     expect(
-      /(^|\n)\s*\*\s*[,{]/.test(body),
+      /(?:^|\n)\s*\*\s*[,{]/.test(body),
       "reduce 块里出现了裸 `*` 选择器 —— 三档分治否掉了全局降级，" +
         "112 行短程 hover 过渡属第 ③ 档，刻意不降级",
     ).toBe(false);

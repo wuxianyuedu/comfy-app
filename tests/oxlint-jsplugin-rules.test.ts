@@ -81,11 +81,11 @@ function tsBlockOf(config: ConfigBlock): ConfigBlock {
 
 /** package.json 里 react 的实际版本（去掉 `^` / `~` 前缀）。 */
 function packageReactVersion(): string {
-  const match = /"react"\s*:\s*"[^\d]*([\d.]+)"/.exec(
+  const match = /"react"\s*:\s*"[^\d]*(?<version>[\d.]+)"/.exec(
     readFileSync(path.join(ROOT, "package.json"), "utf8"),
   );
-  if (match?.[1] === undefined) throw new Error("package.json 里读不到 react 版本");
-  return match[1];
+  if (match?.groups?.version === undefined) throw new Error("package.json 里读不到 react 版本");
+  return match.groups.version;
 }
 
 /** 在 `node_modules/.cache/` 写一份只含这 2 条规则的最小探针配置（跑完即删）。 */

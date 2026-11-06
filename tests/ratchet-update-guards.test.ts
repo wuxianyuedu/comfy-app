@@ -159,7 +159,7 @@ function discoveredBaselines(): Array<{ baseline: string; script: string }> {
     found.set(`${script}:${baseline}`, { script, baseline });
 
   for (const script of readdirSync(dir)) {
-    if (!/\.(cjs|mjs)$/.test(script)) {
+    if (!/\.(?:cjs|mjs)$/.test(script)) {
       continue;
     }
     const src = readFileSync(join(dir, script), "utf8");
@@ -174,19 +174,22 @@ function discoveredBaselines(): Array<{ baseline: string; script: string }> {
      */
     const declared = new Map<string, string>();
     for (const m of src.matchAll(
-      /(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*=\s*path\.join\(([^;]{0,300}?)\)/g,
+      /(?:const|let|var)\s+(?<name>[A-Za-z0-9_$]+)\s*=\s*path\.join\((?<args>[^;]{0,300}?)\)/g,
     )) {
-      const name = m[1];
-      const baseline = /"(\.[^"]+\.json)"/.exec(m[2] ?? "")?.[1];
+      const name = m.groups?.name;
+      const baseline = /"(?<baseline>\.[^"]+\.json)"/.exec(m.groups?.args ?? "")?.groups?.baseline;
       if (name !== undefined && name !== "" && baseline !== undefined && baseline !== "") {
         declared.set(name, baseline);
       }
     }
     /** 真被当作写入目标的变量名。 */
     const writeTargets = new Set<string>();
-    for (const m of src.matchAll(/(?:fs\.)?write(?:File|FileSync)\(\s*([A-Za-z0-9_$]+)/g)) {
-      if (m[1] !== undefined && m[1] !== "") {
-        writeTargets.add(m[1]);
+    for (const m of src.matchAll(
+      /(?:fs\.)?write(?:File|FileSync)\(\s*(?<target>[A-Za-z0-9_$]+)/g,
+    )) {
+      const target = m.groups?.target;
+      if (target !== undefined && target !== "") {
+        writeTargets.add(target);
       }
     }
     for (const [name, baseline] of declared) {
@@ -196,9 +199,9 @@ function discoveredBaselines(): Array<{ baseline: string; script: string }> {
     }
     /** 直接把路径拼在写入调用里的写法（不走变量）也算，别给静默漏登记留第二形状。 */
     for (const m of src.matchAll(
-      /(?:fs\.)?write(?:File|FileSync)\(\s*path\.join\([^;]{0,300}?"(\.[^"]+\.json)"/g,
+      /(?:fs\.)?write(?:File|FileSync)\(\s*path\.join\([^;]{0,300}?"(?<baseline>\.[^"]+\.json)"/g,
     )) {
-      const baseline = m[1];
+      const baseline = m.groups?.baseline;
       if (baseline !== undefined && baseline !== "") {
         push(script, baseline);
       }
@@ -503,8 +506,8 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
          * 照绿 —— 否定式的洞恰在最易被重写的形式上。现在同时认 `'`/`"`/反引号，且不要求字符串以
          * 引号开头（路径可拼在中间）。 */
         const writesJson = [
-          ...src.matchAll(/(?:fs\.)?write(?:File|FileSync)\(([^;]{0,400})/g),
-        ].some((m) => /["'`][^"'`]*\.json["'`]/.test(m[1] ?? ""));
+          ...src.matchAll(/(?:fs\.)?write(?:File|FileSync)\((?<args>[^;]{0,400})/g),
+        ].some((m) => /["'`][^"'`]*\.json["'`]/.test(m.groups?.args ?? ""));
         expect(
           writesJson,
           `${script} 里又出现了「把一份 .json 写回去」的调用 —— ` +
