@@ -269,6 +269,83 @@ function readChecklistCommands(): Set<string> {
   );
 }
 
+/**
+ * ISSUE #3269：`.pnpm/node_modules` 是 pnpm 的 hoisted 虚拟目录，不是 store 条目。
+ * 旧实现每跑一次都把它读成「另有 1 个条目在扫描期间消失（工作区并发变更）」，
+ * 而 `unread` 只进结论行、不参与退码 —— 判据明明写了「本轮未读」却照旧
+ * `✅ 覆盖了全部` + exit 0。排掉 hoisted 层后，`unread > 0` 只剩「真没读到」，
+ * 按 §13.6.3 必须以 exit 2 不给结论。
+ *
+ * 四个方向都要钉：固有结构不报消失 / 真消失不许判绿 / 文件级消失同口径 /
+ * 没读全时已看到的违规不被吞。只看「有没有那句 ⚠️」不够 —— 把
+ * `vanishedNote()` 的输出删掉也能让第一、二条全绿，却什么都没修。
+ */
+describe("hoisted 层与「没读全」三态（ISSUE #3269）", () => {
+  test("pnpm 的 .pnpm/node_modules 在场 → 不报消失、正常判绿", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace(['"esbuild": true']));
+    repo.mkdir("node_modules/.pnpm/node_modules");
+    const one = installed("esbuild@0.28.2", "esbuild", {
+      postinstall: "node install.js",
+    });
+    repo.write(one.path, one.body);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("覆盖了全部带构建脚本的依赖");
+    expect(output).not.toContain("消失");
+    expect(output).not.toContain("另有");
+  });
+
+  test("真有一个 store 条目缺 node_modules → exit 2 不给结论，绝不判绿", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace(['"esbuild": true']));
+    // 固有结构与真消失同时在场：跳过只该跳过前者，不能把后者一起抹平。
+    repo.mkdir("node_modules/.pnpm/node_modules");
+    repo.mkdir("node_modules/.pnpm/ghost@1.0.0");
+    const one = installed("esbuild@0.28.2", "esbuild", {
+      postinstall: "node install.js",
+    });
+    repo.write(one.path, one.body);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(2);
+    expect(output).toContain("不给结论");
+    expect(output).toContain("另有 1 个条目");
+    expect(output).not.toContain("覆盖了全部带构建脚本的依赖");
+  });
+
+  test("包目录在但 package.json 读不到（文件级 ENOENT）→ 同样 exit 2", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace(['"esbuild": true']));
+    const one = installed("esbuild@0.28.2", "esbuild", {
+      postinstall: "node install.js",
+    });
+    repo.write(one.path, one.body);
+    repo.mkdir("node_modules/.pnpm/ghost@1.0.0/node_modules/ghost");
+    const { code, output } = repo.run();
+    expect(code, output).toBe(2);
+    expect(output).toContain("不给结论");
+    expect(output).not.toContain("覆盖了全部带构建脚本的依赖");
+  });
+
+  test("没读全时，已经读到的漏登记事实照旧列出（不因 exit 2 被吞）", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    const one = installed("esbuild@0.28.2", "esbuild", {
+      postinstall: "node install.js",
+    });
+    repo.write(one.path, one.body);
+    repo.mkdir("node_modules/.pnpm/ghost@1.0.0");
+    const { code, output } = repo.run();
+    expect(code, output).toBe(2);
+    expect(output).toContain("esbuild@1.0.0");
+    expect(output).toContain("不给结论");
+  });
+
+  it("判据源码里两处收紧都在（删掉任一条都会让上面的行为用例失去执行者）", () => {
+    const source = readFileSync(GATE_SCRIPT, "utf8");
+    expect(source).toContain('const HOISTED_DIR = "node_modules"');
+    expect(source).toContain("storeDir.name === HOISTED_DIR");
+    // `unread` 不能只进打印：这一格必须以 exit 2 收口。
+    expect(source).toMatch(/if \(unread > 0\)[\s\S]*?process\.exit\(2\)/);
+  });
+});
+
 describe("allow-builds 判据的接线（判据在场 ≠ 判据在跑）", () => {
   it("钩子 D 组真的执行这一步（被注释掉的行不算在场）", () => {
     const steps = dGroupSteps(readFileSync(HOOK, "utf8"));
