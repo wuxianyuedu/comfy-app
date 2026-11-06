@@ -62,9 +62,17 @@ vi.mock("~/trpc/vanilla", () => ({
 const mockedUpload = vi.mocked(uploadBgm);
 
 /* tRPC 的 resolver 类型是 Resolver<...>（不是 vi.Mock），测试里按 Mock 取用。
- * 收敛成一个 helper，避免每处都写一次双重断言。 */
-/* SAFETY: 类型断言已复核 */
-const mockOf = (fn: unknown) => fn as Mock;
+ * 模块工厂已用 vi.fn() 替换该客户端；这里先按运行期判据确认拿到的是 mock，再收窄成 Mock。 */
+function isMock(fn: unknown): fn is Mock {
+  return typeof fn === "function" && "mock" in fn;
+}
+
+const mockOf = (fn: unknown): Mock => {
+  if (!isMock(fn)) {
+    throw new Error("vanillaApi 的出口应已被 vi.mock 替换成 vi mock");
+  }
+  return fn;
+};
 
 const vanilla = {
   skill: { list: { query: mockOf(vanillaApi.skill.list.query) } },

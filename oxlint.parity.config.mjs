@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/components/studio/history/HistoryDetailModal.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/history/HistoryList.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/history/ImageRedrawPanel.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/HomePage.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/hooks/use-dev-server-liveness.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/hooks/use-film-studio.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/hooks/use-film-studio.ts", // 存量 5 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/hooks/use-model-tags.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/hooks/use-project-outputs.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/logs/log-analysis.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/logs/log-category-store.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/logs/log-row-style.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/logs/log-row-style.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/logs/LogPanel.test.tsx", // 存量 7 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/logs/LogPanelOriginSelect.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/logs/LogProvider.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/logs/LogRowRevealPath.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/model-overview-derive.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/nav-items.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/project-canvas/CanvasContextMenu.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/components/studio/project-canvas/CanvasContextMenu.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.stories.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用

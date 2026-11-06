@@ -58,9 +58,11 @@ export function ImageRedrawPanel({
         <FieldLabel>模式</FieldLabel>
         <RadioGroup
           className="flex flex-row gap-4"
-          onValueChange={(v) => {
-            /* SAFETY: 类型断言已复核 */
-            controller.setMode(v as "upscale" | "inpaint");
+          onValueChange={(v: unknown) => {
+            /* base-ui 的 `onValueChange` 给的是宽值；只有这两档是重绘模式。 */
+            if (v === "upscale" || v === "inpaint") {
+              controller.setMode(v);
+            }
           }}
           value={controller.mode}
         >

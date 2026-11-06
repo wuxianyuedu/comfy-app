@@ -249,10 +249,12 @@ export function selectionInsideLogs(selection: SelectionLike | null): boolean {
   }
 }
 
+function isElementNode(node: Node): node is Element {
+  return node.nodeType === 1;
+}
+
 function nodeIsLogText(node: Node): boolean {
-  const element =
-    /* SAFETY: 类型断言已复核 */
-    node.nodeType === 1 ? (node as Element) : (node.parentElement ?? null);
+  const element = isElementNode(node) ? node : (node.parentElement ?? null);
   return Boolean(
     element?.closest(`[${LOG_ROW_TEXT_ATTRIBUTE}]`) ??
     element?.parentElement?.closest(`[${LOG_ROW_TEXT_ATTRIBUTE}]`),

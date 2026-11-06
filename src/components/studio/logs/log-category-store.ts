@@ -15,13 +15,21 @@ const STORAGE_KEY = "comfyapp.logCategories.enabled";
 
 export type CategoryEnabled = Record<LogCategoryFilter, boolean>;
 
+/** 分类常量自洽（每类都已写入 true）时不可达；保留兜底以免不完整的值被当成完整类型。 */
+function isCategoryEnabled(value: Partial<CategoryEnabled>): value is CategoryEnabled {
+  return LOG_CATEGORY_FILTERS.every((category) => typeof value[category] === "boolean");
+}
+
 /** 全部分类默认开启。 */
 function defaultEnabled(): CategoryEnabled {
-  /* SAFETY: 类型断言已复核 */
-  return LOG_CATEGORY_FILTERS.reduce<CategoryEnabled>((acc, category) => {
+  const enabled = LOG_CATEGORY_FILTERS.reduce<Partial<CategoryEnabled>>((acc, category) => {
     acc[category] = true;
     return acc;
-  }, {} as CategoryEnabled);
+  }, {});
+  if (isCategoryEnabled(enabled)) {
+    return enabled;
+  }
+  throw new Error("日志分类开关默认值初始化不完整");
 }
 
 /**

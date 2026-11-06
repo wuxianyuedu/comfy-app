@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
 import { SERVER_ID_ENDPOINT } from "~/lib/log/panel-self-poll";
+import { isPlainRecord } from "~/lib/is-record";
 import {
   describeAppServiceExit,
   fetchAppServiceExit,
@@ -148,11 +149,10 @@ async function probeBootId(): Promise<ProbeResult> {
         routeTableStale: res.status === 404,
       };
     }
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as {
-      bootId?: unknown;
-      runId?: unknown;
-    };
+    /* 响应体是外部 JSON：先确认是对象再读 bootId / runId；非对象按「没有字段」
+     *  处理（与旧代码读到 undefined 的回包结局一致）。 */
+    const payload: unknown = await res.json();
+    const data: Record<string, unknown> = isPlainRecord(payload) ? payload : {};
     const runId = typeof data.runId === "string" && data.runId.length > 0 ? data.runId : null;
     return typeof data.bootId === "string" && data.bootId.length > 0
       ? { ok: true, bootId: data.bootId, runId }
