@@ -258,7 +258,7 @@
       "why": "轮询的耐心预算，不是松紧量：调大它只是把误掐概率换小，「一格都没起来」与「一格跑很久」仍然分不开（ISSUE #2184 定的就是这一点，别拿这一格当出路）。真正的判据是「签名不变 且 inFlightStages() 为 0」。"
     },
     {
-      "file": "scripts/run-affected-tests.mjs",
+      "file": "scripts/affected-launch-per-file-rerun.mjs",
       "const": "PER_FILE_RERUN_MAX",
       "value": 8,
       "unit": "份",
