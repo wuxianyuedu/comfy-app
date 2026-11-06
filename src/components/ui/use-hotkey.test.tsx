@@ -20,14 +20,13 @@ function key(
     shift?: boolean;
   } = {},
 ) {
-  /* SAFETY: 类型断言已复核 */
-  return {
+  return new KeyboardEvent("keydown", {
     key: k,
     ctrlKey: mods.ctrl ?? false,
     metaKey: mods.meta ?? false,
     shiftKey: mods.shift ?? false,
     altKey: mods.alt ?? false,
-  } as KeyboardEvent;
+  });
 }
 
 describe("mod 是跨平台的（这条正是原来两处 mac 上死的根因）", () => {

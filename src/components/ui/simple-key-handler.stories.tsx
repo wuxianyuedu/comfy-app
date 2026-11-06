@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
+import { isRecord } from "~/lib/is-record";
 
 /**
  * 它不是组件，而是「在非输入框元素上按某个键就做一件事」的属性包：`<div role="tab" tabIndex={0} {...simpleKeyHandler(["Space", "Enter"], fn)} />`。
@@ -24,6 +25,23 @@ type SimpleKeyHandlerProps = {
   keys: ReadonlyArray<string>;
   preventDefault?: boolean;
 };
+
+/** 无 `component` 的 meta 上，`StoryObj<typeof meta>` 把渲染入参收窄成 `{}`；
+ *  这里按运行时形状逐项校验后再交给 `Demo`，非法/缺省值给安全缺省。 */
+function isStringArray(value: unknown): value is ReadonlyArray<string> {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function demoPropsFromArgs(value: unknown): SimpleKeyHandlerProps {
+  if (!isRecord(value)) {
+    return { keys: [] };
+  }
+  return {
+    keys: isStringArray(value.keys) ? value.keys : [],
+    ignoreRepeat: typeof value.ignoreRepeat === "boolean" ? value.ignoreRepeat : undefined,
+    preventDefault: typeof value.preventDefault === "boolean" ? value.preventDefault : undefined,
+  };
+}
 
 type Story = StoryObj<typeof meta>;
 
@@ -57,8 +75,7 @@ function Demo({ keys, ignoreRepeat, preventDefault }: SimpleKeyHandlerProps) {
 }
 
 export const Default: Story = {
-  /* SAFETY: 类型断言已复核 */
-  render: (args) => <Demo {...(args as SimpleKeyHandlerProps)} />,
+  render: (args) => <Demo {...demoPropsFromArgs(args)} />,
 };
 
 /* 下面几张各自覆写 `keys`，所以类型上把它**声明成可选** —— 故事层要的是

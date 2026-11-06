@@ -4,6 +4,8 @@
  * `elementCallbackRef` 挂到真的 `<button>`。 */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render } from "@testing-library/react";
+
+import { isPlainRecord, isRecord } from "~/lib/is-record";
 import {
   DRAG_EDGE_GAP_PX,
   DRAG_SLOP_PX,
@@ -40,20 +42,28 @@ function setViewport(width: number, height: number) {
  * 「夹取」判据永远命中不了边界，等于没测。
  */
 function stubRect(this: HTMLElement) {
-  /* SAFETY: 类型断言已复核 */
-  return {
-    width: 40,
-    height: 40,
-    top: 0,
-    left: 0,
-    right: 40,
-    bottom: 40,
-    x: 0,
-    y: 0,
-    /* `DOMRect` 要求 `toJSON`，但本 hook 只读尺寸与坐标 —— 给一个返回自身的
-     * 实现即可（空实现会被 `no-empty-function` 拦下）。 */
-    toJSON: () => ({}),
-  } as unknown as DOMRect;
+  return new DOMRect(0, 0, 40, 40);
+}
+
+/** 指针事件替身：hook 只读 `button` / `pointerId` / `clientX` / `clientY`。
+ *  先按这些成员做运行时校验，再收窄成 `React.PointerEvent<HTMLElement>`。 */
+function isPointerEvent(value: unknown): value is React.PointerEvent<HTMLElement> {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    typeof value.button === "number" &&
+    typeof value.pointerId === "number" &&
+    typeof value.clientX === "number" &&
+    typeof value.clientY === "number"
+  );
+}
+
+function pointerEventOf(value: unknown): React.PointerEvent<HTMLElement> {
+  if (!isPointerEvent(value)) {
+    throw new Error("指针事件替身形状不完整");
+  }
+  return value;
 }
 
 /** 被测组件：把 hook 的 controller 交出来，并把回调 ref 挂到真的元素上。`elementShown` 控制元素**什么时候挂上** ——
@@ -126,13 +136,14 @@ function drag(
   to: { x: number; y: number },
 ) {
   act(() => {
-    /* SAFETY: 类型断言已复核 */
-    handleProps.onPointerDown({
-      button: 0,
-      pointerId: 1,
-      clientX: from.x,
-      clientY: from.y,
-    } as unknown as React.PointerEvent<HTMLElement>);
+    handleProps.onPointerDown(
+      pointerEventOf({
+        button: 0,
+        pointerId: 1,
+        clientX: from.x,
+        clientY: from.y,
+      }),
+    );
   });
   const steps = 8;
   act(() => {
@@ -169,11 +180,20 @@ describe("useDraggablePosition", () => {
     /* 往左上拖 200/100：右侧更远 → `right` 变大，下侧更远 → `bottom` 变大。 */
     drag(first.controller().handleProps, { x: 900, y: 700 }, { x: 700, y: 600 });
     await expect.poll(() => window.localStorage.getItem(KEY)).not.toBeNull();
-    /* SAFETY: 类型断言已复核 */
-    const saved = JSON.parse(window.localStorage.getItem(KEY)!) as {
-      bottom: number;
-      right: number;
-    };
+    const raw = window.localStorage.getItem(KEY);
+    if (raw === null) {
+      throw new Error("拖动后的落点没写进 storage");
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (!isPlainRecord(parsed)) {
+      throw new Error("storage 里的落点不是 JSON 对象");
+    }
+    const right = parsed.right;
+    const bottom = parsed.bottom;
+    if (typeof right !== "number" || typeof bottom !== "number") {
+      throw new Error("storage 里的落点缺少数字的 right / bottom");
+    }
+    const saved = { right, bottom };
     expect(saved.right).toBeGreaterThan(DEFAULT.right);
     expect(saved.bottom).toBeGreaterThan(DEFAULT.bottom);
     cleanup();
@@ -267,13 +287,14 @@ describe("useDraggablePosition", () => {
     await expect.poll(() => controller().offset).not.toBeNull();
     const before = controller().offset;
     act(() => {
-      /* SAFETY: 类型断言已复核 */
-      controller().handleProps.onPointerDown({
-        button: 2,
-        pointerId: 1,
-        clientX: 900,
-        clientY: 700,
-      } as unknown as React.PointerEvent<HTMLElement>);
+      controller().handleProps.onPointerDown(
+        pointerEventOf({
+          button: 2,
+          pointerId: 1,
+          clientX: 900,
+          clientY: 700,
+        }),
+      );
     });
     act(() => {
       window.dispatchEvent(

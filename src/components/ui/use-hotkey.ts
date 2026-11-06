@@ -108,7 +108,7 @@ export function useHotkey(
     if (!enabled) {
       return;
     }
-    const host: Window | Document = target ?? (typeof window === "undefined" ? document : window);
+    const host: EventTarget = target ?? (typeof window === "undefined" ? document : window);
     const isMac = detectMac();
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -124,11 +124,16 @@ export function useHotkey(
       handlerRef.current();
     };
 
-    /* SAFETY: 类型断言已复核 */
-    host.addEventListener("keydown", onKeyDown as EventListener);
+    /* `Window` / `Document` 各自的 `addEventListener("keydown")` 重载在联合类型上
+     * 无法收束；按 `EventTarget` 注册，事件到点再校验是不是键盘事件。 */
+    const listener: EventListener = (event) => {
+      if (event instanceof KeyboardEvent) {
+        onKeyDown(event);
+      }
+    };
+    host.addEventListener("keydown", listener);
     return () => {
-      /* SAFETY: 类型断言已复核 */
-      host.removeEventListener("keydown", onKeyDown as EventListener);
+      host.removeEventListener("keydown", listener);
     };
   }, [enabled, filterInput, preventDefault, target, key, mod, ctrl, meta, shift, alt]);
 }
