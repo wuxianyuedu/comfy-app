@@ -5,6 +5,8 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 const { userMock, readMock, pathMock } = vi.hoisted(() => ({
   userMock: vi.fn<() => Promise<{ id: string } | null>>(),
   readMock: vi.fn(),
@@ -20,6 +22,18 @@ vi.mock("~/lib/comfyui/custom-nodes-manifest.server", () => ({
 }));
 
 import { GET, dynamic, runtime } from "./route";
+
+/** 只有 `{ error: { code, message } }` 这一种形状才继续；否则直接让用例失败。 */
+function errorOf(body: unknown): { code: string; message: string } {
+  if (!isRecord(body) || !isRecord(body.error)) {
+    throw new Error("响应体缺少 error 对象");
+  }
+  const { code, message } = body.error;
+  if (typeof code !== "string" || typeof message !== "string") {
+    throw new Error("error.code / error.message 不是字符串");
+  }
+  return { code, message };
+}
 
 beforeEach(() => {
   userMock.mockReset();
@@ -54,39 +68,31 @@ describe("三相比两相：404 与 500 是两件事", () => {
     readMock.mockReturnValue({ kind: "missing" });
     const res = await GET();
     expect(res.status).toBe(404);
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as {
-      error: { code: string; message: string };
-    };
-    expect(body.error.code).toBe("custom_nodes.manifest_missing");
+    const raw: unknown = await res.json();
+    const body = errorOf(raw);
+    expect(body.code).toBe("custom_nodes.manifest_missing");
     // 话里要能行动：告诉用户去哪儿生成，而不是只说「不存在」
-    expect(body.error.message).toContain("解析");
+    expect(body.message).toContain("解析");
   });
 
   it("unreadable → 500 + custom_nodes.manifest_unreadable，并带上 errno", async () => {
     readMock.mockReturnValue({ kind: "unreadable", detail: "EISDIR" });
     const res = await GET();
     expect(res.status).toBe(500);
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as {
-      error: { code: string; message: string };
-    };
-    expect(body.error.code).toBe("custom_nodes.manifest_unreadable");
-    expect(body.error.message).toContain("EISDIR");
+    const raw: unknown = await res.json();
+    const body = errorOf(raw);
+    expect(body.code).toBe("custom_nodes.manifest_unreadable");
+    expect(body.message).toContain("EISDIR");
   });
 
   it("两相的码互不相同：客户端按码分档说话，混了就等于没分", async () => {
     readMock.mockReturnValue({ kind: "missing" });
-    /* SAFETY: 类型断言已复核 */
-    const missing = (await (await GET()).json()) as {
-      error: { code: string };
-    };
+    const missingRaw: unknown = await (await GET()).json();
+    const missing = errorOf(missingRaw);
     readMock.mockReturnValue({ kind: "unreadable", detail: "EACCES" });
-    /* SAFETY: 类型断言已复核 */
-    const unreadable = (await (await GET()).json()) as {
-      error: { code: string };
-    };
-    expect(missing.error.code).not.toBe(unreadable.error.code);
+    const unreadableRaw: unknown = await (await GET()).json();
+    const unreadable = errorOf(unreadableRaw);
+    expect(missing.code).not.toBe(unreadable.code);
   });
 
   it("缺清单时不回 200 + 空对象 —— 那是把 0 冒充成「解析出 0 个」", async () => {

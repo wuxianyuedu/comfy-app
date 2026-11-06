@@ -15,6 +15,7 @@ import { useExternalAction } from "~/components/ui/use-external-action";
  * 而 `app-settings.ts` 顶层 import fs —— 走那条路会让设置页整页 500（ISSUE #282/#317）。 */
 import { COMFYUI_DEFAULT_PORT } from "~/lib/endpoints";
 import { splitExtraModels } from "~/lib/llm/types";
+import { isRecord } from "~/lib/is-record";
 import { useTRPC } from "~/trpc/react";
 
 import { useSettingsComfy } from "./use-settings-page-comfy";
@@ -54,18 +55,23 @@ const NO_FLASH: FlashMessage | null = null;
  * 输入态；写失败（隐私模式/配额）静默忽略。 */
 const SETTINGS_CACHE_KEY = "settingsPage.lastGoodConfig.v1";
 
+function isSettingsCache(v: unknown): v is { llm?: QueryLlmConfig; settings?: Settings } {
+  if (!isRecord(v)) {
+    return false;
+  }
+  const llm: unknown = v.llm;
+  const settings: unknown = v.settings;
+  return (llm === undefined || isRecord(llm)) && (settings === undefined || isRecord(settings));
+}
+
 function readSettingsCache(): { llm?: QueryLlmConfig; settings?: Settings } {
   try {
     const raw = sessionStorage.getItem(SETTINGS_CACHE_KEY);
     if (raw === null || raw === "") {
       return {};
     }
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(raw) as {
-      llm?: QueryLlmConfig;
-      settings?: Settings;
-    };
-    return Boolean(parsed) && typeof parsed === "object" ? parsed : {};
+    const parsed: unknown = JSON.parse(raw);
+    return isSettingsCache(parsed) ? parsed : {};
   } catch {
     return {};
   }
@@ -81,8 +87,8 @@ function writeSettingsCache(value: { llm?: QueryLlmConfig; settings?: Settings }
 
 /** 目标分区（来自跳转载荷）的合法性收敛：不在白名单里就当作没给。 */
 function readInitialSection(raw: string | null | undefined): Section | null {
-  /* SAFETY: 类型断言已复核 */
-  return SETTINGS_SECTIONS.some((item) => item.id === raw) ? (raw as Section) : null;
+  const match = SETTINGS_SECTIONS.find((item) => item.id === raw);
+  return match ? match.id : null;
 }
 
 /** 设置页全部状态与动作 —— 见文件头注释的分层说明。 */

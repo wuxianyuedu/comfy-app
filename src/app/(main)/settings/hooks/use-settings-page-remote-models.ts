@@ -14,7 +14,7 @@ import {
   type UsageTaskQueryInput,
   type UsageTestInput,
 } from "~/lib/llm/usage-test-client";
-import type { RemoteModelEntry, TaskType } from "~/lib/llm/types";
+import { TASK_TYPES, type RemoteModelEntry, type TaskType } from "~/lib/llm/types";
 /* 条目形状的唯一出处：controller 收的那一枚，就是 lib 里那座草稿→条目桥产出的那枚。 */
 import type { RemoteModelDraftEntry } from "~/lib/llm/remote-model-schema";
 
@@ -41,6 +41,15 @@ function mergeExtraModels(current: Array<string>, model: string, toggled: string
     return next.filter((m) => m !== toggled);
   }
   return [...next, toggled];
+}
+
+/** 只把「全部键都在白名单、值都是数字」的字典收窄成温度覆盖表。 */
+function isTaskTemperatureRecord(v: Record<string, unknown>): v is Record<TaskType, number> {
+  const entries = Object.entries(v);
+  return (
+    entries.length > 0 &&
+    entries.every(([key, value]) => Object.hasOwn(TASK_TYPES, key) && typeof value === "number")
+  );
 }
 
 export function useSettingsRemoteModels(input: {
@@ -201,9 +210,7 @@ export function useSettingsRemoteModels(input: {
           ? Object.fromEntries(Object.entries(base).filter(([key]) => key !== task))
           : { ...base, [task]: Number(raw) };
       patchLlm({
-        temperatureByTask:
-          /* SAFETY: 类型断言已复核 */
-          Object.keys(next).length > 0 ? (next as Record<TaskType, number>) : undefined,
+        temperatureByTask: isTaskTemperatureRecord(next) ? next : undefined,
       });
     },
     [llmDraft, patchLlm],

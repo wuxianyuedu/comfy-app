@@ -4,6 +4,8 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import { GET } from "./route";
 
 beforeEach(() => {
@@ -15,11 +17,11 @@ afterEach(() => {
 });
 
 async function get(): Promise<{ bootId: unknown; runId: unknown }> {
-  /* SAFETY: 类型断言已复核 */
-  return (await GET().json()) as {
-    bootId: unknown;
-    runId: unknown;
-  };
+  const raw: unknown = await GET().json();
+  if (!isRecord(raw)) {
+    throw new Error("响应体不是对象");
+  }
+  return { bootId: raw.bootId, runId: raw.runId };
 }
 
 describe("GET /api/dev/server-id", () => {

@@ -13,7 +13,7 @@
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
 | B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 已清（子批1–12，判决面文件级豁免已整块删除）       |
-| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–2：40 份 / 88 处已清）               |
+| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1、2、4：80 份 / 166 处已清；子批3 在 #3249） |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
@@ -805,26 +805,26 @@
 | `src/app/(main)/settings/components/ComfyuiSection.test.tsx`                                         | 1        | 挂账 |
 | `src/app/(main)/settings/components/CpuLimitPicker.tsx`                                              | 1        | 挂账 |
 | `src/app/(main)/settings/components/RemoteModelDialog.tsx`                                           | 1        | 挂账 |
-| `src/app/(main)/settings/hooks/use-remote-model-dialogs.test.ts`                                     | 1        | 挂账 |
-| `src/app/(main)/settings/hooks/use-settings-page-remote-models.ts`                                   | 1        | 挂账 |
-| `src/app/(main)/settings/hooks/use-settings-page-types.ts`                                           | 1        | 挂账 |
-| `src/app/(main)/settings/hooks/use-settings-page.test.ts`                                            | 11       | 挂账 |
-| `src/app/(main)/settings/hooks/use-settings-page.ts`                                                 | 2        | 挂账 |
-| `src/app/api/agent/chat/route.ts`                                                                    | 2        | 挂账 |
-| `src/app/api/comfy/ensure/route.test.ts`                                                             | 2        | 挂账 |
-| `src/app/api/comfy/queue/events/route.test.ts`                                                       | 1        | 挂账 |
-| `src/app/api/custom-nodes/manifest/route.test.ts`                                                    | 4        | 挂账 |
-| `src/app/api/custom-nodes/route.test.ts`                                                             | 23       | 挂账 |
-| `src/app/api/custom-nodes/route.ts`                                                                  | 8        | 挂账 |
-| `src/app/api/debug/source/route.test.ts`                                                             | 2        | 挂账 |
-| `src/app/api/dev/build-id/route.test.ts`                                                             | 2        | 挂账 |
-| `src/app/api/dev/last-exit/route.test.ts`                                                            | 3        | 挂账 |
-| `src/app/api/dev/server-id/route.test.ts`                                                            | 1        | 挂账 |
-| `src/app/api/film/bgm/route.test.ts`                                                                 | 4        | 挂账 |
+| `src/app/(main)/settings/hooks/use-remote-model-dialogs.test.ts`                                     | 1        | 已清 |
+| `src/app/(main)/settings/hooks/use-settings-page-remote-models.ts`                                   | 1        | 已清 |
+| `src/app/(main)/settings/hooks/use-settings-page-types.ts`                                           | 1        | 已清 |
+| `src/app/(main)/settings/hooks/use-settings-page.test.ts`                                            | 11       | 已清 |
+| `src/app/(main)/settings/hooks/use-settings-page.ts`                                                 | 2        | 已清 |
+| `src/app/api/agent/chat/route.ts`                                                                    | 2        | 已清 |
+| `src/app/api/comfy/ensure/route.test.ts`                                                             | 2        | 已清 |
+| `src/app/api/comfy/queue/events/route.test.ts`                                                       | 1        | 已清 |
+| `src/app/api/custom-nodes/manifest/route.test.ts`                                                    | 4        | 已清 |
+| `src/app/api/custom-nodes/route.test.ts`                                                             | 23       | 已清 |
+| `src/app/api/custom-nodes/route.ts`                                                                  | 8        | 已清 |
+| `src/app/api/debug/source/route.test.ts`                                                             | 2        | 已清 |
+| `src/app/api/dev/build-id/route.test.ts`                                                             | 2        | 已清 |
+| `src/app/api/dev/last-exit/route.test.ts`                                                            | 3        | 已清 |
+| `src/app/api/dev/server-id/route.test.ts`                                                            | 1        | 已清 |
+| `src/app/api/film/bgm/route.test.ts`                                                                 | 4        | 已清 |
 | `src/app/api/generated/[...path]/route.test.ts`                                                      | 3        | 挂账 |
-| `src/app/api/health/route.test.ts`                                                                   | 2        | 挂账 |
-| `src/app/api/images/route.test.ts`                                                                   | 3        | 挂账 |
-| `src/app/api/llm/ollama-start/route.ts`                                                              | 2        | 挂账 |
+| `src/app/api/health/route.test.ts`                                                                   | 2        | 已清 |
+| `src/app/api/images/route.test.ts`                                                                   | 3        | 已清 |
+| `src/app/api/llm/ollama-start/route.ts`                                                              | 2        | 已清 |
 | `src/app/api/llm/route.ts`                                                                           | 4        | 挂账 |
 | `src/app/api/logs/app-runtime/route.ts`                                                              | 3        | 挂账 |
 | `src/app/api/logs/current/route.test.ts`                                                             | 3        | 挂账 |

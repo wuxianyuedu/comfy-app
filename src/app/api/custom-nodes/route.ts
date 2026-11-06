@@ -32,7 +32,6 @@ import type {
   DiscoveredSubpkg,
   ParseReport,
   ParseStreamEvent,
-  SettingsResp,
   SettingsStreamEvent,
 } from "~/lib/comfyui/custom-nodes-stream";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
@@ -48,16 +47,83 @@ const REPORT = path.join(process.cwd(), "src/generated/customNodes.report.json")
 
 /* ── 外部 JSON 的窄化工具(替代原 any)───────────────────────────
  * manifest / report / python stdout 都是外部输入,统一 unknown 进、守卫窄化读;
- * 字段值仅在非 nullish 时原样透传,回退语义与原 `?.` + `??` 完全一致。 */
-/** 等价原 `src?.[key] ?? fallback`:值非 null/undefined 时原样返回,类型由调用处声明。 */
+ * 字段值通过对应类型谓词后才采用,否则回退到兜底值(不再用类型断言)。 */
+function isStringValue(v: unknown): v is string {
+  return typeof v === "string";
+}
+
+function isNumberValue(v: unknown): v is number {
+  return typeof v === "number";
+}
+
+function isStringOrNull(v: unknown): v is string | null {
+  return v === null || typeof v === "string";
+}
+
+function isStringArray(v: unknown): v is Array<string> {
+  return Array.isArray(v) && v.every((item) => typeof item === "string");
+}
+
+function isUnknownArray(v: unknown): v is Array<unknown> {
+  return Array.isArray(v);
+}
+
+type ParseErrorEntry = { error: string; file: string };
+
+function isParseErrorEntry(v: unknown): v is ParseErrorEntry {
+  return isRecord(v) && typeof v.error === "string" && typeof v.file === "string";
+}
+
+function isParseErrorArray(v: unknown): v is Array<ParseErrorEntry> {
+  return Array.isArray(v) && v.every(isParseErrorEntry);
+}
+
+/* 解析器输出的单个子包：name 是界面必需的标识，其余字段来自不同版本解析器时可能缺省，
+ * 只校验存在时的类型，不硬性要求齐全（视图侧对这些字段已有防御）。 */
+function isDiscoveredSubpkg(v: unknown): v is DiscoveredSubpkg {
+  return (
+    isRecord(v) &&
+    typeof v.name === "string" &&
+    (v.path === undefined || typeof v.path === "string") &&
+    (v.parent === undefined || typeof v.parent === "string") &&
+    (v.exists === undefined || typeof v.exists === "boolean") &&
+    (v.isLeaf === undefined || typeof v.isLeaf === "boolean") &&
+    (v.fileCount === undefined || typeof v.fileCount === "number") &&
+    (v.sizeBytes === undefined || typeof v.sizeBytes === "number") &&
+    (v.contentHash === undefined || typeof v.contentHash === "string") &&
+    (v.status === undefined || typeof v.status === "string") &&
+    (v.packageFileCount === undefined || typeof v.packageFileCount === "number")
+  );
+}
+
+/* 报告由 Python 侧写出，历史版本/子集模式字段并不齐全（甚至 packages 可以是字典），
+ * 这里只确认它是对象、核心计数字段若存在则类型正确，其余保持原样透传。 */
+function isParseReport(v: unknown): v is ParseReport {
+  return (
+    isRecord(v) &&
+    (v.generatedAt === undefined || typeof v.generatedAt === "string") &&
+    (v.errorCount === undefined || typeof v.errorCount === "number") &&
+    (v.pathCount === undefined || typeof v.pathCount === "number") &&
+    (v.totalNodes === undefined || typeof v.totalNodes === "number")
+  );
+}
+
+function readDiscoveredPackages(parsed: unknown): Array<DiscoveredSubpkg> {
+  if (!isRecord(parsed) || !Array.isArray(parsed.packages)) {
+    return [];
+  }
+  return parsed.packages.filter(isDiscoveredSubpkg);
+}
+
+/** 等价原 `src?.[key] ?? fallback`:值通过类型谓词后才采用,否则走兜底。 */
 function jsonField<T>(
   src: Record<string, unknown> | null | undefined,
   key: string,
   fallback: T,
+  isT: (v: unknown) => v is T,
 ): T {
   const v: unknown = src?.[key];
-  /* SAFETY: 类型断言已复核 */
-  return (v ?? fallback) as T;
+  return isT(v) ? v : fallback;
 }
 
 /** manifest 里单个已解析包的摘要形状(与前端 SummaryPkg 消费契约一致)。 */
@@ -107,7 +173,7 @@ type ManifestSummary = {
   generatedAt: string | null;
   missingPaths: Array<string>;
   packages: Array<ManifestPackageSummary>;
-  parseErrors: Array<unknown>;
+  parseErrors: Array<ParseErrorEntry>;
   sources: Array<string>;
   totalNodes: number;
 };
@@ -149,26 +215,26 @@ function readManifestSummary() {
       const fields: Record<string, unknown> | undefined = isPlainRecord(info) ? info : undefined;
       pkgs.push({
         name,
-        path: jsonField(fields, "path", ""),
-        nodeCount: jsonField(fields, "nodeCount", 0),
-        nodeTypes: jsonField<Array<string>>(fields, "nodeTypes", []),
-        status: jsonField(fields, "status", "ok"),
-        errors: jsonField<Array<unknown>>(fields, "errors", []),
-        contentHash: jsonField(fields, "contentHash", ""),
-        parsedAt: jsonField<string | null>(fields, "parsedAt", null),
-        parsedFileCount: jsonField(fields, "parsedFileCount", 0),
-        generatedAt: jsonField<string | null>(m, "generatedAt", null),
+        path: jsonField(fields, "path", "", isStringValue),
+        nodeCount: jsonField(fields, "nodeCount", 0, isNumberValue),
+        nodeTypes: jsonField<Array<string>>(fields, "nodeTypes", [], isStringArray),
+        status: jsonField(fields, "status", "ok", isStringValue),
+        errors: jsonField<Array<unknown>>(fields, "errors", [], isUnknownArray),
+        contentHash: jsonField(fields, "contentHash", "", isStringValue),
+        parsedAt: jsonField<string | null>(fields, "parsedAt", null, isStringOrNull),
+        parsedFileCount: jsonField(fields, "parsedFileCount", 0, isNumberValue),
+        generatedAt: jsonField<string | null>(m, "generatedAt", null, isStringOrNull),
       });
     }
-    const sources: Array<string> = jsonField<Array<string>>(m, "sources", []);
-    const nodes: unknown = jsonField(m, "nodes", null);
+    const sources: Array<string> = jsonField<Array<string>>(m, "sources", [], isStringArray);
+    const nodes: unknown = m.nodes ?? null;
     const summary = {
-      generatedAt: jsonField<string | null>(m, "generatedAt", null),
+      generatedAt: jsonField<string | null>(m, "generatedAt", null, isStringOrNull),
       totalNodes: isPlainRecord(nodes) ? Object.keys(nodes).length : 0,
       packages: pkgs,
       /* SAFETY: 类型断言已复核 */
       missingPaths: [] as Array<string>,
-      parseErrors: jsonField<Array<unknown>>(m, "parseErrors", []),
+      parseErrors: jsonField<Array<ParseErrorEntry>>(m, "parseErrors", [], isParseErrorArray),
       sources,
     };
     // stat 失败（极罕见）时 stamp 为 null：返回结果但不缓存。
@@ -279,19 +345,17 @@ function spawnCapture(command: string, args: Array<string>): Promise<string | nu
   });
 }
 
-async function runDiscover(parentDirs: ReadonlyArray<unknown>): Promise<Array<unknown>> {
+async function runDiscover(parentDirs: ReadonlyArray<string>): Promise<Array<unknown>> {
   const key = parentDirs.join("|");
   const cached = discoverCache.get(key);
   if (cached && Date.now() - cached.at < 5000) {
     return cached.result;
   }
-  // spawn 的 args 需要 string[];原 any 同样把原始值直接交给 Node(非字符串由 Node 校验报错),
-  // 断言只为恢复静态类型,不改运行时取值。
+  // spawn 的 args 需要 string[];调用点已把父目录收敛为 string[],这里直接透传。
   const args = [
     "-u",
     "scripts/parse_custom_nodes.py",
-    /* SAFETY: 类型断言已复核 */
-    ...parentDirs.flatMap((parentDir) => ["--discover-parent", parentDir as string]),
+    ...parentDirs.flatMap((parentDir) => ["--discover-parent", parentDir]),
   ];
   /* 候选名与顺序**不在这里写**（台账 A14）：字面量表一旦落在调用点，`py` 就少一个 `-3`，
    * 而 Windows 上的第一候选也不是 `python3`。见 `~/lib/process/python-run`。 */
@@ -303,10 +367,7 @@ async function runDiscover(parentDirs: ReadonlyArray<unknown>): Promise<Array<un
     }
     try {
       const parsed: unknown = JSON.parse(stdout);
-      /* SAFETY: 类型断言已复核 */
-      const pkgs = (
-        isRecord(parsed) && Array.isArray(parsed.packages) ? parsed.packages : []
-      ) as Array<DiscoveredSubpkg>;
+      const pkgs = readDiscoveredPackages(parsed);
       rememberDiscover(key, pkgs);
       return pkgs;
     } catch {
@@ -328,6 +389,8 @@ type DiscoverProgressFields = {
   phase: "scan" | "hash";
   total?: number;
 };
+
+const DISCOVER_PHASES: ReadonlyArray<DiscoverProgressFields["phase"]> = ["scan", "hash"];
 
 function runDiscoverStreaming(
   parent: string,
@@ -393,8 +456,10 @@ function runDiscoverStreaming(
           if (!m) {
             return;
           }
-          /* SAFETY: 类型断言已复核 */
-          const phase = m[1] as "scan" | "hash";
+          const phase = DISCOVER_PHASES.find((candidate) => candidate === m[1]);
+          if (phase === undefined) {
+            return;
+          }
           const rest = m[2]!;
           // 取出 msg=...（若其中含 `|` 也没关系：我们把它之后
           // 直到下一个 `|key=` 或行尾的内容整体当作 msg）。
@@ -479,10 +544,7 @@ function runDiscoverStreaming(
         }
         try {
           const parsed: unknown = finalJson ? JSON.parse(finalJson) : { packages: [] };
-          /* SAFETY: 类型断言已复核 */
-          const pkgs = (
-            isRecord(parsed) && Array.isArray(parsed.packages) ? parsed.packages : []
-          ) as Array<DiscoveredSubpkg>;
+          const pkgs = readDiscoveredPackages(parsed);
           rememberDiscover(parent, pkgs);
           resolved = true;
           send({
@@ -645,19 +707,19 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
             return;
           }
           closed = true;
-          let report: unknown = null;
+          let report: ParseReport | null = null;
           try {
             if (fs.existsSync(REPORT)) {
-              report = JSON.parse(fs.readFileSync(REPORT, "utf8"));
+              const parsed: unknown = JSON.parse(fs.readFileSync(REPORT, "utf8"));
+              report = isParseReport(parsed) ? parsed : null;
             }
           } catch {
             report = null;
           }
           send({
             type: "done",
-            ok: Boolean(report),
-            /* SAFETY: 类型断言已复核 */
-            report: report as ParseReport | null,
+            ok: report !== null,
+            report,
             stderr: "",
             exitCode: code,
           });
@@ -701,10 +763,11 @@ function buildGetResponse(): Response {
   const paths = getPaths();
   const localWorkflowPaths = getLocalWorkflowPaths();
   const summary = readManifestSummary();
-  let lastReport: unknown = null;
+  let lastReport: ParseReport | null = null;
   if (fs.existsSync(REPORT)) {
     try {
-      lastReport = JSON.parse(fs.readFileSync(REPORT, "utf8"));
+      const parsed: unknown = JSON.parse(fs.readFileSync(REPORT, "utf8"));
+      lastReport = isParseReport(parsed) ? parsed : null;
     } catch {
       lastReport = null;
     }
@@ -767,10 +830,8 @@ function buildGetResponse(): Response {
         // 让对话框在同一次注水时就能渲染本地工作流的扫描结果。
         send({
           type: "summary",
-          /* SAFETY: 类型断言已复核 */
-          summary: summary as SettingsResp["summary"],
-          /* SAFETY: 类型断言已复核 */
-          lastReport: lastReport as ParseReport | null,
+          summary,
+          lastReport,
           byPath,
           settings: { paths, localWorkflowPaths },
         });

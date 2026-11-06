@@ -14,6 +14,7 @@ import { spawn } from "node:child_process";
 import { OLLAMA_DEFAULT_PORT, ollamaBaseUrl } from "~/lib/endpoints";
 import { withTimeoutResult } from "~/lib/with-timeout";
 import { errorMessage } from "~/lib/error-message";
+import { isRecord } from "~/lib/is-record";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,10 +42,14 @@ const SPAWN_GRACE_MS = 1000;
  * Next.js dev 模式 HMR 会重置模块变量，让并发 POST 各自 spawn。
  */
 const G_KEY = "__ollamaServeSpawnLock_v2";
-/* SAFETY: 类型断言已复核 */
-const g = globalThis as unknown as Record<string, { starting: boolean } | undefined>;
-const st: { starting: boolean } = g[G_KEY] ?? { starting: false };
-g[G_KEY] = st;
+
+function isSpawnLock(v: unknown): v is { starting: boolean } {
+  return isRecord(v) && typeof v.starting === "boolean";
+}
+
+const existingLock: unknown = Reflect.get(globalThis, G_KEY);
+const st: { starting: boolean } = isSpawnLock(existingLock) ? existingLock : { starting: false };
+Reflect.set(globalThis, G_KEY, st);
 
 /** 本地时间戳（YYYY-MM-DD HH:mm:ss）：runtime 日志是给本机用户看的，
  *  toISOString 的 UTC 在 +8 时区会凭空差出 8 小时。 */
@@ -91,7 +96,6 @@ async function resolveOllamaExe(): Promise<string> {
   if (process.platform !== "win32") {
     return "ollama";
   }
-  /* SAFETY: 类型断言已复核 */
   const candidates = [
     process.env.LOCALAPPDATA !== undefined && process.env.LOCALAPPDATA !== ""
       ? `${process.env.LOCALAPPDATA}\\Programs\\Ollama\\ollama.exe`
@@ -102,7 +106,7 @@ async function resolveOllamaExe(): Promise<string> {
     process.env["ProgramFiles(x86)"] !== undefined && process.env["ProgramFiles(x86)"] !== ""
       ? `${process.env["ProgramFiles(x86)"]}\\Ollama\\ollama.exe`
       : null,
-  ].filter(Boolean) as Array<string>;
+  ].filter((candidate): candidate is string => typeof candidate === "string");
   const fs = await import("node:fs");
   for (const c of candidates) {
     try {

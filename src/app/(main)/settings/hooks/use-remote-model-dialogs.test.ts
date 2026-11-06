@@ -6,18 +6,32 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import type { ReadySettingsPageController } from "./use-settings-page";
 import { useRemoteModelDialogs } from "./use-remote-model-dialogs";
 
-/** 只补本文件用得到的那几个字段，其余以类型断言绕过（接口很大，且与本案无关）。 */
-function makeController(over: Record<string, unknown> = {}) {
-  /* SAFETY: 类型断言已复核 */
-  return {
+/** 本文件用到的 controller 字段；其余字段这个测试替身不读取（接口很大，与本案无关）。 */
+function isReadySettingsPageController(v: unknown): v is ReadySettingsPageController {
+  return (
+    isRecord(v) &&
+    typeof v.saving === "boolean" &&
+    typeof v.addRemoteModel === "function" &&
+    typeof v.updateRemoteModel === "function"
+  );
+}
+
+function makeController(over: Record<string, unknown> = {}): ReadySettingsPageController {
+  const candidate: Record<string, unknown> = {
     saving: false,
     addRemoteModel: vi.fn(() => ({ ok: true })),
     updateRemoteModel: vi.fn(() => ({ ok: true })),
     ...over,
-  } as unknown as ReadySettingsPageController;
+  };
+  if (!isReadySettingsPageController(candidate)) {
+    throw new Error("测试替身缺少必需的 controller 字段");
+  }
+  return candidate;
 }
 
 function setup(over: Record<string, unknown> = {}) {

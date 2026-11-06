@@ -880,26 +880,6 @@ export default defineConfig({
         "src/app/(main)/settings/components/ComfyuiSection.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/app/(main)/settings/components/CpuLimitPicker.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/app/(main)/settings/components/RemoteModelDialog.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/(main)/settings/hooks/use-remote-model-dialogs.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/(main)/settings/hooks/use-settings-page-remote-models.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/(main)/settings/hooks/use-settings-page-types.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/(main)/settings/hooks/use-settings-page.test.ts", // 存量 11 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/(main)/settings/hooks/use-settings-page.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/agent/chat/route.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/comfy/ensure/route.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/comfy/queue/events/route.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/custom-nodes/manifest/route.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/custom-nodes/route.test.ts", // 存量 23 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/custom-nodes/route.ts", // 存量 8 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/debug/source/route.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/dev/build-id/route.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/dev/last-exit/route.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/dev/server-id/route.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/film/bgm/route.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        String.raw`src/app/api/generated/\[...path\]/route.test.ts`, // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/health/route.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/images/route.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/llm/ollama-start/route.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/app/api/llm/route.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
         "src/app/api/logs/app-runtime/route.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
         "src/app/api/logs/current/route.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
