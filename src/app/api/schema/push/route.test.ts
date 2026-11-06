@@ -6,6 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { isPlainRecord } from "~/lib/is-record";
 
 const statusFile = path.join(process.cwd(), "log", "current", "tools", "schema-sync.json");
 
@@ -98,10 +99,8 @@ describe("POST /api/schema/push", () => {
     });
     const res = await post();
     expect(res.status).toBe(404);
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as {
-      error?: string;
-    };
-    expect(body.error).toContain("找不到");
+    const body: unknown = await res.json();
+    const error = isPlainRecord(body) && typeof body.error === "string" ? body.error : "";
+    expect(error).toContain("找不到");
   });
 });

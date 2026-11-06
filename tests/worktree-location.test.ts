@@ -55,11 +55,29 @@ function codeFiles(dir: string): Array<string> {
   return out;
 }
 
+/** ENOENT 判定：只降级「列到名字、读时已没」这一种，其余读错误照冒。 */
+function isMissingFile(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
 /** 全仓 `worktree add` 调用点：相对路径 + 语句窗（先剥注释 —— 叙述里必然出现这四个字）。 */
 function collectCallSites(): Array<{ rel: string; window: string }> {
   const out: Array<{ rel: string; window: string }> = [];
   for (const rel of SCAN_DIRS.flatMap(codeFiles)) {
-    const src = stripComments(readFileSync(join(REPO_ROOT, rel), "utf8"));
+    let raw: string;
+    try {
+      raw = readFileSync(join(REPO_ROOT, rel), "utf8");
+    } catch (error) {
+      /* 「列目录 → 读内容」之间会消失的文件不是判据要判的形态：并发用例
+       * （tests/global-setup-cleanup.test.ts）会在 tests/ 下造 `.setup-cleanup-probe-*` 再删，
+       * 那一窗口与扫描撞上就是 ENOENT（与 scripts/gate-scan-read.cjs 共享件同一条口径）。
+       * ⚠️ 只降级 ENOENT：权限错 / 形状错吞掉就等于「读不到输入」变静默放行。 */
+      if (!isMissingFile(error)) {
+        throw error;
+      }
+      continue;
+    }
+    const src = stripComments(raw);
     for (const match of src.matchAll(CALL_SITE)) {
       out.push({ rel, window: windowAt(src, match.index) });
     }

@@ -7,6 +7,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { isPlainRecord } from "~/lib/is-record";
+
 const statusFile = path.join(process.cwd(), "log", "current", "tools", "schema-sync.json");
 let backup: string | null = null;
 
@@ -56,11 +58,9 @@ describe("GET /api/schema", () => {
       "utf8",
     );
     const { GET } = await import("./route");
-    /* SAFETY: 类型断言已复核 */
-    const body = (await GET().json()) as {
-      phase: string;
-    };
-    expect(body.phase).toBe("syncing");
+    const body: unknown = await GET().json();
+    const phase = isPlainRecord(body) && typeof body.phase === "string" ? body.phase : null;
+    expect(phase).toBe("syncing");
   });
 
   it("文件不在时回 unknown 而不是报错（没提示 ≠ 出错）", async () => {

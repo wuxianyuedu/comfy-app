@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAppRuntimeLogger } from "~/lib/log/app-runtime-log";
+import { isRecord } from "~/lib/is-record";
 import { RUNTIME_LOG_MESSAGE_MAX, clampText } from "~/lib/text-clamp";
 
 /**
@@ -12,7 +13,11 @@ import { RUNTIME_LOG_MESSAGE_MAX, clampText } from "~/lib/text-clamp";
 const ALLOWED_NS = new Set(["settings", "app"]);
 
 /** 允许的日志级别。 */
-const ALLOWED_LEVEL = new Set<"info" | "warn" | "error">(["info", "warn", "error"]);
+const ALLOWED_LEVEL: ReadonlyArray<"info" | "warn" | "error"> = ["info", "warn", "error"];
+
+function isAllowedLevel(v: unknown): v is "info" | "warn" | "error" {
+  return typeof v === "string" && ALLOWED_LEVEL.some((level) => level === v);
+}
 
 /**
  * 单条消息最大长度（截断防爆日志文件；取值受日志体积约束，§16.2.4.48）。
@@ -22,23 +27,19 @@ const MAX_MSG_LEN = RUNTIME_LOG_MESSAGE_MAX;
 
 export async function POST(request: Request) {
   try {
-    /* SAFETY: 类型断言已复核 */
-    const body = (await request.json()) as {
-      fields?: Record<string, unknown>;
-      level?: string;
-      msg?: string;
-      ns?: string;
-    };
+    const rawBody: unknown = await request.json();
+    const body: Record<string, unknown> = isRecord(rawBody) ? rawBody : {};
 
-    const ns = body.ns ?? "app";
+    const rawNs: unknown = body.ns ?? "app";
+    const ns = typeof rawNs === "string" ? rawNs : "";
     if (!ALLOWED_NS.has(ns)) {
       return NextResponse.json({ ok: false }, { status: 400 });
     }
-    const level = body.level ?? "info";
-    /* SAFETY: 类型断言已复核 */
-    if (!ALLOWED_LEVEL.has(level as "info" | "warn" | "error")) {
+    const rawLevel: unknown = body.level ?? "info";
+    if (!isAllowedLevel(rawLevel)) {
       return NextResponse.json({ ok: false }, { status: 400 });
     }
+    const level = rawLevel;
     if (typeof body.msg !== "string" || body.msg.length === 0) {
       return NextResponse.json({ ok: false }, { status: 400 });
     }
@@ -47,11 +48,11 @@ export async function POST(request: Request) {
       maxLength: MAX_MSG_LEN,
       marker: "",
     });
-    const fields = body.fields && typeof body.fields === "object" ? body.fields : undefined;
+    const rawFields: unknown = body.fields;
+    const fields = isRecord(rawFields) ? rawFields : undefined;
 
     const log = createAppRuntimeLogger(ns);
-    /* SAFETY: 类型断言已复核 */
-    log[level as "info" | "warn" | "error"](msg, fields);
+    log[level](msg, fields);
 
     return NextResponse.json({ ok: true });
   } catch {

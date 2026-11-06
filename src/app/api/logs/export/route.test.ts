@@ -8,6 +8,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { isPlainRecord } from "~/lib/is-record";
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "log-export-"));
 const exportDir = path.join(tmp, "exports");
 
@@ -61,17 +63,31 @@ function post(body: unknown) {
   );
 }
 
+type ExportPayload = {
+  bytes: number;
+  ok: boolean;
+  path: string;
+  relativePath: string;
+};
+
+function isExportPayload(v: unknown): v is ExportPayload {
+  return (
+    isPlainRecord(v) &&
+    typeof v.bytes === "number" &&
+    typeof v.ok === "boolean" &&
+    typeof v.path === "string" &&
+    typeof v.relativePath === "string"
+  );
+}
+
 describe("/api/logs/export", () => {
   it("把内容写进 log/exports/ 并回绝对路径与相对路径", async () => {
     const res = await post({ label: "app-runtime", content: "第一行\n第二行" });
     expect(res.status).toBe(200);
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as {
-      bytes: number;
-      ok: boolean;
-      path: string;
-      relativePath: string;
-    };
+    const data: unknown = await res.json();
+    if (!isExportPayload(data)) {
+      throw new Error(`导出响应形状不符：${JSON.stringify(data)}`);
+    }
     expect(data.ok).toBe(true);
     expect(data.relativePath.startsWith("exports/")).toBe(true);
     expect(fs.readFileSync(data.path, "utf8")).toBe("第一行\n第二行");
@@ -83,10 +99,10 @@ describe("/api/logs/export", () => {
       label: "../../../evil",
       content: "x",
     });
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as {
-      path: string;
-    };
+    const data: unknown = await res.json();
+    if (!isExportPayload(data)) {
+      throw new Error(`导出响应形状不符：${JSON.stringify(data)}`);
+    }
     expect(path.dirname(data.path)).toBe(exportDir);
     expect(path.basename(data.path).startsWith("logs-all-")).toBe(true);
   });
