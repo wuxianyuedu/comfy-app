@@ -16,6 +16,12 @@
  *     仍由这一档背书（`--report` 盘点也是全库）。
  * 三处都由 `tests/doc-check-hook-wiring.test.ts` 钉（钩子里有 + 平台侧有 + 都指这一份脚本）。
  *
+ * ⚠️ `--staged` 另有**一道输入面前置**（ISSUE #3259）：oxfmt 按路径读工作区，不读 index
+ * blob，所以「这批路径此刻在工作区的样子」不必然等于「本次要提交的字节」。判绿之前
+ * 先对 `hits` 查一次 index ⇄ 工作区是否一致；不一致就按 §13.6.3 不给结论（exit 2 +
+ * 点名），一致才往下判 —— 那样判绿才真的推出提交内容干净。只管 `--staged` 这一档：
+ * 平台 `--changed` 判的是 `<基线>...HEAD`，那里的工作区本来就是已提交的树。
+ *
  * ⚠️ **两份扫描面，各管各的**（ISSUE #2979）：改动面两档（`--staged` / `--changed`）
  * 的扫描面 = **改动面 ∩ `GLOBS`**，不过 `IGNORE_GLOBS`；`IGNORE_GLOBS` 只对全量档生效
  * —— 它是「存量迁移」的白名单，不是「这些文件不用管格式」的白名单。
@@ -340,6 +346,40 @@ function stagedFiles() {
 }
 
 /**
+ * 暂存面里「index ⇄ 工作区还不一致」的那批路径（ISSUE #3259）。
+ *
+ * `--staged` 把 `hits` 交给 `oxfmt --check <targets…>`，oxfmt 按路径读的是**工作区**
+ * 文件，不是 index blob。于是判据自称判「暂存的那一批」，真判的却是「这批路径此刻
+ * 在工作区长什么样」：暂存了脏内容、又把工作区改干净（AM）就能拿一个假绿，而
+ * 提交进历史的是那份没过 oxfmt 的 blob；反过来（index 干净、工作区又改脏）会假红。
+ *
+ * 这一格只回答「判据此刻能不能替**要提交的字节**背书」。两边一致时判工作区等价于
+ * 判 index blob，判绿才成立；不一致时按 §13.6.3 不给结论，交回人把两边对齐。
+ *
+ * 为什么用一次不带 `--` 的 `git diff --name-only` 再求交集：① 命令短，不受 Windows
+ * 32K 命令行上限约束（一次提交可以带几百份）；② `git diff` 不列未跟踪文件，正好
+ * 不碰「只判暂存的那一批」那条形；③ 交集只取 `hits`，面外任何没暂存的改动都不
+ * 进这一格 —— 收窄面（ISSUE #1747 / #2979）与合并态收窄（ISSUE #2747）都不受影响。
+ *
+ * 与 `stagedFiles()` 同一把尺子：`core.quotePath=false` + POSIX 路径。
+ * 读不出来返回 null ⇒ 调用方 fail-closed（「判据没跑成」≠「判过了且没问题」）。
+ *
+ * @param {string[]} hits 本次暂存面 ∩ GLOBS 的路径
+ * @returns {string[] | null} 不一致的路径（排序后），或 null = 没读到读数
+ */
+function unstagedOverlap(hits) {
+  const res = spawnSync("git", ["-c", "core.quotePath=false", "diff", "--name-only"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+  if (res.status !== 0) {
+    return null;
+  }
+  const dirty = new Set((res.stdout || "").split(/\r?\n/).filter(Boolean).map(toPosix));
+  return hits.filter((rel) => dirty.has(rel)).sort();
+}
+
+/**
  * oxfmt 调一次 `--check <targets…>` 的**共通壳**：三条 fail-closed 规则 +
  * 剥 ANSI + 抽文件名（两条收集器共用这一份，§12.12）。
  *
@@ -565,6 +605,31 @@ function main() {
         `[format] ✓ 本次提交未触及扫描面（${face.length} 个暂存文件中 0 个在 prettier 靶子内），跳过。`,
       );
       process.exit(0);
+    }
+    /* ISSUE #3259：oxfmt 读的是这些路径在**工作区**的内容，不是 index blob。两者还
+     * 不一致时，这一格没有资格替「要提交的字节」给结论 —— 不给绿、也不给红，
+     * 按 §13.6.3 以 exit 2 收口并点名，让人先把两边对齐再提交。 */
+    const overlap = unstagedOverlap(hits);
+    if (overlap === null) {
+      console.error(
+        "[format] --staged 读不出「暂存区 ⇄ 工作区」的差异（git diff 失败）—— 按 fail-closed\n" +
+          "[format]   判定为「判据没跑成」，以 exit 2 结束（不冒充「这一批都干净」）。",
+      );
+      process.exit(2);
+    }
+    if (overlap.length) {
+      console.error(
+        `[format] --staged 判不了：本次暂存面有 ${overlap.length} 份文件的「暂存内容」与「工作区内容」不一致` +
+          " —— oxfmt 按路径读工作区，判绿推不出提交进去的字节干净。",
+      );
+      for (const line of indentItems(overlap)) {
+        console.error(line);
+      }
+      console.error(
+        "[format]   这一格不给结论（§13.6.3）：既不判绿，也不判红。先把两边对齐再提交：\n" +
+          "[format]   重新 `git add <上面点名的文件>`，或把还没暂存的改动先 `git stash` 起来。",
+      );
+      process.exit(2);
     }
     /* 命中后判**暂存的那一批**，不再回落全库：printWidth 迁移期间全库档对
      * 未迁移的存量恒红（见文件头），而提交这一刻要判的是「这一批带进来干不干净」
