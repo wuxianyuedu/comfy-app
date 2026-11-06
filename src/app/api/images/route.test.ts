@@ -3,8 +3,10 @@
  * 而落点没带过来，404 再被调用点 `catch {}` 咽成「没有图」，界面常年空态、判据全绿（台账 E3‴）。断言钉「碰上游之前被挡下」：
  * 会话闸（同台账 A13）→ 形状闸（`filename`/`subfolder` 目录成分、`type` 不在三值内 → 400 且一次上游都不调）→ 失败分相（上游 404 / 别的状态 / 连不上，后者带 `hint`）。
  */
-import type { NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { isRecord } from "~/lib/is-record";
 
 const { userMock, getView, FakeViewError } = vi.hoisted(() => {
   /** 与真 `ComfyViewError` 同形状；路由里的 `instanceof` 判的就是它（所以必须来自
@@ -36,10 +38,9 @@ vi.mock("~/lib/comfyui/client", () => ({
 import { GET } from "./route";
 
 function get(query: string): NextRequest {
-  /* SAFETY: 类型断言已复核 */
-  return new Request(`http://127.0.0.1:3100/api/images${query}`, {
+  return new NextRequest(`http://127.0.0.1:3100/api/images${query}`, {
     method: "GET",
-  }) as unknown as NextRequest;
+  });
 }
 
 beforeEach(() => {
@@ -122,8 +123,11 @@ describe("上游失败要分相", () => {
     getView.mockRejectedValueOnce(new FakeViewError(404, "getView failed: 404"));
     const res = await GET(get("?filename=gone.png"));
     expect(res.status).toBe(404);
-    /* SAFETY: 类型断言已复核 */
-    expect(((await res.json()) as { error?: string }).error).toBeTruthy();
+    const raw: unknown = await res.json();
+    if (!isRecord(raw) || typeof raw.error !== "string") {
+      throw new Error("响应体缺少 error");
+    }
+    expect(raw.error).toBeTruthy();
   });
 
   it("ComfyUI 回别的状态 → 502，不伪装成 500", async () => {
@@ -135,7 +139,10 @@ describe("上游失败要分相", () => {
     getView.mockRejectedValueOnce(new TypeError("fetch failed"));
     const res = await GET(get("?filename=a.png"));
     expect(res.status).toBe(503);
-    /* SAFETY: 类型断言已复核 */
-    expect(((await res.json()) as { hint?: string }).hint).toBe("comfyui-unreachable");
+    const raw: unknown = await res.json();
+    if (!isRecord(raw) || typeof raw.hint !== "string") {
+      throw new Error("响应体缺少 hint");
+    }
+    expect(raw.hint).toBe("comfyui-unreachable");
   });
 });

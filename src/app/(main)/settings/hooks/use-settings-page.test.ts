@@ -74,12 +74,11 @@ vi.mock("~/lib/log/log-file-client", () => {
       if (!res.ok) {
         return null;
       }
-      /* SAFETY: 类型断言已复核 */
-      return (await res.json()) as {
-        content: string;
-        offset: number;
-        size: number;
-      };
+      const body: unknown = await res.json();
+      if (!isFileLogSlice(body)) {
+        throw new Error("fetchFileLogSlice 的响应体不是 { content, offset, size }");
+      }
+      return body;
     },
   );
   const fetchLogSessions = vi.fn(async (source: string, sessionId?: string) => {
@@ -101,6 +100,49 @@ vi.mock("~/lib/log/log-file-client", () => {
     postAppRuntimeLog: postAppRuntimeLogMock,
   };
 });
+
+/** 运行时收窄：只认非 null 的普通对象（数组不算记录）。 */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** `/api/logs/current` 的切片响应；形状不对就让用例直接失败。 */
+type FileLogSlice = { content: string; offset: number; size: number };
+
+function isFileLogSlice(value: unknown): value is FileLogSlice {
+  return (
+    isRecord(value) &&
+    typeof value.content === "string" &&
+    typeof value.offset === "number" &&
+    typeof value.size === "number"
+  );
+}
+
+/** `postAppRuntimeLog` 的记账条目：level/msg 必须是字符串，fields 若给必须是对象。 */
+type RuntimeLogCall = { fields?: unknown; level: string; msg: string };
+
+function isRuntimeLogCall(value: unknown): value is RuntimeLogCall {
+  return (
+    isRecord(value) &&
+    typeof value.level === "string" &&
+    typeof value.msg === "string" &&
+    (value.fields === undefined || isRecord(value.fields))
+  );
+}
+
+/** 把记账数组当 `unknown` 逐层收窄；形状不对就让用例失败（与原来断言后崩同一判定）。 */
+function readRuntimeLogCalls(): RuntimeLogCall[] {
+  const raw: unknown = runtimeLogCalls;
+  if (!Array.isArray(raw)) {
+    throw new Error("runtimeLogCalls 不是数组");
+  }
+  const entries = raw.filter(isRuntimeLogCall);
+  if (entries.length !== raw.length) {
+    throw new Error("runtimeLogCalls 含非日志条目");
+  }
+  return entries;
+}
+
 const probeMock = vi.mocked(probeOllama);
 const startMock = vi.mocked(startOllama);
 
@@ -553,19 +595,13 @@ describe("useSettingsPage", () => {
 
   /* 回归 #273：设置加载失败只体现在降级 UI，不经过 console/unhandledrejection，
    * 日志面板里什么也没有。现在失败会主动落 app-runtime 错误日志（面板轮询可见）。 */
-  /* SAFETY: 类型断言已复核 */
   it("查询失败时把错误落 app-runtime 日志且同一错误只记一次", async () => {
     behavior.llmError = "数据库被锁";
-    (runtimeLogCalls as unknown as Array<unknown>).length = 0;
+    runtimeLogCalls.length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    /* SAFETY: 类型断言已复核 */
-    await expect
-      .poll(() =>
-        (runtimeLogCalls as unknown as Array<{ level: string }>).some((c) => c.level === "error"),
-      )
-      .toBe(true);
+    await expect.poll(() => readRuntimeLogCalls().some((c) => c.level === "error")).toBe(true);
     /* llm.configGet 失败、setting.get 成功 → 草稿仍为空（一份都不齐）。
      * 本次运行没有成功读过的配置 → 没有兜底可用，必须落整页降级 UI 拿到重试与
      * 日志出口，而不是 「配置数据未就绪」死角（见下方 ISSUE #304 的专项回归）。 */
@@ -573,10 +609,7 @@ describe("useSettingsPage", () => {
     expect(result.current.hasError).toBe(true);
     expect(result.current.serveState).toBeNull();
     expect(result.current.errorText).toContain("数据库被锁");
-    /* SAFETY: 类型断言已复核 */
-    const errors = (runtimeLogCalls as unknown as Array<{ level: string; msg: string }>).filter(
-      (c) => c.level === "error",
-    );
+    const errors = readRuntimeLogCalls().filter((c) => c.level === "error");
     expect(errors.length).toBe(1);
     expect(errors[0]?.msg).toContain("数据库被锁");
 
@@ -584,10 +617,7 @@ describe("useSettingsPage", () => {
     act(() => {
       result.current.retry();
     });
-    /* SAFETY: 类型断言已复核 */
-    const errorsAfter = (
-      runtimeLogCalls as unknown as Array<{ level: string; msg: string }>
-    ).filter((c) => c.level === "error");
+    const errorsAfter = readRuntimeLogCalls().filter((c) => c.level === "error");
     expect(errorsAfter.length).toBe(1);
   });
 
@@ -646,60 +676,44 @@ describe("useSettingsPage", () => {
   /* 回归 ISSUE #304：补记日志时把原始报错（tRPC code / 服务端原文 / 堆栈首行）
    * 一并落盘。此前只记翻译后的可读文案，服务端真实报错在面板里彻底丢失，
    * 拿着「请求被中断」的提示无从排查。 */
-  /* SAFETY: 类型断言已复核 */
   it("补记 app-runtime 时带上原始报错（raw 字段）", async () => {
     behavior.llmError = "no such table: llmConfig";
-    (runtimeLogCalls as unknown as Array<unknown>).length = 0;
+    runtimeLogCalls.length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.hasError).toBe(true);
-    /* SAFETY: 类型断言已复核 */
-    await expect
-      .poll(() =>
-        (runtimeLogCalls as unknown as Array<{ level: string }>).some((c) => c.level === "error"),
-      )
-      .toBe(true);
+    await expect.poll(() => readRuntimeLogCalls().some((c) => c.level === "error")).toBe(true);
 
-    /* SAFETY: 类型断言已复核 */
-    const entry = (
-      runtimeLogCalls as unknown as Array<{
-        fields?: { query?: string; raw?: string };
-        level: string;
-      }>
-    ).find((c) => c.level === "error");
-    expect(entry?.fields?.query).toBe("llm.configGet");
+    const entry = readRuntimeLogCalls().find((c) => c.level === "error");
+    const fields = entry?.fields;
+    if (!isRecord(fields)) {
+      throw new Error("错误日志条目缺少 fields");
+    }
+    expect(fields.query).toBe("llm.configGet");
     // raw 是「给排查用」的原文，应含服务端报错本身
-    expect(entry?.fields?.raw).toContain("no such table: llmConfig");
+    expect(fields.raw).toContain("no such table: llmConfig");
   });
 
   /* 回归 ISSUE #304：两个查询同批失败时，日志字段要把**两个**查询名都记上，
    * 否则只看得到其中一条，另一条的失败在面板里无从对应。 */
-  /* SAFETY: 类型断言已复核 */
   it("两个查询都失败时，日志字段记全两条查询名", async () => {
     behavior.llmError = "llm 炸了";
     behavior.settingsError = "settings 炸了";
-    (runtimeLogCalls as unknown as Array<unknown>).length = 0;
+    runtimeLogCalls.length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.hasError).toBe(true);
-    /* SAFETY: 类型断言已复核 */
-    await expect
-      .poll(() =>
-        (runtimeLogCalls as unknown as Array<{ level: string }>).some((c) => c.level === "error"),
-      )
-      .toBe(true);
+    await expect.poll(() => readRuntimeLogCalls().some((c) => c.level === "error")).toBe(true);
 
-    /* SAFETY: 类型断言已复核 */
-    const entry = (
-      runtimeLogCalls as unknown as Array<{
-        fields?: { query?: string };
-        level: string;
-      }>
-    ).find((c) => c.level === "error");
-    expect(entry?.fields?.query).toContain("setting.get");
-    expect(entry?.fields?.query).toContain("llm.configGet");
+    const entry = readRuntimeLogCalls().find((c) => c.level === "error");
+    const fields = entry?.fields;
+    if (!isRecord(fields)) {
+      throw new Error("错误日志条目缺少 fields");
+    }
+    expect(fields.query).toContain("setting.get");
+    expect(fields.query).toContain("llm.configGet");
   });
 
   it("startOllama 失败 → flash 出可读文案（失败路径必须有出口）", async () => {

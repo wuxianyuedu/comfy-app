@@ -6,6 +6,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
+import { isRecord } from "~/lib/is-record";
+
 const { requireRequestUser, readFile, stat } = vi.hoisted(() => ({
   requireRequestUser: vi.fn<() => Promise<{ id: string } | null>>(),
   readFile: vi.fn<(p: string) => Promise<string>>(),
@@ -106,8 +108,10 @@ describe("GET /api/debug/source", () => {
     const { GET } = await import("./route");
     const res = await GET(requestWith("src/lib/clamp.ts"));
     expect(res.status).toBe(200);
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as Record<string, string | number>;
+    const body: unknown = await res.json();
+    if (!isRecord(body)) {
+      throw new Error("响应体不是对象");
+    }
     expect(body.content).toBe("export const x = 1;");
     expect(body.size).toBe(19);
     expect(body.modifiedAt).toBe(mtime.toISOString());
@@ -125,11 +129,11 @@ describe("GET /api/debug/source", () => {
     const { GET } = await import("./route");
     const res = await GET(requestWith("src/lib/does-not-exist.ts"));
     expect(res.status).toBe(404);
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as {
-      error: string;
-    };
-    expect(body.error).toBe("file not found");
-    expect(body.error).not.toContain("ENOENT");
+    const raw: unknown = await res.json();
+    if (!isRecord(raw) || typeof raw.error !== "string") {
+      throw new Error("响应体缺少 error");
+    }
+    expect(raw.error).toBe("file not found");
+    expect(raw.error).not.toContain("ENOENT");
   });
 });

@@ -5,6 +5,8 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 const probeSchemaSync = vi.fn<() => "ready" | "missing" | "unknown">();
 
 vi.mock("~/lib/db-schema-ready", () => ({
@@ -46,16 +48,14 @@ describe("GET /api/health", () => {
     const { GET } = await import("./route");
     const res = await GET(new Request("http://127.0.0.1:3000/api/health"));
     expect(res.status).toBe(503);
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as {
-      db: string;
-      hint: string;
-      status: string;
-    };
-    expect(body.db).toBe("empty");
-    expect(body.status).toBe("error");
+    const raw: unknown = await res.json();
+    if (!isRecord(raw) || typeof raw.hint !== "string") {
+      throw new Error("响应体缺少 hint");
+    }
+    expect(raw.db).toBe("empty");
+    expect(raw.status).toBe("error");
     // 失败路径必须有可行动出口（规范 §9.2 第 3 条），不能只报「错了」。
-    expect(body.hint).toContain("db:push");
+    expect(raw.hint).toContain("db:push");
   });
 
   it("库文件缺失 / 不是 SQLite 时返回 503 + db: unknown", async () => {
@@ -131,13 +131,13 @@ describe("GET /api/health 跨域面（D5）", () => {
   it("503 的 hint 不含内部文档路径（响应体不给仓库文档当出口）", async () => {
     probeSchemaSync.mockReturnValue("missing");
     const { GET } = await import("./route");
-    /* SAFETY: 类型断言已复核 */
-    const body = (await (await GET(new Request(url))).json()) as {
-      hint: string;
-    };
-    expect(body.hint).not.toContain("docs/");
-    expect(body.hint).not.toContain("standards/");
+    const raw: unknown = await (await GET(new Request(url))).json();
+    if (!isRecord(raw) || typeof raw.hint !== "string") {
+      throw new Error("响应体缺少 hint");
+    }
+    expect(raw.hint).not.toContain("docs/");
+    expect(raw.hint).not.toContain("standards/");
     /* 但「先说自己会好」那一层要在：桌包首启是常规形态，用户此刻什么都不必做。 */
-    expect(body.hint).toContain("自动建表");
+    expect(raw.hint).toContain("自动建表");
   });
 });

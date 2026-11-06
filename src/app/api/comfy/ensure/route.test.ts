@@ -5,6 +5,8 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 const AUTOSTART_TIMEOUT_MS = 120_000;
 
 /** `ensureComfyUiReady` 的入参形状（路由传的是短窗口 timeoutMs + onLog）。 */
@@ -109,12 +111,7 @@ describe("POST /api/comfy/ensure", () => {
     const { POST } = await import("./route");
     const res = await POST();
     expect(res.status).toBe(503);
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as {
-      detail: string;
-      ok: boolean;
-      pending: boolean;
-    };
+    const body: unknown = await res.json();
     expect(body).toEqual({
       ok: false,
       pending: false,
@@ -128,12 +125,12 @@ describe("POST /api/comfy/ensure", () => {
     probeComfyUi.mockResolvedValueOnce(null);
     ensureComfyUiReady.mockRejectedValueOnce("boom");
     const { POST } = await import("./route");
-    /* SAFETY: 类型断言已复核 */
-    const body = (await (await POST()).json()) as {
-      detail: string;
-    };
-    expect(body.detail).toBeTruthy();
-    expect(body.detail).not.toBe("undefined");
+    const raw: unknown = await (await POST()).json();
+    if (!isRecord(raw) || typeof raw.detail !== "string") {
+      throw new Error("响应体缺少 detail");
+    }
+    expect(raw.detail).toBeTruthy();
+    expect(raw.detail).not.toBe("undefined");
   });
 
   it("单次请求只等短窗口：整段冷启动交给前端轮，而不是把请求挂死", async () => {

@@ -3,9 +3,11 @@
  * 断言把 `process.cwd()` 顶到临时目录 —— 谁再手写一份落点就会写到临时目录之外，当场看得见（台账 A8 第二段）。
  * mock 边界：`fs`（内存假象，写与 mkdir 调用都记下 ——「拒绝发生在落盘之前」是要断言的事）、`request-user`（鉴权两态）。
  */
-import type { NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 import path from "node:path";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+
+import { isRecord } from "~/lib/is-record";
 
 const { userMock, writes } = vi.hoisted(() => ({
   userMock: vi.fn<() => Promise<{ id: string } | null>>(),
@@ -48,13 +50,12 @@ afterEach(() => {
   cwdSpy.mockClear();
 });
 
-/** handler 只要 `formData()`，用真 Request 顶替 NextRequest。 */
+/** handler 只要 `formData()`，用真 NextRequest 顶替。 */
 function reqWith(form: FormData): NextRequest {
-  /* SAFETY: 类型断言已复核 */
-  return new Request("http://localhost/api/film/bgm", {
+  return new NextRequest("http://localhost/api/film/bgm", {
     method: "POST",
     body: form,
-  }) as unknown as NextRequest;
+  });
 }
 
 function audioForm(name: string, type: string, bytes = "ID3"): FormData {
@@ -67,10 +68,11 @@ describe("POST /api/film/bgm", () => {
   it("成功的落点由 filmBgmRoot() 派生：文件名带 bgm- 前缀，后缀不重复", async () => {
     const res = await POST(reqWith(audioForm("主题曲.mp3", "audio/mpeg")));
     expect(res.status).toBe(200);
-    /* SAFETY: 类型断言已复核 */
-    const { name } = (await res.json()) as {
-      name: string;
-    };
+    const raw: unknown = await res.json();
+    if (!isRecord(raw) || typeof raw.name !== "string") {
+      throw new Error("响应体缺少 name");
+    }
+    const { name } = raw;
     expect(writes.mkdir).toEqual([filmBgmRoot(generatedRoot(TMP))]);
     expect(writes.writeFile).toEqual([path.join(filmBgmRoot(), name)]);
     expect(name).toMatch(/^bgm-[0-9a-z-]+_主题曲\.mp3$/);
@@ -96,20 +98,15 @@ describe("POST /api/film/bgm", () => {
   });
 
   it("请求体不是 multipart → 400「表单解析失败」", async () => {
-    /* SAFETY: 类型断言已复核 */
-    const req = new Request("http://localhost/api/film/bgm", {
+    const req = new NextRequest("http://localhost/api/film/bgm", {
       method: "POST",
       headers: { "content-type": "text/plain" },
       body: "not-a-form",
-    }) as unknown as NextRequest;
+    });
     const res = await POST(req);
     expect(res.status).toBe(400);
-    /* SAFETY: 类型断言已复核 */
-    expect(
-      (await res.json()) as {
-        error: string;
-      },
-    ).toEqual({
+    const body: unknown = await res.json();
+    expect(body).toEqual({
       error: "表单解析失败",
     });
   });

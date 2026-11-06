@@ -4,6 +4,7 @@
  * `Range` 复用同一串判定且只读要的那一段；读不到 404（不抛 EISDIR/EACCES 原文）；`Content-Type` 走 `contentTypeForPath`，缓存 `private`+`immutable`；Range 三态 206/416/忽略回 200。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
 
 const { stat, open, readCalls, disk, userMock, loginRequiredMock, foreignMock } = vi.hoisted(
   () => ({
@@ -53,11 +54,10 @@ function paramsOf(path: Array<string> | undefined) {
 
 function get(path: Array<string> | undefined, range?: string) {
   return import("./route").then(({ GET }) =>
-    /* SAFETY: type assertion reviewed */
     GET(
-      new Request("http://x/api/generated", {
+      new NextRequest("http://x/api/generated", {
         headers: range === undefined ? {} : { range },
-      }) as never,
+      }),
       paramsOf(path),
     ),
   );
@@ -201,10 +201,16 @@ describe("整份读（没有 Range）", () => {
     expect(cache).toMatch(/^private\b/);
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes);
     // 读的是根目录内的那个文件，不是别处。
-    /* SAFETY: type assertion reviewed */
-    expect(normalize(stat.mock.calls[0]?.[0] as string)).toBe(`${artifactRoot}/t1/a.png`);
-    /* SAFETY: type assertion reviewed */
-    expect(normalize(open.mock.calls[0]?.[0] as string)).toBe(`${artifactRoot}/t1/a.png`);
+    const statArg: unknown = stat.mock.calls[0]?.[0];
+    if (typeof statArg !== "string") {
+      throw new Error("stat 的首个调用参数不是路径字符串");
+    }
+    expect(normalize(statArg)).toBe(`${artifactRoot}/t1/a.png`);
+    const openArg: unknown = open.mock.calls[0]?.[0];
+    if (typeof openArg !== "string") {
+      throw new Error("open 的首个调用参数不是路径字符串");
+    }
+    expect(normalize(openArg)).toBe(`${artifactRoot}/t1/a.png`);
   });
 
   it("Accept-Ranges 在场，客户端才知道可以分段要", async () => {

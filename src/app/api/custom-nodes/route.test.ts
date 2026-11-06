@@ -6,10 +6,11 @@
 import path from "node:path";
 import type * as nodeFs from "node:fs";
 import type { PathLike } from "node:fs";
-import type { NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 import { customNodesManifestPath } from "~/lib/comfyui/custom-nodes-manifest.server";
+import { isRecord } from "~/lib/is-record";
 import { pythonCandidates } from "~/lib/process/python-candidates";
 
 type Cb = (...args: Array<unknown>) => void;
@@ -43,7 +44,7 @@ const { spawnMock, userMock, settingsMock, fsState } = vi.hoisted(() => {
   const files = new Map<string, StubFile>();
   const reads = new Map<string, number>();
   return {
-    spawnMock: vi.fn(),
+    spawnMock: vi.fn<(command: string, args?: Array<string>) => unknown>(),
     userMock: vi.fn<() => Promise<{ id: string } | null>>(),
     settingsMock: vi.fn<() => { comfyuiPath: string }>(() => ({
       comfyuiPath: "C:/ComfyUI",
@@ -68,13 +69,22 @@ vi.mock("~/lib/envfile", () => ({ readEnvVar: () => undefined }));
  * 一律转调真实现 —— 摘要与指纹的逻辑本身必须由被测代码真跑一遍。 */
 vi.mock("node:fs", async (importOriginal) => {
   const real = await importOriginal<typeof nodeFs>();
-  const keyOf = (p: unknown): string =>
-    /* SAFETY: 类型断言已复核 */
-    typeof p === "string"
-      ? p
-      : p instanceof URL
-        ? p.href
-        : (p as { toString(): string }).toString();
+  /** `unknown` 收窄成 `BufferEncoding`：只认 Node 自己认的编码名。 */
+  const isBufferEncoding = (v: unknown): v is BufferEncoding =>
+    typeof v === "string" && Buffer.isEncoding(v);
+  /** `PathLike`（string / URL / Buffer）→ 登记表的键；别的形状这里不认识。 */
+  const keyOf = (p: unknown): string => {
+    if (typeof p === "string") {
+      return p;
+    }
+    if (p instanceof URL) {
+      return p.href;
+    }
+    if (Buffer.isBuffer(p)) {
+      return p.toString();
+    }
+    throw new Error(`桩 fs 不认识的路径类型：${String(p)}`);
+  };
   const stub = {
     ...real,
     existsSync: (p: PathLike): boolean => {
@@ -98,8 +108,16 @@ vi.mock("node:fs", async (importOriginal) => {
       const k = keyOf(p);
       const hit = fsState.files.get(k);
       if (!hit) {
-        /* SAFETY: 类型断言已复核 */
-        return (real.readFileSync as (a: unknown, b: unknown) => unknown)(p, options);
+        if (options === undefined) {
+          return real.readFileSync(p);
+        }
+        if (options === null) {
+          return real.readFileSync(p, null);
+        }
+        if (isBufferEncoding(options)) {
+          return real.readFileSync(p, options);
+        }
+        throw new Error(`桩 fs 不认识的 readFileSync options 类型：${typeof options}`);
       }
       if (hit.missing === true || hit.readFails === true) {
         /* SAFETY: 类型断言已复核 */
@@ -118,8 +136,7 @@ vi.mock("node:fs", async (importOriginal) => {
       const k = keyOf(p);
       const hit = fsState.files.get(k);
       if (!hit) {
-        /* SAFETY: 类型断言已复核 */
-        return (real.statSync as (a: unknown) => unknown)(p);
+        return real.statSync(p);
       }
       if (hit.missing === true || hit.statFails === true) {
         /* SAFETY: 类型断言已复核 */
@@ -143,6 +160,44 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 import { GET, POST } from "./route";
+
+/** `unknown` → 对象视图；不是对象就当场失败（与旧断言后崩溃是同一个判定）。 */
+function recordOf(v: unknown, label: string): Record<string, unknown> {
+  if (!isRecord(v)) {
+    throw new Error(`${label} 不是对象：${String(v)}`);
+  }
+  return v;
+}
+
+/** `unknown` → 元素仍是 `unknown` 的数组；不是数组就当场失败。 */
+function isUnknownArray(v: unknown): v is Array<unknown> {
+  return Array.isArray(v);
+}
+
+function arrayOf(v: unknown, label: string): Array<unknown> {
+  if (!isUnknownArray(v)) {
+    throw new Error(`${label} 不是数组：${String(v)}`);
+  }
+  return v;
+}
+
+/** `unknown` → 字符串数组；任一项不是字符串就当场失败。 */
+function stringArrayOf(v: unknown, label: string): Array<string> {
+  const out: Array<string> = [];
+  for (const item of arrayOf(v, label)) {
+    if (typeof item !== "string") {
+      throw new Error(`${label} 含非字符串：${String(item)}`);
+    }
+    out.push(item);
+  }
+  return out;
+}
+
+/** 读响应体并收窄成对象：不是对象就当场失败。 */
+async function jsonRecord(res: Response, label: string): Promise<Record<string, unknown>> {
+  const body: unknown = await res.json();
+  return recordOf(body, label);
+}
 
 /** 被测代码里那两个落点（与 `route.ts` 的常量同一算法，不是抄来的字面量）。 */
 const MANIFEST = customNodesManifestPath();
@@ -196,20 +251,22 @@ function emitClose(child: FakeChild, code: number) {
 }
 
 async function post(body: unknown) {
-  /* SAFETY: 类型断言已复核 */
-  const req = new Request("http://127.0.0.1:3000/api/custom-nodes", {
+  const req = new NextRequest("http://127.0.0.1:3000/api/custom-nodes", {
     method: "POST",
     headers: { "content-type": "application/json" },
     // body 允许是「不是 JSON」的原文 —— 畸形体这一路也在测
     body: typeof body === "string" ? body : JSON.stringify(body),
-  }) as unknown as NextRequest;
+  });
   return POST(req);
 }
 
 /** 取 argv（spawn 的第二个入参）。 */
 function argv(i = 0): Array<string> {
-  /* SAFETY: 类型断言已复核 */
-  return spawnMock.mock.calls[i]?.[1] as Array<string>;
+  const args = spawnMock.mock.calls[i]?.[1];
+  if (!args) {
+    throw new Error(`第 ${i} 次 spawn 没有 argv`);
+  }
+  return args;
 }
 
 /**
@@ -283,11 +340,7 @@ describe("POST /api/custom-nodes —— 鉴权与请求体", () => {
       localWorkflowsPath: "C:/Windows",
     });
     expect(res.status).toBe(200);
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as {
-      localWorkflowPaths: Array<string>;
-      paths: Array<string>;
-    };
+    const body = await jsonRecord(res, "saveSettings 响应体");
     expect(body.paths).toEqual(["C:/ComfyUI/custom_nodes"]);
     expect(body.localWorkflowPaths).toEqual(["C:/ComfyUI/workflows"]);
     expect(spawnMock).not.toHaveBeenCalled();
@@ -378,11 +431,7 @@ describe("POST parse —— argv 注入闸门（台账 A6）", () => {
     settingsMock.mockReturnValue({ comfyuiPath: "" });
     const res = await post({ action: "parse" });
     expect(res.status).toBe(400);
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as {
-      error: string;
-      ok: boolean;
-    };
+    const body = await jsonRecord(res, "缺路径响应体");
     expect(body.ok).toBe(false);
     expect(body.error).toContain("CUSTOM_NODES_PATH");
     expect(spawnMock).not.toHaveBeenCalled();
@@ -467,8 +516,7 @@ describe("POST parse —— 解释器退避与收尾归属（台账 A14）", () 
       if (String(command) !== "py") {
         continue;
       }
-      /* SAFETY: 类型断言已复核 */
-      expect((args as Array<string>)[0]).toBe("-3");
+      expect(args?.[0]).toBe("-3");
     }
   });
 });
@@ -657,8 +705,10 @@ const FULL_MANIFEST = {
 /** 摘要事件里的 `summary` 字段（冷/热两种返回形态都走这一个口子取）。 */
 async function summaryOf(): Promise<Record<string, unknown> | null> {
   const payload = await payloadOf();
-  /* SAFETY: 类型断言已复核 */
-  return payload.summary as Record<string, unknown> | null;
+  if (payload.summary === null) {
+    return null;
+  }
+  return recordOf(payload.summary, "summary");
 }
 
 /**
@@ -674,20 +724,19 @@ async function payloadOf(): Promise<Record<string, unknown>> {
   if ((res.headers.get("content-type") ?? "").includes("ndjson")) {
     return eventOf(await eventsOf(res), "summary");
   }
-  /* SAFETY: 类型断言已复核 */
-  return (await res.json()) as Record<string, unknown>;
+  return jsonRecord(res, "GET 载荷");
 }
 
 /** 把流式响应读到底，按行解析成事件数组。 */
 async function eventsOf(res: Response): Promise<Array<Record<string, unknown>>> {
   const text = await res.text();
-  return (
-    text
-      .split("\n")
-      .filter((line) => line.trim() !== "")
-      /* SAFETY: 类型断言已复核 */
-      .map((line) => JSON.parse(line) as Record<string, unknown>)
-  );
+  return text
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .map((line) => {
+      const parsed: unknown = JSON.parse(line);
+      return recordOf(parsed, "ndjson 事件");
+    });
 }
 
 describe("GET /api/custom-nodes —— 鉴权与错误信封", () => {
@@ -710,33 +759,26 @@ describe("GET /api/custom-nodes —— 鉴权与错误信封", () => {
     fsState.files.set(MANIFEST, { text: "{}", existsFails: true });
     const res = await GET();
     expect(res.status).toBe(500);
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as {
-      error?: { code?: string; message?: string };
-    };
-    expect(body.error?.code).toBe("custom_nodes.read_failed");
+    const body = await jsonRecord(res, "读盘失败响应体");
+    const error = recordOf(body.error, "error 信封");
+    expect(error.code).toBe("custom_nodes.read_failed");
     // 详情取到了就说清是哪一步取不到：错误原文本身已经指名了机制（EACCES）。
-    expect(body.error?.message).toContain("EACCES");
+    expect(error.message).toContain("EACCES");
   });
 
   it("抛上来的东西没有可读详情 → 兜底成「读取配置失败」，而不是空文案或 undefined", async () => {
     fsState.files.set(MANIFEST, { text: "{}", existsFails: "silent" });
     const res = await GET();
     expect(res.status).toBe(500);
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as {
-      error?: { message?: string };
-    };
-    expect(body.error?.message).toBe("读取配置失败");
+    const body = await jsonRecord(res, "兜底错误响应体");
+    const error = recordOf(body.error, "error 信封");
+    expect(error.message).toBe("读取配置失败");
   });
 
   it("500 的信封里只有 error —— 消费方靠「没有 settings」判失败，形状不许偷偷加字段", async () => {
     fsState.files.set(MANIFEST, { text: "{}", existsFails: true });
     const res = await GET();
-    expect(
-      /* SAFETY: 类型断言已复核 */
-      Object.keys((await res.json()) as Record<string, unknown>),
-    ).toEqual(["error"]);
+    expect(Object.keys(await jsonRecord(res, "500 信封"))).toEqual(["error"]);
   });
 });
 
@@ -746,15 +788,16 @@ describe("GET 摘要：清单的六种坏法", () => {
     const events = await getEvents();
     const summary = eventOf(events, "summary");
     expect(summary.summary).toBeNull();
-    /* SAFETY: 类型断言已复核 */
-    const settings = summary.settings as {
-      localWorkflowPaths: Array<string>;
-      paths: Array<string>;
-    };
+    const settings = recordOf(summary.settings, "summary.settings");
+    const paths = stringArrayOf(settings.paths, "settings.paths");
+    const localWorkflowPaths = stringArrayOf(
+      settings.localWorkflowPaths,
+      "settings.localWorkflowPaths",
+    );
     // 两个伴随字段都得指向**同一个安装根**（对话框靠它们在同一屏里配对显示）。
-    expect(settings.paths).toEqual([parent]);
-    expect(path.dirname(settings.localWorkflowPaths[0] ?? "")).toBe(path.dirname(parent));
-    expect(settings.localWorkflowPaths[0]).toMatch(/workflows$/);
+    expect(paths).toEqual([parent]);
+    expect(path.dirname(localWorkflowPaths[0] ?? "")).toBe(path.dirname(parent));
+    expect(localWorkflowPaths[0]).toMatch(/workflows$/);
   });
 
   it.for(["42", '"一段字符串"', "[1,2]", "null", "true"])(
@@ -924,9 +967,7 @@ describe("GET 的 lastReport：原样透传，读不出来时按 null", () => {
     putReport("{ 半截");
     const events = await getEvents();
     expect(eventOf(events, "summary").lastReport).toBeNull();
-    /* SAFETY: 类型断言已复核 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 值来自 JSON.parse 后 as 断言出的外部形状，类型按非空标，保留 ?. 防线
-    expect((eventOf(events, "summary").summary as Record<string, unknown>)?.totalNodes).toBe(2);
+    expect(recordOf(eventOf(events, "summary").summary, "summary").totalNodes).toBe(2);
   });
 
   it("报告有效时逐字段原样透（视图侧要读 mode / addedNodes 这些增量字段）", async () => {
@@ -961,8 +1002,10 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
     const events = text
       .split("\n")
       .filter((l) => l.trim() !== "")
-      /* SAFETY: 类型断言已复核 */
-      .map((l) => JSON.parse(l) as Record<string, unknown>);
+      .map((l) => {
+        const parsed: unknown = JSON.parse(l);
+        return recordOf(parsed, "ndjson 事件");
+      });
     expect(events.map((e) => e.type)).toEqual([
       "discover_start",
       "progress",
@@ -994,12 +1037,10 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
 
     const res = await GET();
     expect(res.headers.get("content-type")).toContain("application/json");
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as Record<string, unknown>;
+    const body = await jsonRecord(res, "热路径响应体");
     expect(spawnMock).toHaveBeenCalledTimes(1);
     expect(body.discoveredByParent).toEqual({ [parent]: [{ name: "Foo" }] });
-    /* SAFETY: 类型断言已复核 */
-    expect((body.summary as Record<string, unknown>).totalNodes).toBe(2);
+    expect(recordOf(body.summary, "body.summary").totalNodes).toBe(2);
     expect(body.settings).toMatchObject({ paths: [parent] });
   });
 
@@ -1024,8 +1065,7 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
     expect(events.map((e) => e.type)).toEqual(["discover_start", "summary", "done"]);
     expect(events[0]).toMatchObject({ parents: [], total: 0 });
     expect(spawnMock).not.toHaveBeenCalled();
-    /* SAFETY: 类型断言已复核 */
-    expect((eventOf(events, "summary").summary as Record<string, unknown>).totalNodes).toBe(2);
+    expect(recordOf(eventOf(events, "summary").summary, "summary").totalNodes).toBe(2);
   });
 
   it("流内部起进程失败 → 出一条 error 事件并把流收尾，不是半截挂着", async () => {
@@ -1033,10 +1073,7 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
     const events = await getEvents();
     expect(events.map((e) => e.type)).toEqual(["discover_start", "progress", "error"]);
     expect(events[2]).toMatchObject({ type: "error" });
-    expect(
-      /* SAFETY: 类型断言已复核 */
-      String((events[2] as { message?: string }).message ?? ""),
-    ).not.toBe("");
+    expect(recordOf(events[2], "error 事件").message ?? "").not.toBe("");
   });
 
   it("byPath 把同一个目录的两种写法归一到同一个键（界面上「已载入/已过期」靠它）", async () => {
@@ -1048,8 +1085,7 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
     });
     scriptDiscover([JSON.stringify({ packages: [] })]);
     const events = await getEvents();
-    /* SAFETY: 类型断言已复核 */
-    const byPath = eventOf(events, "summary").byPath as Record<string, unknown>;
+    const byPath = recordOf(eventOf(events, "summary").byPath, "summary.byPath");
     expect(Object.keys(byPath)).toHaveLength(1);
     const key = Object.keys(byPath)[0] ?? "";
     expect(key).toBe(key.toLowerCase());
@@ -1304,11 +1340,8 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
       lines: [JSON.stringify({ packages: [{ name: "Old", path: "/tmp/a" }] }), ONE_PKG_LINE],
     });
     const events = await getEvents();
-    /* SAFETY: 类型断言已复核 */
-    const packages = eventOf(events, "discover_done").packages as Array<{
-      name: string;
-    }>;
-    expect(packages.map((p) => p.name)).toEqual(["Foo"]);
+    const packages = arrayOf(eventOf(events, "discover_done").packages, "discover_done.packages");
+    expect(packages.map((p) => recordOf(p, "package").name)).toEqual(["Foo"]);
   });
 
   it("收尾时最后一行不是合法 JSON → 失败进度里带退出码，流不挂着", async () => {
