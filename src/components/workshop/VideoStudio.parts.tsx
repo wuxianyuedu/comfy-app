@@ -252,10 +252,10 @@ export function ShotCard({
                 className="bg-subtle! border-border! text-2xs"
                 labels={MOTION_LABELS}
                 onChange={(v) => {
-                  onPatch({
-                    /* SAFETY: 类型断言已复核 */
-                    motion: v as MotionLevel,
-                  });
+                  const motion = MOTIONS.find((item) => item === v);
+                  if (motion !== undefined) {
+                    onPatch({ motion });
+                  }
                 }}
                 options={MOTIONS}
                 placeholder="运动"

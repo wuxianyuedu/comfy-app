@@ -7,6 +7,19 @@ import { afterEach, describe, expect, it } from "vitest";
 import { WorkshopHeader } from "./WorkshopHeader";
 import { STAGE_DEFS, computeStageRatios, type HealthRow } from "./stage-config";
 
+const STAGE_IDS: Record<HealthRow["id"], true> = {
+  script: true,
+  character: true,
+  storyboard: true,
+  shots: true,
+  video: true,
+  render: true,
+};
+
+function isStageId(value: string): value is HealthRow["id"] {
+  return Object.hasOwn(STAGE_IDS, value);
+}
+
 function healthOf(overrides: Partial<Record<string, boolean | number>> = {}): Array<HealthRow> {
   const rows = computeStageRatios(
     {
@@ -20,19 +33,20 @@ function healthOf(overrides: Partial<Record<string, boolean | number>> = {}): Ar
     },
     true,
   );
-  /* SAFETY: 类型断言已复核 */
-  return (Object.keys(rows) as Array<HealthRow["id"]>).map((id) => {
-    const override = overrides[id];
-    const ratio = typeof override === "number" ? override : override === true ? 1 : 0;
-    /* 缩略与全名故意取不同值：写成一样就无法证明视图分别用了这两个字段。 */
-    return {
-      id,
-      label: id,
-      shortLabel: id.slice(0, 2),
-      ratio,
-      pending: ratio < 1,
-    };
-  });
+  return Object.keys(rows)
+    .filter(isStageId)
+    .map((id) => {
+      const override = overrides[id];
+      const ratio = typeof override === "number" ? override : override === true ? 1 : 0;
+      /* 缩略与全名故意取不同值：写成一样就无法证明视图分别用了这两个字段。 */
+      return {
+        id,
+        label: id,
+        shortLabel: id.slice(0, 2),
+        ratio,
+        pending: ratio < 1,
+      };
+    });
 }
 
 function renderHeader(health: Array<HealthRow>) {

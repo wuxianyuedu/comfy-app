@@ -2,6 +2,8 @@
 // 配了本地/远程 LLM 时就用它；没配则回落到一个脚本化的离线状态机，
 // 保证多轮流程始终可用。
 
+import { isRecord } from "~/lib/is-record";
+
 export type AgentSpec = {
   kind?: "image" | "video";
   negative?: string;
@@ -131,6 +133,14 @@ type RawSpec = {
   skillHint?: unknown;
 };
 
+function isRawSpec(v: unknown): v is RawSpec {
+  if (!isRecord(v)) {
+    return false;
+  }
+  const params = v.params;
+  return params === undefined || isRecord(params);
+}
+
 function normalizeSpec(s: RawSpec | null | undefined): AgentSpec {
   const params = s?.params ?? {};
   return {
@@ -146,6 +156,30 @@ function normalizeSpec(s: RawSpec | null | undefined): AgentSpec {
     },
     skillHint: typeof s?.skillHint === "string" ? s.skillHint : undefined,
   };
+}
+
+/* 从响应体里取正文：先认顶层的 `content`，再认 OpenAI 风格
+ * `choices[0].message.content`；都不是字符串时按空串处理。 */
+function readAgentContent(data: unknown): string {
+  if (!isRecord(data)) {
+    return "";
+  }
+  if (typeof data.content === "string") {
+    return data.content;
+  }
+  const choices = data.choices;
+  if (!Array.isArray(choices)) {
+    return "";
+  }
+  const first: unknown = choices[0];
+  if (!isRecord(first)) {
+    return "";
+  }
+  const message = first.message;
+  if (!isRecord(message)) {
+    return "";
+  }
+  return typeof message.content === "string" ? message.content : "";
 }
 
 /**
@@ -168,28 +202,23 @@ export async function chatAgent(history: Array<ChatMessage>): Promise<AgentTurnR
     if (!res.ok) {
       throw new Error("llm failed");
     }
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-      content?: string;
-    };
-    const content = data.content ?? data.choices?.[0]?.message?.content ?? "";
+    const data: unknown = await res.json();
+    const content = readAgentContent(data);
     const jsonMatch = /\{[\s\S]*\}/.exec(content);
     if (jsonMatch) {
-      /* SAFETY: 类型断言已复核 */
-      const parsed = JSON.parse(jsonMatch[0]) as {
-        ready?: boolean;
-        reply?: string;
-        spec?: RawSpec;
-      };
-      if (parsed.ready === true && parsed.spec) {
-        return {
-          reply: parsed.reply ?? "已为你整理好方案。",
-          ready: true,
-          spec: normalizeSpec(parsed.spec),
-        };
+      const parsed: unknown = JSON.parse(jsonMatch[0]);
+      if (isRecord(parsed)) {
+        const reply = typeof parsed.reply === "string" ? parsed.reply : undefined;
+        if (parsed.ready === true && isRawSpec(parsed.spec)) {
+          return {
+            reply: reply ?? "已为你整理好方案。",
+            ready: true,
+            spec: normalizeSpec(parsed.spec),
+          };
+        }
+        return { reply: reply ?? content, ready: false };
       }
-      return { reply: parsed.reply ?? content, ready: false };
+      return { reply: content, ready: false };
     }
     return { reply: content || "（无回复）", ready: false };
   } catch {
