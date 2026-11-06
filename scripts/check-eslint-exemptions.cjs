@@ -243,8 +243,17 @@ function scanViolations({ files, ruleId, root, readFile, runOxlint }) {
       read(path.join(root, rel));
       readable.push(rel);
     } catch (error) {
-      const err = /** @type {NodeJS.ErrnoException} */ (error);
-      failed.push({ file: rel, why: `读不到（${err.code ?? err.message}）` });
+      /* `error` 是 catch 的 `unknown`：`code` 只在它是对象且真有字符串 `code` 时才取，
+         取不到就与原来一样落 `message`（非 Error 的抛出物按 `String(error)` 拼）。 */
+      const code =
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        typeof error.code === "string"
+          ? error.code
+          : undefined;
+      const message = error instanceof Error ? error.message : String(error);
+      failed.push({ file: rel, why: `读不到（${code ?? message}）` });
     }
   }
 
@@ -431,7 +440,7 @@ async function main() {
   let config;
   try {
     const oxlintConfig = await loadOxlintConfig();
-    config = /** @type {ConfigBlock[]} */ (oxlintConfig.overrides ?? []);
+    config = Array.isArray(oxlintConfig.overrides) ? oxlintConfig.overrides : [];
   } catch (error) {
     console.error(
       `${TAG} ✗ 取不到 ${OXLINT_CONFIG_REL} 的求值结果 ⇒ 没结论（不是「台账是干净的」）：`,

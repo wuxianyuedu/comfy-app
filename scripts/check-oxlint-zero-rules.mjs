@@ -275,8 +275,8 @@ function main() {
   }
   const codes = new Set(ZERO_RULES.map(({ rule }) => diagnosticCode(rule)));
   const diagnostics = Array.isArray(report.diagnostics) ? report.diagnostics : [];
-  const hits = diagnostics.filter((/** @type {{ code?: unknown }} */ d) =>
-    codes.has(/** @type {string} */ (d.code)),
+  const hits = diagnostics.filter(
+    (/** @type {{ code?: unknown }} */ d) => typeof d.code === "string" && codes.has(d.code),
   );
   if (hits.length > 0) {
     console.error(

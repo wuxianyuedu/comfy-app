@@ -498,7 +498,7 @@ export function main(io = {}) {
       parsed = JSON.parse(fs.readFileSync(from, "utf8"));
     } catch (error) {
       log(
-        `[pr-failure-issue] --from 那份不是能解析的 JSON（${/** @type {Error} */ (error).message}）⇒ 不构成结论`,
+        `[pr-failure-issue] --from 那份不是能解析的 JSON（${error instanceof Error ? error.message : String(error)}）⇒ 不构成结论`,
       );
       return finish(CODE.NO_FACT, "--from 读不了");
     }
@@ -633,7 +633,11 @@ export function main(io = {}) {
       continue;
     }
     if (decision.action === "recommend") {
-      const ok = commentPull({ run, log }, slug, /** @type {number} */ (target.prIid), body, sn);
+      const prIid = target.prIid;
+      const ok =
+        typeof prIid === "number" && Number.isInteger(prIid)
+          ? commentPull({ run, log }, slug, prIid, body, sn)
+          : false;
       log(
         ok
           ? `[pr-failure-issue] ✓ 已在 PR #${target.prIid} 留下一段读数并回读到`

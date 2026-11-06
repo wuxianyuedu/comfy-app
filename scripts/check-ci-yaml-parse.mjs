@@ -45,6 +45,16 @@ export function collectYamlFiles(root) {
 }
 
 /**
+ * 解析出来的值是不是「映射」形态（数组与 null 都不算）。
+ *
+ * @param {unknown} value 已解析的 JS 值
+ * @returns {value is Record<string, unknown>} 是映射 ⇒ true
+ */
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
  * 递归找出解析树里所有 `stages` 数组（形态无关地找，不假设 CNB 的事件键形状）。
  *
  * @param {unknown} node 已解析的 JS 值
@@ -98,7 +108,8 @@ export function checkYamlFile(root, rel) {
         problems.push(`${rel}: stages[${i}] 不是映射`);
         return;
       }
-      const stageMap = /** @type {Record<string, unknown>} */ (stage);
+      /** @type {Record<string, unknown>} */
+      const stageMap = isRecord(stage) ? stage : {};
       if (typeof stageMap.name !== "string" || stageMap.name.trim() === "") {
         problems.push(`${rel}: stages[${i}] 缺非空 name`);
       }

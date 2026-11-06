@@ -228,6 +228,16 @@ function realRunGit(args) {
 const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * 运行时收窄：API 回话 / `JSON.parse` 出来的条目，先过这道守卫再当对象读。
+ *
+ * @param {unknown} v 待收窄的值
+ * @returns {v is Record<string, unknown>} true ⇒ 是普通对象（非 null / 非数组）
+ */
+function isRecord(v) {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
  * 读上游镜像格留下的派发形状（ISSUE #3148）。**读不到不是错**：那说明本跑没写过
  * （老版本 / 干净检出 / 落盘失败），此时退回「自己猜」的老行为 —— 这一跳是增益，不是判据。
  *
@@ -238,9 +248,9 @@ const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export function readDispatchState(readFile, root) {
   try {
     const raw = readFile(path.join(root, DISPATCH_STATE_DIR, DISPATCH_STATE_FILE), "utf8");
-    const parsed = /** @type {{dispatched?: unknown, reason?: unknown}} */ (JSON.parse(raw));
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- parsed 来自 JSON.parse（文件内容是外部数据，可以是 null / 标量），类型标注按对象非空，保留 ?. 防线
-    if (typeof parsed?.dispatched !== "boolean") {
+    /** @type {unknown} */
+    const parsed = JSON.parse(raw);
+    if (!isRecord(parsed) || typeof parsed.dispatched !== "boolean") {
       return null;
     }
     return { dispatched: parsed.dispatched, reason: String(parsed.reason ?? "") };
@@ -275,8 +285,7 @@ export function workflowRunsUrl(repo) {
  * @returns {boolean} true ⇒ 是本跑
  */
 export function matchesTargetSha(run, sha) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- run 是 API 回话里的 unknown 条目，运行时可缺/为 null，断言不承重
-  const title = String(/** @type {{display_title?: unknown}} */ (run)?.display_title ?? "");
+  const title = String((isRecord(run) ? run.display_title : undefined) ?? "");
   return title.includes(sha);
 }
 
@@ -298,8 +307,7 @@ export function renderTitleSamples(runs) {
     return "触发表里零条 run";
   }
   const titles = runs.slice(0, SAMPLE_TITLES_LIMIT).map((item) => {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- item 是 API 回话里的 unknown 条目，运行时可缺/为 null，断言不承重
-    const raw = String(/** @type {{display_title?: unknown}} */ (item)?.display_title ?? "").trim();
+    const raw = String((isRecord(item) ? item.display_title : undefined) ?? "").trim();
     const text = raw === "" ? "(无标题)" : raw;
     return text.length > SAMPLE_TITLE_MAX_CHARS
       ? `${text.slice(0, SAMPLE_TITLE_MAX_CHARS)}…`
@@ -356,16 +364,12 @@ function summarizeItems(runs, redConclusions) {
   /** @type {string[]} */
   const pending = [];
   for (const item of runs) {
-    const run = /** @type {{conclusion?: unknown, name?: unknown, status?: unknown}} */ (item);
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- item 是 API 回话里的 unknown 条目，运行时可缺/为 null，断言不承重
+    const run = isRecord(item) ? item : undefined;
     const name = String(run?.name ?? "(未命名)");
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- item 是 API 回话里的 unknown 条目，运行时可缺/为 null，断言不承重
     if (run?.status !== "completed") {
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- item 是 API 回话里的 unknown 条目，运行时可缺/为 null，断言不承重
       pending.push(`${name}（${String(run?.status ?? "?")}）`);
       continue;
     }
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- item 是 API 回话里的 unknown 条目，运行时可缺/为 null，断言不承重
     const conclusion = String(run?.conclusion ?? "?");
     if (redConclusions.has(conclusion)) {
       failing.push(`${name}（${conclusion}）`);
@@ -436,8 +440,7 @@ function failState(res) {
 async function readMainPath(io, ctx) {
   const res = await requestJson(io, workflowRunsUrl(ctx.repo), "主路径（runs API）");
   if (res.ok) {
-    const body = /** @type {{workflow_runs?: unknown}} */ (res.body);
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- body 是 API 回话 JSON，运行时可缺/为 null，断言不承重
+    const body = isRecord(res.body) ? res.body : undefined;
     const all = Array.isArray(body?.workflow_runs) ? body.workflow_runs : [];
     const runs = all.filter((r) => matchesTargetSha(r, ctx.headSha));
     /* 认不上时把**触发表原样**带出去（`items`，样本渲染与提前夭折判据都要它）：
@@ -457,8 +460,7 @@ async function readMainPath(io, ctx) {
 async function readChecksPath(io, ctx) {
   const res = await requestJson(io, checkRunsUrl(ctx.repo, ctx.headSha), "兜底（checks API）");
   if (res.ok) {
-    const body = /** @type {{check_runs?: unknown}} */ (res.body);
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- body 是 API 回话 JSON，运行时可缺/为 null，断言不承重
+    const body = isRecord(res.body) ? res.body : undefined;
     return { runs: Array.isArray(body?.check_runs) ? body.check_runs : [], state: "data" };
   }
   return failState(res);
@@ -727,8 +729,7 @@ export async function runVerdict(io) {
         /* 判红时把失败 job 的**完整日志**变成可排障读数（job 清单 → 失败 step 注解 →
          * 失败 step 窗口进 stage 日志 + 全量脱敏落盘走附件）。只加读数：取不到 / 空 /
          * 落盘失败都不改下面的三态判定与退码（见 `ci-github-verdict-logs.mjs` 文件头）。 */
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- `main.runs` 只在 data 态存在，运行时按形状判
-        const mainRuns = /** @type {{runs?: Array<unknown>}} */ (main).runs;
+        const mainRuns = main.state === "data" ? main.runs : undefined;
         if (Array.isArray(mainRuns)) {
           // oxlint-disable-next-line no-await-in-loop -- 收口前只读一次，串行无并发需求
           await dumpFailingRunLogs(reqIo, ctx.repo, mainRuns, RED_RUN_CONCLUSIONS);

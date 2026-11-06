@@ -470,8 +470,11 @@ export function resolveShellInvocation(command, args, options = {}) {
 export function formatSpawnFailure({ err, command, realCommand, cwd }) {
   /** `spawn` 的 error 是 Error 的运行时子类，`code` 由 libuv 填
    *  （与 `executable-resolve.ts` 里读它那一处同一形状）。 */
-  const spawnError = /** @type {NodeJS.ErrnoException | undefined} */ (err);
-  const code = spawnError?.code ?? "未知";
+  const spawnError = typeof err === "object" && err !== null ? err : undefined;
+  const code =
+    (spawnError && "code" in spawnError && typeof spawnError.code === "string"
+      ? spawnError.code
+      : undefined) ?? "未知";
   const where = cwd ? `（当前目录 ${cwd}）` : "";
   const lines = [
     `[cp936-exit] 起不了这条命令：${command}${where}`,
@@ -518,8 +521,8 @@ export function exitCodeFromTermination(code, signal) {
   if (!signal) {
     return UNKNOWN_TERMINATION_EXIT;
   }
-  const table = /** @type {Record<string, number | undefined>} */ (os.constants.signals);
-  return 128 + (table[signal] ?? 0);
+  const signalNumber = Object.entries(os.constants.signals).find(([name]) => name === signal)?.[1];
+  return 128 + (typeof signalNumber === "number" ? signalNumber : 0);
 }
 
 /**
