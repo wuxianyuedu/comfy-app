@@ -91,7 +91,9 @@ function packageReactVersion(): string {
 /** 在 `node_modules/.cache/` 写一份只含这 2 条规则的最小探针配置（跑完即删）。 */
 function writeProbeConfig(probePath: string): void {
   const plugins = PARITY.jsPlugins ?? [];
-  const used = plugins.filter((plugin) => plugin.name === "react-js" || plugin.name === "nextjs-js");
+  const used = plugins.filter(
+    (plugin) => plugin.name === "react-js" || plugin.name === "nextjs-js",
+  );
   expect(used.map((plugin) => plugin.name)).toEqual(["nextjs-js", "react-js"]);
   const globals = tsBlockOf(PARITY).globals ?? {};
   const rules = tsBlockOf(PARITY).rules ?? {};
@@ -120,14 +122,20 @@ export default {
 
 /** 跑一次 oxlint，返回「文件名 → 诊断文案」的映射。 */
 function runProbe(probeConfig: string, fixtures: Array<string>): Map<string, Array<string>> {
-  const r = spawnSync(process.execPath, [OXLINT_BIN, "--config", probeConfig, "-f", "json", ...fixtures], {
-    cwd: ROOT,
-    encoding: "utf8",
-    maxBuffer: 32 * 1024 * 1024,
-  });
+  const r = spawnSync(
+    process.execPath,
+    [OXLINT_BIN, "--config", probeConfig, "-f", "json", ...fixtures],
+    {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 32 * 1024 * 1024,
+    },
+  );
   const out = r.stdout;
   expect(out, `oxlint 没输出 JSON：${r.stderr}`).toBeTruthy();
-  const report = JSON.parse(out) as { diagnostics?: Array<{ filename?: string; message?: string }> };
+  const report = JSON.parse(out) as {
+    diagnostics?: Array<{ filename?: string; message?: string }>;
+  };
   const map = new Map<string, Array<string>>();
   for (const diag of report.diagnostics ?? []) {
     const name = path.basename(diag.filename ?? "");
@@ -153,8 +161,7 @@ describe("① oxlint 侧真的会响：no-deprecated / no-location 两条全在"
         "location-assign.ts": 'export const d = () => {\n  window.location.assign("/other");\n};\n',
         "location-absolute.ts":
           'export const e = () => {\n  location.href = "https://example.com/a";\n};\n',
-        "location-router.ts":
-          'export const f = () => {\n  router.push("/settings");\n};\n',
+        "location-router.ts": 'export const f = () => {\n  router.push("/settings");\n};\n',
       };
       const fixtures: Array<string> = [];
       for (const [name, code] of Object.entries(samples)) {
@@ -167,14 +174,14 @@ describe("① oxlint 侧真的会响：no-deprecated / no-location 两条全在"
       const hits = runProbe(probeConfig, fixtures);
 
       expect(hits.get("find-dom-node.tsx")).toEqual([DEPRECATED_MESSAGES["find-dom-node.tsx"]]);
-      expect(hits.get("react-dom-render.tsx")).toEqual([DEPRECATED_MESSAGES["react-dom-render.tsx"]]);
+      expect(hits.get("react-dom-render.tsx")).toEqual([
+        DEPRECATED_MESSAGES["react-dom-render.tsx"],
+      ]);
       expect(hits.get("legacy-lifecycle.tsx")).toEqual([
         DEPRECATED_MESSAGES["legacy-lifecycle.tsx"],
       ]);
       expect(hits.get("location-relative.ts")).toEqual([locationMessage("location.href")]);
-      expect(hits.get("location-assign.ts")).toEqual([
-        locationMessage("window.location.assign()"),
-      ]);
+      expect(hits.get("location-assign.ts")).toEqual([locationMessage("window.location.assign()")]);
 
       // 反向对照：合法形态一条都不报（闸过宽时这里会红）。
       expect(hits.has("deprecated-ok.tsx")).toBe(false);

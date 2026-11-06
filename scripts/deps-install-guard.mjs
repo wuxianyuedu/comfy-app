@@ -14,7 +14,13 @@
  * 又是「同一件事在两个平台各有一份实现」（规范 §9 / §9.5）。
  *
  * 用法：node scripts/deps-install-guard.mjs
- * 退出码：0 = 没有本检出的实例在跑，可以装；1 = 有实例在跑（已打印 PID 与出口）。
+ * 退出码三态（判据读不到 ≠ 判过了且没问题，§13.6.3）：
+ *   0 = 判据跑完，没有本检出的实例在跑 ⇒ 可以装；
+ *   1 = 判据跑完，确实有实例在跑 ⇒ 不许装（已打印 PID 与出口）；
+ *   2 = 判据没跑起来 / 读数形状不对 ⇒ **没有结论**，同样不许装。
+ *
+ * 为什么 2 不并入 0：把「崩了」当成「没有实例在跑」正是 fail-open ——
+ * 硬规则 9 那一问等于没问，而人拿到的却是一句「可以装」。
  */
 import process from "node:process";
 
@@ -22,22 +28,35 @@ import { resolveRepoRoot } from "./app-port.mjs";
 import { runningAppInstances } from "./launcher-core/port-reap.mjs";
 
 const root = resolveRepoRoot();
-const live = await runningAppInstances(root);
+try {
+  const live = await runningAppInstances(root);
+  /* 判据经 await 跨模块返回，运行时形状不能只信静态类型：这里漏一次就是
+   * 「没有结论」被当成「没有实例在跑」，硬规则 9 当场失效。 */
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 运行时读数可能为 undefined / 形状走形
+  if (!live || typeof live.running !== "boolean" || !Array.isArray(live.pids)) {
+    throw new Error("判据返回的读数形状不对");
+  }
+  if (!live.running) {
+    console.log("✓ 本检出没有正在运行的应用服务，可以执行 pnpm install。");
+    process.exit(0);
+  }
 
-if (!live.running) {
-  console.log("✓ 本检出没有正在运行的应用服务，可以执行 pnpm install。");
-  process.exit(0);
+  const who = live.pids.length > 0 ? `PID ${live.pids.join(", ")}` : "见 run/launcher-session.json";
+  console.error(
+    `本检出的应用服务正在运行（${who}，经由 ${live.via}）—— 现在执行 pnpm install 会因原生模块` +
+      "（`.node`）被进程锁定而 EPERM 连锁失败，并拖垮后续每一条 pnpm 命令（AGENTS 硬规则 9）。",
+  );
+  console.error("出口：先关掉本检出的应用窗口（或停掉正在跑的 `pnpm dev`），再重新执行本入口。");
+  process.exit(1);
+} catch (error) {
+  const reason = error instanceof Error ? error.message : String(error);
+  console.error(
+    `[deps:guard] 归属判据没给出结论（${reason}）⇒ 这一格既不是「没有实例在跑」，` +
+      "也不是「判到有实例在跑」。",
+  );
+  console.error(
+    "出口：复跑 `pnpm deps:guard` 先让判据给出结论；" +
+      "在拿到结论之前不要执行 `pnpm install`（AGENTS 硬规则 9）。",
+  );
+  process.exit(2);
 }
-
-const who =
-  live.pids.length > 0
-    ? `PID ${live.pids.join(", ")}`
-    : "见 run/launcher-session.json";
-console.error(
-  `本检出的应用服务正在运行（${who}，经由 ${live.via}）—— 现在执行 pnpm install 会因原生模块` +
-    "（`.node`）被进程锁定而 EPERM 连锁失败，并拖垮后续每一条 pnpm 命令（AGENTS 硬规则 9）。",
-);
-console.error(
-  "出口：先关掉本检出的应用窗口（或停掉正在跑的 `pnpm dev`），再重新执行本入口。",
-);
-process.exit(1);

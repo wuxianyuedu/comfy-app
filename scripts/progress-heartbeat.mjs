@@ -36,7 +36,9 @@ const CI_ENV_KEYS = ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "BUILDKITE", "CONTINUO
  */
 function ciEnvSet(env) {
   for (const key of CI_ENV_KEYS) {
-    const value = String(env[key] ?? "").trim().toLowerCase();
+    const value = String(env[key] ?? "")
+      .trim()
+      .toLowerCase();
     if (value !== "" && value !== "0" && value !== "false") {
       return true;
     }
@@ -45,7 +47,9 @@ function ciEnvSet(env) {
     if (!key.startsWith("CNB_")) {
       return false;
     }
-    const value = String(env[key] ?? "").trim().toLowerCase();
+    const value = String(env[key] ?? "")
+      .trim()
+      .toLowerCase();
     return value !== "" && value !== "0" && value !== "false";
   });
 }
@@ -182,7 +186,9 @@ export function startProgress(options = {}) {
     process.once("exit", onExit);
     renderTerminal();
   } else {
-    write(`${stampOf(startedAt)} ${state.prefix} ${state.label} 开始${state.note ? `（${state.note}）` : ""}\n`);
+    write(
+      `${stampOf(startedAt)} ${state.prefix} ${state.label} 开始${state.note ? `（${state.note}）` : ""}\n`,
+    );
   }
 
   /**
@@ -287,7 +293,13 @@ export function startProgressSync(options = {}) {
   try {
     child = spawn(
       process.execPath,
-      [import.meta.filename, "--heartbeat-child", statePath, String(intervalMs), String(process.pid)],
+      [
+        import.meta.filename,
+        "--heartbeat-child",
+        statePath,
+        String(intervalMs),
+        String(process.pid),
+      ],
       { stdio: ["ignore", "ignore", "inherit"], windowsHide: true },
     );
   } catch {

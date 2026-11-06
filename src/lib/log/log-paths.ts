@@ -88,10 +88,7 @@ export const WORKSHOP_LOG_DIR = path.join(LOG_CURRENT_DIR, "workshop");
 /** 壳自己的启动链路日志：壳把 `[ComfyAPP]` 诊断与编排器输出（`[orchestrator] …`）
  *  重定向到这里，是双击链路排障的第一现场（Python 启动器已随 ISSUE #784 移除，
  *  这个常量名沿用是为了不动日志面板的来源契约）。 */
-export const LAUNCHER_SHELL_LOG = path.join(
-  LAUNCHER_LOG_DIR,
-  "dev-launcher-stderr.log",
-);
+export const LAUNCHER_SHELL_LOG = path.join(LAUNCHER_LOG_DIR, "dev-launcher-stderr.log");
 /** dev-launcher 当前运行日志（每次运行覆盖，供启动页/应用内面板实时读取）。 */
 export const DEV_LAUNCHER_LOG = path.join(LAUNCHER_LOG_DIR, "dev-launcher.log");
 /** sentinel：内容为本次运行真实 dev-launcher 日志的绝对路径（文件被锁回退改名时靠它定位）。 */
@@ -104,10 +101,7 @@ export const DEV_LAUNCHER_CURRENT_SENTINEL = path.join(
  *  /history 与 /queue 原始 JSON。诊断通道，追加写（见 comfyui/trace.ts）。 */
 export const COMFYUI_TRACE_DIR = COMFYUI_LOG_DIR;
 /** ISSUE #216：ComfyUI 返回内容完整打印到这一份文件。 */
-export const COMFYUI_TRACE_LOG = path.join(
-  COMFYUI_TRACE_DIR,
-  "comfyui-trace.log",
-);
+export const COMFYUI_TRACE_LOG = path.join(COMFYUI_TRACE_DIR, "comfyui-trace.log");
 
 /** 构建与工具脚本日志（tools/scripts/Log-Common.ps1、setup 脚本、schema 同步）。 */
 export const TOOLS_LOG_DIR = path.join(LOG_CURRENT_DIR, "tools");
@@ -122,10 +116,7 @@ export const TOOLS_LOG_DIR = path.join(LOG_CURRENT_DIR, "tools");
  * `current/` `runs/` `latest.txt` `exports/`，否则时间一长必然变成杂物堆。
  * 归 `tools/` 是因为它的写入方是工具脚本链（`db-sync.mjs` / `db-schema-state.mjs`）。
  */
-export const SCHEMA_SYNC_STATUS_FILE = path.join(
-  TOOLS_LOG_DIR,
-  "schema-sync.json",
-);
+export const SCHEMA_SYNC_STATUS_FILE = path.join(TOOLS_LOG_DIR, "schema-sync.json");
 
 /**
  * 日志面板「保存到本地」的落盘目录（`log/exports/`，按次命名）。

@@ -21,9 +21,7 @@ describe("本机服务端点常量（规范 §12.14）", () => {
   });
 
   it("Ollama 默认 Base URL 由端口常量拼出（改端口只需改一处）", () => {
-    expect(OLLAMA_DEFAULT_BASE_URL).toBe(
-      `http://${LOOPBACK_HOST}:${OLLAMA_DEFAULT_PORT}/v1`,
-    );
+    expect(OLLAMA_DEFAULT_BASE_URL).toBe(`http://${LOOPBACK_HOST}:${OLLAMA_DEFAULT_PORT}/v1`);
   });
 
   it("comfyUiBaseUrl 按传入端口拼地址，不内嵌默认端口", () => {

@@ -60,7 +60,13 @@ Say-OK "node $(& node -v) / pnpm $(& pnpm -v)"
 Say-Info "前置检查：本检出有没有正在运行的应用服务"
 Write-Host ">>> node scripts/deps-install-guard.mjs" -ForegroundColor Yellow
 & node (Join-Path $PSScriptRoot "deps-install-guard.mjs")
-if ($LASTEXITCODE -ne 0) {
+$guardCode = $LASTEXITCODE
+if ($guardCode -eq 2) {
+    Say-Err "已停止：归属判据没跑起来，这一格没有结论（不是「没有实例在跑」）。"
+    Say-Info "出口：复跑本入口让判据给出结论；在此之前不要手工执行 pnpm install。"
+    exit 2
+}
+if ($guardCode -ne 0) {
     Say-Err "已停止：这个状态下装依赖会 EPERM 连锁失败（见上方判据给出的原因）。"
     Say-Info "关掉本检出的应用窗口（或停掉正在跑的 pnpm dev），再重新双击本入口即可。"
     exit 1

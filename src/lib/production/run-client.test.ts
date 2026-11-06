@@ -4,15 +4,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { vanillaApi } from "~/trpc/vanilla";
 import {
   approveRun,
+  autoselectShot,
   cancelRun,
+  fetchReviewCalibration,
   fetchRunStatus,
   pauseRun,
   regenerateShot,
   reviewCharacter,
   reviewScript,
   reviewShot,
+  reviewShotImage,
   resumeRun,
   reviseScript,
+  setHumanRating,
+  setHumanVerdict,
+  setScriptHumanVerdict,
   startRun,
 } from "./run-client";
 
@@ -30,6 +36,12 @@ vi.mock("~/trpc/vanilla", () => ({
       reviewScript: { mutate: vi.fn() },
       reviseScript: { mutate: vi.fn() },
       regenerateShot: { mutate: vi.fn() },
+      reviewShotImage: { mutate: vi.fn() },
+      setHumanVerdict: { mutate: vi.fn() },
+      setHumanRating: { mutate: vi.fn() },
+      setScriptHumanVerdict: { mutate: vi.fn() },
+      reviewCalibration: { query: vi.fn() },
+      autoselectShot: { mutate: vi.fn() },
     },
   },
 }));
@@ -45,6 +57,12 @@ const reviewCharacterMutate = vi.mocked(vanillaApi.run.reviewCharacter.mutate);
 const reviewScriptMutate = vi.mocked(vanillaApi.run.reviewScript.mutate);
 const reviseScriptMutate = vi.mocked(vanillaApi.run.reviseScript.mutate);
 const regenerateShotMutate = vi.mocked(vanillaApi.run.regenerateShot.mutate);
+const reviewShotImageMutate = vi.mocked(vanillaApi.run.reviewShotImage.mutate);
+const setHumanVerdictMutate = vi.mocked(vanillaApi.run.setHumanVerdict.mutate);
+const setHumanRatingMutate = vi.mocked(vanillaApi.run.setHumanRating.mutate);
+const setScriptHumanVerdictMutate = vi.mocked(vanillaApi.run.setScriptHumanVerdict.mutate);
+const reviewCalibrationQuery = vi.mocked(vanillaApi.run.reviewCalibration.query);
+const autoselectShotMutate = vi.mocked(vanillaApi.run.autoselectShot.mutate);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -193,5 +211,89 @@ describe("评审 / 重生成封装（P8-1b）", () => {
       mode: "reprompt",
       newPrompt: "改进提示词",
     });
+  });
+});
+
+describe("人工侧 / 抽卡优选封装（FR-QA-04④ / FR-QA-07）", () => {
+  it("reviewShotImage 只回判定本身，服务端已落库", async () => {
+    const verdict = { issues: [], pass: true, scoredAt: "t", suggestion: "" };
+    reviewShotImageMutate.mockResolvedValue({ verdict });
+    const r = await reviewShotImage("proj_1", "s1");
+    expect(reviewShotImageMutate).toHaveBeenCalledWith({ projectId: "proj_1", shotId: "s1" });
+    expect(r).toEqual(verdict);
+  });
+
+  it("setHumanVerdict 透传四个入参 + 缺省 note 为空串", async () => {
+    const humanVerdict = { at: "t", note: "", pass: true, rev: 1 };
+    setHumanVerdictMutate.mockResolvedValue({ humanVerdict });
+    const r = await setHumanVerdict("proj_1", "character", "c1", true);
+    expect(setHumanVerdictMutate).toHaveBeenCalledWith({
+      projectId: "proj_1",
+      kind: "character",
+      targetId: "c1",
+      pass: true,
+      note: "",
+    });
+    expect(r).toEqual(humanVerdict);
+  });
+
+  it("setHumanRating：数字与 null（清除）都原样透传", async () => {
+    setHumanRatingMutate.mockResolvedValue({ ok: true });
+    await setHumanRating("proj_1", "s1", 4);
+    expect(setHumanRatingMutate).toHaveBeenLastCalledWith({
+      projectId: "proj_1",
+      shotId: "s1",
+      rating: 4,
+    });
+    await setHumanRating("proj_1", "s1", null);
+    expect(setHumanRatingMutate).toHaveBeenLastCalledWith({
+      projectId: "proj_1",
+      shotId: "s1",
+      rating: null,
+    });
+  });
+
+  it("setScriptHumanVerdict 回裁决快照（带剧本指纹）", async () => {
+    const humanVerdict = { at: "t", digest: "d1", note: "可以", pass: true };
+    setScriptHumanVerdictMutate.mockResolvedValue({ humanVerdict });
+    const r = await setScriptHumanVerdict("proj_1", true, "可以");
+    expect(setScriptHumanVerdictMutate).toHaveBeenCalledWith({
+      projectId: "proj_1",
+      pass: true,
+      note: "可以",
+    });
+    expect(r.digest).toBe("d1");
+  });
+
+  it("fetchReviewCalibration 是只读 query，原样回聚合读数", async () => {
+    const report = {
+      aiMeanAvg: null,
+      decisionAgreement: null,
+      humanAvg: null,
+      mae: null,
+      perDimension: [],
+      samples: 0,
+    };
+    reviewCalibrationQuery.mockResolvedValue(report);
+    const r = await fetchReviewCalibration("proj_1");
+    expect(reviewCalibrationQuery).toHaveBeenCalledWith({ projectId: "proj_1" });
+    expect(r).toMatchObject({ samples: 0, perDimension: [] });
+  });
+
+  it("autoselectShot 透传候选任务列表，原样回优选结果", async () => {
+    const winner = {
+      candidates: [{ imageUrl: "/a.png", taskId: "t1", verdict: null }],
+      winnerImageUrl: "/a.png",
+      winnerTaskId: "t1",
+      winnerVerdict: { issues: [], pass: true, scoredAt: "t", suggestion: "" },
+    };
+    autoselectShotMutate.mockResolvedValue(winner);
+    const r = await autoselectShot("proj_1", "s1", ["t1", "t2"]);
+    expect(autoselectShotMutate).toHaveBeenCalledWith({
+      projectId: "proj_1",
+      shotId: "s1",
+      taskIds: ["t1", "t2"],
+    });
+    expect(r.winnerTaskId).toBe("t1");
   });
 });

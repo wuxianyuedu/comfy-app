@@ -602,13 +602,12 @@ describe("合并提交自己承担重排（ISSUE #3035）", { timeout: 300_000 }
     const branchTip = headSha(repo);
     repo.git("merge", "--no-ff", "-q", "master-side", "-m", "merge: sync master-side");
 
-    /* 平台形态的两个变量走 `overrides.env` 显式注入，不写 `process.env`：
-     * 夹具的沙箱环境**先剥 `CNB_*`、后落 `extra`**（`git-sandbox-env` 的
-     * `gitSandboxEnv()`），写进 `process.env` 的那份会被剥掉 —— 判据读不到
-     * `CNB_COMMIT`，`landedTipOf()` 返回空串，这条断言在 Linux 上必红
-     * （Windows 上本文件整组跳过，故本地看不出）。 */
+    /* `CNB_COMMIT` 必须走 `repo.run` 的 `overrides.env`：夹具起子进程用的是
+     * `gitSandboxEnv()`，它按 `SANDBOX_STRIPPED_ENV_KEYS` 把继承来的 `CNB_COMMIT`
+     * 剥掉（ISSUE #3218）—— 只写 `process.env` 等于没写，子进程永远读到空串。
+     * `overrides.env` 在剥离**之后**落，才是平台给的那份输入。 */
     const r = repo.run(["--range", `${fork}..${branchTip}`], {
-      env: { CNB_COMMIT: branchTip, CNB_PULL_REQUEST_TARGET_SHA: undefined },
+      env: { CNB_COMMIT: branchTip },
     });
     expect(r.code, r.output).toBe(0);
     expect(r.output).toContain("汇总分母取目标分支那一侧");

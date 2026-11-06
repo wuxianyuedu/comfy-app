@@ -88,7 +88,12 @@ describe("日志模式（CI）", () => {
   it("间隔节流：不到间隔不刷行，跨过间隔才有一行", () => {
     vi.useFakeTimers();
     const c = capture();
-    const p = startProgress({ label: "ship-poll", mode: "log", intervalMs: 15_000, write: c.write });
+    const p = startProgress({
+      label: "ship-poll",
+      mode: "log",
+      intervalMs: 15_000,
+      write: c.write,
+    });
 
     vi.advanceTimersByTime(14_000);
     expect(c.heartbeats(), "14 秒时还不该有心跳").toBe(0);
@@ -244,14 +249,22 @@ describe("同步模式（spawnSync 场景）", () => {
       }
       throw new Error("等不到心跳行");
     };
-    await waitFor(() => chunks.join("").split("\n").filter((line) => line.includes("已跑")).length >= 2);
+    await waitFor(
+      () =>
+        chunks
+          .join("")
+          .split("\n")
+          .filter((line) => line.includes("已跑")).length >= 2,
+    );
     const text = chunks.join("");
     child.kill();
     await new Promise((resolve) => child.on("close", resolve));
     fs.rmSync(dir, { recursive: true, force: true });
 
     expect(text).toContain("合并前复算");
-    expect(text.split("\n").filter((line) => line.includes("已跑")).length).toBeGreaterThanOrEqual(2);
+    expect(text.split("\n").filter((line) => line.includes("已跑")).length).toBeGreaterThanOrEqual(
+      2,
+    );
     expect(text).not.toContain("\r");
     expect(text).not.toContain("\u001B");
   });

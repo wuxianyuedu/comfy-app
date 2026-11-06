@@ -161,7 +161,7 @@ const SAMPLE_TITLE_MAX_CHARS = 80;
  * 其余 completed 结论（success / neutral / skipped）算绿 —— skipped 与 neutral 是
  * GitHub 自己的「不用跑」，与代码对错无关。
  */
-const RED_RUN_CONCLUSIONS = new Set([
+export const RED_RUN_CONCLUSIONS = new Set([
   "action_required",
   "cancelled",
   "failure",

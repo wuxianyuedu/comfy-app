@@ -37,6 +37,7 @@ import { cnbJson, short } from "./ship-exec.mjs";
 import { finishIssueWork } from "./ship-claim.mjs";
 import { reportStage } from "./ship-stage.mjs";
 import { issueItemShapes } from "./ship-ticket.mjs";
+import { cnbData } from "./cnb-fields.mjs";
 
 /**
  * 一行文字里点名的 issue 号（`#2070` / `(#2070)` 两种写法都认，按出现顺序去重）。
@@ -422,7 +423,7 @@ export function fetchPullMergeProof({ run, slug, prNumber }) {
     String(prNumber),
     "-v",
   ]);
-  const d = got?.json?.data ?? null;
+  const d = cnbData(got?.json);
   if (!d || typeof d !== "object") {
     return unreadable;
   }
@@ -619,7 +620,7 @@ export function closeIssues(ctx) {
       String(number),
       "-v",
     ]);
-    const d = back?.json?.data ?? null;
+    const d = cnbData(back?.json);
     /* ISSUE #3059：回读没跑起来 / 缺 `state` 键 ⇒ 关没关成**没有读数**（退 5），
      * 不按「没关成」落红（行为变更：这两种此前退 1，混在「平台说没关成」里）。 */
     const stateMissing = !d || d.state === undefined || d.state === null;

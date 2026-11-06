@@ -400,6 +400,9 @@
     # master 不推过去它们就每天跑一棵旧树（理由全文在 `.push-stages` 里那格的注释上）。
     COMFYAPP_CI_PUSH_GATES: >-
       合并形态复核, GitHub master 镜像, 安装依赖, 生成态文档与源同步, 文档引用与权威源一致, 工作区出处
+    # `push 失败立案` 不在这一份里（ISSUE #2842）：它是 `endStages`（红也要跑的段），
+    # 不是 `stages` 里的一格 —— 与 PR 档的 `PR 失败立案` 同形，定义在 `.push-fail-stage`
+    # 锚点。`COMFYAPP_CI_PUSH_GATES` 列的是 `stages` 主列的格名清单。
     # 每日那一跑自己的 stage 清单 —— **另一个流水线，另一份清单**（定时口 2026-11-05 起由
     # GA `.github/workflows/daily.yml` 的 schedule 起，CNB 这侧只剩手动 / API 两口，跑的是同一份）。
     # 它刻意**不**与上面那一条共用：上面那份是「PR 上跑什么」，这一份是「每天跑什么」，
@@ -608,15 +611,17 @@
 # 就退化」这条路；#1981 那条教训正是别指望变量在某个事件上有值）：
 #
 #   · `push`     —— 仍然只有 `master 合并复核` 一条，它本来就该「一条就够」；
-#                   ⚠️ 但它**不掐旧的那一跑**（`cancel-in-progress: false`，ISSUE #2396）：
-#                   这一格判的是「落到 master 的是不是 PR 合并形态」，**逐提交**给读数，
-#                   而被掐掉的那一跑等于没有读数；重跑它的成本整条只有 20~35 秒
-#                   （大头是全量 clone 的 Prepare）⇒ 「互斥省时间」在这里没有收益，
-#                   只留下「前一笔的读数被销毁」这一条代价。真出现两条排队时，
-#                   逐笔复核也应当逐笔给结论（现场两对，间隔都在 12 秒内：
-#                   `cnb-9qi-1k5qojle1` / `cnb-qta-1k5ptts6m` 被判 `cancel`，
-#                   prepare 里的原文是 `The current pipeline is terminated`，
-#                   而反过来那一跑写着 `the ongoing pipeline is terminated: cnb-9qi-…`）。
+#                   ⚠️ 但它**不掐旧的那一跑、也不掐新来的那一跑**（`cancel-in-progress: false`
+#                   **+ `wait: true`**，前一半见 ISSUE #2396、后一半见 ISSUE #3207）：
+#                   这一格判的是「落到 master 的是不是 PR 合并形态」，**逐提交**给读数。
+#                   #2396 当年只摘掉了「终止旧的一跑」（现场两对，间隔都在 12 秒内：
+#                   `cnb-9qi-1k5qojle1` / `cnb-qta-1k5ptts6m` 被判 `cancel`，prepare 里的
+#                   原文是 `The current pipeline is terminated`，而反过来那一跑写着
+#                   `the ongoing pipeline is terminated: cnb-9qi-…`），而**新来的那一跑**
+#                   照旧在 Prepare 里被判 `The lock … is occupied and the current process is
+#                   terminated` —— `wait` 的默认值是 false，不写它就没有「排队」这件事。
+#                   两笔都该有结论，所以这一把是 `false` + `true` 的组合；理由与现场逐拍
+#                   读数写在 `.lock-push` 锚点上（那是唯一定义处，这里只留指路）。
 #   · `daily`    —— 定时 / 手点 / API 那三条**同一档**，「后起的掐掉先跑的」一字未改地保留
 #                   （§13.5.3.10 想要的就是这份互斥：同一台机上不要同时压两遍那七格）；
 #   · `oneshot-build` / `oneshot-e2e` / `oneshot-unit` —— 每档自己一把：同一档被连点两次
@@ -636,6 +641,22 @@
   # 唯一一把**排队而不终止**的类锁（ISSUE #2396，理由见上面 `push` 那一行）：
   # 这一格逐提交给读数，「只留最新那一笔」等于把前一笔的结论删掉。
   cancel-in-progress: false
+  # `wait: true` 是这一把的**承重项**，不是陪衬（ISSUE #3207）。不带它时
+  # 「不终止」并不等于「排队」—— 官方 `grammar.md#pipeline-lock`：
+  # `wait`（默认 **false**）= 锁被占用时是否等待，`cancel-in-progress`（默认 false）
+  # = 是否**终止**占用锁的那一跑。两个默认值叠起来的语义是「**不终止，也不等**」，
+  # 而现场读数正是这一形：
+  #
+  #   `cnb-310-1k6m7jap1`（07f31f2e 那笔，00:10:17 起）整跑 110s，`get lock …-push` 之后
+  #   一路跑完 6 格全绿；`cnb-o1g-1k6m7jj8q`（672631f8 那笔，**9 秒后**到达）在 Prepare
+  #   就落了 `Pipeline init error: The lock (moon-read/comfy-app-t3-push) is occupied and
+  #   the current process is terminated.`，6 格全 `skipped`、整跑 405ms 判 `error`。
+  #
+  # 也就是说 `cancel-in-progress: false` 单独在场时，**被销毁的是后到那一跑的读数**
+  # （它连跑都没跑起来），而 #2396 当年要的是「前一笔的结论别被删掉」—— 两笔都该有读数。
+  # 一笔合并后紧跟删源分支（`branch.delete` 那一推）就是最常见的两跑重叠形态，
+  # 而删分支那一推是平台自己发起的、没人会去补跑它 ⇒ 缺的那笔读数永久缺着。
+  wait: true
 .lock-daily: &lock_daily
   key: daily
   cancel-in-progress: true
@@ -721,11 +742,12 @@
   # 文件头「--master」一节。令牌经 push 流水线的 `imports:` 注入（与 PR 那条同一枚）。
   - name: GitHub master 镜像
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs --master --readout
-    # 与 PR 那一格同一档外框：探活 30s×至多 3 次、推送 240s×至多 2 次都在脚本里各自
-    # 限时并对 egress 类失败带退避重试（REMOTE_PROBE_TIMEOUT_MS / PUSH_TIMEOUT_MS /
-    # PROBE_MAX_ATTEMPTS，2026-11-02 起 —— `cnb-pe2-1k6e1uhj8` 连续两跑死在探活 15s
-    # 无回话，同日 19:47 同 runner 却探活通过，是间歇抖动不是硬阻断）。10m 是包住
-    # 最坏墙钟（探活 ≈105s + 推送 ≈485s）与节点冷启动的余量。
+    # 与 PR 那一格同一档外框：探活 30s×至多 3 次、内容推送整档吃 4 分钟墙钟预算（至多 10 次、
+    # 退避 5s→50s）、LFS 第二跳单独吃 60s 预算（至多 5 次）。2026-11-05 从「按次数」
+    # （推送 2 次 / LFS 2 次 + 5s 退避）改过来 —— 现场 `Connection was reset` 是瞬时失败，
+    # 一次 0.3s，按次数收口时整格 6s 就交账。常量与理由在 `scripts/ci-mirror-retry-policy.mjs`。
+    # 10m 包住最坏账（探活 ≈105s + 内容推送 240s + LFS 首刀 240s = 585s）与冷启动余量；
+    # LFS 首刀**不裁**超时（60s 预算只管重试），免得把一次「慢但正常」的对象上传掐死。
     timeout: 10m
   - name: 安装依赖
     # 与 `每日安装依赖` 的**命令行 / env / timeout 三样都逐字相同**
@@ -1599,6 +1621,31 @@
       script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs
       timeout: 5m
 
+# ── push 档（master 合并复核）的失败立案（ISSUE #2842）─────────────────────────
+#
+# 这一档为什么也要有：push 档此前**只**引了 `*common` —— 没有 `endStages` 立案格。
+# 于是 master 合并复核红了之后，知道这件事的唯一办法是去翻构建列表：#2607 那一批
+# 漏登记 §13.1 一格，PR 全绿、合并全绿，master 上的 `doc:check` 红了 ≈20 分钟才被
+# 另一条分支的一次性探针撞见（ISSUE #2753 的立案现场）。
+#
+# 形态与 PR / 桌包那两格逐字同族（`endStages` 而不是 `stages` 的最后一格；理由见
+# 上面那个锚点），入口也是**同一个脚本**加一个 `--lane push`：
+#   · 那份读写链（定性 / 取逐格 / 摘录失败行 / 建单 → 补标签 → 独立回读）只写了一次，
+#     这里不抄第二份（§12.12）；
+#   · `--lane` 是「我就是这一档的立案口」的显式声明 —— 不给它，脚本按老规矩把非
+#     `pull_request` 事件判成「不归本格管」。
+# 去重键跟着 `--lane` 走 ⇒ 标题是 `ci(push): push 档红在「…」`，与 PR / 桌包两族互不相混。
+.push-fail-stage: &push_fail_stage
+  endStages:
+    - name: push 失败立案
+      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-pr-failure-issue.mjs --no-block --lane push
+      # 与 `PR 失败立案` 同一量级（三次读命令 + 一次写 + 一次回读）。
+      timeout: 5m
+    # 令牌权限读数：与 PR / 桌包那两格同一个入口、同一份理由（ISSUE #2551）。
+    - name: 令牌权限读数
+      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs
+      timeout: 5m
+
 .gates: &gates
   # ── 2026-10-19：环境类前提三格从这一条上撤到**每日档**（`COMFYAPP_CI_DAILY_GATES`）──
   # 撤的是节奏、不是账：`工具链自证` / `Python 可用性` / `Python 探针读数` 现在各有
@@ -1743,8 +1790,10 @@
   # —— 翻承重后这半句从「死规矩」变成「活判据」。
   #
   # egress 间歇断流不再致命：三跳 git 调用各自带超时并对 egress 类失败带退避重试
-  # （脚本 `REMOTE_PROBE_TIMEOUT_MS 30s×3` / `PUSH_TIMEOUT_MS 240s×2`），真实抖动下重试一次即通
-  # （PR #3162 第二跑 8.5s 派发成功、重试 1 次）；只有**持续**不通/令牌被拒才真正退非零。
+  # （脚本 `REMOTE_PROBE_TIMEOUT_MS 30s×3` / 内容推送 `PUSH_RETRY_BUDGET_MS 240s`、至多 10 次 /
+  # LFS `LFS_PUSH_RETRY_BUDGET_MS 60s`、至多 5 次），真实抖动下重试几次即通
+  # （PR #3162 第二跑 8.5s 派发成功、重试 1 次）；只有**持续**不通 /
+  # 令牌被拒才真正退非零。
   #
   # 令牌那一系一字未动：`GITHUB_MIRROR_TOKEN`（平台侧注入，仓库外配置）缺席/被拒 ⇒ 内部判
   # 「没跑起来」留读数，翻承重后**这个读数现在折成流水线的红（即拦合）** —— 这正是 #3051 第 3 条
@@ -1756,10 +1805,11 @@
   # 落盘失败不影响本格三态（回读格读不到就退回「自己猜」的老行为）。
   - name: GitHub 镜像同步
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs
-    # 三跳 git 调用各自带超时并对 egress 类失败带退避重试（`scripts/ci-github-mirror-push.mjs`
-    # 的 REMOTE_PROBE_TIMEOUT_MS 30s×3 / PUSH_TIMEOUT_MS 240s×2 —— 没有限时就得吃 git 自己
-    # 那个 21s 的 connect 超时，而那一形过去只被念成「令牌活不活」；重试的立案依据见
-    # 脚本文件头第 8 条）。10m 是外框，包住最坏墙钟（≈105s + ≈485s×2）与冷启动余量。
+    # 三跳 git 调用各自带超时：探活 30s×3、内容推送整档 240s 墙钟预算（至多 10 次、退避
+    # 5s→50s）、LFS 第二跳整档 60s 预算（至多 5 次）—— 同一份阶梯、两档窗口，常量与理由在
+    # `scripts/ci-mirror-retry-policy.mjs`；没有限时就得吃 git 自己那个 21s 的 connect 超时，
+    # 而那一形过去只被念成「令牌活不活」。按时间而非按次数收口的立案依据见脚本文件头第 8 条。
+    # 10m 是外框：最坏账 ≈105s + 240s + LFS 首刀 240s = 585s（LFS 首刀不裁，见上面的理由）。
     timeout: 10m
 
   # ── 环境前提（**必须排在 `GitHub 判决回读` 之前**，ISSUE #1959）──
@@ -2351,7 +2401,7 @@ master:
   # 判据双向核对）。若出现非合并提交（本地 --no-verify 就能做到），说明有变更绕过了
   # PR 与门禁 —— `合并形态复核` 一格红，失败即停，后面全部 skipped。
   push:
-    - <<: *common
+    - <<: [*common, *push_fail_stage]
       name: master 合并复核
       lock: *lock_push
       # 与 PR 那条同一枚镜像令牌（`GitHub master 镜像` 那一格要读它）。密钥文件里已声明

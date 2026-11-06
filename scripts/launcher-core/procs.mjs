@@ -58,9 +58,15 @@ export function isWindows(platform = process.platform) {
  *  这是编排器回收残留实例的**唯一入口**：Windows 走 `netstat -ano`（系统自带，
  *  无需 PowerShell 启动开销），POSIX 读 `/proc/net/tcp{,6}` 的 LISTEN inode
  *  再与 `/proc/<pid>/fd` 的 `socket:[…]` 求交集。
- *  @param {number} port @returns {number[]} */
-export function listeningPidsOnPort(port) {
-  const raw = isWindows() ? listeningPidsWindows(port) : listeningPidsPosix(port);
+ *  **返回 Promise，两个平台分支都是**：Windows 的 netstat 是子进程，而上层
+ *  （`orchestrator.mjs` 的 `inspectPort`、`port-reap.mjs` 的 `runningAppInstances`）
+ *  本来就 `await`。让这一层同步，等于要求「在途探测的 Promise」当场是字符串，
+ *  冷缓存首次调用必然抛 TypeError。平台可注入，好让 Windows 分支在任何平台上都能测。
+ *  @param {number} port
+ *  @param {NodeJS.Platform} [platform]
+ *  @returns {Promise<number[]>} */
+export async function listeningPidsOnPort(port, platform = process.platform) {
+  const raw = isWindows(platform) ? await listeningPidsWindows(port) : listeningPidsPosix(port);
   return [...new Set(raw)].sort((a, b) => a - b);
 }
 
@@ -71,12 +77,15 @@ export function listeningPidsOnPort(port) {
  * 看一眼的是下一轮轮询（早已超出 TTL）。并发调用合并为同一次在途探测。 */
 const NETSTAT_SNAPSHOT_TTL_MS = 1000;
 let netstatSnapshot = { at: 0, text: "" };
+/** @type {Promise<string> | null} */
 let netstatInFlight = null;
 
-/** @returns {string} */
+/** netstat 全量快照。**恒返回 Promise**：命中缓存也包成已决 Promise，
+ *  否则返回值随冷 / 热在 string 与 Promise 之间摇摆，调用方永远写不对。
+ *  @returns {Promise<string>} */
 function netstatTcpSnapshot() {
   if (Date.now() - netstatSnapshot.at < NETSTAT_SNAPSHOT_TTL_MS) {
-    return netstatSnapshot.text;
+    return Promise.resolve(netstatSnapshot.text);
   }
   netstatInFlight ??= runCapture("netstat", ["-ano", "-p", "TCP"]).then((text) => {
     netstatSnapshot = { at: Date.now(), text };
@@ -86,9 +95,9 @@ function netstatTcpSnapshot() {
   return netstatInFlight;
 }
 
-/** @param {number} port @returns {number[]} */
-function listeningPidsWindows(port) {
-  const out = netstatTcpSnapshot();
+/** @param {number} port @returns {Promise<number[]>} */
+async function listeningPidsWindows(port) {
+  const out = await netstatTcpSnapshot();
   /** @type {number[]} */
   const pids = [];
   for (const line of out.split(/\r?\n/)) {

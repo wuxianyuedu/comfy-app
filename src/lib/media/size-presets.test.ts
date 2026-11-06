@@ -67,13 +67,9 @@ describe("size-presets：百万像素是连续量（任意值都要能走通）"
   });
 
   it("归一化不再把自由值回退成 1k（此前会静默按 1M 算）", () => {
-    expect(normalizeSizeSpec({ ratio: "16:9", clarity: "2.5M" }).clarity).toBe(
-      "2.5M",
-    );
+    expect(normalizeSizeSpec({ ratio: "16:9", clarity: "2.5M" }).clarity).toBe("2.5M");
     /* 真正识别不出的值仍回退默认档。 */
-    expect(normalizeSizeSpec({ clarity: "999k" }).clarity).toBe(
-      DEFAULT_SIZE_SPEC.clarity,
-    );
+    expect(normalizeSizeSpec({ clarity: "999k" }).clarity).toBe(DEFAULT_SIZE_SPEC.clarity);
   });
 
   it("自由值一路走到换算 / 摘要 / 下发（与档位同一条路径）", () => {
@@ -238,9 +234,9 @@ describe("size-presets：尺寸表达（比例 + 分辨率 / 比例 + 百万像�
 
   it("摘要与默认值：分辨率档只说比例 + 档位，百万像素档追加倍数", () => {
     expect(sizeSpecSummary(DEFAULT_SIZE_SPEC)).toBe("3:4 / 1k");
-    expect(
-      sizeSpecSummary({ ...DEFAULT_SIZE_SPEC, clarity: "2M", multiple: 32 }),
-    ).toBe("3:4 / 2M / 32");
+    expect(sizeSpecSummary({ ...DEFAULT_SIZE_SPEC, clarity: "2M", multiple: 32 })).toBe(
+      "3:4 / 2M / 32",
+    );
   });
 
   it("反解：「WxH」字符串 / 宽高 → 尺寸表达（老数据回读）", () => {
@@ -262,9 +258,7 @@ describe("size-presets：尺寸表达（比例 + 分辨率 / 比例 + 百万像�
     });
     /* 脏值/空值回退默认，不抛错。 */
     expect(sizeSpecFromText("")).toEqual(DEFAULT_SIZE_SPEC);
-    expect(normalizeSizeSpec({ ratio: "42:1", clarity: "999k" })).toEqual(
-      DEFAULT_SIZE_SPEC,
-    );
+    expect(normalizeSizeSpec({ ratio: "42:1", clarity: "999k" })).toEqual(DEFAULT_SIZE_SPEC);
   });
 
   it("toSizeSpec / normalizeSizeSpec：外部写法（短比例标签 / 旧字符串 / 对象）都收得下", () => {
@@ -274,14 +268,14 @@ describe("size-presets：尺寸表达（比例 + 分辨率 / 比例 + 百万像�
     expect(normalizeRatioLabel("9:16")).toBe("9:16 竖屏");
     expect(normalizeRatioLabel("42:1")).toBe(DEFAULT_SIZE_SPEC.ratio);
 
-    expect(
-      normalizeSizeSpec({ ratio: "16:9", clarity: "2M", multiple: 32 }),
-    ).toEqual({ ratio: "16:9 横屏", clarity: "2M", multiple: 32 });
+    expect(normalizeSizeSpec({ ratio: "16:9", clarity: "2M", multiple: 32 })).toEqual({
+      ratio: "16:9 横屏",
+      clarity: "2M",
+      multiple: 32,
+    });
 
     /* toSizeSpec：对象 / "WxH" 字符串 / 脏值三态都归一。 */
-    expect(
-      toSizeSpec({ ratio: "1:1 正方", clarity: "2k", multiple: 8 }),
-    ).toEqual({
+    expect(toSizeSpec({ ratio: "1:1 正方", clarity: "2k", multiple: 8 })).toEqual({
       ratio: "1:1 正方",
       clarity: "2k",
       multiple: 8,
@@ -295,12 +289,10 @@ describe("size-presets：尺寸表达（比例 + 分辨率 / 比例 + 百万像�
     /* 端口没声明候选 → 用标准短标签。 */
     expect(aspectLabelForDims(1280, 720)).toBe("16:9");
     /* 端口声明了候选、但候选里没有这个比例 → 不猜（返回 null，调用方退回默认值）。 */
-    expect(
-      aspectLabelForDims(1080, 1920, ["1:1 (Square)", "16:9 (Widescreen)"]),
-    ).toBeNull();
-    expect(
-      aspectLabelForDims(1280, 720, ["1:1 (Square)", "16:9 (Widescreen)"]),
-    ).toBe("16:9 (Widescreen)");
+    expect(aspectLabelForDims(1080, 1920, ["1:1 (Square)", "16:9 (Widescreen)"])).toBeNull();
+    expect(aspectLabelForDims(1280, 720, ["1:1 (Square)", "16:9 (Widescreen)"])).toBe(
+      "16:9 (Widescreen)",
+    );
     expect(aspectLabelForDims(0, 0)).toBeNull();
   });
 });

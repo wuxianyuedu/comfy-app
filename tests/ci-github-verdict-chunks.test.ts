@@ -78,7 +78,9 @@ describe("ci-print-log-chunk：三种「没有正文」各说各的，且都不�
 
   it("清单形状不对（缺 sha256 / 块数不是数）⇒ 按「没有分块」处置（不抛）", () => {
     expect(normalizeManifest({ chunkCount: "x", sha256: "y" })).toBeNull();
-    expect(normalizeManifest({ chunkCount: 2, printedChunks: 2, gzipBytes: 1, rawBytes: 1 })).toBeNull();
+    expect(
+      normalizeManifest({ chunkCount: 2, printedChunks: 2, gzipBytes: 1, rawBytes: 1 }),
+    ).toBeNull();
     expect(normalizeManifest(null)).toBeNull();
     expect(normalizeManifest(MANIFEST)?.chunkCount).toBe(2);
   });
@@ -96,7 +98,9 @@ describe("ci-print-log-chunk：三种「没有正文」各说各的，且都不�
     for (let i = 1; i <= LOG_CHUNK_STATIC_STAGES; i += 1) {
       expect(renderChunkFromDisk(i, { readFile: fakeDisk(files), root: "/repo" }).exitCode).toBe(0);
     }
-    expect(renderChunk({ index: 1, manifest: normalizeManifest(MANIFEST) }).length).toBeGreaterThan(0);
+    expect(renderChunk({ index: 1, manifest: normalizeManifest(MANIFEST) }).length).toBeGreaterThan(
+      0,
+    );
   });
 });
 
@@ -111,7 +115,11 @@ describe("ci-github-verdict-decide：只有明确 exit 0 才放行（fail-closed
   });
 
   it("判定文件不是合法 JSON / 形状不对 ⇒ exit 2（不许被读成通过）", () => {
-    for (const body of ["{not json", JSON.stringify({ exitCode: "0" }), JSON.stringify({ exitCode: 7 })]) {
+    for (const body of [
+      "{not json",
+      JSON.stringify({ exitCode: "0" }),
+      JSON.stringify({ exitCode: 7 }),
+    ]) {
       const out = decide("decision.json", {
         readFile: fakeDisk({ "/repo/decision.json": body }),
         root: "/repo",
@@ -123,7 +131,10 @@ describe("ci-github-verdict-decide：只有明确 exit 0 才放行（fail-closed
   it("判定写 exit 1 ⇒ 退 1 并带上回读那条结论；写 exit 0 ⇒ 退 0", () => {
     const red = decide("decision.json", {
       readFile: fakeDisk({
-        "/repo/decision.json": JSON.stringify({ exitCode: 1, line: "[verdict] 结论：exit 1 —— 红" }),
+        "/repo/decision.json": JSON.stringify({
+          exitCode: 1,
+          line: "[verdict] 结论：exit 1 —— 红",
+        }),
       }),
       root: "/repo",
     });

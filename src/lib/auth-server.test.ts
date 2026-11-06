@@ -85,9 +85,7 @@ describe("getServerUser：已登录取真实用户，未登录回落演示用户
     const a = await getServerUser(null);
     const b = await getServerUser(null);
     expect(b).toEqual(a);
-    expect(
-      tdb.$tables.users.filter((u) => u.email === DEMO_EMAIL),
-    ).toHaveLength(1);
+    expect(tdb.$tables.users.filter((u) => u.email === DEMO_EMAIL)).toHaveLength(1);
   });
 
   /* 下面这条钉住的是「缓存不许越过数据库」这个判决（不是缓存本身）。

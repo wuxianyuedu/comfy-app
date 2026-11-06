@@ -78,7 +78,7 @@ const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /**
- * 四段的定义 —— 顺序即执行序（复算最贵、先跑；后两段是廉价的纯 git 复查）。
+ * 四段的定义 —— 顺序即执行序（复算最贵、先跑；后三段是廉价的复查）。
  *
  * ⚠️ **2026-10-20 起只剩三段**：`unitTests`（受影响用例）那一档撤了。它从
  * pre-commit 搬到 push 之后只活了不到一天就被撤掉 —— 本地这一跳在最需要它给出
@@ -90,6 +90,14 @@ const ROOT = path.resolve(HERE, "..");
  * `COMFY_AFFECTED_CHANGED`，同一条判决链，并发按 `ci-load.mjs` 收敛）。
  * 撤段而不是「留一段恒跳过」：恒跳过的段会让 `--json` 的读数里永远有一格
  * 「没跑起来」，而那一格不构成证据（§13.6.2 的口径：没判 ≠ 绿）。
+ *
+ * `docCheck` 那一格是 `kind: "script"` 的裸脚本段（ISSUE #2753，2026-11-05）：
+ * `check-doc-references.cjs` 的 §13.1 清单 ⇄ 钩子步骤那一对**没有合并前的执行者** ——
+ * #2607 那一批漏登记 §13.1 一格，PR 全绿、合并全绿，master 上的 `doc:check`
+ * 红了 ≈20 分钟才被另一条分支的一次性探针撞见。实测代价 0.7s（与它在 push 档
+ * 的任何邻居差一个量级以上），且它判的**这一对**是回归判据（清单是手跑全套的
+ * 唯一入口，漏一格 = 照着清单跑的人以为判据不存在）；判据不拆（拆两半=两份口径，
+ * §12.12 同族）—— 其余读者面判定仍归平台 push 档。
  *
  * `mergeLoss` 那一格是 `anchored` 而不是裸 `script`：它**需要一个锚点**
  * （`--baseline <已知好的参照点>`），而那个锚点在「合并前」这一刻是**算得出来的**
@@ -129,6 +137,12 @@ export const SEGMENTS = {
     kind: "anchored",
     script: "check-merged-side-loss.mjs",
     shape: "baseline",
+  },
+  docCheck: {
+    label: "文档引用与权威源一致（§13.1 清单 ⇄ 钩子步骤，#2753）",
+    kind: "script",
+    script: "check-doc-references.cjs",
+    args: [],
   },
 };
 
@@ -588,9 +602,8 @@ function main(argv) {
       });
       continue;
     }
-    /* `base` / `anchored` / `claims` 都已在上面 `continue`，剩下的是**不需要锚点**的裸脚本段：
-     * 目前一段都没有（`claims` 从 #2070 起也要锚点），留着是因为 `SEGMENTS` 的类型
-     * 仍然允许 `kind: "script"` —— 将来加一段廉价复查时不必回来改分派。 */
+    /* `base` / `anchored` 段都已在上面 `continue`，剩下的是**不需要锚点**的裸脚本段：
+     * `docCheck`（#2753）—— 廉价的读者面复查，进合并前这一跳的口径见 SEGMENTS 头注。 */
     const scripted = /** @type {{script: string, args: string[]}} */ (seg);
     const r = runScript(scripted.script, scripted.args);
     results.push({ key, label: seg.label, code: r.code, output: r.output });
@@ -655,7 +668,7 @@ function main(argv) {
   /** @type {"ok" | "red" | "skip"} */
   const state = total === 0 ? "ok" : total === 1 ? "red" : "skip";
   const detail =
-    state === "ok" ? "三段全绿" : state === "red" ? "有段红了" : "有段没跑起来（不构成证据）";
+    state === "ok" ? "各段全绿" : state === "red" ? "有段红了" : "有段没跑起来（不构成证据）";
   for (const line of renderVerdict({ state, gate: "合并前复算", detail })) {
     process.stdout.write(`\n${line}\n`);
   }
