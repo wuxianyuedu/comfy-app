@@ -27,13 +27,24 @@ import {
 } from "~/lib/process/python-run";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { AppError } from "~/lib/core/errors";
-import { isPlainRecord, isRecord } from "~/lib/is-record";
+import { isPlainRecord } from "~/lib/is-record";
 import type {
   DiscoveredSubpkg,
   ParseReport,
   ParseStreamEvent,
   SettingsStreamEvent,
 } from "~/lib/comfyui/custom-nodes-stream";
+import {
+  isNumberValue,
+  isParseErrorArray,
+  isParseReport,
+  isStringArray,
+  isStringOrNull,
+  isStringValue,
+  isUnknownArray,
+  readDiscoveredPackages,
+  type ParseErrorEntry,
+} from "./parse-guards";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { apiErrorDetail } from "~/lib/api-error";
 import { withTimeoutResult } from "~/lib/with-timeout";
@@ -44,76 +55,6 @@ export const dynamic = "force-dynamic";
 
 const MANIFEST = customNodesManifestPath();
 const REPORT = path.join(process.cwd(), "src/generated/customNodes.report.json");
-
-/* ── 外部 JSON 的窄化工具(替代原 any)───────────────────────────
- * manifest / report / python stdout 都是外部输入,统一 unknown 进、守卫窄化读;
- * 字段值通过对应类型谓词后才采用,否则回退到兜底值(不再用类型断言)。 */
-function isStringValue(v: unknown): v is string {
-  return typeof v === "string";
-}
-
-function isNumberValue(v: unknown): v is number {
-  return typeof v === "number";
-}
-
-function isStringOrNull(v: unknown): v is string | null {
-  return v === null || typeof v === "string";
-}
-
-function isStringArray(v: unknown): v is Array<string> {
-  return Array.isArray(v) && v.every((item) => typeof item === "string");
-}
-
-function isUnknownArray(v: unknown): v is Array<unknown> {
-  return Array.isArray(v);
-}
-
-type ParseErrorEntry = { error: string; file: string };
-
-function isParseErrorEntry(v: unknown): v is ParseErrorEntry {
-  return isRecord(v) && typeof v.error === "string" && typeof v.file === "string";
-}
-
-function isParseErrorArray(v: unknown): v is Array<ParseErrorEntry> {
-  return Array.isArray(v) && v.every(isParseErrorEntry);
-}
-
-/* 解析器输出的单个子包：name 是界面必需的标识，其余字段来自不同版本解析器时可能缺省，
- * 只校验存在时的类型，不硬性要求齐全（视图侧对这些字段已有防御）。 */
-function isDiscoveredSubpkg(v: unknown): v is DiscoveredSubpkg {
-  return (
-    isRecord(v) &&
-    typeof v.name === "string" &&
-    (v.path === undefined || typeof v.path === "string") &&
-    (v.parent === undefined || typeof v.parent === "string") &&
-    (v.exists === undefined || typeof v.exists === "boolean") &&
-    (v.isLeaf === undefined || typeof v.isLeaf === "boolean") &&
-    (v.fileCount === undefined || typeof v.fileCount === "number") &&
-    (v.sizeBytes === undefined || typeof v.sizeBytes === "number") &&
-    (v.contentHash === undefined || typeof v.contentHash === "string") &&
-    (v.status === undefined || typeof v.status === "string") &&
-    (v.packageFileCount === undefined || typeof v.packageFileCount === "number")
-  );
-}
-
-/* 报告由 Python 侧写出，历史版本/子集模式字段并不齐全（甚至 packages 可以是字典），
- * 这里只确认它是对象、核心计数字段若存在则类型正确，其余保持原样透传。 */
-function isParseReport(v: unknown): v is ParseReport {
-  return (
-    isRecord(v) &&
-    (v.generatedAt === undefined || typeof v.generatedAt === "string") &&
-    (v.errorCount === undefined || typeof v.errorCount === "number") &&
-    (v.pathCount === undefined || typeof v.pathCount === "number") &&
-    (v.totalNodes === undefined || typeof v.totalNodes === "number")
-  );
-}
-
-function readDiscoveredPackages(parsed: unknown): Array<DiscoveredSubpkg> {
-  if (!isRecord(parsed) || !Array.isArray(parsed.packages)) {
-    return [];
-  }
-  return parsed.packages.filter(isDiscoveredSubpkg);
-}
 
 /** 等价原 `src?.[key] ?? fallback`:值通过类型谓词后才采用,否则走兜底。 */
 function jsonField<T>(

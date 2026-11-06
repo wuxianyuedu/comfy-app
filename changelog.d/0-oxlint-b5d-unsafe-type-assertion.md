@@ -12,6 +12,8 @@
   - 泛型 `jsonField<T>` 增加谓词参数，`ARTIFACT_TYPES` 型断言改谓词过滤。
 - 语义未变：错误码、回话形状（正常数据）、日志话术与用例期望值均保持；没有新增 `as` / `!` /
   逐行禁用，没有放宽既有 overrides。
+- `src/app/api/custom-nodes/route.ts` 按单文件行数上限拆出 `parse-guards.ts`（外部 JSON 谓词与
+  `readDiscoveredPackages`），路由回到 879 行。
 - 台账：B5 行改「清账中（子批1、2、4：80 份 / 166 处已清；子批3 在 #3249）」。
 - 清账总账：#3181（本批挂 `Refs`）。
 
