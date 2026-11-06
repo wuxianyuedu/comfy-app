@@ -84,11 +84,11 @@ export function isRealComfyuiPayload(payload) {
   if (!payload || typeof payload !== "object") {
     return false;
   }
-  const system = /** @type {Record<string, unknown>} */ (payload).system;
+  const system = "system" in payload ? payload.system : undefined;
   if (!system || typeof system !== "object") {
     return false;
   }
-  const version = /** @type {Record<string, unknown>} */ (system).comfyui_version;
+  const version = "comfyui_version" in system ? system.comfyui_version : undefined;
   return typeof version === "string" && version.trim() !== "";
 }
 
@@ -101,16 +101,16 @@ export function isFakeComfyuiPayload(payload) {
   if (!payload || typeof payload !== "object") {
     return false;
   }
-  const obj = /** @type {Record<string, unknown>} */ (payload);
-  if (isRealComfyuiPayload(obj)) {
+  if (isRealComfyuiPayload(payload)) {
     return false;
   }
-  const system = obj.system;
+  const system = "system" in payload ? payload.system : undefined;
   if (!system || typeof system !== "object") {
     return false;
   }
-  const ram = /** @type {Record<string, unknown>} */ (system).ram_total;
-  return ram === 1 && Array.isArray(obj.devices) && obj.devices.length === 0;
+  const ram = "ram_total" in system ? system.ram_total : undefined;
+  const devices = "devices" in payload ? payload.devices : undefined;
+  return ram === 1 && Array.isArray(devices) && devices.length === 0;
 }
 
 /**

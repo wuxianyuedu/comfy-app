@@ -218,8 +218,8 @@ export function runSceneError(name: string): string | undefined {
 
 /** 按名字取场景；写错就抛（`parameters` 里那个名字是不可信输入）。 */
 function requireScene(name: string): WorkflowRunScene {
-  /* SAFETY: 类型断言已复核 */
-  const scene: WorkflowRunScene | undefined = WORKFLOW_RUN_SCENES[name as RunSceneName];
+  const registry: Record<string, WorkflowRunScene> = WORKFLOW_RUN_SCENES;
+  const scene: WorkflowRunScene | undefined = registry[name];
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- 场景名来自 Storybook parameters（手写的不可信输入），查不到时运行期是 undefined；规则把标注判成无重叠，保留抛错出口
   if (scene === undefined) {
     throw new Error(

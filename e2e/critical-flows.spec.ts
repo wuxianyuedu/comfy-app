@@ -171,8 +171,7 @@ test.describe("工作区链路 @critical", () => {
        竖条量起来正好是正方形。老写法在最该红的那一刻会绿。 */
     const measure = () =>
       spinner.evaluate((el) => {
-        /* SAFETY: 类型断言已复核 */
-        const style = getComputedStyle(el as SVGElement);
+        const style = getComputedStyle(el);
         return {
           width: Number.parseFloat(style.width),
           height: Number.parseFloat(style.height),
@@ -198,8 +197,7 @@ test.describe("工作区链路 @critical", () => {
       }
       const previous = parent.style.display;
       parent.style.display = "block";
-      /* SAFETY: 类型断言已复核 */
-      const style = getComputedStyle(el as SVGElement);
+      const style = getComputedStyle(el);
       const box = {
         width: Number.parseFloat(style.width),
         height: Number.parseFloat(style.height),
@@ -352,11 +350,9 @@ test.describe("应用页签与全屏视图 @critical", () => {
    * （`ShellTabs.tsx` 文件头，实测无应用内页签栏），唯一常驻出路是底部状态栏与各视图关闭口。所以守：浮层若盖住状态栏，`elementFromPoint` 会返回浮层子节点；并钉住「不画假页签栏」。 */
   const centerHitsOwnSubtree = (target: ReturnType<Page["locator"]>) =>
     target.evaluate((el) => {
-      /* SAFETY: 类型断言已复核 */
-      const box = (el as HTMLElement).getBoundingClientRect();
+      const box = el.getBoundingClientRect();
       const top = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
-      /* SAFETY: 类型断言已复核 */
-      return top !== null && (el as HTMLElement).contains(top);
+      return top !== null && el.contains(top);
     });
 
   async function expectStatusBarNotCovered(page: Page) {
@@ -707,10 +703,8 @@ test.describe("应用页签与全屏视图 @critical", () => {
         const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
         let best: Text | null = null;
         for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-          /* SAFETY: 类型断言已复核 */
-          const text = n as Text;
-          if (!best || text.length > best.length) {
-            best = text;
+          if (n instanceof Text && (!best || n.length > best.length)) {
+            best = n;
           }
         }
         const node = best!;
@@ -865,8 +859,9 @@ test.describe("应用页签与全屏视图 @critical", () => {
 
         // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
         const overflow = await button.evaluate((el) => {
-          /* SAFETY: 类型断言已复核 */
-          const nodes = [el, ...el.children] as Array<HTMLElement>;
+          const nodes: Array<HTMLElement> = [el, ...el.children].filter(
+            (n): n is HTMLElement => n instanceof HTMLElement,
+          );
           return nodes.map((n) => n.scrollWidth - n.clientWidth);
         });
         for (const px of overflow) {
@@ -882,16 +877,15 @@ test.describe("应用页签与全屏视图 @critical", () => {
         page
           .getByTitle(new RegExp(`^当前来源的${label}：`))
           .first()
-          .evaluate((el) => {
+          .evaluate((el): [number, number, number] => {
             const color = getComputedStyle(el).color;
             const canvas = document.createElement("canvas");
             canvas.width = canvas.height = 1;
             const ctx = canvas.getContext("2d")!;
             ctx.fillStyle = color;
             ctx.fillRect(0, 0, 1, 1);
-            const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-            /* SAFETY: 类型断言已复核 */
-            return [r, g, b] as [number, number, number];
+            const data = ctx.getImageData(0, 0, 1, 1).data;
+            return [data[0] ?? 0, data[1] ?? 0, data[2] ?? 0];
           });
       const [wr, wg, wb] = await rgbOf("警告");
       const [er, eg, eb] = await rgbOf("错误");
@@ -907,8 +901,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
         .getByTitle(/^当前来源的警告：/)
         .first()
         .evaluate((el) => {
-          /* SAFETY: 类型断言已复核 */
-          const count = el.children[1] as HTMLElement;
+          const count = el.children[1];
+          if (!(count instanceof HTMLElement)) {
+            throw new Error("计数节点的第二个子节点不是 HTML 元素");
+          }
           const canvas = document.createElement("canvas");
           canvas.width = canvas.height = 1;
           const ctx = canvas.getContext("2d")!;

@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        ".storybook/flow-canvas.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        ".storybook/main.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        ".storybook/message-center-sources.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        ".storybook/screen-frame.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        ".storybook/store-sources.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        ".storybook/workflow-run-sources.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "e2e/critical-flows.spec.ts", // 存量 8 处 · 清账目标 B5 · 新代码不禁用
-        "e2e/main-journey.spec.ts", // 存量 12 处 · 清账目标 B5 · 新代码不禁用
-        "e2e/project-context-refresh.spec.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "e2e/smoke.spec.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "e2e/support/fake-comfyui-endpoint.mjs", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "e2e/support/preflight-browser.mjs", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "e2e/support/runtime-budget.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "e2e/theme-token-consumers.spec.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "e2e/view-container.spec.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "e2e/workshop-health-segments.spec.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/affected-launch-retry-scope.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/affected-launch-scope-advice.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/agent-film.mjs", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/agent-index.mjs", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
         "scripts/check-ci-yaml-parse.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "scripts/check-daily-attendance.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "scripts/check-eslint-exemptions.cjs", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
