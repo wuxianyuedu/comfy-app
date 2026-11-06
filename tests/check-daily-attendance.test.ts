@@ -68,7 +68,7 @@ function detail(
 ) {
   let seq = 0;
   const withIds = stages.map((s: StageFixture) => {
-    const mine = /^(每日|单跑)/.test(String(s.name));
+    const mine = /^(?:每日|单跑)/.test(String(s.name));
     return {
       ...s,
       id: mine ? `stage-${(seq += 1) - 1}` : String(s.name).toLowerCase(),

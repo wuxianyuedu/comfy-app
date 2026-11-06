@@ -31,7 +31,7 @@ function seedBaseline(repo: GateRepo): void {
 }
 
 /** 读脚本里 `HARD_GATE_RULES` 的声明段（下面那条用例用它算条数，不写字面量）。 */
-const DECL_RE = /const HARD_GATE_RULES = new Set\(\[([\s\S]*?)\]\);/;
+const DECL_RE = /const HARD_GATE_RULES = new Set\(\[(?<rules>[\s\S]*?)\]\);/;
 
 /**
  * 把临时工作区里那份脚本改成「这几条仍走棘轮」的形态 —— 只把 rule id 从 `HARD_GATE_RULES` 摘掉，判据一字不动。
@@ -328,7 +328,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
      * 而改的人只会把数字对上、不会去想机制还在不在（ISSUE #1668 的 P86 就是
      * 「表里占了编号、脚本里没有实现」那一族的实例）。
      * 判据 = 输出的条数与脚本里 `HARD_GATE_RULES` 的规模自洽。 */
-    const declared = DECL_RE.exec(repo.read("scripts/ui-primitives-scope.cjs"))?.[1];
+    const declared = DECL_RE.exec(repo.read("scripts/ui-primitives-scope.cjs"))?.groups?.rules;
     expect(declared, "读不到 HARD_GATE_RULES 的声明").toBeTruthy();
     const size = (declared ?? "").match(/"P\d+"/g)?.length ?? 0;
     expect(size, "HARD_GATE_RULES 里一条判据都没有").toBeGreaterThan(0);
@@ -5671,9 +5671,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     repo.write("src/components/studio/A2.tsx", BUTTON_VIEW);
     repo.write("src/components/studio/B.tsx", SPIN_VIEW);
     const { output } = repo.run();
-    const m = /stripCalls=(\d+)/.exec(output);
+    const m = /stripCalls=(?<stripCalls>\d+)/.exec(output);
     expect(m, output).toBeTruthy();
-    const calls = Number(m![1]);
+    const calls = Number(m?.groups?.stripCalls ?? "");
     /* 上界：**唯一**文本数 × 1（缓存命中 ⇒ 与「多少条判据问过它」无关）。
      * 给一点余量：probe 自己与 `--report` 之外的分支各可能再问一次。
      * 关键判据是「远小于 判据数 × 文本数」（85 × 2 = 170）。 */

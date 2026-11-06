@@ -421,9 +421,9 @@ describe("主题色豁免台账", () => {
     const entries = block.match(/\{\s*\n\s*file:[\s\S]*?\n {2}\},/g) ?? [];
     expect(entries.length).toBeGreaterThan(0);
     for (const entry of entries) {
-      const file = /file:\s*"([^"]+)"/.exec(entry)?.[1];
+      const file = /file:\s*"(?<file>[^"]+)"/.exec(entry)?.groups?.file ?? "";
       expect(file, `豁免条目缺 file：${entry.slice(0, 40)}`).toBeTruthy();
-      const reason = /reason:\s*([\s\S]*?),\n {2}\},$/.exec(entry)?.[1] ?? "";
+      const reason = /reason:\s*(?<reason>[\s\S]*?),\n {2}\},$/.exec(entry)?.groups?.reason ?? "";
       // 理由必须说清「为什么这行色值是内容自己的颜色」，不能是一句「类型色」了事。
       expect(
         reason.replaceAll(/\s+/g, "").length,

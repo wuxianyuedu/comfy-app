@@ -174,9 +174,10 @@ const REGISTERED: Array<Registration> = [
  * ⚠️ 标识符用 `\w+` 而非白名单 `it|test|describe`，为的是认得 `test.extend` 派生的 test（`platformTest` / `dbTest`，见
  * `tests/helpers/platform-fixtures.ts`）—— 白名单会让那些 skip 站点整个漏出扫描面，表现是「一条静默不跑的用例没人登记」；放宽的代价可能把同名普通函数算成站点，那会在「登记项不陈旧」上报红。
  */
-const DIRECT_SITE_RE = /^\s*\w+\.skip(?:If\(([^)]*)\))?\(/;
+const DIRECT_SITE_RE = /^\s*\w+\.skip(?:If\((?<guard>[^)]*)\))?\(/;
 /** 别名定义：`const needsPosixExec = it.skipIf(<guard>);` */
-const ALIAS_DEF_RE = /^\s*const\s+(\w+)\s*=\s*(?:it|test)\.skipIf\(([^)]*)\)\s*;?\s*$/;
+const ALIAS_DEF_RE =
+  /^\s*const\s+(?<name>\w+)\s*=\s*(?:it|test)\.skipIf\((?<guard>[^)]*)\)\s*;?\s*$/;
 
 /** 测试文件的扫描面（`tests/**` 与 `src/**` 下的 `*.test.ts(x)`）。 */
 function testFiles(dir: string, found: Array<string> = []): Array<string> {
@@ -209,8 +210,8 @@ export function skipSitesIn(rel: string): Map<string, number> {
   for (const line of lines) {
     const def = ALIAS_DEF_RE.exec(line);
     if (def) {
-      const aliasName = def[1];
-      const aliasGuard = def[2];
+      const aliasName = def.groups?.name;
+      const aliasGuard = def.groups?.guard;
       if (
         aliasName !== undefined &&
         aliasName !== "" &&
@@ -222,7 +223,7 @@ export function skipSitesIn(rel: string): Map<string, number> {
       }
       continue; // 定义行本身不是站点
     }
-    const usedName = /^\s*(\w+)\(/.exec(line)?.[1];
+    const usedName = /^\s*(?<name>\w+)\(/.exec(line)?.groups?.name;
     if (usedName !== undefined && usedName !== "" && aliasNames.has(usedName)) {
       const guard = aliases.get(usedName) ?? "";
       byGuard.set(guard, (byGuard.get(guard) ?? 0) + 1);
@@ -230,7 +231,7 @@ export function skipSitesIn(rel: string): Map<string, number> {
     }
     const direct = DIRECT_SITE_RE.exec(line);
     if (direct) {
-      const guard = (direct[1] ?? "skip").trim();
+      const guard = (direct.groups?.guard ?? "skip").trim();
       byGuard.set(guard, (byGuard.get(guard) ?? 0) + 1);
     }
   }

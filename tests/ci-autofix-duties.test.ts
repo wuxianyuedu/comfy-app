@@ -29,7 +29,7 @@ describe("平台侧自动修档（.cnb.yml --autofix ⇄ 登记表）", () => {
     expect(AUTOFIX_DUTIES.length).toBeGreaterThan(0);
     for (const duty of AUTOFIX_DUTIES) {
       expect(duty.stage.length, "没写 stage 名").toBeGreaterThan(0);
-      expect(duty.entry, `${duty.stage} 没写入口脚本`).toMatch(/^scripts\/.+\.(cjs|mjs)$/);
+      expect(duty.entry, `${duty.stage} 没写入口脚本`).toMatch(/^scripts\/.+\.(?:cjs|mjs)$/);
       expect(duty.args.length, `${duty.stage} 的判定门是空的`).toBeGreaterThan(0);
       /* `why` 不许是「顺手加的」：两条前提（纯确定的重生成 / 红了只有一种成因）
        * 各要有一句，所以下限放在「足够长到写清这两件事」的量级上。 */

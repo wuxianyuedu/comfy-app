@@ -71,9 +71,9 @@ function pipelineEnv(text: string): Record<string, string> {
       continue;
     }
     if (/^ {4}[A-Za-z_][A-Za-z0-9_]*:/.test(line)) {
-      const m = /^ {4}([A-Za-z_][A-Za-z0-9_]*):[ \t]*(.*)$/.exec(line);
+      const m = /^ {4}(?<key>[A-Za-z_][A-Za-z0-9_]*):[ \t]*(?<value>.*)$/.exec(line);
       if (m) {
-        out[m[1]!] = unquote(m[2] ?? "");
+        out[m.groups?.key ?? ""] = unquote(m.groups?.value ?? "");
       }
       continue;
     }
@@ -126,11 +126,11 @@ describe("CI 落点：临时根与浏览器落点都在开发盘上（契约）"
     const text = readCnb();
     const offLevel: Array<string> = [];
     for (const line of text.split(/\r?\n/)) {
-      const m = /^([ \t]*)(TEMP|TMP|PLAYWRIGHT_BROWSERS_PATH):/.exec(line);
+      const m = /^(?<indent>[ \t]*)(?:TEMP|TMP|PLAYWRIGHT_BROWSERS_PATH):/.exec(line);
       if (!m) {
         continue;
       }
-      const indent = m[1]!.replaceAll("	", "    ").length;
+      const indent = (m.groups?.indent ?? "").replaceAll("	", "    ").length;
       /* 流水线级 = 第 4 列；格级 = 第 6 列（`  - name:` ⇒ `    env:` ⇒ `      KEY:`）。 */
       if (indent !== 4) {
         offLevel.push(line.trim());
@@ -219,7 +219,7 @@ describe("CI 落点：临时根与浏览器落点都在开发盘上（契约）"
       .split(/\r?\n/)
       .map((line, i) => ({ line, no: i + 1 }))
       .filter(({ line }) => !line.trim().startsWith("#"))
-      .filter(({ line }) => /\b(robocopy|Move-Item|Copy-Item)\b/.test(line))
+      .filter(({ line }) => /\b(?:robocopy|Move-Item|Copy-Item)\b/.test(line))
       .map(({ line, no }) => `${no}: ${line.trim()}`);
     expect(
       offenders,

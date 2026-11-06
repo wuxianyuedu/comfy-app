@@ -1612,7 +1612,9 @@ describe("切分之后：ci-build 这一族的读数各只有一份定义", () =
     /* ⚠️ 锚在**行首**：`readout` 的文件头里有一句正写着「见下面那个 `export { … }`」，
      * 不锚行首的写法会从那句注释起、一路吞到真的转发块，于是清单里少转发一个名字也照样绿
      * （变异自证踩过：把 `formatOutcome` 从清单里删掉，这条当时没红）。 */
-    const block = /^export \{([\s\S]*?)\};/m.exec(readout?.src ?? "")?.[1] ?? "(没有转发块)";
+    const block =
+      /^export \{(?<exportBody>[\s\S]*?)\};/m.exec(readout?.src ?? "")?.groups?.exportBody ??
+      "(没有转发块)";
     for (const name of ["formatOutcome", "stageLogExcerpt", "progressReadout"]) {
       expect(block, `转发清单里没有 ${name}`).toContain(name);
     }

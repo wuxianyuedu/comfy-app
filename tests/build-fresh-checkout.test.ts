@@ -29,8 +29,8 @@ describe("模块级副作用不得在表未就绪时读库", () => {
       src.indexOf("function sweepOnce"),
       src.indexOf("function startReaper"),
     );
-    const allCalls = src.match(/void reapStale(Queued|Running)Tasks\(\);/g) ?? [];
-    const guardedCalls = sweepBody.match(/void reapStale(Queued|Running)Tasks\(\);/g) ?? [];
+    const allCalls = src.match(/void reapStale(?:Queued|Running)Tasks\(\);/g) ?? [];
+    const guardedCalls = sweepBody.match(/void reapStale(?:Queued|Running)Tasks\(\);/g) ?? [];
     expect(guardedCalls.length).toBeGreaterThan(0);
     expect(guardedCalls.length, "sweepOnce 之外存在裸 sweeper 调用，会绕过表就绪守卫").toBe(
       allCalls.length,
