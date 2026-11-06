@@ -85,6 +85,7 @@ import {
   reconcilePort as portReapReconcilePort,
   scanPorts,
 } from "./launcher-core/port-reap.mjs";
+import { ProbeUnavailableError } from "./launcher-core/procs.mjs";
 // `COMFY_EXECUTOR` 判据的纯 Node 侧唯一定义（与 executor-host.mjs 共用，ADR §14 D5）
 import { resolveExecutorMode } from "./launcher-core/executor-mode.mjs";
 import { pruneTimestampedLogs, syncNextCache } from "./launcher-core/worktree.mjs";
@@ -484,9 +485,23 @@ export async function run(argv = process.argv.slice(2)) {
   // 新 dev server 会撞 `EADDRINUSE` 立刻退出，编排器随之 `await [dev]` 解析为 1 整体退出
   // （一次双击起不来的典型现场：两个窗口没了，应用也起不来）。残留是**上一次**启动的，
   // 不在这一次启动的单一实例假设里，因此端口族回收必须每次都跑。
-  let portSummary = await reconcilePort(port, ROOT, {
-    explicit: usesExplicitPort(portOrNull),
-  });
+  let portSummary;
+  try {
+    portSummary = await reconcilePort(port, ROOT, {
+      explicit: usesExplicitPort(portOrNull),
+    });
+  } catch (error) {
+    /* 端口 / 进程探测没跑起来：不是「端口空闲」，也不是「被别人占着」。
+     * 这一格**没有结论**，不许继续起服务（会撞残留 / EADDRINUSE），
+     * 也不许被最外层泛化成「启动编排异常」而不给可行动作（§13.6.3）。 */
+    if (error instanceof ProbeUnavailableError) {
+      const reason = error.message;
+      log(`端口归属判据没量到：${reason}`, "ERROR");
+      status("error", 1, "端口归属判据没量到，未继续启动", { error: true, staleShell: reason });
+      return 1;
+    }
+    throw error;
+  }
   log(`端口检查：${portSummary}`, "OK");
   status("port-ready", 0.12, "端口已就绪，处理编译缓存…", { staleShell });
 

@@ -26,6 +26,7 @@ import process from "node:process";
 
 import { resolveRepoRoot } from "./app-port.mjs";
 import { runningAppInstances } from "./launcher-core/port-reap.mjs";
+import { ProbeUnavailableError } from "./launcher-core/procs.mjs";
 
 const root = resolveRepoRoot();
 try {
@@ -50,10 +51,17 @@ try {
   process.exit(1);
 } catch (error) {
   const reason = error instanceof Error ? error.message : String(error);
+  const probeFailed = error instanceof ProbeUnavailableError;
   console.error(
     `[deps:guard] 归属判据没给出结论（${reason}）⇒ 这一格既不是「没有实例在跑」，` +
       "也不是「判到有实例在跑」。",
   );
+  if (probeFailed) {
+    console.error(
+      "判据没量到：端口 / 进程探测命令没跑起来（不是「量到了、结果为空」）。" +
+        "这一支过去会被吞成「没有实例在跑」⇒ 守卫放行 pnpm install，正是硬规则 9 的 fail-open。",
+    );
+  }
   console.error(
     "出口：复跑 `pnpm deps:guard` 先让判据给出结论；" +
       "在拿到结论之前不要执行 `pnpm install`（AGENTS 硬规则 9）。",
