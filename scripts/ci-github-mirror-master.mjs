@@ -30,13 +30,10 @@ import {
   runGitWithRetry,
   sanitize,
 } from "./ci-github-mirror-push.mjs";
-/* 超时 / 次数 / 退避那一组常量单独一份（2026-11-05：主文件贴着 §12.6 R5 的 900 行闸，
- * 加「推送墙钟预算」时切出去的；那一份的文件头写了为什么改按时间收口）。 */
-import {
-  PROBE_MAX_ATTEMPTS,
-  PUSH_MAX_ATTEMPTS,
-  PUSH_RETRY_BUDGET_MS,
-} from "./ci-mirror-retry-policy.mjs";
+/* 超时 / 次数 / 退避那一组常量单独一份；探活与推送共用的墙钟预算见
+ * `ci-mirror-wire-budget.mjs`（ISSUE #3234，两个档都从探活那一跳起算）。 */
+import { PROBE_MAX_ATTEMPTS, PUSH_MAX_ATTEMPTS } from "./ci-mirror-retry-policy.mjs";
+import { createWireBudget } from "./ci-mirror-wire-budget.mjs";
 /* LFS 那一跳自 #3146 起单独一份（900 行闸）：它反过来要 import 主文件的判据，故主文件不转出它。 */
 import { pushLfsObjects } from "./ci-mirror-lfs-push.mjs";
 import { renderMirrorSummary } from "./ci-mirror-failure-report.mjs";
@@ -47,7 +44,7 @@ import { renderMirrorSummary } from "./ci-mirror-failure-report.mjs";
  * 没有要叫醒的对象）。探活与推送两跳的话术与 {@link runMirror} 同一族，
  * 前缀换成 `[mirror-master]`（文件头「--master」一节第 3 条）。
  *
- * @param {{env: Record<string, string | undefined>, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, dryRun?: boolean, log?: (line: string) => void, readout?: boolean}} io
+ * @param {{env: Record<string, string | undefined>, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, now?: () => number, dryRun?: boolean, log?: (line: string) => void, readout?: boolean}} io
  * @returns {Promise<number>} 仓内三态退码
  */
 export async function runMasterMirror(io) {
@@ -65,6 +62,7 @@ export async function runMasterMirror(io) {
   };
   const runGit = io.runGit ?? realRunGit;
   const sleep = io.sleep ?? realSleep;
+  const wireBudget = createWireBudget(io.now);
   const ctx = resolveMasterContext({ env, runGit });
   if (!ctx.ok) {
     for (const reason of ctx.reasons) {
@@ -84,11 +82,13 @@ export async function runMasterMirror(io) {
     );
     return CODE.OK;
   }
-  /* 推送前那一问与 PR 模式同一跳、同一份判读、同一套重试（文件头第 5 / 8 条）。 */
+  /* 推送前那一问与 PR 模式同一跳、同一份判读、**同一份墙钟预算**（见 PR 档第 8 条）。 */
   const probe = await runGitWithRetry(["ls-remote", url], {
+    budgetMs: wireBudget(),
     label: "探活",
     log,
     maxAttempts: PROBE_MAX_ATTEMPTS,
+    now: io.now,
     prefix: "mirror-master",
     runGit,
     sleep,
@@ -118,13 +118,14 @@ export async function runMasterMirror(io) {
     });
     return CODE.NO_FACT;
   }
-  /* 与 PR 模式同一套：egress 类失败重试、整档吃一个墙钟预算（文件头第 8 条），
+  /* 与 PR 模式同一套：egress 类失败重试、两跳共用一份预算的剩余量（PR 档第 8 条），
    * 认证 / 权限类一次就交账。 */
   const push = await runGitWithRetry(pushArgs(url, `refs/heads/${ctx.ref}`), {
-    budgetMs: PUSH_RETRY_BUDGET_MS,
+    budgetMs: wireBudget(),
     label: "推送",
     log,
     maxAttempts: PUSH_MAX_ATTEMPTS,
+    now: io.now,
     prefix: "mirror-master",
     runGit,
     sleep,
