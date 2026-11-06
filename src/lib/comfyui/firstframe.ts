@@ -11,6 +11,7 @@ import { promises as fs } from "node:fs";
 import type { SizeSpec } from "~/lib/media/size-presets";
 import { artifactDiskPath } from "~/lib/media/output-paths";
 import { FIRST_FRAME_WAIT, backoffDelayMs } from "~/lib/retry-policy";
+import { isRecord } from "~/lib/is-record";
 import { isTerminalTaskStatus } from "~/lib/task-state";
 import { taskRepository } from "../core/repository-task";
 import { createWorkflowRunTask } from "~/lib/workshop/workflow-run.server";
@@ -77,14 +78,9 @@ async function waitForImage(taskId: string): Promise<string> {
       if (row.status !== "SUCCEEDED") {
         throw new Error(row.error ?? `首帧生成失败（${row.status}）`);
       }
-      /* SAFETY: 类型断言已复核 */
-      const outputs =
-        (row.resultImages as Array<{
-          localPath?: string;
-          mediaType?: string;
-        }> | null) ?? [];
-      const first = outputs.find((im) => im.mediaType === "image");
-      if (first?.localPath === undefined || first.localPath === "") {
+      const outputs: Array<unknown> = Array.isArray(row.resultImages) ? row.resultImages : [];
+      const first = outputs.find((im) => isRecord(im) && im.mediaType === "image");
+      if (!isRecord(first) || typeof first.localPath !== "string" || first.localPath === "") {
         throw new Error("首帧无图像输出");
       }
       return first.localPath;

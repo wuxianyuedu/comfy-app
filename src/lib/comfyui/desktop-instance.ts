@@ -21,6 +21,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { isPlainRecord, isRecord } from "~/lib/is-record";
 import { classifyComfyInstall } from "./instance-kind";
 
 /** 桌面实例最终派生出的 headless 启动参数（不含解释器与 main.py 路径）。 */
@@ -56,39 +57,26 @@ export function findInstallationById(
   }
   if (Array.isArray(data)) {
     for (const item of data) {
-      if (
-        /* SAFETY: 类型断言已复核 */
-        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-        item != null &&
-        typeof item === "object" &&
-        (item as Record<string, unknown>).id === instanceId
-      ) {
-        /* SAFETY: 类型断言已复核 */
-        return item as Record<string, unknown>;
+      if (isRecord(item) && item.id === instanceId) {
+        return item;
       }
     }
     return null;
   }
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (data != null && typeof data === "object") {
-    /* SAFETY: 类型断言已复核 */
-    const obj = data as Record<string, unknown>;
+  if (isRecord(data)) {
     // 直接键值对应（形如 { "inst-...": {…} }）
-    const direct = obj[instanceId];
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (direct != null && typeof direct === "object") {
-      /* SAFETY: 类型断言已复核 */
-      return direct as Record<string, unknown>;
+    const direct = data[instanceId];
+    if (isRecord(direct)) {
+      return direct;
     }
     // 深搜：遍历对象/数组，找 id 字段匹配的节点。
-    return deepFindById(obj, instanceId);
+    return deepFindById(data, instanceId);
   }
   return null;
 }
 
 function deepFindById(node: unknown, id: string, depth = 0): Record<string, unknown> | null {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (depth > 12 || node == null) {
+  if (depth > 12 || !isRecord(node)) {
     return null;
   }
   if (Array.isArray(node)) {
@@ -100,17 +88,13 @@ function deepFindById(node: unknown, id: string, depth = 0): Record<string, unkn
     }
     return null;
   }
-  if (typeof node === "object") {
-    /* SAFETY: 类型断言已复核 */
-    const obj = node as Record<string, unknown>;
-    if (obj.id === id && typeof obj === "object") {
-      return obj;
-    }
-    for (const key of Object.keys(obj)) {
-      const hit = deepFindById(obj[key], id, depth + 1);
-      if (hit) {
-        return hit;
-      }
+  if (node.id === id) {
+    return node;
+  }
+  for (const key of Object.keys(node)) {
+    const hit = deepFindById(node[key], id, depth + 1);
+    if (hit) {
+      return hit;
     }
   }
   return null;
@@ -204,11 +188,9 @@ export function launchArgsToHeadless(raw: unknown): DesktopLaunchArgs {
 /** 从 installations.json 条目里解出 envVars（可能为对象或空）。 */
 function extractEnvVars(entry: Record<string, unknown> | null): Record<string, string> {
   const ev = entry?.envVars;
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (ev != null && typeof ev === "object" && !Array.isArray(ev)) {
+  if (isPlainRecord(ev)) {
     const out: Record<string, string> = {};
-    /* SAFETY: 类型断言已复核 */
-    for (const [k, v] of Object.entries(ev as Record<string, unknown>)) {
+    for (const [k, v] of Object.entries(ev)) {
       if (typeof v === "string" || typeof v === "number") {
         out[k] = String(v);
       }

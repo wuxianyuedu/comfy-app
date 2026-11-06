@@ -198,8 +198,14 @@ export async function connect(): Promise<void> {
     kickQueue();
   });
   ws.on("message", (data) => {
-    /* SAFETY: 类型断言已复核 */
-    const text = (data as Buffer).toString();
+    let text: string;
+    if (Buffer.isBuffer(data)) {
+      text = data.toString();
+    } else if (Array.isArray(data)) {
+      text = Buffer.concat(data).toString();
+    } else {
+      text = Buffer.from(data).toString();
+    }
     fireAndForget(handleMessage(text), (e) => {
       logger.warn(`[comfyui] ${errorText(e, "handleMessage 异常")}`);
     });

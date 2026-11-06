@@ -10,6 +10,8 @@
  *
  * @module comfyui/executor-outputs — 产物收集与运行时参数提取（纯函数）
  */
+import { isRecord } from "~/lib/is-record";
+
 /** ComfyUI history 输出文件条目（images / videos / gifs / audios 及 3D 兜底）。 */
 export type CollectedOutputFile = {
   filename: string;
@@ -25,6 +27,11 @@ export type CollectedOutputs = {
   videos: Array<CollectedOutputFile>;
 };
 
+/** 输出数组里的文件条目：`filename` 必须是字符串（`subfolder` / `type` 允许缺省）。 */
+function isCollectedOutputFile(v: unknown): v is CollectedOutputFile {
+  return isRecord(v) && typeof v.filename === "string";
+}
+
 /**
  * 从 ComfyUI history 的 outputs 中收集各类产物。
  * 纯函数，便于单测（P2：补齐 audio/text/3D，避免只认 images/videos 导致的死锁）。
@@ -35,29 +42,23 @@ export function collectOutputs(outputs: Record<string, unknown>): CollectedOutpu
   const audios: Array<CollectedOutputFile> = [];
   const others: Array<CollectedOutputFile> = [];
   const texts: Array<string> = [];
-  for (const nodeOut of Object.values(outputs)) {
-    if (typeof nodeOut !== "object" || nodeOut === null) {
+  for (const node of Object.values(outputs)) {
+    if (!isRecord(node)) {
       continue;
     }
-    /* SAFETY: 类型断言已复核 */
-    const node = nodeOut as Record<string, unknown>;
     if (Array.isArray(node.images)) {
-      /* SAFETY: 类型断言已复核 */
-      images.push(...(node.images as Array<CollectedOutputFile>));
+      images.push(...node.images.filter(isCollectedOutputFile));
     }
     if (Array.isArray(node.videos)) {
-      /* SAFETY: 类型断言已复核 */
-      videos.push(...(node.videos as Array<CollectedOutputFile>));
+      videos.push(...node.videos.filter(isCollectedOutputFile));
     }
     // VHS_VideoCombine 把文件发在 `gifs` 下（实际是 mp4/gif/webm）。
     if (Array.isArray(node.gifs)) {
-      /* SAFETY: 类型断言已复核 */
-      videos.push(...(node.gifs as Array<CollectedOutputFile>));
+      videos.push(...node.gifs.filter(isCollectedOutputFile));
     }
     // SaveAudio 与 AudioComposite 把文件发在 `audios` 下。
     if (Array.isArray(node.audios)) {
-      /* SAFETY: 类型断言已复核 */
-      audios.push(...(node.audios as Array<CollectedOutputFile>));
+      audios.push(...node.audios.filter(isCollectedOutputFile));
     }
     // ShowText / 任意文本输出节点：保留渲染文本（无文件）.
     if (typeof node.text === "string" && node.text.trim()) {
@@ -75,20 +76,12 @@ export function collectOutputs(outputs: Record<string, unknown>): CollectedOutpu
       if (k === "images" || k === "videos" || k === "gifs" || k === "audios" || k === "text") {
         continue;
       }
-      if (
-        Array.isArray(v) &&
-        v.length &&
-        v.every(
-          (it) =>
-            // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-            it != null &&
-            typeof it === "object" &&
-            /* SAFETY: 类型断言已复核 */
-            typeof (it as Record<string, unknown>).filename === "string",
-        )
-      ) {
-        /* SAFETY: 类型断言已复核 */
-        others.push(...(v as Array<CollectedOutputFile>));
+      if (!Array.isArray(v)) {
+        continue;
+      }
+      const files = v.filter(isCollectedOutputFile);
+      if (files.length && files.length === v.length) {
+        others.push(...files);
       }
     }
   }
@@ -180,25 +173,23 @@ function readSamplerNode(
 
 export function extractRuntimeParams(entry: unknown): RuntimeParams {
   const out: RuntimeParams = {};
-  /* SAFETY: 类型断言已复核 */
-  const prompt = (entry as { prompt?: unknown } | null | undefined)?.prompt;
-  /* SAFETY: 类型断言已复核 */
-  const graphRaw = (prompt as Record<string, unknown> | null | undefined)?.[2];
-  if (typeof graphRaw !== "object" || graphRaw === null) {
+  const entryObj = isRecord(entry) ? entry : undefined;
+  const promptRaw: unknown = entryObj?.prompt;
+  const graphRaw: unknown = Array.isArray(promptRaw) ? promptRaw[2] : undefined;
+  if (!isRecord(graphRaw)) {
     return out;
   }
-  /* SAFETY: 类型断言已复核 */
-  const graph = graphRaw as Record<string, unknown>;
   const samplers: Array<SamplerRuntime> = [];
-  for (const [nid, nodeRaw] of Object.entries(graph)) {
-    /* SAFETY: 类型断言已复核 */
-    const node = nodeRaw as Record<string, unknown> | undefined;
-    const t = typeof node?.class_type === "string" ? node.class_type : "";
+  for (const [nid, nodeRaw] of Object.entries(graphRaw)) {
+    if (!isRecord(nodeRaw)) {
+      continue;
+    }
+    const t = typeof nodeRaw.class_type === "string" ? nodeRaw.class_type : "";
     if (!isSamplerClassType(t)) {
       continue;
     }
-    /* SAFETY: 类型断言已复核 */
-    const inputs = (node?.inputs ?? {}) as Record<string, unknown>;
+    const inputsRaw: unknown = nodeRaw.inputs;
+    const inputs: Record<string, unknown> = isRecord(inputsRaw) ? inputsRaw : {};
     samplers.push(readSamplerNode(nid, t, inputs));
   }
   if (samplers.length === 0) {
