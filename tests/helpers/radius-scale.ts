@@ -31,12 +31,13 @@ export function parseDerivations(css: string): Map<string, RadiusDerivation> {
     if (name === "") {
       continue;
     }
+    const op2 = m.groups?.op2 ?? "";
     if ((m.groups?.op1 ?? "") === "*") {
       derivations.set(name, {
         coef: Number.parseFloat(m.groups?.value1 ?? "1"),
         offset: 0,
       });
-    } else if ((m.groups?.op2 ?? "") !== "") {
+    } else if (op2 === "+" || op2 === "-") {
       const magnitude = Number.parseFloat(m.groups?.value2 ?? "0");
       derivations.set(name, {
         coef: 1,
