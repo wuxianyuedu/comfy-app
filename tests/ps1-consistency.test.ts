@@ -235,8 +235,8 @@ describe("跨平台动作的实现契约", () => {
       const text = fs.readFileSync(path.join(process.cwd(), rel), "utf8");
       // 只允许 node: 内建与相对路径（本仓库模块）—— 门禁要在「装好依赖之前」
       // 也能跑，引第三方包会让它在干净检出上直接失败。
-      for (const m of text.matchAll(/from\s+"([^"]+)"/g)) {
-        const spec = m[1] ?? "";
+      for (const m of text.matchAll(/from\s+"(?<spec>[^"]+)"/g)) {
+        const spec = m.groups?.spec ?? "";
         expect(
           spec.startsWith("node:") || spec.startsWith("./") || spec.startsWith("../"),
           `${rel} 引入了非内建依赖：${spec}`,

@@ -164,7 +164,7 @@ describe("两个执行者必须经这一层取证", () => {
        * 注意这里只拦**实现形态**（把 `cat-file` 当 git 参数传、把路径当 pathspec 逐文件传），
        * 放行话术里对这条通道的点名说明 —— 报错文案要能指出「是哪一层没跑起来」。 */
       expect(src).not.toMatch(/rev-parse",\s*`\$\{/);
-      expect(src).not.toMatch(/"--",\s*(file|f)\b/);
+      expect(src).not.toMatch(/"--",\s*(?:file|f)\b/);
       expect(src).not.toMatch(/\[\s*"cat-file"/);
     });
   }

@@ -110,8 +110,10 @@ describe("屏名只有一个出处（ISSUE #1423）", () => {
       ...RETIRED_SCREEN_NAMES,
     ]);
     const hits: Array<string> = [];
-    for (const match of text.matchAll(/<h[12]\b[^>]*>\s*([^\s<>{][^<>{]*?)\s*<\/h[12]>/g)) {
-      const content = match[1]?.trim() ?? "";
+    for (const match of text.matchAll(
+      /<h[12]\b[^>]*>\s*(?<content>[^\s<>{][^<>{]*?)\s*<\/h[12]>/g,
+    )) {
+      const content = match.groups?.content?.trim() ?? "";
       if (known.has(content)) {
         hits.push(content);
       }

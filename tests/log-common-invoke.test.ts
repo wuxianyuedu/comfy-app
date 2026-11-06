@@ -76,10 +76,10 @@ function runHarness(host: string): Record<string, string> {
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
   const codes: Record<string, string> = {};
   for (const line of out.split(/\r?\n/)) {
-    const m = /^CODE\|([^|]+)\|(.*)$/.exec(line.trim());
-    const codeKey = m?.[1];
+    const m = /^CODE\|(?<key>[^|]+)\|(?<msg>.*)$/.exec(line.trim());
+    const codeKey = m?.groups?.key;
     if (codeKey !== undefined && codeKey !== "") {
-      codes[codeKey] = m?.[2] ?? "";
+      codes[codeKey] = m?.groups?.msg ?? "";
     }
   }
   codes.__status = String(r.status);

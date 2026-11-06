@@ -127,7 +127,7 @@ describe("统一容器的接入约定（文档型）", () => {
         `${rel} 没被抽出任何 <DocumentFrame> 的 className，判据对它失效`,
       ).toBeGreaterThan(0);
       for (const className of classNames) {
-        if (!/(^|\s)px-/.test(className)) {
+        if (!/(?:^|\s)px-/.test(className)) {
           offenders.push(`${rel} :: ${className}`);
         }
       }

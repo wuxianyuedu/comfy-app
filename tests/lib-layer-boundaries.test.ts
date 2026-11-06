@@ -87,14 +87,14 @@ describe("src/lib 的分层边界（规范 §18.3）", () => {
         const src = readFileSync(full, "utf8");
         // 只匹配模块说明符，注释里提到的路径不算（规范 §18.3 的注释惯例）
         const matches = [
-          ...src.matchAll(/from\s+["']([^"']+)["']/g),
-          ...src.matchAll(/import\s*\(\s*["']([^"']+)["']\s*\)/g),
-        ].map((m) => m[1]);
+          ...src.matchAll(/from\s+["'](?<spec>[^"']+)["']/g),
+          ...src.matchAll(/import\s*\(\s*["'](?<spec>[^"']+)["']\s*\)/g),
+        ].map((m) => m.groups?.spec);
         for (const spec of matches) {
           if (typeof spec !== "string") {
             continue;
           }
-          if (/^((~|@)\/)(components|app)\//.test(spec)) {
+          if (/^(?:~|@)\/(?:components|app)\//.test(spec)) {
             hits.push(`${relative(root, full)} → ${spec}`);
           }
         }

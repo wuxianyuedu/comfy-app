@@ -133,7 +133,7 @@ describe("postinstall 的入口真跑（模拟 Windows 宿主：不经 shell）"
     const src = fs.readFileSync(path.join(ROOT, POSTINSTALL_SCRIPT), "utf8");
     const code = src
       .split("\n")
-      .filter((l) => !/^\s*(\/\/|#|\*|\/\*)/.test(l))
+      .filter((l) => !/^\s*(?:\/\/|#|\*|\/\*)/.test(l))
       .join("\n");
     // `sh` 只允许出现在说明「为什么不能用它」的注释里。
     expect(code).not.toMatch(/\bsh\s+scripts\//);

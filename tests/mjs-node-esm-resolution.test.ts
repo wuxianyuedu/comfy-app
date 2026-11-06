@@ -16,17 +16,17 @@ const ENTRY_DIRS = ["scripts", "e2e", "tools"];
 const SKIP_DIRS = new Set(["node_modules", ".git", ".next", "coverage"]);
 
 /** 由 `.mjs` / `.cjs` 入口链加载的 `.ts` 源码必须带后缀 —— Node ESM 不做猜测。 */
-const TS_SPEC = /\.(ts|tsx|mts|cts)$/;
+const TS_SPEC = /\.(?:ts|tsx|mts|cts)$/;
 
 /** 抽出一个模块里**相对**的静态说明符（只认 `from "…"` 与裸 `import "…"`）。 */
 export function relativeSpecifiers(source: string): Array<string> {
   const out: Array<string> = [];
-  const fromRe = /\bfrom\s+["']([^"']+)["']/g;
-  const bareRe = /(?:^|\n)\s*import\s+["']([^"']+)["']/g;
+  const fromRe = /\bfrom\s+["'](?<spec>[^"']+)["']/g;
+  const bareRe = /(?:^|\n)\s*import\s+["'](?<spec>[^"']+)["']/g;
   for (const re of [fromRe, bareRe]) {
     let m: RegExpExecArray | null;
     while ((m = re.exec(source))) {
-      const spec = m[1];
+      const spec = m.groups?.spec;
       if (spec?.startsWith(".") === true) {
         out.push(spec);
       }
@@ -68,7 +68,7 @@ export function extensionlessTsSpecifiers(root: string = ROOT): Array<{
   for (const dir of ENTRY_DIRS) {
     const abs = path.join(root, dir);
     for (const file of listFiles(abs)) {
-      if (/\.(mjs|cjs)$/.test(file)) {
+      if (/\.(?:mjs|cjs)$/.test(file)) {
         queue.push(file);
       }
     }
@@ -129,7 +129,7 @@ describe("`.mjs` 入口 → `src/**` 的 Node ESM 路径：相对说明符必须
     // 反向自证：掏空 ENTRY_DIRS 或改坏解析，上面那条会变成恒绿。
     const files = ENTRY_DIRS.flatMap((d) => listFiles(path.join(ROOT, d)));
     const mjsImportingSrc = files.filter((f) => {
-      if (!/\.(mjs|cjs)$/.test(f)) {
+      if (!/\.(?:mjs|cjs)$/.test(f)) {
         return false;
       }
       return relativeSpecifiers(readFileSync(f, "utf8")).some(

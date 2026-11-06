@@ -25,9 +25,9 @@ function read(rel: string): string {
 
 /** D 组步骤 = 钩子里 `  run "<标签>" <命令>` 那些行（行首锚定，注释掉的不算）。 */
 function dGroupSteps(hookText: string) {
-  return [...hookText.matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) => ({
-    label: m[1] ?? "",
-    cmd: m[2] ?? "",
+  return [...hookText.matchAll(/^ {2}run "(?<label>[^"]+)" (?<cmd>.+)$/gm)].map((m) => ({
+    label: m.groups?.label ?? "",
+    cmd: m.groups?.cmd ?? "",
   }));
 }
 

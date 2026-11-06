@@ -305,7 +305,7 @@ describe("pre-commit 耗时账：钩子的接线", () => {
   it("记账挂在 EXIT trap 上（被拦下的那次提交也要记）", () => {
     expect(hook).toMatch(/trap '[^']*record_timing[^']*' EXIT/);
     /* 且 trap 的顺序是先记账再删 `$LOGD`（反了就记不到了）。 */
-    const trap = /trap '([^']*)' EXIT/.exec(hook)?.[1] ?? "";
+    const trap = /trap '(?<body>[^']*)' EXIT/.exec(hook)?.groups?.body ?? "";
     expect(trap.indexOf("record_timing")).toBeLessThan(trap.indexOf("rm -rf"));
   });
 
