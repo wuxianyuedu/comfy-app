@@ -101,12 +101,14 @@ describe("WorkflowEditorInner", () => {
     expect(
       layer?.className,
       "过渡屏不许退回 `fixed`（那是整窗浮层，会盖掉侧栏与页签）",
-    ).not.toMatch(/(^|\s)fixed(\s|$)/);
+    ).not.toMatch(/(?:^|\s)fixed(?:\s|$)/);
     expect(
       layer?.className,
       "过渡屏不许用 top-title-bar（那是 FullScreenLayer 的定位标记）",
-    ).not.toMatch(/(^|\s)top-title-bar(\s|$)/);
-    expect(layer?.className, "过渡屏要覆盖定位祖先（壳的内容列）").toMatch(/(^|\s)absolute(\s|$)/);
-    expect(layer?.className).toMatch(/(^|\s)inset-0(\s|$)/);
+    ).not.toMatch(/(?:^|\s)top-title-bar(?:\s|$)/);
+    expect(layer?.className, "过渡屏要覆盖定位祖先（壳的内容列）").toMatch(
+      /(?:^|\s)absolute(?:\s|$)/,
+    );
+    expect(layer?.className).toMatch(/(?:^|\s)inset-0(?:\s|$)/);
   });
 });

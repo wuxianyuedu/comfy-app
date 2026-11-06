@@ -205,7 +205,7 @@ export function decideCleanBranch({ requested, landedVerified, branch }) {
 export function classifyPushFailure(stdout, stderr) {
   const text = `${stdout ?? ""}\n${stderr ?? ""}`;
   const remoteHit =
-    /(^|\n)\s*remote:/.test(text) ||
+    /(?:^|\n)\s*remote:/.test(text) ||
     text.includes("Repository Not Found") ||
     text.includes("仓库不存在") ||
     text.includes("Authentication failed") ||
@@ -290,9 +290,9 @@ export function parseSlug(remoteUrl) {
   if (!s) {
     return null;
   }
-  const m = s.match(/[:/]([^/]+\/[^/]+?)(?:\.git)?$/);
+  const m = s.match(/[:/](?<slug>[^/]+\/[^/]+?)(?:\.git)?$/);
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则捕获组在部分匹配形态下运行时为 undefined
-  return m ? (m[1] ?? null) : null;
+  return m ? (m.groups?.slug ?? null) : null;
 }
 
 /**

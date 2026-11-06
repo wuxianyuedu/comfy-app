@@ -389,7 +389,7 @@ function runDiscoverStreaming(
           // 其中 `msg=` 那段是在界面副标题里显示的人读文本；
           // 其它 key=value（discovered、done、total）用来驱动进度条填充，
           // 这样界面不必去解析中文文本。
-          const m = /^PROGRESS::(scan|hash)\|(.*)$/.exec(line);
+          const m = /^PROGRESS::(?<phase>scan|hash)\|(?<rest>.*)$/.exec(line);
           if (!m) {
             return;
           }
@@ -400,17 +400,17 @@ function runDiscoverStreaming(
           // 直到下一个 `|key=` 或行尾的内容整体当作 msg）。
           // 向后兼容：没有 `|msg=` 的旧格式行，就把剩余部分整体当 msg。
           const fields: DiscoverProgressFields = { phase, msg: "" };
-          const msgM = /\|?msg=([^|]*)/.exec(rest);
+          const msgM = /\|?msg=(?<msg>[^|]*)/.exec(rest);
           if (msgM) {
-            fields.msg = msgM[1]!;
+            fields.msg = msgM.groups?.msg ?? "";
           } else {
             fields.msg = rest;
           }
-          const kvRegex = /\|?(discovered|done|total)=(\d+)/g;
+          const kvRegex = /\|?(?<key>discovered|done|total)=(?<value>\d+)/g;
           let kv: RegExpExecArray | null;
           while ((kv = kvRegex.exec(rest)) !== null) {
-            const n = Number.parseInt(kv[2]!, 10);
-            const k = kv[1]!;
+            const n = Number.parseInt(kv.groups?.value ?? "", 10);
+            const k = kv.groups?.key ?? "";
             if (k === "discovered") {
               fields.discovered = n;
             } else if (k === "done") {

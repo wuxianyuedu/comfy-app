@@ -90,11 +90,12 @@ export function makeScanFns(root, sourceRe) {
       if (!line.startsWith("diff --git ")) {
         continue;
       }
-      const m = /^diff --git a\/(.+?) b\/(.+)$/.exec(line);
+      const m = /^diff --git a\/(?<before>.+?) b\/(?<after>.+)$/.exec(line);
       if (!m) {
         continue;
       }
-      const [, before = "", after = ""] = m;
+      const before = m.groups?.before ?? "";
+      const after = m.groups?.after ?? "";
       if (!sourceRe.test(after)) {
         continue;
       }
@@ -145,20 +146,22 @@ export function makeScanFns(root, sourceRe) {
 export function parseRange(range) {
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- 实参源自 --range 命令行参数，类型按 string 标窄
   const trimmed = String(range ?? "").trim();
-  const three = /^(.*?)\.\.\.(.*)$/.exec(trimmed);
+  const three = /^(?<before>.*?)\.\.\.(?<after>.*)$/.exec(trimmed);
   if (three) {
-    const [, beforeRaw = "", afterRaw = ""] = three;
+    const beforeRaw = three.groups?.before ?? "";
+    const afterRaw = three.groups?.after ?? "";
     const after = afterRaw === "" ? "HEAD" : afterRaw;
     if (beforeRaw === "") {
       return null;
     }
     return { before: beforeRaw, after, dots: "..." };
   }
-  const two = /^(.*?)\.\.(.*)$/.exec(trimmed);
+  const two = /^(?<before>.*?)\.\.(?<after>.*)$/.exec(trimmed);
   if (!two) {
     return null;
   }
-  const [, beforeRaw = "", afterRaw = ""] = two;
+  const beforeRaw = two.groups?.before ?? "";
+  const afterRaw = two.groups?.after ?? "";
   if (beforeRaw === "") {
     return null;
   }

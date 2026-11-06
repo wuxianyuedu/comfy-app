@@ -313,18 +313,18 @@ module.exports = {
       const t2 = stripCommentsCached(t);
       let n = 0;
       /* 扫每个 `<div>` 起始标签 · 三重条件命中才计一次。 */
-      const openRe = /<div\b([^>]*)>/g;
+      const openRe = /<div\b(?<attrs>[^>]*)>/g;
       for (const open of t2.matchAll(openRe)) {
-        const attrs = open[1];
+        const attrs = open.groups?.attrs ?? "";
         /* 排除自闭合（`/` 结尾 · 那是 P73 虚线的账）。 */
         if (attrs.trimEnd().endsWith("/")) {
           continue;
         }
-        const cm = attrs.match(/className=["']([^"']+)["']/);
+        const cm = attrs.match(/className=["'](?<cls>[^"']+)["']/);
         if (!cm) {
           continue;
         }
-        const cls = cm[1];
+        const cls = cm.groups?.cls ?? "";
         if (!/\bborder-dashed\b/.test(cls)) {
           continue;
         }
@@ -490,7 +490,7 @@ module.exports = {
        * 前瞻把带前缀的排掉、避免与 P71 双计。 */
       return (
         t2.match(
-          /(^|[\s"'`{])(?!dark:)(?:bg|text|border|ring|from|to|shadow|fill|stroke|outline|decoration|accent|caret|divide|placeholder|file)-\[?[a-z-]*?(?:emerald|green|rose|red|amber|sky|cyan|violet|blue|purple|fuchsia|indigo|teal|lime|orange|yellow)-[0-9]/g,
+          /(?:^|[\s"'`{])(?!dark:)(?:bg|text|border|ring|from|to|shadow|fill|stroke|outline|decoration|accent|caret|divide|placeholder|file)-\[?[a-z-]*?(?:emerald|green|rose|red|amber|sky|cyan|violet|blue|purple|fuchsia|indigo|teal|lime|orange|yellow)-[0-9]/g,
         ) ?? []
       ).length;
     },
@@ -526,9 +526,10 @@ module.exports = {
        * 只算一处（`size-8` 是唯一修法）；不同 className 之间相互独立。
        * 夹在中间的其它 utility（`w-8 rounded-lg h-8`）不影响判定，也不
        * 会被数字前后有 `.` `/` 之类的分隔符（如 `w-1.5`）误伤。 */
-      const clsRe = /className\s*=\s*(?:"([^"]*)"|'([^']*)'|`\([^`]*`\s*)/g;
+      const clsRe =
+        /className\s*=\s*(?:"(?<doubleQuoted>[^"]*)"|'(?<singleQuoted>[^']*)'|`\([^`]*`\s*)/g;
       for (const m of t2.matchAll(clsRe)) {
-        const cls = m[1] ?? m[2] ?? "";
+        const cls = m.groups?.doubleQuoted ?? m.groups?.singleQuoted ?? "";
         if (!cls) {
           continue;
         }
@@ -537,11 +538,11 @@ module.exports = {
         /* 前面必须是**行首 / 空白 / 引号**（`(^|[^-\w])` + 捕获后续），
          * 否则会把 `min-h-0` / `max-w-md` 这类带前缀的容器写法误当
          * 成 `h-0` / `w-md`（JS 正则 `\b` 在 `-h-` 处也算边界）。 */
-        for (const x of cls.matchAll(/(?:^|[^-\w])w-(\d+(?:\.\d+)?)(?=\s|$)/g)) {
-          ws.add(x[1]);
+        for (const x of cls.matchAll(/(?:^|[^-\w])w-(?<width>\d+(?:\.\d+)?)(?=\s|$)/g)) {
+          ws.add(x.groups?.width ?? "");
         }
-        for (const x of cls.matchAll(/(?:^|[^-\w])h-(\d+(?:\.\d+)?)(?=\s|$)/g)) {
-          hs.add(x[1]);
+        for (const x of cls.matchAll(/(?:^|[^-\w])h-(?<height>\d+(?:\.\d+)?)(?=\s|$)/g)) {
+          hs.add(x.groups?.height ?? "");
         }
         for (const w of ws) {
           if (hs.has(w)) {
@@ -585,8 +586,8 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       let n = 0;
-      for (const m of t2.matchAll(/<Button\b[^>]*>([\s\S]*?)<\/Button>/g)) {
-        const inner = m[1];
+      for (const m of t2.matchAll(/<Button\b[^>]*>(?<inner>[\s\S]*?)<\/Button>/g)) {
+        const inner = m.groups?.inner ?? "";
         let depth = 0;
         /* tag 匹配：`<` 后紧跟 `[A-Za-z]` 起始的名字、属性段允许引号字面量
          * 与 `{…}` 表达式（不递归平衡、够用即可）、以 `>` 或 `/>` 收尾。
@@ -594,12 +595,12 @@ module.exports = {
          * JSX 标签、这里靠 `[^>]*` 会吞到下一行；作为棘轮判据、少计一次
          * 不影响清零节奏。 */
         for (const tg of inner.matchAll(
-          /<(\/?)([A-Za-z][A-Za-z0-9]*)((?:"[^"]*"|'[^']*'|\{[^{}]*\}|[^>])*?)(\/?)>/g,
+          /<(?<closingSlash>\/?)(?<tagName>[A-Za-z][A-Za-z0-9]*)(?<attrs>(?:"[^"]*"|'[^']*'|\{[^{}]*\}|[^>])*?)(?<selfClosingSlash>\/?)>/g,
         )) {
-          const closing = tg[1] === "/";
-          const name = tg[2];
-          const attrs = tg[3];
-          const selfClose = tg[4] === "/";
+          const closing = tg.groups?.closingSlash === "/";
+          const name = tg.groups?.tagName ?? "";
+          const attrs = tg.groups?.attrs ?? "";
+          const selfClose = tg.groups?.selfClosingSlash === "/";
           if (closing) {
             if (depth > 0) {
               depth--;

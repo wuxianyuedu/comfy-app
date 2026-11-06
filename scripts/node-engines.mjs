@@ -70,8 +70,8 @@ import { createRequire } from "node:module";
  * @typedef {{pkg: string, range: string}} DependencyFloor
  */
 
-const TRIPLE_RE = /^(\d+)\.(\d+)\.(\d+)$/;
-const COMPARATOR_RE = /^(\^|>=|<=|>|<|=)?\s*(\d+(?:\.\d+){0,2})$/;
+const TRIPLE_RE = /^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$/;
+const COMPARATOR_RE = /^(?<op>\^|>=|<=|>|<|=)?\s*(?<version>\d+(?:\.\d+){0,2})$/;
 
 /**
  * 严格三段版本；pre-release 与更松的形状一律拒解（见模块头）。
@@ -136,7 +136,7 @@ export function compareVersions(a, b) {
 export function parseRange(range) {
   /* 真实世界里 `>= 10`（操作符后带空格）与 `>=22.12.0 <23.0.0`（一档内并排）都在，
    * 先把操作符后面的空格吃掉，否则 `>=` 与 `10` 会被拆成两个比较符、整条读不懂。 */
-  const normalized = String(range ?? "").replaceAll(/(\^|>=|<=|>|<|=)\s+/g, "$1");
+  const normalized = String(range ?? "").replaceAll(/(?<op>\^|>=|<=|>|<|=)\s+/g, "$<op>");
   const alternatives = normalized
     .split("||")
     .map((s) => s.trim())

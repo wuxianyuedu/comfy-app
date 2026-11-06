@@ -64,8 +64,8 @@ export function normalizeCssColor(value: string): string | null {
   if (!value) {
     return null;
   }
-  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(value);
-  const digits = hex?.[1];
+  const hex = /^#(?<digits>[0-9a-f]{3}|[0-9a-f]{6})$/i.exec(value);
+  const digits = hex?.groups?.digits;
   if (digits !== undefined && digits !== "") {
     const full =
       digits.length === 3
@@ -76,10 +76,10 @@ export function normalizeCssColor(value: string): string | null {
         : digits;
     return `#${full.toLowerCase()}`;
   }
-  const rgb = /^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i.exec(value);
-  const r1 = rgb?.[1];
-  const r2 = rgb?.[2];
-  const r3 = rgb?.[3];
+  const rgb = /^rgba?\(\s*(?<r>\d+)[\s,]+(?<g>\d+)[\s,]+(?<b>\d+)/i.exec(value);
+  const r1 = rgb?.groups?.r;
+  const r2 = rgb?.groups?.g;
+  const r3 = rgb?.groups?.b;
   if (
     r1 !== undefined &&
     r1 !== "" &&

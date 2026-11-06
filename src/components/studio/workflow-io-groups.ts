@@ -174,12 +174,12 @@ export const MEGAPIXEL_VALUE_PRESETS: Array<{ label: string; value: number }> = 
 /** 从自由形式的比例标签（"16:9 (Wide)"）里取出数值化的宽高比。
  *  字符串里没有可识别的比例时返回 null。 */
 export function parseRatioFromLabel(value: string): number | null {
-  const match = /(\d+(?:\.\d+)?)\s*[:x×]\s*(\d+(?:\.\d+)?)/.exec(value);
+  const match = /(?<width>\d+(?:\.\d+)?)\s*[:x×]\s*(?<height>\d+(?:\.\d+)?)/.exec(value);
   if (!match) {
     return null;
   }
-  const w = Number(match[1]);
-  const h = Number(match[2]);
+  const w = Number(match.groups?.width);
+  const h = Number(match.groups?.height);
   if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
     return null;
   }

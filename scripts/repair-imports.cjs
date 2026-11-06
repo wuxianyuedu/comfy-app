@@ -40,7 +40,7 @@ function fixLiteralForms() {
       const p = path.join(dir, e.name).replaceAll("\\", "/");
       if (e.isDirectory()) {
         walk(p);
-      } else if (/\.(tsx?|mjs|cjs|js)$/.test(e.name)) {
+      } else if (/\.(?:tsx?|mjs|cjs|js)$/.test(e.name)) {
         files.push(p);
       }
     }
@@ -55,7 +55,7 @@ function fixLiteralForms() {
     let out = src;
     // studio/undefined → 按导入符号映射
     out = out.replaceAll(
-      /import \{ ([^}]+) \} from "@\/components\/studio\/undefined";/g,
+      /import \{ (?<sym>[^}]+) \} from "@\/components\/studio\/undefined";/g,
       (m, sym) => {
         const target = SYMBOL_MAP[sym.trim()];
         if (!target) {
@@ -88,7 +88,7 @@ function fixDynamicUndefined() {
   }
   const src = fs.readFileSync(f, "utf8");
   const out = src.replaceAll(
-    /import\("@\/components\/studio\/undefined"\)\.then\(\(mod\) => mod\.(\w+)\)/g,
+    /import\("@\/components\/studio\/undefined"\)\.then\(\(mod\) => mod\.(?<sym>\w+)\)/g,
     (m, sym) => `import("@/components/studio/${sym}").then((mod) => mod.${sym})`,
   );
   if (out !== src) {
@@ -118,7 +118,9 @@ function parseAndFixDepth() {
     out = String(error.stdout || "");
   }
   const errs = [
-    ...out.matchAll(/^(.+?)\((\d+),\d+\): error TS2307: Cannot find module '([^']+)'/gm),
+    ...out.matchAll(
+      /^(?<file>.+?)\((?<line>\d+),\d+\): error TS2307: Cannot find module '(?<mod>[^']+)'/gm,
+    ),
   ];
   if (!errs.length) {
     return { broken: 0, fixed: 0 };
@@ -146,7 +148,7 @@ function parseAndFixDepth() {
       }
       // 沿该行找 spec 出现位置,尝试候选深度
       const depth = mod.startsWith("../") ? mod.match(/\.\.\//g).length : 0;
-      const tail = mod.replace(/^(\.\.\/)+/, "");
+      const tail = mod.replace(/^(?:\.\.\/)+/, "");
       const candidates = [];
       for (const d of [depth, depth - 1, depth - 2, depth + 1]) {
         if (d < 0) {

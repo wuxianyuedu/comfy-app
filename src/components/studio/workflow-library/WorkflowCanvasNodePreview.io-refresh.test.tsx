@@ -393,7 +393,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
     const xOf = (id: string) => {
       const el = nodes.find((node) => node.dataset.id === id)!;
       expect(el, `节点 ${id} 应挂载`).toBeTruthy();
-      return Number(/translate\(([-\d.]+)px/.exec(el.style.transform)?.[1]);
+      return Number(/translate\((?<x>[-\d.]+)px/.exec(el.style.transform)?.groups?.x);
     };
     expect(xOf("lib:params")).toBeLessThan(xOf("lib:host"));
     expect(xOf("lib:host")).toBeLessThan(xOf("lib:outputs"));

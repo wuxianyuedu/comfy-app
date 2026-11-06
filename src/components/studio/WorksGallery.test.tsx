@@ -212,7 +212,7 @@ describe("WorksGallery 卡片", () => {
      * 底色要的是「有一档底色 token（`bg-card` / `bg-surface-*` …）」，
      * 层级要的是 §16.2.5 刻度表里的 `z-base`（卡片内遮罩那一档），
      * 不是裸数字 —— 裸数字由 `check-overlay-z.cjs` 硬闸拦下。 */
-    const hasBackground = classes.some((c) => /^bg-(card|surface|background)(\/|$)/.test(c));
+    const hasBackground = classes.some((c) => /^bg-(?:card|surface|background)(?:\/|$)/.test(c));
     expect(hasBackground, "删除按钮没有不透明底：长名字会从「删除」二字底下透出来").toBe(true);
     expect(classes).toContain("z-base");
   });

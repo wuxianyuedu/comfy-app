@@ -184,12 +184,8 @@ export function perCommitShape(range, limit, root, deps, entries = null, shape =
         const fallback =
           second === ""
             ? ""
-            : (runGit(root, [
-                "diff",
-                "--no-color",
-                "--unified=0",
-                `${fallbackBase}..${second}`,
-              ]) ?? "");
+            : (runGit(root, ["diff", "--no-color", "--unified=0", `${fallbackBase}..${second}`]) ??
+              "");
         if (fallback.trim()) {
           patch = fallback;
           patchBase = fallbackBase;
@@ -230,9 +226,7 @@ export function perCommitShape(range, limit, root, deps, entries = null, shape =
     });
     const clean = reformatOnly < limit || (filesCount > 0 && reformatOnly === filesCount);
     if (!clean) {
-      offenders.push(
-        `${rev.slice(0, 8)}(${filesCount} 个源文件里 ${reformatOnly} 个纯格式化)`,
-      );
+      offenders.push(`${rev.slice(0, 8)}(${filesCount} 个源文件里 ${reformatOnly} 个纯格式化)`);
     }
   }
   return { commits, ok: commits.length > 0 && offenders.length === 0, offenders };
@@ -272,7 +266,9 @@ export function perCommitShapeOf(rev, spec) {
     };
   }
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- matchAll 的捕获组在规则眼里非空，但 tsc 的 noUncheckedIndexedAccess 仍给 string|undefined，保留空串兜底
-  const parents = [...raw.matchAll(/^parent ([0-9a-f]{40})$/gm)].map((m) => m[1] ?? "");
+  const parents = [...raw.matchAll(/^parent (?<parent>[0-9a-f]{40})$/gm)].map(
+    (m) => m.groups?.parent ?? "",
+  );
   if (parents.length === 0) {
     return {
       commits: [{ rev, files: 0, reformatOnly: 0, unknown: true }],
@@ -285,7 +281,6 @@ export function perCommitShapeOf(rev, spec) {
    * 永远到不了。所以把这一条提交**直接**交给 `perCommitShape` 的 entries 形态。 */
   return perCommitShape("", limit, root, deps, [{ rev, parents }], { landedTip, spanBase });
 }
-
 
 /**
  * 区间里每个**有内容**提交的「rev → 正文」表（护栏 ① 的取数，ISSUE #3054）。

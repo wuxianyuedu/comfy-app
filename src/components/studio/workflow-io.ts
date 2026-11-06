@@ -89,7 +89,7 @@ function isNumericPinName(e: { label?: string; name?: string }): boolean {
   const name = (e.name ?? "").toLowerCase();
   const label = e.label ?? "";
   if (
-    /\b(steps|seed|noise_seed|cfg|guidance|denoise|strength|weight|scale|batch|count|frames|length|duration|size|resolution)\b/.test(
+    /\b(?:steps|seed|noise_seed|cfg|guidance|denoise|strength|weight|scale|batch|count|frames|length|duration|size|resolution)\b/.test(
       name,
     )
   ) {

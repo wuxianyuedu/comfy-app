@@ -55,7 +55,7 @@ describe("WorkflowSubgraphNode", () => {
     expect(container.querySelector('[title="子工作流"]')?.textContent).toBe("S");
     expect(screen.getByLabelText("折叠子图")).toBeInTheDocument();
     const title = container.querySelector('[title="我的子图"]');
-    expect(title?.className).toMatch(/(^|\s)truncate(\s|$)/);
+    expect(title?.className).toMatch(/(?:^|\s)truncate(?:\s|$)/);
     const chip = container.querySelector('[data-node-id-chip="10"][data-variant="subgraph"]');
     expect(chip, "#id 徽标丢了子图变体标记").toBeTruthy();
   });

@@ -125,9 +125,9 @@ export function componentTargetsOf(storyFile, source, repoRoot) {
   /** @type {string[]} */
   const out = [];
   const dir = path.dirname(storyFile);
-  const re = /from\s+"([./~][^"]*)"/g;
+  const re = /from\s+"(?<specifier>[./~][^"]*)"/g;
   for (const match of source.matchAll(re)) {
-    const spec = match[1];
+    const spec = match.groups?.specifier ?? "";
     const bases = spec.startsWith("~/")
       ? [path.join(repoRoot, "src", spec.slice(2))]
       : spec.startsWith("./") || spec.startsWith("../")

@@ -238,10 +238,11 @@ export function isNextDevNoise(args: Array<unknown>): boolean {
  * ③ 只认 STEP/OK/INFO/WARN/ERROR/DEBUG 六个级别名，不放过 `[rpc]` 这类普通前缀词；时刻限 HH:mm:ss。
  */
 const LOG_LINE_RE =
-  /^\s*\[(\d{2}):(\d{2}):(\d{2})\]\s*\[\[?[0-9;]*m?\[?\s*(STEP|OK|INFO|WARN|ERROR|DEBUG)\s*\[?[0-9;]*m?\]\s*(.*)$/;
-const LAUNCHER_LOG_RE = /^\[(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\.(\d{3})\]\s*(.*)$/;
+  /^\s*\[(?<hh>\d{2}):(?<mm>\d{2}):(?<ss>\d{2})\]\s*\[\[?[0-9;]*m?\[?\s*(?<level>STEP|OK|INFO|WARN|ERROR|DEBUG)\s*\[?[0-9;]*m?\]\s*(?<message>.*)$/;
+const LAUNCHER_LOG_RE =
+  /^\[(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})\s+(?<hh>\d{2}):(?<mm>\d{2}):(?<ss>\d{2})\.(?<ms>\d{3})\]\s*(?<message>.*)$/;
 const APP_RUNTIME_LOG_RE =
-  /^\[(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\.(\d{3})\]\s*\[(INFO|WARN|ERROR|DEBUG)\]\s*(?:\[([^\]]+)\]\s*)?(.*)$/;
+  /^\[(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})\s+(?<hh>\d{2}):(?<mm>\d{2}):(?<ss>\d{2})\.(?<ms>\d{3})\]\s*\[(?<level>INFO|WARN|ERROR|DEBUG)\]\s*(?:\[(?<ns>[^\]]+)\]\s*)?(?<message>.*)$/;
 
 /**
  * 过滤常规 tRPC/RPC 调用计时日志（#294）：`[rpc] xxx 155ms {…}` 来自中间件，正常调用每几秒刷一整屏。
@@ -256,14 +257,14 @@ export function isRoutineRpcTimingLog(args: Array<unknown>): boolean {
     .trim()
     .replace(/^\[[^\]]*\]\s*/, "")
     .replace(/^(?:[a-z]+\]?|\])\s*/i, "");
-  return /^\S+\s+\d+ms(\s*\{.*\})?$/i.test(body);
+  return /^\S+\s+\d+ms(?:\s*\{.*\})?$/i.test(body);
 }
 
 /** 文件转录行（app-runtime / launcher）侧的同规则过滤：返回 true 表示不进面板。 */
 export function isRoutineRpcTimingLine(line: string): boolean {
   const m = APP_RUNTIME_LOG_RE.exec(line);
-  const text = m ? (m[10] ?? "") : line;
-  const level = m ? upperToken(m[8]) : "";
+  const text = m ? (m.groups?.message ?? "") : line;
+  const level = m ? upperToken(m.groups?.level) : "";
   // 失败 / 慢查询（error/warn 级别）永远保留
   if (level === "WARN" || level === "ERROR") {
     return false;
@@ -274,11 +275,11 @@ export function isRoutineRpcTimingLine(line: string): boolean {
     .trim()
     .replace(/^\[[^\]]*\]\s*/, "")
     .replace(/^(?:[a-z]+\]?|\])\s*/i, "");
-  return /^\S+\s+\d+ms(\s*\{.*\})?$/i.test(body);
+  return /^\S+\s+\d+ms(?:\s*\{.*\})?$/i.test(body);
 }
 
 /** `GET <目标>` 那一格的开头：面板自用请求都从这里取目标路径。 */
-const GET_REQUEST_TARGET = /^\s*GET\s+(\S+)/;
+const GET_REQUEST_TARGET = /^\s*GET\s+(?<target>\S+)/;
 
 /**
  * 过滤面板**自轮询**产生的访问日志行（Next dev 请求日志），否则成自我反馈回路：每 2s 六路 + server-id、每 30s build-id 的请求被转录进 nextjs-panel、下一轮又读回来，无限累积且读不到行内时刻、只能钳到解析当时。
@@ -286,7 +287,7 @@ const GET_REQUEST_TARGET = /^\s*GET\s+(\S+)/;
  * 带 `[HH:mm:ss] [INFO]` 前缀的形态由 parseFileLogs 拆出正文后再问一次。 */
 export function isPanelSelfPollingLine(line: string): boolean {
   const match = GET_REQUEST_TARGET.exec(line);
-  const target = match?.[1];
+  const target = match?.groups?.target;
   if (target === undefined || target === "") {
     return false;
   }

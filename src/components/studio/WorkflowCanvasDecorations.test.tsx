@@ -97,7 +97,7 @@ describe("网格线颜色出口", () => {
         return (
           svg
             .getAttribute("style")
-            ?.match(/--xy-background-pattern-color-props:\s*([^;]+);/)?.[1] ?? ""
+            ?.match(/--xy-background-pattern-color-props:\s*(?<color>[^;]+);/)?.groups?.color ?? ""
         );
       }
     }
