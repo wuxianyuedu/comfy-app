@@ -35,10 +35,10 @@ function collectSources(): Array<SourceFile> {
         walk(path.join(dir, entry.name));
         continue;
       }
-      if (!/\.(ts|tsx)$/.test(entry.name)) {
+      if (!/\.(?:ts|tsx)$/.test(entry.name)) {
         continue;
       }
-      if (/\.(test|spec)\./.test(entry.name)) {
+      if (/\.(?:test|spec)\./.test(entry.name)) {
         continue;
       }
       const abs = path.join(dir, entry.name);
@@ -65,8 +65,10 @@ function readEventTable(source: string): Array<string> {
   }
   const block = source.slice(start, source.indexOf("\n}", start));
   const names: Array<string> = [];
-  for (const match of block.matchAll(/^\s{2}(?:"([^"]+)"|([A-Za-z_$][\w$]*))\s*:/gm)) {
-    const name = match[1] ?? match[2];
+  for (const match of block.matchAll(
+    /^\s{2}(?:"(?<value>[^"]+)"|(?<identifier>[A-Za-z_$][\w$]*))\s*:/gm,
+  )) {
+    const name = match.groups?.value ?? match.groups?.identifier;
     if (name !== undefined && name !== "") {
       names.push(name);
     }
@@ -83,10 +85,10 @@ function readNameConstants(sources: Array<SourceFile>): Map<string, string> {
   const map = new Map<string, string>();
   for (const file of sources) {
     for (const match of file.text.matchAll(
-      /\b(?:export\s+)?const\s+([A-Za-z_$][\w$]*)\s*(?::[^=\n]+)?=\s*"([^"]+)"/g,
+      /\b(?:export\s+)?const\s+(?<identifier>[A-Za-z_$][\w$]*)\s*(?::[^=\n]+)?=\s*"(?<name>[^"]+)"/g,
     )) {
-      const identifier = match[1];
-      const name = match[2];
+      const identifier = match.groups?.identifier;
+      const name = match.groups?.name;
       if (identifier !== undefined && identifier !== "" && name !== undefined && name !== "") {
         map.set(identifier, name);
       }

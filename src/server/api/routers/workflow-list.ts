@@ -279,7 +279,7 @@ export const workflowListProcedures = {
           if (existingByPath.has(key)) {
             continue;
           }
-          const friendly = f.name.replace(/\.(json|workflow)$/i, "").trim() || "未命名工作流";
+          const friendly = f.name.replace(/\.(?:json|workflow)$/i, "").trim() || "未命名工作流";
           localPending.push({
             id: pendingId(f.absPath),
             name: friendly,

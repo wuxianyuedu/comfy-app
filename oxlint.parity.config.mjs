@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B4 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/lib/process/executable-resolve.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/shell/reveal-path.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/workflow/workflow-exposed-params.ts", // 存量 7 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/workflow/workflow-param-mapping.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/workshop/api-channel-shared.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/workshop/model-mode-contract.ts", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/workshop/script-parse.ts", // 存量 14 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/workshop/script-parser.ts", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/workshop/workflow-encapsulation.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/server/api/routers/setting-backup.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/server/api/routers/setting.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/server/api/routers/setting.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/server/api/routers/workflow-list.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/server/api/routers/workflow-mutations.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/app-event-pairing.test.ts", // 存量 6 处 · 清账目标 B4 · 新代码不禁用
-        "tests/app-metadata-and-csp-shape.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/app-service-exit-contract.test.ts", // 存量 9 处 · 清账目标 B4 · 新代码不禁用
-        "tests/artifact-layout-single-source.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/audits-doc-references.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/base-check.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
         "tests/build-desktop-step-readings.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
         "tests/build-fresh-checkout.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
         "tests/check-allow-builds.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用

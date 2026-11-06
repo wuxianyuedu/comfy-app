@@ -35,11 +35,11 @@ const SHELL_LIB_RS = readFileSync(join(ROOT, "src-tauri", "src", "lib.rs"), "utf
 
 /** 从 TS 里抠出 `AppServiceExitKind` 的联合取值（写死的形态，改了这里就红）。 */
 function tsKindUnion(): Array<string> {
-  const block = /export type AppServiceExitKind =([\s\S]*?);/.exec(EXIT_TS)?.[1];
+  const block = /export type AppServiceExitKind =(?<body>[\s\S]*?);/.exec(EXIT_TS)?.groups?.body;
   if (block === undefined || block === "") {
     return [];
   }
-  return [...block.matchAll(/"([a-z-]+)"/g)].map((m) => m[1]!);
+  return [...block.matchAll(/"(?<kind>[a-z-]+)"/g)].map((m) => m.groups?.kind ?? "");
 }
 
 /**
@@ -50,16 +50,20 @@ function tsKindUnion(): Array<string> {
 function writtenKinds(source: string): Array<string> {
   const fn = /export function downstreamExitKind\([\s\S]*?\n\}/.exec(source)?.[0];
   const body = fn ?? source;
-  const fromTable = [...body.matchAll(/return\s+"([a-z-]+)"/g)].map((m) => m[1]!);
+  const fromTable = [...body.matchAll(/return\s+"(?<kind>[a-z-]+)"/g)].map(
+    (m) => m.groups?.kind ?? "",
+  );
   const runtime = /export function runtimeExitRecord\([\s\S]*?\n\}/.exec(source)?.[0];
-  const fromRuntime = [...(runtime ?? "").matchAll(/kind:\s*"([a-z-]+)"/g)].map((m) => m[1]!);
+  const fromRuntime = [...(runtime ?? "").matchAll(/kind:\s*"(?<kind>[a-z-]+)"/g)].map(
+    (m) => m.groups?.kind ?? "",
+  );
   return [...fromTable, ...fromRuntime];
 }
 
 describe("应用服务退出记录：跨侧同源", () => {
   it("文件名两侧逐字相同", () => {
-    const inTs = /APP_SERVICE_EXIT_FILE\s*=\s*"([^"]+)"/.exec(EXIT_TS)?.[1];
-    const inMjs = /APP_SERVICE_EXIT_FILE\s*=\s*"([^"]+)"/.exec(EXIT_MJS)?.[1];
+    const inTs = /APP_SERVICE_EXIT_FILE\s*=\s*"(?<value>[^"]+)"/.exec(EXIT_TS)?.groups?.value;
+    const inMjs = /APP_SERVICE_EXIT_FILE\s*=\s*"(?<value>[^"]+)"/.exec(EXIT_MJS)?.groups?.value;
     expect(inTs).toBeTruthy();
     expect(inMjs).toBe(inTs);
     // 落点必须与 `launch-status.json` 同在 run/ 下（同属「本次运行的现场」）。
@@ -129,8 +133,9 @@ describe("应用服务退出记录：跨侧同源", () => {
     // 第三处字面量：`src-tauri/src/shell_launch.rs` 的 `APP_SERVICE_EXIT_FILE`。
     // Rust 没有 import 那条路，只能各写一次——漂开的表现同样是「壳写的记录界面
     // 读不懂」，而这一档恰是用户唯一能看到的现场（窗口还在、页面全连不上）。
-    const inRs = /APP_SERVICE_EXIT_FILE: &str = "([^"]+)"/.exec(SHELL_LAUNCH_RS)?.[1];
-    const inTs = /APP_SERVICE_EXIT_FILE\s*=\s*"([^"]+)"/.exec(EXIT_TS)?.[1];
+    const inRs = /APP_SERVICE_EXIT_FILE: &str = "(?<value>[^"]+)"/.exec(SHELL_LAUNCH_RS)?.groups
+      ?.value;
+    const inTs = /APP_SERVICE_EXIT_FILE\s*=\s*"(?<value>[^"]+)"/.exec(EXIT_TS)?.groups?.value;
     expect(inRs).toBeTruthy();
     expect(inRs).toBe(inTs);
     expect(inRs).toBe("app-service-exit.json");
@@ -148,7 +153,9 @@ describe("应用服务退出记录：跨侧同源", () => {
 
   it("Rust 壳写的成因取值必须是 TS 认得出的那一个（sidecar 档）", () => {
     const writer = /pub fn write_sidecar_exit_record\([\s\S]*?\n\}/.exec(SHELL_LAUNCH_RS)?.[0];
-    const kinds = [...(writer ?? "").matchAll(/"kind":\s*"([a-z-]+)"/g)].map((m) => m[1]!);
+    const kinds = [...(writer ?? "").matchAll(/"kind":\s*"(?<kind>[a-z-]+)"/g)].map(
+      (m) => m.groups!.kind,
+    );
     expect(kinds).toEqual(["sidecar"]);
     // 且这个取值确实在 TS 的联合类型里（不是写一个界面认不出的档）。
     expect(tsKindUnion()).toContain("sidecar");

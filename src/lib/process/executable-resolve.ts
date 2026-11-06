@@ -411,7 +411,7 @@ export function executableKind(candidate: string): ExecutableKind {
     }
     // 批处理：以 `@` 起头（`@echo off` / `@SETLOCAL`），或 `:label` / `echo off`。
     // 只认开头，不看扩展名 —— `.cmd` 只是命名习惯，内容才是判据。
-    if (/^@?\s*(echo|setlocal)\b/i.test(text) || text.startsWith("@")) {
+    if (/^@?\s*(?:echo|setlocal)\b/i.test(text) || text.startsWith("@")) {
       return "batch";
     }
     // 可打印 ASCII 起头 → 文本脚本；其余按二进制（含 Windows 的 MZ 头）。

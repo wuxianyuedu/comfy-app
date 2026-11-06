@@ -138,10 +138,10 @@ export function extractBase64DataUrl(payload: unknown, mime = "image/png"): stri
 
 /* 按文件路径 / URL 的扩展名猜媒体类型（SSE 输出里两种都有）。 */
 export function guessMediaKind(pathOrUrl: string): "image" | "video" | "other" {
-  if (/\.(mp4|webm|mov|mkv|avi|gif)(\?.*)?$/i.test(pathOrUrl)) {
+  if (/\.(?:mp4|webm|mov|mkv|avi|gif)(?:\?.*)?$/i.test(pathOrUrl)) {
     return "video";
   }
-  if (/\.(png|jpe?g|webp|bmp|avif)(\?.*)?$/i.test(pathOrUrl)) {
+  if (/\.(?:png|jpe?g|webp|bmp|avif)(?:\?.*)?$/i.test(pathOrUrl)) {
     return "image";
   }
   return "other";

@@ -70,7 +70,8 @@ describe("根布局的窗口元数据不再是脚手架残留", () => {
 describe("CSP 是模块级常量，不是逐请求现拼", () => {
   it("CSP 在模块级算一次（`headers()` 里没有 join 出来的那份拼装）", () => {
     expect(nextConfig).toContain("const CSP = [");
-    const headersBody = /async headers\(\)\s*\{([\s\S]*?)\n {2}\},/.exec(nextConfig)?.[1];
+    const headersBody = /async headers\(\)\s*\{(?<body>[\s\S]*?)\n {2}\},/.exec(nextConfig)?.groups
+      ?.body;
     expect(headersBody, "next.config.js 里找不到 headers()").toBeTruthy();
     expect(
       headersBody,
