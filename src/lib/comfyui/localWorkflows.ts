@@ -22,6 +22,7 @@ import "server-only";
 import fs from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { isRecord } from "~/lib/is-record";
 import { normalizeSlashes } from "~/lib/path-display";
 
 import { compareText, uniqueBy } from "~/lib/ordered-set";
@@ -133,15 +134,12 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
   try {
     rootStat = await fs.promises.stat(abs);
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    const code = isRecord(error) ? error.code : undefined;
     if (code === "ENOENT") {
       return { rawPath: rawDir, absPath: abs, exists: false, files: [] };
     }
-    // e 为 unknown：`(e as Error)?.message ?? String(e)` 与旧 `e?.message ?? String(e)`
-    // 的运行时语义逐字一致（node fs 抛的都是 Error 实例）。
-    /* SAFETY: 类型断言已复核 */
-    const msg = (error as Error | undefined)?.message ?? String(error);
+    // node fs 抛的都是 Error 实例；非 Error 的抛出值退回字符串形式。
+    const msg = error instanceof Error ? error.message : String(error);
     return {
       rawPath: rawDir,
       absPath: abs,
@@ -220,8 +218,7 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
   try {
     await visit(abs);
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const msg = (error as Error | undefined)?.message ?? String(error);
+    const msg = error instanceof Error ? error.message : String(error);
     return {
       rawPath: rawDir,
       absPath: abs,
@@ -362,8 +359,9 @@ function checksumOfFile(
     try {
       const hash = createHash("sha1");
       const stream = fs.createReadStream(absPath, { encoding: "utf8" });
-      /* SAFETY: 类型断言已复核 */
-      stream.on("data", (chunk) => hash.update(chunk as string));
+      stream.on("data", (chunk) => {
+        hash.update(chunk);
+      });
       stream.on("error", () => {
         resolve(null);
       });

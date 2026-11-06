@@ -22,6 +22,7 @@
 
 import { z } from "zod";
 
+import { asRecord, isPlainRecord, isRecord } from "~/lib/is-record";
 import { randomSeed } from "./random-seed";
 
 /** 任意 JSON 对象的宽松视图（外部输入的中间层窄化用）。 */
@@ -142,11 +143,10 @@ function resolveRawNode(raw: JsonRecord, nodeId: string): RawUiNode | null {
  *  节点」用的是**同一条定位逻辑**（`resolveRawNode`），两处各算各的迟早会给出不同的
  *  节点（消费方见 `graph-node-class.ts`，ISSUE #1202）。 */
 export function rawUiNodeType(raw: unknown, nodeId: string): string | undefined {
-  if (typeof raw !== "object" || raw === null || !nodeId) {
+  if (!isRecord(raw) || !nodeId) {
     return undefined;
   }
-  /* SAFETY: 类型断言已复核 */
-  const type = resolveRawNode(raw as JsonRecord, nodeId)?.type;
+  const type = resolveRawNode(raw, nodeId)?.type;
   return typeof type === "string" && type ? type : undefined;
 }
 /** 具名控件输入在 UI 节点 `widgets_values` 数组里的下标。 */
@@ -175,14 +175,7 @@ function seedWidgetSlot(node: RawUiNode): number {
       continue;
     }
     const w = inp.widget;
-    const wname =
-      /* SAFETY: 类型断言已复核 */
-      typeof w === "string"
-        ? w
-        : // oxlint-disable-next-line eqeqeq, typescript/no-unnecessary-condition -- 同时判 null/undefined；widget 来自外部 JSON（unknown），运行期可能为 null
-          w != null && typeof w === "object"
-          ? ((w as JsonRecord).name ?? inp.name)
-          : inp.name;
+    const wname = typeof w === "string" ? w : isRecord(w) ? (w.name ?? inp.name) : inp.name;
     if (typeof wname === "string" && /seed|noise_seed/i.test(wname)) {
       return slot;
     }
@@ -199,14 +192,7 @@ function seedWidgetName(node: RawUiNode): string | null {
       continue;
     }
     const w = inp.widget;
-    const wname =
-      /* SAFETY: 类型断言已复核 */
-      typeof w === "string"
-        ? w
-        : // oxlint-disable-next-line eqeqeq, typescript/no-unnecessary-condition -- 同时判 null/undefined；widget 来自外部 JSON（unknown），运行期可能为 null
-          w != null && typeof w === "object"
-          ? ((w as JsonRecord).name ?? inp.name)
-          : inp.name;
+    const wname = typeof w === "string" ? w : isRecord(w) ? (w.name ?? inp.name) : inp.name;
     if (typeof wname === "string" && /seed|noise_seed/i.test(wname)) {
       return typeof inp.name === "string" ? inp.name : String(wname);
     }
@@ -270,10 +256,7 @@ type RawSubgraph = {
 function subgraphDefs(raw: JsonRecord): Map<string, RawSubgraph> {
   const out = new Map<string, RawSubgraph>();
   const defs = raw.definitions;
-  const subs =
-    /* SAFETY: 类型断言已复核 */
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    defs != null && typeof defs === "object" ? (defs as JsonRecord).subgraphs : undefined;
+  const subs = isRecord(defs) ? defs.subgraphs : undefined;
   const list: Array<unknown> = Array.isArray(subs)
     ? subs
     : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
@@ -345,26 +328,26 @@ function collectSubgraphTargets(raw: JsonRecord, wrapper: RawUiNode): SubgraphTa
 
   const linksById = new Map<string, SubgraphLink>();
   for (const l of Array.isArray(sub.links) ? sub.links : []) {
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (l == null || typeof l !== "object") {
+    if (!isRecord(l)) {
       continue;
     }
-    /* SAFETY: 类型断言已复核 */
-    const link = l as SubgraphLink;
-    if (typeof link.id !== "string" && typeof link.id !== "number") {
+    if (typeof l.id !== "string" && typeof l.id !== "number") {
       continue;
     }
-    linksById.set(String(link.id), link);
+    linksById.set(String(l.id), {
+      id: l.id,
+      origin_id: l.origin_id,
+      target_id: l.target_id,
+      target_slot: l.target_slot,
+    });
   }
 
   const defInputs: Array<SubgraphPin> = [];
   for (const i of Array.isArray(sub.inputs) ? sub.inputs : []) {
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (i == null || typeof i !== "object") {
+    if (!isRecord(i)) {
       continue;
     }
-    /* SAFETY: 类型断言已复核 */
-    defInputs.push(i as SubgraphPin);
+    defInputs.push({ linkIds: i.linkIds, name: i.name });
   }
 
   const targetByName = new Map<string, { nodeId: string; slot: number }>();
@@ -603,12 +586,10 @@ function mapInputSlotToWidgetSlot(node: RawUiNode, inputIndex: number): number {
     }
     slot++;
     const wname =
-      /* SAFETY: 类型断言已复核 */
       typeof inp.widget === "string"
         ? inp.widget
-        : // oxlint-disable-next-line eqeqeq, typescript/no-unnecessary-condition -- 同时判 null/undefined；widget 来自外部 JSON（unknown），运行期可能为 null
-          inp.widget != null && typeof inp.widget === "object"
-          ? ((inp.widget as JsonRecord).name ?? inp.name)
+        : isRecord(inp.widget)
+          ? (inp.widget.name ?? inp.name)
           : inp.name;
     if (typeof wname === "string" && /seed|noise_seed/i.test(wname)) {
       slot++;
@@ -655,8 +636,8 @@ export function applyApiOverrides(
   if (graph == null || typeof graph !== "object" || Array.isArray(graph)) {
     return {};
   }
-  /* SAFETY: 类型断言已复核 */
-  const out = JSON.parse(JSON.stringify(graph)) as JsonRecord;
+  const parsed: unknown = JSON.parse(JSON.stringify(graph));
+  const out = asRecord(parsed) ?? {};
   if (overrides === undefined || overrides.length === 0) {
     return out;
   }
@@ -667,18 +648,14 @@ export function applyApiOverrides(
       continue;
     }
     const nodeRaw = out[ov.nodeId];
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (nodeRaw == null || typeof nodeRaw !== "object" || Array.isArray(nodeRaw)) {
+    if (!isPlainRecord(nodeRaw)) {
       continue;
     }
-    /* SAFETY: 类型断言已复核 */
-    const inputsRaw = (nodeRaw as JsonRecord).inputs;
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (inputsRaw == null || typeof inputsRaw !== "object" || Array.isArray(inputsRaw)) {
+    const inputsRaw = nodeRaw.inputs;
+    if (!isPlainRecord(inputsRaw)) {
       continue;
     }
-    /* SAFETY: 类型断言已复核 */
-    const inputs = inputsRaw as JsonRecord;
+    const inputs = inputsRaw;
 
     if (ov.name === CONTROL_AFTER_GENERATE) {
       delete inputs[CONTROL_AFTER_GENERATE];
@@ -701,8 +678,8 @@ export function applyRawOverrides(
   rawJson: unknown,
   overrides?: Array<RawWorkflowOverride>,
 ): JsonRecord {
-  /* SAFETY: 类型断言已复核 */
-  const raw = JSON.parse(JSON.stringify(rawJson)) as JsonRecord;
+  const parsed: unknown = JSON.parse(JSON.stringify(rawJson));
+  const raw = asRecord(parsed) ?? {};
   /* **没有**覆盖项也要走漂移抵消：comfy-cli 的提升控件回写错位与「这次有没有
    * 画布覆盖」无关 —— 它错的是宿主自己的值（本次现场 17 处全在我们一次都没碰过
    * 的引脚上）。因此这一步先于「有没有覆盖」的判断。 */
