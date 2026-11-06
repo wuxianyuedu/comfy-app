@@ -1600,7 +1600,7 @@
       timeout: 5m
     # 令牌权限读数：与 PR 那一格同一个入口、同一份理由（ISSUE #2551）。
     - name: 令牌权限读数
-      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-token-scopes.mjs
+      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs
       timeout: 5m
 
 # ── push 档（master 合并复核）的失败立案（ISSUE #2842）─────────────────────────
@@ -1625,7 +1625,7 @@
       timeout: 5m
     # 令牌权限读数：与 PR / 桌包那两格同一个入口、同一份理由（ISSUE #2551）。
     - name: 令牌权限读数
-      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-token-scopes.mjs
+      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs
       timeout: 5m
 
 .gates: &gates
