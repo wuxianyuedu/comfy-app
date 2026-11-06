@@ -22,12 +22,14 @@
 
 - **现状（CNB 口径）**：自托管 16 核节点，`scripts/ci-load.mjs` 按现场核数折算 maxWorkers，动态值；人的覆盖出口是 `COMFY_CI_MAX_WORKERS`（≥1 整数，非法值按默认办并提示）
 - **GA 实测读数**：
-  - 核数：GA 日志原文 `[ci-affected] 收尾复述：并发 --maxWorkers=1（2 核，os）`（`resolveCores()` 的 source = `os` ⇒ 走 `os.cpus()`，2 核）
-  - 推导值：`ceil(2/8) = 1` ⇒ 日志里 vitest 命令就是 `--maxWorkers=1`（run 42179036133）
-  - 全量单测墙钟（run 41616389372，2026-11-03 10:11:51 → 10:22:20）：`Test Files 873 passed (873)`，约 629 秒（≈10.5 分钟），命令 `pnpm run test:coverage --maxWorkers=1`
-- **影响判断**：上一版「4 CPU / 16GB」「全量单测 ~290 分钟、接近 300m 预算」**都不是读数**（实测 2 核、单测 10.5 分钟）；worker 数当前不是墙钟瓶颈，daily 的墙钟问题在串行拓扑（G-9），不在并发
-- **建议改法**：**不写死数字**，只把人的覆盖出口接进 workflow —— `COMFY_CI_MAX_WORKERS: ${{ vars.COMFY_CI_MAX_WORKERS }}`（仓库变量未设 ⇒ 展开成空串 ⇒ `resolveCiWorkers()` 按「没设」走默认推导；设了才覆盖，只调并发、不动判据）。两臂对照（默认 1 vs 覆盖 2）需要能设仓库变量或派发 workflow 的写权限，当前令牌只有 `actions: read`（`GET /actions/variables` 与 `POST /dispatches` 均 403）⇒ 第二臂等仓库变量设置后的下一跑
-- **优先级**：P3（现状已符合「按实测决定」，本条只剩出口 + 口径记录）
+  - 核数：**11-06 起是 4 核**（镜像仓转 public 后托管 runner 规格变了）：GA 日志原文 `[ci-affected] 改动面：…；并发 --maxWorkers=1（4 核，os）`（run 42202918718 › affected-tests）；早前 `（2 核，os）` 的读数已过期
+  - 推导值：`ceil(4/8) = 1` ⇒ vitest 命令仍是 `--maxWorkers=1`（同一跑）；即 PR #3246 接上覆盖出口后，未设仓库变量时默认行为不变
+  - 全量单测墙钟基线（run 41616389372，2026-11-03 10:11:51 → 10:22:20 UTC）：`Test Files 873 passed (873)`，`pnpm run test:coverage --maxWorkers=1`，约 629 秒（≈10.5 分钟）。**注意**：那跑是 2 核机器，只能作为量级基线，不能直接与 4 核那臂对比
+- **影响判断**：上一版「托管 runner 固定 4 CPU / 16GB」「全量单测 ~290 分钟、接近 300m 预算」**都不是读数**；worker 数当前不是墙钟瓶颈，daily 的墙钟问题在串行拓扑（G-9）
+- **建议改法**：**不写死数字**，只把人的覆盖出口接进 workflow —— `COMFY_CI_MAX_WORKERS: ${{ vars.COMFY_CI_MAX_WORKERS }}`（已随 PR #3246 落地；仓库变量未设 ⇒ 展开成空串 ⇒ `resolveCiWorkers()` 按「没设」走默认推导）
+  - **4 worker 那一臂跑不起来（写权限卡点，实测）**：`POST https://api.github.com/repos/wuxianyuedu/comfy-app/actions/variables` → **403** `{"message":"Resource not accessible by personal access token"}`；`GET .../actions/variables` 与 `POST .../actions/workflows/daily.yml/dispatches` 同 403（当前令牌只有 `actions: read`）
+  - 需要动作（有写权限的人）：把仓库变量设成 `COMFY_CI_MAX_WORKERS=4`，下一次定时 daily 即第二臂；取 `单元测试` step 的 `--maxWorkers=` 行 + 墙钟，与 629s / 873 files 并列，并读同跑 `（N 核，os）` 确认规格
+- **优先级**：P3（出口已落地，第二臂只是对照读数）
 
 #### G-2：NODE_OPTIONS / 内存预算
 
