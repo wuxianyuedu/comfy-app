@@ -53,12 +53,6 @@ env:
   SKIP_ENV_VALIDATION: "1"
   BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
   CI: "true"
-  # NSIS 工具镜像的常驻根（resolveToolRoot 的显式出口，scripts/ci-cache-slot.mjs）。
-  # 即弃机没有「本机种过」的前提 ⇒ 根必须落在 actions/cache 接住的路径上（下方 cache 步），
-  # miss 那一跑由 tauri-tools-cache.mjs --download 从被钉的公开资产建镜像。
-  # 用 runner.temp（GitHub 保证存在、每跑唯一）而不是写死 D:\ —— 盘符是 runner 的事实，
-  # 不该由 workflow 押；cache 步的 path 与它同源，避免两处路径各说各话。
-  COMFY_CI_TOOLS_ROOT: ${{ runner.temp }}\ci-tools
 
 jobs:
   package:
@@ -94,7 +88,7 @@ jobs:
 
       # NSIS 工具镜像做成跨跑缓存：key 锁死 NSIS_PLAN 的版本（3.13），版本升上去 = 同批改
       # 这里与 scripts/tauri-tools-cache.mjs 的 NSIS_PLAN。path 即 mirrorDir 的落点
-      # （<COMFY_CI_TOOLS_ROOT>/nsis/3.13），与 env 的 runner.temp 同源。命中 ⇒ 预置步的
+      # （<COMFY_CI_TOOLS_ROOT>/nsis/3.13），与预置步 COMFY_CI_TOOLS_ROOT 同源。命中 ⇒ 预置步的
       # ensure 直接补齐 bundler 缓存；miss ⇒ 预置步先 --download 建镜像（付一次下载），
       # 本步在跑尾把镜像存进缓存。
       - name: NSIS 工具镜像缓存（锁 3.13）
@@ -110,6 +104,10 @@ jobs:
       # 经 bash 里的 `tar`（GNU tar 不读 zip，正是四跑全红那一格）。
       - name: 桌包工具预置（cnb 同款入口；缓存 miss 时先 --download 建镜像）
         shell: bash
+        # `runner` context 只在 step 级可用；放进 workflow 级 env 会让整份文件解析失败
+        # （Unrecognized named-value: 'runner'）。工具根与上方 cache 的 path 同源。
+        env:
+          COMFY_CI_TOOLS_ROOT: ${{ runner.temp }}\ci-tools
         run: node scripts/tauri-tools-cache.mjs || (node scripts/tauri-tools-cache.mjs --download && node scripts/tauri-tools-cache.mjs)
 
       - name: 桌面成品构建（cnb 同款判据一字不改）
