@@ -15,6 +15,14 @@
 #   · CNB 的 `ci-cp936-exit.mjs` 包裹是给 CP936 控制台的转码层；GitHub Windows runner
 #     的 pwsh 输出 UTF-8，直跑真命令。
 #
+# ⚠️ 桌包工具预置这一格曾四跑全红（schedule #1~#4，均 3-4s、`exit code 2`）⇒ 打包步
+#    整片 skipped，artifact 与 nightly 从第一天起就是空的。根因不是资产失效（URL / sha256 /
+#    字节 / zip 顶层目录逐件实测为真），而是 `tauri-tools-cache.mjs --download` 用 `tar -xf`
+#    解 zip，而本步 `shell: bash` 是 Git Bash、里面的 `tar` 是 GNU tar、不读 zip —— 下载完
+#    即 `bail(2)`。脚本侧已把解 zip 换成仓内既有的纯 Node `extractZipTo`（带 zip-slip 防护），
+#    不再押 Windows 自带 bsdtar；本文件这一侧同步把工具根从写死盘符换成 `runner.temp`。
+#    详见 §7.7 与 `ci-toolchain-browser-fetch.mjs`「为什么不走 tar -xf」。
+#
 # ⚠️ schedule 只跑在**镜像仓默认分支**上（同 daily.yml 那段前提，#3064 起已接上）。
 # `workflow_dispatch`（可指 sha）仍是手动入口。GitHub cron 是 UTC：北京 03:00 = UTC 19:00。
 # `uses:` 版本口径同 pr-gate.yml 文件头（有 v7 上 v7；pnpm/action-setup 与 rust-cache
@@ -48,7 +56,9 @@ env:
   # NSIS 工具镜像的常驻根（resolveToolRoot 的显式出口，scripts/ci-cache-slot.mjs）。
   # 即弃机没有「本机种过」的前提 ⇒ 根必须落在 actions/cache 接住的路径上（下方 cache 步），
   # miss 那一跑由 tauri-tools-cache.mjs --download 从被钉的公开资产建镜像。
-  COMFY_CI_TOOLS_ROOT: "D:\\ci-tools"
+  # 用 runner.temp（GitHub 保证存在、每跑唯一）而不是写死 D:\ —— 盘符是 runner 的事实，
+  # 不该由 workflow 押；cache 步的 path 与它同源，避免两处路径各说各话。
+  COMFY_CI_TOOLS_ROOT: ${{ runner.temp }}\ci-tools
 
 jobs:
   package:
@@ -84,18 +94,20 @@ jobs:
 
       # NSIS 工具镜像做成跨跑缓存：key 锁死 NSIS_PLAN 的版本（3.13），版本升上去 = 同批改
       # 这里与 scripts/tauri-tools-cache.mjs 的 NSIS_PLAN。path 即 mirrorDir 的落点
-      # （<COMFY_CI_TOOLS_ROOT>/nsis/3.13）。命中 ⇒ 预置步的 ensure 直接补齐 bundler 缓存；
-      # miss ⇒ 预置步先 --download 建镜像（付一次下载），本步在跑尾把镜像存进缓存。
+      # （<COMFY_CI_TOOLS_ROOT>/nsis/3.13），与 env 的 runner.temp 同源。命中 ⇒ 预置步的
+      # ensure 直接补齐 bundler 缓存；miss ⇒ 预置步先 --download 建镜像（付一次下载），
+      # 本步在跑尾把镜像存进缓存。
       - name: NSIS 工具镜像缓存（锁 3.13）
         uses: actions/cache@v6
         with:
-          path: D:\ci-tools\nsis\3.13
+          path: ${{ runner.temp }}\ci-tools\nsis\3.13
           key: comfyapp-nsis-3.13-${{ runner.os }}
 
       # ensure || (download && ensure)：三态 fail-closed 不静默降级 —— 镜像已在场
       # （缓存命中）⇒ ensure 补齐即过；两边都没有（缓存 miss）⇒ ensure 退 2，接 --download
       # 从被钉的公开资产建镜像再 ensure；下载/解压失败退 2、哈希对不上退 1，都是红。
-      # 用 bash 是为了 `||`/`&&` 链式语义在所有 Windows runner 镜像上一致（不依赖 pwsh 版本）。
+      # `shell: bash` 只为 `||`/`&&` 链式语义一致；脚本内部的解 zip 已改用纯 Node，不再
+      # 经 bash 里的 `tar`（GNU tar 不读 zip，正是四跑全红那一格）。
       - name: 桌包工具预置（cnb 同款入口；缓存 miss 时先 --download 建镜像）
         shell: bash
         run: node scripts/tauri-tools-cache.mjs || (node scripts/tauri-tools-cache.mjs --download && node scripts/tauri-tools-cache.mjs)
@@ -112,6 +124,8 @@ jobs:
           name: comfyapp-desktop-bundle
           path: src-tauri/target/release/bundle/
           retention-days: 14
+          # 打包绿了却一个安装包都没有 ⇒ 判红，不许 warn 蒙混（§7.7「发布只能排在构建绿之后」）。
+          if-no-files-found: error
 
       # 发布落点：CNB 那一格把成品留在本机常驻目录（留 2 份），GitHub runner 是即弃机，
       # 等价物是 GitHub Releases 的滚动 `nightly` tag —— artifact 只活 14 天，而「现在
@@ -123,12 +137,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view nightly >/dev/null 2>&1 || \
-            gh release create nightly --title "每日桌面成品" \
-              --notes "定时任务滚动更新，保留最新一份" --prerelease
+          # 先数成品再动 Release：空手时不许先 create 出一个没有资产的 nightly tag。
           mapfile -d '' files < <(find src-tauri/target/release/bundle -type f \( -name '*.exe' -o -name '*.msi' \) -print0)
           if [ ${#files[@]} -eq 0 ]; then
             echo "打包步没产出任何 .exe / .msi，滚动 Release 没有可上传的资产"
             exit 1
           fi
+          gh release view nightly >/dev/null 2>&1 || \
+            gh release create nightly --title "每日桌面成品" \
+              --notes "定时任务滚动更新，保留最新一份" --prerelease
           gh release upload nightly "${files[@]}" --clobber
