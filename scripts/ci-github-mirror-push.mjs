@@ -51,15 +51,11 @@
  * 7. **`GIT_DIR` / `GIT_WORK_TREE` 一律不从环境继承**（同上）：平台 `prepare` 里有
  *    `export GIT_DIR=…` 的做法（本仓 `scripts/ci-*.mjs` 就有几处），那一形态下子进程里的
  *    `git push` 会推到别的树上 —— 这一格的每一条 git 调用都显式清掉这两个变量，只吃 `cwd`。
- * 8. **网络抖动的韧性**（2026-11-02 `cnb-pe2-1k6e1uhj8` 起，2026-11-04 / 11-05 按现场补判据）：
- *    同一台 runner 时通时不通 ⇒ github.com:443 是间歇抖动而非硬阻断。探活单次 30s、至多 3 次
- *    （退避 5s / 10s）；推送改按**墙钟预算**收口 —— 整档共用 4 分钟（`PUSH_RETRY_BUDGET_MS`，
- *    至多 10 次、退避 5s→50s），只有 egress ∪ 远端 5xx 消耗重试。2026-11-05 改口径的现场：
- *    `Connection was reset` 是**瞬时**失败（一次 0.3s），旧口径「2 次 + 5s」⇒ 整格 6s 交账，
- *    读起来就是「才 1.2 分钟就失败」；次数上限对「瞬时挂、隔一会儿通」没有意义。2026-11-04
- *    补漏字：旧判据认不出 `Connection was reset` / `schannel: server closed abruptly` /
- *    `Internal Server Error`；退码与 `--readout` 未动。取法与数字的理由见
- *    `ci-mirror-retry-policy.mjs` 文件头。
+ * 8. **网络抖动的韧性**（判据演进、数字与 30s 首刀细节见 `ci-mirror-retry-policy.mjs` 文件头）：
+ *    同一台 runner 时通时不通 ⇒ github.com:443 是间歇抖动而非硬阻断。**探活与 wire 推送
+ *    共用一份 4 分钟墙钟预算**（`PUSH_RETRY_BUDGET_MS`，由 `ci-mirror-wire-budget.mjs`
+ *    在探活前起算），两跳各至多 10 次、退避 5s→50s，只有 egress ∪ 远端 5xx 消耗重试；
+ *    认证 / 权限类一次交账；只给推送 4 分钟等于没给 —— 探活失败会短路整格（ISSUE #3234）。
  * 9. **refs 推完还有第二跳：LFS 对象**（第二批，字体真身那一族）。镜像仓若只有指针文件，
  *    GitHub 侧 `checkout` 开 `lfs: true` 就撞「拉不到对象」的红，所以内容推送成功后补一跳
  *    `git lfs push <镜像> HEAD`：**不带 `--all`**（增量由 git-lfs 对账，存量历史不重复计
@@ -127,12 +123,12 @@ import { buildRunName, dispatchPayload, EVENT_TYPE, resolvePrTitle } from "./ci-
 import {
   PROBE_MAX_ATTEMPTS,
   PUSH_MAX_ATTEMPTS,
-  PUSH_RETRY_BUDGET_MS,
   PUSH_TIMEOUT_MS,
   REMOTE_PROBE_TIMEOUT_MS,
   RETRY_BACKOFF_MS,
   RETRY_MIN_ATTEMPT_MS,
 } from "./ci-mirror-retry-policy.mjs";
+import { createWireBudget } from "./ci-mirror-wire-budget.mjs";
 /* 纯拼装切出去之后仍从这里转出，用例与调用方的导入面不用动（见该模块「为什么单独一份」）。 */
 export { dispatchPayload };
 
@@ -514,7 +510,7 @@ export function explainRemoteProbeFailure(text) {
 /**
  * 执行镜像：先问「仓库在不在」→ 推 HEAD → 派发。每一跳各自独立成读数，前一跳没通后一跳不发。
  *
- * @param {{env: Record<string, string | undefined>, fetchImpl?: typeof fetch, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, dryRun?: boolean, log?: (line: string) => void, readout?: boolean, root?: string, writeFileSync?: (file: string, data: string) => void, mkdirSync?: (dir: string, opts: object) => void, cnbJson?: (run: any, args: string[]) => any}} io
+ * @param {{env: Record<string, string | undefined>, fetchImpl?: typeof fetch, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, now?: () => number, dryRun?: boolean, log?: (line: string) => void, readout?: boolean, root?: string, writeFileSync?: (file: string, data: string) => void, mkdirSync?: (dir: string, opts: object) => void, cnbJson?: (run: any, args: string[]) => any}} io
  *   `cnbJson` 是 PR 标题回读的取数动作（`ci-mirror-payload.mjs`；用例给假件，
  *   缺省走真 `cnb` 子进程）。
  * @returns {Promise<number>} 仓内三态退码
@@ -542,6 +538,7 @@ export async function runMirror(io) {
   const fetchImpl = io.fetchImpl ?? fetch;
   const runGit = io.runGit ?? realRunGit;
   const sleep = io.sleep ?? realSleep;
+  const wireBudget = createWireBudget(io.now);
   const ctx = resolveContext({ env, runGit });
   if (!ctx.ok) {
     for (const reason of ctx.reasons) {
@@ -584,11 +581,13 @@ export async function runMirror(io) {
     return CODE.OK;
   }
   /* 推送前那一问：目标仓库没建时 git 的回话与「令牌坏了」逐字同形（见文件头第 5 条）。
-   * egress 类的单次抖动不直接交账：至多 PROBE_MAX_ATTEMPTS 次、带退避（文件头第 8 条）。 */
+   * egress 抖动与推送共享同一份 4 分钟预算：短路掉这一跳就等于短路掉整格（文件头第 8 条）。 */
   const probe = await runGitWithRetry(["ls-remote", url], {
+    budgetMs: wireBudget(),
     label: "探活",
     log,
     maxAttempts: PROBE_MAX_ATTEMPTS,
+    now: io.now,
     prefix: "mirror",
     runGit,
     sleep,
@@ -623,13 +622,13 @@ export async function runMirror(io) {
     );
     return CODE.NO_FACT;
   }
-  /* 推送同样只对 egress 类失败重试，且整档吃一个墙钟预算：瞬时失败（`Connection was reset`
-   * 一次只要 0.3s）在窗口内反复试，到点才按最后一次结果交账（文件头第 8 条）。 */
+  /* 推送接同一份预算的**剩余量**：探活花掉的时间从这里扣，两跳不各领 4 分钟（第 8 条）。 */
   const push = await runGitWithRetry(pushArgs(url, `refs/heads/${ctx.ref}`), {
-    budgetMs: PUSH_RETRY_BUDGET_MS,
+    budgetMs: wireBudget(),
     label: "推送",
     log,
     maxAttempts: PUSH_MAX_ATTEMPTS,
+    now: io.now,
     prefix: "mirror",
     runGit,
     sleep,
@@ -760,8 +759,8 @@ export function exitCodeFor(code, readout) {
  *
  * 只界「动态 import `ci-github-mirror-master.mjs`」这一个最无终点的等待：它是本地盘上
  * 的模块装载（正常 <1s），30s 给的是冷启动 / 杀软扫描的余量。
- * **为什么不界整层**：跑起来之后的探活 ≈105s、推送 ≈485s 各自都有上限，且在
- * `.cnb.yml` 那格 `timeout: 10m` 的外框里；再压一个更小的数会把「慢但活着」误判成
+ * **为什么不界整层**：跑起来之后的探活与推送共用 240s、LFS 首刀 240s 各自都有上限，
+ * 合计 480s 在 `.cnb.yml` 那格 `timeout: 10m` 的外框里；再压一个更小的数会把「慢但活着」误判成
  * 悬挂，压一个更大的数又落在 10m 之外 ⇒ 形同虚设（这条上限必须是「装载」的）。
  *
  * @type {number}
