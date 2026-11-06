@@ -61,7 +61,8 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.inputs.head_sha || github.sha }}
-          fetch-depth: 0
+          # 桌包档定时触发在 master HEAD，打包不做三点 diff / 不读 origin/master ⇒ 1 够。
+          fetch-depth: 1
           # 打包要把字体真身嵌进成品（LFS 指针文件打进去就是坏包）⇒ 这一格必须拉 LFS。
           # 对象由镜像那一格 `git lfs push` 送到；配额口径见 pr-gate.yml 同名注释。
           lfs: true
