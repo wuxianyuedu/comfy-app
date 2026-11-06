@@ -270,6 +270,83 @@ describe("oxfmt 格式判据 --staged 输入面跳过（ISSUE #1747）", () => {
 });
 
 /**
+ * `--staged` 的输入面不只管「哪些路径」，还得管「这些路径的内容从哪来」（ISSUE #3259）。
+ * 现场：暂存一份脏文件、再把工作区改干净却不重新 `git add`（AM），oxfmt 按路径读工作区
+ * ⇒ 判绿，而提交进历史的是 index 里那份没过格式的 blob。这里五条一起钉：① 两个方向的
+ * 不一致都不给结论（exit 2 + 点名 + 绝不判绿/判红）② 一致时照旧判绿、照旧判红 ③ 面外
+ * 那份**已跟踪**的脏文件（改了但没暂存）不误报 —— 「只判暂存的那一批」不许被守卫撑破。
+ */
+describe("oxfmt 格式判据 --staged 暂存面 ⇄ 工作区一致性（ISSUE #3259）", () => {
+  test("index 脏 / 工作区干净（AM）→ exit 2 不给结论，绝不判绿", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    repo.write("src/lib/keep.ts", DIRTY);
+    repo.git("add", "src/lib/keep.ts");
+    /* 关键一跳：工作区改干净但**不重新 git add** —— index 里躺着的仍是脏 blob。
+     * 旧实现在这里会念「命中 0 个（暂存面）」并放行，正是本单要堵的那扇门。 */
+    repo.write("src/lib/keep.ts", CLEAN);
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(2);
+    expect(r.output).toContain("src/lib/keep.ts");
+    expect(r.output).toContain("不给结论");
+    expect(r.output).not.toContain("[ok] oxfmt 格式");
+  });
+
+  test("index 干净 / 工作区又改脏 → 同样 exit 2（既不假红也不假绿）", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    repo.write("src/lib/keep.ts", CLEAN2);
+    repo.git("add", "src/lib/keep.ts");
+    repo.write("src/lib/keep.ts", DIRTY);
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(2);
+    expect(r.output).toContain("src/lib/keep.ts");
+    expect(r.output).not.toContain("个文件未过");
+    expect(r.output).not.toContain("[ok] oxfmt 格式");
+  });
+
+  test("两边一致且干净 → 照旧判绿（守卫不误伤普通提交）", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    repo.write("src/lib/keep.ts", CLEAN2);
+    repo.git("add", "src/lib/keep.ts");
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(0);
+    expect(r.output).toContain("[ok] oxfmt 格式");
+  });
+
+  test("两边一致但脏 → 照旧 exit 1 并点名（守卫不吞真红）", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    repo.write("src/lib/keep.ts", DIRTY);
+    repo.git("add", "src/lib/keep.ts");
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).toContain("src/lib/keep.ts");
+    expect(r.output).toContain("个文件未过");
+  });
+
+  test("面外那份已跟踪文件改脏未暂存 → 仍判绿（交集只取 hits）", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.write("src/lib/other.ts", CLEAN);
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    repo.write("src/lib/keep.ts", CLEAN2);
+    repo.git("add", "src/lib/keep.ts");
+    /* `other.ts` 已跟踪、被改脏、但没暂存 ⇒ 不在 hits 内。`git diff --name-only`
+     * 会列出它；守卫必须靠「交集只取 hits」放行，否则每次部分暂存都白挨一次 exit 2。 */
+    repo.write("src/lib/other.ts", DIRTY);
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(0);
+    expect(r.output).not.toContain("src/lib/other.ts");
+  });
+});
+
+/**
  * 合并态下的 `--staged` 输入面（ISSUE #2747）。现场：解冲突时 D0 把主干带来的存量未格式化文件当成本次提交
  * （合并未提交时 `git diff --cached` 是**相对第一父提交**的全量差异，不是「本次改动」），于是一次与本 PR 无关
  * 的解冲突被别人的旧账拦死；同链 `--changed` 却给「0 个在靶子内」。四条用例钉：①收窄生效（主干存量不被点名）
