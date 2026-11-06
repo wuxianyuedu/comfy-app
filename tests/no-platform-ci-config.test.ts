@@ -1027,11 +1027,14 @@ export function resolveLockKey(template: string, vars: Record<string, string | u
   );
 }
 
-/** `.lock-*` 那几把**类锁**的定义：锚点名 → `{ key 原文, cancel-in-progress 原文 }`（`null` = 没写）。 */
+/** `.lock-*` 那几把**类锁**的定义：锚点名 → `{ key 原文, cancel-in-progress 原文, wait 原文 }`（后两者 `null` = 没写 = 吃平台默认 `false`）。 */
 export function lockAnchorDefinitions(
   text: string,
-): Map<string, { cancelInProgress: boolean | null; key: string }> {
-  const out = new Map<string, { cancelInProgress: boolean | null; key: string }>();
+): Map<string, { cancelInProgress: boolean | null; key: string; wait: boolean | null }> {
+  const out = new Map<
+    string,
+    { cancelInProgress: boolean | null; key: string; wait: boolean | null }
+  >();
   const def = /^\.lock-[\w-]+:[ \t]*&(lock_\w+)[ \t]*$([\s\S]*?)(?=^\S|$(?![\s\S]))/gm;
   for (const m of text.matchAll(def)) {
     const name = m[1];
@@ -1043,9 +1046,14 @@ export function lockAnchorDefinitions(
     /* `null` = 这一行**没写**；`false` 是「写了、值是 false」—— 两者不同：
      * 漏写会让同一件事重复排队，而 `false` 是有意的取舍（逐笔留读数，见 R2）。 */
     const rawCancel = /^[ \t]+cancel-in-progress:[ \t]*(true|false)[ \t]*$/m.exec(body)?.[1];
+    /* `wait` 同理（ISSUE #3207）：`null` = 没写 = 吃平台默认 `false` = **不排队**。
+     * 「不终止」与「排队」是两件事，而两个默认值（`cancel-in-progress: false` /
+     * `wait: false`）叠在一起是「既不终止、也不等」—— 后到那一跑在 Prepare 里当场红。 */
+    const rawWait = /^[ \t]+wait:[ \t]*(true|false)[ \t]*$/m.exec(body)?.[1];
     out.set(name, {
       key,
       cancelInProgress: rawCancel === undefined ? null : rawCancel === "true",
+      wait: rawWait === undefined ? null : rawWait === "true",
     });
   }
   return out;
@@ -1127,7 +1135,7 @@ export function pipelineLockAssignments(text: string): Array<{
 /**
  * 锁按触发类分开后的六条规则（返回违规清单，空 = 都成立）。ISSUE #2114 第二条死因「非 PR 共用退化成 `pr-` 的锁」，现场 `cnb-5j9-1k5bc4p4u` 差 3 秒被 cancel、`cnb-lm1-1k5h1otqt` 244.06s 被无关 push 掐掉（差 0.2 秒）。
  * R1 非 PR 每条显式写 `lock:`（继承 `*common` 即退化入口）；R2 类锁在场、显式写 `cancel-in-progress`、key 为字面量（#1981；与「值为 true」是两件事，#2396）；R3 一把锁只给同一份清单（三条每日口允许共用 `*daily_gates`）；R4 非 PR key 不许等于 `pr-` / `pr-<iid>`。
- * R5 PR 仍用带 `CNB_PULL_REQUEST_IID` 的模板（不许回退「全仓一把」）；R6 `push` 锁必须 `cancel-in-progress: false`（#2396）—— 逐提交给读数，2026-10-28 起扩成树级校验档，成本更高更不能松。
+ * R5 PR 仍用带 `CNB_PULL_REQUEST_IID` 的模板（不许回退「全仓一把」）；R6 `push` 锁必须 `cancel-in-progress: false` **且** `wait: true`（#2396 + #3207）—— 逐提交给读数，两笔都得有结论：「不终止旧跑」与「后到的那跑会排队」是两件事，只写前者时后到者照样在 Prepare 里被判 error。
  */
 export function lockClassViolations(text: string, prIid = "1982"): Array<string> {
   const bad: Array<string> = [];
@@ -1214,8 +1222,13 @@ export function lockClassViolations(text: string, prIid = "1982"): Array<string>
       seen.add(row.stagesRef);
     }
   }
-  /* R6：`push` 那一档逐提交卖读数，「只留最新那一笔」等于删掉前一笔的结论。
-   * 判的是**代出来的 key**，不是锚点名 —— 改名 / 换锚点都逃不掉。 */
+  /* R6：`push` 那一档逐提交卖读数，**两笔都得有结论** ⇒ 两个开关一起判：
+   *   · `cancel-in-progress: false` —— 别终止**旧**的那一跑（#2396 现场：前一笔被判 `cancel`）；
+   *   · `wait: true` —— 别掐掉**新**的那一跑（#3207 现场：`cnb-o1g-1k6m7jj8q` 在 Prepare 里
+   *     `The lock (…-push) is occupied and the current process is terminated`，6 格全 skipped）。
+   * 只写前者时「不终止」并不等于「排队」——`wait` 的默认值就是 `false`（`grammar.md#pipeline-lock`），
+   * 于是语义变成「既不终止、也不等」，后到的照样红。判的是**代出来的 key**，
+   * 不是锚点名 —— 改名 / 换锚点都逃不掉。 */
   for (const row of rows) {
     if (row.lockRef === null) {
       continue;
@@ -1228,6 +1241,14 @@ export function lockClassViolations(text: string, prIid = "1982"): Array<string>
       bad.push(
         `锁 *${row.lockRef}（key「${def.key}」）的 cancel-in-progress 不是 false —— ` +
           "「master 合并复核」的读数是逐提交给的，终止旧的一跑等于把前一笔的结论删掉（ISSUE #2396）",
+      );
+    }
+    if (def.wait !== true) {
+      bad.push(
+        `锁 *${row.lockRef}（key「${def.key}」）没有写 wait: true —— ` +
+          "`wait` 缺省是 false，于是两跑重叠时**后到那一跑**在 Prepare 里直接被判 " +
+          "`the lock … is occupied and the current process is terminated`，它那一笔没有读数；" +
+          "而合并后紧跟的删源分支（branch.delete）正是最常见的重叠形态，没人会去补跑它（ISSUE #3207）",
       );
     }
   }
@@ -2010,6 +2031,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       ".lock-push: &lock_push",
       "  key: push",
       "  cancel-in-progress: false",
+      "  wait: true",
       ".lock-daily: &lock_daily",
       "  key: daily",
       "  cancel-in-progress: true",
@@ -2064,6 +2086,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         ".lock-push: &lock_push",
         "  key: push",
         "  cancel-in-progress: false",
+        "  wait: true",
         ".lock-probe-a: &lock_probe_a",
         "  key: probe-2363-a",
         ...(o.cancel === null ? [] : [`  cancel-in-progress: ${o.cancel ?? "false"}`]),
@@ -2140,12 +2163,24 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     );
     expect(lockClassViolations(noCancel).join("\n")).toContain("没有显式写 cancel-in-progress");
 
-    // ③′ R6：`push` 那把写回 `true` ⇒ 前一笔 push 的复核读数被销毁（ISSUE #2396 的形态）。
+    // ③′ R6 的前一半：`push` 那把写回 `true` ⇒ 前一笔 push 的复核读数被销毁（ISSUE #2396 的形态）。
     const pushCancels = fixture.replace(
       "  key: push\n  cancel-in-progress: false",
       "  key: push\n  cancel-in-progress: true",
     );
     expect(lockClassViolations(pushCancels).join("\n")).toContain("cancel-in-progress 不是 false");
+
+    // ③″ R6 的后一半：`wait: true` 被摘掉 ⇒ 两跑重叠时**后到那一跑**在 Prepare 里直接红
+    // （ISSUE #3207 的现场形态：`cnb-o1g-1k6m7jj8q` 405ms 判 error、6 格全 skipped）。
+    // 这一形必须单独点名 —— 只判 `cancel-in-progress` 时它一个字都不响，而那正是线上那笔。
+    const pushNoWait = fixture.replace(
+      "  cancel-in-progress: false\n  wait: true\n",
+      "  cancel-in-progress: false\n",
+    );
+    expect(lockClassViolations(pushNoWait).join("\n")).toContain("没有写 wait: true");
+    // 写 `wait: false` 与漏写在配置里长得不像、在语义上是一件事（平台默认就是 false）。
+    const pushWaitFalse = fixture.replace("  wait: true\n", "  wait: false\n");
+    expect(lockClassViolations(pushWaitFalse).join("\n")).toContain("没有写 wait: true");
 
     // ④ R2 的后半：key 里放进变量 ⇒ 换个事件它就无值，退化这件事又回来了。
     const templated = fixture.replace(

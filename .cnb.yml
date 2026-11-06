@@ -611,15 +611,17 @@
 # 就退化」这条路；#1981 那条教训正是别指望变量在某个事件上有值）：
 #
 #   · `push`     —— 仍然只有 `master 合并复核` 一条，它本来就该「一条就够」；
-#                   ⚠️ 但它**不掐旧的那一跑**（`cancel-in-progress: false`，ISSUE #2396）：
-#                   这一格判的是「落到 master 的是不是 PR 合并形态」，**逐提交**给读数，
-#                   而被掐掉的那一跑等于没有读数；重跑它的成本整条只有 20~35 秒
-#                   （大头是全量 clone 的 Prepare）⇒ 「互斥省时间」在这里没有收益，
-#                   只留下「前一笔的读数被销毁」这一条代价。真出现两条排队时，
-#                   逐笔复核也应当逐笔给结论（现场两对，间隔都在 12 秒内：
-#                   `cnb-9qi-1k5qojle1` / `cnb-qta-1k5ptts6m` 被判 `cancel`，
-#                   prepare 里的原文是 `The current pipeline is terminated`，
-#                   而反过来那一跑写着 `the ongoing pipeline is terminated: cnb-9qi-…`）。
+#                   ⚠️ 但它**不掐旧的那一跑、也不掐新来的那一跑**（`cancel-in-progress: false`
+#                   **+ `wait: true`**，前一半见 ISSUE #2396、后一半见 ISSUE #3207）：
+#                   这一格判的是「落到 master 的是不是 PR 合并形态」，**逐提交**给读数。
+#                   #2396 当年只摘掉了「终止旧的一跑」（现场两对，间隔都在 12 秒内：
+#                   `cnb-9qi-1k5qojle1` / `cnb-qta-1k5ptts6m` 被判 `cancel`，prepare 里的
+#                   原文是 `The current pipeline is terminated`，而反过来那一跑写着
+#                   `the ongoing pipeline is terminated: cnb-9qi-…`），而**新来的那一跑**
+#                   照旧在 Prepare 里被判 `The lock … is occupied and the current process is
+#                   terminated` —— `wait` 的默认值是 false，不写它就没有「排队」这件事。
+#                   两笔都该有结论，所以这一把是 `false` + `true` 的组合；理由与现场逐拍
+#                   读数写在 `.lock-push` 锚点上（那是唯一定义处，这里只留指路）。
 #   · `daily`    —— 定时 / 手点 / API 那三条**同一档**，「后起的掐掉先跑的」一字未改地保留
 #                   （§13.5.3.10 想要的就是这份互斥：同一台机上不要同时压两遍那七格）；
 #   · `oneshot-build` / `oneshot-e2e` / `oneshot-unit` —— 每档自己一把：同一档被连点两次
@@ -639,6 +641,22 @@
   # 唯一一把**排队而不终止**的类锁（ISSUE #2396，理由见上面 `push` 那一行）：
   # 这一格逐提交给读数，「只留最新那一笔」等于把前一笔的结论删掉。
   cancel-in-progress: false
+  # `wait: true` 是这一把的**承重项**，不是陪衬（ISSUE #3207）。不带它时
+  # 「不终止」并不等于「排队」—— 官方 `grammar.md#pipeline-lock`：
+  # `wait`（默认 **false**）= 锁被占用时是否等待，`cancel-in-progress`（默认 false）
+  # = 是否**终止**占用锁的那一跑。两个默认值叠起来的语义是「**不终止，也不等**」，
+  # 而现场读数正是这一形：
+  #
+  #   `cnb-310-1k6m7jap1`（07f31f2e 那笔，00:10:17 起）整跑 110s，`get lock …-push` 之后
+  #   一路跑完 6 格全绿；`cnb-o1g-1k6m7jj8q`（672631f8 那笔，**9 秒后**到达）在 Prepare
+  #   就落了 `Pipeline init error: The lock (moon-read/comfy-app-t3-push) is occupied and
+  #   the current process is terminated.`，6 格全 `skipped`、整跑 405ms 判 `error`。
+  #
+  # 也就是说 `cancel-in-progress: false` 单独在场时，**被销毁的是后到那一跑的读数**
+  # （它连跑都没跑起来），而 #2396 当年要的是「前一笔的结论别被删掉」—— 两笔都该有读数。
+  # 一笔合并后紧跟删源分支（`branch.delete` 那一推）就是最常见的两跑重叠形态，
+  # 而删分支那一推是平台自己发起的、没人会去补跑它 ⇒ 缺的那笔读数永久缺着。
+  wait: true
 .lock-daily: &lock_daily
   key: daily
   cancel-in-progress: true
