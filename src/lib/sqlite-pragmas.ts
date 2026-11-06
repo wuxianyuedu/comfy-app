@@ -58,6 +58,7 @@
  */
 import { SQLITE_PRAGMA_BOOT } from "~/lib/retry-policy";
 import { runWithSqliteBusyRetry } from "~/lib/sqlite-busy-retry";
+import type { RemoteCallback } from "drizzle-orm/sqlite-proxy";
 
 /** Lock-waiting budget for one connection, in ms. Applied at the host site
  *  through `PRAGMA busy_timeout` (one connection per process, see above). */
@@ -119,4 +120,37 @@ export async function applySqlitePragmas(
       policy: SQLITE_PRAGMA_BOOT,
     });
   }
+}
+
+/**
+ * Wrap a node:sqlite handle's drizzle proxy so PRAGMA init is guaranteed to
+ * finish before the first query, WITHOUT turning the caller into an async
+ * module (ISSUE #3252).
+ *
+ * Why this shape: `db.ts` / `workshop/db.ts` must stay synchronous modules.
+ * A top-level `await applySqlitePragmas(...)` makes Turbopack emit them as
+ * async modules; every `class X extends DrizzleRepository` downstream then
+ * evaluates its `extends` clause before the base class is exported, which is
+ * exactly the "Class extends value undefined" that killed the daily E2E
+ * webServer. Drizzle's `RemoteCallback` already returns a Promise, so we gate
+ * on the (still fully retried, #1282) init promise inside the callback. The
+ * module exports immediately; correctness is preserved at query time.
+ *
+ * Kept ASCII-only: this file is on the build-time module graph (see NOTE at
+ * the top of the file).
+ */
+export function gateProxyWithPragmas(
+  handle: SqlitePragmaTarget & {
+    readonly proxy: RemoteCallback;
+  },
+): RemoteCallback {
+  const ready = applySqlitePragmas(handle);
+  /* Mark the promise as handled so a boot-time PRAGMA failure (e.g. read-only
+   * mount) cannot surface as an unhandledRejection before the first query.
+   * The rejection is still rethrown at query time via `await ready` below. */
+  ready.catch(() => null);
+  return async (query, params, method) => {
+    await ready;
+    return handle.proxy(query, params, method);
+  };
 }
