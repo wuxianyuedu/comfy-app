@@ -47,7 +47,7 @@ describe("工作流库行形状：视图声明与服务端一致（ISSUE #1460�
     /* `as unknown as WorkflowRow` / `as WorkflowRow[]`（及切泛形后的
      * `Array<WorkflowRow>` 写法）都不许出现 —— 单跳断言同样是「这里别查我」，
      * 只是少了一次 `unknown` 洗白。 */
-    expect(code).not.toMatch(/as\s+(unknown\s+as\s+)?(?:WorkflowRow\[\]|Array<WorkflowRow>)/);
+    expect(code).not.toMatch(/as\s+(?:unknown\s+as\s+)?(?:WorkflowRow\[\]|Array<WorkflowRow>)/);
   });
 
   it("`createdAt` 声明为 Date（superjson 过线保真，不是 ISO 串）", () => {

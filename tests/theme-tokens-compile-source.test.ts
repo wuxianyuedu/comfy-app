@@ -34,10 +34,10 @@ describe("theme 编译的输入源固定住了（#1336 的反向判据）", () =
     // （第一版实测到的正是 `--color-primary-strong`，见 helper 注释）。
     const src = fs.readFileSync(GLOBALS, "utf8");
     const declared: Array<string> = [];
-    for (const block of src.matchAll(/@theme(?:\s+inline)?\s*\{([\s\S]*?)\n\}/g)) {
-      const body = block[1] ?? "";
-      for (const decl of body.matchAll(/(--[A-Za-z0-9-]+)\s*:/g)) {
-        const name = decl[1];
+    for (const block of src.matchAll(/@theme(?:\s+inline)?\s*\{(?<body>[\s\S]*?)\n\}/g)) {
+      const body = block.groups?.body ?? "";
+      for (const decl of body.matchAll(/(?<decl>--[A-Za-z0-9-]+)\s*:/g)) {
+        const name = decl.groups?.decl;
         if (name !== undefined && name !== "") {
           declared.push(name);
         }
@@ -88,9 +88,9 @@ describe("主题 token 清单（文件快照，人工 review 的对象）", () =
   it("`@theme` 声明的 token 清单与基线一致", async () => {
     const src = fs.readFileSync(GLOBALS, "utf8");
     const declared = new Set<string>();
-    for (const block of src.matchAll(/@theme(?:\s+inline)?\s*\{([\s\S]*?)\n\}/g)) {
-      for (const decl of (block[1] ?? "").matchAll(/(--[A-Za-z0-9-]+)\s*:/g)) {
-        declared.add(decl[1]!);
+    for (const block of src.matchAll(/@theme(?:\s+inline)?\s*\{(?<body>[\s\S]*?)\n\}/g)) {
+      for (const decl of (block.groups?.body ?? "").matchAll(/(?<decl>--[A-Za-z0-9-]+)\s*:/g)) {
+        declared.add(decl.groups?.decl ?? "");
       }
     }
     /* 一份声明都没有时快照会变成空文件而「照样通过」——先钉住解析本身有效。 */

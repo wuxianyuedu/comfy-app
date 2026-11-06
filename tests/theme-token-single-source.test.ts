@@ -162,9 +162,9 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
       "--shadow-card", // 浮层卡片投影（Tailwind shadow 命名空间）
     ];
     const declared = new Set<string>();
-    for (const m of sourceCss.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)) {
-      if (m[1] !== undefined && m[1] !== "") {
-        declared.add(m[1]);
+    for (const m of sourceCss.matchAll(/^\s*(?<name>--[a-z0-9-]+)\s*:/gm)) {
+      if (m.groups?.name !== undefined && m.groups?.name !== "") {
+        declared.add(m.groups.name);
       }
     }
     const stray = [...declared].filter(
@@ -193,8 +193,8 @@ describe("T2 @theme inline 不得重定义项目 token（ISSUE #672）", () => {
     const themeBlock = braceBlock(sourceCss, "@theme {");
     const inlineBlock = braceBlock(sourceCss, "@theme inline {");
     const projectNames = new Set(
-      [...themeBlock.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].flatMap((m) =>
-        m[1] !== undefined && m[1] !== "" ? [m[1]] : [],
+      [...themeBlock.matchAll(/^\s*(?<name>--[a-z0-9-]+)\s*:/gm)].flatMap((m) =>
+        m.groups?.name !== undefined && m.groups?.name !== "" ? [m.groups.name] : [],
       ),
     );
     /* 判据自己的视力表：命名空间一旦又落到扫描面外，这里先红。 */
@@ -206,12 +206,14 @@ describe("T2 @theme inline 不得重定义项目 token（ISSUE #672）", () => {
     }
     /* SAFETY: 类型断言已复核 */
     const bridged = [
-      ...inlineBlock.matchAll(/^\s*(--[a-z0-9-]+)\s*:\s*var\(--([a-z0-9-]+)\);?/gm),
-    ].flatMap((m) =>
-      m[1] !== undefined && m[1] !== "" && m[2] !== undefined && m[2] !== ""
-        ? [[m[1], m[2]] as const]
-        : [],
-    );
+      ...inlineBlock.matchAll(/^\s*(?<name>--[a-z0-9-]+)\s*:\s*var\(--(?<ref>[a-z0-9-]+)\);?/gm),
+    ].flatMap((m) => {
+      const name = m.groups?.name;
+      const ref = m.groups?.ref;
+      return name !== undefined && name !== "" && ref !== undefined && ref !== ""
+        ? [[name, ref] as const]
+        : [];
+    });
     expect(bridged.length, "@theme inline 的桥一条都没有（判据失效）").toBeGreaterThan(10);
     const shadowed = bridged.filter(([name]) => projectNames.has(name));
     expect(
@@ -223,12 +225,16 @@ describe("T2 @theme inline 不得重定义项目 token（ISSUE #672）", () => {
   it("别名桥指向的别名确实存在（没有指向空气）", () => {
     const inlineBlock = braceBlock(sourceCss, "@theme inline {");
     const bridged = [
-      ...inlineBlock.matchAll(/^\s*--[a-z0-9-]+\s*:\s*var\(--([a-z0-9-]+)\)/gm),
-    ].flatMap((m) => (m[1] !== undefined && m[1] !== "" ? [m[1]] : []));
+      ...inlineBlock.matchAll(/^\s*--[a-z0-9-]+\s*:\s*var\(--(?<ref>[a-z0-9-]+)\)/gm),
+    ].flatMap((m) => {
+      const ref = m.groups?.ref;
+      return ref !== undefined && ref !== "" ? [ref] : [];
+    });
     const declared = new Set(
-      [...sourceCss.matchAll(/^\s*--([a-z0-9-]+)\s*:/gm)].flatMap((m) =>
-        m[1] !== undefined && m[1] !== "" ? [m[1]] : [],
-      ),
+      [...sourceCss.matchAll(/^\s*--(?<name>[a-z0-9-]+)\s*:/gm)].flatMap((m) => {
+        const name = m.groups?.name;
+        return name !== undefined && name !== "" ? [name] : [];
+      }),
     );
     /* 软断言：一条桥指向空气时，其余坏的桥也一起报出来（§11.18）。 */
     for (const alias of bridged) {
@@ -289,8 +295,11 @@ describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Sh
 
   it("@theme 里不许再有 --radius-* 字面量（那份死声明别再长回来）", () => {
     const themeBlock = braceBlock(sourceCss, "@theme {");
-    const stray = [...themeBlock.matchAll(/^\s*(--radius-[a-z0-9-]+)\s*:/gm)].flatMap((m) =>
-      m[1] !== undefined && m[1] !== "" ? [m[1]] : [],
+    const stray = [...themeBlock.matchAll(/^\s*(?<name>--radius-[a-z0-9-]+)\s*:/gm)].flatMap(
+      (m) => {
+        const name = m.groups?.name;
+        return name !== undefined && name !== "" ? [name] : [];
+      },
     );
     expect(
       stray,

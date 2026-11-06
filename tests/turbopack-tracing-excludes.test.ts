@@ -165,9 +165,9 @@ describe.skipIf(!standaloneExists)(".next/standalone 产物里不得有测试 / 
 
   /* SAFETY: 类型断言已复核 */
   it.for([
-    ["测试文件", /(^|\/)src\/.*\.test\.tsx?$/],
-    ["变更碎片", /(^|\/)changelog\.d\/.*\.md$/],
-    ["文档目录", /(^|\/)docs\/.*\.md$/],
+    ["测试文件", /(?:^|\/)src\/.*\.test\.tsx?$/],
+    ["变更碎片", /(?:^|\/)changelog\.d\/.*\.md$/],
+    ["文档目录", /(?:^|\/)docs\/.*\.md$/],
   ] as const)("不含%s", ([, re]) => {
     const hits = files.filter((f) => re.test(f));
     expect(
@@ -219,8 +219,8 @@ import { createRequire } from "node:module";
 
 describe("useTypeScriptCli 与解析到的 TypeScript 版本必须配对", () => {
   const code = stripComments(config);
-  const flag = /useTypeScriptCli:\s*(true|false)/.exec(code);
-  const optedOut = flag?.[1] === "false";
+  const flag = /useTypeScriptCli:\s*(?<flag>true|false)/.exec(code);
+  const optedOut = flag?.groups?.flag === "false";
 
   /** 从仓库根解析 `typescript` 那份包（本仓的 `typescript` 是 pnpm 别名，指向谁由安装态决定）。 */
   function resolvedTsVersion(): string {
