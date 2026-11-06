@@ -120,7 +120,11 @@
  */
 
 import { planSeparatedLaunches, resolveAffectedSegment } from "./affected-launch-segments.mjs";
-import { mergeTimingLedger, orderByKnownDuration, readTimingLedger } from "./affected-launch-duration-order.mjs";
+import {
+  mergeTimingLedger,
+  orderByKnownDuration,
+  readTimingLedger,
+} from "./affected-launch-duration-order.mjs";
 import { applySuspension, excludeArgs } from "./suspended-gate-tests.mjs"; // #2948
 import { patchCoverageArgs } from "./affected-patch-coverage.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
@@ -168,11 +172,10 @@ import {
 /* 显式全量档（`--full`）那一整格 —— 与增量档几乎不共用任何东西，所以是**一条整档**
  * 而不是一段（判据一个字没搬：退出码仍由 `runChunk` 给）。 */
 import { runFullSuite } from "./affected-launch-full-run.mjs";
-import {
-  classifyFirstPass,
-  classifyRetry,
-  mergePerFileReads,
-} from "./affected-launch-retry-verdict.mjs";
+import { classifyFirstPass, classifyRetry } from "./affected-launch-retry-verdict.mjs";
+/* 「第 2 遍认不出自己 ⇒ 有界逐文件补跑」那一段（含 `PER_FILE_RERUN_MAX` 上限）住在
+ * 自己那份文件里 —— 本层贴住 900 行硬闸时按职责切出去的那一刀（ISSUE #3254）。 */
+import { rerunUnknownFiles } from "./affected-launch-per-file-rerun.mjs";
 import {
   isTimeoutShaped,
   remainingWaitMs,
@@ -182,12 +185,10 @@ import {
 /* 墙钟判点（还开不开下一遍）住在自己那份文件里：等待有预算而**跑**没有上界，负载膨胀时
  * 重试本身就成了消耗，直到那一格被平台掐掉、连「未判定」都说不出（ISSUE #2364）。 */
 import {
-  affordablePerFileCount,
   firstPassLimit,
   fmtMinutes,
   gateFirstPassByWallClock,
   gateRerunByWallClock,
-  perFileBudgetStopReport,
   remainingWallClockMs,
   rerunFileList,
   resolveWallClockMs,
@@ -247,21 +248,6 @@ import path from "node:path";
  * `tests/hook-affected-launch.test.ts` 判的是分块后并集等于输入且每块不超预算。
  */
 export const SAFE_ARGV_BUDGET = 24_000;
-
-/**
- * 「分不出哪份是超时」时逐文件补跑的**上限**（份数）。
- *
- * 为什么要有上限：逐文件补跑是一份一次进程启动（约 1–3s），而这条路只在
- * 「第 2 遍仍红且第 2 遍的 junit 认不出这些文件」这条稀有路径上走 —— 上限之内
- * 用几十秒换回判决粒度，值得；上限之外（典型是第 1 遍崩在 suite 之前、整块都被
- * 拉去复跑）逐文件跑等于把整块再跑一遍，而那块本来就是因为跑不动才红的。
- * 超过上限就停在这一档并把名单点出来（退 2），**不**冒充「整块只是超时形态」。
- *
- * 8 = 实测「一次改一个 feature」时组 C 失败文件数的常见上界再留一倍余量。
- * 这一条与 `affected-launch-scope-advice.mjs` 那份 `SCOPE_ADVICE_MIN` 都在 `scripts/.gate-thresholds.json` 里按 `report`
- * 入账（不是松紧量：调它只改变「要不要多花那几十秒」，不改变任何一条断言的判定）。
- */
-const PER_FILE_RERUN_MAX = 8;
 
 async function main(argv) {
   /* 旗标面与载体判决住 `affected-launch-carrier-flags.mjs`（ISSUE #2869）。 */
@@ -327,9 +313,7 @@ async function main(argv) {
       return 1;
     }
     segFiles =
-      seg.mode === "affected"
-        ? files.filter((f) => !FIXED_STRUCTURAL_TESTS.includes(f))
-        : files;
+      seg.mode === "affected" ? files.filter((f) => !FIXED_STRUCTURAL_TESTS.includes(f)) : files;
   }
   if (segFiles.length === 0) {
     if (seg.mode === "affected") {
@@ -472,7 +456,11 @@ async function main(argv) {
        * 与 `--isolated` 那一档同一处，因为它们是同一件事的两个来源（量纲与记账话术
        * 必须一起改，分开写就会漂）。 */
       process.stderr.write(
-        recordBatchTiming({ readings: junitReadings(), cwd: process.cwd(), merge: mergeTimingLedger }),
+        recordBatchTiming({
+          readings: junitReadings(),
+          cwd: process.cwd(),
+          merge: mergeTimingLedger,
+        }),
       );
     }
     /* 逐份用时（`fileTimingReport`）：从这一跑写出的 junit 里读回来。它必须是**收尾**
@@ -507,7 +495,8 @@ async function main(argv) {
      * 出来的事实**，用它判「剩下这几块还开不起来」才不含猜的成分。 */
     const perFileMs = doneFiles > 0 && doneMs > 0 ? Math.round(doneMs / doneFiles) : 0;
     const chunkStartedAt = Date.now();
-    const code = await runChunk(chunk.files, { // oxlint-disable-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
+    const code = await runChunk(chunk.files, {
       entry,
       workers,
       quiet,
@@ -639,9 +628,7 @@ export async function runChunk(chunk, deps) {
   /* 噪音屏蔽（`COMFY_AFFECTED_NOISE_FILTER=1`）：把 `filterLine` 透传给首遍 spawn 的第三
    * 参数。它落在 `spawn(entry, [ … ])` 的实参数组**之后**，不改那个数组的形状
    * （`tests/hook-affected-launch.test.ts` 按那个形状提取「传给 vitest 的实参」）。 */
-  const firstPassOptions = filterLine
-    ? { ...firstPassBase, filterLine }
-    : firstPassBase;
+  const firstPassOptions = filterLine ? { ...firstPassBase, filterLine } : firstPassBase;
   const firstPassStartedAt = Date.now();
   const res = spawn(
     entry,
@@ -797,53 +784,23 @@ export async function runChunk(chunk, deps) {
       kind: verdict.hardFail.length > 0 ? "hard-fail" : "unattributed",
     };
   }
-  if (
-    verdict.kind === "unattributed" &&
-    verdict.unknown.length > 0 &&
-    verdict.unknown.length <= PER_FILE_RERUN_MAX
-  ) {
-    process.stderr.write(
-      `[affected-launch] ${verdict.unknown.length} 份文件在第 2 遍的读数里认不出自己` +
-        " ⇒ 逐文件各跑一次把判决粒度拿回来（不解析块，一份自己一个退出码）…\n",
-    );
-    /** @type {{file: string, status: number | null, output: string}[]} */
-    const perFile = [];
-    // 单价 = 上一份补跑的真实墙钟；买不起就停，剩下的退回下面既有那条「退 2 并点名」
-    // 出口 —— 不新造一档结论，也不把没跑的那份算进「已确认只是超时」（ISSUE #2364）。
-    let perFileMs = 0;
-    for (const file of verdict.unknown) {
-      const pending = verdict.unknown.length - perFile.length;
-      const affordable = affordablePerFileCount({
-        budget: deps.stageBudget,
-        perFileMs,
-        pending,
-      });
-      if (affordable <= 0) {
-        process.stderr.write(
-          perFileBudgetStopReport({
-            remainingMs: remainingWallClockMs(deps.stageBudget) ?? 0,
-            perFileMs,
-            left: pending,
-          }),
-        );
-        break;
-      }
-      const oneStartedAt = Date.now();
-      const one = spawn(entry, ["run", "--no-file-parallelism", file]);
-      perFileMs = Date.now() - oneStartedAt;
-      perFile.push({ file, status: one.status, output: one.output });
-    }
-    verdict = mergePerFileReads(verdict, perFile);
-  }
+  /* 第 2 遍的读数认不出自己 ⇒ 有界逐文件补跑（这一格住 `affected-launch-per-file-rerun.mjs`：
+   * 900 行硬闸的自然切面，ISSUE #3254 —— 判决链、退码与话术一个字没搬）。 */
+  verdict = rerunUnknownFiles({
+    verdict,
+    spawn,
+    entry,
+    stageBudget: deps.stageBudget,
+  });
 
   if (verdict.kind === "unattributed") {
     process.stderr.write(
       `[affected-launch] ⚠ 第 2 遍仍红，而有 ${verdict.unknown.length} 份文件` +
         `**拿不到自己的读数**（超过逐文件补跑的上限，或补跑也没落上读数）。\n` +
         `  这一档不叫「未校验」：未校验是「确认每份都只是超时」，而这里是**分不出**。\n` +
-        `  ⇒ 本组退 2（构成结论，但不是绿，也不是红）。点名：\n${
-        verdict.unknown.map((f) => `    · ${f}\n`).join("")
-        }  下一动作：把那几份单独跑一次定性（串行、同一份清单，规范 §13.6.4 那条）；\n` +
+        `  ⇒ 本组退 2（构成结论，但不是绿，也不是红）。点名：\n${verdict.unknown
+          .map((f) => `    · ${f}\n`)
+          .join("")}  下一动作：把那几份单独跑一次定性（串行、同一份清单，规范 §13.6.4 那条）；\n` +
         `  **不要**抬 testTimeout，也**不要** --no-verify。\n`,
     );
     report({
@@ -862,10 +819,10 @@ export async function runChunk(chunk, deps) {
         `    · 它**也不是红**：失败的是调度，没有任何一条断言报错。\n` +
         `  提交继续，但「哪些文件没被校验过」会在本组末尾逐条点名。\n` +
         `  ⚠️ 这一档**不许**当成「已通过」写进提交说明；它等价于「这次没测」。\n${
-        settled.settled
-          ? ""
-          : `  （等待没等到回落：每核负载 ${settled.load.toFixed(2)} —— 这是**优化**没兑现，\n` +
-            "    不改变上面的结论。）\n"
+          settled.settled
+            ? ""
+            : `  （等待没等到回落：每核负载 ${settled.load.toFixed(2)} —— 这是**优化**没兑现，\n` +
+              "    不改变上面的结论。）\n"
         }  **不要**抬 testTimeout，也**不要** --no-verify。\n`,
     );
     /* 点名的范围必须是**这次真的没拿到可信读数的那些**，而不是整块：整块那份名单会把
@@ -881,9 +838,9 @@ export async function runChunk(chunk, deps) {
   }
   process.stderr.write(
     `[affected-launch] **第 2 遍**里有文件的失败**不是**调度形态 ⇒ 这不是负载假红，按真红处置。\n` +
-      `  同块里确实还有超时的那 ${verdict.timedOut.length} 份，它们不替这几份挡：\n${
-      verdict.hardFail.map((f) => `    · ${f}\n`).join("")
-      }  用 \`node scripts/base-check.mjs <这条>\` 复算归属（你的 / 别线的），\n` +
+      `  同块里确实还有超时的那 ${verdict.timedOut.length} 份，它们不替这几份挡：\n${verdict.hardFail
+        .map((f) => `    · ${f}\n`)
+        .join("")}  用 \`node scripts/base-check.mjs <这条>\` 复算归属（你的 / 别线的），\n` +
       `  再决定修代码还是登记 —— 不要抬 testTimeout。\n`,
   );
   report({
