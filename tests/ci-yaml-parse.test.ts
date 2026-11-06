@@ -27,12 +27,7 @@ describe("CI YAML 独立解析校验", () => {
 
   it("负控制：stage 缺 script ⇒ 红（基本形态不是空转）", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "ci-yaml-"));
-    writeFileSync(
-      path.join(dir, ".cnb.yml"),
-      "main:\n  stages:\n    - name: 只有名字\n",
-      "utf8",
-    );
+    writeFileSync(path.join(dir, ".cnb.yml"), "main:\n  stages:\n    - name: 只有名字\n", "utf8");
     expect(checkYamlFile(dir, ".cnb.yml").join("\n")).toContain("缺非空 script");
   });
-
 });

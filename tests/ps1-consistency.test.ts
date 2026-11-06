@@ -143,7 +143,6 @@ function runGuard(overrides: Record<string, string | null>): string {
   }
 }
 
-
 describe("跨平台动作对照表（规范 §9.5）", () => {
   it("真仓库通过（对照表两侧齐全、脚本都存在、清单单点定义）", () => {
     const out = execFileSync(process.execPath, [GUARD], {

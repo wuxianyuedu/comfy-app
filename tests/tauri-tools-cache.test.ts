@@ -380,9 +380,7 @@ describe("--download（即弃机那一族：从被钉的公开资产直接建镜
     const mirror = mirrorDir(tools, plan);
     const { calls, run } = fakeDownloadRun();
     const lines: Array<string> = [];
-    expect(
-      download({ dryRun: false, log: (l) => lines.push(l), mirror, plan, run }),
-    ).toBe(0);
+    expect(download({ dryRun: false, log: (l) => lines.push(l), mirror, plan, run })).toBe(0);
     /* curl×2（zip + dll）+ tar×1，顺序也是这个顺序。 */
     expect(calls.map((c) => c.cmd)).toEqual(["curl", "tar", "curl"]);
     expect(missingRequired(mirror, plan.required)).toEqual([]);
@@ -423,7 +421,13 @@ describe("--download（即弃机那一族：从被钉的公开资产直接建镜
     const mirror = mirrorDir(tools, plan);
     const lines: Array<string> = [];
     expect(
-      download({ dryRun: false, log: (l) => lines.push(l), mirror, plan, run: fakeDownloadRun().run }),
+      download({
+        dryRun: false,
+        log: (l) => lines.push(l),
+        mirror,
+        plan,
+        run: fakeDownloadRun().run,
+      }),
     ).toBe(1);
     expect(lines.join("\n")).toContain("与被钉的那件对不上");
     expect(fs.existsSync(mirror)).toBe(false);
@@ -457,9 +461,7 @@ describe("--download（即弃机那一族：从被钉的公开资产直接建镜
     fs.writeFileSync(path.join(mirror, "stray.txt"), "半棵树");
     const { calls, run } = fakeDownloadRun();
     const lines: Array<string> = [];
-    expect(
-      download({ dryRun: false, log: (l) => lines.push(l), mirror, plan, run }),
-    ).toBe(1);
+    expect(download({ dryRun: false, log: (l) => lines.push(l), mirror, plan, run })).toBe(1);
     expect(calls).toHaveLength(0);
     expect(lines.join("\n")).toContain("残缺镜像");
     expect(fs.existsSync(path.join(mirror, "stray.txt"))).toBe(true);

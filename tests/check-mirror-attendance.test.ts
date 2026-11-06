@@ -28,9 +28,9 @@ describe("classifyMirrorText：七类形状各有下一动作，不许念成同�
     );
     expect(present.shape).toBe("present");
     /* 只推成而派发没发生 ⇒ GitHub 那边不会起跑，不能算出勤。 */
-    expect(
-      classifyMirrorText("[mirror] ✓ 已推 wuxianyuedu/comfy-app:cnb-pr-3053").shape,
-    ).not.toBe("present");
+    expect(classifyMirrorText("[mirror] ✓ 已推 wuxianyuedu/comfy-app:cnb-pr-3053").shape).not.toBe(
+      "present",
+    );
   });
 
   it("egress / 仓库没建 / 身份够不到 三形分得开（#3046 的现场就是被念成同一句）", () => {
@@ -40,7 +40,8 @@ describe("classifyMirrorText：七类形状各有下一动作，不许念成同�
       ).shape,
     ).toBe("egress");
     expect(
-      classifyMirrorText("[mirror] 推送前这一读没通：目标仓库在 GitHub 上不存在 ⇒ 先去建仓库").shape,
+      classifyMirrorText("[mirror] 推送前这一读没通：目标仓库在 GitHub 上不存在 ⇒ 先去建仓库")
+        .shape,
     ).toBe("repo-missing");
     expect(
       classifyMirrorText("[mirror] 推送前这一读没通：这枚令牌的身份够不到目标仓库").shape,
@@ -50,9 +51,9 @@ describe("classifyMirrorText：七类形状各有下一动作，不许念成同�
     expect(classifyMirrorText("[mirror] 推送前这一读没通：现场拿真值定值").shape).toBe(
       "token-scope",
     );
-    expect(classifyMirrorText("[mirror] 推送前这一读没通：egress 无关的一句 fatal: 403").shape).toBe(
-      "token-scope",
-    );
+    expect(
+      classifyMirrorText("[mirror] 推送前这一读没通：egress 无关的一句 fatal: 403").shape,
+    ).toBe("token-scope");
   });
 
   it("现场 `Connection was reset` 走完探针话术 ⇒ egress，不许落成 token-scope", () => {
@@ -82,9 +83,9 @@ describe("classifyMirrorText：七类形状各有下一动作，不许念成同�
 
   it("格子被 skip 与「有格没正文」分得开（两种都不是缺勤的证据）", () => {
     expect(classifyMirrorText("", "skipped").shape).toBe("no-cell");
-    expect(classifyMirrorText("Runner[orange] $ node scripts/ci-github-mirror-push.mjs").shape).toBe(
-      "unreadable",
-    );
+    expect(
+      classifyMirrorText("Runner[orange] $ node scripts/ci-github-mirror-push.mjs").shape,
+    ).toBe("unreadable");
   });
 });
 

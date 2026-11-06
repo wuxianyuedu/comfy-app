@@ -12,17 +12,13 @@ import { describe, expect, it } from "vitest";
 const SCRIPT = "scripts/check-oxlint-zero-rules.mjs";
 
 describe("已清零 oxlint 规则集闸（#3016）", () => {
-  it(
-    "正控：全仓档清单内规则 0 命中，退 0",
-    { timeout: 300_000 },
-    () => {
-      const r = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8" });
-      // 退 2 = 没跑起来（oxlint 起不来 / 输出不是 JSON / 一份文件都没扫到）：
-      // 那时红与绿都不构成结论，所以这里把 stderr 一并带进断言消息，便于归因。
-      expect(r.status, `stderr: ${r.stderr}`).toBe(0);
-      expect(r.stdout).toContain("0 命中");
-    },
-  );
+  it("正控：全仓档清单内规则 0 命中，退 0", { timeout: 300_000 }, () => {
+    const r = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8" });
+    // 退 2 = 没跑起来（oxlint 起不来 / 输出不是 JSON / 一份文件都没扫到）：
+    // 那时红与绿都不构成结论，所以这里把 stderr 一并带进断言消息，便于归因。
+    expect(r.status, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.stdout).toContain("0 命中");
+  });
 
   it("负控：判空三元否定侧在前（`x !== undefined ? x : 兜底`）必须判红", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "oxlint-zero-rules-"));
