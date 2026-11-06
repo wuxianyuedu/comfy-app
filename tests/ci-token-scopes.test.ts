@@ -297,13 +297,16 @@ describe("main：退码、缺件的出口、以及「不打凭据」", () => {
 });
 
 describe("接线：平台那一跳不许带 --strict", () => {
-  it("三处 endStages 都不带 --strict（否则 PR 上会有一条永远红、没人能修的格子）", () => {
+  it("四处 endStages 都不带 --strict（否则 PR 上会有一条永远红、没人能修的格子）", () => {
     /* ISSUE #2551 的第一跑（`cnb-vv9-1k60eb6vl`）：PR 那一族的令牌连
      * `repo-cnb-history:r` 都没有 ⇒ 探针全 403，带了 `--strict` 就红。那不是这一格坏了，
      * 那是它要量的东西 —— 判它红等于把平台形态伪装成这次 PR 的缺陷。 */
     const config = readFileSync(CONFIG, "utf8");
     const lines = config.split("\n").filter((l) => l.includes("ci-token-scopes.mjs"));
-    expect(lines.length, "三个入口各有一格，`.cnb.yml` 里应当出现三次").toBe(3);
+    /* 四处 = PR / 每日 / 桌包 / push 四个锚点各一格（ISSUE #2842 给 push 档补
+     * 失败立案时把同一格带给了 `*push_fail_stage`）。计数在这里守的是
+     * 「每个入口都还带着读数」—— 新增第五个锚点时同批改这一行。 */
+    expect(lines.length, "四个入口各有一格，`.cnb.yml` 里应当出现四次").toBe(4);
     for (const line of lines) {
       expect(
         line,
