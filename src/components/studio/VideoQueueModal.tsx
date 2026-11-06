@@ -36,13 +36,15 @@ const STATUS_META: Record<"QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCE
     CANCELLED: { icon: "ban", label: "已取消", cls: "text-ink-fainter" },
   };
 
+/** 后端给的 `task.status` 是宽字符串：只有落在 `STATUS_META` 的键上才认。 */
+function isTaskStatus(status: string): status is keyof typeof STATUS_META {
+  return Object.hasOwn(STATUS_META, status);
+}
+
 /** 按任务状态取展示元数据。`task.status` 是宽字符串（来自后端），这里收口
  *  「未知状态 → 排队中」这一条兜底判据，返回**非空**，调用点不再各自 `!`。 */
 function statusMetaFor(status: string): StatusMeta {
-  /* SAFETY: 类型断言已复核 */
-  return status in STATUS_META
-    ? STATUS_META[status as keyof typeof STATUS_META]
-    : STATUS_META.QUEUED;
+  return isTaskStatus(status) ? STATUS_META[status] : STATUS_META.QUEUED;
 }
 
 export type VideoQueueModalProps = {
