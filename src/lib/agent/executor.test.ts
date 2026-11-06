@@ -5,9 +5,10 @@
 // 判据是**工具闭包的输出与写库副作用**，不是「调了哪个函数」。
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveAgentTool } from "./executor";
+import type { ChatArgs } from "~/lib/llm/browser";
 import type { WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
 
-const streamChat = vi.fn();
+const streamChat = vi.fn<(args: ChatArgs) => Promise<string>>();
 
 /** 让 `streamChat` 按给定文本逐字回调 `onToken`（generate_script 走这条路径）。 */
 function streamReturns(text: string) {
@@ -18,8 +19,7 @@ function streamReturns(text: string) {
 }
 
 vi.mock("~/lib/llm/browser", () => ({
-  /* SAFETY: 类型断言已复核 */
-  streamChat: (...args: Array<unknown>): Promise<string> => streamChat(...args) as Promise<string>,
+  streamChat: (...args: Parameters<typeof streamChat>): Promise<string> => streamChat(...args),
 }));
 vi.mock("~/lib/llm/prompts", () => ({
   buildScriptMarkdownMessages: () => [],
@@ -218,8 +218,21 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
 
   it("add_character：重名 → 拒绝，且不产生第二张卡", async () => {
     const { state, handlers } = makeMockContext();
-    /* SAFETY: 类型断言已复核 */
-    state.characters = [{ id: "c1", name: "阿宁" } as never];
+    state.characters = [
+      {
+        id: "c1",
+        name: "阿宁",
+        ageGender: "",
+        appearance: "",
+        costume: "",
+        personality: "",
+        temperament: "",
+        styleTags: [],
+        positivePrompt: "",
+        negativePrompt: "",
+        params: {},
+      },
+    ];
     const res = await resolveAgentTool("add_character", '{"name":"阿宁"}', handlers).execute();
     expect(res.ok).toBe(false);
     expect(state.characters).toHaveLength(1);

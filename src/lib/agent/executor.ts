@@ -42,8 +42,11 @@ function safeParseJson(json: string): Record<string, unknown> {
 /** 把未知参数串转成人类可读摘要。 */
 function summarizeArgs(argsJson: string, maxLen = 200): string {
   try {
-    /* SAFETY: 类型断言已复核 */
-    const obj = JSON.parse(argsJson) as Record<string, unknown>;
+    const parsed: unknown = JSON.parse(argsJson);
+    if (!isRecord(parsed)) {
+      return argsJson.slice(0, maxLen) || "(空参数)";
+    }
+    const obj = parsed;
     const keys = Object.entries(obj)
       .filter(([, v]) => typeof v === "string" || typeof v === "number" || typeof v === "boolean")
       .map(([k, v]) => `${k}=${String(v).slice(0, 60)}`)
@@ -64,10 +67,8 @@ function parseCharactersFromJson(text: string): Array<{
   try {
     const arr = extractJsonArray(text);
     return arr
-      .filter((item) => typeof item === "object" && item !== null)
-      .map((item) => {
-        /* SAFETY: 类型断言已复核 */
-        const rec = item as Record<string, unknown>;
+      .filter(isRecord)
+      .map((rec) => {
         return {
           name: typeof rec.name === "string" ? rec.name : "",
           appearance: typeof rec.appearance === "string" ? rec.appearance : "",
@@ -115,10 +116,8 @@ function parseShotsFromJson(text: string): Array<{
   try {
     const arr = extractJsonArray(text);
     return arr
-      .filter((item) => typeof item === "object" && item !== null)
-      .map((item) => {
-        /* SAFETY: 类型断言已复核 */
-        const rec = item as Record<string, unknown>;
+      .filter(isRecord)
+      .map((rec) => {
         return {
           sceneHeading:
             typeof rec.sceneHeading === "string"
@@ -185,10 +184,17 @@ export function resolveAgentTool(
         patch.logline = args.logline;
       }
       if (typeof args.type === "string") {
-        const valid = ["short_video", "micro_film", "animation", "ad", "comic", "other"];
-        if (valid.includes(args.type)) {
-          /* SAFETY: 类型断言已复核 */
-          patch.type = args.type as WorkshopDraftDto["meta"]["type"];
+        const validTypes: ReadonlyArray<WorkshopDraftDto["meta"]["type"]> = [
+          "short_video",
+          "micro_film",
+          "animation",
+          "ad",
+          "comic",
+          "other",
+        ];
+        const type = validTypes.find((t) => t === args.type);
+        if (type) {
+          patch.type = type;
         }
       }
       const keys = Object.keys(patch).join("、") || "(无字段)";
