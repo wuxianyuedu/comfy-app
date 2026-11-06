@@ -7,9 +7,9 @@ export type HookStep = { cmd: string; label: string };
 
 /** 全文的 `  run "<标签>" <命令…>` 步骤行（**不分组** —— 门禁链的在场判据用它）。 */
 export function runSteps(hookText: string): Array<HookStep> {
-  return [...hookText.matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) => ({
-    label: m[1] ?? "",
-    cmd: m[2] ?? "",
+  return [...hookText.matchAll(/^ {2}run "(?<label>[^"]+)" (?<cmd>.+)$/gm)].map((m) => ({
+    label: m.groups?.label ?? "",
+    cmd: m.groups?.cmd ?? "",
   }));
 }
 

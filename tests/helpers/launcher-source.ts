@@ -17,8 +17,8 @@ const ENTRY = "dev-launcher.mjs";
  */
 function relativeDeps(src: string): Array<string> {
   const found = new Set<string>();
-  for (const m of src.matchAll(/^\s*(?:import|export)\b[^;]*?from\s+"(\.\/[\w./-]+)"/gm)) {
-    found.add(m[1]!.replace(/^\.\//, ""));
+  for (const m of src.matchAll(/^\s*(?:import|export)\b[^;]*?from\s+"(?<dep>\.\/[\w./-]+)"/gm)) {
+    found.add((m.groups?.dep ?? "").replace(/^\.\//, ""));
   }
   return [...found];
 }

@@ -19,7 +19,7 @@ function walk(dir: string): Array<string> {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       out.push(...walk(full));
-    } else if (/\.(tsx|ts)$/.test(entry.name)) {
+    } else if (/\.(?:tsx|ts)$/.test(entry.name)) {
       out.push(full);
     }
   }
@@ -36,9 +36,10 @@ export function collectDataSlots(): { files: number; slots: Set<string> } {
   const files = walk(SRC_DIR);
   for (const file of files) {
     const text = readFileSync(file, "utf8");
-    for (const m of text.matchAll(/data-slot="([^"]+)"/g)) {
-      if (m[1] !== undefined && m[1] !== "") {
-        slots.add(m[1]);
+    for (const m of text.matchAll(/data-slot="(?<slot>[^"]+)"/g)) {
+      const slot = m.groups?.slot ?? "";
+      if (slot !== "") {
+        slots.add(slot);
       }
     }
   }

@@ -40,6 +40,9 @@ const DEFINITION_MARK = "func" + "tion stripComments(";
 const NAIVE_MARK = String.raw`\/\/` + String.raw`[^\n]*/g`;
 /** 护栏的特征串（`(^` 开头的锚/排除组）。同样拆开写，避免本文件自匹配。 */
 const GUARD_MARK = "(" + "^";
+/** 同一护栏的命名组形态（`(?<lead>^|...)`）：B4 清账把匿名捕获组改成命名组后，
+ *  判据不能因为「括号后跟的是组名而不是 `^`」就把护栏当成裸剥注释。 */
+const GUARD_NAMED_RE = new RegExp(String.raw`\(\?<[\w$]+>\^`);
 
 /**
  * 台账：现存本地副本，分层列出以便「谁来收哪一份」可判。
@@ -191,7 +194,10 @@ describe("stripComments 的唯一实现（§12.18 复用优先）", () => {
 
     /* 反向：登记了但已经换走/删掉的，要从 SHAPE_LEDGER 里摘掉（表要能记账）。 */
     const staleShape = SHAPE_LEDGER.filter((rel) => !shapedIn.includes(rel));
-    expect(staleShape, `SHAPE_LEDGER 里已经不存在这类副本的 ${staleShape.length} 份：${staleShape.join("、")}`).toEqual([]);
+    expect(
+      staleShape,
+      `SHAPE_LEDGER 里已经不存在这类副本的 ${staleShape.length} 份：${staleShape.join("、")}`,
+    ).toEqual([]);
   });
 
   it("「裸的全局去行尾注释」那一型不许多处扩散（实测会咬坏字符串里的 URL ⇒ 判据假绿）", () => {
@@ -199,7 +205,7 @@ describe("stripComments 的唯一实现（§12.18 复用优先）", () => {
      *（`tests/helpers/quality-gate-gates.ts`）正是「两根串都点不到」的双漏。 */
     const naive = inlineFace.filter((rel) => {
       const text = readFileSync(path.join(ROOT, rel), "utf8");
-      return text.includes(NAIVE_MARK) && !text.includes(GUARD_MARK);
+      return text.includes(NAIVE_MARK) && !text.includes(GUARD_MARK) && !GUARD_NAMED_RE.test(text);
     });
     expect(
       naive.sort(),

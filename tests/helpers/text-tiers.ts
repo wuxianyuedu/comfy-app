@@ -13,20 +13,22 @@ function tailwindThemeCss(): string {
   return require.resolve("tailwindcss/theme.css");
 }
 
-const TEXT_DECL_RE = /^\s*--text-([a-z0-9]+)\s*:\s*([0-9.]+)(rem|px)\s*;/gm;
+const TEXT_DECL_RE = /^\s*--text-(?<name>[a-z0-9]+)\s*:\s*(?<value>[0-9.]+)(?<unit>rem|px)\s*;/gm;
 
 /**
  * 档位的**配对行高**：Tailwind v4 里 `--text-<名>--line-height` 存在就连带锁 `line-height`（§3.10.1
  * 「同字号两种行高」的来路）。默认表是「行高 ÷ 字号」的比值形状，浏览器按比值乘字号，故这里也按
  * 比值存。**认不出形状就抛错**：静默漏一条会让「按行高推理」的判据拿到缺表的读数。
  */
-const LINE_HEIGHT_RE = /^\s*--text-([a-z0-9]+)--line-height\s*:\s*([^;]+);\s*$/gm;
+const LINE_HEIGHT_RE = /^\s*--text-(?<name>[a-z0-9]+)--line-height\s*:\s*(?<raw>[^;]+);\s*$/gm;
 
 /** 解一条行高声明成比值（乘字号得像素）。支持 `calc(a / b)` 与裸数值两种形状。 */
 function parseLineRatio(raw: string, where: string): number {
-  const calc = /^calc\(\s*([0-9.]+)\s*\/\s*([0-9.]+)\s*\)$/.exec(raw.trim());
-  const numerator = calc?.[1];
-  const denominator = calc?.[2];
+  const calc = /^calc\(\s*(?<numerator>[0-9.]+)\s*\/\s*(?<denominator>[0-9.]+)\s*\)$/.exec(
+    raw.trim(),
+  );
+  const numerator = calc?.groups?.numerator;
+  const denominator = calc?.groups?.denominator;
   if (
     numerator !== undefined &&
     numerator !== "" &&
@@ -35,8 +37,8 @@ function parseLineRatio(raw: string, where: string): number {
   ) {
     return Number.parseFloat(numerator) / Number.parseFloat(denominator);
   }
-  const bare = /^([0-9.]+)$/.exec(raw.trim());
-  const bareNumber = bare?.[1];
+  const bare = /^(?<bare>[0-9.]+)$/.exec(raw.trim());
+  const bareNumber = bare?.groups?.bare;
   if (bareNumber !== undefined && bareNumber !== "") {
     return Number.parseFloat(bareNumber);
   }
@@ -77,33 +79,31 @@ export function parseTextTiers(globalsCss: string, tshirt: RegExp): TextTiers {
   ];
   for (const { text, fromProject } of sources) {
     for (const m of text.matchAll(TEXT_DECL_RE)) {
-      if (
-        m[1] === undefined ||
-        m[1] === "" ||
-        m[2] === undefined ||
-        m[2] === "" ||
-        m[3] === undefined ||
-        m[3] === ""
-      ) {
+      const name = m.groups?.name ?? "";
+      const value = m.groups?.value ?? "";
+      const unit = m.groups?.unit ?? "";
+      if (name === "" || value === "" || unit === "") {
         continue;
       }
-      if (fromProject && !fromProjectIsUsable(m[1], tshirt, defaults)) {
+      if (fromProject && !fromProjectIsUsable(name, tshirt, defaults)) {
         continue;
       }
       if (!fromProject) {
-        defaults.add(m[1]);
+        defaults.add(name);
       }
-      collected.set(m[1], toPx(m[2], m[3]));
+      collected.set(name, toPx(value, unit));
     }
   }
 
   const lineRatios = new Map<string, number>();
   for (const { text } of sources) {
     for (const m of text.matchAll(LINE_HEIGHT_RE)) {
-      if (m[1] === undefined || m[1] === "" || m[2] === undefined || m[2] === "") {
+      const name = m.groups?.name ?? "";
+      const raw = m.groups?.raw ?? "";
+      if (name === "" || raw === "") {
         continue;
       }
-      lineRatios.set(m[1], parseLineRatio(m[2], m[1]));
+      lineRatios.set(name, parseLineRatio(raw, name));
     }
   }
 

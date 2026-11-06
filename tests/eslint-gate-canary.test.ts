@@ -25,7 +25,7 @@ function runCanary(args: Array<string> = []) {
 
 /** 这一趟起了几次 oxlint（脚本把它打在读数里，就是为了能被这样断言）。 */
 function oxlintCalls(text: string): number {
-  return Number(/oxlint 调用 (\d+) 次/.exec(text)?.[1] ?? "-1");
+  return Number(/oxlint 调用 (?<count>\d+) 次/.exec(text)?.groups?.count ?? "-1");
 }
 
 describe("scripts/eslint-gate-canary.mjs", () => {
@@ -36,7 +36,7 @@ describe("scripts/eslint-gate-canary.mjs", () => {
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       expect(r.status, `stdout=${r.stdout ?? ""}\nstderr=${r.stderr ?? ""}`).toBe(0);
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
-      const n = Number(/samples=(\d+)/.exec(r.stdout ?? "")?.[1] ?? "0");
+      const n = Number(/samples=(?<samples>\d+)/.exec(r.stdout ?? "")?.groups?.samples ?? "0");
       // 样本被删空却还退 0，是这条判据自己的失效形态（恒绿）
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       expect(n, `样本数不达标，实际：${r.stdout ?? ""}`).toBeGreaterThanOrEqual(10);
