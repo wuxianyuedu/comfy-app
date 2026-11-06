@@ -15,6 +15,7 @@ import {
 } from "react";
 import JsonView from "react18-json-view";
 import { textHandler } from "~/lib/form-props";
+import { isRecord } from "~/lib/is-record";
 import "react18-json-view/src/style.css";
 import { Button } from "~/components/ui/button";
 import { onNextFrame } from "~/lib/next-frame";
@@ -32,6 +33,25 @@ const MemoJsonView = memo(JsonView);
 
 // ─── 路径工具 ──────────────────────────────────────────────────────────────
 type JsonValue = null | boolean | number | string | Array<JsonValue> | { [k: string]: JsonValue };
+
+/** `unknown` 收窄成 {@link JsonValue}：搜索只能遍历真正的 JSON 树，非法形状直接当无命中。 */
+function isJsonValue(value: unknown): value is JsonValue {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.every((item) => isJsonValue(item));
+  }
+  if (isRecord(value)) {
+    return Object.values(value).every((item) => isJsonValue(item));
+  }
+  return false;
+}
 
 /** 命中路径 — `{[nodeId]: {class_type, inputs, widgets_values, ...}}` 这一层
  *  对应 `["nodes", "3", "widgets_values", "2"]`。在 我们用不到具体 path
@@ -195,25 +215,22 @@ function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number,
   const targets: Array<HitNode> = [];
   let cur = walker.nextNode();
   while (cur) {
-    /* SAFETY: 类型断言已复核 */
-    const t = cur as Text;
-    const text = t.textContent || "";
-    if (text.toLowerCase().includes(q)) {
-      // 估算该 textNode 内出现次数 (大小写不敏感)
-      const lower = text.toLowerCase();
-      let count = 0;
-      let p = 0;
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 逐段扫描循环，indexOf 返回 -1 才 break；规则把字面量 true 判成恒真，保留原写法
-      while (true) {
-        const j = lower.indexOf(q, p);
-        if (j === -1) {
-          break;
+    if (cur instanceof Text) {
+      const text = cur.textContent || "";
+      if (text.toLowerCase().includes(q)) {
+        // 估算该 textNode 内出现次数 (大小写不敏感)
+        const lower = text.toLowerCase();
+        let count = 0;
+        let p = 0;
+        let j = lower.indexOf(q, p);
+        while (j !== -1) {
+          count += 1;
+          p = j + q.length;
+          j = lower.indexOf(q, p);
         }
-        count += 1;
-        p = j + q.length;
-      }
-      if (count > 0) {
-        targets.push({ node: t, count });
+        if (count > 0) {
+          targets.push({ node: cur, count });
+        }
       }
     }
     cur = walker.nextNode();
@@ -289,8 +306,7 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
   const bodyRef = useRef<HTMLDivElement>(null);
 
   const hits = useMemo(
-    /* SAFETY: 类型断言已复核 */
-    () => collectHits(data as JsonValue, query.trim()),
+    () => (isJsonValue(data) ? collectHits(data, query.trim()) : []),
     [data, query],
   );
 
@@ -335,11 +351,8 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
       return;
     }
     return onNextFrame(() => {
-      /* SAFETY: 类型断言已复核 */
-      const el = bodyRef.current?.querySelector(
-        "mark.jv-hit-sub[data-jv-active-hit]",
-      ) as HTMLElement | null;
-      if (!el) {
+      const el = bodyRef.current?.querySelector("mark.jv-hit-sub[data-jv-active-hit]");
+      if (!(el instanceof HTMLElement)) {
         return;
       }
       el.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -375,8 +388,7 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
     }
     if (e.key === "Escape") {
       setQuery("");
-      /* SAFETY: 类型断言已复核 */
-      (e.target as HTMLInputElement).blur();
+      e.currentTarget.blur();
     }
   };
 

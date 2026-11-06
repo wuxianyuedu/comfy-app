@@ -30,8 +30,10 @@ describe("ExitReminder", () => {
         <ExitReminder>提示</ExitReminder>
       </div>,
     );
-    /* SAFETY: 类型断言已复核 */
-    const host = container.firstElementChild as HTMLElement;
+    const host = container.firstElementChild;
+    if (!(host instanceof HTMLElement)) {
+      throw new Error("ExitReminder 未渲染成 HTMLElement");
+    }
     expect(host.dataset.dirty !== undefined).toBe(true);
   });
 });
