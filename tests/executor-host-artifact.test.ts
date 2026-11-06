@@ -62,7 +62,8 @@ describe("预编译的形态判据", () => {
    *  `@libsql/client` 也不该回来：运行时已迁到 Node 内置的 node:sqlite（#3171），
    *  `node:*` 那条通配负责放行，留一个不再被任何代码 import 的原生件只会是死重量。 */
   it("外部件清单是显式白名单，且不含纯 JS 的那三个", () => {
-    const externals = /const EXTERNAL_PACKAGES = \[([\s\S]*?)\];/.exec(buildScript)?.[1];
+    const externals = /const EXTERNAL_PACKAGES = \[(?<body>[\s\S]*?)\];/.exec(buildScript)?.groups
+      ?.body;
     expect(externals, "找不到 EXTERNAL_PACKAGES").toBeTruthy();
     for (const keep of ["ws", "pino"]) {
       expect(externals).toContain(keep);
@@ -86,7 +87,8 @@ describe("预编译的形态判据", () => {
   it("server-only 走内联抛错桩，且不在外部件清单里", () => {
     expect(buildScript).toMatch(/filter:\s*\/\^server-only\$\//);
     expect(buildScript).toContain("SERVER_ONLY_STUB");
-    const externals = /const EXTERNAL_PACKAGES = \[([\s\S]*?)\];/.exec(buildScript)?.[1];
+    const externals = /const EXTERNAL_PACKAGES = \[(?<body>[\s\S]*?)\];/.exec(buildScript)?.groups
+      ?.body;
     expect(externals).not.toContain("server-only");
   });
 
@@ -127,9 +129,10 @@ describe("白名单两侧与桌包断言", () => {
       privateInputs.indexOf("export const RUNTIME_SCRIPTS"),
       privateInputs.indexOf("export const BUILT_RUNTIME_SCRIPTS"),
     );
-    const built = /export const BUILT_RUNTIME_SCRIPTS = \[([\s\S]*?)\];/.exec(privateInputs)?.[1];
+    const built = /export const BUILT_RUNTIME_SCRIPTS = \[(?<body>[\s\S]*?)\];/.exec(privateInputs)
+      ?.groups?.body;
     expect(built, "找不到 BUILT_RUNTIME_SCRIPTS").toBeTruthy();
-    for (const name of [...built!.matchAll(/"([^"]+)"/g)].map((m) => m[1])) {
+    for (const name of [...built!.matchAll(/"(?<name>[^"]+)"/g)].map((m) => m.groups?.name)) {
       expect(runtime, `产物件 ${name} 没登记进 RUNTIME_SCRIPTS，会被剪枝删掉`).toContain(name);
     }
   });

@@ -317,8 +317,8 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
     const launcherLayer = readFileSync("scripts/affected-launch-load-retry.mjs", "utf8");
     const baseCheck = readFileSync("scripts/base-check/verdict.mjs", "utf8");
     const pick = (text: string): Array<string> => {
-      const block = /const TIMEOUT_SIGNATURES = \[([\s\S]*?)\n\];/.exec(text);
-      return (block?.[1] ?? "")
+      const block = /const TIMEOUT_SIGNATURES = \[(?<body>[\s\S]*?)\n\];/.exec(text);
+      return (block?.groups?.body ?? "")
         .split("\n")
         .map((line) => line.trim())
         .filter((line) => line.startsWith("/"))
@@ -341,8 +341,8 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
     /* 提取形态跟**调用形状**走：oxfmt 在实参变长时折行；2026-10-30 起第一遍多一个第三参数 `timeout`（PR #2760
      * 现场：无上界那一遍被平台掐断、零读数）。所以认「`spawn(` 之后到第一个 `]`」，两端放宽任意空白 —— 写死
      * `entry, [` 紧邻或 `] )` 在改动里会静默匹配不到，由下面 `toBeGreaterThanOrEqual(2)` 当场红兜住。 */
-    const spawnSites = [...src.matchAll(/spawn\([\s\S]*?entry,\s*\[([\s\S]*?)\]/g)].map(
-      (m) => m[1] ?? "",
+    const spawnSites = [...src.matchAll(/spawn\([\s\S]*?entry,\s*\[(?<args>[\s\S]*?)\]/g)].map(
+      (m) => m.groups?.args ?? "",
     );
     expect(
       spawnSites.length,
@@ -599,7 +599,7 @@ describe("受影响用例的启动器 —— 等待负载回落（有界、不�
   it("启动器真的接了这一步（不是写了一把没人调用的等待）", () => {
     const code = readFileSync(LAUNCHER_PATH, "utf8")
       .split("\n")
-      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .filter((line) => !/^\s*(?:\/\/|\*|\/\*)/.test(line))
       .join("\n");
     // 默认档就是真等待 —— 注入只在用例里发生，生产路径必须接上；
     // 且预算由调用点给（多块共享一份 deadline，见下一条）。
@@ -959,9 +959,9 @@ describe("受影响用例的启动器 —— 收尾的等待与复跑账", () =>
      * 「等了多久、哪几块没被校验」的时候。实测形态：账上只有绿的记录，红的没有。 */
     const src = readFileSync(LAUNCHER_PATH, "utf8");
     expect(src).toContain("const flush = () =>");
-    const early = /if \(code !== 0\) \{([\s\S]*?)return code;/.exec(src);
+    const early = /if \(code !== 0\) \{(?<body>[\s\S]*?)return code;/.exec(src);
     expect(early, "main 里那条提前返回的形状变了？").toBeTruthy();
-    expect(early?.[1]).toContain("flush()");
+    expect(early?.groups?.body).toContain("flush()");
     // 正常收尾那一侧也要打（两块都缺一段就退化成「只在红的时候有账」）。
     const tail = src.slice(src.lastIndexOf("flush();"));
     expect(tail).toContain("return 0;");
@@ -999,12 +999,12 @@ describe("钩子档并发：兜底由调用点注入（唯一出处 ci-load）�
     );
     // 函数体里不许再出现 process.env，也不许自己 import 核数（那会让它不再纯）。
     // 函数体读的是它**现在**住的那一份（合并 master 之后随「起进程」那一层出列）。
-    const body = /export function resolveMaxWorkers\(([\s\S]*?)\n\}/.exec(
+    const body = /export function resolveMaxWorkers\((?<body>[\s\S]*?)\n\}/.exec(
       readFileSync(SPAWN_LAYER_PATH, "utf8"),
     );
     expect(body, "解不出 resolveMaxWorkers 的函数体").not.toBeNull();
-    expect(body![1]).not.toContain("process.env");
-    expect(body![1]).not.toContain("availableParallelism");
+    expect(body?.groups?.body).not.toContain("process.env");
+    expect(body?.groups?.body).not.toContain("availableParallelism");
   });
 
   it("显式覆盖生效，且提醒里说清「只调并发」", () => {
@@ -1089,7 +1089,7 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
   });
 
   it("意外空集仍阻断，且话术里指出 `--full` 是另一档（两者不许同形）", () => {
-    const guard = /affected 解析没给出清单([\s\S]*?)return 1;/.exec(src)?.[0];
+    const guard = /affected 解析没给出清单(?:[\s\S]*?)return 1;/.exec(src)?.[0];
     expect(guard, "解不出空清单守卫").toBeTruthy();
     expect(guard).toContain("--full");
     expect(guard, "空集必须仍然 return 1（不能因为 --full 存在就放行）").toContain("return 1;");
@@ -2330,11 +2330,11 @@ describe("墙钟预算必须真的到得了第一遍（cnb-53r-1k6b6besn 的现�
     /* 针尖按**拼接**构造 —— 同下面那条「不许出现没接住 stderr 的调用点」：整段写成字面量
      * 会命中那条判据（它判的是本文件里没有漏接 stderr 的调用点），而恒红的判据比没有更坏。 */
     // oxlint-disable-next-line typescript/no-unnecessary-template-expression -- 拆开 run 与 Chunk 是判据的前提：本文件里不许出现完整的 runChunk( 字面量，另一条判据按文本读本文件
-    const call = new RegExp(`await\\s+run${"Chunk"}\\(chunk\\.files, \\{([\\s\\S]*?)\\}\\)`).exec(
-      src,
-    );
+    const call = new RegExp(
+      `await\\s+run${"Chunk"}\\(chunk\\.files, \\{(?<body>[\\s\\S]*?)\\}\\)`,
+    ).exec(src);
     expect(call, "找不到 `runChunk(chunk.files, { … })` 那个调用点").not.toBeNull();
-    expect(call?.[1] ?? "").toMatch(/\bstageBudget\b/);
+    expect(call?.groups?.body ?? "").toMatch(/\bstageBudget\b/);
   });
 
   it("它在分块循环之前声明，且只声明一次", () => {

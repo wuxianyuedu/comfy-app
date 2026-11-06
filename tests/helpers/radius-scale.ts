@@ -25,24 +25,25 @@ export type RadiusScale = {
 export function parseDerivations(css: string): Map<string, RadiusDerivation> {
   const derivations = new Map<string, RadiusDerivation>();
   for (const m of css.matchAll(
-    /^\s*(--radius-[a-z0-9]+)\s*:\s*(?:var\(--radius\)|calc\(var\(--radius\)\s*(?:(\*)\s*([0-9.]+)|([+-])\s*([0-9.]+)px)\))\s*;/gm,
+    /^\s*(?<name>--radius-[a-z0-9]+)\s*:\s*(?:var\(--radius\)|calc\(var\(--radius\)\s*(?:(?<op1>\*)\s*(?<value1>[0-9.]+)|(?<op2>[+-])\s*(?<value2>[0-9.]+)px)\))\s*;/gm,
   )) {
-    if (m[1] === undefined || m[1] === "") {
+    const name = m.groups?.name ?? "";
+    if (name === "") {
       continue;
     }
-    if (m[2] === "*") {
-      derivations.set(m[1], {
-        coef: Number.parseFloat(m[3] ?? "1"),
+    if ((m.groups?.op1 ?? "") === "*") {
+      derivations.set(name, {
+        coef: Number.parseFloat(m.groups?.value1 ?? "1"),
         offset: 0,
       });
-    } else if (m[4] !== undefined && m[4] !== "") {
-      const magnitude = Number.parseFloat(m[5] ?? "0");
-      derivations.set(m[1], {
+    } else if ((m.groups?.op2 ?? "") !== "") {
+      const magnitude = Number.parseFloat(m.groups?.value2 ?? "0");
+      derivations.set(name, {
         coef: 1,
-        offset: m[4] === "-" ? -magnitude : magnitude,
+        offset: (m.groups?.op2 ?? "") === "-" ? -magnitude : magnitude,
       });
     } else {
-      derivations.set(m[1], { coef: 1, offset: 0 });
+      derivations.set(name, { coef: 1, offset: 0 });
     }
   }
   return derivations;
@@ -50,9 +51,9 @@ export function parseDerivations(css: string): Map<string, RadiusDerivation> {
 
 /** 基数 + 派生表一起解出来（`css` 必须是 globals.css 全文）。 */
 export function parseRadiusScale(css: string): RadiusScale {
-  const baseMatch = /^\s*--radius\s*:\s*([0-9.]+)(rem|px)\s*;/m.exec(css);
-  const baseValue = baseMatch?.[1];
-  const baseUnit = baseMatch?.[2];
+  const baseMatch = /^\s*--radius\s*:\s*(?<value>[0-9.]+)(?<unit>rem|px)\s*;/m.exec(css);
+  const baseValue = baseMatch?.groups?.value;
+  const baseUnit = baseMatch?.groups?.unit;
   if (baseValue === undefined || baseValue === "" || baseUnit === undefined || baseUnit === "") {
     throw new Error("globals.css 里找不到 --radius 基数");
   }

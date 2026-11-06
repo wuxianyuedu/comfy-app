@@ -22,7 +22,7 @@ function scriptKindOf(fileName: string): ts.ScriptKind {
  * @param fileName 含扩展名的文件名，用于推断解析器方言（默认按 `.ts`）
  */
 export function normalizeControlFlow(src: string, fileName = "source.ts"): string {
-  if (!/\.(tsx?|m?jsx?|m?cjs)$/.test(fileName)) {
+  if (!/\.(?:tsx?|m?jsx?|m?cjs)$/.test(fileName)) {
     return src;
   }
   const kind = scriptKindOf(fileName);

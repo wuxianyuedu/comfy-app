@@ -20,22 +20,25 @@ const ANCHOR_SCRIPTS = [
 ];
 
 const PATH_RE =
-  /["'`]((?:src|tests|scripts|docs|tools|e2e)\/[A-Za-z0-9_./-]*\.(?:ts|tsx|mts|js|jsx|mjs|cjs|json|css|md|py|ps1|rs))["'`]/g;
+  /["'`](?<path>(?:src|tests|scripts|docs|tools|e2e)\/[A-Za-z0-9_./-]*\.(?:ts|tsx|mts|js|jsx|mjs|cjs|json|css|md|py|ps1|rs))["'`]/g;
 
 /**
  * 剥掉块注释与行注释。行注释用「前面不是 `:`/字母」的判据避开 `https://` 这类 URL 里的 `//`；
  * 字符串里的 `#` 与 URL 不参与本判据，所以宁可少剥也不误剥代码。
  */
 export function stripComments(text: string): string {
-  return text.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/(^|[^:\\])\/\/[^\n]*/g, "$1");
+  return text
+    .replaceAll(/\/\*[\s\S]*?\*\//g, "")
+    .replaceAll(/(?<lead>^|[^:\\])\/\/[^\n]*/g, "$<lead>");
 }
 
 /** 一份源码里作为字符串字面量出现的仓库路径（已去重）。 */
 export function quotedRepoPaths(text: string): Array<string> {
   const out = new Set<string>();
   for (const m of stripComments(text).matchAll(PATH_RE)) {
-    if (m[1] !== undefined && m[1] !== "") {
-      out.add(m[1]);
+    const p = m.groups?.path;
+    if (p !== undefined && p !== "") {
+      out.add(p);
     }
   }
   return [...out];
@@ -57,8 +60,8 @@ function gateScripts(): Array<string> {
     const src = sourceOf(rel);
     /* 只认同目录相对形态：仓里判据之间的引用全是这一种（口径同
      * `tests/helpers/gate-repo.ts` 的 `copyGateDeps`）。 */
-    for (const m of src.matchAll(/require\(\s*"\.\/([\w.-]+\.cjs)"\s*\)/g)) {
-      const dep = `scripts/${m[1]!}`;
+    for (const m of src.matchAll(/require\(\s*"\.\/(?<name>[\w.-]+\.cjs)"\s*\)/g)) {
+      const dep = `scripts/${m.groups?.name ?? ""}`;
       if (seen.has(dep) || !existsSync(path.join(ROOT, dep))) {
         continue;
       }

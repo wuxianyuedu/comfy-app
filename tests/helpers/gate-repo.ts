@@ -54,10 +54,10 @@ export function copyGateDeps(
    *  CJS 里 `require` 一个 ESM（Node 24 的 `require(esm)`，`check-doc-mirror-pairing.cjs` 要 `changed-scope.mjs`，ISSUE #2265）。
    *  路径允许 `/`：`changed-scope.mjs` 依赖链伸进 `scripts/base-check/` 与 `launcher-core/`，只认平铺名会让沙箱 import 时炸。 */
   const DEP_RES = [
-    /require\w*\(\s*"\.\/([\w./-]+\.cjs)"\s*\)/g,
-    /require\w*\(\s*"\.\/([\w./-]+\.mjs)"\s*\)/g,
-    /(?:^|\n)\s*(?:import|export)\s[^;\n]*?from\s+"\.\/([\w./-]+\.mjs)"/g,
-    /(?:^|\n)\s*import\s+"\.\/([\w./-]+\.mjs)"/g,
+    /require\w*\(\s*"\.\/(?<dep>[\w./-]+\.cjs)"\s*\)/g,
+    /require\w*\(\s*"\.\/(?<dep>[\w./-]+\.mjs)"\s*\)/g,
+    /(?:^|\n)\s*(?:import|export)\s[^;\n]*?from\s+"\.\/(?<dep>[\w./-]+\.mjs)"/g,
+    /(?:^|\n)\s*import\s+"\.\/(?<dep>[\w./-]+\.mjs)"/g,
   ];
   const pending = [destScriptAbs];
   const seen = new Set<string>();
@@ -68,7 +68,7 @@ export function copyGateDeps(
     }
     seen.add(abs);
     const src = readFileSync(abs, "utf8");
-    const names = DEP_RES.flatMap((re) => [...src.matchAll(re)].map((m) => m[1]!));
+    const names = DEP_RES.flatMap((re) => [...src.matchAll(re)].map((m) => m.groups?.dep ?? ""));
     for (const name of names) {
       const source = path.join(REPO_ROOT, "scripts", name);
       const dest = path.join(destDir, name);
@@ -264,7 +264,7 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
   const { script, dir = "scripts", dirs = [], workdir, env, files, copy, setup } = options;
   const scriptSource = path.join(REPO_ROOT, "scripts", script);
   const scriptRel = dir === "scripts" ? path.join("scripts", script) : script;
-  const prefix = workdir ?? script.replace(/^check-/, "").replace(/\.(c|m)?js$/, "");
+  const prefix = workdir ?? script.replace(/^check-/, "").replace(/\.(?:c|m)?js$/, "");
 
   const root = mkdtempSync(path.join(tmpdir(), `${prefix}-gate-`));
   /* 边界标记先落（上面 `SANDBOX_PACKAGE_MARKER` 那段）：它必须在任何「解析向上走」的

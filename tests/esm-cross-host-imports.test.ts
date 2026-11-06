@@ -39,8 +39,8 @@ const MJS_HOSTS = [
 
 /** 一份 TS 里的相对 import 说明符。 */
 function relativeSpecifiers(src: string): Array<string> {
-  return [...src.matchAll(/from "(\.[^"]*)"/g)]
-    .map((m) => m[1])
+  return [...src.matchAll(/from "(?<spec>\.[^"]*)"/g)]
+    .map((m) => m.groups?.spec)
     .filter((v): v is string => v !== undefined);
 }
 
