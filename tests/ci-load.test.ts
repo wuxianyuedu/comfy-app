@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   CORES_PER_WORKER,
   FALLBACK_CORES,
+  GA_CORES_PER_WORKER,
   MIN_WORKERS,
   resolveCiWorkers,
   resolveCores,
@@ -94,5 +95,42 @@ describe("人的出口：只调并发，不动任何判据", () => {
         "COMFY_CI_MAX_WORKERS",
       );
     }
+  });
+});
+
+describe("平台分档：CNB 共享宿主机 8 / GA 独享 2（CNB 数字一个不改）", () => {
+  it("CNB 档保持原值：16⇒2、8⇒1、12⇒2", () => {
+    expect(CORES_PER_WORKER).toBe(8);
+    expect(resolveCiWorkers({ env: { CNB_CPUS: "16" } }).workers).toBe(2);
+    expect(resolveCiWorkers({ env: { CNB_CPUS: "8" } }).workers).toBe(1);
+    expect(resolveCiWorkers({ env: { CNB_CPUS: "12" } }).workers).toBe(2);
+  });
+
+  it("GA 档是「一个 worker 至少 2 核」：4 核 ⇒ 2、2 核 ⇒ 1", () => {
+    expect(GA_CORES_PER_WORKER).toBe(2);
+    expect(workersForCores(4, GA_CORES_PER_WORKER)).toBe(2);
+    expect(workersForCores(2, GA_CORES_PER_WORKER)).toBe(1);
+    expect(resolveCiWorkers({ env: { GITHUB_ACTIONS: "true", CNB_CPUS: "4" } }).workers).toBe(2);
+  });
+
+  it("同一个核数在两档上给出不同答案 —— 分档真的生效，不是同一常数换张皮", () => {
+    expect(resolveCiWorkers({ env: { CNB_CPUS: "8" } }).workers).toBe(1);
+    expect(resolveCiWorkers({ env: { GITHUB_ACTIONS: "true", CNB_CPUS: "8" } }).workers).toBe(4);
+  });
+
+  it('缺省 / 非 "true" 的 `GITHUB_ACTIONS` 一律按 CNB 档（本地与 CNB 行为逐字不变）', () => {
+    for (const v of [undefined, "", "false", "1", "TRUE "]) {
+      const env: Record<string, string | undefined> = { CNB_CPUS: "16" };
+      if (v !== undefined) env.GITHUB_ACTIONS = v;
+      expect(resolveCiWorkers({ env }).workers, `GITHUB_ACTIONS=${String(v)}`).toBe(2);
+    }
+  });
+
+  it("人的出口在 GA 档上同样优先，且仍只调并发", () => {
+    const r = resolveCiWorkers({
+      env: { GITHUB_ACTIONS: "true", CNB_CPUS: "4", COMFY_CI_MAX_WORKERS: "1" },
+    });
+    expect(r.workers).toBe(1);
+    expect(r.note).toContain("只调并发");
   });
 });

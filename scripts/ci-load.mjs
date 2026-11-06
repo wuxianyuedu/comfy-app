@@ -46,8 +46,25 @@ import os from "node:os";
  * 这条与「不许拿放宽预算冒充修好了负载」不冲突：**用例、预算、覆盖率阈值一个字不动**，
  * 这里只动并发（与 `COMFY_CI_MAX_WORKERS` 同一口径）。降负载的那一半防线仍在
  * `run-affected-tests.mjs` 的 `--no-file-parallelism` 隔离复跑。
+ *
+ * ── 平台分档（2026-11-06 补）────────────────────────────────────────────
+ *
+ * 上面那个 **8 只在「共享宿主机」上成立**：CNB 自托管节点上并行着别人的 PR 与每日档，
+ * 仓库又控不住「一台机接几个 runner」（见本文件头注第 2 条），只能靠并发数给邻居留余量。
+ *
+ * GA 托管 runner 是**每个 job 独享一台 4 核 VM**，没有邻居要保护 —— 照抄 8 会得到
+ * `ceil(4/8)=1`，等于三核空转，而原始依据（峰值占用减半）在独享机上一分都换不到。
+ * 所以 GA 侧单独一档：`ceil(cores / 2)`（4 核 ⇒ 2），保住「留一半余量」的原意，
+ * 与 CNB 的 8 是两套约束，不是同一常数换了张皮。
+ *
+ * **4 worker 刻意不写进默认**：GA 托管 runner 的 4 vCPU / 16GB 只是口径，本仓没有
+ * 内存读数；取数计划与待定项写在 `docs/guides/ga-migration-checklist.md` G-1，
+ * 没有读数就不把 4 升成默认。
  */
 export const CORES_PER_WORKER = 8;
+
+/** GA 托管 runner 的档：每个 job 独享一台机 ⇒ 只留一半余量（4 核 ⇒ 2）。 */
+export const GA_CORES_PER_WORKER = 2;
 
 /** 平台池与自托管都不给读数时的兜底（等于按 16 逻辑核这一档算）。 */
 export const FALLBACK_CORES = 16;
@@ -100,12 +117,42 @@ export function resolveCores(env = process.env) {
  * 所以取 `ceil`：宁可多开一个，也不让某一档慢到被读成「没跑起来」。
  * 单条流水线要更省 CPU 时用人的出口 `COMFY_CI_MAX_WORKERS`，不在公式里再加一档。
  *
+ * `perWorker` 是**平台档**（8 = 共享宿主机，2 = GA 独享），默认取 CNB 那一档；
+ * 调用点用 `platformCpusPerWorker()` 决定传哪一个，公式本身只有一条。
+ *
  * @param {number} cores
+ * @param {number} [perWorker]
  * @returns {number}
  */
-export function workersForCores(cores) {
+export function workersForCores(cores, perWorker = CORES_PER_WORKER) {
   const n = Number.isFinite(cores) && cores >= 1 ? cores : FALLBACK_CORES;
-  return Math.max(MIN_WORKERS, Math.ceil(n / CORES_PER_WORKER));
+  const ppw = Number.isFinite(perWorker) && perWorker >= 1 ? perWorker : CORES_PER_WORKER;
+  return Math.max(MIN_WORKERS, Math.ceil(n / ppw));
+}
+
+/**
+ * 这一跑在 GA 托管 runner 上吗（`GITHUB_ACTIONS` 由平台注入，恒为 `"true"`）。
+ *
+ * 只在**读环境**这一层判，不在公式里判 —— 分档是「平台给了什么条件」，
+ * 不是「哪条流水线在跑」。
+ *
+ * @param {Record<string, string | undefined>} env
+ * @returns {boolean}
+ */
+export function isGitHubActions(env = process.env) {
+  return String(env.GITHUB_ACTIONS ?? "").trim() === "true";
+}
+
+/**
+ * 本平台「一个 worker 至少要几核」：GA 独享 ⇒ 2；其余（CNB 自托管 / 本地）⇒ 8。
+ *
+ * 本地不判 GA，行为与 2026-11-06 之前逐字一致（不设 `GITHUB_ACTIONS` 就永远走 8）。
+ *
+ * @param {Record<string, string | undefined>} env
+ * @returns {number}
+ */
+export function platformCpusPerWorker(env = process.env) {
+  return isGitHubActions(env) ? GA_CORES_PER_WORKER : CORES_PER_WORKER;
 }
 
 /**
@@ -120,7 +167,7 @@ export function workersForCores(cores) {
  */
 export function resolveCiWorkers({ env = process.env } = {}) {
   const { cores, source, note } = resolveCores(env);
-  const derived = workersForCores(cores);
+  const derived = workersForCores(cores, platformCpusPerWorker(env));
   const raw = String(env.COMFY_CI_MAX_WORKERS ?? "").trim();
   if (raw === "") {
     return { workers: derived, cores, source, note };
