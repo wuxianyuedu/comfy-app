@@ -312,11 +312,12 @@ export function useWorkflowLibraryDetail(
         }
         /* 在模板原始 workflowIO 上只改目标条目的 seedMode，整体落库；
          * 其余字段原样透传，避免用富化视图覆盖原始数据。 */
-        /* SAFETY: 类型断言已复核 */
-        const raw = (template?.workflowIO ?? {}) as Record<string, Record<string, unknown>>;
+        const stored = template?.workflowIO;
+        const raw: Record<string, unknown> = isPlainRecord(stored) ? stored : {};
+        const current = raw[ioKey];
         const next: Record<string, unknown> = {
           ...raw,
-          [ioKey]: { ...raw[ioKey], seedMode: mode },
+          [ioKey]: { ...(isPlainRecord(current) ? current : {}), seedMode: mode },
         };
         await onPatchWorkflowIO(workflow.id, next);
       },

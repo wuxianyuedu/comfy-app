@@ -21,6 +21,7 @@ import { useBusyAction } from "~/components/ui/use-busy-action";
 /* 三个解析入口（全部 / 单条子包 / 单个父目录）：见 use-parse-actions.ts 头注。 */
 import { createParseActions } from "./use-parse-actions";
 import { errorText } from "~/lib/error-message";
+import { isPlainRecord } from "~/lib/is-record";
 import { offsetWithin } from "~/lib/dom-rect";
 import { tailWindowAppend } from "~/lib/page-window";
 import { onNextFrame } from "~/lib/next-frame";
@@ -101,6 +102,99 @@ export type CustomNodesSettingsController = {
  * ndjson 进度事件流的消费器（§12.13）：逐行 JSON.parse（坏行跳过），经 sinks
  * 写进度，聚合结果原样返回；不持有 React 状态，落库统一由调用方处理。
  */
+const SETTINGS_EVENT_PHASES: ReadonlyArray<string> = ["queue", "scan", "hash"];
+
+function isStringArray(value: unknown): value is Array<string> {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+/** `JSON.parse` 产出 `unknown`：只校验消费方读取的顶层字段，畸形行由调用方跳过。 */
+function isSettingsStreamEvent(value: unknown): value is SettingsStreamEvent {
+  if (!isPlainRecord(value) || typeof value.type !== "string") {
+    return false;
+  }
+  if (value.type === "discover_start") {
+    return value.parents === undefined || isStringArray(value.parents);
+  }
+  if (value.type === "progress") {
+    return (
+      (value.discovered === undefined || typeof value.discovered === "number") &&
+      (value.done === undefined || typeof value.done === "number") &&
+      (value.msg === undefined || typeof value.msg === "string") &&
+      (value.parent === undefined || typeof value.parent === "string") &&
+      (value.phase === undefined ||
+        (typeof value.phase === "string" && SETTINGS_EVENT_PHASES.includes(value.phase))) &&
+      (value.total === undefined || typeof value.total === "number")
+    );
+  }
+  if (value.type === "discover_done") {
+    return (
+      (value.packages === undefined || Array.isArray(value.packages)) &&
+      (value.parent === undefined || typeof value.parent === "string")
+    );
+  }
+  if (value.type === "summary") {
+    return (
+      (value.byPath === undefined || isPlainRecord(value.byPath)) &&
+      (value.lastReport === undefined ||
+        value.lastReport === null ||
+        isPlainRecord(value.lastReport)) &&
+      (value.summary === undefined || value.summary === null || isPlainRecord(value.summary))
+    );
+  }
+  if (value.type === "error") {
+    return value.message === undefined || typeof value.message === "string";
+  }
+  return value.type === "done";
+}
+
+/** 解析日志流的一行：同上，只校验 `log` / `done` 消费的字段。 */
+function isParseStreamEvent(value: unknown): value is ParseStreamEvent {
+  if (!isPlainRecord(value) || typeof value.type !== "string") {
+    return false;
+  }
+  if (value.type === "log") {
+    return (
+      (value.level === undefined || typeof value.level === "string") &&
+      (value.msg === undefined || typeof value.msg === "string")
+    );
+  }
+  if (value.type === "done") {
+    return (
+      (value.ok === undefined || typeof value.ok === "boolean") &&
+      (value.report === undefined || value.report === null || isPlainRecord(value.report))
+    );
+  }
+  return false;
+}
+
+type SettingsBlob = SettingsResp & { error?: { message?: string } | string };
+
+/** 单个 JSON blob（缓存预热路径）：settings 或 error 至少有一个可读。 */
+function isSettingsResp(value: unknown): value is SettingsBlob {
+  if (!isPlainRecord(value)) {
+    return false;
+  }
+  const settings = value.settings;
+  const error = value.error;
+  const settingsValid =
+    isPlainRecord(settings) && (settings.paths === undefined || isStringArray(settings.paths));
+  const errorValid =
+    typeof error === "string" ||
+    (isPlainRecord(error) && (error.message === undefined || typeof error.message === "string"));
+  if (!settingsValid && !errorValid) {
+    return false;
+  }
+  return (
+    (value.byPath === undefined || isPlainRecord(value.byPath)) &&
+    (value.discoveredByParent === undefined || isPlainRecord(value.discoveredByParent)) &&
+    (value.lastReport === undefined ||
+      value.lastReport === null ||
+      isPlainRecord(value.lastReport)) &&
+    (value.summary === undefined || value.summary === null || isPlainRecord(value.summary))
+  );
+}
+
 /**
  * 缓存预热路径的 blob 解析（§12.13）：401/500 响应没有 settings，直接读会炸
  * `Cannot read properties of undefined (reading 'paths')` 并掩盖真实原因；
@@ -176,11 +270,14 @@ async function consumeSettingsStream(
       if (!line.trim()) {
         continue;
       }
-      // 设置流的 ndjson 事件 —— 仅本对话框消费的字段；每行由 JSON.parse 自身校验。
+      // 设置流的 ndjson 事件 —— 仅本对话框消费的字段；坏行直接跳过。
       let ev: SettingsStreamEvent;
       try {
-        /* SAFETY: 类型断言已复核 */
-        ev = JSON.parse(line) as SettingsStreamEvent;
+        const payload: unknown = JSON.parse(line);
+        if (!isSettingsStreamEvent(payload)) {
+          continue;
+        }
+        ev = payload;
       } catch {
         continue;
       }
@@ -383,10 +480,10 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
 
       if (!isStream) {
         // 缓存预热路径：服务端返回单个 JSON blob。
-        /* SAFETY: 类型断言已复核 */
-        const data = (await res.json()) as SettingsResp & {
-          error?: { message?: string } | string;
-        };
+        const data: unknown = await res.json();
+        if (!isSettingsResp(data)) {
+          throw new Error(`读取配置失败（HTTP ${res.status}）`);
+        }
         const parsed = parseSettingsBlob(data, res.status);
         setSavedPaths(parsed.paths);
         setSummary(parsed.summary);
@@ -506,8 +603,11 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
           continue;
         }
         try {
-          /* SAFETY: 类型断言已复核 */
-          const obj = JSON.parse(line) as ParseStreamEvent;
+          const payload: unknown = JSON.parse(line);
+          if (!isParseStreamEvent(payload)) {
+            continue;
+          }
+          const obj = payload;
           if (obj.type === "log") {
             setLogs((prev) =>
               tailWindowAppend(

@@ -19,6 +19,7 @@ import type {
   WorkflowIODropPosition,
 } from "../workflow-types";
 import type { WorkflowIOModeOverride } from "~/lib/workflow/workflow-io-types";
+import { isPlainRecord } from "~/lib/is-record";
 import { rectToAnchorRect } from "~/lib/dom-rect";
 import { NodeJsonPopover } from "../WorkflowNodeJsonPopover";
 import { patchWorkflowSilently } from "~/lib/workflow/workflow-mutations";
@@ -480,6 +481,40 @@ export type NodeJsonViewerLookup = {
   subgraphStackLength: number;
 };
 
+/* 原始子图定义 / 父级 rawJson 是**无类型**的服务端负载：只经运行期收窄读出
+ *  查看器需要的字段（id / nodes），不做盲转型。 */
+type RawSubgraphDef = {
+  id?: unknown;
+  nodes?: unknown;
+};
+
+function isRawSubgraphDef(v: unknown): v is RawSubgraphDef {
+  return isPlainRecord(v);
+}
+
+/** `nodes[]` 的收窄：每项都应是普通对象（非对象项永远匹配不到节点 id）。 */
+function isRawNodesArray(v: unknown): v is Array<Record<string, unknown>> {
+  return Array.isArray(v) && v.every(isPlainRecord);
+}
+
+function rawNodesOf(def: RawSubgraphDef | undefined): Array<Record<string, unknown>> | null {
+  const nodes = def?.nodes;
+  return isRawNodesArray(nodes) ? nodes : null;
+}
+
+/** 父级 rawJson 的 `definitions.subgraphs` 表。 */
+function subgraphsOf(parentRawJson: unknown): Record<string, unknown> | undefined {
+  if (!isPlainRecord(parentRawJson)) {
+    return undefined;
+  }
+  const definitions = parentRawJson.definitions;
+  if (!isPlainRecord(definitions)) {
+    return undefined;
+  }
+  const subgraphs = definitions.subgraphs;
+  return isPlainRecord(subgraphs) ? subgraphs : undefined;
+}
+
 export function createNodeJsonViewerStore(
   params: NodeJsonViewerStoreParams,
 ): StoreApi<NodeJsonViewerStore> {
@@ -497,10 +532,7 @@ export function createNodeJsonViewerStore(
         return null;
       }
       const entry: unknown = detail.graph[nodeId];
-      /* SAFETY: 类型断言已复核 */
-      return Boolean(entry) && typeof entry === "object"
-        ? (entry as Record<string, unknown>)
-        : null;
+      return isPlainRecord(entry) ? entry : null;
     },
 
     getNodeView: (nodeId) => {
@@ -509,58 +541,34 @@ export function createNodeJsonViewerStore(
         return null;
       }
       const rawEntry: unknown = detail.graph[nodeId];
-      const entry =
-        /* SAFETY: 类型断言已复核 */
-        Boolean(rawEntry) && typeof rawEntry === "object"
-          ? (rawEntry as Record<string, unknown>)
-          : null;
+      const entry = isPlainRecord(rawEntry) ? rawEntry : null;
       let rawNodesSource: Array<Record<string, unknown>> | null = null;
       const isSubView = subgraphStackLength > 0 && subgraphRawContext !== null;
       if (isSubView) {
-        /* SAFETY: 类型断言已复核 */
-        const subs = (
-          subgraphRawContext.parentRawJson as {
-            definitions?: { subgraphs?: Record<string, unknown> };
-          } | null
-        )?.definitions?.subgraphs;
+        const subs = subgraphsOf(subgraphRawContext.parentRawJson);
         const targetUid = subgraphRawContext.subUid;
-        // 原始子图定义是无类型的服务端负载；只经一个窄形状
-        // 读取查看器需要的字段（id / nodes）。
-        type RawSubgraphDef = {
-          id?: string;
-          nodes?: Array<Record<string, unknown>>;
-        };
-        /* SAFETY: 类型断言已复核 */
-        let subDef: RawSubgraphDef | undefined = subs?.[targetUid] as RawSubgraphDef | undefined;
-        if (!subDef || !Array.isArray(subDef.nodes)) {
+        const candidate: unknown = subs?.[targetUid];
+        const subDef = isRawSubgraphDef(candidate) ? candidate : undefined;
+        let rawNodes = rawNodesOf(subDef);
+        if (rawNodes === null) {
           const matchKey = subs
-            ? Object.keys(subs).find(
-                /* SAFETY: 类型断言已复核 */
-                (key) => (subs[key] as RawSubgraphDef | undefined)?.id === targetUid,
-              )
+            ? Object.keys(subs).find((key) => {
+                const value: unknown = subs[key];
+                return isRawSubgraphDef(value) && value.id === targetUid;
+              })
             : undefined;
           if (matchKey !== undefined && matchKey !== "" && subs !== undefined) {
-            /* SAFETY: 类型断言已复核 */
-            subDef = subs[matchKey] as RawSubgraphDef;
+            const matched: unknown = subs[matchKey];
+            rawNodes = rawNodesOf(isRawSubgraphDef(matched) ? matched : undefined);
           }
         }
-        if (subDef && Array.isArray(subDef.nodes)) {
-          rawNodesSource = subDef.nodes;
+        if (rawNodes !== null) {
+          rawNodesSource = rawNodes;
         }
       }
-      if (
-        !rawNodesSource &&
-        typeof detail.rawJson === "object" &&
-        detail.rawJson !== null &&
-        /* SAFETY: 类型断言已复核 */
-        Array.isArray((detail.rawJson as { nodes?: unknown }).nodes)
-      ) {
-        /* SAFETY: 类型断言已复核 */
-        rawNodesSource = (
-          detail.rawJson as {
-            nodes: Array<Record<string, unknown>>;
-          }
-        ).nodes;
+      const rawJsonNodes = isPlainRecord(detail.rawJson) ? detail.rawJson.nodes : undefined;
+      if (!rawNodesSource && isRawNodesArray(rawJsonNodes)) {
+        rawNodesSource = rawJsonNodes;
       }
       const rawNode = rawNodesSource
         ? // oxlint-disable-next-line no-unnecessary-condition -- rawNodesSource 来自 rawJson / 子图定义的浅断言，脏数据可能含 null 元素
