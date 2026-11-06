@@ -91,7 +91,7 @@ describe("utility 的取值路径：编成 var() 且解得到主题值", () => {
   it.for(UTILITY_SOURCES)(".$cls 引用的变量在两态都解得出非空主题值", ({ cls, prop }) => {
     const rule = new RegExp(`\\.${cls}\\s*\\{[^}]*\\}`).exec(css)?.[0];
     const decl = new RegExp(`${prop}:\\s*([^;]+);`).exec(rule ?? "")?.[1];
-    const name = /var\((--[a-zA-Z0-9-]+)\)/.exec(decl ?? "")?.[1];
+    const name = /var\((?<name>--[a-zA-Z0-9-]+)\)/.exec(decl ?? "")?.groups?.name;
     expect(name, `.${cls} 的 ${prop} 应当引用一颗变量`).toBeTruthy();
     // 性质二：那颗变量在浅/深两态都解得出非空值。只判 var() 形态的话，
     // 指向一颗**不存在的** token 也照样绿 —— 那正是「编译得过、渲染是空」的形态。

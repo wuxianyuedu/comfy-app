@@ -855,23 +855,6 @@ export default defineConfig({
       rules: { "no-control-regex": "off" },
     },
     {
-      /* `eslint/prefer-named-capture-group` 存量挂账（清账批次 `B4`）：332 份 / 1094 处 —— 根目录
-       * --type-aware 探针实测（2026-11-04），不是估读。下面每行 = 一份文件 + 该文件存量处数
-       * （「存量 N 处 · 清账目标 B4 · 新代码不禁用」）；名单是逐字路径而不是 glob，
-       * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
-      files: [
-        "tests/theme-dark-token-cascade.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/theme-token-single-source.test.ts", // 存量 7 处 · 清账目标 B4 · 新代码不禁用
-        "tests/theme-tokens-compile-source.test.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "tests/tracing-ignore.test.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "tests/trpc-surface-executors.test.ts", // 存量 7 处 · 清账目标 B4 · 新代码不禁用
-        "tests/turbopack-tracing-excludes.test.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "tests/workflow-row-shape.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/session-report.mjs", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-      ],
-      rules: { "eslint/prefer-named-capture-group": "off" },
-    },
-    {
       /* `typescript/no-unsafe-type-assertion` 存量挂账（清账批次 `B5`）：608 份 / 1496 处 —— 根目录
        * --type-aware 探针实测（2026-11-04），不是估读。下面每行 = 一份文件 + 该文件存量处数
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，

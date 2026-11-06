@@ -34,7 +34,7 @@ function collect(dir: string, out: Array<string> = []): Array<string> {
     const full = path.join(dir, entry);
     if (statSync(full).isDirectory()) {
       collect(full, out);
-    } else if (/\.(ts|tsx)$/.test(entry)) {
+    } else if (/\.(?:ts|tsx)$/.test(entry)) {
       out.push(full);
     }
   }
@@ -45,15 +45,15 @@ function collect(dir: string, out: Array<string> = []): Array<string> {
 function mountTable(source: string): Record<string, string> {
   const varToFile: Record<string, string> = {};
   for (const m of source.matchAll(
-    /import\s+\{\s*(\w+)\s*\}\s+from\s+"~\/server\/api\/routers\/([\w-]+)"/g,
+    /import\s+\{\s*(?<var>\w+)\s*\}\s+from\s+"~\/server\/api\/routers\/(?<router>[\w-]+)"/g,
   )) {
-    varToFile[m[1]!] = m[2]!;
+    varToFile[m.groups?.var ?? ""] = m.groups?.router ?? "";
   }
   const mounts: Record<string, string> = {};
-  for (const m of source.matchAll(/^\s{2}(\w+):\s*(\w+),$/gm)) {
-    const file = varToFile[m[2]!];
+  for (const m of source.matchAll(/^\s{2}(?<name>\w+):\s*(?<value>\w+),$/gm)) {
+    const file = varToFile[m.groups?.value ?? ""];
     if (file !== undefined && file !== "") {
-      mounts[m[1]!] = file;
+      mounts[m.groups?.name ?? ""] = file;
     }
   }
   return mounts;
@@ -74,8 +74,8 @@ function routerClosure(entry: string, sources: Map<string, string>): Set<string>
     if (text === undefined || text === "") {
       continue;
     }
-    for (const m of text.matchAll(/from\s+"(?:~\/server\/api\/routers|\.)\/?([\w-]+)"/g)) {
-      const next = m[1]!;
+    for (const m of text.matchAll(/from\s+"(?:~\/server\/api\/routers|\.)\/?(?<name>[\w-]+)"/g)) {
+      const next = m.groups?.name ?? "";
       if (next !== current && sources.has(next)) {
         queue.push(next);
       }
@@ -87,8 +87,8 @@ function routerClosure(entry: string, sources: Map<string, string>): Set<string>
 /** 测试文件是否 import 了闭包里的某个 router 文件（`from "./workflow"`、
  *  `from "~/server/api/routers/workflow"`、以及 `import("…")` 的动态形态都认）。 */
 function importsClosure(testText: string, closure: Set<string>): boolean {
-  for (const m of testText.matchAll(/(?:from|import)\s*\(?\s*"([^"]+)"/g)) {
-    const spec = m[1]!;
+  for (const m of testText.matchAll(/(?:from|import)\s*\(?\s*"(?<spec>[^"]+)"/g)) {
+    const spec = m.groups?.spec ?? "";
     if (!/^(?:~\/server\/api\/routers|\.)/.test(spec)) {
       continue;
     }
