@@ -15,4 +15,11 @@
   逐行禁用，没有放宽既有 overrides。
 - 台账：B5 行改「清账中（子批1–5：100 份 / 236 处已清）」。
 
+## Fixed
+
+- `tests/worktree-location.test.ts` 的扫描读取改为只降级 ENOENT：并发用例
+  `tests/global-setup-cleanup.test.ts` 会在 `tests/` 下造 `.setup-cleanup-probe-*.test.tsx` 再删掉，
+  「列目录 → 读内容」窗口与扫描相撞时 `readFileSync` 抛 ENOENT，把这条判据判红（本次 CI 的
+  实际失败格）。与 `scripts/gate-scan-read.cjs` 共享读取器同一条口径，非 ENOENT 照冒。
+
 Refs #3181
