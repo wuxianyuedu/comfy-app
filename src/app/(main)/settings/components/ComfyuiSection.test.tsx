@@ -5,6 +5,8 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 import { ComfyuiSection } from "./ComfyuiSection";
 
@@ -21,6 +23,22 @@ afterEach(() => {
   emitAppEventMock.mockClear();
 });
 
+/** 本分区只读配置草稿、安装形态与保存态；接口其余成员与本节无关。 */
+function isComfyuiSectionController(v: unknown): v is ReadySettingsPageController {
+  if (!isRecord(v)) {
+    return false;
+  }
+  const drafts = v.drafts;
+  return (
+    isRecord(drafts) &&
+    isRecord(drafts.settings) &&
+    typeof v.comfyDefaultPort === "number" &&
+    typeof v.saving === "boolean" &&
+    typeof v.savePrefs === "function" &&
+    typeof v.patchSettings === "function"
+  );
+}
+
 function controller(
   over: Partial<ReadySettingsPageController["drafts"]["settings"]> = {},
   instance: ReadySettingsPageController["comfyInstance"] = {
@@ -29,8 +47,7 @@ function controller(
     desktopManaged: false,
   },
 ): ReadySettingsPageController {
-  /* SAFETY: 类型断言已复核 */
-  return {
+  const stub: unknown = {
     comfyDefaultPort: 8188,
     comfyInstance: instance,
     comfyStorage: null,
@@ -50,7 +67,11 @@ function controller(
         ...over,
       },
     },
-  } as unknown as ReadySettingsPageController;
+  };
+  if (!isComfyuiSectionController(stub)) {
+    throw new Error("创作后端分区的 controller 替身缺少本分区要读的字段");
+  }
+  return stub;
 }
 
 describe("ComfyuiSection（只配置路径）", () => {

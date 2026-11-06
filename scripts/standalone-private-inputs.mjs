@@ -580,6 +580,8 @@ export const FORBIDDEN_SHAPES = [
  * （实测 `check-standalone-contents.cjs` 在 `static` 上报出过旧布局下的 `db.sqlite`
  * 这一条 —— 判据早就写了「开发库文件绝不能出现」，减法却一直没人做）。
  * 表现不是多个文件，而是**上一台机器的数据成为出厂数据**。
+ *
+ * @type {Array<[string, RegExp]>}
  */
 export const PRIVATE_SHAPES = [
   ["开发机私有输入", /(?:^|\/)\.env(?:\.[^/]*)?$/],
@@ -591,10 +593,7 @@ export const PRIVATE_SHAPES = [
  *
  * @type {Array<[string, RegExp]>}
  */
-const ALL_SHAPES = /** @type {Array<[string, RegExp]>} */ ([
-  ...PRIVATE_SHAPES,
-  ...FORBIDDEN_SHAPES,
-]);
+const ALL_SHAPES = [...PRIVATE_SHAPES, ...FORBIDDEN_SHAPES];
 
 /**
  * 递归剔除命中形状清单的文件，并收掉被掏空的目录。

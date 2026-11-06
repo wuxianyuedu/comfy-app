@@ -58,6 +58,11 @@ import {
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
+/** @param {unknown} v @returns {v is Record<string, unknown>} */
+function isRecord(v) {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
 /**
  * 读一份新鲜度账（不存在 / 读不出 → `{}`，由判决把它当成「一档都没记」）。
  *
@@ -165,12 +170,13 @@ export function runGate({
    * 要核另外两栏就得自己开 JSON，于是「账面被看见」这件事只成了一半。 */
   const records = required.map((p) => {
     const entry = ledger[p];
-    const rec =
-      entry && typeof entry === "object" ? /** @type {Record<string, unknown>} */ (entry) : {};
+    if (!isRecord(entry)) {
+      return { key: p, who: "", how: "" };
+    }
     return {
       key: p,
-      who: String(rec.who ?? "").trim(),
-      how: String(rec.how ?? "").trim(),
+      who: String(entry.who ?? "").trim(),
+      how: String(entry.how ?? "").trim(),
     };
   });
   return {

@@ -275,7 +275,13 @@ export async function pidAlive(pid) {
       process.kill(pid, 0);
       return true;
     } catch (error) {
-      return /** @type {NodeJS.ErrnoException} */ (error).code === "EPERM";
+      return (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        typeof error.code === "string" &&
+        error.code === "EPERM"
+      );
     }
   }
   const out = await runCapture("powershell", [

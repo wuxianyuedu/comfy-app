@@ -50,6 +50,11 @@ import { createRequire } from "node:module";
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 /**
  * 一个包 `bin` 字段里那条**相对路径**。
  *
@@ -66,8 +71,8 @@ export function binRelativePath(bin, binName) {
   if (typeof bin === "string") {
     return bin;
   }
-  if (bin && typeof bin === "object") {
-    const v = /** @type {Record<string, unknown>} */ (bin)[binName];
+  if (isRecord(bin)) {
+    const v = bin[binName];
     if (typeof v === "string") {
       return v;
     }

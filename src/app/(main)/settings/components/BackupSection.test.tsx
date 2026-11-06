@@ -7,17 +7,31 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 import { BackupSection } from "./BackupSection";
 
 afterEach(cleanup);
 
+/** 本分区只读备份清单那几格；接口其余成员（LLM / 更新 / 日志等）与本节无关。 */
+function isBackupSectionController(v: unknown): v is ReadySettingsPageController {
+  return (
+    isRecord(v) &&
+    Array.isArray(v.backups) &&
+    typeof v.backupBusy === "boolean" &&
+    typeof v.backupListLoading === "boolean" &&
+    typeof v.restoreBusy === "boolean" &&
+    typeof v.createBackupNow === "function" &&
+    typeof v.restoreFrom === "function"
+  );
+}
+
 function controller(
   overrides: Partial<ReadySettingsPageController> = {},
 ): ReadySettingsPageController {
-  /* SAFETY: 类型断言已复核 */
-  return {
+  const stub: unknown = {
     backups: [],
     pendingRestore: null,
     backupListLoading: false,
@@ -26,7 +40,11 @@ function controller(
     createBackupNow: vi.fn(() => undefined),
     restoreFrom: vi.fn(() => undefined),
     ...overrides,
-  } as unknown as ReadySettingsPageController;
+  };
+  if (!isBackupSectionController(stub)) {
+    throw new Error("备份分区的 controller 替身缺少本分区要读的字段");
+  }
+  return stub;
 }
 
 const oneBackup = [{ name: "db-backup-20261010-120000.sqlite", size: 8192, at: 0 }];

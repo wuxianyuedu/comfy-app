@@ -427,6 +427,21 @@ function parseJson(text) {
   }
 }
 
+/** @param {unknown} v @returns {v is Record<string, unknown>} */
+function isRecord(v) {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** @param {unknown} v @returns {v is PremergeReport} */
+function isPremergeReport(v) {
+  return isRecord(v) && (!("segments" in v) || Array.isArray(v.segments));
+}
+
+/** @param {unknown} v @returns {v is BaseCheckReport} */
+function isBaseCheckReport(v) {
+  return isRecord(v) && (!("rows" in v) || Array.isArray(v.rows));
+}
+
 /**
  * @param {string} script
  * @param {string[]} args
@@ -541,7 +556,8 @@ export function runFromStdin(stdinText, pushUrl = null) {
   /* `--json` 拿逐段码：只有 base 段红时才再问一次归属（那是一批全仓判据的量级，放在稀有
    * 路径上付；绿的那条路径仍然只跑一次）。 */
   const run = runQuiet("premerge-check.mjs", ["--json"]);
-  const report = /** @type {PremergeReport | null} */ (parseJson(run.stdout));
+  const parsedReport = parseJson(run.stdout);
+  const report = isPremergeReport(parsedReport) ? parsedReport : null;
   const segments = Array.isArray(report?.segments) ? report.segments : null;
   const who =
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程起不来时 stdout 实测为 undefined（@types/node 声明偏窄）
@@ -577,9 +593,8 @@ export function runFromStdin(stdinText, pushUrl = null) {
     /* 只有 base 段红 ⇒ 去要逐条归属。别的段红（提交信息里的声明 / 合并丢一侧）按构造
      * 就是本分支的事，不查也拦。 */
     const attr = runQuiet("base-check.mjs", ["--base", "--json"]);
-    const decided = decideBaseAttribution(
-      /** @type {BaseCheckReport | null} */ (parseJson(attr.stdout)),
-    );
+    const parsedAttr = parseJson(attr.stdout);
+    const decided = decideBaseAttribution(isBaseCheckReport(parsedAttr) ? parsedAttr : null);
     if (decided.allowed) {
       baselineOnly = decided.baselineOnly;
       blocking = [];
