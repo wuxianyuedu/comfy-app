@@ -74,9 +74,10 @@ env:
   COMFY_TEST_TIMEOUT_SCALE: "2"
   # 覆盖率 reporter 安静档（ISSUE #1959；逐文件明细在落盘的 lcov / json-summary 里）。
   COMFYAPP_QUIET_COVERAGE: "1"
-  # vitest 并发：默认由 `scripts/ci-load.mjs:resolveCiWorkers()` 按核数推导
-  # （ceil(cores/8)；GA 实测读数 = 1 —— 日志 `[ci-affected] 收尾复述：并发 --maxWorkers=1（2 核，os）`）。
-  # 这里只接「人的覆盖出口」，**不写数**：仓库变量没设 ⇒ 展开成空串 ⇒ 按「没设」走默认；
+  # vitest 并发：默认由 `scripts/ci-load.mjs:resolveCiWorkers()` 按平台分档推导 ——
+  # GA 托管 runner（`GITHUB_ACTIONS=true`，每个 job 独享 4 核 VM）走 `ceil(cores/2)` ⇒ 2；
+  # CNB 自托管（共享宿主机）仍走 `ceil(cores/8)` ⇒ 16 核上 2，行为逐字不变。
+  # 这里只接「人的覆盖出口」，**不写数**：仓库变量没设 ⇒ 展开成空串 ⇒ 走上面的默认；
   # 设成 ≥1 整数才覆盖，只调并发、不动任何判据（口径同 `.cnb.yml` 同名键）。
   COMFY_CI_MAX_WORKERS: ${{ vars.COMFY_CI_MAX_WORKERS }}
   # 三点 diff 基线：镜像 payload 给的是 cnb 平台合成 merge 时的目标侧 sha，

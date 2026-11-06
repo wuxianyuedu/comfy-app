@@ -23,13 +23,25 @@
 - **现状（CNB 口径）**：自托管 16 核节点，`scripts/ci-load.mjs` 按现场核数折算 maxWorkers，动态值；人的覆盖出口是 `COMFY_CI_MAX_WORKERS`（≥1 整数，非法值按默认办并提示）
 - **GA 实测读数**：
   - 核数：**11-06 起是 4 核**（镜像仓转 public 后托管 runner 规格变了）：GA 日志原文 `[ci-affected] 改动面：…；并发 --maxWorkers=1（4 核，os）`（run 42202918718 › affected-tests）；早前 `（2 核，os）` 的读数已过期
-  - 推导值：`ceil(4/8) = 1` ⇒ vitest 命令仍是 `--maxWorkers=1`（同一跑）；即 PR #3246 接上覆盖出口后，未设仓库变量时默认行为不变
-  - 全量单测墙钟基线（run 41616389372，2026-11-03 10:11:51 → 10:22:20 UTC）：`Test Files 873 passed (873)`，`pnpm run test:coverage --maxWorkers=1`，约 629 秒（≈10.5 分钟）。**注意**：那跑是 2 核机器，只能作为量级基线，不能直接与 4 核那臂对比
-- **影响判断**：上一版「托管 runner 固定 4 CPU / 16GB」「全量单测 ~290 分钟、接近 300m 预算」**都不是读数**；worker 数当前不是墙钟瓶颈，daily 的墙钟问题在串行拓扑（G-9）
-- **建议改法**：**不写死数字**，只把人的覆盖出口接进 workflow —— `COMFY_CI_MAX_WORKERS: ${{ vars.COMFY_CI_MAX_WORKERS }}`（已随 PR #3246 落地；仓库变量未设 ⇒ 展开成空串 ⇒ `resolveCiWorkers()` 按「没设」走默认推导）
-  - **4 worker 那一臂跑不起来（写权限卡点，实测）**：`POST https://api.github.com/repos/wuxianyuedu/comfy-app/actions/variables` → **403** `{"message":"Resource not accessible by personal access token"}`；`GET .../actions/variables` 与 `POST .../actions/workflows/daily.yml/dispatches` 同 403（当前令牌只有 `actions: read`）
-  - 需要动作（有写权限的人）：把仓库变量设成 `COMFY_CI_MAX_WORKERS=4`，下一次定时 daily 即第二臂；取 `单元测试` step 的 `--maxWorkers=` 行 + 墙钟，与 629s / 873 files 并列，并读同跑 `（N 核，os）` 确认规格
-- **优先级**：P3（出口已落地，第二臂只是对照读数）
+  - 改造前的推导：`ceil(4/8) = 1` ⇒ `--maxWorkers=1`。那个 8 是**共享宿主机**的档（依据见下），照抄到 GA 就是「4 核里 3 核空转」
+  - 全量单测墙钟基线（run 41616389372，2026-11-03 10:11:51 → 10:22:20 UTC）：`Test Files 873 passed (873)`，`pnpm run test:coverage --maxWorkers=1`，约 629 秒（≈10.5 分钟）。**注意**：那跑是 **2 核机器**，只能作量级基线；**4 核 + 1 worker 的全量基线目前还没有**
+- **依据（为什么 GA 要换档）**：8 核/worker 的原文理由只有一条 ——「单条流水线别把整台机占满，只承诺峰值占用减半」（#2317，代价叙述由 #2320 订正），前提是同机并着别人的流水线、且仓库控不住一台机接几个 runner。GA 每个 job **独享一台 4 核 VM**，没有邻居要保护；按原意「留一半」，4 核应对应 **2 worker**（`ceil(cores/2)`）。原始理由里**没有**内存/磁盘约束，不是 OOM 经验
+- **建议改法（已落地）**：`scripts/ci-load.mjs:resolveCiWorkers()` 按 `GITHUB_ACTIONS === "true"` 分档 —— GA 走 `GA_CORES_PER_WORKER=2`（4 核 ⇒ 2），其余（CNB 自托管 / 本地）仍走 `CORES_PER_WORKER=8`，CNB 的 16⇒2 / 8⇒1 / 12⇒2 **逐字不变**（`tests/ci-load.test.ts` 两套断言同时钉住）；`COMFY_CI_MAX_WORKERS` 覆盖出口优先级与口径不变。规范 §13.5.21 同批补了这段
+- **待定项（未验证，4 不升默认的理由）**：4 worker = 把 4 核打满，**内存上限没有读数**（「4 vCPU / 16GB」只是口径，本仓未实测）。所以默认停在 2；4 只有在下面三臂读数出来、且没有 OOM / worker 启动失败时才考虑升
+- **取数计划（同一台 4 核 GA 机器上 1 / 2 / 4 三臂）**：
+
+  | 臂 | 怎么设 | 用哪一跑 | 读什么 |
+  | --- | --- | --- | --- |
+  | 1 worker | 仓库变量 `COMFY_CI_MAX_WORKERS=1` | 任意 PR 的 `受影响用例`（快信号）＋ 下一跑 daily `单元测试`（全量） | `--maxWorkers=` 行、`（N 核，os）`、该格墙钟 |
+  | 2 worker（默认） | **删掉仓库变量**（展开空串 ⇒ GA 档推导 2） | 同上 | 同上 |
+  | 4 worker | 仓库变量 `COMFY_CI_MAX_WORKERS=4` | 同上 | 同上；另 grep `heap out of memory` / worker 启动失败 / `Test timed out` |
+
+  - ⚠️ 仓库变量当前被用户设成 **4**，会盖掉默认档 —— 取「2 worker」那一臂前**必须先删变量**，否则量到的还是 4
+  - 墙钟读法：`GET /repos/wuxianyuedu/comfy-app/actions/runs/{id}/jobs`（公开仓免令牌）取 step 起止；`--maxWorkers=` 与核数行需要 GA 日志回读（`actions:read` 起）
+  - 判据：4 必须在墙钟 ≤ 2 且**零** OOM / worker 启动失败 / `Test timed out` 的前提下才升默认；任一臂出现不稳 ⇒ 回 2（或 1）。**没有这三臂读数，不把 4 写进默认**
+  - 对照限制：不要拿 629s / 873 files（2 核时代）当同规格基线；跨规格只能报量级
+- **影响判断**：worker 数不是 daily 墙钟的主因（串行拓扑才是，见 G-9）；本条收益有上限，别指望靠并发把 300m 预算吃下来
+- **优先级**：P2（默认档已按平台落地；剩余是 4 与否的读数与内存验证）
 
 #### G-2：NODE_OPTIONS / 内存预算
 

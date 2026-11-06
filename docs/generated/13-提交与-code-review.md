@@ -8439,6 +8439,17 @@ glob 真的罩住（枚举办法是从每条正则里取出它锚定的字面前
 （`cnb-jt3-1k5071kou` 的 `ESLint 零警告` 挂 8640s、`cnb-did-1k50659np` 的 `单元测试`
 挂 2h24m，都只留下 `timeout of … exceeded`）。
 
+**平台分档（2026-11-06 补，GA 适配）：GA 侧 `ceil(cores / 2)`，4 核 ⇒ 2。** 上面那个 8 的前提是
+**共享宿主机** —— 同机并着别人的 PR 与每日档、仓库又控不住「一台机接几个 runner」，
+只能靠并发数给邻居留余量。GA 托管 runner 是**每个 job 独享一台 4 核 VM**，没有邻居要保护：
+照抄 8 只会得到 `ceil(4/8)=1`（三核空转），而这一档买的东西（峰值占用减半）在独享机上
+一分也换不到。所以 `resolveCiWorkers()` 按 `GITHUB_ACTIONS==="true"` 分档：
+GA ⇒ `GA_CORES_PER_WORKER=2`（留一半余量，4 核 ⇒ 2）；其余（CNB 自托管 / 本地）⇒
+`CORES_PER_WORKER=8`，CNB 的 16⇒2 / 8⇒1 / 12⇒2 **一个不改**（`tests/ci-load.test.ts`
+两套断言同时钉住）。**4 worker 不写进默认**：GA 托管 runner 的「4 vCPU / 16GB」只是口径，
+本仓没有内存读数；取数计划与待定项在 `docs/guides/ga-migration-checklist.md` G-1，
+没有读数就不升档。
+
 **刻意没做的（以及为什么）**：
 
 - **不给 `生产构建` 造旋钮**：`next build` 的 worker 数由构建器自己定，没有「按核数
