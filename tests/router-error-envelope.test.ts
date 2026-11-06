@@ -34,8 +34,8 @@ function routerSources(): Array<string> {
 /** 从真实判决配置里取 router 那一档生效的规则条目（配置变了，这里跟着变）。 */
 function routerRestrictedSyntax(): { block: ConfigBlock; entries: Array<RestrictedSyntaxEntry> } {
   const overrides = (oxlintConfig as unknown as { overrides?: Array<ConfigBlock> }).overrides ?? [];
-  const blocks = overrides.filter((block) =>
-    Array.isArray(block.files) && block.files.includes(ROUTER_GLOB),
+  const blocks = overrides.filter(
+    (block) => Array.isArray(block.files) && block.files.includes(ROUTER_GLOB),
   );
   expect(blocks).toHaveLength(1);
   const block = blocks[0];
@@ -84,8 +84,11 @@ describe("② + ③ router 档的规则条目：两层同时生效，且真的�
     expect(entries).toHaveLength(3);
     const selectors = entries.map((e) => e.selector);
     expect(selectors.some((s) => s.includes("ThrowStatement"))).toBe(true);
-    expect(selectors.filter((s) => s.includes("STORE_SELECTOR") || s.includes("CallExpression[callee.name=")))
-      .toHaveLength(2);
+    expect(
+      selectors.filter(
+        (s) => s.includes("STORE_SELECTOR") || s.includes("CallExpression[callee.name="),
+      ),
+    ).toHaveLength(2);
     // 测试夹具要模拟裸 Error，必须留在豁免面外。
     const exclude = block.excludeFiles;
     expect(Array.isArray(exclude) ? exclude : [exclude]).toContain(

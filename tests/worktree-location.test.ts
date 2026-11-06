@@ -117,7 +117,9 @@ describe("worktree 落点契约（#2935 / 硬规则 30）", () => {
     ["tests/helpers/probe-worktree.ts", "探针隔离的一次性克隆"],
   ] as const)("%s 的 worktree 调用点在场且过契约（%s）", ([rel, what]) => {
     const sites = collectCallSites().filter((site) => site.rel === rel);
-    expect(sites.length, `${rel} 的 worktree 调用点扫不到了 —— 扫描面是不是归零了`).toBeGreaterThan(0);
+    expect(sites.length, `${rel} 的 worktree 调用点扫不到了 —— 扫描面是不是归零了`).toBeGreaterThan(
+      0,
+    );
     expect(
       sites.filter((site) => flagsGitDir(site.window)),
       `${rel} 的${what}落到 \`.git/\` 下了`,

@@ -169,13 +169,11 @@ describe("③ selector 真的会响", () => {
       {
         // 反模式：对象字面量 / 造新数组
         "object.ts": `const a = useShellTabs((s) => ({ tabs: s.tabs, active: s.activeTabId }));`,
-        "new-array.ts":
-          `const b = useMessageCenterStore((s) => s.messages.filter((m) => !m.read));`,
+        "new-array.ts": `const b = useMessageCenterStore((s) => s.messages.filter((m) => !m.read));`,
         // 合法：原始值 / store 里已固化的引用 / reduce 成原始值
         "primitive.ts": `const c = useShellTabs((s) => s.activeTabId);`,
         "store-value.ts": `const d = useLogCategoryStore((s) => s.enabled);`,
-        "reduce.ts":
-          `const e = useMessageCenterStore((s) => s.messages.reduce((n, m) => n + (m.read ? 0 : 1), 0));`,
+        "reduce.ts": `const e = useMessageCenterStore((s) => s.messages.reduce((n, m) => n + (m.read ? 0 : 1), 0));`,
         // 普通 React hook 造对象**不在拦的范围**（泛匹配 `use[A-Z]` 会误报一片）
         "use-memo.ts": `const f = useMemo(() => ({ n: 1 }), []);`,
         "use-state.ts": `const g = useState(() => rows.slice(0, 8));`,

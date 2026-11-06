@@ -138,9 +138,7 @@ describe("ISSUE #3058：取数窗口 —— 终止看平台形状，8 页硬顶�
   });
   /** 一页 100 条满页（编号从 start 往下数）。 */
   const fullPage = (start: number) =>
-    Array.from({ length: BRANCH_PULL_PAGE_SIZE }, (_, i) =>
-      pull(start - i, `b${start - i}`, true),
-    );
+    Array.from({ length: BRANCH_PULL_PAGE_SIZE }, (_, i) => pull(start - i, `b${start - i}`, true));
   /** 按 `--page` 参数给应答的假执行者（没登记的页给空页）。 */
   const pagedRun = (pages: Record<number, unknown>, counter?: { n: number }) => {
     return (_cmd: string, args: Array<string>): FakeResult => {

@@ -8,7 +8,13 @@ import { join } from "node:path";
 
 import { describe, expect, test } from "vitest";
 
-import { escapeAnnotation, mapExit, parseCli, pickReasonLines, renderSummary } from "../scripts/ci-step-verdict.mjs";
+import {
+  escapeAnnotation,
+  mapExit,
+  parseCli,
+  pickReasonLines,
+  renderSummary,
+} from "../scripts/ci-step-verdict.mjs";
 
 const SCRIPT = join(process.cwd(), "scripts", "ci-step-verdict.mjs");
 

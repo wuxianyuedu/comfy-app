@@ -47,17 +47,17 @@ describe("stripComments · syntax: hash（ISSUE #2934）", () => {
 
   it("Cargo.toml 格保留行首锚语义：注释行剥空，真依赖行照样命中", () => {
     const src = [
-      "# windows = \"0.61\" （历史：曾在非 Windows 下也参与编译）",
+      '# windows = "0.61" （历史：曾在非 Windows 下也参与编译）',
       "[dependencies]",
-      "serde = \"1\"",
+      'serde = "1"',
       "[target.'cfg(windows)'.dependencies]",
-      "windows = \"0.61\"",
+      'windows = "0.61"',
     ].join("\n");
     const cargo = stripComments(src, { syntax: "hash" });
     const [beforeTarget] = cargo.split("[target.'cfg(windows)'.dependencies]");
     /* 行首锚的含义没变：剥完的注释行是空行，不会被那根 `/^windows\\s*=/m` 误命中。 */
     expect(beforeTarget).not.toMatch(/^windows\s*=/m);
-    expect(cargo).toContain("windows = \"0.61\"");
+    expect(cargo).toContain('windows = "0.61"');
     /* 反向：真把依赖写到无条件区段，同一根锚当场判红。 */
     expect(`windows = "0.61"\n${beforeTarget}`).toMatch(/^windows\s*=/m);
   });
