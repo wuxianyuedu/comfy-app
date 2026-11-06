@@ -13,11 +13,6 @@ import { stripComments } from "./helpers/strip-comments";
  *  `normalizeShotType` 收进清单、仓储的投影参数改成真列清单）；剩下两处是签名桥接，最后一类是
  *  真欠账（F13′）。 */
 const AS_NEVER_LEDGER: Record<string, { count: number; reason: string }> = {
-  "src/lib/core/logger.ts": {
-    count: 1,
-    reason:
-      "转发原生 console 方法：`method.apply(this, args)` 的 args 是 unknown[]，原生 Console 的重载不收 —— 这里是「对齐第三方签名」，不是「绕过一个我们该做的检查」。",
-  },
   "src/lib/log/capture-streams.server.ts": {
     count: 2,
     reason:
