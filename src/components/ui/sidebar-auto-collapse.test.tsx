@@ -24,25 +24,41 @@ function setViewport(width: number): void {
   });
 }
 
+/** `EventListenerOrEventListenerObject` 里只有函数形态会进 `listeners`：`use-narrow-nav`
+ *  传的是零参回调；对象形态（`handleEvent`）在这条桩上不参与。 */
+function isFunctionListener(cb: EventListenerOrEventListenerObject): cb is () => void {
+  return typeof cb === "function";
+}
+
 beforeEach(() => {
   listeners.clear();
-  /* SAFETY: 类型断言已复核 */
-  window.matchMedia = ((query: string) => ({
+  window.matchMedia = (query: string): MediaQueryList => ({
     get matches() {
       const max = /max-width:\s*(?<maxWidth>\d+)px/.exec(query)?.groups?.maxWidth;
       return max === undefined ? false : window.innerWidth <= Number(max);
     },
     media: query,
     onchange: null,
-    addEventListener: (_: string, cb: EventListenerOrEventListenerObject) => {
-      /* SAFETY: 类型断言已复核 */
-      listeners.add(cb as () => void);
+    addListener() {
+      void 0;
     },
-    removeEventListener: (_: string, cb: EventListenerOrEventListenerObject) => {
-      /* SAFETY: 类型断言已复核 */
-      listeners.delete(cb as () => void);
+    removeListener() {
+      void 0;
     },
-  })) as unknown as typeof window.matchMedia;
+    addEventListener(_: string, cb: EventListenerOrEventListenerObject) {
+      if (isFunctionListener(cb)) {
+        listeners.add(cb);
+      }
+    },
+    removeEventListener(_: string, cb: EventListenerOrEventListenerObject) {
+      if (isFunctionListener(cb)) {
+        listeners.delete(cb);
+      }
+    },
+    dispatchEvent() {
+      return false;
+    },
+  });
   setViewport(1440);
 });
 

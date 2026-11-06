@@ -96,10 +96,10 @@ describe("视频与图片走同一个出口", () => {
     const { container } = render(<MediaThumbnail onLoad={onLoad} src={IMG} />);
     fireEvent.load(container.querySelector("img")!);
     expect(onLoad).toHaveBeenCalledTimes(1);
-    /* SAFETY: 类型断言已复核 */
-    const el = onLoad.mock.calls[0]![0] as unknown as {
-      tagName: string;
-    };
+    const el: unknown = onLoad.mock.calls[0]?.[0];
+    if (!(el instanceof HTMLElement)) {
+      throw new Error("onLoad 没有拿到媒体元素");
+    }
     expect(el.tagName).toBe("IMG");
   });
 
@@ -108,10 +108,10 @@ describe("视频与图片走同一个出口", () => {
     const { container } = render(<MediaThumbnail onLoad={onLoad} src="/a.mp4" />);
     fireEvent.loadedData(container.querySelector("video")!);
     expect(onLoad).toHaveBeenCalledTimes(1);
-    /* SAFETY: 类型断言已复核 */
-    const el = onLoad.mock.calls[0]![0] as unknown as {
-      tagName: string;
-    };
+    const el: unknown = onLoad.mock.calls[0]?.[0];
+    if (!(el instanceof HTMLElement)) {
+      throw new Error("onLoad 没有拿到媒体元素");
+    }
     expect(el.tagName).toBe("VIDEO");
   });
 
