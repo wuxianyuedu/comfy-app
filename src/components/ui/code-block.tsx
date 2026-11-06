@@ -10,6 +10,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { chunkRange } from "~/lib/page-window";
 import { useTheme } from "next-themes";
 import { errorMessage } from "~/lib/error-message";
+import { isPlainRecord } from "~/lib/is-record";
 import { beginStaleRun } from "~/lib/stale-run";
 
 const EXT_TO_LANG: Record<string, string> = {
@@ -55,16 +56,24 @@ type ShikiHighlighter = {
 
 let highlighterPromise: Promise<ShikiHighlighter> | null = null;
 
+type ShikiBundle = {
+  createHighlighter: (options: {
+    langs: Array<string>;
+    themes: Array<string>;
+  }) => Promise<ShikiHighlighter>;
+};
+
+function isShikiBundle(v: unknown): v is ShikiBundle {
+  return isPlainRecord(v) && typeof v.createHighlighter === "function";
+}
+
 function getHighlighter(): Promise<ShikiHighlighter> {
   highlighterPromise ??= (async () => {
-    /* SAFETY: 类型断言已复核 */
-    const shiki = (await import("shiki/dist/bundle-web.mjs")) as {
-      createHighlighter: (options: {
-        langs: Array<string>;
-        themes: Array<string>;
-      }) => Promise<ShikiHighlighter>;
-    };
-    return shiki.createHighlighter({
+    const shikiModule: unknown = await import("shiki/dist/bundle-web.mjs");
+    if (!isShikiBundle(shikiModule)) {
+      throw new Error("shiki bundle 缺少 createHighlighter");
+    }
+    return shikiModule.createHighlighter({
       themes: ["one-dark-pro", "github-light"],
       langs: [
         "typescript",

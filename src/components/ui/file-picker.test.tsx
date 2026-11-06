@@ -44,15 +44,17 @@ describe("FilePicker", () => {
   });
 
   it("选中文件后回调：同时给出 file 与整份 FileList（多选要整份）", () => {
-    const onPick = vi.fn();
+    const onPick = vi.fn<(file: File, files: FileList) => void>();
     render(<FilePicker multiple onPick={onPick} />);
     const A = makeFile("a.png");
     const B = makeFile("b.png");
     pick(fileInput(), A, B);
 
     expect(onPick).toHaveBeenCalledTimes(1);
-    /* SAFETY: 类型断言已复核 */
-    const call = onPick.mock.calls[0] as [File, FileList];
+    const call = onPick.mock.calls[0];
+    if (!call) {
+      throw new Error("onPick 未被调用");
+    }
     expect(call[0]).toBe(A);
     expect([...call[1]]).toEqual([A, B]);
   });

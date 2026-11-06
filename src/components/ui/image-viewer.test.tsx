@@ -48,8 +48,13 @@ function renderViewer(onClose: () => void = () => undefined) {
   const view = render(<ImageViewer alt="运行结果" onClose={onClose} src={SRC} />);
   return {
     ...view,
-    /* SAFETY: 类型断言已复核 */
-    canvas: () => view.getByTestId("image-viewer-canvas") as HTMLDivElement,
+    canvas: () => {
+      const canvas = view.getByTestId("image-viewer-canvas");
+      if (!(canvas instanceof HTMLDivElement)) {
+        throw new Error("image-viewer-canvas 应当是一个 div");
+      }
+      return canvas;
+    },
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留 ?. 防线
     percent: () => view.getByTestId("image-viewer-percent").textContent?.trim() ?? "",
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留 ?. 防线

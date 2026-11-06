@@ -48,6 +48,14 @@ const TYPE_LABELS: Record<TypeFilter, string> = {
   audio: "音频",
 };
 
+function isSourceFilter(value: string): value is SourceFilter {
+  return Object.hasOwn(SOURCE_LABELS, value);
+}
+
+function isTypeFilter(value: string): value is TypeFilter {
+  return Object.hasOwn(TYPE_LABELS, value);
+}
+
 /** 计数徽标（ SelectMenu 的 labels 支持 ReactNode）。 */
 function CountBadge({ count }: { count: number }) {
   return (
@@ -98,8 +106,9 @@ export function WorkflowLibraryFilters({
           ]),
         )}
         onChange={(v) => {
-          /* SAFETY: 类型断言已复核 */
-          onSourceFilterChange(v as SourceFilter);
+          if (isSourceFilter(v)) {
+            onSourceFilterChange(v);
+          }
         }}
         options={[...SOURCE_OPTIONS]}
         popoverMinWidth={150}
@@ -128,8 +137,9 @@ export function WorkflowLibraryFilters({
           ]),
         )}
         onChange={(v) => {
-          /* SAFETY: 类型断言已复核 */
-          onTypeFilterChange(v as TypeFilter);
+          if (isTypeFilter(v)) {
+            onTypeFilterChange(v);
+          }
         }}
         options={[...TYPE_OPTIONS]}
         popoverMinWidth={140}

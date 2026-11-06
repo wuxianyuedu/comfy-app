@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/components/studio/workflow-library/sections/EncapsulationTestForm.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-library/workflow-library-detail-config.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-library/workflow-library-param-cards.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-library/workflow-library-wire-graph.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-library/workflow-param-mapping-ui.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-library/WorkflowCanvasNodePreview.io-refresh.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-library/WorkflowLibraryDetailView.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-library/WorkflowLibraryFilters.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-utils.test.ts", // 存量 5 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/WorkflowImportPanel.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workspace-tabs.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/aspect-ratio.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/aurora-background.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/code-block.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/command.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/dialog.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/empty-state.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/file-picker.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/form-rhf.tsx", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/image-viewer.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/components/ui/input-group.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/components/ui/json-viewer.tsx", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
         "src/components/ui/media-drag-source.test.ts", // 存量 9 处 · 清账目标 B5 · 新代码不禁用
