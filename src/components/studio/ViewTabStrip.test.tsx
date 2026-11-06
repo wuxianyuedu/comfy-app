@@ -46,8 +46,10 @@ describe("viewTabLabel", () => {
   });
 
   it("未知视图原样回显，不套一个最近的标签", () => {
-    /* SAFETY: 类型断言已复核 */
-    expect(viewTabLabel("nope" as never)).toBe("nope");
+    /* 签名只收 `WorkspaceView`，而 `?? view` 那条兜底恰恰是给签名之外的运行期输入写的：
+     * 把未知字符串从 `unknown` 那侧原样转发进去，由函数自己的兜底分支作答。 */
+    const unknownView: unknown = "nope";
+    expect(Reflect.apply(viewTabLabel, undefined, [unknownView])).toBe("nope");
   });
 });
 

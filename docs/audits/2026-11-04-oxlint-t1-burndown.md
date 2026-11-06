@@ -13,7 +13,7 @@
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
 | B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 已清（子批1–12，判决面文件级豁免已整块删除）       |
-| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–7：140 份 / 300 处已清）             |
+| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–8：160 份 / 335 处已清）             |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
@@ -885,26 +885,26 @@
 | `src/components/studio/model-overview-derive.test.ts`                                                | 1        | 已清 |
 | `src/components/studio/nav-items.test.ts`                                                            | 1        | 已清 |
 | `src/components/studio/project-canvas/CanvasContextMenu.test.tsx`                                    | 1        | 已清 |
-| `src/components/studio/project-canvas/CanvasContextMenu.tsx`                                         | 1        | 挂账 |
-| `src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.stories.tsx`                   | 2        | 挂账 |
-| `src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.test.tsx`                      | 1        | 挂账 |
-| `src/components/studio/project-canvas/CanvasNode/hooks/use-generate.ts`                              | 1        | 挂账 |
-| `src/components/studio/project-canvas/CanvasNode/hooks/use-node-patch.ts`                            | 1        | 挂账 |
-| `src/components/studio/project-canvas/HistoryPanel.tsx`                                              | 1        | 挂账 |
-| `src/components/studio/project-canvas/hooks/use-canvas-drop.ts`                                      | 1        | 挂账 |
-| `src/components/studio/project-canvas/hooks/use-canvas-menu.ts`                                      | 2        | 挂账 |
-| `src/components/studio/project-canvas/hooks/use-history-panel.test.ts`                               | 6        | 挂账 |
-| `src/components/studio/project-canvas/hooks/use-task-step-log-stream.ts`                             | 4        | 挂账 |
-| `src/components/studio/project-canvas/MaterialLibraryPanel.tsx`                                      | 1        | 挂账 |
-| `src/components/studio/project-canvas/ProjectEdge.test.tsx`                                          | 1        | 挂账 |
-| `src/components/studio/project-canvas/WorkflowSourceFilterChip.tsx`                                  | 1        | 挂账 |
-| `src/components/studio/ProjectCanvas.tsx`                                                            | 4        | 挂账 |
-| `src/components/studio/ShellTabs.test.tsx`                                                           | 1        | 挂账 |
-| `src/components/studio/VideoQueueModal.tsx`                                                          | 1        | 挂账 |
-| `src/components/studio/ViewContainer.test.tsx`                                                       | 1        | 挂账 |
-| `src/components/studio/ViewTabStrip.test.tsx`                                                        | 1        | 挂账 |
-| `src/components/studio/WindowControls.tsx`                                                           | 2        | 挂账 |
-| `src/components/studio/WindowTitleBar.test.tsx`                                                      | 2        | 挂账 |
+| `src/components/studio/project-canvas/CanvasContextMenu.tsx`                                         | 1        | 已清 |
+| `src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.stories.tsx`                   | 2        | 已清 |
+| `src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.test.tsx`                      | 1        | 已清 |
+| `src/components/studio/project-canvas/CanvasNode/hooks/use-generate.ts`                              | 1        | 已清 |
+| `src/components/studio/project-canvas/CanvasNode/hooks/use-node-patch.ts`                            | 1        | 已清 |
+| `src/components/studio/project-canvas/HistoryPanel.tsx`                                              | 1        | 已清 |
+| `src/components/studio/project-canvas/hooks/use-canvas-drop.ts`                                      | 1        | 已清 |
+| `src/components/studio/project-canvas/hooks/use-canvas-menu.ts`                                      | 2        | 已清 |
+| `src/components/studio/project-canvas/hooks/use-history-panel.test.ts`                               | 6        | 已清 |
+| `src/components/studio/project-canvas/hooks/use-task-step-log-stream.ts`                             | 4        | 已清 |
+| `src/components/studio/project-canvas/MaterialLibraryPanel.tsx`                                      | 1        | 已清 |
+| `src/components/studio/project-canvas/ProjectEdge.test.tsx`                                          | 1        | 已清 |
+| `src/components/studio/project-canvas/WorkflowSourceFilterChip.tsx`                                  | 1        | 已清 |
+| `src/components/studio/ProjectCanvas.tsx`                                                            | 4        | 已清 |
+| `src/components/studio/ShellTabs.test.tsx`                                                           | 1        | 已清 |
+| `src/components/studio/VideoQueueModal.tsx`                                                          | 1        | 已清 |
+| `src/components/studio/ViewContainer.test.tsx`                                                       | 1        | 已清 |
+| `src/components/studio/ViewTabStrip.test.tsx`                                                        | 1        | 已清 |
+| `src/components/studio/WindowControls.tsx`                                                           | 2        | 已清 |
+| `src/components/studio/WindowTitleBar.test.tsx`                                                      | 2        | 已清 |
 | `src/components/studio/workflow-editor/hooks/use-subgraph-source-modal.ts`                           | 2        | 挂账 |
 | `src/components/studio/workflow-editor/hooks/use-workflow-detail-loader.ts`                          | 1        | 挂账 |
 | `src/components/studio/workflow-editor/hooks/use-workflow-persistence.test.ts`                       | 1        | 挂账 |

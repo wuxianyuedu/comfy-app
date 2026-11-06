@@ -164,10 +164,12 @@ describe("DocumentFrame（文档型）", () => {
     }
     expect(backdrop.parentElement).toBe(frame);
     const scroller = frame.querySelector("[class*='overflow-y-auto']");
+    if (!scroller) {
+      throw new Error("没找到滚动层");
+    }
     // 同一父级下的前一个兄弟 —— 它不该被塞进居中列里。
     expect(
-      /* SAFETY: 类型断言已复核 */
-      backdrop.compareDocumentPosition(scroller as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
+      backdrop.compareDocumentPosition(scroller) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
