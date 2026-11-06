@@ -6,7 +6,7 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
-import type { EdgeProps } from "@xyflow/react";
+import { Position, type EdgeProps } from "@xyflow/react";
 import { ProjectEdge } from "./ProjectEdge";
 import {
   EDGE_FOCUS_ACTIVE_KEY,
@@ -19,7 +19,6 @@ afterEach(cleanup);
 const GRADIENT_STROKE = "url(#canvas-edge-gradient)";
 
 function makeProps(data: Record<string, unknown> | undefined): EdgeProps {
-  /* SAFETY: 类型断言已复核 */
   return {
     id: "pe-test",
     source: "1",
@@ -28,11 +27,11 @@ function makeProps(data: Record<string, unknown> | undefined): EdgeProps {
     sourceY: 0,
     targetX: 200,
     targetY: 0,
-    sourcePosition: "right",
-    targetPosition: "left",
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
     data,
     style: { stroke: GRADIENT_STROKE, strokeWidth: 2.5 },
-  } as unknown as EdgeProps;
+  };
 }
 
 function wireStyle(data: Record<string, unknown> | undefined) {

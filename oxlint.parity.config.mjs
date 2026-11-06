@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/components/studio/project-canvas/CanvasContextMenu.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.stories.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/project-canvas/CanvasNode/hooks/use-generate.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/project-canvas/CanvasNode/hooks/use-node-patch.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/project-canvas/HistoryPanel.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/project-canvas/hooks/use-canvas-drop.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/project-canvas/hooks/use-canvas-menu.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/project-canvas/hooks/use-history-panel.test.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/project-canvas/hooks/use-task-step-log-stream.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/project-canvas/MaterialLibraryPanel.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/project-canvas/ProjectEdge.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/project-canvas/WorkflowSourceFilterChip.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/ProjectCanvas.tsx", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/ShellTabs.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/VideoQueueModal.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/ViewContainer.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/ViewTabStrip.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/WindowControls.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/WindowTitleBar.test.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/components/studio/workflow-editor/hooks/use-subgraph-source-modal.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/components/studio/workflow-editor/hooks/use-workflow-detail-loader.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/components/studio/workflow-editor/hooks/use-workflow-persistence.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用

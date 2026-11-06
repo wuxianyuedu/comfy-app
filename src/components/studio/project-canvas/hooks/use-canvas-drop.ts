@@ -11,6 +11,7 @@ import { placeCanvasNode } from "~/lib/project-canvas/canvas-helpers";
 import { runAsyncAction } from "~/lib/async-action";
 import { importOutputAsInput } from "~/lib/project-canvas/canvas-api";
 import { defaultData, type CanvasNodeType, type NodeKind } from "~/lib/project-canvas/canvas-types";
+import { isPlainRecord } from "~/lib/is-record";
 import { useToast } from "~/components/studio/ToastProvider";
 import { MEDIA_DRAG_MIME, type MediaDragPayload } from "~/components/ui/media-drag-source";
 
@@ -24,6 +25,28 @@ export type MediaDropPayload = MediaDragPayload & {
   /** 拖拽落地时传入落点的 flow 坐标；缺省则落在视口中心。 */
   position?: XYPosition;
 };
+
+const MEDIA_TYPES = ["image", "video", "audio", "doc"];
+
+/** 拖放载荷的运行时校验：只校验消费方真正读取的字段，畸形载荷由调用方丢弃。 */
+function isMediaDropPayload(v: unknown): v is MediaDropPayload {
+  if (!isPlainRecord(v)) {
+    return false;
+  }
+  const { displayName, mediaType, position, url } = v;
+  if (typeof displayName !== "string" || typeof url !== "string") {
+    return false;
+  }
+  if (typeof mediaType !== "string" || !MEDIA_TYPES.includes(mediaType)) {
+    return false;
+  }
+  if (position === undefined) {
+    return true;
+  }
+  return (
+    isPlainRecord(position) && typeof position.x === "number" && typeof position.y === "number"
+  );
+}
 
 export function useCanvasDrop({ screenToFlowPosition, setNodes }: UseCanvasDropArgs) {
   const toast = useToast();
@@ -99,8 +122,11 @@ export function useCanvasDrop({ screenToFlowPosition, setNodes }: UseCanvasDropA
       e.preventDefault();
       let payload: MediaDropPayload;
       try {
-        /* SAFETY: 类型断言已复核 */
-        payload = JSON.parse(raw) as MediaDropPayload;
+        const parsed: unknown = JSON.parse(raw);
+        if (!isMediaDropPayload(parsed)) {
+          return;
+        }
+        payload = parsed;
       } catch {
         return;
       }

@@ -25,6 +25,13 @@ export type { MaterialItem };
 
 type DisplayMode = "grid" | "list";
 
+/** 作用域白名单：`Tabs` 的 `onValueChange` 给的是 `string`，收窄回联合类型。 */
+const MATERIAL_SCOPE_VALUES: ReadonlyArray<string> = ["project", "cross"];
+
+function isMaterialScope(value: unknown): value is MaterialScope {
+  return typeof value === "string" && MATERIAL_SCOPE_VALUES.includes(value);
+}
+
 /* ── Component ───────────────────────────────────────────── */
 
 type MaterialLibraryPanelProps = {
@@ -105,8 +112,9 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
       <Tabs
         className="gap-0"
         onValueChange={(value) => {
-          /* SAFETY: 类型断言已复核 */
-          setScope(value as MaterialScope);
+          if (isMaterialScope(value)) {
+            setScope(value);
+          }
         }}
         value={scope}
       >

@@ -106,14 +106,7 @@ export function useTitleBarDrag(setMaximized: (next: boolean) => void) {
     if (e.button !== 0) {
       return;
     }
-    if (
-      /* SAFETY: 类型断言已复核 */
-      !isDragRegionTarget(
-        e.target as unknown as {
-          closest?: (s: string) => unknown;
-        },
-      )
-    ) {
+    if (!isDragRegionTarget(e.target instanceof Element ? e.target : null)) {
       return;
     }
     void startWindowDrag();
@@ -121,14 +114,7 @@ export function useTitleBarDrag(setMaximized: (next: boolean) => void) {
 
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (
-        /* SAFETY: 类型断言已复核 */
-        !isDragRegionTarget(
-          e.target as unknown as {
-            closest?: (s: string) => unknown;
-          },
-        )
-      ) {
+      if (!isDragRegionTarget(e.target instanceof Element ? e.target : null)) {
         return;
       }
       void toggleMaximizeWindow().then((next) => {

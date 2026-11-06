@@ -7,6 +7,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useInterval } from "~/components/ui/use-interval";
+import { isPlainRecord } from "~/lib/is-record";
 import { tailWindowAppend } from "~/lib/page-window";
 import type { ValidationError } from "~/lib/comfyui/validation";
 import { isTerminalFailureTaskStatus } from "~/lib/task-state";
@@ -33,6 +34,55 @@ type SseFrame = {
   validationErrors?: unknown;
   workflowName?: unknown;
 };
+
+const STEP_LOG_LEVELS: ReadonlyArray<StepLogEntry["level"]> = [
+  "info",
+  "progress",
+  "warn",
+  "error",
+  "success",
+];
+
+function isStepLogLevel(v: unknown): v is StepLogEntry["level"] {
+  return STEP_LOG_LEVELS.some((level) => level === v);
+}
+
+/** `JSON.parse` 产出 `unknown`：是普通对象才按帧字段继续收窄。 */
+function isSseFrame(v: unknown): v is SseFrame {
+  return isPlainRecord(v);
+}
+
+function isStepLogEntry(v: unknown): v is StepLogEntry {
+  if (!isPlainRecord(v)) {
+    return false;
+  }
+  return (
+    typeof v.t === "number" &&
+    typeof v.msg === "string" &&
+    isStepLogLevel(v.level) &&
+    (v.client === undefined || typeof v.client === "boolean") &&
+    (v.src === undefined || typeof v.src === "string")
+  );
+}
+
+function isValidationError(v: unknown): v is ValidationError {
+  if (!isPlainRecord(v)) {
+    return false;
+  }
+  return (
+    typeof v.nodeId === "string" &&
+    typeof v.classType === "string" &&
+    typeof v.field === "string" &&
+    typeof v.message === "string"
+  );
+}
+
+function isValidationErrorList(v: unknown): v is Array<ValidationError> {
+  if (!Array.isArray(v)) {
+    return false;
+  }
+  return v.every((item: unknown) => isValidationError(item));
+}
 
 /** 把失败原因补成一条 error 日志行（横幅之外，时间线里也看得见，#378）。
  *  纯函数 + 显式 next：去重在 updater 之外完成，避免在 setState updater 里做副作用
@@ -139,13 +189,18 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
     };
     es.onmessage = (ev) => {
       try {
-        /* SAFETY: 类型断言已复核 */
-        /* SAFETY: 类型断言已复核 */
-        const msg = JSON.parse(ev.data as string) as SseFrame;
+        if (typeof ev.data !== "string") {
+          /* SSE 帧不是文本 —— 忽略 */
+          return;
+        }
+        const parsed: unknown = JSON.parse(ev.data);
+        if (!isSseFrame(parsed)) {
+          return;
+        }
+        const msg = parsed;
         lastActivityRef.current = Date.now();
-        if (msg.type === "log" && Boolean(msg.entry)) {
-          /* SAFETY: 类型断言已复核 */
-          const entry = msg.entry as StepLogEntry;
+        const entry = msg.entry;
+        if (msg.type === "log" && isStepLogEntry(entry)) {
           appendStepLog(tid, entry);
           setLogs((prev) => {
             if (prev.some((prev) => prev.t === entry.t && prev.msg === entry.msg)) {
@@ -154,9 +209,9 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
             return tailWindowAppend(prev, entry, MAX_LOGS_PER_TASK);
           });
         } else if (msg.type === "state") {
-          if (Array.isArray(msg.validationErrors)) {
-            /* SAFETY: 类型断言已复核 */
-            const ves = msg.validationErrors as Array<ValidationError>;
+          const rawValidationErrors = msg.validationErrors;
+          if (isValidationErrorList(rawValidationErrors)) {
+            const ves = rawValidationErrors;
             setStepLogValidationErrors(tid, ves);
             setValidationErrors(ves);
           }

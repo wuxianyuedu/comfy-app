@@ -22,6 +22,13 @@ import {
   type TaskMediaType,
 } from "~/lib/project-canvas/history-panel-types";
 
+/** 作用域白名单：`Tabs` 的 `onValueChange` 给的是 `string`，收窄回联合类型。 */
+const HISTORY_SCOPE_VALUES: ReadonlyArray<string> = ["project", "all"];
+
+function isHistoryScope(value: unknown): value is HistoryScope {
+  return typeof value === "string" && HISTORY_SCOPE_VALUES.includes(value);
+}
+
 function KindIcon({ kind }: { kind: TaskMediaType }) {
   if (kind === "video") {
     return <Video size={16} strokeWidth={1.8} />;
@@ -99,8 +106,9 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
         <Tabs
           className="gap-0"
           onValueChange={(value) => {
-            /* SAFETY: 类型断言已复核 */
-            setScope(value as HistoryScope);
+            if (isHistoryScope(value)) {
+              setScope(value);
+            }
           }}
           value={scope}
         >

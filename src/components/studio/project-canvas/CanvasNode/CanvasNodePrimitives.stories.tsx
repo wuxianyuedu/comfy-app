@@ -17,10 +17,10 @@ import {
  * 档位与配色一律从 `canvas-types` / `ui/status-badge` 的常量派生，不手抄字面量，
  * 否则字面量漂了而画布看着正常（规范 16 §16.2.4.5）。
  */
-/* SAFETY: 类型断言已复核 */
-const STATUSES = Object.keys(STATUS_LABEL) as Array<keyof typeof STATUS_LABEL>;
-/* SAFETY: 类型断言已复核 */
-const KINDS = Object.keys(NODE_META) as Array<NodeKind>;
+const STATUSES = Object.keys(STATUS_LABEL).filter((k): k is keyof typeof STATUS_LABEL =>
+  Object.hasOwn(STATUS_LABEL, k),
+);
+const KINDS = Object.keys(NODE_META).filter((k): k is NodeKind => Object.hasOwn(NODE_META, k));
 
 const meta = {
   title: "Studio/CanvasNodePrimitives",
