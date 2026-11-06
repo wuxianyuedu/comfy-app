@@ -347,7 +347,7 @@ export async function inspectPort(port, { listenPids, belongsToRoot, root }) {
  * @returns {boolean}
  */
 export function usesExplicitPort(portOrNull) {
-  return Number.isInteger(portOrNull) && /** @type {number} */ (portOrNull) > 0;
+  return typeof portOrNull === "number" && Number.isInteger(portOrNull) && portOrNull > 0;
 }
 
 /** 应用服务自证身份用的探针（`pnpm dev` / `pnpm start` / `next dev` 都带它）。 */

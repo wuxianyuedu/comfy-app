@@ -72,7 +72,13 @@ export function isPidAlive(pid) {
     return true;
   } catch (error) {
     // EPERM：进程存在但没权限发信号 —— 仍算活着。
-    return /** @type {NodeJS.ErrnoException} */ (error).code === "EPERM";
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof error.code === "string" &&
+      error.code === "EPERM"
+    );
   }
 }
 

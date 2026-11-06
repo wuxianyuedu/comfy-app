@@ -47,6 +47,24 @@ import {
 } from "../src/lib/process/python-resolve.ts";
 import { describeProbeMisses, toProbedCandidates } from "../src/lib/process/probe-exe.ts";
 
+/** @typedef {import("../src/lib/process/probe-exe.ts").ProbeFailure} ProbeFailure */
+
+/**
+ * `find` 是可注入的，`missed` 的 `failure` 在本文件里只是 `unknown`；喂给
+ * `toProbedCandidates` 之前先按 `ProbeFailure` 的三个 `kind` 收窄，
+ * 形状不符的那条不参与打印。
+ * @param {{command: string, failure: unknown}} miss
+ * @returns {miss is {command: string, failure: ProbeFailure}}
+ */
+function isProbedMiss(miss) {
+  const { failure } = miss;
+  if (typeof failure !== "object" || failure === null || !("kind" in failure)) {
+    return false;
+  }
+  const kind = failure.kind;
+  return kind === "spawn-error" || kind === "nonzero-exit" || kind === "timeout";
+}
+
 /** 与 `ci-toolchain-python.mjs` 的 `PY_CANDIDATES` 同口径（那里是唯一出处）。 */
 const CANDIDATES =
   process.platform === "win32" ? ["python", "py", "python3"] : ["python3", "python"];
@@ -121,7 +139,7 @@ export function probeLines({ run, resolve = resolvePython, find = findAcrossCand
       /* `missed` 的 `failure` 是 `ProbeFailure`（`python-resolve.ts` 的类型），而本文件
        * 是 `.mjs`、没有类型可写 —— 摊平那一步在 `probe-exe.ts` 里，这里只转交。 */
       lines.push(
-        `     逐候选：${describeProbeMisses(toProbedCandidates(/** @type {any} */ (missed)))}`,
+        `     逐候选：${describeProbeMisses(toProbedCandidates(missed.filter(isProbedMiss)))}`,
       );
     }
     lines.push(
