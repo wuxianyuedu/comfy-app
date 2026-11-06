@@ -13,6 +13,7 @@ import { hash } from "node:crypto";
 import path from "node:path";
 
 import { DEFAULTS, migrateExitDefaults, type AppSettings, type ExitPolicy } from "./index";
+import { isRecord } from "~/lib/is-record";
 
 export * from "./index";
 export type { AppSettings, ExitPolicy };
@@ -140,14 +141,19 @@ export function getSettingsSync(): AppSettings {
     if (raw === null) {
       throw new Error("设置文件读不到");
     }
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(raw) as Partial<AppSettings> & {
-      comfyuiUrl?: string;
-    };
-    /* comfyuiUrl 已废弃（ComfyUI 由本应用拉起，连接地址固定 127.0.0.1:端口）；
-     * 从旧文件里剥掉，下次保存时彻底从磁盘消失。 */
-    delete parsed.comfyuiUrl;
-    cache = migrateExitDefaults({ ...DEFAULTS, ...parsed });
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed)) {
+      throw new Error("设置文件不是对象");
+    }
+    /* 只取 DEFAULTS 认识的字段（顺带剥掉已废弃的 comfyuiUrl）：
+     * 值仍按原样透传 —— 与从前的整份合并等价，但不再需要断言对象形状。 */
+    const known: Partial<AppSettings> = {};
+    for (const key of Object.keys(DEFAULTS)) {
+      if (Object.hasOwn(parsed, key)) {
+        Reflect.set(known, key, parsed[key]);
+      }
+    }
+    cache = migrateExitDefaults({ ...DEFAULTS, ...known });
   } catch {
     cache = migrateExitDefaults({ ...DEFAULTS });
   }

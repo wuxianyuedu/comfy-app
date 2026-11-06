@@ -155,13 +155,8 @@ describe("shouldUseBrowserTab — 浏览器形态走新浏览器页签", () => {
 });
 
 describe("probeComfyEmbeddable — 取事实（IO）", () => {
-  /* SAFETY: 类型断言已复核 */
   const res = (headers: Record<string, string>, status = 200) =>
-    ({
-      ok: status < 400,
-      status,
-      headers: new Headers(headers),
-    }) as Response;
+    new Response(null, { status, headers: new Headers(headers) });
 
   it("同源不发请求，直接可嵌", async () => {
     const fetchImpl = vi.fn<typeof fetch>();
@@ -176,8 +171,7 @@ describe("probeComfyEmbeddable — 取事实（IO）", () => {
     );
     await probeComfyEmbeddable(COMFY, HOST, fetchImpl);
     const init = fetchImpl.mock.calls[0]?.[1];
-    /* SAFETY: 类型断言已复核 */
-    expect((init?.headers as Record<string, string> | undefined)?.Origin).toBe(HOST);
+    expect(new Headers(init?.headers).get("Origin")).toBe(HOST);
   });
 
   it("ComfyUI 已开 CORS（带 Access-Control-Allow-Origin）→ 可嵌", async () => {

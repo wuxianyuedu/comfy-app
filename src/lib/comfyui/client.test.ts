@@ -64,11 +64,17 @@ beforeEach(() => {
   vi.clearAllMocks();
   resetComfyBase();
   resetProbeMissLog();
-  /* SAFETY: 类型断言已复核 */
   vi.mocked(getSettingsSync).mockReturnValue({
+    autoSyncLocalWorkflow: false,
+    comfyCliPython: "",
+    comfyuiAutoStart: true,
+    comfyuiExtraArgs: "",
     comfyuiPath: String.raw`D:\Comfy`,
     comfyuiPort: 8188,
-  } as never);
+    exitKillComfyui: false,
+    exitKillOllama: true,
+    loginRequired: false,
+  });
   vi.mocked(resolveComfyLaunchPlan).mockReturnValue(plan);
   vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
     pid: null,
@@ -273,11 +279,12 @@ describe("getView — 取字节的地址组装与失败形状", () => {
     viewReply({ status: 404 });
     const err = await getView("gone.png", "", "input").catch((error: unknown) => error);
     expect(err).toBeInstanceOf(ComfyViewError);
-    /* SAFETY: 类型断言已复核 */
-    expect((err as ComfyViewError).status).toBe(404);
+    if (!(err instanceof ComfyViewError)) {
+      throw new Error("getView 未按预期抛出 ComfyViewError");
+    }
+    expect(err.status).toBe(404);
     // 消息保持原样：`executor-finalize` 那类只判「拿不到就抛」的调用方零感知
-    /* SAFETY: 类型断言已复核 */
-    expect((err as Error).message).toBe("getView failed: 404");
+    expect(err.message).toBe("getView failed: 404");
   });
 
   it("连不上时不包成 ComfyViewError（那是「上游答了」的形状），原样把 fetch 的失败交出去", async () => {

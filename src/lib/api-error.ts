@@ -108,14 +108,12 @@ export function readApiError(body: unknown): string | null {
   if (typeof body !== "object" || body === null) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  const err: unknown = (body as Record<string, unknown>)[RESPONSE_ERROR_KEY];
+  const err: unknown = Reflect.get(body, RESPONSE_ERROR_KEY);
   if (typeof err === "string" && err.trim()) {
     return err;
   }
   if (typeof err === "object" && err !== null) {
-    /* SAFETY: 类型断言已复核 */
-    const message = (err as { message?: unknown }).message;
+    const message: unknown = Reflect.get(err, "message");
     if (typeof message === "string" && message.trim()) {
       return message;
     }

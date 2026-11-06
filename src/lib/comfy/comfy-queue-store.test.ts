@@ -46,21 +46,26 @@ class FakeEventSource {
 
 const fetchMock = vi.fn();
 
-function queueRes(payload: unknown): Response {
-  /* SAFETY: 类型断言已复核 */
+/** 可重复读的响应替身：同一份回包会被多拍复用（真实 body 只能读一次）。 */
+type QueueResponse = {
+  json: () => Promise<unknown>;
+  ok: boolean;
+};
+
+function queueRes(payload: unknown): QueueResponse {
   return {
     ok: true,
-    json: () => payload,
-  } as unknown as Response;
+    json: () => Promise.resolve(payload),
+  };
 }
 
 /** 一把可以手动收口的 Promise —— 用来造「两拍重叠」的背压现场。 */
 function deferred(): {
-  promise: Promise<Response>;
-  resolve: (value: Response) => void;
+  promise: Promise<QueueResponse>;
+  resolve: (value: QueueResponse) => void;
 } {
-  let resolve!: (value: Response) => void;
-  const promise = new Promise<Response>((res) => {
+  let resolve!: (value: QueueResponse) => void;
+  const promise = new Promise<QueueResponse>((res) => {
     resolve = res;
   });
   return { promise, resolve };
