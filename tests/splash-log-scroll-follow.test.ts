@@ -17,12 +17,13 @@ const PAGE_HTML = fs.readFileSync(path.join(ROOT, PAGE_REL), "utf8");
 
 /** 从页面里取出内联 `<script>` 的正文（页面只有这一段）。 */
 function pageScript(html: string): string {
-  const match = /<script>([\s\S]*?)<\/script>/.exec(html);
+  const match = /<script>(?<body>[\s\S]*?)<\/script>/.exec(html);
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- RegExp.exec 无匹配时运行期返回 null，规则按非空标，保留 ?. 防线
-  if (match?.[1] === undefined || match?.[1] === "") {
+  const body = match?.groups?.body ?? "";
+  if (body === "") {
     throw new Error(`${PAGE_REL} 里找不到内联 <script>`);
   }
-  return match[1];
+  return body;
 }
 
 /** 量得到的滚动几何（jsdom 不做布局，两个高度都得自己给）。 */

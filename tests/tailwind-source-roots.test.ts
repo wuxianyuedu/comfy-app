@@ -54,7 +54,7 @@ function textUnder(absDir: string): string {
         if (!skip.has(e.name)) {
           walk(path.join(dir, e.name));
         }
-      } else if (/\.(ts|tsx|css|js|mjs|cjs)$/.test(e.name)) {
+      } else if (/\.(?:ts|tsx|css|js|mjs|cjs)$/.test(e.name)) {
         out.push(readFileSync(path.join(dir, e.name), "utf8"));
       }
     }
@@ -68,8 +68,8 @@ function textUnder(absDir: string): string {
 /** 从 globals.css 里读出 `@source` 指令的目标（忽略 `inline(...)` 点名与 `not` 形态）。 */
 function declaredRoots(css: string): Array<string> {
   const out: Array<string> = [];
-  for (const m of css.matchAll(/^\s*@source\s+"([^"]+)"\s*;/gm)) {
-    const target = m[1];
+  for (const m of css.matchAll(/^\s*@source\s+"(?<target>[^"]+)"\s*;/gm)) {
+    const target = m.groups?.target;
     if (target !== undefined && target !== "" && !target.startsWith("inline(")) {
       out.push(target);
     }
@@ -160,7 +160,8 @@ describe("源扫描根是显式名单", () => {
       "除了应用本体之外一棵根都没有 —— 下面那格「摘根必须丢样式」会对着空名单假绿",
     ).toBeGreaterThan(0);
 
-    const unescape = (s: string) => s.replaceAll(/\\(.)/g, "$1").replace(/^\./, "");
+    const unescape = (s: string) =>
+      s.replaceAll(/\\(?<escaped>.)/g, "$<escaped>").replace(/^\./, "");
     for (const rel of extras) {
       const onlyThisRoot = [...withRoots].filter((s) => !base.has(s));
       expect(
@@ -188,7 +189,8 @@ describe("源扫描根是显式名单", () => {
     /* 这一格是「.storybook 为什么必须在根里」的**正面**表述：上面那格判的是差集，
      * 而把一棵根从声明与登记里同时摘掉时差集会一起消失 —— 那一格就没人可依了。
      * 所以这里不看名单，只看「这些面写了哪些数值型任意值」与「产物里有没有它们」。 */
-    const unescape = (s: string) => s.replaceAll(/\\(.)/g, "$1").replace(/^\./, "");
+    const unescape = (s: string) =>
+      s.replaceAll(/\\(?<escaped>.)/g, "$<escaped>").replace(/^\./, "");
     const inProduct = new Set([...selectorParts(rootsCss)].map((s) => unescape(s)));
     for (const surface of MUST_BE_SCANNED) {
       const text = textUnder(path.join(ROOT, surface.dir));

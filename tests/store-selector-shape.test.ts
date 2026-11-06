@@ -29,7 +29,7 @@ function sourceFiles(dir = SRC): Array<string> {
     if (!/\.tsx?$/.test(entry.name)) {
       continue;
     }
-    if (/\.(test|stories)\.tsx?$/.test(entry.name)) {
+    if (/\.(?:test|stories)\.tsx?$/.test(entry.name)) {
       continue;
     }
     out.push(full);
@@ -43,10 +43,10 @@ function realStoreHooks(): Array<string> {
   for (const file of sourceFiles()) {
     const code = stripComments(readFileSync(file, "utf8"));
     for (const m of code.matchAll(
-      /export\s+const\s+(use[A-Za-z0-9_]+)\s*=\s*create(?:Store)?\s*[<(]/g,
+      /export\s+const\s+(?<hook>use[A-Za-z0-9_]+)\s*=\s*create(?:Store)?\s*[<(]/g,
     )) {
-      const name = m[1];
-      if (name !== undefined && name !== "") {
+      const name = m.groups?.hook ?? "";
+      if (name !== "") {
         names.add(name);
       }
     }
@@ -64,12 +64,12 @@ const EXTRA_SUBSCRIBERS = [
 /** 从配置源码取 `STORE_SELECTOR_HOOKS` 清单（不在此重抄一份）。 */
 function configuredHooks(file = CONFIG): Array<string> {
   const src = readFileSync(file, "utf8");
-  const block = /const STORE_SELECTOR_HOOKS = \[([\s\S]*?)\];/.exec(src)?.[1];
+  const block = /const STORE_SELECTOR_HOOKS = \[(?<block>[\s\S]*?)\];/.exec(src)?.groups?.block;
   if (block === undefined || block === "") {
     return [];
   }
-  return [...block.matchAll(/"([^"]+)"/g)]
-    .map((m) => m[1] ?? "")
+  return [...block.matchAll(/"(?<name>[^"]+)"/g)]
+    .map((m) => m.groups?.name ?? "")
     .filter((n) => n.length > 0)
     .sort();
 }
@@ -143,7 +143,7 @@ describe("③ selector 真的会响", () => {
       .split("\n")
       .filter((line) => line.includes("CallExpression[callee.name"))
       .map((line) => {
-        const body = /selector:\s*`([^`]*)`/.exec(line)?.[1] ?? "";
+        const body = /selector:\s*`(?<body>[^`]*)`/.exec(line)?.groups?.body ?? "";
         return body.replace('${STORE_SELECTOR_HOOKS.join("|")}', hooks);
       })
       .filter((s) => s.length > 0);

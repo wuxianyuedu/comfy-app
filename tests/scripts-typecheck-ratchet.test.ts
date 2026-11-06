@@ -342,7 +342,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
    * 「盘上没有未入库的 `.mjs`」会撞上同一次运行里另一份用例的样本（PR #2783 实测）。前缀不写死（与对账`check-bundle-budget.cjs` 同口径，写两遍必漂）：取不到就判「没判」，不是「没有残留」。 */
   function canaryScratchPrefix(): string | null {
     const src = readFileSync(join(REPO_ROOT, "scripts", "eslint-gate-canary.mjs"), "utf8");
-    return /([A-Za-z0-9_-]*canary-)/.exec(src)?.[1] ?? null;
+    return /(?<prefix>[A-Za-z0-9_-]*canary-)/.exec(src)?.groups?.prefix ?? null;
   }
 
   it("同跑兄弟件那一格：canary 的临时样本认得出，别的残留不认进去", () => {

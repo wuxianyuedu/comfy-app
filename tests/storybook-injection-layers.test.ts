@@ -97,7 +97,7 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
     /* 「手抄不够就编一段看着像日志的文本」与「手抄一份 LogEntry[]」是同一件事的
        两半：前者仍然过解析，后者跳过解析。所以量大的那两档（分页长线、同毫秒
        十几行）用生成器 —— 而生成器必须**交出文本**（`join("\n")`），不是数组。 */
-    expect(store, "长线 / 同毫秒场景要有生成器").toMatch(/function (appLines|sameMsLines)\(/);
+    expect(store, "长线 / 同毫秒场景要有生成器").toMatch(/function (?:appLines|sameMsLines)\(/);
     /* 生成器只负责重复，解析仍归 `parseFileLogs`（上面那条已钉住整体口径）；
        这里钉的是生成器的**输出形状**：拼成一行文本给 `text` 字段用。 */
     expect(store, "生成器要拼成原文（join 出行文本），不是产条目数组").toMatch(
@@ -124,12 +124,12 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
       join(ROOT, "src/components/studio/canvas/flow-focus-endpoints.ts"),
       "utf8",
     );
-    const prefixMatch = /OUTPUT_PORT_HANDLE_PREFIX\s*=\s*"([^"]+)"/.exec(prefixSrc);
+    const prefixMatch = /OUTPUT_PORT_HANDLE_PREFIX\s*=\s*"(?<prefix>[^"]+)"/.exec(prefixSrc);
     expect(
       prefixMatch,
       "找不到输出端口前缀常量 —— 判据失去了唯一事实源，别在这里抄一份字面量",
     ).not.toBeNull();
-    const outPrefix = prefixMatch?.[1] ?? "";
+    const outPrefix = prefixMatch?.groups?.prefix ?? "";
 
     /* ── 两侧都现算 ─────────────────────────────────────────────── */
 
@@ -138,9 +138,9 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
       flow.indexOf("export const CANVAS_SCENES = {"),
       flow.indexOf("} satisfies Record<string, CanvasScene>;"),
     );
-    const sceneHandles = [...sceneBlock.matchAll(/(?:source|target)Handle:\s*"([^"]+)"/g)].map(
-      (m) => m[1],
-    );
+    const sceneHandles = [
+      ...sceneBlock.matchAll(/(?:source|target)Handle:\s*"(?<handle>[^"]+)"/g),
+    ].map((m) => m.groups?.handle ?? "");
     expect(sceneHandles.length, "画布场景里一条边都没有 —— 这条判据在空跑").toBeGreaterThan(0);
 
     /* 渲染器侧：消费这些场景的 story 文件里，节点渲染器实际挂的 handle id。 */
@@ -156,7 +156,9 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
     const rowsStart = storySrc.indexOf("const rows = useMemo(", nodeStart);
     expect(rowsStart, "找不到 PortDemoNode 的 rows —— 判据在空跑").toBeGreaterThan(-1);
     const nodeBlock = storySrc.slice(rowsStart, storySrc.indexOf("],", rowsStart));
-    const mountedHandles = [...nodeBlock.matchAll(/id: "([^"]+)"/g)].map((m) => m[1] ?? "");
+    const mountedHandles = [...nodeBlock.matchAll(/id: "(?<id>[^"]+)"/g)].map(
+      (m) => m.groups?.id ?? "",
+    );
     expect(
       mountedHandles.length,
       "解析不到节点渲染器挂的 handle —— 这条判据在空跑",
@@ -172,8 +174,8 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
     }
     /* 输出端必须真带 `out:` 前缀（前缀是 React Flow 找锚点的键的一部分，
        少了它就连不上任何真输出端口）。 */
-    const sceneSourceHandles = [...sceneBlock.matchAll(/sourceHandle:\s*"([^"]+)"/g)].map(
-      (m) => m[1] ?? "",
+    const sceneSourceHandles = [...sceneBlock.matchAll(/sourceHandle:\s*"(?<handle>[^"]+)"/g)].map(
+      (m) => m.groups?.handle ?? "",
     );
     expect(
       sceneSourceHandles.length,
@@ -204,14 +206,18 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
 
     /* 场景里的 nodes / edges：只认本文件导出的那几档，逐档核。 */
     const sceneBlock = screen.slice(screen.indexOf("const PROJECT_SCENES"));
-    const ids = [...sceneBlock.matchAll(/\bid:\s*"([^"]+)"/g)].map((m) => m[1]);
+    const ids = [...sceneBlock.matchAll(/\bid:\s*"(?<id>[^"]+)"/g)].map((m) => m.groups?.id ?? "");
     expect(ids.length, "解析不到任何节点 / 边 id —— 这条判据在空跑").toBeGreaterThan(0);
 
     /* 边：`source` / `target` 指向节点，target 那条必须落到 `picture` 上。 */
     const edges = [
-      ...sceneBlock.matchAll(/\{[^{}]*\bsource:\s*"([^"]+)"[^{}]*\btarget:\s*"([^"]+)"[^{}]*\}/g),
+      ...sceneBlock.matchAll(
+        /\{[^{}]*\bsource:\s*"(?<source>[^"]+)"[^{}]*\btarget:\s*"(?<target>[^"]+)"[^{}]*\}/g,
+      ),
     ];
-    for (const [, src, dst] of edges) {
+    for (const m of edges) {
+      const src = m.groups?.source ?? "";
+      const dst = m.groups?.target ?? "";
       expect(src, `边 ${src}→${dst} 的源要为 output`).toBeTruthy();
       expect(dst, `边 ${src}→${dst} 的目标要为 picture`).toBeTruthy();
     }
