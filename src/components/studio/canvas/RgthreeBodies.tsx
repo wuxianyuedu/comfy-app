@@ -1,4 +1,5 @@
 "use client";
+import { isPlainRecord } from "~/lib/is-record";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { trimmed } from "~/lib/number-format";
 import { compareText } from "~/lib/ordered-set";
@@ -132,13 +133,12 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown
   // 逐 lora 行：过滤掉表头 widget 与空占位。
   // 行的形状取决于包（裸文件名字符串，或一条 widget 记录）。
   type PowerLoraWidget = string | Record<string, unknown>;
-  /* SAFETY: 类型断言已复核 */
-  const loras: Array<PowerLoraWidget> = (widgets as Array<PowerLoraWidget>).filter((widget) => {
+  const loras: Array<PowerLoraWidget> = widgets.filter((widget): widget is PowerLoraWidget => {
     // oxlint-disable-next-line no-unnecessary-condition -- widgets 来自 ComfyUI 的 widgets_values 原始 JSON，元素可能是 null，判空是运行时守卫
     if (widget === null || widget === undefined) {
       return false;
     }
-    if (typeof widget !== "object" || Array.isArray(widget)) {
+    if (!isPlainRecord(widget)) {
       return typeof widget === "string" && widget.length > 0; // bare lora filename
     }
     if (Object.keys(widget).length === 0) {
@@ -201,11 +201,9 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown
         loras.map((widget, index) => {
           const isObj = typeof widget === "object" && !Array.isArray(widget);
           const rec = isObj ? widget : undefined;
+          const recName = rec?.name ?? rec?.lora_name ?? rec?.model_name;
           const name =
-            /* SAFETY: 类型断言已复核 */
-            typeof widget === "string"
-              ? widget
-              : (((rec?.name ?? rec?.lora_name ?? rec?.model_name) as string | undefined) ?? "");
+            typeof widget === "string" ? widget : typeof recName === "string" ? recName : "";
           const modelStr = isObj
             ? fmtStrength(rec?.model_strength ?? rec?.model_str ?? rec?.strength)
             : undefined;

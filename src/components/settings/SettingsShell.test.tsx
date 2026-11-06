@@ -8,18 +8,27 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SETTINGS_SECTIONS, type Section } from "~/app/(main)/settings/hooks/use-settings-page";
+import { isRecord } from "~/lib/is-record";
 
 import { SettingsShell, sectionAnchorId } from "./SettingsShell";
 import { SETTINGS_SCROLL_ORDER, TREE_GROUPS } from "./settings-section-summary";
 
 afterEach(cleanup);
 
+/** `Object.fromEntries` 只给到字符串索引 —— 用运行期补全校验收窄成外壳要的完整映射。 */
+function isSectionChildren(v: unknown): v is Record<Section, React.ReactNode> {
+  return isRecord(v) && SETTINGS_SECTIONS.every((item) => item.id in v);
+}
+
 /** 每个分区一段可辨识的正文（判「全量渲染」时按它找）。 */
-function sectionsStub() {
-  /* SAFETY: 类型断言已复核 */
-  return Object.fromEntries(
+function sectionsStub(): Record<Section, React.ReactNode> {
+  const filled = Object.fromEntries(
     SETTINGS_SECTIONS.map((item) => [item.id, <p key={item.id}>正文-{item.id}</p>]),
-  ) as Record<Section, React.ReactNode>;
+  );
+  if (!isSectionChildren(filled)) {
+    throw new Error("SETTINGS_SECTIONS 未覆盖全部分区");
+  }
+  return filled;
 }
 
 function renderShell(section: Section = "llmLocal", onSelect = vi.fn()) {

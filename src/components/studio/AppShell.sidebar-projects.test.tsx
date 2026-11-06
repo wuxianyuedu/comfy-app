@@ -62,9 +62,10 @@ function renderShell() {
 function projectGroup(): HTMLElement {
   const btn = screen.getByRole("button", { name: "查看全部" });
   const group = btn.closest('[data-slot="sidebar-group"]');
-  expect(group).not.toBeNull();
-  /* SAFETY: 类型断言已复核 */
-  return group as HTMLElement;
+  if (!(group instanceof HTMLElement)) {
+    throw new Error("没找到「项目」分组容器（data-slot=sidebar-group）");
+  }
+  return group;
 }
 
 describe("侧栏「项目」分组的缩略态", () => {

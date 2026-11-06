@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect } from "react";
 import { useStoreApi, type Edge, type Node } from "@xyflow/react";
+import { isRecord } from "~/lib/is-record";
 import {
   resolveEdgeFocus,
   resolvePortFocusRoles,
@@ -41,23 +42,17 @@ export function readPortFocusRole(
     return "none";
   }
   const table = data?.[NODE_PORT_FOCUS_DATA_KEY];
-  if (typeof table !== "object" || table === null) {
+  if (!isRecord(table)) {
     return "none";
   }
-  /* SAFETY: 类型断言已复核 */
-  const role = (table as Record<string, unknown>)[handle];
+  const role = table[handle];
   return role === "upstream" || role === "downstream" || role === "related" ? role : "none";
 }
 
-/** 两个端口级别表是否等价（避免每次选中都重建节点对象）。 */
-function portFocusEquals(
-  a: Record<string, EdgeFocusRole> | undefined,
-  b: Record<string, EdgeFocusRole> | undefined,
-): boolean {
-  if (a === b) {
-    return true;
-  }
-  if (!a || !b) {
+/** 两个端口级别表是否等价（避免每次选中都重建节点对象）。
+ *  入参来自节点 data 的原始 JSON，非对象形状一律按「不等价」处理（调用处据此重建清洗）。 */
+function portFocusEquals(a: unknown, b: Record<string, EdgeFocusRole>): boolean {
+  if (!isRecord(a)) {
     return false;
   }
   const keys = Object.keys(a);
@@ -196,12 +191,8 @@ export function useRelatedEdgesHighlight(
           bucket.downstream.forEach((handle) => (nextTable[handle] = "downstream"));
           bucket.related.forEach((handle) => (nextTable[handle] = "related"));
         }
-        /* SAFETY: 类型断言已复核 */
-        const data = node.data as Record<string, unknown> | undefined;
-        /* SAFETY: 类型断言已复核 */
-        const previousTable = data?.[NODE_PORT_FOCUS_DATA_KEY] as
-          | Record<string, EdgeFocusRole>
-          | undefined;
+        const data: Record<string, unknown> | undefined = node.data;
+        const previousTable = data?.[NODE_PORT_FOCUS_DATA_KEY];
         /* 没有端口标记且本来就没有字段 → 原样返回，不制造无意义的新对象。 */
         const previousActive = data?.[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
         const activeUpToDate = focusActive ? previousActive : !previousActive;

@@ -13,7 +13,7 @@
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
 | B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 已清（子批1–12，判决面文件级豁免已整块删除）       |
-| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–5：100 份 / 236 处已清）             |
+| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–6：120 份 / 268 处已清）             |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
@@ -845,26 +845,26 @@
 | `src/components/code-update/CodeUpdateWatcher.test.tsx`                                              | 1        | 已清 |
 | `src/components/message-center/message-center-store-persistence.test.ts`                             | 1        | 已清 |
 | `src/components/message-center/message-center-store.ts`                                              | 3        | 已清 |
-| `src/components/settings/SettingsShell.stories.tsx`                                                  | 1        | 挂账 |
-| `src/components/settings/SettingsShell.test.tsx`                                                     | 1        | 挂账 |
-| `src/components/settings/use-section-scroll-spy.test.ts`                                             | 2        | 挂账 |
-| `src/components/settings/use-section-scroll-spy.ts`                                                  | 2        | 挂账 |
-| `src/components/studio/AppShell.sidebar-projects.test.tsx`                                           | 1        | 挂账 |
-| `src/components/studio/canvas/FlowNodePinRows.tsx`                                                   | 1        | 挂账 |
-| `src/components/studio/canvas/FlowNodeWidgetRows.tsx`                                                | 1        | 挂账 |
-| `src/components/studio/canvas/hooks/use-canvas-settings.ts`                                          | 2        | 挂账 |
-| `src/components/studio/canvas/hooks/use-related-edges-highlight.ts`                                  | 2        | 挂账 |
-| `src/components/studio/canvas/IOEditContext.tsx`                                                     | 1        | 挂账 |
-| `src/components/studio/canvas/NodeFrost.stories.tsx`                                                 | 2        | 挂账 |
-| `src/components/studio/canvas/PortFocusRows.test.tsx`                                                | 2        | 挂账 |
-| `src/components/studio/canvas/RgthreeBodies.tsx`                                                     | 2        | 挂账 |
-| `src/components/studio/canvas/SubgraphWidgetRow.tsx`                                                 | 2        | 挂账 |
-| `src/components/studio/canvas/WorkflowEdge.test.tsx`                                                 | 3        | 挂账 |
-| `src/components/studio/canvas/WorkflowNode.test.tsx`                                                 | 2        | 挂账 |
-| `src/components/studio/canvas/WorkflowSubgraphNode.test.tsx`                                         | 1        | 挂账 |
-| `src/components/studio/FilmStudioPropertyPanel.tsx`                                                  | 1        | 挂账 |
-| `src/components/studio/history/history-detail-derive.test.ts`                                        | 2        | 挂账 |
-| `src/components/studio/history/history-detail-derive.ts`                                             | 1        | 挂账 |
+| `src/components/settings/SettingsShell.stories.tsx`                                                  | 1        | 已清 |
+| `src/components/settings/SettingsShell.test.tsx`                                                     | 1        | 已清 |
+| `src/components/settings/use-section-scroll-spy.test.ts`                                             | 2        | 已清 |
+| `src/components/settings/use-section-scroll-spy.ts`                                                  | 2        | 已清 |
+| `src/components/studio/AppShell.sidebar-projects.test.tsx`                                           | 1        | 已清 |
+| `src/components/studio/canvas/FlowNodePinRows.tsx`                                                   | 1        | 已清 |
+| `src/components/studio/canvas/FlowNodeWidgetRows.tsx`                                                | 1        | 已清 |
+| `src/components/studio/canvas/hooks/use-canvas-settings.ts`                                          | 2        | 已清 |
+| `src/components/studio/canvas/hooks/use-related-edges-highlight.ts`                                  | 2        | 已清 |
+| `src/components/studio/canvas/IOEditContext.tsx`                                                     | 1        | 已清 |
+| `src/components/studio/canvas/NodeFrost.stories.tsx`                                                 | 2        | 已清 |
+| `src/components/studio/canvas/PortFocusRows.test.tsx`                                                | 2        | 已清 |
+| `src/components/studio/canvas/RgthreeBodies.tsx`                                                     | 2        | 已清 |
+| `src/components/studio/canvas/SubgraphWidgetRow.tsx`                                                 | 2        | 已清 |
+| `src/components/studio/canvas/WorkflowEdge.test.tsx`                                                 | 3        | 已清 |
+| `src/components/studio/canvas/WorkflowNode.test.tsx`                                                 | 2        | 已清 |
+| `src/components/studio/canvas/WorkflowSubgraphNode.test.tsx`                                         | 1        | 已清 |
+| `src/components/studio/FilmStudioPropertyPanel.tsx`                                                  | 1        | 已清 |
+| `src/components/studio/history/history-detail-derive.test.ts`                                        | 2        | 已清 |
+| `src/components/studio/history/history-detail-derive.ts`                                             | 1        | 已清 |
 | `src/components/studio/history/HistoryDetailModal.tsx`                                               | 1        | 挂账 |
 | `src/components/studio/history/HistoryList.tsx`                                                      | 1        | 挂账 |
 | `src/components/studio/history/ImageRedrawPanel.tsx`                                                 | 1        | 挂账 |

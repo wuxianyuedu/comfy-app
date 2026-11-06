@@ -74,8 +74,10 @@ export function NodeIdChip({ nodeId, variant }: { nodeId: string; variant: "node
 
   const handleOpen = (e: React.SyntheticEvent) => {
     e.stopPropagation();
-    /* SAFETY: 类型断言已复核 */
-    const el = e.currentTarget as HTMLElement;
+    const el = e.currentTarget;
+    if (!(el instanceof HTMLElement)) {
+      return;
+    }
     requestShow(el, nodeId, variant);
   };
 

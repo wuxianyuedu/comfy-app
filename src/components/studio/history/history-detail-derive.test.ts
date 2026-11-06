@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import type { ModeContract } from "~/lib/workshop/model-mode-contract";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 
 import {
@@ -19,15 +20,39 @@ import {
 } from "./history-detail-derive";
 import type { TaskDetail } from "./history-types";
 
-/** 只造测试关心的字段：TaskDetail 很大，其余字段用 unknown 兜。 */
-function makeDetail(params: unknown, extra: Partial<TaskDetail> = {}): TaskDetail {
-  /* SAFETY: 类型断言已复核 */
-  return {
-    id: "t-1",
-    params,
-    images: [],
-    ...extra,
-  } as unknown as TaskDetail;
+/** TaskDetail 很大，这里只造测试关心的 params，其余字段按数据库行的必填形状补齐。 */
+const TASK_DETAIL_BASE: TaskDetail = {
+  id: "t-1",
+  userId: "u-test",
+  type: "image",
+  prompt: "",
+  negativePrompt: null,
+  params: {},
+  workflowName: "wf-test",
+  workflowSnapshot: null,
+  projectId: null,
+  shotId: null,
+  referenceImages: null,
+  parentId: null,
+  status: "SUCCEEDED",
+  promptId: null,
+  progress: 0,
+  resultImages: null,
+  logs: null,
+  rawCli: null,
+  error: null,
+  validationErrors: null,
+  createdAt: new Date(0),
+  finishedAt: null,
+  claimedBy: null,
+  claimedAt: null,
+  execPayload: null,
+  progressNode: null,
+  images: [],
+};
+
+function makeDetail(params: unknown): TaskDetail {
+  return { ...TASK_DETAIL_BASE, params };
 }
 
 /** 造一份带作者标签的 IO 表（键是 ioKey：`<nodeId>::widget::<name>`）。 */
@@ -124,10 +149,9 @@ describe("deriveWorkshopParams", () => {
   });
 
   it("用户改过的模式契约优先于内置默认", () => {
-    /* SAFETY: 类型断言已复核 */
-    const contracts = [
+    const contracts: Array<ModeContract> = [
       { mode: "T2I", inputs: ["prompt", "size"], output: "image" },
-    ] as unknown as Parameters<typeof deriveWorkshopParams>[2];
+    ];
     const rows = deriveWorkshopParams(makeDetail({ prompt: "x" }), "T2I", contracts, null);
     expect(rows.map((r) => r.id)).toEqual(["prompt", "size"]);
   });
