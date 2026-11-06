@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/components/settings/SettingsShell.stories.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/settings/SettingsShell.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/settings/use-section-scroll-spy.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/settings/use-section-scroll-spy.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/AppShell.sidebar-projects.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/canvas/FlowNodePinRows.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/canvas/FlowNodeWidgetRows.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/canvas/hooks/use-canvas-settings.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/canvas/hooks/use-related-edges-highlight.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/canvas/IOEditContext.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/canvas/NodeFrost.stories.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/canvas/PortFocusRows.test.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/canvas/RgthreeBodies.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/canvas/SubgraphWidgetRow.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/canvas/WorkflowEdge.test.tsx", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/canvas/WorkflowNode.test.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/canvas/WorkflowSubgraphNode.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/FilmStudioPropertyPanel.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/history/history-detail-derive.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/history/history-detail-derive.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/components/studio/history/HistoryDetailModal.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/components/studio/history/HistoryList.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/components/studio/history/ImageRedrawPanel.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用

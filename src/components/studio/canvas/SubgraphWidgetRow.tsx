@@ -11,10 +11,6 @@ import { renderSubgraphWidgetValue, valueCellColor } from "../workflow-utils";
 import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
 import type { RawInputMeta } from "../workflow-types";
 
-/** COMBO 输入额外携带自己的候选清单（由导入管线盖章；
- *  不属于共享的 RawInputMeta 契约）。 */
-type ComboInputMeta = RawInputMeta & { comboOptions?: unknown };
-
 type SubgraphWidgetRowProps = {
   hostNodeId?: string;
   inp: RawInputMeta;
@@ -25,6 +21,13 @@ type SubgraphWidgetRowProps = {
 
 export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: SubgraphWidgetRowProps) {
   const v: unknown = inp.widgetValue;
+  /* COMBO 输入额外携带自己的候选清单（由导入管线盖章；
+   *  不属于共享的 RawInputMeta 契约）—— 运行时按键存在性读取。 */
+  const comboOptions: unknown = "comboOptions" in inp ? inp.comboOptions : undefined;
+  const hasComboOptions = Array.isArray(comboOptions) && comboOptions.length > 0;
+  const comboOptionStrings: Array<string> = Array.isArray(comboOptions)
+    ? comboOptions.filter((option): option is string => typeof option === "string")
+    : [];
   const isConn = inp.isConnection === true || inp.isBoundary === true;
   /* 图片类 widget（IMAGE / MASK / IMAGEUPLOAD）：画布上也要把选中的图
    *  显示出来 —— 此前这类 widget 只渲染成纯文本值（甚至因为值是 ComfyUI
@@ -35,8 +38,6 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
   const previewUrl = isImageType ? mediaPreviewUrl(v) : null;
   const typeCol = portColor(inp.type);
   return (
-    /* SAFETY: 类型断言已复核 */
-    /* SAFETY: 类型断言已复核 */
     <div
       className="group text-2xs relative grid min-h-5.5 py-0.5 pr-2 pl-5"
       data-sub-widget-name={inp.name}
@@ -102,10 +103,7 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
           fallback="none"
           src={previewUrl}
         />
-      ) : inp.type === "COMBO" &&
-        /* SAFETY: 类型断言已复核 */
-        Array.isArray((inp as ComboInputMeta).comboOptions) &&
-        ((inp as ComboInputMeta).comboOptions as Array<unknown>).length > 0 ? (
+      ) : inp.type === "COMBO" && hasComboOptions ? (
         /* 工作流画布上的 COMBO widget 渲染成只读的
          *  SelectMenu —— 它把当前选中的模型显示成下拉外壳，但
          *  在这里保持禁用（编辑发生在会落盘取值的项目
@@ -116,9 +114,7 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
           disabled
           fullWidth
           onChange={() => undefined}
-          /* SAFETY: 类型断言已复核 */
-          /* SAFETY: 类型断言已复核 */
-          options={(inp as ComboInputMeta).comboOptions as Array<string>}
+          options={comboOptionStrings}
           popoverMinWidth={220}
           value={typeof v === "string" ? v : ""}
         />

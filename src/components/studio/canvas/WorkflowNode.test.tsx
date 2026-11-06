@@ -3,7 +3,7 @@ import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithFlow } from "../../../../tests/helpers/react-flow";
 import { FlowNode } from "./WorkflowNode";
-import type { WorkflowNodeData } from "../workflow-types";
+import type { ComfyGraphNode, WorkflowDetail, WorkflowNodeData } from "../workflow-types";
 import {
   WFStoresProvider,
   createIOEditStore,
@@ -29,6 +29,23 @@ function makeStores(): WFStores {
       subgraphRawContext: null,
       subgraphStackLength: 0,
     }),
+  };
+}
+
+/* 详情只喂 `nodes` 的 id；其余必填列按画布消费方用不到的最小值补齐。 */
+function makeDetail(nodes: Array<ComfyGraphNode>): WorkflowDetail {
+  return {
+    graph: {},
+    groups: null,
+    id: "wf-test",
+    name: "wf-test",
+    nodes,
+    notes: null,
+    paramMap: {},
+    positions: null,
+    rawNodes: null,
+    taskType: "",
+    workflowIO: {},
   };
 }
 
@@ -112,8 +129,11 @@ describe("FlowNode（WorkflowNode 渲染冒烟）", () => {
     const handles = document.querySelectorAll('[data-handleid="out:LATENT"]');
     expect(handles.length).toBeGreaterThan(0);
     /* 降级 = 缩小 + 降透明度，而不是卸载。 */
-    /* SAFETY: 类型断言已复核 */
-    const last = [...handles].at(-1) as HTMLElement;
+    const last = [...handles].at(-1);
+    expect(last).toBeInstanceOf(HTMLElement);
+    if (!(last instanceof HTMLElement)) {
+      throw new Error("输出端点未渲染成 HTML 元素");
+    }
     expect(last.style.opacity).toBe("0.35");
     expect(last.style.width).toBe("4px");
   });
@@ -128,10 +148,11 @@ describe("FlowNode 右上角编号", () => {
   it("detail.nodes 在场时仍显示真实节点 id，不映射成短序号", () => {
     const stores = makeStores();
     stores.viewer.setState({
-      /* SAFETY: 类型断言已复核 */
-      detail: {
-        nodes: [{ id: "1" }, { id: "9" }, { id: "30" }],
-      } as never,
+      detail: makeDetail([
+        { id: "1", class_type: "KSampler", title: "1" },
+        { id: "9", class_type: "KSampler", title: "9" },
+        { id: "30", class_type: "KSampler", title: "30" },
+      ]),
     });
     renderWithFlow(
       <WFStoresProvider stores={stores}>

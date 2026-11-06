@@ -65,14 +65,12 @@ function makeStores(): WFStores {
 }
 
 /** 挂上端口关注标记渲染（模拟 useRelatedEdgesHighlight 写回节点 data 的结果）。 */
-/* SAFETY: 类型断言已复核 */
 function renderWithPortFocus(portFocus: Record<string, string> | undefined, active: boolean) {
   const data = nodeData();
-  /* SAFETY: 类型断言已复核 */
   if (portFocus !== undefined) {
-    (data as unknown as Record<string, unknown>)[NODE_PORT_FOCUS_DATA_KEY] = portFocus;
+    data[NODE_PORT_FOCUS_DATA_KEY] = portFocus;
   }
-  (data as unknown as Record<string, unknown>)[NODE_PORT_FOCUS_ACTIVE_KEY] = active;
+  data[NODE_PORT_FOCUS_ACTIVE_KEY] = active;
   return renderWithFlow(
     <WFStoresProvider stores={makeStores()}>
       <FlowNode data={data} />

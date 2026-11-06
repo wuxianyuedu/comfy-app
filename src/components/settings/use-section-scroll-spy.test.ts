@@ -10,9 +10,31 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SECTION_ROOT_MARGIN, useSectionScrollSpy } from "./use-section-scroll-spy";
 
+/** 假观察器的 entry：`IntersectionObserverEntry` 的七个字段一次给全（用例只读两个）。 */
+function makeEntry(source: {
+  isIntersecting: boolean;
+  target: Element;
+}): IntersectionObserverEntry {
+  const rect = new DOMRect(0, 0, 0, 0);
+  return {
+    boundingClientRect: rect,
+    intersectionRatio: source.isIntersecting ? 1 : 0,
+    intersectionRect: rect,
+    isIntersecting: source.isIntersecting,
+    rootBounds: null,
+    target: source.target,
+    time: 0,
+  };
+}
+
 /** 假观察器：只记录「观察了谁、配置是什么」，回调由用例手动投递。 */
 class FakeIntersectionObserver {
   static last: FakeIntersectionObserver | null = null;
+  /* 这四项只为让 `this` 结构上满足 `IntersectionObserver` —— 本 hook 不读它们。 */
+  root: Element | Document | null = null;
+  rootMargin = "";
+  scrollMargin = "";
+  thresholds: Array<number> = [];
   observed: Array<Element> = [];
   options: IntersectionObserverInit | undefined;
   callback: IntersectionObserverCallback;
@@ -38,19 +60,7 @@ class FakeIntersectionObserver {
 
   /** 投递一次「谁进入了 / 谁离开了」。 */
   emit(entries: Array<{ isIntersecting: boolean; target: Element }>) {
-    /* SAFETY: 类型断言已复核 */
-    this.callback(
-      entries.map(
-        /* SAFETY: 类型断言已复核 */
-        (e) =>
-          ({
-            target: e.target,
-            isIntersecting: e.isIntersecting,
-            intersectionRatio: e.isIntersecting ? 1 : 0,
-          }) as unknown as IntersectionObserverEntry,
-      ),
-      this as unknown as IntersectionObserver,
-    );
+    this.callback(entries.map(makeEntry), this);
   }
 }
 
