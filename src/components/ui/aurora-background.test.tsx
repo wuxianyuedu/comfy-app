@@ -17,8 +17,11 @@ afterEach(cleanup);
 /** 取渲染出的内联 background（jsdom 会原样序列化 `color-mix()`，实测不丢值）。 */
 function glowBackground(tone: "violet" | "cyan" | "magenta", alpha: number) {
   const { container } = render(<AuroraGlow alpha={alpha} tone={tone} />);
-  /* SAFETY: 类型断言已复核 */
-  return (container.firstElementChild as HTMLElement).style.background;
+  const glow = container.firstElementChild;
+  if (!(glow instanceof HTMLElement)) {
+    throw new Error("AuroraGlow 应当渲染出一个元素");
+  }
+  return glow.style.background;
 }
 
 describe("AuroraGlow", () => {

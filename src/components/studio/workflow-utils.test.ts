@@ -11,18 +11,25 @@ import {
 import type { WorkflowDetail } from "./workflow-types";
 
 /* buildEdges 只消费 detail 的 nodes / graph / rawNodes，其余字段与连线
- * 解析无关，用 Partial 组装再断言成完整类型，避免为了必填字段编造数据。 */
+ * 解析无关，用空值补齐其余必填字段，避免为了它们编造业务数据。 */
 function detailWith(
   nodes: WorkflowDetail["nodes"],
   graph: WorkflowDetail["graph"],
   rawNodes: WorkflowDetail["rawNodes"],
 ): WorkflowDetail {
-  /* SAFETY: 类型断言已复核 */
   return {
-    nodes,
     graph,
+    groups: null,
+    id: "test-workflow",
+    name: "test-workflow",
+    nodes,
+    notes: null,
+    paramMap: {},
+    positions: null,
     rawNodes,
-  } as unknown as WorkflowDetail;
+    taskType: "",
+    workflowIO: {},
+  };
 }
 
 describe("extractNoteTitle", () => {
@@ -80,22 +87,11 @@ describe("buildEdges sourceHandle", () => {
    * 出的名字写进 sourceHandle，React Flow 找不到该 handle 会丢弃整条边
    * 并打 error#008 警告（用户看到的 out:width / out:height）。 */
   it("无输出元数据的源节点回落到通用 out handle", () => {
-    /* SAFETY: 类型断言已复核 */
     const detail = detailWith(
       [
-        {
-          id: "94",
-          type: "CustomNoOutputs",
-          class_type: "CustomNoOutputs",
-          inputs: {},
-        },
-        {
-          id: "76",
-          type: "EmptyLatentImage",
-          class_type: "EmptyLatentImage",
-          inputs: {},
-        },
-      ] as unknown as WorkflowDetail["nodes"],
+        { id: "94", class_type: "CustomNoOutputs", title: "94" },
+        { id: "76", class_type: "EmptyLatentImage", title: "76" },
+      ],
       {
         "76": {
           class_type: "EmptyLatentImage",
@@ -110,12 +106,11 @@ describe("buildEdges sourceHandle", () => {
   });
 
   it("有静态输出表的源节点仍 pin 到精确 handle", () => {
-    /* SAFETY: 类型断言已复核 */
     const detail = detailWith(
       [
-        { id: "10", type: "KSampler", class_type: "KSampler", inputs: {} },
-        { id: "20", type: "VAEDecode", class_type: "VAEDecode", inputs: {} },
-      ] as unknown as WorkflowDetail["nodes"],
+        { id: "10", class_type: "KSampler", title: "10" },
+        { id: "20", class_type: "VAEDecode", title: "20" },
+      ],
       { "20": { class_type: "VAEDecode", inputs: { samples: ["10", 0] } } },
       [],
     );
@@ -124,23 +119,11 @@ describe("buildEdges sourceHandle", () => {
   });
 
   it("仅有 raw outputs 的源节点按 raw 名字 pin", () => {
-    /* SAFETY: 类型断言已复核 */
-    /* SAFETY: 类型断言已复核 */
     const detail = detailWith(
       [
-        {
-          id: "30",
-          type: "ResolutionSelector",
-          class_type: "ResolutionSelector",
-          inputs: {},
-        },
-        {
-          id: "40",
-          type: "EmptyLatentImage",
-          class_type: "EmptyLatentImage",
-          inputs: {},
-        },
-      ] as unknown as WorkflowDetail["nodes"],
+        { id: "30", class_type: "ResolutionSelector", title: "30" },
+        { id: "40", class_type: "EmptyLatentImage", title: "40" },
+      ],
       {
         "40": { class_type: "EmptyLatentImage", inputs: { width: ["30", 0] } },
       },
@@ -148,9 +131,9 @@ describe("buildEdges sourceHandle", () => {
         {
           id: "30",
           widgets_values: [],
-          outputs: [{ name: "WIDTH", type: "INT" }],
+          outputs: [{ name: "WIDTH", type: "INT", links: [] }],
         },
-      ] as unknown as WorkflowDetail["rawNodes"],
+      ],
     );
     const edges = buildEdges(detail, []);
     expect(edges[0]?.sourceHandle).toBe("out:WIDTH");

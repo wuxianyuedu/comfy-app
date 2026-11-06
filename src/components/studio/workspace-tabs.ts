@@ -22,6 +22,19 @@ export type WorkspaceTabsState = {
   tabs: Array<ViewTab>;
 };
 
+/** `unknown` 收窄成「字符串或 null」—— 解析存储值时校验 projectId。 */
+function isStringOrNull(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
+/** `unknown` 收窄成已知视图 id —— 解析存储值时校验 view。 */
+function isKnownView(
+  value: unknown,
+  knownViews: ReadonlyArray<WorkspaceView>,
+): value is WorkspaceView {
+  return typeof value === "string" && knownViews.some((known) => known === value);
+}
+
 /** 页签身份的唯一编码处 —— 别在调用点各拼一遍分隔符。 */
 export function tabKey(view: WorkspaceView, projectId: string | null): string {
   return `${view}:${projectId ?? ""}`;
@@ -210,20 +223,12 @@ export function parseWorkspaceTabs(
     if (!Array.isArray(entry) || entry.length < 2) {
       return null;
     }
-    /* SAFETY: 类型断言已复核 */
-    const [view, projectId] = entry as [unknown, unknown];
-    if (
-      typeof view !== "string" ||
-      /* SAFETY: 类型断言已复核 */
-      !knownViews.includes(view as WorkspaceView)
-    ) {
+    const view: unknown = entry[0];
+    const projectId: unknown = entry[1];
+    if (!isKnownView(view, knownViews) || !isStringOrNull(projectId)) {
       return null;
     }
-    if (projectId !== null && typeof projectId !== "string") {
-      return null;
-    }
-    /* SAFETY: 类型断言已复核 */
-    const tab = makeTab(view as WorkspaceView, projectId);
+    const tab = makeTab(view, projectId);
     // 造不出来（项目类视图丢了项目 id）或键重复 ⇒ 整份不可信。
     if (!tab || tabs.some((existing) => existing.key === tab.key)) {
       return null;

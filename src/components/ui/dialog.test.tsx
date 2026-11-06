@@ -5,7 +5,7 @@
  */
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import {
   Dialog,
@@ -107,11 +107,11 @@ function alreadyOpenPopup(): HTMLElement {
   return el;
 }
 
+type OpenChange = (open: boolean, details?: { reason?: string }) => void;
+
 /** 取最近一次 onOpenChange 的第一实参（新状态）与 reason（关闭原因）。 */
-function lastCall(onOpenChange: ReturnType<typeof vi.fn>) {
-  /* SAFETY: 类型断言已复核 */
-  const calls = onOpenChange.mock.calls as unknown as Array<[boolean, { reason?: string }?]>;
-  const call = calls.at(-1);
+function lastCall(onOpenChange: Mock<OpenChange>) {
+  const call = onOpenChange.mock.calls.at(-1);
   return { nextOpen: call?.[0], reason: call?.[1]?.reason };
 }
 
@@ -149,7 +149,7 @@ describe("ui/dialog 的关闭按钮", () => {
   });
 
   it("关闭按钮回传 false，并带上原因 close-press", async () => {
-    const onOpenChange = vi.fn();
+    const onOpenChange = vi.fn<OpenChange>();
     const user = userEvent.setup();
     render(<Demo onOpenChange={onOpenChange} showCloseButton={false} />);
     const popup = await openDialog(user);
@@ -162,7 +162,7 @@ describe("ui/dialog 的关闭按钮", () => {
   });
 
   it("Esc 回传 false（reason=escape-key）；关掉后重开仍带那层遮罩", async () => {
-    const onOpenChange = vi.fn();
+    const onOpenChange = vi.fn<OpenChange>();
     const user = userEvent.setup();
     render(<Demo onOpenChange={onOpenChange} showCloseButton={false} />);
     await openDialog(user);
@@ -276,7 +276,7 @@ describe("ui/dialog 的宽度写法", () => {
 
 describe("ui/dialog 的受控形态", () => {
   it("受控时点关闭只回传、不自己关（由调用方的 state 决定）", async () => {
-    const onOpenChange = vi.fn();
+    const onOpenChange = vi.fn<OpenChange>();
     const user = userEvent.setup();
     render(<Demo onOpenChange={onOpenChange} open showCloseButton={false} />);
     const popup = alreadyOpenPopup();

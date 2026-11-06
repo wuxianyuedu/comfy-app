@@ -74,8 +74,10 @@ describe("EmptyState（三合一）", () => {
     const { container } = render(
       <EmptyState icon={FileText} title="暂无匹配的日志" variant="panel" />,
     );
-    /* SAFETY: 类型断言已复核 */
-    const root = container.firstElementChild as HTMLElement;
+    const root = container.firstElementChild;
+    if (!(root instanceof HTMLElement)) {
+      throw new Error("EmptyState 应当渲染出一个根元素");
+    }
     for (const cls of [
       "flex",
       "h-full",
