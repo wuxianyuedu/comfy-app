@@ -3,6 +3,7 @@
  * 从原来的单文件 CustomNodesSettings.tsx 原样搬来。 */
 
 import type { DiscoveredSubpkg, RowState, SummaryPkg } from "./types";
+import { isPlainRecord } from "~/lib/is-record";
 import { normalizeSlashes } from "~/lib/path-display";
 
 export function pathKey(path: string): string {
@@ -33,10 +34,10 @@ export function deriveRowState(sub: DiscoveredSubpkg, saved: SummaryPkg | undefi
     return { kind: "unimported" };
   }
   if (saved.status === "error") {
-    /* SAFETY: 类型断言已复核 */
     // oxlint-disable-next-line no-unnecessary-condition -- SummaryPkg 来自服务端清单 JSON，旧清单条目可能缺 errors
-    const firstErr = (saved.errors ?? [])[0] as { error?: unknown } | undefined;
-    const reason = typeof firstErr?.error === "string" ? firstErr.error : "解析出错";
+    const firstErr = (saved.errors ?? [])[0];
+    const reason =
+      isPlainRecord(firstErr) && typeof firstErr.error === "string" ? firstErr.error : "解析出错";
     return { kind: "error", reason };
   }
   if (saved.status === "missing") {

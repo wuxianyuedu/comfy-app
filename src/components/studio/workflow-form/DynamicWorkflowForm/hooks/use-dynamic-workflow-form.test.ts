@@ -4,19 +4,29 @@
 // 拖拽状态是组件本地的。用例名直接写「什么场景 → 什么派生结果」。
 
 import { act, cleanup, render, renderHook } from "@testing-library/react";
-import { createElement } from "react";
+import { createElement, type DragEvent } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("~/lib/project-canvas/canvas-api", () => ({
   uploadImageFile: vi.fn(),
 }));
 
+import { isPlainRecord, isRecord } from "~/lib/is-record";
 import { uploadImageFile } from "~/lib/project-canvas/canvas-api";
 import type { WorkflowIOEntry, WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { DynamicWorkflowFormProps } from "../dynamic-workflow-form-config";
-import type { DynamicWorkflowFormController } from "./use-dynamic-workflow-form";
+import type { DynamicWorkflowFormController, RowDragHandlers } from "./use-dynamic-workflow-form";
 
 import { useDynamicWorkflowForm } from "./use-dynamic-workflow-form";
+import { fakeFileList } from "../../../../../../tests/helpers/fake-file-list";
+
+/** 拖拽用例都传了 `onReorder`，`dragHandlers` 必非 null —— 早抛代替 `!`。 */
+function dragHandlersOf(handlers: DynamicWorkflowFormController["dragHandlers"]): RowDragHandlers {
+  if (handlers === null) {
+    throw new Error("用例前提是传了 onReorder，dragHandlers 不该为 null");
+  }
+  return handlers;
+}
 
 /** 驱动 controller 暴露的隐藏 `<input type=file>`。上传入口是 ui/file-picker，input 由 FileInput 渲染，
  *  测试必须真的渲染它（renderHook 不渲染返回的组件）：这里把 controller 与 FileInput 一起渲染，
@@ -47,16 +57,41 @@ function pickPickerFile(file: File) {
   if (!input) {
     throw new Error("没有渲染 ui/file-picker 的 input");
   }
-  /* SAFETY: 类型断言已复核 */
-  const files = {
-    0: file,
-    length: 1,
-    item: () => file,
-  } as unknown as FileList;
+  const files = fakeFileList(file);
   Object.defineProperty(input, "files", { value: files, configurable: true });
   input.dispatchEvent(new Event("change", { bubbles: true }));
   /* 复位行为本身也是被测项：不复位时用户连选同一个文件不会触发 change。 */
   return input;
+}
+
+/** 拖拽事件替身：hook 只读 `preventDefault` / `target` / `dataTransfer` /
+ *  `currentTarget` / `clientY`。先按这些成员做运行时校验，再收窄成
+ *  `DragEvent<HTMLDivElement>`（不做整块形状的一次性断言）。 */
+function isDragEvent(value: unknown): value is DragEvent<HTMLDivElement> {
+  if (!isRecord(value) || !isRecord(value.dataTransfer)) {
+    return false;
+  }
+  if (value.preventDefault !== undefined && typeof value.preventDefault !== "function") {
+    return false;
+  }
+  if (value.clientY !== undefined && typeof value.clientY !== "number") {
+    return false;
+  }
+  const { target, currentTarget } = value;
+  if (target !== undefined && !isRecord(target)) {
+    return false;
+  }
+  if (currentTarget !== undefined && !isRecord(currentTarget)) {
+    return false;
+  }
+  return true;
+}
+
+function dragEventOf(value: unknown): DragEvent<HTMLDivElement> {
+  if (!isDragEvent(value)) {
+    throw new Error("拖拽事件替身形状不完整");
+  }
+  return value;
 }
 
 /** Widget pin（默认 kind=widget）。 */
@@ -251,7 +286,7 @@ describe("useDynamicWorkflowForm — 多模式可见性过滤", () => {
 describe("useDynamicWorkflowForm — set 与 values 的不可变更新", () => {
   it("set 产生新对象（不原地改 values），并只改目标键", () => {
     const values = { a: 1, b: 2 };
-    const onChange = vi.fn();
+    const onChange = vi.fn<(next: Record<string, unknown>) => void>();
     const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ values, onChange })));
 
     act(() => {
@@ -259,8 +294,14 @@ describe("useDynamicWorkflowForm — set 与 values 的不可变更新", () => {
     });
 
     expect(onChange).toHaveBeenCalledTimes(1);
-    /* SAFETY: 类型断言已复核 */
-    const next = onChange.mock.calls[0]![0] as Record<string, unknown>;
+    const firstCall = onChange.mock.calls[0];
+    if (firstCall === undefined) {
+      throw new Error("onChange 未被调用");
+    }
+    const next = firstCall[0];
+    if (!isPlainRecord(next)) {
+      throw new Error("onChange 收到的值不是普通对象");
+    }
     expect(next).toEqual({ a: 1, b: 99 });
     expect(next).not.toBe(values); // 不可变：调用方靠引用变化触发重渲染
     expect(values).toEqual({ a: 1, b: 2 }); // 原对象未被改
@@ -305,17 +346,19 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
     const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ onReorder })));
 
     act(() => {
-      /* SAFETY: 类型断言已复核 */
-      result.current.dragHandlers!.onDragStart("from")({
-        dataTransfer: { setData: vi.fn(), effectAllowed: "" },
-      } as never);
+      dragHandlersOf(result.current.dragHandlers).onDragStart("from")(
+        dragEventOf({
+          dataTransfer: { setData: vi.fn(), effectAllowed: "" },
+        }),
+      );
     });
     act(() => {
-      /* SAFETY: 类型断言已复核 */
-      result.current.dragHandlers!.onDrop("to")({
-        preventDefault: vi.fn(),
-        dataTransfer: {},
-      } as never);
+      dragHandlersOf(result.current.dragHandlers).onDrop("to")(
+        dragEventOf({
+          preventDefault: vi.fn(),
+          dataTransfer: {},
+        }),
+      );
     });
 
     expect(onReorder).toHaveBeenCalledWith("from", "to", "before");
@@ -331,15 +374,16 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
       result.current.beginPortDrag("from");
     });
     act(() => {
-      /* SAFETY: 类型断言已复核 */
-      result.current.dragHandlers!.onDrop("to")({
-        preventDefault: vi.fn(),
-        dataTransfer: {},
-        clientY: 80,
-        currentTarget: {
-          getBoundingClientRect: () => ({ top: 0, height: 100 }),
-        },
-      } as never);
+      dragHandlersOf(result.current.dragHandlers).onDrop("to")(
+        dragEventOf({
+          preventDefault: vi.fn(),
+          dataTransfer: {},
+          clientY: 80,
+          currentTarget: {
+            getBoundingClientRect: () => ({ top: 0, height: 100 }),
+          },
+        }),
+      );
     });
     expect(onReorder).toHaveBeenCalledWith("from", "to", "after");
   });
@@ -350,12 +394,13 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
     const preventDefault = vi.fn();
     const setData = vi.fn();
     act(() => {
-      /* SAFETY: 类型断言已复核 */
-      result.current.dragHandlers!.onDragStart("k1")({
-        target: { closest: () => ({}) }, // 命中可编辑控件（input/select…）
-        preventDefault,
-        dataTransfer: { setData, effectAllowed: "" },
-      } as never);
+      dragHandlersOf(result.current.dragHandlers).onDragStart("k1")(
+        dragEventOf({
+          target: document.createElement("input"), // 命中可编辑控件（input/select…）
+          preventDefault,
+          dataTransfer: { setData, effectAllowed: "" },
+        }),
+      );
     });
     expect(preventDefault).toHaveBeenCalled();
     expect(setData).not.toHaveBeenCalled();
@@ -370,11 +415,12 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
       result.current.beginPortDrag("same");
     });
     act(() => {
-      /* SAFETY: 类型断言已复核 */
-      result.current.dragHandlers!.onDrop("same")({
-        preventDefault: vi.fn(),
-        dataTransfer: {},
-      } as never);
+      dragHandlersOf(result.current.dragHandlers).onDrop("same")(
+        dragEventOf({
+          preventDefault: vi.fn(),
+          dataTransfer: {},
+        }),
+      );
     });
 
     expect(onReorder).not.toHaveBeenCalled();
@@ -388,20 +434,22 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
       result.current.beginPortDrag("k1");
     });
     act(() => {
-      /* SAFETY: 类型断言已复核 */
-      result.current.dragHandlers!.onDragOver("k1")({
-        preventDefault: vi.fn(),
-        dataTransfer: {},
-      } as never);
+      dragHandlersOf(result.current.dragHandlers).onDragOver("k1")(
+        dragEventOf({
+          preventDefault: vi.fn(),
+          dataTransfer: {},
+        }),
+      );
     });
     expect(result.current.dragOverKey).toBe("k1");
 
     act(() => {
-      /* SAFETY: 类型断言已复核 */
-      result.current.dragHandlers!.onDragOver("k2")({
-        preventDefault: vi.fn(),
-        dataTransfer: { dropEffect: "" },
-      } as never);
+      dragHandlersOf(result.current.dragHandlers).onDragOver("k2")(
+        dragEventOf({
+          preventDefault: vi.fn(),
+          dataTransfer: { dropEffect: "" },
+        }),
+      );
     });
     expect(result.current.dragOverKey).toBe("k2");
   });
@@ -410,10 +458,11 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
     const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ onReorder: vi.fn() })));
     const setData = vi.fn();
     act(() => {
-      /* SAFETY: 类型断言已复核 */
-      result.current.dragHandlers!.onDragStart("k1")({
-        dataTransfer: { setData, effectAllowed: "" },
-      } as never);
+      dragHandlersOf(result.current.dragHandlers).onDragStart("k1")(
+        dragEventOf({
+          dataTransfer: { setData, effectAllowed: "" },
+        }),
+      );
     });
     expect(setData).toHaveBeenCalledWith("text/plain", "k1");
   });

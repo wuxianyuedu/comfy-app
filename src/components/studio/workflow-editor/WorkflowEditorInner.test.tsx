@@ -95,20 +95,20 @@ describe("WorkflowEditorInner", () => {
      * 形状：`absolute inset-0`（由定位祖先收窄）+ **不含 `fixed`**（那才是整窗），
      * `top-title-bar` 一并排除。⚠️ 别写成流内 `flex-1` 兄弟：两者会平分内容列。 */
     expect(screen.getByText("加载工作流节点…")).toBeInTheDocument();
-    /* SAFETY: 类型断言已复核 */
-    const layer = container.firstElementChild as HTMLElement | null;
-    expect(layer, "加载态没有渲染出来").toBeTruthy();
+    const layer = container.firstElementChild;
+    if (!(layer instanceof HTMLElement)) {
+      throw new Error("加载态没有渲染出来");
+    }
+    expect(layer.className, "过渡屏不许退回 `fixed`（那是整窗浮层，会盖掉侧栏与页签）").not.toMatch(
+      /(?:^|\s)fixed(?:\s|$)/,
+    );
     expect(
-      layer?.className,
-      "过渡屏不许退回 `fixed`（那是整窗浮层，会盖掉侧栏与页签）",
-    ).not.toMatch(/(?:^|\s)fixed(?:\s|$)/);
-    expect(
-      layer?.className,
+      layer.className,
       "过渡屏不许用 top-title-bar（那是 FullScreenLayer 的定位标记）",
     ).not.toMatch(/(?:^|\s)top-title-bar(?:\s|$)/);
-    expect(layer?.className, "过渡屏要覆盖定位祖先（壳的内容列）").toMatch(
+    expect(layer.className, "过渡屏要覆盖定位祖先（壳的内容列）").toMatch(
       /(?:^|\s)absolute(?:\s|$)/,
     );
-    expect(layer?.className).toMatch(/(?:^|\s)inset-0(?:\s|$)/);
+    expect(layer.className).toMatch(/(?:^|\s)inset-0(?:\s|$)/);
   });
 });

@@ -22,7 +22,7 @@ import { CanvasRecenterButton } from "../canvas/CanvasRecenterButton";
 import { isCustomCanvasSettings } from "../canvas/hooks/use-canvas-settings";
 import type { CanvasSettings } from "../canvas/canvas-settings-types";
 import { PORT_ROLES } from "../canvas/WorkflowNode";
-import type { WorkflowNodeData } from "../workflow-types";
+import { isPlainRecord } from "~/lib/is-record";
 import { workflowNodeTypes, workflowEdgeTypes } from "./WorkflowEditorNodes";
 import { useRelatedEdgesHighlight } from "../canvas/hooks/use-related-edges-highlight";
 
@@ -125,13 +125,12 @@ export function WorkflowEditorCanvas({
    *（角色色是静态的），所以拖节点时 MiniMap 不会因为回调
    * 换了引用而重新渲染。 */
   const miniMapNodeColor = useCallback((node: Node) => {
-    /* SAFETY: 类型断言已复核 */
-    const d = node.data as WorkflowNodeData | undefined;
-    const role = d?.assignedRole;
+    const d = isPlainRecord(node.data) ? node.data : undefined;
+    const rawRole = d?.assignedRole;
+    const role = typeof rawRole === "string" ? rawRole : null;
     return (
-      (role !== null && role !== undefined && role !== ""
-        ? ROLE_COLOR_BY_KEY.get(role)
-        : undefined) ?? "var(--color-ink-faint)"
+      (role !== null && role !== "" ? ROLE_COLOR_BY_KEY.get(role) : undefined) ??
+      "var(--color-ink-faint)"
     );
   }, []);
 
