@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/components/ui/input-group.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/json-viewer.tsx", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/media-drag-source.test.ts", // 存量 9 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/media-thumbnail.test.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/page-header.test.tsx", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/select-menu.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/sidebar-auto-collapse.test.tsx", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/sidebar.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/simple-key-handler.stories.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/sonner.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/status-dot.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/table.stories.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/tabs.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/toggle-group.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/use-busy-action.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/use-draggable-position.test.tsx", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/use-exit-reminder.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/use-external-action.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/use-hotkey.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/ui/use-hotkey.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/components/ui/use-overlay-boundary.test.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/components/workshop/CharacterDesigner.extract.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/components/workshop/FinalComposer.test.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用

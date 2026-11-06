@@ -224,6 +224,9 @@ function Sidebar({
   }
 
   if (isMobile) {
+    const mobileStyle: React.CSSProperties & { "--sidebar-width": string } = {
+      "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
+    };
     return (
       <Sheet onOpenChange={setOpenMobile} open={openMobile} {...props}>
         <SheetContent
@@ -233,12 +236,7 @@ function Sidebar({
           data-slot="sidebar"
           dir={dir}
           side={side}
-          /* SAFETY: 类型断言已复核 */
-          style={
-            {
-              "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
-            } as React.CSSProperties
-          }
+          style={mobileStyle}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Sidebar</SheetTitle>
@@ -652,6 +650,9 @@ function SidebarMenuSkeleton({
   const [width] = React.useState(() => {
     return `${Math.floor(Math.random() * 40) + 50}%`;
   });
+  const skeletonStyle: React.CSSProperties & { "--skeleton-width": string } = {
+    "--skeleton-width": width,
+  };
 
   return (
     <div
@@ -664,12 +665,7 @@ function SidebarMenuSkeleton({
       <Skeleton
         className="h-4 max-w-(--skeleton-width) flex-1"
         data-sidebar="menu-skeleton-text"
-        /* SAFETY: 类型断言已复核 */
-        style={
-          {
-            "--skeleton-width": width,
-          } as React.CSSProperties
-        }
+        style={skeletonStyle}
       />
     </div>
   );

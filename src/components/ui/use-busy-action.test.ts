@@ -61,8 +61,10 @@ describe("useBusyAction", () => {
       }
     });
     expect(caught).toBeInstanceOf(Error);
-    /* SAFETY: 类型断言已复核 */
-    expect((caught as Error).message).toBe("保存失败");
+    if (!(caught instanceof Error)) {
+      throw new Error("期望抛出 Error，实际是别的值");
+    }
+    expect(caught.message).toBe("保存失败");
   });
 
   it("`set` 可以手动置忙 / 复位（跨多段 await 的落点）", () => {

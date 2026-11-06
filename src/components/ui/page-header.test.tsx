@@ -36,8 +36,10 @@ describe("PageHeader（屏级页头）", () => {
       <PageHeader actions={<button type="button">刷新</button>} title="队列" />,
     );
     const header = container.querySelector<HTMLElement>('[data-component="page-header"]');
-    /* SAFETY: 类型断言已复核 */
-    const group = header?.lastElementChild as HTMLElement;
+    const group = header?.lastElementChild;
+    if (!(group instanceof HTMLElement)) {
+      throw new Error("页头应当渲染出动作组");
+    }
     expect(group.className).toContain("shrink-0");
     expect(header?.children).toHaveLength(2);
 
@@ -90,8 +92,10 @@ describe("PageHeader（屏级页头）", () => {
     const header = container.querySelector<HTMLElement>('[data-component="page-header"]');
     /* 两个子元素：`sr-only` 的 h1 + 动作组（说明钮在动作组里）。 */
     expect(header?.children).toHaveLength(2);
-    /* SAFETY: 类型断言已复核 */
-    const group = header?.lastElementChild as HTMLElement;
+    const group = header?.lastElementChild;
+    if (!(group instanceof HTMLElement)) {
+      throw new Error("页头应当渲染出动作组");
+    }
     expect(group.className).toContain("ml-auto");
     expect(group.contains(screen.getByRole("button", { name: "说明" }))).toBe(true);
   });
@@ -101,8 +105,10 @@ describe("PageHeader（屏级页头）", () => {
     const header = container.querySelector<HTMLElement>('[data-component="page-header"]');
     /* 只有一个子元素（标题那一列），说明钮在它里面。 */
     expect(header?.children).toHaveLength(1);
-    /* SAFETY: 类型断言已复核 */
-    const column = header?.firstElementChild as HTMLElement;
+    const column = header?.firstElementChild;
+    if (!(column instanceof HTMLElement)) {
+      throw new Error("页头应当渲染出标题列");
+    }
     expect(column.contains(screen.getByRole("button", { name: "说明" }))).toBe(true);
   });
 
