@@ -249,9 +249,7 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
       /* 与 `gridLineColor()` 同一套取整口径：α 换算成百分数，不丢一位小数。 */
       const percent = Math.round(alpha * 1000) / 10;
       const expr = `color-mix(in srgb, var(--color-canvas-grid-line) ${percent}%, transparent)`;
-      /* SAFETY: 类型断言已复核 */
-      const seen: Record<"light" | "dark", { color: Color; ratio: number; stroke: string }> =
-        {} as never;
+      const seen = new Map<"light" | "dark", { color: Color; ratio: number; stroke: string }>();
 
       for (const dark of [false, true]) {
         // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
@@ -278,11 +276,11 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
         /* 线要真画出来：解析不出颜色 / 全透明 = 幽灵 token 的静默形态。 */
         const color = parseColor(got.stroke);
         expect(color.a, `α=${alpha} ${key}档的线没画出来：stroke=${got.stroke}`).toBeGreaterThan(0);
-        seen[key] = {
+        seen.set(key, {
           stroke: got.stroke,
           color,
           ratio: contrastRatio(blendOver(got.stroke, got.canvas), got.canvas),
-        };
+        });
       }
 
       /* 两档各取对应色相：浅=黑、深=slate-400（**就是原来写死的那个值**，
@@ -294,26 +292,35 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
       };
       /* SAFETY: 类型断言已复核 */
       for (const key of ["light", "dark"] as const) {
-        const c = seen[key].color;
+        const sample = seen.get(key);
+        if (sample === undefined) {
+          throw new Error(`α=${alpha} ${key}档读数缺失`);
+        }
+        const c = sample.color;
         const [r, g, b] = expected[key];
         const got2 = [Math.round(c.r), Math.round(c.g), Math.round(c.b)];
         expect(
           got2,
           `${key}档网格线色相应当是 [${r}, ${g}, ${b}]，实际 ${JSON.stringify(
             got2,
-          )}（stroke=${seen[key].stroke}）`,
+          )}（stroke=${sample.stroke}）`,
         ).toEqual([r, g, b]);
         expect(c.a, `${key}档的 α 没乘上去`).toBeCloseTo(alpha, 3);
       }
+      const light = seen.get("light");
+      const dark = seen.get("dark");
+      if (light === undefined || dark === undefined) {
+        throw new Error(`α=${alpha} 有档读数缺失`);
+      }
       console.log(
-        `[网格线 α=${alpha}] 浅 ${seen.light.ratio.toFixed(2)}:1 / 深 ${seen.dark.ratio.toFixed(2)}:1`,
+        `[网格线 α=${alpha}] 浅 ${light.ratio.toFixed(2)}:1 / 深 ${dark.ratio.toFixed(2)}:1`,
       );
       expect(
-        seen.light.ratio,
-        `α=${alpha} 时浅色画布的网格线（${seen.light.ratio.toFixed(2)}:1）比深色（${seen.dark.ratio.toFixed(
+        light.ratio,
+        `α=${alpha} 时浅色画布的网格线（${light.ratio.toFixed(2)}:1）比深色（${dark.ratio.toFixed(
           2,
         )}:1）更看不见 —— 写死单一色相的老问题回来了`,
-      ).toBeGreaterThanOrEqual(seen.dark.ratio);
+      ).toBeGreaterThanOrEqual(dark.ratio);
     }
   });
 

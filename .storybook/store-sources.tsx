@@ -384,8 +384,8 @@ function seedScene(name: string): void {
 export function sceneEntries(name: string): Array<LogEntry> {
   /* `parameters` 里那个名字是不可信输入（story 里手写的字符串），所以按
      `string` 查、查不到就抛 —— 与值源的 `load()` 同一条口径。 */
-  /* SAFETY: 类型断言已复核 */
-  const scene: LogStoreScene | undefined = LOG_STORE_SCENES[name as SceneName];
+  const registry: Record<string, LogStoreScene> = LOG_STORE_SCENES;
+  const scene: LogStoreScene | undefined = registry[name];
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- 场景名来自 Storybook parameters（手写的不可信输入），查不到时运行期是 undefined；规则把标注判成无重叠，保留抛错出口
   if (scene === undefined) {
     throw new Error(

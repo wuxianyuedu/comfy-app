@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { isRecord } from "../src/lib/is-record";
 import { isTerminalTaskStatus } from "../src/lib/task-state";
 
 /**
@@ -93,16 +94,14 @@ async function trpcCall(
   if (last === undefined) {
     throw new Error(`${procedure} 回了空响应体（预期 JSON Lines）`);
   }
-  /* SAFETY: 类型断言已复核 */
-  const parsed = JSON.parse(last) as { json?: unknown };
+  const parsed: unknown = JSON.parse(last);
   /* 最后一行是 `[chunkId, status, data]`，其中 `data` 的形状是
    * `[[值]]`「值 + 零个 asyncProp」（三段含义见 `e2e/support/trpc-stub.ts` 的
    * 文件头）。逐层取到 `[2] → [0] → [0]` 就是过程返回的那个值本身。 */
-  /* SAFETY: 类型断言已复核 */
-  const data = (parsed.json as Array<unknown> | undefined)?.[2];
-  /* SAFETY: 类型断言已复核 */
-  const value = (data as Array<Array<unknown>> | undefined)?.[0];
-  return Array.isArray(value) ? value[0] : value;
+  const json = isRecord(parsed) ? parsed.json : undefined;
+  const data = isUnknownArray(json) ? json[2] : undefined;
+  const value = isUnknownArray(data) ? data[0] : undefined;
+  return isUnknownArray(value) ? value[0] : value;
 }
 
 /** query 的薄封装（多数调用是它）。 */
@@ -113,6 +112,41 @@ function trpcQuery(page: Page, procedure: string, input?: unknown) {
 /** mutation 的薄封装。 */
 function trpcMutation(page: Page, procedure: string, input: unknown) {
   return trpcCall(page, procedure, input, "mutation");
+}
+
+/** `Array.isArray` 的内置守卫会把元素收成 `any[]`；这里收成 `unknown[]`。 */
+function isUnknownArray(value: unknown): value is Array<unknown> {
+  return Array.isArray(value);
+}
+
+/** tRPC 返回的列表：不是数组按空列表处理（原 `(listed ?? [])` 的读法）。 */
+function recordList(value: unknown): Array<Record<string, unknown>> {
+  return isUnknownArray(value) ? value.filter(isRecord) : [];
+}
+
+/** 读一个字符串字段；不是字符串时按「没读到」处理（原断言的 `?: string`）。 */
+function stringField(record: Record<string, unknown>, key: string): string | undefined {
+  const field = record[key];
+  return typeof field === "string" ? field : undefined;
+}
+
+/** `task.detail` 的运行时视图：只保留断言点原来读取的字段，缺失即让下游 expect 判红。 */
+type TaskDetail = {
+  error?: string | null;
+  images?: Array<unknown>;
+  status?: string;
+};
+
+function taskDetail(value: unknown): TaskDetail {
+  if (!isRecord(value)) {
+    return {};
+  }
+  const rawError = value.error;
+  return {
+    error: typeof rawError === "string" || rawError === null ? rawError : undefined,
+    images: isUnknownArray(value.images) ? value.images : undefined,
+    status: stringField(value, "status"),
+  };
 }
 
 /** 真注册一个账号并把会话 cookie 落进浏览器上下文。
@@ -158,39 +192,34 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
 
     /* 断言的是**库里有这一行**，不是「请求发出去了」：再读一次服务端，
      * 拿到的必须是我们刚写进去的那个 id / 名字。 */
-    /* SAFETY: 类型断言已复核 */
-    const listed = (await trpcQuery(page, "project.list")) as
-      | Array<{ id: string; name: string }>
-      | undefined;
-    const project = (listed ?? []).find((item) => item.id === projectId);
+    const listed = recordList(await trpcQuery(page, "project.list"));
+    const project = listed.find((item) => stringField(item, "id") === projectId);
     expect(
       project,
       "建项目之后 project.list 里必须有这一行（只断言请求发出去了等于没测）",
     ).toBeTruthy();
-    expect(project?.name).toBe(projectName);
+    expect(project === undefined ? undefined : stringField(project, "name")).toBe(projectName);
 
     /* 建工作流：出图还需要一条**可执行**的库行（`hasExecutableWorkflow` 认
      * rawJson 的 nodes 非空）。这条也走服务端，随后由 `generate.generate` 提交。 */
-    /* SAFETY: 类型断言已复核 */
-    const workflow = (await trpcMutation(page, "workflow.create", {
+    const workflow = await trpcMutation(page, "workflow.create", {
       name: `E2E 工作流 ${stamp}`,
       taskType: "image",
       /* 入参字段是 `raw`（服务端 `parseWorkflowContent(JSON.stringify(raw))`
        * 解析后落库到 rawJson 列）—— 也是 `hasExecutableWorkflow` 唯一认的列。 */
       raw: rawWorkflow("一只在窗台上的猫"),
-    })) as { id?: string } | undefined;
-    const workflowId = workflow?.id;
+    });
+    const workflowId = isRecord(workflow) ? stringField(workflow, "id") : undefined;
     expect(workflowId, "workflow.create 必须回一个 id").toBeTruthy();
 
     /* ── ③ 出图：真提交 + 真收口 ── */
-    /* SAFETY: 类型断言已复核 */
-    const submitted = (await trpcMutation(page, "generate.generate", {
+    const submitted = await trpcMutation(page, "generate.generate", {
       workflow: workflowId,
       prompt: "一只在窗台上的猫",
       projectId,
       paramMap: {},
-    })) as { taskId?: string } | undefined;
-    const taskId = submitted?.taskId;
+    });
+    const taskId = isRecord(submitted) ? stringField(submitted, "taskId") : undefined;
     expect(taskId, "generate.generate 必须回一个 taskId").toBeTruthy();
 
     /* 轮询任务详情直到**终态**。断言终态而非「界面显示生成中」：后者在桩后端下也成立，而这条链路要证明
@@ -201,13 +230,10 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
     const terminal = await expect
       .poll(
         async () => {
-          /* SAFETY: 类型断言已复核 */
-          const detail = (await trpcQuery(page, "task.detail", {
-            id: taskId,
-          })) as { error?: string | null; images?: Array<unknown>; status?: string } | undefined;
+          const detail = taskDetail(await trpcQuery(page, "task.detail", { id: taskId }));
           /* 非终态一律回同一个哨兵：poll 据此**继续等**（`QUEUED` 也到不了
              `"终态"`，所以不会被当成结论放行）。 */
-          return isTerminalTaskStatus(detail?.status) ? detail : null;
+          return isTerminalTaskStatus(detail.status) ? detail : null;
         },
         {
           timeout: 60_000,
@@ -216,15 +242,7 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
       )
       .not.toBeNull()
       .then(() => trpcQuery(page, "task.detail", { id: taskId }))
-      .then(
-        /* SAFETY: 类型断言已复核 */
-        (detail) =>
-          detail as {
-            error?: string | null;
-            images?: Array<unknown>;
-            status?: string;
-          },
-      );
+      .then((detail) => taskDetail(detail));
 
     /* 失败也要说清失败在哪一步（验收标准 3）：把 error 带进断言消息，
      * 而不是只报「status 不是 SUCCEEDED」。 */
@@ -246,47 +264,41 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
     const stamp = Date.now();
     await signUp(page, `e2e-journey-fail-${stamp}@example.com`, "e2e-journey-password");
 
-    /* SAFETY: 类型断言已复核 */
-    const workflow = (await trpcMutation(page, "workflow.create", {
+    const workflow = await trpcMutation(page, "workflow.create", {
       name: `E2E 失败工作流 ${stamp}`,
       taskType: "image",
       /* 哨兵进工作流 → 假 comfy-cli 回放失败序列（见本文件头 FAIL_SENTINEL）。 */
       raw: rawWorkflow(`失败用例 ${FAIL_SENTINEL}`),
-    })) as { id?: string } | undefined;
+    });
+    const workflowId = isRecord(workflow) ? stringField(workflow, "id") : undefined;
 
-    /* SAFETY: 类型断言已复核 */
-    const submitted = (await trpcMutation(page, "generate.generate", {
-      workflow: workflow?.id,
+    const submitted = await trpcMutation(page, "generate.generate", {
+      workflow: workflowId,
       prompt: "这条应当失败",
       paramMap: {},
-    })) as { taskId?: string } | undefined;
-    const taskId = submitted?.taskId;
+    });
+    const taskId = isRecord(submitted) ? stringField(submitted, "taskId") : undefined;
     expect(taskId).toBeTruthy();
 
     /* 同成功用例：等的是**已到终态**，不是「不再是 RUNNING」（后者对 `QUEUED`
      * 也成立，会在排队那一瞬就放行、把 `QUEUED` 当成结论）。 */
     /* 同成功用例：等的是**已到终态**（非终态回 null、poll 继续等），不是
      * 「不再是 RUNNING」——后者对 `QUEUED` 也成立，会在排队那一瞬放行。 */
-    /* SAFETY: 类型断言已复核 */
-    const terminal = (await expect
-      .poll(
-        async () => {
-          /* SAFETY: 类型断言已复核 */
-          const detail = (await trpcQuery(page, "task.detail", {
-            id: taskId,
-          })) as { status?: string } | undefined;
-          return isTerminalTaskStatus(detail?.status) ? detail : null;
-        },
-        {
-          timeout: 60_000,
-          message: "失败用例没有到终态",
-        },
-      )
-      .not.toBeNull()
-      .then(() => trpcQuery(page, "task.detail", { id: taskId }))) as {
-      error?: string | null;
-      status?: string;
-    };
+    const terminal = taskDetail(
+      await expect
+        .poll(
+          async () => {
+            const detail = taskDetail(await trpcQuery(page, "task.detail", { id: taskId }));
+            return isTerminalTaskStatus(detail.status) ? detail : null;
+          },
+          {
+            timeout: 60_000,
+            message: "失败用例没有到终态",
+          },
+        )
+        .not.toBeNull()
+        .then(() => trpcQuery(page, "task.detail", { id: taskId })),
+    );
 
     expect(terminal.status).toBe("FAILED");
     /* 关键：报错必须**指回失败的那一步**（假 CLI 给的原因），而不是

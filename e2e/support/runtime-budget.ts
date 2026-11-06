@@ -36,10 +36,9 @@ export function readNavigationSample(page: Page): Promise<{
   loadEventEnd: number | null;
 }> {
   return page.evaluate(() => {
-    /* SAFETY: 类型断言已复核 */
-    const nav = performance.getEntriesByType("navigation")[0] as
-      | PerformanceNavigationTiming
-      | undefined;
+    const nav = performance
+      .getEntriesByType("navigation")
+      .find((e): e is PerformanceNavigationTiming => e instanceof PerformanceNavigationTiming);
     const fcp = performance.getEntriesByName("first-contentful-paint")[0];
     return {
       // `loadEventEnd` 在 load 未完成时是 0 —— 那是「还没有这个读数」，不是「0 毫秒」。
@@ -65,8 +64,8 @@ export function steadyMin(
   if (kept.some((v) => v === null || !Number.isFinite(v))) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  return Math.min(...(kept as Array<number>));
+  const numbers = kept.filter((v): v is number => v !== null);
+  return Math.min(...numbers);
 }
 
 /**

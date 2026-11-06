@@ -69,8 +69,15 @@ export function collectAttribute() {
       if (!Array.isArray(parsed)) {
         throw new Error("不是数组");
       }
-      /** @type {Array<{file?: string, affected?: number}>} */
-      return parsed;
+      return parsed.map((item) => {
+        if (typeof item !== "object" || item === null) {
+          return {};
+        }
+        const file = "file" in item && typeof item.file === "string" ? item.file : undefined;
+        const affected =
+          "affected" in item && typeof item.affected === "number" ? item.affected : undefined;
+        return { file, affected };
+      });
     } catch {
       process.stderr.write("[affected-launch] 改动面归因输出读不懂（仅影响下面那条建议）\n");
       return [];
