@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
+import { isRecord } from "~/lib/is-record";
 import {
   buildParamEntries,
   SIZE_SUB_IDS,
@@ -206,8 +207,7 @@ describe("deriveLibraryParamCards", () => {
     for (const bad of [{ source: [] }, { source: 1 }, [], null, undefined]) {
       const { resolved } = deriveLibraryParamCards({
         io,
-        /* SAFETY: 类型断言已复核 */
-        paramMap: bad as Record<string, unknown>,
+        paramMap: isRecord(bad) ? bad : null,
         mode: "T2I",
       });
       expect(resolved).toEqual({});

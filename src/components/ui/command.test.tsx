@@ -29,7 +29,7 @@ beforeAll(() => {
         void 0;
       }
     }
-    (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = ResizeObserverStub;
+    Reflect.set(globalThis, "ResizeObserver", ResizeObserverStub);
   }
   // jsdom 没有 Element.prototype.scrollIntoView；cmdk 选中项会调用它。
   if (typeof Element.prototype.scrollIntoView !== "function") {

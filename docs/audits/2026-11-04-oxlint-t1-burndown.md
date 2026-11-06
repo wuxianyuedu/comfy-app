@@ -13,7 +13,7 @@
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
 | B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 已清（子批1–12，判决面文件级豁免已整块删除）       |
-| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–9：180 份 / 381 处已清）             |
+| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–10：200 份 / 410 处已清）            |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
@@ -925,26 +925,26 @@
 | `src/components/studio/workflow-library/CustomNodesSettings/parsing.ts`                              | 1        | 已清 |
 | `src/components/studio/workflow-library/hooks/use-workflow-import.ts`                                | 1        | 已清 |
 | `src/components/studio/workflow-library/hooks/use-workflow-library-detail.ts`                        | 1        | 已清 |
-| `src/components/studio/workflow-library/sections/EncapsulationTestForm.test.tsx`                     | 1        | 挂账 |
-| `src/components/studio/workflow-library/workflow-library-detail-config.ts`                           | 1        | 挂账 |
-| `src/components/studio/workflow-library/workflow-library-param-cards.test.ts`                        | 1        | 挂账 |
-| `src/components/studio/workflow-library/workflow-library-wire-graph.test.ts`                         | 1        | 挂账 |
-| `src/components/studio/workflow-library/workflow-param-mapping-ui.ts`                                | 1        | 挂账 |
-| `src/components/studio/workflow-library/WorkflowCanvasNodePreview.io-refresh.test.tsx`               | 1        | 挂账 |
-| `src/components/studio/workflow-library/WorkflowLibraryDetailView.tsx`                               | 1        | 挂账 |
-| `src/components/studio/workflow-library/WorkflowLibraryFilters.tsx`                                  | 2        | 挂账 |
-| `src/components/studio/workflow-utils.test.ts`                                                       | 5        | 挂账 |
-| `src/components/studio/WorkflowImportPanel.test.tsx`                                                 | 1        | 挂账 |
-| `src/components/studio/workspace-tabs.ts`                                                            | 3        | 挂账 |
-| `src/components/ui/aspect-ratio.tsx`                                                                 | 1        | 挂账 |
-| `src/components/ui/aurora-background.test.tsx`                                                       | 1        | 挂账 |
-| `src/components/ui/code-block.tsx`                                                                   | 1        | 挂账 |
-| `src/components/ui/command.test.tsx`                                                                 | 1        | 挂账 |
-| `src/components/ui/dialog.test.tsx`                                                                  | 1        | 挂账 |
-| `src/components/ui/empty-state.test.tsx`                                                             | 1        | 挂账 |
-| `src/components/ui/file-picker.test.tsx`                                                             | 1        | 挂账 |
-| `src/components/ui/form-rhf.tsx`                                                                     | 3        | 挂账 |
-| `src/components/ui/image-viewer.test.tsx`                                                            | 1        | 挂账 |
+| `src/components/studio/workflow-library/sections/EncapsulationTestForm.test.tsx`                     | 1        | 已清 |
+| `src/components/studio/workflow-library/workflow-library-detail-config.ts`                           | 1        | 已清 |
+| `src/components/studio/workflow-library/workflow-library-param-cards.test.ts`                        | 1        | 已清 |
+| `src/components/studio/workflow-library/workflow-library-wire-graph.test.ts`                         | 1        | 已清 |
+| `src/components/studio/workflow-library/workflow-param-mapping-ui.ts`                                | 1        | 已清 |
+| `src/components/studio/workflow-library/WorkflowCanvasNodePreview.io-refresh.test.tsx`               | 1        | 已清 |
+| `src/components/studio/workflow-library/WorkflowLibraryDetailView.tsx`                               | 1        | 已清 |
+| `src/components/studio/workflow-library/WorkflowLibraryFilters.tsx`                                  | 2        | 已清 |
+| `src/components/studio/workflow-utils.test.ts`                                                       | 5        | 已清 |
+| `src/components/studio/WorkflowImportPanel.test.tsx`                                                 | 1        | 已清 |
+| `src/components/studio/workspace-tabs.ts`                                                            | 3        | 已清 |
+| `src/components/ui/aspect-ratio.tsx`                                                                 | 1        | 已清 |
+| `src/components/ui/aurora-background.test.tsx`                                                       | 1        | 已清 |
+| `src/components/ui/code-block.tsx`                                                                   | 1        | 已清 |
+| `src/components/ui/command.test.tsx`                                                                 | 1        | 已清 |
+| `src/components/ui/dialog.test.tsx`                                                                  | 1        | 已清 |
+| `src/components/ui/empty-state.test.tsx`                                                             | 1        | 已清 |
+| `src/components/ui/file-picker.test.tsx`                                                             | 1        | 已清 |
+| `src/components/ui/form-rhf.tsx`                                                                     | 3        | 已清 |
+| `src/components/ui/image-viewer.test.tsx`                                                            | 1        | 已清 |
 | `src/components/ui/input-group.tsx`                                                                  | 1        | 挂账 |
 | `src/components/ui/json-viewer.tsx`                                                                  | 4        | 挂账 |
 | `src/components/ui/media-drag-source.test.ts`                                                        | 9        | 挂账 |

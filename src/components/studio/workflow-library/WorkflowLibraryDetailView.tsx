@@ -12,6 +12,11 @@ import { DETAIL_TABS, type DetailTab } from "./workflow-library-detail-config";
 import { DetailBody } from "./sections/DetailBody";
 import { DetailHeader } from "./sections/DetailHeader";
 
+/** Tabs 的值来自 `DETAIL_TABS` 的 key；集合外的值忽略。 */
+function isDetailTab(value: unknown): value is DetailTab {
+  return typeof value === "string" && DETAIL_TABS.some((tab) => tab.key === value);
+}
+
 export function WorkflowLibraryDetailView({
   controller,
 }: {
@@ -76,8 +81,9 @@ export function WorkflowLibraryDetailView({
       <Tabs
         className="min-h-0 flex-1 gap-0"
         onValueChange={(value) => {
-          /* SAFETY: 类型断言已复核 */
-          setActiveTab(value as DetailTab);
+          if (isDetailTab(value)) {
+            setActiveTab(value);
+          }
         }}
         value={activeTab}
       >
