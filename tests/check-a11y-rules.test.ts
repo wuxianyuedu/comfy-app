@@ -16,8 +16,8 @@ import { loadJudgeModule, REAL_ROOT, SCRIPT } from "./helpers/a11y-effective-con
  */
 const CLI_BUDGET = { timeout: 120_000 };
 
-  /* 收集期暖机一次：把「每进程只付一次」的真加载放在用例计时之外，否则谁排第一条就替全文件付那笔。
-   * `a11y-rules-gate.test.ts` 早有这一步（`await judgeWith(REAL_LEDGER)`）；暖机不替用例断言，失败时抛、整份文件红。 */
+/* 收集期暖机一次：把「每进程只付一次」的真加载放在用例计时之外，否则谁排第一条就替全文件付那笔。
+ * `a11y-rules-gate.test.ts` 早有这一步（`await judgeWith(REAL_LEDGER)`）；暖机不替用例断言，失败时抛、整份文件红。 */
 await loadJudgeModule().loadOxlintConfig();
 
 test("真加载：求值的是仓库根那份 `oxlint.parity.config.mjs`，且只求值一次", async () => {

@@ -142,9 +142,7 @@ describe("三档的登记形状（§11.8）", () => {
         continue;
       }
       expect(
-        String(track.ciStage)
-          .trim()
-          .startsWith("每日"),
+        String(track.ciStage).trim().startsWith("每日"),
         `${kind}（主体=master）的执行者 ${track.ciStage} 不在每日档上 —— 主干的账只能由` +
           "每日那一跑刷新与判读",
       ).toBe(true);

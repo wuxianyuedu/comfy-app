@@ -191,7 +191,10 @@ describe("stripComments 的唯一实现（§12.18 复用优先）", () => {
 
     /* 反向：登记了但已经换走/删掉的，要从 SHAPE_LEDGER 里摘掉（表要能记账）。 */
     const staleShape = SHAPE_LEDGER.filter((rel) => !shapedIn.includes(rel));
-    expect(staleShape, `SHAPE_LEDGER 里已经不存在这类副本的 ${staleShape.length} 份：${staleShape.join("、")}`).toEqual([]);
+    expect(
+      staleShape,
+      `SHAPE_LEDGER 里已经不存在这类副本的 ${staleShape.length} 份：${staleShape.join("、")}`,
+    ).toEqual([]);
   });
 
   it("「裸的全局去行尾注释」那一型不许多处扩散（实测会咬坏字符串里的 URL ⇒ 判据假绿）", () => {

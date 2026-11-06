@@ -465,7 +465,10 @@ describe("push 的目的地不在本仓 remote 上 ⇒ 跳过复算（ISSUE #302
   it("镜像仓库的 URL 判成外来", () => {
     const known = ["https://cnb.cool/moon-read/comfy-app-t3.git"];
     expect(
-      isForeignRemotePush("https://x-access-token:TOKEN@github.com/wuxianyuedu/comfy-app.git", known),
+      isForeignRemotePush(
+        "https://x-access-token:TOKEN@github.com/wuxianyuedu/comfy-app.git",
+        known,
+      ),
     ).toBe(true);
   });
 
@@ -488,7 +491,12 @@ describe("push 的目的地不在本仓 remote 上 ⇒ 跳过复算（ISSUE #302
     expect(verdict.verdict).toBe("skip");
     expect(verdict.reasons[0]).toContain("github.com/wuxianyuedu/comfy-app");
     expect(verdict.reasons[0]).toContain("不在本仓任何 remote 上");
-    const got = exitForNotRun(verdict, { proof: null, candidates, headSha: HEAD, upstreamSha: null });
+    const got = exitForNotRun(verdict, {
+      proof: null,
+      candidates,
+      headSha: HEAD,
+      upstreamSha: null,
+    });
     expect(got?.code).toBe(0);
   });
 
@@ -502,7 +510,12 @@ describe("push 的目的地不在本仓 remote 上 ⇒ 跳过复算（ISSUE #302
       foreignPush: null,
     });
     expect(verdict.verdict).toBe("unavailable");
-    const got = exitForNotRun(verdict, { proof: null, candidates, headSha: HEAD, upstreamSha: null });
+    const got = exitForNotRun(verdict, {
+      proof: null,
+      candidates,
+      headSha: HEAD,
+      upstreamSha: null,
+    });
     expect(got?.code).toBe(2);
   });
 });
