@@ -51,15 +51,11 @@
  * 7. **`GIT_DIR` / `GIT_WORK_TREE` 一律不从环境继承**（同上）：平台 `prepare` 里有
  *    `export GIT_DIR=…` 的做法（本仓 `scripts/ci-*.mjs` 就有几处），那一形态下子进程里的
  *    `git push` 会推到别的树上 —— 这一格的每一条 git 调用都显式清掉这两个变量，只吃 `cwd`。
- * 8. **网络抖动的韧性**（判据演进见 `ci-mirror-retry-policy.mjs` 文件头）：
+ * 8. **网络抖动的韧性**（判据演进、数字与 30s 首刀细节见 `ci-mirror-retry-policy.mjs` 文件头）：
  *    同一台 runner 时通时不通 ⇒ github.com:443 是间歇抖动而非硬阻断。**探活与 wire 推送
  *    共用一份 4 分钟墙钟预算**（`PUSH_RETRY_BUDGET_MS`，由 `ci-mirror-wire-budget.mjs`
  *    在探活前起算），两跳各至多 10 次、退避 5s→50s，只有 egress ∪ 远端 5xx 消耗重试；
- *    认证 / 权限类一次交账。为什么连探活也要吃预算：那一跳失败会短路掉整个推送，
- *    只给推送 4 分钟等于没给 —— 现场 `Connection was reset` 一次 0.3s，探活 3 次加
- *    15s 退避就交账，后面那 4 分钟一秒都没花（ISSUE #3234）。取法与数字的理由见
- *    `ci-mirror-retry-policy.mjs`；`gitTimeoutFor` 把有预算的重试裁到剩余量，探活首刀
- *    仍吃 30s 上限，慢但正常的那一读不会被掐死。
+ *    认证 / 权限类一次交账；只给推送 4 分钟等于没给 —— 探活失败会短路整格（ISSUE #3234）。
  * 9. **refs 推完还有第二跳：LFS 对象**（第二批，字体真身那一族）。镜像仓若只有指针文件，
  *    GitHub 侧 `checkout` 开 `lfs: true` 就撞「拉不到对象」的红，所以内容推送成功后补一跳
  *    `git lfs push <镜像> HEAD`：**不带 `--all`**（增量由 git-lfs 对账，存量历史不重复计

@@ -11,6 +11,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { stripComments } from "./helpers/strip-comments";
+
 const ROOT = path.resolve(import.meta.dirname, "..");
 const AUDITS_DIR = path.join(ROOT, "docs", "audits");
 
@@ -160,7 +162,9 @@ describe("docs/audits/** 的台账引用不许漂到已删的棘轮基线上", (
    * 被禁词拆开拼 —— 原样写成字面量的话，这条用例自己的源码会把自己判红。 */
   it("判据只读仓内台账：源码里不许再出现 git 全历史扫描", () => {
     const source = readFileSync(path.join(ROOT, "tests", "audits-doc-references.test.ts"), "utf8");
-    const code = source.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/\/\/.*$/gm, "");
+    /* 用共享的 ./helpers/strip-comments（§12.18）：本文件自己曾经在这里抄过一份内联剥注释，
+     * 被 tests/strip-comments-single-source.test.ts 的形状面判红（ISSUE #2969）。 */
+    const code = stripComments(source, { trailing: true });
     for (const banned of ["execFile" + "Sync(", "--diff" + "-filter", "git" + " log"]) {
       expect(code, banned).not.toContain(banned);
     }
