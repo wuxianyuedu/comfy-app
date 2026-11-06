@@ -160,6 +160,16 @@ export function dispatchBranchFilter(text) {
  */
 
 /**
+ * 运行时收窄：API 回话 / `JSON.parse` 出来的值，先过这道守卫再当对象读。
+ *
+ * @param {unknown} v 待收窄的值
+ * @returns {v is Record<string, unknown>} true ⇒ 是普通对象（非 null / 非数组）
+ */
+function isRecord(v) {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
  * 零条 run 时的一次**结构判定**：本跑到底还能不能等到 run？
  *
  * 只读三件**正证据**，任何一条明确为「不会」就当场收工 —— 不靠猜时间：
@@ -199,8 +209,7 @@ export async function probeDispatchChain(readJson, ctx) {
   }
   if (repoRead.ok) {
     out.repo = "ok";
-    const body = /** @type {{default_branch?: unknown}} */ (repoRead.body);
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- body 是 API 回话 JSON，运行时可缺/为 null，断言不承重
+    const body = isRecord(repoRead.body) ? repoRead.body : undefined;
     out.defaultBranch = String(body?.default_branch ?? "");
     notes.push(`仓库身份：${ctx.repo} 可查（默认分支 ${out.defaultBranch || "?"}）`);
   } else {
@@ -209,12 +218,10 @@ export async function probeDispatchChain(readJson, ctx) {
 
   const wfRead = await readJson(workflowsUrl(ctx.repo), "workflow 清单");
   if (wfRead.ok) {
-    const body = /** @type {{workflows?: unknown}} */ (wfRead.body);
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- body 是 API 回话 JSON，运行时可缺/为 null，断言不承重
+    const body = isRecord(wfRead.body) ? wfRead.body : undefined;
     const list = Array.isArray(body?.workflows) ? body.workflows : [];
     const found = list.find((item) => {
-      const wf = /** @type {{path?: unknown}} */ (item);
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- item 是 API 回话里的 unknown 条目，断言不承重
+      const wf = isRecord(item) ? item : undefined;
       return String(wf?.path ?? "").endsWith("/pr-gate.yml");
     });
     if (found === undefined) {
@@ -222,10 +229,8 @@ export async function probeDispatchChain(readJson, ctx) {
       out.structural = `GitHub 侧没有 ${out.workflowPath}（workflow 被删或从未建）`;
       notes.push(`workflow 清单：没有 ${out.workflowPath}`);
     } else {
-      const wf = /** @type {{path?: unknown, state?: unknown}} */ (found);
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- item 是 API 回话里的 unknown 条目，断言不承重
+      const wf = isRecord(found) ? found : undefined;
       out.workflowPath = String(wf?.path ?? out.workflowPath);
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上
       out.workflowState = String(wf?.state ?? "");
       if (out.workflowState === "active") {
         out.workflow = "ok";
@@ -249,8 +254,7 @@ export async function probeDispatchChain(readJson, ctx) {
     const fileRead = await readJson(workflowFileUrl(ctx.repo, out.defaultBranch), "workflow 文件");
     const fileStatus = fileRead.status ?? 0;
     if (fileRead.ok) {
-      const body = /** @type {{content?: unknown, encoding?: unknown}} */ (fileRead.body);
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- body 是 API 回话 JSON，运行时可缺/为 null，断言不承重
+      const body = isRecord(fileRead.body) ? fileRead.body : undefined;
       const raw = String(body?.content ?? "");
       const text = raw === "" ? "" : Buffer.from(raw, "base64").toString("utf8");
       if (/\brepository_dispatch\b/u.test(text)) {

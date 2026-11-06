@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "scripts/check-ci-yaml-parse.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/check-daily-attendance.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/check-eslint-exemptions.cjs", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/check-gate-executors.cjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/check-gate-thresholds.cjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/check-known-failed-stale.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/check-oxlint-zero-rules.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/ci-cp936-exit.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/ci-env-probe.mjs", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/ci-github-mirror-push.mjs", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/ci-github-verdict-chain.mjs", // 存量 5 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/ci-github-verdict-read.mjs", // 存量 7 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/ci-image-identity.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/ci-image-plan.mjs", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/ci-pr-failure-issue.mjs", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/ci-token-scopes.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/ci-toolchain-browser-reach.mjs", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/ci-toolchain-selfcheck.mjs", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/ci-workspace-probe.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/coverage-readout.mjs", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "scripts/dev-launcher-session.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "scripts/force-ipv4-dns.cjs", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "scripts/freshness-gate.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用

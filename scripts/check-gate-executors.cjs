@@ -267,6 +267,29 @@ function claimsPreCommit(src) {
 /* ── 台账 ────────────────────────────────────────────────────── */
 
 /**
+ * 运行时收窄：台账是手写 JSON，`JSON.parse` 的产物先过这道守卫再当对象读。
+ *
+ * @param {unknown} v
+ * @returns {v is Record<string, unknown>}
+ */
+function isRecord(v) {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
+ * 一条入口登记的值形状：一串执行者条目，或者干脆没写（缺一栏）。
+ *
+ * 这里只认「是不是数组」这一层 —— 条目里的 `flags` / `judges` / `executors` 可缺，
+ * 缺哪一栏由 `checkEntrypoints()` 逐条判红（那是判据，不是这里的崩溃点）。
+ *
+ * @param {unknown} v
+ * @returns {v is Array<{flags?: string[], judges?: string, executors?: string[]}> | null | undefined}
+ */
+function isEntrypointEntries(v) {
+  return v === null || v === undefined || Array.isArray(v);
+}
+
+/**
  * 条目字段按**可缺**声明：这份 JSON 是**入库的手写台账**，缺一栏就是一句判红的话
  * （「那一形没写它判的是什么」/「一个执行者都没写」），不是崩溃点。
  *
@@ -276,14 +299,22 @@ function readLedger() {
   if (!fs.existsSync(LEDGER)) {
     return { onDemand: {}, entrypoints: {} };
   }
-  /* `parsed` 是手写 JSON 的 `JSON.parse` 产物（无 schema），下面两处 `?? {}` 是「这份台账
+  /* `parsed` 是手写 JSON 的 `JSON.parse` 产物（无 schema），下面 `?? {}` 是「这份台账
    * 还没有那一半」的出口，不是多余条件。 */
   const parsed = JSON.parse(fs.readFileSync(LEDGER, "utf8"));
+  /**
+   * 声明 + 字面量：形状不对的条目落到「缺」上，下游那句「只有 0 形」照原样报出来。
+   * @type {ReturnType<typeof readLedger>["entrypoints"]}
+   */
+  const entrypoints = {};
+  if (isRecord(parsed.entrypoints)) {
+    for (const [script, entries] of Object.entries(parsed.entrypoints)) {
+      entrypoints[script] = isEntrypointEntries(entries) ? entries : undefined;
+    }
+  }
   return {
     onDemand: parsed.onDemand ?? {},
-    entrypoints: /** @type {ReturnType<typeof readLedger>["entrypoints"]} */ (
-      parsed.entrypoints ?? {}
-    ),
+    entrypoints,
   };
 }
 

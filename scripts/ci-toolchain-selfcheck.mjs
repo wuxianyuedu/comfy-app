@@ -229,10 +229,7 @@ function installAndReverify() {
 export function pythonOnly() {
   section("python");
   /** @type {{command: string, path: string | null, version: string} | null} */
-  const python =
-    findPython({
-      notes: /** @type {string[]} */ (/** @type {unknown} */ (notes)),
-    }) ?? installAndReverify();
+  const python = findPython({ notes }) ?? installAndReverify();
   if (python) {
     console.log(`python : ${python.path ?? python.command} ${python.version}`.trim());
     return 0;
@@ -433,9 +430,7 @@ export function main() {
 
   section("python");
   /** @type {{command: string, path: string | null, version: string} | null} */
-  let python = findPython({
-    notes: /** @type {string[]} */ (/** @type {unknown} */ (notes)),
-  });
+  let python = findPython({ notes });
   if (!python) {
     console.log("未发现可用解释器，按序尝试三条安装通道（winget → scoop → 官方 embed 包）");
     python = installAndReverify();

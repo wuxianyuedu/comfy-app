@@ -193,7 +193,8 @@ export function osRelease({ exists = existsSync, readFile = (p) => readFileSync(
     return `${name} / ${process.platform} ${process.arch}`;
   } catch (error) {
     /* 读不到就如实说读不到 —— 那不是判据，别把一次 IO 失败写成「环境不对」。 */
-    return `${process.platform} ${process.arch}（/etc/os-release 读不动：${/** @type {Error} */ (error).message}）`;
+    const message = error instanceof Error ? error.message : String(error);
+    return `${process.platform} ${process.arch}（/etc/os-release 读不动：${message}）`;
   }
 }
 

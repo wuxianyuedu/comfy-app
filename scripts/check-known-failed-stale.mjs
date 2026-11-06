@@ -112,7 +112,13 @@ export function judgeStillFailing(registered, runResult, commandLine, evidence) 
     // 「命令没起来」与「跑完但非零退出」必须分开报（§13.5 同族：ISSUE #576 的形态）——
     // `status ?? 1` 只给一个退出码等于没说原因，而这里的退出码非零**恰好是期望值**
     // （登记项就该红），所以起不来会被误读成「判据通过」。这是本判据最容易骗过自己的位置。
-    const errCode = /** @type {{code?: string}} */ (runResult.error).code;
+    const errCode =
+      typeof runResult.error === "object" &&
+      runResult.error !== null &&
+      "code" in runResult.error &&
+      typeof runResult.error.code === "string"
+        ? runResult.error.code
+        : undefined;
     problems.push(
       `起 vitest 失败（${errCode ?? "UNKNOWN"}）：${runResult.error.message}\n` +
         `        实际命令：${commandLine}\n` +
@@ -137,9 +143,7 @@ export function judgeStillFailing(registered, runResult, commandLine, evidence) 
 
   // ③ 跑完了，**逐份**看这些登记文件自己的状态（不是整场退出码，见函数头注）。
   // 归一化比较：vitest 写的是绝对路径，登记表写的是仓库相对路径。
-  const byAbs = new Map(
-    evidence.files.map((f) => [f.name.replaceAll("\\", "/"), f.status]),
-  );
+  const byAbs = new Map(evidence.files.map((f) => [f.name.replaceAll("\\", "/"), f.status]));
   const failures = [];
   for (const rel of registered) {
     const abs = path.join(ROOT, rel).replaceAll("\\", "/");
@@ -329,8 +333,9 @@ function main() {
       const problems = [];
       if (redJudge.exitCode !== 0) {
         problems.push(
-          `真红的登记没被判成「还红着」（判据把该放行的拦了 / 量具起不来）：\n${
-            redJudge.problems.join("\n")}`,
+          `真红的登记没被判成「还红着」（判据把该放行的拦了 / 量具起不来）：\n${redJudge.problems.join(
+            "\n",
+          )}`,
         );
       }
       if (greenJudge.exitCode === 0) {

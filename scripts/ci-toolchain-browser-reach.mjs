@@ -366,7 +366,7 @@ export function playwrightReachabilityVerdicts({
     try {
       verdict = probe(url);
     } catch (error) {
-      verdict = `探测本身出错：${/** @type {Error} */ (error).message}`;
+      verdict = `探测本身出错：${error instanceof Error ? error.message : String(error)}`;
     }
     return { url, root, verdict, ok: isReachableVerdict(verdict) };
   });
@@ -702,7 +702,7 @@ export function pickPlaywrightRoots({
     try {
       verdict = probe(probeUrlOf(root));
     } catch (error) {
-      verdict = `探测本身出错：${/** @type {Error} */ (error).message}`;
+      verdict = `探测本身出错：${error instanceof Error ? error.message : String(error)}`;
     }
     return { root, verdict, grade: probeGrade(verdict) };
   });

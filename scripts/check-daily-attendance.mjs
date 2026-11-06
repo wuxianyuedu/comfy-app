@@ -91,10 +91,7 @@ export const CODE = { PRESENT: 0, ABSENT: 1, NO_VERDICT: 2 };
  * ⚠️ 这里**刻意不含**`桌面成品包`：那条档的出勤由它自己的立案格与 #2874 那一单管；
  * 把它算进「每日出勤」就是两档互相替对方作证（那正是本判据要拦的假绿）。
  */
-export const DAILY_LANE_PIPELINES = Object.freeze([
-  "每日档（手动触发）",
-  "每日档（API 触发）",
-]);
+export const DAILY_LANE_PIPELINES = Object.freeze(["每日档（手动触发）", "每日档（API 触发）"]);
 
 /**
  * 已退役、但**仍要认**的历史流水线名。
@@ -627,7 +624,7 @@ export function readOffline(file) {
     return {
       list: [],
       details: [],
-      failure: `--from 那份不是能解析的 JSON：${/** @type {Error} */ (error).message}`,
+      failure: `--from 那份不是能解析的 JSON：${error instanceof Error ? error.message : String(error)}`,
     };
   }
   const list = asBuildArray(parsed);

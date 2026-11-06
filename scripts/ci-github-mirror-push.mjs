@@ -379,9 +379,9 @@ export function realRunGit(args, opts) {
   /* 念出来的是子命令而不是 `args[0]` —— 推送那一跳的 `args[0]` 是 `-c`。 */
   const sub = gitSubcommand(args);
   if ((r.error ?? null) !== null || r.status === null) {
-    /* Node 把 `spawnSync` 的 `error` 标成 `Error`，而超时那一支实际带 `code: "ETIMEDOUT"`，
-     * 类型里没申出来 ⇒ 按形状读一次（不覆盖平台原值，也不假设它一定在）。 */
-    const code = /** @type {{ code?: string } | null | undefined} */ (r.error)?.code;
+    /* Node 把 `spawnSync` 的 `error` 标成 `Error`，而超时那一支带 `code: "ETIMEDOUT"`（类型没申出来）⇒ 按形状读一次。 */
+    const err = typeof r.error === "object" ? r.error : null;
+    const code = err !== null && "code" in err ? String(err.code) : undefined;
     const why =
       code === "ETIMEDOUT"
         ? `git ${sub} 超时（>${String(timeout)} ms）：这一跳没拿到任何回话 —— 是没通，不是判出的红`
@@ -768,6 +768,10 @@ export function exitCodeFor(code, readout) {
  */
 export const MIRROR_ENTRY_TIMEOUT_MS = 30_000;
 
+/** @param {unknown} h 定时器句柄 @returns {h is ReturnType<typeof setTimeout>} 是否可以交给 clearTimeout（非句柄值本就是空操作） */
+const isTimeoutHandle = (h) =>
+  typeof h === "number" || typeof h === "string" || (typeof h === "object" && h !== null);
+
 /**
  * 入口的注入面。全部可缺省：生产路径吃 `.cnb.yml` 那一格的实际形态，
  * 用例吃假件（假定时器 / 永不 settle 的假装载）。
@@ -813,11 +817,7 @@ export async function runMirrorEntry(io = {}) {
       console.log(line);
     });
   const setTimer = io.setTimer ?? ((cb, ms) => setTimeout(cb, ms));
-  const clearTimer =
-    io.clearTimer ??
-    ((handle) => {
-      clearTimeout(/** @type {ReturnType<typeof setTimeout>} */ (handle));
-    });
+  const clearTimer = io.clearTimer ?? ((handle) => isTimeoutHandle(handle) && clearTimeout(handle));
   /* `--master` 那一档的执行面在另一份文件（#3148 为回到 900 行闸切出去的）。动态取它：
    * 那一份反过来要 import 本文件的判据与话术，静态互相 import 会成环。 */
   /** @type {() => Promise<{runMasterMirror: MirrorRunner}>} */
