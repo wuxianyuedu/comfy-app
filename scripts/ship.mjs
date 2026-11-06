@@ -179,6 +179,9 @@
  *   pnpm ship --whoami                         # 只读自查：这一份检出的留痕短名 +
  *                                              #   手工写平台文字 / 建 PR 后补标签的粘贴命令
  *                                              #   （一次也不碰平台，不改任何状态）
+ *   node scripts/ship-result.mjs              # 只读回读：上一次 ship 跑到哪、给了什么结论
+ *                                              #   落盘在 .git/ship-result.json（本机、不入库）；
+ *                                              #   后台完成不保证唤醒 ⇒ 下一轮先读它再决定动作
  *   pnpm ship --claim 2187                     # 领取单子：评论「已接单」+ 打 `处理人:` 标签（写后回读）
  *   pnpm ship --release 2187                   # 结束处理：评论「开发结束」+ 撤 `处理人:` 标签（先评论后撤）
  *   pnpm ship --claims                         # 列出自己领取中（state=open）的单子
@@ -237,6 +240,7 @@ import {
 } from "./ship-core.mjs";
 import { makeRunner, short, writeScratch } from "./ship-exec.mjs";
 import { reportStage } from "./ship-stage.mjs";
+import { createShipResultSink } from "./ship-result.mjs";
 import { handleFromProcessEnv, readDevHandleWithSource } from "./ship-ticket.mjs";
 import { reapCheckoutInstances, readAppInstances } from "./ship-reap.mjs";
 import { cleanBranch, createOrReusePull, mergeAndVerify, reportVerdict } from "./ship-platform.mjs";
@@ -260,15 +264,37 @@ import { mentionsCloses } from "./ship-pull-body.mjs";
  * 提前 return**（钩子拦下提交时 `return finish(codes)` 就发生在写完临时文件之后）——
  * 「用完顺手删一句」在这种形状下照样漏，而且漏的恰好是没人回头看的那几次。
  *
- * @param {Parameters<typeof runFlow>[0]} [deps] 注入点
+ * @param {Parameters<typeof runFlow>[0] & { shipResultResolve?: (cwd?: string) => string | null }} [deps] 注入点
+ *   （`shipResultResolve` 只由这一层消费：落盘回读点的落点；默认不给 ⇒ 不写盘，
+ *    见下面 `main()` 里「不污染真实检出」那条说明）
  * @returns {Promise<number>} 进程退出码（三态）
  */
 export async function main(deps = {}) {
   /** @type {string[]} */
   const tmpFiles = [];
   let code;
+  const root = deps.root ?? process.cwd();
+  /* 落盘回读点挂在 `main()` 的唯一出口上（ISSUE #3206）：一轮可以从七八个出口
+   * 结束，挂在某个阶段里就总有「哪条路径忘了写」这一格。sink 一创建就先写一笔
+   * `status=running`，此后每笔 log 同步追加 —— 被 SIGTERM 也留得下停在最后一行
+   * 的读数。写盘失败一律吞掉：这一格是读数，不是判据。
+   *
+   * 落点**必须由调用方显式给**：编排层默认不落盘。几十条 `main({...})` 注入用例
+   * 共用本仓真实检出，若默认把 `.git/ship-result.json` 写了，测试跑完「上一次
+   * ship」就成了假读数；`tests/ship.test.ts` 还有一条 `readdirSync(gitDir)` 必须
+   * 为空的回收断言会当场红。只有 CLI 入口传真实 `resolveGitDir` 才写。 */
+  const { shipResultResolve, ...flowDeps } = deps;
+  const sink = createShipResultSink({
+    root,
+    args: deps.args ?? process.argv.slice(2),
+    resolve: shipResultResolve ?? (() => null),
+  });
+  const log = sink.wrapLog(deps.log ?? ((s) => process.stdout.write(`${s}\n`)));
   try {
-    code = await runFlow(deps, tmpFiles);
+    code = await runFlow({ ...flowDeps, log }, tmpFiles);
+  } catch (error) {
+    sink.fail(error);
+    throw error;
   } finally {
     for (const p of tmpFiles) {
       try {
@@ -283,8 +309,6 @@ export async function main(deps = {}) {
    * 这种形态 —— 而那恰好是这一格要防的事。`--dry-run` 只进计划，不伸手。 */
   const opt = parseArgs(deps.args ?? process.argv.slice(2));
   if (opt.reap && !opt.dryRun) {
-    const root = deps.root ?? process.cwd();
-    const log = deps.log ?? ((s) => process.stdout.write(`${s}\n`));
     const run = deps.run ?? makeRunner(root);
     const before = code;
     code = combineShipCodes([
@@ -305,6 +329,7 @@ export async function main(deps = {}) {
       );
     }
   }
+  sink.finish(code);
   return code;
 }
 
@@ -838,5 +863,6 @@ async function runFlow(deps, tmpFiles) {
 
 // oxlint-disable-next-line typescript/no-unnecessary-condition -- 直接执行判据：以 REPL / 无脚本入口方式入场时 argv[1] 运行时为 undefined
 if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
-  main().then((code) => process.exit(code));
+  /* CLI 是唯一把真实落点交进来的入口；编排层被 import 调用时默认不落盘。 */
+  main({ shipResultResolve: resolveGitDir }).then((code) => process.exit(code));
 }
