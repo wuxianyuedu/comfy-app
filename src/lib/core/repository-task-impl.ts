@@ -215,15 +215,26 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
           ),
         )
         .limit(take);
-      /* 谓词里已有 `claimedBy IS NOT NULL`，而 drizzle 不会据此把投影收窄成非空：
-       * 在边界上断言一次，读侧（把陌生归属值写进用户可见的判死原因）不必再判空。 */
-      /* SAFETY: 类型断言已复核 */
-      return rows as Array<{
+      /* 谓词里已有 `claimedBy IS NOT NULL`，但 drizzle 不会据此把投影收窄成非空：
+       * 这里按运行期判型，读侧（把陌生归属值写进用户可见的判死原因）不必再判空。 */
+      const claimedRows: Array<{
         claimedBy: string;
         createdAt: Date;
         id: string;
         workflowName: string;
-      }>;
+      }> = [];
+      for (const row of rows) {
+        if (typeof row.claimedBy !== "string") {
+          continue;
+        }
+        claimedRows.push({
+          id: row.id,
+          createdAt: row.createdAt,
+          workflowName: row.workflowName,
+          claimedBy: row.claimedBy,
+        });
+      }
+      return claimedRows;
     },
 
     /** reaper 扫 RUNNING 孤儿（ISSUE #1184 起**不再要求 `promptId` 非空**）：
@@ -594,8 +605,17 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
         .where(eq(task.id, taskId))
         .limit(1);
       const value = rows[0]?.rawCli;
-      /* SAFETY: 类型断言已复核 */
-      return Array.isArray(value) ? (value as Array<string>) : null;
+      if (!Array.isArray(value)) {
+        return null;
+      }
+      const lines: Array<string> = [];
+      for (const item of value) {
+        if (typeof item !== "string") {
+          return null;
+        }
+        lines.push(item);
+      }
+      return lines;
     },
   };
 }

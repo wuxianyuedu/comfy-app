@@ -44,6 +44,7 @@ import pino, { type DestinationStream, type LoggerOptions } from "pino";
 
 import { appRuntimeLog } from "~/lib/log/app-runtime-log";
 import { redactSecretShaped } from "~/lib/core/redact-secret";
+import { isRecord } from "~/lib/is-record";
 
 /**
  * 值形状守卫实现见 `./redact-secret`（零框架依赖的纯逻辑）。
@@ -161,8 +162,7 @@ export function createPinoLogger(opts: PinoLoggerOptions = {}) {
         }
         // pino 的 `logMethod` 钩子要的就是「就地转发」：它自己的类型声明是 `=> void`，
         // 转发这一步不产出任何值，也不需要往下游返回（#2918 逐处确认过返回值无人消费）。
-        /* SAFETY: 类型断言已复核 */
-        method.apply(this, args as never);
+        Reflect.apply(method, this, args);
       },
     },
   };
@@ -241,10 +241,7 @@ function renderServerLogEntry(
   // 两参形态：pino 的 `(obj, msg)` 里第二个字符串**就是 msg**（不是命名空间）
   const stringArg = typeof first === "string" ? first : undefined;
   const secondString = typeof second === "string" ? second : undefined;
-  const payload =
-    /* SAFETY: 类型断言已复核 */
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    first != null && typeof first === "object" ? (first as Record<string, unknown>) : undefined;
+  const payload = isRecord(first) ? first : undefined;
 
   // 空串按「没取到」处理：`??` 只挡 null/undefined，挡不住 ""（会写出空行）
   const firstNonEmpty = (...candidates: Array<string | undefined>) =>
@@ -287,10 +284,9 @@ function renderServerLogMessage(payload?: Record<string, unknown>): string {
   if (typeof raw === "string" && raw.length > 0) {
     return raw;
   }
-  /* SAFETY: 类型断言已复核 */
-  const err = payload.err as { message?: unknown } | undefined;
-  if (err && typeof err.message === "string" && err.message.length > 0) {
-    return err.message;
+  const rawErr = payload.err;
+  if (isRecord(rawErr) && typeof rawErr.message === "string" && rawErr.message.length > 0) {
+    return rawErr.message;
   }
   return "";
 }

@@ -17,7 +17,7 @@ import {
   reportDroppedBoundaryLinks,
   runtimeInnerId,
 } from "./workflow-subgraph-parse";
-import type { RawNodeInput, RawSubgraphDef } from "./raw";
+import type { RawNode, RawNodeInput, RawSubgraphDef } from "./raw";
 
 /** 最小子图定义：wrapper 暴露 value_1（作者名 Seed），内层 PrimitiveInt 消费它。 */
 function makeSub(extra: Record<string, unknown> = {}): RawSubgraphDef {
@@ -194,12 +194,11 @@ describe("buildSubgraphGraph — 节点作者标题", () => {
  * 用户以为「位置没保存 / 重置后全乱」。
  */
 describe("extractSubgraphAnnotations — 宿主链坐标", () => {
-  function subWith(nodes: Array<unknown>): RawSubgraphDef {
-    /* SAFETY: 类型断言已复核 */
+  function subWith(nodes: Array<RawNode>): RawSubgraphDef {
     return {
       id: "uid",
       nodes,
-    } as RawSubgraphDef;
+    };
   }
 
   it("读得回 `宿主:内部` 拼接键的拖拽覆盖", () => {

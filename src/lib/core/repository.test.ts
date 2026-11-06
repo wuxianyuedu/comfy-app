@@ -20,9 +20,8 @@ vi.mock("~/server/db", async () => {
   return { db: createTestDb() };
 });
 import { DrizzleRepository } from "~/lib/core/repository-base";
-/** 行类型只作类型用：`import type` 会被擦掉，不影响本文件「先 mock `~/server/db`
- *  再取 schema」的加载顺序。 */
-import type { Project } from "~/server/db/schema";
+import { isRecord } from "~/lib/is-record";
+import type { RemoteModeAdapter } from "~/lib/workshop/model-mode-contract";
 /** `NotFoundError` 从**定义处**导入而不是 `repository-base`：基类只是 import 它
  *  （没有 re-export），`TaskWithCover` 也只经 `repository-task` 可用 —— 见本文件
  *  末尾「零消费导出」那一组断言。 */
@@ -54,6 +53,20 @@ import {
 } from "../../../tests/helpers/test-db";
 
 const tdb = getTestDb();
+
+/** 把 catch 到的 `unknown` 收窄成「必有 message、cause 可选」的形态：drizzle 把
+ *  宿主抛出的原因挂在 `cause` 上，断言要看 message 与 cause.message 两段。 */
+function errorText(error: unknown): { cause?: { message?: string }; message: string } {
+  if (!isRecord(error)) {
+    throw new Error(`期望 Error 形态，实际收到 ${typeof error}`);
+  }
+  const message = typeof error.message === "string" ? error.message : "";
+  const cause =
+    isRecord(error.cause) && typeof error.cause.message === "string"
+      ? { message: error.cause.message }
+      : undefined;
+  return cause === undefined ? { message } : { cause, message };
+}
 
 beforeEach(() => {
   tdb.$reset();
@@ -125,16 +138,16 @@ describe("DrizzleRepository 基类", () => {
      * 而不是把入参原样吐回去。 */
     seedUser(tdb, { id: "u1", email: "u1@test.dev" });
     const { project } = await import("~/server/db/schema");
-    const repo = new DrizzleRepository<Project>(project, project.id);
+    /* 基类 `create(entity: T)` 收整行类型。用表的 `$inferInsert`（带默认值的列
+     *  可省）作 T，才能「少给字段」地落库 —— 入参里根本没有 nodes/edges/createdAt，
+     *  正好证明默认列由库补。 */
+    const repo = new DrizzleRepository<typeof project.$inferInsert>(project, project.id);
 
-    /* `as Project` 是基类签名自己的形状：`create(entity: T)` 收整行类型，落库却只给
-     * 必填列 —— 想证明「默认列由库补」就必须能少给字段，这里不放宽基类的签名。 */
-    /* SAFETY: 类型断言已复核 */
     const created = await repo.create({
       id: "p-create",
       userId: "u1",
       name: "基类写入",
-    } as Project);
+    });
 
     expect(created).toMatchObject({ id: "p-create", name: "基类写入" });
     expect(created.nodes).toBe("[]");
@@ -327,14 +340,14 @@ describe("WorkflowModelTagRepository", () => {
   it("getTemplateTagRows 空数组短路；templateHasTagIdsWhere 能组合进模板查询", async () => {
     seedUser(tdb, { id: "u1", email: "u1@test.dev" });
     const tag = await workflowModelTagRepository.upsertByName("u1", "动漫");
-    const wt = seedWorkflowTemplate(tdb, { id: "wt1", userId: "u1" });
-    await workflowTemplateRepository.setModelTags("wt1", [tag.id]);
+    const wtId = "wt1";
+    seedWorkflowTemplate(tdb, { id: wtId, userId: "u1" });
+    await workflowTemplateRepository.setModelTags(wtId, [tag.id]);
 
     expect(await workflowModelTagRepository.getTemplateTagRows([])).toEqual([]);
-    expect(
-      /* SAFETY: 类型断言已复核 */
-      await workflowModelTagRepository.getTemplateTagRows([wt.id as string]),
-    ).toEqual([{ templateId: "wt1", name: "动漫" }]);
+    expect(await workflowModelTagRepository.getTemplateTagRows([wtId])).toEqual([
+      { templateId: "wt1", name: "动漫" },
+    ]);
 
     const hit = await workflowTemplateRepository.listForUser("u1", {
       where: workflowModelTagRepository.templateHasTagIdsWhere([tag.id]),
@@ -415,7 +428,7 @@ describe("WorkflowTemplateRepository", () => {
   it("findByIdForUser 隔离他人数据；relinkSourcePath 只改路径两列", async () => {
     seedUser(tdb, { id: "u1", email: "u1@test.dev" });
     seedUser(tdb, { id: "u2", email: "u2@test.dev" });
-    const wt = seedWorkflowTemplate(tdb, {
+    seedWorkflowTemplate(tdb, {
       id: "wt1",
       userId: "u1",
       name: "甲的工作流",
@@ -441,10 +454,7 @@ describe("WorkflowTemplateRepository", () => {
     });
 
     expect(await workflowTemplateRepository.listByUser("u2")).toEqual([]);
-    /* SAFETY: 类型断言已复核 */
-    expect((await workflowTemplateRepository.listByUser("u1")).map((t) => t.id)).toEqual([
-      wt.id as string,
-    ]);
+    expect((await workflowTemplateRepository.listByUser("u1")).map((t) => t.id)).toEqual(["wt1"]);
   });
 });
 
@@ -1122,16 +1132,26 @@ describe("FilmRepository / FilmShotRepository", () => {
     expect(await filmRepository.findByIdForUser("u2", f.id)).toBeNull();
     const plain = await filmRepository.findByIdForUser("u1", f.id);
     expect(plain).not.toBeNull();
-    /* SAFETY: 类型断言已复核 */
-    expect((plain as Record<string, unknown>).shots).toBeUndefined();
+    const plainRow: unknown = plain;
+    if (!isRecord(plainRow)) {
+      throw new Error("findByIdForUser 未返回预期的成片行");
+    }
+    expect(plainRow.shots).toBeUndefined();
 
     const withShots = await filmRepository.findByIdForUser("u1", f.id, {
       includeShots: true,
     });
-    /* SAFETY: 类型断言已复核 */
-    expect(
-      (withShots as unknown as { shots: Array<{ order: number }> }).shots.map((s) => s.order),
-    ).toEqual([0, 2]);
+    const withShotsRow: unknown = withShots;
+    if (!isRecord(withShotsRow) || !Array.isArray(withShotsRow.shots)) {
+      throw new Error("findByIdForUser(includeShots) 未返回 shots 数组");
+    }
+    const orders = withShotsRow.shots.map((shot: unknown) => {
+      if (!isRecord(shot) || typeof shot.order !== "number") {
+        throw new Error("filmShot 行缺少数值 order");
+      }
+      return shot.order;
+    });
+    expect(orders).toEqual([0, 2]);
     expect(
       await filmRepository.findByIdForUser("u1", "nope", {
         includeShots: true,
@@ -1289,8 +1309,14 @@ describe("LlmConfigRepository", () => {
     });
 
     // 关键断言：DB 里存的不是明文（这条只有读原始行才能证明）
-    /* SAFETY: 类型断言已复核 */
-    const raw = tdb.$tables.llmConfig[0]!.apiKey as string;
+    const configRow = tdb.$tables.llmConfig[0];
+    if (!configRow) {
+      throw new Error("llmConfig 未落库");
+    }
+    const raw = configRow.apiKey;
+    if (typeof raw !== "string") {
+      throw new Error("llmConfig.apiKey 不是字符串");
+    }
     expect(raw).not.toBe("sk-plain");
     expect(raw.startsWith("enc:v1:")).toBe(true);
 
@@ -1401,7 +1427,7 @@ describe("RemoteModelRepository", () => {
   });
 
   it("replaceAll 保留已有的工坊适配器（不被配置同步清掉）", async () => {
-    const adapters = [
+    const adapters: Array<RemoteModeAdapter> = [
       {
         mode: "t2i",
         inputs: [{ type: "prompt", field: "prompt" }],
@@ -1410,8 +1436,7 @@ describe("RemoteModelRepository", () => {
       },
     ];
     const created = await remoteModelRepository.replaceAll([{ name: "甲" }]);
-    /* SAFETY: 类型断言已复核 */
-    await remoteModelRepository.saveWorkshopAdapters("甲", adapters as never);
+    await remoteModelRepository.saveWorkshopAdapters("甲", adapters);
     expect(await remoteModelRepository.getWorkshopAdapters("甲")).toEqual([
       {
         mode: "T2I",
@@ -1498,14 +1523,7 @@ describe("RemoteModelRepository", () => {
     const failure = await remoteModelRepository
       .replaceAll([{ name: "乙" }])
       .then(() => null)
-      .catch(
-        /* SAFETY: 类型断言已复核 */
-        (error: unknown) =>
-          error as {
-            cause?: { message?: string };
-            message: string;
-          },
-      );
+      .catch(errorText);
     expect(failure, "第二条写失败必须让整条调用失败得看得见").not.toBeNull();
     /* drizzle 会把宿主抛的东西包成 `Failed query: …`，原因挂在 `cause` 上——
      * 比的正是这两段合起来（只看 message 会读不到注入的那句，那正是 #1250 记的形态）。
@@ -1525,10 +1543,9 @@ describe("RemoteModelRepository", () => {
   });
 
   it("起事务撞锁 ⇒ 按 SETTINGS_DB_WRITE 的预算重试，成功后一次落定", async () => {
-    /* SAFETY: 类型断言已复核 */
     const busy = () => {
-      const e = new Error("database is locked");
-      (e as { code?: string }).code = "SQLITE_BUSY";
+      const e: Error & { code?: string } = new Error("database is locked");
+      e.code = "SQLITE_BUSY";
       return e;
     };
     /* 前 maxAttempts-1 次让 `begin immediate` 撞锁，第三次放行：既验「认锁码才重试」，
@@ -1564,8 +1581,14 @@ describe("RemoteModelRepository", () => {
 
   it("seedRemoteModel 落库的是密文（测试基建与生产写入同形）", () => {
     seedRemoteModel(tdb, { name: "甲", apiKey: "sk-seed" });
-    /* SAFETY: 类型断言已复核 */
-    const raw = tdb.$tables.remoteModels[0]!.apiKey as string;
+    const seededRow = tdb.$tables.remoteModels[0];
+    if (!seededRow) {
+      throw new Error("remoteModel 未落库");
+    }
+    const raw = seededRow.apiKey;
+    if (typeof raw !== "string") {
+      throw new Error("remoteModel.apiKey 不是字符串");
+    }
     expect(raw).not.toBe("sk-seed");
     expect(raw.startsWith("enc:v1:")).toBe(true);
   });
@@ -1636,14 +1659,7 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
       extraModels: [{ name: "乙", baseUrl: "https://b/v1", apiKey: "sk-b" }],
     })
       .then(() => null)
-      .catch(
-        /* SAFETY: 类型断言已复核 */
-        (error: unknown) =>
-          error as {
-            cause?: { message?: string };
-            message: string;
-          },
-      );
+      .catch(errorText);
     expect(failure, "第二条写失败必须让整条保存失败得看得见").not.toBeNull();
     expect(
       `${failure?.message ?? ""} ${failure?.cause?.message ?? ""}`,
@@ -1671,14 +1687,7 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
       extraModels: [{ name: "乙", baseUrl: "https://b/v1" }],
     })
       .then(() => null)
-      .catch(
-        /* SAFETY: 类型断言已复核 */
-        (error: unknown) =>
-          error as {
-            cause?: { message?: string };
-            message: string;
-          },
-      );
+      .catch(errorText);
     expect(failure, "远端那一写失败必须让整条保存失败").not.toBeNull();
     expect(`${failure?.message ?? ""} ${failure?.cause?.message ?? ""}`).toContain("测试注入");
     expect(gate.hits()).toBe(1);
@@ -1714,10 +1723,9 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
 
   it("起事务撞锁 ⇒ 整条跨表事务按 SETTINGS_DB_WRITE 重试（与 #2586 同一份预算）", async () => {
     await seedState();
-    /* SAFETY: 类型断言已复核 */
     const busy = () => {
-      const e = new Error("database is locked");
-      (e as { code?: string }).code = "SQLITE_BUSY";
+      const e: Error & { code?: string } = new Error("database is locked");
+      e.code = "SQLITE_BUSY";
       return e;
     };
     const gate = armStatementFailure(
