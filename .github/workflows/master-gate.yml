@@ -34,14 +34,15 @@ jobs:
   doc-chain:
     # 钉 24.04 不跟浮动标签的理由见 pr-gate.yml 同名注释。
     runs-on: ubuntu-24.04
-    # 冷装约 8 分钟 + 两条命令秒级；给 30 分钟，避免装依赖抖动被读成判据红。
+    # 冷装约 8 分钟（pnpm install 是大头）+ 两条命令秒级；给 30 分钟，避免装依赖抖动被读成判据红。
+    # 检出走浅克隆（fetch-depth: 1，无 LFS）：文档链命令只读当前树的 docs/ 与源文件，
+    # 不做三点 diff 也不碰字体等 LFS 对象，拉全历史是纯开销。
     timeout-minutes: 30
     steps:
-      - name: 检出（全历史 + LFS：镜像格把两个父提交的历史一并推上来）
+      - name: 检出（浅克隆：文档链命令只需要当前树的文件内容，不做三点 diff / 历史追溯）
         uses: actions/checkout@v7
         with:
-          fetch-depth: 0
-          lfs: true
+          fetch-depth: 1
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
         uses: pnpm/action-setup@v6

@@ -1,0 +1,250 @@
+# GA 侧适配清单（任务 3 并行期勘察输出）
+
+> 产出日期：2026-11-06
+> 来源：会话 323c5de20d55fff7f1e90699 勘察结论 + `.cnb.yml` vs `.github/workflows/*` 配置对比
+> 纪律：本清单不要求一次性全部落地，按「一主题一分支一 PR」逐条交付；过程中不得修改 CNB 侧的格与台账；所有改动必须排在 master-gate.yml 收口之后。
+
+## 已完成
+
+| 项 | PR | 备注 |
+|---|---|---|
+| GA push 档 master-gate.yml 新增 | #3215 | 文档链两格与 CNB 并行判，CNB 侧不动 |
+| GA 判决回读补全失败 job 日志 | #3192 | 附件格实测要 docker 已删 |
+| 定时重档迁 GA + 镜像派发判据修稳 | — | 历史提交 |
+| GA 推送格 payload 组装（PR 标题 / base_sha / cnb_commit） | #3160 | run 标题携带 PR 标题 |
+| GH 日志回读工具（ship --gh-logs） | #3203 | 判红自动触发 + 显式入口 |
+
+## 待落地（按优先级 + 主题分组）
+
+### 一、并发与资源（4 项）
+
+#### G-1：vitest maxWorkers / pool 配置
+
+- **现状（CNB 口径）**：自托管 16 核节点，`scripts/ci-load.mjs` 按现场核数折算 maxWorkers，动态值
+- **GA 实测表现**：托管 runner 固定 4 CPU / 16GB（公有仓）；vitest 默认单 worker
+- **影响判断**：GA daily.yml 单 job 串行，全量单测 300 分钟预算接近用完（实测 ~290 分钟）；pr-gate.yml 的 fixed-structural-tests / affected-tests 各 job 独立装依赖后串行跑 vitest
+- **建议改法**：
+  - daily.yml 拆分为多 job 并行（安装 → 并行 lint / E2E / 单测）
+  - vitest worker 数在 GA 上显式设为 2（4 核 runner 留 2 给其他进程）
+  - pool 设为 forks 而非 threads（runner 内存 16GB 够）
+- **优先级**：P1（与 daily.yml 拆分联动）
+
+#### G-2：NODE_OPTIONS / 内存预算
+
+- **现状（CNB 口径）**：重档格显式设 NODE_OPTIONS；daily.yml 的 ESLint step 设 `--max-old-space-size=4096`
+- **GA 实测表现**：daily.yml 的 ESLint 已有 4096；其他重档 step（如 db-push 的 typecheck-db-format job）未显式设置
+- **影响判断**：typecheck-db-format 在 GA 上 tsc 全量面 + db schema 对比，可能 OOM
+- **建议改法**：核查 pr-gate.yml / daily.yml 所有 tsc / ESLint / vitest 重档 step，统一加 `--max-old-space-size=4096`；vitest 用 `COMFY_TEST_TIMEOUT_SCALE=2` 已在 env 里对齐
+- **优先级**：P1
+
+#### G-3：timeout-minutes 配置
+
+- **现状（CNB 口径）**：各格独立 timeout，无总上限概念
+- **GA 实测表现**：单 job 硬上限 6 小时（runner 层）；daily.yml 300 分钟（5h）在安全范围；pr-gate.yml 各 job 30-45 分钟
+- **影响判断**：当前安全，但 daily.yml 如未来扩展步骤可能接近 6h
+- **建议改法**：拆分 daily.yml 后重算 timeout；pr-gate.yml heavy-gates job 显式 60 分钟（安装 + cargo 编译最长）
+- **优先级**：P1（随 daily.yml 拆分）
+
+#### G-4：并发档位用法（it.concurrent）
+
+- **现状（CNB 口径）**：固定清单 `COMFY_VITEST_CONCURRENT_FIXED`；受影响清单空
+- **GA 实测表现**：单 worker 上 concurrent 与串行无差；多 worker 上 concurrent 会跨 worker 分散执行
+- **影响判断**：GA 多 worker 后 concurrent 能真正并行，提升 wall clock
+- **建议改法**：保持 CNB 同款脚本零改动，vitest worker 数到位后自然生效
+- **优先级**：P2（依赖 G-1 的 worker 配置）
+
+### 二、缓存与安装（4 项）
+
+#### G-5：setup-node 缓存命中率
+
+- **现状（CNB 口径）**：无 node_modules 缓存（自托管每次全量 clone + 装依赖）
+- **GA 实测表现**：setup-node cache: pnpm；冷装 pnpm install ~6-8 分钟（含原生编译）；热装（缓存命中）~2-3 分钟
+- **影响判断**：缓存命中率未知；如果镜像仓只有本项目 CI 触发（每次都是独立 run），缓存可能因为 runner 复用率低而命中率低
+- **建议改法**：
+  - 在 pr-gate.yml / daily.yml 的 setup-node step 之后加一个"报告缓存状态"的小 step（`node -e "console.log(process.env.CACHE_HIT || 'cold')"` —— 但 setup-node 不暴露这个）
+  - 实测几次冷装 vs 热装差异，确认缓存有效
+  - 如果缓存命中率 < 30%，考虑改用 actions/cache 直接缓存 node_modules
+- **优先级**：P0（冷装时间是当前 GA CI 的主要耗时）
+
+#### G-6：pnpm install 参数
+
+- **现状（CNB 口径）**：`ci-install-deps.mjs` 包裹，多了缓存槽登记逻辑（自托管专属）
+- **GA 实测表现**：pr-gate.yml / daily.yml / master-gate.yml 都是裸 `pnpm install --frozen-lockfile`，缓存槽登记在 GA 上空转（退出码 0）
+- **影响判断**：GA 侧已是正确形态，零变更必要
+- **建议改法**：保持现状
+- **优先级**：已收口
+
+#### G-7：LFS 配额
+
+- **现状（CNB 口径）**：自托管本地 LFS
+- **GA 实测表现**：GitHub LFS 1 GiB 存储 + 1 GiB/月带宽；每次拉取都计带宽；`checkout lfs: true` 会拉全部 LFS 对象
+- **影响判断**：master-gate.yml 的文档链命令不碰字体等 LFS 对象 → 之前 `lfs: true` 是纯开销（PR #3223 修复）；pr-gate.yml fixed-structural-tests 里有字体用例 `tests/unit/font.ts` → 必须 LFS
+- **建议改法**：
+  - master-gate.yml：已改为 `lfs: false`（PR #3223）
+  - pr-gate.yml：保持 `lfs: true`（static-gates / fixed-structural-tests 用例需要）
+  - daily.yml：全量单测需要字体用例，保持 `lfs: true`
+  - 监控 LFS 配额消耗，如接近 1 GiB/月，评估缓存 LFS 对象或减少拉取
+- **优先级**：P2（当前配额充裕）
+
+#### G-8：fetch-depth 配置
+
+- **现状（CNB 口径）**：自托管每次全量 clone（OverlayFS 不可用），fetch-depth 无意义
+- **GA 实测表现**：
+  - pr-gate.yml static-gates：`fetch-depth: 0`（三点 diff 必须）✅ 正确
+  - pr-gate.yml 其余 job：不独立 checkout，共享 static-gates 的检出面 ✅
+  - master-gate.yml：`fetch-depth: 0` → 1（PR #3223 修复）✅ 文档链命令只读当前树
+  - daily.yml：`fetch-depth: 0` → 需评估（有三点 diff 吗？）
+  - package-desktop.yml：`fetch-depth: 0` → 需评估
+- **影响判断**：fetch-depth 过大 = 纯网络开销；过小 = 缺历史导致三点 diff / LFS / 某些静态判据失败
+- **建议改法**：逐个评估每份 workflow 的 checkout 配置，最小化 fetch-depth
+- **优先级**：P0（冷装优化的核心）
+
+### 三、拓扑（3 项）
+
+#### G-9：job 拆分策略
+
+- **现状（CNB 口径）**：PR 档多 stage 串行（薄化后 10 格）；每日档单 job 串行 13 格
+- **GA 实测表现**：pr-gate.yml 已拆 5 个并行 job ✅；daily.yml 仍是单 job 串行（安装 → lint → 单测 → E2E → 覆盖率上报，每个 step 独立装依赖）
+- **影响判断**：daily.yml 无法利用 GA 并行 job 能力；串行 290 分钟（接近 5 小时预算）
+- **建议改法**：
+  - daily.yml 拆分为并行 job：install（pnpm install + LFS）→ lint / ESLint / oxfmt / 单测 / E2E 各独立 job
+  - 共享 setup-node + 缓存命中
+  - 各 job 独立 timeout（lint 15m，单测 60m，E2E 30m，覆盖率上报 5m）
+  - 总 wall clock 预计从 290m 降到 120-150m
+- **优先级**：P1
+
+#### G-10：concurrency 语义
+
+- **现状（CNB 口径）**：lock.key 按 PR IID 分锁（`pr-$IID`），cancel-in-progress:true
+- **GA 实测表现**：pr-gate.yml `pr-${{ github.event.client_payload.pr_number }}` + cancel-in-progress:true ✅；daily.yml `daily`；master-gate.yml `push-master` + cancel-in-progress:false（master push 不取消在跑的）
+- **影响判断**：基本对齐；master-gate.yml 的并发组语义正确（master push 不互斥）
+- **建议改法**：保持现状
+- **优先级**：已收口
+
+#### G-11：台账登记口径
+
+- **现状（CNB 口径）**：COMFYAPP_CI_GATES / PUSH_GATES / DAILY_GATES + GATE_TIER_LEDGER 四份台账
+- **GA 实测表现**：GA workflow 的 step 不进这些台账；只有入口脚本路径在 `COMFYAPP_CI_GATES_ELSEWHERE`
+- **影响判断**：GA 侧 step 变更不会触发台账更新；但当前只有入口脚本路径登记，step 级不登记（刻意设计）
+- **建议改法**：保持现状（GA side steps 不进台账）；如未来需要 GA 侧 step 级对账，单独加机制
+- **优先级**：已收口
+
+### 四、平台差异（5 项）
+
+#### G-12：日志上限
+
+- **现状（CNB 口径）**：单 stage 硬上限 102400 字节，超了静默截断不报错
+- **GA 实测表现**：官方未明确 step 日志硬上限；广为流传的 4MB 是 Travis 旧信息
+- **影响判断**：GA 日志可能更长，ship --gh-logs 回读需要适配
+- **建议改法**：实测 GA 单 job 输出量上限；当前 ship --gh-logs 有 30KB 脱敏截断，加"如 GA 侧日志 > 30KB 则完整落盘到临时文件"的兜底（PR #3203 已实现完整落盘）
+- **优先级**：P2（ship --gh-logs 已实现完整落盘兜底）
+
+#### G-13：artifact 保留期
+
+- **现状（CNB 口径）**：无 artifact 机制（产物留在工作区，下次构建抹掉）
+- **GA 实测表现**：daily.yml 覆盖率 artifact 设 14 天；pr-gate.yml 无 artifact（不需要）
+- **影响判断**：现状合理；14 天够回读
+- **建议改法**：保持现状
+- **优先级**：已收口
+
+#### G-14：shell / 编码矩阵
+
+- **现状（CNB 口径）**：PowerShell + CP936 编码；需要 `ci-cp936-exit.mjs` 包裹所有命令
+- **GA 实测表现**：bash + UTF-8；不需要编码包裹
+- **影响判断**：GA 侧直接跑真命令即可；所有 GA workflow 脚本零改动通过
+- **建议改法**：保持现状
+- **优先级**：已收口
+
+#### G-15：6 小时总上限
+
+- **现状（CNB 口径）**：无显式单流水线总上限；各 stage 独立 timeout
+- **GA 实测表现**：单 job 硬上限 6 小时；单 workflow 也有 6h 上限
+- **影响判断**：daily.yml 300 分钟（5h）在安全范围；拆分后更安全
+- **建议改法**：拆分 daily.yml 后重算各 job timeout；总和 < 6h 即可
+- **优先级**：P1（随 daily.yml 拆分）
+
+#### G-16：失败重试
+
+- **现状（CNB 口径）**：PR 档 retries:0（平台侧 PR 流水线明确声明不自动重试）
+- **GA 实测表现**：无原生 job 重试配置；需要第三方 action 或手动重跑
+- **影响判断**：GA 侧需要手动重跑；CNB 侧也是 retries:0，基本对齐
+- **建议改法**：保持现状，不引入自动重试
+- **优先级**：已收口
+
+### 五、CNB 专有读数替代（5 项）
+
+#### G-17：CNB_COMMIT 变量
+
+- **现状（CNB 口径）**：平台原生注入，指向 PR 源分支 head（非合成 merge）
+- **GA 实测表现**：pr-gate.yml heavy-gates job 从镜像 payload 的 `cnb_commit` 注入同名 env 变量；脚本零改动
+- **影响判断**：镜像推送格必须正确传递 `cnb_commit`，否则格式化提交分离判据会退"没判"（exit 2）
+- **建议改法**：保持 payload 传递路径；镜像推送脚本 `ci-github-mirror-push.mjs` 必须可靠传递
+- **优先级**：P1（与 pr-gate.yml 绑定）
+
+#### G-18：CNB_PULL_REQUEST_TARGET_SHA 变量
+
+- **现状（CNB 口径）**：平台原生注入，三点 diff 基线
+- **GA 实测表现**：pr-gate.yml / daily.yml 从镜像 payload 的 `base_sha` 注入同名 env 变量；脚本零改动
+- **影响判断**：三点 diff 类判据（ci-affected-tests / premerge-check / check-format --changed）读同名变量；缺席时各自退回 merge-base（脚本内已有该口径）
+- **建议改法**：保持 payload 传递路径
+- **优先级**：P1
+
+#### G-19：工作区出处（CNB 专有）
+
+- **现状（CNB 口径）**：自托管节点的工作区路径、commit hash 等事实读数
+- **GA 实测表现**：GitHub runner 无此概念；GA workflow 不承接这一格
+- **影响判断**：留在 CNB push 档，不需要迁移
+- **建议改法**：保持在 CNB push 档
+- **优先级**：已收口
+
+#### G-20：缓存槽读数（CNB 专有）
+
+- **现状（CNB 口径）**：`ci-install-deps.mjs` 里的 COMFY_CI_SLOT 逻辑（自托管多节点缓存槽）
+- **GA 实测表现**：setup-node cache 自动处理；GA 侧裸 `pnpm install --frozen-lockfile` 已是正确形态
+- **影响判断**：已在 GA 侧正确收口
+- **建议改法**：保持现状
+- **优先级**：已收口
+
+#### G-21：平台合成合并预览（CNB 专有）
+
+- **现状（CNB 口径）**：pr-gate.yml 注释提到"平台合成合并预览，报错行号属于合并后的树"
+- **GA 实测表现**：pr-gate.yml 按 payload 的 head_sha 检出同一棵树（CNB 合成 merge 的树）；tree 完全一致
+- **影响判断**：两边判同一份树，判据等价
+- **建议改法**：保持现状
+- **优先级**：已收口
+
+### 六、新缺口（GA 侧没有但应该有的）
+
+#### G-22：GA pr-gate.yml 红日志 workflow 层补全
+
+- **现状**：GA pr-gate.yml 任何 job 跑红后，GitHub Actions 会自动保留日志 7 天（公有仓）或 1 天（私有仓默认），但 ship 侧没有令牌无法自动回读
+- **问题**：当 CNB 判决判定格判"GA 红"时，只有 runs API 的 conclusion=failure 结果，不知道具体哪个 job / step 红的
+- **建议改法**：
+  - pr-gate.yml 每个 job 在失败时 upload-artifact（job summary + 关键文件）
+  - 失败 job 的 `if: failure()` 里加 `actions/upload-artifact@v4`
+  - artifact 命名规则：`pr-gate-${{ github.event.client_payload.pr_number || 'manual' }}-${{ job.name }}-logs`
+  - CNB 侧判决回读格可额外拉 artifact 并附到 CI 失败日志
+- **优先级**：P0（当前 GA 红时无法诊断根因）
+
+#### G-23：镜像仓 GA workflow 变更的镜像同步机制
+
+- **现状**：GA workflow 文件（pr-gate.yml / daily.yml / master-gate.yml）修改后，下次 CNB PR 流水线会自动推到镜像仓
+- **问题**：如果镜像推送红（节点出网，近期频发），GA workflow 可能长期落后；镜像仓的 master 分支 HEAD 可能陈旧
+- **建议改法**：
+  - 在 CNB push 档新增一个"GA workflow 镜像自检"格：定期（每日或每次 push）核查镜像仓 HEAD 的 workflow 文件是否与本仓一致
+  - 如果不一致，触发补推
+- **优先级**：P2（当前手动 `pnpm ship --rerun-ci` 可临时解决）
+
+## 落地顺序（建议）
+
+1. **P0**：G-5 缓存命中率实测 + G-8 fetch-depth 评估 + G-22 红日志补全
+2. **P1**：G-1 daily.yml 拆分 + G-2 NODE_OPTIONS 补齐 + G-9 job 拆分 + G-17/G-18 payload 路径验证
+3. **P2**：G-4 concurrent + G-7 LFS 配额监控 + G-12 日志上限实测 + G-15 timeout 重算 + G-23 镜像同步机制
+4. **已收口**：G-6/G-10/G-11/G-13/G-14/G-16/G-19/G-20/G-21 —— 零变更
+
+## 待验证项
+
+- [ ] master-gate.yml 首次运行（镜像仓 force push master 是否必定触发 push 事件）—— 推断，非实测
+- [ ] GA 侧冷装实际耗时（pnpm install 6-8 分钟是估算，未在 GA runner 上实测）
+- [ ] GA pr-gate.yml worker 数（vitest 在 GA 4 核 runner 上实际起几个 worker）
+- [ ] 节点出网稳定性（github.com port 443 间歇性超时的根因是 runner 白名单还是网络抖动）—— #3046 已知问题
