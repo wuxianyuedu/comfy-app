@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B4 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "tests/host-ts-loads-in-node.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/known-failed-stale.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/lib-layer-boundaries.test.ts", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "tests/lib-server-imports.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/linux-env-bootstrap.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/lockfile-diff.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/log-common-invoke.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/log-run-layout.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/merged-side-loss-git.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/mjs-node-esm-resolution.test.ts", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "tests/no-platform-ci-config.test.ts", // 存量 49 处 · 清账目标 B4 · 新代码不禁用
-        "tests/oxlint-jsplugin-rules.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/page-name-single-source.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/postinstall-cross-platform.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/precommit-timing.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/project-view-container.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/ps1-consistency.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/ratchet-update-guards.test.ts", // 存量 7 处 · 清账目标 B4 · 新代码不禁用
-        "tests/reduced-motion-tiers.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/repository-base-purity.test.ts", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
         "tests/rest-endpoint-targets.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
         "tests/script-main-guard.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
         "tests/scripts-typecheck-ratchet.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用

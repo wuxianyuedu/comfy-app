@@ -143,7 +143,6 @@ function runGuard(overrides: Record<string, string | null>): string {
   }
 }
 
-
 describe("跨平台动作对照表（规范 §9.5）", () => {
   it("真仓库通过（对照表两侧齐全、脚本都存在、清单单点定义）", () => {
     const out = execFileSync(process.execPath, [GUARD], {
@@ -236,8 +235,8 @@ describe("跨平台动作的实现契约", () => {
       const text = fs.readFileSync(path.join(process.cwd(), rel), "utf8");
       // 只允许 node: 内建与相对路径（本仓库模块）—— 门禁要在「装好依赖之前」
       // 也能跑，引第三方包会让它在干净检出上直接失败。
-      for (const m of text.matchAll(/from\s+"([^"]+)"/g)) {
-        const spec = m[1] ?? "";
+      for (const m of text.matchAll(/from\s+"(?<spec>[^"]+)"/g)) {
+        const spec = m.groups?.spec ?? "";
         expect(
           spec.startsWith("node:") || spec.startsWith("./") || spec.startsWith("../"),
           `${rel} 引入了非内建依赖：${spec}`,

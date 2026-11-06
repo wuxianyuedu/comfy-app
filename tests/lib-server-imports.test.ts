@@ -10,12 +10,12 @@ import { describe, expect, it } from "vitest";
 const ROOT = process.cwd();
 
 /** 模块说明符提取：`from "x"`、`import("x")`、`require("x")`、`vi.mock("x")`。 */
-const SPECIFIER_RE = /(?:from|import|require|vi\.mock)\s*\(?\s*["']([^"']+)["']/g;
+const SPECIFIER_RE = /(?:from|import|require|vi\.mock)\s*\(?\s*["'](?<spec>[^"']+)["']/g;
 
 /** 把说明符解析到仓库内的实际文件（只处理本仓库的 `~/` 与 `@/` 别名）。 */
 function resolveSpec(spec: string): string | null {
-  const m = /^(?:~|@)\/(.+)$/.exec(spec);
-  const inner = m?.[1];
+  const m = /^(?:~|@)\/(?<inner>.+)$/.exec(spec);
+  const inner = m?.groups?.inner;
   if (inner === undefined || inner === "") {
     return null;
   }
@@ -79,7 +79,7 @@ function collectEdges(): Array<Edge> {
     const rel = relative(ROOT, file).split("\\").join("/");
     const src = stripComments(readFileSync(file, "utf8"));
     for (const match of src.matchAll(SPECIFIER_RE)) {
-      const spec = match[1];
+      const spec = match.groups?.spec;
       if (typeof spec !== "string") {
         continue;
       }
@@ -153,7 +153,7 @@ describe("lib → server 的越界依赖逐个登记，清单只许变短（ISSU
       import { getSession } from "~/server/better-auth/server";
       // 曾经这样写：import { logger } from "~/server/lib/logger";
     `;
-    const specs = [...stripComments(probe).matchAll(SPECIFIER_RE)].map((m) => m[1]);
+    const specs = [...stripComments(probe).matchAll(SPECIFIER_RE)].map((m) => m.groups?.spec);
     expect(specs, "解析器必须能认出 from 说明符").toEqual(["~/server/better-auth/server"]);
     // 整行 `//` 注释被剥掉（否则说明性路径会被误判成依赖）
     expect(specs).not.toContain("~/server/lib/logger");

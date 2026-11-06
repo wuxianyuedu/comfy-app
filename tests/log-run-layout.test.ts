@@ -309,32 +309,29 @@ describe("保留策略", () => {
 });
 
 describe("zip 写入器与诊断包", () => {
-  itWithPython(
-    "打出来的包能被系统解压工具读（compress_size 与 uncompressed_size 分开写）",
-    () => {
-      const dir = path.join(root, "src");
-      fs.mkdirSync(dir, { recursive: true });
-      // 高可压缩内容：store 模式下两个 size 字段恰好相等，**只有这条路径会露馅**
-      fs.writeFileSync(path.join(dir, "a.log"), "A".repeat(5000));
-      fs.writeFileSync(path.join(dir, "b.bin"), Buffer.from([0, 1, 2, 3, 255]));
-      const out = path.join(root, "out.zip");
-      zipDirectory(dir, out);
+  itWithPython("打出来的包能被系统解压工具读（compress_size 与 uncompressed_size 分开写）", () => {
+    const dir = path.join(root, "src");
+    fs.mkdirSync(dir, { recursive: true });
+    // 高可压缩内容：store 模式下两个 size 字段恰好相等，**只有这条路径会露馅**
+    fs.writeFileSync(path.join(dir, "a.log"), "A".repeat(5000));
+    fs.writeFileSync(path.join(dir, "b.bin"), Buffer.from([0, 1, 2, 3, 255]));
+    const out = path.join(root, "out.zip");
+    zipDirectory(dir, out);
 
-      const listing = unzip([out]);
-      expect(listing[0]).toBe("OK");
-      expect(listing[1]).toBe("a.log,b.bin");
-      // 内容长度对：压坏 / 截断都会在这里露馅
-      const sizes = runPython(
-        `
+    const listing = unzip([out]);
+    expect(listing[0]).toBe("OK");
+    expect(listing[1]).toBe("a.log,b.bin");
+    // 内容长度对：压坏 / 截断都会在这里露馅
+    const sizes = runPython(
+      `
 import sys, zipfile
 z = zipfile.ZipFile(sys.argv[1])
 print(len(z.read("a.log")), len(z.read("b.bin")))
 `,
-        [out],
-      );
-      expect(sizes).toBe("5000 5");
-    },
-  );
+      [out],
+    );
+    expect(sizes).toBe("5000 5");
+  });
 
   itWithPython(
     "诊断包 = current/ + 最近 3 次 runs/，落在 exports/ 而不是 current/ 下",
@@ -428,7 +425,7 @@ describe("布局的单一出处（写方不得自己拼路径）", () => {
       const offenders = src
         .split("\n")
         .filter((line) =>
-          /"log",\s*"(launcher|nextjs|services|shell|tools|comfyui|workshop)"/.test(line),
+          /"log",\s*"(?:launcher|nextjs|services|shell|tools|comfyui|workshop)"/.test(line),
         );
       expect(offenders, `${rel} 里仍有绕过 current/ 的日志路径`).toEqual([]);
     }

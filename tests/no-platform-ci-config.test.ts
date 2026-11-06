@@ -192,9 +192,9 @@ export function ps7OnlySyntaxIn(text: string): Array<string> {
    * 键可能写成 `script: |` 也可能写成列表项 `- script: |`，两种都收。 */
   let bodyIndent: number | null = null;
   lines.forEach((raw, i) => {
-    const scriptStart = /^(\s*)(?:-\s+)?script:\s*\|\s*$/.exec(raw);
+    const scriptStart = /^(?<indent>\s*)(?:-\s+)?script:\s*\|\s*$/.exec(raw);
     if (scriptStart) {
-      bodyIndent = (scriptStart[1] ?? "").length + 2;
+      bodyIndent = (scriptStart.groups?.indent ?? "").length + 2;
       return;
     }
     if (bodyIndent === null) {
@@ -495,8 +495,8 @@ const DAILY_ENV_ONLY_ON_PR: Record<string, Array<string>> = {
 
 /** 一行 env 赋值的键名；不是赋值形状（如脚本行 `$enc=…` / `node …`）回 `null`。 */
 function envAssignmentKey(line: string): string | null {
-  const m = /^([A-Za-z_][A-Za-z0-9_]*)\s*:/.exec(line.trim());
-  return m?.[1] ?? null;
+  const m = /^(?<key>[A-Za-z_][A-Za-z0-9_]*)\s*:/.exec(line.trim());
+  return m?.groups?.key ?? null;
 }
 
 /** 判「PR-only 例外」的形状；回 `null` = 合法，回一句字符串 = 下一动作。 */
@@ -533,12 +533,13 @@ function dropPrOnlyEnvLines(env: Array<string>, onlyOnPr: Array<string>): Array<
 
 /** `45m` / `30m` / `3h` → 分钟。解析不出时回 0（调用方的断言会把它读成「没预算」）。 */
 function stageBudgetMinutes(raw: string | undefined): number {
-  const m = /^(\d+)([smh])$/.exec(String(raw ?? "").trim());
+  const m = /^(?<amount>\d+)(?<unit>[smh])$/.exec(String(raw ?? "").trim());
   if (!m) {
     return 0;
   }
-  const n = Number(m[1]);
-  return m[2] === "h" ? n * 60 : m[2] === "s" ? n / 60 : n;
+  const n = Number(m.groups?.amount ?? 0);
+  const unit = m.groups?.unit;
+  return unit === "h" ? n * 60 : unit === "s" ? n / 60 : n;
 }
 
 /**
@@ -592,7 +593,7 @@ function stageEnvAssignments(text: string, name: string): Array<string> {
   }
   const out: Array<string> = [];
   for (const line of lines.slice(at + 1)) {
-    if (/^\s*(script|timeout|ifModify|name|retries|jobs|runs_on|image):/.test(line)) {
+    if (/^\s*(?:script|timeout|ifModify|name|retries|jobs|runs_on|image):/.test(line)) {
       break;
     }
     const t = line.trim();
@@ -627,7 +628,7 @@ function stageScriptLine(text: string, name: string): string {
   }
   const body: Array<string> = [];
   for (const line of lines.slice(at + 1)) {
-    if (/^\s*(timeout|env|ifModify|name|retries):/.test(line)) {
+    if (/^\s*(?:timeout|env|ifModify|name|retries):/.test(line)) {
       break;
     }
     if (line.trim() === "") {
@@ -650,21 +651,23 @@ export function crontabEvents(
   let branch = "";
   for (const line of text.split("\n")) {
     /* 顶层分支键：顶格、以 `:` 结尾（`master:` / `"dev/*":` / `$:`）。 */
-    const top = /^([^\s#][^:]*):\s*$/.exec(line);
-    if (top?.[1] !== undefined && !top[1].includes(":")) {
-      branch = top[1].replaceAll(/^["']|["']$/g, "").trim();
+    const top = /^(?<branchKey>[^\s#][^:]*):\s*$/.exec(line);
+    const topKey = top?.groups?.branchKey;
+    if (topKey !== undefined && !topKey.includes(":")) {
+      branch = topKey.replaceAll(/^["']|["']$/g, "").trim();
       continue;
     }
     /* 事件键：两格缩进、带引号。**只有**引号形态能被平台当成 crontab 事件 ——
      * 裸的 `crontab:` 是映射键，不是事件名。 */
-    const ev = /^ {2}"(crontab: [^"]*)":\s*$/.exec(line);
-    if (ev?.[1] === undefined) {
+    const ev = /^ {2}"(?<event>crontab: [^"]*)":\s*$/.exec(line);
+    const eventKey = ev?.groups?.event;
+    if (eventKey === undefined) {
       continue;
     }
     out.push({
       branch,
-      event: ev[1],
-      cron: ev[1].slice("crontab:".length).trim(),
+      event: eventKey,
+      cron: eventKey.slice("crontab:".length).trim(),
     });
   }
   return out;
@@ -677,10 +680,10 @@ export function crontabEvents(
  */
 export function registeredDailyGateOrder(text: string): Array<string> {
   const m =
-    /^[ \t]*COMFYAPP_CI_DAILY_GATES:[ \t]*>?-?[ \t]*\r?\n((?:[ \t]+(?!#)\S[^\n]*\r?\n)+)/m.exec(
+    /^[ \t]*COMFYAPP_CI_DAILY_GATES:[ \t]*>?-?[ \t]*\r?\n(?<body>(?:[ \t]+(?!#)\S[^\n]*\r?\n)+)/m.exec(
       text,
     );
-  const body = m?.[1];
+  const body = m?.groups?.body;
   if (body === undefined) {
     return [];
   }
@@ -697,10 +700,10 @@ export function registeredDailyGateOrder(text: string): Array<string> {
  */
 export function registeredPushGateOrder(text: string): Array<string> {
   const m =
-    /^[ \t]*COMFYAPP_CI_PUSH_GATES:[ \t]*>?-?[ \t]*\r?\n((?:[ \t]+(?!#)\S[^\n]*\r?\n)+)/m.exec(
+    /^[ \t]*COMFYAPP_CI_PUSH_GATES:[ \t]*>?-?[ \t]*\r?\n(?<body>(?:[ \t]+(?!#)\S[^\n]*\r?\n)+)/m.exec(
       text,
     );
-  const body = m?.[1];
+  const body = m?.groups?.body;
   if (body === undefined) {
     return [];
   }
@@ -722,8 +725,8 @@ export function pipelineStageNames(text: string, pipelineName: string): Array<st
     /* 只认**流水线项**的 `name:`（`- <<: *anchor` 之后那一行），不认 stage 自己的
      * `- name:` —— 两边同名时（定时那条的流水线与它唯一那格就叫同一个名字）挑错了
      * 起点，解析会从「stage 的 name 行」往下走，结论变成「这条流水线一格都没有」。 */
-    const m = /^\s+name:[ \t]*(\S.*?)[ \t]*$/.exec(lines[i] ?? "");
-    if (m?.[1] === pipelineName && (lines[i - 1] ?? "").includes("<<")) {
+    const m = /^\s+name:[ \t]*(?<name>\S.*?)[ \t]*$/.exec(lines[i] ?? "");
+    if (m?.groups?.name === pipelineName && (lines[i - 1] ?? "").includes("<<")) {
       start = i;
       break;
     }
@@ -753,9 +756,10 @@ export function pipelineStageNames(text: string, pipelineName: string): Array<st
        * 每日那七格现在是两个触发口共用一份（02:00 定时 + 页面上的手点按钮），写成两份
        * 的那一刻就是它俩开始各漂的那一刻。解析器必须认得引用，否则「手点那条跑的是不是
        * 同一份」这件事根本没有判据能问。 */
-      const alias = /^stages:[ \t]*\*(\S+)[ \t]*$/.exec(body);
-      if (alias?.[1] !== undefined) {
-        return anchorStageNames(text, alias[1]);
+      const alias = /^stages:[ \t]*\*(?<anchor>\S+)[ \t]*$/.exec(body);
+      const anchorName = alias?.groups?.anchor;
+      if (anchorName !== undefined) {
+        return anchorStageNames(text, anchorName);
       }
       if (body.startsWith("stages:")) {
         stageIndent = indent;
@@ -766,9 +770,10 @@ export function pipelineStageNames(text: string, pipelineName: string): Array<st
     if (indent <= stageIndent && !body.startsWith("- ")) {
       break;
     }
-    const item = /^- name:[ \t]*(\S.*?)[ \t]*$/.exec(body);
-    if (item?.[1] !== undefined) {
-      out.push(item[1]);
+    const item = /^- name:[ \t]*(?<name>\S.*?)[ \t]*$/.exec(body);
+    const itemName = item?.groups?.name;
+    if (itemName !== undefined) {
+      out.push(itemName);
     }
   }
   return out;
@@ -801,9 +806,10 @@ export function anchorStageNames(text: string, anchor: string): Array<string> {
     if (/^\S/.test(raw)) {
       break;
     }
-    const item = /^-\s+name:[ \t]*(\S.*?)[ \t]*$/.exec(raw.trim());
-    if (item?.[1] !== undefined) {
-      out.push(item[1]);
+    const item = /^-\s+name:[ \t]*(?<name>\S.*?)[ \t]*$/.exec(raw.trim());
+    const itemName = item?.groups?.name;
+    if (itemName !== undefined) {
+      out.push(itemName);
     }
   }
   return out;
@@ -827,16 +833,16 @@ export function resolveAnchoredRunner(
   text: string,
 ): Array<{ namespace?: string; tags?: Array<string> }> {
   // 抽出 `.common` 锚点块里的 runner（缩进两层：`  runner:` 下跟两键）。
-  const anchor = /^\.common:\s*&\w+\s*$([\s\S]*?)(?=^\S)/m.exec(text);
-  const body = anchor?.[1];
+  const anchor = /^\.common:\s*&\w+\s*$(?<body>[\s\S]*?)(?=^\S)/m.exec(text);
+  const body = anchor?.groups?.body;
   if (body === undefined) {
     return [];
   }
-  const runnerNS = /^\s+namespace:\s*(\S+)\s*$/m.exec(body);
-  const tagLines = body.match(/^\s+-\s*(\S+)\s*$/gm) ?? [];
+  const runnerNS = /^\s+namespace:\s*(?<namespace>\S+)\s*$/m.exec(body);
+  const tagLines = body.match(/^\s+-\s*(?:\S+)\s*$/gm) ?? [];
   return [
     {
-      namespace: runnerNS?.[1],
+      namespace: runnerNS?.groups?.namespace,
       tags: tagLines.map((l) => l.replace(/^\s*-\s*/, "").trim()),
     },
   ];
@@ -859,10 +865,11 @@ export function stageBlock(text: string, name: string): string | null {
    *  8 空格、锚点那条直接挂在流水线下是 4 空格，两种都得收得住）。 */
   let itemIndent = 0;
   for (let i = 0; i < lines.length; i += 1) {
-    const item = /^( *)-\s+name:\s*(\S.*?)\s*$/.exec(lines[i] ?? "");
-    if (item?.[2] === name) {
+    const item = /^(?<indent> *)-\s+name:\s*(?<name>\S.*?)\s*$/.exec(lines[i] ?? "");
+    const itemName = item?.groups?.name;
+    if (itemName === name) {
       start = i;
-      itemIndent = (item[1] ?? "").length;
+      itemIndent = (item?.groups?.indent ?? "").length;
       break;
     }
   }
@@ -873,12 +880,12 @@ export function stageBlock(text: string, name: string): string | null {
   for (let i = start + 1; i < lines.length; i += 1) {
     const raw = lines[i] ?? "";
     /* 下一个**同级或更浅**的列表项 / 更浅的键都算收尾（空行不算 —— 配置里正文之间有空行）。 */
-    const nextItem = /^( *)-\s/.exec(raw);
-    if (nextItem && (nextItem[1] ?? "").length <= itemIndent) {
+    const nextItem = /^(?<indent> *)-\s/.exec(raw);
+    if (nextItem && (nextItem.groups?.indent ?? "").length <= itemIndent) {
       break;
     }
-    const key = /^( *)\S/.exec(raw);
-    if (key && (key[1] ?? "").length < itemIndent) {
+    const key = /^(?<indent> *)\S/.exec(raw);
+    if (key && (key.groups?.indent ?? "").length < itemIndent) {
       break;
     }
     out.push(raw);
@@ -895,8 +902,9 @@ export function commentedStageBlock(text: string, name: string): string | null {
   const lines = text.split("\n");
   let start = -1;
   for (let i = 0; i < lines.length; i += 1) {
-    const item = /^#\s+-\s+name:\s*(\S.*?)\s*$/.exec(lines[i] ?? "");
-    if (item?.[1] === name) {
+    const item = /^#\s+-\s+name:\s*(?<name>\S.*?)\s*$/.exec(lines[i] ?? "");
+    const itemName = item?.groups?.name;
+    if (itemName === name) {
       start = i;
       break;
     }
@@ -979,8 +987,8 @@ export function stageTimeouts(text: string): Map<string, string> {
 export function hasPipelineLockCancelInProgress(text: string): boolean {
   /* 收口到「下一个更浅缩进的键」或**文本末尾** —— 少了后半句，末尾没跟别的键的
    * 夹具会解析不出来（真 `.cnb.yml` 里 `.common` 后面还有 `.gates`，看不出来）。 */
-  const anchor = /^\.common:\s*&\w+\s*$([\s\S]*?)(?=^\S|$(?![\s\S]))/m.exec(text);
-  const body = anchor?.[1];
+  const anchor = /^\.common:\s*&\w+\s*$(?<body>[\s\S]*?)(?=^\S|$(?![\s\S]))/m.exec(text);
+  const body = anchor?.groups?.body;
   if (body === undefined) {
     return false;
   }
@@ -994,18 +1002,19 @@ export function hasPipelineLockCancelInProgress(text: string): boolean {
  * 判法同 `hasPipelineLockCancelInProgress`（锚点展开后）。@returns key 原文（未做变量替换），没写时 `null`
  */
 export function pipelineLockKeyTemplate(text: string): string | null {
-  const anchor = /^\.common:\s*&\w+\s*$([\s\S]*?)(?=^\S|$(?![\s\S]))/m.exec(text);
-  const body = anchor?.[1];
+  const anchor = /^\.common:\s*&\w+\s*$(?<body>[\s\S]*?)(?=^\S|$(?![\s\S]))/m.exec(text);
+  const body = anchor?.groups?.body;
   if (body === undefined) {
     return null;
   }
-  const lock = /^(\s+)lock:[ \t]*\r?\n([\s\S]*?)(?=^\1\S|\s*$(?![\s\S]))/m.exec(body);
-  const block = lock?.[2];
+  const lock =
+    /^(?<indent>\s+)lock:[ \t]*\r?\n(?<body>[\s\S]*?)(?=^\k<indent>\S|\s*$(?![\s\S]))/m.exec(body);
+  const block = lock?.groups?.body;
   if (block === undefined) {
     return null;
   }
-  const key = /^\s+key:[ \t]*(\S.*?)[ \t]*$/m.exec(block);
-  return key?.[1] ?? null;
+  const key = /^\s+key:[ \t]*(?<value>\S.*?)[ \t]*$/m.exec(block);
+  return key?.groups?.value ?? null;
 }
 
 /**
@@ -1022,7 +1031,7 @@ const LOCK_KEY_ALLOWED_VARS = ["CNB_PULL_REQUEST_IID"] as const;
  */
 export function resolveLockKey(template: string, vars: Record<string, string | undefined>): string {
   return template.replaceAll(
-    /\$\{?([A-Za-z0-9_]+)\}?/g,
+    /\$\{?(?<name>[A-Za-z0-9_]+)\}?/g,
     (_whole, name: string) => vars[name] ?? "",
   );
 }
@@ -1035,21 +1044,23 @@ export function lockAnchorDefinitions(
     string,
     { cancelInProgress: boolean | null; key: string; wait: boolean | null }
   >();
-  const def = /^\.lock-[\w-]+:[ \t]*&(lock_\w+)[ \t]*$([\s\S]*?)(?=^\S|$(?![\s\S]))/gm;
+  const def =
+    /^\.lock-[\w-]+:[ \t]*&(?<name>lock_\w+)[ \t]*$(?<body>[\s\S]*?)(?=^\S|$(?![\s\S]))/gm;
   for (const m of text.matchAll(def)) {
-    const name = m[1];
-    const body = m[2] ?? "";
-    const key = /^[ \t]+key:[ \t]*(\S.*?)[ \t]*$/m.exec(body)?.[1];
+    const name = m.groups?.name;
+    const body = m.groups?.body ?? "";
+    const key = /^[ \t]+key:[ \t]*(?<key>\S.*?)[ \t]*$/m.exec(body)?.groups?.key;
     if (name === undefined || key === undefined) {
       continue;
     }
     /* `null` = 这一行**没写**；`false` 是「写了、值是 false」—— 两者不同：
      * 漏写会让同一件事重复排队，而 `false` 是有意的取舍（逐笔留读数，见 R2）。 */
-    const rawCancel = /^[ \t]+cancel-in-progress:[ \t]*(true|false)[ \t]*$/m.exec(body)?.[1];
+    const rawCancel = /^[ \t]+cancel-in-progress:[ \t]*(?<value>true|false)[ \t]*$/m.exec(body)
+      ?.groups?.value;
     /* `wait` 同理（ISSUE #3207）：`null` = 没写 = 吃平台默认 `false` = **不排队**。
      * 「不终止」与「排队」是两件事，而两个默认值（`cancel-in-progress: false` /
      * `wait: false`）叠在一起是「既不终止、也不等」—— 后到那一跑在 Prepare 里当场红。 */
-    const rawWait = /^[ \t]+wait:[ \t]*(true|false)[ \t]*$/m.exec(body)?.[1];
+    const rawWait = /^[ \t]+wait:[ \t]*(?<value>true|false)[ \t]*$/m.exec(body)?.groups?.value;
     out.set(name, {
       key,
       cancelInProgress: rawCancel === undefined ? null : rawCancel === "true",
@@ -1096,9 +1107,10 @@ export function pipelineLockAssignments(text: string): Array<{
     if (raw.trim() === "" || /^\s*#/.test(raw)) {
       continue;
     }
-    const eventKey = /^ {2}(\S.*):[ \t]*$/.exec(raw);
-    if (eventKey?.[1] !== undefined) {
-      event = eventKey[1].replaceAll(/^"|"$/g, "").trim();
+    const eventKey = /^ {2}(?<event>\S.*):[ \t]*$/.exec(raw);
+    const eventName = eventKey?.groups?.event;
+    if (eventName !== undefined) {
+      event = eventName.replaceAll(/^"|"$/g, "").trim();
       continue;
     }
     /* 新的一项从**它自己的 `name:`** 起：认的是 `name:`，而 `lock:` / `stages:` 只在**当前项之内**算数。少了这句，上一条的 `lock:` 会被带进下一条
@@ -1110,22 +1122,24 @@ export function pipelineLockAssignments(text: string): Array<{
       lockRef = null;
       continue;
     }
-    const nameKey = /^ {6}name:[ \t]*(.+?)[ \t]*$/.exec(raw);
-    if (nameKey?.[1] !== undefined) {
-      name = nameKey[1];
+    const nameKey = /^ {6}name:[ \t]*(?<name>.+?)[ \t]*$/.exec(raw);
+    const nameValue = nameKey?.groups?.name;
+    if (nameValue !== undefined) {
+      name = nameValue;
       lockRef = null;
       continue;
     }
-    const lockKey = /^ {6}lock:[ \t]*\*(\w+)[ \t]*$/.exec(raw);
-    if (lockKey?.[1] !== undefined) {
-      lockRef = lockKey[1];
+    const lockKey = /^ {6}lock:[ \t]*\*(?<ref>\w+)[ \t]*$/.exec(raw);
+    const lockRefValue = lockKey?.groups?.ref;
+    if (lockRefValue !== undefined) {
+      lockRef = lockRefValue;
       continue;
     }
-    const stagesKey = /^ {6}stages:[ \t]*(\*\w+)?[ \t]*$/.exec(raw);
+    const stagesKey = /^ {6}stages:[ \t]*(?<ref>\*\w+)?[ \t]*$/.exec(raw);
     if (stagesKey !== null) {
       /* 一份 `stages:` 收尾一项；内联清单（没有 `*ref`）当作**只属于这一条**，
        * 于是「同一把锁只许给同一份工作清单」那条规则对它天然要求独占。 */
-      stagesRef = stagesKey[1] ?? `inline:${name}`;
+      stagesRef = stagesKey.groups?.ref ?? `inline:${name}`;
       out.push({ event, name, lockRef, stagesRef });
     }
   }
@@ -1301,9 +1315,10 @@ export function topLevelKeys(text: string): Array<string> {
       continue;
     }
     if (/^\S/.test(raw)) {
-      const m = /^([^:]+):/.exec(raw.trimEnd());
-      if (m?.[1] !== undefined) {
-        out.push(m[1].trim());
+      const m = /^(?<key>[^:]+):/.exec(raw.trimEnd());
+      const key = m?.groups?.key;
+      if (key !== undefined) {
+        out.push(key.trim());
       }
     }
   }
@@ -1486,13 +1501,15 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * `Event must be 'api_trigger' or start with 'api_trigger_'.`）。写成 `daily_api`
      * 那一类名字，这条流水线在配置解析期一个字都不报，而永远没人能触发它 ——
      * 判前缀不判整串：后缀是自由命名的（官方口径），把它钉成字面量等于把实现细节当判据。 */
-    const apiEvents = [...text.matchAll(/^ {2}(api_trigger\w*):$/gm)].map((m) => m[1]);
+    const apiEvents = [...text.matchAll(/^ {2}(?<event>api_trigger\w*):$/gm)].map(
+      (m) => m.groups?.event,
+    );
     expect(
       apiEvents,
       "API 触发口的事件键丢了，或不再是 `api_trigger` 前缀（服务端会直接 400）",
     ).toContain("api_trigger_daily");
-    const badApi = [...text.matchAll(/^ {2}(\w+):$/gm)]
-      .map((m) => m[1] ?? "")
+    const badApi = [...text.matchAll(/^ {2}(?<event>\w+):$/gm)]
+      .map((m) => m.groups?.event ?? "")
       .filter((k) => /api.?trigger|trigger.?api/i.test(k))
       .filter((k) => !k.startsWith("api_trigger"));
     expect(
@@ -1502,7 +1519,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
 
     /* 事件键与按钮：**两个方向**都要有对象。这里的失效形态都是「按了没反应」或
      * 「永远没人按」，而两种都不会让任何一边自己变红。 */
-    const events = [...text.matchAll(/^ {2}(web_trigger_\w+):$/gm)].map((m) => m[1]);
+    const events = [...text.matchAll(/^ {2}(?<event>web_trigger_\w+):$/gm)].map(
+      (m) => m.groups?.event,
+    );
     expect(events.length, ".cnb.yml 里没有 `web_trigger_*` 事件键").toBeGreaterThan(0);
     const triggerFile = path.join(ROOT, ".cnb", "web_trigger.yml");
     expect(
@@ -1510,9 +1529,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "缺 `.cnb/web_trigger.yml` —— 官方把按钮定义放在这个文件里，没有它就没有按钮可点",
     ).toBe(true);
     const buttons = readFileSync(triggerFile, "utf8");
-    const bound = [...buttons.matchAll(/^[ 	]*event:[ 	]*(web_trigger_\w+)[ 	]*$/gm)].map(
-      (m) => m[1],
-    );
+    const bound = [
+      ...buttons.matchAll(/^[ 	]*event:[ 	]*(?<event>web_trigger_\w+)[ 	]*$/gm),
+    ].map((m) => m.groups?.event);
     expect(bound.length, "`.cnb/web_trigger.yml` 里一个 `event:` 都没有").toBeGreaterThan(0);
     for (const ev of bound) {
       expect(
@@ -1577,7 +1596,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const facts = readFileSync(path.join(ROOT, "scripts/doc-facts.cjs"), "utf8");
     /* `source:` 在文件里有两种排版（独占一行 / 跟在 `kind` 后面同一行），
      * 所以扫的是「含 `source:` 的行」而不是「以 `source:` 开头的行」。 */
-    const sourceLines = facts.split("\n").filter((line) => /(^|[{,]\s*)source:\s*["']/.test(line));
+    const sourceLines = facts
+      .split("\n")
+      .filter((line) => /(?:^|[{,]\s*)source:\s*["']/.test(line));
     // 先确认扫描面没跑偏（事实表里一定有 `source:` 行，否则下面的断言是空转）。
     expect(sourceLines.length).toBeGreaterThan(0);
     expect(facts, "scripts/doc-facts.cjs 里连事实表都没读出来，扫描面指错了地方").toContain(
@@ -1604,8 +1625,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
 
   it("Python 探测入口被登记在 env 里，且真的在盘上", () => {
     const text = readRegisteredConfig();
-    const m = /^\s*COMFYAPP_CI_PYTHON_PROBE:\s*(\S+)\s*$/m.exec(text);
-    const declared = m?.[1];
+    const m = /^\s*COMFYAPP_CI_PYTHON_PROBE:\s*(?<path>\S+)\s*$/m.exec(text);
+    const declared = m?.groups?.path;
     expect(
       declared,
       "`.cnb.yml` 的 env 里没有 COMFYAPP_CI_PYTHON_PROBE —— 缺 Python 时「跳过的是哪几条」" +
@@ -1677,15 +1698,16 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 名字带「每日」是 2026-10-19 挪档结果（撤节奏不撤账），由下面「PR 撤掉的格必须在每日清单有同名执行者」判。 */
     const blockText =
       stageBlock(text, "每日浏览器安装") ?? commentedStageBlock(text, "每日浏览器安装");
-    const scriptLine = /^[ \t]*(?:#\s*)?script:[ \t]*(\S.*)$/m.exec(blockText ?? "");
-    const command = scriptLine?.[1]?.trim();
+    const scriptLine = /^[ \t]*(?:#\s*)?script:[ \t]*(?<script>\S.*)$/m.exec(blockText ?? "");
+    const command = scriptLine?.groups?.script?.trim();
     expect(command, "解析不出「每日浏览器安装」那一步的 script").toBeTruthy();
     /* ⚠️ 入口**不一定在第一个字符上**：每个 stage 的脚本现在都以一句
      * `[Console]::OutputEncoding=…;` 开头（平台 stage shell 是 PowerShell，
      * 不设它平台侧的中文日志全是乱码，见 `.cnb.yml` 头注第 6 条），外面还包着
      * `ci-cp936-exit.mjs`（ISSUE #1977 的 CP936 出口）。`unwrapCp936()` 剥掉后者 ——
      * 判的是「这一段命令点到的是哪个入口」，不是「中间隔了几层壳」。 */
-    const entry = /(?:^|;)\s*(?:node\s+)?(scripts\/[^\s;]+)/.exec(unwrapCp936(command ?? ""))?.[1];
+    const entry = /(?:^|;)\s*(?:node\s+)?(?<path>scripts\/[^\s;]+)/.exec(unwrapCp936(command ?? ""))
+      ?.groups?.path;
     expect(entry, `「每日浏览器安装」那一步指向的不是 scripts/ 下的入口：${command}`).toBeTruthy();
     expect(
       existsSync(path.join(ROOT, entry ?? "")),
@@ -1908,12 +1930,14 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     // 预算必须是**分钟量级**：写成 `2h` 等于没写（平台默认就是这个数）。
     for (const name of required) {
       const raw = timeouts.get(name) ?? "";
-      const m = /^(\d+)([smh])$/.exec(raw);
+      const m = /^(?<amount>\d+)(?<unit>[smh])$/.exec(raw);
       expect(m, `${name} 的 timeout 写法认不出：${raw}`).not.toBeNull();
       if (!m) {
         continue;
       }
-      const minutes = Number(m[1]) * (m[2] === "h" ? 60 : m[2] === "s" ? 1 / 60 : 1);
+      const unit = m.groups?.unit;
+      const minutes =
+        Number(m.groups?.amount ?? 0) * (unit === "h" ? 60 : unit === "s" ? 1 / 60 : 1);
       expect(
         minutes,
         `${name} 的 timeout=${raw} 是小时量级 —— 那与平台默认的 2h 上限没有区别，` +
@@ -1951,7 +1975,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       return;
     }
     // ① 代入的变量必须在白名单里 —— `CNB_BRANCH` 正是那个会退化成目标分支的。
-    const used = [...template.matchAll(/\$\{?([A-Za-z0-9_]+)\}?/g)].map((m) => m[1] ?? "");
+    const used = [...template.matchAll(/\$\{?(?<name>[A-Za-z0-9_]+)\}?/g)].map(
+      (m) => m.groups?.name ?? "",
+    );
     const stray = used.filter(
       /* SAFETY: 类型断言已复核 */
       (name) => !LOCK_KEY_ALLOWED_VARS.includes(name as never),
@@ -3055,8 +3081,8 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
    */
   function duplicatedStageNames(text: string): Array<string> {
     const seen = new Map<string, number>();
-    for (const m of text.matchAll(/^ {2}- name: (\S.*?)[ \t]*$/gm)) {
-      const name = m[1] ?? "";
+    for (const m of text.matchAll(/^ {2}- name: (?<name>\S.*?)[ \t]*$/gm)) {
+      const name = m.groups?.name ?? "";
       seen.set(name, (seen.get(name) ?? 0) + 1);
     }
     return [...seen].filter(([, n]) => n > 1).map(([k]) => k);

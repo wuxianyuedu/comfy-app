@@ -12,7 +12,7 @@
 | B1   | `eslint/no-use-before-define（functions:false）` | 75       | 48       | 已清（75 处/48 份）                                |
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
-| B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 清账中（子批1–9：285 份 / 912 处已清）             |
+| B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 清账中（子批1–10：305 份 / 1002 处已清）            |
 | B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 挂账中                                             |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
@@ -692,27 +692,27 @@
 | `tests/helpers/text-tiers.ts`                                                          | 8        | 已清 |
 | `tests/helpers/theme-tokens.ts`                                                        | 4        | 已清 |
 | `tests/hook-affected-launch.test.ts`                                                   | 7        | 已清 |
-| `tests/host-ts-loads-in-node.test.ts`                                                  | 2        | 挂账 |
-| `tests/known-failed-stale.test.ts`                                                     | 2        | 挂账 |
-| `tests/lib-layer-boundaries.test.ts`                                                   | 5        | 挂账 |
-| `tests/lib-server-imports.test.ts`                                                     | 2        | 挂账 |
-| `tests/linux-env-bootstrap.test.ts`                                                    | 1        | 挂账 |
-| `tests/lockfile-diff.test.ts`                                                          | 1        | 挂账 |
-| `tests/log-common-invoke.test.ts`                                                      | 2        | 挂账 |
-| `tests/log-run-layout.test.ts`                                                         | 1        | 挂账 |
-| `tests/merged-side-loss-git.test.ts`                                                   | 1        | 挂账 |
-| `tests/mjs-node-esm-resolution.test.ts`                                                | 5        | 挂账 |
-| `tests/no-platform-ci-config.test.ts`                                                  | 49       | 挂账 |
-| `tests/oxlint-jsplugin-rules.test.ts`                                                  | 1        | 挂账 |
-| `tests/page-name-single-source.test.ts`                                                | 1        | 挂账 |
-| `tests/postinstall-cross-platform.test.ts`                                             | 1        | 挂账 |
-| `tests/precommit-timing.test.ts`                                                       | 1        | 挂账 |
-| `tests/project-view-container.test.ts`                                                 | 1        | 挂账 |
-| `tests/ps1-consistency.test.ts`                                                        | 1        | 挂账 |
+| `tests/host-ts-loads-in-node.test.ts`                                                  | 2        | 已清 |
+| `tests/known-failed-stale.test.ts`                                                     | 2        | 已清 |
+| `tests/lib-layer-boundaries.test.ts`                                                   | 5        | 已清 |
+| `tests/lib-server-imports.test.ts`                                                     | 2        | 已清 |
+| `tests/linux-env-bootstrap.test.ts`                                                    | 1        | 已清 |
+| `tests/lockfile-diff.test.ts`                                                          | 1        | 已清 |
+| `tests/log-common-invoke.test.ts`                                                      | 2        | 已清 |
+| `tests/log-run-layout.test.ts`                                                         | 1        | 已清 |
+| `tests/merged-side-loss-git.test.ts`                                                   | 1        | 已清 |
+| `tests/mjs-node-esm-resolution.test.ts`                                                | 5        | 已清 |
+| `tests/no-platform-ci-config.test.ts`                                                  | 49       | 已清 |
+| `tests/oxlint-jsplugin-rules.test.ts`                                                  | 1        | 已清 |
+| `tests/page-name-single-source.test.ts`                                                | 1        | 已清 |
+| `tests/postinstall-cross-platform.test.ts`                                             | 1        | 已清 |
+| `tests/precommit-timing.test.ts`                                                       | 1        | 已清 |
+| `tests/project-view-container.test.ts`                                                 | 1        | 已清 |
+| `tests/ps1-consistency.test.ts`                                                        | 1        | 已清 |
 | `tests/progress-heartbeat.test.ts`                                                     | 1        | 挂账 |
-| `tests/ratchet-update-guards.test.ts`                                                  | 7        | 挂账 |
-| `tests/reduced-motion-tiers.test.ts`                                                   | 2        | 挂账 |
-| `tests/repository-base-purity.test.ts`                                                 | 3        | 挂账 |
+| `tests/ratchet-update-guards.test.ts`                                                  | 7        | 已清 |
+| `tests/reduced-motion-tiers.test.ts`                                                   | 2        | 已清 |
+| `tests/repository-base-purity.test.ts`                                                 | 3        | 已清 |
 | `tests/rest-endpoint-targets.test.ts`                                                  | 1        | 挂账 |
 | `tests/script-main-guard.test.ts`                                                      | 1        | 挂账 |
 | `tests/scripts-typecheck-ratchet.test.ts`                                              | 1        | 挂账 |

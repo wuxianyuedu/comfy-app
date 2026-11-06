@@ -21,8 +21,8 @@ function stripComments(src: string): string {
 
 /** 模块说明符提取（含动态 import）。 */
 function specifiers(src: string): Array<string> {
-  return [...src.matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)]
-    .map((m) => m[1])
+  return [...src.matchAll(/(?:from|import)\s*\(?\s*["'](?<spec>[^"']+)["']/g)]
+    .map((m) => m.groups?.spec)
     .filter((s): s is string => typeof s === "string");
 }
 
@@ -31,7 +31,7 @@ describe("repository-base 是纯机械 CRUD 基类（ISSUE #565）", () => {
 
   it("基类不引日志（留痕归子类按语义记）", () => {
     const logImports = specifiers(code).filter((s) =>
-      /(^|\/)(logger|app-runtime-log)$|^pino$/.test(s.replace(/^[@~]\//, "")),
+      /(?:^|\/)(?:logger|app-runtime-log)$|^pino$/.test(s.replace(/^[@~]\//, "")),
     );
     expect(
       logImports,

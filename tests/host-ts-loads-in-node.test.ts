@@ -18,14 +18,14 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  */
 function crossHostModules(): Array<string> {
   const source = readFileSync(path.join(ROOT, "tests", "esm-cross-host-imports.test.ts"), "utf8");
-  const block = /const CROSS_HOST_MODULES\s*=\s*\[([\s\S]*?)\]/.exec(source)?.[1];
+  const block = /const CROSS_HOST_MODULES\s*=\s*\[(?<body>[\s\S]*?)\]/.exec(source)?.groups?.body;
   if (block === undefined) {
     throw new Error(
       "读不出 `esm-cross-host-imports.test.ts` 的 `CROSS_HOST_MODULES` —— " +
         "那条边界的清单搬家了就先更新本判据，别让它静默判空。",
     );
   }
-  return [...block.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
+  return [...block.matchAll(/"(?<mod>[^"]+)"/g)].map((m) => m.groups?.mod ?? "");
 }
 
 /** 在**真 Node 进程**里加载一个模块（不注册任何 loader）。 */

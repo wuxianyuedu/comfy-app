@@ -40,8 +40,8 @@ afterEach(() => {
 function relativeImportsOf(entryFile: string): Array<string> {
   const src = fs.readFileSync(entryFile, "utf8");
   const found = new Set<string>();
-  for (const match of src.matchAll(/from\s+"(\.{1,2}\/[^"]+\.(?:mjs|cjs|ts|tsx))"/g)) {
-    const spec = match[1];
+  for (const match of src.matchAll(/from\s+"(?<spec>\.{1,2}\/[^"]+\.(?:mjs|cjs|ts|tsx))"/g)) {
+    const spec = match.groups?.spec;
     if (spec !== undefined) {
       found.add(spec);
     }
