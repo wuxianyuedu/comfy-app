@@ -50,9 +50,7 @@ function say(message) {
 // 形态上全部静默跳过（那正是「靠人记得删 = 没有执行者」的翻版）。
 if (!git(["rev-parse", "--is-inside-work-tree"]).ok) {
   say("不在 git 检出里，跳过提交门槛接线");
-} else if (
-  git(["config", "--local", "--get", "core.hooksPath"]).stdout === HOOKS_PATH
-) {
+} else if (git(["config", "--local", "--get", "core.hooksPath"]).stdout === HOOKS_PATH) {
   say(`core.hooksPath 已指向 ${HOOKS_PATH}（提交门槛已生效）`);
 } else if (git(["config", "--local", "core.hooksPath", HOOKS_PATH]).ok) {
   say(
@@ -90,8 +88,7 @@ if (!git(["rev-parse", "--is-inside-work-tree"]).ok) {
 // 的形态。失败语义也与上面两步一致：**只提示，绝不让 `pnpm install` 挂掉** ——
 // 这一步缺了只是 tsc 少一份输入，依赖没装坏。
 try {
-  const { ensureStorybookAssets, writeStorybookAppOrigin } =
-    await import("./storybook-assets.mjs");
+  const { ensureStorybookAssets, writeStorybookAppOrigin } = await import("./storybook-assets.mjs");
   ensureStorybookAssets(path.join(root, ".storybook", "assets"));
   const { origin, source } = writeStorybookAppOrigin(
     root,
@@ -99,9 +96,7 @@ try {
   );
   say(`[hooks] Storybook 的开发期输入就绪：${origin}（${source}）`);
 } catch (error) {
-  say(
-    `警告：Storybook 的开发期输入没补上（${String(error)}）—— pnpm storybook 会自己生成`,
-  );
+  say(`警告：Storybook 的开发期输入没补上（${String(error)}）—— pnpm storybook 会自己生成`);
 }
 
 // ── 顺带注册 git-lfs 过滤器（字体这类大二进制）───────────────────────────────

@@ -57,9 +57,7 @@ export function planSeparatedLaunches(files, opts = {}) {
   /* 帽的取值语义：**没给**（键不在）= 缺省 `FIXED_CHUNK_FILES`；**显式 0 / 负数** = 关帽
    * （回到纯预算分块的旧行为）。`i += 0` 会死循环，所以关帽走单独一支而不是把 0 喂进循环。 */
   const raw = opts.fixedChunkFiles;
-  const cap = raw === undefined
-    ? FIXED_CHUNK_FILES
-    : Number.isInteger(raw) && raw > 0 ? raw : 0;
+  const cap = raw === undefined ? FIXED_CHUNK_FILES : Number.isInteger(raw) && raw > 0 ? raw : 0;
   const fixed = files.filter((f) => FIXED_STRUCTURAL_TESTS.includes(f));
   const affected = files.filter((f) => !FIXED_STRUCTURAL_TESTS.includes(f));
   /** @type {{kind: 'fixed' | 'affected', files: string[]}[]} */

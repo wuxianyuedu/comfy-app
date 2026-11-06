@@ -29,14 +29,12 @@ const EXEMPT_TABLES = [
   {
     file: "src/lib/comfyui/types.ts",
     exports: ["PORT_COLORS", "DEFAULT_PORT_COLOR"],
-    reason:
-      "ComfyUI 32 个端口类型色（对齐 litegraph 官方调色板），色值即类型语义",
+    reason: "ComfyUI 32 个端口类型色（对齐 litegraph 官方调色板），色值即类型语义",
   },
   {
     file: "src/config/custom-nodes.ts",
     exports: [],
-    reason:
-      "自定义节点类别色（CATEGORY_COLORS + colorFor 兜底色），整文件是类别色模块",
+    reason: "自定义节点类别色（CATEGORY_COLORS + colorFor 兜底色），整文件是类别色模块",
   },
   {
     file: "src/lib/comfyui/node-registry.ts",
@@ -151,8 +149,7 @@ const EXEMPT_TABLES = [
   {
     file: "src/components/studio/canvas/SubgraphHeader.tsx",
     exports: [],
-    reason:
-      "同理：`--color-node-mix-base` 的 useCssColorToken 兜底值只是混色种子值，不参与渲染",
+    reason: "同理：`--color-node-mix-base` 的 useCssColorToken 兜底值只是混色种子值，不参与渲染",
   },
   {
     file: "src/components/studio/workflow-form/WorkflowNodeParts.tsx",
@@ -170,8 +167,7 @@ const EXEMPT_TABLES = [
   {
     file: "src/components/studio/ProjectCanvas.tsx",
     exports: [],
-    reason:
-      "MiniMap 的未知节点兜底色，与 canvas-types 的 NODE_META.color 同一张类别色表",
+    reason: "MiniMap 的未知节点兜底色，与 canvas-types 的 NODE_META.color 同一张类别色表",
   },
   {
     file: "src/components/studio/workflow-library/CustomNodesSettings/NodePreviewCard.tsx",
@@ -190,8 +186,7 @@ const EXEMPT_TABLES = [
   {
     file: "src/components/studio/canvas/IOEditContext.tsx",
     exports: [],
-    reason:
-      "画布 IO 编辑模式的端点强调色（勾选琥珀 / 未勾选灰），色值即模式语义",
+    reason: "画布 IO 编辑模式的端点强调色（勾选琥珀 / 未勾选灰），色值即模式语义",
   },
   {
     file: "src/components/studio/canvas/WorkflowEdge.tsx",
@@ -236,8 +231,7 @@ const EXEMPT_TABLES = [
   {
     file: "src/components/studio/project-canvas/ContentAssetNode.tsx",
     exports: ["ASSET_ACCENT"],
-    reason:
-      "内容载体节点（文本/图片/影片）的类型强调色，与 canvas-types 的 NODE_META.color 同值",
+    reason: "内容载体节点（文本/图片/影片）的类型强调色，与 canvas-types 的 NODE_META.color 同值",
   },
   {
     file: "src/components/studio/project-canvas/WorkflowNode.tsx",

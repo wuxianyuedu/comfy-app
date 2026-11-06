@@ -356,7 +356,5 @@ export function describeGlyphReplacements(replaced, scope = "这一批") {
     .join("、");
   const spokenTotal = spoken.reduce((n, r) => n + r.count, 0);
   const quietTotal = replaced.filter((r) => !isFallback(r)).reduce((n, r) => n + r.count, 0);
-  return (
-    `[cp936-glyph] ${scope}有 ${spokenTotal} 个字符在 CP936 里没有字形、也没有登记的替代写法，已如实记成 \\uXXXX：${parts}${quietTotal > 0 ? `；另有 ${quietTotal} 处按登记表换成读得出来的写法（那些不再逐次报）` : ""}`
-  );
+  return `[cp936-glyph] ${scope}有 ${spokenTotal} 个字符在 CP936 里没有字形、也没有登记的替代写法，已如实记成 \\uXXXX：${parts}${quietTotal > 0 ? `；另有 ${quietTotal} 处按登记表换成读得出来的写法（那些不再逐次报）` : ""}`;
 }

@@ -139,18 +139,15 @@ describe("oxfmt 格式判据（硬闸）", () => {
     expect(r.output).toContain("src/lib/fresh.ts");
   });
 
-  test("测试 / 脚本 / 根级配置 / 非源码产物落在白名单里 → 不误报", ({ repo }) => {
+  test("测试 / 根级配置 / 非源码产物落在白名单里 → 不误报", ({ repo }) => {
     // 白名单是「形态」而不是文件列表：新增的这类文件自动豁免。
     // 夹具预建了空的 `src/lib`：oxfmt 对「存在但一个可扫文件都没有」的根报
     // `Expected at least one target file`（exit 2），所以这里放一份干净源文件
     // —— 让 oxfmt 真扫起来，验证的才是「白名单里的脏文件不被误报」。
     repo.write("src/lib/keep.ts", CLEAN);
     repo.write("tests/fresh.test.ts", DIRTY);
-    repo.write("scripts/fresh.mjs", DIRTY);
-    repo.write("e2e/fresh.spec.ts", DIRTY);
-    /* Rust 壳的构建输出：它被**嵌套的** src-tauri/.gitignore 忽略，而 prettier 只
-     * 按仓库根读 .gitignore —— 不进白名单就会拿它阻断每一次提交（ISSUE #638 修好
-     * pnpm 启动形态后本门禁第一次真正扫到全库时暴露的现象）。 */
+    /* `scripts/**` / `tools/**` / `e2e/**` 已从白名单移出（ISSUE #3251），这三类
+     * 脏文件**必须**被点名 —— 见下面「glob 白名单判定」那张表与 `--changed` 那条。 */
     repo.write("src-tauri/target/debug/build/app-1/out/__global-api-script.js", DIRTY);
     const r = repo.run();
     expect(r.code).toBe(0);
@@ -171,9 +168,12 @@ describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
      * 「按路径引用」那一档会把整份自测算成它们的消费方 —— 改一个 `src/**` 业务文件就拉起
      * 这 40 多秒的一跑。被测脚本自己（`scripts/check-format.cjs`）照旧写真实路径，那是消费关系。 */
     [
-      ["scripts/check-format.cjs", true],
+      // `scripts/` `tools/` `e2e/` 已从全量档白名单移出（ISSUE #3251）：存量清完，
+      // 这三类现在与 `src/**` 同面。
+      ["scripts/check-format.cjs", false],
+      ["tools/fixture.ts", false],
       ["tests/anything.test.ts", true],
-      ["e2e/fixture.spec.ts", true],
+      ["e2e/fixture.spec.ts", false],
       ["docs/api/assets/main.js", true],
       ["fixture.config.js", true],
       ["fixture.config.ts", true],
@@ -199,7 +199,7 @@ describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
  * `--staged` 的输入面跳过（ISSUE #1747）。⚠️ 自 ISSUE #2010 起它**不再是钩子里的那一条**（钩子那步整体挪到
  * 平台侧跑全量档），留下是因为 `--staged` 仍是**人的动作**：提交前自查「这批改动有没有带脏文件」，不想扫全库；
  * 判据本体与前一档一字不差（这些用例判的是 flag 语义，与谁在何时敲它无关）。扫描面由 `GLOBS` + `IGNORE_GLOBS`
- * 现算（实测只剩 `src/**` 与 `.storybook/**`）：面外 ⇒ 跳过（省全库扫描），面内 ⇒ **照旧真扫**（跳过不是松闸后门）。断言 `code === 0` 之外还看输出：「跳过」与「扫过之后没有脏文件」同码，只看码则「永远跳过」能全绿。 */
+ * 现算（`src/**`、`.storybook/**`，以及 ISSUE #3251 起纳入的 `scripts/**`、`tools/**`、`e2e/**`）：面外 ⇒ 跳过（省全库扫描），面内 ⇒ **照旧真扫**（跳过不是松闸后门）。断言 `code === 0` 之外还看输出：「跳过」与「扫过之后没有脏文件」同码，只看码则「永远跳过」能全绿。 */
 describe("oxfmt 格式判据 --staged 输入面跳过（ISSUE #1747）", () => {
   test("暂存文件全在扫描面外 → 跳过（不起 prettier）", ({ repo }) => {
     repo.write("src/lib/dirty.ts", DIRTY);
@@ -221,8 +221,8 @@ describe("oxfmt 格式判据 --staged 输入面跳过（ISSUE #1747）", () => {
   }) => {
     /* #2979 的钉子：`IGNORE_GLOBS` 收着 `scripts/**`，改动面两档从前对它整类豁免
      * ——「本仓自己的脚本从来没被格式判据看过」。收窄之后改动面 = 改动面 ∩ GLOBS
-     * （GLOBS 含 cjs），暂存的脏脚本要被点名并阻断；全量档照旧豁免它（存量迁移
-     * 是 #2710 那条账，不随这一格走）。 */
+     * （GLOBS 含 cjs），暂存的脏脚本要被点名并阻断；全量档自 ISSUE #3251 起也扫
+     * 它（存量已清零，不再豁免）。 */
     repo.write("src/lib/keep.ts", CLEAN);
     repo.git("add", "-A");
     repo.commit("clean-baseline");

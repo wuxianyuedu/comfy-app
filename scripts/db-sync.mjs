@@ -24,10 +24,7 @@
 import path from "node:path";
 
 import { backupNotice, createBackup } from "./db-backup-core.mjs";
-import {
-  ensureSchemaCurrent,
-  writeSchemaSyncStatus,
-} from "./db-schema-state.mjs";
+import { ensureSchemaCurrent, writeSchemaSyncStatus } from "./db-schema-state.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 
@@ -58,6 +55,4 @@ writeSchemaSyncStatus(root, {
   detail: result.detail ?? null,
 });
 
-process.stdout.write(
-  `[db-sync] ${result.state}${result.detail ? `：${result.detail}` : ""}\n`,
-);
+process.stdout.write(`[db-sync] ${result.state}${result.detail ? `：${result.detail}` : ""}\n`);

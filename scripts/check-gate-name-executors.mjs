@@ -73,9 +73,6 @@ export function main(io = {}) {
 }
 
 /* 只在被直接执行时跑 main（被 import 时只暴露纯函数给用例）。 */
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   process.exit(main());
 }

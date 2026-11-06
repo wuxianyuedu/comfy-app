@@ -74,12 +74,7 @@ import {
  * }} input
  * @returns {{ok: boolean, out: string}}
  */
-export function seedBrowserOnOwn({
-  seed = fetchPlaywrightBrowser,
-  env,
-  root,
-  log = () => {},
-}) {
+export function seedBrowserOnOwn({ seed = fetchPlaywrightBrowser, env, root, log = () => {} }) {
   const target = readPlaywrightBrowserTarget();
   const dirName = browserDirName(target, PLAYWRIGHT_FALLBACK_BROWSER_REVISION);
   if (!dirName) {
@@ -87,8 +82,7 @@ export function seedBrowserOnOwn({
      * 而它看起来与成功逐字同形）。 */
     return { ok: false, out: "读不到 browsers.json 里的 revision，不猜目录名" };
   }
-  const chosenRoot =
-    env.PLAYWRIGHT_DOWNLOAD_HOST ?? PLAYWRIGHT_HOST_CANDIDATES[0];
+  const chosenRoot = env.PLAYWRIGHT_DOWNLOAD_HOST ?? PLAYWRIGHT_HOST_CANDIDATES[0];
   if (!chosenRoot) {
     return { ok: false, out: "没有可用的下载根（候选表为空）" };
   }

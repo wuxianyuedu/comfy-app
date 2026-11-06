@@ -257,8 +257,9 @@ function main(parsed) {
     console.log(`[form-field-wiring] 盘点：${total} 处 / ${sites.size} 份文件。`);
     for (const [rel, list] of [...sites.entries()].sort()) {
       console.log(
-        `  · ${rel}: ${list.length} 处\n${
-          list.map((s) => `      ${s.line}: label=${s.label} 控件=${s.tag}`).join("\n")}`,
+        `  · ${rel}: ${list.length} 处\n${list
+          .map((s) => `      ${s.line}: label=${s.label} 控件=${s.tag}`)
+          .join("\n")}`,
       );
     }
     return 0;
@@ -293,11 +294,10 @@ function main(parsed) {
       const was = base.files[rel] ?? 0;
       const mark = list.length > was ? " ← 涨了" : "";
       console.error(
-        `  · ${rel}: ${list.length} 处（基线 ${was}）${mark}\n${
-          list
-            .slice(0, 8)
-            .map((s) => `      ${s.line}: label=${s.label} 控件=${s.tag}`)
-            .join("\n")}`,
+        `  · ${rel}: ${list.length} 处（基线 ${was}）${mark}\n${list
+          .slice(0, 8)
+          .map((s) => `      ${s.line}: label=${s.label} 控件=${s.tag}`)
+          .join("\n")}`,
       );
     }
     console.error("\n口径见 docs/standards/16-shadcn-ui与表单校验.md §16.2.4.26。");

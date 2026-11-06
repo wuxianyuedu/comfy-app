@@ -52,9 +52,7 @@ export function runIsolatedTiming({ files, entry, spawn, merge, cwd, write }) {
       : "[affected-launch] 台账没落盘（无读数或写失败）—— 排序退化为原序，不阻断\n",
   );
   if (rejected.length > 0) {
-    write(
-      `[affected-launch] ${rejected.length} 份没覆盖（不该发生：这一档是最强的来源）\n`,
-    );
+    write(`[affected-launch] ${rejected.length} 份没覆盖（不该发生：这一档是最强的来源）\n`);
   }
   write(
     `[affected-launch] 退出码：0 —— 这是**读数档**，${failed} 份非零退出不改变它` +

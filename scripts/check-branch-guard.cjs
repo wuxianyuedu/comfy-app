@@ -231,9 +231,7 @@ function printBlockedTip(branch) {
   console.error("[branch-guard]   git push origin HEAD                # 推送并创建 PR");
   console.error(`[branch-guard] 已经提交在 ${branch} 上(尚未 push)时,把提交搬走再推:`);
   console.error("[branch-guard]   git branch feat/<简短描述>           # 用当前提交建分支");
-  console.error(
-    `[branch-guard]   git reset --hard origin/${branch} # ${branch} 回退到远端状态`,
-  );
+  console.error(`[branch-guard]   git reset --hard origin/${branch} # ${branch} 回退到远端状态`);
   console.error("[branch-guard]   git checkout feat/<简短描述>         # 继续开发");
   console.error(
     "[branch-guard] 若确实是 PR 合并提交被误判:确认 HEAD 有 2 个父提交后走 --no-verify 并说明原因。",
@@ -308,12 +306,9 @@ function main() {
 
   if (statusOnly) {
     console.log(
-      `[branch-guard] 当前分支 ${
-        result.branch || "(detached)"
-        },父提交数 ${
-        result.parents
-        } → ${
-        result.reason}`,
+      `[branch-guard] 当前分支 ${result.branch || "(detached)"},父提交数 ${result.parents} → ${
+        result.reason
+      }`,
     );
     return;
   }
@@ -329,14 +324,9 @@ function main() {
     const manualDispatch = process.argv.includes("--manual-dispatch");
     const pr = evaluatePr(target);
     console.log(
-      `[branch-guard] v${
-        GUARD_VERSION
-        } PR 源分支复核:HEAD 分支 ${
+      `[branch-guard] v${GUARD_VERSION} PR 源分支复核:HEAD 分支 ${
         pr.branch ?? "(detached)"
-        },父提交数 ${
-        pr.parents
-        },目标分支 ${
-        target}`,
+      },父提交数 ${pr.parents},目标分支 ${target}`,
     );
     if (pr.blocked && manualDispatch) {
       console.log(`[branch-guard] 阻断:${pr.reason}(规范 13.6)。`);
@@ -373,12 +363,9 @@ function main() {
     }
     const landing = evaluateLanding();
     console.log(
-      `[branch-guard] v${
-        GUARD_VERSION
-        } push 复核:HEAD 父提交数 ${
-        landing.parents
-        },合并方式 ${
-        landing.mode}`,
+      `[branch-guard] v${GUARD_VERSION} push 复核:HEAD 父提交数 ${landing.parents},合并方式 ${
+        landing.mode
+      }`,
     );
     console.log(`[branch-guard] OK(${landing.reason})`);
     return;

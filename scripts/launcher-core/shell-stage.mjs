@@ -41,8 +41,7 @@ export function startShellStage(ctx, target) {
   const { mode, shellExe: explicitExe, coldStart, port } = target;
   // 自编排标记：壳拉起本编排器时注入（`shell_launch.rs` 的 `spawn_orchestrator`）。
   // 它回答「本次编排是谁拉起的」，只有壳自编排链路（§1.5）里的 prebuilt 会带。
-  const launchedByShell =
-    process.env.COMFYAPP_SHELL_SELF_LAUNCH === "1" && mode === "prebuilt";
+  const launchedByShell = process.env.COMFYAPP_SHELL_SELF_LAUNCH === "1" && mode === "prebuilt";
   if (mode !== "prebuilt") {
     return { ok: true, shell: null, staleShell: null };
   }

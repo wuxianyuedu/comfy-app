@@ -15,11 +15,7 @@ import {
   pushSchema,
   riskyStatements,
 } from "./db-push-core.mjs";
-import {
-  ensureSchemaCurrent,
-  probeSchemaFresh,
-  probeSchemaSync,
-} from "./db-schema-state.mjs";
+import { ensureSchemaCurrent, probeSchemaFresh, probeSchemaSync } from "./db-schema-state.mjs";
 import { resolveRepoRoot } from "./app-port.mjs";
 
 const ROOT = resolveRepoRoot();
@@ -118,8 +114,7 @@ export function schemaPreflightDecision({
     }
     return {
       verdict: "proceed",
-      reason:
-        "指纹不一致，但 dry-run 说没有待执行语句（指纹只是没登记，库本来就对）",
+      reason: "指纹不一致，但 dry-run 说没有待执行语句（指纹只是没登记，库本来就对）",
     };
   }
   if (autoApplyable) {

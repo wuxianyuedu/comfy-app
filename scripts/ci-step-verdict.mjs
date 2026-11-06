@@ -227,7 +227,9 @@ function runChild(cmd) {
 async function main() {
   const { label, marker, cmd } = parseCli(process.argv.slice(2));
   if (cmd.length === 0) {
-    console.error("用法：node scripts/ci-step-verdict.mjs --label <名> [--inconclusive-marker <标记>] -- <命令...>");
+    console.error(
+      "用法：node scripts/ci-step-verdict.mjs --label <名> [--inconclusive-marker <标记>] -- <命令...>",
+    );
     return 3;
   }
   const { code, lines } = await runChild(cmd);
