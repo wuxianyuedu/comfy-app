@@ -33,6 +33,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { isRecord } from "~/lib/is-record";
 
 let tmp: string;
 let dbFile: string;
@@ -108,18 +109,27 @@ function sweepStaleTempDirs(): void {
 
 sweepStaleTempDirs();
 
+/** 单例客户端是否带可调用的 `close`（`globalThis.db` 的形状来自 `~/server/db`）。 */
+function hasClose(value: unknown): value is { close: () => void } {
+  return isRecord(value) && typeof value.close === "function";
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   /* 关掉挂在单例上的客户端（`NODE_ENV !== "production"` 时 `~/server/db` 会把它
    * 留在 `globalThis.db`）。这一步是卫生，不是「让删得掉」—— 真正的释放要等
    * 线程结束，见上面 `sweepStaleTempDirs` 的说明。 */
-  /* SAFETY: 类型断言已复核 */
-  const cached = (
-    globalThis as unknown as {
-      db?: { $client?: { close?: () => void } };
+  const globalScope: unknown = globalThis;
+  if (!isRecord(globalScope)) {
+    throw new Error("globalThis 不是对象");
+  }
+  const cached = globalScope.db;
+  if (isRecord(cached)) {
+    const client = cached.$client;
+    if (hasClose(client)) {
+      client.close();
     }
-  ).db;
-  cached?.$client?.close?.();
+  }
 });
 
 describe("probeSchemaSync", () => {

@@ -1,17 +1,50 @@
 import { describe, it, expect } from "vitest";
 import { enrichWorkflowIO } from "./workflow-detail-io";
-import type { WorkflowIOEnrichParams } from "./workflow-detail-io";
+import type {
+  WorkflowIOEntry,
+  WorkflowIOEnrichParams,
+  WorkflowIORawEntry,
+} from "./workflow-detail-io";
 import { buildRawInputs } from "./workflow-detail-raw";
-import type { RawWorkflow } from "./raw";
+import { asRawWorkflow, type RawWorkflow } from "./raw";
+
+/** 把 fixture 过一遍与生产同源的收窄，失败即让用例显式失败。 */
+function requireRawWorkflow(v: unknown): RawWorkflow {
+  const raw = asRawWorkflow(v);
+  if (raw === null) {
+    throw new Error("fixture 不是合法的 RawWorkflow");
+  }
+  return raw;
+}
+
+/** 取某个模式下的覆盖默认值；覆盖层缺失时显式失败而不是静默比对 undefined。 */
+function modeDefault(
+  result: Record<string, WorkflowIOEntry>,
+  ioKey: string,
+  mode: string,
+): unknown {
+  const entry = result[ioKey];
+  if (entry === undefined) {
+    throw new Error(`缺少富化条目：${ioKey}`);
+  }
+  const modes = entry.modeOverrides;
+  if (modes === undefined) {
+    throw new Error(`缺少模式覆盖层：${ioKey}`);
+  }
+  const override = modes[mode];
+  if (override === undefined) {
+    throw new Error(`缺少模式覆盖：${ioKey} ${mode}`);
+  }
+  return override.defaultValue;
+}
 
 /* 最小可用参数；各条用例按需覆盖自己关心的字段。 */
 function makeParams(
-  workflowIORaw: Record<string, unknown>,
+  workflowIORaw: WorkflowIOEnrichParams["workflowIORaw"],
   extra?: Partial<WorkflowIOEnrichParams>,
 ): WorkflowIOEnrichParams {
   return {
-    /* SAFETY: 类型断言已复核 */
-    workflowIORaw: workflowIORaw as unknown as WorkflowIOEnrichParams["workflowIORaw"],
+    workflowIORaw,
     rawInputsById: {},
     rawNodeMeta: [],
     graph: {},
@@ -162,7 +195,7 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
     "21:9 (Ultrawide)",
   ];
 
-  function comboParams(workflowIORaw: Record<string, unknown>) {
+  function comboParams(workflowIORaw: WorkflowIOEnrichParams["workflowIORaw"]) {
     return makeParams(workflowIORaw, {
       rawInputsById: {
         "94": [
@@ -191,12 +224,7 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
         },
       }),
     );
-    /* SAFETY: 类型断言已复核 */
-    const modes = result["94::widget::aspect_ratio"]!.modeOverrides as Record<
-      string,
-      { defaultValue?: unknown }
-    >;
-    expect(modes.T2I!.defaultValue).toBe("16:9 (Widescreen)");
+    expect(modeDefault(result, "94::widget::aspect_ratio", "T2I")).toBe("16:9 (Widescreen)");
   });
 
   it("合法值原样透传，不产生改写", async () => {
@@ -211,12 +239,7 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
         },
       }),
     );
-    /* SAFETY: 类型断言已复核 */
-    const modes = result["94::widget::aspect_ratio"]!.modeOverrides as Record<
-      string,
-      { defaultValue?: unknown }
-    >;
-    expect(modes.T2I!.defaultValue).toBe("4:3 (Standard)");
+    expect(modeDefault(result, "94::widget::aspect_ratio", "T2I")).toBe("4:3 (Standard)");
   });
 
   it("候选表匹配不上的模式默认值被摘掉，回退图内默认值", async () => {
@@ -249,12 +272,7 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
         },
       }),
     );
-    /* SAFETY: 类型断言已复核 */
-    const modes = result["94::widget::aspect_ratio"]!.modeOverrides as Record<
-      string,
-      { defaultValue?: unknown }
-    >;
-    expect(modes.T2I!.defaultValue).toBe("16:9");
+    expect(modeDefault(result, "94::widget::aspect_ratio", "T2I")).toBe("16:9");
   });
 
   it("喂给它的载荷只带 `modeOverrides` —— 历史 `modes` 键的归一不在这里", async () => {
@@ -264,17 +282,16 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
      * 同一个 JSON 列就有两个入口，改一处永远漏一处。
      *
      * 归一本身由 `workflow-detail.test.ts` 从列那侧判（它喂的就是列里的原始值）。 */
-    const result = await enrichWorkflowIO(
-      comboParams({
-        "94::widget::aspect_ratio": {
-          direction: "input",
-          kind: "widget",
-          nodeId: "94",
-          name: "aspect_ratio",
-          modes: { T2I: { defaultValue: "4:3 (Standard)" } },
-        },
-      }),
-    );
+    const legacyModes: WorkflowIORawEntry & {
+      modes: Record<string, { defaultValue?: unknown }>;
+    } = {
+      direction: "input",
+      kind: "widget",
+      nodeId: "94",
+      name: "aspect_ratio",
+      modes: { T2I: { defaultValue: "4:3 (Standard)" } },
+    };
+    const result = await enrichWorkflowIO(comboParams({ "94::widget::aspect_ratio": legacyModes }));
     const entry = result["94::widget::aspect_ratio"]!;
     /* 未归一的载荷在这里读不到覆盖层 —— 这正是「列边界那一步不能省」的证据。 */
     expect(entry.modeOverrides).toBeUndefined();
@@ -799,8 +816,7 @@ describe("enrichWorkflowIO — 真实封装节点工作流的端到端取名（I
   const WRAPPER_UUID = "e0940f57-80b2-480e-8a38-36968dc1763d";
 
   it("buildRawInputs + enrichWorkflowIO：label 直读，清掉改名后取到作者 label", async () => {
-    /* SAFETY: 类型断言已复核 */
-    const raw = {
+    const raw = requireRawWorkflow({
       nodes: [
         {
           id: 1512,
@@ -841,7 +857,7 @@ describe("enrichWorkflowIO — 真实封装节点工作流的端到端取名（I
       ],
       links: [],
       definitions: { subgraphs: [] },
-    } as unknown as RawWorkflow;
+    });
 
     const { rawInputsById } = await buildRawInputs(
       raw,
@@ -889,8 +905,7 @@ describe("enrichWorkflowIO — 封装节点作者名整体回收不到时的取�
    * 封装节点的自动编号槽位也直接按机器名处理。 */
   const WRAPPER_UUID = "e0940f57-80b2-480e-8a38-36968dc1763d";
 
-  /* SAFETY: 类型断言已复核 */
-  const raw = {
+  const raw = requireRawWorkflow({
     nodes: [
       {
         id: 4,
@@ -919,7 +934,7 @@ describe("enrichWorkflowIO — 封装节点作者名整体回收不到时的取�
         },
       ],
     },
-  } as unknown as RawWorkflow;
+  });
 
   it("类型 / 类名随条目下发；label 直读、本层作者名作为事实下发", async () => {
     const { rawInputsById } = await buildRawInputs(
@@ -954,8 +969,8 @@ describe("enrichWorkflowIO — 封装节点作者名整体回收不到时的取�
   });
 
   it("作者写在本层的名字优先于子图边界 pin", async () => {
-    /* SAFETY: 类型断言已复核 */
-    const own = JSON.parse(JSON.stringify(raw)) as unknown as RawWorkflow;
+    const snapshot: unknown = JSON.parse(JSON.stringify(raw));
+    const own = requireRawWorkflow(snapshot);
     own.nodes[0]!.inputs![0]!.label = "我的种子";
     const { rawInputsById } = await buildRawInputs(
       own,
@@ -1037,8 +1052,7 @@ describe("enrichWorkflowIO — slotLabel 下发（别名判定的第二判据）
   /* wrapper 槽位别名 value_1，作者把业务名写在本层 inputs[].label 上。
    * 通用翻译（localized_name）也在，且排在前 —— 显示名会停在翻译上，
    * 仅凭显示的 label 无从判断本层是否有作者命名，只有 slotLabel 能作证。 */
-  /* SAFETY: 类型断言已复核 */
-  const raw = {
+  const raw = requireRawWorkflow({
     nodes: [
       {
         id: 9,
@@ -1060,7 +1074,7 @@ describe("enrichWorkflowIO — slotLabel 下发（别名判定的第二判据）
     ],
     links: [],
     definitions: { subgraphs: [] },
-  } as unknown as RawWorkflow;
+  });
 
   it("本层作者名随富化条目下发（供「本地存的是不是机器名」判定）", async () => {
     const { rawInputsById } = await buildRawInputs(
@@ -1092,8 +1106,7 @@ describe("enrichWorkflowIO — slotLabel 下发（别名判定的第二判据）
   });
 
   it("普通节点：没有另一个作者名就不塞无信息量的 slotLabel", async () => {
-    /* SAFETY: 类型断言已复核 */
-    const plain = {
+    const plain = requireRawWorkflow({
       nodes: [
         {
           id: 24,
@@ -1113,7 +1126,7 @@ describe("enrichWorkflowIO — slotLabel 下发（别名判定的第二判据）
       ],
       links: [],
       definitions: { subgraphs: [] },
-    } as unknown as RawWorkflow;
+    });
     const { rawInputsById } = await buildRawInputs(
       plain,
       () => Promise.resolve(undefined),

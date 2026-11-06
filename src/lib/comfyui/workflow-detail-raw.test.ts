@@ -1,15 +1,23 @@
 import { describe, expect, it } from "vitest";
 
 import { buildRawInputs, buildInnerNodeInputs } from "~/lib/comfyui/workflow-detail-raw";
-import type { RawWorkflow } from "~/lib/comfyui/raw";
+import { asRawWorkflow, type RawWorkflow } from "~/lib/comfyui/raw";
 
 const WRAPPER = "aaaaaaaa-1111-2222-3333-444444444444";
+
+/** 把 fixture 过一遍与生产同源的收窄，失败即让用例显式失败。 */
+function requireRawWorkflow(v: unknown): RawWorkflow {
+  const raw = asRawWorkflow(v);
+  if (raw === null) {
+    throw new Error("fixture 不是合法的 RawWorkflow");
+  }
+  return raw;
+}
 
 /** ComfyUI 导出的子工作流封装节点：wrapper 本层槽位名是自动编号的别名
  *  （`value_1`），业务语义在内部节点上，靠 `properties.proxyWidgets`
  *  （[内部节点 id, 内部字段名]）关联。 */
-/* SAFETY: 类型断言已复核 */
-const wrapperWorkflow = {
+const wrapperWorkflow = requireRawWorkflow({
   last_node_id: 12,
   nodes: [
     {
@@ -93,7 +101,7 @@ const wrapperWorkflow = {
       },
     ],
   },
-} as unknown as RawWorkflow;
+});
 
 function noCombo(): Promise<undefined> {
   return Promise.resolve(undefined);
@@ -127,8 +135,7 @@ describe("buildRawInputs — 子工作流封装节点的 proxyField 暂存", () 
   });
 
   it("普通（非封装）节点不带 proxyField", async () => {
-    /* SAFETY: 类型断言已复核 */
-    const plain = {
+    const plain = requireRawWorkflow({
       last_node_id: 1,
       nodes: [
         {
@@ -140,14 +147,14 @@ describe("buildRawInputs — 子工作流封装节点的 proxyField 暂存", () 
         },
       ],
       links: [],
-    } as unknown as RawWorkflow;
+    });
     const { rawInputsById } = await buildRawInputs(plain, noCombo, noMultiline);
     expect(rawInputsById["7"]![0]!.proxyField).toBeUndefined();
   });
 
   it("proxyWidgets 指向的内部节点缺失时仍记下字段名（比别名有信息量）", async () => {
-    /* SAFETY: 类型断言已复核 */
-    const broken = JSON.parse(JSON.stringify(wrapperWorkflow)) as unknown as RawWorkflow;
+    const snapshot: unknown = JSON.parse(JSON.stringify(wrapperWorkflow));
+    const broken = requireRawWorkflow(snapshot);
     const subs = broken.definitions!.subgraphs!;
     const key = Object.keys(subs)[0]!;
     subs[key]!.nodes = [];
@@ -162,8 +169,7 @@ describe("buildRawInputs — 子工作流封装节点的 proxyField 暂存", () 
 describe("buildRawInputs — 封装槽位的作者名从子图边界 pin 回收（ISSUE #349）", () => {
   /** 真实导出形状：wrapper 本层只有自动编号的别名，`properties.proxyWidgets`
    *  被 ComfyUI 隔离掉（只剩 quarantine），作者名只留在子图边界 `inputs[]` 上。 */
-  /* SAFETY: 类型断言已复核 */
-  const quarantined = {
+  const quarantined = requireRawWorkflow({
     last_node_id: 4,
     nodes: [
       {
@@ -203,7 +209,7 @@ describe("buildRawInputs — 封装槽位的作者名从子图边界 pin 回收�
         },
       ],
     },
-  } as unknown as RawWorkflow;
+  });
 
   it("本层没写 label 时用边界 pin 的作者名", async () => {
     const { rawInputsById } = await buildRawInputs(quarantined, noCombo, noMultiline);
@@ -216,16 +222,15 @@ describe("buildRawInputs — 封装槽位的作者名从子图边界 pin 回收�
   });
 
   it("作者真在本层写了别的名字时以本层为准，边界 pin 不覆盖", async () => {
-    /* SAFETY: 类型断言已复核 */
-    const own = JSON.parse(JSON.stringify(quarantined)) as unknown as RawWorkflow;
+    const snapshot: unknown = JSON.parse(JSON.stringify(quarantined));
+    const own = requireRawWorkflow(snapshot);
     own.nodes[0]!.inputs![0]!.label = "我的种子";
     const { rawInputsById } = await buildRawInputs(own, noCombo, noMultiline);
     expect(rawInputsById["4"]![0]!.label).toBe("我的种子");
   });
 
   it("普通节点的 pin 名不会被同名的子图边界 pin 覆盖", async () => {
-    /* SAFETY: 类型断言已复核 */
-    const plain = {
+    const plain = requireRawWorkflow({
       last_node_id: 7,
       nodes: [
         {
@@ -244,7 +249,7 @@ describe("buildRawInputs — 封装槽位的作者名从子图边界 pin 回收�
       ],
       links: [],
       definitions: quarantined.definitions,
-    } as unknown as RawWorkflow;
+    });
     const { rawInputsById } = await buildRawInputs(plain, noCombo, noMultiline);
     expect(rawInputsById["7"]![0]!.label).toBeUndefined();
   });
@@ -281,13 +286,9 @@ describe("buildInnerNodeInputs — 子图内部节点输入索引", () => {
 describe("buildRawInputs — proxyWidgets 的键形态与配对（ISSUE #349）", () => {
   /** 把 wrapper 的 proxyWidgets 换成任意形态，其余保持真实导出形状。 */
   function withProxy(props: Record<string, unknown>): RawWorkflow {
-    /* SAFETY: 类型断言已复核 */
-    const clone = structuredClone(wrapperWorkflow) as unknown as {
-      nodes: Array<{ properties: Record<string, unknown> }>;
-    };
+    const clone = requireRawWorkflow(structuredClone(wrapperWorkflow));
     clone.nodes[0]!.properties = props;
-    /* SAFETY: 类型断言已复核 */
-    return clone as unknown as RawWorkflow;
+    return clone;
   }
 
   it("对象形态 proxyWidgets（键即槽位名）也能解析出内部字段", async () => {

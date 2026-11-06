@@ -514,7 +514,9 @@ export function parseConsoleLine(line: string): ParsedConsoleLine {
     return { ok: false, reason: "命令为空" };
   }
 
-  /* SAFETY: 类型断言已复核 */
-  const [file, ...args] = tokens as [string, ...Array<string>];
+  const [file, ...args] = tokens;
+  if (file === undefined) {
+    return { ok: false, reason: "命令为空" };
+  }
   return { ok: true, file, args, display: [file, ...args].join(" ") };
 }

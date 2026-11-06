@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/lib/comfyui/workflow-detail-io.test.ts", // 存量 9 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/workflow-detail-raw-inputs.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/workflow-detail-raw.test.ts", // 存量 8 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/workflow-detail-raw.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/workflow-detail.ts", // 存量 8 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/workflow-subgraph-parse.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/console/console-catalog.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/console/console-catalog.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/core/logger.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/core/logger.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/core/pino-contract.test.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/core/redact-secret.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/core/repository-base.ts", // 存量 5 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/core/repository-film.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/core/repository-row.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/core/repository-task-impl.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/core/repository-task-impl.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/core/repository-task.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/core/repository.test.ts", // 存量 13 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/db-schema-ready.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/dom-props.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/dom-rect.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/dom-rect.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
