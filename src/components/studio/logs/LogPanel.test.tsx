@@ -8,6 +8,7 @@ import userEvent from "@testing-library/user-event";
 import { LogPanel } from "./LogPanel";
 import { LOG_PAGE_SIZE, computeOriginCounts, useLogStore } from "./log-store";
 import type { LogEntry } from "./log-store";
+import { isPlainRecord } from "~/lib/is-record";
 import { Z, zClass } from "~/lib/shell/overlay-z";
 import {
   LOG_PANEL_OVERLAY_Z,
@@ -418,10 +419,11 @@ describe("LogPanel 日志面板", () => {
       expect(button.className).not.toContain("min-w-0");
       expect(button.className).toContain("min-w-fit");
 
-      /* SAFETY: 类型断言已复核 */
-      const labelEl = button.children[0] as HTMLElement;
-      /* SAFETY: 类型断言已复核 */
-      const countEl = button.children[1] as HTMLElement;
+      const labelEl = button.children[0];
+      const countEl = button.children[1];
+      if (!(labelEl instanceof HTMLElement) || !(countEl instanceof HTMLElement)) {
+        throw new Error("级别按钮缺少标签或计数子元素");
+      }
       expect(labelEl.className).toContain("whitespace-nowrap");
       expect(labelEl.className).not.toContain("truncate");
       /* 数字列：定宽 `4ch` + 右对齐 + 等宽数字——「文字 + 四位数字」是固定预算，
@@ -730,7 +732,7 @@ describe("LogPanel 日志面板", () => {
     /* 面板此前只有浏览器下载：桌面壳里是否落盘由宿主决定，用户点完常常本地
      * 什么都没有（ISSUE #609 第 3 条）。这里断言接线——点一下会把当前筛选的
      * 文本 POST 给导出端点，并把服务端回的路径显示出来。 */
-    const fetchMock = vi.fn(() => ({
+    const fetchMock = vi.fn<(url: string, init: { body: string }) => unknown>(() => ({
       ok: true,
       json: () => ({
         ok: true,
@@ -750,13 +752,16 @@ describe("LogPanel 日志面板", () => {
         }),
       );
       expect(await screen.findByText(/exports\//)).toBeInTheDocument();
-      /* SAFETY: 类型断言已复核 */
-      const [url, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string }];
+      const call = fetchMock.mock.calls[0];
+      if (call === undefined) {
+        throw new Error("未发出导出请求");
+      }
+      const [url, init] = call;
       expect(url).toBe("/api/logs/export");
-      /* SAFETY: 类型断言已复核 */
-      const sent = JSON.parse(init.body) as {
-        content?: string;
-      };
+      const sent: unknown = JSON.parse(init.body);
+      if (!isPlainRecord(sent) || typeof sent.content !== "string") {
+        throw new Error("导出请求体缺少 content 字段");
+      }
       expect(sent.content).toContain("事件");
     } finally {
       vi.unstubAllGlobals();
@@ -769,7 +774,7 @@ describe("LogPanel 日志面板", () => {
      *   「打包诊断」  = 服务端把 current/ + 最近几次 runs/ 打成 zip（run.json
      *                  与环境信息在面板上根本看不到）。
      * 这里断言后者走的是它自己的端点、且不需要带 body（服务端自己找现场）。 */
-    const fetchMock = vi.fn(() => ({
+    const fetchMock = vi.fn<(url: string) => unknown>(() => ({
       ok: true,
       json: () => ({
         ok: true,
@@ -785,9 +790,11 @@ describe("LogPanel 日志面板", () => {
       const user = userEvent.setup();
       await user.click(screen.getByRole("button", { name: "打包诊断现场到本地文件" }));
       expect(await screen.findByText(/diagnostics-/)).toBeInTheDocument();
-      /* SAFETY: 类型断言已复核 */
-      const [url] = fetchMock.mock.calls[0] as unknown as [string];
-      expect(url).toBe("/api/logs/diagnostics");
+      const call = fetchMock.mock.calls[0];
+      if (call === undefined) {
+        throw new Error("未发出诊断请求");
+      }
+      expect(call[0]).toBe("/api/logs/diagnostics");
     } finally {
       vi.unstubAllGlobals();
     }
@@ -868,8 +875,10 @@ describe("LogPanel 日志面板", () => {
     /* jsdom 不做布局，`clientHeight` 恒为 0；这里给它一个真实尺度的视口
      * （600px 高、1100px 宽），面板才会走虚拟窗口分支。改的是**原型**上的取值：
      * 面板读的是它自己那个滚动元素，而 jsdom 里所有元素的尺寸都由这一份原型给出。 */
-    /* SAFETY: 类型断言已复核 */
-    const prototype: object = Object.getPrototypeOf(document.createElement("div")) as object;
+    const prototype = Reflect.getPrototypeOf(document.createElement("div"));
+    if (prototype === null) {
+      throw new Error("无法读取元素原型");
+    }
     const heights = Object.getOwnPropertyDescriptor(prototype, "clientHeight");
     const widths = Object.getOwnPropertyDescriptor(prototype, "clientWidth");
     Object.defineProperty(prototype, "clientHeight", {
@@ -925,8 +934,10 @@ describe("LogPanel 日志面板", () => {
     useSmallPage(200);
     seed(200);
 
-    /* SAFETY: 类型断言已复核 */
-    const prototype: object = Object.getPrototypeOf(document.createElement("div")) as object;
+    const prototype = Reflect.getPrototypeOf(document.createElement("div"));
+    if (prototype === null) {
+      throw new Error("无法读取元素原型");
+    }
     const heights = Object.getOwnPropertyDescriptor(prototype, "clientHeight");
     const widths = Object.getOwnPropertyDescriptor(prototype, "clientWidth");
     Object.defineProperty(prototype, "clientHeight", {

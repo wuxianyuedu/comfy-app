@@ -22,8 +22,16 @@ vi.mock("~/trpc/vanilla", () => ({
 }));
 
 /** tRPC resolver 的类型是 Resolver<...>，测试里按 vi.Mock 取用。 */
-/* SAFETY: 类型断言已复核 */
-const mockOf = (fn: unknown) => fn as Mock;
+function isMock(value: unknown): value is Mock {
+  return typeof value === "function" && "mock" in value;
+}
+
+const mockOf = (fn: unknown): Mock => {
+  if (!isMock(fn)) {
+    throw new Error("预期传入 vi.fn() 创建的 mock 函数");
+  }
+  return fn;
+};
 
 const vanilla = {
   workflowModel: {

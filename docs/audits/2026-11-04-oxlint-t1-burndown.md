@@ -13,7 +13,7 @@
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
 | B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 已清（子批1–12，判决面文件级豁免已整块删除）       |
-| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–6：120 份 / 268 处已清）             |
+| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–7：140 份 / 300 处已清）             |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
@@ -865,26 +865,26 @@
 | `src/components/studio/FilmStudioPropertyPanel.tsx`                                                  | 1        | 已清 |
 | `src/components/studio/history/history-detail-derive.test.ts`                                        | 2        | 已清 |
 | `src/components/studio/history/history-detail-derive.ts`                                             | 1        | 已清 |
-| `src/components/studio/history/HistoryDetailModal.tsx`                                               | 1        | 挂账 |
-| `src/components/studio/history/HistoryList.tsx`                                                      | 1        | 挂账 |
-| `src/components/studio/history/ImageRedrawPanel.tsx`                                                 | 1        | 挂账 |
-| `src/components/studio/HomePage.tsx`                                                                 | 2        | 挂账 |
-| `src/components/studio/hooks/use-dev-server-liveness.ts`                                             | 1        | 挂账 |
-| `src/components/studio/hooks/use-film-studio.test.ts`                                                | 1        | 挂账 |
-| `src/components/studio/hooks/use-film-studio.ts`                                                     | 5        | 挂账 |
-| `src/components/studio/hooks/use-model-tags.test.ts`                                                 | 1        | 挂账 |
-| `src/components/studio/hooks/use-project-outputs.ts`                                                 | 1        | 挂账 |
-| `src/components/studio/logs/log-analysis.ts`                                                         | 2        | 挂账 |
-| `src/components/studio/logs/log-category-store.ts`                                                   | 1        | 挂账 |
-| `src/components/studio/logs/log-row-style.test.ts`                                                   | 2        | 挂账 |
-| `src/components/studio/logs/log-row-style.ts`                                                        | 1        | 挂账 |
-| `src/components/studio/logs/LogPanel.test.tsx`                                                       | 7        | 挂账 |
-| `src/components/studio/logs/LogPanelOriginSelect.tsx`                                                | 1        | 挂账 |
-| `src/components/studio/logs/LogProvider.tsx`                                                         | 1        | 挂账 |
-| `src/components/studio/logs/LogRowRevealPath.test.tsx`                                               | 1        | 挂账 |
-| `src/components/studio/model-overview-derive.test.ts`                                                | 1        | 挂账 |
-| `src/components/studio/nav-items.test.ts`                                                            | 1        | 挂账 |
-| `src/components/studio/project-canvas/CanvasContextMenu.test.tsx`                                    | 1        | 挂账 |
+| `src/components/studio/history/HistoryDetailModal.tsx`                                               | 1        | 已清 |
+| `src/components/studio/history/HistoryList.tsx`                                                      | 1        | 已清 |
+| `src/components/studio/history/ImageRedrawPanel.tsx`                                                 | 1        | 已清 |
+| `src/components/studio/HomePage.tsx`                                                                 | 2        | 已清 |
+| `src/components/studio/hooks/use-dev-server-liveness.ts`                                             | 1        | 已清 |
+| `src/components/studio/hooks/use-film-studio.test.ts`                                                | 1        | 已清 |
+| `src/components/studio/hooks/use-film-studio.ts`                                                     | 5        | 已清 |
+| `src/components/studio/hooks/use-model-tags.test.ts`                                                 | 1        | 已清 |
+| `src/components/studio/hooks/use-project-outputs.ts`                                                 | 1        | 已清 |
+| `src/components/studio/logs/log-analysis.ts`                                                         | 2        | 已清 |
+| `src/components/studio/logs/log-category-store.ts`                                                   | 1        | 已清 |
+| `src/components/studio/logs/log-row-style.test.ts`                                                   | 2        | 已清 |
+| `src/components/studio/logs/log-row-style.ts`                                                        | 1        | 已清 |
+| `src/components/studio/logs/LogPanel.test.tsx`                                                       | 7        | 已清 |
+| `src/components/studio/logs/LogPanelOriginSelect.tsx`                                                | 1        | 已清 |
+| `src/components/studio/logs/LogProvider.tsx`                                                         | 1        | 已清 |
+| `src/components/studio/logs/LogRowRevealPath.test.tsx`                                               | 1        | 已清 |
+| `src/components/studio/model-overview-derive.test.ts`                                                | 1        | 已清 |
+| `src/components/studio/nav-items.test.ts`                                                            | 1        | 已清 |
+| `src/components/studio/project-canvas/CanvasContextMenu.test.tsx`                                    | 1        | 已清 |
 | `src/components/studio/project-canvas/CanvasContextMenu.tsx`                                         | 1        | 挂账 |
 | `src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.stories.tsx`                   | 2        | 挂账 |
 | `src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.test.tsx`                      | 1        | 挂账 |

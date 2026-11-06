@@ -38,8 +38,7 @@ describe("CanvasContextMenu 走 ui/dropdown-menu", () => {
   it("点一个节点项会把对应的 kind 交给 onPick", () => {
     const onPick = vi.fn();
     renderMenu({ onPick });
-    /* SAFETY: 类型断言已复核 */
-    const kinds = Object.keys(NODE_META) as Array<NodeKind>;
+    const kinds = Object.keys(NODE_META).filter((key): key is NodeKind => key in NODE_META);
     const firstKind = kinds[0]!;
     fireEvent.click(
       screen.getByRole("menuitem", {

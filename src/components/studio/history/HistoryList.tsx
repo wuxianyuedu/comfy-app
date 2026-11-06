@@ -17,6 +17,11 @@ import { ViewActions } from "../ViewActions";
 import { useHistoryList } from "./hooks/use-history-list";
 import { FILTERS, type SortKey, type TaskItem } from "./history-types";
 
+/** 排序键的运行时判据：`SelectMenu` 只给字符串，合法档位就这两枚。 */
+function isSortKey(value: string): value is SortKey {
+  return value === "newest" || value === "oldest";
+}
+
 /**
  * 单个日期分组下的任务卡片列表。
  * 独立成组件以便用 useAutoAnimate 给「增 / 删 / 排序换位」的条目级重排做平滑过渡，
@@ -102,8 +107,9 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
           className="text-xs"
           labels={{ newest: "时间倒序", oldest: "时间正序" }}
           onChange={(value) => {
-            /* SAFETY: 类型断言已复核 */
-            c.setSort(value as SortKey);
+            if (isSortKey(value)) {
+              c.setSort(value);
+            }
           }}
           options={["newest", "oldest"]}
           value={c.sort}

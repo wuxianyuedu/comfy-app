@@ -4,6 +4,7 @@
  * 这一层不吃也不写 store state，是天然叶子；方向：本文件 → `log-types`，store → 本文件，无回环。
  */
 import { upperToken } from "~/lib/upper-token";
+import { isRecord } from "~/lib/is-record";
 import { PANEL_SELF_POLL_ENDPOINTS } from "~/lib/log/panel-self-poll";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { nextId as nextEntryId } from "~/lib/unique-id";
@@ -65,22 +66,12 @@ function serializeOne(a: unknown): string {
       : `${a.name}: ${a.message}`;
   }
   // 保留可能来自序列化错误对象的类栈字符串。
-  if (
-    typeof a === "object" &&
-    // oxlint-disable-next-line no-unnecessary-condition -- 上方已提前返回 null/undefined，此判据恒真；保留与序列化错误对象的其他分支一致的空值防御
-    a !== null &&
-    "stack" in a &&
-    /* SAFETY: 类型断言已复核 */
-    typeof (a as { stack?: unknown }).stack === "string"
-  ) {
-    /* SAFETY: 类型断言已复核 */
-    const e = a as {
-      message?: unknown;
-      name?: unknown;
-      stack: string;
-    };
-    const head = typeof e.message === "string" ? e.message : JSON.stringify(a);
-    return `${head}\n${e.stack}`;
+  if (isRecord(a)) {
+    const stack = a.stack;
+    if (typeof stack === "string") {
+      const head = typeof a.message === "string" ? a.message : JSON.stringify(a);
+      return `${head}\n${stack}`;
+    }
   }
   try {
     return JSON.stringify(a, null, 2);
@@ -597,7 +588,7 @@ export function computeFiltered(
   /** 被「设置 → 日志」开关关掉、要从面板隐藏的分类（与 `bucketOf` 同域）。 */
   disabled: Array<LogCategoryFilter> = [],
 ): Array<LogEntry> {
-  const disabledSet = disabled.length > 0 ? new Set(disabled) : null;
+  const disabledSet = disabled.length > 0 ? new Set<string>(disabled) : null;
   /* 「全部来源」按身份去重（同一条日志被六路读到只显示一次，与 `table.all` 的
    * 计数同口径）；选了具体来源就是「那份文件里的行」，逐行照给——副本不丢，
    * 因为用户切过去正是为了看 `origin` 指的那一份。 */
@@ -610,8 +601,7 @@ export function computeFiltered(
     /* 分类开关：被关掉的分类（无论当前在看「全部来源」还是某个具体来源）一律隐藏。
      * 计数维度（`computeOriginCounts`）不读这里——下拉里仍显示真实条数，开关只
      * 影响「显示哪些行」，与「来源筛选下拉」是两条正交的轴。 */
-    /* SAFETY: 类型断言已复核 */
-    const categoryOk = disabledSet ? !disabledSet.has(bucketOf(entry) as LogCategoryFilter) : true;
+    const categoryOk = disabledSet ? !disabledSet.has(bucketOf(entry)) : true;
     return levelOk && originOk && categoryOk && matchesSearch(entry, search);
   });
 }
