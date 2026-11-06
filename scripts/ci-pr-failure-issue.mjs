@@ -101,6 +101,7 @@ export const TITLE_PREFIX = "ci(pr): PR 档红在「";
 export const LANE_PREFIX = /** @type {Record<string,string>} */ ({
   pr: TITLE_PREFIX,
   package: "ci(package): 桌包档红在「",
+  push: "ci(push): push 档红在「",
 });
 
 /** @param {string | null | undefined} lane @returns {string} 未知档一概落到 PR 那一档（不发明第二份默认） */
