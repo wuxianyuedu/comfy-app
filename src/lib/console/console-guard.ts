@@ -45,8 +45,9 @@ export function isLoopbackHost(value: string | null | undefined): boolean {
     return true;
   }
   /* 整个 127.0.0.0/8 都是回环（不是只有 .0.1）。 */
-  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
-  if (v4?.[1] === "127") {
+  const v4 =
+    /^(?<octet1>\d{1,3})\.(?<octet2>\d{1,3})\.(?<octet3>\d{1,3})\.(?<octet4>\d{1,3})$/.exec(host);
+  if (v4?.groups?.octet1 === "127") {
     return true;
   }
   return false;

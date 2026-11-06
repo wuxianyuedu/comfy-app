@@ -109,20 +109,20 @@ function callerLoc(): string {
     // oxlint-disable-next-line typescript/prefer-nullish-coalescing
     const frame = lines[2] || lines[1] || ""; // oxlint-disable-line strict-boolean-expressions -- 取第一个非空栈帧：空串与 undefined 同义，这里必须保留「真值回退」，不能换成 ??
 
-    const match = /\(([^():]+):(\d+):(\d+)\)/.exec(frame);
+    const match = /\((?<file>[^():]+):(?<line>\d+):(?<col>\d+)\)/.exec(frame);
 
     if (match) {
-      const file = lastSegments(match[1], 1) || match[1];
+      const file = lastSegments(match.groups?.file, 1) || match.groups?.file;
 
-      return `${file}:${match[2]}`;
+      return `${file}:${match.groups?.line}`;
     }
 
-    const m2 = /at\s+(\S+):(\d+):(\d+)/.exec(frame);
+    const m2 = /at\s+(?<file>\S+):(?<line>\d+):(?<col>\d+)/.exec(frame);
 
     if (m2) {
-      const file = lastSegments(m2[1], 1) || m2[1];
+      const file = lastSegments(m2.groups?.file, 1) || m2.groups?.file;
 
-      return `${file}:${m2[2]}`;
+      return `${file}:${m2.groups?.line}`;
     }
 
     return "";

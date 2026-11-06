@@ -213,7 +213,7 @@ export function splitExtraModels(raw: unknown): ExtraModelSplit {
  */
 export function isLoopbackBaseUrl(url: string): boolean {
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- types.test.ts 显式传 null（`null as unknown as string`），`?? ""` 是该支唯一防线
-  return /^(https?:\/\/)?(localhost|127\.|\[::1\])/i.test(String(url ?? "").trim());
+  return /^(?:https?:\/\/)?(?:localhost|127\.|\[::1\])/i.test(String(url ?? "").trim());
 }
 
 /** 判定一个「远端条目」是否为误存的本地 ollama。

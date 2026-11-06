@@ -124,7 +124,7 @@ export function filmBgmRoot(root: string = generatedRoot()): string {
  *  去读盘 —— 判成「不是产物地址」。`path.resolve` 会把以 `/` 开头的残留段当绝对路径，
  *  那种位置一定在根外，因此同样落到 `null`。 */
 export function artifactDiskPath(url: string, root: string = generatedRoot()): string | null {
-  const matched = /^\/(?:api\/)?generated\/(.+)$/.exec(url)?.[1];
+  const matched = /^\/(?:api\/)?generated\/(?<matched>.+)$/.exec(url)?.groups?.matched;
   if (matched === undefined) {
     return null;
   }
