@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B4 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/components/ui/button.test.tsx", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/ui/dialog.test.tsx", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/ui/sidebar-auto-collapse.test.tsx", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/ui/status-badge.test.tsx", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/ui/status-dot.test.tsx", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/workshop/script-markdown-utils.ts", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/workshop/ScriptMarkdownEditor.tsx", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/case-token.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/comfy/comfy-embed.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/comfyui/client.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/comfyui/desktop-instance.ts", // 存量 6 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/comfyui/desktop-storage-paths.ts", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/comfyui/error-advice.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/comfyui/executor-finalize.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/comfyui/lifecycle-derive.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/comfyui/localWorkflows.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/comfyui/node-registry.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/comfyui/node-titles.ts", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/comfyui/proc-detect.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/comfyui/raw.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
         "src/lib/comfyui/runner-state.ts", // 存量 6 处 · 清账目标 B4 · 新代码不禁用
         "src/lib/comfyui/status.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
         "src/lib/comfyui/workflow-detail-io.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用

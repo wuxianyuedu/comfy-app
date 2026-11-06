@@ -182,10 +182,10 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
       : undefined;
   let reqW: number | undefined, reqH: number | undefined;
   const sizeStr = typeof taskParams.size === "string" ? taskParams.size : "";
-  const sizeMatch = /(\d+)\s*[x×]\s*(\d+)/i.exec(sizeStr);
+  const sizeMatch = /(?<width>\d+)\s*[x×]\s*(?<height>\d+)/i.exec(sizeStr);
   if (sizeMatch) {
-    reqW = Number(sizeMatch[1]);
-    reqH = Number(sizeMatch[2]);
+    reqW = Number(sizeMatch.groups?.width);
+    reqH = Number(sizeMatch.groups?.height);
   }
   /* 产物地址前缀与磁盘目录同一份布局（`~/lib/media/output-paths`）：这一句
    * 写进 TaskImage.localPath，删除侧要按它把整个目录删掉 —— 两处各拼一遍就

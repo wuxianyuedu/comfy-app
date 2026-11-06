@@ -27,7 +27,7 @@ describe("StatusBadge", () => {
     render(<StatusBadge className="bg-x" status={status} />);
     const cls = badgeClass(status);
     expect(cls).not.toMatch(
-      /\b(bg|text|border)-(?:violet|red|rose|emerald|amber|cyan|sky|fuchsia|purple|green|blue)-\d/,
+      /\b(?:bg|text|border)-(?:violet|red|rose|emerald|amber|cyan|sky|fuchsia|purple|green|blue)-\d/,
     );
   });
 

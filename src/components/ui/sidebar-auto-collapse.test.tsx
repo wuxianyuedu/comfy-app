@@ -29,7 +29,7 @@ beforeEach(() => {
   /* SAFETY: 类型断言已复核 */
   window.matchMedia = ((query: string) => ({
     get matches() {
-      const max = /max-width:\s*(\d+)px/.exec(query)?.[1];
+      const max = /max-width:\s*(?<maxWidth>\d+)px/.exec(query)?.groups?.maxWidth;
       return max === undefined ? false : window.innerWidth <= Number(max);
     },
     media: query,

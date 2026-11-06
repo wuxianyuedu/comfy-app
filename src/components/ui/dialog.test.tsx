@@ -253,9 +253,9 @@ describe("ui/dialog 的宽度写法", () => {
     const popup = await openDialog(user);
 
     expect(popup.className).toContain("max-w-[calc(100%-2rem)]");
-    expect(popup.className).not.toMatch(/(^|\s)sm:max-w-/);
+    expect(popup.className).not.toMatch(/(?:^|\s)sm:max-w-/);
     /* 宽度本体由调用处给；基元只留 `w-full` 这条无变体的默认。 */
-    expect(popup.className).toMatch(/(^|\s)w-full(\s|$)/);
+    expect(popup.className).toMatch(/(?:^|\s)w-full(?:\s|$)/);
   });
 
   it(`popupClassName 落在弹窗本体上（与外层 className 分开，两处各可覆盖）`, async () => {
