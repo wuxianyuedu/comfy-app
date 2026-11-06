@@ -9,6 +9,7 @@ import { useBusyAction } from "~/components/ui/use-busy-action";
 import { runAsyncAction } from "~/lib/async-action";
 import { errorText } from "~/lib/error-message";
 import { readFileAsText } from "~/lib/file-io";
+import { isPlainRecord } from "~/lib/is-record";
 import { fixed } from "~/lib/number-format";
 import type { RouterInputs, RouterOutputs } from "~/trpc/react";
 import { isRawWorkflowJson } from "~/lib/workflow/workflow-format";
@@ -218,14 +219,10 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       //（upscale / inpaint / img2img），建议默认 I2I；否则 T2I。
       try {
         let suggested = "T2I";
-        /* SAFETY: 类型断言已复核 */
-        const obj = parsed as Record<string, unknown>;
-        /* SAFETY: 类型断言已复核 */
-        const nodes = Array.isArray(obj.nodes) ? (obj.nodes as Array<unknown>) : [];
+        const obj: Record<string, unknown> = isPlainRecord(parsed) ? parsed : {};
+        const nodes: Array<unknown> = Array.isArray(obj.nodes) ? obj.nodes : [];
         for (const n of nodes) {
-          const t =
-            /* SAFETY: 类型断言已复核 */
-            typeof n === "object" && n !== null ? (n as { type?: unknown }).type : undefined;
+          const t = isPlainRecord(n) ? n.type : undefined;
           if (typeof t === "string" && /image|upscale|inpaint|edit/i.test(t)) {
             suggested = "I2I";
             break;

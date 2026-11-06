@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/components/studio/workflow-editor/hooks/use-subgraph-source-modal.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-editor/hooks/use-workflow-detail-loader.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-editor/hooks/use-workflow-persistence.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-editor/hooks/use-workflow-save.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-editor/WorkflowEditorCanvas.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-editor/WorkflowEditorInner.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-editor/WorkflowEditorTopbar.test.tsx", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-editor/WorkflowStores.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-editor/WorkflowStores.tsx", // 存量 7 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-form/DynamicWorkflowForm/hooks/use-dynamic-workflow-form.test.ts", // 存量 10 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-form/DynamicWorkflowForm/hooks/use-dynamic-workflow-form.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-form/GroupedControls.compact.test.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-form/StyleSwitcher.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-form/WorkflowWirePortRows.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-io.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-library/CustomNodesSettings/hooks/use-custom-nodes-settings.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-library/CustomNodesSettings/hooks/use-custom-nodes-settings.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-library/CustomNodesSettings/parsing.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-library/hooks/use-workflow-import.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/studio/workflow-library/hooks/use-workflow-library-detail.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/components/studio/workflow-library/sections/EncapsulationTestForm.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/components/studio/workflow-library/workflow-library-detail-config.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/components/studio/workflow-library/workflow-library-param-cards.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用

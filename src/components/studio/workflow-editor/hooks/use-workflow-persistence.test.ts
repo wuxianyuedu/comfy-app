@@ -1,10 +1,14 @@
 import { createElement, type ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 
 import type { WorkflowDetail } from "~/components/studio/workflow-types";
 import { ToastProvider } from "../../ToastProvider";
 import { useWorkflowPersistence } from "./use-workflow-persistence";
+
+type SetDetail = (
+  value: WorkflowDetail | null | ((prev: WorkflowDetail | null) => WorkflowDetail | null),
+) => void;
 
 /* 「重置布局」的回归护栏：快照与当前视图来自**不同的 id 命名空间**时，
  * `Object.keys(positions).length < nodes.length` 这种跨命名空间计数会把完整快照误判
@@ -43,7 +47,7 @@ function renderReset(args: {
   hostNodeId?: string;
   reloadView?: () => void;
 }) {
-  const setDetail = vi.fn();
+  const setDetail = vi.fn<SetDetail>();
   const mutate = vi.fn();
   const fitToContent = args.fitToContent ?? vi.fn();
   const { result, rerender } = renderHook(
@@ -77,12 +81,9 @@ function renderReset(args: {
 }
 
 /** 从 setDetail 的 updater 里取出写回的 positions。 */
-function readWrittenPositions(setDetail: ReturnType<typeof vi.fn>, detail: WorkflowDetail) {
-  /* SAFETY: 类型断言已复核 */
-  const updater = setDetail.mock.calls.at(-1)?.[0] as
-    | ((prev: WorkflowDetail | null) => WorkflowDetail | null)
-    | undefined;
-  if (!updater) {
+function readWrittenPositions(setDetail: Mock<SetDetail>, detail: WorkflowDetail) {
+  const updater = setDetail.mock.calls.at(-1)?.[0];
+  if (typeof updater !== "function") {
     return undefined;
   }
   return updater(detail)?.positions;

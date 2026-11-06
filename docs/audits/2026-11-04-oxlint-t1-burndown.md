@@ -13,7 +13,7 @@
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
 | B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 已清（子批1–12，判决面文件级豁免已整块删除）       |
-| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–8：160 份 / 335 处已清）             |
+| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–9：180 份 / 381 处已清）             |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
@@ -905,26 +905,26 @@
 | `src/components/studio/ViewTabStrip.test.tsx`                                                        | 1        | 已清 |
 | `src/components/studio/WindowControls.tsx`                                                           | 2        | 已清 |
 | `src/components/studio/WindowTitleBar.test.tsx`                                                      | 2        | 已清 |
-| `src/components/studio/workflow-editor/hooks/use-subgraph-source-modal.ts`                           | 2        | 挂账 |
-| `src/components/studio/workflow-editor/hooks/use-workflow-detail-loader.ts`                          | 1        | 挂账 |
-| `src/components/studio/workflow-editor/hooks/use-workflow-persistence.test.ts`                       | 1        | 挂账 |
-| `src/components/studio/workflow-editor/hooks/use-workflow-save.test.ts`                              | 2        | 挂账 |
-| `src/components/studio/workflow-editor/WorkflowEditorCanvas.tsx`                                     | 1        | 挂账 |
-| `src/components/studio/workflow-editor/WorkflowEditorInner.test.tsx`                                 | 1        | 挂账 |
-| `src/components/studio/workflow-editor/WorkflowEditorTopbar.test.tsx`                                | 3        | 挂账 |
-| `src/components/studio/workflow-editor/WorkflowStores.test.ts`                                       | 4        | 挂账 |
-| `src/components/studio/workflow-editor/WorkflowStores.tsx`                                           | 7        | 挂账 |
-| `src/components/studio/workflow-form/DynamicWorkflowForm/hooks/use-dynamic-workflow-form.test.ts`    | 10       | 挂账 |
-| `src/components/studio/workflow-form/DynamicWorkflowForm/hooks/use-dynamic-workflow-form.ts`         | 1        | 挂账 |
-| `src/components/studio/workflow-form/GroupedControls.compact.test.tsx`                               | 2        | 挂账 |
-| `src/components/studio/workflow-form/StyleSwitcher.tsx`                                              | 1        | 挂账 |
-| `src/components/studio/workflow-form/WorkflowWirePortRows.tsx`                                       | 1        | 挂账 |
-| `src/components/studio/workflow-io.ts`                                                               | 2        | 挂账 |
-| `src/components/studio/workflow-library/CustomNodesSettings/hooks/use-custom-nodes-settings.test.ts` | 1        | 挂账 |
-| `src/components/studio/workflow-library/CustomNodesSettings/hooks/use-custom-nodes-settings.ts`      | 3        | 挂账 |
-| `src/components/studio/workflow-library/CustomNodesSettings/parsing.ts`                              | 1        | 挂账 |
-| `src/components/studio/workflow-library/hooks/use-workflow-import.ts`                                | 1        | 挂账 |
-| `src/components/studio/workflow-library/hooks/use-workflow-library-detail.ts`                        | 1        | 挂账 |
+| `src/components/studio/workflow-editor/hooks/use-subgraph-source-modal.ts`                           | 2        | 已清 |
+| `src/components/studio/workflow-editor/hooks/use-workflow-detail-loader.ts`                          | 1        | 已清 |
+| `src/components/studio/workflow-editor/hooks/use-workflow-persistence.test.ts`                       | 1        | 已清 |
+| `src/components/studio/workflow-editor/hooks/use-workflow-save.test.ts`                              | 2        | 已清 |
+| `src/components/studio/workflow-editor/WorkflowEditorCanvas.tsx`                                     | 1        | 已清 |
+| `src/components/studio/workflow-editor/WorkflowEditorInner.test.tsx`                                 | 1        | 已清 |
+| `src/components/studio/workflow-editor/WorkflowEditorTopbar.test.tsx`                                | 3        | 已清 |
+| `src/components/studio/workflow-editor/WorkflowStores.test.ts`                                       | 4        | 已清 |
+| `src/components/studio/workflow-editor/WorkflowStores.tsx`                                           | 7        | 已清 |
+| `src/components/studio/workflow-form/DynamicWorkflowForm/hooks/use-dynamic-workflow-form.test.ts`    | 10       | 已清 |
+| `src/components/studio/workflow-form/DynamicWorkflowForm/hooks/use-dynamic-workflow-form.ts`         | 1        | 已清 |
+| `src/components/studio/workflow-form/GroupedControls.compact.test.tsx`                               | 2        | 已清 |
+| `src/components/studio/workflow-form/StyleSwitcher.tsx`                                              | 1        | 已清 |
+| `src/components/studio/workflow-form/WorkflowWirePortRows.tsx`                                       | 1        | 已清 |
+| `src/components/studio/workflow-io.ts`                                                               | 2        | 已清 |
+| `src/components/studio/workflow-library/CustomNodesSettings/hooks/use-custom-nodes-settings.test.ts` | 1        | 已清 |
+| `src/components/studio/workflow-library/CustomNodesSettings/hooks/use-custom-nodes-settings.ts`      | 3        | 已清 |
+| `src/components/studio/workflow-library/CustomNodesSettings/parsing.ts`                              | 1        | 已清 |
+| `src/components/studio/workflow-library/hooks/use-workflow-import.ts`                                | 1        | 已清 |
+| `src/components/studio/workflow-library/hooks/use-workflow-library-detail.ts`                        | 1        | 已清 |
 | `src/components/studio/workflow-library/sections/EncapsulationTestForm.test.tsx`                     | 1        | 挂账 |
 | `src/components/studio/workflow-library/workflow-library-detail-config.ts`                           | 1        | 挂账 |
 | `src/components/studio/workflow-library/workflow-library-param-cards.test.ts`                        | 1        | 挂账 |

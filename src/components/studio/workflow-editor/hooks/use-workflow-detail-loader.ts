@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { withTimeout } from "~/lib/with-timeout";
+import { isPlainRecord } from "~/lib/is-record";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { WorkflowDetail, WorkflowIOParam } from "~/components/studio/workflow-types";
 
@@ -21,6 +22,11 @@ type CacheEnvelope = {
   d: WorkflowDetail;
   t: number;
 };
+
+/** sessionStorage 缓存的运行期形状：只校验信封的两个字段确实到位。 */
+function isCacheEnvelope(v: unknown): v is CacheEnvelope {
+  return isPlainRecord(v) && typeof v.t === "number" && isPlainRecord(v.d);
+}
 
 /* 缓存 schema 版本后缀。每当 workflow.detailFull / subgraph 响应结构变化时就
  *  提升此后缀，使旧的 sessionStorage 条目失效（每次 fetch 都会 purge 旧命名空间，
@@ -66,8 +72,10 @@ function readCache(key: string): WorkflowDetail | null {
     if (raw === null || raw === "") {
       return null;
     }
-    /* SAFETY: 类型断言已复核 */
-    const obj = JSON.parse(raw) as CacheEnvelope;
+    const obj: unknown = JSON.parse(raw);
+    if (!isCacheEnvelope(obj)) {
+      return null;
+    }
     return Date.now() - obj.t < CACHE_TTL_MS ? obj.d : null;
   } catch {
     return null;

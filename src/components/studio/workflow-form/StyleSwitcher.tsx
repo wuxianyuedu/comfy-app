@@ -6,6 +6,11 @@ import { readStorageJson, writeStorageItem } from "~/lib/browser-storage";
 
 export type GroupStyle = "split" | "preset";
 
+/** 下拉回抛的 `string` → `GroupStyle` 白名单收窄；非法值保持原样（不触发切换）。 */
+function isGroupStyle(value: string): value is GroupStyle {
+  return value === "split" || value === "preset";
+}
+
 const STYLE_PREFIX = "comfyapp:wf-group-style:v1";
 
 export function loadGroupStyle(workflowId: string | undefined, groupId: string): GroupStyle {
@@ -45,8 +50,9 @@ export function StyleSwitcher({
         fullWidth={narrow !== true}
         labels={Object.fromEntries(options.map((option) => [option.value, option.label]))}
         onChange={(value) => {
-          /* SAFETY: 类型断言已复核 */
-          onChange(value as GroupStyle);
+          if (isGroupStyle(value)) {
+            onChange(value);
+          }
         }}
         options={options.map((option) => option.value)}
         value={style}

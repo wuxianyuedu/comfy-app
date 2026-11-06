@@ -21,7 +21,7 @@ vi.mock("../ToastProvider", () => ({
 
 afterEach(cleanup);
 
-const noop = vi.fn();
+const noop = vi.fn<() => void>();
 
 function makeStores(): WFStores {
   return {
@@ -41,17 +41,19 @@ function renderTopBar() {
   return render(
     <WFStoresProvider stores={makeStores()}>
       <WorkflowEditorTopBar
-        /* SAFETY: 类型断言已复核 */
-        detail={
-          {
-            name: "wf",
-            nodes: [],
-            edges: [],
-            notes: [],
-            groups: [],
-            positions: {},
-          } as never
-        }
+        detail={{
+          id: "wf-test",
+          name: "wf",
+          taskType: "txt2img",
+          graph: {},
+          nodes: [],
+          notes: [],
+          groups: [],
+          positions: {},
+          paramMap: {},
+          workflowIO: {},
+          rawNodes: [],
+        }}
         error=""
         fetchDetail={vi.fn(() => Promise.resolve())}
         forceReloadDetail={noop}
@@ -61,10 +63,8 @@ function renderTopBar() {
         resetLayout={noop}
         rootWorkflowName="wf"
         saving={false}
-        /* SAFETY: 类型断言已复核 */
-        setSubgraphStack={noop as never}
-        /* SAFETY: 类型断言已复核 */
-        setViewJsonOpen={noop as never}
+        setSubgraphStack={noop}
+        setViewJsonOpen={noop}
         subgraphStack={[]}
         viewHostNodeId=""
       />

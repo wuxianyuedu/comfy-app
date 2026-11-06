@@ -208,8 +208,7 @@ export function useDynamicWorkflowForm(
       onDragStart: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
         /* 输入框 / 下拉 / 按钮上起手不拖（用户口径：只能从不可编辑区域拖动）
          *  —— preventDefault 直接取消这次拖拽。 */
-        /* SAFETY: 类型断言已复核 */
-        const target = event.target as HTMLElement | null;
+        const target = event.target instanceof HTMLElement ? event.target : null;
         if (target?.closest(DRAG_CANCEL_SELECTOR)) {
           event.preventDefault();
           return;
