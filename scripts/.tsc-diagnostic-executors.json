@@ -5,8 +5,13 @@
     {
       "id": "expect-type-of",
       "name": "类型层断言（expectTypeOf / assertType）的唯一执行者是 tsc",
-      "paths": ["scripts/check-type-assertion-executor.cjs"],
-      "markers": ["expectTypeOf", "tsconfig"],
+      "paths": [
+        "scripts/check-type-assertion-executor.cjs"
+      ],
+      "markers": [
+        "expectTypeOf",
+        "tsconfig"
+      ],
       "reader": "scripts/check-type-assertion-executor.cjs",
       "executor": {
         "kind": "fixed-test",
@@ -20,8 +25,14 @@
     {
       "id": "visual-baseline-freshness",
       "name": "新鲜度账的声明形状（FRESHNESS_TRACKS 的七栏 + 两种「不跑」的理由）",
-      "paths": ["scripts/freshness-ledger.mjs"],
-      "markers": ["FRESHNESS_TRACKS", "freshnessRecord", "trackedBy"],
+      "paths": [
+        "scripts/freshness-ledger.mjs"
+      ],
+      "markers": [
+        "FRESHNESS_TRACKS",
+        "freshnessRecord",
+        "trackedBy"
+      ],
       "reader": "scripts/freshness-gate.mjs",
       "executor": {
         "kind": "fixed-test",
@@ -35,8 +46,13 @@
     {
       "id": "on-demand-duties",
       "name": "按需档 ⇄ 执行者索引的字段形状（机器事实从既有出处现算）",
-      "paths": ["scripts/check-on-demand-duties.cjs"],
-      "markers": ["FRESHNESS_TRACKS", "gate-executor-ledger"],
+      "paths": [
+        "scripts/check-on-demand-duties.cjs"
+      ],
+      "markers": [
+        "FRESHNESS_TRACKS",
+        "gate-executor-ledger"
+      ],
       "reader": "scripts/check-on-demand-duties.cjs",
       "executor": {
         "kind": "fixed-test",
@@ -50,8 +66,13 @@
     {
       "id": "a11y-rule-switch",
       "name": "jsx-a11y 台账的形状（官方 recommended ⇄ 本仓方言 ⇄ 就地豁免）",
-      "paths": ["scripts/check-a11y-rules.cjs"],
-      "markers": ["recommended", "dialect"],
+      "paths": [
+        "scripts/check-a11y-rules.cjs"
+      ],
+      "markers": [
+        "recommended",
+        "dialect"
+      ],
       "reader": "scripts/check-a11y-rules.cjs",
       "executor": {
         "kind": "fixed-test",
@@ -75,8 +96,13 @@
     {
       "id": "gate-repo-boilerplate",
       "name": "门禁自测临时仓库样板（共享件在场）的扫描形状",
-      "paths": ["scripts/check-gate-repo-boilerplate.cjs"],
-      "markers": ["gate-repo", "workdir"],
+      "paths": [
+        "scripts/check-gate-repo-boilerplate.cjs"
+      ],
+      "markers": [
+        "gate-repo",
+        "workdir"
+      ],
       "reader": "scripts/check-gate-repo-boilerplate.cjs",
       "executor": {
         "kind": "fixed-test",
@@ -90,8 +116,14 @@
     {
       "id": "tsc-diagnostic-shape",
       "name": "本判据自己（类型层声明 ⇄ 执行者）的台账形状与地板",
-      "paths": ["scripts/check-tsc-diagnostic-executors.cjs"],
-      "markers": ["MIN_ENTRIES", "declaration-readers", "verifiedSurfaces"],
+      "paths": [
+        "scripts/check-tsc-diagnostic-executors.cjs"
+      ],
+      "markers": [
+        "MIN_ENTRIES",
+        "declaration-readers",
+        "verifiedSurfaces"
+      ],
       "reader": "tests/tsc-diagnostic-executors.test.ts",
       "executor": {
         "kind": "fixed-test",
@@ -105,8 +137,14 @@
     {
       "id": "base-check-recompute",
       "name": "「被门禁拦下先复算 master 基线」的复算口径（五态归属 + 干净快照）",
-      "paths": ["scripts/base-check.mjs"],
-      "markers": ["baseline-red", "inconclusive", "load-flake"],
+      "paths": [
+        "scripts/base-check.mjs"
+      ],
+      "markers": [
+        "baseline-red",
+        "inconclusive",
+        "load-flake"
+      ],
       "reader": "tests/base-check.test.ts",
       "executor": {
         "kind": "fixed-test",
@@ -120,8 +158,12 @@
     {
       "id": "base-check-recompute-verdict",
       "name": "「被门禁拦下先复算 master 基线」的**判决层**（runState 的 did-not-run 一档）",
-      "paths": ["scripts/base-check/verdict.mjs"],
-      "markers": ["did-not-run"],
+      "paths": [
+        "scripts/base-check/verdict.mjs"
+      ],
+      "markers": [
+        "did-not-run"
+      ],
       "reader": "tests/base-check.test.ts",
       "executor": {
         "kind": "fixed-test",
@@ -135,8 +177,13 @@
     {
       "id": "gate-executor-claim",
       "name": "判据自称在跑 / 按需召唤台账的形状",
-      "paths": ["scripts/check-gate-executors.cjs"],
-      "markers": ["EXECUTOR_SOURCES", "onDemand"],
+      "paths": [
+        "scripts/check-gate-executors.cjs"
+      ],
+      "markers": [
+        "EXECUTOR_SOURCES",
+        "onDemand"
+      ],
       "reader": "scripts/check-gate-executors.cjs",
       "executor": {
         "kind": "hook-step",
