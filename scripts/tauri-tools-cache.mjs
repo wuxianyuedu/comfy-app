@@ -28,8 +28,10 @@
  * · `--download`：没有「本机成功打过包」的前提时（GitHub hosted runner 那种即弃机），
  *   从**被钉死的两件公开资产**直接建常驻根镜像：下完先核 sha256 + 字节再落盘，
  *   树的整形照搬 bundler 自己的 `get_and_extract_nsis`（解 zip ⇒ 顶层 `nsis-<版本>/`
- *   改名 `NSIS/` ⇒ dll 落 `Plugins/x86-unicode/additional/`）。传输 / 解压失败 ⇒ 退 2
- *   （没有结论，不静默降级）；哈希对不上 ⇒ 退 1（资产变了 ⇒ 同批改 `NSIS_PLAN`）。
+ *   改名 `NSIS/` ⇒ dll 落 `Plugins/x86-unicode/additional/`）。解 zip 走仓内既有的
+ *   纯 Node `extractZipTo`（`ci-toolchain-browser-fetch.mjs`），不押 Windows 自带 bsdtar ——
+ *   GitHub runner 的 `shell: bash` 是 Git Bash、里面的 `tar` 是 GNU tar、不读 zip（§7.7 同族
+ *   结论）。传输 / 解压失败 ⇒ 退 2（没有结论，不静默降级）；哈希对不上 ⇒ 退 1。
  *   与 `actions/cache` 配套：workflow 把常驻根的镜像目录做成跨跑缓存，miss 那一跑
  *   付一次下载，后面全命中。
  * · 缺省（`ensure`）：必需件已在场 ⇒ 一个字都不动、退 0；不在场而常驻根里有 ⇒ 按清单拷过去
@@ -54,6 +56,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
+import { extractZipTo } from "./ci-toolchain-browser-fetch.mjs";
 import { TOOLS_ROOT_ENV, resolveToolRoot } from "./ci-cache-slot.mjs";
 import { runPnpmSync } from "./launcher-core/shell.mjs";
 
@@ -363,8 +366,9 @@ export function ensure({ cacheDir, toolRoot, toolRootFrom, dryRun, log, plan = N
  * 可信锚点与 `--seed` 同一条：下完先核 sha256 + 字节，核不过就不是那一件，宁可退 1
  * 也不写进常驻根。树的整形照搬 bundler 自己的 `get_and_extract_nsis`：解 zip ⇒ 顶层
  * 目录 `nsis-<版本>/` 改名 `NSIS/` ⇒ dll 落 `Plugins/x86-unicode/additional/`。
- * 解 zip 用 `tar`（bsdtar，Windows 10+ 与 GitHub windows runner 均自带），下载用
- * `curl`（同前）—— 不引第三方依赖，保持 `main()` 的同步形态。
+ * 下载用 `curl`（runner 自带），解 zip 用仓内既有的纯 Node `extractZipTo` —— 不押
+ * `tar` 的平台形态（`shell: bash` 的 Git Bash 里是 GNU tar、不读 zip），也不引第三方依赖，
+ * 保持 `main()` 的同步形态。用例经 `run` 注入假 `curl`/`tar` 的形状一字未改。
  *
  * 退码：传输 / 解压失败 ⇒ **2**（「今天取不到工具」是外部条件，不是判红，但**不静默
  * 降级** —— 让 bundler 去现下就是去撞那条 22–23s 的预算）；哈希 / 树形状与被钉的对不上
@@ -379,6 +383,21 @@ export function download({ mirror, dryRun, log, plan = NSIS_PLAN, run }) {
   const runCmd =
     run ??
     ((cmd, args) => {
+      /* 解 zip 不押外部 `tar`：GitHub runner 的 `shell: bash` 是 Git Bash，`tar` 是 GNU tar、
+       * 对 zip 逐字报「This does not look like a tar archive」（本机可复现，§7.7 同族结论）。
+       * 改用仓内既有、带 zip-slip 防护的纯 Node 实现；`extractZipTo` 解出的顶层目录正是
+       * `nsis-<版本>/`，与下面 `topDir` 的整形逐字对得上。`args` 形状仍是 `tar -xf <zip> -C <dir>`。 */
+      if (cmd === "tar") {
+        const zip = args[args.indexOf("-xf") + 1];
+        const dest = args[args.indexOf("-C") + 1];
+        if (!zip || !dest) {
+          return { status: 2, stdout: "", stderr: `tar 参数形状不对：${args.join(" ")}` };
+        }
+        const failure = extractZipTo(zip, dest);
+        return failure
+          ? { status: 2, stdout: "", stderr: `extractZipTo: ${failure}` }
+          : { status: 0, stdout: "", stderr: "" };
+      }
       const r = spawnSync(cmd, args, { encoding: "utf8", timeout: 300_000 });
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- 子进程起不来时 stdout/stderr 实测为 undefined（@types/node 声明偏窄）
       return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
@@ -399,7 +418,9 @@ export function download({ mirror, dryRun, log, plan = NSIS_PLAN, run }) {
   }
   const zipAsset = plan.assets.zip;
   const dllAsset = plan.assets.dll;
-  log(`[工具缓存] 两件被钉的资产：\n[工具缓存]   zip ${zipAsset.url}\n[工具缓存]   dll ${dllAsset.url}`);
+  log(
+    `[工具缓存] 两件被钉的资产：\n[工具缓存]   zip ${zipAsset.url}\n[工具缓存]   dll ${dllAsset.url}`,
+  );
   if (dryRun) {
     log("[工具缓存] --dry-run：不落盘。");
     return 0;
@@ -496,7 +517,10 @@ export function download({ mirror, dryRun, log, plan = NSIS_PLAN, run }) {
     files,
   };
   try {
-    fs.writeFileSync(path.join(tree, TOOLS_MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}\n`);
+    fs.writeFileSync(
+      path.join(tree, TOOLS_MANIFEST_FILE),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+    );
     /* 整目录改名过去：常驻根里要么是没有这一份，要么是齐全的这一份，没有第三种。 */
     fs.mkdirSync(path.dirname(mirror), { recursive: true });
     fs.renameSync(tree, mirror);
