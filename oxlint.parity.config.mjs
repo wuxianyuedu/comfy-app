@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/lib/agent/executor.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/agent/executor.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/agent/server.test.ts", // 存量 7 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/agent/server.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/api-error.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/app-events.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/app-settings/app-settings.server.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/appearance.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/async-action.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/browser-storage.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfy/comfy-embed.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfy/comfy-liveness-client.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfy/comfy-liveness-client.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfy/comfy-queue-store.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfy/comfy-readiness-client.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfy/comfy-state-client.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfy/comfy-stats-client.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/cli-procs-singleton.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/client.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/client.ts", // 存量 5 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/comfyui/cpu-limit.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/comfyui/custom-nodes-manifest.server.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/comfyui/desktop-instance.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用

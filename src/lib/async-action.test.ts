@@ -97,7 +97,7 @@ describe("runAsyncAction", () => {
   });
 
   it("抛错时走 errorMessage 兜底成可读文案（硬规则 4：失败必须有可见出口）", async () => {
-    const report = vi.fn();
+    const report = vi.fn<(kind: string, detail: string) => void>();
     const r = await runAsyncAction(
       () => {
         throw new Error("ECONNREFUSED");
@@ -105,8 +105,7 @@ describe("runAsyncAction", () => {
       { report, failureText: "保存失败" },
     );
     expect(r.ok).toBe(false);
-    /* SAFETY: 类型断言已复核 */
-    const [kind, detail] = report.mock.calls[0] as [string, string];
+    const [kind, detail] = report.mock.calls[0] ?? ["", ""];
     expect(kind).toBe("err");
     /* `errorMessage` 把网络层原文翻译成人话（`~/lib/error-message`）。 */
     expect(detail).toContain("应用服务");

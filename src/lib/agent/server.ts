@@ -132,31 +132,18 @@ export async function handleAgentChat(req: AgentChatRequest): Promise<AgentChatR
   }
 
   // 指令对象可能是 {reply: ...} / {action: ...} / {done: true, reply: ...}
-  const hasReply = typeof instruction.reply === "string";
-  const hasAction = typeof instruction.action === "string";
   const validNames = new Set(workshopOpenAITools().map((t) => t.function.name));
-  if (hasReply && !hasAction) {
-    return {
-      /* SAFETY: 类型断言已复核 */
-      reply: instruction.reply as string,
-    };
+  if (typeof instruction.reply === "string" && typeof instruction.action !== "string") {
+    return { reply: instruction.reply };
   }
-  /* SAFETY: 类型断言已复核 */
-  if (hasAction && validNames.has(instruction.action as string)) {
+  if (typeof instruction.action === "string" && validNames.has(instruction.action)) {
     return { fallback_instruction: instruction };
   }
-  if (instruction.done === true && hasReply) {
-    return {
-      /* SAFETY: 类型断言已复核 */
-      reply: instruction.reply as string,
-      done: true,
-    };
+  if (instruction.done === true && typeof instruction.reply === "string") {
+    return { reply: instruction.reply, done: true };
   }
-  if (hasReply) {
-    return {
-      /* SAFETY: 类型断言已复核 */
-      reply: instruction.reply as string,
-    };
+  if (typeof instruction.reply === "string") {
+    return { reply: instruction.reply };
   }
   return {
     reply: content.trim() || "我已收到你的请求，但暂时无法处理。",

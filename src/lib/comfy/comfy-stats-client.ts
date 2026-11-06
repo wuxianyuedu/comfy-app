@@ -4,6 +4,8 @@
  * BrowserStatusBar 只关心「读到的 stats 与是否在线」。
  */
 
+import { isRecord } from "~/lib/is-record";
+
 export type ComfyStatsPayload = {
   gpuName?: string;
   online: boolean;
@@ -19,6 +21,25 @@ export type ComfyStatsPayload = {
   vramTotal: number;
   vramUsed: number;
 };
+
+/** 响应体形状收窄：必填字段逐项判型，可选字段出现时也判型。 */
+function isComfyStatsPayload(value: unknown): value is ComfyStatsPayload {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    typeof value.online === "boolean" &&
+    typeof value.ramTotal === "number" &&
+    typeof value.ramUsed === "number" &&
+    typeof value.vramFree === "number" &&
+    typeof value.vramTotal === "number" &&
+    typeof value.vramUsed === "number" &&
+    (value.gpuName === undefined || typeof value.gpuName === "string") &&
+    (value.processAlive === undefined || typeof value.processAlive === "boolean") &&
+    (value.smiVramTotal === undefined || typeof value.smiVramTotal === "number") &&
+    (value.smiVramUsed === undefined || typeof value.smiVramUsed === "number")
+  );
+}
 
 /** 拉取一次系统指标；请求失败（路由不可达等）也返回 online:false 便于降级。 */
 export async function fetchComfyStats(): Promise<ComfyStatsPayload> {
@@ -40,8 +61,11 @@ export async function fetchComfyStats(): Promise<ComfyStatsPayload> {
         ramTotal: 0,
       };
     }
-    /* SAFETY: 类型断言已复核 */
-    return (await res.json()) as ComfyStatsPayload;
+    const raw: unknown = await res.json();
+    if (!isComfyStatsPayload(raw)) {
+      throw new Error("comfy stats payload 形状不合法");
+    }
+    return raw;
   } catch {
     return {
       online: false,

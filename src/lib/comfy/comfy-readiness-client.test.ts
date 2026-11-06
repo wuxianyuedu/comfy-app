@@ -2,13 +2,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readComfyErrorMessage, waitForComfyReady } from "./comfy-readiness-client";
 
-function jsonRes(status: number, body: unknown): Response {
-  /* SAFETY: 类型断言已复核 */
+/** 可重复读的响应替身：用例里的同一个对象可能被多拍复用。 */
+type JsonResponse = {
+  json: () => Promise<unknown>;
+  ok: boolean;
+  status: number;
+};
+
+function jsonRes(status: number, body: unknown): JsonResponse {
   return {
     ok: status >= 200 && status < 300,
     status,
-    json: () => body,
-  } as unknown as Response;
+    json: () => Promise.resolve(body),
+  };
 }
 
 afterEach(() => {
