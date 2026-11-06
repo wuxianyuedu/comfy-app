@@ -6,6 +6,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { SetStateAction } from "react";
 
 import { ShotStudio } from "./ShotStudio";
 import {
@@ -110,8 +111,11 @@ type RenderOptions = {
   workflowId?: string;
 };
 
+/** `onShotsChange` 的签名：可收镜头数组或函数式补丁（React 状态 setter）。 */
+type ShotsSetter = (value: SetStateAction<Array<Shot>>) => void;
+
 function renderStudio(options: RenderOptions = {}) {
-  const onShotsChange = vi.fn();
+  const onShotsChange = vi.fn<ShotsSetter>();
   const onNotice = vi.fn();
   const onCancelShot = vi.fn();
   const utils = render(
@@ -133,11 +137,26 @@ function renderStudio(options: RenderOptions = {}) {
   return { onShotsChange, onNotice, onCancelShot, ...utils };
 }
 
+/** 从一条 onShotsChange 调用里取出函数式补丁并应用一次。 */
+function patchedShotOf(call: Parameters<ShotsSetter>): Shot {
+  const updater = call[0];
+  if (typeof updater !== "function") {
+    throw new Error("onShotsChange 首参不是函数式更新");
+  }
+  const patched = updater([makeShot()])[0];
+  if (patched === undefined) {
+    throw new Error("onShotsChange 的补丁没有返回镜头");
+  }
+  return patched;
+}
+
 /** onShotsChange 是函数式补丁：把它折叠成「最终一条 patch 里的镜头列表」。 */
-function lastPatchedShot(mock: { mock: { calls: Array<Array<unknown>> } }): Shot {
-  /* SAFETY: 类型断言已复核 */
-  const last = mock.mock.calls.at(-1)![0] as (prev: Array<Shot>) => Array<Shot>;
-  return last([makeShot()])[0]!;
+function lastPatchedShot(mock: { mock: { calls: Array<Parameters<ShotsSetter>> } }): Shot {
+  const lastCall = mock.mock.calls.at(-1);
+  if (lastCall === undefined) {
+    throw new Error("onShotsChange 未被调用");
+  }
+  return patchedShotOf(lastCall);
 }
 
 beforeEach(() => {
@@ -239,10 +258,9 @@ describe("ShotStudio 生图出口", () => {
     await user.click(screen.getByRole("button", { name: "生成此镜头" }));
     await expect.poll(() => onShotsChange).toHaveBeenCalled();
     /* watchShot 的产物回写经 onShotsChange 的函数式补丁发生 */
-    const calls = vi.mocked(onShotsChange).mock.calls;
+    const calls = onShotsChange.mock.calls;
     const wroteImage = calls.some((call) => {
-      /* SAFETY: 类型断言已复核 */
-      const patch = (call[0] as (prev: Array<Shot>) => Array<Shot>)([makeShot()])[0]!;
+      const patch = patchedShotOf(call);
       return patch.imageUrl === "/api/generated/1.png";
     });
     expect(wroteImage).toBe(true);

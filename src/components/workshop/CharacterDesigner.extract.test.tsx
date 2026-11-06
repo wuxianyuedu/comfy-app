@@ -52,7 +52,7 @@ afterEach(() => {
 
 describe("CharacterDesigner 提取后回写角色列表", () => {
   it("模型通道提取成功后将并入的角色写入 onCharactersChange", async () => {
-    const onCharactersChange = vi.fn();
+    const onCharactersChange = vi.fn<(c: Array<Character>) => void>();
     render(
       <CharacterDesigner
         characters={[]}
@@ -72,11 +72,10 @@ describe("CharacterDesigner 提取后回写角色列表", () => {
        给不出区分。 */
     await expect.poll(() => onCharactersChange.mock.calls.length).toBe(1);
 
-    /* SAFETY: 类型断言已复核 */
-    const listArg = onCharactersChange.mock.calls[0]?.[0] as Array<Character> | undefined;
+    const listArg = onCharactersChange.mock.calls[0]?.[0];
     expect(listArg).toBeDefined();
     const first = listArg?.[0];
     expect(first).toBeDefined();
-    expect(first!.name).toBe("小满");
+    expect(first?.name).toBe("小满");
   });
 });
