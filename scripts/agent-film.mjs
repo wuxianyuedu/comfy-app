@@ -82,9 +82,7 @@ export function parseArgs(argv) {
       }
       case "--approval": {
         const v = next();
-        opts.approval = ["auto", "stage", "shot"].includes(v)
-          ? /** @type {Approval} */ (v)
-          : "auto";
+        opts.approval = v === "auto" || v === "stage" || v === "shot" ? v : "auto";
         break;
       }
       case "--auto-review": {
@@ -170,12 +168,12 @@ export function buildStatusCall(opts) {
 
 /** 从 superjson 的 tRPC 回包里取 .result.data.json（无信封原样返回）。 @param {unknown} payload @returns {RunSnapshot} */
 export function parseSuperjsonEnvelope(payload) {
-  const obj = /** @type {{ result?: { data?: { json?: RunSnapshot } } } | null | undefined } */ (
-    payload
-  );
+  const obj = typeof payload === "object" && payload !== null ? payload : undefined;
   // `payload` 是 fetch 回来 JSON.parse 的运行时值：缺 `result` / 缺 `data` 都正常。
-  const data = obj?.result?.data;
-  if (data && typeof data === "object" && "json" in data) {
+  const result = obj && "result" in obj ? obj.result : undefined;
+  const data =
+    typeof result === "object" && result !== null && "data" in result ? result.data : undefined;
+  if (typeof data === "object" && data !== null && "json" in data) {
     return data.json;
   }
   // 这里刻意保留 ||：`data` 与 `payload` 都可能是假值（含空串 / 0），一律兜成空快照。

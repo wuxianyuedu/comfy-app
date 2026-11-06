@@ -40,6 +40,11 @@ import { APP_ORIGIN_ENV_KEYS, parseOverride } from "./app-origin-reader.ts";
  * 读不到（没跑过工作台的新检出）就用入库的缺省值 —— 那是常态，不是错误。
  * 这也正是本文件与 `preview.tsx` 都不 import 那份生成件的原因（ISSUE #1409）。
  */
+/** `JSON.parse` 的产物收窄成「非数组的普通对象」—— 文件内容是不可信输入。 */
+function isPlainRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
 function readAppOriginEnv(): Record<string, string> {
   /* ESM 里没有 `__dirname`（Storybook 用 import 加载本文件），按 `import.meta.url`
      定位 —— 生成件与本文件同在 `.storybook/` 下。 */
@@ -47,8 +52,10 @@ function readAppOriginEnv(): Record<string, string> {
   const file = path.join(here, "generated", "app-origin.json");
   let parsed = null;
   try {
-    /* SAFETY: 类型断言已复核 */
-    const raw = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
+    const raw: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!isPlainRecord(raw)) {
+      throw new Error("app-origin.json 不是对象");
+    }
     parsed = parseOverride({
       APP_DEV_PORT: raw[APP_ORIGIN_ENV_KEYS.APP_DEV_PORT] ?? raw.APP_DEV_PORT,
       APP_DEV_ORIGIN: raw[APP_ORIGIN_ENV_KEYS.APP_DEV_ORIGIN] ?? raw.APP_DEV_ORIGIN,

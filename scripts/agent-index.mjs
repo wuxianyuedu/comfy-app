@@ -41,6 +41,11 @@ import path from "node:path";
 const ROOT = path.resolve(import.meta.dirname, "..");
 const TAG = "[agent:index]";
 
+/** @param {unknown} v @returns {v is Record<string, unknown>} */
+function isRecord(v) {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
 /** 两个工具各自的「装在哪、索引在哪、MCP 那一面怎么起」——报缺席时一并给出口。 */
 const TOOLS = {
   codegraph: {
@@ -69,22 +74,27 @@ const TOOLS = {
 export function runTool(cmd, args) {
   /** `stdout` / `stderr` 实测在 ENOENT 时是 `undefined`（`@types/node` 按 `encoding`
    *  声明成 `string`）⇒ 这里按实测形状声明，下面两处 `?? ""` 是给运行时兜的。 */
-  const res = /** @type {{ status: number | null, stdout?: string, stderr?: string,
-   *   error?: {code?: string} }} */ (
+  const res =
     process.platform === "win32"
       ? spawnSync("cmd.exe", ["/d", "/s", "/c", cmd, ...args], {
           cwd: ROOT,
           encoding: "utf8",
         })
-      : spawnSync(cmd, args, { cwd: ROOT, encoding: "utf8" })
-  );
+      : spawnSync(cmd, args, { cwd: ROOT, encoding: "utf8" });
   const stdout = res.stdout ?? "";
   const stderr = res.stderr ?? "";
   /* 「命令不在」有两种形状：POSIX 的 spawn ENOENT，与 cmd.exe 回显的
    * 「'x' is not recognized …」。两种都是**没取到读数**，不是「没就绪」。
    * `SpawnSyncReturns.error` 的静态类型是 `Error`，`code` 只在运行期由 libuv 挂上来。 */
+  const errorCode =
+    typeof res.error === "object" &&
+    res.error !== null &&
+    "code" in res.error &&
+    typeof res.error.code === "string"
+      ? res.error.code
+      : undefined;
   const missing =
-    res.error?.code === "ENOENT" ||
+    errorCode === "ENOENT" ||
     (process.platform === "win32" &&
       /is not recognized as an internal or external command/i.test(stderr));
   return {
@@ -143,10 +153,7 @@ export function probeCodegraph(run = runTool) {
   } catch {
     /* 不是 JSON ⇒ parsed 保持 undefined，下面按「取不到读数」处理。 */
   }
-  const data =
-    typeof parsed === "object" && parsed !== null
-      ? /** @type {Record<string, unknown>} */ (parsed)
-      : null;
+  const data = isRecord(parsed) ? parsed : null;
   if (res.code !== 0 || !data || typeof data.initialized !== "boolean") {
     return {
       id: "codegraph",
@@ -231,15 +238,12 @@ const VERDICT_CODE = { ready: 0, "not-ready": 1, unknown: 2 };
  * @returns {string[]}
  */
 export function renderProbe(probe) {
-  const tool = TOOLS[/** @type {"codegraph" | "zg"} */ (probe.id)];
+  const tool = probe.id === "codegraph" ? TOOLS.codegraph : TOOLS.zg;
   const lines = [];
   lines.push(`${TAG} ${probe.id}：${VERDICT_LABEL[probe.verdict]}`);
   if (probe.id === "codegraph" && probe.data) {
     const d = probe.data;
-    const index =
-      typeof d.index === "object" && d.index !== null
-        ? /** @type {Record<string, unknown>} */ (d.index)
-        : {};
+    const index = isRecord(d.index) ? d.index : {};
     lines.push(
       `   · 版本 ${show(d.version)} · 索引目录 ${show(d.indexPath)}`,
       `   · 上次建索引 ${show(d.lastIndexed, "（还没建过）")}`,

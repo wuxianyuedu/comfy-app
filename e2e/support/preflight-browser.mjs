@@ -16,6 +16,15 @@ export const BROWSER_INSTALL_HINT = "pnpm exec playwright install chromium chrom
  */
 
 /**
+ * catch 变量是 `unknown`：统一收成 `Error`，让返回值形状保持 `{ok:false, error: Error}`。
+ * @param {unknown} error
+ * @returns {Error}
+ */
+function toError(error) {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+/**
  * 「起一次浏览器」的默认实现 —— 真起、真关。`launch` 抽成参数是为了两个方向都能被真跑：
  * 缺件那一侧在**任何**机器上都能用「喂一个会抛的 launch」复核。
  * @returns {Promise<{ok: true} | {ok: false, error: Error}>}
@@ -27,7 +36,7 @@ async function defaultLaunch() {
     await browser.close();
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: /** @type {Error} */ (error) };
+    return { ok: false, error: toError(error) };
   }
 }
 
@@ -56,7 +65,7 @@ export async function checkBrowserReady(options = {}) {
   } catch (error) {
     /* 注入的 launch 直接抛（而不是回 `{ok:false}`）：与「起不来」是同一件事的
      * 两种写法，都收进 missing 那一档。 */
-    result = { ok: false, error: /** @type {Error} */ (error) };
+    result = { ok: false, error: toError(error) };
   }
   if (result.ok) {
     return { verdict: "ready" };

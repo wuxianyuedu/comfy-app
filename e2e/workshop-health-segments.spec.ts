@@ -19,8 +19,10 @@ type SegmentOnScreen = {
 async function readSegments(barRoots: Locator): Promise<Array<SegmentOnScreen>> {
   return await barRoots.evaluateAll((nodes) =>
     nodes.map((node) => {
-      /* SAFETY: 类型断言已复核 */
-      const root = node as HTMLElement;
+      if (!(node instanceof HTMLElement)) {
+        throw new Error("分段条的子节点不是 HTML 元素");
+      }
+      const root = node;
       const label = root.querySelector("span");
       const fill = root.querySelector<HTMLElement>('[data-slot="progress-bar-fill"]');
       const raw = root.getAttribute("aria-valuenow");

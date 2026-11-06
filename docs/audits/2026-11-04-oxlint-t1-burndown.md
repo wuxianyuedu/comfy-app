@@ -13,7 +13,7 @@
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
 | B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 已清（子批1–12，判决面文件级豁免已整块删除）       |
-| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 挂账中                                             |
+| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1：20 份 / 49 处已清）                 |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
@@ -745,26 +745,26 @@
 
 | 文件                                                                                                 | 存量处数 | 状态 |
 | ---------------------------------------------------------------------------------------------------- | -------- | ---- |
-| `.storybook/flow-canvas.tsx`                                                                         | 1        | 挂账 |
-| `.storybook/main.ts`                                                                                 | 1        | 挂账 |
-| `.storybook/message-center-sources.tsx`                                                              | 2        | 挂账 |
-| `.storybook/screen-frame.tsx`                                                                        | 1        | 挂账 |
-| `.storybook/store-sources.tsx`                                                                       | 1        | 挂账 |
-| `.storybook/workflow-run-sources.tsx`                                                                | 1        | 挂账 |
-| `e2e/critical-flows.spec.ts`                                                                         | 8        | 挂账 |
-| `e2e/main-journey.spec.ts`                                                                           | 12       | 挂账 |
-| `e2e/project-context-refresh.spec.ts`                                                                | 1        | 挂账 |
-| `e2e/smoke.spec.ts`                                                                                  | 1        | 挂账 |
-| `e2e/support/fake-comfyui-endpoint.mjs`                                                              | 4        | 挂账 |
-| `e2e/support/preflight-browser.mjs`                                                                  | 2        | 挂账 |
-| `e2e/support/runtime-budget.ts`                                                                      | 2        | 挂账 |
-| `e2e/theme-token-consumers.spec.ts`                                                                  | 1        | 挂账 |
-| `e2e/view-container.spec.ts`                                                                         | 2        | 挂账 |
-| `e2e/workshop-health-segments.spec.ts`                                                               | 1        | 挂账 |
-| `scripts/affected-launch-retry-scope.mjs`                                                            | 1        | 挂账 |
-| `scripts/affected-launch-scope-advice.mjs`                                                           | 1        | 挂账 |
-| `scripts/agent-film.mjs`                                                                             | 2        | 挂账 |
-| `scripts/agent-index.mjs`                                                                            | 4        | 挂账 |
+| `.storybook/flow-canvas.tsx`                                                                         | 1        | 已清 |
+| `.storybook/main.ts`                                                                                 | 1        | 已清 |
+| `.storybook/message-center-sources.tsx`                                                              | 2        | 已清 |
+| `.storybook/screen-frame.tsx`                                                                        | 1        | 已清 |
+| `.storybook/store-sources.tsx`                                                                       | 1        | 已清 |
+| `.storybook/workflow-run-sources.tsx`                                                                | 1        | 已清 |
+| `e2e/critical-flows.spec.ts`                                                                         | 8        | 已清 |
+| `e2e/main-journey.spec.ts`                                                                           | 12       | 已清 |
+| `e2e/project-context-refresh.spec.ts`                                                                | 1        | 已清 |
+| `e2e/smoke.spec.ts`                                                                                  | 1        | 已清 |
+| `e2e/support/fake-comfyui-endpoint.mjs`                                                              | 4        | 已清 |
+| `e2e/support/preflight-browser.mjs`                                                                  | 2        | 已清 |
+| `e2e/support/runtime-budget.ts`                                                                      | 2        | 已清 |
+| `e2e/theme-token-consumers.spec.ts`                                                                  | 1        | 已清 |
+| `e2e/view-container.spec.ts`                                                                         | 2        | 已清 |
+| `e2e/workshop-health-segments.spec.ts`                                                               | 1        | 已清 |
+| `scripts/affected-launch-retry-scope.mjs`                                                            | 1        | 已清 |
+| `scripts/affected-launch-scope-advice.mjs`                                                           | 1        | 已清 |
+| `scripts/agent-film.mjs`                                                                             | 2        | 已清 |
+| `scripts/agent-index.mjs`                                                                            | 4        | 已清 |
 | `scripts/check-ci-yaml-parse.mjs`                                                                    | 1        | 挂账 |
 | `scripts/check-daily-attendance.mjs`                                                                 | 1        | 挂账 |
 | `scripts/check-eslint-exemptions.cjs`                                                                | 2        | 挂账 |

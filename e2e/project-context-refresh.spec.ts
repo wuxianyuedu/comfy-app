@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { isRecord } from "../src/lib/is-record";
 import { expectHomeReady } from "./support/home-anchors";
 
 /**
@@ -11,14 +12,7 @@ import { expectHomeReady } from "./support/home-anchors";
 /* 项目内的六个视图 —— 与 `projectTabs()` 的标签逐字对齐。
  * 名字写死是有意的：它们就是用户看见的那六个词，改标签等于改用户可见行为。 */
 /* SAFETY: 类型断言已复核 */
-const PROJECT_VIEWS = [
-  "主页",
-  "画布",
-  "工坊",
-  "资源库",
-  "产出",
-  "成片",
-] as const;
+const PROJECT_VIEWS = ["主页", "画布", "工坊", "资源库", "产出", "成片"] as const;
 
 /* 五个全局项 —— 用来证明「菜单里本来只有这些」，好让多出来的六个有对照。 */
 /* SAFETY: 类型断言已复核 */
@@ -108,10 +102,13 @@ test.describe("新建项目后的上下文在刷新后仍成立 @critical", () =
     }));
     expect(stored.active).not.toBeNull();
     /* 那一行不能被当成空草稿清掉 —— 它是用户刚建的、正开着的项目。 */
-    /* SAFETY: 类型断言已复核 */
-    const projects = JSON.parse(stored.index ?? "[]") as Array<{
-      id: string;
-    }>;
-    expect(projects.map((project) => project.id)).toContain(stored.active);
+    const parsed: unknown = JSON.parse(stored.index ?? "[]");
+    const ids = Array.isArray(parsed)
+      ? parsed
+          .filter(isRecord)
+          .map((project) => project.id)
+          .filter((id): id is string => typeof id === "string")
+      : [];
+    expect(ids).toContain(stored.active);
   });
 });
