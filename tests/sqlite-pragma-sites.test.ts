@@ -17,6 +17,7 @@ import {
   SQLITE_BUSY_TIMEOUT_MS,
   SQLITE_PRAGMAS,
   applySqlitePragmas,
+  gateProxyWithPragmas,
 } from "../src/lib/sqlite-pragmas";
 import { SQLITE_PRAGMA_BOOT } from "../src/lib/retry-policy";
 
@@ -123,9 +124,14 @@ describe("库级 PRAGMA 清单只有一份定义", () => {
        另外两处的读数一起藏起来（§11.18）。 */
     for (const rel of TS_SITES) {
       const src = code(rel);
-      /* 出口是 `applySqlitePragmas`（清单 + 撞锁重试都在它里面，ISSUE #1282）：
+      /* 共用出口有两个形态，但都住在 `~/lib/sqlite-pragmas`、都走同一份清单与
+       * #1282 撞锁重试：宿主在 async 函数里直接 `await applySqlitePragmas`；
+       * Next 两处为避开顶层 await（见下一条用例）走 `gateProxyWithPragmas`。
        * 三处站点要的是同一件事，各写一遍循环就必然漏一处。 */
-      expect.soft(src, `${rel} 必须 import 共用出口`).toContain("applySqlitePragmas");
+      expect
+        .soft(src, `${rel} 必须走 sqlite-pragmas 的共用出口`)
+        .toMatch(/applySqlitePragmas|gateProxyWithPragmas/);
+      expect.soft(src, `${rel} 不许各写一份 proxy gate`).not.toContain("await pragmasReady");
       expect
         .soft(src, `${rel} 不该再自己遍历清单`)
         .not.toContain("for (const pragma of SQLITE_PRAGMAS)");
@@ -135,6 +141,25 @@ describe("库级 PRAGMA 清单只有一份定义", () => {
       expect
         .soft(src, `${rel} 不该再硬编码 foreign_keys`)
         .not.toContain('"PRAGMA foreign_keys = ON"');
+    }
+  });
+
+  it("Next 两处 db 模块不许顶层 await —— async module 会让 class extends 拿到 undefined 基类", () => {
+    /* ISSUE #3252：db.ts 顶层的 `await applySqlitePragmas(...)` 让 Turbopack 把
+     * 整个 db → repository-base 链编成 async module。`repository-base` 是所有
+     * `class X extends DrizzleRepository` 的基类，async module 下子类的 extends
+     * 会抢在基类 e.s 导出注册之前求值 ⇒ `Class extends value undefined`
+     * （instrumentation hook 加载 film/repository 图时必现，webServer 起不来）。
+     * 形状判：模块顶层出现 `await applySqlitePragmas` 即回潮。委托给共用出口
+     * `gateProxyWithPragmas`（在 proxy 回调里 gate 那条 promise）是唯一正解。 */
+    for (const rel of ["src/server/db.ts", "src/server/workshop/db.ts"]) {
+      const src = code(rel);
+      expect(src, `${rel} 不许顶层 await PRAGMA 初始化`).not.toMatch(
+        /^\s*await\s+applySqlitePragmas\s*\(/m,
+      );
+      expect(src, `${rel} 必须走 gateProxyWithPragmas 守住同步模块`).toContain(
+        "gateProxyWithPragmas",
+      );
     }
   });
 
@@ -160,6 +185,61 @@ describe("库级 PRAGMA 清单只有一份定义", () => {
      * 建表撞上还在跑的宿主时「等一等」比「启动失败」好，而这个进程此刻不服务界面。
      * node:sqlite 是单连接，那里 PRAGMA 就是正确形状（不需要 timeout 选项）。 */
     expect(src).toContain(`"PRAGMA busy_timeout = 2000"`);
+  });
+});
+
+/**
+ * `gateProxyWithPragmas` 的行为量具（ISSUE #3252）：它存在的唯一理由是让 db 模块
+ * **同步**导出（Turbopack 不再把它编成 async module），同时仍保证 PRAGMA 在首次
+ * 查询前就位。这里用假 handle 把那两件事当场量出来，不碰真库、不赌时机。
+ */
+describe("gateProxyWithPragmas：同步导出 + 查询前 PRAGMA 就位", () => {
+  it("调用同步返回 RemoteCallback，PRAGMA 已排上但不阻塞模块求值", () => {
+    const executed: string[] = [];
+    const proxy = gateProxyWithPragmas({
+      execute: (sql: string) => {
+        executed.push(sql);
+      },
+      proxy: () => Promise.resolve({ rows: [] }),
+    });
+    /* 关键形状：返回的是函数而不是 Promise —— 顶层 await 已撤，db 模块同步导出。 */
+    expect(typeof proxy).toBe("function");
+    expect(proxy).not.toBeInstanceOf(Promise);
+  });
+
+  it("首次查询会等 PRAGMA 应用完，且查询落到原 proxy", async () => {
+    let pragmaDone = false;
+    const calls: string[] = [];
+    const proxy = gateProxyWithPragmas({
+      execute: () => {
+        /* 模拟 PRAGMA 是异步完成的一段工作：查询必须排在它之后。 */
+        return Promise.resolve().then(() => {
+          pragmaDone = true;
+        });
+      },
+      proxy: (sql) => {
+        calls.push(sql);
+        return Promise.resolve({ rows: [[pragmaDone]] });
+      },
+    });
+    const result = await proxy("select 1", [], "all");
+    expect(pragmaDone).toBe(true);
+    expect(calls).toEqual(["select 1"]);
+    expect(result.rows[0]).toEqual([true]);
+  });
+
+  it("PRAGMA 真失败时不产生 unhandledRejection，且在查询处如实抛出", async () => {
+    const boom = new Error("read-only mount");
+    const proxy = gateProxyWithPragmas({
+      execute: () => {
+        throw boom;
+      },
+      proxy: () => Promise.resolve({ rows: [] }),
+    });
+    /* 先让一个微任务轮次过去：若 ready 的 rejection 没被标记处理，Node 会在这里
+     * 报 unhandledRejection（本用例自身会挂）。gate 里的 catch 就是为这一格。 */
+    await Promise.resolve();
+    await expect(proxy("select 1", [], "all")).rejects.toBe(boom);
   });
 });
 
