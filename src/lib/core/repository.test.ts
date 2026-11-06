@@ -1585,7 +1585,7 @@ describe("RemoteModelRepository", () => {
 describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事务里落定", () => {
   const head = (s: string) => (s.trim().split(/\s+/)[0] ?? "").toLowerCase();
   /** 只认「往 llmConfig 写」那两条；同一张表上那条 select 是 read-modify-write 的读。 */
-  const llmConfigWrite = (sql: string) => /^(insert into|update)\s+"llmconfig"/i.test(sql);
+  const llmConfigWrite = (sql: string) => /^(?:insert into|update)\s+"llmconfig"/i.test(sql);
   const remoteModelInsert = (sql: string) => /^insert into "remotemodel"/i.test(sql);
 
   /** 起态：库里已有一份单例配置与两条远端模型 —— 回滚的断言要有对照物。 */

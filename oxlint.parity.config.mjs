@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B4 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/lib/comfyui/runner-state.ts", // 存量 6 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/comfyui/status.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/comfyui/workflow-detail-io.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/console/console-guard.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/console/console-run.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/core/repository.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/drizzle-studio/lifecycle.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/envfile.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/layout-budget.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/llm/parse.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/llm/types.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/llm/usage-test-config.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/log/log-ansi.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/log/log-cli-json.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/log/log-run-packs.ts", // 存量 7 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/log/runtime-log-file.ts", // 存量 15 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/markdown/styles.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/media/media-kind.ts", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/media/output-paths.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/lib/media/size-presets.ts", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
         "src/lib/process/executable-resolve.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
         "src/lib/shell/reveal-path.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
         "src/lib/workflow/workflow-exposed-params.ts", // 存量 7 处 · 清账目标 B4 · 新代码不禁用

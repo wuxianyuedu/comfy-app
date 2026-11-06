@@ -58,10 +58,12 @@ function stamp(at: Date): string {
 }
 
 /** 名字里的时刻段（紧凑日期 + 时分秒）。 */
-const STAMP_RE = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/;
+const STAMP_RE =
+  /^(?<year>\d{4})(?<month>\d{2})(?<day>\d{2})-(?<hour>\d{2})(?<minute>\d{2})(?<second>\d{2})$/;
 
 /** 名字形态：`<来源>-<时刻>[-<第几次>].log`。 */
-const FILE_RE = /^([a-z0-9-]+?)-(\d{4}\d{2}\d{2}-\d{2}\d{2}\d{2})(?:-(\d+))?\.log$/;
+const FILE_RE =
+  /^(?<source>[a-z0-9-]+?)-(?<stamp>\d{4}\d{2}\d{2}-\d{2}\d{2}\d{2})(?:-(?<seq>\d+))?\.log$/;
 
 /**
  * 一次启动的文件名：`<source>-<YYYYMMDD-HHmmss>.log`。
@@ -94,23 +96,23 @@ export type RuntimeLogFileName = {
  */
 export function parseRuntimeLogFileName(name: string): RuntimeLogFileName | null {
   const m = FILE_RE.exec(name);
-  if (!m) {
+  if (!m?.groups) {
     return null;
   }
-  const [, source, stampText, ordinalText] = m;
+  const { seq: ordinalText, source, stamp: stampText } = m.groups;
   const sm = STAMP_RE.exec(stampText ?? "");
   /* 捕获组要求至少一个字符，source 不会是空串 */
-  if (source === undefined || !sm) {
+  if (source === undefined || !sm?.groups) {
     return null;
   }
-  const [, y, mo, d, h, mi, s] = sm;
+  const { day, hour, minute, month, second, year } = sm.groups;
   const startedAt = new Date(
-    Number(y),
-    Number(mo) - 1,
-    Number(d),
-    Number(h),
-    Number(mi),
-    Number(s),
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
   ).getTime();
   /* 序号捕获组要么缺省要么非空数字串 */
   const ordinal = ordinalText === undefined ? 1 : Number(ordinalText);
@@ -133,7 +135,8 @@ export function parseRuntimeLogFileName(name: string): RuntimeLogFileName | null
 export const LAUNCH_STAMP_ENV = "COMFYAPP_LAUNCH_STAMP";
 
 /** 名字戳的形态判据（与 {@link runtimeLogFileName} 产出的那一段同形）。 */
-const LAUNCH_STAMP_RE = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/;
+const LAUNCH_STAMP_RE =
+  /^(?<year>\d{4})(?<month>\d{2})(?<day>\d{2})-(?<hour>\d{2})(?<minute>\d{2})(?<second>\d{2})$/;
 
 /**
  * 环境变量里的名字戳 → 可喂给 {@link runtimeLogFileName} 的 `Date`；读不出给 null。
@@ -148,12 +151,19 @@ const LAUNCH_STAMP_RE = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/;
  */
 export function parseLaunchStamp(value: string | undefined): Date | null {
   /* 空串同样匹配不上时间戳正则，与 undefined 同归 null 出口 */
-  const m = value === undefined ? null : LAUNCH_STAMP_RE.exec(value);
+  const m = value === undefined ? null : LAUNCH_STAMP_RE.exec(value)?.groups;
   if (!m) {
     return null;
   }
-  const [, y, mo, d, h, mi, s] = m;
-  const at = new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s));
+  const { day, hour, minute, month, second, year } = m;
+  const at = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+  );
   return Number.isFinite(at.getTime()) ? at : null;
 }
 

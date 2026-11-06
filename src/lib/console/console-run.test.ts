@@ -149,9 +149,9 @@ describe("createConsoleRunner", () => {
         if (event.type !== "out") {
           return;
         }
-        const m = /GRANDCHILD=(\d+)/.exec(event.text);
+        const m = /GRANDCHILD=(?<pid>\d+)/.exec(event.text);
         if (m) {
-          grandchildPid = Number(m[1]);
+          grandchildPid = Number(m.groups?.pid);
         }
       },
     );

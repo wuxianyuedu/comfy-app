@@ -89,12 +89,12 @@ export type WorkflowIOEnrichParams = {
 
 /** 从 "16:9 (Widescreen)" / "16:9" 抽宽高比；抽不出返回 null。 */
 function optionRatio(label: string): number | null {
-  const m = /(\d+(?:\.\d+)?)\s*[:x×]\s*(\d+(?:\.\d+)?)/.exec(label);
+  const m = /(?<width>\d+(?:\.\d+)?)\s*[:x×]\s*(?<height>\d+(?:\.\d+)?)/.exec(label);
   if (!m) {
     return null;
   }
-  const w = Number(m[1]);
-  const h = Number(m[2]);
+  const w = Number(m.groups?.width);
+  const h = Number(m.groups?.height);
   if (!Number.isFinite(w) || !Number.isFinite(h) || h === 0) {
     return null;
   }

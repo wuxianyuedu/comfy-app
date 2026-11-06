@@ -181,7 +181,8 @@ export function looksLikeImage(value: string): boolean {
     return false;
   }
   return (
-    /^data:image\//i.test(v) || /^(https?:\/\/).+\.(png|jpe?g|webp|gif|avif|bmp)([?#].*)?$/i.test(v)
+    /^data:image\//i.test(v) ||
+    /^(?:https?:\/\/).+\.(?:png|jpe?g|webp|gif|avif|bmp)(?:[?#].*)?$/i.test(v)
   );
 }
 
@@ -233,9 +234,9 @@ export function usageTestDraftKey(kind: string, name: string): string {
 export function mediaExtensionFromUrl(url: string, fallback: "png" | "mp4"): string {
   const u = url.trim();
   if (u.startsWith("data:image/")) {
-    const m = /^data:image\/([a-zA-Z0-9.+-]+)/.exec(u);
-    if (m?.[1] !== undefined) {
-      const ext = m[1].toLowerCase().replace("jpeg", "jpg").replace("svg+xml", "svg");
+    const m = /^data:image\/(?<ext>[a-zA-Z0-9.+-]+)/.exec(u);
+    if (m?.groups?.ext !== undefined) {
+      const ext = m.groups.ext.toLowerCase().replace("jpeg", "jpg").replace("svg+xml", "svg");
       if (/^[a-z0-9]{1,8}$/.test(ext)) {
         return ext;
       }

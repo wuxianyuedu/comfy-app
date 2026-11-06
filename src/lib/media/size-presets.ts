@@ -402,11 +402,11 @@ export const CLARITY_SUBGROUP_LABELS: Record<ClarityKind, string> = {
  *  常用档位 —— 界面上的步进器与外部 JSON 都能给出 2.5 这样的值。解析不出返回
  *  null（`"1k"` / `""` / 乱串），由调用方决定怎么回退。 */
 export function parseMegapixelLabel(label: string): number | null {
-  const match = /^(\d+(?:\.\d+)?)\s*M$/i.exec(label.trim());
+  const match = /^(?<value>\d+(?:\.\d+)?)\s*M$/i.exec(label.trim());
   if (!match) {
     return null;
   }
-  const value = Number(match[1]);
+  const value = Number(match.groups?.value);
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
@@ -691,12 +691,12 @@ export function parseSizeText(text: unknown): SizeDims | null {
   if (typeof text !== "string" || !text.trim()) {
     return null;
   }
-  const match = /^(\d+)\s*[xX×]\s*(\d+)$/.exec(text.trim());
+  const match = /^(?<width>\d+)\s*[xX×]\s*(?<height>\d+)$/.exec(text.trim());
   if (!match) {
     return null;
   }
-  const width = Number(match[1]);
-  const height = Number(match[2]);
+  const width = Number(match.groups?.width);
+  const height = Number(match.groups?.height);
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
     return null;
   }
@@ -776,12 +776,12 @@ export function aspectLabelForDims(
 
 /** 从自由文本里解出宽高比（`"16:9 (Widescreen)"` → 16/9）；解不出返回 null。 */
 export function parseRatioFromText(text: string): number | null {
-  const match = /(\d+(?:\.\d+)?)\s*[:x×]\s*(\d+(?:\.\d+)?)/.exec(text);
+  const match = /(?<width>\d+(?:\.\d+)?)\s*[:x×]\s*(?<height>\d+(?:\.\d+)?)/.exec(text);
   if (!match) {
     return null;
   }
-  const w = Number(match[1]);
-  const h = Number(match[2]);
+  const w = Number(match.groups?.width);
+  const h = Number(match.groups?.height);
   if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
     return null;
   }
