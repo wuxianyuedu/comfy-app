@@ -21,9 +21,9 @@ export function normalizeMarkdown(source: string): string {
     if (raw === undefined) {
       break;
     }
-    const fenceMatch = /^ {0,3}(`{3,}|~{3,})/.exec(raw);
+    const fenceMatch = /^ {0,3}(?<fence>`{3,}|~{3,})/.exec(raw);
     if (fenceMatch) {
-      const markerStr = fenceMatch.at(1) ?? "";
+      const markerStr = fenceMatch.groups?.fence ?? "";
       const marker = [...markerStr.trim()][0] ?? "";
       if (!inFence) {
         inFence = true;
@@ -70,11 +70,11 @@ export function buildOutline(value: string): Array<OutlineItem> {
   const items: Array<OutlineItem> = [];
   const lines = value.split("\n");
   lines.forEach((line, index) => {
-    const match = /^(#{1,3})\s+(.+)$/.exec(line);
+    const match = /^(?<hashes>#{1,3})\s+(?<text>.+)$/.exec(line);
     if (match) {
       items.push({
-        level: (match.at(1) ?? "").length,
-        text: (match.at(2) ?? "").trim(),
+        level: (match.groups?.hashes ?? "").length,
+        text: (match.groups?.text ?? "").trim(),
         line: index,
       });
     }

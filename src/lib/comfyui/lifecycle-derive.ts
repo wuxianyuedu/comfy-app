@@ -151,8 +151,8 @@ export function isKeepAliveDead(missCount: number): boolean {
 
 /** 进程秒退时从输出里提取缺失依赖的可行动报错。 */
 export function extractMissingModule(outputLines: Array<string>): string | null {
-  const m = /No module named '([^']+)'/.exec(outputLines.join("\n"));
-  return m?.[1] ?? null;
+  const m = /No module named '(?<module>[^']+)'/.exec(outputLines.join("\n"));
+  return m?.groups?.module ?? null;
 }
 
 /**

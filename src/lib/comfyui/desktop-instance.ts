@@ -120,11 +120,11 @@ function deepFindById(node: unknown, id: string, depth = 0): Record<string, unkn
 function toArgList(launchArgs: unknown): Array<string> {
   if (typeof launchArgs === "string") {
     // 支持双引号包裹含空格的路径。
-    const re = /"([^"]*)"|(\S+)/g;
+    const re = /"(?<quoted>[^"]*)"|(?<bare>\S+)/g;
     const out: Array<string> = [];
     let m: RegExpExecArray | null;
     while ((m = re.exec(launchArgs))) {
-      out.push(m[1] ?? m[2] ?? "");
+      out.push(m.groups?.quoted ?? m.groups?.bare ?? "");
     }
     return out;
   }
@@ -187,9 +187,9 @@ export function launchArgsToHeadless(raw: unknown): DesktopLaunchArgs {
       }
       continue;
     }
-    const eq = /^--port=(.+)$/.exec(lower) ?? /^-p=(.+)$/.exec(lower);
+    const eq = /^--port=(?<port>.+)$/.exec(lower) ?? /^-p=(?<port>.+)$/.exec(lower);
     if (eq) {
-      const n = Number.parseInt(eq[1] ?? "", 10);
+      const n = Number.parseInt(eq.groups?.port ?? "", 10);
       if (!Number.isNaN(n)) {
         port = n;
       }
@@ -288,10 +288,10 @@ export async function resolveDesktopLaunchArgs(
 /** 把空格分隔的 extraArgs 切成参数数组（支持双引号包裹含空格的路径）。 */
 export function splitArgTokens(s: string): Array<string> {
   const out: Array<string> = [];
-  const re = /"([^"]*)"|(\S+)/g;
+  const re = /"(?<quoted>[^"]*)"|(?<bare>\S+)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(s))) {
-    out.push(m[1] ?? m[2] ?? "");
+    out.push(m.groups?.quoted ?? m.groups?.bare ?? "");
   }
   return out;
 }

@@ -69,11 +69,11 @@ export function frameAncestorsAllows(csp: string | null, hostOrigin: string): bo
   if (csp === null || csp === "") {
     return null;
   }
-  const directive = /frame-ancestors([^;]*)/i.exec(csp);
+  const directive = /frame-ancestors(?<sources>[^;]*)/i.exec(csp);
   if (!directive) {
     return null;
   }
-  const sources = directive[1]!.trim().split(/\s+/).filter(Boolean);
+  const sources = (directive.groups?.sources ?? "").trim().split(/\s+/).filter(Boolean);
   if (sources.length === 0) {
     return null;
   }

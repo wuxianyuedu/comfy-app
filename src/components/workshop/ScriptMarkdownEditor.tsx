@@ -213,7 +213,7 @@ export function ScriptMarkdownEditor({
     const transformed = lines
       .map((line, index) => {
         const marker = ordered ? `${index + 1}.` : "-";
-        return `${marker} ${line.replace(/^(\d+\.|-)\s+/, "")}`;
+        return `${marker} ${line.replace(/^(?:\d+\.|-)\s+/, "")}`;
       })
       .join("\n");
     const nextValue = value.slice(0, lineStart) + transformed + value.slice(lineEnd);
