@@ -4,8 +4,7 @@ import { motionPromptSuffix } from "~/components/workshop/FinalComposer";
 
 /** 镜头时长(秒) → 视频帧数(WAN 工作流常用 4-6 秒窗口)。 */
 export function framesFor(shot: Shot, fps: number): number {
-  const seconds =
-    typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 5;
+  const seconds = typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 5;
   return clampInt(seconds * fps, 9, 121);
 }
 

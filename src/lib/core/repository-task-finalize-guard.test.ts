@@ -41,9 +41,7 @@ function statusOf(id: string): string {
 describe("taskRepository.updateProgress —— 只在非终态行生效", () => {
   it("RUNNING 行：写入进度并返回 true", async () => {
     seedTask(tdb, { id: "t-run", userId: "u1", status: "RUNNING" });
-    await expect(taskRepository.updateProgress("t-run", 42)).resolves.toBe(
-      true,
-    );
+    await expect(taskRepository.updateProgress("t-run", 42)).resolves.toBe(true);
     const row = tdb.$tables.tasks.find((t) => t.id === "t-run")!;
     expect(row.progress).toBe(42);
     expect(row.status).toBe("RUNNING");
@@ -53,9 +51,7 @@ describe("taskRepository.updateProgress —— 只在非终态行生效", () => 
     "%s 行：进度回写被丢弃，状态不被改回 RUNNING",
     async (terminal) => {
       seedTask(tdb, { id: "t-done", userId: "u1", status: terminal });
-      await expect(taskRepository.updateProgress("t-done", 99)).resolves.toBe(
-        false,
-      );
+      await expect(taskRepository.updateProgress("t-done", 99)).resolves.toBe(false);
       const row = tdb.$tables.tasks.find((t) => t.id === "t-done")!;
       expect(row.status).toBe(terminal);
       expect(row.progress).not.toBe(99);
@@ -63,18 +59,14 @@ describe("taskRepository.updateProgress —— 只在非终态行生效", () => 
   );
 
   it("行不存在：返回 false（不抛错，调用方按「不归我」处理）", async () => {
-    await expect(taskRepository.updateProgress("nope", 10)).resolves.toBe(
-      false,
-    );
+    await expect(taskRepository.updateProgress("nope", 10)).resolves.toBe(false);
   });
 });
 
 describe("taskRepository.markRunning —— 只在非终态行生效", () => {
   it("QUEUED 行：写下 promptId 并标 RUNNING，返回 true", async () => {
     seedTask(tdb, { id: "t-q", userId: "u1", status: "QUEUED" });
-    await expect(taskRepository.markRunning("t-q", "pid-1")).resolves.toBe(
-      true,
-    );
+    await expect(taskRepository.markRunning("t-q", "pid-1")).resolves.toBe(true);
     const row = tdb.$tables.tasks.find((t) => t.id === "t-q")!;
     expect(row.status).toBe("RUNNING");
     expect(row.promptId).toBe("pid-1");
@@ -84,13 +76,9 @@ describe("taskRepository.markRunning —— 只在非终态行生效", () => {
     "%s 行：promptId 回传被丢弃 —— reaper 已判孤儿就不再复活它",
     async (terminal) => {
       seedTask(tdb, { id: "t-done", userId: "u1", status: terminal });
-      await expect(taskRepository.markRunning("t-done", "pid-9")).resolves.toBe(
-        false,
-      );
+      await expect(taskRepository.markRunning("t-done", "pid-9")).resolves.toBe(false);
       expect(statusOf("t-done")).toBe(terminal);
-      expect(
-        tdb.$tables.tasks.find((t) => t.id === "t-done")!.promptId,
-      ).toBeFalsy();
+      expect(tdb.$tables.tasks.find((t) => t.id === "t-done")!.promptId).toBeFalsy();
     },
   );
 });

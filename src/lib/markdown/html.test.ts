@@ -9,38 +9,26 @@
 import { describe, expect, it } from "vitest";
 
 import { sanitizeHtml } from "./html";
-import {
-  FORBIDDEN_ATTRS,
-  FORBIDDEN_TAGS,
-  isAllowedUrl,
-} from "./sanitize-config";
+import { FORBIDDEN_ATTRS, FORBIDDEN_TAGS, isAllowedUrl } from "./sanitize-config";
 
 /* 这一组直接打**消毒那一步**，不经过 markdown 解析 —— 因为它的成立不能依赖上游
  * 「先转义过」。`render.test.ts` 用真实 markdown 走端到端，这里补充「原料就是一段
  * 恶意 HTML」时会发生什么。 */
 describe("sanitizeHtml", () => {
   it("保留白名单内的标签与属性", () => {
-    const html = sanitizeHtml(
-      '<h2>H</h2><p><a href="https://e.com" rel="noreferrer">x</a></p>',
-    );
+    const html = sanitizeHtml('<h2>H</h2><p><a href="https://e.com" rel="noreferrer">x</a></p>');
     expect(html).toContain("<h2>H</h2>");
     expect(html).toContain('href="https://e.com"');
   });
 
   it("剥掉外壳危险 / 已废弃的标签（保留其可见文本）", () => {
     expect(sanitizeHtml("<object data=x>y</object>")).not.toContain("<object");
-    expect(sanitizeHtml('<iframe src="https://x">y</iframe>')).not.toContain(
-      "<iframe",
-    );
-    expect(sanitizeHtml("<template><b>x</b></template>")).not.toContain(
-      "<template",
-    );
+    expect(sanitizeHtml('<iframe src="https://x">y</iframe>')).not.toContain("<iframe");
+    expect(sanitizeHtml("<template><b>x</b></template>")).not.toContain("<template");
   });
 
   it("剥掉事件处理器", () => {
-    const html = sanitizeHtml(
-      '<a href="https://e.com" onclick="alert(1)">x</a>',
-    );
+    const html = sanitizeHtml('<a href="https://e.com" onclick="alert(1)">x</a>');
     expect(html).not.toContain("onclick");
     expect(html).toContain('href="https://e.com"');
   });
@@ -50,16 +38,11 @@ describe("sanitizeHtml", () => {
      * 所以这里按**清单本身**遍历，而不是另抄一份「坏的标签」列表。 */
     for (const tag of FORBIDDEN_TAGS) {
       const html = sanitizeHtml(`<${tag}></${tag}>`);
-      expect(html.toLowerCase(), `FORBIDDEN_TAGS 未生效：${tag}`).not.toContain(
-        `<${tag}`,
-      );
+      expect(html.toLowerCase(), `FORBIDDEN_TAGS 未生效：${tag}`).not.toContain(`<${tag}`);
     }
     for (const attr of FORBIDDEN_ATTRS) {
       const html = sanitizeHtml(`<a ${attr}="x" href="https://e.com">y</a>`);
-      expect(
-        html.toLowerCase(),
-        `FORBIDDEN_ATTRS 未生效：${attr}`,
-      ).not.toContain(`${attr}=`);
+      expect(html.toLowerCase(), `FORBIDDEN_ATTRS 未生效：${attr}`).not.toContain(`${attr}=`);
     }
   });
 });
@@ -110,9 +93,7 @@ describe("无 DOM 宿主时的错误出口", () => {
     delete globalThis.window;
     try {
       const fresh = await import("./html");
-      expect(() => fresh.sanitizeHtml("<p>x</p>")).toThrowError(
-        /DOMPurify 需要 DOM 宿主/,
-      );
+      expect(() => fresh.sanitizeHtml("<p>x</p>")).toThrowError(/DOMPurify 需要 DOM 宿主/);
     } finally {
       globalThis.window = savedWindow;
       vi.resetModules();
