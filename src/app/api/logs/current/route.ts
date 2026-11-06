@@ -1,6 +1,7 @@
 import { clamp } from "~/lib/clamp";
 import { NextResponse } from "next/server";
 import { apiErrorBody } from "~/lib/api-error";
+import { isRecord } from "~/lib/is-record";
 import fs from "node:fs";
 import { latestPanelLogFile } from "~/lib/log/capture-streams.server";
 import { resolveSessionStart } from "~/lib/log/log-session-scope";
@@ -17,6 +18,10 @@ import { latestRuntimeLogFile } from "~/lib/log/runtime-log-pack.server";
 
 const LAUNCHER_LOG_FILE = LAUNCHER_SHELL_LOG;
 const SENTINEL_FILE = DEV_LAUNCHER_CURRENT_SENTINEL;
+
+function isRuntimeLogSource(v: unknown): v is RuntimeLogSource {
+  return typeof v === "string" && RUNTIME_LOG_SOURCES.some((source) => source === v);
+}
 
 /* 壳侧启动链路的两份日志（壳自持 log/shell/shell.log + 壳侧编排链路
  * log/launcher/shell-launch.log）。路径的唯一事实来源是 `launchPaths`——
@@ -40,8 +45,7 @@ async function sizeOrNull(file: string): Promise<number | null> {
     const stat = await fs.promises.stat(/*turbopackIgnore: true*/ file);
     return stat.size;
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (isRecord(error) && error.code === "ENOENT") {
       return null;
     }
     throw error;
@@ -198,10 +202,8 @@ async function resolveSourceFile(
   /* 四份 runtime 日志（comfyui / drizzle-studio / ollama / app-runtime）现在是**一次启动一份文件**（ISSUE #1326），这里取「最新那一份」
    * 跟随正在写的那一份。`resumable: false`：一个文件只属于一次启动，没有跨运行累积的历史行要裁 —— 会话起点对本族消失
    *（此前拿 `dev-launcher.log` 的 mtime 当起点，锚点比真实启动时刻晚，会把启动早期的行误判成历史，见 §4.1 的四审）。 */
-  /* SAFETY: 类型断言已复核 */
-  if ((RUNTIME_LOG_SOURCES as ReadonlyArray<string>).includes(source)) {
-    /* SAFETY: 类型断言已复核 */
-    const latest = await latestRuntimeLogFile(source as RuntimeLogSource);
+  if (isRuntimeLogSource(source)) {
+    const latest = await latestRuntimeLogFile(source);
     return latest ? { file: latest.file, resumable: false } : { file: "", resumable: false };
   }
   /* 「应用服务输出」：Next dev server 的 stdout/stderr 转录（本次进程一份）。 */

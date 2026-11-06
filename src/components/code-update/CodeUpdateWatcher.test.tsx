@@ -49,8 +49,9 @@ describe("CodeUpdateWatcher", () => {
 
     // toast：标题 + 概要，并明确告知「完整步骤在消息中心」
     expect(toastInfo).toHaveBeenCalledTimes(1);
-    /* SAFETY: 类型断言已复核 */
-    const [title, summary] = toastInfo.mock.calls[0]! as [string, string];
+    const callArgs: unknown = toastInfo.mock.calls[0];
+    const title = Array.isArray(callArgs) && typeof callArgs[0] === "string" ? callArgs[0] : "";
+    const summary = Array.isArray(callArgs) && typeof callArgs[1] === "string" ? callArgs[1] : "";
     expect(title).toContain("重载");
     expect(summary).toContain("消息中心");
 

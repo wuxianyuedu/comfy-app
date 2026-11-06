@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/app/api/llm/route.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/logs/app-runtime/route.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/logs/current/route.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/logs/current/route.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/logs/diagnostics/route.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/logs/export/route.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/logs/history/route.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/logs/list/route.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/logs/sessions/route.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/logs/sessions/route.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/materials/route.test.ts", // 存量 7 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/materials/route.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/production/route.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/schema/push/route.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/schema/route.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/api/upload/route.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/agent-run/RunControlBar.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/code-update/CodeUpdateWatcher.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/message-center/message-center-store-persistence.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/message-center/message-center-store.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
         "src/components/settings/SettingsShell.stories.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/components/settings/SettingsShell.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/components/settings/use-section-scroll-spy.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用

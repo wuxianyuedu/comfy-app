@@ -9,6 +9,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { hasPython, runPython } from "../../../../../tests/helpers/python-exe";
+import { isPlainRecord } from "~/lib/is-record";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "log-diag-"));
 /** 日志根（`<项目根>/log`）—— 与真实布局同形，`LOG_ROOT` 指的就是它。 */
@@ -55,6 +56,23 @@ print("\\n".join(sorted(z.namelist())))
     .filter(Boolean);
 }
 
+type DiagnosticsPayload = {
+  bytes: number | null;
+  ok: boolean;
+  path: string;
+  relativePath: string;
+};
+
+function isDiagnosticsPayload(v: unknown): v is DiagnosticsPayload {
+  return (
+    isPlainRecord(v) &&
+    (v.bytes === null || typeof v.bytes === "number") &&
+    typeof v.ok === "boolean" &&
+    typeof v.path === "string" &&
+    typeof v.relativePath === "string"
+  );
+}
+
 beforeEach(() => {
   authed = true;
   fs.rmSync(tmp, { recursive: true, force: true });
@@ -83,13 +101,10 @@ describe("/api/logs/diagnostics", () => {
   it.skipIf(!PYTHON_OK)("打出能解开的 zip，含本次 current/ 与历史 runs/", async () => {
     const res = await POST();
     expect(res.status).toBe(200);
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as {
-      bytes: number | null;
-      ok: boolean;
-      path: string;
-      relativePath: string;
-    };
+    const data: unknown = await res.json();
+    if (!isDiagnosticsPayload(data)) {
+      throw new Error(`诊断包响应形状不符：${JSON.stringify(data)}`);
+    }
     expect(data.ok).toBe(true);
     expect(data.path.startsWith(path.join(logRoot, "exports"))).toBe(true);
     expect(data.relativePath.startsWith("exports/")).toBe(true);

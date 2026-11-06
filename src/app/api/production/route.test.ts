@@ -5,6 +5,9 @@
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+import { NextRequest } from "next/server";
+import { isPlainRecord } from "~/lib/is-record";
+
 vi.mock("~/server/db", async () => {
   const { createTestDb } = await import("../../../../tests/helpers/test-db");
   return { db: createTestDb() };
@@ -30,11 +33,9 @@ beforeEach(() => {
 });
 
 function putRequest(body: unknown) {
-  /* SAFETY: 类型断言已复核 */
-  return {
-    nextUrl: new URL("http://localhost/api/production"),
-    json: () => body,
-  } as never;
+  const req = new NextRequest("http://localhost/api/production", { method: "PUT" });
+  req.json = () => Promise.resolve(body);
+  return req;
 }
 
 describe("PUT /api/production", () => {
@@ -79,8 +80,7 @@ function getRequest(project: string | null) {
   if (project !== null && project !== "") {
     url.searchParams.set("project", project);
   }
-  /* SAFETY: 类型断言已复核 */
-  return { nextUrl: url } as never;
+  return new NextRequest(url);
 }
 
 describe("GET /api/production", () => {
@@ -109,11 +109,15 @@ describe("GET /api/production", () => {
     });
     const res = await GET(getRequest("proj_1"));
     expect(res.status).toBe(200);
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as {
-      exists: boolean;
-      production: { shots: unknown; title: string };
-    };
+    const body: unknown = await res.json();
+    if (
+      !isPlainRecord(body) ||
+      typeof body.exists !== "boolean" ||
+      !isPlainRecord(body.production) ||
+      typeof body.production.title !== "string"
+    ) {
+      throw new Error(`生产数据响应形状不符：${JSON.stringify(body)}`);
+    }
     expect(body.exists).toBe(true);
     expect(body.production.title).toBe("我的短剧");
     expect(body.production.shots).toEqual([{ id: "s1" }]);

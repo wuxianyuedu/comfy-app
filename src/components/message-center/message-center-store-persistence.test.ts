@@ -6,6 +6,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { isPlainRecord } from "~/lib/is-record";
 import { MESSAGE_CENTER_STORAGE_KEY, useMessageCenterStore } from "./message-center-store";
 
 /** 造一条可用的持久化记录（字段与 `MessageRecord` 一致）。 */
@@ -19,6 +20,21 @@ function record(overrides: Record<string, unknown> = {}) {
     read: true,
     ...overrides,
   };
+}
+
+type StoredMessage = ReturnType<typeof record>;
+
+/** 落盘记录的形状校验：解析出来的 JSON 是 `unknown`，类型对得上才当记录读。 */
+function isStoredMessage(v: unknown): v is StoredMessage {
+  return (
+    isPlainRecord(v) &&
+    typeof v.id === "string" &&
+    typeof v.kind === "string" &&
+    typeof v.title === "string" &&
+    typeof v.body === "string" &&
+    typeof v.time === "number" &&
+    typeof v.read === "boolean"
+  );
 }
 
 function stored(): unknown {
@@ -45,8 +61,8 @@ describe("消息中心持久化：写", () => {
     useMessageCenterStore
       .getState()
       .push({ kind: "offline", title: "应用服务已断开", body: "正文" });
-    /* SAFETY: 类型断言已复核 */
-    const list = stored() as Array<ReturnType<typeof record>>;
+    const raw = stored();
+    const list = Array.isArray(raw) ? raw.filter(isStoredMessage) : [];
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({
       kind: "offline",

@@ -7,6 +7,7 @@ import {
   type LLMMessage,
   type LLMRequestOptions,
   type LLMProviderType,
+  type LLMTool,
   type TaskType,
 } from "~/lib/llm/types";
 import { isRecord } from "~/lib/is-record";
@@ -15,6 +16,49 @@ import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const PROVIDER_TYPES: ReadonlyArray<LLMProviderType> = ["local", "remote"];
+
+function isLLMProviderType(v: unknown): v is LLMProviderType {
+  return typeof v === "string" && PROVIDER_TYPES.some((provider) => provider === v);
+}
+
+function isTaskType(v: unknown): v is TaskType {
+  return typeof v === "string" && v in TASK_TYPES;
+}
+
+type LLMToolCallList = NonNullable<LLMMessage["tool_calls"]>;
+type LLMToolCallEntry = LLMToolCallList[number];
+
+function isLLMToolCall(v: unknown): v is LLMToolCallEntry {
+  return (
+    isRecord(v) &&
+    v.type === "function" &&
+    typeof v.id === "string" &&
+    isRecord(v.function) &&
+    typeof v.function.arguments === "string" &&
+    typeof v.function.name === "string"
+  );
+}
+
+function isLLMToolCallList(v: unknown): v is LLMToolCallList {
+  return Array.isArray(v) && v.every(isLLMToolCall);
+}
+
+function isLLMTool(v: unknown): v is LLMTool {
+  return (
+    isRecord(v) &&
+    v.type === "function" &&
+    isRecord(v.function) &&
+    typeof v.function.name === "string" &&
+    typeof v.function.description === "string" &&
+    (v.function.parameters === undefined || isRecord(v.function.parameters))
+  );
+}
+
+function isLLMToolArray(v: unknown): v is Array<LLMTool> {
+  return Array.isArray(v) && v.every(isLLMTool);
+}
 
 const BodySchema = {
   parse(body: unknown): {
@@ -28,14 +72,11 @@ const BodySchema = {
     }
     const rawMessages: Array<unknown> = rec.messages;
     const messages: Array<LLMMessage> = rawMessages.map((m: unknown) => {
-      // 逐元素断言为最小形状;null/undefined 元素在属性访问处抛 TypeError → 400,与原 any 版一致。
-      /* SAFETY: 类型断言已复核 */
-      const entry = m as {
-        content?: unknown;
-        role?: unknown;
-        tool_call_id?: unknown;
-        tool_calls?: unknown;
-      };
+      // 逐元素窄化;null/undefined 元素直接抛 TypeError → 400,与原 any 版一致。
+      if (m === null || m === undefined) {
+        throw new TypeError("消息元素不能为 null/undefined");
+      }
+      const entry: Record<string, unknown> = isRecord(m) ? m : {};
       // 用 unknown 局部变量承接 `??` 结果,避免 String() 落在真值窄化后的 `{}` 类型上。
       const rawContent: unknown = entry.content ?? "";
       const role =
@@ -48,9 +89,8 @@ const BodySchema = {
               : "system";
       const base: LLMMessage = { role, content: String(rawContent) };
       // 透传 tool_calls（assistant 消息带）与 tool_call_id（tool 消息带）
-      if (role === "assistant" && Array.isArray(entry.tool_calls)) {
-        /* SAFETY: 类型断言已复核 */
-        base.tool_calls = entry.tool_calls as LLMMessage["tool_calls"];
+      if (role === "assistant" && isLLMToolCallList(entry.tool_calls)) {
+        base.tool_calls = entry.tool_calls;
       }
       if (role === "tool" && typeof entry.tool_call_id === "string") {
         base.tool_call_id = entry.tool_call_id;
@@ -58,12 +98,9 @@ const BodySchema = {
       return base;
     });
     const opts: LLMRequestOptions = {};
-    // 原 `as any` 透传:非 "local"/"remote" 的值继续透传给 getLLMConfig(按非 remote 处理),
-    // 加守卫反而会改变该退化行为,这里只恢复静态类型。
-    const hasProvider = Boolean(rec.provider);
-    if (hasProvider) {
-      /* SAFETY: 类型断言已复核 */
-      opts.provider = rec.provider as LLMProviderType;
+    // 只接受白名单内的 provider；非法值不进入 opts，下游按「非 remote 即本地」处理。
+    if (isLLMProviderType(rec.provider)) {
+      opts.provider = rec.provider;
     }
     const hasModel = Boolean(rec.model);
     if (hasModel) {
@@ -76,13 +113,11 @@ const BodySchema = {
     if (typeof rec.maxTokens === "number") {
       opts.maxTokens = rec.maxTokens;
     }
-    if (typeof rec.taskType === "string" && rec.taskType in TASK_TYPES) {
-      /* SAFETY: 类型断言已复核 */
-      opts.taskType = rec.taskType as TaskType;
+    if (isTaskType(rec.taskType)) {
+      opts.taskType = rec.taskType;
     }
-    if (Array.isArray(rec.tools)) {
-      /* SAFETY: 类型断言已复核 */
-      opts.tools = rec.tools as NonNullable<typeof opts.tools>;
+    if (isLLMToolArray(rec.tools)) {
+      opts.tools = rec.tools;
     }
     return { messages, stream: rec.stream === true, opts };
   },
