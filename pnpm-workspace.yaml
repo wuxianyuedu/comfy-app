@@ -97,7 +97,9 @@ overrides:
   #     的**另一条**（host 大小写归一不一致，`>=3.0.0 <3.1.8`）的 patched 提到 3.1.8，
   #     于是 3.1.7 反而落回受影响区间。**override 的版本号是会被新 advisory 追上的**，
   #     这正是 §13.5.9 那条「按 advisory 记账、不按版本记账」的现实理由（ISSUE #1623）。
-  'fast-uri@3': '3.1.8'
+  #     3.1.8 → 3.1.9（ISSUE #3267）：同一个库又出了四条（scheme 伪冒 / host 归一 /
+  #     首段冒号注入 / 相对路径等价），patched 一律 `>=3.1.9` —— 第三次被追上。
+  'fast-uri@3': '3.1.9'
   #   · undici 7.29.0 → 7.29.1（`shadcn > @dotenvx/dotenvx > undici`）
   #     7.29.1 → 7.30.1（ISSUE #2989）：advisory 库后补的四条（DoS via 未处理的
   #     content-encodings 错误、跨源重定向的缓存投毒、Agent 丢掉 tls 选项导致的证书校验
@@ -115,7 +117,8 @@ overrides:
   #   · webpack-dev-middleware 6.x → 7.4.5（`@storybook/nextjs >
   #     @storybook/builder-webpack5 > webpack-dev-middleware`，advisory #1240027：
   #     `publicPath` 不以 `/` 结尾时的路径穿越）。
-  #     本块里唯一一条**跨 major**：Storybook 10.6.1 把自己的 range 钉在 6.x，
+  #     本块里第一条**跨 major**（ISSUE #3267 之后又多了两条）：Storybook 10.6.1
+  #     把自己的 range 钉在 6.x，
   #     不动到这条就消不掉，而 audit 判据给出的两条出路里「登记进基线」被明确排除
   #     （棘轮的后门）。代价面只有组件工作台的 dev server（`pnpm storybook`）——
   #     本地预览用、不对外提供服务。**验证走它真正干活的那一面**，不是「装得上」：
@@ -160,11 +163,15 @@ overrides:
   #     · ip-address 10.7.0 → 10.7.1（`express-rate-limit > ip-address` 与 `socks > ip-address`，
   #       两条 advisory 同一修复版：`isInSubnet()` 的地址比较、`Address6` 的诊断串构造成本）。
   #       两条路径都在 `shadcn > @modelcontextprotocol/sdk` 那一支（按需召唤的组件 CLI）。
-  'ip-address@10': '10.7.1'
+  #       10.7.1 → 10.7.4（ISSUE #3267）：#1242883（Address6 的 zone identifier 二次时间
+  #       匹配可让单条长串拖住进程）patched `>=10.7.4`。
+  'ip-address@10': '10.7.4'
   #     · hono 4.13.5 → 4.13.7（`shadcn > @modelcontextprotocol/sdk > hono` /
   #       `@hono/node-server > hono`，jsx 边界组件的字符串未转义）。运行时没有一处 import，
   #       但它与 ip-address 同链，一并升掉不留待办。
-  'hono@4': '4.13.7'
+  #       4.13.7 → 4.13.11（ISSUE #3267）：#1242595（`serveStatic` 把请求路径二次解码，
+  #       可绕过静态路径上的 middleware）patched `>=4.13.11`。
+  'hono@4': '4.13.11'
   #     · postcss-selector-parser 7.1.5 → 7.1.6（`@storybook/nextjs > css-loader >
   #       postcss-modules-*` 与 `shadcn > postcss-selector-parser`，flat selector 解析的
   #       二次复杂度）。构建期工具链，不进产物。
@@ -174,3 +181,20 @@ overrides:
   #       但它仍只在**日志美化**那一面（`pino-pretty` 是开发期可读输出），
   #       所以判为同一条口径：补丁版，升掉。
   'fast-copy@4': '4.1.0'
+  #   · ISSUE #3267：Dependabot 点名的另外两个包，都是**跨 major**。按 §13.5.9
+  #     `webpack-dev-middleware@6` 那条先例，**验证走真正干活的那一面**，不是「装得上」。
+  #     · minimatch 10.2.6 → 11.0.1（#1244623，globparts 放大 DoS，
+  #       `>=7.0.0 <11.0.1`）。消费方 `@eslint/config-array@0.23.5`（eslint 10）、
+  #       `@sentry/bundler-plugins`、storybook 链；registry 元数据里 11 与 10 同为
+  #       ESM、exports / engines 相同，11 多一个 `@isaacs/nonrecursive-glob-match`。
+  #     · glob 13.0.6 → 14.0.2（#1244013，AbortSignal 取消后仍继续遍历文件系统，
+  #       `>=9.0.0 <=14.0.1`）。消费方 `@sentry/bundler-plugins@11.9.0` 扫 sourcemap；
+  #       14 与 13 的 dependencies / exports / engines 逐项相同。
+  #     ⚠️ **两条键都必须带 major**：锁里同时有 `minimatch@3.1.5`（eslint-plugin-import /
+  #       jsx-a11y / react / glob@7）与 `glob@7.2.3`（rimraf / flat-cache），它们都**不在**
+  #       这两条 advisory 的区间内；不带 major 的全局 override 会把它们顶到 11 / 14 上
+  #       （`brace-expansion@1` / `@5` 双键就是为同一个形状写的）。
+  #     验证面：`pnpm run lint` 真跑 eslint 10 的 config-array 匹配、`pnpm why` 对齐到
+  #       新版本且旧 major 一支不动、`pnpm audit --json` 复算、受影响固定清单用例。
+  'minimatch@10': '11.0.1'
+  'glob@13': '14.0.2'
