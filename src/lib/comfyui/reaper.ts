@@ -11,6 +11,7 @@
 import { errorText } from "~/lib/error-message";
 import { sqliteAwareErrorText } from "~/lib/sqlite-error";
 import { isSchemaReady } from "~/lib/db-schema-ready";
+import { isRecord } from "~/lib/is-record";
 // `../core/repository` 静态值 import 已改成 lazy（P3 §5 第 1 期·最后一步：
 // 让整条 reaper 边不再撞 `import "server-only"` throw、纯 Node executor host
 // 加载 reaper 时能干净过）。同 #1053 runner-state / #1068 executor-finalize
@@ -215,6 +216,22 @@ function claimTerminal(taskId: string): boolean {
   return true;
 }
 
+/** 从 ComfyUI /queue 回执里取 `queue_running` / `queue_pending` 的条目：
+ *  外部 JSON 不可全信，非对象元素按缺失丢弃。 */
+function queueEntries(
+  payload: unknown,
+  key: "queue_running" | "queue_pending",
+): Array<Record<string, unknown>> {
+  if (!isRecord(payload)) {
+    return [];
+  }
+  const list = payload[key];
+  if (!Array.isArray(list)) {
+    return [];
+  }
+  return list.filter(isRecord);
+}
+
 /** 外部证据探针：ComfyUI 侧此刻是否仍有「在飞的工作流」。
  *
  *  纯「进程内记忆」不足以判死一个 QUEUED 孤儿：raw 路径的 comfy-cli 子进程
@@ -246,12 +263,8 @@ async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<bool
     if (!q.ok) {
       return null;
     }
-    /* SAFETY: 类型断言已复核 */
-    const qd = (await q.json()) as {
-      queue_pending?: Array<{ prompt_id?: string }>;
-      queue_running?: Array<{ prompt_id?: string }>;
-    } | null;
-    const all = [...(qd?.queue_running ?? []), ...(qd?.queue_pending ?? [])];
+    const qd: unknown = await q.json();
+    const all = [...queueEntries(qd, "queue_running"), ...queueEntries(qd, "queue_pending")];
     /* 队列非空 → 本应用（MAX_CONCURRENCY=1）必有任务在跑。raw 路径的
      *  comfy-cli 自己生成 client_id，无法反查属于哪个 taskId，因此无法区分
      *  时一律不杀。 */
@@ -269,9 +282,8 @@ async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<bool
     if (!h.ok) {
       return null;
     }
-    /* SAFETY: 类型断言已复核 */
-    const hd = (await h.json()) as Record<string, unknown> | null;
-    return !!hd && Object.hasOwn(hd, hintPromptId);
+    const hd: unknown = await h.json();
+    return isRecord(hd) && Object.hasOwn(hd, hintPromptId);
   } catch {
     /* 网络错误 / 超时：证据不足。 */
     return null;
@@ -483,24 +495,19 @@ export async function reapStaleRunningTasks(): Promise<void> {
           // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           const r = await fetch(url, { signal: AbortSignal.timeout(5000) });
           if (r.status === 200) {
-            /* SAFETY: 类型断言已复核 */
             // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-            const data = (await r.json()) as Record<string, unknown> | null;
-            /* SAFETY: 类型断言已复核 */
-            const entry = data && (data[t.promptId] as Record<string, unknown> | undefined);
+            const data: unknown = await r.json();
+            const rawEntry = isRecord(data) ? data[t.promptId] : undefined;
+            const entry = isRecord(rawEntry) ? rawEntry : undefined;
             if (entry) {
-              /* SAFETY: 类型断言已复核 */
-              const status = entry.status as
-                | {
-                    errored?: unknown;
-                    executed?: unknown;
-                    messages?: unknown;
-                  }
-                | undefined;
-              /* SAFETY: 类型断言已复核 */
-              const errMsg = (entry.error as { message?: string } | undefined)?.message;
+              const status = entry.status;
+              const errorField = entry.error;
+              const errMsg =
+                isRecord(errorField) && typeof errorField.message === "string"
+                  ? errorField.message
+                  : undefined;
               // oxlint-disable-next-line strict-boolean-expressions -- errored 与 error.message 都是 ComfyUI history 回执里的外部字段，任意真值都按「有错误现场」判，防御外部形态变化
-              if (status?.errored || errMsg) {
+              if ((isRecord(status) && status.errored) || errMsg) {
                 verdict = "failed";
                 reason = `ComfyUI execution_error: ${errMsg ?? "未知原因"} (promptId=${t.promptId})`;
               } else {
@@ -520,15 +527,13 @@ export async function reapStaleRunningTasks(): Promise<void> {
                   signal: AbortSignal.timeout(3000),
                 });
                 if (q.ok) {
-                  /* SAFETY: 类型断言已复核 */
                   // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-                  const qd = (await q.json()) as {
-                    queue_pending?: Array<{ prompt_id?: string }>;
-                    queue_running?: Array<{ prompt_id?: string }>;
-                  } | null;
-                  const all = [...(qd?.queue_running ?? []), ...(qd?.queue_pending ?? [])];
-                  // oxlint-disable-next-line typescript/no-unnecessary-condition -- all 元素来自 ComfyUI /queue 的 JSON 响应，运行期可能是 null
-                  inQueue = all.some((all) => all?.prompt_id === t.promptId);
+                  const qd: unknown = await q.json();
+                  const all = [
+                    ...queueEntries(qd, "queue_running"),
+                    ...queueEntries(qd, "queue_pending"),
+                  ];
+                  inQueue = all.some((entry) => entry.prompt_id === t.promptId);
                 }
               } catch {
                 /* 队列探测失败 —— 落到「未知」分支 */

@@ -32,6 +32,7 @@
 //      见 env-python.ts）。
 
 import { errorText } from "~/lib/error-message";
+import { isRecord } from "~/lib/is-record";
 // §18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批·汇聚点）。
 // 静态依赖——`~/lib/error-message` / `fs` / `path` /
 // `../app-settings/app-settings.server`（`.server` 后缀、内部无 server-only） /
@@ -204,10 +205,14 @@ export function readRegisteredLauncher(comfyuiPath: string): string | null {
 export function extractSetupCmds(raw: string): string | null {
   try {
     const parsed: unknown = JSON.parse(raw);
-    /* SAFETY: 类型断言已复核 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- parsed 来自 JSON.parse（外部文件内容），运行期可能是 null，断言掩盖了这一点
-    const setup = (parsed as { setup?: { cmds?: unknown } })?.setup;
-    const cmds = setup?.cmds;
+    if (!isRecord(parsed)) {
+      return null;
+    }
+    const setup = parsed.setup;
+    if (!isRecord(setup)) {
+      return null;
+    }
+    const cmds = setup.cmds;
     return typeof cmds === "string" && cmds.trim() ? cmds : null;
   } catch {
     return null;

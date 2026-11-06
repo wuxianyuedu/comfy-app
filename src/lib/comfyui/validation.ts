@@ -25,7 +25,7 @@
 // 组件（客户端）都能安全导入。
 
 import { z } from "zod";
-import { asRecord } from "~/lib/is-record";
+import { asRecord, isRecord } from "~/lib/is-record";
 
 /* validationErrors 经任务表的 JSON 列往返（服务端写入 → 客户端读取），
  * 所以读取侧**必须**重新校验：Json 列在类型上是 `unknown`，直接
@@ -93,17 +93,13 @@ export function extractValidationErrors(
   const isListCarrier =
     Array.isArray(res) &&
     res.some((r: unknown): boolean => {
-      if (typeof r !== "object" || r === null) {
+      if (!isRecord(r)) {
         return false;
       }
-      /* SAFETY: 类型断言已复核 */
-      const rec = r as Record<string, unknown>;
-      // 这几个字段可能是空字符串，必须用 `||` 判空（`??` 只挡 null/undefined）；
-      // eslint 的 prefer-nullish-coalescing 在这里给的是误报，故就地豁免。
-      return (
-        // oxlint-disable-next-line typescript/prefer-nullish-coalescing
-        !!(rec.node_id || rec.class_type || rec.input_errors || rec.message) // oxlint-disable-line strict-boolean-expressions -- 字段可能为空串：有意按「任意真值」判，与上面的 `||` 豁免同因
-      );
+      // 这四个字段任意一个有内容即视为「条目承载者」；显式 Boolean 判真值，
+      // 不用 `||` 链（那需要两处逐行豁免，且字段可能为空串）。
+      const fields = [r.node_id, r.class_type, r.input_errors, r.message];
+      return fields.some((value) => Boolean(value));
     });
   if (
     // oxlint-disable-next-line strict-boolean-expressions -- ne 是外部 JSON 的任意值，结构不保证，「有没有内容」按任意真值判
@@ -117,20 +113,14 @@ export function extractValidationErrors(
     return [];
   }
   const out: Array<ValidationError> = [];
-  /* SAFETY: 类型断言已复核 */
-  /* SAFETY: 类型断言已复核 */
   const entries: Array<[string, unknown]> = Array.isArray(ne)
-    ? ne.map((item: unknown) => {
-        /* SAFETY: 类型断言已复核 */
-        const rec = item as Record<string, unknown> | null | undefined;
-        // String(x) 的收窄等价（见本文件底部 toStringValue）：值来自外部 JSON。
-        /* SAFETY: 类型断言已复核 */
-        return [toStringValue(rec?.node_id ?? "?"), item] as [string, unknown];
-      })
-    : Object.entries(ne as Record<string, unknown>);
+    ? ne.map((item: unknown): [string, unknown] => [
+        toStringValue(asRecord(item)?.node_id ?? "?"),
+        item,
+      ])
+    : Object.entries(isRecord(ne) ? ne : {});
   for (const [nid, err] of entries) {
-    /* SAFETY: 类型断言已复核 */
-    const errRec = err as Record<string, unknown> | null | undefined;
+    const errRec = asRecord(err);
     const graphNode = graph?.[nid];
     const graphClass = asRecord(graphNode)?.class_type;
     const errClass = errRec?.class_type;
@@ -139,19 +129,12 @@ export function extractValidationErrors(
       (typeof graphClass === "string" ? graphClass : undefined) ??
       "";
     const inputErrors = errRec?.input_errors;
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (inputErrors != null && typeof inputErrors === "object") {
-      /* SAFETY: 类型断言已复核 */
-      for (const [field, v] of Object.entries(inputErrors as Record<string, unknown>)) {
-        /* SAFETY: 类型断言已复核 */
-        const fromObject =
-          /* SAFETY: 类型断言已复核 */
-          // oxlint-disable-next-line typescript/no-unnecessary-condition -- v 是 ComfyUI input_errors 的 JSON 值，运行期可能是 null，断言掩盖了这一点
-          ((v as { message?: string })?.message ??
-            // oxlint-disable-next-line typescript/no-unnecessary-condition -- v 是 ComfyUI input_errors 的 JSON 值，运行期可能是 null，断言掩盖了这一点
-            (v as { details?: string })?.details ??
-            JSON.stringify(v)) ||
-          "配置错误";
+    if (isRecord(inputErrors)) {
+      for (const [field, v] of Object.entries(inputErrors)) {
+        const vRec = asRecord(v);
+        const strMessage = typeof vRec?.message === "string" ? vRec.message : undefined;
+        const strDetails = typeof vRec?.details === "string" ? vRec.details : undefined;
+        const fromObject = (strMessage ?? strDetails ?? JSON.stringify(v)) || "配置错误";
         const message = typeof v === "string" ? v : fromObject;
         out.push({ nodeId: nid, classType, field, message });
       }
@@ -173,6 +156,17 @@ export function extractValidationErrors(
   return out;
 }
 
+/** 单个条目是否是完整的校验错误（四个字段都必须是字符串）。 */
+function isValidationError(v: unknown): v is ValidationError {
+  return (
+    isRecord(v) &&
+    typeof v.nodeId === "string" &&
+    typeof v.classType === "string" &&
+    typeof v.field === "string" &&
+    typeof v.message === "string"
+  );
+}
+
 /* 把数据库 `validationErrors` 列（`ValidationError[]` 的 JSON 字符串，或 null）
  * 解析回类型化数组。做防御：载荷损坏或不是数组时返回 `null`，
  * 调用方据此回落到 `error` 字符串。 */
@@ -184,11 +178,9 @@ export function parseValidationErrors(
     return null;
   }
   try {
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(raw) as unknown;
-    if (Array.isArray(parsed)) {
-      /* SAFETY: 类型断言已复核 */
-      return parsed as Array<ValidationError>;
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.every(isValidationError)) {
+      return parsed;
     }
   } catch {
     /* fall through */

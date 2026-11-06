@@ -22,6 +22,8 @@
  *     `applyRawOverrides`），所以名单缺项（正是本次故障）没有任何地方会红。
  */
 
+import { isRecord } from "~/lib/is-record";
+
 /** 服务端 object_info 里没有、且不携带数据流的节点类型。 */
 export const UI_ONLY_NODE_TYPES: ReadonlySet<string> = new Set([
   "Bookmark (rgthree)",
@@ -34,12 +36,10 @@ export const UI_ONLY_NODE_TYPES: ReadonlySet<string> = new Set([
 
 /** Read a string field off an unknown payload（非 string → undefined）。 */
 function strField(o: unknown, key: string): string | undefined {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (o == null || typeof o !== "object") {
+  if (!isRecord(o)) {
     return undefined;
   }
-  /* SAFETY: 类型断言已复核 */
-  const v = (o as Record<string, unknown>)[key];
+  const v = o[key];
   return typeof v === "string" ? v : undefined;
 }
 
@@ -56,13 +56,11 @@ function pickOutUiOnlyNodes(nodes: Array<unknown>): {
   const kept: Array<unknown> = [];
   const removedIds = new Set<string>();
   for (const n of nodes) {
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (n == null || typeof n !== "object") {
+    if (!isRecord(n)) {
       kept.push(n);
       continue;
     }
-    /* SAFETY: 类型断言已复核 */
-    const node = n as Record<string, unknown>;
+    const node = n;
     /* 两种导出形态都认：ComfyUI 新导出走 `type`，部分路径（子图 wrapper）走
      * `class_type`（与 `executor-cli` 里读节点类型同口径）。 */
     const type = strField(node, "type") ?? strField(node, "class_type");
@@ -94,11 +92,8 @@ function dropLinksTo(container: Record<string, unknown>, removedIds: Set<string>
     if (Array.isArray(link)) {
       return !removedIds.has(idOf(link[1])) && !removedIds.has(idOf(link[3]));
     }
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (link != null && typeof link === "object") {
-      /* SAFETY: 类型断言已复核 */
-      const l = link as Record<string, unknown>;
-      return !removedIds.has(idOf(l.origin_id)) && !removedIds.has(idOf(l.target_id));
+    if (isRecord(link)) {
+      return !removedIds.has(idOf(link.origin_id)) && !removedIds.has(idOf(link.target_id));
     }
     return true;
   });
@@ -130,12 +125,7 @@ export function stripUiOnlyNodes(raw: Record<string, unknown>): {
   }
 
   const defs = raw.definitions;
-  const subs =
-    /* SAFETY: 类型断言已复核 */
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    defs != null && typeof defs === "object"
-      ? (defs as Record<string, unknown>).subgraphs
-      : undefined;
+  const subs = isRecord(defs) ? defs.subgraphs : undefined;
   const list: Array<unknown> = Array.isArray(subs)
     ? subs
     : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
@@ -143,12 +133,10 @@ export function stripUiOnlyNodes(raw: Record<string, unknown>): {
       ? Object.values(subs)
       : [];
   for (const sub of list) {
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (sub == null || typeof sub !== "object") {
+    if (!isRecord(sub)) {
       continue;
     }
-    /* SAFETY: 类型断言已复核 */
-    const def = sub as Record<string, unknown>;
+    const def = sub;
     if (!Array.isArray(def.nodes)) {
       continue;
     }

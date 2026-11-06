@@ -12,6 +12,7 @@
  */
 import fs from "node:fs";
 
+import { isRecord } from "~/lib/is-record";
 import { SERVICES_LOG_DIR } from "~/lib/log/log-paths";
 import {
   openRuntimeLogWriter,
@@ -35,14 +36,39 @@ import {
  *  「有开始没结束」就是那类情况的指纹。 */
 const COMFY_SESSION_MARK = `${SERVICES_LOG_DIR}/comfyui-last-session.json`;
 
+/** `ComfySessionMark["mode"]` 的全部合法取值（外部文件不可信，按白名单判）。 */
+const SESSION_MODES: ReadonlyArray<ComfySessionMark["mode"]> = [
+  "keepAlive",
+  "bound",
+  "cli",
+  "studio",
+];
+
+/** 标记文件来自外部落盘，读回时逐字段判型；形状不认识就当作没有标记。 */
+function isComfySessionMark(v: unknown): v is ComfySessionMark {
+  if (!isRecord(v)) {
+    return false;
+  }
+  if (typeof v.startedAt !== "string") {
+    return false;
+  }
+  if (!(v.pid === null || typeof v.pid === "number")) {
+    return false;
+  }
+  if (!SESSION_MODES.some((mode) => v.mode === mode)) {
+    return false;
+  }
+  const exited = v.exited;
+  if (exited === null) {
+    return true;
+  }
+  return isRecord(exited) && typeof exited.at === "string" && typeof exited.reason === "string";
+}
+
 export function readSessionMark(): ComfySessionMark | null {
   try {
     const parsed: unknown = JSON.parse(fs.readFileSync(COMFY_SESSION_MARK, "utf8"));
-    if (parsed === null || typeof parsed !== "object") {
-      return null;
-    }
-    /* SAFETY: 类型断言已复核 */
-    return parsed as ComfySessionMark;
+    return isComfySessionMark(parsed) ? parsed : null;
   } catch {
     return null;
   }

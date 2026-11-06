@@ -40,6 +40,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { isRecord } from "~/lib/is-record";
 import { redactSecretShaped } from "~/lib/core/redact-secret";
 import { formatLocalStamp } from "~/lib/time-format";
 import { TRACE_LINE_MAX, clampText } from "~/lib/text-clamp";
@@ -108,9 +109,11 @@ export function traceStringify(value: unknown): string {
   if (typeof value === "function") {
     return `[function ${value.name || "anonymous"}]`;
   }
-  /* 此处 value 已是 string/number/boolean/bigint（其余分支均已 return）。 */
-  /* SAFETY: 类型断言已复核 */
-  return `${value as string | number | boolean | bigint}`;
+  /* 此处 value 已是 number/boolean/bigint（其余分支均已 return）。 */
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  return "";
 }
 
 /** 单行截断（保留头部，尾注原始长度 —— 诊断通道最想知道「被切了多少」）。 */
@@ -176,7 +179,7 @@ export type HistoryVerdict = {
   statusStr?: string;
 };
 
-function nonEmptyArray(v: unknown): boolean {
+function nonEmptyArray(v: unknown): v is Array<unknown> {
   return Array.isArray(v) && v.length > 0;
 }
 
@@ -191,16 +194,15 @@ export function historyTraceSummary(
   promptId: string,
   hist: Record<string, unknown> | null | undefined,
 ): HistoryVerdict {
-  const entry =
-    /* SAFETY: 类型断言已复核 */
-    hist && promptId ? (hist[promptId] as Record<string, unknown> | undefined) : undefined;
+  const candidate = hist && promptId ? hist[promptId] : undefined;
+  const entry = isRecord(candidate) ? candidate : undefined;
   if (!entry) {
     return { found: false, outputNodeCount: 0 };
   }
-  /* SAFETY: 类型断言已复核 */
-  const outputs = (entry.outputs ?? {}) as Record<string, unknown>;
-  /* SAFETY: 类型断言已复核 */
-  const status = (entry.status ?? {}) as Record<string, unknown>;
+  const rawOutputs = entry.outputs;
+  const outputs = isRecord(rawOutputs) ? rawOutputs : {};
+  const rawStatus = entry.status;
+  const status = isRecord(rawStatus) ? rawStatus : {};
   const messages = status.messages;
   let executionError: string | undefined;
   if (Array.isArray(messages)) {
@@ -208,12 +210,8 @@ export function historyTraceSummary(
       if (!Array.isArray(msg) || msg[0] !== "execution_error") {
         continue;
       }
-      /* SAFETY: 类型断言已复核 */
-      const payload = msg[1] as Record<string, unknown> | null | undefined;
-      const ex =
-        payload && typeof payload === "object"
-          ? (payload.exception_message ?? payload.message)
-          : undefined;
+      const payload: unknown = msg[1];
+      const ex = isRecord(payload) ? (payload.exception_message ?? payload.message) : undefined;
       if (typeof ex === "string" && ex.trim()) {
         executionError = ex;
         break;
@@ -238,19 +236,15 @@ export function historyOutputKeys(
   hist: Record<string, unknown> | null | undefined,
   promptId: string,
 ): Array<{ keys: Array<string>; nodeId: string }> {
-  const entry =
-    /* SAFETY: 类型断言已复核 */
-    hist && promptId ? (hist[promptId] as Record<string, unknown> | undefined) : undefined;
+  const candidate = hist && promptId ? hist[promptId] : undefined;
+  const entry = isRecord(candidate) ? candidate : undefined;
   const outputs = entry?.outputs;
   if (typeof outputs !== "object" || outputs === null) {
     return [];
   }
   return Object.entries(outputs).map(([nodeId, v]) => ({
     nodeId,
-    keys:
-      /* SAFETY: 类型断言已复核 */
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      v != null && typeof v === "object" ? Object.keys(v as object) : [],
+    keys: isRecord(v) ? Object.keys(v) : [],
   }));
 }
 
@@ -266,8 +260,7 @@ export function queueTraceSummary(qd: unknown): {
       return [];
     }
     const ids: Array<string> = [];
-    /* SAFETY: 类型断言已复核 */
-    for (const it of v as Array<unknown>) {
+    for (const it of v) {
       if (Array.isArray(it)) {
         if (typeof it[1] === "string" && it[1]) {
           ids.push(it[1]);
