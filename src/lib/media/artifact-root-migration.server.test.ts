@@ -82,10 +82,7 @@ describe("migrateLegacyArtifactRoot", () => {
     expect(report.blocked).toEqual([]);
     expect(
       fs
-        .readFileSync(
-          path.join(target(), "projects", "proj_1", "t1", "img_0.png"),
-          "utf8",
-        )
+        .readFileSync(path.join(target(), "projects", "proj_1", "t1", "img_0.png"), "utf8")
         .toString(),
     ).toBe("png-bytes");
     expect(fs.existsSync(legacy())).toBe(false);
@@ -105,15 +102,11 @@ describe("migrateLegacyArtifactRoot", () => {
     expect(report.skipped).toEqual(["films"]);
     expect(report.moved).toEqual(["projects"]);
     // 目标格里那份没被动过
-    expect(
-      fs.readFileSync(path.join(already, "f1.mp4"), "utf8").toString(),
-    ).toBe("newer-bytes");
+    expect(fs.readFileSync(path.join(already, "f1.mp4"), "utf8").toString()).toBe("newer-bytes");
     // 留在原地的那份也还在（数据不丢）
-    expect(
-      fs
-        .readFileSync(path.join(legacy(), "films", "f1.mp4"), "utf8")
-        .toString(),
-    ).toBe("mp4-bytes");
+    expect(fs.readFileSync(path.join(legacy(), "films", "f1.mp4"), "utf8").toString()).toBe(
+      "mp4-bytes",
+    );
     expect(fs.existsSync(legacy())).toBe(true);
   });
 
@@ -153,18 +146,14 @@ describe("migrateLegacyArtifactRoot", () => {
     expect(report.status).toBe("left-behind");
     expect(spy).toHaveBeenCalled();
     // 用户看得见：留在原地的东西要说出在哪，不能只是一句「出错了」
-    expect(logError).toHaveBeenCalledWith(
-      expect.stringContaining("films(EPERM)"),
-    );
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining("films(EPERM)"));
   });
 
   it("两个进程同时起：撞到 ENOENT（对方已搬走）不算失败、也不写错误", () => {
     seedLegacy();
-    vi.spyOn(fs, "renameSync").mockImplementation(
-      (_from: fs.PathLike, _to: fs.PathLike) => {
-        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
-      },
-    );
+    vi.spyOn(fs, "renameSync").mockImplementation((_from: fs.PathLike, _to: fs.PathLike) => {
+      throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+    });
 
     const report = migrateLegacyArtifactRoot(TMP);
 
@@ -188,10 +177,7 @@ describe("migrateLegacyArtifactRoot", () => {
  */
 describe("搬迁已经接到启动点上", () => {
   it("instrumentation 的 nodejs 分支动态引它，且排在会读产物的启动点之前", () => {
-    const src = fs.readFileSync(
-      path.join(process.cwd(), "src/instrumentation.ts"),
-      "utf8",
-    );
+    const src = fs.readFileSync(path.join(process.cwd(), "src/instrumentation.ts"), "utf8");
     const callAt = src.indexOf("artifact-root-migration.server");
     expect(callAt).toBeGreaterThan(-1);
     // 成片监看恢复会读镜头视频（clipPathOf），必须先搬完再恢复

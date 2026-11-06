@@ -1,11 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 
 import { MAX_HISTORY_ENTRIES } from "./console-limits";
-import {
-  consoleSlot,
-  recordConsoleHistory,
-  resetConsoleSlotForTest,
-} from "./console-registry";
+import { consoleSlot, recordConsoleHistory, resetConsoleSlotForTest } from "./console-registry";
 
 /** 造一条历史条目（只关心「计数与顺序」的判据）。 */
 function entry(n: number) {

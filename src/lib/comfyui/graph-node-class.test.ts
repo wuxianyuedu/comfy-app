@@ -51,9 +51,7 @@ describe("classTypeForNode", () => {
 
   it("认不出就是 undefined，绝不猜", () => {
     expect(classTypeForNode({ "9": { class_type: "" } }, "9")).toBeUndefined();
-    expect(
-      classTypeForNode({ nodes: [{ id: 1, type: "" }] }, "1"),
-    ).toBeUndefined();
+    expect(classTypeForNode({ nodes: [{ id: 1, type: "" }] }, "1")).toBeUndefined();
     expect(classTypeForNode({ nodes: [] }, "3")).toBeUndefined();
     expect(classTypeForNode({}, "3")).toBeUndefined();
     /* 载荷不可信：null / undefined / 字符串 / 数字 / 数组 / 空图都不许抛，也认不出。 */
