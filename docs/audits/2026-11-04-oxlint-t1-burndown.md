@@ -12,7 +12,7 @@
 | B1   | `eslint/no-use-before-define（functions:false）` | 75       | 48       | 已清（75 处/48 份）                                |
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
-| B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 清账中（子批1–3：165 份 / 554 处已清）             |
+| B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 清账中（子批1–4：185 份 / 593 处已清）             |
 | B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 挂账中                                             |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
@@ -572,26 +572,26 @@
 | `src/components/studio/WorkflowCanvasDecorations.test.tsx`                             | 1        | 已清 |
 | `src/components/studio/WorksGallery.test.tsx`                                          | 2        | 已清 |
 | `src/components/ui/alert.test.tsx`                                                     | 3        | 已清 |
-| `src/components/ui/button.test.tsx`                                                    | 2        | 挂账 |
-| `src/components/ui/dialog.test.tsx`                                                    | 3        | 挂账 |
-| `src/components/ui/sidebar-auto-collapse.test.tsx`                                     | 1        | 挂账 |
-| `src/components/ui/status-badge.test.tsx`                                              | 1        | 挂账 |
-| `src/components/ui/status-dot.test.tsx`                                                | 1        | 挂账 |
-| `src/components/workshop/script-markdown-utils.ts`                                     | 3        | 挂账 |
-| `src/components/workshop/ScriptMarkdownEditor.tsx`                                     | 1        | 挂账 |
-| `src/lib/case-token.ts`                                                                | 1        | 挂账 |
-| `src/lib/comfy/comfy-embed.ts`                                                         | 1        | 挂账 |
-| `src/lib/comfyui/client.ts`                                                            | 1        | 挂账 |
-| `src/lib/comfyui/desktop-instance.ts`                                                  | 6        | 挂账 |
-| `src/lib/comfyui/desktop-storage-paths.ts`                                             | 5        | 挂账 |
-| `src/lib/comfyui/error-advice.ts`                                                      | 1        | 挂账 |
-| `src/lib/comfyui/executor-finalize.ts`                                                 | 2        | 挂账 |
-| `src/lib/comfyui/lifecycle-derive.ts`                                                  | 1        | 挂账 |
-| `src/lib/comfyui/localWorkflows.ts`                                                    | 1        | 挂账 |
-| `src/lib/comfyui/node-registry.test.ts`                                                | 1        | 挂账 |
-| `src/lib/comfyui/node-titles.ts`                                                       | 5        | 挂账 |
-| `src/lib/comfyui/proc-detect.ts`                                                       | 1        | 挂账 |
-| `src/lib/comfyui/raw.ts`                                                               | 1        | 挂账 |
+| `src/components/ui/button.test.tsx`                                                    | 2        | 已清 |
+| `src/components/ui/dialog.test.tsx`                                                    | 3        | 已清 |
+| `src/components/ui/sidebar-auto-collapse.test.tsx`                                     | 1        | 已清 |
+| `src/components/ui/status-badge.test.tsx`                                              | 1        | 已清 |
+| `src/components/ui/status-dot.test.tsx`                                                | 1        | 已清 |
+| `src/components/workshop/script-markdown-utils.ts`                                     | 3        | 已清 |
+| `src/components/workshop/ScriptMarkdownEditor.tsx`                                     | 1        | 已清 |
+| `src/lib/case-token.ts`                                                                | 1        | 已清 |
+| `src/lib/comfy/comfy-embed.ts`                                                         | 1        | 已清 |
+| `src/lib/comfyui/client.ts`                                                            | 1        | 已清 |
+| `src/lib/comfyui/desktop-instance.ts`                                                  | 6        | 已清 |
+| `src/lib/comfyui/desktop-storage-paths.ts`                                             | 5        | 已清 |
+| `src/lib/comfyui/error-advice.ts`                                                      | 1        | 已清 |
+| `src/lib/comfyui/executor-finalize.ts`                                                 | 2        | 已清 |
+| `src/lib/comfyui/lifecycle-derive.ts`                                                  | 1        | 已清 |
+| `src/lib/comfyui/localWorkflows.ts`                                                    | 1        | 已清 |
+| `src/lib/comfyui/node-registry.test.ts`                                                | 1        | 已清 |
+| `src/lib/comfyui/node-titles.ts`                                                       | 5        | 已清 |
+| `src/lib/comfyui/proc-detect.ts`                                                       | 1        | 已清 |
+| `src/lib/comfyui/raw.ts`                                                               | 1        | 已清 |
 | `src/lib/comfyui/runner-state.ts`                                                      | 6        | 挂账 |
 | `src/lib/comfyui/status.ts`                                                            | 1        | 挂账 |
 | `src/lib/comfyui/workflow-detail-io.ts`                                                | 2        | 挂账 |

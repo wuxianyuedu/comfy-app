@@ -173,17 +173,17 @@ export function friendlyNodeTitle(
  * 静态表与 rawTitle 都不适用时，用它作为最后兜底的显示名。 */
 export function prettifyClassType(classType: string, lang: "zh" | "en" = "zh"): string {
   // 去掉尾部的库名括号后缀，例如 "(rgthree)" 或 "(advanced)"
-  const parenMatch = /\s*\(([^)]+)\)\s*$/.exec(classType);
+  const parenMatch = /\s*\((?<suffix>[^)]+)\)\s*$/.exec(classType);
   let name = classType;
   let suffix = "";
   if (parenMatch) {
-    suffix = parenMatch[1]!;
+    suffix = parenMatch.groups?.suffix ?? "";
     name = classType.slice(0, parenMatch.index).trim();
   }
   // 把 camelCase 与 PascalCase 拆成以空格分隔的单词。
   const spaced = name
-    .replaceAll(/([a-z])([A-Z])/g, "$1 $2")
-    .replaceAll(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replaceAll(/(?<lowerHead>[a-z])(?<upperHead>[A-Z])/g, "$<lowerHead> $<upperHead>")
+    .replaceAll(/(?<upperRun>[A-Z]+)(?<wordStart>[A-Z][a-z])/g, "$<upperRun> $<wordStart>")
     .replaceAll(/_+/g, " ")
     .trim();
   if (lang === "en") {

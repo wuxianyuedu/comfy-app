@@ -71,11 +71,11 @@ export type StorageDirOverrides = {
 };
 
 /** 顶层键（无缩进）：`comfyui_shared:` 或顶层标量 `base_path: D:/x`。 */
-const TOP_KEY_RE = /^([A-Za-z0-9_.-]+):\s*(.*)$/;
+const TOP_KEY_RE = /^(?<key>[A-Za-z0-9_.-]+):\s*(?<value>.*)$/;
 /** 块内字段（带缩进）：`base_path:` / `paths:` / `is_default:`。 */
-const FIELD_RE = /^\s+([A-Za-z_]+):\s*(.*)$/;
+const FIELD_RE = /^\s+(?<name>[A-Za-z_]+):\s*(?<value>.*)$/;
 /** 块内列表项：`- models/`。 */
-const LIST_ITEM_RE = /^\s*-\s*(.+)$/;
+const LIST_ITEM_RE = /^\s*-\s*(?<value>.+)$/;
 
 /** 去掉标量值的引号；` #` 之后当注释（裸 `#` 不截断，避免砍掉路径里的字符）。 */
 function stripScalar(raw: string): string {
@@ -191,8 +191,8 @@ export function parseExtraModelPathsYaml(text: string): ExtraModelPathsFile {
       if (!match) {
         continue;
       }
-      const key = match[1] ?? "";
-      const value = stripScalar(match[2] ?? "");
+      const key = match.groups?.key ?? "";
+      const value = stripScalar(match.groups?.value ?? "");
       if (value) {
         // 顶层标量：ComfyUI 只认 `base_path` 一种（覆盖主 base 目录）。
         if (key === "base_path") {
@@ -209,7 +209,7 @@ export function parseExtraModelPathsYaml(text: string): ExtraModelPathsFile {
     }
     const item = LIST_ITEM_RE.exec(line);
     if (item && awaitingPathItems) {
-      const value = stripScalar(item[1] ?? "");
+      const value = stripScalar(item.groups?.value ?? "");
       if (value) {
         current.paths.push(value);
       }
@@ -219,8 +219,8 @@ export function parseExtraModelPathsYaml(text: string): ExtraModelPathsFile {
     if (!field) {
       continue;
     }
-    const name = field[1] ?? "";
-    const rawFieldValue = (field[2] ?? "").trim();
+    const name = field.groups?.name ?? "";
+    const rawFieldValue = (field.groups?.value ?? "").trim();
     /* 块标量指示符（`|` / `>`）：`text_encoders: |`、`clip_vision: |-` 等。
      * 「空值」是列表还是块，要在 stripScalar 之前认 —— 块值剥掉指示符后是
      * 非空（`|`），一并当作路径就会把 `|` 收进目录。 */

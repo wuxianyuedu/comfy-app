@@ -330,7 +330,7 @@ export function resetComfyBase(): void {
 
 /** `http(s)://host:port` → `ws(s)://host:port`（ComfyUI 的 /api/ws 挂在那个地址下）。 */
 export function toWsBase(httpBase: string): string {
-  return httpBase.replace(/^http(s?):\/\//i, (_m, s) => `ws${s}://`);
+  return httpBase.replace(/^http(?<s>s?):\/\//i, (_m, { s }) => `ws${s}://`);
 }
 
 export async function getHistory(promptId: string): Promise<Record<string, unknown>> {

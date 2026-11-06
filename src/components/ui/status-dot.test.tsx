@@ -25,7 +25,7 @@ describe("StatusDot", () => {
   });
 
   it.for(STATES)("state=%s 的颜色是语义 token 类名", (state) => {
-    expect(dotOf({ state }).className).toMatch(/\bbg-(success|warning|info|destructive)\b/);
+    expect(dotOf({ state }).className).toMatch(/\bbg-(?:success|warning|info|destructive)\b/);
   });
 
   it.for(STATES)("state=%s 不落 Tailwind 原生调色板字面量", (state) => {

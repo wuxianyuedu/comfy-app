@@ -34,7 +34,7 @@ describe("NODE_TYPE_REGISTRY 的数据契约", () => {
 
   it.for(entries)("%s 的字段完整且值域合法", ([, cfg]) => {
     expect(cfg.label).not.toBe("");
-    expect(cfg.color).toMatch(/^(#[0-9a-fA-F]{3,8}|var\(--[\w-]+\))$/);
+    expect(cfg.color).toMatch(/^(?:#[0-9a-fA-F]{3,8}|var\(--[\w-]+\))$/);
     expect(cfg.width).toBeGreaterThan(0);
     expect(cfg.height).toBeGreaterThan(0);
     expect(Array.isArray(cfg.defaultFields)).toBe(true);

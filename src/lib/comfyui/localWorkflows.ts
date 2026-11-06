@@ -194,7 +194,7 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
       if (!ent.isFile()) {
         continue;
       }
-      if (!/\.(json|workflow)$/i.test(ent.name)) {
+      if (!/\.(?:json|workflow)$/i.test(ent.name)) {
         continue;
       }
       pending.push(fullPath);
