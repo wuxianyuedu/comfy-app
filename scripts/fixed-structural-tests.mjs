@@ -595,8 +595,10 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `docs/audits/**` 不在 `doc:check` 的遍历面上（`doc-facts.cjs` 的 `SCOPED_DOC_DIRS`
   // 只含 `docs/standards` 与 `docs/guides`），于是台账点名一份已删的棘轮基线**不会让
   // 任何东西变红** —— 这正是那份台账自己写下、却没能变成红的那句话。它读的是
-  // `docs/audits/*.md` 的文本 + 一次 `git log`，import 图一概追不到（改台账不会把
-  // 它拉进受影响清单），跟改动走等于专挑它不在的时机跑，所以与本次暂存改动无关也照跑。
+  // `docs/audits/*.md` 的文本 + 仓内台账 `scripts/retired-baselines.json`（ISSUE #3245
+  // 起不再跑 `git log --all`：GA 侧是 depth=2 的浅检出，全历史判据会退化成空集），
+  // 两者都不在 import 图上（改台账不会把它拉进受影响清单），跟改动走等于专挑它不在的
+  // 时机跑，所以与本次暂存改动无关也照跑。
   "tests/audits-doc-references.test.ts",
   // 「跨宿主 import 的扩展名形态」（ISSUE #1961）。它判的是「`.mjs` 静态 import 一份
   // `.ts` 时说明符必须是带 `.ts` 的形态」，而**回潮形态**是「有人给那条链上的模块

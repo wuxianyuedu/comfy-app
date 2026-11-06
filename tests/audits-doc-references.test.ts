@@ -1,12 +1,17 @@
 /**
  * `docs/audits/**` 的引用漂移判据（ISSUE #1811 遗留项）：台账不在 `doc:check` 的 SCOPED_DOC_DIRS 面内，点名已删基线不会变红。
- * 只判能证明的一半：台账写了一份已删的 `scripts/.*-baseline.json` 且同行未明写历史快照（名单从 `git log --diff-filter=D` 现算）。
- * 不判路径存在（会假红：`src-tauri/static` 构建产物、`docs/standards/12` 章节号、沿革叙述）；git 带 `-- scripts/` 后 13.3s→3.3s。
+ * 只判能证明的一半：台账写了一份已删的 `scripts/.*-baseline.json` 且同行未明写历史快照。
+ * 已删名单是**仓内显式台账** `scripts/retired-baselines.json`（ISSUE #3245 起），不再用
+ * `git log --all --diff-filter=D` 从全历史现算 —— GA `pr-gate.yml` 把检出缩到 `fetch-depth: 2`
+ * 之后那段历史根本不在检出里，判据会退化成空集、上面那条恒绿。
+ * 不判路径存在（会假红：`src-tauri/static` 构建产物、`docs/standards/12` 章节号、沿革叙述）；
+ * 只在「判据面非空」那条里跟当前 `scripts/` 树对一次账。
  */
-import { execFileSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+
+import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const AUDITS_DIR = path.join(ROOT, "docs", "audits");
@@ -19,50 +24,46 @@ function auditFiles(): Array<string> {
     .sort();
 }
 
-/**
- * 现算「曾入库、今天已不在」的 scripts 基线文件名。只算文件名（台账里全路径与裸名两种写法都有）。
- * 用 `--all`：基线可能在别的分支上删的（squash 合并后进主线），只读 HEAD 会漏。
- * `git` 不可用（浅检出 / 无 git 沙箱）时退化成空集 —— 那是「判据面为空」不是「全绿」，有专门用例判红。
- */
-/** 模块级 memo：整份文件最多走一趟 git（每条用例都重算是白付 I/O）。 */
-let retiredCache: Array<string> | null = null;
+/** 仓内台账：退役一份基线时显式往这里加一条 basename，判据不再问 git 历史。 */
+const RETIRED_LEDGER = path.join("scripts", "retired-baselines.json");
+/** 与 `citedBaselineNames()` 同一把尺子：带前导点的 basename。 */
+const RETIRED_NAME_RE = /^\.[^/]*baseline[^/]*\.json$/;
 
-function retiredBaselineNames(): Array<string> {
-  if (retiredCache) {
-    return retiredCache;
-  }
-  let out;
+/**
+ * 读「曾入库、今天已不在」的 scripts 基线名单 —— **只看当前树里的那份台账**（ISSUE #3245）。
+ *
+ * 旧实现用 `git log --all --diff-filter=D -- scripts/` 现算；GA 侧 `pr-gate.yml` 把
+ * `fixed-structural-tests` 的检出缩到 `fetch-depth: 2` 之后，那段历史不在检出里 ⇒
+ * 名单恒空 ⇒ 上面那条判据恒绿。把事实显式记进仓库，浅检出 / 无 git 沙箱都读得到。
+ * 读不到 / 形状不对 ⇒ 退化成空集 —— 那是「判据面为空」不是「全绿」，有专门用例判红。
+ */
+function readRetiredLedger(): Array<string> {
   try {
-    out = execFileSync(
-      "git",
-      [
-        "log",
-        "--all",
-        "--diff-filter=D",
-        "--name-only",
-        "--pretty=format:",
-        // 只要 scripts/ 那一层：下面按名字筛的就是 `scripts/.…baseline….json`。
-        // 实测 13.3s → 3.3s，而结果集逐字相等（见文件头那一节）。
-        "--",
-        "scripts/",
-      ],
-      { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
-    );
+    const parsed: unknown = JSON.parse(readFileSync(path.join(ROOT, RETIRED_LEDGER), "utf8"));
+    if (typeof parsed !== "object" || parsed === null || !("retired" in parsed)) {
+      return [];
+    }
+    const list: unknown = parsed.retired;
+    if (!Array.isArray(list)) {
+      return [];
+    }
+    return [
+      ...new Set(
+        list.filter(
+          (name): name is string => typeof name === "string" && RETIRED_NAME_RE.test(name),
+        ),
+      ),
+    ].sort();
   } catch {
     return [];
   }
-  const names = new Set<string>();
-  for (const raw of out.split("\n")) {
-    const rel = raw.trim();
-    if (!rel) {
-      continue;
-    }
-    if (!/^scripts\/\.[^/]*baseline[^/]*\.json$/.test(rel)) {
-      continue;
-    }
-    names.add(path.basename(rel));
-  }
-  retiredCache = [...names].sort();
+}
+
+/** 模块级 memo：整份文件最多读一趟台账（每条用例都重读是白付 I/O）。 */
+let retiredCache: Array<string> | null = null;
+
+function retiredBaselineNames(): Array<string> {
+  retiredCache ??= readRetiredLedger();
   return retiredCache;
 }
 
@@ -127,36 +128,46 @@ function findRetiredBaselineClaims(
 }
 
 describe("docs/audits/** 的台账引用不许漂到已删的棘轮基线上", () => {
-  it(
-    "台账里点名一份已删基线时，必须当场写明它是历史快照",
-    /* 预算带实测出处（§13.6.4 不许静默抬预算）：本条承担整趟历史遍历 —— 加了
-     * `-- scripts/` pathspec 之后那趟 git 实测 3.3s（不带是 13.3s，结果集逐字相等），
-     * 而这条用例在本机争用下实测 20.2s。全局 `testTimeout` 是 30s，对一份**挂在固定清单**
-     * 里的判据太薄：贴边时的红是时间红、不是内容红，而它拦住的是所有人的提交。
-     * 下一个改这个数的人请先复测（`--no-file-parallelism` 单跑本文件），别顺手删。 */
-    { timeout: 90_000 },
-    () => {
-      const retired = new Set(retiredBaselineNames());
-      const files = auditFiles().map((rel) => ({
-        rel,
-        text: readFileSync(path.join(ROOT, rel), "utf8"),
-      }));
-      const bad = findRetiredBaselineClaims(files, retired);
-      expect(
-        bad.map((b) => `${b.file}:${b.line} 点名已删基线 ${b.baseline}（同一行没有历史口径）`),
-      ).toEqual([]);
-    },
-  );
+  /* 2026-11-06 起不再有「整趟历史遍历」：名单从仓内台账读，这条用例回到全局 30s 预算，
+   * 原先为 `git log --all` 抬到 90s 的那段实测理由随实现一起收掉（ISSUE #3245）。 */
+  it("台账里点名一份已删基线时，必须当场写明它是历史快照", () => {
+    const retired = new Set(retiredBaselineNames());
+    const files = auditFiles().map((rel) => ({
+      rel,
+      text: readFileSync(path.join(ROOT, rel), "utf8"),
+    }));
+    const bad = findRetiredBaselineClaims(files, retired);
+    expect(
+      bad.map((b) => `${b.file}:${b.line} 点名已删基线 ${b.baseline}（同一行没有历史口径）`),
+    ).toEqual([]);
+  });
 
   /**
-   * 判据面**非空**：守的是最坏失效形态 —— `git` 不可用时 `retiredBaselineNames()` 退化成空集，
-   * 上面那条会**恒绿**而看上去「台账很干净」。所以正面断言「本仓库今天确实有已删基线」；
-   * 不断言 `git` 能跑（那是环境断言，改不了就把人堵在提交上）—— 断言事实才是判据成立的前提。
+   * 判据面**非空**：守的是最坏失效形态 —— 台账读不到 / 被清空时 `retiredBaselineNames()`
+   * 退化成空集，上面那条会**恒绿**而看上去「台账很干净」。所以正面断言本仓台账非空；
+   * 还要跟**当前树**对账：台账只收「已删」的，任何一条今天又出现在 `scripts/` 下，
+   * 要么是台账漂了、要么是这份基线根本不该被当成历史快照跳过。
+   * 不断言 git 能跑（那是环境断言）—— 断言仓内事实才是判据成立的前提。
    */
-  it("判据面非空：仓库历史里确实有已删的棘轮基线（否则上面那条在空转）", () => {
+  it("判据面非空：仓内台账列着已删基线，且每一条今天确实不在 scripts/ 下", () => {
     const retired = retiredBaselineNames();
     expect(retired.length).toBeGreaterThan(0);
     expect(retired).toContain(".dead-exports-baseline.json");
+    for (const name of retired) {
+      expect(existsSync(path.join(ROOT, "scripts", name)), name).toBe(false);
+    }
+  });
+
+  /** 反向钉住这次修法：不许有人把「从全历史现算」加回来（GA 是 depth=2 的浅检出）。
+   * 被禁词拆开拼 —— 原样写成字面量的话，这条用例自己的源码会把自己判红。 */
+  it("判据只读仓内台账：源码里不许再出现 git 全历史扫描", () => {
+    const source = readFileSync(path.join(ROOT, "tests", "audits-doc-references.test.ts"), "utf8");
+    /* 用共享的 ./helpers/strip-comments（§12.18）：本文件自己曾经在这里抄过一份内联剥注释，
+     * 被 tests/strip-comments-single-source.test.ts 的形状面判红（ISSUE #2969）。 */
+    const code = stripComments(source, { trailing: true });
+    for (const banned of ["execFile" + "Sync(", "--diff" + "-filter", "git" + " log"]) {
+      expect(code, banned).not.toContain(banned);
+    }
   });
 
   /** 合成文本：该红的形态必须红（不靠真仓库里恰好存在的那几处）。 */

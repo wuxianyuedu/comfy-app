@@ -49,6 +49,8 @@ import {
   RETRY_BACKOFF_MS,
   RETRY_MIN_ATTEMPT_MS,
 } from "../scripts/ci-mirror-retry-policy.mjs";
+/* ISSUE #3234：探活与 wire 推送共用的那一份墙钟预算（纯函数，用例不必真等 4 分钟）。 */
+import { createWireBudget } from "../scripts/ci-mirror-wire-budget.mjs";
 /* `--master` 那一档的执行面单独一份（#3148：为回到 §12.6 R5 的 900 行闸内切出去的）。 */
 import { runMasterMirror } from "../scripts/ci-github-mirror-master.mjs";
 /* 派发 payload 的 PR 标题那一格（run 列表可读性）。 */
@@ -355,10 +357,24 @@ describe("纯函数", () => {
     /* 探活单次上限 2026-11-02 从 15s 放宽到 30s：`cnb-pe2-1k6e1uhj8` 连续两跑 15s 无回话、
      * 同日 19:47 同 runner 却探活通过 —— 15s 把「慢但活着」的抖动截成了「没通」。 */
     expect(REMOTE_PROBE_TIMEOUT_MS).toBe(30_000);
-    const probeWorst = PROBE_MAX_ATTEMPTS * REMOTE_PROBE_TIMEOUT_MS + 15_000;
-    /* 推送档自 2026-11-05 起按**墙钟预算**收口（不再是「次数 × 单次」）：每次尝试的超时会被
-     * 裁到剩余预算，所以整档最坏就是预算本身，不叠加单跳上限。 */
-    expect(probeWorst + PUSH_RETRY_BUDGET_MS).toBeLessThan(10 * 60_000);
+    /* ISSUE #3234：探活与推送**共用**一份墙钟预算，最坏墙钟就是那一份预算本身，
+     * 不再把「探活次数 × 单次上限」与「推送预算」相加（那是两跳各领一份的旧口径）。
+     * 加上 LFS 首刀的单跳上限，480s 仍落在 10m 外框内。 */
+    expect(PROBE_MAX_ATTEMPTS).toBe(PUSH_MAX_ATTEMPTS);
+    expect(PUSH_RETRY_BUDGET_MS + PUSH_TIMEOUT_MS).toBeLessThan(10 * 60_000);
+  });
+
+  it("createWireBudget：一个起点、两跳取剩余量，用尽后不为负（ISSUE #3234）", () => {
+    let t = 1000;
+    const budget = createWireBudget(() => t);
+    /* 探活第一刀那一刻起算：满额。 */
+    expect(budget()).toBe(PUSH_RETRY_BUDGET_MS);
+    /* 探活花掉的时间要在推送那一跳里被扣掉，而不是各领一份 240s。 */
+    t += 100_000;
+    expect(budget()).toBe(PUSH_RETRY_BUDGET_MS - 100_000);
+    /* 超过窗口也不许给出负数（runGitWithRetry 按「低于一次尝试就不再发起」收口）。 */
+    t += 300_000;
+    expect(budget()).toBe(0);
   });
 
   it("推送重试窗口：瞬时失败也要试满 3–5 分钟，不是 6s 就交账（2026-11-05 现场）", () => {
@@ -1130,8 +1146,9 @@ describe("runMirror（git 与 fetch 全假件）", () => {
   });
 
   it("LFS 重试窗口：单独一份 60s 预算，比 wire 小一档、但不再是 6s 就交账", () => {
-    /* 2026-11-05 第二批：LFS 是同一格里的第二跳，前面已付过探活 105s + wire 240s，
-     * 再给 4 分钟会顶穿 10m 外框；但也不能退回「2 次 + 5s」那个瞬时失败 6s 收工的形态。 */
+    /* 2026-11-05 第二批：LFS 是同一格里的第二跳，探活与 wire 已共用掉 240s（ISSUE #3234
+     * 起从探活起算），再给 4 分钟会顶穿 10m 外框；但也不能退回「2 次 + 5s」那个
+     * 瞬时失败 6s 收工的形态。 */
     expect(LFS_PUSH_RETRY_BUDGET_MS).toBe(60_000);
     expect(LFS_PUSH_RETRY_BUDGET_MS).toBeLessThan(PUSH_RETRY_BUDGET_MS);
     const waits = RETRY_BACKOFF_MS.slice(0, LFS_PUSH_MAX_ATTEMPTS - 1);
@@ -1315,17 +1332,20 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(all).toContain("已推");
   });
 
-  it("探活重试耗尽（egress 连挂 3 次）⇒ 退 2，一次推都不发，结论行照旧是三态原值", async () => {
+  it("探活重试耗尽 ⇒ 退 2，一次推都不发，结论行照旧是三态原值", async () => {
     const down = { code: -1, stderr: "git ls-remote 超时（>30000 ms）：这一跳没拿到任何回话" };
     const { io, pushes, heard, sleeps, probeCalls } = harness({
-      probeResults: [down, down, down],
+      /* 序列用完后假件回落到这里，仍是 egress 失败 ⇒ 上限是真的被耗尽，不是「第 4 次通了」。 */
+      probeCode: down.code,
+      probeResults: Array.from({ length: PROBE_MAX_ATTEMPTS }, () => down),
+      probeStderr: down.stderr,
     });
     const code = await runMirror(io);
     /* 重试不改变退码：耗尽了仍是「前提没落地」（2），不是「判出的红」（1）。 */
     expect(code).toBe(CODE.NO_FACT);
     expect(probeCalls()).toBe(PROBE_MAX_ATTEMPTS);
-    /* 探活仍是 3 次（首跳 + 2 次重试），所以只吃退避表的前两项 —— 表自 2026-11-05 起为
-     * 推送的 4 分钟预算加长了，探活那边没有跟着变。 */
+    /* 探活与推送同值（首跳 + 9 次重试），退避阶梯整条都要吃掉 —— 不再是旧口径的
+     * 「3 次 + 15s 退避 ≈ 16s 就交账」（ISSUE #3234）。 */
     expect(sleeps).toEqual(RETRY_BACKOFF_MS.slice(0, PROBE_MAX_ATTEMPTS - 1));
     expect(pushes).toHaveLength(0);
     const all = heard.join("\n");
@@ -1396,6 +1416,87 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     const all = heard.join("\n");
     expect(all).toContain(`推送第 1/${PUSH_MAX_ATTEMPTS} 次没通`);
     expect(all).toContain("推送失败");
+  });
+
+  it("ISSUE #3234：探活吃同一份预算 ⇒ 重试超时被裁到剩余量，不再 16s 就交账", async () => {
+    const down = {
+      code: -1,
+      stderr:
+        "fatal: unable to access 'https://github.com/x/y.git/': Recv failure: Connection was reset",
+    };
+    const base = harness({
+      probeCode: down.code,
+      probeResults: Array.from({ length: PROBE_MAX_ATTEMPTS }, () => down),
+      probeStderr: down.stderr,
+    });
+    let t = 0;
+    const probeOpts: Array<{ timeout?: number } | undefined> = [];
+    const io = {
+      ...base.io,
+      now: () => t,
+      runGit: (args: Array<string>, opts?: { timeout?: number }) => {
+        if (args[0] === "ls-remote") {
+          probeOpts.push(opts);
+        }
+        return base.io.runGit(args);
+      },
+      /* 假时钟由退避推进：一次真墙钟都不付，但预算真的在走。 */
+      sleep: (ms: number) => {
+        t += ms;
+        return Promise.resolve();
+      },
+    };
+    const code = await runMirror(io);
+    expect(code).toBe(CODE.NO_FACT);
+    /* 探活没通就短路掉整格：一次推、一次派发都不发。 */
+    expect(base.pushes).toHaveLength(0);
+    expect(base.calls).toHaveLength(0);
+    expect(probeOpts).toHaveLength(PROBE_MAX_ATTEMPTS);
+    /* 首刀不裁（照吃 30s 单跳上限），保护「慢但活着」的那一读。 */
+    expect(probeOpts[0]).toBeUndefined();
+    /* 反向验证抓手：把探活那行 `budgetMs: wireBudget()` 摘掉，这里就该是 undefined。
+     * 只把次数抬到 10 而不给预算，重试仍会一路吃满 30s×9 —— 等于没给「3–5 分钟」。 */
+    expect(probeOpts[1]).toEqual({ timeout: REMOTE_PROBE_TIMEOUT_MS });
+    /* 最后一刀只剩「刚好够一次尝试」的余量 ⇒ 预算真的会咬，不是账面数字。 */
+    expect(probeOpts.at(-1)).toEqual({ timeout: RETRY_MIN_ATTEMPT_MS });
+    /* 整档墙钟吃满退避阶梯（230s ≳ 3min），不再是旧口径「3 次 + 15s ≈ 16s」。 */
+    expect(t).toBeGreaterThanOrEqual(3 * 60_000);
+  });
+
+  it("ISSUE #3234：两跳共享 deadline ⇒ 探活花掉的时间从推送预算里扣，不各领 4 分钟", async () => {
+    const down = { code: -1, stderr: "git ls-remote 超时（>30000 ms）：这一跳没拿到任何回话" };
+    const base = harness({
+      probeResults: [down, { code: 0, stdout: `${REMOTE_REF}\n` }],
+      pushCode: 128,
+      pushStderr: "Connection reset by peer",
+    });
+    let t = 0;
+    let probes = 0;
+    const io = {
+      ...base.io,
+      now: () => t,
+      runGit: (args: Array<string>) => {
+        if (args[0] === "ls-remote") {
+          probes += 1;
+          /* 探活第一刀「慢但失败」：挂了 100s 才回话，第二刀通。 */
+          if (probes === 1) {
+            t += 100_000;
+          }
+        }
+        return base.io.runGit(args);
+      },
+      sleep: (ms: number) => {
+        t += ms;
+        return Promise.resolve();
+      },
+    };
+    const code = await runMirror(io);
+    expect(code).toBe(CODE.FAIL);
+    expect(probes).toBe(2);
+    /* 推送只拿到约 135s 剩余预算 ⇒ 第 7 刀后就被收口；若两跳各领一份 240s，
+     * 这里会跑满 PUSH_MAX_ATTEMPTS = 10 次（反向验证抓手）。 */
+    expect(base.pushes.length).toBeLessThan(PUSH_MAX_ATTEMPTS);
+    expect(base.heard.join("\n")).toContain("推送重试预算用尽");
   });
 });
 
@@ -1631,6 +1732,45 @@ describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
     expect(last).not.toContain("派发=");
     /* 类别行与结尾小结**两处都有**：翻到结尾不必回滚，翻不到结尾也能读到类。 */
     expect(heard.join("\n")).toContain(`类别=${LFS_FAILURE_KINDS.LOCAL_REFS}`);
+  });
+
+  it("ISSUE #3234：master 档探活同样吃这份预算（两档不漂移）", async () => {
+    const down = {
+      code: -1,
+      stderr: "git ls-remote 超时（>30000 ms）：这一跳没拿到任何回话",
+    };
+    const base = harness({
+      probeCode: down.code,
+      probeResults: Array.from({ length: PROBE_MAX_ATTEMPTS }, () => down),
+      probeStderr: down.stderr,
+    });
+    let t = 0;
+    const probeOpts: Array<{ timeout?: number } | undefined> = [];
+    const io = {
+      ...base.io,
+      now: () => t,
+      runGit: (args: Array<string>, opts?: { timeout?: number }) => {
+        if (args[0] === "ls-remote") {
+          probeOpts.push(opts);
+        }
+        return base.io.runGit(args);
+      },
+      sleep: (ms: number) => {
+        t += ms;
+        return Promise.resolve();
+      },
+    };
+    const code = await runMasterMirror(io);
+    expect(code).toBe(CODE.NO_FACT);
+    /* 探活没通 ⇒ master 这一档也不推、不跑 LFS。 */
+    expect(base.pushes).toHaveLength(0);
+    expect(base.lfsPushes).toHaveLength(0);
+    /* 与 PR 档同一组读数：首刀不裁、第二刀裁到 30s、最后一刀只剩一次尝试的余量。
+     * 把 master 档探活的 `budgetMs: wireBudget()` 摘掉，这几条就会红。 */
+    expect(probeOpts[0]).toBeUndefined();
+    expect(probeOpts[1]).toEqual({ timeout: REMOTE_PROBE_TIMEOUT_MS });
+    expect(probeOpts.at(-1)).toEqual({ timeout: RETRY_MIN_ATTEMPT_MS });
+    expect(base.heard.every((l) => l.startsWith("[mirror-master]"))).toBe(true);
   });
 });
 
