@@ -21,6 +21,7 @@ import {
   classifyFailureOrigin,
   parseGhLogsTarget,
   renderFailureWindow,
+  resolveGhRepo,
   runGhLogs,
   runGhLogsOnRed,
   selectRunForPr,
@@ -376,6 +377,37 @@ describe("命令行形态：run id / PR 号两种写法都认", () => {
     const both = parseArgs(["--gh-logs", "3195", "--merge"]);
     expect(both.ghLogs).toBe(true);
     expect(both.merge).toBe(true);
+  });
+});
+
+describe("仓库坐标：GitHub 那一侧不认 CNB origin 的 slug", () => {
+  it("缺省落到镜像仓（wuxianyuedu/comfy-app），GITHUB_MIRROR_REPO 可覆盖", () => {
+    expect(resolveGhRepo({})).toBe("wuxianyuedu/comfy-app");
+    expect(resolveGhRepo({ GITHUB_MIRROR_REPO: "  org/repo  " })).toBe("org/repo");
+    expect(resolveGhRepo({ GITHUB_MIRROR_REPO: "   " })).toBe("wuxianyuedu/comfy-app");
+  });
+
+  it("回读的第一跳打的是镜像仓 API，不是 CNB origin 解析出的 slug", async () => {
+    const urls: string[] = [];
+    const lines: string[] = [];
+    const code = await runGhLogs({
+      input: `run:${String(RUN_ID)}`,
+      repo: resolveGhRepo({}),
+      env: { GITHUB_MIRROR_TOKEN: fakeValue },
+      log: (line) => lines.push(line),
+      fetchImpl: (input: RequestInfo | URL): Promise<Response> => {
+        const url =
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        urls.push(url);
+        return fakeGhFetch()(input);
+      },
+      sleep: () => Promise.resolve(),
+      dir: tempDir(),
+    });
+    expect(code).toBe(CODE.GREEN);
+    expect(urls[0]).toBe(
+      `https://api.github.com/repos/wuxianyuedu/comfy-app/actions/runs/${String(RUN_ID)}`,
+    );
   });
 });
 

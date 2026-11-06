@@ -11389,6 +11389,10 @@ pnpm ship --gh-logs https://github.com/.../actions/runs/4242
 - 令牌只从进程环境取：`GITHUB_MIRROR_TOKEN`（优先）/ `GITHUB_TOKEN`，权限 `actions: read`，
   不写任何文件。**没有令牌只念一行**「未设置令牌 ⇒ 跳过 GH 日志回读」，一次网络都不发，
   不判红、不改三态、不改退码。
+- **仓库坐标是镜像仓，不是 origin**：GitHub 那一侧取 `GITHUB_MIRROR_REPO`（缺省
+  `wuxianyuedu/comfy-app`），不从 `git remote get-url origin` 推 —— 本仓 origin 是
+  `cnb.cool/moon-read/comfy-app-t3`，拿它的 slug 打 GitHub API 一律 404（2026-11-05
+  `pnpm ship --gh-logs 42121584357` 现场）。
 - 取不到日志 ≠ 判红：401/403、404、网络不通、run 不在、job 列表为空，都只多一行缺因
   （带 HTTP / 网络原文），退码仍是 `0`。唯一退 `2` 的是**输入认不出**（用法错误）。
 - 脱敏在打印与落盘之前：精确令牌值、`ghp_…` / `github_pat_…`，以及日志里的 `KEY=value`
