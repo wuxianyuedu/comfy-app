@@ -136,9 +136,15 @@ describe("瞬时页签与侧栏隐藏（ISSUE #1784）", () => {
   it("恰好这三项是瞬时页签（切走即关），其余都不是", () => {
     const actual = NAV_ITEMS.filter((item) => isTransientView(item.id)).map((item) => item.id);
     expect(actual.sort()).toEqual([...TRANSIENT_IDS].sort());
-    for (const id of ["home", "canvas", "workshop", "models", "console"]) {
-      /* SAFETY: 类型断言已复核 */
-      expect(isTransientView(id as WorkspaceView)).toBe(false);
+    const nonTransientIds: Array<WorkspaceView> = [
+      "home",
+      "canvas",
+      "workshop",
+      "models",
+      "console",
+    ];
+    for (const id of nonTransientIds) {
+      expect(isTransientView(id)).toBe(false);
     }
   });
 

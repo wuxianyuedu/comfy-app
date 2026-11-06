@@ -13,6 +13,15 @@ import {
   type SelectionLike,
 } from "./log-row-style";
 
+/** 取选中元素的第一个文本子节点（视图结构固定为「元素 → 文本」）。 */
+function firstTextChild(selector: string): Text {
+  const child = document.querySelector(selector)?.firstChild ?? null;
+  if (child instanceof Text) {
+    return child;
+  }
+  throw new Error(`缺少文本子节点：${selector}`);
+}
+
 /** 造一段带行正文标记的 DOM（与 LogRow 渲染出来的结构一致）。 */
 function renderRows(): { inRow: Text; outside: Text } {
   document.body.innerHTML = `
@@ -24,10 +33,8 @@ function renderRows(): { inRow: Text; outside: Text } {
     <p id="other">页面里别的文本</p>
   `;
   return {
-    /* SAFETY: 类型断言已复核 */
-    inRow: document.querySelector(`[${LOG_ROW_TEXT_ATTRIBUTE}]`)!.firstChild as Text,
-    /* SAFETY: 类型断言已复核 */
-    outside: document.querySelector("#other")!.firstChild as Text,
+    inRow: firstTextChild(`[${LOG_ROW_TEXT_ATTRIBUTE}]`),
+    outside: firstTextChild("#other"),
   };
 }
 

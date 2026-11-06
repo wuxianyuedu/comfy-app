@@ -61,14 +61,18 @@ const KIND_CONFIG: Record<"canvas" | "generation" | "workflow" | "video", KindCo
   },
 };
 
+/** 类别键的运行时判据：`KIND_CONFIG` 的自有键就是全部合法类别。 */
+function isKindKey(key: string): key is keyof typeof KIND_CONFIG {
+  return Object.hasOwn(KIND_CONFIG, key);
+}
+
 /** 按项目 kind 取展示配置。`proj.kind` 是宽字符串（旧行可能为空 / 未知），
  *  故此处收口「未知 / 缺省 → 生成」这一条判据，返回**非空**配置——调用点不再
  *  各自 `KIND_CONFIG[... ]!`（`Record<string,T>` 的查表在 noUncheckedIndexedAccess
  *  下恒为 `T|undefined`，逼出一串 `!`）。 */
 function kindConfigOf(kind: string | null | undefined): KindConfig {
   const key = kind ?? "generation";
-  /* SAFETY: 类型断言已复核 */
-  return key in KIND_CONFIG ? KIND_CONFIG[key as keyof typeof KIND_CONFIG] : KIND_CONFIG.generation;
+  return isKindKey(key) ? KIND_CONFIG[key] : KIND_CONFIG.generation;
 }
 
 /** 把类别色按给定透明度档降为背景（`color-mix` 现取，不硬编码透明色）。 */
@@ -184,6 +188,55 @@ export function HomePage({
      `T | undefined`，与其在 JSX 里再判一遍，不如在这里落个名字。 */
   const resumeProject: RecentProject | undefined = recentProjects[0];
 
+  /* 快捷入口卡的数据源：`id` 显式标成 `WorkspaceView`，导航时直接用它，
+   *  不必在 onClick 里把宽字符串断言成视图名。 */
+  const shortcutCards: Array<{
+    desc: string;
+    icon: React.ReactNode;
+    id: WorkspaceView;
+    label: string;
+  }> = [
+    {
+      id: "canvas",
+      label: "新建画布",
+      desc: "自由编排节点工作流",
+      icon: <LayoutTemplate size={22} strokeWidth={1.8} />,
+    },
+    {
+      id: "workshop",
+      label: "全链路工坊",
+      desc: "剧本 → 分镜 → 成片",
+      icon: <BookOpen size={22} strokeWidth={1.8} />,
+    },
+    {
+      id: "models",
+      label: "模型库",
+      desc: "管理 Checkpoint / LoRA",
+      icon: <Box size={22} strokeWidth={1.8} />,
+    },
+    {
+      id: "workflows",
+      label: "工作流库",
+      desc: "导入和复用工作流",
+      icon: (
+        <svg
+          fill="none"
+          height="22"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.8"
+          viewBox="0 0 24 24"
+          width="22"
+        >
+          <rect height="7" rx="1.5" width="7" x="3" y="3" />
+          <rect height="7" rx="1.5" width="7" x="14" y="14" />
+          <path d="M10 6.5h4a3 3 0 013 3v4.5" />
+        </svg>
+      ),
+    },
+  ];
+
   return (
     <DocumentFrame
       backdrop={
@@ -205,52 +258,11 @@ export function HomePage({
       {/* ── 快捷入口卡片 ──
           原先这里还有一块「灵感从这里开始 + 用本地 AI 模型，自由创作图像、视频与专属模型」的欢迎区，移除理由只有一条：**它一个信息都不给**（标题是口号、副标题把四张卡片的说明重说一遍），却占掉首屏上沿约 150px（含下方 40px 间距）；首页整屏要回答的只有「继续哪个项目 / 开哪个入口」。 */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          {
-            id: "canvas",
-            label: "新建画布",
-            desc: "自由编排节点工作流",
-            icon: <LayoutTemplate size={22} strokeWidth={1.8} />,
-          },
-          {
-            id: "workshop",
-            label: "全链路工坊",
-            desc: "剧本 → 分镜 → 成片",
-            icon: <BookOpen size={22} strokeWidth={1.8} />,
-          },
-          {
-            id: "models",
-            label: "模型库",
-            desc: "管理 Checkpoint / LoRA",
-            icon: <Box size={22} strokeWidth={1.8} />,
-          },
-          {
-            id: "workflows",
-            label: "工作流库",
-            desc: "导入和复用工作流",
-            icon: (
-              <svg
-                fill="none"
-                height="22"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="1.8"
-                viewBox="0 0 24 24"
-                width="22"
-              >
-                <rect height="7" rx="1.5" width="7" x="3" y="3" />
-                <rect height="7" rx="1.5" width="7" x="14" y="14" />
-                <path d="M10 6.5h4a3 3 0 013 3v4.5" />
-              </svg>
-            ),
-          },
-        ].map((card) => (
+        {shortcutCards.map((card) => (
           <Button
             className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 flex h-auto flex-col items-start gap-2.5 rounded-2xl border p-4 text-left font-normal transition-all hover:shadow-lg hover:shadow-black/5 dark:shadow-black/10"
             key={card.id}
-            /* SAFETY: 类型断言已复核 */
-            onClick={() => onNavigate?.(card.id as WorkspaceView)}
+            onClick={() => onNavigate?.(card.id)}
             variant="ghost"
           >
             <span className="bg-primary/10 text-primary-strong group-hover:bg-primary/15 flex size-10 items-center justify-center rounded-xl transition-colors">

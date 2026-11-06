@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
 import { useHotkey } from "~/components/ui/use-hotkey";
+import { isRecord } from "~/lib/is-record";
 import { fetchFileLogSlice } from "~/lib/log/log-file-client";
 import { clampLogTime } from "~/lib/log/log-session-scope";
 import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
@@ -44,15 +45,8 @@ export function describeGlobalError(reason: unknown): string {
   if (typeof reason === "string") {
     return reason;
   }
-  if (
-    typeof reason === "object" &&
-    reason !== null &&
-    "message" in reason &&
-    /* SAFETY: 类型断言已复核 */
-    typeof (reason as { message?: unknown }).message === "string"
-  ) {
-    /* SAFETY: 类型断言已复核 */
-    return (reason as { message: string }).message;
+  if (isRecord(reason) && "message" in reason && typeof reason.message === "string") {
+    return reason.message;
   }
   try {
     // oxlint-disable-next-line no-unnecessary-condition -- JSON.stringify 声明返回 string，但运行时对 function/symbol 会返回 undefined，?? 是兜底

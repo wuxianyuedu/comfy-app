@@ -4,10 +4,18 @@
 // 与列出的行同一口径，否则「共 N 个」会和行数对不上。
 import { describe, expect, it } from "vitest";
 
-import { deriveModelOverview } from "./model-overview-derive";
+import { deriveModelOverview, type OverviewFolder } from "./model-overview-derive";
 
 function folder(folderName: string, label: string, count: number) {
   return { folder: folderName, label, count };
+}
+
+/* 构造「缺 count」的目录行：静态类型仍是一行完整数据，运行时把字段删掉——
+ * 用它钉住 `deriveModelOverview` 对缺失计数的兜底（不靠类型断言造假）。 */
+function folderWithoutCount(folderName: string, label: string): OverviewFolder {
+  const row: OverviewFolder = { folder: folderName, label, count: 0 };
+  Reflect.deleteProperty(row, "count");
+  return row;
 }
 
 describe("deriveModelOverview 分组与排序", () => {
@@ -54,14 +62,7 @@ describe("deriveModelOverview 分组与排序", () => {
 
   it("0 与「没有这一档」不是一回事：count 缺失的行按 0 处理，不混进列表", () => {
     const out = deriveModelOverview({
-      /* SAFETY: 类型断言已复核 */
-      folders: [
-        { folder: "a", label: "A", count: 1 },
-        {
-          folder: "b",
-          label: "B",
-        } as never,
-      ],
+      folders: [{ folder: "a", label: "A", count: 1 }, folderWithoutCount("b", "B")],
       loading: false,
       isError: false,
     });

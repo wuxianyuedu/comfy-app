@@ -105,9 +105,12 @@ const ORIGIN_TEXT: Record<LogOriginFilter, string> = {
  * `Select` 的 value 类型是 `any`；值意外为空/未知时落到「全部来源」这个安全默认，
  * 而不是把 `undefined` 塞进索引去渲染。
  */
+function isOriginFilter(value: unknown): value is LogOriginFilter {
+  return typeof value === "string" && value in ORIGIN_TEXT;
+}
+
 function asOriginFilter(value: unknown): LogOriginFilter {
-  /* SAFETY: 类型断言已复核 */
-  return typeof value === "string" && value in ORIGIN_TEXT ? (value as LogOriginFilter) : "all";
+  return isOriginFilter(value) ? value : "all";
 }
 
 /** 下拉候选列表的列宽（列标题与各行共用，列与列才对得上）。 */

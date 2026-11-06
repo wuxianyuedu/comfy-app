@@ -5,6 +5,7 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ViewableImage } from "~/components/ui/image-viewer";
 import { isVideo } from "~/lib/media/media";
 import { fetchTaskWorkflow, openTaskFolder } from "~/lib/history-detail-actions";
+import { isPlainRecord } from "~/lib/is-record";
 
 import {
   deriveTaskOrigin,
@@ -81,8 +82,11 @@ export function HistoryDetailModal({
     hasAny: hasParams,
   } = deriveWorkflowParams(current, workflowIO);
   const firstImage = Array.isArray(current?.images) ? current.images[0] : undefined;
-  /* SAFETY: 类型断言已复核 */
-  const snapSource = (current?.workflowSnapshot as { source?: string } | null | undefined)?.source;
+  /* 快照是 DB 的 JSON 列（unknown）：先确认它是对象、`source` 是字符串再读，
+   *  其余（null / 旧数据 / 非字符串）都按「磁盘回退快照」显示。 */
+  const snapshot = current?.workflowSnapshot;
+  const snapSource =
+    isPlainRecord(snapshot) && typeof snapshot.source === "string" ? snapshot.source : undefined;
   const sourceLabel =
     snapSource === "backfill"
       ? "历史记录回填快照"
