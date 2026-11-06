@@ -161,6 +161,18 @@ jobs:
       - name: UI/逻辑分离
         run: node scripts/check-ui-logic-separation.cjs
 
+      # 失败时上传诊断产物（ship --gh-logs 之外的离线兜底；目录缺席不报错）
+      - name: 失败时上传诊断产物
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-gate-${{ github.event.client_payload.pr_number || 'manual' }}-${{ job.name }}
+          path: |
+            coverage/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
   # ── 安装 + 数据库表结构 + 类型检查 + oxfmt ─────────────────────────────
   # 对应 `.cnb.yml` 的 Install dependencies / 同步数据库表结构 / 类型检查 / oxfmt 格式。
   typecheck-db-format:
@@ -201,6 +213,17 @@ jobs:
       - name: lib Node-only 声明（cnb 同款判据一字不改）
         run: node scripts/ci-run-tool.mjs vitest run tests/lib-node-only-declarations.test.ts
 
+      - name: 失败时上传诊断产物
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-gate-${{ github.event.client_payload.pr_number || 'manual' }}-${{ job.name }}
+          path: |
+            coverage/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
   # ── 固定结构用例（FIXED_STRUCTURAL_TESTS 静态清单，不解析改动面）─────────
   fixed-structural-tests:
     runs-on: ubuntu-24.04
@@ -239,6 +262,17 @@ jobs:
       - name: 固定结构用例（cnb 同款判据一字不改）
         run: node scripts/ci-step-verdict.mjs --label "固定结构用例" -- node scripts/ci-affected-tests.mjs
 
+      - name: 失败时上传诊断产物
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-gate-${{ github.event.client_payload.pr_number || 'manual' }}-${{ job.name }}
+          path: |
+            coverage/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
   # ── 受影响用例（固定清单之外 + 这个 PR 改动牵扯到的用例，三点 diff）──────
   affected-tests:
     runs-on: ubuntu-24.04
@@ -273,6 +307,17 @@ jobs:
 
       - name: 受影响用例（cnb 同款判据一字不改）
         run: node scripts/ci-step-verdict.mjs --label "受影响用例" -- node scripts/ci-affected-tests.mjs
+
+      - name: 失败时上传诊断产物
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-gate-${{ github.event.client_payload.pr_number || 'manual' }}-${{ job.name }}
+          path: |
+            coverage/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
 
   # ── 重档静态判据（钩子注册表执行面，含 cargo test）─────────────────────
   # `.cnb.yml` 那一格带 `.cargo-env` 锚点是自托管 Windows 的 rustup 代理路径
@@ -322,3 +367,14 @@ jobs:
         # 「没判」那一档（缺 CNB_COMMIT 等前提）由脚本自己打结论行，外壳据此折成非红；
         # 有红 / 有缺件不折，红照样红（ISSUE #3102）。
         run: node scripts/ci-step-verdict.mjs --label "重档静态判据" --inconclusive-marker "[重档] 结论：没判" -- node scripts/ci-heavy-gates.mjs
+
+      - name: 失败时上传诊断产物
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-gate-${{ github.event.client_payload.pr_number || 'manual' }}-${{ job.name }}
+          path: |
+            coverage/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
