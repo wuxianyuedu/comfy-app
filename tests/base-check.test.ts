@@ -379,7 +379,7 @@ describe("base-check —— 没收集到用例：inconclusive 的第二条入口
   test("这一态的下一步动作给出环境侧出口（依赖链法 / Windows 形态）", () => {
     const text = nextSteps("inconclusive", { ref: "origin/master" }).join("\n");
     expect(text).toContain("pnpm install --frozen-lockfile");
-    expect(text).toMatch(/同一(个盘|个根)|--keep/);
+    expect(text).toMatch(/同一(?:个盘|个根)|--keep/);
     expect(text).toContain("pnpm");
     /* 不许把它读成别线的红 —— 那正是这次要修的那一格。 */
     expect(text).toMatch(/不构成.*别线的红/);

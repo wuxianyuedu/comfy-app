@@ -33,7 +33,7 @@
 
 /** 视频类模式码（前缀式，兼容 T2V / TI2V / FLF2V / FMF2V / S2V / V2V …）。 */
 const VIDEO_MODE_RE =
-  /^(t2v|i2v|ti2v|flf2v|fmf2v|v2v|r2v|rv2v|vi2v|mv2v|vrc2v|ads2v|s2v|ia2v|a2v)$/i;
+  /^(?:t2v|i2v|ti2v|flf2v|fmf2v|v2v|r2v|rv2v|vi2v|mv2v|vrc2v|ads2v|s2v|ia2v|a2v)$/i;
 
 /** 该模式码是否属于视频生成。 */
 export function isVideoMode(code: string | null | undefined): boolean {
@@ -45,7 +45,7 @@ export function modeUsesFirstFrame(code: string | null | undefined): boolean {
   if (typeof code !== "string") {
     return false;
   }
-  return /^(i2v|ti2v|flf2v|fmf2v|r2v|s2v|ia2v)$/i.test(code.trim());
+  return /^(?:i2v|ti2v|flf2v|fmf2v|r2v|s2v|ia2v)$/i.test(code.trim());
 }
 
 /** 该模式是否需要尾帧图（首尾帧视频）。 */
@@ -53,7 +53,7 @@ export function modeUsesLastFrame(code: string | null | undefined): boolean {
   if (typeof code !== "string") {
     return false;
   }
-  return /^(flf2v|fmf2v)$/i.test(code.trim());
+  return /^(?:flf2v|fmf2v)$/i.test(code.trim());
 }
 
 /** 统一对外参数的种类（`ParamClass` 的对外子集）。
@@ -144,7 +144,7 @@ function isImageEditMode(code: string | null | undefined): boolean {
   if (typeof code !== "string") {
     return false;
   }
-  return /^(i2i|inpaint|outpaint|upscale|e2i|d2i|p2i|r2i|c2i)$/i.test(code.trim());
+  return /^(?:i2i|inpaint|outpaint|upscale|e2i|d2i|p2i|r2i|c2i)$/i.test(code.trim());
 }
 
 /** 一个模式是否支持多张参考图（图生图类通常多图）。 */
@@ -267,13 +267,13 @@ export function exposedParamsForMode(code: string | null | undefined): Array<Exp
 /** 自定义对外参数口的简单类型。 */
 export type ExposedCustomKind = "text" | "image" | "number";
 
-const EXPOSED_CUSTOM_ID_RE = /^custom-(text|image|number)-(\d+)$/;
+const EXPOSED_CUSTOM_ID_RE = /^custom-(?<kind>text|image|number)-(?:\d+)$/;
 
 /** 自定义口 id 的类型；不是自定义口返回 null。 */
 export function exposedCustomKindOf(id: string): ExposedCustomKind | null {
   const matched = EXPOSED_CUSTOM_ID_RE.exec(id);
-  /* SAFETY: 类型断言已复核 */
-  return matched ? (matched[1] as ExposedCustomKind) : null;
+  const kind = matched?.groups?.kind;
+  return kind === "text" || kind === "image" || kind === "number" ? kind : null;
 }
 
 /** 自定义口类型 → 复用的对外参数类（见上方注释）。 */
@@ -306,8 +306,8 @@ export function exposedParamDisplayLabel(id: string): string {
 /** 带序号的参考图口的序号（`reference-image-2` → 2；其余口返回 0）。
  *  第一张不带序号，故「序号 > 1」才是「参考图 2」这种带序号的槽位。 */
 export function referenceImageSlotIndex(id: string): number {
-  const m = /^reference-image-(\d+)$/.exec(id);
-  return m ? Number(m[1]) : 0;
+  const m = /^reference-image-(?<index>\d+)$/.exec(id);
+  return m ? Number(m.groups?.index) : 0;
 }
 
 /** 契约里给定 id 的基础名（未知 id 原样返回，兼容历史落库键）。

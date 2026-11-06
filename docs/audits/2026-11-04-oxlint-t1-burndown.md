@@ -12,7 +12,7 @@
 | B1   | `eslint/no-use-before-define（functions:false）` | 75       | 48       | 已清（75 处/48 份）                                |
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
-| B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 清账中（子批1–5：205 份 / 659 处已清）             |
+| B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 清账中（子批1–6：225 份 / 720 处已清）             |
 | B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 挂账中                                             |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
@@ -612,26 +612,26 @@
 | `src/lib/media/media-kind.ts`                                                          | 3        | 已清 |
 | `src/lib/media/output-paths.ts`                                                        | 1        | 已清 |
 | `src/lib/media/size-presets.ts`                                                        | 5        | 已清 |
-| `src/lib/process/executable-resolve.ts`                                                | 1        | 挂账 |
-| `src/lib/shell/reveal-path.test.ts`                                                    | 1        | 挂账 |
-| `src/lib/workflow/workflow-exposed-params.ts`                                          | 7        | 挂账 |
-| `src/lib/workflow/workflow-param-mapping.ts`                                           | 2        | 挂账 |
-| `src/lib/workshop/api-channel-shared.ts`                                               | 4        | 挂账 |
-| `src/lib/workshop/model-mode-contract.ts`                                              | 3        | 挂账 |
-| `src/lib/workshop/script-parse.ts`                                                     | 14       | 挂账 |
-| `src/lib/workshop/script-parser.ts`                                                    | 3        | 挂账 |
-| `src/lib/workshop/workflow-encapsulation.ts`                                           | 1        | 挂账 |
-| `src/server/api/routers/setting-backup.test.ts`                                        | 1        | 挂账 |
-| `src/server/api/routers/setting.test.ts`                                               | 1        | 挂账 |
-| `src/server/api/routers/setting.ts`                                                    | 1        | 挂账 |
-| `src/server/api/routers/workflow-list.ts`                                              | 1        | 挂账 |
-| `src/server/api/routers/workflow-mutations.ts`                                         | 1        | 挂账 |
-| `tests/app-event-pairing.test.ts`                                                      | 6        | 挂账 |
-| `tests/app-metadata-and-csp-shape.test.ts`                                             | 1        | 挂账 |
-| `tests/app-service-exit-contract.test.ts`                                              | 9        | 挂账 |
-| `tests/artifact-layout-single-source.test.ts`                                          | 2        | 挂账 |
-| `tests/audits-doc-references.test.ts`                                                  | 1        | 挂账 |
-| `tests/base-check.test.ts`                                                             | 1        | 挂账 |
+| `src/lib/process/executable-resolve.ts`                                                | 1        | 已清 |
+| `src/lib/shell/reveal-path.test.ts`                                                    | 1        | 已清 |
+| `src/lib/workflow/workflow-exposed-params.ts`                                          | 7        | 已清 |
+| `src/lib/workflow/workflow-param-mapping.ts`                                           | 2        | 已清 |
+| `src/lib/workshop/api-channel-shared.ts`                                               | 4        | 已清 |
+| `src/lib/workshop/model-mode-contract.ts`                                              | 3        | 已清 |
+| `src/lib/workshop/script-parse.ts`                                                     | 14       | 已清 |
+| `src/lib/workshop/script-parser.ts`                                                    | 3        | 已清 |
+| `src/lib/workshop/workflow-encapsulation.ts`                                           | 1        | 已清 |
+| `src/server/api/routers/setting-backup.test.ts`                                        | 1        | 已清 |
+| `src/server/api/routers/setting.test.ts`                                               | 1        | 已清 |
+| `src/server/api/routers/setting.ts`                                                    | 1        | 已清 |
+| `src/server/api/routers/workflow-list.ts`                                              | 1        | 已清 |
+| `src/server/api/routers/workflow-mutations.ts`                                         | 1        | 已清 |
+| `tests/app-event-pairing.test.ts`                                                      | 6        | 已清 |
+| `tests/app-metadata-and-csp-shape.test.ts`                                             | 1        | 已清 |
+| `tests/app-service-exit-contract.test.ts`                                              | 9        | 已清 |
+| `tests/artifact-layout-single-source.test.ts`                                          | 2        | 已清 |
+| `tests/audits-doc-references.test.ts`                                                  | 1        | 已清 |
+| `tests/base-check.test.ts`                                                             | 1        | 已清 |
 | `tests/build-desktop-step-readings.test.ts`                                            | 1        | 挂账 |
 | `tests/build-fresh-checkout.test.ts`                                                   | 2        | 挂账 |
 | `tests/check-allow-builds.test.ts`                                                     | 2        | 挂账 |

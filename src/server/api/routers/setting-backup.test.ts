@@ -64,7 +64,7 @@ describe("setting.backupCreate", () => {
     if (!result.ok) {
       return;
     }
-    expect(result.name).toMatch(/^db-backup-\d{8}-\d{6}(-\d+)?\.sqlite$/);
+    expect(result.name).toMatch(/^db-backup-\d{8}-\d{6}(?:-\d+)?\.sqlite$/);
 
     const listed = await caller.backupList();
     expect(listed.backups.map((b) => b.name)).toContain(result.name);

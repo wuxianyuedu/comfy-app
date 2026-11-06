@@ -296,5 +296,5 @@ function projectScopedProbe(): (candidate: string) => boolean {
 
 /** `path.relative` 跨盘（Windows 盘不同）时会回一个绝对路径 —— 那就是界外。 */
 function isAbsolutePath(rel: string): boolean {
-  return /^([A-Za-z]:[\\/]|[\\/])/.test(rel);
+  return /^(?:[A-Za-z]:[\\/]|[\\/])/.test(rel);
 }

@@ -587,12 +587,12 @@ function sizeValueForPin(
   if (!raw) {
     return supplied;
   }
-  const dims = /^(\d+)\s*[xX×]\s*(\d+)$/.exec(String(supplied).trim());
+  const dims = /^(?<width>\d+)\s*[xX×]\s*(?<height>\d+)$/.exec(String(supplied).trim());
   if (!dims) {
     return supplied;
   }
-  const width = Number(dims[1]);
-  const height = Number(dims[2]);
+  const width = Number(dims.groups?.width);
+  const height = Number(dims.groups?.height);
   /* 形状由**子口身份**给出：作者连的是「尺寸 · 宽高比」，值就按比例标签派 ——
    * 端口叫什么名字不参与判定。 */
   switch (entry.cls) {

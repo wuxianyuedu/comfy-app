@@ -81,7 +81,7 @@ function asStr(v: unknown): string {
 
 /** 人物行:行首(可带 markdown #/列表符)「人物:/角色:」等标记 + 冒号 */
 const CHARACTER_LINE_RE =
-  /^#{0,6}\s*[*_-]*\s*(?:主要人物|人物|角色|配角|CHARACTERS?|character)\s*[:：]\s*(.+)$/i;
+  /^#{0,6}\s*[*_-]*\s*(?:主要人物|人物|角色|配角|CHARACTERS?|character)\s*[:：]\s*(?<character>.+)$/i;
 
 /** 条目分隔符:顿号 / 分号(逗号常出现在「(女,25岁)」括号内,故不参与分隔) */
 const ENTRY_SPLIT_RE = /[、;；]/;
@@ -99,7 +99,7 @@ export function parseCharacterEntries(markdown: string): Array<ParsedCharacterDr
     if (!m) {
       continue;
     }
-    for (const seg of (m[1] ?? "").split(ENTRY_SPLIT_RE)) {
+    for (const seg of (m.groups?.character ?? "").split(ENTRY_SPLIT_RE)) {
       const draft = parseCharacterEntry(seg);
       if (!draft) {
         continue;
@@ -210,25 +210,25 @@ export function matchSceneHeading(line: string): SceneHeadingInfo | null {
 
   // A:「编号-编号」+ (场景关键词 | 内/外标记) + 尾部
   const a =
-    /^\d{1,3}\s*[-–—.、]\s*\d{1,3}\s*(?:(场\s*景|场|SCENE)\s*)?((?:内|外|INT\.?|EXT\.?)(?=\s|[:：,.、。]|$))?\s*(.*)$/i.exec(
+    /^\d{1,3}\s*[-–—.、]\s*\d{1,3}\s*(?:(?<scene>场\s*景|场|SCENE)\s*)?(?<indoor>(?:内|外|INT\.?|EXT\.?)(?=\s|[:：,.、。]|$))?\s*(?<rest>.*)$/i.exec(
       s,
     );
-  if (a && (a[1] !== undefined || a[2] !== undefined)) {
+  if (a && (a.groups?.scene !== undefined || a.groups?.indoor !== undefined)) {
     return {
       heading: s,
-      marker: normalizeMarker(a[2]),
-      tail: (a[3] ?? "").trim(),
+      marker: normalizeMarker(a.groups?.indoor),
+      tail: (a.groups?.rest ?? "").trim(),
     };
   }
   // B:「场景N」或「场景·」(必须带序号或分隔符,防误伤普通句子)
-  const b = /^(场\s*景|场|SCENE)\s*(?:(\d{1,3})|([:：·.\-–—、]))\s*(.*)$/i.exec(s);
+  const b = /^(?:场\s*景|场|SCENE)\s*(?:\d{1,3}|[:：·.\-–—、])\s*(?<rest>.*)$/i.exec(s);
   if (b) {
-    return { heading: s, marker: "", tail: (b[4] ?? "").trim() };
+    return { heading: s, marker: "", tail: (b.groups?.rest ?? "").trim() };
   }
   // C:「第N场/幕」
-  const c = /^第\s*\d{1,3}\s*[场幕]\s*(.*)$/.exec(s);
+  const c = /^第\s*\d{1,3}\s*[场幕]\s*(?<rest>.*)$/.exec(s);
   if (c) {
-    return { heading: s, marker: "", tail: (c[1] ?? "").trim() };
+    return { heading: s, marker: "", tail: (c.groups?.rest ?? "").trim() };
   }
   return null;
 }
@@ -239,7 +239,7 @@ function normalizeMarker(raw: string | undefined): string {
 }
 
 const TIME_WORDS_RE =
-  /(清晨|早晨|早上|上午|中午|正午|午后|下午|黄昏|傍晚|晚上|夜晚|夜里|深夜|午夜|凌晨|黎明|白天|月夜)/;
+  /(?<time>清晨|早晨|早上|上午|中午|正午|午后|下午|黄昏|傍晚|晚上|夜晚|夜里|深夜|午夜|凌晨|黎明|白天|月夜)/;
 
 /** 从场景标题尾部提取地点/时间:优先「地点(时间)」括号,其次时间词扫描 */
 function extractLocationTime(marker: string, tailRaw: string): { location: string; time: string } {
@@ -248,9 +248,9 @@ function extractLocationTime(marker: string, tailRaw: string): { location: strin
     return { location: normalizeLocation(marker, ""), time: "" };
   }
 
-  const paren = /[(（]([^()（）]*)[)）]\s*$/.exec(tail);
+  const paren = /[(（](?<time>[^()（）]*)[)）]\s*$/.exec(tail);
   if (paren) {
-    const maybeTime = (paren[1] ?? "").trim();
+    const maybeTime = (paren.groups?.time ?? "").trim();
     const loc = tail
       .slice(0, paren.index)
       .trim()
@@ -260,12 +260,13 @@ function extractLocationTime(marker: string, tailRaw: string): { location: strin
     }
   }
   const t = TIME_WORDS_RE.exec(tail);
-  if (t?.[1] !== undefined) {
-    const loc = (tail.slice(0, t.index) + tail.slice(t.index + t[1].length))
+  const time = t?.groups?.time;
+  if (t && time !== undefined) {
+    const loc = (tail.slice(0, t.index) + tail.slice(t.index + time.length))
       .trim()
       .replace(/^[.。、,，:：\-–—\s]+/, "")
       .replace(/[.。、,，:：\-–—\s]+$/, "");
-    return { location: normalizeLocation(marker, loc), time: t[1] };
+    return { location: normalizeLocation(marker, loc), time };
   }
   return { location: normalizeLocation(marker, tail), time: "" };
 }
@@ -278,9 +279,9 @@ function normalizeLocation(marker: string, loc: string): string {
   return l ? `${marker}·${l}` : marker;
 }
 
-const ACTION_LINE_RE = /^\*{0,2}[Δ△▲]\s*(.+?)\*{0,2}$/;
+const ACTION_LINE_RE = /^\*{0,2}[Δ△▲]\s*(?<action>.+?)\*{0,2}$/;
 /** 台词行:「V1 小满:台词」「V12:旁白」——V 后必须跟数字,避免误伤英文单词 */
-const DIALOGUE_LINE_RE = /^\*{0,2}[Vv]\s*(\d{1,3})\s*[:：.]?\s*(.+?)\*{0,2}$/;
+const DIALOGUE_LINE_RE = /^\*{0,2}[Vv]\s*(?:\d{1,3})\s*[:：.]?\s*(?<dialogText>.+?)\*{0,2}$/;
 
 /**
  * 从剧本 markdown 拆分镜头草稿:
@@ -336,12 +337,12 @@ export function parseShotDrafts(
     }
     const am = ACTION_LINE_RE.exec(s);
     if (am) {
-      cur.items.push({ description: (am[1] ?? "").trim(), dialogue: [] });
+      cur.items.push({ description: (am.groups?.action ?? "").trim(), dialogue: [] });
       continue;
     }
     const dm = DIALOGUE_LINE_RE.exec(s);
     if (dm) {
-      const text = (dm[2] ?? "").trim();
+      const text = (dm.groups?.dialogText ?? "").trim();
       if (!text) {
         continue;
       }

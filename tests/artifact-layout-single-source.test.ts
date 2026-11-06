@@ -24,7 +24,7 @@ const FORBIDDEN: ReadonlyArray<{ name: string; pattern: RegExp }> = [
     // 只认引号紧贴在 public 前的那种（UI 里给人看的散文「素材保存在 public/generated…」
     // 不算代码路径构造 —— 它们的处置记在台账 #12，理由见文件头）
     name: "把 public/generated 当字面量路径",
-    pattern: /["']public[\\/]+generated([\\/]|["'])/,
+    pattern: /["']public[\\/]+generated(?:[\\/]|["'])/,
   },
   {
     // 自己抄一遍地址前缀（`taskOutputUrl` / `artifactUrl` 之外不许有第二份）
@@ -76,8 +76,8 @@ function allowedRootSegments(ps1: string): Array<string> | null {
   const rest = ps1.slice(start);
   const ends = rest.search(/\n\s*\$/);
   const statement = ends < 0 ? rest : rest.slice(0, ends);
-  return [...statement.matchAll(/"([^"]*)"/g)]
-    .map((m) => m[1]!)
+  return [...statement.matchAll(/"(?<segment>[^"]*)"/g)]
+    .map((m) => m.groups?.segment ?? "")
     .filter((segment) => segment.length > 0);
 }
 

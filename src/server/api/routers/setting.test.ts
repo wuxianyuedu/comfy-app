@@ -444,7 +444,7 @@ describe("setting.revealPath —— 打开本机路径之前的存在性 + 检�
     if (process.platform === "win32") {
       /* `/select,"<路径>"` 必须是**一个**参数：拆成两个时 explorer 会把含空格的
        * 路径截断，表现是「打开了资源管理器但什么都没选中」。 */
-      expect(cmd).toMatch(/cmd(\.exe)?$/i);
+      expect(cmd).toMatch(/cmd(?:\.exe)?$/i);
       expect(args.at(-1)).toMatch(/^\/select,".+package\.json"$/);
     } else if (process.platform === "darwin") {
       /* macOS：`open -R` 把**目标本身**交给 Finder。 */

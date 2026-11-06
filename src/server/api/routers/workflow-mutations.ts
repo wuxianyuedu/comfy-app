@@ -75,7 +75,7 @@ export const workflowMutationProcedures = {
           sourcePathRaw
             .split(/[\\/]/)
             .pop()
-            ?.replace(/\.(json|workflow)$/i, "")
+            ?.replace(/\.(?:json|workflow)$/i, "")
             .trim() ?? "未命名工作流";
         const name =
           typeof body.name === "string" && body.name.trim() ? body.name.trim() : fallbackName;
