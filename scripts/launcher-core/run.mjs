@@ -235,6 +235,18 @@ export function readRunJsonAt(dir) {
   }
 }
 
+/** run.json 的 `pids` 字段形状（文件可能被改坏，读到什么都先验一遍再取用）。
+ * @param {unknown} value
+ * @returns {value is Record<string, number>} */
+function isPidMap(value) {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.values(value).every((pid) => typeof pid === "number")
+  );
+}
+
 /**
  * 更新 current/run.json 的字段（读-改-写）。
  *
@@ -261,7 +273,8 @@ export function recordPid(root, name, pid) {
   if (!meta) {
     return;
   }
-  const pids = { .../** @type {Record<string, number>} */ (meta.pids) };
+  const rawPids = meta.pids;
+  const pids = isPidMap(rawPids) ? { ...rawPids } : {};
   // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (pid == null) {
     delete pids[name];
@@ -509,11 +522,7 @@ export function dirSize(dir) {
 export async function pruneRuns(root, { now = Date.now(), delete: del } = {}) {
   const runs = listRuns(root);
   const cutoff = now - RETENTION.maxAgeDays * 24 * 60 * 60 * 1000;
-  const byAge = new Set(
-    [...runs]
-      .sort((a, b) => b.name.localeCompare(a.name))
-      .map((r) => r.name),
-  );
+  const byAge = new Set([...runs].sort((a, b) => b.name.localeCompare(a.name)).map((r) => r.name));
   const recent = [...runs]
     .sort((a, b) => b.name.localeCompare(a.name))
     .slice(0, RETENTION.maxRuns)

@@ -12,11 +12,7 @@ import { FormField } from "~/components/ui/form-field";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import {
-  REMOTE_MODEL_KINDS,
-  REMOTE_MODEL_KIND_LABELS,
-  type RemoteModelKind,
-} from "~/lib/llm/types";
+import { REMOTE_MODEL_KINDS, REMOTE_MODEL_KIND_LABELS } from "~/lib/llm/types";
 
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 import type { ModelDialog, RemoteModelDialogs } from "../hooks/use-remote-model-dialogs";
@@ -95,12 +91,12 @@ export function RemoteModelDialog({
                 className="text-sm"
                 fullWidth
                 labels={REMOTE_MODEL_KIND_LABELS}
-                onChange={(kind) => {
-                  d.setAddForm((f) => ({
-                    ...f,
-                    /* SAFETY: 类型断言已复核 */
-                    kind: kind as RemoteModelKind,
-                  }));
+                onChange={(next) => {
+                  /* 可选值就是 `REMOTE_MODEL_KINDS`；用 `find` 收窄，认不出的值不写回。 */
+                  const kind = REMOTE_MODEL_KINDS.find((candidate) => candidate === next);
+                  if (kind !== undefined) {
+                    d.setAddForm((f) => ({ ...f, kind }));
+                  }
                 }}
                 options={[...REMOTE_MODEL_KINDS]}
                 popoverMinWidth={160}

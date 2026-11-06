@@ -7,6 +7,8 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 import { AppearanceSection } from "./AppearanceSection";
@@ -15,13 +17,18 @@ import { AppearanceSection } from "./AppearanceSection";
    每份用例自己收尾 —— 与 RuntimeLogBox.test.tsx 同款。 */
 afterEach(cleanup);
 
-/** 本分区只消费 `theme` / `setTheme` 两个字段，其余字段与本节无关。 */
+/** 本分区只读 `theme` / `setTheme` 两格；接口其余成员与本节无关，替身里缺席。
+ *  用谓词收窄而不是断言：先确认拿到的是对象、且这两格确实在。 */
+function isAppearanceController(v: unknown): v is ReadySettingsPageController {
+  return isRecord(v) && typeof v.theme === "string" && typeof v.setTheme === "function";
+}
+
 function controller(theme: "light" | "dark", setTheme = vi.fn()): ReadySettingsPageController {
-  /* SAFETY: 类型断言已复核 */
-  return {
-    theme,
-    setTheme,
-  } as unknown as ReadySettingsPageController;
+  const stub: unknown = { theme, setTheme };
+  if (!isAppearanceController(stub)) {
+    throw new Error("外观分区的 controller 替身缺少 theme / setTheme");
+  }
+  return stub;
 }
 
 /** 主题外观那一组（本分区还有「圆角」「标题字阶」两组，同为 radiogroup）。 */

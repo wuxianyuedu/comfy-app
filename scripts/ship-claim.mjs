@@ -647,6 +647,13 @@ export function finishIssueWork(ctx) {
   return dropHandlerLabel({ run, log, slug, number, handle: name });
 }
 
+/** `opt.*Bad` 字段的运行时形状（`opt` 由各入口传进来，静态类型是 `any`）。
+ * @param {unknown} value
+ * @returns {value is string[]} */
+function isStringArray(value) {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
 /**
  * `--claim` / `--release` / `--claims` 的入口：先做**互斥与前置**判断，再分派。
  *
@@ -686,10 +693,18 @@ export function runIssueAction(ctx) {
     commentIssue,
     dryRun = false,
   } = ctx;
-  const claimBad = /** @type {string[]} */ (opt.claimBad ?? []);
-  const releaseBad = /** @type {string[]} */ (opt.releaseBad ?? []);
-  const newIssueBad = /** @type {string[]} */ (opt.newIssueBad ?? []);
-  const commentBad = /** @type {string[]} */ (opt.commentBad ?? []);
+  /** @type {unknown} */
+  const rawClaimBad = opt.claimBad;
+  /** @type {unknown} */
+  const rawReleaseBad = opt.releaseBad;
+  /** @type {unknown} */
+  const rawNewIssueBad = opt.newIssueBad;
+  /** @type {unknown} */
+  const rawCommentBad = opt.commentBad;
+  const claimBad = isStringArray(rawClaimBad) ? rawClaimBad : [];
+  const releaseBad = isStringArray(rawReleaseBad) ? rawReleaseBad : [];
+  const newIssueBad = isStringArray(rawNewIssueBad) ? rawNewIssueBad : [];
+  const commentBad = isStringArray(rawCommentBad) ? rawCommentBad : [];
   const bad = [
     ...claimBad.map((x) => `--claim ${x}`),
     ...releaseBad.map((x) => `--release ${x}`),

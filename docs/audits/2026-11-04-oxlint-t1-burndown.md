@@ -13,7 +13,7 @@
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
 | B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 已清（子批1–12，判决面文件级豁免已整块删除）       |
-| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–2：40 份 / 88 处已清）               |
+| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–3：60 份 / 118 处已清）              |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
@@ -785,26 +785,26 @@
 | `scripts/ci-toolchain-selfcheck.mjs`                                                                 | 2        | 已清 |
 | `scripts/ci-workspace-probe.mjs`                                                                     | 1        | 已清 |
 | `scripts/coverage-readout.mjs`                                                                       | 2        | 已清 |
-| `scripts/dev-launcher-session.mjs`                                                                   | 1        | 挂账 |
-| `scripts/force-ipv4-dns.cjs`                                                                         | 2        | 挂账 |
-| `scripts/freshness-gate.mjs`                                                                         | 1        | 挂账 |
-| `scripts/freshness-ledger.mjs`                                                                       | 3        | 挂账 |
-| `scripts/launcher-core/orchestrator.mjs`                                                             | 1        | 挂账 |
-| `scripts/launcher-core/procs.mjs`                                                                    | 1        | 挂账 |
-| `scripts/launcher-core/run.mjs`                                                                      | 1        | 挂账 |
-| `scripts/package-bin-entry.mjs`                                                                      | 1        | 挂账 |
-| `scripts/premerge-check.mjs`                                                                         | 2        | 挂账 |
-| `scripts/premerge-proof.mjs`                                                                         | 2        | 挂账 |
-| `scripts/python-probe.mjs`                                                                           | 1        | 挂账 |
-| `scripts/qoder-ignore.mjs`                                                                           | 1        | 挂账 |
-| `scripts/ship-claim.mjs`                                                                             | 4        | 挂账 |
-| `scripts/standalone-private-inputs.mjs`                                                              | 1        | 挂账 |
-| `src/app/(main)/settings/components/AppearanceSection.test.tsx`                                      | 1        | 挂账 |
-| `src/app/(main)/settings/components/AppearanceSection.tsx`                                           | 1        | 挂账 |
-| `src/app/(main)/settings/components/BackupSection.test.tsx`                                          | 1        | 挂账 |
-| `src/app/(main)/settings/components/ComfyuiSection.test.tsx`                                         | 1        | 挂账 |
-| `src/app/(main)/settings/components/CpuLimitPicker.tsx`                                              | 1        | 挂账 |
-| `src/app/(main)/settings/components/RemoteModelDialog.tsx`                                           | 1        | 挂账 |
+| `scripts/dev-launcher-session.mjs`                                                                   | 1        | 已清 |
+| `scripts/force-ipv4-dns.cjs`                                                                         | 2        | 已清 |
+| `scripts/freshness-gate.mjs`                                                                         | 1        | 已清 |
+| `scripts/freshness-ledger.mjs`                                                                       | 4        | 已清 |
+| `scripts/launcher-core/orchestrator.mjs`                                                             | 1        | 已清 |
+| `scripts/launcher-core/procs.mjs`                                                                    | 1        | 已清 |
+| `scripts/launcher-core/run.mjs`                                                                      | 1        | 已清 |
+| `scripts/package-bin-entry.mjs`                                                                      | 1        | 已清 |
+| `scripts/premerge-check.mjs`                                                                         | 3        | 已清 |
+| `scripts/premerge-proof.mjs`                                                                         | 2        | 已清 |
+| `scripts/python-probe.mjs`                                                                           | 1        | 已清 |
+| `scripts/qoder-ignore.mjs`                                                                           | 1        | 已清 |
+| `scripts/ship-claim.mjs`                                                                             | 4        | 已清 |
+| `scripts/standalone-private-inputs.mjs`                                                              | 1        | 已清 |
+| `src/app/(main)/settings/components/AppearanceSection.test.tsx`                                      | 1        | 已清 |
+| `src/app/(main)/settings/components/AppearanceSection.tsx`                                           | 1        | 已清 |
+| `src/app/(main)/settings/components/BackupSection.test.tsx`                                          | 1        | 已清 |
+| `src/app/(main)/settings/components/ComfyuiSection.test.tsx`                                         | 1        | 已清 |
+| `src/app/(main)/settings/components/CpuLimitPicker.tsx`                                              | 1        | 已清 |
+| `src/app/(main)/settings/components/RemoteModelDialog.tsx`                                           | 1        | 已清 |
 | `src/app/(main)/settings/hooks/use-remote-model-dialogs.test.ts`                                     | 1        | 挂账 |
 | `src/app/(main)/settings/hooks/use-settings-page-remote-models.ts`                                   | 1        | 挂账 |
 | `src/app/(main)/settings/hooks/use-settings-page-types.ts`                                           | 1        | 挂账 |
