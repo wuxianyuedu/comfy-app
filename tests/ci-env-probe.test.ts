@@ -67,7 +67,7 @@ describe("环境前提：两处判据不许各写一份答案", () => {
     expect(gate.length, "门禁那一份没命中 —— 夹具本身写坏了").toBe(4);
     expect(probe.length, "脚本那一份没命中 —— 副本漂了").toBe(gate.length);
     /* 行号必须指到同一行（差一行就等于有一边扫错了块边界）。 */
-    const lineOf = (s: string) => Number(/第 (\d+) 行/.exec(s)?.[1] ?? -1);
+    const lineOf = (s: string) => Number(/第 (?<line>\d+) 行/.exec(s)?.groups?.line ?? -1);
     expect(probe.map(lineOf)).toEqual(gate.map(lineOf));
   });
 
@@ -495,9 +495,9 @@ describe("环境前提：流水线上真的在跑它，且排在最长的等待�
   });
 
   it("那一步点名的入口真的在盘上（脚本存在而配置没接上 = 这一步白写）", () => {
-    const block = /^\s*-\s*name:\s*环境前提\s*$\r?\n\s*script:\s*(\S.*)$/m.exec(
+    const block = /^\s*-\s*name:\s*环境前提\s*$\r?\n\s*script:\s*(?<script>\S.*)$/m.exec(
       read(".cnb.yml"),
-    )?.[1];
+    )?.groups?.script;
     expect(block, "解析不出「环境前提」那一步的 script").toBeTruthy();
     const command = String(block).trim();
     /* ⚠️ 脚本那一行的开头**已经不一定**是 `node …`（2026-10-16 起每个 stage 前面挂 `[Console]::OutputEncoding=…`，
@@ -507,7 +507,8 @@ describe("环境前提：流水线上真的在跑它，且排在最长的等待�
       command,
       "「环境前提」的脚本里没有给 PowerShell 设 UTF-8 输出编码 —— 平台日志会全是乱码",
     ).toContain("[Console]::OutputEncoding");
-    const entry = /(?:^|;)\s*(?:node\s+)?(scripts\/[^\s;]+)/.exec(unwrapCp936(command))?.[1];
+    const entry = /(?:^|;)\s*(?:node\s+)?(?<script>scripts\/[^\s;]+)/.exec(unwrapCp936(command))
+      ?.groups?.script;
     expect(entry, `解析不出「环境前提」点名的入口：${command}`).toBe("scripts/ci-env-probe.mjs");
     expect(read(entry ?? "").length, "「环境前提」点名的入口不在盘上").toBeGreaterThan(0);
   });

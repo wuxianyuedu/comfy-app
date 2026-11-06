@@ -37,7 +37,9 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     expect(INCREMENTAL_GATES.length).toBeGreaterThan(0);
     for (const gate of INCREMENTAL_GATES) {
       expect(gate.globs.length, `${gate.name} 的 globs 是空的`).toBeGreaterThan(0);
-      expect(gate.script, `${gate.name} 没写它守的是哪份脚本`).toMatch(/^scripts\/.+\.(cjs|mjs)$/);
+      expect(gate.script, `${gate.name} 没写它守的是哪份脚本`).toMatch(
+        /^scripts\/.+\.(?:cjs|mjs)$/,
+      );
       expect(gate.why.length, `${gate.name} 没写「为什么这条收窄安全」`).toBeGreaterThan(20);
     }
   });
@@ -306,7 +308,7 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       expect(gate.name.length, "有一个条目没写名字").toBeGreaterThan(0);
       const entry = gate.argv[0] === "node" ? gate.argv[1] : gate.argv[0];
       expect(entry, `\`${gate.name}\` 没点入口`).toMatch(
-        /^(scripts\/.+\.(cjs|mjs)|node_modules\/.+)$/,
+        /^(?:scripts\/.+\.(?:cjs|mjs)|node_modules\/.+)$/,
       );
       expect(
         fs.existsSync(path.join(process.cwd(), entry ?? "")),

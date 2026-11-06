@@ -160,9 +160,9 @@ function candidatesInSource(text: string, constName: string): Array<string> {
    * `"win32"` 是平台判别式，不是候选名 —— 连它一起收就会把「候选表」多算一项。
    * `? [...] : [...]` 的出现顺序**不假定**，按顺序收，与
    * `pythonCandidates("win32")` + `("linux")` 的拼接对账即可。 */
-  return [...block.matchAll(/\[([^\]]*)\]/g)]
-    .flatMap((m) => [...(m[1] ?? "").matchAll(/"([^"]+)"/g)])
-    .map((m) => m[1] ?? "");
+  return [...block.matchAll(/\[(?<material>[^\]]*)\]/g)]
+    .flatMap((m) => [...(m.groups?.material ?? "").matchAll(/"(?<name>[^"]+)"/g)])
+    .map((m) => m.groups?.name ?? "");
 }
 
 describe("工具链自证：Python 候选表只有一份答案", () => {
@@ -990,8 +990,8 @@ describe("工具链自证：安装通道的注入面按结构判（ISSUE #1961�
     /* 只判 **Windows** 分支：POSIX 那条只经 `run` 起包管理器，没有网络与解压
      * 那两截 —— 只注入 `run` 在那里是真的够，判它等于误报。 */
     const self = readFileSync(import.meta.filename, "utf8");
-    const calls = [...self.matchAll(/installPython\(\{([\s\S]*?)\n\s{0,6}\}\);/g)].map(
-      (m) => m[1] ?? "",
+    const calls = [...self.matchAll(/installPython\(\{(?<args>[\s\S]*?)\n\s{0,6}\}\);/g)].map(
+      (m) => m.groups?.args ?? "",
     );
     const winCalls = calls.filter((args) => args.includes("...noExternalAction"));
     expect(winCalls.length, "没扫到 Windows 分支的调用点，判据失效了").toBeGreaterThan(1);
@@ -2021,7 +2021,7 @@ function firstStdoutMatch(
         return;
       }
       clearTimeout(timer);
-      resolve(m[1] ?? "");
+      resolve(m.groups?.value ?? "");
     });
     child.on("error", (error: Error) => {
       clearTimeout(timer);
@@ -2060,7 +2060,7 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
       stdio: ["ignore", "pipe", "inherit"],
     });
     try {
-      const port = await firstStdoutMatch(child, /^\s*(\d+)\s*$/m, {
+      const port = await firstStdoutMatch(child, /^\s*(?<value>\d+)\s*$/m, {
         what: "本地服务的端口",
       });
       body(`http://127.0.0.1:${port}`);
@@ -2163,7 +2163,7 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
       stdio: ["ignore", "pipe", "inherit"],
     });
     try {
-      const port = await firstStdoutMatch(child, /^PORT (\d+)/m, {
+      const port = await firstStdoutMatch(child, /^PORT (?<value>\d+)/m, {
         what: "本地服务的端口",
       });
       const verdict = httpDownloadProbe(`http://127.0.0.1:${port}/big.zip`, {
@@ -2172,7 +2172,7 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
       expect(isReachableVerdict(verdict), "8 MiB 的流没判通").toBe(true);
       /* 服务端在连接被切断时把它写了多少报回来（探测必须**先**把它切断）。 */
       const written = Number(
-        await firstStdoutMatch(child, /WRITTEN (\d+)/m, {
+        await firstStdoutMatch(child, /WRITTEN (?<value>\d+)/m, {
           what: "服务端写出的字节数",
         }),
       );
@@ -2264,7 +2264,7 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
       stdio: ["ignore", "pipe", "inherit"],
     });
     try {
-      const port = await firstStdoutMatch(child, /^\s*PORT (\d+)\s*$/m, {
+      const port = await firstStdoutMatch(child, /^\s*PORT (?<value>\d+)\s*$/m, {
         what: "假链路的端口",
       });
       await body(`http://127.0.0.1:${port}`);

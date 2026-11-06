@@ -488,8 +488,8 @@ describe("接线：入口在盘上、被直接执行时退非零会传出去", (
 
   it("本文件不在 `src/**` 里，也不该 import 任何仓库内模块（构建期第一步要能跑）", () => {
     const text = readFileSync(path.join(ROOT, "scripts", "ci-image-plan.mjs"), "utf8");
-    const imports = [...text.matchAll(/^import .* from "([^"]+)";$/gm)].map((m) =>
-      String(m[1] ?? ""),
+    const imports = [...text.matchAll(/^import .* from "(?<importPath>[^"]+)";$/gm)].map((m) =>
+      String(m.groups?.importPath ?? ""),
     );
     expect(imports.every((s) => s.startsWith("node:"))).toBe(true);
   });

@@ -133,7 +133,7 @@ describe("档位：跳过必须被说出来", () => {
    * 永远按暂存区筛也照样过。
    */
   it("改动面从 env 传进来 ⇒ 走的还是同一条判决链", () => {
-    const countOf = (out: string) => Number(/(\d+) 个用例/.exec(out)?.[1] ?? 0);
+    const countOf = (out: string) => Number(/(?<count>\d+) 个用例/.exec(out)?.groups?.count ?? 0);
     const runLauncher = (changed: string) => {
       const r = spawnSync(
         process.execPath,
