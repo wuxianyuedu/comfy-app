@@ -604,8 +604,16 @@ function main(argv) {
     }
     /* `base` / `anchored` 段都已在上面 `continue`，剩下的是**不需要锚点**的裸脚本段：
      * `docCheck`（#2753）—— 廉价的读者面复查，进合并前这一跳的口径见 SEGMENTS 头注。 */
-    const scripted = /** @type {{script: string, args: string[]}} */ (seg);
-    const r = runScript(scripted.script, scripted.args);
+    if (seg.kind !== "script") {
+      results.push({
+        key,
+        label: seg.label,
+        code: 2,
+        output: `[premerge] 未知段形态：${seg.kind}\n`,
+      });
+      continue;
+    }
+    const r = runScript(seg.script, seg.args);
     results.push({ key, label: seg.label, code: r.code, output: r.output });
   }
 
@@ -697,12 +705,11 @@ function captureStdout(fn) {
   let buffer = "";
   /** @type {unknown} */
   let value;
-  process.stdout.write = /** @type {typeof process.stdout.write} */ (
-    (chunk) => {
-      buffer += String(chunk);
-      return true;
-    }
-  );
+  /** @param {string | Uint8Array} chunk */
+  process.stdout.write = (chunk) => {
+    buffer += String(chunk);
+    return true;
+  };
   try {
     value = fn();
   } finally {
@@ -730,11 +737,10 @@ export function lastSummary(output) {
     return null;
   }
   const word = line.slice(line.indexOf("结论：") + "结论：".length).trim();
-  for (const v of ["current-green", "inconclusive", "baseline-red", "yours"]) {
-    if (word.startsWith(v)) {
-      return /** @type {never} */ (v);
-    }
-  }
+  if (word.startsWith("current-green")) return "current-green";
+  if (word.startsWith("inconclusive")) return "inconclusive";
+  if (word.startsWith("baseline-red")) return "baseline-red";
+  if (word.startsWith("yours")) return "yours";
   return null;
 }
 

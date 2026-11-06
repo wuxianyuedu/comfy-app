@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "scripts/dev-launcher-session.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/force-ipv4-dns.cjs", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/freshness-gate.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/freshness-ledger.mjs", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/launcher-core/orchestrator.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/launcher-core/procs.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/launcher-core/run.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/package-bin-entry.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/premerge-check.mjs", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/premerge-proof.mjs", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/python-probe.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/qoder-ignore.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/ship-claim.mjs", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/standalone-private-inputs.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/(main)/settings/components/AppearanceSection.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/(main)/settings/components/AppearanceSection.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/(main)/settings/components/BackupSection.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/(main)/settings/components/ComfyuiSection.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/(main)/settings/components/CpuLimitPicker.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/app/(main)/settings/components/RemoteModelDialog.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/app/api/llm/route.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
         "src/app/api/logs/app-runtime/route.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
         "src/app/api/logs/current/route.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用

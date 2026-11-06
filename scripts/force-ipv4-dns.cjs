@@ -12,8 +12,9 @@
 const dns = require("node:dns");
 
 /**
- * @param {typeof dns.lookup} lookup
- * @returns {typeof dns.lookup}
+ * @param {(...args: any[]) => any} lookup
+ * @returns {any} 两个入口（回调式 `dns.lookup` / promise 式 `dns.promises.lookup`）共用同一层包装，
+ *   返回类型只能是 `any`；包装体本身仍是上面那个 `patched`（形状判据由它自己保证）。
  */
 function patchLookup(lookup) {
   /** @type {any} */
@@ -40,4 +41,4 @@ function patchLookup(lookup) {
 }
 
 dns.lookup = patchLookup(dns.lookup);
-dns.promises.lookup = /** @type {any} */ (patchLookup(/** @type {any} */ (dns.promises.lookup)));
+dns.promises.lookup = patchLookup(dns.promises.lookup);

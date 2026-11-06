@@ -5,7 +5,7 @@
  * 字段值通过对应类型谓词后才采用，否则回退到兜底值（不用类型断言）。
  * 单独成文件是为了让路由只留 handler 与编排逻辑、不超过单文件行数上限。
  */
-import { isRecord } from "~/lib/is-record";
+import { isPlainRecord } from "~/lib/is-record";
 import type { DiscoveredSubpkg, ParseReport } from "~/lib/comfyui/custom-nodes-stream";
 
 export function isStringValue(v: unknown): v is string {
@@ -31,7 +31,7 @@ export function isUnknownArray(v: unknown): v is Array<unknown> {
 export type ParseErrorEntry = { error: string; file: string };
 
 export function isParseErrorEntry(v: unknown): v is ParseErrorEntry {
-  return isRecord(v) && typeof v.error === "string" && typeof v.file === "string";
+  return isPlainRecord(v) && typeof v.error === "string" && typeof v.file === "string";
 }
 
 export function isParseErrorArray(v: unknown): v is Array<ParseErrorEntry> {
@@ -42,7 +42,7 @@ export function isParseErrorArray(v: unknown): v is Array<ParseErrorEntry> {
  * 只校验存在时的类型，不硬性要求齐全（视图侧对这些字段已有防御）。 */
 export function isDiscoveredSubpkg(v: unknown): v is DiscoveredSubpkg {
   return (
-    isRecord(v) &&
+    isPlainRecord(v) &&
     typeof v.name === "string" &&
     (v.path === undefined || typeof v.path === "string") &&
     (v.parent === undefined || typeof v.parent === "string") &&
@@ -60,7 +60,7 @@ export function isDiscoveredSubpkg(v: unknown): v is DiscoveredSubpkg {
  * 这里只确认它是对象、核心计数字段若存在则类型正确，其余保持原样透传。 */
 export function isParseReport(v: unknown): v is ParseReport {
   return (
-    isRecord(v) &&
+    isPlainRecord(v) &&
     (v.generatedAt === undefined || typeof v.generatedAt === "string") &&
     (v.errorCount === undefined || typeof v.errorCount === "number") &&
     (v.pathCount === undefined || typeof v.pathCount === "number") &&
@@ -69,7 +69,7 @@ export function isParseReport(v: unknown): v is ParseReport {
 }
 
 export function readDiscoveredPackages(parsed: unknown): Array<DiscoveredSubpkg> {
-  if (!isRecord(parsed) || !Array.isArray(parsed.packages)) {
+  if (!isPlainRecord(parsed) || !Array.isArray(parsed.packages)) {
     return [];
   }
   return parsed.packages.filter(isDiscoveredSubpkg);

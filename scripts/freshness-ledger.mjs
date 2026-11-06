@@ -32,6 +32,8 @@ import path from "node:path";
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
+/** @param {unknown} v @returns {v is Record<string, unknown>} */
+const isRecord = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
 
 /**
  * 「这条账是谁写的」的候选来源，**按可信度排序**（第一个非空者胜出）。
@@ -52,16 +54,15 @@ const ROOT = path.resolve(HERE, "..");
  * @returns {(string | undefined)[]} 候选清单（可能有空串 / undefined，由 `gitUser` 过滤）
  */
 export function gitUserCandidates() {
-  return /** @type {(string | undefined)[]} */ ([
+  /** @type {unknown} */
+  const gitName = spawnSync("git", ["config", "user.name"], { cwd: ROOT, encoding: "utf8" }).stdout;
+  return [
     process.env.GIT_AUTHOR_NAME,
     process.env.CNB_BUILD_USER_NICKNAME,
     process.env.CNB_BUILD_USER,
     process.env.CNB_COMMITTER,
-    spawnSync("git", ["config", "user.name"], {
-      cwd: ROOT,
-      encoding: "utf8",
-    }).stdout,
-  ]);
+    typeof gitName === "string" ? gitName : undefined,
+  ];
 }
 
 /**
@@ -493,11 +494,11 @@ export function checkFreshnessLedger(
       }
       continue;
     }
-    if (typeof entry !== "object" || Array.isArray(entry)) {
+    if (!isRecord(entry)) {
       problems.push(`${track.label}（${key}）的新鲜度记录不是对象 —— 形状见 freshnessRecord。`);
       continue;
     }
-    const rec = /** @type {Record<string, unknown>} */ (entry);
+    const rec = entry;
     /* 每一栏的下限只挡「空着 / 明显是占位」的形状，不拿字数去判「写得好不好」：
      * `who` 是个人名（"月读" 两个字完全够用），拿统一的字数门槛会把合法值判红 ——
      * 而一个会误杀合法输入的判据，下场是被人整条绕开。`how` 要的是**能照着重跑**的命令，
@@ -664,11 +665,9 @@ export function checkFreshnessLedger(
  */
 export function readFreshnessLedgerAt(root, rel) {
   try {
-    const parsed = /** @type {unknown} */ (JSON.parse(readFileSync(path.join(root, rel), "utf8")));
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return {};
-    }
-    return /** @type {Record<string, unknown>} */ (parsed);
+    const parsed = JSON.parse(readFileSync(path.join(root, rel), "utf8"));
+    if (!isRecord(parsed)) return {};
+    return parsed;
   } catch {
     return {};
   }
@@ -833,10 +832,10 @@ export function freshnessAge(entry, now = new Date()) {
  * @returns {number | null}
  */
 export function freshnessTime(entry) {
-  if (entry === null || typeof entry !== "object") {
+  if (!isRecord(entry)) {
     return null;
   }
-  const at = String(/** @type {Record<string, unknown>} */ (entry).verifiedAt ?? "").trim();
+  const at = String(entry.verifiedAt ?? "").trim();
   const ms = Date.parse(at);
   return Number.isNaN(ms) ? null : ms;
 }

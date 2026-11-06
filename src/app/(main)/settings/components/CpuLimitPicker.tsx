@@ -38,11 +38,13 @@ export function CpuLimitPicker({ c }: { c: ReadySettingsPageController }) {
       <RadioGroup
         aria-label="出图 CPU 占用档位"
         className="flex flex-col gap-1.5"
-        onValueChange={(v) => {
-          c.patchSettings({
-            /* SAFETY: 类型断言已复核 */
-            comfyuiCpuLimit: v as CpuLimitMode,
-          });
+        onValueChange={(raw) => {
+          /* 基元的 `onValueChange` 出参是 `any`：先落 `unknown`，再按 `CPU_LIMIT_MODES` 收窄。 */
+          const next: unknown = raw;
+          const mode = CPU_LIMIT_MODES.find((candidate) => candidate === next);
+          if (mode !== undefined) {
+            c.patchSettings({ comfyuiCpuLimit: mode });
+          }
         }}
         value={value}
       >

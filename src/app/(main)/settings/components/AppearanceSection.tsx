@@ -64,9 +64,12 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
       <RadioGroup
         aria-label="主题外观"
         className="grid max-w-md grid-cols-2 gap-3"
-        onValueChange={(v) => {
-          /* SAFETY: 类型断言已复核 */
-          c.setTheme(v as "dark" | "light");
+        onValueChange={(raw) => {
+          /* 基元的 `onValueChange` 出参是 `any`：先落 `unknown`，再按字面量收窄。 */
+          const v: unknown = raw;
+          if (v === "dark" || v === "light") {
+            c.setTheme(v);
+          }
         }}
         value={c.theme}
       >
