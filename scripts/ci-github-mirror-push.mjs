@@ -767,7 +767,6 @@ export function exitCodeFor(code, readout) {
  * @type {number}
  */
 export const MIRROR_ENTRY_TIMEOUT_MS = 30_000;
-
 /** @param {unknown} h 定时器句柄 @returns {h is ReturnType<typeof setTimeout>} 是否可以交给 clearTimeout（非句柄值本就是空操作） */
 const isTimeoutHandle = (h) =>
   typeof h === "number" || typeof h === "string" || (typeof h === "object" && h !== null);
@@ -817,7 +816,11 @@ export async function runMirrorEntry(io = {}) {
       console.log(line);
     });
   const setTimer = io.setTimer ?? ((cb, ms) => setTimeout(cb, ms));
-  const clearTimer = io.clearTimer ?? ((handle) => isTimeoutHandle(handle) && clearTimeout(handle));
+  const clearTimer =
+    io.clearTimer ??
+    ((handle) => {
+      if (isTimeoutHandle(handle)) clearTimeout(handle);
+    });
   /* `--master` 那一档的执行面在另一份文件（#3148 为回到 900 行闸切出去的）。动态取它：
    * 那一份反过来要 import 本文件的判据与话术，静态互相 import 会成环。 */
   /** @type {() => Promise<{runMasterMirror: MirrorRunner}>} */
