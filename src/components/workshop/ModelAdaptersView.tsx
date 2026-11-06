@@ -8,6 +8,7 @@ import React from "react";
 
 import {
   WORKSHOP_INPUT_TYPES,
+  isWorkshopInputType,
   workshopInputLabel,
   type WorkshopInputType,
 } from "~/lib/workshop/model-mode-contract";
@@ -78,11 +79,12 @@ function InputMappingRow({
           WORKSHOP_INPUT_TYPES.map((t) => [t.type, `${workshopInputLabel(t.type)}（${t.type}）`]),
         )}
         onChange={(value) => {
-          onChange({
-            /* SAFETY: 类型断言已复核 */
-            type: value as WorkshopInputType,
-            field: row.field,
-          });
+          if (isWorkshopInputType(value)) {
+            onChange({
+              type: value,
+              field: row.field,
+            });
+          }
         }}
         options={WORKSHOP_INPUT_TYPES.map((t) => t.type)}
         value={row.type}

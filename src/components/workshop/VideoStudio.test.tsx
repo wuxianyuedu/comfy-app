@@ -6,6 +6,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { SetStateAction } from "react";
 
 import { VideoStudio } from "./VideoStudio";
 import {
@@ -78,8 +79,11 @@ type RenderOptions = {
   workflowId?: string;
 };
 
+/** `onShotsChange` 的签名：可收镜头数组或函数式补丁（React 状态 setter）。 */
+type ShotsSetter = (value: SetStateAction<Array<Shot>>) => void;
+
 function renderStudio(options: RenderOptions = {}) {
-  const onShotsChange = vi.fn();
+  const onShotsChange = vi.fn<ShotsSetter>();
   const onNotice = vi.fn();
   const onCancelShot = vi.fn();
   const onOpenModelAdapters = vi.fn();
@@ -100,11 +104,26 @@ function renderStudio(options: RenderOptions = {}) {
   return { onShotsChange, onNotice, onCancelShot, onOpenModelAdapters };
 }
 
+/** 从一条 onShotsChange 调用里取出函数式补丁并应用一次。 */
+function patchedShotOf(call: Parameters<ShotsSetter>): Shot {
+  const updater = call[0];
+  if (typeof updater !== "function") {
+    throw new Error("onShotsChange 首参不是函数式更新");
+  }
+  const patched = updater([makeShot()])[0];
+  if (patched === undefined) {
+    throw new Error("onShotsChange 的补丁没有返回镜头");
+  }
+  return patched;
+}
+
 /** onShotsChange 是函数式补丁：折叠成最终一条 patch 里的镜头。 */
-function lastPatchedShot(mock: { mock: { calls: Array<Array<unknown>> } }): Shot {
-  /* SAFETY: 类型断言已复核 */
-  const last = mock.mock.calls.at(-1)![0] as (prev: Array<Shot>) => Array<Shot>;
-  return last([makeShot()])[0]!;
+function lastPatchedShot(mock: { mock: { calls: Array<Parameters<ShotsSetter>> } }): Shot {
+  const lastCall = mock.mock.calls.at(-1);
+  if (lastCall === undefined) {
+    throw new Error("onShotsChange 未被调用");
+  }
+  return patchedShotOf(lastCall);
 }
 
 async function switchToApi(user: ReturnType<typeof userEvent.setup>) {

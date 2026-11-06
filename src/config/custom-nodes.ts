@@ -18,6 +18,7 @@ import type { NodeTypeConfig, PortSpec, FieldDef } from "~/lib/comfyui/node-conf
 import { isFieldType } from "~/lib/comfyui/field-types";
 import { errorText } from "~/lib/error-message";
 import { emitAppEvent } from "~/lib/app-events";
+import { isRecord } from "~/lib/is-record";
 
 /* 把 ComfyUI 的原始分类字符串映射到强调色。对外导出，
  * 好让界面给节点预览卡渲染同一个分类配色，而不必先构建完整的 NodeTypeConfig。 */
@@ -196,6 +197,14 @@ type RawManifest = {
   nodes?: Record<string, ManifestNode>;
 };
 
+function isRawManifest(v: unknown): v is RawManifest {
+  if (!isRecord(v)) {
+    return false;
+  }
+  const nodes = v.nodes;
+  return nodes === undefined || isRecord(nodes);
+}
+
 type ManifestInput = {
   /** 控件的默认值（字符串 / 数字 / 布尔 … 原始 JSON 值），对本模块不透明。 */
   default?: unknown;
@@ -327,6 +336,10 @@ export type ManifestNodeRaw = {
   source?: string;
 };
 
+function isManifestPayload(v: unknown): v is { nodes: Record<string, ManifestNodeRaw> } {
+  return isRecord(v) && isRecord(v.nodes);
+}
+
 /* 直接从磁盘取原始 manifest。manifest 缺失或为空（例如还没解析过）时返回 null。
  * 服务端侧开销很小 —— 首解析之后文件已在缓存里。 */
 export async function getCustomNodesManifest(
@@ -345,19 +358,13 @@ export async function getCustomNodesManifest(
       return null;
     }
     const data: unknown = await res.json();
-    const nodesField =
-      typeof data === "object" && data !== null && "nodes" in data ? data.nodes : undefined;
-    const hasNodes = Boolean(nodesField);
-    if (!hasNodes) {
+    if (!isManifestPayload(data)) {
       console.error(
         "[custom-nodes] 清单形状不对：响应里没有 nodes 字段（解析器版本与前端不匹配？）",
       );
       return null;
     }
-    /* SAFETY: 类型断言已复核 */
-    return data as {
-      nodes: Record<string, ManifestNodeRaw>;
-    };
+    return data;
   } catch (error) {
     console.error("[custom-nodes] 读取节点清单失败：", errorText(error, "读取自定义节点清单"));
     return null;
@@ -393,8 +400,11 @@ export async function refreshCustomNodes(base = ""): Promise<number> {
   }
 
   try {
-    /* SAFETY: 类型断言已复核 */
-    const manifest = (await res.json()) as RawManifest;
+    const parsedManifest: unknown = await res.json();
+    if (!isRawManifest(parsedManifest)) {
+      throw new TypeError("清单不是 JSON 对象");
+    }
+    const manifest = parsedManifest;
     const next: Record<string, NodeTypeConfig> = {};
     const nextPackages: Record<string, string> = {};
     const count = buildInto(next, manifest, nextPackages);

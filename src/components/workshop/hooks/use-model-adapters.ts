@@ -19,6 +19,7 @@ import {
 import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
 import { useTRPC } from "~/trpc/react";
 import { useBusyAction } from "~/components/ui/use-busy-action";
+import { isRecord } from "~/lib/is-record";
 
 export type AdapterCandidate = {
   baseUrl: string | null;
@@ -59,24 +60,21 @@ export function useModelAdapters(): ModelAdaptersController {
 
   const candidates: Array<AdapterCandidate> = React.useMemo(() => {
     const raw: unknown = configQ.data?.config;
-    if (typeof raw !== "object" || raw === null) {
+    if (!isRecord(raw)) {
       return [];
     }
-    /* SAFETY: 类型断言已复核 */
-    const extra = (raw as Record<string, unknown>).extraModels;
+    const extra = raw.extraModels;
     if (!Array.isArray(extra)) {
       return [];
     }
     const out: Array<AdapterCandidate> = [];
     for (const item of extra) {
-      if (typeof item !== "object" || item === null) {
+      if (!isRecord(item)) {
         continue;
       }
-      /* SAFETY: 类型断言已复核 */
-      const rec = item as Record<string, unknown>;
-      const name = typeof rec.name === "string" ? rec.name : "";
-      const kind = rec.kind === "video" ? "video" : rec.kind === "image" ? "image" : "chat";
-      const baseUrl = typeof rec.baseUrl === "string" ? rec.baseUrl : null;
+      const name = typeof item.name === "string" ? item.name : "";
+      const kind = item.kind === "video" ? "video" : item.kind === "image" ? "image" : "chat";
+      const baseUrl = typeof item.baseUrl === "string" ? item.baseUrl : null;
       if (!name || kind === "chat") {
         continue;
       } // 文本模型不参与工坊生图/视频

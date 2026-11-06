@@ -35,18 +35,18 @@ function parseAgentResponse(data: unknown): AgentChatResponse {
     result.reply = data.reply;
   }
   if (Array.isArray(data.tool_calls)) {
-    result.tool_calls = data.tool_calls
-      .filter(isRecord)
-      .filter(
-        (call) => typeof call.id === "string" && typeof call.name === "string" && call.id !== "",
-      )
-      .map((call) => ({
-        /* SAFETY: 类型断言已复核 */
-        id: call.id as string,
-        /* SAFETY: 类型断言已复核 */
-        name: call.name as string,
-        arguments: typeof call.arguments === "string" ? call.arguments : "{}",
-      }));
+    result.tool_calls = data.tool_calls.filter(isRecord).flatMap((call) => {
+      if (typeof call.id !== "string" || typeof call.name !== "string" || call.id === "") {
+        return [];
+      }
+      return [
+        {
+          id: call.id,
+          name: call.name,
+          arguments: typeof call.arguments === "string" ? call.arguments : "{}",
+        },
+      ];
+    });
   }
   if (data.done === true) {
     result.done = true;

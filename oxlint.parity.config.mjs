@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/components/ui/use-overlay-boundary.test.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/workshop/CharacterDesigner.extract.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/workshop/FinalComposer.test.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/workshop/FinalComposer.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/workshop/hooks/use-llm-config.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/workshop/hooks/use-model-adapters.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/workshop/hooks/UseWorkshopPipelinePersistence.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/workshop/mode-contract/dialog/ModeContractEditorView.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/workshop/mode-contract/dialog/ModeContractModeNav.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/workshop/ModelAdaptersView.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/workshop/ScriptGenerator.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/workshop/ShotStudio.test.tsx", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/workshop/StoryboardPlanner.parts.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/workshop/VideoStudio.parts.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/workshop/VideoStudio.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/components/workshop/WorkshopHeader.health.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/config/custom-nodes.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/agent/agentic.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/agent/client.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/agent/client.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/agent/executor.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/agent/executor.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/agent/server.test.ts", // 存量 7 处 · 清账目标 B5 · 新代码不禁用

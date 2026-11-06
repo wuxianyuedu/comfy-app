@@ -16,12 +16,17 @@ import {
 } from "~/lib/llm/types";
 import { useTRPC } from "~/trpc/react";
 import { useBusyAction } from "~/components/ui/use-busy-action";
+import { isRecord } from "~/lib/is-record";
 
 /** 判断远端模型是否为文本生成(对话)可用类型。
  *  kind 缺省(null)的历史条目按 chat 处理——与设置页 `kind ?? "chat"` 归组一致。 */
 function isChatModel(kind: RemoteModelKind | null | undefined): boolean {
   // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   return kind == null || kind === "chat";
+}
+
+function isRemoteModelKind(value: string): value is RemoteModelKind {
+  return REMOTE_MODEL_KINDS.some((candidate) => candidate === value);
 }
 
 /** 候选模型条目（兼容旧字符串与新对象）→ 名字数组，供工坊切换选择。
@@ -36,23 +41,12 @@ function toModelNames(raw: unknown): Array<string> {
       if (item.trim() !== "") {
         names.push(item);
       }
-    } else if (typeof item === "object" && item !== null) {
-      /* SAFETY: 类型断言已复核 */
-      const rec = item as {
-        kind?: unknown;
-        name?: unknown;
-      };
-      const name = typeof rec.name === "string" ? rec.name.trim() : "";
+    } else if (isRecord(item)) {
+      const name = typeof item.name === "string" ? item.name.trim() : "";
       if (name === "") {
         continue;
       }
-      /* SAFETY: 类型断言已复核 */
-      const kind =
-        typeof rec.kind === "string" &&
-        /* SAFETY: 类型断言已复核 */
-        REMOTE_MODEL_KINDS.includes(rec.kind as RemoteModelKind)
-          ? (rec.kind as RemoteModelKind)
-          : null;
+      const kind = typeof item.kind === "string" && isRemoteModelKind(item.kind) ? item.kind : null;
       if (!isChatModel(kind)) {
         continue;
       }
