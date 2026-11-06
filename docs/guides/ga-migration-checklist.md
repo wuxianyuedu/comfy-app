@@ -32,10 +32,10 @@
 #### G-2：NODE_OPTIONS / 内存预算
 
 - **现状（CNB 口径）**：重档格显式设 NODE_OPTIONS；daily.yml 的 ESLint step 设 `--max-old-space-size=4096`
-- **GA 实测表现**：daily.yml 的 ESLint 已有 4096；其他重档 step（如 db-push 的 typecheck-db-format job）未显式设置
-- **影响判断**：typecheck-db-format 在 GA 上 tsc 全量面 + db schema 对比，可能 OOM
-- **建议改法**：核查 pr-gate.yml / daily.yml 所有 tsc / ESLint / vitest 重档 step，统一加 `--max-old-space-size=4096`；vitest 用 `COMFY_TEST_TIMEOUT_SCALE=2` 已在 env 里对齐
-- **优先级**：P1
+- **GA 实测表现**：全仓 `.github/workflows/` 只有一处 `NODE_OPTIONS`（daily.yml 的 ESLint `--max-old-space-size=4096`，注释记着「这一格 OOM 过」）；tsc / db-push / vitest（pr-gate 三格、daily 单测）都**没有** OOM 读数 —— 上一版「统一加 4096」是推断，不是读数
+- **影响判断**：无症状的 step 抬堆上限只会掩盖真实内存回归；反过来，真 OOM 时默认约 2GB 的老生代上限会先于 job 墙钟报红，至少报错点得出来
+- **建议改法**：**不统一加**。只在有 OOM 读数的 step 上给（当前唯一：daily ESLint 4096）；其余 step 等出现 `heap out of memory` 再按现场加，并在该 step 的注释里记下读数出处
+- **优先级**：P3（现状已符合「只在需要处给」，本条只剩口径记录）
 
 #### G-3：timeout-minutes 配置
 
@@ -94,8 +94,8 @@
   - pr-gate.yml typecheck-db-format / fixed-structural-tests / affected-tests：`0` → `2`（合成 merge 的两个父正是 base 与 head，判据基线是 payload 的 `CNB_PULL_REQUEST_TARGET_SHA`）✅ 本主题 PR
   - pr-gate.yml heavy-gates：`fetch-depth: 0` ✅ 保留（依赖新鲜度按 `merge-base HEAD origin/master` 算，浅克隆没有 `origin/master`）
   - master-gate.yml：`fetch-depth: 0` → 1（PR #3223 修复）✅ 文档链命令只读当前树
-  - daily.yml：`fetch-depth: 0` → 需评估（有三点 diff 吗？）
-  - package-desktop.yml：`fetch-depth: 0` → 需评估
+  - daily.yml：`fetch-depth: 0` → 1（每日档定时跑在 master HEAD，不做三点 diff）✅
+  - package-desktop.yml：`fetch-depth: 0` → 1（桌包档定时跑在 master HEAD，打包只读当前树）✅
 - **影响判断**：fetch-depth 过大 = 纯网络开销；过小 = 缺历史导致三点 diff / LFS / 某些静态判据失败
 - **建议改法**：逐个评估每份 workflow 的 checkout 配置，最小化 fetch-depth
 - **优先级**：P0（冷装优化的核心）
