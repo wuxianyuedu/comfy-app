@@ -29,10 +29,12 @@ export async function POST(req: NextRequest) {
   }
 
   const form = await req.formData();
-  /* SAFETY: 类型断言已复核 */
-  const file = form.get("image") as File | null;
-  if (!file) {
+  const file = form.get("image");
+  if (file === null) {
     return NextResponse.json({ error: "未收到文件" }, { status: 400 });
+  }
+  if (typeof file === "string") {
+    return NextResponse.json({ error: "仅支持 PNG / JPG / WebP / GIF 图片" }, { status: 400 });
   }
   if (!ALLOWED_MIME.has(file.type)) {
     return NextResponse.json({ error: "仅支持 PNG / JPG / WebP / GIF 图片" }, { status: 400 });

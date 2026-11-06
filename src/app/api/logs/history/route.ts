@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { apiErrorBody } from "~/lib/api-error";
 import { requireRequestUser } from "~/server/auth/request-user";
+import { isRecord } from "~/lib/is-record";
 import fs from "node:fs";
 import path from "node:path";
 import { unauthorizedResponse } from "~/server/lib/error-response";
@@ -41,8 +42,7 @@ export async function GET(request: Request) {
     try {
       content = await fs.promises.readFile(full, "utf8");
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      if (isRecord(error) && error.code === "ENOENT") {
         return invalidOrMissing();
       }
       throw error;

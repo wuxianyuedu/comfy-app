@@ -28,6 +28,10 @@ import { listRuntimeLogFiles, type RuntimeLogFileEntry } from "~/lib/log/runtime
  * + 各历史包的份（包名倒序）。判据只有「文件是谁」——归档整目录复制、包内结构与 `current/` 逐字同构，跨包即把各包文件排成时间线（`compareRuntimeLogFiles`）；参数 `source` 须在白名单内、`session` 只认两种已登记形态、绝不拿去拼路径。
  */
 
+function isRuntimeLogSource(v: unknown): v is RuntimeLogSource {
+  return typeof v === "string" && RUNTIME_LOG_SOURCES.some((source) => source === v);
+}
+
 /** 单次请求最多返回的正文字节数（约 40 万字符量级）。 */
 const MAX_TEXT_BYTES = 400_000;
 
@@ -129,10 +133,7 @@ export async function GET(request: Request) {
   const source = searchParams.get("source") ?? "";
   const requested = searchParams.get("session");
 
-  if (
-    /* SAFETY: 类型断言已复核 */
-    !(RUNTIME_LOG_SOURCES as ReadonlyArray<string>).includes(source)
-  ) {
+  if (!isRuntimeLogSource(source)) {
     return NextResponse.json(emptyPayload(`unknown source: ${source}`), {
       status: 400,
     });
@@ -142,8 +143,7 @@ export async function GET(request: Request) {
     /* 本次运行：目录与命名规则都从写方那一侧拿（`runtime-log-pack.server`）——
      * 读方自己拼 `log/current/services/<source>-*.log` 就会与写方漂开，而漂开的
      * 表现是「日志在磁盘上、界面上看不到」（两边各自都「看起来是对的」）。 */
-    /* SAFETY: 类型断言已复核 */
-    const currentEntries = await listRuntimeLogFiles(source as RuntimeLogSource);
+    const currentEntries = await listRuntimeLogFiles(source);
 
     /* 历史归档：`runs/` 与包内相对目录同样从写方那一侧取，端点不写 `log/runs`
      * 字面量。交给 `scanRunPacks` 的是**日志根的父目录**（`runsDir()` 自己拼
@@ -155,8 +155,7 @@ export async function GET(request: Request) {
       sourceDir: LOG_DIRS.services,
       runJsonName: LOG_LAYOUT.runJson,
       maxPacks: MAX_PACKS,
-      /* SAFETY: 类型断言已复核 */
-      source: source as RuntimeLogSource,
+      source,
     });
 
     /* 分组、顺序、文案全在纯判据那一层：端点只把两边的数据递进去，不自己拼列表

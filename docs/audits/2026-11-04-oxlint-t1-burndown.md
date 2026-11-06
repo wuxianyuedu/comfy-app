@@ -13,7 +13,7 @@
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
 | B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 已清（子批1–12，判决面文件级豁免已整块删除）       |
-| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–4：80 份 / 196 处已清）              |
+| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–5：100 份 / 236 处已清）             |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
@@ -825,26 +825,26 @@
 | `src/app/api/health/route.test.ts`                                                                   | 2        | 已清 |
 | `src/app/api/images/route.test.ts`                                                                   | 3        | 已清 |
 | `src/app/api/llm/ollama-start/route.ts`                                                              | 2        | 已清 |
-| `src/app/api/llm/route.ts`                                                                           | 4        | 挂账 |
-| `src/app/api/logs/app-runtime/route.ts`                                                              | 3        | 挂账 |
-| `src/app/api/logs/current/route.test.ts`                                                             | 3        | 挂账 |
-| `src/app/api/logs/current/route.ts`                                                                  | 2        | 挂账 |
-| `src/app/api/logs/diagnostics/route.test.ts`                                                         | 1        | 挂账 |
-| `src/app/api/logs/export/route.test.ts`                                                              | 2        | 挂账 |
-| `src/app/api/logs/history/route.ts`                                                                  | 1        | 挂账 |
-| `src/app/api/logs/list/route.ts`                                                                     | 1        | 挂账 |
-| `src/app/api/logs/sessions/route.test.ts`                                                            | 1        | 挂账 |
-| `src/app/api/logs/sessions/route.ts`                                                                 | 2        | 挂账 |
-| `src/app/api/materials/route.test.ts`                                                                | 7        | 挂账 |
-| `src/app/api/materials/route.ts`                                                                     | 1        | 挂账 |
-| `src/app/api/production/route.test.ts`                                                               | 3        | 挂账 |
-| `src/app/api/schema/push/route.test.ts`                                                              | 1        | 挂账 |
-| `src/app/api/schema/route.test.ts`                                                                   | 1        | 挂账 |
-| `src/app/api/upload/route.ts`                                                                        | 1        | 挂账 |
-| `src/components/agent-run/RunControlBar.tsx`                                                         | 1        | 挂账 |
-| `src/components/code-update/CodeUpdateWatcher.test.tsx`                                              | 1        | 挂账 |
-| `src/components/message-center/message-center-store-persistence.test.ts`                             | 1        | 挂账 |
-| `src/components/message-center/message-center-store.ts`                                              | 3        | 挂账 |
+| `src/app/api/llm/route.ts`                                                                           | 4        | 已清 |
+| `src/app/api/logs/app-runtime/route.ts`                                                              | 3        | 已清 |
+| `src/app/api/logs/current/route.test.ts`                                                             | 3        | 已清 |
+| `src/app/api/logs/current/route.ts`                                                                  | 2        | 已清 |
+| `src/app/api/logs/diagnostics/route.test.ts`                                                         | 1        | 已清 |
+| `src/app/api/logs/export/route.test.ts`                                                              | 2        | 已清 |
+| `src/app/api/logs/history/route.ts`                                                                  | 1        | 已清 |
+| `src/app/api/logs/list/route.ts`                                                                     | 1        | 已清 |
+| `src/app/api/logs/sessions/route.test.ts`                                                            | 1        | 已清 |
+| `src/app/api/logs/sessions/route.ts`                                                                 | 2        | 已清 |
+| `src/app/api/materials/route.test.ts`                                                                | 7        | 已清 |
+| `src/app/api/materials/route.ts`                                                                     | 1        | 已清 |
+| `src/app/api/production/route.test.ts`                                                               | 3        | 已清 |
+| `src/app/api/schema/push/route.test.ts`                                                              | 1        | 已清 |
+| `src/app/api/schema/route.test.ts`                                                                   | 1        | 已清 |
+| `src/app/api/upload/route.ts`                                                                        | 1        | 已清 |
+| `src/components/agent-run/RunControlBar.tsx`                                                         | 1        | 已清 |
+| `src/components/code-update/CodeUpdateWatcher.test.tsx`                                              | 1        | 已清 |
+| `src/components/message-center/message-center-store-persistence.test.ts`                             | 1        | 已清 |
+| `src/components/message-center/message-center-store.ts`                                              | 3        | 已清 |
 | `src/components/settings/SettingsShell.stories.tsx`                                                  | 1        | 挂账 |
 | `src/components/settings/SettingsShell.test.tsx`                                                     | 1        | 挂账 |
 | `src/components/settings/use-section-scroll-spy.test.ts`                                             | 2        | 挂账 |

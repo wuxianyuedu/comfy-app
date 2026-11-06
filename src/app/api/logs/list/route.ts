@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { apiErrorBody } from "~/lib/api-error";
 import { requireRequestUser } from "~/server/auth/request-user";
+import { isRecord } from "~/lib/is-record";
 import fs from "node:fs";
 import type { Dirent } from "node:fs";
 import path from "node:path";
@@ -26,8 +27,7 @@ async function scanLogFiles(dir: string, base: string): Promise<Array<LogFileInf
   try {
     entries = await fs.promises.readdir(dir, { withFileTypes: true });
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (isRecord(error) && error.code === "ENOENT") {
       return [];
     }
     throw error;

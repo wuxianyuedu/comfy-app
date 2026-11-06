@@ -71,6 +71,11 @@ const APPROVAL_OPTIONS: Array<{ label: string; value: ApprovalMode }> = [
   { value: "auto", label: "全自动跑完" },
 ];
 
+/** 下拉框给回的是 string；只认选项里列出的档位（与上面同一份白名单）。 */
+function isApprovalMode(v: string): v is ApprovalMode {
+  return APPROVAL_OPTIONS.some((o) => o.value === v);
+}
+
 /** 日志时间戳 → 本地时分秒；解析失败给空串。 */
 function formatStepTime(ts: string): string {
   const d = new Date(ts);
@@ -139,8 +144,9 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
             <SelectMenu
               labels={Object.fromEntries(APPROVAL_OPTIONS.map((o) => [o.value, o.label]))}
               onChange={(v) => {
-                /* SAFETY: 类型断言已复核 */
-                c.setApprovalMode(v as ApprovalMode);
+                if (isApprovalMode(v)) {
+                  c.setApprovalMode(v);
+                }
               }}
               options={APPROVAL_OPTIONS.map((o) => o.value)}
               value={c.approvalMode}

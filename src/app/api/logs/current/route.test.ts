@@ -7,6 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { isRecord } from "~/lib/is-record";
+import type { LaunchPaths } from "~/lib/shell/launch-diagnostics";
+
+type LaunchDiagnosticsModule = {
+  launchPaths: (root: string) => LaunchPaths;
+};
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "log-current-"));
 /* 四份 runtime 日志是**一次启动一份文件**（ISSUE #1326），因此端点取的是目录里
@@ -31,13 +37,11 @@ const shellLogFile = path.join(tmp, "shell.log");
 const shellLaunchLogFile = path.join(tmp, "shell-launch.log");
 
 vi.mock("~/lib/shell/launch-diagnostics", async () => {
-  const actual = await vi.importActual("~/lib/shell/launch-diagnostics");
+  const actual = await vi.importActual<LaunchDiagnosticsModule>("~/lib/shell/launch-diagnostics");
   return {
-    /* SAFETY: 类型断言已复核 */
-    ...(actual as Record<string, unknown>),
+    ...actual,
     launchPaths: () => ({
-      /* SAFETY: 类型断言已复核 */
-      ...(actual as { launchPaths: (root: string) => Record<string, unknown> }).launchPaths(tmp),
+      ...actual.launchPaths(tmp),
       shellLog: shellLogFile,
       shellLaunchLog: shellLaunchLogFile,
     }),
@@ -68,17 +72,40 @@ function writeLines(n: number, startIndex = 0): void {
   fs.appendFileSync(logFile, `${lines.join("\n")}\n`, "utf8");
 }
 
+type LogResponse = {
+  bootId?: string;
+  content: string;
+  mismatch?: boolean;
+  offset: number;
+  sessionStart: number | null;
+  size: number;
+};
+
+function isLogResponse(v: unknown): v is LogResponse {
+  return (
+    isRecord(v) &&
+    typeof v.content === "string" &&
+    typeof v.offset === "number" &&
+    typeof v.size === "number" &&
+    (v.sessionStart === null || typeof v.sessionStart === "number") &&
+    (v.bootId === undefined || typeof v.bootId === "string") &&
+    (v.mismatch === undefined || typeof v.mismatch === "boolean")
+  );
+}
+
+async function readJson(res: Response): Promise<LogResponse> {
+  const raw: unknown = await res.json();
+  if (!isLogResponse(raw)) {
+    throw new Error("响应不是预期的日志载荷形状");
+  }
+  return raw;
+}
+
 async function read(source: string, offset = 0) {
   const res = await GET(
     new Request(`http://localhost/api/logs/current?source=${source}&offset=${offset}`),
   );
-  /* SAFETY: 类型断言已复核 */
-  return (await res.json()) as {
-    content: string;
-    offset: number;
-    sessionStart: number | null;
-    size: number;
-  };
+  return readJson(res);
 }
 
 beforeEach(() => {
@@ -199,14 +226,7 @@ describe("GET /api/logs/current — 服务端进程标识", () => {
       query.set("bootId", bootId);
     }
     const res = await GET(new Request(`http://localhost/api/logs/current?${query.toString()}`));
-    /* SAFETY: 类型断言已复核 */
-    return (await res.json()) as {
-      bootId?: string;
-      content: string;
-      mismatch?: boolean;
-      offset: number;
-      size: number;
-    };
+    return readJson(res);
   }
 
   it("每个响应都带 bootId，且同一进程内恒定", async () => {

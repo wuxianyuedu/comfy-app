@@ -8,6 +8,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { isPlainRecord } from "~/lib/is-record";
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "log-sessions-"));
 /** 夹具的日志根（与 `log-paths` 的 `LOG_ROOT` 同口径）。 */
 const logRoot = path.join(tmp, "log");
@@ -48,13 +50,39 @@ type Payload = {
   windowed: boolean;
 };
 
+function isSessionMeta(v: unknown): v is Payload["sessions"][number] {
+  return (
+    isPlainRecord(v) &&
+    typeof v.crashed === "boolean" &&
+    typeof v.id === "string" &&
+    (v.scope === "current" || v.scope === "runs") &&
+    (v.startedAt === null || typeof v.startedAt === "number") &&
+    typeof v.title === "string"
+  );
+}
+
+function isPayload(v: unknown): v is Payload {
+  return (
+    isPlainRecord(v) &&
+    typeof v.content === "string" &&
+    (v.error === undefined || typeof v.error === "string") &&
+    (v.selectedId === null || typeof v.selectedId === "string") &&
+    Array.isArray(v.sessions) &&
+    v.sessions.every(isSessionMeta) &&
+    typeof v.size === "number" &&
+    typeof v.total === "number" &&
+    typeof v.truncated === "boolean" &&
+    typeof v.windowed === "boolean"
+  );
+}
+
 async function get(query: string): Promise<{ data: Payload; status: number }> {
   const res = await GET(new Request(`http://localhost/api/logs/sessions?${query}`));
-  return {
-    status: res.status,
-    /* SAFETY: 类型断言已复核 */
-    data: (await res.json()) as Payload,
-  };
+  const data: unknown = await res.json();
+  if (!isPayload(data)) {
+    throw new Error(`会话响应形状不符：${JSON.stringify(data)}`);
+  }
+  return { data, status: res.status };
 }
 
 /** 造一份某来源的启动日志文件（名字按写方那套规则）。 */

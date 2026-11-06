@@ -9,6 +9,7 @@
 import { create } from "zustand";
 
 import { readStorageJson, writeStorageJson } from "~/lib/browser-storage";
+import { isPlainRecord } from "~/lib/is-record";
 import { nextId } from "~/lib/unique-id";
 
 export type MessageKind = "update" | "restart" | "offline" | "info";
@@ -160,16 +161,20 @@ export const MESSAGE_CENTER_STORAGE_KEY = "comfyapp:message-center:v1";
 
 const MESSAGE_KINDS: ReadonlyArray<MessageKind> = ["update", "restart", "offline", "info"];
 
+/** 只认白名单里的档位；持久化里的 kind 是外部输入，先收窄再采用。 */
+function isMessageKind(v: unknown): v is MessageKind {
+  return typeof v === "string" && MESSAGE_KINDS.some((kind) => kind === v);
+}
+
 /** 一条记录是否可用（字段齐、类型对、kind 认识）。
  *
  * `runId` **容忍缺席**（升级前写入的历史消息没有这个字段）：缺了就按 null 处理，
  * 于是那些消息落到「未标记启动」那一组——不猜它属于哪一次，也不因此丢掉整条。 */
 function asMessageRecord(raw: unknown): MessageRecord | null {
-  if (typeof raw !== "object" || raw === null) {
+  if (!isPlainRecord(raw)) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  const o = raw as Record<string, unknown>;
+  const o = raw;
   if (typeof o.id !== "string" || o.id === "") {
     return null;
   }
@@ -182,17 +187,12 @@ function asMessageRecord(raw: unknown): MessageRecord | null {
   if (typeof o.read !== "boolean") {
     return null;
   }
-  if (
-    typeof o.kind !== "string" ||
-    /* SAFETY: 类型断言已复核 */
-    !MESSAGE_KINDS.includes(o.kind as MessageKind)
-  ) {
+  if (!isMessageKind(o.kind)) {
     return null;
   }
   return {
     id: o.id,
-    /* SAFETY: 类型断言已复核 */
-    kind: o.kind as MessageKind,
+    kind: o.kind,
     title: o.title,
     body: o.body,
     time: o.time,
