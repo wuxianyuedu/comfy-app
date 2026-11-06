@@ -84,4 +84,21 @@ describe("deps-install-guard 退出码三态", () => {
     expect(result.text).toContain("没给出结论");
     expect(result.text).not.toContain("可以执行 pnpm install");
   });
+
+  it("端口 / 进程探测没跑起来 ⇒ exit 2，话术点明「没量到」而不是「量到空」", async () => {
+    /* 立案现场：runCapture 把 execFile 的 error 吞成空串，netstat 起不来时
+     * runningAppInstances 返回一份形状完全合法的 {running:false} ⇒ 守卫 exit 0
+     * 「可以执行 pnpm install」（硬规则 9 的 fail-open）。现在这一族要能被认出来，
+     * 并落到与「读数形状走形」不同的、可行动的那一句话上。 */
+    const { ProbeUnavailableError } = await import("../scripts/launcher-core/procs.mjs");
+    mocks.runningAppInstances.mockRejectedValue(
+      new ProbeUnavailableError("netstat", ["-ano", "-p", "TCP"], "spawn netstat ENOENT"),
+    );
+    const result = await runGuard();
+    expect(result.code).toBe(2);
+    expect(result.text).toContain("没给出结论");
+    expect(result.text).toContain("判据没量到");
+    expect(result.text).toContain("探测命令没跑起来");
+    expect(result.text).not.toContain("可以执行 pnpm install");
+  });
 });
