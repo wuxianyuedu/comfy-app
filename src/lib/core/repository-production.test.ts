@@ -62,9 +62,7 @@ describe("ProductionRepository", () => {
       title: "u1 的",
     });
     expect(await productionRepository.getForUser("u2", "proj_1")).toBeNull();
-    expect(
-      await productionRepository.getForUser("u1", "proj_1"),
-    ).not.toBeNull();
+    expect(await productionRepository.getForUser("u1", "proj_1")).not.toBeNull();
   });
 
   it("patchContent 支持 scriptReview（FR-QA-07）：JSON 列序列化落库且还原为对象", async () => {

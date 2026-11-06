@@ -63,9 +63,7 @@ describe("readApiError", () => {
   });
 
   it("认结构化信封 {error:{message}}（errorResponse 下发的那一种）", () => {
-    expect(
-      readApiError({ error: { code: "not_found", message: "不存在" } }),
-    ).toBe("不存在");
+    expect(readApiError({ error: { code: "not_found", message: "不存在" } })).toBe("不存在");
   });
 
   it("空字符串 / 空白的 message 不算错误文案", () => {
