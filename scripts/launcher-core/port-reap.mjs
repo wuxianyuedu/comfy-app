@@ -57,8 +57,15 @@ export function scanPorts(port) {
  * 走第二条而不是只看会话，是因为用户完全可以绕过编排器自己 `pnpm dev` ——
  * 那时没有会话锚点，而 `node_modules` 一样被锁着。
  *
+ *  ⚠️ **探测失效时抛 `ProbeUnavailableError`，不返回 `{running:false}`**：
+ *  「没量到」与「量到空」必须是两种读数（§13.6.3）。底层 `listeningPidsOnPort` /
+ *  `processCommandLines` 在命令起不来时抛的是同一族异常，这里刻意不吞 —— 吞成
+ *  「没有实例在跑」正是硬规则 9 的 fail-open。调用方各自有 try/catch 把这一族
+ *  转成「没有结论」（CLI exit 2 / 停止补装 / 启动失败），见各自文件的说明。
+ *
  * @param {string} root 检出根
  * @returns {Promise<{running: boolean, pids: number[], via: "session" | "port" | null}>}
+ * @throws {import("./procs.mjs").ProbeUnavailableError} 端口或命令行探测没跑起来
  */
 export async function runningAppInstances(root) {
   if (isSessionOwnerAlive(root)) {
@@ -75,6 +82,8 @@ export async function runningAppInstances(root) {
   }
 
   const held = [];
+  /* 下面两次探测的失败出口都刻意不接：让 ProbeUnavailableError 原样冒泡到调用方。
+   * 在这里 catch 成空数组 / 空 Map，等于把「没量到」写回「量到空」。 */
   for (const port of scanPorts(resolveAppPort(root))) {
     // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const pids = await listeningPidsOnPort(port);
@@ -188,8 +197,13 @@ export async function reapStaleSession(root = process.cwd()) {
   return alive;
 }
 
-/** 该 PID 的命令行（判「端口上的是不是本仓库的应用服务」，拿不到返回空串）。 */
-/** @param {number} pid @returns {Promise<string>} */
+/** 该 PID 的命令行（判「端口上的是不是本仓库的应用服务」，拿不到返回空串）。
+ *
+ *  这里是**尽力而为**的单 PID 查询，刻意留在宽松档 `runCapture`：拿不到就返回
+ *  空串（判据不清时按「不是本仓库的应用服务」处理，§1.4 不猜着杀）。它不在
+ *  `runningAppInstances` 的归属判据链上 —— 那条链走的是 `processCommandLines`
+ *  的严格版，失败要能冒泡成「没有结论」。两处用途不同，不许混成同一档。
+ *  @param {number} pid @returns {Promise<string>} */
 export async function processCommandLine(pid) {
   try {
     return (

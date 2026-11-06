@@ -17,17 +17,32 @@ import path from "node:path";
 
 import { echoCommandLine } from "./command-echo.mjs";
 
-/** 跑一个命令并拿到 stdout（失败返回空串，不抛）。 */
-/**
- * @param {string} command
- * @param {string[]} args
- * @param {number} [timeoutMs]
- * @returns {Promise<string>}
+/** 探测没跑起来：把「没量到」与「量到空」分开，不许被下游当成后者的空串。
+ *
+ *  为什么用可识别的类而不是裸 Error：调用方只该拦**这一族**（探测失效），
+ *  不该把业务异常一并吞掉。判据读不到 ≠ 判过了且没问题（§13.6.3）。 */
+export class ProbeUnavailableError extends Error {
+  /** @param {string} command @param {string[]} args @param {string} reason */
+  constructor(command, args, reason) {
+    super(`探测命令没跑起来：${[command, ...args].join(" ")}（${reason}）`);
+    this.name = "ProbeUnavailableError";
+    this.command = command;
+    this.args = args;
+    this.reason = reason;
+  }
+}
+
+/** 跑一个命令并拿到 stdout（失败返回空串，不抛）。
+ *
+ *  这是**宽松档**：给「拿不到就按空处理」的尽力而为查询用（进程是否还活着、
+ *  命令行 / cwd 取不到时按「不是本检出」处理，猜着杀比说清楚危险得多）。
+ *  端口归属判据这类**不能 fail-open** 的调用一律走 `runCaptureStrict()`。
+ *  @param {string} command
+ *  @param {string[]} args
+ *  @param {number} [timeoutMs]
+ *  @returns {Promise<string>}
  */
 export function runCapture(command, args, timeoutMs = 10_000) {
-  // 探测命令同样回显：这些调用（netstat / PowerShell CIM / ps）决定了「端口上是谁」
-  // 与「这个 PID 属不属于本检出」——回收残留实例之前的判据全在这里，出问题时
-  // 第一句要问的就是「到底探了什么」，而探测结果本身（空串）看不出来。
   echoCommandLine(command, args);
   return new Promise((resolve) => {
     execFile(
@@ -39,6 +54,37 @@ export function runCapture(command, args, timeoutMs = 10_000) {
       (err, stdout) => {
         // oxlint-disable-next-line typescript/no-unnecessary-condition -- execFile 回调的 stdout 在命令起不来时实测 undefined（上方注释已记）
         resolve(err ? "" : String(stdout ?? ""));
+      },
+    );
+  });
+}
+
+/** 跑一个命令并拿到 stdout；**命令起不来就抛 `ProbeUnavailableError`**。
+ *
+ *  「探测失败」与「探测成功且结果为空」在宽松档里是同一个值 `""`，下游解析函数
+ *  一律按后者处理 —— 端口归属判据会因此静默判成「端口上没有本检出的应用服务」
+ *  （fail-open，硬规则 9 那一问等于没问）。这一层把两者分开：成功时空串是
+ *  合法读数，失败时是可识别的异常。真正抛还是转成第三态读数，由调用方决定。
+ *  @param {string} command
+ *  @param {string[]} args
+ *  @param {number} [timeoutMs]
+ *  @returns {Promise<string>}
+ */
+export function runCaptureStrict(command, args, timeoutMs = 10_000) {
+  echoCommandLine(command, args);
+  return new Promise((resolve, reject) => {
+    execFile(
+      command,
+      args,
+      { timeout: timeoutMs, encoding: "utf8", windowsHide: true },
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- execFile 回调的 stdout 在命令起不来时实测 undefined（runCapture 上方注释已记）
+      (err, stdout) => {
+        if (err) {
+          reject(new ProbeUnavailableError(command, args, err.message));
+          return;
+        }
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上
+        resolve(String(stdout ?? ""));
       },
     );
   });
@@ -62,6 +108,10 @@ export function isWindows(platform = process.platform) {
  *  （`orchestrator.mjs` 的 `inspectPort`、`port-reap.mjs` 的 `runningAppInstances`）
  *  本来就 `await`。让这一层同步，等于要求「在途探测的 Promise」当场是字符串，
  *  冷缓存首次调用必然抛 TypeError。平台可注入，好让 Windows 分支在任何平台上都能测。
+ *
+ *  ⚠️ **探测命令起不来就抛**（`ProbeUnavailableError` / `ProbeUnavailableError`
+ *  同族）：不返回空数组 —— 空数组会被 `inspectPort` 判成「端口空闲」、
+ *  被 `runningAppInstances` 判成「没有本检出的实例在跑」，两者都是 fail-open。
  *  @param {number} port
  *  @param {NodeJS.Platform} [platform]
  *  @returns {Promise<number[]>} */
@@ -74,7 +124,8 @@ export async function listeningPidsOnPort(port, platform = process.platform) {
  * `listeningPidsWindows`，而 `netstat -ano -p TCP` 的输出覆盖**全部**端口 ——
  * 三次调用等于同一份输出跑三遍子进程。1s 内复用同一份快照：探测语义本来就是
  * 「这一瞬间谁在听」，相邻毫秒级调用间不存在需要区分的状态变化；真正要重新
- * 看一眼的是下一轮轮询（早已超出 TTL）。并发调用合并为同一次在途探测。 */
+ * 看一眼的是下一轮轮询（早已超出 TTL）。并发调用合并为同一次在途探测。
+ * 失败的那一份**不进缓存**：让下一次调用能真的重试，而不是把「没量到」缓存 1s。 */
 const NETSTAT_SNAPSHOT_TTL_MS = 1000;
 let netstatSnapshot = { at: 0, text: "" };
 /** @type {Promise<string> | null} */
@@ -87,11 +138,14 @@ function netstatTcpSnapshot() {
   if (Date.now() - netstatSnapshot.at < NETSTAT_SNAPSHOT_TTL_MS) {
     return Promise.resolve(netstatSnapshot.text);
   }
-  netstatInFlight ??= runCapture("netstat", ["-ano", "-p", "TCP"]).then((text) => {
-    netstatSnapshot = { at: Date.now(), text };
-    netstatInFlight = null;
-    return text;
-  });
+  netstatInFlight ??= runCaptureStrict("netstat", ["-ano", "-p", "TCP"])
+    .then((text) => {
+      netstatSnapshot = { at: Date.now(), text };
+      return text;
+    })
+    .finally(() => {
+      netstatInFlight = null;
+    });
   return netstatInFlight;
 }
 
@@ -120,10 +174,12 @@ async function listeningPidsWindows(port) {
 /** @param {number} port @returns {number[]} */
 function listeningPidsPosix(port) {
   const inodes = new Set();
+  let readable = false;
   for (const file of ["/proc/net/tcp", "/proc/net/tcp6"]) {
     let text;
     try {
       text = fs.readFileSync(file, "utf8");
+      readable = true;
     } catch {
       continue;
     }
@@ -141,6 +197,11 @@ function listeningPidsPosix(port) {
       inodes.add(cols[9]);
     }
   }
+  /* 两份 /proc/net/tcp* 一份都读不到 ⇒ 这一路同样「没量到」。空串与「量到空」
+   * 不能是同一个返回值：抛同族异常，让调用方转成第三态而不是 fail-open。 */
+  if (!readable) {
+    throw new ProbeUnavailableError("/proc/net/tcp", [], "两份 tcp 表都读不到");
+  }
   if (inodes.size === 0) {
     return [];
   }
@@ -150,7 +211,8 @@ function listeningPidsPosix(port) {
   try {
     entries = fs.readdirSync("/proc");
   } catch {
-    return [];
+    /* /proc 整个读不到：与上面同族，不能把「没量到」念成「没有监听者」。 */
+    throw new ProbeUnavailableError("/proc", [], "进程表读不到");
   }
   for (const entry of entries) {
     if (!/^\d+$/.test(entry)) {
@@ -184,6 +246,8 @@ function listeningPidsPosix(port) {
  *  Windows 侧把「每 PID 一次 PowerShell 冷启动」（0.5~1.5s）合并为一次：
  *  `Get-CimInstance Win32_Process -Filter "ProcessId=a OR ProcessId=b …"`。
  *  POSIX 用 `ps -o pid=,args= -p a,b,c` 一条命令拿全（ps 本就支持逗号列表）。
+ *  探测命令起不来就抛 —— 它是端口归属判据的一环，空 Map 会被念成
+ *  「这些 PID 都不是本检出的应用服务」（fail-open）。
  *  @param {number[]} pids @returns {Promise<Map<number, string>>} */
 export async function processCommandLines(pids) {
   const out = new Map();
@@ -191,7 +255,7 @@ export async function processCommandLines(pids) {
     return out;
   }
   if (!isWindows()) {
-    const text = await runCapture("ps", ["-o", "pid=,args=", "-p", pids.join(",")]);
+    const text = await runCaptureStrict("ps", ["-o", "pid=,args=", "-p", pids.join(",")]);
     for (const line of text.split("\n")) {
       const trimmed = line.trim();
       if (!trimmed) {
@@ -206,7 +270,7 @@ export async function processCommandLines(pids) {
     return out;
   }
   const filter = pids.map((pid) => `ProcessId=${pid}`).join(" OR ");
-  const text = await runCapture("powershell", [
+  const text = await runCaptureStrict("powershell", [
     "-NoProfile",
     "-Command",
     `(Get-CimInstance Win32_Process -Filter "${filter}") | Select-Object ProcessId, CommandLine | ConvertTo-Json -Compress`,
@@ -215,6 +279,9 @@ export async function processCommandLines(pids) {
   try {
     parsed = JSON.parse(text || "null");
   } catch {
+    /* 命令起来了、输出却不是 JSON：这一格是「量到了但读不懂」，不是
+     * 「命令没起来」（后者已由 runCaptureStrict 抛掉），与 runCapture 的
+     * 返回值缺口无关，按原有的「取不到就缺席」处理，不在本次扩面。 */
     return out;
   }
   const rows = Array.isArray(parsed) ? parsed : parsed ? [parsed] : [];
@@ -232,6 +299,7 @@ export async function processCommandLines(pids) {
 }
 
 /** 某 PID 的工作目录（判「这个进程属不属于本检出」）。
+ *  取不到返回 null：判据不清时按「不是本检出」处理（§1.4 猜着杀比说清楚危险）。
  *  @param {number} pid @returns {Promise<string | null>} */
 export async function processCwd(pid) {
   if (isWindows()) {

@@ -10,8 +10,9 @@
  * Windows 分支在任何平台上都真跑一遍；`vi.resetModules()` 保证每个用例
  * 都从冷缓存开始（那份快照缓存是模块级状态）。
  *
- * 刻意不覆盖的那一格：`runCapture()` 把「命令起不来」吞成空串，那是
- * 「没量到」被当成「量到空」，属另一条诉求，另立单处置。
+ * `runCaptureStrict()` 把「命令起不来」与「量到空」分开之后，这一份也钉住
+ * 失败那一支：netstat 起不来要抛可识别的异常，不许退化成空数组（那会被
+ * `inspectPort` 念成「端口空闲」、被 `runningAppInstances` 念成「没有实例」）。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -89,5 +90,30 @@ describe("netstat 快照的同步/异步契约", () => {
     expect(result).toBeInstanceOf(Promise);
     await expect(result).resolves.toBeInstanceOf(Array);
     expect(mocks.execFile).not.toHaveBeenCalled();
+  });
+});
+
+describe("netstat 探测失效（没量到 ≠ 量到空）", () => {
+  it("netstat 起不来 ⇒ 抛 ProbeUnavailableError，不返回空数组", async () => {
+    mocks.execFile.mockImplementation((_command, _args, _options, callback) => {
+      callback(new Error("spawn netstat ENOENT"), "", "");
+    });
+    const { listeningPidsOnPort } = await import("../scripts/launcher-core/procs.mjs");
+    const { ProbeUnavailableError } = await import("../scripts/launcher-core/procs.mjs");
+    await expect(listeningPidsOnPort(3311, "win32")).rejects.toBeInstanceOf(ProbeUnavailableError);
+  });
+
+  it("第一次失败不进缓存 ⇒ 下一次调用真的重试（而不是把失败缓存 1s）", async () => {
+    mocks.execFile.mockImplementation((_command, _args, _options, callback) => {
+      callback(new Error("spawn netstat ENOENT"), "", "");
+    });
+    const { listeningPidsOnPort } = await import("../scripts/launcher-core/procs.mjs");
+    await expect(listeningPidsOnPort(3311, "win32")).rejects.toBeInstanceOf(Error);
+    // 恢复成正常输出：若失败被缓存，这一轮仍会拿到空串从而解析出 []。
+    mocks.execFile.mockImplementation((_command, _args, _options, callback) => {
+      callback(null, NETSTAT_TEXT, "");
+    });
+    await expect(listeningPidsOnPort(3311, "win32")).resolves.toEqual([4242, 5555]);
+    expect(mocks.execFile).toHaveBeenCalledTimes(2);
   });
 });
