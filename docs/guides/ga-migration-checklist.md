@@ -91,13 +91,15 @@
 - **现状（CNB 口径）**：自托管每次全量 clone（OverlayFS 不可用），fetch-depth 无意义
 - **GA 实测表现**：
   - pr-gate.yml static-gates：`fetch-depth: 0` ✅ 保留（分支守卫 / 提交声明核对 / 补丁覆盖率要读 `origin/master`，浅克隆里没有这条 ref）
-  - pr-gate.yml typecheck-db-format / fixed-structural-tests / affected-tests：`0` → `2`（合成 merge 的两个父正是 base 与 head，判据基线是 payload 的 `CNB_PULL_REQUEST_TARGET_SHA`）✅ 本主题 PR
+  - pr-gate.yml typecheck-db-format：`0` → `2` ✅（本格只跑 `tests/lib-node-only-declarations.test.ts`，它不读 git 历史；判据基线是 payload 的 `CNB_PULL_REQUEST_TARGET_SHA`）
+  - pr-gate.yml fixed-structural-tests：**回到 `0`**（`2` 被实测证伪，见下节「被实测证伪的判断」）
+  - pr-gate.yml affected-tests：`0` → `2` ✅（`COMFY_AFFECTED_SEGMENT=affected` 不含固定清单，`tests/audits-doc-references.test.ts` 不在这一格跑）
   - pr-gate.yml heavy-gates：`fetch-depth: 0` ✅ 保留（依赖新鲜度按 `merge-base HEAD origin/master` 算，浅克隆没有 `origin/master`）
   - master-gate.yml：`fetch-depth: 0` → 1（PR #3223 修复）✅ 文档链命令只读当前树
-  - daily.yml：`fetch-depth: 0` → 1（每日档定时跑在 master HEAD，不做三点 diff）✅
-  - package-desktop.yml：`fetch-depth: 0` → 1（桌包档定时跑在 master HEAD，打包只读当前树）✅
-- **影响判断**：fetch-depth 过大 = 纯网络开销；过小 = 缺历史导致三点 diff / LFS / 某些静态判据失败
-- **建议改法**：逐个评估每份 workflow 的 checkout 配置，最小化 fetch-depth
+  - daily.yml：**回到 `0`**（全量单测含按历史现算的判据，`1` 会红；本笔修正）
+  - package-desktop.yml：`fetch-depth: 0` → 1（桌包档只 `pnpm tauri build`，不跑测试、不做三点 diff）✅
+- **影响判断**：fetch-depth 过大 = 纯网络开销；过小 = 缺历史导致三点 diff / LFS / 按历史现算的判据（`git log --all`）失败
+- **建议改法**：逐个评估每份 workflow 的 checkout 配置，最小化 fetch-depth；**判据里有 `git log` 的格必须全历史**
 - **优先级**：P0（冷装优化的核心）
 
 ### 三、拓扑（3 项）
@@ -242,6 +244,19 @@
 2. **P1**：G-1 daily.yml 拆分 + G-2 NODE_OPTIONS 补齐 + G-9 job 拆分 + G-17/G-18 payload 路径验证
 3. **P2**：G-4 concurrent + G-7 LFS 配额监控 + G-12 日志上限实测 + G-15 timeout 重算 + G-23 镜像同步机制
 4. **已收口**：G-6/G-10/G-11/G-13/G-14/G-16/G-19/G-20/G-21 —— 零变更
+
+## 被实测证伪的判断
+
+- **「pr-gate 三个装依赖 job 的 `fetch-depth` 都能收到 2」**（PR #3236 的假设：合成 merge 的两个父就是 base 与 head ⇒ 2 够）。
+  - 证伪读数（GA run 42177286869 › `fixed-structural-tests`，2026-11-06 06:53–06:56，`git fetch --depth=2`）：
+    ```
+    FAIL tests/audits-doc-references.test.ts > docs/audits/** 的台账引用不许漂到已删的棘轮基线上 > 判据面非空：仓库历史里确实有已删的棘轮基线（否则上面那条在空转）
+    AssertionError: expected 0 to be greater than 0
+    Tests  1 failed | 265 passed (266)
+    ```
+  - 根因：`scripts/fixed-structural-tests.mjs:600` 把 `tests/audits-doc-references.test.ts` 列进固定清单；该用例用 `git log --all --diff-filter=D -- scripts/` 现算「已删的棘轮基线」，浅克隆下退化成空集（脚本注释里本就写着「浅检出时退化成空集，有专门用例判红」）。
+  - 处置：`fixed-structural-tests` 回到 `0`；`affected-tests` 保持 `2`（`COMFY_AFFECTED_SEGMENT=affected` 不含固定清单）；`daily` 从 `1` 回到 `0`（全量单测含同一份用例）。
+  - 时间差值得记：PR #3236 自己那跑是绿的 —— `repository_dispatch` 取的是**默认分支**的 workflow，所以检出面收窄的后果只在它合并之后的下一跑才暴露。
 
 ## 待验证项
 
