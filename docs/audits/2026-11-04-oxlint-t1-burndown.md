@@ -12,7 +12,7 @@
 | B1   | `eslint/no-use-before-define（functions:false）` | 75       | 48       | 已清（75 处/48 份）                                |
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
-| B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 清账中（子批1–4：185 份 / 593 处已清）             |
+| B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 清账中（子批1–5：205 份 / 659 处已清）             |
 | B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 挂账中                                             |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
@@ -592,26 +592,26 @@
 | `src/lib/comfyui/node-titles.ts`                                                       | 5        | 已清 |
 | `src/lib/comfyui/proc-detect.ts`                                                       | 1        | 已清 |
 | `src/lib/comfyui/raw.ts`                                                               | 1        | 已清 |
-| `src/lib/comfyui/runner-state.ts`                                                      | 6        | 挂账 |
-| `src/lib/comfyui/status.ts`                                                            | 1        | 挂账 |
-| `src/lib/comfyui/workflow-detail-io.ts`                                                | 2        | 挂账 |
-| `src/lib/console/console-guard.ts`                                                     | 4        | 挂账 |
-| `src/lib/console/console-run.test.ts`                                                  | 1        | 挂账 |
-| `src/lib/core/repository.test.ts`                                                      | 1        | 挂账 |
-| `src/lib/drizzle-studio/lifecycle.ts`                                                  | 2        | 挂账 |
-| `src/lib/envfile.ts`                                                                   | 2        | 挂账 |
-| `src/lib/layout-budget.test.ts`                                                        | 2        | 挂账 |
-| `src/lib/llm/parse.ts`                                                                 | 1        | 挂账 |
-| `src/lib/llm/types.ts`                                                                 | 2        | 挂账 |
-| `src/lib/llm/usage-test-config.ts`                                                     | 4        | 挂账 |
-| `src/lib/log/log-ansi.ts`                                                              | 4        | 挂账 |
-| `src/lib/log/log-cli-json.ts`                                                          | 1        | 挂账 |
-| `src/lib/log/log-run-packs.ts`                                                         | 7        | 挂账 |
-| `src/lib/log/runtime-log-file.ts`                                                      | 15       | 挂账 |
-| `src/lib/markdown/styles.ts`                                                           | 2        | 挂账 |
-| `src/lib/media/media-kind.ts`                                                          | 3        | 挂账 |
-| `src/lib/media/output-paths.ts`                                                        | 1        | 挂账 |
-| `src/lib/media/size-presets.ts`                                                        | 5        | 挂账 |
+| `src/lib/comfyui/runner-state.ts`                                                      | 6        | 已清 |
+| `src/lib/comfyui/status.ts`                                                            | 1        | 已清 |
+| `src/lib/comfyui/workflow-detail-io.ts`                                                | 2        | 已清 |
+| `src/lib/console/console-guard.ts`                                                     | 4        | 已清 |
+| `src/lib/console/console-run.test.ts`                                                  | 1        | 已清 |
+| `src/lib/core/repository.test.ts`                                                      | 1        | 已清 |
+| `src/lib/drizzle-studio/lifecycle.ts`                                                  | 2        | 已清 |
+| `src/lib/envfile.ts`                                                                   | 2        | 已清 |
+| `src/lib/layout-budget.test.ts`                                                        | 2        | 已清 |
+| `src/lib/llm/parse.ts`                                                                 | 1        | 已清 |
+| `src/lib/llm/types.ts`                                                                 | 2        | 已清 |
+| `src/lib/llm/usage-test-config.ts`                                                     | 4        | 已清 |
+| `src/lib/log/log-ansi.ts`                                                              | 4        | 已清 |
+| `src/lib/log/log-cli-json.ts`                                                          | 1        | 已清 |
+| `src/lib/log/log-run-packs.ts`                                                         | 7        | 已清 |
+| `src/lib/log/runtime-log-file.ts`                                                      | 15       | 已清 |
+| `src/lib/markdown/styles.ts`                                                           | 2        | 已清 |
+| `src/lib/media/media-kind.ts`                                                          | 3        | 已清 |
+| `src/lib/media/output-paths.ts`                                                        | 1        | 已清 |
+| `src/lib/media/size-presets.ts`                                                        | 5        | 已清 |
 | `src/lib/process/executable-resolve.ts`                                                | 1        | 挂账 |
 | `src/lib/shell/reveal-path.test.ts`                                                    | 1        | 挂账 |
 | `src/lib/workflow/workflow-exposed-params.ts`                                          | 7        | 挂账 |

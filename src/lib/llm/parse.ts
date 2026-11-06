@@ -13,10 +13,10 @@ export function extractJson(text: string): unknown {
 
   // 去掉 ```json ... ``` 这类代码围栏
 
-  const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
+  const fence = /```(?:json)?\s*(?<body>[\s\S]*?)```/i.exec(trimmed);
 
   if (fence) {
-    trimmed = fence[1]!.trim();
+    trimmed = fence.groups?.body?.trim() ?? "";
   }
 
   const start = trimmed.search(/[[{]/);

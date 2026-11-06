@@ -193,7 +193,7 @@ export function readRegisteredLauncher(comfyuiPath: string): string | null {
   if (cmds === null) {
     return null;
   }
-  const first = /^"([^"]+)"/.exec(cmds)?.[1] ?? cmds.trim().split(/\s+/)[0];
+  const first = /^"(?<cmd>[^"]+)"/.exec(cmds)?.groups?.cmd ?? cmds.trim().split(/\s+/)[0];
   if (first === undefined || !/\.exe$|python/i.test(first)) {
     return null;
   }
