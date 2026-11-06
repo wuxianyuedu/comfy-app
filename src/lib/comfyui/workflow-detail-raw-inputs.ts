@@ -23,6 +23,7 @@ import {
   type RawSubgraphDef,
   type RawWorkflow,
 } from "~/lib/comfyui/raw";
+import { isRecord } from "~/lib/is-record";
 import { inferInputType, inferIsMultiline } from "~/lib/comfyui/types";
 import type { RawInputEntry } from "./workflow-detail-raw-types";
 
@@ -99,10 +100,8 @@ function collectProxyWidgetPairs(raw: unknown): Array<{ slot?: string; target: [
     }
     return pairs;
   }
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (raw != null && typeof raw === "object") {
-    /* SAFETY: 类型断言已复核 */
-    for (const [slot, value] of Object.entries(raw as Record<string, unknown>)) {
+  if (isRecord(raw)) {
+    for (const [slot, value] of Object.entries(raw)) {
       const target = asTarget(value);
       if (target) {
         pairs.push({ slot, target });
@@ -440,13 +439,11 @@ function subgraphAuthorLabelsByUid(
     }
     const table: Record<string, string> = {};
     for (const pinRaw of subDef.inputs) {
-      if (typeof pinRaw !== "object" || pinRaw === null) {
+      if (!isRecord(pinRaw)) {
         continue;
       }
-      /* SAFETY: 类型断言已复核 */
-      const pin = pinRaw as Record<string, unknown>;
-      const slot = typeof pin.name === "string" ? pin.name.trim() : "";
-      const label = typeof pin.label === "string" ? pin.label.trim() : "";
+      const slot = typeof pinRaw.name === "string" ? pinRaw.name.trim() : "";
+      const label = typeof pinRaw.label === "string" ? pinRaw.label.trim() : "";
       if (!slot || !label || slot === label) {
         continue;
       }

@@ -16,6 +16,11 @@ import { firstRowRequired } from "./repository-row";
  *  （成片监看每 4s 就打进度日志），界面也只显示最近一段。 */
 const LOGS_MAX = 500;
 
+/** `logs` 是 JSON 列（运行期形状不受 schema 约束），先确认是数组再当数组用。 */
+function isUnknownArray(value: unknown): value is Array<unknown> {
+  return Array.isArray(value);
+}
+
 export type FilmSummary = {
   createdAt: Date;
   finalVideo: string | null;
@@ -126,8 +131,8 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
       .from(filmProject)
       .where(eq(filmProject.id, id))
       .limit(1);
-    /* SAFETY: 类型断言已复核 */
-    const arr = (film[0]?.logs as Array<unknown> | null) ?? [];
+    const logs = film[0]?.logs;
+    const arr: Array<unknown> = isUnknownArray(logs) ? logs : [];
     arr.push(entry);
     await db
       .update(filmProject)

@@ -5,6 +5,7 @@
 import "server-only";
 
 import { db } from "~/lib/db";
+import { isRecord } from "~/lib/is-record";
 import { task, taskImage, type Task, type TaskImage } from "~/server/db/schema";
 import { NotFoundError } from "./errors";
 import { DrizzleRepository, type TaskWithCover } from "./repository-base";
@@ -43,10 +44,27 @@ const NO_LIMIT = sql`-1`;
  * `cancel` 正是 impl 里唯一免归属的写。判据与理由见 ADR §14 D4。 */
 const impl: TaskRepoImpl = createTaskRepoImpl(db, { owner: "inline" });
 
+/** 运行期确认构造器带可调用的 `limit`（drizzle 的链式查询对象满足此形状）。 */
+function hasLimit(value: unknown): value is { limit(n: unknown): unknown } {
+  return isRecord(value) && typeof value.limit === "function";
+}
+
+/** 链式调用在运行期返回对象；把它接回调用点的查询类型。 */
+function isQueryOf<Q>(value: unknown): value is Q {
+  return isRecord(value);
+}
+
 /** 把「不限条数」作为 limit 传下去（run-time 是 `sql` 片段，见 NO_LIMIT 注释）。 */
 function limitAll<Q extends { limit(n: number): unknown }>(q: Q): Q {
-  /* SAFETY: 类型断言已复核 */
-  return (q as unknown as { limit(n: unknown): Q }).limit(NO_LIMIT);
+  const candidate: unknown = q;
+  if (!hasLimit(candidate)) {
+    return q;
+  }
+  const chained = candidate.limit(NO_LIMIT);
+  if (!isQueryOf<Q>(chained)) {
+    return q;
+  }
+  return chained;
 }
 
 /**
