@@ -208,7 +208,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         return;
       }
       // 由文件名自动取名（去掉扩展名）。
-      const baseName = file.name.replace(/\.(json|workflow)$/i, "").trim();
+      const baseName = file.name.replace(/\.(?:json|workflow)$/i, "").trim();
       setImportName(baseName || "未命名工作流");
       setImportJson(text);
       setImportErr("");

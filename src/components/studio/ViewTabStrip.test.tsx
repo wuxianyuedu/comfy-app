@@ -142,8 +142,8 @@ describe("两类页签共用一套选中态（壳内形态 e2e 到不了）", ()
 
   it(".u-tab-active 不是空类：给了更亮的表面，也给了一条品牌色条", () => {
     const css = codeOf("src/app/globals.css");
-    const block = /\.u-tab-active\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
-    const bar = /\.u-tab-active::after\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    const block = /\.u-tab-active\s*\{(?<block>[^}]*)\}/.exec(css)?.groups?.block ?? "";
+    const bar = /\.u-tab-active::after\s*\{(?<bar>[^}]*)\}/.exec(css)?.groups?.bar ?? "";
     expect(block, "缺背景（或没取 surface token）").toContain("var(--color-surface)");
     expect(bar, "缺顶部色条的高度").toContain("height: 2px");
     expect(bar, "色条没取品牌渐变 token").toContain("var(--gradient-brand)");

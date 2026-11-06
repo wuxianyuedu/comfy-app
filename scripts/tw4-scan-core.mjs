@@ -35,7 +35,7 @@ const { stripComments } = requireCjs("./ui-primitives-engine.cjs");
 export { stripComments };
 
 /** 字符串字面量：普通串与模板串；模板串里的 `${…}` 作为普通片段保留。 */
-const STRING_LITERAL = /(["'`])((?:\\[\s\S]|(?!\1)[^\\])*?)\1/g;
+const STRING_LITERAL = /(?<quote>["'`])(?<content>(?:\\[\s\S]|(?!\k<quote>)[^\\])*?)\k<quote>/g;
 
 /**
  * 取出 `text` 里**注释之外**的字符串字面量。
@@ -48,7 +48,11 @@ export function stringLiterals(text) {
   const code = stripComments(text);
   const out = [];
   for (const m of code.matchAll(STRING_LITERAL)) {
-    out.push({ quote: m[1], content: m[2], index: m.index });
+    out.push({
+      quote: m.groups?.quote ?? "",
+      content: m.groups?.content ?? "",
+      index: m.index,
+    });
   }
   return out;
 }

@@ -42,8 +42,8 @@ function wireStyles(data: Record<string, unknown> | undefined) {
   return painted.map((path) => {
     const style = path.getAttribute("style") ?? "";
     return {
-      width: Number(/stroke-width:\s*([\d.]+)/.exec(style)?.[1]),
-      opacity: Number(/(?:^|;)\s*opacity:\s*([\d.]+)/.exec(style)?.[1]),
+      width: Number(/stroke-width:\s*(?<width>[\d.]+)/.exec(style)?.groups?.width),
+      opacity: Number(/(?:^|;)\s*opacity:\s*(?<opacity>[\d.]+)/.exec(style)?.groups?.opacity),
     };
   });
 }
@@ -98,7 +98,7 @@ describe("WorkflowEdge 选中态样式", () => {
     const stroke = painted.at(-1)!.getAttribute("style") ?? "";
     /* 提亮公式把 #10b981 推向白色 —— 亮度升上去，但仍是绿系（G 分量最大），
      * 用户依然能凭颜色读出这条线上流的是 IMAGE。 */
-    const rgbPart = /rgb\(([^)]+)\)/.exec(stroke)?.[1];
+    const rgbPart = /rgb\((?<rgb>[^)]+)\)/.exec(stroke)?.groups?.rgb;
     expect(rgbPart).toBeTruthy();
     /* SAFETY: 类型断言已复核 */
     const [r, g, b] = rgbPart!.split(",").map(Number) as [number, number, number];

@@ -55,8 +55,8 @@ export function issueNumbersFromText(text) {
   /** @type {number[]} */
   const out = [];
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- text 是平台给的标题/正文（外部数据），string 只是声明
-  for (const m of String(text ?? "").matchAll(/#\s?(\d{2,})/g)) {
-    out.push(Number(m[1]));
+  for (const m of String(text ?? "").matchAll(/#\s?(?<issue>\d{2,})/g)) {
+    out.push(Number(m.groups?.issue));
   }
   return [...new Set(out)];
 }
@@ -83,8 +83,8 @@ export function claimNumbersFromTitle(text) {
   /** @type {number[]} */
   const out = [];
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- text 是平台给的标题本体（外部数据），string 只是声明
-  for (const m of String(text ?? "").matchAll(/\(\s*#\s?(\d{2,})\s*\)/g)) {
-    out.push(Number(m[1]));
+  for (const m of String(text ?? "").matchAll(/\(\s*#\s?(?<issue>\d{2,})\s*\)/g)) {
+    out.push(Number(m.groups?.issue));
   }
   return [...new Set(out)];
 }

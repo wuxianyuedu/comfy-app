@@ -163,7 +163,7 @@ function getInstalledComfyCliVersion() {
   if (!r.ok) {
     return null;
   }
-  return /^Version:\s*(\S+)/m.exec(r.stdout)?.[1] ?? null;
+  return /^Version:\s*(?<version>\S+)/m.exec(r.stdout)?.groups?.version ?? null;
 }
 
 function getLatestComfyCliVersion() {
@@ -178,7 +178,7 @@ function getLatestComfyCliVersion() {
     writeLog("WARN", "查询 comfy-cli 最新版本失败，跳过升级检查（离线或 PyPI 不可达）");
     return null;
   }
-  return /^comfy-cli\s*\(([^)]+)\)/m.exec(r.stdout)?.[1] ?? null;
+  return /^comfy-cli\s*\((?<version>[^)]+)\)/m.exec(r.stdout)?.groups?.version ?? null;
 }
 
 /** 版本号逐段比（非数字段退回字符串序 —— PyPI 上带后缀的版号走的就是那一支）。
@@ -421,7 +421,7 @@ function pythonMeetsFloor(pythonPath) {
   });
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- 子进程起不来时 stdout/stderr 实测为 undefined（@types/node 声明偏窄）
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
-  const m = /Python\s+(\d+)\.(\d+)(?:\.(\d+))?/.exec(out);
+  const m = /Python\s+(?<major>\d+)\.(?<minor>\d+)(?:\.(?:\d+))?/.exec(out);
   if (!m) {
     writeLog(
       "WARN",
@@ -430,11 +430,13 @@ function pythonMeetsFloor(pythonPath) {
     return true;
   }
   const [maj, min] = PYTHON_MIN_VERSION;
-  const ok = Number(m[1]) > maj || (Number(m[1]) === maj && Number(m[2]) >= min);
+  const ok =
+    Number(m.groups?.major) > maj ||
+    (Number(m.groups?.major) === maj && Number(m.groups?.minor) >= min);
   if (!ok) {
     writeLog(
       "ERROR",
-      `基础 Python ${m[1]}.${m[2]} 低于本仓下限 ${PYTHON_MIN_TEXT}（唯一定义：scripts/ci-env-probe.mjs）`,
+      `基础 Python ${m.groups?.major}.${m.groups?.minor} 低于本仓下限 ${PYTHON_MIN_TEXT}（唯一定义：scripts/ci-env-probe.mjs）`,
     );
   }
   return ok;

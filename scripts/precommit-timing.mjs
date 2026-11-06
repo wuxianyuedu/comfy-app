@@ -270,8 +270,8 @@ export function parseJunitXml(xml) {
   /** @type {{name: string, ms: number}[]} */
   const out = [];
   for (const tag of suiteTags(xml)) {
-    const name = /\bname="([^"]*)"/.exec(tag)?.[1];
-    const time = /\btime="([^"]*)"/.exec(tag)?.[1];
+    const name = /\bname="(?<name>[^"]*)"/.exec(tag)?.groups?.name;
+    const time = /\btime="(?<time>[^"]*)"/.exec(tag)?.groups?.time;
     if (!name || time === undefined) {
       continue;
     }
@@ -302,7 +302,7 @@ export function failingSuitesFromJunit(xml) {
   /** @type {string[]} */
   const out = [];
   for (const tag of suiteTags(xml)) {
-    const name = /\bname="([^"]*)"/.exec(tag)?.[1];
+    const name = /\bname="(?<name>[^"]*)"/.exec(tag)?.groups?.name;
     if (!name) {
       continue;
     }
@@ -342,7 +342,7 @@ export function failingSuiteTextsFromJunit(xml) {
   const openRe = /<testsuite\b[^>]*>/g;
   for (let m = openRe.exec(text); m !== null; m = openRe.exec(text)) {
     const tag = m[0];
-    const name = /\bname="([^"]*)"/.exec(tag)?.[1];
+    const name = /\bname="(?<name>[^"]*)"/.exec(tag)?.groups?.name;
     if (!name) {
       continue;
     }
@@ -572,9 +572,8 @@ export function formatReport(runs, opts = {}) {
     lines.push("");
     lines.push(
       `  组 C 各文件（中位数，前 ${Math.min(10, ranked.length)} 名；` +
-        `共 ${ranked.length} 份有读数${
-        expected > 0 ? ` / 清单 ${expected} 份` : ""
-        }${missing > 0 ? `，缺 ${missing} 份**没有读数 —— 不是 0 秒**` : ""
+        `共 ${ranked.length} 份有读数${expected > 0 ? ` / 清单 ${expected} 份` : ""}${
+          missing > 0 ? `，缺 ${missing} 份**没有读数 —— 不是 0 秒**` : ""
         }）：`,
     );
     for (const f of ranked.slice(0, 10)) {
@@ -662,9 +661,7 @@ export function formatFileTimings(runs, opts = {}) {
     lines.push(`  ${secs(f.ms).padStart(7)}  ${f.name}`);
   }
   if (top > 0 && ranked.length > shown.length) {
-    lines.push(
-      `  ……（--top ${top}：只打最贵 ${top} 名，省了 ${ranked.length - shown.length} 行）`,
-    );
+    lines.push(`  ……（--top ${top}：只打最贵 ${top} 名，省了 ${ranked.length - shown.length} 行）`);
   }
   if (cGroup) {
     lines.push(
@@ -784,15 +781,16 @@ export function recordRun(argv, cwd = process.cwd()) {
   process.stdout.write(
     `[precommit-timing] 已记录本次耗时：总 ${secs(record.totalMs)}（${groups.length} 组 / ${steps.length} 步${
       cRead.files.length > 0 ? ` / 组 C 分文件 ${cRead.files.length} 份` : ""
-      }）\n${
+    }）\n${
       cRead.missing > 0
         ? `[precommit-timing] 组 C 清单 ${cRead.expected} 份里有 ${cRead.missing} 份没给出读数` +
           "（加载即炸 / 被跳过 / reporter 没记上）—— 它们**不是 0 秒**，别按 0 算进砍线\n"
         : ""
-      }${cRead.dropped > 0
+    }${
+      cRead.dropped > 0
         ? `[precommit-timing] 有 ${cRead.dropped} 个 junit 读数解析不出，已跳过\n`
         : ""
-      }${dropped > 0 ? `[precommit-timing] 有 ${dropped} 条耗时读数解析不出，已跳过\n` : ""}`,
+    }${dropped > 0 ? `[precommit-timing] 有 ${dropped} 条耗时读数解析不出，已跳过\n` : ""}`,
   );
   return 0;
 }

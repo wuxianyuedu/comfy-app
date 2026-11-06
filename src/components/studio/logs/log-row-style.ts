@@ -65,7 +65,7 @@ export function hasAnsi(text: string): boolean {
  * 无 ANSI 时的词法上色：`Write-Host` 的颜色不会进文件，面板按 token 复原终端观感（时间戳调暗、`[OK]` 绿、URL 蓝、路径紫）。
  * **路径区间不在这条正则里**：取自 `findLogPathTokens`，与「点一下定位」同判据；两份判据漂移会把 `C:\Program Files\…\pwsh.EXE` 切成两段假路径，现在一条路径恒在一个分片里完整落地（判据见 `log-row-style.test.ts`）。 */
 const TOKEN_RE =
-  /(\[\d{2}:\d{2}:\d{2}\]|\[OK\]|\[STEP\]|\[WARN\]|\[ERROR\]|\[INFO\]|PID\s*[:：]\s*\d+|https?:\/\/[^\s]+)/gi;
+  /(?:\[\d{2}:\d{2}:\d{2}\]|\[OK\]|\[STEP\]|\[WARN\]|\[ERROR\]|\[INFO\]|PID\s*[:：]\s*\d+|https?:\/\/[^\s]+)/gi;
 
 const TOKEN_STYLES: Array<{ pattern: RegExp; style: AnsiStyleKey }> = [
   { pattern: /^\[\d{2}:\d{2}:\d{2}\]$/, style: "gray" },

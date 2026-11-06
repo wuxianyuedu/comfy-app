@@ -151,7 +151,7 @@ module.exports = {
         t2.match(/[A-Za-z_$][\w$]*\s*,?\s*\[\s*[^\]]+\s*\]\s*:\s*!\s*[A-Za-z_$][\w$]*\s*\[/g) ?? [];
       let n = 0;
       for (const flip of flips) {
-        const src = /!\s*([A-Za-z_$][\w$]*)\s*\[/.exec(flip)?.[1];
+        const src = /!\s*(?<src>[A-Za-z_$][\w$]*)\s*\[/.exec(flip)?.groups?.src;
         if (src && new RegExp(String.raw`\.\.\.\s*` + src + String.raw`\b`).test(t2)) {
           n++;
         }
@@ -502,15 +502,17 @@ module.exports = {
        *（与 P22 / P31 同款：判据锚在唯一的签名上）。 */
       const slots =
         t2.match(
-          /\bconst\s*\[\s*([A-Za-z_$][\w$]*[Ee]rror)\s*,\s*([A-Za-z_$][\w$]*)\s*\]\s*=\s*(?:React\.)?useState(?:<[^>]*>)?\s*\(/g,
+          /\bconst\s*\[\s*(?:[A-Za-z_$][\w$]*[Ee]rror)\s*,\s*(?:[A-Za-z_$][\w$]*)\s*\]\s*=\s*(?:React\.)?useState(?:<[^>]*>)?\s*\(/g,
         ) ?? [];
       if (slots.length === 0) {
         return 0;
       }
       let hits = 0;
       for (const slot of slots) {
-        const m = slot.match(/\[\s*([A-Za-z_$][\w$]*[Ee]rror)\s*,\s*([A-Za-z_$][\w$]*)\s*\]/);
-        const setter = m[2];
+        const m = slot.match(
+          /\[\s*(?:[A-Za-z_$][\w$]*[Ee]rror)\s*,\s*(?<setter>[A-Za-z_$][\w$]*)\s*\]/,
+        );
+        const setter = m.groups?.setter ?? "";
         /* ② **逐条写入点**：调用这个 setter 的函数**有除错误对象之外的实参**
          *    （`polishOne(shot)` / `handleAICard(character)`）—— 说明这块错误位
          *    是被「每一条各自」写的，而同一时刻可能两条都挂着错。
@@ -533,11 +535,13 @@ module.exports = {
         let cm;
         while ((cm = callRe.exec(t2)) !== null) {
           const before = t2.slice(0, cm.index);
-          const fn = before.match(/(?:async\s+)?function\s+\w+\s*\(([^)]*)\)[^{]*\{[^{}]*$/);
+          const fn = before.match(
+            /(?:async\s+)?function\s+\w+\s*\((?<params>[^)]*)\)[^{]*\{[^{}]*$/,
+          );
           if (!fn) {
             continue;
           }
-          const params = fn[1].trim();
+          const params = (fn.groups?.params ?? "").trim();
           if (!params) {
             continue;
           }
@@ -580,10 +584,10 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* `let cancelled = false;` 这类声明：名字带作废语义。 */
-      const decls = t2.match(/\blet\s+([A-Za-z_$][\w$]*)\s*=\s*false\s*;/g) ?? [];
+      const decls = t2.match(/\blet\s+(?:[A-Za-z_$][\w$]*)\s*=\s*false\s*;/g) ?? [];
       let hits = 0;
       for (const decl of decls) {
-        const name = decl.match(/\blet\s+([A-Za-z_$][\w$]*)\s*=/)[1];
+        const name = decl.match(/\blet\s+(?<name>[A-Za-z_$][\w$]*)\s*=/).groups?.name ?? "";
         if (!/cancel|abort|stale|alive|disposed/i.test(name)) {
           continue;
         }
@@ -645,7 +649,7 @@ module.exports = {
        * 唯一的签名上，误伤一个合规者就等于逼人改坏代码）。 */
       const read =
         t2.match(
-          /(?:isRecord\s*\(\s*(\w+)\s*\)[\s\S]{0,80}?|\b(\w*(?:body|json|data)\w*)\s+as\s*\{[\s\S]{0,80}?)[\s\S]{0,80}?\b\1\2\.error\b/g,
+          /(?:isRecord\s*\(\s*(?<recordVar>\w+)\s*\)[\s\S]{0,80}?|\b(?<bodyVar>\w*(?:body|json|data)\w*)\s+as\s*\{[\s\S]{0,80}?)[\s\S]{0,80}?\b\k<recordVar>\k<bodyVar>\.error\b/g,
         ) ?? [];
       return write + read.length;
     },
@@ -829,18 +833,18 @@ module.exports = {
         return 0;
       }
       const slotRe =
-        /(?:const|let)\s*\[\s*(\w+)\s*,[^\]]*\]\s*=\s*(?:React\.)?useState<\s*string\s*\|\s*null\s*>\(\s*null\s*\)/g;
+        /(?:const|let)\s*\[\s*(?<slotName>\w+)\s*,[^\]]*\]\s*=\s*(?:React\.)?useState<\s*string\s*\|\s*null\s*>\(\s*null\s*\)/g;
       let hits = 0;
       let m;
       while ((m = slotRe.exec(t2)) !== null) {
-        if (isBusySlotName(m[1])) {
+        if (isBusySlotName(m.groups?.slotName ?? "")) {
           hits += 1;
         }
       }
       /* 视图侧的比较形态：`<busy 名字> === <x>.id`。 */
-      const cmpRe = /\b(\w*[Bb]usy\w*|\w*[Rr]etry\w*Id\w*)\s*===?\s*\w+\.id\b/g;
+      const cmpRe = /\b(?<busyName>\w*[Bb]usy\w*|\w*[Rr]etry\w*Id\w*)\s*===?\s*\w+\.id\b/g;
       while ((m = cmpRe.exec(t2)) !== null) {
-        if (isBusySlotName(m[1])) {
+        if (isBusySlotName(m.groups?.busyName ?? "")) {
           hits += 1;
         }
       }

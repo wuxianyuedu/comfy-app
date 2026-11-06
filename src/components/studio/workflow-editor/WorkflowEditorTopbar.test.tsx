@@ -102,7 +102,7 @@ describe("顶栏按钮全部走 ui/button 基元（ISSUE #672 P1）", () => {
       const el = screen.getByRole("button", { name: new RegExp(text) });
       expect(el.className).toContain("h-auto");
       expect(el.className).not.toContain("rounded-none");
-      expect(el.className).toMatch(/rounded-(md|lg)\b/);
+      expect(el.className).toMatch(/rounded-(?:md|lg)\b/);
     }
     expect(container.querySelectorAll("button").length).toBeGreaterThanOrEqual(labels.length);
   });

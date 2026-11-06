@@ -72,10 +72,10 @@ module.exports = {
         return 0;
       }
       let hits = 0;
-      const re = /(?:window\.)?requestAnimationFrame\s*\(\s*\(?\s*(\w+)?\s*\)?\s*=>/g;
+      const re = /(?:window\.)?requestAnimationFrame\s*\(\s*\(?\s*(?<param>\w+)?\s*\)?\s*=>/g;
       let m;
       while ((m = re.exec(t2)) !== null) {
-        const param = m[1];
+        const param = m.groups?.param;
         /* 帧循环：回调体内再次 rAF（`step` / `tick` 这类自递归采样器）。
          * 取回调体前 900 字符，够跨过循环里的收敛判断与视口下发。 */
         const body = t2.slice(m.index, m.index + 900);
@@ -240,7 +240,7 @@ module.exports = {
          * 与「读取不出来」这类）。`无法读取文件：` 是这条账里的真实落点，
          * 只认「失败」会把那一处整个漏掉 —— 而漏掉的那一半恰恰是最常见的一档。 */
         const before = t2.slice(Math.max(0, m.index - 40), m.index);
-        if (!/(失败|异常|错误|出错|无法|不能|未找到|不存在)/.test(before)) {
+        if (!/(?:失败|异常|错误|出错|无法|不能|未找到|不存在)/.test(before)) {
           continue;
         }
         const after = t2.slice(m.index, m.index + 60);
@@ -432,7 +432,7 @@ module.exports = {
        * 另一个变量时，这不是同一个视图。 */
       return (
         t2.match(
-          /typeof (\w+) === "object" && \1 !== null[\s\S]{0,40}?as Record<string, unknown>/g,
+          /typeof (?<recordVar>\w+) === "object" && \k<recordVar> !== null[\s\S]{0,40}?as Record<string, unknown>/g,
         ) ?? []
       ).length;
     },
@@ -557,7 +557,7 @@ module.exports = {
        *（`split(",")` 在本仓库另有 CSV 解析的用法）。 */
       const splitCuts =
         t2.includes('startsWith("data:")') || t2.includes("data:${")
-          ? t2.match(/split\(","\)/g) ?? []
+          ? (t2.match(/split\(","\)/g) ?? [])
           : [];
       return writes.length + cuts.length + splitCuts.length;
     },
@@ -733,11 +733,15 @@ module.exports = {
       }
       /* 形态：`Omit<` 的基类型是**底层元素 / 组件的属性集**，且第二个参数是
        * 字符串字面量键（`"a" | "b"` 或跨行的 `| "c"`）。 */
-      const base =
-        String.raw`(?:React\.)?(?:ComponentProps|HTMLAttributes|InputHTMLAttributes|ImgHTMLAttributes|VideoHTMLAttributes|ButtonHTMLAttributes|AnchorHTMLAttributes|LabelHTMLAttributes|TextareaHTMLAttributes)|LucideProps|[A-Za-z]*Primitive\.[A-Za-z.]+Props|typeof\s+\w+`;
-      const oneLine = new RegExp(String.raw`\bOmit\s*<\s*(?:` + base + String.raw`)[^;]{0,200}?,\s*"[^"]+"`, "g");
+      const base = String.raw`(?:React\.)?(?:ComponentProps|HTMLAttributes|InputHTMLAttributes|ImgHTMLAttributes|VideoHTMLAttributes|ButtonHTMLAttributes|AnchorHTMLAttributes|LabelHTMLAttributes|TextareaHTMLAttributes)|LucideProps|[A-Za-z]*Primitive\.[A-Za-z.]+Props|typeof\s+\w+`;
+      const oneLine = new RegExp(
+        String.raw`\bOmit\s*<\s*(?:` + base + String.raw`)[^;]{0,200}?,\s*"[^"]+"`,
+        "g",
+      );
       const multiLine = new RegExp(
-        String.raw`\bOmit\s*<[^;]{0,200}?(?:` + base + String.raw`)[^;]{0,300}?\n\s*\|[^;]{0,200}?"[^"]+"`,
+        String.raw`\bOmit\s*<[^;]{0,200}?(?:` +
+          base +
+          String.raw`)[^;]{0,300}?\n\s*\|[^;]{0,200}?"[^"]+"`,
         "g",
       );
       return (t2.match(oneLine) ?? []).length + (t2.match(multiLine) ?? []).length;

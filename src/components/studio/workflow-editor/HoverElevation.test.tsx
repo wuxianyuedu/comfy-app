@@ -154,9 +154,11 @@ describe("悬浮压住连线：CSS 抬升规则", () => {
   });
 
   it("抬升值高于节点自带 zIndex，也高于选中态（+1000）", () => {
-    const decl = /\.react-flow__node\[data-hovered="true"\]\s*\{[^}]*z-index:\s*(\d+)/.exec(css);
+    const decl = /\.react-flow__node\[data-hovered="true"\]\s*\{[^}]*z-index:\s*(?<z>\d+)/.exec(
+      css,
+    );
     expect(decl).not.toBeNull();
-    const hoverZ = Number(decl![1]);
+    const hoverZ = Number(decl!.groups?.z);
     /* 节点自带 zIndex 最大 20（对外参数卡片）、选中态 ≈1010（elevateNodesOnSelect）。 */
     expect(hoverZ).toBeGreaterThan(1010);
     /* 低于节点内部浮层 / <Handle> 惯用的 9999 档，避免反过来盖住端口。 */

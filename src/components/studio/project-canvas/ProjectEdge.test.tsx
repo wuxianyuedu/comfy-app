@@ -44,8 +44,8 @@ function wireStyle(data: Record<string, unknown> | undefined) {
   const style = painted[0]!.getAttribute("style") ?? "";
   return {
     style,
-    width: Number(/stroke-width:\s*([\d.]+)/.exec(style)?.[1]),
-    opacity: Number(/(?:^|;)\s*opacity:\s*([\d.]+)/.exec(style)?.[1] ?? "1"),
+    width: Number(/stroke-width:\s*(?<width>[\d.]+)/.exec(style)?.groups?.width),
+    opacity: Number(/(?:^|;)\s*opacity:\s*(?<opacity>[\d.]+)/.exec(style)?.groups?.opacity ?? "1"),
   };
 }
 

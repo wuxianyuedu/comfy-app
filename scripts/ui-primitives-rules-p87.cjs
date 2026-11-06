@@ -55,7 +55,7 @@ module.exports = {
         const spansBoth =
           /\b(?:inset-[xy]-0|inset-0|fixed)\b/.test(line) ||
           (/\b(?:top|bottom)-0\b/.test(line) &&
-            /\b(?:top|bottom)-0\b/.test(line.replace(/^.*?(top-0|bottom-0)/, ""))) ||
+            /\b(?:top|bottom)-0\b/.test(line.replace(/^.*?(?:top-0|bottom-0)/, ""))) ||
           (/\bleft-0\b/.test(line) && /\bright-0\b/.test(line));
         if (!spansBoth) {
           n++;

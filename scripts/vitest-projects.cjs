@@ -254,7 +254,7 @@ function collectStringLiterals(arrayText) {
     return null;
   }
   const inner = arrayText.slice(1, close);
-  return [...inner.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]);
+  return [...inner.matchAll(/"(?<content>(?:[^"\\]|\\.)*)"/g)].map((m) => m.groups?.content ?? "");
 }
 
 /**
@@ -286,11 +286,11 @@ function readTiers(configText) {
   const items = splitTopLevel(text.slice(bracket + 1));
   let found = 0;
   for (const item of items) {
-    const nameM = /name:\s*"([^"]+)"/.exec(item);
+    const nameM = /name:\s*"(?<name>[^"]+)"/.exec(item);
     if (!nameM) {
       continue;
     }
-    const name = nameM[1];
+    const name = nameM.groups?.name ?? "";
     const inc = literalArray(item, "include", text);
     const exc = literalArray(item, "exclude", text);
     if (inc === null) {
@@ -321,10 +321,10 @@ function readEnvironments(configText) {
   }
   const out = {};
   for (const item of splitTopLevel(text.slice(bracket + 1))) {
-    const nameM = /name:\s*"([^"]+)"/.exec(item);
-    const envM = /environment:\s*"([^"]+)"/.exec(item);
+    const nameM = /name:\s*"(?<name>[^"]+)"/.exec(item);
+    const envM = /environment:\s*"(?<environment>[^"]+)"/.exec(item);
     if (nameM && envM) {
-      out[nameM[1]] = envM[1];
+      out[nameM.groups?.name ?? ""] = envM.groups?.environment ?? "";
     }
   }
   return out;
@@ -364,14 +364,11 @@ function globToRe(g) {
     if (ch === "{") {
       const close = g.indexOf("}", i);
       if (close > 0) {
-        out +=
-          `(?:${
-          g
-            .slice(i + 1, close)
-            .split(",")
-            .map(escapeRe)
-            .join("|")
-          })`;
+        out += `(?:${g
+          .slice(i + 1, close)
+          .split(",")
+          .map(escapeRe)
+          .join("|")})`;
         i = close;
         continue;
       }

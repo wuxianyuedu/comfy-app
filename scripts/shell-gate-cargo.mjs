@@ -93,7 +93,7 @@ export function findCargoLookup({ env = process.env, home = os.homedir() } = {})
   /* 取证那一行要念**原始值**，不是解出来的绝对路径：跨平台的值（Linux 上跑门禁、
    * 而 `CARGO_HOME` 是 Windows 形态）会被 `path.resolve` 解成 `<cwd>/G:\.cargo`，
    * 那一行就与平台上真正配着的值对不上了 —— 判据（「不在」）不变，读的人却会走错路。 */
-  const cargoHomeRaw = (env.CARGO_HOME ?? "").trim().replace(/^"(.*)"$/, "$1");
+  const cargoHomeRaw = (env.CARGO_HOME ?? "").trim().replace(/^"(?<value>.*)"$/, "$<value>");
   const cargoHome = cargoHomeValue(env);
   if (cargoHome) {
     candidates.push({
@@ -248,7 +248,7 @@ export function findCargo(deps) {
 export function cargoHomeValue(env) {
   const raw = (env.CARGO_HOME ?? "")
     .trim()
-    .replace(/^"(.*)"$/, "$1")
+    .replace(/^"(?<value>.*)"$/, "$<value>")
     .trim();
   if (!raw) {
     return null;
@@ -297,7 +297,7 @@ export function cargoBinHomes({ env, home }) {
     ["HOME", "HOME"],
   ];
   for (const [name, label] of envHomes) {
-    const raw = (env[name] ?? "").trim().replace(/^"(.*)"$/, "$1");
+    const raw = (env[name] ?? "").trim().replace(/^"(?<value>.*)"$/, "$<value>");
     if (!raw) {
       continue;
     }
@@ -325,7 +325,7 @@ export function cargoBinHomes({ env, home }) {
 export function rustupCargoHomeValue({ env = process.env, home = os.homedir() } = {}) {
   const rustupHomeRaw = (env.RUSTUP_HOME ?? "")
     .trim()
-    .replace(/^"(.*)"$/, "$1")
+    .replace(/^"(?<value>.*)"$/, "$<value>")
     .trim();
   const settings = path.join(
     rustupHomeRaw ? path.resolve(rustupHomeRaw) : path.join(home, ".rustup"),
@@ -345,7 +345,7 @@ export function rustupCargoHomeValue({ env = process.env, home = os.homedir() } 
   const raw = line
     .slice(line.indexOf("=") + 1)
     .trim()
-    .replace(/^"(.*)"$/, "$1")
+    .replace(/^"(?<value>.*)"$/, "$<value>")
     .trim();
   return raw ? path.resolve(raw) : null;
 }

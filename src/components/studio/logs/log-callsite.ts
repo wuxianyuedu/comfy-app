@@ -39,8 +39,8 @@ function parseStackFrame(raw: string): StackFrame | null {
   }
 
   // 取 frame 中的位置部分：优先用最后一个 (...) 里的内容，否则取整行
-  const parenMatch = /\(([^)]+)\)\s*$/.exec(line);
-  const loc = parenMatch ? parenMatch[1] : line.replace(/^at\s+/, "");
+  const parenMatch = /\((?<location>[^)]+)\)\s*$/.exec(line);
+  const loc = parenMatch ? parenMatch.groups?.location : line.replace(/^at\s+/, "");
   if (loc === undefined || loc === "") {
     return null;
   }
@@ -116,7 +116,7 @@ function describeLibraryFrame(frame: StackFrame): string | null {
   if (pkg === null || pkg === "") {
     return null;
   }
-  const fn = /\bat\s+([^\s(]+)\s*\(/.exec(frame.raw)?.[1];
+  const fn = /\bat\s+(?<fn>[^\s(]+)\s*\(/.exec(frame.raw)?.groups?.fn;
   const clean = fn !== undefined && fn !== "" ? fn : undefined;
   return clean !== undefined && clean !== "" ? `${pkg} → ${clean}` : pkg;
 }

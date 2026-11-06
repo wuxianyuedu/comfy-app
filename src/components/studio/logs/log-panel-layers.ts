@@ -43,10 +43,10 @@ export function isPopupLayerAboveOverlay(popupZ: number): boolean {
  * （`z-modal` / `z-popup`）——后者由 `zClass()` 生成、取值看 `overlay-z` 刻度表。
  */
 export function parseZClass(className: string): number | null {
-  const match = /(?:^|\s)z-(\d+)(?:\s|$)/.exec(className);
+  const match = /(?:^|\s)z-(?<z>\d+)(?:\s|$)/.exec(className);
   if (!match) {
     return null;
   }
-  const value = Number(match[1]);
+  const value = Number(match.groups?.z);
   return Number.isFinite(value) ? value : null;
 }

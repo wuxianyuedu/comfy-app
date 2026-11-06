@@ -72,19 +72,19 @@ export function ticketReading({ root, fragments = [] }) {
   const anonymousFixed = [];
   for (const rel of fragments) {
     const name = path.basename(rel);
-    const m = /^#?(\d+)-/.exec(name);
+    const m = /^#?(?<ticketNumber>\d+)-/.exec(name);
     // 不是 `<号>-<slug>.md` 形态的文件（目录说明 `README.md` 之类）没有号这一格可判。
     if (!m) {
       continue;
     }
-    if (Number(m[1]) === 0) {
+    if (Number(m.groups?.ticketNumber) === 0) {
       anonymous.push(name);
-      const section = /^#{1,6}\s*([A-Za-z]+)/.exec(fragmentHead(root, rel));
-      if ((section?.[1] ?? "") === "Fixed") {
+      const section = /^#{1,6}\s*(?<section>[A-Za-z]+)/.exec(fragmentHead(root, rel));
+      if ((section?.groups?.section ?? "") === "Fixed") {
         anonymousFixed.push(name);
       }
     } else {
-      numbers.push(Number(m[1]));
+      numbers.push(Number(m.groups?.ticketNumber));
     }
   }
   const uniq = [...new Set(numbers)];

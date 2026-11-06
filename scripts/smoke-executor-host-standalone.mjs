@@ -130,9 +130,10 @@ export function smokeExecutorHostArtifact(targetDir = DEFAULT_TARGET) {
     if (run.status !== 0) {
       fail(
         problems,
-        `packaged host exited ${run.status ?? `signal ${run.signal}`}: ${
-          (log || stdout).split("\n").slice(-6).join(" | ")
-        }`,
+        `packaged host exited ${run.status ?? `signal ${run.signal}`}: ${(log || stdout)
+          .split("\n")
+          .slice(-6)
+          .join(" | ")}`,
       );
     } else if (!/runtime inject-ok/.test(log)) {
       fail(
@@ -146,9 +147,9 @@ export function smokeExecutorHostArtifact(targetDir = DEFAULT_TARGET) {
         `packaged host logged a boot FAILED line: ${log.split("\n").slice(-4).join(" | ")}`,
       );
     }
-    const q2 = /runtime q2-scan hostShardQueued=(\S+)/.exec(log);
+    const q2 = /runtime q2-scan hostShardQueued=(?<queued>\S+)/.exec(log);
     if (q2) {
-      detail.push(`queue scan reported ${q2[1]}`);
+      detail.push(`queue scan reported ${q2.groups?.queued}`);
     } else if (run.status === 0) {
       fail(problems, "packaged host never reached the queue scan");
     }

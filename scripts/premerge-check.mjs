@@ -353,7 +353,7 @@ export function scriptsInCommands(commands) {
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- 数组元素与 argv 键来自外部调用方，运行时可为 null/缺键
     for (const a of c?.argv ?? []) {
       const text = String(a);
-      if (/\.(mjs|cjs|js)$/.test(text)) {
+      if (/\.(?:mjs|cjs|js)$/.test(text)) {
         out.add(text);
       }
     }

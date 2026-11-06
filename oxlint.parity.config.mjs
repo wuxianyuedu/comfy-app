@@ -860,61 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B4 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "scripts/node-engines.mjs", // 存量 6 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/package-bin-entry.mjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/precommit-timing.mjs", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/premerge-check.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/premerge-proof.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/reformat-per-commit.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/reformat-scan-core.mjs", // 存量 6 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/repair-imports.cjs", // 存量 7 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/run-tests.mjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/setup-comfy-cli-venv.mjs", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/shell-gate-cargo.mjs", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ship-branches.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ship-close.mjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ship-core.mjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ship-exec.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ship-ticket.mjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/sidecar-name.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/smoke-executor-host-standalone.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/spawn-shell-scan.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/standalone-link-repair.mjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/standalone-private-inputs.mjs", // 存量 7 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/storybook-checks/coverage-ledger.mjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/tw4-canonical-codemod.cjs", // 存量 7 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/tw4-canonical-report.mjs", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/tw4-scan-core.mjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/tw4-spacing-canonical.mjs", // 存量 7 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ui-primitives-engine.cjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ui-primitives-rules-p1-p37.cjs", // 存量 12 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ui-primitives-rules-p38-p58.cjs", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ui-primitives-rules-p59-p66.cjs", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ui-primitives-rules-p67-p86.cjs", // 存量 12 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/ui-primitives-rules-p87.cjs", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "scripts/vitest-projects.cjs", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "src/app/api/custom-nodes/route.ts", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/canvas/WorkflowEdge.test.tsx", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/canvas/WorkflowSubgraphNode.test.tsx", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/hooks/use-css-color-token.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/logs/log-analysis.ts", // 存量 26 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/logs/log-callsite.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/logs/log-panel-layers.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/logs/log-row-style.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/project-canvas/ProjectEdge.test.tsx", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/queue/QueueMonitor.test.tsx", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/ViewTabStrip.test.tsx", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/workflow-editor/HoverElevation.test.tsx", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/workflow-editor/WorkflowEditorInner.test.tsx", // 存量 8 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/workflow-editor/WorkflowEditorTopbar.test.tsx", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/workflow-io-groups.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/workflow-io.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/workflow-library/hooks/use-workflow-import.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/workflow-library/WorkflowCanvasNodePreview.io-refresh.test.tsx", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/workflow-utils.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/WorkflowCanvasDecorations.test.tsx", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/studio/WorksGallery.test.tsx", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "src/components/ui/alert.test.tsx", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
         "src/components/ui/button.test.tsx", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
         "src/components/ui/dialog.test.tsx", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
         "src/components/ui/sidebar-auto-collapse.test.tsx", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
