@@ -46,8 +46,8 @@ function allowedScriptsFromChecker(source: string): Array<string> {
   const start = source.indexOf("const ALLOWED_SCRIPTS = new Set([");
   expect(start, "check-standalone-contents.cjs 里找不到 ALLOWED_SCRIPTS").toBeGreaterThan(-1);
   const body = source.slice(start, source.indexOf("]);", start));
-  return [...body.matchAll(/"([^"]+)"/g)]
-    .map((m) => m[1])
+  return [...body.matchAll(/"(?<name>[^"]+)"/g)]
+    .map((m) => m.groups?.name)
     .filter((name): name is string => typeof name === "string");
 }
 
@@ -69,10 +69,12 @@ function collectRelativeClosure(entry: string): Array<string> {
       .split("\n")
       // 只剥「整行是注释」的形态：这几份脚本的 import 都在行首，足够用且不会
       // 误伤字符串里的 `//`（例如 URL）
-      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .filter((line) => !/^\s*(?:\/\/|\*|\/\*)/.test(line))
       .join("\n");
-    for (const m of code.matchAll(/from\s+"(\.[^"]+)"|import\(\s*"(\.[^"]+)"\s*\)/g)) {
-      const spec = m[1] ?? m[2];
+    for (const m of code.matchAll(
+      /from\s+"(?<fromSpec>\.[^"]+)"|import\(\s*"(?<importSpec>\.[^"]+)"\s*\)/g,
+    )) {
+      const spec = m.groups?.fromSpec ?? m.groups?.importSpec;
       if (spec === undefined || spec === "") {
         continue;
       }

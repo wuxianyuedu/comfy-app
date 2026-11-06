@@ -84,9 +84,9 @@ describe("替身与真件分居两个端口（ISSUE #1756 的修复取向）", (
     /* 这条是「别写死两处」的机器形态：窗口数值登记在 `.mjs`（假服务器是纯 Node
      * 入口，不引 TS），真源在 `endpoints.ts` / `client.ts`。两边对不上就红。 */
     const clientSrc = readText("src/lib/comfyui/client.ts");
-    const rangeMatch = /const PROBE_RANGE = (\d+);/.exec(clientSrc);
+    const rangeMatch = /const PROBE_RANGE = (?<range>\d+);/.exec(clientSrc);
     expect(rangeMatch, "client.ts 里找不到 PROBE_RANGE").not.toBeNull();
-    const probeRange = Number(rangeMatch?.[1]);
+    const probeRange = Number(rangeMatch?.groups?.range);
 
     const ports = comfyProbeWindowPorts();
     expect(ports).toEqual(
@@ -200,7 +200,7 @@ describe("跑前那一探的判决（四态各归各的出口）", () => {
     const text = describeSlotConflict({ verdict: "real", status: 200 });
     expect(text).toContain(FAKE_COMFY_PORT_ENV_KEY);
     expect(text).toContain("pnpm test:e2e");
-    expect(text).not.toMatch(/停掉.{0,6}(8188|真 ?ComfyUI).{0,10}再跑/);
+    expect(text).not.toMatch(/停掉.{0,6}(?:8188|真 ?ComfyUI).{0,10}再跑/);
     // 真件那一支要点名是真件（两种阻断给不同的话，人才知道该改哪儿）。
     expect(text).toContain("comfyui_version");
     const unknown = describeSlotConflict({ verdict: "unknown", status: 403 });
@@ -540,8 +540,8 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     /* Python 侧引不了 `.mjs`，所以它的兜底值是**唯一**允许的第二处字面量
      * —— 这里把它与模块导出对一遍，漂了就红。 */
     const cliSrc = readText("e2e/support/fake-comfyui/comfy_cli/cli.py");
-    const defaults = [...cliSrc.matchAll(/E2E_FAKE_COMFY_PORT", "(\d+)"/g)].map((m) =>
-      Number(m[1]),
+    const defaults = [...cliSrc.matchAll(/E2E_FAKE_COMFY_PORT", "(?<port>\d+)"/g)].map((m) =>
+      Number(m.groups?.port),
     );
     expect(defaults.length).toBeGreaterThan(0);
     for (const d of defaults) {

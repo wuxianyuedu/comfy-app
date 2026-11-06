@@ -279,13 +279,16 @@ test(
       cwd: REAL_ROOT,
       maxBuffer: 1 << 26,
     });
-    const m = /台账 (\d+) 条 · 判过 (\d+) 份 · 真违例 (\d+) 份/.exec(out);
+    const m =
+      /台账 (?<entries>\d+) 条 · 判过 (?<scanned>\d+) 份 · 真违例 (?<violating>\d+) 份/.exec(out);
     /* 用守卫而不是 `!`：拿不到那一行就是要失败，而且失败话里必须带上原文 ——
      * 「读数行没打出来」既可能是判据改了话术，也可能是它压根没跑起来，两种都要看得见。 */
     if (!m) {
       throw new Error(`读数行没打出来：\n${out}`);
     }
-    const [entries, scanned, violating] = m.slice(1).map(Number);
+    const entries = Number(m.groups?.entries);
+    const scanned = Number(m.groups?.scanned);
+    const violating = Number(m.groups?.violating);
     expect(entries).toBeGreaterThan(0);
     expect(scanned).toBe(entries);
     expect(violating).toBe(entries);

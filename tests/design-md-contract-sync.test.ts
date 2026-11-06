@@ -19,9 +19,10 @@ const COLOR_TOKEN = /^--color-[a-z0-9-]+$/;
 /** 抽出「整个行内代码就是一颗 `--color-*`」的引用名（去重、排序）。 */
 function collectBareTokenCitations(text: string): Array<string> {
   const names = new Set<string>();
-  for (const match of text.matchAll(/`(--color-[a-z0-9-]+)`/g)) {
-    if (match[1] !== undefined && match[1] !== "") {
-      names.add(match[1]);
+  for (const match of text.matchAll(/`(?<token>--color-[a-z0-9-]+)`/g)) {
+    const token = match.groups?.token;
+    if (token !== undefined && token !== "") {
+      names.add(token);
     }
   }
   return [...names].sort();
@@ -41,8 +42,8 @@ type HexRow = {
 
 /** 单元格必须是**单独一颗**且**形如** `shape` 的行内代码。 */
 function singleCodeSpan(cell: string, shape: RegExp): string | null {
-  const match = /^`([^`]+)`$/.exec(cell);
-  const span = match?.[1];
+  const match = /^`(?<span>[^`]+)`$/.exec(cell);
+  const span = match?.groups?.span;
   if (span === undefined || span === "") {
     return null;
   }
@@ -105,13 +106,13 @@ function normalizeCssHex(value: string | undefined): string | null {
     return null;
   }
   const raw = value.trim().toLowerCase();
-  const six = /^#([0-9a-f]{6})$/.exec(raw);
-  const sixHex = six?.[1];
+  const six = /^#(?<hex>[0-9a-f]{6})$/.exec(raw);
+  const sixHex = six?.groups?.hex;
   if (sixHex !== undefined && sixHex !== "") {
     return `#${sixHex}`;
   }
-  const three = /^#([0-9a-f]{3})$/.exec(raw);
-  const threeHex = three?.[1];
+  const three = /^#(?<hex>[0-9a-f]{3})$/.exec(raw);
+  const threeHex = three?.groups?.hex;
   if (threeHex !== undefined && threeHex !== "") {
     return `#${[...threeHex].map((c) => c + c).join("")}`;
   }
@@ -236,7 +237,7 @@ function collectProductFiles(dir: string, out: Array<string> = []): Array<string
         collectProductFiles(p, out);
       }
     } else if (
-      /\.(ts|tsx)$/.test(e.name) &&
+      /\.(?:ts|tsx)$/.test(e.name) &&
       !/\.stories\.tsx?$/.test(e.name) &&
       !/\.test\.tsx?$/.test(e.name)
     ) {
@@ -256,8 +257,9 @@ function scanProduct(pattern: RegExp): Array<{ file: string; value: string }> {
     const code = stripComments(readFileSync(abs, "utf8"));
     const rel = path.relative(ROOT_DIR, abs).split(path.sep).join("/");
     for (const m of code.matchAll(pattern)) {
-      if (m[1] !== undefined && m[1] !== "") {
-        hits.push({ file: rel, value: m[1] });
+      const value = m.groups?.value;
+      if (value !== undefined && value !== "") {
+        hits.push({ file: rel, value });
       }
     }
   }
@@ -267,7 +269,7 @@ function scanProduct(pattern: RegExp): Array<{ file: string; value: string }> {
 /** 屏级副说明的**最低档**：`.u-title-page` 之后 4 行内第一个 `<p>` 不许低于 `text-sm`(14px)；三枚候选即 Tailwind
  * 里低于默认正文的那些具名档。按「偏低」判而非「等于 text-xs」：这一档只需挡住写小的，更大的档不是它要管的事 ——
  * 它管的是「副说明被写成小字」，即用户在「模式契约 / 模型适配」两屏上抱怨的那件事。 */
-const BELOW_BODY_TIERS = /\btext-(xs|2xs|3xs)\b/;
+const BELOW_BODY_TIERS = /\btext-(?:xs|2xs|3xs)\b/;
 
 /** 扫「屏级标题之下那行副说明」被写成小字的落点（ISSUE #1751）：同一段行邻域内 ① 一枚 `.u-title-page` 屏级标题，
  * ② 其后 **4 行内第一个** `<p>` 的 class 写着低于 `text-sm` 的档（text-xs / 2xs / 3xs）—— 两件同现才算。
@@ -308,9 +310,9 @@ function scanTitleSubtitleBelowBody(): Array<{ file: string; line: number }> {
 }
 
 /** 调用点的「字面圆角」形状：rounded- / rounded-b- / rounded-t- 都算。 */
-const RADIUS_LITERAL = /\brounded(?:-[a-z]+)?-\[(\d+(?:\.\d+)?)px\]/g;
+const RADIUS_LITERAL = /\brounded(?:-[a-z]+)?-\[(?<value>\d+(?:\.\d+)?)px\]/g;
 /** 调用点的「字面字号」形状（含 10.5px 这类小数档）。 */
-const TEXT_LITERAL = /\btext-\[(\d+(?:\.\d+)?)px\]/g;
+const TEXT_LITERAL = /\btext-\[(?<value>\d+(?:\.\d+)?)px\]/g;
 /** `@theme` 的档名允许的 t-shirt 形状（xs / sm / md / lg / xl 与 2xs…9xl）。 */
 const TSHIRT_NAME = /^(?:xs|sm|md|lg|xl|[2-9](?:xs|sm|md|lg|xl))$/;
 
@@ -579,13 +581,13 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
      * `@theme` 里那些是 `--text-*: 11px`，不带 `font-size:` 这个属性名，所以这条匹配
      * 天然只收声明侧 —— 不必再去切块。 */
     const css = readFileSync(GLOBALS_PATH, "utf8");
-    for (const m of css.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g)) {
-      add(m[1]!, "globals.css 的裸声明");
+    for (const m of css.matchAll(/font-size:\s*(?<value>\d+(?:\.\d+)?)px/g)) {
+      add(m.groups?.value ?? "", "globals.css 的裸声明");
     }
     /* 来路 ③：markdown 渲染器拼的内联样式串（既不是 token 也不是候选名）。 */
     const mdStyles = stripComments(readFileSync(MD_STYLES_PATH, "utf8"));
-    for (const m of mdStyles.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g)) {
-      add(m[1]!, "markdown 渲染器的内联串");
+    for (const m of mdStyles.matchAll(/font-size:\s*(?<value>\d+(?:\.\d+)?)px/g)) {
+      add(m.groups?.value ?? "", "markdown 渲染器的内联串");
     }
 
     expect(
@@ -771,8 +773,8 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     /* 两条正则都必须带**捕获组 1**（数值本身）：`scanProduct` 只收 `m[1]` 有值的命中，
      * 没有捕获组它会一条都不记 —— 于是白名单与调用点一起「扫不到」，判据对着空集绿着。
      * 上面那两条「owner 在册必须扫得到」的断言就是抓这个的。 */
-    const vhCap = /\bmax-h-\[(\d+(?:\.\d+)?)vh\]/g;
-    const iconAlign = /\balign-\[-(\d+(?:\.\d+)?)px\]/g;
+    const vhCap = /\bmax-h-\[(?<value>\d+(?:\.\d+)?)vh\]/g;
+    const iconAlign = /\balign-\[-(?<value>\d+(?:\.\d+)?)px\]/g;
     /* 量具自验：等式为 0 的判据若正则写漂会永远绿。样本串**拆开拼** —— 写全一枚候选名，
        产物里就多一条没人用的规则（`tests/**` 也在源扫描面内，口径见契约 §Colors）。 */
     expect(
@@ -917,8 +919,11 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
        名单跟着撤：留一个不存在的名字等于给「以后又加回这一档」预先放行。 */
     const EXEMPT = new Set(["section", "page", "stage"]);
     const names = [
-      ...readFileSync(GLOBALS_PATH, "utf8").matchAll(/^\s*--text-([a-z0-9]+)\s*:/gm),
-    ].flatMap((m) => (m[1] !== undefined && m[1] !== "" ? [m[1]] : []));
+      ...readFileSync(GLOBALS_PATH, "utf8").matchAll(/^\s*--text-(?<name>[a-z0-9]+)\s*:/gm),
+    ].flatMap((m) => {
+      const name = m.groups?.name;
+      return name !== undefined && name !== "" ? [name] : [];
+    });
     expect(names.length, "一颗 --text-* 都没解出来（正则漂了，这条会静默全绿）").toBeGreaterThan(4);
     const bad = names.filter((n) => !TSHIRT_NAME.test(n) && !EXEMPT.has(n));
     expect(

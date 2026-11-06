@@ -16,7 +16,7 @@ const BUNDLED_FACE = "src";
 const NODE_ONLY_FACE = "scripts";
 
 /** 那一族属性：`import.meta.dirname` / `import.meta.filename`（`url` 不在其内）。 */
-const UNSAFE_IN_BUNDLE = /import\.meta\.(dirname|filename)\b/g;
+const UNSAFE_IN_BUNDLE = /import\.meta\.(?<attr>dirname|filename)\b/g;
 
 function walk(dir: string): Array<string> {
   const out: Array<string> = [];
@@ -38,10 +38,10 @@ function walk(dir: string): Array<string> {
 function findUnsafe(face: string, { includeTests }: { includeTests: boolean }) {
   const hits: Array<string> = [];
   for (const file of walk(path.join(REPO_ROOT, face))) {
-    if (!/\.(ts|tsx|js|mjs|cjs)$/.test(file)) {
+    if (!/\.(?:ts|tsx|js|mjs|cjs)$/.test(file)) {
       continue;
     }
-    if (!includeTests && /\.test\.(ts|tsx|js|mjs|cjs)$/.test(file)) {
+    if (!includeTests && /\.test\.(?:ts|tsx|js|mjs|cjs)$/.test(file)) {
       continue;
     }
     const lines: Array<string> = readFileSync(file, "utf8").split("\n");
@@ -51,7 +51,9 @@ function findUnsafe(face: string, { includeTests }: { includeTests: boolean }) {
         return;
       }
       for (const match of line.matchAll(UNSAFE_IN_BUNDLE)) {
-        hits.push(`${path.relative(REPO_ROOT, file)}:${index + 1} · import.meta.${match[1]}`);
+        hits.push(
+          `${path.relative(REPO_ROOT, file)}:${index + 1} · import.meta.${match.groups?.attr}`,
+        );
       }
     });
   }
