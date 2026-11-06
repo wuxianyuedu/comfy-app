@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B4 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "tests/eslint-gate-canary.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/esm-cross-host-imports.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/executor-host-artifact.test.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "tests/gate-executors.test.ts", // 存量 10 处 · 清账目标 B4 · 新代码不禁用
-        "tests/gate-flag-claims.test.ts", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "tests/gate-hint-targets-exist.test.ts", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "tests/gate-scan-read.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/gate-tier-summary.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/git-path-quoting.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/helpers/data-slots.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/helpers/gate-repo.ts", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "tests/helpers/hook-groups.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/helpers/launcher-source.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/helpers/quality-gate-gates.ts", // 存量 7 处 · 清账目标 B4 · 新代码不禁用
-        "tests/helpers/radius-scale.ts", // 存量 7 处 · 清账目标 B4 · 新代码不禁用
-        "tests/helpers/ratchet-refusal.ts", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "tests/helpers/source-shape.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/helpers/text-tiers.ts", // 存量 8 处 · 清账目标 B4 · 新代码不禁用
-        "tests/helpers/theme-tokens.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "tests/hook-affected-launch.test.ts", // 存量 7 处 · 清账目标 B4 · 新代码不禁用
         "tests/host-ts-loads-in-node.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
         "tests/known-failed-stale.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
         "tests/lib-layer-boundaries.test.ts", // 存量 5 处 · 清账目标 B4 · 新代码不禁用

@@ -336,15 +336,15 @@ describe("翻闸旗标 ⇄ 散文（§13.5.16）", () => {
     /* 扫描面非空：一份脚本都没扫到时本判据恒绿 —— 那正是它要防的形态。 */
     expect(output).toMatch(/\d+ 份脚本/);
     expect(output).toMatch(/\d+ 条翻闸台账/);
-    const m = /(\d+) 份脚本/.exec(output);
-    expect(Number(m?.[1] ?? 0)).toBeGreaterThan(50);
-    const f = /(\d+) 条翻闸台账/.exec(output);
-    expect(Number(f?.[1] ?? 0)).toBeGreaterThan(5);
+    const m = /(?<count>\d+) 份脚本/.exec(output);
+    expect(Number(m?.groups?.count ?? 0)).toBeGreaterThan(50);
+    const f = /(?<count>\d+) 条翻闸台账/.exec(output);
+    expect(Number(f?.groups?.count ?? 0)).toBeGreaterThan(5);
     /* ④ 那一格的读数：真仓库里落点缺失必须是 0 —— 它出现非零就是判据在报真问题，
      * 而这条断言让「有人把两条 tw4 从按需台账里摘掉」在**这里**也能看见。 */
-    const miss = /落点缺失 (\d+)/.exec(output);
+    const miss = /落点缺失 (?<count>\d+)/.exec(output);
     expect(miss, "输出里必须有「落点缺失」这个读数").not.toBeNull();
-    expect(Number(miss?.[1] ?? -1)).toBe(0);
+    expect(Number(miss?.groups?.count ?? -1)).toBe(0);
   });
 
   it("判据自己的文件头不被自适应（它必然要点名脚本与旗标）", () => {

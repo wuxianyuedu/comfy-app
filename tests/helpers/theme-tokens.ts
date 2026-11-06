@@ -31,7 +31,7 @@ function selectsHtml(selector: string): boolean {
     }
     // 去掉 `:not(.dark)` 这段后，余下必须是**单个**「挂在根上」的简单选择器
     const stripped = p.replaceAll(/:not\([^)]*\)/g, "");
-    if (!/^(:root|:host|\.dark)$/.test(stripped)) {
+    if (!/^(?::root|:host|\.dark)$/.test(stripped)) {
       return false;
     }
     return true;
@@ -128,7 +128,10 @@ export function withPinnedSources(cssText: string): string {
   // 实测反例：关掉扫描后 `--color-primary-strong` 浅色档消失，`sidebar-state-contrast` 当场红，
   // 深色档因手写在 `.dark {}` 里还在 —— 「一半在、一半被摇掉」比全红更难归因。
   // static 只**加**声明、不改已有值（同名不同值 = 0 条）。
-  const staticTheme = noAutoScan.replaceAll(/@theme(\s+inline)?\s*\{/g, "@theme$1 static {");
+  const staticTheme = noAutoScan.replaceAll(
+    /@theme(?<inline>\s+inline)?\s*\{/g,
+    "@theme$<inline> static {",
+  );
   return `${staticTheme}\n${pins}\n`;
 }
 
@@ -249,7 +252,7 @@ export function themeTokens(theme: "light" | "dark", cssText: string): ThemeToke
   function resolveValue(value: string, seen: Set<string>): string {
     // 逐个替换 `var(--name[, fallback])`
     return value.replaceAll(
-      /var\(\s*(--[a-zA-Z0-9-]+)\s*(?:,\s*([^()]*(?:\([^()]*\)[^()]*)*))?\)/g,
+      /var\(\s*(?<ref>--[a-zA-Z0-9-]+)\s*(?:,\s*(?<fallback>[^()]*(?:\([^()]*\)[^()]*)*))?\)/g,
       (_all, ref: string, fallback?: string) => {
         const v = resolve(ref, seen);
         if (v !== undefined && v !== "") {

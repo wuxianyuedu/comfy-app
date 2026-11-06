@@ -188,7 +188,7 @@ function scriptFiles(dir: string, found: Array<string> = []): Array<string> {
     const abs = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       scriptFiles(abs, found);
-    } else if (/\.(mjs|cjs|js)$/.test(entry.name)) {
+    } else if (/\.(?:mjs|cjs|js)$/.test(entry.name)) {
       found.push(abs);
     }
   }

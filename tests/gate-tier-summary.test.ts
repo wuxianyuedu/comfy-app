@@ -26,10 +26,10 @@ function run(...flags: Array<string>) {
 describe("gate-tier-summary：按这一轮实际跑了什么念", () => {
   /** 钩子里那五行 `run_group <id> "<说明>"` 是标签的**唯一出处**，测试也从它取（不另抄一份）。 */
   const hookLabels = new Map<string, string>();
-  for (const [, id = "", desc = ""] of readFileSync(HOOK, "utf8").matchAll(
-    /^run_group ([A-Z0-9]+) "([^"]*)"/gm,
+  for (const m of readFileSync(HOOK, "utf8").matchAll(
+    /^run_group (?<id>[A-Z0-9]+) "(?<desc>[^"]*)"/gm,
   )) {
-    hookLabels.set(id, desc);
+    hookLabels.set(m.groups?.id ?? "", m.groups?.desc ?? "");
   }
 
   it("默认档：降下来的 A B D 逐组点名，带上钩子里那份说明", () => {

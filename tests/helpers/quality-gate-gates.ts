@@ -41,11 +41,15 @@ export function parsePs1Gates(src: string): Array<GateEntry> {
     return [];
   }
   const region = src.slice(start, end);
-  const blocks = [...region.matchAll(/@\{([\s\S]*?)\}/g)].map((m) => stripForParsing(m[1] ?? ""));
+  const blocks = [...region.matchAll(/@\{(?<block>[\s\S]*?)\}/g)].map((m) =>
+    stripForParsing(m.groups?.block ?? ""),
+  );
   return blocks
     .map((block) => ({
-      name: /Name\s*=\s*"([A-Za-z0-9_]+)"/.exec(block)?.[1] ?? "",
-      args: [...block.matchAll(/"([^"]*\.(?:mjs|cjs|js))"/g)].map((m) => m[1] ?? ""),
+      name: /Name\s*=\s*"(?<gateName>[A-Za-z0-9_]+)"/.exec(block)?.groups?.gateName ?? "",
+      args: [...block.matchAll(/"(?<scriptPath>[^"]*\.(?:mjs|cjs|js))"/g)].map(
+        (m) => m.groups?.scriptPath ?? "",
+      ),
       onDemand: /Run\s*=\s*\$false\b/.test(block),
     }))
     .filter((e) => e.name.length > 0);
@@ -64,13 +68,15 @@ export function parseMjsGates(src: string): Array<GateEntry> {
   }
   const block = src.slice(start, end);
   return [
-    ...block.matchAll(/^ {2}([A-Za-z0-9_]+): \{([\s\S]*?)(?=^ {2}[A-Za-z0-9_]+: \{|^\};)/gm),
+    ...block.matchAll(
+      /^ {2}(?<gate>[A-Za-z0-9_]+): \{(?<body>[\s\S]*?)(?=^ {2}[A-Za-z0-9_]+: \{|^\};)/gm,
+    ),
   ].map((m) => {
-    const body = stripForParsing(m[2] ?? "");
-    const argsLiteral = /args:\s*\[([^\]]*)\]/.exec(body)?.[1] ?? "";
+    const body = stripForParsing(m.groups?.body ?? "");
+    const argsLiteral = /args:\s*\[(?<args>[^\]]*)\]/.exec(body)?.groups?.args ?? "";
     return {
-      name: m[1] ?? "",
-      args: [...argsLiteral.matchAll(/"([^"]*)"/g)].map((x) => x[1] ?? ""),
+      name: m.groups?.gate ?? "",
+      args: [...argsLiteral.matchAll(/"(?<arg>[^"]*)"/g)].map((x) => x.groups?.arg ?? ""),
       onDemand: /\brun:\s*false\b/.test(body),
     };
   });

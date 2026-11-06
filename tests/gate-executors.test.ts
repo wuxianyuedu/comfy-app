@@ -31,7 +31,7 @@ function copyGateScripts(repo: { dir: string }): void {
   const dstScripts = join(repo.dir, "scripts");
   mkdirSync(dstScripts, { recursive: true });
   for (const entry of readdirSync(srcScripts)) {
-    const isGate = /\.(cjs|mjs)$/.test(entry) && GATE_PREFIXES.some((p) => entry.startsWith(p));
+    const isGate = /\.(?:cjs|mjs)$/.test(entry) && GATE_PREFIXES.some((p) => entry.startsWith(p));
     if (isGate) {
       copyFileSync(join(srcScripts, entry), join(dstScripts, entry));
     }
@@ -187,9 +187,9 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
 
   /** D 组步骤 = `  run "<标签>" <命令>`（与同族用例同款解析，不许 toContain）。 */
   const steps = (): Array<{ cmd: string; label: string }> =>
-    [...hook().matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) => ({
-      label: m[1] ?? "",
-      cmd: m[2] ?? "",
+    [...hook().matchAll(/^ {2}run "(?<label>[^"]+)" (?<cmd>.+)$/gm)].map((m) => ({
+      label: m.groups?.label ?? "",
+      cmd: m.groups?.cmd ?? "",
     }));
 
   test("「判据执行者台账」这一步真在 D 组里（被注掉的行不算在场）", () => {
@@ -259,19 +259,19 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
   const chainScripts = (): Array<string> => {
     const out = new Set<string>();
     const collect = (text: string): void => {
-      for (const mm of text.matchAll(/scripts[\\/]+([A-Za-z0-9_.-]+\.(?:cjs|mjs))/g)) {
-        out.add(mm[1] ?? "");
+      for (const mm of text.matchAll(/scripts[\\/]+(?<name>[A-Za-z0-9_.-]+\.(?:cjs|mjs))/g)) {
+        out.add(mm.groups?.name ?? "");
       }
     };
     const read = (rel: string): string => readFileSync(join(REPO_ROOT, rel), "utf8");
-    for (const m of read(".githooks/pre-commit").matchAll(/^ {2}run "[^"]+" (.+)$/gm)) {
-      collect(m[1] ?? "");
+    for (const m of read(".githooks/pre-commit").matchAll(/^ {2}run "[^"]+" (?<cmd>.+)$/gm)) {
+      collect(m.groups?.cmd ?? "");
     }
-    for (const m of read("scripts/quality-gate.mjs").matchAll(/args:\s*\[([^\]]*)\]/g)) {
-      collect(m[1] ?? "");
+    for (const m of read("scripts/quality-gate.mjs").matchAll(/args:\s*\[(?<body>[^\]]*)\]/g)) {
+      collect(m.groups?.body ?? "");
     }
-    for (const m of read("scripts/quality-gate.ps1").matchAll(/Args\s*=\s*@\(([^)]*)\)/g)) {
-      collect(m[1] ?? "");
+    for (const m of read("scripts/quality-gate.ps1").matchAll(/Args\s*=\s*@\((?<body>[^)]*)\)/g)) {
+      collect(m.groups?.body ?? "");
     }
     return [...out];
   };
@@ -279,7 +279,7 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
   test("四份「名字不叫 check- 但在门禁链里跑」的判据确实被数进去了", () => {
     const output = runInRepo(["--report"]);
     // 份数必须 > 纯前缀口径的 40 —— 差额就是「链里认出、前缀认不出」的那几份。
-    const total = Number(/判据脚本 (\d+) 份/.exec(output)?.[1] ?? "0");
+    const total = Number(/判据脚本 (?<count>\d+) 份/.exec(output)?.groups?.count ?? "0");
     expect(total, "扫描面必须含门禁链认出的判据").toBeGreaterThan(40);
     const chain = chainScripts();
     for (const name of ["shell-gate.mjs", "storybook-check.mjs"]) {
@@ -296,10 +296,10 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
     // ⚠️ 不写死份数：份数随「新写一份 `check-*.cjs` 还没接钩子」正当变动，上涨读数也随散文提及漂移（§12.14）。
     // 这里只钉三件与口径无关的事实：扫描面非空（坏掉退成 0 而 0 份照样「无违规」）、份数独立重数对账、名单逐字同源。
     const output = runInRepo(["--report"]);
-    const total = Number(/判据脚本 (\d+) 份/.exec(output)?.[1] ?? "0");
+    const total = Number(/判据脚本 (?<count>\d+) 份/.exec(output)?.groups?.count ?? "0");
     expect(total, "扫描面空转（退成 0 时下面每一条都照样报 OK）").toBeGreaterThan(40);
     const listed = readdirSync(join(REPO_ROOT, "scripts"))
-      .filter((n) => /\.(cjs|mjs)$/.test(n))
+      .filter((n) => /\.(?:cjs|mjs)$/.test(n))
       .filter((n) => chainScripts().includes(n) || GATE_PREFIXES.some((p) => n.startsWith(p)));
     expect(total, "份数 = 「门禁链事实 ∪ 名字族」自己数出来的份数（不写死数字）").toBe(
       listed.length,

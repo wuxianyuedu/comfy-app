@@ -210,7 +210,7 @@ function enumeratesRepoRoot(src: string): boolean {
      读目录那一族：`\w+\("\."\)` 会把 `full.split(".")[0]` 当遍历根（实测误伤 `check-doc-references.cjs`）；
      `readdir*` 是 Node API，`walk*`/`collect*` 是本仓判据共用命名，IIFE 则锚 `})(".")`。 */
   if (
-    /\b(readdir\w*|walk\w*|collect\w*)\s*\(\s*"\."\s*[,)]/.test(src) ||
+    /\b(?:readdir\w*|walk\w*|collect\w*)\s*\(\s*"\."\s*[,)]/.test(src) ||
     /\)\s*\(\s*"\."\s*\)/.test(src)
   ) {
     return true;
@@ -218,7 +218,7 @@ function enumeratesRepoRoot(src: string): boolean {
   /* ② `path.join(ROOT)` / `path.join(ROOT, "")` —— 不带子目录名即仓库根本身。
      ⚠️ 刻意**不**认 `path.join(ROOT, <变量>)`：那是各处遍历的通用骨架（`SCAN_DIR`
      的值在另一个常量里），按它判会把 22 份扫 `src/` 的判据全扫进来。 */
-  if (/path\.join\(\s*ROOT\s*(,\s*""\s*)?\)/.test(src)) {
+  if (/path\.join\(\s*ROOT\s*(?:,\s*""\s*)?\)/.test(src)) {
     return true;
   }
   return false;
