@@ -509,11 +509,13 @@ describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
   test("仓库自己的树是干净的（硬闸形态下这一格才是终局）", () => {
     const report = runInRepo(["--report"]);
     expect(report.code, report.output).toBe(0);
-    const header = /疑似英文注释 (\d+) 行,分布在 (\d+) 个文件/.exec(report.output);
+    const header = /疑似英文注释 (?<lineCount>\d+) 行,分布在 (?<fileCount>\d+) 个文件/.exec(
+      report.output,
+    );
     expect(header, `无法解析 --report 表头：${report.output}`).toBeTruthy();
     expect(
-      Number(header![1]),
-      `${header![2]} 个文件里有 ${header![1]} 行英文注释 —— ` +
+      Number(header?.groups?.lineCount ?? -1),
+      `${header?.groups?.fileCount ?? 0} 个文件里有 ${header?.groups?.lineCount ?? 0} 行英文注释 —— ` +
         "注释一律中文（§12.4.6）。属构建期纯 ASCII 模块就把路径登记进 " +
         "docs/reference-facts.md 的 `comment.language.asciiOnly` 一行。",
     ).toBe(0);

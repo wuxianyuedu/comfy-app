@@ -196,9 +196,9 @@ describe("镜像身份：流水线上真的在跑它（脚本存在而配置没�
   });
 
   it("那一步点名的入口真的在盘上，且还包着 CP936 出口外壳", () => {
-    const block = /^\s*-\s*name:\s*镜像身份\s*$\r?\n\s*script:\s*(\S.*)$/m.exec(
+    const block = /^\s*-\s*name:\s*镜像身份\s*$\r?\n\s*script:\s*(?<script>\S.*)$/m.exec(
       read(".cnb.yml"),
-    )?.[1];
+    )?.groups?.script;
     expect(block, "解析不出「镜像身份」那一步的 script").toBeTruthy();
     const command = String(block).trim();
     /* 平台的 stage shell 是 PowerShell，它默认按 CP936 解子进程的 UTF-8 输出 ——
@@ -307,8 +307,8 @@ describe("容器格：哪几格进容器是**决定**，不是随手写的（ISS
      * 按**行首的键**判，不按「文件里出现过」：`.cnb.yml` 注释里正当会写它（那几段正是在解释为什么这里不写）。
      */
     const text = read(".cnb.yml");
-    const override = /^[ \t]*PLAYWRIGHT_BROWSERS_PATH:[ \t]*(.*)$/m.exec(text);
-    const value = (override?.[1] ?? "").trim().replaceAll(/^["']|["']$/g, "");
+    const override = /^[ \t]*PLAYWRIGHT_BROWSERS_PATH:[ \t]*(?<value>.*)$/m.exec(text);
+    const value = (override?.groups?.value ?? "").trim().replaceAll(/^["']|["']$/g, "");
     expect(
       value,
       "`.cnb.yml` 里 `PLAYWRIGHT_BROWSERS_PATH` 指向了容器那个路径 —— " +

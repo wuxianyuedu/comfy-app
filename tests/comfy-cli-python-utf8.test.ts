@@ -20,7 +20,7 @@ const ROOT = path.resolve(__dirname, "..");
 function pythonEnvKeys(rel: string): { keys: Array<string>; name: string } {
   const src = stripComments(readFileSync(path.join(ROOT, rel), "utf8")).replaceAll("\r\n", "\n");
   const found: Array<{ keys: Array<string>; name: string }> = [];
-  const head = /(?:^|[\s,(])(env|stdioEnv|childEnv)\s*:\s*\{/g;
+  const head = /(?:^|[\s,(])(?<name>env|stdioEnv|childEnv)\s*:\s*\{/g;
   let m: RegExpExecArray | null;
   while ((m = head.exec(src))) {
     const start = src.indexOf("{", m.index);
@@ -40,9 +40,9 @@ function pythonEnvKeys(rel: string): { keys: Array<string>; name: string } {
       }
     }
     const body = src.slice(start + 1, i);
-    const keys = [...body.matchAll(/([A-Z][A-Z0-9_]*)\s*:/g)].map((k) => k[1]!);
+    const keys = [...body.matchAll(/(?<key>[A-Z][A-Z0-9_]*)\s*:/g)].map((k) => k.groups?.key ?? "");
     if (keys.some((k) => k.startsWith("PYTHON"))) {
-      found.push({ name: m[1]!, keys });
+      found.push({ name: m.groups?.name ?? "", keys });
     }
   }
   expect(
@@ -71,7 +71,9 @@ describe("Python 子进程必须被锁在 UTF-8（ISSUE #1164）", () => {
     const src = stripComments(
       readFileSync(path.join(ROOT, "src/lib/comfyui/executor-cli.ts"), "utf8"),
     );
-    const decodes = [...src.matchAll(/\.setEncoding\(\s*"([^"]+)"\s*\)/g)].map((m) => m[1]);
+    const decodes = [...src.matchAll(/\.setEncoding\(\s*"(?<encoding>[^"]+)"\s*\)/g)].map(
+      (m) => m.groups?.encoding ?? "",
+    );
     expect(decodes.length).toBeGreaterThanOrEqual(2); // stdout + stderr
     /* oxlint 的 `unicorn/text-encoding-identifier-case` 把编码标识统一成规范短名
      *（`utf8`）；两种写法 Node 等价，这里钉的是「两条管道都显式按 UTF-8 解」。 */

@@ -129,9 +129,9 @@ describe("产品版本号三处同步（D7）", () => {
 
   test("④ pre-commit 的 D 组真跑这一步（写在文件里没人跑 = 没有等价）", () => {
     const hook = readFileSync(path.join(REPO_ROOT, ".githooks", "pre-commit"), "utf8");
-    const steps = [...hook.matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) => ({
-      label: m[1] ?? "",
-      cmd: m[2] ?? "",
+    const steps = [...hook.matchAll(/^ {2}run "(?<label>[^"]+)" (?<cmd>.+)$/gm)].map((m) => ({
+      label: m.groups?.label ?? "",
+      cmd: m.groups?.cmd ?? "",
     }));
     const hit = steps.find((s) => s.cmd.includes("check-app-version.cjs"));
     expect(hit, `D 组 ${steps.length} 步里没有版本号同步判据`).toBeDefined();

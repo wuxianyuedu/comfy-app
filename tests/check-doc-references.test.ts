@@ -365,7 +365,7 @@ describe("台账命令口径守卫（AGENTS 硬规则 1：包管理只用 pnpm�
     ]) {
       const lines = docText(doc).split("\n");
       lines.forEach((line, i) => {
-        if (!/(^|[\s`(（])(npm\s+run|npx)\b/.test(line)) {
+        if (!/(?:^|[\s`(（])(?:npm\s+run|npx)\b/.test(line)) {
           return;
         }
         expect(
@@ -766,8 +766,8 @@ describe("§13.1 那份清单与 pre-commit 的 D 组逐字一致（ISSUE #1404�
   /** 与判据同源的两侧解析（写在测试里 = 双向对照：判据漏解析，这条用例会自己发现）。 */
   function hookCommands(): Array<string> {
     const text = docText(HOOK_REL);
-    return [...text.matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) =>
-      (m[2] ?? "").replaceAll(/\s+/g, " ").trim(),
+    return [...text.matchAll(/^ {2}run "(?:[^"]+)" (?<command>.+)$/gm)].map((m) =>
+      (m.groups?.command ?? "").replaceAll(/\s+/g, " ").trim(),
     );
   }
   function docCommands(): Array<string> {

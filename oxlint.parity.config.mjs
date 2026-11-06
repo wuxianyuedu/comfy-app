@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B4 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "tests/build-desktop-step-readings.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/build-fresh-checkout.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/check-allow-builds.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/check-app-version.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/check-daily-attendance.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/check-doc-references.test.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "tests/check-theme-colors.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/check-ui-primitives.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/ci-autofix-duties.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/ci-build-readout.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/ci-dev-drive-root.test.ts", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "tests/ci-env-probe.test.ts", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "tests/ci-image-identity.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/ci-image-plan.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/ci-incremental-gates.test.ts", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "tests/ci-toolchain-selfcheck.test.ts", // 存量 7 处 · 清账目标 B4 · 新代码不禁用
-        "tests/comfy-cli-python-utf8.test.ts", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "tests/comment-language.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/commit-gate-tier.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/conditional-skip-registry.test.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
         "tests/container-single-access.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
         "tests/core-barrel-entry-discipline.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
         "tests/cross-platform-launcher.test.ts", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
