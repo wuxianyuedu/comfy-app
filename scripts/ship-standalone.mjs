@@ -29,7 +29,7 @@ import { closeIssues } from "./ship-close.mjs";
 import { runIssueAction } from "./ship-claim.mjs";
 import { runIssueComment, runNewIssue } from "./ship-issue-new.mjs";
 import { runDiagnose } from "./ship-diagnose.mjs";
-import { runGhLogs } from "./ship-gh-logs.mjs";
+import { resolveGhRepo, runGhLogs } from "./ship-gh-logs.mjs";
 import { runStageLog } from "./ship-stage-log.mjs";
 import { runRerunCiStage } from "./ship-local.mjs";
 import { whoamiLines } from "./ship-ticket.mjs";
@@ -225,7 +225,10 @@ export async function runStandaloneAction(io) {
       code: settle([
         await runGhLogs({
           input: opt.ghLogsRef ?? "",
-          repo: slug,
+          /* GitHub 侧的仓库坐标与 CNB 的 `slug` 是两件事：`slug` 来自 origin
+           * （`cnb.cool/<org>/<repo>`），拿去打 GitHub API 会 404。镜像仓坐标只认
+           * `GITHUB_MIRROR_REPO`（缺省 `wuxianyuedu/comfy-app`）。 */
+          repo: resolveGhRepo(env),
           env,
           log,
           fetchImpl,
