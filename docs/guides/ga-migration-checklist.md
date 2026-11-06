@@ -94,8 +94,8 @@
   - pr-gate.yml typecheck-db-format / fixed-structural-tests / affected-tests：`0` → `2`（合成 merge 的两个父正是 base 与 head，判据基线是 payload 的 `CNB_PULL_REQUEST_TARGET_SHA`）✅ 本主题 PR
   - pr-gate.yml heavy-gates：`fetch-depth: 0` ✅ 保留（依赖新鲜度按 `merge-base HEAD origin/master` 算，浅克隆没有 `origin/master`）
   - master-gate.yml：`fetch-depth: 0` → 1（PR #3223 修复）✅ 文档链命令只读当前树
-  - daily.yml：`fetch-depth: 0` → 需评估（有三点 diff 吗？）
-  - package-desktop.yml：`fetch-depth: 0` → 需评估
+  - daily.yml：`fetch-depth: 0` → 1（每日档定时跑在 master HEAD，不做三点 diff）✅
+  - package-desktop.yml：`fetch-depth: 0` → 1（桌包档定时跑在 master HEAD，打包只读当前树）✅
 - **影响判断**：fetch-depth 过大 = 纯网络开销；过小 = 缺历史导致三点 diff / LFS / 某些静态判据失败
 - **建议改法**：逐个评估每份 workflow 的 checkout 配置，最小化 fetch-depth
 - **优先级**：P0（冷装优化的核心）
