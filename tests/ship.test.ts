@@ -118,6 +118,7 @@ import { decideReap, instanceReading, reapCheckoutInstances } from "../scripts/s
 import { runPreflightStage } from "../scripts/ship-preflight.mjs";
 import { DIAGNOSE_STALL_MINUTES, runDiagnose, stallReadout } from "../scripts/ship-diagnose.mjs";
 import { main } from "../scripts/ship.mjs";
+import { readShipResult } from "../scripts/ship-result.mjs";
 import { EMPTY_COMMIT_ENV } from "../scripts/intentional-empty-commit.mjs";
 
 /** 真机取到的一份 `cnb build get-build-status -v` 的形状（信封 + data 各有一个 status）。 */
@@ -8516,5 +8517,41 @@ describe("parseArgs：--stage-log 的形状（自由文本 + 可选构建号）"
     const got = parseArgs(["--stage-log", "cnb-68q-1k5sc5kgq"]);
     expect(got.stageLogSn).toBe("cnb-68q-1k5sc5kgq");
     expect(got.stageLogBad).toEqual(["(缺点名哪一格)"]);
+  });
+});
+
+/* ISSUE #3206：落盘回读点挂在 `main()` 的**唯一出口**上。模块级用例管的是
+ * `ship-result.mjs` 自己的形状；这一组管的是「编排层真的把它接上了」，以及
+ * 「注入调用不会把本机真实检出的『上一次 ship』写成测试假读数」。 */
+describe("ISSUE #3206：main() 的落盘回读点挂载", () => {
+  const minimal = {
+    root: process.cwd(),
+    log: () => undefined,
+    probeCnb: () => true,
+  };
+
+  it("显式给 shipResultResolve ⇒ 退 2 也写终态，不是只留一笔 running", async () => {
+    const gitDir = mkdtempSync(path.join(os.tmpdir(), "ship-3206-"));
+    try {
+      const code = await main({
+        ...minimal,
+        args: ["--merg"],
+        shipResultResolve: () => gitDir,
+      });
+      expect(code).toBe(CODE.NOT_RUN);
+      const reading = readShipResult(process.cwd(), () => gitDir);
+      expect(reading.found).toBe(true);
+      expect(reading.result).toMatchObject({ status: "not-run", exitCode: 2 });
+      expect(reading.result?.lineCount).toBeGreaterThan(0);
+      expect(reading.result?.finishedAt).not.toBeNull();
+    } finally {
+      rmSync(gitDir, { recursive: true, force: true });
+    }
+  });
+
+  it("不给 shipResultResolve ⇒ 真实检出的落盘结论一个字都不变", async () => {
+    const before = JSON.stringify(readShipResult(process.cwd()));
+    await main({ ...minimal, args: ["--merg"] });
+    expect(JSON.stringify(readShipResult(process.cwd()))).toBe(before);
   });
 });
