@@ -54,9 +54,9 @@ function read(rel: string): string {
  * 与 `tests/doc-check-hook-wiring.test.ts` 的 `dGroupSteps` 同一形态。
  */
 function dGroupSteps(hookText: string) {
-  return [...hookText.matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) => ({
-    label: m[1] ?? "",
-    cmd: m[2] ?? "",
+  return [...hookText.matchAll(/^ {2}run "(?<label>[^"]+)" (?<cmd>.+)$/gm)].map((m) => ({
+    label: m.groups?.label ?? "",
+    cmd: m.groups?.cmd ?? "",
   }));
 }
 
@@ -64,12 +64,14 @@ function dGroupSteps(hookText: string) {
 function launcherTargetNames(): Array<string> {
   const body = read(LAUNCHER);
   const fn = body.slice(body.indexOf("export function shellStaleWarning"));
-  const block = /const targets = \[([\s\S]*?)\];/.exec(fn)?.[1] ?? "";
+  const block = /const targets = \[(?<targets>[\s\S]*?)\];/.exec(fn)?.groups?.targets ?? "";
   // 条目形如 `path.join(root, "src-tauri", "tauri.conf.json")` —— 要的是**最后**那个
   // 字面量（`root` 与 `"src-tauri"` 是前缀，不是判据对象）。
-  return [...block.matchAll(/path\.join\(([^)]*)\)/g)]
+  return [...block.matchAll(/path\.join\((?<args>[^)]*)\)/g)]
     .map((m) => {
-      const parts = [...(m[1] ?? "").matchAll(/"([^"]+)"/g)].map((q) => q[1] ?? "");
+      const parts = [...(m.groups?.args ?? "").matchAll(/"(?<literal>[^"]+)"/g)].map(
+        (q) => q.groups?.literal ?? "",
+      );
       const last = parts.at(-1) ?? "";
       return last.replace(/^src-tauri\//, "").replace(/\/$/, "");
     })

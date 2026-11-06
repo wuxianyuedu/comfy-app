@@ -175,7 +175,7 @@ describe("「是不是被直接执行」的守卫：不许拼 file://（ISSUE #1
       expect(
         src,
         `${rel} 丢了 import.meta 的规范化比较（import.meta.dirname / import.meta.filename）`,
-      ).toMatch(/import\.meta\.(dirname|filename)/);
+      ).toMatch(/import\.meta\.(?:dirname|filename)/);
       // 也可以两侧都过 path.resolve；无论哪种，都不许再出现拼串比较。
       for (const { re, what } of BAD_PATTERNS) {
         expect(re.test(stripCommentsAndStrings(src)), `${rel} 又出现 ${what}`).toBe(false);

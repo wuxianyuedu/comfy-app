@@ -12,11 +12,11 @@ import { adviseOnError } from "~/lib/comfyui/error-advice";
 import { comfyCliMissingHint } from "~/lib/comfyui/comfy-cli-python";
 
 /** 抓 `「设置 → X → Y」` 里那两段（两处文案都用中文引号把整条路径包住）。 */
-const POINTER_RE = /设置 → ([^ →]+) → ([^」]+)」/;
+const POINTER_RE = /设置 → (?<section>[^ →]+) → (?<field>[^」]+)」/;
 
 function pointerOf(text: string): { field: string; section: string } {
   const match = POINTER_RE.exec(text);
-  return { section: match?.[1] ?? "", field: (match?.[2] ?? "").trim() };
+  return { section: match?.groups?.section ?? "", field: (match?.groups?.field ?? "").trim() };
 }
 
 const SECTION_LABELS = SETTINGS_SECTIONS.map((s) => s.label);

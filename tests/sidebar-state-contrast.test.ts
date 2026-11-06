@@ -15,11 +15,11 @@ beforeAll(async () => {
 
 /** `#rrggbb` → sRGB 三个通道（0~255）。产物里这几颗 token 都是 6 位 hex。 */
 function channels(value: string): [number, number, number] {
-  const m = /^#([0-9a-f]{6})$/i.exec(value.trim());
+  const m = /^#(?<hex>[0-9a-f]{6})$/i.exec(value.trim());
   if (!m) {
     throw new Error(`期望 6 位 hex 色值，实际是 ${JSON.stringify(value)}`);
   }
-  const n = Number.parseInt(m[1]!, 16);
+  const n = Number.parseInt(m.groups?.hex ?? "", 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 

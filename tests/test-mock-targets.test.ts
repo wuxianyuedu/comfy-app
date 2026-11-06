@@ -32,7 +32,7 @@ function candidates(withoutExt: string): Array<string> {
  * `http://` 这类协议头。
  */
 function stripComments(text: string): string {
-  return text.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/(^|[^:])\/\/.*$/gm, "$1");
+  return text.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/(?<lead>^|[^:])\/\/.*$/gm, "$<lead>");
 }
 
 /** 递归收集 `*.test.ts(x)`（跳过 node_modules 与点目录）。 */
@@ -60,10 +60,10 @@ describe("vi.mock 说明符必须解析到真实模块（死 mock 门禁）", ()
     for (const root of SCAN_ROOTS) {
       for (const file of testFiles(path.join(REPO_ROOT, root))) {
         const text = stripComments(fs.readFileSync(file, "utf8"));
-        const re = /vi\.(?:mock|doMock)\(\s*["'`]([^"'`]+)["'`]/g;
+        const re = /vi\.(?:mock|doMock)\(\s*["'`](?<specifier>[^"'`]+)["'`]/g;
         let match: RegExpExecArray | null;
         while ((match = re.exec(text))) {
-          const specifier = match[1]!;
+          const specifier = match.groups?.specifier ?? "";
           if (!specifier.startsWith(".") && !specifier.startsWith("~/")) {
             continue;
           }

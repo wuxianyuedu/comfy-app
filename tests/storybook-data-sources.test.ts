@@ -25,7 +25,7 @@ function readConstArray(name: string): Array<string> {
   const re = new RegExp(`export const ${name} = \\[([\\s\\S]*?)\\] as const;`);
   const hit = re.exec(sources);
   expect(hit, `没在 ${SOURCES} 里找到 ${name} —— 注入层的名字清单被删了？`).not.toBeNull();
-  return [...hit![1]!.matchAll(/["']([^"']+)["']/g)].map((m) => m[1]!);
+  return [...hit![1]!.matchAll(/["'](?<name>[^"']+)["']/g)].map((m) => m.groups?.name ?? "");
 }
 
 describe("Storybook 数据源注入层的契约（ISSUE #1381）", () => {
