@@ -4,7 +4,7 @@
 //（工坊对外值 vs 工作流 IO 参数）；参数名可读 —— 历史只存 pin 名，作者标签在 workflowIO.label，
 // 任务本身无快照，只能按 params.workflow 现查（resolveParamLabel）。
 
-import { asRecord } from "~/lib/is-record";
+import { asRecord, isRecord } from "~/lib/is-record";
 import { modeContractEntries, type ModeContract } from "~/lib/workshop/model-mode-contract";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import type { TaskDetail } from "./history-types";
@@ -33,8 +33,10 @@ function paramsOf(detail: TaskDetail | null): Record<string, unknown> {
 /** 取 params.workflowInputs，非数组时给空数组。 */
 export function workflowInputsOf<T extends { name: string }>(detail: TaskDetail | null): Array<T> {
   const raw: unknown = paramsOf(detail).workflowInputs;
-  /* SAFETY: 类型断言已复核 */
-  return Array.isArray(raw) ? (raw as Array<T>) : [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.filter((item: unknown): item is T => isRecord(item) && typeof item.name === "string");
 }
 
 /**

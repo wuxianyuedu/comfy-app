@@ -9,6 +9,7 @@ import {
 /* 节点**角色色**（`computeNodePalette()` 的第二个入参）经端点的类型色出口取 ——
  * 与画布节点里那份同一来源，不在 story 里另写一遍 palette 字面量。 */
 import { portChipStyle } from "~/components/studio/workflow-form/WorkflowPortHandle";
+import type { WorkflowNodeData } from "~/components/studio/workflow-types";
 import { zClass } from "~/lib/shell/overlay-z";
 
 /** 一个真角色的颜色（`IMAGE` 档）；`NodeFrost` 的 `color` 入参就是这种值。 */
@@ -35,14 +36,23 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+/** `computeNodePalette()` 只读 `mode`，入参却声明为完整节点数据 —— 补齐必填项，不写断言。 */
+function nodePaletteFor(nodeMode: number) {
+  const data: WorkflowNodeData = {
+    assignedRole: null,
+    classType: "KSampler",
+    inputs: {},
+    inputSources: {},
+    mode: nodeMode,
+    nodeId: "story",
+    title: "KSampler",
+  };
+  return computeNodePalette(data, { color: ROLE_COLOR }, DARK_PALETTE_BASE);
+}
+
 /** 节点卡片的摆法（`relative` + `overflow-hidden` 是毛玻璃能被裁回边界的前提）。 */
 function FrostCard({ zoom, nodeMode, label }: { label: string; nodeMode: number; zoom: number }) {
-  /* SAFETY: 类型断言已复核 */
-  const palette = computeNodePalette(
-    { mode: nodeMode } as Parameters<typeof computeNodePalette>[0],
-    { color: ROLE_COLOR },
-    DARK_PALETTE_BASE,
-  );
+  const palette = nodePaletteFor(nodeMode);
   return (
     <div className="flex flex-col items-center gap-2">
       <div
@@ -112,12 +122,7 @@ export const InCanvas: Story = {
 
 /** 真画布里的节点渲染器：走 `FrostLayer`，所以缩放由 store 给。 */
 function FrostDemoNode() {
-  /* SAFETY: 类型断言已复核 */
-  const palette = computeNodePalette(
-    { mode: 4 } as Parameters<typeof computeNodePalette>[0],
-    { color: ROLE_COLOR },
-    DARK_PALETTE_BASE,
-  );
+  const palette = nodePaletteFor(4);
   return (
     <div
       className="relative h-27.5 w-55 overflow-hidden rounded-[14px]"

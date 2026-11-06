@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { SETTINGS_SECTIONS, type Section } from "~/app/(main)/settings/hooks/use-settings-page";
+import { isRecord } from "~/lib/is-record";
 import { SettingsShell } from "./SettingsShell";
 
 /**
@@ -23,17 +24,25 @@ export default meta;
 
 type Story = StoryObj<typeof SettingsShell>;
 
+/** `Object.fromEntries` 只给到字符串索引 —— 用运行期补全校验收窄成外壳要的完整映射。 */
+function isSectionChildren(v: unknown): v is Record<Section, React.ReactNode> {
+  return isRecord(v) && SETTINGS_SECTIONS.every((item) => item.id in v);
+}
+
 /** 每个分区给一段占位正文 —— 只为了让锚点有实体。 */
-function sections(pad: string) {
-  /* SAFETY: 类型断言已复核 */
-  return Object.fromEntries(
+function sections(pad: string): Record<Section, React.ReactNode> {
+  const filled = Object.fromEntries(
     SETTINGS_SECTIONS.map((item) => [
       item.id,
       <p className={`text-ink text-sm ${pad}`} key={item.id}>
         这一节的正文（<code className="font-mono">{item.id}</code>）
       </p>,
     ]),
-  ) as Record<Section, React.ReactNode>;
+  );
+  if (!isSectionChildren(filled)) {
+    throw new Error("SETTINGS_SECTIONS 未覆盖全部分区");
+  }
+  return filled;
 }
 
 function Demo({ initial = "llmLocal", pad = "" }: { initial?: Section; pad?: string }) {

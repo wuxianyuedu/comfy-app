@@ -53,8 +53,9 @@ export function useSectionScrollSpy<Id extends string>({
 }: UseSectionScrollSpyOptions<Id>): SectionScrollSpy<Id> {
   /** 已挂上的分区节（id → 元素），观察器按它建立观察。 */
   const nodesRef = useRef(new Map<Id, HTMLElement>());
-  /** 仍在「顶线之下」的分区集合 —— 跨回调累积，由 observer 的 entry 更新。 */
-  const crossedRef = useRef(new Set<HTMLElement>());
+  /** 仍在「顶线之下」的分区集合 —— 跨回调累积，由 observer 的 entry 更新。
+   *  元素只按**身份**进出集合（不读 DOM 属性），故按 `Element` 收（`entry.target` 的原类型）。 */
+  const crossedRef = useRef(new Set<Element>());
   /** 最新的回调：回调里读它，避免把 `onActiveChange` 放进观察器的依赖数组。 */
   const notifyRef = useRef(onActiveChange);
   useEffect(() => {
@@ -116,11 +117,9 @@ export function useSectionScrollSpy<Id extends string>({
       (entries) => {
         for (const entry of entries) {
           if (entry.isIntersecting) {
-            /* SAFETY: 类型断言已复核 */
-            crossed.add(entry.target as HTMLElement);
+            crossed.add(entry.target);
           } else {
-            /* SAFETY: 类型断言已复核 */
-            crossed.delete(entry.target as HTMLElement);
+            crossed.delete(entry.target);
           }
         }
         /* 按**文档顺序**自己排一遍取最后一个：`entries` 的次序不保证，
