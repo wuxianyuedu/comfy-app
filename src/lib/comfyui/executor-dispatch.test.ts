@@ -13,6 +13,8 @@
  * 轮次边界在**收口**处，见 ISSUE #1206），以及「广播给还在排队的行」——它原来读内存队列，现在读库。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import WebSocket from "ws";
+import { isRecord } from "~/lib/is-record";
 
 vi.mock("~/lib/core/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -68,9 +70,21 @@ function fakeRepo(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** 就绪门控只读 `readyState`；这里按运行期实际读取的字段校验形状。 */
+function isOpenWebSocket(v: unknown): v is WebSocket {
+  return isRecord(v) && v.readyState === WebSocket.OPEN;
+}
+
+function openWsValue(): WebSocket {
+  const ws: unknown = { readyState: WebSocket.OPEN };
+  if (!isOpenWebSocket(ws)) {
+    throw new Error("就绪门控夹具形状不符");
+  }
+  return ws;
+}
+
 function openWs() {
-  /* SAFETY: 类型断言已复核 */
-  state().ws = { readyState: 1 } as never;
+  state().ws = openWsValue();
 }
 
 function resetRunnerState() {
@@ -450,10 +464,7 @@ describe("叶子总线接线（这一刀把它从一条回调扩成两条）", (
     vi.resetModules();
     const fresh = await import("./executor-dispatch");
     const runnerState = await import("./runner-state");
-    /* SAFETY: 类型断言已复核 */
-    runnerState.state().ws = {
-      readyState: 1,
-    } as never;
+    runnerState.state().ws = openWsValue();
 
     expect(await fresh.claimAndDispatchOnce()).toBeNull();
 

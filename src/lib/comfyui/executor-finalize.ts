@@ -31,6 +31,7 @@ import path from "node:path";
 import { collectOutputs, extractRuntimeParams } from "./executor-outputs";
 import { friendlyError } from "./executor-errors";
 import { taskOutputDir, taskOutputUrl } from "~/lib/media/output-paths";
+import { isRecord } from "~/lib/is-record";
 import { fetchHistoryEntry, traceComfyQueue, type ComfyHistoryEntry } from "./executor-history";
 import { historyTraceSummary, historyOutputKeys, trace } from "./trace";
 import { kickQueue } from "./executor-continuation";
@@ -124,11 +125,13 @@ function executionErrorMessageOf(msg: unknown): unknown {
   if (!Array.isArray(msg)) {
     return undefined;
   }
-  // Array.isArray 把 unknown 收窄为 any[]，索引取值后立即断言收口。
-  /* SAFETY: 类型断言已复核 */
-  const payload = msg[1] as Record<string, unknown> | null | undefined;
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  return payload != null && typeof payload === "object" ? payload.exception_message : undefined;
+  const payload: unknown = msg[1];
+  return isRecord(payload) ? payload.exception_message : undefined;
+}
+
+/** 只收字符串数组；不是数组（或含非字符串元素）时回落空数组。 */
+function isStringArray(v: unknown): v is Array<string> {
+  return Array.isArray(v) && v.every((s) => typeof s === "string");
 }
 
 /** runner-state 的 `executedWorkflow` 是 `Map<string, unknown>`（不在本次 8 文件
@@ -150,12 +153,8 @@ export async function complete(taskId: string, promptId: string) {
     await completeInner(taskId, promptId, executedWorkflow);
   } catch (error) {
     // 下载 / 落盘 / 写库任何一步炸了，都必须把任务收口，否则队列同样会卡死。
-    /* SAFETY: 类型断言已复核 */
-    await finalizeFailure(
-      taskId,
-      promptId,
-      (error as { message?: unknown } | null | undefined)?.message ?? "结果处理失败",
-    );
+    const failureMessage = isRecord(error) ? error.message : undefined;
+    await finalizeFailure(taskId, promptId, failureMessage ?? "结果处理失败");
   }
 }
 
@@ -174,8 +173,8 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // 复现元数据。projectId 为 localStorage 的 CanvasProject.id（client 侧字符串）。
   const taskRow = await taskRepository.findExecutionMeta(taskId);
   const projectId: string | null = taskRow?.projectId ?? null;
-  /* SAFETY: 类型断言已复核 */
-  const taskParams = (taskRow?.params as Record<string, unknown> | null) ?? {};
+  const paramsRaw: unknown = taskRow?.params;
+  const taskParams: Record<string, unknown> = isRecord(paramsRaw) ? paramsRaw : {};
   const reqSeed =
     typeof taskParams.seed === "number" || typeof taskParams.seed === "string"
       ? String(taskParams.seed)
@@ -469,6 +468,10 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   );
 
   // 项目级产出：写一份可复现的 manifest，便于「按项目归档 + 一键还原」。
+  const referenceImagesRaw: unknown = taskRow?.referenceImages;
+  const referenceImages: Array<string> = isStringArray(referenceImagesRaw)
+    ? referenceImagesRaw
+    : [];
   const manifest = {
     taskId,
     projectId,
@@ -477,8 +480,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     negativePrompt: taskRow?.negativePrompt ?? null,
     seed: actualSeed === undefined ? (reqSeed ?? null) : String(actualSeed),
     size: sizeStr || null,
-    /* SAFETY: 类型断言已复核 */
-    referenceImages: (taskRow?.referenceImages as Array<string> | null) ?? [],
+    referenceImages,
     params: taskParams,
     createdAt: taskRow?.createdAt ?? null,
     files: saved,

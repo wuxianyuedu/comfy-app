@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/lib/comfyui/cpu-limit.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/custom-nodes-manifest.server.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/desktop-instance.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/enqueue.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/executed-model.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/execution-graph.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/execution-shape.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/executor-cli-stream.ts", // 存量 17 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/executor-cli.test.ts", // 存量 8 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/executor-dispatch.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/executor-dispatch.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/executor-errors.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/executor-finalize.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/executor-history.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/executor-outputs.ts", // 存量 12 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/executor-ws.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/firstframe.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/graph-node-class.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/importSource.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/launch-path.test.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/comfyui/lifecycle-exit.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/comfyui/lifecycle-launch.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/comfyui/lifecycle-session-log.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
