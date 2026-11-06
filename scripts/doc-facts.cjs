@@ -62,6 +62,10 @@ const SCOPED_DOCS = [
    * 谁会被平台流程改写」都是从 git 与平台行为实测来的，写错了不会报错、只会照着
    * 一个失效的配置去配 —— 与 `sync-after-pull.md` 同类，纳入校验。 */
   "docs/guides/git-identity.md",
+  /* GA 侧适配清单：逐条写着 `.github/workflows/*` 的落点与「CNB 侧不动」的边界，
+   * 条目状态还挂着 PR 号 —— 漂了就会指着一个不存在的 PR 或已改名的 workflow 说
+   * 「已完成」，与 `sync-after-pull.md` 同类，纳入校验。 */
+  "docs/guides/ga-migration-checklist.md",
   /* 产品需求文档（ISSUE #2421）：产品功能与需求的唯一口径。里面大量引用代码落点
    * （router / 组件 / 表名）与功能状态，漂了就会指着一个不存在的实现说需求 ——
    * 与功能流程图同类，纳入校验。 */
