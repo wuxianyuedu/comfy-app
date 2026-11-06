@@ -7,12 +7,43 @@ import { requireRequestUser } from "~/server/auth/request-user";
 import { handleAgentChat } from "~/lib/agent/server";
 import { parseDraftDto } from "~/lib/workshop/draft-sync-shared";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
-import type { AgentChatRequest } from "~/lib/agent/shared";
+import type { AgentChatRequest, AgentMessageLike } from "~/lib/agent/shared";
 import { apiErrorBody } from "~/lib/api-error";
 import { unauthorizedResponse } from "~/server/lib/error-response";
+import { isRecord } from "~/lib/is-record";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+type AgentToolCall = { arguments: string; id: string; name: string };
+
+function isAgentToolCall(v: unknown): v is AgentToolCall {
+  return (
+    isRecord(v) &&
+    typeof v.arguments === "string" &&
+    typeof v.id === "string" &&
+    typeof v.name === "string"
+  );
+}
+
+function isAgentMessageLike(v: unknown): v is AgentMessageLike {
+  if (!isRecord(v) || typeof v.content !== "string") {
+    return false;
+  }
+  if (v.role === "user") {
+    return true;
+  }
+  if (v.role === "tool") {
+    return typeof v.tool_call_id === "string";
+  }
+  if (v.role === "assistant") {
+    const toolCalls = v.tool_calls;
+    return (
+      toolCalls === undefined || (Array.isArray(toolCalls) && toolCalls.every(isAgentToolCall))
+    );
+  }
+  return false;
+}
 
 export async function POST(req: NextRequest) {
   const user = await requireRequestUser();
@@ -25,17 +56,15 @@ export async function POST(req: NextRequest) {
     return body;
   }
 
-  /* SAFETY: 类型断言已复核 */
-  const rawMessages = Array.isArray(body.messages)
-    ? (body.messages as Array<Record<string, unknown>>)
+  const rawMessages: Array<AgentMessageLike> = Array.isArray(body.messages)
+    ? body.messages.filter(isAgentMessageLike)
     : [];
   if (rawMessages.length === 0) {
     return NextResponse.json({ error: "messages 不能为空" }, { status: 400 });
   }
 
   const request: AgentChatRequest = {
-    /* SAFETY: 类型断言已复核 */
-    messages: rawMessages as AgentChatRequest["messages"],
+    messages: rawMessages,
     draft: parseDraftDto(body.draft),
     useTools: body.useTools !== false,
   };

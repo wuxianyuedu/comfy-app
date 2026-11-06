@@ -7,6 +7,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { APP_SERVICE_EXIT_FILE } from "~/lib/shell/app-service-exit";
+import { isRecord } from "~/lib/is-record";
 
 import { GET } from "./route";
 
@@ -36,11 +37,11 @@ function writeRecord(body: unknown): void {
 async function get(): Promise<{ currentRunId: unknown; record: unknown }> {
   const res = GET();
   expect(res.headers.get("Cache-Control")).toBe("no-store");
-  /* SAFETY: 类型断言已复核 */
-  return (await res.json()) as {
-    currentRunId: unknown;
-    record: unknown;
-  };
+  const raw: unknown = await res.json();
+  if (!isRecord(raw)) {
+    throw new Error("响应体不是对象");
+  }
+  return { currentRunId: raw.currentRunId, record: raw.record };
 }
 
 describe("GET /api/dev/last-exit", () => {
@@ -64,8 +65,11 @@ describe("GET /api/dev/last-exit", () => {
     fs.rmSync(FILE, { force: true });
     const res = GET();
     expect(res.status).toBe(200);
-    /* SAFETY: 类型断言已复核 */
-    expect(((await res.json()) as { record: unknown }).record).toBeNull();
+    const raw: unknown = await res.json();
+    if (!isRecord(raw)) {
+      throw new Error("响应体不是对象");
+    }
+    expect(raw.record).toBeNull();
   });
 
   it("记录坏掉时按「没有原因可讲」处理，不 500（消费者是已经出故障时的界面）", async () => {
@@ -73,8 +77,11 @@ describe("GET /api/dev/last-exit", () => {
     fs.writeFileSync(FILE, "{ 这不是 JSON", "utf8");
     const res = GET();
     expect(res.status).toBe(200);
-    /* SAFETY: 类型断言已复核 */
-    expect(((await res.json()) as { record: unknown }).record).toBeNull();
+    const raw: unknown = await res.json();
+    if (!isRecord(raw)) {
+      throw new Error("响应体不是对象");
+    }
+    expect(raw.record).toBeNull();
   });
 
   it("空文件同样算「没有原因可讲」", async () => {

@@ -4,18 +4,23 @@
 
 import { describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import { GET } from "./route";
 
 async function buildId(): Promise<string> {
   const res = GET();
   expect(res.headers.get("Cache-Control")).toBe("no-store");
-  /* SAFETY: 类型断言已复核 */
-  const data = (await res.json()) as {
-    buildId?: unknown;
-  };
-  expect(typeof data.buildId).toBe("string");
-  /* SAFETY: 类型断言已复核 */
-  return data.buildId as string;
+  const raw: unknown = await res.json();
+  if (!isRecord(raw)) {
+    throw new Error("响应体不是对象");
+  }
+  const { buildId } = raw;
+  expect(typeof buildId).toBe("string");
+  if (typeof buildId !== "string") {
+    throw new Error("buildId 不是字符串");
+  }
+  return buildId;
 }
 
 describe("GET /api/dev/build-id", () => {

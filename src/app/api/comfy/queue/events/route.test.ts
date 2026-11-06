@@ -5,6 +5,8 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 const subscribers: Array<() => void> = [];
 vi.mock("~/lib/comfyui/queue-signal.server", () => ({
   subscribeQueueChanged: (l: () => void) => {
@@ -34,8 +36,14 @@ async function readOnce(res: Response): Promise<string> {
 function frameOf(chunk: string): Record<string, unknown> {
   // 形如 `data: {"changed":true,"at":123}\n\n`
   const line = chunk.split("\n").find((l) => l.startsWith("data: "));
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(line!.slice("data: ".length)) as Record<string, unknown>;
+  if (line === undefined) {
+    throw new Error("SSE 帧缺 data 行");
+  }
+  const raw: unknown = JSON.parse(line.slice("data: ".length));
+  if (!isRecord(raw)) {
+    throw new Error("SSE 帧的 data 不是对象");
+  }
+  return raw;
 }
 
 describe("GET /api/comfy/queue/events", () => {

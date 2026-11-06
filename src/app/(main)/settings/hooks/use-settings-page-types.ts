@@ -259,10 +259,13 @@ export const SETTINGS_SECTIONS: Array<{ id: Section; label: string }> = [
 ];
 
 /** 按任务温度区的任务清单 —— 视图遍历渲染，顺序即渲染顺序。 */
-/* SAFETY: 类型断言已复核 */
-export const TEMPERATURE_TASKS = Object.entries(TASK_TYPES) as Array<
-  [TaskType, (typeof TASK_TYPES)[TaskType]]
->;
+function isTaskType(value: string): value is TaskType {
+  return Object.hasOwn(TASK_TYPES, value);
+}
+
+export const TEMPERATURE_TASKS: Array<[TaskType, (typeof TASK_TYPES)[TaskType]]> = Object.entries(
+  TASK_TYPES,
+).filter((entry): entry is [TaskType, (typeof TASK_TYPES)[TaskType]] => isTaskType(entry[0]));
 
 /** `drafts` 非空由容器保证（`if (!c.drafts)` 早退），用交集类型表达，
  *  消费方（含子视图）内不必逐处判空。 */
