@@ -134,7 +134,7 @@ export function defaultInputsForMode(mode: string): Array<{
     if (/^I2V$/.test(code)) {
       return [{ type: "image", field: "image" }, ...base, durationRow];
     }
-    if (/^(FLF2V|FMF2V)$/.test(code)) {
+    if (/^(?:FLF2V|FMF2V)$/.test(code)) {
       return [
         { type: "first-frame", field: "first_frame" },
         { type: "last-frame", field: "last_frame" },
@@ -381,9 +381,9 @@ export function nextCustomInputId(
 ): ModeContractInputId {
   let max = 0;
   for (const id of inputs) {
-    const matched = /^custom-[a-z]+-(\d+)$/.exec(id);
+    const matched = /^custom-[a-z]+-(?<index>\d+)$/.exec(id);
     if (matched) {
-      max = Math.max(max, Number(matched[1]));
+      max = Math.max(max, Number(matched.groups?.index));
     }
   }
   return `custom-${kind}-${max + 1}`;
@@ -417,8 +417,8 @@ export function moveContractInput(
 
 /** 带序号的参考图口的序号（`reference-image-2` → 2；非带序号口返回 0）。 */
 export function referenceImageSlotIndex(id: string): number {
-  const m = /^reference-image-(\d+)$/.exec(id);
-  return m ? Number(m[1]) : 0;
+  const m = /^reference-image-(?<index>\d+)$/.exec(id);
+  return m ? Number(m.groups?.index) : 0;
 }
 
 /** 任意契约口 id 的展示名（带序号的参考图口显示为「参考图 2」，其余同基础口）。

@@ -277,11 +277,11 @@ function referenceSlotOf(id: string): number {
   if (id === "reference-image") {
     return 0;
   }
-  const matched = /^reference-image-(\d+)$/.exec(id);
+  const matched = /^reference-image-(?<index>\d+)$/.exec(id);
   if (!matched) {
     return -1;
   }
-  return Math.max(0, Number(matched[1]) - 1);
+  return Math.max(0, Number(matched.groups?.index) - 1);
 }
 
 /** 读某个**契约口**在对外值里的当前内容（图片口是文件名，文本口是文本）。

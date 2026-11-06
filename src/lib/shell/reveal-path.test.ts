@@ -126,7 +126,7 @@ describe("命令与参数形态", () => {
     /* SAFETY: 类型断言已复核 */
     const [cmd, args] = spawnMock.mock.calls[0] as [string, Array<string>];
     if (process.platform === "win32") {
-      expect(cmd).toMatch(/cmd(\.exe)?$/i);
+      expect(cmd).toMatch(/cmd(?:\.exe)?$/i);
       /* `/select,"<路径>"` 必须是**一个**参数：拆成 `/select,` + 路径两个时，
        * explorer 会把含空格的路径截断（打开了但没选中）。 */
       expect(args.at(-1)).toBe(`/select,"${target}"`);
