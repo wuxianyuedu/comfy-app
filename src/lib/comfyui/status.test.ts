@@ -52,8 +52,13 @@ import {
   COMFY_UNBOUND_PORT_TTL_MS,
 } from "./status";
 import { getSettingsSync } from "../app-settings/app-settings.server";
+import { DEFAULTS, type AppSettings } from "../app-settings/index";
 import { resolveComfyLaunchPlan } from "./launch-path";
-import { classifyComfyInstall } from "./instance-kind";
+import {
+  classifyComfyInstall,
+  type ComfyInstallClassify,
+  type ComfyInstallKind,
+} from "./instance-kind";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import { collectComfyPythonCandidates } from "./env-python";
 import { probeComfyAtPort } from "./probe";
@@ -65,19 +70,20 @@ const plan = {
   mainPy: String.raw`C:\Comfy\main.py`,
 };
 
+/** 一份完整的设置对象：默认值 + 本用例要改的两项。 */
+function settingsWith(comfyuiPath: string, comfyuiPort: number): AppSettings {
+  return { ...DEFAULTS, comfyuiPath, comfyuiPort };
+}
+
+/** 安装形态判定结果（测试里只需 kind + instanceRoot）。 */
+function installOf(kind: ComfyInstallKind, instanceRoot: string | null): ComfyInstallClassify {
+  return { kind, instanceRoot, instanceIdFile: null };
+}
+
 beforeEach(() => {
-  /* SAFETY: 类型断言已复核 */
-  vi.mocked(getSettingsSync).mockReturnValue({
-    comfyuiPath: String.raw`C:\Comfy`,
-    comfyuiPort: 0,
-  } as never);
+  vi.mocked(getSettingsSync).mockReturnValue(settingsWith(String.raw`C:\Comfy`, 0));
   vi.mocked(resolveComfyLaunchPlan).mockReturnValue(plan);
-  /* SAFETY: 类型断言已复核 */
-  vi.mocked(classifyComfyInstall).mockReturnValue({
-    kind: "portable",
-    instanceRoot: String.raw`C:\Comfy`,
-    instanceIdFile: null,
-  } as never);
+  vi.mocked(classifyComfyInstall).mockReturnValue(installOf("portable", String.raw`C:\Comfy`));
   vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
     pid: null,
     failed: false,
@@ -141,21 +147,12 @@ describe("getComfyRuntimeSnapshot — 外部实例也要认出来", () => {
       JSON.stringify({ setup: { cmds: String.raw`"C:\\uv\\uv.exe" run main.py` } }),
       "utf8",
     );
-    /* SAFETY: 类型断言已复核 */
-    vi.mocked(getSettingsSync).mockReturnValue({
-      comfyuiPath: dir,
-      comfyuiPort: 0,
-    } as never);
+    vi.mocked(getSettingsSync).mockReturnValue(settingsWith(dir, 0));
     vi.mocked(resolveComfyLaunchPlan).mockReturnValue({
       ...plan,
       mainPy: path.join(dir, "main.py"),
     });
-    /* SAFETY: 类型断言已复核 */
-    vi.mocked(classifyComfyInstall).mockReturnValue({
-      kind: "desktop",
-      instanceRoot: dir,
-      instanceIdFile: null,
-    } as never);
+    vi.mocked(classifyComfyInstall).mockReturnValue(installOf("desktop", dir));
 
     const snap = await getComfyRuntimeSnapshot({ force: true });
     expect(snap.running).toBe(true);
@@ -230,11 +227,7 @@ describe("getComfyRuntimeSnapshot — 外部实例也要认出来", () => {
   });
 
   it("未配置路径且无 bound 子进程 → 未运行", async () => {
-    /* SAFETY: 类型断言已复核 */
-    vi.mocked(getSettingsSync).mockReturnValue({
-      comfyuiPath: "",
-      comfyuiPort: 0,
-    } as never);
+    vi.mocked(getSettingsSync).mockReturnValue(settingsWith("", 0));
     const snap = await getComfyRuntimeSnapshot({ force: true });
     expect(snap.running).toBe(false);
     expect(snap.unverified).toBe(false);
@@ -246,11 +239,7 @@ describe("getComfyRuntimeSnapshot — 外部实例也要认出来", () => {
   });
 
   it("未配路径时仍探一次配置端口：外部实例在跑要认出来", async () => {
-    /* SAFETY: 类型断言已复核 */
-    vi.mocked(getSettingsSync).mockReturnValue({
-      comfyuiPath: "",
-      comfyuiPort: 8188,
-    } as never);
+    vi.mocked(getSettingsSync).mockReturnValue(settingsWith("", 8188));
     vi.mocked(probeComfyAtPort).mockResolvedValue("http://127.0.0.1:8188");
     const snap = await getComfyRuntimeSnapshot({ force: true });
     expect(snap.running).toBe(true);
@@ -264,11 +253,7 @@ describe("配置端口抢跑 — 不让 Get-NetTCPConnection 一个人占满首�
     // 主场景：实例就在配置端口上跑。权威查询（Get-NetTCPConnection，本机
     // ~2.5s）很慢，但配置端口毫秒级就有应答 —— 抢先给出结论，
     // 「设置页打开要等一会」里被白等的那段就是它。
-    /* SAFETY: 类型断言已复核 */
-    vi.mocked(getSettingsSync).mockReturnValue({
-      comfyuiPath: String.raw`C:\Comfy`,
-      comfyuiPort: 8188,
-    } as never);
+    vi.mocked(getSettingsSync).mockReturnValue(settingsWith(String.raw`C:\Comfy`, 8188));
     vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
       pid: 4242,
       failed: false,
@@ -296,11 +281,7 @@ describe("配置端口抢跑 — 不让 Get-NetTCPConnection 一个人占满首�
   });
 
   it("配置端口没人应答 → 仍以权威查询为准（不猜、不误报端口）", async () => {
-    /* SAFETY: 类型断言已复核 */
-    vi.mocked(getSettingsSync).mockReturnValue({
-      comfyuiPath: String.raw`C:\Comfy`,
-      comfyuiPort: 8188,
-    } as never);
+    vi.mocked(getSettingsSync).mockReturnValue(settingsWith(String.raw`C:\Comfy`, 8188));
     vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
       pid: 4242,
       failed: false,
@@ -323,11 +304,7 @@ describe("配置端口只探一次 — 失败路径不重复付超时", () => {
     // 这一条拦的是「同一件事问两遍」的回归：`snapshotOnce` 的步骤 1.5 已经探过
     // 配置端口，`resolvePortFast` 若再探一次，失败路径每次都要等满 1.5s 超时
     // ——「没在跑」这个主场景下就是白加一整条链（ISSUE #346 的耗时代价）。
-    /* SAFETY: 类型断言已复核 */
-    vi.mocked(getSettingsSync).mockReturnValue({
-      comfyuiPath: String.raw`C:\Comfy`,
-      comfyuiPort: 8188,
-    } as never);
+    vi.mocked(getSettingsSync).mockReturnValue(settingsWith(String.raw`C:\Comfy`, 8188));
     // 进程表命中，但配置端口没人应答（实例在别处 / 还没绑端口）。
     vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
       pid: 4242,
@@ -347,11 +324,7 @@ describe("配置端口只探一次 — 失败路径不重复付超时", () => {
     // 否则「本应用自己拉起的实例」就会退化成都等权威查询。
     setBoundChildPidReader(() => 4242);
     try {
-      /* SAFETY: 类型断言已复核 */
-      vi.mocked(getSettingsSync).mockReturnValue({
-        comfyuiPath: String.raw`C:\Comfy`,
-        comfyuiPort: 8188,
-      } as never);
+      vi.mocked(getSettingsSync).mockReturnValue(settingsWith(String.raw`C:\Comfy`, 8188));
       vi.mocked(probeComfyAtPort).mockResolvedValue("http://127.0.0.1:8188");
       vi.mocked(findPidListeningPort).mockResolvedValue(8188);
 
@@ -472,11 +445,7 @@ describe("候选查询并发化 — 冷启动等待不叠成 N 倍（ISSUE #339 
     // 这里用一个「记录并发峰值」的桩把这件事钉住：峰值必须 > 1。
     let inFlight = 0;
     let peak = 0;
-    /* SAFETY: 类型断言已复核 */
-    vi.mocked(getSettingsSync).mockReturnValue({
-      comfyuiPath: String.raw`C:\Comfy`,
-      comfyuiPort: 0,
-    } as never);
+    vi.mocked(getSettingsSync).mockReturnValue(settingsWith(String.raw`C:\Comfy`, 0));
     vi.mocked(findPidForMainPyDetailed).mockImplementation(async (needle: string) => {
       inFlight += 1;
       peak = Math.max(peak, inFlight);
@@ -499,11 +468,7 @@ describe("候选查询并发化 — 冷启动等待不叠成 N 倍（ISSUE #339 
 
   it("几路同时命中时，仍按候选声明顺序取第一个（顺序语义不变）", async () => {
     let call = 0;
-    /* SAFETY: 类型断言已复核 */
-    vi.mocked(getSettingsSync).mockReturnValue({
-      comfyuiPath: String.raw`C:\Comfy`,
-      comfyuiPort: 0,
-    } as never);
+    vi.mocked(getSettingsSync).mockReturnValue(settingsWith(String.raw`C:\Comfy`, 0));
     vi.mocked(findPidForMainPyDetailed).mockImplementation(async () => {
       call += 1;
       // 让**后**发出的请求先返回：并发实现若按「谁先返回」取结论，
@@ -575,12 +540,7 @@ describe("didQueryProcTable — 区分「查过没命中」与「根本没查」
   it("一条候选都没有（没得查）→ 没查过，上层不得据此报「未运行」", async () => {
     // 配置路径存在，但 plan 解析失败、没有登记启动器、环境反查也拿不到解释器。
     vi.mocked(resolveComfyLaunchPlan).mockReturnValue({ error: "路径不存在" });
-    /* SAFETY: 类型断言已复核 */
-    vi.mocked(classifyComfyInstall).mockReturnValue({
-      kind: "unknown",
-      instanceRoot: null,
-      instanceIdFile: null,
-    } as never);
+    vi.mocked(classifyComfyInstall).mockReturnValue(installOf("unknown", null));
     vi.mocked(collectComfyPythonCandidates).mockReturnValue([]);
     const snap = await getComfyRuntimeSnapshot({ force: true });
     expect(snap.running).toBe(false);
@@ -633,11 +593,7 @@ describe("配置端口已应答 → 直接判「在跑」，不再枚举进程�
   });
 
   it("配置里显式写了端口时，快路径问的就是那个端口", async () => {
-    /* SAFETY: 类型断言已复核 */
-    vi.mocked(getSettingsSync).mockReturnValue({
-      comfyuiPath: String.raw`C:\Comfy`,
-      comfyuiPort: 9000,
-    } as never);
+    vi.mocked(getSettingsSync).mockReturnValue(settingsWith(String.raw`C:\Comfy`, 9000));
     vi.mocked(probeComfyAtPort).mockResolvedValue("http://127.0.0.1:9000");
     const snap = await getComfyRuntimeSnapshot({ force: true });
     expect(probeComfyAtPort).toHaveBeenCalledWith(9000);

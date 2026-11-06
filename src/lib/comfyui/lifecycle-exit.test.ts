@@ -125,8 +125,12 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
       isStopped: () => stopRequested,
       setTimer: (fn) => {
         ticks.push(fn);
-        /* SAFETY: 类型断言已复核 */
-        return 0 as unknown as ReturnType<typeof setInterval>;
+        /* 只借一个合法的定时器句柄给 `clearTimer`；本用例自己跑 tick，不靠它触发。 */
+        const handle = setTimeout(() => {
+          /* 占位回调：句柄只借给 `clearTimer`，本用例自己跑 tick。 */
+        }, 0);
+        clearTimeout(handle);
+        return handle;
       },
       clearTimer: () => {
         stopped = true;

@@ -13,6 +13,9 @@
 // （模块加载已零副作用，见 ADR §14 D3），因此先把它们的副作用依赖全部 mock 掉。
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ChildProcess } from "node:child_process";
+
+import { isRecord } from "~/lib/is-record";
 
 vi.mock("../core/repository", () => ({
   taskRepository: {
@@ -117,6 +120,12 @@ type ReaperInternals = {
   reapStaleRunningTasks?: () => Promise<void>;
 };
 
+type ReaperFn = () => Promise<void>;
+
+function isReaperFn(v: unknown): v is ReaperFn {
+  return typeof v === "function";
+}
+
 /** ComfyUI 侧「无活动」的默认应答：/queue 空、/history 空。
  *  QUEUED reaper 判死前必须拿到这份证据（见 comfyHasActiveWorkflow），
  *  否则无主行用例会因「证据不足」被跳过。 */
@@ -161,12 +170,17 @@ afterEach(() => {
 /* reaper.ts 目前只导出 isTaskClaimedInProcess，两条 sweeper 是模块私有。
  * 为了让判决矩阵可被直接断言（不受 30s 定时器摆布），这里经动态 import
  * 取出内部实现——仅测试用，不改变生产导出面。 */
-async function loadReaper(): Promise<ReaperInternals & { isTaskClaimedInProcess: unknown }> {
-  /* SAFETY: 类型断言已复核 */
-  const mod = (await import("./reaper")) as unknown as ReaperInternals & {
-    isTaskClaimedInProcess: unknown;
-  };
-  return mod;
+async function loadReaper(): Promise<ReaperInternals> {
+  const mod: unknown = await import("./reaper");
+  if (!isRecord(mod)) {
+    throw new Error("reaper 模块不是对象");
+  }
+  const queued = mod.reapStaleQueuedTasks;
+  const running = mod.reapStaleRunningTasks;
+  if (!isReaperFn(queued) || !isReaperFn(running)) {
+    throw new Error("reaper 未导出 sweeper");
+  }
+  return { reapStaleQueuedTasks: queued, reapStaleRunningTasks: running };
 }
 
 describe("QUEUED 死信判决矩阵（ISSUE #1204 起：只判没有任何宿主片会领的行）", () => {
@@ -296,8 +310,8 @@ describe("QUEUED 死信判决矩阵（ISSUE #1204 起：只判没有任何宿主
 
   it("comfy-cli 子进程正在驱动（promptId 未回传）→ 跳过回收", async () => {
     const reaper = await loadReaper();
-    /* SAFETY: 类型断言已复核 */
-    vi.mocked(cliProcs).set("t-cli", {} as never);
+    /* 子进程句柄只是在表里占位：reaper 只查 `has`，不读它的字段。 */
+    vi.mocked(cliProcs).set("t-cli", new ChildProcess());
     repoMock("listStaleUnownedQueued").mockResolvedValue([queuedRow("t-cli")]);
 
     await reaper.reapStaleQueuedTasks!();
@@ -526,8 +540,8 @@ describe("RUNNING reaper 判决矩阵", () => {
    */
   it("无 promptId 但本进程仍握着它的 cli 句柄：两轮都不插手（正常执行中）", async () => {
     const reaper = await loadReaper();
-    /* SAFETY: 类型断言已复核 */
-    vi.mocked(cliProcs).set("t-np1", {} as never);
+    /* 子进程句柄只是在表里占位：reaper 只查 `has`，不读它的字段。 */
+    vi.mocked(cliProcs).set("t-np1", new ChildProcess());
     repoMock("listStaleRunning").mockResolvedValue([
       runningRow("t-np1", null),
       runningRow("t-np1", null),

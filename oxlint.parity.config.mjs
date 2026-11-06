@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/lib/comfyui/lifecycle-exit.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/lifecycle-launch.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/lifecycle-session-log.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/lifecycle.test.ts", // 存量 22 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/localWorkflows.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/probe.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/queue-signal.server.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/raw-cli-client.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/raw-overrides.test.ts", // 存量 10 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/raw-overrides.ts", // 存量 11 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/raw-ui-only-nodes.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/raw-ui-only-nodes.ts", // 存量 5 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/raw.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/reaper-decisions.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/reaper.ts", // 存量 7 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/status.test.ts", // 存量 14 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/status.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/trace.ts", // 存量 8 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/validation.ts", // 存量 8 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/comfyui/workflow-detail-combo.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/comfyui/workflow-detail-io.test.ts", // 存量 9 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/comfyui/workflow-detail-raw-inputs.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/comfyui/workflow-detail-raw.test.ts", // 存量 8 处 · 清账目标 B5 · 新代码不禁用
