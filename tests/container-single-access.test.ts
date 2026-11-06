@@ -19,7 +19,7 @@ function walk(dir: string, out: Array<string> = []): Array<string> {
       walk(full, out);
       continue;
     }
-    if (/\.(ts|tsx)$/.test(name)) {
+    if (/\.(?:ts|tsx)$/.test(name)) {
       out.push(full);
     }
   }
@@ -39,7 +39,7 @@ describe("仓储取用只有一个入口（ISSUE #568）", () => {
        * 旧的第二跳剔「以星号开头的行」是给没剥干净的续行兜底，helper 整段剥掉，不需要这一条。 */
       const code = stripComments(readFileSync(file, "utf8"));
       if (
-        /(^|[^\w.])container\.resolve\s*\(/.test(code) ||
+        /(?:^|[^\w.])container\.resolve\s*\(/.test(code) ||
         /from\s+["'][^"']*core\/container["']/.test(code)
       ) {
         offenders.push(rel);

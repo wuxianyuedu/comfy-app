@@ -17,18 +17,18 @@ beforeAll(async () => {
 /** 解析 `rgb(r g b / a)` 或 `#rrggbb`（本仓 token 的两种写法）。 */
 function parseColor(value: string): { a: number; rgb: [number, number, number] } {
   const v = value.trim();
-  const hex = /^#([0-9a-f]{6})$/i.exec(v);
+  const hex = /^#(?<hex>[0-9a-f]{6})$/i.exec(v);
   if (hex) {
-    const n = Number.parseInt(hex[1]!, 16);
+    const n = Number.parseInt(hex.groups?.hex ?? "", 16);
     return { rgb: [(n >> 16) & 255, (n >> 8) & 255, n & 255], a: 1 };
   }
-  const m = /^rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*(?:\/\s*([\d.]+)\s*)?\)$/.exec(v);
+  const m = /^rgb\(\s*(?<r>\d+)\s+(?<g>\d+)\s+(?<b>\d+)\s*(?:\/\s*(?<alpha>[\d.]+)\s*)?\)$/.exec(v);
   if (!m) {
     throw new Error(`期望 rgb(r g b / a) 或 #rrggbb，实际是 ${JSON.stringify(value)}`);
   }
   return {
-    rgb: [Number(m[1]), Number(m[2]), Number(m[3])],
-    a: m[4] === undefined ? 1 : Number(m[4]),
+    rgb: [Number(m.groups?.r ?? 0), Number(m.groups?.g ?? 0), Number(m.groups?.b ?? 0)],
+    a: m.groups?.alpha === undefined ? 1 : Number(m.groups?.alpha),
   };
 }
 

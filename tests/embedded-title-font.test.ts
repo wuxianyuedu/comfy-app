@@ -116,7 +116,7 @@ function indexBlob(path: string): string {
 
 /** 一条 `@font-face { … }` 块，按出现顺序。 */
 function fontFaces(css: string): Array<string> {
-  return [...css.matchAll(/@font-face\s*\{([^}]*)\}/g)].map((m) => m[1] ?? "");
+  return [...css.matchAll(/@font-face\s*\{(?<block>[^}]*)\}/g)].map((m) => m.groups?.block ?? "");
 }
 
 /** 某个 `--font-*` 变量的值里，第几个位置是 `family`（0 起算；找不到为 -1）。 */
@@ -125,7 +125,7 @@ function familyPosition(css: string, cssVar: string, family: string): number {
   if (value === undefined) {
     return -1;
   }
-  const names = [...value.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  const names = [...value.matchAll(/"(?<name>[^"]+)"/g)].map((m) => m.groups?.name);
   return names.indexOf(family);
 }
 
@@ -192,7 +192,7 @@ describe("每一份内嵌字面本身", () => {
     for (const { file, why } of EMBEDDED_FACES) {
       const blob = indexBlob(file);
       const pointer =
-        /^version https:\/\/git-lfs\.github\.com\/spec\/v1\s+oid sha256:([0-9a-f]{64})\s+size (\d+)$/m.exec(
+        /^version https:\/\/git-lfs\.github\.com\/spec\/v1\s+oid sha256:[0-9a-f]{64}\s+size (?<size>\d+)$/m.exec(
           blob,
         );
       expect(
@@ -202,7 +202,7 @@ describe("每一份内嵌字面本身", () => {
       ).not.toBeNull();
       const onDisk = statSync(fileURLToPath(new URL(`../${file}`, import.meta.url)));
       expect(
-        Number(pointer?.[2]),
+        Number(pointer?.groups?.size),
         `${file} 指针记的 size 与磁盘字节数不一致（拷贝过的文件与提交出去的不是同一份）`,
       ).toBe(onDisk.size);
       // 下界同时钉两件事：这是一份**完整 CJK**（subset 过的会在 1 MB 量级），
@@ -234,9 +234,9 @@ describe("@font-face 与 --font-* 必须指向同一个名字", () => {
   const css = () => read("src/app/globals.css");
 
   it("每一个 @font-face 都登记在 EMBEDDED_FACES 里，且没有登记了却没写的", () => {
-    const declared = [...css().matchAll(/@font-face\s*\{[^}]*font-family:\s*"([^"]+)"/g)].map(
-      (m) => m[1],
-    );
+    const declared = [
+      ...css().matchAll(/@font-face\s*\{[^}]*font-family:\s*"(?<family>[^"]+)"/g),
+    ].map((m) => m.groups?.family);
     // 两头都判：写了没登记（8 MB 白背而没人管）与登记了没写（CSS 指向空气）
     // 都是静默形态，而任何一个方向的单边断言都拦不住另一边。
     expect(
@@ -252,12 +252,16 @@ describe("@font-face 与 --font-* 必须指向同一个名字", () => {
     for (const face of EMBEDDED_FACES) {
       const block = faces.find((b) => new RegExp(`font-family:\\s*"${face.family}"`).test(b));
       expect(block, `没有 ${face.family} 的 @font-face`).toBeTruthy();
-      const src = /src:\s*url\("([^"]+\.(?:woff2|ttf))"\)\s*format\("([^"]+)"\)/.exec(block ?? "");
+      const src =
+        /src:\s*url\("(?<url>[^"]+\.(?:woff2|ttf))"\)\s*format\("(?<format>[^"]+)"\)/.exec(
+          block ?? "",
+        );
       expect(
         src,
         `${face.family} 的 src 不是 \`url(<字体>.<ext>) format(<载体>)\` 形态`,
       ).not.toBeNull();
-      const [, url, declaredFormat] = src ?? [];
+      const url = src?.groups?.url;
+      const declaredFormat = src?.groups?.format;
       // 四者同名：扩展名 / format() / 磁盘文件 / LFS 属性。任何一处单独漂开都
       // **不报错** —— format() 写错时浏览器照嗅探照解码（它只是「要不要下载」的门），
       // 所以只有这里能拦。

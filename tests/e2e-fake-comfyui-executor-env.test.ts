@@ -204,6 +204,6 @@ describe("接线在位", () => {
     const entries = readdirSync(FAKE_CLI_MODULE_ROOT, { withFileTypes: true })
       .filter((e) => e.isFile())
       .map((e) => e.name);
-    expect(entries.filter((n) => /\.(sh|ps1|cmd|bat)$/.test(n))).toEqual([]);
+    expect(entries.filter((n) => /\.(?:sh|ps1|cmd|bat)$/.test(n))).toEqual([]);
   });
 });

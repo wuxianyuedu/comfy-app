@@ -626,9 +626,9 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
   it("钩子那一步真判了这条账（每次提交都看得见它的日期）", () => {
     // `cmd` 逐字相等而不是 `toContain`：把这一行注掉时行首锚定的解析已经不认它
     // ——「把这一步静音」正是这一族要拦的动作（§13.5.8）。
-    const steps = [...readText(".githooks/pre-commit").matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map(
-      (m) => ({ label: m[1] ?? "", cmd: m[2] ?? "" }),
-    );
+    const steps = [
+      ...readText(".githooks/pre-commit").matchAll(/^ {2}run "(?<label>[^"]+)" (?<cmd>.+)$/gm),
+    ].map((m) => ({ label: m.groups?.label ?? "", cmd: m.groups?.cmd ?? "" }));
     const hit = steps.find((s) => s.cmd.includes("scripts/freshness-gate.mjs"));
     expect(hit?.cmd).toBe("node scripts/freshness-gate.mjs");
     // 标签要能让人从这一行读出「判的是哪几档」—— 只写其中一档时，

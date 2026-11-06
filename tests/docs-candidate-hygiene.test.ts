@@ -69,7 +69,10 @@ const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
  * 带空格的形状 —— 本文件也在扫描面里，写全一枚就多一条死规则，这条判据对自己同样生效）。
  */
 function unescapeSelector(part: string): string {
-  return part.trim().replaceAll(/\\(.)/g, "$1").replace(/^\./, "");
+  return part
+    .trim()
+    .replaceAll(/\\(?<escaped>.)/g, "$<escaped>")
+    .replace(/^\./, "");
 }
 
 /**
@@ -104,7 +107,7 @@ function placeholderCandidates(candidates: Iterable<string>): Set<string> {
   const out = new Set<string>();
   for (const c of candidates) {
     const value = c.slice(c.indexOf("[") + 1, -1);
-    if (/[…<]/.test(value) || /^-?N(px|rem|em|ex|ch|vh|vw|ms|s|%)?$/i.test(value)) {
+    if (/[…<]/.test(value) || /^-?N(?:px|rem|em|ex|ch|vh|vw|ms|s|%)?$/i.test(value)) {
       out.add(c);
       continue;
     }
@@ -137,7 +140,7 @@ beforeAll(async () => {
   /* SAFETY: 类型断言已复核 */
   proseFiles = [
     ...walk("docs").filter((f) => f.endsWith(".md")),
-    ...walk("tests").filter((f) => /\.(ts|tsx)$/.test(f)),
+    ...walk("tests").filter((f) => /\.(?:ts|tsx)$/.test(f)),
   ].map((f) => [f, read(f)] as [string, string]);
 
   /* 空跑的形状先挡掉：扫描面钉错（比如把 ../../docs 写成 docs，那会被按 CSS 所在目录

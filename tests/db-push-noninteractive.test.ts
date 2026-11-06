@@ -170,10 +170,10 @@ describe("探测判据跨实现同源", () => {
       "utf8",
     );
     // TS 侧的哨兵表名从源码里读出来，避免「两边各自改名后互不知情」。
-    const m = /const SENTINEL_TABLE = "([^"]+)"/.exec(tsSrc);
+    const m = /const SENTINEL_TABLE = "(?<table>[^"]+)"/.exec(tsSrc);
     expect(m, "TS 侧必须保留单一定义的 SENTINEL_TABLE").toBeTruthy();
     /* SAFETY: 类型断言已复核 */
-    expect((mjs as { SENTINEL_TABLE: string }).SENTINEL_TABLE).toBe(m![1]);
+    expect((mjs as { SENTINEL_TABLE: string }).SENTINEL_TABLE).toBe(m?.groups?.table);
     // 探针名也要对得上，否则「在不在」的语义无从对照。
     expect(
       /* SAFETY: 类型断言已复核 */

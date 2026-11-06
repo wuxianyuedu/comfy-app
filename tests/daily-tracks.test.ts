@@ -142,9 +142,7 @@ describe("三档的登记形状（§11.8）", () => {
         continue;
       }
       expect(
-        String(track.ciStage)
-          .trim()
-          .startsWith("每日"),
+        String(track.ciStage).trim().startsWith("每日"),
         `${kind}（主体=master）的执行者 ${track.ciStage} 不在每日档上 —— 主干的账只能由` +
           "每日那一跑刷新与判读",
       ).toBe(true);
@@ -735,9 +733,9 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
   });
 
   it("钩子那一步真判了这几档（标签要点名 e2e，否则红出来会读成别人的事）", () => {
-    const steps = [...readText(".githooks/pre-commit").matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map(
-      (m) => ({ label: m[1] ?? "", cmd: m[2] ?? "" }),
-    );
+    const steps = [
+      ...readText(".githooks/pre-commit").matchAll(/^ {2}run "(?<label>[^"]+)" (?<cmd>.+)$/gm),
+    ].map((m) => ({ label: m.groups?.label ?? "", cmd: m.groups?.cmd ?? "" }));
     const hit = steps.find((s) => s.cmd.includes("scripts/freshness-gate.mjs"));
     expect(hit?.cmd).toBe("node scripts/freshness-gate.mjs");
     expect(hit?.label).toContain("e2e");

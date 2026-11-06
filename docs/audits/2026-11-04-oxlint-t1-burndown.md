@@ -12,7 +12,7 @@
 | B1   | `eslint/no-use-before-define（functions:false）` | 75       | 48       | 已清（75 处/48 份）                                |
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
-| B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 清账中（子批1–7：245 份 / 769 处已清）             |
+| B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 清账中（子批1–8：265 份 / 835 处已清）             |
 | B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 挂账中                                             |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
@@ -652,26 +652,26 @@
 | `tests/comment-language.test.ts`                                                       | 2        | 已清 |
 | `tests/commit-gate-tier.test.ts`                                                       | 1        | 已清 |
 | `tests/conditional-skip-registry.test.ts`                                              | 4        | 已清 |
-| `tests/container-single-access.test.ts`                                                | 2        | 挂账 |
-| `tests/core-barrel-entry-discipline.test.ts`                                           | 2        | 挂账 |
-| `tests/cross-platform-launcher.test.ts`                                                | 3        | 挂账 |
-| `tests/daily-tracks.test.ts`                                                           | 2        | 挂账 |
-| `tests/db-push-noninteractive.test.ts`                                                 | 1        | 挂账 |
-| `tests/design-md-contract-sync.test.ts`                                                | 13       | 挂账 |
-| `tests/dev-launcher-toolchain-gate.test.ts`                                            | 1        | 挂账 |
-| `tests/dev-loopback-origins.test.ts`                                                   | 2        | 挂账 |
-| `tests/dialog-backdrop-contrast.test.ts`                                               | 5        | 挂账 |
-| `tests/dist-artifact-hygiene.test.ts`                                                  | 4        | 挂账 |
-| `tests/doc-check-hook-wiring.test.ts`                                                  | 3        | 挂账 |
-| `tests/docs-candidate-hygiene.test.ts`                                                 | 3        | 挂账 |
-| `tests/e2e-fake-comfyui-endpoint.test.ts`                                              | 3        | 挂账 |
-| `tests/e2e-fake-comfyui-executor-env.test.ts`                                          | 1        | 挂账 |
-| `tests/e2e-run.test.ts`                                                                | 2        | 挂账 |
-| `tests/e2e-runtime-budget.test.ts`                                                     | 2        | 挂账 |
-| `tests/embedded-title-font.test.ts`                                                    | 7        | 挂账 |
-| `tests/entry-common-strict-mode.test.ts`                                               | 4        | 挂账 |
-| `tests/env-import-meta-shape.test.ts`                                                  | 3        | 挂账 |
-| `tests/eslint-exemption-staleness.test.ts`                                             | 3        | 挂账 |
+| `tests/container-single-access.test.ts`                                                | 2        | 已清 |
+| `tests/core-barrel-entry-discipline.test.ts`                                           | 2        | 已清 |
+| `tests/cross-platform-launcher.test.ts`                                                | 3        | 已清 |
+| `tests/daily-tracks.test.ts`                                                           | 2        | 已清 |
+| `tests/db-push-noninteractive.test.ts`                                                 | 1        | 已清 |
+| `tests/design-md-contract-sync.test.ts`                                                | 13       | 已清 |
+| `tests/dev-launcher-toolchain-gate.test.ts`                                            | 1        | 已清 |
+| `tests/dev-loopback-origins.test.ts`                                                   | 2        | 已清 |
+| `tests/dialog-backdrop-contrast.test.ts`                                               | 5        | 已清 |
+| `tests/dist-artifact-hygiene.test.ts`                                                  | 4        | 已清 |
+| `tests/doc-check-hook-wiring.test.ts`                                                  | 3        | 已清 |
+| `tests/docs-candidate-hygiene.test.ts`                                                 | 3        | 已清 |
+| `tests/e2e-fake-comfyui-endpoint.test.ts`                                              | 3        | 已清 |
+| `tests/e2e-fake-comfyui-executor-env.test.ts`                                          | 1        | 已清 |
+| `tests/e2e-run.test.ts`                                                                | 2        | 已清 |
+| `tests/e2e-runtime-budget.test.ts`                                                     | 2        | 已清 |
+| `tests/embedded-title-font.test.ts`                                                    | 7        | 已清 |
+| `tests/entry-common-strict-mode.test.ts`                                               | 4        | 已清 |
+| `tests/env-import-meta-shape.test.ts`                                                  | 3        | 已清 |
+| `tests/eslint-exemption-staleness.test.ts`                                             | 3        | 已清 |
 | `tests/eslint-gate-canary.test.ts`                                                     | 2        | 挂账 |
 | `tests/esm-cross-host-imports.test.ts`                                                 | 1        | 挂账 |
 | `tests/executor-host-artifact.test.ts`                                                 | 4        | 挂账 |

@@ -301,7 +301,7 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
       expect(
         fs.readFileSync(path.join(capsDir, name), "utf8"),
         `capabilities/${name}：不许把执行能力透给前端`,
-      ).not.toMatch(/shell:(allow-execute|allow-spawn)/);
+      ).not.toMatch(/shell:(?:allow-execute|allow-spawn)/);
     }
   });
 
@@ -508,7 +508,7 @@ describe("Phase 2-C：executor-host 接入 launcher", () => {
 describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静默失效）", () => {
   const ROOT = process.cwd();
   /** 相对形态 + `.ts` 后缀：这两点都是在纯 Node 下真的能加载起来的前提。 */
-  const SPEC_LITERAL_RE = /["'`](\.\.\/src\/lib\/[^"'`\n]+\.ts)["'`]/g;
+  const SPEC_LITERAL_RE = /["'`](?<specifier>\.\.\/src\/lib\/[^"'`\n]+\.ts)["'`]/g;
 
   /** 剥掉块注释与整行 `//` 注释：注释里解释「为什么用动态 import」不该被当成说明符。 */
   function stripComments(source: string): string {
@@ -521,7 +521,7 @@ describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静�
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         out.push(...scriptFiles(full));
-      } else if (/\.(mjs|cjs|ts)$/.test(entry.name)) {
+      } else if (/\.(?:mjs|cjs|ts)$/.test(entry.name)) {
         out.push(full);
       }
     }
@@ -535,7 +535,7 @@ describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静�
       const rel = path.relative(ROOT, abs).split(path.sep).join("/");
       const source = stripComments(fs.readFileSync(abs, "utf8"));
       for (const match of source.matchAll(SPEC_LITERAL_RE)) {
-        const specifier = match[1];
+        const specifier = match.groups?.specifier;
         if (specifier === undefined || specifier === "") {
           continue;
         }
