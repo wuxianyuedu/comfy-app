@@ -144,11 +144,11 @@ describe("可执行形态的候选顺序（executableExts）", () => {
     expect(exts).not.toContain(".BAT");
   });
 
-/**
- * `.PS1` **不看 `PATHEXT`**（ISSUE #1961）。此前判据是反向的：老用例断言没声明就不出现，而 Windows 默认
- * `PATHEXT`（`.COM;.EXE;.BAT;.CMD;…`）从不含 `.PS1`。corepack 摆的三个形态里只有 `.ps1` 能被 Node 起，候选表却没有它
- * ⇒ `whichCommand()` 一个都选不出 ⇒ 上层报「PATH 上没有可用 pnpm 形态」，而能跑的就在旁边（现场流水线停在不成立的结论上）。
- */
+  /**
+   * `.PS1` **不看 `PATHEXT`**（ISSUE #1961）。此前判据是反向的：老用例断言没声明就不出现，而 Windows 默认
+   * `PATHEXT`（`.COM;.EXE;.BAT;.CMD;…`）从不含 `.PS1`。corepack 摆的三个形态里只有 `.ps1` 能被 Node 起，候选表却没有它
+   * ⇒ `whichCommand()` 一个都选不出 ⇒ 上层报「PATH 上没有可用 pnpm 形态」，而能跑的就在旁边（现场流水线停在不成立的结论上）。
+   */
   it("`.PS1` 无条件在候选里 —— 默认 PATHEXT 从不声明它，由它决定就是永远选不出来", () => {
     // Windows 的默认 PATHEXT（实测形态：没有 .PS1）。
     const DEFAULT_PATHEXT = ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC";
@@ -593,11 +593,11 @@ describe("pnpm check:toolchain 真跑", () => {
     expect(r.stdout).toContain("tsc / eslint / vitest 都能跑");
   });
 
-/**
- * 「无 node_modules」这一分支的措辞就是判据（ISSUE #1568）。现场：有人在无依赖容器里读旧版一句 WARN + `pnpm install`，
- * 得出「本机跑不了 tsc/eslint/vitest」，跳过三条门禁并写进提交信息 —— 25 条类型错因此落进 `master`。故它必须正面回答
- * 「能装 / 装多久 / 装完能跑什么」并点名「不得据此跳过门禁」；`--deps-root` 只换依赖检查根，给空目录即可复现。
- */
+  /**
+   * 「无 node_modules」这一分支的措辞就是判据（ISSUE #1568）。现场：有人在无依赖容器里读旧版一句 WARN + `pnpm install`，
+   * 得出「本机跑不了 tsc/eslint/vitest」，跳过三条门禁并写进提交信息 —— 25 条类型错因此落进 `master`。故它必须正面回答
+   * 「能装 / 装多久 / 装完能跑什么」并点名「不得据此跳过门禁」；`--deps-root` 只换依赖检查根，给空目录即可复现。
+   */
   runIfPnpm("依赖未装时：说清「能装 / 装多久 / 装完能跑什么」，并点名禁止据此跳过门禁", () => {
     const emptyRoot = path.join(tmp, "no-deps");
     fs.mkdirSync(emptyRoot, { recursive: true });
@@ -888,7 +888,7 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
     };
 
     for (const abs of walk(path.join(ROOT, "scripts"))) {
-      if (!/\.(mjs|cjs|ts)$/.test(abs)) {
+      if (!/\.(?:mjs|cjs|ts)$/.test(abs)) {
         continue;
       }
       const rel = path.relative(ROOT, abs).split(path.sep).join("/");

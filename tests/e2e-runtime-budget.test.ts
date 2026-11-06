@@ -142,7 +142,7 @@ describe("运行时预算基线文件 ⇄ spec 常量同源", () => {
 
   it("倍数两平台同一个数（spec 里只写一份）", () => {
     /* 倍数不按平台分档：相对灵敏度不该因宿主打折（各自的基线已经吃掉了机器差）。 */
-    const inSpec = Number(/factor: (\d+)/.exec(spec)?.[1]);
+    const inSpec = Number(/factor: (?<factor>\d+)/.exec(spec)?.groups?.factor);
     expect(inSpec).toBe(baseline.metric.factor);
   });
 
@@ -319,7 +319,9 @@ describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 
      * 那正是 §11.13 要拦的形态，而它在别处不会红。 */
     /* 认的是**顶层那个自测向预算**（`use` 之前那一条），不是写死的 `180_000` /
      * 那两条 webServer 等待窗口 —— 它们各有各的量级，不是这条红线管的东西。 */
-    const topLevelTimeouts = [...configSrc.matchAll(/^ {2}timeout: ([\d_]+),$/gm)].map((m) => m[1]);
+    const topLevelTimeouts = [...configSrc.matchAll(/^ {2}timeout: (?<timeout>[\d_]+),$/gm)].map(
+      (m) => m.groups?.timeout,
+    );
     expect(topLevelTimeouts).toEqual(["60_000"]);
   });
 });

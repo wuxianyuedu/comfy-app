@@ -46,8 +46,8 @@ describe("core/index.ts 的出口纪律（ISSUE #565）", () => {
   // （单独跑 <3s）。给足容忍度，断言本身不变。
   it("转出的每个符号都有消费方（没有消费方的转发等于零消费导出）", { timeout: 30_000 }, () => {
     const code = stripComments(readFileSync(INDEX, "utf8"));
-    const names = [...code.matchAll(/export\s+(?:type\s+)?\{([^}]*)\}/g)]
-      .flatMap((m) => (m[1] ?? "").split(","))
+    const names = [...code.matchAll(/export\s+(?:type\s+)?\{(?<names>[^}]*)\}/g)]
+      .flatMap((m) => (m.groups?.names ?? "").split(","))
       .map((part) =>
         part
           .trim()
@@ -126,7 +126,7 @@ describe("core/index.ts 的出口纪律（ISSUE #565）", () => {
  * 不再自己 `readdirSync` + `statSync`：后者在「列到名字 → 取类型」之间有消失窗口，CI 上崩的正是那一跳的读取
  * （枚举这一跳同形）；本仓已有唯一实现，留第二份削弱版只会让下一次竞态换个栈再崩。 */
 function walkAll(dir: string): Array<string> {
-  return reader.walkForScan(dir, /\.(ts|tsx|mjs|cjs)$/, {
+  return reader.walkForScan(dir, /\.(?:ts|tsx|mjs|cjs)$/, {
     skipDirs: new Set([".git", ".next", "node_modules"]),
   });
 }

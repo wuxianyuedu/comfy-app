@@ -12,7 +12,7 @@ const nextConfig = readFileSync(path.join(root, "next.config.js"), "utf8");
 
 /** 取出 `allowedDevOrigins: [...]` 那一段（没有这颗键时返回 null）。 */
 function allowedDevOriginsEntry(): string | null {
-  return /allowedDevOrigins:\s*\[([\s\S]*?)\]/.exec(nextConfig)?.[1] ?? null;
+  return /allowedDevOrigins:\s*\[(?<body>[\s\S]*?)\]/.exec(nextConfig)?.groups?.body ?? null;
 }
 
 describe("dev 期回环两种拼法都在 allowedDevOrigins 里", () => {
@@ -31,8 +31,8 @@ describe("dev 期回环两种拼法都在 allowedDevOrigins 里", () => {
      所以判的是「豁免面恰好等于这两个名字」，而不是「没出现某个坏字符串」——
      后者漏得过 `10.x.`、`*.local`、端口写法等各种形态。 */
   it("豁免面只有这两个回环名，没有局域网地址或通配", () => {
-    const hosts = [...(allowedDevOriginsEntry() ?? "").matchAll(/["']([^"']+)["']/g)].map(
-      (m) => m[1],
+    const hosts = [...(allowedDevOriginsEntry() ?? "").matchAll(/["'](?<host>[^"']+)["']/g)].map(
+      (m) => m.groups?.host ?? "",
     );
     expect(hosts.sort()).toEqual(["127.0.0.1", "localhost"]);
   });

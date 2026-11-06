@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B4 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "tests/container-single-access.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/core-barrel-entry-discipline.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/cross-platform-launcher.test.ts", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "tests/daily-tracks.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/db-push-noninteractive.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/design-md-contract-sync.test.ts", // 存量 13 处 · 清账目标 B4 · 新代码不禁用
-        "tests/dev-launcher-toolchain-gate.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/dev-loopback-origins.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/dialog-backdrop-contrast.test.ts", // 存量 5 处 · 清账目标 B4 · 新代码不禁用
-        "tests/dist-artifact-hygiene.test.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "tests/doc-check-hook-wiring.test.ts", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "tests/docs-candidate-hygiene.test.ts", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "tests/e2e-fake-comfyui-endpoint.test.ts", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "tests/e2e-fake-comfyui-executor-env.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
-        "tests/e2e-run.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/e2e-runtime-budget.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
-        "tests/embedded-title-font.test.ts", // 存量 7 处 · 清账目标 B4 · 新代码不禁用
-        "tests/entry-common-strict-mode.test.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用
-        "tests/env-import-meta-shape.test.ts", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
-        "tests/eslint-exemption-staleness.test.ts", // 存量 3 处 · 清账目标 B4 · 新代码不禁用
         "tests/eslint-gate-canary.test.ts", // 存量 2 处 · 清账目标 B4 · 新代码不禁用
         "tests/esm-cross-host-imports.test.ts", // 存量 1 处 · 清账目标 B4 · 新代码不禁用
         "tests/executor-host-artifact.test.ts", // 存量 4 处 · 清账目标 B4 · 新代码不禁用

@@ -136,11 +136,12 @@ describe("doc:check 在平台侧、不在钩子里（ISSUE #1371 立档 → ISSU
   });
 
   it("钩子里那句「D(N 个判据脚本)」的 N 与实际步骤数一致（这数字没有别的判据核）", () => {
-    const claimed = /D\((\d+) 个判据脚本\)/.exec(hook);
+    const claimed = /D\((?<count>\d+) 个判据脚本\)/.exec(hook);
     expect(claimed, "钩子里的判据计数陈述还在吗？").not.toBeNull();
-    expect(Number(claimed?.[1]), `钩子注释写 ${claimed?.[1]}，实际 ${steps.length}`).toBe(
-      steps.length,
-    );
+    expect(
+      Number(claimed?.groups?.count),
+      `钩子注释写 ${claimed?.groups?.count}，实际 ${steps.length}`,
+    ).toBe(steps.length);
   });
 });
 
@@ -729,7 +730,7 @@ describe("第二梯队全库扫描的输入面跳过接进 D 组（ISSUE #1747 �
       // 只认**真的** require 行：注释里出现的同一段字面不算（本仓的风格是
       // 在文件头解释「为什么这样加载」，那条注释必然含 `require("typescript")`）。
       const tsAt = lines.findIndex(
-        (l) => !/^\s*(\/\/|\*|\/\*)/.test(l) && /require\(\s*"typescript"\s*\)/.test(l),
+        (l) => !/^\s*(?:\/\/|\*|\/\*)/.test(l) && /require\(\s*"typescript"\s*\)/.test(l),
       );
       if (tsAt === -1) {
         continue;
@@ -775,7 +776,7 @@ describe("被聚合档接管的 6 条 AST 判据（ISSUE #1747 续，第四笔�
         `${script} 的 --staged 短路没了 —— 聚合档把这条单跑时它不再省时`,
       ).toBeGreaterThanOrEqual(0);
       const tsAt = lines.findIndex(
-        (l) => !/^\s*(\/\/|\*|\/\*)/.test(l) && /require\(\s*"typescript"\s*\)/.test(l),
+        (l) => !/^\s*(?:\/\/|\*|\/\*)/.test(l) && /require\(\s*"typescript"\s*\)/.test(l),
       );
       if (tsAt === -1) {
         return;
