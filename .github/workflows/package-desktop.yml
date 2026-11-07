@@ -12,6 +12,11 @@
 #     滚动 `nightly` GitHub Release（按名字取，每天都指向最新一份）。两者各答一件事：
 #     「这一跑产了什么」与「现在要拿一个包去哪拿」。Release 用 runner 自带的 `gh`
 #     与 workflow 级 `permissions: contents: write`，不引第三方 action。
+#   · **两类成品分开下载（ISSUE #3345）**：安装版（nsis / msi）与免安装版（解压即用的
+#     portable zip）是两种分发形态，不再混进同一个 artifact。`pnpm tauri build` 只产
+#     安装包；紧接着那一格用 `scripts/package-desktop-portable.mjs` 把同一份载荷按
+#     打包器同布局（`app.exe` + `node.exe` + `static/**`，见规范 §7.6）收成单个 zip。
+#     两个 artifact 各传一类、Release 资产也按名字分开 —— 拿包的人不用再从一堆 exe 里挑。
 #   · CNB 的 `ci-cp936-exit.mjs` 包裹是给 CP936 控制台的转码层；GitHub Windows runner
 #     的 pwsh 输出 UTF-8，直跑真命令。
 #
@@ -157,16 +162,35 @@ jobs:
       - name: 桌面成品构建（cnb 同款判据一字不改）
         run: pnpm tauri build
 
+      # 免安装版：同一份载荷、不打安装器。输出刻意放在 bundle/ 之外 —— 放进 bundle/
+      # 会被下面「安装版」artifact 一起收走，两类成品又混回一处。
+      # 组装步只读三件现成产物（壳 / sidecar / static），缺件即红，不重跑任何构建。
+      - name: 组装免安装版（portable zip；与安装包同一次构建、同一份载荷）
+        run: node scripts/package-desktop-portable.mjs --out portable/ComfyAPP-portable.zip --stage portable-stage
+
       # upload-artifact v4 → v7（2026-11-02 核过 tag）：v5 起 node24 运行时，v6 起要求
       # runner ≥ 2.327.1（托管 runner 恒满足），v7 新增 `archive` 输入（缺省 true ⇒
       # 本步的 name/path/retention-days 用法不变）。
-      - name: 上传桌面成品（artifact；发布落点的最终决定见文件头）
+      # 两个 artifact 各装一类：下载页上能分别点「安装版」与「免安装版」。
+      - name: 上传安装版（artifact：nsis / msi）
         uses: actions/upload-artifact@v7
         with:
-          name: comfyapp-desktop-bundle
-          path: src-tauri/target/release/bundle/
+          name: comfyapp-desktop-installer
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
           retention-days: 14
           # 打包绿了却一个安装包都没有 ⇒ 判红，不许 warn 蒙混（§7.7「发布只能排在构建绿之后」）。
+          if-no-files-found: error
+
+      - name: 上传免安装版（artifact：解压即用的 portable zip）
+        uses: actions/upload-artifact@v7
+        with:
+          name: comfyapp-desktop-portable
+          path: portable/ComfyAPP-portable.zip
+          retention-days: 14
+          # 免安装版缺件也判红：少 sidecar / server.js 的包在用户机器上是「双击没反应」，
+          # 构建侧静默放行 = 发一个起不来的包。
           if-no-files-found: error
 
       # 发布落点：CNB 那一格把成品留在本机常驻目录（留 2 份），GitHub runner 是即弃机，
@@ -179,13 +203,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # 先数成品再动 Release：空手时不许先 create 出一个没有资产的 nightly tag。
-          mapfile -d '' files < <(find src-tauri/target/release/bundle -type f \( -name '*.exe' -o -name '*.msi' \) -print0)
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "打包步没产出任何 .exe / .msi，滚动 Release 没有可上传的资产"
+          # 先数两类成品再动 Release：空手时不许先 create 出一个没有资产的 nightly tag。
+          mapfile -d '' installers < <(find src-tauri/target/release/bundle -type f \( -name '*.exe' -o -name '*.msi' \) -print0)
+          portable=portable/ComfyAPP-portable.zip
+          if [ ${#installers[@]} -eq 0 ] || [ ! -f "$portable" ]; then
+            echo "两类成品不齐（安装包 ${#installers[@]} 份 / 免安装版 $([ -f "$portable" ] && echo 有 || echo 无)），滚动 Release 不动"
             exit 1
           fi
           gh release view nightly >/dev/null 2>&1 || \
             gh release create nightly --title "每日桌面成品" \
-              --notes "定时任务滚动更新，保留最新一份" --prerelease
-          gh release upload nightly "${files[@]}" --clobber
+              --notes "定时任务滚动更新，保留最新一份。安装版 = setup.exe / msi；免安装版 = *-portable.zip（解压后双击 app.exe 即用）" --prerelease
+          gh release upload nightly "${installers[@]}" "$portable" --clobber

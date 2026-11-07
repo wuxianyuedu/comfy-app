@@ -194,6 +194,7 @@ comfy-cli 解释器」填它的绝对路径即可，留空时行上的错误与�
 | 生成原文文档                            | `pnpm doc:gen`                                 | `tools/docs/generate-docs.ps1`    |
 | 起组件工作台                            | `pnpm storybook`                               | `tools/start/storybook.ps1`       |
 | 出一份节点镜像的操作计划（装机提速）    | `pnpm ci:image-plan`                           | （Windows 侧同一条命令）          |
+| 组装免安装版（portable zip）             | `pnpm package:portable`                        | `tools/build/package-portable.ps1` |
 | 探测开发盘红利并调优                    | `pnpm dev:drive`                               | `tools/start/tune-dev-drive.ps1`  |
 
 > 这两张表不是「文档承诺」：`scripts/check-ps1-consistency.mjs` 挂在 `.githooks/pre-commit`，
@@ -391,6 +392,7 @@ tools\build\build-standalone.ps1   # 组装 standalone 资源（server.js + .nex
 | 独立模式资源（standalone）        | `tools\build\build-standalone.ps1`                        |
 | 完整安装包（不发布）              | `pnpm tauri build`                                        |
 | 把打好的安装包发布到常驻目录      | `node scripts/publish-desktop-bundle.mjs`                 |
+| 组装免安装版（解压即用 zip）      | `pnpm package:portable`                                   |
 | 清理重建前端资源                  | `tools\build\rebuild-static.ps1`                          |
 
 更详细的脚本职责、启动入口对比（`start-tauri.ps1` / `start-tauri-dev.ps1` / 壳自身）、CSP 与 standalone 模式说明，
