@@ -82,7 +82,7 @@ import { formatDurationMs } from "../src/lib/time-format.ts";
 import { startProgressSync } from "./progress-heartbeat.mjs";
 
 import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
-import { pnpmInvocation } from "./launcher-core/shell.mjs";
+import { pnpmCli } from "./ci-install-deps.mjs";
 // 启动页副本（`splash.html` + `index.html`）的清单与同步：与 dev-launcher 共用
 // 同一份实现，避免「少写一个副本名」这类静默失误在两处各自发生。
 import { syncSplashAssets } from "./launcher-core/splash-assets.mjs";
@@ -197,18 +197,22 @@ function dirSize(dir) {
 progress.step("1/4 pnpm build");
 console.log("[build-desktop] 1/4 执行 pnpm build（Next standalone 输出）...");
 const step1At = performance.now();
-// pnpm 的可执行形态由 shell.mjs 一处判定（规范 §2.1.1 / §9.5）：`execSync("pnpm …")`
-// 走的是 shell，Windows 上选中批处理形态时同样起不来，而 shell 语义让「命令没起来」
-// 与「跑完但失败」更难分辨。派生子进程一律经 pnpmInvocation，不自己拼可执行名。
+// pnpm 的形态由 ci-install-deps.mjs 的 pnpmCli() 一处判定（规范 §2.1.1 / §9.5）：
+// 它先真起一次 `-v` 探活，能找到就交出可 spawn 的绝对路径；找不到时退回裸名字
+// `pnpm`（与改动前 `pnpmInvocation` 返回 null 时报错不同：这一档交给 spawnSync 自己
+// 的解析面，起不来仍由下面的 `build.error` 分支如实报出，不冒充判据结论）。
+// 这与 daily「生产构建」格（artifact-run.mjs 的 runPnpmSync(command: pnpmCli())）
+// 是同一个 spawnSync 形态 —— 那格在 GA 上已验证能跑通，而按名字在 PATH × 扩展名里
+// 找的 pnpmInvocation() 够不着 action-setup 装在临时 dest 的垫片形态（ISSUE #2281）。
+// db-push / db-migrate / e2e-run / full-suite-run 都走这一份，build-desktop 不该是
+// 唯一还按名字找的那个（§12.18 复用在先）。
 {
-  const invocation = pnpmInvocation(["build"]);
-  if (!invocation) {
-    fail("PATH 上找不到可用的 pnpm（先跑 pnpm check:toolchain 自查）。");
-  }
+  const cli = pnpmCli();
+  const args = [...cli.prefixArgs, "build"];
   // 这一句是「1/4 执行 pnpm build」的**真实命令行**：构建日志里既有步骤名、也有
   // 到底跑了哪条命令，事后核对构建产物与命令的对应关系不必再猜。
-  echoCommandLine(invocation.command, invocation.args);
-  const build = spawnSync(invocation.command, invocation.args, {
+  echoCommandLine(cli.command, args);
+  const build = spawnSync(cli.command, args, {
     stdio: "inherit",
     cwd: root,
     windowsHide: true,
@@ -219,7 +223,7 @@ const step1At = performance.now();
     const spawnError = /** @type {NodeJS.ErrnoException} */ (build.error);
     fail(
       `起 pnpm 失败（${spawnError.code ?? "UNKNOWN"}）：${spawnError.message}；` +
-        `实际命令：${formatCommandLine(invocation.command, invocation.args)}`,
+        `实际命令：${formatCommandLine(cli.command, args)}`,
     );
   }
   if (build.status !== 0) {
@@ -382,15 +386,13 @@ progress.step("2.3 首启建表");
 // （手工副本迟早与 schema 漂开，而漂开的表现是首启建出一张缺列的表）。
 const schemaSqlPath = join(staticDir, "schema.sql");
 {
-  const invocation = pnpmInvocation(["exec", "drizzle-kit", "export", "--sql"]);
-  if (!invocation) {
-    fail("PATH 上找不到可用的 pnpm，无法导出首启建表用的 DDL（先跑 pnpm check:toolchain）。");
-  }
-  echoCommandLine(invocation.command, invocation.args);
+  const cli = pnpmCli();
+  const args = [...cli.prefixArgs, "exec", "drizzle-kit", "export", "--sql"];
+  echoCommandLine(cli.command, args);
   /* `drizzle-kit` 起不来时 `stdout` / `stderr` 实测是 `undefined`（`@types/node` 按
    * `encoding` 声明成 `string`）⇒ 下面两处 `?? ""` 是给运行时兜的，不是多余的。 */
   const exported = /** @type {{ status: number | null, stdout?: string, stderr?: string }} */ (
-    spawnSync(invocation.command, invocation.args, {
+    spawnSync(cli.command, args, {
       cwd: root,
       encoding: "utf8",
       windowsHide: true,
