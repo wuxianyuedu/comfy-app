@@ -34,7 +34,8 @@ jobs:
   doc-chain:
     # 钉 24.04 不跟浮动标签的理由见 pr-gate.yml 同名注释。
     runs-on: ubuntu-24.04
-    # 冷装约 8 分钟（pnpm install 是大头）+ 两条命令秒级；给 30 分钟，避免装依赖抖动被读成判据红。
+    # pnpm install 是大头（含 better-sqlite3 原生编译，时长随 registry 与缓存状态浮动）+ 两条命令秒级；
+    # 给 30 分钟，避免装依赖抖动被读成判据红。
     # 检出走浅克隆（fetch-depth: 1，无 LFS）：文档链命令只读当前树的 docs/ 与源文件，
     # 不做三点 diff 也不碰字体等 LFS 对象，拉全历史是纯开销。
     timeout-minutes: 30

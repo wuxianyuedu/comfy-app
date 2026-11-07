@@ -205,6 +205,13 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       "`.github/workflows/pr-gate.yml` 里没有 `check-format.cjs --changed` —— 撤出 CNB 后" +
         "它是这条判据唯一的执行者，两边都没有 = 没人跑它",
     ).toContain("node scripts/check-format.cjs --changed");
+    /* ISSUE #3291：同一 job 里还有第二格全量档（不带旗标）—— 两格互补：`--changed`
+     * 判这次 PR 带来的改动面，全量档判全库不变式。缺了它，「PR 自己扩判面 / 删
+     * `IGNORE_GLOBS` / 改 `.oxfmtrc.json`」又只剩人手动盘点这一条路。 */
+    expect(
+      /^[ \t]*run:\s*node scripts\/check-format\.cjs\s*$/m.test(workflow),
+      "`.github/workflows/pr-gate.yml` 里没有不带旗标的全量档 —— 全库不变式没有自动执行者",
+    ).toBe(true);
     /* SAFETY: 类型断言已复核 */
     // oxlint-disable-next-line typescript/no-require-imports
     const fmt = require("../scripts/check-format.cjs") as {
