@@ -16,9 +16,12 @@ import {
   main,
   probeAll,
 } from "../scripts/ci-token-scopes.mjs";
+import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = path.resolve(__dirname, "..");
 const CONFIG = path.join(ROOT, ".cnb.yml");
+/** 入口脚本名：只用来定位 `.cnb.yml` 里会被执行的那几行。 */
+const SCOPE_SCRIPT = "ci-token-scopes.mjs";
 
 type FetchResult = {
   body: string;
@@ -296,22 +299,96 @@ describe("main：退码、缺件的出口、以及「不打凭据」", () => {
   });
 });
 
+/**
+ * 只数**真会被执行的入口**：先按 YAML 的 `#` 剥掉整行与行尾注释（复用 §12.18 的唯一实现，
+ * 不另写剥注释正则），再只认 `script:` 命令行。注释里提一次脚本名、或某格被注释掉，
+ * 都不该被算成第五个入口 / 少算一个入口（ISSUE #3306）。
+ *
+ * 两种缩进都在面内：`.gates` 列表里的 4 空格 `script:`，与 `endStages` 锚点块里的 6 空格。
+ */
+function scopeEntryScripts(config: string): string[] {
+  const code = stripComments(config, { syntax: "hash", trailing: true });
+  return code
+    .split("\n")
+    .filter((line) => /^\s+script:\s/.test(line) && line.includes(SCOPE_SCRIPT));
+}
+
+/** 造一格 `.cnb.yml` stage；`listIndent` 是 `- name:` 的缩进，`script:` 比它深两格。 */
+function scopeStage(name: string, listIndent: number, extra = ""): string {
+  const pad = " ".repeat(listIndent);
+  return (
+    `${pad}- name: ${name}\n` +
+    `${pad}  script: node scripts/ci-cp936-exit.mjs -- node scripts/${SCOPE_SCRIPT}${extra}\n`
+  );
+}
+
+/** 与真配置同形状：一条 4 空格入口 + 三条 6 空格 `endStages` 入口。 */
+const FOUR_ENTRIES =
+  scopeStage("每日", 2) + scopeStage("PR", 4) + scopeStage("桌包", 4) + scopeStage("push", 4);
+
 describe("接线：平台那一跳不许带 --strict", () => {
   it("四处 endStages 都不带 --strict（否则 PR 上会有一条永远红、没人能修的格子）", () => {
     /* ISSUE #2551 的第一跑（`cnb-vv9-1k60eb6vl`）：PR 那一族的令牌连
      * `repo-cnb-history:r` 都没有 ⇒ 探针全 403，带了 `--strict` 就红。那不是这一格坏了，
      * 那是它要量的东西 —— 判它红等于把平台形态伪装成这次 PR 的缺陷。 */
-    const config = readFileSync(CONFIG, "utf8");
-    const lines = config.split("\n").filter((l) => l.includes("ci-token-scopes.mjs"));
+    const lines = scopeEntryScripts(readFileSync(CONFIG, "utf8"));
     /* 四处 = PR / 每日 / 桌包 / push 四个锚点各一格（ISSUE #2842 给 push 档补
-     * 失败立案时把同一格带给了 `*push_fail_stage`）。计数在这里守的是
-     * 「每个入口都还带着读数」—— 新增第五个锚点时同批改这一行。 */
-    expect(lines.length, "四个入口各有一格，`.cnb.yml` 里应当出现四次").toBe(4);
+     * 失败立案时把同一格带给了 `*push_fail_stage`）。计数只认**会被执行的 script 行**：
+     * 剥注释后按 `script:` 取，注释里提一句脚本名不算第五个入口（ISSUE #3306）。
+     * 新增 / 撤掉一个锚点时同批改这一行。 */
+    expect(lines.length, "四个入口各有一格，`.cnb.yml` 里应当有四条 script 命令").toBe(4);
     for (const line of lines) {
       expect(
         line,
         "平台那一跳带上 `--strict` 之后，PR 上会有一条永远红且没人能修的格子（ISSUE #2551）",
       ).not.toContain("--strict");
     }
+  });
+});
+
+describe("入口计数面只认会被执行的 script 行（ISSUE #3306）", () => {
+  it("四个入口：4 空格与 6 空格两种缩进都数得到", () => {
+    expect(scopeEntryScripts(FOUR_ENTRIES)).toHaveLength(4);
+  });
+
+  it("整行注释里引用一次脚本名不算第五个入口（PR #3303 第二跑的假红形状）", () => {
+    const config = `${FOUR_ENTRIES}  # 五跑读数见 ${SCOPE_SCRIPT}\n`;
+    expect(config.split(SCOPE_SCRIPT).length - 1, "夹具里确实出现了 5 次文件名").toBe(5);
+    expect(scopeEntryScripts(config)).toHaveLength(4);
+  });
+
+  it("行尾注释里引用脚本名也不算入口", () => {
+    const config = `  env:\n    NOTE: x # 见 ${SCOPE_SCRIPT}\n${FOUR_ENTRIES}`;
+    expect(scopeEntryScripts(config)).toHaveLength(4);
+  });
+
+  it("被注释掉的一格不算入口", () => {
+    const config = FOUR_ENTRIES.replace(
+      "  script: node scripts/ci-cp936-exit",
+      "  # script: node scripts/ci-cp936-exit",
+    );
+    expect(scopeEntryScripts(config)).toHaveLength(3);
+  });
+
+  it("删掉一条 script 行，主用例的 toBe(4) 会判红（计数面不是空转）", () => {
+    const config = FOUR_ENTRIES.replace(/^ {4}script:.*\n/m, "");
+    expect(scopeEntryScripts(config)).toHaveLength(3);
+  });
+
+  it("真命令带 --strict 时仍在计数面内（逐行判据抓得到）", () => {
+    const config = FOUR_ENTRIES.replace(
+      `scripts/${SCOPE_SCRIPT}\n`,
+      `scripts/${SCOPE_SCRIPT} --strict\n`,
+    );
+    const lines = scopeEntryScripts(config);
+    expect(lines).toHaveLength(4);
+    expect(lines.some((line) => line.includes("--strict"))).toBe(true);
+  });
+
+  it("注释里写 --strict 不被当成命令旗标", () => {
+    const config = `  # 这里只是解释 --strict 不能加，见 ${SCOPE_SCRIPT}\n${FOUR_ENTRIES}`;
+    const lines = scopeEntryScripts(config);
+    expect(lines).toHaveLength(4);
+    expect(lines.some((line) => line.includes("--strict"))).toBe(false);
   });
 });
