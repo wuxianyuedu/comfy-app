@@ -72,13 +72,13 @@
 #### G-5：setup-node 缓存命中率
 
 - **现状（CNB 口径）**：无 node_modules 缓存（自托管每次全量 clone + 装依赖）
-- **GA 实测表现**：setup-node cache: pnpm；冷装 pnpm install ~6-8 分钟（含原生编译）；热装（缓存命中）~2-3 分钟
+- **GA 估算（未实测，读数见下方待办）**：setup-node cache: pnpm；冷装 pnpm install 曾按 ~6-8 分钟估（含原生编译），热装（缓存命中）按 ~2-3 分钟估 —— 这两个值**不是 GA runner 上的读数**，引用前先补测
 - **影响判断**：缓存命中率未知；如果镜像仓只有本项目 CI 触发（每次都是独立 run），缓存可能因为 runner 复用率低而命中率低
 - **建议改法**：
   - 在 pr-gate.yml / daily.yml 的 setup-node step 之后加一个"报告缓存状态"的小 step（`node -e "console.log(process.env.CACHE_HIT || 'cold')"` —— 但 setup-node 不暴露这个）
   - 实测几次冷装 vs 热装差异，确认缓存有效
   - 如果缓存命中率 < 30%，考虑改用 actions/cache 直接缓存 node_modules
-- **优先级**：P0（冷装时间是当前 GA CI 的主要耗时）
+- **优先级**：P0（安装是 GA CI 的固定成本；实际耗时待测 —— 见上方「未实测」，不要拿 6-8 分钟的估算当读数）
 
 #### G-6：pnpm install 参数
 
