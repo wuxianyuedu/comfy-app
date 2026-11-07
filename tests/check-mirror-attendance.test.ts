@@ -3,11 +3,13 @@
  * 「现在」由 `now` 钉住（沿用 `tests/check-daily-attendance.test.ts` 的纪律）—— 不钉住它这一档
  * 就会随真实时间自己变红，成为「随时间漂移的平台状态判据」。
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_WINDOW_HOURS,
+  EGRESS_SIGNAL,
   MIRROR_STAGE_NAME,
   classifyMirrorText,
+  egressWindowSignal,
   judgeMirrorAttendance,
   main,
   readMirrorCell,
@@ -146,6 +148,135 @@ describe("judgeMirrorAttendance：三态、覆盖与「没这一格不算缺勤�
       windowHours: DEFAULT_WINDOW_HOURS,
     });
     expect(out.stats.windowBuilds).toBe(1);
+  });
+});
+
+/* ── ISSUE #3278：环境红信号 ────────────────────────────────────────────────
+ * 现场是「24h 窗口 6 present + 2 egress」仍 `code=0 / verdict=present`：出勤判据没坏，
+ * 坏的是「有没有机器说得出这几跑是环境红」。信号单列一档，退码一个字不改。 */
+describe("egressWindowSignal：出勤照旧，环境红单独可读（ISSUE #3278）", () => {
+  const build = (sn: string) => ({ createTime: IN_WINDOW, eventUrl: "x/pull/1", sn });
+  const judge = (shapes: string[]) =>
+    judgeMirrorAttendance({
+      builds: shapes.map((_, i) => build(`cnb-${String(i)}`)),
+      now: NOW,
+      readings: shapes.map((shape, i) => ({
+        evidence: "",
+        found: true,
+        shape,
+        sn: `cnb-${String(i)}`,
+      })),
+      windowHours: DEFAULT_WINDOW_HOURS,
+    });
+
+  it("6 present + 2 egress ⇒ 仍是出勤，但信号说间歇性断流、要立案，并把 egress 点进 headline", () => {
+    const out = judge([
+      "present",
+      "present",
+      "present",
+      "present",
+      "present",
+      "present",
+      "egress",
+      "egress",
+    ]);
+    expect(out.code).toBe(0);
+    expect(out.verdict).toBe("present");
+    expect(out.stats.present).toBe(6);
+    expect(out.stats.egress).toBe(2);
+    expect(out.signal.signal).toBe(EGRESS_SIGNAL.INTERMITTENT);
+    expect(out.signal.shouldFile).toBe(true);
+    expect(out.headline).toContain("egress×2（环境红/节点出网）");
+  });
+
+  it("推成且零 egress ⇒ stable，不立案", () => {
+    const out = judge(["present", "present"]);
+    expect(out.signal.signal).toBe(EGRESS_SIGNAL.STABLE);
+    expect(out.signal.shouldFile).toBe(false);
+    expect(out.headline).not.toContain("环境红");
+  });
+
+  it("零次推成、全是 egress ⇒ egress-only，立案（持续断流）", () => {
+    const out = judge(["egress", "egress"]);
+    expect(out.code).toBe(1);
+    expect(out.signal.signal).toBe(EGRESS_SIGNAL.EGRESS_ONLY);
+    expect(out.signal.shouldFile).toBe(true);
+  });
+
+  it("缺勤但不是出网（令牌 / 仓库那族）⇒ 不立 egress 单，交缺勤判决自己交账", () => {
+    const out = judge(["token-scope", "repo-missing"]);
+    expect(out.code).toBe(1);
+    expect(out.signal.signal).toBe(EGRESS_SIGNAL.OTHER_ABSENT);
+    expect(out.signal.shouldFile).toBe(false);
+  });
+
+  it("没结论 ⇒ no-verdict，绝不立案（§13.6.3：判据读不到不等于判过了）", () => {
+    const out = judgeMirrorAttendance({
+      builds: [build("cnb-a")],
+      now: NOW,
+      readings: [{ evidence: "", found: false, shape: "no-cell", sn: "cnb-a" }],
+      windowHours: DEFAULT_WINDOW_HOURS,
+    });
+    expect(out.code).toBe(2);
+    expect(out.signal.signal).toBe(EGRESS_SIGNAL.NO_VERDICT);
+    expect(out.signal.shouldFile).toBe(false);
+  });
+
+  it("纯函数那一档：`code=2` 优先于 stats 里残留的 egress 计数", () => {
+    const signal = egressWindowSignal({
+      code: 2,
+      stats: { present: 0, seen: 3, shapeCounts: { egress: 3 } },
+    });
+    expect(signal.signal).toBe(EGRESS_SIGNAL.NO_VERDICT);
+    expect(signal.egress).toBe(3);
+    expect(signal.shouldFile).toBe(false);
+  });
+
+  it("`--json` 里带 signal，非 json 档带 `signal=` 那一行（人和机器都能认）", () => {
+    const list = JSON.stringify({
+      data: [
+        {
+          createTime: IN_WINDOW,
+          eventUrl: "https://cnb.cool/o/r/-/merge_requests/1",
+          sn: "cnb-a",
+          status: "success",
+        },
+      ],
+      status: 200,
+    });
+    const run = (_cmd: string, args: Array<string>) => {
+      if (args[1] === "get-build-logs") {
+        return { error: null, stderr: "", stdout: list, status: 0 };
+      }
+      if (args[1] === "get-build-status") {
+        return { error: null, stderr: "", status: 0, stdout: buildStatus() };
+      }
+      return {
+        error: null,
+        stderr: "",
+        status: 0,
+        stdout: JSON.stringify({
+          data: { content: ["[mirror] ✓ 已推 o/r:cnb-pr-1 @ abc · 已派发 cnb-pr-sync"] },
+          status: 200,
+        }),
+      };
+    };
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      expect(main(["--json"], { ...env, run: run as never })).toBe(0);
+      /* 按纯文本钉字段形状即可：这里要证的是「signal 真的进了 --json 的载荷」，
+       * 再 JSON.parse 一遍只会把平台载荷类型重新引进用例（那份形状由判据自己给）。 */
+      const jsonOut = spy.mock.calls.map((c) => String(c[0])).join("\n");
+      expect(jsonOut).toContain('"signal": "stable"');
+      expect(jsonOut).toContain('"shouldFile": false');
+
+      spy.mockClear();
+      expect(main([], { ...env, run: run as never })).toBe(0);
+      const lines = spy.mock.calls.map((c) => String(c[0]));
+      expect(lines.some((l) => l.includes("signal=stable"))).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
