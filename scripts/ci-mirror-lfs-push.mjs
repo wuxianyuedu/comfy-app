@@ -119,7 +119,7 @@ export function parseLfsObjectIds(text) {
  * @returns {Promise<{attempts: number, code: number, elapsedMs: number,
  *   failure: ReturnType<typeof classifyLfsPushFailure> | null, objects: string | null,
  *   retriedByObjectId: boolean}>}
- *   仓内三态退码（这一跳只有 OK / FAIL 两态：前提那一层已由探活挡过）+ 收尾小结要的读数；
+ *   仓内三态退码（这一跳只有 OK / FAIL 两态：前提那一层已由内容推送那一刀挡过）+ 收尾小结要的读数；
  *   `retriedByObjectId` 记「这一跳进过 `--object-id` 回退」（读数，不参与判定）
  */
 export async function pushLfsObjects(ctx) {

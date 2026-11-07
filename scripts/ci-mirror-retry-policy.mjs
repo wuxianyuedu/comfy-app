@@ -18,8 +18,8 @@
  *
  * 改成**墙钟预算**：整档（首跳 + 全部重试）共用 {@link PUSH_RETRY_BUDGET_MS}，
  * 到点才按最后一次结果交账。次数上限退化成「别把日志刷成一片」的兜底，不再是主判据。
- * ISSUE #3234 起这份预算**从探活那一跳起算、与 wire 推送共用**：只给推送等于没给，
- * 因为探活失败会短路掉整格（现场见 `ci-mirror-wire-budget.mjs` 文件头）。
+ * ISSUE #3252 起推送前不再探活，这份预算就从**推送第一刀**起算（现场见
+ * `ci-mirror-wire-budget.mjs` 文件头）。
  *
  * 为什么 4 分钟：用户侧的期望是「起码试 3–5 分钟」；而它比改动前的最坏墙钟
  * （2 × 240s + 5s = 485s）**更小**，`.cnb.yml` 那两格 10m 外框反而更宽裕。
@@ -28,31 +28,28 @@
  */
 
 /**
- * 推送前那一问（`git ls-remote`）的墙钟上限（ISSUE #3051）。
+ * 远端读（`git ls-remote`）的**单次**墙钟上限：推送前不再有探活那一跳，这一读只剩
+ * 「推完之后回读 refs」这一处（`ci-mirror-push-verify.mjs`）。
  *
- * 为什么必须换成**本仓给的数**：不给就得等 git 自己的 connect 超时，而那一形的实测是
- * `Failed to connect to github.com port 443 after 21114 ms` —— 二十一秒全花在这一格上，
- * 且这一格从 #3051 起排在主列（`Install dependencies` 之前），每条 PR 都要付一次。
+ * 为什么不给就没法收口：不给就得等 git 自己的 connect 超时，而那一形的实测是
+ * `Failed to connect to github.com port 443 after 21114 ms` —— 二十一秒全花在这一格上。
  * 30s 的取法（2026-11-02 从 15s 放宽）：通的时候这一读实测 0.4–9.2s（#3014 记的几跑）；
- * 而 `cnb-pe2-1k6e1uhj8` 连续两跑 15s 无回话、同日 19:47 同 runner 却探活通过 ——
- * 15s 把「慢但活着」的抖动截成了「没通」。单次上限放宽 + 有限次重试（{@link PROBE_MAX_ATTEMPTS}）
- * 配套给：ISSUE #3234 起探活与 wire 推送**共用一份 240s 墙钟预算**（从探活这一跳起算，
- * 见 `ci-mirror-wire-budget.mjs`），单次 30s 上限只保护「慢但活着」的那一读；wire 档最坏
- * 240s + LFS 首刀 240s = 480s，远在 `.cnb.yml` 那一格 10m 外框之内。
+ * 而 `cnb-pe2-1k6e1uhj8` 连续两跑 15s 无回话、同日 19:47 同 runner 却通过 ——
+ * 15s 把「慢但活着」的抖动截成了「没通」。
  */
-export const REMOTE_PROBE_TIMEOUT_MS = 30_000;
+export const REMOTE_READ_TIMEOUT_MS = 30_000;
 
 /**
- * 探活（`ls-remote`）的尝试上限：与 wire 推送同值（首跳 + 9 次重试）。
+ * 推送后回读的**总预算**与尝试上限。
  *
- * 这一跳与推送共用同一份墙钟预算（`ci-mirror-wire-budget.mjs`），次数只兜住日志刷屏；
- * 只有 egress 类失败（`isEgressFailure` 那组判据）才消耗重试；认证 / 权限 / 仓库不存在
- * 这类「再试一百次也一样」的回话一次就交账。
+ * 回读发生在推送之后：此刻网络刚通过，正常是一刀的事（实测 0.4–9.2s）。60s / 3 次只兜
+ * 「远端刚好在这一秒抖了」，不占推送那 240s 的预算（否则推送吃满后回读必然被裁到 0）。
  */
-export const PROBE_MAX_ATTEMPTS = 10;
+export const VERIFY_RETRY_BUDGET_MS = 60_000;
+export const VERIFY_MAX_ATTEMPTS = 3;
 
 /**
- * 探活 + wire 推送**共用**的墙钟预算：从探活第一刀起算，到推送最后一次重试交账。
+ * wire 推送的墙钟预算：从推送第一刀起算，到最后一次重试交账。
  * 见本文件头「那一处口径改动」与 `ci-mirror-wire-budget.mjs`。
  *
  * 它与 {@link PUSH_TIMEOUT_MS} 是两个不同的数，别混：后者是**单次尝试**的上限（首次推整棵
@@ -65,8 +62,8 @@ export const PUSH_RETRY_BUDGET_MS = 240_000;
 /**
  * LFS 那一跳（`git lfs push`，含可能的 `--object-id` 回退）的**墙钟预算**（2026-11-05 第二批）。
  *
- * 为什么要比内容推送的 240s 小很多：LFS 是在**同一格里的第二跳**，探活与内容推送已经
- * 共用掉一份 240s 墙钟预算（ISSUE #3234 起从探活起算），LFS 首刀又照吃 240s 单跳上限；
+ * 为什么要比内容推送的 240s 小很多：LFS 是在**同一格里的第二跳**，内容推送（#3252 起不再
+ * 有探活）已经吃掉最多 240s 墙钟预算，LFS 首刀又照吃 240s 单跳上限；
  * 再给它 4 分钟重试窗口就会把 `.cnb.yml` 那两格的 10m 外框顶穿（240 + 240 = 480s，
  * 剩下的余量要留给冷启动与派发）。
  *
