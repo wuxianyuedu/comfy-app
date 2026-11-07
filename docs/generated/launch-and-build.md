@@ -2970,10 +2970,14 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 是两件事，过去只有前者有执行者。
 
 **独立一条流水线，不进 `.daily-gates`**（业主口径）。`.cnb.yml` 里那张 `.package-gates`
-锚点 + `.lock-package` 那把锁 + 两个事件键（`"crontab: 0 2 * * *"` 与 `web_trigger_package`，
-按钮在 `.cnb/web_trigger.yml`）。三处都各有判据（`tests/no-platform-ci-config.test.ts`）：
-桌包那几格不许出现在 `COMFYAPP_CI_DAILY_GATES` 里、两个触发口必须引用同一个
-`*package_gates`、而两条 crontab 的时刻不许相同。
+锚点 + `.lock-package` 那把锁 + 触发口。**触发面变过两轮**：定时那一跑 2026-11-05 起
+从这台自托管节点的 `crontab` 迁到 GA 的 `.github/workflows/package-desktop.yml`（见
+`.cnb.yml` 头注「四条流水线」），CNB 侧此后**不再挂** `crontab` 事件（`tests/no-platform-ci-config.test.ts`
+反向钉住）；2026-11-07 起再补 `api_trigger_package`（ISSUE #3297，理由见下面 NSIS 读数段）。
+所以今天 CNB 侧是两个触发口：`web_trigger_package`（手点按钮，`.cnb/web_trigger.yml`）
++ `api_trigger_package`（CLI / NPC），**同一份** `*package_gates`、**同一把** `*lock_package`、
+同一个立案锚点 `*package_fail_stage`。判据（`tests/no-platform-ci-config.test.ts`）：桌包那几格
+不许出现在 `COMFYAPP_CI_DAILY_GATES` 里、两个触发口必须引用同一个 `*package_gates`。
 
 **发布档的触发与「三平台」现状（#2641，2026-10-31）**：设计里曾写「`tag: v*` 触发发布档、
 三平台（ubuntu / windows / macOS）打包，20–40min」—— 那是**前瞻**，不是今天的形状，也**不**
@@ -3132,6 +3136,17 @@ tauri 判定工具缓存目录不完整时会**先删掉** `%LOCALAPPDATA%\tauri
   跑不起来，都是**候选根因的读数**而非判红，处置由人照读数定。上面那句「不读环境变量」
   的处置、以及 `resolveTauriCacheRoot` 的口径，**要等这一格给出读数之后**再分叉改，
   不在这一轮猜修法。顺序由 `tests/no-platform-ci-config.test.ts` 钉住（夹在两格之间）。
+
+**这格读数曾经没有执行者（ISSUE #3297 的第二次现场）**：PR #3302 把读数格合进 master
+之后，CNB 桌包档的定时已经迁走、而 `web_trigger_package` 手点口从没被点过
+（`cnb build get-build-logs --event web_trigger_package` 读数 `total=0`）—— 四次
+`makensis 0x2` 全发生在 #3302 合入**之前**，合入之后这一档再没跑过，读数一次都没落地。
+「判据在场、执行者不在场」正是 #2114 那一族，所以本轮补 `api_trigger_package`：
+与 `api_trigger_daily` 同构（服务端只认 `api_trigger` 前缀，实测 400），让读数与后续修法
+能被 CLI / NPC 触发复验。现场逐格复核（最近一跑 `cnb-llp-1k6jutvp5`）：`stage-2` 报
+`bundler 落点：…\systemprofile\AppData\Local\tauri\NSIS` + `必需件齐全 → 不动`，
+`stage-3` 全程无 `Downloading` / `Recreating it` 而直接 `Running makensis → 0x2` ⇒
+工具缓存确实在场，缝在「bundler 到底去哪找、能不能真起 makensis.exe」，照读数分叉。
 
 **自查入口**（不点按钮、不等定时）：
 
