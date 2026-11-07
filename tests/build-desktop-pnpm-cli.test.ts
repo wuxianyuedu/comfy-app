@@ -153,19 +153,19 @@ describe("build-desktop 与 daily 生产构建同用一份 pnpm 形态判据（I
     };
 
     // ① 修复前：PATH 上只有 action-setup 自己加的 .bin / .bin/bin 垫片 ⇒ 回落裸名字
-    const before = probe([binBin, bin, "C:\\Windows\\System32"], [shim], "");
+    const before = probe([binBin, bin, String.raw`C:\Windows\System32`], [shim], "");
     expect(before.cli.resolved).toBe(false);
     expect(before.cli.command).toBe("pnpm");
     expect(before.logs).toContain("逐条见下");
     expect(before.logs).toContain("PATH 条目");
 
     // ② 上一轮的错误推导：把 .bin/pnpm（垫片文件）当目录补进 PATH ⇒ 仍拿不到
-    const wrong = probe([shim, binBin, bin, "C:\\Windows\\System32"], [shim], "");
+    const wrong = probe([shim, binBin, bin, String.raw`C:\Windows\System32`], [shim], "");
     expect(wrong.cli.resolved).toBe(false);
     expect(wrong.cli.command).toBe("pnpm");
 
     // ③ 正解：把 <dest>/node_modules/pnpm 补进 PATH，pnpm.exe -v 真起得来 ⇒ 绝对路径
-    const fixed = probe([pkgDir, binBin, bin, "C:\\Windows\\System32"], [exe, shim], exe);
+    const fixed = probe([pkgDir, binBin, bin, String.raw`C:\Windows\System32`], [exe, shim], exe);
     expect(fixed.cli.resolved).toBe(true);
     expect(fixed.cli.command).toBe(exe);
     expect(fixed.cli.prefixArgs).toEqual([]);
