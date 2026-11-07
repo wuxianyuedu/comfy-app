@@ -36,6 +36,8 @@ import { createWireBudget } from "./ci-mirror-wire-budget.mjs";
 /* LFS 那一跳自 #3146 起单独一份（900 行闸）：它反过来要 import 主文件的判据，故主文件不转出它。 */
 import { pushLfsObjects } from "./ci-mirror-lfs-push.mjs";
 import { verifyLfsObjects, verifyPushedRef } from "./ci-mirror-push-verify.mjs";
+/* 推送前的远端更新闸（ISSUE #3252）：单发读一次远端 ref，只在这一档挂（PR 档不加）。 */
+import { guardRemoteNotAhead } from "./ci-mirror-remote-guard.mjs";
 import { renderMirrorSummary } from "./ci-mirror-failure-report.mjs";
 
 /**
@@ -82,6 +84,25 @@ export async function runMasterMirror(io) {
     );
     return CODE.OK;
   }
+  /* 推送前的远端更新闸（ISSUE #3252）：单发读一次远端 ref，远端是本次 HEAD 的后代
+   * ⇒ 拒推（`exit 1`，作为**事实**交账，强推会把远端退回旧值）。它**不是**探活：
+   * 不重试、不占推送重试预算；读不到 / 浅克隆只记「闸不可用」照推（模块头写清了区分）。 */
+  const guard = guardRemoteNotAhead({
+    headSha: ctx.headSha,
+    log,
+    prefix: "mirror-master",
+    ref: `refs/heads/${ctx.ref}`,
+    runGit,
+    sanitize,
+    token: ctx.token,
+    url,
+  });
+  if (guard.code !== CODE.OK) {
+    log(`[mirror-master] 结论：exit ${String(guard.code)} —— ${guard.note}`);
+    summarize({ lfs: null, wire: `拒推（${guard.relation}）` });
+    return guard.code;
+  }
+  log(`[mirror-master] 前闸：${guard.note}`);
   /* 不再先探活（ISSUE #3252 的现场：探活 6 次耗 201s、一次内容推送都没发起）。网络不通时
    * push 自己的回话与 ls-remote 同一形，双跳只是把同一次出网试两遍；这里第一刀就是内容推送。 */
   const push = await runGitWithRetry(pushArgs(url, `refs/heads/${ctx.ref}`), {

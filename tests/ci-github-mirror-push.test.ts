@@ -1840,17 +1840,23 @@ describe("runMasterMirror（推送 + 回读，没有派发那一跳）", () => {
   function harness(
     opts: {
       env?: Record<string, string | undefined>;
+      /* 推送前远端更新闸（#3252）的假事实：缺省「远端 sha 在本地、且是 HEAD 的祖先」⇒ 照推。 */
+      headIsAncestor?: boolean;
       lfsCode?: number;
       lfsJsonCode?: number;
       lfsJsonStdout?: string;
       lfsStderr?: string;
+      localHasRemote?: boolean;
       pushCode?: number;
       pushResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
       pushStderr?: string;
       remoteCode?: number;
+      remoteIsAncestor?: boolean;
       remoteResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
       remoteStderr?: string;
       remoteStdout?: string;
+      /* `git rev-parse --is-shallow-repository` 的回话：缺省 false（完整克隆）。 */
+      shallow?: boolean;
     } = {},
   ) {
     const pushes: Array<Array<string>> = [];
@@ -1906,6 +1912,20 @@ describe("runMasterMirror（推送 + 回读，没有派发那一跳）", () => {
         }
         return { code: 0, stdout: "", stderr: "" };
       }
+      if (args[0] === "cat-file") {
+        return { code: opts.localHasRemote === false ? 1 : 0, stdout: "", stderr: "" };
+      }
+      if (args[0] === "rev-parse" && args.includes("--is-shallow-repository")) {
+        return { code: 0, stdout: `${opts.shallow === true ? "true" : "false"}\n`, stderr: "" };
+      }
+      /* 前闸的两次祖先查询：第一次问「远端是 HEAD 的祖先吗」，第二次问反向。 */
+      if (args[0] === "merge-base") {
+        const remoteIsOlder = args[3] === SHA;
+        const yes = remoteIsOlder
+          ? (opts.remoteIsAncestor ?? true)
+          : (opts.headIsAncestor ?? false);
+        return { code: yes ? 0 : 1, stdout: "", stderr: "" };
+      }
       return gitOk(args);
     };
     const io = {
@@ -1944,7 +1964,8 @@ describe("runMasterMirror（推送 + 回读，没有派发那一跳）", () => {
     const code = await runMasterMirror(io);
     expect(code).toBe(CODE.NO_FACT);
     expect(pushes).toHaveLength(1);
-    expect(remoteCalls()).toBe(0);
+    /* 前闸读了一次（读到的远端 = 本地 HEAD ⇒ 照推），推送后的回读没有发生。 */
+    expect(remoteCalls()).toBe(1);
     expect(heard.join("\n")).toContain("先去建仓库");
     expect(heard.join("\n")).toContain("[mirror-master] 结论：exit 2");
   });
@@ -1954,7 +1975,8 @@ describe("runMasterMirror（推送 + 回读，没有派发那一跳）", () => {
     const code = await runMasterMirror(io);
     expect(code).toBe(CODE.OK);
     expect(pushes).toHaveLength(1);
-    expect(remoteCalls()).toBe(1);
+    /* 前闸一发 + 推送后回读一发。 */
+    expect(remoteCalls()).toBe(2);
     expect(heard.join("\n")).toContain("[mirror-master] 推送后回读：回读一致");
     expect(heard.join("\n")).not.toContain("目标仓库是空的");
   });
@@ -1987,9 +2009,134 @@ describe("runMasterMirror（推送 + 回读，没有派发那一跳）", () => {
     });
     const code = await runMasterMirror(io);
     expect(code).toBe(CODE.NO_FACT);
-    expect(remoteCalls()).toBe(1);
+    /* 前闸那一发（读不到 ⇒ 闸不可用照推）+ 推送后回读那一发（也没通）。 */
+    expect(remoteCalls()).toBe(2);
     expect(heard.join("\n")).toContain("[mirror-master] 结论：exit 2");
     expect(heard.join("\n")).toContain("回读没通");
+  });
+
+  /* ── ISSUE #3252：推送前的远端更新闸（只挂在 master 档） ─────────────────── */
+
+  it("前闸：远端是本次 HEAD 的后代（远端更新）⇒ 拒推，双 sha 在场，一次 push 都不发", async () => {
+    const ahead = "e".repeat(40);
+    const { heard, io, pushes, remoteCalls } = harness({
+      remoteStdout: `${ahead}\trefs/heads/${MASTER_REF}\n`,
+      remoteIsAncestor: false,
+      headIsAncestor: true,
+    });
+    const code = await runMasterMirror(io);
+    expect(code).toBe(CODE.FAIL);
+    expect(pushes).toHaveLength(0);
+    /* 只读了闸那一发；没有推送，也就没有推送后的回读。 */
+    expect(remoteCalls()).toBe(1);
+    const all = heard.join("\n");
+    expect(all).toContain(`remote=${ahead}`);
+    expect(all).toContain(`local=${SHA}`);
+    expect(all).toContain("远端比本次 HEAD 更新");
+    expect(all).toContain("[mirror-master] 结论：exit 1");
+  });
+
+  it("前闸：远端与本次 HEAD 分叉 ⇒ 拒推（强推会丢掉远端那侧的提交）", async () => {
+    const other = "f".repeat(40);
+    const { heard, io, pushes } = harness({
+      remoteStdout: `${other}\trefs/heads/${MASTER_REF}\n`,
+      remoteIsAncestor: false,
+      headIsAncestor: false,
+    });
+    const code = await runMasterMirror(io);
+    expect(code).toBe(CODE.FAIL);
+    expect(pushes).toHaveLength(0);
+    const all = heard.join("\n");
+    expect(all).toContain("已分叉");
+    expect(all).toContain(`remote=${other}`);
+    expect(all).toContain(`local=${SHA}`);
+    expect(all).toContain("[mirror-master] 结论：exit 1");
+  });
+
+  it("前闸：完整克隆下远端 sha 本地不存在 ⇒ 必不是祖先，拒推", async () => {
+    const other = "a".repeat(40);
+    const { heard, io, pushes } = harness({
+      localHasRemote: false,
+      remoteStdout: `${other}\trefs/heads/${MASTER_REF}\n`,
+      shallow: false,
+    });
+    const code = await runMasterMirror(io);
+    expect(code).toBe(CODE.FAIL);
+    expect(pushes).toHaveLength(0);
+    const all = heard.join("\n");
+    expect(all).toContain("远端有本地没有的提交");
+    expect(all).toContain(`remote=${other}`);
+    expect(all).toContain("[mirror-master] 结论：exit 1");
+  });
+
+  it("前闸：shallow 检出 ⇒ 按「闸不可用」放行，照推（本地缺对象不构成证据）", async () => {
+    const other = "b".repeat(40);
+    const { heard, io, pushes } = harness({
+      localHasRemote: false,
+      remoteResults: [
+        { code: 0, stdout: `${other}\trefs/heads/${MASTER_REF}\n` },
+        { code: 0, stdout: `${SHA}\trefs/heads/${MASTER_REF}\n` },
+      ],
+      shallow: true,
+    });
+    const code = await runMasterMirror(io);
+    expect(code).toBe(CODE.OK);
+    expect(pushes).toHaveLength(1);
+    expect(heard.join("\n")).toContain("闸不可用");
+    expect(heard.join("\n")).toContain("照推");
+  });
+
+  it("前闸：ls-remote 读不到 ⇒ 只念「闸不可用」并照推，不重试、不占推送预算", async () => {
+    const { heard, io, pushes, sleeps } = harness({
+      remoteResults: [
+        { code: 128, stderr: "fatal: unable to access: Could not resolve host" },
+        { code: 0, stdout: `${SHA}\trefs/heads/${MASTER_REF}\n` },
+      ],
+    });
+    const code = await runMasterMirror(io);
+    expect(code).toBe(CODE.OK);
+    expect(pushes).toHaveLength(1);
+    /* 闸是单发：读失败不进退避阶梯，一次 sleep 都不付。 */
+    expect(sleeps).toHaveLength(0);
+    const all = heard.join("\n");
+    expect(all).toContain("闸不可用");
+    expect(all).toContain("ls-remote 没通");
+    expect(all).toContain("照推");
+  });
+
+  it("前闸：远端 ref 不存在（首次推送）⇒ 照推", async () => {
+    const { heard, io, pushes } = harness({
+      remoteResults: [
+        { code: 0, stdout: "" },
+        { code: 0, stdout: `${SHA}\trefs/heads/${MASTER_REF}\n` },
+      ],
+    });
+    const code = await runMasterMirror(io);
+    expect(code).toBe(CODE.OK);
+    expect(pushes).toHaveLength(1);
+    expect(heard.join("\n")).toContain("首次推送");
+    expect(heard.join("\n")).toContain("照推");
+  });
+
+  it("前闸：远端与本次 HEAD 相等 / 落后 ⇒ 照推（0 次拒推）", async () => {
+    /* 相等：默认假件就回本次 HEAD，照推（0 对象）。 */
+    const equal = harness();
+    expect(await runMasterMirror(equal.io)).toBe(CODE.OK);
+    expect(equal.pushes).toHaveLength(1);
+    expect(equal.heard.join("\n")).toContain("前闸：远端与本次 HEAD 相等");
+
+    /* 落后：远端 sha 在本地、且是 HEAD 的祖先 ⇒ 照推（这次推才是前进）。 */
+    const behind = "c".repeat(40);
+    const older = harness({
+      remoteResults: [
+        { code: 0, stdout: `${behind}\trefs/heads/${MASTER_REF}\n` },
+        { code: 0, stdout: `${SHA}\trefs/heads/${MASTER_REF}\n` },
+      ],
+    });
+    expect(await runMasterMirror(older.io)).toBe(CODE.OK);
+    expect(older.pushes).toHaveLength(1);
+    expect(older.heard.join("\n")).toContain("落后于本次 HEAD");
+    expect(older.heard.join("\n")).not.toContain("拒推");
   });
 
   it("令牌缺席 ⇒ 退 2，git 一次都不碰", async () => {
@@ -2020,7 +2167,8 @@ describe("runMasterMirror（推送 + 回读，没有派发那一跳）", () => {
     expect(code).toBe(CODE.OK);
     expect(pushes).toHaveLength(2);
     expect(sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
-    expect(remoteCalls()).toBe(1);
+    /* 前闸一发 + 推送后回读一发（闸不占推送重试预算，所以退避表仍只有推送那一跳）。 */
+    expect(remoteCalls()).toBe(2);
     expect(heard.every((l) => l.startsWith("[mirror-master]"))).toBe(true);
     expect(heard.join("\n")).toContain(
       `[mirror-master] 推送第 1/${PUSH_MAX_ATTEMPTS} 次没通（可重试类）`,
