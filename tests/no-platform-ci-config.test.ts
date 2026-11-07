@@ -2355,6 +2355,35 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toBeTruthy();
   });
 
+  it("每日档重格红后有环境证据步：dmesg 的 OOM 行 + 内存读数（ISSUE #3333）", () => {
+    /* 立案现场：GA Daily 连续多天红在不同重格（全量E2E / API 文档 / 单元测试），每次
+     * 环境杀都停在「最大嫌疑」——hosted runner 的内核 OOM 行不会自己进 step 日志，
+     * dmesg 在 ubuntu-24.04 镜像上要 sudo。这一步 `if: failure()` 兜住全部会红的格：
+     * 一个诊断点，不按重格复制三份；绿的那一跑一个字节都不付。 */
+    const dailyYml = readFileSync(path.join(ROOT, ".github/workflows/daily.yml"), "utf8");
+    const stepAt = dailyYml.indexOf("name: 环境证据");
+    expect(
+      stepAt,
+      "每日档没有「环境证据」诊断步 —— 重格的环境杀永远停在「疑似 OOM」",
+    ).toBeGreaterThan(-1);
+    expect(
+      stepAt,
+      "「环境证据」没排在「单元测试」之后 —— 排在它前面的会红格没被兜住",
+    ).toBeGreaterThan(dailyYml.indexOf("name: 单元测试"));
+    expect(
+      stepAt,
+      "「环境证据」该在「覆盖率报告」之前 —— 它是诊断读数，不该排到产物出口后面",
+    ).toBeLessThan(dailyYml.indexOf("name: 覆盖率报告"));
+    const stepText = dailyYml.slice(stepAt, dailyYml.indexOf("name: 覆盖率报告"));
+    expect(stepText, "「环境证据」不是 `if: failure()` —— 绿的那一跑也要付这笔钱").toContain(
+      "if: failure()",
+    );
+    expect(stepText, "没有 dmesg 的 OOM 行读数 —— 证据步空转").toContain("dmesg");
+    expect(stepText, "没有内存读数（free -h）—— 只有 OOM 行分不出「耗尽」还是「被杀」").toContain(
+      "free -h",
+    );
+  });
+
   it("桌包那一档独立成档：自己的清单 + 自己的锁 + 两个触发口同一份（ISSUE #2503）", () => {
     /* 业主口径「桌包独立一条，不要并进每日 `*daily_gates` 表」；原话里的条数**不在这里记账**（#2878 同口径：写进注释而判据不读，漂了没人红；要数问 `.daily-gates` ⇄ `COMFYAPP_CI_DAILY_GATES`，见 §13.5.17）。
      * 落成三件会静默失效的事实：① 清单是**另一张锚点**（并进 `.daily-gates` 后每日会多背一次 cargo 编译）；② 锁是**另一把**（共用 `*lock_daily` 会让手点桌包掐停当日某一格，#2114 换方向复发）；

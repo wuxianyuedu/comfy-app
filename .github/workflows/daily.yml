@@ -5,6 +5,8 @@
 # 用，拆成多 job 就要跨 job 传产物，那不是等价形态）：
 #   安装依赖 → 同步数据库表结构 → 新鲜度账 → 生产构建 → ESLint 零警告 →
 #   浏览器安装 → 全量E2E → API 文档自检 → 单元测试（排最后，与 CNB「最容易出问题的放最后」同口径）
+#   → 失败时补一步环境证据（dmesg 的 OOM 行 + 内存读数；ISSUE #3333，`if: failure()`
+#   只花在红的那一跑 —— 重格死成「子进程被信号打死 / 没有读数」时，OOM 不再停在「最大嫌疑」）
 #   → 镜像漂移判据（CNB master vs GitHub master；ISSUE #3252 的每日兜底，放最末尾）。
 #   每个 step 的 `timeout-minutes` 与 CNB 那一格 stage 的 `timeout` 同值（卡死要在
 #   自己的名字上报，而不是让 300m 的 job 顶层兜底）——映射见各 step 行尾注释。
@@ -149,6 +151,20 @@ jobs:
       - name: 单元测试（排最后：唯一会因机器负载而红的一档，同 CNB 口径）
         timeout-minutes: 45 # 对位 CNB `每日单元测试` 45m（内部墙钟预算 30m）
         run: node scripts/full-suite-run.mjs
+
+      # 环境证据（ISSUE #3333）：重格红成「子进程被信号打死 / 没有读数」时，OOM 定性
+      # 此前只能停在「最大嫌疑」——内核的 OOM 行不会自己进 step 日志，而 ubuntu-24.04
+      # 镜像的 dmesg 要 sudo（hosted runner 有免密 sudo）。`if: failure()` 兜住上面
+      # 全部会红的格：证据只花在红的那一跑，绿的那一跑一个字节都不付。
+      # grep 无命中退 1 是「内核没记 OOM」这一读数本身，`|| echo` 把它接住、不冒充第二格红。
+      - name: 环境证据（失败时：dmesg 的 OOM 行 + 内存读数）
+        timeout-minutes: 5 # 读数步给「卡死要早报」的上限，同其他读数格
+        if: failure()
+        run: |
+          echo "== dmesg 的 OOM / killed 行（空 = 内核没记 OOM，别把环境杀念成 OOM）=="
+          sudo dmesg -T | grep -iE "out of memory|oom|killed process" || echo "（dmesg 无 OOM 形状的行）"
+          echo "== 内存读数 =="
+          free -h
 
       # 覆盖率上报的对位落点。CNB 那一格是 `ci-coverage-report.mjs`，走 `cnb` CLI
       # 把 lcov 交给平台；GitHub runner 没有那个 CLI，判据本体不该为换平台重抄一遍。
