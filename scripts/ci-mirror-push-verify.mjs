@@ -244,18 +244,15 @@ export async function verifyLfsObjects(deps) {
   }
   const missing = [];
   for (const row of rows) {
-    const oid = row && typeof row === "object" && typeof row.oid === "string" ? row.oid : "";
+    const record = row && typeof row === "object" ? row : null;
+    const oid = record && typeof record.oid === "string" ? record.oid : "";
+    const hasError = record !== null && record.error !== null && record.error !== undefined;
     const hasDownload =
-      row &&
-      typeof row === "object" &&
-      row.actions &&
-      typeof row.actions === "object" &&
-      row.actions.download
-        ? true
-        : false;
-    if (row && typeof row === "object" && row.error != null) {
-      missing.push(oid === "" ? "(oid 未回)" : oid);
-    } else if (!hasDownload) {
+      record !== null &&
+      record.actions &&
+      typeof record.actions === "object" &&
+      Boolean(record.actions.download);
+    if (hasError || !hasDownload) {
       missing.push(oid === "" ? "(oid 未回)" : oid);
     }
   }

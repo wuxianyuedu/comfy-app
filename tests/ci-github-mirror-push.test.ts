@@ -740,25 +740,25 @@ describe("runMirror（git 与 fetch 全假件）", () => {
       dispatchStatus?: number;
       env?: Record<string, string | undefined>;
       fetchThrows?: boolean;
+      lfsCode?: number;
       /* `git lfs ls-files --json` 的回话（推送后核对对象清单）：缺省 0 个对象 ⇒ 不发明请求。
        * `--long` 那一支（ref 枚举不到的回退清单）仍走下面的 `lfsList*`。 */
       lfsJsonCode?: number;
       lfsJsonStdout?: string;
-      lfsCode?: number;
       lfsListCode?: number;
       lfsListResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
       lfsListStdout?: string;
       lfsResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
       lfsStderr?: string;
       lfsStdout?: string;
+      pushCode?: number;
+      pushResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
+      pushStderr?: string;
       /* 推送后回读（`git ls-remote <url> <ref>`）的假回话：未指定时按第三个参数回同一条 ref。 */
       remoteCode?: number;
       remoteResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
       remoteStderr?: string;
       remoteStdout?: string;
-      pushCode?: number;
-      pushResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
-      pushStderr?: string;
     } = {},
   ) {
     const pushes: Array<Array<string>> = [];
@@ -1844,13 +1844,13 @@ describe("runMasterMirror（推送 + 回读，没有派发那一跳）", () => {
       lfsJsonCode?: number;
       lfsJsonStdout?: string;
       lfsStderr?: string;
+      pushCode?: number;
+      pushResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
+      pushStderr?: string;
       remoteCode?: number;
       remoteResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
       remoteStderr?: string;
       remoteStdout?: string;
-      pushCode?: number;
-      pushResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
-      pushStderr?: string;
     } = {},
   ) {
     const pushes: Array<Array<string>> = [];

@@ -448,7 +448,7 @@ export function findMirrorReadoutFailure(run, slug, sn, json) {
         return null;
       }
       const hits = [...detail.text.matchAll(/\[mirror-master] 结论：exit (?<code>[12])/g)];
-      const hit = hits.length > 0 ? hits[hits.length - 1] : null;
+      const hit = hits.length > 0 ? hits.at(-1) : null;
       if (!hit) {
         return null;
       }

@@ -69,7 +69,11 @@ export function judgeMirrorDrift({ cnbSha, githubSha }) {
 export async function main(io = {}) {
   const argv = io.argv ?? process.argv.slice(2);
   const env = io.env ?? process.env;
-  const log = io.log ?? ((line) => console.log(line));
+  const log =
+    io.log ??
+    ((line) => {
+      console.log(line);
+    });
   const fetchImpl = io.fetchImpl ?? fetch;
   const runGit =
     io.runGit ??
