@@ -408,11 +408,7 @@ export async function runPreflightStage(ctx) {
     stagedCount: staged.length,
     depsState: freshState,
   });
-  if (!d0.run) {
-    if (d0.why !== null) {
-      log(formatD0PreRunLine({ failures: 0, total: 0, ms: 0, skippedLine: d0.why }));
-    }
-  } else {
+  if (d0.run) {
     let hookText = null;
     try {
       hookText = readFileSync(join(root, ".githooks", "pre-commit"), "utf8");
@@ -451,6 +447,8 @@ export async function runPreflightStage(ctx) {
       }
       codes.push(CODE.GREEN);
     }
+  } else if (d0.why !== null) {
+    log(formatD0PreRunLine({ failures: 0, total: 0, ms: 0, skippedLine: d0.why }));
   }
 
   return {

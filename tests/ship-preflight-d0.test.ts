@@ -8,7 +8,6 @@
 import fs, { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it, TestRunner } from "vitest";
 
 import {
@@ -23,7 +22,7 @@ import { parseArgs } from "../scripts/ship-args.mjs";
 import { runPreflightStage } from "../scripts/ship-preflight.mjs";
 import { CODE } from "../scripts/ship-core.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 /** 这一条用例这次**真跑了**吗（vitest 5 的 `-t` 不跳未命中用例体，见 ship.test.ts 文件头）。 */
 function ranThisCase(): boolean {
@@ -212,7 +211,7 @@ describe("preRunD0Steps：红不短路，一次报齐；退出码原样带出", 
   function harness(statuses: Array<number>) {
     const calls: Array<string> = [];
     const logs: Array<string> = [];
-    const relayed: Array<{ stdout: string; stderr?: string }> = [];
+    const relayed: Array<{ stderr?: string; stdout: string }> = [];
     let i = 0;
     const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
@@ -283,10 +282,10 @@ describe("formatD0PreRunLine：读数形状只有这一处", () => {
     expect(formatD0PreRunLine({ failures: 0, total: 0, ms: 0, skippedLine: "旗标关" })).toContain(
       "没跑（旗标关）",
     );
-    expect(formatD0PreRunLine({ failures: 0, total: 17, ms: 16100, skippedLine: null })).toContain(
+    expect(formatD0PreRunLine({ failures: 0, total: 17, ms: 16_100, skippedLine: null })).toContain(
       "17 步全绿（16.1s）",
     );
-    const red = formatD0PreRunLine({ failures: 2, total: 17, ms: 20000, skippedLine: null });
+    const red = formatD0PreRunLine({ failures: 2, total: 17, ms: 20_000, skippedLine: null });
     expect(red).toContain("2/17 步红");
     expect(red).toContain("提交钩子会拦下的事实");
   });
@@ -326,10 +325,10 @@ describe("阶段 0 接线：预跑红 ⇒ 落 1 停手，与提交钩子同权�
   ].join("\n");
 
   function wiringIo(opts: {
-    hook?: string | null;
-    stepStatus?: Record<string, number>;
-    staged?: string;
     fresh?: FakeResult;
+    hook?: string | null;
+    staged?: string;
+    stepStatus?: Record<string, number>;
   }) {
     const rootDir = mkdtempSync(path.join(os.tmpdir(), "ship-d0-"));
     if (opts.hook !== null) {
@@ -374,11 +373,11 @@ describe("阶段 0 接线：预跑红 ⇒ 落 1 停手，与提交钩子同权�
 
   async function stage(
     opts: {
-      hook?: string | null;
-      stepStatus?: Record<string, number>;
-      staged?: string;
-      fresh?: FakeResult;
       args?: Array<string>;
+      fresh?: FakeResult;
+      hook?: string | null;
+      staged?: string;
+      stepStatus?: Record<string, number>;
     } = {},
   ) {
     const io = wiringIo(opts);

@@ -64,7 +64,7 @@ export const PRE_RUN_SKIP_SCRIPTS = new Set(["scripts/check-deps-freshness.mjs"]
 export function parseD0RunLines(hookText) {
   const lines = hookText.split("\n");
   const start = lines.findIndex((l) => l.startsWith(`run_group ${D0_GROUP_NAME} `));
-  if (start < 0) {
+  if (start === -1) {
     return { steps: [], closed: false };
   }
   /** @type {D0Step[]} */
@@ -74,13 +74,13 @@ export function parseD0RunLines(hookText) {
     if (line.trim() === "'") {
       return { steps, closed: true };
     }
-    const m = /^\s*run "([^"]*)"\s+(.+?)\s*$/.exec(line);
+    const m = /^\s*run "(?<label>[^"]*)"\s+(?<cmd>.+?)\s*$/.exec(line);
     if (!m) {
       continue;
     }
     /* 命令形状在钩子里只有一种：`node scripts/<名> [旗标…]`。按空白拆 ——
      * 步骤行里没有带引号的参数（带引号的标签已被上面那组捕获），拆完即原样。 */
-    steps.push({ label: m[1] ?? "", argv: (m[2] ?? "").split(/\s+/) });
+    steps.push({ label: m.groups?.label ?? "", argv: (m.groups?.cmd ?? "").split(/\s+/) });
   }
   return { steps, closed: false };
 }
