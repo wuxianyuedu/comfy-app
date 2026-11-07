@@ -27,20 +27,20 @@ import {
 
 /** 一条告警（本档 `normalizeAlert()` 之后的形状）。 */
 type Alert = {
+  message: string;
   number: number;
+  path: string;
   ruleId: string;
   severity: string;
-  path: string;
   startLine: number | null;
-  message: string;
   url: string;
 };
 
 /** 平台上的已有单。 */
-type IssueRow = { number: number; title: string; labels: string[] };
+type IssueRow = { labels: string[]; number: number; title: string };
 
 const analysis = {
-  id: 2117829505,
+  id: 2_117_829_505,
   ref: "refs/heads/master",
   commitSha: "cbb029de342e8c354056dbadf0b5975ff1ff1c76",
   createdAt: "2026-11-07T10:17:28Z",
@@ -70,12 +70,12 @@ const issue = (number: number, title: string, labels: string[] = []): IssueRow =
 
 /* ── 一次最小可用的平台替身 ───────────────────────────────────────── */
 
-type HttpCall = { url: string; init: { method?: string; body?: string } };
+type HttpCall = { init: { body?: string; method?: string }; url: string };
 
 type FakeResponse = {
+  headers: { get: (key: string) => string | null };
   ok: boolean;
   status: number;
-  headers: { get: (key: string) => string | null };
   text: () => Promise<string>;
 };
 
@@ -95,7 +95,7 @@ function response(
 
 /** GitHub 侧：`/code-scanning/alerts` 与 `/code-scanning/analyses`。 */
 function ghOk(alerts: unknown[], calls?: HttpCall[]) {
-  return (url: string, init?: { method?: string; body?: string }): Promise<FakeResponse> => {
+  return (url: string, init?: { body?: string; method?: string }): Promise<FakeResponse> => {
     calls?.push({ url, init: init ?? {} });
     if (url.includes("/code-scanning/analyses")) {
       return response(200, [
@@ -115,8 +115,8 @@ const ENV = {
 
 /** 走一遍 `main` 并收集日志（不碰网络、不写 summary）。 */
 async function runMain(
-  ghFetch: (url: string, init?: { method?: string; body?: string }) => Promise<FakeResponse>,
-  cnbFetch: (url: string, init?: { method?: string; body?: string }) => Promise<FakeResponse>,
+  ghFetch: (url: string, init?: { body?: string; method?: string }) => Promise<FakeResponse>,
+  cnbFetch: (url: string, init?: { body?: string; method?: string }) => Promise<FakeResponse>,
   argv: string[] = [],
 ) {
   const logs: string[] = [];
@@ -241,7 +241,7 @@ describe("正文模板（概览 / 命中表 / 修复建议 / 验收口径）", (
       analysis,
       ghRepo: "wuxianyuedu/comfy-app",
     });
-    expect(body).toContain("a \\| b");
+    expect(body).toContain(String.raw`a \| b`);
   });
 
   it("链接形状与 GitHub 页面一致", () => {
@@ -337,7 +337,7 @@ describe("建单路径：创建 → 补标签 → 独立回读", () => {
     const cnbCalls: HttpCall[] = [];
     const cnbFetch = (
       url: string,
-      init?: { method?: string; body?: string },
+      init?: { body?: string; method?: string },
     ): Promise<FakeResponse> => {
       cnbCalls.push({ url, init: init ?? {} });
       if (url.includes("/issues?state=open")) {

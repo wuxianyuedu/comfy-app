@@ -117,7 +117,7 @@ export function titleKey(ruleId) {
  */
 export function normalizeTitle(title) {
   return String(title ?? "")
-    .replace(/\s+/g, " ")
+    .replaceAll(/\s+/g, " ")
     .trim();
 }
 
@@ -185,7 +185,7 @@ export function aggregateByRule(alerts) {
   return [...groups.values()]
     .map((group) => ({
       ...group,
-      alerts: group.alerts.slice().sort((a, b) => a.number - b.number),
+      alerts: [...group.alerts].sort((a, b) => a.number - b.number),
     }))
     .sort(
       (a, b) =>
@@ -250,7 +250,7 @@ export function issueTitle(ruleId, count, severity) {
  */
 function cell(value) {
   return String(value ?? "")
-    .replaceAll("|", "\\|")
+    .replaceAll("|", String.raw`\|`)
     .replaceAll("\r", " ")
     .replaceAll("\n", " ")
     .trim();
@@ -420,7 +420,8 @@ function renderClearedSection({ ruleId, analysis, at }) {
 export function composeClearedBody(existingBody, section) {
   const text = String(existingBody ?? "").replace(/\s+$/, "");
   const withoutHeader = text.replace(/^\*\*\[评论人：[^\]\n]*\]\*\*\s*/, "");
-  return `**[评论人：${AUTHOR_HANDLE}]**\n\n${section}${withoutHeader}`.replace(/\s+$/, "") + "\n";
+  const merged = `**[评论人：${AUTHOR_HANDLE}]**\n\n${section}${withoutHeader}`.replace(/\s+$/, "");
+  return `${merged}\n`;
 }
 
 /**

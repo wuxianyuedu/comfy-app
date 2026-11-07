@@ -265,7 +265,7 @@ async function fetchAlertsPage(ctx, page, seen) {
       partial: seen.length,
     };
   }
-  const alerts = seen.concat(got.json.map(normalizeAlert));
+  const alerts = [...seen, ...got.json.map(normalizeAlert)];
   if (got.json.length < PER_PAGE) {
     return { ok: true, alerts, pages: page };
   }
@@ -346,15 +346,16 @@ async function listOpenIssuesPage(ctx, page, seen) {
   if (!Array.isArray(got.json)) {
     return { ok: false, kind: "shape", status: got.status, detail: "issues 不是数组" };
   }
-  const issues = seen.concat(
-    got.json.map((/** @type {any} */ row) => ({
+  const issues = [
+    ...seen,
+    ...got.json.map((/** @type {any} */ row) => ({
       number: Number(row?.number ?? 0),
       title: String(row?.title ?? ""),
       labels: (Array.isArray(row?.labels) ? row.labels : [])
         .map((/** @type {any} */ l) => (typeof l === "string" ? l : String(l?.name ?? "")))
         .filter(Boolean),
     })),
-  );
+  ];
   if (got.json.length < PER_PAGE) {
     return { ok: true, issues };
   }

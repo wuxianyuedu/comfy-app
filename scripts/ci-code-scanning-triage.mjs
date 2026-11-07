@@ -138,11 +138,11 @@ async function runActions(ctx, actions, index, reading, ledger, log) {
       at: reading.at,
     });
     const said = await appendComment(ctx, number, comment.body, comment.marker);
-    if (!said.ok) {
-      ledger.failures.push(`${action.ruleId}：#${number} 正文已刷新，但${said.detail}`);
-    } else {
+    if (said.ok) {
       ledger.updated += 1;
       ledger.details.push(`刷新 #${number}：${action.title}`);
+    } else {
+      ledger.failures.push(`${action.ruleId}：#${number} 正文已刷新，但${said.detail}`);
     }
     return runActions(ctx, actions, index + 1, reading, ledger, log);
   }
@@ -205,7 +205,11 @@ async function runActions(ctx, actions, index, reading, ledger, log) {
 export async function main(io = {}) {
   const argv = io.argv ?? process.argv.slice(2);
   const env = io.env ?? process.env;
-  const log = io.log ?? ((s) => console.log(s));
+  const log =
+    io.log ??
+    ((s) => {
+      console.log(s);
+    });
   const dryRun = argv.includes("--dry-run");
   const ghFetch = io.ghFetch ?? fetch;
   const cnbFetch = io.cnbFetch ?? fetch;
@@ -371,7 +375,7 @@ export async function main(io = {}) {
 }
 
 /* 只在被直接执行时跑 main（被 import 时只暴露纯函数给用例）。 */
-if (process.argv[1] && process.argv[1].endsWith("ci-code-scanning-triage.mjs")) {
+if (process.argv[1]?.endsWith("ci-code-scanning-triage.mjs")) {
   const exit = await main();
   if (exit !== CODE.DONE) {
     process.stderr.write(
