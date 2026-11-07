@@ -389,7 +389,7 @@ export function fetchBuildList(run, slug, event, limit, opts = {}) {
    * 为什么要有这个形态（ISSUE #2550）：`ci-pr-failure-issue.mjs` 那一格按「我自己这一跑」
    * 查列表，而它服务的那一档**不是** `pull_request`（桌包那一档挂在 `crontab` / 手点上）——
    * 沿用「只查 pull_request」的过滤，`pickSelf()` 就找不到自己那一行 ⇒ 事件念成
-   * `(取不到)`、`self` 为 null ⇒ 连「还没到终态」那一道都跳过了。 */
+   * `(取不到)`、`self` 为 null ⇒ 连「这一跑是谁」都认不出来。 */
   const args = event
     ? ["build", "get-build-logs", "--repo", slug, "--event", event]
     : ["build", "get-build-logs", "--repo", slug];
@@ -430,10 +430,12 @@ export function fetchBuildList(run, slug, event, limit, opts = {}) {
   }
   const builds = list
     .filter((b) => b && typeof b.sn === "string")
-    /* `status` 与 `eventUrl` 是**列表自带字段的原样透出**（不另立判据）：调用方拿它们
-     * 决定「要不要去取逐格详情」（在跑 / 排队的那几跑先不取），以及把红挂回出问题的那张
-     * PR 上 —— 这两个字段只有列表这一侧有（`get-build-status -v` 只给 `status` +
-     * `pipelinesStatus`，说不出自己是哪一跑，见 `fetchDailyDetails` 那段）。 */
+    /* `status` 与 `eventUrl` 是**列表自带字段的原样透出**（不另立判据）：`eventUrl`
+     * 用来把红挂回出问题的那张 PR 上（这个字段只有列表这一侧有 —— `get-build-status -v`
+     * 只给 `status` + `pipelinesStatus`，说不出自己是哪一跑，见 `fetchDailyDetails` 那段），
+     * `status` 由各调用方自己决定怎么用；失败立案那两格**不拿它判终态** —— 它们挂在
+     * `endStages`，列表里当前这一跑的 `status` 恒 `pending`，判红没红改认逐格读数
+     * （ISSUE #3298）。 */
     .map((b) => ({
       sn: String(b.sn),
       createTime: String(b.createTime ?? ""),
