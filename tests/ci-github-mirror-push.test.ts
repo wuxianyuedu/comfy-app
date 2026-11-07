@@ -38,6 +38,7 @@ import {
 /* 超时 / 次数 / 退避那一组常量自 2026-11-05 起单独一份（主文件贴着 900 行闸）。
  * 从**实现所在的模块**取，而不是从主文件的转出口取 —— 那里不再转出它们。 */
 import {
+  HOSTED_AWAIT_POLL_INTERVAL_MS,
   LFS_PUSH_MAX_ATTEMPTS,
   LFS_PUSH_RETRY_BUDGET_MS,
   PUSH_MAX_ATTEMPTS,
@@ -49,6 +50,8 @@ import {
   VERIFY_MAX_ATTEMPTS,
   VERIFY_RETRY_BUDGET_MS,
 } from "../scripts/ci-mirror-retry-policy.mjs";
+/* 「等托管机」前置（ISSUE #3346）单独一份：它静态 import 主文件的判据，测试直接钉它的行为。 */
+import { maybeSkipViaHosted } from "../scripts/ci-mirror-hosted-await.mjs";
 /* 推送之后的自证（回读 refs + LFS batch 核对）：实现单独一份，用例直接钉它的三态。 */
 import {
   parseLfsObjects,
@@ -2387,5 +2390,176 @@ describe("runMirrorEntry（入口的终点）", () => {
     expect(result.status).not.toBe(13);
     expect(result.status).toBe(CODE.NO_FACT);
     expect(stdout).toContain("[mirror-master] 结论：exit 2");
+  });
+});
+
+/* ── 托管机镜像实验（ISSUE #3346）：once 档与「等托管机」前置 ──────────────────── */
+
+describe("once 档：三跳各只试一次，失败了也不重试（ISSUE #3346）", () => {
+  /** 自带迷你假件（runMirror 的 `harness` 在另一个 describe 的作用域里）：只数刀数与听读数。 */
+  function onceHarness(opts: { lfsCode?: number; lfsStderr?: string; pushCode?: number } = {}) {
+    const heard: Array<string> = [];
+    const pushes: Array<Array<string>> = [];
+    const lfsPushes: Array<Array<string>> = [];
+    const runGit = (args: Array<string>) => {
+      if (args[0] === "rev-parse") {
+        return {
+          code: 0,
+          stdout: `${SHA}
+`,
+          stderr: "",
+        };
+      }
+      if (args[0] === "ls-remote") {
+        return {
+          code: 0,
+          stdout: `${remoteRefLine(String(args[2] ?? "refs/heads/main"))}
+`,
+          stderr: "",
+        };
+      }
+      if (args.includes("lfs")) {
+        lfsPushes.push(args);
+        return { code: opts.lfsCode ?? 0, stdout: "", stderr: opts.lfsStderr ?? "" };
+      }
+      if (args.includes("push")) {
+        pushes.push(args);
+        return {
+          code: opts.pushCode ?? 0,
+          stdout: "",
+          /* egress 形状才进重试面（认证 / 拒收类一次交账）—— 缺省档要量的是重试阶梯本身。 */
+          stderr: opts.pushCode ? "Failed to connect to github.com port 443 after 21066 ms" : "",
+        };
+      }
+      return gitOk(args);
+    };
+    const io = {
+      cnbJson: () => null,
+      env: okEnv,
+      fetchImpl: (() => new Response(null, { status: 204 })) as unknown as typeof fetch,
+      log: (line: string) => heard.push(line),
+      mkdirSync: () => undefined,
+      root: "/repo",
+      runGit,
+      sleep: () => Promise.resolve(),
+      writeFileSync: () => undefined,
+    };
+    return { heard, io, lfsPushes, pushes };
+  }
+
+  it("推送那一跳：once ⇒ 恰好 1 刀；缺省 ⇒ 吃满重试阶梯", async () => {
+    const onceRun = onceHarness({ pushCode: 1 });
+    const onceCode = await runMirror({ ...onceRun.io, once: true });
+    expect(onceCode).toBe(CODE.NO_FACT);
+    expect(onceRun.pushes, "once 档不许有第二刀").toHaveLength(1);
+
+    const retryRun = onceHarness({ pushCode: 1 });
+    const retryCode = await runMirror(retryRun.io);
+    expect(retryCode).toBe(CODE.NO_FACT);
+    expect(retryRun.pushes.length, "缺省档必须还在重试（兜底语义没被顺手拆掉）").toBeGreaterThan(1);
+  });
+
+  it("LFS 那一跳：once ⇒ 恰好 1 刀；缺省 ⇒ 吃满 LFS 的重试阶梯", async () => {
+    const egress = "Failed to connect to github.com port 443 after 21066 ms";
+    const onceRun = onceHarness({ lfsCode: 1, lfsStderr: egress });
+    const onceCode = await runMirror({ ...onceRun.io, once: true });
+    expect(onceCode).toBe(CODE.FAIL);
+    expect(onceRun.lfsPushes, "once 档的 LFS 跳不许有第二刀").toHaveLength(1);
+
+    const retryRun = onceHarness({ lfsCode: 1, lfsStderr: egress });
+    await runMirror(retryRun.io);
+    expect(retryRun.lfsPushes.length, "缺省档必须还在重试").toBeGreaterThan(1);
+  });
+});
+
+describe("等托管机（ci-mirror-hosted-await，ISSUE #3346）", () => {
+  /** ref 行的旧值形态：同 PR 上一跑留下的 sha —— 不算命中（边界第 3 条）。 */
+  const OLD_SHA = "1111111111111111111111111111111111111111";
+  const AWAIT_REF = `refs/heads/${mirrorRefFor("2649")}`;
+
+  /** 组一套注入面：rev-parse 照答真 SHA；ls-remote 按场景给行（缺省回旧值 = 一直没推到）。 */
+  function awaitHarness(
+    opts: { lsResults?: Array<{ code: number; stdout?: string }>; tick?: number } = {},
+  ) {
+    const heard: Array<string> = [];
+    const written: Array<string> = [];
+    const ls: Array<Array<string>> = [];
+    const sleeps: Array<number> = [];
+    const lsSeq = opts.lsResults ? [...opts.lsResults] : null;
+    let t = 0;
+    const runGit = (args: Array<string>) => {
+      if (args[0] === "rev-parse") {
+        return { code: 0, stdout: `${SHA}\n`, stderr: "" };
+      }
+      if (args[0] === "ls-remote") {
+        ls.push(args);
+        const head = lsSeq?.shift();
+        if (head) {
+          return { code: head.code, stdout: head.stdout ?? "", stderr: "" };
+        }
+        return { code: 0, stdout: `${OLD_SHA}\t${AWAIT_REF}\n`, stderr: "" };
+      }
+      return gitOk(args);
+    };
+    const io = {
+      env: okEnv,
+      log: (line: string) => {
+        heard.push(line);
+      },
+    };
+    const extras = {
+      mkdirSync: () => undefined,
+      now: () => (t += opts.tick ?? 0),
+      root: "G:/fake-root",
+      runGit,
+      sleep: (ms: number) => {
+        sleeps.push(ms);
+        return Promise.resolve();
+      },
+      writeFileSync: (file: string, data: string) => {
+        written.push(`${file}
+${data}`);
+      },
+    };
+    return { extras, heard, io, ls, sleeps, written };
+  }
+
+  it("第一读就见本跑 HEAD ⇒ skipped，回执照落（「成功了就不在自托管跑」）", async () => {
+    const h = awaitHarness({
+      lsResults: [{ code: 0, stdout: `${SHA}\t${AWAIT_REF}\n` }],
+    });
+    const verdict = await maybeSkipViaHosted(h.io, h.extras);
+    expect(verdict.skipped).toBe(true);
+    expect(h.ls).toHaveLength(1);
+    const state = dispatchedState(h.written);
+    expect(state.dispatched).toBe(true);
+    expect(state.reason ?? "").toContain("托管机");
+    expect(h.heard.join("\n")).toContain("跳过推送");
+  });
+
+  it("ref 一直在但不是本跑 HEAD ⇒ 预算到点落回兜底，不写回执", async () => {
+    const h = awaitHarness({ tick: 100_000 });
+    const verdict = await maybeSkipViaHosted(h.io, h.extras);
+    expect(verdict.skipped).toBe(false);
+    expect(h.written, "没派发就不许落 dispatched:true（回读格会空等）").toEqual([]);
+    expect(h.heard.join("\n")).toContain("落回原有重试推送");
+    expect(h.sleeps.every((ms) => ms === HOSTED_AWAIT_POLL_INTERVAL_MS)).toBe(true);
+  });
+
+  it("每一读都没通（egress 抖动）⇒ 预算内继续等，到点落回兜底", async () => {
+    const h = awaitHarness({ lsResults: [{ code: 1 }, { code: 1 }], tick: 100_000 });
+    const verdict = await maybeSkipViaHosted(h.io, h.extras);
+    expect(verdict.skipped).toBe(false);
+    expect(h.heard.join("\n")).toContain("这一读没通");
+  });
+
+  it("前提取不到（令牌缺席）⇒ 直接落回 runMirror，一次远端读都不发", async () => {
+    const h = awaitHarness();
+    const verdict = await maybeSkipViaHosted(
+      { env: { ...okEnv, GITHUB_MIRROR_TOKEN: "" }, log: h.io.log },
+      h.extras,
+    );
+    expect(verdict.skipped).toBe(false);
+    expect(h.ls, "前提层的事归 runMirror 的话术，这一层不抢").toHaveLength(0);
   });
 });

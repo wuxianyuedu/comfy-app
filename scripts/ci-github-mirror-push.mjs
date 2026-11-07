@@ -101,6 +101,11 @@
  * node scripts/ci-github-mirror-push.mjs --readout     # 读数档：三态照打点、退码恒 0（push 档 / 本地自查）
  * node scripts/ci-github-mirror-push.mjs --dry-run     # 只打印计划与 payload，不发任何请求
  * node scripts/ci-github-mirror-push.mjs --master      # push 档那一格：推 master，不派发
+ * node scripts/ci-github-mirror-push.mjs --once --readout
+ *     # 托管机实验档（ISSUE #3346）：三跳各只试一次、不重试；配平台池那条影子流水线
+ * node scripts/ci-github-mirror-push.mjs --await-hosted
+ *     # 主列那一格（ISSUE #3346）：先等托管机实验格的结果 —— refs 见本跑 HEAD 即跳过推送，
+ *     # 预算（HOSTED_AWAIT_BUDGET_MS）到点没见才落回下面的正常推送
  * ```
  *
  * 环境变量：`GITHUB_MIRROR_TOKEN`（必填）、`GITHUB_MIRROR_REPO`（缺省
@@ -122,12 +127,15 @@ import { pushLfsObjects } from "./ci-mirror-lfs-push.mjs";
 import { buildRunName, dispatchPayload, EVENT_TYPE, resolvePrTitle } from "./ci-mirror-payload.mjs";
 import { verifyLfsObjects, verifyPushedRef } from "./ci-mirror-push-verify.mjs";
 import {
+  gitSubcommand,
+  gitTimeoutFor,
   PUSH_MAX_ATTEMPTS,
-  PUSH_TIMEOUT_MS,
-  REMOTE_READ_TIMEOUT_MS,
   RETRY_BACKOFF_MS,
   RETRY_MIN_ATTEMPT_MS,
+  VERIFY_MAX_ATTEMPTS,
 } from "./ci-mirror-retry-policy.mjs";
+/* 这两个纯函数随 #3346 迁去 retry-policy（给本文件腾 900 行硬闸余量）；仍从这里转出，导入面不改。 */
+export { gitSubcommand, gitTimeoutFor };
 import { createWireBudget } from "./ci-mirror-wire-budget.mjs";
 /* 纯拼装切出去之后仍从这里转出，用例与调用方的导入面不用动（见该模块「为什么单独一份」）。 */
 export { dispatchPayload };
@@ -310,55 +318,7 @@ export function resolveMasterContext(io) {
 }
 
 /**
- * 找出这一次 git 调用的**子命令**。
- *
- * 不能拿 `args[0]` 判：`pushArgs()` 为了不带本仓钩子，前面挂着 `-c core.hooksPath=`，
- * 于是推送那一跳的 `args[0]` 是 `-c`。按 `args[0]` 写会让推送**拿不到超时**而账面看不出
- * 来（限时的缺席不会红，只会退回「吃平台外框那一刀」的旧形态）。
- *
- * @param {string[]} args git 参数表
- * @returns {string} 子命令（`push` / `ls-remote` / `rev-parse`…）；一个都没有就回空串
- */
-export function gitSubcommand(args) {
-  for (let i = 0; i < args.length; i += 1) {
-    const a = String(args[i] ?? "");
-    /* `-c` 吃下一个参数（`core.hooksPath=` 那一形态），跳过它才能走到真子命令。 */
-    if (a === "-c") {
-      i += 1;
-      continue;
-    }
-    if (!a.startsWith("-")) {
-      return a;
-    }
-  }
-  return "";
-}
-
-/**
- * 这一跳该给多大墙钟：`ls-remote` 短、`push` 长，本地那几跳（`rev-parse`）不限。
- *
- * @param {string[]} args git 参数表
- * @returns {number | undefined} 交给 `spawnSync` 的 timeout（毫秒）；不给 = 不限
- */
-export function gitTimeoutFor(args) {
-  const sub = gitSubcommand(args);
-  if (sub === "ls-remote") {
-    return REMOTE_READ_TIMEOUT_MS;
-  }
-  /* LFS 那一跳（`lfsPushArgs` 的子命令是 `lfs`）与内容推送同量级：对象可以有几 MB，
-   * 首次送存量更久 ⇒ 给推送档，不给回读档（`ls-remote` 只读一个 ref，30s 足够）。 */
-  if (sub === "push" || sub === "lfs") {
-    return PUSH_TIMEOUT_MS;
-  }
-  return undefined;
-}
-
-/**
  * 真身：git 子进程执行器（测试注入点同形的假件在用例里给）。
- *
- * `opts.timeout` 是**这一次**尝试的墙钟（{@link runGitWithRetry} 按剩余预算裁出来的），
- * 给了就压过 {@link gitTimeoutFor} 的单跳上限。没有它，一个 4 分钟预算里可以塞进
- * 「首刀 240s + 二刀 240s」—— 预算就只是记账，不是上限。
  *
  * ⚠️ 超时不是「git 回了个非零」：`spawnSync` 到点是**本仓把它杀了**，`status` 变 `null`、
  * `error.code` 是 `ETIMEDOUT`。原样交出去只会读成一句「exit -1」，所以这里补一句回话，
@@ -496,7 +456,7 @@ export function explainRemoteProbeFailure(text) {
 /**
  * 执行镜像：推 HEAD → 回读远端 ref → 推 LFS → 核对对象 → 派发。每一跳各自独立成读数，前一跳没通后一跳不发。
  *
- * @param {{env: Record<string, string | undefined>, fetchImpl?: typeof fetch, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, now?: () => number, dryRun?: boolean, log?: (line: string) => void, readout?: boolean, root?: string, writeFileSync?: (file: string, data: string) => void, mkdirSync?: (dir: string, opts: object) => void, cnbJson?: (run: any, args: string[]) => any}} io
+ * @param {{env: Record<string, string | undefined>, fetchImpl?: typeof fetch, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, now?: () => number, dryRun?: boolean, log?: (line: string) => void, readout?: boolean, once?: boolean, root?: string, writeFileSync?: (file: string, data: string) => void, mkdirSync?: (dir: string, opts: object) => void, cnbJson?: (run: any, args: string[]) => any}} io
  *   `cnbJson` 是 PR 标题回读的取数动作（`ci-mirror-payload.mjs`；用例给假件，
  *   缺省走真 `cnb` 子进程）。
  * @returns {Promise<number>} 仓内三态退码
@@ -509,6 +469,9 @@ export async function runMirror(io) {
       console.log(line);
     });
   const readout = io.readout ?? false;
+  /* once（ISSUE #3346）：托管机实验档「三跳各只试一次」。墙钟预算照旧（首刀不裁的纪律
+   * 不变），次数收到 1 —— 「失败了也不重试」是这一档的实验语义本身，不是预算的副产品。 */
+  const once = io.once ?? false;
   /** 收尾小结（ISSUE #3106）：每个终局都把 wire / LFS / 派发并排成**最后一行**。
    *  @param {MirrorSummaryFields} fields */
   const summarize = (fields) => {
@@ -573,7 +536,7 @@ export async function runMirror(io) {
     budgetMs: wireBudget(),
     label: "推送",
     log,
-    maxAttempts: PUSH_MAX_ATTEMPTS,
+    maxAttempts: once ? 1 : PUSH_MAX_ATTEMPTS,
     now: io.now,
     prefix: "mirror",
     runGit,
@@ -601,6 +564,7 @@ export async function runMirror(io) {
   const refCheck = await verifyPushedRef({
     headSha: ctx.headSha,
     log,
+    maxAttempts: once ? 1 : VERIFY_MAX_ATTEMPTS,
     now: io.now,
     prefix: "mirror",
     ref: `refs/heads/${ctx.ref}`,
@@ -627,6 +591,7 @@ export async function runMirror(io) {
   const wireNote = `通（refs/heads/${ctx.ref} @ ${ctx.headSha.slice(0, 8)}）`;
   const lfs = await pushLfsObjects({
     log,
+    maxAttempts: once ? 1 : undefined,
     prefix: "mirror",
     runGit,
     runGitWithRetry,
@@ -775,13 +740,21 @@ const isTimeoutHandle = (h) =>
  * 用例吃假件（假定时器 / 永不 settle 的假装载）。
  *
  * @typedef {object} MirrorEntryIo
+ * @property {boolean} [awaitHosted] 等托管机实验格的前置（ISSUE #3346；主列那一格带）
  * @property {(handle: unknown) => void} [clearTimer] 清超时定时器（缺省 `clearTimeout`）
+ * @property {(dir: string, opts?: object) => void} [mkdirSync] 派发回执的建目录（透传给等托管机前置）
+ * @property {() => number} [now] 墙钟注入点（透传）
+ * @property {string} [root] 派发回执的落点根（透传）
+ * @property {typeof realRunGit} [runGit] git 执行器（透传）
+ * @property {(ms: number) => Promise<void>} [sleep] 等待注入点（透传）
  * @property {boolean} [dryRun]
  * @property {Record<string, string | undefined>} [env]
  * @property {() => Promise<{runMasterMirror: MirrorRunner}>} [importMaster] 取 `--master` 档执行面（缺省动态 import）
  * @property {(line: string) => void} [log]
  * @property {boolean} [master]
+ * @property {boolean} [once] 三跳各只试一次（托管机实验档，ISSUE #3346）
  * @property {boolean} [readout]
+ * @property {(file: string, data: string) => void} [writeFileSync] 派发回执的写文件（透传）
  * @property {MirrorRunner} [runPr] PR 档执行面（缺省 {@link runMirror}）
  * @property {(cb: () => void, ms: number) => unknown} [setTimer] 超时定时器（缺省 `setTimeout`）
  */
@@ -807,7 +780,7 @@ const isTimeoutHandle = (h) =>
  * @returns {Promise<number>} 交给进程的退出码
  */
 export async function runMirrorEntry(io = {}) {
-  const { dryRun = false, master = false, readout = false } = io;
+  const { awaitHosted = false, dryRun = false, master = false, once = false, readout = false } = io;
   const env = io.env ?? process.env;
   const log =
     io.log ??
@@ -833,12 +806,21 @@ export async function runMirrorEntry(io = {}) {
     lastLine = line;
     log(line);
   };
-  const runIo = { dryRun, env, log: track, readout };
+  const runIo = { dryRun, env, log: track, once, readout };
   /** @type {unknown} 定时器句柄（`setTimeout` 的返回形态由注入面决定） */
   let timer = null;
   /** @type {number} */
   let code = CODE.NO_FACT;
   try {
+    /* 托管机实验格的等待前置（ISSUE #3346）：refs 回读见本跑 HEAD ⇒ 托管机已推送并派发，
+     * 本格只落回执、跳过推送（「成功了就不在自托管跑」）；到点没见 ⇒ 落回原有推送（兜底）。
+     * 动态 import 与 --master 同一纪律：那一份静态 import 本文件的判据与帮助件。 */
+    if (awaitHosted && !master && !dryRun) {
+      const hosted = await import("./ci-mirror-hosted-await.mjs");
+      if ((await hosted.maybeSkipViaHosted(runIo, io)).skipped) {
+        return exitCodeFor(CODE.OK, readout);
+      }
+    }
     if (master) {
       /** @type {Promise<{kind: "timeout"}>} */
       const deadline = new Promise((resolve) => {
@@ -890,9 +872,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.met
   const dryRun = process.argv.includes("--dry-run");
   const readout = process.argv.includes("--readout");
   const master = process.argv.includes("--master");
+  const once = process.argv.includes("--once");
+  const awaitHosted = process.argv.includes("--await-hosted");
   /* 入口**不再**是顶层 await（文件头第 10 条）：求值同步收尾，跨文件那个环自然解开；
    * 等待的终点交给 `runMirrorEntry` 的显式超时，而不是 Node 的 exit 13 兜底。 */
-  runMirrorEntry({ dryRun, env: process.env, master, readout }).then((code) => {
+  runMirrorEntry({ awaitHosted, dryRun, env: process.env, master, once, readout }).then((code) => {
     process.exit(code);
   });
 }
