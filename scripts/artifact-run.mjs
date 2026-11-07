@@ -152,7 +152,10 @@ export function main(argv) {
       `[artifact-run] ✗ ${abortedAdvice({
         label: "产物级护栏（build + 数产物）",
         timeoutMs: ARTIFACT_TIMEOUT_MS,
-      })}        （读数：退出码 ${res.status ?? "信号"}）\n`,
+        /* 三态读数原值带过去（ISSUE #3332）：判据在 abortedAdvice 一处，这里不重判。 */
+        signal: res.signal ?? null,
+        errorCode: res.error?.code ?? null,
+      })}        （读数：退出码 ${res.status ?? "无"}，信号 ${res.signal ?? "无"}）\n`,
     );
     return 1;
   }
