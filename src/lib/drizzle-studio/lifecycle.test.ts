@@ -158,17 +158,19 @@ describe("openDrizzleStudio — 未运行时不打开空页面", () => {
 
 describe("退出记录的归属（ISSUE #2435）", () => {
   /** 假子进程：只给到本模块真会碰到的那几样（pid、两条输出流、事件）。 */
+  class FakeChild extends EventEmitter {
+    pid: number;
+    stdout = new EventEmitter();
+    stderr = new EventEmitter();
+
+    constructor(pid: number) {
+      super();
+      this.pid = pid;
+    }
+  }
+
   function fakeChild(pid: number) {
-    /* SAFETY: 类型断言已复核 */
-    const child = new EventEmitter() as EventEmitter & {
-      pid: number;
-      stderr: EventEmitter;
-      stdout: EventEmitter;
-    };
-    child.pid = pid;
-    child.stdout = new EventEmitter();
-    child.stderr = new EventEmitter();
-    return child;
+    return new FakeChild(pid);
   }
 
   /** 落盘行里「为什么退出」那几行（横幅 + `[exit]`）。写入器带时间戳前缀，

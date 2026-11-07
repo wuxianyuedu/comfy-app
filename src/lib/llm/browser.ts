@@ -3,6 +3,7 @@
 import type { LLMMessage, LLMRequestOptions } from "./types";
 import { readApiError, readJsonBody } from "~/lib/api-error";
 import { errorMessage } from "~/lib/error-message";
+import { isRecord } from "~/lib/is-record";
 
 export type ChatArgs = {
   messages: Array<LLMMessage>;
@@ -48,21 +49,20 @@ export async function streamChat({ messages, opts, onToken, signal }: ChatArgs):
     if (data === "[DONE]") {
       return;
     }
-    let json: { error?: unknown; token?: unknown };
+    let parsed: unknown;
     try {
-      /* SAFETY: 类型断言已复核 */
-      json = JSON.parse(data) as {
-        error?: unknown;
-        token?: unknown;
-      };
+      parsed = JSON.parse(data);
     } catch {
       /* 纯语法坏帧：跳过它，不因为一行坏 JSON 丢掉整条回答。 */
       return;
     }
-    if (typeof json.error === "string" && json.error !== "") {
-      throw new Error(json.error);
+    if (!isRecord(parsed)) {
+      return;
     }
-    const token = typeof json.token === "string" ? json.token : "";
+    if (typeof parsed.error === "string" && parsed.error !== "") {
+      throw new Error(parsed.error);
+    }
+    const token = typeof parsed.token === "string" ? parsed.token : "";
     if (token) {
       full += token;
       onToken?.(token);
@@ -112,15 +112,12 @@ export async function completeChat({ messages, opts }: ChatArgs): Promise<string
     body: JSON.stringify({ messages, stream: false, ...opts }),
   });
   /* 错误信封的读法收在一处（规范 16 §16.2.4.35）。 */
-  /* SAFETY: 类型断言已复核 */
-  const json = (await readJsonBody(res)) as {
-    content?: string;
-    error?: string;
-  };
+  const body = await readJsonBody(res);
   if (!res.ok) {
-    throw new Error(readApiError(json) ?? `LLM 请求失败 (${res.status})`);
+    throw new Error(readApiError(body) ?? `LLM 请求失败 (${res.status})`);
   }
-  return json.content ?? "";
+  const content: unknown = isRecord(body) ? body.content : undefined;
+  return typeof content === "string" ? content : "";
 }
 
 export type RemoteProbeResult = {
@@ -153,19 +150,14 @@ export async function probeRemoteApi(input: {
       detail: errorMessage(error, "网络请求失败"),
     };
   }
-  /* SAFETY: 类型断言已复核 */
-  const json = (await readJsonBody(res)) as {
-    detail?: unknown;
-    error?: unknown;
-    models?: unknown;
-    ok?: unknown;
-  };
+  const body = await readJsonBody(res);
+  const json: Record<string, unknown> = isRecord(body) ? body : {};
   /* `detail` 优先（它是这条路由的**业务字段**：探测结论的说明），
    * 错误信封交唯一读法（规范 16 §16.2.4.35）。 */
   const detail =
     typeof json.detail === "string"
       ? json.detail
-      : (readApiError(json) ?? `请求失败 (${res.status})`);
+      : (readApiError(body) ?? `请求失败 (${res.status})`);
   return {
     ok: json.ok === true,
     detail,

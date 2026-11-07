@@ -16,6 +16,16 @@ export type OllamaModel = {
 
 export type OllamaProbe = { models: Array<OllamaModel>; up: true } | { up: false };
 
+/** `/api/tags` 的一条模型条目：三字段都是视图直接消费的形状，缺一不算条目。 */
+function isOllamaModel(value: unknown): value is OllamaModel {
+  return (
+    isRecord(value) &&
+    typeof value.name === "string" &&
+    typeof value.size === "number" &&
+    typeof value.modified_at === "string"
+  );
+}
+
 /** Ollama 的 /api/tags 在 OpenAI 兼容 base URL（…/v1）后面，需要剥掉后缀。 */
 export function ollamaTagsUrl(baseUrl: string): string {
   return `${baseUrl.replace(/\/v1\/?$/, "")}/api/tags`;
@@ -47,8 +57,7 @@ export async function probeOllama(baseUrl: string): Promise<OllamaProbe> {
     const models = isRecord(body) ? body.models : undefined;
     return {
       up: true,
-      /* SAFETY: 类型断言已复核 */
-      models: Array.isArray(models) ? (models as Array<OllamaModel>) : [],
+      models: Array.isArray(models) ? models.filter(isOllamaModel) : [],
     };
   } catch {
     return { up: false };

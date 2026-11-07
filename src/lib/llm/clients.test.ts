@@ -18,42 +18,55 @@ import { ollamaTagsUrl, probeOllama, startOllama, stopOllama } from "~/lib/llm/o
 import { fetchLocalModels, fetchRemoteModels } from "~/lib/llm/model-catalog-client";
 import { testModelUsage, queryUsageTask } from "~/lib/llm/usage-test-client";
 import { saveMediaToLocalTemp } from "~/lib/llm/video-task-util";
+import { isRecord } from "~/lib/is-record";
 
 const fetchMock = vi.fn<typeof fetch>();
 
+/** fetch 首参收窄成 URL 字符串（运行时只可能是字符串或 Request）。 */
+function readCallUrl(input: unknown): string {
+  if (typeof input === "string") {
+    return input;
+  }
+  if (input instanceof Request) {
+    return input.url;
+  }
+  throw new TypeError("fetch 首参既不是字符串也不是 Request");
+}
+
 /** 取第 n 次 fetch 调用的 (url, init)，并把 init 收成可安全访问的形状。 */
 function callAt(n = 0): { init: RequestInit; url: string } {
-  const call = fetchMock.mock.calls[n]!;
-  // fetch 的首参在运行时一定是字符串 URL 或 Request；这里只做类型收窄，
-  // 不做字符串化（`String(obj)` 会得到 `[object Object]`，lint 也据此拦人）。
-  const arg: unknown = call[0];
-  /* SAFETY: 类型断言已复核 */
-  const url = typeof arg === "string" ? arg : (arg as Request).url;
-  return { url, init: call[1] ?? {} };
+  const call = fetchMock.mock.calls[n];
+  if (!call) {
+    throw new TypeError(`fetch 第 ${n} 次调用不存在`);
+  }
+  return { url: readCallUrl(call[0]), init: call[1] ?? {} };
 }
 
 /** 取第 n 次 fetch 调用的请求体（JSON 解析后的对象）。 */
 function sentBody(n = 0): Record<string, unknown> {
   const raw = callAt(n).init.body;
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(typeof raw === "string" ? raw : "{}") as Record<string, unknown>;
+  const parsed: unknown = JSON.parse(typeof raw === "string" ? raw : "{}");
+  return isRecord(parsed) ? parsed : {};
 }
 
 /** 取第 n 次 fetch 调用的请求头。 */
 function sentHeaders(n = 0): Record<string, string> {
-  /* SAFETY: 类型断言已复核 */
-  return (callAt(n).init.headers ?? {}) as Record<string, string>;
+  const headers: unknown = callAt(n).init.headers ?? {};
+  if (!isRecord(headers)) {
+    return {};
+  }
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (typeof value === "string") {
+      out[key] = value;
+    }
+  }
+  return out;
 }
 
-/** 一次性响应替身（`json()` / `text()` 都可用）。 */
+/** 一次性响应替身：真实 `Response`，`json()` / `text()` 都按同一份 JSON 回包工作。 */
 function jsonResponse(body: unknown, status = 200): Response {
-  /* SAFETY: 类型断言已复核 */
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: () => Promise.resolve(body),
-    text: () => Promise.resolve(JSON.stringify(body)),
-  } as unknown as Response;
+  return new Response(JSON.stringify(body), { status });
 }
 
 beforeEach(() => {
@@ -98,14 +111,7 @@ describe("ollama-client", () => {
   });
 
   it("2xx 却是非 JSON（端口上跑的是别的服务）→ 按未运行处理，而不是「0 个模型」", async () => {
-    /* SAFETY: 类型断言已复核 */
-    fetchMock.mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: () => {
-        throw new Error("not json");
-      },
-    } as unknown as Response);
+    fetchMock.mockResolvedValue(new Response("not json", { status: 200 }));
     await expect(probeOllama("http://x/v1")).resolves.toEqual({ up: false });
   });
 
@@ -127,14 +133,7 @@ describe("ollama-client", () => {
     await expect(startOllama()).rejects.toThrow("端口被占");
 
     // 响应体不是 JSON / 没有 error → 用兜底中文文案
-    /* SAFETY: 类型断言已复核 */
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 500,
-      json: () => {
-        throw new Error("x");
-      },
-    } as unknown as Response);
+    fetchMock.mockResolvedValue(new Response("not json", { status: 500 }));
     await expect(startOllama()).rejects.toThrow(/请确认已安装 Ollama/);
     fetchMock.mockResolvedValue(jsonResponse({}, 500));
     await expect(startOllama()).rejects.toThrow(/请确认已安装 Ollama/);
@@ -189,12 +188,7 @@ describe("model-catalog-client", () => {
   });
 
   it("响应体不是 JSON → 仍给 HTTP 文案（页面不该因探测而报错）", async () => {
-    /* SAFETY: 类型断言已复核 */
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 502,
-      json: () => Promise.reject(new Error("html")),
-    } as unknown as Response);
+    fetchMock.mockResolvedValue(new Response("<html></html>", { status: 502 }));
     await expect(fetchLocalModels()).resolves.toEqual({
       ok: false,
       models: [],
@@ -289,12 +283,7 @@ describe("usage-test-client", () => {
   });
 
   it("响应体不可解析 → 落到「请求失败 (status)」而不是抛错", async () => {
-    /* SAFETY: 类型断言已复核 */
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 500,
-      json: () => Promise.reject(new Error("html")),
-    } as unknown as Response);
+    fetchMock.mockResolvedValue(new Response("<html></html>", { status: 500 }));
     await expect(testModelUsage(INPUT)).resolves.toMatchObject({
       ok: false,
       detail: "请求失败 (500)",
@@ -338,12 +327,7 @@ describe("saveMediaToLocalTemp（本地落盘，失败一律静默）", () => {
   it("远端 URL：下载并落到 temp/usage-test/<模型名>/，扩展名随 URL", async () => {
     const spy = vi.spyOn(process, "cwd").mockReturnValue(tmpRoot);
     try {
-      /* SAFETY: 类型断言已复核 */
-      fetchMock.mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: () => Promise.resolve(new TextEncoder().encode("binary").buffer),
-      } as unknown as Response);
+      fetchMock.mockResolvedValue(new Response("binary", { status: 200 }));
 
       const dest = await saveMediaToLocalTemp("image", "my model/x", "https://i/a.png");
       expect(dest).not.toBeNull();
@@ -373,20 +357,10 @@ describe("saveMediaToLocalTemp（本地落盘，失败一律静默）", () => {
   it("HTTP 失败 / 空文件 / 网络抛错 → 返回 null 而不是抛错（落盘只是增强）", async () => {
     const spy = vi.spyOn(process, "cwd").mockReturnValue(tmpRoot);
     try {
-      /* SAFETY: 类型断言已复核 */
-      fetchMock.mockResolvedValue({
-        ok: false,
-        status: 404,
-        arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
-      } as unknown as Response);
+      fetchMock.mockResolvedValue(new Response(null, { status: 404 }));
       await expect(saveMediaToLocalTemp("video", "m", "https://v/x.mp4")).resolves.toBeNull();
 
-      /* SAFETY: 类型断言已复核 */
-      fetchMock.mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
-      } as unknown as Response);
+      fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
       await expect(saveMediaToLocalTemp("video", "m", "https://v/x.mp4")).resolves.toBeNull();
 
       fetchMock.mockRejectedValue(new Error("ECONNRESET"));

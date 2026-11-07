@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/lib/dom-props.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/dom-rect.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/dom-rect.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/drizzle-studio/lifecycle.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/file-io.test.ts", // 存量 17 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/film/bgm-client.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/form-props.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/is-record.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/list-filter.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/llm/browser.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/llm/clients.test.ts", // 存量 11 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/llm/model-catalog-client.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/llm/ollama-client.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/llm/ollama-client.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/llm/prompts.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/llm/prompts.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/llm/remote-model-schema.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/llm/server.test.ts", // 存量 7 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/llm/server.ts", // 存量 9 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/llm/types.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/llm/types.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/llm/usage-test-client.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/llm/usage-test.server.test.ts", // 存量 15 处 · 清账目标 B5 · 新代码不禁用
