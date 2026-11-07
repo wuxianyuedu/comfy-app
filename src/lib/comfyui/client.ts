@@ -82,8 +82,11 @@ declare global {
 
 const probeLog: SilentProbeGlobal = (globalThis.__comfySilentProbeV1 ??= {});
 
-/** 探测链路的会话标识：只有**同一会话 + 同一批地址**才算「重复」。 */
-const SESSION_ID = Math.random().toString(36).slice(2, 10);
+/** 探测链路的会话标识：只有**同一会话 + 同一批地址**才算「重复」。
+ *  用 `crypto.randomUUID()` 而不是 `Math.random()`：这串只是防刷屏的日志键，
+ *  但 CodeQL `js/insecure-randomness`（#15）认的是「安全上下文里的弱随机」；
+ *  安全随机源在本链路零成本（Node 24 / 现代浏览器都自带 `globalThis.crypto`）。 */
+const SESSION_ID = globalThis.crypto.randomUUID();
 
 /** 本次「探测全落空」是否值得再写一条日志（同一批地址、同一静默期内不重复写）。
  *  导出供回归测试直接断言节流判据。 */
