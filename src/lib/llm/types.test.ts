@@ -18,10 +18,9 @@ import {
 } from "./types";
 
 describe("resolveTaskTemperature", () => {
-  /* SAFETY: 类型断言已复核 */
-  const overrides = {
+  const overrides: Partial<Record<TaskType, number>> = {
     chat: 0.9,
-  } as Record<TaskType, number>;
+  };
 
   it("该任务配置了覆盖值 → 覆盖值优先（高于调用方显式温度）", () => {
     expect(
@@ -175,8 +174,7 @@ describe("isLoopbackBaseUrl", () => {
     expect(isLoopbackBaseUrl("https://api.openai.com/v1")).toBe(false);
     expect(isLoopbackBaseUrl("https://192.168.1.10/v1")).toBe(false);
     expect(isLoopbackBaseUrl("")).toBe(false);
-    /* SAFETY: 类型断言已复核 */
-    expect(isLoopbackBaseUrl(null as unknown as string)).toBe(false);
+    expect(isLoopbackBaseUrl(null)).toBe(false);
   });
 });
 

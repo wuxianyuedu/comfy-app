@@ -68,21 +68,38 @@ export function splitDomProps<T extends object, const Keys extends ReadonlyArray
   rest: Omit<T, Extract<Keys[number], keyof T>>;
 } {
   const own: Record<string, unknown> = {};
-  /* SAFETY: 类型断言已复核 */
-  const rest = { ...props } as Record<string, unknown>;
+  const rest: Omit<T, Extract<Keys[number], keyof T>> = { ...props };
+  /* `rest` 的精确类型不接受任意 `string` 键（键集在类型上是封闭的），而下面的
+   * 「搬」要按表里的键读写 —— 用一份 `Record` 视图操作同一个对象。 */
+  const restView: Record<string, unknown> = rest;
   for (const key of keys) {
     /* 调用处没传的私有键**不出现在 own 里**（不凭空补 `undefined`）——
      * 那会让「区分不出「没传」与「传了 undefined」」这个信息在出口里丢掉。 */
-    if (key in rest) {
-      own[key] = rest[key];
-      delete rest[key];
+    if (key in restView) {
+      own[key] = restView[key];
+      Reflect.deleteProperty(restView, key);
     }
   }
-  /* SAFETY: 类型断言已复核 */
-  return { own, rest } as {
-    own: Pick<T, Extract<Keys[number], keyof T>>;
-    rest: Omit<T, Extract<Keys[number], keyof T>>;
-  };
+  assertOwnProps<T, Keys[number]>(own, keys);
+  return { own, rest };
+}
+
+/**
+ * 「`own` 里的键全是私有键表里的」这一条的运行时校验，并据此收窄成 `Pick`。
+ *
+ * 值是从 `props` 原样搬来的（构造过程已保证）；能机器验证的是「没有表外的键」，
+ * 这正是 `own` 与 `Pick<T, …>` 之间除类型声明外唯一说得清的部分。
+ */
+function assertOwnProps<T extends object, K extends string>(
+  value: Record<string, unknown>,
+  keys: readonly K[],
+): asserts value is Pick<T, Extract<K, keyof T>> {
+  const allowed = new Set<string>(keys);
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) {
+      throw new TypeError(`splitDomProps: own 里出现了私有键表之外的字段 "${key}"`);
+    }
+  }
 }
 
 /**
@@ -102,9 +119,7 @@ export function commonOwnProps<A extends string, B extends string>(
   a: ReadonlyArray<A>,
   b: ReadonlyArray<B>,
 ): Array<A & B> {
-  /* SAFETY: 类型断言已复核 */
-  const setB = new Set<string>(b as ReadonlyArray<string>);
-  /* SAFETY: 类型断言已复核 */
-  /* SAFETY: 类型断言已复核 */
-  return (a as ReadonlyArray<string>).filter((k) => setB.has(k)) as Array<A & B>;
+  const setB = new Set<string>(b);
+  /* 命中 `b` 里的某个串 ⇒ 这个 `k`（来自 `a`）同时也是 `B` —— 判据就是成员关系。 */
+  return a.filter((k): k is A & B => setB.has(k));
 }

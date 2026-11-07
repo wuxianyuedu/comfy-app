@@ -91,6 +91,11 @@ export function remoteModelEntryFromDraft(draft: RemoteModelFieldValues): Remote
   };
 }
 
+/** zod 的 `issue.path[0]` 是任意键；只有字段 schema 里真有的键才写回错误表。 */
+function isRemoteModelFieldKey(key: string): key is keyof RemoteModelFieldValues {
+  return Object.hasOwn(remoteModelFieldSchema.shape, key);
+}
+
 /** 逐字段的第一条错误（键 = 字段名）。空对象 = 字段级全通过。
  *
  *  只做字段级判定：`model` 是否与既有条目重名、编辑态条目是否还存在 ——
@@ -111,15 +116,13 @@ export function validateRemoteModelFields(
   const out: Partial<Record<keyof RemoteModelFieldValues, string>> = {};
   for (const issue of parsed.error.issues) {
     const key = issue.path[0];
-    if (typeof key !== "string") {
+    if (typeof key !== "string" || !isRemoteModelFieldKey(key)) {
       continue;
     }
-    /* SAFETY: 类型断言已复核 */
-    if (out[key as keyof RemoteModelFieldValues] !== undefined) {
+    if (out[key] !== undefined) {
       continue;
     }
-    /* SAFETY: 类型断言已复核 */
-    out[key as keyof RemoteModelFieldValues] = issue.message;
+    out[key] = issue.message;
   }
   return out;
 }
