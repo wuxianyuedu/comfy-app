@@ -466,7 +466,7 @@
     #   2026-11-05 起 PR 档不再装依赖（GA 的安装 step 接管那个问题），本档只留
     #   平台读数与判决链；撤下来的每一格都得先在每日/GA 侧有执行者，判据同一条。
     COMFYAPP_CI_DAILY_GATES: >-
-      每日失败立案, 每日令牌权限读数, 每日工具链自证, 每日安装依赖, 每日 YAML 真解析,
+      每日失败立案, 每日令牌权限读数, 每日工具链自证, 每日安装依赖, 每日镜像出勤立案, 每日 YAML 真解析,
       每日 Python 可用性, 每日 Python 探针读数, 每日同步数据库表结构, 每日新鲜度账, 每日生产构建,
       每日 ESLint 零警告, 每日浏览器安装, 每日全量E2E, 每日 API 文档生成与自检, 每日单元测试, 覆盖率上报
     # ⚠️ `每日浏览器安装` 与 `每日全量E2E` 的相对顺序不许动：装那一件要下 ~120 MiB
@@ -934,6 +934,31 @@
       $ErrorActionPreference = "Stop"
       node scripts/ci-cp936-exit.mjs -- node scripts/check-pnpm-available.mjs
       node scripts/ci-cp936-exit.mjs -- node scripts/ci-install-deps.mjs
+  # ── 镜像出勤 / egress 立案（ISSUE #3278 方案 B：保持承重 + 补自动执行者）──────
+  #
+  # `pnpm check:mirror-attendance` 早就在（`scripts/check-mirror-attendance.mjs`），
+  # 三态 0/1/2、按**正文**认「已推 · 已派发」、逐形状里 `egress` 独立成键。但它此前是
+  # **按需档**：三份清单里没有一格跑它 ⇒ 断流只能靠人手动敲一次或翻某条 PR 的日志才知道。
+  # 这一格把「有人跑」变成事实，24h 窗口内出现 egress 就建单 / 在旧单追加读数（去重键在
+  # 标题里，一条诉求一张单）。**它不改**镜像格与 `GitHub 判决回读 / 判定` 的承重口径
+  # （#3046 一个名字都不许摘）：断流时 PR 照旧会红，变的是红之前已有机器读数把
+  # 「环境红 ≠ 内容红」写成 `environment-red=github-mirror-egress` 那一行。
+  #
+  # ⚠️ `--no-block` 是**必须**的，不是宽容：这格量的是节点出网（仓库改不了的事实），
+  # 而它排在 `每日单元测试` / `每日全量E2E` 之前 —— 间歇性 egress 几乎天天有，做成会红的格
+  # 就等于每天把后面整条每日链 skip 掉（§13.5.21）。非零折成退 0，但那句红话原样打在
+  # 屏幕上并给可粘贴的手工出口，由 `tests/ci-mirror-egress-issue.test.ts` 钉住不许静默。
+  # ⚠️ 判据自己**不重试也不判绿**：列表取不到 / 窗口没盖满 / 开着的单取不到 ⇒ 退 2「没结论」，
+  # 一次都不写（§13.6.3）。退 2 不算「今天没有 egress」。
+  #
+  # 排在 `每日安装依赖` **之后**不是排版：`makeRunner()` 的 `cnbSpawn()` 要装完依赖才解析得到
+  # 包真身（自托管 runner 宿主 PATH 上没有 `cnb`，见 `ci-token-scopes.mjs` 的五跑读数）；
+  # 同一跑的 `PR 失败立案` 好得很，正因为它在依赖装好之后。排在 `每日单元测试` 之前则是
+  # 「最后一条会红的格」那条顺序判据。它自己不红，也不许挪到那条之后。
+  - name: 每日镜像出勤立案
+    timeout: 5m
+    script: |
+      node scripts/ci-cp936-exit.mjs -- node scripts/ci-mirror-egress-issue.mjs --no-block
   # ── GH workflows 的**真解析**（ISSUE #3063，档位 ②：只挂每日档）────────────
   #
   # `check:ci-yaml` 只判三件：YAML 能解析、锚点 / 别名合法、CNB 每格有 `name` + `script`。

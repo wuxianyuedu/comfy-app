@@ -249,6 +249,10 @@ const DAILY_GATES = [
   "每日令牌权限读数",
   "每日工具链自证",
   "每日安装依赖",
+  /* ISSUE #3278 方案 B：镜像出勤的**自动执行者**（既有 `check:mirror-attendance` 是按需档，
+   * 三份清单里没有一格跑它）。排在装依赖之后（`cnbSpawn()` 要装完才起得来），
+   * 且必须在 `每日单元测试` 之前 —— 它自己带 `--no-block` 不红，也不许挪到那条之后。 */
+  "每日镜像出勤立案",
   /* ISSUE #3063（档位 ②）：GH workflows 的真解析，只挂每日档 —— 二进制钉在节点常驻根，
    * 取用零网络（`scripts/ci-actionlint.mjs`）。 */
   "每日 YAML 真解析",
@@ -341,6 +345,11 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   { name: "每日令牌权限读数", tier: "daily" },
   { name: "每日工具链自证", tier: "daily" },
   { name: "每日安装依赖", tier: "daily" },
+  {
+    name: "每日镜像出勤立案",
+    note: "ISSUE #3278 方案 B：把按需档 `check:mirror-attendance` 挂进每日档自动执行，24h 窗口出现 egress 就建单 / 追加读数；带 `--no-block`，量的是节点出网这一仓库改不了的事实，判它红会把 `每日单元测试` 之后整条链 skip 掉",
+    tier: "daily",
+  },
   { name: "每日 YAML 真解析", tier: "daily" },
   { name: "每日 Python 可用性", tier: "daily" },
   { name: "每日 Python 探针读数", tier: "daily" },
@@ -2816,6 +2825,31 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       DAILY_GATES[0],
       "`每日失败立案` 必须排在每日清单最前 —— 写在任何红格之后都会被那次红一起 skipped",
     ).toBe("每日失败立案");
+  });
+
+  /**
+   * ISSUE #3278 方案 B：`每日镜像出勤立案` 不能只是清单上多一个名字。三件都钉住 ——
+   * ① 点的仍是 `ci-mirror-egress-issue.mjs`；② 必带 `--no-block`（它量的是节点出网，
+   * 判红会把 `每日单元测试` / `每日全量E2E` 整条链 skip 掉，§13.5.21）；
+   * ③ 排位在 `每日安装依赖` 之后、`每日单元测试` 之前（前者决定 `cnbSpawn()` 起不起得来，
+   * 后者是「最后一条会红的格」那条顺序判据）。
+   */
+  it("`每日镜像出勤立案` 有执行者、带 --no-block，且排在装依赖之后 / 单元测试之前", () => {
+    const text = readRegisteredConfig();
+    const lines = executableScriptLines(text, "每日镜像出勤立案");
+    expect(lines, "`每日镜像出勤立案` 没有 script ⇒ 自动出勤又没有执行者了").toBeTruthy();
+    const joined = lines.join(" ");
+    expect(joined).toContain("scripts/ci-mirror-egress-issue.mjs");
+    expect(
+      joined,
+      "这一格不许判红：断流是节点出网事实，每天红一次就会把后面整条每日链 skip 掉",
+    ).toContain("--no-block");
+    const order = registeredDailyGateOrder(text);
+    const at = order.indexOf("每日镜像出勤立案");
+    expect(at, "`每日镜像出勤立案` 不在 COMFYAPP_CI_DAILY_GATES 里").toBeGreaterThanOrEqual(0);
+    expect(at).toBeGreaterThan(order.indexOf("每日安装依赖"));
+    expect(at).toBeLessThan(order.indexOf("每日单元测试"));
+    expect(DAILY_GATES).toContain("每日镜像出勤立案");
   });
 
   it("判据不是空转：喂进 CI 配置名时必须判成违规", () => {
