@@ -1,23 +1,23 @@
 #!/usr/bin/env node
 /**
- * `ci-mirror-wire-budget.mjs` —— 镜像格「探活 + wire 推送」**共用一份墙钟预算**（ISSUE #3234）。
+ * `ci-mirror-wire-budget.mjs` —— 镜像格推送那一跳的**墙钟预算起点**（ISSUE #3234 / #3252）。
  *
- * 立案现场：墙钟预算此前只挂在 `git push` 那一跳，探活 `git ls-remote` 仍是「3 次 +
- * 固定 5s/10s 退避」的旧口径。一次 PR 档镜像同步实测撞上 `Recv failure: Connection was
- * reset`，每次约 0.3s 就败，探活跑满 3 次、约 16s 便交账；而探活失败会**短路**掉后面的
- * 推送，于是 4 分钟预算一秒都没花。用户要的「起码试 3–5 分钟」实际只覆盖了三跳里的第二跳。
+ * 立案现场（#3234）：墙钟预算此前只挂在 `git push` 那一跳，探活 `git ls-remote` 仍是
+ * 「3 次 + 固定 5s/10s 退避」的旧口径。一次 PR 档镜像同步实测撞上 `Recv failure: Connection
+ * was reset`，每次约 0.3s 就败，探活跑满 3 次、约 16s 便交账；而探活失败会**短路**掉后面的
+ * 推送，于是 4 分钟预算一秒都没花。
  *
- * 这里的形状是「一个起点、两跳共用」：探活与推送各自把 `wireBudget()` 的当前值交给
- * `runGitWithRetry` 的 `budgetMs`。那个函数以**自己被调用的时刻**为起点扣时间，所以传
- * 「剩余量」正好等价于两跳共享同一个 deadline，而不是各领一份预算叠成两倍。
+ * #3252 起推送前不再有探活那一跳（双跳只是把同一次出网试两遍，现场探活 6 次耗 201s、
+ * 内容推送一次都没发起），这个模块只剩一个职责：**在推送第一刀之前打个起点**，把
+ * 「还剩多少预算」交给 `runGitWithRetry` 的 `budgetMs`。那个函数以**自己被调用的时刻**为
+ * 起点扣时间，传「剩余量」正好等价于整档共享同一个 deadline。
  *
- * 最坏墙钟随之从「探活 105s + 推送 240s + LFS 首刀 240s」降到「wire 档 240s + LFS
- * 首刀 240s = 480s」，仍在 `.cnb.yml` 的 10m 外框内，且比改动前更宽松。`gitTimeoutFor`
- * 会把有预算的重试裁到剩余量，探活首刀仍吃 30s 上限，慢但正常的那一读不会被掐死。
+ * 最坏墙钟：push 档 240s + LFS 首刀 240s = 480s，仍在 `.cnb.yml` 的 10m 外框内。
+ * `gitTimeoutFor` 会把有预算的重试裁到剩余量，首刀仍吃 `PUSH_TIMEOUT_MS` 上限。
  *
  * 纯函数、零副作用；`now` 可注入，用例不必真等 4 分钟。
  *
- * @module scripts/ci-mirror-wire-budget — 探活与 wire 推送共享的墙钟预算
+ * @module scripts/ci-mirror-wire-budget — 推送那一跳的墙钟预算起点
  */
 import { PUSH_RETRY_BUDGET_MS } from "./ci-mirror-retry-policy.mjs";
 
