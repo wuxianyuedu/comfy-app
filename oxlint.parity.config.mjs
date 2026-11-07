@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/lib/llm/types.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/llm/usage-test-client.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/llm/usage-test.server.test.ts", // 存量 15 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/log/capture-streams.server.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/log/capture-streams.server.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/log/log-cli-json.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/log/log-file-client.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/log/log-file-client.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/media/data-url.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/media/materials-client.test.ts", // 存量 5 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/media/size-preset-store.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/media/size-preset-store.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/media/task-images-client.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/page-window.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/process/kill-process-tree.posix.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/process/pnpm-resolve.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/process/probe-exe.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/process/process-launch.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/process/python-run.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/production/payload.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/production/production-client.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/production/review-rubrics.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/production/review-types.test.ts", // 存量 12 处 · 清账目标 B5 · 新代码不禁用

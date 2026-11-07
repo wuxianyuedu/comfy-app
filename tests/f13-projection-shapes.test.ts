@@ -10,15 +10,9 @@ import { stripComments } from "./helpers/strip-comments";
 
 /** `as never` 的逐处登记：文件 → `{ 次数, 为什么 }`。
  *  要加一条进来，先答「为什么不能改成把类型收对」：本批已把三处改掉（LLM 景别在**解析边界**用
- *  `normalizeShotType` 收进清单、仓储的投影参数改成真列清单）；剩下两处是签名桥接，最后一类是
- *  真欠账（F13′）。 */
-const AS_NEVER_LEDGER: Record<string, { count: number; reason: string }> = {
-  "src/lib/log/capture-streams.server.ts": {
-    count: 2,
-    reason:
-      "覆写 stream.write 时把 encoding/callback 两形参转交原实现，同一个「对齐第三方签名」的桥接（Node 的 write 重载在 TS 里收成 never 才通得过）。",
-  },
-};
+ *  `normalizeShotType` 收进清单、仓储的投影参数改成真列清单）；`capture-streams.server.ts`
+ *  的两处覆写桥接也已改用 `Reflect.apply` —— 现在全库 0 处，表保持为空（新增即由本用例判红）。 */
+const AS_NEVER_LEDGER: Record<string, { count: number; reason: string }> = {};
 
 /** 递归收集 `src/**` 的非测试 `.ts` / `.tsx`。 */
 function collectSource(dir: string, out: Array<string> = []): Array<string> {

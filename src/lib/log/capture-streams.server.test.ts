@@ -87,11 +87,8 @@ const written = { err: [] as Array<string>, out: [] as Array<string> };
 
 /** 一条流换成「只记录、不外发」的桩。 */
 function silentWrite(bucket: Array<string>): typeof process.stdout.write {
-  return (chunk: unknown) => {
-    bucket.push(
-      /* SAFETY: 类型断言已复核 */
-      typeof chunk === "string" ? chunk : Buffer.from(chunk as Uint8Array).toString("utf8"),
-    );
+  return (chunk: string | Uint8Array) => {
+    bucket.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
     return true;
   };
 }

@@ -28,6 +28,14 @@ import {
   type ProbeOutcome,
 } from "./probe-exe";
 
+/** 注入点只读 `error` / `status` / `signal`，而 `typeof spawnSync` 是重载类型：
+ *  单形返回值的假函数无法字面构造。运行期确认它可调用后再收窄。 */
+function assertSpawnSyncLike(value: unknown): asserts value is typeof spawnSync {
+  if (typeof value !== "function") {
+    throw new TypeError("假的 spawnSync 必须是可调用函数");
+  }
+}
+
 describe("probeExecutable：真起一次进程，三条出口分开答", () => {
   it("能起的进程答 ok（不喂任何与业务有关的参数）", () => {
     // `process.execPath` 在任何宿主上都一定起得来；`-e ""` 是空语句、退 0。
@@ -188,12 +196,12 @@ describe("边界：没有码的那种形态也不许编一个数出来充数", (
     /* `spawnSync` 不填 `error.code` 的形态在真机上没有稳定的造法，而**这一格的判据
      * 必须被走到**：把它读成「没有错误」就会让一条失败被报成可用。所以留一个注入点
      * （与 `executable-resolve.ts` 的 `probe` 同一个理由）。 */
-    /* SAFETY: 类型断言已复核 */
-    const fake = (() => ({
+    const fake: unknown = () => ({
       error: new Error("boom"),
       status: null,
       signal: null,
-    })) as unknown as typeof spawnSync;
+    });
+    assertSpawnSyncLike(fake);
     const got = probeExecutable("whatever", [], 1000, fake);
     expect(got.ok).toBe(false);
     expect(got.failure).toEqual({ kind: "spawn-error", code: "UNKNOWN" });

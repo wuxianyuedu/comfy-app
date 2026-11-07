@@ -131,6 +131,14 @@ export function tailWindow<T>(items: ReadonlyArray<T>, size: number): Array<T> {
   return items.slice(items.length - n);
 }
 
+/** `tailWindowAppend` 只在窗口已满时原地搬移，因此它的入参在运行期必须是真数组
+ *  （`ReadonlyArray` 仅是类型层约束）；这不是数组时与原来 `shift()` 一样抛错。 */
+function assertMutableArray<T>(value: ReadonlyArray<T>): asserts value is Array<T> {
+  if (!Array.isArray(value)) {
+    throw new TypeError("tailWindowAppend: items 必须是数组");
+  }
+}
+
 /**
  * **尾部窗口的增量版**：把 `item` 追加进窗口，并保持「最多 `size` 条」。
  *
@@ -160,8 +168,8 @@ export function tailWindowAppend<T>(items: ReadonlyArray<T>, item: T, size: numb
   }
   /* 窗口已满：原数组长度就是上限，`shift` + `push` 后仍恰为 `n` 条，
    * 不必再切片。 */
-  /* SAFETY: 类型断言已复核 */
-  const next = items as Array<T>;
+  assertMutableArray(items);
+  const next = items;
   next.shift();
   next.push(item);
   return next;
