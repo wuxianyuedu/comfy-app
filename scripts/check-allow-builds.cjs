@@ -84,6 +84,16 @@
  * 一个目录读不到与「一份源码文件被删」不同形，所以这一格收紧只落在判据自己身上：
  * 不改共用件、不改其他判据的读数，也不改 `vanishedNote()` 的话术。
  *
+ * ── 读到了但读不成：输入不可信（ISSUE #3274） ─────────────────────
+ *
+ * 第三种「没读成」：文件在、字节读到了，但内容不是合法 JSON（或不是对象）——
+ * 安装被中断写了一半、盘上损坏都可能长这样。此前 `scriptBearingPackage()` 解析
+ * 失败返回 `null`，与「无站点」同形 ⇒ 调用处 `continue`，既不计 `unread` 也不进
+ * `problems`，照旧「✅ 覆盖了全部」+ exit 0。那一支恰好可能带 postinstall。
+ * 现在这一支单独计 `untrusted`，与 `unread` 同口径以 exit 2 不给结论
+ * （§13.6.3），但话术各念各的：`vanishedNote()` 的「扫描期间消失（工作区并发
+ * 变更）」对解析失败不成立 —— 解析失败时工作区可能完全静止。
+ *
  * ── 为什么是条件触发（`--staged`），而不是每次提交都扫 ──────────
  *
  * 一次全树扫描 4.5s，而**能让「带构建脚本的依赖」发生变化的输入只有三个文件** ——
@@ -107,7 +117,8 @@
  *   node scripts/check-allow-builds.cjs            # 全量判（手动 / 合并前那一跳）
  *   node scripts/check-allow-builds.cjs --staged   # 只在本次提交动了依赖面时判
  * 退出码：0 = 名单覆盖齐全（或未触及依赖面而跳过）；1 = 有带构建脚本的依赖未登记，
- * 或扫描面读不到；2 = `--staged` 下读不到暂存清单，或扫描中真有条目没读到
+ * 或扫描面读不到；2 = `--staged` 下读不到暂存清单，或扫描中真有条目没读到，
+ * 或读到的 package.json 内容不可信（解析失败 / 不是对象）
  * （判据没跑成 / 没给结论，都不冒充跳过或「已覆盖」）。
  */
 const path = require("node:path");
@@ -253,21 +264,25 @@ function collectInstalledPackages() {
  * 空串不算：`"postinstall": ""` 这类残留不执行任何东西，pnpm 也不会为它要求批准 ——
  * 把它算成站点就是误报。
  *
+ * 三态（ISSUE #3274）：解析失败 / 解析出来不是对象 ⇒ `"untrusted"`（字节读到了
+ * 但内容不可信，调用方必须计数，不许当「无站点」跳过）；合法对象但没有生命周期
+ * 站点 ⇒ `null`；有站点 ⇒ 包信息对象。
+ *
  * @param {string} raw 文件正文（消失的那一路由调用方处理）
- * @returns {{name: string, version: string, scripts: string[]} | null} 无站点返回 `null`
+ * @returns {{name: string, version: string, scripts: string[]} | null | "untrusted"}
  */
 function scriptBearingPackage(raw) {
   let parsed;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    // 装出来的 package.json 读到了字节却解析不了 —— 这一条输入不可信，按「没有站点」
-    // 跳过（既不崩、也不凭空造一条违规）。注意它与「扫描期间消失」不同形：
-    // readForScan() 已经把字节交回来了，只有它返回 null（ENOENT）才计进 unread。
-    return null;
+    // 装出来的 package.json 读到了字节却解析不了 —— 输入不可信。它与「扫描期间
+    // 消失」不同形（readForScan() 已经把字节交回来了），也与「无站点」不同形：
+    // 那份坏内容里可能正好藏着一条 postinstall，跳过它等于凭空判绿。
+    return "untrusted";
   }
-  if (!parsed || typeof parsed !== "object") {
-    return null;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return "untrusted";
   }
   const scripts = parsed.scripts;
   if (!scripts || typeof scripts !== "object") {
@@ -306,6 +321,8 @@ if (process.argv.includes("--staged")) {
 const problems = [];
 let scanned = 0;
 let unread = 0;
+let untrusted = 0;
+const untrustedPaths = [];
 const bearing = [];
 
 if (dirExists(WORKSPACE_FILE)) {
@@ -334,6 +351,11 @@ if (dirExists(WORKSPACE_FILE)) {
           continue;
         }
         const found = scriptBearingPackage(raw);
+        if (found === "untrusted") {
+          untrusted += 1;
+          untrustedPaths.push(path.relative(ROOT, entry.absPath));
+          continue;
+        }
         if (found === null) {
           continue;
         }
@@ -369,14 +391,31 @@ if (dirExists(WORKSPACE_FILE)) {
   );
 }
 
-/* ── 三态结论（ISSUE #3269） ───────────────────────────────────────
+/* ── 三态结论（ISSUE #3269 / #3274） ───────────────────────────────
    排掉 hoisted 层之后，`unread > 0` 只剩「这一轮真有包目录 / package.json 没读到」
-   这一种形状。少读一份就可能正好少读一个带 postinstall 的包，此时那句
+   这一种形状；`untrusted > 0` 是另一族：字节读到了但内容不可信（解析失败 /
+   不是对象）。两族都可能让一个带 postinstall 的包躲过对账，此时那句
    「覆盖了全部」是伪证。§13.6.3「判据读不到 ≠ 判过了且没问题」⇒ 这一格
    优先于绿、以 exit 2 不给结论；已经读到的违规事实照旧列出，不因为「没读全」
-   被吞掉（exit 2 与 exit 1 一样会挡住提交）。 */
-if (unread > 0) {
-  console.error(vanishedNote(unread).trim());
+   被吞掉（exit 2 与 exit 1 一样会挡住提交）。两族话术各念各的：vanishedNote()
+   的「扫描期间消失（工作区并发变更）」对解析失败不成立。 */
+if (unread > 0 || untrusted > 0) {
+  if (unread > 0) {
+    console.error(vanishedNote(unread).trim());
+  }
+  if (untrusted > 0) {
+    console.error(
+      `\n⚠️ 另有 ${untrusted} 份 package.json 读到了字节但内容不可信` +
+        "（JSON 解析失败或不是对象）：",
+    );
+    for (const p of untrustedPaths) {
+      console.error(`  · ${p}`);
+    }
+    console.error(
+      "  文件在原地、字节也读到了，坏的是内容本身（安装被中断 / 产物损坏）——\n" +
+        "  里面可能正好藏着一条构建脚本，跳过它等于凭空判绿。",
+    );
+  }
   if (problems.length > 0) {
     console.error("\n❌ 已经读到的那部分输入里，另有以下违规：");
     for (const problem of problems) {
@@ -385,7 +424,7 @@ if (unread > 0) {
   }
   console.error(
     `\n  本轮扫了 ${scanned} 个安装条目、判到 ${bearing.length} 个带构建脚本的依赖，` +
-      "但上面那几份输入没读到。\n" +
+      "但上面那几份输入没读到或读不成。\n" +
       "  ⚠️ allowBuilds 判据这一轮没跑全 —— 按 §13.6.3 不给结论（exit 2）：" +
       "既不判绿、也不判红，更不冒充「覆盖了全部」。\n" +
       "  出口：重跑一次；若稳定复现，先 `pnpm install --frozen-lockfile` 把 node_modules 修好。",
