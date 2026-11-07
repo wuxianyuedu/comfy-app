@@ -1600,6 +1600,11 @@
 # 判决链一个字都不在这里重写：定性是 `ci-build-readout.mjs` 的 `classifyBuildOutcome()`
 # （与 `pnpm ship --diagnose` / 每日档同一份），取数是它的 `fetchBuildList()` +
 # `check-daily-attendance.mjs` 的 `fetchBuildDetails()`，写单是 `ship-issue-new.mjs`。
+# ⚠️ 判「红没红」只认 `fetchBuildDetails()` 那份**逐格读数**：这一格挂在 `endStages`，
+# 列表里当前这一跑的构建级 `status` 恒 `pending`（要等整条流水线收尾才落终态），
+# 拿它当门槛就是恒真 ⇒ 一张单都写不出来（ISSUE #3298 的现场：桌包档连红六次、
+# 立案格每次都只念一句「还没到终态」）。逐格还在跑 / 详情取不到落成 `running` /
+# `unknown`，由既有 `decideAction()` 判「不构成结论 ⇒ 不写」，没有第二套判据。
 # 落点按「有没有人能收」分两档：`CNB_PULL_REQUEST_IID` 在场上 ⇒ 评论在那张 PR 下
 # （一条诉求一张单，不另开单）；认不出来 ⇒ 按格名去重建单。取舍与两种形状都在
 # `scripts/ci-pr-failure-issue.mjs` 头注里，这里不重抄。
@@ -1649,6 +1654,12 @@
 #     与本锚点是两种不同的形状，别拿同一句话概括。
 #
 # 去重键跟着 `--lane` 走 ⇒ 标题是 `ci(package): 桌包档红在「…」`，与 PR 那一族互不相混。
+#
+# ⚠️ 立案格跑了却一句结论都没写，是这一档曾经**常态化失效**的形状（ISSUE #3298）：
+# 2026-10-29 ~ 11-04 连红六次、`makensis 0x2`，立案格每跑都只念「状态是 pending ⇒
+# 还没到终态」。根因不在桌包、在立案格自己：`endStages` 执行时列表里本跑的构建级
+# `status` 恒 `pending`，那道「等终态」的门槛恒真。修法见上面的判决链那一段 ——
+# 判红改认逐格读数，列表这一侧只用来认「这一跑是谁 / 事件是什么」。
 .package-fail-stage: &package_fail_stage
   endStages:
     - name: 桌包失败立案

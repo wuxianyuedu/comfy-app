@@ -34,12 +34,13 @@ const build = (
   sn: string,
   event = "pull_request",
   eventUrl = "https://cnb.cool/moon-read/comfy-app-t3/-/pulls/2323",
+  status = "error",
 ) => ({
   sn,
   event,
   eventUrl,
   createTime: "2026-10-25T03:08:18.000Z",
-  status: "error",
+  status,
 });
 
 /**
@@ -557,6 +558,113 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
     ).toBe(false);
     // 读链真的走到了逐格日志那一层（不是靠 --from 绕过去的）。
     expect(calls.some((c) => c.includes("get-build-stage"))).toBe(true);
+  });
+});
+
+/**
+ * ISSUE #3298 的回归面：这一格挂在 `endStages`，**执行时列表里当前这一跑的构建级
+ * `status` 恒 `pending`**（整条流水线还没收尾，平台没给它终态）。旧实现拿这个字段当
+ * 「到没到终态」的门槛 ⇒ 恒真 ⇒ 立案格跑了却一句结论都不写（桌包档连红六次、
+ * 一张单没落）。判「红没红」改认 `get-build-status` 的逐格读数：主链 stages 此刻
+ * 已经跑完、逐格状态已落定，立案格自己在飞那一格属 endStages 可见性面、不进判决池。
+ *
+ * 三条钉住：① 列表 pending + 逐格 error ⇒ 照常判红并念出要写（旧实现在这里短路）；
+ * ② 逐格也还在跑 ⇒ 仍不写（「取不到 / 没结论」的兜底没被删掉）；
+ * ③ PR 档同形（不带 --lane）也不许再被列表 status 挡住。
+ */
+describe("ISSUE #3298：判红只认逐格读数，不认列表里恒 `pending` 的构建级 status", () => {
+  /** 一台会应答的假执行者：列表认 `status`，逐格详情认 `get-build-status`。 */
+  function runner(listStatus: string, detailState: Verdict) {
+    const calls: Array<string> = [];
+    const heard: Array<string> = [];
+    const code = main({
+      argv: ["--lane", "package", "--dry-run"],
+      slug: "moon-read/comfy-app-t3",
+      env: { CNB_BUILD_ID: "sn-pkg", CNB_PULL_REQUEST_IID: "" },
+      log: (s: string) => heard.push(s),
+      run: (cmd: string, args: Array<string>) => {
+        const key = args.join(" ");
+        calls.push(`${cmd} ${key}`);
+        const json = (data: unknown) => ({
+          status: 0,
+          stdout: JSON.stringify({ status: 200, data }),
+          stderr: "",
+          error: null,
+        });
+        if (key.includes("get-build-logs")) {
+          /* `endStages` 现场：列表里本跑的 status 是 pending，不是 error。 */
+          return json([build("sn-pkg", "crontab: 0 3 * * *", "", listStatus)]);
+        }
+        if (key.includes("get-build-status")) {
+          return json(detail(detailState).data);
+        }
+        if (key.includes("list-issues")) {
+          /* 查得到「开着的单」、且确实一张都没有 ⇒ 走新建（不是「查不到 ⇒ 不写」）。
+           * `openIssues()` 认 `{data: []}` 这一形；给 `{}` 会被判成取不到列表。 */
+          return json([]);
+        }
+        return json({});
+      },
+    });
+    return { code, out: heard.join("\n"), calls };
+  }
+
+  it("列表 `status=pending` + 逐格 error ⇒ 判 failed 并念出要建单（旧实现恒短路成「还没到终态」）", () => {
+    const { code, out, calls } = runner("pending", "failed");
+    expect(out).not.toContain("还没到终态");
+    expect(out).toContain("判定 failed");
+    expect(out).toContain("档 package");
+    /* 没有 PR 可挂 ⇒ 落点是「按格名建单」；dry-run 只念不写。 */
+    expect(out).toContain("新建一张：ci(package): 桌包档红在「类型检查」");
+    expect(code, out).toBe(CODE.DONE);
+    /* 读链真的走到了逐格详情（不是靠 --from 绕过去的），且一个写命令都没发。 */
+    expect(calls.some((c) => c.includes("get-build-status"))).toBe(true);
+    expect(
+      calls.some((c) => c.includes("create-issue") || c.includes("post-pull-comment")),
+      `dry-run 却发了写命令：${calls.join(" / ")}`,
+    ).toBe(false);
+  });
+
+  it("负控：列表 pending、逐格也还在跑 ⇒ 仍不写（`running` 由既有 decideAction 判 no-fact）", () => {
+    const { code, out } = runner("pending", "running");
+    expect(out).toContain("判定 running");
+    expect(out).toContain("不写");
+    expect(out).not.toContain("新建一张");
+    expect(code).toBe(CODE.NO_FACT);
+  });
+
+  it("PR 档同形：不带 --lane 时列表 pending 也不许被挡住（--dry-run 走完读链）", () => {
+    const calls: Array<string> = [];
+    const heard: Array<string> = [];
+    const code = main({
+      argv: ["--dry-run"],
+      slug: "moon-read/comfy-app-t3",
+      env: { CNB_BUILD_ID: "sn-live", CNB_PULL_REQUEST_IID: "2323" },
+      log: (s: string) => heard.push(s),
+      run: (cmd: string, args: Array<string>) => {
+        const key = args.join(" ");
+        calls.push(`${cmd} ${key}`);
+        const json = (data: unknown) => ({
+          status: 0,
+          stdout: JSON.stringify({ status: 200, data }),
+          stderr: "",
+          error: null,
+        });
+        if (key.includes("get-build-logs")) {
+          return json([build("sn-live", "pull_request", "", "pending")]);
+        }
+        if (key.includes("get-build-status")) {
+          return json(detail("failed").data);
+        }
+        return json({});
+      },
+    });
+    const out = heard.join("\n");
+    expect(out).not.toContain("还没到终态");
+    expect(out).toContain("判定 failed");
+    expect(out).toContain("--dry-run：「类型检查」→ 评论在 PR #2323 下");
+    expect(code, out).toBe(CODE.DONE);
+    expect(calls.some((c) => c.includes("get-build-status"))).toBe(true);
   });
 });
 

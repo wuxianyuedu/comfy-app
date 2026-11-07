@@ -532,7 +532,7 @@ describe("fetchBuildList：两种信封都要认出列表", () => {
 
   /**
    * `event` 为空 ⇒ 发命令时**不带 `--event`**（什么事件的都要）。这一形是 ISSUE #2550 加的：桌面成品包那一档的立案口要按「我自己这一跑」查列表，而那一档挂在 `crontab` / 手点上。
-   * 沿用「只查 `pull_request`」的过滤就查不到自己（现场：事件念成 `(取不到)`、`self` 为 null，连「还没到终态」那一道都跳过了）。
+   * 沿用「只查 `pull_request`」的过滤就查不到自己（现场：事件念成 `(取不到)`、`self` 为 null，连「这一跑是谁」都认不出来）。
    */
   it("`event` 为空 ⇒ 命令里不带 `--event`（查得到自己那一跑）", () => {
     const seen: Array<Array<string>> = [];
