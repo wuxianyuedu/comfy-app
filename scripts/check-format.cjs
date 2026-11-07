@@ -221,6 +221,11 @@ const IGNORE_GLOBS = [
   "docs/generated/**",
   /* ② 非源码产物:Rust 壳的构建输出(被嵌套的 src-tauri/.gitignore 忽略)。 */
   "src-tauri/target/**",
+  /* 根级配置（ISSUE #3293）：全量档只逐 `SCAN_ROOTS` 跑，根级文件不在任何扫描根
+   * ⇒ 这一条**移不移出都不改变全量档的判决面**（移出是假动作，只会把 `isScanned()`
+   * 的声明面变宽）。两份存量（`drizzle.config.ts` / `oxlint.config.ts`）已在本批迁到
+   * oxfmt 100 列；它们的实际判决面是 `--changed` / `--staged`（被碰时才判），
+   * 与全量档无关。留着的意义是「声明 ⇄ 事实」对齐。 */
   "*.config.{js,ts,mjs,cjs}",
   "*.js",
 ];
@@ -297,8 +302,10 @@ function isScanned(rel) {
  * 翻成硬闸之后，改动面两档对存量本来就不红（只判「这次改动带来的那批」），
  * 白名单在那两档上剩下的唯一效果就是「本仓自己的脚本 / 用例从来没被格式判据看过」
  * —— 而平台那一格真点到过 `scripts/**` 的文件（#2942 重跑现场：三份 `.mjs`/`.cjs`
- * 被点名），说明判据面**本该**含它。全量档照旧（存量迁移另有 #2710 的账，
- * 本仓实测 136 份：scripts/tests/tools/e2e 134 + 根级 config 2 —— 谁碰谁迁）。
+ * 被点名），说明判据面**本该**含它。全量档照旧（存量迁移另有 #2710 的账；
+ * #3251 迁完 scripts/tools/e2e 后，只剩 `tests/**` 与根级匹配 `GLOBS` 的文件不在
+ * 全量档面内（2026-11-07 实测 tests 368 份 + 根级 7 份；其中根级 2 份的格式债已由
+ * ISSUE #3293 清掉）—— 谁碰谁迁）。
  *
  * @param {string} rel 仓库根相对 POSIX 路径
  */
