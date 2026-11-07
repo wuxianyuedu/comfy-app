@@ -15,3 +15,13 @@
 - 这道闸只挂 master 档（`runMasterMirror`）；PR 档不加。
 - 用例：后代拒推（双 sha、不发起 push）、分叉拒推、完整克隆缺对象拒推、
   shallow 放行、读失败照推（不付退避）、ref 不存在照推、相等 / 落后照推。
+- 首跑读数（`cnb-rqs-1k6r4p7b7`，HEAD `d67bda56` 的 push 构建）：`ls-remote` 撞
+  `Recv failure: Connection was reset` ⇒ 逐字记「前闸：闸不可用（ls-remote 没通）→ 照推」，
+  随即推送 6 次仍 `Failed to connect to github.com port 443 after 21046 ms`、预算 201s
+  用尽 ⇒ `exit 2`（读数档折绿）—— 出网抖动时闸**没有**把整格短路成 `exit 2`。
+- 同日 PR 档首跑（`cnb-32d-1k6r5d2ud`，PR #3344）撞
+  `fatal: Authentication failed for 'https://github.com/wuxianyuedu/comfy-app.git/'`：
+  PR 档不加这道闸，那一格走的是共用的「推送失败三类话术」，重跑属环境层。
+- 本地校验：`tests/ci-github-mirror-push.test.ts`（含 7 条前闸用例）、
+  `tests/ci-pr-failure-issue.test.ts`、`tests/ci-mirror-drift.test.ts` 全绿；
+  `tsc --noEmit`、`pnpm lint`、oxlint 清零规则、基础设施文件长度闸均为 0。
