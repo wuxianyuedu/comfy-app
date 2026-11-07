@@ -127,9 +127,9 @@ function collect(parsed) {
   const problems = [];
   // 扫描根既支持相对仓库根(默认 src/),也支持绝对路径(测试把 fixtures 放 tmp)。
   const absBase = path.isAbsolute(SCAN_DIR) ? SCAN_DIR : path.join(ROOT, SCAN_DIR);
-  const relBase = path.isAbsolute(SCAN_DIR)
-    ? SCAN_DIR.replaceAll("/", "/")
-    : SCAN_DIR.replace(/^\/+/, "").replaceAll("/", "/");
+  /* `replaceAll("/", "/")` 是恒等替换（CodeQL #18/#19 `js/identity-replacement`），
+   * 原先两处都是空操作；去掉，行为一字不变。相对根的头部斜杠仍按老口径剥掉。 */
+  const relBase = path.isAbsolute(SCAN_DIR) ? SCAN_DIR : SCAN_DIR.replace(/^\/+/, "");
   const files = walk(absBase, relBase);
   for (const rel of files) {
     const shared = parsed?.get(rel);
