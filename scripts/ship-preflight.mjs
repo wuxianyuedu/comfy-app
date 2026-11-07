@@ -3,7 +3,9 @@
  * ship-preflight.mjs —— `pnpm ship` 的**阶段 0**：本检出的读数与本地门（规范 §13.6 / §13.5.25 / §13.10.9）。
  *
  * 为什么单独一件：这一格判的全是**本检出自己的事实**（在不在分支上、带进来哪些碎片、
- * 依赖新鲜度、本机实例在不在跑），与 `ship-platform.mjs` 那四段正相反 —— 后者只经
+ * 依赖新鲜度、本机实例在不在跑、提交前预跑一遍钩子 D0 的只读形态判据 —— ISSUE #3200，
+ * 机制在 `ship-preflight-d0.mjs`，清单只从钩子文本解析、不抄第二份），与
+ * `ship-platform.mjs` 那四段正相反 —— 后者只经
  * `run` 摸平台、不读本检出的形状；而把它留在 `ship.mjs` 里时，装配层被这一段的
  * 200 多行推过了 `check-infra-file-size.cjs` 的 900 硬闸（#2189 之后第二次撞上）。
  * 拆法照旧按职责、不按行数。
@@ -24,6 +26,8 @@
  * 有的要把累积的 `codes` 交给 `finish` 收口、dry-run 又走自己那一条。把
  * 「哪个出口怎么收尾」留在装配层，本文件一次也不打印「结论」。
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import process from "node:process";
 
 import {
@@ -33,6 +37,13 @@ import {
   planCommands,
   readFreshnessState,
 } from "./ship-core.mjs";
+import {
+  decideD0PreRun,
+  formatD0PreRunLine,
+  parseD0RunLines,
+  preRunD0Steps,
+  selectPreRunSteps,
+} from "./ship-preflight-d0.mjs";
 import { HANDLE_SOURCES } from "./dev-handle.mjs";
 import { DEV_HANDLE_ENV_KEY, issueAuthoring, ticketReading } from "./ship-ticket.mjs";
 import { logInstanceReading } from "./ship-reap.mjs";
@@ -379,6 +390,67 @@ export async function runPreflightStage(ctx) {
         "不构成结论，也不念成「红了」。",
     );
     codes.push(CODE.READOUT_MISSING);
+  }
+
+  /* ── D0 预跑（ISSUE #3200）：提交之前把形态的红一次报齐 ──────────────
+   * 清单不在这里抄第二份 —— 从 `.githooks/pre-commit` 的 D0 组里解析
+   * `run "<标签>" <命令>` 步骤行（与 `check-gate-executors.cjs` 认的是同一批行），
+   * 钩子里加一步，预跑自动跟上。每一步按**原样命令**起子进程，红不红只看各判据
+   * 自己的退出码（红线③：不另立判定）；预跑红 ⇒ 本格落 RED 停手，与「提交钩子
+   * 会拦下它」同权 —— 不是「提示一下照跑」，省的就是那次提交往返。
+   * 清单取不到（文件不在 / 组形状变了）⇒ 念一句跳过、不冒充结论：
+   * 提交时钩子照判，这一格只是不预付。跳过条件与耗时读数由机制层给
+   * （`ship-preflight-d0.mjs`），这里只接线。 */
+  const d0 = decideD0PreRun({
+    enabled: opt.preflightD0,
+    dryRun: opt.dryRun,
+    adds: opt.adds,
+    stagedCount: staged.length,
+    depsState: freshState,
+  });
+  if (!d0.run) {
+    if (d0.why !== null) {
+      log(formatD0PreRunLine({ failures: 0, total: 0, ms: 0, skippedLine: d0.why }));
+    }
+  } else {
+    let hookText = null;
+    try {
+      hookText = readFileSync(join(root, ".githooks", "pre-commit"), "utf8");
+    } catch {
+      /* 读不到 ⇒ 下面统一按「取不到」处置，不在这里冒充结论。 */
+    }
+    const parsed = hookText === null ? { steps: [], closed: false } : parseD0RunLines(hookText);
+    /* 零步同样算「取不到」：登记处里总有步骤（用例对真钩子钉着），
+     * 读出零只可能是步骤行的形状漂了 —— 不许把「0 步全绿」念成结论。 */
+    if (!parsed.closed || parsed.steps.length === 0) {
+      log(
+        formatD0PreRunLine({
+          failures: 0,
+          total: 0,
+          ms: 0,
+          skippedLine: "取不到 .githooks/pre-commit 的 D0 清单 ⇒ 提交钩子照判",
+        }),
+      );
+    } else {
+      const steps = selectPreRunSteps(parsed.steps);
+      const pre = preRunD0Steps({ steps, run, relay, log });
+      log(
+        formatD0PreRunLine({
+          failures: pre.failures.length,
+          total: steps.length,
+          ms: pre.ms,
+          skippedLine: null,
+        }),
+      );
+      if (pre.failures.length > 0) {
+        /* 有步骤没跑起来（退出码取不到）⇒ 落「没跑起来」家族，不念成
+         * 「有事实是红的」—— 与上面新鲜度那一格同口径。 */
+        const inconclusive = pre.failures.some((f) => f.status === null || f.status < 0);
+        codes.push(inconclusive ? CODE.NOT_RUN : CODE.RED);
+        return { action: "finish", codes };
+      }
+      codes.push(CODE.GREEN);
+    }
   }
 
   return {
