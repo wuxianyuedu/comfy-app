@@ -30,6 +30,7 @@ vi.mock("~/lib/core/logger", () => ({
 
 import {
   ComfyViewError,
+  getHistory,
   getView,
   resolveComfyBase,
   probeComfyBase,
@@ -290,5 +291,22 @@ describe("getView — 取字节的地址组装与失败形状", () => {
   it("连不上时不包成 ComfyViewError（那是「上游答了」的形状），原样把 fetch 的失败交出去", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("fetch failed"));
     await expect(getView("a.png", "", "input")).rejects.toBeInstanceOf(TypeError);
+  });
+});
+
+describe("getHistory — promptId 只作为单个路径段拼接", () => {
+  it("`../` 与 `?` 被编码，不能改写请求路径（CodeQL #12）", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+    await getHistory("../../system_stats?x=1");
+    const calledUrl = fetchSpy.mock.calls[0]?.[0];
+    if (typeof calledUrl !== "string") {
+      throw new Error("fetch 的输入不是字符串 URL");
+    }
+    expect(calledUrl).toContain("/api/history/..%2F..%2Fsystem_stats%3Fx%3D1");
+    /* 裸拼的两个症状都要消失：路径穿越与查询串注入。 */
+    expect(calledUrl).not.toContain("../");
+    expect(calledUrl).not.toContain("?x=1");
   });
 });
