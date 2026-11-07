@@ -144,17 +144,42 @@ export function classifyOutcome(res) {
 /**
  * 「被预算砍」与「跑完了但非零」要长得不一样 —— 一段给调用方直接打的话术。
  *
- * @param {{label: string, timeoutMs: number}} args `label` 是这一档的名字（如「全量单测 + 覆盖率」）
+ * aborted 一族有**三种成因**，下一动作完全不同，共用一句就会把人引去查错的地方
+ * （ISSUE #3332 的现场：GA hosted runner 上子进程在收尾段被信号打死，读到的却是
+ * 「预算砍」—— 而那一跑只活了 3m07s，30 分钟预算从未到）：真预算砍会带
+ * `error=ETIMEDOUT`（spawnSync 超时的形状），信号杀是 `error` 不在而 `signal` 在
+ * —— 源头上分得开，话术跟着分三态。与 `e2e-run-playwright.mjs` 的 `runChild()`
+ * 「退出码 / 被信号打死 / 起不来」三条出口同一条拆法（§13.6.4 第十五处）。
+ *
+ * 不带 `signal` / `errorCode` 调用时保持预算话术（兼容没带读数的调用方）。
+ *
+ * @param {{label: string, timeoutMs: number, signal?: string | null,
+ *           errorCode?: string | null}} args `label` 是这一档的名字（如「全量单测 + 覆盖率」）
  * @returns {string}
  */
-export function abortedAdvice({ label, timeoutMs }) {
-  return (
-    `${label}的子进程**在墙钟预算处被砍**（${Math.round(timeoutMs / 60_000)} 分钟）—— ` +
-    "这是**测量没发生**，不是判据红：\n" +
-    "        · 它不该被记进任何一份新鲜度账（账记的是「上一次真跑绿」）；\n" +
-    "        · **要修的不是用例** —— 先看这台机器上还有谁在跑，让开再跑一次；\n" +
-    "        · **不要**按「判据红」去隔离重跑单份文件，那回答的是另一个问题。\n"
-  );
+export function abortedAdvice({ label, timeoutMs, signal = null, errorCode = null }) {
+  /* 三态共用的首尾两条：测量没发生（账不记），也不许按「判据红」去隔离重跑。
+   * 各态自己的那条弹点按既有 lit+lit 形态收成常量，return 用单一模板串插值
+   * —— `+` 拼标识符会撞 prefer-template 的已清零棘轮（ISSUE #3016）。 */
+  const head = "        · 它不该被记进任何一份新鲜度账（账记的是「上一次真跑绿」）；\n";
+  const tail = "        · **不要**按「判据红」去隔离重跑单份文件，那回答的是另一个问题。\n";
+  const oomBullet =
+    "        · 预算没到（真被预算砍会带 error=ETIMEDOUT，不是这个形状）—— 最大嫌疑是内存耗尽\n" +
+    "          （OOM killer）或被外部杀树：先取内核证据（dmesg 的 OOM 行 / 内存读数）定性，再复跑整档；\n";
+  const notStartedBullet =
+    "        · **要修的不是用例** —— 查可执行文件落点与参数形态（`pnpm check:toolchain` / §2.1.1）；\n";
+  const budgetBullet = "        · **要修的不是用例** —— 先看这台机器上还有谁在跑，让开再跑一次；\n";
+  const prefix = `${label}的子进程`;
+  if (signal && !errorCode) {
+    /* 外击那一态：OOM killer / 外部杀树。下一动作是「先定性再复跑」，不是「让开」
+     * —— hosted runner 上没有「别人」，共享节点语境的那句话在这里会指错方向。 */
+    return `${prefix}**被信号打死**（${signal}）—— 这是**测量没发生**，不是判据红：\n${head}${oomBullet}${tail}`;
+  }
+  if (errorCode && errorCode !== "ETIMEDOUT") {
+    return `${prefix}**压根没起来**（error=${errorCode}）—— 这是**测量没发生**，不是判据红：\n${head}${notStartedBullet}${tail}`;
+  }
+  /* ETIMEDOUT（真预算砍），或调用方没带读数 ⇒ 预算话术（缺省保持旧形状）。 */
+  return `${prefix}**在墙钟预算处被砍**（${Math.round(timeoutMs / 60_000)} 分钟）—— 这是**测量没发生**，不是判据红：\n${head}${budgetBullet}${tail}`;
 }
 
 /**
@@ -264,8 +289,11 @@ export function hostUnsafeArgs(args, viaHost) {
  *           stdio?: "pipe"|"inherit"|"ignore", name?: string, platform?: NodeJS.Platform,
  *           command?: { command: string, prefixArgs: string[] } | null }} [options]
  * @returns {{ ok: boolean, stdout: string, stderr: string, status: number | null,
- *             error: NodeJS.ErrnoException | null, command: string, args: string[] }}
- *   `status === null && error` = 命令没起来（判据是 `error`，不是退出码）
+ *             signal: NodeJS.Signals | null, error: NodeJS.ErrnoException | null,
+ *             command: string, args: string[] }}
+ *   `status === null && error` = 命令没起来（判据是 `error`，不是退出码）；
+ *   `error` 不在而 `signal` 在 = 被信号打死（外击；真预算砍是 `error=ETIMEDOUT` + `SIGTERM`）。
+ *   旧形状没有 `signal`，读数里打不出「被什么杀」，信号杀会被念成预算砍（ISSUE #3332）。
  */
 export function runPnpmSync(
   args = [],
@@ -294,6 +322,7 @@ export function runPnpmSync(
         `PATH 上找不到可用的 pnpm（未发现 ${name} 的任何可执行形态）。\n` +
         "  自查：pnpm check:toolchain（或 node scripts/check-pnpm-available.mjs）",
       status: null,
+      signal: null,
       error: Object.assign(new Error(`${name} not found on PATH`), {
         code: "ENOENT",
       }),
@@ -331,6 +360,7 @@ export function runPnpmSync(
       stdout: "",
       stderr: message,
       status: null,
+      signal: null,
       error: Object.assign(new Error(message), { code: "EINVAL" }),
       command: invocation.command,
       args: invocation.args,
@@ -341,7 +371,7 @@ export function runPnpmSync(
   echoCommandLine(invocation.command, invocation.args);
   const result =
     /** @type {{ status: number | null, stdout?: string, stderr?: string,
-     *   error?: NodeJS.ErrnoException | null }} */ (
+     *   signal?: NodeJS.Signals | null, error?: NodeJS.ErrnoException | null }} */ (
       spawnSync(invocation.command, invocation.args, {
         cwd,
         env,
@@ -359,6 +389,9 @@ export function runPnpmSync(
     stderr: String(result.stderr ?? ""),
     // 「没起来」时 status 为 null：保留 null 而不是 `?? 0`，调用方必须显式分流。
     status: error ? null : (result.status ?? null),
+    // 被信号打死时的信号名：旧形状丢掉它，读数就分不出「SIGTERM=预算砍」与
+    // 「SIGKILL=外击（OOM / 杀树）」（ISSUE #3332 的现场正是后者被念成前者）。
+    signal: result.signal ?? null,
     error,
     command: invocation.command,
     args: invocation.args,
