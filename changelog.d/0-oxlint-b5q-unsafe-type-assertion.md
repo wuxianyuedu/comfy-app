@@ -13,7 +13,7 @@
   - `llm/prompts`：`extractJson` 结果改 `asRecord(...) ?? {}`；`characterNames` 先 `Array.isArray`
     再逐元素 `String`。`llm/browser` / `model-catalog-client` / `ollama-client` / `remote-model-schema`
     同口径（`isRecord`、`isOllamaModel`、`isRemoteModelFieldKey` + `Object.hasOwn`）。
-  - `llm/types`：`isLoopbackBaseUrl` 形参放宽为 `unknown`（`?? ""` 成为真实防线，删掉一处
+  - `llm/types`：`isLoopbackBaseUrl` 形参放宽为 `unknown`（非字符串输入回落空串，删掉一处
     `no-unnecessary-condition` 逐行禁用）；`resolveTaskTemperature.overrides` 放宽为
     `Partial<Record<TaskType, number>>`（实现本就按「有键且非空才算覆盖」裁决）。
   - 用例：`Response` / `File` / `FileReader` / `ReadableStream` / 子进程一律用真实对象或

@@ -212,7 +212,8 @@ export function splitExtraModels(raw: unknown): ExtraModelSplit {
  * 回环服务；真远端模型不会用回环地址访问。与服务端 describeFetchFailure 的判定一致。
  */
 export function isLoopbackBaseUrl(url: unknown): boolean {
-  return /^(?:https?:\/\/)?(?:localhost|127\.|\[::1\])/i.test(String(url ?? "").trim());
+  const value = typeof url === "string" ? url : "";
+  return /^(?:https?:\/\/)?(?:localhost|127\.|\[::1\])/i.test(value.trim());
 }
 
 /** 判定一个「远端条目」是否为误存的本地 ollama。
