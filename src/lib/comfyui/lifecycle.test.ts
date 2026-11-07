@@ -488,9 +488,12 @@ describe("getComfyUiStatus — 状态三态组合", () => {
 
 describe("关闭流程 — 进程树回收判据", () => {
   it("关闭时回收整棵进程树（Windows 经 taskkill /T /F），禁止单杀（否则子进程残留）", async () => {
-    // 局部 spy：不能全局 spyOn process.kill —— 同一文件里多个用例依赖真实的
-    // kill 语义（探活、进程收敛），全局替换会把它们一起打坏。
-    const processKillSpy = vi.spyOn(process, "kill");
+    /* 局部 spy，且**只记账、不真发信号**：本用例把目标 pid 桩成 4321，透传的
+     * `process.kill` 会真的往机器上这个 pid 发 SIGTERM —— CI runner 上它可能
+     * 正好是跑本文件的 vitest worker（实测：worker 被 SIGTERM 杀死，整跑判红）。
+     * 要断言的是「发没发、发的什么信号」，不是 OS 真收到，所以 mock 实现返回
+     * true 即可；仍保持局部（其余用例要真实的 kill 语义）。 */
+    const processKillSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
     const { stopComfyUiProcess } = await import("./lifecycle");
     const { findPidForMainPy } = await import("./proc-detect");
 
@@ -520,7 +523,8 @@ describe("关闭流程 — 进程树回收判据", () => {
   it.runIf(process.platform !== "win32")(
     "POSIX：keepAlive 拉起的实例按进程组回收（拿不到组会静默留孤儿）",
     async () => {
-      const processKillSpy = vi.spyOn(process, "kill");
+      /* 同上：pid 是桩值（5566），真发 SIGTERM 可能打到 runner 上的无关进程。 */
+      const processKillSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
       const { stopComfyUiProcess } = await import("./lifecycle");
       const { findPidForMainPy } = await import("./proc-detect");
       const { probeComfyBase } = await import("./client");

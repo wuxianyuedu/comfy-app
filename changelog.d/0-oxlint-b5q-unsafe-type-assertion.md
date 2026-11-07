@@ -1,3 +1,10 @@
+## Fixed
+
+- `comfyui/lifecycle.test.ts` 的「进程树回收」两条用例把 pid 桩成 4321 / 5566 后，
+  `vi.spyOn(process, "kill")` 仍透传真实实现 —— 等于往 runner 上这两个 pid 真发 SIGTERM，
+  CI 上正好命中跑本文件的 vitest worker（`Worker exited unexpectedly with signal SIGTERM`，整跑判红）。
+  改为 `mockImplementation(() => true)`：只记账、不发真信号；断言（发过 / 信号名 / 目标类型）不变。
+
 ## Changed
 
 - **B5 子批 17：20 份 / 74 处 `typescript/no-unsafe-type-assertion` 清零**（判决面删掉这 20 份路径行）。
