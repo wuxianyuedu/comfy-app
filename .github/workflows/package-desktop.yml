@@ -72,6 +72,7 @@ jobs:
           lfs: true
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
+        id: setup-pnpm
         uses: pnpm/action-setup@v6
 
       - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
@@ -85,6 +86,29 @@ jobs:
 
       - name: 安装依赖（better-sqlite3 原生编译吃 VS 生成工具，镜像自带）
         run: pnpm install --frozen-lockfile
+
+      # `pnpm tauri build` 的 `beforeBuildCommand` 是 `node scripts/build-desktop.mjs`：
+      # 它跑在 Node 子进程里，再按名字 spawn `pnpm build`。action-setup 只把
+      # `<dest>/node_modules/.bin` 加进 PATH，而 npm 在 Windows 给那里摆的是 `pnpm` /
+      # `.cmd` / `.ps1` 三个垫片 —— Node 的 `spawnSync({shell:false})` 起不来，于是
+      # build-desktop 第一步就报「PATH 上找不到可用的 pnpm」，整格 1 秒红（ISSUE #3305）。
+      # CNB 同款档能全绿，靠的是安装格 `ci-install-deps.mjs` 把 pnpm 真身放回 PATH；
+      # 这里对位补上：pnpm 12 的原生 `pnpm.exe` 在 `bin_dest` 的兄弟目录 `pnpm/`。
+      # 补的是**真身目录**（不是 .bin 垫片目录），pwsh 与 Node 两条解析面都够得着。
+      - name: 把 pnpm 真身目录补进 PATH（供 beforeBuildCommand 的 Node 子进程）
+        shell: pwsh
+        env:
+          # `${{ }}` 不直接写进 `run:`：经 env 传入，避免表达式文本被宿主二次解释。
+          PNPM_BIN_DEST: ${{ steps.setup-pnpm.outputs.bin_dest }}
+        run: |
+          $pnpmPkg = Join-Path (Split-Path $env:PNPM_BIN_DEST -Parent) 'pnpm'
+          if (-not (Test-Path $pnpmPkg)) {
+            Write-Error "action-setup 装出的 pnpm 包目录不在预期落点：$pnpmPkg"
+            exit 1
+          }
+          # 补的是**真身目录**（不是 .bin 垫片目录）：pwsh 与 Node 两条解析面都够得着。
+          $pnpmPkg | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Write-Host "[package-desktop] pnpm 真身目录已补进 PATH：$pnpmPkg"
 
       # NSIS 工具镜像做成跨跑缓存：key 锁死 NSIS_PLAN 的版本（3.13），版本升上去 = 同批改
       # 这里与 scripts/tauri-tools-cache.mjs 的 NSIS_PLAN。path 即 mirrorDir 的落点
