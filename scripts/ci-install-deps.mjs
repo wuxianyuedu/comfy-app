@@ -398,10 +398,16 @@ export function pnpmCli(deps = {}) {
   const write = deps.write ?? ((s) => process.stdout.write(s));
   const boot = ensurePnpmOnPath({ ...deps, write });
   if (boot.probing === null) {
+    /* 逐条把「问过哪几处、各自什么结论」念出来：桌包档这一族最贵的形状是「补 PATH
+     * 那一格假绿、本格静默回落」—— 只看一句「没找到」分不清是 PATH 没补对，还是这台
+     * 机器本来就没有 pnpm（ISSUE #3305 第二轮）。与 main() 的失败出口同一份 consulted。 */
     write(
       `[ci-install-deps] ⚠ 这一格没找到可用的 pnpm（${boot.detail}）⇒ 仍按裸名字 \`pnpm\` 起，` +
         "失败由调用方报\n",
     );
+    for (const line of boot.consulted) {
+      write(`[ci-install-deps]   ${line}\n`);
+    }
     return { command: "pnpm", prefixArgs: [], resolved: false };
   }
   return { command: boot.probing, prefixArgs: [], resolved: true };
