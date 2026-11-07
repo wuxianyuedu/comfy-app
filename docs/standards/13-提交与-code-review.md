@@ -8714,6 +8714,49 @@ token 建单是通的（#2273 / #2274 就是那么建的），CI 那一侧**还�
 没权限就去平台把节点身份的权限补上，**不要**改成「静默跳过当作没问题」。
 这一格的账在 ISSUE #2345。
 
+##### 镜像出勤也要有人问：`每日镜像出勤立案`（ISSUE #3278 方案 B）
+
+**补的是「判据在场、执行者不在场」的第二次**。§13.5.23 那一格把「每日那一跑红了」自动变成一张单；
+`scripts/check-mirror-attendance.mjs`（#3046 期望第 2 条）则把「`GitHub 镜像同步` 那一格
+有没有推成、没推成是什么形状」判成三态 `0 出勤 / 1 缺勤 / 2 没结论`，按**正文**认
+「已推 · 已派发」、七类形状各有下一动作，`egress` 独立成键。但那份判据是**按需档**：
+`COMFYAPP_CI_GATES` / `_PUSH_GATES` / `_DAILY_GATES` 三份清单里没有一格跑它 ⇒ 节点到
+`github.com:443` 的断流，只有在有人手动敲一次 `pnpm check:mirror-attendance`、或某条 PR
+恰好红了被人翻日志时才看得见。这和 §13.5.13 那一族逐字同形。
+
+**还有一层更隐蔽的**：修 `judgeMirrorAttendance()` 前，窗口里只要有一次 `present` 就退 0。
+24h 窗口 `6 present + 2 egress` 仍是 `code=0 / verdict=present` —— 就算给它挂个每天跑的
+执行者，间歇性断流期间也会天天绿、一张单都不立。于是 #3278 在同一份判据里加了一条
+**不改退码**的 `signal`（`stable` / `intermittent-egress` / `egress-only` /
+`other-absent` / `no-verdict`）：退码答「这一格在窗口内出过勤」，信号单独答
+「其中几跑是被节点出网卡住的」。`--json` 带 `signal`，日志档带 `signal=` 那一行。
+
+**方案 B 的边界（治理口径，不越权）**：`ci-github-mirror-push.mjs` 一个字不改，不给镜像格
+加回 `--readout`，`GitHub 判决回读 / 日志分块 ×3 / GitHub 判决判定` 的 fail-closed 一字不动
+（#3046「在这一跳被证实之前清单一个都不许摘」）。断流时 PR **照旧会红** —— 变的只是红之前
+≤24h 已有一张单把「环境红 ≠ 内容红」写成机器标记 `environment-red=github-mirror-egress`。
+把这一格做成会红的判据是错的：CNB stage 串行且失败即停，`每日单元测试` / `每日全量E2E` 的
+唯一执行者就排在后面，而间歇性 egress 几乎天天有（§13.5.21）。所以平台那一跳带
+`--no-block`：非零折成退 0，但**那句红话原样打在屏幕上**并给可粘贴的手工出口。
+
+**取数 / 判决 / 写单一处都不另立**（§12.12 / §12.18）：`collectMirrorAttendance()` 收起
+「窗口翻页 → 逐跑读格 → 判决 → 信号」整段，`main()` 与每日档执行者读同一份 `payload`；
+开着的单 = `openDailyIssues()`；建单与「写后独立回读」= `runNewIssue()` /
+`runAppendIssueComment()`。去重键是标题里的固定串 `ci(mirror): GitHub 镜像同步 egress 出勤读数`，
+构建号 / 时刻 / 次数都不进键（#2399）。正文只含读数、覆盖自证与下一动作，**根因写「未判定」**；
+治理口径本身在 #3278 跟踪，出勤读数是另一族（#2251 一条诉求一张单）。
+
+**三态**与仓内其余档同口径：列表取不到 / 窗口没盖满 / 开着的单取不到一律退 2「没结论」，
+**不新建、不判绿**（§13.6.3）。排位在 `每日安装依赖` 之后（`cnbSpawn()` 要装完依赖才解析得到
+包真身，自托管 runner 宿主 PATH 上没有 `cnb`，见 §13.10.16 的五跑读数）、`每日单元测试`
+之前（最后一条会红的格那条顺序约束）。
+
+**判据**：`tests/check-mirror-attendance.test.ts`（信号五形 / 现场 6+2 仍 `code=0` /
+headline 点名 egress / `--json` 与日志档都有信号）、
+`tests/ci-mirror-egress-issue.test.ts`（四道门 / 正文只报读数 / `--no-block` 只改退码不改话术）、
+`tests/no-platform-ci-config.test.ts`（这一格有执行者、带 `--no-block`、排位两头）逐层钉住。
+条数随用例变，这里不写死它。
+
 #### 13.5.24 本地钩子的预算是 5 分钟：同一把尺接到组 C（ISSUE #2022）
 
 **为什么这是一个硬约束而不是偏好**：pre-commit 慢过 5 分钟，人的真实反应是 `--no-verify` ——
