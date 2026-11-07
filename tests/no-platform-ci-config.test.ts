@@ -2437,10 +2437,14 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toBe(true);
 
     const rows = pipelineLockAssignments(text).filter((r) => r.stagesRef === "*package_gates");
+    /* 定时 11-05 起迁 GA ⇒ CNB 侧只剩两个触发口：手点（`.cnb/web_trigger.yml` 那个按钮）
+     * 与 `api_trigger_package`（ISSUE #3297）。补后者是因为按钮要一双手、而 `#3302` 那格
+     * NSIS 现场读数从合入起一次都没跑到（`web_trigger_package` 派发读数 total=0）——
+     * 判「读数格有没有执行者」这件事，得先有一个能被 CLI / NPC 触发的口。 */
     expect(
       rows.map((r) => r.event).sort(),
-      "桌包档在 CNB 只剩 `web_trigger_package` 一个触发口（定时已迁 GA；按钮在 `.cnb/web_trigger.yml`）",
-    ).toEqual(["web_trigger_package"]);
+      "桌包档在 CNB 该有 `web_trigger_package` + `api_trigger_package` 两个触发口（定时已迁 GA）",
+    ).toEqual(["api_trigger_package", "web_trigger_package"]);
     expect(
       new Set(rows.map((r) => r.lockRef)).size,
       "同一份清单的触发口点的不是同一把锁 —— 同一件事会被排成两次互掐",
