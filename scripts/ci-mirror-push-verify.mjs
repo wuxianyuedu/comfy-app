@@ -171,7 +171,9 @@ export function parseLfsObjects(stdout) {
  */
 export async function verifyLfsObjects(deps) {
   const { fetchImpl, log, prefix, repo, runGit, token } = deps;
-  const list = runGit(["lfs", "ls-files", "--json"]);
+  /* `-c core.quotePath=false`：`--json` 的 `name` 是路径，转义过的读不出原样
+   * （ISSUE #2272）；与 `ci-mirror-lfs-push.mjs` 的 `--long` 同口径。 */
+  const list = runGit(["-c", "core.quotePath=false", "lfs", "ls-files", "--json"]);
   if (list.code !== 0) {
     log(`[${prefix}]   ${String(list.stderr ?? "").trim()}`);
     return {
