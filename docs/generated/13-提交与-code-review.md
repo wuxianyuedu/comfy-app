@@ -9449,8 +9449,20 @@ base64 再 ×1.33）。附件 stage 已删除，**不留一个每次都红的格
 在台账里把撤出格登记为「GA `master-gate.yml` 承接」；`CROSS_LANE_SCRIPT_MIRRORS` 的
 `每日安装依赖 ⇄ 安装依赖` 对账面同批失效（CNB push 此后没有安装格）。
 
-**未验证（标注为推断，不是实测）**：镜像仓对 `--force` 推 master 是否**必定**触发 `push`
-事件，目前按 GitHub 常规行为推断；第一跑要在镜像推送成功之后才会出现。
+**已验证（ISSUE #3299 收尾，不再是推断）**：镜像格 `git push --force HEAD:refs/heads/master`
+**确实每笔都触发 `push`** —— 公开只读 API 取 `master-gate.yml`（`on: push`）的 run 列表，
+#36–#47 逐笔 `event=push success`，`head_sha` 与本仓 commit 逐字一致（含 `5fc65679` /
+`b209aa05` / `2686e35b`），即「被推上去的那一笔」就是被判的那一笔。下面那条「未验证」的推断
+到此有读数支撑。
+
+⚠️ **但「有 push 事件」不等于「该 workflow 声明了 push」**（这一格是 #3299 换来的口径，
+完整实测与三条判断见 launch-and-build §7.7.1）：同一时段 `package-desktop.yml`（`on:` 里
+**只有** `schedule` + `workflow_dispatch`）在修好后**零 run**，修坏前却每笔 push 都长一条
+`event=push`、`0` 个 job 的 failure run —— 那是**无效 workflow 文件**为每个到达事件伪造的空 run
+（页面带 `Invalid workflow file` / `Unrecognized named-value` 注解，见 #3276）。所以：
+**触发面只认 `on:` 那一份，不许拿 run 的 `event` 字段反推**；`event` 记的是「平台把哪个事件
+投递到了这个 workflow」，不是「这个 workflow 声明了哪些事件」。看到「长出没声明事件的空 run」
+先去查文件有效性，别改 `on:`。
 
 ### 13.6 分支与合并策略
 
