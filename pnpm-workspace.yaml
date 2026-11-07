@@ -187,6 +187,13 @@ overrides:
   #       `>=7.0.0 <11.0.1`）。消费方 `@eslint/config-array@0.23.5`（eslint 10）、
   #       `@sentry/bundler-plugins`、storybook 链；registry 元数据里 11 与 10 同为
   #       ESM、exports / engines 相同，11 多一个 `@isaacs/nonrecursive-glob-match`。
+  #       ⚠️ **实测证伪（2026-11-07，ISSUE #3252）**：minimatch 11 删掉了实例方法
+  #       `Minimatch#matchOne`，而 typedoc 0.28.20 的 `glob()` 正好调它 ⇒ 每日档
+  #       `API 文档生成与自检` 崩在 `mini.matchOne is not a function`。「exports /
+  #       engines 相同」只覆盖装载面，不覆盖实例 API。处置：override 保留（其余消费方
+  #       不受影响），typedoc 用 `patchedDependencies` 打一处最小补丁换成等价的
+  #       `match(f, partial)`（`patches/typedoc@0.28.20.patch`）。typedoc 升级到已支持
+  #       minimatch 11 的版本后，删掉这条 patch。
   #     · glob 13.0.6 → 14.0.2（#1244013，AbortSignal 取消后仍继续遍历文件系统，
   #       `>=9.0.0 <=14.0.1`）。消费方 `@sentry/bundler-plugins@11.9.0` 扫 sourcemap；
   #       14 与 13 的 dependencies / exports / engines 逐项相同。
@@ -198,3 +205,6 @@ overrides:
   #       新版本且旧 major 一支不动、`pnpm audit --json` 复算、受影响固定清单用例。
   'minimatch@10': '11.0.1'
   'glob@13': '14.0.2'
+
+patchedDependencies:
+  typedoc@0.28.20: patches/typedoc@0.28.20.patch
