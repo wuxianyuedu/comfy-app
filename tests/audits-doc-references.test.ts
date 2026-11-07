@@ -2,8 +2,8 @@
  * `docs/audits/**` 的引用漂移判据（ISSUE #1811 遗留项）：台账不在 `doc:check` 的 SCOPED_DOC_DIRS 面内，点名已删基线不会变红。
  * 只判能证明的一半：台账写了一份已删的 `scripts/.*-baseline.json` 且同行未明写历史快照。
  * 已删名单是**仓内显式台账** `scripts/retired-baselines.json`（ISSUE #3245 起），不再用
- * `git log --all --diff-filter=D` 从全历史现算 —— GA `pr-gate.yml` 把检出缩到 `fetch-depth: 2`
- * 之后那段历史根本不在检出里，判据会退化成空集、上面那条恒绿。
+ * `git log --all --diff-filter=D` 从全历史现算 —— 判据与检出深度解耦：浅克隆 / 无 git
+ * 历史的沙箱里那段历史根本不在，全历史扫描会退化成空集、上面那条恒绿；仓内台账在哪种检出都读得到。
  * 不判路径存在（会假红：`src-tauri/static` 构建产物、`docs/standards/12` 章节号、沿革叙述）；
  * 只在「判据面非空」那条里跟当前 `scripts/` 树对一次账。
  */
@@ -32,9 +32,9 @@ const RETIRED_NAME_RE = /^\.[^/]*baseline[^/]*\.json$/;
 /**
  * 读「曾入库、今天已不在」的 scripts 基线名单 —— **只看当前树里的那份台账**（ISSUE #3245）。
  *
- * 旧实现用 `git log --all --diff-filter=D -- scripts/` 现算；GA 侧 `pr-gate.yml` 把
- * `fixed-structural-tests` 的检出缩到 `fetch-depth: 2` 之后，那段历史不在检出里 ⇒
- * 名单恒空 ⇒ 上面那条判据恒绿。把事实显式记进仓库，浅检出 / 无 git 沙箱都读得到。
+ * 旧实现从 git 全历史现算已删名单；与检出深度解耦后不再问 git 历史（ISSUE #3255 同步口径）：
+ * 浅克隆 / 无 git 历史的沙箱里那段历史不在，全历史扫描会退化成空集 ⇒ 判据恒绿。
+ * 把事实显式记进仓库，哪种检出都读得到。
  * 读不到 / 形状不对 ⇒ 退化成空集 —— 那是「判据面为空」不是「全绿」，有专门用例判红。
  */
 function readRetiredLedger(): Array<string> {
@@ -158,8 +158,8 @@ describe("docs/audits/** 的台账引用不许漂到已删的棘轮基线上", (
     }
   });
 
-  /** 反向钉住这次修法：不许有人把「从全历史现算」加回来（GA 是 depth=2 的浅检出）。
-   * 被禁词拆开拼 —— 原样写成字面量的话，这条用例自己的源码会把自己判红。 */
+  /** 反向钉住这次修法：不许有人把「从全历史现算」加回来（判据与检出深度解耦，
+   * 全历史扫描在浅克隆里退化成空集）。被禁词拆开拼 —— 原样写成字面量的话，这条用例自己的源码会把自己判红。 */
   it("判据只读仓内台账：源码里不许再出现 git 全历史扫描", () => {
     const source = readFileSync(path.join(ROOT, "tests", "audits-doc-references.test.ts"), "utf8");
     /* 用共享的 ./helpers/strip-comments（§12.18）：本文件自己曾经在这里抄过一份内联剥注释，

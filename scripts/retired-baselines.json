@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "note": "曾入库、今天已不在 scripts/ 下的棘轮基线（ISSUE #3245）。判据只认这份仓内台账，不再用 git log --all 从全历史现算 —— GA pr-gate 的 fetch-depth=2 里根本没有那段历史。退役一份新基线时，显式往 retired 加一条 basename。",
+  "note": "曾入库、今天已不在 scripts/ 下的棘轮基线（ISSUE #3245）。判据只认这份仓内台账，不再从 git 全历史现算 —— 判据与检出深度解耦，浅克隆里没有那段历史，全历史扫描会退化成空集。退役一份新基线时，显式往 retired 加一条 basename。",
   "retired": [
     ".circular-deps-baseline.json",
     ".click-keyboard-baseline.json",

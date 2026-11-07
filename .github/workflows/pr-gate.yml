@@ -248,16 +248,14 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
-          # depth=2 在这一格是错的（实测证伪，PR #3236 的假设）：固定结构清单里有
-          # tests/audits-doc-references.test.ts（scripts/fixed-structural-tests.mjs:600），
-          # 它用 `git log --all --diff-filter=D -- scripts/` 现算「已删的棘轮基线」，
-          # 浅克隆下退化成空集 ⇒ 那条「判据面非空」反向锚点必红。
-          # 读数（GA run 42177286869 › fixed-structural-tests，2026-11-06 06:53）：
-          #   FAIL tests/audits-doc-references.test.ts > 判据面非空 …
-          #   AssertionError: expected 0 to be greater than 0
-          #   Tests 1 failed | 265 passed (266)
-          # ⇒ 这一格回到全历史。字体真身仍由下面的 `lfs: true` 拉。
-          fetch-depth: 0
+          # 与受影响那格同一份检出形状：合成 merge 的两个父（base 与 head）在场即够。
+          # 全量核过固定清单（ISSUE #3255）：没有任何判据问 git 全历史 ——
+          # audits-doc-references 的已删基线名单改读仓内台账（#3245，与检出深度解耦）；
+          # check-commit-claims 唯一读真历史的那条自带浅克隆 skip（hasCommit 守卫）；
+          # 其余要么自建沙箱仓库，要么只读 index / HEAD 树。曾因全历史判据退回 0
+          # （#3242），判据改台账后该前提已不成立，随 #3236 的优化意图回到浅检出。
+          # 字体真身仍由下面的 `lfs: true` 拉（与深度无关）。
+          fetch-depth: 2
           # 固定结构用例清单里有字体用例（tests/embedded-title-font.test.ts）：它断言
           # 工作树里的字体是**真身字节**（与 index 里 LFS 指针记的 size 一致），只检指针
           # 文件必红 ⇒ 这一格必须拉 LFS 真身。对象由镜像那一格 `git lfs push` 送过去。
