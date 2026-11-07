@@ -19,6 +19,9 @@
   `Recv failure: Connection was reset` ⇒ 逐字记「前闸：闸不可用（ls-remote 没通）→ 照推」，
   随即推送 6 次仍 `Failed to connect to github.com port 443 after 21046 ms`、预算 201s
   用尽 ⇒ `exit 2`（读数档折绿）—— 出网抖动时闸**没有**把整格短路成 `exit 2`。
+- 同日 PR 档首跑（`cnb-32d-1k6r5d2ud`，PR #3344）撞
+  `fatal: Authentication failed for 'https://github.com/wuxianyuedu/comfy-app.git/'`：
+  PR 档不加这道闸，那一格走的是共用的「推送失败三类话术」，重跑属环境层。
 - 本地校验：`tests/ci-github-mirror-push.test.ts`（含 7 条前闸用例）、
   `tests/ci-pr-failure-issue.test.ts`、`tests/ci-mirror-drift.test.ts` 全绿；
   `tsc --noEmit`、`pnpm lint`、oxlint 清零规则、基础设施文件长度闸均为 0。
