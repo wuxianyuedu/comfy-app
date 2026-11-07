@@ -331,7 +331,18 @@ export function resetComfyBase(): void {
 
 /** `http(s)://host:port` → `ws(s)://host:port`（ComfyUI 的 /api/ws 挂在那个地址下）。 */
 export function toWsBase(httpBase: string): string {
-  return httpBase.replace(/^http(?<s>s?):\/\//i, (_m, { s }) => `ws${s}://`);
+  /* 只换协议头，不再用带捕获组的 replace 回调：`String#replace` 回调的第二
+   * 个参数是**第一个捕获组字符串**、命名组对象在最后一个参数，按 `(_m, { s })`
+   * 写会从字符串上解构出 `undefined`，拼出 `wsundefined://…` —— `new WebSocket()`
+   * 直接抛协议错误且被下游静默重试，表现成「WS 永不就绪、队列任务永不领取」
+   * （daily 全量E2E 的 60s 超时）。 */
+  if (/^https:/i.test(httpBase)) {
+    return httpBase.replace(/^https/i, "wss");
+  }
+  if (/^http:/i.test(httpBase)) {
+    return httpBase.replace(/^http/i, "ws");
+  }
+  return httpBase;
 }
 
 export async function getHistory(promptId: string): Promise<Record<string, unknown>> {
