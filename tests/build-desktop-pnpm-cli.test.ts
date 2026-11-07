@@ -5,15 +5,20 @@
  * 垫片（shebang / .cmd / .ps1），Node 按名字找的形态判据够不着真身 `pnpm-native.exe`
  * （名字不在 PATH × 扩展名的候选集里，见 ci-install-deps.mjs 的 shimPnpm 头注）。
  *
- * `daily` 的「生产构建」格经 `artifact-run.mjs` → `runPnpmSync(command: pnpmCli())`
- * 在 GA 上已验证 success，而 build-desktop 曾是唯一还按名字找的那个。两处的关键差别
- * 不是「谁找到了绝对路径」：`pnpmCli()` 在纯 action-setup 形态（PATH 上只有 npm 的
- * `pnpm` / `.cmd` / `.ps1` 垫片、无 corepack 落点）下同样拿不到绝对路径，但它是**退回
- * 裸名字 `pnpm` 交给 spawnSync 的宿主解析面**，而不是像 `pnpmInvocation()` 那样返回
- * null 直接 fail —— daily 那格正是靠这一条在 GA 上跑通的。所以这一份钉住：
- *   ① 源码形态收口到 pnpmCli，不许回潮；
- *   ② 有 corepack 落点时 pnpmCli 确实比按名字找强（拿到可 spawn 的绝对路径）；
- *   ③ 纯垫片形态下 pnpmInvocation 判没有、pnpmCli 不硬 fail（失败由调用方 spawn 报）。
+ * 这一族在 GA 上红过两轮，两轮红点不同（ISSUE #3305）：
+ *   ① 第一轮：build-desktop 用 `pnpmInvocation()` 按名字找，在 `beforeBuildCommand` 的
+ *      Node 子进程里返回 null ⇒ 当场 fail。修法是收口到 `pnpmCli()`，与 daily 生产构建
+ *      同一份判据。
+ *   ② 第二轮：`pnpmCli()` 仍回落裸 `pnpm` ⇒ ENOENT。根因是 workflow 那一格用
+ *      `bin_dest` 拼父目录猜真身目录，而 bootstrap 12.17.0 ≠ 本仓钉的 12.4.1 ⇒
+ *      action-setup 走 `self-update`，`bin_dest` 实为 `.bin/bin`，拼出来的是 `.bin/pnpm`
+ *      这个**垫片文件**；`Test-Path` 对文件也返回真 ⇒ 补 PATH 那一格假绿。
+ *
+ * 所以这一份钉住：① 源码形态不许回潮；② 真实 `dest` 语义下（真身在
+ * `<dest>/node_modules/pnpm/pnpm.exe`）补 PATH 后 `pnpmCli` 命中绝对路径；
+ * ③ `.bin/pnpm` 那种垫片文件形状补进 PATH 时拿不到绝对路径，且失败读数把
+ * 「问过哪几处」逐条念全（不再只给一句「没找到」）；④ workflow 那一格读 `dest`
+ * 输出、真起一次 `-v`，不再靠 `Test-Path` 假绿。
  */
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -109,37 +114,82 @@ describe("build-desktop 与 daily 生产构建同用一份 pnpm 形态判据（I
     rmSync(versionRoot, { recursive: true, force: true });
   });
 
-  it("GA workflow 把 pnpm 真身目录补进 PATH 后，pnpmCli 命中绝对路径（不需裸名兜底）", () => {
-    /* 这一条是修复能成立的**决定性证据**：package-desktop.yml 新增那一格把
-     * action-setup 的 `<dest>/node_modules/pnpm`（pnpm 12 原生 pnpm.exe 所在目录）
-     * 追加到 GITHUB_PATH。补过之后 `ensurePnpmOnPath` 第 1 步在 PATH 上真起
-     * `pnpm.exe -v` 成功 ⇒ pnpmCli 交出绝对路径，build-desktop 直接 spawnSync 它，
-     * 不再依赖「裸 pnpm 经宿主解析面能不能起」这个平台相关的假设。 */
+  it("GA 真实 dest 语义下：补 <dest>/node_modules/pnpm 才命中，垫片文件形状拿不到", () => {
+    /* 决定性证据按 action-setup@v6 的**实测落点**造形状：`dest` 是安装根，
+     * `<dest>/node_modules/pnpm/pnpm.exe` 是 pnpm 12 原生二进制，而 `bin_dest`
+     * 在 self-update 后是 `<dest>/node_modules/.bin/bin`（bootstrap 12.17.0，
+     * 本仓 packageManager 钉 12.4.1）。上一轮拿 `bin_dest` 的父目录拼出
+     * `.bin/pnpm` —— 那是 npm 生成的垫片**文件**，不是目录。 */
     const dest = join("D:", "a", "_temp", "setup-pnpm");
     const pkgDir = join(dest, "node_modules", "pnpm");
     const bin = join(dest, "node_modules", ".bin");
+    const binBin = join(bin, "bin");
     const exe = join(pkgDir, "pnpm.exe");
-    const env: NodeJS.ProcessEnv = {
+    const shim = join(bin, "pnpm");
+    const baseEnv: NodeJS.ProcessEnv = {
       ...process.env,
-      PATH: `${pkgDir};${bin};C:\\Windows\\System32`,
       PATHEXT: ".COM;.EXE;.BAT;.CMD",
       LOCALAPPDATA: join("C:", "Users", "runneradmin", "AppData", "Local"),
       USERPROFILE: join("C:", "Users", "runneradmin"),
     };
-    const cli = pnpmCli({
-      platform: "win32",
-      env,
-      exists: (p: string) => p === exe,
-      readDir: () => [],
-      spawn: (cmd: string) =>
-        cmd === exe
-          ? { status: 0, stdout: "12.4.1\n", stderr: "", error: null }
-          : { status: null, stdout: "", stderr: "", error: "ENOENT" },
-      write: () => undefined,
-      publish: () => null,
-    });
-    expect(cli.resolved).toBe(true);
-    expect(cli.command).toBe(exe);
-    expect(cli.prefixArgs).toEqual([]);
+    /** 按仓里判据的读法模拟真盘：`ensurePnpmOnPath` 在 win32 下用 path.join 拼候选。 */
+    const probe = (pathEntries: string[], present: string[], works: string) => {
+      const env: NodeJS.ProcessEnv = { ...baseEnv, PATH: pathEntries.join(";") };
+      const logs: string[] = [];
+      const cli = pnpmCli({
+        platform: "win32",
+        env,
+        exists: (p: string) =>
+          present.some((x) => x.replaceAll("/", "\\") === p.replaceAll("/", "\\")),
+        readDir: () => [],
+        spawn: (cmd: string) =>
+          cmd.replaceAll("/", "\\") === works.replaceAll("/", "\\")
+            ? { status: 0, stdout: "12.4.1\n", stderr: "", error: null }
+            : { status: null, stdout: "", stderr: "", error: "ENOENT" },
+        write: (line: string) => logs.push(line),
+        publish: () => null,
+      });
+      return { cli, logs: logs.join("") };
+    };
+
+    // ① 修复前：PATH 上只有 action-setup 自己加的 .bin / .bin/bin 垫片 ⇒ 回落裸名字
+    const before = probe([binBin, bin, String.raw`C:\Windows\System32`], [shim], "");
+    expect(before.cli.resolved).toBe(false);
+    expect(before.cli.command).toBe("pnpm");
+    expect(before.logs).toContain("逐条见下");
+    expect(before.logs).toContain("PATH 条目");
+
+    // ② 上一轮的错误推导：把 .bin/pnpm（垫片文件）当目录补进 PATH ⇒ 仍拿不到
+    const wrong = probe([shim, binBin, bin, String.raw`C:\Windows\System32`], [shim], "");
+    expect(wrong.cli.resolved).toBe(false);
+    expect(wrong.cli.command).toBe("pnpm");
+
+    // ③ 正解：把 <dest>/node_modules/pnpm 补进 PATH，pnpm.exe -v 真起得来 ⇒ 绝对路径
+    const fixed = probe([pkgDir, binBin, bin, String.raw`C:\Windows\System32`], [exe, shim], exe);
+    expect(fixed.cli.resolved).toBe(true);
+    expect(fixed.cli.command).toBe(exe);
+    expect(fixed.cli.prefixArgs).toEqual([]);
+  });
+
+  it("workflow 补 PATH 那一格读 dest 输出、真起 -v，不再靠 Test-Path 假绿", () => {
+    const yml = readFileSync(
+      join(process.cwd(), ".github", "workflows", "package-desktop.yml"),
+      "utf8",
+    );
+    const step = yml.slice(
+      yml.indexOf("- name: 把 pnpm 真身目录补进 PATH"),
+      yml.indexOf("- name: NSIS 工具镜像缓存"),
+    );
+    expect(step).toContain("steps.setup-pnpm.outputs.dest");
+    expect(step).toContain("PathType Container");
+    expect(step).toContain("pnpm.exe");
+    expect(step).toContain("-v");
+    // 候选顺序：self-update 落点在前（版本与 packageManager 一致），bootstrap 真身兜底
+    expect(step.indexOf("$env:PNPM_BIN_DEST")).toBeLessThan(
+      step.indexOf("Join-Path $env:PNPM_DEST"),
+    );
+    expect(step, "不许再从 bin_dest 拼父目录猜真身落点").not.toContain(
+      "Split-Path $env:PNPM_BIN_DEST -Parent",
+    );
   });
 });
