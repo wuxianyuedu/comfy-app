@@ -9,7 +9,7 @@ description: 把「分支 → 提交 → push → PR → 等 CI → 绿了合并
 它的边界在哪、以及哪几格仍然要人判断。要看全部旗标与阶段名就读 `scripts/ship.mjs` 的文件头
 （那里列了这一族各自的职责：`-core` 判断、`-args` 旗标层、`-build` build 取数、`-exec` 效应适配、`-platform` 平台侧三段 + 分支清理、
 `-poll` 轮询那一格、`-pull-body` PR 正文那一格、`-local` 本地两段、`-close` 关单、`-claim` 领取 / 结束 / 列表 / 建单分派、`-issue-new` 一步建单、
-`-diagnose` 只读诊断、`-stage-log` 只读取某一格的日志正文、`-preflight` 阶段 0，
+`-diagnose` 只读诊断、`-stage-log` 只读取某一格的日志正文、`-preflight` 阶段 0、`-preflight-d0` D0 预跑机制层，
 `-codes` 退码表（唯一出处）、`-stage` 「走到哪了」阶段进度行（唯一出处），入口只做装配与收口）。
 
 ## 什么时候用
@@ -23,6 +23,7 @@ description: 把「分支 → 提交 → push → PR → 等 CI → 绿了合并
 
 ```bash
 pnpm ship --dry-run          # 先看它打算跑哪些命令（一条都不执行，但阻塞照报）
+pnpm ship --no-preflight-d0  # 关掉阶段 0 的 D0 预跑（默认开：提交前把钩子 D0 只读判据预跑一遍、红一次报齐；双付明说，提交时钩子照判）
 pnpm ship --branch feat/x    # 还没有分支时，让它先把分支建出来再往下走（名字必须人给）
 pnpm ship                    # 到「CI 出终态 + 打印下一动作」为止
 pnpm ship --merge            # CI 绿了才合并（squash）
@@ -291,7 +292,8 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
 
 | 要做的事                   | 谁在做                                                                                                                  |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| 提交门槛                   | `.githooks/pre-commit`（由 `git commit` 触发）                                                                          |
+| 提交门槛                   | `.githooks/pre-commit`（由 `git commit` 触发；阶段 0 只预跑它的 D0 只读子集）                                             |
+| 这次提交的形态红（预报）   | 阶段 0 的 D0 预跑（ISSUE #3200）：清单从 `.githooks/pre-commit` 的 D0 组解析（单一出处，不抄第二份），每步按原样命令起、红不短路 ⇒ 所有红一次报齐落 `1` 停手（与提交钩子同权）；清单取不到 ⇒ 跳过不冒充结论；跳过条件各念一行（`--add` / dry-run / 依赖没就绪 / 旗标关），暂存面为空静默；双付明说（`--no-preflight-d0` 关） |
 | 合并前固定动作三段         | `.githooks/pre-push` → `premerge-proof.mjs`，落一份机器本地证明                                                         |
 | 「这条红是我的还是主干的」 | `scripts/base-check.mjs`（CI 红时它会点名这个入口，不自己归因）                                                         |
 | 流水线终态                 | 平台 build 的 `data.status`                                                                                             |
