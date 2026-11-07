@@ -19,5 +19,7 @@
 - 语义未变：合法输入结果一致；非法输入维持各自既有的回落 / 跳过 / 抛错行为
   （`log-file-client` 对形状不符的 200 响应按解析失败抛出 / 回落，与既有「网络层异常不咽成 null」一致）。
 - 台账：B5 行改「清账中（子批1–18：360 份 / 903 处已清）」。
+- 同步删掉 `tests/f13-projection-shapes.test.ts` 中 `capture-streams.server.ts` 的 `as never`
+  陈旧登记（该文件已改用 `Reflect.apply`，实际 0 处）；固定结构判据恢复为 0 登记。
 
 Refs #3181
