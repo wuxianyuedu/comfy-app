@@ -3144,6 +3144,47 @@ node scripts/publish-desktop-bundle.mjs           # 真发布；常驻根会打�
 node scripts/ci-nsis-tool-probe.mjs               # 只量 NSIS 工具现场（恒退 0，只读）
 ```
 
+#### 7.7.1 无效 workflow 会伪造一条它没声明事件的空 run —— 别拿 `event` 反推触发面（ISSUE #3299）
+
+**这一节答的是「镜像仓 Actions 里那条 `event=push` 的 run 是哪来的」**。`.github/workflows/package-desktop.yml`
+的 `on:` 从落地起只有 `schedule` + `workflow_dispatch`，逐笔提交逐字如此、GitHub raw 双取一致；
+但它在文件坏掉那段时间里「每收到一次镜像 push 就长一条 `event=push`、`total_count: 0` 个 job、
+`conclusion: failure` 的 run」。第一反应会是「文件是不是偷偷声明了 `push`」——**这条读法是错的**：
+`event` 字段记的是「平台把哪个事件投递到了这个 workflow」，不是「这个 workflow 声明了哪些事件」。
+文件解析不过时，平台照样会为到达的事件建一条 run 来挂注解，于是就出现「声明面里没有的事件、
+却有一条该事件的 run」。
+
+**实测读数（镜像仓 `wuxianyuedu/comfy-app`，workflow id `404530522`，公开只读 API）**：
+
+- 坏文件期（顶层 `env:` 里写了 `${{ runner.temp }}`，#3276 那次回归，逐笔 `git show <sha>:.github/workflows/package-desktop.yml`
+  都是 `on: schedule + workflow_dispatch` 且顶层 `env:` 含 `runner.temp`）：run #5–#36 全是 `event=push`、
+  `GET /runs/{id}/jobs` 恒 `total_count: 0`；#36 的 run 页面 `Invalid workflow file` / `Unrecognized named-value`
+  各出现 1 次。同期 `schedule` run #1–#4 各 1 个 job（那是文件还有效的时段）。
+- 修好之后（`212e524d` 起把 `COMFY_CI_TOOLS_ROOT` 下沉到 step 级 `env:`，见 #3276）：#37 起全是
+  `workflow_dispatch`、各 1 个 job（#40 `success`），**再无一条 push run**。
+- 同期 `master-gate.yml`（`on: push`）#36–#47 每笔 push 都起跑 `success`（含 `5fc65679` / `b209aa05` /
+  `2686e35b`）——**push 事件照常发生**，只是有效文件不再为它建空 run。
+
+**三个候选的裁决**：候选 A（无效文件为每个到达事件伪造一条没声明事件的空 run）**成立**——它同时解释
+「`event=push` 却 0 job」与「修好后同样 push 却零 run」；候选 B（镜像格 `git push --force HEAD:refs/heads/master`
+属 `push` 事件定义面，head_sha 与本仓逐字一致，见 §13.5.34）只是**push 事件的来源**；候选 C
+（#5 那批文件其实有效）可排除——#5 起文件已带顶层 `runner.temp`，是坏的。
+
+**可复做的判断口径**（下次再看到「workflow 长出它没声明的事件的 run」）：
+
+1. **先看 job 数与注解，再看 `event`**：`GET /repos/<owner>/<repo>/actions/runs/<id>/jobs` 为 `total_count: 0`
+   + 页面 `Invalid workflow file` / `Unrecognized named-value` ⇒ 这是**文件坏了**的旁证，不是触发面变了。
+2. **触发面只认 `on:` 那一份**（`git show <head_sha>:.github/workflows/<file>.yml` 与 GitHub raw 双取），
+   **不许从 `event` 反推**。本次就是先按 `event=push` 反推出「文件声明了 push」，与 raw 内容矛盾，
+   才回头去查注解，把 #3276 的诊断带偏过一次。
+3. **「修好后同一分支再推、却不出 run」不是判据漂移**：正是文件从无效变有效的那一格读数；
+   要验「push 到底有没有发生」，去看同一仓库里 `on: push` 的 workflow（本例 `master-gate.yml`）有没有
+   对应 run，别拿这条坏 workflow 的 run 列表当事件流水。
+
+> 这条不进门禁：`event` 是平台侧事实、判据自身不做网络请求（§13.5.13 的口径），
+> 且它只在「文件坏掉」这一形出现、有确定的注解形状可指到行，写进口径比再写一条扫描器合适
+> （硬规则 24 末句：怪癖的归宿是单子/口径，不是第二套判定）。
+
 ---
 
 ## 8. Windows 入口规范：一律 .ps1，禁用 .bat / .cmd / .vbs
