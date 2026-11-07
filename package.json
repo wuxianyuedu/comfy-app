@@ -23,7 +23,7 @@
     "deps:guard": "node scripts/deps-install-guard.mjs",
     "format:check": "node scripts/check-format.cjs --changed",
     "format:report": "node scripts/check-format.cjs --report",
-    "format:write": "oxfmt \"src/**/*.{ts,tsx,js,jsx,mdx}\" \".storybook/**/*.{ts,tsx,js,jsx,mdx}\"",
+    "format:write": "oxfmt \"**/*.{ts,tsx,js,jsx,mjs,cjs,mdx}\"",
     "format:ratchet": "node scripts/check-format.cjs",
     "format:reformat-guard": "node scripts/check-reformat-only.cjs",
     "lint": "pnpm run lint:oxlint",
