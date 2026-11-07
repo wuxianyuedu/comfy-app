@@ -346,7 +346,11 @@ export function toWsBase(httpBase: string): string {
 }
 
 export async function getHistory(promptId: string): Promise<Record<string, unknown>> {
-  const res = await fetch(`${comfyBase()}/api/history/${promptId}`, {
+  /* promptId 来自 ComfyUI / comfy-cli 回传的 prompt_id，只按**路径段**编码后再拼 URL
+   * （与 `getModels` 的 folder 同一口径）。裸拼会让 `../`、`?` 改写请求路径 ——
+   * CodeQL #12（js/request-forgery）报的就是这一格。host 仍是用户配置的 ComfyUI
+   * 地址（这是本应用的用途，不是攻击面），要收的只是这段路径。 */
+  const res = await fetch(`${comfyBase()}/api/history/${encodeURIComponent(promptId)}`, {
     // 本地 ComfyUI 正常秒回；此超时只兜「连上却不返回」的病态挂死，给足余量。
     signal: AbortSignal.timeout(15_000),
   });
