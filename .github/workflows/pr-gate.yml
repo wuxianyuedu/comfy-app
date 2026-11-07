@@ -186,10 +186,11 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
-          # 这一格只读本次改动面：`check-format.cjs --changed` 的基线是 payload 的
+          # 这一格的两份格式判面都只读当前树：`--changed` 的基线是 payload 的
           # `CNB_PULL_REQUEST_TARGET_SHA`，而镜像推来的合成 merge 的两个父正是
           # base 与 head ⇒ depth=2 就够（本机读数：全量历史 2610 笔 / pack ≈170 MiB，
-          # 这一格用不到更早的提交）。基线缺席时判据自己退「没判」，不靠浅克隆蒙过去。
+          # 这一格用不到更早的提交）；全量档走 `git ls-files` 数当前树的文件，
+          # 也不读历史。基线缺席时 `--changed` 自己退「没判」，不靠浅克隆蒙过去。
           fetch-depth: 2
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
@@ -201,7 +202,7 @@ jobs:
           node-version: 26
           cache: pnpm
 
-      - name: 安装依赖（冷装约 8 分钟；allowBuilds 清单见 pnpm-workspace.yaml）
+      - name: 安装依赖（allowBuilds 清单见 pnpm-workspace.yaml）
         run: pnpm install --frozen-lockfile
 
       - name: 同步数据库表结构（cnb 同款判据一字不改）
@@ -212,6 +213,15 @@ jobs:
 
       - name: oxfmt 格式（cnb 同款判据一字不改；基线 = CNB_PULL_REQUEST_TARGET_SHA）
         run: node scripts/check-format.cjs --changed
+
+      - name: oxfmt 格式（全量档：硬闸「未过 oxfmt 的文件一个都不许有」）
+        # 与上一格互补，不是重复：`--changed` 判「这次 PR 带来的那一批」，这一格判全库
+        # 不变式。缺口的形态是「PR 自己改判面」—— 扩 `SCAN_ROOTS` / 删 `IGNORE_GLOBS` /
+        # 改 `.oxfmtrc.json` 时，`--changed` 只看得见被碰的文件（`.oxfmtrc.json` 连
+        # `GLOBS` 都不进），新纳入的那些存量没有任何判决面。
+        # 成本只有实测读数：本机全量档 3.5–4.8s（2107 份判据面，热缓存）。PR 档是
+        # 合入前唯一的自动执行点 ⇒ 红在合入前、暴露窗口 0（不会先落主干再回补）。
+        run: node scripts/check-format.cjs
 
       - name: lib Node-only 声明（cnb 同款判据一字不改）
         run: node scripts/ci-run-tool.mjs vitest run tests/lib-node-only-declarations.test.ts
