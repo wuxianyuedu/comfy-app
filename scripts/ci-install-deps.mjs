@@ -379,17 +379,35 @@ export async function runInstallWithSlot(_expected, deps = {}) {
  * `prefixArgs` 恒为空（本文件只认真可执行，不经宿主）。**找不到时 `command` 退回
  * 裸名字 `pnpm`** —— 与各脚本原来的行为一致，错误由它们自己报，这里不替它们判红。
  *
- * @param {{platform?: NodeJS.Platform, env?: NodeJS.ProcessEnv, write?: (s: string) => void}} [deps]
+ * 注入面与 `ensurePnpmOnPath` 同一套（它把整个 `deps` 原样透传下去）：单测据此
+ * 在 POSIX 上判 Windows 的形态，不碰真进程。
+ *
+ * @param {{
+ *   platform?: NodeJS.Platform,
+ *   env?: NodeJS.ProcessEnv,
+ *   root?: string,
+ *   exists?: (p: string) => boolean,
+ *   readDir?: (p: string) => import("node:fs").Dirent[],
+ *   spawn?: typeof spawnSettled,
+ *   write?: (s: string) => void,
+ *   publish?: (dir: string) => string | null,
+ * }} [deps]
  * @returns {{command: string, prefixArgs: string[], resolved: boolean}}
  */
 export function pnpmCli(deps = {}) {
   const write = deps.write ?? ((s) => process.stdout.write(s));
   const boot = ensurePnpmOnPath({ ...deps, write });
   if (boot.probing === null) {
+    /* 逐条把「问过哪几处、各自什么结论」念出来：桌包档这一族最贵的形状是「补 PATH
+     * 那一格假绿、本格静默回落」—— 只看一句「没找到」分不清是 PATH 没补对，还是这台
+     * 机器本来就没有 pnpm（ISSUE #3305 第二轮）。与 main() 的失败出口同一份 consulted。 */
     write(
       `[ci-install-deps] ⚠ 这一格没找到可用的 pnpm（${boot.detail}）⇒ 仍按裸名字 \`pnpm\` 起，` +
         "失败由调用方报\n",
     );
+    for (const line of boot.consulted) {
+      write(`[ci-install-deps]   ${line}\n`);
+    }
     return { command: "pnpm", prefixArgs: [], resolved: false };
   }
   return { command: boot.probing, prefixArgs: [], resolved: true };

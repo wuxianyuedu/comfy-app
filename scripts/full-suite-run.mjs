@@ -697,7 +697,10 @@ async function main(argv) {
       `[full-suite-run] ✗ ${abortedAdvice({
         label: "全量单测 + 覆盖率",
         timeoutMs: FULL_SUITE_TIMEOUT_MS,
-      })}        （读数：退出码 ${res.status ?? "信号"}，` +
+        /* 三态读数原值带过去（ISSUE #3332）：判据在 abortedAdvice 一处，这里不重判。 */
+        signal: res.signal ?? null,
+        errorCode: res.error?.code ?? null,
+      })}        （读数：退出码 ${res.status ?? "无"}，信号 ${res.signal ?? "无"}，` +
         `error=${res.error ? String(res.error.code ?? res.error.message) : "无"}）\n` +
         `        规范：docs/standards/13-提交与-code-review.md §13.5.4\n`,
     );

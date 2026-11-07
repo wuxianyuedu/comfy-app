@@ -23,6 +23,8 @@
  *
  * 取 `cnb` 通道 = `cnbJson`；取构建列表 = `fetchBuildList()`（`ci-build-readout.mjs`）；
  * 取逐格详情 = `fetchBuildDetails()`（`check-daily-attendance.mjs`，与每日档同一个取法）；
+ * 判结论**只认这份逐格读数**：列表里构建级 `status` 在 `endStages` 执行时恒 `pending`，
+ * 拿它当「到没到终态」的门槛就是恒不写（ISSUE #3298）；
  * 定性 = `classifyBuildOutcome()`；被带下去的格 = `downstreamSkipped()`；
  * 失败行摘录 = `describeFailedStages()`；仓库 slug = `resolveRepoSlug()`；
  * 写单 / 评论 = `runNewIssue()` 与那条「写后独立回读」的实现（每日档里各有一份）。
@@ -45,8 +47,10 @@
  *
  * 缺省：`0` 有结论（写了 / 无需写）、`1` 该写的没写成、`2` 取不到读数。
  * 平台那一格带 `--no-block`：非零都改成「退 0 + 把那句红话原样打在屏幕上」。
- * 这一格自己写着**上一跑**的红，它一坏不该把自己也变成一条红 —— 但**也不许静默**
- * （失败时打出可粘贴的手工出口，由用例钉住）。
+ * 这一格读的是**自己这一跑**（每日档那一格才读上一跑），它一坏不该把自己也变成
+ * 一条红 —— 但**也不许静默**（失败时打出可粘贴的手工出口，由用例钉住）。
+ * 判红只认 `get-build-status` 的逐格读数：列表里构建级 `status` 在 `endStages`
+ * 执行时恒 `pending`，拿它当「到没到终态」的门槛就是恒真（ISSUE #3298）。
  *
  * ## 用法
  *
@@ -73,6 +77,7 @@ import {
   downstreamSkipped,
   enrichStageErrors,
   fetchBuildList,
+  fetchStageDetail,
   resolveRepoSlug,
 } from "./ci-build-readout.mjs";
 import { fetchBuildDetails } from "./check-daily-attendance.mjs";
@@ -111,9 +116,6 @@ export function lanePrefix(lane) {
 
 /** 优先级：PR 档红挡的是「这一笔能不能进 master」，所以与每日档同档。 */
 export const PRIORITY = "P1";
-
-/** 平台侧认不出的构建级状态（在跑 / 排队）：这些不去取逐格详情，先不判。 */
-const NOT_FINAL = new Set(["pending", "running", "queued", "created", "waiting", ""]);
 
 /**
  * @param {string} stage 格名
@@ -406,6 +408,56 @@ export function pickSelf(list, sn) {
   return (Array.isArray(list) ? list : []).find((b) => String(b?.sn ?? "") === sn) ?? null;
 }
 
+/** push 档镜像格在平台读数里的格名（`.cnb.yml` 的 stage 名，逐字相同）。 */
+export const MIRROR_MASTER_STAGE = "GitHub master 镜像";
+
+/**
+ * 认 push 档镜像格的**读数档失败**。
+ *
+ * 那一格带 `--readout`：脚本把 1/2 折成 0，平台那格恒绿，失败只留在日志正文的
+ * `[mirror-master] 结论：exit N` 上。不把这一行读回来，这一档就永远「红格 0 个」⇒
+ * 镜像没推过去也无人立案（ISSUE #3252 的现场：`cnb-ft3-1k6qfer4u`）。
+ *
+ * 只认 `exit 1|2`：`exit 0` 是正常收工；读不到的格回 null（没结论不是失败）。
+ *
+ * @param {any} run 执行者
+ * @param {string} slug 仓库路径
+ * @param {string} sn 构建号
+ * @param {any} json `get-build-status -v` 的读数
+ * @returns {{exitCode: number, line: string, stageId: string} | null}
+ */
+export function findMirrorReadoutFailure(run, slug, sn, json) {
+  const data = json && typeof json === "object" ? json.data : null;
+  const table =
+    data?.pipelinesStatus && typeof data.pipelinesStatus === "object" ? data.pipelinesStatus : null;
+  if (!table) {
+    return null;
+  }
+  for (const [key, pipeline] of Object.entries(table)) {
+    const stages = pipeline && typeof pipeline === "object" ? pipeline.stages : null;
+    if (!Array.isArray(stages)) {
+      continue;
+    }
+    for (const stage of stages) {
+      if (!stage || typeof stage !== "object" || stage.name !== MIRROR_MASTER_STAGE) {
+        continue;
+      }
+      const stageId = String(stage.id ?? "");
+      const detail = fetchStageDetail(run, slug, sn, String(pipeline.id ?? key), stageId);
+      if (!detail) {
+        return null;
+      }
+      const hits = [...detail.text.matchAll(/\[mirror-master] 结论：exit (?<code>[12])/g)];
+      const hit = hits.length > 0 ? hits.at(-1) : null;
+      if (!hit) {
+        return null;
+      }
+      return { exitCode: Number(hit.groups?.code), line: hit[0], stageId };
+    }
+  }
+  return null;
+}
+
 /**
  * 入口。
  *
@@ -525,7 +577,10 @@ export function main(io = {}) {
      *
      * 过滤条件：默认只查 `pull_request`（这一格的出身）；而给了 `--lane`（且不是 pr）
      * 时**不带事件过滤** —— 那一档没有 PR 事件可查，按 PR 过滤就等于查不到自己
-     * （ISSUE #2550 的现场：事件念成 `(取不到)`、`self` 为 null，连终态那一道都跳过）。 */
+     * （ISSUE #2550 的现场：事件念成 `(取不到)`、连自己这一跑都认不出来）。
+     * 列表在这里只用来认「这一跑是谁 / 事件是什么」：判红没红改认逐格读数（见下面
+     * `fetchBuildDetails` 那段），列表里构建级 `status` 在 `endStages` 下恒 `pending`，
+     * 拿它当门槛就是恒真（ISSUE #3298）。 */
     list = fetchBuildList(run, slug, lane && lane !== "pr" ? "" : "pull_request", 60, { log });
     if (!list) {
       /* 这一句是这一格**唯一**的失效形态（它是 `endStages`，退出码不构成流水线结论），
@@ -551,14 +606,13 @@ export function main(io = {}) {
     log(`[pr-failure-issue] ${target.why} ⇒ 不写。`);
     return finish(CODE.DONE, target.why);
   }
-  if (!offline && self && NOT_FINAL.has(String(self.status ?? "").toLowerCase())) {
-    log(
-      `[pr-failure-issue] 列表里这一跑（${sn}）的状态是「${self.status}」⇒ 还没到终态，` +
-        "这一次读到的不是结论（也不写）。",
-    );
-    return finish(CODE.NO_FACT, "还没到终态");
-  }
-
+  /* 判「红没红」只认 `get-build-status` 的逐格读数，不认列表里构建级 `status`
+   * （ISSUE #3298）：这一格挂在 `endStages`，列表里当前这一跑的 `status` 恒为
+   * `pending`（要等整条流水线收尾才落终态），拿它当门槛就是恒真 ⇒ 一张单都写不出来。
+   * 主链 stages 此刻已经跑完、逐格状态已落定，立案格自己在飞那一格属 `endStages`
+   * 可见性面、不进判决池；还在跑 / 详情取不到落成 `running` / `unknown`，由
+   * `decideAction()` 判「不构成结论 ⇒ 不写」—— 两种「取不到」的兜底都在既有判决链上，
+   * 不另立第二套判据。列表这一侧只用来认「这一跑是谁 / 事件是什么」。 */
   if (!offline) {
     details = fetchBuildDetails(run, slug, [self ?? { sn }]);
   }
@@ -571,6 +625,24 @@ export function main(io = {}) {
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- firstDetail 由平台读数数组下标取，运行时可能为空；类型面标的恒真只是没建模索引
     firstDetail ? enrichStageErrors(run, slug, sn, firstDetail.json) : null,
   );
+  /* push 档的镜像格是读数档：平台那格恒绿，红只在日志正文里。把这一行读回来当失败事实，
+   * 否则 `--readout` 一折，镜像没推过去也永远「红格 0 个」（见 `findMirrorReadoutFailure`）。 */
+  if (!offline && lane === "push" && firstDetail) {
+    const mirror = findMirrorReadoutFailure(run, slug, sn, firstDetail.json);
+    if (mirror) {
+      log(
+        `[pr-failure-issue] 镜像格读数档失败（${mirror.line}）⇒ 按事实立案（平台那一格仍是绿的）`,
+      );
+      outcome.state = "failed";
+      outcome.failed.push({
+        error: mirror.line,
+        id: mirror.stageId,
+        index: -1,
+        name: `${MIRROR_MASTER_STAGE}（读数档）`,
+        status: "error",
+      });
+    }
+  }
   // 这里刻意保留 ||：`name` 是展示名，缺或为空串都退 id —— `??` 管不住空串那一半。
   const failedNames = outcome.failed.map((/** @type {any} */ f) => f.name || f.id);
   const skipped = downstreamSkipped(outcome).map((/** @type {any} */ s) => s.name || s.id);
@@ -611,6 +683,10 @@ export function main(io = {}) {
   const willWrite = offline || dryRun;
   let wrote = true;
   for (const s of decision.stages) {
+    /* 标题按档算一次：dry-run 念出来的与真写路径用的是同一个值（同一处事实一个出处，
+     * 也让「写什么先念什么」在用例里可钉）。不传 lane 会落成 PR 族前缀、与按档的
+     * 去重键对不上 ⇒ 每次红都新建一张噪声单。 */
+    const title = issueTitle(s.stage, lane ?? "pr");
     const body = composeBody({
       slug,
       target,
@@ -627,7 +703,7 @@ export function main(io = {}) {
               ? `评论在 PR #${target.prIid} 下（不新建单）`
               : s.number
                 ? `在 #${s.number} 下追加一条读数（不新建）`
-                : `新建一张：${issueTitle(s.stage, lane ?? "pr")}`
+                : `新建一张：${title}`
           } · 正文 ${body.length} 字 · 一条都没写`,
       );
       continue;
@@ -678,7 +754,7 @@ export function main(io = {}) {
       root: ROOT,
       mkTmp: (name, text) => writeScratch(ROOT, name, text),
       opt: {
-        newIssue: issueTitle(s.stage),
+        newIssue: title,
         issueBodyFile: path.relative(ROOT, file),
         priority: PRIORITY,
       },

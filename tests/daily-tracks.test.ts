@@ -716,6 +716,52 @@ describe("墙钟预算：**测量没发生**与「判据红」必须分得开（
     expect(advice).toContain("要修的不是用例");
     expect(advice).not.toContain("不记账");
   });
+
+  it("aborted 的话术按成因分三态：信号杀不许冒充「预算砍」（ISSUE #3332）", () => {
+    /* 立案现场：GA Daily run 42364056027 —— 子进程只活了 3m07s（30 分钟预算从未到），
+     * 死前 3793 条用例全绿、死在覆盖率报告收尾段，读数 `退出码 信号，error=无`。
+     * 旧话术对一切 aborted 都念「在墙钟预算处被砍」，把人引去「让开再跑一次」；
+     * 而真预算砍会带 error=ETIMEDOUT，源头上分得开。 */
+    const killed = abortedAdvice({
+      label: "全量单测 + 覆盖率",
+      timeoutMs: FULL_SUITE_TIMEOUT_MS,
+      signal: "SIGKILL",
+      errorCode: null,
+    });
+    expect(killed).toContain("被信号打死");
+    expect(killed).toContain("SIGKILL");
+    expect(killed).toContain("测量没发生");
+    expect(killed, "信号杀不是预算砍，不许念预算那一句").not.toContain("在墙钟预算处被砍");
+    expect(killed, "下一动作要对：先定性（内核证据）再复跑").toContain("dmesg");
+    // 真预算砍（ETIMEDOUT；spawnSync 超时会连 signal 一起给 SIGTERM）—— 原句保留
+    const timedOut = abortedAdvice({
+      label: "全量单测 + 覆盖率",
+      timeoutMs: FULL_SUITE_TIMEOUT_MS,
+      signal: "SIGTERM",
+      errorCode: "ETIMEDOUT",
+    });
+    expect(timedOut).toContain("在墙钟预算处被砍");
+    expect(timedOut).toContain("要修的不是用例");
+    // 第三态：命令压根没起来（ENOENT / EINVAL），也各有各的下一动作
+    const notStarted = abortedAdvice({
+      label: "全量单测 + 覆盖率",
+      timeoutMs: FULL_SUITE_TIMEOUT_MS,
+      errorCode: "ENOENT",
+    });
+    expect(notStarted).toContain("压根没起来");
+    expect(notStarted).not.toContain("在墙钟预算处被砍");
+  });
+
+  it("两个消费方把 signal / errorCode 原值带进话术，`runPnpmSync` 不再丢 signal", () => {
+    /* `runPnpmSync` 丢弃 `result.signal` 是 #3332 定性的直接障碍：读数只剩一个
+     * 「信号」字样，分不出 SIGTERM（预算砍）与 SIGKILL（外击）。 */
+    expect(readText("scripts/launcher-core/shell.mjs")).toContain("signal: result.signal ?? null");
+    for (const rel of ["scripts/full-suite-run.mjs", "scripts/artifact-run.mjs"]) {
+      const text = readText(rel);
+      expect(text, rel).toContain("signal: res.signal ?? null");
+      expect(text, rel).toContain("errorCode: res.error?.code ?? null");
+    }
+  });
 });
 
 describe("接线在位（§13.5.12：判据要有人跑）", () => {

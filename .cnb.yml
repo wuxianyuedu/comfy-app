@@ -466,7 +466,7 @@
     #   2026-11-05 起 PR 档不再装依赖（GA 的安装 step 接管那个问题），本档只留
     #   平台读数与判决链；撤下来的每一格都得先在每日/GA 侧有执行者，判据同一条。
     COMFYAPP_CI_DAILY_GATES: >-
-      每日失败立案, 每日令牌权限读数, 每日工具链自证, 每日安装依赖, 每日 YAML 真解析,
+      每日失败立案, 每日令牌权限读数, 每日工具链自证, 每日安装依赖, 每日镜像出勤立案, 每日 YAML 真解析,
       每日 Python 可用性, 每日 Python 探针读数, 每日同步数据库表结构, 每日新鲜度账, 每日生产构建,
       每日 ESLint 零警告, 每日浏览器安装, 每日全量E2E, 每日 API 文档生成与自检, 每日单元测试, 覆盖率上报
     # ⚠️ `每日浏览器安装` 与 `每日全量E2E` 的相对顺序不许动：装那一件要下 ~120 MiB
@@ -934,6 +934,31 @@
       $ErrorActionPreference = "Stop"
       node scripts/ci-cp936-exit.mjs -- node scripts/check-pnpm-available.mjs
       node scripts/ci-cp936-exit.mjs -- node scripts/ci-install-deps.mjs
+  # ── 镜像出勤 / egress 立案（ISSUE #3278 方案 B：保持承重 + 补自动执行者）──────
+  #
+  # `pnpm check:mirror-attendance` 早就在（`scripts/check-mirror-attendance.mjs`），
+  # 三态 0/1/2、按**正文**认「已推 · 已派发」、逐形状里 `egress` 独立成键。但它此前是
+  # **按需档**：三份清单里没有一格跑它 ⇒ 断流只能靠人手动敲一次或翻某条 PR 的日志才知道。
+  # 这一格把「有人跑」变成事实，24h 窗口内出现 egress 就建单 / 在旧单追加读数（去重键在
+  # 标题里，一条诉求一张单）。**它不改**镜像格与 `GitHub 判决回读 / 判定` 的承重口径
+  # （#3046 一个名字都不许摘）：断流时 PR 照旧会红，变的是红之前已有机器读数把
+  # 「环境红 ≠ 内容红」写成 `environment-red=github-mirror-egress` 那一行。
+  #
+  # ⚠️ `--no-block` 是**必须**的，不是宽容：这格量的是节点出网（仓库改不了的事实），
+  # 而它排在 `每日单元测试` / `每日全量E2E` 之前 —— 间歇性 egress 几乎天天有，做成会红的格
+  # 就等于每天把后面整条每日链 skip 掉（§13.5.21）。非零折成退 0，但那句红话原样打在
+  # 屏幕上并给可粘贴的手工出口，由 `tests/ci-mirror-egress-issue.test.ts` 钉住不许静默。
+  # ⚠️ 判据自己**不重试也不判绿**：列表取不到 / 窗口没盖满 / 开着的单取不到 ⇒ 退 2「没结论」，
+  # 一次都不写（§13.6.3）。退 2 不算「今天没有 egress」。
+  #
+  # 排在 `每日安装依赖` **之后**不是排版：`makeRunner()` 的 `cnbSpawn()` 要装完依赖才解析得到
+  # 包真身（自托管 runner 宿主 PATH 上没有 `cnb`，五跑读数见 §13.10.16）；
+  # 同一跑的 `PR 失败立案` 好得很，正因为它在依赖装好之后。排在 `每日单元测试` 之前则是
+  # 「最后一条会红的格」那条顺序判据。它自己不红，也不许挪到那条之后。
+  - name: 每日镜像出勤立案
+    timeout: 5m
+    script: |
+      node scripts/ci-cp936-exit.mjs -- node scripts/ci-mirror-egress-issue.mjs --no-block
   # ── GH workflows 的**真解析**（ISSUE #3063，档位 ②：只挂每日档）────────────
   #
   # `check:ci-yaml` 只判三件：YAML 能解析、锚点 / 别名合法、CNB 每格有 `name` + `script`。
@@ -1461,6 +1486,20 @@
     # 日志里没有 `Downloading` / `Recreating it`（2026-10-27 本机实测，见规范 §7.7）。
     timeout: 5m
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/tauri-tools-cache.mjs
+  - name: 打包·NSIS 工具现场读数
+    # ISSUE #3297：桌包档每一次死在 `Running makensis … / Unable to start child process, error 0x2`，
+    # 而前一格「桌包工具预置」逐字报「必需件齐全」。两格对同一棵树给出互相矛盾的结论：
+    # 预置判 `%LOCALAPPDATA%` 拼出来的 `tauri\NSIS`，bundler 走 SHGetKnownFolderPath
+    # （§7.7 记着「不读 LOCALAPPDATA 环境变量」），LocalSystem 会话里两者未必同值。
+    #
+    # **这一格只加读数、不改判据、不猜修法**（恒退 0）：把 ensure 侧原值、bundler 侧
+    # known folder、两处 makensis.exe 的 Test-Path / Length / 真跑 /VERSION / 整树文件数
+    # 与进程账号一次打出来，下一次红就能定性分叉（口径与 §7.7 那句待复核的话对齐）。
+    # 逻辑在 `scripts/ci-nsis-tool-probe.mjs` —— 不在配置里就地写 PowerShell，
+    # 与 `镜像身份` / `工作区复用读数` 同一条：配置里的逻辑一条判据都测不到它。
+    # 顺序也是判据的一部分：排在 `pnpm tauri build` 之后 = 那一刻 bundler 已经撞完了。
+    timeout: 5m
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-nsis-tool-probe.mjs
   - name: 打包·桌面成品构建
     # 整条链：`beforeBuildCommand`（`build-desktop.mjs` → `pnpm build` → 数产物 → 体积护栏）
     # → cargo release 编译 → bundle（nsis + msi）。判据一个字都不在这里重写，也不带 `--no-bundle`
@@ -1561,6 +1600,11 @@
 # 判决链一个字都不在这里重写：定性是 `ci-build-readout.mjs` 的 `classifyBuildOutcome()`
 # （与 `pnpm ship --diagnose` / 每日档同一份），取数是它的 `fetchBuildList()` +
 # `check-daily-attendance.mjs` 的 `fetchBuildDetails()`，写单是 `ship-issue-new.mjs`。
+# ⚠️ 判「红没红」只认 `fetchBuildDetails()` 那份**逐格读数**：这一格挂在 `endStages`，
+# 列表里当前这一跑的构建级 `status` 恒 `pending`（要等整条流水线收尾才落终态），
+# 拿它当门槛就是恒真 ⇒ 一张单都写不出来（ISSUE #3298 的现场：桌包档连红六次、
+# 立案格每次都只念一句「还没到终态」）。逐格还在跑 / 详情取不到落成 `running` /
+# `unknown`，由既有 `decideAction()` 判「不构成结论 ⇒ 不写」，没有第二套判据。
 # 落点按「有没有人能收」分两档：`CNB_PULL_REQUEST_IID` 在场上 ⇒ 评论在那张 PR 下
 # （一条诉求一张单，不另开单）；认不出来 ⇒ 按格名去重建单。取舍与两种形状都在
 # `scripts/ci-pr-failure-issue.mjs` 头注里，这里不重抄。
@@ -1610,6 +1654,12 @@
 #     与本锚点是两种不同的形状，别拿同一句话概括。
 #
 # 去重键跟着 `--lane` 走 ⇒ 标题是 `ci(package): 桌包档红在「…」`，与 PR 那一族互不相混。
+#
+# ⚠️ 立案格跑了却一句结论都没写，是这一档曾经**常态化失效**的形状（ISSUE #3298）：
+# 2026-10-29 ~ 11-04 连红六次、`makensis 0x2`，立案格每跑都只念「状态是 pending ⇒
+# 还没到终态」。根因不在桌包、在立案格自己：`endStages` 执行时列表里本跑的构建级
+# `status` 恒 `pending`，那道「等终态」的门槛恒真。修法见上面的判决链那一段 ——
+# 判红改认逐格读数，列表这一侧只用来认「这一跑是谁 / 事件是什么」。
 .package-fail-stage: &package_fail_stage
   endStages:
     - name: 桌包失败立案
@@ -2518,6 +2568,18 @@ master:
   web_trigger_package:
     - <<: [*common, *package_fail_stage]
       name: 桌面成品包（手动触发）
+      lock: *lock_package
+      stages: *package_gates
+  # 桌包那一档的 API 口（ISSUE #3297）：与 `api_trigger_daily` 同构 —— 按钮要一双手，
+  # 而 `start-build --event` 服务端只认 `api_trigger` 前缀（实测 400，见上面每日档那格）。
+  # 定时 11-05 起迁去 GA、手点口从没人点过（`get-build-logs --event web_trigger_package`
+  # 读数 total=0）⇒ #3302 合进来的「打包·NSIS 工具现场读数」一直是没有执行者的格，
+  # 四次 `makensis 0x2` 全发生在它合入之前。补这一口是为了让读数/修法能被程序触发复验。
+  # 与手点口共用同一份 `*package_gates`、同一把 `*lock_package`、同一个立案锚点
+  # `*package_fail_stage`（红了同样有人看得见）；不另抄清单、不另起第二把锁。
+  api_trigger_package:
+    - <<: [*common, *package_fail_stage]
+      name: 桌面成品包（API 触发）
       lock: *lock_package
       stages: *package_gates
   api_trigger_e2e:

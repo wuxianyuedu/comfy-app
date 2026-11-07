@@ -249,6 +249,10 @@ const DAILY_GATES = [
   "每日令牌权限读数",
   "每日工具链自证",
   "每日安装依赖",
+  /* ISSUE #3278 方案 B：镜像出勤的**自动执行者**（既有 `check:mirror-attendance` 是按需档，
+   * 三份清单里没有一格跑它）。排在装依赖之后（`cnbSpawn()` 要装完才起得来），
+   * 且必须在 `每日单元测试` 之前 —— 它自己带 `--no-block` 不红，也不许挪到那条之后。 */
+  "每日镜像出勤立案",
   /* ISSUE #3063（档位 ②）：GH workflows 的真解析，只挂每日档 —— 二进制钉在节点常驻根，
    * 取用零网络（`scripts/ci-actionlint.mjs`）。 */
   "每日 YAML 真解析",
@@ -341,6 +345,11 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   { name: "每日令牌权限读数", tier: "daily" },
   { name: "每日工具链自证", tier: "daily" },
   { name: "每日安装依赖", tier: "daily" },
+  {
+    name: "每日镜像出勤立案",
+    note: "ISSUE #3278 方案 B：把按需档 `check:mirror-attendance` 挂进每日档自动执行，24h 窗口出现 egress 就建单 / 追加读数；带 `--no-block`，量的是节点出网这一仓库改不了的事实，判它红会把 `每日单元测试` 之后整条链 skip 掉",
+    tier: "daily",
+  },
   { name: "每日 YAML 真解析", tier: "daily" },
   { name: "每日 Python 可用性", tier: "daily" },
   { name: "每日 Python 探针读数", tier: "daily" },
@@ -2346,6 +2355,35 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toBeTruthy();
   });
 
+  it("每日档重格红后有环境证据步：dmesg 的 OOM 行 + 内存读数（ISSUE #3333）", () => {
+    /* 立案现场：GA Daily 连续多天红在不同重格（全量E2E / API 文档 / 单元测试），每次
+     * 环境杀都停在「最大嫌疑」——hosted runner 的内核 OOM 行不会自己进 step 日志，
+     * dmesg 在 ubuntu-24.04 镜像上要 sudo。这一步 `if: failure()` 兜住全部会红的格：
+     * 一个诊断点，不按重格复制三份；绿的那一跑一个字节都不付。 */
+    const dailyYml = readFileSync(path.join(ROOT, ".github/workflows/daily.yml"), "utf8");
+    const stepAt = dailyYml.indexOf("name: 环境证据");
+    expect(
+      stepAt,
+      "每日档没有「环境证据」诊断步 —— 重格的环境杀永远停在「疑似 OOM」",
+    ).toBeGreaterThan(-1);
+    expect(
+      stepAt,
+      "「环境证据」没排在「单元测试」之后 —— 排在它前面的会红格没被兜住",
+    ).toBeGreaterThan(dailyYml.indexOf("name: 单元测试"));
+    expect(
+      stepAt,
+      "「环境证据」该在「覆盖率报告」之前 —— 它是诊断读数，不该排到产物出口后面",
+    ).toBeLessThan(dailyYml.indexOf("name: 覆盖率报告"));
+    const stepText = dailyYml.slice(stepAt, dailyYml.indexOf("name: 覆盖率报告"));
+    expect(stepText, "「环境证据」不是 `if: failure()` —— 绿的那一跑也要付这笔钱").toContain(
+      "if: failure()",
+    );
+    expect(stepText, "没有 dmesg 的 OOM 行读数 —— 证据步空转").toContain("dmesg");
+    expect(stepText, "没有内存读数（free -h）—— 只有 OOM 行分不出「耗尽」还是「被杀」").toContain(
+      "free -h",
+    );
+  });
+
   it("桌包那一档独立成档：自己的清单 + 自己的锁 + 两个触发口同一份（ISSUE #2503）", () => {
     /* 业主口径「桌包独立一条，不要并进每日 `*daily_gates` 表」；原话里的条数**不在这里记账**（#2878 同口径：写进注释而判据不读，漂了没人红；要数问 `.daily-gates` ⇄ `COMFYAPP_CI_DAILY_GATES`，见 §13.5.17）。
      * 落成三件会静默失效的事实：① 清单是**另一张锚点**（并进 `.daily-gates` 后每日会多背一次 cargo 编译）；② 锁是**另一把**（共用 `*lock_daily` 会让手点桌包掐停当日某一格，#2114 换方向复发）；
@@ -2408,11 +2446,34 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "工具预置排到了真打包之后 —— 那一刻 bundler 已经自己去撞那条下载预算了",
     ).toBe(true);
 
+    /* NSIS 工具现场读数（ISSUE #3297）：只加读数、不改判据、恒退 0。三件事都要有执行者 ——
+     * 在清单里、点在盘上的入口、以及**夹在工具预置与真打包之间**（排到构建之后，
+     * 那一刻 bundler 已经撞完 0x2，读数就没有「下一次红就能定性」的用处了）。 */
+    const readoutName = "打包·NSIS 工具现场读数";
+    const readout = stageBlock(text, readoutName);
+    expect(readout, "`.cnb.yml` 里找不到「打包·NSIS 工具现场读数」那一格").toBeTruthy();
+    const readoutEntry = "scripts/ci-nsis-tool-probe.mjs";
+    expect(readout, `读数那一格点的应是 ${readoutEntry}`).toContain(readoutEntry);
+    expect(existsSync(path.join(ROOT, readoutEntry)), `${readoutEntry} 不在盘上`).toBe(true);
+    expect(
+      packageStages.indexOf(readoutName),
+      "「打包·NSIS 工具现场读数」没在清单里 —— 那一格丢了就回到「两格互相矛盾、仓里读不出答案」",
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      packageStages.indexOf("打包·桌包工具预置") < packageStages.indexOf(readoutName) &&
+        packageStages.indexOf(readoutName) < packageStages.indexOf("打包·桌面成品构建"),
+      "NSIS 工具现场读数没夹在「工具预置」与「桌面成品构建」之间",
+    ).toBe(true);
+
     const rows = pipelineLockAssignments(text).filter((r) => r.stagesRef === "*package_gates");
+    /* 定时 11-05 起迁 GA ⇒ CNB 侧只剩两个触发口：手点（`.cnb/web_trigger.yml` 那个按钮）
+     * 与 `api_trigger_package`（ISSUE #3297）。补后者是因为按钮要一双手、而 `#3302` 那格
+     * NSIS 现场读数从合入起一次都没跑到（`web_trigger_package` 派发读数 total=0）——
+     * 判「读数格有没有执行者」这件事，得先有一个能被 CLI / NPC 触发的口。 */
     expect(
       rows.map((r) => r.event).sort(),
-      "桌包档在 CNB 只剩 `web_trigger_package` 一个触发口（定时已迁 GA；按钮在 `.cnb/web_trigger.yml`）",
-    ).toEqual(["web_trigger_package"]);
+      "桌包档在 CNB 该有 `web_trigger_package` + `api_trigger_package` 两个触发口（定时已迁 GA）",
+    ).toEqual(["api_trigger_package", "web_trigger_package"]);
     expect(
       new Set(rows.map((r) => r.lockRef)).size,
       "同一份清单的触发口点的不是同一把锁 —— 同一件事会被排成两次互掐",
@@ -2816,6 +2877,31 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       DAILY_GATES[0],
       "`每日失败立案` 必须排在每日清单最前 —— 写在任何红格之后都会被那次红一起 skipped",
     ).toBe("每日失败立案");
+  });
+
+  /**
+   * ISSUE #3278 方案 B：`每日镜像出勤立案` 不能只是清单上多一个名字。三件都钉住 ——
+   * ① 点的仍是 `ci-mirror-egress-issue.mjs`；② 必带 `--no-block`（它量的是节点出网，
+   * 判红会把 `每日单元测试` / `每日全量E2E` 整条链 skip 掉，§13.5.21）；
+   * ③ 排位在 `每日安装依赖` 之后、`每日单元测试` 之前（前者决定 `cnbSpawn()` 起不起得来，
+   * 后者是「最后一条会红的格」那条顺序判据）。
+   */
+  it("`每日镜像出勤立案` 有执行者、带 --no-block，且排在装依赖之后 / 单元测试之前", () => {
+    const text = readRegisteredConfig();
+    const lines = executableScriptLines(text, "每日镜像出勤立案");
+    expect(lines, "`每日镜像出勤立案` 没有 script ⇒ 自动出勤又没有执行者了").toBeTruthy();
+    const joined = lines.join(" ");
+    expect(joined).toContain("scripts/ci-mirror-egress-issue.mjs");
+    expect(
+      joined,
+      "这一格不许判红：断流是节点出网事实，每天红一次就会把后面整条每日链 skip 掉",
+    ).toContain("--no-block");
+    const order = registeredDailyGateOrder(text);
+    const at = order.indexOf("每日镜像出勤立案");
+    expect(at, "`每日镜像出勤立案` 不在 COMFYAPP_CI_DAILY_GATES 里").toBeGreaterThanOrEqual(0);
+    expect(at).toBeGreaterThan(order.indexOf("每日安装依赖"));
+    expect(at).toBeLessThan(order.indexOf("每日单元测试"));
+    expect(DAILY_GATES).toContain("每日镜像出勤立案");
   });
 
   it("判据不是空转：喂进 CI 配置名时必须判成违规", () => {

@@ -341,8 +341,79 @@ describe("hoisted 层与「没读全」三态（ISSUE #3269）", () => {
     const source = readFileSync(GATE_SCRIPT, "utf8");
     expect(source).toContain('const HOISTED_DIR = "node_modules"');
     expect(source).toContain("storeDir.name === HOISTED_DIR");
-    // `unread` 不能只进打印：这一格必须以 exit 2 收口。
-    expect(source).toMatch(/if \(unread > 0\)[\s\S]*?process\.exit\(2\)/);
+    // `unread` / `untrusted` 不能只进打印：这一格必须以 exit 2 收口。
+    expect(source).toMatch(/if \(unread > 0 \|\| untrusted > 0\)[\s\S]*?process\.exit\(2\)/);
+  });
+});
+
+/**
+ * ISSUE #3274：第三种「没读成」—— 文件在、字节读到了，但内容不是合法 JSON（或不是对象）。
+ * 旧实现里 `scriptBearingPackage()` 解析失败返回 `null`，与「无站点」同形 ⇒ 调用处
+ * `continue` 照旧 `✅ 覆盖了全部` + exit 0。那一支恰好可能带 postinstall，判据漏掉
+ * 一条本该拦下的登记疏漏。与 #3269 的 ENOENT 同口径（exit 2 不给结论），但话术必须
+ * 与「扫描期间消失（工作区并发变更）」区分 —— 解析失败时工作区可能完全静止。
+ */
+describe("读到了但读不成：输入不可信（ISSUE #3274）", () => {
+  test("坏 JSON 的 package.json → exit 2 不给结论，点名那份文件，不冒充「覆盖了全部」", ({
+    repo,
+  }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    repo.write(
+      "node_modules/.pnpm/broken@1.0.0/node_modules/broken/package.json",
+      '{"name": "broken", "scripts": {',
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(2);
+    expect(output).toContain("不可信");
+    expect(output).toContain("broken/package.json");
+    expect(output).toContain("不给结论");
+    expect(output).not.toContain("覆盖了全部带构建脚本的依赖");
+    // 话术不许复用「消失 / 并发变更」那一套：解析失败时工作区可能完全静止。
+    expect(output).not.toContain("消失");
+    expect(output).not.toContain("并发变更");
+  });
+
+  test("合法 JSON 但没有 scripts → 仍是「无站点」，判绿（别把无站点误判成读不成）", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    const one = installed("plain@1.0.0", "plain");
+    repo.write(one.path, one.body);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("覆盖了全部带构建脚本的依赖");
+    expect(output).not.toContain("不可信");
+  });
+
+  test("合法 JSON 但不是对象（数组 / null / 标量）→ 同样不可信，exit 2", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    repo.write("node_modules/.pnpm/arr@1.0.0/node_modules/arr/package.json", "[1,2,3]");
+    repo.write("node_modules/.pnpm/nul@1.0.0/node_modules/nul/package.json", "null");
+    repo.write("node_modules/.pnpm/num@1.0.0/node_modules/num/package.json", "42");
+    const { code, output } = repo.run();
+    expect(code, output).toBe(2);
+    expect(output).toContain("另有 3 份");
+    expect(output).not.toContain("覆盖了全部带构建脚本的依赖");
+  });
+
+  test("不可信与真消失同时在场 → 两种话术各念各的，都进 exit 2", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    repo.write("node_modules/.pnpm/broken@1.0.0/node_modules/broken/package.json", "{bad");
+    repo.mkdir("node_modules/.pnpm/ghost@1.0.0");
+    const { code, output } = repo.run();
+    expect(code, output).toBe(2);
+    expect(output).toContain("另有 1 个条目");
+    expect(output).toContain("不可信");
+    expect(output).toContain("不给结论");
+  });
+
+  test("没读全时，已经读到的漏登记事实照旧列出（不因 exit 2 被吞）", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    const one = installed("esbuild@0.28.2", "esbuild", { postinstall: "node install.js" });
+    repo.write(one.path, one.body);
+    repo.write("node_modules/.pnpm/broken@1.0.0/node_modules/broken/package.json", "{bad");
+    const { code, output } = repo.run();
+    expect(code, output).toBe(2);
+    expect(output).toContain("esbuild@1.0.0");
+    expect(output).toContain("不给结论");
   });
 });
 

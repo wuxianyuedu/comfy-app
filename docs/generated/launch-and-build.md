@@ -2970,10 +2970,14 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 是两件事，过去只有前者有执行者。
 
 **独立一条流水线，不进 `.daily-gates`**（业主口径）。`.cnb.yml` 里那张 `.package-gates`
-锚点 + `.lock-package` 那把锁 + 两个事件键（`"crontab: 0 2 * * *"` 与 `web_trigger_package`，
-按钮在 `.cnb/web_trigger.yml`）。三处都各有判据（`tests/no-platform-ci-config.test.ts`）：
-桌包那几格不许出现在 `COMFYAPP_CI_DAILY_GATES` 里、两个触发口必须引用同一个
-`*package_gates`、而两条 crontab 的时刻不许相同。
+锚点 + `.lock-package` 那把锁 + 触发口。**触发面变过两轮**：定时那一跑 2026-11-05 起
+从这台自托管节点的 `crontab` 迁到 GA 的 `.github/workflows/package-desktop.yml`（见
+`.cnb.yml` 头注「四条流水线」），CNB 侧此后**不再挂** `crontab` 事件（`tests/no-platform-ci-config.test.ts`
+反向钉住）；2026-11-07 起再补 `api_trigger_package`（ISSUE #3297，理由见下面 NSIS 读数段）。
+所以今天 CNB 侧是两个触发口：`web_trigger_package`（手点按钮，`.cnb/web_trigger.yml`）
++ `api_trigger_package`（CLI / NPC），**同一份** `*package_gates`、**同一把** `*lock_package`、
+同一个立案锚点 `*package_fail_stage`。判据（`tests/no-platform-ci-config.test.ts`）：桌包那几格
+不许出现在 `COMFYAPP_CI_DAILY_GATES` 里、两个触发口必须引用同一个 `*package_gates`。
 
 **发布档的触发与「三平台」现状（#2641，2026-10-31）**：设计里曾写「`tag: v*` 触发发布档、
 三平台（ubuntu / windows / macOS）打包，20–40min」—— 那是**前瞻**，不是今天的形状，也**不**
@@ -3112,13 +3116,87 @@ tauri 判定工具缓存目录不完整时会**先删掉** `%LOCALAPPDATA%\tauri
 `pnpm tauri build` → `[3/3]` 发布（同一个入口）。`build-standalone.ps1` 的 `--no-bundle`
 形态不变（那是「只要能跑的壳」那条路）。
 
+**NSIS 工具现场读数（ISSUE #3297；只加读数、不改判据、恒退 0）**：桌包档曾每一次都死在
+最后一格 `Running makensis … / Unable to start child process, error 0x2`，而前一格
+`打包·桌包工具预置` 逐字报「必需件齐全」——两格对**同一棵树**给出互相矛盾的结论：
+预置判的是 `resolveTauriCacheRoot()` 读 `%LOCALAPPDATA%` 拼出来的 `tauri\NSIS`，
+而 bundler 走 `SHGetKnownFolderPath`（就是上面那句「不读 `LOCALAPPDATA` 环境变量」），
+普通会话里两者同值，`orange-runner`（LocalSystem）这一族未必。仓里读不出答案，必须在
+那一格现场量，所以清单在「工具预置」与 `pnpm tauri build` 之间多一格
+`打包·NSIS 工具现场读数`（`scripts/ci-nsis-tool-probe.mjs`）：
+
+- 一次打出三样：`ensure` 侧的 `%LOCALAPPDATA%` 原值与落点、bundler 侧的 known folder
+  （`[Environment]::GetFolderPath('LocalApplicationData')` —— `SHGetKnownFolderPath` 的
+  .NET 面）与落点、两处 `makensis.exe` 各自的 `Test-Path` / `Length` / **真跑一次**
+  `/VERSION` 的退出码与输出 / 整树文件数 / 进程账号 / 两处是否同值。
+- 为什么不能只 `Test-Path`：`0x2` 在「被起 exe 的依赖 DLL 解析不到」时同样回这个码，
+  与「exe 本身不在」逐字同形；而 `NSIS_PLAN.required` 六件只是「bundler 会不会去重下」
+  的判据、不是「完整」的判据，所以整树文件数**独立数**，不复用 `missingRequired()` 的结论。
+- 这一格**恒退 0**（与 `镜像身份` / `工作区复用读数` 同族）：两处不同值、`/VERSION`
+  跑不起来，都是**候选根因的读数**而非判红，处置由人照读数定。上面那句「不读环境变量」
+  的处置、以及 `resolveTauriCacheRoot` 的口径，**要等这一格给出读数之后**再分叉改，
+  不在这一轮猜修法。顺序由 `tests/no-platform-ci-config.test.ts` 钉住（夹在两格之间）。
+
+**这格读数曾经没有执行者（ISSUE #3297 的第二次现场）**：PR #3302 把读数格合进 master
+之后，CNB 桌包档的定时已经迁走、而 `web_trigger_package` 手点口从没被点过
+（`cnb build get-build-logs --event web_trigger_package` 读数 `total=0`）—— 四次
+`makensis 0x2` 全发生在 #3302 合入**之前**，合入之后这一档再没跑过，读数一次都没落地。
+「判据在场、执行者不在场」正是 #2114 那一族，所以本轮补 `api_trigger_package`：
+与 `api_trigger_daily` 同构（服务端只认 `api_trigger` 前缀，实测 400），让读数与后续修法
+能被 CLI / NPC 触发复验。现场逐格复核（最近一跑 `cnb-llp-1k6jutvp5`）：`stage-2` 报
+`bundler 落点：…\systemprofile\AppData\Local\tauri\NSIS` + `必需件齐全 → 不动`，
+`stage-3` 全程无 `Downloading` / `Recreating it` 而直接 `Running makensis → 0x2` ⇒
+工具缓存确实在场，缝在「bundler 到底去哪找、能不能真起 makensis.exe」，照读数分叉。
+
 **自查入口**（不点按钮、不等定时）：
 
 ```bash
 pnpm tauri build                                  # 整条链（本机实测见上面那张表）
 node scripts/publish-desktop-bundle.mjs --dry-run # 只打印会往哪儿落、会删谁
 node scripts/publish-desktop-bundle.mjs           # 真发布；常驻根会打在第一行
+node scripts/ci-nsis-tool-probe.mjs               # 只量 NSIS 工具现场（恒退 0，只读）
 ```
+
+#### 7.7.1 无效 workflow 会伪造一条它没声明事件的空 run —— 别拿 `event` 反推触发面（ISSUE #3299）
+
+**这一节答的是「镜像仓 Actions 里那条 `event=push` 的 run 是哪来的」**。`.github/workflows/package-desktop.yml`
+的 `on:` 从落地起只有 `schedule` + `workflow_dispatch`，逐笔提交逐字如此、GitHub raw 双取一致；
+但它在文件坏掉那段时间里「每收到一次镜像 push 就长一条 `event=push`、`total_count: 0` 个 job、
+`conclusion: failure` 的 run」。第一反应会是「文件是不是偷偷声明了 `push`」——**这条读法是错的**：
+`event` 字段记的是「平台把哪个事件投递到了这个 workflow」，不是「这个 workflow 声明了哪些事件」。
+文件解析不过时，平台照样会为到达的事件建一条 run 来挂注解，于是就出现「声明面里没有的事件、
+却有一条该事件的 run」。
+
+**实测读数（镜像仓 `wuxianyuedu/comfy-app`，workflow id `404530522`，公开只读 API）**：
+
+- 坏文件期（顶层 `env:` 里写了 `${{ runner.temp }}`，#3276 那次回归，逐笔 `git show <sha>:.github/workflows/package-desktop.yml`
+  都是 `on: schedule + workflow_dispatch` 且顶层 `env:` 含 `runner.temp`）：run #5–#36 全是 `event=push`、
+  `GET /runs/{id}/jobs` 恒 `total_count: 0`；#36 的 run 页面 `Invalid workflow file` / `Unrecognized named-value`
+  各出现 1 次。同期 `schedule` run #1–#4 各 1 个 job（那是文件还有效的时段）。
+- 修好之后（`212e524d` 起把 `COMFY_CI_TOOLS_ROOT` 下沉到 step 级 `env:`，见 #3276）：#37 起全是
+  `workflow_dispatch`、各 1 个 job（#40 `success`），**再无一条 push run**。
+- 同期 `master-gate.yml`（`on: push`）#36–#47 每笔 push 都起跑 `success`（含 `5fc65679` / `b209aa05` /
+  `2686e35b`）——**push 事件照常发生**，只是有效文件不再为它建空 run。
+
+**三个候选的裁决**：候选 A（无效文件为每个到达事件伪造一条没声明事件的空 run）**成立**——它同时解释
+「`event=push` 却 0 job」与「修好后同样 push 却零 run」；候选 B（镜像格 `git push --force HEAD:refs/heads/master`
+属 `push` 事件定义面，head_sha 与本仓逐字一致，见 §13.5.34）只是**push 事件的来源**；候选 C
+（#5 那批文件其实有效）可排除——#5 起文件已带顶层 `runner.temp`，是坏的。
+
+**可复做的判断口径**（下次再看到「workflow 长出它没声明的事件的 run」）：
+
+1. **先看 job 数与注解，再看 `event`**：`GET /repos/<owner>/<repo>/actions/runs/<id>/jobs` 为 `total_count: 0`
+   + 页面 `Invalid workflow file` / `Unrecognized named-value` ⇒ 这是**文件坏了**的旁证，不是触发面变了。
+2. **触发面只认 `on:` 那一份**（`git show <head_sha>:.github/workflows/<file>.yml` 与 GitHub raw 双取），
+   **不许从 `event` 反推**。本次就是先按 `event=push` 反推出「文件声明了 push」，与 raw 内容矛盾，
+   才回头去查注解，把 #3276 的诊断带偏过一次。
+3. **「修好后同一分支再推、却不出 run」不是判据漂移**：正是文件从无效变有效的那一格读数；
+   要验「push 到底有没有发生」，去看同一仓库里 `on: push` 的 workflow（本例 `master-gate.yml`）有没有
+   对应 run，别拿这条坏 workflow 的 run 列表当事件流水。
+
+> 这条不进门禁：`event` 是平台侧事实、判据自身不做网络请求（§13.5.13 的口径），
+> 且它只在「文件坏掉」这一形出现、有确定的注解形状可指到行，写进口径比再写一条扫描器合适
+> （硬规则 24 末句：怪癖的归宿是单子/口径，不是第二套判定）。
 
 ---
 

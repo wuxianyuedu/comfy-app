@@ -29,7 +29,11 @@
  *  · 逐格分类只调 `ci-build-readout.mjs` 那一份（`classifyBuildOutcome` / `findStageMatches` /
  *    `fetchStageDetail` / `normalizeStageContent`），这里不写第二份取数（§12.12）；
  *  · 窗口覆盖自证与「钉住现在」的口径沿用 `check-daily-attendance.mjs`（#2392 那条：
- *    没取满窗口就不许念「窗口内没有」）。
+ *    没取满窗口就不许念「窗口内没有」）；
+ *  · **ISSUE #3278 起多带一份「环境红」信号**：`present` 只答「窗口里至少有一跑推成」，
+ *    间歇性 egress（现场 6 present + 2 egress）在它下面仍念「出勤 ✓」，于是自动执行者
+ *    天天跑、天天绿，断流从来不会被主动立案。信号按下面 {@link egressWindowSignal} 单列一档，
+ *    **不改三态退码**：`0` 仍是出勤，只是把「其中几跑是环境红」读得出来。
  *
  * ## 三态退码（与 `check-daily-attendance.mjs` 同口径）
  *
@@ -43,8 +47,13 @@
  * ```text
  * pnpm check:mirror-attendance                       # 默认 24h 窗口、最多读 3 跑正文
  * pnpm check:mirror-attendance --hours 72 --limit 5
- * pnpm check:mirror-attendance --json                # 机器可读（逐跑形状 + 覆盖自证）
+ * pnpm check:mirror-attendance --json                # 机器可读（逐跑形状 + 覆盖自证 + 环境红信号）
  * ```
+ *
+ * `--json` 里的 `signal` 是 ISSUE #3278 那台「环境红」读数键：`stable` /
+ * `intermittent-egress` / `egress-only` / `other-absent` / `no-verdict`。
+ * 它**不改** `code`：间歇性断流仍是 `code=0 / verdict=present`，由信号单独把
+ * 「其中几跑是节点出网卡住的」说出来，交每日档 `每日镜像出勤立案` 决定是否立案。
  */
 import { cnbJson, makeRunner } from "./ship-exec.mjs";
 import { classifyBuildOutcome, fetchStageDetail, findStageMatches } from "./ci-build-readout.mjs";
@@ -187,11 +196,86 @@ export function readMirrorCell(run, slug, sn) {
 }
 
 /**
+ * 「环境红」窗口信号的五种形状（ISSUE #3278）。
+ *
+ * 这一档**不是**第二份出勤判决：`judgeMirrorAttendance()` 的三态退码原封不动，
+ * 本表只把「窗口里有没有 egress、要不要立案」折成一句机器读得懂的键。之所以必须单列，
+ * 是因为 `presentCount > 0 ⇒ 出勤 ✓` 会吞掉间歇性断流 —— 现场 24h 窗口里 6 跑推成、
+ * 2 跑 `egress`，判据仍是 `code=0 / verdict=present`，而「今天有 PR 因节点出网被判红」
+ * 这件事在读数里没有任何一处说得出来。
+ */
+export const EGRESS_SIGNAL = {
+  STABLE: "stable",
+  INTERMITTENT: "intermittent-egress",
+  EGRESS_ONLY: "egress-only",
+  OTHER_ABSENT: "other-absent",
+  NO_VERDICT: "no-verdict",
+};
+
+/** 每种信号对应的下一动作；`shouldFile` 只给两种 egress 形状开门（一条诉求一张单）。
+ * @type {Record<string, string>}
+ */
+export const EGRESS_SIGNAL_NOTES = {
+  stable: "窗口内推成且没有 egress ⇒ 无事可立",
+  "intermittent-egress": "间歇性断流：有推成也有 egress ⇒ 立案（环境红，不是 PR 内容红）",
+  "egress-only": "窗口内一次都没推成、全是 egress ⇒ 立案（持续断流）",
+  "other-absent": "缺勤但不是出网形状（令牌 / 仓库 / 派发）⇒ 不立 egress 单，由缺勤判决自己交账",
+  "no-verdict": "判据没给结论（列表取不到 / 窗口没盖满 / 没有这一格）⇒ 不立案，也不判绿",
+};
+
+/**
+ * 把一次出勤判决折成「环境红」信号。**纯函数**：输入只有判决对象，不碰网络、不写单。
+ *
+ * `CODE.PRESENT` 与「信号说有 egress」刻意可以同时成立 —— 这是本单要治的那一形：
+ * 退码答「这一格在窗口内出过勤」，信号答「其中几跑是被节点出网卡住的」。
+ * 把两者合成一位退码，就等于让一条环境红把每日档整条链 skip 掉（§13.5.21）。
+ *
+ * @param {{code:number, stats:{shapeCounts:Record<string,number>, seen:number, present:number}}} out
+ * @returns {{signal:string, egress:number, present:number, seen:number, shouldFile:boolean, note:string}}
+ */
+export function egressWindowSignal({ code, stats }) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 平台读数形状由外部 JSON 给，键可能整族缺席
+  const egress = stats.shapeCounts.egress ?? 0;
+  const base = { egress, present: stats.present, seen: stats.seen };
+  /* `EGRESS_SIGNAL` 按 Record<string,string> 标窄，而仓内开了 noUncheckedIndexedAccess：
+   * 直接 `let signal = EGRESS_SIGNAL.NO_VERDICT` 会把 undefined 一起带进类型，
+   * 下面拿它当索引就当场 TS2538。`String()` 是给 tsc 看的那一跳，不是运行时兜底。 */
+  /** @type {string} */
+  let signal = String(EGRESS_SIGNAL.NO_VERDICT);
+  if (code !== CODE.NO_VERDICT) {
+    if (stats.present > 0 && egress > 0) {
+      signal = EGRESS_SIGNAL.INTERMITTENT;
+    } else if (stats.present > 0) {
+      signal = EGRESS_SIGNAL.STABLE;
+    } else {
+      signal = egress > 0 ? EGRESS_SIGNAL.EGRESS_ONLY : EGRESS_SIGNAL.OTHER_ABSENT;
+    }
+  }
+  return {
+    ...base,
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- EGRESS_SIGNAL_NOTES 按 string 索引（未开 noUncheckedIndexedAccess）
+    note: EGRESS_SIGNAL_NOTES[signal] ?? "",
+    shouldFile: signal === EGRESS_SIGNAL.INTERMITTENT || signal === EGRESS_SIGNAL.EGRESS_ONLY,
+    signal,
+  };
+}
+
+/** 把信号挂到三态判决对象上，让 `--json` 与每日档执行者共用同一份口径（§12.12）。
+ * @template {{code:number, stats:{shapeCounts:Record<string,number>, seen:number, present:number}}} T
+ * @param {T} out
+ * @returns {T & {signal: ReturnType<typeof egressWindowSignal>}}
+ */
+function withEgressSignal(out) {
+  return { ...out, signal: egressWindowSignal({ code: out.code, stats: out.stats }) };
+}
+
+/**
  * 出结论：**不取数**，只对已有的逐跑读数做判决（可离线测的那一半）。
  *
  * @param {{builds:any[], readings:Array<{sn:string,found:boolean,shape:string,evidence:string}>, windowHours:number, now:number}} input
  * @returns {{code:number, verdict:string, headline:string, evidence:any[],
- *   stats:{shapeCounts:Record<string,number>, windowBuilds:number, seen:number, present:number}}}
+ *   signal:ReturnType<typeof egressWindowSignal>,
+ *   stats:{shapeCounts:Record<string,number>, windowBuilds:number, seen:number, present:number, egress:number}}}
  */
 export function judgeMirrorAttendance({ builds, readings, windowHours, now }) {
   const horizonMs = now - windowHours * 3_600_000;
@@ -208,6 +292,7 @@ export function judgeMirrorAttendance({ builds, readings, windowHours, now }) {
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- Record 索引缺键时运行时为 undefined（未开 noUncheckedIndexedAccess）
   const presentCount = shapeCounts.present ?? 0;
   const stats = {
+    egress: shapeCounts.egress ?? 0,
     shapeCounts,
     windowBuilds: inWindow.length,
     seen: seen.length,
@@ -216,18 +301,21 @@ export function judgeMirrorAttendance({ builds, readings, windowHours, now }) {
   if (presentCount > 0) {
     /* 「最近那一跑」取的是**读数顺序上的第一条 present**（调用方按平台给的执行序交进来）。 */
     const first = seen.find((r) => r.shape === "present");
-    return {
+    /* egress 必须进 headline：只念「6/8 跑推成」会把剩下 2 跑的环境红藏进 shapeCounts，
+     * 而人翻构建日志时看到的正是「这一跑红了」——两句话对不上就要重查一遍（ISSUE #3278）。 */
+    const egressTail = stats.egress > 0 ? ` · 其中 egress×${stats.egress}（环境红/节点出网）` : "";
+    return withEgressSignal({
       code: CODE.PRESENT,
       verdict: "present",
       headline:
         `出勤 ✓ 最近读的 ${readings.length} 跑里 ${presentCount}/${seen.length} 跑「已推 · 已派发」` +
-        `（最近：${first?.sn ?? "(未点到)"}）· 窗口 ${windowHours}h 内共 ${inWindow.length} 跑`,
+        `（最近：${first?.sn ?? "(未点到)"}）· 窗口 ${windowHours}h 内共 ${inWindow.length} 跑${egressTail}`,
       evidence: seen.map((r) => ({ sn: r.sn, shape: r.shape, note: SHAPE_NOTES[r.shape] ?? "" })),
       stats,
-    };
+    });
   }
   if (seen.length === 0) {
-    return {
+    return withEgressSignal({
       code: CODE.NO_VERDICT,
       verdict: "unknown",
       headline:
@@ -238,7 +326,7 @@ export function judgeMirrorAttendance({ builds, readings, windowHours, now }) {
         shape: r.shape,
       })),
       stats,
-    };
+    });
   }
   const named = Object.entries(shapeCounts)
     .filter(([shape]) => shape !== "present")
@@ -248,7 +336,7 @@ export function judgeMirrorAttendance({ builds, readings, windowHours, now }) {
    * 把「最近三跑零次推成」念成「窗口内零次推成」就是 #2392 那一族（判据窗口比取数面大），
    * 所以这里同时念出未逐跑读的那几跑，让读者知道结论的量程在哪儿。 */
   const unread = Math.max(0, inWindow.length - readings.length);
-  return {
+  return withEgressSignal({
     code: CODE.ABSENT,
     verdict: "absent",
     headline:
@@ -261,7 +349,7 @@ export function judgeMirrorAttendance({ builds, readings, windowHours, now }) {
       ...(r.evidence === "" ? {} : { line: r.evidence }),
     })),
     stats,
-  };
+  });
 }
 
 /**
@@ -275,6 +363,55 @@ export function judgeMirrorAttendance({ builds, readings, windowHours, now }) {
 function flagValue(argv, flag) {
   const at = argv.indexOf(flag);
   return at === -1 ? "" : (argv[at + 1] ?? "");
+}
+
+/**
+ * 一次「取数 → 逐跑读格 → 判决」的完整读数（ISSUE #3278 抽出的共用出口）。
+ *
+ * 原来这一段只长在 `main()` 里，于是每日档 `ci-mirror-egress-issue.mjs` 要么把十行取数
+ * 抄一遍（两份 PR 档筛选迟早漂）、要么去解析 `main()` 打到 stdout 的 JSON（拿日志当接口）。
+ * 两条都不行，所以把编排也收成一处：`main()` 与每日档执行者读的是**同一份** `payload`，
+ * 判决仍是 {@link judgeMirrorAttendance} 那唯一一份（§12.12）。
+ *
+ * 三态里「没给结论」这两种形状由 `ok:false` 交回调用方：调用方各自决定打印 / 不写 / 退码，
+ * 但**都不许**把 `why` 落成「窗口内没有 egress」（§13.6.3）。
+ *
+ * @param {{run:(cmd:string,args:string[])=>any, slug:string, windowHours:number, now:number, limit:number}} input
+ * @returns {{ok:false, why:string} | {ok:true, out:ReturnType<typeof judgeMirrorAttendance>,
+ *   payload:Record<string,unknown>, coverage:string, asked:string[], windowBuilds:number}}
+ */
+export function collectMirrorAttendance({ limit, now, run, slug, windowHours }) {
+  const win = fetchBuildsCoveringWindow({ run, slug, windowHours, now });
+  if (win.list === null) {
+    return {
+      ok: false,
+      why: "取不到构建列表（`cnb` 起不来 / 网络不通 / 返回不是 JSON）—— 判据自身不做重试",
+    };
+  }
+  if (!win.covered) {
+    return {
+      ok: false,
+      why: `取数没盖住 ${windowHours}h 窗口 —— ${win.note}；「窗口内没出勤」这句话在这上面不成立`,
+    };
+  }
+  /* 只读 PR 档那一族：镜像格挂在质量门禁流水线上，非 PR 的跑压根没有这一格。
+   * 这里不预先按事件猜 —— 交出去取正文，`no-cell` 那一支会把「不是这一档」如实念出来。 */
+  const prBuilds = win.list.filter((b) => /pull/i.test(String(b?.eventUrl ?? b?.event ?? "")));
+  const picked = (prBuilds.length > 0 ? prBuilds : win.list).slice(0, limit);
+  const readings = picked.map((b) => {
+    const sn = String(b?.sn ?? "");
+    return { sn, ...readMirrorCell(run, slug, sn) };
+  });
+  const out = judgeMirrorAttendance({ builds: win.list, readings, now, windowHours });
+  const asked = picked.map((b) => String(b?.sn ?? ""));
+  return {
+    asked,
+    coverage: win.note,
+    ok: true,
+    out,
+    payload: { ...out, coverage: win.note, asked },
+    windowBuilds: out.stats.windowBuilds,
+  };
 }
 
 /**
@@ -297,29 +434,12 @@ export function main(rawArgv, env = {}) {
   const repoFlag = flagValue(argv, "--repo");
   const slug = env.slug ?? (repoFlag === "" ? "moon-read/comfy-app-t3" : repoFlag);
 
-  const win = fetchBuildsCoveringWindow({ run, slug, windowHours, now });
-  if (win.list === null) {
-    console.log(
-      "[mirror-attendance] 没结论 ? 取不到构建列表（`cnb` 起不来 / 网络不通 / 返回不是 JSON）—— 判据自身不做重试",
-    );
+  const reading = collectMirrorAttendance({ limit, now, run, slug, windowHours });
+  if (!reading.ok) {
+    console.log(`[mirror-attendance] 没结论 ? ${reading.why}`);
     return CODE.NO_VERDICT;
   }
-  if (!win.covered) {
-    console.log(
-      `[mirror-attendance] 没结论 ? 取数没盖住 ${windowHours}h 窗口 —— ${win.note}；「窗口内没出勤」这句话在这上面不成立`,
-    );
-    return CODE.NO_VERDICT;
-  }
-  /* 只读 PR 档那一族：镜像格挂在质量门禁流水线上，非 PR 的跑压根没有这一格。
-   * 这里不预先按事件猜 —— 交出去取正文，`no-cell` 那一支会把「不是这一档」如实念出来。 */
-  const prBuilds = win.list.filter((b) => /pull/i.test(String(b?.eventUrl ?? b?.event ?? "")));
-  const picked = (prBuilds.length > 0 ? prBuilds : win.list).slice(0, limit);
-  const readings = picked.map((b) => {
-    const sn = String(b?.sn ?? "");
-    return { sn, ...readMirrorCell(run, slug, sn) };
-  });
-  const out = judgeMirrorAttendance({ builds: win.list, readings, now, windowHours });
-  const payload = { ...out, coverage: win.note, asked: picked.map((b) => String(b?.sn ?? "")) };
+  const { out, payload, coverage } = reading;
   if (asJson) {
     console.log(JSON.stringify(payload, null, 2));
   } else {
@@ -327,7 +447,13 @@ export function main(rawArgv, env = {}) {
     for (const e of out.evidence) {
       console.log(`[mirror-attendance]   ${e.sn} · ${e.shape}${e.line ? ` · ${e.line}` : ""}`);
     }
-    console.log(`[mirror-attendance] 取数覆盖自证：${win.note}`);
+    /* 机器读的一行：`signal=` 前缀让日志抓取 / 每日档执行者能直接认出「环境红」，
+     * 不必靠人把「出勤 ✓ 6/8」再和 PR 红格对一遍（ISSUE #3278）。 */
+    console.log(
+      `[mirror-attendance] signal=${out.signal.signal} egress=${out.signal.egress}/${out.signal.seen}` +
+        ` shouldFile=${out.signal.shouldFile} · ${out.signal.note}`,
+    );
+    console.log(`[mirror-attendance] 取数覆盖自证：${coverage}`);
   }
   return out.code;
 }
