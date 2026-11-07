@@ -2,6 +2,8 @@
 // 本地（Ollama / LM Studio / vLLM）与远程（OpenAI 兼容）两类提供商，
 // 都讲 OpenAI 的 /v1/chat/completions 协议。
 
+import { isRecord } from "~/lib/is-record";
+
 export type LLMProviderType = "local" | "remote";
 
 /** 已知的任务类型 key —— 用于按场景选择不同温度。
@@ -100,6 +102,12 @@ export function normalizeEntryApiKey(rec: Record<string, unknown>): string | nul
 /** extraModels 的原始存储 / 传输形状：旧数据是纯名字字符串，新数据是条目对象。 */
 export type RawExtraModel = string | RemoteModelEntry;
 
+/** 运行期白名单判定：词表里有的字符串才收窄成 `RemoteModelKind`。 */
+function isRemoteModelKind(value: unknown): value is RemoteModelKind {
+  const kinds: ReadonlyArray<string> = REMOTE_MODEL_KINDS;
+  return typeof value === "string" && kinds.includes(value);
+}
+
 /**
  * 列表里**一枚对象**的容错归一（`normalizeExtraModels` 与 `splitExtraModels` 共用）。
  *
@@ -117,11 +125,10 @@ export type RawExtraModel = string | RemoteModelEntry;
  * 返回 `null` = 这一枚不是条目（不是对象、没有名字、名字全空白）。
  */
 function normalizeExtraModelItem(item: unknown): RemoteModelEntry | null {
-  if (typeof item !== "object" || item === null) {
+  if (!isRecord(item)) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  const rec = item as Record<string, unknown>;
+  const rec = item;
   const name = typeof rec.name === "string" ? rec.name.trim() : "";
   if (name === "") {
     return null;
@@ -133,12 +140,7 @@ function normalizeExtraModelItem(item: unknown): RemoteModelEntry | null {
     baseUrl: typeof rec.baseUrl === "string" && rec.baseUrl.trim() !== "" ? rec.baseUrl : null,
     // 三态：`undefined` 时**不挂这个键**（「不提供意见」不能被写成「清空」）
     ...(apiKey === undefined ? {} : { apiKey }),
-    /* SAFETY: 类型断言已复核 */
-    kind:
-      /* SAFETY: 类型断言已复核 */
-      typeof kind === "string" && (REMOTE_MODEL_KINDS as ReadonlyArray<string>).includes(kind)
-        ? (kind as RemoteModelKind)
-        : null,
+    kind: isRemoteModelKind(kind) ? kind : null,
   };
 }
 

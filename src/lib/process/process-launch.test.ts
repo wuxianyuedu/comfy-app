@@ -20,7 +20,10 @@ import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { spawnMock, openSyncMock, closeSyncMock, warnMock, spawned } = vi.hoisted(() => ({
-  spawnMock: vi.fn(),
+  spawnMock:
+    vi.fn<
+      (command: string, args: Array<string>, options: Record<string, unknown>) => EmitterChild
+    >(),
   openSyncMock: vi.fn<(file: string, flags: string) => number>(() => 42),
   closeSyncMock: vi.fn<(fd: number) => void>(),
   warnMock: vi.fn<(message: string) => void>(),
@@ -78,10 +81,7 @@ function fakeChild(): EmitterChild {
 
 /** 最近一次 `spawn` 的三元参数（命令 / 参数 / 选项）。 */
 function lastSpawn(): [string, Array<string>, Record<string, unknown>] {
-  /* SAFETY: 类型断言已复核 */
-  const call = spawnMock.mock.calls.at(-1) as
-    | [string, Array<string>, Record<string, unknown>]
-    | undefined;
+  const call = spawnMock.mock.calls.at(-1);
   if (!call) {
     throw new Error("这一条用例没有调到 spawn —— 判据落空，先查分支");
   }

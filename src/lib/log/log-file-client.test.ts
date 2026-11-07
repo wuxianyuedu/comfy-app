@@ -16,6 +16,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
 import {
   fetchFileLogSlice,
   fetchLogSessions,
@@ -67,8 +68,8 @@ function methodOf(call: FetchCall | undefined): string | undefined {
 /** JSON 请求体。 */
 function bodyOf(call: FetchCall | undefined): Record<string, unknown> {
   const raw = typeof call?.[1]?.body === "string" ? call[1].body : "{}";
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(raw) as Record<string, unknown>;
+  const parsed: unknown = JSON.parse(raw);
+  return isRecord(parsed) ? parsed : {};
 }
 
 describe("fetchFileLogSlice —— 增量游标", () => {
