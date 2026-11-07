@@ -1461,6 +1461,20 @@
     # 日志里没有 `Downloading` / `Recreating it`（2026-10-27 本机实测，见规范 §7.7）。
     timeout: 5m
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/tauri-tools-cache.mjs
+  - name: 打包·NSIS 工具现场读数
+    # ISSUE #3297：桌包档每一次死在 `Running makensis … / Unable to start child process, error 0x2`，
+    # 而前一格「桌包工具预置」逐字报「必需件齐全」。两格对同一棵树给出互相矛盾的结论：
+    # 预置判 `%LOCALAPPDATA%` 拼出来的 `tauri\NSIS`，bundler 走 SHGetKnownFolderPath
+    # （§7.7 记着「不读 LOCALAPPDATA 环境变量」），LocalSystem 会话里两者未必同值。
+    #
+    # **这一格只加读数、不改判据、不猜修法**（恒退 0）：把 ensure 侧原值、bundler 侧
+    # known folder、两处 makensis.exe 的 Test-Path / Length / 真跑 /VERSION / 整树文件数
+    # 与进程账号一次打出来，下一次红就能定性分叉（口径与 §7.7 那句待复核的话对齐）。
+    # 逻辑在 `scripts/ci-nsis-tool-probe.mjs` —— 不在配置里就地写 PowerShell，
+    # 与 `镜像身份` / `工作区复用读数` 同一条：配置里的逻辑一条判据都测不到它。
+    # 顺序也是判据的一部分：排在 `pnpm tauri build` 之后 = 那一刻 bundler 已经撞完了。
+    timeout: 5m
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-nsis-tool-probe.mjs
   - name: 打包·桌面成品构建
     # 整条链：`beforeBuildCommand`（`build-desktop.mjs` → `pnpm build` → 数产物 → 体积护栏）
     # → cargo release 编译 → bundle（nsis + msi）。判据一个字都不在这里重写，也不带 `--no-bundle`
