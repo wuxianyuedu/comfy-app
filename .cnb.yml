@@ -2570,6 +2570,18 @@ master:
       name: 桌面成品包（手动触发）
       lock: *lock_package
       stages: *package_gates
+  # 桌包那一档的 API 口（ISSUE #3297）：与 `api_trigger_daily` 同构 —— 按钮要一双手，
+  # 而 `start-build --event` 服务端只认 `api_trigger` 前缀（实测 400，见上面每日档那格）。
+  # 定时 11-05 起迁去 GA、手点口从没人点过（`get-build-logs --event web_trigger_package`
+  # 读数 total=0）⇒ #3302 合进来的「打包·NSIS 工具现场读数」一直是没有执行者的格，
+  # 四次 `makensis 0x2` 全发生在它合入之前。补这一口是为了让读数/修法能被程序触发复验。
+  # 与手点口共用同一份 `*package_gates`、同一把 `*lock_package`、同一个立案锚点
+  # `*package_fail_stage`（红了同样有人看得见）；不另抄清单、不另起第二把锁。
+  api_trigger_package:
+    - <<: [*common, *package_fail_stage]
+      name: 桌面成品包（API 触发）
+      lock: *lock_package
+      stages: *package_gates
   api_trigger_e2e:
     - <<: *common
       name: 单跑全量E2E（API 触发）
