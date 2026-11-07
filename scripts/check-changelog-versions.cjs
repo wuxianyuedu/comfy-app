@@ -153,6 +153,30 @@ function parseSections(text) {
 }
 
 /**
+ * 去掉一行里的 HTML 注释。单遍线性扫描：从 `<!--` 起整段丢弃到 `-->`，
+ * 未闭合的丢到行尾。不用 `replaceAll(/<!--[\s\S]*?-->/g, "")`：删掉一段后
+ * 仍可能留下新的 `<!--`（CodeQL #8 `js/incomplete-multi-character-sanitization`）。
+ * @param {string} line
+ * @returns {string}
+ */
+function stripHtmlComments(line) {
+  let out = "";
+  let rest = line;
+  for (;;) {
+    const start = rest.indexOf("<!--");
+    if (start === -1) {
+      return out + rest;
+    }
+    out += rest.slice(0, start);
+    const end = rest.indexOf("-->", start + 4);
+    if (end === -1) {
+      return out;
+    }
+    rest = rest.slice(end + 3);
+  }
+}
+
+/**
  * 段落里点名的 ISSUE 号集合(去重)。HTML 注释里的 `#N` 不算 —— 锚那一行本身
  * 不带号,但注释里引一句「见 §13.10.5」是常态,别把它数进来。
  * @param {string[]} body
@@ -161,7 +185,7 @@ function parseSections(text) {
 function issuesIn(body) {
   const set = new Set();
   for (const line of body) {
-    const stripped = line.replaceAll(/<!--[\s\S]*?-->/g, "");
+    const stripped = stripHtmlComments(line);
     for (const m of stripped.matchAll(ISSUE_RE)) {
       const issue = m.groups?.issue;
       if (issue !== undefined) {
