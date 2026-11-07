@@ -30,6 +30,11 @@ concurrency:
   group: push-master
   cancel-in-progress: false
 
+# 显式最小权限（CodeQL `actions/missing-workflow-permissions`，#20）：doc-chain 只读
+# 当前树的 docs/ 与源文件，不推分支、不写 issue。
+permissions:
+  contents: read
+
 jobs:
   doc-chain:
     # 钉 24.04 不跟浮动标签的理由见 pr-gate.yml 同名注释。

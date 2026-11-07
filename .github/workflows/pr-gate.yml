@@ -60,6 +60,12 @@ on:
         required: false
         default: ""
 
+# 显式最小权限（CodeQL `actions/missing-workflow-permissions`，#3–#7）：本工作流只读仓库
+# —— checkout、装依赖、跑各判据、上传 artifact。不写这一栏时 GITHUB_TOKEN 拿仓库默认
+# 权限（可能含 contents: write），对一条纯判据工作流没有必要。
+permissions:
+  contents: read
+
 concurrency:
   group: pr-${{ github.event.client_payload.pr_number || github.run_id }}
   cancel-in-progress: true
