@@ -58,6 +58,8 @@ export function parseRemoteRefSha(stdout, ref) {
  * @param {object} deps
  * @param {string} deps.headSha 本次推的 HEAD（完整 40 位）
  * @param {(line: string) => void} deps.log 输出通道
+ * @param {number} [deps.maxAttempts] 尝试上限覆盖：托管机实验的 once 档传 1（ISSUE #3346，
+ *   三跳各只试一次）；缺省 {@link VERIFY_MAX_ATTEMPTS}
  * @param {string} deps.prefix 行前缀（`mirror` / `mirror-master`）
  * @param {string} deps.ref 目标 ref 全名
  * @param {(args: string[]) => {code: number, stderr: string, stdout: string}} deps.runGit 执行者
@@ -70,13 +72,25 @@ export function parseRemoteRefSha(stdout, ref) {
  * @returns {Promise<{attempts: number, code: number, note: string, remoteSha: string | null}>}
  */
 export async function verifyPushedRef(deps) {
-  const { headSha, log, now, prefix, ref, runGit, runGitWithRetry, sanitize, sleep, token, url } =
-    deps;
+  const {
+    headSha,
+    log,
+    maxAttempts: attemptsCap = VERIFY_MAX_ATTEMPTS,
+    now,
+    prefix,
+    ref,
+    runGit,
+    runGitWithRetry,
+    sanitize,
+    sleep,
+    token,
+    url,
+  } = deps;
   const read = await runGitWithRetry(["ls-remote", url, ref], {
     budgetMs: VERIFY_RETRY_BUDGET_MS,
     label: "推送后回读",
     log,
-    maxAttempts: VERIFY_MAX_ATTEMPTS,
+    maxAttempts: attemptsCap,
     now,
     prefix,
     runGit,
