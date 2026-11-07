@@ -54,7 +54,7 @@
 #### G-3：timeout-minutes 配置
 
 - **现状（CNB 口径）**：各格独立 timeout，无总上限概念
-- **GA 实测表现**：单 job 硬上限 6 小时（runner 层）；daily.yml 顶层 300 分钟（5h），各 step 已与 CNB 对应 stage 同预算（安装 20 / 库表 30 / 新鲜度 5 / 构建 30 / lint 30 / 浏览器 20 / E2E 45 / API 文档 30 / 单测 45 / 覆盖率产物 5，合计 244m < 300m）；pr-gate.yml 各 job 20–60 分钟
+- **GA 实测表现**：单 job 硬上限 6 小时（runner 层）；daily.yml 顶层 300 分钟（5h），各 step 已与 CNB 对应 stage 同预算（安装 20 / 库表 30 / 新鲜度 5 / 构建 30 / lint 30 / 浏览器 20 / E2E 45 / API 文档 30 / 单测 45 / 覆盖率产物 5；另有 GA 专有的镜像漂移判据 5 —— ISSUE #3252 的每日兜底，CNB 侧无对应 stage，合计 249m < 300m）；pr-gate.yml 各 job 20–60 分钟
 - **影响判断**：顶层 300m 只兜「整条链挂死」；step 级预算让卡死在自己的名字上报（CNB 的口径），也防单格吃光整条链的墙钟
 - **建议改法**：daily.yml 的 step 级预算已落地（本主题 PR）；将来若拆成多 job，按各 job 重算。pr-gate.yml heavy-gates job 已显式 60 分钟（安装 + cargo 编译最长）
 - **优先级**：P2（step 级预算已落地，剩余只在拆 job 时重算）

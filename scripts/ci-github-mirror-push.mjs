@@ -52,10 +52,10 @@
  *    `export GIT_DIR=…` 的做法（本仓 `scripts/ci-*.mjs` 就有几处），那一形态下子进程里的
  *    `git push` 会推到别的树上 —— 这一格的每一条 git 调用都显式清掉这两个变量，只吃 `cwd`。
  * 8. **网络抖动的韧性**（判据演进、数字与 30s 首刀细节见 `ci-mirror-retry-policy.mjs` 文件头）：
- *    同一台 runner 时通时不通 ⇒ github.com:443 是间歇抖动而非硬阻断。**探活与 wire 推送
- *    共用一份 4 分钟墙钟预算**（`PUSH_RETRY_BUDGET_MS`，由 `ci-mirror-wire-budget.mjs`
- *    在探活前起算），两跳各至多 10 次、退避 5s→50s，只有 egress ∪ 远端 5xx 消耗重试；
- *    认证 / 权限类一次交账；只给推送 4 分钟等于没给 —— 探活失败会短路整格（ISSUE #3234）。
+ *    同一台 runner 时通时不通 ⇒ github.com:443 是间歇抖动而非硬阻断。推送那一跳单独吃一份
+ *    4 分钟墙钟预算（`PUSH_RETRY_BUDGET_MS`，从第一刀推送前起算），至多 10 次、退避 5s→50s，
+ *    只有 egress ∪ 远端 5xx 消耗重试，认证 / 权限类一次交账。**#3252 起不再先探活**（双跳等于
+ *    把同一次出网试两遍，现场探活 6 次耗 201s、内容推送一次都没发起），失败读数直接来自真实推送。
  * 9. **refs 推完还有第二跳：LFS 对象**（第二批，字体真身那一族）。镜像仓若只有指针文件，
  *    GitHub 侧 `checkout` 开 `lfs: true` 就撞「拉不到对象」的红，所以内容推送成功后补一跳
  *    `git lfs push <镜像> HEAD`：**不带 `--all`**（增量由 git-lfs 对账，存量历史不重复计
@@ -75,12 +75,12 @@
  *     `Detected unsettled top-level await` 并以 exit 13 收场：一格红，日志里没有一句
  *     三态读数。所以入口改成 `.then()` 收口（求值同步做完，环自然解开）；那一跳**装载**
  *     另挂显式上限 {@link MIRROR_ENTRY_TIMEOUT_MS} —— 到点按 exit 2 明念「在等什么 /
- *     等了多久 / 最后读数」，不靠 Node 的兜底退码。**只界装载那一跳**：跑起来之后的探活 /
- *     推送 / LFS 各自已有上限（见常量注释），外框 10m 包的是它们的最坏墙钟。
+ *     等了多久 / 最后读数」，不靠 Node 的兜底退码。**只界装载那一跳**：跑起来之后的推送 /
+ *     LFS 各自已有上限（见常量注释），外框 10m 包的是它们的最坏墙钟。
  *
  * ## `--master`：push 档（`master 合并复核`）的主干镜像
  *
- * 同一枚令牌、同一条推送链（探活 → `--force` 推），三件事与 PR 模式不同：
+ * 同一枚令牌、同一条推送链（`--force` 推 → 回读 ref → 推 LFS → 核对对象），三件事与 PR 模式不同：
  *
  *   1. **没有 IID**：push 事件上没有 `CNB_PULL_REQUEST_IID`，上下文集换成
  *      `resolveMasterContext()`（只要令牌与 HEAD 两件，ref 恒为 `master`）；
@@ -120,11 +120,11 @@ import {
 } from "./ci-mirror-failure-report.mjs";
 import { pushLfsObjects } from "./ci-mirror-lfs-push.mjs";
 import { buildRunName, dispatchPayload, EVENT_TYPE, resolvePrTitle } from "./ci-mirror-payload.mjs";
+import { verifyLfsObjects, verifyPushedRef } from "./ci-mirror-push-verify.mjs";
 import {
-  PROBE_MAX_ATTEMPTS,
   PUSH_MAX_ATTEMPTS,
   PUSH_TIMEOUT_MS,
-  REMOTE_PROBE_TIMEOUT_MS,
+  REMOTE_READ_TIMEOUT_MS,
   RETRY_BACKOFF_MS,
   RETRY_MIN_ATTEMPT_MS,
 } from "./ci-mirror-retry-policy.mjs";
@@ -343,10 +343,10 @@ export function gitSubcommand(args) {
 export function gitTimeoutFor(args) {
   const sub = gitSubcommand(args);
   if (sub === "ls-remote") {
-    return REMOTE_PROBE_TIMEOUT_MS;
+    return REMOTE_READ_TIMEOUT_MS;
   }
   /* LFS 那一跳（`lfsPushArgs` 的子命令是 `lfs`）与内容推送同量级：对象可以有几 MB，
-   * 首次送存量更久 ⇒ 给推送档，不给探活档。 */
+   * 首次送存量更久 ⇒ 给推送档，不给回读档（`ls-remote` 只读一个 ref，30s 足够）。 */
   if (sub === "push" || sub === "lfs") {
     return PUSH_TIMEOUT_MS;
   }
@@ -414,7 +414,7 @@ export const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms
  * 取法与数字的理由见 `ci-mirror-retry-policy.mjs`。
  *
  * 每一次重试都留一行读数（第几次、等多久），重试耗尽后交回**最后一次**的结果 ——
- * 退码与后续话术与没有重试时逐字同形（探活仍是 exit 2、推送仍是 exit 1）。
+ * 退码与后续话术与没有重试时逐字同形（推送没通仍是 exit 2 —— 前提没落地）。
  *
  * @param {string[]} args git 参数表
  * @param {{runGit: typeof realRunGit, sleep: (ms: number) => Promise<void>, log: (line: string) => void, prefix: string, label: string, maxAttempts: number, budgetMs?: number, now?: () => number}} ctx
@@ -461,21 +461,7 @@ export async function runGitWithRetry(args, ctx) {
 }
 
 /**
- * `git ls-remote` 的输出里有没有**任何一条** ref —— 有 ⇒ 那枚令牌认到了目标仓库。
- *
- * 只看「有没有 refs 行」、不看 ref 名：空仓库的 `ls-remote` 回**零行且退 0**，非空仓库
- * 一定回 `HEAD` 或某条 `refs/*`。所以这一判的语义是「仓库在、且令牌读得到它」，
- * 与这个 PR 自己的 ref 存不存在无关（`--force` 推的是新 ref）。
- *
- * @param {string} stdout `git ls-remote` 的标准输出（可空串）
- * @returns {boolean} 非空 ⇒ 在
- */
-export function hasRemoteRefs(stdout) {
-  return stdout.split("\n").some((line) => /^[0-9a-f]{40}\s+\S+\s*$/i.test(line.trim()));
-}
-
-/**
- * 把 `git ls-remote` 的失败回话翻成**具体那一句**（回话本身不判红，它只被念出来）。
+ * 把推送 / 远端读的失败回话翻成**具体那一句**（回话本身不判红，它只被念出来）。
  *
  * 三形态各有各的下一动作，读的人不必自己去猜：
  *
@@ -504,11 +490,11 @@ export function explainRemoteProbeFailure(text) {
   if (/repository access blocked|not accessible|deploy key/i.test(text)) {
     return "这枚令牌的身份够不到目标仓库（fine-grained PAT 须把该仓库列进仓库访问范围）";
   }
-  return "推送前的这一读就被拒了 ⇒ 现场拿真值在本地 `git ls-remote` 一次定值（仓库在不在 / 令牌活不活）";
+  return "推送被拒且不属于上面几类 ⇒ 现场拿真值在本地 `git ls-remote` / `git push --dry-run` 各定一次值（仓库在不在 / 令牌活不活 / 保护规则拦不拦）";
 }
 
 /**
- * 执行镜像：先问「仓库在不在」→ 推 HEAD → 派发。每一跳各自独立成读数，前一跳没通后一跳不发。
+ * 执行镜像：推 HEAD → 回读远端 ref → 推 LFS → 核对对象 → 派发。每一跳各自独立成读数，前一跳没通后一跳不发。
  *
  * @param {{env: Record<string, string | undefined>, fetchImpl?: typeof fetch, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, now?: () => number, dryRun?: boolean, log?: (line: string) => void, readout?: boolean, root?: string, writeFileSync?: (file: string, data: string) => void, mkdirSync?: (dir: string, opts: object) => void, cnbJson?: (run: any, args: string[]) => any}} io
  *   `cnbJson` 是 PR 标题回读的取数动作（`ci-mirror-payload.mjs`；用例给假件，
@@ -580,49 +566,9 @@ export async function runMirror(io) {
     );
     return CODE.OK;
   }
-  /* 推送前那一问：目标仓库没建时 git 的回话与「令牌坏了」逐字同形（见文件头第 5 条）。
-   * egress 抖动与推送共享同一份 4 分钟预算：短路掉这一跳就等于短路掉整格（文件头第 8 条）。 */
-  const probe = await runGitWithRetry(["ls-remote", url], {
-    budgetMs: wireBudget(),
-    label: "探活",
-    log,
-    maxAttempts: PROBE_MAX_ATTEMPTS,
-    now: io.now,
-    prefix: "mirror",
-    runGit,
-    sleep,
-  });
-  const probeText = sanitize(`${probe.stdout}\n${probe.stderr}`, ctx.token);
-  /* 两种形态先分开念：读失败是「前提没落地」，零条 ref 是**空仓库**（合法，继续推）。 */
-  log(
-    probe.code === 0
-      ? "[mirror] 推送前这一读：通（空仓库 ⇒ 零条 ref 也是通的）"
-      : `[mirror] 推送前这一读没通（exit ${probe.code}）：${explainRemoteProbeFailure(probeText)}`,
-  );
-  if (probe.code === 0 && !hasRemoteRefs(probe.stdout)) {
-    log("[mirror]   目标仓库是空的（零条 ref）—— `--force` 推一个新 ref 正是它该有的第一笔");
-  }
-  if (probe.code !== 0) {
-    for (const line of probeText.split("\n")) {
-      if (line.trim()) {
-        log(`[mirror]   ${line}`);
-      }
-    }
-    log(
-      "[mirror] 结论：exit 2 —— 前提没落地（egress / 目标仓库 / 令牌这三层之一，看上面那句是哪一种；不是这一格判出的红）",
-    );
-    summarize({
-      lfs: null,
-      retries: probe.attempts - 1,
-      wire: `没跑（exit ${String(probe.code)}）`,
-    });
-    leave(
-      false,
-      `推送前的探活没通（exit ${String(probe.code)}：egress / 仓库 / 令牌三层之一）⇒ 派发没发生`,
-    );
-    return CODE.NO_FACT;
-  }
-  /* 推送接同一份预算的**剩余量**：探活花掉的时间从这里扣，两跳不各领 4 分钟（第 8 条）。 */
+  /* 不再先探活（ISSUE #3252 的现场：探活 6 次耗 201s、一次内容推送都没发起）。网络不通时
+   * push 自己的回话与 ls-remote 同一形，双跳只是把同一次出网试两遍；这里第一刀就是内容推送，
+   * egress 类才重试，预算从这一刀起算。 */
   const push = await runGitWithRetry(pushArgs(url, `refs/heads/${ctx.ref}`), {
     budgetMs: wireBudget(),
     label: "推送",
@@ -634,16 +580,48 @@ export async function runMirror(io) {
     sleep,
   });
   if (push.code !== 0) {
-    log(`[mirror] 推送失败（exit ${push.code}）：`);
-    for (const line of `${push.stdout}\n${push.stderr}`.split("\n")) {
+    const pushText = sanitize(`${push.stdout}\n${push.stderr}`, ctx.token);
+    log(`[mirror] 推送本身没通（exit ${push.code}）：${explainRemoteProbeFailure(pushText)}`);
+    for (const line of pushText.split("\n")) {
       if (line.trim()) {
-        log(`[mirror]   ${sanitize(line, ctx.token)}`);
+        log(`[mirror]   ${line}`);
       }
     }
+    log(
+      "[mirror] 结论：exit 2 —— 前提没落地（egress / 目标仓库 / 令牌这三层之一，看上面那句是哪一种；不是这一格判出的红）",
+    );
     summarize({ lfs: null, retries: push.attempts - 1, wire: `败（exit ${String(push.code)}）` });
-    leave(false, `refs 推送失败（exit ${String(push.code)}）⇒ 派发没发生`);
-    return CODE.FAIL;
+    leave(
+      false,
+      `refs 推送没通（exit ${String(push.code)}：egress / 仓库 / 令牌三层之一）⇒ 派发没发生`,
+    );
+    return CODE.NO_FACT;
   }
+  /* 推成功 ≠ 远端那条 ref 前进到了本次 HEAD：回读一次，按远端事实交账（见 verify 模块头）。 */
+  const refCheck = await verifyPushedRef({
+    headSha: ctx.headSha,
+    log,
+    now: io.now,
+    prefix: "mirror",
+    ref: `refs/heads/${ctx.ref}`,
+    runGit,
+    runGitWithRetry,
+    sanitize,
+    sleep,
+    token: ctx.token,
+    url,
+  });
+  if (refCheck.code !== CODE.OK) {
+    log(`[mirror] 结论：exit ${String(refCheck.code)} —— ${refCheck.note}`);
+    summarize({
+      lfs: null,
+      retries: push.attempts - 1,
+      wire: `推了但没到位（${refCheck.note}）`,
+    });
+    leave(false, `refs 推送后回读不符（${refCheck.note}）⇒ 派发没发生`);
+    return refCheck.code;
+  }
+  log(`[mirror] 推送后回读：${refCheck.note}`);
   /* refs 已在 ⇒ 第二跳把 LFS 对象送过去（文件头第 9 条）。它挂了照样是红，且**不派发**：
    * 派出去只会让 GitHub 侧拿指针文件跑出一格假红（字体用例对不上字节数）。 */
   const wireNote = `通（refs/heads/${ctx.ref} @ ${ctx.headSha.slice(0, 8)}）`;
@@ -672,6 +650,28 @@ export async function runMirror(io) {
     );
     return lfs.code;
   }
+  /* `git lfs push` 退 0 也不等于对象在远端可下载：按 batch API 逐个核对，别只看退出码。 */
+  const lfsCheck = await verifyLfsObjects({
+    fetchImpl,
+    log,
+    prefix: "mirror",
+    repo: ctx.repo,
+    runGit,
+    token: ctx.token,
+  });
+  if (lfsCheck.code !== CODE.OK) {
+    log(`[mirror] 结论：exit ${String(lfsCheck.code)} —— ${lfsCheck.note}`);
+    summarize({
+      elapsedMs: lfs.elapsedMs,
+      lfs: false,
+      objects: lfsCheck.objectsText,
+      retries: lfs.attempts - 1,
+      wire: wireNote,
+    });
+    leave(false, `LFS 推送后核对没通过（${lfsCheck.note}）⇒ 刻意不派发`);
+    return lfsCheck.code;
+  }
+  log(`[mirror] 推送后回读：${lfsCheck.note}`);
   let res;
   try {
     res = await fetchImpl(`https://api.github.com/repos/${ctx.repo}/dispatches`, {
@@ -759,8 +759,8 @@ export function exitCodeFor(code, readout) {
  *
  * 只界「动态 import `ci-github-mirror-master.mjs`」这一个最无终点的等待：它是本地盘上
  * 的模块装载（正常 <1s），30s 给的是冷启动 / 杀软扫描的余量。
- * **为什么不界整层**：跑起来之后的探活与推送共用 240s、LFS 首刀 240s 各自都有上限，
- * 合计 480s 在 `.cnb.yml` 那格 `timeout: 10m` 的外框里；再压一个更小的数会把「慢但活着」误判成
+ * **为什么不界整层**：跑起来之后的推送 240s、LFS 首刀 240s 各自都有上限（另有两次回读各
+ * 60s），合计在 `.cnb.yml` 那格 `timeout: 10m` 的外框里；再压一个更小的数会把「慢但活着」误判成
  * 悬挂，压一个更大的数又落在 10m 之外 ⇒ 形同虚设（这条上限必须是「装载」的）。
  *
  * @type {number}

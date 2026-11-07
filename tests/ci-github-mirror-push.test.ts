@@ -19,7 +19,6 @@ import {
   explainRemoteProbeFailure,
   gitSubcommand,
   gitTimeoutFor,
-  hasRemoteRefs,
   isEgressFailure,
   LFS_FAILURE_KINDS,
   lfsObjectIdPushArgs,
@@ -41,14 +40,22 @@ import {
 import {
   LFS_PUSH_MAX_ATTEMPTS,
   LFS_PUSH_RETRY_BUDGET_MS,
-  PROBE_MAX_ATTEMPTS,
   PUSH_MAX_ATTEMPTS,
   PUSH_RETRY_BUDGET_MS,
   PUSH_TIMEOUT_MS,
-  REMOTE_PROBE_TIMEOUT_MS,
+  REMOTE_READ_TIMEOUT_MS,
   RETRY_BACKOFF_MS,
   RETRY_MIN_ATTEMPT_MS,
+  VERIFY_MAX_ATTEMPTS,
+  VERIFY_RETRY_BUDGET_MS,
 } from "../scripts/ci-mirror-retry-policy.mjs";
+/* 推送之后的自证（回读 refs + LFS batch 核对）：实现单独一份，用例直接钉它的三态。 */
+import {
+  parseLfsObjects,
+  parseRemoteRefSha,
+  verifyLfsObjects,
+  verifyPushedRef,
+} from "../scripts/ci-mirror-push-verify.mjs";
 /* ISSUE #3234：探活与 wire 推送共用的那一份墙钟预算（纯函数，用例不必真等 4 分钟）。 */
 import { createWireBudget } from "../scripts/ci-mirror-wire-budget.mjs";
 /* `--master` 那一档的执行面单独一份（#3148：为回到 §12.6 R5 的 900 行闸内切出去的）。 */
@@ -81,8 +88,9 @@ const okEnv = {
   CNB_REPO_SLUG: "root/comfy-app",
 };
 
-/* 假仓库的 ref 行：`ls-remote` 非空 ⇒ 「仓库在」（推送前那一问的通形态）。 */
+/* 假仓库的 ref 行：推送后回读按第三个参数问「具体哪条 ref」，假实现必须回同一条。 */
 const REMOTE_REF = `${SHA}\trefs/heads/main`;
+const remoteRefLine = (ref: string) => `${SHA}\t${ref}`;
 
 const gitOk = (args: Array<string>) => {
   if (args[0] === "rev-parse") {
@@ -309,10 +317,15 @@ describe("纯函数", () => {
     expect(ok.startsWith("[mirror-master]")).toBe(true);
   });
 
-  it("hasRemoteRefs：非空仓库认 refs 行，空仓库零行不算「在」", () => {
-    expect(hasRemoteRefs(`${REMOTE_REF}\n`)).toBe(true);
-    expect(hasRemoteRefs("")).toBe(false);
-    expect(hasRemoteRefs("\n  \n")).toBe(false);
+  it("parseRemoteRefSha：只认逐字相同的 ref；零行 / 别的 ref 都不算回读到", () => {
+    /* 旧探活那一形（空仓库 ⇒ 零行）的等价覆盖：现在它落在「推完之后回读」这一跳上 ——
+     * 远端没有目标 ref 时，回读必须回 null，而不是拿任意一行当代理。 */
+    expect(parseRemoteRefSha(`${REMOTE_REF}\n`, "refs/heads/main")).toBe(SHA);
+    expect(parseRemoteRefSha("", "refs/heads/main")).toBeNull();
+    expect(parseRemoteRefSha("\n  \n", "refs/heads/main")).toBeNull();
+    expect(
+      parseRemoteRefSha(`${remoteRefLine("refs/heads/master-old")}\n`, "refs/heads/master"),
+    ).toBeNull();
   });
 
   it("explainRemoteProbeFailure：仓库没建 / 里外不是同一种下一动作", () => {
@@ -344,7 +357,7 @@ describe("纯函数", () => {
   });
 
   it("gitTimeoutFor：网络两跳各给一个数，本地那跳不限", () => {
-    expect(gitTimeoutFor(["ls-remote", "https://github.com/x/y"])).toBe(REMOTE_PROBE_TIMEOUT_MS);
+    expect(gitTimeoutFor(["ls-remote", "https://github.com/x/y"])).toBe(REMOTE_READ_TIMEOUT_MS);
     /* 推送那一跳的参数表以 `-c core.hooksPath=` 开头 ⇒ 子命令不在 args[0] 上。按 args[0] 判
      * 会给出一份**不限时**的推送，而「限时的缺席」不会红，只会退回吃平台外框那一刀的旧形态。 */
     expect(gitSubcommand(pushArgs("https://oauth2:t@github.com/x/y", "refs/heads/cnb-pr-1"))).toBe(
@@ -354,22 +367,23 @@ describe("纯函数", () => {
       PUSH_TIMEOUT_MS,
     );
     expect(gitTimeoutFor(["rev-parse", "HEAD"])).toBeUndefined();
-    /* 探活单次上限 2026-11-02 从 15s 放宽到 30s：`cnb-pe2-1k6e1uhj8` 连续两跑 15s 无回话、
-     * 同日 19:47 同 runner 却探活通过 —— 15s 把「慢但活着」的抖动截成了「没通」。 */
-    expect(REMOTE_PROBE_TIMEOUT_MS).toBe(30_000);
-    /* ISSUE #3234：探活与推送**共用**一份墙钟预算，最坏墙钟就是那一份预算本身，
-     * 不再把「探活次数 × 单次上限」与「推送预算」相加（那是两跳各领一份的旧口径）。
-     * 加上 LFS 首刀的单跳上限，480s 仍落在 10m 外框内。 */
-    expect(PROBE_MAX_ATTEMPTS).toBe(PUSH_MAX_ATTEMPTS);
+    /* 远端读单次上限 2026-11-02 从 15s 放宽到 30s：`cnb-pe2-1k6e1uhj8` 连续两跑 15s 无回话、
+     * 同日 19:47 同 runner 却通过 —— 15s 把「慢但活着」的抖动截成了「没通」。 */
+    expect(REMOTE_READ_TIMEOUT_MS).toBe(30_000);
+    /* ISSUE #3252：推送前不再有探活，推送第一刀就是这一格唯一的网络写入口；回读另领
+     * 60s 预算（VERIFY_RETRY_BUDGET_MS），不占推送那 240s。加上 LFS 首刀的单跳上限，
+     * 480s 仍落在 10m 外框内。 */
+    expect(VERIFY_MAX_ATTEMPTS).toBe(3);
+    expect(VERIFY_RETRY_BUDGET_MS).toBe(60_000);
     expect(PUSH_RETRY_BUDGET_MS + PUSH_TIMEOUT_MS).toBeLessThan(10 * 60_000);
   });
 
-  it("createWireBudget：一个起点、两跳取剩余量，用尽后不为负（ISSUE #3234）", () => {
+  it("createWireBudget：一个起点、后续跳取剩余量，用尽后不为负（ISSUE #3234）", () => {
     let t = 1000;
     const budget = createWireBudget(() => t);
-    /* 探活第一刀那一刻起算：满额。 */
+    /* 推送第一刀那一刻起算：满额。 */
     expect(budget()).toBe(PUSH_RETRY_BUDGET_MS);
-    /* 探活花掉的时间要在推送那一跳里被扣掉，而不是各领一份 240s。 */
+    /* 首刀花掉的时间要在重试里被扣掉，而不是再领一份 240s。 */
     t += 100_000;
     expect(budget()).toBe(PUSH_RETRY_BUDGET_MS - 100_000);
     /* 超过窗口也不许给出负数（runGitWithRetry 按「低于一次尝试就不再发起」收口）。 */
@@ -726,6 +740,10 @@ describe("runMirror（git 与 fetch 全假件）", () => {
       dispatchStatus?: number;
       env?: Record<string, string | undefined>;
       fetchThrows?: boolean;
+      /* `git lfs ls-files --json` 的回话（推送后核对对象清单）：缺省 0 个对象 ⇒ 不发明请求。
+       * `--long` 那一支（ref 枚举不到的回退清单）仍走下面的 `lfsList*`。 */
+      lfsJsonCode?: number;
+      lfsJsonStdout?: string;
       lfsCode?: number;
       lfsListCode?: number;
       lfsListResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
@@ -733,10 +751,11 @@ describe("runMirror（git 与 fetch 全假件）", () => {
       lfsResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
       lfsStderr?: string;
       lfsStdout?: string;
-      probeCode?: number;
-      probeResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
-      probeStderr?: string;
-      probeStdout?: string;
+      /* 推送后回读（`git ls-remote <url> <ref>`）的假回话：未指定时按第三个参数回同一条 ref。 */
+      remoteCode?: number;
+      remoteResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
+      remoteStderr?: string;
+      remoteStdout?: string;
       pushCode?: number;
       pushResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
       pushStderr?: string;
@@ -749,22 +768,33 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     const calls: Array<{ bodyText: string; init: RequestInit; url: string }> = [];
     const heard: Array<string> = [];
     const sleeps: Array<number> = [];
-    let probeCalls = 0;
-    const probeSeq = opts.probeResults ? [...opts.probeResults] : null;
+    let remoteCalls = 0;
+    const remoteSeq = opts.remoteResults ? [...opts.remoteResults] : null;
     const pushSeq = opts.pushResults ? [...opts.pushResults] : null;
     const lfsSeq = opts.lfsResults ? [...opts.lfsResults] : null;
     const lfsListSeq = opts.lfsListResults ? [...opts.lfsListResults] : null;
     const runGit = (args: Array<string>) => {
       if (args[0] === "ls-remote") {
-        probeCalls += 1;
-        const head = probeSeq?.shift();
+        remoteCalls += 1;
+        const head = remoteSeq?.shift();
         if (head) {
           return { code: head.code, stdout: head.stdout ?? "", stderr: head.stderr ?? "" };
         }
+        /* ⚠️ 必须按第三个参数回**同一条 ref**：回读问 `refs/heads/cnb-pr-2649`，
+         * 假实现回 `refs/heads/main` 会让所有成功用例被判成「远端没有该 ref」。 */
+        const requestedRef = String(args[2] ?? "refs/heads/main");
         return {
-          code: opts.probeCode ?? 0,
-          stdout: opts.probeStdout ?? `${REMOTE_REF}\n`,
-          stderr: opts.probeStderr ?? "",
+          code: opts.remoteCode ?? 0,
+          stdout: opts.remoteStdout ?? `${remoteRefLine(requestedRef)}\n`,
+          stderr: opts.remoteStderr ?? "",
+        };
+      }
+      /* `ls-files --json` 是推送后的对象核对；`--long` 是 ref 枚举不到时的回退清单。 */
+      if (args.includes("ls-files") && args.includes("--json")) {
+        return {
+          code: opts.lfsJsonCode ?? 0,
+          stdout: opts.lfsJsonStdout ?? JSON.stringify({ files: [] }),
+          stderr: "",
         };
       }
       /* 回退路径的清单读取（`lfs ls-files --long`）：0 条 ref 也要能给出 OID。 */
@@ -862,7 +892,7 @@ describe("runMirror（git 与 fetch 全假件）", () => {
       sleeps,
       written,
       titleCalls,
-      probeCalls: () => probeCalls,
+      remoteCalls: () => remoteCalls,
     };
   }
 
@@ -955,21 +985,26 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(all).not.toContain(TOKEN);
   });
 
-  it("推送失败 / 探活失败 ⇒ 同样留 `dispatched: false`（回读格据此提前收工）", async () => {
-    /* 推送失败那一跳：refs 都没到镜像仓，GitHub 侧不可能有 run。 */
+  it("推送失败（认证 / egress）⇒ 退 2，同样留 `dispatched: false`（回读格据此提前收工）", async () => {
+    /* 推送失败那一跳：refs 都没到镜像仓，GitHub 侧不可能有 run。自 #3252 起推送前不再
+     * 探活，推送本身的失败一律按「前提没落地」交账（2，不是判出的实例红 1）。 */
     const pushFail = harness({
       pushCode: 128,
       pushStderr: "fatal: schannel: server closed abruptly",
     });
-    expect(await runMirror(pushFail.io)).toBe(CODE.FAIL);
+    expect(await runMirror(pushFail.io)).toBe(CODE.NO_FACT);
     expect(dispatchedState(pushFail.written)).toMatchObject({ dispatched: false });
-    expect(dispatchedState(pushFail.written).reason).toContain("推送失败");
+    expect(dispatchedState(pushFail.written).reason).toContain("refs 推送没通");
 
-    /* 探活失败那一跳：连仓库都没问到，同样不会有 run。 */
-    const probeFail = harness({ probeCode: 128, probeStderr: "fatal: unable to access" });
-    expect(await runMirror(probeFail.io)).toBe(CODE.NO_FACT);
-    expect(dispatchedState(probeFail.written)).toMatchObject({ dispatched: false });
-    expect(dispatchedState(probeFail.written).reason).toContain("探活");
+    /* 一次都没推送出去（首刀 egress）同样是「没跑起来」那一档。 */
+    const egressFail = harness({
+      pushCode: 128,
+      pushStderr: "fatal: unable to access: Could not resolve host",
+      pushResults: [{ code: 128, stderr: "fatal: unable to access: Could not resolve host" }],
+    });
+    expect(await runMirror(egressFail.io)).toBe(CODE.NO_FACT);
+    expect(dispatchedState(egressFail.written)).toMatchObject({ dispatched: false });
+    expect(dispatchedState(egressFail.written).reason).toContain("refs 推送没通");
 
     /* 前提没配齐那一跳（令牌缺席）：一条都没发。 */
     const noToken = harness({ env: { CNB_PULL_REQUEST_IID: "2649" } });
@@ -1201,43 +1236,91 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(all).toContain("***");
   });
 
-  it("推送前那一读失败（仓库没建 / 令牌够不到）⇒ 退 2，一次推与派发都不发", async () => {
-    const { io, pushes, calls, heard } = harness({
-      probeCode: 128,
-      probeStderr: "remote: Repository not found.\nfatal: Authentication failed",
+  it("推送那一跳被拒（仓库没建 / 令牌够不到）⇒ 退 2，一次推已发、派发不发", async () => {
+    /* 旧「推送前那一读」的等价覆盖：现在第一刀就是内容推送，仓库不存在 / 令牌坏了
+     * 由 push 自己回同一句话术；回读与派发都不再发生。 */
+    const { io, pushes, calls, heard, remoteCalls } = harness({
+      pushCode: 128,
+      pushStderr: "remote: Repository not found.\nfatal: Authentication failed",
     });
     const code = await runMirror(io);
     /* 前提没落地 ⇒ 「有一步没跑起来」（2），不是「有事实是红」（1）—— 后者会把人赶去改代码。 */
     expect(code).toBe(CODE.NO_FACT);
-    expect(pushes).toHaveLength(0);
+    expect(pushes).toHaveLength(1);
+    expect(remoteCalls()).toBe(0);
     expect(calls).toHaveLength(0);
     expect(heard.join("\n")).toContain("先去建仓库");
+    expect(heard.join("\n")).toContain("结论：exit 2");
   });
 
-  it("目标仓库是空的（零条 ref）⇒ 照样推 + 派发，读成「空仓库」而不是失败", async () => {
-    const { io, pushes, calls, heard } = harness({ probeStdout: "" });
+  it("目标仓库是空的（首次推送，远端零条 ref）⇒ 不短路，推后回读一致照常派发", async () => {
+    /* 没有探活之后，「空仓库」不再是推送前的一个分支：push 自己就把它推出来，
+     * 随后回读必须按**具体 ref** 认（假件按第三个参数回同一条），不是拿任意一行代理。 */
+    const { io, pushes, calls, heard, remoteCalls } = harness();
     const code = await runMirror(io);
     expect(code).toBe(CODE.OK);
     expect(pushes).toHaveLength(1);
+    expect(remoteCalls()).toBe(1);
     expect(calls).toHaveLength(1);
-    expect(heard.join("\n")).toContain("目标仓库是空的");
+    expect(heard.join("\n")).toContain("推送后回读：回读一致");
+    expect(heard.join("\n")).not.toContain("目标仓库是空的");
   });
 
-  it("推送前那一读的回话也不许出现令牌原值（硬规则 17）", async () => {
+  it("推送成功但回读不符 ⇒ 退 1，不派发（远端那条 ref 没前进到本次 HEAD）", async () => {
+    const other = "b".repeat(40);
+    const { io, calls, heard, remoteCalls } = harness({
+      remoteStdout: `${other}\trefs/heads/cnb-pr-2649\n`,
+    });
+    const code = await runMirror(io);
+    expect(code).toBe(CODE.FAIL);
+    expect(remoteCalls()).toBe(1);
+    expect(calls).toHaveLength(0);
+    const all = heard.join("\n");
+    expect(all).toContain("回读不符");
+    expect(all).toContain(`remote=${other} local=${SHA}`);
+    expect(all).toContain("结论：exit 1");
+  });
+
+  it("推送成功但远端没有该 ref ⇒ 退 1（推了但没到位），不拿别的 ref 冒充", async () => {
+    const other = "c".repeat(40);
+    /* 回的是 `refs/heads/master-old`：不许按子串认成 `refs/heads/cnb-pr-2649`。 */
+    const { io, calls, heard } = harness({
+      remoteStdout: `${other}\trefs/heads/cnb-pr-2649-old\n`,
+    });
+    const code = await runMirror(io);
+    expect(code).toBe(CODE.FAIL);
+    expect(calls).toHaveLength(0);
+    expect(heard.join("\n")).toContain("远端没有 refs/heads/cnb-pr-2649");
+  });
+
+  it("推送成功但回读本身没通 ⇒ 退 2（没结论，不等于通过）", async () => {
+    const { io, calls, heard, remoteCalls } = harness({
+      remoteCode: 128,
+      remoteStderr: "fatal: Authentication failed",
+    });
+    const code = await runMirror(io);
+    expect(code).toBe(CODE.NO_FACT);
+    expect(remoteCalls()).toBe(1);
+    expect(calls).toHaveLength(0);
+    expect(heard.join("\n")).toContain("回读没通");
+    expect(heard.join("\n")).toContain("结论：exit 2");
+  });
+
+  it("推送那一跳的回话也不许出现令牌原值（硬规则 17）", async () => {
     const { io, heard } = harness({
-      probeCode: 128,
-      probeStderr: `fatal: Authentication failed for 'https://oauth2:${TOKEN}@github.com/x.git/'`,
+      pushCode: 128,
+      pushStderr: `fatal: Authentication failed for 'https://oauth2:${TOKEN}@github.com/x.git/'`,
     });
     await runMirror(io);
     expect(heard.join("\n")).not.toContain(TOKEN);
   });
 
-  it("推送失败 ⇒ 退 1，且一跳都不派发", async () => {
+  it("推送失败 ⇒ 退 2，且一跳都不派发", async () => {
     const { io, calls, heard } = harness({ pushCode: 128 });
     const code = await runMirror(io);
-    expect(code).toBe(CODE.FAIL);
+    expect(code).toBe(CODE.NO_FACT);
     expect(calls).toHaveLength(0);
-    expect(heard.some((l) => l.includes("推送失败"))).toBe(true);
+    expect(heard.some((l) => l.includes("推送本身没通"))).toBe(true);
   });
 
   it("派发被拒（4xx 带 body）⇒ 退 1，body 脱敏后回显", async () => {
@@ -1275,23 +1358,25 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(heard.join("\n")).toContain("cnb-pr-2649");
   });
 
-  it("探活撞上现场 `Connection was reset` 第一次、第二次通 ⇒ 退 0（cnb-95h 那形）", async () => {
-    const { io, pushes, calls, heard, sleeps, probeCalls } = harness({
-      probeResults: [
+  it("推送那一跳撞上现场 `Connection was reset` 第一次、第二次通 ⇒ 退 0（cnb-95h 那形）", async () => {
+    /* 旧「探活第一次抖动、第二次通」的等价覆盖：现在抖动发生在推送这一跳，
+     * 重试语义、退避读数与最终派发都与原来同强度。 */
+    const { io, pushes, calls, heard, sleeps, remoteCalls } = harness({
+      pushResults: [
         {
           code: 128,
           stderr:
             "fatal: unable to access 'https://github.com/wuxianyuedu/comfy-app.git/': Recv failure: Connection was reset",
         },
-        { code: 0, stdout: `${REMOTE_REF}\n` },
+        { code: 0 },
       ],
     });
     expect(await runMirror(io)).toBe(CODE.OK);
-    expect(probeCalls()).toBe(2);
+    expect(pushes).toHaveLength(2);
     expect(sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
-    expect(pushes).toHaveLength(1);
+    expect(remoteCalls()).toBe(1);
     expect(calls).toHaveLength(1);
-    expect(heard.join("\n")).toContain("次没通（可重试类）");
+    expect(heard.join("\n")).toContain(`推送第 1/${PUSH_MAX_ATTEMPTS} 次没通（可重试类）`);
   });
 
   it("推送撞上 GitHub `Internal Server Error` 重试一次后通 ⇒ 退 0，派发照发", async () => {
@@ -1313,41 +1398,40 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(heard.join("\n")).toContain("次没通（可重试类）");
   });
 
-  it("探活第一次 egress 抖动、第二次通 ⇒ 退 0：推与派发照发，日志留重试行与退避读数", async () => {
-    /* `cnb-pe2-1k6e1uhj8` 的形态：15s 无回话是抖动不是硬阻断 —— 放宽到 30s 再试一次就该通。 */
-    const { io, pushes, calls, heard, sleeps, probeCalls } = harness({
-      probeResults: [
-        { code: -1, stderr: "git ls-remote 超时（>30000 ms）：这一跳没拿到任何回话" },
-        { code: 0, stdout: `${REMOTE_REF}\n` },
+  it("推送第一次 egress 超时、第二次通 ⇒ 退 0：推与派发照发，日志留重试行与退避读数", async () => {
+    /* `cnb-pe2-1k6e1uhj8` 的形态：无回话是抖动不是硬阻断 —— 换到推送这一跳，重试一次就该通。 */
+    const { io, pushes, calls, heard, sleeps, remoteCalls } = harness({
+      pushResults: [
+        { code: -1, stderr: "git push 超时（>240000 ms）：这一跳没拿到任何回话" },
+        { code: 0 },
       ],
     });
     const code = await runMirror(io);
     expect(code).toBe(CODE.OK);
-    expect(probeCalls()).toBe(2);
+    expect(pushes).toHaveLength(2);
     expect(sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
-    expect(pushes).toHaveLength(1);
+    expect(remoteCalls()).toBe(1);
     expect(calls).toHaveLength(1);
     const all = heard.join("\n");
-    expect(all).toContain(`探活第 1/${PROBE_MAX_ATTEMPTS} 次没通（可重试类）`);
+    expect(all).toContain(`推送第 1/${PUSH_MAX_ATTEMPTS} 次没通（可重试类）`);
     expect(all).toContain("已推");
   });
 
-  it("探活重试耗尽 ⇒ 退 2，一次推都不发，结论行照旧是三态原值", async () => {
-    const down = { code: -1, stderr: "git ls-remote 超时（>30000 ms）：这一跳没拿到任何回话" };
-    const { io, pushes, heard, sleeps, probeCalls } = harness({
-      /* 序列用完后假件回落到这里，仍是 egress 失败 ⇒ 上限是真的被耗尽，不是「第 4 次通了」。 */
-      probeCode: down.code,
-      probeResults: Array.from({ length: PROBE_MAX_ATTEMPTS }, () => down),
-      probeStderr: down.stderr,
+  it("推送重试耗尽 ⇒ 退 2，整条退避阶梯吃掉，结论行照旧是三态原值", async () => {
+    const down = { code: -1, stderr: "git push 超时（>240000 ms）：这一跳没拿到任何回话" };
+    const { io, pushes, heard, sleeps } = harness({
+      /* 序列用完后假件回落到这里，仍是 egress 失败 ⇒ 上限是真的被耗尽，不是「后面几次通了」。 */
+      pushCode: down.code,
+      pushResults: Array.from({ length: PUSH_MAX_ATTEMPTS }, () => down),
+      pushStderr: down.stderr,
     });
     const code = await runMirror(io);
     /* 重试不改变退码：耗尽了仍是「前提没落地」（2），不是「判出的红」（1）。 */
     expect(code).toBe(CODE.NO_FACT);
-    expect(probeCalls()).toBe(PROBE_MAX_ATTEMPTS);
-    /* 探活与推送同值（首跳 + 9 次重试），退避阶梯整条都要吃掉 —— 不再是旧口径的
+    expect(pushes).toHaveLength(PUSH_MAX_ATTEMPTS);
+    /* 与旧探活同值（首跳 + 9 次重试），退避阶梯整条都要吃掉 —— 不再是旧口径的
      * 「3 次 + 15s 退避 ≈ 16s 就交账」（ISSUE #3234）。 */
-    expect(sleeps).toEqual(RETRY_BACKOFF_MS.slice(0, PROBE_MAX_ATTEMPTS - 1));
-    expect(pushes).toHaveLength(0);
+    expect(sleeps).toEqual(RETRY_BACKOFF_MS.slice(0, PUSH_MAX_ATTEMPTS - 1));
     const all = heard.join("\n");
     expect(all).toContain("这一跳没通");
     expect(all).toContain("结论：exit 2");
@@ -1356,17 +1440,17 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(exitCodeFor(code, false)).toBe(2);
   });
 
-  it("探活撞上认证 / 仓库类失败 ⇒ 一次就交账，一次重试都不试", async () => {
-    const { io, pushes, heard, sleeps, probeCalls } = harness({
-      probeCode: 128,
-      probeStderr: "remote: Repository not found.\nfatal: Authentication failed",
+  it("推送撞上认证 / 仓库类失败 ⇒ 一次就交账，一次重试都不试", async () => {
+    const { io, pushes, heard, sleeps, remoteCalls } = harness({
+      pushCode: 128,
+      pushStderr: "remote: Repository not found.\nfatal: Authentication failed",
     });
     const code = await runMirror(io);
     expect(code).toBe(CODE.NO_FACT);
     /* 「再试一百次也一样」的回话不许消耗重试 —— 重试它只会把真问题拖慢几分钟。 */
-    expect(probeCalls()).toBe(1);
+    expect(pushes).toHaveLength(1);
     expect(sleeps).toHaveLength(0);
-    expect(pushes).toHaveLength(0);
+    expect(remoteCalls()).toBe(0);
     expect(heard.join("\n")).toContain("先去建仓库");
   });
 
@@ -1388,19 +1472,20 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(heard.join("\n")).toContain(`推送第 1/${PUSH_MAX_ATTEMPTS} 次没通（可重试类）`);
   });
 
-  it("推送撞上认证类失败 ⇒ 不重试：只推一次，退 1", async () => {
+  it("推送撞上认证类失败 ⇒ 不重试：只推一次，退 2", async () => {
     const { io, pushes, heard, sleeps } = harness({
       pushCode: 128,
       pushStderr: "fatal: Invalid username or token",
     });
     const code = await runMirror(io);
-    expect(code).toBe(CODE.FAIL);
+    /* 自 #3252 起推送失败一律交账为「前提没落地」（2），不再判成实例红（1）。 */
+    expect(code).toBe(CODE.NO_FACT);
     expect(pushes).toHaveLength(1);
     expect(sleeps).toHaveLength(0);
-    expect(heard.join("\n")).toContain("推送失败");
+    expect(heard.join("\n")).toContain("推送本身没通");
   });
 
-  it("推送重试耗尽仍 egress ⇒ 退 1，重试行与失败明细都留账", async () => {
+  it("推送重试耗尽仍 egress ⇒ 退 2，重试行与失败明细都留账", async () => {
     /* 全程 egress（不是「挂两次就通」）：`pushCode` 让每一次都失败，才谈得上「耗尽」。
      * 自 2026-11-05 起次数上限是 10 次 + 4 分钟预算，所以这里断言的是**整条退避阶梯**
      * 都被吃掉 —— 现场要的正是「别 6s 就交账」。 */
@@ -1409,34 +1494,35 @@ describe("runMirror（git 与 fetch 全假件）", () => {
       pushStderr: "Connection reset by peer",
     });
     const code = await runMirror(io);
-    expect(code).toBe(CODE.FAIL);
+    expect(code).toBe(CODE.NO_FACT);
     expect(pushes).toHaveLength(PUSH_MAX_ATTEMPTS);
     expect(sleeps).toEqual(RETRY_BACKOFF_MS.slice(0, PUSH_MAX_ATTEMPTS - 1));
     expect(calls).toHaveLength(0);
     const all = heard.join("\n");
     expect(all).toContain(`推送第 1/${PUSH_MAX_ATTEMPTS} 次没通`);
-    expect(all).toContain("推送失败");
+    expect(all).toContain("推送本身没通");
+    expect(all).toContain("结论：exit 2");
   });
 
-  it("ISSUE #3234：探活吃同一份预算 ⇒ 重试超时被裁到剩余量，不再 16s 就交账", async () => {
+  it("ISSUE #3234：推送那一跳吃同一份预算 ⇒ 重试超时被裁到剩余量，不再 16s 就交账", async () => {
     const down = {
       code: -1,
       stderr:
         "fatal: unable to access 'https://github.com/x/y.git/': Recv failure: Connection was reset",
     };
     const base = harness({
-      probeCode: down.code,
-      probeResults: Array.from({ length: PROBE_MAX_ATTEMPTS }, () => down),
-      probeStderr: down.stderr,
+      pushCode: down.code,
+      pushResults: Array.from({ length: PUSH_MAX_ATTEMPTS }, () => down),
+      pushStderr: down.stderr,
     });
     let t = 0;
-    const probeOpts: Array<{ timeout?: number } | undefined> = [];
+    const pushOpts: Array<{ timeout?: number } | undefined> = [];
     const io = {
       ...base.io,
       now: () => t,
       runGit: (args: Array<string>, opts?: { timeout?: number }) => {
-        if (args[0] === "ls-remote") {
-          probeOpts.push(opts);
+        if (args.includes("push")) {
+          pushOpts.push(opts);
         }
         return base.io.runGit(args);
       },
@@ -1448,38 +1534,35 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     };
     const code = await runMirror(io);
     expect(code).toBe(CODE.NO_FACT);
-    /* 探活没通就短路掉整格：一次推、一次派发都不发。 */
-    expect(base.pushes).toHaveLength(0);
+    expect(base.pushes).toHaveLength(PUSH_MAX_ATTEMPTS);
     expect(base.calls).toHaveLength(0);
-    expect(probeOpts).toHaveLength(PROBE_MAX_ATTEMPTS);
-    /* 首刀不裁（照吃 30s 单跳上限），保护「慢但活着」的那一读。 */
-    expect(probeOpts[0]).toBeUndefined();
-    /* 反向验证抓手：把探活那行 `budgetMs: wireBudget()` 摘掉，这里就该是 undefined。
-     * 只把次数抬到 10 而不给预算，重试仍会一路吃满 30s×9 —— 等于没给「3–5 分钟」。 */
-    expect(probeOpts[1]).toEqual({ timeout: REMOTE_PROBE_TIMEOUT_MS });
+    expect(pushOpts).toHaveLength(PUSH_MAX_ATTEMPTS);
+    /* 首刀不裁（照吃 240s 单跳上限），保护「慢但活着」的那一跳。 */
+    expect(pushOpts[0]).toBeUndefined();
+    /* 反向验证抓手：把推送那行 `budgetMs: wireBudget()` 摘掉，这里就该是 undefined。
+     * 只把次数抬到 10 而不给预算，重试仍会一路吃满 240s×9 —— 等于没给「3–5 分钟」。 */
+    expect(pushOpts[1]).toEqual({ timeout: PUSH_RETRY_BUDGET_MS - (RETRY_BACKOFF_MS[0] ?? 0) });
     /* 最后一刀只剩「刚好够一次尝试」的余量 ⇒ 预算真的会咬，不是账面数字。 */
-    expect(probeOpts.at(-1)).toEqual({ timeout: RETRY_MIN_ATTEMPT_MS });
+    expect(pushOpts.at(-1)).toEqual({ timeout: RETRY_MIN_ATTEMPT_MS });
     /* 整档墙钟吃满退避阶梯（230s ≳ 3min），不再是旧口径「3 次 + 15s ≈ 16s」。 */
     expect(t).toBeGreaterThanOrEqual(3 * 60_000);
   });
 
-  it("ISSUE #3234：两跳共享 deadline ⇒ 探活花掉的时间从推送预算里扣，不各领 4 分钟", async () => {
-    const down = { code: -1, stderr: "git ls-remote 超时（>30000 ms）：这一跳没拿到任何回话" };
+  it("ISSUE #3234：首刀耗时也扣同一份预算 ⇒ 慢一次就把推送重试次数收口，不另领 4 分钟", async () => {
     const base = harness({
-      probeResults: [down, { code: 0, stdout: `${REMOTE_REF}\n` }],
       pushCode: 128,
       pushStderr: "Connection reset by peer",
     });
     let t = 0;
-    let probes = 0;
+    let pushes = 0;
     const io = {
       ...base.io,
       now: () => t,
       runGit: (args: Array<string>) => {
-        if (args[0] === "ls-remote") {
-          probes += 1;
-          /* 探活第一刀「慢但失败」：挂了 100s 才回话，第二刀通。 */
-          if (probes === 1) {
+        if (args.includes("push")) {
+          pushes += 1;
+          /* 首刀「慢但失败」：挂了 100s 才回话，之后每次都是 egress 失败。 */
+          if (pushes === 1) {
             t += 100_000;
           }
         }
@@ -1491,12 +1574,236 @@ describe("runMirror（git 与 fetch 全假件）", () => {
       },
     };
     const code = await runMirror(io);
-    expect(code).toBe(CODE.FAIL);
-    expect(probes).toBe(2);
-    /* 推送只拿到约 135s 剩余预算 ⇒ 第 7 刀后就被收口；若两跳各领一份 240s，
+    expect(code).toBe(CODE.NO_FACT);
+    /* 推送只拿到约 135s 剩余预算 ⇒ 第 7 刀后就被收口；若另领一份 240s，
      * 这里会跑满 PUSH_MAX_ATTEMPTS = 10 次（反向验证抓手）。 */
     expect(base.pushes.length).toBeLessThan(PUSH_MAX_ATTEMPTS);
     expect(base.heard.join("\n")).toContain("推送重试预算用尽");
+  });
+});
+
+describe("推送后自证（ci-mirror-push-verify）", () => {
+  const REF = "refs/heads/cnb-pr-2649";
+  const OID_A = "a".repeat(64);
+  const OID_B = "b".repeat(64);
+
+  /** 回读那一跳：`runGit` 给假回话，重试器用真实现（预算 / 退避都走注入的假钟）。 */
+  function verifyRef(
+    results: Array<{ code: number; stderr?: string; stdout?: string }>,
+    extra: { remoteCode?: number; remoteStderr?: string } = {},
+  ) {
+    const lines: Array<string> = [];
+    let calls = 0;
+    const runGit = () => {
+      calls += 1;
+      const head = results.shift();
+      if (head) {
+        return { code: head.code, stdout: head.stdout ?? "", stderr: head.stderr ?? "" };
+      }
+      return { code: extra.remoteCode ?? 0, stdout: "", stderr: extra.remoteStderr ?? "" };
+    };
+    return {
+      calls: () => calls,
+      lines,
+      run: () =>
+        verifyPushedRef({
+          headSha: SHA,
+          log: (line: string) => {
+            lines.push(line);
+          },
+          now: () => 0,
+          prefix: "mirror",
+          ref: REF,
+          runGit,
+          runGitWithRetry,
+          sanitize,
+          sleep: () => Promise.resolve(),
+          token: TOKEN,
+          url: "https://x-access-token@github.com/wuxianyuedu/comfy-app.git",
+        }),
+    };
+  }
+
+  it("回读一致 ⇒ 0，拿远端 sha 与 HEAD 逐字比", async () => {
+    const fake = verifyRef([{ code: 0, stdout: `${SHA}\t${REF}\n` }]);
+    const got = await fake.run();
+    expect(got).toMatchObject({ code: CODE.OK, remoteSha: SHA });
+    expect(got.note).toContain("回读一致");
+  });
+
+  it("回读不符 ⇒ 1（有事实是错），remote/local 都念出来", async () => {
+    const other = "b".repeat(40);
+    const fake = verifyRef([{ code: 0, stdout: `${other}\t${REF}\n` }]);
+    const got = await fake.run();
+    expect(got.code).toBe(CODE.FAIL);
+    expect(got.note).toContain(`remote=${other} local=${SHA}`);
+  });
+
+  it("远端没有这条 ref ⇒ 1，不拿别的 ref 冒充", async () => {
+    const other = "c".repeat(40);
+    const fake = verifyRef([{ code: 0, stdout: `${other}\t${REF}-old\n` }]);
+    const got = await fake.run();
+    expect(got.code).toBe(CODE.FAIL);
+    expect(got.remoteSha).toBeNull();
+    expect(got.note).toContain(`远端没有 ${REF}`);
+  });
+
+  it("回读本身没通 ⇒ 2（没结论，不等于通过），认证类不重试", async () => {
+    const fake = verifyRef([], {
+      remoteCode: 128,
+      remoteStderr: "fatal: Authentication failed",
+    });
+    const got = await fake.run();
+    expect(got.code).toBe(CODE.NO_FACT);
+    expect(got.attempts).toBe(1);
+    expect(got.note).toContain("回读没通");
+  });
+
+  it("回读 egress 抖动 ⇒ 按 VERIFY 次数上限重试，耗尽仍是 2", async () => {
+    const down = { code: -1, stderr: "git ls-remote 超时：没拿到任何回话" };
+    const fake = verifyRef(Array.from({ length: VERIFY_MAX_ATTEMPTS }, () => down));
+    const got = await fake.run();
+    expect(got.code).toBe(CODE.NO_FACT);
+    expect(got.attempts).toBe(VERIFY_MAX_ATTEMPTS);
+    expect(fake.calls()).toBe(VERIFY_MAX_ATTEMPTS);
+  });
+
+  it("parseLfsObjects：读不懂 / 缺字段都是没结论，合法清单出 {oid,size}", () => {
+    expect(parseLfsObjects("not json").error).toContain("不是 JSON");
+    expect(parseLfsObjects(JSON.stringify({ files: null })).error).toContain("files 数组");
+    expect(
+      parseLfsObjects(JSON.stringify({ files: [{ name: "x.ttf", oid: "abc", size: 1 }] })).error,
+    ).toContain("缺 oid/size");
+    expect(parseLfsObjects(JSON.stringify({ files: [{ oid: OID_A, size: 12 }] })).objects).toEqual([
+      { oid: OID_A, size: 12 },
+    ]);
+  });
+
+  /** `verifyLfsObjects` 的假件：本地清单由 `list` 给，HTTP 面由 `fetchImpl` 给。 */
+  function verifyLfs(
+    list: { code: number; stderr?: string; stdout?: string },
+    fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
+  ) {
+    const lines: Array<string> = [];
+    return {
+      lines,
+      run: () =>
+        verifyLfsObjects({
+          fetchImpl,
+          log: (line: string) => {
+            lines.push(line);
+          },
+          prefix: "mirror",
+          repo: DEFAULT_REPO,
+          runGit: () => ({ code: list.code, stdout: list.stdout ?? "", stderr: list.stderr ?? "" }),
+          token: TOKEN,
+        }),
+    };
+  }
+
+  it("LFS 清单 0 条 ⇒ 0 且一次 batch 都不发", async () => {
+    let calls = 0;
+    const fake = verifyLfs({ code: 0, stdout: JSON.stringify({ files: [] }) }, () => {
+      calls += 1;
+      return Promise.resolve(new Response("{}"));
+    });
+    const got = await fake.run();
+    expect(got).toMatchObject({ code: CODE.OK, objects: 0 });
+    expect(calls).toBe(0);
+  });
+
+  it("LFS batch 每个对象都有 download ⇒ 0", async () => {
+    const bodies: Array<string> = [];
+    const fake = verifyLfs(
+      {
+        code: 0,
+        stdout: JSON.stringify({
+          files: [
+            { oid: OID_A, size: 1 },
+            { oid: OID_B, size: 2 },
+          ],
+        }),
+      },
+      (_input, init) => {
+        bodies.push(typeof init?.body === "string" ? init.body : "");
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              objects: [
+                { actions: { download: { href: "https://lfs/a" } }, oid: OID_A },
+                { actions: { download: { href: "https://lfs/b" } }, oid: OID_B },
+              ],
+            }),
+            { status: 200 },
+          ),
+        );
+      },
+    );
+    const got = await fake.run();
+    expect(got).toMatchObject({ code: CODE.OK, objects: 2 });
+    expect(got.note).toContain("2/2 远端可下载");
+    expect(JSON.parse(bodies[0] ?? "{}")).toMatchObject({
+      operation: "download",
+      transfers: ["basic"],
+    });
+  });
+
+  it("LFS batch 有对象带 error / 没 download ⇒ 1，缺失 OID 点名", async () => {
+    const fake = verifyLfs(
+      {
+        code: 0,
+        stdout: JSON.stringify({
+          files: [
+            { oid: OID_A, size: 1 },
+            { oid: OID_B, size: 2 },
+          ],
+        }),
+      },
+      () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              objects: [
+                { actions: { download: { href: "https://lfs/a" } }, oid: OID_A },
+                { error: { code: 404, message: "Object not found" }, oid: OID_B },
+              ],
+            }),
+            { status: 200 },
+          ),
+        ),
+    );
+    const got = await fake.run();
+    expect(got.code).toBe(CODE.FAIL);
+    expect(got.missing).toEqual([OID_B]);
+    expect(got.note).toContain("1/2 个 LFS 对象远端拿不到");
+  });
+
+  it("LFS batch 请求没跑起来 / HTTP 非 200 / 回话对不上 ⇒ 2（没结论）", async () => {
+    const list = { code: 0, stdout: JSON.stringify({ files: [{ oid: OID_A, size: 1 }] }) };
+    const thrown = await verifyLfs(list, () => Promise.reject(new Error("dns down"))).run();
+    expect(thrown.code).toBe(CODE.NO_FACT);
+    expect(thrown.note).toContain("没跑起来");
+
+    const http500 = await verifyLfs(list, () =>
+      Promise.resolve(new Response("no", { status: 500 })),
+    ).run();
+    expect(http500.code).toBe(CODE.NO_FACT);
+    expect(http500.note).toContain("HTTP 500");
+
+    const mismatch = await verifyLfs(list, () =>
+      Promise.resolve(new Response(JSON.stringify({ objects: [] }), { status: 200 })),
+    ).run();
+    expect(mismatch.code).toBe(CODE.NO_FACT);
+    expect(mismatch.note).toContain("对象数不一致");
+  });
+
+  it("LFS 清单读不到 ⇒ 2（没结论），不是 0", async () => {
+    const fake = verifyLfs({ code: 128, stderr: "not a git repository" }, () =>
+      Promise.resolve(new Response("{}")),
+    );
+    const got = await fake.run();
+    expect(got.code).toBe(CODE.NO_FACT);
+    expect(got.note).toContain("读不到本地 LFS 指针清单");
   });
 });
 
@@ -1528,17 +1835,19 @@ describe("resolveMasterContext（push 档：没有 IID，ref 恒为 master）", 
   });
 });
 
-describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
+describe("runMasterMirror（推送 + 回读，没有派发那一跳）", () => {
   /** 与 runMirror 那套同形的假件；这一支根本没有 fetch 面（不派发是签名级的）。 */
   function harness(
     opts: {
       env?: Record<string, string | undefined>;
       lfsCode?: number;
+      lfsJsonCode?: number;
+      lfsJsonStdout?: string;
       lfsStderr?: string;
-      probeCode?: number;
-      probeResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
-      probeStderr?: string;
-      probeStdout?: string;
+      remoteCode?: number;
+      remoteResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
+      remoteStderr?: string;
+      remoteStdout?: string;
       pushCode?: number;
       pushResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
       pushStderr?: string;
@@ -1548,20 +1857,30 @@ describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
     const lfsPushes: Array<Array<string>> = [];
     const heard: Array<string> = [];
     const sleeps: Array<number> = [];
-    let probeCalls = 0;
-    const probeSeq = opts.probeResults ? [...opts.probeResults] : null;
+    let remoteCalls = 0;
+    const remoteSeq = opts.remoteResults ? [...opts.remoteResults] : null;
     const pushSeq = opts.pushResults ? [...opts.pushResults] : null;
     const runGit = (args: Array<string>) => {
       if (args[0] === "ls-remote") {
-        probeCalls += 1;
-        const head = probeSeq?.shift();
+        remoteCalls += 1;
+        const head = remoteSeq?.shift();
         if (head) {
           return { code: head.code, stdout: head.stdout ?? "", stderr: head.stderr ?? "" };
         }
+        /* 同样按第三个参数回同一条 ref：master 这一档回读问的是 `refs/heads/master`。 */
+        const requestedRef = String(args[2] ?? `refs/heads/${MASTER_REF}`);
         return {
-          code: opts.probeCode ?? 0,
-          stdout: opts.probeStdout ?? `${REMOTE_REF}\n`,
-          stderr: opts.probeStderr ?? "",
+          code: opts.remoteCode ?? 0,
+          stdout: opts.remoteStdout ?? `${remoteRefLine(requestedRef)}\n`,
+          stderr: opts.remoteStderr ?? "",
+        };
+      }
+      /* 推送后 LFS 对象核对走 `ls-files --json`，别把它记成一次 LFS push。 */
+      if (args.includes("ls-files") && args.includes("--json")) {
+        return {
+          code: opts.lfsJsonCode ?? 0,
+          stdout: opts.lfsJsonStdout ?? JSON.stringify({ files: [] }),
+          stderr: "",
         };
       }
       /* 与 runMirror 的 harness 同一分流：lfs push 先于内容 push 判，各记各的账。 */
@@ -1598,7 +1917,7 @@ describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
         return Promise.resolve();
       },
     };
-    return { heard, io, pushes, lfsPushes, sleeps, probeCalls: () => probeCalls };
+    return { heard, io, pushes, lfsPushes, sleeps, remoteCalls: () => remoteCalls };
   }
 
   it("推成 ⇒ 退 0；--force 打到 refs/heads/master，且日志里没有任何「已派发」", async () => {
@@ -1617,33 +1936,60 @@ describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
     expect(heard.every((l) => l.startsWith("[mirror-master]"))).toBe(true);
   });
 
-  it("推送前那一读失败 ⇒ 退 2，一次推都不发", async () => {
-    const { heard, io, pushes } = harness({
-      probeCode: 128,
-      probeStderr: "remote: Repository not found.\nfatal: Authentication failed",
+  it("推送那一跳被拒 ⇒ 退 2，一次推已发、回读不发", async () => {
+    const { heard, io, pushes, remoteCalls } = harness({
+      pushCode: 128,
+      pushStderr: "remote: Repository not found.\nfatal: Authentication failed",
     });
     const code = await runMasterMirror(io);
     expect(code).toBe(CODE.NO_FACT);
-    expect(pushes).toHaveLength(0);
+    expect(pushes).toHaveLength(1);
+    expect(remoteCalls()).toBe(0);
     expect(heard.join("\n")).toContain("先去建仓库");
+    expect(heard.join("\n")).toContain("[mirror-master] 结论：exit 2");
   });
 
-  it("目标仓库是空的（零条 ref）⇒ 照样推，读成「空仓库」而不是失败", async () => {
-    const { heard, io, pushes } = harness({ probeStdout: "" });
+  it("目标仓库是空的（首次推送）⇒ 不短路，推后回读一致照常收尾", async () => {
+    const { heard, io, pushes, remoteCalls } = harness();
     const code = await runMasterMirror(io);
     expect(code).toBe(CODE.OK);
     expect(pushes).toHaveLength(1);
-    expect(heard.join("\n")).toContain("目标仓库是空的");
+    expect(remoteCalls()).toBe(1);
+    expect(heard.join("\n")).toContain("[mirror-master] 推送后回读：回读一致");
+    expect(heard.join("\n")).not.toContain("目标仓库是空的");
   });
 
-  it("推送失败 ⇒ 退 1；硬规则 17：回显里不许出现令牌原值", async () => {
+  it("推送失败 ⇒ 退 2；硬规则 17：回显里不许出现令牌原值", async () => {
     const { heard, io } = harness({ pushCode: 128 });
     const code = await runMasterMirror(io);
-    expect(code).toBe(CODE.FAIL);
+    expect(code).toBe(CODE.NO_FACT);
     const all = heard.join("\n");
-    expect(all).toContain("推送失败");
+    expect(all).toContain("[mirror-master] 推送本身没通");
     expect(all).not.toContain(TOKEN);
     expect(all).toContain("***");
+  });
+
+  it("master 档回读不符 ⇒ 退 1，前缀仍是 [mirror-master]", async () => {
+    const other = "d".repeat(40);
+    const { heard, io } = harness({
+      remoteStdout: `${other}\trefs/heads/${MASTER_REF}\n`,
+    });
+    const code = await runMasterMirror(io);
+    expect(code).toBe(CODE.FAIL);
+    expect(heard.join("\n")).toContain("[mirror-master] 结论：exit 1");
+    expect(heard.join("\n")).toContain("回读不符");
+  });
+
+  it("master 档回读没通 ⇒ 退 2，没结论不等于通过", async () => {
+    const { heard, io, remoteCalls } = harness({
+      remoteCode: 128,
+      remoteStderr: "fatal: Authentication failed",
+    });
+    const code = await runMasterMirror(io);
+    expect(code).toBe(CODE.NO_FACT);
+    expect(remoteCalls()).toBe(1);
+    expect(heard.join("\n")).toContain("[mirror-master] 结论：exit 2");
+    expect(heard.join("\n")).toContain("回读没通");
   });
 
   it("令牌缺席 ⇒ 退 2，git 一次都不碰", async () => {
@@ -1663,33 +2009,38 @@ describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
     expect(heard.join("\n")).toContain(MASTER_REF);
   });
 
-  it("与 PR 格同一套韧性：探活 egress 重试后通 ⇒ 退 0，前缀是 [mirror-master]", async () => {
-    const { heard, io, pushes, sleeps, probeCalls } = harness({
-      probeResults: [
-        { code: -1, stderr: "git ls-remote 超时（>30000 ms）：这一跳没拿到任何回话" },
-        { code: 0, stdout: `${REMOTE_REF}\n` },
+  it("与 PR 格同一套韧性：推送那一跳 egress 重试后通 ⇒ 退 0，前缀是 [mirror-master]", async () => {
+    const { heard, io, pushes, sleeps, remoteCalls } = harness({
+      pushResults: [
+        { code: -1, stderr: "git push 超时（>240000 ms）：这一跳没拿到任何回话" },
+        { code: 0 },
       ],
     });
     const code = await runMasterMirror(io);
     expect(code).toBe(CODE.OK);
-    expect(probeCalls()).toBe(2);
+    expect(pushes).toHaveLength(2);
     expect(sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
-    expect(pushes).toHaveLength(1);
+    expect(remoteCalls()).toBe(1);
     expect(heard.every((l) => l.startsWith("[mirror-master]"))).toBe(true);
+    expect(heard.join("\n")).toContain(
+      `[mirror-master] 推送第 1/${PUSH_MAX_ATTEMPTS} 次没通（可重试类）`,
+    );
   });
 
-  it("与 PR 格同一套韧性：推送认证类失败不重试、egress 重试耗尽退 1", async () => {
+  it("与 PR 格同一套韧性：推送认证类失败不重试、egress 重试耗尽退 2", async () => {
     const auth = harness({ pushCode: 128, pushStderr: "fatal: Invalid username or token" });
-    expect(await runMasterMirror(auth.io)).toBe(CODE.FAIL);
+    expect(await runMasterMirror(auth.io)).toBe(CODE.NO_FACT);
     expect(auth.pushes).toHaveLength(1);
     expect(auth.sleeps).toHaveLength(0);
+    expect(auth.heard.join("\n")).toContain("[mirror-master] 推送本身没通");
 
-    /* 全程 egress（同 PR 档那条）：整条退避阶梯都要被吃掉，退码仍是「判出的红」。 */
+    /* 全程 egress（同 PR 档那条）：整条退避阶梯都要被吃掉，退码仍是「前提没落地」。 */
     const eg = harness({ pushCode: 128, pushStderr: "Connection timed out" });
-    expect(await runMasterMirror(eg.io)).toBe(CODE.FAIL);
+    expect(await runMasterMirror(eg.io)).toBe(CODE.NO_FACT);
     expect(eg.pushes).toHaveLength(PUSH_MAX_ATTEMPTS);
     expect(eg.sleeps).toEqual(RETRY_BACKOFF_MS.slice(0, PUSH_MAX_ATTEMPTS - 1));
-    expect(eg.heard.join("\n")).toContain("[mirror-master] 推送失败");
+    expect(eg.heard.join("\n")).toContain("[mirror-master] 推送本身没通");
+    expect(eg.heard.join("\n")).toContain("[mirror-master] 结论：exit 2");
   });
 
   it("master 档同样跑 LFS 第二跳：daily / 桌包的 checkout 也开 lfs:true，前缀是 [mirror-master]", async () => {
@@ -1734,24 +2085,24 @@ describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
     expect(heard.join("\n")).toContain(`类别=${LFS_FAILURE_KINDS.LOCAL_REFS}`);
   });
 
-  it("ISSUE #3234：master 档探活同样吃这份预算（两档不漂移）", async () => {
+  it("ISSUE #3234：master 档推送那一跳同样吃这份预算（两档不漂移）", async () => {
     const down = {
       code: -1,
-      stderr: "git ls-remote 超时（>30000 ms）：这一跳没拿到任何回话",
+      stderr: "git push 超时（>240000 ms）：这一跳没拿到任何回话",
     };
     const base = harness({
-      probeCode: down.code,
-      probeResults: Array.from({ length: PROBE_MAX_ATTEMPTS }, () => down),
-      probeStderr: down.stderr,
+      pushCode: down.code,
+      pushResults: Array.from({ length: PUSH_MAX_ATTEMPTS }, () => down),
+      pushStderr: down.stderr,
     });
     let t = 0;
-    const probeOpts: Array<{ timeout?: number } | undefined> = [];
+    const pushOpts: Array<{ timeout?: number } | undefined> = [];
     const io = {
       ...base.io,
       now: () => t,
       runGit: (args: Array<string>, opts?: { timeout?: number }) => {
-        if (args[0] === "ls-remote") {
-          probeOpts.push(opts);
+        if (args.includes("push")) {
+          pushOpts.push(opts);
         }
         return base.io.runGit(args);
       },
@@ -1762,14 +2113,14 @@ describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
     };
     const code = await runMasterMirror(io);
     expect(code).toBe(CODE.NO_FACT);
-    /* 探活没通 ⇒ master 这一档也不推、不跑 LFS。 */
-    expect(base.pushes).toHaveLength(0);
+    /* 推送没通 ⇒ master 这一档也不跑 LFS。 */
+    expect(base.pushes).toHaveLength(PUSH_MAX_ATTEMPTS);
     expect(base.lfsPushes).toHaveLength(0);
-    /* 与 PR 档同一组读数：首刀不裁、第二刀裁到 30s、最后一刀只剩一次尝试的余量。
-     * 把 master 档探活的 `budgetMs: wireBudget()` 摘掉，这几条就会红。 */
-    expect(probeOpts[0]).toBeUndefined();
-    expect(probeOpts[1]).toEqual({ timeout: REMOTE_PROBE_TIMEOUT_MS });
-    expect(probeOpts.at(-1)).toEqual({ timeout: RETRY_MIN_ATTEMPT_MS });
+    /* 与 PR 档同一组读数：首刀不裁、第二刀裁到剩余量、最后一刀只剩一次尝试的余量。
+     * 把 master 档推送的 `budgetMs: wireBudget()` 摘掉，这几条就会红。 */
+    expect(pushOpts[0]).toBeUndefined();
+    expect(pushOpts[1]).toEqual({ timeout: PUSH_RETRY_BUDGET_MS - (RETRY_BACKOFF_MS[0] ?? 0) });
+    expect(pushOpts.at(-1)).toEqual({ timeout: RETRY_MIN_ATTEMPT_MS });
     expect(base.heard.every((l) => l.startsWith("[mirror-master]"))).toBe(true);
   });
 });
