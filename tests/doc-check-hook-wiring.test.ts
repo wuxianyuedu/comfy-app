@@ -533,7 +533,7 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
     const changedAt = workflow.indexOf("node scripts/check-format.cjs --changed");
     const fullAt = workflow.indexOf("run: node scripts/check-format.cjs\n");
     expect(
-      changedAt >= 0 && fullAt > changedAt,
+      changedAt !== -1 && fullAt > changedAt,
       "全量档没有排在改动面档之后 —— 两格的顺序是「先判这次带来的、再判全库」，" +
         "顺序反了会让改动面档的读数淹没在全库输出里",
     ).toBe(true);
