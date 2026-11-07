@@ -239,9 +239,8 @@ export function installStreamCapture(): void {
       } catch {
         /* 转录失败不吞掉输出本身 */
       }
-      /* SAFETY: 类型断言已复核 */
-      /* SAFETY: 类型断言已复核 */
-      return original.call(stream, chunk, encodingOrCb as never, cb as never);
+      const written: unknown = Reflect.apply(original, stream, [chunk, encodingOrCb, cb]);
+      return written === true;
     };
     stream.write = patched;
   };

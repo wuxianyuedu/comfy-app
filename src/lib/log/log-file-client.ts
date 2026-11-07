@@ -7,6 +7,7 @@
  * `offset` 是**本次返回内容的起点**（服务端在需要重读整文件时会把它回落到 0）。
  */
 
+import { isRecord } from "~/lib/is-record";
 import { withQuery } from "~/lib/query-string";
 import { LOG_SLICE_ENDPOINT } from "./panel-self-poll";
 import type { LogSessionsPayload } from "./log-sessions";
@@ -30,6 +31,16 @@ export type FileLogSlice = {
   /** 文件当前总字节数（下一轮增量读取的游标）。 */
   size: number;
 };
+
+/** 运行期收窄 `/api/logs/current` 的响应体；只校验客户端真正读取的必填字段。 */
+function isFileLogSlice(value: unknown): value is FileLogSlice {
+  return (
+    isRecord(value) &&
+    typeof value.content === "string" &&
+    typeof value.offset === "number" &&
+    typeof value.size === "number"
+  );
+}
 
 export type LogSourceKind =
   | "dev"
@@ -76,8 +87,11 @@ export async function fetchFileLogSlice(
   if (!res.ok) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  return (await res.json()) as FileLogSlice;
+  const data: unknown = await res.json();
+  if (!isFileLogSlice(data)) {
+    throw new TypeError("日志切片响应形状不合法");
+  }
+  return data;
 }
 
 /* ── 常驻服务 runtime 日志的「每一次启动」（设置页启动日志）─────────────
@@ -93,6 +107,20 @@ export async function fetchFileLogSlice(
  * 这个动作，界面上没有可切的东西；它的历史由日志面板自己那一路覆盖。
  */
 export type RuntimeLogSourceKind = "comfyui-runtime" | "drizzle-studio-runtime" | "ollama-runtime";
+
+/** 运行期收窄 `/api/logs/sessions` 的响应体；形状不符按「这一次没读成功」回落 null。 */
+function isLogSessionsPayload(value: unknown): value is LogSessionsPayload {
+  return (
+    isRecord(value) &&
+    typeof value.content === "string" &&
+    (value.selectedId === null || typeof value.selectedId === "string") &&
+    Array.isArray(value.sessions) &&
+    typeof value.size === "number" &&
+    typeof value.total === "number" &&
+    typeof value.truncated === "boolean" &&
+    typeof value.windowed === "boolean"
+  );
+}
 
 /**
  * 拉取某来源的启动列表 + 指定一次（缺省取最新那一份）的正文。
@@ -111,8 +139,8 @@ export async function fetchLogSessions(
     if (!res.ok) {
       return null;
     }
-    /* SAFETY: 类型断言已复核 */
-    return (await res.json()) as LogSessionsPayload;
+    const data: unknown = await res.json();
+    return isLogSessionsPayload(data) ? data : null;
   } catch {
     return null;
   }
@@ -140,6 +168,11 @@ export type SavedLogExport = {
   relativePath?: string;
 };
 
+/** 运行期收窄导出/诊断端点的回执；`ok` 是两端共同依赖的唯一必填字段。 */
+function isSavedLogExport(value: unknown): value is SavedLogExport {
+  return isRecord(value) && typeof value.ok === "boolean";
+}
+
 /**
  * 把一段日志文本保存到本机 `log/exports/`。
  *
@@ -154,9 +187,8 @@ export async function saveLogExport(label: string, content: string): Promise<Sav
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ label, content }),
     });
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as SavedLogExport;
-    return data;
+    const data: unknown = await res.json();
+    return isSavedLogExport(data) ? data : { ok: false, error: "响应形状不合法" };
   } catch (error) {
     return {
       ok: false,
@@ -180,8 +212,8 @@ export async function saveLogExport(label: string, content: string): Promise<Sav
 export async function saveDiagnosticsPackage(): Promise<SavedLogExport> {
   try {
     const res = await fetch("/api/logs/diagnostics", { method: "POST" });
-    /* SAFETY: 类型断言已复核 */
-    return (await res.json()) as SavedLogExport;
+    const data: unknown = await res.json();
+    return isSavedLogExport(data) ? data : { ok: false, error: "响应形状不合法" };
   } catch (error) {
     return {
       ok: false,

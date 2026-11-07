@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
 import { SIZE_PRESET_STORAGE_KEY } from "./size-preset-store";
 import type { SizeDims, SizePresetTable, SizeScene } from "./size-presets";
 
@@ -18,6 +19,15 @@ function cell(
   tier: "1k" | "2k" | "4k",
 ): SizeDims {
   return table[scene][ratio]![tier];
+}
+
+/** 从落盘的 JSON 里读 `image` → 比例行 → 档位这一格；形状不符时 undefined。 */
+function persistedImageCell(parsed: unknown): unknown {
+  if (!isRecord(parsed) || !isRecord(parsed.image)) {
+    return undefined;
+  }
+  const row = parsed.image["16:9 横屏"];
+  return isRecord(row) ? row["1k"] : undefined;
 }
 
 beforeEach(() => {
@@ -53,11 +63,10 @@ describe("size-preset-store", () => {
       height: 720,
     });
     expect(listener).toHaveBeenCalledTimes(1);
-    /* SAFETY: 类型断言已复核 */
-    const persisted = JSON.parse(
+    const persisted: unknown = JSON.parse(
       window.localStorage.getItem(SIZE_PRESET_STORAGE_KEY) ?? "null",
-    ) as { image?: Record<string, Record<string, unknown>> } | null;
-    expect(persisted?.image?.["16:9 横屏"]?.["1k"]).toEqual({
+    );
+    expect(persistedImageCell(persisted)).toEqual({
       width: 1280,
       height: 720,
     });

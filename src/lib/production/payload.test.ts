@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildProductionPayload, inheritDerivedFields, SHOT_DERIVED_FIELDS } from "./payload";
 import { emptyWorkshopDraft, type WorkshopDraft } from "~/lib/workshop/draft-store";
-import type { Shot } from "~/lib/workshop/types";
+import { shotInputSchema } from "~/lib/workshop/types";
 
 describe("buildProductionPayload", () => {
   it("摊平 meta / 剧本 / 场景 / 角色 / 镜头，进度用入参 stage + rendered", () => {
@@ -19,8 +19,7 @@ describe("buildProductionPayload", () => {
         logline: "一句话",
       },
       scriptMarkdown: "# 剧本",
-      /* SAFETY: 类型断言已复核 */
-      shots: [{ id: "a" } as Shot],
+      shots: [shotInputSchema.parse({ id: "a", index: 0 })],
     };
     const payload = buildProductionPayload(draft, "storyboard", true);
     expect(payload).toMatchObject({

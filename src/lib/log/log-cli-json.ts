@@ -29,9 +29,12 @@ export function splitCliLogLine(message: string): { payload: string; tag: CliLog
   if (!match) {
     return null;
   }
+  const tag = match.groups?.tag;
+  if (tag !== "原始" && tag !== "stdout" && tag !== "stderr") {
+    return null;
+  }
   return {
-    /* SAFETY: 类型断言已复核 */
-    tag: match.groups?.tag as CliLogTag,
+    tag,
     payload: message.slice(match[0].length).trimStart(),
   };
 }

@@ -6,25 +6,49 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { deleteMaterial, fetchMaterials, uploadMaterial } from "./materials-client";
 
 function jsonResponse(body: unknown, ok = true, status = ok ? 200 : 400): Response {
-  /* SAFETY: 类型断言已复核 */
-  return {
-    ok,
-    status,
-    json: () => body,
-  } as unknown as Response;
+  return new Response(JSON.stringify(body), { status });
+}
+
+/** fetch 的 init 是运行期对象（测试桩总会给字面量），按对象收窄即可。 */
+function isRequestInit(value: unknown): value is RequestInit {
+  return typeof value === "object" && value !== null;
+}
+
+/** 请求地址只该是字符串；别的形态说明这一档没量到任何事。 */
+function urlOf(target: unknown): string {
+  if (typeof target !== "string") {
+    throw new Error("请求地址不是字符串 —— 这一档没测到任何事");
+  }
+  return target;
 }
 
 /** 记录调用参数：URL 与 init 都按可选处理，避免 vi.fn() 的零元组签名报错。 */
-function callArgs(fetchMock: ReturnType<typeof vi.fn>): {
+function callArgs(
+  fetchMock: ReturnType<typeof vi.fn>,
+  index = 0,
+): {
   init?: RequestInit;
   url: string;
 } {
-  const first = fetchMock.mock.calls[0] ?? [];
+  const call: unknown = fetchMock.mock.calls[index];
+  if (!Array.isArray(call)) {
+    return { url: "" };
+  }
+  const target: unknown = call[0];
+  const init: unknown = call[1];
   return {
-    url: String(first[0] ?? ""),
-    /* SAFETY: 类型断言已复核 */
-    init: first[1] as RequestInit | undefined,
+    url: urlOf(target),
+    init: isRequestInit(init) ? init : undefined,
   };
+}
+
+/** 请求体必须是 FormData（上传这一档要钉的就是它）。 */
+function formDataOf(init: RequestInit | undefined): FormData {
+  const body = init?.body;
+  if (!(body instanceof FormData)) {
+    throw new Error("请求体不是 FormData —— 这一档没测到任何事");
+  }
+  return body;
 }
 
 function item(over: Record<string, unknown> = {}) {
@@ -133,8 +157,7 @@ describe("uploadMaterial", () => {
       folder: "ref",
       projectId: "p-1",
     });
-    /* SAFETY: 类型断言已复核 */
-    const fd1 = callArgs(fetchMock).init?.body as FormData;
+    const fd1 = formDataOf(callArgs(fetchMock).init);
     expect(fd1.get("folder")).toBe("ref");
     expect(fd1.get("projectId")).toBe("p-1");
     expect(fd1.get("shared")).toBeNull();
@@ -143,12 +166,7 @@ describe("uploadMaterial", () => {
       folder: "ref",
       projectId: null,
     });
-    /* SAFETY: 类型断言已复核 */
-    /* SAFETY: 类型断言已复核 */
-    /* SAFETY: 类型断言已复核 */
-    const fd2 = (
-      (fetchMock.mock.calls[1] as Array<unknown> | undefined)?.[1] as RequestInit | undefined
-    )?.body as FormData;
+    const fd2 = formDataOf(callArgs(fetchMock, 1).init);
     expect(fd2.get("shared")).toBe("true");
   });
 

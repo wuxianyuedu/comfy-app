@@ -162,26 +162,23 @@ export function pnpmJsEntry(dropIn: string): string | null {
   if (pkgDir === null) {
     return null;
   }
-  let manifest: { bin?: unknown };
+  let bin: unknown;
   try {
-    /* SAFETY: 类型断言已复核 */
-    manifest = JSON.parse(fs.readFileSync(path.join(pkgDir, "package.json"), "utf8")) as {
-      bin?: unknown;
-    };
+    const manifest: unknown = JSON.parse(
+      fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"),
+    );
+    bin = undefined;
+    if (manifest !== null && typeof manifest === "object") {
+      bin = Reflect.get(manifest, "bin");
+    }
   } catch {
     return null;
   }
-  const bin = manifest.bin;
   let rel: unknown;
   if (typeof bin === "string") {
     rel = bin;
-  } else if (
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    bin != null &&
-    typeof bin === "object"
-  ) {
-    /* SAFETY: 类型断言已复核 */
-    rel = (bin as Record<string, unknown>).pnpm;
+  } else if (bin !== null && typeof bin === "object") {
+    rel = Reflect.get(bin, "pnpm");
   }
   if (typeof rel === "string" && rel !== "") {
     const target = path.resolve(pkgDir, rel);
@@ -214,11 +211,8 @@ function pnpmPackageDir(dropIn: string): string | null {
       return dir;
     }
     try {
-      /* SAFETY: 类型断言已复核 */
-      const pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")) as {
-        name?: unknown;
-      };
-      if (pkg.name === "pnpm") {
+      const pkg: unknown = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
+      if (pkg !== null && typeof pkg === "object" && Reflect.get(pkg, "name") === "pnpm") {
         return dir;
       }
     } catch {

@@ -8,6 +8,7 @@
  * 类型层、引不得 server 那份（它拉 getLLMConfig 与 node:fs），所以从双方都能
  * 引的叶子 ~/lib/llm/types 派生 —— 值与类型都只有一处定义，别名不会再漂。 */
 import type { RemoteModelKind } from "~/lib/llm/types";
+import { asRecord } from "~/lib/is-record";
 
 export type UsageTestKind = RemoteModelKind;
 
@@ -52,8 +53,8 @@ export async function testModelUsage(input: UsageTestInput): Promise<UsageTestRe
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  /* SAFETY: 类型断言已复核 */
-  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  const raw: unknown = await res.json().catch(() => ({}));
+  const json = asRecord(raw) ?? {};
   return parseUsageTestResult(res, json);
 }
 
@@ -94,7 +95,7 @@ export async function queryUsageTask(input: UsageTaskQueryInput): Promise<UsageT
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  /* SAFETY: 类型断言已复核 */
-  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  const raw: unknown = await res.json().catch(() => ({}));
+  const json = asRecord(raw) ?? {};
   return parseUsageTestResult(res, json);
 }
