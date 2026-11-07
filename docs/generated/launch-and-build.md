@@ -3112,12 +3112,34 @@ tauri 判定工具缓存目录不完整时会**先删掉** `%LOCALAPPDATA%\tauri
 `pnpm tauri build` → `[3/3]` 发布（同一个入口）。`build-standalone.ps1` 的 `--no-bundle`
 形态不变（那是「只要能跑的壳」那条路）。
 
+**NSIS 工具现场读数（ISSUE #3297；只加读数、不改判据、恒退 0）**：桌包档曾每一次都死在
+最后一格 `Running makensis … / Unable to start child process, error 0x2`，而前一格
+`打包·桌包工具预置` 逐字报「必需件齐全」——两格对**同一棵树**给出互相矛盾的结论：
+预置判的是 `resolveTauriCacheRoot()` 读 `%LOCALAPPDATA%` 拼出来的 `tauri\NSIS`，
+而 bundler 走 `SHGetKnownFolderPath`（就是上面那句「不读 `LOCALAPPDATA` 环境变量」），
+普通会话里两者同值，`orange-runner`（LocalSystem）这一族未必。仓里读不出答案，必须在
+那一格现场量，所以清单在「工具预置」与 `pnpm tauri build` 之间多一格
+`打包·NSIS 工具现场读数`（`scripts/ci-nsis-tool-probe.mjs`）：
+
+- 一次打出三样：`ensure` 侧的 `%LOCALAPPDATA%` 原值与落点、bundler 侧的 known folder
+  （`[Environment]::GetFolderPath('LocalApplicationData')` —— `SHGetKnownFolderPath` 的
+  .NET 面）与落点、两处 `makensis.exe` 各自的 `Test-Path` / `Length` / **真跑一次**
+  `/VERSION` 的退出码与输出 / 整树文件数 / 进程账号 / 两处是否同值。
+- 为什么不能只 `Test-Path`：`0x2` 在「被起 exe 的依赖 DLL 解析不到」时同样回这个码，
+  与「exe 本身不在」逐字同形；而 `NSIS_PLAN.required` 六件只是「bundler 会不会去重下」
+  的判据、不是「完整」的判据，所以整树文件数**独立数**，不复用 `missingRequired()` 的结论。
+- 这一格**恒退 0**（与 `镜像身份` / `工作区复用读数` 同族）：两处不同值、`/VERSION`
+  跑不起来，都是**候选根因的读数**而非判红，处置由人照读数定。上面那句「不读环境变量」
+  的处置、以及 `resolveTauriCacheRoot` 的口径，**要等这一格给出读数之后**再分叉改，
+  不在这一轮猜修法。顺序由 `tests/no-platform-ci-config.test.ts` 钉住（夹在两格之间）。
+
 **自查入口**（不点按钮、不等定时）：
 
 ```bash
 pnpm tauri build                                  # 整条链（本机实测见上面那张表）
 node scripts/publish-desktop-bundle.mjs --dry-run # 只打印会往哪儿落、会删谁
 node scripts/publish-desktop-bundle.mjs           # 真发布；常驻根会打在第一行
+node scripts/ci-nsis-tool-probe.mjs               # 只量 NSIS 工具现场（恒退 0，只读）
 ```
 
 ---

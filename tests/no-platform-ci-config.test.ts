@@ -2408,6 +2408,25 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "工具预置排到了真打包之后 —— 那一刻 bundler 已经自己去撞那条下载预算了",
     ).toBe(true);
 
+    /* NSIS 工具现场读数（ISSUE #3297）：只加读数、不改判据、恒退 0。三件事都要有执行者 ——
+     * 在清单里、点在盘上的入口、以及**夹在工具预置与真打包之间**（排到构建之后，
+     * 那一刻 bundler 已经撞完 0x2，读数就没有「下一次红就能定性」的用处了）。 */
+    const readoutName = "打包·NSIS 工具现场读数";
+    const readout = stageBlock(text, readoutName);
+    expect(readout, "`.cnb.yml` 里找不到「打包·NSIS 工具现场读数」那一格").toBeTruthy();
+    const readoutEntry = "scripts/ci-nsis-tool-probe.mjs";
+    expect(readout, `读数那一格点的应是 ${readoutEntry}`).toContain(readoutEntry);
+    expect(existsSync(path.join(ROOT, readoutEntry)), `${readoutEntry} 不在盘上`).toBe(true);
+    expect(
+      packageStages.indexOf(readoutName),
+      "「打包·NSIS 工具现场读数」没在清单里 —— 那一格丢了就回到「两格互相矛盾、仓里读不出答案」",
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      packageStages.indexOf("打包·桌包工具预置") < packageStages.indexOf(readoutName) &&
+        packageStages.indexOf(readoutName) < packageStages.indexOf("打包·桌面成品构建"),
+      "NSIS 工具现场读数没夹在「工具预置」与「桌面成品构建」之间",
+    ).toBe(true);
+
     const rows = pipelineLockAssignments(text).filter((r) => r.stagesRef === "*package_gates");
     expect(
       rows.map((r) => r.event).sort(),
