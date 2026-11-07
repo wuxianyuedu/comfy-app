@@ -411,9 +411,7 @@ export function selfCheckRunLines() {
  */
 export function checkCommands() {
   return IMAGE_CHECKS.map((c) =>
-    c.kind === "command"
-      ? `${c.name} ${c.arg}`
-      : `test -x ${c.arg.split("*")[0]}*`.replace("*", ""),
+    c.kind === "command" ? `${c.name} ${c.arg}` : `test -x ${c.arg}`,
   );
 }
 

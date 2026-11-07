@@ -210,6 +210,12 @@ describe("Dockerfile 的形状", () => {
      * 读起来像「镜像里没装浏览器」。 */
     expect(selfCheck).not.toMatch(/command -v chrome-headless-shell/);
     expect(selfCheck).toContain("test -x /root/.cache/ms-playwright/");
+    /* 两个出口读同一份清单 ⇒ 浏览器那一行的 glob 必须原样保留。旧实现把
+     * `*,*` 之前的 glob 剪掉，`checkCommands()` 曾产出
+     * `test -x /root/.cache/ms-playwright/chromium_headless_shell-`（CodeQL #9）。 */
+    const browserLine = IMAGE_CHECKS.find((c) => c.name === "chrome-headless-shell")?.arg ?? "";
+    expect(browserLine).toContain("chromium_headless_shell-*");
+    expect(checks).toContain(`test -x ${browserLine}`);
   });
 
   it("镜像自己带上身份标识（与 `镜像身份` 那一档读的是同一个变量名）", () => {

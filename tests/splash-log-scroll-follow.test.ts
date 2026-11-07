@@ -17,7 +17,7 @@ const PAGE_HTML = fs.readFileSync(path.join(ROOT, PAGE_REL), "utf8");
 
 /** 从页面里取出内联 `<script>` 的正文（页面只有这一段）。 */
 function pageScript(html: string): string {
-  const match = /<script>(?<body>[\s\S]*?)<\/script>/.exec(html);
+  const match = /<script>(?<body>[\s\S]*?)<\/script>/i.exec(html);
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- RegExp.exec 无匹配时运行期返回 null，规则按非空标，保留 ?. 防线
   const body = match?.groups?.body ?? "";
   if (body === "") {

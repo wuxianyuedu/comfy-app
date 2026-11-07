@@ -243,7 +243,7 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
        * —— 换成 `.ts` 会让它落回扫描面里，那测的是本函数而不是 `IGNORE_GLOBS`。 */
       const braced = glob.replaceAll(/\{[^}]*\}/g, "ts");
       const probe = /\.\w+$/.test(braced.replace(/^\*/, "x"))
-        ? braced.replace(/\*/, "probe")
+        ? braced.replaceAll("*", "probe")
         : braced.replace(/\*\*$|\*$/, "probe.ts");
       expect(
         fmt.isScanned(probe),
