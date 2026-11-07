@@ -133,6 +133,24 @@ describe("changelog-versions —— 跨锚分裂（本条判据的主判据）",
     expect(code).toBe(0);
   });
 
+  test("HTML 注释里的 ISSUE 号不算（含未闭合注释整段丢弃 · CodeQL #8）", ({ repo }) => {
+    const sha = headSha(repo);
+    repo.write(
+      "CHANGELOG.md",
+      changelog({
+        pendingAnchor: `<!-- since: ${sha} — 第一批 -->`,
+        /* 未闭合的 `<!--` 会吞掉这一行剩下的部分 —— 注释里的 #355 一律不算，
+         * 所以它与已发布段落的 #355 **不构成跨锚分裂**。旧实现只删成对注释，
+         * 这里会留下 `#355` 而误判。 */
+        pendingBody: "- 一条 <!-- 尚未闭合的注释里提到 ISSUE #355\n",
+        releasedBody: "首个版本基线（含 ISSUE #355 的初版）。\n",
+      }),
+    );
+    const { code, output } = repo.run();
+    expect(code).toBe(0);
+    expect(output).toContain("来源锚与条目归属一致");
+  });
+
   test("**带日期的版本段落不算待发段落** —— 算进去这条判据就恒空转", ({ repo }) => {
     /* 这是判据自己的静默失效面：把 `## [0.2.0] - 2026-10-01` 也算成待发段落，
      * 「锚之前的已发布段落」就永远是空集（实测 `earlier` 恒为 0），
