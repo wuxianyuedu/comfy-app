@@ -4,6 +4,7 @@ import "server-only";
 import type { ZodType } from "zod";
 import { llmConfigRepository, remoteModelRepository } from "~/lib/core/repository";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
+import { asRecord } from "~/lib/is-record";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 import {
   resolveTaskTemperature,
@@ -11,6 +12,8 @@ import {
   foldRemoteToLocal,
   isLoopbackBaseUrl,
   pickVisionModelName,
+  REMOTE_MODEL_KINDS,
+  TASK_TYPES,
 } from "./types";
 import type {
   LLMConfig,
@@ -24,10 +27,30 @@ import type {
   LLMTool,
 } from "./types";
 
+const PROVIDER_TYPES: ReadonlyArray<LLMProviderType> = ["local", "remote"];
+
+function isLLMProviderType(v: unknown): v is LLMProviderType {
+  return typeof v === "string" && PROVIDER_TYPES.some((provider) => provider === v);
+}
+
+function isRemoteModelKind(v: unknown): v is RemoteModelKind {
+  return typeof v === "string" && REMOTE_MODEL_KINDS.some((kind) => kind === v);
+}
+
+/** 只把「键都在任务白名单、值都是数字」的字典收窄成按任务温度覆盖表（空字典也合法）。 */
+function isTaskTemperatureRecord(v: Record<string, unknown>): v is Record<TaskType, number> {
+  return Object.entries(v).every(
+    ([key, value]) => Object.hasOwn(TASK_TYPES, key) && typeof value === "number",
+  );
+}
+
+/** 环境变量里的 provider 只认白名单：空串 / 非法值一律回落 local。 */
+function providerFromEnv(v: string | undefined): LLMProviderType {
+  return isLLMProviderType(v) ? v : "local";
+}
+
 const ENV_DEFAULTS: LLMConfig = {
-  /* SAFETY: 类型断言已复核 */
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- LLM_PROVIDER 是环境变量，运行期可为空串；断言只改类型不做 sanitize，`|| "local"` 是唯一回落
-  provider: (process.env.LLM_PROVIDER as LLMProviderType) || "local",
+  provider: providerFromEnv(process.env.LLM_PROVIDER),
   baseUrl: process.env.LLM_BASE_URL ?? OLLAMA_DEFAULT_BASE_URL,
   model: process.env.LLM_MODEL ?? "",
   extraModels: null,
@@ -53,9 +76,12 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
   try {
     const row = await llmConfigRepository.findSingleton();
     if (row) {
-      if (row.provider) {
-        /* SAFETY: 类型断言已复核 */
-        cfg.provider = row.provider as LLMProviderType;
+      // DB 行按宽松对象视图读：json 列（extraModels / temperatureByTask）形状不保证，
+      // 其余列由下方的白名单收窄。
+      const rowRecord = asRecord(row);
+      // 只接受白名单内的 provider；非法值保留 env 默认，下游按「非 remote 即本地」处理。
+      if (isLLMProviderType(row.provider)) {
+        cfg.provider = row.provider;
       }
       if (row.baseUrl) {
         cfg.baseUrl = row.baseUrl;
@@ -66,16 +92,14 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
       // 两类候选分开存：`llmConfig.extraModels` 是本地 ollama 候选（纯名字，无
       // apiKey），远端独立模型在 `remoteModel` 表。读取时合并两者，保证下游
       //（运行时按名找 baseUrl/apiKey、设置页候选清单、工坊分组）行为不变。
-      /* SAFETY: 类型断言已复核 */
-      const split = splitExtraModels((row as Record<string, unknown>).extraModels);
+      const split = splitExtraModels(rowRecord?.extraModels);
       const remoteRows = await remoteModelRepository.list();
       const remoteEntries = remoteRows.map((r) => ({
         name: r.name,
         baseUrl: r.baseUrl,
         apiKey: r.apiKey,
-        /* SAFETY: 类型断言已复核 */
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- kind 来自 DB 列，运行期可为 null/undefined；断言只标类型，`?? null` 负责归一
-        kind: (r.kind as RemoteModelKind) ?? null,
+        // 用途只认白名单；库里的非法值归一成 null（历史上写坏一列不该让整条消失）。
+        kind: isRemoteModelKind(r.kind) ? r.kind : null,
       }));
       // 合并两来源：本地候选名 + 远端表条目。`split.remoteEntries` 在列里不该再
       // 出现（写入侧只落字符串），仍一并合并是因为**读侧不假设写入侧守规矩**——
@@ -99,12 +123,10 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
         cfg.temperature = row.temperature;
       }
       // temperatureByTask 是 json 列，读出来是 unknown —— 形状由 resolveTaskTemperature 消费，
-      /* SAFETY: 类型断言已复核 */
-      const raw = row as Record<string, unknown>;
-      // oxlint-disable-next-line strict-boolean-expressions -- temperatureByTask 是 DB json 列读出的 unknown，形状不保证，按任意真值判「有没有配」
-      if (raw.temperatureByTask) {
-        /* SAFETY: 类型断言已复核 */
-        cfg.temperatureByTask = raw.temperatureByTask as Record<TaskType, number>;
+      // 只收「键在任务白名单、值是数字」的项，非法键丢弃。
+      const taskTemperatures = asRecord(rowRecord?.temperatureByTask);
+      if (taskTemperatures !== null && isTaskTemperatureRecord(taskTemperatures)) {
+        cfg.temperatureByTask = taskTemperatures;
       }
       // oxlint-disable-next-line eqeqeq, typescript/no-unnecessary-condition -- 同时判 null 与 undefined；DB 数值列运行期可为 null，类型按非空标
       if (row.maxTokens != null) {
@@ -164,16 +186,14 @@ export async function getConfigForClient() {
   const row = await llmConfigRepository.findSingleton();
   let extra: Array<string | RemoteModelEntry> = [];
   if (row) {
-    /* SAFETY: 类型断言已复核 */
-    const split = splitExtraModels((row as Record<string, unknown>).extraModels);
+    const split = splitExtraModels(asRecord(row)?.extraModels);
     const remoteRows = await remoteModelRepository.list();
     const tableEntries: Array<RemoteModelEntry> = remoteRows.map((r) => ({
       name: r.name,
       baseUrl: r.baseUrl,
       apiKey: r.apiKey,
-      /* SAFETY: 类型断言已复核 */
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- kind 来自 DB 列，运行期可为 null/undefined，`?? null` 负责归一
-      kind: (r.kind as RemoteModelKind) ?? null,
+      // 用途只认白名单；库里的非法值归一成 null（历史上写坏一列不该让整条消失）。
+      kind: isRemoteModelKind(r.kind) ? r.kind : null,
     }));
     // 读取层兜底归并：`remoteModel` 表里若存着指向本机回环、且不带 apiKey 的条目，
     // 那是「本地 ollama 被错存成了远端」，折回本地候选字符串下发 —— 工坊下拉与设置页
@@ -185,9 +205,8 @@ export async function getConfigForClient() {
     );
     extra = [...folded.localNames, ...folded.remoteEntries];
   }
-  const cfgSafe = { ...cfg };
-  /* SAFETY: 类型断言已复核 */
-  delete (cfgSafe as Partial<LLMConfig>).apiKey;
+  const cfgSafe: LLMConfig = { ...cfg };
+  delete cfgSafe.apiKey;
   const extraSafe = extra.map(
     (e) => (typeof e === "object" && e !== null ? maskRemoteEntryForClient(e) : e), // oxlint-disable-line typescript/no-unnecessary-condition -- extra 由 DB json 列与本地候选名合并，元素运行期可为 null
   );
@@ -230,8 +249,8 @@ export function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
   if (!(e instanceof TypeError)) {
     return errorMessage(e, "网络请求失败");
   }
-  /* SAFETY: 类型断言已复核 */
-  const cause = (e as { cause?: unknown }).cause;
+  // 运行期取 `cause`（Node 的 fetch TypeError 会挂它），按 unknown 处理。
+  const cause: unknown = Reflect.get(e, "cause");
   const causeMsg =
     cause instanceof Error
       ? String(cause.message)
@@ -370,6 +389,26 @@ function assertModelConfigured(cfg: LLMConfig): void {
   }
 }
 
+/** 取响应体的 `choices[0]`（非数组 / 空数组时 undefined），收成宽松对象视图。 */
+function firstChoice(payload: unknown): Record<string, unknown> | null {
+  const rec = asRecord(payload);
+  const choices = rec === null ? undefined : rec.choices;
+  const first: unknown = Array.isArray(choices) ? choices[0] : undefined;
+  return asRecord(first);
+}
+
+/** 取 `choices[0].message` 的宽松对象视图（缺失 / 非对象时 null）。 */
+function firstMessage(payload: unknown): Record<string, unknown> | null {
+  const choice = firstChoice(payload);
+  return choice === null ? null : asRecord(choice.message);
+}
+
+/** 从宽松对象读字符串字段：缺失 / 非字符串一律回落 fallback。 */
+function stringField(rec: Record<string, unknown> | null, key: string, fallback: string): string {
+  const v = rec === null ? undefined : rec[key];
+  return typeof v === "string" ? v : fallback;
+}
+
 /* 一次性（非流式）补全。 */
 export async function completeLLM(cfg: LLMConfig, messages: Array<LLMMessage>): Promise<string> {
   assertModelConfigured(cfg);
@@ -381,11 +420,8 @@ export async function completeLLM(cfg: LLMConfig, messages: Array<LLMMessage>): 
     stream: false,
   });
 
-  /* SAFETY: 类型断言已复核 */
-  const json = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  return json.choices?.[0]?.message?.content ?? "";
+  const json: unknown = await res.json();
+  return stringField(firstMessage(json), "content", "");
 }
 
 /* 流式补全。每收到一个增量就调用一次 `onToken`，
@@ -437,11 +473,10 @@ export async function streamLLM(
         continue;
       }
       try {
-        /* SAFETY: 类型断言已复核 */
-        const json = JSON.parse(data) as {
-          choices?: Array<{ delta?: { content?: string } }>;
-        };
-        const token: string = json.choices?.[0]?.delta?.content ?? "";
+        const json: unknown = JSON.parse(data);
+        const choice = firstChoice(json);
+        const delta = choice === null ? null : asRecord(choice.delta);
+        const token = stringField(delta, "content", "");
         if (token) {
           full += token;
           onToken(token);
@@ -474,11 +509,8 @@ export async function completeLLMStructured<T>(
     response_format: { type: "json_object" },
   });
 
-  /* SAFETY: 类型断言已复核 */
-  const json = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  const content = json.choices?.[0]?.message?.content ?? "{}";
+  const json: unknown = await res.json();
+  const content = stringField(firstMessage(json), "content", "{}");
   let parsed: unknown;
   try {
     parsed = JSON.parse(content);
@@ -518,45 +550,35 @@ export async function completeLLMTools(
     tools,
   });
 
-  /* SAFETY: 类型断言已复核 */
-  const json = (await res.json()) as {
-    choices?: Array<{
-      message?: {
-        content?: string | null;
-        tool_calls?: Array<{
-          function?: { arguments?: string; name?: string };
-          id?: string;
-          type?: string;
-        }>;
-      };
-    }>;
-  };
-  const msg = json.choices?.[0]?.message;
-  const content = msg?.content ?? "";
-  const rawCalls = msg?.tool_calls ?? [];
+  const json: unknown = await res.json();
+  const msg = firstMessage(json);
+  const content = stringField(msg, "content", "");
+  const rawCallsValue: unknown = msg === null ? undefined : msg.tool_calls;
+  const rawCalls: Array<unknown> = Array.isArray(rawCallsValue) ? rawCallsValue : [];
   // 逐条显式判空（而非 filter 后依赖类型收窄）：不同 TS 版本对
   // filter 回调的类型谓词推断不一致，显式守卫在两种版本下都能收窄。
-  const toolCalls = rawCalls.flatMap((call) => {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- rawCalls 来自 LLM API 回包 JSON，元素运行期可为 null，保留 ?. 守卫
-    const fn = call?.function;
-    if (
-      typeof call?.id !== "string" || // oxlint-disable-line typescript/no-unnecessary-condition -- 同上：API 回包元素运行期可为 null，?. 是防御
-      call.id === "" ||
-      typeof fn?.name !== "string" ||
-      fn.name === "" ||
-      typeof fn.arguments !== "string"
-    ) {
-      return [];
-    }
-    return [
-      {
-        id: call.id,
-        /* SAFETY: 类型断言已复核 */
-        type: "function" as const,
-        function: { name: fn.name, arguments: fn.arguments },
-      },
-    ];
-  });
+  const toolCalls = rawCalls.flatMap(
+    (call: unknown): Array<CompleteToolsResult["toolCalls"][number]> => {
+      const callRecord = asRecord(call);
+      const fn = callRecord === null ? null : asRecord(callRecord.function);
+      if (callRecord === null || fn === null) {
+        return [];
+      }
+      const id = callRecord.id;
+      const fnName = fn.name;
+      const fnArguments = fn.arguments;
+      if (
+        typeof id !== "string" ||
+        id === "" ||
+        typeof fnName !== "string" ||
+        fnName === "" ||
+        typeof fnArguments !== "string"
+      ) {
+        return [];
+      }
+      return [{ id, type: "function", function: { name: fnName, arguments: fnArguments } }];
+    },
+  );
 
   return { content, toolCalls };
 }

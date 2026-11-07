@@ -19,6 +19,23 @@ import {
   type AnchorRect,
 } from "./dom-rect";
 
+/** 把「只实现了 `~/lib/dom-rect` 真正读到的成员」的普通对象收窄成 `Element`。 */
+function isElementLike(v: unknown): v is Element {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    "getBoundingClientRect" in v &&
+    typeof v.getBoundingClientRect === "function"
+  );
+}
+
+function elementLike(shape: object): Element {
+  if (!isElementLike(shape)) {
+    throw new TypeError("fake element 必须实现 getBoundingClientRect");
+  }
+  return shape;
+}
+
 /** 造一个「像元素」的假对象（jsdom 的 `getBoundingClientRect` 恒为 0）。 */
 function fakeEl(opts: {
   clientHeight?: number;
@@ -40,15 +57,14 @@ function fakeEl(opts: {
     toJSON: () => ({}),
     ...opts.rect,
   };
-  /* SAFETY: 类型断言已复核 */
-  return {
+  return elementLike({
     clientWidth: opts.clientWidth ?? 0,
     clientHeight: opts.clientHeight ?? 0,
     scrollWidth: opts.scrollWidth ?? 0,
     scrollHeight: opts.scrollHeight ?? 0,
     scrollTop: opts.scrollTop ?? 0,
     getBoundingClientRect: () => rect,
-  } as unknown as Element;
+  });
 }
 
 describe("readElementBox", () => {
@@ -82,8 +98,7 @@ describe("readElementBox", () => {
   });
 
   it("不是元素（没有 clientWidth）时给 null", () => {
-    /* SAFETY: 类型断言已复核 */
-    expect(readElementBox({} as unknown as Element)).toBeNull();
+    expect(readElementBox(elementLike({ getBoundingClientRect: () => ({}) }))).toBeNull();
   });
 
   it("noRect 跳过视口位置（滚动回调里避免强制布局）", () => {

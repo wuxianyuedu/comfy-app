@@ -15,12 +15,35 @@ import { describe, expect, it, vi } from "vitest";
 
 import { readFileAsDataUrl, readFileAsText } from "./file-io";
 
-/** 造一个只有 `.text()` 的假 File（走第一条通道）。 */
+/** 造一个真实的 File（`.text()` 由 Blob 提供，走第一条通道）。 */
 function textFile(content: string): File {
-  /* SAFETY: 类型断言已复核 */
-  return {
-    text: () => Promise.resolve(content),
-  } as unknown as File;
+  return new File([content], "test.txt");
+}
+
+/** 盖掉实例上的 `text`：给函数走第一条通道，给 `undefined` 模拟没有该方法。 */
+function fileWithText(text: (() => Promise<string>) | undefined): File {
+  const file = new File([], "test.txt");
+  Object.defineProperty(file, "text", { value: text, configurable: true });
+  return file;
+}
+
+/** 全局 FileReader 的原描述符：用例换掉它之后按原样恢复（原本没有则删除）。 */
+const originalFileReader = Object.getOwnPropertyDescriptor(globalThis, "FileReader");
+
+function installFileReader(value: unknown): void {
+  Object.defineProperty(globalThis, "FileReader", {
+    value,
+    configurable: true,
+    writable: true,
+  });
+}
+
+function restoreFileReader(): void {
+  if (originalFileReader) {
+    Object.defineProperty(globalThis, "FileReader", originalFileReader);
+  } else {
+    Reflect.deleteProperty(globalThis, "FileReader");
+  }
 }
 
 describe("readFileAsText", () => {
@@ -31,15 +54,11 @@ describe("readFileAsText", () => {
   });
 
   it("读失败时抛出，不静默返回空串", async () => {
-    /* SAFETY: 类型断言已复核 */
-    const file = {
-      text: () => Promise.reject(new Error("权限被拒")),
-    } as unknown as File;
+    const file = fileWithText(() => Promise.reject(new Error("权限被拒")));
     await expect(readFileAsText(file)).rejects.toThrow("权限被拒");
   });
 
   it("宿主没有 file.text() 时退回 FileReader 通道", async () => {
-    const original = globalThis.FileReader;
     class FakeReader {
       result: string | ArrayBuffer | null = null;
       error: DOMException | null = null;
@@ -50,22 +69,17 @@ describe("readFileAsText", () => {
         this.onload?.();
       }
     }
-    /* SAFETY: 类型断言已复核 */
-    globalThis.FileReader = FakeReader as unknown as typeof FileReader;
+    installFileReader(FakeReader);
     try {
-      /* SAFETY: 类型断言已复核 */
-      const file = {} as unknown as File;
-      await expect(readFileAsText(file)).resolves.toBe("来自 reader");
+      await expect(readFileAsText(fileWithText(undefined))).resolves.toBe("来自 reader");
     } finally {
-      globalThis.FileReader = original;
+      restoreFileReader();
     }
   });
 
   it("FileReader 读到空结果时算失败（不是「空文件」）", async () => {
-    const original = globalThis.FileReader;
     class FakeReader {
-      /* SAFETY: 类型断言已复核 */
-      result = null as string | ArrayBuffer | null;
+      result: string | ArrayBuffer | null = null;
       error: DOMException | null = null;
       onload: (() => void) | null = null;
       onerror: (() => void) | null = null;
@@ -73,20 +87,17 @@ describe("readFileAsText", () => {
         this.onload?.();
       }
     }
-    /* SAFETY: 类型断言已复核 */
-    globalThis.FileReader = FakeReader as unknown as typeof FileReader;
+    installFileReader(FakeReader);
     try {
-      /* SAFETY: 类型断言已复核 */
-      await expect(readFileAsText({} as File)).rejects.toThrow("读取文件失败");
+      await expect(readFileAsText(fileWithText(undefined))).rejects.toThrow("读取文件失败");
     } finally {
-      globalThis.FileReader = original;
+      restoreFileReader();
     }
   });
 });
 
 describe("readFileAsDataUrl", () => {
   it("正常读到 data URL 时原样返回", async () => {
-    const original = globalThis.FileReader;
     class FakeReader {
       result: string | ArrayBuffer | null = "data:image/png;base64,AAA";
       error: DOMException | null = null;
@@ -96,18 +107,17 @@ describe("readFileAsDataUrl", () => {
         this.onload?.();
       }
     }
-    /* SAFETY: 类型断言已复核 */
-    globalThis.FileReader = FakeReader as unknown as typeof FileReader;
+    installFileReader(FakeReader);
     try {
-      /* SAFETY: 类型断言已复核 */
-      await expect(readFileAsDataUrl({} as File)).resolves.toBe("data:image/png;base64,AAA");
+      await expect(readFileAsDataUrl(new File([], "test.txt"))).resolves.toBe(
+        "data:image/png;base64,AAA",
+      );
     } finally {
-      globalThis.FileReader = original;
+      restoreFileReader();
     }
   });
 
   it("读到空值算失败并抛出（此前一处把空串当图片地址往下传）", async () => {
-    const original = globalThis.FileReader;
     class FakeReader {
       result: string | null = "";
       error: DOMException | null = null;
@@ -117,30 +127,26 @@ describe("readFileAsDataUrl", () => {
         this.onload?.();
       }
     }
-    /* SAFETY: 类型断言已复核 */
-    globalThis.FileReader = FakeReader as unknown as typeof FileReader;
+    installFileReader(FakeReader);
     try {
-      /* SAFETY: 类型断言已复核 */
-      await expect(readFileAsDataUrl({} as File)).rejects.toThrow("读取本地图片失败");
+      await expect(readFileAsDataUrl(new File([], "test.txt"))).rejects.toThrow("读取本地图片失败");
     } finally {
-      globalThis.FileReader = original;
+      restoreFileReader();
     }
   });
 
   it("无 FileReader 的环境（SSR）reject 而非抛 ReferenceError", async () => {
-    const original = globalThis.FileReader;
-    /* SAFETY: 类型断言已复核 */
-    globalThis.FileReader = undefined as unknown as typeof globalThis.FileReader;
+    installFileReader(undefined);
     try {
-      /* SAFETY: 类型断言已复核 */
-      await expect(readFileAsDataUrl({} as File)).rejects.toThrow("当前环境不支持读取文件");
+      await expect(readFileAsDataUrl(new File([], "test.txt"))).rejects.toThrow(
+        "当前环境不支持读取文件",
+      );
     } finally {
-      globalThis.FileReader = original;
+      restoreFileReader();
     }
   });
 
   it("readAsText 通道的 reader.onerror 也抛出可展示的中文文案", async () => {
-    const original = globalThis.FileReader;
     class FakeReader {
       result: string | null = null;
       error: DOMException | null = new DOMException("boom");
@@ -150,18 +156,15 @@ describe("readFileAsDataUrl", () => {
         this.onerror?.();
       }
     }
-    /* SAFETY: 类型断言已复核 */
-    globalThis.FileReader = FakeReader as unknown as typeof FileReader;
+    installFileReader(FakeReader);
     try {
-      /* SAFETY: 类型断言已复核 */
-      await expect(readFileAsText({} as File)).rejects.toThrow("读取文件失败");
+      await expect(readFileAsText(fileWithText(undefined))).rejects.toThrow("读取文件失败");
     } finally {
-      globalThis.FileReader = original;
+      restoreFileReader();
     }
   });
 
   it("reader.onerror 抛出可展示的中文文案", async () => {
-    const original = globalThis.FileReader;
     class FakeReader {
       result: string | null = null;
       error: DOMException | null = new DOMException("boom");
@@ -171,13 +174,11 @@ describe("readFileAsDataUrl", () => {
         this.onerror?.();
       }
     }
-    /* SAFETY: 类型断言已复核 */
-    globalThis.FileReader = FakeReader as unknown as typeof FileReader;
+    installFileReader(FakeReader);
     try {
-      /* SAFETY: 类型断言已复核 */
-      await expect(readFileAsDataUrl({} as File)).rejects.toThrow("读取本地图片失败");
+      await expect(readFileAsDataUrl(new File([], "test.txt"))).rejects.toThrow("读取本地图片失败");
     } finally {
-      globalThis.FileReader = original;
+      restoreFileReader();
     }
   });
 });
@@ -185,10 +186,7 @@ describe("readFileAsDataUrl", () => {
 describe("两条通道的次序", () => {
   it("有 file.text() 就不碰 FileReader（避免双通道各读一次）", async () => {
     const spy = vi.fn(() => Promise.resolve("x"));
-    /* SAFETY: 类型断言已复核 */
-    const file = {
-      text: spy,
-    } as unknown as File;
+    const file = fileWithText(spy);
     await readFileAsText(file);
     expect(spy).toHaveBeenCalledTimes(1);
   });

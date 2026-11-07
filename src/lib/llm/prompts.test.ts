@@ -56,8 +56,11 @@ describe("buildCharacterMessages", () => {
 
   it("信息全空时给出兜底指令，而不是发一条空消息", () => {
     const [, user] = buildCharacterMessages({ name: "" });
-    /* SAFETY: 类型断言已复核 */
-    expect((user!.content as string).trim()).toBe("请帮我设计一个原创角色");
+    const content = user?.content;
+    if (typeof content !== "string") {
+      throw new Error("user.content 不是字符串");
+    }
+    expect(content.trim()).toBe("请帮我设计一个原创角色");
   });
 
   it("风格标签用顿号连接", () => {
@@ -347,38 +350,41 @@ describe("buildShotImageReviewMessages（P8-2 多模态）", () => {
     expect(msgs[0]!.role).toBe("system");
     const user = msgs[1]!;
     expect(user.role).toBe("user");
-    /* SAFETY: 类型断言已复核 */
-    const content = user.content as Array<{
-      image_url?: { url: string };
-      text?: string;
-      type: string;
-    }>;
+    const content = user.content;
     expect(Array.isArray(content)).toBe(true);
+    if (!Array.isArray(content)) {
+      throw new Error("user.content 不是内容块数组");
+    }
     // 首块是文本上下文（含提示词与景别）
-    expect(content[0]).toMatchObject({ type: "text" });
-    expect(content[0]!.text).toContain("雨中司机");
-    expect(content[0]!.text).toContain("中景");
+    const first = content[0];
+    if (first?.type !== "text") {
+      throw new Error("首块不是文本内容");
+    }
+    expect(first).toMatchObject({ type: "text" });
+    expect(first.text).toContain("雨中司机");
+    expect(first.text).toContain("中景");
     // 之后是图块：镜头图 + 两张定妆照
-    const imageUrls = content.filter((p) => p.type === "image_url").map((p) => p.image_url!.url);
+    const imageUrls = content.flatMap((p) => (p.type === "image_url" ? [p.image_url.url] : []));
     expect(imageUrls).toEqual(["/shot.png", "/p1.png", "/p2.png"]);
   });
 
   it("没有定妆照时只带镜头图一张", () => {
-    /* SAFETY: 类型断言已复核 */
     const content = buildShotImageReviewMessages({
       imageUrl: "/shot.png",
       portraitUrls: [],
       prompt: "x",
       shotType: "",
       characterNames: [],
-    })[1]!.content as Array<{ image_url?: { url: string }; type: string }>;
-    const imageUrls = content.filter((p) => p.type === "image_url").map((p) => p.image_url!.url);
+    })[1]?.content;
+    if (!Array.isArray(content)) {
+      throw new Error("user.content 不是内容块数组");
+    }
+    const imageUrls = content.flatMap((p) => (p.type === "image_url" ? [p.image_url.url] : []));
     expect(imageUrls).toEqual(["/shot.png"]);
   });
 
   it("传生图 rubric 文本时，system 追加维度评分要求", () => {
-    /* SAFETY: 类型断言已复核 */
-    const system = buildShotImageReviewMessages(
+    const content = buildShotImageReviewMessages(
       {
         imageUrl: "/s",
         portraitUrls: [],
@@ -387,7 +393,10 @@ describe("buildShotImageReviewMessages（P8-2 多模态）", () => {
         characterNames: [],
       },
       "维度要求文本",
-    )[0]!.content as string;
-    expect(system).toContain("维度要求文本");
+    )[0]?.content;
+    if (typeof content !== "string") {
+      throw new Error("system 消息内容不是字符串");
+    }
+    expect(content).toContain("维度要求文本");
   });
 });

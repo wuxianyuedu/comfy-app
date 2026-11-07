@@ -28,6 +28,7 @@ import {
   completeLLMTools,
 } from "~/lib/llm/server";
 import type { LLMConfig, LLMTool } from "~/lib/llm/types";
+import { isRecord } from "~/lib/is-record";
 import { llmConfigRepository } from "~/lib/core/repository-user";
 import { getTestDb, seedRemoteModel } from "../../../tests/helpers/test-db";
 import { z } from "zod";
@@ -45,40 +46,34 @@ const CFG = (over: Partial<LLMConfig> = {}): LLMConfig => ({
   ...over,
 });
 
-/** 一次性响应替身：`res.json()` / `res.text()` 都可用。 */
-function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {}): Response {
-  const status = init.status ?? 200;
-  /* SAFETY: 类型断言已复核 */
-  return {
-    ok: init.ok ?? (status >= 200 && status < 300),
-    status,
-    json: () => Promise.resolve(body),
-    text: () => Promise.resolve(JSON.stringify(body)),
-    body: null,
-  } as unknown as Response;
+/** 一次性响应替身：真实 `Response`，`res.json()` / `res.text()` 都可用。 */
+function jsonResponse(body: unknown, init: { status?: number } = {}): Response {
+  return new Response(JSON.stringify(body), { status: init.status ?? 200 });
 }
 
-/** 流式响应替身：按给定 chunk 逐次吐出 `reader.read()` 的结果。 */
+/** 流式响应替身：把给定 chunk 逐段写进真实 `ReadableStream` 作为响应体。 */
 function streamResponse(chunks: Array<string>): Response {
   const encoder = new TextEncoder();
-  let i = 0;
-  /* SAFETY: 类型断言已复核 */
-  return {
-    ok: true,
-    status: 200,
-    json: () => Promise.resolve({}),
-    text: () => Promise.resolve(""),
-    body: {
-      getReader: () => ({
-        read: () =>
-          Promise.resolve(
-            i < chunks.length
-              ? { done: false, value: encoder.encode(chunks[i++]) }
-              : { done: true, value: undefined },
-          ),
-      }),
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
     },
-  } as unknown as Response;
+  });
+  return new Response(stream, { status: 200 });
+}
+
+/** fetch 首参收窄成 URL 字符串（运行时只可能是字符串或 Request）。 */
+function readCallUrl(input: unknown): string {
+  if (typeof input === "string") {
+    return input;
+  }
+  if (input instanceof Request) {
+    return input.url;
+  }
+  throw new TypeError("fetch 首参既不是字符串也不是 Request");
 }
 
 /** 忽略 token 回调的占位（避免 lint 的空函数告警，同时语义清楚）。 */
@@ -88,26 +83,33 @@ const fetchMock = vi.fn<typeof fetch>();
 
 /** 取第 n 次 fetch 调用的 (url, init)，并把 init 收成可安全访问的形状。 */
 function callAt(n = 0): { init: RequestInit; url: string } {
-  const call = fetchMock.mock.calls[n]!;
-  // fetch 的首参在运行时一定是字符串 URL 或 Request；这里只做类型收窄，
-  // 不做字符串化（`String(obj)` 会得到 `[object Object]`，lint 也据此拦人）。
-  const arg: unknown = call[0];
-  /* SAFETY: 类型断言已复核 */
-  const url = typeof arg === "string" ? arg : (arg as Request).url;
-  return { url, init: call[1] ?? {} };
+  const call = fetchMock.mock.calls[n];
+  if (!call) {
+    throw new TypeError(`fetch 第 ${n} 次调用不存在`);
+  }
+  return { url: readCallUrl(call[0]), init: call[1] ?? {} };
 }
 
 /** 取第 n 次 fetch 调用的请求体（JSON 解析后的对象）。 */
 function sentBody(n = 0): Record<string, unknown> {
   const raw = callAt(n).init.body;
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(typeof raw === "string" ? raw : "{}") as Record<string, unknown>;
+  const parsed: unknown = JSON.parse(typeof raw === "string" ? raw : "{}");
+  return isRecord(parsed) ? parsed : {};
 }
 
 /** 取第 n 次 fetch 调用的请求头。 */
 function sentHeaders(n = 0): Record<string, string> {
-  /* SAFETY: 类型断言已复核 */
-  return (callAt(n).init.headers ?? {}) as Record<string, string>;
+  const headers: unknown = callAt(n).init.headers ?? {};
+  if (!isRecord(headers)) {
+    return {};
+  }
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (typeof value === "string") {
+      out[key] = value;
+    }
+  }
+  return out;
 }
 
 beforeEach(() => {
@@ -441,13 +443,7 @@ describe("completeLLM（一次性补全）", () => {
   });
 
   it("错误响应体为空时不拼多余的冒号", async () => {
-    /* SAFETY: 类型断言已复核 */
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 502,
-      text: () => Promise.resolve(""),
-      json: () => Promise.resolve({}),
-    } as unknown as Response);
+    fetchMock.mockResolvedValue(new Response("", { status: 502 }));
     await expect(completeLLM(CFG(), [])).rejects.toThrow(/LLM 请求失败 \(502\)$/);
   });
 });
@@ -483,14 +479,7 @@ describe("streamLLM（流式补全）", () => {
   });
 
   it("服务端不返回 body → 明确报「未返回数据流」", async () => {
-    /* SAFETY: 类型断言已复核 */
-    fetchMock.mockResolvedValue({
-      ok: true,
-      status: 200,
-      body: null,
-      json: () => Promise.resolve({}),
-      text: () => Promise.resolve(""),
-    } as unknown as Response);
+    fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
     await expect(streamLLM(CFG(), [], noop)).rejects.toThrow(/未返回数据流/);
   });
 
