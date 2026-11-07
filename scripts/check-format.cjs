@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @ts-nocheck -- oxfmt 格式判据(判定型;执行者 = .githooks/pre-commit 的 D0(带 --staged)、平台侧 .cnb.yml 的「oxfmt 格式」(带 --changed) 与 pnpm check:all(带 --changed),第四个出口 pnpm format:report(全量盘点))
+// @ts-nocheck -- oxfmt 格式判据(判定型;执行者 = .githooks/pre-commit 的 D0(带 --staged)、GA .github/workflows/pr-gate.yml 的两格(带 --changed 的改动面档 + 不带旗标的全量档) 与 pnpm check:all(带 --changed),盘点出口 pnpm format:report(全量档只出清单))
 /**
  * prettier 格式判据（**硬闸**）—— 规范见 docs/standards/13-提交与-code-review.md §13.5.1。
  *
@@ -9,12 +9,16 @@
  *   · `.githooks/pre-commit` 的 **D0** 带 `--staged`（「没碰到扫描面」就跳过并明说跳过，
  *     红了当场 `pnpm exec oxfmt <点名的文件>`，只点本次改的 —— 不必等一次 CI 往返）；
  *     命中扫描面后判的是**暂存的那一批**，不再回落全库；
- *   · `.cnb.yml` 的「oxfmt 格式」与 `pnpm check:all` 带 `--changed`：判**改动面**
- *     （`changed-scope.mjs` 的 `resolveChangedFiles`，基线 = `CNB_PULL_REQUEST_TARGET_SHA`
- *     三点 diff，本地退回各 remote/本地 master 的分叉点）∩ `GLOBS`；
+ *   · `.github/workflows/pr-gate.yml` 的「oxfmt 格式」（`--changed`）与 `pnpm check:all`
+ *     带 `--changed`：判**改动面**（`changed-scope.mjs` 的 `resolveChangedFiles`，
+ *     基线 = `CNB_PULL_REQUEST_TARGET_SHA` 三点 diff，本地退回各 remote/本地 master
+ *     的分叉点）∩ `GLOBS`；
  *   · **默认（不带旗标）照旧全库**——硬闸语义「未过 oxfmt 的文件一个都不许有」
- *     仍由这一档背书（`--report` 盘点也是全库）。
- * 三处都由 `tests/doc-check-hook-wiring.test.ts` 钉（钩子里有 + 平台侧有 + 都指这一份脚本）。
+ *     由这一档背书。执行者是 `pr-gate.yml` 紧跟 `--changed` 之后的第二格（ISSUE #3291，
+ *     2026-11-07），所以是**合入前唯一自动执行点**、暴露窗口 0；`--report` 盘点也走全库，
+ *     但只出清单。
+ * 这几处都由 `tests/doc-check-hook-wiring.test.ts` 与 `tests/ci-incremental-gates.test.ts`
+ * 钉（钩子里有 + 平台两格都在 + 都指这一份脚本）。
  *
  * ⚠️ `--staged` 另有**一道输入面前置**（ISSUE #3259）：oxfmt 按路径读工作区，不读 index
  * blob，所以「这批路径此刻在工作区的样子」不必然等于「本次要提交的字节」。判绿之前
@@ -96,8 +100,9 @@
  * 无感,且 prettier 的 `--cache` 让重复调用几乎零成本。
  *
  * 用法:
- *   node scripts/check-format.cjs             # 全库检查(硬闸:命中即退 1) —— 裸调用的硬闸语义
- *   node scripts/check-format.cjs --changed   # 只判改动面 ∩ GLOBS —— 平台侧与 check:all 用这一档
+ *   node scripts/check-format.cjs             # 全库检查(硬闸:命中即退 1) —— 裸调用的硬闸语义;
+ *                                           #   平台侧 `pr-gate.yml` 也跑这一档(ISSUE #3291)
+ *   node scripts/check-format.cjs --changed   # 只判改动面 ∩ GLOBS —— 平台侧改动面格与 check:all 用这一档
  *   node scripts/check-format.cjs --report    # 只出清单不判失败(盘点用,照旧全库)
  *   node scripts/check-format.cjs --staged    # 判暂存面(人的动作:提交前自查)
  *                                           #   合并态(MERGE_HEAD 在场)下暂存面 = 相对第一父的
@@ -105,8 +110,9 @@
  *
  * ── `--staged` / `--changed` 的输入面：两份扫描面怎么分（ISSUE #2979）─────────
  *
- * 全库扫描实测 **17.6s**(热缓存,本机 8 核) —— 它在钩子的 D 组里曾是**单项最贵**的
- * 一步(这个读数正是 ISSUE #2010 里"挪到 CI"那笔账的一半)。
+ * 全库扫描实测 **3.5–4.8s**(热缓存,本机 8 核;2026-11-07 复测)。它曾是钩子 D 组里
+ * **单项最贵**的一步 —— 旧注释记的 17.6s 是当时的量级,与今天差一个量级;引用成本时
+ * 按现读数,不要再拿那笔旧账当今天的依据。
  *
  * 全量档的扫描面由既有配置算出来(`git ls-files` 跟踪的全库,落在 `SCAN_ROOTS` 五个
  * 目录里、又被 `GLOBS` 收口的那些):
@@ -127,7 +133,7 @@
  * ⚠️ **`IGNORE_GLOBS` 不进改动面两档**（ISSUE #2979）：它的立论是「高频 churn 路径
  * 纳入棘轮会让每次排障都产生格式 diff」—— 那是**棘轮时代**的话；翻成硬闸之后
  * （§13.5.1，#1811）改动面两档对存量本来就不红，白名单在那两档上剩下的唯一效果
- * 是「列在里面的目录没有任何一个判决面能拦到」（本地那步说「跳过」、平台那格
+ * 是「列在里面的目录没有任何一个判决面能拦到」（本地那步说「跳过」、当时 CNB 那格
  * `ifModify` 不含 ⇒ 根本不执行，两处都不红 —— #2942 重跑现场点名的三份
  * `.mjs`/`.cjs` 全在 `scripts/`，说明判据面本该含它；`scripts/` 已于 ISSUE #3251
  * 与 `tools/` `e2e/` 一起从全量档白名单移出）。所以两档的扫描面是

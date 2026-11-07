@@ -89,7 +89,7 @@ jobs:
       - name: cargo 缓存
         uses: swatinem/rust-cache@v2
 
-      - name: 安装依赖（冷装约 8 分钟；better-sqlite3 原生编译吃 VS 生成工具，镜像自带）
+      - name: 安装依赖（better-sqlite3 原生编译吃 VS 生成工具，镜像自带）
         run: pnpm install --frozen-lockfile
 
       # NSIS 工具镜像做成跨跑缓存：key 锁死 NSIS_PLAN 的版本（3.13），版本升上去 = 同批改

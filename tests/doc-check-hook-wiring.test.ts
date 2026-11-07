@@ -461,8 +461,10 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
     const workflow = readFileSync(join(REPO_ROOT, ".github", "workflows", "pr-gate.yml"), "utf8");
     /* 断言取的是**那一行 `run:`**，不是整个 workflow（文件里写满了为什么这样排的理由），
      * 拿全文去 `not.toContain("--autofix")` 会红在自己的解释文字上。 */
+    /* 取的是**带 `--changed` 的那一行**：同 job 里还有第二格全量档（ISSUE #3291），
+     * 用宽松匹配会读成哪一格取决于排版顺序。 */
     const scriptLine =
-      /^[ \t]*run:\s*node scripts\/check-format\.cjs.*$/m.exec(workflow)?.[0] ?? "";
+      /^[ \t]*run:\s*node scripts\/check-format\.cjs --changed.*$/m.exec(workflow)?.[0] ?? "";
     expect(
       scriptLine,
       "GA 的工作流里找不到 `check-format.cjs` 的 `run:` 行 —— 读不到命令就当没带旗标，" +
@@ -517,6 +519,26 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
     ).toMatch(/^[0-9]+\.[0-9]+\.[0-9]+$/);
   });
 
+  it("GA 另有第二格全量档：不带旗标、排在改动面档之后", () => {
+    /* ISSUE #3291：全量档此前只有人手动跑（`pnpm format:ratchet` / `--report`），
+     * 「PR 自己扩判面 / 删 `IGNORE_GLOBS` / 改 `.oxfmtrc.json`」这类形态没有判决面。
+     * 这一格是合入前唯一的自动执行点（暴露窗口 0），判面与 `--changed` 互补、不是重复。 */
+    const workflow = readFileSync(join(REPO_ROOT, ".github", "workflows", "pr-gate.yml"), "utf8");
+    const fullLine = /^[ \t]*run:\s*node scripts\/check-format\.cjs\s*$/m.exec(workflow)?.[0] ?? "";
+    expect(
+      fullLine,
+      "`pr-gate.yml` 里找不到不带旗标的 `node scripts/check-format.cjs` —— 全量档又没有" +
+        "自动执行者了（存量变脏只会在下一次人工盘点时暴露）",
+    ).not.toBe("");
+    const changedAt = workflow.indexOf("node scripts/check-format.cjs --changed");
+    const fullAt = workflow.indexOf("run: node scripts/check-format.cjs\n");
+    expect(
+      changedAt >= 0 && fullAt > changedAt,
+      "全量档没有排在改动面档之后 —— 两格的顺序是「先判这次带来的、再判全库」，" +
+        "顺序反了会让改动面档的读数淹没在全库输出里",
+    ).toBe(true);
+  });
+
   it("它不在**停用**清单里（那是另一件事：临时让位，不是挪执行者）", () => {
     /* `COMFYAPP_CI_DISABLED_GATES` 里同名的那条是 2026-10-16 的临时停用（让位给 E2E
      * 调试），恢复条件是「E2E 一绿 + 平台日志中文可读」。本轮它是被**挪过来接管**的，
@@ -539,13 +561,14 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
     ).toContain("scripts/check-format.cjs");
   });
 
-  it("脚本头把**两个**执行者都写明白（自称 ⇄ 实际，别让两份承诺一起过期）", () => {
+  it("脚本头把**平台侧两格**都写明白（自称 ⇄ 实际，别让两份承诺一起过期）", () => {
     const script = readFileSync(FORMAT_GATE, "utf8");
     expect(
       script,
-      "check-format.cjs 的头部没写明它由平台侧 `.cnb.yml` 调用 —— " +
-        "脚本自称的执行者与实际不一致时，读的人会被指到别处去找一步不存在的步骤",
-    ).toContain(".cnb.yml");
+      "check-format.cjs 的头部没写明它由平台侧 `.github/workflows/pr-gate.yml` 调用 —— " +
+        "2026-11-05 起 CNB 那一格已搬到这里；脚本自称的执行者与实际不一致时，" +
+        "读的人会被指到别处去找一步不存在的步骤",
+    ).toContain(".github/workflows/pr-gate.yml");
     /* #2610 反转了这条的第二半：以前它要求头部**不许**说钩子里有这一步（那时真没有）。
      * 现在 D0 有它，所以判据换成同一条纪律的正向版 —— 头部必须点名 `.githooks/pre-commit`，
      * 否则「只在平台跑」那句旧自我介绍会把下一个人支到错误的一档去改参数。 */

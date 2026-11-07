@@ -93,7 +93,7 @@ jobs:
           node-version: 26
           cache: pnpm
 
-      - name: 安装依赖（冷装约 8 分钟；allowBuilds 清单见 pnpm-workspace.yaml）
+      - name: 安装依赖（allowBuilds 清单见 pnpm-workspace.yaml）
         timeout-minutes: 20 # 对位 CNB `每日安装依赖` 20m（其内部墙钟预算 12m）
         run: pnpm install --frozen-lockfile
 
