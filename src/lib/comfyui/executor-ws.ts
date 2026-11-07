@@ -178,7 +178,11 @@ export async function connect(): Promise<void> {
   let ws: WebSocket;
   try {
     ws = new WebSocket(url);
-  } catch {
+  } catch (error) {
+    /* URL 不合法时 `new WebSocket()` 抛错是**同步**的，走不到 error 事件；
+     * 若在这里静默重试，队列只会每拍重连一次而永不就绪（`toWsBase` 拼错协议
+     * 曾因此潜伏很久）。留一条 warn 让下一次能从日志直接认出。 */
+    logger.warn(`[comfyui] WS URL 非法（${url}）：${errorText(error, "new WebSocket 失败")}`);
     s.connecting = false;
     s.wsPathIndex += 1; // 换一条 WS 路径重试
     scheduleReconnect();
