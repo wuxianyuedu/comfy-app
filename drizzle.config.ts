@@ -31,8 +31,7 @@ import { defineConfig } from "drizzle-kit";
  * 为这一档写了「或」兜底，两侧口径必须一致，否则「应用连着默认库、drizzle-kit 拿着
  * 一个打不开的地址」又是两条锚点分叉）。写成显式的「拿到的是不是一句真值」，
  * 而不是靠 `||` —— 同一判据在 `scripts/db-schema-state.mjs` 里也是这个形状。 */
-const fromEnv =
-  typeof process.env.DATABASE_URL === "string" ? process.env.DATABASE_URL : "";
+const fromEnv = typeof process.env.DATABASE_URL === "string" ? process.env.DATABASE_URL : "";
 const raw = fromEnv === "" ? "file:./db.sqlite" : fromEnv;
 
 /* scheme 判定要求**至少两个字符**再加冒号：单字母不算 scheme，否则 Windows 盘符

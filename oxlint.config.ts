@@ -61,7 +61,18 @@ export default defineConfig({
    * `vitest` 是**唯一**的追加（2026-11-04）：oxlint 原生插件（73 条规则，`node_modules`
    * 里没有独立包，不需要装依赖），只在评估尺注册、**规则一条未开** —— 试跑读数与
    * 「开哪几条」的建议见 `docs/audits/2026-11-04-oxlint-t1-burndown.md` §六，等口径后再进判决面。 */
-  plugins: ["import", "jsx-a11y", "nextjs", "node", "oxc", "promise", "react", "typescript", "unicorn", "vitest"],
+  plugins: [
+    "import",
+    "jsx-a11y",
+    "nextjs",
+    "node",
+    "oxc",
+    "promise",
+    "react",
+    "typescript",
+    "unicorn",
+    "vitest",
+  ],
   // `eslint` 是 oxlint 原生保留名，oxlint-plugin-eslint 必须显式别名成 eslint-js。
   // eslint-plugin-boundaries 经 jsPlugins 跑（用 resolver 解析别名导入）。
   jsPlugins: [
@@ -331,8 +342,7 @@ export default defineConfig({
             patterns: [
               {
                 group: ["drizzle-orm", "drizzle-orm/*"],
-                message:
-                  "UI/features 不得直接依赖 Drizzle orm,请经 src/lib/core 仓储访问数据。",
+                message: "UI/features 不得直接依赖 Drizzle orm,请经 src/lib/core 仓储访问数据。",
               },
             ],
           },
