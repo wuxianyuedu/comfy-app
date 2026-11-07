@@ -27,6 +27,9 @@ import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { ContractInputCatalog } from "./ContractInputCatalog";
 import { ModeContractModeNav } from "./ModeContractModeNav";
 
+/** 输出类别的唯一取值清单（下拉选项与回写校验共用）。 */
+const OUTPUT_OPTIONS: Array<ModeContract["output"]> = ["image", "video", "audio"];
+
 /** 中文展示名 + 机器 id：界面上只写中文时，对不上代码 / 日志 / 配置里的 id。 */
 function LabelWithId({ label, id }: { id: string; label: string }) {
   return (
@@ -176,10 +179,12 @@ function ModeContractDraftPanel({
             audio: "音频（audio）",
           }}
           onChange={(value) => {
-            /* SAFETY: 类型断言已复核 */
-            controller.setOutput(value as ModeContract["output"]);
+            const output = OUTPUT_OPTIONS.find((item) => item === value);
+            if (output !== undefined) {
+              controller.setOutput(output);
+            }
           }}
-          options={["image", "video", "audio"]}
+          options={OUTPUT_OPTIONS}
           value={draft.output}
         />
       </div>

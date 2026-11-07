@@ -29,7 +29,7 @@ function makeShot(patch: Partial<Shot> = {}): Shot {
 }
 
 function renderComposer(shots: Array<Shot>, rendered = false) {
-  const onShotsChange = vi.fn();
+  const onShotsChange = vi.fn<(shots: Array<Shot>) => void>();
   const onRendered = vi.fn();
   render(
     <FinalComposer
@@ -168,10 +168,7 @@ describe("FinalComposer 逐镜编辑", () => {
     await user.clear(input);
     await user.type(input, "99");
     /* 每次键入都会 updateShot；最后一条 patch 应是钳取后的 20。 */
-    const patches = vi
-      .mocked(onShotsChange)
-      /* SAFETY: 类型断言已复核 */
-      .mock.calls.map((call) => (call[0] as Array<Shot>)[0]!.duration);
+    const patches = onShotsChange.mock.calls.map((call) => call[0][0]?.duration);
     expect(patches.at(-1)).toBe(20);
   });
 
@@ -181,10 +178,7 @@ describe("FinalComposer 逐镜编辑", () => {
 
     const input = screen.getByDisplayValue("5");
     await user.clear(input);
-    const patches = vi
-      .mocked(onShotsChange)
-      /* SAFETY: 类型断言已复核 */
-      .mock.calls.map((call) => (call[0] as Array<Shot>)[0]!.duration);
+    const patches = onShotsChange.mock.calls.map((call) => call[0][0]?.duration);
     expect(patches.at(-1)).toBe(4);
   });
 });

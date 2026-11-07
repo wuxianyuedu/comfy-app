@@ -10,6 +10,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -77,6 +78,14 @@ import {
   pruneKeepAliveLogs,
   type LaunchHost,
 } from "./lifecycle-launch";
+import type { ComfyRuntimeSnapshot } from "./status";
+
+/* 造一个只带 pid 的子进程句柄（`spawnManaged` 的桩只需这一格事实）。 */
+function fakeManagedChild(pid: number): ChildProcess {
+  const child = new ChildProcess();
+  Object.defineProperty(child, "pid", { value: pid, configurable: true });
+  return child;
+}
 
 function fakeHost(): LaunchHost {
   return {
@@ -95,7 +104,7 @@ function fakeHost(): LaunchHost {
  *
  *  返回类型就是 `mock.calls` 那一格的自然类型 —— 桩签名是
  *  `startComfyExitWatcher: vi.fn(() => ({ stop: vi.fn() }))`，`vi.mocked` 之后
- *  入参类型即真实 deps，这里不再用 `as` 重复声明一遍（那会被 lint 的
+ *  入参类型即真实 deps，这里不再用类型断言重复声明一遍（那会被 lint 的
  *  `no-unnecessary-type-assertion` 判为多余，也确实多余）。 */
 function lastWatcherDeps(): WatcherDeps | undefined {
   return vi.mocked(startComfyExitWatcher).mock.calls.at(-1)?.[0];
@@ -264,11 +273,9 @@ describe("runEnsureLaunch —— 保活拉起遇端口被占：识别、中止�
     );
     const { spawnManaged } = await import("~/lib/process/process-launch");
     // spawnManaged 是同步返回（keepAlive 下 child 是中介进程句柄）
-    /* SAFETY: 类型断言已复核 */
-    vi.mocked(spawnManaged).mockReturnValue({ child: { pid: 4321 } } as never);
+    vi.mocked(spawnManaged).mockReturnValue({ child: fakeManagedChild(4321) });
     const { getComfyRuntimeSnapshot } = await import("./status");
-    /* SAFETY: 类型断言已复核 */
-    vi.mocked(getComfyRuntimeSnapshot).mockResolvedValue({
+    const snapshot: ComfyRuntimeSnapshot = {
       running: true,
       pid: 97_356,
       port: 8188,
@@ -276,7 +283,8 @@ describe("runEnsureLaunch —— 保活拉起遇端口被占：识别、中止�
       unverified: false,
       didQueryProcTable: true,
       source: "process",
-    } as never);
+    };
+    vi.mocked(getComfyRuntimeSnapshot).mockResolvedValue(snapshot);
 
     const { runEnsureLaunch } = await import("./lifecycle-launch");
     const notes: Array<string> = [];

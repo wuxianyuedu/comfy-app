@@ -106,21 +106,17 @@ export function removeStorageItem(key: string): boolean {
  * `parse` 可选：调用处若只存字符串（`"1"` / `"split"`），传 `Number.parseInt`
  * 这类窄化函数即可 —— 不再需要各自写一遍 `raw === "preset" ? ... : ...`。
  */
-export function readStorageJson<T>(key: string, fallback: T, parse?: (raw: string) => T): T {
+export function readStorageJson<T>(
+  key: string,
+  fallback: T,
+  parse: (raw: string) => T = JSON.parse,
+): T {
   const raw = readStorageItem(key);
   if (raw === null) {
     return fallback;
   }
-  if (parse) {
-    try {
-      return parse(raw);
-    } catch {
-      return fallback;
-    }
-  }
   try {
-    /* SAFETY: 类型断言已复核 */
-    return JSON.parse(raw) as T;
+    return parse(raw);
   } catch {
     return fallback;
   }

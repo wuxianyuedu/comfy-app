@@ -8,6 +8,7 @@
  */
 import { describe, it, expect } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
 import { applyApiOverrides, applyRawOverrides } from "./raw-overrides";
 
 const INNER_UUID = "9b9009e4-2d3d-445f-9be5-6063f465757e";
@@ -58,14 +59,47 @@ function nestedRaw() {
 }
 
 function widgetsOf(raw: unknown, subgraphUid: string, innerId: string): Array<unknown> {
-  /* SAFETY: 类型断言已复核 */
-  const r = raw as {
-    definitions: {
-      subgraphs: Record<string, { nodes: Array<{ id: string; widgets_values: Array<unknown> }> }>;
-    };
-  };
-  const node = r.definitions.subgraphs[subgraphUid]!.nodes.find((n) => n.id === innerId)!;
+  if (!isRecord(raw)) {
+    throw new Error("raw 不是对象");
+  }
+  const definitions = raw.definitions;
+  if (!isRecord(definitions)) {
+    throw new Error("raw.definitions 不是对象");
+  }
+  const subgraphs = definitions.subgraphs;
+  if (!isRecord(subgraphs)) {
+    throw new Error("raw.definitions.subgraphs 不是对象");
+  }
+  const subgraph = subgraphs[subgraphUid];
+  if (!isRecord(subgraph)) {
+    throw new Error(`子图 ${subgraphUid} 不是对象`);
+  }
+  const list: Array<unknown> = Array.isArray(subgraph.nodes) ? subgraph.nodes : [];
+  const node = list.find(
+    (n: unknown): n is { id: unknown; widgets_values: Array<unknown> } =>
+      isRecord(n) &&
+      typeof n.id === "string" &&
+      n.id === innerId &&
+      Array.isArray(n.widgets_values),
+  );
+  if (node === undefined) {
+    throw new Error(`子图 ${subgraphUid} 里找不到内部节点 ${innerId}`);
+  }
   return node.widgets_values;
+}
+
+/** 顶层 `nodes[index]` 的 `widgets_values`。 */
+function widgetsAt(raw: unknown, index: number): Array<unknown> {
+  if (!isRecord(raw)) {
+    throw new Error("raw 不是对象");
+  }
+  const list: Array<unknown> = Array.isArray(raw.nodes) ? raw.nodes : [];
+  const node = list[index];
+  if (!isRecord(node) || !Array.isArray(node.widgets_values)) {
+    throw new Error(`raw.nodes[${index}] 没有 widgets_values`);
+  }
+  const widgets: Array<unknown> = node.widgets_values;
+  return widgets;
 }
 
 describe("resolveRawNode — 拼接 id 逐层下钻", () => {
@@ -106,12 +140,9 @@ describe("resolveRawNode — 拼接 id 逐层下钻", () => {
       ],
       links: [],
     };
-    /* SAFETY: 类型断言已复核 */
-    const result = applyRawOverrides(raw, [{ nodeId: "24", name: "image", value: "new.png" }]) as {
-      nodes: Array<{ id: string; widgets_values: Array<unknown> }>;
-    };
+    const result = applyRawOverrides(raw, [{ nodeId: "24", name: "image", value: "new.png" }]);
 
-    expect(result.nodes[0]!.widgets_values).toEqual(["new.png"]);
+    expect(widgetsAt(result, 0)).toEqual(["new.png"]);
   });
 
   it("存量裸内部 id（没有宿主前缀）仍按子图定义兜底定位", () => {
@@ -144,48 +175,65 @@ function apiGraphWithSampler(): ApiGraph {
   };
 }
 
+/** API 图里按节点 id 取节点对象。 */
+function apiNode(out: unknown, nodeId: string): Record<string, unknown> {
+  if (!isRecord(out)) {
+    throw new Error("API 图不是对象");
+  }
+  const node = out[nodeId];
+  if (!isRecord(node)) {
+    throw new Error(`API 图里没有节点 ${nodeId}`);
+  }
+  return node;
+}
+
+/** API 图里按节点 id + 入参名取值。 */
+function apiInput(out: unknown, nodeId: string, name: string): unknown {
+  const inputs = apiNode(out, nodeId).inputs;
+  if (!isRecord(inputs)) {
+    throw new Error(`节点 ${nodeId} 没有 inputs`);
+  }
+  return inputs[name];
+}
+
 describe("applyApiOverrides — API 格式载荷的覆盖注入", () => {
   it("值写进命名入参；数值入参的字符串值被收窄成数字", () => {
-    /* SAFETY: 类型断言已复核 */
     const out = applyApiOverrides(apiGraphWithSampler(), [
       { nodeId: "3", name: "steps", value: "30" },
-    ]) as ApiGraph;
+    ]);
 
-    expect(out["3"]!.inputs.steps).toBe(30);
+    expect(apiInput(out, "3", "steps")).toBe(30);
     /* 其余入参（含连线元组）原样保留。 */
-    expect(out["3"]!.inputs.cfg).toBe(4);
-    expect(out["3"]!.inputs.positive).toEqual(["6", 0]);
+    expect(apiInput(out, "3", "cfg")).toBe(4);
+    expect(apiInput(out, "3", "positive")).toEqual(["6", 0]);
   });
 
   it("空串不参与数值收窄（清空输入框 = 没有值，不能把 steps 写成 0）", () => {
-    /* SAFETY: 类型断言已复核 */
     const out = applyApiOverrides(apiGraphWithSampler(), [
       { nodeId: "3", name: "steps", value: "" },
-    ]) as ApiGraph;
+    ]);
 
-    expect(out["3"]!.inputs.steps).toBe("");
+    expect(apiInput(out, "3", "steps")).toBe("");
   });
 
   it("control_after_generate=randomize：铸新 seed 且该键不入载荷", () => {
-    /* SAFETY: 类型断言已复核 */
     const out = applyApiOverrides(apiGraphWithSampler(), [
       { nodeId: "3", name: "control_after_generate", value: "randomize" },
-    ]) as ApiGraph;
+    ]);
 
-    expect(out["3"]!.inputs.control_after_generate).toBeUndefined();
-    const seed = out["3"]!.inputs.seed;
+    expect(apiInput(out, "3", "control_after_generate")).toBeUndefined();
+    const seed = apiInput(out, "3", "seed");
     expect(typeof seed).toBe("number");
     expect(seed).not.toBe(111);
   });
 
   it("control_after_generate=fixed：只摘键，seed 保持原值", () => {
-    /* SAFETY: 类型断言已复核 */
     const out = applyApiOverrides(apiGraphWithSampler(), [
       { nodeId: "3", name: "control_after_generate", value: "fixed" },
-    ]) as ApiGraph;
+    ]);
 
-    expect(out["3"]!.inputs.control_after_generate).toBeUndefined();
-    expect(out["3"]!.inputs.seed).toBe(111);
+    expect(apiInput(out, "3", "control_after_generate")).toBeUndefined();
+    expect(apiInput(out, "3", "seed")).toBe(111);
   });
 
   it("节点不存在 / 无 inputs 时原样返回，不抛错", () => {
@@ -193,14 +241,13 @@ describe("applyApiOverrides — API 格式载荷的覆盖注入", () => {
       "3": { class_type: "KSampler", inputs: { seed: 1 } },
       "4": { class_type: "Note" },
     };
-    /* SAFETY: 类型断言已复核 */
     const out = applyApiOverrides(graph, [
       { nodeId: "999", name: "seed", value: 7 },
       { nodeId: "4", name: "seed", value: 7 },
-    ]) as Record<string, { inputs?: Record<string, unknown> }>;
+    ]);
 
-    expect(out["3"]!.inputs!.seed).toBe(1);
-    expect(out["4"]!.inputs).toBeUndefined();
+    expect(apiInput(out, "3", "seed")).toBe(1);
+    expect(apiNode(out, "4").inputs).toBeUndefined();
   });
 
   it("非对象输入（null / 数组）返回空对象而不是抛错", () => {
@@ -270,31 +317,24 @@ function driftRaw(socketInnerHasWidget: boolean) {
   };
 }
 
-type DriftOut = {
-  nodes: Array<{ id: string; widgets_values: Array<unknown> }>;
-};
-
 describe("抵消 comfy-cli 提升控件回写的槽位漂移", () => {
   it("漂移存在时：宿主值折进内层，宿主数组清空（回写变空操作）", () => {
-    /* SAFETY: 类型断言已复核 */
-    const out = applyRawOverrides(driftRaw(true), []) as DriftOut;
+    const out = applyRawOverrides(driftRaw(true), []);
     /* 宿主按下标 0 的 clip_name 值落进内层 CLIPLoader —— 不是错位的 undefined。 */
     expect(widgetsOf(out, DRIFT_UUID, "100")).toEqual(["umt5_xxl_fp8.safetensors"]);
     /* 清空后 comfy-cli 的 host_value 一律 UNSET，不再覆盖上面的正确值。 */
-    expect(out.nodes[0]!.widgets_values).toEqual([]);
+    expect(widgetsAt(out, 0)).toEqual([]);
   });
 
   it("没有覆盖项时同样抵消（错位与「这次有没有画布覆盖」无关）", () => {
-    /* SAFETY: 类型断言已复核 */
-    const out = applyRawOverrides(driftRaw(true)) as DriftOut;
-    expect(out.nodes[0]!.widgets_values).toEqual([]);
+    const out = applyRawOverrides(driftRaw(true));
+    expect(widgetsAt(out, 0)).toEqual([]);
     expect(widgetsOf(out, DRIFT_UUID, "100")).toEqual(["umt5_xxl_fp8.safetensors"]);
   });
 
   it("漂移不存在时不动载荷（宿主数组与内层默认值都保留）", () => {
-    /* SAFETY: 类型断言已复核 */
-    const out = applyRawOverrides(driftRaw(false), []) as DriftOut;
-    expect(out.nodes[0]!.widgets_values).toEqual(["umt5_xxl_fp8.safetensors"]);
+    const out = applyRawOverrides(driftRaw(false), []);
+    expect(widgetsAt(out, 0)).toEqual(["umt5_xxl_fp8.safetensors"]);
     expect(widgetsOf(out, DRIFT_UUID, "100")).toEqual(["default.safetensors"]);
   });
 });

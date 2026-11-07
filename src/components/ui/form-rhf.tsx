@@ -26,8 +26,7 @@ type FormFieldContextValue<
   name: TName;
 };
 
-/* SAFETY: 类型断言已复核 */
-const FormFieldContext = React.createContext<FormFieldContextValue>({} as FormFieldContextValue);
+const FormFieldContext = React.createContext<FormFieldContextValue | null>(null);
 
 function FormField<
   TFieldValues extends FieldValues = FieldValues,
@@ -44,20 +43,21 @@ type FormItemContextValue = {
   id: string;
 };
 
-/* SAFETY: 类型断言已复核 */
-const FormItemContext = React.createContext<FormItemContextValue>({} as FormItemContextValue);
+const FormItemContext = React.createContext<FormItemContextValue | null>(null);
 
 function useFormField() {
   const fieldContext = React.useContext(FormFieldContext);
   const itemContext = React.useContext(FormItemContext);
   const { getFieldState, formState } = useFormContext();
 
-  const fieldState = getFieldState(fieldContext.name, formState);
-
-  const hasFieldContext = Boolean(fieldContext);
-  if (!hasFieldContext) {
+  if (fieldContext === null) {
     throw new Error("useFormField should be used within <FormField>");
   }
+  if (itemContext === null) {
+    throw new Error("useFormField should be used within <FormItem>");
+  }
+
+  const fieldState = getFieldState(fieldContext.name, formState);
 
   const { id } = itemContext;
 
@@ -97,8 +97,10 @@ function FormLabel({ className, ...props }: React.ComponentProps<typeof Label>) 
 function FormControl(props: React.PropsWithChildren) {
   const { error, formItemId, formDescriptionId, formMessageId } = useFormField();
 
-  /* SAFETY: 类型断言已复核 */
-  const child = React.Children.only(props.children) as React.ReactElement<Record<string, unknown>>;
+  const child = React.Children.only(props.children);
+  if (!React.isValidElement<Record<string, unknown>>(child)) {
+    throw new Error("FormControl 需要一个 React 元素子节点");
+  }
   return React.cloneElement(child, {
     id: formItemId,
     "aria-describedby": error ? `${formDescriptionId} ${formMessageId}` : formDescriptionId,

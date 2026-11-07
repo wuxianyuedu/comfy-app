@@ -6,7 +6,21 @@
  * `subgraphRawContext`，见 WorkflowEditorInner 里该 state 的注释）。 */
 import { useMemo } from "react";
 
+import { isPlainRecord } from "~/lib/is-record";
 import type { WorkflowDetail } from "../../workflow-types";
+
+/** 父级 rawJson 的 `definitions.subgraphs` 表；每层都按运行期形状收窄。 */
+function subgraphsOf(parentRawJson: unknown): Record<string, unknown> | undefined {
+  if (!isPlainRecord(parentRawJson)) {
+    return undefined;
+  }
+  const definitions = parentRawJson.definitions;
+  if (!isPlainRecord(definitions)) {
+    return undefined;
+  }
+  const subgraphs = definitions.subgraphs;
+  return isPlainRecord(subgraphs) ? subgraphs : undefined;
+}
 
 export function useSubgraphSourceModal(params: {
   detail: WorkflowDetail | null;
@@ -35,21 +49,13 @@ export function useSubgraphSourceModal(params: {
       if (!ctx) {
         return null;
       }
-      /* SAFETY: 类型断言已复核 */
-      const subs = (
-        ctx.parentRawJson as {
-          definitions?: { subgraphs?: Record<string, unknown> };
-        } | null
-      )?.definitions?.subgraphs;
+      const subs = subgraphsOf(ctx.parentRawJson);
       if (!subs) {
         return null;
       }
       return (
         subs[ctx.subUid] ??
-        Object.values(subs).find(
-          /* SAFETY: 类型断言已复核 */
-          (s) => (s as { id?: unknown } | null)?.id === ctx.subUid,
-        ) ??
+        Object.values(subs).find((s) => isPlainRecord(s) && s.id === ctx.subUid) ??
         null
       );
     })();

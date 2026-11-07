@@ -40,6 +40,7 @@ import { db } from "~/lib/db";
 import type { AnySQLiteColumn, AnySQLiteTable } from "drizzle-orm/sqlite-core";
 import { AppError, NotFoundError } from "./errors";
 import type { Task, TaskImage } from "~/server/db/schema";
+import { isRecord } from "~/lib/is-record";
 
 /** 带首张封面图的任务行（画廊/历史面板专用）。 */
 export type TaskWithCover = Task & { images: Array<TaskImage> };
@@ -48,6 +49,16 @@ export type TaskWithCover = Task & { images: Array<TaskImage> };
 export type Identifiable = {
   id: string;
 };
+
+/** drizzle 的列对象在运行期带 `name` / `dataType` 字符串字段。 */
+function isColumn(value: unknown): value is AnySQLiteColumn {
+  return isRecord(value) && typeof value.name === "string" && typeof value.dataType === "string";
+}
+
+/** 运行期确认一行满足实体契约（至少是带字符串主键的对象）。 */
+function isEntityOf<T extends Identifiable>(value: unknown): value is T {
+  return isRecord(value) && typeof value.id === "string";
+}
 
 /**
  * 与 ORM 无关的持久化契约。任何业务模块都应面向该接口编程，
@@ -88,9 +99,9 @@ export class DrizzleRepository<T extends Identifiable> implements Repository<T> 
     /* 表对象上的 `id` 列：子类不传 `idColumn` 时的约定。缺席属**装配错误**
      *  （基类拿到了一张没有 id 的表），在这里显式失败 —— 原来的 `!` 会把
      *  它变成下游某次 SQL 上的莫名报错。 */
-    /* SAFETY: 类型断言已复核 */
-    const implicit = (this.table as unknown as Record<string, AnySQLiteColumn>).id;
-    if (!implicit) {
+    const table: unknown = this.table;
+    const implicit = isRecord(table) ? table.id : undefined;
+    if (!isColumn(implicit)) {
       throw new AppError("仓储基类需要一张带 id 列的表（或显式传入 idColumn）");
     }
     return implicit;
@@ -98,22 +109,31 @@ export class DrizzleRepository<T extends Identifiable> implements Repository<T> 
 
   async findById(id: string): Promise<T | null> {
     const rows = await db.select().from(this.table).where(eq(this.id, id)).limit(1);
-    /* SAFETY: 类型断言已复核 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 查询无命中时 rows[0] 运行期为 undefined（断言把空数组元素抹成了 T），`?? null` 是唯一回落
-    return (rows[0] as T) ?? null;
+    const row = rows[0];
+    if (!isEntityOf<T>(row)) {
+      return null;
+    }
+    return row;
   }
 
   async findAll(): Promise<Array<T>> {
-    /* SAFETY: 类型断言已复核 */
-    return (await db.select().from(this.table)) as Array<T>;
+    const rows = await db.select().from(this.table);
+    const entities: Array<T> = [];
+    for (const row of rows) {
+      if (isEntityOf<T>(row)) {
+        entities.push(row);
+      }
+    }
+    return entities;
   }
 
   async create(entity: T): Promise<T> {
-    /* SAFETY: 类型断言已复核 */
-    const values = entity as Record<string, unknown>;
-    const rows = await db.insert(this.table).values(values).returning();
-    /* SAFETY: 类型断言已复核 */
-    return rows[0] as T;
+    const rows = await db.insert(this.table).values(entity).returning();
+    const row = rows[0];
+    if (!isEntityOf<T>(row)) {
+      throw new AppError("插入未返回记录");
+    }
+    return row;
   }
 
   async update(id: string, patch: Partial<T>): Promise<T> {
@@ -121,11 +141,12 @@ export class DrizzleRepository<T extends Identifiable> implements Repository<T> 
     if (!existing) {
       throw new NotFoundError(`记录不存在: ${id}`);
     }
-    /* SAFETY: 类型断言已复核 */
-    const values = patch as Record<string, unknown>;
-    const rows = await db.update(this.table).set(values).where(eq(this.id, id)).returning();
-    /* SAFETY: 类型断言已复核 */
-    return rows[0] as T;
+    const rows = await db.update(this.table).set(patch).where(eq(this.id, id)).returning();
+    const row = rows[0];
+    if (!isEntityOf<T>(row)) {
+      throw new AppError("更新未返回记录");
+    }
+    return row;
   }
 
   async delete(id: string): Promise<void> {

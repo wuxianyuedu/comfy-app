@@ -40,6 +40,7 @@
  */
 import WebSocket from "ws";
 import { errorText } from "~/lib/error-message";
+import { isRecord } from "~/lib/is-record";
 import { sqliteAwareErrorText } from "~/lib/sqlite-error";
 import { fireAndForget } from "~/lib/async-action";
 import { logger } from "~/lib/core/logger";
@@ -215,13 +216,13 @@ export async function claimAndDispatchOnce(options?: {
     return taskId;
   }
 
+  const paramsRaw = row.params;
+  const overridesRaw = isRecord(paramsRaw) ? paramsRaw.workflowInputs : undefined;
   const job: Job = {
     taskId,
     workflowName: row.workflowName,
     rawJson: row.execPayload,
-    /* SAFETY: 类型断言已复核 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- row.params 是库里的 JSON 列（unknown），运行期可能是 null 或没有 workflowInputs 字段
-    overrides: (row.params as { workflowInputs?: Job["overrides"] })?.workflowInputs,
+    overrides: Array.isArray(overridesRaw) ? overridesRaw : undefined,
   };
 
   /* 完整输入参数入日志（原 `processQueue` 里那条）：任务日志是复现与排障的唯一

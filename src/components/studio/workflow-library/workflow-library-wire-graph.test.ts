@@ -135,8 +135,7 @@ describe("边的两端与 handle 取值", () => {
     /* 用户口径：这里是编辑对外参数的界面，「未连过就不要连」—— 所以库里没有
      *  「默认线」这一档样式，两条边都按实线画。 */
     for (const edge of [buildInputEdge(inputWire, true), buildOutputEdge(outputWire, true)]) {
-      /* SAFETY: 类型断言已复核 */
-      expect((edge.style as { strokeDasharray?: string }).strokeDasharray).toBeUndefined();
+      expect(edge.style).not.toHaveProperty("strokeDasharray");
       expect(edge.style).toMatchObject({ strokeWidth: 2.5, opacity: 1 });
     }
   });

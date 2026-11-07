@@ -20,6 +20,19 @@ import {
 /** 语义色档的类型从 `Badge` 的 props 派生（不手抄一份字面量）。 */
 type BadgeTone = NonNullable<React.ComponentProps<typeof Badge>["tone"]>;
 
+/** `tone` 白名单：故事数据里的字符串必须过运行时校验才交给 `Badge`。 */
+const BADGE_TONES: Record<BadgeTone, true> = {
+  danger: true,
+  neutral: true,
+  primary: true,
+  success: true,
+  warning: true,
+};
+
+function isBadgeTone(value: unknown): value is BadgeTone {
+  return typeof value === "string" && Object.hasOwn(BADGE_TONES, value);
+}
+
 const meta = {
   title: "UI/Table",
   component: Table,
@@ -83,11 +96,10 @@ export const WithStatusColumn: Story = {
           ["qwen_image_edit.safetensors", "下载中", "neutral"],
           ["flux1-dev.safetensors", "缺失", "danger"],
         ].map(([name, status, tone]) => (
-          /* SAFETY: 类型断言已复核 */
           <TableRow key={name}>
             <TableCell className="font-mono text-xs">{name}</TableCell>
             <TableCell>
-              <Badge tone={tone as BadgeTone}>{status}</Badge>
+              <Badge tone={isBadgeTone(tone) ? tone : "neutral"}>{status}</Badge>
             </TableCell>
             <TableCell className="text-right">
               <Button size="xs" variant="ghost">

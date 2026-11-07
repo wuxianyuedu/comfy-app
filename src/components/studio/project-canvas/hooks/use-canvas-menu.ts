@@ -28,10 +28,8 @@ export function useCanvasMenu({
     (e: MouseEvent | globalThis.MouseEvent) => {
       e.preventDefault();
       setMenu({
-        /* SAFETY: 类型断言已复核 */
-        x: (e as globalThis.MouseEvent).clientX,
-        /* SAFETY: 类型断言已复核 */
-        y: (e as globalThis.MouseEvent).clientY,
+        x: e.clientX,
+        y: e.clientY,
       });
     },
     [setMenu],

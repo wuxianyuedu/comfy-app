@@ -68,6 +68,22 @@
  * 那比崩掉更坏（同 `gate-scan-read.cjs` 头部那句口径）。所以这里判红，
  * 并把出口直接写成那一条命令。
  *
+ * ── hoisted 层不是 store 条目（ISSUE #3269） ──────────────────────
+ *
+ * `node_modules/.pnpm/node_modules` 是 pnpm 的 hoisted 虚拟目录：里面全是指向
+ * `.pnpm/<条目>/node_modules/<包>` 的符号链接，而且**从安装完成起**就没有自己的
+ * `node_modules` 子目录。此前 `collectInstalledPackages()` 把它当成一条 store 条目，
+ * 读 `<它>/node_modules` 必然失败 ⇒ 每跑一次都稳定报「另有 1 个条目在扫描期间消失
+ * （工作区并发变更）」，而工作区其实完全静止。判据要数的是
+ * `.pnpm/<条目>/node_modules/<包>/package.json`，这一层本来就不该进 `entries`。
+ *
+ * 排掉它之后，`unread > 0` 只剩「这一轮真的有包目录没读到」这一种形状 —— 那可能让
+ * 一个带 postinstall 的包躲过对账，按 §13.6.3「判据读不到 ≠ 判过了且没问题」以
+ * `exit 2` 收口，不冒充「覆盖了全部」。共用件 `gate-scan-read.cjs` 的条目级消失语义
+ * 是「那个条目已不在、不可能承载违规」；本判据的输入面是**枚举出来的包目录**，
+ * 一个目录读不到与「一份源码文件被删」不同形，所以这一格收紧只落在判据自己身上：
+ * 不改共用件、不改其他判据的读数，也不改 `vanishedNote()` 的话术。
+ *
  * ── 为什么是条件触发（`--staged`），而不是每次提交都扫 ──────────
  *
  * 一次全树扫描 4.5s，而**能让「带构建脚本的依赖」发生变化的输入只有三个文件** ——
@@ -91,7 +107,8 @@
  *   node scripts/check-allow-builds.cjs            # 全量判（手动 / 合并前那一跳）
  *   node scripts/check-allow-builds.cjs --staged   # 只在本次提交动了依赖面时判
  * 退出码：0 = 名单覆盖齐全（或未触及依赖面而跳过）；1 = 有带构建脚本的依赖未登记，
- * 或扫描面读不到；2 = `--staged` 下读不到暂存清单（判据没跑成，不冒充跳过）。
+ * 或扫描面读不到；2 = `--staged` 下读不到暂存清单，或扫描中真有条目没读到
+ * （判据没跑成 / 没给结论，都不冒充跳过或「已覆盖」）。
  */
 const path = require("node:path");
 const {
@@ -112,6 +129,8 @@ const { DEPENDENCY_FILES } = require("./dependency-face.mjs");
 const ROOT = path.resolve(__dirname, "..");
 const WORKSPACE_FILE = path.join(ROOT, "pnpm-workspace.yaml");
 const PNPM_DIR = path.join(ROOT, "node_modules", ".pnpm");
+/** pnpm 的 hoisted 虚拟目录名：它是 `.pnpm/` 下的一个目录，不是 `<name>@<ver>` 那种 store 条目。 */
+const HOISTED_DIR = "node_modules";
 /** pnpm 会为其执行（或据其拒绝）的生命周期脚本 —— 顺序照 pnpm 自己的调用序。 */
 const LIFECYCLE_SCRIPTS = ["preinstall", "install", "postinstall"];
 
@@ -164,6 +183,12 @@ function readAllowBuildsKeys(text) {
  * `isSymbolicLink()` 的条目一律跳过 —— 顺着链接读会把同一个包按依赖边数
  * 重复读几十遍（实测会走到上万次读取），而判据要的是「装了哪些包」，不是「图有几条边」。
  *
+ * ISSUE #3269：`.pnpm/node_modules` 是 pnpm 自己的 hoisted 虚拟目录，不是
+ * `<name>@<ver>` 条目 —— 它里面全是指向真实条目的符号链接，而且从安装完成起
+ * 就没有 `node_modules` 子目录。把它算进 `storeDirs` 会让下面那次 `readdirForScan`
+ * 每跑一次稳定 ENOENT ⇒ 稳定「消失 1 条」。这一层不进扫描面，真包在各自条目下
+ * 已经被数过一遍，不会因此少判。
+ *
  * @returns {{entries: Array<{name: string, absPath: string}>, vanished: number}}
  */
 function collectInstalledPackages() {
@@ -177,6 +202,9 @@ function collectInstalledPackages() {
 
   for (const storeDir of storeDirs) {
     if (!storeDir.isDirectory()) {
+      continue;
+    }
+    if (storeDir.name === HOISTED_DIR) {
       continue;
     }
     const inner = readdirForScan(path.join(PNPM_DIR, storeDir.name, "node_modules"));
@@ -233,8 +261,9 @@ function scriptBearingPackage(raw) {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    // 装出来的 package.json 解析不了 = 这一条输入不可信，不当作站点；
-    // 它不会静默消失：结论行报「几个条目没读到」（同 gate-scan-read 那句口径）。
+    // 装出来的 package.json 读到了字节却解析不了 —— 这一条输入不可信，按「没有站点」
+    // 跳过（既不崩、也不凭空造一条违规）。注意它与「扫描期间消失」不同形：
+    // readForScan() 已经把字节交回来了，只有它返回 null（ENOENT）才计进 unread。
     return null;
   }
   if (!parsed || typeof parsed !== "object") {
@@ -340,19 +369,40 @@ if (dirExists(WORKSPACE_FILE)) {
   );
 }
 
+/* ── 三态结论（ISSUE #3269） ───────────────────────────────────────
+   排掉 hoisted 层之后，`unread > 0` 只剩「这一轮真有包目录 / package.json 没读到」
+   这一种形状。少读一份就可能正好少读一个带 postinstall 的包，此时那句
+   「覆盖了全部」是伪证。§13.6.3「判据读不到 ≠ 判过了且没问题」⇒ 这一格
+   优先于绿、以 exit 2 不给结论；已经读到的违规事实照旧列出，不因为「没读全」
+   被吞掉（exit 2 与 exit 1 一样会挡住提交）。 */
+if (unread > 0) {
+  console.error(vanishedNote(unread).trim());
+  if (problems.length > 0) {
+    console.error("\n❌ 已经读到的那部分输入里，另有以下违规：");
+    for (const problem of problems) {
+      console.error(`  · ${problem}`);
+    }
+  }
+  console.error(
+    `\n  本轮扫了 ${scanned} 个安装条目、判到 ${bearing.length} 个带构建脚本的依赖，` +
+      "但上面那几份输入没读到。\n" +
+      "  ⚠️ allowBuilds 判据这一轮没跑全 —— 按 §13.6.3 不给结论（exit 2）：" +
+      "既不判绿、也不判红，更不冒充「覆盖了全部」。\n" +
+      "  出口：重跑一次；若稳定复现，先 `pnpm install --frozen-lockfile` 把 node_modules 修好。",
+  );
+  process.exit(2);
+}
+
 if (problems.length > 0) {
   console.error("❌ 依赖构建脚本与 allowBuilds 未对账：");
   for (const problem of problems) {
     console.error(`  · ${problem}`);
   }
-  console.error(
-    `\n  本轮扫描 ${scanned} 个安装条目，其中 ${bearing.length} 个带构建脚本。${vanishedNote(unread)}`,
-  );
+  console.error(`\n  本轮扫描 ${scanned} 个安装条目，其中 ${bearing.length} 个带构建脚本。`);
   process.exit(1);
 }
 
 console.log(
-  `✅ allowBuilds 覆盖了全部带构建脚本的依赖：${bearing.length} 个` +
-    `（扫了 ${scanned} 个安装条目）${vanishedNote(unread)}`,
+  `✅ allowBuilds 覆盖了全部带构建脚本的依赖：${bearing.length} 个（扫了 ${scanned} 个安装条目）`,
 );
 process.exit(0);

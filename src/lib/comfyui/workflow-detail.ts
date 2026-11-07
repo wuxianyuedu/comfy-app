@@ -28,6 +28,7 @@ import {
   type ApiWorkflowNode,
 } from "~/lib/comfyui/raw";
 import { cacheJson, cacheDel, cacheDelPrefix, cachePeek } from "~/lib/server-cache";
+import { isRecord } from "~/lib/is-record";
 import { parseModesJson } from "~/lib/workflow/workflow-types";
 import { parseWorkflowIOMap, type IOParamSlot } from "~/lib/workflow/workflow-io-types";
 import { parseWorkflowParamMap, type WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
@@ -146,6 +147,66 @@ export type WorkflowDetailFull = {
   workflowIO: Record<string, WorkflowDetailIOEntry>;
 };
 
+/** 运行时校验一条序列化详情（缓存读回 / 自产 JSON 的边界）。 */
+function isWorkflowDetailFull(value: unknown): value is WorkflowDetailFull {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    typeof value.taskType === "string" &&
+    typeof value.format === "string" &&
+    isRecord(value.graph) &&
+    Array.isArray(value.nodes) &&
+    Array.isArray(value.groups) &&
+    Array.isArray(value.notes) &&
+    Array.isArray(value.rawNodes) &&
+    (value.positions === null || isRecord(value.positions))
+  );
+}
+
+/** 读回序列化详情；形状不可用（含 JSON 语法错误）返回 null。 */
+function parseWorkflowDetailJson(json: string): WorkflowDetailFull | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return null;
+  }
+  return isWorkflowDetailFull(parsed) ? parsed : null;
+}
+
+/** 读回**自产**的序列化详情：形状不可用说明内部序列化坏了，按 500 抛出。 */
+function requireWorkflowDetailJson(json: string): WorkflowDetailFull {
+  const detail = parseWorkflowDetailJson(json);
+  if (detail === null) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "工作流详情序列化结果形状不可用",
+    });
+  }
+  return detail;
+}
+
+/** 坐标元组守卫：至少 [x, y] 两个 number。 */
+function isPositionTuple(v: unknown): v is [number, number] {
+  return Array.isArray(v) && v.length >= 2 && typeof v[0] === "number" && typeof v[1] === "number";
+}
+
+/** `positions` DB 列（JSON）→ 坐标表；非对象回落 null，非法条目丢弃。 */
+function parsePositionsColumn(value: unknown): Record<string, [number, number]> | null {
+  const rec = asRecord(value);
+  if (rec === null) {
+    return null;
+  }
+  const out: Record<string, [number, number]> = {};
+  for (const [key, pos] of Object.entries(rec)) {
+    if (isPositionTuple(pos)) {
+      out[key] = [pos[0], pos[1]];
+    }
+  }
+  return out;
+}
+
 /** 把已读出的工作流行转换成下发给客户端的序列化 JSON。
  *
  *  这是 `buildWorkflowDetailFull` 里那段 278 行 `cacheJson` 闭包的正身：闭包体
@@ -206,9 +267,7 @@ async function buildWorkflowDetailJson(input: {
    *      未知键会被静默忽略。
    *      ignored. */
   const positionsFromRaw = raw && Array.isArray(raw.nodes) ? extractPositions(raw) : {};
-  /* SAFETY: 类型断言已复核 */
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- tpl.positions 是数据库 JSON 列，类型断言掩盖了运行期可能为 null 的情况
-  const tplPositions = (tpl.positions as Record<string, [number, number]>) ?? {};
+  const tplPositions = parsePositionsColumn(tpl.positions) ?? {};
   const effectivePositions: Record<string, [number, number]> = {
     ...positionsFromRaw,
     ...tplPositions,
@@ -242,11 +301,14 @@ async function buildWorkflowDetailJson(input: {
     // 认出两个字段里任一处的 UUID 类名 —— 少了这道回落，每个节点都会被渲染成
     // 普通的 WorkflowNode，子图封装节点会把 10+ 行 IO **内联摊开**，
     // 而不是被认成 `is_subgraph: true` 去用紧凑的 WorkflowSubgraphNode。
-    // （与旧 `n?.class_type || (n?.type as string) || "?"` 逐值等价：
+    // （与旧 `n?.class_type || n?.type || "?"` 逐值等价：
     //  `a || b` ≡ `a ? a : b`，空串同样回退。）
-    /* SAFETY: 类型断言已复核 */
-    // oxlint-disable-next-line strict-boolean-expressions -- n.type 是外部 JSON 任意值：类名按「非空真值」取，空串/缺失/异形回落 "?"（与上方注释的逐值等价口径一致）
-    const classType: string = n.class_type ? n.class_type : n.type ? (n.type as string) : "?";
+    const classType: string =
+      n.class_type === ""
+        ? typeof n.type === "string" && n.type !== ""
+          ? n.type
+          : "?"
+        : n.class_type;
     const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
     /* 子图封装节点（class_type === UUID）的显示名取自
      *  raw.definitions.subgraphs[uid].name。与子图路由的 `sub` 解析器同一套
@@ -437,8 +499,7 @@ async function buildWorkflowDetailJson(input: {
             ? { direction: "output", kind: "output" }
             : {
                 direction: "input",
-                /* SAFETY: 类型断言已复核 */
-                kind: e.kind as "param" | "widget",
+                kind: e.kind === "widget" ? "widget" : "param",
               };
         return [k, { ...e, ...slot } satisfies WorkflowDetailIOEntry];
       }),
@@ -532,8 +593,12 @@ export async function buildWorkflowDetailFull(
    * （缓存在 PATCH / DELETE 时失效；404 从不缓存。） */
   const cached = cachePeek<string>(cacheKey);
   if (cached !== undefined && typeof cached === "string") {
-    /* SAFETY: 类型断言已复核 */
-    return JSON.parse(cached) as WorkflowDetailFull;
+    const cachedDetail = parseWorkflowDetailJson(cached);
+    if (cachedDetail !== null) {
+      return cachedDetail;
+    }
+    /* 形状不可用（含损坏条目）：丢掉它，按缓存未命中重新构建。 */
+    cacheDel(cacheKey);
   }
 
   const tpl = await workflowTemplateRepository.findByIdForUser(userId, id);
@@ -599,8 +664,7 @@ export async function buildWorkflowDetailFull(
     }),
   );
 
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(detailJson) as WorkflowDetailFull;
+  return requireWorkflowDetailJson(detailJson);
 }
 
 export async function buildSubgraphDetail(
@@ -618,8 +682,12 @@ export async function buildSubgraphDetail(
    * （下面 400 / 404 那两种情况从不缓存。） */
   const cached = cachePeek<string>(cacheKey);
   if (cached !== undefined && typeof cached === "string") {
-    /* SAFETY: 类型断言已复核 */
-    return JSON.parse(cached) as WorkflowDetailFull;
+    const cachedDetail = parseWorkflowDetailJson(cached);
+    if (cachedDetail !== null) {
+      return cachedDetail;
+    }
+    /* 形状不可用（含损坏条目）：丢掉它，按缓存未命中重新构建。 */
+    cacheDel(cacheKey);
   }
 
   const tpl = await workflowTemplateRepository.findByIdForUser(userId, id);
@@ -718,13 +786,7 @@ export async function buildSubgraphDetail(
      *  只是一个安静的空白，排障时既不知道是哪条边、也无从判断是数据问题还是
      *  渲染问题（规范 10 §10.3.1：降级不得静默）。 */
     reportDroppedBoundaryLinks(sub, boundaryLinkInfoById, pinIdByLinkId, boundaryLinks);
-    /* SAFETY: 类型断言已复核 */
-    const ann = extractSubgraphAnnotations(
-      sub,
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- tpl.positions 是数据库 JSON 列，类型断言掩盖了运行期可能为 null 的情况
-      (tpl.positions as Record<string, [number, number]>) ?? {},
-      hostId,
-    );
+    const ann = extractSubgraphAnnotations(sub, parsePositionsColumn(tpl.positions) ?? {}, hostId);
 
     return JSON.stringify({
       id: `${tpl.id}#subgraph:${uid}`,
@@ -754,6 +816,5 @@ export async function buildSubgraphDetail(
     });
   });
 
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(detailJson) as WorkflowDetailFull;
+  return requireWorkflowDetailJson(detailJson);
 }

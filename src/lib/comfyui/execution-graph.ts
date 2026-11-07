@@ -71,7 +71,7 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
   /* 存库 graph 来自 JSON：先把每个节点一次性收窄成稳定视图（值仍逐字透传），
    * 后续 walk / 剔除逻辑都读写视图，不再到处 unknown。 */
   type PrepEntry = {
-    /** 运行时恒为 string；保持原值逐字透传（断言仅在编译期） */
+    /** 运行时恒为 string；非字符串按空串收口，合法图逐字透传 */
     classType: string;
     inputs: Record<string, unknown>;
     meta: Record<string, unknown>;
@@ -85,9 +85,9 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
       continue;
     }
     const meta = asRecord(rec._meta) ?? {};
+    const classType = typeof rec.class_type === "string" ? rec.class_type : "";
     graph[id] = {
-      /* SAFETY: 类型断言已复核 */
-      classType: rec.class_type as string,
+      classType,
       inputs: asRecord(rec.inputs) ?? {},
       meta,
     };

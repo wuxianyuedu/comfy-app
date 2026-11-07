@@ -20,6 +20,7 @@
 
 import { trace } from "./trace";
 import { classTypeForNode, nodeLabel } from "./graph-node-class";
+import { isRecord } from "~/lib/is-record";
 import { INLINE_DUMP_MAX, clampText } from "~/lib/text-clamp";
 
 /** 面板日志的注入点（同 TraceFn：默认用 runner-state 的 log，测试传收集器）。
@@ -63,14 +64,11 @@ export const MAX_RAW_JSON_LINES = 300;
  * 字段（它是 {code, message, hint, details}），于是 6 条逐字段清单从未渲染。
  */
 export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
-  if (typeof root !== "object" || root === null) {
+  if (!isRecord(root)) {
     return undefined;
   }
   const seen = new WeakSet();
-  const stack: Array<{ d: number; node: JsonRecord }> = [
-    /* SAFETY: 类型断言已复核 */
-    { node: root as JsonRecord, d: 0 },
-  ];
+  const stack: Array<{ d: number; node: JsonRecord }> = [{ node: root, d: 0 }];
   while (stack.length) {
     /* 判据与取值同一处：`stack.pop()` 在非空循环里必然有值。 */
     const top = stack.pop();
@@ -91,13 +89,8 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
       return ne;
     }
     for (const v of Object.values(node)) {
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      if (v != null && typeof v === "object") {
-        stack.push({
-          /* SAFETY: 类型断言已复核 */
-          node: v as JsonRecord,
-          d: d + 1,
-        });
+      if (isRecord(v)) {
+        stack.push({ node: v, d: d + 1 });
       }
     }
   }
@@ -118,17 +111,12 @@ export function extractEnvelopeValidationErrors(
 
 /** envelope 里错误消息的取值：message → hint → 兜底文案。 */
 export function envelopeErrorMessage(env: unknown): string {
-  const err =
-    /* SAFETY: 类型断言已复核 */
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    env != null && typeof env === "object" ? (env as JsonRecord).error : undefined;
+  const err = isRecord(env) ? env.error : undefined;
   const str = (o: unknown, key: string): string | undefined => {
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (o == null || typeof o !== "object") {
+    if (!isRecord(o)) {
       return undefined;
     }
-    /* SAFETY: 类型断言已复核 */
-    const v = (o as JsonRecord)[key];
+    const v = o[key];
     return typeof v === "string" ? v : undefined;
   };
   return str(err, "message") ?? str(err, "hint") ?? "comfy-cli 执行失败";
@@ -143,30 +131,22 @@ export function envelopeErrorMessage(env: unknown): string {
  *
  *  返回 `null` 表示不是这种错误（交给下方兜底逻辑按原样落盘）。 */
 export function translateWorkflowUnknownNodesError(env: unknown): string | null {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (env == null || typeof env !== "object") {
+  if (!isRecord(env)) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  const err = (env as JsonRecord).error;
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (err == null || typeof err !== "object") {
+  const err = env.error;
+  if (!isRecord(err)) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  if ((err as JsonRecord).code !== "workflow_unknown_nodes") {
+  if (err.code !== "workflow_unknown_nodes") {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  const details = (err as JsonRecord).details;
-  const list =
-    /* SAFETY: 类型断言已复核 */
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    details != null && typeof details === "object" ? (details as JsonRecord).errors : undefined;
-  if (Array.isArray(list) && list.length > 0) {
+  const details = err.details;
+  const rawList: unknown = isRecord(details) ? details.errors : undefined;
+  if (Array.isArray(rawList) && rawList.length > 0) {
+    const list: Array<unknown> = rawList;
     const lines = list.slice(0, 12).map((raw) => {
-      /* SAFETY: 类型断言已复核 */
-      const e = raw as JsonRecord;
+      const e: Record<string, unknown> = isRecord(raw) ? raw : {};
       const node = typeof e.node_id === "string" ? `节点 ${e.node_id}` : "某节点";
       const field = typeof e.field === "string" ? ` 的「${e.field}」输入` : "";
       const hint =
@@ -181,13 +161,7 @@ export function translateWorkflowUnknownNodesError(env: unknown): string | null 
     const more = list.length > 12 ? `\n  …还有 ${list.length - 12} 处` : "";
     return `工作流校验未通过（comfy-cli 对照服务端校验），请修正后重新执行：\n${lines.join("\n")}${more}`;
   }
-  const message =
-    /* SAFETY: 类型断言已复核 */
-    /* SAFETY: 类型断言已复核 */
-    /* SAFETY: 类型断言已复核 */
-    typeof (err as JsonRecord).message === "string"
-      ? ((err as JsonRecord).message as string)
-      : "未知校验错误";
+  const message = typeof err.message === "string" ? err.message : "未知校验错误";
   return `工作流校验未通过（comfy-cli 对照服务端校验）：${message}`;
 }
 
@@ -249,9 +223,9 @@ export type CliEnvelopeParser = {
  * （`deps.patched`，与 `progress` 帧同一条路，见 ADR §24）。
  */
 function nodeTag(evt: JsonRecord, patched: Record<string, unknown> | undefined): string {
-  /* SAFETY: 类型断言已复核 */
-  /* SAFETY: 类型断言已复核 */
-  const node = (evt.node ?? (evt.data as JsonRecord | null | undefined)?.node ?? "?") as string;
+  const dataNode: unknown = isRecord(evt.data) ? evt.data.node : undefined;
+  const rawNode = evt.node ?? dataNode ?? "?";
+  const node = typeof rawNode === "string" ? rawNode : "?";
   const fromEvent =
     typeof evt.class_type === "string" && evt.class_type ? evt.class_type : undefined;
   const classType =
@@ -388,7 +362,7 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
       }
       return;
     }
-    if (typeof ev !== "object" || ev === null) {
+    if (!isRecord(ev)) {
       doTrace("cli", taskId, "stdout JSON 非对象", { line });
       return;
     }
@@ -409,8 +383,7 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
     }
     /* 已解析事件也原样落 trace：面板会按事件类型折叠成一行，这里保留原文。 */
     doTrace("cli", taskId, "stdout 事件", { event: ev });
-    /* SAFETY: 类型断言已复核 */
-    dispatchEvent(ev as JsonRecord);
+    dispatchEvent(ev);
   };
 
   return {
@@ -563,14 +536,8 @@ export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
         // 把原始 envelope（截断）落盘，支持现场能看到真实形状，而不是只剩
         // 一句「Workflow has N validation error(s)」。
         const rawMsg = msg;
-        const err =
-          /* SAFETY: 类型断言已复核 */
-          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-          env != null && typeof env === "object" ? (env as JsonRecord).error : undefined;
-        const errCode =
-          /* SAFETY: 类型断言已复核 */
-          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-          err != null && typeof err === "object" ? (err as JsonRecord).code : undefined;
+        const err = isRecord(env) ? env.error : undefined;
+        const errCode = isRecord(err) ? err.code : undefined;
         if (/validation error/i.test(rawMsg) || errCode === "prompt_rejected") {
           try {
             const dump = clampText(JSON.stringify(env), {

@@ -23,6 +23,11 @@ const OPTIONS: Array<{
   { v: "online", label: "在线", local: false },
 ];
 
+/** 选项即白名单：`onSelect` 给的是 `string`，只放行本 chip 暴露的三档。 */
+function isWorkflowSourceFilter(value: string): value is WorkflowSourceFilter {
+  return OPTIONS.some((option) => option.v === value);
+}
+
 export function WorkflowSourceFilterChip({ value, onChange }: WorkflowSourceFilterChipProps) {
   const isLocal = value === "local";
   const label = value === "all" ? "全部" : isLocal ? "本机" : "在线";
@@ -43,8 +48,9 @@ export function WorkflowSourceFilterChip({ value, onChange }: WorkflowSourceFilt
         ),
       }))}
       onSelect={(next) => {
-        /* SAFETY: 类型断言已复核 */
-        onChange(next as WorkflowSourceFilter);
+        if (isWorkflowSourceFilter(next)) {
+          onChange(next);
+        }
       }}
       trigger={
         <>

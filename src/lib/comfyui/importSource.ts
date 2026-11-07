@@ -17,6 +17,7 @@
 import "server-only";
 import { hash } from "node:crypto";
 import { errorText } from "~/lib/error-message";
+import { isRecord } from "~/lib/is-record";
 import { promises as fs } from "node:fs";
 import { z } from "zod";
 import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
@@ -202,11 +203,8 @@ export async function reimportFromSource(tpl: {
   try {
     stat = await fs.stat(tpl.sourcePath);
   } catch (error: unknown) {
-    /* SAFETY: 类型断言已复核 */
-    const err = error as {
-      code?: string;
-    } | null;
-    if (err?.code === "ENOENT") {
+    const code = isRecord(error) ? error.code : undefined;
+    if (code === "ENOENT") {
       return { missing: true };
     }
     return { missing: true };

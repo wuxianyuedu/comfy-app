@@ -1,3 +1,5 @@
+import { isRecord } from "~/lib/is-record";
+
 /* comfy-cli 完整原始输出的网络层（§17 把 IO 收进 lib，视图只渲染）。
  *
  * 面板摘要是截断的，这里按需拉取某次执行的完整 comfy-cli stdout/stderr
@@ -16,9 +18,11 @@ export async function fetchRawCli(taskId: string): Promise<Array<string>> {
     if (!res.ok) {
       return [];
     }
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as Partial<RawCliResponse>;
-    return Array.isArray(data.lines) ? data.lines : [];
+    const data: unknown = await res.json();
+    if (!isRecord(data) || !Array.isArray(data.lines)) {
+      return [];
+    }
+    return data.lines.filter((line): line is string => typeof line === "string");
   } catch {
     return [];
   }

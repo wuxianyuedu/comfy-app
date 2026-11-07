@@ -19,6 +19,7 @@
 import { getHistory, resolveComfyBase } from "./client";
 import { HISTORY_RETRIES, HISTORY_RETRY_DELAY_MS, state } from "./runner-state";
 import { queueTraceSummary, trace } from "./trace";
+import { isRecord } from "~/lib/is-record";
 import { sleep } from "~/lib/with-timeout";
 
 /**
@@ -36,6 +37,31 @@ export type ComfyHistoryEntry = {
   };
 };
 
+/** 把 `/history` 里取出的任意值收窄成本层的最小条目视图；
+ *  `outputs` / `status` 存在但不是期望形状时视为不合法（回落 `undefined`）。 */
+function isComfyHistoryEntry(v: unknown): v is ComfyHistoryEntry {
+  if (!isRecord(v)) {
+    return false;
+  }
+  const outputs = v.outputs;
+  if (outputs !== undefined && !isRecord(outputs)) {
+    return false;
+  }
+  const status = v.status;
+  if (status !== undefined) {
+    if (!isRecord(status)) {
+      return false;
+    }
+    if (status.messages !== undefined && !Array.isArray(status.messages)) {
+      return false;
+    }
+    if (status.status_str !== undefined && typeof status.status_str !== "string") {
+      return false;
+    }
+  }
+  return true;
+}
+
 /** 轮询 history —— ComfyUI 是「先广播完成、后写 history」，直接读会扑空。
  *
  *  ISSUE #216：本函数返回 null 时调用方只会写一句「未找到生成结果」，用户没有任何
@@ -51,9 +77,8 @@ export async function fetchHistoryEntry(promptId: string): Promise<ComfyHistoryE
       const hist = await getHistory(promptId);
       lastRaw = hist;
       lastErr = null;
-      /* SAFETY: 类型断言已复核 */
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- hist 来自 ComfyUI /history 的 JSON 响应，运行期可能是 null（类型断言把它标成 Record）
-      const entry = hist?.[promptId] as ComfyHistoryEntry | undefined;
+      const histEntry: unknown = isRecord(hist) ? hist[promptId] : undefined;
+      const entry = isComfyHistoryEntry(histEntry) ? histEntry : undefined;
       // outputs 落盘也可能晚一拍，等到有 outputs 或明确报错为止。
       if (
         entry &&

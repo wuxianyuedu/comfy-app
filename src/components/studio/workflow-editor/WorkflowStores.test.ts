@@ -5,7 +5,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import { callStoreAction, createIOEditStore, type IOEditStore } from "./WorkflowStores";
+import { callStoreAction, createIOEditStore } from "./WorkflowStores";
 import {
   registerStaleStoreDeliver,
   reportCodeUpdatedSinceLoad,
@@ -232,11 +232,8 @@ describe("callStoreAction", () => {
     const store = createIOEditStore("wf");
     /* 模拟旧实例：动作集合比当前模块少成员（旧窗口里 setIOValues /
      *  resetIOPreviewValues 这类已删动作还在调用点，新实例上则已经不存在）。 */
-    /* SAFETY: 类型断言已复核 */
-    const stale = {
-      /* SAFETY: 类型断言已复核 */
-      getState: () => ({}) as unknown as IOEditStore,
-    } as unknown as Parameters<typeof callStoreAction<IOEditStore>>[0];
+    const stale = createIOEditStore("wf");
+    Reflect.deleteProperty(stale.getState(), "toggleIORequired");
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {
       expect(() => callStoreAction(stale, "toggleIORequired", () => undefined)).not.toThrow();
@@ -255,11 +252,8 @@ describe("callStoreAction", () => {
     const deliveries: Array<{ title: string }> = [];
     registerStaleStoreDeliver((n) => deliveries.push(n));
     reportCodeUpdatedSinceLoad();
-    /* SAFETY: 类型断言已复核 */
-    const stale = {
-      /* SAFETY: 类型断言已复核 */
-      getState: () => ({}) as unknown as IOEditStore,
-    } as unknown as Parameters<typeof callStoreAction<IOEditStore>>[0];
+    const stale = createIOEditStore("wf");
+    Reflect.deleteProperty(stale.getState(), "toggleIORequired");
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {
       callStoreAction(stale, "toggleIORequired", () => undefined);

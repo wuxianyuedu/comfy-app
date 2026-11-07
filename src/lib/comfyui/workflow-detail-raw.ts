@@ -196,11 +196,14 @@ export function buildRawView(
   if (raw && Array.isArray(raw.nodes)) {
     const rawGraph = buildRawViewGraph(raw);
     const rawViewNodes: Array<DetailNodeView> = Object.entries(rawGraph).map(([nodeId, n]) => {
-      /* 与旧 `n?.class_type || (n?.type as string) || "?"` 语义逐值等价
+      /* 与旧 `n?.class_type || n?.type || "?"` 语义逐值等价
        *  （`a || b` ≡ `a ? a : b`）：class_type/type 为空串时同样回退。 */
-      /* SAFETY: 类型断言已复核 */
-      // oxlint-disable-next-line strict-boolean-expressions -- class_type/type 是外部图记录的 unknown 字段，空串等 falsy 形态都要回退占位符，保留原真值语义
-      const classType: string = n.class_type ? n.class_type : n.type ? (n.type as string) : "?";
+      const classType: string =
+        n.class_type === ""
+          ? typeof n.type === "string" && n.type !== ""
+            ? n.type
+            : "?"
+          : n.class_type;
       const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
       let resolvedTitle: string | undefined;
       if (isUuidClass && raw.definitions?.subgraphs) {

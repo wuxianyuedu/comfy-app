@@ -13,7 +13,7 @@ import type { SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
 
 import { env } from "~/env";
 import { openNodeSqlite, type NodeSqliteHandle } from "~/lib/sqlite-driver";
-import { applySqlitePragmas } from "~/lib/sqlite-pragmas";
+import { gateProxyWithPragmas } from "~/lib/sqlite-pragmas";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { sql } from "drizzle-orm";
 import * as schema from "./db/schema";
@@ -37,19 +37,22 @@ function resolveDbPath(url: string): string {
 // pointing at the same file regardless of process CWD shifts.
 const nodeSqlite = openNodeSqlite(resolveDbPath(env.DATABASE_URL ?? DEFAULT_DB_FILE));
 
-// Pragma init is awaited at top level so the exported `db` never runs a query before WAL/foreign_keys are on;
-// the list lives in `~/lib/sqlite-pragmas`, which deliberately holds only the two database-level pragmas and
-// leaves the lock-wait budget unset -- a contended write fails fast rather than stalling the event loop (#1250).
-// `applySqlitePragmas` survives a concurrent WAL switch: `next build` collects page data with 7 workers, a new
-// db file grants the lock to only one (measured 3/8 SQLITE_BUSY); the unhandled rejection kills the build (#1282).
-await applySqlitePragmas(nodeSqlite);
+// PRAGMA init must NOT be a top-level await (ISSUE #3252): TLA makes Turbopack
+// emit this module as an async module, and `db` is imported by
+// `repository-base` -- the base class of every `class X extends
+// DrizzleRepository`. Under an async module those `extends` clauses evaluate
+// before the base class is exported ("Class extends value undefined") when the
+// instrumentation hook loads the film/repository graph. Gate the drizzle proxy
+// on the init promise instead: the module stays synchronous, while every query
+// still waits for WAL/foreign_keys (with the #1282 busy retry) before it runs.
+const gatedProxy = gateProxyWithPragmas(nodeSqlite);
 
 /* SAFETY: reviewed */
 const globalForDb = globalThis as unknown as {
   db: SqliteRemoteDatabase<typeof schema> | undefined;
 };
 
-export const db = globalForDb.db ?? drizzle(nodeSqlite.proxy, { schema });
+export const db = globalForDb.db ?? drizzle(gatedProxy, { schema });
 
 /** The retired libsql driver exposed the client as `$client`; tests use that
  *  property (and `closeDb`) to release the handle before unlinking a temp

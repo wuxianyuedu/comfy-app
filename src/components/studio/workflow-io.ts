@@ -3,6 +3,7 @@
  * 数据来源口径：**只能**取画布编辑器 IO 编辑模式里作者亲手勾选的 `workflowIO` —— 从不扫图猜参数（作者没勾的 pin 就不是对外参数）。服务端在数据到达前为每个条目补上 ComfyUI 类型与当前值（`src/app/api/workflows/[id]/route.ts` 的「workflowIO 富化」段）。
  */
 
+import { isPlainRecord } from "~/lib/is-record";
 import { upperToken } from "~/lib/upper-token";
 import { runtimeNodeId } from "~/lib/workflow/workflow-param-mapping";
 import {
@@ -247,6 +248,15 @@ export function numericBounds(e: WorkflowIOEntry): {
     : { min: 0, max: 1_000_000, step: 1, decimalPlaces: 0 };
 }
 
+/** 派生拷贝上可能带 `ioKey`（类型未声明），运行期收窄后再读。 */
+function readIoKey(entry: unknown): string | undefined {
+  if (!isPlainRecord(entry)) {
+    return undefined;
+  }
+  const value = entry.ioKey;
+  return typeof value === "string" ? value : undefined;
+}
+
 /** 两条记录是不是同一个 pin —— 撞名判定必须先排除「条目自己」。不能只看对象身份：同一行渲染时会按当前模式派生拷贝（`{...entry, seedMode}`，见 DynamicWorkflowFormView 的 renderRow；GroupedControls 折叠态的行也是现造的拷贝），身份比较会把每一行判成「与自撞名 → 回退 name」，显示名掉回 `value_1`（ISSUE #349 的根因）。
  *  判据按可靠度递降：对象身份 → `ioKey` →「节点 + 方向 + 槽位名」三元组（三元组就是 ioKey 的拼法，任何一份拷贝都认得出来）。
  */
@@ -254,10 +264,8 @@ function isSamePin(a: WorkflowIOEntry, b: WorkflowIOEntry): boolean {
   if (a === b) {
     return true;
   }
-  /* SAFETY: 类型断言已复核 */
-  const aKey = (a as { ioKey?: string }).ioKey;
-  /* SAFETY: 类型断言已复核 */
-  const bKey = (b as { ioKey?: string }).ioKey;
+  const aKey = readIoKey(a);
+  const bKey = readIoKey(b);
   if (aKey !== undefined && bKey !== undefined) {
     return aKey === bKey;
   }

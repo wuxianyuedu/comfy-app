@@ -13,34 +13,51 @@
  *
  * db 用**内存 SQLite + 真 Drizzle**（`tests/helpers/test-db.ts` 那套 better-sqlite3
  * 后端）。`createTaskRepoImpl` 形参类型是 `TaskRepoDb`（libsql 客户端），本文件
- * 里做一次 `as unknown as TaskRepoDb`——不是"给实现加抽象妥协"，而是
+ * 用一个运行时守卫把测试库收窄到这个形状——不是"给实现加抽象妥协"，而是
  * **测试基建（better-sqlite3）与运行时（libsql）在结构上兼容同一份 drizzle
  * builder API**、只是类型名义不同。P3 §5 ADR 附录 §11.1 决定 1 里明确了这条
- * 断言的落点。
+ * 收窄的落点。
  */
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { createTestDb, seedUser, type TestDb } from "../../../tests/helpers/test-db";
 import { task } from "~/server/db/schema";
+import { isRecord } from "~/lib/is-record";
 import { createTaskRepoImpl, type TaskRepoImpl } from "./repository-task-impl";
 import type { TaskRepoDb } from "./repository-task-impl-types";
 
 let tdb: TestDb;
+/** 测试库的 drizzle 客户端视图（形状与 `TaskRepoDb` 对齐）。 */
+let repoDb: TaskRepoDb;
 let impl: TaskRepoImpl;
 /** host 归属那一片的实例：与 `impl` 同库、只差构造期的 owner 声明。 */
 let hostImpl: TaskRepoImpl;
 let userId: string;
 
+/** 测试库是否具备 drizzle 客户端的方法（better-sqlite3 与运行时形状差异见
+ *  `repository-task-impl-types`）。 */
+function isTaskRepoDb(value: unknown): value is TaskRepoDb {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const required: Array<string> = ["select", "insert", "update", "delete", "transaction"];
+  return required.every((method) => typeof value[method] === "function");
+}
+
+function requireTaskRepoDb(value: unknown): TaskRepoDb {
+  if (!isTaskRepoDb(value)) {
+    throw new Error("测试库缺少 drizzle 客户端方法");
+  }
+  return value;
+}
+
 beforeAll(() => {
   tdb = createTestDb();
-  // 内存测试库结构上是同一份 drizzle builder，运行时类型名义不同（better-sqlite3
-  // vs libsql）；一次性断言、之后所有 impl 方法都用这个 `db`。
-  /* SAFETY: 类型断言已复核 */
-  impl = createTaskRepoImpl(tdb as unknown as TaskRepoDb, {
+  repoDb = requireTaskRepoDb(tdb);
+  impl = createTaskRepoImpl(repoDb, {
     owner: "inline",
   });
-  /* SAFETY: 类型断言已复核 */
-  hostImpl = createTaskRepoImpl(tdb as unknown as TaskRepoDb, {
+  hostImpl = createTaskRepoImpl(repoDb, {
     owner: "host",
   });
 });
@@ -51,12 +68,10 @@ beforeEach(() => {
   seedUser(tdb, { id: userId, email: `${userId}@x.io` });
 });
 
-/** 建一行任务。`extra` 里的字段直接落到 task 表（比 seedTask 少了类型限制）。 */
-async function seed(extra: Record<string, unknown> = {}): Promise<string> {
+/** 建一行任务。`extra` 里的字段直接落到 task 表（与基点同名列时以 `extra` 为准）。 */
+async function seed(extra: Partial<typeof task.$inferInsert> = {}): Promise<string> {
   const id = `t-${Math.random().toString(36).slice(2, 10)}`;
-  /* SAFETY: 类型断言已复核 */
-  /* SAFETY: 类型断言已复核 */
-  await (tdb as unknown as TaskRepoDb).insert(task).values({
+  const row: typeof task.$inferInsert = {
     id,
     userId,
     type: "TXT2IMG",
@@ -64,14 +79,13 @@ async function seed(extra: Record<string, unknown> = {}): Promise<string> {
     params: {},
     workflowName: "w",
     status: "QUEUED",
-    ...extra,
-  } as never);
+  };
+  await repoDb.insert(task).values(Object.assign(row, extra));
   return id;
 }
 
 function readRow(id: string): Record<string, unknown> | undefined {
-  /* SAFETY: 类型断言已复核 */
-  return (tdb.$tables.tasks as Array<Record<string, unknown>>).find((r) => r.id === id);
+  return tdb.$tables.tasks.find((r) => r.id === id);
 }
 
 /** `claimedAt` 的毫秒值（没写过就是 null）。
@@ -329,7 +343,7 @@ describe("listStaleUnownedQueued（reaper 的死信扫描：5 条件 AND，ISSUE
     expect(got.find((r) => r.id === id)?.claimedBy).toBe(unowned);
   });
 
-  const broken: Array<[string, Record<string, unknown>]> = [
+  const broken: Array<[string, Partial<typeof task.$inferInsert>]> = [
     ["已 finishedAt 不返", { finishedAt: new Date() }],
     ["createdAt 不早于 cutoff 不返（还没过时限）", { createdAt: freshDate }],
     ["有 promptId 不返（归 ComfyUI 负责，由 listStaleRunning 对账）", { promptId: "pid" }],

@@ -5,6 +5,8 @@
 // 眼里的消费方（同目录 `.test.ts` 算数）。
 
 import { describe, expect, it, vi } from "vitest";
+import type { ChildProcess } from "node:child_process";
+import { isRecord } from "~/lib/is-record";
 import type { TaskWriteOutcome } from "../core/repository-task-impl";
 
 // `./reaper`（模块级副作用）与 `./executor`（barrel）会拉起 reaper 心跳 +
@@ -78,6 +80,11 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
   const runnerLog = { warn: vi.fn() };
   let seq = 0;
 
+  /** 收窄成「带着 `kill` 的子进程句柄」，即取消路径真正读取的那一项。 */
+  function isCliProcHandle(v: unknown): v is ChildProcess {
+    return isRecord(v) && typeof v.kill === "function";
+  }
+
   function setup(
     row: { promptId: string | null; status: string } | null,
     options: {
@@ -99,8 +106,12 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
     vi.mocked(client.interrupt).mockReset().mockResolvedValue(undefined);
     const kill = vi.fn();
     if (inFlight) {
-      /* SAFETY: 类型断言已复核 */
-      cli.cliProcs.set(taskId, { kill } as never);
+      /* `cliProcs` 的消费侧只读 `kill`；按运行期实际用到的字段校验形状。 */
+      const handle: unknown = { kill };
+      if (!isCliProcHandle(handle)) {
+        throw new Error("comfy-cli 句柄夹具形状不符");
+      }
+      cli.cliProcs.set(taskId, handle);
     } else {
       cli.cliProcs.delete(taskId);
     }

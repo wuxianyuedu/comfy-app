@@ -29,15 +29,17 @@ describe("useExternalAction", () => {
   });
 
   it("动作抛错时用 errorMessage 兜底（失败路径必须有可读文案）", async () => {
-    const report = vi.fn();
+    const report = vi.fn<(kind: "ok" | "err", detail: string) => void>();
     const { result } = renderHook(() => useExternalAction({ target: "folder", report }));
     await act(async () => {
       await result.current.run(() => {
         throw new Error("ECONNREFUSED");
       });
     });
-    /* SAFETY: 类型断言已复核 */
-    const first = report.mock.calls[0] as [string, string];
+    const first = report.mock.calls[0];
+    if (!first) {
+      throw new Error("report 未被调用");
+    }
     expect(first[0]).toBe("err");
     expect(first[1]).toContain("应用服务");
   });

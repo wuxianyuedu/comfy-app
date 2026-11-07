@@ -352,10 +352,10 @@ export function FinalComposer({
                       className="bg-subtle! border-border! text-xs"
                       labels={TRANSITION_LABELS}
                       onChange={(value) => {
-                        updateShot(shot.id, {
-                          /* SAFETY: 类型断言已复核 */
-                          transition: value as Transition,
-                        });
+                        const transition = TRANSITIONS.find((item) => item === value);
+                        if (transition !== undefined) {
+                          updateShot(shot.id, { transition });
+                        }
                       }}
                       options={TRANSITIONS}
                       placeholder="转场"
@@ -370,10 +370,10 @@ export function FinalComposer({
                       className="bg-subtle! border-border! text-xs"
                       labels={MOTION_LABELS}
                       onChange={(value) => {
-                        updateShot(shot.id, {
-                          /* SAFETY: 类型断言已复核 */
-                          motion: value as MotionLevel,
-                        });
+                        const motion = MOTIONS.find((item) => item === value);
+                        if (motion !== undefined) {
+                          updateShot(shot.id, { motion });
+                        }
                       }}
                       options={MOTIONS}
                       placeholder="运动"

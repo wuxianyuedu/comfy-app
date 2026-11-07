@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, cleanup } from "@testing-library/react";
 import { useWorkshopPipeline } from "~/components/workshop/hooks/use-workshop-pipeline";
 import { createProject, getActiveId } from "~/lib/project-canvas/canvas-store";
+import { isPlainRecord } from "~/lib/is-record";
 
 vi.mock("~/lib/workshop/character-portrait-client", () => ({
   generateWorkflowPortrait: vi.fn(),
@@ -76,8 +77,14 @@ describe("useWorkshopPipeline 剧本持久化回归（Phase 2：按 proj_* 键�
     const key = `comfyapp.workshop.draft.${projectId}.v1`;
     const stored: string | null = localStorage.getItem(key);
     expect(stored).toBeTruthy();
-    /* SAFETY: 类型断言已复核 */
-    expect((JSON.parse(stored!) as { scriptMarkdown: string }).scriptMarkdown).toBe(SCRIPT);
+    if (stored === null) {
+      throw new Error("卸载未把剧本落盘");
+    }
+    const parsed: unknown = JSON.parse(stored);
+    if (!isPlainRecord(parsed) || typeof parsed.scriptMarkdown !== "string") {
+      throw new Error("落盘的草稿不是预期的 JSON 对象");
+    }
+    expect(parsed.scriptMarkdown).toBe(SCRIPT);
 
     // 切回 → 重挂载，剧本应恢复而非清空
     const second = renderHook(() => useWorkshopPipeline());

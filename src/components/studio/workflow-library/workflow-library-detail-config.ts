@@ -3,6 +3,7 @@
 
 import type { SourceModalData } from "~/components/studio/SourceModal";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
+import { isPlainRecord } from "~/lib/is-record";
 import type { WorkflowRow } from "./workflow-library-config";
 
 /** 详情面板的四个页签 —— 数组顺序即渲染顺序，**第一项也是默认页签**。
@@ -55,13 +56,14 @@ export type DetailTemplate = {
   workflowIO?: unknown;
 };
 
+/** 表内每个值都应是条目对象（旧数据里可能混进数组 / 非对象）。 */
+function isWorkflowIOMap(value: unknown): value is WorkflowIOMap {
+  return isPlainRecord(value) && Object.values(value).every(isPlainRecord);
+}
+
 /** workflowIO 在旧数据里可能存成数组或非对象，这里收紧成 Map 或 null。 */
 export function normalizeWorkflowIO(raw: unknown): WorkflowIOMap | null {
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-    return null;
-  }
-  /* SAFETY: 类型断言已复核 */
-  return raw as WorkflowIOMap;
+  return isWorkflowIOMap(raw) ? raw : null;
 }
 
 /** 「源文件」展示磁盘上的原始导入 JSON（用户当初导入的那个文件）：库里的

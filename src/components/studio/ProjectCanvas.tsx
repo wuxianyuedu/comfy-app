@@ -17,11 +17,11 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import { downloadJson } from "~/lib/browser-io";
+import { isPlainRecord } from "~/lib/is-record";
 import { lastSegments } from "~/lib/path-display";
 import { CanvasNode } from "./project-canvas/CanvasNode";
 import { WorkflowNodeArdot } from "./project-canvas/WorkflowNodeArdot";
 import {
-  type CanvasNodeData,
   type CanvasNodeType,
   NODE_META,
   defaultData,
@@ -80,12 +80,18 @@ const edgeTypes = {
   default: ProjectEdge,
 } as const;
 
+/** 节点类别白名单：`NODE_META` 的键即全部合法档位。 */
+function isNodeKind(value: unknown): value is NodeKind {
+  return typeof value === "string" && Object.hasOwn(NODE_META, value);
+}
+
 /* MiniMap 颜色表提到模块级 Map —— 好让 `nodeColor` 回调保持引用稳定：
  * MiniMap 只在绘制时调用它，不会因为拖拽 / 状态抖动期间回调换了引用
  * 而重新渲染。 */
-/* SAFETY: 类型断言已复核 */
 const MINIMAP_COLOR_BY_KIND = new Map(
-  (Object.keys(NODE_META) as Array<NodeKind>).map((k) => [k, NODE_META[k].color]),
+  Object.keys(NODE_META)
+    .filter(isNodeKind)
+    .map((k) => [k, NODE_META[k].color]),
 );
 
 /* 默认连线选项与 proOptions 提到模块级常量 —— 内联对象字面量每次渲染都重建，
@@ -105,11 +111,39 @@ const PRO_OPTIONS = { hideAttribution: true };
 
 type PlaceFlowFn = Parameters<typeof placeCanvasNode>[0]["flow"]["screenToFlowPosition"];
 
+/** 回写器只保证 React Flow 的 `Node`；本画布的表恒为 CanvasNodeType —— 用守卫收回。 */
+function isCanvasNodeType(node: FlowNode): node is CanvasNodeType {
+  return node.type === "canvasNode" || node.type === "workflowArdot";
+}
+
 /** 节点上的镜头 id（非镜头节点没有 `data.shotId`）。 */
 function shotIdOfNode(n: CanvasNodeType): string | undefined {
   /* SAFETY: 类型断言已复核 */
   const data = n.data as { shotId?: string } | undefined;
   return data?.shotId;
+}
+
+/** `production.shots`（`unknown[]`）逐项收窄：缺必填字段 / 类型不符的记录不投影。 */
+function isShot(value: unknown): value is Shot {
+  if (!isPlainRecord(value)) {
+    return false;
+  }
+  return (
+    typeof value.id === "string" &&
+    value.id !== "" &&
+    typeof value.index === "number" &&
+    Number.isInteger(value.index) &&
+    typeof value.sceneId === "string" &&
+    typeof value.sceneHeading === "string" &&
+    typeof value.shotType === "string" &&
+    typeof value.description === "string" &&
+    Array.isArray(value.characterIds) &&
+    value.characterIds.every((id) => typeof id === "string") &&
+    typeof value.status === "string" &&
+    typeof value.prompt === "string" &&
+    typeof value.negativePrompt === "string" &&
+    isPlainRecord(value.params)
+  );
 }
 
 /** 把 production.shots 物化 / 合并进画布节点（Phase 3c-2a，幂等）。
@@ -120,9 +154,7 @@ function materializeProductionShots(
   prod: ProductionData | null,
   screenToFlowPosition: PlaceFlowFn,
 ): Array<CanvasNodeType> {
-  const shots =
-    /* SAFETY: 类型断言已复核 */
-    prod && Array.isArray(prod.shots) ? (prod.shots as Array<Shot>) : [];
+  const shots = prod && Array.isArray(prod.shots) ? prod.shots.filter(isShot) : [];
   if (shots.length === 0) {
     return nodes;
   }
@@ -229,10 +261,11 @@ function CanvasInner({
   /* 选中节点 → 相关连线高亮：把「上下游」标记写回 edges，由画布的
    * `smoothstep` 边渲染层加成不同样式。 */
   useRelatedEdgesHighlight(setEdges, {
-    /* 节点表的 setter 声明的是 CanvasNodeType[]，而这里只改节点 data 上的端口
-     *  关注字段（结构上仍是同一批节点）—— 收窄成 Node[] 会挡在类型门口。 */
-    /* SAFETY: 类型断言已复核 */
-    setNodes: setNodes as unknown as (updater: (nodes: Array<FlowNode>) => Array<FlowNode>) => void,
+    /* 写回器只声明 Node（不绑 data 形状），本画布的表恒为 CanvasNodeType ——
+     *  回写结果经守卫收回画布节点类型，写入内容不变。 */
+    setNodes: (updater) => {
+      setNodes((nodes) => updater(nodes).filter(isCanvasNodeType));
+    },
   });
 
   /* 双 rAF fitView：等 ReactFlow 完成本轮布局后再 fit，
@@ -326,9 +359,15 @@ function CanvasInner({
    *（类别色是静态的），所以拖节点时 MiniMap 不会因为回调
    * 换了引用而重新渲染。 */
   const miniMapNodeColor = useCallback((node: { data?: unknown }) => {
-    /* SAFETY: 类型断言已复核 */
-    const kind = (node.data as CanvasNodeData | undefined)?.kind;
-    return (kind ? MINIMAP_COLOR_BY_KIND.get(kind) : undefined) ?? "#6B7280";
+    const data = node.data;
+    if (!isPlainRecord(data)) {
+      return "#6B7280";
+    }
+    const kind = data.kind;
+    if (!isNodeKind(kind)) {
+      return "#6B7280";
+    }
+    return MINIMAP_COLOR_BY_KIND.get(kind) ?? "#6B7280";
   }, []);
 
   /* 右键菜单 + 落子的一簇回调（抽到 useCanvasMenu，CanvasInner 只留编排，§12.13）。 */

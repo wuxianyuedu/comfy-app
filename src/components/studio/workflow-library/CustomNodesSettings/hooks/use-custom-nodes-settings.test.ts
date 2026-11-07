@@ -11,6 +11,7 @@ vi.mock("~/config/custom-nodes", () => ({
 }));
 
 import { getCustomNodesManifest, refreshCustomNodes } from "~/config/custom-nodes";
+import { isPlainRecord } from "~/lib/is-record";
 import { useCustomNodesSettings } from "./use-custom-nodes-settings";
 
 const mockedManifest = vi.mocked(getCustomNodesManifest);
@@ -46,8 +47,7 @@ function settingsBlob(over: Record<string, unknown> = {}) {
     settings: {
       paths: ["D:/comfy/custom_nodes"],
       localWorkflowPaths: [],
-      /* SAFETY: 类型断言已复核 */
-      ...(settings as object | undefined),
+      ...(isPlainRecord(settings) ? settings : {}),
     },
   });
 }

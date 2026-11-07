@@ -18,8 +18,7 @@ function setShellForm(on: boolean) {
       value: { invoke: () => null, transformCallback: () => 0 },
     });
   } else {
-    /* SAFETY: 类型断言已复核 */
-    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+    Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
   }
 }
 

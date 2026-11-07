@@ -24,6 +24,7 @@
 // 定位实际端口。端口上有别的 ComfyUI 响应 ≠ 配置路径的实例在运行。
 
 import { clamp } from "~/lib/clamp";
+import { isRecord } from "~/lib/is-record";
 import { getSettingsSync } from "../app-settings/app-settings.server";
 import { COMFYUI_DEFAULT_PORT, comfyUiBaseUrl, LOOPBACK_HOST } from "../endpoints";
 import { baseForLocalPort, queryInstanceByPath } from "./instance-port";
@@ -338,8 +339,8 @@ export async function getHistory(promptId: string): Promise<Record<string, unkno
     // 本地 ComfyUI 正常秒回；此超时只兜「连上却不返回」的病态挂死，给足余量。
     signal: AbortSignal.timeout(15_000),
   });
-  /* SAFETY: 类型断言已复核 */
-  return (await res.json()) as Record<string, unknown>;
+  const raw: unknown = await res.json();
+  return isRecord(raw) ? raw : {};
 }
 
 /** `getView` 的失败带着 ComfyUI 回的状态码。
@@ -378,6 +379,11 @@ export async function getView(filename: string, subfolder: string, type: string)
   return Buffer.from(await res.arrayBuffer());
 }
 
+/** 整个数组都是字符串才算合法（有一个坏元素就整体回落，保持「空列表」语义）。 */
+function isStringList(value: unknown): value is Array<string> {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
 // 返回某个模型目录在磁盘上的真实文件名列表。
 export async function listModels(folder: string): Promise<Array<string>> {
   try {
@@ -387,9 +393,8 @@ export async function listModels(folder: string): Promise<Array<string>> {
     if (!res.ok) {
       return [];
     }
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as Array<string>;
-    return Array.isArray(data) ? data : [];
+    const raw: unknown = await res.json();
+    return isStringList(raw) ? raw : [];
   } catch {
     return [];
   }
@@ -412,10 +417,9 @@ export async function listModelFolders(): Promise<Array<string>> {
     if (!res.ok) {
       return [];
     }
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as Array<string>;
-    return Array.isArray(data)
-      ? data.filter((datum) => typeof datum === "string" && datum.length > 0)
+    const raw: unknown = await res.json();
+    return Array.isArray(raw)
+      ? raw.filter((datum): datum is string => typeof datum === "string" && datum.length > 0)
       : [];
   } catch {
     return [];
@@ -440,10 +444,8 @@ export async function uploadImage(
   if (!res.ok) {
     throw new Error(`ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`);
   }
-  /* SAFETY: 类型断言已复核 */
-  return (await res.json()) as {
-    name?: string;
-  };
+  const raw: unknown = await res.json();
+  return isRecord(raw) && typeof raw.name === "string" ? { name: raw.name } : {};
 }
 
 /** 让 ComfyUI 中断**当前正在执行的这一轮**（全局停、不带 prompt 参数——所以
@@ -498,6 +500,20 @@ type ComfyDevice = {
   vram_used?: number;
 };
 
+/** 单块设备的形状收窄：可选字段出现时必须是对应类型。 */
+function isComfyDevice(value: unknown): value is ComfyDevice {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    (value.name === undefined || typeof value.name === "string") &&
+    (value.type === undefined || typeof value.type === "string") &&
+    (value.vram_free === undefined || typeof value.vram_free === "number") &&
+    (value.vram_total === undefined || typeof value.vram_total === "number") &&
+    (value.vram_used === undefined || typeof value.vram_used === "number")
+  );
+}
+
 function pickGpu(devices: Array<ComfyDevice> | undefined): ComfyDevice | undefined {
   if (!Array.isArray(devices) || devices.length === 0) {
     return undefined;
@@ -519,17 +535,18 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
     if (!res.ok) {
       return null;
     }
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as {
-      devices?: Array<ComfyDevice>;
-      system?: { ram_free?: number; ram_total?: number };
-    };
-    const dev = pickGpu(data.devices);
+    const raw: unknown = await res.json();
+    const data: Record<string, unknown> = isRecord(raw) ? raw : {};
+    const devices: Array<ComfyDevice> = Array.isArray(data.devices)
+      ? data.devices.filter(isComfyDevice)
+      : [];
+    const system: Record<string, unknown> = isRecord(data.system) ? data.system : {};
+    const dev = pickGpu(devices);
     const vramTotal = dev?.vram_total ?? 0;
     const vramFree = clamp(dev?.vram_free ?? vramTotal, 0, vramTotal);
     const vramUsed = vramTotal - vramFree;
-    const ramTotal = data.system?.ram_total ?? 0;
-    const ramFree = data.system?.ram_free ?? 0;
+    const ramTotal = typeof system.ram_total === "number" ? system.ram_total : 0;
+    const ramFree = typeof system.ram_free === "number" ? system.ram_free : 0;
     // 并行查 nvidia-smi 物理专用显存：nvidia-smi 反映本机物理 GPU，与
     // ComfyUI 的 CUDA 逻辑口径并列展示供对照。查询失败 / 非 NVIDIA 卡
     // 返回 null，不影响 ComfyUI 主数据与在线状态。

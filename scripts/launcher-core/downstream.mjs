@@ -104,7 +104,18 @@ export async function syncDependencies(ctx, root, deps = {}) {
    * 也起不来」，排查方向还被指错（按 §13.6.3 会被读成「本机跑不了门禁」）。
    * 判据按**归属**而不是按端口有没有人：隔壁检出占着同一个端口不会锁本检出的
    * `node_modules`，拿「端口被占」当拦截条件会在多检出并行下天天误拦。 */
-  const live = await runningAppInstances(root);
+  let live;
+  try {
+    live = await runningAppInstances(root);
+  } catch (error) {
+    /* 端口 / 进程探测没跑起来 ⇒ 这一格**没有结论**，绝不能当成「没有实例在跑」
+     * 而继续 `pnpm install`（那正是硬规则 9 的 fail-open，§13.6.3）。 */
+    return (
+      `归属判据没量到（${error instanceof Error ? error.message : String(error)}）：` +
+      "端口 / 进程探测命令没跑起来，既不是「没有实例在跑」，也不是「判到有实例在跑」。\n" +
+      "已停止补装依赖。出口：复跑启动器让判据给出结论；在拿到结论之前不要手工执行 pnpm install。"
+    );
+  }
   if (live.running) {
     return (
       `本检出的应用服务正在运行（PID ${live.pids.join(", ") || "见 run/launcher-session.json"}），` +

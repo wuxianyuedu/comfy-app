@@ -115,9 +115,10 @@ export function appearanceVars(prefs: AppearancePrefs): Record<string, string> {
 /** 把变量写到给定元素上（默认 `<html>`，与 next-themes 的 `dark` class 同一层）。 */
 export function applyAppearance(
   prefs: AppearancePrefs,
-  element: HTMLElement | null | undefined = typeof document === "undefined"
-    ? null
-    : document.documentElement,
+  element:
+    | { style: { setProperty: (name: string, value: string) => void } }
+    | null
+    | undefined = typeof document === "undefined" ? null : document.documentElement,
 ): void {
   if (!element) {
     return;

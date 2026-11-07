@@ -20,6 +20,7 @@
 // 状态查询。
 
 import { startPollTimer } from "~/lib/poll-timer";
+import { isRecord } from "~/lib/is-record";
 import type { ComfyStateChange } from "~/lib/comfyui/state-watch";
 
 /** 单次长轮询的请求上限：比服务端的窗口（25s）宽一点，只兜住病态挂死的连接。 */
@@ -45,28 +46,38 @@ const st: StateClientGlobal = (globalThis.__comfyStateClient_v1 ??= {});
 
 const listeners = new Set<Listener>();
 
-/** 帧形状收窄：外部输入，逐字段判型，不做类型断言。 */
+/** 合法来源白名单：与服务端 `ComfyStateChangeKind` 的取值保持一致。 */
+const STATE_CHANGE_KINDS: ReadonlyArray<ComfyStateChange["kind"]> = [
+  "start",
+  "ready",
+  "stop",
+  "exit",
+  "config",
+];
+
+function isStateChangeKind(value: unknown): value is ComfyStateChange["kind"] {
+  return typeof value === "string" && STATE_CHANGE_KINDS.some((kind) => kind === value);
+}
+
+/** 帧形状收窄：外部输入，逐字段判型。 */
 function parseChange(raw: unknown): ComfyStateChange | null {
-  if (typeof raw !== "object" || raw === null) {
+  if (!isRecord(raw)) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  const o = raw as Record<string, unknown>;
   if (
-    typeof o.seq !== "number" ||
-    !Number.isFinite(o.seq) ||
-    typeof o.at !== "number" ||
-    typeof o.kind !== "string" ||
-    typeof o.detail !== "string"
+    typeof raw.seq !== "number" ||
+    !Number.isFinite(raw.seq) ||
+    typeof raw.at !== "number" ||
+    !isStateChangeKind(raw.kind) ||
+    typeof raw.detail !== "string"
   ) {
     return null;
   }
   return {
-    seq: o.seq,
-    at: o.at,
-    /* SAFETY: 类型断言已复核 */
-    kind: o.kind as ComfyStateChange["kind"],
-    detail: o.detail,
+    seq: raw.seq,
+    at: raw.at,
+    kind: raw.kind,
+    detail: raw.detail,
   };
 }
 
