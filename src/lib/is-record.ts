@@ -65,6 +65,5 @@ export function isPlainRecord(v: unknown): v is Record<string, unknown> {
  * 全部消费点的收窄结果）。要「纯对象、非数组」用 {@link isPlainRecord}。
  */
 export function asRecord(v: unknown): Record<string, unknown> | null {
-  /* SAFETY: 类型断言已复核 */
-  return typeof v === "object" && v !== null ? (v as Record<string, unknown>) : null;
+  return isRecord(v) ? v : null;
 }
