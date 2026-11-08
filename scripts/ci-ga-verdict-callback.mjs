@@ -33,12 +33,17 @@
  *    会不会仍写一条终态、以及那条终态是否参与聚合，**是接线前必须补的探针读数**，
  *    本骨架不假装它已解决（详见 `.cnb.yml` 该事件上方的注释）。
  *
- * ## fail-closed 三态
+ * ## 退出码只表「送达」，不表「判了什么」
  *
- * 前提不全（sha / 结论 / 令牌 / 仓库缺席）⇒ `2`（没判过 ≠ 判过）；
- * 结论判绿 ⇒ 发 `GA_VERDICT=success` 并退 `0`；判红或结论不认得（含
- * `cancelled` / `startup_failure` / 空串）⇒ 一律按红发 `failure` 并退 `1`；
- * 起跑没拿回 `sn` ⇒ `2`，绝不把「没发出去」读成绿。
+ * 这一跳是**信使**：把 GA 的 conclusion 折成 `GA_VERDICT` 送进 CNB 回调 build，
+ * 由那条 build 读 `GA_VERDICT` 独立折红/折绿并挂进 commit-statuses（承重在那边）。
+ * 所以本脚本的退出码只回答「结论送没送到」，不回答「GA 判绿还是判红」：
+ * 前提齐全 + 成功拿回 `sn` ⇒ `0`（送达成功），与 `verdict` 是 success 还是
+ * failure 无关；`--dry-run` 同口径。两格仍按 fail-closed 退 `2`（没判过 ≠ 判过）：
+ * 前提不全（sha / 结论 / 令牌 / 仓库缺席）、或起跑没拿回 `sn`（没发出去）——
+ * 绝不把「没发出去」读成绿，也不把「GA 判红」读成「送达失败」。
+ * 结论→`GA_VERDICT` 的折叠仍是 fail-closed：只认 success / neutral / skipped，
+ * 其余（含 `cancelled` / `startup_failure` / 空串 / 未认得的词）一律折成 failure。
  *
  * GA 侧收尾 job 带 `continue-on-error: true`：这一跳是**送结论**，不该反过来
  * 改变 GA workflow run 自己的 conclusion（CNB 回读格读的就是它）。
@@ -263,10 +268,10 @@ export async function sendCallback({ ctx, fetchImpl = fetch, log }) {
 }
 
 /**
- * 主流程：折结论 → 发回调 → 三态退码。
+ * 主流程：折结论 → 发回调 → 按「送达」退码。
  *
  * @param {{argv?: string[], env?: Record<string, string | undefined>, fetchImpl?: FetchLike, log?: (line: string) => void}} io
- * @returns {Promise<number>} 0 绿 / 1 红 / 2 没判过
+ * @returns {Promise<number>} 0 送达成功（判决内容见 GA_VERDICT）/ 2 没判过
  */
 export async function main(io = {}) {
   const argv = io.argv ?? process.argv.slice(2);
@@ -288,7 +293,7 @@ export async function main(io = {}) {
     log(`[ga-callback] DRY-RUN：POST ${ctx.endpoint}/${ctx.repo}${url}`);
     log(`[ga-callback] DRY-RUN：body=${init.body}`);
     log(`[ga-callback] DRY-RUN：conclusion=${ctx.conclusion} → ${VERDICT_ENV_KEY}=${ctx.verdict}`);
-    return ctx.verdict === "success" ? CODE.OK : CODE.FAIL;
+    return CODE.OK;
   }
   const sn = await sendCallback({ ctx, fetchImpl: io.fetchImpl, log });
   if (!sn) {
@@ -298,7 +303,8 @@ export async function main(io = {}) {
     `[ga-callback] 已起回调 build ${sn} · event=${CALLBACK_EVENT} · sha=${ctx.sha.slice(0, 8)} · ` +
       `conclusion=${ctx.conclusion} → ${VERDICT_ENV_KEY}=${ctx.verdict}`,
   );
-  return ctx.verdict === "success" ? CODE.OK : CODE.FAIL;
+  log(`[ga-callback] 送达成功，判决内容由 CNB 回调 build 读 ${VERDICT_ENV_KEY} 折红/折绿`);
+  return CODE.OK;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
