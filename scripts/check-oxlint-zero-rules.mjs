@@ -38,8 +38,9 @@
  *   排在红前面：环境不可信时红与绿都不构成结论。
  *
  *   带路径参数时不挂 `--type-aware`：自测夹具在仓外临时目录、没有 tsconfig 可挂；
- *   负控因此只选语法级规则（`unicorn/no-negated-condition`），见
- *   `tests/check-oxlint-zero-rules.test.ts`。
+ *   负控因此只选语法级规则（`unicorn/no-negated-condition`、`import/no-duplicates`、
+ *   `react/jsx-boolean-value` —— 后两条把 import / react 族的「探针真的在扫」
+ *   也钉进契约，ISSUE #3340），见 `tests/check-oxlint-zero-rules.test.ts`。
  */
 import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -161,6 +162,59 @@ function buildRulesObject() {
  */
 const NON_NATIVE_PLUGINS = [{ prefix: "perfectionist", pkg: "eslint-plugin-perfectionist" }];
 
+/** `plugins:` 声明里**不需要**出现的内建族（eslint 核心规则无需声明）。 */
+const NATIVE_PLUGIN_NO_DECLARATION = new Set(["eslint"]);
+
+/**
+ * oxlint `plugins:` 的声明语义是**替换**而不是追加：写了一行，缺省的
+ * `unicorn` / `typescript` / `oxc` 就被这一行挤掉（实测：`plugins: ["import",
+ * "react"]` 让 `unicorn(no-negated-condition)` 从 `--rules` 的 Enabled 列消失）。
+ * 所以声明集合必须包含清单涉及的**全部内建族**，不能只挑「缺的」那几个 ——
+ * `react` / `import` 不声明不生效（#2777 的教训，探针把它原样带进来过：
+ * ISSUE #3340，4 条静默空转），`unicorn` 不带上则反被挤掉。
+ *
+ * 排除两族：`eslint`（核心规则不需要声明）与全部 jsPlugins 族（它们走
+ * `jsPlugins:` 那一行，写进 `plugins:` 反而是 `Unknown plugin` —— plugins 数组
+ * 只收内建名，实测三形态见 writeProbeConfig 注释）。
+ */
+function requiredNativePlugins() {
+  const exclude = new Set([
+    ...NATIVE_PLUGIN_NO_DECLARATION,
+    ...NON_NATIVE_PLUGINS.map(({ prefix }) => prefix),
+  ]);
+  const out = new Set();
+  for (const { rule } of ZERO_RULES) {
+    const prefix = rule.slice(0, rule.indexOf("/"));
+    if (!exclude.has(prefix)) out.add(prefix);
+  }
+  return [...out].sort();
+}
+
+/**
+ * 探针配置自检：清单里的每条规则，其 namespace 必须要么是**缺省即开**的
+ * （`unicorn` / `typescript` / `oxc` / `eslint`），要么出现在生成的
+ * `plugins:` / `jsPlugins:` 里。缺了 = 该规则在探针里**静默空转**（「0 命中」
+ * 不是扫过的 0）—— 这闸就只剩自话自说了，退 2 停跑。
+ */
+/**
+ * @param {{ nativePlugins: string[], jsPluginPrefixes: string[] }} input
+ */
+function assertEveryRuleRegistered({ nativePlugins, jsPluginPrefixes }) {
+  const defaultOn = new Set(["unicorn", "typescript", "oxc", "eslint"]);
+  const covered = new Set([...defaultOn, ...nativePlugins, ...jsPluginPrefixes]);
+  const missing = [
+    ...new Set(
+      ZERO_RULES.map(({ rule }) => rule.slice(0, rule.indexOf("/"))).filter((p) => !covered.has(p)),
+    ),
+  ];
+  if (missing.length > 0) {
+    console.error(
+      `[没跑起来] ZERO_RULES 里这些 namespace 没有被探针配置注册（缺 plugins/jsPlugins 声明 ⇒ 规则静默空转）：${missing.join(", ")} —— 按 ISSUE #2777 / #3340 的口径，新增 namespace 要么进 NATIVE_PLUGINS_NEEDING_DECLARATION / NON_NATIVE_PLUGINS，要么确认它缺省即开。`,
+    );
+    process.exit(2);
+  }
+}
+
 /**
  * 解析探针需要的 jsPlugins，返回写进配置的那几行（不需要时是空串）。
  *
@@ -198,19 +252,35 @@ function jsPluginsLines() {
  * **永远停在「配置加载失败」（退 2）**。判据要判的是 ZERO_RULES 那 41 条
  * 有没有回潮：categories 全关 + 只抬清单内规则已经把预设的其余负载全部关掉了，
  * extends 在这里不带来任何在场诊断，只带来插件解析这个失败面 —— 等价化简掉；
- * 清单内**非内建** namespace 的插件由 `jsPluginsLines()` 按绝对路径显式挂上。
+ * 清单内**非内建** namespace 的插件由 `jsPluginsLines()` 按绝对路径显式挂上，
+ * **需要显式声明**的内建族由 `requiredNativePlugins()` 推导进 `plugins:` ——
+ * 两份名单都从 ZERO_RULES 推导，`assertEveryRuleRegistered()` 兜底：新规则族
+ * 没被任何一份覆盖时探针当场退 2，不再可能静默空转（ISSUE #3340）。
  */
 function writeProbeConfig() {
   const cacheDir = path.join(ROOT, "node_modules", ".cache");
   mkdirSync(cacheDir, { recursive: true });
   const configPath = path.join(cacheDir, "oxlint-zero-rules.config.mjs");
+  const nativePlugins = requiredNativePlugins();
+  const jsPluginPrefixes = NON_NATIVE_PLUGINS.filter(({ prefix }) =>
+    ZERO_RULES.some(({ rule }) => rule.startsWith(`${prefix}/`)),
+  ).map(({ prefix }) => prefix);
+  assertEveryRuleRegistered({ nativePlugins, jsPluginPrefixes });
+  /* `plugins:` 数组只收**内建**插件名 —— 写 jsPlugins 的名字（如 perfectionist）
+   * 反而报 `Unknown plugin`（实测三形态：无 plugins 行 + jsPlugins ⇒ 工作；
+   * plugins 内建 + jsPlugins ⇒ 工作；plugins 含 jsPlugins 名 ⇒ 解析失败）。
+   * jsPlugins 的 name 只是命名空间前缀，走它自己那一行。 */
+  const pluginsLine =
+    nativePlugins.length > 0
+      ? `  plugins: [${nativePlugins.map((p) => JSON.stringify(p)).join(", ")}],\n`
+      : "";
   const body = `// 本文件由 scripts/check-oxlint-zero-rules.mjs 每次运行现生成，勿手改。
 // 不 extends 预设（jsPlugins 的 specifier 从配置位置解析，pnpm 隔离布局下够不到
 // @nkzw —— 见生成方 check-oxlint-zero-rules.mjs 的 writeProbeConfig 注释）。
 import { defineConfig } from "oxlint";
 
 export default defineConfig({
-${jsPluginsLines()}  categories: {
+${pluginsLine}${jsPluginsLines()}  categories: {
     correctness: "off",
     suspicious: "off",
     perf: "off",
