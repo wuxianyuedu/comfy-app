@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/lib/workshop/api-channel-core.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workshop/api-channel.server.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workshop/character-portrait.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workshop/character-portrait.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workshop/draft-integrity.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workshop/draft-store.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workshop/draft-store.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workshop/draft-sync-client.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workshop/draft-sync-shared.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workshop/generation-client.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workshop/generation-client.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workshop/generation-log.server.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workshop/generation-log.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workshop/model-mode-contract.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workshop/types.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workshop/workflow-run.server.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workshop/workflow-run.server.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/proxy.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/agent/review.test.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/agent/run-engine.test.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用
         "src/server/agent/run-engine.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
         "src/server/api/routers/generate.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/server/api/routers/llm.test.ts", // 存量 9 处 · 清账目标 B5 · 新代码不禁用

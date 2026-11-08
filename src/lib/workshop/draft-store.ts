@@ -7,6 +7,7 @@
 //
 // 纯浏览器侧：读写都经 ~/lib/browser-storage（SSR / 隐私模式读不到即当空草稿）。
 import { readStorageItem, writeStorageJson } from "~/lib/browser-storage";
+import { isRecord } from "~/lib/is-record";
 import { emptyProject } from "~/lib/workshop/script-parser";
 import type { Character, ProjectMeta, Scene, Shot } from "~/lib/workshop/types";
 
@@ -46,6 +47,24 @@ function draftKeyFor(id: string): string {
   return `comfyapp.workshop.draft.${id}.v1`;
 }
 
+/* meta 只判「是不是对象」这一层；三类元素只判「是不是数组」——
+ *  形状问题由 `~/lib/workshop/draft-integrity` 在读侧判，与 canvas-store 同口径。 */
+function isProjectMeta(v: unknown): v is ProjectMeta {
+  return isRecord(v);
+}
+
+function isSceneList(v: unknown): v is Array<Scene> {
+  return Array.isArray(v);
+}
+
+function isCharacterList(v: unknown): v is Array<Character> {
+  return Array.isArray(v);
+}
+
+function isShotList(v: unknown): v is Array<Shot> {
+  return Array.isArray(v);
+}
+
 /** 解析并补全一份草稿：逐字段校验类型，损坏则回退成空草稿。
  *
  *  与 `~/lib/workshop/draft-sync-shared` 的 `parseDraftDto` 同一条口径：**三类元素
@@ -57,14 +76,14 @@ function parseDraft(raw: string | null): WorkshopDraft {
     return emptyWorkshopDraft();
   }
   try {
-    /* SAFETY: 类型断言已复核 */
-    const draft = JSON.parse(raw) as Partial<WorkshopDraft>;
+    const parsed: unknown = JSON.parse(raw);
+    const draft = isRecord(parsed) ? parsed : {};
     return {
-      meta: draft.meta ?? DEFAULT_META,
+      meta: isProjectMeta(draft.meta) ? draft.meta : DEFAULT_META,
       scriptMarkdown: typeof draft.scriptMarkdown === "string" ? draft.scriptMarkdown : "",
-      scenes: Array.isArray(draft.scenes) ? draft.scenes : [],
-      characters: Array.isArray(draft.characters) ? draft.characters : [],
-      shots: Array.isArray(draft.shots) ? draft.shots : [],
+      scenes: isSceneList(draft.scenes) ? draft.scenes : [],
+      characters: isCharacterList(draft.characters) ? draft.characters : [],
+      shots: isShotList(draft.shots) ? draft.shots : [],
       workflowId: typeof draft.workflowId === "string" ? draft.workflowId : "",
       videoWorkflowId: typeof draft.videoWorkflowId === "string" ? draft.videoWorkflowId : "",
     };

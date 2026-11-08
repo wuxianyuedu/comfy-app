@@ -17,19 +17,15 @@
  * `route.ts` 那一处。用例因此只断言「折到哪」，不去断言「谁能读」。
  */
 import { describe, expect, it } from "vitest";
-import type { NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 
 import { config, proxy } from "./proxy";
 
 /** Next 传进来的 `nextUrl` 是 `NextURL`（比标准 `URL` 多一个 `clone()`）；
- *  被测代码只吃 `pathname` 与 `clone()`，所以按这两样造替身，不假造整个类型。 */
+ *  直接构造真的 `NextRequest` 即可，被测代码只用到 `pathname` 与 `clone()`。
+ *  `NextURL` 会把回环地址 127.0.0.1 归一成 localhost，故落点期望值同此。 */
 function reqFor(pathnameWithQuery: string): NextRequest {
-  const url = new URL(`http://127.0.0.1:3996${pathnameWithQuery}`);
-  const nextUrl = Object.assign(url, { clone: () => new URL(url.href) });
-  /* SAFETY: 类型断言已复核 */
-  return {
-    nextUrl,
-  } as unknown as NextRequest;
+  return new NextRequest(new URL(`http://127.0.0.1:3996${pathnameWithQuery}`));
 }
 
 /** rewrite 的落点（Next 把它写在 `x-middleware-rewrite` 上）；`next()` 时为空。 */
@@ -40,24 +36,24 @@ function rewrittenTo(res: Response): string | null {
 describe("产物前缀折进带闸门的读取口", () => {
   it("/generated/<taskId>/<file> → 改写到 /api/generated/ 同一位置", () => {
     const res = proxy(reqFor("/generated/t1/img_0.png"));
-    expect(rewrittenTo(res)).toBe("http://127.0.0.1:3996/api/generated/t1/img_0.png");
+    expect(rewrittenTo(res)).toBe("http://localhost:3996/api/generated/t1/img_0.png");
   });
 
   it("多层产物路径原样折过去（素材格与项目格都比任务格深）", () => {
     const res = proxy(reqFor("/generated/materials/proj-a/ref/secret.png"));
     expect(rewrittenTo(res)).toBe(
-      "http://127.0.0.1:3996/api/generated/materials/proj-a/ref/secret.png",
+      "http://localhost:3996/api/generated/materials/proj-a/ref/secret.png",
     );
   });
 
   it("查询串保留（改写只动 pathname，不该把 ?v= 丢掉）", () => {
     const res = proxy(reqFor("/generated/t1/a.png?v=2"));
-    expect(rewrittenTo(res)).toBe("http://127.0.0.1:3996/api/generated/t1/a.png?v=2");
+    expect(rewrittenTo(res)).toBe("http://localhost:3996/api/generated/t1/a.png?v=2");
   });
 
   it("/generated 这一段本身也折过去（它会解析成产物根，交给 route 判 404）", () => {
     const res = proxy(reqFor("/generated"));
-    expect(rewrittenTo(res)).toBe("http://127.0.0.1:3996/api/generated");
+    expect(rewrittenTo(res)).toBe("http://localhost:3996/api/generated");
   });
 });
 

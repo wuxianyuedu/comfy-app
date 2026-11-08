@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { preparePortraitReferences } from "./generation-client";
 import type { Character } from "./types";
+import { isRecord } from "~/lib/is-record";
 
 function makeCharacter(id: string, portraitUrl?: string): Character {
   return {
@@ -35,11 +36,8 @@ function makeCharacter(id: string, portraitUrl?: string): Character {
 function mockPrepare(prefix: string, failUrls: ReadonlySet<string> = new Set()) {
   const mock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
     const raw = typeof init?.body === "string" ? init.body : "{}";
-    /* SAFETY: 类型断言已复核 */
-    const body = JSON.parse(raw) as {
-      image?: string;
-    };
-    const image = body.image ?? "";
+    const parsed: unknown = JSON.parse(raw);
+    const image = isRecord(parsed) && typeof parsed.image === "string" ? parsed.image : "";
     if (failUrls.has(image)) {
       return Promise.resolve(
         new Response(JSON.stringify({ error: "上传失败" }), {

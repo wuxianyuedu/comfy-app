@@ -19,7 +19,7 @@
 import { clampPct } from "~/lib/progress";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { RouterInputs } from "~/trpc/react";
-import { isRecord } from "~/lib/is-record";
+import { isPlainRecord, isRecord } from "~/lib/is-record";
 import type { Character, StyleRef } from "./types";
 import {
   extractSavedOutputs,
@@ -32,6 +32,7 @@ import {
   modeUsesFirstFrame,
   modeUsesLastFrame,
 } from "~/lib/workflow/workflow-exposed-params";
+import { parseWorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import { buildEncapsulatedInputs, type WorkshopExposedValues } from "./workflow-encapsulation";
 import { deriveEncapsulationStatus } from "./workshop-encapsulation-status";
 
@@ -175,10 +176,8 @@ function toWorkflowOption(row: Record<string, unknown>): WorkshopWorkflowOption 
     : [];
   const mode = row.defaultMode ?? taskType ?? modes[0] ?? null;
   const encapsulationReady = deriveEncapsulationStatus({
-    /* SAFETY: 类型断言已复核 */
-    io: (row.workflowIO ?? null) as Parameters<typeof deriveEncapsulationStatus>[0]["io"],
-    /* SAFETY: 类型断言已复核 */
-    paramMap: (row.paramMap ?? null) as Parameters<typeof deriveEncapsulationStatus>[0]["paramMap"],
+    io: parseWorkflowIOMap(row.workflowIO),
+    paramMap: isPlainRecord(row.paramMap) ? row.paramMap : null,
     mode: typeof mode === "string" ? mode : null,
   }).ready;
   return {

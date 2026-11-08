@@ -8,6 +8,7 @@
 import { clampInt } from "~/lib/clamp";
 import { tailWindow } from "~/lib/page-window";
 import { errorText } from "~/lib/error-message";
+import { isRecord } from "~/lib/is-record";
 
 import "server-only";
 
@@ -82,8 +83,11 @@ export async function readGenerationLogs(
           continue;
         }
         try {
-          /* SAFETY: 类型断言已复核 */
-          const raw = JSON.parse(trimmed) as Record<string, unknown>;
+          const parsed: unknown = JSON.parse(trimmed);
+          if (!isRecord(parsed)) {
+            continue;
+          }
+          const raw = parsed;
           // 行内 stage 由 append 写入；不匹配的环节直接跳过
           if (raw.stage !== stage) {
             continue;

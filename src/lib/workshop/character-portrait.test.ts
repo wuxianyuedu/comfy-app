@@ -39,6 +39,11 @@ function makePortrait(patch: Partial<CharacterPortrait> = {}): CharacterPortrait
   };
 }
 
+/** 旧草稿里 portraits 的运行时形状不可信：用真实角色对象注入运行时值，静态形状不参与构造。 */
+function characterWithRawPortraits(portraits: unknown): Character {
+  return Object.assign(makeCharacter(), { portraits });
+}
+
 describe("normalizePortrait 脏数据归一化", () => {
   it("没有可用 url 的条目一律丢弃", () => {
     expect(normalizePortrait(null)).toBeNull();
@@ -76,25 +81,15 @@ describe("normalizePortrait 脏数据归一化", () => {
 describe("portraitCandidates 读取候选", () => {
   it("无 portraits 字段（旧数据）返回空数组", () => {
     expect(portraitCandidates(makeCharacter())).toEqual([]);
-    expect(
-      portraitCandidates(
-        makeCharacter({
-          /* SAFETY: 类型断言已复核 */
-          portraits: "x" as never,
-        }),
-      ),
-    ).toEqual([]);
+    expect(portraitCandidates(characterWithRawPortraits("x"))).toEqual([]);
   });
 
   it("按时间倒序返回，坏条目被剔除", () => {
-    const character = makeCharacter({
-      /* SAFETY: 类型断言已复核 */
-      portraits: [
-        makePortrait({ url: "/u/old.png", createdAt: 1 }),
-        { url: "" } as CharacterPortrait,
-        makePortrait({ url: "/u/new.png", createdAt: 9 }),
-      ],
-    });
+    const character = characterWithRawPortraits([
+      makePortrait({ url: "/u/old.png", createdAt: 1 }),
+      { url: "" },
+      makePortrait({ url: "/u/new.png", createdAt: 9 }),
+    ]);
     expect(portraitCandidates(character).map((item) => item.url)).toEqual([
       "/u/new.png",
       "/u/old.png",
