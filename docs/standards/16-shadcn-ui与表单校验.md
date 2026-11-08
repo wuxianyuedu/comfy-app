@@ -2374,7 +2374,7 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | 落点                                                             | 归一化写法             | 可搜字段                              |
 | ---------------------------------------------------------------- | ---------------------- | ------------------------------------- |
 | `AttributeMultiSelect`（工坊角色属性多选）                       | **只 `trim()`**        | 分组选项（`options`）                 |
-| `model-library-config` 的 `filterModels` / `filterFolders`       | `trim().toLowerCase()` | 名称 + 文件名 / 目录名 + 标签         |
+| `model-library-config` 的 `filterModels`                         | `trim().toLowerCase()` | 名称 + 文件名                         |
 | `workflow-library-config` 的 `filterWorkflows` / `filterPending` | `trim().toLowerCase()` | 名称                                  |
 | `log-store` 的 `matchesSearch`                                   | `trim().toLowerCase()` | 正文 + 位置                           |
 | `LogRow` 的 `HighlightedText`                                    | `trim().toLowerCase()` | 正文分片                              |

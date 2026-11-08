@@ -30,7 +30,7 @@ import { projectRepository } from "~/lib/core/repository-project";
 import { taskRepository } from "~/lib/core/repository-task";
 import { workflowTemplateRepository } from "~/lib/core/repository-workflow-template";
 import { workflowModelTagRepository } from "~/lib/core/repository-model-tag";
-import { modelRepository, userModelConfigRepository } from "~/lib/core/repository-model";
+import { modelRepository } from "~/lib/core/repository-model";
 import { filmRepository, filmShotRepository } from "~/lib/core/repository-film";
 import { skillRepository } from "~/lib/core/repository-skill";
 import {
@@ -600,32 +600,6 @@ describe("ModelRepository", () => {
     await modelRepository.setAvailabilityByFolder("loras", false);
 
     expect(await modelRepository.countsByFolder()).toEqual({ checkpoints: 1 });
-  });
-
-  it("UserModelConfigRepository：addOrEnable / patchForUser 幂等，deleteForUser 只动本人", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
-    seedUser(tdb, { id: "u2", email: "u2@test.dev" });
-
-    const c = await userModelConfigRepository.addOrEnable("u1", "loras", "LoRA");
-    expect(c).toMatchObject({ enabled: true, isCustom: true });
-    await userModelConfigRepository.addOrEnable("u1", "loras", "LoRA 改名");
-    expect(await userModelConfigRepository.listByUser("u1")).toHaveLength(1);
-
-    // patchForUser 对不存在的行是「先插后冲突更新」
-    const patched = await userModelConfigRepository.patchForUser("u1", "checkpoints", {
-      enabled: false,
-      label: "CKPT",
-    });
-    expect(patched).toMatchObject({ enabled: false, label: "CKPT" });
-
-    expect(await userModelConfigRepository.listEnabledFolders()).toEqual(["loras"]);
-
-    await userModelConfigRepository.deleteForUser("u2", "loras");
-    expect(await userModelConfigRepository.listByUser("u1")).toHaveLength(2);
-    await userModelConfigRepository.deleteForUser("u1", "loras");
-    expect((await userModelConfigRepository.listByUser("u1")).map((r) => r.folder)).toEqual([
-      "checkpoints",
-    ]);
   });
 });
 
