@@ -2473,16 +2473,17 @@ master:
         tags:
           - cnb:arch:amd64
       docker:
-        # 官方 node 镜像（buildpack-deps 底，git 在）；git-lfs 不在 ⇒ 第一格起跑先补装。
-        image: node:26
+        # git-lfs 预装进镜像：平台按这份 Dockerfile 构建临时镜像并按 versionBy 缓存
+        # （文件不变就不重建）—— 取代原先「每跑 apt-get 装一遍」的那一格。
+        build:
+          dockerfile: .cnb/ci-image/Dockerfile
+          versionBy: .cnb/ci-image/Dockerfile
       lock:
         key: mirror-pr-$CNB_PULL_REQUEST_IID
         cancel-in-progress: true
       imports:
         - https://cnb.cool/moon-read/GITHUB_MIRROR_TOKEN/-/blob/main/envs.yml
       stages:
-        - name: git-lfs 就位（官方 node 镜像不带；失败只念读数，不冒充第二格红）
-          script: git lfs version || (apt-get update -qq && apt-get install -y -qq git-lfs) || echo "[mirror-hosted] git-lfs 就位失败 ⇒ 下一格的 LFS 跳会失败，读数见那一格"
         - name: 镜像推送（单次 · 读数档）
           script: node scripts/ci-github-mirror-push.mjs --once --readout
           timeout: 10m
