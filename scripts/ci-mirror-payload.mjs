@@ -134,11 +134,23 @@ export function pullTitleArgs(slug, number) {
  * `run` 是外部命令执行者（缺省 `makeRunner(ROOT)`）。
  *
  * @param {{env: Record<string, string | undefined>, iid: string, log: (line: string) => void, cnbJson?: (run: any, args: string[]) => any, run?: (cmd: string, args: string[]) => any}} io
- *   `env.CNB_REPO_SLUG` 是平台注入的仓库路径；`iid` 是 `CNB_PULL_REQUEST_IID`。
+ *   `env.CNB_REPO_SLUG` 是平台注入的仓库路径；`iid` 是 `CNB_PULL_REQUEST_IID`；
+ *   `env.CNB_PULL_REQUEST_TITLE` 是平台在合并类事件上注入的只读标题（自托管与
+ *   平台池同源，在场就不需要 cnb 通道 —— 托管机实验格没有 cnb 二进制，#3346）。
  * @returns {string} 可分派用的单行标题；没有时为空串
  */
 export function resolvePrTitle(io) {
   const { env, iid, log } = io;
+  /* 平台在合并类事件（pull_request / .update / .merged / .comment…）上给每个 Job
+   * 注入只读的 `CNB_PULL_REQUEST_TITLE`（同族还有 DESCRIPTION / PROPOSER / BRANCH /
+   * EVENT_URL）—— 自托管与平台池同源，读它不需要 cnb 通道。缺席（本地自查 /
+   * 旧事件形态）才落到下面的 `cnb pulls get-pull` 回读兜底。归一与回读路径同一把
+   * `normalizeRunTitle`（折叠空白 / 截断），两条路产出的标题逐字同形。 */
+  const injected = normalizeRunTitle(String(env.CNB_PULL_REQUEST_TITLE ?? ""));
+  if (injected !== "") {
+    log(`[mirror] PR 标题：${injected}（取自平台注入的 \`CNB_PULL_REQUEST_TITLE\`）`);
+    return injected;
+  }
   const readJson = io.cnbJson ?? cnbJson;
   const slug = String(env.CNB_REPO_SLUG ?? "").trim();
   if (slug === "") {
