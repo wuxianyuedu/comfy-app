@@ -3,6 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { vanillaApi } from "~/trpc/vanilla";
 import {
+  DEFAULT_PRODUCTION_RUN,
+  type ProductionRun,
+  type RunAction,
+} from "~/lib/production/run-types";
+import {
   approveRun,
   autoselectShot,
   cancelRun,
@@ -77,12 +82,10 @@ describe("fetchRunStatus", () => {
   });
 
   it("脏 run 回包 → 归一", async () => {
+    const dirtyRun = { ...DEFAULT_PRODUCTION_RUN };
+    Reflect.set(dirtyRun, "status", "乱");
     statusQuery.mockResolvedValue({
-      /* SAFETY: 类型断言已复核 */
-      run: {
-        status: "乱",
-        approvalMode: "stage",
-      } as never,
+      run: dirtyRun,
       action: { kind: "generate_script" },
     });
     const r = await fetchRunStatus("proj_1");
@@ -94,11 +97,7 @@ describe("fetchRunStatus", () => {
 describe("run 控制动作", () => {
   it("start 透传入参 + 回快照", async () => {
     startMutate.mockResolvedValue({
-      /* SAFETY: 类型断言已复核 */
-      run: {
-        status: "running",
-        approvalMode: "auto",
-      } as never,
+      run: { ...DEFAULT_PRODUCTION_RUN, status: "running", approvalMode: "auto" },
       action: { kind: "generate_script" },
     });
     const r = await startRun("proj_1", { goal: "g", approvalMode: "auto" });
@@ -112,16 +111,13 @@ describe("run 控制动作", () => {
   });
 
   it("pause / resume / approve / cancel 各调对应 mutation 并回快照", async () => {
-    const snap = {
-      /* SAFETY: 类型断言已复核 */
-      run: { status: "paused" } as never,
-      /* SAFETY: 类型断言已复核 */
-      action: { kind: "idle" as const },
+    const snap: { action: RunAction; run: ProductionRun } = {
+      run: { ...DEFAULT_PRODUCTION_RUN, status: "paused" },
+      action: { kind: "idle" },
     };
     pauseMutate.mockResolvedValue(snap);
     resumeMutate.mockResolvedValue({
-      /* SAFETY: 类型断言已复核 */
-      run: { status: "running" } as never,
+      run: { ...DEFAULT_PRODUCTION_RUN, status: "running" },
       action: snap.action,
     });
     approveMutate.mockResolvedValue(snap);

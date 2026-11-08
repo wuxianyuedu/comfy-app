@@ -247,12 +247,16 @@ export const REVIEW_RUBRICS: Record<ReviewRubricKind, ReviewRubric> = {
   shotImage: SHOT_IMAGE_RUBRIC,
 };
 
+const REVIEW_RUBRIC_KINDS = new Set(Object.keys(REVIEW_RUBRICS));
+
+/** 外部字符串 → rubric kind；不是已登记的 kind → false（调用方回落 null）。 */
+function isReviewRubricKind(value: string): value is ReviewRubricKind {
+  return REVIEW_RUBRIC_KINDS.has(value);
+}
+
 /** 取某评审对象的 rubric；未知 kind → null（调用方回落「无评分」旧路，不抛）。 */
 export function rubricFor(kind: string): ReviewRubric | null {
-  /* SAFETY: 类型断言已复核 */
-  const rubric = REVIEW_RUBRICS[kind as ReviewRubricKind];
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- kind 是外部字符串，未知 kind 索引运行期为 undefined（注释明言回落 null）
-  return rubric ?? null;
+  return isReviewRubricKind(kind) ? REVIEW_RUBRICS[kind] : null;
 }
 
 /**

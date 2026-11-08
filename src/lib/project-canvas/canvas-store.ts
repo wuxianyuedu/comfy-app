@@ -40,14 +40,27 @@ function emitChanged() {
   emitAppEvent("comfyapp:canvas-store-changed");
 }
 
+/* 以下三个守卫只确认「是数组」这一层运行期判据（条目形状由写入端保证），
+ * 替代无运行期校验的类型断言。 */
+function isCanvasProjectList(v: unknown): v is Array<CanvasProject> {
+  return Array.isArray(v);
+}
+
+function isPersistedNodeList(v: unknown): v is Array<PersistedNode> {
+  return Array.isArray(v);
+}
+
+function isPersistedEdgeList(v: unknown): v is Array<PersistedEdge> {
+  return Array.isArray(v);
+}
+
 /** 读项目索引（坏数据 / 没存过一律空表）。「能不能用 storage」与「坏数据怎么办」
  *  收在 `~/lib/browser-storage`（§16.2.4.28）—— 此前本文件 12 处各写一遍
  *  `typeof localStorage === "undefined"`，另有自己的 `safeParse`。 */
 function readIndex(): Array<CanvasProject> {
   return readStorageJson<Array<CanvasProject>>(INDEX_KEY, [], (raw) => {
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(raw) as Array<CanvasProject>;
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed: unknown = JSON.parse(raw);
+    return isCanvasProjectList(parsed) ? parsed : [];
   });
 }
 
@@ -194,7 +207,6 @@ export type ServerProjectRow = {
  * 同一列的两个形状，调用方要的只是一个能比较的毫秒数。
  */
 export async function fetchServerProjects(): Promise<Array<ServerProjectRow>> {
-  /* SAFETY: 类型断言已复核 */
   const rows = (await vanillaApi.project.list.query()) as Array<ServerProjectRow>;
   return Array.isArray(rows) ? rows : [];
 }
@@ -205,12 +217,8 @@ function toCanvasProject(row: ServerProjectRow): CanvasProject {
     id: row.id,
     name: row.name,
     updatedAt: new Date(row.updatedAt).getTime(),
-    /* SAFETY: 类型断言已复核 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 行来自服务端 API（JSON 列），nodes 运行期可缺省，断言只改类型
-    nodes: (row.nodes as CanvasProject["nodes"]) ?? [],
-    /* SAFETY: 类型断言已复核 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：服务端行里 edges 运行期可缺省
-    edges: (row.edges as CanvasProject["edges"]) ?? [],
+    nodes: isPersistedNodeList(row.nodes) ? row.nodes : [],
+    edges: isPersistedEdgeList(row.edges) ? row.edges : [],
   };
 }
 
@@ -315,7 +323,6 @@ export async function hydrateProjectFromServer(id: string): Promise<CanvasProjec
  * 只有当项目「零节点零连线**且**名字等于该字面量」时，
  * 才算是可安全回收的空草稿。
  * 用户自己命名的空项目（他确实有意保存了一个空画布）**不会**被回收。 */
-/* SAFETY: 类型断言已复核 */
 export const EMPTY_DRAFT_NAMES = ["未命名"] as const;
 export const EMPTY_DRAFT_NAME = EMPTY_DRAFT_NAMES[0];
 

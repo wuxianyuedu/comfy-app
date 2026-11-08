@@ -5,7 +5,7 @@
 import type { Edge } from "@xyflow/react";
 import { describe, expect, it } from "vitest";
 
-import type { CanvasNodeData, CanvasNodeType } from "./canvas-types";
+import { defaultData, type CanvasNodeData, type CanvasNodeType } from "./canvas-types";
 import {
   applyPropagationToNodes,
   makeNodeId,
@@ -16,13 +16,11 @@ import {
 /** 构造最小画布节点：applyPropagationToNodes 只读 id / type / data，
  *  其余 React Flow 字段（position 等）与传播逻辑无关。 */
 function node(id: string, data: Partial<CanvasNodeData>): CanvasNodeType {
-  /* 断言收在工厂一处：`data` 是 `Partial`（夹具只给关心的字段），
-   * 而 `CanvasNodeType` 要的是完整的 `CanvasNodeData`。 */
+  /* 缺省字段由全库唯一构造出口 `defaultData(kind)` 补齐，避免手搓缺字段的假节点。 */
   return {
     id,
     type: "canvasNode",
-    /* SAFETY: 类型断言已复核 */
-    data: data as CanvasNodeData,
+    data: Object.assign(defaultData(data.kind ?? "image"), data),
     position: { x: 0, y: 0 },
   };
 }
@@ -89,10 +87,7 @@ describe("placeCanvasNode", () => {
       nodes: base,
       point: { x: 30, y: 40 },
       flow,
-      /* SAFETY: 类型断言已复核 */
-      data: {
-        kind: "image",
-      } as CanvasNodeData,
+      data: defaultData("image"),
     });
     expect(next).toHaveLength(2);
     expect(next[1]!.type).toBe("canvasNode");
@@ -110,10 +105,7 @@ describe("placeCanvasNode", () => {
           return p;
         },
       },
-      /* SAFETY: 类型断言已复核 */
-      data: {
-        kind: "image",
-      } as CanvasNodeData,
+      data: defaultData("image"),
     });
     expect(received).toEqual(viewportCenter());
   });
@@ -129,10 +121,7 @@ describe("placeCanvasNode", () => {
           return p;
         },
       },
-      /* SAFETY: 类型断言已复核 */
-      data: {
-        kind: "image",
-      } as CanvasNodeData,
+      data: defaultData("image"),
     });
     expect(received).toEqual(viewportCenter());
   });
@@ -143,10 +132,7 @@ describe("placeCanvasNode", () => {
       nodes: base,
       point: { x: 0, y: 0 },
       flow,
-      /* SAFETY: 类型断言已复核 */
-      data: {
-        kind: "image",
-      } as CanvasNodeData,
+      data: defaultData("image"),
     });
     expect(base).toHaveLength(1);
     expect(next).not.toBe(base);
@@ -167,10 +153,7 @@ describe("placeCanvasNode", () => {
           return { x: p.x + 9999, y: p.y + 9999 };
         },
       },
-      /* SAFETY: 类型断言已复核 */
-      data: {
-        kind: "image",
-      } as CanvasNodeData,
+      data: defaultData("image"),
     });
     expect(calls).toBe(0);
     expect(next[0]!.position).toEqual({ x: 340, y: 10 });
@@ -182,10 +165,7 @@ describe("placeCanvasNode", () => {
       id: "n_sink",
       flowPosition: { x: 0, y: 0 },
       flow,
-      /* SAFETY: 类型断言已复核 */
-      data: {
-        kind: "image",
-      } as CanvasNodeData,
+      data: defaultData("image"),
     });
     expect(next[0]!.id).toBe("n_sink");
   });
@@ -195,19 +175,13 @@ describe("placeCanvasNode", () => {
       nodes: [],
       point: { x: 0, y: 0 },
       flow,
-      /* SAFETY: 类型断言已复核 */
-      data: {
-        kind: "image",
-      } as CanvasNodeData,
+      data: defaultData("image"),
     });
     const second = placeCanvasNode({
       nodes: first,
       point: { x: 0, y: 0 },
       flow,
-      /* SAFETY: 类型断言已复核 */
-      data: {
-        kind: "image",
-      } as CanvasNodeData,
+      data: defaultData("image"),
     });
     expect(first[0]!.id).not.toBe(second[1]!.id);
   });

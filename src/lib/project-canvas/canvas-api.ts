@@ -216,7 +216,6 @@ export async function pollTask(
           return { taskId, localPath: v.localPath, mediaType: v.mediaType };
         }
       }
-      /* SAFETY: 类型断言已复核 */
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- API 回包，task 运行期可能为 null/缺 status
       const st = task?.status as string | undefined;
       if (st === "FAILED" || st === "CANCELLED" || st === "ERROR") {
@@ -272,6 +271,5 @@ export async function pollTask(
 /* 成功分支的类型守卫 —— 让既有的 `if (result)` 调用点语义不变
  *（填充过的 TaskResult 依旧是真值），同时让失败分支有类型安全。 */
 export function isTaskSuccess(r: TaskResult | TaskFailure): r is TaskResult {
-  /* SAFETY: 类型断言已复核 */
-  return typeof (r as TaskResult).localPath === "string";
+  return typeof asRecord(r)?.localPath === "string";
 }

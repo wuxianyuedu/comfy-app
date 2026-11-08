@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/lib/production/production-client.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/production/review-rubrics.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/production/review-types.test.ts", // 存量 12 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/production/review-types.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/production/run-client.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/production/run-types.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/production/shot-writeback.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/production/shot-writeback.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/production/sync.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/project-canvas/canvas-api.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/project-canvas/canvas-api.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/project-canvas/canvas-helpers.test.ts", // 存量 9 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/project-canvas/canvas-helpers.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/project-canvas/canvas-store.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/project-canvas/canvas-store.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/project-canvas/canvas-types.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/project-canvas/history-panel-client.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/project-canvas/sync-notice.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/query-string.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/server-cache.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/shell/app-service-exit.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/shell/app-update-client.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/shell/code-update-since-load.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用

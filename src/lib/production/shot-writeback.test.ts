@@ -11,7 +11,12 @@ import {
 } from "~/lib/workshop/draft-store";
 import { pushServerDraft } from "~/lib/workshop/draft-sync-client";
 import { fireAndForget } from "~/lib/async-action";
-import { fetchProduction, pushProduction } from "~/lib/production/production-client";
+import { isRecord } from "~/lib/is-record";
+import {
+  fetchProduction,
+  pushProduction,
+  type ProductionData,
+} from "~/lib/production/production-client";
 import type { Shot } from "~/lib/workshop/types";
 import { recordCanvasShotGeneration, requestShotRedo } from "./shot-writeback";
 
@@ -35,10 +40,16 @@ const pushProdMock = vi.mocked(pushProduction);
 const pushDraftMock = vi.mocked(pushServerDraft);
 /* 两处 `fireAndForget(…, () => {…})` 的静默回调是「失败路径的唯一出口」，
    把它们抓下来逐条断言：草稿已落本地缓存（用户的那一改没丢），镜像留给下次自动保存。 */
-/* SAFETY: 类型断言已复核 */
-const fireAndForgetMock = vi.mocked(fireAndForget) as unknown as {
-  mock: { calls: Array<[Promise<unknown>, (e: unknown) => void]> };
-};
+const fireAndForgetMock = vi.mocked(fireAndForget);
+
+/** 按对象读数组第 `index` 项；不是对象即判失败（调用用例对此有前提）。 */
+function recordAt(items: Array<unknown>, index: number): Record<string, unknown> {
+  const item = items[index];
+  if (!isRecord(item)) {
+    throw new TypeError(`第 ${index} 项不是对象`);
+  }
+  return item;
+}
 
 function shotA(over: Partial<Shot> = {}): Shot {
   return {
@@ -177,15 +188,13 @@ describe("requestShotRedo", () => {
     writeWorkshopDraft("proj_1", {
       ...emptyWorkshopDraft(),
       // rev 不在 Shot 类型上，作为未知扩展字段写入（草稿 JSON 列宽容）。
-      /* SAFETY: 类型断言已复核 */
       shots: [
-        {
-          ...shotA(),
+        Object.assign(shotA(), {
           imageUrl: "/x.png",
           clipUrl: "/y.mp4",
           status: "done",
           rev: 0,
-        } as never,
+        }),
       ],
     });
   }
@@ -210,8 +219,7 @@ describe("requestShotRedo", () => {
     await requestShotRedo("proj_1", "a");
 
     expect(fireAndForgetMock).toHaveBeenCalledTimes(1);
-    /* SAFETY: 类型断言已复核 */
-    const drafted = readWorkshopDraft("proj_1").shots[0] as unknown as Record<string, unknown>;
+    const drafted = recordAt(readWorkshopDraft("proj_1").shots, 0);
     expect(drafted).toMatchObject({ status: "idle", rev: 1 });
   });
 
@@ -241,7 +249,7 @@ describe("requestShotRedo", () => {
     /* `Array.isArray(prod.shots) ? … : []` 的右半边：服务端 JSON 列没有形状约束
        （route 原样透传），一行坏数据不该让整条退回链路抛错，也不该把别的镜头冲掉。 */
     seedDraftWithDoneShotA();
-    fetchProdMock.mockResolvedValue({
+    const malformed: ProductionData = {
       title: "T",
       type: "",
       tone: "",
@@ -249,10 +257,10 @@ describe("requestShotRedo", () => {
       scriptMarkdown: "",
       scenes: [],
       characters: [],
-      /* SAFETY: 类型断言已复核 */
-      shots: "not-an-array" as unknown as Array<never>,
+      shots: [],
       progress: { stage: "render", rendered: false },
-    });
+    };
+    fetchProdMock.mockResolvedValue(Object.assign(malformed, { shots: "not-an-array" }));
 
     await requestShotRedo("proj_1", "a");
 
@@ -291,16 +299,14 @@ describe("requestShotRedo", () => {
 
     await requestShotRedo("proj_1", "a");
 
-    /* SAFETY: 类型断言已复核 */
-    const drafted = readWorkshopDraft("proj_1").shots[0] as unknown as Record<string, unknown>;
+    const drafted = recordAt(readWorkshopDraft("proj_1").shots, 0);
     expect(drafted).toMatchObject({ status: "idle", rev: 1 });
     expect(drafted.imageUrl).toBeUndefined();
     expect(pushDraftMock).toHaveBeenCalledTimes(1);
 
     expect(pushProdMock).toHaveBeenCalledTimes(1);
     const [, payload] = pushProdMock.mock.calls[0]!;
-    /* SAFETY: 类型断言已复核 */
-    const pushed = (payload.shots as Array<Record<string, unknown>>)[0]!;
+    const pushed = recordAt(payload.shots, 0);
     expect(pushed).toMatchObject({
       status: "idle",
       clipStatus: "idle",
