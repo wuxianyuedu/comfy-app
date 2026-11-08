@@ -1790,7 +1790,6 @@
   # 恢复动作 = 取消注释 → 名字挪回 `COMFYAPP_CI_GATES` → 从 `DISABLED_GATES` 删。
   # ⚠️ 停用后「后续流程走不通」不再由这格判：GA 没跑起来 / 没送回结论 ⇒
   # `GA 回调结论回读` 站内回读撑到 45m 预算、超时即红（fail-closed），承重锚不变。
->>>>>>> origin/master
   #
   # 双远端镜像（cnb 主）的推送跳：推 HEAD 到 `wuxianyuedu/comfy-app` 的 `cnb-pr-<IID>` 专属
   # ref，再补一跳 `git lfs push`（不带 --all，只推该 ref 可达且远端还没有的对象 —— 镜像仓若
