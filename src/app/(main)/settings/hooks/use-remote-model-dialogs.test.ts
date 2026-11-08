@@ -158,3 +158,29 @@ describe("useRemoteModelDialogs —— 字段级校验出口", () => {
     expect(result.current.fieldErrors).toEqual({});
   });
 });
+
+describe("useRemoteModelDialogs —— 添加弹窗的用途锁定", () => {
+  it("按分组打开时用途落在该分组，并随弹窗状态一起带出", () => {
+    const { result } = setup();
+
+    act(() => {
+      result.current.openAddDialog("image");
+    });
+
+    /* 视图据此把「用途」下拉锁定为这一个分组 —— 从外面那一组点进来，
+     * 不能再选成图片 / 视频之外的用途。 */
+    expect(result.current.dialog).toMatchObject({ kind: "image", mode: "add" });
+    expect(result.current.addForm.kind).toBe("image");
+  });
+
+  it("编辑弹窗仍按条目用途预填（改选用途不被分组锁定所限）", () => {
+    const { result } = setup();
+
+    act(() => {
+      result.current.openEditDialog({ kind: "video", name: "vid" });
+    });
+
+    expect(result.current.dialog).toMatchObject({ mode: "edit", original: "vid" });
+    expect(result.current.addForm.kind).toBe("video");
+  });
+});

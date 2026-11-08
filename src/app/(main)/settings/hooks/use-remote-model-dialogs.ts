@@ -31,8 +31,9 @@ import { createUsageFieldEditor } from "./usage-field-editor";
  *  与 schema 同形但互不引用：schema 加一个字段，表单状态不会跟着红。 */
 export type ModelDialogForm = RemoteModelFieldValues;
 
+/** 添加弹窗携带 `kind`：用途由点开的那个分组决定，弹窗内不再允许改选。 */
 export type ModelDialog =
-  | { mode: "add" }
+  | { kind: RemoteModelKind; mode: "add" }
   | { entry: RemoteModelEntry; mode: "edit"; original: string }
   | null;
 
@@ -123,7 +124,7 @@ export type RemoteModelDialogs = {
   /** 字段级校验错误（键 = 字段名）。规则住在 `~/lib/llm/remote-model-schema`，
    *  这里只转述 —— 字段级与集合级（重名查重）分开，见该模块头注释。 */
   fieldErrors: Partial<Record<ModelDialogField, string>>;
-  /** 打开「添加模型」弹窗，按用途预选用途。 */
+  /** 打开「添加模型」弹窗，用途锁定在点开的那个分组。 */
   openAddDialog: (kind?: RemoteModelKind) => void;
   /** 打开「编辑模型」弹窗（密钥留空不改）。 */
   openEditDialog: (entry: RemoteModelEntry) => void;
@@ -200,7 +201,7 @@ export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteMod
   const editor = createUsageFieldEditor(setUsageTest);
 
   function openAddDialog(kind: RemoteModelKind = "chat") {
-    setDialog({ mode: "add" });
+    setDialog({ kind, mode: "add" });
     setAddForm({ baseUrl: "", apiKey: "", model: "", kind });
     setClearKey(false);
     setTestMsg(null);
