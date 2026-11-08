@@ -44,10 +44,12 @@ describe("isModelFileName 按扩展名判模型文件", () => {
   });
 
   it("取的是最后一段后缀：插件仓库的深层路径也判得对", () => {
-    expect(isModelFileName("x-flux-comfyui\\xflux\\src\\flux\\modules\\layers.py")).toBe(false);
+    expect(isModelFileName(String.raw`x-flux-comfyui\xflux\src\flux\modules\layers.py`)).toBe(
+      false,
+    );
     expect(
       isModelFileName(
-        "x-flux-comfyui\\xflux\\src\\flux\\modules\\__pycache__\\layers.cpython-313.pyc",
+        String.raw`x-flux-comfyui\xflux\src\flux\modules\__pycache__\layers.cpython-313.pyc`,
       ),
     ).toBe(false);
     expect(isModelFileName("SomeNode/models/real_lora.safetensors")).toBe(true);

@@ -15,11 +15,11 @@ const repo = vi.hoisted(() => ({
   upsertScannedMany: vi.fn(
     (
       _scanned: Array<{
-        folder: string;
+        baseModel: string;
         fileName: string;
+        folder: string;
         name: string;
         type: string;
-        baseModel: string;
       }>,
     ) => Promise.resolve(),
   ),

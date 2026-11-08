@@ -39,7 +39,7 @@ export const MODEL_FILE_EXTENSIONS: ReadonlySet<string> = new Set([
  *  路径里后缀可能是路径段，`lastIndexOf` 取到的就是真后缀段）。 */
 export function isModelFileName(fileName: string): boolean {
   const dot = fileName.lastIndexOf(".");
-  return dot >= 0 && MODEL_FILE_EXTENSIONS.has(fileName.slice(dot).toLowerCase());
+  return dot !== -1 && MODEL_FILE_EXTENSIONS.has(fileName.slice(dot).toLowerCase());
 }
 
 /** 非「模型用途」的目录：custom_nodes 是节点代码目录（有自己的管理面板），
