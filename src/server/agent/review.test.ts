@@ -29,6 +29,7 @@ vi.mock("~/server/better-auth", () => ({
 }));
 
 import { productionRepository } from "~/lib/core/repository-production";
+import { isRecord } from "~/lib/is-record";
 import { normalizeScriptReviewState } from "~/lib/production/review-types";
 import { REVIEW_RUBRICS } from "~/lib/production/review-rubrics";
 import {
@@ -44,6 +45,39 @@ import { getTestDb, seedTask, seedUser, type Row } from "../../../tests/helpers/
 const tdb = getTestDb();
 const USER = "user-a";
 const PROJ = "proj_rev";
+
+/** `unknown` 收窄成对象数组；不是对象数组就当场抛。 */
+function assertRecordArray(
+  value: unknown,
+  label: string,
+): asserts value is Array<Record<string, unknown>> {
+  if (!Array.isArray(value) || !value.every((item) => isRecord(item))) {
+    throw new TypeError(`${label} 不是对象数组`);
+  }
+}
+
+/** 消息数组的收窄守卫：每项都必须是带 `role` / `content` 的对象。 */
+function assertMessages(
+  value: unknown,
+): asserts value is Array<{ content: unknown; role: string }> {
+  if (
+    !Array.isArray(value) ||
+    !value.every((item) => isRecord(item) && typeof item.role === "string" && "content" in item)
+  ) {
+    throw new TypeError("消息不是含 role / content 的对象数组");
+  }
+}
+
+/** 内容块的收窄守卫：每项都必须是带字符串 `type` 的对象。 */
+type ContentPart = { image_url?: unknown; type: string };
+function isContentPart(value: unknown): value is ContentPart {
+  return isRecord(value) && typeof value.type === "string";
+}
+function assertContentParts(value: unknown): asserts value is Array<ContentPart> {
+  if (!Array.isArray(value) || !value.every((item) => isContentPart(item))) {
+    throw new TypeError("消息 content 不是内容块数组");
+  }
+}
 
 async function seed(content: {
   characters?: Array<unknown>;
@@ -68,8 +102,11 @@ async function seed(content: {
 async function rows(col: "shots" | "characters"): Promise<Array<Record<string, unknown>>> {
   const row = await productionRepository.getForUser(USER, PROJ);
   const raw = row?.[col];
-  /* SAFETY: 类型断言已复核 */
-  return Array.isArray(raw) ? (raw as Array<Record<string, unknown>>) : [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  assertRecordArray(raw, col);
+  return raw;
 }
 
 beforeEach(() => {
@@ -107,8 +144,8 @@ describe("reviewContent", () => {
     expect(shot?.review).toEqual(verdict);
     // 只写内容列，没碰 run（run 仍是 upsert 默认的空对象，无 status）
     const row = await productionRepository.getForUser(USER, PROJ);
-    /* SAFETY: 类型断言已复核 */
-    expect((row?.run as Record<string, unknown> | undefined)?.status).toBeUndefined();
+    const run = row?.run;
+    expect(isRecord(run) ? run.status : undefined).toBeUndefined();
   });
 
   it("评审角色卡：判定写回 character.review", async () => {
@@ -378,20 +415,23 @@ describe("reviewShotImage（P8-2 生图视觉评审）", () => {
     // 视觉评审走独立视觉模型配置通道
     expect(getVisionLLMConfig).toHaveBeenCalledWith({ taskType: "review" });
     // 消息里带图：镜头图 + 定妆照都进了 image_url 块
-    /* SAFETY: 类型断言已复核 */
-    const [, userMsg] = completeLLMStructured.mock.calls[0]![1] as Array<{
-      content: unknown;
-      role: string;
-    }>;
-    /* SAFETY: 类型断言已复核 */
-    const parts = userMsg!.content as Array<{
-      image_url?: unknown;
-      type: string;
-    }>;
-    const imageUrls = parts
-      .filter((p) => p.type === "image_url")
-      /* SAFETY: 类型断言已复核 */
-      .map((p) => (p.image_url as { url: string }).url);
+    const messages = completeLLMStructured.mock.calls[0]?.[1];
+    assertMessages(messages);
+    const userMsg = messages[1];
+    if (!isRecord(userMsg)) {
+      throw new TypeError("第二条消息不是对象");
+    }
+    const content = userMsg.content;
+    assertContentParts(content);
+    const imageUrls = content
+      .filter((part) => part.type === "image_url")
+      .map((part) => {
+        const imageUrl = part.image_url;
+        if (!isRecord(imageUrl) || typeof imageUrl.url !== "string") {
+          throw new TypeError("image_url 块缺少字符串 url");
+        }
+        return imageUrl.url;
+      });
     expect(imageUrls).toEqual(["/shot.png", "/portrait.png"]);
   });
 
@@ -483,8 +523,11 @@ describe("autoselectShotImage", () => {
     // 赢家判定落 shot.imageReview（与 reviewShotImage 同一落点）；镜头的
     // imageUrl / taskId 不被服务端动（草稿回写口径，字段所有权见 #2615）。
     const shot = (await rows("shots"))[0]!;
-    /* SAFETY: 类型断言已复核 */
-    expect((shot.imageReview as { scores: unknown }).scores).toBeTruthy();
+    const imageReview = shot.imageReview;
+    if (!isRecord(imageReview)) {
+      throw new TypeError("镜头缺少对象形态的 imageReview");
+    }
+    expect(imageReview.scores).toBeTruthy();
     expect(shot.imageUrl).toBe("/generated/task-a/1.png");
   });
 

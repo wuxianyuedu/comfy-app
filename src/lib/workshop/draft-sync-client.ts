@@ -5,8 +5,9 @@
 // Phase 2：工坊并入统一 proj_* 项目后不再有「列全部云端项目重建本地索引」与
 // 「删某个工坊项目镜像」的能力（项目增删统一在首页 canvas-store 走），故只保留
 // 单项目读 / 写两个函数。
+import { isRecord } from "~/lib/is-record";
 import { withQuery } from "~/lib/query-string";
-import type { WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
+import { parseDraftDto, type WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
 
 /** 拉取某项目的服务端草稿；服务端无该行或已空 → 返回 null。 */
 export async function fetchServerDraft(projectId: string): Promise<WorkshopDraftDto | null> {
@@ -16,14 +17,8 @@ export async function fetchServerDraft(projectId: string): Promise<WorkshopDraft
       return null;
     }
     const data: unknown = await res.json();
-    if (
-      /* SAFETY: 类型断言已复核 */
-      typeof data === "object" &&
-      data !== null &&
-      (data as { exists?: unknown }).exists === true
-    ) {
-      /* SAFETY: 类型断言已复核 */
-      return (data as { draft: WorkshopDraftDto }).draft;
+    if (isRecord(data) && data.exists === true && isRecord(data.draft)) {
+      return parseDraftDto(data.draft);
     }
     return null;
   } catch {
