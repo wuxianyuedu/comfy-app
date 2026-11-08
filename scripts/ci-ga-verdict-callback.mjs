@@ -4,11 +4,13 @@
  *
  * ## 它替掉的是哪一段
  *
- * 现状：`GitHub 判决回读` 那一格在自托管机上轮询 GitHub Actions 的 conclusion
- * （45m 预算），而自托管机到 github.com 的出网间歇不通。探针在 #3374 上验过：
- * 外部用 `repo-cnb-trigger:rw` 的令牌调 `POST /{repo}/-/build/start`，带
+ * 2026-11-08 转正（ISSUE #3378 / §13.5.33）后，旧 `GitHub 判决回读` 出站轮询
+ * GitHub Actions conclusion（45m 预算）那一格已停用 —— 自托管机到 github.com 的
+ * 出网间歇不通，正是本单要解的那一格。探针在 #3374 上验过：外部用
+ * `repo-cnb-trigger:rw` 的令牌调 `POST /{repo}/-/build/start`，带
  * `event=api_trigger_ga_verdict`、`sha=<PR 预合并 sha>`、`env.GA_VERDICT=<结论>`，
- * 平台会把这条短流水线的终态自动写进该 sha 的 commit-statuses 并参与保护分支聚合。
+ * 平台把这条短流水线的终态自动写进该 sha 的 commit-statuses。CNB 侧
+ * `GA 回调结论回读`（`ci-ga-verdict-readout.mjs`）站内读这条 status 折退码，
  * 于是「读回」变成「送回」，CNB 机器不必再出网去读 GitHub。
  *
  * ## 它跑在哪 / 不跑在哪
@@ -27,11 +29,10 @@
  * 2. **回调与占位共用同一事件名** ⇒ 同一条 commit-status context，后写覆盖前写
  *    （探针 `cnb-edc-1k6subhok` 一族）。不同事件名 = 两条 context，占位的红会
  *    一直拉住聚合，回调的绿救不回来。
- * 3. **同 context 是「最后跑完者赢」**：回调与占位自由赛跑时，晚结束的占位会
- *    覆盖回调的终态（探针 `cnb-eiu-1k6sukdi2`）。骨架里靠同一把
- *    `cancel-in-progress: true` 锁让「回调到达即掐掉占位」；被 cancel 的 build
- *    会不会仍写一条终态、以及那条终态是否参与聚合，**是接线前必须补的探针读数**，
- *    本骨架不假装它已解决（详见 `.cnb.yml` 该事件上方的注释）。
+ * 3. **同 context 是「最后跑完者赢」**：转正后只有 callback 一个写者，共用
+ *    `cancel-in-progress: true` 的锁只管「同 PR 连派发几次时后一条掐掉前一条」。
+ *    骨架期那半个 `GA_ROLE=placeholder` 写者已退役，fail-closed 改由 CNB 侧
+ *    `GA 回调结论回读` 自己承担（超时 / status 缺席即判红）。
  *
  * ## fail-closed 三态
  *
@@ -40,8 +41,8 @@
  * `cancelled` / `startup_failure` / 空串）⇒ 一律按红发 `failure` 并退 `1`；
  * 起跑没拿回 `sn` ⇒ `2`，绝不把「没发出去」读成绿。
  *
- * GA 侧收尾 job 带 `continue-on-error: true`：这一跳是**送结论**，不该反过来
- * 改变 GA workflow run 自己的 conclusion（CNB 回读格读的就是它）。
+ * GA 侧收尾 job 带 `continue-on-error: true`：这一跳是**送结论**，它自己发没
+ * 发出去不该反过来改变 GA workflow run 的 conclusion。
  *
  * 用法（`pr-gate.yml` 的收尾 job）：
  *

@@ -192,7 +192,7 @@ describe("镜像身份：流水线上真的在跑它（脚本存在而配置没�
      * 早已撤到每日档，拿它们做顺序锚只会是空话。 */
     expect(at, "`镜像身份` 不在清单里 —— 那一步因此没有任何执行者").toBeGreaterThan(-1);
     expect(at).toBe(0);
-    expect(at).toBeLessThan(order.indexOf("GitHub 判决回读"));
+    expect(at).toBeLessThan(order.indexOf("GA 回调结论回读"));
   });
 
   it("那一步点名的入口真的在盘上，且还包着 CP936 出口外壳", () => {

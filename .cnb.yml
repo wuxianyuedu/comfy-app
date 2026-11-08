@@ -312,8 +312,12 @@
     #   这一格在 `.gates` 里以注释形态留着（可 grep 回原文）—— 判据把「停用」与「删除」分开判。
     # ⚠️ 这个键**保留而不删除**：它是「停用」这件事的执行者（判据见
     # `tests/no-platform-ci-config.test.ts` 的「停用登记」那两条）。
+    # 后五格是 ISSUE #3378 转正时随「老轮询主列」一起退场的：执行者换成站内的
+    # `GA 回调结论回读`，原文按注释形态留在 `.gates`，要回退照旧「取消注释 → 挪回
+    # `COMFYAPP_CI_GATES` → 从本清单删」。停用 ≠ 删除，判据同上面那两条。
     COMFYAPP_CI_DISABLED_GATES: >-
-      单元测试, ESLint 零警告, 新鲜度账
+      单元测试, ESLint 零警告, 新鲜度账, GitHub 判决回读, 日志分块 1/3, 日志分块 2/3,
+      日志分块 3/3, GitHub 判决判定
     # 「换了执行者」的登记（ISSUE #2227）：清单里那几个**以注释形态留在 `.gates` 里**的名字
     # （停用形态与换执行者形态在配置里长得一模一样 ⇒ 机器分不出两者），它们的执行者在这里
     # **机器可读**地登记一次。
@@ -379,10 +383,14 @@
     # 2026-11-05 薄化：GA `pr-gate.yml` 已承接的 24 格从这一份撤出（逐项归属写在
     # `.gates` 顶部那段）。这一份此后只有两类：**平台专有读数**（这台节点的事实）与
     # **判决链**（镜像派发 → 回读 GA → 承重退码）。
+    # 2026-11-08 转正（ISSUE #3378 / §13.5.33）：出站轮询 GitHub conclusion 的
+    # `GitHub 判决回读` / `日志分块 ×3` / `GitHub 判决判定` 五格停用（原文按注释形态
+    # 留在 `.gates`，恢复动作见那一段），换成 `GA 回调结论回读` —— 站内读 GA 送回
+    # commit-statuses 的结论，自托管机一台都不碰 github.com。双写消失、承重仍在
+    # `pull_request` build 的退码上（§13.6「PR 跑绿才合并」）。
     COMFYAPP_CI_GATES: >-
-      镜像身份, 工作区复用读数, 缓存槽读数, GitHub 镜像同步, 环境前提, GitHub 判决回读,
-      日志分块 1/3, 日志分块 2/3, 日志分块 3/3, GitHub 判决判定,
-      格式化提交分离, 零消费导出
+      镜像身份, 工作区复用读数, 缓存槽读数, GitHub 镜像同步, 环境前提,
+      GA 回调结论回读, 格式化提交分离, 零消费导出
     # master 合并复核那条流水线（push 档）自己的 stage 清单 —— 第三份，按档登记。
     # 2026-10-28 起这一档从「只有合并形态复核一格」扩成「树级校验档」：判的是**合并后的
     # 树**一致不一致、这次运行的事实是什么，不是「这次改动能不能过」（那由 PR 档判），
@@ -685,18 +693,17 @@
 .lock-probe-a: &lock_probe_a
   key: probe-2363-a
   cancel-in-progress: false
-# ── GA 回调 / 占位的共用锁（ISSUE #3378 骨架）────────────────────────────────
+# ── GA 回调的共用锁（ISSUE #3378 · 2026-11-08 转正）──────────────────────────
 #
-# 占位与回调是**同一件事的两个写者**：它们共用一个事件名
-# `api_trigger_ga_verdict`（⇒ 同一条 commit-status context，后写覆盖前写），
-# 因此必须共用一把 `cancel-in-progress: true` 的锁 —— 回调到达时掐掉还在
-# 撑 pending 的占位，避免「晚结束的占位把回调终态覆盖回去」（探针
-# `cnb-eiu-1k6sukdi2` 的现场）。
+# 转正后只有**一个写者**：GA 收尾 job 发的 callback。这把
+# `cancel-in-progress: true` 的锁仍留着，管的是「同一个 PR 连着派发几次」：
+# 后一条 callback 到达时掐掉还在跑的前一条，避免旧结论晚落定、把新结论
+# 覆盖回去（探针 `cnb-edc-1k6subhok` 一族的「后写覆盖前写」）。
 #
-# ⚠️ 这是**骨架**，接线前还有一格未验：被 cancel 的 build 会不会仍写一条
-# 终态、那条终态是否参与聚合。若平台把 cancel 也写成一条红，就得改成
-# 「回调落定时显式 `stop-build` 占位」或「只保留一个写者」；两种出路的
-# 取舍写在 `api_trigger_ga_verdict` 那段注释里，不在这里偷偷定。
+# 骨架期还有 `GA_ROLE=placeholder` 那半个写者撑 pending；那一半随转正退役，
+# fail-closed 改由 `GA 回调结论回读` 承担（主列 build 活到出结论，超时即红）。
+# 被 cancel 的占位会不会仍写终态那一格探针已实测闭合（cancel 不留拉红聚合的
+# 终态），而单写者之后它连对象都没有了。
 #
 # 不与 `pr-$CNB_PULL_REQUEST_IID` 共用：api_trigger 事件上那个变量无值，
 # 落回字面 `pr-` 会把并行的 PR 主列一起掐掉（#2114 同款死因）。
@@ -1948,7 +1955,9 @@
   #   · 平台读数：镜像身份 / 工作区复用读数 / 缓存槽读数 / 环境前提（问的都是这台节点的事实，
   #     GA 的 runner 是另一台机器，读数在那里没有对象）；
   #   · 派发：GitHub 镜像同步（GA 那条 workflow 由它触发）；
-  #   · 判决：GitHub 判决回读 / 日志分块 ×3 / GitHub 判决判定（承重退码）。
+  #   · 判决：GA 回调结论回读（站内读 GA 送回的 status，承重退码）。2026-11-08 转正
+  #     （ISSUE #3378 / §13.5.33）后，出站轮询的 `GitHub 判决回读` / 日志分块 ×3 /
+  #     `GitHub 判决判定` 五格停用，原文按注释形态留在下面供回退。
   #
   # ⚠️ 恢复动作不是「取消注释」：这些格的真身现在在 `pr-gate.yml`，要回到这一档得
   # **两处同批**改（删 GA 的 step + 把 stage 加回这里并登记进 `COMFYAPP_CI_GATES`），
@@ -2129,14 +2138,22 @@
   # 再加**全量日志的下载端点**（`GET /repos/<owner>/<repo>/actions/jobs/<job_id>/logs`，
   # 需 `actions: read`）与本地落盘路径（`.comfy-ci/tmp/github-verdict-logs/verdict-logs.txt`，
   # 已在 `.gitignore` 内、每次回读先清空旧文件）。
-  - name: GitHub 判决回读
-    # `--decision-out`：这一格只**读数 + 落盘**，退码恒 0 —— 判定交给后面最后一格。
-    # 理由：CNB 的 stage 串行，这一格若直接退 1，后面「日志分块」那几格根本跑不到，
-    # 而「判红」恰恰是最需要看日志的那一形。判定文件读不到 ⇒ 判定格退 2（fail-closed）。
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-verdict-read.mjs --decision-out .comfy-ci/tmp/github-verdict-logs/decision.json
-    # 包住 45m 轮询预算 + 进程开销；与 GitHub 侧最重格的外框同级。
-    timeout: 60m
-
+  # ── 老轮询主列（ISSUE #3378 转正后停用，原文按注释形态留着供回退）──────────────
+  #
+  # 2026-11-08：出站轮询 api.github.com 的 `GitHub 判决回读`、gzip+base64 日志分块三格、
+  # `GitHub 判决判定` 五格一起退场，执行者换成下面那格 `GA 回调结论回读` —— 站内读
+  # GA 送回 commit-statuses 的结论（§13.5.33 逐笔对账）。停用 ≠ 删除：恢复动作是
+  # 「取消这段注释 → 把五个名字挪回 `COMFYAPP_CI_GATES` → 从 `COMFYAPP_CI_DISABLED_GATES` 删」，
+  # 判据 `tests/no-platform-ci-config.test.ts` 的「停用登记」两条钉着。五格原文逐字保留在下：
+  #
+  # - name: GitHub 判决回读
+  # `--decision-out`：这一格只**读数 + 落盘**，退码恒 0 —— 判定交给后面最后一格。
+  # 理由：CNB 的 stage 串行，这一格若直接退 1，后面「日志分块」那几格根本跑不到，
+  # 而「判红」恰恰是最需要看日志的那一形。判定文件读不到 ⇒ 判定格退 2（fail-closed）。
+  # script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-verdict-read.mjs --decision-out .comfy-ci/tmp/github-verdict-logs/decision.json
+  # 包住 45m 轮询预算 + 进程开销；与 GitHub 侧最重格的外框同级。
+  # timeout: 60m
+  #
   # ── 失败日志的全量通道：**gzip + base64 + 分块打印**（2026-11-05 按实测重做）──
   #
   # 为什么不是「附件」：`cnbcool/attachments` 那类格是**插件**（`image` + `settings`），要
@@ -2158,23 +2175,44 @@
   #
   # 这三格**不许变成必红**：清单读不到 / 这一块不存在 / 块文件缺失，都只各念一行、退 0；
   # 判决由最后一格退码，日志取不到不改变三态与退码（用例钉着）。
-  - name: 日志分块 1/3
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-print-log-chunk.mjs 1
-    timeout: 2m
-  - name: 日志分块 2/3
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-print-log-chunk.mjs 2
-    timeout: 2m
-  - name: 日志分块 3/3
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-print-log-chunk.mjs 3
-    timeout: 2m
-
+  # - name: 日志分块 1/3
+  # script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-print-log-chunk.mjs 1
+  # timeout: 2m
+  # - name: 日志分块 2/3
+  # script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-print-log-chunk.mjs 2
+  # timeout: 2m
+  # - name: 日志分块 3/3
+  # script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-print-log-chunk.mjs 3
+  # timeout: 2m
+  #
   # ── 判决判定：**承重**。把回读格留下的 `decision.json` 换成流水线真退码。
   #
   # 读不到 / 不是合法 JSON / 形状不对 ⇒ exit 2（判不了就拦合，fail-closed）；exit 1 ⇒ 拦合；
   # **只有**明确写着 exit 0 才放行 —— 与回读格那套三态一字不差，本格不做第二次判读。
-  - name: GitHub 判决判定
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-verdict-decide.mjs .comfy-ci/tmp/github-verdict-logs/decision.json
-    timeout: 2m
+  # - name: GitHub 判决判定
+  # script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-verdict-decide.mjs .comfy-ci/tmp/github-verdict-logs/decision.json
+  # timeout: 2m
+  #
+  # ── GA 回调结论回读：**承重**（ISSUE #3378 转正 / §13.5.33）───────────────────
+  #
+  # 只认 `cnb/api_trigger_ga_verdict/*` 这条 context 的终态：GA `pr-gate.yml` 的收尾 job
+  # （`if: always()`）用 `CNB_TRIGGER_TOKEN` 把 conclusion 送回，平台写进本 PR 预合并 sha
+  # 的 commit-statuses。本格读 `GET /{repo}/-/pulls/{n}/commit-statuses`（api.cnb.cool，站内，
+  # 与镜像格 `get-pull` 回读同族、同一枚平台注入 `CNB_TOKEN`），**自托管机一台都不碰
+  # github.com**。三态 fail-closed：绿 0 / 红 1 / 没终态或超时 2；2 与 1 一样折成本 build
+  # 的退码 ⇒ 保护分支与 `ship` 仍认这条 `pull_request` build（§13.6 承重不换锚）。占位腿因此
+  # 不需要：主列这条 build 自己活到出结论，超时即红，单写者无竞态。
+  #
+  # ⚠️ 首跑复验出口：端点与令牌形状已在本机真读验证（`ci-ga-verdict-readout.mjs
+  # --pr 3398` 读到 `state=success ⇒ 绿`），但**PR 节点上那枚平台注入 `CNB_TOKEN`
+  # 是否同样读得到 `commit-statuses` 仍要首跑坐实**。若首跑报「令牌缺席 / 平台没回」
+  # ⇒ 直接在构建日志看这一行；快速回退按上面停用段的恢复动作，出站轮询链完整保留
+  # 在盘上。
+  # GA 侧判红的全量日志仍可 `pnpm ship --gh-logs <run-id|pr号>` 按需取（不走 PR 档）。
+  - name: GA 回调结论回读
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-ga-verdict-readout.mjs
+    # 包住站内短轮询预算（脚本 DEFAULT_BUDGET_MS 45m）+ 进程开销；与最重格外框同级。
+    timeout: 60m
 
   # ── 构建与产物：**这一格 2026-10-18 起不在 PR 上跑了**（口径见 §13.5.23）──
   #
@@ -2672,54 +2710,41 @@ master:
   # 并且记住：**委托发不出去之前，PR 那一格不许再挂 `--autofix`**（就地修 + 回不去
   # = 让陈旧隐形的那一格，ISSUE #2231 同型）。
 
-  # ── GA 回调 + 占位 fail-closed（ISSUE #3378）────────────────────────────────
+  # ── GA 回调（ISSUE #3378 · 2026-11-08 转正）────────────────────────────────
   #
-  # 目标：把「CNB 出站轮询 GitHub conclusion」换成「GA 入站推送结论」。上一轮
-  # 在 #3374 上的探针验过两件：① 一条绑 `sha=PR 预合并 sha` 的 `api_trigger`
-  # build，其终态会挂进 `GET /pulls/{n}/commit-statuses` 并参与保护分支聚合
-  # （context 前缀是 `cnb/api_trigger_ga_verdict/...`，不是 `pull_request/`）；
-  # ② `--env` 注入生效、`--sha` 绑预合并 sha 时 `CNB_COMMIT` 也是那笔。
-  # 于是 GA 跑完用自己的令牌调一次 `POST /{repo}/-/build/start` 即可，
-  # 自托管机一台都不必碰 github.com。
+  # 目标：把「CNB 出站轮询 GitHub conclusion」换成「GA 入站推送结论」。探针
+  # （#3374）验过两件：① 一条绑 `sha=PR 预合并 sha` 的 `api_trigger` build，
+  # 其终态会挂进 `GET /pulls/{n}/commit-statuses`（context 前缀
+  # `cnb/api_trigger_ga_verdict/...`）；② `--env` 注入生效。于是 GA 跑完用自己
+  # 的令牌调一次 `POST /{repo}/-/build/start` 即可，自托管机一台都不必碰
+  # github.com。
   #
-  # ⚠️ **这是可评审的骨架，刻意不接承重主列**：`质量门禁` 那条 PR 流水线与
-  # `GitHub 判决回读 → 判定` 那一格一个字节不动，§13.6「PR 跑绿才合并」的
-  # 承重仍在原处。本段是**休眠**的 —— 没有人在 GA 侧发回调、也没有人在 PR
-  # 事件上起占位，它就不会自己跑。转正要单独一次决定（见文末「接线前」）。
+  # **已转正**：`质量门禁` 的 `GA 回调结论回读`（§13.5.33 逐笔对账）站内读这条
+  # status，折成 `pull_request` build 的退码 —— 出站轮询 GitHub conclusion 的
+  # 老主列五格已停用，双写消失，§13.6「PR 跑绿才合并」的承重仍在这条 build
+  # 上（不换成「靠 api_trigger context 拦合」那条没坐实的路）。
   #
-  # 为什么**只有一条流水线、靠 `GA_ROLE` 分两种角色**，而不是两个事件：
-  # commit-status 的 context 由「事件名 + 流水线序号」生成，两个事件 ⇒ 两条
-  # context，占位的红会一直拉住聚合、回调的绿救不回来。共用同一事件名
-  # ⇒ 同一条 context，后写覆盖前写（探针 `cnb-edc-1k6subhok` 一族实测）。
-  # 两种角色由 `env.GA_ROLE` 区分：`placeholder` / `callback`。
+  # ⚠️ 流水线 `name` **不改名**：commit-status 的 context 含这段名字，改名会让
+  # 「同一条 context 后写覆盖前写」的读数与历史现场对不上。名字里「骨架·休眠」
+  # 是落地那一刻的称谓，只指「不接承重主列」；回调 build 本身一直由 GA 收尾
+  # job 自动起，不是「没人发它就不跑」。
   #
-  # 两种角色的判定都**内联在下面的 stage script** 里，不引用 `scripts/` 下任何
-  # 入口：`git.enable: false` 时工作区没有代码（绑预合并 sha 必须关检出 ——
-  # 不关的话 clone 服务只 fetch master，`checkout` 直接
-  # `fatal: reference is not a tree`，探针 `cnb-4ee-1k6stvp2v` 的死因）。
-  # 配置里的逻辑一条判据都测不到，所以配套脚本放在**发回调的 GA 侧**
+  # **单写者，不再需要占位腿**：`GA_ROLE=placeholder` 那一半与 `*lock_ga_verdict`
+  # 的 cancel 竞态设计随转正一起退役 —— fail-closed 改由 `GA 回调结论回读` 自己
+  # 承担：主列那条 `pull_request` build 活到 GA 出结论，超时 / status 缺席即判红。
+  # 那条锁仍留着：同一个 PR 连派发几次时，后一条 callback 掐掉前一条，避免
+  # 旧结论覆盖新结论（后写覆盖前写仍成立，只是不再分两个角色）。
+  #
+  # 判定**内联在下面的 stage script** 里，不引用 `scripts/` 下任何入口：
+  # `git.enable: false` 时工作区没有代码（绑预合并 sha 必须关检出 —— 不关的话
+  # clone 服务只 fetch master，`checkout` 直接 `fatal: reference is not a tree`，
+  # 探针 `cnb-4ee-1k6stvp2v` 的死因）。配套脚本放在**发回调的 GA 侧**
   # （`scripts/ci-ga-verdict-callback.mjs`）与只读对账入口
   # （`scripts/ci-ga-verdict-placeholder.mjs`），不在这一档里跑。
   #
-  # 三态（fail-closed，与 `GitHub 判决判定` 同款）：
-  #   · `GA_ROLE=callback` + `GA_VERDICT` 明确是绿词（success/neutral/skipped）
-  #     ⇒ exit 0；是红词或缺席 ⇒ exit 1；
-  #   · `GA_ROLE=placeholder` ⇒ 先 `Start-Sleep` 撑住 pending，到预算仍没人
-  #     回调 ⇒ exit 1（GA 永不回调时不能让 PR 早放行）；
-  #   · 角色认不出 ⇒ exit 2（没判过 ≠ 判过）。
-  #
-  # ⚠️ **接线前必须补的一格探针读数**：占位与回调共用 `*lock_ga_verdict`
-  # （`cancel-in-progress: true`）让「回调到达即掐掉占位」，但**被 cancel 的
-  # build 会不会仍写一条终态、那条终态是否参与聚合**没有实测。若 cancel 也
-  # 落成一条红，就得改成「回调落定时显式 `stop-build` 占位」或「只留一个
-  # 写者」；这条是骨架里唯一没被探针盖住的缝，不假装它已解决。
-  #
-  # 接线动作（三步，各是一次独立决定）：
-  #   ① `pr-gate.yml` 收尾 job 调 `ci-ga-verdict-callback.mjs`（带
-  #      `CNB_TRIGGER_TOKEN` = 用户本轮补的 `repo-cnb-trigger:rw`）；
-  #   ② 镜像格 payload 带 `cnb_merge_sha`（`CNB_PULL_REQUEST_MERGE_SHA`）；
-  #   ③ PR 事件上起一条占位（同 sha、同事件、`GA_ROLE=placeholder`），
-  #      再逐笔对账 §13.5.33 的判决链要不要退场。
+  # 三态（fail-closed）：`GA_VERDICT` 明确是绿词（success/neutral/skipped）
+  # ⇒ exit 0；是红词或缺席 ⇒ exit 1；`GA_ROLE` 不是 callback ⇒ exit 2
+  # （没判过 ≠ 判过）。
   api_trigger_ga_verdict:
     - <<: *common
       name: GA 判决回调（骨架·休眠）
@@ -2731,32 +2756,24 @@ master:
           # 全 ASCII 日志：`git.enable: false` 时工作区没有
           # `scripts/ci-cp936-exit.mjs`，包不了那层转码；这一格自己不写中文，
           # CP936 对 ASCII 逐字通过，乱码面从源头就不存在。
-          # PS 5.1 原生写法（`Start-Sleep` / `-contains` / 无 `?.` `??`），
-          # 与头注第 3、6 两条和 §13.5.3.4.1 的解析期判据对齐。
+          # PS 5.1 原生写法（`-contains` / 无 `?.` `??`），与头注第 3、6 两条
+          # 和 §13.5.3.4.1 的解析期判据对齐。
           script: |
             $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
             $role = [string]$env:GA_ROLE
-            if ($role -eq 'placeholder') {
-              $secs = 2700
-              if ($env:GA_PLACEHOLDER_TIMEOUT_SEC) { $secs = [int]$env:GA_PLACEHOLDER_TIMEOUT_SEC }
-              Write-Host "[ga-verdict] placeholder holds pending for $secs s (waiting for callback to overwrite)"
-              Start-Sleep -Seconds $secs
-              Write-Host "[ga-verdict] placeholder timeout: GA never called back, fail-closed"
-              exit 1
+            if ($role -ne 'callback') {
+              Write-Host "[ga-verdict] role is not callback, inconclusive (not a pass)"
+              exit 2
             }
-            if ($role -eq 'callback') {
-              $v = ([string]$env:GA_VERDICT).ToLower()
-              $green = @('success', 'neutral', 'skipped') -contains $v
-              if ($green) {
-                Write-Host "[ga-verdict] callback conclusion=$v -> success"
-                exit 0
-              }
-              Write-Host "[ga-verdict] callback conclusion=$v -> failure"
-              exit 1
+            $v = ([string]$env:GA_VERDICT).ToLower()
+            $green = @('success', 'neutral', 'skipped') -contains $v
+            if ($green) {
+              Write-Host "[ga-verdict] callback conclusion=$v -> success"
+              exit 0
             }
-            Write-Host "[ga-verdict] unknown GA_ROLE, inconclusive (not a pass)"
-            exit 2
-          timeout: 50m
+            Write-Host "[ga-verdict] callback conclusion=$v -> failure"
+            exit 1
+          timeout: 5m
 
   # ── 锁编排探针（ISSUE #2363）：三条**一次性**流水线，读数取完即**整段删掉** ─────
   #
