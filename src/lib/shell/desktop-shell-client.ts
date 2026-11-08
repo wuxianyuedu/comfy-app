@@ -93,14 +93,11 @@ export function clearLaunchLoadingStub(): void {
   if (typeof window === "undefined") {
     return;
   }
-  /* SAFETY: 类型断言已复核 */
-  const w = window as unknown as {
-    __comfyappStubTimer?: number;
-  };
+  const timer: unknown = Reflect.get(window, "__comfyappStubTimer");
   /* 计时器 id 用 0 表示「已清」，0 与缺省都按没有计时器处理 */
-  if ((w.__comfyappStubTimer ?? 0) !== 0) {
-    window.clearInterval(w.__comfyappStubTimer);
-    w.__comfyappStubTimer = 0;
+  if (typeof timer === "number" && timer !== 0) {
+    window.clearInterval(timer);
+    Reflect.set(window, "__comfyappStubTimer", 0);
   }
   document.getElementById(LOADING_STUB_ID)?.remove();
 }

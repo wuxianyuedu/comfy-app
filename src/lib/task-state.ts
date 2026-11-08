@@ -58,14 +58,15 @@ export const TASK_STATUS_LABELS = {
   CANCELLED: "已取消",
 } as const satisfies Record<string, string>;
 
+/** 该字符串是否是本表认识的状态码（收窄用，与 `Object.keys` 同判据）。 */
+function isKnownTaskStatus(status: string): status is keyof typeof TASK_STATUS_LABELS {
+  return Object.hasOwn(TASK_STATUS_LABELS, status);
+}
+
 /** 读标签；未知状态原样回显（不静默转成「未知」把信息吞掉）。 */
 export function taskStatusLabel(status: string | null | undefined): string {
   if (status === null || status === undefined || status === "") {
     return "未知";
   }
-  const known: ReadonlyArray<string> = Object.keys(TASK_STATUS_LABELS);
-  /* SAFETY: 类型断言已复核 */
-  return known.includes(status)
-    ? TASK_STATUS_LABELS[status as keyof typeof TASK_STATUS_LABELS]
-    : status;
+  return isKnownTaskStatus(status) ? TASK_STATUS_LABELS[status] : status;
 }

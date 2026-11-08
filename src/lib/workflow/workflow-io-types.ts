@@ -6,6 +6,7 @@
  * 放在 `src/lib/` 下是为了让服务端不必跨界去引 `components/`。
  */
 import { z } from "zod";
+import { isPlainRecord } from "~/lib/is-record";
 
 /* 一个暴露出来的引脚，形状与 GET /api/workflows/[id] 返回的一致。 */
 export type WorkflowIOEntry = {
@@ -92,6 +93,26 @@ const WorkflowIOEntrySchema = z.looseObject({
 });
 const WorkflowIOMapSchema = z.record(z.string(), WorkflowIOEntrySchema);
 
+/** 一条模式覆盖项吗（宽松判据：只校验已知字段的类型，未知字段原样保留）。 */
+function isModeOverride(value: unknown): value is WorkflowIOModeOverride {
+  if (!isPlainRecord(value)) {
+    return false;
+  }
+  const required = value.required;
+  const seedMode = value.seedMode;
+  const visible = value.visible;
+  return (
+    (required === undefined || typeof required === "boolean") &&
+    (seedMode === undefined || typeof seedMode === "string") &&
+    (visible === undefined || typeof visible === "boolean")
+  );
+}
+
+/** 形如 `{ <模式码>: WorkflowIOModeOverride }` 的覆盖层吗。 */
+function isModeOverrideMap(value: unknown): value is Record<string, WorkflowIOModeOverride> {
+  return isPlainRecord(value) && Object.values(value).every(isModeOverride);
+}
+
 /** 解析 workflowIO 列（DB JSON 列）；非对象 / 形状不符 → 空表。
  *
  *  列里可能留着把模式覆盖层写作 `modes` 键的行（该键与工作流级的
@@ -115,10 +136,9 @@ export function parseWorkflowIOMap(value: unknown): WorkflowIOMap {
     /* 旧键先删掉、再按需落新键：留着它等于让同一份覆盖层以两个名字在本列里
      * 往返 —— 下游读哪个都能读通，于是「谁是权威」永远说不清（而 `.loose()`
      * 会让它一路透传回写库）。 */
-    /* SAFETY: 类型断言已复核 */
-    const legacy = rec.modes as Record<string, WorkflowIOModeOverride> | undefined;
+    const legacy = rec.modes;
     delete rec.modes;
-    if (entry.modeOverrides === undefined && legacy !== undefined) {
+    if (entry.modeOverrides === undefined && isModeOverrideMap(legacy)) {
       entry.modeOverrides = legacy;
     }
   }

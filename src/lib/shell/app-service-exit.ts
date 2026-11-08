@@ -33,6 +33,8 @@
  * 与同一组成因取值**，漂开即「记录写进去了、界面读不懂」。
  */
 
+import { isRecord } from "~/lib/is-record";
+
 /** 应用服务结束的成因（写入侧与本模块共用的取值，不许各写一套）。 */
 export type AppServiceExitKind =
   /** 服务自己退出（编译失败 / 端口被占 / pnpm 异常）。 */
@@ -80,11 +82,10 @@ export const APP_SERVICE_EXIT_FILE = "app-service-exit.json";
  * 「服务退出了，退出码 N」——升级前后版本混跑时这条尤其常见。
  */
 export function parseAppServiceExitRecord(raw: unknown): AppServiceExitRecord | null {
-  if (typeof raw !== "object" || raw === null) {
+  if (!isRecord(raw)) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  const o = raw as Record<string, unknown>;
+  const o = raw;
   if (typeof o.at !== "string" || o.at === "") {
     return null;
   }
@@ -384,11 +385,10 @@ export async function fetchAppServiceExit(): Promise<AppServiceExitProbe> {
     if (!res.ok) {
       return empty;
     }
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as {
-      currentRunId?: unknown;
-      record?: unknown;
-    };
+    const data: unknown = await res.json();
+    if (!isRecord(data)) {
+      return empty;
+    }
     return {
       record: parseAppServiceExitRecord(data.record),
       currentRunId:

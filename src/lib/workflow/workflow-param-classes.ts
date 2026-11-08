@@ -171,8 +171,10 @@ export function sizeGroupIds(id: string | null | undefined): ReadonlyArray<Param
   if (id === undefined || id === null) {
     return [];
   }
-  /* SAFETY: 类型断言已复核 */
-  return id === "size" ? SIZE_SUB_IDS : [id as ParamClass];
+  if (id === "size") {
+    return SIZE_SUB_IDS;
+  }
+  return isParamClass(id) ? [id] : [];
 }
 
 /* ── 端口分类：只看**声明类型** ──
@@ -240,6 +242,11 @@ export const CLASS_FAMILY: Record<ParamClass, PinFamily | null> = {
   "lora-strength": "number",
   other: null,
 };
+
+/** 分类键的运行时判据（id 来自持久化 / 契约字符串，可能是历史遗留的未知值）。 */
+function isParamClass(value: string): value is ParamClass {
+  return Object.hasOwn(CLASS_FAMILY, value);
+}
 
 /** 某个对外参数类接受的端口族（`null` = 不接受任何端口）。 */
 export function familyOfClass(cls: ParamClass): PinFamily | null {

@@ -18,6 +18,7 @@
 
 import { readStorageItem, removeStorageItem, writeStorageJson } from "../browser-storage";
 import type { TaskLogEntry } from "../workshop/generation-client";
+import { isRecord } from "~/lib/is-record";
 import { tailWindow, tailWindowAppend } from "~/lib/page-window";
 
 /** 这次运行**从哪个入口发起**。
@@ -103,6 +104,13 @@ function persist(): void {
   writeStorageJson(STORAGE_KEY, arr);
 }
 
+/** 落库记录的最小可信形状：与 `hydrate` 的既有校验逐字一致（只看两个 id）。 */
+function isWorkflowRunMeta(value: unknown): value is WorkflowRunMeta {
+  return (
+    isRecord(value) && typeof value.taskId === "string" && typeof value.workflowId === "string"
+  );
+}
+
 function hydrate(): void {
   const raw = readStorageItem(STORAGE_KEY);
   if (raw === null) {
@@ -116,18 +124,8 @@ function hydrate(): void {
       return;
     }
     for (const item of parsed) {
-      if (
-        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-        item != null &&
-        typeof item === "object" &&
-        /* SAFETY: 类型断言已复核 */
-        typeof (item as WorkflowRunMeta).taskId === "string" &&
-        /* SAFETY: 类型断言已复核 */
-        typeof (item as WorkflowRunMeta).workflowId === "string"
-      ) {
-        /* SAFETY: 类型断言已复核 */
-        const meta = item as WorkflowRunMeta;
-        runs.set(meta.taskId, meta);
+      if (isWorkflowRunMeta(item)) {
+        runs.set(item.taskId, item);
       }
     }
   } catch {
