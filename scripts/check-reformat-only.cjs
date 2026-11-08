@@ -159,6 +159,7 @@ const {
   parseFaceArgs,
   faceArgRefusal,
 } = require("./reformat-scan-core.mjs");
+
 const { gitOrEmpty, collectChangedFiles, collectPairs } = makeScanFns(ROOT, SOURCE_RE);
 
 /**

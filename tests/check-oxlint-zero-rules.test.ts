@@ -54,6 +54,63 @@ describe("已清零 oxlint 规则集闸（#3016）", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  /**
+   * import / react 族的负控（ISSUE #3340）：这两族的 4 条规则曾因探针配置缺
+   * `plugins:` 声明而**静默空转**——「0 命中」里它们是「没扫」而不是「扫过 0」，
+   * 而旧负控只挑了生效族（unicorn），空转抓不住自己。这两条夹具钉住「探针真的
+   * 在扫这两族」：哪天 plugins 声明又丢了，这里先红。
+   */
+  it("负控：import 族（重复 import 语句）必须判红 —— import(no-duplicates) 真在扫", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "oxlint-zero-rules-"));
+    try {
+      const fixture = path.join(dir, "fixture.ts");
+      writeFileSync(
+        fixture,
+        'import { a } from "node:path";\nimport { b } from "node:path";\nexport const both = [a, b];\n',
+        "utf8",
+      );
+      const r = spawnSync(process.execPath, [SCRIPT, fixture], { encoding: "utf8" });
+      expect(r.status, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(1);
+      const out = `${r.stdout}${r.stderr}`;
+      expect(out).toContain("import(no-duplicates)");
+      expect(out).toContain("fixture.ts");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("负控：react 族（JSX 布尔属性字面量）必须判红 —— react(jsx-boolean-value) 真在扫", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "oxlint-zero-rules-"));
+    try {
+      // .jsx：路径档不挂 --type-aware 也没有 tsconfig，JSX 语法按扩展名解析。
+      const fixture = path.join(dir, "fixture.jsx");
+      writeFileSync(
+        fixture,
+        "export const Bar = (props) => <div active={true} {...props} />;\n",
+        "utf8",
+      );
+      const r = spawnSync(process.execPath, [SCRIPT, fixture], { encoding: "utf8" });
+      expect(r.status, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(1);
+      const out = `${r.stdout}${r.stderr}`;
+      expect(out).toContain("react(jsx-boolean-value)");
+      expect(out).toContain("fixture.jsx");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("探针配置声明了清单涉及的全部内建族（plugins 是替换语义，漏一个挤一个）", () => {
+    // `plugins:` 行存在 ⇒ 缺省族被这一行**替换**（实测：只写 import/react 时
+    // unicorn 从 --rules 的 Enabled 列消失，ISSUE #3340）。声明集合必须是
+    // 清单涉及的内建族全集 —— 直接起探针（顺带刷新生成物）后钉**行为**。
+    const r = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8" });
+    expect(r.status, `stderr: ${r.stderr}`).toBe(0);
+    const probe = readFileSync("node_modules/.cache/oxlint-zero-rules.config.mjs", "utf8");
+    expect(probe).toContain('plugins: ["import", "react", "typescript", "unicorn"]');
+    // jsPlugins 的名字不进 plugins 数组（写进去反而 Unknown plugin，实测）。
+    expect(probe).not.toContain('"perfectionist"]');
+  });
 });
 
 /**
