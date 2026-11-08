@@ -538,14 +538,16 @@
   `fileName + folder`；扫描根来自设置里的 ComfyUI 路径。
 - 落点：`src/server/api/routers/model.ts`、`src/lib/models.ts`
 
-#### FR-MD-02 每目录启用管理
+#### FR-MD-02 按目录浏览
 
 - 状态：已上线
-- 需求：可按目录启用 / 停用 / 删除模型配置（决定创作时暴露哪些模型）。
-- 行为与验收：启用态在 `userModelConfig`（用户级）；停用即从创作面消失，
-  不删磁盘文件。
-- 落点：`src/server/api/routers/model.ts`（`configList` / `configSave` /
-  `configDelete`）、`src/components/studio/hooks/use-model-folder-config.ts`
+- 需求：模型库页面按 ComfyUI 的模型目录浏览 —— 左侧一列目录，选中后右侧显示该目录的模型。
+- 行为与验收：所有 ComfyUI 模型目录默认启用（与 ComfyUI 默认状态一致），不再有
+  每目录启用 / 停用的配置，也不再提供「模型目录配置」入口；扫描以
+  `GET /api/models` 返回的目录清单为准；目录名即模型类型；搜索只在当前目录内生效。
+  空库时按设置里是否填了 ComfyUI 路径分别提示「ComfyUI 还没有配置」或「模型库里还没有模型」。
+- 落点：`src/server/api/routers/model.ts`（`configList`）、`src/lib/models.ts`、
+  `src/components/studio/ModelLibrary.tsx`、`src/components/studio/hooks/use-model-library.ts`
 
 #### FR-MD-03 模型收藏
 

@@ -2,9 +2,10 @@ import { fmtBytes } from "~/lib/format-bytes";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { compareText } from "~/lib/ordered-set";
 import { displayValue } from "~/lib/display-value";
+import { folderMeta } from "~/lib/model-types";
 
 // ── 工作室模型库：配置层（规范 17 §17.2 第①层）──────────────────────────────
-// 行类型、纯派生（筛选 / 计数 / 体积格式化）——与 tRPC hook 分开，
+// 行类型、纯派生（按目录分组 / 筛选 / 体积格式化）——与 tRPC hook 分开，
 // 可脱离 React 直接断言。
 
 export type ModelRow = {
@@ -16,28 +17,28 @@ export type ModelRow = {
   type: string;
 };
 
-/** GET /api/models/config 返回的一行（只保留本视图渲染用到的子集）。 */
-export type FolderConfigRow = {
+/** 左侧目录列的一行：目录名**就是**模型类型，数量由已同步的模型派生。 */
+export type ModelFolder = {
   count: number;
-  enabled: boolean;
-  folder: string;
-  hasConfig: boolean;
   label: string;
-  /** 目录名**就是**模型类型。 */
   type: string;
 };
 
-export const ALL_TYPES = "ALL";
-
-/** 关键字 + 类型筛选：命中「名称 或 文件名（含路径）」任一即保留。 */
-export function filterModels(models: Array<ModelRow>, filter: string, q: string): Array<ModelRow> {
+/**
+ * 按当前目录 + 关键字筛选。目录为 `null` 时表示不限制目录。
+ * 可搜字段是本域的判据（名称 + 文件名，搜 `model.safetensors` 也能中），
+ * 归一化与命中判决走 `~/lib/list-filter`（规范 16 §16.2.4.16）。
+ */
+export function filterModels(
+  models: Array<ModelRow>,
+  folder: string | null,
+  q: string,
+): Array<ModelRow> {
   const term = normalizeNeedle(q);
   return models.filter((model) => {
-    if (filter !== ALL_TYPES && model.type !== filter) {
+    if (folder !== null && model.type !== folder) {
       return false;
     }
-    /* 可搜字段是本域的判据（名称 + 文件名，搜 `model.safetensors` 也能中），
-     * 归一化与命中判决走 `~/lib/list-filter`（规范 16 §16.2.4.16）。 */
     return matchesNeedle(term, `${model.name} ${model.fileName}`);
   });
 }
@@ -58,6 +59,15 @@ export function countByType(models: Array<ModelRow>): Array<[string, number]> {
   );
 }
 
+/** 由已同步的模型派生左侧目录列（只列有模型的目录）。 */
+export function foldersOf(models: Array<ModelRow>): Array<ModelFolder> {
+  return countByType(models).map(([type, count]) => ({
+    type,
+    label: folderMeta(type).label,
+    count,
+  }));
+}
+
 /**
  * 模型体积：B / KB / MB / GB 自动换挡；空值显示「—」。走 `~/lib/format-bytes` 唯一出口（此前两处各写一份、
  * 阈值 `>` 与 `<` 两套，1024 字节整给出不同答案）。**`0` 也当「未知体积」**（有用例钉住）：`fileSize` 为 0
@@ -71,25 +81,4 @@ export function fmtSize(n?: number | null): string {
     return displayValue(null);
   }
   return displayValue(fmtBytes(n));
-}
-
-/** 目录行的关键字筛选（命中目录名或展示标签）。 */
-export function filterFolders(folders: Array<FolderConfigRow>, q: string): Array<FolderConfigRow> {
-  const term = normalizeNeedle(q);
-  if (!term) {
-    return folders;
-  }
-  return folders.filter((row) => matchesNeedle(term, `${row.folder} ${row.label}`));
-}
-
-/** 目录行拆成「已启用 / 可添加」两组（原组件里的两个 useMemo）。 */
-export function splitFolders(
-  folders: Array<FolderConfigRow>,
-  q: string,
-): { available: Array<FolderConfigRow>; enabled: Array<FolderConfigRow> } {
-  const matched = filterFolders(folders, q);
-  return {
-    enabled: matched.filter((row) => row.enabled),
-    available: matched.filter((row) => !row.enabled),
-  };
 }
