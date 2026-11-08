@@ -38,6 +38,13 @@ export type CanvasPlacementContext = {
   screenToFlowPosition: (point: XYPosition) => XYPosition;
 };
 
+/** 运行期确认节点类型是画布接受的两支之一，再交给 ReactFlow 的类型面。 */
+function assertCanvasNodeType(node: Node): asserts node is CanvasNodeType {
+  if (node.type !== "canvasNode" && node.type !== "workflowArdot") {
+    throw new TypeError(`不是画布节点：${String(node.type)}`);
+  }
+}
+
 /**
  * 把一个画布节点放进项目画布 —— **全库唯一的入口**（规范 16 §16.2.4.38）。
  *
@@ -86,8 +93,13 @@ export function placeCanvasNode(opts: {
     position,
     data: opts.data,
   };
-  /* SAFETY: 类型断言已复核 */
-  return [...opts.nodes, node] as Array<CanvasNodeType>;
+  const all: Array<CanvasNodeType> = [];
+  for (const existing of opts.nodes) {
+    assertCanvasNodeType(existing);
+    all.push(existing);
+  }
+  all.push(node);
+  return all;
 }
 
 /** 双 rAF 的 fitView 调度器：等 ReactFlow 完成本轮布局后再 fit，

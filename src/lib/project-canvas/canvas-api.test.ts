@@ -7,12 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { uploadImageFile } from "./canvas-api";
 
 function jsonRes(status: number, body: unknown): Response {
-  /* SAFETY: 类型断言已复核 */
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: () => body,
-  } as unknown as Response;
+  return new Response(JSON.stringify(body), { status });
 }
 
 /** 按顺序响应 fetch：先上传、再 ensure 轮询、最后重传。 */

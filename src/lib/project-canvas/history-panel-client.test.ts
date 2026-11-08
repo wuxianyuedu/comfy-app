@@ -12,8 +12,7 @@ vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
     task: {
       list: {
-        /* SAFETY: 类型断言已复核 */
-        query: (...args: Array<unknown>) => taskListQuery(...args) as never,
+        query: (...args: Array<unknown>): unknown => taskListQuery(...args),
       },
     },
   },

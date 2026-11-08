@@ -24,9 +24,13 @@ import { pushServerDraft } from "~/lib/workshop/draft-sync-client";
 import { fireAndForget } from "~/lib/async-action";
 import type { Shot } from "~/lib/workshop/types";
 
+/** 服务端 `shots` 列没有形状约束：只核「是不是数组」，元素原样留着（与草稿 store
+ *  同口径 —— 认不出就丢等于删用户/服务端写进来的东西）。 */
 function asShots(raw: unknown): Array<Shot> {
-  /* SAFETY: 类型断言已复核 */
-  return Array.isArray(raw) ? (raw as Array<Shot>) : [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.map((shot: Shot) => shot);
 }
 
 /** 把某镜头的生成态补丁回写进该项目（草稿 + 两张服务端镜像）。静默失败、不阻塞画布。 */
@@ -80,8 +84,7 @@ export async function requestShotRedo(projectId: string, shotId: string): Promis
   if (nextShots !== draft.shots) {
     const nextDraft = {
       ...draft,
-      /* SAFETY: 类型断言已复核 */
-      shots: nextShots as Array<Shot>,
+      shots: asShots(nextShots),
     };
     writeWorkshopDraft(projectId, nextDraft);
     fireAndForget(pushServerDraft(projectId, nextDraft), () => {

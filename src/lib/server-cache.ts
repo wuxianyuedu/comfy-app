@@ -12,7 +12,17 @@
  *   因此按 TTL 失效是安全的。
  */
 
+import { isRecord } from "~/lib/is-record";
+
 type Entry<T> = { expiresAt: number; value: T };
+
+/** 缓存条目只由本模块写入：读到它即意味着同 key 的上一次写入成功，值就是那次
+ *  构建的结果。这里在运行期核对条目形状（对象且带 `value`），而不是靠断言宣称。 */
+function assertEntryValue<T>(entry: unknown): asserts entry is Entry<T> {
+  if (!isRecord(entry) || !Object.hasOwn(entry, "value")) {
+    throw new TypeError("server-cache: 缓存条目形状不合法");
+  }
+}
 
 type CacheStore = {
   map: Map<string, Entry<unknown>>;
@@ -48,8 +58,8 @@ export async function cacheJson<T>(
     // 重新插入一次，以标记为「最近使用」。
     store.map.delete(key);
     store.map.set(key, existing);
-    /* SAFETY: 类型断言已复核 */
-    return existing.value as T;
+    assertEntryValue<T>(existing);
+    return existing.value;
   }
 
   const value = await build();
@@ -85,8 +95,8 @@ export function cachePeek<T>(key: string): T | undefined {
     // 重新插入一次，以标记为「最近使用」。
     store.map.delete(key);
     store.map.set(key, existing);
-    /* SAFETY: 类型断言已复核 */
-    return existing.value as T;
+    assertEntryValue<T>(existing);
+    return existing.value;
   }
   return undefined;
 }
