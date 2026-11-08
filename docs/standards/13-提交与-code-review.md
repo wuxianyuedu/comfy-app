@@ -9476,11 +9476,13 @@ build**（§13.6「PR 跑绿才合并」的承重锚一个字没换）。
 （`GA 判决回调（骨架·休眠）`）**不改名**：commit-status 的 context 含它，
 改名会让「同一条 context 后写覆盖前写」的读数与历史现场对不上。
 
-**一条诚实边界**：`GA 回调结论回读` 依赖 `CNB_TOKEN` 在 PR 节点上读得到
-`commit-statuses`。端点与令牌形状已在本机真读验证
-（`ci-ga-verdict-readout.mjs --pr 3398` 读到 `state=success ⇒ 绿`），但 PR 节点上
-平台注入的 `CNB_TOKEN` 是否同样读得到，仍要首跑坐实 —— 复验出口写在配置注释里
-（看构建日志那一行），不假装已验。
+**PR 节点读权已坐实**：`GA 回调结论回读` 依赖 `CNB_TOKEN` 在 PR 节点上读得到
+`commit-statuses`。本机真读（`ci-ga-verdict-readout.mjs --pr 3398` ⇒
+`state=success ⇒ 绿`）验了端点与令牌形状，PR #3408 第二跑
+（`cnb-i2o-1k6tit72t`）上这一格在真实 `pull_request` build 里 `success`，端到端
+成立。首跑（`cnb-p7n-1k6thqak3`）红在 `GitHub 镜像同步` 的 15m 外框超时
+（egress 抖动、与本格无关），后面几格整片 skipped，不是这一格的读数 —— 环境格
+的红不靠抬超时或反复重跑掩盖（§13.6.4），rerun 只为取一次新读数。
 
 #### 13.5.34 2026-11-06 GA push 档：镜像仓 master 的文档链并行执行者（任务 3 并行期）
 

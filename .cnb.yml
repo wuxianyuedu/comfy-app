@@ -2203,11 +2203,13 @@
   # 的退码 ⇒ 保护分支与 `ship` 仍认这条 `pull_request` build（§13.6 承重不换锚）。占位腿因此
   # 不需要：主列这条 build 自己活到出结论，超时即红，单写者无竞态。
   #
-  # ⚠️ 首跑复验出口：端点与令牌形状已在本机真读验证（`ci-ga-verdict-readout.mjs
-  # --pr 3398` 读到 `state=success ⇒ 绿`），但**PR 节点上那枚平台注入 `CNB_TOKEN`
-  # 是否同样读得到 `commit-statuses` 仍要首跑坐实**。若首跑报「令牌缺席 / 平台没回」
-  # ⇒ 直接在构建日志看这一行；快速回退按上面停用段的恢复动作，出站轮询链完整保留
-  # 在盘上。
+  # ✅ **PR 节点读权已坐实**（PR #3408 第二跑 `cnb-i2o-1k6tit72t`）：这一格
+  # 在真实 PR build 上 `success`，站内读到的正是 GA 回调写进 commit-statuses 的
+  # 结论 —— 端点、平台注入 `CNB_TOKEN`、聚合全链路端到端成立。首跑
+  # （`cnb-p7n-1k6thqak3`）红在 `GitHub 镜像同步` 的 15m 外框超时（egress 抖动，
+  # 与本格无关），后面几格整片 skipped，不是这一格的读数。若将来报「令牌缺席 /
+  # 平台没回」⇒ 直接在构建日志看这一行；快速回退按上面停用段的恢复动作，出站
+  # 轮询链完整保留在盘上。
   # GA 侧判红的全量日志仍可 `pnpm ship --gh-logs <run-id|pr号>` 按需取（不走 PR 档）。
   - name: GA 回调结论回读
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-ga-verdict-readout.mjs
