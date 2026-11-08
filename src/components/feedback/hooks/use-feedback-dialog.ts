@@ -12,7 +12,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
 import { useToast } from "~/components/studio/ToastProvider";
 import { useExternalAction } from "~/components/ui/use-external-action";
-import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
+import { copyFailureText, useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
 import { readFileAsDataUrl } from "~/lib/file-io";
 import {
@@ -91,7 +91,7 @@ export function useFeedbackDialog(open: boolean): FeedbackController {
   const external = useExternalAction({ target: "browser", report });
   const copy = useCopyFeedback({
     onSuccess: () => toast.success("已复制 Issue 正文", "粘贴到新建 Issue 页即可提交"),
-    onFailure: () => toast.error("复制失败", "剪贴板不可用，请手动选中反馈包里的 issue.md 全文"),
+    onFailure: () => toast.error("复制失败", copyFailureText("反馈包里的 issue.md 全文")),
   });
 
   const addImage = useCallback(

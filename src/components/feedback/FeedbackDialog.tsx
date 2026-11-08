@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { Label } from "~/components/ui/label";
+import { FieldLabel } from "~/components/ui/field";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
@@ -59,7 +59,7 @@ export function FeedbackDialog({ controller: c, onClose, open }: FeedbackDialogP
 
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="feedback-description">问题描述</Label>
+            <FieldLabel htmlFor="feedback-description">问题描述</FieldLabel>
             <Textarea
               className="min-h-28"
               id="feedback-description"
@@ -72,11 +72,11 @@ export function FeedbackDialog({ controller: c, onClose, open }: FeedbackDialogP
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label>截图</Label>
+            <FieldLabel>截图</FieldLabel>
             <div className="flex flex-wrap items-center gap-2">
               {c.images.map((image, index) => (
                 <div
-                  className="border-border relative h-16 w-16 overflow-hidden rounded-md border"
+                  className="border-border relative size-16 overflow-hidden rounded-md border"
                   key={`${image.name}-${index}`}
                 >
                   <MediaThumbnail
@@ -93,7 +93,7 @@ export function FeedbackDialog({ controller: c, onClose, open }: FeedbackDialogP
                     size="icon-sm"
                     variant="secondary"
                   >
-                    <X size={11} />
+                    <X data-icon="inline-start" size={11} />
                   </Button>
                 </div>
               ))}
@@ -108,7 +108,7 @@ export function FeedbackDialog({ controller: c, onClose, open }: FeedbackDialogP
             </p>
           </div>
 
-          <label className="flex cursor-pointer items-center gap-2 text-sm">
+          <FieldLabel className="flex cursor-pointer items-center gap-2 text-sm">
             <Checkbox
               checked={c.includeDiagnostics}
               onCheckedChange={(value) => {
@@ -116,7 +116,7 @@ export function FeedbackDialog({ controller: c, onClose, open }: FeedbackDialogP
               }}
             />
             <span>附带运行日志诊断包（推荐，排障最有用的一段现场）</span>
-          </label>
+          </FieldLabel>
         </div>
 
         {c.result?.ok === true && (
