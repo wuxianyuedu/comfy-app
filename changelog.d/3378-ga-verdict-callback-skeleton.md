@@ -1,0 +1,3 @@
+## Added
+
+- **流水线新增「GA 回调 + 占位 fail-closed」休眠骨架（ISSUE #3378）**：把「CNB 出站轮询 GitHub conclusion」换成「GA 入站推送结论」的落点备好 —— `.cnb.yml` 加一条绑 PR 预合并 sha、`git.enable: false` 的 `api_trigger_ga_verdict` 短流水线（按 `GA_ROLE` 分 callback / placeholder 两种角色、共用一条 commit-status context 与一把 cancel-in-progress 锁），镜像派发 payload 带 `cnb_merge_sha`，GA 侧 `pr-gate.yml` 加一个 `continue-on-error` 的收尾 job 调 `scripts/ci-ga-verdict-callback.mjs`；`scripts/ci-ga-verdict-placeholder.mjs` 是只读对账入口。**刻意不接承重主列**：`质量门禁` 的判决链一字未动、CNB 侧不自动起占位、GA 侧回调依赖尚未配置的 `CNB_TRIGGER_TOKEN` secret，转正要单独一次决定（含「被 cancel 的占位会不会仍写终态」那格探针读数）。令牌 `repo-cnb-trigger:rw` 已由业主补上。
