@@ -38,7 +38,20 @@ function fixture(platform: "win32" | "linux") {
   put("src-tauri/static/server.js");
   put("src-tauri/static/scripts/standalone-runtime.mjs");
   put("src-tauri/static/.next/static/chunk.js");
-  return { root, exe, sidecar };
+  return {
+    root,
+    exe,
+    sidecar,
+    /** 判据注入与夹具**成对**（#3383）：`resolvePlan` 的 `platform` 缺省落本机
+     *  （定 sidecar 落包名），壳的解析更是独立的 `resolveShellExe` 注入点、缺省走
+     *  `defaultShellExe` 的本机平台判据 —— 本机是 Windows 而夹具是 linux 时，
+     *  不注入就恒红（找 app.exe、夹具只有 app）。用例要拿夹具当「那台机器」，
+     *  把这两个字段展开进 io 即可，别在用例里手拼第二份。 */
+    io: {
+      platform,
+      resolveShellExe: (r: string) => path.join(r, `src-tauri/target/release/${exe}`),
+    },
+  };
 }
 
 afterEach(() => {
@@ -72,9 +85,9 @@ describe("发现本轮 sidecar，不重算目标三元组", () => {
 
 describe("计划与缺件（三态分得开）", () => {
   it("夹具齐 ⇒ 缺件为空；输出名可经 --out 覆盖", () => {
-    const { root } = fixture("linux");
+    const { root, io } = fixture("linux");
     const outFile = path.join(root, "custom.zip");
-    const plan = resolvePlan({ cwd: root, argv: ["--out", outFile] });
+    const plan = resolvePlan({ cwd: root, ...io, argv: ["--out", outFile] });
     expect(plan.outFile).toBe(outFile);
     expect(missingParts(plan)).toEqual([]);
     expect(plan.sidecarName).toBe("node");
@@ -156,11 +169,12 @@ describe("真组装：解回来是打包器同布局", () => {
   });
 
   it("--dry-run 不落盘；输出已存在 ⇒ 退 1 不覆盖", async () => {
-    const { root } = fixture("linux");
+    const { root, io: fixtureIo } = fixture("linux");
     const outFile = path.join(root, "portable.zip");
     const lines: string[] = [];
     const io = {
       cwd: root,
+      ...fixtureIo,
       log: (line: string) => lines.push(line),
       argv: ["--out", outFile, "--stage", path.join(root, "stage"), "--dry-run"],
     };
