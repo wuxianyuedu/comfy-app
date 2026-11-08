@@ -31,7 +31,6 @@ import { echoCommandLine } from "./command-echo.mjs";
  * 实现的机械前提 —— 换 Node 大版本时先看这里。
  * 被搬走的函数带类型注解（`.mjs` 调用方不受影响，Node 擦掉注解后就是普通 JS）。 */
 import {
-  clearWhichCommandCache,
   commandInvocation,
   executableExts,
   executableKind,
@@ -47,7 +46,6 @@ import {
  * （后者不引入本地绑定，用了就是 `ReferenceError: isWindows is not defined`）。
  * 这一行再把它们原样转出去，保持既有调用方与用例的导入路径不变。 */
 export {
-  clearWhichCommandCache,
   commandInvocation,
   executableExts,
   executableKind,

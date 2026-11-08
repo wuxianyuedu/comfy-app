@@ -132,8 +132,8 @@ export type WhichCommandOptions = {
    * 或者**为「它本来就不可能红」而通过**（更糟：绿灯是假的）。
    * 注入探针后这张表在两端机器上判同一个结论；Windows 那几档照旧走真探测
    * （批处理不起、`.ps1` 落宿主、MZ 头当二进制），因为那些在本机是真造得出来的。
-   * ⚠️ `whichCommand` 的记忆化键**不含 probe**（只有 name + PATH + PATHEXT + platform）：
-   *   同一个 PATH 上换探针又指望换结论，会读到上一条的缓存 —— 换探针的用例先 `clearWhichCommandCache()`。
+   * 每次调用都重新解析（不再有进程内记忆化，见下方「为什么不再做进程内记忆化」）：
+   * 同一个 PATH 上换探针直接得到新结论，不需要先清任何缓存。
    */
   probe?: UsabilityProbe;
   /**
@@ -144,8 +144,7 @@ export type WhichCommandOptions = {
    * 候选名一样、判据不一样。此前 `whichCommand` 把这一格写死成 `--version`，
    * 于是带宿主参数的候选（`py -3`）只能由调用方自己再包一层，或者干脆漏掉这一档
    * （ISSUE #1959 第二轮：门禁探的面与流水线自证探的面因此漂成两份）。
-   * 记忆化键里**也不含它** —— 同一条 PATH 上「`py --version` 不成立、`py -3 --version`
-   * 成立」会被读成同一条缓存，换 probeArgs 的用例请先 `clearWhichCommandCache()`。
+   * 每次调用都按这次给的 `probeArgs` 重新判，不会读到「上一次用别的探针得出的结论」。
    */
   probeArgs?: Array<string>;
 };
@@ -168,19 +167,22 @@ export type CommandUsability = {
  * （见 `tests/esm-cross-host-imports.test.ts`）。 */
 export { isWindows };
 
-/* 探测结果的进程内记忆化：一份启动编排会对同一个名字调 4~6 次 `whichCommand`，
- * 每次都完整扫 PATH × PATHEXT 并对候选**真起一次进程** —— 纯属重复劳动。
+/* 为什么**不再**做进程内记忆化（ISSUE #3327）
  *
- * 键 = name + PATH + PATHEXT + platform：任一不同即不同条目（单测注入的 env / platform
- * 互不串扰）。**测试里同一个 tmp 路径可能被覆写重造**，那类场景先调
- * `clearWhichCommandCache()`。 */
-const whichCache = new Map<string, string | null>();
-
-/** 丢掉 `whichCommand` 的记忆：PATH 上的文件在本进程存活期间被重建 / 覆写
- *  的场景（测试、装完依赖再探测）需要显式调用。 */
-export function clearWhichCommandCache(): void {
-  whichCache.clear();
-}
+ * 此前这里有一个模块级 `Map`（键 = name + PATH + PATHEXT + platform），把一份启动
+ * 编排里对同一个名字的重复解析（实测 1~2 次/进程）省下来。代价是一条**跨调用通道**：
+ * 任何一次解析的产物都写进同一张表，另一次「按名字查」的解析会把它读回来 ——
+ * 扫描器据此把「测试夹具里的 `process.execPath`」追成 `spawn` 的参数（对 Map 的键
+ * 不敏感）。那条数据流在运行时不存在，但通道本身是真的：只要有人能在进程内改这张
+ * 表，值就能换掉。
+ *
+ * 实测的收益（本机 Windows）：缓存命中 0.02ms、冷解析 180~220ms（那一次
+ * `pnpm --version` 探针进程占绝大部分），而一次运行里同名解析通常只有 1~2 次
+ * （启动编排 2 次：装依赖 + 起 dev server；`dev.mjs` / `start.mjs` / `quality-gate`
+ * 各 1 次，后者解析一次后把形态传给每一步）。省下的最多是「一次探针」，远小于
+ * 这些进程本身的运行时长 —— 按「收益很小就去掉共享缓存」取舍，通道直接消失，
+ * 且 PATH 在本进程内被改动（装完 pnpm 再探测）时新结论立刻生效，不再读到旧值。
+ */
 
 /**
  * 读一个环境变量，**按平台的大小写语义**（Windows 上不敏感）。
@@ -250,12 +252,6 @@ export function whichCommand(
   }: WhichCommandOptions = {},
 ): string | null {
   const pathValue = envVar(env, "PATH", platform) ?? "";
-  const pathextValue = envVar(env, "PATHEXT", platform);
-  const key = `${name} ${pathValue} ${pathextValue ?? ""} ${platform}`;
-  const hit = whichCache.get(key);
-  if (hit !== undefined) {
-    return hit;
-  }
   const dirs = pathValue.split(path.delimiter).filter(Boolean);
   const exts = executableExts(env, platform);
   let result: string | null = null;
@@ -284,7 +280,6 @@ export function whichCommand(
       break;
     }
   }
-  whichCache.set(key, result);
   return result;
 }
 
@@ -349,7 +344,7 @@ export function executableExts(
  * 候选名是拿 `PATHEXT` 拼出来的，而系统那份默认写成大写，于是解析结果可能是 `node.EXE`。
  * spawn 对大小写无所谓，但这一份路径不只用来 spawn：控制台回显它、日志写它，而用户会拿
  * 它去比对与点开。NTFS 不敏感但**保留**原大小写，所以真实名字问目录要一次就够（只在命中
- * 后做一次，结果进 `whichCache`）。POSIX 的大小写是要紧的，原样返回。
+ * 后做一次）。POSIX 的大小写是要紧的，原样返回。
  */
 function onDiskName(
   dir: string,

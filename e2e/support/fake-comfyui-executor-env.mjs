@@ -6,7 +6,6 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { clearWhichCommandCache } from "../../src/lib/process/executable-resolve.ts";
 import { pythonCandidates as sharedPythonCandidates } from "../../src/lib/process/python-candidates.ts";
 import { resolvePython } from "../../src/lib/process/python-resolve.ts";
 
@@ -49,15 +48,13 @@ export function resolveFakeCliPython({
   platform = process.platform,
   probe,
 } = {}) {
-  /* 记忆化键不含探针（见 `executable-resolve.ts` 的 `probeArgs` 注释），
-   * 而这里的调用方会拿不同的假探针问同一条 PATH —— 不先清就会读到上一条的结论。 */
-  clearWhichCommandCache();
+  /* 每次调用都按这次注入的探针重新解析（`whichCommand` 不再做进程内记忆化，
+   * ISSUE #3327），拿不同的假探针问同一条 PATH 不会读到上一条的结论。 */
   const hit = resolvePython({
     env,
     platform,
     ...(probe ? { probe } : {}),
   });
-  clearWhichCommandCache();
   return hit?.path ?? null;
 }
 

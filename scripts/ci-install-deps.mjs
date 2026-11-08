@@ -687,17 +687,16 @@ export function ensurePnpmOnPath({
         const dir = path.dirname(candidate);
         env.PATH = [dir, pathValue].filter(Boolean).join(sep);
         /* 进程全局也必须一起改（ISSUE #2281 第二轮，已在平台那一跑上实测复现）：
-         * `runPnpmSync` 默认 `env = process.env`，而形态判据有进程内记忆化
-         * （`whichCache` 的键含 PATH）。只改注入的那份 env 时，本函数的 `-v` 过了、
-         * 紧接着的 `pnpm install` 仍报 `pnpm not found on PATH` —— 判据看得见、
-         * 安装看不见，正是这一族最贵的形状。 */
+         * `runPnpmSync` 默认 `env = process.env`。只改注入的那份 env 时，本函数的
+         * `-v` 过了、紧接着的 `pnpm install` 仍报 `pnpm not found on PATH` ——
+         * 判据看得见、安装看不见，正是这一族最贵的形状。 */
         if (env !== process.env) {
           process.env.PATH = env.PATH;
         }
         /* 还差最后一步：把按**名字**找的那条路也接上（见 `shimPnpm` 的注释）。
-         * 当前进程的形态判据已经缓存过「PATH 上没有 pnpm」这条结论，而它的键里只有
-         * PATH —— 再问一次仍拿到那个 null。所以这里落一个同名垫片，让**新起的进程**
-         * （后几十格的 `node` / `pnpm …`）按名字也找得到。 */
+         * 本进程的形态判据每次都会按当前 `PATH` 重新解析（`whichCommand` 不再做
+         * 进程内记忆化，ISSUE #3327），但 `spawn("pnpm")` 走的是 OS 按名字查找，
+         * 落一个同名垫片让**新起的进程**也按名字找得到。 */
         const shim = publish(dir);
         write(
           `[ci-install-deps] PATH 上没有可用的 pnpm ⇒ 用 ${label} 的落点补上：${dir}（${candidate} ${res.stdout.trim()}）` +
