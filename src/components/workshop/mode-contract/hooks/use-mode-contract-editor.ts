@@ -37,6 +37,8 @@ export type ModeContractEditorController = {
   moveInput: (id: ModeContractInputId, delta: number) => void;
   /** 下一个可追加的参考图口 id（没有选中模式时为 null）。 */
   nextReferenceImageId: ModeContractInputId | null;
+  /** 这份检出能不能「保存为项目默认」（正式包 false，入口随之隐藏）。 */
+  projectDefaultEditable: boolean;
   /** 移除某个输入口（自定义口连着它的定义一起移除）。 */
   removeInput: (id: ModeContractInputId) => void;
   /** 改一个自定义口的展示名（空名不生效，保持原名）。 */
@@ -48,10 +50,7 @@ export type ModeContractEditorController = {
   saveAsProjectDefault: () => Promise<string | null>;
   /** 本次打开期间是否已成功保存过（视图据此提示「另一处已生效」）。 */
   saved: boolean;
-  /** 最近一次成功保存走的是哪条路（视图据此分文案：本机覆盖 vs 项目默认）。 */
   savedKind: "local" | "project" | null;
-  /** 这份检出能不能「保存为项目默认」（正式包 false，入口随之隐藏）。 */
-  projectDefaultEditable: boolean;
   saving: boolean;
   /** 「保存为项目默认」进行中。 */
   savingProjectDefaults: boolean;
