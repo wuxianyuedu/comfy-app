@@ -186,3 +186,12 @@ export function gitTimeoutFor(args) {
   }
   return undefined;
 }
+
+/**
+ * 「等托管机」的**内容核验**单跳上限（ISSUE #3346 第二批）：ref 上出现的 sha 与本格
+ * HEAD 不同时，浅取那一笔回来比 `^{tree}` —— 树一致才是托管机交付了等价内容。
+ *
+ * 60s 的取法：浅取只有一笔 commit + 树，egress 通时秒级；给到与 LFS 那一跳同量级，
+ * 失败了也只是这一轮轮询多等一下（预算内继续等，不交账）。
+ */
+export const HOSTED_VERIFY_TIMEOUT_MS = 60_000;
