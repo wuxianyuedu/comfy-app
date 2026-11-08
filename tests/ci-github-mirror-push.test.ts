@@ -38,7 +38,6 @@ import {
 /* 超时 / 次数 / 退避那一组常量自 2026-11-05 起单独一份（主文件贴着 900 行闸）。
  * 从**实现所在的模块**取，而不是从主文件的转出口取 —— 那里不再转出它们。 */
 import {
-  HOSTED_AWAIT_POLL_INTERVAL_MS,
   LFS_PUSH_MAX_ATTEMPTS,
   LFS_PUSH_RETRY_BUDGET_MS,
   PUSH_MAX_ATTEMPTS,
@@ -2598,14 +2597,18 @@ ${data}`);
     expect(h.heard.join("\n")).toContain("跳过推送");
   });
 
-  it("ref 在但树与本跑不同（旧值 / 别笔）⇒ 预算到点落回兜底，不写回执（#3346 现场形态）", async () => {
+  it("ref 在但树与本跑不同 ⇒ 当场落回兜底，不等满预算（#3346 重跑现场形态）", async () => {
+    /* 重跑现场：托管机管线被平台 skip（上一跑已成功过），ref 上是上一跑推的旧值 ——
+     * 旧值永远不会自己变成我们的树，等满 300s 只是白等（实测）。当场兜底，fail-closed 不变。 */
     const h = awaitHarness({ remoteTree: OTHER_TREE, tick: 100_000 });
     const verdict = await maybeSkipViaHosted(h.io, h.extras);
     expect(verdict.skipped).toBe(false);
+    expect(verdict.why).toContain("上一跑的旧值");
+    expect(h.fetches, "一次浅取就定性").toHaveLength(1);
+    expect(h.sleeps, "当场返回，一秒都不白等").toEqual([]);
     expect(h.written, "没派发就不许落 dispatched:true（回读格会空等）").toEqual([]);
+    expect(h.heard.join("\n")).toContain("不等满预算");
     expect(h.heard.join("\n")).toContain("落回原有重试推送");
-    expect(h.heard.join("\n"), "树不等的读数要说清（不是 sha 抖动）").toContain("树与本跑不同");
-    expect(h.sleeps.every((ms) => ms === HOSTED_AWAIT_POLL_INTERVAL_MS)).toBe(true);
   });
 
   it("ref 上是托管机推的另一笔 merge 提交但树一致 ⇒ skipped，回执带那笔 sha（#3346 现场形态）", async () => {
