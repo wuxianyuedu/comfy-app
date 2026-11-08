@@ -315,9 +315,12 @@
     # 后五格是 ISSUE #3378 转正时随「老轮询主列」一起退场的：执行者换成站内的
     # `GA 回调结论回读`，原文按注释形态留在 `.gates`，要回退照旧「取消注释 → 挪回
     # `COMFYAPP_CI_GATES` → 从本清单删」。停用 ≠ 删除，判据同上面那两条。
+    # 2026-11-08 再停 `GitHub 镜像同步`（ISSUE #3418 / #3378 后续指令）：推送与派发
+    # 整个挪到平台池那条「GitHub 镜像同步」流水线，自托管机不再碰 github.com；
+    # 原文按注释形态留在 `.gates`，恢复动作与这五格同形。
     COMFYAPP_CI_DISABLED_GATES: >-
-      单元测试, ESLint 零警告, 新鲜度账, GitHub 判决回读, 日志分块 1/3, 日志分块 2/3,
-      日志分块 3/3, GitHub 判决判定
+      单元测试, ESLint 零警告, 新鲜度账, GitHub 镜像同步, GitHub 判决回读, 日志分块 1/3,
+      日志分块 2/3, 日志分块 3/3, GitHub 判决判定
     # 「换了执行者」的登记（ISSUE #2227）：清单里那几个**以注释形态留在 `.gates` 里**的名字
     # （停用形态与换执行者形态在配置里长得一模一样 ⇒ 机器分不出两者），它们的执行者在这里
     # **机器可读**地登记一次。
@@ -386,10 +389,14 @@
     # 2026-11-08 转正（ISSUE #3378 / §13.5.33）：出站轮询 GitHub conclusion 的
     # `GitHub 判决回读` / `日志分块 ×3` / `GitHub 判决判定` 五格停用（原文按注释形态
     # 留在 `.gates`，恢复动作见那一段），换成 `GA 回调结论回读` —— 站内读 GA 送回
-    # commit-statuses 的结论，自托管机一台都不碰 github.com。双写消失、承重仍在
-    # `pull_request` build 的退码上（§13.6「PR 跑绿才合并」）。
+    # commit-statuses 的结论，双写消失、承重仍在 `pull_request` build 的退码上
+    # （§13.6「PR 跑绿才合并」）。
+    # 同日再撤 `GitHub 镜像同步`（ISSUE #3418 / #3378 后续指令）：自托管节点到
+    # github.com 的出网不稳，推送与派发整个挪到平台池那条同名流水线（另一条出网路径），
+    # 本档此后只剩「平台读数 + 站内回读判决」两类。自托管机一台都不碰 github.com；
+    # 「后续流程走不通」由 `GA 回调结论回读` 的 fail-closed（没终态 / 超时 ⇒ 判红）兜住。
     COMFYAPP_CI_GATES: >-
-      镜像身份, 工作区复用读数, 缓存槽读数, GitHub 镜像同步, 环境前提,
+      镜像身份, 工作区复用读数, 缓存槽读数, 环境前提,
       GA 回调结论回读, 格式化提交分离, 零消费导出
     # master 合并复核那条流水线（push 档）自己的 stage 清单 —— 第三份，按档登记。
     # 2026-10-28 起这一档从「只有合并形态复核一格」扩成「树级校验档」：判的是**合并后的
@@ -1838,7 +1845,14 @@
     # 与上面那格同量级（几次 stat）。秒级的事给 5m 只为「卡死要早报」。
     timeout: 5m
 
-  # ── GitHub 镜像同步（**已翻承重，退码生效**；ISSUE #2978 / #3051）──
+  # ── GitHub 镜像同步（**停用**；ISSUE #3418 / #3378 后续指令）──
+  #
+  # 自托管节点到 github.com:443 的出网间歇不通，而「判断推送成功没成功」正是这格
+  # 半天判不出来的那一层。按 #3378 后续指令：推送与派发整个挪到平台池那条同名
+  # 流水线（`pull_request` 的第二条），本格停用 —— 原文按注释形态逐字留在下面，
+  # 恢复动作 = 取消注释 → 名字挪回 `COMFYAPP_CI_GATES` → 从 `DISABLED_GATES` 删。
+  # ⚠️ 停用后「后续流程走不通」不再由这格判：GA 没跑起来 / 没送回结论 ⇒
+  # `GA 回调结论回读` 站内回读撑到 45m 预算、超时即红（fail-closed），承重锚不变。
   #
   # 双远端镜像（cnb 主）的推送跳：推 HEAD 到 `wuxianyuedu/comfy-app` 的 `cnb-pr-<IID>` 专属
   # ref，再补一跳 `git lfs push`（不带 --all，只推该 ref 可达且远端还没有的对象 —— 镜像仓若
@@ -1878,20 +1892,20 @@
   # 主列末尾的 `GitHub 判决回读` 读它，从而在「本跑根本没派发」时不再空转满 45m。
   # 两格共用一个工作区（本流水线单 job 串行），所以这一跳只是一次写文件 + 一次读文件。
   # 落盘失败不影响本格三态（回读格读不到就退回「自己猜」的老行为）。
-  - name: GitHub 镜像同步
-    # --await-hosted（ISSUE #3346）：先等托管机实验格的结果 —— refs 回读见本跑 HEAD 即
-    # 跳过推送（托管机那条影子流水线已推送并派发，本格只落回执），预算
-    # （HOSTED_AWAIT_BUDGET_MS 300s）到点没见才走下面的正常推送（兜底语义不变）。
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs --await-hosted
-    # 三跳 git 调用各自带超时：内容推送与回读共用一份 240s 墙钟预算（#3252 起不再探活，
-    # 预算从推送第一刀起算；至多 10 次、退避 5s→50s）、LFS 整档 60s（至多 5 次）——
-    # 同一份阶梯、两档窗口，常量与理由在 `scripts/ci-mirror-retry-policy.mjs` 与
-    # `ci-mirror-wire-budget.mjs`。没有限时就得吃 git 自己那个 21s 的 connect 超时，
-    # 而那一形过去只被念成「令牌活不活」。
-    # 15m 是外框（#3346 从 10m 抬）：最坏账 300s（等托管机）+ 240s（推送）+ 60s（回读）
-    # + 60s（LFS）≈ 660s —— 抬的是外框，判据与预算一个字没动。
-    timeout: 15m
-
+# - name: GitHub 镜像同步
+#   # --await-hosted（ISSUE #3346）：先等托管机实验格的结果 —— refs 回读见本跑 HEAD 即
+#   # 跳过推送（托管机那条影子流水线已推送并派发，本格只落回执），预算
+#   # （HOSTED_AWAIT_BUDGET_MS 300s）到点没见才走下面的正常推送（兜底语义不变）。
+#   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs --await-hosted
+#   # 三跳 git 调用各自带超时：内容推送与回读共用一份 240s 墙钟预算（#3252 起不再探活，
+#   # 预算从推送第一刀起算；至多 10 次、退避 5s→50s）、LFS 整档 60s（至多 5 次）——
+#   # 同一份阶梯、两档窗口，常量与理由在 `scripts/ci-mirror-retry-policy.mjs` 与
+#   # `ci-mirror-wire-budget.mjs`。没有限时就得吃 git 自己那个 21s 的 connect 超时，
+#   # 而那一形过去只被念成「令牌活不活」。
+#   # 15m 是外框（#3346 从 10m 抬）：最坏账 300s（等托管机）+ 240s（推送）+ 60s（回读）
+#   # + 60s（LFS）≈ 660s —— 抬的是外框，判据与预算一个字没动。
+#   timeout: 15m
+#
   # ── 环境前提（**必须排在 `GitHub 判决回读` 之前**，ISSUE #1959）──
   #
   # 上面三步答的是「四件工具在不在」「解释器住哪」，这一步答的是它们旁边那**三格**：
@@ -1951,13 +1965,14 @@
   #   Install dependencies      → 各 job 自己的 `安装依赖` step；PR 档此后没有吃
   #                             `node_modules` 的格，这一格装完也没人用（446s/PR）
   #
-  # 留在这一档的三类（它们**不在** GA 覆盖面上，摘了就没有执行者）：
+  # 留在这一档的两类（它们**不在** GA 覆盖面上，摘了就没有执行者）：
   #   · 平台读数：镜像身份 / 工作区复用读数 / 缓存槽读数 / 环境前提（问的都是这台节点的事实，
   #     GA 的 runner 是另一台机器，读数在那里没有对象）；
-  #   · 派发：GitHub 镜像同步（GA 那条 workflow 由它触发）；
   #   · 判决：GA 回调结论回读（站内读 GA 送回的 status，承重退码）。2026-11-08 转正
   #     （ISSUE #3378 / §13.5.33）后，出站轮询的 `GitHub 判决回读` / 日志分块 ×3 /
   #     `GitHub 判决判定` 五格停用，原文按注释形态留在下面供回退。
+  #   · 派发（`GitHub 镜像同步`）：同日随 ISSUE #3418 挪到平台池那条流水线 ——
+  #     自托管节点出网不稳，不再由它推 github.com；下游判不下去由回读格超时判红。
   #
   # ⚠️ 恢复动作不是「取消注释」：这些格的真身现在在 `pr-gate.yml`，要回到这一档得
   # **两处同批**改（删 GA 的 step + 把 stage 加回这里并登记进 `COMFYAPP_CI_GATES`），
@@ -2498,33 +2513,35 @@ master:
     # **要改的是判据的解析面，不是把锚点拆回去**。
     - <<: [*common, *pr_fail_stage]
       name: 质量门禁
-      # GitHub 镜像令牌（ISSUE #2978）：从密钥仓库 `moon-read/GITHUB_MIRROR_TOKEN`
-      # 导入，供主列那一格「GitHub 镜像同步」的推送与派发读取（#3051 起它在 `.gates` 里，
-      # 不在 `endStages` 了 —— 但取令牌这一跳仍然只有 PR 那条流水线需要）。密钥文件里必须声明
-      # `allow_slugs: [moon-read/comfy-app-t3]` —— 默认只有密钥仓库管理员触发的
-      # 流水线才读得到，而 PR 的触发者是各 PR 作者；声明后按规则校验、忽略触发者角色。
-      imports:
-        - https://cnb.cool/moon-read/GITHUB_MIRROR_TOKEN/-/blob/main/envs.yml
+      # 镜像令牌不再由这一条导入（ISSUE #3418）：推送与派发已随 `GitHub 镜像同步`
+      # 停用挪到平台池那条流水线，它自带同一枚 `GITHUB_MIRROR_TOKEN` 的 imports
+      # （`allow_slugs: [moon-read/comfy-app-t3]` 的声明理由见那一格）。
       stages: *gates
 
-  # ── 托管机镜像同步实验（ISSUE #3346）：有期限、读数档、刻意平台池 ──────────────
+  # ── GitHub 镜像同步（平台池 · 正式出口；ISSUE #3346 实验转正 / #3418）──────────
   #
   # 自托管节点到 github.com:443 的出网间歇不通（`cnb-l86-1k6r1ckna`：重试 6 次耗 203s
-  # 全败、整格红、判决格整片 skipped）。本条流水线在**平台池**（腾讯云侧，另一条出网路径）
-  # 上把同一跳推一次，量那一侧稳不稳 —— 与 #1993「门禁主列永远自托管」不冲突：这一条是
-  # 读数档（`--readout` 退码恒 0）、不装依赖、分钟级、单格，且有期限
-  # （`tests/no-platform-ci-config.test.ts` 的 `HOSTED_MIRROR_PROBE_BY`：到期读数取完，
-  # 转正或删除，不许一直挂着）。
+  # 全败、整格红、判决格整片 skipped），而平台池的腾讯云侧是另一条出网路径、稳。
+  # 按 #3378 后续指令（ISSUE #3418）：自托管主列那格停用，推送与派发**整个**由这一条
+  # 承担 —— 与 #1993「门禁主列永远自托管」不冲突：这一条不是门禁主列，是镜像出口动作，
+  # 不装依赖、分钟级、单格。
   #
-  # `--once`：三跳（推送 / 回读 / LFS）各**只试一次、不重试** —— 「失败了也不重试」是
-  # 实验语义本身。自托管主列那一格带 `--await-hosted`：refs 见本跑 HEAD ⇒ 跳过推送
-  # （「成功了就不在自托管跑」），到点没见 ⇒ 原有重试推送兜底，PR 可靠性不回退。
+  # 实验期的两个旗标随转正一起摘掉：
+  #   · `--once`（四跳各只试一次、不重试）⇒ 恢复缺省的重试档：egress 抖动下按
+  #     `PUSH_RETRY_BUDGET_MS` / `LFS_PUSH_RETRY_BUDGET_MS` 退避重试，只有持续不通才交账；
+  #   · `--readout`（退码恒 0）⇒ 退码生效：推不出去 / 派发失败即非零。
+  # ⚠️ 退码承重**不**等于「靠判断推送成功拦合」：这一条在平台池、不在 `质量门禁`
+  # 的 `pull_request` build 里；后续流程走不通（GA 没跑起来 / 没送回结论）由 `质量门禁`
+  # 的 `GA 回调结论回读` 超时判红兜住（§13.6 承重锚不变）。
   #
   # ⚠️ 锁**不**共用 `pr-$CNB_PULL_REQUEST_IID`：锁是跨流水线的，同一把 key +
   # cancel-in-progress 会把并行的「质量门禁」那条掐掉（#2114 的同款死因）。
-  # ⚠️ 已知代价：兜底推送与托管机推送存在双派发竞态窗（同 sha 两条 GitHub run）——
-  # 判决链按 sha 取读数、同树同判；窗口只有几秒（`ci-mirror-hosted-await.mjs` 文件头）。
-    - name: GitHub 镜像同步（托管机实验）
+  # 实验期的双派发竞态窗随自托管兜底推送一起消失：现在只有一个写者。
+    - name: GitHub 镜像同步（平台池）
+      # 流水线名带「（平台池）」后缀：与 `质量门禁` 里那条**停用的同名 stage**
+      # 区分开，也和 #3346 实验期的名字划清。下面的 stage 仍叫 `GitHub 镜像同步` ——
+      # `check:mirror-attendance` / `每日镜像出勤立案` 按格名认出勤，换机器不换名，
+      # 出勤读数才不断档。
       runner:
         # 平台池 = 云托管 Linux 节点（不写 namespace: group 就是它；主列的 runnerShape
         # 判据仍按 `.common` 锚点读，不受这一条影响）。
@@ -2542,8 +2559,10 @@ master:
       imports:
         - https://cnb.cool/moon-read/GITHUB_MIRROR_TOKEN/-/blob/main/envs.yml
       stages:
-        - name: 镜像推送（单次 · 读数档）
-          script: node scripts/ci-github-mirror-push.mjs --once --readout
+        - name: GitHub 镜像同步
+          script: node scripts/ci-github-mirror-push.mjs
+          # 10m 外框包住最坏账（推送 240s + 回读 + LFS 60s）与冷启动余量；
+          # 与自托管主列那格同一份重试预算（常量在 `ci-mirror-retry-policy.mjs`）。
           timeout: 10m
 
   # 合并后的 push：**不重跑全套**（全套是 PR 那条的事；「不引入新代码」的前提依旧 ——

@@ -1,18 +1,21 @@
 # PR 质量门禁（镜像档）—— 双远端镜像的 PR 门禁主体（ISSUE #2978 起，本批从一格冒烟扩成主体）
 #
-# 触发链：cnb PR 流水线的「GitHub 镜像同步」格把本跑 HEAD 推到本仓库的
-# `cnb-pr-<IID>` 专属 ref，再派发 `repository_dispatch`（event_type 逐字配对
+# 触发链：cnb PR 流水线的**平台池镜像出口**（`.cnb.yml` 的 `pull_request`
+# 第二条「GitHub 镜像同步（平台池）」）把本跑 HEAD 推到本仓库的 `cnb-pr-<IID>`
+# 专属 ref，再派发 `repository_dispatch`（event_type 逐字配对
 # `scripts/ci-github-mirror-push.mjs` 的 `EVENT_TYPE`）；本 workflow 按**同一笔 sha**
 # 检出并跑判据 —— 两边判同一份树，读数才对得上账。
+# ISSUE #3418 起：自托管主列那格停用（出网不稳、判断推送成功半天出不来），
+# 推送与派发整个由平台池那条承担；本 workflow 的触发方式一字未变。
 #
 # 与 `.cnb.yml` 质量门禁的对应（命令一字不改，判据同源）：
 #   · 本文件**承接**：分支守卫 / 提交声明核对 / 同步数据库表结构 / 类型检查 /
 #     固定结构用例 / 受影响用例 / 14 个 check-* 静态格 / lib Node-only 声明 /
 #     oxfmt 格式 / 重档静态判据。
 #   · **留在 CNB**（平台专有，本文件刻意不跑）：镜像身份 / 工作区复用读数 /
-#     缓存槽读数 / GitHub 镜像同步 / 环境前提（自托管节点事实读数）/
-#     覆盖率上报（`ci-coverage-report.mjs` 走 `cnb` CLI）/ 失败立案与令牌权限读数
-#     （CNB API）。
+#     缓存槽读数 / 环境前提（自托管节点事实读数）/ GitHub 镜像同步（平台池出口，
+#     ISSUE #3418 起不在自托管主列）/ 覆盖率上报（`ci-coverage-report.mjs`
+#     走 `cnb` CLI）/ 失败立案与令牌权限读数（CNB API）。
 #   · diff 类判据（`ci-affected-tests` / `premerge-check` / `check-format --changed`）
 #     读 `CNB_PULL_REQUEST_TARGET_SHA` 做三点 diff —— 这里用镜像 payload 的 `base_sha`
 #     注入同名变量，脚本零改动；缺席时它们各自退回 merge-base（脚本内已有该口径）。
