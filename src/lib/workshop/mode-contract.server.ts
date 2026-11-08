@@ -46,7 +46,7 @@ export async function loadModeContracts(
 ): Promise<Array<ModeContract>> {
   for (const rel of [MODE_CONTRACTS_REL_PATH, LEGACY_CONFIG_REL_PATH]) {
     // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-    const override = await readOverrideFile(path.join(root, rel));
+    const override = await readOverrideFile(path.join(/*turbopackIgnore: true*/ root, rel));
     if (override && override.length > 0) {
       return override;
     }
@@ -64,7 +64,7 @@ export async function saveModeContracts(
   root: string = process.cwd(),
 ): Promise<Array<ModeContract>> {
   const normalized = parseModeContracts(contracts);
-  const file = path.join(root, MODE_CONTRACTS_REL_PATH);
+  const file = path.join(/*turbopackIgnore: true*/ root, MODE_CONTRACTS_REL_PATH);
   try {
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");

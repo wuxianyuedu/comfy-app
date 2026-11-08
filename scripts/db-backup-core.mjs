@@ -252,13 +252,13 @@ export function createBackup(root, options = {}) {
     let ordinal = 1;
     for (;;) {
       target = path.join(dir, backupFileName(now, ordinal));
-      if (!fs.existsSync(target)) {
+      if (!fs.existsSync(/* turbopackIgnore: true */ target)) {
         break;
       }
       ordinal += 1;
     }
     tmp = `${target}.partial`;
-    if (fs.existsSync(tmp)) {
+    if (fs.existsSync(/* turbopackIgnore: true */ tmp)) {
       fs.unlinkSync(tmp);
     }
   } catch (error) {
@@ -559,7 +559,7 @@ export function applyPendingRestore(root, options = {}) {
      * malformed`（`guide-database-backup.md` §3.2 记录过这个现场）。 */
     for (const side of [`${dbFile}-wal`, `${dbFile}-shm`]) {
       try {
-        if (fs.existsSync(side)) {
+        if (fs.existsSync(/* turbopackIgnore: true */ side)) {
           fs.unlinkSync(side);
         }
       } catch (error) {

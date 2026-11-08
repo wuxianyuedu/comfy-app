@@ -577,7 +577,7 @@ export async function buildWorkflowDetailFull(
   if (meta?.sourcePath != null) {
     sourcePath = meta.sourcePath;
     try {
-      const stat = fs.statSync(sourcePath);
+      const stat = fs.statSync(/*turbopackIgnore: true*/ sourcePath);
       sourceOutdated =
         typeof meta.sourceMtime === "number" && Math.floor(stat.mtimeMs / 1000) > meta.sourceMtime;
     } catch {
