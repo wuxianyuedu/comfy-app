@@ -50,7 +50,7 @@ import {
   VERIFY_RETRY_BUDGET_MS,
 } from "../scripts/ci-mirror-retry-policy.mjs";
 /* 「等托管机」前置（ISSUE #3346）单独一份：它静态 import 主文件的判据，测试直接钉它的行为。 */
-import { maybeSkipViaHosted } from "../scripts/ci-mirror-hosted-await.mjs";
+import { excerptFailureText, maybeSkipViaHosted } from "../scripts/ci-mirror-hosted-await.mjs";
 /* 推送之后的自证（回读 refs + LFS batch 核对）：实现单独一份，用例直接钉它的三态。 */
 import {
   parseLfsObjects,
@@ -2524,7 +2524,9 @@ describe("等托管机（ci-mirror-hosted-await，ISSUE #3346）", () => {
   function awaitHarness(
     opts: {
       fetchCode?: number;
-      lsResults?: Array<{ code: number; stdout?: string }>;
+      /** 浅取失败时的回话原文（读数用；判据只看 `fetchCode`）。 */
+      fetchStderr?: string;
+      lsResults?: Array<{ code: number; stdout?: string; stderr?: string }>;
       /** `FETCH_HEAD^{tree}` 假回话（缺省 = 与本格同树 ⇒ 树等价命中）。 */
       remoteTree?: string;
       tick?: number;
@@ -2549,13 +2551,13 @@ describe("等托管机（ci-mirror-hosted-await，ISSUE #3346）", () => {
       }
       if (args[0] === "fetch") {
         fetches.push(args);
-        return { code: opts.fetchCode ?? 0, stdout: "", stderr: "" };
+        return { code: opts.fetchCode ?? 0, stdout: "", stderr: opts.fetchStderr ?? "" };
       }
       if (args[0] === "ls-remote") {
         ls.push(args);
         const head = lsSeq?.shift();
         if (head) {
-          return { code: head.code, stdout: head.stdout ?? "", stderr: "" };
+          return { code: head.code, stdout: head.stdout ?? "", stderr: head.stderr ?? "" };
         }
         return { code: 0, stdout: `${OLD_SHA}\t${AWAIT_REF}\n`, stderr: "" };
       }
@@ -2597,6 +2599,19 @@ ${data}`);
     expect(h.heard.join("\n")).toContain("跳过推送");
   });
 
+  it("ref 的 sha 与本跑 HEAD 逐字相等 ⇒ 直接判已落，一次浅取都不发（读数写明跳过浅取）", async () => {
+    /* sha 相等 = 同一个提交对象 ⇒ 树必然一致，比树是多余的网络往返；
+     * 而浅取正是弱网下最先断的一跳（实测 `exit 128`）。 */
+    const h = awaitHarness({
+      lsResults: [{ code: 0, stdout: `${SHA}\t${AWAIT_REF}\n` }],
+    });
+    const verdict = await maybeSkipViaHosted(h.io, h.extras);
+    expect(verdict.skipped).toBe(true);
+    expect(h.fetches, "同 sha 还去浅取就是多余的往返").toEqual([]);
+    expect(h.heard.join("\n")).toContain("ref 已等于目标 sha");
+    expect(h.heard.join("\n")).toContain("跳过浅取");
+  });
+
   it("ref 在但树与本跑不同 ⇒ 当场落回兜底，不等满预算（#3346 重跑现场形态）", async () => {
     /* 重跑现场：托管机管线被平台 skip（上一跑已成功过），ref 上是上一跑推的旧值 ——
      * 旧值永远不会自己变成我们的树，等满 300s 只是白等（实测）。当场兜底，fail-closed 不变。 */
@@ -2628,13 +2643,20 @@ ${data}`);
     expect(h.heard.join("\n")).toContain("树一致");
   });
 
-  it("浅取没通 ⇒ 预算内继续等，到点落回兜底", async () => {
-    const h = awaitHarness({ fetchCode: 1, tick: 100_000 });
+  it("浅取没通 ⇒ 预算内继续等，到点落回兜底；失败原文脱敏后落日志（#3346 的 128 现场）", async () => {
+    const h = awaitHarness({
+      fetchCode: 128,
+      fetchStderr: "fatal: RPC failed; curl 56 Recv failure: Connection reset by peer",
+      tick: 100_000,
+    });
     const verdict = await maybeSkipViaHosted(h.io, h.extras);
     expect(verdict.skipped).toBe(false);
     /* 浅取失败不是判决：同一笔回执下一轮照旧再验（预算内 3 轮 = 3 次浅取）。 */
     expect(h.fetches).toHaveLength(3);
     expect(h.heard.join("\n")).toContain("浅取没通");
+    /* 只念退出码的话，「128 是哪一类」在日志里无从分辨 —— 原文必须跟着落。 */
+    expect(h.heard.join("\n")).toContain("RPC failed");
+    expect(h.heard.join("\n")).toContain("已脱敏");
   });
 
   it("每一读都没通（egress 抖动）⇒ 预算内继续等，到点落回兜底", async () => {
@@ -2655,5 +2677,37 @@ ${data}`);
     );
     expect(verdict.skipped).toBe(false);
     expect(h.ls, "前提层的事归 runMirror 的话术，这一层不抢").toHaveLength(0);
+  });
+
+  it("失败原文读数：令牌 / URL userinfo / 本机绝对路径全换占位，头尾之外明示省略", () => {
+    const long = [
+      `fatal: unable to access 'https://x-access-token:${TOKEN}@github.com/root/comfy-app.git/': Failed to connect to github.com port 443 after 21128 ms`,
+      "fatal: remote error: not our ref 26a3c3ed",
+      `Authorization: Basic ${"A".repeat(40)}`,
+      "  C:\\work\\repo\\.git\\objects\\pack (bad)",
+      "  /home/runner/work/comfy-app/.git (bad)",
+      ...Array.from({ length: 20 }, (_, i) => `trace line ${String(i)}`),
+    ];
+    const out = excerptFailureText(long.join("\n"), TOKEN, {
+      headLines: 2,
+      maxLineChars: 160,
+      tailLines: 2,
+    });
+    const joined = out.join("\n");
+    expect(joined, "令牌原值不许进日志").not.toContain(TOKEN);
+    expect(joined, "URL 里的 userinfo 整段换占位").not.toContain("x-access-token");
+    expect(joined, "Basic 那一截也要换").not.toContain("AAAAAAAA");
+    expect(joined, "本机绝对路径不许留（盘符）").not.toContain("C:\\work");
+    expect(joined, "本机绝对路径不许留（POSIX）").not.toContain("/home/runner");
+    expect(joined, "头尾之外明示省略").toContain("中间省略");
+    expect(joined, "三类之一要看得见：服务端拒绝").toContain("not our ref");
+    expect(out, "头 2 + 省略 1 + 尾 2").toHaveLength(5);
+  });
+
+  it("超长单行裁到封顶并标注（单 stage 日志 102400 字节上限）", () => {
+    const out = excerptFailureText(`fatal: ${"x".repeat(300)}`, "", { maxLineChars: 100 });
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("本行截断");
+    expect(out[0]?.length ?? 0).toBeLessThan(160);
   });
 });
