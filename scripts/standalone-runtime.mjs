@@ -30,7 +30,7 @@ import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
 
-import { spawnInGroup } from "./launcher-core/shell.mjs";
+import { assertAbsoluteRoot, resolveSpawnTarget, spawnInGroup } from "./launcher-core/shell.mjs";
 import { pruneTimestampedLogs } from "./launcher-core/worktree.mjs";
 import { runStamp } from "./launcher-core/log.mjs";
 import { resolveExecutorMode } from "./launcher-core/executor-mode.mjs";
@@ -43,12 +43,16 @@ import {
  *  （`server.js` / `package.json` / `.next/` / `node_modules/`）都在这一层。
  *  自定位而不是信传入的 cwd——Next 的 server 启动即 `process.chdir(__dirname)`，
  *  任何依赖 cwd 的锚点在它手里都会漂。 */
-const APP_ROOT = path.resolve(import.meta.dirname, "..");
-const SERVER = path.join(APP_ROOT, "server.js");
-const REAP_ENTRY = path.join(APP_ROOT, "scripts", "reap-process.mjs");
+const APP_ROOT = assertAbsoluteRoot(path.resolve(import.meta.dirname, ".."), "standalone 应用根");
+/** 三个载荷入口（写死）：`spawn` 的参数数组只许放这类常量，变量部分（应用根）留在
+ *  `cwd`；落点由 {@link resolveSpawnTarget} 校验在根内且无父级跳转（ISSUE #3327）。 */
+const SERVER_ENTRY = "server.js";
+const REAP_ENTRY_REL = "scripts/reap-process.mjs";
+const HOST_ENTRY_REL = "scripts/executor-host.mjs";
+const SERVER = resolveSpawnTarget(APP_ROOT, SERVER_ENTRY, "standalone server 入口");
 /** 执行宿主的入口（3-E2b）。与 `server.js` 不同，它是**可选**的一路：开关没设
  *  就不该有它，所以判据是「设了 host 而这份不在」才报，而不是「不在就报」。 */
-const HOST_ENTRY = path.join(APP_ROOT, "scripts", "executor-host.mjs");
+const HOST_ENTRY = resolveSpawnTarget(APP_ROOT, HOST_ENTRY_REL, "执行器宿主入口");
 
 function line(message) {
   process.stdout.write(`[standalone-runtime] ${message}\n`);
@@ -97,8 +101,10 @@ function reapTree(pid) {
   if (!pid) {
     return;
   }
-  const run = spawnSync(process.execPath, [REAP_ENTRY, String(pid), "--force"], {
+  const run = spawnSync(process.execPath, [REAP_ENTRY_REL, String(pid), "--force"], {
     encoding: "utf8",
+    // 入口是相对应用根的常量：Next 会 chdir，cwd 必须显式钉住（ISSUE #3327）。
+    cwd: APP_ROOT,
     windowsHide: true,
   });
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- 子进程起不来时 stdout/stderr 实测为 undefined（@types/node 声明偏窄）
@@ -139,7 +145,7 @@ function spawnExecutorHost(childEnv, stamp) {
   const { stdoutFile, stderrFile } = openHostLogFiles(stamp);
   const host = spawnInGroup({
     command: process.execPath,
-    args: [HOST_ENTRY],
+    args: [HOST_ENTRY_REL],
     cwd: APP_ROOT,
     // 与 server 共用同一份装配结果（绝对 `DATABASE_URL`、`SKIP_ENV_VALIDATION`、
     // 运行期密钥…）——两处各拼一遍等于给「宿主读的库不是 server 的库」留缝。
@@ -182,7 +188,7 @@ function main() {
   const { stdoutFile, stderrFile } = openServerLogFiles(stamp);
   const server = spawnInGroup({
     command: process.execPath,
-    args: [SERVER],
+    args: [SERVER_ENTRY],
     // cwd = 应用根：Next 会自己 chdir 到这里，提前对齐让 `log/`、`data/`、
     // `generated/`（产物根）这些按 cwd 解析的运行期目录与 server 看到的是同一处。
     cwd: APP_ROOT,
