@@ -67,7 +67,7 @@ function NodeCardList({
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   // 与 ModelLibrary / ProjectOutputs 同一条误报豁免：virtualizer 的读数只在
   // 本组件 render 内消费，不外传给被 memo 的子组件。
-  // eslint-disable-next-line react-hooks/incompatible-library
+  // oxlint-disable-next-line react/incompatible-library
   const virtualizer = useVirtualizer({
     count: nodeTypeList.length,
     getScrollElement: () => scrollEl,

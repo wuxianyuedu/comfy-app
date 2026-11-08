@@ -109,8 +109,12 @@ eslint.config.js、`lint:policy` 与 `@typescript-eslint/parser` / `eslint-plugi
 `react-hooks/*` 12 条随 eslint 一并删除。其中 `config` / `gating` **已证空转**：两引擎
 （ESLint `Linter` 与 oxlint jsPlugin）在无 options 时均 0 诊断，而本仓不传编译器 options
 —— 迁上来是纯空转；实测启用会让全仓 lint 从 34s 涨到 64s（+80%），零收益。
-其余 10 条在退役前的全仓读数里 0 诊断，且 oxlint 无等价实现。若要重新承重，
-门槛是先有等价实现或独立判据，再按本仓口径评估启用。
+其余 10 条在退役前的全仓读数里 0 诊断。**更正（2026-11）**：oxlint 当前已原生提供
+React Compiler 族（`react/immutability`、`react/incompatible-library`、
+`react/preserve-manual-memoization`、`react/purity`、`react/refs`、`react/set-state-in-effect`、
+`react/set-state-in-render`、`react/static-components`、`react/use-memo`、`react/void-use-memo`、
+`react/error-boundaries`、`react/unsupported-syntax`、`react/globals`），判决配置已启用其中
+10 条；此前「oxlint 无等价实现」的说法不再成立。若要重新承重，按本仓口径评估启用（先测命中）。
 
 > **134 → 208 是怎么来的（#2777 PR-1）**：判决配置此前没写 `plugins` 字段，oxlint 只
 > 默认启用 `unicorn` / `typescript` / `oxc`，`react` / `nextjs` / `jsx_a11y` / `import`
@@ -140,9 +144,9 @@ eslint.config.js 已删。以下插件包留着**不是**因为 eslint 还在跑
 ### 复审条件（什么时候可以再收紧）
 
 `react/no-deprecated` 与 `@next/next/no-location-assign-relative-destination` 已由
-jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。若要恢复 React Compiler 族判据，
-门槛是 oxlint 提供等价实现（或给出独立判据）。逐条对齐矩阵与缺口复核口径在
-`log/tools/eslint-oxlint-parity.md`（本地台账，不入仓）。
+jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生提供 React Compiler 族
+（见上），恢复判据的门槛不再是「等价实现」，而是逐条评估命中与成本后按本仓口径启用。
+逐条对齐矩阵与缺口复核口径在 `log/tools/eslint-oxlint-parity.md`（本地台账，不入仓）。
 
 ### 已知限制
 

@@ -663,7 +663,7 @@ node scripts/storybook-check.mjs   # 枚举来源 + 组件覆盖率，一条命�
    `missing.png`（失败兜底那条分支的现场）；名字不认识时 `resolveSource()` 抛错。
    静默回退到空值会让「源名写错了」与「本来就没有」变成同一件事。
 3. **ReactNode 参数走 `render`，不进 Args**。且 `render` **不是 React 组件** ——
-   要在里面用 hook，把它抽成真组件（`react-hooks/rules-of-hooks` 会当场拦下，
+   要在里面用 hook，把它抽成真组件（`react/rules-of-hooks` 会当场拦下，
    那条报错是对的）。
 
 **为什么不用 `vi.mock` / MSW**：测试侧确实有 MSW（`tests/helpers/trpc-msw.ts`），
@@ -3933,7 +3933,7 @@ disabled = action.anyBusy; // 整表动作看这个
 - **接法是回调 `ref`**（返回 `[ref, box]`）：元素什么时候挂上由 React 调这个
   回调告诉 hook，不需要在渲染期读 `ref.current`（**首帧那个还是 `null`**），
   也不需要在 effect 体里同步 `setState`（会触发级联渲染，ESLint 的
-  `react-hooks/set-state-in-effect` 明确禁止）。调用处已经有 `ref` 对象时在
+  `react/set-state-in-effect` 明确禁止）。调用处已经有 `ref` 对象时在
   回调里一并写进去即可（如画布的 `containerRef`）。
 - **元素卸载时渲染期直接回 `null`**，不靠 effect 去清 —— 「未挂载」与
   「尺寸为 0」因此天然分得开。
