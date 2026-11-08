@@ -545,6 +545,9 @@
 - 行为与验收：所有 ComfyUI 模型目录默认启用（与 ComfyUI 默认状态一致），不再有
   每目录启用 / 停用的配置，也不再提供「模型目录配置」入口；扫描以
   `GET /api/models` 返回的目录清单为准；目录名即模型类型；搜索只在当前目录内生效。
+  收录判据（#3368）：非模型用途的目录（custom_nodes，节点代码有专门的管理面板）
+  整目录排除；目录内文件按模型扩展名过滤（ComfyUI 对目录列的是全部文件，插件
+  仓库的源码 / 文档不算模型）；过滤后没剩文件的目录不出现在目录列。
   空库时按设置里是否填了 ComfyUI 路径分别提示「ComfyUI 还没有配置」或「模型库里还没有模型」。
 - 落点：`src/server/api/routers/model.ts`（`configList`）、`src/lib/models.ts`、
   `src/components/studio/ModelLibrary.tsx`、`src/components/studio/hooks/use-model-library.ts`
