@@ -31,7 +31,7 @@ import {
 } from "./ci-github-mirror-push.mjs";
 /* 超时 / 次数 / 退避那一组常量单独一份；推送那一跳的墙钟预算见
  * `ci-mirror-wire-budget.mjs`（ISSUE #3252 起从推送第一刀起算，前面不再有探活）。 */
-import { PUSH_MAX_ATTEMPTS } from "./ci-mirror-retry-policy.mjs";
+import { PUSH_MAX_ATTEMPTS, VERIFY_MAX_ATTEMPTS } from "./ci-mirror-retry-policy.mjs";
 import { createWireBudget } from "./ci-mirror-wire-budget.mjs";
 /* LFS 那一跳自 #3146 起单独一份（900 行闸）：它反过来要 import 主文件的判据，故主文件不转出它。 */
 import { pushLfsObjects } from "./ci-mirror-lfs-push.mjs";
@@ -179,6 +179,8 @@ export async function runMasterMirror(io) {
   const lfsCheck = await verifyLfsObjects({
     fetchImpl: io.fetchImpl ?? fetch,
     log,
+    /* 与 PR 档同一跳的韧性（ISSUE #3400）：master 档没有 `--once`，按默认上限重试。 */
+    maxAttempts: VERIFY_MAX_ATTEMPTS,
     now: io.now,
     prefix: "mirror-master",
     repo: ctx.repo,
@@ -192,7 +194,7 @@ export async function runMasterMirror(io) {
       elapsedMs: lfs.elapsedMs,
       lfs: false,
       objects: lfsCheck.objectsText,
-      retries: lfs.attempts - 1,
+      retries: lfs.attempts - 1 + (lfsCheck.attempts - 1),
       wire: wireNote,
     });
     return lfsCheck.code;

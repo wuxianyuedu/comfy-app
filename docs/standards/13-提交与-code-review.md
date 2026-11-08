@@ -9428,6 +9428,62 @@ base64 再 ×1.33）。附件 stage 已删除，**不留一个每次都红的格
 加回 `.gates`、把名字加回 `COMFYAPP_CI_GATES`；`tests/no-platform-ci-config.test.ts` 的总账
 （`GATE_TIER_LEDGER`）会当场点名只改一边的形态。
 
+##### 13.5.33.1 2026-11-08 转正：老轮询主列退场，判决链改站内读回调 status（ISSUE #3378）
+
+**改的是执行者，不是判据，也不是承重锚。** §13.5.33 留下的判决链是「CNB 出站轮询
+GitHub Actions conclusion（45m）→ 日志分块 ×3 → `GitHub 判决判定` 折退码」。
+自托管机到 `github.com` 的出网间歇不通（本单从头的痛点），而托管机稳 ——
+于是把「CNB 出站去拉」换成「GA 入站推送 + CNB 站内读」。
+
+**双写先说清**：骨架落地时 GA 收尾 job 是 `if: always()`、无开关，secret 修好
+之后每个 PR 都真写一条 `cnb/api_trigger_ga_verdict/*` 进 `commit-statuses`、
+参与聚合；而老轮询主列仍在承重。两套独立判决各占一条 context、全绿才绿 ——
+这不是「休眠」，是外部条件变了之后腿自己醒了。本转正把它收成**一个数据源、
+两个读数**，双写消失。
+
+**逐笔对账（与 §13.5.33 撤 24 格同形，五处同批）**：
+
+| 面                              | 动作                                                                                                                                                 |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `COMFYAPP_CI_GATES`             | 撤 `GitHub 判决回读` / `日志分块 1/3..3/3` / `GitHub 判决判定` 五格，加 `GA 回调结论回读`                                                            |
+| `COMFYAPP_CI_DISABLED_GATES`    | 五格登记为**停用**（停用 ≠ 删除，原文按注释形态留在 `.gates`，恢复动作照旧「取消注释 → 挪回 GATES → 从停用清单删」）                                 |
+| `.gates`                        | 五格真身转注释形态；新增一格 `GA 回调结论回读` 点 `scripts/ci-ga-verdict-readout.mjs`                                                                |
+| `GATE_TIER_LEDGER`              | 五格进 `retired` 段并逐项写明「现在谁跑」；新格进 `PR` 段；`慢 stage 的 timeout 预算` 与两份顺序锚用例（`ci-env-probe` / `ci-image-identity`）同批改 |
+| `pr-gate.yml` / `.cnb.yml` 注释 | 收尾 job 与 `api_trigger_ga_verdict` 段从「骨架·休眠」改成转正事实；占位写者（`GA_ROLE=placeholder`）退役                                            |
+
+**新格的三态（fail-closed）**：`GA 回调结论回读` 读
+`GET /{repo}/-/pulls/{n}/commit-statuses`（api.cnb.cool，站内，与镜像格
+`get-pull` 回读同族、同一枚平台注入 `CNB_TOKEN`），只认
+`cnb/api_trigger_ga_verdict/*` 这条 context 的终态 —— success ⇒ 0、
+failure/error ⇒ 1、pending / 缺席 / 未知词 / 到 45m 预算仍没终态 ⇒ 2。
+2 与 1 一样折成 `pull_request` build 的退码，**保护分支与 `ship` 仍认这条
+build**（§13.6「PR 跑绿才合并」的承重锚一个字没换）。
+
+**为什么不选「让 `质量门禁` 秒级结束、靠 api_trigger context 拦合」**：那条要求
+保护分支把 `cnb/api_trigger_ga_verdict/*` 计成必需状态检查，而端到端合并按钮
+实测一直没坐实，10:52 的 `mergeable_state=mergeable` 读数反而倾向不计入。
+站内回读这条不需要那格前提：判决仍落在原生 `pull_request` build 的退码上。
+
+**单写者，不需要占位腿**：骨架期「占位撑 pending + 回调改判 + cancel 锁」那一半
+随转正退役 —— 主列这条 build 自己活到 GA 出结论，超时即红，fail-closed 由
+它承担，没有两个写者竞态。`*lock_ga_verdict` 的 `cancel-in-progress` 保留，
+只管「同 PR 连派发几次时后一条掐掉前一条」。
+
+**保留与快速回退**：`ci-github-verdict-*` 出站轮询/日志脚本与
+`ci-ga-verdict-placeholder.mjs` 只读对账入口都留在盘上 —— 前者供
+`pnpm ship --gh-logs`（§13.10.13）按需取 GA 判红日志，后者做现场读数；
+五格原文按注释形态留着，回退三步与停用清单配对。流水线 `name`
+（`GA 判决回调（骨架·休眠）`）**不改名**：commit-status 的 context 含它，
+改名会让「同一条 context 后写覆盖前写」的读数与历史现场对不上。
+
+**PR 节点读权已坐实**：`GA 回调结论回读` 依赖 `CNB_TOKEN` 在 PR 节点上读得到
+`commit-statuses`。本机真读（`ci-ga-verdict-readout.mjs --pr 3398` ⇒
+`state=success ⇒ 绿`）验了端点与令牌形状，PR #3408 第二跑
+（`cnb-i2o-1k6tit72t`）上这一格在真实 `pull_request` build 里 `success`，端到端
+成立。首跑（`cnb-p7n-1k6thqak3`）红在 `GitHub 镜像同步` 的 15m 外框超时
+（egress 抖动、与本格无关），后面几格整片 skipped，不是这一格的读数 —— 环境格
+的红不靠抬超时或反复重跑掩盖（§13.6.4），rerun 只为取一次新读数。
+
 #### 13.5.34 2026-11-06 GA push 档：镜像仓 master 的文档链并行执行者（任务 3 并行期）
 
 新增 `.github/workflows/master-gate.yml`，在镜像仓 master 的 `push` 上跑文档链两格：

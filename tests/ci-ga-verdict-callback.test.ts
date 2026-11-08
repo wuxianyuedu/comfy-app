@@ -7,7 +7,8 @@
  *   ② 前提不全（sha / 令牌 / 仓库 / conclusion）⇒ 没判过（2），不是绿；
  *   ③ `start-build` 的请求体逐字对 `dto.StartBuildReq`：绑预合并 sha、送
  *      `GA_VERDICT` / `GA_ROLE=callback`、事件名与 `.cnb.yml` 配对；
- *   ④ 「没拿回 sn」≠「发出去了」：应答缺 sn 一律退 2。
+ *   ④ 「没拿回 sn」≠「发出去了」：应答缺 sn 一律退 2；
+ *   ⑤ 退出码只表送达：判红也照样退 0（判决内容由 GA_VERDICT 交给 CNB 回调 build 折）。
  */
 import { describe, expect, it } from "vitest";
 
@@ -105,7 +106,7 @@ describe("请求体：逐字对 StartBuildReq", () => {
   });
 });
 
-describe("主流程三态", () => {
+describe("主流程：退出码只表送达，不表判决内容", () => {
   /** 收集日志的空操作：不让 `() => {}` 触发 no-empty-function。 */
   const collect = (into: string[]) => (line: string) => {
     into.push(line);
@@ -120,22 +121,18 @@ describe("主流程三态", () => {
         status,
       });
 
-  it("dry-run 不发起请求，绿退 0 / 红退 1", async () => {
+  it("dry-run 不发起请求，判绿判红都退 0（送达口径）", async () => {
     const lines: string[] = [];
-    expect(
-      await main({
-        argv: ["--conclusion", "success", "--dry-run"],
-        env: BASE_ENV,
-        log: collect(lines),
-      }),
-    ).toBe(0);
-    expect(
-      await main({
-        argv: ["--conclusion", "failure", "--dry-run"],
-        env: BASE_ENV,
-        log: collect(lines),
-      }),
-    ).toBe(1);
+    const codes = await Promise.all(
+      ["success", "failure"].map((conclusion) =>
+        main({
+          argv: ["--conclusion", conclusion, "--dry-run"],
+          env: BASE_ENV,
+          log: collect(lines),
+        }),
+      ),
+    );
+    expect(codes).toEqual([0, 0]);
     expect(lines.some((l) => l.includes("DRY-RUN"))).toBe(true);
   });
 
@@ -154,16 +151,19 @@ describe("主流程三态", () => {
     expect(code).toBe(2);
   });
 
-  it("拿到 sn 且判绿 ⇒ 0；判红 ⇒ 1", async () => {
-    const run = (conclusion: string) =>
+  it("拿到 sn 即送达成功：判绿判红都退 0，判决内容仍写进 GA_VERDICT", async () => {
+    const run = (conclusion: string, into: string[]) =>
       main({
         argv: ["--conclusion", conclusion],
         env: BASE_ENV,
         fetchImpl: fakeFetch({ data: { sn: "cnb-test-1" } }),
-        log: collect([]),
+        log: collect(into),
       });
-    expect(await run("success")).toBe(0);
-    expect(await run("failure")).toBe(1);
+    expect(await run("success", [])).toBe(0);
+    const redLines: string[] = [];
+    expect(await run("failure", redLines)).toBe(0);
+    // 红仍要如实送出去（CNB 回调 build 读它折红），只是不该把送达步骤染红。
+    expect(redLines.some((l) => l.includes("GA_VERDICT=failure"))).toBe(true);
   });
 
   it("平台非 200 ⇒ 2；请求抛异常 ⇒ 2", async () => {

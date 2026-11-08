@@ -410,8 +410,8 @@ describe("runVerdict 集成：判红 + job 日志取不到 ⇒ 退码不变", ()
   });
 });
 
-describe("契约：.cnb.yml 的全量通道**不许依赖 docker**", () => {
-  it("没有 `cnbcool/attachments` 这类插件格；分块三格 + 判定格在役且入口对得上", () => {
+describe("契约：老轮询主列按停用形态留着，站内回读格在役（ISSUE #3378 转正）", () => {
+  it("五格原文可恢复、没有必红的 docker 插件格，且 `GA 回调结论回读` 接上入口", () => {
     const yml = readFileSync(new URL("../.cnb.yml", import.meta.url), "utf8");
     /* 实测 cnb-l4r-1k6lcffnv：`cnbcool/attachments` 那格要 docker，自托管节点 0s 红
      * `Runner does not enable Docker.` —— 必红的格一个都不许留（注释里记由来不算）。 */
@@ -420,15 +420,32 @@ describe("契约：.cnb.yml 的全量通道**不许依赖 docker**", () => {
       .filter((line) => !line.trimStart().startsWith("#"))
       .join("\n");
     expect(live).not.toContain("cnbcool/attachments");
-    expect(yml).toContain("日志分块 1/3");
-    expect(yml).toContain("日志分块 2/3");
-    expect(yml).toContain("日志分块 3/3");
+    /* 老轮询主列五格 2026-11-08 起停用：原文按注释形态留在 `.gates`（恢复动作照旧），
+     * 不再出现在活配置里。判据 `tests/no-platform-ci-config.test.ts` 的「停用登记」两条
+     * 与 `COMFYAPP_CI_DISABLED_GATES` 双向钉着，这里只核「原文还在、没被悄悄删掉」。 */
+    for (const name of [
+      "GitHub 判决回读",
+      "日志分块 1/3",
+      "日志分块 2/3",
+      "日志分块 3/3",
+      "GitHub 判决判定",
+    ]) {
+      expect(yml, `停用格「${name}」的注释原文被删了 —— 恢复动作没有原文可依`).toMatch(
+        new RegExp(`^[ \\t]*#+[ \\t]*-[ \\t]+name:[ \\t]*${name}[ \\t]*$`, "m"),
+      );
+      expect(live, `停用格「${name}」又出现在活配置里 —— 停用与在役只允许一个`).not.toContain(
+        `- name: ${name}`,
+      );
+    }
+    /* 三份脚本与 `--decision-out` 原文都在（按需复验 / 快速回退靠它们），不冒充在役。 */
+    expect(yml).toContain("ci-github-verdict-read.mjs");
     expect(yml).toContain("ci-print-log-chunk.mjs");
-    expect(yml).toContain("GitHub 判决判定");
     expect(yml).toContain("ci-github-verdict-decide.mjs");
-    /* 回读格退码 0、判定交给后面那格：`--decision-out` 必须在场。 */
     expect(yml).toContain("--decision-out");
-    /* 分块格数必须与模块常量同源（多一格 / 少一格都红）。 */
+    /* 承重换成站内回读格：活配置里它必须在，且点的是新入口。 */
+    expect(live).toContain("- name: GA 回调结论回读");
+    expect(live).toContain("scripts/ci-ga-verdict-readout.mjs");
+    /* 分块格数必须与模块常量同源（多一格 / 少一格都红）—— 原文三格仍在。 */
     const chunkStages = ["1", "2", "3"].filter((i) => yml.includes(`日志分块 ${i}/3`));
     expect(chunkStages).toHaveLength(LOG_CHUNK_STATIC_STAGES);
   });

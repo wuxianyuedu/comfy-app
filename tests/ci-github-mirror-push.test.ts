@@ -479,35 +479,6 @@ describe("纯函数", () => {
     expect(isEgressFailure("remote: Repository access blocked")).toBe(false);
   });
 
-  it("git-lfs / Go net 在 Windows 与 POSIX 侧的 TCP connect 超时认成 egress（PR #3398 首跑）", () => {
-    /* `cnb-dto-1k6tb0h72` 的 LFS 那一跳：git-lfs 是 Go 写的，batch 请求的回话不走
-     * git / curl 那一套，Go net 包在出网层自己抛的措辞一个字都对不上旧正则 ⇒
-     * 被念成「其他」、`shouldRetryGitFailure` 也不认，60s 墙钟预算整档吃不到。 */
-    const shapes = [
-      'batch response: Post "https://oauth2:***@github.com/x/y.git/info/lfs/objects/batch": dial tcp 20.205.243.166:443: connectex: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond.',
-      'Post "https://github.com/x/y.git/info/lfs/objects/batch": dial tcp 140.82.114.4:443: i/o timeout',
-      "dial tcp: lookup github.com on 10.0.0.1:53: no such host",
-      "dial tcp 127.0.0.1:443: connect: connection refused",
-    ];
-    for (const raw of shapes) {
-      /* 话术、重试面与失败分类三者同源：这一族现在是 egress，不是「其他」。 */
-      expect(isEgressFailure(raw)).toBe(true);
-      expect(shouldRetryGitFailure(raw)).toBe(true);
-      expect(classifyLfsPushFailure(raw).kind).toBe("EGRESS");
-      expect(classifyLfsPushFailure(raw).next).toContain("节点侧");
-    }
-    /* 认证 / 配额 / 仓库三族仍一次都不试 —— 放宽的只是 Go 的措辞，不是判据的边界。 */
-    for (const raw of [
-      "remote: Repository not found.\nfatal: Authentication failed",
-      "fatal: Invalid username or token",
-      "batch response: This repository is over its data quota.",
-      "remote: Permission denied",
-    ]) {
-      expect(isEgressFailure(raw)).toBe(false);
-      expect(shouldRetryGitFailure(raw)).toBe(false);
-    }
-  });
-
   it("现场四种失败原话：egress 三形认、远端 5xx 只进重试面不进话术", () => {
     /* 2026-11-04 三跑「重试=0 次」的现场原话，逐字取自镜像格日志。 */
     const reset =
@@ -808,6 +779,8 @@ describe("runMirror（git 与 fetch 全假件）", () => {
   /** 收口假件与日志的量具。 */
   function harness(
     opts: {
+      /* LFS batch 核对的假件：第一次网络层抛、之后按给定状态回（模拟 egress 抖动一次）。 */
+      batchThrowsOnce?: boolean;
       /* PR 标题回读的假件（缺省回 null ⇒「回读没跑起来」，标题留空、照旧派发）。 */
       cnbJson?: (run: unknown, args: string[]) => unknown;
       dispatchBody?: string;
@@ -918,6 +891,7 @@ describe("runMirror（git 与 fetch 全假件）", () => {
       }
       return gitOk(args);
     };
+    let batchCalls = 0;
     const fetchImpl = ((url: string | URL, init?: RequestInit) => {
       calls.push({
         url: String(url),
@@ -926,6 +900,24 @@ describe("runMirror（git 与 fetch 全假件）", () => {
       });
       if (opts.fetchThrows === true) {
         throw new Error("network down");
+      }
+      if (opts.batchThrowsOnce === true && String(url).includes("objects/batch")) {
+        batchCalls += 1;
+        if (batchCalls === 1) {
+          throw new TypeError("fetch failed");
+        }
+        /* 清单里的对象逐字回一条 download，让核对判 OK（对象形状与 OID 无关，只数条数）。 */
+        const bodyText = typeof init?.body === "string" ? init.body : "{}";
+        const asked = JSON.parse(bodyText) as { objects?: Array<{ oid: string }> };
+        return new Response(
+          JSON.stringify({
+            objects: (asked.objects ?? []).map((o) => ({
+              actions: { download: { href: "https://lfs/ok" } },
+              oid: o.oid,
+            })),
+          }),
+          { status: 200 },
+        );
       }
       return new Response(opts.dispatchBody ?? null, {
         status: opts.dispatchStatus ?? 204,
@@ -1037,6 +1029,26 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(code).toBe(CODE.OK);
     expect(titleCalls).toHaveLength(0);
     expect(heard.join("\n")).toContain(`[mirror] GitHub run 标题：PR #2649 · ${SHA}`);
+  });
+
+  /* 现场 PR #3395 / ISSUE #3400 的端到端复位：wire 与 LFS 推送都通，LFS batch 核对
+   * 第一次撞上 `TypeError: fetch failed`（egress 抖动）。修好之前这一跳单次即交账 ⇒
+   * 整格 exit 2、派发不发生；修好之后重试一次就通，整格退 0 且派发照发。 */
+  it("LFS 核对 fetch 抖动一次 ⇒ 重试后通、整格退 0 且派发（ISSUE #3400 现场复位）", async () => {
+    const { io, calls, heard, written, sleeps } = harness({
+      batchThrowsOnce: true,
+      lfsJsonStdout: JSON.stringify({ files: [{ oid: "a".repeat(64), size: 1 }] }),
+    });
+    const code = await runMirror(io);
+    expect(code).toBe(CODE.OK);
+    /* batch 发了两次、dispatch 发了一次 ⇒ 核对这一跳确实挺过了那一次抖动。 */
+    const batch = calls.filter((c) => c.url.includes("objects/batch"));
+    const dispatch = calls.filter((c) => c.url.includes("/dispatches"));
+    expect(batch).toHaveLength(2);
+    expect(dispatch).toHaveLength(1);
+    expect(dispatchedState(written)).toMatchObject({ dispatched: true });
+    expect(heard.join("\n")).toContain("网络抖动 / 远端 5xx 重试");
+    expect(sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
   });
 
   it("LFS 推送失败 ⇒ 退 1，一跳都不派发（派出去只会让 GitHub 侧拿指针文件跑假红）", async () => {
@@ -1753,11 +1765,16 @@ describe("推送后自证（ci-mirror-push-verify）", () => {
     ]);
   });
 
-  /** `verifyLfsObjects` 的假件：本地清单由 `list` 给，HTTP 面由 `fetchImpl` 给。 */
+  /** `verifyLfsObjects` 的假件：本地清单由 `list` 给，HTTP 面由 `fetchImpl` 给。
+   * 重试那一族注入假 `sleep` / `now`（一次真墙钟都不付）；不给 `maxAttempts` 就走缺省单次。 */
   function verifyLfs(
     list: { code: number; stderr?: string; stdout?: string },
     fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
-    opts: { maxAttempts?: number; now?: () => number } = {},
+    opts: {
+      maxAttempts?: number;
+      now?: () => number;
+      sleep?: (ms: number) => Promise<void>;
+    } = {},
   ) {
     const lines: Array<string> = [];
     const sleeps: Array<number> = [];
@@ -1771,14 +1788,16 @@ describe("推送后自证（ci-mirror-push-verify）", () => {
             lines.push(line);
           },
           maxAttempts: opts.maxAttempts,
-          now: opts.now,
+          now: opts.now ?? (() => 0),
           prefix: "mirror",
           repo: DEFAULT_REPO,
           runGit: () => ({ code: list.code, stdout: list.stdout ?? "", stderr: list.stderr ?? "" }),
-          sleep: (ms: number) => {
-            sleeps.push(ms);
-            return Promise.resolve();
-          },
+          sleep:
+            opts.sleep ??
+            ((ms: number) => {
+              sleeps.push(ms);
+              return Promise.resolve();
+            }),
           token: TOKEN,
         }),
     };
@@ -1880,94 +1899,6 @@ describe("推送后自证（ci-mirror-push-verify）", () => {
     expect(mismatch.note).toContain("对象数不一致");
   });
 
-  it("LFS 核对网络层抖动：第 1 次抛、第 2 次通 ⇒ 0，重试读数进日志（#3400）", async () => {
-    const list = { code: 0, stdout: JSON.stringify({ files: [{ oid: OID_A, size: 1 }] }) };
-    let calls = 0;
-    const fake = verifyLfs(list, () => {
-      calls += 1;
-      if (calls === 1) {
-        return Promise.reject(new TypeError("fetch failed"));
-      }
-      return Promise.resolve(
-        new Response(
-          JSON.stringify({
-            objects: [{ actions: { download: { href: "https://lfs/a" } }, oid: OID_A }],
-          }),
-          { status: 200 },
-        ),
-      );
-    });
-    const got = await fake.run();
-    expect(got.code).toBe(CODE.OK);
-    expect(calls).toBe(2);
-    /* 退避那一跳真发过，且读数进日志（别把「重试过了」读成「一次就过」）。 */
-    expect(fake.sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
-    expect(fake.lines.join("\n")).toContain("LFS 核对第 1/");
-    expect(fake.lines.join("\n")).toContain("5s 后试第 2 次");
-  });
-
-  it("LFS 核对远端 5xx：重试后才 200 ⇒ 0；4xx 一次交账不重试", async () => {
-    const list = { code: 0, stdout: JSON.stringify({ files: [{ oid: OID_A, size: 1 }] }) };
-    const ok = () =>
-      new Response(
-        JSON.stringify({
-          objects: [{ actions: { download: { href: "https://lfs/a" } }, oid: OID_A }],
-        }),
-        { status: 200 },
-      );
-    let calls5xx = 0;
-    const five = verifyLfs(list, () => {
-      calls5xx += 1;
-      return Promise.resolve(calls5xx === 1 ? new Response("no", { status: 502 }) : ok());
-    });
-    expect((await five.run()).code).toBe(CODE.OK);
-    expect(calls5xx).toBe(2);
-    expect(five.sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
-
-    /* 认证 / 权限类（4xx）不该被重试：一次交账，且仍是「没结论」。 */
-    let calls4xx = 0;
-    const four = verifyLfs(list, () => {
-      calls4xx += 1;
-      return Promise.resolve(new Response("no", { status: 403 }));
-    });
-    const got4xx = await four.run();
-    expect(got4xx.code).toBe(CODE.NO_FACT);
-    expect(got4xx.note).toContain("HTTP 403");
-    expect(calls4xx).toBe(1);
-    expect(four.sleeps).toEqual([]);
-  });
-
-  it("LFS 核对网络层耗尽仍是 2；once 恰好一发（不重试）", async () => {
-    const list = { code: 0, stdout: JSON.stringify({ files: [{ oid: OID_A, size: 1 }] }) };
-    let calls = 0;
-    const exhausted = verifyLfs(
-      list,
-      () => {
-        calls += 1;
-        return Promise.reject(new TypeError("fetch failed"));
-      },
-      { now: () => 0 },
-    );
-    const got = await exhausted.run();
-    expect(got.code).toBe(CODE.NO_FACT);
-    expect(got.note).toContain("没跑起来");
-    expect(calls).toBe(VERIFY_MAX_ATTEMPTS);
-    expect(exhausted.sleeps).toEqual(RETRY_BACKOFF_MS.slice(0, VERIFY_MAX_ATTEMPTS - 1));
-    /* 托管机实验 once 档：三跳各只试一次，第四跳（这一格）同样一发即弃。 */
-    let onceCalls = 0;
-    const onceFake = verifyLfs(
-      list,
-      () => {
-        onceCalls += 1;
-        return Promise.reject(new TypeError("fetch failed"));
-      },
-      { maxAttempts: 1 },
-    );
-    expect((await onceFake.run()).code).toBe(CODE.NO_FACT);
-    expect(onceCalls).toBe(1);
-    expect(onceFake.sleeps).toEqual([]);
-  });
-
   it("LFS 清单读不到 ⇒ 2（没结论），不是 0", async () => {
     const fake = verifyLfs({ code: 128, stderr: "not a git repository" }, () =>
       Promise.resolve(new Response("{}")),
@@ -1975,6 +1906,155 @@ describe("推送后自证（ci-mirror-push-verify）", () => {
     const got = await fake.run();
     expect(got.code).toBe(CODE.NO_FACT);
     expect(got.note).toContain("读不到本地 LFS 指针清单");
+  });
+
+  /* 现场 PR #3395 / ISSUE #3400：wire 与 LFS 推送都通了，最后一次 batch 核对撞上
+   * `TypeError: fetch failed`（egress 抖动）却一次就交账 ⇒ 整格 exit 2。 */
+  describe("LFS 核对 batch 的网络重试（ISSUE #3400）", () => {
+    const list = {
+      code: 0,
+      stdout: JSON.stringify({ files: [{ oid: OID_A, size: 1 }] }),
+    };
+    const okBatch = () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            objects: [{ actions: { download: { href: "https://lfs/a" } }, oid: OID_A }],
+          }),
+          { status: 200 },
+        ),
+      );
+
+    it("网络层第一次抛、第二次通 ⇒ 0，且只重试了一次（缺省单次档不重试是前提）", async () => {
+      let calls = 0;
+      const fake = verifyLfs(
+        list,
+        () => {
+          calls += 1;
+          if (calls === 1) {
+            return Promise.reject(new TypeError("fetch failed"));
+          }
+          return okBatch();
+        },
+        { maxAttempts: VERIFY_MAX_ATTEMPTS },
+      );
+      const got = await fake.run();
+      expect(got.code).toBe(CODE.OK);
+      expect(got.attempts).toBe(2);
+      expect(calls).toBe(2);
+      expect(fake.sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
+      expect(fake.lines.join("\n")).toContain("网络抖动 / 远端 5xx 重试");
+    });
+
+    it("网络层一直抛 ⇒ 吃满 VERIFY 上限后仍是 2，note 念最后一次的原话", async () => {
+      let calls = 0;
+      const fake = verifyLfs(
+        list,
+        () => {
+          calls += 1;
+          return Promise.reject(new TypeError("fetch failed"));
+        },
+        { maxAttempts: VERIFY_MAX_ATTEMPTS },
+      );
+      const got = await fake.run();
+      expect(got.code).toBe(CODE.NO_FACT);
+      expect(got.attempts).toBe(VERIFY_MAX_ATTEMPTS);
+      expect(calls).toBe(VERIFY_MAX_ATTEMPTS);
+      expect(got.note).toContain("fetch failed");
+    });
+
+    it("远端 5xx 重试、4xx 一次交账（认证 / 权限类不重试）", async () => {
+      let calls5xx = 0;
+      const retry5xx = verifyLfs(
+        list,
+        () => {
+          calls5xx += 1;
+          return calls5xx === 1 ? Promise.resolve(new Response("no", { status: 503 })) : okBatch();
+        },
+        { maxAttempts: VERIFY_MAX_ATTEMPTS },
+      );
+      expect((await retry5xx.run()).code).toBe(CODE.OK);
+      expect(calls5xx).toBe(2);
+
+      let calls401 = 0;
+      const noRetry401 = verifyLfs(
+        list,
+        () => {
+          calls401 += 1;
+          return Promise.resolve(new Response("no", { status: 401 }));
+        },
+        { maxAttempts: VERIFY_MAX_ATTEMPTS },
+      );
+      const got401 = await noRetry401.run();
+      expect(got401.code).toBe(CODE.NO_FACT);
+      expect(got401.attempts).toBe(1);
+      expect(calls401).toBe(1);
+      expect(got401.note).toContain("HTTP 401");
+    });
+
+    it("回话对不上 / 对象确实缺失是读到的事实，不消耗重试", async () => {
+      let mismatchCalls = 0;
+      const mismatch = verifyLfs(
+        list,
+        () => {
+          mismatchCalls += 1;
+          return Promise.resolve(new Response(JSON.stringify({ objects: [] }), { status: 200 }));
+        },
+        { maxAttempts: VERIFY_MAX_ATTEMPTS },
+      );
+      const gotMismatch = await mismatch.run();
+      expect(gotMismatch.code).toBe(CODE.NO_FACT);
+      expect(gotMismatch.attempts).toBe(1);
+      expect(mismatchCalls).toBe(1);
+
+      let missingCalls = 0;
+      const missingOne = verifyLfs(
+        list,
+        () => {
+          missingCalls += 1;
+          return Promise.resolve(
+            new Response(JSON.stringify({ objects: [{ oid: OID_A, error: { code: 404 } }] }), {
+              status: 200,
+            }),
+          );
+        },
+        { maxAttempts: VERIFY_MAX_ATTEMPTS },
+      );
+      const gotMissing = await missingOne.run();
+      expect(gotMissing.code).toBe(CODE.FAIL);
+      expect(gotMissing.attempts).toBe(1);
+      expect(missingCalls).toBe(1);
+    });
+
+    it("maxAttempts=1（--once 托管机实验档）⇒ 网络失败恰好一发，不重试", async () => {
+      let calls = 0;
+      const fake = verifyLfs(
+        list,
+        () => {
+          calls += 1;
+          return Promise.reject(new TypeError("fetch failed"));
+        },
+        { maxAttempts: 1 },
+      );
+      const got = await fake.run();
+      expect(got.code).toBe(CODE.NO_FACT);
+      expect(got.attempts).toBe(1);
+      expect(calls).toBe(1);
+      expect(fake.sleeps).toHaveLength(0);
+    });
+
+    it("不给 maxAttempts（现存的直接调用）⇒ 缺省单次，逐字保持原行为", async () => {
+      let calls = 0;
+      const fake = verifyLfs(list, () => {
+        calls += 1;
+        return Promise.reject(new Error("dns down"));
+      });
+      const got = await fake.run();
+      expect(got.code).toBe(CODE.NO_FACT);
+      expect(got.attempts).toBe(1);
+      expect(calls).toBe(1);
+      expect(got.note).toContain("没跑起来");
+    });
   });
 });
 
@@ -2563,7 +2643,7 @@ describe("runMirrorEntry（入口的终点）", () => {
 
 /* ── 托管机镜像实验（ISSUE #3346）：once 档与「等托管机」前置 ──────────────────── */
 
-describe("once 档：三跳各只试一次，失败了也不重试（ISSUE #3346）", () => {
+describe("once 档：四跳各只试一次，失败了也不重试（ISSUE #3346 / #3400）", () => {
   /** 自带迷你假件（runMirror 的 `harness` 在另一个 describe 的作用域里）：只数刀数与听读数。 */
   function onceHarness(opts: { lfsCode?: number; lfsStderr?: string; pushCode?: number } = {}) {
     const heard: Array<string> = [];
@@ -2784,5 +2864,37 @@ ${data}`);
     );
     expect(verdict.skipped).toBe(false);
     expect(h.ls, "前提层的事归 runMirror 的话术，这一层不抢").toHaveLength(0);
+  });
+});
+
+/* ISSUE #3400 的接线防回潮：第四跳（LFS 核对 batch）曾经是**唯一**没接上重试的，
+ * 于是「wire/LFS 都推成功了，却因最后一次核对的 fetch 抖动把整格判挂」。
+ * 这里逐实例钉住两处调用点都把 maxAttempts / sleep / now 注进去，别再漏一次。
+ * （§12.18：接线后的防回潮用逐实例 grep 断言，不新写启发式扫描器。） */
+describe("LFS 核对调用的接线（ISSUE #3400）", () => {
+  const sources = [
+    { file: "scripts/ci-github-mirror-push.mjs", label: "PR 档 runMirror" },
+    { file: "scripts/ci-github-mirror-master.mjs", label: "master 档 runMasterMirror" },
+  ] as const;
+
+  it.for(sources)("$label 的 verifyLfsObjects 调用带 maxAttempts / sleep / now", ({ file }) => {
+    const src = readFileSync(path.join(process.cwd(), file), "utf8");
+    const call = src.slice(
+      src.indexOf("verifyLfsObjects({"),
+      src.indexOf("verifyLfsObjects({") + 600,
+    );
+    expect(call).toContain("maxAttempts:");
+    expect(call).toContain("sleep,");
+    expect(call).toContain("now:");
+  });
+
+  it("PR 档按 once 收窄，master 档用默认上限", () => {
+    const pr = readFileSync(path.join(process.cwd(), "scripts/ci-github-mirror-push.mjs"), "utf8");
+    const master = readFileSync(
+      path.join(process.cwd(), "scripts/ci-github-mirror-master.mjs"),
+      "utf8",
+    );
+    expect(pr.slice(pr.indexOf("verifyLfsObjects({"))).toContain("once ? 1 : VERIFY_MAX_ATTEMPTS");
+    expect(master.slice(master.indexOf("verifyLfsObjects({"))).toContain("VERIFY_MAX_ATTEMPTS");
   });
 });

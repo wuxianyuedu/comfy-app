@@ -105,14 +105,14 @@
 - **现状（CNB 口径）**：自托管每次全量 clone（OverlayFS 不可用），fetch-depth 无意义
 - **GA 实测表现**：
   - pr-gate.yml static-gates：`fetch-depth: 0` ✅ 保留（分支守卫 / 提交声明核对 / 补丁覆盖率要读 `origin/master`，浅克隆里没有这条 ref）
-  - pr-gate.yml typecheck-db-format：`0` → `2` ✅（本格只跑 `tests/lib-node-only-declarations.test.ts`，它不读 git 历史；判据基线是 payload 的 `CNB_PULL_REQUEST_TARGET_SHA`）
-  - pr-gate.yml fixed-structural-tests：**回到 `0`**（`2` 被实测证伪，见下节「被实测证伪的判断」）
-  - pr-gate.yml affected-tests：`0` → `2` ✅（`COMFY_AFFECTED_SEGMENT=affected` 不含固定清单，`tests/audits-doc-references.test.ts` 不在这一格跑）
+  - pr-gate.yml typecheck-db-format：**回到 `0`**（`2` 被实测证伪：`--changed` 的基线是 payload 的 `CNB_PULL_REQUEST_TARGET_SHA`，不等于合成 merge 的 base 父；老 PR 重跑 + master 前进时基线更老、落在 depth=2 之外 ⇒ 三点 diff 退 2，ISSUE #3375）
+  - pr-gate.yml fixed-structural-tests：`0` → `2` ✅（#3255 / #3329：按历史现算的判据改读仓内台账后，`fixed` 段不解析改动面、不读 git 全历史 ⇒ 浅检出重新成立；下节「被实测证伪的判断」记的是它**此前**退回 `0` 的那一轮）
+  - pr-gate.yml affected-tests：**回到 `0`**（同 ISSUE #3375：`affected` 段要按三点 diff 算改动面，基线对象缺失就 fail-closed 退 2；`fixed` 段不解析改动面，故 `fixed-structural-tests` 那格可留 `2`）
   - pr-gate.yml heavy-gates：`fetch-depth: 0` ✅ 保留（依赖新鲜度按 `merge-base HEAD origin/master` 算，浅克隆没有 `origin/master`）
   - master-gate.yml：`fetch-depth: 0` → 1（PR #3223 修复）✅ 文档链命令只读当前树
   - daily.yml：**回到 `0`**（全量单测含按历史现算的判据，`1` 会红；本笔修正）
   - package-desktop.yml：`fetch-depth: 0` → 1（桌包档只 `pnpm tauri build`，不跑测试、不做三点 diff）✅
-- **影响判断**：fetch-depth 过大 = 纯网络开销；过小 = 缺历史导致三点 diff / LFS / 按历史现算的判据（`git log --all`）失败
+- **影响判断**：fetch-depth 过大 = 纯网络开销；过小 = 缺历史导致三点 diff / LFS / 按历史现算的判据（`git log --all`）失败；**凡读 `CNB_PULL_REQUEST_TARGET_SHA` 做三点 diff 的格必须全历史** —— 该 sha 是 PR 事件的目标分支快照，PR 存活期间 master 前进就会比合成 merge 的 base 父更老（ISSUE #3375）
 - **建议改法**：逐个评估每份 workflow 的 checkout 配置，最小化 fetch-depth；**判据里有 `git log` 的格必须全历史**
 - **优先级**：P0（冷装优化的核心）
 
@@ -261,6 +261,12 @@
 
 ## 被实测证伪的判断
 
+- **「读 `CNB_PULL_REQUEST_TARGET_SHA` 做三点 diff 的两格，depth=2 就够」**（PR #3236 的推论：合成 merge 的两个父 = base 与 head）。
+  - 证伪读数（PR #3366 重跑 `cnb-ukn-1k6sn867h` › GitHub `affected-tests` / `typecheck-db-format`，2026-11-08 04:46）：两格失败行逐字相同 ——
+    `262308122060db67debad3bba1a9036fe9a5a9a2 的 diff 没跑起来（浅克隆 / 该 sha 不在本地对象库里；先 fetch 再跑）（退 2 —— 这一格没判，不构成证据）`。
+  - 根因：payload 注入的 `CNB_PULL_REQUEST_TARGET_SHA = 26230812` 是 **PR 创建事件**的 master 快照；重跑时合成 merge 的 base 父已是 `b263d7d18`（比它新 3 笔），而 `--depth=2` 只 fetch 到合成 merge 的两个父 ⇒ 基线对象与它到 HEAD 的历史都不在本地对象库。同日新开的 PR（#3374 / #3393）base 与 base 父一致、depth=2 够 ⇒ 绿，故这一形只在「老 PR 重跑 + master 已前进」暴露。
+  - 处置：`typecheck-db-format` / `affected-tests` 两格回到 `fetch-depth: 0`，判据脚本（`changed-scope.mjs` / `check-format.cjs` / `ci-affected-tests.mjs`）一字不改 —— 它们按 fail-closed 退 2 是正确行为；`fixed-structural-tests` 的 `fixed` 段不解析改动面，保持 `2`。
+  - 作用域：`repository_dispatch` 取**镜像仓默认分支**的 workflow 定义 ⇒ 修复合进 CNB `master`、经 `master 合并复核` 的 `GitHub master 镜像` 那一格推到镜像仓之后，才对后续 PR 的 GA 判据生效；已在飞的 PR 需要各自重跑一次。
 - **「pr-gate 三个装依赖 job 的 `fetch-depth` 都能收到 2」**（PR #3236 的假设：合成 merge 的两个父就是 base 与 head ⇒ 2 够）。
   - 证伪读数（GA run 42177286869 › `fixed-structural-tests`，2026-11-06 06:53–06:56，`git fetch --depth=2`）：
     ```

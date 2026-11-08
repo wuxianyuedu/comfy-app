@@ -172,12 +172,14 @@ export async function resolveDesktopStoragePaths(
   };
   const inputDir: StorageDirInfo = {
     path: overrides.inputDir ?? path.join(primaryBase, "input"),
-    exists: exists(overrides.inputDir ?? path.join(primaryBase, "input")),
+    exists: exists(/*turbopackIgnore: true*/ overrides.inputDir ?? path.join(primaryBase, "input")),
     source: overrides.inputDir === null ? null : "--input-directory",
   };
   const outputDir: StorageDirInfo = {
     path: overrides.outputDir ?? path.join(primaryBase, "output"),
-    exists: exists(overrides.outputDir ?? path.join(primaryBase, "output")),
+    exists: exists(
+      /*turbopackIgnore: true*/ overrides.outputDir ?? path.join(primaryBase, "output"),
+    ),
     source: overrides.outputDir === null ? null : "--output-directory",
   };
 

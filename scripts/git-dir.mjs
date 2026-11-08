@@ -111,5 +111,5 @@ export function gitScratchPath(root, name, resolve = resolveGitDir) {
   if (!gitDir) {
     return null;
   }
-  return path.join(gitDir, name);
+  return path.join(/* turbopackIgnore: true */ gitDir, name);
 }

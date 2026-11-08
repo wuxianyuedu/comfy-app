@@ -19,7 +19,6 @@
  *
  * @module scripts/ci-mirror-push-verify — 推送后的 ref / LFS 自证
  */
-import { isRetryableFetchFailure } from "./ci-mirror-failure-report.mjs";
 import {
   REMOTE_READ_TIMEOUT_MS,
   RETRY_BACKOFF_MS,
@@ -172,37 +171,90 @@ export function parseLfsObjects(stdout) {
 }
 
 /**
+ * 发起一次 LFS batch 请求并读回 JSON —— 只做「这一跳有没有跑起来」的分流，不判业务。
+ *
+ * 分三形，是否值得重试由调用方按 kind / 状态码决定：
+ *   · `network`：fetch 本身抛错（Node undici 的 `TypeError: fetch failed` 一族，
+ *     现场 PR #3395 的 `egress 抖动`），或回话 body 没读全 ⇒ 瞬时，重试有意义；
+ *   · `http`：拿到了 HTTP 应答但不是 200 —— 5xx 是远端瞬时错（重试有意义），
+ *     4xx 是认证 / 权限 / 请求形状（「再试一百次也一样」，不重试）；
+ *   · `ok`：200 且 body 是 JSON ⇒ 把解析结果交回调用方判对象在不在。
+ *
+ * 刻意不复用 `runGitWithRetry`：那一跳吃的是 git 子进程的 `{stdout, stderr}` 文本与
+ * egress 正则，而这里是 `fetch` 的异常对象与 HTTP 状态码，判据面不同（§12.18：这一处
+ * 独有的形态就地写，不把两种失败硬塞进同一个重试器）。
+ *
+ * @param {object} deps
+ * @param {(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>} deps.fetchImpl HTTP 执行面
+ * @param {string} deps.repo 镜像仓库坐标
+ * @param {Array<{oid: string, size: number}>} deps.objects 本地指针清单
+ * @param {string} deps.token 镜像令牌
+ * @returns {Promise<{kind: "network"|"http"|"ok", error?: unknown, status?: number, body?: unknown, note?: string}>}
+ */
+async function requestLfsBatch({ fetchImpl, objects, repo, token }) {
+  const auth = Buffer.from(`x-access-token:${token}`, "utf8").toString("base64");
+  let res;
+  try {
+    res = await fetchImpl(`https://github.com/${repo}.git/info/lfs/objects/batch`, {
+      body: JSON.stringify({ objects, operation: "download", transfers: ["basic"] }),
+      headers: {
+        Accept: "application/vnd.git-lfs+json",
+        Authorization: `Basic ${auth}`,
+        "Content-Type": "application/vnd.git-lfs+json",
+        "User-Agent": "comfy-app-cnb-mirror",
+      },
+      method: "POST",
+      signal: AbortSignal.timeout(REMOTE_READ_TIMEOUT_MS),
+    });
+  } catch (error) {
+    return { error, kind: "network", note: `LFS 核对请求没跑起来（网络层）：${String(error)}` };
+  }
+  if (res.status !== 200) {
+    return {
+      kind: "http",
+      note: `LFS 核对被拒：HTTP ${String(res.status)} ⇒ 没结论`,
+      status: res.status,
+    };
+  }
+  try {
+    const body = await res.json();
+    return { body, kind: "ok" };
+  } catch (error) {
+    return { error, kind: "network", note: `LFS 核对的回话没读全（网络层）：${String(error)}` };
+  }
+}
+
+/**
+ * @param {{kind: "network"|"http"|"ok", status?: number}} outcome 一次 batch 请求的分流结果
+ * @returns {boolean} true ⇒ 瞬时失败（网络没跑起来 / 远端 5xx），值得再发一次
+ */
+function retryableBatchFailure(outcome) {
+  return outcome.kind === "network" || (outcome.kind === "http" && (outcome.status ?? 0) >= 500);
+}
+
+/**
  * 推送后核对 LFS 对象在远端**可下载**（不是看 `git lfs push` 的退出码）。
  *
  * 用 LFS batch API 的 `download` 操作：对每个本地指针 OID，远端回 `actions.download` 即
  * 「在」；带 `error`（GitHub 对缺失对象回 404 族）即「不在」。批量一次问完。
  *
- * 与推送链其余三跳同一纪律：**网络层异常（`fetch failed` / `cause.code` 上的 `E*`）
- * 与远端 5xx 才消耗重试**（墙钟预算 `VERIFY_RETRY_BUDGET_MS` + 退避阶梯表），
- * 认证 / 权限（4xx）、回话对不上、对象确实缺失（有事实的 FAIL）一律一次交账 ——
- * 重试权限问题只会把真问题拖慢，还把「令牌缺 scope」读成「网络不好」。
- * 这一跳是推送链上的**第四跳**，此前裸 `fetch` 单次即弃：wire/LFS 都推成功了，
- * 却因最后一次核对的网络抖动把整跑判挂（PR #3398 第二跑、
- * `cnb-1t1-1k6tbm25q` 的 `TypeError: fetch failed`）。重试读数进日志，
- * 别把「重试过了」读成「一次就过」。
- *
  * @param {object} deps
  * @param {(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>} deps.fetchImpl HTTP 执行面
  * @param {(line: string) => void} deps.log 输出通道
- * @param {number} [deps.maxAttempts] 尝试上限覆盖：托管机实验的 once 档传 1；缺省 {@link VERIFY_MAX_ATTEMPTS}
+ * @param {number} [deps.maxAttempts] 尝试上限（缺省 1 = 单次即弃；主文件按 `once ? 1 : VERIFY_MAX_ATTEMPTS` 注入）
  * @param {() => number} [deps.now] 墙钟注入点
  * @param {string} deps.prefix 行前缀
  * @param {(args: string[]) => {code: number, stderr: string, stdout: string}} deps.runGit 执行者
  * @param {string} deps.repo 镜像仓库坐标（`owner/repo`）
- * @param {(ms: number) => Promise<void>} [deps.sleep] 退避（缺省真退避；用例注入假件）
+ * @param {(ms: number) => Promise<void>} [deps.sleep] 退避注入点
  * @param {string} deps.token 镜像令牌
- * @returns {Promise<{code: number, missing: string[], note: string, objects: number, objectsText: string}>}
+ * @returns {Promise<{attempts: number, code: number, missing: string[], note: string, objects: number, objectsText: string}>}
  */
 export async function verifyLfsObjects(deps) {
   const {
     fetchImpl,
     log,
-    maxAttempts: attemptsCap = VERIFY_MAX_ATTEMPTS,
+    maxAttempts: attemptsCap = 1,
     now = Date.now,
     prefix,
     repo,
@@ -216,6 +268,7 @@ export async function verifyLfsObjects(deps) {
   if (list.code !== 0) {
     log(`[${prefix}]   ${String(list.stderr ?? "").trim()}`);
     return {
+      attempts: 1,
       code: CODE.NO_FACT,
       missing: [],
       note: "读不到本地 LFS 指针清单 ⇒ 没结论",
@@ -225,10 +278,18 @@ export async function verifyLfsObjects(deps) {
   }
   const parsed = parseLfsObjects(list.stdout);
   if (parsed.error !== "") {
-    return { code: CODE.NO_FACT, missing: [], note: parsed.error, objects: 0, objectsText: "0/0" };
+    return {
+      attempts: 1,
+      code: CODE.NO_FACT,
+      missing: [],
+      note: parsed.error,
+      objects: 0,
+      objectsText: "0/0",
+    };
   }
   if (parsed.objects.length === 0) {
     return {
+      attempts: 1,
       code: CODE.OK,
       missing: [],
       note: "0 个 LFS 对象，无需核对",
@@ -236,90 +297,59 @@ export async function verifyLfsObjects(deps) {
       objectsText: "0/0",
     };
   }
-  const auth = Buffer.from(`x-access-token:${token}`, "utf8").toString("base64");
-  const request = () =>
-    fetchImpl(`https://github.com/${repo}.git/info/lfs/objects/batch`, {
-      body: JSON.stringify({
-        objects: parsed.objects,
-        operation: "download",
-        transfers: ["basic"],
-      }),
-      headers: {
-        Accept: "application/vnd.git-lfs+json",
-        Authorization: `Basic ${auth}`,
-        "Content-Type": "application/vnd.git-lfs+json",
-        "User-Agent": "comfy-app-cnb-mirror",
-      },
-      method: "POST",
-      signal: AbortSignal.timeout(REMOTE_READ_TIMEOUT_MS),
-    });
-  /** 这一跳还剩多少预算；到点就不再发起，按最后一次的结果交账。 */
+  /* batch 那一跳的网络重试（现场 PR #3395 / ISSUE #3400）：wire 与 LFS 推送都已经通了，
+   * 却因最后一次核对的 `TypeError: fetch failed` 单次即退 2、把整格判挂。与
+   * `verifyPushedRef` 同口径：只重试瞬时（网络层 / 远端 5xx），认证 4xx 与回话事实一次交账；
+   * 预算 / 次数 / 退避都取 retry-policy 的同一组数，不另立一套。`maxAttempts=1` 时整段退化成
+   * 原来的单次调用（现有直接调用与 `--once` 托管机实验档逐字保持）。 */
+  /** @type {(note: string, attempts: number) => {attempts: number, code: number, missing: string[], note: string, objects: number, objectsText: string}} */
+  const noFact = (note, attempts) => ({
+    attempts,
+    code: CODE.NO_FACT,
+    missing: [],
+    note,
+    objects: parsed.objects.length,
+    objectsText: `未读到/${String(parsed.objects.length)}`,
+  });
   const startedAt = now();
   const remaining = () => VERIFY_RETRY_BUDGET_MS - (now() - startedAt);
-  /** 最后一次真正拿到的 HTTP 应答；整档全抛网络异常时保持 null。 */
-  let res = null;
-  /** 最后一次「没通」的读数（网络异常原话 / 远端 5xx 状态码），只进日志。 */
-  let lastFailure = "";
-  let attempts = 0;
-  for (let attempt = 1; attempt <= attemptsCap; attempt += 1) {
-    attempts = attempt;
-    /** 这一发值不值得再来一次：只有网络层异常与远端 5xx 为真。 */
-    let retryable;
-    try {
-      // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
-      res = await request();
-      /* 到了 GitHub、服务端自己给了一记瞬时错（5xx）⇒ 换一次请求就可能成。
-       * 200 / 4xx（认证 / 权限 / 配额）/ 其余非 5xx 一律不重试，按现有结果交账。 */
-      retryable = res.status >= 500 && res.status < 600;
-      if (retryable) {
-        lastFailure = `HTTP ${String(res.status)}`;
-      }
-    } catch (error) {
-      res = null;
-      lastFailure = String(error);
-      /* 只有网络层异常（`fetch failed` / `cause.code` 上的 `E*` / egress 文本族）才重试。 */
-      retryable = isRetryableFetchFailure(error);
-    }
-    if (!retryable || attempt === attemptsCap) {
-      break;
-    }
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 下标越界时运行时为 undefined（未开 noUncheckedIndexedAccess）
-    const wait = RETRY_BACKOFF_MS[attempt - 1] ?? RETRY_BACKOFF_MS.at(-1) ?? 5000;
-    const left = remaining() - wait;
-    if (left < RETRY_MIN_ATTEMPT_MS) {
+  let attempts = 1;
+  let outcome = await requestLfsBatch({ fetchImpl, objects: parsed.objects, repo, token });
+  for (let attempt = 2; attempt <= attemptsCap && retryableBatchFailure(outcome); attempt += 1) {
+    const wait = RETRY_BACKOFF_MS[attempt - 2] ?? RETRY_BACKOFF_MS.at(-1) ?? 5000;
+    if (remaining() - wait < RETRY_MIN_ATTEMPT_MS) {
       log(
-        `[${prefix}] LFS 核对重试预算用尽：已试 ${String(attempt)} 次（预算 ${String(VERIFY_RETRY_BUDGET_MS / 1000)}s，低于一次尝试的 ${String(RETRY_MIN_ATTEMPT_MS / 1000)}s 就不再发起）⇒ 按最后一次结果交账`,
+        `[${prefix}] LFS 核对重试预算用尽：已试 ${String(attempt - 1)} 次、耗 ${String(Math.round((now() - startedAt) / 1000))}s ⇒ 按最后一次结果交账`,
       );
       break;
     }
     log(
-      `[${prefix}] LFS 核对第 ${String(attempt)}/${String(attemptsCap)} 次没通（${lastFailure}）⇒ ${String(wait / 1000)}s 后试第 ${String(attempt + 1)} 次（网络抖动 / 远端 5xx 重试；认证 / 权限类不重试）`,
+      `[${prefix}] LFS 核对第 ${String(attempt - 1)}/${String(attemptsCap)} 次没通（${outcome.note ?? "瞬时失败"}）⇒ ${String(wait / 1000)}s 后试第 ${String(attempt)} 次（网络抖动 / 远端 5xx 重试；认证 / 权限类不重试）`,
     );
-    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
+    // oxlint-disable-next-line no-await-in-loop -- 镜像格按跳串行；并发重试会打乱推送 / 派发顺序
     await sleep(wait);
+    attempts = attempt;
+    // oxlint-disable-next-line no-await-in-loop -- 镜像格按跳串行：上一次请求没交账前不许发下一发（并发重试会打乱推送 / 派发顺序）
+    outcome = await requestLfsBatch({ fetchImpl, objects: parsed.objects, repo, token });
   }
-  if (res === null) {
-    return {
-      code: CODE.NO_FACT,
-      missing: [],
-      note: `LFS 核对请求没跑起来（网络层${attempts > 1 ? `，已试 ${String(attempts)} 次` : ""}）：${lastFailure}`,
-      objects: parsed.objects.length,
-      objectsText: `未读到/${String(parsed.objects.length)}`,
-    };
+  if (outcome.kind === "network") {
+    return noFact(outcome.note ?? "LFS 核对请求没跑起来（网络层）", attempts);
   }
-  if (res.status !== 200) {
-    return {
-      code: CODE.NO_FACT,
-      missing: [],
-      note: `LFS 核对被拒：HTTP ${String(res.status)} ⇒ 没结论`,
-      objects: parsed.objects.length,
-      objectsText: `未读到/${String(parsed.objects.length)}`,
-    };
+  if (outcome.kind === "http") {
+    return noFact(
+      outcome.note ?? `LFS 核对被拒：HTTP ${String(outcome.status)} ⇒ 没结论`,
+      attempts,
+    );
   }
-  const body = await res.json().catch(() => null);
-  const rows = body && typeof body === "object" ? body.objects : null;
+  /** @type {unknown} */
+  const body = outcome.body;
+  /** @type {{objects?: unknown} | null} */
+  const record =
+    body && typeof body === "object" ? /** @type {{objects?: unknown}} */ (body) : null;
+  const rows = record && Array.isArray(record.objects) ? record.objects : null;
   if (!Array.isArray(rows) || rows.length !== parsed.objects.length) {
     return {
+      attempts,
       code: CODE.NO_FACT,
       missing: [],
       note: "LFS 核对的回话对不上（对象数不一致）⇒ 没结论",
@@ -344,6 +374,7 @@ export async function verifyLfsObjects(deps) {
   if (missing.length > 0) {
     const shown = missing.slice(0, 3).join(", ");
     return {
+      attempts,
       code: CODE.FAIL,
       missing,
       note: `${String(missing.length)}/${String(parsed.objects.length)} 个 LFS 对象远端拿不到（${shown}${missing.length > 3 ? " …" : ""}）`,
@@ -352,6 +383,7 @@ export async function verifyLfsObjects(deps) {
     };
   }
   return {
+    attempts,
     code: CODE.OK,
     missing: [],
     note: `LFS 对象 ${String(parsed.objects.length)}/${String(parsed.objects.length)} 远端可下载`,
