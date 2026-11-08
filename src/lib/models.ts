@@ -1,6 +1,6 @@
 import { listModels, listModelFolders } from "./comfyui/client";
 import { modelRepository } from "./core/repository";
-import type { ModelType } from "./model-types";
+import { isModelFileName, isModelFolder, type ModelType } from "./model-types";
 
 export function baseFromName(name: string): string {
   const lower = name.toLowerCase();
@@ -46,6 +46,11 @@ type ScannedFile = {
  *（不做分类学重映射，也不给每一行加别的类型）。
  * 某个目录的文件只归属于该目录的类型。
  *
+ * 收录判据见 `model-types.ts`（ISSUE #3368）：非模型用途的目录（custom_nodes）
+ * 整个排除；目录里的文件按**模型扩展名**过滤 —— ComfyUI 对目录列的是全部文件，
+ * 插件仓库的源码 / 文档不该进模型库。过滤后没剩任何文件的目录不落库，
+ * 目录列与计数随之自然消失。
+ *
  * 返回同步到的模型文件数。
  */
 export async function syncModels(): Promise<number> {
@@ -53,7 +58,7 @@ export async function syncModels(): Promise<number> {
   await modelRepository.disableAllLocal();
 
   // 第 2 步 —— 目录清单同时充当可达性判据：拿不到目录就没有可回填的东西。
-  const folders = await listModelFolders();
+  const folders = (await listModelFolders()).filter(isModelFolder);
   if (!folders.length) {
     return 0;
   }
@@ -63,12 +68,18 @@ export async function syncModels(): Promise<number> {
   const perFolder = await Promise.all(
     folders.map(async (folder) => ({
       folder,
-      files: await listModels(folder),
+      files: (await listModels(folder)).filter(isModelFileName),
     })),
   );
 
   const scanned: Array<ScannedFile> = [];
   for (const { folder, files } of perFolder) {
+    /* 过滤后为空的目录不落库：数据库里没有它的行，目录列与计数自然为零。
+     *（isAvailable 的既有语义不承载「目录在不在」——停用行是同步重置的产物，
+     * 这里不靠它表达。） */
+    if (files.length === 0) {
+      continue;
+    }
     for (const fileName of files) {
       const name = stripExt(fileName);
       scanned.push({
