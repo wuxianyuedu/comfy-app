@@ -49,15 +49,24 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  * `PR #号 · sha` 的老格式 —— 老 payload（没有这个键）与「有新键但值为空」在 GitHub 侧
  * 渲染出同一句，两者都不报错。
  *
- * @param {{ref: string, headSha: string, baseSha: string, cnbCommit: string, prNumber: string, title?: string}} args
+ * @param {{ref: string, headSha: string, baseSha: string, cnbCommit: string, cnbMergeSha: string, prNumber: string, title?: string}} args
  * @returns {{event_type: string, client_payload: Record<string, string>}}
  */
-export function dispatchPayload({ baseSha, cnbCommit, headSha, prNumber, ref, title = "" }) {
+export function dispatchPayload({
+  baseSha,
+  cnbCommit,
+  cnbMergeSha = "",
+  headSha,
+  prNumber,
+  ref,
+  title = "",
+}) {
   return {
     client_payload: {
       base_sha: baseSha,
       branch: ref,
       cnb_commit: cnbCommit,
+      cnb_merge_sha: cnbMergeSha,
       head_sha: headSha,
       pr_number: prNumber,
       pr_title: title,

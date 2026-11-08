@@ -522,6 +522,7 @@ describe("纯函数", () => {
     const p = dispatchPayload({
       baseSha: "aa".repeat(20),
       cnbCommit: "bb".repeat(20),
+      cnbMergeSha: "cc".repeat(20),
       headSha: SHA,
       prNumber: "2649",
       ref: mirrorRefFor("2649"),
@@ -531,6 +532,7 @@ describe("纯函数", () => {
       base_sha: "a".repeat(40),
       branch: "cnb-pr-2649",
       cnb_commit: "b".repeat(40),
+      cnb_merge_sha: "c".repeat(40),
       head_sha: SHA,
       pr_number: "2649",
       /* 不给标题 ⇒ 键在、值为空串：workflow 的 run-name 据此退回老格式
@@ -542,6 +544,7 @@ describe("纯函数", () => {
       dispatchPayload({
         baseSha: "",
         cnbCommit: "",
+        cnbMergeSha: "",
         headSha: SHA,
         prNumber: "2649",
         ref: mirrorRefFor("2649"),

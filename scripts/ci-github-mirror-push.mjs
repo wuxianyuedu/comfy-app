@@ -249,7 +249,7 @@ export function buildPushUrl(repo, token, user = "oauth2") {
  * 从环境变量收口本次镜像的上下文；缺哪件就念哪件（fail-closed 的「读数」半边）。
  *
  * @param {{env: Record<string, string | undefined>, runGit: (args: string[]) => {code: number, stdout: string, stderr: string}}} io
- * @returns {{ok: true, repo: string, token: string, iid: string, ref: string, headSha: string, baseSha: string, cnbCommit: string} | {ok: false, reasons: string[]}}
+ * @returns {{ok: true, repo: string, token: string, iid: string, ref: string, headSha: string, baseSha: string, cnbCommit: string, cnbMergeSha: string} | {ok: false, reasons: string[]}}
  */
 export function resolveContext(io) {
   const { env, runGit } = io;
@@ -276,6 +276,10 @@ export function resolveContext(io) {
      * 分离」判据（reformat-preview-range.mjs）需要它才能认出合成合并预览的两个父。
      * 缺席不阻断 —— 缺了那一档照旧退「没判」，与 CNB 侧缺变量的行为一致。 */
     cnbCommit: (env.CNB_COMMIT ?? "").trim(),
+    /* PR 预合并 sha（CNB 平台合成的 merge 提交）= commit-statuses 的 sha。
+     * GA 回调 build 必须绑这一笔才能把终态写进那张 statuses 集合；与 headSha
+     * 「同树不同 sha」，别拿本跑 HEAD 顶替（ISSUE #3378 探针读数）。 */
+    cnbMergeSha: (env.CNB_PULL_REQUEST_MERGE_SHA ?? "").trim(),
     headSha: headSha.stdout.trim(),
     iid,
     ok: true,
@@ -505,6 +509,7 @@ export async function runMirror(io) {
   const payload = dispatchPayload({
     baseSha: ctx.baseSha,
     cnbCommit: ctx.cnbCommit,
+    cnbMergeSha: ctx.cnbMergeSha,
     headSha: ctx.headSha,
     prNumber: ctx.iid,
     ref: ctx.ref,
