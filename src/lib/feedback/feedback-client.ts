@@ -6,7 +6,7 @@
 
 import { isRecord } from "~/lib/is-record";
 import { readApiError } from "~/lib/api-error";
-import type { FeedbackDraft } from "./feedback-contract";
+import type { FeedbackCliStatus, FeedbackDraft, FeedbackPublishResult } from "./feedback-contract";
 
 /** 一次反馈落盘的结果。失败不抛：界面据此显示「保存失败」+ 原因（硬规则 4）。 */
 export type FeedbackExportResult = {
@@ -96,6 +96,88 @@ export async function submitFeedback(draft: FeedbackDraft): Promise<FeedbackExpo
   } catch (error) {
     return {
       ...EMPTY,
+      error: error instanceof Error ? error.message : "网络请求失败",
+    };
+  }
+}
+
+/** 「提交到仓库」失败的兜底形状（网络/服务端失败都转成同形状结果）。 */
+const PUBLISH_EMPTY: FeedbackPublishResult = {
+  ok: false,
+  error: "",
+  uploaded: 0,
+  issueNumber: "",
+  issueUrl: "",
+};
+
+/** 收窄 GET /status 的回执；形状不对按「不可用」处理，不猜。 */
+function toCliStatus(value: unknown): FeedbackCliStatus {
+  if (isRecord(value) && typeof value.available === "boolean") {
+    return {
+      available: value.available,
+      reason: typeof value.reason === "string" ? value.reason : "",
+    };
+  }
+  return { available: false, reason: "环境探测回执形状不合法" };
+}
+
+/** 收窄 POST /publish 的回执；业务失败只需 ok:false + 一句原因。 */
+function toPublishResult(value: unknown): FeedbackPublishResult | null {
+  if (!isRecord(value) || typeof value.ok !== "boolean") {
+    return null;
+  }
+  const error = typeof value.error === "string" ? value.error : "";
+  if (value.ok === false) {
+    return { ...PUBLISH_EMPTY, error: error || "提交反馈失败" };
+  }
+  if (
+    typeof value.issueNumber !== "string" ||
+    typeof value.issueUrl !== "string" ||
+    typeof value.uploaded !== "number"
+  ) {
+    return null;
+  }
+  return {
+    ok: true,
+    error,
+    uploaded: value.uploaded,
+    issueNumber: value.issueNumber,
+    issueUrl: value.issueUrl,
+  };
+}
+
+/** 探测运行环境里的 cnb cli 是否可用（弹窗打开时调一次，只读）。 */
+export async function getFeedbackCliStatus(): Promise<FeedbackCliStatus> {
+  try {
+    const res = await fetch("/api/feedback/publish", { method: "GET" });
+    if (!res.ok) {
+      return { available: false, reason: `环境探测失败（HTTP ${res.status}）` };
+    }
+    return toCliStatus((await res.json()) as unknown);
+  } catch (error) {
+    return {
+      available: false,
+      reason: error instanceof Error ? error.message : "环境探测请求失败",
+    };
+  }
+}
+
+/** 把已生成的反馈包提交到 CNB 仓库；失败不抛，界面据此显示可见原因。 */
+export async function publishFeedback(packageName: string): Promise<FeedbackPublishResult> {
+  try {
+    const res = await fetch("/api/feedback/publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ packageName }),
+    });
+    const data: unknown = await res.json();
+    if (!res.ok) {
+      return { ...PUBLISH_EMPTY, error: readApiError(data) ?? `提交失败（HTTP ${res.status}）` };
+    }
+    return toPublishResult(data) ?? { ...PUBLISH_EMPTY, error: "提交回执形状不合法" };
+  } catch (error) {
+    return {
+      ...PUBLISH_EMPTY,
       error: error instanceof Error ? error.message : "网络请求失败",
     };
   }

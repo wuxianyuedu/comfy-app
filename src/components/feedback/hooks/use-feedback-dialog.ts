@@ -6,7 +6,7 @@
  * 状态分三块：草稿（描述 / 图片 / 诊断开关）、一次提交的执行态、提交结果。
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 
 import { useTRPC } from "~/trpc/react";
@@ -20,7 +20,13 @@ import {
   MAX_IMAGES,
   type FeedbackDraft,
 } from "~/lib/feedback/feedback-contract";
-import { submitFeedback, type FeedbackExportResult } from "~/lib/feedback/feedback-client";
+import {
+  getFeedbackCliStatus,
+  publishFeedback,
+  submitFeedback,
+  type FeedbackExportResult,
+} from "~/lib/feedback/feedback-client";
+import type { FeedbackCliStatus, FeedbackPublishResult } from "~/lib/feedback/feedback-contract";
 
 /** 界面里一张待提交的截图（data URL 直接当预览用，不另存一份）。 */
 export type FeedbackImage = { dataUrl: string; name: string };
@@ -40,6 +46,8 @@ export type FeedbackController = {
   addImage: (file: File) => void;
   /** 是否还能再加图。 */
   canAddImage: boolean;
+  /** 运行环境里的 cnb cli 状态（null = 还没探测完）。 */
+  cli: FeedbackCliStatus | null;
   /** 关闭弹窗（并清掉上一次的失败态）。 */
   close: () => void;
   /** 复制预填正文（成功 / 失败都由 toast 念出来）。 */
@@ -52,6 +60,14 @@ export type FeedbackController = {
   includeDiagnostics: boolean;
   /** 打开 CNB 新建 Issue 页（系统默认浏览器，桌面壳内 target=_blank 打不开）。 */
   openIssuePage: () => void;
+  /** 打开已建好的 Issue（系统默认浏览器）。 */
+  openPublishedIssue: () => void;
+  /** 把反馈包提交到 CNB 仓库（cli 可用时）。 */
+  publish: () => void;
+  /** 上一次「提交到仓库」的结果（null = 还没提交过）。 */
+  published: FeedbackPublishResult | null;
+  /** 是否正在提交到仓库。 */
+  publishing: boolean;
   /** 删掉第 index 张截图。 */
   removeImage: (index: number) => void;
   /** 上一次提交的结果（null = 还没提交过）。 */
@@ -77,6 +93,9 @@ export function useFeedbackDialog(open: boolean): FeedbackController {
   const [includeDiagnostics, setIncludeDiagnostics] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<FeedbackExportResult | null>(null);
+  const [cli, setCli] = useState<FeedbackCliStatus | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [published, setPublished] = useState<FeedbackPublishResult | null>(null);
 
   const report = useCallback(
     (kind: "ok" | "err", detail: string) => {
@@ -93,6 +112,23 @@ export function useFeedbackDialog(open: boolean): FeedbackController {
     onSuccess: () => toast.success("已复制 Issue 正文", "粘贴到新建 Issue 页即可提交"),
     onFailure: () => toast.error("复制失败", copyFailureText("反馈包里的 issue.md 全文")),
   });
+
+  /* 弹窗打开时探测一次环境：cli 在不在、登没登。失败不打断填写，
+   * 界面会把「不可用」如实念出来并保留复制 / 打开页的回退（硬规则 4）。 */
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    let alive = true;
+    void getFeedbackCliStatus().then((status) => {
+      if (alive) {
+        setCli(status);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [open]);
 
   const addImage = useCallback(
     (file: File) => {
@@ -158,12 +194,46 @@ export function useFeedbackDialog(open: boolean): FeedbackController {
     );
   }, [external, openExternalM]);
 
+  const publish = useCallback(() => {
+    if (!lock.tryEnter() || result?.ok !== true) {
+      return;
+    }
+    setPublishing(true);
+    void publishFeedback(result.packageName)
+      .then((res) => {
+        setPublished(res);
+        if (res.ok && res.error === "") {
+          toast.success(
+            "反馈已提交到仓库",
+            `Issue #${res.issueNumber} · ${res.uploaded} 个附件`,
+            6000,
+          );
+        } else if (res.ok) {
+          toast.success("Issue 已建，但附件未全带上", res.error, 8000);
+        } else {
+          toast.error("提交失败，可复制正文手动提交", res.error, 8000);
+        }
+      })
+      .finally(() => {
+        setPublishing(false);
+        lock.exit();
+      });
+  }, [lock, result, toast]);
+
+  const openPublishedIssue = useCallback(() => {
+    if (published?.ok === true) {
+      void external.runWithTarget(published.issueUrl, (url) => openExternalM.mutateAsync({ url }));
+    }
+  }, [external, openExternalM, published]);
+
   const close = useCallback(() => {
     setResult(null);
+    setPublished(null);
   }, []);
 
   return useMemo(
     () => ({
+      cli,
       close,
       copyIssueBody,
       description,
@@ -171,6 +241,10 @@ export function useFeedbackDialog(open: boolean): FeedbackController {
       images,
       canAddImage: images.length < MAX_IMAGES && open,
       openIssuePage,
+      openPublishedIssue,
+      publish,
+      published,
+      publishing,
       result,
       submitting,
       addImage,
@@ -180,6 +254,7 @@ export function useFeedbackDialog(open: boolean): FeedbackController {
       submit,
     }),
     [
+      cli,
       close,
       copyIssueBody,
       description,
@@ -187,6 +262,10 @@ export function useFeedbackDialog(open: boolean): FeedbackController {
       images,
       open,
       openIssuePage,
+      openPublishedIssue,
+      publish,
+      published,
+      publishing,
       result,
       submitting,
       addImage,

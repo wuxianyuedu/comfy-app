@@ -5,7 +5,16 @@
  * 组件自身不发请求、不写业务规则。图片选择用 ui/file-picker 的 useFilePicker。
  */
 
-import { ImagePlus, X, Clipboard, ExternalLink, FileText } from "lucide-react";
+import {
+  ImagePlus,
+  X,
+  Clipboard,
+  ExternalLink,
+  FileText,
+  CloudUpload,
+  CheckCircle2,
+  AlertCircle,
+} from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -52,8 +61,8 @@ export function FeedbackDialog({ controller: c, onClose, open }: FeedbackDialogP
         <DialogHeader>
           <DialogTitle>反馈应用运行问题</DialogTitle>
           <DialogDescription>
-            填清遇到的问题，附上截图与运行日志；应用会把这些收成一份本机反馈包，并生成好 Issue
-            正文，你复制后粘贴到仓库新建 Issue 页即可提交。
+            填清遇到的问题，附上截图与运行日志；应用会收成一份本机反馈包并生成 Issue 正文。
+            若运行环境装有已登录的 cnb cli，可一键提交到仓库；否则复制正文到新建页提交。
           </DialogDescription>
         </DialogHeader>
 
@@ -119,6 +128,32 @@ export function FeedbackDialog({ controller: c, onClose, open }: FeedbackDialogP
           </FieldLabel>
         </div>
 
+        {c.cli !== null && !c.cli.available && (
+          <div className="border-warning/30 bg-warning/5 flex items-start gap-2 rounded-lg border p-3">
+            <AlertCircle className="text-warning-strong mt-0.5 shrink-0" size={14} />
+            <p className="text-ink-soft text-xs">
+              环境里的 cnb cli 不可用（{c.cli.reason}），仍可复制正文手动提交。
+            </p>
+          </div>
+        )}
+
+        {c.published?.ok === true && (
+          <div className="border-success-strong/30 bg-success/5 flex flex-col gap-1.5 rounded-lg border p-3">
+            <p className="text-success-strong flex items-center gap-1.5 text-sm font-medium">
+              <CheckCircle2 size={14} />
+              已提交到仓库：Issue #{c.published.issueNumber}
+            </p>
+            <p className="text-ink-muted text-2xs break-all">{c.published.issueUrl}</p>
+            {c.published.error !== "" && (
+              <p className="text-warning-strong text-xs">{c.published.error}</p>
+            )}
+            <Button onClick={c.openPublishedIssue} size="sm" variant="outline">
+              <ExternalLink data-icon="inline-start" size={14} />
+              打开该 Issue
+            </Button>
+          </div>
+        )}
+
         {c.result?.ok === true && (
           <div className="border-success-strong/30 bg-success/5 flex flex-col gap-1.5 rounded-lg border p-3">
             <p className="text-success-strong flex items-center gap-1.5 text-sm font-medium">
@@ -135,6 +170,20 @@ export function FeedbackDialog({ controller: c, onClose, open }: FeedbackDialogP
         )}
 
         <DialogFooter>
+          <Button
+            disabled={!c.result?.ok || c.submitting || c.publishing || c.cli?.available !== true}
+            onClick={c.publish}
+            title={
+              c.cli?.available === true
+                ? "调用运行环境中已登录的 cnb cli 建单并上传附件"
+                : "运行环境没有可用的 cnb cli，请用下面两个按钮手动提交"
+            }
+            variant="default"
+          >
+            {c.publishing && <Spinner data-icon="inline-start" />}
+            <CloudUpload data-icon="inline-end" size={14} />
+            {c.publishing ? "正在提交…" : "提交到仓库"}
+          </Button>
           <Button
             disabled={!c.result?.ok || c.submitting}
             onClick={c.copyIssueBody}

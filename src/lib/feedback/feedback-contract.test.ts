@@ -112,3 +112,21 @@ describe("buildIssueTitle / buildIssueBody / feedbackFileName", () => {
     expect(feedbackFileName("20261108-100000-000")).toBe("feedback-20261108-100000-000");
   });
 });
+
+describe("feedbackIssueUrl（已建 Issue 链接）", () => {
+  it("用同一份仓库坐标与站点根拼链接", async () => {
+    const { feedbackIssueUrl, FEEDBACK_CNB_WEB, FEEDBACK_REPO_SLUG } =
+      await import("./feedback-contract");
+    expect(feedbackIssueUrl("3390")).toBe(
+      `${FEEDBACK_CNB_WEB}/${FEEDBACK_REPO_SLUG}/-/issues/3390`,
+    );
+  });
+
+  it("新建页与已建链接同根（端点收口，不各写一份域名）", async () => {
+    const { FEEDBACK_NEW_ISSUE_URL, FEEDBACK_CNB_WEB, FEEDBACK_REPO_SLUG } =
+      await import("./feedback-contract");
+    expect(FEEDBACK_NEW_ISSUE_URL.startsWith(`${FEEDBACK_CNB_WEB}/${FEEDBACK_REPO_SLUG}`)).toBe(
+      true,
+    );
+  });
+});

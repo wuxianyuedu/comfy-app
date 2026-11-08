@@ -10,8 +10,10 @@ import { asRecord } from "~/lib/is-record";
 
 /** 反馈仓库坐标（与 CI 脚本的 `DEFAULT_CNB_SLUG` 同一处事实，不放进桌包凭证）。 */
 export const FEEDBACK_REPO_SLUG = "moon-read/comfy-app-t3";
+/** CNB 站点根（新建页与已建 Issue 链接同一处事实，§12.14 端点收口）。 */
+export const FEEDBACK_CNB_WEB = "https://cnb.cool";
 /** 新建 Issue 页（用户在有平台身份的浏览器里粘贴正文提交）。 */
-export const FEEDBACK_NEW_ISSUE_URL = `https://cnb.cool/${FEEDBACK_REPO_SLUG}/-/issues/new`;
+export const FEEDBACK_NEW_ISSUE_URL = `${FEEDBACK_CNB_WEB}/${FEEDBACK_REPO_SLUG}/-/issues/new`;
 
 /** 一张反馈的提交体（客户端 → /api/feedback/export）。图片是浏览器读出的 data URL。 */
 export type FeedbackDraft = {
@@ -144,3 +146,30 @@ export function buildIssueTitle(description: string): string {
   const title = clean === "" ? "应用运行反馈" : clean;
   return `[运行反馈] ${title.slice(0, 80)}`;
 }
+
+/** 拼出一条已建 Issue 的可打开链接；number 由服务端回执给出（只信平台原值）。 */
+export function feedbackIssueUrl(number: string): string {
+  return `${FEEDBACK_CNB_WEB}/${FEEDBACK_REPO_SLUG}/-/issues/${number}`;
+}
+
+/** 运行环境里 cnb cli 的可用性（服务端探测后回给界面，决定「提交」按钮在不在）。 */
+export type FeedbackCliStatus = {
+  /** 是否可执行且已登录（只读探测的结论）。 */
+  available: boolean;
+  /** 不可用原因（available=false 时给用户看，成功时为空）。 */
+  reason: string;
+};
+
+/** 一次「提交到仓库」的结果（成功给链接，失败给一句可见原因）。 */
+export type FeedbackPublishResult = {
+  /** 失败原因（成功时为空）。 */
+  error: string;
+  /** 建好的 Issue 号（平台原值）。 */
+  issueNumber: string;
+  /** Issue 的可打开链接。 */
+  issueUrl: string;
+  /** 是否成功建单（附件上传失败不会推翻这一格，会如实说明）。 */
+  ok: boolean;
+  /** 上传成功的附件数（图片 + 诊断 zip）。 */
+  uploaded: number;
+};
