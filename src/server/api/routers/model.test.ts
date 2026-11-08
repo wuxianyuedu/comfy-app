@@ -20,7 +20,7 @@ const { scan, comfy, settings } = vi.hoisted(() => ({
     comfyBase: vi.fn(() => "http://127.0.0.1:8188"),
   },
   settings: {
-    getSettingsSync: vi.fn(() => ({ comfyuiPath: "G:\\ComfyUI" })),
+    getSettingsSync: vi.fn(() => ({ comfyuiPath: String.raw`G:\ComfyUI` })),
   },
 }));
 
