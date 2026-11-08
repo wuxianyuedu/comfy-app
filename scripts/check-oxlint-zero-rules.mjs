@@ -196,6 +196,9 @@ function requiredNativePlugins() {
  * `plugins:` / `jsPlugins:` 里。缺了 = 该规则在探针里**静默空转**（「0 命中」
  * 不是扫过的 0）—— 这闸就只剩自话自说了，退 2 停跑。
  */
+/**
+ * @param {{ nativePlugins: string[], jsPluginPrefixes: string[] }} input
+ */
 function assertEveryRuleRegistered({ nativePlugins, jsPluginPrefixes }) {
   const defaultOn = new Set(["unicorn", "typescript", "oxc", "eslint"]);
   const covered = new Set([...defaultOn, ...nativePlugins, ...jsPluginPrefixes]);
