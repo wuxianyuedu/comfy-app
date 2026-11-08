@@ -15,6 +15,7 @@ import {
   maybeSpawnExecutorHost,
   planExecutorHostSpawn,
 } from "../scripts/launcher-core/executor-host-spawn.mjs";
+import { resolveSpawnTarget } from "../scripts/launcher-core/shell.mjs";
 import { launcherChainSource } from "./helpers/launcher-source";
 import { stripComments } from "./helpers/strip-comments";
 
@@ -108,6 +109,20 @@ describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
     expect(lines.join("\n")).not.toContain("✗");
   });
 
+  it("root 不是规范化的绝对路径：显式报一批、不起进程（ISSUE #3327）", () => {
+    const lines: Array<string> = [];
+    const result = maybeSpawnExecutorHost({
+      root: "relative-root",
+      runTimestamp: "t",
+      env: { COMFY_EXECUTOR: "host" },
+      logLine: (m) => lines.push(m),
+    });
+    expect(result).toBeNull();
+    const text = lines.join("\n");
+    expect(text).toContain("✗ 拒绝拉起执行器宿主");
+    expect(text).toContain("必须是绝对路径");
+  });
+
   it("设了 host 但入口不在：不退回 inline，并说清后果", () => {
     const root = mkRoot({ withHost: false });
     const lines: Array<string> = [];
@@ -144,7 +159,9 @@ describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
       pid: 4242,
     }));
     vi.resetModules();
-    vi.doMock("../scripts/launcher-core/shell.mjs", () => ({ spawnInGroup }));
+    /* 只替换「拉起」这一步；入口判据（resolveSpawnTarget）用真实现，
+     * 否则本用例验证的就不是接线后的形态（ISSUE #3327）。 */
+    vi.doMock("../scripts/launcher-core/shell.mjs", () => ({ spawnInGroup, resolveSpawnTarget }));
     try {
       const mod = await import("../scripts/launcher-core/executor-host-spawn.mjs");
       const result = mod.maybeSpawnExecutorHost({
@@ -164,7 +181,10 @@ describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
         platform: string;
       };
       expect(call.command).toBe(process.execPath);
-      expect(call.args).toEqual([path.join(root, EXECUTOR_HOST_SCRIPT)]);
+      /* 参数数组只放**写死的相对入口**，根在 cwd 里（ISSUE #3327：注入面收窄）。
+       * 断言意图不变：拼起来仍必须正好是 root 下的宿主入口。 */
+      expect(call.args).toEqual([EXECUTOR_HOST_SCRIPT]);
+      expect(path.join(call.cwd, call.args[0] ?? "")).toBe(path.join(root, EXECUTOR_HOST_SCRIPT));
       expect(call.cwd).toBe(root);
       /* 归一化后的值必须**显式**传下去：`.env` 来源时它不在 `process.env` 里，
        * 不传就是「调用方认为 host、宿主起着骨架」的静默错配（ADR §14 D5）。 */

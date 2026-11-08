@@ -10,6 +10,7 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import path from "node:path";
 
 import { echoCommandLine } from "./command-echo.mjs";
 
@@ -106,6 +107,71 @@ export function spawnInGroup({
     windowsHide: true,
     shell: false,
   });
+}
+
+/**
+ * 「项目根 / 载荷根」的判据：必须是**已规范化的绝对路径**。
+ *
+ * 这两类根只来自模块自身位置（`import.meta.dirname`），不接受 env / argv / 配置；
+ * 但一旦上游把它换成相对路径或未归一化的串，`spawn` 的 `cwd` 就会落到一个**和调用方
+ * 以为的不是同一个目录**的地方（ISSUE #3327 要收窄的正是这条）。这里显式拒绝，
+ * 而不是让 `path.*` 静默归一化——非法值要在第一跳就看得见。
+ *
+ * @param {unknown} root 待校验的根
+ * @param {string} [label] 报错时的称呼（「standalone 应用根」这类）
+ * @returns {string} 原值（校验通过）
+ */
+export function assertAbsoluteRoot(root, label = "根") {
+  const value = typeof root === "string" ? root : "";
+  if (value.trim() === "" || value !== value.trim()) {
+    throw new Error(`${label}必须是路径字符串（收到 ${JSON.stringify(root)}）`);
+  }
+  if (!path.isAbsolute(value)) {
+    throw new Error(`${label}必须是绝对路径：${value}`);
+  }
+  if (value !== path.normalize(value)) {
+    throw new Error(`${label}必须是已规范化的路径（收到 ${value}）`);
+  }
+  return value;
+}
+
+/**
+ * 「能进 `spawn` 参数数组的入口」判据：返回**根下的绝对落点**，供存在性检查；
+ * 真正传给 `spawn` 的参数仍是调用方写死的相对入口（常量）。
+ *
+ * 为什么参数位置只留常量（ISSUE #3327）：`spawn` 的 `command` / `args` 会进 OS 的
+ * 命令行。本仓要起的入口本来就是「根 + 写死的载荷内路径」；把**变量部分**留在
+ * `cwd` 里、`args` 只留常量，注入面就从「任意绝对路径」收窄成「几个写死的文件名」，
+ * 变量根再经 {@link assertAbsoluteRoot} 与越界判据才允许使用。
+ *
+ * 拒绝形态：空值 / 两端空白 / 绝对路径（含 Windows 盘符与 UNC）/ `.`、`..`、空段，
+ * 以及任何拼出来越出根的结果。合法值（`server.js`、`scripts/executor-host.mjs`）
+ * 的落点与 `path.join(root, entry)` 逐字同值，正常路径行为不变。
+ *
+ * @param {unknown} root 已校验的根（见 {@link assertAbsoluteRoot}）
+ * @param {string} relEntry 写死的相对入口（载荷内路径）
+ * @param {string} [label] 报错时的称呼
+ * @returns {string} 入口的绝对落点
+ */
+export function resolveSpawnTarget(root, relEntry, label = "spawn 入口") {
+  const base = assertAbsoluteRoot(root, `${label}的根`);
+  const value = typeof relEntry === "string" ? relEntry : "";
+  if (value.trim() === "" || value !== value.trim()) {
+    throw new Error(`${label}必须是写死的相对路径（收到 ${JSON.stringify(relEntry)}）`);
+  }
+  if (path.isAbsolute(value) || path.win32.isAbsolute(value)) {
+    throw new Error(`${label}不接受绝对路径：${value}`);
+  }
+  const segments = value.split(/[\\/]+/u);
+  if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
+    throw new Error(`${label}不接受父级跳转或空段：${value}`);
+  }
+  const target = path.join(base, ...segments);
+  const rel = path.relative(base, target);
+  if (rel === "" || rel.startsWith("..") || path.isAbsolute(rel)) {
+    throw new Error(`${label}越出了根：${value}`);
+  }
+  return target;
 }
 
 /**
