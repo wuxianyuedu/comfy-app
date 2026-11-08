@@ -27,8 +27,9 @@
  *    —— 这一层要是会红，「实验失败」就会拦合并，那不是它的职责。
  * 2. **前提取不到不在这一层交账**：令牌 / IID / HEAD 取不到时落回 `runMirror()`，由它按
  *    既定话术打「没跑起来」的三态与回执 —— 这里抢着报会把同一件事说两遍、还少一套读数。
- * 3. **ref 在但树不同**（同 PR 上一跑留下的旧值 / 别笔）不算命中：记进已验集合不重复
- *    浅取；到点后兜底推送用 `--force` 覆盖它（ref 按 IID 专属，覆盖自己的旧值正是幂等语义）。
+ * 3. **ref 在但树不同**（同 PR 上一跑留下的旧值——重跑场景托管机管线会被平台 skip）
+ *    不算命中，且**当场落回兜底**：旧值永远不会自己变成我们的内容，等满预算只是白等
+ *    （重跑现场实测 300s）；它要被重推，ref 变化的那一刻会被后续读数重新核验。
  * 4. **双派发竞态窗是已知代价**：兜底推送进行中托管机恰好落地 ⇒ GitHub 收到两条同树的
  *    `repository_dispatch` ⇒ 两条 run。判决链按 sha 认领（见上，回执带托管机那笔），
  *    树同判同；窗口只有「最后一次回读」与「兜底推送完成」之间的那几秒。
@@ -104,8 +105,6 @@ export async function maybeSkipViaHosted(io, extras = {}) {
    * sha 不同），ref 上的 sha 对不上本格 HEAD 是**常态**而不是抖动。 */
   const localTreeRead = runGit(["rev-parse", "HEAD^{tree}"]);
   const localTree = localTreeRead.code === 0 ? localTreeRead.stdout.trim() : "";
-  /** 已验过「树不等」的 ref sha：同一笔不重复浅取。 */
-  const verifiedNotOurs = new Set();
   const start = now();
   let reads = 0;
   /** @type {string} */
@@ -147,8 +146,6 @@ export async function maybeSkipViaHosted(io, extras = {}) {
         return skipWith(refSha, `第 ${String(reads)} 读同 sha`);
       } else if (localTree === "") {
         lastNote = `ref 在 ${refSha.slice(0, 8)}，本格 HEAD 的树取不到 ⇒ 只能等同 sha（降级）`;
-      } else if (verifiedNotOurs.has(refSha)) {
-        lastNote = `ref 在 ${refSha.slice(0, 8)}（已验过树不等：旧值 / 别笔）`;
       } else {
         const fetched = runGit(["fetch", "--no-tags", "--depth=1", url, refSha], {
           timeout: HOSTED_VERIFY_TIMEOUT_MS,
@@ -164,8 +161,12 @@ export async function maybeSkipViaHosted(io, extras = {}) {
             fetched.code,
           )}）⇒ 下轮再验`;
         } else {
-          verifiedNotOurs.add(refSha);
-          lastNote = `ref 在 ${refSha.slice(0, 8)} 但树与本跑不同（旧值 / 别笔）`;
+          /* 树不等 ⇒ ref 上是**上一跑的旧值**（重跑场景：托管机管线被平台 skip，不会再推；
+           * 它要重推，ref 变化的那一刻会被后续读数重新核验）。旧值永远不会自己变成我们的
+           * 内容 —— 不等满预算，当场落回兜底（ISSUE #3346：重跑现场实测 300s 白等）。 */
+          const why = `ref 在 ${refSha.slice(0, 8)} 但树与本跑不同（上一跑的旧值：重跑场景托管机格被平台 skip）`;
+          log(`[mirror] 等托管机：${why} ⇒ 不等满预算，落回原有重试推送（兜底）`);
+          return { skipped: false, why };
         }
       }
     } else {
