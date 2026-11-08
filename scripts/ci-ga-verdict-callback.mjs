@@ -30,8 +30,9 @@
  * 3. **同 context 是「最后跑完者赢」**：回调与占位自由赛跑时，晚结束的占位会
  *    覆盖回调的终态（探针 `cnb-eiu-1k6sukdi2`）。骨架里靠同一把
  *    `cancel-in-progress: true` 锁让「回调到达即掐掉占位」；被 cancel 的 build
- *    会不会仍写一条终态、以及那条终态是否参与聚合，**是接线前必须补的探针读数**，
- *    本骨架不假装它已解决（详见 `.cnb.yml` 该事件上方的注释）。
+ *    **不会**再写一条拉红聚合的终态（同 context 实测：占位 `cancel`、callback
+ *    后写 `success`、聚合 `success`），所以这把锁的方案成立，不需要
+ *    `stop-build` 或「只留一个写者」（详见 `.cnb.yml` 该事件上方的注释）。
  *
  * ## fail-closed 三态
  *

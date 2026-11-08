@@ -395,7 +395,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # ── GA 结论送回 CNB（ISSUE #3378 骨架·休眠）───────────────────────────────
+  # ── GA 结论送回 CNB（ISSUE #3378 骨架）───────────────────────────────────
   #
   # 上一轮探针（#3374）验过：GA 侧用 `repo-cnb-trigger:rw` 的令牌调一次
   # `POST /{repo}/-/build/start`，带 `event=api_trigger_ga_verdict`、
@@ -404,11 +404,15 @@ jobs:
   # 轮询 GitHub conclusion」可以换成「GA 入站推送结论」，自托管机不必再碰
   # github.com —— 正是本单要解的那一格（托管机出网稳、自托管不稳）。
   #
-  # ⚠️ **骨架刻意休眠**：CNB 侧 `质量门禁` 的判决链一个字节没动，本 job 只在
-  # `CNB_TRIGGER_TOKEN` 这个 secret 配好之后才发得出回调；没配时脚本按
-  # fail-closed 退 2，而 `continue-on-error: true` 保证它**不改变本 workflow
+  # CNB 侧 `质量门禁` 的判决链一个字节没动 —— 本 job 只**送结论**，不承重。
+  # 它带 `if: always()`、没有任何开关：`CNB_TRIGGER_TOKEN` 在场时每次 GA
+  # run 收尾都会发回调，不是「配好 secret 之前不会自己送」。secret 是 GitHub
+  # 仓库侧的 Actions secret，与 CNB 侧 NPC 令牌不是同一件东西。脚本前提不全
+  # 时按 fail-closed 退 2，`continue-on-error: true` 保证它**不改变本 workflow
   # run 自己的 conclusion**（CNB 回读格读的就是这个 conclusion，不能自指）。
-  # 转正 = 配 secret + 起占位 + 逐笔对账 §13.5.33 判决链退场，是单独一次决定。
+  # 「回调腿发没发」用 `pnpm ga-verdict:attendance` 只读对账 CNB 侧那个事件
+  # 的 build 出勤；GA run console 不在这枚令牌的读权内，0 出勤不等于 GA 判红。
+  # 转正 = 确认回调腿出勤 + 起占位 + 逐笔对账 §13.5.33 判决链退场，是单独一次决定。
   #
   # `needs` 列全五个判据 job：`if: always()` 让任一格红/取消时本格照样跑，
   # 把「红」也送回去（否则 GA 判红而 CNB 侧一直没有终态，PR 会一直挂着）。

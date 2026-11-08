@@ -693,10 +693,9 @@
 # 撑 pending 的占位，避免「晚结束的占位把回调终态覆盖回去」（探针
 # `cnb-eiu-1k6sukdi2` 的现场）。
 #
-# ⚠️ 这是**骨架**，接线前还有一格未验：被 cancel 的 build 会不会仍写一条
-# 终态、那条终态是否参与聚合。若平台把 cancel 也写成一条红，就得改成
-# 「回调落定时显式 `stop-build` 占位」或「只保留一个写者」；两种出路的
-# 取舍写在 `api_trigger_ga_verdict` 那段注释里，不在这里偷偷定。
+# ✅ 被 cancel 的占位会不会仍写一条终态、那条终态是否参与聚合 —— 这一格
+# 已在 `api_trigger_ga_verdict` 段里记为实测闭合：cancel 不落成拉红聚合的
+# 终态，这把锁的方案成立，不需要 `stop-build` 或「只留一个写者」那两条出路。
 #
 # 不与 `pr-$CNB_PULL_REQUEST_IID` 共用：api_trigger 事件上那个变量无值，
 # 落回字面 `pr-` 会把并行的 PR 主列一起掐掉（#2114 同款死因）。
@@ -2684,8 +2683,13 @@ master:
   #
   # ⚠️ **这是可评审的骨架，刻意不接承重主列**：`质量门禁` 那条 PR 流水线与
   # `GitHub 判决回读 → 判定` 那一格一个字节不动，§13.6「PR 跑绿才合并」的
-  # 承重仍在原处。本段是**休眠**的 —— 没有人在 GA 侧发回调、也没有人在 PR
-  # 事件上起占位，它就不会自己跑。转正要单独一次决定（见文末「接线前」）。
+  # 承重仍在原处。回调腿不在这里自动起：它由 GA 侧 `pr-gate.yml` 的收尾 job
+  # （`if: always()`、无开关）发 —— GitHub 仓库里 `CNB_TRIGGER_TOKEN` 在场时
+  # 每次 GA run 收尾都会送一次结论，占位腿则由接线那一步决定要不要起。
+  # 「回调腿到底发没发」用 `pnpm ga-verdict:attendance` 做只读对账：它只念
+  # CNB 侧 `api_trigger_ga_verdict` 事件的 build 出勤，不碰 GitHub run console
+  # （那不在本仓令牌读权内）。0 出勤只说明 CNB 侧没收到，不等于 GA 判红。
+  # 转正（起占位 + §13.5.33 判决链退场）仍是单独一次决定，不在这里替人拍板。
   #
   # 为什么**只有一条流水线、靠 `GA_ROLE` 分两种角色**，而不是两个事件：
   # commit-status 的 context 由「事件名 + 流水线序号」生成，两个事件 ⇒ 两条
@@ -2708,18 +2712,26 @@ master:
   #     回调 ⇒ exit 1（GA 永不回调时不能让 PR 早放行）；
   #   · 角色认不出 ⇒ exit 2（没判过 ≠ 判过）。
   #
-  # ⚠️ **接线前必须补的一格探针读数**：占位与回调共用 `*lock_ga_verdict`
-  # （`cancel-in-progress: true`）让「回调到达即掐掉占位」，但**被 cancel 的
-  # build 会不会仍写一条终态、那条终态是否参与聚合**没有实测。若 cancel 也
-  # 落成一条红，就得改成「回调落定时显式 `stop-build` 占位」或「只留一个
-  # 写者」；这条是骨架里唯一没被探针盖住的缝，不假装它已解决。
+  # ✅ **被 cancel 的占位终态那一格，已在同一条 context 上实测闭合**：占位
+  # 撑住时聚合 `pending`；同锁起 callback 后占位终态 `cancel`，**不留下拉红
+  # 聚合的终态**，那条 context 只剩 callback 的终态、聚合随它走。所以
+  # `cancel-in-progress: true` 这把锁的方案成立，不需要改成「回调落定时显式
+  # `stop-build` 占位」或「只留一个写者」。读数形态：`cnb-46i-1k6t9rgdi`
+  # （占位 `cancel`）/ `cnb-sn4-1k6t9snit`（callback `success`），在
+  # `cnb/api_trigger_ga_verdict/pipeline-1` 这一条 context 上后写覆盖前写。
   #
-  # 接线动作（三步，各是一次独立决定）：
-  #   ① `pr-gate.yml` 收尾 job 调 `ci-ga-verdict-callback.mjs`（带
-  #      `CNB_TRIGGER_TOKEN` = 用户本轮补的 `repo-cnb-trigger:rw`）；
-  #   ② 镜像格 payload 带 `cnb_merge_sha`（`CNB_PULL_REQUEST_MERGE_SHA`）；
-  #   ③ PR 事件上起一条占位（同 sha、同事件、`GA_ROLE=placeholder`），
-  #      再逐笔对账 §13.5.33 的判决链要不要退场。
+  # 接线现状（前两步已随骨架落地，第三步是单独一次决定）：
+  #   ① `pr-gate.yml` 收尾 job 已调 `ci-ga-verdict-callback.mjs`，注入
+  #      `CNB_TRIGGER_TOKEN`（GitHub 仓库侧 secret，不是 CNB 侧 NPC 令牌）；
+  #   ② 镜像格 payload 已带 `cnb_merge_sha`（`CNB_PULL_REQUEST_MERGE_SHA`）；
+  #   ③ **还没做**：PR 事件上起一条占位（同 sha、同事件、
+  #      `GA_ROLE=placeholder`），再逐笔对账 §13.5.33 的判决链要不要退场。
+  #      占位是 fail-closed 的那一半 —— 回调腿出勤没确认之前先起占位，
+  #      会把每个 PR 都拉红，所以两步绑在同一次决定里。
+  # 下面流水线名里的「休眠」是骨架落地那一刻的称谓，只指**不接承重主列**；
+  # 回调 build 本身由 GA 收尾 job 自动起（见上），不是「没人发它就不跑」。
+  # 不改名：commit-status 的 context 含这段 name，改名会让「同一条 context
+  # 后写覆盖前写」的读数与历史现场对不上。
   api_trigger_ga_verdict:
     - <<: *common
       name: GA 判决回调（骨架·休眠）
