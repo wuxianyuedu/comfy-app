@@ -436,6 +436,17 @@ describe("claimNumbersFromTitle / referencedNotClaimed：认领形态与正文�
     expect(claimNumbersFromTitle("")).toEqual([]);
   });
 
+  it("全角括号的认领形态也认（ISSUE #3337：本仓 squash 标题的单号惯例）", () => {
+    const title = "fix(gates): aborted 话术按成因分三态，runPnpmSync 带出 signal（#3332）";
+    expect(claimNumbersFromTitle(title)).toEqual([3332]);
+    // 全角括号包的号是**认领**，不再落进「裸引用」那一半。
+    expect(referencedNotClaimed(title)).toEqual([]);
+    // 半角 / 全角混排、与去重照旧。
+    expect(claimNumbersFromTitle("修（#2070）再修 (#2071)")).toEqual([2070, 2071]);
+    // 括号宽度放宽不越界：裸写仍不是认领。
+    expect(claimNumbersFromTitle("修 #2070 与 #2096")).toEqual([]);
+  });
+
   it("decideCloseIssue 那一层：裸写的号不进待关集合", () => {
     const d = decideCloseIssue({
       requested: true,
@@ -445,6 +456,18 @@ describe("claimNumbersFromTitle / referencedNotClaimed：认领形态与正文�
     });
     expect(d.act).toBe(true);
     expect(d.numbers).toEqual([2603]);
+  });
+
+  it("decideCloseIssue：落地标题是全角括号认领时同样点名成功（ISSUE #3337 的 --merge 主通道）", () => {
+    const d = decideCloseIssue({
+      requested: true,
+      landedVerified: true,
+      title: "fix(gates): aborted 话术按成因分三态，runPnpmSync 带出 signal（#3332）",
+      explicit: [],
+    });
+    expect(d.act).toBe(true);
+    expect(d.numbers).toEqual([3332]);
+    expect([...d.sources.values()]).toEqual(["本轮落地那一行点名的"]);
   });
 
   it("反面的反面：人点名过的号即使标题里是裸写也照关 —— 收窄针对推定，不针对显式动作", () => {
@@ -1296,6 +1319,25 @@ describe("#2199 findMergedPullProofs：只认 is_merged，先剥尾数再找号"
   it("负控制：PR 自己的号不能被当成单子号", () => {
     const f = io([[{ number: 2179, is_merged: true, title: "chore(x): 没有单子 (#2179)" }]]);
     expect(findMergedPullProofs({ run: f.run, slug: "o/r", numbers: [2179] }).proofs.size).toBe(0);
+  });
+
+  it("命中：标题本体是全角括号认领也算（ISSUE #3337 的 --close-issue <n> 补关通道）", () => {
+    const f = io([
+      [
+        {
+          number: 3335,
+          is_merged: true,
+          title: "fix(gates): aborted 话术按成因分三态，runPnpmSync 带出 signal（#3332） (#3335)",
+        },
+      ],
+    ]);
+    const r = findMergedPullProofs({ run: f.run, slug: "o/r", numbers: [3332] });
+    expect(r.ran).toBe(true);
+    // 剥掉平台拼的半角 PR 尾数后，标题本体的全角认领（#3332）被认出。
+    expect(r.proofs.get(3332)).toEqual({
+      prNumber: 3335,
+      title: "fix(gates): aborted 话术按成因分三态，runPnpmSync 带出 signal（#3332）",
+    });
   });
 
   it("负控制：没合并的那条即便标题里有号也不算证明", () => {
