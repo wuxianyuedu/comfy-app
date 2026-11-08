@@ -233,7 +233,9 @@ export function readRunJson(root) {
  */
 export function readRunJsonAt(dir) {
   try {
-    return JSON.parse(fs.readFileSync(path.join(dir, LOG_LAYOUT.runJson), "utf8"));
+    return JSON.parse(
+      fs.readFileSync(path.join(/* turbopackIgnore: true */ dir, LOG_LAYOUT.runJson), "utf8"),
+    );
   } catch {
     return null;
   }

@@ -106,11 +106,11 @@ export function configFingerprint(root) {
   /** @type {Record<string, string>} */
   const files = {};
   for (const rel of FINGERPRINT_FILES) {
-    const full = path.join(root, rel);
-    if (!fs.existsSync(full)) {
+    const full = path.join(/* turbopackIgnore: true */ root, rel);
+    if (!fs.existsSync(/* turbopackIgnore: true */ full)) {
       continue;
     }
-    const digest = crypto.hash("sha256", fs.readFileSync(full), "hex");
+    const digest = crypto.hash("sha256", fs.readFileSync(/* turbopackIgnore: true */ full), "hex");
     files[rel] = digest;
     combined.update(`${rel}\u0000${digest}\u0000`);
   }

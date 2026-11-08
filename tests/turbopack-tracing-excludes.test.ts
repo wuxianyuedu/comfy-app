@@ -1,6 +1,7 @@
 /**
  * 构建期「全项目追踪」告警的清单护栏 + 产物级探针（ISSUE #489）：动态路径访问会让整个项目被复制进
- * `.next/standalone`（实测 62MB，连 142 个 `*.test.ts` 都在）；`turbopackIgnore` 注解对 `fs.*` 一概无效（§7.2）。
+ * `.next/standalone`（实测 62MB，连 142 个 `*.test.ts` 都在）；`turbopackIgnore` 注解必须写在被高亮的
+ * 表达式上才生效，跨模块展开无效（Next 16.4.3 实测，见 §7.2）。
  * 清单不做减法（真删靠 `standalone-private-inputs.mjs`），故产物探针才是判据；清单只守 ① 顶层键位 ② 目录齐全 ③ 不用 ignoreIssue。
  */
 import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
