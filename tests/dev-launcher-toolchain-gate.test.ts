@@ -20,7 +20,6 @@ import { stripComments } from "./helpers/strip-comments";
 const needsPosixExec = it.skipIf(process.platform === "win32");
 
 import {
-  clearWhichCommandCache,
   commandInvocation,
   executableExts,
   executableKind,
@@ -46,9 +45,9 @@ let tmp: string;
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "toolchain-gate-"));
-  // `whichCommand` 与 `probePnpm` 都有进程内记忆化，而本文件的用例会在**同一个
-  // tmp 路径**上覆写重造 pnpm 形态 —— 每个用例先清缓存，避免读到上一个用例的旧结论。
-  clearWhichCommandCache();
+  // `probePnpm` 有进程内记忆化，而本文件的用例会在**同一个 tmp 路径**上覆写重造
+  // pnpm 形态 —— 每个用例先清它，避免读到上一个用例的旧结论。
+  // （`whichCommand` 不再记忆化，每次都重新解析，ISSUE #3327。）
   clearPnpmProbeCache();
 });
 
@@ -200,7 +199,6 @@ describe("`.PS1` 是候选（Windows 默认 PATHEXT 不含它，ISSUE #1961）",
       PATH: `${dir}${path.delimiter}${hostDir}`,
       PATHEXT: ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC",
     };
-    clearWhichCommandCache();
     /* 反向验证：把 `executableExts` 里那句 `.PS1` 无条件放行去掉，这一格立刻
      * 从 `pnpm.ps1` 变回 `null` —— 这正是修复前的实测读数。 */
     const found = whichCommand("pnpm", {
@@ -240,7 +238,6 @@ describe("`.PS1` 是候选（Windows 默认 PATHEXT 不含它，ISSUE #1961）",
 
   it("POSIX 上同一条判据不生效（`.PS1` 不是那儿的形态）", () => {
     const dir = ps1OnlyDir();
-    clearWhichCommandCache();
     expect(
       whichCommand("pnpm", {
         env: { PATH: dir },
