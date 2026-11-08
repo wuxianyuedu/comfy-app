@@ -13,6 +13,7 @@ import {
   type ApiChannelStored,
   type WorkshopApiSettings,
 } from "./api-channel-core";
+import { isRecord } from "~/lib/is-record";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -44,15 +45,33 @@ function stubFetch(impl: (url: string, init?: RequestInit) => unknown) {
 function bodyOf(mock: ReturnType<typeof stubFetch>, call = 0): Record<string, unknown> {
   const init: RequestInit | undefined = mock.mock.calls[call]?.[1];
   const raw: unknown = init?.body;
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(typeof raw === "string" ? raw : "{}") as Record<string, unknown>;
+  const parsed: unknown = JSON.parse(typeof raw === "string" ? raw : "{}");
+  return isRecord(parsed) ? parsed : {};
 }
 
-/** 取第 n 次 fetch 调用的请求头。 */
+/** 取第 n 次 fetch 调用的请求头（请求头形态由运行时判定，只收字符串值）。 */
 function headersOf(mock: ReturnType<typeof stubFetch>, call = 0): Record<string, string> {
   const init: RequestInit | undefined = mock.mock.calls[call]?.[1];
-  /* SAFETY: 类型断言已复核 */
-  return (init?.headers ?? {}) as Record<string, string>;
+  const headers = init?.headers;
+  if (!isRecord(headers)) {
+    return {};
+  }
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (typeof value === "string") {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+/** 存量配置从磁盘来，运行时形状不可信：这里只确认最外层是对象，内层故意保留坏值。 */
+function assertStoredSettingsContainer(
+  value: unknown,
+): asserts value is Partial<WorkshopApiSettings> {
+  if (!isRecord(value)) {
+    throw new TypeError("存量配置替身必须是对象");
+  }
 }
 
 /** 上游响应桩：按上面的 mock 签名给回 Response 形状。 */
@@ -101,15 +120,12 @@ describe("defaultChannelsFromEnv / normalizeSettings", () => {
 
   it("坏数据（非对象 / 字段类型不对）按默认处理，不抛错", () => {
     const defaults = defaultChannelsFromEnv({});
-    const merged = normalizeSettings(
-      {
-        /* SAFETY: 类型断言已复核 */
-        image: "not-an-object" as never,
-        /* SAFETY: 类型断言已复核 */
-        video: { baseUrl: 123 } as never,
-      },
-      defaults,
-    );
+    const corrupted: unknown = {
+      image: "not-an-object",
+      video: { baseUrl: 123 },
+    };
+    assertStoredSettingsContainer(corrupted);
+    const merged = normalizeSettings(corrupted, defaults);
     expect(merged.image).toEqual(defaults.image);
     expect(merged.video.baseUrl).toBe("");
   });

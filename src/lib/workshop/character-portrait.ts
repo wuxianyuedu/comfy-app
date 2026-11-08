@@ -3,6 +3,7 @@
 // 一次生图往往不满意，故同一角色允许累积多张候选（本机 / 远端 / 外部导入），
 // 由用户挑一张定为定妆照。这里只有纯函数与常量，可直接单测。
 
+import { isRecord } from "~/lib/is-record";
 import type { Character, CharacterPortrait, PortraitSource } from "./types";
 
 /** 单角色保留的候选上限：超出丢最旧，避免草稿随每次生成无限膨胀
@@ -47,11 +48,10 @@ function isPortraitSource(value: unknown): value is PortraitSource {
 /** 单条候选的归一化：形状不合法（没有可用 url）时返回 null，
  *  使一张坏数据不会炸掉整块界面。旧草稿缺字段按导入来源兜底。 */
 export function normalizePortrait(raw: unknown): CharacterPortrait | null {
-  if (typeof raw !== "object" || raw === null) {
+  if (!isRecord(raw)) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  const candidate = raw as Record<string, unknown>;
+  const candidate = raw;
   const url = candidate.url;
   if (typeof url !== "string" || !url) {
     return null;

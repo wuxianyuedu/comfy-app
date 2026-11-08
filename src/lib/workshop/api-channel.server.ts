@@ -8,6 +8,7 @@
 //   ② 落盘读写（含进程内缓存）;
 //   ③ 生图前查 `remoteModel` 表，决定走哪条上游（MCP 侧没有这张表）。
 // 其余（请求体字段、超时、错误文案、响应提取）与 MCP 入口逐字共用一份。
+import { isRecord } from "~/lib/is-record";
 import { upperToken } from "~/lib/upper-token";
 import "server-only";
 
@@ -54,8 +55,13 @@ export function getWorkshopApiSettingsSync(): WorkshopApiSettings {
   }
   let stored: Partial<WorkshopApiSettings> = {};
   try {
-    /* SAFETY: 类型断言已复核 */
-    stored = JSON.parse(readFileSync(FILE, "utf8")) as Partial<WorkshopApiSettings>;
+    const parsed: unknown = JSON.parse(readFileSync(FILE, "utf8"));
+    if (isRecord(parsed)) {
+      stored = {
+        image: sanitizeChannel(parsed.image, DEFAULTS.image),
+        video: sanitizeChannel(parsed.video, DEFAULTS.video),
+      };
+    }
   } catch {
     // 文件缺失或损坏 → 用默认值。
   }

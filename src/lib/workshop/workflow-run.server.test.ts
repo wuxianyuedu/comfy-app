@@ -10,6 +10,8 @@
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 const { kickMock, taskRepo } = vi.hoisted(() => ({
   kickMock: vi.fn<(job: unknown) => void>(() => undefined),
   taskRepo: {
@@ -97,29 +99,24 @@ describe("createWorkflowRunTask", () => {
       workflowName: "库生图",
       taskType: "T2I",
     });
-    /* SAFETY: 类型断言已复核 */
-    const created = taskRepo.createQueued.mock.calls[0]![0] as {
-      params: {
-        workflowInputs?: Array<{ name: string; nodeId: string; value: unknown }>;
-      };
-      prompt: string;
-      workflowName: string;
-    };
-    expect(created.prompt).toBe("一只猫");
-    expect(created.workflowName).toBe("库生图");
-    expect(created.params.workflowInputs).toContainEqual({
+    const createdRaw = taskRepo.createQueued.mock.calls[0]?.[0];
+    if (!isRecord(createdRaw)) {
+      throw new TypeError("createQueued 首次调用必须带入参对象");
+    }
+    const createdParams = createdRaw.params;
+    if (!isRecord(createdParams)) {
+      throw new TypeError("createQueued 入参缺 params 对象");
+    }
+    expect(createdRaw.prompt).toBe("一只猫");
+    expect(createdRaw.workflowName).toBe("库生图");
+    expect(createdParams.workflowInputs).toContainEqual({
       nodeId: "1",
       name: "prompt",
       value: "一只猫",
     });
     // 载荷只随行走（§14 D1 第二刀：派发是库里的一次 pull，不再有内存 Job）
-    /* SAFETY: 类型断言已复核 */
-    const createdFull = taskRepo.createQueued.mock.calls[0]![0] as {
-      claimedBy?: string;
-      execPayload?: unknown;
-    };
-    expect(createdFull.execPayload).toBeDefined();
-    expect(createdFull.claimedBy).toBe("inline");
+    expect(createdRaw.execPayload).toBeDefined();
+    expect(createdRaw.claimedBy).toBe("inline");
     expect(kickMock).toHaveBeenCalledTimes(1);
   });
 

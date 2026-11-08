@@ -13,6 +13,7 @@
 //
 // 输出类型由模式的类别决定（图像 → 图片，视频 → 视频，音频 → 音频）。
 
+import { isRecord } from "~/lib/is-record";
 import { upperToken } from "~/lib/upper-token";
 import {
   EXPOSED_PARAM_DISPLAY_LABEL,
@@ -178,11 +179,10 @@ export function parseRemoteModeAdapters(raw: unknown): Array<RemoteModeAdapter> 
   const out: Array<RemoteModeAdapter> = [];
   const seen = new Set<string>();
   for (const item of raw) {
-    if (typeof item !== "object" || item === null) {
+    if (!isRecord(item)) {
       continue;
     }
-    /* SAFETY: 类型断言已复核 */
-    const rec = item as Record<string, unknown>;
+    const rec = item;
     const mode = upperToken(rec.mode);
     if (!mode || seen.has(mode)) {
       continue;
@@ -190,11 +190,10 @@ export function parseRemoteModeAdapters(raw: unknown): Array<RemoteModeAdapter> 
     const inputs: Array<{ field: string; type: WorkshopInputType }> = [];
     if (Array.isArray(rec.inputs)) {
       for (const row of rec.inputs) {
-        if (typeof row !== "object" || row === null) {
+        if (!isRecord(row)) {
           continue;
         }
-        /* SAFETY: 类型断言已复核 */
-        const r = row as Record<string, unknown>;
+        const r = row;
         if (!isWorkshopInputType(r.type)) {
           continue;
         }
@@ -245,11 +244,10 @@ export function readFieldPath(payload: unknown, path: string): unknown {
       cur = cur[idx];
       continue;
     }
-    if (typeof cur !== "object") {
+    if (!isRecord(cur)) {
       return null;
     }
-    /* SAFETY: 类型断言已复核 */
-    cur = (cur as Record<string, unknown>)[seg];
+    cur = cur[seg];
   }
   return cur;
 }
@@ -523,9 +521,8 @@ export function requiredInputsFor(contract: {
  *  这是成品配置（`configuredModeContracts`）与编辑器初值的共同来源：口清单只从
  *  `exposedParamsForMode` 派生一次，别处不再抄一份。 */
 export function derivedModeContract(mode: string): ModeContract {
-  const inputs = exposedParamsForMode(mode).map(
-    /* SAFETY: 类型断言已复核 */
-    (d) => d.id as ModeContractInputId,
+  const inputs = exposedParamsForMode(mode).flatMap((d) =>
+    isModeContractInputId(d.id) ? [d.id] : [],
   );
   return {
     mode: upperToken(mode),
@@ -601,11 +598,10 @@ export function parseModeContracts(raw: unknown): Array<ModeContract> {
   const out: Array<ModeContract> = [];
   const seen = new Set<string>();
   for (const item of raw) {
-    if (typeof item !== "object" || item === null) {
+    if (!isRecord(item)) {
       continue;
     }
-    /* SAFETY: 类型断言已复核 */
-    const rec = item as Record<string, unknown>;
+    const rec = item;
     const mode = upperToken(rec.mode);
     if (!mode || seen.has(mode)) {
       continue;
@@ -657,11 +653,10 @@ function parseCustomInputs(raw: unknown): Array<ModeContractCustomInput> {
   }
   const out: Array<ModeContractCustomInput> = [];
   for (const item of raw) {
-    if (typeof item !== "object" || item === null) {
+    if (!isRecord(item)) {
       continue;
     }
-    /* SAFETY: 类型断言已复核 */
-    const rec = item as Record<string, unknown>;
+    const rec = item;
     const id = typeof rec.id === "string" ? rec.id : "";
     const label = typeof rec.label === "string" ? rec.label.trim() : "";
     const kind = customInputKindOf(id);
