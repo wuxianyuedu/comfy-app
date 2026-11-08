@@ -6,7 +6,9 @@
 import { upperToken } from "~/lib/upper-token";
 import {
   MODE_CONTRACT_INPUT_TYPES,
+  configuredModeContracts,
   derivedModeContract,
+  modeContractSignature,
   type ModeContract,
   type ModeContractCustomKind,
   type ModeContractInputType,
@@ -50,7 +52,13 @@ export function contractModeLabel(mode: string): string {
   return ALL_WORKFLOW_TYPES.find((t) => t.code === mode.toUpperCase())?.label ?? mode;
 }
 
-/** 某模式当前生效的契约：本机覆盖里有就用它，没有就按成品配置现算。
+/** 成品配置（推导 + 项目默认显式覆盖）按模式码的索引 —— 见
+ *  `effectiveModeContract` 的回落分支。 */
+const CONFIGURED_BY_MODE: ReadonlyMap<string, ModeContract> = new Map(
+  configuredModeContracts().map((contract) => [contract.mode, contract]),
+);
+
+/** 某模式当前生效的契约：本机覆盖里有就用它，没有就按成品配置（推导 + 项目默认显式覆盖）。
  *  「改过/没改过」的判据收在这一处（两个入口的徽标、编辑器初值、封装视图都读它）。
  *  `stored` 是**本机覆盖**（`useModeContracts` 的读取结果），不是成品配置。 */
 export function effectiveModeContract(
@@ -58,11 +66,16 @@ export function effectiveModeContract(
   stored: ReadonlyArray<ModeContract>,
 ): { contract: ModeContract; customized: boolean } {
   const code = upperToken(mode);
+  const fallback = CONFIGURED_BY_MODE.get(code) ?? derivedModeContract(code);
   const found = stored.find((c) => c.mode === code);
-  if (found) {
+  if (found && modeContractSignature(found) !== modeContractSignature(fallback)) {
     return { contract: found, customized: true };
   }
-  return { contract: derivedModeContract(code), customized: false };
+  /* 「已改」判的是**内容**（与本模式成品配置深比较），不是「覆盖文件里有没有
+   * 这一条」（ISSUE #3396 反馈 1 的现场：旧版保存把整份注册表写进覆盖，用户
+   * 只改了一个模式、二十多个原样入库，徽标全部点亮）。内容相同的覆盖条目按
+   * 没改过处理 —— 生效值回落成品配置本身，两条本来就一模一样。 */
+  return { contract: fallback, customized: false };
 }
 
 /** 某模式是否已被用户改过（「已改」徽标）。 */

@@ -15,3 +15,12 @@
 
 /** 本机覆盖相对**仓库根**（= 运行期的 `process.cwd()`）的路径。 */
 export const MODE_CONTRACTS_REL_PATH = "data/workshop-mode-contracts.json";
+
+/** 项目默认显式覆盖（ISSUE #3396）——相对**仓库根**的路径，入库、跟代码走。
+ *
+ *  与 {@link MODE_CONTRACTS_REL_PATH} 的分工：那份是「这台机器上的额外改动」
+ *  （不入库），这份是「界面里点『保存为项目默认』写出来的默认」（提交后每个
+ *  检出与每个桌包都是它）。只有开发检出有写它的入口（正式包载荷里没有源码，
+ *  也没有这个入口）；静态 import 它的那一侧见 `model-mode-contract.ts` ——
+ *  编译进产物后读的就是这份快照。 */
+export const MODE_CONTRACT_DEFAULTS_REL_PATH = "src/lib/workshop/mode-contract-defaults.json";

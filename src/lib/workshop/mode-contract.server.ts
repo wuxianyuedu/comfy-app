@@ -21,15 +21,20 @@
 
 import "server-only";
 
-import { promises as fs } from "node:fs";
+import { existsSync, promises as fs } from "node:fs";
 import path from "node:path";
 
 import { errorText } from "~/lib/error-message";
 
-import { MODE_CONTRACTS_REL_PATH } from "./mode-contract-write-path";
+import {
+  MODE_CONTRACTS_REL_PATH,
+  MODE_CONTRACT_DEFAULTS_REL_PATH,
+} from "./mode-contract-write-path";
 import {
   configuredModeContracts,
+  localOverrideDiff,
   parseModeContracts,
+  projectDefaultDiff,
   type ModeContract,
 } from "./model-mode-contract";
 
@@ -54,30 +59,66 @@ export async function loadModeContracts(
   return configuredModeContracts();
 }
 
-/** 保存整份本机覆盖（归一化后覆盖 `data/workshop-mode-contracts.json`）。
+/** 保存整份本机覆盖（归一化 + **差集化**后覆盖 `data/workshop-mode-contracts.json`）。
  *
- *  「改回成品配置」= 传空数组：`[]` 是「覆盖为空」这个状态本身（`loadModeContracts`
- *  据此回落成品配置），而不是「一台机器上碰巧没有任何契约」—— 契约的清单永远由
- *  成品配置给，空的覆盖不表达任何额外意思。 */
+ *  差集化（ISSUE #3396 反馈 1）：与成品配置相同的模式**不落盘** —— 覆盖文件里
+ *  只留「这台机器上真的改过的模式」。此前保存整份注册表，用户只改了一个模式、
+ *  其余二十多个原样入库，读取侧「覆盖里有 = 已改」的判据就把它们全点亮了。
+ *  「改回成品配置」由此免费成立：把草稿改回默认再保存 = 与成品配置相同 =
+ *  从覆盖里消失（「还原默认」按钮是同一件事的显式出口）。传空数组 = 清空覆盖
+ *  （全部回到默认）。
+ *
+ *  返回**落盘的**清单（差集，归一化后）—— 调用方（hook → refetch）拿它刷新
+ *  界面，「已改」徽标随之只点亮真改过的模式。 */
 export async function saveModeContracts(
   contracts: Array<ModeContract>,
   root: string = process.cwd(),
 ): Promise<Array<ModeContract>> {
-  const normalized = parseModeContracts(contracts);
+  const normalized = localOverrideDiff(parseModeContracts(contracts));
   const file = path.join(/*turbopackIgnore: true*/ root, MODE_CONTRACTS_REL_PATH);
   try {
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
   } catch (error) {
     /* 失败必须说出来：「保存了但没落盘」是最坏的形态（用户以为配置生效、
-     *  实际下一次读取回到旧值），而它唯一的痕迹就是这里。文案走 `errorText`
+     * 实际下一次读取回到旧值），而它唯一的痕迹就是这里。文案走 `errorText`
      * （动作前缀 + 详情的唯一出口，规范 16 §16.2.4.45），并把**文件路径**带上：
-     *  它是这条路唯一能定位的东西。 */
+     * 它是这条路唯一能定位的东西。 */
     throw new Error(errorText(error, `模式契约写入失败（${file}）`), {
       cause: error,
     });
   }
   return normalized;
+}
+
+/** 还原一个模式到默认：把它从本机覆盖里移除（生效值回落成品配置）。
+ *
+ *  覆盖文件**不在时不动**（本来就没有「这台机器的改动」，还原无事可做 ——
+ *  读路径不产生副作用的同一条纪律，别让一次「还原」把空覆盖钉进本机）；
+ *  移除后整份为空就把文件写成 `[]`（覆盖为空 = 全部回落默认，与保存侧同一
+ *  形状）。返回该模式**还原后的生效契约**（成品配置那条），界面直接用它刷新
+ *  草稿。 */
+export async function resetModeContractOverride(
+  mode: string,
+  root: string = process.cwd(),
+): Promise<{ contracts: Array<ModeContract>; effective: ModeContract | null }> {
+  const file = path.join(/*turbopackIgnore: true*/ root, MODE_CONTRACTS_REL_PATH);
+  const existing = await readOverrideFile(file);
+  if (existing === null) {
+    return { contracts: [], effective: null };
+  }
+  const code = mode.toUpperCase();
+  /* 保留的部分也过一遍差集：把旧版「整份注册表落盘」留下的存量膨胀
+   * （与成品配置相同的条目）顺手清洗掉 —— 还原一次，文件就归位一次。 */
+  const contracts = localOverrideDiff(existing.filter((c) => c.mode !== code));
+  try {
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, `${JSON.stringify(contracts, null, 2)}\n`, "utf8");
+  } catch (error) {
+    throw new Error(errorText(error, `模式契约还原失败（${file}）`), { cause: error });
+  }
+  const effective = configuredModeContracts().find((c) => c.mode === code) ?? null;
+  return { contracts, effective };
 }
 
 /** 读本机覆盖：文件不在或读不出来返回 null（与「读出来是空数组」区分开）。
@@ -97,4 +138,42 @@ async function readOverrideFile(file: string): Promise<Array<ModeContract> | nul
   } catch {
     return null;
   }
+}
+
+/** 这份检出是不是**开发检出**（ISSUE #3396 的「非正式版形态」）。
+ *
+ *  判据与壳的形态判据（规范 §1.5）同一条：检出里有没有启动编排器
+ *  `scripts/dev-launcher.mjs`。它同时在 = 源码在手，「保存为项目默认」才有
+ *  可写的目标文件；standalone 分发载荷里没有编排器，这一格必为 false。 */
+export function isDevCheckout(root: string = process.cwd()): boolean {
+  return existsSync(path.join(root, "scripts", "dev-launcher.mjs"));
+}
+
+/** 把「当前编辑的契约」里与推导**有差异**的部分写进入库的项目默认
+ *  （`src/lib/workshop/mode-contract-defaults.json`，跟代码走）。
+ *
+ *  只有开发检出可以调：正式包没有源码可写，这格调用本身就是错用 —— 大声失败
+ *  而不是假装成功。写的是 `projectDefaultDiff` 的差集（与推导相同的模式不写），
+ *  未显式覆盖的模式继续跟随推导演进；写完后读取侧（静态 import 的那份快照）
+ *  要**重启进程**才会变 —— 返回值里把这一点说清，由界面转告。 */
+export async function saveModeContractsAsProjectDefaults(
+  contracts: Array<ModeContract>,
+  root: string = process.cwd(),
+): Promise<{ contracts: Array<ModeContract>; file: string }> {
+  if (!isDevCheckout(root)) {
+    throw new Error(
+      "保存为项目默认只在开发检出可用（这份检出里没有 scripts/dev-launcher.mjs）——" +
+        "正式包的契约改动请用「保存模式契约」（只落本机）。",
+    );
+  }
+  const normalized = parseModeContracts(contracts);
+  const diff = projectDefaultDiff(normalized);
+  const file = path.join(/*turbopackIgnore: true*/ root, MODE_CONTRACT_DEFAULTS_REL_PATH);
+  try {
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, `${JSON.stringify(diff, null, 2)}\n`, "utf8");
+  } catch (error) {
+    throw new Error(errorText(error, `项目默认写入失败（${file}）`), { cause: error });
+  }
+  return { contracts: diff, file };
 }

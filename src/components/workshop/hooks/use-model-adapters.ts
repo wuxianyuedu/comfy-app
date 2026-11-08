@@ -11,11 +11,11 @@ import { errorMessage } from "~/lib/error-message";
 
 import {
   adapterInputsFromContract,
-  derivedModeContract,
   defaultEndpointPathForMode,
   parseRemoteModeAdapters,
   type RemoteModeAdapter,
 } from "~/lib/workshop/model-mode-contract";
+import { effectiveModeContract } from "~/components/workshop/mode-contract/mode-contract-config";
 import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
 import { useTRPC } from "~/trpc/react";
 import { useBusyAction } from "~/components/ui/use-busy-action";
@@ -125,10 +125,12 @@ export function useModelAdapters(): ModelAdaptersController {
               {
                 mode,
                 endpointPath: defaultEndpointPathForMode(mode),
-                // 默认输入清单来自**生效的模式契约**（本机覆盖里有就用它，
-                // 否则按成品配置现算）—— 统一口在这里先定义、适配器只做翻译。
+                // 默认输入清单来自**生效的模式契约**（effectiveModeContract =
+                // 本机覆盖 → 成品配置〔推导 + 项目默认显式覆盖，#3396〕）——
+                // 统一口在这里先定义、适配器只做翻译；与契约编辑器的初值同源，
+                // 不会出现「编辑器看到 A、适配器预填 B」。
                 inputs: adapterInputsFromContract(
-                  modeContracts.contracts.find((c) => c.mode === mode) ?? derivedModeContract(mode),
+                  effectiveModeContract(mode, modeContracts.contracts).contract,
                 ),
                 outputField: "",
               },

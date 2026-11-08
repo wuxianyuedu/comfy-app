@@ -50,7 +50,7 @@ describe("生效契约（改过的用改过的，未改过的回落内置默认�
     expect(isModeContractCustomized("T2I", [])).toBe(false);
   });
 
-  it("注册表里有该模式时用它并标「已改」（模式码大小写不敏感）", () => {
+  it("注册表里有该模式且**内容与默认不同**时用它并标「已改」（模式码大小写不敏感）", () => {
     const custom = {
       mode: "T2I",
       /* SAFETY: 类型断言已复核 */
@@ -62,6 +62,17 @@ describe("生效契约（改过的用改过的，未改过的回落内置默认�
     expect(customized).toBe(true);
     expect(contract).toEqual(custom);
     expect(isModeContractCustomized("T2I", [custom])).toBe(true);
+  });
+
+  it("覆盖条目与默认**内容相同**时标「未改」——判据是内容不是「文件里有没有」（ISSUE #3396 反馈 1）", () => {
+    // 旧版保存把整份注册表写进覆盖：二十多个与默认一模一样的条目把徽标全部点亮。
+    // 现在判的是与本模式成品配置深比较（modeContractSignature）。
+    const identical = { ...derivedModeContract("T2I") };
+    expect(isModeContractCustomized("T2I", [identical])).toBe(false);
+    // required 未固化（undefined）与「固化后的内置默认」是同一件事，也不算改过。
+    expect(isModeContractCustomized("T2I", [{ ...identical, required: undefined }])).toBe(false);
+    // 生效值回落成品配置本身（两条内容本来就一样，返回哪条都该是默认那份）。
+    expect(effectiveModeContract("T2I", [identical]).contract).toEqual(derivedModeContract("T2I"));
   });
 });
 

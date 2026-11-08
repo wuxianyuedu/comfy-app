@@ -10,7 +10,13 @@ import {
   parseRemoteModeAdapters,
   WORKSHOP_INPUT_TYPES,
 } from "~/lib/workshop/model-mode-contract";
-import { loadModeContracts, saveModeContracts } from "~/lib/workshop/mode-contract.server";
+import {
+  isDevCheckout,
+  loadModeContracts,
+  resetModeContractOverride,
+  saveModeContracts,
+  saveModeContractsAsProjectDefaults,
+} from "~/lib/workshop/mode-contract.server";
 
 /** 适配器输入行：统一输入类型 → 请求体字段名 */
 const adapterInputSchema = z.object({
@@ -37,6 +43,46 @@ const taskTypeKeys = ["txt2img", "img2video", "chat", "code", "creative", "revie
  *  的词表）。在这里再抄一份行内枚举，就是「弹窗能选、服务端不认」那种漂移的起点。 */
 const extraModelsSchema = z.array(z.union([z.string(), remoteModelEntrySchema]));
 
+/** 一条模式契约的入参形状（本机保存与「保存为项目默认」共用同一份，ISSUE #3396）。
+ *  口 id 由 isModeContractInputId 做类型守卫（zod 随之把入参窄化成契约口）；
+ *  写入侧各自的归一化（`parseModeContracts`）再做一次。 */
+const modeContractsInputSchema = z.object({
+  contracts: z.array(
+    z.object({
+      mode: z.string().min(1),
+      // 契约口是工坊对用户的统一口径（尺寸 / 参考图…），**不是**适配器侧的
+      // 输入类型（aspect-ratio / megapixels…）。曾误用 WORKSHOP_INPUT_TYPES
+      // 校验，保存含「尺寸」的契约直接被 zod 打回（Invalid option …）。
+      inputs: z
+        .array(
+          z.string().refine(isModeContractInputId, {
+            message:
+              "契约口必须是 prompt|negative|size|duration|reference-image|first-frame|last-frame（第 2 张起的参考图带序号，如 reference-image-2）、或自定义口 custom-text-1 / custom-image-2 / custom-number-3",
+          }),
+        )
+        .min(1),
+      output: z.enum(["image", "video", "audio"]),
+      /* 该模式的必备口（缺了它这条流在工坊里驱动不起来）。缺省 =
+       * 没配过 → 由 requiredInputsFor 回落内置默认（提示词）。 */
+      required: z.array(z.string().refine(isModeContractInputId)).optional(),
+      /* 作者自定义的口：名字由作者填，类型是「简单类型」之一（决定工坊
+       *  控件形态与它接受哪一族端口）。归一化（丢弃无定义的口）在
+       *  `parseModeContracts` 里再做一次。 */
+      customInputs: z
+        .array(
+          z.object({
+            id: z.string().refine(isCustomContractInputId, {
+              message: "自定义口 id 形如 custom-text-1 / custom-image-2",
+            }),
+            label: z.string().min(1),
+            kind: z.enum(["text", "image", "number"]),
+          }),
+        )
+        .optional(),
+    }),
+  ),
+});
+
 export const llmRouter = createTRPCRouter({
   /* GET /api/llm/config —— 读 */
   configGet: authedProcedure.query(async () => {
@@ -44,56 +90,37 @@ export const llmRouter = createTRPCRouter({
     return { config: cfg };
   }),
 
-  /** 模式契约注册表：每种模式的统一输入 / 输出（只含用户改过的模式） */
+  /** 模式契约注册表：每种模式的统一输入 / 输出（只含用户改过的模式）。
+   *  `projectDefaultEditable` 供界面决定要不要渲染「保存为项目默认」——
+   *  只有开发检出有可写的目标文件（ISSUE #3396）。 */
   modeContractsGet: authedProcedure.query(async () => {
     const contracts = await loadModeContracts();
+    return { contracts, projectDefaultEditable: isDevCheckout() };
+  }),
+
+  modeContractsSave: authedProcedure.input(modeContractsInputSchema).mutation(async ({ input }) => {
+    // 口 id 由 isModeContractInputId 做类型守卫（zod 随之把入参窄化成契约口），
+    // saveModeContracts 内部再做一次契约归一化。
+    const contracts = await saveModeContracts(input.contracts);
     return { contracts };
   }),
 
-  modeContractsSave: authedProcedure
-    .input(
-      z.object({
-        contracts: z.array(
-          z.object({
-            mode: z.string().min(1),
-            // 契约口是工坊对用户的统一口径（尺寸 / 参考图…），**不是**适配器侧的
-            // 输入类型（aspect-ratio / megapixels…）。曾误用 WORKSHOP_INPUT_TYPES
-            // 校验，保存含「尺寸」的契约直接被 zod 打回（Invalid option …）。
-            inputs: z
-              .array(
-                z.string().refine(isModeContractInputId, {
-                  message:
-                    "契约口必须是 prompt|negative|size|duration|reference-image|first-frame|last-frame（第 2 张起的参考图带序号，如 reference-image-2）、或自定义口 custom-text-1 / custom-image-2 / custom-number-3",
-                }),
-              )
-              .min(1),
-            output: z.enum(["image", "video", "audio"]),
-            /* 该模式的必备口（缺了它这条流在工坊里驱动不起来）。缺省 =
-             * 没配过 → 由 requiredInputsFor 回落内置默认（提示词）。 */
-            required: z.array(z.string().refine(isModeContractInputId)).optional(),
-            /* 作者自定义的口：名字由作者填，类型是「简单类型」之一（决定工坊
-             *  控件形态与它接受哪一族端口）。归一化（丢弃无定义的口）在
-             *  `parseModeContracts` 里再做一次。 */
-            customInputs: z
-              .array(
-                z.object({
-                  id: z.string().refine(isCustomContractInputId, {
-                    message: "自定义口 id 形如 custom-text-1 / custom-image-2",
-                  }),
-                  label: z.string().min(1),
-                  kind: z.enum(["text", "image", "number"]),
-                }),
-              )
-              .optional(),
-          }),
-        ),
-      }),
-    )
+  /** 「保存为项目默认」：与推导有差异的契约写进入库 JSON（跟代码走）。
+   *  只有开发检出可用 —— 正式包大声失败（判据与出口都在
+   *  `saveModeContractsAsProjectDefaults`）。 */
+  modeContractsSaveProjectDefaults: authedProcedure
+    .input(modeContractsInputSchema)
     .mutation(async ({ input }) => {
-      // 口 id 由 isModeContractInputId 做类型守卫（zod 随之把入参窄化成契约口），
-      // saveModeContracts 内部再做一次契约归一化。
-      const contracts = await saveModeContracts(input.contracts);
-      return { contracts };
+      const { contracts, file } = await saveModeContractsAsProjectDefaults(input.contracts);
+      return { contracts, file };
+    }),
+
+  /** 「还原默认」：把一个模式从本机覆盖里移除（生效值回落成品配置）。
+   *  返回移除后的覆盖整份与该模式的生效契约（界面直接拿它刷新草稿）。 */
+  modeContractReset: authedProcedure
+    .input(z.object({ mode: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      return resetModeContractOverride(input.mode);
     }),
 
   /** 读取某条远端模型的工坊模式适配器 */

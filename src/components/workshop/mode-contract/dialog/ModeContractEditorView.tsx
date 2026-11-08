@@ -103,6 +103,8 @@ function ModeContractDraftPanel({
   draft: ModeContract;
 }) {
   const { saving, saved, nextReferenceImageId } = controller;
+  /* 「还原默认」只对真改过的模式出现：判据与左栏「已改」徽标同源（内容比较）。 */
+  const customized = isModeContractCustomized(draft.mode, controller.stored);
 
   return (
     <section className="border-border bg-surface flex flex-col gap-4 rounded-xl border p-4">
@@ -203,11 +205,15 @@ function ModeContractDraftPanel({
       {saved && (
         <p className="bg-success/10 text-success-strong rounded-lg px-3 py-2 text-xs">
           已保存 —— 工坊与工作流库读的是同一份注册表，另一处刷新后即生效。
-          <span className="text-ink font-medium">改动只落在这台机器上，不会跟着代码走。</span>
+          <span className="text-ink font-medium">
+            {controller.savedKind === "project"
+              ? "已写入项目默认（src/lib/workshop/mode-contract-defaults.json），提交后每个检出与桌包都是这一份；本进程内要重启应用才读到新默认。"
+              : "改动只落在这台机器上，不会跟着代码走。"}
+          </span>
         </p>
       )}
 
-      <div>
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           disabled={saving}
           onClick={() => {
@@ -217,6 +223,29 @@ function ModeContractDraftPanel({
         >
           {saving ? "保存中…" : "保存模式契约"}
         </Button>
+        {customized && (
+          <Button
+            disabled={controller.resetting}
+            onClick={() => {
+              void controller.resetToDefault();
+            }}
+            variant="outline"
+          >
+            {controller.resetting ? "还原中…" : "还原默认"}
+          </Button>
+        )}
+        {/* 只在开发检出出现：正式包没有源码可写，「项目默认」无从谈起（ISSUE #3396）。 */}
+        {controller.projectDefaultEditable && (
+          <Button
+            disabled={controller.savingProjectDefaults}
+            onClick={() => {
+              void controller.saveAsProjectDefault();
+            }}
+            variant="outline"
+          >
+            {controller.savingProjectDefaults ? "写入中…" : "保存为项目默认（跟代码走）"}
+          </Button>
+        )}
       </div>
     </section>
   );
