@@ -24,6 +24,12 @@ import {
 } from "~/lib/workflow/workflow-exposed-params";
 import { getWorkflowType } from "~/lib/workflow/workflow-types";
 
+/* 项目默认的**显式覆盖**（ISSUE #3396）：界面「保存为项目默认」写出来的那份，
+ * 入库、跟代码走。静态 import（不走 fs）——编译进产物后读到的就是这份快照，
+ * 与写回侧（`mode-contract.server.ts` 落 `MODE_CONTRACT_DEFAULTS_REL_PATH`）
+ * 指向同一份文件。内容为空（`[]`）= 没有任何显式覆盖，纯推导。 */
+import defaultsJson from "./mode-contract-defaults.json";
+
 /** 可作为输入的统一类型（供适配器配置选用）。
  *
  *  「尺寸」在契约层是一个口（`size`），到这里按接口请求体细分为三行：
@@ -573,21 +579,56 @@ export const ALL_CONTRACT_MODES: ReadonlyArray<string> = [
 /** ── 成品配置：编译进源码的那份契约注册表 ────────────────────────────────
  *
  * 过去契约是**入库的文件**（`config/workshop-mode-contracts.json`）：每个检出
- *  与每个桌包都读同一份，代价是「要改它得先找到那个文件」。现在它回到源码里 ——
- *  每种模式的口清单与输出类别由 `derivedModeContract` 现算，这一份就是全部默认：
- *  仓库里没有第二个地方定义「T2I 有哪些口」。
+ * 与每个桌包都读同一份，代价是「要改它得先找到那个文件」。现在它回到源码里 ——
+ * 每种模式的口清单与输出类别由 `derivedModeContract` 现算，这一份是默认的**第一
+ * 出处**。
  *
- *  仍然保留的编辑入口（ISSUE #632 的「哪个口必备应该能配」）写的是**本机覆盖**
- *  （`mode-contract.server.ts`），不改这一份 —— 成品配置跟着构建走，覆盖跟着这台
- *  机器走，两者都在而不互相污染。
+ * 在推导之上有一层**显式覆盖**（ISSUE #3396）：编辑器「保存为项目默认」把
+ * 「与推导不同的模式」写进入库的 `mode-contract-defaults.json`，这里按模式整份
+ * 替换推导值。只写差异是这一层的全部要点：没显式覆盖的模式继续跟随推导演进
+ * （改了某模式的预制口清单，界面上立刻跟上），显式覆盖的模式以快照为准。
+ * 「仓库里没有第二个地方定义 T2I 有哪些口」仍然成立 —— JSON 里的条目是
+ * 「作者对 T2I 的显式决定」，不是第二份推导。
  *
- *  哪些模式进来：`ALL_MODES` 由调用方给（纯函数层不引工作流类型表，避免把
- *  `workflow-types` 这张大表拖进每个读者）；调用点见
- *  `mode-contract-config.ts` 的 `CONTRACT_MODES`（= 生成类模式）。 */
+ * 仍然保留的编辑入口（ISSUE #632 的「哪个口必备应该能配」）写的是**本机覆盖**
+ * （`mode-contract.server.ts`），不改这一份 —— 成品配置跟着构建走，覆盖跟着这台
+ * 机器走，两者都在而不互相污染。
+ *
+ * 哪些模式进来：`ALL_MODES` 由调用方给（纯函数层不引工作流类型表，避免把
+ * `workflow-types` 这张大表拖进每个读者）；调用点见
+ * `mode-contract-config.ts` 的 `CONTRACT_MODES`（= 生成类模式）。
+ * `explicit` 参数为测试留注入点（默认读入库 JSON）。 */
 export function configuredModeContracts(
   modes: ReadonlyArray<string> = ALL_CONTRACT_MODES,
+  explicit: ReadonlyArray<ModeContract> = parseModeContracts(defaultsJson),
 ): Array<ModeContract> {
-  return modes.map((mode) => derivedModeContract(mode));
+  const overrides = new Map(explicit.map((contract) => [contract.mode, contract]));
+  return modes.map((mode) => {
+    const code = upperToken(mode);
+    return overrides.get(code) ?? derivedModeContract(code);
+  });
+}
+
+/** 「保存为项目默认」该写进入库 JSON 的内容：与推导**有差异**的那些契约。
+ *
+ *  逐字段稳定比较（显式字段序，别依赖对象键序）：mode 大写、口顺序、必备固化、
+ *  自定义口定义都参与 —— 任何一处不同都算「作者显式决定了这个模式」。与推导
+ *  相同的模式被丢掉：留在 JSON 里只会在推导演进时悄悄压住新默认（占位的覆盖
+ *  是这一层唯一的漂移形态）。 */
+export function projectDefaultDiff(contracts: ReadonlyArray<ModeContract>): Array<ModeContract> {
+  return contracts.filter(
+    (contract) =>
+      stableContractKey(contract) !== stableContractKey(derivedModeContract(contract.mode)),
+  );
+}
+
+/** 契约的稳定比较键：显式字段序序列化。`required` 走 `requiredInputsFor` 固化
+ *  （编辑器里 undefined 与「固化后的内置默认」是同一件事）。 */
+function stableContractKey(contract: ModeContract): string {
+  return JSON.stringify({
+    ...contract,
+    required: requiredInputsFor(contract),
+  });
 }
 /** 校验并归一化一份注册表（去重、剔非法口、模式大写）。
  *

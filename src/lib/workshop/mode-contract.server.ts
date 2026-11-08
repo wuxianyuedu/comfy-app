@@ -21,15 +21,19 @@
 
 import "server-only";
 
-import { promises as fs } from "node:fs";
+import { existsSync, promises as fs } from "node:fs";
 import path from "node:path";
 
 import { errorText } from "~/lib/error-message";
 
-import { MODE_CONTRACTS_REL_PATH } from "./mode-contract-write-path";
+import {
+  MODE_CONTRACTS_REL_PATH,
+  MODE_CONTRACT_DEFAULTS_REL_PATH,
+} from "./mode-contract-write-path";
 import {
   configuredModeContracts,
   parseModeContracts,
+  projectDefaultDiff,
   type ModeContract,
 } from "./model-mode-contract";
 
@@ -97,4 +101,42 @@ async function readOverrideFile(file: string): Promise<Array<ModeContract> | nul
   } catch {
     return null;
   }
+}
+
+/** 这份检出是不是**开发检出**（ISSUE #3396 的「非正式版形态」）。
+ *
+ *  判据与壳的形态判据（规范 §1.5）同一条：检出里有没有启动编排器
+ *  `scripts/dev-launcher.mjs`。它同时在 = 源码在手，「保存为项目默认」才有
+ *  可写的目标文件；standalone 分发载荷里没有编排器，这一格必为 false。 */
+export function isDevCheckout(root: string = process.cwd()): boolean {
+  return existsSync(path.join(root, "scripts", "dev-launcher.mjs"));
+}
+
+/** 把「当前编辑的契约」里与推导**有差异**的部分写进入库的项目默认
+ *  （`src/lib/workshop/mode-contract-defaults.json`，跟代码走）。
+ *
+ *  只有开发检出可以调：正式包没有源码可写，这格调用本身就是错用 —— 大声失败
+ *  而不是假装成功。写的是 `projectDefaultDiff` 的差集（与推导相同的模式不写），
+ *  未显式覆盖的模式继续跟随推导演进；写完后读取侧（静态 import 的那份快照）
+ *  要**重启进程**才会变 —— 返回值里把这一点说清，由界面转告。 */
+export async function saveModeContractsAsProjectDefaults(
+  contracts: Array<ModeContract>,
+  root: string = process.cwd(),
+): Promise<{ contracts: Array<ModeContract>; file: string }> {
+  if (!isDevCheckout(root)) {
+    throw new Error(
+      "保存为项目默认只在开发检出可用（这份检出里没有 scripts/dev-launcher.mjs）——" +
+        "正式包的契约改动请用「保存模式契约」（只落本机）。",
+    );
+  }
+  const normalized = parseModeContracts(contracts);
+  const diff = projectDefaultDiff(normalized);
+  const file = path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH);
+  try {
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, `${JSON.stringify(diff, null, 2)}\n`, "utf8");
+  } catch (error) {
+    throw new Error(errorText(error, `项目默认写入失败（${file}）`), { cause: error });
+  }
+  return { contracts: diff, file };
 }

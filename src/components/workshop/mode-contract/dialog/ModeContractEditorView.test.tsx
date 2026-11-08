@@ -13,7 +13,10 @@ import { ModeContractEditorView } from "./ModeContractEditorView";
 afterEach(cleanup);
 
 /** 一个只填必要字段的控制器替身：本用例判的是**布局**，不是编辑行为。 */
-function stubController(mode: string | null): ModeContractEditorController {
+function stubController(
+  mode: string | null,
+  overrides: Partial<ModeContractEditorController> = {},
+): ModeContractEditorController {
   const draft = mode !== null && mode !== "" ? derivedModeContract(mode) : null;
   return {
     mode,
@@ -21,6 +24,9 @@ function stubController(mode: string | null): ModeContractEditorController {
     stored: [],
     saving: false,
     saved: false,
+    savedKind: null,
+    projectDefaultEditable: false,
+    savingProjectDefaults: false,
     selectMode: vi.fn(),
     setDraft: vi.fn(),
     appendInput: vi.fn(),
@@ -34,6 +40,8 @@ function stubController(mode: string | null): ModeContractEditorController {
     nextReferenceImageId: draft !== null && draft.inputs.length > 0 ? null : "reference-image",
     setOutput: vi.fn(),
     save: vi.fn(() => Promise.resolve()),
+    saveAsProjectDefault: vi.fn(() => Promise.resolve(null)),
+    ...overrides,
   };
 }
 
@@ -55,5 +63,19 @@ describe("模式契约编辑器的两栏布局（ISSUE #1870）", () => {
     expect(heading.textContent).toContain("T2I");
     /* 左栏仍在（两栏是并列的，不是「选了才换屏」）。 */
     expect(screen.getByRole("radiogroup", { name: "选择要配置的模式" })).toBeTruthy();
+  });
+
+  it("「保存为项目默认」只在开发检出渲染（正式包只有本机保存，ISSUE #3396）", () => {
+    render(<ModeContractEditorView controller={stubController("T2I")} />);
+    expect(screen.queryByRole("button", { name: /保存为项目默认/ })).toBeNull();
+  });
+
+  it("开发检出给出「保存为项目默认」入口（ISSUE #3396）", () => {
+    render(
+      <ModeContractEditorView
+        controller={stubController("T2I", { projectDefaultEditable: true })}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /保存为项目默认/ })).toBeTruthy();
   });
 });

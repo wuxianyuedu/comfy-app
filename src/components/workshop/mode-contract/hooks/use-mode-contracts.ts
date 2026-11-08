@@ -18,10 +18,18 @@ export function useModeContracts() {
   const query = useQuery(trpc.llm.modeContractsGet.queryOptions());
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
   const saveBusy = useBusyAction();
+  const saveDefaultsBusy = useBusyAction();
 
   const contracts: Array<ModeContract> = parseModeContracts(query.data?.contracts);
 
   const saveMutation = useMutation(trpc.llm.modeContractsSave.mutationOptions());
+  const saveDefaultsMutation = useMutation(
+    trpc.llm.modeContractsSaveProjectDefaults.mutationOptions(),
+  );
+
+  /** 这份检出能不能「保存为项目默认」：只有开发检出有可写的目标文件
+   *  （ISSUE #3396，服务端判据 `isDevCheckout`）。 */
+  const projectDefaultEditable = query.data?.projectDefaultEditable === true;
 
   const save = useCallback(
     async (contracts: Array<ModeContract>) => {
@@ -33,12 +41,29 @@ export function useModeContracts() {
     [saveMutation, query, saveBusy],
   );
 
+  /** 「保存为项目默认」（跟代码走）：与推导有差异的契约写进入库 JSON。
+   *  返回写盘的绝对路径（界面转告「提交后生效」）；非开发检出服务端会拒。 */
+  const saveAsProjectDefaults = useCallback(
+    async (contracts: Array<ModeContract>): Promise<string | null> => {
+      return saveDefaultsBusy.run(async () => {
+        const res = await saveDefaultsMutation.mutateAsync({ contracts });
+        return res.file;
+      });
+    },
+    [saveDefaultsMutation, saveDefaultsBusy],
+  );
+
   return {
     /** 用户改过的契约（未改过的模式不在其中）。 */
     contracts,
     loading: query.isLoading,
+    /** 这份检出能不能「保存为项目默认」（正式包为 false，界面隐藏该入口）。 */
+    projectDefaultEditable,
     save,
+    saveAsProjectDefaults,
     saving: saveBusy.busy,
+    /** 「保存为项目默认」进行中（与 `saving` 分开：两个按钮各自转圈）。 */
+    savingProjectDefaults: saveDefaultsBusy.busy,
     refetch: query.refetch,
   };
 }

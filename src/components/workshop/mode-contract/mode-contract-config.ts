@@ -6,6 +6,7 @@
 import { upperToken } from "~/lib/upper-token";
 import {
   MODE_CONTRACT_INPUT_TYPES,
+  configuredModeContracts,
   derivedModeContract,
   type ModeContract,
   type ModeContractCustomKind,
@@ -50,7 +51,13 @@ export function contractModeLabel(mode: string): string {
   return ALL_WORKFLOW_TYPES.find((t) => t.code === mode.toUpperCase())?.label ?? mode;
 }
 
-/** 某模式当前生效的契约：本机覆盖里有就用它，没有就按成品配置现算。
+/** 成品配置（推导 + 项目默认显式覆盖）按模式码的索引 —— 见
+ *  `effectiveModeContract` 的回落分支。 */
+const CONFIGURED_BY_MODE: ReadonlyMap<string, ModeContract> = new Map(
+  configuredModeContracts().map((contract) => [contract.mode, contract]),
+);
+
+/** 某模式当前生效的契约：本机覆盖里有就用它，没有就按成品配置（推导 + 项目默认显式覆盖）。
  *  「改过/没改过」的判据收在这一处（两个入口的徽标、编辑器初值、封装视图都读它）。
  *  `stored` 是**本机覆盖**（`useModeContracts` 的读取结果），不是成品配置。 */
 export function effectiveModeContract(
@@ -62,7 +69,14 @@ export function effectiveModeContract(
   if (found) {
     return { contract: found, customized: true };
   }
-  return { contract: derivedModeContract(code), customized: false };
+  /* 回落的是**成品配置**（推导 + 项目默认显式覆盖）而不是裸推导：作者「保存为
+   * 项目默认」的那份就是默认本身，编辑器打开时要看到它（ISSUE #3396）。
+   * 索引模块级算一次 —— configuredModeContracts 每次现算全部生成模式，
+   * 每次选中模式都重摊一遍没有意义。 */
+  return {
+    contract: CONFIGURED_BY_MODE.get(code) ?? derivedModeContract(code),
+    customized: false,
+  };
 }
 
 /** 某模式是否已被用户改过（「已改」徽标）。 */

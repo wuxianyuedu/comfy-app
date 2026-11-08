@@ -692,7 +692,12 @@
 - 状态：已上线
 - 需求：每种生成模式声明统一输入 / 输出（契约），是工作流配落点的依据。
 - 行为与验收：契约可读可写（`modeContractsGet` / `modeContractsSave`）；
-  「模式契约」是全局瞬态视图（与当前项目无关）。
+  「模式契约」是全局瞬态视图（与当前项目无关）。保存分两种（#3396）：
+  「保存模式契约」只落本机（`data/workshop-mode-contracts.json`，不入库，
+  正式包与开发检出都可用）；「保存为项目默认（跟代码走）」把与推导有差异的
+  契约写进入库的 `src/lib/workshop/mode-contract-defaults.json`（提交后每个
+  检出与桌包都是它），**只在开发检出可用**（正式包无源码可写，入口随之隐藏、
+  服务端大声拒绝）；生效顺序是 本机覆盖 → 项目默认 → 按模式推导。
 - 落点：`src/components/workshop/mode-contract/ModeContractView.tsx`、
   `src/server/api/routers/llm.ts`
 
