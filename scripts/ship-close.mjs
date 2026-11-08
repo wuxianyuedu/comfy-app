@@ -40,7 +40,8 @@ import { issueItemShapes } from "./ship-ticket.mjs";
 import { cnbData } from "./cnb-fields.mjs";
 
 /**
- * 一行文字里点名的 issue 号（`#2070` / `(#2070)` 两种写法都认，按出现顺序去重）。
+ * 一行文字里点名的 issue 号：裸 `#2070`、半角 `(#2070)`、全角 `（#2070）` 都算
+ * 「出现过」（认领与否由 `claimNumbersFromTitle` 另判），按出现顺序去重。
  *
  * ⚠️ **只许喂 squash 那一行的「标题本体」，不许喂拼完 PR 号的那一整行**：
  * `mergeAndVerify` 发给平台的是 `${title} (#${number})`，而那个尾数是 **PR 号**
@@ -62,7 +63,11 @@ export function issueNumbersFromText(text) {
 }
 
 /**
- * **认领形态**的号：只认 `(#123)` 这一种写法（ISSUE #2646）。
+ * **认领形态**的号：带括号包裹的 `(#123)` / `（#123)`（ISSUE #2646 收窄成带括号；
+ * 宽度上全角 / 半角**都认** —— ISSUE #3337：本仓 squash 标题的单号惯例是全角
+ * `（#3332）`，锚只认半角时 `--close-issue` 的两条通道对本仓自己的标题形态
+ * 永远「查不到落地」。放宽的只有括号宽度，保守语义一字未动：裸写的 `#730`
+ * 仍然是「人话引用」不参与关单，查不到照样退 2。
  *
  * 为什么要与 `issueNumbersFromText` 分开：那条是「这行文字里出现过哪些号」，
  * 而**关单需要的是「这一轮做完并认领了哪张单」**。本仓的认领形态就是提交信息末尾的
@@ -74,7 +79,7 @@ export function issueNumbersFromText(text) {
  *
  * ⚠️ 同一条约束仍然成立：**只喂标题本体**，不许喂拼完 PR 号的那一整行（见上面那段与
  * `pullTitleBody`）—— 收窄成带括号并没有消除「`(#2648)` 其实是 PR 号」这一格，
- * 消除它靠的是剥回本体这一步。
+ * 消除它靠的是剥回本体这一步（平台拼的尾数恒为半角，剥尾数那一条保持半角锚）。
  *
  * @param {string} text 标题本体
  * @returns {number[]}
@@ -83,7 +88,7 @@ export function claimNumbersFromTitle(text) {
   /** @type {number[]} */
   const out = [];
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- text 是平台给的标题本体（外部数据），string 只是声明
-  for (const m of String(text ?? "").matchAll(/\(\s*#\s?(?<issue>\d{2,})\s*\)/g)) {
+  for (const m of String(text ?? "").matchAll(/[(（]\s*#\s?(?<issue>\d{2,})\s*[)）]/g)) {
     out.push(Number(m.groups?.issue));
   }
   return [...new Set(out)];
