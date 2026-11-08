@@ -64,6 +64,8 @@ import { parseArgs, parseIssueNumberToken } from "../scripts/ship-args.mjs";
 import {
   buildPullBody,
   capDiffstat,
+  capFragmentBodies,
+  FRAGMENT_BODY_BUDGET,
   mentionsCloses,
   PULL_BODY_LIMIT,
 } from "../scripts/ship-pull-body.mjs";
@@ -80,6 +82,7 @@ import {
 import {
   authorLabel,
   commentHeader,
+  fragmentBody,
   handlerLabel,
   issueAuthoring,
   issueItemShapes,
@@ -4404,6 +4407,114 @@ describe("buildPullBody：只搬量到的事实，不生成会被复核的因果
   });
 });
 
+/** 碎片正文照录进 PR 正文（ISSUE #3360）：PR 概览页要能直接看到「具体改了什么」。 */
+describe("buildPullBody：碎片原文照录 + 字节量降级", () => {
+  const root = fragRoot({
+    "3360-a.md":
+      "## Added\n\n- **改了 A**：根因是 X，动了 `src/a.ts`。\n- 用例：tests/a.test.ts 两条全绿。\n",
+    "3360-b.md": "## Fixed\n\n- **修了 B**：证据是 Y。\n",
+    "3360-empty.md": "## Changed\n",
+  });
+
+  it("fragmentBody：去掉首行段落标题，正文按盘上原样；读不到回空串", () => {
+    expect(fragmentBody(root, "changelog.d/3360-a.md")).toBe(
+      "- **改了 A**：根因是 X，动了 `src/a.ts`。\n- 用例：tests/a.test.ts 两条全绿。",
+    );
+    expect(fragmentBody(root, "changelog.d/3360-empty.md")).toBe("");
+    expect(fragmentBody(root, "changelog.d/不存在.md")).toBe("");
+  });
+
+  it("盘上真有碎片 ⇒ 正文里出现片段原文（不只是文件名与段落标题）", () => {
+    const body = buildPullBody({
+      root,
+      fragments: ["changelog.d/3360-a.md"],
+      diffstat: " 1 file changed",
+    });
+    expect(body).toContain("## 碎片原文（照录 `changelog.d/`");
+    expect(body).toContain("> - **改了 A**：根因是 X，动了 `src/a.ts`。");
+    expect(body).toContain("> - 用例：tests/a.test.ts 两条全绿。");
+    expect(body).toContain(
+      "> 本段由 `pnpm ship` 拼装，内容全部是它当场量到的事实（碎片标题、碎片原文与 diffstat）。",
+    );
+    // 首行标题只在「清单」那一行出现，原文节里不重复贴一遍。
+    expect(body.split("## Added").length - 1).toBe(1);
+  });
+
+  it("没有可贴的碎片正文 ⇒ 输出与旧形态逐字节相同", () => {
+    const old = [
+      "**[评论人：未配]**",
+      "",
+      "## 本 PR 带的变更碎片（`changelog.d/`）",
+      "",
+      "- `changelog.d/3360-empty.md` → ## Changed",
+      "",
+      "## 改动量（`git diff --stat` 对 PR 的目标分支）",
+      "",
+      "```",
+      " 1 file changed",
+      "```",
+      "",
+      "> 本段由 `pnpm ship` 拼装，内容全部是它当场量到的事实（碎片标题与 diffstat）。",
+      "> 判断、读数与因果请写在下面的正文里 —— 脚本不代写；开头那行「评论人」只是这一跑的留痕，不是对正文的判断背书。",
+      "",
+    ].join("\n");
+    expect(
+      buildPullBody({
+        root,
+        fragments: ["changelog.d/3360-empty.md"],
+        diffstat: " 1 file changed",
+      }),
+    ).toBe(old);
+  });
+
+  it("capFragmentBodies：按整份贴满预算，列出的 + 省略的 === 总份数，省略要念出来", () => {
+    const many = Array.from({ length: 9 }, (_, i) => `changelog.d/3360-${i}.md`);
+    // 每份约 1200 字节，9 份共约 10.8KB > 5KB 预算 ⇒ 减半后保留 4 份（不截断半份）。
+    const manyRoot = fragRoot(
+      Object.fromEntries(
+        many.map((f) => [f.split("/").at(-1) ?? f, `## Added\n\n${"字".repeat(400)}\n`]),
+      ),
+    );
+    const capped = capFragmentBodies({ root: manyRoot, fragments: many }, 5000);
+    expect(capped.total).toBe(9);
+    expect(capped.listed + capped.omitted).toBe(capped.total);
+    expect(capped.listed).toBeGreaterThan(0);
+    expect(capped.listed).toBeLessThan(9);
+    expect(capped.note).toContain(`另有 ${capped.omitted} 份`);
+  });
+
+  it("长度按 UTF-8 字节判：纯中文碎片不会因 `.length` 低估而顶穿上限", () => {
+    const bigRoot = fragRoot({ "3360-cn.md": `## Added\n\n${"中文".repeat(20_000)}\n` });
+    const body = buildPullBody({
+      root: bigRoot,
+      fragments: ["changelog.d/3360-cn.md"],
+      diffstat: Array.from({ length: 50 }, (_, i) => ` f${i}.ts | 1 +`).join("\n"),
+    });
+    expect(body.length).toBeLessThan(PULL_BODY_LIMIT + 1); // 字符数看着很小
+    expect(Buffer.byteLength(body, "utf8")).toBeLessThanOrEqual(PULL_BODY_LIMIT);
+    expect(Buffer.byteLength(body, "utf8")).toBeGreaterThan(0);
+  });
+
+  it("碎片原文预算减到 0 仍装不下 ⇒ 不贴原文、也不冒充「已贴」", () => {
+    const hugeRoot = fragRoot({ "3360-huge.md": `## Added\n\n${"x".repeat(200)}\n` });
+    const body = buildPullBody({
+      root: hugeRoot,
+      fragments: ["changelog.d/3360-huge.md"],
+      diffstat: " 1 file changed",
+      // 注入一份自己就顶穿上限的人写正文：两处摘要都减到 0 也装不下
+      userBody: `## 正文\n\n${"字".repeat(PULL_BODY_LIMIT)}`,
+    });
+    expect(body).not.toContain("## 碎片原文");
+    expect(body).toContain("## 本 PR 带的变更碎片");
+  });
+
+  it("FRAGMENT_BODY_BUDGET 与 capFragmentBodies 的缺省值同源（账本口径）", () => {
+    // 缺省预算就是那份常量：改了常量而忘了账本，check-gate-thresholds 会红。
+    expect(FRAGMENT_BODY_BUDGET).toBeGreaterThan(0);
+    expect(FRAGMENT_BODY_BUDGET).toBeLessThan(PULL_BODY_LIMIT);
+  });
+});
+
 /**
  * PR 正文的摘要性（ISSUE #2248）。#2231 改动面 2673 个文件，`git diff --stat` 原样贴进正文 = 166324 字节，超过
  * 平台硬上限 65535 ⇒ 建 PR 被拒（`errcode 2000003`），而屏幕只念「响应里没有 PR 号 ⇒ 没跑起来」，看不出是正文
@@ -4871,7 +4982,8 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
     expect(bodies).toEqual([]);
     const all = heard.join("\n");
     expect(all).toContain("超过上限");
-    expect(all).toContain(`--pr-body-file\` ${huge.length} 字节`);
+    // 平台拒的是 UTF-8 字节数，不是字符数（中文按字节算，ISSUE #3360 同款口径）。
+    expect(all).toContain(`--pr-body-file\` ${Buffer.byteLength(huge, "utf8")} 字节`);
   });
 
   it("readPullCreateError：只认 errcode / errmsg 这两个键名，成功响应一律回 null", () => {

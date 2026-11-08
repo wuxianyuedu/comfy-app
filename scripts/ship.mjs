@@ -47,7 +47,7 @@
  *     （硬规则 9 唯一实现），回收只发 `scripts/reap-process.mjs`（硬规则 3 唯一入口）。
  *   · `ship-ticket.mjs`   —— **单子那一格**：碎片挂在哪个号上、谁提的、按什么优先级。
  *     与「外部执行者的形状」不同的变化方向，所以不在 `ship-core`（叠一起已越过 900 行硬闸）。
- *   · `ship-pull-body.mjs`—— **PR 正文那一格**：碎片清单 + `git diff --stat` 的摘要与封顶。
+ *   · `ship-pull-body.mjs`—— **PR 正文那一格**：碎片清单 + 碎片原文 + `git diff --stat` 的摘要与封顶。
  *     它只回答「发给平台的正文长什么样」，与 `ship-core` 那些「外部执行者的形状」各自变化；
  *     #2248 落地时 `ship-core` 又到了 906 行，按上面 #2189 那条同一口径拆（拆法按职责）。
  *   · `ship-pr-body.mjs`  —— **正文注入那一格**（`--pr-body-file`）：建 PR 与复用 PR 时的
@@ -116,7 +116,7 @@
  *     重复付费，且两份结论会开始漂移。这里只**读**那份证明。
  *   · **不生成因果句进提交信息**：`check-commit-claims.mjs` 会把「§x.y 照旧保留」
  *     「`<path>` 一个字没动」「N 处收到 0」三种句式拿提交树复核。所以 PR 正文
- *     只填它**量到的**（diffstat、碎片标题、失败 stage 名），不填推断。
+ *     只填它**量到的**（diffstat、碎片标题、碎片原文、失败 stage 名），不填推断。
  *   · **不碰 `--force` / 不改历史 / 不删分支**。
  *   · **不替 issue 写内容**。`--close-issue` 只做一件机械事：把点名的单子置
  *     `closed / completed`，然后**独立回读** `state` / `state_reason` /
