@@ -18,7 +18,9 @@ import { readFileAsDataUrl } from "~/lib/file-io";
 import {
   FEEDBACK_NEW_ISSUE_URL,
   MAX_IMAGES,
+  type FeedbackCliStatus,
   type FeedbackDraft,
+  type FeedbackPublishResult,
 } from "~/lib/feedback/feedback-contract";
 import {
   getFeedbackCliStatus,
@@ -26,7 +28,6 @@ import {
   submitFeedback,
   type FeedbackExportResult,
 } from "~/lib/feedback/feedback-client";
-import type { FeedbackCliStatus, FeedbackPublishResult } from "~/lib/feedback/feedback-contract";
 
 /** 界面里一张待提交的截图（data URL 直接当预览用，不另存一份）。 */
 export type FeedbackImage = { dataUrl: string; name: string };
