@@ -15,6 +15,15 @@ const { llmServer, contracts } = vi.hoisted(() => ({
   contracts: {
     loadModeContracts: vi.fn(() => [{ mode: "TXT2IMG" }]),
     saveModeContracts: vi.fn((c: unknown) => c),
+    isDevCheckout: vi.fn(() => false),
+    saveModeContractsAsProjectDefaults: vi.fn(() => ({
+      contracts: [{ mode: "TXT2IMG" }],
+      file: "src/lib/workshop/mode-contract-defaults.json",
+    })),
+    resetModeContractOverride: vi.fn(() => ({
+      contracts: [],
+      effective: { mode: "TXT2IMG", inputs: ["prompt"], output: "image" },
+    })),
   },
 }));
 
@@ -34,6 +43,9 @@ vi.mock("~/lib/llm/server", () => ({
 vi.mock("~/lib/workshop/mode-contract.server", () => ({
   loadModeContracts: contracts.loadModeContracts,
   saveModeContracts: contracts.saveModeContracts,
+  isDevCheckout: contracts.isDevCheckout,
+  saveModeContractsAsProjectDefaults: contracts.saveModeContractsAsProjectDefaults,
+  resetModeContractOverride: contracts.resetModeContractOverride,
 }));
 
 import { createCallerFactory } from "~/server/api/trpc";
@@ -231,6 +243,24 @@ describe("modeContracts —— 契约口 id 的类型守卫", () => {
   it("读取走同一个出口（不在路由里再造一份默认契约）", async () => {
     const res = await caller().modeContractsGet();
     expect(res.contracts).toEqual([{ mode: "TXT2IMG" }]);
+    /* 「保存为项目默认」入口的开关来自服务端判据（isDevCheckout），不是界面猜的
+     *（ISSUE #3396）。 */
+    expect(res.projectDefaultEditable).toBe(false);
+    expect(contracts.isDevCheckout).toHaveBeenCalledTimes(1);
+  });
+
+  it("保存为项目默认：整份契约交给服务端差集写回（台账 E3 执行者）", async () => {
+    const res = await caller().modeContractsSaveProjectDefaults(
+      contract(["prompt", "negative", "size"]),
+    );
+    expect(contracts.saveModeContractsAsProjectDefaults).toHaveBeenCalledTimes(1);
+    expect(res.file).toBe("src/lib/workshop/mode-contract-defaults.json");
+  });
+
+  it("还原默认：模式码交给服务端移除覆盖（台账 E3 执行者）", async () => {
+    const res = await caller().modeContractReset({ mode: "txt2img" });
+    expect(contracts.resetModeContractOverride).toHaveBeenCalledWith("txt2img");
+    expect(res.effective).toEqual({ mode: "TXT2IMG", inputs: ["prompt"], output: "image" });
   });
 });
 

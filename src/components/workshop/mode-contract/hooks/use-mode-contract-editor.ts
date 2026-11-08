@@ -37,15 +37,27 @@ export type ModeContractEditorController = {
   moveInput: (id: ModeContractInputId, delta: number) => void;
   /** 下一个可追加的参考图口 id（没有选中模式时为 null）。 */
   nextReferenceImageId: ModeContractInputId | null;
+  /** 这份检出能不能「保存为项目默认」（正式包 false，入口随之隐藏）。 */
+  projectDefaultEditable: boolean;
   /** 移除某个输入口（自定义口连着它的定义一起移除）。 */
   removeInput: (id: ModeContractInputId) => void;
   /** 改一个自定义口的展示名（空名不生效，保持原名）。 */
   renameCustomInput: (id: ModeContractInputId, label: string) => void;
+  /** 「还原默认」进行中。 */
+  resetting: boolean;
+  /** 还原当前模式到默认：从本机覆盖移除、草稿回到成品配置（ISSUE #3396 反馈 2）。 */
+  resetToDefault: () => Promise<void>;
   /** 保存当前草稿（并入整份注册表）。 */
   save: () => Promise<void>;
+  /** 把当前草稿并入整份注册表后写回**项目默认**（跟代码走；只有开发检出可用，
+   *  正式包该入口不渲染、服务端也会拒）。解析为写盘的文件路径。 */
+  saveAsProjectDefault: () => Promise<string | null>;
   /** 本次打开期间是否已成功保存过（视图据此提示「另一处已生效」）。 */
   saved: boolean;
+  savedKind: "local" | "project" | null;
   saving: boolean;
+  /** 「保存为项目默认」进行中。 */
+  savingProjectDefaults: boolean;
   /** 打开某模式的契约编辑（初值 = 已改过的用改过的，否则内置默认）。 */
   selectMode: (mode: string) => void;
   setDraft: (draft: ModeContract) => void;
@@ -61,12 +73,14 @@ export function useModeContractEditor(): ModeContractEditorController {
   const [mode, setMode] = useState<string | null>(null);
   const [draft, setDraft] = useState<ModeContract | null>(null);
   const [saved, setSaved] = useState(false);
+  const [savedKind, setSavedKind] = useState<"local" | "project" | null>(null);
 
   const selectMode = useCallback(
     (next: string) => {
       setMode(next);
       setDraft(effectiveModeContract(next, registry.contracts).contract);
       setSaved(false);
+      setSavedKind(null);
     },
     [registry.contracts],
   );
@@ -188,20 +202,57 @@ export function useModeContractEditor(): ModeContractEditorController {
     setDraft((prev) => (prev ? { ...prev, output } : prev));
   }, []);
 
-  const save = useCallback(async () => {
+  /** 整份注册表 = 其余模式（用户已改过的）+ 当前草稿。两种保存共用这一步：
+   *  服务端都是「整份收下、各自归一」，这里不重复归一。 */
+  const mergedRegistry = useCallback((): Array<ModeContract> | null => {
     if (!draft) {
-      return;
+      return null;
     }
     const rest = registry.contracts.filter((c) => c.mode !== draft.mode);
-    await registry.save([...rest, draft]);
+    return [...rest, draft];
+  }, [draft, registry.contracts]);
+
+  const resetToDefault = useCallback(async () => {
+    if (!mode) {
+      return;
+    }
+    const effective = await registry.resetToDefault(mode);
+    if (effective) {
+      setDraft(effective);
+    }
+    setSaved(false);
+    setSavedKind(null);
+  }, [mode, registry]);
+
+  const save = useCallback(async () => {
+    const all = mergedRegistry();
+    if (!all) {
+      return;
+    }
+    await registry.save(all);
     setSaved(true);
-  }, [draft, registry]);
+    setSavedKind("local");
+  }, [mergedRegistry, registry]);
+
+  const saveAsProjectDefault = useCallback(async (): Promise<string | null> => {
+    const all = mergedRegistry();
+    if (!all) {
+      return null;
+    }
+    const file = await registry.saveAsProjectDefaults(all);
+    setSaved(true);
+    setSavedKind("project");
+    return file;
+  }, [mergedRegistry, registry]);
 
   return {
     mode,
     draft,
     stored: registry.contracts,
+    resetting: registry.resetting,
     saving: registry.saving,
+    savingProjectDefaults: registry.savingProjectDefaults,
+    projectDefaultEditable: registry.projectDefaultEditable,
     isRequired,
     toggleRequired,
     hasAnyRequired: effectiveRequired.length > 0,
@@ -209,15 +260,19 @@ export function useModeContractEditor(): ModeContractEditorController {
     setDraft: (next: ModeContract) => {
       setDraft(next);
       setSaved(false);
+      setSavedKind(null);
     },
     appendInput,
     removeInput,
+    resetToDefault,
     moveInput,
     addCustomInput,
     renameCustomInput,
     nextReferenceImageId: draft ? nextReferenceImageId(draft.inputs) : null,
     setOutput,
     save,
+    saveAsProjectDefault,
     saved,
+    savedKind,
   };
 }

@@ -25,9 +25,18 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { loadModeContracts, saveModeContracts } from "./mode-contract.server";
-import { MODE_CONTRACTS_REL_PATH } from "./mode-contract-write-path";
-import { configuredModeContracts } from "./model-mode-contract";
+import {
+  isDevCheckout,
+  loadModeContracts,
+  resetModeContractOverride,
+  saveModeContracts,
+  saveModeContractsAsProjectDefaults,
+} from "./mode-contract.server";
+import {
+  MODE_CONTRACTS_REL_PATH,
+  MODE_CONTRACT_DEFAULTS_REL_PATH,
+} from "./mode-contract-write-path";
+import { configuredModeContracts, derivedModeContract } from "./model-mode-contract";
 
 let root: string;
 
@@ -99,6 +108,43 @@ describe("模式契约：成品配置 + 本机覆盖", () => {
     await expect(loadModeContracts(root)).resolves.toEqual(configuredModeContracts());
   });
 
+  it("保存走差集：与成品配置相同的模式不落盘（ISSUE #3396 反馈 1）", async () => {
+    // 整份注册表里只有一条真改过（I2I 输出类别），其余原样 —— 落盘的只有那一条。
+    const [t2i, i2i] = configuredModeContracts(["T2I", "I2I"]);
+    if (!t2i || !i2i) {
+      throw new Error("成品配置里没有 T2I / I2I");
+    }
+    const saved = await saveModeContracts([t2i, { ...i2i, output: "video" }], root);
+    expect(saved.map((c) => c.mode)).toEqual(["I2I"]);
+    expect(JSON.parse((await readRaw()) ?? "{}")).toEqual(saved);
+  });
+
+  it("还原默认：把模式从本机覆盖移除；覆盖不在时不动、不建文件", async () => {
+    const [t2i, i2i] = configuredModeContracts(["T2I", "I2I"]);
+    if (!t2i || !i2i) {
+      throw new Error("成品配置里没有 T2I / I2I");
+    }
+    await saveModeContracts(
+      [
+        { ...t2i, output: "video" },
+        { ...i2i, output: "video" },
+      ],
+      root,
+    );
+    const res = await resetModeContractOverride("T2I", root);
+    expect(res.contracts.map((c) => c.mode)).toEqual(["I2I"]);
+    // 生效值 = 成品配置那条
+    expect(res.effective).toEqual(t2i);
+    await expect(loadModeContracts(root)).resolves.toEqual([{ ...i2i, output: "video" }]);
+
+    // 覆盖不在时：无事可做、不建文件（读路径无副作用的同一纪律）
+    await fs.rm(path.join(root, "data"), { recursive: true, force: true });
+    const noop = await resetModeContractOverride("T2I", root);
+    expect(noop.contracts).toEqual([]);
+    expect(noop.effective).toBeNull();
+    await expect(readRaw()).resolves.toBeNull();
+  });
+
   it("老检出（曾落在 config/）升级后不丢配置，且读路径只读不搬", async () => {
     const legacy = await writeLegacy([
       { mode: "I2I", inputs: ["prompt", "first-frame"], output: "image" },
@@ -132,5 +178,61 @@ describe("模式契约：成品配置 + 本机覆盖", () => {
     await expect(
       saveModeContracts([{ mode: "T2I", inputs: ["prompt"], output: "image" }], root),
     ).rejects.toThrow(/模式契约写入失败.*workshop-mode-contracts\.json/s);
+  });
+});
+
+describe("保存为项目默认：开发检出的写回入口（ISSUE #3396）", () => {
+  /** 把临时 root 布置成一份「开发检出」：编排器在位 + src 目标目录在。 */
+  async function asDevCheckout(): Promise<void> {
+    const launcher = path.join(root, "scripts", "dev-launcher.mjs");
+    await fs.mkdir(path.dirname(launcher), { recursive: true });
+    await fs.writeFile(launcher, "// 桩：形态判据只看它在不在", "utf8");
+  }
+
+  it("判据与壳的形态判据同口径：检出里有编排器才是开发检出", async () => {
+    expect(isDevCheckout(root)).toBe(false);
+    await asDevCheckout();
+    expect(isDevCheckout(root)).toBe(true);
+  });
+
+  it("非开发检出大声拒绝（正式包没有源码可写，这条调用就是错用）", async () => {
+    await expect(
+      saveModeContractsAsProjectDefaults(
+        [{ mode: "T2I", inputs: ["prompt"], output: "image" }],
+        root,
+      ),
+    ).rejects.toThrow(/只在开发检出可用/);
+    // 拒绝的同时什么都没写
+    await expect(
+      fs.readFile(path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH), "utf8"),
+    ).rejects.toThrow();
+  });
+
+  it("写的是与推导的**差集**，与推导相同的模式不写（未覆盖的继续跟随推导演进）", async () => {
+    await asDevCheckout();
+    const derivedT2I = derivedModeContract("T2I");
+    const tweaked: typeof derivedT2I = {
+      ...derivedModeContract("I2I"),
+      output: "video",
+    };
+    const res = await saveModeContractsAsProjectDefaults(
+      [derivedT2I, tweaked, derivedModeContract("T2A")],
+      root,
+    );
+    // 与推导相同的 T2I / T2A 被丢掉；I2I（输出类别被改）保留。
+    expect(res.contracts.map((c) => c.mode)).toEqual(["I2I"]);
+    const raw = await fs.readFile(path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH), "utf8");
+    expect(JSON.parse(raw)).toEqual(res.contracts);
+    // 落点就是入库的那一份（跟代码走的文件）
+    expect(res.file).toBe(path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH));
+  });
+
+  it("全都与推导相同 ⇒ 写出空数组（= 没有任何显式覆盖，读取侧纯推导）", async () => {
+    await asDevCheckout();
+    const res = await saveModeContractsAsProjectDefaults([derivedModeContract("T2I")], root);
+    expect(res.contracts).toEqual([]);
+    await expect(
+      fs.readFile(path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH), "utf8"),
+    ).resolves.toBe("[]\n");
   });
 });
