@@ -71,6 +71,17 @@ describe("model.configList —— 目录清单来自 ComfyUI，全部默认启�
     expect(res.folders[1]).toMatchObject({ label: "VAE", count: 2 });
   });
 
+  it("非模型用途的目录（custom_nodes）同刀排除，不以 count=0 挂在目录列上（ISSUE #3368）", async () => {
+    comfy.listModelFolders.mockReturnValueOnce([
+      "vae",
+      "checkpoints",
+      "custom_nodes",
+      "Custom Nodes",
+    ]);
+    const res = await caller().configList();
+    expect(res.folders.map((f) => f.folder)).toEqual(["checkpoints", "vae"]);
+  });
+
   it("ComfyUI 不可达时降级成 false，不让模型库 500", async () => {
     vi.mocked(fetch).mockRejectedValueOnce(new Error("ECONNREFUSED"));
     const res = await caller().configList();
