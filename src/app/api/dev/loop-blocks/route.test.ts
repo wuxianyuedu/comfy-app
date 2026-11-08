@@ -17,7 +17,7 @@ afterEach(() => {
   resetEventLoopWatchForTests();
 });
 
-async function get(): Promise<{ running: unknown; blocks: unknown[] }> {
+async function get(): Promise<{ blocks: unknown[]; running: unknown }> {
   const res = GET();
   expect(res.headers.get("Cache-Control")).toBe("no-store");
   const raw: unknown = await res.json();
@@ -27,21 +27,21 @@ async function get(): Promise<{ running: unknown; blocks: unknown[] }> {
   if (!Array.isArray(raw.blocks)) {
     throw new Error("blocks 不是数组");
   }
-  return { running: raw.running, blocks: raw.blocks };
+  return { blocks: raw.blocks, running: raw.running };
 }
 
 describe("GET /api/dev/loop-blocks", () => {
   it("没有任何记录：回空数组 + running 标记（观测未启动也是合法状态）", async () => {
     resetEventLoopWatchForTests();
-    const { running, blocks } = await get();
+    const { blocks, running } = await get();
     expect(running).toBe(false);
     expect(blocks).toEqual([]);
   });
 
   it("有阻塞记录：按观测侧的时间序原样带出", async () => {
-    eventLoopBeat(1_000);
-    eventLoopBeat(6_000); // 一次 4s 阻塞
-    eventLoopBeat(7_000);
+    eventLoopBeat(1000);
+    eventLoopBeat(6000); // 一次 4s 阻塞
+    eventLoopBeat(7000);
     eventLoopBeat(20_000); // 又一次（漂移 12s）
     const { blocks } = await get();
     expect(blocks).toEqual(latestEventLoopBlocks());

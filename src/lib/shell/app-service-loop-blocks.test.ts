@@ -13,7 +13,7 @@ const OFFLINE = 100_000;
 const RECOVERED = 119_000;
 
 function block(overrides: Partial<Record<string, number>> = {}) {
-  return { driftMs: 17_000, startedAt: OFFLINE - 1_000, endedAt: RECOVERED - 1_000, ...overrides };
+  return { driftMs: 17_000, startedAt: OFFLINE - 1000, endedAt: RECOVERED - 1000, ...overrides };
 }
 
 function stubBody(body: unknown, status = 200): void {
@@ -33,7 +33,7 @@ describe("fetchLoopBlockForOffline", () => {
   it("多条命中取最近一条（endedAt 最大）", async () => {
     stubBody({
       running: true,
-      blocks: [block({ driftMs: 4_000, startedAt: 90_000, endedAt: 95_000 }), block()],
+      blocks: [block({ driftMs: 4000, startedAt: 90_000, endedAt: 95_000 }), block()],
     });
     const got = await fetchLoopBlockForOffline(OFFLINE, RECOVERED);
     expect(got?.driftMs).toBe(17_000);
@@ -44,7 +44,7 @@ describe("fetchLoopBlockForOffline", () => {
       running: true,
       blocks: [
         block({ startedAt: 50_000, endedAt: 60_000 }), // 断开之前就恢复了
-        block({ startedAt: RECOVERED + 1_000, endedAt: RECOVERED + 5_000 }), // 恢复之后才观测到
+        block({ startedAt: RECOVERED + 1000, endedAt: RECOVERED + 5000 }), // 恢复之后才观测到
       ],
     });
     expect(await fetchLoopBlockForOffline(OFFLINE, RECOVERED)).toBeNull();

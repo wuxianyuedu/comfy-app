@@ -273,13 +273,13 @@ export type AppServiceStartInput = {
   at: number;
   /** 上一份进程结束记录的落盘时刻（ISO 串或毫秒）；没有为 null。 */
   exitAt: number | null;
-  /** 上一份进程为什么结束；没有为 null。 */
-  notice: AppServiceExitNotice | null;
   /**
    * 与本次断开窗口重叠的一次事件循环阻塞读数；没有则省略（观测未启动 / 没阻塞 /
    * 窗口不重叠）。见 `~/lib/shell/app-service-loop-blocks`：数据在恢复应答之后才读得到。
    */
   loopBlock?: AppServiceLoopBlock | null;
+  /** 上一份进程为什么结束；没有为 null。 */
+  notice: AppServiceExitNotice | null;
   /** 本次会话观测到的断开时刻；冷启动为 null。 */
   offlineAt: number | null;
   /**

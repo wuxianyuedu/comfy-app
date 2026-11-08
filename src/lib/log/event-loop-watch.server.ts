@@ -34,10 +34,10 @@
 import { logger } from "~/lib/core/logger";
 
 /** 心跳间隔。越小对阻塞起点的估算越准，代价是常态空转；1s 足够（读数是秒级）。 */
-export const EVENT_LOOP_WATCH_INTERVAL_MS = 1_000;
+export const EVENT_LOOP_WATCH_INTERVAL_MS = 1000;
 
 /** 漂移超过这个值才算一次阻塞并记录（理由见文件头「边界」）。 */
-export const EVENT_LOOP_BLOCK_REPORT_MS = 3_000;
+export const EVENT_LOOP_BLOCK_REPORT_MS = 3000;
 
 /** 内存里最多留几条：端点只取最近一条，留余量给「恢复后逐条翻看」。 */
 export const EVENT_LOOP_BLOCKS_MAX = 20;
@@ -46,10 +46,10 @@ export const EVENT_LOOP_BLOCKS_MAX = 20;
 export type EventLoopBlock = {
   /** 阻塞时长的下界估计（毫秒）＝ 这一次心跳的漂移。 */
   driftMs: number;
-  /** 阻塞起点的估算：最后一次按时心跳的时刻 + 一拍。 */
-  startedAt: number;
   /** 心跳恢复运行（即观测到阻塞的那一拍）的时刻。 */
   endedAt: number;
+  /** 阻塞起点的估算：最后一次按时心跳的时刻 + 一拍。 */
+  startedAt: number;
 };
 
 let timer: ReturnType<typeof setInterval> | null = null;

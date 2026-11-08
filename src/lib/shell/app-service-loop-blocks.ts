@@ -16,10 +16,10 @@ export const LOOP_BLOCKS_ENDPOINT = "/api/dev/loop-blocks";
 export type AppServiceLoopBlock = {
   /** 阻塞时长的下界估计（毫秒）。 */
   driftMs: number;
-  /** 阻塞起点的估算。 */
-  startedAt: number;
   /** 心跳恢复运行（观测到阻塞的那一拍）的时刻。 */
   endedAt: number;
+  /** 阻塞起点的估算。 */
+  startedAt: number;
 };
 
 function parseBlock(value: unknown): AppServiceLoopBlock | null {
