@@ -17,6 +17,10 @@
   `HOSTED_MIRROR_PROBE_BY` 到期读数取完 —— 转正（自托管侧摘推送）或整段删除。
 - 已知代价（记入 `ci-mirror-hosted-await.mjs` 文件头）：兜底推送与托管机推送存在
   双派发竞态窗（同 sha 两条 GitHub run），判决链按 sha 取读数、同树同判。
+- **git-lfs 预装进镜像**（PR 评审随手账）：托管机那条不再每跑 apt-get 装一遍 ——
+  新增 `.cnb/ci-image/Dockerfile`（`FROM node:26` + git-lfs 一层），实验流水线的
+  `docker.build` 按它构建临时镜像并按 `versionBy` 缓存（Dockerfile 不变就不重建）；
+  「git-lfs 就位」那格删除。不引第三方镜像（供应链面不变）、不维护外部仓。
 - 用例：`tests/ci-github-mirror-push.test.ts` 新增 once 两态（推送 / LFS 各只试一次，
   缺省档重试语义仍在）与等托管机四场景（见 HEAD 即跳过 + 落回执、旧 sha 到点兜底、
   读没通到点兜底、前提取不到不抢话术）；`tests/no-platform-ci-config.test.ts`
