@@ -303,6 +303,15 @@
       "why": "PR 正文里 diffstat 逐行明细的样本数。它只决定「摘要长多少行」，不决定任何一条判定；正文总长超上限时这个数还会自己减半（ISSUE #2248），所以它是起始值而不是保证值。"
     },
     {
+      "file": "scripts/ship-pull-body.mjs",
+      "const": "FRAGMENT_BODY_BUDGET",
+      "value": 48000,
+      "unit": "字节（UTF-8）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "PR 正文里碎片原文（changelog.d 去掉首行后的内容）占的字节预算，ISSUE #3360。它只决定「贴几份完整碎片」：超预算按整份逐份贴满、装不下的省略并念出份数，不决定任何一条判定；调大只会让正文更接近平台硬上限，调小只是少贴几份。"
+    },
+    {
       "file": "scripts/affected-launch-wallclock.mjs",
       "const": "STAGE_WALL_CLOCK_MS",
       "value": 25,
