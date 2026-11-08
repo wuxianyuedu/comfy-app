@@ -12,6 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 
+import { errorText } from "~/lib/error-message";
 import { isRecord } from "~/lib/is-record";
 import { resolveCommandInvocation } from "~/lib/process/executable-resolve";
 import { killProcessTree } from "~/lib/process/kill-process-tree";
@@ -48,10 +49,6 @@ function firstLine(text: string): string {
   return line.trim().slice(0, 200) || "无输出";
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 /**
  * 起一条 cnb 命令并收 -v 回执。
  * 用 spawn 传 argv 数组、不经 shell（硬规则 3）：命令形态由
@@ -68,7 +65,7 @@ function runCnb(args: Array<string>): Promise<CliRun> {
         stdio: ["ignore", "pipe", "pipe"],
       });
     } catch (error) {
-      resolve({ ok: false, data: null, error: `无法启动 cnb 命令：${errorMessage(error)}` });
+      resolve({ ok: false, data: null, error: errorText(error, "无法启动 cnb 命令") });
       return;
     }
 
@@ -108,7 +105,7 @@ function runCnb(args: Array<string>): Promise<CliRun> {
       }
     });
     child.on("error", (error) => {
-      finish({ ok: false, data: null, error: `无法启动 cnb 命令：${firstLine(error.message)}` });
+      finish({ ok: false, data: null, error: errorText(error, "无法启动 cnb 命令") });
     });
     child.on("close", () => {
       const envelope = parseEnvelope(stdout);
@@ -145,7 +142,7 @@ export async function probeCnbCli(): Promise<{ available: boolean; reason: strin
         stdio: ["ignore", "pipe", "pipe"],
       });
     } catch (error) {
-      resolve({ available: false, reason: `无法启动 cnb 命令：${errorMessage(error)}` });
+      resolve({ available: false, reason: errorText(error, "无法启动 cnb 命令") });
       return;
     }
     let stdout = "";
@@ -172,7 +169,7 @@ export async function probeCnbCli(): Promise<{ available: boolean; reason: strin
       stdout += chunk;
     });
     child.on("error", (error) => {
-      finish({ available: false, reason: `无法执行 cnb status：${firstLine(error.message)}` });
+      finish({ available: false, reason: errorText(error, "无法执行 cnb status") });
     });
     child.on("close", () => {
       if (!stdout.includes("已登录")) {

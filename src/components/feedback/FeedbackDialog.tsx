@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
   Dialog,
@@ -170,20 +171,24 @@ export function FeedbackDialog({ controller: c, onClose, open }: FeedbackDialogP
         )}
 
         <DialogFooter>
-          <Button
-            disabled={!c.result?.ok || c.submitting || c.publishing || c.cli?.available !== true}
-            onClick={c.publish}
-            title={
+          <Hint
+            label={
               c.cli?.available === true
                 ? "调用运行环境中已登录的 cnb cli 建单并上传附件"
                 : "运行环境没有可用的 cnb cli，请用下面两个按钮手动提交"
             }
-            variant="default"
+            wrap
           >
-            {c.publishing && <Spinner data-icon="inline-start" />}
-            <CloudUpload data-icon="inline-end" size={14} />
-            {c.publishing ? "正在提交…" : "提交到仓库"}
-          </Button>
+            <Button
+              disabled={!c.result?.ok || c.submitting || c.publishing || c.cli?.available !== true}
+              onClick={c.publish}
+              variant="default"
+            >
+              {c.publishing && <Spinner data-icon="inline-start" />}
+              <CloudUpload data-icon="inline-end" size={14} />
+              {c.publishing ? "正在提交…" : "提交到仓库"}
+            </Button>
+          </Hint>
           <Button
             disabled={!c.result?.ok || c.submitting}
             onClick={c.copyIssueBody}
