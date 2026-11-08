@@ -68,17 +68,6 @@ export const FIELD_TO_FOLDERS: Record<string, Array<string>> = {
   pose: ["pose"],
 };
 
-/* 反向映射：目录名 → 从它读取的字段名（用于提示气泡）。 */
-const FOLDER_TO_FIELDS: Record<string, Array<string>> = (() => {
-  const m: Record<string, Array<string>> = {};
-  for (const [field, folders] of Object.entries(FIELD_TO_FOLDERS)) {
-    for (const f of folders) {
-      (m[f] ??= []).push(field);
-    }
-  }
-  return m;
-})();
-
 /**
  * 解析某个 COMBO 字段映射到哪些目录名：先精确查表，
  * 再不精确地按归一化后的子串兜底，好让变体字段名也能解析出来。
@@ -289,20 +278,4 @@ export function folderMeta(folder: string): { color: string; label: string } {
     label: prettyFolder(folder),
     color: FALLBACK_PALETTE.at(hashString(folder) % FALLBACK_PALETTE.length) ?? FALLBACK_PALETTE[0],
   };
-}
-
-/**
- * 目录类型「药丸」标签的提示气泡。它解释这条原则：
- * 目录名**就是**类型 —— 该目录的模型绝不会归到另一个类型 ——
- * 以及哪些画布 COMBO 字段会列出该目录下的文件。
- */
-export function getFolderTooltip(folder: string): string {
-  const fields = FOLDER_TO_FIELDS[folder] ?? [];
-  const firstFields = fields.slice(0, 4).join(" / ");
-  const more = fields.length > 4 ? ` 等 ${fields.length} 个` : "";
-  const fieldHint =
-    fields.length > 0
-      ? `同步后，画布上 ${firstFields}${more} 字段的 COMBO 下拉会列出此目录的文件。`
-      : "此目录当前没有对应画布 COMBO 字段。";
-  return `目录 "${folder}" 本身就是一个独立的模型类型，其下的模型只归属该目录，不会被归类到其他类型。${fieldHint}`;
 }

@@ -18,7 +18,6 @@ import { createTestQueryClient } from "../../../../tests/helpers/renderWithProvi
 import { TRPCProvider, createTrpcClient } from "~/trpc/react";
 
 import { useModelLibrary, type ModelLibraryController } from "./use-model-library";
-import { ALL_TYPES } from "../model-library-config";
 
 type Row = {
   createdAt: string;
@@ -70,6 +69,11 @@ const mockRouter = t.router({
       }
       return { ok: true, count: behavior.models.length };
     }),
+    configList: t.procedure.query(() => ({
+      folders: [],
+      comfyReachable: true,
+      comfyuiPathConfigured: true,
+    })),
   }),
 });
 
@@ -200,7 +204,7 @@ describe("useModelLibrary", () => {
     expect(result.current.models).toHaveLength(1);
   });
 
-  it("筛选与搜索：filtered / typeChips 随状态派生（本地筛选，不打新请求）", async () => {
+  it("按目录浏览：folders / activeFolder 随数据派生，切换目录与搜索都是本地筛选", async () => {
     behavior = { models: [ONE, TWO, THREE] };
     const { result } = renderHook(() => useModelLibrary(), {
       wrapper: makeWrapper(),
@@ -208,43 +212,48 @@ describe("useModelLibrary", () => {
     await expect.poll(() => result.current.loading).toBe(false);
     await waitSyncSettled(result);
 
-    expect(result.current.filtered).toHaveLength(3);
-    // 类型 chips 按数量降序
-    expect(result.current.typeChips).toEqual([
+    // 目录列按数量降序；默认选中第一项（loras 2 个）
+    expect(result.current.folders.map((folder) => [folder.type, folder.count])).toEqual([
       ["loras", 2],
       ["checkpoints", 1],
     ]);
+    expect(result.current.activeFolder).toBe("loras");
+    expect(result.current.filtered.map((m) => m.id)).toEqual(["m2", "m3"]);
 
     const callsBefore = listInputs.length;
     act(() => {
-      result.current.setFilter("loras");
+      result.current.setActiveFolder("checkpoints");
     });
-    expect(result.current.filtered.map((m) => m.id)).toEqual(["m2", "m3"]);
+    expect(result.current.filtered.map((m) => m.id)).toEqual(["m1"]);
 
     act(() => {
       result.current.setQ("anime");
+    });
+    expect(result.current.filtered).toEqual([]);
+
+    act(() => {
+      result.current.setActiveFolder("loras");
     });
     expect(result.current.filtered.map((m) => m.id)).toEqual(["m3"]);
 
     act(() => {
       result.current.setQ("");
     });
-    act(() => {
-      result.current.setFilter(ALL_TYPES);
-    });
-    expect(result.current.filtered).toHaveLength(3);
-    // 筛选是纯本地派生：不应该为了筛选再发请求
+    expect(result.current.filtered.map((m) => m.id)).toEqual(["m2", "m3"]);
+    // 目录选择与搜索是纯本地派生：不应该为了它们再发请求
     expect(listInputs.length).toBe(callsBefore);
   });
 
-  it("类型 count 为 0 时 chips 不出现（数据驱动，不是写死的目录表）", async () => {
-    behavior = { models: [ONE] };
+  it("空库：folders 为空、activeFolder 为 null", async () => {
+    behavior = { models: [] };
     const { result } = renderHook(() => useModelLibrary(), {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.loading).toBe(false);
     await waitSyncSettled(result);
-    expect(result.current.typeChips).toEqual([["checkpoints", 1]]);
+    expect(result.current.folders).toEqual([]);
+    expect(result.current.activeFolder).toBeNull();
+    expect(result.current.filtered).toEqual([]);
   });
 
   it("sync 失败不阻塞列表：loading 仍收敛，行照常渲染", async () => {
@@ -287,6 +296,11 @@ describe("useModelLibrary 卸载后不再 setState", () => {
           return { models: [ONE] };
         }),
         sync: t.procedure.mutation(() => ({ ok: true, count: 1 })),
+        configList: t.procedure.query(() => ({
+          folders: [],
+          comfyReachable: true,
+          comfyuiPathConfigured: true,
+        })),
       }),
     });
     server.use(
