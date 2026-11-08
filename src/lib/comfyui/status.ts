@@ -37,7 +37,7 @@ import { isRecord } from "~/lib/is-record";
 // 静态依赖——`~/lib/error-message` / `fs` / `path` /
 // `../app-settings/app-settings.server`（`.server` 后缀、内部无 server-only） /
 // `../endpoints` / `./launch-path` / `./instance-kind` / `./proc-detect` /
-// `~/lib/shell/tracing-ignore` / `./probe` / `./env-python` /
+// `./probe` / `./env-python` /
 // `~/lib/core/logger`（经 `app-runtime-log` #1075 + `log-paths` #1074 通链）
 // —— 在前 8 批 comfyui 与 lib 层地基批完成之后**全部**纯 Node 可加载。
 // 登记进 `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
@@ -48,7 +48,6 @@ import { COMFYUI_DEFAULT_PORT } from "../endpoints";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { classifyComfyInstall } from "./instance-kind";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
-import { tracingIgnoreArgs } from "~/lib/shell/tracing-ignore";
 import { probeComfyAtPort } from "./probe";
 import { collectComfyPythonCandidates } from "./env-python";
 import { logger } from "~/lib/core/logger";
@@ -157,7 +156,7 @@ export function launcherCommandCandidates(pythonExe: string): Array<string> {
   const exts = process.platform === "win32" ? ["pythonw.exe", "python.exe"] : ["pythonw", "python"];
   // 去重：便携版解释器本身就叫 python.exe，枚举结果与候选重复时不必查两遍。
   return [
-    ...new Set([...exts.map((name) => path.join(...tracingIgnoreArgs(), dir, name)), pythonExe]),
+    ...new Set([...exts.map((name) => path.join(/*turbopackIgnore: true*/ dir, name)), pythonExe]),
   ];
 }
 
@@ -169,7 +168,7 @@ export function readRegisteredLauncher(comfyuiPath: string): string | null {
     return null;
   }
   const registry = path.join(
-    ...tracingIgnoreArgs(),
+    /*turbopackIgnore: true*/
     comfyuiPath,
     ".venv",
     "Lib",
@@ -179,11 +178,11 @@ export function readRegisteredLauncher(comfyuiPath: string): string | null {
   );
   let raw: string;
   try {
-    raw = fs.readFileSync(...tracingIgnoreArgs(), registry, "utf8");
+    raw = fs.readFileSync(/*turbopackIgnore: true*/ registry, "utf8");
   } catch {
     // 兜底：comfyuiPath 本身就是注册表文件（少见，但比「静默不认」好）。
     try {
-      raw = fs.readFileSync(...tracingIgnoreArgs(), comfyuiPath, "utf8");
+      raw = fs.readFileSync(/*turbopackIgnore: true*/ comfyuiPath, "utf8");
     } catch {
       return null;
     }

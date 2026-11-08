@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
 
-import { tracingIgnoreArgs } from "~/lib/shell/tracing-ignore";
 import { toDisplayPath } from "~/lib/path-display";
 
 /* 运行期「本地更新」检测：桌面壳开着时前端源码 src/ 由 dev server HMR 热更、无需打扰，但有一批「改完当前窗口不生效、得重启」的文件 —— Rust 源码 / tauri.conf.json /
@@ -26,7 +25,7 @@ type FileFingerprint = string;
 
 function fingerprintOf(abs: string): FileFingerprint | null {
   try {
-    const st = fs.statSync(...tracingIgnoreArgs(), abs);
+    const st = fs.statSync(/*turbopackIgnore: true*/ abs);
     if (!st.isFile()) {
       return null;
     }
@@ -40,7 +39,7 @@ function fingerprintOf(abs: string): FileFingerprint | null {
 function walkFiles(dirAbs: string, out: Array<string> = []): Array<string> {
   let entries: Array<fs.Dirent>;
   try {
-    entries = fs.readdirSync(...tracingIgnoreArgs(), dirAbs, {
+    entries = fs.readdirSync(/*turbopackIgnore: true*/ dirAbs, {
       withFileTypes: true,
     });
   } catch {
@@ -63,12 +62,12 @@ function walkFiles(dirAbs: string, out: Array<string> = []): Array<string> {
 function collectGroup(roots: Array<string>): Map<string, FileFingerprint> {
   const map = new Map<string, FileFingerprint>();
   for (const rel of roots) {
-    const abs = path.join(...tracingIgnoreArgs(), REPO_ROOT, rel);
+    const abs = path.join(/*turbopackIgnore: true*/ REPO_ROOT, rel);
     if (!fs.existsSync(abs)) {
       map.set(rel, "missing");
       continue;
     }
-    const st = fs.statSync(...tracingIgnoreArgs(), abs);
+    const st = fs.statSync(/*turbopackIgnore: true*/ abs);
     if (st.isDirectory()) {
       for (const f of walkFiles(abs)) {
         const fp = fingerprintOf(f);

@@ -132,7 +132,7 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
 
   let rootStat: fs.Stats;
   try {
-    rootStat = await fs.promises.stat(abs);
+    rootStat = await fs.promises.stat(/*turbopackIgnore: true*/ abs);
   } catch (error) {
     const code = isRecord(error) ? error.code : undefined;
     if (code === "ENOENT") {

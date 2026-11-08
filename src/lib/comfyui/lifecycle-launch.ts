@@ -385,10 +385,10 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
     const lines: Array<string> = [];
     for (const file of [kaErrLog, kaOutLog]) {
       try {
-        if (!fs.existsSync(file)) {
+        if (!fs.existsSync(/*turbopackIgnore: true*/ file)) {
           continue;
         }
-        lines.push(...fs.readFileSync(file, "utf8").split(/\r?\n/));
+        lines.push(...fs.readFileSync(/*turbopackIgnore: true*/ file, "utf8").split(/\r?\n/));
       } catch {
         /* 读不到就当没有这一份证据，不影响判死本身 */
       }
