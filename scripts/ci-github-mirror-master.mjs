@@ -179,9 +179,11 @@ export async function runMasterMirror(io) {
   const lfsCheck = await verifyLfsObjects({
     fetchImpl: io.fetchImpl ?? fetch,
     log,
+    now: io.now,
     prefix: "mirror-master",
     repo: ctx.repo,
     runGit,
+    sleep,
     token: ctx.token,
   });
   if (lfsCheck.code !== CODE.OK) {

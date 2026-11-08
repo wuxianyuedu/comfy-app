@@ -1,0 +1,3 @@
+## Fixed
+
+- **镜像格 LFS 核对 fetch 单次即弃 ⇒ egress 抖动下 wire/LFS 都推成功了整跑仍判挂（#3400，PR #3398 第二跑现场）**：`ci-mirror-push-verify.mjs` 的 `verifyLfsObjects()` 是推送链上的第四跳，此前 LFS batch API 核对是裸 `fetch`，`TypeError: fetch failed` / HTTP 5xx 一次即返 `NO_FACT(2)`，把后面「环境前提 / GitHub 判决回读 / 判决判定」整片 skipped。现在这一跳接入与 `verifyPushedRef` 同口径的有限重试（`VERIFY_MAX_ATTEMPTS` / `VERIFY_RETRY_BUDGET_MS` / 退避表 / 注入 `sleep`·`now`），只重试网络层异常与远端 5xx；认证/权限（4xx）、回话对不上、对象确实缺失仍一次交账。主文件与 master 镜像调用点把 `once ? 1 : VERIFY_MAX_ATTEMPTS` 注入，托管机实验档保持「各跳只试一次」。网络层失败判据收成 `ci-mirror-failure-report.mjs` 里 `isRetryableFetchFailure()` 一份（§12.18），`ci-github-verdict-request.mjs` 的 `isRetryableRequestFailure` 改为同源别名，不再两处各写一遍会漂的正则。补定向用例：网络层/5xx 重试后通、4xx 不重试、耗尽仍是 2、`once` 恰好一发。

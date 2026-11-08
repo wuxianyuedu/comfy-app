@@ -479,6 +479,35 @@ describe("纯函数", () => {
     expect(isEgressFailure("remote: Repository access blocked")).toBe(false);
   });
 
+  it("git-lfs / Go net 在 Windows 与 POSIX 侧的 TCP connect 超时认成 egress（PR #3398 首跑）", () => {
+    /* `cnb-dto-1k6tb0h72` 的 LFS 那一跳：git-lfs 是 Go 写的，batch 请求的回话不走
+     * git / curl 那一套，Go net 包在出网层自己抛的措辞一个字都对不上旧正则 ⇒
+     * 被念成「其他」、`shouldRetryGitFailure` 也不认，60s 墙钟预算整档吃不到。 */
+    const shapes = [
+      'batch response: Post "https://oauth2:***@github.com/x/y.git/info/lfs/objects/batch": dial tcp 20.205.243.166:443: connectex: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond.',
+      'Post "https://github.com/x/y.git/info/lfs/objects/batch": dial tcp 140.82.114.4:443: i/o timeout',
+      "dial tcp: lookup github.com on 10.0.0.1:53: no such host",
+      "dial tcp 127.0.0.1:443: connect: connection refused",
+    ];
+    for (const raw of shapes) {
+      /* 话术、重试面与失败分类三者同源：这一族现在是 egress，不是「其他」。 */
+      expect(isEgressFailure(raw)).toBe(true);
+      expect(shouldRetryGitFailure(raw)).toBe(true);
+      expect(classifyLfsPushFailure(raw).kind).toBe("EGRESS");
+      expect(classifyLfsPushFailure(raw).next).toContain("节点侧");
+    }
+    /* 认证 / 配额 / 仓库三族仍一次都不试 —— 放宽的只是 Go 的措辞，不是判据的边界。 */
+    for (const raw of [
+      "remote: Repository not found.\nfatal: Authentication failed",
+      "fatal: Invalid username or token",
+      "batch response: This repository is over its data quota.",
+      "remote: Permission denied",
+    ]) {
+      expect(isEgressFailure(raw)).toBe(false);
+      expect(shouldRetryGitFailure(raw)).toBe(false);
+    }
+  });
+
   it("现场四种失败原话：egress 三形认、远端 5xx 只进重试面不进话术", () => {
     /* 2026-11-04 三跑「重试=0 次」的现场原话，逐字取自镜像格日志。 */
     const reset =
@@ -1728,19 +1757,28 @@ describe("推送后自证（ci-mirror-push-verify）", () => {
   function verifyLfs(
     list: { code: number; stderr?: string; stdout?: string },
     fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
+    opts: { maxAttempts?: number; now?: () => number } = {},
   ) {
     const lines: Array<string> = [];
+    const sleeps: Array<number> = [];
     return {
       lines,
+      sleeps,
       run: () =>
         verifyLfsObjects({
           fetchImpl,
           log: (line: string) => {
             lines.push(line);
           },
+          maxAttempts: opts.maxAttempts,
+          now: opts.now,
           prefix: "mirror",
           repo: DEFAULT_REPO,
           runGit: () => ({ code: list.code, stdout: list.stdout ?? "", stderr: list.stderr ?? "" }),
+          sleep: (ms: number) => {
+            sleeps.push(ms);
+            return Promise.resolve();
+          },
           token: TOKEN,
         }),
     };
@@ -1840,6 +1878,94 @@ describe("推送后自证（ci-mirror-push-verify）", () => {
     ).run();
     expect(mismatch.code).toBe(CODE.NO_FACT);
     expect(mismatch.note).toContain("对象数不一致");
+  });
+
+  it("LFS 核对网络层抖动：第 1 次抛、第 2 次通 ⇒ 0，重试读数进日志（#3400）", async () => {
+    const list = { code: 0, stdout: JSON.stringify({ files: [{ oid: OID_A, size: 1 }] }) };
+    let calls = 0;
+    const fake = verifyLfs(list, () => {
+      calls += 1;
+      if (calls === 1) {
+        return Promise.reject(new TypeError("fetch failed"));
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            objects: [{ actions: { download: { href: "https://lfs/a" } }, oid: OID_A }],
+          }),
+          { status: 200 },
+        ),
+      );
+    });
+    const got = await fake.run();
+    expect(got.code).toBe(CODE.OK);
+    expect(calls).toBe(2);
+    /* 退避那一跳真发过，且读数进日志（别把「重试过了」读成「一次就过」）。 */
+    expect(fake.sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
+    expect(fake.lines.join("\n")).toContain("LFS 核对第 1/");
+    expect(fake.lines.join("\n")).toContain("5s 后试第 2 次");
+  });
+
+  it("LFS 核对远端 5xx：重试后才 200 ⇒ 0；4xx 一次交账不重试", async () => {
+    const list = { code: 0, stdout: JSON.stringify({ files: [{ oid: OID_A, size: 1 }] }) };
+    const ok = () =>
+      new Response(
+        JSON.stringify({
+          objects: [{ actions: { download: { href: "https://lfs/a" } }, oid: OID_A }],
+        }),
+        { status: 200 },
+      );
+    let calls5xx = 0;
+    const five = verifyLfs(list, () => {
+      calls5xx += 1;
+      return Promise.resolve(calls5xx === 1 ? new Response("no", { status: 502 }) : ok());
+    });
+    expect((await five.run()).code).toBe(CODE.OK);
+    expect(calls5xx).toBe(2);
+    expect(five.sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
+
+    /* 认证 / 权限类（4xx）不该被重试：一次交账，且仍是「没结论」。 */
+    let calls4xx = 0;
+    const four = verifyLfs(list, () => {
+      calls4xx += 1;
+      return Promise.resolve(new Response("no", { status: 403 }));
+    });
+    const got4xx = await four.run();
+    expect(got4xx.code).toBe(CODE.NO_FACT);
+    expect(got4xx.note).toContain("HTTP 403");
+    expect(calls4xx).toBe(1);
+    expect(four.sleeps).toEqual([]);
+  });
+
+  it("LFS 核对网络层耗尽仍是 2；once 恰好一发（不重试）", async () => {
+    const list = { code: 0, stdout: JSON.stringify({ files: [{ oid: OID_A, size: 1 }] }) };
+    let calls = 0;
+    const exhausted = verifyLfs(
+      list,
+      () => {
+        calls += 1;
+        return Promise.reject(new TypeError("fetch failed"));
+      },
+      { now: () => 0 },
+    );
+    const got = await exhausted.run();
+    expect(got.code).toBe(CODE.NO_FACT);
+    expect(got.note).toContain("没跑起来");
+    expect(calls).toBe(VERIFY_MAX_ATTEMPTS);
+    expect(exhausted.sleeps).toEqual(RETRY_BACKOFF_MS.slice(0, VERIFY_MAX_ATTEMPTS - 1));
+    /* 托管机实验 once 档：三跳各只试一次，第四跳（这一格）同样一发即弃。 */
+    let onceCalls = 0;
+    const onceFake = verifyLfs(
+      list,
+      () => {
+        onceCalls += 1;
+        return Promise.reject(new TypeError("fetch failed"));
+      },
+      { maxAttempts: 1 },
+    );
+    expect((await onceFake.run()).code).toBe(CODE.NO_FACT);
+    expect(onceCalls).toBe(1);
+    expect(onceFake.sleeps).toEqual([]);
   });
 
   it("LFS 清单读不到 ⇒ 2（没结论），不是 0", async () => {
