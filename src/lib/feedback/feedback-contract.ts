@@ -17,8 +17,6 @@ export const FEEDBACK_NEW_ISSUE_URL = `https://cnb.cool/${FEEDBACK_REPO_SLUG}/-/
 export type FeedbackDraft = {
   /** 问题描述（必填，界面已判非空，这里再兜一次上限）。 */
   description: string;
-  /** 用户附加的截图（data URL）；顺序即界面里的添加顺序。 */
-  images: Array<{ dataUrl: string; name: string }>;
   /** 运行环境信息（浏览器侧采集，纯展示事实，不含任何口令）。 */
   environment: {
     appVersion: string;
@@ -26,6 +24,8 @@ export type FeedbackDraft = {
     userAgent: string;
     when: string;
   };
+  /** 用户附加的截图（data URL）；顺序即界面里的添加顺序。 */
+  images: Array<{ dataUrl: string; name: string }>;
   /** 是否随包附上诊断日志 zip（复用 /api/logs/diagnostics 的产物路径）。 */
   includeDiagnostics: boolean;
 };
@@ -140,7 +140,7 @@ export function buildIssueBody(draft: FeedbackDraft, packageName: string): strin
 /** 预填标题：取描述首行，去掉换行与多余空白，长度封顶。 */
 export function buildIssueTitle(description: string): string {
   const firstLine = description.split("\n").find((l) => l.trim() !== "") ?? "应用运行反馈";
-  const clean = firstLine.replace(/\s+/g, " ").trim();
+  const clean = firstLine.replaceAll(/\s+/g, " ").trim();
   const title = clean === "" ? "应用运行反馈" : clean;
   return `[运行反馈] ${title.slice(0, 80)}`;
 }

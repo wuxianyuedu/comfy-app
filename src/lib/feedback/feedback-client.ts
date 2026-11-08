@@ -10,35 +10,35 @@ import type { FeedbackDraft } from "./feedback-contract";
 
 /** 一次反馈落盘的结果。失败不抛：界面据此显示「保存失败」+ 原因（硬规则 4）。 */
 export type FeedbackExportResult = {
-  /** 失败原因（成功时为空）。 */
-  error: string;
-  /** 反馈包目录的绝对路径（成功时有）。 */
-  packagePath: string;
-  /** 反馈包名（进 Issue 正文引用）。 */
-  packageName: string;
-  /** 相对 log/ 的短路径（界面空间窄，展示这一截）。 */
-  relativePath: string;
-  /** 本次随包写入的截图数。 */
-  imageCount: number;
   /** 诊断日志 zip 是不是真的带上了。 */
   diagnosticsIncluded: boolean;
-  ok: boolean;
+  /** 失败原因（成功时为空）。 */
+  error: string;
+  /** 本次随包写入的截图数。 */
+  imageCount: number;
   /** 预填好的 Issue 正文（服务端按同一份契约生成，界面直接复制）。 */
   issueBody: string;
   /** 预填好的 Issue 标题。 */
   issueTitle: string;
+  ok: boolean;
+  /** 反馈包名（进 Issue 正文引用）。 */
+  packageName: string;
+  /** 反馈包目录的绝对路径（成功时有）。 */
+  packagePath: string;
+  /** 相对 log/ 的短路径（界面空间窄，展示这一截）。 */
+  relativePath: string;
 };
 
 const EMPTY: FeedbackExportResult = {
-  error: "",
-  packagePath: "",
-  packageName: "",
-  relativePath: "",
-  imageCount: 0,
   diagnosticsIncluded: false,
-  ok: false,
+  error: "",
+  imageCount: 0,
   issueBody: "",
   issueTitle: "",
+  ok: false,
+  packageName: "",
+  packagePath: "",
+  relativePath: "",
 };
 
 /**

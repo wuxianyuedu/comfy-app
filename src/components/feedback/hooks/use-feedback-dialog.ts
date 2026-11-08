@@ -36,34 +36,34 @@ function collectEnvironment(): FeedbackDraft["environment"] {
 }
 
 export type FeedbackController = {
+  /** 添加一张截图；失败给 toast，不打断填写。 */
+  addImage: (file: File) => void;
+  /** 是否还能再加图。 */
+  canAddImage: boolean;
   /** 关闭弹窗（并清掉上一次的失败态）。 */
   close: () => void;
   /** 复制预填正文（成功 / 失败都由 toast 念出来）。 */
   copyIssueBody: () => void;
   /** 当前描述。 */
   description: string;
-  /** 诊断日志开关。 */
-  includeDiagnostics: boolean;
   /** 已添加的截图。 */
   images: Array<FeedbackImage>;
-  /** 是否还能再加图。 */
-  canAddImage: boolean;
+  /** 诊断日志开关。 */
+  includeDiagnostics: boolean;
   /** 打开 CNB 新建 Issue 页（系统默认浏览器，桌面壳内 target=_blank 打不开）。 */
   openIssuePage: () => void;
-  /** 上一次提交的结果（null = 还没提交过）。 */
-  result: FeedbackExportResult | null;
-  /** 本次提交是否正在跑。 */
-  submitting: boolean;
-  /** 添加一张截图；失败给 toast，不打断填写。 */
-  addImage: (file: File) => void;
   /** 删掉第 index 张截图。 */
   removeImage: (index: number) => void;
+  /** 上一次提交的结果（null = 还没提交过）。 */
+  result: FeedbackExportResult | null;
   /** 改描述。 */
   setDescription: (value: string) => void;
   /** 切换诊断日志开关。 */
   setIncludeDiagnostics: (value: boolean) => void;
   /** 提交反馈（校验 → 落盘 → 给出口）。 */
   submit: () => void;
+  /** 本次提交是否正在跑。 */
+  submitting: boolean;
 };
 
 export function useFeedbackDialog(open: boolean): FeedbackController {

@@ -22,7 +22,7 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { useFilePicker } from "~/components/ui/file-picker";
-import { type FeedbackController } from "./hooks/use-feedback-dialog";
+import type { FeedbackController } from "./hooks/use-feedback-dialog";
 
 type FeedbackDialogProps = {
   controller: FeedbackController;
@@ -33,7 +33,9 @@ type FeedbackDialogProps = {
 export function FeedbackDialog({ controller: c, onClose, open }: FeedbackDialogProps) {
   const picker = useFilePicker({
     accept: "image/png,image/jpeg,image/webp,image/gif",
-    onPick: (file) => c.addImage(file),
+    onPick: (file) => {
+      c.addImage(file);
+    },
   });
 
   return (
@@ -61,7 +63,9 @@ export function FeedbackDialog({ controller: c, onClose, open }: FeedbackDialogP
             <Textarea
               className="min-h-28"
               id="feedback-description"
-              onChange={(event) => c.setDescription(event.target.value)}
+              onChange={(event) => {
+                c.setDescription(event.target.value);
+              }}
               placeholder="例如：点了生成后界面一直转圈，日志里最后一行是……期望是……"
               value={c.description}
             />
@@ -83,7 +87,9 @@ export function FeedbackDialog({ controller: c, onClose, open }: FeedbackDialogP
                   <Button
                     aria-label={`移除截图 ${index + 1}`}
                     className="absolute top-0.5 right-0.5 size-5 rounded-full p-0"
-                    onClick={() => c.removeImage(index)}
+                    onClick={() => {
+                      c.removeImage(index);
+                    }}
                     size="icon-sm"
                     variant="secondary"
                   >
@@ -105,7 +111,9 @@ export function FeedbackDialog({ controller: c, onClose, open }: FeedbackDialogP
           <label className="flex cursor-pointer items-center gap-2 text-sm">
             <Checkbox
               checked={c.includeDiagnostics}
-              onCheckedChange={(value) => c.setIncludeDiagnostics(value === true)}
+              onCheckedChange={(value) => {
+                c.setIncludeDiagnostics(value === true);
+              }}
             />
             <span>附带运行日志诊断包（推荐，排障最有用的一段现场）</span>
           </label>

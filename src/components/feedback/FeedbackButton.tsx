@@ -23,13 +23,21 @@ export function FeedbackButton() {
         <Button
           aria-label="反馈应用运行问题"
           className="text-2xs text-ink-muted hover:bg-subtle hover:text-ink relative h-auto gap-1 rounded px-1.5 py-0.5"
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setOpen(true);
+          }}
           variant="ghost"
         >
           <MessageSquareWarning data-icon="inline-start" size={12} />
         </Button>
       </Hint>
-      <FeedbackDialog controller={controller} onClose={() => setOpen(false)} open={open} />
+      <FeedbackDialog
+        controller={controller}
+        onClose={() => {
+          setOpen(false);
+        }}
+        open={open}
+      />
     </>
   );
 }
