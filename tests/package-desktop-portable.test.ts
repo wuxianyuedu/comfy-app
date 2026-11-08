@@ -93,11 +93,11 @@ describe("计划与缺件（三态分得开）", () => {
     expect(missing.join(" ")).toMatch(/server\.js/);
   });
 
-  it("binaries/ 里两个 sidecar ⇒ 退 2「没有结论」，不随手挑一个", () => {
+  it("binaries/ 里两个 sidecar ⇒ 退 2「没有结论」，不随手挑一个", async () => {
     const { root } = fixture("win32");
     fs.writeFileSync(path.join(root, "src-tauri/binaries", "node-aarch64-pc-windows-msvc.exe"), "");
     const lines: string[] = [];
-    const rc = main({
+    const rc = await main({
       cwd: root,
       platform: "win32",
       resolveShellExe: (r) => path.join(r, "src-tauri/target/release/app.exe"),
@@ -111,12 +111,12 @@ describe("计划与缺件（三态分得开）", () => {
 });
 
 describe("真组装：解回来是打包器同布局", () => {
-  it("Windows：app.exe + node.exe + static/**，三项内容与源逐字一致", () => {
+  it("Windows：app.exe + node.exe + static/**，三项内容与源逐字一致", async () => {
     const { root, exe, sidecar } = fixture("win32");
     const outFile = path.join(root, "portable.zip");
     const stageDir = path.join(root, "stage");
     const lines: string[] = [];
-    const rc = main({
+    const rc = await main({
       cwd: root,
       platform: "win32",
       resolveShellExe: (r) => path.join(r, "src-tauri/target/release/app.exe"),
@@ -155,7 +155,7 @@ describe("真组装：解回来是打包器同布局", () => {
     );
   });
 
-  it("--dry-run 不落盘；输出已存在 ⇒ 退 1 不覆盖", () => {
+  it("--dry-run 不落盘；输出已存在 ⇒ 退 1 不覆盖", async () => {
     const { root } = fixture("linux");
     const outFile = path.join(root, "portable.zip");
     const lines: string[] = [];
@@ -164,10 +164,10 @@ describe("真组装：解回来是打包器同布局", () => {
       log: (line: string) => lines.push(line),
       argv: ["--out", outFile, "--stage", path.join(root, "stage"), "--dry-run"],
     };
-    expect(main(io)).toBe(0);
+    expect(await main(io)).toBe(0);
     expect(fs.existsSync(outFile)).toBe(false);
     fs.writeFileSync(outFile, "old");
-    expect(main({ ...io, argv: ["--out", outFile] })).toBe(1);
+    expect(await main({ ...io, argv: ["--out", outFile] })).toBe(1);
     expect(fs.readFileSync(outFile, "utf8")).toBe("old");
   });
 });
