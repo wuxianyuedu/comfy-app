@@ -18,7 +18,7 @@
  * 最大命中合并，复跑补上的覆盖不会丢，首跑数据也不会被复跑子集覆盖。
  *
  * thresholds 不用摘：`vitest.config.ts` 的默认档已经把 thresholds 摘空
- * （`COMFY_COVERAGE_ENFORCE!==1`，ISSUE #2669），受影响链不会撞上 149 条门槛。
+ * （`COMFY_COVERAGE_ENFORCE!==1`，ISSUE #2669），受影响链不会撞上 150 条门槛。
  * `--coverage.all` 保持默认（未加载的 src 文件也进报告 = 0%）——「没被任何用例
  * 加载」恰恰是 patch coverage 要抓的形状之一。
  *

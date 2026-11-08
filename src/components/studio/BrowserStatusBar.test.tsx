@@ -73,6 +73,14 @@ vi.mock("~/components/message-center/hooks/use-app-service-message-log", () => (
   },
 }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/workspace" }));
+// 反馈按钮自带 controller（ToastProvider / TRPCProvider 上下文），有独立用例；
+// 这份用例只断言状态栏第 1~3 区的指标与可访问名，把它换成透传壳，避免每条
+// 用例都被迫补一整套应用接线（与上面 LogProvider / 消息中心换桩同一口径）。
+vi.mock("~/components/feedback/FeedbackButton", () => ({
+  FeedbackButton: () => {
+    /* 反馈按钮不在本用例的断言面里 */
+  },
+}));
 
 function noop() {
   /* 测试桩：仅为满足 LogProvider 上下文的最小形状 */

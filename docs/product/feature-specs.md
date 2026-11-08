@@ -807,6 +807,31 @@
 - 落点：`src/components/update-check/`、`src/lib/shell/app-update-client.ts`、
   `docs/guides/PRODUCTION-GAPS.md`（P0-2）
 
+#### FR-MC-05 应用内运行反馈
+
+- 状态：已上线
+- 需求：底部状态栏有「反馈」按钮，点开一个界面填写问题描述、附加截图；
+  一键把描述 / 截图 / 运行日志诊断包收成一份本机反馈包，并生成预填好的
+  Issue 标题与正文（复制即粘、打开仓库新建 Issue 页即提）。
+- 行为与验收：① 入口在 `src/components/studio/BrowserStatusBar.tsx` 第 4 区
+  （与消息中心 / 日志同栏，全局常驻）；② 落盘由
+  `POST /api/feedback/export` 负责，文件名服务端按时刻自造、绝不采用客户端
+  文件名，图片走 PNG / JPG / WebP / GIF 白名单（svg 拒收），落点在
+  `log/exports/feedback-<时刻>/`（`issue.md` + `images/` + 可选 `diagnostics/`），
+  回绝对路径与相对路径（回归：`src/app/api/feedback/export/route.test.ts`）；
+  ③ 预填正文由 `~/lib/feedback/feedback-contract` 一处生成（浏览器复制与服务端
+  落盘读同一份），含问题描述 / 环境 / 附件说明三段
+  （回归：`src/lib/feedback/feedback-contract.test.ts`）；④ 桌包**不内置** CNB
+  凭证（硬规则 17）：运行时探测环境里可执行的 `cnb` cli（身份取进程
+  `CNB_TOKEN` 或本机 `cnb login` 登录态），可用则「提交到仓库」一键建单并把
+  `images/` / `diagnostics/` 上传到该 Issue 的附件评论（`POST /api/feedback/publish`，
+  只收服务端自造的包名、拒路径遍历；回归：`src/app/api/feedback/publish/route.test.ts`、
+  `src/server/feedback/cnb-cli.test.ts`）；不可用或失败一律保留「复制正文 +
+  `setting.openExternal` 打开新建 Issue 页」回退，每格都有可见出口（硬规则 4）。
+- 落点：`src/components/feedback/`（按钮 / 弹窗 / controller hook）、
+  `src/lib/feedback/`（契约 + 网络层）、`src/app/api/feedback/export/route.ts`、
+  `src/app/api/feedback/publish/route.ts`、`src/server/feedback/cnb-cli.ts`
+
 ---
 
 ## 15. 系列与剧集结构（FR-SR）
