@@ -2526,7 +2526,7 @@ describe("等托管机（ci-mirror-hosted-await，ISSUE #3346）", () => {
       fetchCode?: number;
       /** 浅取失败时的回话原文（读数用；判据只看 `fetchCode`）。 */
       fetchStderr?: string;
-      lsResults?: Array<{ code: number; stdout?: string; stderr?: string }>;
+      lsResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
       /** `FETCH_HEAD^{tree}` 假回话（缺省 = 与本格同树 ⇒ 树等价命中）。 */
       remoteTree?: string;
       tick?: number;
@@ -2684,7 +2684,7 @@ ${data}`);
       `fatal: unable to access 'https://x-access-token:${TOKEN}@github.com/root/comfy-app.git/': Failed to connect to github.com port 443 after 21128 ms`,
       "fatal: remote error: not our ref 26a3c3ed",
       `Authorization: Basic ${"A".repeat(40)}`,
-      "  C:\\work\\repo\\.git\\objects\\pack (bad)",
+      String.raw`  C:\work\repo\.git\objects\pack (bad)`,
       "  /home/runner/work/comfy-app/.git (bad)",
       ...Array.from({ length: 20 }, (_, i) => `trace line ${String(i)}`),
     ];
@@ -2697,7 +2697,7 @@ ${data}`);
     expect(joined, "令牌原值不许进日志").not.toContain(TOKEN);
     expect(joined, "URL 里的 userinfo 整段换占位").not.toContain("x-access-token");
     expect(joined, "Basic 那一截也要换").not.toContain("AAAAAAAA");
-    expect(joined, "本机绝对路径不许留（盘符）").not.toContain("C:\\work");
+    expect(joined, "本机绝对路径不许留（盘符）").not.toContain(String.raw`C:\work`);
     expect(joined, "本机绝对路径不许留（POSIX）").not.toContain("/home/runner");
     expect(joined, "头尾之外明示省略").toContain("中间省略");
     expect(joined, "三类之一要看得见：服务端拒绝").toContain("not our ref");

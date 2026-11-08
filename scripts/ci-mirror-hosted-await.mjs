@@ -96,14 +96,14 @@ export function excerptFailureText(text, secret = "", opts = {}) {
   } = opts;
   let out = sanitize(String(text), secret);
   /* URL 的 userinfo：`https://x-access-token:***@github.com/...` ⇒ `https://***@github.com/...`。 */
-  out = out.replace(/(?<scheme>\bhttps?:\/\/)[^\s/@]+@/gu, "$<scheme>***@");
+  out = out.replaceAll(/(?<scheme>\bhttps?:\/\/)[^\s/@]+@/gu, "$<scheme>***@");
   /* 凭据形状整段换掉（`Authorization: Basic …` / 残留的 `x-access-token:…`）。 */
-  out = out.replace(/(?<head>\bAuthorization:\s*Basic\s+)\S+/giu, "$<head>***");
-  out = out.replace(/(?<head>\bx-access-token:)[^\s@]+/giu, "$<head>***");
+  out = out.replaceAll(/(?<head>\bAuthorization:\s*Basic\s+)\S+/giu, "$<head>***");
+  out = out.replaceAll(/(?<head>\bx-access-token:)[^\s@]+/giu, "$<head>***");
   /* 本机绝对路径：Windows 盘符 / UNC / POSIX 的家目录与临时目录根。 */
-  out = out.replace(/\b[A-Za-z]:[\\/][^\s"'`]*/gu, "<path>");
-  out = out.replace(/\\\\[^\s"'`]+/gu, "<path>");
-  out = out.replace(/(?:\/home\/|\/Users\/|\/root\/|\/tmp\/|\/var\/)[^\s"'`]*/gu, "<path>");
+  out = out.replaceAll(/\b[A-Za-z]:[\\/][^\s"'`]*/gu, "<path>");
+  out = out.replaceAll(/\\\\[^\s"'`]+/gu, "<path>");
+  out = out.replaceAll(/(?:\/home\/|\/Users\/|\/root\/|\/tmp\/|\/var\/)[^\s"'`]*/gu, "<path>");
   const lines = out
     .split(/\r?\n/u)
     .map((line) => line.trimEnd())
