@@ -67,6 +67,7 @@
 | `build/build-standalone.ps1` | build/ | 壳（standalone 用） | 完整生产构建独立壳：`pnpm tauri build --no-bundle`，产出不连 dev server 的可分发壳 |
 | `build/build-all.ps1` | build/ | 一键编排 | `pnpm tauri build`（app.exe + nsis/msi 安装包）→ 发布到常驻目录留 2 份（规范 §7.7） |
 | `build/rebuild-static.ps1` | build/ | 资源 | 清理并重建 `src-tauri/static`（standalone / 嵌入资源来源） |
+| `build/package-portable.ps1` | build/ | 免安装版 | 组装解压即用的 portable zip（逻辑 `scripts/package-desktop-portable.mjs`，跨平台 `pnpm package:portable`，规范 §7.7 / ISSUE #3345） |
 | `docs/generate-docs.ps1` | docs/ | 文档 | 一键生成原文文档：`pnpm doc:check` 校验一致性 + `pnpm doc:render` 生成 `docs/generated/`（跨平台等价：`pnpm doc:gen`；逻辑在 `scripts/generate-docs.ps1` / `scripts/generate-docs.mjs`） |
 | `docs/generate-api-docs.ps1` | docs/ | 文档 | 一键重生成 API 文档 `docs/api/**`（跨平台等价：`pnpm run docs`；逻辑在 `scripts/generate-api-docs.mjs`，跑 + 验 + 重试在 `scripts/typedoc-run.mjs`） |
 | `shadcn-registry/start-shadcn-registry.ps1` | shadcn-registry/ | 团队 shadcn Registry | 启动本地 shadcn Registry HTTP 服务（`D:/dev/Comfy-APP-T3/registry`，供 `shadcn add @comfy-app-t3/*`） |
@@ -88,6 +89,7 @@
 | `build/build-standalone.ps1` | `scripts/build-standalone.ps1` |
 | `build/build-tauri-release.ps1` | `scripts/build-tauri-release.ps1` |
 | `build/rebuild-static.ps1` | `scripts/rebuild-static.ps1` |
+| `build/package-portable.ps1` | `scripts/package-portable.ps1`（薄转交 → `pnpm package:portable`） |
 | `shadcn-registry/start-shadcn-registry.ps1` | `scripts/start-shadcn-registry.ps1` |
 | `database-studio/start-database-studio.ps1` | `database-studio/start-database-studio.logic.ps1`（本类无 `scripts/` 分层，后缀区分） |
 | `start/start-web.ps1` | `scripts/dev-launcher.ps1` |

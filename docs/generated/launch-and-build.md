@@ -3157,6 +3157,52 @@ node scripts/publish-desktop-bundle.mjs           # 真发布；常驻根会打�
 node scripts/ci-nsis-tool-probe.mjs               # 只量 NSIS 工具现场（恒退 0，只读）
 ```
 
+#### 7.7.2 安装版与免安装版分开下载（ISSUE #3345）
+
+**这一节答的是「下载页上怎么分得开」**。§7.7 讲的是安装包怎么打、发到哪儿；而
+「需要安装」与「解压即用」是两种分发形态，此前 GA 桌包档把 `bundle/` 整个传进
+**一个** artifact（`comfyapp-desktop-bundle`），滚动 `nightly` Release 里也只摆着
+`setup.exe` / `.msi` —— 想要免安装版的人得自己在目录里翻，或者根本没有这一份。
+
+**免安装版不是第二种构建**，而是 `pnpm tauri build` 打出的**同一份载荷**换一种
+分发形态。组装者是 `scripts/package-desktop-portable.mjs`（`pnpm package:portable`，
+Windows 双击入口 `tools/build/package-portable.ps1`）：它只读三件现成产物，按 §7.6
+实测的**打包器同布局**收进一个目录再打成单个 zip ——
+
+```
+ComfyAPP-portable.zip
+├─ app.exe     ← src-tauri/target/release/app[.exe]（defaultShellExe 判名字）
+├─ node[.exe]            ← src-tauri/binaries/node-<triple>[.exe]，落包时剥三元组后缀
+└─ static/**             ← src-tauri/static（server.js + 运行入口 + 裁剪 node_modules）
+```
+
+解压到任意目录、双击 exe 即用：目录里没有 `package.json` 与
+`scripts/dev-launcher.mjs`，`ensure_launch_mode` 判 standalone（§1.5），壳经
+`node.exe` 起内嵌 server。这正是 §7.6 那条「不装安装包的复演法」用的布局，不是新发明。
+
+**为什么不再算一遍目标三元组**：`build-desktop.mjs` 里的 `targetTriple()` 是私有的，
+而那份模块 import 即执行整份构建（没有 main guard），引不进来；在这里重抄一份
+平台映射表就是 §12.12 的第二份实现。组装脚本改读 `binaries/` 里**本轮真实产出**
+的那个文件（0 个 = 缺件、多个 = 退 2「没有结论」，不许随手挑第一个），与打包器
+读的是同一份事实。
+
+**GA 那一侧的形状**（`.github/workflows/package-desktop.yml`）：
+
+| 形态 | artifact（按 run 取，14 天） | 滚动 `nightly` Release 上的资产 |
+| --- | --- | --- |
+| 安装版 | `comfyapp-desktop-installer`（只收 `nsis/*.exe` + `msi/*.msi`） | `ComfyAPP_<版本>_x64-setup.exe` / `…_en-US.msi` |
+| 免安装版 | `comfyapp-desktop-portable`（只收那一份 zip） | `ComfyAPP-portable.zip`（名字带 `portable`，一眼可分） |
+
+两条约束都由 workflow 自己守住：① 免安装 zip **刻意落在 `bundle/` 之外**，否则会被
+安装版 artifact 一起收走，两类成品又混回一处；② 两类成品都数过才动 Release，
+缺任一类即退 1 —— 少 sidecar / `server.js` 的免安装包在用户机器上是「双击没反应」，
+构建侧静默放行等于发一个起不来的包。
+
+**CNB 那一档不改**：`publish-desktop-bundle.mjs` 仍只收安装包（它的
+`INSTALLER_EXTENSIONS` 不认 `.zip`），常驻目录留 2 份的口径不变 —— 这次诉求是
+「GA 侧下载页分开」，本地发布面没有被要求改。本地想自查免安装版，先跑
+`pnpm tauri build`，再 `pnpm package:portable`（`--dry-run` 只打印计划）。
+
 #### 7.7.1 无效 workflow 会伪造一条它没声明事件的空 run —— 别拿 `event` 反推触发面（ISSUE #3299）
 
 **这一节答的是「镜像仓 Actions 里那条 `event=push` 的 run 是哪来的」**。`.github/workflows/package-desktop.yml`
@@ -3647,6 +3693,7 @@ sidecar」两种不同形态的失败。
 | pnpm 可执行形态的唯一出口（规范 §2.1.1 / §2.1.7）                             | `scripts/prepare-local-run.ps1`（第 2/3 步经它）                                                    | `scripts/launcher-core/shell.mjs`（`pnpmInvocation` / `runPnpmSync`，契约测试 `tests/dev-launcher-toolchain-gate.test.ts`）                                                    |
 | 依赖表结构自愈（Drizzle push 失败后补列 / 补索引）                            | `scripts/dev-launcher.ps1`（schema 同步阶段）                                                       | `scripts/heal-db.cjs`（被启动链路的 schema 同步阶段调用）                                                                                                                      |
 | 「现在能不能安全地 `pnpm install`」—— 原生模块锁定前置检查（AGENTS 硬规则 9） | `scripts/sync-lint.ps1`（装之前的前置检查那一步）                                                   | `scripts/deps-install-guard.mjs`（`pnpm deps:guard`，契约测试 `tests/dev-launcher-dependency-sync.test.ts`；判据本体见 §3.2 的 `runningAppInstances`）                         |
+| 组装免安装版（解压即用的 portable zip，ISSUE #3345） | `tools/build/package-portable.ps1`（薄入口 → `tools/scripts/package-portable.ps1`） | `scripts/package-desktop-portable.mjs`（`pnpm package:portable`；与 `pnpm tauri build` 同一份载荷，规范 §7.7） |
 | 桌包 standalone 运行（不经编排器的内嵌 server 与宿主，ISSUE #1216）           | `src-tauri\target\release\app.exe`（双击，壳自己起入口）/ `tools/start/start-desktop.ps1` | `scripts/standalone-runtime.mjs`（由壳经 Node sidecar 起；它再按 `COMFY_EXECUTOR` 起 `scripts/executor-host.mjs`。刻意**不**挂 `pnpm` 脚本——它不是开发者命令，是一种运行形态） |
 | 接上提交门槛（`core.hooksPath=.githooks`）                                    | `scripts/prepare-local-run.ps1`（由 `pnpm install` 的 postinstall 触发）                            | `scripts/install-git-hooks.mjs`（`node scripts/install-git-hooks.mjs`；postinstall 逐字调用它，契约测试 `tests/postinstall-cross-platform.test.ts`）                           |
 | 组件工作台 Storybook（开发期预览）                                            | `tools/start/storybook.ps1`                                                                         | `scripts/storybook.mjs`（`pnpm storybook` / `pnpm storybook:build`；契约测试 `tests/storybook-config.test.ts`）                                                                |
