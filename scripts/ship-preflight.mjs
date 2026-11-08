@@ -30,13 +30,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
 
-import {
-  CODE,
-  codeTag,
-  decideCreateBranch,
-  planCommands,
-  readFreshnessState,
-} from "./ship-core.mjs";
+import { CODE, codeTag, decideCreateBranch, planCommands } from "./ship-core.mjs";
+import { freshnessDriftAdvice, readFreshnessState } from "./ship-freshness.mjs";
 import {
   decideD0PreRun,
   formatD0PreRunLine,
@@ -361,7 +356,14 @@ export async function runPreflightStage(ctx) {
   if (freshState === "clean") {
     codes.push(CODE.GREEN);
   } else if (freshState === "drift") {
-    log("[ship] 依赖新鲜度红了（硬规则 25）⇒ 先 `git pull` + `pnpm install` 再回来。");
+    /* drift 不是一种病（ISSUE #3201）：② 基线漂移的出口是 `git pull`，
+     * ③ 安装漂移（切换分支 / 换基线的现场）与 `git pull` 无关，出口是
+     * `pnpm deps:guard && pnpm install`。按判据 `--json` 的原值分形态转述
+     * （话术本体在 `freshnessDriftAdvice`，纯函数、可单测）；
+     * 退出码不动 —— 「有事实是红的」依旧。 */
+    for (const line of freshnessDriftAdvice(fresh).lines) {
+      log(line);
+    }
     codes.push(CODE.RED);
     return { action: "finish", codes };
   } else if (freshState === "no-install") {

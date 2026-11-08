@@ -53,7 +53,6 @@ import {
   looksNewlineMangled,
   parseSlug,
   planCommands,
-  readFreshnessState,
   readPullCreateError,
   readPullVerdict,
   resolveUpstream,
@@ -79,6 +78,7 @@ import {
   pullTitleBody,
   referencedNotClaimed,
 } from "../scripts/ship-close.mjs";
+import { freshnessDriftAdvice, readFreshnessState } from "../scripts/ship-freshness.mjs";
 import {
   authorLabel,
   commentHeader,
@@ -5388,6 +5388,93 @@ describe("readFreshnessState：判据原值里三件不同的事必须分开读"
     ).toBe("unknown");
     // 有 JSON 但没有判据自己的 `code`：读出来的不是那份判据的结论。
     expect(readFreshnessState(json({ remoteDrifts: [], installDrift: null }))).toBe("unknown");
+  });
+});
+
+/**
+ * drift 的分形态下一动作（ISSUE #3201）：固定话术「先 git pull + pnpm install」在
+ * 「切换分支 / 换基线」的现场两处不准（git pull 无关、漏 deps:guard 前置与指南出处）。
+ * 判据原值不变，只钉**转述**的内容。
+ */
+describe("freshnessDriftAdvice：drift 按判据原值分形态给下一动作（ISSUE #3201）", () => {
+  const json = (o: unknown): FakeResult => ({
+    /* SAFETY: 类型断言已复核 */
+    status: Number((o as { code?: number }).code ?? 0),
+    stdout: JSON.stringify(o),
+    stderr: "",
+    error: null,
+  });
+  const joined = (r: { lines: Array<string> }): string => r.lines.join("\n");
+
+  it("② 干净 / ③ 漂移（切换分支现场）：出口是 deps:guard && install 与指南，不提 git pull", () => {
+    const r = freshnessDriftAdvice(
+      json({
+        code: 1,
+        remoteChecked: true,
+        remoteDrifts: [],
+        installDrift: { state: "drift", unresolved: [] },
+        envBroken: false,
+      }),
+    );
+    expect(r.shape).toBe("install");
+    const text = joined(r);
+    expect(text).toContain("pnpm install");
+    expect(text).toContain("pnpm deps:guard");
+    expect(text).toContain("docs/guides/sync-after-pull.md");
+    expect(text).not.toContain("git pull");
+  });
+
+  it("② 基线漂移：保留 git pull 话术（且也带 deps:guard 前置）", () => {
+    const r = freshnessDriftAdvice(
+      json({
+        code: 1,
+        remoteChecked: true,
+        remoteDrifts: [{ file: "pnpm-lock.yaml", kind: "content" }],
+        installDrift: null,
+        envBroken: false,
+      }),
+    );
+    expect(r.shape).toBe("remote");
+    const text = joined(r);
+    expect(text).toContain("git pull");
+    expect(text).toContain("pnpm deps:guard");
+  });
+
+  it("②③ 同时：两个动作都给，先 pull 再装", () => {
+    const r = freshnessDriftAdvice(
+      json({
+        code: 1,
+        remoteChecked: true,
+        remoteDrifts: [{ file: "pnpm-lock.yaml", kind: "content" }],
+        installDrift: { state: "drift", unresolved: [] },
+        envBroken: false,
+      }),
+    );
+    expect(r.shape).toBe("both");
+    const text = joined(r);
+    expect(text.indexOf("git pull")).toBeGreaterThan(-1);
+    expect(text.indexOf("git pull")).toBeLessThan(text.indexOf("pnpm install"));
+  });
+
+  it("读数分层不完整：保守给通用出口（两样都点），不编归因", () => {
+    const r = freshnessDriftAdvice({ status: 1, stdout: "not json", stderr: "", error: null });
+    expect(r.shape).toBe("generic");
+    const text = joined(r);
+    expect(text).toContain("pnpm install");
+    expect(text).toContain("pnpm deps:guard");
+  });
+
+  it("no-install 的安装漂移不算 ③：remoteDrifts 为空时它已被 readFreshnessState 归 no-install", () => {
+    const r = freshnessDriftAdvice(
+      json({
+        code: 1,
+        remoteChecked: true,
+        remoteDrifts: [],
+        installDrift: { state: "no-install", unresolved: [] },
+        envBroken: false,
+      }),
+    );
+    expect(r.shape).toBe("generic");
   });
 });
 
