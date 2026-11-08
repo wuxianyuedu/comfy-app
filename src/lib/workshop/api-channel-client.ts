@@ -62,16 +62,13 @@ export async function saveApiChannels(payload: ApiChannelSavePayload): Promise<A
   }
 
   /* 非法 JSON 按空对象处理（后端 500 可能返回非 JSON）—— 读法收在出口里。 */
-  /* SAFETY: 类型断言已复核 */
-  const data = (await readJsonBody(res)) as {
-    channels?: unknown;
-    error?: unknown;
-  };
+  const data: unknown = await readJsonBody(res);
   if (!res.ok) {
     throw new Error(readApiErrorMessage(data) ?? "保存失败");
   }
-  if (!isChannelsView(data.channels)) {
+  const channels = isRecord(data) ? data.channels : undefined;
+  if (!isChannelsView(channels)) {
     throw new Error("保存失败：服务端返回的通道配置格式不正确");
   }
-  return data.channels;
+  return channels;
 }

@@ -7,14 +7,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { patchWorkflow, patchWorkflowSilently } from "./workflow-mutations";
 
-const updateMutate = vi.fn();
+const updateMutate = vi.fn<(...args: Array<unknown>) => Promise<unknown>>();
 
 vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
     workflow: {
       update: {
-        /* SAFETY: 类型断言已复核 */
-        mutate: (...args: Array<unknown>) => updateMutate(...args) as never,
+        mutate: (...args: Array<unknown>) => updateMutate(...args),
       },
     },
   },

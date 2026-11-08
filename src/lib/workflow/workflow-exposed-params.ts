@@ -108,6 +108,11 @@ export const EXPOSED_PARAM_LABEL: Record<ExposedParamClass, string> = {
   "lora-strength": "LoRA 强度",
 };
 
+/** 字符串 id 是不是契约表里的类（键集与 `EXPOSED_PARAM_LABEL` 同源）。 */
+function isExposedParamClass(id: string): id is ExposedParamClass {
+  return Object.hasOwn(EXPOSED_PARAM_LABEL, id);
+}
+
 /** 各口的**界面展示名** —— 整个仓库的**唯一出处**。
  *
  *  同一张契约清单会出现在三处（工坊封装的对外口一览、工作流库「画布节点」的
@@ -314,10 +319,10 @@ export function referenceImageSlotIndex(id: string): number {
  *
  *  **界面不要用它**：请走 `exposedParamDisplayLabel`。 */
 export function exposedParamLabel(id: string): string {
-  /* SAFETY: 类型断言已复核 */
-  const cls = id as ExposedParamClass;
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- id 是外部字符串，未知 id 索引运行期为 undefined（注释明言原样返回）
-  return EXPOSED_PARAM_LABEL[cls] ?? id;
+  if (!isExposedParamClass(id)) {
+    return id;
+  }
+  return EXPOSED_PARAM_LABEL[id];
 }
 
 /** 某个统一参数 id 属于哪一类（`reference-image-2` 这类带序号的口归到同一类，
@@ -327,9 +332,8 @@ export function exposedClassOf(id: string): ExposedParamClass | null {
   if (custom) {
     return EXPOSED_CUSTOM_CLASS[custom];
   }
-  if (id in EXPOSED_PARAM_LABEL) {
-    /* SAFETY: 类型断言已复核 */
-    return id as ExposedParamClass;
+  if (isExposedParamClass(id)) {
+    return id;
   }
   if (/^reference-image-\d+$/.test(id)) {
     return "reference-image";

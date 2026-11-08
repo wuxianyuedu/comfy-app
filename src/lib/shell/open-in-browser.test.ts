@@ -17,9 +17,22 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 type Cb = (...args: Array<unknown>) => void;
 
+/** spawn 的实参形状：生产代码每次都传第三项选项。 */
+type SpawnOptions = { stdio?: string; windowsHide?: boolean };
+type SpawnCall = (cmd: string, args: Array<string>, options: SpawnOptions) => unknown;
+
 const { spawnMock } = vi.hoisted(() => ({
-  spawnMock: vi.fn(),
+  spawnMock: vi.fn<SpawnCall>(),
 }));
+
+/** 取某次 spawn 调用的实参；没调用过时直接让用例失败（与断言失败同义）。 */
+function spawnCallAt(index = 0): [string, Array<string>, SpawnOptions] {
+  const call = spawnMock.mock.calls[index];
+  if (call === undefined) {
+    throw new Error(`spawn 未被调用（index=${index}）`);
+  }
+  return call;
+}
 
 vi.mock("child_process", () => ({ spawn: spawnMock }));
 
@@ -102,8 +115,7 @@ describe("openUrlInBrowser 的协议闸门", () => {
 describe("openUrlInBrowser 的命令形态", () => {
   it("命令与参数分开发给 spawn，URL 是独立的一个 argv 元素（不拼整串）", async () => {
     await openUrlInBrowser("http://127.0.0.1:8188?a=1&b=2");
-    /* SAFETY: 类型断言已复核 */
-    const [cmd, args] = spawnMock.mock.calls[0] as [string, Array<string>];
+    const [cmd, args] = spawnCallAt();
     if (platform === "win32") {
       // `start` 是 cmd 内建命令，必须由 cmd /c 承载；空串是窗口标题（防 & 被吞）
       expect(cmd).toBeTruthy();

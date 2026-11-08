@@ -4,6 +4,7 @@
  */
 
 import { readApiError, readJsonBody } from "~/lib/api-error";
+import { isRecord } from "~/lib/is-record";
 import { withQuery } from "~/lib/query-string";
 
 export type DebugSourcePayload = {
@@ -14,6 +15,22 @@ export type DebugSourcePayload = {
   modifiedAt: string;
   size: number;
 };
+
+/** 响应体形状校验：不是本模块约定的负载就抛错，不把残缺对象漏给视图。 */
+function assertDebugSourcePayload(value: unknown): asserts value is DebugSourcePayload {
+  if (!isRecord(value)) {
+    throw new Error("调试源码响应格式不正确");
+  }
+  if (
+    typeof value.absolutePath !== "string" ||
+    typeof value.content !== "string" ||
+    typeof value.file !== "string" ||
+    typeof value.modifiedAt !== "string" ||
+    typeof value.size !== "number"
+  ) {
+    throw new Error("调试源码响应格式不正确");
+  }
+}
 
 /** 读取某模块的源码文本。文件不存在 / 非白名单时抛带服务端文案的错误。 */
 export async function fetchDebugSource(file: string): Promise<DebugSourcePayload> {
@@ -26,6 +43,6 @@ export async function fetchDebugSource(file: string): Promise<DebugSourcePayload
   if (!res.ok) {
     throw new Error(readApiError(body) ?? `HTTP ${res.status}`);
   }
-  /* SAFETY: 类型断言已复核 */
-  return body as DebugSourcePayload;
+  assertDebugSourcePayload(body);
+  return body;
 }
