@@ -325,20 +325,18 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   { name: "GitHub 镜像同步", tier: "PR" },
   { name: "环境前提", tier: "PR" },
   /* 2026-11-05 薄化：GA `pr-gate.yml` 已承接的格从 PR 清单撤出，档位登记在 retired 段
-   * （每一项的 note 写明「现在谁跑」）。这一档此后只剩平台读数与判决链。 */
+   * （每一项的 note 写明「现在谁跑」）。这一档此后只剩平台读数与判决链；
+   * 2026-11-08 起判决链的承重格换成站内的 `GA 回调结论回读`（ISSUE #3378）。 */
   /* 主列末尾的承重档（已摘 `--readout`，ISSUE #3051 期望第 3 条已落地）：镜像格派发的
    * 同一笔 head_sha，GitHub Actions 跑完没有、结论是什么。有结论且红 ⇒ 拦合；没跑起来 ⇒
    * exit 2 同样拦合；只有读到绿才放行。无跨档对应物，不进 CROSS_LANE_SCRIPT_MIRRORS。 */
-  { name: "GitHub 判决回读", tier: "PR" },
-  /* 判红那一形的**全量日志通道**（2026-11-05 按实测重做）：回读格把失败 job 的脱敏正文压成
-   * gzip+base64 分块，这三格各打一块（每块 ≤ 90000 base64 字节，单 stage 封顶 102400）；
-   * 块数 / 整包 sha256 / 尺寸在 manifest 里，拼回来能逐字核对。这三格**不许红**（读不到就
-   * 各念一行、退 0），所以它们不是「判据」而是读数 —— 但仍然必须登记，否则闸序对不上。 */
-  { name: "日志分块 1/3", tier: "PR" },
-  { name: "日志分块 2/3", tier: "PR" },
-  { name: "日志分块 3/3", tier: "PR" },
-  /* 承重的那一格挪到分块之后：读回读格留下的 decision.json 并退真码（读不到 ⇒ exit 2）。 */
-  { name: "GitHub 判决判定", tier: "PR" },
+  /* ISSUE #3378 转正（§13.5.33 逐笔对账）：出站轮询 GitHub conclusion 的五格
+   * （`GitHub 判决回读` / `日志分块 ×3` / `GitHub 判决判定`）随老轮询主列一起停用，
+   * 档位登记在 retired 段（每一项的 note 写明「现在谁跑」）。这一格是它们的执行者：
+   * 站内读 GA 送回 commit-statuses 的结论，承重退码仍落在 `pull_request` build 上。
+   * 它排在 `环境前提` 之后、`格式化提交分离` / `零消费导出`（两条无 stage 的登记）之前 ——
+   * 与 `.gates` 的实际执行序同处。 */
+  { name: "GA 回调结论回读", tier: "PR" },
   /* 这两条**没有自己的 stage**（登记在 `COMFYAPP_CI_GATES_ELSEWHERE`）：原本由 PR 档的
    * `重档静态判据` 那一格跑，2026-11-05 整格搬到 GA 的同名 job —— 名字仍在 PR 清单里，
    * 因为它们在 PR 上仍然被判，只是换了一台 runner。 */
@@ -445,7 +443,7 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
     note: "2026-10-19 撤成每日全量E2E：整档不带 --grep，@critical 是其子集",
   },
   // ── 2026-11-05 薄化：GA `.github/workflows/pr-gate.yml` 承接（同一个 PR 事件、
-  //    同一个镜像仓；PR 档只留平台读数 + 判决链，结论由 `GitHub 判决判定` 承重读回）。
+  //    同一个镜像仓；PR 档只留平台读数 + 判决链，结论 2026-11-08 起由 `GA 回调结论回读` 承重读回）。
   //    逐项归属与「为什么不在这边跑」写在 `.cnb.yml` 的 `.gates` 顶部那段。──
   {
     name: "Install dependencies",
@@ -485,6 +483,25 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
     note: "GA `oxfmt 格式` step（`check-format.cjs --changed`，每次 PR 都跑、无 ifModify）",
   },
   { name: "重档静态判据", tier: "retired", note: "GA `重档静态判据` job（`ci-heavy-gates.mjs`）" },
+  // ── 2026-11-08 转正（ISSUE #3378）：老轮询主列五格停用，执行者换成站内的
+  //    `GA 回调结论回读`（§13.5.33）。原文按注释形态留在 `.gates`，恢复动作照旧。
+  {
+    name: "GitHub 判决回读",
+    tier: "retired",
+    note: "ISSUE #3378 转正：出站轮询 api.github.com 的 conclusion 换成站内读 `GA 回调结论回读`（`ci-ga-verdict-readout.mjs` 读 commit-statuses）；出站轮询链仍留在盘上供 `pnpm ship --gh-logs` 按需复验与快速回退",
+  },
+  {
+    name: "日志分块 1/3",
+    tier: "retired",
+    note: "同上：gzip+base64 全量日志分块通道随出站回读一起停用；GA 判红日志改 `pnpm ship --gh-logs <run-id|pr号>` 按需取，不再占 PR 档三格",
+  },
+  { name: "日志分块 2/3", tier: "retired", note: "同 `日志分块 1/3`，随老轮询主列停用" },
+  { name: "日志分块 3/3", tier: "retired", note: "同 `日志分块 1/3`，随老轮询主列停用" },
+  {
+    name: "GitHub 判决判定",
+    tier: "retired",
+    note: "同上：`ci-github-verdict-decide.mjs` 读 decision.json 折退码那格停用，承重退码改由 `GA 回调结论回读` 直接给出（fail-closed 三态：绿 0 / 红 1 / 没判过 2）",
+  },
 ];
 
 /**
@@ -2005,9 +2022,10 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const required = [
       "ESLint 零警告",
       "单元测试",
-      /* `GitHub 判决回读` 墙钟上限就是它的轮询预算（45m）—— 零构建但**不**是秒级，
-       * 节点 egress 抖动的现场它会顶满预算跑，预算缺席时卡死要等满 2h 才有人知道。 */
-      "GitHub 判决回读",
+      /* 2026-11-08 转正（ISSUE #3378）：`GitHub 判决回读` 随老轮询主列停用，换成
+       * `GA 回调结论回读` —— 它同样要活到 GA 出结论（站内短轮询 45m 预算），
+       * 预算缺席时卡死要等满 2h 才有人知道，所以这一列不能空。 */
+      "GA 回调结论回读",
       // 2026-11-02 `受影响用例` / `固定结构用例` 从 PR 撤到每日全量单测（见 GATE_TIER_LEDGER
       // 的 retired 段）：这两个 PR stage 不再存在，预算要求随之解除。
     ].filter((name) => !disabled.includes(name));

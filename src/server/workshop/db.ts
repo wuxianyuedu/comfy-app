@@ -9,7 +9,6 @@ import path from "node:path";
 
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 
-import { tracingIgnoreArgs } from "~/lib/shell/tracing-ignore";
 import { openNodeSqlite } from "~/lib/sqlite-driver";
 import { gateProxyWithPragmas } from "~/lib/sqlite-pragmas";
 import * as schema from "~/server/db/schema";
@@ -19,7 +18,7 @@ const DEFAULT_DB_FILE = "./db.sqlite";
 
 function resolveDbPath(url: string): string {
   const raw = url.startsWith("file:") ? url.slice("file:".length) : url;
-  return path.resolve(...tracingIgnoreArgs(), process.cwd(), raw || DEFAULT_DB_FILE);
+  return path.resolve(/*turbopackIgnore: true*/ process.cwd(), raw || DEFAULT_DB_FILE);
 }
 
 const dbUrl = process.env.DATABASE_URL ?? "file:./db.sqlite";

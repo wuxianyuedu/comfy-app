@@ -21,6 +21,11 @@
  * **内容等价**：ref 上出现 sha（与本格 HEAD 不同）就浅取那一笔，比 `^{tree}` 与本格
  * HEAD 的树 —— 树一致就是托管机交付了等价内容（GitHub 侧判的是同一棵树）。
  *
+ * 反向的一支同样要认：ref 上的 sha **正好等于本格 HEAD** 时，同一个提交对象 ⇒ 树必然
+ * 一致，直接判「已落」、**不浅取**（弱网下浅取正是最先断的一跳，`exit 128`）。
+ * 失败时把原文脱敏后留头尾若干行 —— 退出码之外的 `connect/timeout`、
+ * `not our ref` / `couldn't find remote ref`、`RPC failed` / `early EOF` 才分得开。
+ *
  * ## 边界
  *
  * 1. **本模块不判红**：两种出路（跳过 / 兜底）都是合法出路，退出码由后面的推送流程决定
@@ -57,6 +62,67 @@ import {
 
 /** 派发回执的落点根：与 `runMirror` 的 `ROOT` 同一出处（scripts/ 的上一级）。 */
 const ROOT = path.resolve(import.meta.dirname, "..");
+/** 失败回话读数：头 / 尾各留几行（中间的以一行「省略」明示）。 */
+const EXCERPT_HEAD_LINES = 6;
+const EXCERPT_TAIL_LINES = 6;
+/** 失败回话读数：单行封顶多少字符（单 stage 日志整体有 102400 字节上限）。 */
+const EXCERPT_MAX_LINE_CHARS = 200;
+
+/**
+ * 把 `git` 的失败回话做成**读数形态**：脱敏 + 头尾截断（只进日志，不进判据）。
+ *
+ * 为什么要有它（ISSUE #3346 的现场）：浅取那一跳原先只念退出码 ——
+ * `浅取没通（exit 128）`，`fetched.stderr` 整段丢掉。可 `128` 至少有三种来路，
+ * 下一动作完全不同，日志里却逐字同形：
+ *
+ * · `Failed to connect` / `Could not connect to server` / `Operation timed out` ⇒ egress；
+ * · `not our ref` / `couldn't find remote ref` ⇒ 服务端拒绝（对象不存在 / 未 advertise）；
+ * · `RPC failed` / `early EOF` / `Connection reset` ⇒ 传输中断（传到一半断了）。
+ *
+ * 三件脱敏：令牌原值、URL 里的 userinfo（令牌换成 `***` 后仍会剩下
+ * `x-access-token:***@` 那一截）、本机绝对路径（盘符 / UNC / POSIX 家目录与临时目录根）。
+ * 任何凭据形状整段换占位 —— 构建日志是公开可见的，宁可少留。
+ *
+ * @param {string} text `stdout + stderr`（未脱敏）
+ * @param {string} [secret] 令牌原值（与主流程同一枚）
+ * @param {{headLines?: number, tailLines?: number, maxLineChars?: number}} [opts] 截断面（测试注入）
+ * @returns {string[]} 逐行读数（空行已剔除；中间省略处有一行明示）
+ */
+export function excerptFailureText(text, secret = "", opts = {}) {
+  const {
+    headLines = EXCERPT_HEAD_LINES,
+    maxLineChars = EXCERPT_MAX_LINE_CHARS,
+    tailLines = EXCERPT_TAIL_LINES,
+  } = opts;
+  let out = sanitize(String(text), secret);
+  /* URL 的 userinfo：`https://x-access-token:***@github.com/...` ⇒ `https://***@github.com/...`。 */
+  out = out.replaceAll(/(?<scheme>\bhttps?:\/\/)[^\s/@]+@/gu, "$<scheme>***@");
+  /* 凭据形状整段换掉（`Authorization: Basic …` / 残留的 `x-access-token:…`）。 */
+  out = out.replaceAll(/(?<head>\bAuthorization:\s*Basic\s+)\S+/giu, "$<head>***");
+  out = out.replaceAll(/(?<head>\bx-access-token:)[^\s@]+/giu, "$<head>***");
+  /* 本机绝对路径：Windows 盘符 / UNC / POSIX 的家目录与临时目录根。 */
+  out = out.replaceAll(/\b[A-Za-z]:[\\/][^\s"'`]*/gu, "<path>");
+  out = out.replaceAll(/\\\\[^\s"'`]+/gu, "<path>");
+  out = out.replaceAll(/(?:\/home\/|\/Users\/|\/root\/|\/tmp\/|\/var\/)[^\s"'`]*/gu, "<path>");
+  const lines = out
+    .split(/\r?\n/u)
+    .map((line) => line.trimEnd())
+    .filter((line) => line !== "");
+  const clipped = lines.map((line) =>
+    line.length <= maxLineChars
+      ? line
+      : `${line.slice(0, maxLineChars)}…（本行截断，原 ${String(line.length)} 字符）`,
+  );
+  if (clipped.length <= headLines + tailLines) {
+    return clipped;
+  }
+  const omitted = clipped.length - headLines - tailLines;
+  return [
+    ...clipped.slice(0, headLines),
+    `…（中间省略 ${String(omitted)} 行）…`,
+    ...clipped.slice(-tailLines),
+  ];
+}
 
 /**
  * 在托管机实验格的预算内等它的推送结果；见到等价内容（同树）就让调用方跳过推送。
@@ -109,6 +175,29 @@ export async function maybeSkipViaHosted(io, extras = {}) {
   let reads = 0;
   /** @type {string} */
   let lastNote;
+  /**
+   * 一次失败的**原文读数**（脱敏 + 头尾截断）：判据 / 重试 / 预算一概不动，只让日志能自证
+   * 「128 到底是连不上、被服务端拒，还是传到一半断了」。远程读本来就读不出东西才走这里，
+   * 再多一次 `log` 不产生任何网络动作。
+   */
+  const logFailure = (
+    /** @type {string} */ label,
+    /** @type {{code: number, stderr: string, stdout: string}} */ result,
+  ) => {
+    const excerpt = excerptFailureText(`${result.stdout}\n${result.stderr}`, ctx.token);
+    if (excerpt.length === 0) {
+      return;
+    }
+    log(
+      `[mirror]    ${label}没通（exit ${String(result.code)}）的原文（已脱敏；` +
+        `头 ${String(EXCERPT_HEAD_LINES)} / 尾 ${String(EXCERPT_TAIL_LINES)} 行、` +
+        `每行 ${String(EXCERPT_MAX_LINE_CHARS)} 字符封顶）—— 按字面分三类：` +
+        "connect/timeout、not our ref / couldn't find remote ref、RPC failed / early EOF",
+    );
+    for (const line of excerpt) {
+      log(`[mirror]      ${line}`);
+    }
+  };
   /** 跳过时落回执 + 返回。 */
   const skipWith = (/** @type {string} */ sha, /** @type {string} */ why) => {
     log(
@@ -142,8 +231,9 @@ export async function maybeSkipViaHosted(io, extras = {}) {
       if (refSha === undefined || refSha === "") {
         lastNote = "ref 还没出现（本跑还没被托管机推过）";
       } else if (refSha === ctx.headSha) {
-        /* 直接同 sha（少见：平台哪天统一了合成提交）——不必比树。 */
-        return skipWith(refSha, `第 ${String(reads)} 读同 sha`);
+        /* sha 相等 ⇒ 同一个提交对象，树必然一致：**不必浅取**。这一步原本也要走浅取，
+         * 而弱网下浅取正是最先断的一跳（`exit 128`）—— 多一次纯属自找的往返。 */
+        return skipWith(refSha, `ref 已等于目标 sha（${refSha.slice(0, 8)}），跳过浅取`);
       } else if (localTree === "") {
         lastNote = `ref 在 ${refSha.slice(0, 8)}，本格 HEAD 的树取不到 ⇒ 只能等同 sha（降级）`;
       } else {
@@ -157,6 +247,13 @@ export async function maybeSkipViaHosted(io, extras = {}) {
           return skipWith(refSha, `第 ${String(reads)} 读树一致`);
         }
         if (remoteTree === "") {
+          /* 断点落成了两形（浅取没通 / 浅取到了但树读不出来），原文各留在自己那一跳 ——
+           * 只念退出码的话，「128 是哪一类」在日志里无从分辨（ISSUE #3346 现场）。 */
+          if (fetched.code !== 0) {
+            logFailure("浅取", fetched);
+          } else if (remoteTreeRead !== null) {
+            logFailure("浅取后的树回读", remoteTreeRead);
+          }
           lastNote = `ref 在 ${refSha.slice(0, 8)}，浅取没通（exit ${String(
             fetched.code,
           )}）⇒ 下轮再验`;
@@ -170,6 +267,7 @@ export async function maybeSkipViaHosted(io, extras = {}) {
         }
       }
     } else {
+      logFailure("ls-remote", read);
       lastNote = `这一读没通（exit ${String(read.code)}：egress 抖动 / 远端慢，预算内继续等）`;
     }
     const elapsed = now() - start;

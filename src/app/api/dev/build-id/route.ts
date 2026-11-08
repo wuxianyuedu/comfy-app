@@ -3,7 +3,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { getServerBootId } from "~/lib/shell/dev-server-id";
 import { readDepsFreshness } from "~/lib/shell/deps-freshness.server";
-import { tracingIgnoreArgs } from "~/lib/shell/tracing-ignore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,7 +22,7 @@ function moduleFingerprints(): string {
   const root = process.cwd();
   return WATCHED_MODULES.map((rel) => {
     try {
-      const st = fs.statSync(path.join(...tracingIgnoreArgs(), root, rel));
+      const st = fs.statSync(path.join(/*turbopackIgnore: true*/ root, rel));
       return `${rel}@${Math.trunc(st.mtimeMs)}:${st.size}`;
     } catch {
       /* 读不到（打包形态不含源码）就记 missing，不当作变化。 */

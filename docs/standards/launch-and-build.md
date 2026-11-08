@@ -2238,20 +2238,22 @@ Warning: Dynamic filesystem access causes tracing of the whole project
 （`path.join` / `path.resolve` / 拼接字符串），不是消费它的 `fs.statSync`。
 知道这点才能判断「注释该放哪、为什么放了没用」。
 
-**第二件事：`turbopackIgnore` 在这里帮不上忙（实测口径）。** 它的语义是
-"skip bundling a dynamic import"（只作用于 `import()` / `require()` /
-`require.resolve()` / `new Worker()`）。对 `fs.*` 的动态路径访问，以下四种写法
-**全部无效**（逐条实测，Next 16.3.2 + Turbopack）：
+**第二件事：`turbopackIgnore` 能消这条警，但注解必须落在被高亮的那条表达式上（Next
+16.4.3 实测）。** 官方语义里它写的是 "skip bundling a dynamic import"（`import()` /
+`require()` / `new Worker()`），但 Turbopack 对动态路径访问的告警文本本身就把
+`fs.existsSync(/*turbopackIgnore: true*/ …)` 列为 opt-out 方式。本次在 Next 16.4.3
++ Turbopack 上逐条实测：
 
-| 写法                                                           | 结果                                |
-| -------------------------------------------------------------- | ----------------------------------- |
-| `fs.statSync(path.join(/*turbopackIgnore: true*/ root, rel))`  | 告警照旧，高亮整个 `path.join(...)` |
-| `const abs = /* turbopackIgnore: true */ path.join(root, rel)` | 告警挪到 `path.join` 那一行，照旧   |
-| `const abs = path.join(root, rel); // turbopackIgnore`         | 同上，照旧                          |
-| 注解做成模块级常量再 `path.join(...CONST, root, rel)`          | 同上，照旧                          |
+| 写法                                                          | 结果                                       |
+| ------------------------------------------------------------- | ------------------------------------------ |
+| `fs.existsSync(/*turbopackIgnore: true*/ target)`             | 该调用点告警消失（`52 → 48`，两处试验）    |
+| `path.join(/*turbopackIgnore: true*/ root, rel)`              | 该调用点告警消失                           |
+| `fs.statSync(path.join(/*turbopackIgnore: true*/ dir, name))` | 注解落在内层 `path.join` 上才生效           |
+| 注解做成模块级常量再 `path.join(...CONST, root, rel)`         | **无效**（注解不在调用点源码里）           |
 
-> 结论：看到别人（或历史提交）说「加个 `/*turbopackIgnore: true*/` 就好了」，
-> 先按上表验一遍——**仓库里现有的这些注解都是无效的**，不能作为「已修」的证据。
+> 结论：注解只在**调用点**被扫描；跨模块展开（旧 `tracingIgnoreArgs()` 的做法）永远无效，
+> 因此那个 helper 已删除，各调用点改为内联注解。16.3.2 上「注解全无效」的旧结论作废。
+> 判断一条注解是否算数，只看「同一份 `next build` 里这条告警是否消失」，不看代码长得像不像。
 
 **第三件事：`outputFileTracingExcludes` 是「意图声明」，不是「减法」——实测它对全项目
 追踪带进来的文件一条都不减。** 它工作在产物路径层面（next.config.js 顶层键，Next 16 起
@@ -2322,14 +2324,11 @@ Turbopack 的判据不是「有没有动态分量」，而是**路径表达式�
 | `path.join(cwd, rel, "package.json")`（动态中间段 + 字面量叶子） | 不报   |
 | `path.join(cwd, "package.json")`（全字面量）                     | 不报   |
 
-> 也就是说：**这条告警只可能靠「让路径落到一个可命名的子目录」来消**，而本仓库
-> 那 5 处（`api/dev/build-id` / `api/update-check` / `lib/comfyui/status` /
-> `lib/db-schema-ready` / `server/workshop/db`）的动态段都来自**运行期事实**
-> ——`process.cwd()`、`DATABASE_URL`、用户配置的 ComfyUI 解释器路径、HTTP 入参。
-> 想让它们静态收敛，等价于**改路径契约**（例如把 `db.sqlite` 从仓库根挪进
-> `db/` 子目录、把被观测源码清单改成固定常量）。那是产品/存储布局决策，不是
-> Lint 级别的清理，**因此本仓库的处置是「不消警、以 `outputFileTracingExcludes`
-> 兜住产物」**——告警的数量本身不构成缺陷，产物里有没有不该有的东西才是。
+> 也就是说：**让路径静态收敛**（落到字面量子目录）仍是结构上最干净的做法，但**不是唯一
+> 出口**——动态段来自运行期事实（`process.cwd()`、`DATABASE_URL`、用户配置的 ComfyUI
+> 解释器路径、HTTP 入参）时，就在被高亮的表达式上加 `/*turbopackIgnore: true*/`（见
+> 「第二件事」）。本仓库的处置是：**能静态收敛就收敛，不能就在调用点标注解，标完
+> 告警数应为 0**；`outputFileTracingExcludes` 继续兜产物，但它不是消警手段。
 
 **第五件事：`outputFileTracingExcludes` 有一个已知盲区——`instrumentation` 不被应用。**
 Next 的 include/exclude 是在 `collect-build-traces` 里**按 route entry 逐个**应用的
@@ -2392,7 +2391,8 @@ node scripts/check-standalone-contents.cjs   # [standalone] ✓ 产物干净
    **不改行为**——实测「配了 ignoreIssue + 把哨兵目录从 excludes 里摘掉」后哨兵
    照样回到 `standalone`。用它等于把信号关掉而问题留着（反模式 E9「降级不得静默」）。
 2. **不要**为了消警去改动态路径的写法（拆 `path.join`、加中间变量、换 `resolve`）。
-   高亮位置会跟着移动，告警一条不少，却把代码改得更绕。
+   高亮位置会跟着移动，告警一条不少，却把代码改得更绕。注解只加在**当前被高亮的那条
+   表达式**上，路径计算本身不动。
 3. **不要**在构建期模块图上给这类改动加无谓的包装（如给每个路径都套一层
    `map`/展开）。实测这会把 Turbopack 打到 Rust panic：
    `ModuleGraph::get_traces` / `there must be a path to a root`，整个
