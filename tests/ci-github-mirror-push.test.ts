@@ -612,6 +612,42 @@ describe("PR 标题（ci-mirror-payload）", () => {
     expect(buildRunName({ prNumber: "", sha: SHA })).toBe(`PR #manual · ${SHA}`);
   });
 
+  it("resolvePrTitle：平台注入的 CNB_PULL_REQUEST_TITLE 优先 —— 不起 cnb 通道（ISSUE #3346）", () => {
+    /* 托管机实验格跑在平台池容器里，没有 cnb 二进制 —— 标题改读平台注入的内置变量后，
+     * 那一格的 run 名不再退「PR #号 · sha」老格式。归一与回读路径同一把 normalizeRunTitle。 */
+    const titleCalls: Array<Array<string>> = [];
+    const heard: string[] = [];
+    const got = resolvePrTitle({
+      cnbJson: (_run: unknown, args: string[]) => {
+        titleCalls.push(args);
+        return { json: { data: { title: "不该被读到" } } };
+      },
+      env: { ...okEnv, CNB_PULL_REQUEST_TITLE: "  托管机实验：镜像预装 git-lfs  " },
+      iid: "2649",
+      log: (line: string) => heard.push(line),
+    });
+    expect(got).toBe("托管机实验：镜像预装 git-lfs");
+    expect(titleCalls, "env 在场就不该再走 cnb 通道（托管机格没有 cnb）").toHaveLength(0);
+    expect(heard.join("\n")).toContain("[mirror] PR 标题：托管机实验：镜像预装 git-lfs");
+  });
+
+  it("resolvePrTitle：env 缺席 ⇒ 原有 cnb 回读兜底不变", () => {
+    const titleCalls: Array<Array<string>> = [];
+    const heard: string[] = [];
+    const got = resolvePrTitle({
+      cnbJson: (_run: unknown, args: string[]) => {
+        titleCalls.push(args);
+        return { json: { data: { title: "回读兜底标题" } } };
+      },
+      env: okEnv,
+      iid: "2649",
+      log: (line: string) => heard.push(line),
+    });
+    expect(heard.join(" ")).toContain("[mirror] PR 标题：回读兜底标题");
+    expect(got).toBe("回读兜底标题");
+    expect(titleCalls).toHaveLength(1);
+  });
+
   it("resolvePrTitle：读到标题就归一后返回，并念一行读数", () => {
     const heard: string[] = [];
     const seen: Array<Array<string>> = [];

@@ -21,6 +21,11 @@
   新增 `.cnb/ci-image/Dockerfile`（`FROM node:26` + git-lfs 一层），实验流水线的
   `docker.build` 按它构建临时镜像并按 `versionBy` 缓存（Dockerfile 不变就不重建）；
   「git-lfs 就位」那格删除。不引第三方镜像（供应链面不变）、不维护外部仓。
+- **PR 标题改读平台注入的 `CNB_PULL_REQUEST_TITLE`**：合并类事件上平台给每个 Job
+  注入只读标题（同族 DESCRIPTION / PROPOSER / BRANCH / EVENT_URL），自托管与平台池
+  同源 —— 托管机实验格不再需要 cnb 通道（首跑读数：容器里没有 cnb 二进制，标题退回
+  「PR #号 · sha」老格式）。env 缺席时保留原 `cnb pulls get-pull` 回读兜底；
+  曾做过一版镜像预装 cnb CLI 的方案（PR #3364），被这个零依赖方案取代后关闭。
 - 用例：`tests/ci-github-mirror-push.test.ts` 新增 once 两态（推送 / LFS 各只试一次，
   缺省档重试语义仍在）与等托管机四场景（见 HEAD 即跳过 + 落回执、旧 sha 到点兜底、
   读没通到点兜底、前提取不到不抢话术）；`tests/no-platform-ci-config.test.ts`
