@@ -22,7 +22,11 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { deflateRawSync } from "node:zlib";
+import { promisify } from "node:util";
+import { crc32, deflateRaw } from "node:zlib";
+
+/** deflate 的异步形态：压缩在线程池跑，事件循环只收发 Buffer（ISSUE #3369）。 */
+const deflateRawAsync = promisify(deflateRaw);
 
 import { localTimestamp } from "./log.mjs";
 import { resolveGitDir } from "../git-dir.mjs";
@@ -573,55 +577,90 @@ export async function pruneRuns(root, { now = Date.now(), delete: del } = {}) {
  * **不用系统 `zip`**：这台机器与 CI 容器都没有它，Windows 上只有 `tar.exe`
  * —— 而保留策略「压不了就整包删」恰恰在最需要它的机器上不生效，用户点
  * 「导出诊断包」那一下直接不可用。deflate 走 `node:zlib`，零新依赖。
+ *
+ * **异步**（ISSUE #3369）：本函数也会被 Next 服务进程执行（「打包诊断」），
+ * 旧的逐文件 `readFileSync` + `deflateRawSync` + 同步写盘会把整个事件循环
+ * 冻结到打包完成——日志几十 MB 时就是十几秒，期间探活端点全部超时，界面
+ * 翻成「应用服务已断开」。读文件走 promises、压缩走线程池（`node:zlib/promises`），
+ * 事件循环只在收发 Buffer 时被占用。
  * @param {string} dir
  * @param {string} outFile
- * @returns {string}
+ * @returns {Promise<string>}
  */
 export function zipDirectory(dir, outFile) {
-  const files = collectFiles(dir);
+  return zipSources([{ dir, prefix: "" }], outFile);
+}
+
+/**
+ * 多源打包：把若干目录各自映射到 zip 里的一个前缀下，一次写出。
+ *
+ * 为 `exportDiagnostics` 而生（ISSUE #3369）：旧实现先把 `current/` 与最近几次
+ * `runs/` **整棵复制**进暂存目录再压一遍——在服务进程里那是双倍同步 IO，且
+ * 暂存目录本身还要再删一遍。直接按「来源 → 前缀」打包后，复制这一步整个消失，
+ * 解压出来的布局不变（`log/` 的形状，规范 §4）。
+ *
+ * 条目顺序 = entries 顺序内逐文件字典序；中央目录的 offset 依赖前一条目，
+ * 因此必须串行压缩（`no-await-in-loop` 在此是刻意的）。
+ * @param {Array<{ dir: string, prefix: string }>} entries 前缀为空串 = 条目名不带顶层目录
+ * @param {string} outFile
+ * @returns {Promise<string>}
+ */
+export async function zipSources(entries, outFile) {
   const local = [];
   const central = [];
   let offset = 0;
-  for (const rel of files) {
-    const data = fs.readFileSync(path.join(dir, rel));
-    const raw = deflateRawSync(data);
-    // store 与 deflate 取更小的那个：已压缩内容（如 png）deflate 后可能更大。
-    const useStore = raw.length >= data.length;
-    const body = useStore ? data : raw;
-    const nameBytes = Buffer.from(rel.split(path.sep).join("/"), "utf8");
-    const crc = crc32(data);
-    const { header, size } = localHeader({
-      nameBytes,
-      crc,
-      compressSize: body.length,
-      uncompressedSize: data.length,
-      method: useStore ? 0 : 8,
-    });
-    local.push(header, body);
-    central.push(
-      centralHeader({
+  let count = 0;
+  for (const { dir, prefix } of entries) {
+    // oxlint-disable-next-line no-await-in-loop -- 条目顺序与 offset 累计依赖前一条目，串行是刻意的（见上）
+    for (const rel of collectFiles(dir)) {
+      // oxlint-disable-next-line no-await-in-loop -- 同上：逐文件串行压缩
+      const data = await fs.promises.readFile(path.join(dir, rel));
+      // oxlint-disable-next-line no-await-in-loop -- 压缩在线程池跑（见 zipDirectory 注释）
+      const raw = await deflateRawAsync(data);
+      // store 与 deflate 取更小的那个：已压缩内容（如 png）deflate 后可能更大。
+      const useStore = raw.length >= data.length;
+      const body = useStore ? data : raw;
+      const entryName = prefix
+        ? `${prefix}/${rel.split(path.sep).join("/")}`
+        : rel.split(path.sep).join("/");
+      const nameBytes = Buffer.from(entryName, "utf8");
+      // zlib 自带的 CRC-32（C 实现）：查表逐字节的 JS 版在几十 MB 日志上是秒级 CPU，
+      // 换它之后这段成本基本归零（ISSUE #3369）。
+      const crc = crc32(data);
+      const { header, size } = localHeader({
         nameBytes,
         crc,
         compressSize: body.length,
         uncompressedSize: data.length,
         method: useStore ? 0 : 8,
-        offset,
-      }),
-    );
-    offset += size + body.length;
+      });
+      local.push(header, body);
+      central.push(
+        centralHeader({
+          nameBytes,
+          crc,
+          compressSize: body.length,
+          uncompressedSize: data.length,
+          method: useStore ? 0 : 8,
+          offset,
+        }),
+      );
+      offset += size + body.length;
+      count++;
+    }
   }
   const centralBuf = Buffer.concat(central);
   const out = Buffer.concat([
     ...local,
     centralBuf,
     endOfCentral({
-      count: files.length,
+      count,
       centralSize: centralBuf.length,
       centralOffset: offset,
     }),
   ]);
-  fs.mkdirSync(path.dirname(outFile), { recursive: true });
-  fs.writeFileSync(outFile, out);
+  await fs.promises.mkdir(path.dirname(outFile), { recursive: true });
+  await fs.promises.writeFile(outFile, out);
   return outFile;
 }
 
@@ -717,38 +756,19 @@ function endOfCentral({ count, centralSize, centralOffset }) {
   return b;
 }
 
-/** CRC-32（zip 用的那个多项式；Node 没有内置，20 行查表足够）。 */
-/** @type {Int32Array | null} */
-let crcTable = null;
-/**
- * @param {Buffer} buf
- * @returns {number}
- */
-function crc32(buf) {
-  if (!crcTable) {
-    crcTable = new Int32Array(256);
-    for (let i = 0; i < 256; i++) {
-      let c = i;
-      for (let k = 0; k < 8; k++) {
-        c = c & 1 ? 0xed_b8_83_20 ^ (c >>> 1) : c >>> 1;
-      }
-      crcTable[i] = c;
-    }
-  }
-  let crc = -1;
-  const table = crcTable;
-  for (let i = 0; i < buf.length; i++) {
-    crc = (crc >>> 8) ^ (table[(crc ^ (buf[i] ?? 0)) & 0xff] ?? 0);
-  }
-  return (crc ^ -1) >>> 0;
-}
-
 /**
  * 一键打包诊断：`current/` + 最近 3 次 `runs/` → `log/exports/diagnostics-<时间>-<runId>.zip`。
  *
  * 用户报 bug 时最需要的就是「一个文件发过来」，比让他截图/翻目录强太多。
  * 导出落点在 exports/ 而**不在** current/ 下：否则下一次归档会把它一趟趟
  * 搬进 runs/，包越滚越大。
+ *
+ * **不再先复制到暂存目录**（ISSUE #3369）：本函数会被 Next 服务进程执行（面板
+ * 「打包诊断」按钮），旧实现「整棵复制 current/ + 3 次 runs/，再逐文件同步压缩」
+ * 的双倍同步 IO 会把事件循环冻结到打包完成——跑了一小时的日志几十 MB 起，
+ * 冻结十几秒，期间探活全部超时，界面翻成「应用服务已断开」。现在按
+ * 「来源 → 前缀」直接多源打包（`zipSources`），复制这一步整个消失，
+ * 解压出来仍是 log/ 的形状（规范 §4）。
  * @param {string} root
  * @param {{ at?: Date, runId?: string }} [options]
  * @returns {Promise<string>}
@@ -761,22 +781,15 @@ export async function exportDiagnostics(root, { at = new Date(), runId } = {}) {
   // 打开 exports/ 时两个地方的名字读起来是同一套写法。
   const stamp = localTimestamp(at).slice(0, 19).replace(" ", "_").replaceAll(":", "");
   const out = path.join(exportsDir(root), `diagnostics-${stamp}-${id}.zip`);
-  // 先备一份到临时目录，再按「current/ + 最近几次 runs/」的目录结构打包，
-  // 保证解压出来就是 log/ 的形状（用户/我们能直接对照规范 §4 读）。
-  const stage = path.join(exportsDir(root), `.stage-${id}`);
-  fs.rmSync(stage, { recursive: true, force: true });
-  fs.mkdirSync(stage, { recursive: true });
-  try {
-    if (fs.existsSync(cur)) {
-      copyTree(cur, path.join(stage, LOG_LAYOUT.current));
-    }
-    const recent = listRuns(root).slice(-RETENTION.diagnosticsRuns);
-    for (const run of recent) {
-      copyTree(run.dir, path.join(stage, LOG_LAYOUT.runs, run.name));
-    }
-    await zipDirectory(stage, out);
-    return out;
-  } finally {
-    fs.rmSync(stage, { recursive: true, force: true });
+  /** @type {Array<{ dir: string, prefix: string }>} */
+  const sources = [];
+  if (fs.existsSync(cur)) {
+    sources.push({ dir: cur, prefix: LOG_LAYOUT.current });
   }
+  const recent = listRuns(root).slice(-RETENTION.diagnosticsRuns);
+  for (const run of recent) {
+    sources.push({ dir: run.dir, prefix: `${LOG_LAYOUT.runs}/${run.name}` });
+  }
+  await zipSources(sources, out);
+  return out;
 }

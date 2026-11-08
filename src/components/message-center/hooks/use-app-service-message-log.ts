@@ -14,6 +14,7 @@ import {
   fetchCurrentDisconnectExit,
   isPreviousRunExit,
 } from "~/lib/shell/app-service-exit";
+import { fetchLoopBlockForOffline } from "~/lib/shell/app-service-loop-blocks";
 import type { DevServerState } from "~/lib/shell/dev-server-status";
 import {
   deriveAppServiceEvent,
@@ -77,9 +78,15 @@ async function recordStart(
   stopped: StoppedFlag,
   runId: string | null,
 ): Promise<void> {
-  /* 全程不抛（`fetchAppServiceExit` 自带兜底）：这一刻刚出过一次故障，
-   * 任何异常都只会让现场更难查。 */
-  const probe = await fetchAppServiceExit();
+  /* 全程不抛（`fetchAppServiceExit` / `fetchLoopBlockForOffline` 自带兜底）：这一刻
+   * 刚出过一次故障，任何异常都只会让现场更难查。两个读回都只在**恢复**场景有意义
+   * （冷启动没有「刚才为什么断」可讲），断开窗口用不上就都回 null，这里不重复判。 */
+  const offlineAt = event.offlineAt;
+  const recovered = offlineAt !== null;
+  const [probe, loopBlock] = await Promise.all([
+    fetchAppServiceExit(),
+    recovered ? fetchLoopBlockForOffline(offlineAt, event.at) : Promise.resolve(null),
+  ]);
   if (stopped.current) {
     return;
   }
@@ -94,6 +101,9 @@ async function recordStart(
     offlineAt: event.offlineAt,
     exitAt: record === null ? null : Date.parse(record.at) || null,
     notice: record === null ? null : describeAppServiceExit(record),
+    /* 与断开窗口重叠的事件循环阻塞（ISSUE #3369）：读到就把恢复消息里的
+     * 「多半是短暂无响应」换成事实读数。 */
+    loopBlock,
     /* 停表那一段随事件走（判据在纯函数层决定「多长才值得标一行」）。 */
     unprobedMs: event.unprobedMs,
   });

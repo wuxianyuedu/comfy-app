@@ -341,6 +341,51 @@ describe("describeAppServiceStart 启动/恢复文案", () => {
     ];
     expect(new Set(titles).size).toBe(3);
   });
+
+  it("读到与断开窗口重叠的事件循环阻塞：把「多半是抖动」的猜测换成事实读数（ISSUE #3369）", () => {
+    const m = describeAppServiceStart({
+      at: T0 + 19_000,
+      offlineAt: T0,
+      exitAt: null,
+      notice: null,
+      loopBlock: { driftMs: 17_000, startedAt: T0 - 1000, endedAt: T0 + 18_000 },
+      unprobedMs: 0,
+    });
+    expect(m.title).toBe("应用服务已恢复");
+    expect(m.body).toContain("事件循环");
+    expect(m.body).toContain("被阻塞了约 17 秒");
+    expect(m.body).toContain("恢复调度");
+    /* 猜测那句必须让位：读数在场还说「多半」，等于否认自己拿得到的事实。 */
+    expect(m.body).not.toContain("多半是服务在同一次运行内短暂无响应");
+    /* 时长是下界：文案写「约」，不写精确断言。 */
+    expect(m.body).toContain("约");
+  });
+
+  it("恢复但没读到阻塞读数：保持「没有结束记录」的原口径，不编一个成因", () => {
+    const m = describeAppServiceStart({
+      at: T0 + 19_000,
+      offlineAt: T0,
+      exitAt: null,
+      notice: null,
+      loopBlock: null,
+      unprobedMs: 0,
+    });
+    expect(m.body).toContain("这次断开没有留下结束记录");
+    expect(m.body).not.toContain("事件循环");
+  });
+
+  it("进程结束记录在场时优先讲它：loopBlock 不覆盖 notice（两种事实不同时成立）", () => {
+    const m = describeAppServiceStart({
+      at: T0 + 19_000,
+      offlineAt: T0,
+      exitAt: T0,
+      notice: exitNotice,
+      loopBlock: { driftMs: 17_000, startedAt: T0 - 1000, endedAt: T0 + 18_000 },
+      unprobedMs: 0,
+    });
+    expect(m.body).toContain(exitNotice.why);
+    expect(m.body).not.toContain("事件循环");
+  });
 });
 
 describe("停表那一段的如实标注（A）", () => {

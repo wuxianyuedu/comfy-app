@@ -271,6 +271,50 @@ describe("useAppServiceMessageLog：启动 / 恢复", () => {
     expect(recovered.body).toContain("无从得知");
   });
 
+  it("恢复时服务端观测有事件循环阻塞：恢复消息带事实读数，不说「多半是抖动」（ISSUE #3369）", async () => {
+    /* 无结束记录（进程没死的那类「断开」）+ loop-blocks 有与窗口重叠的读数。 */
+    const offlineAt = Date.now() + 1000;
+    const recoveredAt = Date.now() + 19_000;
+    stubExitEndpoint({ record: null });
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("/api/dev/loop-blocks")) {
+        return Promise.resolve(
+          Response.json({
+            running: true,
+            blocks: [
+              {
+                driftMs: 17_000,
+                startedAt: offlineAt - 1000,
+                endedAt: recoveredAt - 1000,
+              },
+            ],
+          }),
+        );
+      }
+      if (!url.includes("/api/dev/last-exit")) {
+        return Promise.resolve(new Response("{}", { status: 404 }));
+      }
+      return Promise.resolve(Response.json({ record: null, currentRunId: DEFAULT_RUN_ID }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const { rerender } = mount({ state: "online", processIsNew: false });
+    vi.setSystemTime(offlineAt);
+    rerender({ state: "offline", processIsNew: false });
+    vi.setSystemTime(recoveredAt);
+    rerender({ state: "online", processIsNew: false });
+    vi.useRealTimers();
+
+    await expect.poll(() => messages().length).toBe(2);
+    const recovered = messages()[0]!;
+    expect(recovered.title).toBe("应用服务已恢复");
+    expect(recovered.body).toContain("事件循环");
+    expect(recovered.body).toContain("被阻塞了约 17 秒");
+    expect(recovered.body).not.toContain("多半是服务在同一次运行内短暂无响应");
+  });
+
   it("整页刷新（进程没换新）不发任何消息", () => {
     stubExitEndpoint();
     const { rerender } = mount({ state: "online", processIsNew: true });

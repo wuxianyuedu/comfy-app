@@ -184,9 +184,10 @@ export function missingParts(plan) {
 
 /**
  * 主流程。
- * @param {PortableIo} [io] @returns {number} 0 成功 / 1 失败 / 2 没有结论
+ * @param {PortableIo} [io] @returns {Promise<number>} 0 成功 / 1 失败 / 2 没有结论
+ *   （zip 一步异步化后整体变 async，见 launcher-core/run.mjs `zipDirectory` 的 ISSUE #3369 注）
  */
-export function main(io = {}) {
+export async function main(io = {}) {
   const log = io.log ?? ((line) => process.stdout.write(`${line}\n`));
   const plan = resolvePlan(io);
   log(`[免安装版] 版本 ${plan.appVersion} · 输出 ${plan.outFile}`);
@@ -243,7 +244,7 @@ export function main(io = {}) {
       recursive: true,
       dereference: true,
     });
-    zipDirectory(plan.stageDir, plan.outFile);
+    await zipDirectory(plan.stageDir, plan.outFile);
   } catch (error) {
     fs.rmSync(plan.stageDir, { recursive: true, force: true });
     fs.rmSync(plan.outFile, { force: true });
@@ -257,5 +258,5 @@ export function main(io = {}) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
-  process.exit(main());
+  process.exit(await main());
 }
