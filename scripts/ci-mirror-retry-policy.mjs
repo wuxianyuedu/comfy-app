@@ -8,7 +8,8 @@
  * 一段撑得起理由的注释 —— 切法与 #3106 / #3146 / #3148 同一纪律：**按职责切出去，
  * 主文件原样转出**，用例与调用方的导入面一个字都不用改。
  *
- * 这一份是纯常量（零 import、零副作用），所以不存在与主文件成环的问题。
+ * 这一份是纯常量与纯函数（零 import、零副作用：gitTimeoutFor/gitSubcommand 从主文件
+ * 迁入，ISSUE #3346 那一批要给主文件腾 900 行硬闸的余量），不存在与主文件成环的问题。
  *
  * ## 那一处口径改动（2026-11-05）
  *
@@ -122,3 +123,66 @@ export const RETRY_MIN_ATTEMPT_MS = 10_000;
  * 也不许被读成「什么都没发生」）。首次推整棵对象库可以很久，所以这一支给得宽。
  */
 export const PUSH_TIMEOUT_MS = 240_000;
+
+/**
+ * 「等托管机实验格」的墙钟预算（ISSUE #3346）：自托管主列那一格的 `--await-hosted`
+ * 前置在这一份预算内回读镜像 ref —— 看到本跑 HEAD 已在 ⇒ 托管机已推送并派发，
+ * 本格跳过推送（回执照落，判决回读格不受影响）；到点仍没见 ⇒ 走原有重试推送兜底。
+ *
+ * 300s 的取法：托管格自身 = 流水线起跑（0.5–1.5min）+ 单次推送（egress 通时秒级），
+ * 再留一个冷启动余量（首次拉镜像 / 全量 clone）。它吃进主列那格 15m 外框的最坏账：
+ * 300s（等待）+ 240s（兜底推送预算）+ 60s（回读）+ 60s（LFS）≈ 11 分钟 —— 所以外框
+ * 同批从 10m 抬到 15m（抬的是外框，判据与预算一个字没动）。
+ */
+export const HOSTED_AWAIT_BUDGET_MS = 300_000;
+
+/**
+ * 「等托管机」的轮询间隔：远端读（`ls-remote` 单 ref）实测 0.4–9.2s（#3014 记的几跑），
+ * 15s 足够密，也不会把远端读成压力源。到点交账的是「预算」，不是「次数」——
+ * 与推送那一跳同一分工。
+ */
+export const HOSTED_AWAIT_POLL_INTERVAL_MS = 15_000;
+
+/**
+ * 找出这一次 git 调用的**子命令**。
+ *
+ * 不能拿 `args[0]` 判：`pushArgs()` 为了不带本仓钩子，前面挂着 `-c core.hooksPath=`，
+ * 于是推送那一跳的 `args[0]` 是 `-c`。按 `args[0]` 写会让推送**拿不到超时**而账面看不出
+ * 来（限时的缺席不会红，只会退回「吃平台外框那一刀」的旧形态）。
+ *
+ * @param {string[]} args git 参数表
+ * @returns {string} 子命令（`push` / `ls-remote` / `rev-parse`…）；一个都没有就回空串
+ */
+export function gitSubcommand(args) {
+  for (let i = 0; i < args.length; i += 1) {
+    const a = String(args[i] ?? "");
+    /* `-c` 吃下一个参数（`core.hooksPath=` 那一形态），跳过它才能走到真子命令。 */
+    if (a === "-c") {
+      i += 1;
+      continue;
+    }
+    if (!a.startsWith("-")) {
+      return a;
+    }
+  }
+  return "";
+}
+
+/**
+ * 这一跳该给多大墙钟：`ls-remote` 短、`push` 长，本地那几跳（`rev-parse`）不限。
+ *
+ * @param {string[]} args git 参数表
+ * @returns {number | undefined} 交给 `spawnSync` 的 timeout（毫秒）；不给 = 不限
+ */
+export function gitTimeoutFor(args) {
+  const sub = gitSubcommand(args);
+  if (sub === "ls-remote") {
+    return REMOTE_READ_TIMEOUT_MS;
+  }
+  /* LFS 那一跳（`lfsPushArgs` 的子命令是 `lfs`）与内容推送同量级：对象可以有几 MB，
+   * 首次送存量更久 ⇒ 给推送档，不给回读档（`ls-remote` 只读一个 ref，30s 足够）。 */
+  if (sub === "push" || sub === "lfs") {
+    return PUSH_TIMEOUT_MS;
+  }
+  return undefined;
+}

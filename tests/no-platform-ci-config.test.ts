@@ -89,6 +89,17 @@ const PROBE_PIPELINES = [
 const PROBE_BY = "2026-11-09T00:00:00Z";
 
 /**
+ * 托管机镜像实验（ISSUE #3346）的**有期限例外** —— 与探针同款登记形态，方向相反：
+ * 探针刻意**留在自托管**（量时序），这一条刻意**上平台池**（量 github.com 出网）。
+ * 名单不许泛化成「自带 runner 的都放行」（等于关掉判据），日期不许省（省了「实验」
+ * 就只剩一句「先跑着」）。
+ */
+const HOSTED_MIRROR_PROBE_PIPELINES = ["GitHub 镜像同步（托管机实验）"] as const;
+
+/** 实验的到期日：过了这一刻，读数该取完了 —— 转正（自托管侧摘推送）或整段删除。 */
+const HOSTED_MIRROR_PROBE_BY = "2026-11-22T00:00:00Z";
+
+/**
  * 探针里**被测的锁形态**逐条点名放过哪条规则（与 `PROBE_PIPELINES` 同一天到期）。
  * `api_trigger_probe_a` → `cancelFalse`（要的正是 `cancel-in-progress: false`，而 R2 默认把漏写判红）。
  * `api_trigger_probe_b` / `c` → `noLock`（对照组一条锁都不写才量得到「没有锁时会不会并行」）；这不是放宽 R1/R2，其余规则仍会问。
@@ -1378,10 +1389,16 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * `*common` 那条锁（理由见下面那条用例）。同额扣除必须两头都有 —— 只减一边
      * 会让「漏接锚点」与「探针在跑」在读数上变成同一个数字。 */
     const probing = PROBE_PIPELINES.filter((name) => text.includes(`  ${name}:\n`));
+    /* 托管机镜像实验（ISSUE #3346）是第二个例外，与探针同一句理由：它**刻意**不吃
+     * `*common`（runner / docker / lock 全自带 —— 去 platform pool 正是实验本身）。 */
+    const hostedProbe = HOSTED_MIRROR_PROBE_PIPELINES.filter((name) =>
+      text.includes(`- name: ${name}`),
+    );
     expect(
-      refs.length + probing.length,
-      `锚点引用数（${refs.length}）与带 \`stages:\` 的流水线数（${stageLists.length}）对不上 —— ` +
-        "有一条流水线没接上 `*common`，它会静默回落到计费的平台池",
+      refs.length + probing.length + hostedProbe.length,
+      `锚点引用数（${refs.length}）+ 例外流水线数（${String(probing.length + hostedProbe.length)}）` +
+        `与带 \`stages:\` 的流水线数（${stageLists.length}）对不上 —— 有一条流水线既没接上 ` +
+        "`*common` 又没登记为例外，它会静默回落到计费的平台池",
     ).toBe(stageLists.length);
     expect(
       refs.length,
@@ -1427,6 +1444,71 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         "探针 A 的锁定义里没有 `cancel-in-progress: false` —— 它测的就是这个值，改成 `true` 等于把问题掐掉",
       ).toMatch(/cancel-in-progress:\s*false/);
     }
+  });
+
+  it("托管机镜像实验（ISSUE #3346）：有期限例外 —— 刻意平台池、单次读数档、自带锁", () => {
+    /* 与探针同款的「例外 + 自毁」，方向相反：探针刻意留在自托管（量时序），这一条
+     * 刻意上平台池（量 github.com 出网）。它红不红都**不承重**（--readout 退码恒 0），
+     * 所以例外只盖「不吃锚点」这一件事；锁必须自带且**不**共用 `pr-$CNB_PULL_REQUEST_IID`
+     * —— 同一把 key + cancel-in-progress 会把并行的「质量门禁」那条掐掉（#2114 同款）。 */
+    const text = readRegisteredConfig();
+    const alive = HOSTED_MIRROR_PROBE_PIPELINES.filter((name) => text.includes(`- name: ${name}`));
+    if (alive.length === 0) {
+      return;
+    }
+    expect(
+      Date.parse(HOSTED_MIRROR_PROBE_BY),
+      `托管机镜像实验已过期（HOSTED_MIRROR_PROBE_BY=${HOSTED_MIRROR_PROBE_BY}）—— ` +
+        "读数该取完了：转正（自托管侧摘推送）或把 .cnb.yml 里那条实验流水线与这段例外一起删掉",
+    ).toBeGreaterThan(Date.now());
+    for (const name of alive) {
+      /* 它住在 `pull_request` 的流水线列表里，不在事件键那一层 —— 按「下一份 `push:` 事件
+       * 键」截取它所在的片段（比另造一个解析器便宜，且足以钉形状）。 */
+      const at = text.indexOf(`- name: ${name}`);
+      expect(at, `实验流水线「${name}」找不到条目起点`).toBeGreaterThan(-1);
+      const chunk = text
+        .slice(at, text.indexOf("\n  push:", at))
+        .split("\n")
+        .filter((line) => !line.trim().startsWith("#"))
+        .join("\n");
+      expect(chunk, `「${name}」没有点名平台池标签 —— 实验量的是云托管节点那条出网路径`).toMatch(
+        /^\s+tags:\s*\n\s+-\s*cnb:arch:amd64\s*$/m,
+      );
+      expect(
+        chunk,
+        `「${name}」写了 namespace: group —— 它就该在平台池上，写自托管等于把实验拆了`,
+      ).not.toMatch(/namespace:\s*group\b/);
+      expect(
+        chunk,
+        `「${name}」引用了 \`*common\` —— 它会继承自托管 runner 与 PR 模板锁，实验自己成了变量`,
+      ).not.toMatch(/<<:\s*(?:\[\s*)?\*\w+/);
+      expect(chunk, `「${name}」不是单次推送档（--once 缺席）`).toContain("--once");
+      expect(
+        chunk,
+        `「${name}」不是读数档（--readout 缺席）—— 它一红就会拦住与它无关的合并`,
+      ).toContain("--readout");
+      expect(
+        chunk,
+        `「${name}」的锁不是自带 key —— 共用 \`pr-$CNB_PULL_REQUEST_IID\` 会掐停质量门禁那条`,
+      ).toContain("mirror-pr-$CNB_PULL_REQUEST_IID");
+      expect(chunk, `「${name}」没 import 镜像令牌 —— 推送格读不到它`).toContain(
+        "GITHUB_MIRROR_TOKEN",
+      );
+    }
+  });
+
+  it("主列「GitHub 镜像同步」带 --await-hosted，且仍不带 --readout（#3346 前置 + #3051 fail-closed）", () => {
+    const text = readRegisteredConfig();
+    const block = stageBlock(text, "GitHub 镜像同步");
+    expect(block, "主列找不到「GitHub 镜像同步」那一格").toBeTruthy();
+    expect(
+      block,
+      "主列那一格没带 --await-hosted —— 托管机实验格成功了也没人会跳过推送（#3346 的后半句丢了）",
+    ).toContain("--await-hosted");
+    expect(
+      block,
+      "fail-closed（#3051）不许回潮：主列那一格不是读数档，推不出去就该拦合并",
+    ).not.toContain("--readout");
   });
 
   it("push 档跑的就是 `COMFYAPP_CI_PUSH_GATES` 那几格（声明与事实双向核对）", () => {
@@ -2035,7 +2117,11 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       rows.length,
       `解析出的流水线数（${rows.length}）与带 stages: 的项（${stageLines}）对不上 —— 有一条被漏掉，它就没人判`,
     ).toBe(stageLines);
-    expect(rows.filter((r) => r.event === "pull_request").length).toBe(1);
+    /* 一条 PR 主列 + 托管机镜像实验（ISSUE #3346 的有期限例外；在册时 +1，口径同锚点计数那条）。 */
+    const hostedAlive = HOSTED_MIRROR_PROBE_PIPELINES.filter((name) =>
+      text.includes(`- name: ${name}`),
+    ).length;
+    expect(rows.filter((r) => r.event === "pull_request").length).toBe(1 + hostedAlive);
     expect(rows.filter((r) => r.event !== "pull_request").length).toBeGreaterThanOrEqual(9);
     /* 三条每日触发口仍然同一把（那份互斥是刻意保留的，不是被这次改动顺手拆掉的）。
      * 这里**不钉事件名清单** —— 「有没有定时口」由「定时档不在本机、在 GA」那条管，

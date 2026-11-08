@@ -115,7 +115,10 @@ export function parseLfsObjectIds(text) {
  *
  * @param {{log: (line: string) => void, prefix: string, runGit: Function,
  *   sleep: (ms: number) => Promise<void>, token: string, url: string,
- *   runGitWithRetry: Function, sanitize: (text: string, secret: string) => string}} ctx
+ *   runGitWithRetry: Function, sanitize: (text: string, secret: string) => string,
+ *   maxAttempts?: number}} ctx
+ *   `maxAttempts` 是尝试上限覆盖：托管机实验的 once 档传 1（ISSUE #3346，三跳各只试一次）；
+ *   缺省 {@link LFS_PUSH_MAX_ATTEMPTS}
  * @returns {Promise<{attempts: number, code: number, elapsedMs: number,
  *   failure: ReturnType<typeof classifyLfsPushFailure> | null, objects: string | null,
  *   retriedByObjectId: boolean}>}
@@ -123,7 +126,17 @@ export function parseLfsObjectIds(text) {
  *   `retriedByObjectId` 记「这一跳进过 `--object-id` 回退」（读数，不参与判定）
  */
 export async function pushLfsObjects(ctx) {
-  const { log, prefix, runGit, sleep, token, url, runGitWithRetry, sanitize } = ctx;
+  const {
+    log,
+    prefix,
+    runGit,
+    sleep,
+    token,
+    url,
+    runGitWithRetry,
+    sanitize,
+    maxAttempts: attemptsCap = LFS_PUSH_MAX_ATTEMPTS,
+  } = ctx;
   const startedAt = Date.now();
   /** 整档（主路径 + 可能的 --object-id 回退）还剩下多少预算：两跳共用一份，不各领一份。 */
   const budgetLeft = () => Math.max(0, LFS_PUSH_RETRY_BUDGET_MS - (Date.now() - startedAt));
@@ -131,7 +144,7 @@ export async function pushLfsObjects(ctx) {
     budgetMs: budgetLeft(),
     label: "LFS 推送",
     log,
-    maxAttempts: LFS_PUSH_MAX_ATTEMPTS,
+    maxAttempts: attemptsCap,
     prefix,
     runGit,
     sleep,
@@ -171,7 +184,7 @@ export async function pushLfsObjects(ctx) {
         budgetMs: budgetLeft(),
         label: "LFS 回退推送（--object-id）",
         log,
-        maxAttempts: LFS_PUSH_MAX_ATTEMPTS,
+        maxAttempts: attemptsCap,
         prefix,
         runGit,
         sleep,
