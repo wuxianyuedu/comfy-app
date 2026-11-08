@@ -60,6 +60,11 @@ export type BuildQueryOptions = {
   keepEmpty?: boolean;
 };
 
+/** 单值（非数组）载荷的运行期判据：`QueryScalar` 去掉 `null`/`undefined` 后的三档。 */
+function isScalar(value: unknown): value is string | number | boolean {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+}
+
 /** 单值 → 字符串；不该写进查询串的返回 `null`（表示省略）。 */
 function encodeValue(
   value: string | number | boolean,
@@ -114,8 +119,7 @@ export function buildQueryString(
       }
       continue;
     }
-    /* SAFETY: 类型断言已复核 */
-    const part = encodeValue(value as string | number | boolean, keepEmpty, key);
+    const part = encodeValue(isScalar(value) ? value : String(value), keepEmpty, key);
     if (part !== null) {
       parts.push(part);
     }
