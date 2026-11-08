@@ -102,7 +102,8 @@
  * node scripts/ci-github-mirror-push.mjs --dry-run     # 只打印计划与 payload，不发任何请求
  * node scripts/ci-github-mirror-push.mjs --master      # push 档那一格：推 master，不派发
  * node scripts/ci-github-mirror-push.mjs --once --readout
- *     # 托管机实验档（ISSUE #3346）：三跳各只试一次、不重试；配平台池那条影子流水线
+ *     # 托管机实验档（ISSUE #3346）：推送 / 回读 / LFS 推送 / LFS 核对四跳各只试一次、
+ *     #   不重试（LFS 核对这一跳自 ISSUE #3400 起一并纳入）；配平台池那条影子流水线
  * node scripts/ci-github-mirror-push.mjs --await-hosted
  *     # 主列那一格（ISSUE #3346）：先等托管机实验格的结果 —— refs 见本跑 HEAD 即跳过推送，
  *     # 预算（HOSTED_AWAIT_BUDGET_MS）到点没见才落回下面的正常推送
@@ -469,8 +470,9 @@ export async function runMirror(io) {
       console.log(line);
     });
   const readout = io.readout ?? false;
-  /* once（ISSUE #3346）：托管机实验档「三跳各只试一次」。墙钟预算照旧（首刀不裁的纪律
-   * 不变），次数收到 1 —— 「失败了也不重试」是这一档的实验语义本身，不是预算的副产品。 */
+  /* once（ISSUE #3346）：托管机实验档「四跳各只试一次」（推送 / 回读 / LFS 推送 /
+   * LFS 核对，最后一跳自 ISSUE #3400 起一并纳入）。墙钟预算照旧（首刀不裁的纪律不变），
+   * 次数收到 1 —— 「失败了也不重试」是这一档的实验语义本身，不是预算的副产品。 */
   const once = io.once ?? false;
   /** 收尾小结（ISSUE #3106）：每个终局都把 wire / LFS / 派发并排成**最后一行**。
    *  @param {MirrorSummaryFields} fields */
@@ -619,9 +621,13 @@ export async function runMirror(io) {
   const lfsCheck = await verifyLfsObjects({
     fetchImpl,
     log,
+    /* 第四跳的韧性（ISSUE #3400）：与 refs 回读 / LFS 推送同口径，`--once` 档仍各只试一次。 */
+    maxAttempts: once ? 1 : VERIFY_MAX_ATTEMPTS,
+    now: io.now,
     prefix: "mirror",
     repo: ctx.repo,
     runGit,
+    sleep,
     token: ctx.token,
   });
   if (lfsCheck.code !== CODE.OK) {
@@ -630,7 +636,7 @@ export async function runMirror(io) {
       elapsedMs: lfs.elapsedMs,
       lfs: false,
       objects: lfsCheck.objectsText,
-      retries: lfs.attempts - 1,
+      retries: lfs.attempts - 1 + (lfsCheck.attempts - 1),
       wire: wireNote,
     });
     leave(false, `LFS 推送后核对没通过（${lfsCheck.note}）⇒ 刻意不派发`);
