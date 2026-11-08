@@ -1,0 +1,3 @@
+## Changed
+
+- **GA 回调腿正式转正、老轮询主列退场（ISSUE #3378 / §13.5.33 逐笔对账）**：把「CNB 出站轮询 GitHub Actions conclusion（45m）→ 日志分块 ×3 → `GitHub 判决判定`」五格停用（原文按注释形态留在 `.gates`、登记进 `COMFYAPP_CI_DISABLED_GATES`，恢复动作照旧），换成一格 `GA 回调结论回读` —— 站内读 `commit-statuses` 里 GA 收尾 job 送回的结论（`scripts/ci-ga-verdict-readout.mjs`，fail-closed 三态：绿 0 / 红 1 / 没判过 2）。承重退码仍落在原生 `pull_request` build 上，§13.6「PR 跑绿才合并」的锚不换；双写消失、自托管机不再碰 github.com、占位写者与 cancel 竞态设计退役。`COMFYAPP_CI_GATES` / `GATE_TIER_LEDGER` / 三份契约用例的顺序锚 / §13.5.33.1 续节 / `pr-gate.yml` 与 `.cnb.yml` 注释同批对账。**读数**：本机真读验证（`--pr 3398` ⇒ `state=success ⇒ 绿`）+ PR #3408 第二跑 `cnb-i2o-1k6tit72t` 上本格 `success`，端点、平台注入 `CNB_TOKEN`、聚合全链路端到端坐实；`ci-github-verdict-*` 出站链保留在盘上供 `pnpm ship --gh-logs` 按需复验与快速回退。
