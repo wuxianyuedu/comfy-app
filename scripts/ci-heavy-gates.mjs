@@ -268,6 +268,23 @@ export function heavyGateArgv(argv, deps) {
       notRunCodes: [2],
     };
   }
+  /* ⚠️ `check-deps-freshness.mjs --staged` 在这一档**换发 `--offline`**（只判 ③ 本地
+   * 安装自洽，不判 ② 基线依赖 ⇄ 远端）。剥旗标进全量会把钩子那句「只在本次提交
+   * 动了依赖面时判」变成「每次 CI 都判 ②」—— §13.5.13 逐字说过那是「天天红的闸」。
+   * 而这里检出的是平台构造的**合成 merge 预览**：第一父是派发那刻的 master 快照，
+   * master 在 PR 存活期间继续前进并可能改依赖面 ⇒ ② 把「分叉点 vs 领先后的远端」
+   * 读成「你的基线旧了」，出口却是「git pull / 把远端合进来」—— 开发者无从 pull
+   * 一个平台造出来的落后 base。② 的执行者是 `pnpm check:deps-freshness`（开工前 /
+   * PR 评审前）与钩子 `--staged` 那一档；复合档里只留 ③，判据脚本一字不改
+   * （`--offline` 是它既有形态）。 */
+  if (joined.includes("check-deps-freshness.mjs") && argv.includes("--staged")) {
+    return {
+      ok: true,
+      argv: [...fullTreeArgv(argv), "--offline"],
+      via: "只判 ③ 本地安装自洽（合成 merge 态不判 ② 远端基线，§13.5.13）",
+      notRunCodes: [],
+    };
+  }
   if (!CHANGED_SCOPED.some((p) => joined.includes(p))) {
     return {
       ok: true,
