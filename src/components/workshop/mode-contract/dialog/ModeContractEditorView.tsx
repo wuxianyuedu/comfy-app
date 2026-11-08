@@ -103,6 +103,8 @@ function ModeContractDraftPanel({
   draft: ModeContract;
 }) {
   const { saving, saved, nextReferenceImageId } = controller;
+  /* 「还原默认」只对真改过的模式出现：判据与左栏「已改」徽标同源（内容比较）。 */
+  const customized = isModeContractCustomized(draft.mode, controller.stored);
 
   return (
     <section className="border-border bg-surface flex flex-col gap-4 rounded-xl border p-4">
@@ -221,6 +223,17 @@ function ModeContractDraftPanel({
         >
           {saving ? "保存中…" : "保存模式契约"}
         </Button>
+        {customized && (
+          <Button
+            disabled={controller.resetting}
+            onClick={() => {
+              void controller.resetToDefault();
+            }}
+            variant="outline"
+          >
+            {controller.resetting ? "还原中…" : "还原默认"}
+          </Button>
+        )}
         {/* 只在开发检出出现：正式包没有源码可写，「项目默认」无从谈起（ISSUE #3396）。 */}
         {controller.projectDefaultEditable && (
           <Button

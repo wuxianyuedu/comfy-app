@@ -28,6 +28,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   isDevCheckout,
   loadModeContracts,
+  resetModeContractOverride,
   saveModeContracts,
   saveModeContractsAsProjectDefaults,
 } from "./mode-contract.server";
@@ -105,6 +106,43 @@ describe("模式契约：成品配置 + 本机覆盖", () => {
     await saveModeContracts([], root);
     await expect(readRaw()).resolves.toBe("[]\n");
     await expect(loadModeContracts(root)).resolves.toEqual(configuredModeContracts());
+  });
+
+  it("保存走差集：与成品配置相同的模式不落盘（ISSUE #3396 反馈 1）", async () => {
+    // 整份注册表里只有一条真改过（I2I 输出类别），其余原样 —— 落盘的只有那一条。
+    const [t2i, i2i] = configuredModeContracts(["T2I", "I2I"]);
+    if (!t2i || !i2i) {
+      throw new Error("成品配置里没有 T2I / I2I");
+    }
+    const saved = await saveModeContracts([t2i, { ...i2i, output: "video" }], root);
+    expect(saved.map((c) => c.mode)).toEqual(["I2I"]);
+    expect(JSON.parse((await readRaw()) ?? "{}")).toEqual(saved);
+  });
+
+  it("还原默认：把模式从本机覆盖移除；覆盖不在时不动、不建文件", async () => {
+    const [t2i, i2i] = configuredModeContracts(["T2I", "I2I"]);
+    if (!t2i || !i2i) {
+      throw new Error("成品配置里没有 T2I / I2I");
+    }
+    await saveModeContracts(
+      [
+        { ...t2i, output: "video" },
+        { ...i2i, output: "video" },
+      ],
+      root,
+    );
+    const res = await resetModeContractOverride("T2I", root);
+    expect(res.contracts.map((c) => c.mode)).toEqual(["I2I"]);
+    // 生效值 = 成品配置那条
+    expect(res.effective).toEqual(t2i);
+    await expect(loadModeContracts(root)).resolves.toEqual([{ ...i2i, output: "video" }]);
+
+    // 覆盖不在时：无事可做、不建文件（读路径无副作用的同一纪律）
+    await fs.rm(path.join(root, "data"), { recursive: true, force: true });
+    const noop = await resetModeContractOverride("T2I", root);
+    expect(noop.contracts).toEqual([]);
+    expect(noop.effective).toBeNull();
+    await expect(readRaw()).resolves.toBeNull();
   });
 
   it("老检出（曾落在 config/）升级后不丢配置，且读路径只读不搬", async () => {

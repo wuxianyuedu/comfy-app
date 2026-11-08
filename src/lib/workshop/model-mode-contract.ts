@@ -609,22 +609,43 @@ export function configuredModeContracts(
   });
 }
 
-/** 「保存为项目默认」该写进入库 JSON 的内容：与推导**有差异**的那些契约。
- *
- *  逐字段稳定比较（显式字段序，别依赖对象键序）：mode 大写、口顺序、必备固化、
- *  自定义口定义都参与 —— 任何一处不同都算「作者显式决定了这个模式」。与推导
- *  相同的模式被丢掉：留在 JSON 里只会在推导演进时悄悄压住新默认（占位的覆盖
- *  是这一层唯一的漂移形态）。 */
+/** 「保存为项目默认」该写进入库 JSON 的内容：与**推导**有差异的那些契约。 */
 export function projectDefaultDiff(contracts: ReadonlyArray<ModeContract>): Array<ModeContract> {
+  return contractsDiffAgainstBase(contracts, (mode) => derivedModeContract(mode));
+}
+
+/** 「保存模式契约」（本机覆盖）该写进 `data/` 的内容：与**成品配置**（推导 +
+ *  项目默认）有差异的那些契约。
+ *
+ *  两个覆盖层各比各的基准，不是同一把尺子：项目默认盖在推导上，本机覆盖盖在
+ *  「项目默认 + 推导」上 —— 基准不同是语义的一部分。本机里存一条与成品配置
+ *  相同的契约，读出来还是同一份内容，只会徒增「已改」的假象（ISSUE #3396
+ *  反馈 1 的现场：保存整份注册表后，二十多个模式全量亮「已改」）。 */
+export function localOverrideDiff(contracts: ReadonlyArray<ModeContract>): Array<ModeContract> {
+  const configured = new Map(configuredModeContracts().map((c) => [c.mode, c]));
+  return contractsDiffAgainstBase(contracts, (mode) => {
+    const found = configured.get(upperToken(mode));
+    return found ?? derivedModeContract(mode);
+  });
+}
+
+/** 差集的共用实现：逐字段稳定比较（显式字段序，别依赖对象键序），与基准相同
+ *  的模式被丢掉。mode 大写、口顺序、必备固化、自定义口定义都参与 —— 任何一处
+ *  不同都算「作者显式决定了这个模式」。留一条与基准相同的覆盖只会压住基准的
+ *  演进（占位的覆盖是覆盖层唯一的漂移形态）。 */
+function contractsDiffAgainstBase(
+  contracts: ReadonlyArray<ModeContract>,
+  baseFor: (mode: string) => ModeContract,
+): Array<ModeContract> {
   return contracts.filter(
-    (contract) =>
-      stableContractKey(contract) !== stableContractKey(derivedModeContract(contract.mode)),
+    (contract) => modeContractSignature(contract) !== modeContractSignature(baseFor(contract.mode)),
   );
 }
 
 /** 契约的稳定比较键：显式字段序序列化。`required` 走 `requiredInputsFor` 固化
- *  （编辑器里 undefined 与「固化后的内置默认」是同一件事）。 */
-function stableContractKey(contract: ModeContract): string {
+ *  （编辑器里 undefined 与「固化后的内置默认」是同一件事）。判「这个模式改没改」
+ *  也用它（`mode-contract-config` 的徽标判据，ISSUE #3396 反馈 1）。 */
+export function modeContractSignature(contract: ModeContract): string {
   return JSON.stringify({
     ...contract,
     required: requiredInputsFor(contract),

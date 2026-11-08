@@ -13,6 +13,7 @@ import {
 import {
   isDevCheckout,
   loadModeContracts,
+  resetModeContractOverride,
   saveModeContracts,
   saveModeContractsAsProjectDefaults,
 } from "~/lib/workshop/mode-contract.server";
@@ -112,6 +113,14 @@ export const llmRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       const { contracts, file } = await saveModeContractsAsProjectDefaults(input.contracts);
       return { contracts, file };
+    }),
+
+  /** 「还原默认」：把一个模式从本机覆盖里移除（生效值回落成品配置）。
+   *  返回移除后的覆盖整份与该模式的生效契约（界面直接拿它刷新草稿）。 */
+  modeContractReset: authedProcedure
+    .input(z.object({ mode: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      return resetModeContractOverride(input.mode);
     }),
 
   /** 读取某条远端模型的工坊模式适配器 */

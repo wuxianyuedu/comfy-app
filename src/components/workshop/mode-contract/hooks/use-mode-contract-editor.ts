@@ -43,6 +43,8 @@ export type ModeContractEditorController = {
   removeInput: (id: ModeContractInputId) => void;
   /** 改一个自定义口的展示名（空名不生效，保持原名）。 */
   renameCustomInput: (id: ModeContractInputId, label: string) => void;
+  /** 还原当前模式到默认：从本机覆盖移除、草稿回到成品配置（ISSUE #3396 反馈 2）。 */
+  resetToDefault: () => Promise<void>;
   /** 保存当前草稿（并入整份注册表）。 */
   save: () => Promise<void>;
   /** 把当前草稿并入整份注册表后写回**项目默认**（跟代码走；只有开发检出可用，
@@ -51,6 +53,8 @@ export type ModeContractEditorController = {
   /** 本次打开期间是否已成功保存过（视图据此提示「另一处已生效」）。 */
   saved: boolean;
   savedKind: "local" | "project" | null;
+  /** 「还原默认」进行中。 */
+  resetting: boolean;
   saving: boolean;
   /** 「保存为项目默认」进行中。 */
   savingProjectDefaults: boolean;
@@ -208,6 +212,18 @@ export function useModeContractEditor(): ModeContractEditorController {
     return [...rest, draft];
   }, [draft, registry.contracts]);
 
+  const resetToDefault = useCallback(async () => {
+    if (!mode) {
+      return;
+    }
+    const effective = await registry.resetToDefault(mode);
+    if (effective) {
+      setDraft(effective);
+    }
+    setSaved(false);
+    setSavedKind(null);
+  }, [mode, registry]);
+
   const save = useCallback(async () => {
     const all = mergedRegistry();
     if (!all) {
@@ -233,6 +249,7 @@ export function useModeContractEditor(): ModeContractEditorController {
     mode,
     draft,
     stored: registry.contracts,
+    resetting: registry.resetting,
     saving: registry.saving,
     savingProjectDefaults: registry.savingProjectDefaults,
     projectDefaultEditable: registry.projectDefaultEditable,
@@ -247,6 +264,7 @@ export function useModeContractEditor(): ModeContractEditorController {
     },
     appendInput,
     removeInput,
+    resetToDefault,
     moveInput,
     addCustomInput,
     renameCustomInput,

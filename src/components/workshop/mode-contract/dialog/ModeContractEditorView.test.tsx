@@ -26,6 +26,7 @@ function stubController(
     saved: false,
     savedKind: null,
     projectDefaultEditable: false,
+    resetting: false,
     savingProjectDefaults: false,
     selectMode: vi.fn(),
     setDraft: vi.fn(),
@@ -41,6 +42,7 @@ function stubController(
     setOutput: vi.fn(),
     save: vi.fn(() => Promise.resolve()),
     saveAsProjectDefault: vi.fn(() => Promise.resolve(null)),
+    resetToDefault: vi.fn(() => Promise.resolve()),
     ...overrides,
   };
 }

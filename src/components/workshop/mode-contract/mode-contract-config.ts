@@ -8,6 +8,7 @@ import {
   MODE_CONTRACT_INPUT_TYPES,
   configuredModeContracts,
   derivedModeContract,
+  modeContractSignature,
   type ModeContract,
   type ModeContractCustomKind,
   type ModeContractInputType,
@@ -65,18 +66,16 @@ export function effectiveModeContract(
   stored: ReadonlyArray<ModeContract>,
 ): { contract: ModeContract; customized: boolean } {
   const code = upperToken(mode);
+  const fallback = CONFIGURED_BY_MODE.get(code) ?? derivedModeContract(code);
   const found = stored.find((c) => c.mode === code);
-  if (found) {
+  if (found && modeContractSignature(found) !== modeContractSignature(fallback)) {
     return { contract: found, customized: true };
   }
-  /* 回落的是**成品配置**（推导 + 项目默认显式覆盖）而不是裸推导：作者「保存为
-   * 项目默认」的那份就是默认本身，编辑器打开时要看到它（ISSUE #3396）。
-   * 索引模块级算一次 —— configuredModeContracts 每次现算全部生成模式，
-   * 每次选中模式都重摊一遍没有意义。 */
-  return {
-    contract: CONFIGURED_BY_MODE.get(code) ?? derivedModeContract(code),
-    customized: false,
-  };
+  /* 「已改」判的是**内容**（与本模式成品配置深比较），不是「覆盖文件里有没有
+   * 这一条」（ISSUE #3396 反馈 1 的现场：旧版保存把整份注册表写进覆盖，用户
+   * 只改了一个模式、二十多个原样入库，徽标全部点亮）。内容相同的覆盖条目按
+   * 没改过处理 —— 生效值回落成品配置本身，两条本来就一模一样。 */
+  return { contract: fallback, customized: false };
 }
 
 /** 某模式是否已被用户改过（「已改」徽标）。 */
