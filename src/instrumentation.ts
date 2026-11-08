@@ -51,6 +51,14 @@ export async function register() {
      * 所以热重启后的恢复会晚到几十秒，属正常而不是没接上；桌包（standalone 编译产物）
      * 则是进程起来就跑。 */
     await import("./server/film/orchestrator").then((m) => m.resumeStalledFilms());
+    /* 事件循环阻塞观测的**唯一**启动点（ISSUE #3369）：服务「断开约 20 秒自行恢复」
+     * 的现场里进程没死、无异常、无慢查询记录，服务端一个字都不留——没有这份读数，
+     * 断开永远「莫名」。心跳漂移检测 + 恢复消息读回（GET /api/dev/loop-blocks），
+     * 把「多半是短暂无响应」的猜测换成事实。与 reaper / dispatch 同形态：动态
+     * import 是刻意的，本文件在 Edge runtime 也执行。 */
+    await import("./lib/log/event-loop-watch.server").then((m) => {
+      m.startEventLoopWatch();
+    });
     await import("./sentry.server.config");
   }
   if (process.env.NEXT_RUNTIME === "edge") {
