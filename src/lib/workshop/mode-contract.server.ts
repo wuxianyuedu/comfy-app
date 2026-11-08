@@ -102,7 +102,7 @@ export async function resetModeContractOverride(
   mode: string,
   root: string = process.cwd(),
 ): Promise<{ contracts: Array<ModeContract>; effective: ModeContract | null }> {
-  const file = path.join(root, MODE_CONTRACTS_REL_PATH);
+  const file = path.join(/*turbopackIgnore: true*/ root, MODE_CONTRACTS_REL_PATH);
   const existing = await readOverrideFile(file);
   if (existing === null) {
     return { contracts: [], effective: null };
@@ -168,7 +168,7 @@ export async function saveModeContractsAsProjectDefaults(
   }
   const normalized = parseModeContracts(contracts);
   const diff = projectDefaultDiff(normalized);
-  const file = path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH);
+  const file = path.join(/*turbopackIgnore: true*/ root, MODE_CONTRACT_DEFAULTS_REL_PATH);
   try {
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, `${JSON.stringify(diff, null, 2)}\n`, "utf8");
