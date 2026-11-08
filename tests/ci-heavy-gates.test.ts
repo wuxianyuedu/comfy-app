@@ -92,6 +92,31 @@ describe("复合档 —— 判决面只在「本次改动」上的那一步（IS
     expect(other.argv).toEqual(["node", "scripts/check-dead-exports.cjs"]);
   });
 
+  it("check-deps-freshness --staged ⇒ 换发 --offline（合成 merge 态只判 ③，§13.5.13）", () => {
+    const got = heavyGateArgv(["node", "scripts/check-deps-freshness.mjs", "--staged"]);
+    expect(got.ok).toBe(true);
+    if (!got.ok) {
+      return;
+    }
+    expect(got.argv).toEqual(["node", "scripts/check-deps-freshness.mjs", "--offline"]);
+    expect(got.via).toContain("③");
+    expect(got.notRunCodes).toEqual([]);
+    /* 反向对照：不带 --staged 的调用不是钩子那一档，别误伤成换发。 */
+    const plain = heavyGateArgv(["node", "scripts/check-deps-freshness.mjs"]);
+    expect(plain.ok).toBe(true);
+    if (!plain.ok) {
+      return;
+    }
+    expect(plain.argv).toEqual(["node", "scripts/check-deps-freshness.mjs"]);
+    /* 别的 --staged 步骤照旧剥旗标进全量，不沾这个换发。 */
+    const other = heavyGateArgv(["node", "scripts/check-dead-exports.cjs", "--staged"]);
+    expect(other.ok).toBe(true);
+    if (!other.ok) {
+      return;
+    }
+    expect(other.argv).toEqual(["node", "scripts/check-dead-exports.cjs"]);
+  });
+
   it("拿得到基线 ⇒ 换成 `--base` 形态（真判，不再恒绿无声）", () => {
     const got = heavyGateArgv(["node", "scripts/shell-gate.mjs"], {
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },

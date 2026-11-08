@@ -51,6 +51,7 @@
     "check:freshness": "node scripts/freshness-gate.mjs --ledger",
     "check:daily-attendance": "node scripts/check-daily-attendance.mjs",
     "check:mirror-attendance": "node scripts/check-mirror-attendance.mjs",
+    "ga-verdict:attendance": "node scripts/ci-ga-verdict-attendance.mjs",
     "check:comment-headers": "node scripts/check-comment-headers.mjs",
     "check:app-version": "node scripts/check-app-version.cjs",
     "check:ci-incremental": "node scripts/ci-incremental-gates.mjs --check",

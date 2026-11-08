@@ -95,6 +95,7 @@ vi.mock("~/server/better-auth", () => ({
 }));
 
 import { productionRepository } from "~/lib/core/repository-production";
+import { isRecord } from "~/lib/is-record";
 import {
   normalizeProductionRun,
   scriptDigestOf,
@@ -106,6 +107,16 @@ import { getTestDb, seedUser } from "../../../tests/helpers/test-db";
 const tdb = getTestDb();
 const USER = "user-a";
 const PROJ = "proj_run";
+
+/** `unknown` 收窄成对象数组；不是对象数组就当场抛。 */
+function assertRecordArray(
+  value: unknown,
+  label: string,
+): asserts value is Array<Record<string, unknown>> {
+  if (!Array.isArray(value) || !value.every((item) => isRecord(item))) {
+    throw new TypeError(`${label} 不是对象数组`);
+  }
+}
 
 /** 建/改生产数据行：内容列 + progress + run 列（run 直接写库，模拟 start 之后的状态）。 */
 async function seed(
@@ -177,8 +188,9 @@ describe("advanceRunLoop", () => {
     await seed({ scriptMarkdown: "# 剧本" }, { status: "running", approvalMode: "stage" });
     await advanceRunLoop(USER, PROJ);
     const row = await readRow();
-    /* SAFETY: 类型断言已复核 */
-    expect((row!.characters as Array<{ name: string }>)[0]).toMatchObject({
+    const characters = row?.characters;
+    assertRecordArray(characters, "characters");
+    expect(characters[0]).toMatchObject({
       name: "阿宁",
     });
     expect(normalizeProductionRun(row!.run).awaitingStage).toBe("character");
@@ -195,13 +207,8 @@ describe("advanceRunLoop", () => {
     );
     await advanceRunLoop(USER, PROJ);
     const row = await readRow();
-    /* SAFETY: 类型断言已复核 */
-    const shots = row!.shots as Array<{
-      index: number;
-      prompt: string;
-      rev: number;
-      status: string;
-    }>;
+    const shots = row?.shots;
+    assertRecordArray(shots, "shots");
     expect(shots).toHaveLength(2);
     expect(shots[0]).toMatchObject({
       index: 0,
@@ -226,12 +233,16 @@ describe("advanceRunLoop", () => {
     const row = await readRow();
     expect(synthesizeFirstFrame).toHaveBeenCalledTimes(1);
     // 「种子」默认随机：首刷也带一个新的随机 seed（走「种子」对外参数；作者没连种子口则落不下去）。
-    /* SAFETY: 类型断言已复核 */
-    const firstSeed = (synthesizeFirstFrame.mock.calls[0]![0] as { seed?: number }).seed;
+    const firstArg = synthesizeFirstFrame.mock.calls[0]?.[0];
+    if (!isRecord(firstArg)) {
+      throw new TypeError("生图参数不是对象");
+    }
+    const firstSeed = firstArg.seed;
     expect(typeof firstSeed).toBe("number");
     expect(Number.isFinite(firstSeed)).toBe(true);
-    /* SAFETY: 类型断言已复核 */
-    const shot = (row!.shots as Array<{ imageUrl?: string; status: string }>)[0];
+    const shotRows = row?.shots;
+    assertRecordArray(shotRows, "shots");
+    const shot = shotRows[0];
     expect(shot).toMatchObject({
       status: "done",
       imageUrl: "/api/generated/shot.png",
@@ -262,8 +273,11 @@ describe("advanceRunLoop", () => {
       workflowId: "wf-img",
     });
     // 重出走的是「抽卡」：带一个有限数字 seed（具体值随机，只断类型）
-    /* SAFETY: 类型断言已复核 */
-    const seedArg = (synthesizeFirstFrame.mock.calls[0]![0] as { seed?: number }).seed;
+    const seedArgSource = synthesizeFirstFrame.mock.calls[0]?.[0];
+    if (!isRecord(seedArgSource)) {
+      throw new TypeError("生图参数不是对象");
+    }
+    const seedArg = seedArgSource.seed;
     expect(typeof seedArg).toBe("number");
     expect(Number.isFinite(seedArg)).toBe(true);
   });
@@ -525,12 +539,9 @@ describe("advanceRunLoop · 剧本评审闭环（FR-QA-07 ④ · #2478）", () =
     expect(reviewScript).toHaveBeenCalledTimes(1);
     expect(scriptDigestOf(revised)).not.toBe(scriptDigestOf("# 旧剧本"));
     const row = await readRow();
-    /* SAFETY: 类型断言已复核 */
-    const shots = row!.shots as Array<{
-      id: string;
-      prompt: string;
-    }>;
-    expect(shots.some((s) => s.id === "old")).toBe(false); // 旧分镜被新剧本的分镜覆盖
+    const shots = row?.shots;
+    assertRecordArray(shots, "shots");
+    expect(shots.some((item) => item.id === "old")).toBe(false); // 旧分镜被新剧本的分镜覆盖
     const run = normalizeProductionRun(row!.run);
     expect(run.storyboardScriptDigest).toBe(scriptDigestOf(revised));
   });

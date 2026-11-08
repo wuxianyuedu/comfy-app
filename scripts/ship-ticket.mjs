@@ -46,6 +46,26 @@ export function fragmentHead(root, rel) {
 }
 
 /**
+ * 一份 `changelog.d/` 碎片**去掉首行段落标题之后的正文**，按盘上原样（只去首尾空白）。
+ *
+ * 首行由 `fragmentHead` 单独读，两者拼起来就是这份文件的全部内容：PR 正文里标题进
+ * 「清单」那一行、正文进「原文」那一节，各读一处、不重抄、不改写。首行按形态门禁
+ * （§13.10.5）必然是段落标题；取不到文件回空串 —— 那是「没有读到」，不是「正文为空」，
+ * 调用方据它决定要不要为这份碎片贴出原文小节。
+ *
+ * @param {string} root 仓库根
+ * @param {string} rel 碎片相对路径
+ * @returns {string} 去掉首行后的正文
+ */
+export function fragmentBody(root, rel) {
+  try {
+    return fs.readFileSync(path.join(root, rel), "utf8").split(/\r?\n/).slice(1).join("\n").trim();
+  } catch {
+    return "";
+  }
+}
+
+/**
  * 「这次变更挂在哪张单子上」—— **只读数，不拦**。
  *
  * 三条口径，方向都是「把没挂单念出来，而不是逼出一个号」：
