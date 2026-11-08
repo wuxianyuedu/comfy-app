@@ -192,12 +192,14 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
-          # 这一格的两份格式判面都只读当前树：`--changed` 的基线是 payload 的
-          # `CNB_PULL_REQUEST_TARGET_SHA`，而镜像推来的合成 merge 的两个父正是
-          # base 与 head ⇒ depth=2 就够（本机读数：全量历史 2610 笔 / pack ≈170 MiB，
-          # 这一格用不到更早的提交）；全量档走 `git ls-files` 数当前树的文件，
-          # 也不读历史。基线缺席时 `--changed` 自己退「没判」，不靠浅克隆蒙过去。
-          fetch-depth: 2
+          # `--changed` 的基线是 payload 的 `CNB_PULL_REQUEST_TARGET_SHA`（PR 事件注入的
+          # 目标分支快照），**不等于**合成 merge 的 base 父：master 在 PR 存活期间继续前进时
+          # 它会比 base 父更老，这批历史落在 depth=2 之外 ⇒ 三点 diff 的 merge-base / 基线对象
+          # 取不到、判据 fail-closed 退 2（ISSUE #3375 的现场：老 PR 重跑 + master 已前进）。
+          # 全量档走 `git ls-files` 数当前树、不读历史，但两格共用同一次 checkout ⇒ 一起回到
+          # 全量历史，与 static / heavy 同形态（fixed 段不解析改动面，仍可浅检出）。基线缺席时
+          # `--changed` 自己退「没判」。
+          fetch-depth: 0
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
         uses: pnpm/action-setup@v6
@@ -306,8 +308,11 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
-          # 与 fixed 那格同因：diff 基线是合成 merge 的父提交，depth=2 够。
-          fetch-depth: 2
+          # 与 typecheck 那格同因：diff 基线是 payload 的 `CNB_PULL_REQUEST_TARGET_SHA`
+          # （PR 事件的目标分支快照），不是合成 merge 的 base 父。老 PR 重跑 + master 前进时
+          # 基线比 base 父更老，depth=2 取不到 ⇒ 三点 diff fail-closed 退 2（ISSUE #3375）。
+          # 回到全量历史，判据脚本一字不改。
+          fetch-depth: 0
           # 与 fixed 那格同因：改动面含字体资产 / 字体用例时这一格也会跑到
           # tests/embedded-title-font.test.ts，只检指针文件必红 ⇒ 同开 lfs: true。
           # 配额口径见 fixed 那格（每次拉取计带宽，撞墙是 Billing 的事）。
