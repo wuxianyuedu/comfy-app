@@ -13,14 +13,13 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 /* POSIX 宿主探针改由 fixture 提供（`tests/helpers/platform-fixtures.ts`）——
  * 原来本文件自己写了一份 `posixHost()`，与 `kill-process-tree` 那边同形。
  * fixture 版是同一份实现，改一处两边都动。 */
 import { test as platformTest } from "../../../tests/helpers/platform-fixtures";
 
 import {
-  clearWhichCommandCache,
   executableExts,
   executableKind,
   pnpmInvocation,
@@ -33,16 +32,12 @@ import {
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "exec-resolve-"));
 let seq = 0;
-/** 每个用例一个独立目录：同一个 tmp 路径被覆写重造会让记忆化缓存说谎。 */
+/** 每个用例一个独立目录：同名文件被覆写重造不会串到别的用例（`whichCommand` 不再记忆化）。 */
 function freshDir(): string {
   const dir = path.join(tmp, `case-${seq++}`);
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
-
-beforeEach(() => {
-  clearWhichCommandCache();
-});
 
 afterAll(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
@@ -549,5 +544,74 @@ describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", ()
     expect(inv!.command).toBe(process.execPath);
     expect(inv!.args).toEqual([entry, "install"]);
     expect(inv!.viaHost).toBe(false);
+  });
+});
+
+/**
+ * 解析结果**不跨调用共享**（ISSUE #3327）。
+ *
+ * 此前模块级 `Map` 把每次解析的产物写进同一张表，另一次「按名字查」的调用会把它读回来：
+ * 既会读到过期值（PATH 上的文件在本进程存活期间被删 / 重造），也构成一条进程内通道
+ * （扫描器据此把一次调用当成另一次的源）。去掉记忆化后每次调用都现扫 PATH，下面四条钉的是
+ * 「合法值照旧、旧值不再复用、探针换了立即生效」。
+ */
+describe("whichCommand：每次调用现解析（不再有进程内记忆化）", () => {
+  /** 只看候选名、不真起进程 —— `access` 与 `spawn` 都放行。 */
+  function passthrough(): UsabilityProbe {
+    return { access: () => undefined, spawn: () => null };
+  }
+
+  it("合法值照旧：PATH 上唯一的候选就是返回的绝对路径", () => {
+    const dir = freshDir();
+    const exe = path.join(dir, "tool");
+    writeExec(exe, "#!/bin/sh\nexit 0\n");
+    expect(
+      whichCommand("tool", { env: { PATH: dir }, platform: "linux", probe: passthrough() }),
+    ).toBe(exe);
+  });
+
+  it("同名、同 PATH、文件已删：第二次不再读回第一次的旧路径", () => {
+    const dir = freshDir();
+    const exe = path.join(dir, "tool");
+    writeExec(exe, "#!/bin/sh\nexit 0\n");
+    const env = { PATH: dir };
+    expect(whichCommand("tool", { env, platform: "linux", probe: passthrough() })).toBe(exe);
+    fs.rmSync(exe);
+    /* 旧实现的记忆化键只有 name + PATH + PATHEXT + platform ⇒ 这里会读回已删掉的旧路径。 */
+    expect(whichCommand("tool", { env, platform: "linux", probe: passthrough() })).toBeNull();
+  });
+
+  it("换探针不再需要先清缓存：同一条 PATH 上一次通过、一次拒绝", () => {
+    const dir = freshDir();
+    writeExec(path.join(dir, "tool"), "#!/bin/sh\nexit 0\n");
+    const env = { PATH: dir };
+    expect(whichCommand("tool", { env, platform: "linux", probe: passthrough() })).not.toBeNull();
+    /* 旧实现的键里不含 probe ⇒ 这一格会读到上一条的「可用」结论。 */
+    expect(
+      whichCommand("tool", {
+        env,
+        platform: "linux",
+        probe: { access: () => undefined, spawn: () => "ENOEXEC" },
+      }),
+    ).toBeNull();
+  });
+
+  it("已删除的落点不会以旧值再进 `spawn` 的参数（resolveCommandInvocation）", () => {
+    const dir = freshDir();
+    const exe = path.join(dir, "tool");
+    writeExec(exe, "#!/bin/sh\nexit 0\n");
+    const options = { env: { PATH: dir }, platform: "linux" as const, probe: passthrough() };
+    expect(resolveCommandInvocation("tool", [], options)).toEqual({
+      command: exe,
+      args: [],
+      resolved: true,
+    });
+    fs.rmSync(exe);
+    /* 找不到就退回裸名字（交给 OS 按名字解析），而不是上一次解析出的绝对路径。 */
+    expect(resolveCommandInvocation("tool", [], options)).toEqual({
+      command: "tool",
+      args: [],
+      resolved: false,
+    });
   });
 });
