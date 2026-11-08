@@ -328,7 +328,7 @@ export const DISPATCH_STATE_FILE = "mirror-dispatch.json";
  *
  * @param {(file: string, data: string) => void} writeFileSync 注入面（用例不落真文件）
  * @param {string} root 检出根
- * @param {{dispatched: boolean, reason: string}} state 这一跳的结论
+ * @param {{dispatched: boolean, reason: string, sha?: string}} state 这一跳的结论
  * @param {(dir: string, opts: { recursive: boolean }) => void} [mkdir] 注入面（默认真建目录）
  * @returns {void}
  */

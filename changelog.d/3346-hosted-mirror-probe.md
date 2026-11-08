@@ -26,6 +26,16 @@
   同源 —— 托管机实验格不再需要 cnb 通道（首跑读数：容器里没有 cnb 二进制，标题退回
   「PR #号 · sha」老格式）。env 缺席时保留原 `cnb pulls get-pull` 回读兜底；
   曾做过一版镜像预装 cnb CLI 的方案（PR #3364），被这个零依赖方案取代后关闭。
+- **await 前置改按「树等价」匹配，跳过路径的回执带派发 sha**（首跑读数：同一 PR 事件
+  上两条流水线**各自合成 merge 提交** —— 托管机推 `550f9e58`、主格 HEAD `c415c6ef`，
+  同两父同树、sha 不同 ⇒ 按 sha 等值匹配的等待 300s 必然白等，且直接放宽成「ref 存在
+  即跳过」会断在判决链：判决回读按 `display_title` 里的 sha 认领本跑）。三件同批：
+  ① `ci-mirror-hosted-await.mjs` 在 ref 出现非本格 sha 时浅取那一笔、比 `^{tree}` 与
+  本格 HEAD 的树（同 ⇒ 托管机交付了等价内容，跳过；不同 ⇒ 旧值，继续等）；
+  ② 跳过路径的 `mirror-dispatch.json` 带 `sha`（托管机实际推送的那笔）；
+  ③ 判决回读 `readDispatchState` 透传 `sha`（40 位十六进制才收），`runVerdict` 的
+  认领键优先用回执里的 sha（缺席回落本格 HEAD）—— 托管机那条 run 才认得到。
+  已知代价不变：双派发竞态窗（同树两条 run，判决链按回执 sha 认领，树同判同）。
 - 用例：`tests/ci-github-mirror-push.test.ts` 新增 once 两态（推送 / LFS 各只试一次，
   缺省档重试语义仍在）与等托管机四场景（见 HEAD 即跳过 + 落回执、旧 sha 到点兜底、
   读没通到点兜底、前提取不到不抢话术）；`tests/no-platform-ci-config.test.ts`

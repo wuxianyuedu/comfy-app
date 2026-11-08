@@ -225,6 +225,11 @@ describe("纯函数", () => {
       reason: "推送失败",
     });
     expect(read(JSON.stringify({ dispatched: true, reason: "已派发" }))?.dispatched).toBe(true);
+    /* 回执里的派发 sha（#3346）：40 位十六进制才透传 —— 认领键要用托管机实际推的那笔。 */
+    expect(
+      read(JSON.stringify({ dispatched: true, reason: "已派发", sha: "5".repeat(40) })),
+    ).toEqual({ dispatched: true, reason: "已派发", sha: "5".repeat(40) });
+    expect(read(JSON.stringify({ dispatched: true, sha: "55555555" }))?.sha).toBeUndefined();
     /* 缺字段 / 不是 JSON / 文件不在：都返回 null，让调用方退回老行为。 */
     expect(read(JSON.stringify({ reason: "没有 dispatched" }))).toBeNull();
     expect(read("not json")).toBeNull();
@@ -281,7 +286,7 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
       checksFallback?: Response | (() => Response);
       checksSteps?: Array<Response | Error>;
       /** 上游派发形状那份落盘（#3148）：缺省 = 读不到，退回「自己猜」的老行为。 */
-      dispatchState?: { dispatched: boolean; reason: string } | null;
+      dispatchState?: { dispatched: boolean; reason: string; sha?: string } | null;
       env?: Record<string, string | undefined>;
       nowStep?: number;
       runsFallback?: Response | (() => Response);
@@ -698,6 +703,36 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
     const all = heard.join("\n");
     expect(all).toContain("上游派发格的读数");
     expect(all).toContain("已派发");
+    expect(all).toContain("结论：exit 0");
+  });
+
+  it("回执带派发 sha（托管机那笔，与本格 HEAD 同树不同 sha）⇒ 认领键换过去照样认领（#3346）", async () => {
+    /* 两条流水线各自合成 merge 提交：跳过路径下 GitHub run 的 display_title 里嵌的是
+     * 托管机那笔 sha —— 认领键必须跟着回执走，按本格 HEAD 找永远认不上。 */
+    const hostedSha = "5".repeat(40);
+    const { calls, heard, io } = harness({
+      dispatchState: {
+        dispatched: true,
+        reason: "已由托管机实验格推送并派发（树与本跑一致）",
+        sha: hostedSha,
+      },
+      runsFallback: new Response(
+        runsBodyOf([
+          {
+            conclusion: "success",
+            display_title: `PR #2649 · ci(mirror): 托管机实验 · ${hostedSha}`,
+            name: "static-gates",
+            status: "completed",
+          },
+        ]),
+      ),
+    });
+    const code = await runVerdict(io);
+    expect(code).toBe(CODE.OK);
+    expect(calls).toEqual([workflowRunsUrl(REPO)]);
+    const all = heard.join("\n");
+    expect(all).toContain("认领键：回执记录的派发 sha 55555555 与本格 HEAD");
+    expect(all).toContain("按回执那笔认领");
     expect(all).toContain("结论：exit 0");
   });
 
