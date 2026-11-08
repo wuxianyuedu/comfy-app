@@ -37,21 +37,20 @@ import { cnbJson } from "./ship-exec.mjs";
  * @returns {string[] | null}
  */
 export function readCommentBodies({ run, slug, number, route = "issue" }) {
-  const tail = [
-    "--repo",
-    slug,
-    "--number",
-    String(number),
-    "--sort",
-    "-created",
-    "--page-size",
-    "100",
-    "-v",
-  ];
+  const head = ["--repo", slug, "--number", String(number)];
+  /* 参数尾巴按 route 拼开（ISSUE #3279）：`--sort -created` 只有单子评论区
+   * （`issues list-issue-comments`）支持，PR 侧的 `pulls list-pull-comments`
+   * 没有这一项 —— 共用一个 tail 时 PR 侧命令直接 `unknown option`，写成功了
+   * 也念成「回读没跑起来」，人会去重跑造成重复评论。回读这一格本来就是
+   * 逐字找最新那条，PR 侧不带 sort 不承载任何判据。 */
+  const tail =
+    route === "pull"
+      ? ["--page-size", "100", "-v"]
+      : ["--sort", "-created", "--page-size", "100", "-v"];
   const got =
     route === "pull"
-      ? cnbJson(run, ["pulls", "list-pull-comments", ...tail])
-      : cnbJson(run, ["issues", "list-issue-comments", ...tail]);
+      ? cnbJson(run, ["pulls", "list-pull-comments", ...head, ...tail])
+      : cnbJson(run, ["issues", "list-issue-comments", ...head, ...tail]);
   if (!got) {
     return null;
   }
