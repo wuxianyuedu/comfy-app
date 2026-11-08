@@ -63,21 +63,25 @@ export function readPullBody(json) {
  * @returns {{body: string, stop: number | null, reason: string}}
  */
 function cappedPlan(body, userBody, verb) {
-  if (body.length <= PULL_BODY_LIMIT) {
+  /* 平台拒的是 UTF-8 字节数，不是字符数：纯中文正文用 `.length` 会低估到三分之一，
+   * 于是「本地说在上限内」而平台回 2000003。`buildPullBody` 也按同一把尺子降级。 */
+  if (Buffer.byteLength(body, "utf8") <= PULL_BODY_LIMIT) {
     return { body, stop: null, reason: "" };
   }
-  /* 与 #2248 同一条出口：超上限时一次网络往返都不发。碎片清单不在裁剪面里，
-   * 这里能裁的只有 diffstat（`buildPullBody` 内部已经减半到 0）；仍然超，说明
+  /* 与 #2248 同一条出口：超上限时一次网络往返都不发。清单本身不裁（漏报这次带了什么），
+   * `buildPullBody` 内部已经把 diffstat 与碎片原文预算都减到 0；仍然超，说明
    * 正文本体自己就装不下 —— 说清它有多大、该由人裁哪一段。 */
   const mine = userBody ?? "";
-  const mineNote = mine ? `（其中 \`--pr-body-file\` ${mine.length} 字节）` : "";
+  const mineNote = mine
+    ? `（其中 \`--pr-body-file\` ${Buffer.byteLength(mine, "utf8")} 字节）`
+    : "";
   const outlet = mine
-    ? "先裁掉正文里那一段（碎片清单与 diffstat 已经裁到最小），或把变更拆小。"
+    ? "先裁掉正文里那一段（清单、碎片原文与 diffstat 已经裁到最小），或把变更拆小。"
     : "这一格没有执行者（不是「已建」）。出口是把这次变更拆小，或自己写正文手工建一条。";
   return {
     body,
     stop: CODE.NOT_RUN,
-    reason: `[ship] PR 正文拼出来 ${body.length} 字节${mineNote}，超过上限 ${PULL_BODY_LIMIT} ⇒ ${verb}：${outlet}`,
+    reason: `[ship] PR 正文拼出来 ${Buffer.byteLength(body, "utf8")} 字节${mineNote}，超过上限 ${PULL_BODY_LIMIT} ⇒ ${verb}：${outlet}`,
   };
 }
 
