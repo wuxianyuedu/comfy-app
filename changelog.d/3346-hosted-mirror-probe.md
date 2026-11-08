@@ -36,6 +36,11 @@
   ③ 判决回读 `readDispatchState` 透传 `sha`（40 位十六进制才收），`runVerdict` 的
   认领键优先用回执里的 sha（缺席回落本格 HEAD）—— 托管机那条 run 才认得到。
   已知代价不变：双派发竞态窗（同树两条 run，判决链按回执 sha 认领，树同判同）。
+- **树不等 ⇒ 当场兜底，不等满预算**（#3366 重跑现场读数：重跑 build 里托管机管线被
+  平台标 `skipped`——上一跑已成功过——ref 上是上一跑推的旧值，树与本跑 legitimately
+  不同；旧值永远不会自己变成我们的树，等满 300s 只是白等）。树守卫正确地拒绝跳过
+  （fail-closed 没破），但改成**当场落回兜底**：它要被重推，ref 变化的那一刻会被后续
+  读数重新核验。附带修正读数话术：「ref 还没出现」与「ref 在但树不同」分开念。
 - 用例：`tests/ci-github-mirror-push.test.ts` 新增 once 两态（推送 / LFS 各只试一次，
   缺省档重试语义仍在）与等托管机四场景（见 HEAD 即跳过 + 落回执、旧 sha 到点兜底、
   读没通到点兜底、前提取不到不抢话术）；`tests/no-platform-ci-config.test.ts`
