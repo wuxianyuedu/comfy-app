@@ -21,6 +21,7 @@
  * = 断开（卡片悬空），刷新后不会被默认落点复活。
  */
 
+import { isPlainRecord } from "~/lib/is-record";
 import { MODE_KEY_PREFIX } from "~/lib/workflow/workflow-param-mapping";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 
@@ -70,22 +71,19 @@ function manualMapForMode(
   if (mode == null || mode === "") {
     return {};
   }
-  if (typeof paramMap !== "object" || paramMap === null || Array.isArray(paramMap)) {
+  if (!isPlainRecord(paramMap)) {
     return {};
   }
-  /* SAFETY: 类型断言已复核 */
-  const ns = (paramMap as Record<string, unknown>)[OUTPUT_BINDING_NAMESPACE];
-  if (typeof ns !== "object" || ns === null || Array.isArray(ns)) {
+  const ns = paramMap[OUTPUT_BINDING_NAMESPACE];
+  if (!isPlainRecord(ns)) {
     return {};
   }
-  /* SAFETY: 类型断言已复核 */
-  const table = (ns as Record<string, unknown>)[`${MODE_KEY_PREFIX}${mode}`];
-  if (typeof table !== "object" || table === null || Array.isArray(table)) {
+  const table = ns[`${MODE_KEY_PREFIX}${mode}`];
+  if (!isPlainRecord(table)) {
     return {};
   }
   const out: Record<string, string | null> = {};
-  /* SAFETY: 类型断言已复核 */
-  for (const [ioKey, value] of Object.entries(table as Record<string, unknown>)) {
+  for (const [ioKey, value] of Object.entries(table)) {
     if (typeof value === "string") {
       out[ioKey] = value;
     } else if (value === null) {
@@ -158,19 +156,11 @@ export function applyOutputBindingEdit(
     return base;
   }
   const ns = base[OUTPUT_BINDING_NAMESPACE];
-  const table =
-    /* SAFETY: 类型断言已复核 */
-    typeof ns === "object" && ns !== null && !Array.isArray(ns)
-      ? {
-          ...(ns as Record<string, unknown>),
-        }
-      : {};
+  const table: Record<string, unknown> = isPlainRecord(ns) ? { ...ns } : {};
   const key = `${MODE_KEY_PREFIX}${edit.mode}`;
   const byOutput = table[key];
   table[key] = {
-    ...(typeof byOutput === "object" && byOutput !== null && !Array.isArray(byOutput)
-      ? byOutput
-      : {}),
+    ...(isPlainRecord(byOutput) ? byOutput : {}),
     [edit.outputIoKey]: edit.ioKey,
   };
   return { ...base, [OUTPUT_BINDING_NAMESPACE]: table };
@@ -190,22 +180,16 @@ export function clearOutputBindingEdit(
     return base;
   }
   const ns = base[OUTPUT_BINDING_NAMESPACE];
-  if (typeof ns !== "object" || ns === null || Array.isArray(ns)) {
+  if (!isPlainRecord(ns)) {
     return base;
   }
-  /* SAFETY: 类型断言已复核 */
-  const table = {
-    ...(ns as Record<string, unknown>),
-  };
+  const table: Record<string, unknown> = { ...ns };
   const key = `${MODE_KEY_PREFIX}${mode}`;
   const byOutput = table[key];
-  if (typeof byOutput !== "object" || byOutput === null || Array.isArray(byOutput)) {
+  if (!isPlainRecord(byOutput)) {
     return base;
   }
-  /* SAFETY: 类型断言已复核 */
-  const next = {
-    ...(byOutput as Record<string, unknown>),
-  };
+  const next: Record<string, unknown> = { ...byOutput };
   delete next[outputIoKey];
   if (Object.keys(next).length > 0) {
     table[key] = next;

@@ -860,26 +860,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/lib/shell/app-service-exit.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/shell/app-update-client.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/shell/code-update-since-load.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/shell/desktop-shell-client.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/shell/open-in-browser.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/shell/reveal-path.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/shell/stale-store-notify.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/sqlite-error.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/task-state.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/update-check-client.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workflow/debug-source-client.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workflow/workflow-exposed-params.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workflow/workflow-io-types.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workflow/workflow-io-types.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workflow/workflow-mutations.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workflow/workflow-output-binding.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workflow/workflow-param-classes.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workflow/workflow-param-mapping.ts", // 存量 5 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workflow/workflow-run-store.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/lib/workshop/api-channel-client.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/workshop/api-channel-core.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/workshop/api-channel.server.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/lib/workshop/character-portrait.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用

@@ -20,6 +20,7 @@
  * 不同；③ 就是两边之间那层薄封装，方向是「库 → 通用」，通用那侧不认识库。
  */
 import { errorText } from "~/lib/error-message";
+import { isRecord } from "~/lib/is-record";
 import { LOG_DETAIL_MAX, clampText } from "~/lib/text-clamp";
 
 /** cause 链最多走几层：drizzle → 驱动 → native 实际只有一两层，留出余量即可，
@@ -40,21 +41,19 @@ const LOCK_ERRCODES: Readonly<Record<number, string>> = {
 };
 
 function fieldOf(value: unknown, key: "code" | "message" | "name" | "errstr"): string {
-  if (typeof value !== "object" || value === null) {
+  if (!isRecord(value)) {
     return "";
   }
-  /* SAFETY: 类型断言已复核 */
-  const raw = (value as Record<string, unknown>)[key];
+  const raw = value[key];
   return typeof raw === "string" ? raw : "";
 }
 
 /** node:sqlite 的 `errcode`（原生扩展码），取不到给 `null`。 */
 function errcodeOf(value: unknown): number | null {
-  if (typeof value !== "object" || value === null) {
+  if (!isRecord(value)) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  const raw = (value as Record<string, unknown>).errcode;
+  const raw = value.errcode;
   return typeof raw === "number" ? raw : null;
 }
 

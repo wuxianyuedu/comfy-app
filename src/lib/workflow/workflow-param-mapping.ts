@@ -43,6 +43,7 @@ import {
   exposedParamDisplayLabel,
   exposedParamsForMode,
 } from "~/lib/workflow/workflow-exposed-params";
+import { isPlainRecord } from "~/lib/is-record";
 import {
   alignMultipleOf,
   aspectLabelForDims,
@@ -66,6 +67,11 @@ import {
 } from "./workflow-param-classes";
 
 export * from "./workflow-param-classes";
+
+/** 分类键的运行时判据（契约 / 持久化来的字符串可能是历史遗留的未知值）。 */
+function isParamClass(value: string): value is ParamClass {
+  return Object.hasOwn(CLASS_FAMILY, value);
+}
 
 /* 注：一条映射线**一定**来自作者画的线 —— 落点本身不可能凭空产生（见
  *  `resolveMapping`：没有线就没有落点）；也没有「组合控件摊开成多条线」这回事
@@ -141,8 +147,10 @@ function buildContractEntries(
       if (out.some((entry) => entry.id === id)) {
         continue;
       }
-      /* SAFETY: 类型断言已复核 */
-      const cls = (def.cls === "size" ? id : def.cls) as ParamClass;
+      const cls = def.cls === "size" ? id : def.cls;
+      if (!isParamClass(cls)) {
+        continue;
+      }
       const pins = pinsByClass.get(cls) ?? [];
       const override = pins.map((pin) => labels?.[pin.ioKey]).find(Boolean);
       out.push({
@@ -201,8 +209,10 @@ function classifyPins(io: WorkflowIOMap | null | undefined): Map<ParamClass, Par
     });
   }
   const pinsByClass = new Map<ParamClass, ParamEntry["pins"]>();
-  /* SAFETY: 类型断言已复核 */
-  for (const klass of Object.keys(CLASS_FAMILY) as Array<ParamClass>) {
+  for (const klass of Object.keys(CLASS_FAMILY)) {
+    if (!isParamClass(klass)) {
+      continue;
+    }
     /* 聚合值 `size` 不单独摆候选：契约层把它摊成六个子口。 */
     if (klass === "size") {
       continue;
@@ -353,16 +363,14 @@ const LEGACY_SIZE_ENTRY_ID = "size";
 export function parseParamMapping(paramMap: unknown): ParamMapping {
   const manualByMode: Record<string, Record<string, string | null>> = {};
   const out: ParamMapping = { manualByMode, labels: {} };
-  if (typeof paramMap !== "object" || paramMap === null || Array.isArray(paramMap)) {
+  if (!isPlainRecord(paramMap)) {
     return out;
   }
-  /* SAFETY: 类型断言已复核 */
-  const sourceRaw = (paramMap as Record<string, unknown>).source;
-  if (typeof sourceRaw !== "object" || sourceRaw === null || Array.isArray(sourceRaw)) {
+  const sourceRaw = paramMap.source;
+  if (!isPlainRecord(sourceRaw)) {
     return out;
   }
-  /* SAFETY: 类型断言已复核 */
-  for (const [key, value] of Object.entries(sourceRaw as Record<string, unknown>)) {
+  for (const [key, value] of Object.entries(sourceRaw)) {
     if (!key.startsWith(MODE_KEY_PREFIX)) {
       continue;
     }
@@ -370,12 +378,11 @@ export function parseParamMapping(paramMap: unknown): ParamMapping {
     if (mode === "") {
       continue;
     }
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    if (!isPlainRecord(value)) {
       continue;
     }
     const byEntry: Record<string, string | null> = {};
-    /* SAFETY: 类型断言已复核 */
-    for (const [entryId, target] of Object.entries(value as Record<string, unknown>)) {
+    for (const [entryId, target] of Object.entries(value)) {
       /* 存量清理：那个键没有任何入口能再写出来，读到即丢（下面 `byEntry` 里没它，
        *  序列化自然也不会把它写回去）。 */
       if (entryId === LEGACY_SIZE_ENTRY_ID) {
