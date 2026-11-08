@@ -204,7 +204,6 @@ export function ImageGenerationPanel({
   );
 
   const selectType = (code: string) => {
-    // eslint-disable-next-line react-hooks/immutability -- seededFor 为 useRef，重选类型时清空种子标记
     seededFor.current = null;
     setWfModes(null);
     /* 切类型时若当前模型标签在新类型下没有工作流
@@ -229,7 +228,6 @@ export function ImageGenerationPanel({
     });
   };
   const selectModelTag = (name: string) => {
-    // eslint-disable-next-line react-hooks/immutability -- 同上，重选模型标签时重置种子
     seededFor.current = null;
     setWfModes(null);
     // 该模型下若只剩 1 个工作流，就直接选它，避免
@@ -266,7 +264,6 @@ export function ImageGenerationPanel({
   };
   const selectWorkflow = (wfId: string) => {
     const wf = wfList.find((wfList) => wfList.id === wfId);
-    // eslint-disable-next-line react-hooks/immutability -- 重选工作流时重置种子
     seededFor.current = null;
     patch({
       workflowId: wfId,

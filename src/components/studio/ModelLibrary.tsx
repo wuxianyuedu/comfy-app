@@ -198,7 +198,7 @@ function ModelList({ items }: { items: Array<ModelRow> }) {
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   // virtualizer 的读数（getVirtualItems/getTotalSize）只在本组件 render 内消费，
   // 不外传给被 memo 的子组件，不存在该规则担心的「跨组件陈旧 UI」风险，此告警对本用法是误报。
-  // eslint-disable-next-line react-hooks/incompatible-library
+  // oxlint-disable-next-line react/incompatible-library
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollEl,

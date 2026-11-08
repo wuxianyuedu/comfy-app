@@ -9708,7 +9708,7 @@ eslint 配置）：本机 1s 级；用库里那条 bin 的预算仍与 a11y 同�
 **#2638 oxlint（PR 秒级前置 lint）⇒ 不进 CI 常驻第二道闸；「评估尺 + 清污批驱动」的现行用法落档。**
 
 - 单子的「现状」读数已过时：oxlint **已经引入**——`oxlint` / `oxlint-config-awesomeness` /
-  `oxlint-plugin-eslint` / `oxlint-plugin-boundaries` 在 devDependencies，根级
+  `oxlint-plugin-eslint` 在 devDependencies（`oxlint-plugin-boundaries` 已在后续清理批移除），根级
   `oxlint.config.ts` 已提交（awesomeness 预设 + boundaries 元素表与 `eslint.config.js`
   逐字对应 + store selector 与 router 错误信封两条同判据镜像）。单子落笔之后，
   #2774 / #2775 / #2841 一族已经把「oxlint 怎么用」跑成了既成事实：**单规则临时配置 +
