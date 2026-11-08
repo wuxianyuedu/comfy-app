@@ -1,23 +1,22 @@
 #!/usr/bin/env node
 /**
- * `ci-ga-verdict-placeholder.mjs` —— 「占位 fail-closed」那一族的**只读对账入口**（ISSUE #3378）。
+ * `ci-ga-verdict-placeholder.mjs` —— GA 回调 status 的**只读对账入口**（ISSUE #3378）。
  *
  * ## 它回答哪一格
  *
- * 回调那一跳（`ci-ga-verdict-callback.mjs`）要成立，脚下有两件同时为真的前提：
+ * 2026-11-08 转正后，GA 收尾 job 的 callback 是唯一判决数据源，CNB 侧
+ * `GA 回调结论回读`（`ci-ga-verdict-readout.mjs`）站内读它写进
+ * `GET /{repo}/-/pulls/{n}/commit-statuses` 的终态。骨架期的占位写者
+ * （`GA_ROLE=placeholder`）已退役，但这条只读入口留着做**现场对账**：
+ * 从那张 statuses 集合按 context 前缀分出「占位 / 回调 / 其它」三堆，给一行
+ * 可复做的读数（哪一堆在场、终态是什么、全量聚合落在哪）。
  *
- *   ① 占位 build 与回调 build 都绑在**同一个 PR 预合并 sha** 上；
- *   ② 两者写的是**同一条 commit-status context**（`cnb/api_trigger_ga_verdict/...`），
- *      后写覆盖前写 —— 否则占位的红会一直拉住聚合，回调的绿救不回来。
- *
- * 这两件在配置里是分散的（`.cnb.yml` 的事件名、GA 的 payload、平台合成的 sha），
- * 只靠读代码对不出来。本入口从 `GET /{repo}/-/pulls/{n}/commit-statuses` 取回
- * 那张 statuses 集合，按 context 前缀分出「占位 / 回调 / 其它」三堆，给一行
- * **可复做的读数**：缺哪一堆、两堆的 sha 是不是同一笔、终态是谁最后写的。
+ * 它是历史 skeleton 的读数工具，不是判据、不承重：名字留 `placeholder` 是
+ * 骨架落地时的称谓，改它要连 GA 侧 payload 与历史读数一起改，不值当。
  *
  * ## 刻意不做的事
  *
- * - **不写状态、不起 build、不掐占位**：这些都是动作，归 `.cnb.yml` 的回调
+ * - **不写状态、不起 build、不掐谁**：这些都是动作，归 `.cnb.yml` 的回调
  *   流水线（它才有可信事件令牌）与 GA 侧回调脚本。本文件一次网络写都不发。
  * - **不判「能不能合」**：聚合 `state` 是平台算的，本入口只把它念出来，
  *   不另立第二套判定（硬规则 27 第三条）。

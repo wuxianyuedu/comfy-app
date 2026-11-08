@@ -477,20 +477,21 @@ describe("环境前提：浏览器那一格的两个消费者不许各写一份�
 });
 
 describe("环境前提：流水线上真的在跑它，且排在最长的等待之前", () => {
-  it("`COMFYAPP_CI_GATES` 里登记了它，且它排在 `GitHub 判决回读` 之前", () => {
+  it("`COMFYAPP_CI_GATES` 里登记了它，且它排在 `GA 回调结论回读` 之前", () => {
     /* 2026-11-05 薄化后 PR 档不再装依赖（GA 的 `安装依赖` step 接管），原先「排在
      * `Install dependencies` 之前」的对象随之消失。仍然成立的语义是：这一格答的是
-     * 「这台节点此刻能力够不够」，而 `GitHub 判决回读` 要等 45m —— 排在那后面等于把
-     * 结论推到最后一刻，红了也没人来得及看。 */
+     * 「这台节点此刻能力够不够」，而 `GA 回调结论回读` 要活到 GA 出结论（站内 45m
+     * 预算，2026-11-08 起接替 `GitHub 判决回读`）—— 排在那后面等于把结论推到最后一刻，
+     * 红了也没人来得及看。 */
     const order = registeredGateOrder(read(".cnb.yml"));
     expect(order.length, "解析不出 COMFYAPP_CI_GATES —— 键被删了？").toBeGreaterThan(0);
     const at = order.indexOf("环境前提");
-    const waitAt = order.indexOf("GitHub 判决回读");
+    const waitAt = order.indexOf("GA 回调结论回读");
     expect(at, "`环境前提` 不在清单里 —— 那一步因此没有任何执行者").toBeGreaterThan(-1);
     expect(waitAt).toBeGreaterThan(-1);
     expect(
       at,
-      "`环境前提` 必须排在 `GitHub 判决回读` 之前：前提结论要在 45m 的等待开始前给出",
+      "`环境前提` 必须排在 `GA 回调结论回读` 之前：前提结论要在 45m 的等待开始前给出",
     ).toBeLessThan(waitAt);
   });
 

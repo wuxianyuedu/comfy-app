@@ -192,12 +192,14 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
-          # 这一格的两份格式判面都只读当前树：`--changed` 的基线是 payload 的
-          # `CNB_PULL_REQUEST_TARGET_SHA`，而镜像推来的合成 merge 的两个父正是
-          # base 与 head ⇒ depth=2 就够（本机读数：全量历史 2610 笔 / pack ≈170 MiB，
-          # 这一格用不到更早的提交）；全量档走 `git ls-files` 数当前树的文件，
-          # 也不读历史。基线缺席时 `--changed` 自己退「没判」，不靠浅克隆蒙过去。
-          fetch-depth: 2
+          # `--changed` 的基线是 payload 的 `CNB_PULL_REQUEST_TARGET_SHA`（PR 事件注入的
+          # 目标分支快照），**不等于**合成 merge 的 base 父：master 在 PR 存活期间继续前进时
+          # 它会比 base 父更老，这批历史落在 depth=2 之外 ⇒ 三点 diff 的 merge-base / 基线对象
+          # 取不到、判据 fail-closed 退 2（ISSUE #3375 的现场：老 PR 重跑 + master 已前进）。
+          # 全量档走 `git ls-files` 数当前树、不读历史，但两格共用同一次 checkout ⇒ 一起回到
+          # 全量历史，与 static / heavy 同形态（fixed 段不解析改动面，仍可浅检出）。基线缺席时
+          # `--changed` 自己退「没判」。
+          fetch-depth: 0
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
         uses: pnpm/action-setup@v6
@@ -306,8 +308,11 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
-          # 与 fixed 那格同因：diff 基线是合成 merge 的父提交，depth=2 够。
-          fetch-depth: 2
+          # 与 typecheck 那格同因：diff 基线是 payload 的 `CNB_PULL_REQUEST_TARGET_SHA`
+          # （PR 事件的目标分支快照），不是合成 merge 的 base 父。老 PR 重跑 + master 前进时
+          # 基线比 base 父更老，depth=2 取不到 ⇒ 三点 diff fail-closed 退 2（ISSUE #3375）。
+          # 回到全量历史，判据脚本一字不改。
+          fetch-depth: 0
           # 与 fixed 那格同因：改动面含字体资产 / 字体用例时这一格也会跑到
           # tests/embedded-title-font.test.ts，只检指针文件必红 ⇒ 同开 lfs: true。
           # 配额口径见 fixed 那格（每次拉取计带宽，撞墙是 Billing 的事）。
@@ -395,20 +400,18 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # ── GA 结论送回 CNB（ISSUE #3378 骨架·休眠）───────────────────────────────
+  # ── GA 结论送回 CNB（ISSUE #3378 · 2026-11-08 转正）────────────────────────
   #
-  # 上一轮探针（#3374）验过：GA 侧用 `repo-cnb-trigger:rw` 的令牌调一次
+  # 探针（#3374）验过：GA 侧用 `repo-cnb-trigger:rw` 的令牌调一次
   # `POST /{repo}/-/build/start`，带 `event=api_trigger_ga_verdict`、
-  # `sha=<PR 预合并 sha>`、`env.GA_VERDICT=<结论>`，平台会把那条短流水线的
-  # 终态自动写进该 sha 的 commit-statuses 并参与保护分支聚合。于是「CNB 出站
-  # 轮询 GitHub conclusion」可以换成「GA 入站推送结论」，自托管机不必再碰
-  # github.com —— 正是本单要解的那一格（托管机出网稳、自托管不稳）。
+  # `sha=<PR 预合并 sha>`、`env.GA_VERDICT=<结论>`，平台把那条短流水线的终态
+  # 自动写进该 sha 的 commit-statuses。
   #
-  # ⚠️ **骨架刻意休眠**：CNB 侧 `质量门禁` 的判决链一个字节没动，本 job 只在
-  # `CNB_TRIGGER_TOKEN` 这个 secret 配好之后才发得出回调；没配时脚本按
-  # fail-closed 退 2，而 `continue-on-error: true` 保证它**不改变本 workflow
-  # run 自己的 conclusion**（CNB 回读格读的就是这个 conclusion，不能自指）。
-  # 转正 = 配 secret + 起占位 + 逐笔对账 §13.5.33 判决链退场，是单独一次决定。
+  # 这一跳是**转正后的唯一判决数据源**：CNB 侧 `质量门禁` 的
+  # `GA 回调结论回读`（§13.5.33 逐笔对账）站内读这条 status，折成
+  # `pull_request` build 的退码 —— 出站轮询 GitHub conclusion 的主列已停用，
+  # 自托管机一台都不必碰 github.com。`continue-on-error: true` 保留：这一格
+  # 是「送结论」，它自己发没发出去不该反过来改本 run 的 conclusion。
   #
   # `needs` 列全五个判据 job：`if: always()` 让任一格红/取消时本格照样跑，
   # 把「红」也送回去（否则 GA 判红而 CNB 侧一直没有终态，PR 会一直挂着）。
