@@ -75,6 +75,12 @@ const DOMAINS = [
    * 本目录只放服务端取用面与设置页的接线。 */
   "db-backup",
   "drizzle-studio",
+  /* 应用内运行反馈（ISSUE #3371）：问题描述 / 截图 / 诊断日志打包与预填
+   * Issue 正文。它是「把一次现场收成可提交材料」这一件事的域，与 `log`
+   * （日志读写）、`media`（媒体编解码）都不同族：那两个是地基，本域是
+   * **面向用户的反馈入口**。契约 / 网络层在 `src/lib/feedback/`，落盘在
+   * `src/app/api/feedback/export/`，界面在 `src/components/feedback/`。 */
+  "feedback",
   "film",
   "llm",
   "log",

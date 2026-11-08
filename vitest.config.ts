@@ -840,6 +840,18 @@ const BASE_CONFIG = defineConfig({
           statements: 95,
           branches: 90,
         },
+        /* 应用内运行反馈（ISSUE #3371）：契约 / 正文生成 + 网络层。新增域
+         * **同批**登记（规范 §12.5.3 R14 / §18.6）：数值取自
+         * `pnpm exec vitest run --coverage src/lib/feedback` 的实测值向下取整到
+         * 5 的倍数（90.62 / 85.85 / 100 / 90.76 → 90/85/100/90），只升不降。
+         * 未满 100 的是契约守卫里几条「畸形输入」的兜底分支与网络层的
+         * HTTP 失败回落，用例已覆盖主路径，覆盖率工具按分支算不到全部组合。 */
+        "src/lib/feedback/**": {
+          lines: 90,
+          functions: 100,
+          statements: 90,
+          branches: 85,
+        },
         /* 应用内控制台（ISSUE #1327）：命令目录/解析（`console-catalog`）、
          * 回环闸门（`console-guard`）、SSE 客户端（`console-client`）、
          * 执行面（`console-run`）、运行槽单例（`console-registry`）。

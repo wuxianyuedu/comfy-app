@@ -1,0 +1,102 @@
+/* ── 「运行反馈」的网络层（规范 17 第②层）──────────────────────────────
+ * 反馈弹窗只关心「把一份草稿交出去、拿到落盘结果」，不直接发 fetch。
+ * 与 /api/logs/export 同族：桌面壳里浏览器下载不保证落盘，所以由服务端
+ * 把反馈包写进 log/exports/ 并把绝对路径回给界面。
+ */
+
+import { isRecord } from "~/lib/is-record";
+import { readApiError } from "~/lib/api-error";
+import type { FeedbackDraft } from "./feedback-contract";
+
+/** 一次反馈落盘的结果。失败不抛：界面据此显示「保存失败」+ 原因（硬规则 4）。 */
+export type FeedbackExportResult = {
+  /** 失败原因（成功时为空）。 */
+  error: string;
+  /** 反馈包目录的绝对路径（成功时有）。 */
+  packagePath: string;
+  /** 反馈包名（进 Issue 正文引用）。 */
+  packageName: string;
+  /** 相对 log/ 的短路径（界面空间窄，展示这一截）。 */
+  relativePath: string;
+  /** 本次随包写入的截图数。 */
+  imageCount: number;
+  /** 诊断日志 zip 是不是真的带上了。 */
+  diagnosticsIncluded: boolean;
+  ok: boolean;
+  /** 预填好的 Issue 正文（服务端按同一份契约生成，界面直接复制）。 */
+  issueBody: string;
+  /** 预填好的 Issue 标题。 */
+  issueTitle: string;
+};
+
+const EMPTY: FeedbackExportResult = {
+  error: "",
+  packagePath: "",
+  packageName: "",
+  relativePath: "",
+  imageCount: 0,
+  diagnosticsIncluded: false,
+  ok: false,
+  issueBody: "",
+  issueTitle: "",
+};
+
+/**
+ * 收窄服务端回执并补齐缺省字段。
+ * 「业务失败」那一档只需 `ok:false` + 一句原因（路由的 400/500 就是这种形状），
+ * 成功才要求全套路径 / 正文；否则一句「请填写问题描述」会被误判成「响应形状
+ * 不合法」，用户看不到真正的原因。
+ */
+function toFeedbackResult(value: unknown): FeedbackExportResult | null {
+  if (!isRecord(value) || typeof value.ok !== "boolean") {
+    return null;
+  }
+  const error = typeof value.error === "string" ? value.error : "";
+  if (value.ok === false) {
+    return { ...EMPTY, ok: false, error: error || "保存反馈失败" };
+  }
+  if (
+    typeof value.packagePath !== "string" ||
+    typeof value.packageName !== "string" ||
+    typeof value.relativePath !== "string" ||
+    typeof value.issueBody !== "string" ||
+    typeof value.issueTitle !== "string" ||
+    typeof value.imageCount !== "number" ||
+    typeof value.diagnosticsIncluded !== "boolean"
+  ) {
+    return null;
+  }
+  return {
+    ok: true,
+    error: "",
+    packagePath: value.packagePath,
+    packageName: value.packageName,
+    relativePath: value.relativePath,
+    imageCount: value.imageCount,
+    diagnosticsIncluded: value.diagnosticsIncluded,
+    issueBody: value.issueBody,
+    issueTitle: value.issueTitle,
+  };
+}
+
+/** 把一份反馈草稿交给服务端打包落盘。网络 / 服务端失败都转成同形状失败结果。 */
+export async function submitFeedback(draft: FeedbackDraft): Promise<FeedbackExportResult> {
+  try {
+    const res = await fetch("/api/feedback/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(draft),
+    });
+    const data: unknown = await res.json();
+    if (!res.ok) {
+      return { ...EMPTY, error: readApiError(data) ?? `提交失败（HTTP ${res.status}）` };
+    }
+    const result = toFeedbackResult(data);
+    return result ?? { ...EMPTY, error: "反馈响应形状不合法" };
+  } catch (error) {
+    return {
+      ...EMPTY,
+      error: error instanceof Error ? error.message : "网络请求失败",
+    };
+  }
+}
