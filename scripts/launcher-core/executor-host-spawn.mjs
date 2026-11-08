@@ -41,7 +41,7 @@ import { currentDirOf } from "./log.mjs";
 /** launcher 那一份日志分级（`launcher-core/log.mjs` 的同名 typedef）。
  *
  *  @typedef {"STEP" | "OK" | "WARN" | "ERROR" | "INFO"} LogLevel */
-import { spawnInGroup } from "./shell.mjs";
+import { resolveSpawnTarget, spawnInGroup } from "./shell.mjs";
 import { pruneTimestampedLogs } from "./worktree.mjs";
 
 /** 宿主入口：相对**项目根**（不是相对本文件——宿主自己按 ROOT 锚定 CWD）。 */
@@ -102,7 +102,19 @@ export function maybeSpawnExecutorHost({
     return null;
   }
 
-  const hostScript = path.join(root, EXECUTOR_HOST_SCRIPT);
+  /* 根的形态与入口的落点先过判据（ISSUE #3327）：`root` 必须是规范化的绝对路径，
+   * `EXECUTOR_HOST_SCRIPT` 必须是根内、无父级跳转的写死相对路径。非法值显式报一批，
+   * 不静默归一化、也不退回 inline。 */
+  let hostScript;
+  try {
+    hostScript = resolveSpawnTarget(root, EXECUTOR_HOST_SCRIPT, "执行器宿主入口");
+  } catch (error) {
+    logLine(
+      `✗ 拒绝拉起执行器宿主：${error instanceof Error ? error.message : String(error)}`,
+      "ERROR",
+    );
+    return null;
+  }
   if (!fs.existsSync(hostScript)) {
     /* 设了开关而入口不在：**不退回 inline**。退回才是更坏的一档——那时已经按
      * host 归属写下的行没有任何宿主会领，而「谁该来领」这件事就从现场消失了
@@ -127,7 +139,9 @@ export function maybeSpawnExecutorHost({
   try {
     child = spawnInGroup({
       command: process.execPath,
-      args: [hostScript],
+      /* 参数里只放写死的相对入口，变量部分（根）留在 `cwd`：即使根被打歪，
+       * 也不能把任意路径塞进命令行（ISSUE #3327）。 */
+      args: [EXECUTOR_HOST_SCRIPT],
       cwd: root,
       stdoutFile,
       stderrFile,

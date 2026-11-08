@@ -27,6 +27,7 @@ import {
   touchHeartbeat,
   writeSession,
 } from "../scripts/dev-launcher-session.mjs";
+import { assertAbsoluteRoot, resolveSpawnTarget } from "../scripts/launcher-core/shell.mjs";
 import { killProcessTree } from "../src/lib/process/kill-process-tree";
 import { stripComments as stripJs } from "./helpers/strip-comments";
 import { launcherChainSource } from "./helpers/launcher-source";
@@ -735,5 +736,48 @@ describe("readDiagnosticsTail（失败诊断的取词通道）", () => {
     fs.writeFileSync(path.join(panelDir, "nextjs-stdout-1.log"), "不是转录", "utf8");
     expect(latestPanelTranscript(panelDir)).toContain("nextjs-panel-2-2.log");
     expect(latestPanelTranscript(path.join(panelDir, "不存在"))).toBeNull();
+  });
+});
+
+/**
+ * ISSUE #3327：`spawn` 的参数数组只许放写死的相对入口，变量部分（项目根 / 载荷根）
+ * 留在 `cwd`，根与入口都先过判据。这里钉判据本身：合法值逐字同值，非法值显式拒绝。
+ */
+describe("spawn 入口判据（ISSUE #3327）", () => {
+  const root = path.resolve(import.meta.dirname, "..");
+
+  it("合法入口：落点与 path.join 逐字同值（正常路径行为不变）", () => {
+    expect(resolveSpawnTarget(root, "server.js", "server")).toBe(path.join(root, "server.js"));
+    expect(resolveSpawnTarget(root, "scripts/executor-host.mjs", "host")).toBe(
+      path.join(root, "scripts", "executor-host.mjs"),
+    );
+  });
+
+  /** 「形状非法」的入口样本：每一条都必须在判据第一跳被拒（不靠后续 path 归一化兜底）。 */
+  const rejectedEntries: Array<[string, string]> = [
+    ["父级跳转", "../server.js"],
+    ["嵌在中间", "scripts/../../server.js"],
+    ["反斜杠跳转", String.raw`scripts\..\..\server.js`],
+    ["POSIX 绝对路径", "/etc/passwd"],
+    ["Windows 盘符", String.raw`C:\Windows\System32\cmd.exe`],
+    ["空值", ""],
+    ["两端空白", " server.js "],
+    ["当前目录段", "./server.js"],
+    ["空段（尾部斜杠）", "scripts/executor-host.mjs/"],
+    ["只有父级", ".."],
+  ];
+
+  it.for(rejectedEntries)("拒绝 %s：%j", ([label, entry]) => {
+    expect(() => resolveSpawnTarget(root, entry, "入口"), label).toThrow();
+  });
+
+  it("根必须是规范化的绝对路径（不静默归一化）", () => {
+    expect(() => assertAbsoluteRoot("relative-root", "根")).toThrow(/绝对路径/u);
+    expect(() => assertAbsoluteRoot(`${root}${path.sep}.`, "根")).toThrow(/规范化/u);
+    expect(assertAbsoluteRoot(root, "根")).toBe(root);
+  });
+
+  it("根非法时，入口判据也不放行", () => {
+    expect(() => resolveSpawnTarget("relative-root", "server.js", "入口")).toThrow(/绝对路径/u);
   });
 });
