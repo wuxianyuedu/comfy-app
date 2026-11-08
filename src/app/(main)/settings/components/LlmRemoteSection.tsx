@@ -161,6 +161,16 @@ export function LlmRemoteSection({
           "还没有视频模型 —— 点击「添加模型」加入视频生成 API 使用的模型。",
         )}
 
+        <p className="text-muted-foreground text-2xs mb-3 leading-relaxed">
+          <strong className="text-ink/80">保存位置</strong>
+          ：接口地址、API Key 等配置保存在本地 SQLite 数据库（默认{" "}
+          <code className="text-ink/80">db.sqlite</code>，路径由{" "}
+          <code className="text-ink/80">DATABASE_URL</code> 指定）：每条模型落在{" "}
+          <code className="text-ink/80">remoteModel</code> 表，全局接口地址 / 全局 API Key 落在{" "}
+          <code className="text-ink/80">llmConfig</code> 单例行。API Key 在库内以 AES-256-GCM
+          加密存放，不会以明文下发到浏览器。
+        </p>
+
         <p className="text-muted-foreground text-2xs mb-4 leading-relaxed">
           此页只维护模型清单，添加 / 编辑 / 移除都会
           <strong className="text-ink/80">即时保存</strong>

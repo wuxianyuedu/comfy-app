@@ -27,6 +27,10 @@ export function RemoteModelDialog({
   /** 非空由调用方保证：仅在弹窗打开时渲染。 */
   dialog: NonNullable<ModelDialog>;
 }) {
+  /* 添加弹窗的用途由所在分组决定：下拉锁定为该分组，避免在「文本模型」组里
+     再选出一个图片 / 视频模型。编辑态仍可改选（reclassify 是显式动作）。 */
+  const lockedKind = dialog.mode === "add" ? dialog.kind : null;
+
   /* 关闭语义（Esc / 点遮罩）交给 `ui/dialog`：此前自绘遮罩 div + 手写
      `onClick`，Esc 与焦点归还都没有。 */
   return (
@@ -83,12 +87,18 @@ export function RemoteModelDialog({
             )}
           </FormField>
 
-          <FormField className="mb-3" id="remote-model-kind" label="用途">
+          <FormField
+            className="mb-3"
+            hint={lockedKind === null ? undefined : "用途由所在分组决定，不可更改"}
+            id="remote-model-kind"
+            label="用途"
+          >
             {(field) => (
               <SelectMenu
                 {...field}
                 autoFitFromOptions={false}
                 className="text-sm"
+                disabled={lockedKind !== null}
                 fullWidth
                 labels={REMOTE_MODEL_KIND_LABELS}
                 onChange={(next) => {
@@ -98,7 +108,7 @@ export function RemoteModelDialog({
                     d.setAddForm((f) => ({ ...f, kind }));
                   }
                 }}
-                options={[...REMOTE_MODEL_KINDS]}
+                options={lockedKind === null ? [...REMOTE_MODEL_KINDS] : [lockedKind]}
                 popoverMinWidth={160}
                 value={d.addForm.kind}
               />
