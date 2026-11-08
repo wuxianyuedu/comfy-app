@@ -116,7 +116,12 @@ import {
   runAppendIssueComment,
   runIssueComment,
 } from "../scripts/ship-issue-new.mjs";
-import { sameCommentBody, stripTrailingNewline } from "../scripts/ship-comment.mjs";
+import {
+  appendComment,
+  readCommentBodies,
+  sameCommentBody,
+  stripTrailingNewline,
+} from "../scripts/ship-comment.mjs";
 import { decideReap, instanceReading, reapCheckoutInstances } from "../scripts/ship-reap.mjs";
 import { runPreflightStage } from "../scripts/ship-preflight.mjs";
 import { DIAGNOSE_STALL_MINUTES, runDiagnose, stallReadout } from "../scripts/ship-diagnose.mjs";
@@ -2747,6 +2752,96 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
    * → 回读」实现（`scripts/ship-comment.mjs`）；这组钉其上多出的三件：① 正文文件是唯一入口；② 回读比对先归一
    * 末尾换行；③ 不相等就是红，不是「差不多」。
    */
+  /**
+   * `readCommentBodies` / `appendComment` 的命令形状与 PR 落点（ISSUE #3279）：
+   * 写那一半按 route 分叉是后加的，读那一半曾共用单子评论区的参数尾巴 ——
+   * `--sort -created` 在 `pulls list-pull-comments` 上不存在，PR 侧写成功也
+   * 念成「回读没跑起来」。
+   */
+  describe("ship-comment：PR 落点的回读命令形状（ISSUE #3279）", () => {
+    const PULL_PAGE = {
+      status: 200,
+      stdout: JSON.stringify({
+        status: 200,
+        data: [{ body: "读数：回执两条，逐字比对通过。" }],
+      }),
+      stderr: "",
+      error: null,
+    };
+    const POST_OK = {
+      /* status 是 cnb 的**进程退出码**（0 = 命令正常结束）；HTTP 201 在 stdout JSON 里
+       *（#3279 的现场读数：`status 201、data.id=…`）。 */
+      status: 0,
+      stdout: JSON.stringify({ status: 201, data: { id: "1" } }),
+      stderr: "",
+      error: null,
+    };
+
+    it("pull 侧回读命令的形状里没有 --sort（list-pull-comments 不支持它）", () => {
+      const calls: Array<Array<string>> = [];
+      const run = (_cmd: string, args: Array<string>) => {
+        calls.push(args);
+        return PULL_PAGE;
+      };
+      const bodies = readCommentBodies({
+        run,
+        slug: "o/r",
+        number: 3277,
+        route: "pull",
+      });
+      expect(bodies).toEqual(["读数：回执两条，逐字比对通过。"]);
+      const list = calls.find((a) => a.includes("list-pull-comments"));
+      expect(list).toBeTruthy();
+      expect(list?.includes("--sort")).toBe(false);
+    });
+
+    it("issue 侧回读照旧带 --sort -created（单子评论区支持它）", () => {
+      const calls: Array<Array<string>> = [];
+      const run = (_cmd: string, args: Array<string>) => {
+        calls.push(args);
+        return PULL_PAGE;
+      };
+      readCommentBodies({ run, slug: "o/r", number: 2187, route: "issue" });
+      const list = calls.find((a) => a.includes("list-issue-comments"));
+      expect(list).toBeTruthy();
+      const at = list?.indexOf("--sort") ?? -1;
+      expect(at).toBeGreaterThan(-1);
+      expect(list?.[at + 1]).toBe("-created");
+    });
+
+    it("PR 落点正向链：写成功 + 回读读到 ⇒ posted 且 bodies 含正文（不再念「没跑起来」）", () => {
+      const calls: Array<Array<string>> = [];
+      const run = (_cmd: string, args: Array<string>) => {
+        calls.push(args);
+        return args.includes("post-pull-comment") ? POST_OK : PULL_PAGE;
+      };
+      const logs: Array<string> = [];
+      const wrote = appendComment({
+        run,
+        log: (line) => {
+          logs.push(line);
+        },
+        slug: "o/r",
+        number: 3277,
+        body: "读数：回执两条，逐字比对通过。",
+        mkTmp: (_name, text) => {
+          const f = path.join(mkdtempSync(path.join(os.tmpdir(), "ship-pull-comment-")), "c.md");
+          fs.writeFileSync(f, text, "utf8");
+          return f;
+        },
+        route: "pull",
+      });
+      expect(wrote.posted).toBe(true);
+      expect(wrote.bodies).toEqual(["读数：回执两条，逐字比对通过。"]);
+      // post 与回读都是 pulls 命名空间，且回读尾巴没有 --sort。
+      expect(calls.some((a) => a.includes("post-pull-comment"))).toBe(true);
+      const list = calls.find((a) => a.includes("list-pull-comments"));
+      expect(list?.includes("--sort")).toBe(false);
+      // 「写那一步没跑起来」那句话不再出现（ISSUE #3279 的症状本体）。
+      expect(logs.join("\n")).not.toContain("没跑起来");
+    });
+  });
+
   describe("--comment：往单子上写一条读数（ISSUE #2719）", () => {
     const bodyText = "读数：回执两条，逐字比对通过。\n";
 
