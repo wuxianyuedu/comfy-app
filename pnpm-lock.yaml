@@ -425,9 +425,6 @@ importers:
       oxlint-config-awesomeness:
         specifier: 4.7.1
         version: 4.7.1(@nkzw/eslint-plugin@2.0.0(eslint@10.14.0(jiti@2.7.0)(supports-color@8.1.1)))(@typescript/typescript6@6.0.2)(eslint-plugin-no-only-tests@3.4.0)(eslint-plugin-perfectionist@5.13.0(@typescript/typescript6@6.0.2)(eslint@10.14.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1))(eslint-plugin-unused-imports@4.4.1(@typescript-eslint/eslint-plugin@8.71.0(@typescript-eslint/parser@8.72.0(@typescript/typescript6@6.0.2)(eslint@10.14.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1))(@typescript/typescript6@6.0.2)(eslint@10.14.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1))(eslint@10.14.0(jiti@2.7.0)(supports-color@8.1.1)))(eslint@10.14.0(jiti@2.7.0)(supports-color@8.1.1))(oxlint-plugin-react-doctor@0.9.18)(oxlint-tsgolint@7.0.2005)(oxlint@1.90.0(oxlint-tsgolint@7.0.2005))
-      oxlint-plugin-boundaries:
-        specifier: ^0.1.0
-        version: 0.1.0(oxlint@1.90.0(oxlint-tsgolint@7.0.2005))
       oxlint-plugin-eslint:
         specifier: 1.90.0
         version: 1.90.0
@@ -7249,12 +7246,6 @@ packages:
     peerDependenciesMeta:
       '@shadcn/lint':
         optional: true
-
-  oxlint-plugin-boundaries@0.1.0:
-    resolution: {integrity: sha512-mPY42ac2d0hXA30hA/7bh/RsRUlgQ+dSGnLu+81fw28ZFF8UfDJklhAZsCrnDbZAEn0QV5Pm7ldhbtAzeu10XQ==}
-    engines: {node: '>=20.19'}
-    peerDependencies:
-      oxlint: '>=1.69.0 <2'
 
   oxlint-plugin-eslint@1.90.0:
     resolution: {integrity: sha512-JjQbCJZ1HuWrOA0qi1r8l6uqEdlP3Htu1XWrMNkTieGRRWLNB2nOFu7iw1MYSWODcuJR8lJn5KfoP6DujhWtiA==}
@@ -15477,11 +15468,6 @@ snapshots:
       oxlint-plugin-react-doctor: 0.9.18
       oxlint-tsgolint: 7.0.2005
       typescript: '@typescript/typescript6@6.0.2'
-
-  oxlint-plugin-boundaries@0.1.0(oxlint@1.90.0(oxlint-tsgolint@7.0.2005)):
-    dependencies:
-      '@oxlint/plugins': 1.90.0
-      oxlint: 1.90.0(oxlint-tsgolint@7.0.2005)
 
   oxlint-plugin-eslint@1.90.0: {}
 

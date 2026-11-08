@@ -145,7 +145,7 @@ function VirtualizedOutputGrid({
   const scrollMargin = listRef.current?.offsetTop ?? 0;
   // 与 ModelLibrary 同一条误报豁免：virtualizer 的读数只在本组件 render 内消费，
   // 不外传给被 memo 的子组件，不存在该规则担心的「跨组件陈旧 UI」风险。
-  // eslint-disable-next-line react-hooks/incompatible-library
+  // oxlint-disable-next-line react/incompatible-library
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollEl,

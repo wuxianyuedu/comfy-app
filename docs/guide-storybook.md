@@ -151,7 +151,7 @@ const meta = {
 3. **ReactNode 参数走 `render`，不进 Args**。`trigger` / `footer` / `children`
    这类参数由 story 的 `render` 给 —— Args 面板只认可序列化的值。
    注意 `render` **不是 React 组件**：要在里面用 hook，请把它抽成一个真组件
-   （`react-hooks/rules-of-hooks` 会把这一条当场拦下，那条报错是对的）。
+   （`react/rules-of-hooks` 会把这一条当场拦下，那条报错是对的）。
 
 **为什么不用 `vi.mock` / MSW**：测试侧确实有 MSW（`tests/helpers/trpc-msw.ts`），
 但那层的用途是「让 tRPC 的完整管线在无后端时可被断言」——它转发给一个**测试
