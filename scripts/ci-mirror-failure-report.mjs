@@ -34,6 +34,16 @@ import path from "node:path";
  *     中间那个 `was` 让它当场漏掉（curl / schannel 的常见措辞）；
  *   · `schannel: server closed abruptly (missing close_notify)` —— TLS 层断流；
  *   · `Recv failure` 前缀本身（配别的错因时仍属传输层）。
+ *
+ * git-lfs 是 Go 写的，它的 batch 请求不走 git / curl 那一套，回话是 Go net 包在
+ * 出网那一层自己抛的措辞 —— 与上面三形讲的是同一件事（网络根本没到 github.com:443），
+ * 却一个字都对不上，于是那一跳被念成「其他」、`shouldRetryGitFailure()` 也不认，
+ * 墙钟预算重试整档吃不到。这一族按现场原话逐字补（Windows / Winsock 的
+ * TCP connect 超时那一形见 PR #3398 首跑 `cnb-dto-1k6tb0h72` 的 LFS 那一跳）：
+ *   · `dial tcp <ip>:443: connectex: A connection attempt failed`（对方在超时内没应答）；
+ *   · `dial tcp ...: i/o timeout`（POSIX 侧同族）；
+ *   · `connect: connection refused` / `no such host` / `lookup ... no such host`（DNS 与
+ *     connect 被拒，Go net 的常见措辞）。
  * 认证 / 权限 / 仓库不存在三族一个字都没放宽：它们「再试一百次也一样」。
  *
  * ⚠️ 本函数**不认** GitHub 服务端的 5xx：那不是出网问题，归 {@link isTransientRemoteFailure}。
@@ -43,7 +53,7 @@ import path from "node:path";
  * @returns {boolean} true ⇒ 网络根本没到 GitHub（或中途断流），重试有意义
  */
 export function isEgressFailure(text) {
-  return /failed to connect|could not connect to server|couldn't connect to host|could not resolve host|connection\s+(?:was\s+)?reset|connection timed out|name resolution|getaddrinfo|empty reply from server|server closed abruptly|recv failure|超时/i.test(
+  return /failed to connect|could not connect to server|couldn't connect to host|could not resolve host|connection\s+(?:was\s+)?reset|connection timed out|connection refused|name resolution|getaddrinfo|empty reply from server|server closed abruptly|recv failure|a connection attempt failed|dial tcp|i\/o timeout|no such host|超时/i.test(
     text,
   );
 }
@@ -81,6 +91,45 @@ export function isTransientRemoteFailure(text) {
  */
 export function shouldRetryGitFailure(text) {
   return isEgressFailure(text) || isTransientRemoteFailure(text);
+}
+
+/**
+ * 是不是一个可按键取值的对象（异常对象是 `unknown`，先过这一跳再读字段）。
+ *
+ * @param {unknown} value 任意值
+ * @returns {value is Record<string, unknown>} true ⇒ 对象
+ */
+function isRecord(value) {
+  return typeof value === "object" && value !== null;
+}
+
+/**
+ * Node `fetch`（undici）在网络层抛出的那一族异常值不值得再试。
+ *
+ * `git` 那一族看 stdout/stderr 字符串，这里看的是**异常对象**：`fetch failed` 是 undici
+ * 的统一包装，真因在 `message` 或 `cause.code` 上（`ECONNRESET` / `ETIMEDOUT` /
+ * `ENOTFOUND` …）。与 {@link isEgressFailure} 同源复用、不另立一份正则 —— 两边都判
+ * 「网络根本没到 GitHub」，只是入口一个是文本、一个是 Error。
+ *
+ * 认证 / 权限（401/403 / `Invalid username or token`）**不在这一族**：它们是 HTTP 应答，
+ * 由调用方按 `res.status` 一次交账，绝不重试（重试权限问题只会把真问题拖慢，还把
+ * 「令牌缺 scope」读成「网络不好」）。
+ *
+ * @param {unknown} error `fetch` 抛出的异常
+ * @returns {boolean} true ⇒ 网络层失败，重试有意义
+ */
+export function isRetryableFetchFailure(error) {
+  const e = isRecord(error) ? error : {};
+  const cause = isRecord(e.cause) ? e.cause : {};
+  const text = String(e.message ?? error);
+  const code = String(cause.code ?? "");
+  return (
+    isEgressFailure(text) ||
+    /fetch failed|network|socket|econnreset|econnrefused|enotfound|etimedout|eai_again/i.test(
+      text,
+    ) ||
+    /^(?:ENOTFOUND|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN)$/i.test(code)
+  );
 }
 
 /**

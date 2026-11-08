@@ -17,7 +17,11 @@
  * 3. **不打令牌值**（硬规则 17）：失败回话体先过 `sanitize`；成功回话（含日志正文）
  *    由调用方再过 `redactSecrets`（`ci-github-verdict-logs.mjs`）。
  */
-import { isEgressFailure, sanitize } from "./ci-github-mirror-push.mjs";
+import { sanitize } from "./ci-github-mirror-push.mjs";
+/* 网络层失败判据的唯一实现挪到叶子模块（§12.18）：git 那一族（文本）与 fetch
+ * 那一族（Error 对象）共用一份，别在两处各写一遍会漂的正则。这里保留再导出，
+ * 既有用例与调用方读的入口一字未变。 */
+import { isRetryableFetchFailure } from "./ci-mirror-failure-report.mjs";
 /* 退避表自 2026-11-05 起单独一份（主文件贴着 900 行闸，不再转出这一组常量）。
  * 这一格只吃表的前两项（`REQUEST_MAX_ATTEMPTS` = 3），与改口径前逐值相同。 */
 import { RETRY_BACKOFF_MS } from "./ci-mirror-retry-policy.mjs";
@@ -29,35 +33,18 @@ export const CHECK_RUNS_TIMEOUT_MS = 30_000;
 export const REQUEST_MAX_ATTEMPTS = 3;
 
 /**
- * 是不是一个可按键取值的对象（异常对象是 `unknown`，先过这一跳再读字段）。
+ * 这一次失败值不值得再试：复用叶子模块里那一份网络层判据（git 文本族 ∪
+ * Node `fetch` 的 `fetch failed` / `cause.code` 上的 `E*` 错误码）。
+ * 认证 / 权限（401/403）与其余 HTTP 错误一律不重试：重试权限问题只会把真问题拖慢，
+ * 还把「令牌缺 `actions: read`」读成「网络不好」。
  *
- * @param {unknown} value 任意值
- * @returns {value is Record<string, unknown>} true ⇒ 对象
- */
-function isRecord(value) {
-  return typeof value === "object" && value !== null;
-}
-
-/**
- * 这一次失败值不值得再试：egress 正则（与镜像格同源）之外，补 Node `fetch`
- * 在网络层抛出的那一族（`fetch failed` 与 `cause.code` 上的 `E*` 错误码）。
+ * 保留这个名字是因为 `ci-github-verdict-read.mjs` 与既有用例都从这一层读它；
+ * 实现只有一份，在 `ci-mirror-failure-report.mjs`。
  *
  * @param {unknown} error `fetch` 抛出的异常
  * @returns {boolean} true ⇒ 网络根本没到 GitHub，重试有意义
  */
-export function isRetryableRequestFailure(error) {
-  const e = isRecord(error) ? error : {};
-  const cause = isRecord(e.cause) ? e.cause : {};
-  const text = String(e.message ?? error);
-  const code = String(cause.code ?? "");
-  return (
-    isEgressFailure(text) ||
-    /fetch failed|network|socket|econnreset|econnrefused|enotfound|etimedout|eai_again/i.test(
-      text,
-    ) ||
-    /^(?:ENOTFOUND|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN)$/i.test(code)
-  );
-}
+export const isRetryableRequestFailure = isRetryableFetchFailure;
 
 /**
  * 带单次上限的一次请求：到点 abort 并把异常翻成含「超时」字样的 Error ——
