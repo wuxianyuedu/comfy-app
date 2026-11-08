@@ -27,7 +27,10 @@
  * 日志会明确打出本轮走的是哪条路径、为什么回落，线上判读不用猜。
  *
  * sha 的推导与镜像格**同源**：同一份 `resolveContext()`（`GITHUB_MIRROR_TOKEN` +
- * `CNB_PULL_REQUEST_IID` → 镜像 ref + `git rev-parse HEAD`），两边读的一定是同一笔树，
+ * `CNB_PULL_REQUEST_IID` → 镜像 ref + `git rev-parse HEAD`），两边读的一定是同一笔树。
+ * ⚠️ 但**sha 不一定相同**：平台给每条流水线各自合成 merge 提交（同两父同树、sha 不同，
+ * 实测 550f9e58 vs c415c6ef 并排两个 run）—— 跳过路径下认领键用回执记录的那笔
+ * （`readDispatchState` 的 `sha`，ISSUE #3346），不用本格 HEAD。
  * 不会出现「推的是 A、读的是 B」的对账错位。
  *
  * ## 边界
@@ -243,7 +246,9 @@ function isRecord(v) {
  *
  * @param {(file: string, encoding: "utf8") => string} readFile 注入面（用例不读真文件）
  * @param {string} root 检出根
- * @returns {{dispatched: boolean, reason: string} | null} 上游结论；`null` = 没有这个事实
+ * @returns {{dispatched: boolean, reason: string, sha?: string} | null} 上游结论；
+ *   `null` = 没有这个事实。`sha` 是回执记录的**派发那一笔**（托管机实验格推的它自己
+ *   合成的 merge 提交 —— 与本格 HEAD 同树不同 sha，ISSUE #3346）；只收 40 位十六进制。
  */
 export function readDispatchState(readFile, root) {
   try {
@@ -253,7 +258,12 @@ export function readDispatchState(readFile, root) {
     if (!isRecord(parsed) || typeof parsed.dispatched !== "boolean") {
       return null;
     }
-    return { dispatched: parsed.dispatched, reason: String(parsed.reason ?? "") };
+    /** @type {{dispatched: boolean, reason: string, sha?: string}} */
+    const out = { dispatched: parsed.dispatched, reason: String(parsed.reason ?? "") };
+    if (typeof parsed.sha === "string" && /^[0-9a-f]{40}$/i.test(parsed.sha)) {
+      out.sha = parsed.sha;
+    }
+    return out;
   } catch {
     return null;
   }
@@ -613,6 +623,16 @@ export async function runVerdict(io) {
         "egress / 令牌 / LFS / 派发各是各的下一动作，见 #3046 / #3146），修好后本格自然能读到判决。",
     );
     return CODE.NO_FACT;
+  }
+  /* 认领键（ISSUE #3346）：回执里记着托管机格实际派发的那一笔 —— 与本格 HEAD 同树
+   * 不同 sha（两条流水线各自合成 merge 提交，实测 550f9e58 vs c415c6ef 并排两个 run）。
+   * 在就用它认领（display_title 里嵌的是它），缺席回落本格 HEAD。 */
+  if (upstream !== null && typeof upstream.sha === "string" && upstream.sha !== ctx.headSha) {
+    log(
+      `[verdict] 认领键：回执记录的派发 sha ${upstream.sha.slice(0, 8)} 与本格 HEAD ${ctx.headSha.slice(0, 8)} 不同` +
+        "（两条流水线各自合成 merge 提交，#3346）⇒ 按回执那笔认领",
+    );
+    ctx.headSha = upstream.sha;
   }
   if (upstream) {
     log(`[verdict] 上游派发格的读数：${upstream.reason}`);

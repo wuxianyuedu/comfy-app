@@ -106,7 +106,11 @@ const gitOk = (args: Array<string>) => {
 };
 
 /** 从落盘假件的量具里取出**最后一份**派发形状（#3148 给回读格的输入）。 */
-function dispatchedState(written: Array<string>): { dispatched?: boolean; reason?: string } {
+function dispatchedState(written: Array<string>): {
+  dispatched?: boolean;
+  reason?: string;
+  sha?: string;
+} {
   const last = written.at(-1) ?? "";
   const json = last.slice(last.indexOf("\n") + 1).trim();
   return json === "" ? {} : (JSON.parse(json) as { dispatched?: boolean; reason?: string });
@@ -2512,20 +2516,41 @@ describe("等托管机（ci-mirror-hosted-await，ISSUE #3346）", () => {
   /** ref 行的旧值形态：同 PR 上一跑留下的 sha —— 不算命中（边界第 3 条）。 */
   const OLD_SHA = "1111111111111111111111111111111111111111";
   const AWAIT_REF = `refs/heads/${mirrorRefFor("2649")}`;
+  /* 树等价的量具：本格 HEAD^{tree} 与远端那一笔各回各的，相等 = 托管机交付了等价内容。 */
+  const LOCAL_TREE = "0123456789abcdef0123456789abcdef01234567";
+  const OTHER_TREE = "fedcba9876543210fedcba9876543210fedcba98";
+  const OTHER_SHA = "2222222222222222222222222222222222222222";
 
-  /** 组一套注入面：rev-parse 照答真 SHA；ls-remote 按场景给行（缺省回旧值 = 一直没推到）。 */
+  /** 组一套注入面：rev-parse 照答真 SHA 与本格 HEAD 的树；ls-remote 按场景给行（缺省回旧值 = 一直没推到）。 */
   function awaitHarness(
-    opts: { lsResults?: Array<{ code: number; stdout?: string }>; tick?: number } = {},
+    opts: {
+      fetchCode?: number;
+      lsResults?: Array<{ code: number; stdout?: string }>;
+      /** `FETCH_HEAD^{tree}` 假回话（缺省 = 与本格同树 ⇒ 树等价命中）。 */
+      remoteTree?: string;
+      tick?: number;
+    } = {},
   ) {
     const heard: Array<string> = [];
     const written: Array<string> = [];
     const ls: Array<Array<string>> = [];
+    const fetches: Array<Array<string>> = [];
     const sleeps: Array<number> = [];
     const lsSeq = opts.lsResults ? [...opts.lsResults] : null;
     let t = 0;
     const runGit = (args: Array<string>) => {
       if (args[0] === "rev-parse") {
+        if (args[1] === "HEAD^{tree}") {
+          return { code: 0, stdout: `${LOCAL_TREE}\n`, stderr: "" };
+        }
+        if (args[1] === "FETCH_HEAD^{tree}") {
+          return { code: 0, stdout: `${opts.remoteTree ?? LOCAL_TREE}\n`, stderr: "" };
+        }
         return { code: 0, stdout: `${SHA}\n`, stderr: "" };
+      }
+      if (args[0] === "fetch") {
+        fetches.push(args);
+        return { code: opts.fetchCode ?? 0, stdout: "", stderr: "" };
       }
       if (args[0] === "ls-remote") {
         ls.push(args);
@@ -2557,7 +2582,7 @@ describe("等托管机（ci-mirror-hosted-await，ISSUE #3346）", () => {
 ${data}`);
       },
     };
-    return { extras, heard, io, ls, sleeps, written };
+    return { extras, fetches, heard, io, ls, sleeps, written };
   }
 
   it("第一读就见本跑 HEAD ⇒ skipped，回执照落（「成功了就不在自托管跑」）", async () => {
@@ -2573,17 +2598,47 @@ ${data}`);
     expect(h.heard.join("\n")).toContain("跳过推送");
   });
 
-  it("ref 一直在但不是本跑 HEAD ⇒ 预算到点落回兜底，不写回执", async () => {
-    const h = awaitHarness({ tick: 100_000 });
+  it("ref 在但树与本跑不同（旧值 / 别笔）⇒ 预算到点落回兜底，不写回执（#3346 现场形态）", async () => {
+    const h = awaitHarness({ remoteTree: OTHER_TREE, tick: 100_000 });
     const verdict = await maybeSkipViaHosted(h.io, h.extras);
     expect(verdict.skipped).toBe(false);
     expect(h.written, "没派发就不许落 dispatched:true（回读格会空等）").toEqual([]);
     expect(h.heard.join("\n")).toContain("落回原有重试推送");
+    expect(h.heard.join("\n"), "树不等的读数要说清（不是 sha 抖动）").toContain("树与本跑不同");
     expect(h.sleeps.every((ms) => ms === HOSTED_AWAIT_POLL_INTERVAL_MS)).toBe(true);
   });
 
+  it("ref 上是托管机推的另一笔 merge 提交但树一致 ⇒ skipped，回执带那笔 sha（#3346 现场形态）", async () => {
+    /* 两条流水线各自合成 merge 提交：sha 不同（实测 550f9e58 vs c415c6ef）、树相同 ——
+     * 认「树」不认 sha；跳过路径的回执必须带托管机实际推送的那笔（判决回读认领用）。 */
+    const h = awaitHarness({
+      lsResults: [{ code: 0, stdout: `${OTHER_SHA}\t${AWAIT_REF}\n` }],
+      tick: 100_000,
+    });
+    const verdict = await maybeSkipViaHosted(h.io, h.extras);
+    expect(verdict.skipped).toBe(true);
+    expect(verdict.sha).toBe(OTHER_SHA);
+    expect(h.fetches, "内容核验走一次浅取").toHaveLength(1);
+    const state = dispatchedState(h.written);
+    expect(state.dispatched).toBe(true);
+    expect(state.sha).toBe(OTHER_SHA);
+    expect(h.heard.join("\n")).toContain("树一致");
+  });
+
+  it("浅取没通 ⇒ 预算内继续等，到点落回兜底", async () => {
+    const h = awaitHarness({ fetchCode: 1, tick: 100_000 });
+    const verdict = await maybeSkipViaHosted(h.io, h.extras);
+    expect(verdict.skipped).toBe(false);
+    /* 浅取失败不是判决：同一笔回执下一轮照旧再验（预算内 3 轮 = 3 次浅取）。 */
+    expect(h.fetches).toHaveLength(3);
+    expect(h.heard.join("\n")).toContain("浅取没通");
+  });
+
   it("每一读都没通（egress 抖动）⇒ 预算内继续等，到点落回兜底", async () => {
-    const h = awaitHarness({ lsResults: [{ code: 1 }, { code: 1 }], tick: 100_000 });
+    const h = awaitHarness({
+      lsResults: [{ code: 1 }, { code: 1 }, { code: 1 }],
+      tick: 100_000,
+    });
     const verdict = await maybeSkipViaHosted(h.io, h.extras);
     expect(verdict.skipped).toBe(false);
     expect(h.heard.join("\n")).toContain("这一读没通");
