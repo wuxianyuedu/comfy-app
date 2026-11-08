@@ -17,7 +17,7 @@
  *
  * ## 登记处是单一事实源（期望 #2）
  *
- * `vitest.config.ts` 的 `COVERAGE_THRESHOLDS`（149 条）是本脚本与判据**共用同一份导入**
+ * `vitest.config.ts` 的 `COVERAGE_THRESHOLDS`（150 条）是本脚本与判据**共用同一份导入**
  * 的来源 —— Node 26 默认类型擦除，纯 Node 的 `.mjs` 直接 `import()` 它即可拿到，
  * **不引第二份解析、不抄正则**（`coverage-targets-exist.test.ts` 也从同一处取）。
  * 早先「纯 Node 不能 import .ts」那句读数已过时（#2540 同族：tsx 留任；Node 原生 type

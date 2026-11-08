@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { FileText, Lock } from "lucide-react";
 import { useLogPanel } from "./logs/LogProvider";
 import { MessageCenterButton } from "~/components/message-center/MessageCenterButton";
+import { FeedbackButton } from "~/components/feedback/FeedbackButton";
 import { useAppServiceMessageLog } from "~/components/message-center/hooks/use-app-service-message-log";
 import { fpsTone, useFps } from "./hooks/use-fps";
 import { useComfyReadiness } from "./hooks/use-comfy-readiness";
@@ -330,7 +331,7 @@ export function BrowserStatusBar() {
       </div>
 
       {/* ── 第 4 区：FPS + 消息中心 + 日志 + 应用服务状态（固定宽度，最右） ── */}
-      <div className="flex w-70 shrink-0 items-center justify-end gap-2.5 whitespace-nowrap">
+      <div className="flex w-78 shrink-0 items-center justify-end gap-2.5 whitespace-nowrap">
         {/* 实时帧率 */}
         <span
           className="hidden items-center gap-1 md:flex"
@@ -342,6 +343,8 @@ export function BrowserStatusBar() {
         </span>
 
         <MessageCenterButton />
+
+        <FeedbackButton />
 
         {/* 纯图标按钮（只有图标与可选的错误计数徽标，没有可见文字）：按 ui/hint 的契约
             传 accessibleName，让提示文案同时成为 aria-label —— 否则读屏只报一颗匿名按钮。 */}
