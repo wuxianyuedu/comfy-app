@@ -33,7 +33,6 @@
  */
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { CODE } from "./ci-github-mirror-push.mjs";
 import { readOption } from "./ci-ga-verdict-callback.mjs";
@@ -142,7 +141,11 @@ export function summarizeStatuses(payload) {
 export async function main(io = {}) {
   const argv = io.argv ?? process.argv.slice(2);
   const env = io.env ?? process.env;
-  const log = io.log ?? ((line) => console.log(line));
+  const log =
+    io.log ??
+    ((line) => {
+      console.log(line);
+    });
   const pr = (readOption(argv, "--pr") || env.CNB_PULL_REQUEST_IID || "").trim();
   const repo = (readOption(argv, "--repo") || env.CNB_REPO_SLUG || "").trim();
   const token = (env.CNB_TOKEN || env.CNB_TRIGGER_TOKEN || "").trim();
@@ -197,7 +200,8 @@ export async function main(io = {}) {
 }
 
 const invokedDirectly =
-  process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  process.argv[1] !== undefined &&
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename);
 if (invokedDirectly) {
   main().then(
     (code) => {

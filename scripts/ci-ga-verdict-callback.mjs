@@ -271,7 +271,11 @@ export async function sendCallback({ ctx, fetchImpl = fetch, log }) {
 export async function main(io = {}) {
   const argv = io.argv ?? process.argv.slice(2);
   const env = io.env ?? process.env;
-  const log = io.log ?? ((line) => console.log(line));
+  const log =
+    io.log ??
+    ((line) => {
+      console.log(line);
+    });
   const ctx = resolveCallbackContext({ argv, env });
   if (!ctx.ok) {
     for (const reason of ctx.reasons) {
