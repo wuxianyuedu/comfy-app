@@ -62,4 +62,45 @@ describe("check-infra-file-size 硬闸", () => {
     expect(r.code).toBe(1);
     expect(globBaselines(repo.dir)).toEqual([]);
   });
+
+  /* ── 临近拆分提醒（ISSUE #3473）：到 800 就点名规划，不等撞闸 ──
+   * 它是读数不是闸：退出码永远由 900 那把尺子独占。边界四格里，
+   * 900 恰恰要提醒（硬闸判「超过」，900 本身不红 —— 它是再加一行就撞闸的那格）。 */
+  describe("临近拆分提醒（≥800 行，只读数不阻断；ISSUE #3473）", () => {
+    /** 造一份恰好 `n` 行的 `.cjs`。 */
+    const writeSized = (repo: GateRepo, n: number) => {
+      repo.write("scripts/sized.cjs", `${"// 行\n".repeat(n)}module.exports = 1;\n`);
+    };
+
+    test("850 行：退 0 且点名（提醒不等撞闸）", ({ repo }) => {
+      writeSized(repo, 850);
+      const r = repo.run();
+      expect(r.code).toBe(0);
+      expect(r.output).toContain("临近拆分提醒");
+      expect(r.output).toContain("scripts/sized.cjs");
+    });
+
+    test("799 行不提醒、800 行整提醒（下边界）", ({ repo }) => {
+      writeSized(repo, 799);
+      expect(repo.run().output).not.toContain("临近拆分提醒");
+      writeSized(repo, 800);
+      expect(repo.run().output).toContain("临近拆分提醒");
+    });
+
+    test("900 行整：提醒在、阻断不在（硬闸判「超过」）", ({ repo }) => {
+      writeSized(repo, 900);
+      const r = repo.run();
+      expect(r.code).toBe(0);
+      expect(r.output).toContain("临近拆分提醒");
+      expect(r.output).toContain("scripts/sized.cjs");
+    });
+
+    test("提醒不接管退出码：与超限文件同跑，红的仍是 900 那把尺子", ({ repo }) => {
+      writeSized(repo, 850);
+      writeBig(repo);
+      const r = repo.run();
+      expect(r.code).toBe(1);
+      expect(r.output).toContain("scripts/big.cjs");
+    });
+  });
 });

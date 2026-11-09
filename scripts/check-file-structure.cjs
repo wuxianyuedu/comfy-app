@@ -82,8 +82,20 @@ let vanished = 0;
 /** R5 用:超限文件 → 行数(路径为仓库相对路径)。 */
 const oversizedFiles = {};
 
+/** R5 用:临近提醒文件 → 行数(同口径;#3473 的那一档)。 */
+const nearLimitFiles = {};
+
 /** R5 的文件行数阈值:超过即阻断(与 §12.6 的姊妹档 `check-infra-file-size.cjs` 同一个数)。 */
 const SPLIT_HINT_LINES = 900;
+
+/**
+ * **临近拆分提醒线**（ISSUE #3473）：到这个行数就点名让人规划拆分，不等撞闸。
+ *
+ * 它不是第二道闸 —— 「提醒做成闸」等于把 800 变成第二个 900，同样的撞闸形态
+ * 换个数字重来。只进读数、不进 problems、不碰退出码。与 infra 侧那份同数
+ * （账 `r5-proximity-lines` 组内必须同数，只改一把 = 两边提醒时机脱钩）。
+ */
+const PROXIMITY_WARN_LINES = 800;
 
 // 声明层(常量与清单表)拆在同目录的 file-structure-rules.cjs(ISSUE #1811):
 // 这份脚本此前 1213 行、过半是纯数据,R5「超 900 行须拆」正是冲这个形态来的。
@@ -106,6 +118,7 @@ const {
   GIT_TRANSIENT_ROOT_FILES,
 } = require("./file-structure-rules.cjs");
 const { gateFail, gatePass } = require("./ci-log.mjs");
+const { renderProximityLines } = require("./file-size-proximity.cjs");
 
 /* 无 `--update` / `--strict`:R5 已是硬闸(ISSUE #1811 收掉那两条通道),
  * 而它们是这份脚本里唯一读 ARGS 的地方 —— 旗标整个删掉,不留「传了也没用」的
@@ -274,6 +287,8 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
       const lines = text.split("\n").length;
       if (lines > SPLIT_HINT_LINES) {
         oversizedFiles[p] = lines;
+      } else if (lines >= PROXIMITY_WARN_LINES) {
+        nearLimitFiles[p] = lines;
       }
     }
   })("src");
@@ -543,6 +558,19 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
 // (改名 / 挪目录就看不见 = 假绿;同 `check-infra-file-size.cjs` 的口径)。
 for (const [f, n] of Object.entries(oversizedFiles).sort((a, b) => b[1] - a[1])) {
   problems.push(`R5 超限文件(${f} → ${n} 行,阈值 ${SPLIT_HINT_LINES})。拆分(规范 §12.6 R5)`);
+}
+
+// ── R5 的临近拆分提醒(只读数、不阻断;ISSUE #3473)──
+// 899 行那一刻什么读数都没有 = 等撞闸才知道要拆,规划的时机已经迟了。
+// 到提醒线就点名,让人在还有余量时规划;这一档跑在重档(D 组 / GA heavy-gates),
+// 提交那一步的 infra 档姊妹提醒见 check-infra-file-size.cjs 的 --staged 过滤。
+for (const line of renderProximityLines({
+  tag: "[structure]",
+  near: Object.entries(nearLimitFiles),
+  warnAt: PROXIMITY_WARN_LINES,
+  hardAt: SPLIT_HINT_LINES,
+})) {
+  console.log(line);
 }
 
 /**
