@@ -10,6 +10,8 @@
  * （`oxlint.parity.config.mjs`，与 `pnpm run lint:oxlint` 逐字同一条）真跑一次
  * oxlint → 断言每条目标规则都命中；同时放一份**干净样本**做反向对照
  * （闸若空转/过宽，干净样本也会红，或违例样本一条都不红，两种都要被看出来）。
+ * 另有一格按 message 对拍：判决配置 `options.reportUnusedDisableDirectives` 报出的
+ * 死 disable 诊断没有 code 字段，用「造死豁免 / 删掉死豁免」一对样本判它真在工作。
  *
  * 为什么必须落真文件而不是 `--stdin`：样本要按配置的**文件类档位**解析
  * （`tests/**` 走 TS 面、`scripts/**` 走 scripts 的 js 面），`--stdin` 拿不到那份
@@ -99,6 +101,12 @@ const SCRIPTS_SAMPLES = [
 
 /* 反向对照：干净样本**必须 0 命中**。 */
 const CLEAN_TS = "export const add = (a: number, b: number): number => a + b;\n";
+/* 正控 / 负控（ISSUE #3438）：同一份代码只差那行死 disable 注释 —— 有它必须报出
+ * 未使用指令，删掉必须 0 命中。这类诊断在 oxlint 的 JSON 里只有 message、没有 code，
+ * 所以不能并进下面按规则名对拍的样本表，另按 message 归集。 */
+const DEAD_DISABLE_SRC = "// oxlint-disable-next-line no-debugger\nexport const a = 1;\n";
+const REMOVED_DISABLE_SRC = "export const a = 1;\n";
+const UNUSED_DISABLE_MESSAGE = "Unused oxlint-disable directive";
 /* 阴性对照：`no-undef` 对 scripts 面是**刻意关停**的（scripts 在 tsc 的
  * checkJs 判决面里），它不许反过来把 Node 全局判出来 —— 关停要真的生效。 */
 const NO_UNDEF_SRC = "export const home = process.env.HOME;\n";
@@ -122,7 +130,7 @@ if (process.argv.includes("--sabotage")) {
  * 用判决配置真跑一次 oxlint（CLI 级，覆盖的就是门禁走的那一跳）。
  *
  * @param {readonly string[]} files 样本文件的绝对路径
- * @returns {{diagnostics: {filename: string, code?: string}[], status: number | null}}
+ * @returns {{diagnostics: {filename: string, code?: string, message?: string}[], status: number | null}}
  */
 function runOxlint(files) {
   OXLINT_CALLS += 1;
@@ -217,6 +225,10 @@ function main() {
     }
     const cleanAbs = path.join(tsDir, "clean.ts");
     fs.writeFileSync(cleanAbs, CLEAN_TS, "utf8");
+    const deadDisableAbs = path.join(tsDir, "dead-disable.ts");
+    fs.writeFileSync(deadDisableAbs, DEAD_DISABLE_SRC, "utf8");
+    const removedDisableAbs = path.join(tsDir, "removed-disable.ts");
+    fs.writeFileSync(removedDisableAbs, REMOVED_DISABLE_SRC, "utf8");
     const noUndefAbs = path.join(scriptsDir, "node-global.mjs");
     fs.writeFileSync(noUndefAbs, NO_UNDEF_SRC, "utf8");
 
@@ -232,12 +244,16 @@ function main() {
     const lintTargets = [
       ...tsFiles.map((f) => f.abs),
       ...(tsFiles.length ? [cleanAbs] : []),
+      deadDisableAbs,
+      removedDisableAbs,
       ...scriptFiles.map((f) => f.abs),
       ...(scriptFiles.length ? [noUndefAbs] : []),
     ];
     const run = lintTargets.length ? runOxlint(lintTargets) : { diagnostics: [], status: 0 };
 
     const byFile = new Map();
+    /** @type {Map<string, string[]>} */
+    const messagesByFile = new Map();
     for (const entry of run.diagnostics) {
       const abs = path.resolve(ROOT, entry.filename);
       const set = byFile.get(abs) ?? new Set();
@@ -246,6 +262,11 @@ function main() {
         set.add(rule);
       }
       byFile.set(abs, set);
+      if (typeof entry.message === "string") {
+        const list = messagesByFile.get(abs) ?? [];
+        list.push(entry.message);
+        messagesByFile.set(abs, list);
+      }
     }
 
     for (const f of [...tsFiles, ...scriptFiles]) {
@@ -266,7 +287,23 @@ function main() {
       misses.push("node-global.mjs（阴性对照）：no-undef 对 scripts 面是刻意关停的，不该命中");
     }
 
-    const total = tsFiles.length + scriptFiles.length;
+    /* 死 disable 正控 / 负控（ISSUE #3438）：这一族诊断没有 code，只按 message 归集。
+     * 两份样本内容只差那行注释，读数可直接对拍。 */
+    const deadMessages = messagesByFile.get(path.resolve(deadDisableAbs)) ?? [];
+    if (!deadMessages.some((m) => m.includes(UNUSED_DISABLE_MESSAGE))) {
+      misses.push(
+        `dead-disable.ts（正控）：造的死 disable 指令没被报出来 ⇒ options.reportUnusedDisableDirectives 没生效或被摘掉（实际：${deadMessages.join(" | ") || "（无诊断）"}）`,
+      );
+    }
+    const removedMessages = messagesByFile.get(path.resolve(removedDisableAbs)) ?? [];
+    if (removedMessages.length > 0) {
+      misses.push(
+        `removed-disable.ts（负控）：删掉死豁免后不该有任何命中，实际：${removedMessages.join(" | ")}`,
+      );
+    }
+
+    /* +2：上面那对按 message 对拍的正控 / 负控样本。 */
+    const total = tsFiles.length + scriptFiles.length + 2;
     if (misses.length > 0) {
       console.error(`[lint-canary] ✗ ${misses.length}/${total} 条对照没守住：`);
       for (const m of misses) {
@@ -283,6 +320,9 @@ function main() {
     for (const f of [...tsFiles, ...scriptFiles]) {
       console.log(`  · ${f.name} → ${f.rule}`);
     }
+    console.log(
+      `  · dead-disable.ts → ${UNUSED_DISABLE_MESSAGE}（正控）/ removed-disable.ts → 0 命中（负控）`,
+    );
     return 0;
   } finally {
     if (SABOTAGE_CONFIG) {

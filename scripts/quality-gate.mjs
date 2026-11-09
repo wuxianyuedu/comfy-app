@@ -104,7 +104,8 @@ export const GATES = {
      * content`）收在 package.json 的 `lint` 脚本里：四个调用点（.githooks/
      * pre-commit 第 7 步 / 本文件 / quality-gate.ps1 / CI）共用同一份命令，
      * 各自的目录清单与参数不再各抄一遍（抄一遍就会漂移）。
-     * 范围与规则面口径见 `oxlint.parity.config.mjs` 顶部那节（#3157 起只剩 oxlint 一档）。 */
+     * 范围与规则面口径见 `oxlint.parity.config.mjs` 顶部那节（#3157 起只剩 oxlint 一档）；
+     * 死 disable 指令那一格（ISSUE #3438）也收在那份配置的 options 里，同走这条链。 */
     args: ["run", "lint"],
   },
   /**

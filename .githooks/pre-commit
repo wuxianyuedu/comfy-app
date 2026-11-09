@@ -440,6 +440,7 @@ grep -E '^── ' "$LOGD/D0.log" | sed 's/^/  [ok] /'
 # 门禁、`pnpm lint`、CI 共用同一份，不在这里再抄一遍目录清单（抄一遍就会漂移；
 # 范围与规则面见 oxlint.parity.config.mjs 顶部那节）。#3157 起 eslint 已退役，
 # `lint` 只剩 oxlint 一档（`--deny-warnings`），不再有第二份缓存与指纹失效那一步。
+# 死 disable 指令那一格（ISSUE #3438）固化在判决配置的 options 里，与这里同一条链。
 run_group A "tsc --noEmit" sh -c 'pnpm exec tsc --noEmit'
 run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm run lint'
 
