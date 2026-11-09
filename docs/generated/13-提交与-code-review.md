@@ -9552,7 +9552,7 @@ build**（§13.6「PR 跑绿才合并」的承重锚一个字没换）。
 | --- | --- |
 | push 主列 | `GitHub master 镜像` 出 `COMFYAPP_CI_PUSH_GATES` / `.push-stages` / `GATE_TIER_LEDGER`（进 retired）；`master 合并复核` 不再 import `GITHUB_MIRROR_TOKEN`。主列此后只判「合并后的树」 |
 | 平台池出口 | `push` 事件新增**第二条**流水线 `GitHub master 镜像（平台池）`：平台池 tags + docker git-lfs + 自带类锁 `*lock_push_mirror` + import 同一枚令牌；stage 名仍是 `GitHub master 镜像`（与历史出勤读数同名，换机器不换名），脚本 `node scripts/ci-github-mirror-push.mjs --master`（**摘 `--readout`**、退码生效），`timeout: 10m` |
-| 兜底 | 失败出口 = 该流水线自己的 error 落进 push build（`push 失败立案` 读逐格读数，但它挂在主列 `endStages`、可能早于平台池那格收尾 —— 这一跳没在 push 节点上单独实测过，不假装已验）+ 每日 `镜像漂移判据`（`always()`、跨仓匿名 ls-remote）兜「之后没人再推」。`findMirrorReadoutFailure()` 那套「读数档折零」专用立案随 `--readout` 一起退役 |
+| 兜底 | 失败出口 = 该流水线自己的 error 落进 push build（`push 失败立案` 读逐格读数，它挂在**本条**的 `endStages`、与本格同跑）+ 每日 `镜像漂移判据`（`always()`、跨仓匿名 ls-remote）兜「之后没人再推」。`findMirrorReadoutFailure()` 那套「读数档折零」专用立案随 `--readout` 一起退役 |
 
 **为什么分两条流水线**：镜像出口不校验树、不吃 `node_modules`，与「文档链红不红」没有对偶关系。
 合并形态复核 fail-stop 时不该连镜像一起不推；拆开之后两件事各自给结论。锁也不共用：
@@ -9694,8 +9694,11 @@ relay step 的 stage 读数（`[ga-logs-relay] 已搬到 CNB` / 「前提不成�
 承重回读格不能删的理由；② GA `master-gate.yml` 的 `--check --autofix` 就地重渲染
 写的是 GA 自己的工作区，不回写 CNB；`docs/generated/**` 的镜像带不带仍由本地
 D0「文档源 ⇄ 生成态镜像同批」判据守（§13.5.5），不靠 CI 回写；③ `push 失败立案`
-内联进平台池出口那一跳没在 push 节点上单独实测过（与 §13.5.33.3 同一条边界），
-失败出口另由每日 `镜像漂移判据` 兜底。
+内联进平台池出口那一跳已在 push 节点上实测：因为照抄了自托管那句 Windows
+PowerShell 编码前缀，整格 `sh` 退 127（ISSUE #3453）—— 修法是把该格收成 Linux 原生
+`node scripts/ci-pr-failure-issue.mjs --no-block --lane push`，并给平台池镜像的
+Dockerfile 预装 `cnb` CLI（立案脚本的判决链要起 `cnb` 子进程；不装会「绿着空转」）。
+失败出口另由每日 `镜像漂移判据` 兜底。平台池 `CNB_TOKEN` 的 scope 边界另见 #3457。
 
 
 ### 13.6 分支与合并策略
