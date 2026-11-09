@@ -11,9 +11,15 @@
 #   每个 step 的 `timeout-minutes` 与 CNB 那一格 stage 的 `timeout` 同值（卡死要在
 #   自己的名字上报，而不是让 300m 的 job 顶层兜底）——映射见各 step 行尾注释。
 #
-# 刻意不承接（CNB 专有或自托管节点事实）：每日失败立案 / 每日令牌权限读数
-# （CNB API）/ 每日工具链自证 / 每日 Python 可用性 / 每日 Python 探针读数
-# （自托管宿主机事实读数；GitHub runner 的工具链由镜像与 setup-* 钉死，无需自证）。
+# 刻意不承接（CNB 专有或自托管节点事实）：每日令牌权限读数 / 每日工具链自证 /
+# 每日 Python 可用性 / 每日 Python 探针读数（自托管宿主机事实读数；GitHub runner 的工具链
+# 由镜像与 setup-* 钉死，无需自证）。
+#
+# 每日失败立案**原本**在这份清单里，理由是它依赖 CNB API / cnb CLI —— 那条理由在「脚本走
+# HTTP 而不是 cnb CLI」之后不再成立：本档末尾的 `失败立案` 步用内置 GITHUB_TOKEN 读自身这一跑
+# 的 jobs、用 CNB_ISSUE_TOKEN 写单（与 code-scanning-triage.yml 同一条通道），把「这一跑红了」
+# 变成一张按格名去重的 CNB 单（#3436；缺口现场 #3368 / #3435）。CNB 自己的 `每日失败立案`
+# 判的是 CNB 上一跑，与本档这一跑互不覆盖。
 #
 # 两处与 CNB 不同形、但判据不变：
 #   · 安装用裸 `pnpm install --frozen-lockfile`：CNB 的 `ci-install-deps.mjs` 多出来的
@@ -39,9 +45,11 @@ on:
         default: ""
 
 # 漂移判据要在镜像仓建单（ISSUE #3252），因此显式要 issues: write；
+# 失败立案要读自身这一跑的 jobs（`/actions/runs/{id}/jobs`），因此显式要 actions: read。
 # 其余权限按最小面给（本档只读代码、写 artifact）。
 permissions:
   contents: read
+  actions: read
   issues: write
 
 concurrency:
@@ -165,6 +173,33 @@ jobs:
           sudo dmesg -T | grep -iE "out of memory|oom|killed process" || echo "（dmesg 无 OOM 形状的行）"
           echo "== 内存读数 =="
           free -h
+
+      # 立案（#3436 / 同族 #2274）：把「这一跑红了」变成一张 CNB 单。
+      # 本档此前**没有**这一格 —— CNB 的 `每日失败立案` 判的是 CNB 自己的上一跑，本档这一跑
+      # 不在它的读数面里；于是那次掉页（#3368 换了模型库的 UI 形状、e2e 用例没跟着改，2026-11-08
+      # 全量E2E 红）只能靠人手动 `gh run view --log-failed` 再手动立案。判据在场、执行者不在场，
+      # 这一格补的就是那个执行者。
+      #
+      # 三个落点选择都是判据：
+      #   · `if: failure()` —— 判的是**这一跑自己**：jobs API 此时已把前面红格的 conclusion 写好，
+      #     本格自己还在 in_progress ⇒ 读得到红格、不会把自己读进去。
+      #   · `continue-on-error: true` —— 本格自己发没发出去不该给这一跑叠第二个红；但**不静默**，
+      #     失败话术与手工出口由脚本原样打印（`tests/ci-ga-daily-failure-issue.test.ts` 钉住）。
+      #   · 排在 `环境证据` 之后、且紧挨着它：两者同挂 `if: failure()`，中间不夹 `always()` 的格，
+      #     日志里「先读环境证据、再立案」的顺序才是读得出来的（§13.5.4 只报事实、不代写因果）。
+      - name: 失败立案（补洞：GA 每日档跑红 ⇒ CNB 单，按格名去重）
+        timeout-minutes: 5
+        if: failure()
+        continue-on-error: true
+        env:
+          # 内置 token 只读自身这一跑的 jobs（`actions: read` 见顶层 permissions）。
+          GITHUB_TOKEN: ${{ github.token }}
+          # CNB 侧建单 / 贴标签 / 评论（repo-issue:rw + repo-notes:rw），与 code-scanning-triage 同一枚。
+          CNB_ISSUE_TOKEN: ${{ secrets.CNB_ISSUE_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        # `--no-block`：脚本自己的出口话术按「平台那一跳」念（非零落 0 + 手工出口），
+        # 与 workflow 侧的 continue-on-error 同向，两边口径一致（同 .cnb.yml 那一格）。
+        run: node scripts/ci-ga-daily-failure-issue.mjs --no-block
 
       # 覆盖率上报的对位落点。CNB 那一格是 `ci-coverage-report.mjs`，走 `cnb` CLI
       # 把 lcov 交给平台；GitHub runner 没有那个 CLI，判据本体不该为换平台重抄一遍。
