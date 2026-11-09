@@ -16,6 +16,7 @@
 | GA 判红日志正文搬到 CNB 侧（本地站内读，不再出站 github.com） | #3437 | `ci-ga-logs-relay.mjs` + `ship-ga-logs-cnb.mjs`；`--gh-logs` 优先读 CNB、缺席退回旧链路 |
 | 回调 status 红了分不清送达失败 / GA 判红：PR 评论并列念「送达 / 判决」 | #3452 | `ci-ga-logs-relay.mjs` 复用结论折叠；只补可读性，承重退码与 status 颜色一字未改 |
 | 判红日志附件挂到 PR 本体（描述镜像）+ 另配 `CNB_PULL_REQUEST_TOKEN` | #3454 | `ci-ga-logs-relay.mjs` 评论后读改写 `PATCH /-/pulls/{n}`，只换自己 marker 块；描述只写镜像、评论仍是权威读源，`repo-pr:rw` 专用令牌不给旧令牌扩权 |
+| GA 回读结论判红时补「错误日志怎么取」的指针 | #3469 | `ci-ga-verdict-readout.mjs` 明确判红那一眼把 `pnpm ship --gh-logs pr:<号>` 念进 stage 日志；绿 / 没判过 / `--json` 不给，不改三态与退码 |
 
 ## 待落地（按优先级 + 主题分组）
 
@@ -237,7 +238,7 @@
 
 #### G-22：GA pr-gate.yml 红日志 workflow 层补全
 
-- **现状**：GA pr-gate.yml 任何 job 跑红后，GitHub Actions 会自动保留日志 7 天（公有仓）或 1 天（私有仓默认），但 ship 侧没有令牌无法自动回读。**ISSUE #3437 起**：GA 收尾 job 把失败 job 日志正文脱敏 + gzip + base64 存成 CNB 附件 + 一条带 marker 的 PR 评论，`pnpm ship --gh-logs` 优先从 CNB 站内读（本地零 `api.github.com`），缺席才退回原 GitHub 链路；判决链与承重一字未改。
+- **现状**：GA pr-gate.yml 任何 job 跑红后，GitHub Actions 会自动保留日志 7 天（公有仓）或 1 天（私有仓默认），但 ship 侧没有令牌无法自动回读。**ISSUE #3437 起**：GA 收尾 job 把失败 job 日志正文脱敏 + gzip + base64 存成 CNB 附件 + 一条带 marker 的 PR 评论，`pnpm ship --gh-logs` 优先从 CNB 站内读（本地零 `api.github.com`），缺席才退回原 GitHub 链路；判决链与承重一字未改。 **ISSUE #3469 起**：`GA 回调结论回读` 判红时 stage 日志里也直接给那条 `pnpm ship --gh-logs pr:<号>`（§13.5.33.7），看日志的人/AI 不用跳去翻 PR 评论才知道去哪取。
 - **问题**：当 CNB 判决判定格判"GA 红"时，只有 runs API 的 conclusion=failure 结果，不知道具体哪个 job / step 红的
 - **建议改法**：
   - pr-gate.yml 每个 job 在失败时 upload-artifact（job summary + 关键文件）

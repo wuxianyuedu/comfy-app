@@ -29,6 +29,15 @@
  * 仍 pending 或 status 缺席）。2 与 1 一样折成流水线红，绝不让「GA 没送回来」
  * 被读成绿；占位腿因此不需要 —— 主列这条 build 自己活到出结论，超时即红。
  *
+ * ## 判红时那条「错误日志怎么取」的指针
+ *
+ * 本格只回读 GA 送回的**结论**（commit-statuses），日志里没有失败 job 的正文。
+ * 判红时看日志的人/AI 最容易卡在「看了这几行，不知道真正的错误日志去哪找」：
+ * 正文由 GA 收尾 job 搬到 CNB（附件 + PR 评论/描述镜像，§13.5.33.4/.6），
+ * 本地取回入口是 `pnpm ship --gh-logs pr:<号>`。于是明确判红（code=1）那一眼
+ * 多打几行只读提示，把这条入口念出来。绿 / 没判过都不打，避免「没判过」被读成
+ * 「有日志可取」；不改三态、不改退码、不发网络请求，`--json` 仍只给一行机器读数。
+ *
  * ## 用法
  *
  * ```text
@@ -148,6 +157,25 @@ export function verdictFromStatus(status) {
 }
 
 /**
+ * 判红那一眼补的人读提示：本格只读 GA 结论，失败 job 的日志正文怎么取。
+ *
+ * 日志正文由 GA 收尾 job 搬到 CNB（附件 + PR 评论/描述镜像），本地取回入口是
+ * `pnpm ship --gh-logs pr:<号>`（站内读、无需出站 github.com）。提示只在**明确判红**
+ * 时打（绿 / 没判过都不打），且只读：不改三态、不改退码、不发网络请求。命令形状与
+ * `ci-ga-logs-relay.mjs` 评论/描述里那条同源，由用例逐字对账，别两处各写一份形状。
+ *
+ * @param {string} pr PR 号（IID；前提齐全时必是数字串）
+ * @returns {string[]} 逐行日志（每行自带 `[ga-readout]` 前缀）
+ */
+export function errorLogsHint(pr) {
+  return [
+    "[ga-readout] 判红了：本格只站内回读 GA 送回的结论（commit-statuses），这里没有失败 job 的日志正文。",
+    `[ga-readout] 错误日志怎么取：\`pnpm ship --gh-logs pr:${pr}\`（优先从 CNB 站内读判红日志附件，无需出站 github.com，也不需要 GitHub 令牌）。`,
+    "[ga-readout] 同一份附件链也挂在本 PR 的评论与描述里，可直接点开；CNB 侧缺席会如实念一行并退回 GitHub 链路。",
+  ];
+}
+
+/**
  * 主流程：站内短轮询，直到拿到终态或预算到顶。
  *
  * @param {{argv?: string[], env?: Record<string, string | undefined>, fetchImpl?: FetchLike, now?: () => number, sleep?: (ms: number) => void | Promise<void>, log?: (line: string) => void}} io
@@ -229,6 +257,11 @@ export async function main(io = {}) {
         ? `[ga-readout] ${STATUS_PREFIX}：state=${status.state || "(空)"} ⇒ ${code === CODE.OK ? "绿" : code === CODE.FAIL ? "红" : "还没判完"}`
         : `[ga-readout] ${STATUS_PREFIX}：status 缺席 ⇒ GA 还没送回结论`;
       log(json ? JSON.stringify({ code, state: lastState, present: lastPresent }) : line);
+      if (!json && code === CODE.FAIL) {
+        for (const hint of errorLogsHint(pr)) {
+          log(hint);
+        }
+      }
       return code;
     }
     log(`[ga-readout] ${STATUS_PREFIX}：state=${status.state || "(空)"}（未终态），继续等`);

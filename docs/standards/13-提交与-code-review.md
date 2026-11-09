@@ -9692,6 +9692,33 @@ step 不承重）/ 本节 + 生成态镜像 / `ga-migration-checklist.md` + 镜�
 旧行为，不拦合。构建详情页那个「附件」tab 仍是第三个对象（§13.5.33 已记：插件格要
 Docker、自托管节点没开），与本格的 PR 描述不是一回事。
 
+
+##### 13.5.33.7 2026-11-09 GA 回读结论判红时补「错误日志怎么取」的指针（ISSUE #3469 / #3454 后续指令）
+
+**改的是判红日志里的一行可读性，不是判决、不是载体。** 月读贴出 `GA 回调结论回读` stage
+判红截图：日志只有 `[ga-readout] … state=error → 红` 与 `任务执行失败，返回码：1`，
+没有一句话告诉看日志的人/AI「真正的失败日志去哪找」，AI 分析/修复拿着这份空读数只能猜。
+而取法早就存在（§13.5.33.4/.6）：GA 收尾 job 判红时把失败 job 日志正文搬到 CNB
+（附件 + PR 评论 / 描述镜像），本地取回是 `pnpm ship --gh-logs pr:<号>` —— 这条提示
+**只写在 PR 评论 / 描述正文里**，回读格的 build 日志看不到，两条通道在读的人那里没合流。
+
+| 面 | 动作 |
+| --- | --- |
+| 承重回读格 | `ci-ga-verdict-readout.mjs` 新增纯函数 `errorLogsHint(pr)`：明确判红（`code === CODE.FAIL`）那一眼，在 `⇒ 红` 之后多打三行只读提示 —— 本格只站内读 GA 送回的结论、这里没有失败 job 正文；错误日志取 `pnpm ship --gh-logs pr:<号>`（优先 CNB 站内读、无需出站 github.com / GitHub 令牌）；同一份附件链也挂在 PR 评论与描述里 |
+| 边界 | **只在明确判红给**：绿（0）/ 没判过（2，pending / 缺席 / 前提不全 / 平台没回）都不刷，避免把「没判过」读成「有日志可取」；`--json` 仍只给一行机器读数，判红也不夹提示。提示不改三态、不改退码、不发网络请求、不写 commit-statuses；`pr` 本就从 `--pr` / `CNB_PULL_REQUEST_IID` 解析好，拼它不需要新前提 |
+| 单一出处 | 命令形状与 `ci-ga-logs-relay.mjs` 的 `relayCommentBody` / `renderRelayDescriptionBlock` 同源（都是 `pnpm ship --gh-logs pr:<号>`），由用例逐字对账，别两处各写一份形状；取法本身（relay / 本地读者 / ship）一行不改 |
+
+**为什么不动承重**：与 §13.5.33.4/.5/.6 同一句 —— 日志是证据，不是判决。新增的只是
+「把现成入口念出来」，不碰流水线 `name` / `COMFYAPP_CI_GATES` / `GATE_TIER_LEDGER` /
+`GA_VERDICT` 折叠 / 三态退码；`.cnb.yml` 那段配置注释只补一行口径（它本来就在讲
+「GA 侧判红的全量日志仍可 `--gh-logs` 按需取」）。
+
+**逐笔对账**：`ci-ga-verdict-readout.mjs`（头注 + `errorLogsHint` + `main` 判红接线）/
+`tests/ci-ga-verdict-readout.test.ts`（提示带 PR 号且与 relay 评论同源 / 判红给且退 1 /
+绿与没判过不给 / `--json` 不污染 / 前提不全不刷）/ `.cnb.yml`（回读格注释补口径）/
+本节 + 生成态镜像 / `ga-migration-checklist.md` + 镜像 / `## Changed` 碎片挂 #3469，
+与 §13.5.33.4 同形同批。
+
 #### 13.5.34 2026-11-06 GA push 档：镜像仓 master 的文档链并行执行者（任务 3 并行期）
 
 新增 `.github/workflows/master-gate.yml`，在镜像仓 master 的 `push` 上跑文档链两格：
