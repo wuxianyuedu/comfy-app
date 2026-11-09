@@ -92,12 +92,14 @@ const SLOW_LOG_COALESCE_MS = 60_000;
 
 type SlowBucket = { at: number; count: number };
 
-const G_KEY = "__trpcSlowQueryBuckets_v1";
+/* 聚合窗口挂在 globalThis（HMR 重载后仍连续）：经环境声明拿 typed 键，不再断言。 */
+declare global {
+  var __trpcSlowQueryBuckets_v1: Map<string, SlowBucket> | undefined;
+}
+
 const buckets = (() => {
-  /* SAFETY: 类型断言已复核 */
-  const g = globalThis as unknown as Record<string, Map<string, SlowBucket> | undefined>;
-  g[G_KEY] ??= new Map<string, SlowBucket>();
-  return g[G_KEY];
+  globalThis.__trpcSlowQueryBuckets_v1 ??= new Map<string, SlowBucket>();
+  return globalThis.__trpcSlowQueryBuckets_v1;
 })();
 
 /** 记录一次慢查询；返回需要在面板写的行（不写时返回 null）。 */

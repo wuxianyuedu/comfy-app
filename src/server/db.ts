@@ -47,12 +47,14 @@ const nodeSqlite = openNodeSqlite(resolveDbPath(env.DATABASE_URL ?? DEFAULT_DB_F
 // still waits for WAL/foreign_keys (with the #1282 busy retry) before it runs.
 const gatedProxy = gateProxyWithPragmas(nodeSqlite);
 
-/* SAFETY: reviewed */
-const globalForDb = globalThis as unknown as {
-  db: SqliteRemoteDatabase<typeof schema> | undefined;
-};
+declare global {
+  /* Dev-reload singleton keeps the existing global key `db` (renaming it would
+   * desync cross-module reads/writes). Ambient declaration instead of the old
+   * `globalThis as unknown as { db: ... }` cast, so access stays typed. */
+  var db: SqliteRemoteDatabase<typeof schema> | undefined;
+}
 
-export const db = globalForDb.db ?? drizzle(gatedProxy, { schema });
+export const db = globalThis.db ?? drizzle(gatedProxy, { schema });
 
 /** The retired libsql driver exposed the client as `$client`; tests use that
  *  property (and `closeDb`) to release the handle before unlinking a temp
@@ -62,7 +64,7 @@ export const db = globalForDb.db ?? drizzle(gatedProxy, { schema });
 (db as SqliteRemoteDatabase<typeof schema> & { $client?: NodeSqliteHandle }).$client = nodeSqlite;
 
 if (env.NODE_ENV !== "production") {
-  globalForDb.db = db;
+  globalThis.db = db;
 }
 
 /**

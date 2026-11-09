@@ -171,7 +171,7 @@ describe("task.list", () => {
     });
     await expect(
       caller.list({
-        /* SAFETY: 类型断言已复核 */
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- 故意喂不在枚举里的值：zod 闸必须拦下（线上载荷可绕过编译期类型）
         media: "doc" as never,
       }),
     ).rejects.toMatchObject({

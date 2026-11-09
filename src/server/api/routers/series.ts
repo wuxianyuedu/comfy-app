@@ -4,6 +4,7 @@ import type { SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
 import { TRPCError } from "@trpc/server";
 import { createId } from "@paralleldrive/cuid2";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
+import { isPlainRecord } from "~/lib/is-record";
 import type * as schema from "~/server/db/schema";
 import {
   series,
@@ -31,6 +32,12 @@ type ProductionCharacter = {
   styleTags?: Array<unknown>;
   temperament?: string;
 };
+
+/** `production.characters` 列的运行期判据：条目是对象（引擎写入端保证字段形状，
+ *  消费侧字段读取全部 `?? ""` 兜底）；非对象条目跳过，不再对 any[] 盲断言。 */
+function isProductionCharacterRow(v: unknown): v is ProductionCharacter {
+  return isPlainRecord(v);
+}
 
 /** 把生产数据里的角色卡映射成系列角色库实体的可写字段（FR-SR-03：引用而非拷贝）。 */
 function productionCharacterToLibrary(pc: ProductionCharacter): {
@@ -702,10 +709,9 @@ export const seriesRouter = createTRPCRouter({
       if (epSeriesId === null) {
         throw new TRPCError({ code: "NOT_FOUND", message: "季未归属任何系列" });
       }
-      /* SAFETY: 类型断言已复核 */
-      const prodChars = (
-        Array.isArray(prod.characters) ? prod.characters : []
-      ) as Array<ProductionCharacter>;
+      const prodChars = Array.isArray(prod.characters)
+        ? prod.characters.filter(isProductionCharacterRow)
+        : [];
       let created = 0;
       let updated = 0;
       let linked = 0;
@@ -787,10 +793,9 @@ export const seriesRouter = createTRPCRouter({
         .from(episodeCharacter)
         .innerJoin(character, eq(episodeCharacter.characterId, character.id))
         .where(eq(episodeCharacter.episodeId, ep.id));
-      /* SAFETY: 类型断言已复核 */
-      const prodChars = (Array.isArray(prod.characters) ? prod.characters : []) as Array<
-        Record<string, unknown>
-      >;
+      const prodChars = Array.isArray(prod.characters)
+        ? prod.characters.filter(isProductionCharacterRow)
+        : [];
       const byName = new Map<string, Record<string, unknown>>();
       for (const c of prodChars) {
         const n = typeof c?.name === "string" ? c.name : "";

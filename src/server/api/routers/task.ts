@@ -5,6 +5,7 @@ import { createTRPCRouter, authedProcedure, rateLimitedProcedure } from "~/serve
 import { taskRepository } from "~/lib/core/repository";
 import { logger } from "~/lib/core/logger";
 import { errorMessage } from "~/lib/error-message";
+import { asRecord } from "~/lib/is-record";
 import { taskOutputDir } from "~/lib/media/output-paths";
 import { cancelTask as cancelExecutorTask } from "~/lib/comfyui/enqueue";
 import { kickQueue } from "~/lib/comfyui/executor-continuation";
@@ -81,8 +82,7 @@ export const taskRouter = createTRPCRouter({
           includeImages: true,
         });
         return tasks.map((task) => {
-          /* SAFETY: 类型断言已复核 */
-          const p = (task.params ?? {}) as Record<string, unknown>;
+          const p = asRecord(task.params) ?? {};
           const checkpoint = typeof p.checkpoint === "string" ? p.checkpoint : null;
           const cover = task.images[0]?.localPath ?? null;
           const coverMediaType = task.images[0]?.mediaType ?? null;
@@ -248,16 +248,13 @@ export const taskRouter = createTRPCRouter({
     if (!task) {
       throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
     }
-    /* SAFETY: 类型断言已复核 */
-    const snap = task.workflowSnapshot as {
-      capturedAt?: string;
-      source?: string;
-      workflow?: unknown;
-    } | null;
+    /* 快照列是外来 JSON：只判「是对象」这一层，字符串字段带 typeof 收口
+     * （损坏行按缺省回落，不再把垃圾值原样透传）。 */
+    const snap = asRecord(task.workflowSnapshot);
     return {
       workflow: snap?.workflow ?? null,
-      source: snap?.source ?? null,
-      capturedAt: snap?.capturedAt ?? null,
+      source: typeof snap?.source === "string" ? snap.source : null,
+      capturedAt: typeof snap?.capturedAt === "string" ? snap.capturedAt : null,
     };
   }),
 

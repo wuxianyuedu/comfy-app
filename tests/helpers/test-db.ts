@@ -4,7 +4,7 @@
  * 走 `sqlite-proxy` 而非 `drizzle-orm/better-sqlite3`（ISSUE #2586）：后者把事务回调交给 better-sqlite3 的 `transaction()`，它**不等 promise** —— `await db.transaction(async (tx) => …)` 会在第一个 await 之前就 COMMIT，原子性静默失效。
  * 代理层 `SQLiteRemoteSession.transaction` 是 `await transaction(tx)`，`begin`/`commit`/`rollback` 走同一回调 ⇒ 同一份生产代码在测试宿主上拿到的是**真的**事务，而不是看着正常的空壳。 @module tests/helpers/test-db — Drizzle 内存测试库（测试基建，不触碰 src 源码） */
 import Database from "better-sqlite3";
-import { drizzle, type RemoteCallback } from "drizzle-orm/sqlite-proxy";
+import { drizzle, type RemoteCallback, type SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
 import * as schema from "~/server/db/schema";
 import { encryptLlmKey } from "~/lib/llm/secrets";
 
@@ -231,8 +231,9 @@ export type TestTables = {
   workflowTemplates: Array<Row>;
 };
 
-export type TestDb = {
-  [key: string]: unknown;
+/* 实例本体就是 drizzle（$reset/$tables/$sqlTrace 是 Object.assign 挂上去的附加键，
+ * 见 getTestDb 内注释）：类型取与 drizzle 的交集，测试里不再需要强转。 */
+export type TestDb = SqliteRemoteDatabase<typeof schema> & {
   $reset(): void;
   /** 本条用例经过宿主的 SQL 顺序（`$reset()` 清空）。判「读有没有落在事务内」用它。 */
   $sqlTrace: Array<string>;
@@ -479,12 +480,11 @@ export function createTestDb(): TestDb {
   };
 
   // 把 $reset / $tables 挂到 drizzle 实例上，供测试与 vi.mock 共用同一对象
-  /* SAFETY: 类型断言已复核 */
-  const api = Object.assign(db, {
+  const api: TestDb = Object.assign(db, {
     $reset: reset,
     $tables: tables,
     $sqlTrace: sqlTrace,
-  }) as unknown as TestDb;
+  });
 
   currentDb = api;
   return api;

@@ -7,6 +7,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
+import { isPlainRecord } from "~/lib/is-record";
 import { productionRepository } from "~/lib/core/repository-production";
 import {
   normalizeProductionRun,
@@ -320,21 +321,14 @@ export const runRouter = createTRPCRouter({
       }
       const rawList = input.kind === "shot" ? row.shots : row.characters;
       const list: Array<unknown> = Array.isArray(rawList) ? rawList : [];
-      const rec = list.find(
-        (item) =>
-          /* SAFETY: 类型断言已复核 */
-          typeof item === "object" &&
-          item !== null &&
-          (item as { id?: unknown }).id === input.targetId,
-      );
+      const rec = list.find((item) => isPlainRecord(item) && item.id === input.targetId);
       if (rec === undefined) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: `找不到要裁决的${input.kind === "shot" ? "镜头" : "角色卡"}`,
         });
       }
-      /* SAFETY: 类型断言已复核 */
-      const revRaw = (rec as { rev?: unknown }).rev;
+      const revRaw = isPlainRecord(rec) ? rec.rev : undefined;
       const rev = typeof revRaw === "number" && Number.isFinite(revRaw) ? revRaw : 0;
       const verdict = {
         pass: input.pass,

@@ -20,8 +20,9 @@ import {
 
 /** 适配器输入行：统一输入类型 → 请求体字段名 */
 const adapterInputSchema = z.object({
-  /* SAFETY: 类型断言已复核 */
-  type: z.enum(WORKSHOP_INPUT_TYPES.map((t) => t.type) as [string, ...Array<string>]),
+  /* zod v4 的 `z.enum` 带 `const T extends readonly string[]`：直接吃同一份
+   * 词表派生的数组即可，字面量联合原样保留，无需断言成元组。 */
+  type: z.enum(WORKSHOP_INPUT_TYPES.map((t) => t.type)),
   field: z.string().min(1),
 });
 const adapterSchema = z.object({

@@ -63,6 +63,7 @@ vi.mock("~/server/agent/review", () => ({
 }));
 
 import { createCallerFactory } from "~/server/api/trpc";
+import { asRecord, isPlainRecord } from "~/lib/is-record";
 import { runRouter } from "~/server/api/routers/run";
 import { productionRepository } from "~/lib/core/repository-production";
 import { scriptDigestOf } from "~/lib/production/run-types";
@@ -71,6 +72,13 @@ import { getTestDb, seedUser } from "../../../../tests/helpers/test-db";
 import { errorEnvelope, makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(runRouter);
+
+/** production 行的 shots JSON 列按记录视图读：只判「数组且条目是对象」，
+ *  字段交给 expect 断言（写入端是引擎自己；损坏条目不参与断言）。 */
+function shotRows(row: { shots: unknown } | null | undefined): Array<Record<string, unknown>> {
+  const raw: unknown = row?.shots;
+  return Array.isArray(raw) ? raw.filter(isPlainRecord) : [];
+}
 const tdb = getTestDb();
 
 beforeEach(() => {
@@ -139,8 +147,7 @@ describe("run.start / 生命周期", () => {
     expect(res.run.goal).toBe("一句话");
     expect(res.action).toEqual({ kind: "generate_script" });
     const row = await productionRepository.getForUser("user-a", "proj_1");
-    /* SAFETY: 类型断言已复核 */
-    expect((row?.run as { status: string }).status).toBe("running");
+    expect(asRecord(row?.run)?.status).toBe("running");
   });
 
   it("图缺 → 启动后下一步 render_images（只列缺图的镜）", async () => {
@@ -264,7 +271,7 @@ describe("run.reviewShot / reviewCharacter / regenerateShot", () => {
       createCaller(makeCtx()).regenerateShot({
         projectId: "proj_r",
         shotId: "s1",
-        /* SAFETY: 类型断言已复核 */
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- 故意喂不在枚举里的 mode：非法输入必须被闸拦下（线上载荷可绕过编译期类型）
         mode: "乱" as "gacha",
       }),
     ).rejects.toThrow();
@@ -291,8 +298,7 @@ describe("run 人工侧（#2480）", () => {
       rev: 2,
     });
     const row = await productionRepository.getForUser("user-a", "proj_h");
-    /* SAFETY: 类型断言已复核 */
-    const shot = (row?.shots as Array<Record<string, unknown>>)[0];
+    const shot = shotRows(row)[0];
     expect(shot?.humanVerdict).toMatchObject({ pass: false, rev: 2 });
   });
 
@@ -328,7 +334,7 @@ describe("run 人工侧（#2480）", () => {
     });
     let row = await productionRepository.getForUser("user-a", "proj_h");
     /* SAFETY: 类型断言已复核 */
-    expect((row?.shots as Array<Record<string, unknown>>)[0]?.humanRating).toBe(3);
+    expect(shotRows(row)[0]?.humanRating).toBe(3);
     await createCaller(makeCtx()).setHumanRating({
       projectId: "proj_h",
       shotId: "s1",
@@ -336,7 +342,7 @@ describe("run 人工侧（#2480）", () => {
     });
     row = await productionRepository.getForUser("user-a", "proj_h");
     /* SAFETY: 类型断言已复核 */
-    expect((row?.shots as Array<Record<string, unknown>>)[0]?.humanRating).toBeNull();
+    expect(shotRows(row)[0]?.humanRating).toBeNull();
     await expect(
       createCaller(makeCtx()).setHumanRating({
         projectId: "proj_h",
