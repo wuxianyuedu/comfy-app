@@ -368,9 +368,8 @@
     # schedule 才跑得到新树）。现在它按 PR 出口同形挪成 `push` 事件下的第二条平台池
     # 流水线（另一条出网路径、退码生效），不再占 `master 合并复核` 主列的格 ——
     # 这份清单只登记主列，逐格判据双向核对（§13.5.33.3）。
-    # `push 失败立案` 不在这一份里（ISSUE #2842）：它是 `endStages`（红也要跑的段），
-    # 不是 `stages` 里的一格 —— 与 PR 档的 `PR 失败立案` 同形，定义在 `.push-fail-stage`
-    # 锚点。`COMFYAPP_CI_PUSH_GATES` 列的是 `stages` 主列的格名清单。
+    # `push 失败立案` 不在这一份里：它是 `endStages`（红也要跑的段），不是 `stages`
+    # 里的一格 —— 内联在下面 `GitHub master 镜像（平台池）` 那条流水线的 `endStages`。
     # 每日那一跑自己的 stage 清单 —— **另一个流水线，另一份清单**（定时口由
     # GA `.github/workflows/daily.yml` 的 schedule 起，CNB 这侧只剩手动 / API 两口，跑的是同一份）。
     # 它刻意**不**与上面那一条共用：上面那份是「PR 上跑什么」，这一份是「每天跑什么」，
@@ -1516,26 +1515,6 @@
       script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-pr-failure-issue.mjs --no-block --lane package
       # 与 `PR 失败立案` 同一量级（三次读命令 + 一次写 + 一次回读）。
       timeout: 5m
-# ── push 档（master 合并复核）的失败立案─────────────────────────
-#
-# 这一档为什么也要有：push 档此前**只**引了 `*common` —— 没有 `endStages` 立案格。
-# 于是 master 合并复核红了之后，知道这件事的唯一办法是去翻构建列表：曾有一批
-# 漏登记 §13.1 一格，PR 全绿、合并全绿，master 上的 `doc:check` 红了 ≈20 分钟才被
-# 另一条分支的一次性探针撞见（立案格就是为这一形设的）。
-#
-# 形态与 PR / 桌包那两格逐字同族（`endStages` 而不是 `stages` 的最后一格；理由见
-# 上面那个锚点），入口也是**同一个脚本**加一个 `--lane push`：
-#   · 那份读写链（定性 / 取逐格 / 摘录失败行 / 建单 → 补标签 → 独立回读）只写了一次，
-#     这里不抄第二份（§12.12）；
-#   · `--lane` 是「我就是这一档的立案口」的显式声明 —— 不给它，脚本按老规矩把非
-#     `pull_request` 事件判成「不归本格管」。
-# 去重键跟着 `--lane` 走 ⇒ 标题是 `ci(push): push 档红在「…」`，与 PR / 桌包两族互不相混。
-.push-fail-stage: &push_fail_stage
-  endStages:
-    - name: push 失败立案
-      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-pr-failure-issue.mjs --no-block --lane push
-      # 与 `PR 失败立案` 同一量级（三次读命令 + 一次写 + 一次回读）。
-      timeout: 5m
 .gates: &gates
   # ── 环境类前提三格从这一条上撤到**每日档**（`COMFYAPP_CI_DAILY_GATES`）──
   # 撤的是节奏、不是账：`工具链自证` / `Python 可用性` / `Python 探针读数` 现在各有
@@ -2366,15 +2345,11 @@ master:
           timeout: 10m
 
   # 合并后的 push：**不重跑全套**（全套是 PR 那条的事；「不引入新代码」的前提依旧 ——
-  # 合并提交由平台按**已被门禁验过的源分支 SHA** 生成）。主列是「树级校验档」：
-  # 形态复核 + 前提安装 + 文档链两格 + 工作区出处，判的是合并后的树一致不一致
-  # （清单与顺序在 `.push-stages` 锚点 / `COMFYAPP_CI_PUSH_GATES`，判据双向核对）。
-  # 若出现非合并提交（本地 --no-verify 就能做到），说明有变更绕过了 PR 与门禁 ——
-  # `合并形态复核` 一格红，失败即停，后面全部 skipped。
+  # 合并提交由平台按**已被门禁验过的源分支 SHA** 生成）。树级校验档已撤（文档链两格
+  # 挪 GA `master-gate.yml` 同名 step），合并形态复核的真正防线仍是平台分支保护。
   #
-  # 镜像出口是**第二条流水线**（平台池），与主列并行：它不是树级校验、不吃
-  # `node_modules`，也不占主列的格。主列因此不再 import 镜像令牌 —— 那一枚
-  # 只被第二条流水线读取。
+  # 镜像出口（平台池）是 push 事件下唯一的流水线：它不是树级校验、不吃
+  # `node_modules`，只把合并后的 HEAD 推成镜像仓的 master。镜像令牌只被它读取。
   push:
     - name: GitHub master 镜像（平台池）
       # 与 PR 档的「GitHub 镜像同步（平台池）」同一形态：自托管节点到 github.com
@@ -2392,9 +2367,8 @@ master:
       # 继续推没有新信息。
       #
       # 承重 / 兜底：push 不拦合并。失败出口 = 本流水线自己的 error 落进 push build
-      # （`push 失败立案` 读逐格读数，但它挂在主列的 endStages、可能早于本格收尾 ——
-      # 这一跳没在 push 节点上单独实测过，不假装已验），加上每日 `镜像漂移判据`
-      # （跨仓匿名 ls-remote、`always()`）兜「之后没人再推」。
+      # （`push 失败立案` 读逐格读数；它挂在**本条**的 endStages，与本格同跑），
+      # 加上每日 `镜像漂移判据`（跨仓匿名 ls-remote、`always()`）兜「之后没人再推」。
       runner:
         # 平台池 = 云托管 Linux 节点（不写 namespace: group 就是它）。
         tags:
@@ -2412,11 +2386,17 @@ master:
       lock: *lock_push_mirror
       imports:
         - https://cnb.cool/moon-read/GITHUB_MIRROR_TOKEN/-/blob/main/envs.yml
-      # 主列已撤（ISSUE #3378）：立案格跟着挪到这一条，`--lane push` 显式声明
-      # 「我就是这一档的立案口」。红也要跑的语义由平台 endStages 保证。
+      # 立案格与镜像出口同跑（#3378 起内联在这一条的 endStages）。`--lane push`
+      # 显式声明「我就是这一档的立案口」，红也要跑的语义由平台 endStages 保证。
+      # ⚠️ 这一条在**平台池 Linux 容器**里：脚本要用 `sh` 语法，不许带自托管那句
+      # `$enc=[Text.Encoding]::UTF8; …`（那是 Windows PowerShell，sh 会把它拆成
+      # `=[Text.Encoding]::UTF8: not found` 当场退 127，#3453）。同理不包
+      # `ci-cp936-exit.mjs` —— CP936 转码是中文 Windows 自托管那一跳的事，Linux 上
+      # 该外壳直接直通，包着只是多一层无用的壳。立案脚本的 `cnb` 通道由本条
+      # `docker.build` 的 Dockerfile 预装（见 `.cnb/ci-image/Dockerfile`）。
       endStages:
         - name: push 失败立案
-          script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-pr-failure-issue.mjs --no-block --lane push
+          script: node scripts/ci-pr-failure-issue.mjs --no-block --lane push
           timeout: 5m
       stages:
         - name: GitHub master 镜像

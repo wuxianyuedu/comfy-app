@@ -1470,6 +1470,29 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         chunk,
         `「${name}」还带实验期的 --readout —— 推不出去 / 派发失败必须退非零`,
       ).not.toContain("--readout");
+
+      /* 平台池是 Linux 容器（node 镜像），stage shell 是 `sh`：自托管那句
+       * `$enc=[Text.Encoding]::UTF8; …` 是 Windows PowerShell，sh 会把它拆成
+       * `=[Text.Encoding]::UTF8: not found` 当场退 127；`ci-cp936-exit.mjs` 也只是
+       * 中文 Windows 那一跳的转码外壳（Linux 上直通）。两者都不许被照抄进平台池格
+       * —— 现场：push 出口的 `endStages` 立案格带着这两样，退出 127、整格红。 */
+      const scriptLines = chunk.split("\n").filter((line) => /^\s+script:\s/.test(line));
+      expect(
+        scriptLines.length,
+        `「${name}」解析不出 script 行 —— 下面两条语法判据就没有对象了`,
+      ).toBeGreaterThan(0);
+      for (const line of scriptLines) {
+        expect(
+          line,
+          `「${name}」的 script 带了 Windows PowerShell 语法（[Text.Encoding]）—— ` +
+            "这一条在平台池 Linux 容器里跑，sh 会当场退 127",
+        ).not.toContain("[Text.Encoding]");
+        expect(
+          line,
+          `「${name}」的 script 还包着 ci-cp936-exit.mjs —— CP936 转码只属中文 Windows ` +
+            `自托管那一跳，Linux 上这层外壳是多余的`,
+        ).not.toContain("ci-cp936-exit.mjs");
+      }
       const isPushMirror = name === "GitHub master 镜像（平台池）";
       expect(
         chunk,
@@ -1486,8 +1509,39 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
           chunk,
           "push 镜像出口的 stage 名不是 `GitHub master 镜像` —— 立案回读按格名认",
         ).toContain("name: GitHub master 镜像");
+        expect(
+          chunk,
+          "push 镜像出口的 endStages 没有立案格 —— 红了就没人知道（这一格是 push 事件下唯一的流水线）",
+        ).toContain("ci-pr-failure-issue.mjs --no-block --lane push");
       }
     }
+  });
+
+  it("平台池镜像 Dockerfile 预装 cnb CLI（endStages 立案格的执行前提）", () => {
+    /* `push 失败立案` 的判决链（fetchBuildList / fetchBuildDetails / 建单 / 补标签 /
+     * 独立回读）整条走 `makeRunner()` 起 `cnb` 子进程。平台池容器是 `node:26` +
+     * git-lfs，本就没有这个二进制 —— #3453 之前那一格即使修好了 sh 语法也会
+     * 「取不到读数、一次都不写」（`--no-block` 折成退 0）⇒ 绿着空转。
+     * 装它的动作**只有这一处**，所以判据点名 Dockerfile：缺这一行，换台机器
+     * 重建镜像就又回到「判据在场、执行者不在场」。官方 `zh/develops/cnb-cli.md`
+     * 的接入方式是 npm 包或 cnbcool/cnb-cli 镜像；平台注入 CNB_TOKEN 无需登录。 */
+    const dockerfile = readFileSync(path.join(ROOT, ".cnb/ci-image/Dockerfile"), "utf8");
+    expect(
+      dockerfile,
+      "`.cnb/ci-image/Dockerfile` 没装 @cnbcool/cnb-cli —— 平台池 endStages 的立案格起不来 cnb 子进程",
+    ).toContain("@cnbcool/cnb-cli");
+    expect(
+      dockerfile,
+      "装完没自证 —— `cnb` 不在 PATH / 包没解开时镜像照样构建成功，那一格仍然空转",
+    ).toContain("cnb --version");
+    /* 反例：只写注释不算装（与「入口计数面只认会被执行的 script 行」同一条口径）。
+     * 把 RUN 那行注释掉，判据必须当场红，否则它守不住「删装法只留说明」那一形。 */
+    const commented = dockerfile.replace(
+      /^RUN npm install -g @cnbcool\/cnb-cli && cnb --version$/m,
+      "# RUN npm install -g @cnbcool/cnb-cli && cnb --version",
+    );
+    expect(commented).not.toBe(dockerfile);
+    expect(/^RUN .*@cnbcool\/cnb-cli/m.test(commented)).toBe(false);
   });
 
   it("自托管主列「GitHub 镜像同步」已停用，推送出口只在平台池那一条（ISSUE #3418）", () => {
