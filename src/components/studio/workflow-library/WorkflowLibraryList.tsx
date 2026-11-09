@@ -111,7 +111,6 @@ export function WorkflowLibraryList({
           松开即可读取该工作流 JSON
         </p>
       )}
-      {/* oxlint-disable-next-line no-unnecessary-condition -- 该 prop 声明为 string|null，undefined 判定对声明类型恒真；保留它兼容调用方缺省/显式 undefined */}
       {fileErr !== null && fileErr !== undefined && fileErr !== "" && (
         <p className="border-destructive/25 bg-destructive/8 text-destructive text-2xs border-b px-3 py-1.5">
           ⚠ {fileErr}
@@ -249,7 +248,6 @@ function WorkflowListItem({
   const encapsulation = deriveEncapsulationStatus({
     io: workflow.workflowIO ?? null,
     paramMap: workflow.paramMap ?? null,
-    // oxlint-disable-next-line no-unnecessary-condition -- defaultMode 来自 tRPC 列表响应，旧行可能缺该字段
     mode: workflow.defaultMode ?? workflow.taskType ?? null,
   });
 

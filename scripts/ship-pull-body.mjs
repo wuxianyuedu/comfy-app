@@ -71,7 +71,6 @@ export function prBodyPlanLines(slug) {
  *   `total` 是逐行明细一共有几条（不含总计数行），`listed + omitted === total` 恒成立
  */
 export function capDiffstat(diffstat, sampleMax = DIFFSTAT_SAMPLE_MAX) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- diffstat 是 git diff --stat 的原文（外部数据），string 只是声明
   const lines = String(diffstat ?? "")
     .split(/\r?\n/)
     .filter((l) => l.trim() !== "");
@@ -177,7 +176,6 @@ function bodyBytes(text) {
  * @returns {boolean} 出现 `Closes`（大小写不敏感、只认整词）
  */
 export function mentionsCloses(text) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- text 是文件原文（外部输入），string 只是声明
   return /\bcloses\b/i.test(String(text ?? ""));
 }
 

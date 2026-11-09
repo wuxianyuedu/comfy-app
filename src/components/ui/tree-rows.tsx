@@ -72,8 +72,7 @@ export function TreeRow({
   return (
     <div data-slot="tree-row">
       {row}
-      {/* oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined */}
-      {children != null && (
+      {children !== null && children !== undefined && (
         <TreeChildren className={childrenClassName} depth={depth} railClassName={railClassName}>
           {children}
         </TreeChildren>

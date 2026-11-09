@@ -258,9 +258,7 @@ function runRegistered(registered) {
   });
   return {
     status: r.status,
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawn 失败时 stdout 实测为 null，@types/node 按 string 标
     stdout: r.stdout ?? "",
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawn 失败时 stderr 实测为 null，@types/node 按 string 标
     stderr: r.stderr ?? "",
     ...(r.error ? { error: r.error } : {}),
     commandLine,

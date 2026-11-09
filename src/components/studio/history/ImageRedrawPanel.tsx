@@ -154,8 +154,9 @@ export function ImageRedrawPanel({
             !controller.selectedTemplateId ||
             (controller.mode === "inpaint" && (controller.mask === null || controller.mask === ""))
           }
-          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-          onClick={() => void controller.run(imageUrl)}
+          onClick={() => {
+            void controller.run(imageUrl);
+          }}
           size="sm"
           type="button"
         >

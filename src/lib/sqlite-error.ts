@@ -67,8 +67,7 @@ function collect(error: unknown): { codes: Array<string>; messages: Array<string
   const codes: Array<string> = [];
   const messages: Array<string> = [];
   let node: unknown = error;
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  for (let depth = 0; depth < CAUSE_CHAIN_LIMIT && node != null; depth++) {
+  for (let depth = 0; depth < CAUSE_CHAIN_LIMIT && node !== null && node !== undefined; depth++) {
     const code = fieldOf(node, "code");
     if (code && !codes.includes(code)) {
       codes.push(code);

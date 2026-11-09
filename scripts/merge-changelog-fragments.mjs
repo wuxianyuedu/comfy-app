@@ -228,7 +228,6 @@ function mergeInto(changelogText, fragments, version, anchorRev) {
    * 于是 `target` 不再带着 `undefined` 走到后面四处（那五格红就是这么来的）。
    * 抛出条件与原句逐字等价（`pending.length === 0` ⇔ 这里取不到第一个）。 */
   const [firstPending, ...restPending] = pendingSections(lines);
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 无待发段落时解构首元素运行时为 undefined（随即抛错的一支）
   if (!firstPending) {
     throw new Error(
       "CHANGELOG.md 里找不到待发段落(既没有 `## [Unreleased]`、也没有未发布的 `[x.y.z]`)",
@@ -270,7 +269,6 @@ function mergeInto(changelogText, fragments, version, anchorRev) {
   let current = null;
   for (const line of lines.slice(start + 1, end)) {
     const name = line.match(/^###\s+(?<name>.+)$/)?.groups?.name;
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则不匹配时 name 运行时为 undefined
     const section = name?.trim();
     if (section && SECTIONS.includes(section)) {
       current = section;

@@ -100,8 +100,9 @@ export function FilmStudioTopBar({
           (c.shotSource === "project" &&
             (c.activeProjectId === null || c.activeProjectId === "" || c.projectShotCount === 0))
         }
-        // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-        onClick={() => void (c.shotSource === "project" ? c.createFromProject() : c.create())}
+        onClick={() => {
+          void (c.shotSource === "project" ? c.createFromProject() : c.create());
+        }}
         size="sm"
         variant="primary"
       >
@@ -112,8 +113,9 @@ export function FilmStudioTopBar({
       {c.film && c.running && (
         <Button
           className="border-border text-ink-strong hover:bg-surface-2 h-auto rounded-lg px-3 py-1.5"
-          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-          onClick={() => void c.cancel()}
+          onClick={() => {
+            void c.cancel();
+          }}
           size="xs"
           variant="outline"
         >

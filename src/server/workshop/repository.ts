@@ -75,7 +75,6 @@ function applyContentToState(
       ...state.meta,
       title: content.title,
       /* SAFETY: 类型断言已复核 */
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- content.type 经 `as ProjectMeta["type"]` 断言，来源是运行期数据，`?? state.meta.type` 是兜底
       type: (content.type as ProjectMeta["type"]) ?? state.meta.type,
       tone: content.tone,
       logline: content.logline,
@@ -94,7 +93,6 @@ export function rowToState(row: WorkshopSession): WorkshopSessionState {
     meta: {
       title: row.title,
       /* SAFETY: 类型断言已复核 */
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- row.type 是 DB 列经 `as ProjectMeta["type"]`，历史行可能不在枚举内，`?? "short_video"` 是兜底
       type: (row.type as ProjectMeta["type"]) ?? "short_video",
       tone: row.tone,
       logline: row.logline,

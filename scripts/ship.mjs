@@ -400,7 +400,6 @@ async function runFlow(deps, tmpFiles) {
    * @param {{stdout:string,stderr?:string}} r 执行结果
    */
   const relay = (r) => {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- r 是外部命令的执行结果，调用方传入的形状运行时可能缺 stdout
     if (r.stdout?.trim()) {
       log(r.stdout.trimEnd());
     }
@@ -796,7 +795,6 @@ async function runFlow(deps, tmpFiles) {
         /* 本轮合并已验真时，`--as-merged` 不参与判决（那一条比"人点名的某条 PR"更强）。
          * 这一句是**读数**、不改退码，但它必须出现：缺了它，下一行念的「依据：本轮落地
          * 那一行点名的」会让人以为旗标被吃掉了 —— 静默忽略别人的旗标正是这一族反复在收的形状。 */
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- landed 在合并未发生/未验真时运行时为 null，类型标窄
         if (opt.asMerged !== null && landed?.verified === true) {
           log(
             `[ship] --as-merged ${opt.asMerged} 这一跳**不参与判决**：本轮合并已验真` +
@@ -871,7 +869,6 @@ async function runFlow(deps, tmpFiles) {
   }
 }
 
-// oxlint-disable-next-line typescript/no-unnecessary-condition -- 直接执行判据：以 REPL / 无脚本入口方式入场时 argv[1] 运行时为 undefined
 if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   /* CLI 是唯一把真实落点交进来的入口；编排层被 import 调用时默认不落盘。 */
   main({ shipResultResolve: resolveGitDir }).then((code) => process.exit(code));

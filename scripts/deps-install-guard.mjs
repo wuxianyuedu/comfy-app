@@ -33,7 +33,6 @@ try {
   const live = await runningAppInstances(root);
   /* 判据经 await 跨模块返回，运行时形状不能只信静态类型：这里漏一次就是
    * 「没有结论」被当成「没有实例在跑」，硬规则 9 当场失效。 */
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 运行时读数可能为 undefined / 形状走形
   if (!live || typeof live.running !== "boolean" || !Array.isArray(live.pids)) {
     throw new Error("判据返回的读数形状不对");
   }

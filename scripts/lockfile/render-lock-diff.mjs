@@ -160,7 +160,6 @@ export function renderLockDiff(diff, opts = {}) {
     }
   }
 
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- diff 来自 pnpm-lock.yaml 解析（外部文件），duplicates 声明非空但防御缺键
   const dup = [...(diff.duplicates?.old || []), ...(diff.duplicates?.new || [])];
   if (dup.length) {
     lines.push(

@@ -147,7 +147,6 @@ export function planRun(
       /* 停用台账：逐条一个旗标，与 `run-affected-tests.mjs` 的 `excludeArgs` 同一个形状
        * （拼成一个参数会让「剔了哪几条」在命令行上读不出来，而这一档的全部可见性就在
        * 那一行读数上）。空数组 ⇒ 一个字都不加。 */
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- `exclude` 是可选入参（`= []` 只兜了 undefined），显式传 null 时这条路仍要成立
       ...(exclude ?? []).filter(Boolean).flatMap((rel) => ["--exclude", rel]),
       ...extra,
     ],
@@ -274,7 +273,6 @@ export function coverageGate(argv, env = process.env) {
  */
 export function suiteRanking(xmlText, { limit = 10, file = "", diag } = {}) {
   const where = file ? `（落点 ${file}）` : "";
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- xmlText 在类型上必填，但调用方读不到文件时给的就是空串/undefined
   const entries = parseJunitXml(String(xmlText ?? ""));
   if (entries.length === 0) {
     return junitMissingLine("分文件耗时", file, diag);
@@ -373,7 +371,6 @@ export function parseJunitPhaseCosts(xml) {
  */
 export function suitePhaseTax(xmlText, { limit = 10, file = "", wallMs = null, diag } = {}) {
   const where = file ? `（落点 ${file}）` : "";
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上（这一档的调用方读不到 junit 时给空串）
   const entries = parseJunitPhaseCosts(String(xmlText ?? ""));
   if (entries.length === 0) {
     return junitMissingLine("装载税", file, diag);
@@ -424,7 +421,6 @@ export function suitePhaseTax(xmlText, { limit = 10, file = "", wallMs = null, d
  * @returns {boolean}
  */
 export function shouldRecord({ exitCode, dryRun, extra = [], exclude = [] }) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同 `excludeArgs`：可选入参显式传 null 时这条路仍要成立
   if ((exclude ?? []).length > 0) {
     return false;
   }
@@ -746,7 +742,6 @@ async function main(argv) {
           });
           /* `runPnpmSync` 的 `stdout` / `stderr` 在起不来时是空串（它自己兜过），
            * 但本处是**注入面**（用例会换掉 `runPnpmSync`）—— 这层 `??` 仍在。 */
-          // oxlint-disable-next-line typescript/no-unnecessary-condition -- 注入面的出参形状不由本文件保证
           const out = `${String(res2.stdout ?? "")}\n${String(res2.stderr ?? "")}`;
           return {
             status: res2.status ?? 1,

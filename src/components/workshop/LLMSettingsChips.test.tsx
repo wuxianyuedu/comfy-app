@@ -53,7 +53,6 @@ describe("LLM 设置的提供方 / 模型清单 chip（ISSUE #1925）", () => {
     expect(screen.getByRole("radiogroup", { name: "提供方" })).toBeTruthy();
     const providerChips = screen
       .getAllByRole("radio")
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留空值兜底
       .filter((c) => /Ollama|OpenAI/.test(c.textContent ?? ""));
     expect(providerChips).toHaveLength(2);
     expect(providerChips.map((c) => c.getAttribute("aria-checked"))).toEqual(["true", "false"]);

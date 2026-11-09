@@ -105,7 +105,6 @@ test.describe("队列与运行屏 @critical", () => {
        每行前面那个「第 N 位」是用户据以估算的读数，与行的位置必须一致。 */
     const rows = await waitingSection(page)
       .locator("li")
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- Playwright evaluate 里的 DOM 节点 textContent 运行期可为 null（lib.dom 声明 string|null），规则未建模，保留兜底
       .evaluateAll((nodes) => nodes.map((n) => n.textContent ?? ""));
     expect(rows.map((t) => /第 (?<count>\d+) 位/.exec(t)?.groups?.count ?? "?").join(",")).toBe(
       "1,2,3",

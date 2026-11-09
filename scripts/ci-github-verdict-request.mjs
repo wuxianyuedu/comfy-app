@@ -115,7 +115,6 @@ async function requestWithRetry(io, url, label, readBody) {
       if (!isRetryableRequestFailure(error) || attempt === REQUEST_MAX_ATTEMPTS) {
         break;
       }
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 下标越界时运行时为 undefined（未开 noUncheckedIndexedAccess），退避表长度不随上限变
       const wait = RETRY_BACKOFF_MS[attempt - 1] ?? RETRY_BACKOFF_MS.at(-1) ?? 5000;
       log(
         `[verdict] ${label}读数第 ${String(attempt)}/${String(REQUEST_MAX_ATTEMPTS)} 次没通（egress 类）⇒ ${String(wait / 1000)}s 后试第 ${String(attempt + 1)} 次（网络抖动重试；认证 / 权限类不重试）`,

@@ -120,9 +120,7 @@ function persistProjectToServer(p: CanvasProject): void {
       .mutate({
         id: p.id,
         name: p.name,
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 画布项目可能来自 localStorage/反序列化，nodes 运行期可缺省，`?? []` 是兜底
         nodes: p.nodes ?? [],
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：edges 运行期可缺省
         edges: p.edges ?? [],
       })
       /* 成功要把之前的拒收记录撤掉：用户照着提示把名字改对之后，
@@ -382,7 +380,6 @@ export function findNextAvailableName(base: string, excludeId?: string): string 
   // 否则会一直与它相撞，而不是找到下一个空闲槽位。
   let suffix = 2;
 
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 命名去重由内部 return/上限判据退出，`while (true)` 是刻意写法
   while (true) {
     const candidate = `${baseClean}_${suffix}`;
     if (!taken.has(candidate)) {
@@ -467,7 +464,6 @@ function isReapableEmptyDraft(project: CanvasProject, activeId: string | null): 
   if (project.name !== EMPTY_DRAFT_NAME) {
     return false;
   }
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- project 来自 localStorage 索引（JSON.parse），nodes/edges 运行期可缺省，?. 与 ?? 0 都是兜底
   return (project.nodes?.length ?? 0) === 0 && (project.edges?.length ?? 0) === 0;
 }
 
@@ -590,9 +586,7 @@ export async function listProjectsWithServer(): Promise<{
   for (const project of localAll) {
     byId.set(project.id, {
       ...project,
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 本地项目来自 localStorage 索引（JSON.parse），nodes 运行期可缺省
       nodes: project.nodes ?? [],
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：edges 运行期可缺省
       edges: project.edges ?? [],
       origin: "local",
     });

@@ -74,11 +74,7 @@ export function parseCliJsonLine(message: string): { tag: CliLogTag; value: unkn
   }
   try {
     const value: unknown = JSON.parse(split.payload);
-    if (
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      value != null &&
-      typeof value === "object"
-    ) {
+    if (value !== null && value !== undefined && typeof value === "object") {
       return { tag: split.tag, value };
     }
   } catch {

@@ -134,7 +134,6 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
         outlineOffset: selected === true ? "2px" : undefined,
       }}
     >
-      {/* oxlint-disable-next-line no-unnecessary-condition -- accent 由三态颜色表达式生成、类型上恒非空，保留判空防未来新增空色值把磨砂层画成透明 */}
       {accent && nodeMode !== 0 && <FrostLayer color={accent} nodeMode={nodeMode} />}
       {/* 头部 —— 紫色强调（子图身份）。与普通 WorkflowNode 头部同一个
        *  NODE_TITLE_H，好让带标题的节点在网格上对齐。 */}

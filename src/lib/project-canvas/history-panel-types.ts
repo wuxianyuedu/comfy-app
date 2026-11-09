@@ -77,7 +77,6 @@ export function timeAgo(iso: string): string {
 
 /** 卡片主标题：优先提示词摘要，退回工作流名，最后退回任务 id 短码。 */
 export function titleOf(task: HistoryTaskRow): string {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 任务行来自历史列表 API 响应，prompt 运行期可为 null
   const p = task.prompt?.trim();
   if (p) {
     return clampText(p, { maxLength: PROMPT_TITLE_MAX });

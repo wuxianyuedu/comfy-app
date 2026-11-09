@@ -158,7 +158,6 @@ function runSelfTest() {
       stderr: `起自证失败：${r.error.message}`,
     };
   }
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 子进程起不来时 stdout/stderr 实测为 undefined（@types/node 声明偏窄）
   return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
 }
 

@@ -187,7 +187,6 @@ export function runGate({
     records,
     /* 「这一档的执行者在不在平台侧」是**判决的一部分**，不是话术：调用方要据此把
      * 同一行读成「拦」或「读数」。留空 = 本地仍然是必经之路。 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- ciStage 来自档位登记表，可空
     ciStage: String(track.ciStage ?? "").trim(),
   };
 }
@@ -219,7 +218,6 @@ export function runGate({
  * @returns {Date | null}
  */
 export function dirtySinceToday(track, now = new Date()) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- track 由档位登记表构造，dirty 恒为数组，`!track.dirty` 是防御形态
   if (!track.dirty || track.dirty.length === 0) {
     return null;
   }

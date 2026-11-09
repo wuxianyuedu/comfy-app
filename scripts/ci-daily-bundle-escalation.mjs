@@ -295,7 +295,6 @@ export function fetchBundleRedStreak({
       };
     }
     const hit = hits[0];
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 上方 hits.length !== 1 已拦空，守卫防该判据改动后静默穿透
     if (!hit) {
       return { days: "unknown", note: `${sn} 的预算闸那一格认不出` };
     }
@@ -369,7 +368,6 @@ export function judgeBundleStageReading({
       const { hits } = findStageMatches(outcome, BUNDLE_GATE_STAGE);
       if (hits.length === 1) {
         const hit = hits[0];
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 上方 hits.length === 1 已守住非空，守卫防该判据改动后静默穿透
         if (!hit) {
           return { fired: false, reason: "预算闸那一格认不出", section: "" };
         }

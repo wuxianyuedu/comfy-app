@@ -30,7 +30,6 @@ const caller = () => createCaller(makeCtx());
 async function envelope(p: Promise<unknown>): Promise<string> {
   return p.then(
     () => "OK",
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- rejection 值是外部抛出的任意值，回调参数按 { code? } 标窄，`?.` 是运行期防线
     (error: { code?: string }) => error?.code ?? "UNKNOWN",
   );
 }

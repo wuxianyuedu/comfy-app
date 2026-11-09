@@ -30,7 +30,6 @@ const DRAG_CANCEL_SELECTOR = "input, textarea, select, button, [contenteditable]
  *  指示线画在实际插入位置，落点即所见。取不到几何信息（测试桩 / 理论上
  *  的分离节点）时退回 before。 */
 const positionOf = (event: DragEvent<HTMLDivElement>): WorkflowIODropPosition => {
-  // oxlint-disable-next-line no-unnecessary-condition -- 合成/测试事件可能缺 currentTarget，? 保留为运行时守卫
   const rect = event.currentTarget?.getBoundingClientRect?.();
   const rectPresent = Boolean(rect);
   if (!rectPresent || rect.height <= 0) {
@@ -275,8 +274,7 @@ export function useDynamicWorkflowForm(
   const set = useCallback(
     (ioKey: string, value: unknown) => {
       /* 清空某格 → 撤掉它的本地预览，避免「值已空却还显示旧图」。 */
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      if (value === "" || value == null) {
+      if (value === "" || value === null || value === undefined) {
         setPreviews((prev) => {
           if (prev[ioKey] === undefined) {
             return prev;
@@ -332,8 +330,9 @@ export function useDynamicWorkflowForm(
    *  onChange 里复位 `event.target.value`（同一套样板全库 9 份）。 */
   const uploadPicker = useFilePicker({
     accept: "image/*",
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    onPick: (file) => void onFile(file),
+    onPick: (file) => {
+      void onFile(file);
+    },
   });
 
   const pickFile = useCallback(

@@ -273,7 +273,6 @@ export function imageIdentity({
         `      口径与「宿主侧怎么用起来」见 docs/standards/13-提交与-code-review.md §13.5.3.4.1。`,
     );
   }
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 环境变量只会是 string | undefined，!== null 是防守形态
   if (image !== undefined && image !== null && String(image).trim() !== "" && dig === "missing") {
     lines.push(
       `读数：声明了镜像引用却没给 digest —— 标签会被移动，digest 不会（${DIGEST_ENV} 留空）`,

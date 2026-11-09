@@ -158,7 +158,6 @@ async function spawnOllamaServe(
       windowsHide: true,
       mode: "keepAlive",
     });
-    // oxlint-disable-next-line no-unnecessary-condition -- 判别联合里 child 在则 error 恒空，保留双判抵御形状漂移
     if (launched.child === undefined || launched.error !== undefined) {
       const msg = launched.error;
       const hint =

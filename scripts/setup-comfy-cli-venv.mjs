@@ -122,9 +122,7 @@ function runStep(label, file, args, timeoutMs = STEP_TIMEOUT_DEFAULT_MS) {
     writeLog("ERROR", `${label} 超时（${Math.round(timeoutMs / 1000)}s）`);
     return { ok: false, stdout: "", stderr: "" };
   }
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 子进程起不来时 stdout 实测为 undefined（@types/node 声明偏窄）
   const stdout = String(r.stdout ?? "");
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：stderr
   const stderr = String(r.stderr ?? "");
   if (stdout.trim()) {
     writeLog("INFO", stdout.trim());
@@ -419,7 +417,6 @@ function pythonMeetsFloor(pythonPath) {
     encoding: "utf8",
     windowsHide: true,
   });
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 子进程起不来时 stdout/stderr 实测为 undefined（@types/node 声明偏窄）
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
   const m = /Python\s+(?<major>\d+)\.(?<minor>\d+)(?:\.(?:\d+))?/.exec(out);
   if (!m) {

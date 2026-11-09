@@ -68,7 +68,6 @@ function addProbeWithEnv(scratch: string, env: NodeJS.ProcessEnv): string {
     env,
     encoding: "utf8",
   });
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
   return `${r.stdout ?? ""}${r.stderr ?? ""}`;
 }
 
@@ -79,7 +78,6 @@ function indexPaths(repoDir: string): Array<string> {
     env: gitSandboxEnv(),
   });
   expect(r.status, `读索引失败: ${r.stderr}`).toBe(0);
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
   return (r.stdout ?? "")
     .split("\n")
     .filter((line) => line.trim() !== "")
@@ -178,7 +176,6 @@ describe("临时仓库夹具的 git 环境隔离", () => {
       /* 只剥继承变量，**不**注入沙箱配置 —— 这是「没修之前」的形态。 */
       env: bareEnv(),
     });
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     const rawOut = `${raw.stdout ?? ""}${raw.stderr ?? ""}`;
     expect(
       rawOut,
@@ -194,13 +191,11 @@ describe("临时仓库夹具的 git 环境隔离", () => {
     });
     expect(sandboxed.status, `git add 失败: ${sandboxed.stderr}`).toBe(0);
     expect(
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       `${sandboxed.stdout ?? ""}${sandboxed.stderr ?? ""}`,
       "夹具的 git add 又打起换行 advice 了（CI 日志会被几十条这样的噪音盖满）",
     ).not.toContain("LF will be replaced by CRLF");
     /* 也**不**许换个方向叫（`CRLF will be replaced by LF`）—— 那一档说明
      * `core.autocrlf=false` 没压住宿主的相反设置。 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(`${sandboxed.stdout ?? ""}${sandboxed.stderr ?? ""}`).not.toContain(
       "will be replaced by",
     );

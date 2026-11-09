@@ -167,7 +167,6 @@ export function useRelatedEdgesHighlight(
           },
         };
       });
-      // oxlint-disable-next-line no-unnecessary-condition -- changed 在 map 回调里写入，规则的控制流分析看不到该写入点
       return changed ? next : currentEdges;
     });
 
@@ -229,7 +228,6 @@ export function useRelatedEdgesHighlight(
           },
         };
       });
-      // oxlint-disable-next-line no-unnecessary-condition -- 同上：changed 在 map 回调里写入
       return changed ? next : currentNodes;
     });
   }, [resolveNodeIdOption, setEdges, setNodes, store]);

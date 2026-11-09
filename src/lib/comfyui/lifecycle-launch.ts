@@ -234,9 +234,7 @@ export async function runEnsureLaunch(input: {
   // 显式传 --port，保证「界面显示端口 = 实际监听端口」一致。
   const eff = await resolveEffectiveLaunch({
     comfyuiPath: settings.comfyuiPath,
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- settings 由 app-settings.json 经 JSON.parse 合并而来，历史文件里 comfyuiPort 可能为 null
     comfyuiPort: settings.comfyuiPort ?? 0,
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- settings 由 app-settings.json 经 JSON.parse 合并而来，历史文件里 comfyuiExtraArgs 可能为 null
     comfyuiExtraArgs: settings.comfyuiExtraArgs ?? "",
   });
   const args = buildSpawnArgs({
@@ -269,8 +267,10 @@ export async function runEnsureLaunch(input: {
       PYTHONIOENCODING: "utf8",
       PYTHONUTF8: "1",
     },
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    deadline: input.timeoutMs == null ? null : Date.now() + input.timeoutMs,
+    deadline:
+      input.timeoutMs === null || input.timeoutMs === undefined
+        ? null
+        : Date.now() + input.timeoutMs,
     timeoutDetail: `ComfyUI 启动超过 ${Math.round((input.timeoutMs ?? 0) / 1000)}s 仍未就绪，继续留在后台观察；详见 log/services/comfyui-runtime.log`,
     cpuLimitMode: resolveCpuLimitMode({
       mode: settings.comfyuiCpuLimit,
@@ -326,8 +326,10 @@ export async function waitForExistingInstanceReady(input: {
   const { host, settings, note } = input;
   let goneStreak = 0;
   const result = await waitForComfyReady({
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    deadline: input.timeoutMs == null ? null : Date.now() + input.timeoutMs,
+    deadline:
+      input.timeoutMs === null || input.timeoutMs === undefined
+        ? null
+        : Date.now() + input.timeoutMs,
     timeoutDetail: `已有 ComfyUI 实例持续未响应（等待 ${Math.round((input.timeoutMs ?? 0) / 1000)}s 后放弃）；可能正忙或已卡死，详见 log/services/comfyui-runtime.log`,
     readyDetail: "ComfyUI 已就绪（接管已在运行的实例）",
     onReady: (base) => {
@@ -599,7 +601,6 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
     note(result.detail);
     /* 端口冲突的失败带上机器可读标记：caller 不把它当终态失败，而是转
      * 「等待已有实例就绪」（占着端口的极可能就是另一个 ComfyUI）。 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- portConflict 由等待循环内的闭包回调写入，控制流分析看不到，运行期可能已变 true
     return portConflict ? { ...result, portConflict: true } : result;
   }
 
@@ -877,8 +878,8 @@ async function launchBoundMode(host: LaunchHost, ctx: EnsureCtx): Promise<Ensure
  */
 export async function probeChildReady(child: ReturnType<typeof spawn>): Promise<string | null> {
   const childPid = child.pid;
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  const listenPort = childPid == null ? null : await findPidListeningPort(childPid);
+  const listenPort =
+    childPid === null || childPid === undefined ? null : await findPidListeningPort(childPid);
   if (listenPort === null) {
     return null;
   }

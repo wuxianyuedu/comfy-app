@@ -22,12 +22,6 @@
   ],
   "inlineExemptions": [
     {
-      "rule": "jsx-a11y/anchor-has-content",
-      "file": "src/components/ui/pagination.tsx",
-      "why": "锚点的**内容**经 Base UI 的 `render` 通道从 `<Button>` 转发到 `<a>`，规则只读这一处 JSX、看到一个空 `<a />` —— 是误报。同口径先例：P84 的 `EXEMPT_FILES`（出口自身的实现不进收口面）。",
-      "keeper": "scripts/check-a11y-rules.cjs 白名单 + tests/check-a11y-rules.test.ts"
-    },
-    {
       "rule": "jsx-a11y/click-events-have-key-events",
       "file": "src/components/studio/TitleBarTabs.tsx",
       "why": "`role=\"tab\"` 的页签行已有 `{...simpleKeyHandler([\"Space\", \"Enter\"], …)}`（§16.2.4.57）—— 规则认不出属性展开。**规则认不出属性展开**（实测：同一份 `{...simpleKeyHandler(…)}` 换成字面量 `onKeyDown={fn}`，这条规则当场不报）。",

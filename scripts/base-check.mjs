@@ -787,7 +787,6 @@ function main(argv) {
   const cleaned = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- argv 下标越界时运行期是 undefined；规则未建模 noUncheckedIndexedAccess，保留跳过出口
     if (a === undefined) {
       /* `noUncheckedIndexedAccess` 下的形状兜底：进程给不出这一位时没有词可摘。 */
       continue;

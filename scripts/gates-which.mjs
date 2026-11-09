@@ -92,7 +92,6 @@ export function parseArgs(argv) {
  */
 export function scriptOf(argv) {
   for (const raw of argv) {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- raw 来自 argv（外部输入），string[] 只是声明
     const token = String(raw ?? "").replaceAll("\\", "/");
     const m = /(?:^|\/)scripts\/(?<script>[^/]+\.(?:mjs|cjs))$/.exec(token);
     const script = m?.groups?.script;
@@ -172,9 +171,7 @@ export function affectedTests(changed, deps = {}) {
     input: changed.join("\n"),
     stdio: ["pipe", "pipe", "pipe"],
   });
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 子进程起不来时 stdout 实测为 undefined（@types/node 声明偏窄）
   const stdout = String(res.stdout ?? "");
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 子进程起不来时 stderr 实测为 undefined（@types/node 声明偏窄）
   const stderr = String(res.stderr ?? "");
   if (res.status !== 0 || stdout.trim() === "") {
     return {
@@ -399,7 +396,6 @@ export function main(argv = process.argv.slice(2)) {
   return gates.ok && tests.ok ? 0 : 2;
 }
 
-// oxlint-disable-next-line typescript/no-unnecessary-condition -- 直接执行判据：以 REPL / 无脚本入口方式入场时 argv[1] 运行时为 undefined
 if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(main());
 }

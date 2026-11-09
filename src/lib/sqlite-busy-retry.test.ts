@@ -43,8 +43,12 @@ describe("runWithSqliteBusyRetry", () => {
         }
         return Promise.resolve(calls);
       },
-      // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-      { policy: POLICY, onBusy: (attempt) => void seen.push(attempt) },
+      {
+        policy: POLICY,
+        onBusy: (attempt) => {
+          void seen.push(attempt);
+        },
+      },
     );
     expect(result).toBe(3);
     expect(seen).toEqual([0, 1]);

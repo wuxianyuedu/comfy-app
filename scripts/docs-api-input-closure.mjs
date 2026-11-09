@@ -310,7 +310,6 @@ export function typedocProgramFiles(root = ROOT) {
 
 /* 直接执行时把面与事实打出来（人读的那一份；判决在测试里）。
  * `node scripts/docs-api-input-closure.mjs` */
-// oxlint-disable-next-line typescript/no-unnecessary-condition -- process.argv[1] 在 node -e / REPL 形态下实为 undefined，@types/node 标成 string
 if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   const globs = docsApiTriggerGlobs();
   const files = typedocProgramFiles();

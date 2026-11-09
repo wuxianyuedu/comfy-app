@@ -312,7 +312,6 @@ export const workflowMutationProcedures = {
               "id" in nd ? (nd as { id?: unknown }).id : undefined;
             const pid =
               typeof rawId === "string" ? rawId : typeof rawId === "number" ? String(rawId) : "";
-            // oxlint-disable-next-line typescript/no-unnecessary-condition -- posMap 是 `input.positions as Record<…>`：tRPC 入参可以不带 positions，断言只改类型，`?.` 是运行期防线
             if (pid && posMap?.[pid]) {
               nodes[i] = { ...nd, pos: posMap[pid] };
             }

@@ -144,7 +144,6 @@ export function makeScanFns(root, sourceRe) {
  * @returns {{before: string, after: string, dots: string} | null} 解析不出给 `null`
  */
 export function parseRange(range) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 实参源自 --range 命令行参数，类型按 string 标窄
   const trimmed = String(range ?? "").trim();
   const three = /^(?<before>.*?)\.\.\.(?<after>.*)$/.exec(trimmed);
   if (three) {

@@ -128,8 +128,7 @@ export function stripUiOnlyNodes(raw: Record<string, unknown>): {
   const subs = isRecord(defs) ? defs.subgraphs : undefined;
   const list: Array<unknown> = Array.isArray(subs)
     ? subs
-    : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      subs != null && typeof subs === "object"
+    : subs !== null && subs !== undefined && typeof subs === "object"
       ? Object.values(subs)
       : [];
   for (const sub of list) {

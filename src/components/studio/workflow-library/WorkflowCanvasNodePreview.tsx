@@ -337,13 +337,11 @@ export function WorkflowCanvasNodePreview({
               modes={modes}
               onModeChange={onModeChange}
               outputs={outputs}
-              /* oxlint-disable-next-line no-unnecessary-condition -- 本块在外层 viewMode === "edit" 分支内已收窄，保留比较防外层条件调整后语义漂移 */
               phaseKind={viewMode === "edit" && phase.kind === "failed" ? "idle" : phase.kind}
               running={running}
               /* 编辑对外参数页签是配置界面，不应显示上次运行的失败状态（红点 +
                *  「失败」文案）。这里把失败态渲染成「待开始」的中性状态，运行中 /
                *  已完成等状态保留，方便用户必要时感知运行进度。 */
-              /* oxlint-disable-next-line no-unnecessary-condition -- 同上：外层已收窄为 edit，保留比较与 phaseKind 口径一致 */
               statusLabel={viewMode === "edit" && phase.kind === "failed" ? "待开始" : statusLabel}
               taskType={taskType}
               workflowName={workflowName}

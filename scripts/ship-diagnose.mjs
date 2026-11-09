@@ -304,9 +304,7 @@ export function runDiagnose({
   let reason = outcome.reasons.find((r) => r.reason)?.reason ?? null;
   if (!reason && outcome.state === "cancelled") {
     const first = outcome.cancelled[0];
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- cancelled 来自平台数据，空数组时首元素运行时为 undefined
     const pipeline = first ? pipelineForStage(outcome, first.id) : null;
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- first 可为 undefined；pipelineForStage 查不到时可为 null（平台数据）
     if (first && pipeline) {
       reason = fetchStageReason(run, slug, target, pipeline.id, first.id);
     }

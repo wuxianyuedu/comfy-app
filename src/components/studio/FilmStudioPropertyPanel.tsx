@@ -239,8 +239,9 @@ export function FilmStudioPropertyPanel({
               c.film.shots.some((shot) => shot.status === "SUCCEEDED") && (
                 <Button
                   className="ml-2 h-auto text-inherit underline hover:no-underline"
-                  // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                  onClick={() => void c.recompose()}
+                  onClick={() => {
+                    void c.recompose();
+                  }}
                   variant="link"
                 >
                   重新合成

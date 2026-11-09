@@ -134,7 +134,6 @@ function runOxlint(files) {
   if (res.error) {
     throw new Error(`oxlint 起不来：${res.error.message}`);
   }
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout 实测为 undefined
   const text = (res.stdout ?? "").trim();
   let parsed;
   try {

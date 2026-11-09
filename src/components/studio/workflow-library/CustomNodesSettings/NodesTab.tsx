@@ -291,8 +291,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                       <Button
                         className="border-border bg-bg text-ink hover:bg-subtle text-2xs h-auto shrink-0 rounded-lg px-3 py-1 font-medium disabled:cursor-not-allowed disabled:opacity-50"
                         disabled={!!parsing || total === 0 || (parentParsed && cnt.outdated === 0)}
-                        // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                        onClick={() => void onParseAllParent(parent)}
+                        onClick={() => {
+                          void onParseAllParent(parent);
+                        }}
                         variant="outline"
                       >
                         {parsing ? "…" : "解析本目录"}
@@ -382,7 +383,6 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                   label={
                                     state.kind === "loaded" &&
                                     saved?.parsedAt !== undefined &&
-                                    // oxlint-disable-next-line no-unnecessary-condition -- saved 来自清单响应，parsedAt 逐字段判空沿用旧数据形状
                                     saved?.parsedAt !== null &&
                                     saved.parsedAt !== ""
                                       ? `已加载 ${saved.parsedAt.split("T")[1]?.slice(0, 5) ?? ""}`

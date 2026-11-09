@@ -86,7 +86,6 @@ export function runStageLog({
   headSha = "",
   dryRun = false,
 }) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- stageRef 来自 CLI 参数（外部输入），string 只是声明
   const want = String(stageRef ?? "").trim();
   if (want === "") {
     log(
@@ -159,7 +158,6 @@ export function runStageLog({
   }
   /* 上面已排掉「零命中」与「多命中」两支，这里只是让类型收窄到一格。 */
   const hit = hits[0];
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 长度闸在上方，守卫为 noUncheckedIndexedAccess 下 hits[0] 的 undefined 分量收窄
   if (!hit) {
     return CODE.NOT_RUN;
   }

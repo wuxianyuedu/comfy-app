@@ -108,8 +108,9 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
             <Button
               className="h-auto rounded-lg px-3 py-2"
               disabled={c.busy || !c.draft.trim()}
-              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-              onClick={() => void c.addTag()}
+              onClick={() => {
+                void c.addTag();
+              }}
               size="sm"
               variant="primary-solid"
             >
@@ -202,8 +203,9 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                           aria-label={`删除 ${tag.name}`}
                           className="text-ink-soft hover:bg-danger/15 hover:text-danger-strong hover:border-danger/40 rounded-md border border-transparent"
                           disabled={isEditing}
-                          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                          onClick={() => void c.deleteTag(tag.name, tag.count)}
+                          onClick={() => {
+                            void c.deleteTag(tag.name, tag.count);
+                          }}
                           size="icon-xs"
                           variant="ghost"
                         >

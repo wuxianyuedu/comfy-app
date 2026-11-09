@@ -314,7 +314,6 @@ export function withCommentHeader(body, handle) {
   while (i < lines.length) {
     /* `line` 在 `noUncheckedIndexedAccess` 下是 `string | undefined`（`i < length` 已经
      * 保证它在界内，但规则不看那个条件）—— 这处 `??` 按 §5.10 的 C 格留注释。 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 索引访问的可空规则没建模
     const trimmed = String(lines[i] ?? "").trim();
     if (trimmed === "") {
       i += 1;
@@ -454,7 +453,6 @@ const ITEM_SHAPES = [
  * @returns {{headings: number, unchecked: number, checked: number, ordered: number, total: number}}
  */
 export function issueItemShapes(body) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同 `withCommentHeader`：空 body 合法，规则读不到
   const text = String(body ?? "");
   /** @type {Record<string, number | undefined>} */
   const shapes = {};

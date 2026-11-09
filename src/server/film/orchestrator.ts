@@ -141,7 +141,6 @@ async function parseScriptToShots(
     const sc = parseIdeaToScenes(raw, {
       title: "",
       /* SAFETY: 类型断言已复核 */
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- type 来自外部入参、经 `as ProjectType` 断言，运行期可为 undefined，`?? "short_video"` 是兜底
       type: (type as ProjectType) ?? "short_video",
       tone: "",
       logline: "",

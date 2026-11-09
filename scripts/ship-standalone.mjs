@@ -55,29 +55,28 @@ function namedActions(opt, self) {
     ["merge", opt.merge, "--merge"],
     ["closeIssue", opt.closeIssue, "--close-issue"],
     ["cleanBranch", opt.cleanBranch, "--clean-branch"],
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    ["branch", opt.branch != null, "--branch"],
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    ["message", opt.message != null, "--message"],
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    ["messageFile", opt.messageFile != null, "--message-file"],
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    ["title", opt.title != null, "--title"],
+    ["branch", opt.branch !== null && opt.branch !== undefined, "--branch"],
+    ["message", opt.message !== null && opt.message !== undefined, "--message"],
+    ["messageFile", opt.messageFile !== null && opt.messageFile !== undefined, "--message-file"],
+    ["title", opt.title !== null && opt.title !== undefined, "--title"],
     ["add", opt.adds.length > 0, "--add"],
     ["only", opt.only, "--only"],
     ["reap", opt.reap, "--reap"],
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    ["claim", opt.claim != null, "--claim"],
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    ["release", opt.release != null, "--release"],
+    ["claim", opt.claim !== null && opt.claim !== undefined, "--claim"],
+    ["release", opt.release !== null && opt.release !== undefined, "--release"],
     ["claims", opt.claims, "--claims"],
     ["branches", opt.branches, "--branches"],
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    ["newIssue", opt.newIssue != null || opt.newIssueBad.length > 0, "--new-issue"],
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    ["comment", opt.comment != null || opt.commentBad.length > 0, "--comment"],
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    ["bodyFile", opt.bodyFile != null, "--body-file"],
+    [
+      "newIssue",
+      (opt.newIssue !== null && opt.newIssue !== undefined) || opt.newIssueBad.length > 0,
+      "--new-issue",
+    ],
+    [
+      "comment",
+      (opt.comment !== null && opt.comment !== undefined) || opt.commentBad.length > 0,
+      "--comment",
+    ],
+    ["bodyFile", opt.bodyFile !== null && opt.bodyFile !== undefined, "--body-file"],
     /* `--pr-body-file` 是主流程那一段的输入（建 / 复用 PR 时注入正文），只读那几条
      * 动作没有执行者 —— 与其它主流程旗标同一档：不静默收下。 */
     ["prBodyFile", opt.prBodyFile !== null, "--pr-body-file"],
@@ -268,8 +267,7 @@ export async function runStandaloneAction(io) {
    * 「想建单却漏了旗标」—— 静默忽略会让这一跑退回主流程，而人以为单子建好了。 */
   if (
     (opt.issueBodyFile !== null || opt.priority !== null) &&
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    opt.newIssue == null &&
+    (opt.newIssue === null || opt.newIssue === undefined) &&
     opt.newIssueBad.length === 0
   ) {
     log(
@@ -288,17 +286,12 @@ export async function runStandaloneAction(io) {
       opt.merge ? "--merge" : null,
       opt.cleanBranch ? "--clean-branch" : null,
       opt.reap ? "--reap" : null,
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 解析器遇 --rerun-ci 会置真（ship-args.mjs），类型从初值推成字面量 false
       opt.rerunCi ? "--rerun-ci" : null,
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      opt.claim == null ? null : "--claim",
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      opt.release == null ? null : "--release",
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      opt.newIssue == null ? null : "--new-issue",
+      opt.claim === null || opt.claim === undefined ? null : "--claim",
+      opt.release === null || opt.release === undefined ? null : "--release",
+      opt.newIssue === null || opt.newIssue === undefined ? null : "--new-issue",
       opt.adds.length > 0 ? "--add" : null,
       opt.claims ? "--claims" : null,
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 解析器遇 --whoami 会置真（ship-args.mjs），类型从初值推成字面量 false
       opt.whoami ? "--whoami" : null,
       opt.only ? "--only" : null,
     ].filter(Boolean);
@@ -328,17 +321,12 @@ export async function runStandaloneAction(io) {
    * 互斥与前置（cnb / slug / 留痕）在 `runIssueAction` 里判；这里只做分派，
    * 且排在 preflight 之前 —— 否则在 master 上或没有碎片时连「领取」都跑不了。 */
   if (
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    opt.claim != null ||
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    opt.release != null ||
+    (opt.claim !== null && opt.claim !== undefined) ||
+    (opt.release !== null && opt.release !== undefined) ||
     opt.claims ||
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    opt.newIssue != null ||
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    opt.comment != null ||
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    opt.bodyFile != null ||
+    (opt.newIssue !== null && opt.newIssue !== undefined) ||
+    (opt.comment !== null && opt.comment !== undefined) ||
+    (opt.bodyFile !== null && opt.bodyFile !== undefined) ||
     opt.claimBad.length > 0 ||
     opt.releaseBad.length > 0 ||
     opt.newIssueBad.length > 0 ||

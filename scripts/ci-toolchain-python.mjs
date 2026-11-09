@@ -82,7 +82,6 @@ import path from "node:path";
  */
 function run(cmd, args) {
   const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true });
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout / stderr 实测为 undefined，@types/node 按 string 标
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
   return { ok: r.status === 0 && !r.error, out };
 }
@@ -257,7 +256,6 @@ export function currentAccount() {
     ["-NoProfile", "-Command", "[System.Security.Principal.WindowsIdentity]::GetCurrent().Name"],
     { encoding: "utf8", windowsHide: true },
   );
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout 实测为 undefined，@types/node 按 string 标
   return (r.stdout ?? "").trim() || "(取不到)";
 }
 
@@ -693,7 +691,6 @@ function installPythonPosix({ run: runCmd, platform }) {
  */
 function firstLine(text) {
   return (
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- text 是子进程原始输出（外部输入），类型按 string 标窄
     String(text ?? "")
       .split("\n")
       .map((l) => l.trim())

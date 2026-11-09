@@ -104,7 +104,6 @@ function projectFaceOf(args, cwd) {
   if (given === null || given === "") {
     return { face: path.join(cwd, "tsconfig.json"), explicit: false };
   }
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- given 由 argv 解析，字符串面兜底保留（前有 null / 空串提前返回）
   const abs = path.resolve(cwd, given ?? "");
   return path.extname(abs) === ".json"
     ? { face: abs, explicit: true }
@@ -211,7 +210,6 @@ function headShaOf(cwd) {
     encoding: "utf8",
     windowsHide: true,
   });
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 出参：起不来 / 无输出时 stdout 实测为 null，@types/node 按非空标，保留空串兜底
   const sha = String(res.stdout ?? "").trim();
   return res.status === 0 && /^[0-9a-f]{40}$/i.test(sha) ? sha : null;
 }
@@ -287,7 +285,6 @@ function programMjsOf(entry, faceFile) {
   if (probe.error || (probe.status ?? 1) !== 0) {
     return null;
   }
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 出参：起不来 / 无输出时 stdout 实测为 null，@types/node 按非空标，保留空串兜底
   const all = String(probe.stdout ?? "")
     .split(/\r?\n/)
     .filter((line) => line.toLowerCase().endsWith(".mjs"));

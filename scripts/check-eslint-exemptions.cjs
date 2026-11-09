@@ -193,7 +193,6 @@ function runOxlintCli(files, ruleId, root) {
     if (res.error) {
       throw new Error(`oxlint 起不来：${res.error.message}`);
     }
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 出参：起不来 / 无输出时 stdout 实测为 null，@types/node 按非空标，保留空串兜底
     const text = (res.stdout ?? "").trim();
     let parsed;
     try {

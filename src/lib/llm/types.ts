@@ -288,12 +288,10 @@ export function resolveTaskTemperature(opts: {
   taskType?: TaskType;
 }): number {
   const { taskType, explicitTemperature, overrides, fallback } = opts;
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (taskType && overrides?.[taskType] != null) {
+  if (taskType && overrides?.[taskType] !== null && overrides?.[taskType] !== undefined) {
     return overrides[taskType];
   }
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (explicitTemperature != null) {
+  if (explicitTemperature !== null && explicitTemperature !== undefined) {
     return explicitTemperature;
   }
   if (taskType) {

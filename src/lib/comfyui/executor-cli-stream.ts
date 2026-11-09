@@ -82,8 +82,8 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
     seen.add(node);
     const ne = node.node_errors;
     if (
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      ne != null &&
+      ne !== null &&
+      ne !== undefined &&
       (Array.isArray(ne) ? ne.length > 0 : typeof ne === "object" && Object.keys(ne).length > 0)
     ) {
       return ne;

@@ -108,7 +108,6 @@ export function calibrateFromShots(shots: Array<unknown>): CalibrationReport {
     const hasHuman = rating !== null;
 
     aiMeans.push(mean);
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- hasHuman 是 rating !== null 的别名（类型收窄后后半段恒真），显式复核不删分支
     if (hasHuman && rating !== null) {
       pairs.push({
         ai: mean,
@@ -126,7 +125,6 @@ export function calibrateFromShots(shots: Array<unknown>): CalibrationReport {
       };
       acc.aiSum += item.score;
       acc.aiCount += 1;
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- hasHuman 是 rating !== null 的别名（类型收窄后后半段恒真），显式复核不删分支
       if (hasHuman && rating !== null) {
         acc.humanSum += humanRatingOnScale5(rating);
         acc.humanCount += 1;

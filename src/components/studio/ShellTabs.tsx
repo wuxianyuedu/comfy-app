@@ -168,7 +168,7 @@ export function ShellTabs({
             {tab.blockedReason !== undefined &&
             tab.blockedReason !== null &&
             tab.blockedReason !== "" ? (
-              <TabBlockedNotice label={tab.label} reason={tab.blockedReason} url={tab.blockedUrl} /> // oxlint-disable-next-line no-unnecessary-condition -- url 类型为 string|null，!== undefined 恒真；保留三判与上方 blockedReason 的条件形状一致
+              <TabBlockedNotice label={tab.label} reason={tab.blockedReason} url={tab.blockedUrl} />
             ) : tab.url !== undefined && tab.url !== null && tab.url !== "" ? (
               <iframe
                 className="h-full w-full border-0"

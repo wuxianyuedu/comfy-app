@@ -169,8 +169,7 @@ export function DetailBody({
             <span className="text-ink-faint text-xs font-medium">工作流(RAW)格式原件</span>
           </div>
           <div className={`bg-canvas-deep ${EMBEDDED_SCROLL_MAX_HEIGHT} overflow-auto rounded-xl`}>
-            {/* oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined */}
-            {sourceData?.source == null ? (
+            {sourceData?.source === null || sourceData?.source === undefined ? (
               <p className="text-ink-fainter px-4 py-10 text-center text-xs">暂无源文件数据</p>
             ) : (
               <LazyJsonViewer

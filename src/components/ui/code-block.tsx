@@ -106,8 +106,7 @@ function tokenInlineStyle(tok: ShikiToken): CSSProperties {
   if (tok.color !== undefined && tok.color !== "") {
     style.color = tok.color;
   }
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (tok.fontStyle != null) {
+  if (tok.fontStyle !== null && tok.fontStyle !== undefined) {
     if ((tok.fontStyle & 1) !== 0) {
       style.fontStyle = "italic";
     }

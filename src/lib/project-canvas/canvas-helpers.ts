@@ -212,35 +212,30 @@ export function applyPropagationToNodes(
           if (typeof src.content === "string" && src.content.trim() !== "") {
             next.prompt = src.content;
           }
-          // oxlint-disable-next-line typescript/no-unnecessary-condition -- src 来自画布节点数据（localStorage/导入 JSON），prompt 运行期可缺省
         } else if (src.prompt?.trim()) {
           next.prompt = src.prompt;
         }
         break;
       }
       case "negative": {
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 节点数据来自外部 JSON，negative 运行期可缺省
         if (src.negative?.trim()) {
           next.negative = src.negative;
         }
         break;
       }
       case "steps": {
-        // oxlint-disable-next-line eqeqeq, typescript/no-unnecessary-condition -- 同时判 null 与 undefined；节点数据来自外部 JSON，数值字段运行期可为 null
-        if (src.steps != null) {
+        if (src.steps !== null && src.steps !== undefined) {
           next.steps = src.steps;
         }
         break;
       }
       case "cfg": {
-        // oxlint-disable-next-line eqeqeq, typescript/no-unnecessary-condition -- 同时判 null 与 undefined；节点数据来自外部 JSON，数值字段运行期可为 null
-        if (src.cfg != null) {
+        if (src.cfg !== null && src.cfg !== undefined) {
           next.cfg = src.cfg;
         }
         break;
       }
       case "seed": {
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 节点数据来自外部 JSON，seed 运行期可缺省
         if (src.seed?.trim()) {
           next.seed = src.seed;
         }

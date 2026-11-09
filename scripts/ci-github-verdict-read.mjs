@@ -215,9 +215,7 @@ function realRunGit(args) {
   const r = spawnSync("git", args, { cwd: ROOT, encoding: "utf8", env: gitEnv() });
   return {
     code: r.status ?? -1,
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程失败时 stderr 实测为 null，@types/node 按 string 标
     stderr: String(r.stderr ?? ""),
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程失败时 stdout 实测为 null，@types/node 按 string 标
     stdout: String(r.stdout ?? ""),
   };
 }

@@ -124,8 +124,9 @@ export function FilmStudioShotListPanel({
                   <Hint accessibleName label="退回让 AI 重做这一镜">
                     <Button
                       className="text-ink-soft hover:bg-primary/15 mr-1 shrink-0"
-                      // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                      onClick={() => void c.redoShot(shot.id)}
+                      onClick={() => {
+                        void c.redoShot(shot.id);
+                      }}
                       size="icon-xs"
                       variant="ghost"
                     >

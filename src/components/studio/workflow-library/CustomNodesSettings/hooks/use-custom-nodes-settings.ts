@@ -218,15 +218,12 @@ function parseSettingsBlob(
   }
   /* `??` 而非 `||`：对象 / 数组在声明域内恒真，回退只在运行期 null/undefined
    * （接口缺字段）时触发 —— 与原 `||` 在该域内逐值等价。 */
-  // oxlint-disable-next-line no-unnecessary-condition -- settings 来自 fetch 响应的浅断言，旧服务端响应可能缺 paths
   const paths = data.settings.paths ?? [];
   return {
     paths,
     summary: data.summary,
     lastReport: data.lastReport,
-    // oxlint-disable-next-line no-unnecessary-condition -- 同上：旧服务端响应可能缺 discoveredByParent
     discoveredByParent: data.discoveredByParent ?? {},
-    // oxlint-disable-next-line no-unnecessary-condition -- 同上：旧服务端响应可能缺 byPath
     byPath: data.byPath ?? {},
   };
 }
@@ -255,7 +252,6 @@ async function consumeSettingsStream(
   const discoveredByParent: Record<string, Array<DiscoveredSubpkg>> = {};
   const paths: Array<string> = [];
 
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 流式读循环，只有 done 才 break；规则把字面量 true 判成恒真，保留原写法
   while (true) {
     // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const { done, value } = await reader.read();
@@ -345,8 +341,9 @@ async function consumeSettingsStream(
 
 /** 延迟一拍 fire-and-forget 地拉一次数据，返回清定时器的 cleanup（三处 useEffect 共用）。 */
 function scheduleDeferredRefresh(run: () => Promise<unknown>): () => void {
-  // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-  const timer = setTimeout(() => void run(), 0);
+  const timer = setTimeout(() => {
+    void run();
+  }, 0);
   return () => {
     clearTimeout(timer);
   };
@@ -558,7 +555,6 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   const fetchManifest = useCallback(async () => {
     const manifest = await getCustomNodesManifest();
     if (manifest) {
-      // oxlint-disable-next-line no-unnecessary-condition -- manifest 是 fetch 响应的 cast，旧服务端响应可能缺 nodes
       setManifestByNode(manifest.nodes ?? {});
     }
   }, []);
@@ -587,7 +583,6 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buf = "";
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 流式读循环，只有 done 才 break；规则把字面量 true 判成恒真，保留原写法
     while (true) {
       // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const { done, value } = await reader.read();
@@ -616,7 +611,6 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
                 PARSE_LOG_MAX,
               ),
             );
-            // oxlint-disable-next-line no-unnecessary-condition -- 判别联合在 else 分支已收窄为 "done"，保留显式比较防守类型扩展后分支错位
           } else if (obj.type === "done") {
             void onDone(obj.report ?? null, obj.ok === true);
           }

@@ -42,7 +42,6 @@ export function readGitHead(root) {
     if (r.status !== 0) {
       return null;
     }
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程起不来时 stdout 实测为 undefined（@types/node 声明偏窄）
     const head = String(r.stdout ?? "").trim();
     return head === "" ? null : head;
   } catch {
@@ -70,7 +69,6 @@ export function readNameStatusDiff(root, base) {
     if (r.status !== 0) {
       return null;
     }
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程起不来时 stdout 实测为 undefined（@types/node 声明偏窄）
     return String(r.stdout ?? "");
   } catch {
     return null;

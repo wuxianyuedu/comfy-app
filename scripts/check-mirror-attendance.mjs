@@ -106,7 +106,6 @@ export const SHAPE_NOTES = {
  * @returns {{shape: keyof typeof SHAPE_NOTES, evidence: string}} `evidence` 是命中的那句原话片段
  */
 export function classifyMirrorText(text, stageStatus = "") {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 实参源自平台 API 正文，类型按 string 标窄
   const t = String(text ?? "");
   /** 命中形状的那一句原话片段（截到 160 字 —— 证据行不许变成日志转储）。 */
   const line = (/** @type {RegExp} */ re) => {
@@ -234,7 +233,6 @@ export const EGRESS_SIGNAL_NOTES = {
  * @returns {{signal:string, egress:number, present:number, seen:number, shouldFile:boolean, note:string}}
  */
 export function egressWindowSignal({ code, stats }) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 平台读数形状由外部 JSON 给，键可能整族缺席
   const egress = stats.shapeCounts.egress ?? 0;
   const base = { egress, present: stats.present, seen: stats.seen };
   /* `EGRESS_SIGNAL` 按 Record<string,string> 标窄，而仓内开了 noUncheckedIndexedAccess：
@@ -253,7 +251,6 @@ export function egressWindowSignal({ code, stats }) {
   }
   return {
     ...base,
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- EGRESS_SIGNAL_NOTES 按 string 索引（未开 noUncheckedIndexedAccess）
     note: EGRESS_SIGNAL_NOTES[signal] ?? "",
     shouldFile: signal === EGRESS_SIGNAL.INTERMITTENT || signal === EGRESS_SIGNAL.EGRESS_ONLY,
     signal,
@@ -289,7 +286,6 @@ export function judgeMirrorAttendance({ builds, readings, windowHours, now }) {
     shapeCounts[r.shape] = (shapeCounts[r.shape] ?? 0) + 1;
   }
   const seen = (Array.isArray(readings) ? readings : []).filter((r) => r.shape !== "no-cell");
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- Record 索引缺键时运行时为 undefined（未开 noUncheckedIndexedAccess）
   const presentCount = shapeCounts.present ?? 0;
   const stats = {
     egress: shapeCounts.egress ?? 0,

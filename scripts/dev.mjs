@@ -46,7 +46,6 @@ function parseArgs(argv) {
     const a = argv[i];
     /* `noUncheckedIndexedAccess` 之下按下标取到的是 `string | undefined`；
      * `i < argv.length` 已保证这一格有值，守卫只把这件事写给类型检查器看。 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- argv 下标在 noUncheckedIndexedAccess 下是 string | undefined，守卫写给 tsc
     if (a === undefined) {
       continue;
     }

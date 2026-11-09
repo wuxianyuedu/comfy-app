@@ -148,8 +148,9 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  */
 export function normalizeStageContent(content) {
   const raw = Array.isArray(content)
-    ? // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      content.map((x) => (typeof x === "string" ? x : x == null ? "" : String(x))).join("\n")
+    ? content
+        .map((x) => (typeof x === "string" ? x : x === null || x === undefined ? "" : String(x)))
+        .join("\n")
     : typeof content === "string"
       ? content
       : "";
@@ -303,7 +304,6 @@ export function describeFailedStages(
   for (const s of shown) {
     const pipeline = pipelineForStage(outcome, s.id);
     if (!pipeline) {
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- `StageRef.name` 是平台 JSON 兜出的空串，空名时退回 id
       const shownName = s.name ?? s.id;
       log(`${prefix}   失败格：${shownName}（${s.id}）不在任何一条流水线的读数里 ⇒ 取不到日志。`);
       continue;
@@ -311,7 +311,6 @@ export function describeFailedStages(
     const detail = fetchStageDetail(run, slug, sn, pipeline.id, s.id);
     /* 两处都是「详情是 null」的出口：`fetchStageDetail` 拿不到/读不懂时回 null，
      * 那时退回摘要里的 status、不打耗时 —— 判定上「取不到详情」与「有详情」必须分开。 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- `StageRef` 的字段在 classifyStages 里是从平台 JSON 兜出来的空串，这处兜底仍必要
     const status = detail?.status || s.status;
     const duration =
       detail && detail.duration !== null ? ` · ${formatDurationMs(detail.duration) ?? "未知"}` : "";
@@ -733,7 +732,6 @@ export function main({
     /* `r.reason` 在 `classifyBuildOutcome` 的返回类型上是必填（它自己兜成 `""`），
      * 这处 `?.` 与 `??` 属于「没有一条带原因」那一支的兜底，按 §5.10 的 C 格原地保留。 */
     /** @type {string | null} */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- `reason` 可能是空串，这处兜底仍是「没有原因」那一支
     let reason = outcome.reasons.find((r) => r.reason)?.reason ?? null;
     if (!reason && outcome.state === "cancelled") {
       /* 注记是给规则的：索引访问在它那里拿不到 `T | undefined`（`noUncheckedIndexedAccess`

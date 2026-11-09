@@ -79,7 +79,6 @@ export function handleCommentState(bodies, handle) {
   const claim = commentSentence("claim", handle);
   const release = commentSentence("release", handle);
   for (const body of Array.isArray(bodies) ? bodies : []) {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- bodies 是平台评论正文（外部数据），元素运行时可为 null
     const text = String(body ?? "");
     if (text.includes(claim)) {
       return "claim";
@@ -721,23 +720,23 @@ export function runIssueAction(ctx) {
   }
   /* `--body-file` 是 `--comment` 的正文，单独出现就是在写一个没有会读它的东西 ——
    * 静默退回主流程会让人以为评论已经写了（§13.10.12 对 `--issue-body-file` 同一条处置）。 */
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (opt.bodyFile != null && opt.comment == null) {
+  if (
+    opt.bodyFile !== null &&
+    opt.bodyFile !== undefined &&
+    (opt.comment === null || opt.comment === undefined)
+  ) {
     log(
       "[ship] [ERROR] --body-file 只跟 --comment <号> 一起用：" +
         "它是评论正文；建单的正文旗标是 --issue-body-file。",
     );
     return CODE.NOT_RUN;
   }
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  const wantsNewIssue = opt.newIssue != null || newIssueBad.length > 0;
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  const wantsComment = opt.comment != null || commentBad.length > 0;
+  const wantsNewIssue =
+    (opt.newIssue !== null && opt.newIssue !== undefined) || newIssueBad.length > 0;
+  const wantsComment = (opt.comment !== null && opt.comment !== undefined) || commentBad.length > 0;
   const wanted = [
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    opt.claim == null ? null : "--claim",
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    opt.release == null ? null : "--release",
+    opt.claim === null || opt.claim === undefined ? null : "--claim",
+    opt.release === null || opt.release === undefined ? null : "--release",
     opt.claims ? "--claims" : null,
     wantsNewIssue ? "--new-issue" : null,
     wantsComment ? "--comment" : null,
@@ -754,12 +753,9 @@ export function runIssueAction(ctx) {
     opt.closeIssue ? "--close-issue" : null,
     opt.cleanBranch ? "--clean-branch" : null,
     opt.branch ? "--branch" : null,
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    opt.message == null ? null : "--message",
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    opt.messageFile == null ? null : "--message-file",
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    opt.title == null ? null : "--title",
+    opt.message === null || opt.message === undefined ? null : "--message",
+    opt.messageFile === null || opt.messageFile === undefined ? null : "--message-file",
+    opt.title === null || opt.title === undefined ? null : "--title",
     opt.adds.length > 0 ? "--add" : null,
     opt.only ? "--only" : null,
   ].filter(Boolean);
@@ -830,8 +826,7 @@ export function runIssueAction(ctx) {
   if (opt.claims) {
     return runClaims({ run, log, slug, handle: name });
   }
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (opt.claim != null) {
+  if (opt.claim !== null && opt.claim !== undefined) {
     return runClaim({
       run,
       log,

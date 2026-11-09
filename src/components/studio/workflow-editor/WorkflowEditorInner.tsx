@@ -255,8 +255,9 @@ function WorkflowEditorBody({
   /* useNodesState 只接受挂载首帧的初值；后续同步统一走下面的 effect（初始图节点
    * 即为这一帧的初值，detail 就绪后才会补上）。 */
   const [nodes, setNodes, onNodesChange] = useNodesState(graphNodes);
-  // oxlint-disable-next-line typescript/no-unnecessary-type-arguments -- useEdgesState 的泛型要从显式实参推断，去掉会退化成 never[]
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  // 空数组会把类型参数推成 never[]，用显式类型的初值保住 Edge[]（省掉泛型参数仍等价）
+  const initialEdges: Edge[] = [];
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   /* 画布上只有**工作流图**本身：图节点与图连线都来自工作流自身
    * （`buildInitialNodes` / `buildEdges`）。对外参数卡片与其映射线已从编辑器移除

@@ -396,7 +396,6 @@ const { matchesAny } = createRequire(import.meta.url)("./vitest-projects.cjs");
  *   找不到 = 这条判据**没有**收窄面（那是不许收窄的形态：全仓不变量 / 前提类）
  */
 export function narrowingEntryForScript(script) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 实参源自钩子/配置解析的脚本路径，跨边界，类型按 string 标窄
   const s = String(script ?? "").replaceAll("\\", "/");
   if (s === "") {
     return null;
@@ -417,7 +416,6 @@ export function narrowingEntryForScript(script) {
  * @returns {boolean} true = 碰到了（照跑）；false = 没碰到（可按面跳过）
  */
 export function faceTouched(entry, files) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- entry 跨调用边界传入（调用方可能交 narrowingEntryForScript 的 null），类型按必填标
   const globs = entry?.globs ?? [];
   /* 没有面 ⇒ 不许收窄（宁可多跑）：全仓不变量与前提类都在这一档里。 */
   if (globs.length === 0) {
@@ -433,7 +431,6 @@ export function faceTouched(entry, files) {
 /* 「是不是被直接执行」按 Node 自己的口径判 —— 这条踩过（ISSUE #1961 最后一格：
  * `file://${path.resolve(...)}` 在 Windows 上恒不相等，main() 一次都不跑、进程退 0）。
  * 用 argv[1] 与当前文件的 realpath 比较，平台无关。 */
-// oxlint-disable-next-line typescript/no-unnecessary-condition -- process.argv[1] 在 node -e / REPL 形态下实为 undefined，@types/node 标成 string
 if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(main());
 }

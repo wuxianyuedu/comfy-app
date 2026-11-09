@@ -96,7 +96,6 @@ export function resolveBlobs(run, specs) {
     const line = lines[i];
     const spec = uniq[i];
     /* 越界 = 输出比请求少，形状已经不对了 ⇒ 整单判「没跑起来」。 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 长度闸在上方，守卫为 noUncheckedIndexedAccess 收窄（git 输出是外部数据）
     if (line === undefined || spec === undefined) {
       return null;
     }

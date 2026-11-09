@@ -132,9 +132,7 @@ export function buildSignature(json, sn = "") {
     const stages = p && Array.isArray(p.stages) ? p.stages : [];
     stageTotal += stages.length;
     stageDone += stages.filter(
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- stages 来自平台 API JSON，元素运行时可为 null
       (s) =>
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同一个 s：平台 JSON 元素运行时可为 null，这条守卫真的走得到
         s &&
         typeof s.status === "string" &&
         !RUNNING.has(s.status.toLowerCase()) &&

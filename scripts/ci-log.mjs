@@ -479,7 +479,6 @@ export function gateSkip(gate, why, options = {}) {
 export function gateFail(gate, items, options = {}) {
   /* 没有证据就不打判决：反过来就是屏幕上出现一条「命中 0 条」的红，读的人第一动作
    * 是去找那 0 条在哪。调用点该做的是「先判，再打」。 */
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- `items` 进了函数体之后规则读成非空（调用点已判过），这处兜底是给「直接调用 gateFail(null)」那条路的
   if ((items ?? []).filter((x) => String(x ?? "").trim()).length === 0) {
     return "ok";
   }

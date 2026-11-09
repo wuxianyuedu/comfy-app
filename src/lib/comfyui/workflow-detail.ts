@@ -439,7 +439,6 @@ async function buildWorkflowDetailJson(input: {
   const notes: Array<WorkflowDetailNote> = [];
   if (raw && Array.isArray(raw.nodes)) {
     raw.nodes.forEach((n) => {
-      // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- nodes 元素来自外部 JSON，运行期可能是 null（类型收窄不覆盖），防御性判空
       if (!n || (n.type !== "Note" && n.type !== "MarkdownNote")) {
         return;
       }
@@ -573,8 +572,7 @@ export async function buildWorkflowDetailFull(
   let sourceMissing = false;
   let sourcePath: string | null = null;
   const meta = await workflowTemplateRepository.findSourceMetaForUser(userId, id);
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (meta?.sourcePath != null) {
+  if (meta?.sourcePath !== null && meta?.sourcePath !== undefined) {
     sourcePath = meta.sourcePath;
     try {
       const stat = fs.statSync(/*turbopackIgnore: true*/ sourcePath);

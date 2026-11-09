@@ -152,7 +152,6 @@ export function run(cmd, args, options = {}) {
     windowsHide: true,
     cwd: options.cwd,
   });
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout / stderr 实测为 undefined，@types/node 按 string 标
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
   return { ok: r.status === 0 && !r.error, out };
 }
@@ -275,8 +274,7 @@ export function jobLabel(cwd) {
 export function dirFact(target, nowMs, fsLike = realFs) {
   /** @type {DirFact} */
   const absent = { present: false, ageS: null, bornMs: null, from: "-" };
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (target == null) {
+  if (target === null || target === undefined) {
     return absent;
   }
   /** @type {{birthtimeMs: number, mtimeMs: number} | null} */
@@ -286,7 +284,6 @@ export function dirFact(target, nowMs, fsLike = realFs) {
   } catch {
     return absent;
   }
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- statSync 抛错已走 catch，这处判空是防御形态，规则按类型看成恒假
   if (!st) {
     return absent;
   }

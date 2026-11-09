@@ -18,7 +18,6 @@ describe("compareText", () => {
      * （大写 Z 的码位 90 < 小写 a 的 97）。这一条钉住的正是那条账：
      * 两种判据混用会让同一份列表在不同面板顺序相反。 */
     expect(compareText("apple", "Zebra")).toBeLessThan(0);
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 刻意保留字面量比较：这一条用例钉的正是 JS `<` 按码位比较字符串的行为
     expect("Zebra" < "apple").toBe(true);
   });
 });

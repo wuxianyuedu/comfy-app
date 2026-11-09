@@ -85,7 +85,6 @@ const FAILURE_MARKERS = [
 export function stageLogExcerpt(text, opts = {}) {
   const maxFailureLines = opts.maxFailureLines ?? 25;
   const tailLines = opts.tailLines ?? 40;
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 实参源自平台 API 日志正文，类型按 string 标窄
   const lines = String(text ?? "").split("\n");
   /** @type {Array<{line: number, text: string}>} */
   const anchors = [];
@@ -93,7 +92,6 @@ export function stageLogExcerpt(text, opts = {}) {
   const loose = [];
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- lines 由 String().split 得来，JSDoc 把元素标成 string，越界索引运行时是 undefined
     if (!line?.trim()) {
       continue;
     }

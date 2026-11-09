@@ -315,7 +315,6 @@ export function formatShipResult(reading) {
   return lines;
 }
 
-// oxlint-disable-next-line typescript/no-unnecessary-condition -- 直接执行判据：以 REPL / 无脚本入口方式入场时 argv[1] 运行时为 undefined
 if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   const reading = readShipResult();
   if (process.argv.slice(2).includes("--json")) {

@@ -206,7 +206,6 @@ export async function claimAndDispatchOnce(options?: {
   );
 
   const row = await repo.findExecJob(taskId);
-  // oxlint-disable-next-line strict-boolean-expressions -- execPayload 是库里读出的外部数据，任何缺值形态（null/undefined/空串）都按「无执行载荷」防御性收口，不许误提交
   if (!row?.execPayload) {
     /* 行没有执行载荷 = 建行异常（或本刀之前的历史 host 行）。判失败并留可见原因，
      * 不许变 RUNNING 僵尸——host 片的 reaper 是这条的兜底，主动收口更快也更准。 */

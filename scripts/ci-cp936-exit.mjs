@@ -306,7 +306,6 @@ export function parseInvocation(argv) {
    * 「参数类型是 `string | undefined`」那件事一个显式收口。
    * 那一层可空来自 `noUncheckedIndexedAccess`，规则没建模 —— 按 §5.10 的 C 格留注释。 */
   const [command, ...args] = rest;
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 索引访问在 noUncheckedIndexedAccess 下是 string | undefined，规则没建模
   return { command: command ?? null, args, usage };
 }
 
@@ -723,9 +722,7 @@ export function runWithCp936Exit(
        * 字节被按 936 解成乱码串，后面拿 PowerShell 再按 936 编回去只是把乱码换个
        * 编码存下来（「先解对、再编回」两段里的第一段，`ci-console-encoding.mjs`
        * 钉的是控制台那一半，这里钉的是抓子进程这一半）。 */
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- stdio 配置变化时子进程流可为 null，类型按非空标窄
       stream?.setEncoding?.("utf8");
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- stdio 配置变化时子进程流可为 null，类型按非空标窄
       stream?.on("data", (d) => {
         const split = splitStreamChunk(carry, String(d));
         carry = split.carry;

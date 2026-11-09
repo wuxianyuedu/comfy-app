@@ -238,8 +238,9 @@ export function UsageTestDialog({
             <Button
               className="h-auto rounded-lg px-4 py-2 text-sm font-semibold"
               disabled={usageTest.running || usageTest.querying || !usageTest.prompt.trim()}
-              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-              onClick={() => void d.runUsageTest()}
+              onClick={() => {
+                void d.runUsageTest();
+              }}
             >
               {usageTest.querying ? "等待中…" : usageTest.running ? "调用中…" : "执行测试"}
             </Button>
@@ -262,8 +263,8 @@ function UsageVideoModeQuickPick({
    * 才回填 ToggleGroup，否则给空数组（全不选）。 */
   const modeValue = usageTest.fields.find((f) => f.key === "mode")?.value;
   const trimmedModeValue = modeValue?.trim();
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  const modeValueIsBroken = modeValue != null && isModeValueBroken(modeValue);
+  const modeValueIsBroken =
+    modeValue !== null && modeValue !== undefined && isModeValueBroken(modeValue);
   const modeToggleValue =
     trimmedModeValue !== undefined &&
     trimmedModeValue !== "" &&
@@ -408,8 +409,9 @@ function UsageFieldEditor({
                 ) : (
                   <FieldImageButton
                     hint="本地上传一张图片作为该字段的值（自动转 data URL）"
-                    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                    onPick={(file) => void d.pickFieldImage(i, file)}
+                    onPick={(file) => {
+                      void d.pickFieldImage(i, file);
+                    }}
                   />
                 )}
                 {!(usageTest.kind === "video" && isMediaField(f.key)) && f.key !== "mode" && (
@@ -478,8 +480,9 @@ function UsageTestResultPanel({
           <>
             <p className="bg-success/10 text-success-strong mb-2 rounded-lg px-3 py-2 text-xs">
               {result.detail}
-              {/* oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined */}
-              {result.elapsedMs != null && ` · 耗时 ${fixed(result.elapsedMs / 1000, 1) ?? "0"}s`}
+              {result.elapsedMs !== null &&
+                result.elapsedMs !== undefined &&
+                ` · 耗时 ${fixed(result.elapsedMs / 1000, 1) ?? "0"}s`}
             </p>
             {result.chatText !== undefined && result.chatText !== "" && (
               <p className="border-border/50 bg-surface-1 max-h-40 overflow-y-auto rounded-lg border p-3 text-xs whitespace-pre-wrap">
@@ -497,8 +500,9 @@ function UsageTestResultPanel({
               <Hint label="在系统默认浏览器中打开生成的视频">
                 <Button
                   className="text-primary h-auto items-center gap-1 p-0 text-xs font-medium"
-                  // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                  onClick={() => void c.openExternalUrl(result.videoUrl ?? "")}
+                  onClick={() => {
+                    void c.openExternalUrl(result.videoUrl ?? "");
+                  }}
                   variant="link"
                 >
                   打开生成的视频
@@ -526,11 +530,11 @@ function UsageTestResultPanel({
                   <Button
                     className="mt-2 h-auto items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold"
                     disabled={usageTest.querying}
-                    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                    onClick={() => void d.continueUsageWait()}
+                    onClick={() => {
+                      void d.continueUsageWait();
+                    }}
                     variant="warning-solid"
                   >
-                    {/* oxlint-disable-next-line no-unnecessary-condition -- 外层 !usageTest.querying 已把它收窄成 false，三元留作渲染防御 */}
                     {usageTest.querying ? (
                       <Spinner className="text-primary-foreground size-3" />
                     ) : (

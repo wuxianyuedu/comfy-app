@@ -166,8 +166,9 @@ export function MaterialLibraryContent({
                   <Hint accessibleName label="删除">
                     <Button
                       className="text-ink-soft hover:text-destructive rounded bg-black/70 hover:bg-black/60"
-                      // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                      onClick={() => void remove(item)}
+                      onClick={() => {
+                        void remove(item);
+                      }}
                       size="icon-xs"
                       variant="ghost"
                     >
@@ -241,8 +242,9 @@ export function MaterialLibraryContent({
                   <Hint accessibleName label="删除">
                     <Button
                       className="text-ink-muted hover:bg-subtle hover:text-destructive rounded-md"
-                      // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                      onClick={() => void remove(item)}
+                      onClick={() => {
+                        void remove(item);
+                      }}
                       size="icon-sm"
                       variant="ghost"
                     >

@@ -53,7 +53,6 @@ function renderSize(width: number, height: number) {
    * 给每个 item 挂 data-slot="toggle-group-item"，拿它做 selector 比 role 更稳。
    * PopoverContent 走 Portal 挂到 document.body、不在 container 里 —— 必须从 document 或 screen 拿。 */
   return [...document.querySelectorAll<HTMLElement>("[data-slot=toggle-group-item]")].map(
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留空值兜底
     (el) => el.textContent ?? "",
   );
 }

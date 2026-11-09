@@ -125,7 +125,6 @@ export function smokeExecutorHostArtifact(targetDir = DEFAULT_TARGET) {
       timeout: 120_000,
     });
     const log = fs.existsSync(logFile) ? fs.readFileSync(logFile, "utf8") : "";
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 子进程起不来时 stdout/stderr 实测为 undefined（@types/node 声明偏窄）
     const stdout = `${run.stdout ?? ""}${run.stderr ?? ""}`;
     if (run.status !== 0) {
       fail(

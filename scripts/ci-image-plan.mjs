@@ -310,11 +310,9 @@ export function toolingVersionsFromLock(lockText, names) {
 export function imagePlan({ nodeVersion, pnpmVersion, tag = IMAGE_TAG, appDir = APP_DIR }) {
   /* 两个入参是 CLI / 调用方给的版本号，缺就是缺 —— 本函数刻意「形状不认就抛」，
    * 不退回一个猜出来的值（与 `nodeFloor` 同一条口径）。 */
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 入参可缺，规则读不到
   if (!/^v\d+\.\d+\.\d+$/.test(nodeVersion ?? "")) {
     throw new Error(`node 版本要带 v 的精确号（拿到的是 ${JSON.stringify(nodeVersion)}）`);
   }
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上
   if (!/^\d+\.\d+\.\d+/.test(pnpmVersion ?? "")) {
     throw new Error(`pnpm 版本形状不认（拿到的是 ${JSON.stringify(pnpmVersion)}）`);
   }

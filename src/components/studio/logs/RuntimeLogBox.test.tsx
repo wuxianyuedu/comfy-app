@@ -107,9 +107,8 @@ describe("RuntimeLogBox", () => {
     const labels = (await screen.findAllByRole("option")).map((option) => option.textContent);
     expect(labels).toEqual(["09-30 10:01:03", "09-30 10:07:41"]);
 
-    const first = (await screen.findAllByRole("option")).find(
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留 ?. 防线
-      (option) => option.textContent?.startsWith("09-30 10:01:03"),
+    const first = (await screen.findAllByRole("option")).find((option) =>
+      option.textContent?.startsWith("09-30 10:01:03"),
     );
     if (!first) {
       throw new Error("弹层里没有 10:01:03 那一档启动");

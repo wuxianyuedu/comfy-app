@@ -67,8 +67,7 @@ function manualMapForMode(
   paramMap: unknown,
   mode: string | null | undefined,
 ): Record<string, string | null> {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (mode == null || mode === "") {
+  if (mode === null || mode === undefined || mode === "") {
     return {};
   }
   if (!isPlainRecord(paramMap)) {
@@ -100,8 +99,7 @@ export function manualOutputSource(
   outputIoKey: string,
   mode: string | null | undefined,
 ): string | null | undefined {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (mode == null || mode === "") {
+  if (mode === null || mode === undefined || mode === "") {
     return undefined;
   }
   const table = manualMapForMode(paramMap, mode);

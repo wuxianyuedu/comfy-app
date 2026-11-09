@@ -67,24 +67,27 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
               才是实心。此前三颗都是实心品牌紫，一屏里三颗主按钮。 */}
           <StatusButton
             disabled={c.dbStudioOpening || c.dbStudioStarting || c.dbStudioStatus?.up !== true}
-            // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-            onClick={() => void c.openDbStudio()}
+            onClick={() => {
+              void c.openDbStudio();
+            }}
             variant="primary"
           >
             {c.dbStudioOpening ? "打开中…" : "打开查看"}
           </StatusButton>
           <StatusButton
             disabled={c.dbStudioStarting || c.dbStudioStatus?.up === true}
-            // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-            onClick={() => void c.startDbStudio()}
+            onClick={() => {
+              void c.startDbStudio();
+            }}
             variant={c.dbStudioStatus?.up === true ? "primary" : "primary-solid"}
           >
             {c.dbStudioStarting ? "启动中…" : "启动 Drizzle Studio"}
           </StatusButton>
           <StatusButton
             disabled={c.dbStudioStopping || c.dbStudioStatus?.up !== true}
-            // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-            onClick={() => void c.stopDbStudio()}
+            onClick={() => {
+              void c.stopDbStudio();
+            }}
             variant={c.dbStudioStatus?.up === true ? "primary-solid" : "primary"}
           >
             {c.dbStudioStopping ? "关闭中…" : "关闭 Drizzle Studio"}

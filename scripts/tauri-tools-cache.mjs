@@ -399,7 +399,6 @@ export function download({ mirror, dryRun, log, plan = NSIS_PLAN, run }) {
           : { status: 0, stdout: "", stderr: "" };
       }
       const r = spawnSync(cmd, args, { encoding: "utf8", timeout: 300_000 });
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 子进程起不来时 stdout/stderr 实测为 undefined（@types/node 声明偏窄）
       return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
     });
   log(`[工具缓存] 下载建镜像：${plan.name} ${plan.version} → ${mirror}`);

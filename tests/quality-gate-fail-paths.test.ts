@@ -16,7 +16,6 @@ describe("quality-gate 失败路径（ISSUE #2588）", () => {
       windowsHide: true,
       timeout: 60_000,
     });
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
     expect(out).toContain("未知门禁：definitely-not-a-gate");
     expect(out).toContain("all");
@@ -35,10 +34,8 @@ describe("quality-gate 失败路径（ISSUE #2588）", () => {
       windowsHide: true,
       timeout: 60_000,
     });
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(2);
     expect(r.stderr).toContain("[红] quality-gate（未知门禁：definitely-not-a-gate");
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(r.stdout ?? "").not.toContain("[红]");
   });
 
@@ -53,7 +50,6 @@ describe("quality-gate 失败路径（ISSUE #2588）", () => {
       windowsHide: true,
       timeout: 60_000,
     });
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
     expect(r.status, out).toBe(2);
     expect(out).toContain("未知门禁：definitely-not-a-gate");
@@ -67,7 +63,6 @@ describe("quality-gate 失败路径（ISSUE #2588）", () => {
         windowsHide: true,
         timeout: 60_000,
       });
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
       expect(r.status, `${arg} ⇒ ${out}`).toBe(2);
       expect(out).toContain("不认识的参数：");

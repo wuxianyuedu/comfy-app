@@ -168,12 +168,9 @@ export function latestDailyDispatch(builds) {
  * @returns {string[]} 流水线名（按平台给的顺序，空名剔除）
  */
 function pipelineNamesOf(detail) {
-  return (
-    classifyBuildOutcome(detail)
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- classifyBuildOutcome 的返回形状由它自己兜，这处的兜底是给「认不出」那一支的
-      .pipelines.map((p) => String(p?.name ?? "").trim())
-      .filter((n) => n !== "")
-  );
+  return classifyBuildOutcome(detail)
+    .pipelines.map((p) => String(p?.name ?? "").trim())
+    .filter((n) => n !== "");
 }
 
 /**

@@ -711,7 +711,6 @@ export const seriesRouter = createTRPCRouter({
       let linked = 0;
       const linkedIds = new Set<string>();
       for (const pc of prodChars) {
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- prodChars 是 `prod.characters as Array<ProductionCharacter>`，JSON 列元素运行期可为 null，`?.` 是防线
         const name = pc?.name ?? "";
         if (!name) {
           continue;
@@ -794,7 +793,6 @@ export const seriesRouter = createTRPCRouter({
       >;
       const byName = new Map<string, Record<string, unknown>>();
       for (const c of prodChars) {
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- prodChars 是 JSON 列经 `as Array<Record<string, unknown>>`，元素运行期可为 null
         const n = typeof c?.name === "string" ? c.name : "";
         if (n) {
           byName.set(n, c);

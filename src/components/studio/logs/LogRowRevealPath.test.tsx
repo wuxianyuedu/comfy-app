@@ -67,7 +67,6 @@ async function hintText(user: ReturnType<typeof userEvent.setup>, el: HTMLElemen
   const popup = await screen.findByText(/./, {
     selector: '[data-slot="tooltip-content"]',
   });
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留空值兜底
   return popup.textContent ?? "";
 }
 

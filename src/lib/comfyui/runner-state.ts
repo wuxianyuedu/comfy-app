@@ -107,7 +107,7 @@ function callerLoc(): string {
     // 栈的形状：lines[0] 是 "Error"，lines[1] 是 " at log (…)"，lines[2] 才是真正的调用方。
 
     // oxlint-disable-next-line typescript/prefer-nullish-coalescing
-    const frame = lines[2] || lines[1] || ""; // oxlint-disable-line strict-boolean-expressions -- 取第一个非空栈帧：空串与 undefined 同义，这里必须保留「真值回退」，不能换成 ??
+    const frame = lines[2] || lines[1] || "";
 
     const match = /\((?<file>[^():]+):(?<line>\d+):(?<col>\d+)\)/.exec(frame);
 

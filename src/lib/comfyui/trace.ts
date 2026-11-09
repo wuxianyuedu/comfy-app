@@ -85,8 +85,7 @@ function localTimestamp(): string {
 
 /** 把任意值转成可读文本（对齐规范 07 §7.10：Error 取 stack，循环引用兜底）。 */
 export function traceStringify(value: unknown): string {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (value == null) {
+  if (value === null || value === undefined) {
     return "null";
   }
   if (typeof value === "string") {
@@ -265,8 +264,7 @@ export function queueTraceSummary(qd: unknown): {
         if (typeof it[1] === "string" && it[1]) {
           ids.push(it[1]);
         }
-        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      } else if (it != null && typeof it === "object") {
+      } else if (it !== null && it !== undefined && typeof it === "object") {
         /* SAFETY: 类型断言已复核 */
         const id = (it as { prompt_id?: unknown }).prompt_id;
         if (typeof id === "string" && id) {

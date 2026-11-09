@@ -308,8 +308,9 @@ export function resolveMapping(
   const out: Record<string, string | null> = {};
   /* 只读一份（本函数不再给任何旧键补位，没有要写回的东西）。 */
   const manual: Record<string, string | null> =
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    (mode != null && mode !== "" ? mapping?.manualByMode?.[mode] : undefined) ?? {};
+    (mode !== null && mode !== undefined && mode !== ""
+      ? mapping?.manualByMode?.[mode]
+      : undefined) ?? {};
   for (const entry of entries) {
     const hit = manualTargetForEntryRaw(manual, entry);
     if (!hit.found) {
@@ -331,8 +332,7 @@ export function manualTargetFor(
   entryId: string,
   mode?: string | null,
 ): string | null | undefined {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (mode == null || mode === "") {
+  if (mode === null || mode === undefined || mode === "") {
     return undefined;
   }
   const byEntry = mapping?.manualByMode?.[mode];
@@ -415,9 +415,7 @@ export function serializeParamMapping(
   const source: Record<string, unknown> = {};
   for (const [mode, byEntry] of Object.entries(mapping.manualByMode ?? {})) {
     const targets: Record<string, string | null> = {};
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- manualByMode 来自落库 paramMap（JSON），byEntry 运行期可缺省
     for (const [id, target] of Object.entries(byEntry ?? {})) {
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- target 来自落库 JSON，运行期可为 null 以外类型外值，显式判空不删分支
       if (typeof target !== "string" && target !== null) {
         continue;
       }
@@ -448,8 +446,7 @@ export function hasManualWiring(
   mapping: ParamMapping | null | undefined,
   mode?: string | null,
 ): boolean {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (mode == null || mode === "") {
+  if (mode === null || mode === undefined || mode === "") {
     return false;
   }
   return Object.keys(mapping?.manualByMode?.[mode] ?? {}).length > 0;
@@ -462,8 +459,7 @@ export function clearModeWiring(
   mode?: string | null,
 ): ParamMapping {
   const manualByMode = { ...mapping?.manualByMode };
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (mode != null && mode !== "") {
+  if (mode !== null && mode !== undefined && mode !== "") {
     delete manualByMode[mode];
   }
   return { manualByMode, labels: { ...mapping?.labels } };
@@ -494,8 +490,7 @@ export function handleIdForIoKey(
   io: WorkflowIOMap | null | undefined,
   ioKey: string | null | undefined,
 ): string | null {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (ioKey == null || ioKey === "") {
+  if (ioKey === null || ioKey === undefined || ioKey === "") {
     return null;
   }
   const name = io?.[ioKey]?.name;
@@ -513,12 +508,10 @@ export function ioKeyForHandle(
   nodeId: string,
   handleId: string | null | undefined,
 ): string | null {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (!nodeId || handleId == null || handleId === "") {
+  if (!nodeId || handleId === null || handleId === undefined || handleId === "") {
     return null;
   }
   for (const [ioKey, entry] of Object.entries(io ?? {})) {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- io 来自落库 IO 表（JSON），元素运行期可为 null
     if (entry?.nodeId === nodeId && entry.name === handleId) {
       return ioKey;
     }
@@ -698,8 +691,7 @@ export function applyParamMapping(args: {
      *  **落点那一行**的值才属于这个口子 —— 否则用户在参数面板改了「步数」，会被
      *  当成「尺寸 · 宽」写进宽度那一行。 */
     const target = resolved[entry.id];
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    const byPinKeys = target == null ? undefined : values[target];
+    const byPinKeys = target === null || target === undefined ? undefined : values[target];
     const supplied = byContract ?? byPinKeys;
     if (supplied === undefined) {
       continue;

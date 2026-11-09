@@ -64,7 +64,6 @@ export function collectAttribute() {
     try {
       /* `res.stdout` 是 `spawnSync` 出参，起不来时实测是 `undefined`（`@types/node` 按泛型
        * 声明成非空）—— 这处 `??` 是给运行时用的，不是给编译器用的。 */
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- `spawnSync` 起不来时 stdout 实测为 undefined，`@types/node` 按泛型声明成非空
       const parsed = JSON.parse(String(res.stdout ?? "[]"));
       if (!Array.isArray(parsed)) {
         throw new Error("不是数组");

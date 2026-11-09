@@ -84,7 +84,6 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
           vanillaApi.workflowModel.list.query(),
         ]);
         if (wfRes.status === "fulfilled") {
-          // oxlint-disable-next-line no-unnecessary-condition -- workflows 来自 tRPC workflow.list（外部数据），旧服务端可能缺该字段，?? [] 是运行时守卫
           data.wfList = wfRes.value.workflows ?? [];
         }
         if (
@@ -163,15 +162,12 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
           if (!alive || !tplReady) {
             return;
           }
-          // oxlint-disable-next-line no-unnecessary-condition -- workflowIO 来自 tRPC workflow.detailFull（外部数据），旧服务端可能缺该字段，?? null 是运行时守卫
           setWfIO(tpl.workflowIO ?? null);
           /* SAFETY: 类型断言已复核 */
-          // oxlint-disable-next-line no-unnecessary-condition -- paramMap 来自 tRPC workflow.detailFull（外部数据），强转只用于类型收口，?? null 是运行时守卫
           const paramMap = (tpl.paramMap as Record<string, unknown>) ?? null;
           setWfParamMap(paramMap);
           /* 一并写进节点数据：运行期（use-generate）不能依赖 hook 的异步
            *  状态，映射必须随节点一起持久化，否则刷新后运行会丢掉手工线。 */
-          // oxlint-disable-next-line no-unnecessary-condition -- paramMap 经上面的强转收窄为非空，运行时仍可能缺省；?? undefined 与 patch 的可空口径一致
           patch({ paramMap: paramMap ?? undefined });
           /* 模式一致性：库卡片对 `taskType` 有 fallback，画布走同一套，避免
            * 「库显示文生图 / 画布显示未选」。优先级：

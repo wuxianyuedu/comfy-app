@@ -3314,7 +3314,6 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
     /* 注册表指了 `source` 的那些格：它们跟着的是**接槽那一族**，就必须真把那枚开关置成 1。 */
     const followingSlotFamily = ONESHOT_TARGETS.flatMap((t) =>
       (Array.isArray(t.prereqs) ? t.prereqs : [])
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 值来自 JSON/`as` 断言后的外部形状，类型按非空标，保留运行期防线
         .filter((p) => typeof p?.source === "string" && p.source !== "")
         .map((p) => p.oneshot),
     );

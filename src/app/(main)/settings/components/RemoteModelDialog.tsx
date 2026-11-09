@@ -165,8 +165,9 @@ export function RemoteModelDialog({
                 <Button
                   className="text-muted-foreground h-auto shrink-0 rounded-lg px-3 py-2 text-sm"
                   disabled={d.testing}
-                  // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                  onClick={() => void d.testConnection()}
+                  onClick={() => {
+                    void d.testConnection();
+                  }}
                   variant="outline"
                 >
                   {d.testing ? "测试中…" : "测试连接"}
@@ -288,8 +289,9 @@ export function RemoteModelDialog({
                  （规范性提示要么可达、要么写在 onSubmit 之前）。校验交给
                  `submitDialog` 的字段级判定，失败逐字段标红。 */
               disabled={c.saving}
-              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-              onClick={() => void d.submitDialog()}
+              onClick={() => {
+                void d.submitDialog();
+              }}
             >
               {c.saving ? "保存中…" : dialog.mode === "edit" ? "保存" : "添加并保存"}
             </Button>

@@ -199,7 +199,6 @@ export function describeSpawnFailure(error) {
   if (typeof error === "string") {
     return error;
   }
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- error 是子进程或驱动抛出的现场对象，code / message 运行时可能缺
   return error.code ?? error.message ?? "UNKNOWN";
 }
 

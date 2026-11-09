@@ -434,7 +434,6 @@ function checkEntrypoints(entrypoints, names) {
     /* 注记这几个 `?.` 是给规则的：`entries` 的条目数组来自手写 JSON（`readLedger()` 原样
      * 返回 `JSON.parse` 的产物），`flags` / `judges` / `executors` 三个字段可缺 —— 缺一栏
      * 正是下面三句判红要说的事。 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 手写台账的条目字段可缺（缺一栏就是下面那句判红要说的事），规则不建模
     const declaredFlags = new Set(entries.flatMap((e) => (Array.isArray(e?.flags) ? e.flags : [])));
     /* 登记时就拒掉「两形旗标有包含关系（含相等）」：允许它存在，等于让「超集那一行同时证两形」
      * 是错还是有意在规范里没有答案 —— 上面那条排除也就没有拦头。
@@ -471,10 +470,8 @@ function checkEntrypoints(entrypoints, names) {
     }
     for (const entry of entries) {
       forms += 1;
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 手写台账的条目字段可缺，规则不建模
       const flags = entry && Array.isArray(entry.flags) ? entry.flags : [];
       const label = flags.length > 0 ? flags.join(" ") : "(无旗标)";
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上
       const judges = entry ? entry.judges : undefined;
       if (typeof judges !== "string" || judges.trim() === "") {
         problems.push(
@@ -482,7 +479,6 @@ function checkEntrypoints(entrypoints, names) {
             `就在「这两形判的不是同一件事」那句，空着等于没登记`,
         );
       }
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上
       const executors = entry && Array.isArray(entry.executors) ? entry.executors : [];
       if (executors.length === 0) {
         problems.push(`「${script}」那一形（${label}）一个执行者都没写`);
