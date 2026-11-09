@@ -2485,10 +2485,10 @@ master:
           - cnb:arch:amd64
         # 这一格是网络 IO 动作（git 探活 / 推送 / LFS / 派发），CPU 密集部分只有
         # node 启动与 git 压缩；平台池缺省 8 核（memory = 核数 × 2 GiB）对它过配，
-        # 而核时计费 = 核数 × 时长 ⇒ 显式降到 1 核。最佳核数按「GitHub 镜像同步」
+        # 而核时计费 = 核数 × 时长 ⇒ 显式降核。最佳核数按「GitHub 镜像同步」
         # 格的 duration 实测定（1 / 2 / 4 / 8 各档读数记在案单里），墙钟不显著
         # 变差就取核时最小的那一档。
-        cpus: 1
+        cpus: 2
       docker:
         # git-lfs 预装进镜像：平台按这份 Dockerfile 构建临时镜像并按 versionBy 缓存
         # （文件不变就不重建）—— 取代原先「每跑 apt-get 装一遍」的那一格。
