@@ -15,13 +15,23 @@ export type ProjectMeta = {
   type: ProjectType;
 };
 
-export type ProjectType =
-  | "short_video" // 短视频
-  | "micro_film" // 微电影
-  | "animation" // 动画
-  | "ad" // 广告
-  | "comic" // 漫画/漫剧
-  | "other";
+/** `ProjectType` 的运行期词表：union 与守卫同一出处，写法同 `SHOT_TYPES`。 */
+export const PROJECT_TYPES = [
+  "short_video", // 短视频
+  "micro_film", // 微电影
+  "animation", // 动画
+  "ad", // 广告
+  "comic", // 漫画/漫剧
+  "other",
+] as const;
+
+export type ProjectType = (typeof PROJECT_TYPES)[number];
+
+/** `ProjectType` 的运行期守卫：外来值（DB 列、草稿 JSON）收进 union，
+ *  不在词表里返回 false，由调用点按自己的口径回落（本文件不替业务选默认值）。 */
+export function isProjectType(v: unknown): v is ProjectType {
+  return PROJECT_TYPES.some((candidate) => candidate === v);
+}
 
 /* 剧本里的一个场景。 */
 export type Scene = {

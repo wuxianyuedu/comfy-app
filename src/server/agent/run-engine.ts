@@ -33,7 +33,8 @@ import { displayValue } from "~/lib/display-value";
 import { reviewContent, reviewScript, reviewShotImage, reviseScript } from "~/server/agent/review";
 import type { ProductionStage } from "~/lib/production/progress";
 import { errorMessage } from "~/lib/error-message";
-import type { Character, ProjectType, Shot } from "~/lib/workshop/types";
+import { isProjectType, normalizeShotType } from "~/lib/workshop/types";
+import type { Character, Shot } from "~/lib/workshop/types";
 import type { Production } from "~/server/db/schema";
 import { sleep } from "~/lib/with-timeout";
 
@@ -121,12 +122,18 @@ async function saveRun(userId: string, projectId: string, run: ProductionRun) {
 
 function projectMeta(row: Production) {
   return {
-    /* SAFETY: 类型断言已复核 */
-    type: row.type as ProjectType,
+    /* type 列是外来值（DB 文本列）：不在词表回落 "other"（只喂 prompt 拼装，
+     * 语义中性档；此前是盲断言，垃圾值会原样进 prompt）。 */
+    type: isProjectType(row.type) ? row.type : "other",
     tone: row.tone,
     logline: row.logline,
     title: row.title,
   };
+}
+
+/** `row.shots` 的运行期判据：只判「是数组」这一层（写入端=本引擎，见 execImages 内注释）。 */
+function isShotArray(v: unknown): v is Array<Shot> {
+  return Array.isArray(v);
 }
 
 // ── 执行器：每个只做一件事，写回走 patchContent（不碰 run/progress），结果经 ExecResult.run 带出 ──
@@ -236,8 +243,8 @@ async function execStoryboard(
       index: i,
       sceneId: "",
       sceneHeading: it.sceneHeading ?? "",
-      /* SAFETY: 类型断言已复核 */
-      shotType: (it.shotType ?? "medium") as Shot["shotType"],
+      /* 外来景别值收进词表：缺省与非法值都回落默认档（normalizeShotType 的既定口径）。 */
+      shotType: normalizeShotType(it.shotType),
       description: it.description,
       characterIds: [],
       prompt: it.description,
@@ -273,8 +280,10 @@ async function execImages(
       error: "缺少图类工作流（imageWorkflowId），无法逐镜生图",
     };
   }
-  /* SAFETY: 类型断言已复核 */
-  const shots = Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [];
+  /* shots 是本引擎自己经 patchContent 写库的 `Array<Shot>`（写入端可信）：
+   * 运行期只判「是数组」这一层（同 draft-sync-shared 的 isShotList 口径，
+   * 元素形状问题由 draft-integrity 在读侧判），不再对 any[] 做盲断言。 */
+  const shots = isShotArray(row.shots) ? row.shots : [];
   const want = new Set(shotIds);
   const next: Array<Shot> = [];
   for (const shot of shots) {

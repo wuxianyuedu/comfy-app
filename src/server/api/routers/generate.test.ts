@@ -39,6 +39,7 @@ vi.mock("~/lib/comfyui/executor-continuation", async () => {
 });
 
 import { createCallerFactory } from "~/server/api/trpc";
+import { asRecord } from "~/lib/is-record";
 import { generateRouter } from "~/server/api/routers/generate";
 import { getTestDb, seedUser, seedWorkflowTemplate } from "../../../../tests/helpers/test-db";
 import { errorEnvelope, makeCtx } from "../../../../tests/helpers/trpc";
@@ -90,8 +91,7 @@ describe("generate.generate（工作流库工作流）", () => {
     // 派发不再经内存 Job（§14 D1 第二刀）：载荷只随行走（上面两条断言：
     // claimedBy=inline 与 execPayload），这里踢一次只是省掉等 2s 节拍。
     expect(kickMock).toHaveBeenCalledTimes(1);
-    /* SAFETY: 类型断言已复核 */
-    expect((row?.params as { workflowInputs?: unknown }).workflowInputs).toEqual([
+    expect(asRecord(row?.params)?.workflowInputs).toEqual([
       { nodeId: "1", name: "text", value: "a cat" },
     ]);
   });
@@ -197,8 +197,7 @@ describe("generate.generate（RAW 原件执行路径）", () => {
     // 「不再走 /prompt」这条口径现在由 dispatch 只读 execPayload 保证
     // （见 executor-dispatch.test.ts 的「两种载荷都只交 comfy-cli」组）。
     expect(row?.execPayload).toEqual(rawJson);
-    /* SAFETY: 类型断言已复核 */
-    expect((row?.params as { workflowInputs?: unknown }).workflowInputs).toEqual([
+    expect(asRecord(row?.params)?.workflowInputs).toEqual([
       { nodeId: "1", name: "text", value: "hi" },
     ]);
   });

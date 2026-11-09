@@ -4,8 +4,8 @@
  * 注意 `createCaller(seriesRouter)` 的 procedure 为顶层命名（`caller.create`…），挂 root 后才成 `series.create` 路径。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { isPlainRecord } from "~/lib/is-record";
 import { eq } from "drizzle-orm";
-import type { SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
 
 vi.mock("~/server/db", async () => {
   const { createTestDb } = await import("../../../../tests/helpers/test-db");
@@ -40,7 +40,7 @@ import { makeCtx } from "../../../../tests/helpers/trpc";
 const createCaller = createCallerFactory(seriesRouter);
 const createGenCaller = createCallerFactory(seriesGenerationRouter);
 const tdb = getTestDb();
-const tdbDb = tdb as unknown as SqliteRemoteDatabase<typeof schema>;
+const tdbDb = tdb;
 const userCaller = () => createCaller(makeCtx());
 const otherCaller = () =>
   createCaller(makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } }));
@@ -344,9 +344,8 @@ describe("production ↔ 系列库 双向同步（提升 / 注入）", () => {
       .select({ characters: schema.production.characters })
       .from(schema.production)
       .where(eq(schema.production.id, "p3"));
-    const names = ((prodRow?.characters as Array<{ name: string }> | undefined) ?? []).map(
-      (c) => c.name,
-    );
+    const chars = Array.isArray(prodRow?.characters) ? prodRow.characters : [];
+    const names = chars.filter(isPlainRecord).map((c) => c.name);
     expect(names).toContain("新角");
     expect(names).toContain("已有");
   });

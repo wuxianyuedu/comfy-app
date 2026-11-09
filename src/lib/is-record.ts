@@ -67,3 +67,15 @@ export function isPlainRecord(v: unknown): v is Record<string, unknown> {
 export function asRecord(v: unknown): Record<string, unknown> | null {
   return isRecord(v) ? v : null;
 }
+
+/**
+ * 「是数组，元素按 `unknown` 读」的守卫 —— 与 {@link isRecord} 同族，只是收的目标是数组。
+ *
+ * 为什么不用 `Array.isArray` 直接收：它把 `unknown` 收成 `any[]`，随后的字面量 spread
+ * 会被 no-unsafe-assignment 记作「any 进数组」，改用 `slice()` / `Array.from()` 又被
+ * `unicorn/prefer-spread` 盯上 —— 两条判据双向夹住。这里收成 `Array<unknown>`，
+ * 消费点用字面量 spread 复制就是干净形态。
+ */
+export function isUnknownArray(v: unknown): v is Array<unknown> {
+  return Array.isArray(v);
+}

@@ -12,6 +12,7 @@ import { episode, production, season, series, task } from "~/server/db/schema";
 import { workflowTemplateRepository, taskRepository } from "~/lib/core/repository";
 import { kickQueue } from "~/lib/comfyui/executor-continuation";
 import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
+import { isPlainRecord } from "~/lib/is-record";
 
 type Db = SqliteRemoteDatabase<typeof schema>;
 type Ctx = { db: Db; user: { id: string } };
@@ -39,6 +40,11 @@ function bestStatus(a?: string, b?: string): string {
   return ra >= rb ? (a ?? b ?? "PENDING") : (b ?? a ?? "PENDING");
 }
 
+/** `production.shots` 的运行期判据：引擎写入的条目是对象、本文件只消费 `id`
+ * 字段（字符串化判断在消费点），元素其余字段由写入端与 draft-integrity 保证。 */
+function isShotIdList(v: unknown): v is Array<{ id?: string }> {
+  return Array.isArray(v) && v.every((s) => isPlainRecord(s));
+}
 export const seriesGenerationRouter = createTRPCRouter({
   /**
    * 整季生成进度（FR-SR-04 ③）：按集返回 总/完成/失败/进行中/待生成 计数，
@@ -81,8 +87,8 @@ export const seriesGenerationRouter = createTRPCRouter({
           const prod = await ctx.db.query.production.findFirst({
             where: eq(production.id, ep.projectId),
           });
-          /* SAFETY: 类型断言已复核 */
-          const shots = Array.isArray(prod?.shots) ? (prod?.shots as Array<{ id?: string }>) : [];
+          const rawShots: unknown = prod?.shots;
+          const shots = isShotIdList(rawShots) ? rawShots : [];
           total = shots.length;
           const shotIds = shots
             .map((s) => s.id)
@@ -176,8 +182,8 @@ export const seriesGenerationRouter = createTRPCRouter({
         const prod = await ctx.db.query.production.findFirst({
           where: eq(production.id, ep.projectId),
         });
-        /* SAFETY: 类型断言已复核 */
-        const shots = Array.isArray(prod?.shots) ? (prod?.shots as Array<{ id?: string }>) : [];
+        const rawShots: unknown = prod?.shots;
+        const shots = isShotIdList(rawShots) ? rawShots : [];
         for (const s of shots) {
           const sid = s.id;
           if (sid === undefined || sid === "") {

@@ -61,6 +61,7 @@ vi.mock("~/lib/comfyui/raw", async (importOriginal) => ({
 }));
 
 import { createCallerFactory, createTRPCContext } from "~/server/api/trpc";
+import { asRecord, isPlainRecord } from "~/lib/is-record";
 import { workflowRouter } from "~/server/api/routers/workflow";
 import { importFromLocalPath, reimportFromSource } from "~/lib/comfyui/importSource";
 import { getTestDb, seedUser, seedWorkflowTemplate } from "../../../../tests/helpers/test-db";
@@ -326,7 +327,7 @@ describe("workflow.detail", () => {
     await expect(caller.detail({ id: "wf-b" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    /* SAFETY: 类型断言已复核 */
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- 故意喂缺必填字段的载荷：zod 闸必须报 BAD_REQUEST（线上 JSON 载荷绕得过编译期类型）
     await expect(caller.detail({} as never)).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
@@ -471,11 +472,9 @@ describe("workflow.update", () => {
     const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-1")!;
     expect(row.taskType).toBe("T2I"); // normalizeTaskType("t2i") → 规范大写 "T2I"
     expect(row.positions).toEqual({ "5": [0, 0], "1": [1, 2] }); // merge 不清空另一命名空间
-    /* SAFETY: 类型断言已复核 */
-    const rawJson = row.rawJson as {
-      nodes: Array<{ pos?: unknown }>;
-    };
-    expect(rawJson.nodes[0]?.pos).toEqual([1, 2]);
+    const rawJson = asRecord(row.rawJson);
+    const nodes = Array.isArray(rawJson?.nodes) ? rawJson.nodes : [];
+    expect(isPlainRecord(nodes[0]) ? nodes[0].pos : undefined).toEqual([1, 2]);
     expect(row.modelTags).toEqual([expect.objectContaining({ name: "SDXL", userId: "user-a" })]);
     expect(tdb.$tables.workflowModelTags).toHaveLength(1);
   });

@@ -209,11 +209,9 @@ export const workflowListProcedures = {
       const enriched: Array<WorkflowListRow> = list.map((list) => {
         const def = getWorkflowType(normalizeTaskType(list.taskType));
         const rawView = asRawWorkflow(list.rawJson);
-        const graphObj =
-          /* SAFETY: 类型断言已复核 */
-          rawView && Array.isArray(rawView.nodes)
-            ? (rawView as unknown as Record<string, unknown>)
-            : null;
+        /* RawWorkflow 自带 `[k: string]: unknown` 索引签名，本身就是
+         * `Record<string, unknown>` 的子形态 —— 原先的双断言是纯仪式。 */
+        const graphObj = rawView && Array.isArray(rawView.nodes) ? rawView : null;
         const exec = executionShapeOf(list);
 
         let diskMtimeSec: number | null = null;

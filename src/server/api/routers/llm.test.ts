@@ -50,6 +50,7 @@ vi.mock("~/lib/workshop/mode-contract.server", () => ({
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { llmConfigRepository, remoteModelRepository } from "~/lib/core/repository";
+import type { LlmConfig } from "~/server/db/schema";
 import { llmRouter } from "~/server/api/routers/llm";
 import { getTestDb, seedRemoteModel, type TestDb } from "../../../../tests/helpers/test-db";
 import { makeCtx } from "../../../../tests/helpers/trpc";
@@ -57,6 +58,20 @@ import { makeCtx } from "../../../../tests/helpers/trpc";
 const createCaller = createCallerFactory(llmRouter);
 const tdb: TestDb = getTestDb();
 const caller = () => createCaller(makeCtx());
+
+/** upsertSingleton 的最小回执行：测试只消费 provider / apiKey 派生的脱敏视图与调用账。 */
+const upsertedConfig = {
+  id: "singleton",
+  provider: "remote",
+  baseUrl: "https://api.example/v1",
+  model: "m1",
+  extraModels: null,
+  apiKey: "enc:v1:test",
+  temperature: 0.7,
+  temperatureByTask: null,
+  maxTokens: 2048,
+  updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+} satisfies LlmConfig;
 
 async function codeOf(promise: Promise<unknown>): Promise<string> {
   return promise.then(
@@ -85,7 +100,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
     const upsert = vi
       .spyOn(llmConfigRepository, "upsertSingleton")
       /* SAFETY: 类型断言已复核 */
-      .mockResolvedValue(undefined as never);
+      .mockResolvedValue(upsertedConfig);
     expect(await codeOf(caller().configSave({ baseUrl: "HTTPS://x.example" }))).toBe("OK");
     expect(await codeOf(caller().configSave({ baseUrl: "http://127.0.0.1:11434/v1" }))).toBe("OK");
     expect(upsert).toHaveBeenCalledTimes(2);
@@ -97,7 +112,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
     expect(
       await codeOf(
         caller().configSave({
-          /* SAFETY: 类型断言已复核 */
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- 故意喂不在枚举里的值：zod 闸必须拦下（线上 JSON 载荷绕得过编译期类型，绕不过这道闸）
           provider: "azure" as never,
         }),
       ),
@@ -110,7 +125,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
     const upsert = vi
       .spyOn(llmConfigRepository, "upsertSingleton")
       /* SAFETY: 类型断言已复核 */
-      .mockResolvedValue(undefined as never);
+      .mockResolvedValue(upsertedConfig);
     await caller().configSave({
       extraModels: ["llama3", { name: "gpt-x", baseUrl: "https://api.example/v1", apiKey: "k" }],
     });
@@ -134,7 +149,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
     const upsert = vi
       .spyOn(llmConfigRepository, "upsertSingleton")
       /* SAFETY: 类型断言已复核 */
-      .mockResolvedValue(undefined as never);
+      .mockResolvedValue(upsertedConfig);
     seedRemoteModel(tdb, { name: "既有远端" });
     await caller().configSave({ model: "m1" });
     expect(upsert.mock.calls[0]?.[0]).toMatchObject({ extraModels: undefined });
@@ -148,7 +163,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
     const upsert = vi
       .spyOn(llmConfigRepository, "upsertSingleton")
       /* SAFETY: 类型断言已复核 */
-      .mockResolvedValue(undefined as never);
+      .mockResolvedValue(upsertedConfig);
     const res = await caller().configSave({ model: "m1" });
     expect(res.config).toEqual({ provider: "remote", hasApiKey: true });
     upsert.mockRestore();
@@ -159,7 +174,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
     expect(
       await codeOf(
         caller().configSave({
-          /* SAFETY: 类型断言已复核 */
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- 故意喂不在枚举里的键：zod 闸必须拦下（线上载荷可绕过编译期类型）
           temperatureByTask: {
             translate: 0.9,
           } as never,
@@ -268,7 +283,7 @@ describe("workshopAdapters —— 适配器形状与大写归一", () => {
     const save = vi
       .spyOn(remoteModelRepository, "saveWorkshopAdapters")
       /* SAFETY: 类型断言已复核 */
-      .mockResolvedValue([] as never);
+      .mockResolvedValue([]);
     await caller().workshopAdaptersSave({
       name: "gpt-x",
       adapters: [
@@ -279,10 +294,7 @@ describe("workshopAdapters —— 适配器形状与大写归一", () => {
         },
       ],
     });
-    /* SAFETY: 类型断言已复核 */
-    const passed = save.mock.calls[0]?.[1] as Array<{
-      mode: string;
-    }>;
+    const passed = save.mock.calls[0]?.[1] ?? [];
     expect(passed[0]?.mode).toBe("TXT2IMG");
     save.mockRestore();
   });
@@ -305,7 +317,7 @@ describe("workshopAdapters —— 适配器形状与大写归一", () => {
     const get = vi
       .spyOn(remoteModelRepository, "getWorkshopAdapters")
       /* SAFETY: 类型断言已复核 */
-      .mockResolvedValue([] as never);
+      .mockResolvedValue([]);
     await caller().workshopAdaptersGet({ name: "gpt-x" });
     expect(get).toHaveBeenCalledWith("gpt-x");
     get.mockRestore();

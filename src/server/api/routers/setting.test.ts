@@ -30,7 +30,7 @@ const {
   studioStopMock,
   studioOpenMock,
 } = vi.hoisted(() => ({
-  spawnMock: vi.fn(),
+  spawnMock: vi.fn<(command: string, args: Array<string>) => unknown>(),
   /** 让「取检出根」那一次 `realpath` 抛错的开关（探针在每次调用开头读它）。 */
   fsState: { failRoot: false },
   probeMock: vi.fn<() => Promise<{ embeddable: boolean; reason: string }>>(() =>
@@ -292,8 +292,7 @@ describe("setting.openExternal —— 交给系统浏览器之前的协议闸（
       url: "https://example.com/out.mp4",
     });
     expect(res.ok).toBe(true);
-    /* SAFETY: 类型断言已复核 */
-    const args = spawnMock.mock.calls[0]?.[1] as Array<string>;
+    const args = spawnMock.mock.calls[0]?.[1] ?? [];
     expect(args.at(-1)).toBe("https://example.com/out.mp4");
   });
 
@@ -439,8 +438,7 @@ describe("setting.revealPath —— 打开本机路径之前的存在性 + 检�
     });
     expect(res.ok).toBe(true);
     expect(spawnMock).toHaveBeenCalledTimes(1);
-    /* SAFETY: 类型断言已复核 */
-    const [cmd, args] = spawnMock.mock.calls[0] as [string, Array<string>];
+    const [cmd, args] = spawnMock.mock.calls[0] ?? ["", []];
     if (process.platform === "win32") {
       /* `/select,"<路径>"` 必须是**一个**参数：拆成两个时 explorer 会把含空格的
        * 路径截断，表现是「打开了资源管理器但什么都没选中」。 */
