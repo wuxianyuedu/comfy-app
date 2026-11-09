@@ -48,8 +48,9 @@ const nodeSqlite = openNodeSqlite(resolveDbPath(env.DATABASE_URL ?? DEFAULT_DB_F
 const gatedProxy = gateProxyWithPragmas(nodeSqlite);
 
 declare global {
-  /* dev 热重载单例沿用既有 `db` 键：键名不改，避免跨模块读写错位（此前这里
-   * 是 `globalThis as unknown as { db: … }`，改环境声明后无需断言就是 typed）。 */
+  /* Dev-reload singleton keeps the existing global key `db` (renaming it would
+   * desync cross-module reads/writes). Ambient declaration instead of the old
+   * `globalThis as unknown as { db: ... }` cast, so access stays typed. */
   var db: SqliteRemoteDatabase<typeof schema> | undefined;
 }
 
