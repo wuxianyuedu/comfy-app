@@ -390,3 +390,22 @@ export function writeDispatchState(writeFileSync, root, state, mkdir = mkdirSync
     /* 落盘失败只影响「回读格能不能提前收工」，不许把这一格自己判红。 */
   }
 }
+
+/**
+ * LFS 对象核对（第四跳）的失败读数：只给收尾小结用，不进 `git lfs push` 的七族分类。
+ *
+ * 这一跳走 batch API / Node `fetch`，失败时只有异常对象或 HTTP 状态码，不产生
+ * `git lfs push` 的 stdout/stderr。若让小结走 `failure` 缺省，会念成「类别：其他」
+ * 并把人指向并不存在的 git-lfs 原话；CNB 日志只显示最后几行，那一句直接把排障带偏。
+ * 所以单独给一份 label / short，并把核对自己的回话带进最后一行（ISSUE #3413）。
+ *
+ * @param {string} note `verifyLfsObjects` 给出的失败原话
+ * @returns {{label: string, short: string, next: string}}
+ */
+export function describeLfsCheckFailure(note) {
+  return {
+    label: "LFS 核对没通过",
+    next: `LFS 对象核对（batch API / fetch）没跑通 ⇒ ${note}`,
+    short: `看 LFS 核对回话：${note}`,
+  };
+}

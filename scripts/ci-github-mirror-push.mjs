@@ -119,6 +119,7 @@ import path from "node:path";
 import process from "node:process";
 
 import {
+  describeLfsCheckFailure,
   isEgressFailure,
   renderMirrorSummary,
   shouldRetryGitFailure,
@@ -633,8 +634,10 @@ export async function runMirror(io) {
   });
   if (lfsCheck.code !== CODE.OK) {
     log(`[mirror] 结论：exit ${String(lfsCheck.code)} —— ${lfsCheck.note}`);
+    /* 这一跳没有 git-lfs 原话，给小结专属读数，别落回 OTHER 缺省（ISSUE #3413）。 */
     summarize({
       elapsedMs: lfs.elapsedMs,
+      failure: describeLfsCheckFailure(lfsCheck.note),
       lfs: false,
       objects: lfsCheck.objectsText,
       retries: lfs.attempts - 1 + (lfsCheck.attempts - 1),
