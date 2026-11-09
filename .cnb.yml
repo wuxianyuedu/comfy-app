@@ -2460,6 +2460,12 @@ master:
         # 判据仍按 `.common` 锚点读，不受这一条影响）。
         tags:
           - cnb:arch:amd64
+        # 这一格是网络 IO 动作（git 探活 / 推送 / LFS / 派发），CPU 密集部分只有
+        # node 启动与 git 压缩；平台池缺省 8 核（memory = 核数 × 2 GiB）对它过配，
+        # 而核时计费 = 核数 × 时长 ⇒ 显式取 1 核。实测 1 / 2 / 4 / 8 核四档的
+        # 格耗时都在 egress 抖动区间内、无核数敏感度（读数与 sn 记在案单里），
+        # 故取核时最小的那一档。
+        cpus: 1
       docker:
         # git-lfs 预装进镜像：平台按这份 Dockerfile 构建临时镜像并按 versionBy 缓存
         # （文件不变就不重建）—— 取代原先「每跑 apt-get 装一遍」的那一格。
