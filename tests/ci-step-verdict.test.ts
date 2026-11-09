@@ -13,6 +13,7 @@ import {
   mapExit,
   parseCli,
   pickReasonLines,
+  renderJobSummary,
   renderSummary,
 } from "../scripts/ci-step-verdict.mjs";
 
@@ -136,5 +137,134 @@ describe("ci-step-verdict.mjs（一步红了，为什么）", () => {
     ]);
     expect(code).toBe(2);
     expect(output).toContain("::error::合成缺件 红（退出码 2）");
+  });
+
+  /* ── 摘要版式（2026-11-09 对齐 GA 摘要实测乱象）────────────────────────
+   * 那一页当时有四个形状：两段数字互相矛盾的 `Vitest Test Report`（vitest 的
+   * github-actions reporter 每进程各写一份，vitest.config.ts 已关）、
+   * 「命中行」与「末尾 15 行」逐字相同、通过格也印一行 `ok`、多格平铺没有总览。
+   * 下面这组把「修掉之后长什么样」钉住 —— 改版式先改这里。 */
+  test("版式：命中行与末尾段逐字相同时，末尾段不重复出现", () => {
+    const md = renderSummary({
+      label: "合成失败",
+      code: 1,
+      rawCode: 1,
+      inconclusive: false,
+      lines: ["[红] 第一处判据失败: x"],
+    });
+    expect(md).toContain("命中行");
+    expect(md).not.toContain("末尾");
+  });
+
+  test("版式：末尾段只在命中行之外还有内容时出现（且不重复命中行）", () => {
+    const md = renderSummary({
+      label: "分支守卫",
+      code: 1,
+      rawCode: 1,
+      inconclusive: false,
+      lines: [
+        "[branch-guard] 复核开始",
+        "[branch-guard] 阻断:源分支就是 master",
+        "[branch-guard] master 只接受 PR 变更",
+      ],
+    });
+    expect(md).toContain("末尾 15 行");
+    const hit = md.indexOf("命中行");
+    const tail = md.indexOf("末尾 15 行");
+    expect(tail).toBeGreaterThan(hit);
+    // 末尾段里包含命中行那一句是正常的（它是输出的一部分），但**不许只有它**
+    const tailBlock = md.slice(tail);
+    expect(tailBlock).toContain("复核开始");
+    expect(tailBlock).toContain("master 只接受 PR 变更");
+  });
+
+  test("版式：通过的格不印「命中行」（一行 ok 不是证据）", () => {
+    const md = renderSummary({
+      label: "固定结构用例",
+      code: 0,
+      rawCode: 0,
+      inconclusive: false,
+      lines: ["ok", "done 60"],
+    });
+    expect(md).toContain("通过");
+    expect(md).not.toContain("命中行");
+    expect(md).not.toContain("末尾");
+  });
+
+  test("版式：三态图标各就各位（没判刻意不是 ❌ —— 它不是红也不是通过）", () => {
+    const pass = renderSummary({ label: "a", code: 0, rawCode: 0, inconclusive: false, lines: [] });
+    const nofact = renderSummary({
+      label: "b",
+      code: 0,
+      rawCode: 2,
+      inconclusive: true,
+      lines: [],
+    });
+    const red = renderSummary({ label: "c", code: 1, rawCode: 1, inconclusive: false, lines: [] });
+    expect(pass).toContain("✅ a — 通过");
+    expect(nofact).toContain("⚠️ b — 没判（退出码 2");
+    expect(red).toContain("❌ c — 红（退出码 1）");
+  });
+
+  test("汇总：空数组给空串（不写空壳标题）", () => {
+    expect(renderJobSummary([])).toBe("");
+  });
+
+  test("汇总：一格只要一行结论 + 正文，不出只有一行的表", () => {
+    const md = renderJobSummary([
+      {
+        label: "分支守卫",
+        code: 1,
+        rawCode: 1,
+        inconclusive: false,
+        lines: ["[branch-guard] 阻断:x"],
+      },
+    ]);
+    expect(md).toContain("## 本 step 判据：❌ **1 格红**");
+    expect(md).not.toContain("| 结论 |");
+    expect(md).toContain("### ❌ 分支守卫 — 红（退出码 1）");
+  });
+
+  test("汇总：多格给总览表，结论行「有红先报红」，没判不是通过", () => {
+    const md = renderJobSummary(
+      [
+        {
+          label: "分支守卫",
+          code: 1,
+          rawCode: 1,
+          inconclusive: false,
+          lines: ["[branch-guard] 阻断:x"],
+        },
+        { label: "固定结构用例", code: 0, rawCode: 0, inconclusive: false, lines: ["ok"] },
+        {
+          label: "受影响用例",
+          code: 0,
+          rawCode: 2,
+          inconclusive: true,
+          lines: ["[affected] 结论：不判"],
+        },
+      ],
+      { title: "PR 判据" },
+    );
+    expect(md).toContain("## PR 判据：❌ **1 格红** · ⚠️ 1 格没判 · ✅ 1 格通过");
+    expect(md).toContain("| ❌ 红 | 分支守卫 | 退出码 1 |");
+    expect(md).toContain("| ✅ 通过 | 固定结构用例 | — |");
+    expect(md).toContain("| ⚠️ 没判 | 受影响用例 | 退出码 2 |");
+  });
+
+  test("汇总：一次 job 全绿 ⇒ 结论行是「全部通过」，不是「0 格红」", () => {
+    const md = renderJobSummary([
+      { label: "a", code: 0, rawCode: 0, inconclusive: false, lines: [] },
+      { label: "b", code: 0, rawCode: 0, inconclusive: false, lines: [] },
+    ]);
+    expect(md).toContain("✅ **全部通过**（2 格）");
+    expect(md).not.toContain("0 格红");
+  });
+
+  test("参数：--summary-title 被认出并透传（认不出的参数仍然报错）", () => {
+    expect(
+      parseCli(["--summary-title", "PR 判据", "--label", "x", "--", "node", "-v"]).summaryTitle,
+    ).toBe("PR 判据");
+    expect(() => parseCli(["--nope"])).toThrow(/认不出的参数/);
   });
 });

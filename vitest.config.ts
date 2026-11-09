@@ -238,6 +238,34 @@ const BASE_CONFIG = defineConfig({
      * 一条 `expect.poll` 走到超时说明被等的事根本没发生 —— 去查它为什么没发生，
      * 别把这个数往上抬。 */
     expect: { poll: { timeout: 4000, interval: 50 } },
+    /* ★ 显式钉住 `reporters`，目的是**不让 vitest 自己往 Job Summary 里写**。
+     *
+     * vitest 5 的默认值是 `["default", ...(GITHUB_ACTIONS === "true" ? ["github-actions"] : [])]`
+     * （`vitest/dist/chunks/defaults.*.js`）。那个 `github-actions` reporter 会：
+     *   ① 把每条失败用例写成 `::error::` 注解；
+     *   ② **往 `$GITHUB_STEP_SUMMARY` 追加一整段 `## Vitest Test Report`** ——
+     *      `jobSummary.outputPath` 的默认值就是那个环境变量，而它在 `test.reporters`
+     *      这一层**关不掉**（只有 `new GithubActionsReporter({jobSummary:{enabled:false}})`
+     *      能关，但那要走自定义 reporter）。
+     *
+     * 后果实测（本文件 + `ci-step-verdict.mjs` 的摘要，2026-11-09 的 GA 页）：
+     * 一次 job 里跑了几次 vitest，摘要里就有几段 `Vitest Test Report`，而且**数字互相
+     * 矛盾**（3 passes 与 1 pass 并排）。读者没法判断哪份是这次的总账，而这几段还压在
+     * 真正的判据结论**前面** —— 这正是「摘要乱糟糟」的形状。
+     *
+     * 口径：本仓的摘要**只有一个写入者** —— `scripts/ci-step-verdict.mjs`（§「一步红了，
+     * 为什么」的唯一出口）。它写的是「这一格判没判、红在哪」，比 reporter 的用例级
+     * 计数更贴近读者要回答的那一问；两套并存 = 同一页两个口径。
+     *
+     * 代价写在明处：**失败用例的 `::error::` 注解随之消失**。这一条不是白丢 ——
+     * `ci-step-verdict.mjs` 在主进程侧按退出码打一条 `::error::`/`::warning::`，注解面仍然
+     * 有；而逐条用例的位置与堆栈本来就在日志里（junit / 终端输出照旧）。
+     *
+     * ⚠️ 命令行**显式**给 `--reporter` 会盖掉这里（`full-suite-run.mjs` 就是
+     * `--reporter=default --reporter=junit`）；那种情况下 `github-actions` 本来也不会被
+     * 追加，所以两边一致。改这一段时跑 `tests/vitest-gha-summary.test.ts` —— 它按
+     * 「GITHUB_ACTIONS=true 跑一次、摘要里不许出现 `Vitest Test Report`」正面判。 */
+    reporters: ["default"],
     /* 并发上限：**取自 `scripts/ci-load.mjs` 那一处**（ISSUE #2324，以前这里是字面 8）。
      * 为什么不再写数字：同一句「一个 worker 至少 8 核」的判断曾在三个地方各留一份副本
      * （这里 8、`run-affected-tests.mjs` 的 4、`ci-load.mjs` 的按核折算），结果就是

@@ -50,6 +50,13 @@ const MAX_REASON_LINES = 8;
 /** 尾部保留行数（`[红]` 那一段常常在最后几屏，取够一段上下文）。 */
 const TAIL_LINES = 200;
 
+/** 摘要里「末尾若干行」那一段的行数。
+ *
+ * 与 `TAIL_LINES` 是两件事：后者是**内存里**留多少行供挑原因，前者是**写进摘要**
+ * 多少行给人看。混用会让摘要里出现两百行终端噪声（那正是「摘要乱糟糟」之一）。
+ * 15 行是按「够读到一段结论 + 一两行上文」定的。 */
+const TAIL_LINES_IN_SUMMARY = 15;
+
 /** ANSI 着色剥离（`ci-heavy-gates.mjs` 的 `log()` 带色）。用 `String.fromCharCode(27)`
  * 拼正则：源码里写不出那个控制字符（`no-control-regex` 连转义写法也拦）。 */
 const ANSI_ESCAPE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
@@ -58,11 +65,12 @@ const ANSI_ESCAPE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
  * 解析 CLI 参数（`--` 之后全是子命令，一个字都不动）。
  *
  * @param {string[]} argv
- * @returns {{label: string, marker: string | null, cmd: string[]}}
+ * @returns {{label: string, marker: string | null, cmd: string[], summaryTitle: string | null}}
  */
 export function parseCli(argv) {
   let label = "";
   let marker = null;
+  let summaryTitle = null;
   const cmd = [];
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -80,9 +88,16 @@ export function parseCli(argv) {
       i += 1;
       continue;
     }
-    throw new Error(`认不出的参数 "${arg}"（只认 --label / --inconclusive-marker / --）`);
+    if (arg === "--summary-title") {
+      summaryTitle = argv[i + 1] ?? null;
+      i += 1;
+      continue;
+    }
+    throw new Error(
+      `认不出的参数 "${arg}"（只认 --label / --inconclusive-marker / --summary-title / --）`,
+    );
   }
-  return { label, marker, cmd };
+  return { label, marker, cmd, summaryTitle };
 }
 
 /**
@@ -118,7 +133,14 @@ export function pickReasonLines(lines) {
 }
 
 /**
- * 渲染 Job Summary（Markdown）。纯函数：让用例能逐字判，不必真跑子进程。
+ * 渲染**一段**判据（Markdown）。纯函数：让用例能逐字判，不必真跑子进程。
+ *
+ * 版式口径（2026-11-09 对齐 GA 摘要实测乱象）：
+ *   · 标题只到 `###`，`##` 留给 `renderJobSummary()` 的总览 —— 一段一个 `##`
+ *     会让摘要变成一串平级大标题，读者看不出「谁包着谁」；
+ *   · **「末尾若干行」只在它真的带来新信息时才出现**。此前无条件输出，而
+ *     `pickReasonLines()` 在输出很短时取的就是全部行 ⇒ 「命中行」与「末尾 15 行」
+ *     是同一段文字复制两遍（GA 页上逐字可见）。判据是**内容差**，不是行数。
  *
  * @param {object} verdict
  * @param {string} verdict.label 步骤名
@@ -131,11 +153,8 @@ export function pickReasonLines(lines) {
 export function renderSummary({ label, code, rawCode, inconclusive, lines }) {
   const clean = (lines ?? []).map((line) => String(line ?? "").replaceAll(ANSI_ESCAPE, ""));
   const reasons = pickReasonLines(clean);
-  const head = inconclusive
-    ? `### ${label} — 没判（退出码 ${rawCode}，按没判不按红）`
-    : code === 0
-      ? `### ${label} — 通过`
-      : `### ${label} — 红（退出码 ${rawCode}）`;
+  const tone = inconclusive ? "没判" : code === 0 ? "通过" : "红";
+  const head = `### ${stateIcon(tone)} ${label} — ${stateText(tone, rawCode)}`;
   const body = [
     head,
     "",
@@ -146,14 +165,100 @@ export function renderSummary({ label, code, rawCode, inconclusive, lines }) {
         : "> 首条原因见下面的「命中行」；完整输出在同一份日志里。",
     "",
   ];
-  if (reasons.length > 0) {
-    body.push("**命中行**", "", "```", ...reasons, "```", "");
+  /* 「命中行」只在它带来证据时才给：通过的那一格没有失败行可读，
+     把一行 `ok` 印成代码块是占位，不是信息（GA 页上那类「同一段话出现两遍」的近亲）。 */
+  if (reasons.length > 0 && (code !== 0 || inconclusive)) {
+    body.push("**命中行**", "", "```text", ...reasons, "```", "");
   }
-  const tail = clean.filter((line) => line.trim()).slice(-15);
-  if (code !== 0 || inconclusive) {
-    body.push("**末尾 15 行**", "", "```", ...tail, "```", "");
+  /* 末尾若干行只在「命中行之外还有别的可读内容」时给 —— 否则就是同一段话说两遍。 */
+  const tail = clean.filter((line) => line.trim()).slice(-TAIL_LINES_IN_SUMMARY);
+  const extra = tail.filter((line) => !reasons.includes(line.trim()));
+  if (extra.length > 0 && (code !== 0 || inconclusive)) {
+    body.push(`**末尾 ${TAIL_LINES_IN_SUMMARY} 行**`, "", "```text", ...tail, "```", "");
   }
   return body.join("\n");
+}
+
+/** 三态在摘要里的图标（`没判` 刻意不是 ❌ —— 它不是红，也不是通过）。
+ *
+ * @param {string} tone
+ */
+function stateIcon(tone) {
+  return tone === "通过" ? "✅" : tone === "没判" ? "⚠️" : "❌";
+}
+
+/** 三态的标题后缀（退出码只在非通过时才有意义）。
+ *
+ * @param {string} tone
+ * @param {number} rawCode
+ */
+function stateText(tone, rawCode) {
+  if (tone === "通过") {
+    return "通过";
+  }
+  if (tone === "没判") {
+    return `没判（退出码 ${rawCode}，按没判不按红）`;
+  }
+  return `红（退出码 ${rawCode}）`;
+}
+
+/**
+ * 把**这一步跑的每一格**聚合成一页 Job Summary。
+ *
+ * 为什么需要这一层：`ci-step-verdict.mjs` 一次只包一格，而一个 job 里可能包多格
+ * （`.cnb.yml` 与 `pr-gate.yml` 都有这样的 job）。逐格 `###` 平铺时，读者要滚完
+ * 每一段才知道「这次到底红没红、红在哪几格」—— 结论行以及（多格时）那张总览表
+ * 就是回答这一问的位置。**汇总层不重新判**：三态全部来自各格的同一份读数。
+ *
+ * 两档形态，按格数切换（不是两个渲染器）：
+ *   · **一格** ⇒ 只要一行结论 + 那一段正文。一张只有一行的表没有任何信息量，
+ *     反而把正文推下去 —— 这是「摘要乱糟糟」里最不值的那一层。
+ *   · **多格** ⇒ 结论行 + 一张总览表 + 各段正文。表的价值只在它能横向对比时成立。
+ *
+ * 空数组 ⇒ 空串（不写一个空壳标题出来）。
+ *
+ * @param {Array<{label: string, code: number, rawCode: number, inconclusive: boolean, lines: string[]}>} verdicts
+ * @param {{title?: string}} [opt]
+ * @returns {string}
+ */
+export function renderJobSummary(verdicts, opt = {}) {
+  if (verdicts.length === 0) {
+    return "";
+  }
+  const rows = verdicts.map((v) => {
+    const tone = v.inconclusive ? "没判" : v.code === 0 ? "通过" : "红";
+    return {
+      icon: stateIcon(tone),
+      label: v.label,
+      tone,
+      detail: tone === "通过" ? "—" : `退出码 ${v.rawCode}`,
+    };
+  });
+  /** @param {string} t */
+  const count = (t) => rows.filter((r) => r.tone === t).length;
+  const title = opt.title ?? "本 step 判据";
+  /* 结论行按「有红先报红」排：一条红压过所有没判 —— 第一行就该是读者要的那一句。 */
+  const red = count("红");
+  const warn = count("没判");
+  const headline =
+    red > 0
+      ? `❌ **${red} 格红**${warn > 0 ? ` · ⚠️ ${warn} 格没判` : ""} · ✅ ${count("通过")} 格通过`
+      : warn > 0
+        ? `⚠️ **${warn} 格没判**（不是通过）· ✅ ${count("通过")} 格通过`
+        : `✅ **全部通过**（${count("通过")} 格）`;
+  const lines = [`## ${title}：${headline}`, ""];
+  if (rows.length > 1) {
+    lines.push(
+      "| 结论 | 格 | 读数 |",
+      "| --- | --- | --- |",
+      ...rows.map((r) => `| ${r.icon} ${r.tone} | ${r.label} | ${r.detail} |`),
+      "",
+    );
+  }
+  for (const v of verdicts) {
+    lines.push(renderSummary(v), "");
+  }
+  return lines.join("\n");
 }
 
 /**
@@ -223,10 +328,10 @@ function runChild(cmd) {
 }
 
 async function main() {
-  const { label, marker, cmd } = parseCli(process.argv.slice(2));
+  const { label, marker, cmd, summaryTitle } = parseCli(process.argv.slice(2));
   if (cmd.length === 0) {
     console.error(
-      "用法：node scripts/ci-step-verdict.mjs --label <名> [--inconclusive-marker <标记>] -- <命令...>",
+      "用法：node scripts/ci-step-verdict.mjs --label <名> [--inconclusive-marker <标记>] [--summary-title <页标题>] -- <命令...>",
     );
     return 3;
   }
@@ -234,14 +339,16 @@ async function main() {
   const markerHit = marker !== null && lines.some((line) => line.includes(marker));
   const verdict = mapExit(code, markerHit);
   const reasons = pickReasonLines(lines);
-  const summary = renderSummary({
-    label,
+  const entry = {
     code: verdict.code,
-    rawCode: code ?? 1,
     inconclusive: verdict.inconclusive,
+    label,
     lines,
-  });
-  appendSummary(summary);
+    rawCode: code ?? 1,
+  };
+  /* 一次调用 = 一页摘要（总览表 + 这一段）。此前这里直接追加 `renderSummary()`，
+   * 于是同一 job 里包几格、摘要就平铺几段 `###`，没有任何总览。 */
+  appendSummary(renderJobSummary([entry], { title: summaryTitle ?? undefined }));
   if (verdict.inconclusive) {
     console.log(
       `::warning::${escapeAnnotation(`${label} 不判（退出码 ${code}）：${reasons.at(-1) ?? "见日志"}`)}`,
