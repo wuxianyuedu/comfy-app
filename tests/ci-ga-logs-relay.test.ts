@@ -9,7 +9,9 @@
  *   ⑤ 只搬失败 job：判绿的 job 不进包；没有失败 job ⇒ 不发评论；
  *   ⑥ `relayLogs` 走「上传链接 → PUT → 发 PR 评论」三步，缺一步即没判过；
  *   ⑦ base64 载体：PUT 的是 gzip→base64 的纯文本，不是二进制（端到端探针结论）；
- *   ⑧ 送达/判决并列读数（ISSUE #3452）：复用结论折叠、三档自洽、不进 marker。
+ *   ⑧ 送达/判决并列读数（ISSUE #3452）：复用结论折叠、三档自洽、不进 marker；
+ *   ⑨ PR 描述镜像（ISSUE #3454）：读改写只换自己那块、人工描述逐字保留、
+ *      评论仍是权威读源、专用令牌缺席/GET 失败/PATCH 失败都不改送达结论。
  */
 import { gunzipSync, gzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
@@ -18,17 +20,23 @@ import { CODE } from "../scripts/ci-github-mirror-push.mjs";
 import {
   collectFailedJobLogs,
   main,
+  mergeRelayDescription,
+  mirrorRelayDescription,
   parseRelayComment,
   relayCommentBody,
   relayLogs,
+  RELAY_DESCRIPTION_END,
   RELAY_MARKER,
+  renderRelayDescriptionBlock,
   renderVerdictReadout,
   resolveRelayContext,
+  stripRelayDescription,
 } from "../scripts/ci-ga-logs-relay.mjs";
 
 const SHA = "a".repeat(40);
 const BASE_ENV = {
   CNB_ISSUE_TOKEN: "token",
+  CNB_PULL_REQUEST_TOKEN: "pr-token",
   CNB_REPO_SLUG: "moon-read/comfy-app-t3",
   CNB_PULL_REQUEST_IID: "3437",
   CNB_PULL_REQUEST_MERGE_SHA: SHA,
@@ -43,6 +51,7 @@ const CTX = {
   ghToken: "gh-token",
   ok: true as const,
   pr: "3437",
+  prToken: "pr-token",
   repo: "moon-read/comfy-app-t3",
   runId: "4242",
   sha: SHA,
@@ -147,6 +156,14 @@ describe("② 前提：缺一件就是没判过", () => {
       expect(out.join("\n")).toContain("前提不成立");
     }
   });
+  it("CNB_PULL_REQUEST_TOKEN 是可选的：缺席仍可发起（只发评论，不镜像描述）", () => {
+    const rest = Object.fromEntries(
+      Object.entries(BASE_ENV).filter(([k]) => k !== "CNB_PULL_REQUEST_TOKEN"),
+    );
+    const c = resolveRelayContext(rest);
+    expect(c.ok).toBe(true);
+    if (c.ok) expect(c.prToken).toBe("");
+  });
   it("sha 缺席不阻断（附件名用 noid 兜底）", () => {
     const c = resolveRelayContext({ ...BASE_ENV, CNB_PULL_REQUEST_MERGE_SHA: "" });
     expect(c.ok).toBe(true);
@@ -225,14 +242,33 @@ describe("③ 只搬失败 job + 脱敏", () => {
   });
 });
 
-/** CNB 侧三步的假 fetch：记录每一步，可让任一步失败。 */
-function cnbFetch(opts: { fail?: "upload" | "put" | "comment" } = {}) {
-  const calls: Array<{ body?: string; method: string; url: string }> = [];
+/** CNB 侧的假 fetch：记录每一步，可让任一步失败。
+ * `pullBody` 是 `GET /-/pulls/{n}` 读回的「人工描述」，用来验读改写保留原文。 */
+function cnbFetch(
+  opts: {
+    fail?: "upload" | "put" | "comment" | "get" | "patch" | "no-body";
+    pullBody?: string;
+  } = {},
+) {
+  const calls: Array<{ auth?: string; body?: string; method: string; url: string }> = [];
   const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
     await Promise.resolve();
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     const method = init?.method ?? "GET";
-    calls.push({ body: typeof init?.body === "string" ? init.body : undefined, method, url });
+    const rawHeaders = init?.headers;
+    let auth = "";
+    if (rawHeaders instanceof Headers) {
+      auth = rawHeaders.get("Authorization") ?? "";
+    } else if (rawHeaders && !Array.isArray(rawHeaders) && typeof rawHeaders === "object") {
+      const record: Record<string, unknown> = rawHeaders;
+      auth = typeof record.Authorization === "string" ? record.Authorization : "";
+    }
+    calls.push({
+      auth,
+      body: typeof init?.body === "string" ? init.body : undefined,
+      method,
+      url,
+    });
     if (method === "POST" && url.endsWith("/-/upload/files")) {
       if (opts.fail === "upload") return new Response("no", { status: 403 });
       return new Response(
@@ -255,12 +291,30 @@ function cnbFetch(opts: { fail?: "upload" | "put" | "comment" } = {}) {
         status: 201,
       });
     }
+    if (method === "GET" && url.includes("/-/pulls/")) {
+      if (opts.fail === "get") return new Response("no", { status: 403 });
+      const payload =
+        opts.fail === "no-body"
+          ? { number: "3437" }
+          : { body: opts.pullBody ?? "人工写的 PR 描述，不许被覆盖。", number: "3437" };
+      return new Response(JSON.stringify(payload), {
+        headers: { "content-type": "application/json" },
+        status: 200,
+      });
+    }
+    if (method === "PATCH" && url.includes("/-/pulls/")) {
+      if (opts.fail === "patch") return new Response("no", { status: 403 });
+      return new Response(JSON.stringify({ number: "3437" }), {
+        headers: { "content-type": "application/json" },
+        status: 200,
+      });
+    }
     return new Response("not found", { status: 404 });
   };
   return { calls, fetchImpl };
 }
 
-describe("④ relayLogs：上传 → PUT → 发评论三步，base64 载体", () => {
+describe("④ relayLogs：上传 → PUT → 发评论三步，base64 载体（描述镜像是第四步、不承重）", () => {
   it("三步齐发，且 PUT 的是 gzip→base64 纯文本（可 decode/gunzip 还原）", async () => {
     const { calls, fetchImpl } = cnbFetch();
     const { out, log } = lines();
@@ -269,7 +323,9 @@ describe("④ relayLogs：上传 → PUT → 发评论三步，base64 载体", (
       { jobs: 1, text: "== run 4242 / job「x」==\n##[error]boom\n" },
     );
     expect(code).toBe(CODE.OK);
-    expect(calls.map((c) => c.method)).toEqual(["POST", "PUT", "POST"]);
+    /* 前 3 步是承重（上传/PUT/发评论发布附件），后 2 步是只写镜像（读改写描述）。 */
+    expect(calls.slice(0, 3).map((c) => c.method)).toEqual(["POST", "PUT", "POST"]);
+    expect(calls.slice(3).map((c) => c.method)).toEqual(["GET", "PATCH"]);
     const putBody = calls[1]?.body ?? "";
     expect(putBody.length).toBeGreaterThan(0);
     expect(putBody).not.toContain("\n");
@@ -343,5 +399,172 @@ describe("⑧ 送达/判决并列读数（ISSUE #3452）", () => {
     expect(comment?.body).toContain("GA_VERDICT=failure");
     expect(comment?.body).toContain("**送达**");
     expect(comment?.body).toContain(RELAY_MARKER);
+  });
+});
+
+/** 描述镜像那块的固定身份读数（与评论同源）。 */
+const MIRROR_META = {
+  assetPath: "u/key/f.b64",
+  bytes: 1234,
+  fileName: "f.b64",
+  jobs: 2,
+  pr: "3437",
+  runId: "4242",
+  sha: SHA,
+};
+
+describe("⑨ PR 描述镜像：读改写只换自己那块（ISSUE #3454）", () => {
+  it("镜像块带起始 marker / 闭合标记 / 同源附件链，且评论正文形状不变", () => {
+    const block = renderRelayDescriptionBlock(MIRROR_META);
+    expect(block).toContain(RELAY_MARKER);
+    expect(block).toContain(RELAY_DESCRIPTION_END);
+    expect(block).toContain("[f.b64](/-/files/u/key/f.b64)");
+    expect(block).toContain("挂在 PR 本体");
+    /* 本地读者仍只认「评论 + marker + 附件链」：镜像块不是评论正文的替代品。 */
+    expect(relayCommentBody(MIRROR_META)).toContain(RELAY_MARKER);
+    expect(relayCommentBody(MIRROR_META)).not.toContain(RELAY_DESCRIPTION_END);
+  });
+
+  it("stripRelayDescription 只摘自己的成对块，人工描述与单行 marker 评论逐字保留", () => {
+    const human = "人工写的 PR 描述，第一行。\n第二行不许动。";
+    const withBlock = `${human}\n\n${renderRelayDescriptionBlock(MIRROR_META)}\n`;
+    expect(stripRelayDescription(withBlock).replace(/\s+$/u, "")).toBe(human);
+    /* 评论那种单行 marker（没有闭合标记）不是自己的块，不许被摘。 */
+    const pasted = `${human}\n\n${relayCommentBody(MIRROR_META)}`;
+    expect(stripRelayDescription(pasted)).toContain(RELAY_MARKER);
+    /* 历史堆叠（两块）一并摘干净，写回后只剩最新一块。 */
+    const stacked = `${human}\n\n${renderRelayDescriptionBlock(MIRROR_META)}\n\n${renderRelayDescriptionBlock({ ...MIRROR_META, runId: "9999" })}`;
+    expect(stripRelayDescription(stacked)).not.toContain(RELAY_MARKER);
+  });
+
+  it("mergeRelayDescription 保留人工描述、替换旧块、不重复堆叠", () => {
+    const human = "人工写的 PR 描述，不许被覆盖。";
+    const first = mergeRelayDescription(`${human}\n`, renderRelayDescriptionBlock(MIRROR_META));
+    expect(first).toContain(human);
+    expect(first.match(/GA_LOG_RELAY_V1/gu)?.length).toBe(2); // 起始 + 闭合各一次
+    const second = mergeRelayDescription(
+      first,
+      renderRelayDescriptionBlock({ ...MIRROR_META, runId: "9999" }),
+    );
+    expect(second).toContain(human);
+    expect(second).toContain("run=9999");
+    expect(second).not.toContain("run=4242");
+    /* 空描述也能写：不因人工内容为空而跳过镜像。 */
+    expect(mergeRelayDescription("", renderRelayDescriptionBlock(MIRROR_META))).toContain(
+      RELAY_DESCRIPTION_END,
+    );
+  });
+
+  it("mirrorRelayDescription 用 CNB_PULL_REQUEST_TOKEN 读改写，保留人工描述", async () => {
+    const { calls, fetchImpl } = cnbFetch({ pullBody: "人工描述，逐字保留。" });
+    const { out, log } = lines();
+    await mirrorRelayDescription(
+      {
+        ctx: {
+          endpoint: "https://api.cnb.cool",
+          prToken: "pr-token",
+          pr: "3437",
+          repo: "moon-read/comfy-app-t3",
+        },
+        fetchImpl,
+        log,
+      },
+      MIRROR_META,
+    );
+    expect(calls.map((c) => c.method)).toEqual(["GET", "PATCH"]);
+    /* 两跳都带专用令牌，不是 CNB_ISSUE_TOKEN 那一枚（不扩权）。 */
+    for (const c of calls) expect(c.auth).toBe("Bearer pr-token");
+    const patched: unknown = JSON.parse(calls[1]?.body ?? "{}");
+    let patchedBody = "";
+    if (patched && typeof patched === "object" && "body" in patched) {
+      const record: Record<string, unknown> = patched;
+      patchedBody = typeof record.body === "string" ? record.body : "";
+    }
+    expect(patchedBody).toContain("人工描述，逐字保留。");
+    expect(patchedBody).toContain(RELAY_DESCRIPTION_END);
+    expect(patchedBody).toContain("[f.b64](/-/files/u/key/f.b64)");
+    expect(out.join("\n")).toContain("PR 描述已镜像");
+  });
+
+  it("专用令牌缺席 / GET 失败 / 应答缺 body：都不发 PATCH；PATCH 失败也只多一行读数", async () => {
+    for (const fail of ["get", "no-body"] as const) {
+      const { calls, fetchImpl } = cnbFetch({ fail });
+      const { out, log } = lines();
+      // oxlint-disable-next-line no-await-in-loop -- 逐个失败档串行验，互不并发
+      await mirrorRelayDescription(
+        {
+          ctx: {
+            endpoint: "https://api.cnb.cool",
+            prToken: "pr-token",
+            pr: "3437",
+            repo: "moon-read/comfy-app-t3",
+          },
+          fetchImpl,
+          log,
+        },
+        MIRROR_META,
+      );
+      expect(out.join("\n")).toMatch(/不镜像|读不回|缺 body/u);
+      expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+    }
+    const patchFail = cnbFetch({ fail: "patch" });
+    const pfLines = lines();
+    await mirrorRelayDescription(
+      {
+        ctx: {
+          endpoint: "https://api.cnb.cool",
+          prToken: "pr-token",
+          pr: "3437",
+          repo: "moon-read/comfy-app-t3",
+        },
+        fetchImpl: patchFail.fetchImpl,
+        log: pfLines.log,
+      },
+      MIRROR_META,
+    );
+    expect(pfLines.out.join("\n")).toContain("写不进");
+    expect(patchFail.calls.map((c) => c.method)).toEqual(["GET", "PATCH"]);
+    const { calls, fetchImpl } = cnbFetch();
+    const { out, log } = lines();
+    await mirrorRelayDescription(
+      {
+        ctx: {
+          endpoint: "https://api.cnb.cool",
+          prToken: "",
+          pr: "3437",
+          repo: "moon-read/comfy-app-t3",
+        },
+        fetchImpl,
+        log,
+      },
+      MIRROR_META,
+    );
+    expect(out.join("\n")).toContain("只发评论");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("relayLogs：描述 GET/PATCH 失败不算送达失败（评论已发 ⇒ 仍是 CODE.OK）", async () => {
+    for (const fail of ["get", "patch"] as const) {
+      const { fetchImpl } = cnbFetch({ fail });
+      const { out, log } = lines();
+      // oxlint-disable-next-line no-await-in-loop -- 逐个失败档串行验，互不并发
+      const code = await relayLogs(
+        { ctx: CTX, fetchImpl, log, gzipSync },
+        { jobs: 1, text: "log" },
+      );
+      expect(code).toBe(CODE.OK);
+      expect(out.join("\n")).toContain("已搬到 CNB");
+      expect(out.join("\n")).toContain("不镜像");
+    }
+  });
+
+  it("relayLogs：描述走专用令牌、评论走 CNB_ISSUE_TOKEN，两枚不混用", async () => {
+    const { calls, fetchImpl } = cnbFetch();
+    const { log } = lines();
+    await relayLogs({ ctx: CTX, fetchImpl, log, gzipSync }, { jobs: 1, text: "log" });
+    const comment = calls.find((c) => c.method === "POST" && c.url.includes("/comments"));
+    const patch = calls.find((c) => c.method === "PATCH");
+    expect(comment?.auth).toBe(`Bearer ${CTX.token}`);
+    expect(patch?.auth).toBe(`Bearer ${CTX.prToken}`);
   });
 });
