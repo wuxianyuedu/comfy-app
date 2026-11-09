@@ -57,7 +57,27 @@ if ($buildErr -ne 0) {
     Log ""
     Log "[错误] 安装包构建失败（exit=$buildErr），已用记事本打开日志：$LOG"
     Log "  发布那一格**没有执行** —— 本轮常驻目录里没有新的一份。"
-    if ((Get-RunningShellProcess -ProjectRoot $PROJECT_ROOT).Count -gt 0) {
+
+    # 失败出口按错误码分岔（ISSUE #3468）。两族「产物被占用」长得像、处置完全不同：
+    #   os error 5  桌面壳常驻占着 app.exe，锁不会自己消失，得先关窗口；
+    #   os error 32 打完 nsis 立刻给 msi 二次 patch 同一个 app.exe，撞上实时防护 /
+    #               索引器扫刚生成的大 exe，是瞬时共享冲突，几秒就放。
+    # 旧实现只查「有没有壳」，后一族拿到的只有一句没有出口的裸错误。
+    # Invoke-Logged 逐行双写，走到这里日志已落盘；读不到就只给「没有结论」，
+    # 不把「没读到」当成「没有这种错误」（§13.6.3 三态口径）。
+    $tailText = ""
+    try {
+        $tailText = (Get-Content -LiteralPath $script:LOG -Tail 200 -Encoding UTF8 -ErrorAction Stop) -join "`n"
+    } catch { }
+    if (-not $tailText) {
+        Log "  [没有结论] 读不到构建日志尾部，错误码分岔这一格没跑起来；照上面那段真实错误归因。"
+    } elseif ($tailText -match 'os error 32|另一个程序正在使用此文件') {
+        Log "  定性：os error 32（产物被瞬时占用）。本仓这一族出现在 nsis 打出之后、"
+        Log "        msi 二次 patch app.exe 那一跳；nsis 包通常已经生成，msi 没有。"
+        Log "  处置：等几秒重跑本入口；或只补打缺的那个包，不必重跑整套编译："
+        Log "        pnpm exec tauri bundle --bundles msi"
+        Log "        （app.exe 与 static 载荷已在场；补完再决定要不要重跑发布那一格）"
+    } elseif ((Get-RunningShellProcess -ProjectRoot $PROJECT_ROOT).Count -gt 0) {
         Log "  注意：日志中若出现「failed to remove file ... app.exe / 拒绝访问 (os error 5)」，"
         Log "        说明桌面壳在构建期间被打开了。关闭桌面窗口后重跑本构建即可。"
     }
