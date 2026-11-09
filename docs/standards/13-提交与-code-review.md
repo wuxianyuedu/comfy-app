@@ -9535,6 +9535,40 @@ build**（§13.6「PR 跑绿才合并」的承重锚一个字没换）。
 （实验档）。`ci-github-mirror-push.mjs --await-hosted` 与
 `ci-mirror-hosted-await.mjs` 完整留在盘上，就是为这一跳准备的。
 
+##### 13.5.33.3 2026-11-08 push 档镜像出口也挪到平台池（ISSUE #3426 / #3378 后续指令）
+
+**改的是 push 档镜像的执行机器，不是承重锚。** §13.5.33.2 把 PR 出口挪到平台池之后，
+`push` 事件的「GitHub master 镜像」仍留在自托管 `master 合并复核` 主列里，带
+`--readout`（退码恒 0）：出站 github.com 不稳时，推不出去被折成绿，失败只留在日志正文，
+靠 `findMirrorReadoutFailure()` 回读日志补立案，加每日 `镜像漂移判据` 兜「之后没人再推」。
+同一条不稳的链路，PR 侧治了、push 侧没治。
+
+**落地的三件事**（与 §13.5.33.2 同形同批）：
+
+| 面 | 动作 |
+| --- | --- |
+| push 主列 | `GitHub master 镜像` 出 `COMFYAPP_CI_PUSH_GATES` / `.push-stages` / `GATE_TIER_LEDGER`（进 retired）；`master 合并复核` 不再 import `GITHUB_MIRROR_TOKEN`。主列此后只判「合并后的树」 |
+| 平台池出口 | `push` 事件新增**第二条**流水线 `GitHub master 镜像（平台池）`：平台池 tags + docker git-lfs + 自带类锁 `*lock_push_mirror` + import 同一枚令牌；stage 名仍是 `GitHub master 镜像`（与历史出勤读数同名，换机器不换名），脚本 `node scripts/ci-github-mirror-push.mjs --master`（**摘 `--readout`**、退码生效），`timeout: 10m` |
+| 兜底 | 失败出口 = 该流水线自己的 error 落进 push build（`push 失败立案` 读逐格读数，但它挂在主列 `endStages`、可能早于平台池那格收尾 —— 这一跳没在 push 节点上单独实测过，不假装已验）+ 每日 `镜像漂移判据`（`always()`、跨仓匿名 ls-remote）兜「之后没人再推」。`findMirrorReadoutFailure()` 那套「读数档折零」专用立案随 `--readout` 一起退役 |
+
+**为什么分两条流水线**：镜像出口不校验树、不吃 `node_modules`，与「文档链红不红」没有对偶关系。
+合并形态复核 fail-stop 时不该连镜像一起不推；拆开之后两件事各自给结论。锁也不共用：
+`*lock_push` 管主列逐提交排队（`wait: true`），`*lock_push_mirror` 管镜像出口自己的
+`cancel-in-progress: true`（force-push 幂等「跟住」，后一笔必然覆盖前一笔）。
+
+**逐笔对账**：`COMFYAPP_CI_PUSH_GATES` / `.push-stages` / `GATE_TIER_LEDGER` /
+`tests/no-platform-ci-config.test.ts`（出口名单扩成两个、`nextEventAt` 收口、锁计数按事件分开、
+新增 push 主列不带令牌用例）/ `ci-pr-failure-issue.mjs` + 用例 / `.github/workflows/daily.yml`
+与 `master-gate.yml` 头注 / `ci-mirror-drift.mjs` 处置话术 / 本节 + 生成态镜像 /
+`changelog.d` 碎片，与 §13.5.33.2 同形同批。
+
+**边界**：#3397 的「摘掉 GA 已跑过的格、镜像迁 GitHub-hosted」是另一张单、另一个选型
+（GA-hosted runner + 摘重复格）；本单只做镜像出口换机器，不动 push 档其余格。
+
+**回退**：把 `GitHub master 镜像` 挪回 `COMFYAPP_CI_PUSH_GATES` 与 `.push-stages`、从 retired
+摘掉、`master 合并复核` 补回令牌 import、平台池那条改回 `--master --readout`，并恢复
+`findMirrorReadoutFailure()` 立案。`--readout` 旗标本身完整留在盘上，就是为这一跳准备的。
+
 #### 13.5.34 2026-11-06 GA push 档：镜像仓 master 的文档链并行执行者（任务 3 并行期）
 
 新增 `.github/workflows/master-gate.yml`，在镜像仓 master 的 `push` 上跑文档链两格：
@@ -9556,9 +9590,10 @@ build**（§13.6「PR 跑绿才合并」的承重锚一个字没换）。
 **并行期纪律（本次只加这一侧）**：CNB push 档的文档链两格与 `COMFYAPP_CI_PUSH_GATES`、
 `GATE_TIER_LEDGER` 一个字节不动。先跑若干轮合并、逐格比对两侧结论一致，再做切换 PR ——
 出问题时才能分清是谁红。切换要同批做三处：从 `.push-stages` 摘两格、把
-`COMFYAPP_CI_PUSH_GATES` 缩到三格（`合并形态复核` / `GitHub master 镜像` / `工作区出处`）、
+`COMFYAPP_CI_PUSH_GATES` 缩到四格（形态复核 / 安装 / 文档链两格 / 工作区出处）、
 在台账里把撤出格登记为「GA `master-gate.yml` 承接」；`CROSS_LANE_SCRIPT_MIRRORS` 的
-`每日安装依赖 ⇄ 安装依赖` 对账面同批失效（CNB push 此后没有安装格）。
+`每日安装依赖 ⇄ 安装依赖` 对账面同批失效（CNB push 此后没有安装格）。镜像出口另按
+§13.5.33.3 挪成 `push` 事件下第二条平台池流水线，不占这份主列清单。
 
 **已验证（ISSUE #3299 收尾，不再是推断）**：镜像格 `git push --force HEAD:refs/heads/master`
 **确实每笔都触发 `push`** —— 公开只读 API 取 `master-gate.yml`（`on: push`）的 run 列表，

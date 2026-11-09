@@ -126,6 +126,10 @@
 # push 不重跑全套的理由与旧版相同（合并提交由平台按**已验过的源分支 SHA** 生成、
 # 不引入新代码），但今天它不再是「省额度」，而是「省一遍没有新信息的运行时间」。
 #
+# ⚠️ `pull_request` 与 `push` 两个事件**各有第二条流水线**：镜像出口（平台池）。
+# 它们不是门禁主列，不装依赖、分钟级、自带 runner / 锁 / 令牌；拆开的理由与逐笔
+# 对账在 §13.5.33.2 / §13.5.33.3。上面这几行说的是**主列**那几条。
+#
 # ⚠️ **`&common` 锚点里刻意不含 stages**：`<<: *pipeline` 会把 stages 一起带过去，
 # 那正是「push 也跑整套门禁」的来源（详见 git 历史里 55bc9b36 的立案说明）。
 # 覆盖根键时锚点里的键会被整体替换，故每个事件都写出完整形态。
@@ -410,11 +414,12 @@
     # 名字在这儿 = 那一格必须一字不差地出现在 `master 合并复核` 流水线里（判据
     # `tests/no-platform-ci-config.test.ts` 双向核对：缺一格红、多一格红）。
     #
-    # 2026-11-02 起加 `GitHub master 镜像` 一格：它不是校验，是这一档的出口动作 ——
-    # GitHub 侧的 schedule（daily / package-desktop）跑镜像仓的默认分支，CNB 的
-    # master 不推过去它们就每天跑一棵旧树（理由全文在 `.push-stages` 里那格的注释上）。
+    # `GitHub master 镜像` 原是这一档的出口动作（把 master 推到 GitHub 镜像仓，那边
+    # schedule 才跑得到新树）。现在它按 PR 出口同形挪成 `push` 事件下的第二条平台池
+    # 流水线（另一条出网路径、退码生效），不再占 `master 合并复核` 主列的格 ——
+    # 这份清单只登记主列，逐格判据双向核对（§13.5.33.3）。
     COMFYAPP_CI_PUSH_GATES: >-
-      合并形态复核, GitHub master 镜像, 安装依赖, 生成态文档与源同步, 文档引用与权威源一致, 工作区出处
+      合并形态复核, 安装依赖, 生成态文档与源同步, 文档引用与权威源一致, 工作区出处
     # `push 失败立案` 不在这一份里（ISSUE #2842）：它是 `endStages`（红也要跑的段），
     # 不是 `stages` 里的一格 —— 与 PR 档的 `PR 失败立案` 同形，定义在 `.push-fail-stage`
     # 锚点。`COMFYAPP_CI_PUSH_GATES` 列的是 `stages` 主列的格名清单。
@@ -672,6 +677,13 @@
   # 一笔合并后紧跟删源分支（`branch.delete` 那一推）就是最常见的两跑重叠形态，
   # 而删分支那一推是平台自己发起的、没人会去补跑它 ⇒ 缺的那笔读数永久缺着。
   wait: true
+# push 档镜像出口自己的类锁。与 PR 出口同形：自带 key、不与
+# `pr-$CNB_PULL_REQUEST_IID` 共用（push 上那个变量无值，落回字面 `pr-` 会把
+# 并行 PR 主列一起掐掉）。也不与 `*lock_push`（逐提交排队）共用：后者管的是
+# 主列树级校验的读数，这里管的是镜像出口，两件事。
+.lock-push-mirror: &lock_push_mirror
+  key: mirror-push
+  cancel-in-progress: true
 .lock-daily: &lock_daily
   key: daily
   cancel-in-progress: true
@@ -692,14 +704,6 @@
 .lock-package: &lock_package
   key: package
   cancel-in-progress: true
-# 探针 A 的锁（ISSUE #2363，一次性）。`cancel-in-progress: false` **就是被测的那个东西**：
-# 第二条在第一条活着时到达，到底是排队、被跳过、还是照样并行 —— 写 `true` 等于把问题掐掉。
-# 「锁按类分开」那一族的 R2（类锁必须带 `cancel-in-progress: true`）因此在这把锁上**刻意
-# 不成立**，它是 `PROBE_PIPELINES` 那段有期限例外的一部分（判据与到期日见
-# `tests/no-platform-ci-config.test.ts`），不是漏写。
-.lock-probe-a: &lock_probe_a
-  key: probe-2363-a
-  cancel-in-progress: false
 # ── GA 回调的共用锁（ISSUE #3378 · 2026-11-08 转正）──────────────────────────
 #
 # 转正后只有**一个写者**：GA 收尾 job 发的 callback。这把
@@ -726,13 +730,12 @@
 # 2026-10-28 起扩格（此前整条只有 `合并形态复核` 一格、20~35 秒）。撤进来的四格判的都是
 # 「**合并后的树**一致不一致 / 这次运行的事实是什么」，不是「这次 PR 改了什么」——
 # 那一类留在 PR 档（判据面在 `ci-incremental-gates.mjs` 的登记里逐条写着为什么收窄安全）。
-# 2026-11-02 起的 `GitHub master 镜像` 是这一档里唯一的例外：它不校验树，是出口动作
-# （把 master 镜像到 GitHub，那边的 schedule 才跑得到新树），取舍写在那格的注释里。
+# 镜像出口**不在这份清单里**：它不校验树，是 `push` 事件下另一条平台池流水线
+# （见 `push:` 那一段），与主列并行、自带锁与令牌。拆开之后「文档链红了」不再
+# 连带「镜像不推」，两件事各自给结论。
 # 顺序有讲究：
 #   · `合并形态复核` 排最前：形态不对（非合并提交）时后面全部 skipped，
 #     别在没资格的工作区上花文档链的钱；
-#   · `GitHub master 镜像` 紧随其后：它不吃 node_modules，排在前提格之前没有成本；
-#     排在它后面反而会让「文档链红了」连带「镜像不推」—— 那不是想要的对偶；
 #   · `安装依赖` 是前提格：这一档的 `生成态文档与源同步` 要吃 `node_modules`，而 push 是
 #     全新 job 目录、`node_modules` 恒不在场（与每日档同一形态，理由见 `每日安装依赖` 那段）。
 #     缺了它，这一档会以「找不到依赖」的形态红 —— 与每日档当年「找不到 next」同一族。
@@ -754,33 +757,6 @@
     # 这一格曾有「唯一没钉控制台编码」的历史（规范 §13.5.3.9）：补上那层 `$enc=…`
     # 不改变读数，但让它不依赖「控制台代码页恰好是多少」这个**继承来的**状态。
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-branch-guard.cjs --merge-commit
-  # ── GitHub master 镜像：这一档唯一的**出口动作**（不校验树）──────────────────
-  #
-  # 它要回答的事：GitHub 侧的 schedule（`.github/workflows/daily.yml` /
-  # `package-desktop.yml`）跑的是镜像仓的**默认分支** —— CNB 的 master 不推过去，
-  # 它们每天跑的就是一棵停在旧 SHA 的树，绿灯与「今天的 master 行不行」无关。
-  # 所以每一次 master push 都要把 HEAD 推成那边的 `refs/heads/master`（`--force`：
-  # 镜像语义是「跟住」，漏推之后下一推自己追平），并补一跳 `git lfs push` ——
-  # daily / package-desktop 的 checkout 同样开 `lfs: true`，字体对象不在就是假红。
-  #
-  # 排位：在 `合并形态复核` **之后**（形态不对的工作区整档 fail-stop，没资格的树不推）、
-  # 在 `安装依赖` **之前**（推送只吃 git 与令牌，不吃 node_modules —— 早推早就位，
-  # 也让后面几格校验红掉时镜像不跟着陪葬：树级校验红 ≠ master 不该被镜像）。
-  #
-  # `--readout` 与 PR 那一格 `GitHub 镜像同步` 同族同理由（#3051）：egress / 仓库 /
-  # 令牌是**外部前提**，实测这条链路上撞过 `Failed to connect to github.com port 443`，
-  # 前提没落地不许叠进树级校验的红；三态原值照旧逐行打在日志里。脚本那一侧的形态
-  # （不派发、不需要 IID、`[mirror-master]` 前缀）见 `scripts/ci-github-mirror-push.mjs`
-  # 文件头「--master」一节。令牌经 push 流水线的 `imports:` 注入（与 PR 那条同一枚）。
-  - name: GitHub master 镜像
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs --master --readout
-    # 与 PR 那一格同一档外框：探活与内容推送**共用一份 4 分钟墙钟预算**（从探活起算，
-    # 两跳各至多 10 次、退避 5s→50s）、LFS 第二跳单独吃 60s 预算（至多 5 次）。
-    # ISSUE #3234 起探活也纳入这份预算：那一跳失败会短路掉整格，只给推送等于没给。
-    # 常量与理由在 `scripts/ci-mirror-retry-policy.mjs` 与 `ci-mirror-wire-budget.mjs`。
-    # 10m 包住最坏账（探活+推送共用 240s + LFS 首刀 240s = 480s）与冷启动余量；
-    # LFS 首刀**不裁**超时（60s 预算只管重试），免得把一次「慢但正常」的对象上传掐死。
-    timeout: 10m
   - name: 安装依赖
     # 与 `每日安装依赖` 的**命令行 / env / timeout 三样都逐字相同**
     # （判据 `tests/no-platform-ci-config.test.ts` 的 `CROSS_LANE_SCRIPT_MIRRORS`；
@@ -2566,27 +2542,63 @@ master:
           timeout: 10m
 
   # 合并后的 push：**不重跑全套**（全套是 PR 那条的事；「不引入新代码」的前提依旧 ——
-  # 合并提交由平台按**已被门禁验过的源分支 SHA** 生成）。这一档 2026-10-28 起是
-  # 「树级校验档」：形态复核 + 前提安装 + 文档链三格 + 工作区出处，判的是合并后的树
-  # 一致不一致（清单与顺序在 `.push-stages` 锚点 / `COMFYAPP_CI_PUSH_GATES`，
-  # 判据双向核对）。若出现非合并提交（本地 --no-verify 就能做到），说明有变更绕过了
-  # PR 与门禁 —— `合并形态复核` 一格红，失败即停，后面全部 skipped。
+  # 合并提交由平台按**已被门禁验过的源分支 SHA** 生成）。主列是「树级校验档」：
+  # 形态复核 + 前提安装 + 文档链两格 + 工作区出处，判的是合并后的树一致不一致
+  # （清单与顺序在 `.push-stages` 锚点 / `COMFYAPP_CI_PUSH_GATES`，判据双向核对）。
+  # 若出现非合并提交（本地 --no-verify 就能做到），说明有变更绕过了 PR 与门禁 ——
+  # `合并形态复核` 一格红，失败即停，后面全部 skipped。
+  #
+  # 镜像出口是**第二条流水线**（平台池），与主列并行：它不是树级校验、不吃
+  # `node_modules`，也不占主列的格。主列因此不再 import 镜像令牌 —— 那一枚
+  # 只被第二条流水线读取。
   push:
     - <<: [*common, *push_fail_stage]
       name: master 合并复核
       lock: *lock_push
-      # 与 PR 那条同一枚镜像令牌（`GitHub master 镜像` 那一格要读它）。密钥文件里已声明
-      # `allow_slugs: [moon-read/comfy-app-t3]`（声明理由见 `pull_request` 那条上面的注释），
-      # push 事件的触发者按同一规则校验。
+      stages: *push_stages
+
+    - name: GitHub master 镜像（平台池）
+      # 与 PR 档的「GitHub 镜像同步（平台池）」同一形态：自托管节点到 github.com
+      # 的出网不稳，推送与 LFS 整个挪到平台池（腾讯云侧另一条出网路径）。
+      # 这一条不是门禁主列，是**出口动作**：把合并后的 HEAD 推成镜像仓的
+      # `refs/heads/master`（`--force`，镜像语义是「跟住」），供那边 daily /
+      # package-desktop 的 schedule 与 master-gate 的 push 判同一棵树。
+      #
+      # `--readout` 已摘：原先读数档把 1/2 折成 0，平台那格恒绿、失败只留在
+      # 日志正文里，要靠 `push 失败立案` 回读日志补立案。现在退码生效，
+      # 推不出去 / LFS 送不到即非零，失败直接落进这一格的 error 状态。
+      # ⚠️ 不与 `master 合并复核` 共用锁：两件事各自要结论，一把锁只挡
+      # 「同一件事被重复排队」。`cancel-in-progress: true` 是「同时只留最新那一推」
+      # —— 镜像是 force-push 的幂等「跟住」，后一笔必然覆盖前一笔，让旧的那一跑
+      # 继续推没有新信息。
+      #
+      # 承重 / 兜底：push 不拦合并。失败出口 = 本流水线自己的 error 落进 push build
+      # （`push 失败立案` 读逐格读数，但它挂在主列的 endStages、可能早于本格收尾 ——
+      # 这一跳没在 push 节点上单独实测过，不假装已验），加上每日 `镜像漂移判据`
+      # （跨仓匿名 ls-remote、`always()`）兜「之后没人再推」。
+      runner:
+        # 平台池 = 云托管 Linux 节点（不写 namespace: group 就是它）。
+        tags:
+          - cnb:arch:amd64
+      docker:
+        build:
+          dockerfile: .cnb/ci-image/Dockerfile
+          versionBy: .cnb/ci-image/Dockerfile
+      lock: *lock_push_mirror
       imports:
         - https://cnb.cool/moon-read/GITHUB_MIRROR_TOKEN/-/blob/main/envs.yml
-      stages: *push_stages
+      stages:
+        - name: GitHub master 镜像
+          script: node scripts/ci-github-mirror-push.mjs --master
+          # 10m 外框包住最坏账（推送 240s + 回读 + LFS 60s）与冷启动余量；
+          # 与 PR 出口同一份重试预算（常量在 `ci-mirror-retry-policy.mjs`）。
+          timeout: 10m
 
   # ── 定时档的执行者已从这台机迁到 GitHub Actions ──────────────────────────────
   #
   # 这里刻意**不再挂** `"crontab: …"` 事件：每日那批判据与桌包那一档由
   # `.github/workflows/daily.yml` / `package-desktop.yml` 的 schedule 承担，跑的是
-  # GitHub 镜像仓的默认分支（由 push 档的 `GitHub master 镜像` 格跟住 master）。
+  # GitHub 镜像仓的默认分支（由 push 事件的「GitHub master 镜像（平台池）」流水线跟住 master）。
   # 自托管节点是本机，定时重档（生产构建 / 全量E2E / 全量单测 / cargo 冷编译）
   # 与日常开发抢核；而「同一台机上并发在场时墙钟不可读」正是这一族要避开的失真，
   # 桌包那条还要整棵依赖树冷编译，单机满载时连单测的超时都不构成代码结论。
@@ -2795,92 +2807,3 @@ master:
             Write-Host "[ga-verdict] callback conclusion=$v -> failure"
             exit 1
           timeout: 5m
-
-  # ── 锁编排探针（ISSUE #2363）：三条**一次性**流水线，读数取完即**整段删掉** ─────
-  #
-  # ⚠️ 三条都**不吃 `*common`**（没有 `- <<: *common`），`runner: group + tags: cnb` 逐字
-  # 抄在这里。两件事各自都是刻意的：
-  #   · 那条锚点自带的 `lock.key: pr-$CNB_PULL_REQUEST_IID` 在 `api_trigger` 上没有值 ⇒
-  #     三条探针会落回同一把字面 `pr-` 并**互相掐停**，测出来的「相交/错开」就不再是
-  #     探针自己那把锁的读数（探针先得自己不成为变量）；
-  #   · 而「每条流水线都要引用 `*common`」那条判据（`tests/no-platform-ci-config.test.ts`
-  #     的 `runner 是锚点展开后…`）会因为这三条而红 —— 这三条是**一次性**的，所以不放开
-  #     那条判据，改为一段**有期限的例外 + 自毁判据**：`PROBE_PIPELINES` / `PROBE_BY`
-  #     在那一刻之前是允许的例外，过了那一刻用例会点名要求删掉这一段。到期自动转红的
-  #     形状，是为了让「临时」两个字不靠人的记性。
-  #
-  # 为什么它们必须写进 `.cnb.yml`、而不能靠 `start-build --config` 内联：
-  # `--config` 只覆盖**被选中的那条流水线**的内容，不替代整份配置 —— 事件名本身要先在
-  # 配置里存在。实测两次（带 `--config` / 把 `config` 塞进 `--data` 请求体）都是同一句
-  # `[CONFIG_EVENT_EMPTY] … no api_trigger_probe_a event config for branch master and $`。
-  # 所以探针脚下这一份配置是**必要条件**，不是图省事。
-  #
-  # 挂在 `master:` 下而不是另开 `$:` 段：平台允许 Issue / NPC 事件挂 `$:`，但**本仓
-  # 这份配置里没有那一层**，而 `master:` 重复出现会静默吃掉后面那一段（同文件已有判据
-  # 在拦）。`api_trigger` 从任意分支都能触发这里的事件名，所以探针照样不必等合入 master
-  # 就能起跑。
-  #
-  # ⚠️ 三条各自要答的问题（Issue 第 1 节）：
-  #   · `probe-2363-a` —— 同 key、`cancel-in-progress: false` + `wait: true`。第二条到达时是
-  #     **排队**（等第一条跑完再进）/ **跳过** / **照样并行**，只有时间线能分开它；
-  #     注意 `wait` 与 `cancel-in-progress` **不能同时写**（官方 schema 原文），所以这里
-  #     写的是 `cancel-in-progress: false` 这个显式值 + `wait: true`；
-  #   · `probe-2363-b` —— **stage 级** `lock`（`wait: true`）。schema 认不认、认了之后
-  #     是不是**只**串这一格而流水线其余部分照跑，是「只串行重档」那条出路的前提；
-  #   · `probe-2363-c` —— 一条锁都不写，作**对照**：没有它，前两条的「相交/错开」
-  #     分不清是锁造成的还是节点本来就排队。
-  #
-  # 休眠时**不会跑**（没有事件推它们）；代价是配置多一小段、以及上面那条判据的例外。
-  # 取数/起跑入口：`node scripts/ci-probe-lock-readout.mjs --help`。
-  api_trigger_probe_a:
-    # ⚠️ 每项都必须写全 `name:` 六空格那一层 —— 判定「换了一条流水线」的解析器认的是
-    # 这个名字键（`pipelineLockAssignments()`）；省掉它的坏形态是：这三条会被**算进上一条**
-    # 的锁归属里，于是「同一把锁给了不同的 stage 清单」当场误报（实测过）。
-    # ⚠️ `runner.tags` 必须是 `win`，**不是** `cnb` —— 逐字抄 `.common` 那段。写成
-    # `cnb` 的现场读数（四跑全中）：Prepare 96ms 就红在
-    # `Pipeline prepare error: No runner for namespace: group tags: cnb, cpus: -1`，
-    # 一格都没跑、也没有任何「锁」的读数。这条是「抄 `runner` 而不引用锚点」要付的
-    # 代价：锚点里那两个值一起被抄对，否则探针连起跑都做不到，而红的形态与锁无关。
-    - name: 探针A（同 key · wait:true · cancel-in-progress:false）
-      runner:
-        namespace: group
-        tags:
-          - win
-      lock: *lock_probe_a
-      stages:
-        - name: 探针A-填满时间窗
-          script: |
-            echo "[probe-a] start sn=$env:CNB_BUILD_SN t=$(Get-Date -Format o)"
-            Start-Sleep -Seconds 90
-            echo "[probe-a] end t=$(Get-Date -Format o)"
-          timeout: 20m
-  api_trigger_probe_b:
-    - name: 探针B（stage 级 lock · wait:true）
-      runner:
-        namespace: group
-        tags:
-          - win
-      stages:
-        - name: 探针B-填满时间窗
-          lock:
-            key: probe-2363-b-stage
-            wait: true
-            timeout: 900
-          script: |
-            echo "[probe-b] start sn=$env:CNB_BUILD_SN t=$(Get-Date -Format o)"
-            Start-Sleep -Seconds 90
-            echo "[probe-b] end t=$(Get-Date -Format o)"
-          timeout: 20m
-  api_trigger_probe_c:
-    - name: 探针C（对照 · 一条锁都不写）
-      runner:
-        namespace: group
-        tags:
-          - win
-      stages:
-        - name: 探针C-填满时间窗
-          script: |
-            echo "[probe-c] start sn=$env:CNB_BUILD_SN t=$(Get-Date -Format o)"
-            Start-Sleep -Seconds 90
-            echo "[probe-c] end t=$(Get-Date -Format o)"
-          timeout: 20m

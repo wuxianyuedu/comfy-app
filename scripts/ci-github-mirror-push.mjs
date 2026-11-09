@@ -25,8 +25,8 @@
  *    而这条流水线实测整跑 2546s ⇒ GitHub 那一跑最早只能在一个多小时后起跑，等「读回 GitHub
  *    对同一笔 sha 的判决」那一格上线就成了串行。前移是为了并行；主列的退码**承重**（某格
  *    `error` 会把后面的格整片 `skipped`），所以这里的取舍是刻意的：**推不出去 = 这跑没判过
- *    = 不许合**。`.cnb.yml` 主列那一格因此**不再带 `--readout`**；旗标还留给 push 档
- *    （那里只报读数、合并闸由别处承重）。
+ *    = 不许合**。`.cnb.yml` 主列那一格因此**不再带 `--readout`**。push 出口（#3426）同样
+ *    不带：它也挪到了平台池流水线、退码生效。旗标保留给本地自查与快速回退。
  * 4. 推送用 `--force` 不用 `--force-with-lease`：lease 需要 expected 值（要先
  *    `ls-remote` 再推，两跳网络 + 竞态窗），而 ref 按 IID 专属、由并发锁保证
  *    同一 PR 同时只有一跑在推 —— 覆盖自己的旧值正是幂等语义。
@@ -98,7 +98,7 @@
  *
  * ```text
  * node scripts/ci-github-mirror-push.mjs               # 三态退码（CI 主列那一格：承重）
- * node scripts/ci-github-mirror-push.mjs --readout     # 读数档：三态照打点、退码恒 0（push 档 / 本地自查）
+ * node scripts/ci-github-mirror-push.mjs --readout     # 读数档：三态照打点、退码恒 0（本地自查 / 回退）
  * node scripts/ci-github-mirror-push.mjs --dry-run     # 只打印计划与 payload，不发任何请求
  * node scripts/ci-github-mirror-push.mjs --master      # push 档那一格：推 master，不派发
  * node scripts/ci-github-mirror-push.mjs --once --readout
@@ -723,7 +723,7 @@ export async function runMirror(io) {
  * 推不出去/派发失败即退非零、直接拦合并 —— 这正是期望第 3 条要的 fail-closed。
  *
  * @param {number} code `runMirror()` 给出的三态
- * @param {boolean} readout 读数档（push 档 / 本地自查；PR 主列那一格 2026-11-05 起不带）
+ * @param {boolean} readout 读数档（本地自查 / 回退；PR 与 push 两条平台侧出口都不带）
  * @returns {number} 交给进程的退出码
  */
 export function exitCodeFor(code, readout) {

@@ -75,44 +75,23 @@ function repoTopLevel(): Array<string> {
  * 以文本核对（不引 YAML 解析器：本文件每次提交都跑，加依赖不划算；匹配面窄到不误伤注释措辞）。
  */
 /**
- * 探针流水线（ISSUE #2363）的**有期限例外** —— 与 `CONFIG_SHAPE` 的「每条流水线引用 `*common`」判据配对，理由见用它的用例。
- * 名单不许泛化成「自带 runner 的都放行」（等于关掉判据），日期不许省（省了「临时」就只剩一句话）。
+ * 平台池镜像出口（ISSUE #3346 实验转正 / #3418；push 出口见 #3426）的**常驻例外** ——
+ * 这两条刻意**上平台池**（自托管出网不稳，推送整个挪过去）。它们不吃 `*common`
+ * 锚点（runner / docker / lock 全自带），所以锚点计数、锁计数两处要同额扣掉；
+ * 名单不许泛化成「自带 runner 的都放行」（等于关掉判据）。不再有期限：删掉哪一条，
+ * 对应事件就没有推送出口了。
  */
-/* SAFETY: 类型断言已复核 */
-const PROBE_PIPELINES = [
-  "api_trigger_probe_a",
-  "api_trigger_probe_b",
-  "api_trigger_probe_c",
+const HOSTED_MIRROR_PIPELINES = [
+  "GitHub 镜像同步（平台池）",
+  "GitHub master 镜像（平台池）",
 ] as const;
 
-/** 探针的到期日：过了这一刻，本文件的用例当场要求把那三条与这段例外一起删掉。 */
-const PROBE_BY = "2026-11-09T00:00:00Z";
-
-/**
- * 平台池镜像出口（ISSUE #3346 实验转正 / #3418）的**常驻例外** —— 与探针同款登记形态：
- * 探针刻意**留在自托管**（量时序），这一条刻意**上平台池**（自托管出网不稳，推送与派发
- * 整个挪过去）。它不吃 `*common` 锚点（runner / docker / lock 全自带），所以锚点计数、
- * 锁计数两处要同额扣掉；名单不许泛化成「自带 runner 的都放行」（等于关掉判据）。
- * 不再有期限：自托管主列那格已停用，这一条是唯一执行者，删掉就没有推送出口了。
- */
-const HOSTED_MIRROR_PIPELINES = ["GitHub 镜像同步（平台池）"] as const;
-
-/**
- * 探针里**被测的锁形态**逐条点名放过哪条规则（与 `PROBE_PIPELINES` 同一天到期）。
- * `api_trigger_probe_a` → `cancelFalse`（要的正是 `cancel-in-progress: false`，而 R2 默认把漏写判红）。
- * `api_trigger_probe_b` / `c` → `noLock`（对照组一条锁都不写才量得到「没有锁时会不会并行」）；这不是放宽 R1/R2，其余规则仍会问。
- */
-const PROBE_LOCK_EXEMPT: Array<{
-  /** 这一条的锁**故意**不写 `cancel-in-progress`，锚点名写在这里（其余一条都不许借）。 */
-  cancelFalse?: string;
-  event: string;
-  /** 这一条**故意**一条锁都不写（对照组）。 */
-  noLock?: boolean;
-}> = [
-  { event: "api_trigger_probe_a", cancelFalse: "lock_probe_a" },
-  { event: "api_trigger_probe_b", noLock: true },
-  { event: "api_trigger_probe_c", noLock: true },
-];
+/** 从 `- name:` 那一行起，收到**下一个 2 空格事件键**为止（含 push 之后的事件）。 */
+function nextEventAt(text: string, from: number): number {
+  const rest = text.slice(from).split("\n").slice(1).join("\n");
+  const m = /\n {2}[a-zA-Z_][\w"-]*:/.exec(rest);
+  return m ? from + 1 + m.index : text.length;
+}
 
 /** 取某个事件键下那一段原文（到下一个 2 空格事件键为止）；取不到给空串。 */
 function configEventBlock(text: string, event: string): string {
@@ -339,7 +318,7 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   { name: "零消费导出", tier: "PR" },
   // ── push 档（COMFYAPP_CI_PUSH_GATES，树级校验档 + 镜像出口格）──
   { name: "合并形态复核", tier: "push" },
-  { name: "GitHub master 镜像", tier: "push" },
+
   { name: "安装依赖", tier: "push" },
   { name: "生成态文档与源同步", tier: "push" },
   { name: "文档引用与权威源一致", tier: "push" },
@@ -367,6 +346,11 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   { name: "每日单元测试", tier: "daily" },
   { name: "覆盖率上报", tier: "daily" },
   // ── retired（降级登记，必须带理由；§13.5.30）──
+  {
+    name: "GitHub master 镜像",
+    tier: "retired",
+    note: "ISSUE #3426（#3378 后续指令）：与 PR 出口同形，镜像推送从自托管主列挪成 `push` 事件下第二条平台池流水线（`GitHub master 镜像（平台池）`），摘 `--readout`、退码生效；不再占 `COMFYAPP_CI_PUSH_GATES` 主列。失败出口 = 该流水线自己的 error + 每日 `镜像漂移判据` 跨仓兜底",
+  },
   {
     name: "GitHub 镜像同步",
     tier: "retired",
@@ -732,7 +716,7 @@ export function registeredDailyGateOrder(text: string): Array<string> {
 
 /**
  * push 档（`master 合并复核`）清单（`COMFYAPP_CI_PUSH_GATES`，顺序即执行序）：判的是**合并后的树**，既非单次改动（PR 档）也非 master 全量健康（每日档）。
- * 2026-11-02 多一格 `GitHub master 镜像`：本档唯一**出口动作**（把 master 推到 GitHub 镜像仓），不校验树，排在 `合并形态复核` 后、`安装依赖` 前。
+ * 镜像出口（原 `GitHub master 镜像` 格）已挪成 `push` 事件下另一条平台池流水线，不占这份清单（ISSUE #3426）。
  * 与每日清单同一份解析：声明 ⇄ `pipelineStageNames(text, "master 合并复核")` 双向核对，只读一份时另一份漂了没人红。
  */
 export function registeredPushGateOrder(text: string): Array<string> {
@@ -1151,7 +1135,7 @@ export function pipelineLockAssignments(text: string): Array<{
       continue;
     }
     /* 新的一项从**它自己的 `name:`** 起：认的是 `name:`，而 `lock:` / `stages:` 只在**当前项之内**算数。少了这句，上一条的 `lock:` 会被带进下一条
-     * （探针三条自写 `runner`、不吃锚点且都带 `lock:`，会各自继承上一条的锁归属 —— ISSUE #2363 点过这个坏形态，判据侧到 2026-10-26 才堵上）。
+     * （一条项的 `lock:` 只在它自己之内算数，否则上一条的锁归属会被带进下一条）。
      * 显式清空之后，「没写 `lock:` 的项」落到 R1 该有的读数上。 */
     const itemStart = /^ {4}-[ \t]*(?:<<:)?[ \t]*/.exec(raw) !== null;
     if (itemStart) {
@@ -1209,11 +1193,6 @@ export function lockClassViolations(text: string, prIid = "1982"): Array<string>
   /** 同一把工作清单 → 允许共用它的那些锁；反过来锁 → 它只能给一份清单。 */
   const lockToWork = new Map<string, Set<string | null>>();
 
-  /* 探针（ISSUE #2363）里**被测的就是锁本身**：A 的 `cancel-in-progress: false` 是要问的问题、B/C 的「一条锁都不写」是对照组 ⇒ R1 与 R2 的「显式写」对它们不成立。
-   * 豁免**逐条点名**：`PROBE_PIPELINES` 是到期日与「不许吃锚点」名单，`PROBE_LOCK_EXEMPT` 是这一层的「放过哪条规则」名单；探针仍须过「key 字面量」「不撞退化形状」「一把锁只给一份清单」。
-   * ⚠️ A 写成 `true` 不会被本函数点名（R6 只对 `push` 成立），那一半由下面那条用例直接读原文断言；两份名单是字面量而非投影，否则「C 有了锁」与「A 的锁错了」会读成同一件事。 */
-  const probeExempt = new Map(PROBE_LOCK_EXEMPT.map((e) => [e.event, e]));
-
   for (const row of rows) {
     if (row.event === "pull_request") {
       /* R5：PR 那一条的 key 必须随 PR 编号变。用两个编号各代一次、比结果 ——
@@ -1230,11 +1209,7 @@ export function lockClassViolations(text: string, prIid = "1982"): Array<string>
       }
       continue;
     }
-    /* R1：非 PR 的一条都不许靠继承拿锁 —— 那次退化就是从继承进来的。
-     * 例外只有「对照组」那一形（探针 C：一条锁都不写才是它的对照条件）。 */
-    if (row.lockRef === null && probeExempt.get(row.event)?.noLock === true) {
-      continue;
-    }
+    /* R1：非 PR 的一条都不许靠继承拿锁 —— 那次退化就是从继承进来的。 */
     if (row.lockRef === null) {
       bad.push(
         `非 PR 流水线「${row.name}」（事件 ${row.event}）没有显式的 lock 覆盖 —— 它会继承 .common 那条模板，而该模板在非 PR 事件上退化成一把共用锁`,
@@ -1247,9 +1222,8 @@ export function lockClassViolations(text: string, prIid = "1982"): Array<string>
       continue;
     }
     /* R2 的「必须显式写」这一半：`cancel-in-progress: false` 与「漏写」在配置里长得
-     * 一样，所以漏写默认判红；只有**点名要 `false`** 的那一把（探针 A）放过。 */
-    const exemptCancel = probeExempt.get(row.event)?.cancelFalse === row.lockRef;
-    if (def.cancelInProgress === null && !exemptCancel) {
+     * 一样，所以漏写默认判红。 */
+    if (def.cancelInProgress === null) {
       bad.push(
         `锁 *${row.lockRef} 没有显式写 cancel-in-progress —— 漏写与「有意排队」在配置里长得一样，重复排队就收不成一条（要排队的那一档写 false 并说明理由）`,
       );
@@ -1402,17 +1376,13 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     // ⚠️ 不钉写死条数（过去钉 5 = 把「今天有几条流水线」当判据）：基准从文本现推，一条流水线必然带且只带一个 6 空格 `stages:`，引用数与它对齐；删某条 `stages:` 同样红。
     const refs = text.match(/^\s+-\s*<<:\s*(?:\[\s*)?\*\w+/gm) ?? [];
     const stageLists = text.match(/^ {6}stages:/gm) ?? [];
-    /* 有期限的探针例外（ISSUE #2363）从两边**同额**扣掉：探针不吃锚点、也不吃
-     * `*common` 那条锁（理由见下面那条用例）。同额扣除必须两头都有 —— 只减一边
-     * 会让「漏接锚点」与「探针在跑」在读数上变成同一个数字。 */
-    const probing = PROBE_PIPELINES.filter((name) => text.includes(`  ${name}:\n`));
-    /* 平台池镜像出口（ISSUE #3346 实验转正 / #3418）是第二个例外，与探针同一句理由：
+    /* 平台池镜像出口（ISSUE #3346 实验转正 / #3418；push 出口 #3426）是常驻例外：
      * 它**刻意**不吃 `*common`（runner / docker / lock 全自带 —— 去 platform pool
      * 正是「自托管出网不稳、换一条出网路径」这件事本身）。 */
     const hostedMirror = HOSTED_MIRROR_PIPELINES.filter((name) => text.includes(`- name: ${name}`));
     expect(
-      refs.length + probing.length + hostedMirror.length,
-      `锚点引用数（${refs.length}）+ 例外流水线数（${String(probing.length + hostedMirror.length)}）` +
+      refs.length + hostedMirror.length,
+      `锚点引用数（${refs.length}）+ 例外流水线数（${String(hostedMirror.length)}）` +
         `与带 \`stages:\` 的流水线数（${stageLists.length}）对不上 —— 有一条流水线既没接上 ` +
         "`*common` 又没登记为例外，它会静默回落到计费的平台池",
     ).toBe(stageLists.length);
@@ -1420,46 +1390,6 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       refs.length,
       "一条流水线都没引用锚点（`.common` 被删了或换了形状）",
     ).toBeGreaterThanOrEqual(5);
-  });
-
-  it("探针例外有期限：在册的探针流水线不许吃 `*common`，且过了 `PROBE_BY` 必须删掉", () => {
-    /* 这是**有期限的例外**，不是放宽判据（ISSUE #2363 探针）：锚点自带 `lock.key: pr-$CNB_PULL_REQUEST_IID` 在 `api_trigger` 上无值 ⇒ 三条落回同一把字面 `pr-` 并互相掐停，探针先得自己不成为变量。
-     * 处置是「例外 + 自毁」：名单字面量（`PROBE_PIPELINES`，不是「自带 runner 都放行」）、有到期日（`PROBE_BY`，过期即红要求删段）、探针消失后本用例照样绿（删探针不留只能靠改用例的判据）。
-     */
-    const text = readRegisteredConfig();
-    const alive = PROBE_PIPELINES.filter((name) => text.includes(`  ${name}:\n`));
-    if (alive.length === 0) {
-      return;
-    }
-    expect(
-      Date.parse(PROBE_BY),
-      `探针已经过期（PROBE_BY=${PROBE_BY}）—— 读数早该取完了，把 .cnb.yml 里那三条探针` +
-        `（${PROBE_PIPELINES.join(" / ")}）与这一段例外一起删掉`,
-    ).toBeGreaterThan(Date.now());
-    /* 例外只覆盖「不吃锚点」这一件事：探针仍然必须在自托管节点上跑、仍然必须有 tags ——
-     * 少了它们，探针量到的是平台池的时序，与这件事无关。 */
-    for (const name of alive) {
-      const block = configEventBlock(text, name);
-      expect(block, `探针 ${name} 在配置里但没有可解析的流水线体`).not.toBe("");
-      expect(block, `探针 ${name} 没有 namespace: group（会回落到计费平台池）`).toMatch(
-        /namespace:\s*group\b/,
-      );
-      expect(block, `探针 ${name} 没有非空 tags`).toMatch(/^\s*tags:\s*\n\s+-\s*\S+/m);
-      expect(
-        block,
-        `探针 ${name} 引用了 \`*common\` —— 它会继承那条 PR 模板锁，三条互相掐停，探针自己成了变量`,
-      ).not.toMatch(/<<:\s*(?:\[\s*)?\*\w+/);
-    }
-    /* 例外只覆盖「不吃锚点」与「A 那把锁刻意 `cancel-in-progress: false`」两件事：
-     * 别的一条都不许借道。至少有一条探针必须留着那把 `false` 的锁 —— 它是被测对象本身，
-     * 三条都删了就等于探针没在测任何东西，而用例会静静地全绿。 */
-    const aBlock = configEventBlock(text, "api_trigger_probe_a");
-    if (aBlock !== "") {
-      expect(
-        aBlock,
-        "探针 A 的锁定义里没有 `cancel-in-progress: false` —— 它测的就是这个值，改成 `true` 等于把问题掐掉",
-      ).toMatch(/cancel-in-progress:\s*false/);
-    }
   });
 
   it("平台池镜像出口（ISSUE #3418 转正）：刻意平台池、真实推送与派发、自带锁", () => {
@@ -1476,7 +1406,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         -1,
       );
       const chunk = text
-        .slice(at, text.indexOf("\n  push:", at))
+        .slice(at, nextEventAt(text, at))
         .split("\n")
         .filter((line) => !line.trim().startsWith("#"))
         .join("\n");
@@ -1499,13 +1429,23 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         chunk,
         `「${name}」还带实验期的 --readout —— 推不出去 / 派发失败必须退非零`,
       ).not.toContain("--readout");
+      const isPushMirror = name === "GitHub master 镜像（平台池）";
       expect(
         chunk,
-        `「${name}」的锁不是自带 key —— 共用 \`pr-$CNB_PULL_REQUEST_IID\` 会掐停质量门禁那条`,
-      ).toContain("mirror-pr-$CNB_PULL_REQUEST_IID");
+        `「${name}」的锁不是自带 key —— 共用 PR 主列那把会掐停并行的质量门禁`,
+      ).toContain(isPushMirror ? "lock_push_mirror" : "mirror-pr-$CNB_PULL_REQUEST_IID");
       expect(chunk, `「${name}」没 import 镜像令牌 —— 推送格读不到它`).toContain(
         "GITHUB_MIRROR_TOKEN",
       );
+      if (isPushMirror) {
+        expect(chunk, "push 镜像出口没有点 `--master` —— 它要推 master 且不派发").toContain(
+          "--master",
+        );
+        expect(
+          chunk,
+          "push 镜像出口的 stage 名不是 `GitHub master 镜像` —— 立案回读按格名认",
+        ).toContain("name: GitHub master 镜像");
+      }
     }
   });
 
@@ -1529,7 +1469,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const at = text.indexOf("- name: GitHub 镜像同步（平台池）");
     expect(at, "平台池那条推送流水线不在了 —— 这一停就把出口一起停掉了").toBeGreaterThan(-1);
     const chunk = text
-      .slice(at, text.indexOf("\n  push:", at))
+      .slice(at, nextEventAt(text, at))
       .split("\n")
       .filter((line) => !line.trim().startsWith("#"))
       .join("\n");
@@ -1537,6 +1477,21 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(chunk, "平台池出口不是 ci-github-mirror-push.mjs —— 推送与派发没有执行者").toContain(
       "node scripts/ci-github-mirror-push.mjs",
     );
+  });
+
+  it("push 主列不再带镜像格与镜像令牌（ISSUE #3426）", () => {
+    const text = readRegisteredConfig();
+    const main = configEventBlock(text, "push").split(
+      "    - name: GitHub master 镜像（平台池）",
+    )[0];
+    expect(
+      main,
+      "`master 合并复核` 还 import 着镜像令牌 —— 那一枚只该被第二条平台池流水线读取",
+    ).not.toContain("GITHUB_MIRROR_TOKEN");
+    expect(
+      main,
+      "push 主列的 stages 里还挂着 `GitHub master 镜像` —— 它已挪成另一条流水线",
+    ).not.toContain("- name: GitHub master 镜像");
   });
 
   it("push 档跑的就是 `COMFYAPP_CI_PUSH_GATES` 那几格（声明与事实双向核对）", () => {
@@ -1561,7 +1516,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     /* 顺序约束（前提格先于吃 node_modules 的格子）：这一档过去举的例子是
      * `API 文档生成与自检`（要跑 typedoc，而 push 是全新 job 目录、`node_modules`
      * 恒不在场）。2026-11-05 它已撤到每日档（ISSUE #2537）—— push 侧今天没有吃
-     * `node_modules` 的判据格，但 `安装依赖` 仍是后面镜像出口格的前提，必须在前。 */
+     * `node_modules` 的判据格，但 `安装依赖` 仍是后面文档链两格的前提，必须在前。 */
     const installAt = declared.indexOf("安装依赖");
     expect(installAt, "push 清单里没有「安装依赖」—— 前提格被删了").toBeGreaterThanOrEqual(0);
 
@@ -2146,12 +2101,13 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       rows.length,
       `解析出的流水线数（${rows.length}）与带 stages: 的项（${stageLines}）对不上 —— 有一条被漏掉，它就没人判`,
     ).toBe(stageLines);
-    /* 一条 PR 主列 + 平台池镜像出口（ISSUE #3418 转正后的常驻例外；在册时 +1，
-     * 口径同锚点计数那条）。 */
-    const hostedAlive = HOSTED_MIRROR_PIPELINES.filter((name) =>
-      text.includes(`- name: ${name}`),
-    ).length;
-    expect(rows.filter((r) => r.event === "pull_request").length).toBe(1 + hostedAlive);
+    /* 一条 PR 主列 + 平台池镜像出口（ISSUE #3418 转正后的常驻例外）；push 档同理是
+     * 一条主列 + 一条平台池镜像出口（ISSUE #3426）。两个事件分开数，别把 push 那条
+     * 算进 PR 的例外里。 */
+    const prMirrorAlive = text.includes("- name: GitHub 镜像同步（平台池）") ? 1 : 0;
+    const pushMirrorAlive = text.includes("- name: GitHub master 镜像（平台池）") ? 1 : 0;
+    expect(rows.filter((r) => r.event === "pull_request").length).toBe(1 + prMirrorAlive);
+    expect(rows.filter((r) => r.event === "push").length).toBe(1 + pushMirrorAlive);
     expect(rows.filter((r) => r.event !== "pull_request").length).toBeGreaterThanOrEqual(9);
     /* 三条每日触发口仍然同一把（那份互斥是刻意保留的，不是被这次改动顺手拆掉的）。
      * 这里**不钉事件名清单** —— 「有没有定时口」由「定时档不在本机、在 GA」那条管，
@@ -2224,77 +2180,6 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ]);
     expect([...lockAnchorDefinitions(fixture).keys()]).toEqual(["lock_push", "lock_daily"]);
     expect(lockClassViolations(fixture)).toEqual([]);
-
-    /* ⑦ 探针三条**不吃锚点**、各自带 `runner`，而 `lock:` 只在**当前项之内**算数：解析器必须在它自己的 `name:` 上收口，否则上一条的 `lock:` 会被带进下一条。
-     * 于是「B/C 故意一条锁都不写」没有对象、A 的 `false` 也测不到要测的锁（`.cnb.yml` 那段注释早点了这个坏形态）。
-     * 顺带钉住例外**边界**：豁免只覆盖「漏写」与「一条都不写」，别的规则一条都不放过。 */
-    const probeFixture = (o: { cancel?: string | null; extra?: string; probeB?: string }) =>
-      [
-        ".common: &common",
-        "  lock:",
-        "    key: pr-$CNB_PULL_REQUEST_IID",
-        "    cancel-in-progress: true",
-        ".lock-push: &lock_push",
-        "  key: push",
-        "  cancel-in-progress: false",
-        "  wait: true",
-        ".lock-probe-a: &lock_probe_a",
-        "  key: probe-2363-a",
-        ...(o.cancel === null ? [] : [`  cancel-in-progress: ${o.cancel ?? "false"}`]),
-        ...(o.extra === undefined ? [] : o.extra.split("\n")),
-        "master:",
-        "  pull_request:",
-        "    - <<: *common",
-        "      name: 质量门禁",
-        "      stages: *gates",
-        "  push:",
-        "    - <<: *common",
-        "      name: master 合并复核",
-        "      lock: *lock_push",
-        "      stages: *push_stages",
-        "  api_trigger_probe_a:",
-        "    - name: 探针A",
-        "      lock: *lock_probe_a",
-        "      stages:",
-        "        - name: 探针A-填满时间窗",
-        "          script: echo a",
-        "  api_trigger_probe_b:",
-        "    - name: 探针B",
-        ...(o.probeB === undefined ? [] : [o.probeB]),
-        "      stages:",
-        "        - name: 探针B-填满时间窗",
-        "          script: echo b",
-        "",
-      ].join("\n");
-    /* A 拿到的是**它自己**那把锁（不是上一条的 `lock_push`），B 落到「一条都不写」。 */
-    expect(
-      pipelineLockAssignments(probeFixture({})).map((r) => `${r.event}|${r.lockRef ?? "(没写)"}`),
-    ).toContain("api_trigger_probe_a|lock_probe_a");
-    expect(
-      pipelineLockAssignments(probeFixture({})).map((r) => `${r.event}|${r.lockRef ?? "(没写)"}`),
-    ).toContain("api_trigger_probe_b|(没写)");
-    expect(lockClassViolations(probeFixture({}))).toEqual([]);
-    expect(
-      lockClassViolations(probeFixture({ cancel: null })),
-      "A 漏写 `cancel-in-progress` 也该放过 —— 它就是被测的那把锁",
-    ).toEqual([]);
-    /* B 自己拿一把锁（还是**一把没写 `cancel-in-progress` 的**）就没在当对照组了：
-     * 豁免只覆盖「一条都不写」，这一形照旧被 R2 点名。 */
-    expect(
-      lockClassViolations(
-        probeFixture({
-          extra: ".lock-probe-b: &lock_probe_b\n  key: probe-2363-b",
-          probeB: "      lock: *lock_probe_b",
-        }),
-      ).join("\n"),
-      "B 自己拿一把锁就没在当对照组了，而豁免的只是「一条都不写」",
-    ).toContain("没有显式写 cancel-in-progress");
-    expect(
-      lockClassViolations(
-        probeFixture({}).replace("  key: probe-2363-a", "  key: probe-$CNB_BRANCH"),
-      ).join("\n"),
-      "例外不覆盖 key 形态：带变量照旧点名",
-    ).toContain("带变量");
 
     // ① R1：有人**忘了写覆盖** ⇒ 那条流水线静默回落到 `pr-`，正是被修掉的那个形态。
     const forgotten = fixture.replace("      lock: *lock_push\n", "");

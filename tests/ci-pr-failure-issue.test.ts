@@ -14,10 +14,8 @@ import {
   CODE,
   composeBody,
   decideAction,
-  findMirrorReadoutFailure,
   issueTitle,
   main,
-  MIRROR_MASTER_STAGE,
   prIidFromUrl,
   resolveTarget,
   titleKey,
@@ -751,59 +749,5 @@ describe("平台配置：这一格是 Pipeline 级 `endStages`，不是 `stages`
     expect(block).not.toContain("always()");
     expect(block).not.toContain("when:");
     expect(block).not.toContain("run:");
-  });
-});
-
-describe("push 档镜像格的读数失败（--readout 折零后仍要立案）", () => {
-  const statusJson = {
-    data: {
-      pipelinesStatus: {
-        pipeline: {
-          id: "pipeline-1",
-          stages: [{ id: "stage-mirror", name: MIRROR_MASTER_STAGE, status: "success" }],
-        },
-      },
-    },
-  };
-  const runWith = (content: string) => (_cmd: string, args: Array<string>) => {
-    if (args.includes("get-build-stage")) {
-      return { error: null, status: 0, stderr: "", stdout: JSON.stringify({ data: { content } }) };
-    }
-    return { error: null, status: 0, stderr: "", stdout: "{}" };
-  };
-
-  it("读数 `exit 2` ⇒ 返回失败事实（平台那格是绿的，但镜像没推过去）", () => {
-    const got = findMirrorReadoutFailure(
-      runWith(
-        "[mirror-master] 推送本身没通（exit 2）：egress\n[mirror-master] 结论：exit 2 —— 前提没落地",
-      ),
-      "root/comfy-app",
-      "sn-1",
-      statusJson,
-    );
-    expect(got).toMatchObject({
-      exitCode: 2,
-      line: "[mirror-master] 结论：exit 2",
-      stageId: "stage-mirror",
-    });
-  });
-
-  it("`exit 0` / 没有该行 ⇒ null（没结论不是失败）", () => {
-    expect(
-      findMirrorReadoutFailure(
-        runWith("[mirror-master] 结论：exit 0 —— 已推"),
-        "root/comfy-app",
-        "sn-1",
-        statusJson,
-      ),
-    ).toBeNull();
-    expect(
-      findMirrorReadoutFailure(
-        runWith("[mirror-master] 推送后回读：回读一致"),
-        "root/comfy-app",
-        "sn-1",
-        statusJson,
-      ),
-    ).toBeNull();
   });
 });
