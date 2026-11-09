@@ -37,7 +37,8 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const { skipUnlessStagedTouches } = require("./gate-scan-read.cjs");
+const { skipUnlessStagedTouches, readStagedPaths } = require("./gate-scan-read.cjs");
+const { renderProximityLines } = require("./file-size-proximity.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
@@ -46,6 +47,15 @@ const STAGED = ARGS.has("--staged");
 
 /** 与 R5 同一把尺子：超过即进拆分候选。 */
 const SPLIT_HINT_LINES = 900;
+
+/**
+ * **临近拆分提醒线**（ISSUE #3473）：到这个行数就点名让人规划拆分，不等撞闸。
+ *
+ * 它不是第二道闸 —— 「提醒做成闸」等于把 800 变成第二个 900，同样的撞闸形态
+ * 换个数字重来。只进读数、不进退出码。与 R5 侧那份同数（账 `r5-proximity-lines`
+ * 组内必须同数，只改一把 = 两边提醒时机脱钩）。
+ */
+const PROXIMITY_WARN_LINES = 800;
 
 /**
  * 扫描面：判据与入口自己住的两层。扩展名按层分 ——
@@ -84,6 +94,8 @@ function relOf(abs) {
 function collect() {
   /** @type {Map<string, number>} */
   const oversized = new Map();
+  /** @type {Map<string, number>} */
+  const near = new Map();
   let scanned = 0;
   for (const { dir, ext } of SCAN_ROOTS) {
     const base = path.join(ROOT, dir);
@@ -99,10 +111,12 @@ function collect() {
       const lines = countLines(abs);
       if (lines > SPLIT_HINT_LINES) {
         oversized.set(rel, lines);
+      } else if (lines >= PROXIMITY_WARN_LINES) {
+        near.set(rel, lines);
       }
     }
   }
-  return { oversized, scanned };
+  return { oversized, near, scanned };
 }
 
 function main() {
@@ -113,7 +127,24 @@ function main() {
     });
   }
 
-  const { oversized, scanned } = collect();
+  const { oversized, near, scanned } = collect();
+
+  /** 提醒清单的作用域：暂存档只念**本次触碰**的文件 —— 仓库里常年住着十几个
+   * 800+ 的文件（#3473 当场盘点），全量照念等于每次提交刷一面墙，
+   * 教人把提醒读成背景噪声；全量档（`--report` / 平台侧）才是规划全景。 */
+  let scopeNote;
+  let nearList = [...near.entries()];
+  if (STAGED && !REPORT_ONLY) {
+    /* skipUnlessStagedTouches 在前面已经对「git 读不到」退过 2，这里理应拿得到；
+     * 万一还是 null，宁可退回全量清单（吵但不哑）—— 提醒读数静默消失
+     * 正是这一格要防的形态。 */
+    const staged = readStagedPaths(ROOT);
+    if (staged) {
+      const stagedSet = new Set(staged);
+      nearList = nearList.filter(([rel]) => stagedSet.has(rel));
+      scopeNote = "本次暂存触碰的文件";
+    }
+  }
 
   if (REPORT_ONLY) {
     console.log(
@@ -122,12 +153,29 @@ function main() {
     for (const [rel, lines] of [...oversized.entries()].sort((a, b) => b[1] - a[1])) {
       console.log(`  ${String(lines).padStart(6)}  ${rel}`);
     }
+    for (const line of renderProximityLines({
+      tag: "[infra-size]",
+      near: nearList,
+      warnAt: PROXIMITY_WARN_LINES,
+      hardAt: SPLIT_HINT_LINES,
+    })) {
+      console.log(line);
+    }
     return 0;
   }
 
   console.log(
     `[infra-size] 扫描 ${SCAN_ROOTS.map((s) => `${s.dir}/**`).join(" + ")}：${scanned} 个文件，超 ${SPLIT_HINT_LINES} 行的文件 ${oversized.size} 个`,
   );
+  for (const line of renderProximityLines({
+    tag: "[infra-size]",
+    near: nearList,
+    warnAt: PROXIMITY_WARN_LINES,
+    hardAt: SPLIT_HINT_LINES,
+    scopeNote,
+  })) {
+    console.log(line);
+  }
   if (oversized.size === 0) {
     console.log("[infra-size] OK");
     return 0;

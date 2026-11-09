@@ -500,6 +500,41 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       expect(code).toBe(0);
     });
 
+    /* ── 临近拆分提醒（ISSUE #3473）：≥800 进读数、不进 problems ──
+     * 899 停着不提醒 = 等撞闸才知道要拆。边界与 infra 档那份同口径：
+     * 提醒线 ≥800（800 整进、799 不进）、硬闸上界含 900（它不红但最该提醒）。 */
+    describe("R5 临近拆分提醒（≥800 行，只读数不阻断；ISSUE #3473）", () => {
+      it("850 行：退 0 且点名", () => {
+        writeLines("src/lib/comfyui/lifecycle.ts", 850);
+        const { code, output } = run();
+        expect(code).toBe(0);
+        expect(output).toContain("临近拆分提醒");
+        expect(output).toContain("src/lib/comfyui/lifecycle.ts");
+      });
+
+      it("799 行不提醒、800 行整提醒（下边界）", () => {
+        writeLines("src/lib/comfyui/lifecycle.ts", 799);
+        expect(run().output).not.toContain("临近拆分提醒");
+        writeLines("src/lib/comfyui/lifecycle.ts", 800);
+        expect(run().output).toContain("临近拆分提醒");
+      });
+
+      it("900 行整：提醒在、阻断不在", () => {
+        writeLines("src/lib/comfyui/lifecycle.ts", 900);
+        const { code, output } = run();
+        expect(code).toBe(0);
+        expect(output).toContain("临近拆分提醒");
+        expect(output).not.toContain("R5 超限文件");
+      });
+
+      it("测试文件不进提醒面（与 R5 同一张排除清单）", () => {
+        writeLines("src/lib/comfyui/huge.test.ts", 850);
+        const { code, output } = run();
+        expect(code).toBe(0);
+        expect(output).not.toContain("临近拆分提醒");
+      });
+    });
+
     it("测试文件不进扫描面（用例体量不是可维护性信号）", () => {
       writeLines("src/app/(main)/settings/hooks/use-settings-page.test.ts", 901);
       const { code, output } = run();

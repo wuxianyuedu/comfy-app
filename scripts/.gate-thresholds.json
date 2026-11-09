@@ -434,6 +434,26 @@
       "kind": "threshold",
       "strictness": "larger-is-stricter",
       "why": "逐跑取正文的上界（与 check-daily-attendance.mjs 的 FETCH_MAX_PAGES 同族：它决定**读到几跑**，不是松紧本身）。收紧 ⇒ 读到的样本变小，而这一档的结论主语就是「读到的那几跑」（headline 明写「最近读的 N 跑里…、未逐跑读 M 跑」，正是为了不把「我没读」念成「它没推」，#2392 那一族）；放宽 ⇒ 更容易在历史里撞到一次 present。"
+    },
+    {
+      "file": "scripts/check-file-structure.cjs",
+      "const": "PROXIMITY_WARN_LINES",
+      "value": 800,
+      "unit": "行",
+      "kind": "report",
+      "strictness": "n/a",
+      "group": "r5-proximity-lines",
+      "why": "R5 的临近拆分提醒线（#3473）：≥800 进「规划拆分」读数、不阻断 —— 调它动的是提醒时机，不是闸的松紧；与 infra 侧那份组内必须同数。"
+    },
+    {
+      "file": "scripts/check-infra-file-size.cjs",
+      "const": "PROXIMITY_WARN_LINES",
+      "value": 800,
+      "unit": "行",
+      "kind": "report",
+      "strictness": "n/a",
+      "group": "r5-proximity-lines",
+      "why": "基础设施档同一把提醒尺（#3473），与 R5 侧组内同数；--staged 档只念本次暂存触碰的文件。"
     }
   ],
   "$notCovered": {
