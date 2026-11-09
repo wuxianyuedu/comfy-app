@@ -10117,6 +10117,50 @@ eslint 配置）：本机 1s 级；用库里那条 bin 的预算仍与 a11y 同�
   D 组尾部与 `quality-gate` 的 `oxlintZeroRules`（实测约 155s，只在重档付；
   契约测试 `tests/check-oxlint-zero-rules.test.ts`）。
 
+**#3441「类型参数有默认值」不等于「可以交给空数组推断」：`no-unnecessary-type-arguments` 的例外口径。**
+
+- 症状（#3403 清污批当场踩到，本单补落档）：`@xyflow/react` 的签名是
+  `useEdgesState<EdgeType extends Edge = Edge>(initialEdges: EdgeType[])`。写
+  `useEdgesState<Edge>([])` 会被 `typescript/no-unnecessary-type-arguments` 报
+  「`Edge` 是该类型参数的默认值，可以省略」；真删掉 `<Edge>` 之后类型**不会回落到
+  默认值 `Edge`**——`EdgeType` 由实参 `[]` 反推成 `never`，`setEdges` 收
+  `SetStateAction<never[]>`，之后塞 `Edge[]` 全线报错。规则只比「显式实参 == 默认值」，
+  看不见推断发生在哪个位置，所以这条提示对 `f<T = Default>([])` 恒偏；按提示改反而是
+  「过了 lint 崩了类型」。
+- 可复算读数（TypeScript 7.0.2 / oxlint 1.90.0；单规则 `--type-aware` 探针
+  `OXLINT_RULE=typescript/no-unnecessary-type-arguments` + `pnpm exec tsc --noEmit`）。
+  三份同族夹具必须放 `tests/` 下而非点开头目录——TS 的 `**/*.ts(x)` glob 跳过点目录，
+  放错会得到「`tsc exit=0`」的假绿：
+
+  | 夹具 | 形态 | 规则探针 | `tsc --noEmit` |
+  | --- | --- | --- | --- |
+  | `with-arg.tsx` | `useEdgesState<Edge>([])` | 1 命中：`This is the default value for this type parameter, so it can be omitted.` | 绿 |
+  | `no-arg.tsx` | `useEdgesState([])` 后 `setEdges(next: Edge[])` | 0 命中（另报 `typescript(TS2345)`） | 红：`TS2345: Argument of type 'Edge[]' is not assignable to parameter of type 'SetStateAction<never[]>'` |
+  | `typed-initial.tsx` | 显式初值（见下） | 0 命中 | 绿 |
+
+- **本仓拍板写法**：把类型交给初值变量，不带类型参数、不带类型断言、不加 disable——
+  规则不报，`EdgeType` 也确实推成 `Edge`。
+
+  ```ts
+  // 空数组会把类型参数推成 never[]，用显式类型的初值保住 Edge[]（省掉泛型参数仍等价）
+  const initialEdges: Edge[] = [];
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  ```
+
+  两处现场已由 #3403 按此形态落地：`src/components/studio/ProjectCanvas.tsx`、
+  `src/components/studio/workflow-editor/WorkflowEditorInner.tsx`。新写同类调用点直接照抄，
+  不要先按 lint 提示删泛型再靠 `tsc` 把类型崩塌找回来。
+- **为什么不给 `ZERO_RULES` 探针加「按形状豁免」**：规则实现在上游 oxlint、不在仓里；
+  要认 `f<T = Default>([])` 就必须在探针里另写一套 AST / 形状扫描器，正是硬规则 24 末句与
+  `AGENTS.md`「遇到代码怪癖：当场立案，不就地绕开」那节明禁的「新造判据抓怪癖」——
+  误报一片且本身会静默失效。`ZERO_RULES` 是**规则名**清单，不掺调用点形状；怪癖的归宿是
+  口径文档 + 单子，不是门禁。`scripts/check-oxlint-zero-rules.mjs` 文件头指向本节，改规则
+  清单时能看到这条例外。
+- **复评触发**：上游 `typescript/no-unnecessary-type-arguments` 开始把「默认值 + 空数组实参」
+  纳入判断，或 `@xyflow/react` 把 `useEdgesState` 改成不靠初值反推类型参数时，重跑上面三份
+  夹具；只有当 `with-arg.tsx` 不再被报、且 `no-arg.tsx` 的 `tsc` 也是绿的时候，才撤编本段
+  并允许调用点用最简形态。在那之前本节是这条规则的固定读者面。
+
 #### 13.6.1 master 只接受「分支开发 → PR → 合并」（机器强制）
 
 只用「禁止直接 push」约束不住主干：本地 `git commit` 到 `master` 完全不经过任何
