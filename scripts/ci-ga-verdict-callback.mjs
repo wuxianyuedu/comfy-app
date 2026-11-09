@@ -8,8 +8,9 @@
  * GitHub Actions conclusion（45m 预算）那一格已停用 —— 自托管机到 github.com 的
  * 出网间歇不通，正是本单要解的那一格。探针在 #3374 上验过：外部用
  * `repo-cnb-trigger:rw` 的令牌调 `POST /{repo}/-/build/start`，带
- * `event=api_trigger_ga_verdict`、`sha=<PR 预合并 sha>`、`env.GA_VERDICT=<结论>`，
- * 平台把这条短流水线的终态自动写进该 sha 的 commit-statuses。CNB 侧
+ * `event=api_trigger_ga_verdict`、`sha=<PR 预合并 sha>`、`env.GA_VERDICT=<结论>`、
+ * `env.GA_CALLBACK_SHA=<同一个预合并 sha>`，平台把这条短流水线的终态自动写进
+ * 该 sha 的 commit-statuses。CNB 侧
  * `GA 回调结论回读`（`ci-ga-verdict-readout.mjs`）站内读这条 status 折退码，
  * 于是「读回」变成「送回」，CNB 机器不必再出网去读 GitHub。
  *
@@ -69,6 +70,9 @@ export const CALLBACK_EVENT = "api_trigger_ga_verdict";
 
 /** 回调 build 读的那枚环境变量名（与 `.cnb.yml` 内联判定同源）。 */
 export const VERDICT_ENV_KEY = "GA_VERDICT";
+
+/** 回调 build 读的「本条 build 绑定到哪个 sha」环境变量名（与 `.cnb.yml` 内联日志同源）。 */
+export const SHA_ENV_KEY = "GA_CALLBACK_SHA";
 
 /** CNB OpenAPI 的缺省服务地址（平台侧可用 `CNB_API_ENDPOINT` 覆盖，同 `ci-token-scopes.mjs`）。 */
 export const DEFAULT_API_ENDPOINT = "https://api.cnb.cool";
@@ -196,7 +200,9 @@ export function resolveCallbackContext({ argv, env }) {
  * 拼 `POST /{repo}/-/build/start` 的请求体（形状逐字对 `dto.StartBuildReq`）。
  *
  * `sync: "false"`：发完就走，不等短流水线跑完 —— GA 收尾 job 不该被 CNB 那几秒
- * 占着。`sha` 绑预合并 sha，`env` 送结论、PR 号与角色。
+ * 占着。`sha` 绑预合并 sha，`env` 送结论、PR 号、角色与**同一个 sha** ——
+ * 后者让 CNB 侧回调 build 的日志能念出「这条 build 绑的是哪笔」；
+ * `CNB_COMMIT` 在 `api_trigger*` 事件上平台没有明文取值保证，不拿它当唯一来源。
  *
  * @param {{sha: string, pr: string, verdict: string}} ctx
  * @returns {{url: string, init: {method: string, headers: Record<string, string>, body: string}}}
@@ -207,6 +213,7 @@ export function startBuildRequest({ pr, sha, verdict }) {
     env: {
       GA_PR_NUMBER: pr,
       GA_ROLE: "callback",
+      [SHA_ENV_KEY]: sha,
       [VERDICT_ENV_KEY]: verdict,
     },
     event: CALLBACK_EVENT,

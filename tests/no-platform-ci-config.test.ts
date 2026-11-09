@@ -1697,6 +1697,28 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toEqual([]);
   });
 
+  it("GA 回调 build 的判定脚本念得出自己绑在哪个 sha 上（CNB 侧日志身份读数）", () => {
+    /* `git.enable: false` 的回调 build 没有仓库代码，判定逻辑内联在 `.cnb.yml`。
+     * 以前只打 `conclusion`，排查「这条回调绑的是哪笔预合并 sha」得跳去 GA run
+     * 页面翻（#3378 03:48 贴图）。GA 侧把 sha 随 `env.GA_CALLBACK_SHA` 送进来后，
+     * 这份 script 必须把它打进日志，并保留与 `CNB_COMMIT` 的交叉核对 ——
+     * 平台对 `api_trigger*` 事件的 `CNB_COMMIT` 没有明文取值保证。 */
+    const script = stageScriptLine(readRegisteredConfig(), "GA 结论判定");
+    expect(script, "解析不出 `GA 结论判定` 的 script").not.toBe("");
+    expect(script).toContain("$env:GA_CALLBACK_SHA");
+    expect(script).toContain("$env:GA_PR_NUMBER");
+    expect(script).toContain("$env:CNB_COMMIT");
+    expect(script).toContain("[ga-verdict] callback sha=");
+    expect(script).toContain("[ga-verdict] callback cnb_commit=");
+    expect(script).toContain("sha_check=");
+    /* 三态退码一字不许动：身份读数只是日志，不参与判定。 */
+    expect(script).toContain("exit 2");
+    expect(script).toContain("exit 0");
+    expect(script).toContain("exit 1");
+    expect(script).toContain("conclusion=$v sha=$short -> success");
+    expect(script).toContain("conclusion=$v sha=$short -> failure");
+  });
+
   it("Python 探测入口被登记在 env 里，且真的在盘上", () => {
     const text = readRegisteredConfig();
     const m = /^\s*COMFYAPP_CI_PYTHON_PROBE:\s*(?<path>\S+)\s*$/m.exec(text);

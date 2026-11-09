@@ -2721,6 +2721,13 @@ master:
   # 三态（fail-closed）：`GA_VERDICT` 明确是绿词（success/neutral/skipped）
   # ⇒ exit 0；是红词或缺席 ⇒ exit 1；`GA_ROLE` 不是 callback ⇒ exit 2
   # （没判过 ≠ 判过）。
+  #
+  # **日志身份读数**：`env` 里除 `GA_VERDICT` / `GA_ROLE` / `GA_PR_NUMBER` 外，
+  # `scripts/ci-ga-verdict-callback.mjs` 还带 `GA_CALLBACK_SHA=<预合并 sha>` ——
+  # 这条短 build 绑的是哪笔，CNB 侧日志自己念得出来，不必跳去 GA run 页面翻。
+  # `CNB_COMMIT` 一并打印作交叉核对：文档没给 `api_trigger*` 事件的取值保证，
+  # 两者不一致时以 `GA_CALLBACK_SHA` 为准并明写 `mismatch`，别把绑错的 sha
+  # 读成「平台又合成了一棵新树」。只加日志，不改三态退码与 `GA_VERDICT` 折叠。
   api_trigger_ga_verdict:
     - <<: *common
       name: GA 判决回调（骨架·休眠）
@@ -2737,6 +2744,17 @@ master:
           script: |
             $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
             $role = [string]$env:GA_ROLE
+            $sha = [string]$env:GA_CALLBACK_SHA
+            $pr = [string]$env:GA_PR_NUMBER
+            $cnbSha = [string]$env:CNB_COMMIT
+            $short = $sha
+            if ($short.Length -gt 8) { $short = $short.Substring(0, 8) }
+            $cnbShort = $cnbSha
+            if ($cnbShort.Length -gt 8) { $cnbShort = $cnbShort.Substring(0, 8) }
+            $match = 'match'
+            if ($sha -ne '' -and $cnbSha -ne '' -and $sha -ne $cnbSha) { $match = 'mismatch' }
+            Write-Host "[ga-verdict] callback sha=$sha (short=$short) pr=$pr role=$role"
+            Write-Host "[ga-verdict] callback cnb_commit=$cnbSha (short=$cnbShort) sha_check=$match"
             if ($role -ne 'callback') {
               Write-Host "[ga-verdict] role is not callback, inconclusive (not a pass)"
               exit 2
@@ -2744,9 +2762,9 @@ master:
             $v = ([string]$env:GA_VERDICT).ToLower()
             $green = @('success', 'neutral', 'skipped') -contains $v
             if ($green) {
-              Write-Host "[ga-verdict] callback conclusion=$v -> success"
+              Write-Host "[ga-verdict] callback conclusion=$v sha=$short -> success"
               exit 0
             }
-            Write-Host "[ga-verdict] callback conclusion=$v -> failure"
+            Write-Host "[ga-verdict] callback conclusion=$v sha=$short -> failure"
             exit 1
           timeout: 5m
