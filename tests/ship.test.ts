@@ -3934,6 +3934,139 @@ describe("ISSUE #3083：冲突三态分型与判决 / 合并两格的念法", ()
   });
 });
 
+/**
+ * ISSUE #3465：合并验真读的「主干顶端」必须来自合并回执的 sha，不是刷新前的
+ * `origin/master`。squash 合并回执与 git 服务端 ref 传播之间有窗口：窗口内本地那条
+ * 远端跟踪引用仍指向上一笔，拿它查本轮净新增的碎片必然得 false ⇒ 把「合上了」
+ * 读成红。这组用例把「按哪一笔查」「查不到时算不算红」两件事分别钉住。
+ */
+describe("ISSUE #3465：合并验真读的是合并后的那一笔提交", () => {
+  const MERGE_SHA = "b7663a9b1234567890abcdef1234567890abcdef12";
+  const ok = (stdout = ""): FakeResult => ({ status: 0, stdout, stderr: "", error: null });
+  const cnbEnvelope = (data: unknown) => ok(JSON.stringify({ status: 200, data }));
+
+  /** 只答合并那一段要问的几件事；`cat-file -e` 按参数形状分别给结论。 */
+  function mergeIo(opts: {
+    /** 合并提交对象在不在本地（模拟 ref 传播窗口）。 */
+    commitLocal?: boolean;
+    /** 碎片在不在合并提交里。 */
+    fragInCommit?: boolean;
+    /** PR 回读的 is_merged；缺键用 undefined。 */
+    isMerged?: boolean | undefined;
+    /** 合并回执给不给 sha。 */
+    withSha?: boolean;
+  }) {
+    const log: Array<string> = [];
+    const calls: Array<string> = [];
+    const run = (cmd: string, args: Array<string>): FakeResult => {
+      calls.push([cmd, ...args].join(" "));
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "merge-pull") {
+        return cnbEnvelope({
+          merged: true,
+          ...(opts.withSha === false ? {} : { sha: MERGE_SHA }),
+        });
+      }
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "get-pull") {
+        /* 合并前的标题回读、合并后的验真回读共用这一问；给一份可合并 / 已合并的形状。 */
+        return cnbEnvelope({
+          number: 3464,
+          mergeable_state: "mergeable",
+          blocked_on: "",
+          is_merged: opts.isMerged ?? true,
+          state: "closed",
+          title: "revert(ci): 撤掉 push 档受控造红探针 (#3464)",
+          base: { ref: "refs/heads/master" },
+        });
+      }
+      if (cmd === "git" && args[0] === "cat-file" && args[2]?.startsWith(MERGE_SHA)) {
+        const spec = args[2];
+        if (spec.endsWith("^{commit}")) {
+          return opts.commitLocal === false ? { ...ok(), status: 1 } : ok();
+        }
+        return opts.fragInCommit === false ? { ...ok(), status: 1 } : ok();
+      }
+      /* 旧引用一律判「查不到」：这一组就是要证明验真不再问它。 */
+      if (cmd === "git" && args[0] === "cat-file" && args[2]?.includes("origin/master")) {
+        return { ...ok(), status: 1 };
+      }
+      return ok();
+    };
+    return { run, log, calls };
+  }
+
+  const ctx = (f: ReturnType<typeof mergeIo>) => ({
+    run: f.run,
+    log: (s: string) => f.log.push(s),
+    slug: "moon-read/comfy-app-t3",
+    number: 3464,
+    frags: ["changelog.d/3457-push-real-red-revert.md"],
+    baseRef: "origin/master",
+    up: { remote: "origin", base: "origin/master", source: "upstream" },
+    merge: true,
+    buildState: "green" as const,
+    explicitTitle: "revert(ci): 撤掉 push 档受控造红探针",
+  });
+
+  it("合并提交对象已在本地、碎片在其中 ⇒ 退 0；且 cat-file 查的是 mergeSha，不是 origin/master", () => {
+    const f = mergeIo({ commitLocal: true, fragInCommit: true, isMerged: true });
+    expect(mergeAndVerify(ctx(f))).toBe(CODE.GREEN);
+    const all = f.log.join("\n");
+    expect(all).toContain("合并提交可解析=true");
+    expect(all).toContain("碎片在合并提交里=true");
+    /* 钉住 #3465 的根因：验真那一查必须按合并回执的 sha 问，不许再问陈旧引用。 */
+    const checks = f.calls.filter((c) => c.startsWith("git cat-file -e "));
+    expect(checks.length).toBeGreaterThan(0);
+    expect(checks.every((c) => c.includes(MERGE_SHA))).toBe(true);
+    expect(checks.some((c) => c.includes("origin/master"))).toBe(false);
+  });
+
+  it("窗口内合并对象还没同步到本地 ⇒ 退 5「没有读数」，不把 is_merged=true 读成红", () => {
+    const f = mergeIo({ commitLocal: false, isMerged: true });
+    expect(mergeAndVerify(ctx(f))).toBe(CODE.READOUT_MISSING);
+    const all = f.log.join("\n");
+    expect(all).toContain("合并提交可解析=false");
+    expect(all).toContain("碎片在合并提交里=(未判定)");
+    expect(all).toContain("还没同步到本检出");
+    expect(all).toContain("不把「引用未刷新」读成「没合上」");
+  });
+
+  it("回执没给 sha ⇒ 同样没有测量对象，退 5 而不是红", () => {
+    const f = mergeIo({ withSha: false, isMerged: true });
+    expect(mergeAndVerify(ctx(f))).toBe(CODE.READOUT_MISSING);
+    expect(f.log.join("\n")).toContain("合并提交可解析=false");
+  });
+
+  it("对象在、碎片确实不在 ⇒ 退 1（真事实为红，这一格不因新口径被绕过）", () => {
+    const f = mergeIo({ commitLocal: true, fragInCommit: false, isMerged: true });
+    expect(mergeAndVerify(ctx(f))).toBe(CODE.RED);
+    const all = f.log.join("\n");
+    expect(all).toContain("合并提交可解析=true");
+    expect(all).toContain("碎片在合并提交里=false");
+  });
+
+  it("PR 回读 is_merged=false ⇒ 仍是红（平台明确说没合上，与窗口那一格分开）", () => {
+    const f = mergeIo({ commitLocal: true, fragInCommit: true, isMerged: false });
+    expect(mergeAndVerify(ctx(f))).toBe(CODE.RED);
+  });
+
+  it("is_merged 缺键 ⇒ 退 5，不按「没合上」落红（与 #3059 同一口径）", () => {
+    const f = mergeIo({ commitLocal: true, fragInCommit: true, isMerged: undefined });
+    /* 夹具的 `?? true` 会把 undefined 变成 true，这里直接覆盖 get-pull 的应答。 */
+    const run = (cmd: string, args: Array<string>): FakeResult => {
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "get-pull") {
+        return cnbEnvelope({
+          number: 3464,
+          mergeable_state: "mergeable",
+          state: "closed",
+          title: "t",
+        });
+      }
+      return f.run(cmd, args);
+    };
+    expect(mergeAndVerify({ ...ctx(f), run })).toBe(CODE.READOUT_MISSING);
+  });
+});
+
 describe("parseSlug：https 与 ssh 两种 origin 都要认", () => {
   it("取不到就回 null（不猜一个仓库名 —— 猜错会把 PR 开到别处）", () => {
     expect(parseSlug("https://cnb.cool/moon-read/comfy-app-t3")).toBe("moon-read/comfy-app-t3");
