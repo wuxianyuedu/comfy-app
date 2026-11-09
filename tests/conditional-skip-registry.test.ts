@@ -43,6 +43,17 @@ const REGISTERED: Array<Registration> = [
       "同一份结论）不分平台，始终在判",
   },
   {
+    file: "tests/build-all-failure-hint.test.ts",
+    guard: "hosts.length === 0",
+    count: 1,
+    tier: "env",
+    why:
+      "没有 PowerShell 宿主时，`build-all.ps1` 的真宿主 Parser sweep 跑不了（判据本就长在 " +
+      "Windows 双击构建侧，与 log-common-invoke 同族）；同文件 6 条静态形态契约（三档失败出口 / " +
+      "日志尾部读取面 / os error 5 壳提示 / 失败仍先于发布 / UTF-8 BOM）不分平台，始终在判。" +
+      "按 §13.6.3 三态口径，没跑起来的那一格如实跳过，不读成「语法判过了」（ISSUE #3468）",
+  },
+  {
     file: "tests/quality-gate-ps-precheck.test.ts",
     guard: "!hasPs",
     count: 3,
