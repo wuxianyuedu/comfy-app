@@ -1757,6 +1757,33 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     );
   });
 
+  it("GA 判红评论并列念送达/判决：relay step 带 GA_JOB_RESULTS，承重一字不动（ISSUE #3452）", () => {
+    /* commit-status 那条 `error [2.2s]` 是 GA 判决结论的镜像，不是回调腿挂了；
+     * 平台这格 description 没有写入口（Swagger 三条 commit-status 路径全是 get），
+     * 承重退码更不许动，于是把解释念进 #3437 那条本来就会发的 PR 评论。
+     * 这几条钉住「env 接线在场 + 复用同一份结论折叠 + 不碰承重」。 */
+    const workflow = readFileSync(path.join(ROOT, ".github/workflows/pr-gate.yml"), "utf8");
+    const relay = readFileSync(path.join(ROOT, "scripts/ci-ga-logs-relay.mjs"), "utf8");
+    /* relay step 带 GA_JOB_RESULTS（与结论回调那一跳同源），评论才念得出本次 verdict。 */
+    const relayBlock = workflow.slice(workflow.indexOf("把 GA 判红日志正文搬到 CNB"));
+    expect(relayBlock).toContain("GA_JOB_RESULTS: ${{ join(needs.*.result, ',') }}");
+    /* 复用优先：结论折叠 import callback 已导出的纯函数，不另抄词表（§12.18）。 */
+    expect(relay).toContain("conclusionFromJobResults");
+    expect(relay).toContain("verdictFromConclusion");
+    expect(relay).toContain('from "./ci-ga-verdict-callback.mjs"');
+    /* 评论里并列念两件事，且 marker 形状不动（本地读者只认 marker + 附件链）。 */
+    expect(relay).toContain("**送达**");
+    expect(relay).toContain("**判决**");
+    expect(relay).toContain("GA 判决结论的镜像");
+    /* 承重一字不动：不写 commit-statuses、不改流水线 name、不改三态退码。 */
+    expect(readRegisteredConfig()).toContain("name: GA 判决回调（骨架·休眠）");
+    expect(relay).toContain("不碰承重");
+    const script = stageScriptLine(readRegisteredConfig(), "GA 结论判定");
+    expect(script).toContain("exit 0");
+    expect(script).toContain("exit 1");
+    expect(script).toContain("exit 2");
+  });
+
   it("Python 探测入口被登记在 env 里，且真的在盘上", () => {
     const text = readRegisteredConfig();
     const m = /^\s*COMFYAPP_CI_PYTHON_PROBE:\s*(?<path>\S+)\s*$/m.exec(text);
