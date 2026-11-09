@@ -120,8 +120,12 @@ export const projectRouter = createTRPCRouter({
           steps: params.steps ?? null,
           cfg: params.cfg ?? null,
           checkpoint: params.checkpoint ?? null,
-          /* SAFETY: 类型断言已复核 */
-          referenceImages: (task.referenceImages as Array<string> | null) ?? [],
+          /* 引擎写入的是 string 列表；非字符串数组（损坏行）按空处理，不再原样透传。 */
+          referenceImages:
+            Array.isArray(task.referenceImages) &&
+            task.referenceImages.every((img) => typeof img === "string")
+              ? task.referenceImages
+              : [],
           parentId: task.parentId ?? null,
           createdAt: task.createdAt,
           images: task.images.map((img) => ({

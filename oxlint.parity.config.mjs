@@ -868,26 +868,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/server/agent/run-engine.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/api/routers/generate.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/api/routers/llm.test.ts", // 存量 9 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/api/routers/llm.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/api/routers/model.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/api/routers/project.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/api/routers/run.test.ts", // 存量 5 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/api/routers/run.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/api/routers/series-generation.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/api/routers/series.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/api/routers/series.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/api/routers/setting.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/api/routers/skill.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/api/routers/task.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/api/routers/task.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/api/routers/workflow-list.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/api/routers/workflow-mutations.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/api/routers/workflow.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/api/trpc.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/db.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "src/server/film/compose-film.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/server/film/orchestrator.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "src/server/film/orchestrator.ts", // 存量 9 处 · 清账目标 B5 · 新代码不禁用

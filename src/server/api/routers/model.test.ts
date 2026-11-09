@@ -119,7 +119,7 @@ describe("model.list / sync —— 上下文与透传", () => {
     const list = vi
       .spyOn(modelRepository, "list")
       /* SAFETY: 类型断言已复核 */
-      .mockResolvedValue([] as never);
+      .mockResolvedValue([]);
     await caller().list({ type: "checkpoints", q: "sd" });
     expect(list).toHaveBeenCalledWith({ type: "checkpoints", q: "sd" });
     await caller().list();

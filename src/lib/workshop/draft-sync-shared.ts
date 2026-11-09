@@ -4,6 +4,7 @@
 // 与纯校验函数，同时被客户端 hook 与服务端 route/repository 引用，保证两侧
 // 只对齐一份契约（风格对齐 api-channel-shared.ts —— 纯函数、客户端可安全 import）。
 import { asRecord } from "~/lib/is-record";
+import { isProjectType } from "~/lib/workshop/types";
 import type { Character, ProjectMeta, Scene, Shot } from "~/lib/workshop/types";
 
 /** 与 use-workshop-pipeline 中 localStorage WorkshopDraft 对齐的线上结构。 */
@@ -49,16 +50,6 @@ export function draftHasContent(draft: WorkshopDraftDto): boolean {
     draft.scenes.length > 0 ||
     draft.characters.length > 0 ||
     draft.shots.length > 0
-  );
-}
-
-/* SAFETY: 类型断言已复核 */
-const PROJECT_TYPES = ["short_video", "micro_film", "animation", "ad", "comic", "other"] as const;
-
-function isProjectType(v: unknown): v is ProjectMeta["type"] {
-  return (
-    /* SAFETY: 类型断言已复核 */
-    typeof v === "string" && (PROJECT_TYPES as ReadonlyArray<string>).includes(v)
   );
 }
 

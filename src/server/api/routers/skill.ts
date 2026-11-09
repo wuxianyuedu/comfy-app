@@ -24,16 +24,15 @@ export const skillRouter = createTRPCRouter({
         includeInactive: input?.all === true,
       });
       const parsed = skills.map((skill) => {
-        /* SAFETY: 类型断言已复核 */
-        const obj = skill as unknown as Record<string, unknown>;
+        /* tags 列存的是 JSON 字符串（仓储侧 `like` 直接对列做模糊匹配），出口解回值；
+         * 行本身已是 typed 对象，直接 spread，不再经 Record 断言绕行。 */
         let tags: unknown;
         try {
-          /* SAFETY: 类型断言已复核 */
-          tags = JSON.parse((obj.tags as string) ?? "[]");
+          tags = JSON.parse(skill.tags ?? "[]");
         } catch {
           tags = [];
         }
-        return { ...obj, tags };
+        return { ...skill, tags };
       });
       const categories = await skillRepository.groupByActiveCategory();
       return {

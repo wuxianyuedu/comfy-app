@@ -23,9 +23,23 @@ import {
 } from "~/lib/workflow/workflow-types";
 import { parseWorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import { workflowParamMapInputSchema } from "~/lib/workflow/workflow-param-map";
+import { isPlainRecord, isUnknownArray } from "~/lib/is-record";
 import path from "node:path";
 
 import { isWithinAllowedLocalWorkflowRoot } from "./workflow-local-roots";
+
+/** 坐标覆盖表形状：`Record<string, [number, number]>`（positions 的库内 JSON blob）。
+ * 形状不符时调用点按「没有覆盖」处理 —— 合法输入结果与旧断言一致，非法形状不再
+ * 把垃圾值原样写进节点坐标。 */
+function isPositionMap(value: unknown): value is Record<string, [number, number]> {
+  if (!isPlainRecord(value)) {
+    return false;
+  }
+  return Object.values(value).every(
+    (v) =>
+      Array.isArray(v) && v.length === 2 && typeof v[0] === "number" && typeof v[1] === "number",
+  );
+}
 
 export const workflowMutationProcedures = {
   /* POST /api/workflows —— 新建：create/import (API graph, RAW UI json, or local file) */
@@ -211,13 +225,12 @@ export const workflowMutationProcedures = {
         /* 保存 IO 映射时把类型 / 默认值固化进库（fix 4）：用图里当前字面量补全
          * 缺失的 type / defaultValue，离线也能做，不依赖 object_info 重算。 */
         workflowIO:
-          /* SAFETY: 类型断言已复核 */
           rest.workflowIO === undefined
             ? undefined
             : persistEnrichedWorkflowIO(
                 /* IO 的类型 / 默认值从 RAW 原件的字面量与 object_info 富化，
                  * 存库不再有第二份可执行的 API 图。 */
-                (existing.rawJson as Record<string, unknown> | null | undefined) ?? null,
+                isPlainRecord(existing.rawJson) ? existing.rawJson : null,
                 parseWorkflowIOMap(rest.workflowIO),
               ),
       };
@@ -240,13 +253,7 @@ export const workflowMutationProcedures = {
         /* 重置是「删除覆盖」这一件事本身，与写入互斥：同时传 positions 时
          *  以重置为准，否则刚清掉的键又被写回来，按钮看起来时灵时不灵。 */
         patch.positions = undefined;
-        /* SAFETY: 类型断言已复核 */
-        const cur =
-          typeof existing.positions === "object" &&
-          existing.positions !== null &&
-          !Array.isArray(existing.positions)
-            ? (existing.positions as Record<string, unknown>)
-            : {};
+        const cur = isPlainRecord(existing.positions) ? existing.positions : {};
         const next: Record<string, unknown> = {};
         if (scope) {
           const prefix = `${scope}:`;
@@ -282,26 +289,17 @@ export const workflowMutationProcedures = {
       }
 
       // 位置的合并 / 替换，以及把分组与便签写回 rawJson
-      let nextRawJson: Record<string, unknown> | null = null;
-      if (
-        typeof existing.rawJson === "object" &&
-        existing.rawJson !== null &&
-        !Array.isArray(existing.rawJson)
-      ) {
-        /* SAFETY: 类型断言已复核 */
-        nextRawJson = existing.rawJson as Record<string, unknown>;
-      }
+      const nextRawJson: Record<string, unknown> | null = isPlainRecord(existing.rawJson)
+        ? existing.rawJson
+        : null;
       const writePositions =
         input.positions !== undefined && input.resetPositionsScope === undefined;
       if (writePositions || groups !== undefined || notes !== undefined) {
-        nextRawJson = nextRawJson ? { ...nextRawJson } : {};
-        /* SAFETY: 类型断言已复核 */
-        const nodes = Array.isArray(nextRawJson.nodes)
-          ? [...(nextRawJson.nodes as Array<unknown>)]
-          : [];
+        const writable = nextRawJson ? { ...nextRawJson } : {};
+        const rawNodes: unknown = writable.nodes;
+        const nodes: Array<unknown> = isUnknownArray(rawNodes) ? [...rawNodes] : [];
         if (writePositions) {
-          /* SAFETY: 类型断言已复核 */
-          const posMap = input.positions as Record<string, [number, number]>;
+          const posMap = isPositionMap(input.positions) ? input.positions : {};
           for (let i = 0; i < nodes.length; i++) {
             const nd = nodes[i];
             if (typeof nd !== "object" || nd === null) {
@@ -318,30 +316,22 @@ export const workflowMutationProcedures = {
           }
         }
         if (groups !== undefined) {
-          nextRawJson.groups = groups;
+          writable.groups = groups;
         }
         if (notes !== undefined) {
-          nextRawJson.notes = notes;
+          writable.notes = notes;
         }
         if (nodes.length > 0) {
-          nextRawJson.nodes = nodes;
+          writable.nodes = nodes;
         }
-        patch.rawJson = nextRawJson;
+        patch.rawJson = writable;
         if (writePositions) {
           if (mergePositions === true) {
             // 合并进已有的 positions 列（从子图 / RAW 视图拖单个键时，
             // 不能把另一个命名空间一起抹掉）。
-            /* SAFETY: 类型断言已复核 */
-            const cur =
-              typeof existing.positions === "object" &&
-              existing.positions !== null &&
-              !Array.isArray(existing.positions)
-                ? (existing.positions as Record<string, [number, number]>)
-                : {};
-            /* SAFETY: 类型断言已复核 */
             patch.positions = {
-              ...cur,
-              ...(input.positions as Record<string, [number, number]>),
+              ...(isPositionMap(existing.positions) ? existing.positions : {}),
+              ...(isPositionMap(input.positions) ? input.positions : {}),
             };
           } else {
             patch.positions = input.positions;
