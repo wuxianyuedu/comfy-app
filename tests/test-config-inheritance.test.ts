@@ -38,6 +38,11 @@ const SHARED_EXPECTATIONS = {
   testTimeout: resolveTimeoutBudget(process.env.COMFY_TEST_TIMEOUT_SCALE).testTimeout,
   hookTimeout: resolveTimeoutBudget(process.env.COMFY_TEST_TIMEOUT_SCALE).hookTimeout,
   maxWorkers: ROOT_WORKERS,
+  /* `reporters`（2026-11-09）：显式钉 `["default"]`，关掉 vitest 在 `GITHUB_ACTIONS=true`
+   * 下自动追加的 `github-actions` reporter —— 它每个 vitest 进程各往 `$GITHUB_STEP_SUMMARY`
+   * 写一份 `Vitest Test Report`，一次 job 几个进程就有几段互相矛盾的计数。两档都要这份
+   * 钉法，所以它是共享项；判据 `tests/vitest-gha-summary.test.ts` 从终态正面钉。 */
+  reporters: ["default"],
 } as const;
 
 /** `expect.poll` 的预算（对象形状，单独比）。 */
@@ -106,6 +111,13 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
       expect(cfg.testTimeout, prefix).toBe(SHARED_EXPECTATIONS.testTimeout);
       expect(cfg.hookTimeout, prefix).toBe(SHARED_EXPECTATIONS.hookTimeout);
       expect(cfg.maxWorkers, prefix).toBe(SHARED_EXPECTATIONS.maxWorkers);
+      /* vitest 解析后把 `reporters` 归一成 `[名字, 选项?]` 元组数组 —— 按名字归一后比，
+       * 否则这条判据红在「配置写法」而不是「这一档拿没拿到」（同 setupFiles 的归一口径）。 */
+      /* SAFETY: 类型断言已复核 */
+      const reporterNames = (cfg.reporters as Array<unknown>).map((r) =>
+        Array.isArray(r) ? r[0] : r,
+      );
+      expect(reporterNames, prefix).toEqual(SHARED_EXPECTATIONS.reporters);
       /* SAFETY: 类型断言已复核 */
       expect((cfg.expect as { poll?: unknown } | undefined)?.poll, prefix).toEqual(EXPECT_POLL);
     }

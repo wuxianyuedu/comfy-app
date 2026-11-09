@@ -11,6 +11,9 @@
   正面判据 `tests/vitest-gha-summary.test.ts`：带 `GITHUB_ACTIONS=true` 与真
   `$GITHUB_STEP_SUMMARY` 起子进程跑一次，摘要里不许出现 `Vitest Test Report`（反向实测：
   配置改回去它就红；子进程命令行**不许**传 `--reporter`，会整个覆盖配置让这条永远绿）。
+  `reporters` 按仓库判据登记进 `tests/test-config-inheritance.test.ts` 的
+  `SHARED_EXPECTATIONS`（两档都要这份钉法，逐档断言随表自动跟上）——
+  「新增根级项先回答它是不是共享项」那条判据正拦的是这个。
 - **CI（`ci-step-verdict.mjs` 摘要版式）**：标题带三态图标（✅ 通过 / ⚠️ 没判 —— 刻意
   不是 ❌，它不是红也不是通过 / ❌ 红）；「命中行」只在红或没判时给（通过的格不再印一行
   `ok`）；「末尾 15 行」只在命中行之外还有真实内容时出现（此前无条件输出，输出短时与
