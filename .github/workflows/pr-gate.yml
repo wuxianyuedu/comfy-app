@@ -474,6 +474,13 @@ jobs:
       # ⚠️ 首跑复验出口：`actions: read` 能不能读到同 run 的 job logs、以及
       # `CNB_ISSUE_TOKEN` 在 PR 事件上带不带 notes 写权，得看这一跑的 stage 读数
       # （`[ga-logs-relay] 已搬到 CNB` / 前提不成立那几行）；没坐实前不改承重。
+      #
+      # ISSUE #3452：评论里并列念「送达 / 判决」两件事。commit-status 那格叫
+      # 「GA 判决回调」、显示 `error [2.2s]`，读起来像回调腿挂了；它其实是
+      # **GA 判决结论的镜像**（红 = GA 判红生效）。平台这格 description 没有写入口
+      # （Swagger 三条 commit-status 路径全是 get），承重退码更一字不能动，
+      # 于是把解释念进这条本来就会发的 PR 评论。`GA_JOB_RESULTS` 与结论回调
+      # 那一跳同源，脚本复用同一份结论折叠，不另立判据。判绿时不发评论（无失败 job）。
       - name: 把 GA 判红日志正文搬到 CNB
         if: always()
         continue-on-error: true
@@ -483,4 +490,5 @@ jobs:
           CNB_PULL_REQUEST_IID: ${{ github.event.client_payload.pr_number || '' }}
           CNB_PULL_REQUEST_MERGE_SHA: ${{ github.event.client_payload.cnb_merge_sha || '' }}
           GITHUB_TOKEN: ${{ github.token }}
+          GA_JOB_RESULTS: ${{ join(needs.*.result, ',') }}
         run: node scripts/ci-ga-logs-relay.mjs

@@ -8,7 +8,8 @@
  *   ④ 脱敏：正文里的令牌形状 / env 形状进 CNB 之前抹成 `<redacted>`；
  *   ⑤ 只搬失败 job：判绿的 job 不进包；没有失败 job ⇒ 不发评论；
  *   ⑥ `relayLogs` 走「上传链接 → PUT → 发 PR 评论」三步，缺一步即没判过；
- *   ⑦ base64 载体：PUT 的是 gzip→base64 的纯文本，不是二进制（端到端探针结论）。
+ *   ⑦ base64 载体：PUT 的是 gzip→base64 的纯文本，不是二进制（端到端探针结论）；
+ *   ⑧ 送达/判决并列读数（ISSUE #3452）：复用结论折叠、三档自洽、不进 marker。
  */
 import { gunzipSync, gzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
@@ -21,6 +22,7 @@ import {
   relayCommentBody,
   relayLogs,
   RELAY_MARKER,
+  renderVerdictReadout,
   resolveRelayContext,
 } from "../scripts/ci-ga-logs-relay.mjs";
 
@@ -74,6 +76,31 @@ describe("① marker 评论：身份读数 + 附件链，且认得回", () => {
     expect(body).toContain("jobs=2");
     expect(body).toContain("bytes=1234");
     expect(body).toContain("[ga-logs.b64](/-/files/abc/def/ga-logs.b64)");
+    /* 没给 verdictReadout 时正文形状与 #3437 原样（marker / 附件链 / 取回命令不移位）。 */
+    expect(body).not.toContain("**判决**");
+  });
+
+  it("给了 verdictReadout：正文并列念送达/判决，marker 与附件链形状不变（ISSUE #3452）", () => {
+    const body = relayCommentBody({
+      assetPath: "abc/def/ga-logs.b64",
+      bytes: 1234,
+      fileName: "ga-logs.b64",
+      jobs: 2,
+      pr: "3437",
+      runId: "4242",
+      sha: SHA,
+      verdictReadout: renderVerdictReadout("success,failure,skipped"),
+    });
+    expect(body).toContain(RELAY_MARKER);
+    expect(body).toContain("**送达**");
+    expect(body).toContain("**判决**");
+    expect(body).toContain("GA_VERDICT=failure");
+    expect(body).toContain("这条 commit-status 是**GA 判决结论的镜像**");
+    /* 本地读者只认 marker 与附件链：正文里多出来的解释不许改变这两件。 */
+    const parsed = parseRelayComment(body);
+    expect(parsed?.assetPath).toBe("abc/def/ga-logs.b64");
+    expect(parsed?.run).toBe("4242");
+    expect(parsed?.jobs).toBe(2);
   });
 
   it("parseRelayComment 认相对链，也认平台补成绝对 URL 的链", () => {
@@ -261,5 +288,60 @@ describe("④ relayLogs：上传 → PUT → 发评论三步，base64 载体", (
       );
       expect(code).toBe(CODE.NO_FACT);
     }
+  });
+});
+
+describe("⑧ 送达/判决并列读数（ISSUE #3452）", () => {
+  it("判红：结论折叠复用 callback 那一族，明示「红 = GA 判红生效、不是回调挂了」", () => {
+    const r = renderVerdictReadout("success,success,failure,skipped,success");
+    expect(r).toContain("conclusion=failure → GA_VERDICT=failure");
+    expect(r).toContain("这条 status 的 error 是 GA 判红、已生效拦截合并");
+    expect(r).toContain("它和这条 status 的红绿**无关**");
+    expect(r).toContain("不是回调腿的检查");
+    expect(r).toContain("承重退码一字未改");
+  });
+  it("判绿：自洽成「status 绿 = GA 判绿」，不冒出一句判红的话", () => {
+    const r = renderVerdictReadout("success,skipped,success");
+    expect(r).toContain("conclusion=success → GA_VERDICT=success");
+    expect(r).toContain("这条 status 是绿的 = GA 判绿、允许合并");
+    expect(r).not.toContain("error 是 GA 判红");
+  });
+  it("GA_JOB_RESULTS 缺席：如实念读不出，不猜结论、不假装送达", () => {
+    const r = renderVerdictReadout("");
+    expect(r).toContain("GA_JOB_RESULTS 缺席");
+    expect(r).not.toContain("GA_VERDICT=");
+  });
+  it("main 把 env.GA_JOB_RESULTS 折成读数注进评论（端到端接线）", async () => {
+    const { calls, fetchImpl } = cnbFetch();
+    const gaFetchImpl: typeof fetch = async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("/actions/runs/4242/jobs")) {
+        return new Response(
+          JSON.stringify({ jobs: [{ conclusion: "failure", id: 2, name: "heavy-gates" }] }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+      if (url.includes("/actions/jobs/")) {
+        return new Response("##[error]boom", { status: 200 });
+      }
+      return fetchImpl(input, init);
+    };
+    const { log } = lines();
+    const code = await main({
+      argv: [],
+      env: { ...BASE_ENV, GA_JOB_RESULTS: "success,failure,skipped" },
+      fetchImpl: gaFetchImpl,
+      gzipSync,
+      log,
+    });
+    expect(code).toBe(CODE.OK);
+    const comment = calls.find((c) => c.method === "POST" && c.url.includes("/comments"));
+    expect(comment?.body).toContain("**判决**");
+    expect(comment?.body).toContain("GA_VERDICT=failure");
+    expect(comment?.body).toContain("**送达**");
+    expect(comment?.body).toContain(RELAY_MARKER);
   });
 });

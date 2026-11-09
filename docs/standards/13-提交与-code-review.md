@@ -9605,6 +9605,49 @@ relay step 的 stage 读数（`[ga-logs-relay] 已搬到 CNB` / 「前提不成�
 没坐实前不改承重；坐实不了也只是日志搬不到，退回旧链路，不拦合。探针在
 #3432 / #3437 上留了两条自检评论（无删除/编辑权限，403 清不掉），全绿、不阻塞。
 
+##### 13.5.33.5 2026-11-09 回调 status 红了分不清「送达失败」还是「GA 判红」：只补可读性（ISSUE #3452）
+
+**改的是解释文字，不是承重，也不是颜色。** PR #3448 上，GA 收尾 job 明明
+把结论送回了（`ci-ga-verdict-callback.mjs` 送达成功恒退 0），commit-status 里那条
+`cnb/api_trigger_ga_verdict/pipeline-1(GA 判决回调（骨架·休眠）)` 却显示
+`error [2.2s]`。月读原话：「为什么判决回调成功了，还是红的，不能回调成功是绿的吗，
+这样还要打开看才能知道是回调失败还是流水线红了。」
+
+**先核平台能力，别凭印象改**：Issue 期望给这格 `description` 补原因。Swagger
+（`https://api.cnb.cool/swagger.json`）里三条 commit-status 路径
+（`/build/status/{sn}` / `/git/commit-statuses/{commitish}` /
+`/pulls/{number}/commit-statuses`）**全是 `get`**，`dto.StartBuildReq` 也没有
+`description` 字段 ⇒ 那条 `error [2.2s]` 是平台按 build 终态**自动生成**的，
+外部写不进去。期望 1 此路不通；能承载「不承重可读性文字」的只有 §13.5.33.4
+已经落地的那条 PR 评论。
+
+**为什么不改颜色**：把它恒做成绿，`GA 回调结论回读` 就永远读到绿、承重失效，
+§13.6「PR 跑绿才合并」被架空，GA 判红再也拦不住合并。**红恰恰是判决生效的证据，
+不是回调挂了**（§13.5.33.1 的三态退码与 `GA_VERDICT` 折叠一字未动）。真正的
+混淆是**名字与颜色错位**：context 叫「GA 判决回调」、名字带「骨架·休眠」，看上去
+像一条回调腿的检查，它其实是「GA 判决结论的镜像」；而 GA 侧「送达」那一跳
+（#3404 已恒绿）与 CNB 侧「判决」这一格颜色相反、两处都叫「回调」。
+
+**落地的三件事（改解释，不改判定）**：
+
+| 面 | 动作 |
+| --- | --- |
+| GA 侧评论写者 | `ci-ga-logs-relay.mjs` 的 `relayCommentBody` 在「判红日志正文」那条**本来就会发**的 PR 评论里，并列念两件事：`**判决**`（本次 `conclusion` → `GA_VERDICT`、这格红/绿各是什么）、`**送达**`（信使那一跳恒绿、与这格红绿无关、要查送达看 `[ga-callback]` 读数、这格是判决镜像不是回调腿检查）。新增纯函数 `renderVerdictReadout()` **复用** `ci-ga-verdict-callback.mjs` 已导出的 `conclusionFromJobResults` / `verdictFromConclusion`（§12.18 / 硬规则 24），不另抄结论词表、不另立判据（复用 #3102 那族「红格可见性」思路） |
+| 接线 | `pr-gate.yml` 的 relay step 补 `GA_JOB_RESULTS: ${{ join(needs.*.result, ',') }}`（与结论回调那一跳同源）；step 仍 `if: always()` + `continue-on-error`，判绿不发评论（无失败 job），`GA_JOB_RESULTS` 缺席时如实念「读不出」、不猜 |
+| 本地读者 | `parseRelayComment` 只认 marker 与附件链 —— 新增的解释**不进 marker**、形状不变，`ship-ga-logs-cnb.mjs` / `ship-gh-logs.mjs` 一行不改 |
+
+**逐笔对账**：`ci-ga-logs-relay.mjs`（头注 / 纯函数 / 评论正文 / env 注入）/
+`pr-gate.yml`（relay step env + 注释）/ `tests/ci-ga-logs-relay.test.ts`（并列读数
+三档 + 正文形状不变 + `main` 端到端接线）/ `tests/no-platform-ci-config.test.ts`
+（钉 env 接线 + 复用折叠 + 流水线 name 与三态退码一字不动）/ 本节 + 生成态镜像 /
+`ga-migration-checklist.md` + 镜像 / `## Changed` 碎片，与 §13.5.33.4 同形同批。
+
+**边界**：「回调成功 = 绿」那条（Issue 期望 3）是把结论从 status 颜色里搬走、
+改成回读格读 `GA_VERDICT`、或拆两条 status，属重做数据源，要同批改 `STATUS_PREFIX` /
+回读格 / 保护分支 / 契约用例 / 本节，代价高且会断历史读数，**倾向不做、本单不做**。
+评论里的两行是**只读解释**：日志搬不到 / 结论读不出都不改三态、不改本 run 的
+conclusion、不拦合（与 §13.5.33.4「取不到 ≠ 判红」同口径）。
+
 #### 13.5.34 2026-11-06 GA push 档：镜像仓 master 的文档链并行执行者（任务 3 并行期）
 
 新增 `.github/workflows/master-gate.yml`，在镜像仓 master 的 `push` 上跑文档链两格：

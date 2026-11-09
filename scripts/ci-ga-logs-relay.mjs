@@ -11,6 +11,17 @@
  * 本格把日志正文也搬到 CNB：**产在 GA 侧（托管机，出网稳、有 actions: read）→ 存进
  * CNB（站内）→ 本地从 CNB 站内读**。与结论回调同一条「GA 写 / CNB 读」的分工。
  *
+ * ## 顺带治「回调成功为什么还是红」（ISSUE #3452）
+ *
+ * commit-status 里那条 `cnb/api_trigger_ga_verdict/*` 叫「GA 判决回调」、显示
+ * `error [2.2s]`，读起来像「回调腿挂了」；它其实是**GA 判决结论的镜像**——
+ * 红恰恰是判决生效的证据，不是信使没送到。平台这格 `description` 写不进去
+ * （Swagger 里三条 commit-status 路径全是 `get`，`StartBuildReq` 也没有该字段），
+ * 承重退码更是一字不能动（§13.5.33.1）。于是把「送达」与「判决」两件事并列
+ * 念进这条**本来就会发的 PR 评论**：复用 #3102 那族「红格可见性」思路，不另起
+ * 一条判据、不新增一条 status。判绿时本就不发评论（没有失败 job），列表上不点开
+ * 就能读出「回调已送达 / GA 判红」。
+ *
  * ## 载体（2026-11-09 探针逐格坐实，不是推断）
  *
  *   1. `POST /{repo}/-/upload/files`（`repo-notes:rw`）：body `{name,size}` ⇒ 回
@@ -21,7 +32,7 @@
  *      未发布时 `GET /-/files/<path>` 恒 404（探针 `2119667552891596800` 一族），
  *      发布后 `cnb pulls get-files` / 裸 GET 都逐字读回（探针 `3432`）。
  *   4. 评论正文带一行固定 marker `GA_LOG_RELAY_V1`（含 run/sha/pr/jobs/bytes），
- *      本地按 PR 号扫评论列表认它。
+ *      本地按 PR 号扫评论列表认它；marker 形状不动，正文额外并列念「送达 / 判决」。
  *
  * PR 与 Issue 是两套独立编号（探测 `issues get --number 3432` 回 404），所以这里
  * 只用 `pulls` 那组端点；GA 侧没有 `cnb` CLI（四跑读数 #2551），全程裸 fetch。
@@ -36,7 +47,8 @@
  *     （`cnb` CLI 读附件走 JSON 信封，二进制会被转坏，端到端探针验过）。
  *   · **单 PR 一条评论**：marker 里带 run id 与 sha；不同 run 会留多条历史评论，
  *     但本地只认「最新一条 marker 评论」（按列表顺序，见 `ship-gh-logs.mjs`）。
- *   · **不碰承重**：不写 commit-statuses、不改流水线 name、不改 `GA_VERDICT` 折叠。
+ *   · **不碰承重**：不写 commit-statuses、不改流水线 name、不改 `GA_VERDICT` 折叠、
+ *     不改三态退码。评论里那两行是**只读解释**，不参与任何判定（ISSUE #3452）。
  *
  * ## 用法（`pr-gate.yml` 的收尾 job，判红才跑）
  *
@@ -48,12 +60,14 @@
  * env：`CNB_ISSUE_TOKEN`（`repo-notes:rw`，与 code-scanning-triage 同一枚 secret）、
  * `CNB_REPO_SLUG`、`CNB_PULL_REQUEST_IID`、`CNB_PULL_REQUEST_MERGE_SHA`、
  * `GITHUB_RUN_ID`、`GITHUB_TOKEN`（内置 `github.token`，`actions: read`）、
- * `GITHUB_REPOSITORY`（镜像仓 `owner/repo`，不是 CNB origin）。
+ * `GITHUB_REPOSITORY`（镜像仓 `owner/repo`，不是 CNB origin）、
+ * `GA_JOB_RESULTS`（同结论回调那一跳，用来在评论里念出本次 verdict）。
  */
 import path from "node:path";
 import process from "node:process";
 
 import { CODE } from "./ci-github-mirror-push.mjs";
+import { conclusionFromJobResults, verdictFromConclusion } from "./ci-ga-verdict-callback.mjs";
 import { gzipSync } from "node:zlib";
 import { jobLogUrl, redactSecrets, runJobsUrl } from "./ci-github-verdict-logs.mjs";
 import { requestJson, requestText } from "./ci-github-verdict-request.mjs";
@@ -118,20 +132,53 @@ export function resolveRelayContext(env) {
 }
 
 /**
- * 评论正文：一行 marker（本地按它认）+ 一行人读摘要 + 附件链。
+ * 「送达 / 判决」并列读数（ISSUE #3452）：把两件同名却颜色相反的事一次念清。
+ *
+ * 回调那一跳是**信使**（`ci-ga-verdict-callback.mjs`：送达成功恒退 0，判绿判红都一样）；
+ * commit-status 那条 `error` 是**GA 判决结论的镜像**，红 = 判决生效的证据，不是回调挂了。
+ * 平台这格 `description` 没有写入口，承重退码也不许动，于是把两件事并列念进 PR 评论。
+ * 复用 callback 已导出的结论折叠函数，不另抄一份词表（§12.18 / 硬规则 24）。
+ *
+ * @param {string} jobResults `GA_JOB_RESULTS`（逗号分隔的 `needs.*.result`）
+ * @returns {string} 一段人读摘要（纯函数，缺席时如实念「前提缺席」，不猜）
+ */
+export function renderVerdictReadout(jobResults) {
+  const conclusion = conclusionFromJobResults(jobResults);
+  if (conclusion === "") {
+    return "判决读数：GA_JOB_RESULTS 缺席 ⇒ 本次结论读不出（不影响日志搬运与送达判定）。";
+  }
+  const verdict = verdictFromConclusion(conclusion);
+  const color =
+    verdict === "success"
+      ? "这条 status 是绿的 = GA 判绿、允许合并"
+      : "这条 status 的 error 是 GA 判红、已生效拦截合并";
+  return [
+    `**判决**：GA 本次 conclusion=${conclusion} → GA_VERDICT=${verdict}；${color}。`,
+    "**送达**：结论回调是「信使」，退出码只表「送没送到」，判绿判红都恒绿 —— 它和这条 status 的红绿**无关**。",
+    "要查回调本身有没有送到，看 GA 收尾 job「把结论送回 CNB」那格的 `[ga-callback]` 读数；",
+    "这条 commit-status 是**GA 判决结论的镜像**，不是回调腿的检查。承重退码一字未改（§13.5.33.1）。",
+  ].join("\n");
+}
+
+/**
+ * 评论正文：一行 marker（本地按它认）+ 送达/判决并列读数 + 人读摘要 + 附件链。
  *
  * marker 里带 run id 与预合并 sha 的前 8 位 —— 本地能把「这条日志是哪一跑」念出来，
  * 不用跳 GA 页面（与 #3430 给回调日志补身份读数是同一条理由）。
+ * 「送达 / 判决」那一段是只读解释，**不进 marker、不参与 parseRelayComment**
+ * （本地读者只认 marker 与附件链，形状不变，ISSUE #3452）。
  *
- * @param {{pr:string, runId:string, sha:string, fileName:string, assetPath:string, jobs:number, bytes:number}} c
+ * @param {{pr:string, runId:string, sha:string, fileName:string, assetPath:string, jobs:number, bytes:number, verdictReadout?:string}} c
  * @returns {string} 评论正文（纯函数）
  */
 export function relayCommentBody(c) {
   const short = c.sha ? c.sha.slice(0, 8) : "n/a";
   const link = `[${c.fileName}](/-/files/${c.assetPath})`;
+  const readout = c.verdictReadout ?? "";
   return [
     `<!-- ${RELAY_MARKER} run=${c.runId} sha=${c.sha} pr=${c.pr} jobs=${String(c.jobs)} bytes=${String(c.bytes)} -->`,
     `GA 判红日志正文（ISSUE #3437）：run ${c.runId} · sha ${short} · ${String(c.jobs)} 个失败 job · ${String(c.bytes)} 字节（gzip）。`,
+    ...(readout ? ["", readout] : []),
     `本地取回：\`pnpm ship --gh-logs pr:${c.pr}\`（优先读本评论的附件，无需出站 github.com）。`,
     "",
     link,
@@ -273,7 +320,7 @@ export async function cnbRequest(io, method, target, body = {}) {
 /**
  * 把一份已拼好的正文搬上 CNB：上传 → PUT → 发PR评论（发布）。
  *
- * @param {{ctx:{endpoint:string,repo:string,token:string,pr:string,runId:string,sha:string}, fetchImpl:typeof fetch, log:(l:string)=>void, gzipSync:(b:Buffer)=>Buffer}} io
+ * @param {{ctx:{endpoint:string,repo:string,token:string,pr:string,runId:string,sha:string,verdictReadout?:string}, fetchImpl:typeof fetch, log:(l:string)=>void, gzipSync:(b:Buffer)=>Buffer}} io
  * @param {{text:string, jobs:number}} collected 失败 job 日志正文
  * @returns {Promise<number>} 0 送达成功 / 2 没判过（前提不全或没发出去）
  */
@@ -319,6 +366,7 @@ export async function relayLogs(io, collected) {
     pr: ctx.pr,
     runId: ctx.runId,
     sha: ctx.sha,
+    verdictReadout: ctx.verdictReadout,
   });
   const posted = await cnbRequest({ ctx, fetchImpl }, "POST", `${api}/-/pulls/${ctx.pr}/comments`, {
     json: { body },
@@ -367,7 +415,7 @@ export async function main(io = {}) {
     if (!collected) return CODE.OK;
     return await relayLogs(
       {
-        ctx,
+        ctx: { ...ctx, verdictReadout: renderVerdictReadout(env.GA_JOB_RESULTS ?? "") },
         fetchImpl,
         gzipSync: io.gzipSync ?? gzipSync,
         log,
