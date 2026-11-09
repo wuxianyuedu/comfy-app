@@ -2400,7 +2400,10 @@ master:
           timeout: 5m
       stages:
         - name: GitHub master 镜像
-          script: node scripts/ci-github-mirror-push.mjs --master
+          script: node scripts/ci-github-mirror-push.mjs --master && exit 1
+          # 受控探针：镜像照常推送成功之后，本格按计划判红，
+          # 让 endStages 的「push 失败立案」读到 failed 并真去建单，验
+          # CNB_TOKEN 的 repo-issue:rw 那一支。取证后随下一笔提交整行回滚。
           # 10m 外框包住最坏账（推送 240s + 回读 + LFS 60s）与冷启动余量；
           # 与 PR 出口同一份重试预算（常量在 `ci-mirror-retry-policy.mjs`）。
           timeout: 10m
