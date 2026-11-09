@@ -1,0 +1,7 @@
+## Fixed
+
+- **给未使用 disable 指令补上执行者，死豁免不再无感回流（ISSUE #3438，#3403 收尾）**：#3403 把 923 条未压住任何诊断的 `oxlint-disable` 清到 0 之后，开关没有任何执行者。最小配置实测：造一条 `// oxlint-disable-next-line no-debugger`（下一行没问题可压）跑 `oxlint --deny-warnings` 得 `0 warnings / 0 errors / exit 0`；带上开关后同一份文件报 `Unused oxlint-disable directive`、`1 warning / exit 1`，干净文件仍 0/0。`--deny-warnings` 与该开关同场结论一致。
+- **选型：落在判决配置的 `options`，不写 CLI 旗标**。oxlint 类型声明里的 `reportUnusedDisableDirectives` 属于 `OxlintOptions` 而不是配置顶层：顶层直写（无论 `--config` 指向还是自动发现的 `.oxlintrc.json`）运行时都报 `unknown field ... expected one of ... options ...`，只有 `options.reportUnusedDisableDirectives` 生效，`defineConfig({ options: … })` 实测透传。CLI 旗标虽然也生效且优先级更高，但 `eslint-gate-canary.mjs` 只用 `--config` 真跑、不带 CLI 旗标 —— 写 CLI 会让 canary 与判决口对同一份配置给出不同结论。写在配置里则 `lint:oxlint`、pre-push 的 `check:premerge` 复算、平台格与 canary 自动同口径，单一出处。
+- **正控 / 负控接进既有阳性对照机器**：`scripts/eslint-gate-canary.mjs` 在同一趟 oxlint 调用里加 `dead-disable.ts`（有死豁免，必须报出 `Unused oxlint-disable directive`）与 `removed-disable.ts`（同一份代码删掉那行注释，必须 0 命中）；诊断按 message 归集、不并入按规则名对拍的样本表。oxlint 调用次数仍为 1，`tests/eslint-gate-canary.test.ts` 既有三条用例不用改。
+- **执行者登记面**：钩子 B 组 `run_group B … 'pnpm run lint'`、`quality-gate.mjs` 的 `GATES.lint` 与 `quality-gate.ps1` 的 `$Blocks` 本就在场；本次不新增判据脚本、不另立第二套判定，只把两处注释与 `AGENTS.md` 的 lint 判据节同批补上口径，避免「参数收在 package.json」那句把新落点漏掉。
+- **边界**：不动 384 条规则面、不摘任何现有豁免、不改 `--deny-warnings` 与三态退码；`oxlint.config.ts`（IDE 评估尺，非判决口）不同批。带开关跑全库仍是 `0 warnings / 0 errors`（2528 files / 384 rules），#3403 的存量清零没有被打破。
