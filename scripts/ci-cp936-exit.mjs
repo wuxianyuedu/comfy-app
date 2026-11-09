@@ -126,7 +126,7 @@
  *     「第一块到就发出去」那条判据仍然只判时机 —— 「被 kill 之后还能不能读到」
  *     在单测里没有对应的时刻，那件事由流式本身保证。
  */
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -145,6 +145,9 @@ import {
   resolveCommandInvocation,
 } from "../src/lib/process/executable-resolve.ts";
 import { describeGlyphReplacements, normalizeCp936Glyphs } from "./ci-cp936-glyphs.mjs";
+/* 写字节那一半（转码计划的实现体）住在新家，本文件只在默认参数里用它 ——
+ * re-export 那一句见下方常量区的注释。 */
+import { writeCp936 } from "./ci-cp936-write.mjs";
 
 /* 这两个别名只为一件事：模块里那两兄弟的名字都长，而它们各自要表达的是**收什么**——
  * `resolveCommandInvocation` 收**名字**（PATH 查找 + 形态），`commandInvocation`
@@ -156,133 +159,37 @@ import { describeGlyphReplacements, normalizeCp936Glyphs } from "./ci-cp936-glyp
 const resolveByName = resolveCommandInvocation;
 const resolveByPath = commandInvocation;
 
-/** 中文 Windows 的 ANSI 代码页 —— 平台那一跳读的就是它。 */
-export const CP936_CODE_PAGE = 936;
+/* 转码那一半（代码页常量 / 转码预算 / 转码计划 / 真正落字节的 `writeCp936`）已按
+ * 职责切到 `ci-cp936-write.mjs` —— 那份文件贴着 R5 的 900 行硬闸，#3412 的兜底
+ * 把余量用完了；切法与 `ci-mirror-retry-policy.mjs` 同一纪律：按职责切出去、
+ * 主文件原样转出，用例与调用方的导入面一个字都不用改。 */
+export {
+  CP936_CODE_PAGE,
+  TRANSCODE_TIMEOUT_MS,
+  encodeCp936Plan,
+  writeCp936,
+} from "./ci-cp936-write.mjs";
 
 /**
- * 转码那一步（起 PowerShell 把一批字节按 936 重发）的**墙钟预算**（毫秒）。
+ * 子进程 **exit 之后**等 `close` 的**静默预算**（毫秒，ISSUE #3412）。
  *
- * 它不是一个性能旋钮，是**外壳不会把流水线停住**的边界：`writeCp936` 用的是
- * `spawnSync`（同步），而它跑在子进程 `data` 回调里 —— 挂住一次就等于把整条链
- * 停在那里（子进程的管道随即填满、它也卡住，`close` 永不到来）。正常形态是
- * 「PowerShell 冷启动 + 编一批字节」，本机实测几十到几百毫秒；给两个数量级的余量，
- * 撞上它只会退化成「原文照打 + 说明」那条既有出口（转码失败不是判据）。
+ * `close` 的语义是「进程结束**且** stdio 都关了」—— 子进程退出后，若某个比它
+ * 活得久的孙进程（git 的远端 helper / 凭据 helper 这一类）还持有 stdout/stderr
+ * 管道的**写端**，`close` 就一直不来（现场复现，`tests/ci-cp936-exit.test.ts`
+ * 真进程那条：`exit` 132ms 到、`close` 在孙进程活着期间永不到来）⇒ 外壳停在
+ * `await` 上不退出，平台 15m 外框把一个**结论已在手**的绿格强杀记成 error。
+ *
+ * 处置不是收树：实测 `taskkill /PID <已退的根> /T /F` 只回 not found ——
+ * Windows 的树枚举要先开到根，死根的后代够不着。预算到点按 **exit 已交出的
+ * 结论**交账（残余半行照发），幸存的孙进程留给它自己的生命周期与平台收尾。
+ *
+ * 取 45s：正常这一跳实测 ~130ms（exit 与 close 前后脚）；最坏的正当时滞是
+ * 最后一块输出正在转码（`TRANSCODE_TIMEOUT_MS` = 30s 那一刀，转码是同步的，
+ * 它块着的时候计时器与 `close` 都排队等它）—— 45s = 1.5× 它，又远低于最小的
+ * stage 外框（5m）。**有数据进来就续期：只计静默，不计总量**，慢而活的排水
+ * 不会被它截断。
  */
-export const TRANSCODE_TIMEOUT_MS = 30_000;
-
-/**
- * 一步转码的**计划**（纯函数，可测）：把「怎么把这批 UTF-8 文本以 936 写出去」
- * 表达成一条 PowerShell 脚本 + 它的入参。
- *
- * 刻意**不在 Node 侧编码**：Node 没有 GBK 编码器（见文件头），所以这里只产出
- * 「要交给 PowerShell 的那段脚本」。用它当可测面，是因为本仓没有第二处能判
- * 「这条链写出去的是不是 936 字节」—— 抓取端在本进程之外。
- *
- * 三处细节都不是风格：
- *   · `[Console]::OpenStandardOutput()` —— 绕过控制台对象**直接写原始字节**，
- *     否则 PS 又会按它自己的 `OutputEncoding` 重编一遍（探针第 4 行同一条路数）；
- *   · `$Input` 通道读 stdin —— 与下面的 `spawnSync(..., { input })` 配对，
- *     不经过命令行参数（那会被 PowerShell 再解一次引号与转义）；
- *   · `Flush()` 显式调用 —— 不解没有坏结论，但解了省得在管道里悬着。
- *
- * @param {number} [codePage]
- * @returns {{script: string, codePage: number}}
- */
-export function encodeCp936Plan(codePage = CP936_CODE_PAGE) {
-  return {
-    codePage,
-    script:
-      `$enc=[Text.Encoding]::GetEncoding(${codePage}); ` +
-      `$w=[Console]::OpenStandardOutput(); ` +
-      `$in=[Console]::In.ReadToEnd(); ` +
-      `$b=$enc.GetBytes($in); ` +
-      `$w.Write($b,0,$b.Length); $w.Flush()`,
-  };
-}
-
-/**
- * 把一段 UTF-8 文本以 CP936 写到 stdout —— **唯一一处真的落字节**。
- *
- * 两个注入面（`platform` / `run`）不是给测试凑数用的：本文件在 Linux 上跑不了真的
- * PowerShell，而这条链的**判据全是「起了什么、退了多少」**，所以必须有可注入的一层
- * （与 `ci-console-encoding.mjs` 的 `runImpl` 同一处置）。
- *
- * 失败时**不抛**：返回 `{ok:false}`，由调用方决定「原文照打」——转码是外壳，
- * 它不是判据，把流水线弄红于它无关。
- *
- * `spawnImpl` 是**第三**个注入面，专为一件在 Linux 上够不到的事存在：默认实现
- * 里那句 `spawnSync` 只会在 Windows 分支跑到，而平台侧第一次红正是它（见下）。
- * 有了它，这条链的**真实现**（起什么、`encoding` / `stdio` 是什么）在本地就能判。
- *
- * `stdio` **只作用于 stdout / stderr**（stdin 恒留在管道上）：它默认 `"inherit"`，
- * 由调用方在 Windows 那条路上显式传同一个值。生产**必须**是 `"inherit"` —— 否则
- * PowerShell 编好的那批 936 字节收进 `r.stdout` 就没了（见文件头那条坑）。
- * 而 stdin 不能跟着 `"inherit"`：那份 UTF-8 原文就是从 stdin 递给 PowerShell 的
- * （`input`），两者配在一起时 `input` 会被**静默丢掉**（stdin 变成真终端），
- * PowerShell 的 `[Console]::In.ReadToEnd()` 读到空串 ⇒ 日志仍然一个字都没有。
- *
- * @param {string} text UTF-8 文本（子进程的原始输出）
- * @param {{platform?: NodeJS.Platform,
- *          run?: (cmd: string, args: string[], input: string) => {status: number|null},
- *          spawnImpl?: typeof spawnSync,
- *          stdio?: "inherit" | "pipe"}} [ports]  `stdio` 只作用于 stdout / stderr
- * @returns {{ok: boolean}}
- */
-export function writeCp936(
-  text,
-  { platform = process.platform, run, spawnImpl = spawnSync, stdio = "inherit" } = {},
-) {
-  if (platform !== "win32") {
-    return { ok: false };
-  }
-  const { script } = encodeCp936Plan();
-  const exec =
-    run ??
-    ((cmd, args, input) => {
-      /* `encoding` 要么是**编码名字符串**（如 `"utf8"`）、要么是 `null` 表示
-       * 「stdout/stderr 给 Buffer」。`"buffer"` 与 `Buffer` **两者都不行** ——
-       * 它们都会被当编码名去 `Buffer.isEncoding` 查表，而查不到时 `spawnSync`
-       * 在 `Buffer.from(input, encoding)` 那里当场抛 `ERR_UNKNOWN_ENCODING`。
-       * 这一句本是本文件第一次上平台唯一真炸的那一处（`工具链自证` stage 直接红），
-       * 而本地全绿：`writeCp936` 在非 Windows **直接 return**，那条语句在 Linux
-       * 检出一辈子都执行不到。
-       *
-       * 要的是 Buffer 输出，所以写 `null`（等价于省掉这个键）—— 不是 `Buffer`。
-       * 判据见 `tests/ci-cp936-exit.test.ts` 的 `spawnImpl` 那一组。 */
-      const r = spawnImpl(cmd, args, {
-        input,
-        encoding: null,
-        /* **PowerShell 的 stdout 已经就是那批 936 字节** —— 让它直接落到本进程的
-         * stdout，不要再经我们手里过一道。
-         *
-         * 这一格此前是 `pipe`（`spawnSync` 的默认）+ `encoding: null`：字节确实
-         * 编对了，却被收进 `r.stdout` 这个 Buffer，然后**整份丢掉** —— 平台的
-         * stage 日志里因此**一个字都没有**（外壳把子进程的输出吞了，正是「退出码
-         * 转了、输出没转」那种形态）。`"inherit"` 是这一格的正确取值：
-         * 我们要的是「原样落到日志」，不是「取回来再加工」。
-         *
-         * 判据钉在「默认实现交出去的 stdio 是 inherit」（`spawnImpl` 注入面）。 */
-        /* **只把 stdout / stderr 接出去，stdin 必须留在管道上** —— 那份 UTF-8
-         * 原文就是从 stdin 递给 PowerShell 的（`input`），而 `stdio: "inherit"`
-         * 是一句「三路都别再管」的话：配 `input` 用时它会**静默丢掉** `input`
-         * （stdin 变成真终端），PowerShell 的 `[Console]::In.ReadToEnd()` 于是
-         * 读到空串、一个字节都不发。那就是本条出口第一次修完之后**依然全空**的
-         * 原因（平台侧 `E2E 关键流程` 那一格：退出 1、日志零行）。
-         * ⇒ 要表达的是「标准输出那两路落日志」，不是「整个 stdio 都别管」。 */
-        stdio: ["pipe", stdio, stdio],
-        /* **转码这一步必须有预算**（ISSUE #1977 第八轮）：`spawnSync` 无 `timeout`
-         * 就是「挂住就一直挂」—— 而它是**同步**的，挂在 `data` 回调里等于把整条链
-         * 停住：子进程那一侧的管道很快填满、它卡在 `write()` 上，`close` 永不到来，
-         * 平台那 36 分钟读到的就是**零行**（与「攒到 `close` 才发」那一处同形、
-         * 但坏在更早的一跳）。判到预算即放弃转码：调用方会走「原文照打 + 说明」
-         * 那条路 —— 转码是外壳、不是判据，退出码不受影响。 */
-        timeout: TRANSCODE_TIMEOUT_MS,
-      });
-      return { status: r.status };
-    });
-  const r = exec("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], text);
-  return { ok: r.status === 0 };
-}
+export const POST_EXIT_CLOSE_IDLE_MS = 45_000;
 
 /**
  * 「怎么把它的字节以 CP936 写出去」这件事在**应用层**的唯一形态。
@@ -543,7 +450,8 @@ export function exitCodeFromTermination(code, signal) {
  *            platform?: NodeJS.Platform,
  *            env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
  *          }) => {command?: string, args?: string[], resolved?: boolean} | null | undefined,
- *          out?: (chunk: string) => void}} [ports]
+ *          out?: (chunk: string) => void,
+ *          postExitCloseIdleMs?: number}} [ports]
  * @returns {Promise<number>} 该转出去的退出码
  */
 export function runWithCp936Exit(
@@ -555,6 +463,7 @@ export function runWithCp936Exit(
     write = writeCp936,
     resolve = resolveShellInvocation,
     out,
+    postExitCloseIdleMs = POST_EXIT_CLOSE_IDLE_MS,
   } = {},
 ) {
   const { command, args, usage } = parseInvocation(argv);
@@ -609,8 +518,23 @@ export function runWithCp936Exit(
   /* 参数用**解析口交回来的那一份**（宿主前缀 + 原参数都由它拼好）。 */
   const realArgs = invocation.args;
   /* 形参叫 `settle` 而**不是** `resolve`：上面那个 `resolve` 是解析口的名字，同名会
-   * 让「谁在调谁」变成读者要推的事（这条遮蔽本文件真踩过，见头注第三个坑）。 */
+   * 让「谁在调谁」变成读者要推的事（这条遮蔽本文件真踩过，见头注第三个坑）。
+   *
+   * `settled` 闸（ISSUE #3412）：交账口现在有三个（`close` / `error` / exit 后的
+   * close 兜底），互相都可能抢到对方前面 —— Promise 的第二次 resolve 无害，但
+   * 「只说一次」的话与计时器要靠这道闸保证。 */
   return new Promise((settle) => {
+    let settled = false;
+    /** 交账口的幂等闸（谁先到谁交账；第二次 resolve 无害，闸后的话只说一次）。
+     *
+     * @param {number} code */
+    const settleOnce = (code) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      settle(code);
+    };
     /* `shell: false` 是默认 —— 本文件**不**替调用方解释命令行。stage 里那条命令
      * 本身可能是 `pnpm run build` 这种带子命令的形态，但它的解析归它自己的宿主
      * （`.cnb.yml` 的 stage shell），这里只管把 token 原样递过去。 */
@@ -631,6 +555,17 @@ export function runWithCp936Exit(
      * 它原来是每跑收尾一句，现在成了按行发，每行都重复一遍会把真输出埋掉。 */
     let carry = "";
     let warnedTranscodeFailure = false;
+    /* **exit 之后的 close 兜底**（ISSUE #3412，预算见 `POST_EXIT_CLOSE_IDLE_MS`）。
+     *
+     * `exitInfo` 是 exit 事件交出的那份结论（close 兜底按它交账）；`null` = 还没退。
+     * `postExitTimer` 只在 exit 之后 armed：child 还活着时结论不在手，兜底没有
+     * 交账的资格 —— 「不许把没判完洗成绿」在这一格的形状就是「timer 不早于 exit」。 */
+    /** exit 事件交出的那份结论（close 兜底按它交账）；`null` = 还没退。 */
+    /** @type {{code: number | null, signal: string | null} | null} */
+    let exitInfo = null;
+    /** @type {ReturnType<typeof setTimeout> | null} */
+    let postExitTimer = null;
+    let exitAt = 0;
     /* 字形归一化的**跨块累计**（ISSUE #1977 那一族之外的一件事，见下）。
      *
      * 为什么要单独记一份：转码是**边到边发**的，一个 stage 的输出会分成很多块，
@@ -727,31 +662,24 @@ export function runWithCp936Exit(
         const split = splitStreamChunk(carry, String(d));
         carry = split.carry;
         flush(split.text);
+        /* exit 之后还来的字节说明排水活着：静默预算从这一刻重算（只计静默，
+         * 不计总量 —— 见 `POST_EXIT_CLOSE_IDLE_MS`）。没退时 `exitInfo` 是 null，
+         * 这一句不参与「child 活着」的任何计时。 */
+        if (exitInfo !== null && postExitTimer !== null) {
+          postExitTimer.refresh();
+        }
       });
     }
-    child.on("error", (err) => {
-      /* 起不来（命令不存在）也是「这条命令的结论」，走同一个复核出口：
-       * 原文照打 + 非零退出码（127 是壳里「命令没找到」的常规形态）。
-       *
-       * 但**「结论在」不等于「结论够用」**：这条出口此前只回一句
-       * `起不了这条命令：<command>`，而真因的每一条线索都在手里 —— `err.code`
-       * （`ENOENT` 是「盘上没这件东西」，`EACCES` / `EINVAL` 是「有，但起不来」，
-       * 两者要做的处置完全不同）、解析口交回来的**绝对路径**（这条是一行
-       * `module.exports` 的 shim 还是真的可执行文件，看路径就看得出）、以及
-       * 调用方自己写的那份原文（相对路径与绝对路径在这里长得一样，分不开）。 */
-      emit(
-        `${formatSpawnFailure({
-          err,
-          command,
-          realCommand,
-          cwd: process.cwd(),
-        })}\n`,
-      );
-      settle(127);
-    });
-    child.on("close", (code, signal) => {
-      /* 行尾那份残余（**没有换行符收尾的最后一个片段**）在这里补发：`close` 一到，
-       * 那一行就到底了。
+    /** close 与 exit 后兜底**两条路共用**的收尾：残余半行 → 字形总数 → 终止读数 →
+     * 交出折算的退出码。抽出来的理由：兜底那一路（#3412）要的不是另一份收尾，
+     * 是同一份收尾换一个到法 —— 两份各自漂移就是下一处「一边修好另一边还是旧的」。
+     *
+     * @param {number | null} code
+     * @param {string | null} signal
+     */
+    const finalize = (code, signal) => {
+      /* 行尾那份残余（**没有换行符收尾的最后一个片段**）在这里补发：`close` 一到
+       * （或兜底到点，见下），那一行就到底了。
        *
        * ⚠️ 「被 kill 时 `close` 不会来」是本文件挂着的一条**错前提**（ISSUE #2571
        * 当场复现推翻）：子进程被信号终止时 `close` **照来**，带的是 `code=null` +
@@ -798,7 +726,75 @@ export function runWithCp936Exit(
           emit(line);
         }
       }
-      settle(exitCode);
+      return exitCode;
+    };
+    child.on("error", (err) => {
+      /* 起不来（命令不存在）也是「这条命令的结论」，走同一个复核出口：
+       * 原文照打 + 非零退出码（127 是壳里「命令没找到」的常规形态）。
+       *
+       * 但**「结论在」不等于「结论够用」**：这条出口此前只回一句
+       * `起不了这条命令：<command>`，而真因的每一条线索都在手里 —— `err.code`
+       * （`ENOENT` 是「盘上没这件东西」，`EACCES` / `EINVAL` 是「有，但起不来」，
+       * 两者要做的处置完全不同）、解析口交回来的**绝对路径**（这条是一行
+       * `module.exports` 的 shim 还是真的可执行文件，看路径就看得出）、以及
+       * 调用方自己写的那份原文（相对路径与绝对路径在这里长得一样，分不开）。 */
+      if (settled) {
+        return;
+      }
+      emit(
+        `${formatSpawnFailure({
+          err,
+          command,
+          realCommand,
+          cwd: process.cwd(),
+        })}\n`,
+      );
+      settleOnce(127);
+    });
+    child.on("exit", (code, signal) => {
+      /* **结论到手的时刻**（ISSUE #3412）：从这一行起，这条命令跑成什么样已经
+       * 定了 —— 外壳不该再被 stdio 的收尾绑住。这里只记录 + armed 静默预算，
+       * 不交账：正常形态 `close` 前后脚就到（实测 ~130ms），残余半行与字形总数
+       * 都由它收，预算那条路是给「close 被孙进程的管道写端拖住」的现场留的。
+       *
+       * 没退不 armed：timer 晚于 exit 才存在，就是「不许把没判完洗成绿」
+       * 在这一格的形状 —— 兜底交的账永远是 exit 已交出的那份。 */
+      exitInfo = { code, signal };
+      exitAt = Date.now();
+      postExitTimer = setTimeout(() => {
+        postExitTimer = null;
+        /* 兜底与 close 互相都可能抢到对方前面：闸后面的话只说一次、
+         * `finalize` 的残余半行与字形总数也只发一遍。 */
+        if (settled) {
+          return;
+        }
+        const waited = Math.max(1, Math.round((Date.now() - exitAt) / 1000));
+        /* 这一行直接走 `write`、不过 `flush` 的字形归一化 ⇒ 文案里的字符必须
+         * **全是 CP936 编得出来的**（`⇒` 没有字形，会被 .NET 编成 `?`；
+         * 箭头用 `→`，它有字形 —— 与 `ci-cp936-glyphs.mjs` 头注的口径一致）。 */
+        const line =
+          `[cp936-exit] 子进程已退出、close 静默 ${waited}s 没来 —— ` +
+          "输出管道的写端还被某个比子进程活得久的孙进程持有（#3412 现场复现）→ " +
+          `按 exit 已交出的结论交账；死根的树收不到（taskkill /T 够不着），孙进程留给自己与平台收尾\n`;
+        /* 与收尾那几条同一个口径：走 `write`（CP936 那一跳），不走 `emit`。 */
+        const { ok } = write(line, { stdio: "inherit" });
+        if (!ok) {
+          emit(line);
+        }
+        settleOnce(finalize(code, signal));
+      }, postExitCloseIdleMs);
+    });
+    child.on("close", (code, signal) => {
+      /* 正常路：stdio 全关了，残余半行、字形总数、终止读数都在 `finalize` 里。
+       * 迟到的 close（兜底已按 exit 交过账）到此为止：闸后那句是幂等的一半。 */
+      if (postExitTimer !== null) {
+        clearTimeout(postExitTimer);
+        postExitTimer = null;
+      }
+      if (settled) {
+        return;
+      }
+      settleOnce(finalize(code, signal));
     });
   });
 }

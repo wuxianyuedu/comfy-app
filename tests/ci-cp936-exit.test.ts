@@ -218,6 +218,8 @@ describe("CP936 出口：编排与退出码", () => {
         handlers[ev] = fn;
         return undefined;
       },
+      /* 触发 `exit`：#3412 那条兜底判的是「exit 已到手、close 没来」。 */
+      emitExit: () => handlers.exit?.(code, signal),
       /* 触发 `close`：编排就是靠它收尾的。 */
       emitClose: () => handlers.close?.(code, signal),
     };
@@ -394,6 +396,61 @@ describe("CP936 出口：编排与退出码", () => {
       },
     );
     expect(code).toBe(128 + os.constants.signals.SIGTERM);
+  });
+
+  it("**exit 已到、close 一直没来** ⇒ 按 exit 已交出的结论交账，不把结论吊死在 stdio 上（ISSUE #3412）", async () => {
+    /* 现场：PR #3408 首跑的小结已打印、进程却不退出，15m 外框把绿格强杀记成 error。
+     * 根因（本机复现坐实）：孙进程持有 stdout/stderr 管道的**写端** ⇒ 子进程 exit 了
+     * 而 `close`（= 进程结束**且** stdio 全关）在孙进程活着期间永不到来。
+     * 兜底交的账**必须是 exit 已交出的那份** —— timer 不早于 exit，就是
+     * 「不许把没判完洗成绿」在这一格的形状。 */
+    const written: Array<string> = [];
+    const printed: Array<string> = [];
+    const child = fakeChild("", 7);
+    const code = await runWithCp936Exit(["--", "做点事"], {
+      platform: "linux",
+      resolve: passthroughResolve,
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: (() => {
+        queueMicrotask(() => child.emitExit());
+        return child;
+      }) as never,
+      write: (t) => {
+        written.push(t);
+        return { ok: true };
+      },
+      out: (t) => {
+        printed.push(t);
+      },
+      postExitCloseIdleMs: 100,
+    });
+    expect(code).toBe(7);
+    /* 说明走 CP936 通道（`write`），不走 UTF-8 直写的 `emit` —— 与收尾那几条同一口径。 */
+    expect(written.join("")).toContain("close");
+    expect(printed.join("")).not.toContain("close");
+  });
+
+  it("**真起一条「孙进程持有输出管道」的子进程** ⇒ close 不来也交得出账（现场复现，ISSUE #3412）", async () => {
+    /* 这条是**现场**不是形状：子进程先起一个 detached + unref 的孙（继承 fd1/fd2 =
+     * 外壳管道的写端，活 3s），自己马上退 0 —— 与 M1 复现逐字同形。真进程才能回答
+     * 「`exit` 之后 `close` 到底来不来」：孙进程活着的那 3s 里不来，兜底在注入的
+     * 800ms 处按 exit 的结论交账，而不是等 3s（生产预算 45s 时就是等出 15m 外框）。 */
+    const childScript =
+      "const{spawn}=require('node:child_process');" +
+      "const gc=spawn(process.execPath,['-e','setTimeout(()=>{},3000)']," +
+      "{stdio:['ignore','inherit','inherit'],detached:true,windowsHide:true});" +
+      "gc.unref();console.log('child-done');";
+    const started = Date.now();
+    const code = await runWithCp936Exit(["--", process.execPath, "-e", childScript], {
+      platform: "linux",
+      resolve: passthroughResolve,
+      write: () => ({ ok: false }),
+      out: () => undefined,
+      postExitCloseIdleMs: 800,
+    });
+    expect(code).toBe(0);
+    /* 兜底在 800ms 处交账：若退回「等 close」的老形态，这一跑要吃满孙进程的 3s。 */
+    expect(Date.now() - started).toBeLessThan(3000);
   });
 
   it("折算表本体：有码照原样、有号折 128+号、号查不到仍非零", () => {
