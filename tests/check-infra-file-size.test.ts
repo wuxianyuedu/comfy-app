@@ -67,9 +67,12 @@ describe("check-infra-file-size 硬闸", () => {
    * 它是读数不是闸：退出码永远由 900 那把尺子独占。边界四格里，
    * 900 恰恰要提醒（硬闸判「超过」，900 本身不红 —— 它是再加一行就撞闸的那格）。 */
   describe("临近拆分提醒（≥800 行，只读数不阻断；ISSUE #3473）", () => {
-    /** 造一份恰好 `n` 行的 `.cjs`。 */
+    /** 造一份按闸的口径恰好 `n` 行的 `.cjs`。
+     *
+     * 行数口径是 `text.split("\n").length`：末行**不带**换行时它才恰好等于物理行数
+     * （带尾换行的 n 行会被数成 n+1 —— 首跑边界用例就是这么红的）。 */
     const writeSized = (repo: GateRepo, n: number) => {
-      repo.write("scripts/sized.cjs", `${"// 行\n".repeat(n)}module.exports = 1;\n`);
+      repo.write("scripts/sized.cjs", `${"// 行\n".repeat(n - 1)}module.exports = 1;`);
     };
 
     test("850 行：退 0 且点名（提醒不等撞闸）", ({ repo }) => {
