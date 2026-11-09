@@ -15,6 +15,7 @@
 | GH 日志回读工具（ship --gh-logs） | #3203 | 判红自动触发 + 显式入口 |
 | GA 判红日志正文搬到 CNB 侧（本地站内读，不再出站 github.com） | #3437 | `ci-ga-logs-relay.mjs` + `ship-ga-logs-cnb.mjs`；`--gh-logs` 优先读 CNB、缺席退回旧链路 |
 | 回调 status 红了分不清送达失败 / GA 判红：PR 评论并列念「送达 / 判决」 | #3452 | `ci-ga-logs-relay.mjs` 复用结论折叠；只补可读性，承重退码与 status 颜色一字未改 |
+| 判红日志附件挂到 PR 本体（描述镜像）+ 另配 `CNB_PULL_REQUEST_TOKEN` | #3454 | `ci-ga-logs-relay.mjs` 评论后读改写 `PATCH /-/pulls/{n}`，只换自己 marker 块；描述只写镜像、评论仍是权威读源，`repo-pr:rw` 专用令牌不给旧令牌扩权 |
 
 ## 待落地（按优先级 + 主题分组）
 

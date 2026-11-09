@@ -33,6 +33,13 @@
  *      发布后 `cnb pulls get-files` / 裸 GET 都逐字读回（探针 `3432`）。
  *   4. 评论正文带一行固定 marker `GA_LOG_RELAY_V1`（含 run/sha/pr/jobs/bytes），
  *      本地按 PR 号扫评论列表认它；marker 形状不动，正文额外并列念「送达 / 判决」。
+ *   5. **PR 描述另挂一份「最新镜像」**（ISSUE #3454）：`GET /-/pulls/{n}` 读回整段
+ *      body → 只替换自己 `<!-- GA_LOG_RELAY_V1 … -->` … `<!-- /GA_LOG_RELAY_V1 -->`
+ *      那一块 → `PATCH /-/pulls/{n}` 写回（`repo-pr:rw`）。人工描述与前后内容逐字保留，
+ *      同一 PR 永远只留最新一块，不重复堆叠。这一跳用**另一枚**令牌
+ *      `CNB_PULL_REQUEST_TOKEN`（人已配 `repo-pr:rw`）：`CNB_ISSUE_TOKEN` 只有
+ *      `repo-notes:rw`，写不了 PR 描述，也不给它扩权。评论先发（附件「发布」这一跳），
+ *      描述随后镜像同一条 `asset_link`。
  *
  * PR 与 Issue 是两套独立编号（探测 `issues get --number 3432` 回 404），所以这里
  * 只用 `pulls` 那组端点；GA 侧没有 `cnb` CLI（四跑读数 #2551），全程裸 fetch。
@@ -47,6 +54,11 @@
  *     （`cnb` CLI 读附件走 JSON 信封，二进制会被转坏，端到端探针验过）。
  *   · **单 PR 一条评论**：marker 里带 run id 与 sha；不同 run 会留多条历史评论，
  *     但本地只认「最新一条 marker 评论」（按列表顺序，见 `ship-gh-logs.mjs`）。
+ *   · **两个来源显式分开，优先级定死**：评论列表 = **唯一权威读源**（`ship-ga-logs-cnb.mjs`
+ *     只扫 `cnb pulls list-comments`）；PR 描述 = relay 的**只写镜像**，本地读者**不读描述**。
+ *     所以 `parseRelayComment` 的附件链正则永远只有一个输入面，不会出现「读到哪份全凭
+ *     列表顺序」那种运气型行为（ISSUE #3454 技术注意）。描述缺令牌 / 读改写失败都只多
+ *     一行读数，评论已送达就仍是送达。
  *   · **不碰承重**：不写 commit-statuses、不改流水线 name、不改 `GA_VERDICT` 折叠、
  *     不改三态退码。评论里那两行是**只读解释**，不参与任何判定（ISSUE #3452）。
  *
@@ -57,7 +69,8 @@
  * node scripts/ci-ga-logs-relay.mjs --dry-run   # 只打印计划，一条网络都不发
  * ```
  *
- * env：`CNB_ISSUE_TOKEN`（`repo-notes:rw`，与 code-scanning-triage 同一枚 secret）、
+ * env：`CNB_ISSUE_TOKEN`（`repo-notes:rw`，与 code-scanning-triage 同一枚 secret，写评论 / 传附件）、
+ * `CNB_PULL_REQUEST_TOKEN`（`repo-pr:rw`，**只**用于读改写 PR 描述；缺席则只发评论）、
  * `CNB_REPO_SLUG`、`CNB_PULL_REQUEST_IID`、`CNB_PULL_REQUEST_MERGE_SHA`、
  * `GITHUB_RUN_ID`、`GITHUB_TOKEN`（内置 `github.token`，`actions: read`）、
  * `GITHUB_REPOSITORY`（镜像仓 `owner/repo`，不是 CNB origin）、
@@ -108,10 +121,15 @@ function asList(v) {
  * 收齐前提，缺哪件念哪件（fail-closed 的「读数」半边）。
  *
  * @param {Record<string, string | undefined>} env 进程环境
- * @returns {{ok:true, token:string, repo:string, pr:string, sha:string, runId:string, ghToken:string, ghRepo:string, endpoint:string} | {ok:false, reasons:string[]}}
+ * `prToken` 是**可选**的：PR 描述只是评论的镜像，缺它仍照发评论（不进 reasons、
+ * 不改三态）。两枚令牌分开取，是因为写评论要 `repo-notes:rw`、写描述要 `repo-pr:rw`，
+ * 不给 `CNB_ISSUE_TOKEN` 扩权（ISSUE #3454 期望 3 的答案：另配写描述专用令牌）。
+ *
+ * @returns {{ok:true, token:string, prToken:string, repo:string, pr:string, sha:string, runId:string, ghToken:string, ghRepo:string, endpoint:string} | {ok:false, reasons:string[]}}
  */
 export function resolveRelayContext(env) {
   const token = String(env.CNB_ISSUE_TOKEN ?? env.CNB_TOKEN ?? "").trim();
+  const prToken = String(env.CNB_PULL_REQUEST_TOKEN ?? "").trim();
   const repo = String(env.CNB_REPO_SLUG ?? "").trim();
   const pr = String(env.CNB_PULL_REQUEST_IID ?? "").trim();
   const sha = String(env.CNB_PULL_REQUEST_MERGE_SHA ?? "").trim();
@@ -128,7 +146,7 @@ export function resolveRelayContext(env) {
   if (!ghToken) reasons.push("`GITHUB_TOKEN` 缺席（要 actions: read 读 job logs）");
   if (!ghRepo) reasons.push("`GITHUB_REPOSITORY` 缺席（镜像仓 owner/repo）");
   if (reasons.length > 0) return { ok: false, reasons };
-  return { endpoint, ghRepo, ghToken, ok: true, pr, repo, runId, sha, token };
+  return { endpoint, ghRepo, ghToken, ok: true, pr, prToken, repo, runId, sha, token };
 }
 
 /**
@@ -160,6 +178,91 @@ export function renderVerdictReadout(jobResults) {
   ].join("\n");
 }
 
+/** 附件链只拼一次，评论与 PR 描述镜像共用（§12.18）。
+ * @param {{fileName:string, assetPath:string}} c
+ * @returns {string} Markdown 附件链
+ */
+function relayAssetLink(c) {
+  return `[${c.fileName}](/-/files/${c.assetPath})`;
+}
+
+/** 身份读数那一行（marker），评论与镜像共用同一形状。
+ * @param {{pr:string, runId:string, sha:string, jobs:number, bytes:number}} c
+ * @returns {string} 一行 HTML 注释 marker
+ */
+export function relayMarkerLine(c) {
+  return `<!-- ${RELAY_MARKER} run=${c.runId} sha=${c.sha} pr=${c.pr} jobs=${String(c.jobs)} bytes=${String(c.bytes)} -->`;
+}
+
+/** PR 描述里那块「最新镜像」的闭合标记；与起始 marker 成对，读改写只认这一块。 */
+export const RELAY_DESCRIPTION_END = "<!-- /GA_LOG_RELAY_V1 -->";
+
+/**
+ * PR 描述里那块「最新镜像」：marker 起 / 闭合标记止，中间是同源附件链与人读说明。
+ *
+ * 与评论正文**不是同一段**：评论是 append-only 的历史 + 权威读源，描述是 relay 的
+ * 只写镜像，本地读者从不读描述（两个来源显式分开，见头注边界）。
+ *
+ * @param {{pr:string, runId:string, sha:string, fileName:string, assetPath:string, jobs:number, bytes:number}} c
+ * @returns {string} 一块可整体替换的描述片段
+ */
+export function renderRelayDescriptionBlock(c) {
+  const short = c.sha ? c.sha.slice(0, 8) : "n/a";
+  return [
+    relayMarkerLine(c),
+    "### GA 判红日志附件（挂在 PR 本体，ISSUE #3454）",
+    "",
+    `本次判红（GA run ${c.runId} · sha ${short} · ${String(c.jobs)} 个失败 job · ${String(c.bytes)} 字节 gzip）的日志正文附件，与评论区同源：`,
+    "",
+    `- ${relayAssetLink(c)}`,
+    "",
+    `本地取回：\`pnpm ship --gh-logs pr:${c.pr}\`（评论列表是权威读源；PR 本体这份是最新镜像）。`,
+    "",
+    RELAY_DESCRIPTION_END,
+  ].join("\n");
+}
+
+/**
+ * 把 PR 描述里**自己那几块** marker 块摘掉，人工内容逐字保留。
+ *
+ * 认「起始 marker → 闭合标记」这一对；评论正文那种单行 marker（没有闭合标记）不匹配，
+ * 所以即使有人把评论正文贴进描述也不会被误删。命中多块（历史堆叠）时一并摘掉，
+ * 保证下一步写回去后只剩一块。
+ *
+ * @param {string} previous 读回的整段描述
+ * @returns {string} 摘掉自己那几块后的描述
+ */
+export function stripRelayDescription(previous) {
+  const re = /<!--\s*GA_LOG_RELAY_V1\b[\s\S]*?<!--\s*\/GA_LOG_RELAY_V1\s*-->/gu;
+  return String(previous ?? "").replaceAll(re, "");
+}
+
+/**
+ * 读-改-写里的「改」：保留人工描述、去掉旧的自己那块、把新块补到末尾。
+ *
+ * 不整段覆盖：`PATCH /-/pulls/{n}` 的 `body` 虽是整段写，内容来自「刚读回的原文 +
+ * 只替换自己那一块」。末尾空白归一，避免每跑一次多攒一个空行。
+ *
+ * @param {string} previous 读回的整段描述
+ * @param {string} block 新的镜像块
+ * @returns {string} 要写回的描述
+ */
+export function mergeRelayDescription(previous, block) {
+  const base = stripRelayDescription(previous).replace(/\s+$/u, "");
+  return base === "" ? `${block}\n` : `${base}\n\n${block}\n`;
+}
+
+/**
+ * 评论正文：一行 marker（本地按它认）+ 送达/判决并列读数 + 人读摘要 + 附件链。
+ *
+ * marker 里带 run id 与预合并 sha 的前 8 位 —— 本地能把「这条日志是哪一跑」念出来，
+ * 不用跳 GA 页面（与 #3430 给回调日志补身份读数是同一条理由）。
+ * 「送达 / 判决」那一段是只读解释，**不进 marker、不参与 parseRelayComment**
+ * （本地读者只认 marker 与附件链，形状不变，ISSUE #3452）。
+ *
+ * @param {{pr:string, runId:string, sha:string, fileName:string, assetPath:string, jobs:number, bytes:number, verdictReadout?:string}} c
+ * @returns {string} 评论正文（纯函数）
+ */
 /**
  * 评论正文：一行 marker（本地按它认）+ 送达/判决并列读数 + 人读摘要 + 附件链。
  *
@@ -173,15 +276,14 @@ export function renderVerdictReadout(jobResults) {
  */
 export function relayCommentBody(c) {
   const short = c.sha ? c.sha.slice(0, 8) : "n/a";
-  const link = `[${c.fileName}](/-/files/${c.assetPath})`;
   const readout = c.verdictReadout ?? "";
   return [
-    `<!-- ${RELAY_MARKER} run=${c.runId} sha=${c.sha} pr=${c.pr} jobs=${String(c.jobs)} bytes=${String(c.bytes)} -->`,
+    relayMarkerLine(c),
     `GA 判红日志正文（ISSUE #3437）：run ${c.runId} · sha ${short} · ${String(c.jobs)} 个失败 job · ${String(c.bytes)} 字节（gzip）。`,
     ...(readout ? ["", readout] : []),
     `本地取回：\`pnpm ship --gh-logs pr:${c.pr}\`（优先读本评论的附件，无需出站 github.com）。`,
     "",
-    link,
+    relayAssetLink(c),
   ].join("\n");
 }
 
@@ -277,7 +379,7 @@ export async function collectFailedJobLogs(io) {
  * 发一次 CNB 调用（写一律不重试：一次重发就可能多一条评论）。
  *
  * @param {{ctx:{endpoint:string,repo:string,token:string}, fetchImpl:typeof fetch}} io
- * @param {"POST"|"PUT"|"GET"} method 方法
+ * @param {"POST"|"PUT"|"PATCH"|"GET"} method 方法
  * @param {string} target 完整 URL
  * @param {{json?:unknown, text?:string, contentType?:string}} [body] 请求体
  * @returns {Promise<{ok:true, status:number, json:unknown, text:string} | {ok:false, status:number, detail:string}>}
@@ -318,9 +420,57 @@ export async function cnbRequest(io, method, target, body = {}) {
 }
 
 /**
+ * 把同一份附件链镜像进 **PR 描述**（ISSUE #3454）：读-改-写，只替换自己那块。
+ *
+ * 这一跳与评论通道**解耦**：先发评论（附件「发布」这一跳，是 `GET /-/files/` 可读的
+ * 前提），评论成功之后才镜像描述。描述用**另一枚**令牌 `prToken`（`repo-pr:rw`）：
+ * `CNB_ISSUE_TOKEN` 只有 `repo-notes:rw`，写描述会 403；缺席 / GET 读不到 / PATCH 失败
+ * 都只多一行读数，**不影响评论已送达**这一结论，也不改三态。
+ *
+ * 读改写保留人工描述：`mergeRelayDescription` 先摘掉旧的自己那块（认起始 + 闭合标记
+ * 这一对，不会碰到评论那种单行 marker），再把新块补到末尾。同一 PR 永远只留最新一块。
+ *
+ * @param {{ctx:{endpoint:string,repo:string,prToken:string,pr:string}, fetchImpl:typeof fetch, log:(l:string)=>void}} io
+ * @param {{pr:string, runId:string, sha:string, fileName:string, assetPath:string, jobs:number, bytes:number}} c 与评论同源的身份读数
+ * @returns {Promise<void>} 永远不抛；失败也只记一行读数
+ */
+export async function mirrorRelayDescription(io, c) {
+  const { ctx, fetchImpl, log } = io;
+  if (!ctx.prToken) {
+    log("[ga-logs-relay] 没配 CNB_PULL_REQUEST_TOKEN（repo-pr:rw）⇒ 只发评论，PR 描述不镜像");
+    return;
+  }
+  const pullUrl = `${ctx.endpoint}/${ctx.repo}/-/pulls/${ctx.pr}`;
+  const descCtx = { endpoint: ctx.endpoint, repo: ctx.repo, token: ctx.prToken };
+  const got = await cnbRequest({ ctx: descCtx, fetchImpl }, "GET", pullUrl);
+  if (!got.ok) {
+    log(
+      `[ga-logs-relay] PR 描述读不回（HTTP ${String(got.status)}）⇒ 不镜像（评论已发，缺的只是镜像）`,
+    );
+    return;
+  }
+  const data = isRecord(got.json) ? (isRecord(got.json.data) ? got.json.data : got.json) : null;
+  if (!data || !("body" in data)) {
+    log("[ga-logs-relay] PR 描述应答缺 body 字段 ⇒ 不镜像（评论已发，缺的只是镜像）");
+    return;
+  }
+  const body = mergeRelayDescription(String(data.body ?? ""), renderRelayDescriptionBlock(c));
+  const patched = await cnbRequest({ ctx: descCtx, fetchImpl }, "PATCH", pullUrl, {
+    json: { body },
+  });
+  if (!patched.ok) {
+    log(
+      `[ga-logs-relay] PR 描述写不进（HTTP ${String(patched.status)}）⇒ 不镜像（评论已发，缺的只是镜像）`,
+    );
+    return;
+  }
+  log(`[ga-logs-relay] PR 描述已镜像：PR #${ctx.pr} · run ${c.runId}（评论仍是权威读源）`);
+}
+
+/**
  * 把一份已拼好的正文搬上 CNB：上传 → PUT → 发PR评论（发布）。
  *
- * @param {{ctx:{endpoint:string,repo:string,token:string,pr:string,runId:string,sha:string,verdictReadout?:string}, fetchImpl:typeof fetch, log:(l:string)=>void, gzipSync:(b:Buffer)=>Buffer}} io
+ * @param {{ctx:{endpoint:string,repo:string,token:string,prToken:string,pr:string,runId:string,sha:string,verdictReadout?:string}, fetchImpl:typeof fetch, log:(l:string)=>void, gzipSync:(b:Buffer)=>Buffer}} io
  * @param {{text:string, jobs:number}} collected 失败 job 日志正文
  * @returns {Promise<number>} 0 送达成功 / 2 没判过（前提不全或没发出去）
  */
@@ -358,7 +508,7 @@ export async function relayLogs(io, collected) {
     log(`[ga-logs-relay] PUT 正文失败（HTTP ${String(put.status)}）⇒ 跳过（缺的只是日志）`);
     return CODE.NO_FACT;
   }
-  const body = relayCommentBody({
+  const meta = {
     assetPath,
     bytes: gz.length,
     fileName,
@@ -366,10 +516,9 @@ export async function relayLogs(io, collected) {
     pr: ctx.pr,
     runId: ctx.runId,
     sha: ctx.sha,
-    verdictReadout: ctx.verdictReadout,
-  });
+  };
   const posted = await cnbRequest({ ctx, fetchImpl }, "POST", `${api}/-/pulls/${ctx.pr}/comments`, {
-    json: { body },
+    json: { body: relayCommentBody({ ...meta, verdictReadout: ctx.verdictReadout }) },
   });
   if (!posted.ok) {
     log(
@@ -379,6 +528,16 @@ export async function relayLogs(io, collected) {
   }
   log(
     `[ga-logs-relay] 已搬到 CNB：PR #${ctx.pr} · run ${ctx.runId} · ${String(collected.jobs)} 个失败 job · ${String(gz.length)} 字节（gzip）`,
+  );
+  /* 评论先发（发布这一跳让附件可读），随后把同一条 asset_link 镜像进 PR 描述。
+   * 描述那一格是只写镜像、永不承重：失败只多一行读数，不改上面已定的送达结论。 */
+  await mirrorRelayDescription(
+    {
+      ctx: { endpoint: ctx.endpoint, prToken: ctx.prToken, pr: ctx.pr, repo: ctx.repo },
+      fetchImpl,
+      log,
+    },
+    meta,
   );
   return CODE.OK;
 }

@@ -1794,7 +1794,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(workflow).toContain("actions: read");
     expect(workflow).toContain("ci-ga-logs-relay.mjs");
     expect(workflow).toContain("把 GA 判红日志正文搬到 CNB");
-    /* 用已配好的 CNB_ISSUE_TOKEN（写评论要 repo-notes:rw），不新增 secret；
+    /* 写评论用已配好的 CNB_ISSUE_TOKEN（repo-notes:rw）；ISSUE #3454 起另配一枚
+     * CNB_PULL_REQUEST_TOKEN（repo-pr:rw）只写 PR 描述，旧令牌不扩权。
      * 内置 github.token 读本 run 的 job logs。 */
     expect(workflow).toContain("secrets.CNB_ISSUE_TOKEN");
     expect(workflow).toMatch(/GITHUB_TOKEN:\s*\$\{\{ github\.token \}\}/u);
@@ -1836,6 +1837,35 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(script).toContain("exit 0");
     expect(script).toContain("exit 1");
     expect(script).toContain("exit 2");
+  });
+
+  it("GA 判红日志挂 PR 本体：另配 CNB_PULL_REQUEST_TOKEN（repo-pr:rw），评论仍是权威读源（ISSUE #3454）", () => {
+    /* 期望 3 的答案是「另配写描述专用令牌」，不是给 CNB_ISSUE_TOKEN 扩权：
+     * `patch-pull` 要 repo-pr:rw、`post-pull-comment` 要 repo-notes:rw，两枚分开。
+     * 描述通道是「读改写只替换自己那块」的只写镜像；本地读者只扫评论列表，
+     * 不许把描述也并进读源（两处都命中 = 读到哪份全凭列表顺序）。 */
+    const workflow = readFileSync(path.join(ROOT, ".github/workflows/pr-gate.yml"), "utf8");
+    const relay = readFileSync(path.join(ROOT, "scripts/ci-ga-logs-relay.mjs"), "utf8");
+    const reader = readFileSync(path.join(ROOT, "scripts/ship-ga-logs-cnb.mjs"), "utf8");
+    /* 接线：新 secret 注入 relay step，脚本认这个 env 名。 */
+    expect(workflow).toContain("CNB_PULL_REQUEST_TOKEN: ${{ secrets.CNB_PULL_REQUEST_TOKEN }}");
+    expect(relay).toContain("CNB_PULL_REQUEST_TOKEN");
+    /* 只写描述：GET 读回 → PATCH 写回，且用另一枚令牌（不拿 CNB_ISSUE_TOKEN 顶）。 */
+    expect(relay).toContain("PATCH");
+    expect(relay).toContain("mergeRelayDescription");
+    expect(relay).toContain("stripRelayDescription");
+    /* 评论先发（发布附件）再镜像描述；描述失败不算送达失败。 */
+    expect(relay).toContain("mirrorRelayDescription");
+    /* 本地读者一行不改：仍只认 `cnb pulls list-comments`，描述不进读源。 */
+    expect(reader).toContain("pulls");
+    expect(reader).toContain("list-comments");
+    expect(reader).not.toContain("get-pull");
+    /* 承重一字不动：step 仍不承重，流水线 name 与三态退码不变。 */
+    const relayBlock = workflow.slice(workflow.indexOf("把 GA 判红日志正文搬到 CNB"));
+    expect(relayBlock).toContain("continue-on-error: true");
+    expect(relayBlock).toContain("if: always()");
+    expect(readRegisteredConfig()).toContain("name: GA 判决回调（骨架·休眠）");
+    expect(relay).toContain("不碰承重");
   });
 
   it("Python 探测入口被登记在 env 里，且真的在盘上", () => {
