@@ -52,7 +52,6 @@ export function ShotFilmStrip({
       <div className="custom-scrollbar flex gap-1.5 overflow-x-auto pb-1">
         {shots.map((shot) => {
           const frame = shotFrameView(shot.status);
-          // oxlint-disable-next-line no-unnecessary-condition -- shots 元素来自浅校验的草稿解析（draft-store 只查 Array.isArray、不深查元素），脏草稿可能缺 sceneHeading，保留可选链兜底
           const heading = shot.sceneHeading?.trim();
           return (
             <Hint

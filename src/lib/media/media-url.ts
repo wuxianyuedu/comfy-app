@@ -48,7 +48,6 @@ const IMAGES_ENDPOINT = "/api/images";
  * 不必在调用处再包一层三元。示例见 `ContentAssetNode` 的相册区。
  */
 export function comfyImageUrl(ref: ComfyMediaRef): string | null {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- ref 来自 ComfyUI 工作流/相册数据（外部 JSON），filename 运行期可为 null，本函数契约就是空引用给 null
   const filename = ref.filename?.trim() ?? "";
   if (filename === "") {
     return null;
@@ -74,14 +73,12 @@ export function mediaReferenceFilename(reference: unknown): string {
   if (typeof reference === "string") {
     return reference.trim();
   }
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (reference == null || typeof reference !== "object") {
+  if (reference === null || reference === undefined || typeof reference !== "object") {
     return "";
   }
   /* SAFETY: 类型断言已复核 */
   const raw: unknown = Array.isArray(reference) ? (reference as Array<unknown>)[0] : reference;
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (raw != null && typeof raw === "object") {
+  if (raw !== null && raw !== undefined && typeof raw === "object") {
     /* SAFETY: 类型断言已复核 */
     const f = (raw as { filename?: unknown }).filename;
     return typeof f === "string" ? f.trim() : "";
@@ -101,8 +98,7 @@ export function mediaReferenceFilename(reference: unknown): string {
  * `MediaThumbnail` 的 `src`（它本来就接受 `null`），调用处不必再包三元。
  */
 export function mediaPreviewUrl(reference: unknown): string | null {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (reference == null) {
+  if (reference === null || reference === undefined) {
     return null;
   }
 

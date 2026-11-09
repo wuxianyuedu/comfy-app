@@ -182,7 +182,6 @@ export const LFS_FAILURE_SHORT_ACTIONS = {
  * @returns {{kind: string, label: string, next: string, short: string, evidence: string}}
  */
 export function classifyLfsPushFailure(text) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 入参 text 是子进程原始输出（外部数据），运行期可为 undefined；规则按非空 string 标
   const raw = String(text ?? "");
   const lastLine = raw
     .split("\n")
@@ -283,7 +282,6 @@ export function explainLfsPushFailure(text) {
  * @returns {string | null} 形如 `3/3`，或 `null`
  */
 export function parseLfsObjectCount(text) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 入参 text 是子进程原始输出（外部数据），运行期可为 undefined；规则按非空 string 标
   const m = /Uploading LFS objects:.{0,40}?\((?<done>\d+)\/(?<total>\d+)\)/i.exec(
     String(text ?? ""),
   );

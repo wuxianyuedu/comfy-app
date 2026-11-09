@@ -182,7 +182,6 @@ export function persistEnrichedWorkflowIO(
 ): Record<string, WorkflowIORawEntry> {
   const out: Record<string, WorkflowIORawEntry> = {};
   for (const [ioKey, v] of Object.entries(workflowIO)) {
-    // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- v 是落库 JSON 记录的值，运行期可能为 null，防御判空必要
     if (!v || typeof v !== "object") {
       continue;
     }
@@ -234,7 +233,6 @@ export async function enrichWorkflowIO(
   const workflowIO: Record<string, WorkflowIOEntry> = {};
 
   for (const [ioKey, v] of Object.entries(workflowIORaw)) {
-    // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- v 是落库 JSON 记录的值，运行期可能为 null，防御判空必要
     if (!v || typeof v !== "object") {
       continue;
     }
@@ -273,7 +271,6 @@ export async function enrichWorkflowIO(
       );
       const dicts: Array<Record<string, unknown>> = [rawInputsById, metaById, graph];
       for (const dict of dicts) {
-        // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- dicts 成员源于外部 JSON 记录，graph 参数存在可空调用形态，运行期可能为 null
         if (!dict) {
           continue;
         }
@@ -285,7 +282,6 @@ export async function enrichWorkflowIO(
        * 一个词边界字符（`-`），这样 `9b9009e4` 永远不会
        * 因此不会与 `9b9009e44` 相撞。 */
       for (const dict of dicts) {
-        // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- dicts 成员源于外部 JSON 记录，graph 参数存在可空调用形态，运行期可能为 null
         if (!dict) {
           continue;
         }
@@ -455,8 +451,8 @@ export async function enrichWorkflowIO(
     const modeOverridesSource = v.modeOverrides;
     let cleanedModes: Record<string, WorkflowIOModeOverride> | undefined;
     if (
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      modeOverridesSource != null &&
+      modeOverridesSource !== null &&
+      modeOverridesSource !== undefined &&
       typeof modeOverridesSource === "object" &&
       options &&
       options.length > 0
@@ -464,10 +460,8 @@ export async function enrichWorkflowIO(
       let touched = false;
       const next: Record<string, WorkflowIOModeOverride> = {};
       for (const [mode, override] of Object.entries(modeOverridesSource)) {
-        // oxlint-disable-next-line eqeqeq, typescript/no-unnecessary-condition -- 同时判 null/undefined；override 是 PATCH 原样落库的 JSON 值，运行期可能是 null/标量
-        if (override == null || typeof override !== "object") {
+        if (override === null || override === undefined || typeof override !== "object") {
           /* 畸形覆盖（PATCH 原样落库可能带 null/标量）：原样透传不清洗。 */
-          // oxlint-disable-next-line typescript/no-unnecessary-condition -- 此处 override 已被上面判空收窄成 never，但落库 JSON 运行期仍可能是 null/标量
           next[mode] = override ?? {};
           continue;
         }

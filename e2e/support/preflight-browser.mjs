@@ -71,7 +71,6 @@ export async function checkBrowserReady(options = {}) {
     return { verdict: "ready" };
   }
 
-  // oxlint-disable-next-line no-unnecessary-condition -- error 是 catch 的 unknown 断言，注入的 launch 可能不回该字段，保留运行期守卫
   const message = result.error?.message ?? "";
   const executablePath = parseMissingExecutable(message);
   if (executablePath === null) {

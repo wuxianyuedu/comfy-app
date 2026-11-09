@@ -281,8 +281,7 @@ export function recordPid(root, name, pid) {
   }
   const rawPids = meta.pids;
   const pids = isPidMap(rawPids) ? { ...rawPids } : {};
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (pid == null) {
+  if (pid === null || pid === undefined) {
     delete pids[name];
   } else {
     pids[name] = pid;
@@ -613,7 +612,6 @@ export async function zipSources(entries, outFile) {
   let offset = 0;
   let count = 0;
   for (const { dir, prefix } of entries) {
-    // oxlint-disable-next-line no-await-in-loop -- 条目顺序与 offset 累计依赖前一条目，串行是刻意的（见上）
     for (const rel of collectFiles(dir)) {
       // oxlint-disable-next-line no-await-in-loop -- 同上：逐文件串行压缩
       const data = await fs.promises.readFile(path.join(dir, rel));

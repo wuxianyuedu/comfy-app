@@ -74,8 +74,10 @@ export function RequiredChips({
     <div className="flex flex-wrap items-center justify-end gap-1 pt-1">
       {live.map((pin) => {
         const required = resolveEntryRequired(pin, mode) === true;
-        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-        const visible = visibilityMode == null ? true : isVisibleInMode(pin, visibilityMode);
+        const visible =
+          visibilityMode === null || visibilityMode === undefined
+            ? true
+            : isVisibleInMode(pin, visibilityMode);
         return (
           <span
             className="border-border-strong bg-canvas-deep flex items-center gap-1 rounded border px-1.5 py-0.5"

@@ -44,7 +44,6 @@ const BUILD_SN_SHAPE = /^cnb-[a-z0-9]{2,}-[a-z0-9]{4,}$/i;
 export function parseIssueNumberToken(token) {
   /* `token` 来自命令行与 TAPD 链接尾段 —— **外部输入**，`string` 只是它的常规形态；
    * 兜底留给真给不出来的时候（与 `run-tests.mjs` 那边的 junit 产物同口径）。 */
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上方注释：外部输入，string 只是声明
   const bare = String(token ?? "").replace(/^#/, "");
   return /^\d{2,}$/.test(bare) ? Number(bare) : null;
 }

@@ -62,6 +62,5 @@ export function parseTaskImageRows(rows: ReadonlyArray<unknown>): Array<TaskGall
 /** 拉取任务的产出图片列表。失败由调用方决定（相册场景是静默降级）。 */
 export async function fetchTaskImages(taskId: string): Promise<Array<TaskGalleryImage>> {
   const task = await vanillaApi.task.detail.query({ id: taskId });
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- images 是关系装载行（task 表无此列），列被改名/少发时运行期为 undefined，注释已记该漂移
   return parseTaskImageRows(task.images ?? []);
 }

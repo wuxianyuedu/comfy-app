@@ -90,7 +90,6 @@ describe("WorksGallery 说明文案", () => {
    * 肉眼核，但「星号会不会被渲染出来」只有这一层答得了。 */
   it("把「服务端」排成强调，而不是把 Markdown 星号印到界面上", () => {
     renderWith();
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留空值兜底
     const text = screen.getByText(/列表以/).textContent ?? "";
     expect(text).toContain("列表以服务端为准");
     expect(text, "裸的 Markdown 星号会原样显示给用户").not.toContain("**");
@@ -98,7 +97,6 @@ describe("WorksGallery 说明文案", () => {
 
   it("词边界没有让 JSX 缩进带出多余空白", () => {
     renderWith();
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留空值兜底
     const text = screen.getByText(/列表以/).textContent ?? "";
     // 中文句子里不该出现词间空格（JSX 会把换行处的空白当内容渲染）。
     expect(text).not.toContain("服务端 为准");

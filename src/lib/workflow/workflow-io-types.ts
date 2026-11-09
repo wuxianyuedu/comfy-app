@@ -127,7 +127,6 @@ export function parseWorkflowIOMap(value: unknown): WorkflowIOMap {
   }
   const data = parsed.data;
   for (const entry of Object.values(data)) {
-    // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- 落库 JSON 的防御判断：类型收窄不覆盖运行期 null，保留原判断
     if (!entry || typeof entry !== "object") {
       continue;
     }
@@ -233,7 +232,6 @@ export function resolveEntrySeedMode(
 export function collectModeCodes(io: WorkflowIOMap | null | undefined): Array<string> {
   const seen = new Set<string>();
   for (const entry of Object.values(io ?? {})) {
-    // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- 落库 IO 表的防御判断：类型收窄不覆盖运行期 null，保留原判断
     if (!entry || typeof entry !== "object") {
       continue;
     }

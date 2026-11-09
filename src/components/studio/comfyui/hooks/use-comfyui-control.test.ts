@@ -123,8 +123,7 @@ const mockRouter = t.router({
     comfyStatus: t.procedure.query(() => {
       comfyStatusCalls += 1;
       return {
-        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-        up: behavior.comfyBase != null,
+        up: behavior.comfyBase !== null && behavior.comfyBase !== undefined,
         base: behavior.comfyBase ?? null,
         starting: false,
         /* 库里已保存的路径：启动动作按它拉起，视图把它写在页上（ISSUE #1900

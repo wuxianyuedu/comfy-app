@@ -693,7 +693,7 @@ export function mergeAndVerify(ctx) {
   // 回读两件事：平台说合上了，**且**碎片真的在主干顶端（只看平台回执 = 半个结论）。
   const baseParts = (baseRef ?? "").split("/");
   const trunkBranch = baseParts.slice(1).join("/");
-  run("git", ["fetch", baseParts[0] ?? up.remote ?? "origin", trunkBranch || "master"]); // oxlint-disable-line typescript/no-unnecessary-condition -- baseParts[0] 在 noUncheckedIndexedAccess 下带 undefined 分量，兜底链为类型收窄服务
+  run("git", ["fetch", baseParts[0] ?? up.remote ?? "origin", trunkBranch || "master"]);
   const stillOpen = cnbJson(run, [
     "pulls",
     "get-pull",

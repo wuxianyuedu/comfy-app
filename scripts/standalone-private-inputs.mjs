@@ -385,7 +385,6 @@ export const STANDALONE_ALLOWED_TOPLEVEL = [
  * @returns {boolean}
  */
 function isProductPathAllowed(allowedToplevel, relPosix) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- relPosix 来自文件枚举（外部数据），string 只是声明
   const rel = String(relPosix ?? "")
     .replaceAll("\\", "/")
     .replace(/^\.?\//, "");

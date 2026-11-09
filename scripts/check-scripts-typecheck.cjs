@@ -216,7 +216,6 @@ function trackedMjsDetailed(root) {
    * 声明非空）。本文件自己就是「取不到 ≠ 没有」的执行者，这处 `??` 是那道防线。 */
   if (top.status !== 0) {
     /* 「不是 git 仓库」是合法的夹具形态；除此之外的非零退出（仓库损坏等）是真故障。 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 起不来时 stderr 实测为 null/undefined，@types/node 按 string 标
     if (/not a git repository/i.test(String(top.stderr ?? ""))) {
       return { kind: "not-git-top" };
     }
@@ -225,7 +224,6 @@ function trackedMjsDetailed(root) {
       reason: `git rev-parse 退出码 ${top.status}：${firstErrLine(top.stderr)}`,
     };
   }
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 起不来时 stdout 实测为 undefined（见上方注释），@types/node 按 string 标
   if (!String(top.stdout ?? "").trim()) {
     return { kind: "not-git-top" };
   }
@@ -257,7 +255,6 @@ function trackedMjsDetailed(root) {
   return {
     kind: "ok",
     files: new Set(
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 起不来时 stdout 实测为 undefined（见上方注释），@types/node 按 string 标
       String(listed.stdout ?? "")
         .split("\0")
         .filter(Boolean)
@@ -397,7 +394,6 @@ function runTsc() {
   }
   /* 同理：tsc 没跑起来 / 被掐断时 `stdout` / `stderr` 是 `undefined`，而这处正是要
    * 把「一行都没有」判成 `ok: false`（空输出不构成绿）的地方。 */
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：tsc 没跑起来时两个出参都是 undefined
   const output = `${r.stdout ?? ""}${r.stderr ?? ""}`;
   if (!output.trim()) {
     return {
@@ -750,7 +746,6 @@ function main(io = {}) {
   const dropped = [];
   for (const [rel, codes] of Object.entries(baseline.files ?? {})) {
     for (const [code, base] of Object.entries(codes)) {
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- `cur.files` 是本跑现算的稀疏表，没报过的格就是缺；规则不建模
       const n = cur.files?.[rel]?.[code] ?? 0;
       if (n < base) {
         dropped.push(`  ${rel} ${code}: ${base} → ${n}`);

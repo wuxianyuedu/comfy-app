@@ -147,9 +147,7 @@ export function useHistoryList(): HistoryListController {
     ),
   );
   const workflowIO = useMemo<WorkflowIOMap>(
-    () =>
-      // oxlint-disable-next-line no-unnecessary-condition -- ioQ.data 来自 tRPC workflow.detail（外部数据），旧服务端可能缺 template/workflowIO，? 是运行时守卫
-      ioQ.isSuccess ? parseWorkflowIOMap(ioQ.data?.template?.workflowIO) : EMPTY_WORKFLOW_IO,
+    () => (ioQ.isSuccess ? parseWorkflowIOMap(ioQ.data?.template?.workflowIO) : EMPTY_WORKFLOW_IO),
     [ioQ.isSuccess, ioQ.data],
   );
   /* 模式契约注册表：详情弹窗按「任务模式 + 生效契约」枚举工坊对外口（与工坊

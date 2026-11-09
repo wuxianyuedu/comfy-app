@@ -76,7 +76,6 @@ test.describe("锚定浮层让出窗口标题行 @critical", () => {
           titleBarBottom: t.bottom,
           hitInsidePopup: hit ? popup === hit || popup.contains(hit) : false,
           hitIsTitleBar: hit ? titleBar!.contains(hit) : false,
-          // oxlint-disable-next-line typescript/no-unnecessary-condition -- Playwright evaluate 里的 DOM 节点 textContent 运行期可为 null（lib.dom 声明 string|null），规则未建模，保留兜底
           text: popup.textContent ?? "",
         };
       });

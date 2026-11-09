@@ -103,7 +103,6 @@ export type SpawnArgsFacts = {
  */
 export function buildSpawnArgs(facts: SpawnArgsFacts): Array<string> {
   const port =
-    // oxlint-disable-next-line strict-boolean-expressions -- 「0 = 未配置」端口契约判据（scripts/check-comfyui-port-contract.cjs）钉死此形状：0 与 undefined 同为「未配置」，都落 defaultPort
     facts.effectivePort && facts.effectivePort > 0 ? facts.effectivePort : facts.defaultPort;
   const args = [...facts.baseArgs];
   if (port !== facts.defaultPort) {

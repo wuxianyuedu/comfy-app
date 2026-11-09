@@ -621,7 +621,6 @@ export function applySlot(io = {}) {
       cwd: slot,
       stdio: "inherit",
     });
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- res 是注入的子进程执行封装，实跑可能缺，类型按非空标
     const status = res?.status ?? 1;
     /* 「退 0」与「装出来一棵树」是两件事：注入的出口、被截断的日志、pnpm 自己的
      * 空跑都可能给出 0 而没有产物。产物不在就按失败处理 —— 写指纹这一步在没产物的
@@ -664,7 +663,6 @@ export function applySlot(io = {}) {
   }
 }
 
-// oxlint-disable-next-line typescript/no-unnecessary-condition -- process.argv[1] 在 node -e / REPL 形态下实为 undefined，@types/node 标成 string
 if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   applySlot();
   process.exit(0);

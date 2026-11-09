@@ -141,7 +141,6 @@ function run(cmd, args, downloadHost) {
     windowsHide: true,
     env,
   });
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout / stderr 实测为 undefined，@types/node 按 string 标
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
   return { ok: r.status === 0 && !r.error, out };
 }
@@ -162,7 +161,6 @@ function section(title) {
  * @returns {{major: number, minor: number, patch: number} | null}
  */
 export function parseVersion(text) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- text 是组件自己测出来的版本串（外部输入），类型按 string 标窄
   const m = /(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)/.exec(text ?? "");
   if (!m) {
     return null;

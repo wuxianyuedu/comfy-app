@@ -506,7 +506,6 @@ export async function reapStaleRunningTasks(): Promise<void> {
                 isRecord(errorField) && typeof errorField.message === "string"
                   ? errorField.message
                   : undefined;
-              // oxlint-disable-next-line strict-boolean-expressions -- errored 与 error.message 都是 ComfyUI history 回执里的外部字段，任意真值都按「有错误现场」判，防御外部形态变化
               if ((isRecord(status) && status.errored) || errMsg) {
                 verdict = "failed";
                 reason = `ComfyUI execution_error: ${errMsg ?? "未知原因"} (promptId=${t.promptId})`;

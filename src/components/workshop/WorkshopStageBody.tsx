@@ -383,8 +383,9 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
               <LazyShotStudio
                 apiChannels={apiChannels}
                 characters={characters}
-                // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                onCancelShot={(shot) => void cancelShotTask(shot, "image")}
+                onCancelShot={(shot) => {
+                  void cancelShotTask(shot, "image");
+                }}
                 onNextStage={() => {
                   setTab("video");
                 }}
@@ -416,8 +417,9 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
             <StageBoundary label="视频工具">
               <LazyVideoStudio
                 apiChannels={apiChannels}
-                // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                onCancelShot={(shot) => void cancelShotTask(shot, "video")}
+                onCancelShot={(shot) => {
+                  void cancelShotTask(shot, "video");
+                }}
                 onNextStage={() => {
                   setTab("render");
                 }}

@@ -134,7 +134,6 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown
   // 行的形状取决于包（裸文件名字符串，或一条 widget 记录）。
   type PowerLoraWidget = string | Record<string, unknown>;
   const loras: Array<PowerLoraWidget> = widgets.filter((widget): widget is PowerLoraWidget => {
-    // oxlint-disable-next-line no-unnecessary-condition -- widgets 来自 ComfyUI 的 widgets_values 原始 JSON，元素可能是 null，判空是运行时守卫
     if (widget === null || widget === undefined) {
       return false;
     }

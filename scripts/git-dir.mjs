@@ -86,7 +86,6 @@ export function resolveGitDir(cwd = process.cwd()) {
   if (r.status !== 0) {
     return null;
   }
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程起不来时 stdout 实测为 undefined（@types/node 声明偏窄）
   const dir = String(r.stdout ?? "").trim();
   return dir || null;
 }

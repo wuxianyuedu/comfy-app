@@ -250,8 +250,7 @@ function isDateColumn(col: string): boolean {
 function parseRow(_table: string, row: Record<string, unknown>): Row {
   const out: Row = { ...row };
   for (const [k, v] of Object.entries(out)) {
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (v != null && jsonColumns.has(k) && typeof v === "string") {
+    if (v !== null && v !== undefined && jsonColumns.has(k) && typeof v === "string") {
       try {
         out[k] = JSON.parse(v);
       } catch {
@@ -509,8 +508,7 @@ let seedSeq = 0;
  * 「密文形态」恰恰是 `LlmConfigRepository` / `RemoteModelRepository` 的关键行为。
  */
 function encryptSeedLlmKey(plain: string | null | undefined): string | null {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (plain == null || plain === "") {
+  if (plain === null || plain === undefined || plain === "") {
     return null;
   }
   return encryptLlmKey(plain);

@@ -52,7 +52,6 @@ export function runCapture(command, args, timeoutMs = 10_000) {
       // `stdout` 在命令起不来时实测是 `undefined`（`@types/node` 的 `execFile` 回调把它
       // 声明成 `string`）⇒ 这个 `?? ""` 是给运行时兜的，不是多余的。
       (err, stdout) => {
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- execFile 回调的 stdout 在命令起不来时实测 undefined（上方注释已记）
         resolve(err ? "" : String(stdout ?? ""));
       },
     );
@@ -77,13 +76,11 @@ export function runCaptureStrict(command, args, timeoutMs = 10_000) {
       command,
       args,
       { timeout: timeoutMs, encoding: "utf8", windowsHide: true },
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- execFile 回调的 stdout 在命令起不来时实测 undefined（runCapture 上方注释已记）
       (err, stdout) => {
         if (err) {
           reject(new ProbeUnavailableError(command, args, err.message));
           return;
         }
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上
         resolve(String(stdout ?? ""));
       },
     );

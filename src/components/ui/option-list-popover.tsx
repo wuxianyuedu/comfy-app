@@ -132,8 +132,7 @@ export function OptionListPopover({
             </Button>
           );
         })}
-        {/* oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined */}
-        {items.length === 0 && emptyHint != null && (
+        {items.length === 0 && emptyHint !== null && emptyHint !== undefined && (
           <div className="text-ink-muted text-3xs px-3 py-2">{emptyHint}</div>
         )}
       </PopoverContent>

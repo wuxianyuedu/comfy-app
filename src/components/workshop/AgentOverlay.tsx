@@ -289,8 +289,9 @@ export function AgentOverlay({
            * 此前这里没判 IME，中文输入法下**候选词未上屏的 Enter 会被当成发送**
            *（把半截拼音发给 AI），见 §16.2.4.29。 */
           {...enterCommit({
-            // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-            onCommit: () => void send(),
+            onCommit: () => {
+              void send();
+            },
             excludeShift: true,
           })}
           className="field-sizing-normal border-border bg-subtle text-ink placeholder:text-muted-foreground/50 focus-visible:border-primary focus-visible:ring-primary/30 min-h-0 flex-1 resize-none rounded-xl px-3 py-2 text-sm"
@@ -301,8 +302,9 @@ export function AgentOverlay({
           aria-label="发送"
           className="shrink-0 rounded-lg"
           disabled={!input.trim() || busy}
-          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-          onClick={() => void send()}
+          onClick={() => {
+            void send();
+          }}
           size="icon-lg"
           variant="primary-solid"
         >

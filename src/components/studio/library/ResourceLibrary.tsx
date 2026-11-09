@@ -43,8 +43,9 @@ export function ResourceLibrary() {
   /* 素材上传选择器：多选、不限定类型（素材库也收音频 / 视频 / 文档）。 */
   const uploadPicker = useFilePicker({
     multiple: true,
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    onPick: (_first, files) => void library.upload(files),
+    onPick: (_first, files) => {
+      void library.upload(files);
+    },
   });
 
   /* 前置未满足：本项目档下没有活跃项目时，「本项目」这个档取不到任何东西，

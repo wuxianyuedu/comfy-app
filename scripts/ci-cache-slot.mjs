@@ -230,9 +230,7 @@ function cacheRootFacts(io) {
     };
   }
   const res = run(["store", "path"], { cwd: io.cwd });
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- res 是子进程执行封装返回值，注入面实测可缺，类型按非空标
   const store = String(res?.stdout ?? "").trim();
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- res 是子进程执行封装返回值，注入面实测可缺，类型按非空标
   if ((res?.status ?? 1) !== 0 || !store) {
     return {
       explicit: null,
@@ -651,7 +649,6 @@ export function main(io = {}) {
   return 0;
 }
 
-// oxlint-disable-next-line typescript/no-unnecessary-condition -- process.argv[1] 在 node -e / REPL 形态下实为 undefined，@types/node 标成 string
 if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(main());
 }

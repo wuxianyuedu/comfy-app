@@ -65,39 +65,33 @@ export type ComfySignal =
 export class ComfyProtocolAdapter {
   /** executing / progress —— 重置该任务的看门狗。 */
   isActivity(msg: ComfyWsMessage): boolean {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- msg 源于 ComfyUI WebSocket 的 JSON 帧（外部 IPC），类型断言掩盖了运行期可能为 null，保留防御
     return msg?.type === "executing" || msg?.type === "progress";
   }
 
   /** executing 且节点非 null —— 某节点开始执行。 */
   isNodeStarted(msg: ComfyWsMessage): boolean {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- msg 源于外部 WS 帧，运行期可能为 null，保留防御
     return msg?.type === "executing" && Boolean(msg.data?.node);
   }
 
   /** executing 且 node 为 null —— 上一个节点跑完。 */
   isNodeFinished(msg: ComfyWsMessage): boolean {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- msg 源于外部 WS 帧，运行期可能为 null，保留防御
     return msg?.type === "executing" && msg.data?.node === null;
   }
 
   /** progress 进度跳动。 */
   isProgress(msg: ComfyWsMessage): boolean {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- msg 源于外部 WS 帧，运行期可能为 null，保留防御
     return msg?.type === "progress";
   }
 
   /** 完成信号：标准 ComfyUI 用 executing 且 node 为 null；
    *  kaytool 构建（v0.28）改发 execution_success。 */
   isCompletion(msg: ComfyWsMessage): boolean {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- msg 源于外部 WS 帧，运行期可能为 null，保留防御
     return msg?.type === "execution_success" || this.isNodeFinished(msg);
   }
 
   /** 错误：execution_error（kaytool 构建里的 exception_message
    *  可能是结构化对象 —— 由 friendlyError 负责剥出内容）。 */
   isError(msg: ComfyWsMessage): boolean {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- msg 源于外部 WS 帧，运行期可能为 null，保留防御
     return msg?.type === "execution_error";
   }
 

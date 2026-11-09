@@ -186,13 +186,11 @@ export async function resolveComfyBase(): Promise<string> {
    *
    * 判据链本身收在 `instance-port.ts`（与 status.ts 同口径：main.py → 启动器
    * 候选 → 环境反查），这里只管把结论翻成地址。 */
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- settings 由 app-settings.json 经 JSON.parse 合并而来，手写/历史文件里 comfyuiPath 可能为 null，非空判断是运行期防线
   const comfyuiPath = settings.comfyuiPath?.trim();
   if (comfyuiPath) {
     const found = await queryInstanceByPath(comfyuiPath);
     const portBase = baseForLocalPort(found.port);
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (found.port != null && portBase !== null) {
+    if (found.port !== null && found.port !== undefined && portBase !== null) {
       _resolvedBase = portBase;
       logger.info(
         `[comfyui] Connected to configured instance on :${found.port} (pid=${found.pid}, via=${found.via})`,
@@ -575,10 +573,12 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
       vramUsed,
       vramFree,
       vramTotal,
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      smiVramUsed: smi?.usedMiB == null ? undefined : smi.usedMiB * 1024 * 1024,
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      smiVramTotal: smi?.totalMiB == null ? undefined : smi.totalMiB * 1024 * 1024,
+      smiVramUsed:
+        smi?.usedMiB === null || smi?.usedMiB === undefined ? undefined : smi.usedMiB * 1024 * 1024,
+      smiVramTotal:
+        smi?.totalMiB === null || smi?.totalMiB === undefined
+          ? undefined
+          : smi.totalMiB * 1024 * 1024,
       ramUsed: ramTotal > 0 ? Math.max(0, ramTotal - ramFree) : 0,
       ramTotal,
     };

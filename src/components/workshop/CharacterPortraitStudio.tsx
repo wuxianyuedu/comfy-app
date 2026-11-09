@@ -54,8 +54,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
   /* 导入定妆照：隐藏 input + 选完复位收进`ui/file-picker`。 */
   const importPicker = useFilePicker({
     accept: "image/*",
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    onPick: (file) => void actions.importFile(character, file),
+    onPick: (file) => {
+      void actions.importFile(character, file);
+    },
   });
 
   /** 会话消息只挂在发起它的那张卡上，别的角色卡不重复展示同一份进度与日志。 */
@@ -167,8 +168,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
         <Button
           className="h-auto rounded-md px-3 py-1.5"
           disabled={!canGenerate}
-          onClick={() =>
-            // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
+          onClick={() => {
             void actions.generate(
               character,
               session.channel === "remote" && effectiveRemoteModel
@@ -179,8 +179,8 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                       localLabel: localOptionLabels[session.localWorkflowId] ?? "库工作流",
                     }
                   : undefined,
-            )
-          }
+            );
+          }}
           size="xs"
           variant="primary-solid"
         >
@@ -257,7 +257,6 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
               {session.error}
             </Alert>
           )}
-          {/* oxlint-disable-next-line no-unnecessary-condition -- 本块在外层 {focused && …} 内、focused 已收窄为真使本条件恒真；保留 || focused 与外层守卫解耦，防守卫调整后语义漂移 */}
           {(session.log.length > 0 || focused) && (
             /* 触发行右侧的「历史」是**另一个动作**（打开历史日志），不是折叠
              * 开关 —— 它不能放进`Disclosure` 的 trigger 里：

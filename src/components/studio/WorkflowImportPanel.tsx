@@ -55,8 +55,9 @@ export function WorkflowImportPanel({ state, onClose, onImport }: WorkflowImport
   const pickerProps = useMemo(() => ({ "aria-label": "选择工作流 JSON 文件" }), []);
   const importPicker = useFilePicker({
     accept: ".json,.workflow,application/json",
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    onPick: (file) => void handlePickedFile(file),
+    onPick: (file) => {
+      void handlePickedFile(file);
+    },
     inputProps: pickerProps,
   });
 

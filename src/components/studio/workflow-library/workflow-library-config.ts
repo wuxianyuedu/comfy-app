@@ -189,7 +189,6 @@ function sourceOf(workflow: WorkflowRow): "local" | "online" {
 }
 
 function categoryOf(workflow: Pick<WorkflowRow, "taskType">): string | undefined {
-  // oxlint-disable-next-line no-unnecessary-condition -- taskType 来自 tRPC workflow.list 响应，旧数据可能缺该字段，空串兜底是运行期守卫
   return getWorkflowType(normalizeTaskType(workflow.taskType ?? ""))?.category;
 }
 

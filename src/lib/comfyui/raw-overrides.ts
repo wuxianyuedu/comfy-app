@@ -154,7 +154,6 @@ function widgetSlot(node: RawUiNode, name: string): number {
   const inputs = node.inputs ?? [];
   let slot = 0;
   for (const inp of inputs) {
-    // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- widget 标记是二形（外部 JSON）；inputs 元素运行期可能为 null，判空防御必要
     if (inp?.widget) {
       if (inp.name === name) {
         return slot;
@@ -170,7 +169,6 @@ function seedWidgetSlot(node: RawUiNode): number {
   const inputs = node.inputs ?? [];
   let slot = 0;
   for (const inp of inputs) {
-    // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- widget 标记是二形（外部 JSON）；inputs 元素运行期可能为 null，判空防御必要
     if (!inp?.widget) {
       continue;
     }
@@ -187,7 +185,6 @@ function seedWidgetSlot(node: RawUiNode): number {
 function seedWidgetName(node: RawUiNode): string | null {
   const inputs = node.inputs ?? [];
   for (const inp of inputs) {
-    // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- widget 标记是二形（外部 JSON）；inputs 元素运行期可能为 null，判空防御必要
     if (!inp?.widget) {
       continue;
     }
@@ -206,7 +203,6 @@ function widgetInputCount(node: RawUiNode): number {
   const inputs = node.inputs ?? [];
   let count = 0;
   for (const inp of inputs) {
-    // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- widget 标记是二形（外部 JSON）；inputs 元素运行期可能为 null，判空防御必要
     if (inp?.widget) {
       count++;
     }
@@ -259,8 +255,7 @@ function subgraphDefs(raw: JsonRecord): Map<string, RawSubgraph> {
   const subs = isRecord(defs) ? defs.subgraphs : undefined;
   const list: Array<unknown> = Array.isArray(subs)
     ? subs
-    : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      subs != null && typeof subs === "object"
+    : subs !== null && subs !== undefined && typeof subs === "object"
       ? Object.values(subs)
       : [];
   for (const sg of list) {
@@ -389,7 +384,6 @@ function hostWidgetIndexes(wrapper: RawUiNode): Map<string, number> {
   const out = new Map<string, number>();
   let i = 0;
   for (const inp of wrapper.inputs ?? []) {
-    // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- widget 标记是二形（外部 JSON）；inputs 元素运行期可能为 null，判空防御必要
     if (!inp?.widget) {
       continue;
     }
@@ -464,8 +458,7 @@ function applySubgraphInteriorOverrides(
  * 只改深拷贝出来的载荷，库里的工作流不受影响。
  */
 function neutralizePromotedHostDrift(raw: JsonRecord): void {
-  // oxlint-disable-next-line eqeqeq, typescript/no-unnecessary-condition -- 同时判 null/undefined；raw 是外部工作流 JSON 的深层拷贝（JSON.parse 结果），运行期可能为 null
-  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) {
+  if (raw === null || raw === undefined || typeof raw !== "object" || Array.isArray(raw)) {
     return;
   }
   /** comfy-cli 的判据（复刻自 `comfy_cli.cql.promoted.promoted_inputs`）。 */
@@ -481,7 +474,6 @@ function neutralizePromotedHostDrift(raw: JsonRecord): void {
         continue;
       }
       const inner = t.innerById.get(target.nodeId);
-      // oxlint-disable-next-line strict-boolean-expressions -- widget 标记是「字符串名或 {name} 对象」二形（外部 JSON），按任意真值判「有没有控件」
       if (!inner?.inputs?.[target.slot]?.widget) {
         continue;
       }
@@ -575,7 +567,6 @@ function mapInputSlotToWidgetSlot(node: RawUiNode, inputIndex: number): number {
   let slot = 0;
   for (let i = 0; i < inputs.length; i++) {
     const inp = inputs[i];
-    // oxlint-disable-next-line strict-boolean-expressions -- widget 标记是「字符串名或 {name} 对象」二形（外部 JSON），按任意真值判「有没有控件」
     if (!inp?.widget) {
       continue;
     }
@@ -632,8 +623,7 @@ export function applyApiOverrides(
   graph: unknown,
   overrides?: Array<RawWorkflowOverride>,
 ): JsonRecord {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (graph == null || typeof graph !== "object" || Array.isArray(graph)) {
+  if (graph === null || graph === undefined || typeof graph !== "object" || Array.isArray(graph)) {
     return {};
   }
   const parsed: unknown = JSON.parse(JSON.stringify(graph));
@@ -643,7 +633,6 @@ export function applyApiOverrides(
   }
 
   for (const ov of overrides) {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- overrides 是库里的 workflowInputs JSON，数组元素运行期可能是 null，保留防御判空
     if (!ov?.nodeId || ov.value === undefined) {
       continue;
     }
@@ -690,7 +679,6 @@ export function applyRawOverrides(
   /* 已落到节点上的覆盖项，循环结束后统一同步子图内层（见文件末尾）。 */
   const pendingByNode = new Map<string, Array<{ name: string; value: unknown }>>();
   for (const ov of overrides) {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- overrides 是库里的 workflowInputs JSON，数组元素运行期可能是 null，保留防御判空
     if (!ov?.nodeId || ov.value === undefined) {
       continue;
     }

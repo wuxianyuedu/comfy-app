@@ -224,7 +224,6 @@ export function resolutionDims(
   tier: ResolutionTier,
   table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
 ): SizeDims {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- table 可由调用方传入（localStorage 恢复表），且本函数注释承诺「表里缺行时回退」，运行期可缺场景行
   const row = table[scene]?.[nearestRatioPreset(ratio).label];
   const hit = row?.[tier];
   if (hit && hit.width > 0 && hit.height > 0) {
@@ -727,8 +726,7 @@ export function toSizeSpec(raw: unknown): SizeSpec {
   if (typeof raw === "string") {
     return sizeSpecFromText(raw);
   }
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (raw != null && typeof raw === "object") {
+  if (raw !== null && raw !== undefined && typeof raw === "object") {
     return normalizeSizeSpec(raw);
   }
   return { ...DEFAULT_SIZE_SPEC };
@@ -817,7 +815,6 @@ export function resolutionTierOf(
   if (!(width > 0) || !(height > 0)) {
     return null;
   }
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：table 可由调用方传入，场景行运行期可能缺失，缺行时返回 null
   const row = table[scene]?.[nearestRatioPreset(width / height).label];
   if (!row) {
     return null;

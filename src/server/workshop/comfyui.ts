@@ -204,9 +204,7 @@ export async function getComfyView(
   const base = comfyBase();
   const url = new URL(`${base}/api/view`);
   url.searchParams.set("filename", filename);
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 这两项来自 ComfyUI 输出 JSON（经 `as` 断言），运行期可能缺省；参数类型只标 string
   url.searchParams.set("subfolder", subfolder ?? "");
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：type 同样来自 ComfyUI 输出 JSON 的 `as` 断言，运行期可能缺省
   url.searchParams.set("type", type ?? "");
   try {
     const res = await fetch(url.toString(), {

@@ -102,13 +102,11 @@ export function extractValidationErrors(
       return fields.some((value) => Boolean(value));
     });
   if (
-    // oxlint-disable-next-line strict-boolean-expressions -- ne 是外部 JSON 的任意值，结构不保证，「有没有内容」按任意真值判
     (!ne || (Array.isArray(ne) ? ne.length === 0 : Object.keys(ne).length === 0)) &&
     isListCarrier
   ) {
     ne = res;
   }
-  // oxlint-disable-next-line strict-boolean-expressions -- 同上：ne 形状来自外部，「没内容」按任意真值判
   if (!ne) {
     return [];
   }
@@ -142,8 +140,7 @@ export function extractValidationErrors(
       out.push({ nodeId: nid, classType, field: "", message: errRec.message });
     } else if (typeof err === "string") {
       out.push({ nodeId: nid, classType, field: "", message: err });
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    } else if (err != null && typeof err === "object") {
+    } else if (err !== null && err !== undefined && typeof err === "object") {
       // 未知的结构化形状 —— 尽力序列化出来，绝不把信息丢掉。
       out.push({
         nodeId: nid,
@@ -173,8 +170,7 @@ function isValidationError(v: unknown): v is ValidationError {
 export function parseValidationErrors(
   raw: string | null | undefined,
 ): Array<ValidationError> | null {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (raw == null || raw === "") {
+  if (raw === null || raw === undefined || raw === "") {
     return null;
   }
   try {

@@ -182,7 +182,6 @@ export function applyImageReview(
     hit = true;
     return { ...raw, imageReview: verdict };
   });
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- hit 由 map 回调里置真，规则的控制流看不到闭包写入，运行期可为 true
   return hit ? next : entities;
 }
 
@@ -222,7 +221,6 @@ export function applyReview(
       ...(history.length > 0 ? { reviewHistory: history } : {}),
     };
   });
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：hit 由 map 回调里置真，闭包写入不可见
   return hit ? next : entities;
 }
 
@@ -403,7 +401,6 @@ export function applyHumanVerdict(
     hit = true;
     return { ...raw, humanVerdict: verdict };
   });
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：hit 由 map 回调里置真，闭包写入不可见
   return hit ? next : entities;
 }
 
@@ -443,6 +440,5 @@ export function applyHumanRating(
     // undefined 键不落：序列化后 null 与缺省在宽容读下等价，这里保留 null 显式语义。
     return value === null ? { ...raw, humanRating: null } : { ...raw, humanRating: value };
   });
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：hit 由 map 回调里置真，闭包写入不可见
   return hit ? next : entities;
 }

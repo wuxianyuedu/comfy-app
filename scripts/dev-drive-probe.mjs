@@ -281,7 +281,6 @@ export function probeVolume(platform) {
       `if ($d) { "$($d.DriveFormat)|$($d.VolumeLabel)" } else { "|" }`,
     platform,
   );
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout 实测为 undefined，@types/node 按 string 标
   raw = String(viaDriveInfo.stdout ?? "").trim();
   if (!raw || raw === "|") {
     const viaGetVolume = runPowerShell(
@@ -289,7 +288,6 @@ export function probeVolume(platform) {
         `if ($v) { "$($v.FileSystemType)|$($v.FileSystemLabel)" } else { "|" }`,
       platform,
     );
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout 实测为 undefined，@types/node 按 string 标
     raw = String(viaGetVolume.stdout ?? "").trim();
   }
   const [fsType = "", label = ""] = raw.split("|");

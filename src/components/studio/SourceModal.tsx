@@ -42,8 +42,7 @@ export type SourceModalProps = {
 
 export function SourceModal({ data, loading, error, onClose }: SourceModalProps) {
   const activeText = useMemo(() => {
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (data?.source == null) {
+    if (data?.source === null || data?.source === undefined) {
       return "";
     }
     return JSON.stringify(data.source, null, 2);
@@ -129,8 +128,7 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
               <p className="text-ink-muted px-5 py-3 text-sm">加载中…</p>
             ) : error !== undefined && error !== "" ? (
               <p className="text-destructive px-5 py-3 text-sm">{error}</p>
-            ) : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-            data?.source == null ? (
+            ) : data?.source === null || data?.source === undefined ? (
               <p className="text-ink-muted px-5 py-3 text-sm">没有可显示的数据</p>
             ) : (
               <LazyJsonViewer

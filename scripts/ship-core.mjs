@@ -291,7 +291,6 @@ export function parseSlug(remoteUrl) {
     return null;
   }
   const m = s.match(/[:/](?<slug>[^/]+\/[^/]+?)(?:\.git)?$/);
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则捕获组在部分匹配形态下运行时为 undefined
   return m ? (m.groups?.slug ?? null) : null;
 }
 
@@ -334,7 +333,6 @@ export function parseSlug(remoteUrl) {
  * @returns {{remote: string | null, base: string | null, source: "upstream" | "remote-head" | "sole-remote" | "origin" | "none"}}
  */
 export function resolveUpstream({ upstream, remotes = [], localBranch = null, remoteHead = null }) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- remotes 来自 git 输出（外部数据），元素运行时可为 null
   const named = remotes.map((r) => (r ?? "").trim()).filter(Boolean);
   const u = (upstream ?? "").trim();
   const slash = u.indexOf("/");
@@ -579,7 +577,6 @@ export function findPullForBranch(json, branch) {
  * @returns {number | null} 命中的 PR 号；认不出（含空 sha）时 `null`
  */
 export function findMergedPullForHeadSha(json, headSha, sink = null) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- headSha 来自 git rev-parse 输出（外部数据），string 只是声明
   const sha = String(headSha ?? "").trim();
   if (!sha) {
     return null;
@@ -681,8 +678,7 @@ export function planCommands(st) {
    * 这里的计划只服务于「源码里每一个 cnb 工具都有一条对应的计划行」那本账：
    * 对账用例把三个旗标一起拨上，任何一侧新增调用而另一侧没跟都会红。
    * 写标签 / 评论一律**后跟独立回读** —— 回执不算结论。 */
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (st.claim != null) {
+  if (st.claim !== null && st.claim !== undefined) {
     const who = st.handle ?? "<短名>";
     p.push(`cnb issues get-issue --repo ${st.slug} --number ${st.claim} -v`);
     p.push(
@@ -701,8 +697,7 @@ export function planCommands(st) {
       `cnb issues list-issue-comments --repo ${st.slug} --number ${st.claim} --sort -created --page-size 100 -v`,
     );
   }
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (st.release != null) {
+  if (st.release !== null && st.release !== undefined) {
     const who = st.handle ?? "<短名>";
     p.push(`cnb issues get-issue --repo ${st.slug} --number ${st.release} -v`);
     p.push(

@@ -197,8 +197,10 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
       set((state) => {
         const hit = codes.filter((code) =>
           Object.values(state.workflowIO).some(
-            // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-            (entry) => entry.modeOverrides != null && code in entry.modeOverrides,
+            (entry) =>
+              entry.modeOverrides !== null &&
+              entry.modeOverrides !== undefined &&
+              code in entry.modeOverrides,
           ),
         );
         if (hit.length === 0) {
@@ -571,8 +573,7 @@ export function createNodeJsonViewerStore(
         rawNodesSource = rawJsonNodes;
       }
       const rawNode = rawNodesSource
-        ? // oxlint-disable-next-line no-unnecessary-condition -- rawNodesSource 来自 rawJson / 子图定义的浅断言，脏数据可能含 null 元素
-          (rawNodesSource.find((rawNode) => String(rawNode?.id) === nodeId) ?? null)
+        ? (rawNodesSource.find((rawNode) => String(rawNode?.id) === nodeId) ?? null)
         : null;
       return {
         entry,

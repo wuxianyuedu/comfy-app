@@ -152,7 +152,6 @@ describe("档位：跳过必须被说出来", () => {
           },
         },
       );
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       expect(r.status, r.stderr ?? "").toBe(0);
       return `${r.stdout}\n${r.stderr}`;
     };

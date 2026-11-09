@@ -78,8 +78,7 @@ export function FormField({
 
   return (
     <Field className={cn("min-w-0 gap-0", className)}>
-      {/* oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined */}
-      {label != null && (
+      {label !== null && label !== undefined && (
         <FieldLabel
           {...(wiresControl ? { htmlFor: fieldId } : {})}
           className={cn("text-ink/80 mb-1.5 block w-full text-sm font-medium", labelClassName)}
@@ -93,12 +92,10 @@ export function FormField({
         </FieldLabel>
       )}
       {typeof children === "function" ? children(a11y) : (children ?? null)}
-      {/* oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined */}
-      {hint != null && (
+      {hint !== null && hint !== undefined && (
         <FieldDescription className="text-2xs leading-relaxed">{hint}</FieldDescription>
       )}
-      {/* oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined */}
-      {error != null && error !== "" && (
+      {error !== null && error !== undefined && error !== "" && (
         <FieldError
           className={cn("text-danger-strong text-2xs mt-1 font-normal", errorClassName)}
           id={errorId}

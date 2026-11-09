@@ -19,38 +19,34 @@ import { workshopOpenAITools } from "./tools";
 
 /** 把 messages 数组窄化为 LLMMessage 形状并透传 tool_calls / tool_call_id。 */
 function narrowMessages(raw: AgentChatRequest["messages"]): Array<LLMMessage> {
-  return (
-    raw
-      // oxlint-disable-next-line strict-boolean-expressions -- 请求体 messages 未过 zod 校验（route.ts 直接断言），元素运行期可为 null，类型收窄不覆盖外部 JSON，保留防御判空
-      .filter((m) => m && typeof m === "object") // oxlint-disable-line typescript/no-unnecessary-condition -- 请求体 messages 未过 zod 校验，元素运行期可为 null，保留防御判空
-      .map((m) => {
-        const role = m.role;
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 请求体 role 来自外部 JSON，运行期可为 system 等类型外值，第三段判空是唯一防线
-        if (role !== "assistant" && role !== "user" && role !== "tool") {
-          return null;
-        }
-        const msg: LLMMessage = {
-          role,
-          content: typeof m.content === "string" ? m.content : "",
-        };
-        if (role === "assistant" && Array.isArray(m.tool_calls)) {
-          msg.tool_calls = m.tool_calls.map((call) => ({
-            id: call.id,
-            /* SAFETY: 类型断言已复核 */
-            type: "function" as const,
-            function: {
-              name: call.name,
-              arguments: call.arguments,
-            },
-          }));
-        }
-        if (role === "tool" && typeof m.tool_call_id === "string") {
-          msg.tool_call_id = m.tool_call_id;
-        }
-        return msg;
-      })
-      .filter((m): m is LLMMessage => m !== null)
-  );
+  return raw
+    .filter((m) => m && typeof m === "object")
+    .map((m) => {
+      const role = m.role;
+      if (role !== "assistant" && role !== "user" && role !== "tool") {
+        return null;
+      }
+      const msg: LLMMessage = {
+        role,
+        content: typeof m.content === "string" ? m.content : "",
+      };
+      if (role === "assistant" && Array.isArray(m.tool_calls)) {
+        msg.tool_calls = m.tool_calls.map((call) => ({
+          id: call.id,
+          /* SAFETY: 类型断言已复核 */
+          type: "function" as const,
+          function: {
+            name: call.name,
+            arguments: call.arguments,
+          },
+        }));
+      }
+      if (role === "tool" && typeof m.tool_call_id === "string") {
+        msg.tool_call_id = m.tool_call_id;
+      }
+      return msg;
+    })
+    .filter((m): m is LLMMessage => m !== null);
 }
 
 /** 走 OpenAI 兼容 tools 协议调用模型，返回 content 与 tool_calls。 */

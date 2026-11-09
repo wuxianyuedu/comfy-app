@@ -294,7 +294,6 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
     };
   }
 
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- settings 由 app-settings.json 经 JSON.parse 合并而来，历史文件里 comfyuiPath 可能为 null
   const comfyuiPath = settings.comfyuiPath?.trim() ?? "";
 
   // 1.5) 配置端口已经有人应答 → 直接认「在跑」，跳过其余三次进程表查询。

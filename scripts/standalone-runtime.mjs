@@ -107,7 +107,6 @@ function reapTree(pid) {
     cwd: APP_ROOT,
     windowsHide: true,
   });
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 子进程起不来时 stdout/stderr 实测为 undefined（@types/node 声明偏窄）
   const out = `${run.stdout ?? ""}${run.stderr ?? ""}`.trim();
   if (run.status === 0) {
     line(`reap pid=${pid} ${out}`);
@@ -210,7 +209,6 @@ function main() {
       host = null;
     });
     host.on("error", (err) => {
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- error 事件实参形态运行时不受类型约束，err 可为 null/undefined
       line(`host spawn error: ${err?.message ?? err}`);
       host = null;
     });
@@ -237,7 +235,6 @@ function main() {
   };
 
   server.on("error", (err) => {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- error 事件实参形态运行时不受类型约束，err 可为 null/undefined
     fail(`server failed to start: ${err?.message ?? err}`);
   });
   server.on("exit", (code, signal) => {

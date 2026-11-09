@@ -195,10 +195,8 @@ export function parseRange(range) {
        * undefined —— 两处的 `??` / `if (!rawVersion)` 都是真的，规则不建模正则分组。 */
       /* `m[1]` 是可选分组（操作符可省），运行时**真的**可能是 undefined；规则侧把
        * `RegExpExecArray` 的索引读成非空（连 `.ts` 里也一样，实测过），按 §5.10 的 C 格落账。 */
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 可选分组可缺，规则把 RegExpExecArray 索引读成非空
       const op = m[1] ?? "=";
       const rawVersion = m[2];
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：`m[2]` 可缺
       if (!rawVersion) {
         return null;
       }
@@ -233,7 +231,6 @@ export function parseRange(range) {
      * 在规则眼里恒假 —— 但它守的是「只有上界的区间」那一种形状（`parseRange` 明确
      * 不接受它，回 null 而不是拼一个下界为空的区间）。判空的必要性在**契约**上，
      * 按 §5.10 的 C 格留注释。 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 只有上界的区间要落 null，这条判空守的是契约不是当前流程
     if (lower === null) {
       return null;
     }

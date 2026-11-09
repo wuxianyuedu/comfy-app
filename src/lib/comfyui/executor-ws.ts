@@ -166,7 +166,6 @@ export async function connect(): Promise<void> {
     return;
   }
   // await 期间可能已有别的调用建好了连接
-  // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- 类型层把 s.ws 收窄成恒 null，但上面 await 期间并发 connect() 可能已建好连接（竞态见上），这是运行期防御性判空
   if (s.ws) {
     s.connecting = false;
     return;

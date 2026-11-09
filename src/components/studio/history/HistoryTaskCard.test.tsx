@@ -47,7 +47,6 @@ describe("HistoryTaskCard 键盘可达性", () => {
     });
     expect(buttons.length).toBeGreaterThanOrEqual(2);
 
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留 ?. 防线
     const body = buttons.find((b) => b.textContent?.includes("测试工作流"))!;
     body.focus();
     expect(body).toHaveFocus();
@@ -61,7 +60,6 @@ describe("HistoryTaskCard 键盘可达性", () => {
     const { onOpenDetail } = renderCard();
     const body = screen
       .getAllByRole("button", { name: /测试工作流/ })
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留 ?. 防线
       .find((b) => b.textContent?.includes("测试工作流"))!;
 
     await userEvent.click(body);

@@ -33,7 +33,6 @@ describe("SeedModeButton", () => {
     /* 触发器自身也带当前标签，故按 `aria-selected` 数选项（P1 判据口径：
        选项行是 `<Button role="option">`）。 */
     const options = screen.getAllByRole("option");
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留 ?. 防线
     expect(options.map((element) => element.textContent?.slice(0, 3))).toEqual([
       "固定值",
       "递增值",

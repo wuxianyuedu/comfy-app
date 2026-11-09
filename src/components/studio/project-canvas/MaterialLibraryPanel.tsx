@@ -70,8 +70,9 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
   /* 素材上传选择器：多选、无类型限制（素材库也收音频/视频）。 */
   const uploadPicker = useFilePicker({
     multiple: true,
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    onPick: (_first, files) => void upload(files),
+    onPick: (_first, files) => {
+      void upload(files);
+    },
   });
 
   return (

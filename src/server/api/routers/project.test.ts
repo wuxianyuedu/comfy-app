@@ -158,7 +158,6 @@ describe("project.get", () => {
       p.then(
         () => "OK",
         (error: { code?: string; message?: string }) =>
-          // oxlint-disable-next-line typescript/no-unnecessary-condition -- rejection 值是外部抛出的任意值，回调参数按 { code?; message? } 标窄，`?.` 是运行期防线
           `${error?.code ?? "?"}|${error?.message ?? "?"}`,
       );
     const foreign = await envelope(caller.get({ projectId: "p-b" }));

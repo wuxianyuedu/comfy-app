@@ -36,7 +36,6 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
   });
 
   let user: TRPCUser | null = null;
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- better-auth 的 getSession 运行期可返回 null（本仓单测正是按 null 打桩），类型声明未带 null，`session?.` 是唯一防线
   if (session?.user?.email !== undefined && session.user.email !== "") {
     let dbUser = await userRepository.findByEmail(session.user.email);
     dbUser ??= await userRepository.createUser({

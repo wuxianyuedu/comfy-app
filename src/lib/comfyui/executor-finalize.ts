@@ -328,7 +328,6 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
    * 文件命名与日志序号。 */
   // Images
   for (const [i, im] of images.entries()) {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- im 来自 ComfyUI /history 响应的 outputs，运行期可能不带 subfolder/type 字段
     // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const buf = await getView(im.filename, im.subfolder ?? "", im.type ?? "");
     const ext = path.extname(im.filename) || ".png";
@@ -340,7 +339,6 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   }
   // 视频（mp4 / gif / webm）
   for (const [i, v] of videos.entries()) {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- v 来自 ComfyUI /history 响应的 outputs，运行期可能不带 subfolder/type 字段
     // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const buf = await getView(v.filename, v.subfolder ?? "", v.type ?? "");
     const ext = path.extname(v.filename) || ".mp4";
@@ -352,7 +350,6 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   }
   // 音频（SaveAudio / AudioComposite）
   for (const [i, a] of audios.entries()) {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- a 来自 ComfyUI /history 响应的 outputs，运行期可能不带 subfolder/type 字段
     // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const buf = await getView(a.filename, a.subfolder ?? "", a.type ?? "");
     const ext = path.extname(a.filename) || ".wav";
@@ -364,7 +361,6 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   }
   // 通用 3D / 未知文件产物（mesh、gltf、obj …）
   for (const [i, o] of others.entries()) {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- o 来自 ComfyUI /history 响应的 outputs，运行期可能不带 subfolder/type 字段
     // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const buf = await getView(o.filename, o.subfolder ?? "", o.type ?? "");
     const ext = path.extname(o.filename) || ".bin";
@@ -414,8 +410,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // workflow 一并写进 Task.workflowSnapshot，使「任务」与「模板当前版本」彻底
   // 解耦、可独立复现。`source: "execution"` 标记这是执行时自动捕获的独立副本。
   const workflowSnapshot =
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    executedWorkflow == null
+    executedWorkflow === null || executedWorkflow === undefined
       ? undefined
       : {
           workflow: executedWorkflow,
@@ -493,8 +488,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // manifest.seed + TaskImage.seed 持久化，工作流模板后续改动时凭这份快照即可
   // 完整复现本次生成结果。raw 路径为 liblib subgraph 格式（未展开），api 路径为
   // 已展开 graph。
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (executedWorkflow != null) {
+  if (executedWorkflow !== null && executedWorkflow !== undefined) {
     await fs
       .writeFile(path.join(dir, "workflow.json"), JSON.stringify(executedWorkflow, null, 2), "utf8")
       .catch(() => undefined);

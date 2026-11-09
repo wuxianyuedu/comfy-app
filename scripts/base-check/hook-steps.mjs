@@ -315,7 +315,6 @@ export function readHookSteps(hookPath = HOOK) {
     }
     const label = m.groups?.label;
     const command = m.groups?.command;
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 捕获组按下标取被标成 string；守卫防的是正则改动后的静默失配
     if (label === undefined || command === undefined) {
       continue;
     }
@@ -472,7 +471,6 @@ export function commandTargetState(argv, cwd) {
  */
 function resolveGateInvocation(argv) {
   const [cmd, ...rest] = argv;
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 空 argv 时解构出的 cmd 是 undefined，规则没建模 noUncheckedIndexedAccess
   if (cmd === undefined) {
     return null;
   }

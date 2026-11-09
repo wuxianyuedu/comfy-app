@@ -112,14 +112,12 @@ export function parseHeadings(text) {
  */
 export function sectionRange(headings, index, totalLines) {
   const h = headings[index];
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- headings 下标在 noUncheckedIndexedAccess 下可 undefined，这处守卫真的走得到
   if (h === undefined) {
     return { start: 1, end: 0, limit: 0 };
   }
   let end = totalLines;
   for (let j = index + 1; j < headings.length; j++) {
     const next = headings[j];
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- headings 下标在 noUncheckedIndexedAccess 下可 undefined，这处守卫真的走得到
     if (next !== undefined && next.level <= h.level) {
       end = next.line - 1;
       break;
@@ -139,7 +137,6 @@ export function sectionRange(headings, index, totalLines) {
  * @returns {{ok: true, src: string, rendered: boolean} | {ok: false, reason: string, candidates?: string[]}}
  */
 export function resolveDoc(name) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- name 是人给的命令行参数，类型按 string 标窄
   const raw = String(name ?? "")
     .trim()
     .replaceAll("\\", "/")

@@ -73,8 +73,8 @@ export const config = {
    * `proxy()` 里的判据一次都不会执行，而且不报错。
    * `/generated` 不带斜杠那条也要匹配：它会解析成产物根目录本身，交给 route 回 404，
    * 而不是在这里替它决定。 */
-  /* oxlint-disable-next-line unicorn/prefer-string-raw -- Next 16 对段配置导出做静态求值
-   * （extract-const-value 只认字面量节点），String.raw 标签模板判 unsupported ⇒
-   * errorFromUnsupportedSegmentConfig 构建必红（#3087 的 oxlint --fix 引入的现场） */
-  matcher: ["/((?!_next|.*\\..*).*)", "/generated", "/generated/:path*"],
+  /* `matcher` 由 Next 16 静态求值（extract-const-value 只认字面量节点）：用字符类 `[.]`
+   * 匹配字面点，既不引入转义，也不用 `String.raw` 标签模板 —— 后者在该静态求值里判
+   * unsupported，errorFromUnsupportedSegmentConfig 会让构建必红。 */
+  matcher: ["/((?!_next|.*[.].*).*)", "/generated", "/generated/:path*"],
 };

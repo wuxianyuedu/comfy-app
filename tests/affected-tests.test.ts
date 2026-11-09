@@ -678,9 +678,7 @@ describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2
       input: list.join("\n"),
       env: SPAWN_ENV,
     });
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(viaArgv.status, viaArgv.stderr ?? "").toBe(0);
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(viaStdin.status, viaStdin.stderr ?? "").toBe(0);
     expect(viaStdin.stdout).toBe(viaArgv.stdout);
   });
@@ -698,7 +696,6 @@ describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2
       maxBuffer: 64 << 20,
       env: SPAWN_ENV,
     });
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(r.status, r.stderr ?? "").toBe(0);
     expect(r.stdout.trim().split(/\s+/).length).toBeGreaterThan(0);
   });
@@ -743,7 +740,6 @@ describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2
       env: { ...SPAWN_ENV, COMFY_AFFECTED_CHANGED: payload },
       maxBuffer: 64 << 20,
     });
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(r.status, r.stderr ?? "").toBe(0);
     expect(r.stdout).toMatch(/\d+ 个用例 \/ \d+ 次启动/);
   });
@@ -803,9 +799,7 @@ describe("启动器消费 --changed-stdin，读不到就显式降级（ISSUE #28
       maxBuffer: 64 << 20,
     });
     const viaStdin = run(["--dry-run", "--changed-stdin"], LIST.join("\n"));
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(viaEnv.status, viaEnv.stderr ?? "").toBe(0);
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(viaStdin.status, viaStdin.stderr ?? "").toBe(0);
     expect(viaStdin.stdout).toBe(viaEnv.stdout);
     expect(viaStdin.stderr).toContain("改动面自 stdin：1 条");
@@ -813,7 +807,6 @@ describe("启动器消费 --changed-stdin，读不到就显式降级（ISSUE #28
 
   it("stdin 是空清单 ⇒ 退 2 并喊出来，不退回固定清单", () => {
     const r = run(["--changed-stdin"], "");
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(r.status, r.stderr ?? "").toBe(2);
     expect(r.stdout).toBe("");
     expect(r.stderr).toContain("清单是空的");
@@ -822,7 +815,6 @@ describe("启动器消费 --changed-stdin，读不到就显式降级（ISSUE #28
 
   it("不认识的旗标 ⇒ 退 2 并点名（拼错与没写不能长得一样）", () => {
     const r = run(["--changed-files=tests/ship.test.ts"]);
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
     expect(r.status, r.stderr ?? "").toBe(2);
     expect(r.stderr).toContain("--changed-files=tests/ship.test.ts");
   });

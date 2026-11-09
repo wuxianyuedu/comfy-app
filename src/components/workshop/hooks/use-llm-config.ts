@@ -21,8 +21,7 @@ import { isRecord } from "~/lib/is-record";
 /** 判断远端模型是否为文本生成(对话)可用类型。
  *  kind 缺省(null)的历史条目按 chat 处理——与设置页 `kind ?? "chat"` 归组一致。 */
 function isChatModel(kind: RemoteModelKind | null | undefined): boolean {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  return kind == null || kind === "chat";
+  return kind === null || kind === undefined || kind === "chat";
 }
 
 function isRemoteModelKind(value: string): value is RemoteModelKind {
@@ -108,7 +107,6 @@ export function useLLMConfig(): LLMConfigController {
     /* 本地 Ollama 模型均通过 chat/completions 调用，天然可做文本任务。 */
     const local = [...p.localNames];
     const remote = [...remoteNames];
-    // oxlint-disable-next-line no-unnecessary-condition -- cfg 来自 tRPC 查询响应（外部数据），旧服务端 / 手工请求可能缺 model 字段，保留 ?. 与 ?? 兜底
     const model = cfg.model?.trim() ?? "";
     /* 生效提供方：本机 Ollama 被存成「远端 API」（baseUrl 回环 + 无密钥）时按
        本地分组与展示——否则 ollama 模型在下拉/徽标里被挂成「远端」，可用性

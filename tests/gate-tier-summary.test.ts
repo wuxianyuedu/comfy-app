@@ -19,7 +19,6 @@ function run(...flags: Array<string>) {
     encoding: "utf8",
     cwd: ROOT,
   });
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
   return { out: got.stdout ?? "", code: got.status };
 }
 

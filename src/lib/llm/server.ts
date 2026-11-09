@@ -118,8 +118,7 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
       if (typeof row.apiKey === "string" && row.apiKey !== "") {
         cfg.apiKey = row.apiKey;
       }
-      // oxlint-disable-next-line eqeqeq, typescript/no-unnecessary-condition -- 同时判 null 与 undefined；DB 数值列运行期可为 null，类型按非空标
-      if (row.temperature != null) {
+      if (row.temperature !== null && row.temperature !== undefined) {
         cfg.temperature = row.temperature;
       }
       // temperatureByTask 是 json 列，读出来是 unknown —— 形状由 resolveTaskTemperature 消费，
@@ -128,8 +127,7 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
       if (taskTemperatures !== null && isTaskTemperatureRecord(taskTemperatures)) {
         cfg.temperatureByTask = taskTemperatures;
       }
-      // oxlint-disable-next-line eqeqeq, typescript/no-unnecessary-condition -- 同时判 null 与 undefined；DB 数值列运行期可为 null，类型按非空标
-      if (row.maxTokens != null) {
+      if (row.maxTokens !== null && row.maxTokens !== undefined) {
         cfg.maxTokens = row.maxTokens;
       }
     }
@@ -165,8 +163,7 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
       overrides: cfg.temperatureByTask ?? null,
       fallback: cfg.temperature,
     });
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (override.maxTokens != null) {
+    if (override.maxTokens !== null && override.maxTokens !== undefined) {
       cfg.maxTokens = override.maxTokens;
     }
   }
@@ -207,8 +204,8 @@ export async function getConfigForClient() {
   }
   const cfgSafe: LLMConfig = { ...cfg };
   delete cfgSafe.apiKey;
-  const extraSafe = extra.map(
-    (e) => (typeof e === "object" && e !== null ? maskRemoteEntryForClient(e) : e), // oxlint-disable-line typescript/no-unnecessary-condition -- extra 由 DB json 列与本地候选名合并，元素运行期可为 null
+  const extraSafe = extra.map((e) =>
+    typeof e === "object" && e !== null ? maskRemoteEntryForClient(e) : e,
   );
   return {
     ...cfgSafe,
@@ -254,12 +251,11 @@ export function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
   const causeMsg =
     cause instanceof Error
       ? String(cause.message)
-      : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-        cause == null
+      : cause === null || cause === undefined
         ? ""
         : typeof cause === "string"
           ? cause
-          : (JSON.stringify(cause) ?? ""); // oxlint-disable-line typescript/no-unnecessary-condition -- cause 是 unknown，带 toJSON 返回 undefined 时 JSON.stringify 运行期返回 undefined
+          : (JSON.stringify(cause) ?? "");
   const base = cfg.baseUrl.replace(/\/$/, "");
   const local = cfg.provider === "local" || isLoopbackBaseUrl(base);
   // 常见 Node undici 底层错误码
@@ -451,7 +447,6 @@ export async function streamLLM(
   let buffer = "";
   let full = "";
 
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- SSE 读取轮询由内部 done 判据 break，`while (true)` 是刻意写法
   while (true) {
     // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const { done, value } = await reader.read();

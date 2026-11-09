@@ -318,7 +318,6 @@ function runScript(script, args, extraEnv = {}, cwd = ROOT) {
   /* Node 自己在 `MODULE_NOT_FOUND` 时也退 1 —— 与「判据红了」同形。所以「没跑起来」
    * 由**两路输出全空**（脚本连一行都没打出来）兜一层，再归一成 2。
    * 这条与 `base-check.mjs` 的 `commandTargetState` 是同一族口径（§13.6.2）。 */
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 子进程起不来时 stdout/stderr 实测为 undefined（@types/node 声明偏窄）
   const output = `${r.stdout ?? ""}${r.stderr ?? ""}`;
   if (typeof r.status !== "number" || (r.status !== 0 && output.trim() === "")) {
     return {
@@ -348,9 +347,7 @@ function runScript(script, args, extraEnv = {}, cwd = ROOT) {
  */
 export function scriptsInCommands(commands) {
   const out = new Set();
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 导出函数入参防御：调用方运行时可传 null/undefined
   for (const c of commands ?? []) {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 数组元素与 argv 键来自外部调用方，运行时可为 null/缺键
     for (const a of c?.argv ?? []) {
       const text = String(a);
       if (/\.(?:mjs|cjs|js)$/.test(text)) {

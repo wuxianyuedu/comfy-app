@@ -169,8 +169,7 @@ async function enrichSubgraphProxyWidgets(input: {
 
       if (Array.isArray(subDef?.nodes)) {
         for (const inN of subDef.nodes) {
-          // oxlint-disable-next-line eqeqeq, typescript/no-unnecessary-condition -- 同时判 null/undefined；inN 是外部 JSON 数组元素，运行期可能为 null
-          if (inN?.id != null) {
+          if (inN?.id !== null && inN?.id !== undefined) {
             map.set(String(inN.id), inN);
           }
         }
@@ -221,7 +220,6 @@ async function enrichSubgraphProxyWidgets(input: {
         return slot < wv.length ? wv[slot] : undefined;
       }
       /* 通用路径：数出目标输入之前有多少个 widget 槽。 */
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- inputs 元素来自外部工作流 JSON，运行期可能是 null
       const inputIdx = inputs.findIndex((i) => i?.name === fieldName);
       if (inputIdx === -1) {
         return undefined;
@@ -243,7 +241,6 @@ async function enrichSubgraphProxyWidgets(input: {
      * 工作流里封装节点很多时，内层映射的代价仍然很低。 */
     const wrapperNodeIds: Array<string> = [];
     for (const nodeId of Object.keys(rawInputsById)) {
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- raw.nodes 元素来自外部 JSON，运行期可能是 null
       const rn = raw.nodes.find((n) => String(n?.id) === nodeId);
       if (!rn) {
         continue;
@@ -256,7 +253,6 @@ async function enrichSubgraphProxyWidgets(input: {
     }
 
     for (const nodeId of wrapperNodeIds) {
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- raw.nodes 元素来自外部 JSON，运行期可能是 null
       const rn = raw.nodes.find((n) => String(n?.id) === nodeId);
       if (!rn) {
         continue;
@@ -331,7 +327,6 @@ async function enrichSubgraphProxyWidgets(input: {
         /* 封装条目自己没带类型时，采用内部节点该槽位的类型作为权威值
          *  （防御性 —— 通常原始 JSON 里本来就有）。 */
         if (internalNode && Array.isArray(internalNode.inputs)) {
-          // oxlint-disable-next-line typescript/no-unnecessary-condition -- internalNode.inputs 元素来自外部 JSON，运行期可能是 null
           const inp = internalNode.inputs.find((i) => i?.name === fieldName);
           if (typeof inp?.type === "string") {
             updated.type = inp.type;
@@ -433,7 +428,6 @@ function subgraphAuthorLabelsByUid(
       ])
     : Object.entries(subgraphs);
   for (const [key, subDef] of subgraphEntries) {
-    // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- subDef 来自外部 JSON，数组元素运行期可能为 null
     if (!subDef || !Array.isArray(subDef.inputs)) {
       continue;
     }
@@ -503,7 +497,6 @@ export async function buildRawInputs(
   const subgraphAuthorLabels = subgraphAuthorLabelsByUid(raw);
   if (raw && Array.isArray(raw.nodes)) {
     for (const rn of raw.nodes) {
-      // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- nodes 元素来自外部 JSON，运行期可能是 null/undefined
       if (!rn) {
         continue;
       }
@@ -529,7 +522,6 @@ export async function buildRawInputs(
       const legacyByName = new Map<string, unknown>();
       let widgetCounter = 0;
       for (const inp of rn.inputs) {
-        // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- inputs 元素来自外部 JSON，运行期可能是 null/undefined
         if (!inp || typeof inp.name !== "string") {
           continue;
         }
@@ -575,12 +567,10 @@ export async function buildRawInputs(
       const usedWidgetNames = new Set<string>();
 
       for (const inp of rn.inputs) {
-        // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- inputs 元素来自外部 JSON，运行期可能是 null/undefined
         if (!inp || typeof inp.name !== "string") {
           continue;
         }
-        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-        const isConn = inp.link != null;
+        const isConn = inp.link !== null && inp.link !== undefined;
         /* ComfyUI 在「被暴露的 widget 代理」输入上，把 widget 把手烤成
          *  `{ widget: { name: "…" } }` —— 值存在 `widgets_values` 里，
          * 下标是「按 inputs[] 顺序数到该行时已见到的 widget 个数」。

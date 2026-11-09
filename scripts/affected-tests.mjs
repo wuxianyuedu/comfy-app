@@ -224,7 +224,6 @@ export function specifiersOf(text, fromFile) {
     /* `m.groups?.specifier` 在类型上仍是 `string | undefined`（TS 不认「正则里的必需分组在 matchAll 里
      * 必定存在」）—— 这处 `??` 是给 tsc 看的，不是给运行时看的，删了会撞脚本档类型检查（§13.5.14）。
      * 同一行的字面量索引就是 `noUncheckedIndexedAccess` 那一层，规则没建模，按 §5.10 的 C 格留注释。 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上一行：`m.groups?.specifier` 是必需分组，运行时非 undefined，这处 `??` 只服务于 tsc
     for (const cand of specCandidates(m.groups?.specifier ?? "", fromFile)) {
       out.add(cand);
     }
@@ -837,7 +836,6 @@ function main() {
     /* `reasons` 按 `Record<string, string | undefined>` 声明（索引访问在 `noUncheckedIndexedAccess`
      * 下就是 `| undefined`）。这一支实测确实带着 `__note` —— 所以这处 `??` 同时是给 tsc 看的
      * 与给规则看的：规则那一侧不建模索引访问，按 §5.10 的 C 格留在原地。 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- `reasons` 的索引在 noUncheckedIndexedAccess 下可 undefined，规则没建模索引访问
     process.stderr.write(
       wideFallbackNote(
         res.reasons.__note ?? "见 --json",

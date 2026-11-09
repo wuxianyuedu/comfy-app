@@ -277,7 +277,6 @@ export function readRevisions(gitDir, cwd = ROOT) {
       encoding: "utf8",
       env: { ...process.env, GIT_DIR: gitDir },
     });
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程起不来时 stdout 实测为 undefined（@types/node 声明偏窄）
     return r.status === 0 ? String(r.stdout ?? "").trim() : "";
   };
   /* `resolveMergeBaseRef()` 的第③档是「本地 `master`」，那一档在**这里**语义不对：这一跳要的
@@ -457,7 +456,6 @@ function runQuiet(script, args) {
    * 声明非空）。这里 `?? ""` 的语义是「没读到输出」—— 与 `status` 那一格同一件事。 */
   return {
     status: typeof r.status === "number" ? r.status : 2,
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 子进程起不来时 stdout 实测为 undefined（上方注释已记）
     stdout: r.stdout ?? "",
   };
 }
@@ -478,7 +476,6 @@ function readRemoteUrls(cwd) {
   }
   /** @type {string[]} */
   const urls = [];
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程起不来时 stdout 实测为 undefined（@types/node 声明偏窄）
   for (const name of String(names.stdout ?? "")
     .split("\n")
     .map((s) => s.trim())) {
@@ -489,7 +486,6 @@ function readRemoteUrls(cwd) {
     if (got.status !== 0) {
       continue;
     }
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程起不来时 stdout 实测为 undefined（@types/node 声明偏窄）
     for (const line of String(got.stdout ?? "").split("\n")) {
       if (line.trim()) {
         urls.push(line.trim());
@@ -513,7 +509,6 @@ export function runFromStdin(stdinText, pushUrl = null) {
     process.stderr.write("[pre-push] 当前目录不是 git 检出 —— 无从复算（退 2）\n");
     return 2;
   }
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程起不来时 stdout 实测为 undefined（@types/node 声明偏窄）
   const gitDir = path.resolve(ROOT, String(gitDirOut.stdout ?? "").trim());
   const refs = parseRefLines(stdinText);
   const candidates = mergeCandidates(refs);
@@ -560,7 +555,6 @@ export function runFromStdin(stdinText, pushUrl = null) {
   const report = isPremergeReport(parsedReport) ? parsedReport : null;
   const segments = Array.isArray(report?.segments) ? report.segments : null;
   const who =
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程起不来时 stdout 实测为 undefined（@types/node 声明偏窄）
     spawnSync("git", ["config", "user.name"], {
       cwd: ROOT,
       encoding: "utf8",

@@ -174,7 +174,6 @@ export const taskRouter = createTRPCRouter({
         message: "任务还在排队或执行中，不需要重试（可在队列监视里观察）",
       });
     }
-    // oxlint-disable-next-line strict-boolean-expressions -- execPayload 是库里读出的外部数据，任何缺值形态（null/undefined/空串）都按「无执行载荷」防御性收口
     if (!original.execPayload) {
       throw new TRPCError({
         code: "PRECONDITION_FAILED",

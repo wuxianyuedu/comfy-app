@@ -359,7 +359,6 @@ export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30_000;
  * @returns {string[]}
  */
 export function playwrightInstallHints(out, facts = {}) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- out 是子进程原始输出（外部输入），类型按 string 标窄
   const text = out ?? "";
   if (!/Failed to download|Download failure|timed out after/.test(text)) {
     return [];
@@ -523,7 +522,6 @@ export function playwrightInstallHintFacts(env = {}) {
  * @returns {number | null}
  */
 function observedTimeoutMs(text) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- text 是子进程原始输出，类型按 string 标窄
   const m = /timed out after (?<ms>\d+)ms/.exec(text ?? "");
   if (!m) {
     return null;
@@ -769,7 +767,6 @@ export function runPlaywrightInstall({
   let out = "";
   for (const host of picked.roots) {
     const r = exec(pnpm.command, args, host);
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- r.out 是子进程执行封装（可注入）的出参，类型按 string 标窄
     out += `${r.out ?? ""}\n`;
     if (r.ok) {
       return { ok: true, out, command: pnpm.command, args, host, probes };

@@ -46,8 +46,9 @@ function HeaderHarness({ wrapInitial = false }: { wrapInitial?: boolean }) {
     <div className="w-240 max-w-full">
       <LogPanelHeader
         clear={clear}
-        // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-        copyAllAction={() => void copyAll()}
+        copyAllAction={() => {
+          void copyAll();
+        }}
         copyDone={false}
         copyFailed={false}
         countsByOrigin={header.countsByOrigin}

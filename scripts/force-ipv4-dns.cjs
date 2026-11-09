@@ -26,8 +26,7 @@ function patchLookup(lookup) {
     if (typeof options === "function") {
       callback = options;
       options = {};
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    } else if (options == null) {
+    } else if (options === null || options === undefined) {
       options = {};
     } else if (typeof options !== "object") {
       options = { family: options };

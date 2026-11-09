@@ -59,8 +59,9 @@ export function UpdateCheckSection() {
         <Button
           className="text-primary h-auto items-center gap-1.5 p-0 font-medium"
           disabled={checking}
-          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-          onClick={() => void handleManualCheck()}
+          onClick={() => {
+            void handleManualCheck();
+          }}
           variant="link"
         >
           {checking ? (

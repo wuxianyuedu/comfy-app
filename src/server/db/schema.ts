@@ -25,10 +25,8 @@ const dateNull = customType<{ data: Date | null; driverData: string | null }>({
   dataType() {
     return "text";
   },
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  fromDriver: (v) => (v == null ? null : new Date(v)),
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  toDriver: (v) => (v == null ? null : v.toISOString()),
+  fromDriver: (v) => (v === null || v === undefined ? null : new Date(v)),
+  toDriver: (v) => (v === null || v === undefined ? null : v.toISOString()),
 });
 
 // ── Better Auth 表（表名单数，对齐 better-auth 的默认命名）─────────

@@ -28,7 +28,6 @@ export function sidecarFileName(triple, platform = process.platform) {
  * @returns {string | null} 三元组；没有 `host:` 行时 `null`
  */
 export function hostTripleFromCargoVersion(output) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- output 是 cargo 子进程输出（外部数据），string 只是声明
   const m = /^host:\s*(?<host>\S+)$/m.exec(output ?? "");
   return m?.groups?.host ?? null;
 }

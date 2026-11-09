@@ -158,8 +158,7 @@ export async function executeViaComfyCli(job: Job) {
   const s = state();
   const { taskId, rawJson, prompt, overrides } = job;
   /* RAW 原件走 UI→API 转换；没有 rawJson 就是 API 图，直接提交。 */
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  const isRaw = rawJson != null;
+  const isRaw = rawJson !== null && rawJson !== undefined;
   /* RAW 路径的入口行：让用户在日志面板上直接看出「任务正由哪条路径处理」。
    * 加这行之前，提交后要等第一条 stdout JSON 事件（常在 5–30s 之后，
    * Python venv 启动完）才会安静结束 —— 面板上看不出是在跑还是卡住。 */

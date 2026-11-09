@@ -442,7 +442,6 @@ async function main(argv) {
     if (exit.reason === null) {
       const raw = argv[argv.indexOf(flag) + 1];
       process.stderr.write(
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- raw 由 argv 下标取，运行时可能 undefined，类型按 string 标窄
         `[e2e-run] ✗ 理由（"${String(raw ?? "").trim()}"）不算「有人回答过」—— ` +
           "写清这次为什么不跑 / 为什么不吃这一档（占位词与过短的理由都被拦）。\n" +
           `        用法：node scripts/e2e-run.mjs ${flag} "本次只改文档，不动功能链路"\n`,

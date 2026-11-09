@@ -39,8 +39,7 @@ export function NodePreviewCard({
   const typed = inputs.filter(
     (input) => input.widget === undefined || input.widget === null || input.widget === "",
   );
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  const widgets = inputs.filter((input) => input.widget != null);
+  const widgets = inputs.filter((input) => input.widget !== null && input.widget !== undefined);
   /* 空串同义「无值」需回退 fallbackName（原 `||` 语义的显式写法）。 */
   const displayName = data?.displayName;
   const title = displayName !== undefined && displayName !== "" ? displayName : fallbackName;
@@ -79,7 +78,6 @@ export function NodePreviewCard({
         >
           {title}
         </span>
-        {/* oxlint-disable-next-line no-unnecessary-condition -- 节点清单来自 fetch 浅断言，category 判空保留运行时守卫 */}
         {data?.category !== undefined && data?.category !== "" && (
           <span
             className="rounded-full px-1.5 py-px text-[8.5px] font-semibold"

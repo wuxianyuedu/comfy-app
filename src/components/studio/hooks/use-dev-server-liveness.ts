@@ -277,7 +277,6 @@ export function useDevServerLiveness(): DevServerLiveness {
       if (exitFetchedForBootIdRef.current !== bootId) {
         exitFetchedForBootIdRef.current = bootId;
         const probe = await fetchAppServiceExit();
-        // oxlint-disable-next-line no-unnecessary-condition -- stoppedRef 由卸载清理在 await 期间写入，规则的控制流分析看不到该写入点
         if (stoppedRef.current) {
           return;
         }

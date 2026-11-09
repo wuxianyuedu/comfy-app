@@ -633,7 +633,6 @@ function resolveTscBin(): {
         cwd,
         encoding: "utf8",
       });
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout/stderr 实测为 undefined，@types/node 按非空标，空串兜底保留
       return { status: r.status, output: `${r.stdout ?? ""}${r.stderr ?? ""}` };
     };
     return { run: (args) => runIn(ROOT, args), runIn };

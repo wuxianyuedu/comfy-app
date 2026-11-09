@@ -503,7 +503,6 @@ function viaHost(exe, prefix, probeRun) {
  */
 function runProbe(cmd, args) {
   const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true });
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout / stderr 实测为 undefined，@types/node 按 string 标
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
   if (r.error || r.status !== 0) {
     return null;

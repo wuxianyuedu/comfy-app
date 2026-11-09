@@ -146,7 +146,6 @@ export function pushFreshnessLedger({ root, kinds, run }) {
    * 而失败的那一步把整跑后面所有格的输入面换成了它们（ISSUE #2344）。 */
   const unstage = () => {
     const res = git(["reset", "-q", "--", ...allRels]);
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- res 是注入的子进程执行封装，实跑可能缺，类型按非空标
     if (res?.status === 0) {
       return "";
     }

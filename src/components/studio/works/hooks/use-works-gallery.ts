@@ -129,7 +129,8 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
     cancelDelete,
     confirmDelete,
     deleting,
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    refresh: () => void load(),
+    refresh: () => {
+      void load();
+    },
   };
 }

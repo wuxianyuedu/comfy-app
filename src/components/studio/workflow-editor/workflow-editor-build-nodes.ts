@@ -104,7 +104,6 @@ const buildBoundaryPinNode = (
     /* 显示名链路：边界 pin 的 `label`（作者业务名）**优先**，取不到回落 `localized`
      *（ComfyUI 的 i18n），最后兜底 `name` —— 标题永不为空；与 WfSubgraphNode.outputs.display
      * 同链路，两层渲染同一字符串，`name === type` 时 tooltip 补上解析出的类型以便区分。 */
-    // oxlint-disable-next-line no-unnecessary-condition -- pin 来自平台 detail 的 boundaryPins（外部数据），旧数据可能缺 name，空串兜底保证 title 是字符串
     title: pin.label ?? pin.localized ?? pin.name ?? "",
     type: pin.type,
     direction: kind,
@@ -192,7 +191,6 @@ function layoutBoundaryPins(
   const rightRailX = maxX + RAIL_GAP;
 
   const rawPosOf = (pin: BoundaryPin): [number, number] | null => {
-    // oxlint-disable-next-line no-unnecessary-condition -- 类型把 pos 声明成 [number,number]，但它是从原始工作流 JSON 透出的外部数据，长度检查是运行时守卫
     if (Array.isArray(pin.pos) && pin.pos.length >= 2) {
       const x = Number(pin.pos[0]) || 0;
       const y = Number(pin.pos[1]) || 0;
@@ -370,7 +368,6 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
       }
       if (bl.kind === "output") {
         (boundaryOutputsByNodeId[nid] ??= new Set()).add(slot);
-        // oxlint-disable-next-line no-unnecessary-condition -- kind 已在上一支排除 "output"，保留显式比较防服务端将来新增 kind 时静默落进 input 桶
       } else if (bl.kind === "input") {
         (boundaryInputsByNodeId[nid] ??= new Set()).add(slot);
       }
@@ -579,8 +576,10 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
   const positionsCount = Object.keys(savedPositions ?? {}).length;
 
   const useSavedPositions =
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    savedPositions != null && positionsCount > 0 && positionsCount >= realNodes.length;
+    savedPositions !== null &&
+    savedPositions !== undefined &&
+    positionsCount > 0 &&
+    positionsCount >= realNodes.length;
   if (useSavedPositions && Boolean(savedPositions)) {
     const positionsById = savedPositions;
     const middleNodes = realNodes.map((realNode) => {

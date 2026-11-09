@@ -145,33 +145,34 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   );
   const workflowList = useQuery(trpc.workflow.list.queryOptions(undefined));
 
-  // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-  const invalidateSeries = () => void qc.invalidateQueries(trpc.series.list.queryFilter());
-  const invalidateSeasons = (sid: string) =>
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
+  const invalidateSeries = () => {
+    void qc.invalidateQueries(trpc.series.list.queryFilter());
+  };
+  const invalidateSeasons = (sid: string) => {
     void qc.invalidateQueries(trpc.series.seasons.queryFilter({ seriesId: sid }));
-  const invalidateEpisodes = (sid: string) =>
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
+  };
+  const invalidateEpisodes = (sid: string) => {
     void qc.invalidateQueries(trpc.series.episodes.queryFilter({ seasonId: sid }));
+  };
   const invalidateCurrent = () => {
     if (projectId !== undefined && projectId !== "") {
       void qc.invalidateQueries(trpc.series.byProject.queryFilter({ projectId }));
     }
   };
-  const invalidateCharacters = (sid: string) =>
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
+  const invalidateCharacters = (sid: string) => {
     void qc.invalidateQueries(trpc.series.characters.queryFilter({ seriesId: sid }));
-  const invalidateEpisodeChars = (eid: string) =>
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
+  };
+  const invalidateEpisodeChars = (eid: string) => {
     void qc.invalidateQueries(trpc.series.episodeCharacters.queryFilter({ episodeId: eid }));
-  const invalidateCharacterEpisodes = (cid: string) =>
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
+  };
+  const invalidateCharacterEpisodes = (cid: string) => {
     void qc.invalidateQueries(trpc.series.characterEpisodes.queryFilter({ characterId: cid }));
-  const invalidateSeasonProgress = () =>
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
+  };
+  const invalidateSeasonProgress = () => {
     void qc.invalidateQueries(
       trpc.seriesGeneration.seasonGenerationProgress.queryFilter({ seasonId: seasonId ?? "" }),
     );
+  };
 
   const createSeries = useMutation(
     trpc.series.create.mutationOptions({ onSuccess: invalidateSeries }),

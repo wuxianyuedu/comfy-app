@@ -335,7 +335,6 @@ export function failingSuitesFromJunit(xml) {
  * @returns {{name: string, body: string}[]} 属性读不出失败的 suite 不在这里
  */
 export function failingSuiteTextsFromJunit(xml) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- xml 是磁盘上的 junit 产物（外部数据），string 只是声明
   const text = String(xml ?? "");
   /** @type {{name: string, body: string}[]} */
   const out = [];
@@ -620,7 +619,6 @@ export function formatFileTimings(runs, opts = {}) {
   const nth = Math.max(1, Math.round(Number(opts.last) || 1));
   const top = Math.max(0, Math.round(Number(opts.top) || 0));
   const run = runs.slice(-nth)[0];
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- runs 为空时 slice(-nth)[0] 运行期是 undefined；规则未建模 noUncheckedIndexedAccess，保留出口
   if (!run) {
     return (
       `[precommit-timing] 账本里没有第 ${nth} 次记录（共 ${runs.length} 条）—— ` +
@@ -696,13 +694,11 @@ function collect(argv, name) {
      * 就当没有这一格」处理而不是断言 —— 与文件头那条同口径：记账线路**不阻断**提交，
      * 参数形状读不出只是少一格账，抛出来才是把记账变成了必经之路。 */
     const arg = argv[i];
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 守卫为 noUncheckedIndexedAccess 收窄服务（删掉 tsc 红）
     if (arg === undefined) {
       continue;
     }
     if (arg === name) {
       const next = argv[i + 1];
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 旗标收尾时 argv[i+1] 运行时为 undefined
       if (next !== undefined) {
         out.push(next);
       }

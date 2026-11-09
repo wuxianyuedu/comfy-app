@@ -100,7 +100,6 @@ function variantsAccessBase(node, cvaNames) {
   }
   if (
     ts.isElementAccessExpression(node) &&
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- TS AST API 的防御收窄：argumentExpression 形态运行时不受声明约束
     node.argumentExpression !== undefined &&
     ts.isStringLiteral(node.argumentExpression) &&
     node.argumentExpression.text === "variants" &&
@@ -292,7 +291,6 @@ export function cvaVariantTables(source) {
     /* 绑定名：`const X = cva(…)` 取 X；否则退回「cva 的起始行」当键。 */
     const parent = node.parent;
     const binding =
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 根节点的 parent 运行时为 undefined（TS 类型声明不含该分量）
       parent !== undefined && ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)
         ? parent.name.text
         : `#${String(source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1)}`;

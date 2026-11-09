@@ -312,7 +312,7 @@ export function isUsableSkipReason(reason) {
  */
 export function isWholeTrackRun(extra = []) {
   const passthrough = (Array.isArray(extra) ? extra : [])
-    .map((a) => String(a ?? "").trim()) // oxlint-disable-line typescript/no-unnecessary-condition -- extra 是调用方给的透传参数（外部输入），元素运行时可为 null/undefined
+    .map((a) => String(a ?? "").trim())
     .filter((a) => a !== "");
   if (passthrough.length === 0) {
     return { ok: true, why: null };
@@ -408,7 +408,7 @@ export function freshnessVerdict({ track, at, now, dirtySince }) {
    * 一次任何文件」会被读成「这一档已经被自证了」，于是「每天首次」那条判据在有人动过代码的
    * 日子里**整个失效**（而账面上看不出任何异常）。三档现在都吃面，所以这一格只能由
    * `tests/daily-tracks.test.ts` 的合成档来判 —— 它判的是机制，不是某一档的当前形状。 */
-  const since = (track.dirty ?? []).length > 0 ? dirtySince : null; // oxlint-disable-line typescript/no-unnecessary-condition -- 新增登记档漏填 dirty 时运行时为 undefined（上方注释明言防这一形），类型标窄
+  const since = (track.dirty ?? []).length > 0 ? dirtySince : null;
   const dirtyHows = [
     `跑一次 \`${track.run}\`（跑绿即记）`,
     track.skipHow ? `记一条写明理由的豁免：\`${track.skipHow}\`` : null,
@@ -599,7 +599,7 @@ export function checkFreshnessLedger(
         waiverToday &&
         waiver === "dirtyReason" &&
         dirtySince !== null &&
-        (track.dirty ?? []).length > 0 // oxlint-disable-line typescript/no-unnecessary-condition -- 同上：漏填 dirty 的登记项运行时为 undefined
+        (track.dirty ?? []).length > 0
       ) {
         /* 「这次改动不吃这一档」是一句**能被当天的事实驳倒**的话。
          *

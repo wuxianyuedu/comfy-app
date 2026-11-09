@@ -56,18 +56,13 @@ export function withGenerationAttribution(
 ): GenerateInput {
   return {
     ...input,
-    ...(attribution.projectId /* oxlint-disable-line strict-boolean-expressions -- 空 projectId 有意不落字段（见上注释：「没有归属」不写成空串），按任意真值判 */
-      ? { projectId: attribution.projectId }
-      : {}),
-    ...(attribution.shotId /* oxlint-disable-line strict-boolean-expressions -- 同上：空 shotId 有意不落字段，按任意真值判 */
-      ? { shotId: attribution.shotId }
-      : {}),
+    ...(attribution.projectId ? { projectId: attribution.projectId } : {}),
+    ...(attribution.shotId ? { shotId: attribution.shotId } : {}),
   };
 }
 
 export async function startLocalGenerate(input: GenerateInput): Promise<string> {
   const res = await vanillaApi.generate.generate.mutate(input);
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- res 是 tRPC mutation 回包（API 响应），taskId 运行期可缺，`?.` 保留防御
   if (!res?.taskId) {
     throw new Error("本地生成任务创建失败");
   }
@@ -299,20 +294,16 @@ export async function buildLibraryWorkflowInput(
   contractIds?: ReadonlyArray<string>,
 ): Promise<LibraryWorkflowBuildResult> {
   const detail = await vanillaApi.workflow.detailFull.query({ id: workflowId });
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- detail 来自 tRPC 查询回包（API 响应），workflowIO 列运行期可缺，`?? null` 兜底
   const io = detail?.workflowIO ?? null;
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：API 回包里 availableModes 运行期可缺
   const modes = Array.isArray(detail?.availableModes)
     ? detail.availableModes.filter((mode): mode is string => typeof mode === "string")
     : [];
   const mode =
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    requestedMode != null && requestedMode.trim() !== ""
+    requestedMode !== null && requestedMode !== undefined && requestedMode.trim() !== ""
       ? requestedMode
-      : (detail?.defaultMode ?? detail?.taskType ?? modes[0] ?? null); // oxlint-disable-line typescript/no-unnecessary-condition -- API 回包字段/空数组元素运行期均可缺，四级 ?? 兜底到 null
+      : (detail?.defaultMode ?? detail?.taskType ?? modes[0] ?? null);
   const { workflowInputs, unmatched } = buildEncapsulatedInputs({
     io,
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：API 回包里 paramMap 列运行期可缺
     paramMap: detail?.paramMap ?? null,
     mode,
     values,

@@ -249,7 +249,6 @@ export function buildWorkflowPreview(graph: Record<string, unknown>): WorkflowPr
   const byLevel: Record<number, Array<string>> = {};
   for (const id of visible) {
     const lv = level[id] ?? 0;
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- byLevel 是普通对象，索引访问运行期可能取到 undefined，||= 懒初始化不能删
     (byLevel[lv] ||= []).push(id);
   }
   for (const arr of Object.values(byLevel)) {
@@ -323,7 +322,6 @@ export function buildWorkflowPreviewFull(graph: Record<string, unknown>): Workfl
   const byLevel: Record<number, Array<string>> = {};
   for (const [id] of entries) {
     const lv = level[id] ?? 0;
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- byLevel 是普通对象，索引访问运行期可能取到 undefined，||= 懒初始化不能删
     (byLevel[lv] ||= []).push(id);
   }
   for (const arr of Object.values(byLevel)) {

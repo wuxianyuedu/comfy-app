@@ -256,7 +256,6 @@ function changedStoryFiles() {
     process.stderr.write("[storybook] 读不到暂存区清单，本次只盘点、不判必填 props 那一档\n");
     return [];
   }
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程起不来时 stdout 实测为 undefined（@types/node 声明偏窄）
   return String(result.stdout ?? "")
     .split("\n")
     .map((l) => l.trim())
@@ -359,7 +358,6 @@ function main() {
           .sort((a, b) => a.diff - b.diff)[0];
         violations.push(
           `${rel(story)} 的 ${arrayName}（轴 \`${axis}\`）与 ${rel(component)} 的 cva 对不上${
-            // oxlint-disable-next-line typescript/no-unnecessary-condition -- 一个候选都没有时 sort(...)[0] 运行时为 undefined
             described === undefined
               ? "（该文件里这一轴一处都没有）"
               : `（最接近的是 ${described.binding}${

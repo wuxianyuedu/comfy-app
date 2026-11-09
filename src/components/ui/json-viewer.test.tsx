@@ -20,7 +20,6 @@ function wideObject(keys: number): Record<string, number> {
 }
 
 function bodyText(): string {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- DOM textContent 运行期是 string|null（lib.dom 声明），规则未建模，保留空值兜底
   return screen.getByTestId("json-viewer-body").textContent ?? "";
 }
 

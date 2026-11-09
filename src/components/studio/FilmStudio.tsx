@@ -150,8 +150,9 @@ export function FilmStudio() {
               setReviewShot(null);
             }
           }}
-          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-          onRegenerated={() => void c.reloadProjectShots()}
+          onRegenerated={() => {
+            void c.reloadProjectShots();
+          }}
           open
           projectId={c.activeProjectId}
           shot={{ id: reviewShot.id, name: reviewShot.name }}

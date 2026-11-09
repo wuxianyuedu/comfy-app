@@ -93,7 +93,6 @@ export function parseArgs(argv) {
     /* `noUncheckedIndexedAccess` 之下按下标取到的是 `string | undefined`；
      * `i < argv.length` 已保证这一格有值，守卫只把这件事写给类型检查器看 ——
      * 与 `scripts/dev.mjs` 的 `parseArgs` 同一个写法。 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 守卫为 tsc noUncheckedIndexedAccess 收窄服务（删掉 tsc 红），oxlint 的类型解析不含该开关
     if (arg === undefined) {
       continue;
     }
@@ -114,7 +113,6 @@ export function parseArgs(argv) {
       }
     } else {
       const next = argv[i + 1];
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 旗标收尾时 argv[i+1] 运行时为 undefined（不是纯类型收窄）
       if (next === undefined || next.startsWith("-")) {
         problems.push(
           `${arg}：后面没有值（给了旗标却没给东西，与「压根没给」不是同一件事，不能默认）。`,

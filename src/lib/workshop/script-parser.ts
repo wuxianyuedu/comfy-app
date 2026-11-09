@@ -68,7 +68,6 @@ function expandIdea(
   meta: Pick<ProjectMeta, "title" | "type" | "tone" | "logline">,
 ): Array<Scene> {
   const tone = meta.tone || "温暖治愈";
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- meta 来自项目数据（DB JSON），type 运行期可缺省/为空串，`||` 是默认值兜底
   const type = meta.type || "short_video";
   const base = idea.replace(/[。.！!？?\s]+$/, "");
 

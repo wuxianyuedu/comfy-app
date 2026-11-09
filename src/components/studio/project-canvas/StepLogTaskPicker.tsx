@@ -50,7 +50,6 @@ export const StepLogTaskPicker = memo(function StepLogTaskPicker({
           const seq = seqByTaskId.get(id);
           const wn = meta?.workflowName?.trim();
           const st = meta?.status ?? "?";
-          // oxlint-disable-next-line no-unnecessary-condition -- seqByTaskId 只在 seq 非空时写入，Map.get 读到的值恒为 number；保留 null 判定作缺值防御
           const seqLabel = seq === null ? null : `#${seq}`;
           const titleParts = [seqLabel, wn, st, id].filter(Boolean);
           const displayParts = [seqLabel, wn ?? `task ${id.slice(0, 8)}`, st].filter(Boolean);

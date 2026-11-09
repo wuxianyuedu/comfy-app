@@ -128,15 +128,13 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
 
     if (Array.isArray(n.inputs) && n.inputs.length) {
       for (const inp of n.inputs) {
-        // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- 外部 JSON 的 inputs 数组元素运行期可能为 null，保留防御判空
         if (!inp || typeof inp.name !== "string") {
           continue;
         }
         slots.push({
           name: inp.name,
           type: typeof inp.type === "string" ? inp.type : undefined,
-          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-          link: inp.link == null ? null : Number(inp.link),
+          link: inp.link === null || inp.link === undefined ? null : Number(inp.link),
         });
       }
     } else {
@@ -170,10 +168,7 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
       raw: n,
       inputs: slots,
       outputTypes: Array.isArray(n.outputs)
-        ? n.outputs.map((output) =>
-            // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- 外部 JSON 的 outputs 数组元素运行期可能为 null，保留防御判空
-            output && typeof output.type === "string" ? output.type : "",
-          )
+        ? n.outputs.map((output) => (output && typeof output.type === "string" ? output.type : ""))
         : [],
     });
   }
@@ -199,8 +194,7 @@ export function buildRawViewGraph(raw: RawWorkflow): Record<string, ApiWorkflowN
   for (const idx of index.values()) {
     const inputs: Record<string, unknown> = {};
     for (const slot of idx.inputs) {
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      if (slot.link == null) {
+      if (slot.link === null || slot.link === undefined) {
         continue;
       }
       const ref = linkIndex.get(slot.link);
@@ -215,7 +209,6 @@ export function buildRawViewGraph(raw: RawWorkflow): Record<string, ApiWorkflowN
      * inputTypes/outputTypes 供 `execution-graph` 在提交前穿透旁路节点。 */
     const meta: ApiNodeMeta = {};
     const title = idx.raw.title ?? idx.raw.properties?.title;
-    // oxlint-disable-next-line strict-boolean-expressions -- title 是外部 JSON 的 unknown 值，空串与其它 falsy 形态都要跳过，避免给 _meta.title 写入空标题
     if (title) {
       meta.title = toStringValue(title);
     }

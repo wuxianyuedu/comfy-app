@@ -211,8 +211,7 @@ const started = /applying migrations/i.test(output) || /migrations applied/i.tes
 
 if (afterTables <= 0) {
   const hint = run.error
-    ? // oxlint-disable-next-line typescript/no-unnecessary-condition -- run.error 是子进程失败现场（外部输入），code 可能缺
-      `起 pnpm 失败（${run.error.code ?? "UNKNOWN"}）：${run.error.message ?? ""}`
+    ? `起 pnpm 失败（${run.error.code ?? "UNKNOWN"}）：${run.error.message ?? ""}`
     : started
       ? "drizzle-kit 说它在应用迁移，但库里一张用户表都没有 —— 语句没落地（写锁 / 库不可写 / 路径不一致）。"
       : "drizzle-kit 没走到应用迁移那一步（输出见上），且库里一张用户表都没有。";

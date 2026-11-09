@@ -35,8 +35,7 @@ export function nodeExecutable() {
  */
 export function interpretRunResult(result, command) {
   const spawnError = result.error
-    ? // oxlint-disable-next-line typescript/no-unnecessary-condition -- Node 运行时的 error 对象 code/message 都可能缺（ErrnoException 声明偏窄）
-      String(result.error.code ?? result.error.message ?? "unknown")
+    ? String(result.error.code ?? result.error.message ?? "unknown")
     : null;
   if (spawnError) {
     return {
@@ -191,7 +190,6 @@ export const POSTINSTALL_FORBIDDEN = [
  * @returns {{ ok: boolean, reason: string }}
  */
 export function checkPostinstall(script) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- script 来自调用方读出的 package.json 内容（外部数据），string 只是声明
   const text = String(script ?? "").trim();
   if (!text) {
     return { ok: false, reason: "postinstall 为空：钩子接线会被静默跳过" };

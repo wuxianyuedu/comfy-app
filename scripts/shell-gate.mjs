@@ -239,12 +239,9 @@ export function materializeCargoTestInputs({
   // 三元组从 cargo 自己嘴里问（`cargo -vV` 的 `host:` 行）—— cargo test 按宿主
   // 三元组编译，sidecar 名里带的是同一个；写死或从 process.arch 翻译都会漂。
   let triple = null;
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 注入参数类型标 string|null，`!== undefined` 是对显式传 undefined 的防御收窄
   if (cargo !== null && cargo !== undefined) {
     const out =
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- versionOutput 是注入参数，调用点可显式传 undefined，类型按 string 标窄
       versionOutput ??
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- cargo 子进程起不来时 stdout 实测为 undefined（@types/node 声明偏窄）
       spawnSync(cargo, ["-vV"], { encoding: "utf8", windowsHide: true }).stdout ??
       "";
     triple = hostTripleFromCargoVersion(out) ?? null;

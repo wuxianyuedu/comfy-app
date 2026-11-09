@@ -246,7 +246,6 @@ export function scanPendingMerge({ source = "" } = {}) {
  * @returns {{ok: true} | {ok: false, why: string}}
  */
 export function acknowledgeReason(message, lost) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 实参源自 git 提交信息读取，类型按 string 标窄
   const text = String(message ?? "");
   if (!text.includes("整份取一侧")) {
     return {

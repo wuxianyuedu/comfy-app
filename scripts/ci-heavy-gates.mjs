@@ -449,7 +449,6 @@ export function runHeavyGates(io = {}) {
      * 这一条把「有没有判决面」从**逐条核对**变成**机械判据**：任何一条判据将来
      * 在这个形态下丢掉判决面，账面上就再也混不进「绿」里。
      */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- `r.output` 是注入面（用例会喂 null），规则读不到
     if (r.code === 0 && String(r.output ?? "").trim() === "") {
       notJudged.push({
         label: step.label,
@@ -468,7 +467,6 @@ export function runHeavyGates(io = {}) {
        * 与 `notJudged` 分开：那一档是「一个字都没说」，这一档是「说了，说的是没判」。
        * 判法共用 `scripts/ci-log.mjs` 的 `looksSkipped()`（同一张说法表），
        * 并在打印时与判据自己的输出**并排**念出来。 */
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上
       noJudgement: r.code === 0 && looksSkipped(String(r.output ?? "").trim()),
     });
   }
@@ -861,7 +859,6 @@ export function main(io = {}) {
 /* 只在被直接执行时跑 main。被 import 时（`tests/ci-autofix-duties.test.ts` 要读
  * `HEAVY_GATES`）只暴露纯数据与函数 —— 否则 `process.exit()` 会当场把测试进程杀掉，
  * 而那件事的形态是「用例一条都没跑、套件却红了」，读起来与真红完全两样。 */
-// oxlint-disable-next-line typescript/no-unnecessary-condition -- process.argv[1] 在 node -e / REPL 形态下实为 undefined，@types/node 标成 string
 if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(main());
 }

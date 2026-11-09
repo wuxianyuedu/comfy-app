@@ -129,7 +129,6 @@ export function pickReasonLines(lines) {
  * @returns {string}
  */
 export function renderSummary({ label, code, rawCode, inconclusive, lines }) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- lines / line 是子进程原始输出（外部数据），元素可为空串，规则按非空标
   const clean = (lines ?? []).map((line) => String(line ?? "").replaceAll(ANSI_ESCAPE, ""));
   const reasons = pickReasonLines(clean);
   const head = inconclusive
@@ -164,7 +163,6 @@ export function renderSummary({ label, code, rawCode, inconclusive, lines }) {
  * @returns {string}
  */
 export function escapeAnnotation(text) {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 入参 text 是外部文本，运行期可为 undefined；规则按非空 string 标
   return String(text ?? "")
     .replaceAll("%", "%25")
     .replaceAll("\r", "%0D")
@@ -259,7 +257,6 @@ async function main() {
   return 0;
 }
 
-// oxlint-disable-next-line typescript/no-unnecessary-condition -- 被 import 时 process.argv[1] 运行期不存在；类型按非空标，保留直执行守卫
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename) {
   try {
     process.exitCode = await main();

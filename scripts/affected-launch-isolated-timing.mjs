@@ -89,7 +89,6 @@ export const ORPHAN_ISOLATED_FLAG_NOTE =
 export function recordBatchTiming({ readings, cwd, merge }) {
   const { written, rejected } = merge(
     cwd,
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- readings 跨调用边界传入，类型按必填标，兜底防漏传
     (readings ?? []).map((r) => ({ ...r, source: "batch" })),
   );
   const head = written

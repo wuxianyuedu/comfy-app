@@ -61,8 +61,7 @@ const ENDPOINTS = "src/lib/endpoints.ts";
  * 服务端与拉起侧读取，而 app-settings.ts 顶层 import fs —— 走那条路会让设置有
  * 默认端口的页面整页 500（ISSUE #282/#317）。app-settings.ts 只**再导出**同名。 */
 const endpointsSrc = read(ENDPOINTS);
-// oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-if (endpointsSrc == null) {
+if (endpointsSrc === null || endpointsSrc === undefined) {
   fail(`找不到 ${ENDPOINTS}`);
 }
 const decl =
@@ -80,20 +79,17 @@ const defaultPort = decl ? Number(decl.groups?.port) : null;
  * 需要默认端口的地方直接引 `@/lib/endpoints`；这里改成「反向」断言。 */
 const settingsPureSrc = read(SETTINGS_PURE);
 const settingsIoSrc = read(SETTINGS_IO);
-// oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-if (settingsPureSrc == null) {
+if (settingsPureSrc === null || settingsPureSrc === undefined) {
   fail(`找不到 ${SETTINGS_PURE}`);
 }
-// oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-if (settingsIoSrc == null) {
+if (settingsIoSrc === null || settingsIoSrc === undefined) {
   fail(`找不到 ${SETTINGS_IO}`);
 }
 for (const [file, src] of [
   [SETTINGS_PURE, settingsPureSrc],
   [SETTINGS_IO, settingsIoSrc],
 ]) {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (src == null) {
+  if (src === null || src === undefined) {
     continue;
   }
   if (
@@ -110,8 +106,7 @@ for (const [file, src] of [
 /* ── ② 拉起侧：spawn 参数对端口的口径 ───────────────────────────────────── */
 
 const deriveSrc = read(DERIVE);
-// oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-if (deriveSrc == null) {
+if (deriveSrc === null || deriveSrc === undefined) {
   fail(`找不到 ${DERIVE}`);
 } else {
   // buildSpawnArgs 必须"只在有效端口与默认端口不同时"才补 --port。
@@ -139,8 +134,7 @@ if (deriveSrc == null) {
 }
 
 const lifecycleSrc = read(LIFECYCLE);
-// oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-if (lifecycleSrc == null) {
+if (lifecycleSrc === null || lifecycleSrc === undefined) {
   fail(`找不到 ${LIFECYCLE}`);
 } else if (
   !/buildSpawnArgs\(\{[\s\S]{0,400}?defaultPort:\s*COMFYUI_DEFAULT_PORT/.test(lifecycleSrc)
@@ -163,8 +157,7 @@ if (
 /* ── ③ 拉起侧与连接侧对「未配置端口」给同一个默认值 ─────────────────────── */
 
 const clientSrc = read(CLIENT);
-// oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-if (clientSrc == null) {
+if (clientSrc === null || clientSrc === undefined) {
   fail(`找不到 ${CLIENT}`);
 }
 /* 连接侧与拉起侧自 ISSUE #569 第 5 项起都**直接从零依赖常量层**取默认端口
@@ -180,8 +173,7 @@ else if (
 }
 
 const desktopSrc = read(DESKTOP);
-// oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-if (desktopSrc == null) {
+if (desktopSrc === null || desktopSrc === undefined) {
   fail(`找不到 ${DESKTOP}`);
 }
 

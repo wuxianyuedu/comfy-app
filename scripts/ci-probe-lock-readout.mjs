@@ -133,8 +133,7 @@ export function readBuild(repo, sn, call = cnbCall) {
     return emptyReading(sn, `响应不是 JSON（前 120 字：${raw.slice(0, 120)}）`);
   }
   const data = parsed?.data;
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (data == null || typeof data !== "object") {
+  if (data === null || data === undefined || typeof data !== "object") {
     return emptyReading(sn, "响应里没有 data");
   }
   /* 平台**只有**流水线粒度的时间：一跑里可以是多个 pipeline（本仓每条流水线各一个），
@@ -202,7 +201,7 @@ export function readRunWindow(repo, sn) {
     /** @type {RunRow[]} */
     const rows = JSON.parse(raw)?.data?.data ?? [];
     /** @type {RunRow} */
-    const row = rows.find((r) => r?.sn === sn) ?? rows[0] ?? {}; // oxlint-disable-line typescript/no-unnecessary-condition -- rows 来自平台 JSON 且可能为空，`rows[0]` 运行时为 undefined，元素字段类型由 @type 标窄
+    const row = rows.find((r) => r?.sn === sn) ?? rows[0] ?? {};
     const create = Number(row.createTime ? Date.parse(row.createTime) : Number.NaN);
     const durationMs = Number(row.duration ?? Number.NaN);
     const ended = Number.isFinite(create) && Number.isFinite(durationMs);
@@ -247,8 +246,7 @@ function emptyReading(sn, note) {
  * @returns {number | null}
  */
 export function toMs(value) {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (value == null || value === "") {
+  if (value === null || value === undefined || value === "") {
     return null;
   }
   if (/^\d+$/.test(value)) {
@@ -283,13 +281,11 @@ export function overlap(a, b, now = Date.now()) {
   const span = (x) => {
     const start = toMs(x.startTime) ?? toMs(x.createTime);
     const end = toMs(x.endTime);
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    return { start, end: end ?? now, stillRunning: end == null };
+    return { start, end: end ?? now, stillRunning: end === null || end === undefined };
   };
   const sa = span(a);
   const sb = span(b);
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (sa.start == null || sb.start == null) {
+  if (sa.start === null || sa.start === undefined || sb.start === null || sb.start === undefined) {
     return { verdict: "取不到时间线", seconds: 0, stillRunning: false };
   }
   const seconds = Math.round((Math.min(sa.end, sb.end) - Math.max(sa.start, sb.start)) / 1000);
@@ -390,8 +386,7 @@ export function probeConfig(opts) {
   const { event, key, cancelInProgress, wait, stageLock, jobLock, seconds } = opts;
   const timeout = opts.timeout ?? "20m";
   const pipelineLock = [`  lock:`, `    key: ${key}`];
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (cancelInProgress != null) {
+  if (cancelInProgress !== null && cancelInProgress !== undefined) {
     pipelineLock.push(`    cancel-in-progress: ${cancelInProgress}`);
   }
   if (wait) {
@@ -405,16 +400,13 @@ export function probeConfig(opts) {
   const lockBlock = (indent, l) => {
     const pad = " ".repeat(indent);
     const out = [`${pad}lock:`, `${pad}  key: ${l.key}`];
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (l.wait != null) {
+    if (l.wait !== null && l.wait !== undefined) {
       out.push(`${pad}  wait: ${l.wait}`);
     }
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (l.timeout != null) {
+    if (l.timeout !== null && l.timeout !== undefined) {
       out.push(`${pad}  timeout: ${l.timeout}`);
     }
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (l.expires != null) {
+    if (l.expires !== null && l.expires !== undefined) {
       out.push(`${pad}  expires: ${l.expires}`);
     }
     return out;
@@ -540,7 +532,6 @@ function parseFlags(argv) {
     const a = argv[i];
     /* `noUncheckedIndexedAccess` 下按下标取到的是 `string | undefined`，而 `i < length`
      * 已保证这一格有值 —— 守卫只是把这件事写给类型检查器（同 `dev.mjs` 那一处）。 */
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- argv 下标在 noUncheckedIndexedAccess 下是 string | undefined，守卫写给 tsc
     if (a === undefined) {
       continue;
     }
@@ -549,8 +540,7 @@ function parseFlags(argv) {
     }
     const k = a.slice(2);
     const next = argv[i + 1];
-    // oxlint-disable-next-line eqeqeq, typescript/no-unnecessary-condition -- 同时判 null 与 undefined；argv[i + 1] 越界时运行时是 undefined，类型按 string 标窄
-    if (next != null && !next.startsWith("--")) {
+    if (next !== null && next !== undefined && !next.startsWith("--")) {
       out[k] = next;
       i += 1;
     } else {
@@ -577,8 +567,13 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.met
      * @returns {boolean | undefined}
      */
     const bool = (v) =>
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      v === true ? true : v === "false" ? false : v == null ? undefined : v === "true";
+      v === true
+        ? true
+        : v === "false"
+          ? false
+          : v === null || v === undefined
+            ? undefined
+            : v === "true";
     process.stdout.write(
       probeConfig({
         event: String(f.event),
@@ -591,7 +586,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.met
         jobLock: f["job-lock"]
           ? { key: String(f["job-lock"]), wait: true, timeout: 900 }
           : undefined,
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 旗标 Record 缺键时运行时是 undefined，类型按 string | boolean 标窄
         seconds: Number(f.seconds ?? 90),
       }),
     );
@@ -604,7 +598,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.met
       console.error(USAGE);
       process.exit(2);
     }
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 旗标 Record 缺键时运行时是 undefined，类型按 string | boolean 标窄
     console.log(startProbe(repo, String(f.event), String(f.title ?? `probe ${f.event}`)));
     process.exit(0);
   }
@@ -625,7 +618,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.met
       console.error(USAGE);
       process.exit(2);
     }
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 旗标 Record 缺键时运行时是 undefined，类型按 string | boolean 标窄
     const gap = Number(f.gap ?? 20);
     const first = startProbe(repo, String(f.event), `pair-1 ${f.event}`);
     console.log(`[probe] 第一条 ${first}，等 ${gap}s 再起第二条`);

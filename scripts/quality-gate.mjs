@@ -305,7 +305,6 @@ function parseArgs(argv) {
       const next = argv[i + 1];
       /* 提了旗标没给值 ⇒ 不算「没提要求」：原实现那句 `|| "all"` 正是本单要收的那一格
        * （缺值 / 不认识的形式统统落回 `"all"`，而 `"all"` 在这份工具里是最重的一档）。 */
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 旗标收尾时 argv[i+1] 运行时为 undefined
       if (next === undefined || next.startsWith("--")) {
         out.unknown.push(arg);
         continue;
@@ -507,7 +506,6 @@ function main() {
   const plan = [];
   for (const k of keys) {
     const gate = GATES[k];
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- k 来自用户 --mode 输入，运行时可为未知键（下一行的话术就是为它准备的）
     if (!gate) {
       fail(`未知门禁：${mode}（可选：${Object.keys(GATES).join(" / ")} / all）`);
       return 2;
@@ -572,10 +570,6 @@ function main() {
 /* 只在被直接执行时跑 main：`gates-which.mjs` 要 import 这张表当它唯一的口径来源，
  * import 一下就把整套门禁跑起来是另一种事故。判法取既有的 realpath 比较（ISSUE #1961：
  * `file://` 拼接在 Windows 上恒不相等）。 */
-if (
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 直接执行判据：以 REPL / 无脚本入口方式入场时 argv[1] 运行时为 undefined
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(main());
 }

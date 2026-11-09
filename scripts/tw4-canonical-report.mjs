@@ -184,7 +184,6 @@ for (const file of files) {
   const literals = /\.tsx?$/.test(file)
     ? stringLiterals(read(file))
     : [...read(file).matchAll(LITERAL_IN_NON_JS)].map((m) => ({
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则捕获组在不参与匹配时运行时为 undefined
         content: m.groups?.content ?? "",
       }));
   for (const match of literals) {
@@ -273,7 +272,6 @@ if (shouldWrite) {
          * 循环界保证它不是 undefined，但那是**我**知道的不是**类型**知道的 ——
          * 直接 `canonical.get(pieces[i])` 会新冒一格 TS2345（本批实测就是这么现出来的）。 */
         const piece = pieces[i];
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 守卫为 noUncheckedIndexedAccess 收窄服务（上方注释已记），oxlint 的类型解析不含该开关
         if (piece === undefined) {
           continue;
         }

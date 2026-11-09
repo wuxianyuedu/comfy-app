@@ -154,7 +154,7 @@ export function probeExecutable(
     /* SAFETY: 类型断言已复核 */
     const errno = (probe.error as NodeJS.ErrnoException).code;
     // oxlint-disable-next-line typescript/prefer-nullish-coalescing
-    const code: string = errno || "UNKNOWN"; // oxlint-disable-line strict-boolean-expressions -- 刻意保留 || 兜底：errno 为空串同样是「没有码」，不能换成 ??
+    const code: string = errno || "UNKNOWN";
     if (code === "ETIMEDOUT") {
       return { ok: false, failure: { kind: "timeout", timeoutMs } };
     }

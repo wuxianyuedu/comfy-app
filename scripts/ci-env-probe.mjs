@@ -392,7 +392,6 @@ function run(cmd, args) {
   const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true });
   return {
     ok: r.status === 0 && !r.error,
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawn 失败时 stdout/stderr 实测为 null，@types/node 按 string 标
     out: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim(),
   };
 }
@@ -690,7 +689,6 @@ export function envProbe({
       for (const v of verdicts) {
         /* `root` 在类型上必填（`playwrightReachabilityVerdicts` 的返回形状），但它是
          * 注入面 `probeUrlOf` 的产物 —— 那一步的兜底仍在，按 §5.10 的 C 格留注释。 */
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 注入面 probeUrlOf 的产物，root 缺时退回 url
         notes.push(`下载根探测：${v.root ?? v.url} → ${v.verdict}`);
       }
       if (reachable.length === 0) {

@@ -305,7 +305,6 @@ describe("工坊 MCP 工具面", () => {
     const listed = await client.listTools();
     const loose = listed.tools
       .filter((tool) => {
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- inputSchema 来自 MCP SDK 的 listTools 回包，运行期可能缺省，`?? {}` 是防线
         const shape = JSON.stringify(tool.inputSchema ?? {});
         /* JSON Schema 里 `z.any()` 落成真空 schema（`{}`）或 `additionalProperties`
          * 全放的数组；这两形态都意味着「什么都收」。 */

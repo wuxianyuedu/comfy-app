@@ -188,7 +188,6 @@ export async function pollUntilTerminal(ctx) {
         const first = outcome.cancelled[0];
         const skipped = downstreamSkipped(outcome).map((s) => s.name || s.id);
         log(
-          // oxlint-disable-next-line typescript/no-unnecessary-condition -- cancelled 来自平台数据，空数组时首元素运行时为 undefined
           `[ship]   这一跑**被取消**（不是产物坏了）：${first ? first.name : "(不知哪一格)"} 被终止 ⇒ 下面那几格根本没跑${
             skipped.length > 0 ? `（${skipped.join("、")}）` : ""
           }，这一跑没有 CI 结论`,
