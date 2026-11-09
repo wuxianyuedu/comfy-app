@@ -2523,6 +2523,12 @@ master:
         # 平台池 = 云托管 Linux 节点（不写 namespace: group 就是它）。
         tags:
           - cnb:arch:amd64
+        # 与 PR 出口同一份网络 IO 动作（git 探活 / 推送 / LFS，`--master` 只是不派发），
+        # CPU 密集部分只有 node 启动与 git 压缩；平台池缺省 8 核（memory = 核数 × 2 GiB）
+        # 对它过配，而核时计费 = 核数 × 时长 ⇒ 显式取 1 核。依据是 #3429 在 PR 出口上的
+        # 1 / 2 / 4 / 8 核四档实测：格耗时都在 egress 抖动区间内、无核数敏感度，
+        # 同一脚本同一性质 ⇒ 结论适用，取核时最小的那一档。
+        cpus: 1
       docker:
         build:
           dockerfile: .cnb/ci-image/Dockerfile
