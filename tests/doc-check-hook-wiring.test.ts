@@ -57,6 +57,16 @@ function platformExecutor(stageName: string) {
   if (stage !== null) {
     return { where: "stage", command: stage };
   }
+  /* ISSUE #3378 收尾：CNB push 主列撤掉后，文档链两格由 GA `master-gate.yml`
+   * 同名 step 承接（§13.5.34 并行期逐格比对后才切换）。stage / 聚合档都没有时，
+   * 认 GA workflow 的 `run:` 行 —— 判据本体（脚本路径）逐字在场才算执行者。 */
+  const gaWorkflow = readFileSync(join(REPO_ROOT, ".github/workflows/master-gate.yml"), "utf8");
+  const gaLine = gaWorkflow
+    .split("\n")
+    .find((l) => /^\s*run:\s*/.test(l) && l.includes("scripts/check-doc-references.cjs"));
+  if (stageName === "文档引用与权威源一致" && gaLine) {
+    return { where: "GA master-gate.yml", command: gaLine.trim() };
+  }
   const gate = HEAVY_GATES.find((g) => g.name === stageName);
   if (!gate) {
     return null;

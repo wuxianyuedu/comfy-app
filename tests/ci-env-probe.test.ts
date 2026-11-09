@@ -22,7 +22,6 @@ import {
 /* 每个 stage 现在都以 `node scripts/ci-cp936-exit.mjs -- <真命令>` 起（ISSUE #1977），
  * 而下面那条「环境前提点名的入口在不在盘上」判据抓的是 `scripts/…` —— 不剥外壳就会
  * 抓到外壳自己（它当然在盘上），判据从「接线对不对」退化成「外壳在不在」。 */
-import { unwrapCp936 } from "../scripts/ci-cp936-exit.mjs";
 import {
   commentedStageBlock,
   ps7OnlySyntaxIn as ps7OnlySyntaxInGate,
@@ -476,42 +475,22 @@ describe("环境前提：浏览器那一格的两个消费者不许各写一份�
   });
 });
 
-describe("环境前提：流水线上真的在跑它，且排在最长的等待之前", () => {
-  it("`COMFYAPP_CI_GATES` 里登记了它，且它排在 `GA 回调结论回读` 之前", () => {
-    /* 2026-11-05 薄化后 PR 档不再装依赖（GA 的 `安装依赖` step 接管），原先「排在
-     * `Install dependencies` 之前」的对象随之消失。仍然成立的语义是：这一格答的是
-     * 「这台节点此刻能力够不够」，而 `GA 回调结论回读` 要活到 GA 出结论（站内 45m
-     * 预算，2026-11-08 起接替 `GitHub 判决回读`）—— 排在那后面等于把结论推到最后一刻，
-     * 红了也没人来得及看。 */
+describe("环境前提：已随 CNB 主列瘦身退役（ISSUE #3378）", () => {
+  it("不再挂在 `COMFYAPP_CI_GATES` 上，脚本仍留盘", () => {
+    /* 这一格问的是自托管节点的工具链 / 浏览器下载根前提。GA 承接全部代码判据后，
+     * CNB `pull_request` build 只剩「站内读 GA 送回的结论」，没有哪个判据在这台节点
+     * 上跑到下载根 ⇒ 退役。脚本留盘（每日档的环境判据仍 import 它的模块）。 */
     const order = registeredGateOrder(read(".cnb.yml"));
     expect(order.length, "解析不出 COMFYAPP_CI_GATES —— 键被删了？").toBeGreaterThan(0);
-    const at = order.indexOf("环境前提");
-    const waitAt = order.indexOf("GA 回调结论回读");
-    expect(at, "`环境前提` 不在清单里 —— 那一步因此没有任何执行者").toBeGreaterThan(-1);
-    expect(waitAt).toBeGreaterThan(-1);
     expect(
-      at,
-      "`环境前提` 必须排在 `GA 回调结论回读` 之前：前提结论要在 45m 的等待开始前给出",
-    ).toBeLessThan(waitAt);
-  });
-
-  it("那一步点名的入口真的在盘上（脚本存在而配置没接上 = 这一步白写）", () => {
-    const block = /^\s*-\s*name:\s*环境前提\s*$\r?\n\s*script:\s*(?<script>\S.*)$/m.exec(
-      read(".cnb.yml"),
-    )?.groups?.script;
-    expect(block, "解析不出「环境前提」那一步的 script").toBeTruthy();
-    const command = String(block).trim();
-    /* ⚠️ 脚本那一行的开头**已经不一定**是 `node …`（2026-10-16 起每个 stage 前面挂 `[Console]::OutputEncoding=…`，
-     * 外面还包着 `ci-cp936-exit.mjs`，`unwrapCp936()` 剥掉最后那一层 —— ISSUE #1977 的 CP936 出口：PowerShell 默认按
-     * CP936 解 UTF-8 输出，中文日志在平台侧全是乱码）。所以判「这段命令点到哪个入口」，不是「是否从第一个字符起」。 */
+      order.indexOf("环境前提"),
+      "`环境前提` 又回到 PR 清单了 —— 它已随 #3378 退役，要加回请先给出它在这条 build 上的消费者",
+    ).toBe(-1);
     expect(
-      command,
-      "「环境前提」的脚本里没有给 PowerShell 设 UTF-8 输出编码 —— 平台日志会全是乱码",
-    ).toContain("[Console]::OutputEncoding");
-    const entry = /(?:^|;)\s*(?:node\s+)?(?<script>scripts\/[^\s;]+)/.exec(unwrapCp936(command))
-      ?.groups?.script;
-    expect(entry, `解析不出「环境前提」点名的入口：${command}`).toBe("scripts/ci-env-probe.mjs");
-    expect(read(entry ?? "").length, "「环境前提」点名的入口不在盘上").toBeGreaterThan(0);
+      order.indexOf("GA 回调结论回读"),
+      "承重回读格不在清单里 —— §13.6 的锚不能丢",
+    ).toBeGreaterThan(-1);
+    expect(read("scripts/ci-env-probe.mjs").length, "脚本留盘").toBeGreaterThan(0);
   });
 });
 

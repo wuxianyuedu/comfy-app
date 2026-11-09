@@ -400,11 +400,10 @@ export async function probeAll(opts) {
  * 也就是说，**读数落在日志里、而读者找不到它，与没有读数等价** —— 这与
  * `ci-workspace-probe.mjs` 里「job 标签只取 basename，两跑并排一模一样」是同一类病。
  *
- * 映射按**触发口**（`CNB_EVENT` 是唯一权威）：同一条 `ci-token-scopes.mjs` 现役挂在
- * PR / 每日 / 桌包 / push 这几条流水线上，每日档是 `.daily-gates` 的第二格
- * `每日令牌权限读数`，其余几档是 `endStages` 里的 `令牌权限读数`（同构，push 落进下面
- * 「按事件名指路」的兜底出口）。入口数不在这里写死，以 `.cnb.yml` 现役 `script:` 行为准。
- * 所以「去哪个流水线、哪一格里看」不能靠读的人自己拼。
+ * 映射按**触发口**（`CNB_EVENT` 是唯一权威）：ISSUE #3378 收尾后，这条读数**只剩
+ * 每日档一个执行者**（`.daily-gates` 的第二格 `每日令牌权限读数`）—— PR / 桌包 /
+ * push 三处的 `endStages` 里那格随「CNB 侧不再写平台 / 出网」一起退役。
+ * 入口数不在这里写死，以 `.cnb.yml` 现役 `script:` 行为准。
  *
  * ⚠️ 默认退化成「照事件名去找」而不是猜一个具体格名：事件名认不出来时，写死一条路径
  * 就是在教人去看一个可能不存在的地方 —— 那比不写更坏（§13.6.4.1 同一条纪律）。
@@ -423,24 +422,11 @@ export function whereItLives(ctx) {
    * 认不出来的就落进最后那条按事件名指路的出口，而不是落回一个陈旧的格名。
    */
   const dailyCron = /^crontab:\s*0\s+1\s/.test(event);
-  const packageCron = /^crontab:\s*0\s+3\s/.test(event);
   /** @type {{match: (e: string) => boolean, where: string}[]} */
   const lanes = [
     {
-      match: (e) => e === "pull_request",
-      where: `这一跑：${label} → 最后两格（endStages）里的「令牌权限读数」`,
-    },
-    {
-      match: () => packageCron,
-      where: `这一跑：${label} → 最后两格（endStages）里的「令牌权限读数」`,
-    },
-    {
       match: () => dailyCron,
       where: `这一跑：${label} → 第二格「每日令牌权限读数」`,
-    },
-    {
-      match: (e) => e.startsWith("web_trigger_package") || e.startsWith("api_trigger_package"),
-      where: `这一跑：${label} → 最后两格（endStages）里的「令牌权限读数」`,
     },
     {
       match: (e) => e.startsWith("web_trigger_daily") || e.startsWith("api_trigger_daily"),
@@ -453,7 +439,7 @@ export function whereItLives(ctx) {
       lane
         ? lane.where
         : `按事件名 ${event || "（不在场）"} 找到这一跑的流水线，` +
-          "在它的 stage 列表里找「令牌权限读数」/「每日令牌权限读数」那一格"
+          "在它的 stage 列表里找「每日令牌权限读数」那一格（ISSUE #3378 后它是唯一执行者）"
     }` + " · 平台不把每一格的日志摊在流水线首页，要点进那一格才看得见"
   );
 }

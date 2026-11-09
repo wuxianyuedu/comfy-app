@@ -19,7 +19,6 @@ import {
   ROOT,
 } from "../scripts/ci-image-identity.mjs";
 import { registeredGateOrder } from "./no-platform-ci-config.test";
-import { unwrapCp936 } from "../scripts/ci-cp936-exit.mjs";
 
 const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
 
@@ -183,32 +182,21 @@ describe("镜像身份：它是**读数**不是判据（三档都不许退非零
   });
 });
 
-describe("镜像身份：流水线上真的在跑它（脚本存在而配置没接上 = 这一步白写）", () => {
-  it("`COMFYAPP_CI_GATES` 里登记了它，且它是本档第一格", () => {
+describe("镜像身份：已随 CNB 主列瘦身退役（ISSUE #3378）", () => {
+  it("不再挂在 `COMFYAPP_CI_GATES` 上，脚本仍留盘", () => {
+    /* 这一格是自托管节点的镜像身份读数（恒退 0）。CNB `pull_request` build 现在
+     * 只做站内回读 GA 结论，没有节点事实的消费者 ⇒ 退役。脚本留盘，供每日档
+     * 环境读数与「下一台机器从哪张镜像长出来」那一问按需复用。 */
     const order = registeredGateOrder(read(".cnb.yml"));
-    const at = order.indexOf("镜像身份");
-    /* 位置：2026-11-05 薄化后它是这一档的第一格 —— 它问的是「这一跑到底跑在哪台
-     * runner 上」，后面每一格的读数都要以这个答案为前提；`工具链自证` / `Python 可用性`
-     * 早已撤到每日档，拿它们做顺序锚只会是空话。 */
-    expect(at, "`镜像身份` 不在清单里 —— 那一步因此没有任何执行者").toBeGreaterThan(-1);
-    expect(at).toBe(0);
-    expect(at).toBeLessThan(order.indexOf("GA 回调结论回读"));
-  });
-
-  it("那一步点名的入口真的在盘上，且还包着 CP936 出口外壳", () => {
-    const block = /^\s*-\s*name:\s*镜像身份\s*$\r?\n\s*script:\s*(?<script>\S.*)$/m.exec(
-      read(".cnb.yml"),
-    )?.groups?.script;
-    expect(block, "解析不出「镜像身份」那一步的 script").toBeTruthy();
-    const command = String(block).trim();
-    /* 平台的 stage shell 是 PowerShell，它默认按 CP936 解子进程的 UTF-8 输出 ——
-     * 这一步打的**全是中文**（判读那几行），少了这句它在平台日志里就是花屏。 */
     expect(
-      command,
-      "「镜像身份」的脚本里没有给 PowerShell 设 UTF-8 输出编码 —— 平台日志会是乱码",
-    ).toContain("[Console]::OutputEncoding");
-    expect(unwrapCp936(command)).toContain("node scripts/ci-image-identity.mjs");
-    expect(read("scripts/ci-image-identity.mjs").length).toBeGreaterThan(0);
+      order.indexOf("镜像身份"),
+      "`镜像身份` 又回到 PR 清单了 —— 它已随 #3378 退役；要加回请先给出它在这条 build 上的消费者",
+    ).toBe(-1);
+    expect(
+      order.indexOf("GA 回调结论回读"),
+      "承重回读格不在清单里 —— §13.6 的锚不能丢",
+    ).toBeGreaterThan(-1);
+    expect(read("scripts/ci-image-identity.mjs").length, "脚本留盘").toBeGreaterThan(0);
   });
 
   it("两个变量名在**给人读的那一面**确实被点名（规范与下一步的操作说明）", () => {
