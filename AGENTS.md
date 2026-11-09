@@ -98,7 +98,16 @@
 | --- | --- | --- | --- |
 | 通用 lint | `pnpm run lint:oxlint` | `oxlint.parity.config.mjs`（判决配置；`oxlint.config.ts` 是同源的 IDE 面） | **384 条规则**的全量面：`src` / `tests` / `scripts` / `e2e` / `tools` / `.storybook` / 根配置文件（208 条 eslint 口径 + 171 条预设 0 命中免费档 + 5 条 T1 语义规则，后者存量按文件挂账、分批次清，见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`） |
 
-零警告语义由 oxlint `--deny-warnings` 承担。**#3157 起 eslint 不再作为 lint 执行器**：
+零警告语义由 oxlint `--deny-warnings` 承担。**#3438 起死 disable 指令也有执行者**：
+`oxlint.parity.config.mjs` 的 `options.reportUnusedDisableDirectives = "warn"` 让所有拿这份判决
+配置的调用（`lint:oxlint` / pre-push 的 `check:premerge` 复算 / 平台格 / `eslint-gate-canary.mjs`）
+同口径报出压不住东西的 `oxlint-disable`，与 `--deny-warnings` 同场时死豁免退 1、干净文件退 0。
+该键属于 oxlint 的 `OxlintOptions`，**顶层直写运行时报 `unknown field`**；CLI 旗标优先级更高，
+所以只在配置里写一份，不在 `lint:oxlint` 再抄一遍 —— 抄两份既拆开唯一出处，又会让不带 CLI
+旗标的 canary 与判决口给出不同结论。正控（造死豁免要红）/ 负控（删掉要绿）由
+`eslint-gate-canary.mjs` 在同一趟 oxlint 调用里守住，读数随判据一起打印。
+
+**#3157 起 eslint 不再作为 lint 执行器**：
 eslint.config.js、`lint:policy` 与 `@typescript-eslint/parser` / `eslint-plugin-react-hooks`
 均已删除，`--fix` 只落到 oxlint 这一档。`eslint` 包本身**保留**（理由见下方「依赖最小集」），
 只当两个 jsPlugin 的运行时宿主。平台格子的名字仍叫「ESLint（零警告）」—— 那是一个稳定标识

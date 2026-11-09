@@ -86,6 +86,14 @@ const storeSelectorEntries = [
 ];
 
 export default defineConfig({
+  /* 压不住任何诊断的 disable 指令必须报出来 —— 清完存量后缺这一格，新写的死豁免
+   * 会无感回流（ISSUE #3438，#3403 收尾）。落在判决配置的 options 而非 CLI 旗标：
+   * 所有拿这份 config 的调用（lint:oxlint / pre-push 复算 / 平台 / eslint-gate-canary.mjs）
+   * 自动同口径，不必抄第二份命令。该键属于 oxlint 的 OxlintOptions，顶层直写运行时报
+   * unknown field；CLI 旗标优先级更高，两边都写等于把唯一出处拆成两份。
+   * warn 与 lint 的 --deny-warnings 同场 ⇒ 死豁免退 1、干净文件退 0；正控 / 负控由
+   * eslint-gate-canary.mjs 在同一趟 oxlint 调用里守住。 */
+  options: { reportUnusedDisableDirectives: "warn" },
   categories: {
     correctness: "off",
     suspicious: "off",
