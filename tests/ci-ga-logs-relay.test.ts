@@ -157,7 +157,7 @@ function gaFetch(opts: { jobs?: unknown; logText?: string } = {}): typeof fetch 
 
 describe("③ 只搬失败 job + 脱敏", () => {
   it("判绿 job 不进包；失败 job 的令牌/env 形状抹成 <redacted>", async () => {
-    const secret = "ghp_" + "z".repeat(30);
+    const secret = `ghp_${"z".repeat(30)}`;
     const logText = [
       "##[error]Process completed with exit code 1.",
       `LEAK=${secret}`,
@@ -200,7 +200,7 @@ describe("③ 只搬失败 job + 脱敏", () => {
 
 /** CNB 侧三步的假 fetch：记录每一步，可让任一步失败。 */
 function cnbFetch(opts: { fail?: "upload" | "put" | "comment" } = {}) {
-  const calls: Array<{ url: string; method: string; body?: string }> = [];
+  const calls: Array<{ body?: string; method: string; url: string }> = [];
   const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
     await Promise.resolve();
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;

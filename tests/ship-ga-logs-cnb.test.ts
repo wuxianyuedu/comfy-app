@@ -101,7 +101,7 @@ describe("③ base64 → gzip 往返", () => {
   it("能还原正文，且空白（折行）不影响", () => {
     const raw = "== run 4242 / job「heavy-gates」==\n##[error]boom\n";
     const b64 = Buffer.from(gzipSync(Buffer.from(raw))).toString("base64");
-    const wrapped = b64.replace(/(?<chunk>.{20})/gu, "$<chunk>\n");
+    const wrapped = b64.replaceAll(/(?<chunk>.{20})/gu, "$<chunk>\n");
     expect(decodeRelayPayload(b64)).toBe(raw);
     expect(decodeRelayPayload(wrapped)).toBe(raw);
   });

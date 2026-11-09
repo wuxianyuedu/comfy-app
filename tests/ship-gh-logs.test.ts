@@ -152,20 +152,20 @@ function fakeGhFetch(
  */
 async function runOnce(
   opts: {
-    dryRun?: boolean;
-    env?: Record<string, string>;
-    fetchImpl?: typeof fetch;
-    input?: string;
-    windowMaxBytes?: number;
     cnbIo?:
       | {
           run: (
             cmd: string,
             args: string[],
-          ) => { stdout: string; stderr: string; status: number; error: string | null };
+          ) => { error: string | null; status: number; stderr: string; stdout: string };
           slug: string;
         }
       | undefined;
+    dryRun?: boolean;
+    env?: Record<string, string>;
+    fetchImpl?: typeof fetch;
+    input?: string;
+    windowMaxBytes?: number;
   } = {},
 ) {
   const lines: string[] = [];

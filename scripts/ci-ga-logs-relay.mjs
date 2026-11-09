@@ -282,7 +282,7 @@ export async function relayLogs(io, collected) {
   const gz = io.gzipSync(Buffer.from(collected.text, "utf8"));
   const payload = Buffer.from(gz).toString("base64");
   const fileName =
-    `ga-logs-${ctx.runId}-${ctx.sha.slice(0, 8) || "noid"}${RELAY_FILE_SUFFIX}`.replace(
+    `ga-logs-${ctx.runId}-${ctx.sha.slice(0, 8) || "noid"}${RELAY_FILE_SUFFIX}`.replaceAll(
       SAFE_NAME,
       "_",
     );
@@ -344,7 +344,11 @@ export async function relayLogs(io, collected) {
 export async function main(io = {}) {
   const argv = io.argv ?? process.argv.slice(2);
   const env = io.env ?? process.env;
-  const log = io.log ?? ((l) => console.log(l));
+  const log =
+    io.log ??
+    ((l) => {
+      console.log(l);
+    });
   const fetchImpl = io.fetchImpl ?? globalThis.fetch;
   const sleep = io.sleep ?? (() => Promise.resolve());
   const ctx = resolveRelayContext(env);
