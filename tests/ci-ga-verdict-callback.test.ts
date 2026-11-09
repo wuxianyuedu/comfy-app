@@ -6,7 +6,8 @@
  *      cancelled / 空串 / 未认得的词）一律按红，绝不早放行；
  *   ② 前提不全（sha / 令牌 / 仓库 / conclusion）⇒ 没判过（2），不是绿；
  *   ③ `start-build` 的请求体逐字对 `dto.StartBuildReq`：绑预合并 sha、送
- *      `GA_VERDICT` / `GA_ROLE=callback`、事件名与 `.cnb.yml` 配对；
+ *      `GA_VERDICT` / `GA_ROLE=callback` / `GA_CALLBACK_SHA`（让 CNB 日志念得出绑定 sha）、
+ *      事件名与 `.cnb.yml` 配对；
  *   ④ 「没拿回 sn」≠「发出去了」：应答缺 sn 一律退 2；
  *   ⑤ 退出码只表送达：判红也照样退 0（判决内容由 GA_VERDICT 交给 CNB 回调 build 折）。
  */
@@ -17,6 +18,7 @@ import {
   conclusionFromJobResults,
   main,
   resolveCallbackContext,
+  SHA_ENV_KEY,
   startBuildRequest,
   verdictFromConclusion,
   VERDICT_ENV_KEY,
@@ -84,7 +86,7 @@ describe("前提：缺一件就是没判过", () => {
 });
 
 describe("请求体：逐字对 StartBuildReq", () => {
-  it("绑预合并 sha、送 GA_VERDICT / GA_ROLE、事件名配对、不同步等待", () => {
+  it("绑预合并 sha、送 GA_VERDICT / GA_ROLE / GA_CALLBACK_SHA、事件名配对、不同步等待", () => {
     const { url, init } = startBuildRequest({ pr: "3378", sha: SHA, verdict: "failure" });
     expect(url).toBe("/-/build/start");
     expect(init.method).toBe("POST");
@@ -94,9 +96,18 @@ describe("请求体：逐字对 StartBuildReq", () => {
       sync: "false",
       env: {
         [VERDICT_ENV_KEY]: "failure",
+        [SHA_ENV_KEY]: SHA,
         GA_ROLE: "callback",
         GA_PR_NUMBER: "3378",
       },
+    });
+  });
+
+  it("GA_CALLBACK_SHA 与请求体 sha 逐字相同（CNB 日志能自证绑在哪笔）", () => {
+    const { init } = startBuildRequest({ pr: "3378", sha: SHA, verdict: "success" });
+    expect(JSON.parse(init.body)).toMatchObject({
+      sha: SHA,
+      env: { [SHA_ENV_KEY]: SHA },
     });
   });
 
