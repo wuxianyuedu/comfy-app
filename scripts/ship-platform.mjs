@@ -504,9 +504,15 @@ export function reportVerdict(ctx) {
  *
  * 平台回执 `merged:true` 只是半个结论：只看它就退 0，等于把「合上了」建立在
  * 一次调用的返回值上。所以再取两件独立事实 —— PR 的 `is_merged`，以及这份碎片
- * 真的在**解析出的主干基线顶端**（`cat-file -e`）。回读那条引用同样来自
- * `resolveUpstream`，写死任何远端名都会在「远端名不是它」的那台克隆上
- * 让 fetch 与 cat-file 双双失败 ⇒ 报成红；反过来若某处吞了失败，就会报成「都在」。
+ * 真的在**合并提交里**（`cat-file -e <mergeSha>:<frag>`）。
+ *
+ * 「合并后的主干顶端」取自平台回执的 `mergeData.sha`，不取 `origin/<trunk>`：
+ * squash 合并回执与 git 服务端 ref 传播之间有窗口，窗口内本地那条远端跟踪引用
+ * 仍指向上一笔（或合并对象根本还没同步到本检出）。拿陈旧引用查本轮净新增的碎片
+ * 必然得到 false，于是「合上了」被判成红。先 `git fetch <远端> <主干>` 刷新引用、
+ * 把合并对象取回本检出，再按 sha 查；对象仍取不到 ⇒ 这一格**没有测量**
+ * （`READOUT_MISSING`），不落红，也不冒充「都在」。反过来若某处吞了失败，就会报成
+ * 「都在」——所以失败一律显式分型，不静默。
  *
  * @param {{
  *   run: PlatformIO["run"],
@@ -690,10 +696,16 @@ export function mergeAndVerify(ctx) {
     log("[ship] 合并调用没给出 merged:true ⇒ 不假定它成功了，去平台上核对。");
     return CODE.RED;
   }
-  // 回读两件事：平台说合上了，**且**碎片真的在主干顶端（只看平台回执 = 半个结论）。
+  // 回读两件事：平台说合上了，**且**碎片真的在合并提交里（只看平台回执 = 半个结论）。
   const baseParts = (baseRef ?? "").split("/");
   const trunkBranch = baseParts.slice(1).join("/");
-  run("git", ["fetch", baseParts[0] ?? up.remote ?? "origin", trunkBranch || "master"]);
+  const remote = baseParts[0] ?? up.remote ?? "origin";
+  /* 先刷新主干引用，把合并提交对象取回本检出。squash 回执与 git 服务端 ref 传播之间
+   * 有窗口：窗口内这条引用仍指向上一笔，合并对象根本没同步到本地。所以下面不拿
+   * `origin/<trunk>` 当「主干顶端」，只认平台回执里的 mergeSha —— 验真读的是合并后的
+   * 那一个。对象取不到时这一格没有测量，落「读数未刷新」而不是红。 */
+  run("git", ["fetch", remote, trunkBranch || "master"]);
+  const mergeSha = (mergeData.sha ?? "").trim();
   const stillOpen = cnbJson(run, [
     "pulls",
     "get-pull",
@@ -704,17 +716,30 @@ export function mergeAndVerify(ctx) {
     "-v",
   ]);
   const back = stillOpen ? readPullVerdict(stillOpen.json) : null;
-  const readRef = baseRef ?? `${up.remote ?? "origin"}/master`;
-  const fragOnMaster = frags.every(
-    (f) => run("git", ["cat-file", "-e", `${readRef}:${f}`]).status === 0,
-  );
+  /* 合并提交对象没同步到本检出（或回执根本没给 sha）⇒ 这一格拿不到测量对象。
+   * 与 `is_merged` 缺键同一口径：拿不到测量 ≠ 测量结果是红的。 */
+  const mergeCommitLocal =
+    mergeSha !== "" && run("git", ["cat-file", "-e", `${mergeSha}^{commit}`]).status === 0;
+  const fragOnMaster = mergeCommitLocal
+    ? frags.every((f) => run("git", ["cat-file", "-e", `${mergeSha}:${f}`]).status === 0)
+    : false;
   log(
-    `[ship] 合并回执 sha=${short(mergeData.sha)} 回读 is_merged=${back ? (back.isMergedTri === "unknown" ? "(缺键)" : back.isMerged) : "?"} 碎片在主干顶端=${fragOnMaster}`,
+    `[ship] 合并回执 sha=${short(mergeData.sha)} 回读 is_merged=${back ? (back.isMergedTri === "unknown" ? "(缺键)" : back.isMerged) : "?"} 合并提交可解析=${mergeCommitLocal} 碎片在合并提交里=${mergeCommitLocal ? fragOnMaster : "(未判定)"}`,
   );
   /* ISSUE #3059：回读没跑起来 / 缺 `is_merged` 键 ⇒ 没有读数，不落红（行为变更：此前退 1）。 */
   if (!back || back.isMergedTri === "unknown") {
     log(
       `[ship] 合并后回读${back ? "缺 `is_merged` 键" : "没跑起来"} ⇒ 合没合上**没有读数**，不按「没合上」处理（${codeTag(CODE.READOUT_MISSING)}）。`,
+    );
+    return CODE.READOUT_MISSING;
+  }
+  /* 验真读的是「合并后的那一个」：对象没同步到本地时没有测量对象，不能把陈旧引用
+   * / 缺失对象读成「碎片不在主干」这一事实。平台说合上了、而这一格没结论 ⇒ 读数缺失。 */
+  if (back.isMerged && !mergeCommitLocal) {
+    log(
+      `[ship] 合并提交 ${short(mergeSha)} 还没同步到本检出 ⇒ 碎片在不在合并提交里**没有读数**，` +
+        `不把「引用未刷新」读成「没合上」（${codeTag(CODE.READOUT_MISSING)}）。` +
+        "合并事实以平台 is_merged=true 为准，本轮不重复合并。",
     );
     return CODE.READOUT_MISSING;
   }
@@ -734,7 +759,7 @@ export function mergeAndVerify(ctx) {
    * 阶段 7（关单）要的正是「落进主干的那一行标题本体」，所以它是**这一刻**的快照。 */
   if (landed) {
     landed.title = title;
-    landed.sha = mergeData.sha ?? "";
+    landed.sha = mergeSha;
     landed.verified = true;
   }
   run("git", ["checkout", "master"]);

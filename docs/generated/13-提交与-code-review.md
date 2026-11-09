@@ -9841,6 +9841,21 @@ Dockerfile 预装 `cnb` CLI（立案脚本的判决链要起 `cnb` 子进程；�
 `ship-platform` / `ship-claim` 等分模块同族）；**代理侧的执行说明**在 project Skill
 `.qoder/skills/ship/SKILL.md`。规范各处不重抄旗标清单——抄一份，下一个旗标加进来时它就是第二次脱钩。
 
+**合并验真读的是「合并后的那一笔提交」，不是刷新前的远端跟踪引用（ISSUE #3465）。**
+`--merge` 合并成功后要回读两件独立事实：PR 的 `is_merged`，以及本轮碎片真的落在合并提交里。
+后者此前用 `cat-file -e <origin/master>:<碎片>` 查，而 squash 合并回执与 git 服务端 ref 传播之间
+有一个窗口——窗口内本地 `origin/master` 仍指向上一笔，本轮净新增的碎片必然查不到，于是
+「`is_merged=true` + `碎片在主干顶端=false`」把合上了读成退 1。旧码确实先跑过
+`git fetch <远端> <主干>`，但验真随后读的是那条引用、不是合并回执给出的那笔提交，两处读数取自
+不同时刻的对象。现在 `mergeAndVerify` 仍先 fetch，但「主干顶端」只认平台回执里的
+`mergeData.sha`：`git cat-file -e <sha>^{commit}` 判合并提交对象在不在本检出、
+`git cat-file -e <sha>:<碎片>` 判碎片在不在合并提交里。两条边界与 #3059 同一口径——
+**① 对象没同步到本地（或回执没给 sha）⇒ 这一格没有测量对象，落 `READOUT_MISSING`（退 5）、
+不落红、不重复合并**，合并事实以平台 `is_merged=true` 为准（「拿不到测量 ≠ 测量结果是红的」）；
+② 对象在、碎片确实不在，或平台明确 `is_merged=false`，仍按事实退红，新口径不是绕过口。
+`tests/ship.test.ts` 那组 ISSUE #3465 用例逐条钉住「`cat-file` 查的是 mergeSha、一次也没问
+`origin/master`」，避免下一次换旗标 / 换分支时又漂回去。
+
 **阶段 0 有一格「预付」：D0 预跑**（ISSUE #3200）。`git commit` 触发 pre-commit 之前，
 先把钩子 D0 组（§13.5.8.2.1）那批只读形态判据跑一遍，**所有红一次报齐** ⇒ 落 `1` 停手，
 与「提交钩子会拦下它」同权。省的是往返：钩子 D0 带 `set -e`，一次红就截断、后面的不跑 ——
