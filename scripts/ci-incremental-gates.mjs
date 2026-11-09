@@ -296,7 +296,7 @@ export function readCnbConfig(root = ROOT) {
  * @param {string} text `.cnb.yml` 原文
  * @returns {string[]} 逐条不一致（人读的话术）
  */
-export function checkIncrementalGates(text) {
+export function checkIncrementalGates(text, workflowText = "") {
   const actual = parseStageIfModify(text);
   /** @type {string[]} */
   const problems = [];
@@ -305,6 +305,15 @@ export function checkIncrementalGates(text) {
   for (const gate of INCREMENTAL_GATES) {
     const got = actual.get(gate.name);
     if (got === undefined) {
+      /* ISSUE #3378 收尾：CNB push 主列撤掉后，这一格由 GA `master-gate.yml` 的同名
+       * step 承接（不带 ifModify：两条命令都是秒级文本读，按路径过滤会漏判）。
+       * GA 侧在场即视作「执行者还在」，登记表的 globs 面仍由下面方向二/三守着。 */
+      /* 按字面量认 step 名在场即可：登记表里的名字不含正则元字符，用 includes
+       * 比现拼正则更直白，也不碰「已清零 oxlint 规则集」那两条硬闸。 */
+      const gaStep = workflowText.includes(`- name: ${gate.name}`);
+      if (gaStep && gate.script && workflowText.includes(gate.script)) {
+        continue;
+      }
       problems.push(
         `\`${gate.name}\` 在登记表里，但 .cnb.yml 里没有它的 \`ifModify\` —— ` +
           `「收窄名单」与配置漂了：要么补上 \`ifModify\`（${gate.globs.join(", ")}），` +
@@ -354,10 +363,19 @@ export function checkIncrementalGates(text) {
  * 逻辑只在 `checkIncrementalGates()` 一处，本函数不重写判据。
  */
 function main() {
-  const problems = checkIncrementalGates(readCnbConfig());
+  /* ISSUE #3378 收尾：CNB push 主列撤掉后，登记表里的 `生成态文档与源同步`
+   * 由 GA `master-gate.yml` 的同名 step 承接。执行面从 `.cnb.yml` 扩到 GA workflow
+   * （同一份纯函数判），缺省仍只认 `.cnb.yml` —— 纯配置的自测样本不受影响。 */
+  let gaWorkflow = "";
+  try {
+    gaWorkflow = fs.readFileSync(path.join(ROOT, ".github/workflows/master-gate.yml"), "utf8");
+  } catch {
+    /* 文件缺席 = 没有 GA 执行面，按老口径判（会如实报出缺口）。 */
+  }
+  const problems = checkIncrementalGates(readCnbConfig(), gaWorkflow);
   if (problems.length === 0) {
     console.log(
-      `[ci-incremental] ✓ .cnb.yml 与登记表一致：${INCREMENTAL_GATES.length} 条 stage 带 ifModify（其余任何改动都跑）`,
+      `[ci-incremental] ✓ 登记表与执行面（.cnb.yml + GA master-gate.yml）一致：${INCREMENTAL_GATES.length} 条（其余任何改动都跑）`,
     );
     return 0;
   }

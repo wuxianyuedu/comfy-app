@@ -351,7 +351,6 @@
     # 「平台读数 + 站内回读判决」两类。自托管机一台都不碰 github.com；
     # 「后续流程走不通」由 `GA 回调结论回读` 的 fail-closed（没终态 / 超时 ⇒ 判红）兜住。
     COMFYAPP_CI_GATES: >-
-      镜像身份, 工作区复用读数, 缓存槽读数, 环境前提,
       GA 回调结论回读, 格式化提交分离, 零消费导出
     # master 合并复核那条流水线（push 档）自己的 stage 清单 —— 第三份，按档登记。
     # master 合并复核那条流水线（push 档）自己的 stage 清单 —— 第三份，按档登记。
@@ -369,8 +368,6 @@
     # schedule 才跑得到新树）。现在它按 PR 出口同形挪成 `push` 事件下的第二条平台池
     # 流水线（另一条出网路径、退码生效），不再占 `master 合并复核` 主列的格 ——
     # 这份清单只登记主列，逐格判据双向核对（§13.5.33.3）。
-    COMFYAPP_CI_PUSH_GATES: >-
-      合并形态复核, 安装依赖, 生成态文档与源同步, 文档引用与权威源一致, 工作区出处
     # `push 失败立案` 不在这一份里（ISSUE #2842）：它是 `endStages`（红也要跑的段），
     # 不是 `stages` 里的一格 —— 与 PR 档的 `PR 失败立案` 同形，定义在 `.push-fail-stage`
     # 锚点。`COMFYAPP_CI_PUSH_GATES` 列的是 `stages` 主列的格名清单。
@@ -595,30 +592,6 @@
 # `resolveLockKey()` 一族 —— 按事件把每条流水线的**有效 key** 代出来，判
 # 「同类的 key 相同、异类的 key 相异、任何一条都不与 `pr-<iid>` 撞」，
 # 并逐条带坏形态的反向复算（含「有人忘了写覆盖 ⇒ 退回 `pr-`」那一种）。
-.lock-push: &lock_push
-  key: push
-  # 唯一一把**排队而不终止**的类锁（理由见上面 `push` 那一行）：
-  # 这一格逐提交给读数，「只留最新那一笔」等于把前一笔的结论删掉。
-  cancel-in-progress: false
-  # `wait: true` 是这一把的**承重项**，不是陪衬。不带它时
-  # 「不终止」并不等于「排队」—— 官方 `grammar.md#pipeline-lock`：
-  # `wait`（默认 **false**）= 锁被占用时是否等待，`cancel-in-progress`（默认 false）
-  # = 是否**终止**占用锁的那一跑。两个默认值叠起来的语义是「**不终止，也不等**」，
-  # 而现场读数正是这一形：
-  #
-  #   前一笔整跑 110s、6 格全绿；9 秒后到达的下一笔在 Prepare 就落了
-  #   `Pipeline init error: The lock … is occupied and the current process is
-  #   terminated.`，6 格全 `skipped`、整跑 405ms 判 `error`。
-  #
-  # 也就是说 `cancel-in-progress: false` 单独在场时，**被销毁的是后到那一跑的读数**
-  # （它连跑都没跑起来），而这一把要的是「前一笔的结论别被删掉」—— 两笔都该有读数。
-  # 一笔合并后紧跟删源分支（`branch.delete` 那一推）就是最常见的两跑重叠形态，
-  # 而删分支那一推是平台自己发起的、没人会去补跑它 ⇒ 缺的那笔读数永久缺着。
-  wait: true
-# push 档镜像出口自己的类锁。与 PR 出口同形：自带 key、不与
-# `pr-$CNB_PULL_REQUEST_IID` 共用（push 上那个变量无值，落回字面 `pr-` 会把
-# 并行 PR 主列一起掐掉）。也不与 `*lock_push`（逐提交排队）共用：后者管的是
-# 主列树级校验的读数，这里管的是镜像出口，两件事。
 .lock-push-mirror: &lock_push_mirror
   key: mirror-push
   cancel-in-progress: true
@@ -662,63 +635,6 @@
 # ⚠️ 这里曾有 `.lock-formatfix`（`oxfmt 格式` 的委托回写口独占一把锁）。
 # 那个事件连同委托后来被整条摘掉（PR 事件的令牌推不动、也触发不了可信事件），
 # 所以这把锁没有引用者了 —— 留着它就是一条「在册而无人出勤」的配置（§13.5.x 那一族）。
-
-# ── push 档（`master 合并复核`）的格子：树级校验档 ────────────────────────────
-#
-# 扩格（此前整条只有 `合并形态复核` 一格、20~35 秒）。撤进来的四格判的都是
-# 「**合并后的树**一致不一致 / 这次运行的事实是什么」，不是「这次 PR 改了什么」——
-# 那一类留在 PR 档（判据面在 `ci-incremental-gates.mjs` 的登记里逐条写着为什么收窄安全）。
-# 镜像出口**不在这份清单里**：它不校验树，是 `push` 事件下另一条平台池流水线
-# （见 `push:` 那一段），与主列并行、自带锁与令牌。拆开之后「文档链红了」不再
-# 连带「镜像不推」，两件事各自给结论。
-# 顺序有讲究：
-#   · `合并形态复核` 排最前：形态不对（非合并提交）时后面全部 skipped，
-#     别在没资格的工作区上花文档链的钱；
-#   · `安装依赖` 是前提格：这一档的 `生成态文档与源同步` 要吃 `node_modules`，而 push 是
-#     全新 job 目录、`node_modules` 恒不在场（与每日档同一形态，理由见 `每日安装依赖` 那段）。
-#     缺了它，这一档会以「找不到依赖」的形态红 —— 与每日档当年「找不到 next」同一族。
-#     `API 文档生成与自检` 撤到每日档后不再吃这一格，但它在每日档同样排在
-#     `每日安装依赖` 之后。
-#     **这一格接槽**。判「哪一档能接」的那条线不是档名，是**后面有没有
-#     `next build`**：接槽把作业的 `node_modules` 整棵接成指向项目根之外的 junction，而
-#     Turbopack 对这一条有硬要求（每日那一档因此不接，理由与两臂读数见 `每日安装依赖` 上面那段）。
-#     push 清单里没有构建格 ⇒ 那条限制与这一档无关。证伪不是靠推的：这四格在搬到 push 档之前
-#     长在**接了槽的 PR 流水线**上，两臂（未命中建槽 / 命中）的逐格原值、以及「哪一格在哪一臂
-#     因 `ifModify` 没被执行到」都记在规范 §13.5.3.4.3 —— 这里不抄数，抄一份就会漂第二次。
-#     ⚠️ 收益的**预估同样不进正文**（§13.5.3.4.3 那条量具纪律）：落地后已按同一格回查，
-#     原值与「两个方向都不许外推」那两句都在规范那一份出处里。
-#   · 四格保持 PR 档时的**同一入口、同一旗标、同一 `ifModify`** —— 撤档不等于换判据。
-#     `ifModify` 在 push 事件上的语义由平台按合并提交的差异面算；平台不认时恒跑，
-#     方向是「多跑」不是「漏跑」，安全侧。
-.push-stages: &push_stages
-  - name: 合并形态复核
-    # 这一格曾有「唯一没钉控制台编码」的历史（规范 §13.5.3.9）：补上那层 `$enc=…`
-    # 不改变读数，但让它不依赖「控制台代码页恰好是多少」这个**继承来的**状态。
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-branch-guard.cjs --merge-commit
-  - name: 安装依赖
-    # 与 `每日安装依赖` 的**命令行 / env / timeout 三样都逐字相同**
-    # （判据 `tests/no-platform-ci-config.test.ts` 的 `CROSS_LANE_SCRIPT_MIRRORS`；
-    # PR 档不再有安装格，这一对面换成「每日 ⇄ push」）。
-    # 同一份脚本长在几条流水线上各配一份 env，就是几条流水线各自漂（§12.12 的孪生形态，
-    # 只是它长在配置里）。墙钟那一行是给 `ci-install-deps.mjs` 自己的 12m 预算留的余量，
-    # 不是「抬 timeout 换绿」（§11.13）。
-    env:
-      COMFY_CI_SLOT: "1"
-    timeout: 20m
-    script: |
-      $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
-      $ErrorActionPreference = "Stop"
-      node scripts/ci-cp936-exit.mjs -- node scripts/check-pnpm-available.mjs
-      node scripts/ci-cp936-exit.mjs -- node scripts/ci-install-deps.mjs
-  - name: 生成态文档与源同步
-    ifModify:
-      - "docs/**"
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/render-doc-placeholders.cjs --check --autofix
-  - name: 文档引用与权威源一致
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-doc-references.cjs
-  - name: 工作区出处
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-workspace-provenance.mjs
-    timeout: 5m
 
 .daily-gates: &daily_gates
   # ── 每日失败立案：排在**整份清单的最前面**，判的是「上一跑」──────────────────
@@ -1324,8 +1240,6 @@
     # （判据按现役配置扫过一遍：`打包·安装依赖` 出现这枚键会当场红）。
     # 收益的读数不写在这里（跨天不可引用、且并发在场时墙钟不可读）：`pnpm ship --stage-log
     # <sn> 安装依赖` 现取，规范 §13.5.3.4.3 是那份出处。
-    env:
-      COMFY_CI_SLOT: "1"
     timeout: 20m
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
@@ -1562,17 +1476,7 @@
       # 与 `每日失败立案` 同量级（实测那条 1.6s）。给 5m 是留给节点冷启动与平台慢响应，
       # 不是给「让它多试几次」—— 取不到读数时它**不重试也不写**，退 2 由话术说出来。
       timeout: 5m
-    # ── 令牌权限读数：这一跑的 `CNB_TOKEN` 够得着哪些能力 ────────────
-    #
-    # 与每日档那一格**同一个入口与同一份理由**（那边写着为什么、为什么排在这里）。
-    # `endStages` 里的顺序不是执行顺序的保证（平台并发/顺序由平台定），所以这里不靠
-    # 「读数在前」传达什么 —— 它只是与每日档同形，读的人不必在两处用两套心智模型。
-    #
-    # 5m：14 条只读请求**并发**跑（实测本机合计 0.45s）、零写命令。与每日那一格同量级。
-    - name: 令牌权限读数
-      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs
-      timeout: 5m
-    # ── `GitHub 镜像同步` 不在这一档了───────────────────────────────
+    # ── `令牌权限读数` 与 `GitHub 镜像同步` 都不在这一档了────────────
     #
     # 它前移进主列（`.gates` 里 `缓存槽读数` 之后），为什么搬与「搬的是位置、不是那句不承重」
     # 都写在那一格的锚点上。这里留一行是因为这一档剩下的两格**必须留在 `endStages`**：
@@ -1612,11 +1516,6 @@
       script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-pr-failure-issue.mjs --no-block --lane package
       # 与 `PR 失败立案` 同一量级（三次读命令 + 一次写 + 一次回读）。
       timeout: 5m
-    # 令牌权限读数：与 PR 那一格同一个入口、同一份理由。
-    - name: 令牌权限读数
-      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs
-      timeout: 5m
-
 # ── push 档（master 合并复核）的失败立案─────────────────────────
 #
 # 这一档为什么也要有：push 档此前**只**引了 `*common` —— 没有 `endStages` 立案格。
@@ -1637,11 +1536,6 @@
       script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-pr-failure-issue.mjs --no-block --lane push
       # 与 `PR 失败立案` 同一量级（三次读命令 + 一次写 + 一次回读）。
       timeout: 5m
-    # 令牌权限读数：与 PR / 桌包那两格同一个入口、同一份理由。
-    - name: 令牌权限读数
-      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs
-      timeout: 5m
-
 .gates: &gates
   # ── 环境类前提三格从这一条上撤到**每日档**（`COMFYAPP_CI_DAILY_GATES`）──
   # 撤的是节奏、不是账：`工具链自证` / `Python 可用性` / `Python 探针读数` 现在各有
@@ -1674,8 +1568,6 @@
   # 把「标签没钉版本 / digest 拼错」写成读数、以及**没有标识时给出下一动作**。
   # 逻辑在 `scripts/ci-image-identity.mjs` —— 不在配置里就地写 PowerShell，
   # 理由与 `工具链自证` 逐字相同（配置里的逻辑一条判据都测不到它）。
-  - name: 镜像身份
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-image-identity.mjs
 
   # ── `Python 可用性` / `Python 探针读数` 已经不在这一条上──
   #
@@ -1731,11 +1623,6 @@
   # 最后一段**恒等于 `workspace`**，只取 basename 时两跑并排一模一样 —— 有区分度的那一半在
   # 父目录，故现在由 `jobLabel()` 取「父目录名 + 最后一段」，判据钉住「两个不同 job 的标签必须
   # 不同」。与这一档开头那句是同一类病：**读数落在日志里读不出来，与没有读数等价**。
-  - name: 工作区复用读数
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-workspace-probe.mjs
-    # 秒级（几次 git 调用 + 几个 stat）。给 5m 与 `新鲜度账` 同款：只是「卡死要早报」的
-    # 量级余量，判据本身远小于它。
-    timeout: 5m
 
   # ── 缓存槽读数（恒不退非零）──
   # 只回答三问：有没有槽、该落哪个键、这一跑与它的关系是 `reuse` / `install-into-slot` /
@@ -1754,10 +1641,6 @@
   # `pnpm store path`（同一条 cwd、同一条解析面，所以就是那次 install 真正会用的 store），
   # 取它所在卷下的 `ci-cache/<包名>`。写死盘符曾经把这台机器坑在什么位置上，见
   # §13.5.3.4.3 里「runner 换盘」那一段。
-  - name: 缓存槽读数
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-cache-slot.mjs
-    # 与上面那格同量级（几次 stat）。秒级的事给 5m 只为「卡死要早报」。
-    timeout: 5m
 
   # ── GitHub 镜像同步（**停用**）──
   #
@@ -1853,8 +1736,6 @@
   # 「四个域全量一遍供人定位」的取证刻意不同 —— 后者是失败之后给人看的现场。
   # 也**不**在这里替 `浏览器安装` 去装：探测到「都不通」时的出路在人不在仓
   # （换根 / 配代理 / 预装进落点），这一步的作用是把结论提前，不是代办。
-  - name: 环境前提
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-env-probe.mjs
 
   # ── 薄化：GA 承接的 24 格从 PR 档撤出 ──
   #
@@ -2495,11 +2376,6 @@ master:
   # `node_modules`，也不占主列的格。主列因此不再 import 镜像令牌 —— 那一枚
   # 只被第二条流水线读取。
   push:
-    - <<: [*common, *push_fail_stage]
-      name: master 合并复核
-      lock: *lock_push
-      stages: *push_stages
-
     - name: GitHub master 镜像（平台池）
       # 与 PR 档的「GitHub 镜像同步（平台池）」同一形态：自托管节点到 github.com
       # 的出网不稳，推送与 LFS 整个挪到平台池（腾讯云侧另一条出网路径）。
@@ -2536,6 +2412,12 @@ master:
       lock: *lock_push_mirror
       imports:
         - https://cnb.cool/moon-read/GITHUB_MIRROR_TOKEN/-/blob/main/envs.yml
+      # 主列已撤（ISSUE #3378）：立案格跟着挪到这一条，`--lane push` 显式声明
+      # 「我就是这一档的立案口」。红也要跑的语义由平台 endStages 保证。
+      endStages:
+        - name: push 失败立案
+          script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-pr-failure-issue.mjs --no-block --lane push
+          timeout: 5m
       stages:
         - name: GitHub master 镜像
           script: node scripts/ci-github-mirror-push.mjs --master

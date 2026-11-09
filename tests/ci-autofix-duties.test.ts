@@ -3,6 +3,8 @@
  * ① 登记表每条 ⇒ 配置同名 stage 的 `script` 点名其入口且 `--autofix` / `--check` 逐字都在；② 带自动修旗标的 stage ⇒ 必须在登记表里。少任一半就退化成「看着在自动修、修了什么没人知道」（与 §13.5.18 的 `ifModify` 判据同源）。
  * 进固定清单（`scripts/fixed-structural-tests.mjs`）因触发面恰是 `.cnb.yml`：只改配置在静态 import 图里追不到用例，「只在受影响时跑」会随下次配置改动错过。
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -16,10 +18,16 @@ import {
 import { HEAVY_GATES } from "../scripts/ci-heavy-gates.mjs";
 
 const CONFIG = readCnbConfig(process.cwd());
+/* ISSUE #3378 收尾：`生成态文档与源同步` 由 GA `master-gate.yml` 承接，自动修执行面
+ * 从 CNB stage 换到 GA step（同款入口、同款旗标）。 */
+const GA_MASTER_GATE = readFileSync(
+  path.join(process.cwd(), ".github/workflows/master-gate.yml"),
+  "utf8",
+);
 
 describe("平台侧自动修档（.cnb.yml --autofix ⇄ 登记表）", () => {
   it("真仓一致：登记表与两个执行面（stage + 聚合档条目）逐字同源", () => {
-    const problems = checkAutofixDuties(CONFIG, ["--autofix"], HEAVY_GATES);
+    const problems = checkAutofixDuties(CONFIG, ["--autofix"], HEAVY_GATES, GA_MASTER_GATE);
     expect(problems, `平台侧自动修登记与配置不一致：\n${problems.join("\n")}`).toEqual([]);
   });
 
@@ -51,7 +59,7 @@ describe("平台侧自动修档（.cnb.yml --autofix ⇄ 登记表）", () => {
   it("自动修名单是**封闭**的：每一档都点名了 `--check` 与 `--autofix` 两个旗标", () => {
     /* 只有 `--autofix` 而没有 `--check` 是**最坏的形态**：脚本会走写入模式（它不判任何
      * 东西、恒退 0），于是这一步永远绿 —— 判据在配置里、结论恒放行。 */
-    const executors = collectExecutors(CONFIG, HEAVY_GATES);
+    const executors = collectExecutors(CONFIG, HEAVY_GATES, GA_MASTER_GATE);
     for (const name of AUTOFIX_STAGE_NAMES) {
       const line = executors.get(name) ?? "";
       expect(line, `${name} 的 script 不认识（解析为空）`).not.toBe("");
