@@ -114,8 +114,9 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
       /* vitest 解析后把 `reporters` 归一成 `[名字, 选项?]` 元组数组 —— 按名字归一后比，
        * 否则这条判据红在「配置写法」而不是「这一档拿没拿到」（同 setupFiles 的归一口径）。 */
       /* SAFETY: 类型断言已复核 */
-      const reporterNames = (cfg.reporters as Array<unknown>).map((r) =>
-        Array.isArray(r) ? r[0] : r,
+      const reporterEntries = cfg.reporters as Array<unknown>;
+      const reporterNames = reporterEntries.map((entry) =>
+        Array.isArray(entry) ? String(entry[0]) : String(entry),
       );
       expect(reporterNames, prefix).toEqual(SHARED_EXPECTATIONS.reporters);
       /* SAFETY: 类型断言已复核 */
