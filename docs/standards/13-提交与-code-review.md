@@ -9583,7 +9583,7 @@ build**（§13.6「PR 跑绿才合并」的承重锚一个字没换）。
 
 | 面 | 动作 |
 | --- | --- |
-| GA 侧写者 | `pr-gate.yml` 收尾 `ga-verdict-callback` job 末尾加一步 `ci-ga-logs-relay.mjs`：用内置 `github.token`（顶层补 `actions: read`）读本 run 的失败 job 日志 → `redactSecrets` 脱敏（硬规则 17）→ gzip + base64 编成**纯文本** → `POST /-/upload/files` 拿上传链接 → PUT 正文 → `POST /-/pulls/{n}/comments` 发一条带 `GA_LOG_RELAY_V1` marker 的评论（附 run / sha / pr / jobs / bytes 身份读数 + 附件链）。写 CNB 用已配好的 `CNB_ISSUE_TOKEN`（`repo-notes:rw`，code-scanning-triage.yml 同一枚），**不新增 secret**。`if: always()` + step 级 `continue-on-error`：日志搬不到绝不改本 run 的 conclusion |
+| GA 侧写者 | `pr-gate.yml` 收尾 `ga-verdict-callback` job 末尾加一步 `ci-ga-logs-relay.mjs`：用内置 `github.token`（顶层补 `actions: read`）读本 run 的失败 job 日志 → `redactSecrets` 脱敏（硬规则 17）→ gzip + base64 编成**纯文本** → `POST /-/upload/files` 拿上传链接 → PUT 正文 → `POST /-/pulls/{n}/comments` 发一条带 `GA_LOG_RELAY_V1` marker 的评论（附 run / sha / pr / jobs / bytes 身份读数 + 附件链）。写 PR 评论 / 传附件用已配好的 `CNB_ISSUE_TOKEN`（`repo-notes:rw`，code-scanning-triage.yml 同一枚）；**PR 描述镜像另配** `CNB_PULL_REQUEST_TOKEN`（`repo-pr:rw`，见 §13.5.33.6），旧令牌不扩权。`if: always()` + step 级 `continue-on-error`：日志搬不到绝不改本 run 的 conclusion |
 | CNB 侧载体 | **附件 + PR 评论**（不是 commit-statuses、不是 build stage 日志）。探针逐格坐实：`upload-file` 返回 `asset_link` 即上传成功；**未发布时 `GET /-/files/<path>` 恒 404**，链进评论发布后 `cnb assets get-files` 逐字读回。PR 与 Issue 是两套独立编号（`issues get --number <PR号>` 回 404），所以只用 `pulls` 那组端点。载体用 base64 纯文本而非 gzip 二进制：`cnb` CLI 的 `-v` 走 JSON 信封，二进制会被转坏（端到端探针验过 decode/gunzip 逐字还原） |
 | 本地读者 | `ship-ga-logs-cnb.mjs`：`cnb pulls list-comments`（列表旧→新、两个 list 命令都不支持 `--sort` ⇒ 倒着扫第一条 marker）→ `cnb assets get-files` 读 base64 → decode + gunzip。`pnpm ship --gh-logs <PR号>` 与判红自动回读**优先走这里**（注入 `cnbIo={run,slug}`，放在 GitHub 令牌闸之前 ⇒ CNB 命中时**不需要任何 GitHub 凭据、零 `api.github.com` 请求**），复用既有 `extractFailureWindow` / `shipFailureWindow` / `renderFailureWindow` 呈现，口径与 GitHub 链路同形。CNB 侧缺席（旧 PR 没跑过 relay / 评论被清 / 平台读不到）⇒ 如实念一行，退回原 GitHub 出站链路（快速回退完整留盘） |
 
@@ -9647,6 +9647,47 @@ relay step 的 stage 读数（`[ga-logs-relay] 已搬到 CNB` / 「前提不成�
 回读格 / 保护分支 / 契约用例 / 本节，代价高且会断历史读数，**倾向不做、本单不做**。
 评论里的两行是**只读解释**：日志搬不到 / 结论读不出都不改三态、不改本 run 的
 conclusion、不拦合（与 §13.5.33.4「取不到 ≠ 判红」同口径）。
+
+##### 13.5.33.6 2026-11-09 判红日志附件挂到 PR 本体：另配写描述专用令牌（ISSUE #3454）
+
+**改的是载体的一条只读镜像，不是承重、不是读源。** 用户在 PR #3448 连问两次「附件现在
+放在评论里，不能直接放在 PR 本身吗」；11:05 那一跑的 todo 记着「给出结论并回复 =
+completed」，评论区却没有对应回复落地（期望 1 先把附件链用 `patch-pull` 写进 #3448
+描述坐实「能放 PR 本体」，纯 API、一条命令可回退）。本格把那条一次性探针收成 relay 的
+常规通道。
+
+**期望 3（令牌那一格）人已拍板**：**另配一枚 `CNB_PULL_REQUEST_TOKEN`（`repo-pr:rw`），
+不给 `CNB_ISSUE_TOKEN` 扩权**。权限面是硬约束：`post-pull-comment` / `upload-file` 要
+`repo-notes:rw`，`patch-pull` 要 `repo-pr:rw`（`cnb pulls patch-pull --help` 逐字），
+两枚各管一条通道、谁也不越界。#3437 收敛时写下的「不新增 secret」旧约束就此解除，
+但**只**为描述这一格解除：评论 / 附件仍走原来那枚。
+
+**落地的三件事（与 §13.5.33.4/.5 同形：改载体，不另立判定）**：
+
+| 面 | 动作 |
+| --- | --- |
+| GA 侧写者 | `ci-ga-logs-relay.mjs` 在「上传 → PUT → 发 PR 评论」之后，多一跳**只写镜像**：`GET /-/pulls/{n}` 读回整段 body → `mergeRelayDescription` 摘掉自己旧的 `<!-- GA_LOG_RELAY_V1 … -->` … `<!-- /GA_LOG_RELAY_V1 -->` 成对块、逐字保留人工描述、把最新一块补到末尾 → `PATCH /-/pulls/{n}` 写回。评论先发（附件「发布」那一跳），镜像随后用**同一条** `asset_link`；`PATCH` 的 `body` 是整段覆盖（cnb-upload-attachment skill 原文），所以读改写只换自己那块、不整段重发、不重复堆叠 |
+| 令牌与降级 | `resolveRelayContext` 把 `CNB_PULL_REQUEST_TOKEN` 作为**可选**前提（不进 `reasons`）：缺席 / GET 读不回 / 应答缺 `body` / PATCH 403 都只多一行读数，**评论已送达就仍是送达**，不改三态、不改本 run 的 conclusion、不拦合。两枚令牌在 `relayLogs` 里显式分开传（评论用 `token`、描述用 `prToken`），契约用例逐跳核 `Authorization` |
+| 本地读者 | **一行不改**：`ship-ga-logs-cnb.mjs` 仍只扫 `cnb pulls list-comments`，评论列表 = 唯一权威读源，PR 描述 = relay 的只写镜像、本地从不读。这正面回答接手时那条技术注意——一旦给描述通道加读回，`parseRelayComment` 的附件链正则就会把两处都命中、出现「读到哪份全凭列表顺序」；把描述定成只写，两个来源天生分开，不需要优先级规则。§13.5.33.4 建议的「评论为权威、描述只作最新镜像」由此落地 |
+
+**为什么不动承重**：与 §13.5.33.4/.5 同一句 —— 不写 commit-statuses、不改流水线
+`name`、不改 `GA_VERDICT` 折叠、不改三态退码。relay step 仍 `if: always()` + step 级
+`continue-on-error`；描述是证据的镜像，不是判决，「取不到 ≠ 判红」不变。判绿不发评论
+（无失败 job），自然也不写描述。
+
+**逐笔对账**：`ci-ga-logs-relay.mjs`（头注载体第 5 件 + 两个来源边界 / `resolveRelayContext`
+可选前提 / 三个纯函数 / `mirrorRelayDescription` / `relayLogs` 接线）/ `pr-gate.yml`
+（relay step 注入新 secret + 头注改成两枚令牌各管一摊）/ `tests/ci-ga-logs-relay.test.ts`
+（镜像块形状 / 摘块与人工描述保留 / 替换不堆叠 / 专用令牌逐跳 / 四种降级 / 描述失败仍
+`CODE.OK`）/ `tests/no-platform-ci-config.test.ts`（钉 env 接线 + 本地读者不读描述 +
+step 不承重）/ 本节 + 生成态镜像 / `ga-migration-checklist.md` + 镜像 / `## Changed`
+碎片，与 §13.5.33.4 同形同批。
+
+**边界**：`repo-pr:rw` 在**镜像仓这一跑**的 secret 上带不带写权、`GET /-/pulls/{n}` 读回的
+`body` 字段形状，仍看首跑那条 relay step 的 stage 读数（`PR 描述已镜像` / 「只发评论」/
+「写不进」那几行）；坐实不了只是描述没镜像，评论区附件照常可读，退回 §13.5.33.4 的
+旧行为，不拦合。构建详情页那个「附件」tab 仍是第三个对象（§13.5.33 已记：插件格要
+Docker、自托管节点没开），与本格的 PR 描述不是一回事。
 
 #### 13.5.34 2026-11-06 GA push 档：镜像仓 master 的文档链并行执行者（任务 3 并行期）
 
