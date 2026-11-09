@@ -9536,7 +9536,10 @@ build**（§13.6「PR 跑绿才合并」的承重锚一个字没换）。
 **回退**：把 `GitHub 镜像同步` 从停用清单挪回 `COMFYAPP_CI_GATES`、`.gates`
 取消注释、`GATE_TIER_LEDGER` 挪回 PR 段，并把平台池那条改回 `--once --readout`
 （实验档）。`ci-github-mirror-push.mjs --await-hosted` 与
-`ci-mirror-hosted-await.mjs` 完整留在盘上，就是为这一跳准备的。
+`ci-mirror-hosted-await.mjs` 完整留在盘上，就是为这一跳准备的。这两份当前
+**没有活调用点**（`.cnb.yml` 的活 `script:` 行不带该旗标，正式出口在平台池），
+是休眠的回退实现而非运行中的链路；状态、保留理由与接线位置写在
+`ci-mirror-hosted-await.mjs` 文件头，接线时同批更新那里与「等托管机」那一组用例。
 
 ##### 13.5.33.3 2026-11-08 push 档镜像出口也挪到平台池（ISSUE #3426 / #3378 后续指令）
 
