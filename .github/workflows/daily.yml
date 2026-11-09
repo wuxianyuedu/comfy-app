@@ -185,9 +185,9 @@ jobs:
           if-no-files-found: warn
 
       # 漂移判据（ISSUE #3252）：CNB master ≠ GitHub master 即立案。
-      # push 档的「GitHub master 镜像」格是读数档（`--readout`），出网失败被折成绿 ——
-      # 那一跑实测探活 6 次/201s 后放弃，镜像停在旧树而整跑 success。当次靠 push 档的
-      # 回读自证 + 读数立案兜住；「之后没人再推」只能靠每日这一条跨仓库核对。
+      # push 镜像出口已挪到平台池流水线、摘掉 `--readout`（退码生效，推不出去即 error）；
+      # 但「之后没人再推」没有别的执行者 —— 平台池那一跳失败后 master 会停在旧树，
+      # 只能靠每日这一条跨仓库核对兜住（两边匿名 ls-remote，不引新密钥）。
       # 放最后且 `always()`：它红或没结论都不挡前面任何树级读数。两边都是匿名 ls-remote，
       # 不引新密钥；`--allow-no-fact` 只把「今天这条链没连上」记成警告，不冒充漂移。
       - name: 镜像漂移判据（CNB master vs GitHub master）

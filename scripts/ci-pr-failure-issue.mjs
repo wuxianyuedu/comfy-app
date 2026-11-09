@@ -77,7 +77,6 @@ import {
   downstreamSkipped,
   enrichStageErrors,
   fetchBuildList,
-  fetchStageDetail,
   resolveRepoSlug,
 } from "./ci-build-readout.mjs";
 import { fetchBuildDetails } from "./check-daily-attendance.mjs";
@@ -408,56 +407,6 @@ export function pickSelf(list, sn) {
   return (Array.isArray(list) ? list : []).find((b) => String(b?.sn ?? "") === sn) ?? null;
 }
 
-/** push 档镜像格在平台读数里的格名（`.cnb.yml` 的 stage 名，逐字相同）。 */
-export const MIRROR_MASTER_STAGE = "GitHub master 镜像";
-
-/**
- * 认 push 档镜像格的**读数档失败**。
- *
- * 那一格带 `--readout`：脚本把 1/2 折成 0，平台那格恒绿，失败只留在日志正文的
- * `[mirror-master] 结论：exit N` 上。不把这一行读回来，这一档就永远「红格 0 个」⇒
- * 镜像没推过去也无人立案（ISSUE #3252 的现场：`cnb-ft3-1k6qfer4u`）。
- *
- * 只认 `exit 1|2`：`exit 0` 是正常收工；读不到的格回 null（没结论不是失败）。
- *
- * @param {any} run 执行者
- * @param {string} slug 仓库路径
- * @param {string} sn 构建号
- * @param {any} json `get-build-status -v` 的读数
- * @returns {{exitCode: number, line: string, stageId: string} | null}
- */
-export function findMirrorReadoutFailure(run, slug, sn, json) {
-  const data = json && typeof json === "object" ? json.data : null;
-  const table =
-    data?.pipelinesStatus && typeof data.pipelinesStatus === "object" ? data.pipelinesStatus : null;
-  if (!table) {
-    return null;
-  }
-  for (const [key, pipeline] of Object.entries(table)) {
-    const stages = pipeline && typeof pipeline === "object" ? pipeline.stages : null;
-    if (!Array.isArray(stages)) {
-      continue;
-    }
-    for (const stage of stages) {
-      if (!stage || typeof stage !== "object" || stage.name !== MIRROR_MASTER_STAGE) {
-        continue;
-      }
-      const stageId = String(stage.id ?? "");
-      const detail = fetchStageDetail(run, slug, sn, String(pipeline.id ?? key), stageId);
-      if (!detail) {
-        return null;
-      }
-      const hits = [...detail.text.matchAll(/\[mirror-master] 结论：exit (?<code>[12])/g)];
-      const hit = hits.length > 0 ? hits.at(-1) : null;
-      if (!hit) {
-        return null;
-      }
-      return { exitCode: Number(hit.groups?.code), line: hit[0], stageId };
-    }
-  }
-  return null;
-}
-
 /**
  * 入口。
  *
@@ -625,24 +574,6 @@ export function main(io = {}) {
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- firstDetail 由平台读数数组下标取，运行时可能为空；类型面标的恒真只是没建模索引
     firstDetail ? enrichStageErrors(run, slug, sn, firstDetail.json) : null,
   );
-  /* push 档的镜像格是读数档：平台那格恒绿，红只在日志正文里。把这一行读回来当失败事实，
-   * 否则 `--readout` 一折，镜像没推过去也永远「红格 0 个」（见 `findMirrorReadoutFailure`）。 */
-  if (!offline && lane === "push" && firstDetail) {
-    const mirror = findMirrorReadoutFailure(run, slug, sn, firstDetail.json);
-    if (mirror) {
-      log(
-        `[pr-failure-issue] 镜像格读数档失败（${mirror.line}）⇒ 按事实立案（平台那一格仍是绿的）`,
-      );
-      outcome.state = "failed";
-      outcome.failed.push({
-        error: mirror.line,
-        id: mirror.stageId,
-        index: -1,
-        name: `${MIRROR_MASTER_STAGE}（读数档）`,
-        status: "error",
-      });
-    }
-  }
   // 这里刻意保留 ||：`name` 是展示名，缺或为空串都退 id —— `??` 管不住空串那一半。
   const failedNames = outcome.failed.map((/** @type {any} */ f) => f.name || f.id);
   const skipped = downstreamSkipped(outcome).map((/** @type {any} */ s) => s.name || s.id);

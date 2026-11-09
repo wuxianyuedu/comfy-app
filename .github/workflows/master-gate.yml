@@ -2,9 +2,10 @@
 #
 # 为什么单独一份：CNB push 档「master 合并复核」里的 `生成态文档与源同步` /
 # `文档引用与权威源一致` 是树级文本判据，与自托管节点的平台事实无关。它们挪到
-# GitHub Actions 之后，CNB push 只剩「合并形态复核 → GitHub master 镜像 → 工作区出处」
-# 三格（切换是下一笔 PR）。**本次只加这一侧**：CNB push 档三格一个字节不动，两侧并行跑、
-# 逐格比对结论，出问题时才能分清是谁红。
+# GitHub Actions 之后，CNB push 主列剩「合并形态复核 → 安装依赖 → 文档链两格 →
+# 工作区出处」，镜像出口另起一条平台池流水线（与本 workflow 同由那次 master push 触发）。
+# **本次只加这一侧**：CNB push 档三格一个字节不动，两侧并行跑、逐格比对结论，
+# 出问题时才能分清是谁红。
 #
 # 触发口径：
 #   · 只在 `push` 到 master 上跑 —— 镜像格 `git push --force HEAD:refs/heads/master`

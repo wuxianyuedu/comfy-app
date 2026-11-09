@@ -158,8 +158,8 @@ async function fileDriftIssue(deps) {
     "",
     `CNB 提交：https://cnb.cool/moon-read/comfy-app-t3/-/commit/${cnbSha}`,
     "",
-    "处置：在 CNB 上重跑一次 master 的 push 档（`GitHub master 镜像` 格凡带 `--readout`，绿不代表推到了；",
-    "以本单的 shas 为准）；若 egress 仍不通，见 `push 失败立案` 那张单。",
+    "处置：在 CNB 上重跑一次 master 的 push 档（镜像出口是 `GitHub master 镜像（平台池）` 流水线，",
+    "退码生效、error 即可读；以本单的 shas 为准）；若 egress 仍不通，见 `push 失败立案` 那张单。",
   ].join("\n");
   let existing;
   try {
