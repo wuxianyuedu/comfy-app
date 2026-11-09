@@ -2000,6 +2000,8 @@
   # 平台没回」⇒ 直接在构建日志看这一行；快速回退按上面停用段的恢复动作，出站
   # 轮询链完整保留在盘上。
   # GA 侧判红的全量日志仍可 `pnpm ship --gh-logs <run-id|pr号>` 按需取（不走 PR 档）。
+  # 本格判红时日志里也直接给那条 `pnpm ship --gh-logs pr:<号>`（§13.5.33.7）：
+  # 回读格只有结论、没有失败 job 正文，看日志的人/AI 不用跳去翻 PR 评论才知道去哪取。
   - name: GA 回调结论回读
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-ga-verdict-readout.mjs
     # 包住站内短轮询预算（脚本 DEFAULT_BUDGET_MS 45m）+ 进程开销；与最重格外框同级。

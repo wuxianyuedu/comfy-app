@@ -6,16 +6,19 @@
  *      `updated_at` 最新那条（后写覆盖前写），不按数组顺序猜；
  *   ② success ⇒ 绿、failure/error ⇒ 红、pending / 缺席 / 未知词 ⇒ 没判过（fail-closed）；
  *   ③ 三种信封形状都能收，收不到是空读数而不是抛；
- *   ④ 前提不全 / 平台没回 / 到预算仍非终态 ⇒ 2，绝不静默成绿。
+ *   ④ 前提不全 / 平台没回 / 到预算仍非终态 ⇒ 2，绝不静默成绿；
+ *   ⑤ 明确判红时补「错误日志怎么取」的只读指针（绿 / 没判过 / --json 都不给）。
  */
 import { describe, expect, it } from "vitest";
 
 import {
+  errorLogsHint,
   main,
   readCallbackStatus,
   STATUS_PREFIX,
   verdictFromStatus,
 } from "../scripts/ci-ga-verdict-readout.mjs";
+import { relayCommentBody } from "../scripts/ci-ga-logs-relay.mjs";
 
 const CTX = `${STATUS_PREFIX}/pipeline-1(GA 判决回调)`;
 const OWN = "cnb/pull_request/pipeline-1(质量门禁)";
@@ -182,5 +185,101 @@ describe("主流程：站内短轮询，前提不全不静默", () => {
       log: collect(lines),
     });
     expect(JSON.parse(lines.at(-1) ?? "{}")).toMatchObject({ code: 0, present: true });
+  });
+});
+
+describe("判红时补「错误日志怎么取」的指针（只读，不改退码）", () => {
+  const collect = (into: string[]) => (line: string) => {
+    into.push(line);
+  };
+  const fakeFetch =
+    (payload: unknown, status = 200) =>
+    (_url: string, _init: unknown) =>
+      Promise.resolve({
+        json: () => Promise.resolve(payload),
+        ok: status >= 200 && status < 300,
+        status,
+      });
+  const baseArgv = ["--pr", "3378", "--repo", "moon-read/comfy-app-t3"];
+  const baseEnv = { CNB_TOKEN: "t" };
+  /** 每个用例独立的「一眼到预算」时钟：第一次给 0，之后给超过预算的值。 */
+  const freshExpiredNow = () => {
+    let n = 0;
+    return () => (n++ === 0 ? 0 : 60_000);
+  };
+  const shortBudget = ["--budget-ms", "1"];
+
+  it("提示带本 PR 号，命令形状与 GA 侧评论/描述里那条同源", () => {
+    const hint = errorLogsHint("3378").join("\n");
+    expect(hint).toContain("pnpm ship --gh-logs pr:3378");
+    expect(hint).toContain("无需出站 github.com");
+    const relay = relayCommentBody({
+      pr: "3378",
+      runId: "1",
+      sha: "abcdef123456",
+      fileName: "ga-logs.b64",
+      assetPath: "a/b/ga-logs.b64",
+      jobs: 1,
+      bytes: 2,
+    });
+    expect(relay).toContain("pnpm ship --gh-logs pr:3378");
+  });
+
+  it("明确判红 ⇒ 退 1 且把提示念出来", async () => {
+    const lines: string[] = [];
+    const code = await main({
+      argv: baseArgv,
+      env: baseEnv,
+      fetchImpl: fakeFetch({ data: [{ context: CTX, state: "error" }] }),
+      log: collect(lines),
+    });
+    expect(code).toBe(1);
+    expect(lines.join("\n")).toContain("pnpm ship --gh-logs pr:3378");
+    expect(lines.join("\n")).toContain("这里没有失败 job 的日志正文");
+  });
+
+  it("绿 / 没判过都不给提示（不把「没判过」读成「有日志可取」）", async () => {
+    const greenLines: string[] = [];
+    expect(
+      await main({
+        argv: baseArgv,
+        env: baseEnv,
+        fetchImpl: fakeFetch({ data: [{ context: CTX, state: "success" }] }),
+        log: collect(greenLines),
+      }),
+    ).toBe(0);
+    expect(greenLines.join("\n")).not.toContain("错误日志怎么取");
+    const pendingLines: string[] = [];
+    expect(
+      await main({
+        argv: [...baseArgv, ...shortBudget, "--poll-ms", "1"],
+        env: baseEnv,
+        fetchImpl: fakeFetch({ data: [{ context: CTX, state: "pending" }] }),
+        now: freshExpiredNow(),
+        sleep: () => undefined,
+        log: collect(pendingLines),
+      }),
+    ).toBe(2);
+    expect(pendingLines.join("\n")).not.toContain("错误日志怎么取");
+  });
+
+  it("--json 仍只给一行机器读数，判红也不夹提示", async () => {
+    const lines: string[] = [];
+    const code = await main({
+      argv: [...baseArgv, "--json"],
+      env: baseEnv,
+      fetchImpl: fakeFetch({ data: [{ context: CTX, state: "failure" }] }),
+      log: collect(lines),
+    });
+    expect(code).toBe(1);
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({ code: 1, present: true });
+    expect(lines.join("\n")).not.toContain("错误日志怎么取");
+  });
+
+  it("前提不全也不刷提示（连 PR 号都没有，不拼半条命令）", async () => {
+    const lines: string[] = [];
+    expect(await main({ argv: [], env: {}, log: collect(lines) })).toBe(2);
+    expect(lines.join("\n")).not.toContain("错误日志怎么取");
   });
 });
