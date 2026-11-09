@@ -4381,8 +4381,15 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
      * 而另一侧没跟，这条就红。只比「模块 + 工具」对（参数值含 `<tmp>` / `…` 占位，逐字比会脆）。取数面是
      * `scripts/ship*.mjs` 整族 + `ci-build-readout.mjs`（`--diagnose` 与它共用取数）：只读单份会抓 0 条 ⇒ 两侧空集恒绿，前置断言拦这个。 */
     const shipDir = path.resolve(__dirname, "../scripts");
+    /* `ship-ga-logs-cnb.mjs` 是 `--gh-logs`（与主流程互斥的单件动作）的站内读回层：
+     * 它的 cnb 调用不进主流程的 `--dry-run` 计划（那一条由 `runGhLogs` 自己念），
+     * 所以不在这本「计划 ⇄ 执行」账的提取面里。排除它而不是给它编一条不会拨的
+     * 旗标 —— 后者正是这条判据要防的「两处各写一遍」。 */
     const src = readdirSync(shipDir)
-      .filter((f) => /^ship.*\.mjs$/.test(f) || f === "ci-build-readout.mjs")
+      .filter(
+        (f) =>
+          (/^ship.*\.mjs$/.test(f) || f === "ci-build-readout.mjs") && f !== "ship-ga-logs-cnb.mjs",
+      )
       .map((f) => readFileSync(path.join(shipDir, f), "utf8"))
       .join("\n");
     /** 从 `cnbJson(run, ["pulls", "post-pull", …])` 里抽出前两个字符串。 */

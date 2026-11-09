@@ -13,6 +13,7 @@
 | 定时重档迁 GA + 镜像派发判据修稳 | — | 历史提交 |
 | GA 推送格 payload 组装（PR 标题 / base_sha / cnb_commit） | #3160 | run 标题携带 PR 标题 |
 | GH 日志回读工具（ship --gh-logs） | #3203 | 判红自动触发 + 显式入口 |
+| GA 判红日志正文搬到 CNB 侧（本地站内读，不再出站 github.com） | #3437 | `ci-ga-logs-relay.mjs` + `ship-ga-logs-cnb.mjs`；`--gh-logs` 优先读 CNB、缺席退回旧链路 |
 
 ## 待落地（按优先级 + 主题分组）
 
@@ -234,7 +235,7 @@
 
 #### G-22：GA pr-gate.yml 红日志 workflow 层补全
 
-- **现状**：GA pr-gate.yml 任何 job 跑红后，GitHub Actions 会自动保留日志 7 天（公有仓）或 1 天（私有仓默认），但 ship 侧没有令牌无法自动回读
+- **现状**：GA pr-gate.yml 任何 job 跑红后，GitHub Actions 会自动保留日志 7 天（公有仓）或 1 天（私有仓默认），但 ship 侧没有令牌无法自动回读。**ISSUE #3437 起**：GA 收尾 job 把失败 job 日志正文脱敏 + gzip + base64 存成 CNB 附件 + 一条带 marker 的 PR 评论，`pnpm ship --gh-logs` 优先从 CNB 站内读（本地零 `api.github.com`），缺席才退回原 GitHub 链路；判决链与承重一字未改。
 - **问题**：当 CNB 判决判定格判"GA 红"时，只有 runs API 的 conclusion=failure 结果，不知道具体哪个 job / step 红的
 - **建议改法**：
   - pr-gate.yml 每个 job 在失败时 upload-artifact（job summary + 关键文件）

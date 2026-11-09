@@ -9572,6 +9572,42 @@ build**（§13.6「PR 跑绿才合并」的承重锚一个字没换）。
 摘掉、`master 合并复核` 补回令牌 import、平台池那条改回 `--master --readout`，并恢复
 `findMirrorReadoutFailure()` 立案。`--readout` 旗标本身完整留在盘上，就是为这一跳准备的。
 
+
+##### 13.5.33.4 2026-11-09 GA 判红日志正文改从 CNB 侧获取（ISSUE #3437 / #3378 后续指令）
+
+**改的是日志正文的数据源，不是判决链、不是承重锚。** §13.5.33.1 把**结论**改成
+「GA 入站送回 + CNB 站内读 commit-statuses」，§13.5.33.2/.3 把镜像推送挪到平台池；
+但**失败 job 的日志正文**一直留在 `pnpm ship --gh-logs`（含判红自动回读
+`runGhLogsOnRed`）从 `api.github.com` 出站拉。本地 / 自托管机到 github.com 出网
+间歇不通时，判红想看「哪一步、哪一行」就卡在这一跳 —— 结论已经不用出站了，日志
+还得出站。本格把日志正文也搬到 CNB 侧，让本地从站内读。
+
+**落地的三件事（与前面几节同形：改执行者，不另立判定）**：
+
+| 面 | 动作 |
+| --- | --- |
+| GA 侧写者 | `pr-gate.yml` 收尾 `ga-verdict-callback` job 末尾加一步 `ci-ga-logs-relay.mjs`：用内置 `github.token`（顶层补 `actions: read`）读本 run 的失败 job 日志 → `redactSecrets` 脱敏（硬规则 17）→ gzip + base64 编成**纯文本** → `POST /-/upload/files` 拿上传链接 → PUT 正文 → `POST /-/pulls/{n}/comments` 发一条带 `GA_LOG_RELAY_V1` marker 的评论（附 run / sha / pr / jobs / bytes 身份读数 + 附件链）。写 CNB 用已配好的 `CNB_ISSUE_TOKEN`（`repo-notes:rw`，code-scanning-triage.yml 同一枚），**不新增 secret**。`if: always()` + step 级 `continue-on-error`：日志搬不到绝不改本 run 的 conclusion |
+| CNB 侧载体 | **附件 + PR 评论**（不是 commit-statuses、不是 build stage 日志）。探针逐格坐实：`upload-file` 返回 `asset_link` 即上传成功；**未发布时 `GET /-/files/<path>` 恒 404**，链进评论发布后 `cnb assets get-files` 逐字读回。PR 与 Issue 是两套独立编号（`issues get --number <PR号>` 回 404），所以只用 `pulls` 那组端点。载体用 base64 纯文本而非 gzip 二进制：`cnb` CLI 的 `-v` 走 JSON 信封，二进制会被转坏（端到端探针验过 decode/gunzip 逐字还原） |
+| 本地读者 | `ship-ga-logs-cnb.mjs`：`cnb pulls list-comments`（列表旧→新、两个 list 命令都不支持 `--sort` ⇒ 倒着扫第一条 marker）→ `cnb assets get-files` 读 base64 → decode + gunzip。`pnpm ship --gh-logs <PR号>` 与判红自动回读**优先走这里**（注入 `cnbIo={run,slug}`，放在 GitHub 令牌闸之前 ⇒ CNB 命中时**不需要任何 GitHub 凭据、零 `api.github.com` 请求**），复用既有 `extractFailureWindow` / `shipFailureWindow` / `renderFailureWindow` 呈现，口径与 GitHub 链路同形。CNB 侧缺席（旧 PR 没跑过 relay / 评论被清 / 平台读不到）⇒ 如实念一行，退回原 GitHub 出站链路（快速回退完整留盘） |
+
+**为什么不动承重**：`.cnb.yml` 的 `质量门禁` / `GA 回调结论回读` / `COMFYAPP_CI_GATES` /
+停用清单 / `GATE_TIER_LEDGER` / 流水线 `name`（context 含它）/ `GA_VERDICT` 折叠
+**一字未改**。日志是证据，不是判决（§13.5.33 第 3 条原话）：取不到 ≠ 判红的三态
+语义不变，relay 脚本与本地读者都永不改退码。新增的是一条**只写评论与附件**的旁路。
+
+**逐笔对账**：`pr-gate.yml`（`permissions.actions: read` + 收尾 step + 头注）/
+`ci-ga-logs-relay.mjs` / `ship-ga-logs-cnb.mjs` / `ship-gh-logs.mjs`（双数据源头注 +
+CNB 优先分支 + `cnbIo` 注入面）/ `ship-standalone.mjs` 与 `ship.mjs`（两处调用点注入
+`cnbIo`）/ `tests/no-platform-ci-config.test.ts`（钉住接线在场 + 不改名 + step 不承重）/
+三份 ga-logs 用例（GA 搬运 10 条、本地读回 9 条、`--gh-logs` CNB 优先 4 条）/
+本节 + 生成态镜像 / `## Changed` 碎片，与 §13.5.33.1 同形同批。
+
+**边界（写进配置注释了，没假装已验）**：`actions: read` 能不能读到**同 run** 的
+job logs、`CNB_ISSUE_TOKEN` 在 PR 事件上带不带 `repo-notes:rw`，得看首跑那条
+relay step 的 stage 读数（`[ga-logs-relay] 已搬到 CNB` / 「前提不成立」那几行）。
+没坐实前不改承重；坐实不了也只是日志搬不到，退回旧链路，不拦合。探针在
+#3432 / #3437 上留了两条自检评论（无删除/编辑权限，403 清不掉），全绿、不阻塞。
+
 #### 13.5.34 2026-11-06 GA push 档：镜像仓 master 的文档链并行执行者（任务 3 并行期）
 
 新增 `.github/workflows/master-gate.yml`，在镜像仓 master 的 `push` 上跑文档链两格：

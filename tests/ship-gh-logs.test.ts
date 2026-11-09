@@ -152,6 +152,15 @@ function fakeGhFetch(
  */
 async function runOnce(
   opts: {
+    cnbIo?:
+      | {
+          run: (
+            cmd: string,
+            args: string[],
+          ) => { error: string | null; status: number; stderr: string; stdout: string };
+          slug: string;
+        }
+      | undefined;
     dryRun?: boolean;
     env?: Record<string, string>;
     fetchImpl?: typeof fetch;
@@ -170,6 +179,7 @@ async function runOnce(
     windowMaxBytes: opts.windowMaxBytes,
     dryRun: opts.dryRun,
     dir: tempDir(),
+    cnbIo: opts.cnbIo,
   });
   return { code, lines, text: lines.join("\n") };
 }
@@ -426,5 +436,98 @@ describe("一行结论：环境侧 / 内容判据 / 混合作业", () => {
         { kind: "environment", name: "Checkout" },
       ]),
     ).toContain("混合");
+  });
+});
+
+/** 造一条 CNB relay 附件正文（gzip→base64），与 GA 侧脚本同形。 */
+import { gzipSync as gzipNode } from "node:zlib";
+import { RELAY_MARKER } from "../scripts/ci-ga-logs-relay.mjs";
+
+function relayB64(text: string): string {
+  return Buffer.from(gzipNode(Buffer.from(text, "utf8"))).toString("base64");
+}
+
+/** 假 cnb 执行者：按命令返回 -v 的 JSON 信封。 */
+function fakeCnbIo(text: string | null) {
+  const relayText = text ?? "";
+  const marker = `<!-- ${RELAY_MARKER} run=4242 sha=${"c".repeat(40)} pr=3195 jobs=1 bytes=99 -->\n[f.b64](/-/files/u/key/f.b64)`;
+  return {
+    run: (_cmd: string, args: string[]) => {
+      const key = args.join(" ");
+      if (key.includes("list-comments")) {
+        return {
+          error: null,
+          status: 0,
+          stderr: "",
+          stdout: `status: 200\n${JSON.stringify({ data: text === null ? [] : [{ body: marker, id: "1" }] })}`,
+        };
+      }
+      if (key.includes("get-files")) {
+        return {
+          error: null,
+          status: 0,
+          stderr: "",
+          stdout: `status: 200\n${JSON.stringify({ data: relayB64(relayText) })}`,
+        };
+      }
+      return { error: null, status: 0, stderr: "", stdout: "{}" };
+    },
+    slug: "moon-read/comfy-app-t3",
+  };
+}
+
+describe("⑤ CNB 侧优先（ISSUE #3437）：站内读 relay，本地不出站 github.com", () => {
+  const CNB_LOG = [
+    "== run 4242 / job「heavy-gates」（failure）==",
+    "##[group]Run pnpm vitest",
+    "FAIL tests/foo.test.ts",
+    "##[error]Process completed with exit code 1.",
+    "##[endgroup]",
+  ].join("\n");
+
+  it("CNB 命中：无 GitHub 令牌也读得到，且一次 api.github.com 都不发", async () => {
+    let ghCalls = 0;
+    const fetchImpl = ((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("api.github.com")) ghCalls += 1;
+      return Promise.resolve(textResponse("not found", 404));
+    }) as typeof fetch;
+    const r = await runOnce({
+      input: "pr:3195",
+      env: {},
+      fetchImpl,
+      cnbIo: fakeCnbIo(CNB_LOG),
+    });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(r.text).toContain("CNB 侧 GA 判红日志");
+    expect(r.text).toContain("未出站 github.com");
+    expect(r.text).toContain("##[error]Process completed with exit code 1.");
+    expect(r.text).toContain("全量日志已落盘");
+    expect(ghCalls).toBe(0);
+  });
+
+  it("CNB 缺席 ⇒ 如实念一行，退回 GitHub 链路（快速回退）", async () => {
+    const r = await runOnce({
+      input: "pr:3195",
+      cnbIo: fakeCnbIo(null),
+    });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(r.text).toContain("CNB 侧没有 GA 日志 relay 评论 ⇒ 退回 GitHub 链路");
+    /* 退回之后 GitHub 链路确实把日志读回来了（快速回退不是空念一句）。 */
+    expect(r.text).toContain(`GH run #${String(RUN_ID)}`);
+    expect(r.text).toContain("全量日志已落盘");
+  });
+
+  it("run: 形态不走 CNB（附件按 PR 号归属），照旧走 GA 出站链路", async () => {
+    const r = await runOnce({ input: `run:${String(RUN_ID)}`, cnbIo: fakeCnbIo(CNB_LOG) });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(r.text).not.toContain("CNB 侧 GA 判红日志");
+    expect(r.text).toContain(`GH run #${String(RUN_ID)}`);
+  });
+
+  it("没有 cnbIo（旧调用方）行为不变：仍走 GitHub 链路", async () => {
+    const r = await runOnce({ input: `run:${String(RUN_ID)}` });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(r.text).toContain(`GH run #${String(RUN_ID)}`);
   });
 });
