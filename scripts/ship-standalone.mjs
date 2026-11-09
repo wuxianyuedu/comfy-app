@@ -205,7 +205,8 @@ export async function runStandaloneAction(io) {
   }
   /* ── `--gh-logs <run-id|pr号>`：直接回读 GA 失败日志（规范 §13.6）──────────
    * 与 `--diagnose` / `--stage-log` 同一条纪律：只读、一次只做一件、排在 preflight
-   * 之前。它**不依赖 cnb**（只走 GitHub API），也不必等 ship 判红 —— 显式入口就是
+   * 之前。**优先从 CNB 站内读 relay 日志**（ISSUE #3437，站内、稳），缺席才走
+   * GitHub API；不必等 ship 判红 —— 显式入口就是
    * 「先看一眼红在哪」。没有令牌时只念一行，不改退码。 */
   if (opt.ghLogs || opt.ghLogsBad.length > 0) {
     const clashes = namedActions(opt, "ghLogs");
@@ -229,6 +230,9 @@ export async function runStandaloneAction(io) {
            * （`cnb.cool/<org>/<repo>`），拿去打 GitHub API 会 404。镜像仓坐标只认
            * `GITHUB_MIRROR_REPO`（缺省 `wuxianyuedu/comfy-app`）。 */
           repo: resolveGhRepo(env),
+          /* CNB 侧优先读 relay 正文（ISSUE #3437）：`slug` 正是 CNB 坐标、
+           * `run` 是 ship 的执行者，站内读评论/附件不需要 GitHub 令牌。 */
+          cnbIo: slug ? { run, slug } : undefined,
           env,
           log,
           fetchImpl,

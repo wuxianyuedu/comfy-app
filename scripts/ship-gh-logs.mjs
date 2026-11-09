@@ -27,6 +27,19 @@
  *      `KEY=value` / `{"key":"value"}` 形状都抹成 `<redacted>`（硬规则 17）。
  *   4. **落盘目录是系统临时目录**（`<tmp>/comfy-ship-gh-logs/`）：不进仓库、单 run
  *      一份、每次回读先清空上一次；屏幕打印绝对路径 + 清理提示。
+ *
+ * ## 双数据源（ISSUE #3437，2026-11-09）
+ *
+ * GA 收尾 job 判红时会把失败 job 的日志正文脱敏 + gzip + base64 存成 CNB 附件，
+ * 并发一条带 `GA_LOG_RELAY_V1` marker 的 PR 评论（`ci-ga-logs-relay.mjs`）。本地
+ * **优先从 CNB 站内读**这份（`ship-ga-logs-cnb.mjs`，`api.cnb.cool`，稳）；CNB 侧
+ * 缺席（旧 PR 没跑过 relay / 平台读不到 / 评论被清）才退回下面的 GitHub 出站链路
+ * （快速回退完整留盘）。CNB 命中时**不需要** `GITHUB_MIRROR_TOKEN` / `GITHUB_TOKEN`
+ * —— 这正是「本地开发机到 github.com 不稳」那一格的解法。
+ *
+ * 呈现口径两套共用：CNB 那份是「已拼好的失败 job 正文」，照样过
+ * `extractFailureWindow` / `shipFailureWindow` / `renderFailureWindow`，跑出来的
+ * run / job / 注解 / 窗口 / 一行结论与 GitHub 链路同形。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -44,6 +57,7 @@ import {
   truncateJobLog,
 } from "./ci-github-verdict-logs.mjs";
 import { RED_RUN_CONCLUSIONS, workflowRunsUrl } from "./ci-github-verdict-read.mjs";
+import { readRelayLogs } from "./ship-ga-logs-cnb.mjs";
 
 /** 全量日志落点（系统临时目录；不进仓库）。 */
 export const GH_LOGS_DIR = path.join(os.tmpdir(), "comfy-ship-gh-logs");
@@ -427,6 +441,55 @@ export function renderFailureWindow(label, win) {
 }
 
 /**
+ * 把 CNB 侧那份「已拼好的失败 job 正文」渲染成台面读数，并落一份全量盘。
+ *
+ * 复用与 GitHub 链路同一组呈现函数（窗口 / 注解 / 归因 / 落盘），不另写第二套；
+ * 差别只在「job / step 元数据」这一层：relay 正文里已经带 `== run … / job「X」==`
+ * 分节，逐节过 `extractFailureWindow`，没有 GA job 回话里的 step 清单就按 job 名归因。
+ *
+ * @param {string} text 还原后的日志正文
+ * @param {{run:string,sha:string,pr:string,jobs:number,bytes:number,assetPath:string}} meta marker 身份读数
+ * @param {{log:(l:string)=>void, windowMaxBytes?:number, dir?:string}} io 注入面
+ * @returns {void}
+ */
+function renderRelayLogs(text, meta, io) {
+  const log = io.log;
+  const shortSha = meta.sha ? meta.sha.slice(0, 8) : "n/a";
+  log(
+    `[ship] CNB 侧 GA 判红日志（ISSUE #3437）：run ${meta.run} · sha ${shortSha} · ${String(meta.jobs)} 个失败 job · 站内读取，未出站 github.com`,
+  );
+  const sections = String(text).split(/^== run /mu);
+  /** @type {Array<{name:string, kind:"content"|"environment"|"unknown"}>} */
+  const readings = [];
+  /** @type {string[]} */
+  const archive = [
+    "# ship GA 失败日志回读（CNB 侧 relay 正文，已脱敏）",
+    `# run ${meta.run} / sha ${meta.sha} / pr ${meta.pr} / jobs ${String(meta.jobs)}`,
+  ];
+  for (const sec of sections) {
+    if (!sec.trim()) continue;
+    const head = /^(?<id>[^\s]+)\s*\/\s*job「(?<name>[^」]*)」/u.exec(sec);
+    const label = head?.groups?.name ?? "job";
+    const clean = sec.replace(/^[^\n]*\n/u, "");
+    const raw = extractFailureWindow(clean);
+    if (raw.errors.length > 0) {
+      log(`[ship] ✗ job「${label}」失败注解（共 ${String(raw.errors.length)} 条）：`);
+      for (const line of raw.errors) log(`[ship]     ${line}`);
+    } else {
+      log(`[ship] ✗ job「${label}」：没有 ##[error] 行（日志里没有注解）`);
+    }
+    const win = shipFailureWindow(raw.lines, io.windowMaxBytes ?? SHIP_WINDOW_MAX_BYTES);
+    for (const line of renderFailureWindow(`job「${label}」`, win)) log(line);
+    readings.push({ kind: classifyFailureName(label), name: label });
+    archive.push("", `== ${sec.split("\n")[0]}`, clean);
+  }
+  const absPath = writeGhLogsFile(archive.join("\n"), meta.run, io.dir ?? GH_LOGS_DIR);
+  log(`[ship] 全量日志已落盘：${absPath}（CNB 侧 relay 正文）`);
+  log(`[ship] 清理提示：删掉 ${path.dirname(absPath)} 即可（系统临时目录，不进仓库）`);
+  log(`[ship] 结论：${classifyFailureOrigin(readings)}`);
+}
+
+/**
  * 真身回读：**永不抛异常、永不改三态**（输入认不出时退 2，那是用法错误）。
  *
  * @param {{
@@ -439,23 +502,48 @@ export function renderFailureWindow(label, win) {
  *   dryRun?: boolean,
  *   windowMaxBytes?: number,
  *   dir?: string,
+ *   cnbIo?: {run: (cmd: string, args: string[]) => {stdout:string,stderr:string,status:number,error:string|null}, slug: string} | undefined,
  * }} io 注入面
  * @returns {Promise<number>} 退码（只在「输入认不出」时是 2）
  */
 export async function runGhLogs(io) {
   const env = io.env ?? {};
   const log = io.log;
-  const token = resolveGhToken(env);
-  if (token === "") {
-    log("[ship] 未设置令牌 ⇒ 跳过 GH 日志回读（GITHUB_MIRROR_TOKEN / GITHUB_TOKEN）");
-    return CODE.GREEN;
-  }
   const target = parseGhLogsTarget(io.input);
   if (target.kind === null) {
     log(
       `[ship] [ERROR] --gh-logs 收的是 run id 或 PR 号（可写 run:4242 / pr:3195），这里认不出：「${String(target.bad)}」`,
     );
     return CODE.NOT_RUN;
+  }
+  /* ── CNB 侧优先（ISSUE #3437）：按 PR 号站内读 relay 正文 ──────────────
+   * 放在「GitHub 令牌」那一闸**之前**：CNB 命中时本地不需要任何 GitHub 凭据，
+   * 也不发一条 api.github.com。只有 `pr:` 形态够得着（CNB 附件按 PR 号归属）；
+   * `run:` 形态照旧走 GA 出站链路。缺席时如实念一行，再退回下面那条链。 */
+  if (target.kind === "pr" && io.cnbIo && !io.dryRun) {
+    try {
+      const relay = readRelayLogs({
+        number: target.number,
+        run: io.cnbIo.run,
+        slug: io.cnbIo.slug,
+      });
+      if (relay) {
+        renderRelayLogs(relay.text, relay.meta, {
+          dir: io.dir,
+          log,
+          windowMaxBytes: io.windowMaxBytes,
+        });
+        return CODE.GREEN;
+      }
+      log("[ship] CNB 侧没有 GA 日志 relay 评论 ⇒ 退回 GitHub 链路（快速回退留盘）");
+    } catch (error) {
+      log(`[ship] CNB 侧读回异常 ⇒ 退回 GitHub 链路（不改三态）：${String(error)}`);
+    }
+  }
+  const token = resolveGhToken(env);
+  if (token === "") {
+    log("[ship] 未设置令牌 ⇒ 跳过 GH 日志回读（GITHUB_MIRROR_TOKEN / GITHUB_TOKEN）");
+    return CODE.GREEN;
   }
   if (!io.repo) {
     log("[ship] GH 日志回读：取不到仓库 slug ⇒ 跳过（缺的只是日志）");
@@ -646,6 +734,8 @@ export async function runGhLogs(io) {
  *
  * 「blocked 里的失败项」也在这一格里：CNB 把 GA 判红折算成 build 红，下游被阻塞的
  * job 在同一批 `failed` 读数里出现，不另开第二个入口。
+ *
+ * `cnbIo` 透传给 `runGhLogs`（ISSUE #3437）：判红自动回读也优先走 CNB 站内。
  *
  * @param {Omit<Parameters<typeof runGhLogs>[0], "input"> & {number: number, buildState: string}} io 注入面
  * @returns {Promise<void>} 到点兑现（不参与退码）

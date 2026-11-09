@@ -1719,6 +1719,33 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(script).toContain("conclusion=$v sha=$short -> failure");
   });
 
+  it("GA 判红日志正文搬到 CNB：relay step 在收尾 job，且不碰承重主列（ISSUE #3437）", () => {
+    /* 结论回调（`ci-ga-verdict-callback.mjs`）已经把 GA 的 verdict 送回 CNB；
+     * #3437 补的是**日志正文**这一半：GA 侧把失败 job 日志脱敏 + gzip + base64
+     * 写成 CNB 附件 + 一条带 marker 的 PR 评论，本地 `pnpm ship --gh-logs`
+     * 优先从 CNB 站内读，判红时不必再出站 github.com。
+     * 这几条钉住「接线在场 + 不承重」：少一条就会退回旧链路而没人发现。 */
+    const workflow = readFileSync(path.join(ROOT, ".github/workflows/pr-gate.yml"), "utf8");
+    expect(workflow).toContain("actions: read");
+    expect(workflow).toContain("ci-ga-logs-relay.mjs");
+    expect(workflow).toContain("把 GA 判红日志正文搬到 CNB");
+    /* 用已配好的 CNB_ISSUE_TOKEN（写评论要 repo-notes:rw），不新增 secret；
+     * 内置 github.token 读本 run 的 job logs。 */
+    expect(workflow).toContain("secrets.CNB_ISSUE_TOKEN");
+    expect(workflow).toMatch(/GITHUB_TOKEN:\s*\$\{\{ github\.token \}\}/u);
+    /* step 级 continue-on-error：日志搬不到绝不改本 run 的 conclusion。
+     * 判决链 / commit-statuses / 流水线 name 一个字都不许动。 */
+    const relayBlock = workflow.slice(workflow.indexOf("把 GA 判红日志正文搬到 CNB"));
+    expect(relayBlock).toContain("continue-on-error: true");
+    expect(relayBlock).toContain("if: always()");
+    /* 流水线 name 在 `.cnb.yml`（commit-status context 含它），本格一个字不动。 */
+    expect(readRegisteredConfig()).toContain("name: GA 判决回调（骨架·休眠）");
+    /* 本地读者在场：ship 侧从 CNB 站内读回的模块。 */
+    expect(readFileSync(path.join(ROOT, "scripts/ship-gh-logs.mjs"), "utf8")).toContain(
+      "ship-ga-logs-cnb.mjs",
+    );
+  });
+
   it("Python 探测入口被登记在 env 里，且真的在盘上", () => {
     const text = readRegisteredConfig();
     const m = /^\s*COMFYAPP_CI_PYTHON_PROBE:\s*(?<path>\S+)\s*$/m.exec(text);

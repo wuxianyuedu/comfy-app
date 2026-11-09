@@ -66,8 +66,12 @@ on:
 # 显式最小权限（CodeQL `actions/missing-workflow-permissions`，#3–#7）：本工作流只读仓库
 # —— checkout、装依赖、跑各判据、上传 artifact。不写这一栏时 GITHUB_TOKEN 拿仓库默认
 # 权限（可能含 contents: write），对一条纯判据工作流没有必要。
+# ISSUE #3437 补 `actions: read`：收尾 job 用内置 `github.token` 读**本 run** 的失败 job
+# 日志正文（`GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs`），搬到 CNB 侧，
+# 让本地判红时不必再出站 github.com 拉日志。只读，不写 GitHub。
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: pr-${{ github.event.client_payload.pr_number || github.run_id }}
@@ -455,3 +459,28 @@ jobs:
           CNB_PULL_REQUEST_MERGE_SHA: ${{ github.event.client_payload.cnb_merge_sha || '' }}
           GA_JOB_RESULTS: ${{ join(needs.*.result, ',') }}
         run: node scripts/ci-ga-verdict-callback.mjs
+
+      # ISSUE #3437：把**失败 job 的日志正文**搬到 CNB 侧（站内），本地 `pnpm ship
+      # --gh-logs` 优先从 CNB 读，判红时不必再出站 github.com —— 本单从头治的那一格。
+      # 与「结论回调」同一条「GA 入站推送 + CNB 站内读」分工，只是载荷从 conclusion
+      # 换成日志正文。`if: always()` + step 级 `continue-on-error`：日志搬不到绝不
+      # 反过来改本 run 的 conclusion（判红该拦的闸在 CNB 侧，与这一格无关）。
+      # 脚本自己判有没有失败 job（判绿时不发评论），无条件跑最不容易在 GA 表达式上出错。
+      #
+      # 令牌：`CNB_ISSUE_TOKEN` 是 code-scanning-triage.yml 已在用的那枚仓库 secret
+      # （`repo-notes:rw`）—— 写 PR 评论 + 上传附件用的是它，与结论回调的
+      # `CNB_TRIGGER_TOKEN`（`repo-cnb-trigger:rw`）不是一回事：后者起 build，前者写评论。
+      # `GITHUB_TOKEN` 走内置 `github.token`（顶层 `actions: read`），读本 run 的 job logs。
+      # ⚠️ 首跑复验出口：`actions: read` 能不能读到同 run 的 job logs、以及
+      # `CNB_ISSUE_TOKEN` 在 PR 事件上带不带 notes 写权，得看这一跑的 stage 读数
+      # （`[ga-logs-relay] 已搬到 CNB` / 前提不成立那几行）；没坐实前不改承重。
+      - name: 把 GA 判红日志正文搬到 CNB
+        if: always()
+        continue-on-error: true
+        env:
+          CNB_ISSUE_TOKEN: ${{ secrets.CNB_ISSUE_TOKEN }}
+          CNB_REPO_SLUG: moon-read/comfy-app-t3
+          CNB_PULL_REQUEST_IID: ${{ github.event.client_payload.pr_number || '' }}
+          CNB_PULL_REQUEST_MERGE_SHA: ${{ github.event.client_payload.cnb_merge_sha || '' }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/ci-ga-logs-relay.mjs

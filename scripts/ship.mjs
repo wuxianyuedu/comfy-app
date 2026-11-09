@@ -749,6 +749,9 @@ async function runFlow(deps, tmpFiles) {
           buildState,
           number,
           repo: slug,
+          /* CNB 侧优先读 relay 正文（ISSUE #3437）：判红时本地从站内取日志，
+           * 不必出站 github.com。`run` / `slug` 与主流程同一份执行者与坐标。 */
+          cnbIo: slug ? { run, slug } : undefined,
           env,
           log,
           fetchImpl: deps.fetchImpl ?? globalThis.fetch,
