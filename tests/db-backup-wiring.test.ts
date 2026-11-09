@@ -117,19 +117,16 @@ describe("启动链：换文件必须排在起服务之前", () => {
      * 都会有一处红 —— 那样换文件就发生在有进程持有这个库的时刻了。 */
     for (const { file, label } of entries) {
       const src = read(file);
-      if (!src.includes("spawnSchemaSync(")) {
-        /* 编排器的 schema 同步随起服务桥段搬进了 `dev-boot.mjs`：那一份里
-         * **不许**出现换文件（正面那条已断），这里只断「它不在换文件之前」。 */
-        expect(
-          read("scripts/launcher-core/dev-boot.mjs").includes("applyPendingRestoreAtBoot"),
-          `${label}: 换文件不许排在 schema 同步之后`,
-        ).toBe(false);
-        continue;
-      }
+      /* 两类入口判据不同：编排器的 schema 同步随起服务桥段搬进了 `dev-boot.mjs`
+       * （桥接档：那一份里**不许**出现换文件——正面那条已断，这里只断「它不在换文件
+       * 之前」）；直连档判换文件行在同步之前。条件收进取值，断言本体无条件跑。 */
+      const bridgesViaDevBoot = !src.includes("spawnSchemaSync(");
       expect(
-        lineOf(src, "applyPendingRestoreAtBoot("),
+        bridgesViaDevBoot
+          ? !read("scripts/launcher-core/dev-boot.mjs").includes("applyPendingRestoreAtBoot")
+          : lineOf(src, "applyPendingRestoreAtBoot(") < lineOf(src, "spawnSchemaSync("),
         `${label}: 换文件不许排在 schema 同步之后`,
-      ).toBeLessThan(lineOf(src, "spawnSchemaSync("));
+      ).toBe(true);
     }
   });
 });

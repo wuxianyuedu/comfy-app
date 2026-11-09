@@ -122,20 +122,17 @@ describe("复算快照的依赖链接：谁在链上、收尾谁先走", () => {
 
     git(["worktree", "remove", "--force", wt]);
 
-    if (process.platform === "win32") {
-      /**
-       * 这里断言的是**伤害确实发生**：目标树上的 `next` 垫片没了。
-       * 若哪天 git 修成「穿链接不删」，这条会红 —— 那是好消息（危害消失，届时把
-       * `unlinkDependencies` 降级成防御性冗余并订正碎片），不许反过来把它 skip 掉。
-       */
-      expect(
-        existsSync(shimOf(checkout)),
-        "win32 上 `git worktree remove --force` 不再穿 junction —— 危害假设变了，" +
-          "请回来订正 base-check 的这段注释与碎片，别直接 skip",
-      ).toBe(false);
-    } else {
-      expect(existsSync(shimOf(checkout))).toBe(true);
-    }
+    /**
+     * 这里断言的是**伤害确实发生**：目标树上的 `next` 垫片没了（win32 断 false；
+     * POSIX 上 junction 本就随目录树活着，断 true）。
+     * 若哪天 git 修成「穿链接不删」，win32 支会红 —— 那是好消息（危害消失，届时把
+     * `unlinkDependencies` 降级成防御性冗余并订正碎片），不许反过来把它 skip 掉。
+     */
+    expect(
+      existsSync(shimOf(checkout)),
+      "win32 上 `git worktree remove --force` 不再穿 junction —— 危害假设变了，" +
+        "请回来订正 base-check 的这段注释与碎片，别直接 skip",
+    ).toBe(process.platform !== "win32");
   }, 30_000);
 
   it("②先 `unlinkDependencies` 再摘 worktree ⇒ 两边都活着（这就是修法的顺序）", () => {

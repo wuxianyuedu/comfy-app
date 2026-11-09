@@ -148,12 +148,12 @@ describe("ConsolePresetList · 按分组折叠", () => {
       const root = trigger.closest('[data-slot="disclosure"]');
       const panel = panelOf(group.items[0]!.id)!;
       const panelClass = panel.className;
-      if (panelClass.includes("basis-full")) {
-        expect(
-          root?.className,
-          `${group.id} 的面板用了 basis-full，Root 却没写 flex-wrap —— 面板会横着占满整行`,
-        ).toContain("flex-wrap");
-      }
+      /* 条件收进期望值：面板用 basis-full（横占整行）时 Root 必须写 flex-wrap，
+       * 没用就不约束 —— 断言本体无条件跑（no-conditional-expect）。 */
+      expect(
+        panelClass.includes("basis-full") ? (root?.className ?? "").includes("flex-wrap") : true,
+        `${group.id} 的面板用了 basis-full，Root 却没写 flex-wrap —— 面板会横着占满整行`,
+      ).toBe(true);
     }
   });
 

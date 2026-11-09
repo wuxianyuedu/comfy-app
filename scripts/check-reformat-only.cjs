@@ -572,17 +572,10 @@ async function main() {
      * 护栏 ① 也读它（「这一笔含不含重排」从这张表取，ISSUE #3054）⇒ 先算好再递。
      * 合并行按目标侧取补丁、与已判行去重（ISSUE #3035）：`landedRev` 定位目标侧，
      * `beforeRev`（区间起点）当空 patch 退路的基线。 */
-    const perCommit = perCommitShape(
-      `${beforeRev}..${afterRev}`,
-      limit,
-      ROOT,
-      perCommitDeps,
-      null,
-      {
-        landedTip: landedRev,
-        spanBase: beforeRev,
-      },
-    );
+    const perCommit = perCommitShape(`${beforeRev}..${afterRev}`, limit, ROOT, perCommitDeps, {
+      landedTip: landedRev,
+      spanBase: beforeRev,
+    });
     process.exit(
       report(
         files,
@@ -670,7 +663,7 @@ async function main() {
               "汇总分母同源（ISSUE #3035）",
           );
         }
-        return perCommitShape(range, limit, ROOT, perCommitDeps, null, {
+        return perCommitShape(range, limit, ROOT, perCommitDeps, {
           landedTip,
           spanBase: rangeBefore,
         });

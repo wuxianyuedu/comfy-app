@@ -114,9 +114,8 @@ describe("findExecutionMeta", () => {
     expect(createdAt).toBeInstanceOf(Date);
     // 用 instanceof 把类型 narrow 到 Date，避免 `!` 与 `as` 两种形态
     // （前者被 src 非空断言硬闸数、后者被 non-nullable-type-assertion-style 拦）。
-    if (createdAt instanceof Date) {
-      expect(createdAt.toISOString()).toBe("2026-01-02T03:04:05.000Z");
-    }
+    if (!(createdAt instanceof Date)) throw new Error("unreachable：上一行已断言 Date");
+    expect(createdAt.toISOString()).toBe("2026-01-02T03:04:05.000Z");
   });
 
   it("未知 id 返回 null（不抛）", async () => {

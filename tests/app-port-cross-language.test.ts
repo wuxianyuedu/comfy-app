@@ -148,10 +148,13 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
     // 若某侧把 F:\\… 交给 path.resolve / abspath，在 POSIX 上会拼上 cwd，
     // 规范化结果就不再是 f:/… —— 这条检查 normalized 字段本身的形状。
     for (const v of fixture.vectors) {
-      if (/^[a-zA-Z]:/.test(v.input.replaceAll("\\", "/"))) {
-        expect(v.normalized).toMatch(/^[a-z]:\//);
-        expect(v.normalized).not.toContain(ROOT.toLowerCase());
-      }
+      /* 只有盘符向量（Windows 形状）查这两条：规范化不染 cwd、不回落根检出 ——
+       * 条件收进合取式（非盘符向量恒真），断言本体无条件跑（no-conditional-expect）。 */
+      const isDriveVector = /^[a-zA-Z]:/.test(v.input.replaceAll("\\", "/"));
+      expect(
+        !isDriveVector ||
+          (/^[a-z]:\//.test(v.normalized) && !v.normalized.includes(ROOT.toLowerCase())),
+      ).toBe(true);
     }
   });
 });

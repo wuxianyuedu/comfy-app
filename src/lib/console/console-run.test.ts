@@ -237,10 +237,9 @@ describe("createConsoleRunner", () => {
     expect(result.exitCode).toBeNull();
     /* 文案必须**说清找过 PATH**（ISSUE #1327）：裸的 `spawn xxx ENOENT` 看着像
      * 参数写错，而用户要做的是「确认命令装没装 / 这个进程的 PATH 里有没有它」。 */
-    if (errorFrame?.type === "error") {
-      expect(errorFrame.message).toContain("definitely-not-a-real-binary-xyz");
-      expect(errorFrame.message).toContain("PATH");
-    }
+    if (errorFrame?.type !== "error") throw new Error("unreachable：上一行已断言 error 帧");
+    expect(errorFrame.message).toContain("definitely-not-a-real-binary-xyz");
+    expect(errorFrame.message).toContain("PATH");
   });
 
   it("起进程前先解析可执行形态：start 帧报的是**真正要起的那一份**", async () => {

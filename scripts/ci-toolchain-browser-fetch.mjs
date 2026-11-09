@@ -126,7 +126,7 @@ export const FETCH_MAX_CHUNKS = 16_384;
  *   chunkBytes?: number, minChunkBytes?: number, chunkTimeoutMs?: number,
  *   retries?: number, maxChunks?: number,
  *   onChunk?: (done: number, total: number) => void,
- *   fetchChunk?: (url: string, dest: string, offset: number, size: number, timeoutMs: number, options?: {probeOnly?: boolean}) => {bytes: number, total: number | null, out: string},
+ *   fetchChunk?: (url: string, dest: string, opts: {offset: number, size: number, timeoutMs: number, probeOnly?: boolean}) => {bytes: number, total: number | null, out: string},
  * }} [options]
  *   `fetchChunk` 是注入面（默认 {@link fetchRangeToFile}）：判据里换掉它就不出网。
  *   `onChunk` 是进度读数（本步无进度条，交给调用方打一行）。
@@ -148,7 +148,12 @@ export function fetchUrlResumable(
   mkdirSync(path.dirname(dest), { recursive: true });
   /* **先问总长**（一次 `Range: bytes=0-0`，不落盘）：它既是「这条链路通不通」的读数，
    * 也是「还剩多少」的分母。取不到就直接交给 Playwright 的老路。 */
-  const head = fetchChunk(url, dest, 0, 1, chunkTimeoutMs, { probeOnly: true });
+  const head = fetchChunk(url, dest, {
+    offset: 0,
+    size: 1,
+    timeoutMs: chunkTimeoutMs,
+    probeOnly: true,
+  });
   const headTotal = head.total;
   if (headTotal === null || !Number.isFinite(headTotal) || headTotal <= 0) {
     return {
@@ -197,7 +202,7 @@ export function fetchUrlResumable(
     let got = -1;
     let lastOut = "";
     for (let attempt = 1; attempt <= retries; attempt += 1) {
-      const r = fetchChunk(url, dest, written, want, chunkTimeoutMs);
+      const r = fetchChunk(url, dest, { offset: written, size: want, timeoutMs: chunkTimeoutMs });
       /* `got` 是**这一片真写进去的字节数**（<=0 = 这一片没成）。不假设服务器老实回了
        * 我问的那一段 —— `fetchRangeToFile` 只追加它读到的，所以「少给了」只会让下一片
        * 从更靠后的偏移接着接。 */
@@ -374,13 +379,11 @@ export const FETCH_CHUNK_SCRIPT = `
  *
  * @param {string} url
  * @param {string} dest
- * @param {number} offset
- * @param {number} size
- * @param {number} timeoutMs
- * @param {{probeOnly?: boolean}} [options]
+ * @param {{offset: number, size: number, timeoutMs: number, probeOnly?: boolean}} opts
  * @returns {{bytes: number, total: number | null, out: string}}
  */
-export function fetchRangeToFile(url, dest, offset, size, timeoutMs, { probeOnly = false } = {}) {
+export function fetchRangeToFile(url, dest, opts) {
+  const { offset, size, timeoutMs, probeOnly = false } = opts;
   const scratch = `${dest}.part`;
   const r = spawnSync(
     process.execPath,

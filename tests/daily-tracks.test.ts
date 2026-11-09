@@ -936,11 +936,12 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
      * 且不晚于现在。它同时是「实现没在真实仓库上抛异常」的执行者 —— 而这一路
      * （`git log --since` 的输出解析）是纯文本状态机，最容易在真实输出上崩。 */
     const at = dirtySinceToday(freshnessTrack("full"));
-    if (at !== null) {
-      expect(at instanceof Date).toBe(true);
-      expect(Number.isNaN(at.getTime())).toBe(false);
-      expect(at.getTime()).toBeLessThanOrEqual(Date.now());
-    }
+    /* 返回可空（今天没动过是合法态，本条不问「动没动过」）：非空时必是解得开的
+     * 过去时刻 —— 可空分支收进合取式，断言本体无条件跑（no-conditional-expect）。 */
+    expect(
+      at === null ||
+        (at instanceof Date && !Number.isNaN(at.getTime()) && at.getTime() <= Date.now()),
+    ).toBe(true);
   });
 });
 

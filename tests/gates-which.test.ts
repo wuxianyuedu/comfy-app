@@ -169,10 +169,9 @@ describe("gates:which —— 用例那一半不重算 import 图", () => {
       spawn: fakeSpawn(() => ({ status: 2, stdout: "", stderr: "基线取不到\n" })),
     });
     expect(got.ok).toBe(false);
-    if (!got.ok) {
-      expect(got.stderr).toContain("基线取不到");
-      expect(got.reason).toContain("2");
-    }
+    if (got.ok) throw new Error("unreachable：ok=false 已由上一行断言");
+    expect(got.stderr).toContain("基线取不到");
+    expect(got.reason).toContain("2");
   });
 
   test("stdout 不是 JSON ⇒ 没取到读数（不是「零条用例」）", () => {
@@ -262,13 +261,18 @@ describe("gates:which —— AGENTS.md 的表与机器可读副本双向对账",
   });
 
   test("路径行必须有路径、动作行必须有「什么时候按动作判」的说明", () => {
-    for (const entry of DOC_READING_MAP) {
-      if (entry.paths.length === 0) {
-        expect(typeof entry.when).toBe("string");
-        expect((entry.when ?? "").length).toBeGreaterThan(0);
-      } else {
-        expect(entry.paths.length).toBeGreaterThan(0);
-      }
+    /* 两类行拆双循环：filters 空了下面两支就静默不跑（正是 no-conditional-expect
+     * 要防的形），所以先断言两类行都真的在场。 */
+    const actionRows = DOC_READING_MAP.filter((entry) => entry.paths.length === 0);
+    const pathRows = DOC_READING_MAP.filter((entry) => entry.paths.length > 0);
+    expect(actionRows.length).toBeGreaterThan(0);
+    expect(pathRows.length).toBeGreaterThan(0);
+    for (const entry of actionRows) {
+      expect(typeof entry.when).toBe("string");
+      expect((entry.when ?? "").length).toBeGreaterThan(0);
+    }
+    for (const entry of pathRows) {
+      expect(entry.paths.length).toBeGreaterThan(0);
     }
   });
 });
@@ -311,10 +315,7 @@ describe("gates:which —— 入口本身", () => {
      * 三态口径 —— 取不到就明说「没有结论」，不许静默退 0 冒充「查过了」。 */
     const { code, output } = run([]);
     expect([0, 2]).toContain(code);
-    if (code === 2) {
-      expect(output).toContain("没有结论");
-    } else {
-      expect(output).toContain("改动面");
-    }
+    /* 两态话术收进期望值：断言本体无条件执行（no-conditional-expect）。 */
+    expect(code === 2 ? output.includes("没有结论") : output.includes("改动面")).toBe(true);
   }, 120_000);
 });

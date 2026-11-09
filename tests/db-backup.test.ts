@@ -161,9 +161,8 @@ describe("createBackup：真的备份，且验得动", () => {
     // ① 判据一：产物能被 integrity_check 读通（不是「文件存在」）
     const verify = verifyBackupFile(result.file);
     expect(verify.ok).toBe(true);
-    if (verify.ok) {
-      expect(verify.tables).toBeGreaterThan(0);
-    }
+    if (!verify.ok) throw new Error("unreachable：ok=true 已由上一行断言");
+    expect(verify.tables).toBeGreaterThan(0);
 
     // ② 判据二：-wal / -shm 不进备份
     expect(fs.existsSync(`${result.file}-wal`)).toBe(false);

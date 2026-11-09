@@ -505,18 +505,16 @@ describe("关闭流程 — 进程树回收判据", () => {
     vi.mocked(findPidForMainPy).mockResolvedValueOnce(4321);
     const r = await stopComfyUiProcess();
 
-    if (process.platform === "win32") {
-      // 平台判据只在 kill-process-tree：这里锁「命令确实是整树回收」。
-      expect(r.detail).toBeTruthy();
-    } else {
-      // POSIX：经 killProcessTree 发信号。这里锁住「真的发了信号」而不是
-      // 静默跳过 —— 旧实现只 `child.kill()`，无句柄的接管场景会直接漏杀。
-      // 目标仍可达（探测被 mock 成恒可达）→ 收口为 ok=false + 可行动提示。
-      expect(processKillSpy).toHaveBeenCalled();
-      const signals = processKillSpy.mock.calls.map((c) => c[1]);
-      expect(signals).toContain("SIGTERM");
-      expect(r.detail).toBeTruthy();
-    }
+    // 平台分支收进期望值（no-conditional-expect）：win32 走 kill-process-tree 的整树
+    // 回收（detail 由命令给出）；POSIX 经 killProcessTree 发信号 —— 这里锁住「真的发了
+    // 信号」而不是静默跳过（旧实现只 `child.kill()`，无句柄的接管场景会直接漏杀）。
+    // 目标仍可达（探测被 mock 成恒可达）→ 收口为 ok=false + 可行动提示。
+    expect(
+      process.platform === "win32" ||
+        (processKillSpy.mock.calls.length > 0 &&
+          processKillSpy.mock.calls.some((c) => c[1] === "SIGTERM")),
+    ).toBe(true);
+    expect(r.detail).toBeTruthy();
     processKillSpy.mockRestore();
   });
 

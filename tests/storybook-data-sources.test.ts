@@ -61,17 +61,14 @@ describe("Storybook 数据源注入层的契约（ISSUE #1381）", () => {
 
     for (const name of names) {
       const onDisk = existsSync(join(ASSETS, name));
-      if (name === "missing.png") {
-        expect(onDisk, "`missing.png` 真的存在了 —— 「加载失败落兜底」那条分支的现场就没了").toBe(
-          false,
-        );
-      } else {
-        expect(
-          onDisk,
-          `${name} 不在 .storybook/assets/ —— 名字与磁盘脱钩了：` +
-            "画布上组件会渲染它的失败兜底，而读的人会以为「设计就是这样」",
-        ).toBe(true);
-      }
+      /* 分支收进期望值与消息（no-conditional-expect）：兜底名必须不在磁盘、真名必须在。 */
+      expect(
+        onDisk,
+        name === "missing.png"
+          ? "`missing.png` 真的存在了 —— 「加载失败落兜底」那条分支的现场就没了"
+          : `${name} 不在 .storybook/assets/ —— 名字与磁盘脱钩了：` +
+              "画布上组件会渲染它的失败兜底，而读的人会以为「设计就是这样」",
+      ).toBe(name !== "missing.png");
     }
   });
 

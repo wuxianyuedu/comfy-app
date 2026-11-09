@@ -34,19 +34,15 @@ function pickOffset(sx: number, sy: number, tx: number, ty: number) {
   return mag;
 }
 
-/** 三次贝塞尔在 t = 0.5 处的中点。 */
+/** 三次贝塞尔在 t = 0.5 处的中点（p0 起点、p1/p2 控制点、p3 终点）。 */
 function bezierMidpoint(
-  p0x: number,
-  p0y: number,
-  p1x: number,
-  p1y: number,
-  p2x: number,
-  p2y: number,
-  p3x: number,
-  p3y: number,
+  p0: { x: number; y: number },
+  p1: { x: number; y: number },
+  p2: { x: number; y: number },
+  p3: { x: number; y: number },
 ): [number, number] {
-  const x = (p0x + 3 * p1x + 3 * p2x + p3x) / 8;
-  const y = (p0y + 3 * p1y + 3 * p2y + p3y) / 8;
+  const x = (p0.x + 3 * p1.x + 3 * p2.x + p3.x) / 8;
+  const y = (p0.y + 3 * p1.y + 3 * p2.y + p3.y) / 8;
   return [x, y];
 }
 
@@ -108,7 +104,12 @@ export const WorkflowEdge = React.memo(function WorkflowEdge(props: EdgeProps) {
   const c2y = targetY + tOut[1] * offset;
 
   const edgePath = `M ${sourceX},${sourceY} C ${c1x},${c1y} ${c2x},${c2y} ${targetX},${targetY}`;
-  const [labelX, labelY] = bezierMidpoint(sourceX, sourceY, c1x, c1y, c2x, c2y, targetX, targetY);
+  const [labelX, labelY] = bezierMidpoint(
+    { x: sourceX, y: sourceY },
+    { x: c1x, y: c1y },
+    { x: c2x, y: c2y },
+    { x: targetX, y: targetY },
+  );
 
   /* 选中节点的相关连线：加粗 + 提亮，其余连线在选中态下降噪，让「这个节点连到
    * 哪里」一眼可读。关注级别由 `useRelatedEdgesHighlight` 写在 edge.data 上；

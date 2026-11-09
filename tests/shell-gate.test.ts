@@ -571,9 +571,9 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
       // 不假设开发机装了 cargo：只判「探针这向不空转」——PATH 上有就到手，
       // 没有也不会返回一个不存在的路径。
       const found = findCargo();
-      if (found !== null) {
-        expect(existsSync(found)).toBe(true);
-      }
+      /* found 可空（本机没装 cargo 是合法态）：不变式只有一条 —— 找到就必须真存在，
+       * 可缺席分支收进合取式，断言本体无条件执行（no-conditional-expect）。 */
+      expect(found === null || existsSync(found)).toBe(true);
     });
   });
 

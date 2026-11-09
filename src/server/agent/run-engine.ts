@@ -271,9 +271,9 @@ async function execImages(
   projectId: string,
   run: ProductionRun,
   row: Production,
-  view: ProductionRunView,
-  shotIds: Array<string>,
+  io: { shotIds: Array<string>; view: ProductionRunView },
 ): Promise<ExecResult> {
+  const { view, shotIds } = io;
   if (!run.imageWorkflowId) {
     return {
       ok: false,
@@ -596,7 +596,7 @@ export async function advanceRunLoop(userId: string, projectId: string): Promise
         }
         case "render_images": {
           // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-          res = await execImages(userId, projectId, run, row, view, action.shotIds);
+          res = await execImages(userId, projectId, run, row, { view, shotIds: action.shotIds });
           break;
         }
         case "review_shots": {

@@ -244,9 +244,9 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
     /* 它要么绿（0）、要么真报「需要人工看」（1）；「没跑起来」（2）只允许由
      * 取不到 merge target / 浅克隆这一族原因给出，且必须在输出里说清原因。 */
     expect([0, 1, 2]).toContain(code);
-    if (code === 2) {
-      expect(output).toContain("[premerge] ");
-    }
+    /* 「没跑起来」（2）必须说清原因 —— 条件收进合取式（非 2 即恒真），
+     * 断言本体无条件跑（no-conditional-expect）。 */
+    expect(code !== 2 || output.includes("[premerge] ")).toBe(true);
   });
 
   test("`claims` 段的扫描面是**这批**，不是「最新那一笔」（ISSUE #2070）", () => {
@@ -293,13 +293,10 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
     const { code, output } = run(["--only=claims"]);
     expect(output).not.toContain("取不到要审的提交");
     expect([0, 1, 2]).toContain(code);
-    if (code === 2) {
-      expect(output).toContain("[premerge] ");
-    }
-    /* 走到「审了几笔」这一层：绿的那一支必须说得出条数，或说得出「无可审」。 */
-    if (code === 0) {
-      expect(output).toMatch(/次提交|无可审/);
-    }
+    /* 两支条件读数收进合取式：2 必须说「没跑起来」的原因、0 必须报得出条数或
+     * 「无可审」—— 断言本体无条件跑（no-conditional-expect）。 */
+    expect(code !== 2 || output.includes("[premerge] ")).toBe(true);
+    expect(code !== 0 || /次提交|无可审/.test(output)).toBe(true);
   });
 
   test("锚点 = **分叉点**（`merge-base` 要并进去的那条 vs HEAD），不是上游的尖端", async () => {
@@ -422,9 +419,8 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
         CNB_PULL_REQUEST_TARGET_SHA: "f".repeat(40),
       });
       expect(bogus.ok).toBe(false);
-      if (!bogus.ok) {
-        expect(bogus.reason).toContain("CNB_PULL_REQUEST_TARGET_SHA");
-      }
+      if (bogus.ok) throw new Error("unreachable：ok=false 已由上一行断言");
+      expect(bogus.reason).toContain("CNB_PULL_REQUEST_TARGET_SHA");
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }
@@ -451,7 +447,8 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
       const { anchorMissed, resolveForkBaseline } = await import("../scripts/premerge-check.mjs");
       const got = resolveForkBaseline(repo);
       expect(got.ok).toBe(false);
-      if (!got.ok) {
+      if (got.ok) throw new Error("unreachable：ok=false 已由上一行断言");
+      {
         expect(got.reason).toContain("取不到要并进去的那条");
         /* **编排那一半也要判**：这一段此前把 `ok:false` 折成 `code: 0` —— 函数契约
          * 对了、接线错了，于是「取不到分叉点」在总读数里是**绿**。`anchorMissed` 是

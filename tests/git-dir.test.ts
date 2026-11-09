@@ -97,11 +97,9 @@ describe("resolveGitDir：三种检出形态", () => {
     const upper = "C:/WINDOWS/TEMP/git-dir-x/repo/.git";
     const backslashed = String.raw`C:\Windows\Temp\git-dir-x\repo\.git`;
     expect(norm(backslashed)).toBe(norm(slashed));
-    if (process.platform === "win32") {
-      expect(norm(upper)).toBe(norm(slashed));
-    } else {
-      expect(norm(upper)).not.toBe(norm(slashed));
-    }
+    /* 平台分支收进期望值：win32 折大小写到同形、POSIX 不折 —— 断言本体无条件执行
+     * （no-conditional-expect：分支里的断言在另一支上会静默不跑）。 */
+    expect(norm(upper) === norm(slashed)).toBe(process.platform === "win32");
   });
 
   it("前置自证：那个 worktree 的 `.git` 确实是个文件 —— 否则上面两条白测", () => {

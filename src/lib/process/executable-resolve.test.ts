@@ -506,10 +506,9 @@ describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", ()
     writeExec(path.join(dir, "pnpm"), "#!/bin/sh\nexit 0\n");
     expect(pnpmJsEntry(dir)).toBeNull();
     const inv = pnpmInvocation(["install"], { env: { PATH: dir } });
-    // 「没走 JS 入口」= 起的那条命令不是 `process.execPath` + `node_modules` 里的入口
-    if (inv) {
-      expect(inv.command).not.toBe(process.execPath);
-    }
+    // 「没走 JS 入口」= 起的那条命令不是 `process.execPath` + `node_modules` 里的入口；
+    // inv 可空（没起命令也是合规态）—— 可空分支收进合取式，断言无条件跑。
+    expect(inv === null || inv.command !== process.execPath).toBe(true);
   });
 
   it("PATH 上只有垫片、包真身在本机落点上：仍走 JS 入口（不退回宿主）", () => {

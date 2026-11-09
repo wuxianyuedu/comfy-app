@@ -60,9 +60,9 @@ describe("getNodeConfig — 三级回落", () => {
 
   it("自定义节点优先于内置表（manifest 可覆盖同名 class_type）", () => {
     const custom = CUSTOM_NODE_TYPES.LoraLoader;
-    if (custom) {
-      expect(getNodeConfig("LoraLoader")).toBe(custom);
-    }
+    /* 自定义节点在本机可能没装（可缺席）：在场的形态只有一种 —— 配置取的就是
+     * 自定义那份。可缺席分支收进合取式，断言本体无条件跑（no-conditional-expect）。 */
+    expect(custom === undefined || getNodeConfig("LoraLoader") === custom).toBe(true);
   });
 
   it("未知 class_type 回落通用配置，且 label 就是 class_type", () => {

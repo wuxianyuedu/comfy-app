@@ -570,7 +570,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
   // 单一格式（不再区分 RAW / API 视图）。节点布局优先使用
   // detail.positions（已含 rawJson 原始位置 + 用户拖拽覆盖），不足时退回
   // Kahn 拓扑自动布局兜底。
-  const kahn = computeKahnLayout(realNodes, scopeDetail.graph, colW, rowH, padX, padY);
+  const kahn = computeKahnLayout(realNodes, scopeDetail.graph, { colW, rowH, padX, padY });
 
   const savedPositions = scopeDetail.positions;
   const positionsCount = Object.keys(savedPositions ?? {}).length;

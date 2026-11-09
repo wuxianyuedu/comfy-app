@@ -313,13 +313,13 @@ describe("@font-face 与 --font-* 必须指向同一个名字", () => {
         .map((n) => familyPosition(source, face.cssVar, n))
         .filter((p) => p >= 0)
         .sort((a, b) => a - b)[0];
-      if (firstRival !== undefined) {
-        expect(
-          pos,
-          `${face.cssVar} 里 "${face.family}"（第 ${pos} 位）排在系统 CJK` +
-            `（第 ${firstRival} 位）之后 —— 系统字体先命中，内嵌这份永远不会被用到`,
-        ).toBeLessThan(firstRival);
-      }
+      /* 系统里没装 CJK 对手字体时没有比较对象（可缺席）：在场的形态只有一种 ——
+       * 内嵌字体必须排在它前面。可缺席分支收进合取式，断言本体无条件跑。 */
+      expect(
+        firstRival === undefined || pos < firstRival,
+        `${face.cssVar} 里 "${face.family}"（第 ${pos} 位）排在系统 CJK` +
+          `（第 ${firstRival} 位）之后 —— 系统字体先命中，内嵌这份永远不会被用到`,
+      ).toBe(true);
     }
   });
 });

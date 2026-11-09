@@ -172,15 +172,13 @@ export async function syncDependencies(ctx, root, deps = {}) {
  *  不靠环境变量兜底 —— 裸 `next dev` 会落 Next 默认 3000，与 .env / 壳 / e2e 对不上）。 */
 /**
  * 起子进程并把它接到日志文件。
- * @param {number} port 应用端口
  * @param {{ spawned: import("node:child_process").ChildProcess[], root: string }} ctx 子进程账本与检出根
- * @param {number} port 应用端口
- * @param {string} host 绑定主机
- * @param {string} outFile stdout 落盘路径
- * @param {string} errFile stderr 落盘路径
- * @param {Record<string, string>} [extraEnv] 追加环境变量
+ * @param {{port: number, host: string, outFile: string, errFile: string, extraEnv?: Record<string, string>}} opts
+ *   `port` 应用端口；`host` 绑定主机；`outFile` / `errFile` 是 stdout / stderr 落盘路径；
+ *   `extraEnv` 追加环境变量。
  */
-export function spawnDevServer(ctx, port, host, outFile, errFile, extraEnv = {}) {
+export function spawnDevServer(ctx, opts) {
+  const { port, host, outFile, errFile, extraEnv = {} } = opts;
   // 起服务用的是**门禁验过的那个命令形态**（`commandInvocation`）：
   // `pnpm` 在 Windows 上常常只有 shebang shim 而 shim 起不来，此时真正能用的是
   // 同目录的 `pnpm.ps1`（经 PowerShell 宿主）。门禁选出来的形态必须在起服务这一

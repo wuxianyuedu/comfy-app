@@ -187,11 +187,12 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
      * 一句带候选的说明。两条都不是「恒绿」——它是这台机器事实的读数。 */
     const real = checkPythonReady();
     expect(["ready", "missing"]).toContain(real.verdict);
-    if (real.verdict === "ready") {
-      expect(real.interpreter).toBeTruthy();
-      expect(real.interpreter).toMatch(/[\\/]/);
-    } else {
-      expect(real.detail).toContain("python");
-    }
+    /* 两态收进期望值：ready ⇒ 解释器在且是绝对路径；missing ⇒ 说明点名 python ——
+     * 两态都是这台机器的事实读数，断言本体无条件跑（no-conditional-expect）。 */
+    expect(
+      real.verdict === "ready"
+        ? real.interpreter !== null && /[\\/]/.test(real.interpreter)
+        : (real.detail ?? "").includes("python"),
+    ).toBe(true);
   });
 });

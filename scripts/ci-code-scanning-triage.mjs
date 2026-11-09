@@ -100,12 +100,12 @@ const DEFAULT_CNB_BASE = "https://api.cnb.cool";
  * @param {{fetchImpl: FetchLike, token: string, base: string, slug: string}} ctx CNB 连接
  * @param {Action[]} actions 计划动作
  * @param {number} index 当前动作下标
- * @param {{analysis: Analysis, at: string}} reading 这一次的读数
- * @param {ActionLedger} ledger 计数账
- * @param {(s: string) => void} log 日志口
+ * @param {{reading: {analysis: Analysis, at: string}, ledger: ActionLedger, log: (s: string) => void}} io
+ *   递归共用的三件套：这一次的读数、计数账、日志口。
  * @returns {Promise<void>}
  */
-async function runActions(ctx, actions, index, reading, ledger, log) {
+async function runActions(ctx, actions, index, io) {
+  const { reading, ledger, log } = io;
   const action = actions[index];
   if (!action) {
     return;
@@ -118,18 +118,18 @@ async function runActions(ctx, actions, index, reading, ledger, log) {
     } else {
       ledger.failures.push(`${action.ruleId}：${made.detail}`);
     }
-    return runActions(ctx, actions, index + 1, reading, ledger, log);
+    return runActions(ctx, actions, index + 1, io);
   }
   const number = Number(action.number ?? 0);
   if (action.kind === "update") {
     const wrote = await updateBody(ctx, number, action.body ?? "");
     if (!wrote.ok) {
       ledger.failures.push(`${action.ruleId}：${wrote.detail}`);
-      return runActions(ctx, actions, index + 1, reading, ledger, log);
+      return runActions(ctx, actions, index + 1, io);
     }
     if (!wrote.changed) {
       ledger.unchanged += 1;
-      return runActions(ctx, actions, index + 1, reading, ledger, log);
+      return runActions(ctx, actions, index + 1, io);
     }
     const comment = renderUpdateComment({
       ruleId: action.ruleId,
@@ -144,24 +144,24 @@ async function runActions(ctx, actions, index, reading, ledger, log) {
     } else {
       ledger.failures.push(`${action.ruleId}：#${number} 正文已刷新，但${said.detail}`);
     }
-    return runActions(ctx, actions, index + 1, reading, ledger, log);
+    return runActions(ctx, actions, index + 1, io);
   }
   /* clear：读旧正文 → 已经把这一份分析的「已无命中」写进去了就跳过 → 否则刷新 + 评论 + 标签 */
   const detail = await cnbCall(ctx, "GET", `issues/${number}`, { retries: RETRIES });
   if (!detail.ok) {
     ledger.failures.push(`${action.ruleId}：读 #${number} 的旧正文失败：${detail.detail}`);
-    return runActions(ctx, actions, index + 1, reading, ledger, log);
+    return runActions(ctx, actions, index + 1, io);
   }
   const previous = String(detail.json?.body ?? detail.json?.data?.body ?? "");
   if (previous.includes(action.marker ?? "")) {
     ledger.unchanged += 1;
-    return runActions(ctx, actions, index + 1, reading, ledger, log);
+    return runActions(ctx, actions, index + 1, io);
   }
   const nextBody = composeClearedBody(previous, action.section ?? "");
   const wrote = await updateBody(ctx, number, nextBody);
   if (!wrote.ok) {
     ledger.failures.push(`${action.ruleId}：${wrote.detail}`);
-    return runActions(ctx, actions, index + 1, reading, ledger, log);
+    return runActions(ctx, actions, index + 1, io);
   }
   const comment = renderUpdateComment({
     ruleId: action.ruleId,
@@ -172,7 +172,7 @@ async function runActions(ctx, actions, index, reading, ledger, log) {
   const said = await appendComment(ctx, number, comment.body, comment.marker);
   if (!said.ok) {
     ledger.failures.push(`${action.ruleId}：#${number} 正文已刷新，但${said.detail}`);
-    return runActions(ctx, actions, index + 1, reading, ledger, log);
+    return runActions(ctx, actions, index + 1, io);
   }
   const tagged = await cnbCall(ctx, "POST", `issues/${number}/labels`, {
     body: { labels: [CLEARED_LABEL] },
@@ -181,11 +181,11 @@ async function runActions(ctx, actions, index, reading, ledger, log) {
     ledger.failures.push(
       `${action.ruleId}：#${number} 已刷新，但打 \`${CLEARED_LABEL}\` 失败：${tagged.detail}`,
     );
-    return runActions(ctx, actions, index + 1, reading, ledger, log);
+    return runActions(ctx, actions, index + 1, io);
   }
   ledger.cleared += 1;
   ledger.details.push(`标注已清零 #${number}：${action.ruleId}（未关单，留给人确认）`);
-  return runActions(ctx, actions, index + 1, reading, ledger, log);
+  return runActions(ctx, actions, index + 1, io);
 }
 
 /**
@@ -360,7 +360,7 @@ export async function main(io = {}) {
     failures: [],
     details,
   });
-  await runActions(cnbCtx, actions, 0, { analysis, at }, ledger, log);
+  await runActions(cnbCtx, actions, 0, { reading: { analysis, at }, ledger, log });
   details.push(
     `动作：新建 ${ledger.created} · 刷新 ${ledger.updated} · 标注已清零 ${ledger.cleared} · ` +
       `无变化 ${ledger.unchanged} · 失败 ${ledger.failures.length}`,

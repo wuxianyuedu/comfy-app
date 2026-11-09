@@ -159,6 +159,30 @@ export default defineConfig({
      * 六条里的 `typescript/strict-void-return` **没开**：981 处里 546 处是 TS 合法的
      * 「返回值函数传给 void 回调」，规则只有 `allowReturnAny` 一个选项，收不干净。
      * 逐条证据与批次见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
+    /* ── vitest 原生插件批（issue #3180，台账 §六）：低噪声、抓真问题那批 ──
+     * `valid-expect` 必须配 `maxArgs: 2`：默认只认 1 参，会把 expect(a, b) 形态的
+     * 合法双参断言成片误报（审计读数 555 处 / 137 份）。不开清单（方向反 / 误报 /
+     * 噪声档）见台账 §六，这里不列。 */
+    "vitest/valid-expect": ["error", { maxArgs: 2 }],
+    "vitest/no-conditional-expect": "error",
+    "vitest/no-conditional-tests": "error",
+    "vitest/no-duplicate-hooks": "error",
+    "vitest/no-focused-tests": "error",
+    "vitest/no-identical-title": "error",
+    "vitest/no-alias-methods": "error",
+    "vitest/consistent-vitest-vi": "error",
+    "vitest/valid-expect-in-promise": "error",
+    "vitest/no-test-return-statement": "error",
+    "vitest/require-awaited-expect-poll": "error",
+    "vitest/no-mocks-import": "error",
+    "vitest/no-interpolation-in-snapshots": "error",
+    "vitest/no-import-node-test": "error",
+    /* ── T2 结构规模类第一批（issue #3179）：max-params 先开 ──
+     * `max: 5` 是实测档（2026-11-10 全仓探针：6 参 9 处 + 8 参 1 处全部清零，5 参
+     * 34 处合规不动——后者集中在启动链关键脚本，签名改造风险大；收 4 是后续候选
+     * 批次，见台账 §五）。complexity / max-depth / max-nested-calls 三条缓（阈值
+     * 待拍，本批不开）。 */
+    "eslint/max-params": ["error", { max: 5 }],
     "no-await-in-loop": "error",
     "no-use-before-define": ["error", { functions: false }],
     "eslint/prefer-named-capture-group": "error",

@@ -221,12 +221,13 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
       expect(src, `边 ${src}→${dst} 的源要为 output`).toBeTruthy();
       expect(dst, `边 ${src}→${dst} 的目标要为 picture`).toBeTruthy();
     }
-    /* 有边就必须有 target 是 `picture` 的节点 —— 否则上面那条 loop 空转。 */
-    if (edges.length > 0) {
-      expect(sceneBlock, "有连线却没有 picture 节点 —— 那些边在真画布上不会渲染").toMatch(
-        /kind:\s*"picture"/,
-      );
-    }
+    /* 有边就必须有 target 是 `picture` 的节点 —— 条件收进合取式（无边即恒真），
+     * 断言本体无条件跑（no-conditional-expect）。 */
+    expect(
+      edges.length === 0 || /kind:\s*"picture"/.test(sceneBlock),
+      "有连线却没有 picture 节点 —— 那些边在真画布上不会渲染",
+    ).toBe(true);
+
     /* 反向：场景里不许出现真画布上不存在的 handle id 形状。 */
     expect(
       sceneBlock,

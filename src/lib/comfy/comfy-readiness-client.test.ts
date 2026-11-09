@@ -90,11 +90,10 @@ describe("waitForComfyReady", () => {
 
     const r = await waitForComfyReady({ timeoutMs: 20, pollMs: 5 });
     expect(r.ok).toBe(false);
-    if (!r.ok) {
-      expect(r.pending).toBe(true);
-      expect(r.message).toContain("正在启动 ComfyUI");
-      expect(r.message).toContain("手动启动");
-    }
+    if (r.ok) throw new Error("unreachable：ok=false 已由上一行断言");
+    expect(r.pending).toBe(true);
+    expect(r.message).toContain("正在启动 ComfyUI");
+    expect(r.message).toContain("手动启动");
   });
 
   it("网络层异常按「还在启动」处理，最终超时也算 pending", async () => {
@@ -102,8 +101,7 @@ describe("waitForComfyReady", () => {
 
     const r = await waitForComfyReady({ timeoutMs: 20, pollMs: 5 });
     expect(r.ok).toBe(false);
-    if (!r.ok) {
-      expect(r.pending).toBe(true);
-    }
+    if (r.ok) throw new Error("unreachable：ok=false 已由上一行断言");
+    expect(r.pending).toBe(true);
   });
 });

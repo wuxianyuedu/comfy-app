@@ -312,13 +312,12 @@ Error: Interactive prompts require a TTY terminal (process.stdin.isTTY or proces
      * **没拿到清单**那条带不出语句 —— 拿「risky 必非空」判它等于把新那一档判成
      * 用例红。这里按语义钉：有 risky 就逐条给全，没有就必须在 reason 里说清
      * 「是读不出而不是库没问题」。 */
-    if (d.verdict === "abort") {
-      if ((d.risky?.length ?? 0) > 0) {
-        expect(d.reason).toContain("丢数据");
-      } else {
-        expect(d.reason).toContain("没交出语句清单");
-      }
-    }
+    /* 分支收进期望值：abort 档按 risky 有无取话术、非 abort 档不约束（取值恒真）——
+     * 断言本体无条件跑（no-conditional-expect）。 */
+    expect(
+      d.verdict !== "abort" ||
+        d.reason.includes((d.risky?.length ?? 0) > 0 ? "丢数据" : "没交出语句清单"),
+    ).toBe(true);
   });
 });
 
