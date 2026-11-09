@@ -68,24 +68,20 @@ describe("probeExecutable：真起一次进程，三条出口分开答", () => {
     expect(got.ok).toBe(false);
     expect(got.failure?.kind).toBe("nonzero-exit");
     const said = describeProbeFailure(got.failure!);
-    if (process.platform === "win32") {
-      expect(got.failure).toMatchObject({
-        kind: "nonzero-exit",
-        status: 1,
-        signal: null,
-      });
-      expect(said).toContain("exit 1");
-      /* 这一句才是本格的要点：话术**不许**在拿不到信号时编一个出来 ——
-         「被信号结束」在 win32 上无从谈起，编出来就是一条假归因。 */
-      expect(said).not.toContain("信号");
-      return;
-    }
-    expect(got.failure).toMatchObject({
-      kind: "nonzero-exit",
-      status: null,
-      signal: "SIGKILL",
-    });
-    expect(said).toContain("SIGKILL");
+    /* 平台分支收进期望值（no-conditional-expect）：win32 的非零退出来自
+     * TerminateProcess（status 1、signal null）；POSIX 是 SIGKILL。 */
+    expect(got.failure).toMatchObject(
+      process.platform === "win32"
+        ? { kind: "nonzero-exit", status: 1, signal: null }
+        : { kind: "nonzero-exit", status: null, signal: "SIGKILL" },
+    );
+    expect(
+      process.platform === "win32"
+        ? said.includes("exit 1") && !said.includes("信号")
+        : said.includes("SIGKILL"),
+    ).toBe(true);
+    /* 这一句才是本格的要点：话术**不许**在拿不到信号时编一个出来 ——
+       「被信号结束」在 win32 上无从谈起，编出来就是一条假归因。 */
   });
 
   it("撞上探测预算 ⇒ timeout，不许混进「起不来」", () => {

@@ -93,7 +93,7 @@ describe("无 DOM 宿主时的错误出口", () => {
     delete globalThis.window;
     try {
       const fresh = await import("./html");
-      expect(() => fresh.sanitizeHtml("<p>x</p>")).toThrowError(/DOMPurify 需要 DOM 宿主/);
+      expect(() => fresh.sanitizeHtml("<p>x</p>")).toThrow(/DOMPurify 需要 DOM 宿主/);
     } finally {
       globalThis.window = savedWindow;
       vi.resetModules();

@@ -60,10 +60,9 @@ describe("前提：缺一件就是没判过", () => {
       env: BASE_ENV,
     });
     expect(ctx.ok).toBe(true);
-    if (ctx.ok) {
-      expect(ctx.sha).toBe(SHA);
-      expect(ctx.verdict).toBe("success");
-    }
+    if (!ctx.ok) throw new Error("unreachable：ok=true 已由上一行断言");
+    expect(ctx.sha).toBe(SHA);
+    expect(ctx.verdict).toBe("success");
   });
 
   it("缺令牌 / 缺 sha / 缺 conclusion 各自被点名", () => {
@@ -72,9 +71,8 @@ describe("前提：缺一件就是没判过", () => {
       env: { ...BASE_ENV, CNB_TRIGGER_TOKEN: "" },
     });
     expect(noToken.ok).toBe(false);
-    if (!noToken.ok) {
-      expect(noToken.reasons.join(" ")).toContain("CNB_TRIGGER_TOKEN");
-    }
+    if (noToken.ok) throw new Error("unreachable：ok=false 已由上一行断言");
+    expect(noToken.reasons.join(" ")).toContain("CNB_TRIGGER_TOKEN");
     const badSha = resolveCallbackContext({
       argv: ["--conclusion", "success"],
       env: { ...BASE_ENV, CNB_PULL_REQUEST_MERGE_SHA: "HEAD" },

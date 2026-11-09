@@ -63,9 +63,10 @@ function detail(
   event: string,
   createTime: string,
   stages: Array<StageFixture>,
-  pipelineStatus = "success",
-  pipelineName = "每日生产构建",
+  opts: { pipelineName?: string; pipelineStatus?: string } = {},
 ) {
+  const pipelineStatus = opts.pipelineStatus ?? "success";
+  const pipelineName = opts.pipelineName ?? "每日生产构建";
   let seq = 0;
   const withIds = stages.map((s: StageFixture) => {
     const mine = /^(?:每日|单跑)/.test(String(s.name));
@@ -145,7 +146,11 @@ describe("daily-attendance：出勤结论跟着读数走", () => {
     ];
     const got = judgeAttendance({
       builds: [listed("cnb-lm1-1k5h1otqt", "crontab: 0 0 * * *", RECENT, "error")],
-      details: [detail("cnb-lm1-1k5h1otqt", "crontab: 0 0 * * *", RECENT, stages, "cancel")],
+      details: [
+        detail("cnb-lm1-1k5h1otqt", "crontab: 0 0 * * *", RECENT, stages, {
+          pipelineStatus: "cancel",
+        }),
+      ],
       now: NOW,
     });
     expect(got.code, got.headline).toBe(CODE.NO_VERDICT);
@@ -163,7 +168,11 @@ describe("daily-attendance：出勤结论跟着读数走", () => {
     ];
     const got = judgeAttendance({
       builds: [listed("cnb-7kr-1k5as018h", "crontab: 0 4 * * *", RECENT, "error")],
-      details: [detail("cnb-7kr-1k5as018h", "crontab: 0 4 * * *", RECENT, stages, "error")],
+      details: [
+        detail("cnb-7kr-1k5as018h", "crontab: 0 4 * * *", RECENT, stages, {
+          pipelineStatus: "error",
+        }),
+      ],
       now: NOW,
     });
     expect(got.code, got.headline).toBe(CODE.ABSENT);
@@ -244,14 +253,10 @@ describe("daily-attendance：两条定时档交错时，判的是每日那一档
         listed("cnb-hk7-1k5i5euak", "crontab: 0 1 * * *", "2026-10-22T14:00:17.000Z"),
       ],
       details: [
-        detail(
-          "cnb-uuu-1k672u3j6",
-          "crontab: 0 3 * * *",
-          RECENT,
-          PACKAGE_STAGES,
-          "error",
-          "桌面成品包",
-        ),
+        detail("cnb-uuu-1k672u3j6", "crontab: 0 3 * * *", RECENT, PACKAGE_STAGES, {
+          pipelineStatus: "error",
+          pipelineName: "桌面成品包",
+        }),
         detail("cnb-hk7-1k5i5euak", "crontab: 0 1 * * *", "2026-10-22T14:00:17.000Z", GREEN_STAGES),
       ],
       now: NOW,
@@ -275,14 +280,10 @@ describe("daily-attendance：两条定时档交错时，判的是每日那一档
     const got = judgeAttendance({
       builds: [listed("cnb-uuu-1k672u3j6", "crontab: 0 3 * * *", RECENT, "error")],
       details: [
-        detail(
-          "cnb-uuu-1k672u3j6",
-          "crontab: 0 3 * * *",
-          RECENT,
-          PACKAGE_STAGES,
-          "error",
-          "桌面成品包",
-        ),
+        detail("cnb-uuu-1k672u3j6", "crontab: 0 3 * * *", RECENT, PACKAGE_STAGES, {
+          pipelineStatus: "error",
+          pipelineName: "桌面成品包",
+        }),
       ],
       now: NOW,
     });
@@ -311,9 +312,13 @@ describe("daily-attendance：两条定时档交错时，判的是每日那一档
 
   it("每日那一档的三个触发口都算本档（定时 / 手点 / API）", () => {
     const rows = [
-      detail("cnb-a", "crontab: 0 1 * * *", RECENT, GREEN_STAGES, "success", "每日生产构建"),
-      detail("cnb-b", "web_trigger_daily", RECENT, GREEN_STAGES, "success", "每日档（手动触发）"),
-      detail("cnb-c", "api_trigger_daily", RECENT, GREEN_STAGES, "success", "每日档（API 触发）"),
+      detail("cnb-a", "crontab: 0 1 * * *", RECENT, GREEN_STAGES, { pipelineName: "每日生产构建" }),
+      detail("cnb-b", "web_trigger_daily", RECENT, GREEN_STAGES, {
+        pipelineName: "每日档（手动触发）",
+      }),
+      detail("cnb-c", "api_trigger_daily", RECENT, GREEN_STAGES, {
+        pipelineName: "每日档（API 触发）",
+      }),
     ];
     for (const row of rows) {
       const got = judgeAttendance({
@@ -338,14 +343,10 @@ describe("daily-attendance：两条定时档交错时，判的是每日那一档
      * 而前者才是这一格的口径（加一档时改名单，不改判决）。 */
     const builds = [listed("cnb-uuu-1k672u3j6", "crontab: 0 3 * * *", RECENT, "error")];
     const details = [
-      detail(
-        "cnb-uuu-1k672u3j6",
-        "crontab: 0 3 * * *",
-        RECENT,
-        PACKAGE_STAGES,
-        "error",
-        "桌面成品包",
-      ),
+      detail("cnb-uuu-1k672u3j6", "crontab: 0 3 * * *", RECENT, PACKAGE_STAGES, {
+        pipelineStatus: "error",
+        pipelineName: "桌面成品包",
+      }),
     ];
     const asOwn = pickDailySubject({ builds, details, lanes: ["桌面成品包"] });
     /* `found` 是那一族的判别式：两支的形状不同，`build` 只在 `found: true` 那一支上有意义，
@@ -363,7 +364,9 @@ describe("daily-attendance：两条定时档交错时，判的是每日那一档
   });
 
   it("平台没给流水线名时不让它当本档（空名不凑形状）", () => {
-    const nameless = detail("cnb-x9", "crontab: 0 1 * * *", RECENT, GREEN_STAGES, "success", "   ");
+    const nameless = detail("cnb-x9", "crontab: 0 1 * * *", RECENT, GREEN_STAGES, {
+      pipelineName: "   ",
+    });
     const got = pickDailySubject({
       builds: [listed("cnb-x9", "crontab: 0 1 * * *", RECENT)],
       details: [nameless],

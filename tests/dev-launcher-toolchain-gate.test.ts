@@ -763,13 +763,14 @@ describe("pnpm check:toolchain：打印探测身份，版本漂移可自解释",
     const host = path.join(hostDir, "pwsh.EXE");
     // 经宿主时命令名会变成宿主（现场里那句 `（…\pwsh.EXE）` 就是这么来的）——
     // 自检据此把「命令是 pwsh.EXE」译回「它跑的是哪个 .ps1」。
-    if (invocation.command === host) {
-      expect(invocation.prefixArgs).toContain(script);
-    } else {
-      // 机器上 `.ps1` 被当成可直接执行（POSIX 的 shebang 语义）时退化为原样调用：
-      // 那也满足「命令名可解释」，只是无需再打印宿主一行。
-      expect(invocation.command).toBe(script);
-    }
+    // 两条解释都满足「命令名可解释」：经宿主时脚本进 prefixArgs；机器上 `.ps1`
+    // 可直接执行（POSIX shebang 语义）时退化为原样调用。分支收进期望值，
+    // 断言本体无条件跑（no-conditional-expect）。
+    expect(
+      invocation.command === host
+        ? invocation.prefixArgs.includes(script)
+        : invocation.command === script,
+    ).toBe(true);
   });
 
   (envWithPnpm() ? it : it.skip)("自检打印「选中的 pnpm」一行（版本漂移的先查对象）", () => {

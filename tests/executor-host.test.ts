@@ -106,14 +106,13 @@ describe("scripts/executor-host.mjs 骨架", () => {
       const text = fs.readFileSync(logPath, "utf8");
       expect(text).toContain("boot pid=");
       expect(text).toContain("heartbeat bootId=");
-      if (process.platform === "win32") {
-        // Windows Node 控制台 SIGTERM 走 TerminateProcess：handler 不跑、
-        // exit code 是 null；这只算「进程确实终止了」。
-        expect(exitCode === 0 || exitCode === null).toBe(true);
-      } else {
-        expect(exitCode).toBe(0);
-        expect(text).toContain("shutdown sig=SIGTERM");
-      }
+      // 平台分支收进期望值（no-conditional-expect）：Windows Node 控制台 SIGTERM 走
+      // TerminateProcess —— handler 不跑、exit code 可 null，只算「进程确实终止了」；
+      // POSIX 走 handler：exit 0 且打点。
+      expect(exitCode === 0 || exitCode === null || process.platform !== "win32").toBe(true);
+      expect(
+        process.platform === "win32" || (exitCode === 0 && text.includes("shutdown sig=SIGTERM")),
+      ).toBe(true);
     } finally {
       if (!child.killed) {
         child.kill("SIGKILL");

@@ -381,11 +381,9 @@ export function mixHex(colorA: string, colorB: string, ratio: number): string {
 export function computeKahnLayout(
   realNodes: Array<ComfyGraphNode>,
   graph: Record<string, unknown>,
-  colW: number,
-  rowH: number,
-  padX: number,
-  padY: number,
+  layout: { colW: number; padX: number; padY: number; rowH: number },
 ): Record<string, { x: number; y: number }> {
+  const { colW, rowH, padX, padY } = layout;
   const level: Record<string, number> = {};
   const incoming: Record<string, Set<string>> = {};
   const outAdj: Record<string, Set<string>> = {};

@@ -25,7 +25,7 @@ import process from "node:process";
  * @param {(root?: string) => { version: string, expected: string, tip: string | null } | null} ctx.reconcilePnpmVersion pnpm 版本一致性
  * @param {(name: string, root?: string) => string} ctx.currentDirOf log/current/<分区> 解析
  * @param {(dir: string, prefixes: string[], keep?: number) => void} ctx.pruneTimestampedLogs 按次日志轮转
- * @param {(port: number, host: string, out: string, err: string) => import("node:child_process").ChildProcess} ctx.spawnDevServer 起 dev server
+ * @param {(opts: {port: number, host: string, outFile: string, errFile: string, extraEnv?: Record<string, string>}) => import("node:child_process").ChildProcess} ctx.spawnDevServer 起 dev server
  * @param {(root: string, name: string, pid: number | null) => void} ctx.recordPid 落 PID 锚点
  * @param {() => import("node:child_process").ChildProcess | null | undefined} ctx.spawnExecutorHost 起执行器宿主
  * @param {() => { mode: string, unknown: string | null }} ctx.resolveExecutorMode 执行器模式判据
@@ -69,7 +69,7 @@ export function bootDevServerStage(ctx, target) {
   const nextOut = path.join(nextDir, `nextjs-stdout-${runTimestamp}.log`);
   const nextErr = path.join(nextDir, `nextjs-stderr-${runTimestamp}.log`);
   log(`启动 Next.js dev server（${host}:${port}）…`, "STEP");
-  const dev = ctx.spawnDevServer(port, host, nextOut, nextErr);
+  const dev = ctx.spawnDevServer({ port, host, outFile: nextOut, errFile: nextErr });
   ctx.recordPid(root, "nextjs", dev.pid ?? null);
   log(`dev server 已启动（PID ${dev.pid}，输出见 ${nextOut}）`, "OK");
 

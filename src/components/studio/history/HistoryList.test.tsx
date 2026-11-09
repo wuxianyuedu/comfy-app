@@ -100,10 +100,8 @@ describe("FILTERS 的配色只给语义键", () => {
   it("不给 Tailwind 类名字面量（配色归 ui/status-dot）", () => {
     for (const f of FILTERS) {
       expect(f).not.toHaveProperty("dotCls");
-      // 语义键只能是 status-dot 认识的那几档。
-      if (f.tone !== undefined) {
-        expect(["up", "busy", "probing", "down"]).toContain(f.tone);
-      }
+      // 语义键只能是 status-dot 认识的那几档；可缺省分支收进合取式（断言无条件跑）。
+      expect(f.tone === undefined || ["up", "busy", "probing", "down"].includes(f.tone)).toBe(true);
     }
   });
 

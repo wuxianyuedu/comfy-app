@@ -162,7 +162,8 @@ describe("② 前提：缺一件就是没判过", () => {
     );
     const c = resolveRelayContext(rest);
     expect(c.ok).toBe(true);
-    if (c.ok) expect(c.prToken).toBe("");
+    if (!c.ok) throw new Error("unreachable：ok=true 已由上一行断言");
+    expect(c.prToken).toBe("");
   });
   it("sha 缺席不阻断（附件名用 noid 兜底）", () => {
     const c = resolveRelayContext({ ...BASE_ENV, CNB_PULL_REQUEST_MERGE_SHA: "" });

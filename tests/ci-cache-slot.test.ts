@@ -231,12 +231,12 @@ describe("槽根的推导（不写死盘符）", () => {
 describe("第二条同卷义务：槽与作业必须同卷", () => {
   it("同卷判真、跨卷判假（Windows 上就是盘符；POSIX 上根恒 `/` ⇒ 恒真）", () => {
     expect(sameVolumeAs(ROOT, path.join(ROOT, "node_modules"))).toBe(true);
-    if (process.platform === "win32") {
-      expect(sameVolumeAs("D:/ci-cache/repo", ROOT)).toBe(false);
-      // 空串**不是**「读不到」：`path.resolve("")` 落在 cwd ⇒ 判同卷。
-      // 「没有槽根」这件事由上一格（`planSlot` 的 `!cacheRoot`）去说，别指望这里拦。
-      expect(sameVolumeAs("", ROOT)).toBe(true);
-    }
+    // 空串**不是**「读不到」：`path.resolve("")` 落在 cwd ⇒ 判同卷（三平台同读数）。
+    // 「没有槽根」这件事由上一格（`planSlot` 的 `!cacheRoot`）去说，别指望这里拦。
+    expect(sameVolumeAs("", ROOT)).toBe(true);
+    // 跨卷只在 win32 有盘符语义（D: vs ROOT 卷）；POSIX 根恒 `/` ⇒ 恒真 ——
+    // 平台条件收进期望值，断言本体无条件跑（no-conditional-expect）。
+    expect(sameVolumeAs("D:/ci-cache/repo", ROOT)).toBe(process.platform !== "win32");
   });
 
   it("跨卷 ⇒ no-cache，且那句话把后果说清（红会落在别人一条用例里）", () => {

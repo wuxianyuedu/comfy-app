@@ -87,13 +87,13 @@ async function resolvedVitest(): Promise<Vitest> {
 
 describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () => {
   it("两档都在，且命名与文档一致", async () => {
-    const vitest = await resolvedVitest();
-    expect(vitest.projects.map((p) => p.name).sort()).toEqual(EXPECTED_PROJECTS);
+    const vitestRun = await resolvedVitest();
+    expect(vitestRun.projects.map((p) => p.name).sort()).toEqual(EXPECTED_PROJECTS);
   });
 
   it("**每一档**都拿到了共享项（失效形态是一档落后，所以逐档判）", async () => {
-    const vitest = await resolvedVitest();
-    for (const project of vitest.projects) {
+    const vitestRun = await resolvedVitest();
+    for (const project of vitestRun.projects) {
       /* SAFETY: 类型断言已复核 */
       const cfg = project.config as unknown as Record<string, unknown>;
       const prefix = `[${project.name}]`;
@@ -130,22 +130,22 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
    * 而 DOM 档下跑纯逻辑**不报错、只是变慢**（静默的那一侧，§11.17.1）。
    */
   it("`environment` 按档分叉，没被抬到根级共享（那正是分档要防的事）", async () => {
-    const vitest = await resolvedVitest();
-    const byName = new Map(vitest.projects.map((p) => [p.name, p.config]));
+    const vitestRun = await resolvedVitest();
+    const byName = new Map(vitestRun.projects.map((p) => [p.name, p.config]));
     for (const [name, env] of Object.entries(EXPECTED_TIER_ENVIRONMENTS)) {
       expect(byName.get(name)?.environment, `[${name}]`).toBe(env);
     }
   });
 
   it("没有一档写 `extends: false` 把自己摘出继承（例外要显式登记）", async () => {
-    const vitest = await resolvedVitest();
+    const vitestRun = await resolvedVitest();
     // `extends` 在解析后的配置上不会原样留名，改用它的**结果**判：
     // 关掉继承的那一档拿不到共享项 —— 由上面「逐档都拿到了」那一条兜住。
     // 这里只钉住「两档都不缺失」，并留一处源码级断言防住 `extends: false` 字样回来。
     const { readFile } = await import("node:fs/promises");
     const source = stripComments(await readFile(CONFIG, "utf8"));
     expect(source).not.toMatch(/extends\s*:\s*false/);
-    for (const project of vitest.projects) {
+    for (const project of vitestRun.projects) {
       /* SAFETY: 类型断言已复核 */
       expect(
         (project.config as unknown as Record<string, unknown>).globals,
@@ -221,9 +221,9 @@ describe("判据预算的临时乘数（ISSUE #2959）", () => {
   });
 
   it("这一跑**实际生效**的值就是乘数算出来的（不是只改了常量）", async () => {
-    const vitest = await resolvedVitest();
+    const vitestRun = await resolvedVitest();
     const expected = resolveTimeoutBudget(process.env.COMFY_TEST_TIMEOUT_SCALE);
-    for (const project of vitest.projects) {
+    for (const project of vitestRun.projects) {
       /* SAFETY: 类型断言已复核 */
       const cfg = project.config as unknown as Record<string, unknown>;
       expect(cfg.testTimeout, `[${project.name}]`).toBe(expected.testTimeout);

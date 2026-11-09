@@ -13,14 +13,15 @@ import { FILTER_LABELS } from "./LogFilterBar";
 import { ORIGIN_TEXT } from "./LogPanelOriginSelect";
 import type { LogFilter, LogOriginFilter } from "./log-types";
 
-function pageSummary(
-  page: number,
-  totalPages: number,
-  pageSize: number,
-  total: number,
-  all: number,
-  search: string,
-): string {
+function pageSummary(meta: {
+  all: number;
+  page: number;
+  pageSize: number;
+  search: string;
+  total: number;
+  totalPages: number;
+}): string {
+  const { page, totalPages, pageSize, total, all, search } = meta;
   if (total === 0) {
     return search.trim() ? "无筛选命中的日志" : "无匹配日志";
   }
@@ -71,7 +72,9 @@ export function LogPanelFooter(input: {
   return (
     <div className="border-border-strong bg-surface-1 text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-xs">
       <span className="flex items-center gap-2">
-        <span>{pageSummary(safePage, totalPages, pageSize, total, totalAll, search)}</span>
+        <span>
+          {pageSummary({ page: safePage, totalPages, pageSize, total, all: totalAll, search })}
+        </span>
         {droppedTotal > 0 && (
           <span
             className="text-ink-fainter shrink-0"

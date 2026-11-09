@@ -466,13 +466,13 @@ describe("接线：入口在盘上、被直接执行时退非零会传出去", (
     });
     /* 不带 `--node-version` 且不联网时，它必须**红**：一声不吭地猜一个版本，
      * 会让镜像与 `engines.node` 各走各的而谁也没报错。 */
-    if (r.status === 0) {
-      /* 例外只有一条：能联网时它现取了一版（那是设计内的另一条路）。 */
-      expect(r.stdout).toContain("docker build");
-      return;
-    }
-    expect(r.status).not.toBe(0);
-    expect(`${r.stdout}${r.stderr}`).toMatch(/ci-image-plan/);
+    /* 两态收进一条期望值：能联网现取一版（status 0 且给了 build 计划，设计内另一条路）
+     * 或离线红且点名本脚本 —— 断言本体无条件跑（no-conditional-expect）。 */
+    expect(
+      r.status === 0
+        ? r.stdout.includes("docker build")
+        : `${r.stdout}${r.stderr}`.includes("ci-image-plan"),
+    ).toBe(true);
   });
 
   it("`--dockerfile --node-version` 只打正文（供 `docker build -f -`）", () => {

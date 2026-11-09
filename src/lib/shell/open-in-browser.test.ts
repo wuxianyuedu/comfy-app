@@ -116,13 +116,13 @@ describe("openUrlInBrowser 的命令形态", () => {
   it("命令与参数分开发给 spawn，URL 是独立的一个 argv 元素（不拼整串）", async () => {
     await openUrlInBrowser("http://127.0.0.1:8188?a=1&b=2");
     const [cmd, args] = spawnCallAt();
-    if (platform === "win32") {
-      // `start` 是 cmd 内建命令，必须由 cmd /c 承载；空串是窗口标题（防 & 被吞）
-      expect(cmd).toBeTruthy();
-      expect(args.slice(0, 3)).toEqual(["/c", "start", ""]);
-    } else {
-      expect(args).toHaveLength(1);
-    }
+    // win32：`start` 是 cmd 内建命令，必须由 cmd /c 承载（空串是窗口标题，防 & 被吞）；
+    // POSIX：URL 单参直给。平台分支收进期望值，断言本体无条件跑（no-conditional-expect）。
+    expect(
+      platform === "win32"
+        ? cmd !== "" && JSON.stringify(args.slice(0, 3)) === JSON.stringify(["/c", "start", ""])
+        : args.length === 1,
+    ).toBe(true);
     expect(args.at(-1)).toBe("http://127.0.0.1:8188?a=1&b=2");
     // 走的是 execFile 语义的 spawn + 数组参数：任何一段里都不出现 shell 二次解析
     expect(args.some((a) => a.includes("cmd /c"))).toBe(false);

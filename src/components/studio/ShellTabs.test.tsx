@@ -51,6 +51,7 @@ function openComfyTab(patch: {
 const written: Array<string> = [];
 
 beforeEach(() => {
+  resetTabs();
   written.length = 0;
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
@@ -70,8 +71,6 @@ function mountTabs() {
     </ShellTabs>,
   );
 }
-
-beforeEach(resetTabs);
 
 afterEach(() => {
   cleanup();

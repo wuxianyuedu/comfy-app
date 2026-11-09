@@ -20,25 +20,27 @@ describe("withTimeout", () => {
   it("超时抛 TimeoutError（带 timeoutMs）", async () => {
     vi.useFakeTimers();
     const p = withTimeout(never(), 500, { label: "加载" });
-    const assertion = expect(p).rejects.toBeInstanceOf(TimeoutError);
+    /* 先挂 no-op 拒绝处理器占住位（推进定时器到断言之间不许出现 unhandled rejection），
+     * 断言本体在推进后 await —— 时序与旧的「先挂断言再推进」等价。 */
+    p.catch(() => undefined);
     await vi.advanceTimersByTimeAsync(500);
-    await assertion;
+    await expect(p).rejects.toBeInstanceOf(TimeoutError);
   });
 
   it("默认文案带量纲换算（秒）与 label", async () => {
     vi.useFakeTimers();
     const p = withTimeout(never(), 25_000, { label: "工作流加载" });
-    const assertion = expect(p).rejects.toThrow("工作流加载超时（25s）");
+    p.catch(() => undefined);
     await vi.advanceTimersByTimeAsync(25_000);
-    await assertion;
+    await expect(p).rejects.toThrow("工作流加载超时（25s）");
   });
 
   it("message 优先于 label 拼法", async () => {
     vi.useFakeTimers();
     const p = withTimeout(never(), 1000, { message: "自定义超时" });
-    const assertion = expect(p).rejects.toThrow("自定义超时");
+    p.catch(() => undefined);
     await vi.advanceTimersByTimeAsync(1000);
-    await assertion;
+    await expect(p).rejects.toThrow("自定义超时");
   });
 
   it("成功路径会清掉定时器（不泄漏活动定时器）", async () => {
@@ -79,9 +81,11 @@ describe("withTimeout", () => {
         throw new Error("钩子失败");
       },
     });
-    const assertion = expect(p).rejects.toBeInstanceOf(TimeoutError);
+    /* 先挂 no-op 拒绝处理器占住位（推进定时器到断言之间不许出现 unhandled rejection），
+     * 断言本体在推进后 await —— 时序与旧的「先挂断言再推进」等价。 */
+    p.catch(() => undefined);
     await vi.advanceTimersByTimeAsync(1000);
-    await assertion;
+    await expect(p).rejects.toBeInstanceOf(TimeoutError);
   });
 
   it("底层晚到的结果被丢弃、不触发 onTimeout", async () => {
@@ -95,9 +99,11 @@ describe("withTimeout", () => {
       1000,
       { label: "x", onTimeout },
     );
-    const assertion = expect(p).rejects.toBeInstanceOf(TimeoutError);
+    /* 先挂 no-op 拒绝处理器占住位（推进定时器到断言之间不许出现 unhandled rejection），
+     * 断言本体在推进后 await —— 时序与旧的「先挂断言再推进」等价。 */
+    p.catch(() => undefined);
     await vi.advanceTimersByTimeAsync(1000);
-    await assertion;
+    await expect(p).rejects.toBeInstanceOf(TimeoutError);
     expect(onTimeout).toHaveBeenCalledTimes(1);
     resolveLate("late");
     expect(onTimeout).toHaveBeenCalledTimes(1);

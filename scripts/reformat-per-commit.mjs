@@ -104,16 +104,23 @@ export function runGit(root, args) {
  * @param {number} limit 触发阈值
  * @param {string} root 工作区
  * @param {PerCommitDeps} deps 判定注入面
- * @param {Array<{rev: string, parents: Array<string>}> | null} [entries] 自测入口用
- * @param {{landedTip?: string, spanBase?: string}} [shape] 合并行的定位件：
+ * @param {{entries?: Array<{rev: string, parents: Array<string>}>, landedTip?: string, spanBase?: string}} [opts]
+ *   `entries` 自测入口用；`landedTip` / `spanBase` 是合并行的定位件：
  *   `landedTip` 是目标分支那一侧的 tip（判定合并的「目标侧父」），`spanBase` 是
  *   区间起点（空 patch 退路的基线）。都不给 ⇒ 合并行退第一父、无退路 —— 与
  *   改动前逐字一致的保守形态。
  * @returns {PerCommitReport}
  */
-export function perCommitShape(range, limit, root, deps, entries = null, shape = {}) {
-  const landedTip = shape.landedTip ?? "";
-  const spanBase = shape.spanBase ?? "";
+export function perCommitShape(
+  range,
+  limit,
+  root,
+  deps,
+  /**
+   * @type {{entries?: Array<{rev: string, parents: Array<string>}>, landedTip?: string, spanBase?: string}}
+   */
+  { entries = undefined, landedTip = "", spanBase = "" } = {},
+) {
   /* `%H %P`:提交 + 它的全部父提交(差分要的就是它们;合并行的「目标侧」从这里挑)。
    * **不再 `--no-merges`**（ISSUE #3035，理由见上）。
    *
@@ -278,7 +285,11 @@ export function perCommitShapeOf(rev, spec) {
   /* ⚠️ **不能**走 `git log <父>..<rev>`：区间两端都要能解析成**提交**，而这一档的父
    * 恰恰读不到（`fatal: Invalid revision range`）—— 那样「逐提交取不到 diff」这一支
    * 永远到不了。所以把这一条提交**直接**交给 `perCommitShape` 的 entries 形态。 */
-  return perCommitShape("", limit, root, deps, [{ rev, parents }], { landedTip, spanBase });
+  return perCommitShape("", limit, root, deps, {
+    entries: [{ rev, parents }],
+    landedTip,
+    spanBase,
+  });
 }
 
 /**

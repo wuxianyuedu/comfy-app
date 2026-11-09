@@ -62,11 +62,10 @@ describe("readAttendance：三态 + 覆盖自证", () => {
       run: runWith([{ createTime: IN_WINDOW, event: CALLBACK_EVENT, status: "success" }]),
     });
     expect(got.ok).toBe(true);
-    if (got.ok) {
-      expect(got.code).toBe(0);
-      expect(got.summary.matched).toBe(1);
-      expect(got.coverage).toContain("取满窗口");
-    }
+    if (!got.ok) throw new Error("unreachable：ok=true 已由上一行断言");
+    expect(got.code).toBe(0);
+    expect(got.summary.matched).toBe(1);
+    expect(got.coverage).toContain("取满窗口");
   });
 
   it("窗口盖满但一条都没有 ⇒ 1（缺勤），不是没结论", () => {
@@ -75,18 +74,16 @@ describe("readAttendance：三态 + 覆盖自证", () => {
       run: runWith([{ createTime: IN_WINDOW, event: "pull_request", status: "success" }]),
     });
     expect(got.ok).toBe(true);
-    if (got.ok) {
-      expect(got.code).toBe(1);
-      expect(got.summary.matched).toBe(0);
-    }
+    if (!got.ok) throw new Error("unreachable：ok=true 已由上一行断言");
+    expect(got.code).toBe(1);
+    expect(got.summary.matched).toBe(0);
   });
 
   it("列表取不到 ⇒ 2（没结论），不冒充缺勤", () => {
     const got = readAttendance({ ...env, run: runWith(null) });
     expect(got.ok).toBe(false);
-    if (!got.ok) {
-      expect(got.why).toContain("取不到构建列表");
-    }
+    if (got.ok) throw new Error("unreachable：ok=false 已由上一行断言");
+    expect(got.why).toContain("取不到构建列表");
     expect(main([], { ...env, run: runWith(null) })).toBe(2);
   });
 });

@@ -1120,7 +1120,7 @@ describe("useSettingsPage", () => {
    * 「设置页这一侧有没有偷偷留着第二条通道」—— 留着的表现是全绿且看不出来的：
    * 状态行没了，但后台每 30s 还在轮询一个没人读的端点，且与「ComfyUI」页各持一份
    * 结论（两份漂了也没人发现）。 */
-  it("不再订阅运行态通道（运行态整块归侧栏「ComfyUI」页）", async () => {
+  it("运行态清退后零轮询：stateRequests 与 comfyStatus 调用计数都归零", async () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });

@@ -1081,10 +1081,9 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
   test("显式点名时按单条解析（钩子标签 / 脚本名 / 整条命令都认）", () => {
     const byLabel = resolveMergeBatch(["文件结构硬规则(R1-R12，R5 硬闸)"]);
     expect(byLabel.ok).toBe(true);
-    if (byLabel.ok) {
-      expect(byLabel.commands).toHaveLength(1);
-      expect(byLabel.commands[0]!.argv).toContain("scripts/check-file-structure.cjs");
-    }
+    if (!byLabel.ok) throw new Error("unreachable：ok=true 已由上一行断言");
+    expect(byLabel.commands).toHaveLength(1);
+    expect(byLabel.commands[0]!.argv).toContain("scripts/check-file-structure.cjs");
     /* 不存在的名字 ⇒ 判失败并列出候选（不许猜，同 `resolveGateCommand`）。 */
     expect(resolveMergeBatch(["这个标签不存在"]).ok).toBe(false);
   });

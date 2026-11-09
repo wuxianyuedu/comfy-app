@@ -2339,17 +2339,14 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
             fetchChunk: (
               /** @type {string} */ url,
               /** @type {string} */ d,
-              /** @type {number} */ offset,
-              /** @type {number} */ size,
-              /** @type {number} */ timeoutMs,
-              /** @type {{probeOnly?: boolean}} */ opts = {},
+              /** @type {{offset: number; size: number; timeoutMs: number; probeOnly?: boolean}} */ opts,
             ) => {
               /* 只记**取数据**那几次：上面那次 `Range: bytes=0-0` 是「问总长」，
                * 它当然从 0 开始 —— 把它算进来会让这条判据永远看着像「重下了」。 */
               if (opts.probeOnly !== true) {
-                offsets.push(offset);
+                offsets.push(opts.offset);
               }
-              return fetchRangeToFile(url, d, offset, size, timeoutMs, opts);
+              return fetchRangeToFile(url, d, opts);
             },
           });
           expect(res.ok, "接不上").toBe(true);

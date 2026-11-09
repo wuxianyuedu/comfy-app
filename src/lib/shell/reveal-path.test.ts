@@ -137,19 +137,21 @@ describe("命令与参数形态", () => {
     expect(result.ok).toBe(true);
     expect(spawnMock).toHaveBeenCalledTimes(1);
     const [cmd, args] = spawnCallAt();
-    if (process.platform === "win32") {
-      expect(cmd).toMatch(/cmd(?:\.exe)?$/i);
-      /* `/select,"<路径>"` 必须是**一个**参数：拆成 `/select,` + 路径两个时，
-       * explorer 会把含空格的路径截断（打开了但没选中）。 */
-      expect(args.at(-1)).toBe(`/select,"${target}"`);
-    } else if (process.platform === "darwin") {
-      /* macOS：`open -R` 把**目标本身**交给 Finder（文件则选中它）。 */
-      expect(args).toEqual(["-R", target]);
-    } else {
-      /* Linux：没有统一的「选中」协议，退化为打开**父目录**（点一个日志文件的
-       * 意图是「到它那儿去」，用编辑器打开它不是）。 */
-      expect(args).toEqual(["/a b"]);
-    }
+    /* 三平台各有各的调用形状：win32 用 cmd /select 且 `/select,"<路径>"` 必须是
+     * **一个**参数（拆成 `/select,` + 路径两个时，explorer 会把含空格的路径截断，
+     * 打开了但没选中）；darwin 用 `open -R` 把**目标本身**交给 Finder（文件则选中它）；
+     * linux 没有统一的「选中」协议，退化为打开**父目录**（点一个日志文件的意图是
+     * 「到它那儿去」，用编辑器打开它不是）。平台分支收进期望值，断言无条件跑
+     * （no-conditional-expect）。 */
+    const isWin = process.platform === "win32";
+    const isDarwin = process.platform === "darwin";
+    expect(
+      isWin
+        ? /cmd(?:\.exe)?$/i.test(cmd) && args.at(-1) === `/select,"${target}"`
+        : isDarwin
+          ? JSON.stringify(args) === JSON.stringify(["-R", target])
+          : JSON.stringify(args) === JSON.stringify(["/a b"]),
+    ).toBe(true);
   });
 
   it("spawn 的是命令 + 参数数组，不是拼好的整串（不走 shell）", async () => {

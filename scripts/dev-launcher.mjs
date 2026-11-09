@@ -357,11 +357,9 @@ export function syncDependencies(root, deps = {}) {
 }
 
 /** 起 dev server（实现见 `launcher-core/downstream.mjs`）。
- * @param {number} port @param {string} host
- * @param {string} outFile @param {string} errFile
- * @param {Record<string, string>} [extraEnv] */
-export function spawnDevServer(port, host, outFile, errFile, extraEnv = {}) {
-  return downstreamSpawnDevServer(downstreamCtx, port, host, outFile, errFile, extraEnv);
+ * @param {{port: number, host: string, outFile: string, errFile: string, extraEnv?: Record<string, string>}} opts */
+export function spawnDevServer(opts) {
+  return downstreamSpawnDevServer(downstreamCtx, opts);
 }
 
 /** 拉起 executor host（实现见 `launcher-core/downstream.mjs`）。 */
@@ -615,7 +613,7 @@ export async function run(argv = process.argv.slice(2)) {
     if (detail) {
       extraEnv.COMFYAPP_RESTART_DETAIL = detail;
     }
-    dev = spawnDevServer(port, args.host, nextOut, nextErr, extraEnv);
+    dev = spawnDevServer({ port, host: args.host, outFile: nextOut, errFile: nextErr, extraEnv });
     watchDevChild(dev);
     writeSession(ROOT, {
       launcher_pid: process.pid,

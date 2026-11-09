@@ -254,19 +254,21 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
            那句还原替它顶罪（跨卷时真因是 EXDEV，报出来的却是 ENOENT）。 */
         fs.mkdirSync(path.dirname(stash), { recursive: true });
         moveFileAcrossVolumes(generatedFile, stash);
-        expect(
-          fs.existsSync(stash) && !fs.existsSync(generatedFile),
-          `生成件没能挪进 ${stash} —— 暂存点必须在仓库内（跨卷本应由 copy 退路兜住，
-挪不动说明这一格没跑起来，不是判据红；见 generatedStashFile）`,
-        ).toBe(true);
-        /* 挪的只是那个 json，**目录必须还在**：pre-commit 各组并发（`wall ≈ max(各组)`），组 A 的 tsc 与组 B 的 eslint
-           都在遍历 `.storybook/**`；目录中途消失会撞 `ENOENT: scandir '.storybook\generated'`，报错既不含本条判据
-           也不含真凶（实测崩过一回）。空目录不影响任何人：json 不是 tsc / eslint 的展开目标。 */
-        expect(
-          fs.existsSync(generatedDir),
-          "④ 只许挪走那个 json，不许把 .storybook/generated 目录一起搬走 —— 同批并发的 tsc / eslint 正在遍历这个目录",
-        ).toBe(true);
       }
+      /* 两条读数只在「本来有生成件」的档上判（新检出没有 json 可挪）—— 条件收进
+         合取式（无生成件即恒真），断言本体无条件跑（no-conditional-expect）。 */
+      expect(
+        !existed || (fs.existsSync(stash) && !fs.existsSync(generatedFile)),
+        `生成件没能挪进 ${stash} —— 暂存点必须在仓库内（跨卷本应由 copy 退路兜住，
+挪不动说明这一格没跑起来，不是判据红；见 generatedStashFile）`,
+      ).toBe(true);
+      /* 挪的只是那个 json，**目录必须还在**：pre-commit 各组并发（`wall ≈ max(各组)`），组 A 的 tsc 与组 B 的 eslint
+         都在遍历 `.storybook/**`；目录中途消失会撞 `ENOENT: scandir '.storybook\generated'`，报错既不含本条判据
+         也不含真凶（实测崩过一回）。空目录不影响任何人：json 不是 tsc / eslint 的展开目标。 */
+      expect(
+        !existed || fs.existsSync(generatedDir),
+        "④ 只许挪走那个 json，不许把 .storybook/generated 目录一起搬走 —— 同批并发的 tsc / eslint 正在遍历这个目录",
+      ).toBe(true);
       try {
         const { dir, cfg } = await writeNarrowTsconfig();
         try {

@@ -73,12 +73,12 @@ describe("ui/ 的组件覆盖率（ISSUE #1381）", () => {
    * 判红只会逼人凑一条假理由。换成双向不变式：两边同时成立才合法。
    */
   it("理由表为空 ⟺ 覆盖率已满（两边都不能单独成立）", () => {
-    if (NO_STORY_REASON.size === 0) {
-      expect(
-        STAT.uncovered,
-        "理由表空了，但还有组件没有 story —— 要么补 story，要么把理由加回去",
-      ).toEqual([]);
-    }
+    /* 双向不变式收进一条期望值：两边同真同假才合法 —— 断言无条件跑
+     * （no-conditional-expect；条件里的断言在另一支上会静默不跑）。 */
+    expect(
+      NO_STORY_REASON.size === 0,
+      "理由表空了，但还有组件没有 story —— 要么补 story，要么把理由加回去",
+    ).toBe(STAT.uncovered.length === 0);
   });
 
   it("已经有 story 的组件不许留在理由表里（那会静默放行下一次回归）", () => {

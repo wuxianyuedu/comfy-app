@@ -44,6 +44,8 @@ afterEach(() => {
   // 只清调用记录，不 restore：restore 之后再把值塞回同一个 spy 就不生效了，
   // 表现为「后一半用例突然读到真实 cwd」
   cwdSpy.mockClear();
+  // （原第二份顶层 afterEach 并入这里：stubFetch 的替身随每条用例统一摘除）
+  vi.unstubAllGlobals();
 });
 
 afterAll(() => {
@@ -162,10 +164,6 @@ function stubFetch(
   vi.stubGlobal("fetch", spy);
   return spy;
 }
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
 
 describe("resolveMediaBytes 的 http(s) 分支", () => {
   it("请求带一个未触发的超时信号（沉默的上游不许挂住整条流水线）", async () => {

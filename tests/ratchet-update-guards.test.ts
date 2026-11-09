@@ -223,6 +223,10 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
    * 传 `{}`、更不能抄 `30_000`** —— 那会把全局 `testTimeout` 钉死本地（口径同 §11.13）。
    */
   function itRatchet(name: string, ratchet: Ratchet, body: () => void): void {
+    /* 条件建测是这层包装的本职：vitest 5 删了三参写法、预算登记表又不许给未登记行
+     * 传空 options（会钉死全局 testTimeout），两支只能各走各的签名。
+     * 诊断锚定在 if 行（两支各计一次），禁用注明于此。 */
+    // oxlint-disable-next-line vitest/no-conditional-tests -- 见上：vitest 5 签名分叉 + 预算登记约束
     if (ratchet.timeout === undefined) {
       it(name, body);
     } else {

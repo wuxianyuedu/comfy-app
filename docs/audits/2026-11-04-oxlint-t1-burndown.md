@@ -1368,15 +1368,25 @@
 | -------------------------- | ------------- | --------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `eslint/complexity`        | `{ max: 20 }` | 218 / 180       | `{ max: 30 }` → 82 / 76 | **不开**：命中是 `WidgetControl`(49)、`extractSubgraphAnnotations`(37)、`generateShot`(21) 这类状态机/解析器，降复杂度必须重写函数结构，放过半数也只是把阈值挪到 30    |
 | `eslint/max-depth`         | `{ max: 4 }`  | 76 / 28         | `{ max: 5 }` → 19 / 8   | **缓**：`max: 4` 的命中多为解析器/脚本 5–6 层缩进；`max: 5` 只剩 19 处 / 8 份，可作下一批候选，但要先拍阈值                                                            |
-| `eslint/max-params`        | `{ max: 4 }`  | 40 / 33         | `{ max: 5 }` → 9 / 9    | **可开候选**：量小，样本是 5 参函数（`sizeValueForPin` / `fetchStageDetail`），改 options 对象即机械改；建议下一批单独 PR                                              |
+| `eslint/max-params`        | `{ max: 4 }`  | 40 / 33         | `{ max: 5 }` → 9 / 9    | **已开（max: 5，2026-11-10）**：6 参 9 处 + 8 参 1 处全部清零（options 对象化，单 PR），5 参 34 处合规不动（集中在启动链关键脚本）；收 4 是后续候选批次                                              |
 | `unicorn/max-nested-calls` | 默认 `max: 3` | 727 / 94        | `max: 5` → 19 / 1       | **不开默认口径**：`max: 3` 把 `z.string().max(2000).optional()`、`expect(path.parse(...).root)` 这类链式调用全判违例；只认 `max: 5`（仅 1 份文件），若开必须显式调阈值 |
 
-三条建议都不是「改代码就能绿」的形态：这组规则会逼着重写函数结构，阈值本身有争议，等产品/架构侧拍口径。
+三条建议（complexity / max-depth / max-nested-calls）都不是「改代码就能绿」的形态：这组规则会逼着重写函数结构，阈值本身有争议，等产品/架构侧拍口径（max-params 已先行落地，见上）。
 
 ## 六、vitest 插件（评估面已注册，规则未开）
 
 - 插件名是 oxlint **原生** `vitest`（`node_modules` 里没有独立包，73 条规则），已加入
-  `oxlint.config.ts` 的 `plugins`；规则暂不启用，等口径。
+  `oxlint.config.ts` 的 `plugins`；**2026-11-10 起判决面已启用「建议开」那批（15 条，`valid-expect` 配
+  `maxArgs: 2`）**，评估尺同批同步；存量 120 处清零（`no-conditional-expect` 107 处按
+  「分支收进期望值 / 死守卫 throw 化 / 数据分型拆双测 / 可缺席收合取」四种形态逐条改写，
+  另 13 处小存量同批清零）。**不开清单（相较最初建议的两处调整）**：`no-disabled-tests`（3/3 命中全是
+  `it.skipIf` 工厂创建的误报，本仓平台门控的既定习语；三元式 `it.skip` 反而漏判，无 options 可救）与
+  `valid-title`（4/4 命中全是成员访问 / 模板字面量标题——数据驱动测试的常规形态，微样本实证该实现
+  整类拒绝且无 options 放行）两条移入下方不建议开段；`no-standalone-expect`（279/23，全是
+  `tests/helpers/**` 里的共用断言 helper，属合法用法）、`expect-expect`(9/7，抽样 5 条全是
+  `it.skipIf` / `it(name, body)` 动态别名，误报)、`no-importing-vitest-globals`(859，仓库是
+  `globals: false`、必须显式 import，该规则默认按反方向判且**不接受 options**)、
+  `prefer-importing-vitest-globals`(53，同理方向不对)。
 - 试跑面：`src` / `tests` / `scripts` / `e2e` / `tools` / `.storybook`（2449 份，其中 875 份 test）。
   仓库 `vitest.config.ts` 是 `globals: false`（显式 import），这点直接影响两条规则怎么判。
 - **建议开（低噪声、抓真问题）**：`valid-expect`（**必须配 `{ maxArgs: 2 }`**：默认只认 1 参会误报 555 处 / 137 份，配成 2 后只剩 5 / 1）、`no-conditional-expect`(99/40)、`no-disabled-tests`(3/3)、`no-duplicate-hooks`(3/3)、`valid-title`(4/3)、`no-conditional-tests`(2/1)、`no-identical-title`(1/1)、`consistent-vitest-vi`(1/1)、`no-alias-methods`(1/1)，以及 0 命中的 `no-focused-tests` / `valid-expect-in-promise` / `no-test-return-statement` / `require-awaited-expect-poll` / `no-mocks-import` / `no-interpolation-in-snapshots` / `no-import-node-test`。

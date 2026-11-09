@@ -1501,18 +1501,23 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       expect(chunk, `「${name}」没 import 镜像令牌 —— 推送格读不到它`).toContain(
         "GITHUB_MIRROR_TOKEN",
       );
-      if (isPushMirror) {
-        expect(chunk, "push 镜像出口没有点 `--master` —— 它要推 master 且不派发").toContain(
-          "--master",
-        );
-        expect(
-          chunk,
-          "push 镜像出口的 stage 名不是 `GitHub master 镜像` —— 立案回读按格名认",
-        ).toContain("name: GitHub master 镜像");
-        expect(
-          chunk,
-          "push 镜像出口的 endStages 没有立案格 —— 红了就没人知道（这一格是 push 事件下唯一的流水线）",
-        ).toContain("ci-pr-failure-issue.mjs --no-block --lane push");
+      /* push 镜像出口的三条专属读数只在 isPushMirror 上判：条件收进「取表」，
+       * 断言本体在无条件循环里跑（no-conditional-expect）。 */
+      const pushMirrorChecks: Array<[string, string]> = isPushMirror
+        ? [
+            ["--master", "push 镜像出口没有点 `--master` —— 它要推 master 且不派发"],
+            [
+              "name: GitHub master 镜像",
+              "push 镜像出口的 stage 名不是 `GitHub master 镜像` —— 立案回读按格名认",
+            ],
+            [
+              "ci-pr-failure-issue.mjs --no-block --lane push",
+              "push 镜像出口的 endStages 没有立案格 —— 红了就没人知道（这一格是 push 事件下唯一的流水线）",
+            ],
+          ]
+        : [];
+      for (const [needle, why] of pushMirrorChecks) {
+        expect(chunk, why).toContain(needle);
       }
     }
   });
@@ -1971,13 +1976,13 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 期间有人把镜像那一行删掉，谁也不会知道，恢复时又回到「只调超时数字」那条错路。 */
     const active = stageBlock(text, "每日浏览器安装");
     const stage = active ?? commentedStageBlock(text, "每日浏览器安装");
-    if (active === null) {
-      expect(
-        registeredDisabledGates(text),
-        "「每日浏览器安装」既不在清单里、也没在 `DISABLED_GATES` 里登记 —— " +
-          "这一段判据会失去扫描对象，先补登记",
-      ).toContain("每日浏览器安装");
-    }
+    /* 两态收进合取式：stage 在场（active）或撤档且在停用清单登记 ——
+     * 断言本体无条件跑（no-conditional-expect）。 */
+    expect(
+      active !== null || registeredDisabledGates(text).includes("每日浏览器安装"),
+      "「每日浏览器安装」既不在清单里、也没在 `DISABLED_GATES` 里登记 —— " +
+        "这一段判据会失去扫描对象，先补登记",
+    ).toBe(true);
     expect(stage, "解析不出「每日浏览器安装」这一步 —— 名字被改了？").toBeTruthy();
     expect(
       stage,
@@ -2111,12 +2116,11 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
             "恢复时要把它从停用清单里删掉"
         : "`单元测试` 既不在 GATES、也不在 DISABLED_GATES 里 —— 停用必须留痕（见上一条）",
     ).toBe(true);
-    if (inDisabled) {
-      expect(
-        stageKeptAsComment(text, "单元测试"),
-        "`单元测试` 被停用了，但 .gates 里没有它的注释原文 —— 恢复时无原文可依",
-      ).toBe(true);
-    }
+    /* 停用档才要求留痕 —— 条件收进合取式（未停用即恒真），断言本体无条件跑。 */
+    expect(
+      !inDisabled || stageKeptAsComment(text, "单元测试"),
+      "`单元测试` 被停用了，但 .gates 里没有它的注释原文 —— 恢复时无原文可依",
+    ).toBe(true);
   });
 
   it("`oxfmt 格式` 是**在跑**的那一档，不是停用（2026-11-05 起执行者是 GA）", () => {
@@ -2988,12 +2992,11 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       ).toBeTruthy();
       const command = lines.join(" ");
       expect(command, `「${dailyName}」点的入口不是 ${entry}：撤档不等于换判据`).toContain(entry);
-      if (flag !== "") {
-        expect(
-          command,
-          `「${dailyName}」丢了 ${flag} —— 它与别的格共用同一份脚本，是这一面旗标把它分成另一格`,
-        ).toContain(flag);
-      }
+      /* 旗标可空（不带旗标的格没有这一面）—— 条件收进合取式，断言本体无条件跑。 */
+      expect(
+        flag === "" || command.includes(flag),
+        `「${dailyName}」丢了 ${flag} —— 它与别的格共用同一份脚本，是这一面旗标把它分成另一格`,
+      ).toBe(true);
     }
   });
 
@@ -3425,13 +3428,13 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
       const withBuild = stagesWithBuildConsumer(
         new Map(stages.map((n) => [n, executableScriptLines(text, n)])),
       );
-      if (slotOn(stageBody(text, row.install) ?? "")) {
-        expect(
-          withBuild,
-          `${row.pipeline} 的「${row.install}」把 \`COMFY_CI_SLOT\` 置成 1，而这一档后面有会真构建的格子` +
-            `（${withBuild.join(" / ")}）—— 接槽形态下 Turbopack 会拒那条链（#2081 那一形）`,
-        ).toEqual([]);
-      }
+      /* 接槽形态才约束「后面不许有真构建格」—— 条件收进合取式（未接槽即恒真），
+       * 断言本体无条件跑（no-conditional-expect）。 */
+      expect(
+        !slotOn(stageBody(text, row.install) ?? "") || withBuild.length === 0,
+        `${row.pipeline} 的「${row.install}」把 \`COMFY_CI_SLOT\` 置成 1，而这一档后面有会真构建的格子` +
+          `（${withBuild.join(" / ")}）—— 接槽形态下 Turbopack 会拒那条链（#2081 那一形）`,
+      ).toBe(true);
     }
     /* ISSUE #3378：push 主列撤掉后注册表里不再有 `source`（`单跑单测·安装依赖`
      * 改向 `每日安装依赖` 逐字相同）。`source` 是「副本真身不必是每日格」那一格的

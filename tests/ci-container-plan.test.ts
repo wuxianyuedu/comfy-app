@@ -116,15 +116,16 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
      * 为空）；没有容器格 ⇒ `none`（不是 `broken`，也不是「桥修好了」）。后者是这一档
      * 此刻的真形态 —— 两格都跑在宿主机上，同一块盘，没有「跨容器」这回事。 */
     const p = plan(CNB);
-    if (p.containers.length === 0) {
-      expect(
-        p.bridge,
-        "没有容器格时 `bridge` 必须是 `none` —— `complete` 会让人以为桥在起作用",
-      ).toBe("none");
-      expect(p.missing).toEqual([]);
-      return;
-    }
-    expect(p.bridge, `没挂 ${BROWSERS_VOLUME} 的格：${p.missing.join(" / ")}`).toBe("complete");
+    /* 两态都由同一份现役配置判出来：有容器格 ⇒ 桥必须通（`complete` 且 `missing`
+     * 为空）；没有容器格 ⇒ `none`（不是 `broken`，也不是「桥修好了」）—— 后者是
+     * 这一档此刻的真形态：两格都跑在宿主机上，同一块盘，没有「跨容器」这回事。
+     * 分支收进期望值，断言本体无条件跑（no-conditional-expect）。 */
+    expect(
+      p.containers.length === 0 ? p.bridge === "none" : p.bridge === "complete",
+      p.containers.length === 0
+        ? "没有容器格时 `bridge` 必须是 `none` —— `complete` 会让人以为桥在起作用"
+        : `没挂 ${BROWSERS_VOLUME} 的格：${p.missing.join(" / ")}`,
+    ).toBe(true);
     expect(p.missing).toEqual([]);
   });
 
@@ -344,9 +345,11 @@ describe("解析器的两处细节：注释与卷写法", () => {
   it("读数是人读的三行，且断桥那一档**点名**（不是一句「有问题」）", () => {
     const lines = describePlan(CNB);
     expect(lines[0]).toContain("self-hosted");
-    if (plan(CNB).containers.length > 0) {
-      expect(lines.join("\n")).toContain(BROWSERS_VOLUME);
-    }
+    /* 有容器格才读得到卷名 —— 条件收进合取式（无容器格即恒真），
+     * 断言本体无条件跑（no-conditional-expect）。 */
+    expect(plan(CNB).containers.length === 0 || lines.join("\n").includes(BROWSERS_VOLUME)).toBe(
+      true,
+    );
     const broken = describePlan(containerFixture({ bridge: [] }));
     expect(broken.join("\n")).toContain("重下");
     /* 点名到格：两格都要出现，不是一句「有格没挂卷」。 */

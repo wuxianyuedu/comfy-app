@@ -115,13 +115,12 @@ describe("WorkshopHeader 的健康度分段条", () => {
     expect(fills).toHaveLength(STAGE_DEFS.length);
     rows.forEach((row, i) => {
       const cls = fills[i]?.className ?? "";
-      if (row.ratio >= 1) {
-        expect(cls).toContain("bg-success");
-        expect(cls).not.toContain("bg-primary");
-      } else {
-        expect(cls).toContain("bg-primary");
-        expect(cls).not.toContain("bg-success");
-      }
+      /* 满档用 bg-success、未满用 bg-primary：分支收进期望值，断言本体无条件跑
+       * （no-conditional-expect —— 条件里的断言在另一支上会静默不跑）。 */
+      const want = row.ratio >= 1 ? "bg-success" : "bg-primary";
+      const not = row.ratio >= 1 ? "bg-primary" : "bg-success";
+      expect(cls).toContain(want);
+      expect(cls).not.toContain(not);
     });
   });
 

@@ -837,9 +837,8 @@ describe("resolveContext（fail-closed 的读数半边）", () => {
   it("令牌缺席 ⇒ 不通过，并点名缺什么", () => {
     const got = resolveContext({ env: { CNB_PULL_REQUEST_IID: "2649" }, runGit: gitOk });
     expect(got.ok).toBe(false);
-    if (!got.ok) {
-      expect(got.reasons.join("\n")).toContain("GITHUB_MIRROR_TOKEN");
-    }
+    if (got.ok) throw new Error("unreachable：ok=false 已由上一行断言");
+    expect(got.reasons.join("\n")).toContain("GITHUB_MIRROR_TOKEN");
   });
 
   it("IID 非纯数字 ⇒ 不通过（本格只挂 PR 流水线）", () => {
@@ -2193,9 +2192,8 @@ describe("resolveMasterContext（push 档：没有 IID，ref 恒为 master）", 
   it("令牌缺席 ⇒ 不通过，并点名缺什么", () => {
     const got = resolveMasterContext({ env: {}, runGit: gitOk });
     expect(got.ok).toBe(false);
-    if (!got.ok) {
-      expect(got.reasons.join("\n")).toContain("GITHUB_MIRROR_TOKEN");
-    }
+    if (got.ok) throw new Error("unreachable：ok=false 已由上一行断言");
+    expect(got.reasons.join("\n")).toContain("GITHUB_MIRROR_TOKEN");
   });
 
   it("HEAD 取不到 ⇒ 不通过", () => {
