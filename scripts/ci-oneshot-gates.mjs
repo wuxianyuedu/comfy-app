@@ -19,18 +19,11 @@
 /**
  * 一行的形状：某一档 + 它的两个触发口事件键 + 前提格的「每日名 ⇄ 单跑名」配对。
  *
- * ⚠️ `source` 是 ISSUE #2853 加的那一格：**副本的真身不必是每日那一格**。
- * 前提格之所以要与真身逐字相同，是为了"手工复验问的是同一件事"；而「安装依赖」这一格
- * 在仓里有两族真身 —— 置着依赖缓存槽的那族（PR 的 `Install dependencies` ⇄ push 的
- * `安装依赖`，命令行 / env / `timeout` 三样逐字相同，由 `CROSS_LANE_SCRIPT_MIRRORS` 判）与
- * 不置的那族（每日那一格，因为它后面背着 `next build`，#2081 那条 Turbopack 限制）。
- * **一条档能不能接槽判的是「它后面有没有会真构建的格子」**（#2851 定的那条线；执行者是
- * `BUILD_CONSUMER_MARKERS` 那张表，它的量程由 #2883 补到"经 tauri 间接触发"那一形），
- * 不是它叫什么名字：`单跑单测` 后面只有 `full-suite-run.mjs`（vitest 不是 Turbopack 消费者；
- * 同一类消费者在 PR 档的 `受影响用例` 上早已在接槽形态下每跑都绿 —— 这一句**不含 push 档**，
- * 那份清单里没有测试格），所以它的安装格要跟着**接槽那一族**逐字相同，不是跟着每日。
- * 默认（不写 `source`）仍是「与 `daily` 那一格逐字相同」—— 其余前提格都是这个形状；
- * 写了 `source` 的，上面那段因果就是它存在的理由，别把它当豁免清单来加新的一行。
+ * ⚠️ `source` 是 ISSUE #2853 留下的可选字段：**副本的真身不必是每日那一格**。
+ * 它原本指向 push 档 `安装依赖`（置着 `COMFY_CI_SLOT` 的接槽族）。ISSUE #3378 收尾
+ * 把 push 主列整条撤掉，`单跑单测·安装依赖` 的 `source` 随之摘除 —— 现在三档单跑
+ * 的安装格一律与 `每日安装依赖` 逐字相同（都不接槽）。类型里的 `source?` 保留，
+ * 是将来再出现「某档的真身不是每日格」那一形时用的，不为它另造第二套判据。
  *
  * @typedef {{
  *   eventWeb: string,
@@ -83,9 +76,9 @@ export const ONESHOT_TARGETS = [
       {
         daily: "每日安装依赖",
         oneshot: "单跑单测·安装依赖",
-        /* 逐字相同的真身是 push 那一格（置着 `COMFY_CI_SLOT`），不是每日那一格 ——
-         * 因果整段写在上面 `source` 那一段里（ISSUE #2853）。 */
-        source: "安装依赖",
+        /* ISSUE #3378：push 主列撤掉后 `安装依赖` 那一格不再存在，`source` 随之摘除
+         * —— 这一格现在与 `每日安装依赖` 逐字相同（都不置 `COMFY_CI_SLOT`）。
+         * 原本 `source` 指向接槽那一族的理由（#2853）随那格一起退役。 */
       },
     ],
     // 全量单测只问「这套代码在锁定的依赖上过不过」；建库与浏览器它不碰。
@@ -106,8 +99,8 @@ export function oneshotGates(target) {
 
 /**
  * 某档单跑清单里每一格的「单跑名 ⇄ 真身名」对照（判据据此逐格比正文）。
- * `source` 原样带出去：判据比的是 `source ?? daily`（为什么允许换真身，见本文件头注
- * 那一整段，ISSUE #2853）。
+ * `source` 原样带出去：判据比的是 `source ?? daily`（可选字段的来历见本文件头注，
+ * ISSUE #2853 / #3378）。今天注册表里一个 `source` 都没有。
  *
  * @param {OneshotTarget} target `ONESHOT_TARGETS` 里的一行
  * @returns {Array<{ daily: string, oneshot: string, source?: string }>}

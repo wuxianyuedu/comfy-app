@@ -215,21 +215,22 @@ describe("whereItLives：读数落在日志里，还要读得出来在哪", () =
     },
   ];
 
-  it("三档触发口各自念对格名", () => {
+  it("触发口各自念对格名（ISSUE #3378 后只剩每日档一个执行者）", () => {
     const head = (event: string, label: string) =>
       formatReadout(rows, { repo: "a/b", event, branch: "master", label })[0];
-    expect(head("pull_request", "质量门禁")).toContain("质量门禁 流水线");
-    expect(head("pull_request", "质量门禁")).toContain("「令牌权限读数」");
     expect(head("crontab: 0 1 * * *", "每日生产构建")).toContain("「每日令牌权限读数」");
     expect(head("web_trigger_daily", "每日档（手动触发）")).toContain("「每日令牌权限读数」");
     expect(head("api_trigger_daily", "每日档（API 触发）")).toContain("「每日令牌权限读数」");
-    expect(head("crontab: 0 3 * * *", "桌面成品包")).toContain("「令牌权限读数」");
+    /* PR / 桌包 / push 三处 endStages 的读数已退役 ⇒ 不再有具体格名可指，
+     * 落进「按事件名指路」的兜底出口，不许念出一个已经不存在的格名。 */
+    expect(head("pull_request", "质量门禁")).toContain("按事件名 pull_request");
+    expect(head("crontab: 0 3 * * *", "桌面成品包")).toContain("按事件名");
   });
 
   it("事件认不出来时按事件名指路，不猜一个可能不存在的格名", () => {
     const line = formatReadout(rows, { repo: "a/b", event: "push", branch: "master" })[0];
     expect(line).toContain("push");
-    expect(line).toContain("找「令牌权限读数」");
+    expect(line).toContain("找「每日令牌权限读数」");
     expect(line, "没认出来的事件不该被写成某一条具体流水线").not.toContain("流水线 流水线");
   });
 });
@@ -322,9 +323,8 @@ function scopeStage(name: string, listIndent: number, extra = ""): string {
   );
 }
 
-/** 与真配置同形状：一条 4 空格入口 + 三条 6 空格 `endStages` 入口。 */
-const FOUR_ENTRIES =
-  scopeStage("每日", 2) + scopeStage("PR", 4) + scopeStage("桌包", 4) + scopeStage("push", 4);
+/** 与真配置同形状（ISSUE #3378 后）：只剩每日档那一条 2 空格入口。 */
+const FOUR_ENTRIES = scopeStage("每日", 2);
 
 describe("接线：平台那一跳不许带 --strict", () => {
   it("四处 endStages 都不带 --strict（否则 PR 上会有一条永远红、没人能修的格子）", () => {
@@ -332,11 +332,10 @@ describe("接线：平台那一跳不许带 --strict", () => {
      * `repo-cnb-history:r` 都没有 ⇒ 探针全 403，带了 `--strict` 就红。那不是这一格坏了，
      * 那是它要量的东西 —— 判它红等于把平台形态伪装成这次 PR 的缺陷。 */
     const lines = scopeEntryScripts(readFileSync(CONFIG, "utf8"));
-    /* 四处 = PR / 每日 / 桌包 / push 四个锚点各一格（ISSUE #2842 给 push 档补
-     * 失败立案时把同一格带给了 `*push_fail_stage`）。计数只认**会被执行的 script 行**：
-     * 剥注释后按 `script:` 取，注释里提一句脚本名不算第五个入口（ISSUE #3306）。
-     * 新增 / 撤掉一个锚点时同批改这一行。 */
-    expect(lines.length, "四个入口各有一格，`.cnb.yml` 里应当有四条 script 命令").toBe(4);
+    /* ISSUE #3378 收尾：PR / 桌包 / push 三处 endStages 的读数退役，只剩每日档
+     * 一格（`.daily-gates` 的第二格 `每日令牌权限读数`）。计数只认**会被执行的
+     * script 行**：剥注释后按 `script:` 取，注释里提一句脚本名不算第二个入口。 */
+    expect(lines.length, "只剩每日档一个入口，`.cnb.yml` 里应当有一条 script 命令").toBe(1);
     for (const line of lines) {
       expect(
         line,
@@ -347,19 +346,19 @@ describe("接线：平台那一跳不许带 --strict", () => {
 });
 
 describe("入口计数面只认会被执行的 script 行（ISSUE #3306）", () => {
-  it("四个入口：4 空格与 6 空格两种缩进都数得到", () => {
-    expect(scopeEntryScripts(FOUR_ENTRIES)).toHaveLength(4);
+  it("每日档那一条入口数得到", () => {
+    expect(scopeEntryScripts(FOUR_ENTRIES)).toHaveLength(1);
   });
 
-  it("整行注释里引用一次脚本名不算第五个入口（PR #3303 第二跑的假红形状）", () => {
+  it("整行注释里引用一次脚本名不算第二个入口（PR #3303 第二跑的假红形状）", () => {
     const config = `${FOUR_ENTRIES}  # 五跑读数见 ${SCOPE_SCRIPT}\n`;
-    expect(config.split(SCOPE_SCRIPT).length - 1, "夹具里确实出现了 5 次文件名").toBe(5);
-    expect(scopeEntryScripts(config)).toHaveLength(4);
+    expect(config.split(SCOPE_SCRIPT).length - 1, "夹具里确实出现了 2 次文件名").toBe(2);
+    expect(scopeEntryScripts(config)).toHaveLength(1);
   });
 
   it("行尾注释里引用脚本名也不算入口", () => {
     const config = `  env:\n    NOTE: x # 见 ${SCOPE_SCRIPT}\n${FOUR_ENTRIES}`;
-    expect(scopeEntryScripts(config)).toHaveLength(4);
+    expect(scopeEntryScripts(config)).toHaveLength(1);
   });
 
   it("被注释掉的一格不算入口", () => {
@@ -367,12 +366,12 @@ describe("入口计数面只认会被执行的 script 行（ISSUE #3306）", () 
       "  script: node scripts/ci-cp936-exit",
       "  # script: node scripts/ci-cp936-exit",
     );
-    expect(scopeEntryScripts(config)).toHaveLength(3);
+    expect(scopeEntryScripts(config)).toHaveLength(0);
   });
 
-  it("删掉一条 script 行，主用例的 toBe(4) 会判红（计数面不是空转）", () => {
+  it("删掉一条 script 行，主用例的 toBe(1) 会判红（计数面不是空转）", () => {
     const config = FOUR_ENTRIES.replace(/^ {4}script:.*\n/m, "");
-    expect(scopeEntryScripts(config)).toHaveLength(3);
+    expect(scopeEntryScripts(config)).toHaveLength(0);
   });
 
   it("真命令带 --strict 时仍在计数面内（逐行判据抓得到）", () => {
@@ -381,14 +380,14 @@ describe("入口计数面只认会被执行的 script 行（ISSUE #3306）", () 
       `scripts/${SCOPE_SCRIPT} --strict\n`,
     );
     const lines = scopeEntryScripts(config);
-    expect(lines).toHaveLength(4);
+    expect(lines).toHaveLength(1);
     expect(lines.some((line) => line.includes("--strict"))).toBe(true);
   });
 
   it("注释里写 --strict 不被当成命令旗标", () => {
     const config = `  # 这里只是解释 --strict 不能加，见 ${SCOPE_SCRIPT}\n${FOUR_ENTRIES}`;
     const lines = scopeEntryScripts(config);
-    expect(lines).toHaveLength(4);
+    expect(lines).toHaveLength(1);
     expect(lines.some((line) => line.includes("--strict"))).toBe(false);
   });
 });

@@ -24,10 +24,16 @@ import { globToRe } from "../scripts/vitest-projects.cjs";
 import { stageBlock } from "./no-platform-ci-config.test";
 
 const CONFIG = readCnbConfig();
+/* ISSUE #3378 收尾：`生成态文档与源同步` 的收窄面由 GA `master-gate.yml` 的同名 step
+ * 承接（GA 侧不带 ifModify：两条命令都是秒级文本读，按路径过滤会漏判）。 */
+const GA_MASTER_GATE = fs.readFileSync(
+  path.join(process.cwd(), ".github/workflows/master-gate.yml"),
+  "utf8",
+);
 
 describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", () => {
   it("真仓一致：登记表与 .cnb.yml 逐字同源", () => {
-    const problems = checkIncrementalGates(CONFIG);
+    const problems = checkIncrementalGates(CONFIG, GA_MASTER_GATE);
     expect(problems, `平台侧增量登记与配置不一致：\n${problems.join("\n")}`).toEqual([]);
   });
 
@@ -351,9 +357,14 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       ...folded("COMFYAPP_CI_DAILY_GATES"),
     ]);
     for (const gate of INCREMENTAL_GATES) {
+      /* ISSUE #3378 收尾：CNB 侧「带 ifModify 的 stage」已随 push 主列一起撤掉，
+       * 登记表这条现在由 GA `master-gate.yml` 的同名 step 承接 ⇒ 在 GA 侧在场
+       * 也算「有执行者」，不再要求它出现在 CNB 的三份顺序清单里。 */
+      const gaAlive =
+        GA_MASTER_GATE.includes(`- name: ${gate.name}`) && GA_MASTER_GATE.includes(gate.script);
       expect(
-        order.has(gate.name),
-        `\`${gate.name}\` 带着 ifModify，却不在 PR / push / 每日任何一份顺序清单里（死配置）`,
+        order.has(gate.name) || gaAlive,
+        `\`${gate.name}\` 既不在 PR / push / 每日任何一份顺序清单里，也不在 GA master-gate.yml 里（死配置）`,
       ).toBe(true);
     }
   });

@@ -9649,6 +9649,55 @@ relay step 的 stage 读数（`[ga-logs-relay] 已搬到 CNB` / 「前提不成�
 投递到了这个 workflow」，不是「这个 workflow 声明了哪些事件」。看到「长出没声明事件的空 run」
 先去查文件有效性，别改 `on:`。
 
+#### 13.5.35 2026-11-09 CNB 侧退成「站内回读 + 平台池镜像出口」，只为承重而存在的格子退役（ISSUE #3378 收尾）
+
+**改的是 CNB 主列的形状，不是承重锚。** §13.5.33.1 转正之后，`质量门禁` 这条
+`pull_request` build 的实质工作只剩一件：站内读 GA 收尾 job 送回 `commit-statuses` 的结论，
+把它折成本 build 的退码（§13.6「PR 跑绿才合并」）。push 事件下 `master 合并复核` 主列
+判的是「合并后的树」，而文档链两格自 §13.5.34 起已由 GA `master-gate.yml` 同款逐字承接。
+业主口径（08:25 指令）：「有些是因为之前 CNB 侧承重才使用的，现在没必要的就去掉，
+能挪到 GA 侧的就挪过去」。
+
+**逐格对账**（降级 ≠ 删除：`GATE_TIER_LEDGER` 的 retired 段逐条写明「现在谁跑」，
+脚本与判据完整留盘；恢复动作 = 把 stage 加回配置 + 名字挪回清单 + 从 retired 摘掉）：
+
+| 档 | 退役格 | 性质 | 现在谁跑 / 为什么摘 |
+| --- | --- | --- | --- |
+| PR | `镜像身份` / `工作区复用读数` / `缓存槽读数` / `环境前提` | 自托管节点读数（恒退 0 或几秒） | GA `pr-gate.yml` 承接全部代码判据后，这条 build 不再判节点事实，四格无消费者。脚本留盘；每日档同名环境判据仍在 |
+| PR / 桌包 / push | `令牌权限读数` | `endStages` 读数 | 量 `CNB_TOKEN` 够得着哪些能力；CNB 主列已无写平台 / 出网动作，只剩每日档那一格（`每日令牌权限读数`）。`ci-token-scopes.mjs` 的 `whereItLives()` 收敛到每日档 |
+| push | `生成态文档与源同步` / `文档引用与权威源一致` | 文档链判据 | **挪 GA**：`.github/workflows/master-gate.yml` 同名 step（同款入口、同款旗标，§13.5.34 并行期逐格比对后才切换） |
+| push | `安装依赖` | 前提格 | 只被上面两格吃 `node_modules`；两格挪 GA（它自己 `pnpm install`）后无消费者。`单跑单测·安装依赖` 的逐字相同真身改向 `每日安装依赖` |
+| push | `合并形态复核` | 形态留痕 | `check-branch-guard.cjs --merge-commit` 头注自承「真正的防线是平台分支保护，本条是形态留痕、不是那条防线」；主列撤掉后无对象。平台分支保护设置一字未动 |
+| push | `工作区出处` | 自托管工作区出处判据 | CNB 侧不再有写盘判据，GA runner 无此概念（`ga-migration-checklist.md` G-19）。脚本留盘 |
+
+**保留**：PR 档 `GA 回调结论回读`（§13.6 承重锚，把 GA 结论折成 `pull_request` build
+的退码）、`push` 事件下 `GitHub master 镜像（平台池）`（GA 侧三份 schedule 与
+`master-gate.yml` 的树来源）、`pull_request` 下 `GitHub 镜像同步（平台池）`（派发出口）、
+两档 `失败立案`（`endStages`，红也要跑）。**没换锚**：保护分支 / `ship` 仍认那条
+原生 `pull_request` build；`api_trigger_ga_verdict` 的 context 仍只是回读格的数据源。
+
+**CNB 侧的形状变化**：`COMFYAPP_CI_GATES` 缩到 3 格（`GA 回调结论回读` +
+两条无 stage 的 `COMFYAPP_CI_GATES_ELSEWHERE`），`COMFYAPP_CI_PUSH_GATES` 键随主列
+一起删除（留一个空清单 = 「在册 ≠ 出勤」那族静默失效），`.push-stages` / `*lock_push`
+/ `*push_fail_stage` 锚点退役，`push 失败立案` 内联进平台池镜像出口的 `endStages`
+（`--lane push` 显式声明，红也要跑的语义仍由平台 `endStages` 保证）。
+
+**逐笔对账（与 §13.5.33 同形）**：`.cnb.yml` 三份清单 / 两份登记表
+（`AUTOFIX_DUTIES` / `INCREMENTAL_GATES` 的执行面从 `.cnb.yml` 扩到 GA
+`master-gate.yml`，表内容不空转）/ `GATE_TIER_LEDGER` / `ci-oneshot-gates.mjs`
+的 `source` 摘除 / `ci-token-scopes.mjs` 的触发口映射 / 两份顺序锚契约用例
+（`ci-env-probe.test.ts` / `ci-image-identity.test.ts`）/ `doc-check-hook-wiring.test.ts`
+的 `platformExecutor` / 本节 + 生成态镜像 / `changelog.d` 碎片，同批改动。
+
+**边界（写进配置注释了，没假装已验）**：① 「保护分支是否把 `cnb/api_trigger_ga_verdict/*`
+计成必需状态检查」的端到端合并按钮实测仍缺 `repo-manage:r` 令牌没坐实 —— 这正是
+承重回读格不能删的理由；② GA `master-gate.yml` 的 `--check --autofix` 就地重渲染
+写的是 GA 自己的工作区，不回写 CNB；`docs/generated/**` 的镜像带不带仍由本地
+D0「文档源 ⇄ 生成态镜像同批」判据守（§13.5.5），不靠 CI 回写；③ `push 失败立案`
+内联进平台池出口那一跳没在 push 节点上单独实测过（与 §13.5.33.3 同一条边界），
+失败出口另由每日 `镜像漂移判据` 兜底。
+
+
 ### 13.6 分支与合并策略
 
 - 功能分支：`feat/<short-desc>`；修复分支：`fix/<issue-id>-<desc>`。

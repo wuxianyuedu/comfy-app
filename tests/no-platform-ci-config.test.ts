@@ -291,16 +291,11 @@ type LedgerEntry = {
 };
 const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   // ── PR 档（COMFYAPP_CI_GATES）──
-  { name: "镜像身份", tier: "PR" },
-  { name: "工作区复用读数", tier: "PR" },
-  { name: "缓存槽读数", tier: "PR" },
-  /* ISSUE #3418（#3378 后续指令）：自托管主列那格停用，推送与派发整个挪到平台池
-   * 那条流水线（`.cnb.yml` 的 `pull_request` 第二条）。它不再是 `质量门禁` 的
-   * `pull_request` build 里的一格 ⇒ 从 PR 总账摘名，登记进 retired 段。 */
-  { name: "环境前提", tier: "PR" },
-  /* 2026-11-05 薄化：GA `pr-gate.yml` 已承接的格从 PR 清单撤出，档位登记在 retired 段
-   * （每一项的 note 写明「现在谁跑」）。这一档此后只剩平台读数与判决链；
-   * 2026-11-08 起判决链的承重格换成站内的 `GA 回调结论回读`（ISSUE #3378）。 */
+  /* ISSUE #3378 收尾（08:25 指令）：`镜像身份` / `工作区复用读数` / `缓存槽读数` /
+   * `环境前提` 四格是**自托管节点事实读数**（恒退 0、问的是这台 runner 的镜像 / 工作区 /
+   * pnpm 槽根 / 工具链），过去 CNB 侧承重时才每个 PR 判；GA `pr-gate.yml` 承接全部代码
+   * 判据之后，这条 `pull_request` build 只剩「站内读 GA 送回的结论」一件事，四格没有
+   * 消费者 ⇒ 摘掉，档位登记进 retired 段（逐项写明「现在谁跑」）。 */
   /* 主列末尾的承重档（已摘 `--readout`，ISSUE #3051 期望第 3 条已落地）：镜像格派发的
    * 同一笔 head_sha，GitHub Actions 跑完没有、结论是什么。有结论且红 ⇒ 拦合；没跑起来 ⇒
    * exit 2 同样拦合；只有读到绿才放行。无跨档对应物，不进 CROSS_LANE_SCRIPT_MIRRORS。 */
@@ -316,13 +311,12 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
    * 因为它们在 PR 上仍然被判，只是换了一台 runner。 */
   { name: "格式化提交分离", tier: "PR" },
   { name: "零消费导出", tier: "PR" },
-  // ── push 档（COMFYAPP_CI_PUSH_GATES，树级校验档 + 镜像出口格）──
-  { name: "合并形态复核", tier: "push" },
-
-  { name: "安装依赖", tier: "push" },
-  { name: "生成态文档与源同步", tier: "push" },
-  { name: "文档引用与权威源一致", tier: "push" },
-  { name: "工作区出处", tier: "push" },
+  // ── push 档（COMFYAPP_CI_PUSH_GATES）──
+  /* ISSUE #3378 收尾：push 主列整条撤掉。文档链两格由 GA `master-gate.yml` 同款逐字
+   * 承接（§13.5.34 并行期已验），`安装依赖` 只被那两格吃、`合并形态复核` 是形态留痕
+   * （真防线是平台分支保护，check-branch-guard.cjs 头注自承）、`工作区出处` 是自托管
+   * 专有读数 ⇒ 五格全摘，档位登记进 retired 段。`COMFYAPP_CI_PUSH_GATES` 键随主列
+   * 一起删除（见下面那条判据的收口）。 */
   // ── 每日档（COMFYAPP_CI_DAILY_GATES）──
   { name: "每日失败立案", tier: "daily" },
   { name: "每日令牌权限读数", tier: "daily" },
@@ -346,6 +340,53 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   { name: "每日单元测试", tier: "daily" },
   { name: "覆盖率上报", tier: "daily" },
   // ── retired（降级登记，必须带理由；§13.5.30）──
+  /* ISSUE #3378 收尾（08:25 指令）：CNB 侧从承重平台退成「站内回读结论 + 平台池镜像出口」，
+   * 只为过去 CNB 承重 / 自托管节点环境存在的格子整批摘掉。降级 ≠ 删除，逐条登记「现在谁跑」。 */
+  {
+    name: "镜像身份",
+    tier: "retired",
+    note: "PR 档自托管节点镜像身份读数（恒退 0）。GA 承接代码判据后这条 build 不再判节点事实，无消费者 ⇒ 摘。脚本 ci-image-identity.mjs 留盘，每日档同名读数仍在",
+  },
+  {
+    name: "工作区复用读数",
+    tier: "retired",
+    note: "PR 档 ephemeral 工作区复用形态读数（恒退 0）。CNB 主列不再有吃工作区热态的判据，无消费者 ⇒ 摘。脚本 ci-workspace-probe.mjs 留盘",
+  },
+  {
+    name: "缓存槽读数",
+    tier: "retired",
+    note: "PR 档 pnpm 缓存槽命中读数（恒退 0）。PR 档早不装依赖（GA 各 job 自己装），本格自承「假如这一档装会命中哪档」，无对象 ⇒ 摘。脚本 ci-cache-slot.mjs 留盘",
+  },
+  {
+    name: "环境前提",
+    tier: "retired",
+    note: "PR 档自托管节点工具链 / 浏览器下载根前提读数（几秒、mostly 不判红）。它问的是这台节点能不能跑到下载根，而 PR 主列的判据全在 GA runner 上跑 ⇒ 摘。脚本 ci-env-probe.mjs 与 tests/ci-env-probe.test.ts 留盘（每日档环境判据仍用它）",
+  },
+  {
+    name: "合并形态复核",
+    tier: "retired",
+    note: "push 档形态留痕（check-branch-guard.cjs --merge-commit）。脚本头注自承「真正的防线是平台分支保护，本条是形态留痕、不是那条防线」；主列撤掉后无对象 ⇒ 摘。平台分支保护设置不动",
+  },
+  {
+    name: "安装依赖",
+    tier: "retired",
+    note: "push 档安装格，只被同档文档链两格吃 node_modules；两格挪 GA master-gate.yml（它自己 pnpm install）之后无消费者 ⇒ 摘。单跑单测·安装依赖 的逐字相同真身改向 每日安装依赖",
+  },
+  {
+    name: "生成态文档与源同步",
+    tier: "retired",
+    note: "push 档文档链格（--check --autofix）⇒ 挪 GA .github/workflows/master-gate.yml 同名 step（同款入口、同款旗标，§13.5.34 并行期已跑过若干轮逐格比对）",
+  },
+  {
+    name: "文档引用与权威源一致",
+    tier: "retired",
+    note: "push 档文档链格 ⇒ 挪 GA .github/workflows/master-gate.yml 同名 step（check-doc-references.cjs 逐字一致）",
+  },
+  {
+    name: "工作区出处",
+    tier: "retired",
+    note: "push 档自托管工作区出处判据（跑哪份源码 / 谁写脏过 tracked 面）。CNB 侧不再有写盘判据，GA runner 无此概念（ga-migration-checklist G-19）⇒ 摘。脚本 ci-workspace-provenance.mjs 留盘",
+  },
   {
     name: "GitHub master 镜像",
     tier: "retired",
@@ -496,11 +537,10 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
  * `同步数据库表结构 ⇄ 每日同步数据库表结构` 随 PR 格撤出一起消失。
  */
 const CROSS_LANE_SCRIPT_MIRRORS: Array<[string, string]> = [
-  // 多行块也在内：这一格是 `script: |` 的三行体，只比第一行会漏掉「第二行改了」这种漂移。
-  ["每日安装依赖", "安装依赖"],
-  /* 这一对是「每日 ⇄ push」：push 清单里没有构建格（ISSUE #2851），所以两侧都置着
-   * `COMFY_CI_SLOT` —— 而 `DAILY_ENV_ONLY_ON_PR` 里给 `每日安装依赖` 登记一行豁免
-   * （那张表按**左边那个名字**取豁免键），只动一边会被这条判据报成一堆行的差。 */
+  /* ISSUE #3378 收尾：push 主列撤掉后，`安装依赖` 那一格不再存在。
+   * 「每日 ⇄ push 安装格逐字相同」这一对随之失效（§13.5.34 的切换三处里
+   * 早就写明这一对要同批消失）。`单跑单测·安装依赖` 的逐字相同真身改向
+   * `每日安装依赖`（见 ci-oneshot-gates.mjs 的 `source` 摘除）。 */
 ];
 
 /**
@@ -511,7 +551,8 @@ const CROSS_LANE_SCRIPT_MIRRORS: Array<[string, string]> = [
  * 「不相同的那一行正是被允许的那一行」。
  */
 const DAILY_ENV_ONLY_ON_PR: Record<string, Array<string>> = {
-  每日安装依赖: ["COMFY_CI_SLOT"],
+  /* ISSUE #3378：push 安装格已撤 ⇒ 不再有「哪格可少 COMFY_CI_SLOT 这一行」的
+   * 两格对照。表留空壳是让「跨档同形」判据仍有对象，不静默跳过。 */
 };
 
 /** 一行 env 赋值的键名；不是赋值形状（如脚本行 `$enc=…` / `node …`）回 `null`。 */
@@ -1494,61 +1535,31 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).not.toContain("- name: GitHub master 镜像");
   });
 
-  it("push 档跑的就是 `COMFYAPP_CI_PUSH_GATES` 那几格（声明与事实双向核对）", () => {
-    /* 2026-10-28 起 push 档从「只有合并形态复核一格」扩成「树级校验档」：
-     * 形态复核 + 前提安装 + 文档链三格 + 工作区出处，判的是**合并后的树**。
-     * 与每日清单同一套双向核对：声明（env 里的清单）与事实（流水线里真的在跑的
-     * stage）只读一份时另一份漂了没人红 —— 名字留在清单、格子被删，账面全绿而
-     * 执行面是空的，正是本仓最不能有的形态。 */
+  it("push 主列已撤：CNB 侧只剩平台池镜像出口，文档链由 GA master-gate 承接（ISSUE #3378 / #3397）", () => {
+    /* 2026-11-09（ISSUE #3378 收尾 / #3397「摘掉 GA 已跑过的格」）：push 主列整条撤掉。
+     * 原先那五格分别是：形态留痕（真防线是平台分支保护）、只被文档链两格吃的安装格、
+     * GA `master-gate.yml` 已同款逐字在跑的文档链两格、自托管工作区出处读数。
+     * 后者由 GA 侧承接（§13.5.34 并行期逐格比对结论一致后才切换），前三者无消费者。
+     * 声明键 `COMFYAPP_CI_PUSH_GATES` 随主列一起删 —— 留一个空清单会变成「在册 ≠ 出勤」
+     * 那族静默失效，而判据读到空数组也只会给一句没对象的绿。 */
     const text = readRegisteredConfig();
-    const declared = registeredPushGateOrder(text);
     expect(
-      declared.length,
-      "解析不出 COMFYAPP_CI_PUSH_GATES —— 键被删了或换了形状，这条判据就没有对象了",
-    ).toBeGreaterThan(0);
-    const actual = pipelineStageNames(text, "master 合并复核");
-    expect(
-      actual,
-      "push 流水线的 stage 名单与 `COMFYAPP_CI_PUSH_GATES` 不一致" +
-        "（缺一格 = 声明在吹牛；多一格 = 没登记就上了线）",
-    ).toEqual(declared);
-
-    /* 顺序约束（前提格先于吃 node_modules 的格子）：这一档过去举的例子是
-     * `API 文档生成与自检`（要跑 typedoc，而 push 是全新 job 目录、`node_modules`
-     * 恒不在场）。2026-11-05 它已撤到每日档（ISSUE #2537）—— push 侧今天没有吃
-     * `node_modules` 的判据格，但 `安装依赖` 仍是后面文档链两格的前提，必须在前。 */
-    const installAt = declared.indexOf("安装依赖");
-    expect(installAt, "push 清单里没有「安装依赖」—— 前提格被删了").toBeGreaterThanOrEqual(0);
-
-    /* ISSUE #2537：这一格**不许**回到 PR/合并侧的即时判里 —— 它今天只在每日档
-     * （`COMFYAPP_CI_DAILY_GATES` 的「每日 API 文档生成与自检」）。有人改回去要在这里红。 */
-    expect(
-      declared,
-      "「API 文档生成与自检」又回到了 push 清单 —— 2026-11-05 起它只在每日档（ISSUE #2537：98% 触发率、40.9s 中位、占 30.6%）",
-    ).not.toContain("API 文档生成与自检");
-
-    /* `覆盖率上报` 不在 push 档（push 不跑测试，放进去只会静默空转）；它 2026-11-02 从
-     * PR 档挪到了**每日档** —— 每日档的 `每日单元测试` 跑 `pnpm run test:coverage` 产出
-     * lcov，这一格接在后面上报。 */
-    expect(
-      declared,
-      "「覆盖率上报」不该出现在 push 清单里 —— push 档没有产出 lcov.info 的格子，它在那里只会静默跳过",
-    ).not.toContain("覆盖率上报");
-
-    /* 接槽的安全前提（ISSUE #2851）：这一档后面**不许有会真构建的格子**。
-     * `安装依赖` 那一格置着 `COMFY_CI_SLOT: "1"`，而接槽形态下 Turbopack 拒指向项目根之外的
-     * `node_modules` 链（每日档那次是 13.8s 就死 + 后面四格整片 `skipped`，ISSUE #2081）。
-     * 「push 清单里没有构建格」过去只是 #2851 单子与配置注释里的一句话 —— 它现在是判据：
-     * 往这份清单里加构建格的人要当场被拦住，而不是等那一跑死了再查为什么。 */
-    const withBuild = stagesWithBuildConsumer(
-      new Map(declared.map((n) => [n, executableScriptLines(text, n)])),
-    );
-    expect(
-      withBuild,
-      `push 清单里出现了会真构建的格子（${withBuild.join(" / ")}），而「安装依赖」那一格置着 ` +
-        "`COMFY_CI_SLOT`：先摘那一行并同批把它登记进 `DAILY_ENV_ONLY_ON_PR`，" +
-        "或先证明 #2521 的 `turbopackAdditionalRoots` 在这一档上跑得通（它在有构建格的档上一次都没被执行过）",
+      registeredPushGateOrder(text),
+      "`COMFYAPP_CI_PUSH_GATES` 又出现了 —— push 主列已撤，这份清单没有对象；要加回判据就同批把主列加回配置并登记进 GATE_TIER_LEDGER",
     ).toEqual([]);
+    expect(
+      pipelineStageNames(text, "master 合并复核"),
+      "「master 合并复核」流水线又回来了 —— 它与这份清单必须同批出现或同批消失",
+    ).toEqual([]);
+    /* 反向钉住出口仍在：push 事件下的平台池镜像流水线一条都不能少（它是 GA 侧
+     * daily / master-gate / package-desktop 的树来源，删了那边判的是旧树）。 */
+    const push = configEventBlock(text, "push");
+    expect(push, "push 事件下没有平台池镜像出口了").toContain(
+      "- name: GitHub master 镜像（平台池）",
+    );
+    expect(push, "平台池镜像出口没点名推送脚本").toContain(
+      "node scripts/ci-github-mirror-push.mjs --master",
+    );
   });
 
   it("手点 / API 两个触发口跑的是同一份清单，而按钮与事件键两两对上", () => {
@@ -2150,14 +2161,14 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       rows.length,
       `解析出的流水线数（${rows.length}）与带 stages: 的项（${stageLines}）对不上 —— 有一条被漏掉，它就没人判`,
     ).toBe(stageLines);
-    /* 一条 PR 主列 + 平台池镜像出口（ISSUE #3418 转正后的常驻例外）；push 档同理是
-     * 一条主列 + 一条平台池镜像出口（ISSUE #3426）。两个事件分开数，别把 push 那条
-     * 算进 PR 的例外里。 */
+    /* PR = 一条主列 + 平台池镜像出口（ISSUE #3418 转正后的常驻例外）。
+     * ISSUE #3378 收尾：push **主列已撤**，push 事件下只剩那条平台池镜像出口
+     * （ISSUE #3426），所以这一行从「1 + 出口」改成「出口」。 */
     const prMirrorAlive = text.includes("- name: GitHub 镜像同步（平台池）") ? 1 : 0;
     const pushMirrorAlive = text.includes("- name: GitHub master 镜像（平台池）") ? 1 : 0;
     expect(rows.filter((r) => r.event === "pull_request").length).toBe(1 + prMirrorAlive);
-    expect(rows.filter((r) => r.event === "push").length).toBe(1 + pushMirrorAlive);
-    expect(rows.filter((r) => r.event !== "pull_request").length).toBeGreaterThanOrEqual(9);
+    expect(rows.filter((r) => r.event === "push").length).toBe(pushMirrorAlive);
+    expect(rows.filter((r) => r.event !== "pull_request").length).toBeGreaterThanOrEqual(8);
     /* 三条每日触发口仍然同一把（那份互斥是刻意保留的，不是被这次改动顺手拆掉的）。
      * 这里**不钉事件名清单** —— 「有没有定时口」由「定时档不在本机、在 GA」那条管，
      * 这里只管锁。定时口迁走之后 `lock_daily` 归手点 / API 两口共用，仍是同一件事。 */
@@ -3279,7 +3290,7 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
     const text = readRegisteredConfig();
     /** 每档：流水线名 → 它那一格的安装格名（名字逐字取自身配置，不做拼接）。 */
     const laneInstall = [
-      { pipeline: "master 合并复核", install: "安装依赖" },
+      /* ISSUE #3378：push 主列（含 `安装依赖`）已撤，这一行随之摘掉。 */
       /* 两条定时口已迁 GA；接槽开关的形状判在留下来的**手点口**上，
        * 它们引用的是同一份 `*daily_gates` / `*package_gates`，结论不变。 */
       { pipeline: "每日档（手动触发）", install: "每日安装依赖" },
@@ -3311,7 +3322,10 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
         ).toEqual([]);
       }
     }
-    /* 注册表指了 `source` 的那些格：它们跟着的是**接槽那一族**，就必须真把那枚开关置成 1。 */
+    /* ISSUE #3378：push 主列撤掉后注册表里不再有 `source`（`单跑单测·安装依赖`
+     * 改向 `每日安装依赖` 逐字相同）。`source` 是「副本真身不必是每日格」那一格的
+     * 显式声明，今天一个都没有 ⇒ 这里改成反向钉：谁再把一个不存在的真身登记回来，
+     * `每个单跑格与真身逐字相同` 那条会当场红，不需要第二份 source 清单。 */
     const followingSlotFamily = ONESHOT_TARGETS.flatMap((t) =>
       (Array.isArray(t.prereqs) ? t.prereqs : [])
         .filter((p) => typeof p?.source === "string" && p.source !== "")
@@ -3319,17 +3333,9 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
     );
     expect(
       followingSlotFamily.length,
-      "注册表里没有一格登记 `source` —— 上面那段因果就没有对象了（注册表被改回去而这里没跟上）",
-    ).toBeGreaterThan(0);
-    for (const name of followingSlotFamily) {
-      const body = stageBody(text, name) ?? "";
-      expect(
-        slotOn(body),
-        `「${name}」在注册表里跟着接槽那一族（source 指向置着开关的那一格），配置里却没把 ` +
-          "`COMFY_CI_SLOT` 置成 1 —— 摘掉那一行不会有任何别处红，所以这一句要在这里红。" +
-          `（该格正文：\n${body}）`,
-      ).toBe(true);
-    }
+      "注册表又出现了 `source` —— push 安装格已撤，接槽那一族的真身不再存在；" +
+        "这一行要么随主列一起加回，要么把 source 摘掉并改向 `每日安装依赖`",
+    ).toBe(0);
   });
 
   it("单跑的格名不许与每日格或彼此重名", () => {

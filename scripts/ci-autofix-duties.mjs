@@ -166,8 +166,30 @@ export function parseStageScripts(text) {
  * @param {readonly {name: string, argv: readonly string[]}[]} heavyGates 聚合档的条目
  * @returns {Map<string, string>} 执行者名 → 命令行
  */
-export function collectExecutors(text, heavyGates) {
+export function collectExecutors(text, heavyGates, workflowText = "") {
   const out = parseStageScripts(text);
+  /* ISSUE #3378 收尾：CNB push 主列撤掉后，`生成态文档与源同步`（--autofix）由
+   * GA `.github/workflows/master-gate.yml` 的同名 step 承接。GA workflow 的 step 名
+   * 带「（CNB push 档同款判据、同款旗标）」后缀，这里按「去掉括号后缀」归一到登记表
+   * 里的 stage 名 —— 单一出处仍是 AUTOFIX_DUTIES，不另抄一份名字表。 */
+  if (workflowText) {
+    let stepName = null;
+    for (const raw of workflowText.split("\n")) {
+      const nm = /^\s*-\s+name:\s*(?<n>\S.*?)\s*$/.exec(raw);
+      if (nm?.groups?.n) {
+        stepName = nm.groups.n;
+        continue;
+      }
+      const run = /^\s*run:\s*(?<cmd>\S.*?)\s*$/.exec(raw);
+      if (run?.groups?.cmd && stepName) {
+        const key = stepName.replace(/（[^）]*）\s*$/, "").trim();
+        if (key && !out.has(key)) {
+          out.set(key, run.groups.cmd);
+        }
+        stepName = null;
+      }
+    }
+  }
   for (const gate of heavyGates) {
     /* 聚合档的条目名与 stage 名共用一个命名空间：重名会让两份登记各说各话，
      * 而这在配置里完全看不出来（一边是 `- name:`，一边是 JS 数组项）。 */
@@ -197,8 +219,13 @@ export function collectExecutors(text, heavyGates) {
  *   （缺省为空 = 只认 stage，纯配置的自测样本走这一档）
  * @returns {string[]} 逐条不一致（人读的话术）
  */
-export function checkAutofixDuties(text, autofixTokens = ["--autofix"], heavyGates = []) {
-  const scripts = collectExecutors(text, heavyGates);
+export function checkAutofixDuties(
+  text,
+  autofixTokens = ["--autofix"],
+  heavyGates = [],
+  workflowText = "",
+) {
+  const scripts = collectExecutors(text, heavyGates, workflowText);
   /** @type {string[]} */
   const problems = [];
 
