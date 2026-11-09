@@ -73,7 +73,9 @@ import {
 } from "../scripts/ci-mirror-payload.mjs";
 /* 重试面比话术面宽一族，两个判据都从实现所在的模块直接取（与主文件的转出口同源）。 */
 import {
+  describeLfsCheckFailure,
   isTransientRemoteFailure,
+  LFS_FAILURE_SHORT_ACTIONS,
   shouldRetryGitFailure,
   writeDispatchState,
 } from "../scripts/ci-mirror-failure-report.mjs";
@@ -269,6 +271,15 @@ describe("纯函数", () => {
     expect(other.next).toContain("原话");
     /* 空回话也不许判成 egress（它会让「没拿到任何回话」被读成网络抖动）。 */
     expect(classifyLfsPushFailure("").kind).toBe("OTHER");
+  });
+
+  it("describeLfsCheckFailure：核对跳的读数不带 git-lfs 原话（ISSUE #3413）", () => {
+    const failure = describeLfsCheckFailure("LFS 核对请求没跑起来（网络层）：fetch failed");
+    expect(failure.label).toBe("LFS 核对没通过");
+    expect(failure.short).toContain("fetch failed");
+    expect(failure.short).not.toContain("git-lfs");
+    expect(failure.short).not.toBe(LFS_FAILURE_SHORT_ACTIONS.OTHER);
+    expect(failure.next).toContain("batch API");
   });
 
   it("parseLfsObjectCount：读得到就给 n/m，读不到给 null（不编数字）", () => {
@@ -1406,6 +1417,21 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(last).toContain("出网问题在节点侧");
   });
 
+  it("LFS 核对失败 ⇒ 小结念核对回话，不落到「其他 / git-lfs 原话」（ISSUE #3413 现场）", async () => {
+    const { io, heard } = harness({
+      fetchThrows: true,
+      lfsJsonStdout: JSON.stringify({ files: [{ oid: "a".repeat(64), size: 1 }] }),
+    });
+    const code = await runMirror(io);
+    expect(code).toBe(CODE.NO_FACT);
+    const last = heard.at(-1) ?? "";
+    expect(last.startsWith("[mirror] 小结（判决）：")).toBe(true);
+    expect(last).toContain("LFS=败（类别：LFS 核对没通过）");
+    expect(last).not.toContain(`LFS=败（类别：${LFS_FAILURE_KINDS.OTHER}）`);
+    expect(last).not.toContain(LFS_FAILURE_SHORT_ACTIONS.OTHER);
+    expect(last).toContain("network down");
+  });
+
   it("LFS 通 ⇒ 小结并排 wire / LFS / 派发，对象数从 git-lfs 的进度行读出来", async () => {
     const { io, heard } = harness({
       lfsStdout: "Uploading LFS objects: 100% (3/3), 8.6 MB | 0 B/s, done.",
@@ -2196,6 +2222,8 @@ describe("runMasterMirror（推送 + 回读，没有派发那一跳）", () => {
   function harness(
     opts: {
       env?: Record<string, string | undefined>;
+      /* LFS 核对 batch 的 fetch 假件：缺省清单为空、不发请求；给一个恒抛的就能造核对失败。 */
+      fetchImpl?: typeof fetch;
       /* 推送前远端更新闸（#3252）的假事实：缺省「远端 sha 在本地、且是 HEAD 的祖先」⇒ 照推。 */
       headIsAncestor?: boolean;
       lfsCode?: number;
@@ -2286,6 +2314,7 @@ describe("runMasterMirror（推送 + 回读，没有派发那一跳）", () => {
     };
     const io = {
       env: opts.env ?? { GITHUB_MIRROR_TOKEN: TOKEN },
+      fetchImpl: opts.fetchImpl,
       log: (line: string) => heard.push(line),
       runGit,
       sleep: (ms: number) => {
@@ -2295,6 +2324,20 @@ describe("runMasterMirror（推送 + 回读，没有派发那一跳）", () => {
     };
     return { heard, io, pushes, lfsPushes, sleeps, remoteCalls: () => remoteCalls };
   }
+
+  it("LFS 核对失败 ⇒ 小结也念核对回话，不落到「其他 / git-lfs 原话」（ISSUE #3413 同批）", async () => {
+    const { heard, io } = harness({
+      fetchImpl: (() => Promise.reject(new TypeError("fetch failed"))) as unknown as typeof fetch,
+      lfsJsonStdout: JSON.stringify({ files: [{ oid: "a".repeat(64), size: 1 }] }),
+    });
+    const code = await runMasterMirror(io);
+    expect(code).toBe(CODE.NO_FACT);
+    const last = heard.at(-1) ?? "";
+    expect(last.startsWith("[mirror-master] 小结（判决）：")).toBe(true);
+    expect(last).toContain("LFS=败（类别：LFS 核对没通过）");
+    expect(last).not.toContain(LFS_FAILURE_SHORT_ACTIONS.OTHER);
+    expect(last).toContain("fetch failed");
+  });
 
   it("推成 ⇒ 退 0；--force 打到 refs/heads/master，且日志里没有任何「已派发」", async () => {
     const { heard, io, pushes } = harness();

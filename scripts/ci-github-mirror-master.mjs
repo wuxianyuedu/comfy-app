@@ -38,7 +38,7 @@ import { pushLfsObjects } from "./ci-mirror-lfs-push.mjs";
 import { verifyLfsObjects, verifyPushedRef } from "./ci-mirror-push-verify.mjs";
 /* 推送前的远端更新闸（ISSUE #3252）：单发读一次远端 ref，只在这一档挂（PR 档不加）。 */
 import { guardRemoteNotAhead } from "./ci-mirror-remote-guard.mjs";
-import { renderMirrorSummary } from "./ci-mirror-failure-report.mjs";
+import { describeLfsCheckFailure, renderMirrorSummary } from "./ci-mirror-failure-report.mjs";
 
 /**
  * `--master` 模式的执行面：推 `HEAD:refs/heads/master` → 回读远端 ref → 推 LFS →
@@ -190,8 +190,10 @@ export async function runMasterMirror(io) {
   });
   if (lfsCheck.code !== CODE.OK) {
     log(`[mirror-master] 结论：exit ${String(lfsCheck.code)} —— ${lfsCheck.note}`);
+    /* 与 PR 档同一份核对读数：这一跳没有 git-lfs 原话可看（ISSUE #3413）。 */
     summarize({
       elapsedMs: lfs.elapsedMs,
+      failure: describeLfsCheckFailure(lfsCheck.note),
       lfs: false,
       objects: lfsCheck.objectsText,
       retries: lfs.attempts - 1 + (lfsCheck.attempts - 1),
