@@ -525,6 +525,9 @@ export function runWithCp936Exit(
    * 「只说一次」的话与计时器要靠这道闸保证。 */
   return new Promise((settle) => {
     let settled = false;
+    /** 交账口的幂等闸（谁先到谁交账；第二次 resolve 无害，闸后的话只说一次）。
+     *
+     * @param {number} code */
     const settleOnce = (code) => {
       if (settled) {
         return;
@@ -557,7 +560,10 @@ export function runWithCp936Exit(
      * `exitInfo` 是 exit 事件交出的那份结论（close 兜底按它交账）；`null` = 还没退。
      * `postExitTimer` 只在 exit 之后 armed：child 还活着时结论不在手，兜底没有
      * 交账的资格 —— 「不许把没判完洗成绿」在这一格的形状就是「timer 不早于 exit」。 */
+    /** exit 事件交出的那份结论（close 兜底按它交账）；`null` = 还没退。 */
+    /** @type {{code: number | null, signal: string | null} | null} */
     let exitInfo = null;
+    /** @type {ReturnType<typeof setTimeout> | null} */
     let postExitTimer = null;
     let exitAt = 0;
     /* 字形归一化的**跨块累计**（ISSUE #1977 那一族之外的一件事，见下）。
@@ -664,9 +670,13 @@ export function runWithCp936Exit(
         }
       });
     }
-    /* close 与 exit 后兜底**两条路共用**的收尾：残余半行 → 字形总数 → 终止读数 →
+    /** close 与 exit 后兜底**两条路共用**的收尾：残余半行 → 字形总数 → 终止读数 →
      * 交出折算的退出码。抽出来的理由：兜底那一路（#3412）要的不是另一份收尾，
-     * 是同一份收尾换一个到法 —— 两份各自漂移就是下一处「一边修好另一边还是旧的」。 */
+     * 是同一份收尾换一个到法 —— 两份各自漂移就是下一处「一边修好另一边还是旧的」。
+     *
+     * @param {number | null} code
+     * @param {string | null} signal
+     */
     const finalize = (code, signal) => {
       /* 行尾那份残余（**没有换行符收尾的最后一个片段**）在这里补发：`close` 一到
        * （或兜底到点，见下），那一行就到底了。
