@@ -129,7 +129,7 @@ function errorName(error) {
  * @param {number} [attempt] 已重试次数（内部用）
  * @returns {Promise<{ok: true, json: any, link: string | null} | {ok: false, kind: string, status: number, detail: string}>}
  */
-async function ghGet(ctx, path, attempt = 0) {
+export async function ghGet(ctx, path, attempt = 0) {
   try {
     const res = await ctx.fetchImpl(`${ctx.apiBase}${path}`, {
       headers: {
@@ -375,9 +375,10 @@ async function listOpenIssuesPage(ctx, page, seen) {
  * （单子建出来却没有可筛的标签，等于把「写了没有读者」再落一遍）。
  * @param {{fetchImpl: FetchLike, token: string, base: string, slug: string}} ctx
  * @param {string} name 标签名
+ * @param {string} [description] 标签描述（缺省按 code scanning 那两枚给；别的族自带描述）
  * @returns {Promise<{ok: true} | {ok: false, kind: string, status: number, detail: string}>}
  */
-export async function ensureLabel(ctx, name) {
+export async function ensureLabel(ctx, name, description) {
   const got = await cnbCall(ctx, "GET", `labels?page=1&page_size=${PER_PAGE}`, {
     retries: RETRIES,
   });
@@ -395,9 +396,10 @@ export async function ensureLabel(ctx, name) {
       name,
       color: LABEL_COLORS[name] ?? "8A2BE2",
       description:
-        name === CLEARED_LABEL
+        description ??
+        (name === CLEARED_LABEL
           ? "code scanning 规则已无命中（留给人确认后关单）"
-          : "GitHub code scanning 告警",
+          : "GitHub code scanning 告警"),
     },
   });
   if (!created.ok) {
@@ -418,11 +420,12 @@ export async function ensureLabel(ctx, name) {
  * 这一栏。回读是唯一能回答「这张单现在长什么样」的那一问。
  *
  * @param {{fetchImpl: FetchLike, token: string, base: string, slug: string}} ctx
- * @param {Action} action
+ * @param {{title: string, body?: string, priority?: string}} action
  * @param {(line: string) => void} log
+ * @param {{labels?: string[], logPrefix?: string}} [opt] 标签集与日志前缀（缺省 = code scanning 那族）
  * @returns {Promise<{ok: true, number: number} | {ok: false, detail: string}>}
  */
-export async function createIssue(ctx, action, log) {
+export async function createIssue(ctx, action, log, opt = {}) {
   const created = await cnbCall(ctx, "POST", "issues", {
     body: { title: action.title, body: action.body ?? "", priority: action.priority ?? "P2" },
   });
@@ -434,7 +437,7 @@ export async function createIssue(ctx, action, log) {
   if (!Number.isInteger(number) || number <= 0) {
     return { ok: false, detail: "建单回执里没有可用的单号（回执本身不是结论）" };
   }
-  const labels = [`提单人:${AUTHOR_HANDLE}`, FAMILY_LABEL];
+  const labels = opt.labels ?? [`提单人:${AUTHOR_HANDLE}`, FAMILY_LABEL];
   const tagged = await cnbCall(ctx, "POST", `issues/${number}/labels`, { body: { labels } });
   if (!tagged.ok) {
     /* 单已经建出来了：这时说「零写入」是不诚实的。如实报「单在、标签没落上」，退 1。 */
@@ -456,7 +459,9 @@ export async function createIssue(ctx, action, log) {
       detail: `#${number} 回读不一致：标题「${title}」· 标签 [${names.join(", ")}]`,
     };
   }
-  log(`[code-scanning] ✓ #${number} 已回读：标题一致 · 标签 [${names.join(", ")}]`);
+  log(
+    `${opt.logPrefix ?? "[code-scanning]"} ✓ #${number} 已回读：标题一致 · 标签 [${names.join(", ")}]`,
+  );
   return { ok: true, number };
 }
 
