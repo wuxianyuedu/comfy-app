@@ -105,6 +105,7 @@
  *     # 托管机实验档（ISSUE #3346）：推送 / 回读 / LFS 推送 / LFS 核对四跳各只试一次、
  *     #   不重试（LFS 核对这一跳自 ISSUE #3400 起一并纳入）；配平台池那条影子流水线
  * node scripts/ci-github-mirror-push.mjs --await-hosted
+ *     # 回退档，当前没有活调用点（接线位置与保留理由见 ci-mirror-hosted-await.mjs 文件头）：
  *     # 主列那一格（ISSUE #3346）：先等托管机实验格的结果 —— refs 见本跑 HEAD 即跳过推送，
  *     # 预算（HOSTED_AWAIT_BUDGET_MS）到点没见才落回下面的正常推送
  * ```
