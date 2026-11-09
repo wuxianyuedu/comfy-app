@@ -508,6 +508,94 @@ describe("纯函数", () => {
     }
   });
 
+  /* git-lfs 是 Go 写的，batch 请求不经 git / curl，回话是 Go net 包在 Winsock / POSIX
+   * 那一层抛的措辞。这一族与上面「Recv failure / schannel」讲的是同一件事，但一个字
+   * 都对不上；漏认的现场是 LFS 那一跳「重试=1 次」、类别念成「其他」（PR #3398 首跑
+   * `cnb-dto-1k6tb0h72`）。判据补在 ci-mirror-failure-report.mjs，这里钉住它三个消费面
+   * 同源：话术、重试、LFS 失败分类。 */
+  it("git-lfs / Go net 的 TCP connect 超时：现场原话认 egress、可重试、分类 EGRESS（#3401）", () => {
+    const windowsConnectTimeout =
+      'batch response: Post "https://oauth2:***@github.com/x/y.git/info/lfs/objects/batch": dial tcp 20.205.243.166:443: connectex: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond.';
+    expect(isEgressFailure(windowsConnectTimeout)).toBe(true);
+    expect(shouldRetryGitFailure(windowsConnectTimeout)).toBe(true);
+    expect(explainRemoteProbeFailure(windowsConnectTimeout)).toContain("这一跳没通");
+
+    const classified = classifyLfsPushFailure(windowsConnectTimeout);
+    expect(classified.kind).toBe("EGRESS");
+    expect(classified.label).toBe(LFS_FAILURE_KINDS.EGRESS);
+    expect(classified.next).toContain("节点侧");
+    expect(classified.short).toContain("DNS");
+    /* evidence 是最后一条非空行、按 160 字截断：现场这一整行比它长，逐字对拍。 */
+    expect(classified.evidence).toBe(windowsConnectTimeout.slice(0, 160));
+    expect(explainLfsPushFailure(windowsConnectTimeout)).toContain(
+      `类别=${LFS_FAILURE_KINDS.EGRESS}`,
+    );
+  });
+
+  it("Go net 的 POSIX / DNS / Winsock 形态都在 egress 面，认证 / 配额 / 仓库不存在仍不认（#3401）", () => {
+    const goNetShapes = [
+      "batch response: dial tcp 20.205.243.166:443: connectex: A connection attempt failed",
+      "batch response: dial tcp 20.205.243.166:443: connectex: No connection could be made because the target machine actively refused it",
+      "batch response: dial tcp 20.205.243.166:443: i/o timeout",
+      "batch response: dial tcp 20.205.243.166:443: connect: connection refused",
+      "batch response: dial tcp: lookup github.com on 10.0.0.1:53: no such host",
+    ];
+    for (const shape of goNetShapes) {
+      expect(isEgressFailure(shape)).toBe(true);
+      expect(shouldRetryGitFailure(shape)).toBe(true);
+      expect(classifyLfsPushFailure(shape).kind).toBe("EGRESS");
+    }
+    /* 反控制：这三族「再试一百次也一样」，判据补形之后不许被顺带认成出网问题。 */
+    const nonEgress: Array<[string, string]> = [
+      ["fatal: Authentication failed for 'https://github.com/x/y.git/'", "AUTH"],
+      ["batch response: This repository is over its data quota. (402 Payment Required)", "QUOTA"],
+      ["batch request: Repository or object not found: exit status 404", "LFS_DISABLED"],
+    ];
+    for (const [text, kind] of nonEgress) {
+      expect(isEgressFailure(text)).toBe(false);
+      expect(shouldRetryGitFailure(text)).toBe(false);
+      expect(classifyLfsPushFailure(text).kind).toBe(kind);
+    }
+  });
+
+  it("runGitWithRetry：Go net connect 超时不再单次即弃，认证仍一次交账（#3401）", async () => {
+    const heard: string[] = [];
+    let calls = 0;
+    /* 首刀给指定回话、第二刀通：只判「有没有发起第 2 次」，不碰预算 / 退避阶梯。 */
+    const ctx = (stderr: string) => ({
+      budgetMs: LFS_PUSH_RETRY_BUDGET_MS,
+      label: "LFS 推送",
+      log: (line: string) => {
+        heard.push(line);
+      },
+      maxAttempts: 2,
+      now: () => 0,
+      prefix: "mirror",
+      runGit: () => {
+        calls += 1;
+        return calls === 1
+          ? { code: 128, stderr, stdout: "" }
+          : { code: 0, stderr: "", stdout: "" };
+      },
+      sleep: () => Promise.resolve(),
+    });
+    const args = lfsPushArgs("https://example.invalid/x.git");
+    const retried = await runGitWithRetry(
+      args,
+      ctx("batch response: dial tcp 20.205.243.166:443: connectex: A connection attempt failed"),
+    );
+    expect(retried.attempts).toBe(2);
+    expect(retried.code).toBe(0);
+    expect(heard.join("\n")).toContain("可重试类");
+
+    heard.length = 0;
+    calls = 0;
+    const notRetried = await runGitWithRetry(args, ctx("fatal: Authentication failed"));
+    expect(notRetried.attempts).toBe(1);
+    expect(notRetried.code).toBe(128);
+    expect(heard.join("\n")).not.toContain("可重试类");
+  });
+
   it("exitCodeFor：读数档折的是退码那一位数，三态原值另说", () => {
     expect(exitCodeFor(CODE.NO_FACT, true)).toBe(0);
     expect(exitCodeFor(CODE.FAIL, true)).toBe(0);
@@ -1299,6 +1387,23 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     const last = heard.at(-1) ?? "";
     expect(last).toContain(`重试=${String(LFS_PUSH_MAX_ATTEMPTS - 1)} 次`);
     expect(last).toContain(`LFS=败（类别：${LFS_FAILURE_KINDS.EGRESS}）`);
+  });
+
+  it("LFS 撞 Go net connect 超时 ⇒ 小结念 EGRESS 而不是「其他」（#3401 现场）", async () => {
+    const { io, heard } = harness({
+      lfsCode: 128,
+      lfsStderr:
+        'batch response: Post "https://oauth2:***@github.com/x/y.git/info/lfs/objects/batch": dial tcp 20.205.243.166:443: connectex: A connection attempt failed',
+    });
+    const code = await runMirror(io);
+    expect(code).toBe(CODE.FAIL);
+    const all = heard.join("\n");
+    expect(all).toContain(`类别=${LFS_FAILURE_KINDS.EGRESS}`);
+    expect(all).not.toContain(`类别=${LFS_FAILURE_KINDS.OTHER}`);
+    const last = heard.at(-1) ?? "";
+    expect(last).toContain(`LFS=败（类别：${LFS_FAILURE_KINDS.EGRESS}）`);
+    /* 下一动作指向节点侧出网，而不是「看上一行 git-lfs 原话」。 */
+    expect(last).toContain("出网问题在节点侧");
   });
 
   it("LFS 通 ⇒ 小结并排 wire / LFS / 派发，对象数从 git-lfs 的进度行读出来", async () => {
