@@ -673,9 +673,9 @@ describe("平台配置：这一格是 Pipeline 级 `endStages`，不是 `stages`
 
   /* 正控：真的读到了那一格（否则下面几条断言会在「配置里没有它」上以别的名义绿掉）。 */
   it("`.cnb.yml` 里有这一格，入口是脚本而不是裸命令", () => {
-    expect(CONFIG).toContain("    - name: PR 失败立案");
+    expect(CONFIG).toContain("        - name: PR 失败立案");
     expect(CONFIG).toContain("node scripts/ci-pr-failure-issue.mjs --no-block");
-    const at = CONFIG.indexOf("    - name: PR 失败立案");
+    const at = CONFIG.indexOf("        - name: PR 失败立案");
     expect(CONFIG.slice(at, at + 800)).toContain("timeout: 5m");
   });
 
@@ -695,51 +695,35 @@ describe("平台配置：这一格是 Pipeline 级 `endStages`，不是 `stages`
         "而「红了要有人知道」正是它唯一的用途。它属于 Pipeline 级 `endStages`。",
     ).not.toContain("PR 失败立案");
 
-    const anchorAt = CONFIG.indexOf(".pr-fail-stage: &pr_fail_stage");
-    expect(anchorAt).toBeGreaterThan(0);
-    expect(CONFIG.slice(anchorAt, anchorAt + 200)).toContain("endStages:");
+    /* #3478 起它是**内联**在 `pull_request` 流水线里的 `endStages`（旧独立锚点
+     * `*pr_fail_stage` 随主列迁平台池一并退役）—— 形态由下面几条按内联层钉。 */
+    const prAt = CONFIG.indexOf("  pull_request:");
+    expect(CONFIG.slice(prAt, CONFIG.indexOf("\n  push:", prAt))).toContain("  endStages:");
   });
 
-  it("PR 那条流水线真的引入了这个锚点（写了锚点却没人引用 = 永远不跑）", () => {
+  it("PR 那条流水线真的带着这个 endStages（写了却没人引用 = 永远不跑）", () => {
     const at = CONFIG.indexOf("  pull_request:");
-    const body = CONFIG.slice(at, at + 500);
-    /* 两个锚点合在**一个**合并键里：同一层写两行 `<<:` 是非法 YAML（`yaml` 解析器当场
-     * `Map keys must be unique`），而它坏掉的方式是静默的 —— 两个键只有一个生效。
-     * 所以这里钉的是流式形态，不是「两行」。 */
-    expect(body).toContain("- <<: [*common, *pr_fail_stage]");
-  });
-
-  it("锚点真的落在流水线项那一层（写了锚点却没人引用 = 永远不跑）", () => {
-    const at = CONFIG.indexOf("  pull_request:");
-    expect(at).toBeGreaterThan(0);
     const body = CONFIG.slice(at, CONFIG.indexOf("\n  push:", at));
-    expect(
-      body,
-      "`pull_request` 那条流水线没有引用 `*pr_fail_stage` —— 锚点写了也是白写",
-    ).toContain("- <<: [*common, *pr_fail_stage]");
-    expect(body, "`*gates`（串行链）也不许把它带回来").not.toContain("PR 失败立案");
+    /* #3478 起主列不吃 `*common` / `*pr_fail_stage`（平台池例外，runner / docker / lock
+     * 全自带）—— 旧锚点合并键不许回流：回流 = 整条迁回自托管 Windows。 */
+    expect(body).not.toContain("- <<: [*common, *pr_fail_stage]");
+    expect(body).toContain("      endStages:");
   });
 
-  /**
-   * 缩进是**语义**：`endStages:` 挂在哪一层，决定平台认不认它是流水线的收尾档。前面断言判的是「文本里有
-   * 那段字」，缩进错一格在它们眼里是**绿**的 —— 它会变成谁也不认识的字段，平台照读照跑，这一格永远不
-   * 执行。判据按锚点里那一层的缩进认：`endStages:` 是 2 空格（锚点展开进流水线项），它的格是 4 空格。
-   */
-  it("锚点里 `endStages:` 的缩进是流水线项那一层，格在它下面一层", () => {
-    const anchorAt = CONFIG.indexOf(".pr-fail-stage: &pr_fail_stage");
-    expect(anchorAt).toBeGreaterThan(0);
-    const lines = CONFIG.slice(anchorAt).split("\n");
-    const endAt = lines.findIndex((l) => l === "  endStages:");
+  it("endStages 落在流水线项那一层（缩进错一层 = 谁也不认识的字段，静默不执行）", () => {
+    const at = CONFIG.indexOf("  pull_request:");
+    const lines = CONFIG.slice(at, CONFIG.indexOf("\n  push:", at)).split("\n");
+    const endAt = lines.findIndex((l) => l === "      endStages:");
     expect(
       endAt,
-      "`*pr_fail_stage` 里没有 2 空格的 `endStages:` —— 它被挂到了错的那一层",
+      "`pull_request` 里没有 6 空格的 `endStages:` —— 它被挂到了错的那一层",
     ).toBeGreaterThan(0);
-    expect(lines[endAt + 1]).toBe("    - name: PR 失败立案");
+    expect(lines[endAt + 1]).toBe("        - name: PR 失败立案");
   });
 
   it("**不是** `failStages`：那一档只在红时跑，「这一格自己挂了」会一起消失", () => {
-    const anchorAt = CONFIG.indexOf(".pr-fail-stage: &pr_fail_stage");
-    const block = CONFIG.slice(anchorAt, anchorAt + 400);
+    const at = CONFIG.indexOf("  pull_request:");
+    const block = CONFIG.slice(at, CONFIG.indexOf("\n  push:", at));
     expect(block).not.toContain("failStages");
     expect(block).not.toContain("ifModify");
     /* 那两条没被验证过的条件语法也不许回来当「红也跑」的手段 —— 第一版写成
