@@ -99,11 +99,12 @@ export const INPUT_FACES = [
       "scripts/check-a11y-rules.cjs",
       "scripts/.a11y-rule-ledger.json",
       "oxlint.parity.config.mjs",
+      "src/lib/is-record.ts",
       "tests/fixtures/a11y-rule-ledger.sample.json",
       "tests/helpers/a11y-effective-config.ts",
       "tests/a11y-rules-gate.test.ts",
     ],
-    why: "被测输入里最贵的一件是判决配置 `oxlint.parity.config.mjs` 的求值，其余是判据本体与两份台账；业务组件改多少都不会让「规则开关 ⇄ 台账」这条漂",
+    why: "被测输入里最贵的一件是判决配置 `oxlint.parity.config.mjs` 的求值，其余是判据本体与两份台账；`src/lib/is-record.ts` 是用例直接 import 的共享守卫（ISSUE #3181 B5 子批 23 收窄夹具 JSON 时用上），面自称「它读什么」就得把它写进来 —— 它不是 wide 触发面，漏写就是改到守卫时这一条按面静默跳过；业务组件改多少都不会让「规则开关 ⇄ 台账」这条漂",
   },
   /* 下面这批是「拿真子进程 / 真 git / 真渲染」的判据自测：它们的触发面都窄到能写成面 ——
    * 进固定清单的理由是 import 图追不到，不是「必须每次跑」。#2793 先登记了耗时榜上最贵的
@@ -144,12 +145,13 @@ export const INPUT_FACES = [
     test: "tests/a11y-axe-stories.test.ts",
     face: [
       "src/components/ui/**",
+      "src/lib/is-record.ts",
       ".storybook/data-sources.tsx",
       "scripts/.a11y-axe-known.json",
       "tests/helpers/jsdom-capability.ts",
       "tests/a11y-axe-stories.test.ts",
     ],
-    why: "输入是 `src/components/ui/*.stories.tsx` 渲染出来的那棵树及其装饰器数据源：组件与故事的改动会改判决，负债台账与 jsdom 能力件同理（`tests/setup.ts` 与 axe / react 的版本是 wide 触发面，轮不到这一层）",
+    why: "输入是 `src/components/ui/*.stories.tsx` 渲染出来的那棵树及其装饰器数据源：组件与故事的改动会改判决，负债台账与 jsdom 能力件同理；`src/lib/is-record.ts` 是用例直接 import 的共享守卫（ISSUE #3181 B5 子批 23 收窄故事模块时用上），不是 wide 触发面，按「面写它读什么」必须登记（`tests/setup.ts` 与 axe / react 的版本才是 wide 触发面，轮不到这一层）",
   },
   {
     test: "tests/gate-executors.test.ts",
