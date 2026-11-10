@@ -49,6 +49,35 @@ export function requestUrlForFormat(baseUrl: string, format: LlmApiFormat): stri
   return base === "" ? "" : `${base}${LLM_API_FORMAT_PATHS[format]}`;
 }
 
+/** Base URL 看不出「接口版本段」时的提示（只提示、不改写，返回 `null` 表示不提示）。
+ *
+ *  版本段是路径最后一段 `v1` / `v1beta` / `v2` 这类（`/api/v1` 也算有）。
+ *  两个例外不提示：格式路径**自带**版本段（Anthropic 的 `/v1/messages`，Base URL
+ *  通常只到域名），以及 Base URL 还没填 / 不是合法 URL（那由字段校验管）。
+ *
+ *  为什么不自动补：各家网关版本段位置不同（有的在域名后、有的在 `/api/v1`），
+ *  替用户猜会造出「看着填对了却 404」的地址（#3501 的既定口径，#3517 只加提示）。 */
+export function baseUrlVersionHint(baseUrl: string, format: LlmApiFormat): string | null {
+  if (/^\/v\d/i.test(LLM_API_FORMAT_PATHS[format])) {
+    return null;
+  }
+  const trimmed = baseUrl.trim().replace(/\/+$/, "");
+  if (trimmed === "") {
+    return null;
+  }
+  let pathname: string;
+  try {
+    pathname = new URL(trimmed).pathname;
+  } catch {
+    return null;
+  }
+  const last = pathname.split("/").filter(Boolean).at(-1) ?? "";
+  if (/^v\d+[a-z0-9]*$/i.test(last)) {
+    return null;
+  }
+  return "看不出接口版本段（如 /v1）—— 有些网关要求 Base URL 带版本号，若测试连接报 404 请对照服务商文档补上";
+}
+
 /* ── 模型输入类型 ───────────────────────────────────────────────── */
 
 /* SAFETY: 类型断言已复核 */

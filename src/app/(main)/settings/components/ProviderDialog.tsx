@@ -17,6 +17,7 @@ import { textHandler } from "~/lib/form-props";
 import {
   LLM_API_FORMATS,
   LLM_API_FORMAT_LABELS,
+  baseUrlVersionHint,
   requestUrlForFormat,
 } from "~/lib/llm/provider-types";
 
@@ -25,6 +26,7 @@ import type { SettingsProviders } from "../hooks/use-settings-providers";
 
 export function ProviderDialog({ d, p }: { d: ProviderModelDialogs; p: SettingsProviders }) {
   const finalUrl = requestUrlForFormat(d.providerForm.baseUrl, d.providerForm.apiFormat);
+  const versionHint = baseUrlVersionHint(d.providerForm.baseUrl, d.providerForm.apiFormat);
 
   return (
     <Dialog
@@ -86,6 +88,7 @@ export function ProviderDialog({ d, p }: { d: ProviderModelDialogs; p: SettingsP
               ) : (
                 <span>
                   实际请求地址：<code className="text-ink/80">{finalUrl}</code>
+                  {versionHint !== null && <span className="mt-0.5 block">{versionHint}</span>}
                 </span>
               )
             }
@@ -100,7 +103,7 @@ export function ProviderDialog({ d, p }: { d: ProviderModelDialogs; p: SettingsP
                 onChange={textHandler((baseUrl) => {
                   d.setProviderForm((prev) => ({ ...prev, baseUrl }));
                 })}
-                placeholder="https://platform.agnes-ai.com/v1"
+                placeholder="https://api.example.com/v1"
                 value={d.providerForm.baseUrl}
               />
             )}

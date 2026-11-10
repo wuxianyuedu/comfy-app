@@ -29,6 +29,7 @@ import {
   LLM_API_FORMATS,
   LLM_API_FORMAT_LABELS,
   MODEL_INPUT_TYPE_LABELS,
+  baseUrlVersionHint,
   formatContextWindow,
   parseInputTypes,
   requestUrlForFormat,
@@ -71,6 +72,7 @@ export function ProviderDetail({
 
   const models = p.models.filter((model) => model.providerId === provider.id);
   const finalUrl = requestUrlForFormat(form.baseUrl, form.apiFormat);
+  const versionHint = baseUrlVersionHint(form.baseUrl, form.apiFormat);
 
   async function saveProvider() {
     setError(null);
@@ -157,6 +159,7 @@ export function ProviderDetail({
             ) : (
               <span>
                 实际请求地址：<code className="text-ink/80">{finalUrl}</code>
+                {versionHint !== null && <span className="mt-0.5 block">{versionHint}</span>}
               </span>
             )
           }
@@ -171,7 +174,7 @@ export function ProviderDetail({
               onChange={textHandler((baseUrl) => {
                 setForm((prev) => ({ ...prev, baseUrl }));
               })}
-              placeholder="https://platform.agnes-ai.com/v1"
+              placeholder="https://api.example.com/v1"
               value={form.baseUrl}
             />
           )}

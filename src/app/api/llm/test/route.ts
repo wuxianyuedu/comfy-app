@@ -5,9 +5,9 @@ import { unauthorizedResponse } from "~/server/lib/error-response";
 import { getLLMConfig } from "~/lib/llm/server";
 import { apiErrorDetail } from "~/lib/api-error";
 import { chatHeaders } from "~/lib/llm/api-format";
+import { httpFailureDetail } from "~/lib/llm/http-failure";
 import { isLlmApiFormat, type LlmApiFormat } from "~/lib/llm/provider-types";
 import { llmProviderRepository } from "~/lib/core/repository";
-import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -125,13 +125,16 @@ export async function POST(req: NextRequest) {
       }
     }
     if (!res.ok) {
-      const snippet = clampText(await res.text().catch(() => ""), {
-        maxLength: INLINE_SNIPPET_MAX,
-        marker: "",
-      });
+      /* 探测地址一并点名：用户对照服务商文档改 Base URL 时，得先看清
+       * 「我探的是哪一条」。整页 HTML 由 `httpFailureDetail` 翻成
+       * 「这不是接口响应」，不再把标记灌进提示（#3517）。 */
       return NextResponse.json({
         ok: false,
-        detail: `HTTP ${res.status}${snippet ? `：${snippet}` : ""}`,
+        detail: httpFailureDetail({
+          body: await res.text().catch(() => ""),
+          status: res.status,
+          url: `${probeBase.replace(/\/$/, "")}/models`,
+        }),
       });
     }
     const parsed: unknown = await res.json();
