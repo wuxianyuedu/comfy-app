@@ -11,9 +11,8 @@ import { ArrowRight } from "lucide-react";
 import { emitAppEvent } from "~/lib/app-events";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Button } from "~/components/ui/button";
-import { StatusButton } from "~/components/ui/service-status-row";
 
-import { SettingsCard } from "~/components/ui/settings-card";
+import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { Field } from "./SettingsPrimitives";
 import { FieldLabel } from "~/components/ui/field";
 import { ComfyuiStoragePaths } from "./ComfyuiStoragePaths";
@@ -38,6 +37,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
     <SettingsCard title="创作后端（ComfyUI）">
       <Field
         label="ComfyUI 路径（源码根或桌面版实例根）"
+        onBlur={() => {
+          void c.savePrefs();
+        }}
         onChange={(value) => {
           c.patchSettings({ comfyuiPath: value });
         }}
@@ -54,6 +56,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
       </p>
       <Field
         label="comfy-cli 解释器（Python 绝对路径）"
+        onBlur={() => {
+          void c.savePrefs();
+        }}
         onChange={(value) => {
           c.patchSettings({ comfyCliPython: value });
         }}
@@ -89,6 +94,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         <>
           <Field
             label="ComfyUI 端口"
+            onBlur={() => {
+              void c.savePrefs();
+            }}
             onChange={(value) => {
               c.patchSettings({
                 comfyuiPort: Math.max(0, Number(value) || 0),
@@ -104,6 +112,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           </p>
           <Field
             label="ComfyUI 启动参数（可选）"
+            onBlur={() => {
+              void c.savePrefs();
+            }}
             onChange={(value) => {
               c.patchSettings({ comfyuiExtraArgs: value });
             }}
@@ -126,7 +137,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           checked={c.drafts.settings.comfyuiAutoStart}
           id="comfyui-autostart"
           onCheckedChange={(next) => {
-            c.patchSettings({ comfyuiAutoStart: next === true });
+            void c.commitPrefs({ comfyuiAutoStart: next === true });
           }}
         />
         <FieldLabel className="text-ink/80 text-sm" htmlFor="comfyui-autostart">
@@ -138,7 +149,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           checked={c.drafts.settings.autoSyncLocalWorkflow}
           id="auto-sync-local-workflow"
           onCheckedChange={(next) => {
-            c.patchSettings({ autoSyncLocalWorkflow: next === true });
+            void c.commitPrefs({ autoSyncLocalWorkflow: next === true });
           }}
         />
         <FieldLabel className="text-ink/80 text-sm" htmlFor="auto-sync-local-workflow">
@@ -154,7 +165,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           按钮 + 日志框」，它让「改路径」这件小事要穿过一屏运行操作。现在这里只
           留一句指路 —— 它不是装饰，是这一分区撤掉四个动作之后**必须**给的出口
           （用户按老位置找「启动 ComfyUI」时会先看到这句，而不是以为功能没了）。 */}
-      <div className="border-border bg-surface-1 mb-4 rounded-lg border px-3 py-2">
+      <div className={`${SETTINGS_ROW_CLASS} mb-4`}>
         <p className="text-ink-muted text-xs leading-relaxed">
           路径配好并保存之后，到侧栏的「ComfyUI」页启动它 —— 那里有运行状态、启动 /
           关闭、打开查看，以及每一次启动的日志。
@@ -171,15 +182,6 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           <ArrowRight aria-hidden className="size-3" data-icon="inline-end" />
         </Button>
       </div>
-      <StatusButton
-        disabled={c.saving}
-        onClick={() => {
-          void c.savePrefs();
-        }}
-        variant="primary-solid"
-      >
-        保存偏好
-      </StatusButton>
     </SettingsCard>
   );
 }
