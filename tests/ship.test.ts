@@ -8385,6 +8385,190 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       }
     });
   });
+  /* ── #3512 工作模式：模式是打包旗标的显式别名，展开后与逐枚旗标同义 ── */
+  describe("#3512 工作模式：--mode auto / confirm", () => {
+    const GET_PULL_TITLED =
+      '{"status":200,"data":{"number":777,"title":"fix(ship): 阶段进度 (#3083)","state":"open","mergeable_state":"mergeable","is_merged":true}}';
+    const ISSUE_CLOSED =
+      '{"status":200,"data":{"state":"closed","state_reason":"completed","closed_at":"2026-11-03T01:02:03.000Z","body":"x"}}';
+
+    it("auto 全托管：一次点名跑完 合并→关单→删分支，结论 0", async () => {
+      const { tmpRoot, gitDir } = proofRoot("mode-auto");
+      try {
+        const heard: Array<string> = [];
+        const base = fake({ chain: true, branchSubjects: ["fix(ship): 阶段进度 (#3083)"] });
+        const run = overrideRun(base, {
+          "get-pull": GET_PULL_TITLED,
+          "update-issue": '{"status":200,"data":{}}',
+          "get-issue": ISSUE_CLOSED,
+        });
+        const code = await main({
+          root: tmpRoot,
+          run,
+          log: (s: string) => heard.push(s),
+          probeCnb: () => true,
+          resolveGitDir: () => gitDir,
+          env: {},
+          args: ["--mode", "auto"],
+        });
+        expect(code).toBe(CODE.GREEN);
+        const all = heard.join("\n");
+        expect(all).toContain("[ship] ▶ 合并 | pr=777 | form=squash");
+        expect(all).toContain("[ship] ▶ 关单 | issue=3083 | state=closed");
+        expect(all).toContain("[ship] ▶ 清分支 | branch=feat/x | remote=已删 | local=已删");
+        const calls = base.calls.join("\n");
+        expect(calls).toContain("merge-pull");
+        expect(calls).toContain("update-issue");
+        expect(calls).toContain("push cnb --delete");
+        expect(calls).toContain("branch -D");
+        /* 展开语义 = 人亲手给了三枚旗标：与上面 #3083 那格的整链形状逐字同路。 */
+      } finally {
+        fs.rmSync(tmpRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("confirm 拒绝合并：不问也不跑 关单/删分支，跳过被读出来，结论仍 0", async () => {
+      const { tmpRoot, gitDir } = proofRoot("mode-confirm-decline");
+      try {
+        const heard: Array<string> = [];
+        const asked: Array<string> = [];
+        const base = fake({ chain: true, branchSubjects: ["fix(ship): 阶段进度 (#3083)"] });
+        const run = overrideRun(base, {
+          "get-pull": GET_PULL_TITLED,
+          "update-issue": '{"status":200,"data":{}}',
+          "get-issue": ISSUE_CLOSED,
+        });
+        const code = await main({
+          root: tmpRoot,
+          run,
+          log: (s: string) => heard.push(s),
+          probeCnb: () => true,
+          resolveGitDir: () => gitDir,
+          env: {},
+          args: ["--mode", "confirm"],
+          confirm: (label: string) => {
+            asked.push(label);
+            return Promise.resolve(false);
+          },
+        });
+        /* 跳过不是失败：与「默认不给 --merge」的那一跳同状态（CI 出终态 + 下一动作）。 */
+        expect(code).toBe(CODE.GREEN);
+        expect(asked).toEqual(["合并 PR"]);
+        const all = heard.join("\n");
+        expect(all).toContain("确认模式：合并未授权 ⇒ 跳过");
+        expect(all).toContain("pnpm ship --merge");
+        expect(all).toContain("确认模式：1 个动作未授权被跳过（合并 PR #777）");
+        const calls = base.calls.join("\n");
+        expect(calls).not.toContain("merge-pull");
+        expect(calls).not.toContain("update-issue");
+        expect(calls).not.toContain("branch -D");
+      } finally {
+        fs.rmSync(tmpRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("confirm 全部同意：三个动作都执行（与 auto 同一终点）", async () => {
+      const { tmpRoot, gitDir } = proofRoot("mode-confirm-yes");
+      try {
+        const heard: Array<string> = [];
+        const asked: Array<string> = [];
+        const base = fake({ chain: true, branchSubjects: ["fix(ship): 阶段进度 (#3083)"] });
+        const run = overrideRun(base, {
+          "get-pull": GET_PULL_TITLED,
+          "update-issue": '{"status":200,"data":{}}',
+          "get-issue": ISSUE_CLOSED,
+        });
+        const code = await main({
+          root: tmpRoot,
+          run,
+          log: (s: string) => heard.push(s),
+          probeCnb: () => true,
+          resolveGitDir: () => gitDir,
+          env: {},
+          args: ["--mode", "confirm"],
+          confirm: (label: string) => {
+            asked.push(label);
+            return Promise.resolve(true);
+          },
+        });
+        expect(code).toBe(CODE.GREEN);
+        expect(asked).toEqual(["合并 PR", "关单", "删分支"]);
+        const calls = base.calls.join("\n");
+        expect(calls).toContain("merge-pull");
+        expect(calls).toContain("update-issue");
+        expect(calls).toContain("branch -D");
+      } finally {
+        fs.rmSync(tmpRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("confirm 只拒关单：合并与删分支照走，关单跳过并念手动出口", async () => {
+      const { tmpRoot, gitDir } = proofRoot("mode-confirm-close-no");
+      try {
+        const heard: Array<string> = [];
+        const base = fake({ chain: true, branchSubjects: ["fix(ship): 阶段进度 (#3083)"] });
+        const run = overrideRun(base, {
+          "get-pull": GET_PULL_TITLED,
+          "update-issue": '{"status":200,"data":{}}',
+          "get-issue": ISSUE_CLOSED,
+        });
+        const code = await main({
+          root: tmpRoot,
+          run,
+          log: (s: string) => heard.push(s),
+          probeCnb: () => true,
+          resolveGitDir: () => gitDir,
+          env: {},
+          args: ["--mode", "confirm"],
+          confirm: (label: string) => Promise.resolve(label !== "关单"),
+        });
+        expect(code).toBe(CODE.GREEN);
+        const all = heard.join("\n");
+        expect(all).toContain("确认模式：关单未授权 ⇒ 跳过");
+        expect(all).toContain("pnpm ship --close-issue");
+        expect(all).toContain("确认模式：1 个动作未授权被跳过（关单（--close-issue））");
+        const calls = base.calls.join("\n");
+        expect(calls).toContain("merge-pull");
+        expect(calls).not.toContain("update-issue");
+        expect(calls).toContain("branch -D");
+      } finally {
+        fs.rmSync(tmpRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("词表外 ⇒ 退 2 不静默收下，一个写动作都不发", async () => {
+      const { run, calls } = fake({ chain: true });
+      const heard: Array<string> = [];
+      const code = await main({
+        ...quiet,
+        run,
+        log: (s: string) => heard.push(s),
+        args: ["--mode", "yolo"],
+      });
+      expect(code).toBe(CODE.NOT_RUN);
+      const all = heard.join("\n");
+      expect(all).toContain("--mode 不认识");
+      expect(all).toContain("auto / confirm");
+      expect(all).toContain("这一跳没有结论");
+      expect(calls.join("\n")).not.toContain("merge-pull");
+    });
+
+    it("模式与单件动作互斥：--claims 同跑 ⇒ 2（模式先展开，守卫点名的是展开后的旗标）", async () => {
+      const { run } = fake({ chain: true });
+      const heard: Array<string> = [];
+      const code = await main({
+        ...quiet,
+        run,
+        log: (s: string) => heard.push(s),
+        args: ["--mode", "auto", "--claims"],
+      });
+      expect(code).toBe(CODE.NOT_RUN);
+      /* 展开发生在解析层 ⇒ 互斥守卫读到的是 `--merge / --close-issue / --clean-branch`
+       * 这组展开后的旗标名，不是 `--mode` 这个词 —— 拒绝的依据仍然成立（--claims 与
+       * 合并那一族互斥），只是点名的是展开面。 */
+      expect(heard.join("\n")).toContain("--merge");
+    });
+  });
 });
 
 /**
