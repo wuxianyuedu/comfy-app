@@ -45,7 +45,6 @@ import {
   resolveUpstream,
   readUsageTestPrologue,
   readPayload,
-  httpFailureDetail,
   parseExtraJson,
   chatTextFrom,
   callChat,
@@ -248,27 +247,11 @@ describe("readUsageTestPrologue（两个路由共用的请求前言）", () => {
   });
 });
 
-describe("readPayload / httpFailureDetail / parseExtraJson / chatTextFrom", () => {
+describe("readPayload / parseExtraJson / chatTextFrom", () => {
   it("readPayload：非 JSON 响应体给 null（调用方按状态给文案）", async () => {
     expect(await readPayload(jsonResponse({ a: 1 }))).toEqual({ a: 1 });
     const html = new Response("not json", { status: 502 });
     expect(await readPayload(html)).toBeNull();
-  });
-
-  it("httpFailureDetail：对象体走 JSON、非 JSON 体带原始文本、都截断到 240 字符", () => {
-    expect(httpFailureDetail(500, { a: "x" })).toBe('HTTP 500：{"a":"x"}');
-    // 非 JSON 体（网关 HTML 错误页）此前拼出的是重复状态码 `HTTP 503：HTTP 503`，
-    // 上游写的真实原因一个字都看不到
-    expect(httpFailureDetail(503, null, "<html>upstream boom</html>")).toBe(
-      "HTTP 503：<html>upstream boom</html>",
-    );
-    expect(httpFailureDetail(503, null, "   ")).toBe("HTTP 503");
-    expect(httpFailureDetail(503, null)).toBe("HTTP 503");
-    const long = httpFailureDetail(500, { a: "y".repeat(500) });
-    expect(long.length).toBeLessThanOrEqual("HTTP 500：".length + 240);
-    expect(httpFailureDetail(500, null, "z".repeat(500)).length).toBeLessThanOrEqual(
-      "HTTP 500：".length + 240,
-    );
   });
 
   it("parseExtraJson：空串=无额外参数，非对象 / 坏 JSON 给可读文案", () => {
@@ -327,11 +310,22 @@ describe("callChat", () => {
     expect(callAt().init.signal).toBeInstanceOf(AbortSignal);
   });
 
-  it("非 2xx → HTTP 状态 + 响应片段", async () => {
+  it("非 2xx → HTTP 状态 + 地址 + 响应片段", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ error: "bad" }, 500));
     await expect(callChat(UP, "m", "q", {})).resolves.toEqual({
       ok: false,
-      detail: 'HTTP 500：{"error":"bad"}',
+      detail: 'HTTP 500（https://u/v1/chat/completions）：{"error":"bad"}',
+    });
+  });
+
+  it("非 2xx 且响应体是 HTML 页面 → 指出「不是接口响应」，不灌标记（#3517）", async () => {
+    fetchMock.mockResolvedValue(
+      new Response("<!DOCTYPE html><html><body>404</body></html>", { status: 404 }),
+    );
+    const out = await callChat(UP, "m", "q", {});
+    expect(out).toMatchObject({
+      ok: false,
+      detail: containsText("返回的是网页（HTML）而不是接口响应"),
     });
   });
 
@@ -373,7 +367,7 @@ describe("callImage", () => {
     fetchMock.mockResolvedValue(jsonResponse({}, 429));
     await expect(callImage(UP, "m", "p", "", {})).resolves.toEqual({
       ok: false,
-      detail: "HTTP 429：{}",
+      detail: "HTTP 429（https://u/v1/chat/completions）：{}",
     });
 
     fetchMock.mockResolvedValue(jsonResponse({ data: [] }));
@@ -434,7 +428,7 @@ describe("callVideo（提交 + 内置一轮轮询）", () => {
     fetchMock.mockResolvedValue(jsonResponse({ m: "x" }, 400));
     await expect(callVideo(UP, "m", "p", {})).resolves.toEqual({
       status: "error",
-      detail: 'HTTP 400：{"m":"x"}',
+      detail: 'HTTP 400（https://u/v1/chat/completions）：{"m":"x"}',
     });
   });
 });

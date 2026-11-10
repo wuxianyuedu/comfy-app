@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { EMPTY_PLACEHOLDER } from "~/lib/display-value";
 
 import {
+  baseUrlVersionHint,
   formatContextWindow,
   inferModelDefaults,
   isLlmApiFormat,
@@ -38,6 +39,37 @@ describe("isLlmApiFormat / requestUrlForFormat", () => {
     );
     expect(requestUrlForFormat("https://agnes", "responses")).toBe("https://agnes/responses");
     expect(requestUrlForFormat("   ", "responses")).toBe("");
+  });
+});
+
+describe("baseUrlVersionHint：只提示「看不出版本段」，不改写用户输入", () => {
+  it("路径最后一段不是版本段时提示（含完全没有路径的域名）", () => {
+    expect(baseUrlVersionHint("https://api.example.com", "chat-completions")).toContain(
+      "看不出接口版本段",
+    );
+    expect(baseUrlVersionHint("https://api.example.com/api", "chat-completions")).toContain(
+      "看不出接口版本段",
+    );
+  });
+
+  it("/v1、/api/v1、/v1beta 都算有版本段（去尾斜杠后判）", () => {
+    for (const base of [
+      "https://api.example.com/v1",
+      "https://api.example.com/api/v1/",
+      "https://api.example.com/v1beta",
+      "https://api.example.com/v2",
+    ]) {
+      expect(baseUrlVersionHint(base, "chat-completions"), base).toBeNull();
+    }
+  });
+
+  it("格式路径自带版本段时不提示（Anthropic 的 Base URL 通常只到域名）", () => {
+    expect(baseUrlVersionHint("https://api.anthropic.com", "anthropic-messages")).toBeNull();
+  });
+
+  it("空值 / 非 URL 不提示（那归字段校验管，别在输入中途唠叨）", () => {
+    expect(baseUrlVersionHint("   ", "chat-completions")).toBeNull();
+    expect(baseUrlVersionHint("not a url", "chat-completions")).toBeNull();
   });
 });
 
