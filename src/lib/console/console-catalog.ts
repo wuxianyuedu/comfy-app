@@ -93,13 +93,13 @@ export const CONSOLE_PRESETS: Array<ConsolePresetGroup> = [
         id: "format-check",
         label: "格式检查",
         command: "pnpm run format:check",
-        desc: "prettier 检查（不改文件）",
+        desc: "oxfmt 检查（不改文件）",
       },
       {
         id: "format-write",
         label: "格式化",
         command: "pnpm run format:write",
-        desc: "prettier 就地改文件；改完自己看一眼 diff",
+        desc: "oxfmt 就地改文件；改完自己看一眼 diff",
       },
       {
         id: "lint-fix",

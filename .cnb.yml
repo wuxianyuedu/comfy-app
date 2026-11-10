@@ -97,7 +97,7 @@
 #    YAML 里 `[` 开头的纯量是**流式序列**，那样写整份文件解析不过
 #    （prettier 的 YAML 解析器当场报 `SyntaxError: Unexpected scalar at node end`，
 #    而平台侧只会表现为「流水线起不来」）。判 `.cnb.yml` 的语法用
-#    `pnpm exec prettier --check .cnb.yml` —— 它带 YAML 解析器。
+#    `pnpm check:ci-yaml`（prettier 已随 #2541 退役，`pnpm exec prettier` 今天跑不了）。
 #
 # ── 两条门禁流水线 + 一批「GA 派发」触发口：谁在什么事件上跑 ────────────────
 #
