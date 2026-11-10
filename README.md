@@ -408,7 +408,7 @@ tools\build\build-standalone.ps1   # 组装 standalone 资源（server.js + .nex
 pnpm dev          # 前端开发服务器
 pnpm build        # Next.js 生产构建（standalone）
 pnpm check        # eslint + tsc --noEmit
-pnpm ship         # 交出去：提交 → push → 开 PR → 等 CI（合并要显式加 --merge）
+pnpm ship         # 交出去：提交 → push → 开 PR → 等 CI（--mode auto 全托管 / --mode confirm 关键步确认 / 合并要显式）
 pnpm test         # Vitest 单元测试
 pnpm test:e2e     # Playwright e2e
 pnpm run docs     # 生成 API 文档到 docs/api（必须是 run docs：pnpm docs 是内建命令）

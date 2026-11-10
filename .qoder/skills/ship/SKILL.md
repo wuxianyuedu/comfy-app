@@ -28,6 +28,10 @@ pnpm ship --branch feat/x    # 还没有分支时，让它先把分支建出来�
 pnpm ship                    # 到「CI 出终态 + 打印下一动作」为止
 pnpm ship --merge            # CI 绿了才合并（squash）
 pnpm ship --merge --close-issue --clean-branch   # 合上之后关单、并把**这一次那条**分支收掉
+pnpm ship --mode auto                            # 全托管：= 上面那三枚旗标的**显式别名**（一次点名授权整组）
+pnpm ship --mode confirm                         # 同一组动作，但合并 / 关单 / 删分支每步先问 [y/N]
+                                                 #  （回答不是 y ⇒ 未授权：跳过该动作、念出手动出口，
+                                                 #   收尾结论行前汇总；EOF / 非交互 fail-closed）
 pnpm ship --merge --close-issue 2179             # 本轮号（标题末尾的 (#N)）+ 人点名的号，并集去重
 pnpm ship --close-issue 2179                     # 只补关：本轮不合，凭平台侧「已合并 PR」的落地证明关它
 pnpm ship --claim 2187                           # 领取：打 `处理人:` + `参与人:` 标签，评论「已接单」（写后回读）
@@ -44,6 +48,17 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
 ```
 
 ## 几条必须先知道的边界
+
+0. **工作模式是打包旗标的显式别名，不是新判定（ISSUE #3512）。** `--mode auto` 在语义上
+   等于人亲手给了 `--merge --close-issue --clean-branch`（展开发生在解析层，阶段表不认识
+   「模式」这个词），所以四条红线全部照旧：终态仍只认 build 的 `data.status` 与 PR 的
+   `is_merged`，结论一次也不来自模式本身。`--mode confirm` 是同一组动作 + 每步一句
+   `[y/N]`（CI 已经红的那一跳不问合并，照旧走「给了 --merge 而 CI 红 ⇒ 退 1」）；回答不是
+   `y` / `yes`（含 EOF / 非交互）按**未授权**处理：跳过该动作、当场念出手动出口，收尾
+   结论行**之前**汇总跳过清单 —— 跳过不是失败（与默认不给 `--merge` 的那一跳同状态），
+   但**跳过必须被读出来**，不许在屏幕上长得像执行过。词表只有 `auto` / `confirm`，
+   词表外 / 重复 / 缺值 ⇒ 退 2 不静默收下；与 `--claims` / `--diagnose` / `--reap` 等
+   单件动作的互斥走既有清单（展开后守卫点名的是展开面）。
 
 1. **退码分型表（0–7）：看到退码就知道是哪件事，`2` 及以上都不等于通过**（ISSUE #3083）。
    唯一出处 `scripts/ship-codes.mjs`，`--merge` 与 `--diagnose` 同一套码：

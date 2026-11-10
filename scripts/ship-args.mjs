@@ -20,6 +20,8 @@
  *
  * @module scripts/ship-args — `pnpm ship` 的旗标解析层（纯函数，不摸世界）
  */
+import { SHIP_MODES } from "./ship-mode.mjs";
+
 /**
  * 平台构建号的形状（`cnb-<短码>-<轮次>`，实测 `cnb-68q-1k5sc5kgq`）。
  *
@@ -29,6 +31,33 @@
  * 构建」那句明说的 2，而不是悄悄把构建号读成格名。
  */
 const BUILD_SN_SHAPE = /^cnb-[a-z0-9]{2,}-[a-z0-9]{4,}$/i;
+
+/**
+ * `--mode` 的值收口：词表外 / 缺值 / 重复都进 `modeBad`，一次也不静默收下。
+ *
+ * 为什么不静默：拼错的模式会被读成「没要那个动作」（与未知旗标同一族最贵的误读 ——
+ * 「以为会全托管跑完，其实什么都没授权」），所以哪怕值看起来眼熟也当场点名。
+ * 词表是唯一出处（`ship-mode.mjs` 的 `SHIP_MODES`），这里不抄第二份。
+ *
+ * @param {{mode: string | null, modeBad: string[]}} out 累积中的解析结果
+ * @param {string} tok 命令行上紧跟的值（可能为空串）
+ * @returns {void}
+ */
+function setModeValue(out, tok) {
+  if (tok === "") {
+    out.modeBad.push(`(缺模式：可选 ${SHIP_MODES.join(" / ")})`);
+    return;
+  }
+  if (!SHIP_MODES.includes(tok)) {
+    out.modeBad.push(`词表外：${tok}（可选：${SHIP_MODES.join(" / ")}）`);
+    return;
+  }
+  if (out.mode !== null) {
+    out.modeBad.push(`重复的 --mode（前一个 ${out.mode}）`);
+    return;
+  }
+  out.mode = tok;
+}
 
 /**
  * 一个命令行 token 是不是合法的 issue 号（`2179` 或 `#2179`）。不是就回 `null`。
@@ -91,10 +120,10 @@ export function parseIssueNumberToken(token) {
  * 没有对应的肯定旗标：默认就是开的。
  *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],rerunCi:boolean,only:string|null,unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],rerunCi:boolean,only:string|null,unknown:string[]}} */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果 */
   const out = {
     message: null,
     messageFile: null,
@@ -138,6 +167,8 @@ export function parseArgs(argv) {
     ghLogsBad: [],
     rerunCi: false,
     only: null,
+    mode: null,
+    modeBad: [],
     unknown: [],
   };
   for (let i = 0; i < argv.length; i += 1) {
@@ -332,6 +363,13 @@ export function parseArgs(argv) {
       out.adds.push(a.slice("--add=".length));
     } else if (a.startsWith("--only=")) {
       out.only = a.slice("--only=".length);
+    } else if (a === "--mode") {
+      /* 空格写法：下一个 token 是模式值。词表外 / 缺值 / 重复都进 modeBad（见
+       * `setModeValue`），由执行层点名后停 —— 拼错的模式不许被读成「没要那个动作」。 */
+      setModeValue(out, String(argv[++i] ?? ""));
+    } else if (a.startsWith("--mode=")) {
+      /* 等号写法：与空格写法共用同一支，避免「一种写法能用、另一种被当成未知旗标」。 */
+      setModeValue(out, a.slice("--mode=".length));
     } else if (a.startsWith("--claim=") || a.startsWith("--release=")) {
       const isClaim = a.startsWith("--claim=");
       const tok = a.slice(a.indexOf("=") + 1);

@@ -62,6 +62,11 @@ function namedActions(opt, self) {
     ["add", opt.adds.length > 0, "--add"],
     ["only", opt.only, "--only"],
     ["reap", opt.reap, "--reap"],
+    [
+      "mode",
+      (opt.mode !== null && opt.mode !== undefined) || (opt.modeBad ?? []).length > 0,
+      "--mode",
+    ],
     ["claim", opt.claim !== null && opt.claim !== undefined, "--claim"],
     ["release", opt.release !== null && opt.release !== undefined, "--release"],
     ["claims", opt.claims, "--claims"],

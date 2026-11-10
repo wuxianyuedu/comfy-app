@@ -103,7 +103,9 @@
  *    的细分（冲突 / CI 无终态 / 读数缺失 / 守卫拦住 / 本地前置）—— 看到退码就知道
  *    是哪件事。合码口径不变：「没跑起来家族」（≥2）压过 `1`，`1` 压过 `0` ——
  *    「没拿到测量」与「测量结果是红的」是两件事，混起来就是静默失效。
- * 3. **合并是显式动作。** 默认止于阶段 5（打印下一动作）。要合就 `--merge`。
+ * 3. **合并是显式动作。** 默认止于阶段 5（打印下一动作）。要合就 `--merge`
+ *    （或 `--mode auto` / `--mode confirm` —— 那是打包旗标的显式别名，#3512；
+ *    别名由人点名才算授权，展开后与逐枚旗标同义，不发明判定）。
  *
  * ── 它**不做**什么 ─────────────────────────────────────────────
  *
@@ -170,6 +172,14 @@
  *                                              # false ⇒ 退 1（前提被推翻），取不到 ⇒ 退 2。
  *                                              # 它**不是** --force-close，也不替代本轮验真的合并。
  *   pnpm ship --merge --clean-branch           # 合上之后删掉**这次那一条**分支（远端 + 本地）
+ *   pnpm ship --mode auto                      # 全托管：= `--merge --close-issue --clean-branch` 的
+ *                                              #  **显式别名**（一次点名授权整组；展开发生在解析层，
+ *                                              #  结论仍只认 build 的 data.status 与 PR 的 is_merged）
+ *   pnpm ship --mode confirm                   # 同一组动作，但合并 / 关单 / 删分支每步先问 [y/N]
+ *                                              #  （回答不是 y ⇒ 未授权：跳过该动作、念出手动出口，
+ *                                              #   收尾结论行前汇总；EOF / 非交互 fail-closed；
+ *                                              #   CI 已红的那一跳不问合并，照旧退 1）
+ *                                              #  词表只有 auto / confirm，词表外 ⇒ 退 2 不静默收下
  *   pnpm ship --reap                           # 这一轮结束时收掉本检出**端口上那批**残留进程
  *                                              #  （阶段 0 每轮都念一行归属读数；`via:"session"`
  *                                              #   那一档不归这里收，见 `ship-reap.mjs`）
@@ -237,6 +247,7 @@ import { resolveGitDir } from "./git-dir.mjs";
 /* 旗标解析在 `ship-args.mjs`：它跟着「命令行长什么样」动，而 `ship-core` 跟着「外部执行者的
  * 读数形状」动（ISSUE #2491 把这一层拆出去的那条理由写在文件头）。 */
 import { parseArgs } from "./ship-args.mjs";
+import { expandMode, makeStdinConfirm, runFinalStages, SHIP_MODES } from "./ship-mode.mjs";
 import {
   CODE,
   codeTag,
@@ -250,10 +261,9 @@ import { reportStage } from "./ship-stage.mjs";
 import { createShipResultSink } from "./ship-result.mjs";
 import { handleFromProcessEnv, readDevHandleWithSource } from "./ship-ticket.mjs";
 import { reapCheckoutInstances, readAppInstances } from "./ship-reap.mjs";
-import { cleanBranch, createOrReusePull, mergeAndVerify, reportVerdict } from "./ship-platform.mjs";
+import { createOrReusePull, reportVerdict } from "./ship-platform.mjs";
 import { pollUntilTerminal } from "./ship-poll.mjs";
 import { startProgress } from "./progress-heartbeat.mjs";
-import { closeIssues } from "./ship-close.mjs";
 import { runCommitStage, runPushStage } from "./ship-local.mjs";
 import { runPreflightStage } from "./ship-preflight.mjs";
 import { runGhLogsOnRed } from "./ship-gh-logs.mjs";
@@ -355,6 +365,7 @@ export async function main(deps = {}) {
  *   args?: string[],
  *   env?: Record<string, string | undefined>,
  *   readInstances?: (root: string) => Promise<{running?: boolean, pids?: number[], via?: string | null}>,
+ *   confirm?: (label: string, detail?: string) => Promise<boolean>,
  * }} deps 注入点（由 `main` 总是给全，所以这里不标可选 —— 标了会让后面那个
  *    必需参数报 TS1016「required 不能跟在 optional 之后」）
  * @param {string[]} tmpFiles 临时文件回收清单，由 `main` 建并在 `finally` 里清
@@ -376,13 +387,21 @@ async function runFlow(deps, tmpFiles) {
     return p;
   };
   const run = deps.run ?? makeRunner(root);
+  const opt0 = parseArgs(deps.args ?? process.argv.slice(2));
+  /** 模式展开（#3512）：`--mode auto` / `confirm` 是打包旗标的显式别名，展开后与
+   * 人亲手给了那三枚旗标完全同义。展开发生在解析层之后、所有阶段之前 ——
+   * standalone 分派（只补关那一路认 `closeIssue && !merge`）与互斥清单读到的
+   * 都已经是展开后的旗标面。词表外的值留在 `modeBad` 里，由下面那道检查拦。 */
+  expandMode(opt0);
+  const opt = opt0;
   /** cnb 在不在：**真起一次** `--version` 看退码。不按「PATH 里有没有那个名字」判 ——
    *  在 Windows 垫片上「找得到」与「起得来」是两件事（见 `ship-exec.mjs` 的 `cnbSpawn`）。 */
   const probeCnb = deps.probeCnb ?? (() => run("cnb", ["--version"]).status === 0);
   const log = deps.log ?? ((s) => process.stdout.write(`${s}\n`));
   const sleep = deps.sleep ?? ((ms) => new Promise((res) => setTimeout(res, ms)));
   const now = deps.now ?? (() => Date.now());
-  const opt = parseArgs(deps.args ?? process.argv.slice(2));
+  /* `opt` 在上面随模式展开一起解析了（`expandMode` 要在 standalone 分派之前生效），
+   * 这里不再第二次 parse —— 两份解析会在「运行期环境变了」之类的场景分叉。 */
   const codes = /** @type {number[]} */ ([]);
   const want = (/** @type {string} */ p) => !opt.only || opt.only === p;
   /** 下面几段共用的远端/基线，在两道守卫之后解析（见 `resolveUpstream` 那一段的注释）。 */
@@ -413,6 +432,24 @@ async function runFlow(deps, tmpFiles) {
     log("[ship] 拼错的旗标会被读成「没要那个动作」，所以这里直接停。见文件头「用法」。");
     return CODE.NOT_RUN;
   }
+  /* 模式词表外的值不静默收下（#3512）：拼错的模式会被读成「没授权那组动作」，
+   * 而人以为全托管在跑 —— 与未知旗标同一族最贵的误读，所以哪怕眼熟也当场点名。 */
+  if (opt.modeBad.length > 0) {
+    log(
+      `[ship] [ERROR] --mode 不认识：${opt.modeBad.join("；")}（可选：${SHIP_MODES.join(" / ")}）`,
+    );
+    log("[ship] 这一跳没有结论（exit 2），不是「没要那个动作」。");
+    return CODE.NOT_RUN;
+  }
+  /** `--mode confirm`：合并 / 关单 / 删分支每步先问一次。确认应答器**恒定义**
+   *  （造一个闭包不开 stdin，调用才读流），非 confirm 模式的三个调用点都在
+   *  `modeConfirm` 分支里、一次也不会被走到 —— 这样 tsc 不需要跨 const 收窄，
+   *  也不引入断言（#3167 对断言收窄零容忍）。可注入（`deps.confirm`，测试喂
+   *  PassThrough）；缺省 = 读真实 stdin，fail-closed。 */
+  const modeConfirm = opt.mode === "confirm";
+  const confirmStep = deps.confirm ?? makeStdinConfirm();
+  /** confirm 模式下被拒的动作（读数，不改退码；收尾结论行前汇总一遍）。 */
+  const confirmSkipped = /** @type {string[]} */ ([]);
   if (opt.only && !PHASES.includes(opt.only)) {
     log(`[ship] [ERROR] --only 不认的阶段：${opt.only}（可选：${PHASES.join(" / ")}）`);
     return CODE.NOT_RUN;
@@ -759,80 +796,35 @@ async function runFlow(deps, tmpFiles) {
         });
       }
 
-      // ── 阶段 6：merge（显式）─────────────────────────────────
-      /* `landed` 是「落进主干的那一行」的快照，由阶段 6 在**验真之后**填；
-       * 阶段 7 要从它的标题本体里取 issue 号 —— 不在那里回推，因为合并那一步
-       * 会把 HEAD 挪到 master，`pickTitle` 那时已经算不出这条分支的第一笔。 */
+      // ── 阶段 6-8：终局三跳（合并 / 关单 / 删分支）—— 模式下的装配 ──
+      /* 实现收在 `ship-mode.mjs` 的 `runFinalStages`（#3512）：问不问 / 跳不跳 /
+       * 念什么出口是「模式怎么改变阶段 6–8 的走法」，与装配层的变化方向不同；
+       * 判定本身仍在 `ship-platform` / `ship-close`。`landed` 由合并那一跳在
+       * **验真之后**就地填（阶段 7 要从它的标题本体取号，那里不回推 —— 合并会把
+       * HEAD 挪走，`pickTitle` 那时算不出这条分支的第一笔）；`confirmSkipped`
+       * 是同一个数组的引用，`finish()` 在结论行之前汇总它。 */
       const landed = { title: "", sha: "", verified: false };
-      if (want("merge")) {
-        codes.push(
-          mergeAndVerify({
-            run,
-            log,
-            slug,
-            number,
-            frags,
-            baseRef,
-            up,
-            merge: opt.merge,
-            buildState,
-            explicitTitle: opt.title,
-            /* preflight 钉住的分支名：合并前第二道漂移复核要用（第一道在上面进平台段前）。 */
-            branch,
-            landed,
-            /* 只把「人这一跳给了哪个旗标」递过去：合并那一段收尾那句边界声明要按
-             * 这一轮实际做了什么来说，不留一句被下一行推翻的话。 */
-            cleanBranch: opt.cleanBranch,
-          }),
-        );
-      }
-
-      // ── 阶段 7：关单（显式，且只跟在验真的合并之后）────────────
-      /* 这一格**只在人点名时出现**（`--close-issue`）：关一张单子是把状态写到
-       * 别人也看得见、且不会自动回退的地方，与合并本身同一档，所以同一个口径 ——
-       * 默认不开。没合并成而带着它跑，落的是 2 并说明（不是静默跳过、更不是绿）。 */
-      if (opt.closeIssue) {
-        /* 本轮合并已验真时，`--as-merged` 不参与判决（那一条比"人点名的某条 PR"更强）。
-         * 这一句是**读数**、不改退码，但它必须出现：缺了它，下一行念的「依据：本轮落地
-         * 那一行点名的」会让人以为旗标被吃掉了 —— 静默忽略别人的旗标正是这一族反复在收的形状。 */
-        if (opt.asMerged !== null && landed?.verified === true) {
-          log(
-            `[ship] --as-merged ${opt.asMerged} 这一跳**不参与判决**：本轮合并已验真` +
-              "（比一条点名的 PR 更强的证明）⇒ 号仍从落地那一行的标题本体取。",
-          );
-        }
-        codes.push(
-          closeIssues({
-            run,
-            log,
-            slug,
-            closeIssue: true,
-            landed,
-            explicit: opt.closeIssueNumbers,
-            handle,
-            handleExplicit: who.explicit,
-            mkTmp,
-            asMerged: opt.asMerged,
-          }),
-        );
-      }
-
-      // ── 阶段 8：清理分支（显式，且只跟在验真的合并之后）──────────
-      /* 与合并、关单同一档：默认不开。这一格动的是 ref —— 远端那条删掉后 PR 的评审线索
-       * 一起没，本地那条是这些提交唯一的对象（squash 落进主干的是另一笔）。
-       * 所以守卫就是「合并验真过没有」，而不是「用户是不是随口说了清理」。 */
-      if (opt.cleanBranch) {
-        codes.push(
-          cleanBranch({
-            run,
-            log,
-            remote: up.remote,
-            branch,
-            landedVerified: landed.verified,
-            cleanBranch: true,
-          }),
-        );
-      }
+      const fin = await runFinalStages({
+        run,
+        log,
+        want,
+        opt,
+        modeConfirm,
+        confirmStep,
+        confirmSkipped,
+        slug,
+        number,
+        frags,
+        baseRef,
+        up,
+        buildState,
+        branch,
+        landed,
+        handle,
+        handleExplicit: who.explicit,
+        mkTmp,
+      });
+      codes.push(...fin.codes);
     }
   }
 
@@ -864,6 +856,14 @@ async function runFlow(deps, tmpFiles) {
         : code === CODE.RED
           ? "有事实是红的"
           : "有一步没跑起来（**不等于**通过）";
+    /* 确认模式的跳过必须在结论行**之前**汇总（结论行之后再补一行，就成了
+     * 「一句声明被自己的下一行修正」的形状）。跳过不是失败 —— 但也不许长得像执行过。 */
+    if (confirmSkipped.length > 0) {
+      log(
+        `[ship] 确认模式：${confirmSkipped.length} 个动作未授权被跳过（${confirmSkipped.join("、")}）` +
+          " —— 各自的手动出口在上面，**跳过不是执行过**。",
+      );
+    }
     log(`[ship] 结论：exit ${code} —— ${word}`);
     return code;
   }
