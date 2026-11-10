@@ -144,8 +144,9 @@ export function FormsSection() {
           </Field>
         </GalleryCell>
         <GalleryCell label="FormField（自带标签/错误行）">
+          {/* children 走 render-prop（§16.2.4.26）：普通节点形态下 a11y 接线落不到控件上，判据红。 */}
           <FormField error="这个字段必填" id="kit-form-field-1" label="负向提示词">
-            <Input id="kit-form-field-1" placeholder="留空试试错误行" />
+            {(a11y) => <Input {...a11y} placeholder="留空试试错误行" />}
           </FormField>
         </GalleryCell>
         <GalleryCell label="MultiModeSelect（工作流类型多选）">
