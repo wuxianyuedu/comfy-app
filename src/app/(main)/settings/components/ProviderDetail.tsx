@@ -148,6 +148,7 @@ export function ProviderDetail({
         error={error}
         errors={errors}
         form={form}
+        onChange={updateForm}
         onClearKey={() => {
           const next = { ...form, clearApiKey: true };
           setForm(next);
@@ -156,7 +157,6 @@ export function ProviderDetail({
         onCommit={() => {
           void commit();
         }}
-        onChange={updateForm}
         onTest={() => {
           void testProvider();
         }}

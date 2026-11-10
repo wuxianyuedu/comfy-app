@@ -39,10 +39,10 @@ export function ProviderConnectionFields({
   errors: ProviderFormErrors;
   form: ProviderFormValues;
   /** 请求清除已保存的密钥（立刻落库，可撤销）。 */
+  onChange: (patch: Partial<ProviderFormValues>) => void;
   onClearKey: () => void;
   /** 失焦即保存：父级按「与库里那份有无差异」决定写不写。 */
   onCommit: () => void;
-  onChange: (patch: Partial<ProviderFormValues>) => void;
   onTest: () => void;
   /** 撤销上一步的「清除密钥」（还没落库时）。 */
   onUndoClearKey: () => void;
