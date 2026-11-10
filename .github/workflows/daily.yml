@@ -31,12 +31,16 @@
 # 走 —— 2026-11-02 起 CNB push 档有了「GitHub master 镜像」格（#3064），前提已接上。
 # `workflow_dispatch`（可指 sha）仍是手动入口。
 # `uses:` 版本口径同 pr-gate.yml 文件头（有 v7 上 v7；pnpm/action-setup 最新只到 v6）。
-# GitHub cron 是 UTC：北京 01:00 = UTC 17:00（前一日）。
+# GitHub cron 是 UTC：北京 01:37 = UTC 17:37（前一日）。
+# 挪出整点（#3485）：官方明示 schedule 在高负载（含每小时开头）下会延迟、
+# 负载够高时排队任务可能被直接丢弃 —— 2026-11-09 北京 01:00 那条 schedule 就没被
+# 创建（三个定时档集体缺席，无 run、无 cancelled）。历史读数也印证整点从来没准点过
+# （名义 17:00 UTC 实际落在 20:35–22:27Z）。分钟取 37 与桌包档对齐，错开整点峰值。
 name: Daily (mirror)
 
 on:
   schedule:
-    - cron: "0 17 * * *"
+    - cron: "37 17 * * *"
   workflow_dispatch:
     inputs:
       head_sha:
