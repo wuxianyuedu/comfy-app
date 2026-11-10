@@ -26,7 +26,7 @@ import {
   StatusButton,
 } from "~/components/ui/service-status-row";
 
-import { SettingsCard } from "~/components/ui/settings-card";
+import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { Toggle } from "~/components/ui/toggle";
 import { Field } from "./SettingsPrimitives";
@@ -52,6 +52,9 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       {/* Base URL 仅本地 Ollama 需要；远端的连接参数由模型条目各自携带 */}
       <Field
         label="Base URL"
+        onBlur={() => {
+          void c.saveLlm();
+        }}
         onChange={(value) => {
           c.patchLlm({ baseUrl: value });
         }}
@@ -60,9 +63,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       />
 
       {/* Ollama 状态行 */}
-      <div
-        className={`border-border bg-surface-1 mb-4 rounded-lg border px-3 py-2.5 ${STATUS_ROW_CLASS}`}
-      >
+      <div className={`${SETTINGS_ROW_CLASS} mb-4 ${STATUS_ROW_CLASS}`}>
         {c.ollamaStatus === "checking" && (
           <>
             <Spinner className="size-3.5" />
@@ -137,7 +138,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
               <SelectMenu
                 fullWidth
                 onChange={(model: string) => {
-                  c.patchLlm({ model });
+                  void c.commitLlm({ model });
                 }}
                 options={c.ollamaModels.map((m) => m.name)}
                 value={c.drafts.llm.model}
@@ -159,7 +160,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                       className="h-auto rounded-lg border px-2.5 py-1 text-xs"
                       key={model.name}
                       onPressedChange={() => {
-                        c.toggleExtraModel(model.name);
+                        void c.toggleExtraModel(model.name);
                       }}
                       pressed={checked}
                       size="sm"
@@ -181,6 +182,9 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       ) : (
         <Field
           label="模型"
+          onBlur={() => {
+            void c.saveLlm();
+          }}
           onChange={(value) => {
             c.patchLlm({ model: value });
           }}
@@ -192,6 +196,9 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       <div className="mb-4 grid grid-cols-2 gap-3">
         <Field
           label="全局默认温度"
+          onBlur={() => {
+            void c.saveLlm();
+          }}
           onChange={(value) => {
             c.patchLlm({ temperature: Number(value) || 0 });
           }}
@@ -199,6 +206,9 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
         />
         <Field
           label="最大 Token"
+          onBlur={() => {
+            void c.saveLlm();
+          }}
           onChange={(value) => {
             c.patchLlm({ maxTokens: Number(value) || 0 });
           }}
@@ -208,7 +218,9 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
 
       {/* 按任务类型配置温度 —— 远端调用同样按这套推荐默认取温度，
  但不在此暴露配置项 */}
-      <div className="border-border bg-surface-1 mb-4 rounded-xl border p-4">
+      {/* 这一块是**分组框**（折叠面板的外壳），不是「一行」：它与卡片同底、
+          只留一圈描边，靠内里的行（`bg-surface-row`）分层。 */}
+      <div className="border-border mb-4 rounded-xl border p-4">
         {/* 折叠开关 + 面板：`▸/▾` 与`aria-expanded` 都由基元给
  （规范 16 §16.2.4.13）。基元默认 marker 在标题**左侧**，这里标题
  在左、marker 在右 —— 用`flex-row-reverse` 把 marker 换到右侧，
@@ -235,10 +247,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
               const shown =
                 taskTempEdits[key] ?? String(isOverridden ? override : meta.defaultTemperature);
               return (
-                <div
-                  className="border-border/50 bg-surface-1 flex items-center gap-3 rounded-lg border px-3 py-2.5"
-                  key={key}
-                >
+                <div className={`${SETTINGS_ROW_CLASS} flex items-center gap-3`} key={key}>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-ink text-sm font-medium">{meta.label}</span>
@@ -277,6 +286,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                     min={0}
                     onBlur={() => {
                       clearTaskEdit(key);
+                      void c.saveLlm();
                     }}
                     onChange={(event) => {
                       setTaskEdit(key, event.target.value);
@@ -292,16 +302,6 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
           </div>
         </Disclosure>
       </div>
-
-      <StatusButton
-        disabled={c.saving}
-        onClick={() => {
-          void c.saveLlm();
-        }}
-        variant="primary-solid"
-      >
-        保存 LLM 配置
-      </StatusButton>
     </SettingsCard>
   );
 }
