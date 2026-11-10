@@ -227,16 +227,18 @@ describe("fetchNodePlan：现取而不是猜", () => {
   it("从 index.json 里挑出满足下限的那一版", async () => {
     const res = await fetchNodePlan({
       enginesRange: "^24.15.0",
-      /* 只喂这一层真正会读的两格（`ok` / `json()`）：造一个完整的 `Response`
-       * 会让这条判据测到 `fetch` 的形状而不是本层的解析。 */
-      /* SAFETY: 类型断言已复核 */
-      fetchImpl: (() => ({
-        ok: true,
-        json: () => [
-          { version: "v24.22.0", files: ["linux-x64"] },
-          { version: "v24.1.0", files: ["linux-x64"] },
-        ],
-      })) as unknown as typeof fetch,
+      /* 假件回一份真 `Response`：本层读的就是 `ok` / `status` / `json()` 三格，
+       * 用真回话喂才不会把「假件的形状」当成被测行为。 */
+      fetchImpl: () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify([
+              { version: "v24.22.0", files: ["linux-x64"] },
+              { version: "v24.1.0", files: ["linux-x64"] },
+            ]),
+            { status: 200 },
+          ),
+        ),
     });
     expect(res.version).toBe("v24.22.0");
     expect(res.floor).toEqual({ major: 24, minor: 15, patch: 0 });
@@ -246,11 +248,7 @@ describe("fetchNodePlan：现取而不是猜", () => {
     await expect(
       fetchNodePlan({
         enginesRange: "^24.15.0",
-        /* SAFETY: 类型断言已复核 */
-        fetchImpl: (() => ({
-          ok: false,
-          status: 404,
-        })) as unknown as typeof fetch,
+        fetchImpl: () => Promise.resolve(new Response(null, { status: 404 })),
       }),
     ).rejects.toThrow(/HTTP 404/);
   });

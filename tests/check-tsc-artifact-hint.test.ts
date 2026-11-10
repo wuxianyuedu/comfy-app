@@ -7,11 +7,13 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-// 判据脚本是 CJS（与 scripts/check-*.cjs 同族，`@ts-nocheck` 后经 require 进来是 any），
-// 按仓库惯例给 mod 显式标注返回形状。
-/* SAFETY: 类型断言已复核 */
-// oxlint-disable-next-line typescript/no-require-imports
-const mod = require("../scripts/check-tsc-artifact-hint.cjs") as {
+/** 外来值是不是普通对象（数组不算）：本文件收窄判据导出面的统一入口。 */
+function isPlainRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** 判据导出面：三个导出逐个核过（函数各就各位）才算形状对。 */
+function isArtifactHintModule(v: unknown): v is {
   buildHint: (v: unknown) => string;
   classifyTscErrors: (text: string) => {
     artifactFiles: Array<string>;
@@ -21,7 +23,24 @@ const mod = require("../scripts/check-tsc-artifact-hint.cjs") as {
     total: number;
   };
   isArtifact: (filePath: string) => boolean;
-};
+} {
+  return (
+    isPlainRecord(v) &&
+    typeof v.buildHint === "function" &&
+    typeof v.classifyTscErrors === "function" &&
+    typeof v.isArtifact === "function"
+  );
+}
+
+// 判据脚本是 CJS（与 scripts/check-*.cjs 同族，`@ts-nocheck` 后经 require 进来是 any），
+// 按仓库惯例给 mod 显式标注返回形状 —— 标注靠上面的类型守卫逐个导出核对，不靠断言。
+// oxlint-disable-next-line typescript/no-require-imports
+const required: unknown = require("../scripts/check-tsc-artifact-hint.cjs");
+
+if (!isArtifactHintModule(required)) {
+  throw new Error("check-tsc-artifact-hint.cjs 的导出面不对");
+}
+const mod = required;
 
 const { classifyTscErrors, buildHint, isArtifact } = mod;
 

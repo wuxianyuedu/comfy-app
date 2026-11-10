@@ -13,6 +13,11 @@ const SCRIPT = join(process.cwd(), "scripts", "check-react-updater-purity.cjs");
 
 let workdir = "";
 
+/** execFileSync 抛出的失败对象：只认「是对象」这一层，字段各自再按 typeof 收窄。 */
+function isExecFailure(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
 function run(dir: string): { code: number; output: string } {
   try {
     const output = execFileSync(process.execPath, [SCRIPT, dir], {
@@ -21,15 +26,12 @@ function run(dir: string): { code: number; output: string } {
     });
     return { code: 0, output };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as {
-      status?: number;
-      stderr?: string;
-      stdout?: string;
-    };
+    const e: Record<string, unknown> = isExecFailure(error) ? error : {};
+    const stdout = typeof e.stdout === "string" ? e.stdout : "";
+    const stderr = typeof e.stderr === "string" ? e.stderr : "";
     return {
       code: typeof e.status === "number" ? e.status : 1,
-      output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
+      output: `${stdout}${stderr}`,
     };
   }
 }

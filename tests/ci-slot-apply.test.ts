@@ -32,6 +32,19 @@ let cache: string;
 let slot: string;
 let key: string;
 
+/** 外来值先落 `unknown`，过这道守卫才谈读字段（不用类型断言）。 */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** 只收「键 → 字符串」的那一格：`scripts` 就是这个形状。 */
+function isStringRecord(v: unknown): v is Record<string, string> {
+  if (!isRecord(v)) {
+    return false;
+  }
+  return Object.values(v).every((item) => typeof item === "string");
+}
+
 /** 造一份「依赖面四件 + node_modules」的最小作业检出。 */
 function seedJob(root: string) {
   fs.mkdirSync(path.join(root, "scripts"), { recursive: true });
@@ -92,13 +105,12 @@ describe("槽的输入面与落位", () => {
 
   it("落位时摘掉本仓自己的 scripts，其余逐字节照搬", () => {
     const written = materializeSlotInputs({ jobRoot: job, slot });
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(fs.readFileSync(path.join(slot, "package.json"), "utf8")) as {
-      dependencies?: Record<string, string>;
-      scripts?: unknown;
-    };
-    expect(pkg.scripts).toBeUndefined();
-    expect(pkg.dependencies).toEqual({ leftpad: "1.0.0" });
+    const parsed: unknown = JSON.parse(fs.readFileSync(path.join(slot, "package.json"), "utf8"));
+    if (!isRecord(parsed)) {
+      throw new TypeError("槽里的 package.json 不是对象");
+    }
+    expect(parsed.scripts).toBeUndefined();
+    expect(parsed.dependencies).toEqual({ leftpad: "1.0.0" });
     expect(fs.readFileSync(path.join(slot, "pnpm-lock.yaml"), "utf8")).toBe("pnpm-lock.yaml\n");
     expect(written.some((line) => line.includes("已摘 scripts"))).toBe(true);
   });
@@ -110,12 +122,17 @@ describe("槽的输入面与落位", () => {
     expect(pnpmInstallFingerprint(slot)).toBe(pnpmInstallFingerprint(job));
     /* 只往 scripts 加一行：两侧都不动。旧实现（键对原文取哈希）里这一行会换键，
      * 而槽里那份副本逐字不变 —— 白付一次整装（`Done in 3m 41.4s`）。 */
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(fs.readFileSync(path.join(job, "package.json"), "utf8")) as {
-      scripts: Record<string, string>;
-    };
-    pkg.scripts["setup:comfy-cli-venv"] = "node scripts/setup-comfy-cli-venv.mjs";
-    fs.writeFileSync(path.join(job, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
+    const parsed: unknown = JSON.parse(fs.readFileSync(path.join(job, "package.json"), "utf8"));
+    if (!isRecord(parsed)) {
+      throw new TypeError("作业里的 package.json 不是对象");
+    }
+    const scripts = parsed.scripts;
+    if (!isStringRecord(scripts)) {
+      throw new TypeError("package.json 的 scripts 不是「键 → 字符串」");
+    }
+    scripts["setup:comfy-cli-venv"] = "node scripts/setup-comfy-cli-venv.mjs";
+    /* 回写**整份** `package.json`（`name` / `dependencies` 等其余键一个都不能少）。 */
+    fs.writeFileSync(path.join(job, "package.json"), `${JSON.stringify(parsed, null, 2)}\n`);
     expect(pnpmInstallFingerprint(job)).toBe(key);
     expect(pnpmInstallFingerprint(slot)).toBe(key);
   });

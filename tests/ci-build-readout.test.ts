@@ -947,6 +947,96 @@ type StageJson = {
   status?: string;
 };
 
+/** 外来值是不是普通对象（数组不算）：本文件收窄平台读数的统一入口。 */
+function isPlainRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** 外来数组（元素类型未知）：逐格读数的入口。 */
+function isUnknownArray(v: unknown): v is Array<unknown> {
+  return Array.isArray(v);
+}
+
+/**
+ * 一格读数的形状核对：出现的字段逐个按 `typeof` 收窄，缺席的字段不强求。
+ *
+ * 为什么逐字段核而不是断言一次到位：这一格的字段全是**可选**的（`error` 只有
+ * `get-build-stage -v` 才给），断言等于把「读到的那一格长什么样」与「假定的样子」
+ * 混成一句话 —— 而 `error` 在不在，正是这一族判据要分的那条线。
+ */
+function isStageJson(v: unknown): v is StageJson {
+  if (!isPlainRecord(v)) {
+    return false;
+  }
+  if (v.duration !== undefined && typeof v.duration !== "number") {
+    return false;
+  }
+  if (v.error !== undefined && typeof v.error !== "string") {
+    return false;
+  }
+  if (v.id !== undefined && typeof v.id !== "string") {
+    return false;
+  }
+  if (v.name !== undefined && typeof v.name !== "string") {
+    return false;
+  }
+  if (v.status !== undefined && typeof v.status !== "string") {
+    return false;
+  }
+  return true;
+}
+
+/** 一条流水线那一格的形状核对（`stages` 是逐格读数，其余字段可选）。 */
+function isPipelineJson(v: unknown): v is {
+  id?: string;
+  name?: string;
+  stages: Array<StageJson>;
+  status?: string;
+} {
+  if (!isPlainRecord(v)) {
+    return false;
+  }
+  if (v.id !== undefined && typeof v.id !== "string") {
+    return false;
+  }
+  if (v.name !== undefined && typeof v.name !== "string") {
+    return false;
+  }
+  if (v.status !== undefined && typeof v.status !== "string") {
+    return false;
+  }
+  const stages: unknown = v.stages;
+  if (!isUnknownArray(stages)) {
+    return false;
+  }
+  return stages.every((stage) => isStageJson(stage));
+}
+
+/**
+ * `get-build-status -v` 那份读数的形状核对。
+ *
+ * `enrichStageErrors()` 的返回类型是 `any`（脚本那份 JSDoc 写的），断言它等于把
+ * 「补完原话之后长什么样」与「假定长什么样」混成一句话 —— 而这一族的判据正是
+ * 「补完之后那一格有没有原话」。故先落 `unknown`，逐层收窄。
+ */
+function isBuildJson(v: unknown): v is BuildJson {
+  if (!isPlainRecord(v)) {
+    return false;
+  }
+  const data: unknown = v.data;
+  if (!isPlainRecord(data)) {
+    return false;
+  }
+  if (data.status !== undefined && typeof data.status !== "string") {
+    return false;
+  }
+  const table: unknown = data.pipelinesStatus;
+  if (!isPlainRecord(table)) {
+    return false;
+  }
+  return Object.values(table).every((pipeline) => isPipelineJson(pipeline));
+}
+
 /** 取 `prepare` 那一格 —— 这一族样本里它是主角（唯一有读数的那一格）。 */
 function prepareStage(json: BuildJson, key = "cnb-9qi-1k5qojle1-001"): StageJson {
   /* `noUncheckedIndexedAccess` 在本仓开着。样本是我们自己造的形状，取不到就是样本坏了 ——
@@ -1124,13 +1214,15 @@ describe("enrichStageErrors：原话只在 get-build-stage 里，分类前必须
 
   it("非绿非 skipped 的那一格被补上原话，且不改入参（原值要留给比对）", () => {
     const run = stageRun(KILLED_AT_PREPARE_STAGE);
-    /* SAFETY: 类型断言已复核 */
-    const enriched = enrichStageErrors(
+    const enriched: unknown = enrichStageErrors(
       run,
       "org/repo",
       "cnb-9qi-1k5qojle1",
       KILLED_AT_PREPARE,
-    ) as BuildJson;
+    );
+    if (!isBuildJson(enriched)) {
+      throw new Error("补完原话之后那份读数的形状不对");
+    }
     expect(prepareStage(enriched).error).toBe(LOCK_TERMINATED_MESSAGE);
     /* 原值一个字节都没改 —— 这是「只读平台读数」那条纪律的执行面。 */
     expect(prepareStage(KILLED_AT_PREPARE)).not.toHaveProperty("error");
@@ -1158,13 +1250,15 @@ describe("enrichStageErrors：原话只在 get-build-stage 里，分类前必须
   });
 
   it("取不到原话 ⇒ 那一格保持原样（空 ≠ 「没有异常」，分类照状态判）", () => {
-    /* SAFETY: 类型断言已复核 */
-    const enriched = enrichStageErrors(
+    const enriched: unknown = enrichStageErrors(
       stageRun({ data: { code: 204, message: "没有查询到该stage信息。" } }),
       "org/repo",
       "b1",
       KILLED_AT_PREPARE,
-    ) as BuildJson;
+    );
+    if (!isBuildJson(enriched)) {
+      throw new Error("补完原话之后那份读数的形状不对");
+    }
     expect(prepareStage(enriched)).toEqual({
       status: "error",
       duration: 12_856,
@@ -1193,13 +1287,15 @@ describe("现场那一形：prepare 期被抢锁 ⇒ 被取消，不是「去查
       stderr: "",
       error: null,
     });
-    /* SAFETY: 类型断言已复核 */
-    const enriched = enrichStageErrors(
+    const enriched: unknown = enrichStageErrors(
       run,
       "org/repo",
       "cnb-9qi-1k5qojle1",
       KILLED_AT_PREPARE,
-    ) as BuildJson;
+    );
+    if (!isBuildJson(enriched)) {
+      throw new Error("补完原话之后那份读数的形状不对");
+    }
     const o = classifyBuildOutcome(enriched);
     expect(o.state).toBe("cancelled");
     expect(o.failed).toEqual([]);
@@ -1227,13 +1323,10 @@ describe("现场那一形：prepare 期被抢锁 ⇒ 被取消，不是「去查
       stderr: "",
       error: null,
     });
-    /* SAFETY: 类型断言已复核 */
-    const enriched = enrichStageErrors(
-      run,
-      "org/repo",
-      "cnb-ico-1k5r2letb",
-      REAL_FAILURE,
-    ) as BuildJson;
+    const enriched: unknown = enrichStageErrors(run, "org/repo", "cnb-ico-1k5r2letb", REAL_FAILURE);
+    if (!isBuildJson(enriched)) {
+      throw new Error("补完原话之后那份读数的形状不对");
+    }
     const o = classifyBuildOutcome(enriched);
     expect(o.state).toBe("failed");
     expect(o.failed.map((s) => s.name)).toEqual(["受影响用例"]);

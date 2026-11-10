@@ -11,6 +11,28 @@ import { describe, expect, it } from "vitest";
 
 const SCRIPT = "scripts/check-oxlint-zero-rules.mjs";
 
+/** 外来值是不是普通对象（数组不算）：本文件收窄 package.json 的入口。 */
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * package.json 的形状：`scripts` 是「命令名 → 命令行」的表。
+ *
+ * 逐字段校验过才收窄 —— 断言外来 JSON 一次等于把「读到的形状」与「假定的形状」
+ * 混成一句话，而这一条断言的判据恰恰是「package.json 里那条入口脚本还在不在」。
+ */
+function isPackageJson(value: unknown): value is { scripts: Record<string, string> } {
+  if (!isPlainRecord(value)) {
+    return false;
+  }
+  const scripts = value.scripts;
+  if (!isPlainRecord(scripts)) {
+    return false;
+  }
+  return Object.values(scripts).every((line) => typeof line === "string");
+}
+
 describe("已清零 oxlint 规则集闸（#3016）", () => {
   it("正控：全仓档清单内规则 0 命中，退 0", { timeout: 300_000 }, () => {
     const r = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8" });
@@ -130,10 +152,11 @@ describe("门槛接线", () => {
   });
 
   it("package.json 有独立入口脚本", () => {
-    const pkg = JSON.parse(readFileSync("package.json", "utf8")) as {
-      scripts: Record<string, string>;
-    };
-    expect(pkg.scripts["check:oxlint-zero-rules"]).toBe(`node ${SCRIPT}`);
+    const parsed: unknown = JSON.parse(readFileSync("package.json", "utf8"));
+    if (!isPackageJson(parsed)) {
+      throw new Error("package.json 的 scripts 段形状不对");
+    }
+    expect(parsed.scripts["check:oxlint-zero-rules"]).toBe(`node ${SCRIPT}`);
   });
 
   it("清单里登记着 #3016 这条的源头规则（no-negated-condition）", () => {
