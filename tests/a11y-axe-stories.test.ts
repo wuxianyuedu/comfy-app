@@ -5,11 +5,12 @@
  * 渲不出来登记 `unrenderable`（双向）、按 `story.render ?? meta.render` + args 浅合并、`PAINT_SCOPE_RULES_OFF`（jsdom 无绘制事实 ⇒ 假通过）。台账 `scripts/.a11y-axe-known.json` 无 `--update`，增删皆红。
  */
 import { cleanup, render } from "@testing-library/react";
-import { createElement, type ComponentType, type ReactElement, type ReactNode } from "react";
+import { createElement, type ComponentType, type ReactNode } from "react";
 import axe from "axe-core";
 import { describe, expect, it } from "vitest";
 import KNOWN from "../scripts/.a11y-axe-known.json";
 
+import { isPlainRecord, isUnknownArray } from "../src/lib/is-record";
 import { installJsdomCapabilityGate } from "./helpers/jsdom-capability";
 
 type Finding = { component: string; nodes: number; rule: string };
@@ -35,14 +36,53 @@ type StoryShape = {
 
 type StoryModule = { default?: MetaShape } & Record<string, unknown>;
 
-/* 断言**不直接挂在泛型调用上**：`@typescript-eslint/no-unnecessary-type-assertion`
- * 会认「泛型调用的类型实参可从断言推断」，要求把类型写进 `glob<…>`（而这份 glob 的
- * 泛型签名随 vite 版本变，写进去反而脆）。先落到变量再断言，形状不变、也不触发那条规则。 */
+/** eager glob 的每份值都是普通对象；用类型守卫把 unknown 收成 StoryModule。 */
+function isStoryModule(v: unknown): v is StoryModule {
+  return isPlainRecord(v);
+}
+
+/** 故事对象的字段全可选，收窄只判「是普通对象」，字段类型由守卫签名保证。 */
+function isStoryShape(v: unknown): v is StoryShape {
+  return isPlainRecord(v);
+}
+
+/** meta.component 可能是函数组件，也可能是 forwardRef / memo 包装的对象组件。 */
+function isComponentType(v: unknown): v is ComponentType<Record<string, unknown>> {
+  return typeof v === "function" || (typeof v === "object" && v !== null);
+}
+
+type LedgerPairs = {
+  unrenderable: Array<string>;
+  violations: Array<{ component: string; rule: string }>;
+};
+
+/** asLedger 产出的 JSON 解析回来，逐字段校验后再读（不靠断言）。 */
+function isLedgerPairs(v: unknown): v is LedgerPairs {
+  if (!isPlainRecord(v)) {
+    return false;
+  }
+  const unrenderable = v.unrenderable;
+  const violations = v.violations;
+  return (
+    isUnknownArray(unrenderable) &&
+    unrenderable.every((x) => typeof x === "string") &&
+    isUnknownArray(violations) &&
+    violations.every(
+      (x) => isPlainRecord(x) && typeof x.component === "string" && typeof x.rule === "string",
+    )
+  );
+}
+
+/* eager glob 的泛型签名随 vite 版本变，不写死；每份模块过守卫后收进 StoryModule 表。 */
 const globbed = import.meta.glob("../src/components/ui/*.stories.tsx", {
   eager: true,
 });
-/* SAFETY: 类型断言已复核 */
-const files = globbed as Record<string, StoryModule>;
+const files: Record<string, StoryModule> = {};
+for (const [path, mod] of Object.entries(globbed)) {
+  if (isStoryModule(mod)) {
+    files[path] = mod;
+  }
+}
 
 /** 页面级规则：判的是「一整页」，对单枚裸渲染的组件没有意义（见文件头第 ② 条）。 */
 const PAGE_SCOPE_RULES_OFF = [
@@ -155,12 +195,10 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
         if (storyName === "default") {
           continue;
         }
-        const hasStory = Boolean(raw);
-        if (!hasStory || typeof raw !== "object") {
+        if (!isStoryShape(raw)) {
           continue;
         }
-        /* SAFETY: 类型断言已复核 */
-        const story = raw as StoryShape;
+        const story = raw;
         const key = `${component} > ${storyName}`;
         /* `argTypes[x].defaultValue` 在 Storybook 里由 argsEnhancers 折进 args。
          * 本用例的浅合并与它等价的前提是这一档为空 —— 出现了就是「渲的输入与
@@ -187,12 +225,8 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
           let tree: ReactNode;
           if (renderFn) {
             tree = renderFn(args);
-          } else if (
-            typeof Comp === "function" ||
-            typeof Comp === "object" /* forwardRef / memo 包装 */
-          ) {
-            /* SAFETY: 类型断言已复核 */
-            tree = createElement(Comp as ComponentType<Record<string, unknown>>, args);
+          } else if (isComponentType(Comp)) {
+            tree = createElement(Comp, args);
           } else {
             throw new Error("故事没有 render，meta.component 也不是组件");
           }
@@ -202,8 +236,8 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
           if (tree === null || tree === undefined || tree === false || tree === "") {
             throw new Error("render 未返回可判的节点（副作用式 / 空 render）");
           }
-          /* SAFETY: 类型断言已复核 */
-          view = render(tree as ReactElement);
+          // render 接受 ReactNode，tree 已经是判过空的节点，无需再压成 ReactElement。
+          view = render(tree);
           // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
           const results = await axe.run(view.baseElement, {
             resultTypes: ["violations"],
@@ -264,13 +298,13 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
       })),
       KNOWN.unrenderable,
     );
-    /* SAFETY: 类型断言已复核 */
-    const actualPairs = JSON.parse(actual) as {
-      unrenderable: Array<string>;
-      violations: Array<{ component: string; rule: string }>;
-    };
-    /* SAFETY: 类型断言已复核 */
-    const registeredPairs = JSON.parse(registered) as typeof actualPairs;
+    const actualParsed: unknown = JSON.parse(actual);
+    const registeredParsed: unknown = JSON.parse(registered);
+    if (!isLedgerPairs(actualParsed) || !isLedgerPairs(registeredParsed)) {
+      throw new Error("a11y 台账配对形状不对");
+    }
+    const actualPairs = actualParsed;
+    const registeredPairs = registeredParsed;
 
     const found = new Set(actualPairs.violations.map((v) => `${v.component}|${v.rule}`));
     const registeredSet = new Set(

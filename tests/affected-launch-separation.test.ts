@@ -22,6 +22,12 @@ import {
   sortTier,
 } from "../scripts/affected-launch-duration-order.mjs";
 import { isNoiseLine } from "../scripts/affected-launch-noise-reporter.mjs";
+import { isPlainRecord } from "../src/lib/is-record";
+
+/** 落盘台账的 JSON 形状：files 是一本 { ms, source } 字典。 */
+function isTimingFile(v: unknown): v is { files: Record<string, { ms: number; source: string }> } {
+  return isPlainRecord(v) && isPlainRecord(v.files);
+}
 
 describe("planSeparatedLaunches 的固定段分块帽（ISSUE #2863）", () => {
   it("超出帽的固定段切成多块，且不丢不重、每块不超帽", () => {
@@ -116,10 +122,13 @@ describe("耗时台账排序（ISSUE #2863 的 ③：重块排前）", () => {
           { name: "tests/broken.test.ts", ms: Number.NaN },
         ]).written,
       ).toBe(true);
-      /* SAFETY: 类型断言已复核 */
-      const j = JSON.parse(
+      const parsed: unknown = JSON.parse(
         fs.readFileSync(path.join(dir, "scripts", ".test-file-timing.json"), "utf8"),
-      ) as { files: Record<string, { ms: number; source: string }> };
+      );
+      if (!isTimingFile(parsed)) {
+        throw new Error("耗时台账形状不对");
+      }
+      const j = parsed;
       expect(j.files["tests/a.test.ts"]).toEqual({ ms: 7, source: "batch" }); // 覆盖 + 取整
       expect(j.files["tests/new.test.ts"]).toEqual({ ms: 0, source: "batch" });
       expect(j.files["tests/old.test.ts"]).toEqual({ ms: 999, source: "batch" }); // 保留（老形状按 batch 读）

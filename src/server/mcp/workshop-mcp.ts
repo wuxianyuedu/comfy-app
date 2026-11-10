@@ -8,8 +8,7 @@ import { z } from "zod";
 import { APP_VERSION } from "~/lib/app-version";
 
 import { sizeSpecFromText, toSizeSpec, type SizeSpec } from "~/lib/media/size-presets";
-import type { ProjectMeta } from "~/lib/workshop/types";
-import { characterListInputSchema, shotListInputSchema } from "~/lib/workshop/types";
+import { characterListInputSchema, isProjectType, shotListInputSchema } from "~/lib/workshop/types";
 import { saveComfySettings } from "~/server/workshop/comfyui";
 import * as orchestrator from "~/server/workshop/orchestrator";
 
@@ -187,8 +186,8 @@ export function buildWorkshopMcpServer(): McpServer {
       json(
         await orchestrator.setMeta(args.sessionId, {
           title: args.title,
-          /* SAFETY: 类型断言已复核 */
-          type: args.type as ProjectMeta["type"] | undefined,
+          // type 入参是外来字符串：不在词表按「未给」回落（setMeta 的 patch 语义）。
+          type: isProjectType(args.type) ? args.type : undefined,
           tone: args.tone,
           logline: args.logline,
         }),

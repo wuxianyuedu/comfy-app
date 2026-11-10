@@ -8,7 +8,28 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isPlainRecord } from "../src/lib/is-record";
 import { normalizeControlFlow } from "./helpers/source-shape";
+
+/** require 进来的 CJS 模块导出面（下面三个函数）。 */
+type JudgeModule = {
+  decidePythonVerdict: (
+    first: Measure,
+    second: Measure | null,
+  ) => { problems: Array<string>; unverified: Array<string> };
+  isTimeoutLike: (e: unknown) => boolean;
+  probeCommand: (cmd: string, args: Array<string>) => ProbeState;
+};
+
+/** require 的结果是 any：先按导出面逐个校验函数是否在场，再收成类型。 */
+function isJudgeModule(v: unknown): v is JudgeModule {
+  return (
+    isPlainRecord(v) &&
+    typeof v.decidePythonVerdict === "function" &&
+    typeof v.isTimeoutLike === "function" &&
+    typeof v.probeCommand === "function"
+  );
+}
 
 /**
  * 需要 POSIX 执行语义的用例开关：要写 `#!/bin/sh` 假命令并 `chmod` 出执行位，而 Windows 上 libuv 不解析
@@ -23,17 +44,14 @@ const SCRIPT_SOURCE = normalizeControlFlow(
   readFileSync(path.resolve(__dirname, "../scripts/check-app-port-vectors.cjs"), "utf8"),
   "check-app-port-vectors.cjs",
 );
-// 判据脚本是 CJS（`@ts-nocheck`，require 进来是 any），按仓库惯例显式标注返回形状。
-/* SAFETY: 类型断言已复核 */
+// 判据脚本是 CJS（`@ts-nocheck`），require 进来的模块形状用守卫读，不用断言。
 // oxlint-disable-next-line typescript/no-require-imports
-const judge = require("../scripts/check-app-port-vectors.cjs") as {
-  decidePythonVerdict: (
-    first: Measure,
-    second: Measure | null,
-  ) => { problems: Array<string>; unverified: Array<string> };
-  isTimeoutLike: (e: unknown) => boolean;
-  probeCommand: (cmd: string, args: Array<string>) => ProbeState;
-};
+const required: unknown = require("../scripts/check-app-port-vectors.cjs");
+
+if (!isJudgeModule(required)) {
+  throw new Error("check-app-port-vectors.cjs 的导出面不对");
+}
+const judge = required;
 
 /**
  * 命令探测的四态（`probeCommand` 的返回）。第四档 `present-but-nonzero` 是补上的：旧实现只有三档，

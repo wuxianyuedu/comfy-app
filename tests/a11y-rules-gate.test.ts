@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { expect, test } from "vitest";
+import { isPlainRecord, isUnknownArray } from "../src/lib/is-record";
 import { loadJudgeModule, REAL_ROOT, SCRIPT } from "./helpers/a11y-effective-config";
 import type { Ledger } from "./helpers/a11y-effective-config";
 
@@ -19,10 +20,7 @@ const run = promisify(execFile);
 const { judge } = loadJudgeModule();
 
 /** 夹具台账的**形状样本**（落盘在 `tests/fixtures/`、与真台账解耦，见文件头）。 */
-/* SAFETY: 类型断言已复核 */
-const SAMPLE = JSON.parse(
-  readFileSync(path.join(REAL_ROOT, "tests", "fixtures", "a11y-rule-ledger.sample.json"), "utf8"),
-) as {
+type LedgerSample = {
   dialect: Array<{ decision: string; keeper: string; rule: string; why: string }>;
   inlineExemptions: Array<{
     file: string;
@@ -33,14 +31,52 @@ const SAMPLE = JSON.parse(
   why: string;
 };
 
+/** 夹具 JSON 先过守卫再读：两个数组在场、条目是对象、四个字符串字段齐全。 */
+function isLedgerSample(v: unknown): v is LedgerSample {
+  if (!isPlainRecord(v) || typeof v.why !== "string") {
+    return false;
+  }
+  const dialect = v.dialect;
+  const exemptions = v.inlineExemptions;
+  return (
+    isUnknownArray(dialect) &&
+    dialect.every(
+      (d) =>
+        isPlainRecord(d) &&
+        typeof d.decision === "string" &&
+        typeof d.keeper === "string" &&
+        typeof d.rule === "string" &&
+        typeof d.why === "string",
+    ) &&
+    isUnknownArray(exemptions) &&
+    exemptions.every(
+      (e) =>
+        isPlainRecord(e) &&
+        typeof e.file === "string" &&
+        typeof e.keeper === "string" &&
+        typeof e.rule === "string" &&
+        typeof e.why === "string",
+    )
+  );
+}
+
+function parseLedgerSample(file: string): LedgerSample {
+  const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
+  if (!isLedgerSample(parsed)) {
+    throw new Error(`台账夹具形状不对：${file}`);
+  }
+  return parsed;
+}
+
+const SAMPLE = parseLedgerSample(
+  path.join(REAL_ROOT, "tests", "fixtures", "a11y-rule-ledger.sample.json"),
+);
+
 /**
  * **真台账**（`scripts/.a11y-rule-ledger.json`）—— 只被一条用例碰（下面第 1 条），
  * 用来自查「仓库当前状态本身是绿的」。其余用例一律在 `SAMPLE` 上加减。
  */
-/* SAFETY: 类型断言已复核 */
-const REAL_LEDGER = JSON.parse(
-  readFileSync(path.join(REAL_ROOT, "scripts", ".a11y-rule-ledger.json"), "utf8"),
-) as typeof SAMPLE;
+const REAL_LEDGER = parseLedgerSample(path.join(REAL_ROOT, "scripts", ".a11y-rule-ledger.json"));
 
 let seq = 0;
 

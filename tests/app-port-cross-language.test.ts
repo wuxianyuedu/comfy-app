@@ -8,8 +8,51 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isPlainRecord, isUnknownArray } from "../src/lib/is-record";
+
 const ROOT = process.cwd();
 const VECTORS = "tests/fixtures/app-port-vectors.json";
+
+type PortFixture = {
+  envVectors: Array<{ content: string; note: string; port: number | null }>;
+  vectors: Array<{ fnv1a32: number; input: string; normalized: string; port: number }>;
+};
+
+/** 共享向量夹具：JSON 解析后逐字段校验，再读两个向量数组。 */
+function isPortFixture(v: unknown): v is PortFixture {
+  if (!isPlainRecord(v)) {
+    return false;
+  }
+  const env = v.envVectors;
+  const vec = v.vectors;
+  return (
+    isUnknownArray(env) &&
+    env.every(
+      (e) =>
+        isPlainRecord(e) &&
+        typeof e.content === "string" &&
+        typeof e.note === "string" &&
+        (typeof e.port === "number" || e.port === null),
+    ) &&
+    isUnknownArray(vec) &&
+    vec.every(
+      (e) =>
+        isPlainRecord(e) &&
+        typeof e.fnv1a32 === "number" &&
+        typeof e.input === "string" &&
+        typeof e.normalized === "string" &&
+        typeof e.port === "number",
+    )
+  );
+}
+
+function readPortFixture(): PortFixture {
+  const parsed: unknown = JSON.parse(fs.readFileSync(path.join(ROOT, VECTORS), "utf8"));
+  if (!isPortFixture(parsed)) {
+    throw new Error("app-port 共享向量夹具形状不对");
+  }
+  return parsed;
+}
 
 function readIfExists(rel: string): string | null {
   try {
@@ -30,11 +73,7 @@ function hasCommand(cmd: string, args: Array<string>): boolean {
 }
 
 describe("app-port 跨语言一致性（四侧读同一份共享向量）", () => {
-  /* SAFETY: 类型断言已复核 */
-  const fixture = JSON.parse(fs.readFileSync(path.join(ROOT, VECTORS), "utf8")) as {
-    envVectors: Array<{ content: string; note: string; port: number | null }>;
-    vectors: Array<{ fnv1a32: number; input: string; normalized: string; port: number }>;
-  };
+  const fixture = readPortFixture();
 
   it("向量文件存在且至少 5 条（防止误删后全绿）", () => {
     expect(fixture.vectors.length).toBeGreaterThanOrEqual(5);

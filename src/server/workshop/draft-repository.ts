@@ -3,7 +3,7 @@
 // 该表与 AI/MCP 用的 workshopSession 并列，互不污染：id 直接复用前端
 // 生成的 wsp_* 项目 id，应用重启后稳定不变，天然支持多项目按 id upsert。
 import { desc, eq } from "drizzle-orm";
-import type { Character, Scene, Shot } from "~/lib/workshop/types";
+import { asRecord } from "~/lib/is-record";
 import { parseDraftDto, type WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
 import {
   workshopDraft,
@@ -37,12 +37,11 @@ export function rowToDto(row: WorkshopDraftRow): WorkshopDraftDto {
       scriptMarkdown: row.scriptMarkdown,
     },
     scriptMarkdown: row.scriptMarkdown,
-    /* SAFETY: 类型断言已复核 */
-    scenes: Array.isArray(row.scenes) ? (row.scenes as Array<Scene>) : [],
-    /* SAFETY: 类型断言已复核 */
-    characters: Array.isArray(row.characters) ? (row.characters as Array<Character>) : [],
-    /* SAFETY: 类型断言已复核 */
-    shots: Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [],
+    // scenes/characters/shots 是 JSON 列（unknown）：交给 parseDraftDto 的
+    // isSceneList 等守卫判「是数组」这层（与旧断言同口径，非数组回落 []）。
+    scenes: row.scenes,
+    characters: row.characters,
+    shots: row.shots,
   });
 }
 
@@ -127,7 +126,8 @@ export async function upsertDraft(
 export async function deleteDraft(id: string): Promise<boolean> {
   const result = await workshopDb.delete(workshopDraft).where(eq(workshopDraft.id, id));
   // node:sqlite 的 sqlite-proxy run 结果给 changes（libsql ResultSet 的 rowsAffected 已随驱动退场，#3171）：
-  // drizzle 的 SqliteRemoteResult 类型只声明 rows，故按驱动实际返回形状收窄一次。
-  /* SAFETY: 类型断言已复核 */
-  return ((result as { changes?: number }).changes ?? 0) > 0;
+  // drizzle 的 SqliteRemoteResult 类型只声明 rows，故按驱动实际返回形状取一次；
+  // 只有数字才认，外来/异常值按 0 回落。
+  const changes = asRecord(result)?.changes;
+  return (typeof changes === "number" ? changes : 0) > 0;
 }

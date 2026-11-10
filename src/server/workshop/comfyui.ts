@@ -13,6 +13,7 @@ import { sleep } from "~/lib/with-timeout";
 import { promises as fs, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { asRecord, isPlainRecord } from "~/lib/is-record";
 import { DEFAULT_SIZE_SPEC, sizeSpecDims, type SizeSpec } from "~/lib/media/size-presets";
 
 const OUTPUT_DIR = path.join(process.cwd(), "data", "workshop-outputs");
@@ -23,6 +24,31 @@ export type ComfySettings = {
   imageWorkflow?: unknown;
   videoWorkflow?: unknown;
 };
+
+// settings 文件是外来 JSON：非对象、或 checkpoint 不是字符串时按「空配置」回落
+// （与 IO 失败的 catch 同口径）；imageWorkflow/videoWorkflow 是任意值，原样留着。
+function isComfySettings(v: unknown): v is ComfySettings {
+  return isPlainRecord(v) && (v.checkpoint === undefined || typeof v.checkpoint === "string");
+}
+
+// /api/prompt 响应是外来 JSON：只认「对象且 error/prompt_id 是字符串或缺失」，
+// 其余按空结果回落（透传原对象，保留额外键供错误文案 stringify）。
+function isComfyPromptResult(v: unknown): v is ComfyPromptResult {
+  return (
+    isPlainRecord(v) &&
+    (v.error === undefined || typeof v.error === "string") &&
+    (v.prompt_id === undefined || typeof v.prompt_id === "string")
+  );
+}
+
+// history 的单个 node 输出只判「是对象」这层（写入端=ComfyUI，images/gifs 元素
+// 形状读侧判），非对象按「没有输出」处理。
+function isComfyNodeOutput(v: unknown): v is {
+  gifs?: Array<{ filename: string; subfolder: string; type: string }>;
+  images?: Array<{ filename: string; subfolder: string; type: string }>;
+} {
+  return isPlainRecord(v);
+}
 
 let resolvedBase: string | null = null;
 
@@ -67,8 +93,8 @@ export function createSettingsFileMemo(file: string, io: SettingsFileIo = realSe
       }
       let parsed: ComfySettings;
       try {
-        /* SAFETY: 类型断言已复核 */
-        parsed = JSON.parse(io.read(file)) as ComfySettings;
+        const raw: unknown = JSON.parse(io.read(file));
+        parsed = isComfySettings(raw) ? raw : {};
       } catch {
         parsed = {};
       }
@@ -173,8 +199,8 @@ export async function postComfyPrompt(prompt: unknown): Promise<ComfyPromptResul
         `ComfyUI /api/prompt 失败 (${res.status}): ${await res.text().catch(() => "")}`,
       );
     }
-    /* SAFETY: 类型断言已复核 */
-    return (await res.json()) as ComfyPromptResult;
+    const raw: unknown = await res.json();
+    return isComfyPromptResult(raw) ? raw : {};
   } catch (error) {
     guardNetworkFailure(error);
   }
@@ -189,8 +215,8 @@ export async function getComfyHistory(promptId: string): Promise<Record<string, 
     if (!res.ok) {
       throw new Error(`ComfyUI /api/history 失败 (${res.status})`);
     }
-    /* SAFETY: 类型断言已复核 */
-    return (await res.json()) as Record<string, unknown>;
+    const raw: unknown = await res.json();
+    return asRecord(raw) ?? {};
   } catch (error) {
     guardNetworkFailure(error);
   }
@@ -233,14 +259,12 @@ export async function uploadComfyImage(buffer: Buffer, filename: string): Promis
     if (!res.ok) {
       throw new Error(`ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`);
     }
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as {
-      name?: string;
-    };
-    if (data.name === undefined || data.name === "") {
+    const raw: unknown = await res.json();
+    const name = asRecord(raw)?.name;
+    if (typeof name !== "string" || name === "") {
       throw new Error("ComfyUI 上传未返回文件名");
     }
-    return data.name;
+    return name;
   } catch (error) {
     guardNetworkFailure(error);
   }
@@ -385,12 +409,10 @@ export async function runComfyWorkflow(
   while (Date.now() < deadline) {
     // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     history = await getComfyHistory(promptId).catch(() => ({}));
-    /* SAFETY: 类型断言已复核 */
-    const entry = history[promptId] as
-      | { status?: { completed?: boolean; status_str?: string } }
-      | undefined;
-    const done = entry?.status?.completed === true || entry?.status?.status_str === "success";
-    const failed = entry?.status?.status_str === "error";
+    const entry = asRecord(history[promptId]);
+    const status = asRecord(entry?.status);
+    const done = status?.completed === true || status?.status_str === "success";
+    const failed = status?.status_str === "error";
     if (done || failed) {
       break;
     }
@@ -398,19 +420,15 @@ export async function runComfyWorkflow(
     await sleep(1500);
   }
 
-  /* SAFETY: 类型断言已复核 */
-  const entry = history[promptId] as { outputs?: Record<string, unknown> } | undefined;
-  const outputs = entry?.outputs ?? {};
+  const entry = asRecord(history[promptId]);
+  const outputs: Record<string, unknown> = asRecord(entry?.outputs) ?? {};
   const files: Array<string> = [];
   const outDir = outputDirForSession(opts?.sessionId);
   await fs.mkdir(outDir, { recursive: true });
   for (const nodeOut of Object.values(outputs)) {
-    /* SAFETY: 类型断言已复核 */
-    const rec = nodeOut as {
-      gifs?: Array<{ filename: string; subfolder: string; type: string }>;
-      images?: Array<{ filename: string; subfolder: string; type: string }>;
-    };
-    const items = [...(rec.images ?? []), ...(rec.gifs ?? [])];
+    const items = isComfyNodeOutput(nodeOut)
+      ? [...(nodeOut.images ?? []), ...(nodeOut.gifs ?? [])]
+      : [];
     for (const item of items) {
       // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const buf = await getComfyView(item.filename, item.subfolder, item.type);

@@ -14,8 +14,15 @@ import {
   renderProbe,
   runTool,
 } from "../scripts/agent-index.mjs";
+import { isPlainRecord } from "../src/lib/is-record";
 
 const SCRIPT = join(process.cwd(), "scripts", "agent-index.mjs");
+
+/** execFileSync 抛出的错误对象：字段可选，按宽松对象声明后再逐字段读。 */
+type ExecErrorFields = { status?: number; stderr?: string; stdout?: string };
+function isExecErrorFields(v: unknown): v is ExecErrorFields {
+  return isPlainRecord(v);
+}
 
 /** 一次命令的读数形状（与 `runTool` 的返回值同形）。 */
 type RunResult = {
@@ -38,12 +45,7 @@ function run(args: Array<string> = []) {
     });
     return { code: 0, output };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as {
-      status?: number;
-      stderr?: string;
-      stdout?: string;
-    };
+    const e: ExecErrorFields = isExecErrorFields(error) ? error : {};
     return {
       code: typeof e.status === "number" ? e.status : 1,
       output: `${e.stdout ?? ""}${e.stderr ?? ""}`,

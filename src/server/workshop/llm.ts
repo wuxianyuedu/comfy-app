@@ -9,6 +9,7 @@ import { llmConfig } from "~/server/db/schema";
 import { workshopDb } from "./db";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
+import { asRecord, isUnknownArray } from "~/lib/is-record";
 
 export type WorkshopLLMConfig = {
   apiKey: string | null;
@@ -108,9 +109,12 @@ export async function completeWorkshopLLM(
       `LLM 请求失败 (${res.status})${hint}${detail.trim() ? `：${clampText(detail, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}` : ""}`,
     );
   }
-  /* SAFETY: 类型断言已复核 */
-  const json = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  return json.choices?.[0]?.message?.content ?? "";
+  // LLM 响应体是外来 JSON：逐层按宽松对象/数组读，content 非字符串回落 ""。
+  const raw: unknown = await res.json();
+  const root = asRecord(raw);
+  const rawChoices = root?.choices;
+  const choices = isUnknownArray(rawChoices) ? rawChoices : [];
+  const message = asRecord(asRecord(choices[0])?.message);
+  const content = message?.content;
+  return typeof content === "string" ? content : "";
 }
