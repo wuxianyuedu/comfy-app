@@ -40,8 +40,19 @@ import path from "node:path";
  * 顶层是否有 Node 内建」，path 命中即红。
  */
 
-/** 日志根目录（<项目根>/log）。 */
-export const LOG_ROOT = path.join(process.cwd(), "log");
+/**
+ * 日志根目录。
+ *
+ * standalone 桌包下由启动器经 `COMFY_APP_DATA_DIR` 环境变量注入运行期可写数据根
+ * （见 `scripts/launcher-core/app-data-dir.mjs` 与 `standalone-runtime.mjs`）：载荷根 /
+ * 安装目录不可写或会被更新清掉，日志与导出必须落进 OS app-data 目录（ISSUE #3498）。
+ * 下游 `LOG_CURRENT_DIR` / `LOG_EXPORT_DIR` 等全部由本常量派生，改这一处即可整体随动。
+ *
+ * 开发态不设该变量 ⇒ 回退 `process.cwd()/log`（仓库根下的 log，与既有开发习惯一致）。
+ */
+export const LOG_ROOT = process.env.COMFY_APP_DATA_DIR
+  ? path.join(process.env.COMFY_APP_DATA_DIR, "log")
+  : path.join(process.cwd(), "log");
 
 /* ── 「一次运行一包」的写点：log/current/ ──────────────────────────────────
  * 进程**始终**写 current/（路径固定，见规范 §4）；退出时由启动编排的
