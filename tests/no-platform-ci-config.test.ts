@@ -413,7 +413,7 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   {
     name: "API 文档生成与自检",
     tier: "retired",
-    note: "2026-11-05 从 push 撤到每日档「每日 API 文档生成与自检」（ISSUE #2537 / 事故 #2528）：新触发面 98% 触发率、CI 中位 40.9s、占 140.2s 串行流水线的 30.6%，PR 侧不再即时判；最晚次日 01:00 暴露，暴露窗口 ≤24h，失败走既有 daily 红 build / 每日失败立案通道",
+    note: "2026-11-05 从 push 撤到每日档「每日 API 文档生成与自检」（ISSUE #2537 / 事故 #2528）：新触发面 98% 触发率、CI 中位 40.9s、占 140.2s 串行流水线的 30.6%，PR 侧不再即时判；最晚次日 01:37 暴露，暴露窗口 ≤24h，失败走既有 daily 红 build / 每日失败立案通道",
   },
   {
     name: "受影响用例",
@@ -473,7 +473,7 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   {
     name: "单元测试",
     tier: "retired",
-    note: "撤到每日单元测试：全量单测只在 01:00 跑（§13.5.23）",
+    note: "撤到每日单元测试：全量单测只在 01:37 跑（§13.5.23）",
   },
   {
     name: "E2E 关键流程",
@@ -2132,7 +2132,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
 
   it("`API 文档生成与自检` 只在每日档：push 侧不再即时判，每日档排在单元测试之前（ISSUE #2537）", () => {
     /* 2026-11-05 的口径变更：这一格从 push 撤到每日档 —— **PR 侧不再即时判**，
-     * 最晚次日 01:00 暴露，暴露窗口 ≤24h。判三件事：
+     * 最晚次日 01:37 暴露，暴露窗口 ≤24h。判三件事：
      *   ① push 清单里没有旧名（有人改回去要红）；
      *   ② 每日清单里有新名，且**在 `每日单元测试` 之前**（后者必须是最后一个会红的格）；
      *   ③ 每日块真的在、点的是同一份判据。
@@ -2554,7 +2554,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      *      只是永远不触发，而配置看上去仍像有定时档（#1229 那一族）；本机白扛负载
      *      或两边都不跑，账面一条红都不会有。
      *   ② GA 侧 `daily.yml` / `package-desktop.yml` 必须各有 `schedule`，且 cron 对位
-     *      北京 01:00 / 03:00（GitHub cron 用 UTC ⇒ 17:00 / 19:00 前一天）。少一条 =
+     *      北京 01:37 / 03:37（GitHub cron 用 UTC ⇒ 17:37 / 19:37 前一天；#3485 起挪出
+     *      整点 —— 官方明示整点高负载下 schedule 会延迟甚至被丢弃，11/9 Daily 缺席即此）。
+     *      少一条 =
      *      本机已撤定时、那边又没人起，这一档就真的没有执行者了。
      *   ③ 留在 CNB 的手点口仍跑 `COMFYAPP_CI_DAILY_GATES` 那份清单，跑法脚本与
      *      timeout 预算一字不动 —— 撤的是「时钟起它」，不是把判据本身撤掉。 */
@@ -2575,14 +2577,14 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(dailyYml, "`.github/workflows/daily.yml` 没有 schedule —— 每日档从此无人执行").toMatch(
       /^\s*schedule:\s*$/m,
     );
-    expect(dailyYml, "每日档的 cron 不是北京 01:00（UTC 17:00）").toMatch(
-      /cron:\s*"0 17 \* \* \*"/,
+    expect(dailyYml, "每日档的 cron 不是北京 01:37（UTC 17:37）").toMatch(
+      /cron:\s*"37 17 \* \* \*"/,
     );
     expect(packageYml, "`.github/workflows/package-desktop.yml` 没有 schedule").toMatch(
       /^\s*schedule:\s*$/m,
     );
-    expect(packageYml, "桌包档的 cron 不是北京 03:00（UTC 19:00）").toMatch(
-      /cron:\s*"0 19 \* \* \*"/,
+    expect(packageYml, "桌包档的 cron 不是北京 03:37（UTC 19:37）").toMatch(
+      /cron:\s*"37 19 \* \* \*"/,
     );
 
     const daily = pipelineStageNames(text, "每日档（手动触发）");

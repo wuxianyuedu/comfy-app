@@ -29,7 +29,9 @@
 #    详见 §7.7 与 `ci-toolchain-browser-fetch.mjs`「为什么不走 tar -xf」。
 #
 # ⚠️ schedule 只跑在**镜像仓默认分支**上（同 daily.yml 那段前提，#3064 起已接上）。
-# `workflow_dispatch`（可指 sha）仍是手动入口。GitHub cron 是 UTC：北京 03:00 = UTC 19:00。
+# `workflow_dispatch`（可指 sha）仍是手动入口。GitHub cron 是 UTC：北京 03:37 = UTC 19:37。
+# 挪出整点（#3485）理由同 daily.yml 文件头：官方明示整点高负载下 schedule 会延迟
+# 甚至被丢弃，历史读数里本档也从来没准点过（名义 19:00 UTC 实际落在 22:31–23:55Z）。
 # `uses:` 版本口径同 pr-gate.yml 文件头（有 v7 上 v7；pnpm/action-setup 与 rust-cache
 # 的最新主版本分别是 v6 与 v2）。
 name: Package desktop (mirror)
@@ -41,7 +43,7 @@ permissions:
 
 on:
   schedule:
-    - cron: "0 19 * * *"
+    - cron: "37 19 * * *"
   workflow_dispatch:
     inputs:
       head_sha:
