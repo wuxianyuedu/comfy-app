@@ -83,6 +83,19 @@
   （业务提示走各视图内的 toast / 错误条）。
 - 落点：`src/app/layout.tsx`（`MessageCenterPanel` / `BrowserStatusBar`）
 
+#### FR-WS-09 UI 控件总览页（/ui-kit）
+
+- 状态：已上线
+- 需求：把项目里全部可视化基元摆到同一屏，让「控件颜色 / 背景色错档」
+  在明暗两态下都能一眼看出来（ISSUE #3525）。
+- 行为与验收：`/ui-kit` 地址栏可直达；页内含语义 token 墙（表面 / 文字 /
+  边框 / 品牌 / 状态五组）与七个基元分组，全部走语义 token 类名
+  （`theme:check` 判 0 写死色值）；右上角开关切换的是应用全局主题
+  （与设置页同源）；命令面板（⌘/Ctrl+K）「其他」组有「UI 控件总览」
+  入口；不进工作区 17 视图注册表。逐 prop 的形态矩阵归 Storybook。
+- 落点：`src/app/(main)/ui-kit/page.tsx`、
+  `src/components/ui/ui-kit-gallery*.tsx`、`src/components/studio/CommandPalette.tsx`
+
 ---
 
 ## 2. 账号与访问（FR-AU）
