@@ -247,7 +247,7 @@ export const INPUT_FACES = [
       "scripts/ci-cp936-exit.mjs",
       "scripts/setup-comfy-cli-venv.mjs",
       "scripts/setup-comfy-cli-venv.ps1",
-      "scripts/ci-oneshot-gates.mjs",
+      "scripts/ci-ga-trigger-map.mjs",
       "scripts/full-suite-run.mjs",
       "scripts/freshness-ledger.mjs",
       "scripts/doc-facts.cjs",

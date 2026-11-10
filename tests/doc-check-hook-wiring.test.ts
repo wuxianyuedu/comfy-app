@@ -8,11 +8,11 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
-  registeredDailyGateOrder,
   registeredDisabledGates,
   registeredGateOrder,
   stageBlock,
 } from "./no-platform-ci-config.test";
+import { DAILY_GATE_EXECUTORS } from "../scripts/ci-ga-trigger-map.mjs";
 
 import { groupShBody, runSteps, stepsInGroup } from "./helpers/hook-groups";
 import { HEAVY_GATES, heavyGateRegistryProblems } from "../scripts/ci-heavy-gates.mjs";
@@ -35,16 +35,21 @@ function hookGateSteps(hookText: string) {
 }
 
 /**
- * 每日那一条流水线的 stage 清单（`COMFYAPP_CI_DAILY_GATES`），与 PR 档同形状、同解析器
- * （`registeredDailyGateOrder` + `stageBlock`；抄第二份就会静默漂，§12.12 / §12.18）。需要它是因为 ISSUE #2300：
- * 「新鲜度账」2026-10-23 从 PR 档撤到每日档，拿 PR 清单问会答「不在」，真相是「搬走了，不是不存在」。
+ * 每日档的格清单：**#3504 起执行面在 GA `daily.yml`** —— 按 `DAILY_GATE_EXECUTORS`
+ * 的对照把逻辑格名换成 step 名，从 daily.yml 里切出各格的块原文（抄第二份对照就会
+ * 静默漂，§12.12 / §12.18）。需要它是因为 ISSUE #2300：「新鲜度账」从 PR 档撤到每日档，
+ * 拿 PR 清单问会答「不在」，真相是「搬走了，不是不存在」。
  * PR 档那一条在 2026-11-05 薄化后只剩平台读数与判决链，因此这里不再有 `platformStages()` 那一份。 */
 function dailyStages(): Array<{ name: string; stage: string | null }> {
-  const text = readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8");
-  return registeredDailyGateOrder(text).map((name) => ({
-    name,
-    stage: stageBlock(text, name),
-  }));
+  const daily = readFileSync(join(REPO_ROOT, ".github/workflows/daily.yml"), "utf8");
+  return Object.entries(DAILY_GATE_EXECUTORS).map(([name, step]) => {
+    const at = daily.indexOf(`      - name: ${step}`);
+    if (at === -1) {
+      return { name, stage: null };
+    }
+    const next = daily.indexOf("\n      - name:", at + 1);
+    return { name, stage: daily.slice(at, next === -1 ? daily.length : next) };
+  });
 }
 
 /**
@@ -59,13 +64,28 @@ function platformExecutor(stageName: string) {
   }
   /* ISSUE #3378 收尾：CNB push 主列撤掉后，文档链两格由 GA `master-gate.yml`
    * 同名 step 承接（§13.5.34 并行期逐格比对后才切换）。stage / 聚合档都没有时，
-   * 认 GA workflow 的 `run:` 行 —— 判据本体（脚本路径）逐字在场才算执行者。 */
-  const gaWorkflow = readFileSync(join(REPO_ROOT, ".github/workflows/master-gate.yml"), "utf8");
-  const gaLine = gaWorkflow
+   * 认 GA workflow 的 `run:` 行 —— 判据本体（脚本路径）逐字在场才算执行者。
+   * ISSUE #3504：每日档的执行面整体迁 GA `daily.yml` —— 按 `DAILY_GATE_EXECUTORS`
+   * 的对照把逻辑格名换成 step 名再找 `run:` 行（CNB 侧不再有「每日档 stage 清单」）。 */
+  const gaMaster = readFileSync(join(REPO_ROOT, ".github/workflows/master-gate.yml"), "utf8");
+  const gaLine = gaMaster
     .split("\n")
     .find((l) => /^\s*run:\s*/.test(l) && l.includes("scripts/check-doc-references.cjs"));
   if (stageName === "文档引用与权威源一致" && gaLine) {
     return { where: "GA master-gate.yml", command: gaLine.trim() };
+  }
+  const dailyStep = DAILY_GATE_EXECUTORS[stageName];
+  if (dailyStep) {
+    const daily = readFileSync(join(REPO_ROOT, ".github/workflows/daily.yml"), "utf8");
+    const marker = `      - name: ${dailyStep}`;
+    const at = daily.indexOf(marker);
+    if (at !== -1) {
+      const next = daily.indexOf("\n      - name:", at + 1);
+      return {
+        where: "GA daily.yml",
+        command: daily.slice(at, next === -1 ? daily.length : next),
+      };
+    }
   }
   const gate = HEAVY_GATES.find((g) => g.name === stageName);
   if (!gate) {
@@ -271,11 +291,15 @@ describe("API 文档生成与自检（#1329 收尾 → #1975 挪执行者 → #2
   it("平台侧那一步**不带 `--autofix`**（产物不再进 git，没有「自动修完再提交」的对象）", () => {
     /* ISSUE #2231 现场：master 产物与源差 9 处而平台**报绿** —— 带 `--autofix` 就会就地重生成再判，第二次一致 ⇒ 退 0，
      * 「修好了」与「本来就对」同形 ⇒ 漂移在 CI 隐形。产物搬出 git 后该格改判「本轮产物可不可用」，自动修旗标必须摘掉。
-     * ⚠️ 只核那一行的 `script:`（整块里注释出现旗标字面量不等于这一格带着它），解析口径复用 `parseStageScripts()`。 */
-    const script = parseStageScripts(readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8")).get(
-      "每日 API 文档生成与自检",
-    );
-    expect(script, "配置里解析不出「每日 API 文档生成与自检」那一行的 script").toBeDefined();
+     * ⚠️ #3504 起执行者是 GA daily.yml 的 `API 文档生成与自检` step —— 只核那一行的 `run:`（整块里注释出现旗标字面量不等于这一格带着它）。 */
+    const daily = readFileSync(join(REPO_ROOT, ".github/workflows/daily.yml"), "utf8");
+    const marker = `      - name: ${DAILY_GATE_EXECUTORS["每日 API 文档生成与自检"]}`;
+    const at = daily.indexOf(marker);
+    expect(at, "daily.yml 里解析不出「API 文档生成与自检」那一格").toBeGreaterThan(-1);
+    const next = daily.indexOf("\n      - name:", at + 1);
+    const step = daily.slice(at, next === -1 ? daily.length : next);
+    const script = step.split("\n").find((l) => /^\s*run:/.test(l));
+    expect(script, "GA 那一格解析不出 `run:` 行").toBeDefined();
     expect(
       script,
       "平台侧那一步又带上了 `--autofix` —— 产物不再进 git，没有「自动修完再提交」的对象",
@@ -851,12 +875,16 @@ describe("新鲜度账：平台侧的第二个执行者（ISSUE #1979）", () =>
     ).toContain("scripts/freshness-gate.mjs");
     /* ⚠️ 主体那一行是这一格**存在的理由**（ISSUE #2300 主体分权）：主体=master ⇒
      * 判据读的是机器分支 `ci/freshness-ledger` 上**主干的权威账**；缺了它，每日这一格
-     * 就会以 `"pr"` 上下文跑（读工作树那份），主干的账就没人判了。 */
+     * 就会以 `"pr"` 上下文跑（读工作树那份），主干的账就没人判了。
+     * GA 形态里它在 workflow 顶层 `env:`（daily.yml 的 env 块，对位 CNB 每日档各格的
+     * 同名键）——step 块与顶层 env 至少一处要置着，两处都没有才是红。 */
+    const dailyEnv = readFileSync(join(REPO_ROOT, ".github/workflows/daily.yml"), "utf8");
     expect(
-      hit?.stage,
+      String(hit?.stage).includes("COMFY_CI_SUBJECT") ||
+        /COMFY_CI_SUBJECT:\s*"master"/.test(dailyEnv),
       '每日侧那一步没有带 `COMFY_CI_SUBJECT: "master"` —— 主体不是 master ⇒ 它读的是' +
         "工作树那份账而不是主干的权威账（判据主体分权）",
-    ).toContain("COMFY_CI_SUBJECT");
+    ).toBe(true);
     expect(
       registeredGateOrder(config),
       "`新鲜度账` 还在 COMFYAPP_CI_GATES 里 —— 它 2026-10-23 撤到了每日档：PR 上下文读的是" +
@@ -864,30 +892,29 @@ describe("新鲜度账：平台侧的第二个执行者（ISSUE #1979）", () =>
     ).not.toContain("新鲜度账");
   });
 
-  it("每日那一条上凡刷新新鲜度账的档都排在「每日新鲜度账」之后（PR 那一条上一格都不许有）", () => {
+  it("GA 每日档里凡刷新新鲜度账的格都排在「新鲜度账」之后（PR 那一条上一格都不许有）", () => {
     /* 不是风格：跑法脚本跑绿会刷新自己那笔账（`artifact-run.mjs` / `full-suite-run.mjs` / `e2e-run.mjs` 各写一份），
-     * 而同分支 stage 共享工作区 —— 排在 `每日新鲜度账` 之前时它读到刚被改过的账，「账是旧的」永远判不出来。
-     * ⚠️ 按**名字**认那三格：每日跑的是壳（`ci-daily-build.mjs` / `e2e-run.mjs` / `full-suite-run.mjs`），按 script 认会认不到 ⇒ 恒绿空转；改名同批改这里。 */
+     * 而单 job 串行共享同一个工作区 —— 排在 `新鲜度账` step 之前时它读到刚被改过的账，「账是旧的」永远判不出来。
+     * ⚠️ #3504 起执行面在 GA daily.yml，按 step 名认（对照 `DAILY_GATE_EXECUTORS`）；改名同批改对照登记。 */
     const ledgerRefreshing = ["每日生产构建", "每日全量E2E", "每日单元测试"];
-    const order = registeredDailyGateOrder(config);
-    expect(order, "`每日新鲜度账` 不在每日清单里").toContain("每日新鲜度账");
-    const freshAt = order.indexOf("每日新鲜度账");
     const daily = dailyStages().map((s, at) => ({ ...s, at }));
+    const freshAt = daily.findIndex((s) => s.name === "每日新鲜度账");
+    expect(freshAt, "GA daily.yml 里没有「新鲜度账」step").toBeGreaterThan(-1);
     const refreshers = daily.filter((s) => ledgerRefreshing.includes(s.name));
     /* 找到三格这件事本身要判：找不到就是「那一列变了」，而空数组会让下面那条恒绿。 */
     expect(
       refreshers.map((s) => s.name),
-      "每日那三格（生产构建 / 全量E2E / 单元测试）没在每日清单里找到 —— 它们的跑法脚本会刷新账，" +
+      "GA 每日档那三格（生产构建 / 全量E2E / 单元测试）没在 daily.yml 里找到 —— 它们的跑法脚本会刷新账，" +
         "这一条的比较面因此空了（判据恒绿 = 静默失效）",
     ).toEqual(ledgerRefreshing);
     const beforeGate = refreshers.filter((s) => s.at < freshAt).map((s) => s.name);
     expect(
       beforeGate,
-      `这些 stage 排在 \`每日新鲜度账\` 之前：${beforeGate.join(", ")} —— 它们的跑法脚本会先把账刷新，` +
+      `这些 step 排在 \`新鲜度账\` 之前：${beforeGate.join(", ")} —— 它们的跑法脚本会先把账刷新，` +
         "于是这一步读到的是「刚被本次运行证过的账」，恒放行",
     ).toEqual([]);
     /* 半边二：`新鲜度账` 此刻**不许**在 PR 清单里 —— 2026-10-23 的挪档结论要写死成
-     * 断言，而不是靠「恰好解析不出来」。它现在只在每日档（`每日新鲜度账`）。 */
+     * 断言，而不是靠「恰好解析不出来」。它现在只在每日档（GA daily.yml 的同名 step）。 */
     expect(
       registeredGateOrder(config),
       "`新鲜度账` 又回到 `COMFYAPP_CI_GATES` 了 —— 它 2026-10-23 撤到了每日档（ISSUE #2300 " +

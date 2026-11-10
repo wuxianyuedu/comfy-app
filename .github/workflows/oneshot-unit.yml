@@ -1,0 +1,76 @@
+# 单跑全量单测（镜像档）—— 对位 `.cnb.yml` 已退役的「单跑全量单测」档（ISSUE #3504）
+#
+# `web_trigger_unit` / `api_trigger_unit` 两条触发口派发（`--preset unit`）落到本 workflow。
+# step 清单逐字对位 CNB `.oneshot-unit` 锚点退役前的两格：安装依赖 → 全量单测
+# （`full-suite-run.mjs` 整档）。全量单测只问「这套代码在锁定的依赖上过不过」；
+# 建库与浏览器它不碰（同 CNB 单跑旧口径 —— ⚠️ 故意不带 Python 两格：那两格答的是
+# E2E 链的解释器问题，与 vitest 无关）。
+#
+# ⚠️ 它跑绿会刷整档新鲜度凭证（`full-suite-run.mjs` 的记账）—— 与 daily.yml 的
+# `单元测试` step 同一份执行者语义，并发在场时别拿耗时当量级读。
+#
+# 形态口径同 oneshot-build.yml 文件头（裸 install / 无 cp936 外壳 / 无 schedule）。
+name: Oneshot unit (mirror)
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      head_sha:
+        description: 要跑单测的那一笔 sha（留空 = 默认分支 HEAD）
+        required: false
+        default: ""
+
+concurrency:
+  group: oneshot-unit
+  cancel-in-progress: true
+
+env:
+  SKIP_ENV_VALIDATION: "1"
+  BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
+  CI: "true"
+  COMFYAPP_QUIET_COVERAGE: "1"
+  # vitest 并发同 daily.yml：只接「人的覆盖出口」，不写数（口径同 `.cnb.yml` 同名键）。
+  COMFY_CI_MAX_WORKERS: ${{ vars.COMFY_CI_MAX_WORKERS }}
+  COMFY_CI_SUBJECT: "master"
+  # 全量单测里有真建一笔提交的用例（tests/freshness-ledger-backend.test.ts）：runner
+  # 检出后不带 git 身份 ⇒ 喂中性身份，判据一字不改（同 daily.yml）。
+  GIT_AUTHOR_NAME: ci-mirror
+  GIT_AUTHOR_EMAIL: ci-mirror@users.noreply.github.com
+  GIT_COMMITTER_NAME: ci-mirror
+  GIT_COMMITTER_EMAIL: ci-mirror@users.noreply.github.com
+
+jobs:
+  oneshot-unit:
+    runs-on: ubuntu-24.04
+    # 两格预算之和（20 + 45）量级之上的整数档。
+    timeout-minutes: 75
+    steps:
+      - name: 检出（按派发那笔 sha）
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.head_sha || github.sha }}
+          # 全量单测含按 git 历史现算的判据（tests/audits-doc-references.test.ts）：
+          # 浅克隆退化成空集 ⇒ 那条反向锚点必红 —— 与 daily.yml 同回全历史。
+          fetch-depth: 0
+          # 全量单测含字体用例（tests/embedded-title-font.test.ts）：要字体真身字节。
+          lfs: true
+
+      - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
+        uses: pnpm/action-setup@v6
+
+      - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: 安装依赖（allowBuilds 清单见 pnpm-workspace.yaml）
+        timeout-minutes: 20
+        run: pnpm install --frozen-lockfile
+
+      - name: 全量单测（cnb 同款判据一字不改）
+        timeout-minutes: 45
+        run: node scripts/full-suite-run.mjs
