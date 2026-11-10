@@ -380,19 +380,14 @@ export function useSettingsPage(options?: {
    * DbStudio / Ollama 无任何共享 state。返回形状与原 controller 逐字段一致。 */
   const {
     toggleExtraModel,
-    remoteModelList,
-    addRemoteModel,
-    updateRemoteModel,
-    removeRemoteModel,
-    probeRemote,
     testModelUsage: testModelUsageFn,
     queryUsageTask: queryUsageTaskFn,
     setTaskTemperature,
   } = useSettingsRemoteModels({
     llmDraft,
+    persistLlmDraft,
     setLlmDraft,
     patchLlm,
-    persistLlmDraft,
   });
 
   /* 加载失败判定与补记日志（沉在 sub-hook；说明见其文件头）。 */
@@ -435,11 +430,6 @@ export function useSettingsPage(options?: {
     commitLlm,
     commitPrefs,
     toggleExtraModel,
-    remoteModelList,
-    addRemoteModel,
-    updateRemoteModel,
-    removeRemoteModel,
-    probeRemote,
     testModelUsage: testModelUsageFn,
     queryUsageTask: queryUsageTaskFn,
     llmApiKey,

@@ -3,7 +3,7 @@
 /**
  * 「实际使用」测试弹窗（规范 17 §17.2 第③层）。
  * 按用途真实调用一次，路径 / 提示词 / 尺寸 / 额外字段均可自定义；图片 / 视频
- * 消耗提供方额度（弹窗内有预告）。交互态与动作由 `useRemoteModelDialogs` 承载。
+ * 消耗提供方额度（弹窗内有预告）。交互态与动作由 `useUsageTestDialogs` 承载。
  */
 
 import {
@@ -34,7 +34,7 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { fixed } from "~/lib/number-format";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
-import type { RemoteModelDialogs, UsageTestDialogState } from "../hooks/use-remote-model-dialogs";
+import type { UsageTestDialogs, UsageTestDialogState } from "../hooks/use-usage-test-dialogs";
 
 const USAGE_TEST_KIND_LABELS: Record<UsageTestKind, string> = {
   chat: "文本",
@@ -47,7 +47,7 @@ export function UsageTestDialog({
   usageTest,
 }: {
   c: ReadySettingsPageController;
-  d: RemoteModelDialogs;
+  d: UsageTestDialogs;
   /** 非空由调用方保证：仅在弹窗打开时渲染。 */
   usageTest: NonNullable<UsageTestDialogState>;
 }) {
@@ -256,7 +256,7 @@ function UsageVideoModeQuickPick({
   d,
   usageTest,
 }: {
-  d: RemoteModelDialogs;
+  d: UsageTestDialogs;
   usageTest: NonNullable<UsageTestDialogState>;
 }) {
   /* mode 快捷选择的当前值：fields 里的 mode 值合法（在预设清单内、非坏值）
@@ -353,7 +353,7 @@ function UsageFieldEditor({
   d,
   usageTest,
 }: {
-  d: RemoteModelDialogs;
+  d: UsageTestDialogs;
   usageTest: NonNullable<UsageTestDialogState>;
 }) {
   return (
@@ -468,7 +468,7 @@ function UsageTestResultPanel({
   result,
 }: {
   c: ReadySettingsPageController;
-  d: RemoteModelDialogs;
+  d: UsageTestDialogs;
   /** 非空由调用方保证：仅在有结果且不在调用中时渲染。 */
   result: NonNullable<UsageTestDialogState["result"]>;
   usageTest: NonNullable<UsageTestDialogState>;

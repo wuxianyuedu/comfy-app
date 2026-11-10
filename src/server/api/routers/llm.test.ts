@@ -141,7 +141,8 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
       name: "gpt-x",
       baseUrl: "https://api.example/v1",
     });
-    expect(String(rows[0]!.apiKey).startsWith("enc:v1:")).toBe(true);
+    /* `list()` 读侧已解密（#3509），落盘形态只能读原始表行。 */
+    expect(String(tdb.$tables.remoteModels[0]!.apiKey).startsWith("enc:v1:")).toBe(true);
     upsert.mockRestore();
   });
 
@@ -197,6 +198,162 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
     ).toBe("OK");
     expect(upsert).toHaveBeenCalledTimes(1);
     upsert.mockRestore();
+  });
+});
+
+describe("providers —— 供应商 / 模型的入参闸与全量回读（#3501）", () => {
+  const saveProvider = (patch: Record<string, unknown> = {}) =>
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- 用例故意用宽松 patch 造各种入参
+    caller().providerSave({
+      name: "Agnes",
+      baseUrl: "https://platform.agnes-ai.com",
+      apiFormat: "anthropic-messages",
+      ...patch,
+    } as never);
+
+  it("providersGet 空库：两份清单都是空数组（历史遗留迁移跑过也不造假数据）", async () => {
+    expect(await caller().providersGet()).toEqual({ providers: [], models: [] });
+  });
+
+  it("providerSave 新建 / 更新：回全量视图，密钥只报 hasApiKey，落库密文", async () => {
+    const created = await saveProvider({ apiKey: "sk-provider" });
+    expect(created.providers).toHaveLength(1);
+    expect(created.providers[0]).toMatchObject({
+      name: "Agnes",
+      baseUrl: "https://platform.agnes-ai.com",
+      apiFormat: "anthropic-messages",
+      hasApiKey: true,
+    });
+    expect(created.providers[0]).not.toHaveProperty("apiKey");
+    const providerId = created.providers[0]!.id;
+    expect(String(tdb.$tables.llmProviders[0]!.apiKey).startsWith("enc:v1:")).toBe(true);
+
+    // 更新不带 apiKey ⇒ 保持既有；显式 null ⇒ 清空（hasApiKey 跟着变 false）
+    const updated = await caller().providerSave({
+      id: providerId,
+      name: "Agnes 2",
+      baseUrl: "https://agnes.example.com",
+      apiFormat: "responses",
+    });
+    expect(updated.providers[0]).toMatchObject({
+      id: providerId,
+      name: "Agnes 2",
+      apiFormat: "responses",
+      hasApiKey: true,
+    });
+
+    const cleared = await caller().providerSave({
+      id: providerId,
+      name: "Agnes 2",
+      baseUrl: "https://agnes.example.com",
+      apiFormat: "responses",
+      apiKey: null,
+    });
+    expect(cleared.providers[0]?.hasApiKey).toBe(false);
+    expect(tdb.$tables.llmProviders[0]!.apiKey).toBeNull();
+  });
+
+  it("providerSave 的 zod 闸：Base URL 非 http(s) / 空名 / 未知格式都 BAD_REQUEST，且不落库", async () => {
+    for (const patch of [
+      { baseUrl: "ftp://x" },
+      { baseUrl: "not a url" },
+      { name: "   " },
+      { apiFormat: "grpc" },
+    ]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序
+      expect(await codeOf(saveProvider(patch))).toBe("BAD_REQUEST");
+    }
+    expect(tdb.$tables.llmProviders).toEqual([]);
+  });
+
+  it("modelSave / modelToggle / modelDelete：全量回读、启停、删除", async () => {
+    const providerId = (await saveProvider()).providers[0]!.id;
+    const saved = await caller().modelSave({
+      providerId,
+      name: "claude-sonnet-4",
+      kind: "chat",
+      apiKey: "sk-model",
+      contextWindow: 200_000,
+      maxOutputTokens: 8192,
+      inputTypes: ["text", "image"],
+      capabilities: ["structured-output"],
+      reasoningLevels: ["low", "high"],
+      reasoningParamMapping: { param: "reasoning_effort", values: { low: "low" } },
+      smartConfig: false,
+    });
+    expect(saved.models).toHaveLength(1);
+    expect(saved.models[0]).toMatchObject({
+      providerId,
+      name: "claude-sonnet-4",
+      kind: "chat",
+      enabled: true,
+      hasApiKey: true,
+      contextWindow: 200_000,
+      maxOutputTokens: 8192,
+      inputTypes: ["text", "image"],
+      capabilities: ["structured-output"],
+      reasoningLevels: ["low", "high"],
+      reasoningParamMapping: { param: "reasoning_effort", values: { low: "low" } },
+      smartConfig: false,
+    });
+    expect(saved.models[0]).not.toHaveProperty("apiKey");
+    const modelId = saved.models[0]!.id;
+
+    const toggled = await caller().modelToggle({ id: modelId, enabled: false });
+    expect(toggled.models[0]?.enabled).toBe(false);
+    expect(tdb.$tables.remoteModels[0]!.enabled).toBe(0);
+
+    const deleted = await caller().modelDelete({ id: modelId });
+    expect(deleted.models).toEqual([]);
+    expect((await caller().providersGet()).models).toEqual([]);
+  });
+
+  it("modelSave 的 zod 闸：缺 providerId / 空名 / 0 窗口 / 未知用途 / 未知输入类型都 BAD_REQUEST", async () => {
+    const providerId = (await saveProvider()).providers[0]!.id;
+    const base = { providerId, name: "m" };
+    for (const patch of [
+      { providerId: undefined },
+      { providerId: "" },
+      { name: "   " },
+      { contextWindow: 0 },
+      { maxOutputTokens: -1 },
+      { kind: "audio" },
+      { inputTypes: ["audio"] },
+      { capabilities: ["telepathy"] },
+      { reasoningParamMapping: { param: "x", values: { low: 1 } } },
+    ]) {
+      // oxlint-disable-next-line no-await-in-loop, typescript/no-unsafe-type-assertion -- 逐轮 await 保顺序；故意喂非法入参
+      expect(await codeOf(caller().modelSave({ ...base, ...patch } as never))).toBe("BAD_REQUEST");
+    }
+    expect(tdb.$tables.remoteModels).toEqual([]);
+  });
+
+  it("providerDelete 连名下模型一起删，并把剩余状态整份回读", async () => {
+    const first = await saveProvider({ name: "Agnes" });
+    const second = await saveProvider({ name: "Backup", baseUrl: "https://backup.example.com" });
+    const dropId = first.providers[0]!.id;
+    await caller().modelSave({ providerId: dropId, name: "owned-by-drop" });
+    await caller().modelSave({
+      providerId: second.providers.find((p) => p.name === "Backup")!.id,
+      name: "owned-by-keep",
+    });
+
+    const after = await caller().providerDelete({ id: dropId });
+    expect(after.providers.map((p) => p.name)).toEqual(["Backup"]);
+    expect(after.models.map((m) => m.name)).toEqual(["owned-by-keep"]);
+  });
+
+  it("providersGet 先把历史遗留模型迁进「默认供应商」再回读", async () => {
+    seedRemoteModel(tdb, { name: "legacy" });
+    const state = await caller().providersGet();
+    expect(state.providers.map((p) => p.name)).toEqual(["默认供应商"]);
+    expect(state.models).toHaveLength(1);
+    expect(state.models[0]).toMatchObject({
+      name: "legacy",
+      providerId: state.providers[0]!.id,
+      enabled: true,
+      hasApiKey: false,
+    });
   });
 });
 

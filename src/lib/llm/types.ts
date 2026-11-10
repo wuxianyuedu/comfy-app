@@ -3,6 +3,7 @@
 // 都讲 OpenAI 的 /v1/chat/completions 协议。
 
 import { isRecord } from "~/lib/is-record";
+import type { LlmApiFormat } from "./provider-types";
 
 export type LLMProviderType = "local" | "remote";
 
@@ -76,11 +77,31 @@ export const REMOTE_MODEL_KIND_LABELS: Record<RemoteModelKind, string> = {
  * `hasApiKey` 是**只读视图字段**：服务端下发时逐条标「这条存过密钥」（与顶层同口径），
  * 供设置页显示「已配置」而不把明文送进浏览器；它不参与写入判定。 */
 export type RemoteModelEntry = {
+  /** 所属供应商的接口格式（#3501；服务端按它组装请求）。 */
+  apiFormat?: LlmApiFormat | null;
   apiKey?: string | null;
   baseUrl?: string | null;
+  /** 模型能力（#3501）：structured-output / native-web-search / system-messages。 */
+  capabilities?: Array<string> | null;
+  /** 上下文窗口（token，#3501）。 */
+  contextWindow?: number | null;
+  /** 是否启用（#3501；停用的模型不下发给工坊下拉）。 */
+  enabled?: boolean;
   hasApiKey?: boolean;
+  /** 输入类型（#3501）：text / image / video / pdf。 */
+  inputTypes?: Array<string> | null;
   kind?: RemoteModelKind | null;
+  /** 最大输出 token（#3501）。 */
+  maxOutputTokens?: number | null;
   name: string;
+  /** 所属供应商 id（#3501）；空 = 历史遗留条目。 */
+  providerId?: string | null;
+  /** 推理等级词表（#3501）。 */
+  reasoningLevels?: Array<string> | null;
+  /** 推理参数映射（#3501）：{ param, values }。 */
+  reasoningParamMapping?: unknown;
+  /** 「智能配置」开关（#3501）。 */
+  smartConfig?: boolean;
 };
 
 /** `apiKey` 的三态归一（唯一一份口径，`normalizeExtraModels` 与 `splitExtraModels`
@@ -301,6 +322,8 @@ export function resolveTaskTemperature(opts: {
 }
 
 export type LLMConfig = {
+  /** 上游接口格式（#3501）：由命中的供应商决定，缺省按 OpenAI 兼容处理。 */
+  apiFormat?: LlmApiFormat;
   /** remote 提供方的密钥；与 RemoteModelEntry.apiKey 一样只在服务端参与请求 */
   apiKey?: string | null;
   /** OpenAI-compatible base URL: 本机 Ollama 默认值见 `~/lib/endpoints`

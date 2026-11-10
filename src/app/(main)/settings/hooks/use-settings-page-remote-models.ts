@@ -1,22 +1,20 @@
 "use client";
 
 /**
- * 设置页「远端模型管理」分区的 sub-hook（`use-settings-page` 的拆分件）。
- * 只做配置：本地候选勾选 + 远端条目增删改 / 测试连接，不区分「当前生效」（由工坊运行时定）；
- * 增删改即时落库，连通性走服务端代理（apiKey 不直接打远端），返回形状与主 hook 一致。
+ * 设置页「模型清单」分区的 sub-hook（`use-settings-page` 的拆分件）。
+ * 只做配置：本地候选勾选 + 按任务温度；远端供应商 / 模型的增删改在
+ * `use-settings-providers`（#3501 起独立成表、独立读写面），不在这里。
+ * 连通性 / 实际调用测试走服务端代理（apiKey 不直接打远端），返回形状与主 hook 一致。
  */
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 
-import { probeRemoteApi } from "~/lib/llm/browser";
 import {
   queryUsageTask,
   testModelUsage,
   type UsageTaskQueryInput,
   type UsageTestInput,
 } from "~/lib/llm/usage-test-client";
-import { TASK_TYPES, type RemoteModelEntry, type TaskType } from "~/lib/llm/types";
-/* 条目形状的唯一出处：controller 收的那一枚，就是 lib 里那座草稿→条目桥产出的那枚。 */
-import type { RemoteModelDraftEntry } from "~/lib/llm/remote-model-schema";
+import { TASK_TYPES, type TaskType } from "~/lib/llm/types";
 
 import type { LlmConfig } from "./use-settings-page-types";
 
@@ -62,7 +60,7 @@ export function useSettingsRemoteModels(input: {
   ) => Promise<{ error?: string; ok: boolean }>;
   setLlmDraft: LlmDraftSetter;
 }) {
-  const { llmDraft, setLlmDraft, patchLlm, persistLlmDraft } = input;
+  const { llmDraft, persistLlmDraft, setLlmDraft, patchLlm } = input;
 
   /** 勾选/取消一个本地候选模型（多选集 = 主模型 + 勾选项）。
    *  option C：本地候选只存名字（字符串、无 apiKey），与远端独立模型(extraModels)
@@ -87,108 +85,6 @@ export function useSettingsRemoteModels(input: {
     [llmDraft, persistLlmDraft, setLlmDraft],
   );
 
-  /* ── 远端模型管理 ──
-   * 设置页只做「配置」：条目的增删改 + 测试连接，不区分「当前生效」——
-   * 实际用哪个模型由工坊运行时切换（configSave.model）。
-   * 增删改即时落库（无需再点保存按钮），失败时提示条给出可读错误。
-   * 连通性 / 实际调用测试走服务端代理（apiKey 不直接打远端）。 */
-  const addRemoteModel = useCallback(
-    async (entry: RemoteModelDraftEntry): Promise<{ error?: string; ok: boolean }> => {
-      if (!llmDraft) {
-        return { ok: false, error: "配置未就绪，请稍后重试" };
-      }
-      const name = entry.name.trim();
-      if (!name) {
-        return { ok: false, error: "请填写模型名称" };
-      }
-      if (llmDraft.extraModels.some((e) => e.name === name)) {
-        return { ok: false, error: `模型「${name}」已在列表中` };
-      }
-      const trimmedBaseUrl = entry.baseUrl?.trim();
-      const trimmedApiKey = entry.apiKey?.trim();
-      const cleaned: RemoteModelEntry = {
-        name,
-        baseUrl: trimmedBaseUrl !== undefined && trimmedBaseUrl !== "" ? trimmedBaseUrl : null,
-        apiKey: trimmedApiKey !== undefined && trimmedApiKey !== "" ? trimmedApiKey : null,
-        kind: entry.kind ?? null,
-      };
-      const nextDraft = {
-        ...llmDraft,
-        extraModels: [...llmDraft.extraModels, cleaned],
-      };
-      setLlmDraft(nextDraft);
-      return persistLlmDraft(nextDraft);
-    },
-    [llmDraft, persistLlmDraft, setLlmDraft],
-  );
-
-  const removeRemoteModel = useCallback(
-    async (name: string): Promise<{ error?: string; ok: boolean }> => {
-      if (!llmDraft) {
-        return { ok: false, error: "配置未就绪，请稍后重试" };
-      }
-      const next = llmDraft.extraModels.filter((e) => e.name !== name);
-      if (next.length === llmDraft.extraModels.length) {
-        return { ok: true };
-      }
-      const nextDraft = { ...llmDraft, extraModels: next };
-      setLlmDraft(nextDraft);
-      return persistLlmDraft(nextDraft);
-    },
-    [llmDraft, persistLlmDraft, setLlmDraft],
-  );
-
-  /** 编辑既有条目（只作用于已配置条目）；改名时若当前生效模型引用的是旧名，
-   *  同步改 draft.model —— 工坊按名字引用模型，不同步会指向不存在的名字。 */
-  const updateRemoteModel = useCallback(
-    async (
-      name: string,
-      patch: Partial<RemoteModelDraftEntry>,
-    ): Promise<{ error?: string; ok: boolean }> => {
-      if (!llmDraft) {
-        return { ok: false, error: "配置未就绪，请稍后重试" };
-      }
-      const nextName = (patch.name ?? name).trim();
-      if (!nextName) {
-        return { ok: false, error: "请填写模型名称" };
-      }
-      const existing = llmDraft.extraModels.find((e) => e.name === name);
-      if (!existing) {
-        return { ok: false, error: `模型「${name}」不存在，请刷新后重试` };
-      }
-      if (nextName !== name && llmDraft.extraModels.some((e) => e.name === nextName)) {
-        return { ok: false, error: `模型「${nextName}」已在列表中` };
-      }
-      const typedKey = patch.apiKey?.trim();
-      const updated: RemoteModelEntry = {
-        name: nextName,
-        baseUrl: patch.baseUrl === undefined ? (existing.baseUrl ?? null) : patch.baseUrl,
-        /* `apiKey` 三态（台账 A11 客户端这一半）：重填 → 新值；勾「清除密钥」→ `null`；
-         * 未动 → 省略键。不能用 `existing?.apiKey ?? null`：existing 来自服务端脱敏清单
-         * （永不带值），折成 null 后 replaceAll 会按覆盖语义清掉库里的密钥。 */
-        ...(typedKey !== undefined && typedKey !== ""
-          ? { apiKey: typedKey }
-          : patch.clearApiKey === true
-            ? { apiKey: null }
-            : {}),
-        kind: patch.kind === undefined ? (existing.kind ?? null) : patch.kind,
-      };
-      const nextDraft = {
-        ...llmDraft,
-        model: llmDraft.model === name ? nextName : llmDraft.model,
-        extraModels: llmDraft.extraModels.map((e) => (e.name === name ? updated : e)),
-      };
-      setLlmDraft(nextDraft);
-      return persistLlmDraft(nextDraft);
-    },
-    [llmDraft, persistLlmDraft, setLlmDraft],
-  );
-
-  const probeRemote = useCallback(
-    async (input: { apiKey?: string; baseUrl?: string; model?: string }) => probeRemoteApi(input),
-    [],
-  );
-
   /** 模型「实际使用」测试（chat / 生图 / 生视频各一次真实调用）。
    *  网络封装在 lib/llm/usage-test-client，密钥解析在服务端完成。 */
   const testModelUsageFn = useCallback(async (input: UsageTestInput) => testModelUsage(input), []);
@@ -199,10 +95,6 @@ export function useSettingsRemoteModels(input: {
     async (input: UsageTaskQueryInput) => queryUsageTask(input),
     [],
   );
-
-  /** 远端候选模型列表（配置视图，按保存顺序）——设置页不区分「当前生效」，
-   *  用哪个模型由工坊运行时切换。 */
-  const remoteModelList: Array<RemoteModelEntry> = llmDraft?.extraModels ?? [];
 
   const setTaskTemperature = useCallback(
     (task: TaskType, raw: string) => {
@@ -225,11 +117,6 @@ export function useSettingsRemoteModels(input: {
 
   return {
     toggleExtraModel,
-    remoteModelList,
-    addRemoteModel,
-    updateRemoteModel,
-    removeRemoteModel,
-    probeRemote,
     testModelUsage: testModelUsageFn,
     queryUsageTask: queryUsageTaskFn,
     setTaskTemperature,

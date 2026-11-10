@@ -1,195 +1,139 @@
 "use client";
 
 /**
- * 远程模型（OpenAI 兼容）分区（规范 17 §17.2 第③层）。
- * 只维护模型清单（按用途分组 + 行内动作）；列表与动作来自 controller，
- * 弹窗交互态来自 `useRemoteModelDialogs`（第②层）。
+ * 远程模型分区（规范 17 §17.2 第③层，#3501）：左侧供应商清单、右侧供应商详情
+ * （内联连接参数 + 模型列表）。
+ *
+ * 数据来自 `use-settings-providers`（供应商 / 模型读写与探测）、弹窗态来自
+ * `use-provider-model-dialogs`、「实际使用」测试弹窗来自 `use-usage-test-dialogs`；
+ * 本组件只渲染，不拼请求、不判字段。
  */
 
-import type { RemoteModelKind } from "~/lib/llm/types";
 import { Button } from "~/components/ui/button";
+import { EmptyState } from "~/components/ui/empty-state";
+import { SettingsCard } from "~/components/ui/settings-card";
+import { LLM_API_FORMATS, LLM_API_FORMAT_LABELS } from "~/lib/llm/provider-types";
 
-import { Hint } from "~/components/ui/hint";
-import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
-import { RemoteModelDialog } from "./RemoteModelDialog";
+import { ProviderDetail } from "./ProviderDetail";
+import { ProviderDialog } from "./ProviderDialog";
+import { ProviderModelDialog } from "./ProviderModelDialog";
 import { UsageTestDialog } from "./UsageTestDialog";
+import { useProviderModelDialogs } from "../hooks/use-provider-model-dialogs";
+import { useSettingsProviders } from "../hooks/use-settings-providers";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
-import type { RemoteModelDialogs } from "../hooks/use-remote-model-dialogs";
+import { useUsageTestDialogs } from "../hooks/use-usage-test-dialogs";
 
-export function LlmRemoteSection({
-  c,
-  d,
-}: {
-  c: ReadySettingsPageController;
-  d: RemoteModelDialogs;
-}) {
-  /* 远程模型按用途分组展示（文本 / 图片 / 视频）；kind 缺省的历史条目
-   * 按文本模型归组。行内不再重复用途标签 —— 分组本身就是用途。 */
-  function remoteModelGroup(kind: RemoteModelKind, title: string, emptyHint: string) {
-    const entries = c.remoteModelList.filter((entry) => (entry.kind ?? "chat") === kind);
-    return (
-      /* 分组头是一行**轻量区头**（标题 + 计数 + 右端动作），不是一个各自套着
-         边框的卡中卡 —— 三个空分组此前各画一圈边框 + 16px 内距，只为装一行
-         「还没有…」和一颗按钮，一屏里长出三个几乎全空的盒子（视觉上比
-         「这里面有什么」更响）。现在分组由**一行区头 + 一组行**构成，
-         空分组只剩那一行提示，边框留给真正的条目。 */
-      <section aria-label={title} className="mb-5">
-        <div className="border-border-subtle mb-2 flex items-center gap-2 border-b pb-1.5">
-          <h3 className="u-title">{title}</h3>
-          <span className="text-ink-fainter text-2xs tabular-nums">{entries.length}</span>
-          <Button
-            className="text-muted-foreground hover:text-ink text-2xs ml-auto h-auto rounded-md px-2 py-1"
-            onClick={() => {
-              d.openAddDialog(kind);
-            }}
-            size="xs"
-            variant="outline"
-          >
-            ＋ 添加模型
-          </Button>
-        </div>
-        {entries.length > 0 ? (
-          <div className="flex flex-col gap-1.5">
-            {entries.map((entry) => {
-              const thisProbe = d.rowProbe?.name === entry.name ? d.rowProbe : null;
-              const rowMsg = thisProbe ? thisProbe.msg : null;
-              return (
-                <div className="flex-col gap-1" key={entry.name}>
-                  <div className={`${SETTINGS_ROW_CLASS} flex items-center gap-2 text-sm`}>
-                    <span className="min-w-0 flex-1 truncate">
-                      <span className="text-ink">{entry.name}</span>
-                      {entry.baseUrl !== null &&
-                        entry.baseUrl !== undefined &&
-                        entry.baseUrl !== "" && (
-                          <span className="text-muted-foreground text-3xs ml-2">独立接口</span>
-                        )}
-                      {entry.apiKey !== null &&
-                        entry.apiKey !== undefined &&
-                        entry.apiKey !== "" && (
-                          <span className="text-muted-foreground text-3xs ml-1.5">独立密钥</span>
-                        )}
-                    </span>
-                    <Hint label="按该条目配置探测接口连通性（不生成、不耗额度）" wrap>
-                      <Button
-                        className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
-                        disabled={thisProbe?.running === true}
-                        onClick={() => {
-                          void d.runEntryConnectionTest(entry);
-                        }}
-                        size="xs"
-                        variant="outline"
-                      >
-                        {thisProbe?.running === true ? "连接测试中…" : "测试连接"}
-                      </Button>
-                    </Hint>
-                    <Hint label="按实际用法发起一次真实生成调用（参数可在弹窗内自定义）">
-                      <Button
-                        className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
-                        onClick={() => {
-                          d.openUsageTest(kind, entry);
-                        }}
-                        size="xs"
-                        variant="outline"
-                      >
-                        测试生成
-                      </Button>
-                    </Hint>
-                    <Hint label="编辑接口地址 / 密钥 / 名称">
-                      <Button
-                        className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
-                        onClick={() => {
-                          d.openEditDialog(entry);
-                        }}
-                        size="xs"
-                        variant="outline"
-                      >
-                        编辑
-                      </Button>
-                    </Hint>
-                    <Hint label="移除该模型（即时保存）">
-                      <Button
-                        aria-label={`移除模型 ${entry.name}`}
-                        className="text-muted-foreground hover:text-danger-strong"
-                        onClick={() => {
-                          void c.removeRemoteModel(entry.name);
-                        }}
-                        size="icon-xs"
-                        variant="ghost"
-                      >
-                        ✕
-                      </Button>
-                    </Hint>
-                  </div>
-                  {rowMsg && (
-                    <div
-                      className={`text-2xs mr-1 ml-1 rounded border px-2 py-1 ${
-                        rowMsg.kind === "ok"
-                          ? "border-success/30 bg-success/10 text-success-strong"
-                          : "border-destructive/30 bg-destructive/10 text-danger-strong"
-                      }`}
-                    >
-                      {rowMsg.text}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="text-muted-foreground text-2xs">{emptyHint}</p>
-        )}
-      </section>
-    );
-  }
+export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
+  const p = useSettingsProviders();
+  const d = useProviderModelDialogs(p);
+  const usage = useUsageTestDialogs(c);
 
   return (
     <>
-      <SettingsCard title="远程模型（OpenAI 兼容）">
-        {/* 模型按用途分组：文本（对话）/ 图片 / 视频；kind 缺省的
- 历史条目按文本模型归组，添加时按组预选用途 */}
-        {remoteModelGroup(
-          "chat",
-          "文本模型",
-          "还没有文本模型 —— 点击「添加模型」加入对话 / 写作调用的模型。",
-        )}
-        {remoteModelGroup(
-          "image",
-          "图片模型",
-          "还没有图片模型 —— 点击「添加模型」加入生图 API 使用的模型。",
-        )}
-        {remoteModelGroup(
-          "video",
-          "视频模型",
-          "还没有视频模型 —— 点击「添加模型」加入视频生成 API 使用的模型。",
+      <SettingsCard
+        description="每个供应商维护自己的 Base URL / API 格式 / API Key，模型挂在供应商下"
+        title="远程模型（供应商）"
+      >
+        {p.errorText !== null && p.errorText !== "" && (
+          <p className="bg-destructive/10 text-danger-strong mb-3 rounded-lg px-3 py-2 text-xs">
+            读取供应商失败：{p.errorText}
+          </p>
         )}
 
-        <p className="text-muted-foreground text-2xs mb-3 leading-relaxed">
+        {p.loading ? (
+          <p className="text-muted-foreground text-2xs">正在读取供应商…</p>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]">
+            <aside aria-label="供应商列表" className="flex min-w-0 flex-col gap-1.5">
+              {p.providers.map((provider) => {
+                const active = p.selected?.id === provider.id;
+                const count = p.models.filter((model) => model.providerId === provider.id).length;
+                const format =
+                  LLM_API_FORMATS.find((candidate) => candidate === provider.apiFormat) ??
+                  "chat-completions";
+                return (
+                  <Button
+                    aria-current={active ? "true" : undefined}
+                    className={`h-auto w-full justify-start gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${
+                      active
+                        ? "border-primary-500/40 bg-primary-500/10"
+                        : "border-border bg-surface-row hover:bg-surface-2"
+                    }`}
+                    key={provider.id}
+                    onClick={() => {
+                      p.selectProvider(provider.id);
+                    }}
+                    type="button"
+                    variant="ghost"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="text-ink block truncate text-sm">{provider.name}</span>
+                      <span className="text-muted-foreground text-2xs block truncate">
+                        {LLM_API_FORMAT_LABELS[format].split("（")[0]}
+                        {provider.hasApiKey ? " · 已配密钥" : ""}
+                      </span>
+                    </span>
+                    <span className="text-ink-fainter text-2xs shrink-0 tabular-nums">{count}</span>
+                  </Button>
+                );
+              })}
+
+              <Button
+                className="text-muted-foreground hover:text-ink text-2xs mt-1 h-auto rounded-md px-2 py-1.5"
+                onClick={() => {
+                  d.openAddProvider();
+                }}
+                variant="outline"
+              >
+                ＋ 新建供应商
+              </Button>
+            </aside>
+
+            <section aria-label="供应商详情" className="min-w-0">
+              {p.selected ? (
+                <ProviderDetail
+                  d={d}
+                  key={p.selected.id}
+                  p={p}
+                  provider={p.selected}
+                  usage={usage}
+                />
+              ) : (
+                <EmptyState
+                  className="border-border/60"
+                  description="先「新建供应商」填好 Base URL / 格式 / 密钥，再往里添加模型。"
+                  minHeightClass="min-h-36"
+                  title="还没有供应商"
+                />
+              )}
+            </section>
+          </div>
+        )}
+
+        <p className="text-muted-foreground text-2xs mt-4 mb-2 leading-relaxed">
           <strong className="text-ink/80">保存位置</strong>
-          ：接口地址、API Key 等配置保存在本地 SQLite 数据库（默认{" "}
+          ：供应商落在本地 SQLite 的 <code className="text-ink/80">
+            llmProvider
+          </code> 表、模型落在{" "}
+          <code className="text-ink/80">remoteModel</code> 表（默认{" "}
           <code className="text-ink/80">db.sqlite</code>，路径由{" "}
-          <code className="text-ink/80">DATABASE_URL</code> 指定）：每条模型落在{" "}
-          <code className="text-ink/80">remoteModel</code> 表，全局接口地址 / 全局 API Key 落在{" "}
-          <code className="text-ink/80">llmConfig</code> 单例行。API Key 在库内以 AES-256-GCM
+          <code className="text-ink/80">DATABASE_URL</code> 指定）。API Key 以 AES-256-GCM
           加密存放，不会以明文下发到浏览器。
         </p>
 
-        <p className="text-muted-foreground text-2xs mb-4 leading-relaxed">
-          此页只维护模型清单，添加 / 编辑 / 移除都会
-          <strong className="text-ink/80">即时保存</strong>
-          ：「测试连接」按该条目自身配置探测接口连通性（不生成、不耗额度）；「测试生成」按实际用法发起一次真实调用（参数可在弹窗内自定义，图片
+        <p className="text-muted-foreground text-2xs leading-relaxed">
+          「测试连接」按当前填写的 Base URL / 格式 /
+          密钥探测接口（不生成、不耗额度）；「测试生成」按实际用法发起一次真实调用（参数可在弹窗内自定义，图片
           /
-          视频会消耗额度）。带「独立接口／独立密钥」的模型调用时使用条目内配置，其余走已保存的全局连接配置。实际使用哪个模型在工坊运行界面选择。
+          视频会消耗额度）。停用的模型不会出现在工坊的模型下拉里；实际使用哪个模型在工坊运行界面选择。
         </p>
       </SettingsCard>
 
-      {/* 「添加 / 编辑模型」弹窗：接口地址 / API Key 可留空回落全局；
- 编辑态密钥「留空不改」，可显式清除。测试连接成功后顺带展示
- 服务端模型清单供点选。 */}
-      {d.dialog && <RemoteModelDialog c={c} d={d} dialog={d.dialog} />}
+      {d.providerDialog && <ProviderDialog d={d} p={p} />}
 
-      {/* 「实际使用」测试弹窗：按用途真实调用一次（chat / 生图 / 生视频），
- 路径 / 提示词 / 尺寸 / 额外参数均可自定义输入。 */}
-      {d.usageTest && <UsageTestDialog c={c} d={d} usageTest={d.usageTest} />}
+      {d.modelDialog && <ProviderModelDialog d={d} dialog={d.modelDialog} p={p} />}
+
+      {usage.usageTest && <UsageTestDialog c={c} d={usage} usageTest={usage.usageTest} />}
     </>
   );
 }

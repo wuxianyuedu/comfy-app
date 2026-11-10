@@ -23,7 +23,6 @@ import { LogCategorySection } from "./components/LogCategorySection";
 import { LlmLocalSection } from "./components/LlmLocalSection";
 import { LlmRemoteSection } from "./components/LlmRemoteSection";
 import { UpdateCheckSection } from "./components/UpdateCheckSection";
-import { useRemoteModelDialogs } from "./hooks/use-remote-model-dialogs";
 
 export function SettingsPageView({
   c,
@@ -36,9 +35,6 @@ export function SettingsPageView({
   /** 屏级可见标题；页签（或顶栏）已在说屏名时不传（ISSUE #1872，见外壳文档）。 */
   title?: string;
 }) {
-  /* 远程模型的弹窗交互状态集中在第②层 hook：视图只消费字段、只渲染 JSX。 */
-  const remoteModelDialogs = useRemoteModelDialogs(c);
-
   /* 分区正文：**每个分区一项，全都在**（外壳铺在同一根滚动条里）。分区组件的
    * props 全是 `c`（或 `c` + 弹窗状态），所以这里只是一张「分区 → 组件」的表。 */
   const sections = useMemo(
@@ -53,14 +49,14 @@ export function SettingsPageView({
         ),
         appUpdate: <AppUpdateSection c={c} />,
         llmLocal: <LlmLocalSection c={c} />,
-        llmRemote: <LlmRemoteSection c={c} d={remoteModelDialogs} />,
+        llmRemote: <LlmRemoteSection c={c} />,
         comfyui: <ComfyuiSection c={c} />,
         database: <DatabaseSection c={c} />,
         backup: <BackupSection c={c} />,
         exit: <ExitSection c={c} />,
         logs: <LogCategorySection />,
       }) satisfies Record<Section, React.ReactNode>,
-    [c, remoteModelDialogs],
+    [c],
   );
 
   return (
