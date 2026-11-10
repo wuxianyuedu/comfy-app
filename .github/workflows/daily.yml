@@ -65,7 +65,6 @@ env:
   SKIP_ENV_VALIDATION: "1"
   BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
   CI: "true"
-  COMFY_TEST_TIMEOUT_SCALE: "2"
   COMFYAPP_QUIET_COVERAGE: "1"
   # vitest 并发：默认由 `scripts/ci-load.mjs:resolveCiWorkers()` 按平台分档推导 ——
   # GA 托管 runner（`GITHUB_ACTIONS=true`，每个 job 独享 4 核 VM）走 `ceil(cores/2)` ⇒ 2；
