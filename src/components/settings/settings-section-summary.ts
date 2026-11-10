@@ -68,5 +68,11 @@ export function isGroupFirstSection(section: Section): boolean {
   if (index <= 0) {
     return true;
   }
-  return sectionGroupLabel(order[index]!) !== sectionGroupLabel(order[index - 1]!);
+  /* 不用 `!`：越界的下标由显式空值守卫接住（判据「src 里不许出现非空断言」是硬闸）。 */
+  const current = order[index];
+  const previous = order[index - 1];
+  if (current === undefined || previous === undefined) {
+    return true;
+  }
+  return sectionGroupLabel(current) !== sectionGroupLabel(previous);
 }
