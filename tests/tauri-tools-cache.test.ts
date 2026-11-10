@@ -13,7 +13,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   TOOLS_ROOT_ENV,
   resolveBuildCacheRoot,
-  resolveCacheRoot,
   resolveToolRoot,
 } from "../scripts/ci-cache-slot.mjs";
 import {
@@ -121,7 +120,7 @@ describe("落点与根", () => {
     );
     /* 不许住在两份槽根之下：那边的淘汰器按 TTL 删键位，而这一份删了今天就没包。 */
     const roots = {
-      deps: resolveCacheRoot({ cwd: ROOT, env: {}, run }).root ?? "",
+      deps: resolveBuildCacheRoot({ cwd: ROOT, env: {}, run }).root ?? "",
       build: resolveBuildCacheRoot({ cwd: ROOT, env: {}, run }).root ?? "",
       tools: resolveToolRoot({ cwd: ROOT, env: {}, run }).root ?? "",
     };

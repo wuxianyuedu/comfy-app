@@ -19,7 +19,6 @@ import {
   main,
   pnpmInstallFingerprint,
   readInstallFingerprint,
-  runInstallWithSlot,
   writeInstallFingerprint,
 } from "../scripts/ci-install-deps.mjs";
 
@@ -365,72 +364,6 @@ function makeInstalledRoot(): string {
  * 每日那格按策略不接槽（ISSUE #2081），而旧实现「开关没拨」什么都不打印 ⇒ 与「什么都没发生」逐字
  * 同形，下一个人分不清「按策略不接」与「配了槽没接管」。
  */
-describe("接槽执行档的三条出口", () => {
-  /** 收齐打印的替身。 */
-  function collector() {
-    const lines: Array<string> = [];
-    return {
-      write: (s: string) => lines.push(s),
-      get text() {
-        return lines.join("");
-      },
-    };
-  }
-
-  it("开关没拨：照常装，且把「按策略不接槽」打出来", async () => {
-    const stub = installStub();
-    const out = collector();
-    const code = await runInstallWithSlot(null, {
-      env: {},
-      write: out.write,
-      install: stub.run,
-    });
-    expect(code).toBe(0);
-    expect(stub.calls, "开关没拨也要真装一次 —— 每日那一格靠的就是这一跳").toBe(1);
-    expect(out.text).toContain("槽未接管（开关没拨");
-    expect(out.text).toContain("⇒ 照常装");
-    /* 那句话必须**点名是哪个开关**，且不许把理由写成某一条流水线的形状。
-     * 旧的写法是「—— 每日档后面背着 next build」：它在 `单跑E2E·安装依赖` /
-     * `单跑单测·安装依赖` / `打包·安装依赖` 那三格上念的是**别人的**理由（那三档没有
-     * 构建格），而读日志的人会把「我这一档后面背着构建」当成结论去处理。
-     * 分档的那条线是「后面有没有会真构建的格子」，那句话只许指向登记处，不许当场复述。 */
-    expect(out.text).toContain("COMFY_CI_SLOT");
-    expect(out.text).not.toContain("每日档后面背着");
-  });
-
-  it("只有 `1` 算拨开：写成 `0` 走的是同一句策略话术，而不是一句「接不上」", async () => {
-    const out = collector();
-    const code = await runInstallWithSlot(null, {
-      env: { COMFY_CI_SLOT: "0" },
-      write: out.write,
-      install: () => 0,
-    });
-    expect(code).toBe(0);
-    expect(out.text).toContain("开关没拨");
-  });
-
-  it("env 从注入读，不读进程全局（否则单测会随本机开关变结论）", async () => {
-    process.env.COMFY_CI_SLOT = "not-1";
-    try {
-      const out = collector();
-      await runInstallWithSlot(null, {
-        env: {},
-        write: out.write,
-        install: () => 0,
-      });
-      // 注入的是「没有这个键」，而进程里那条垃圾值不该把它读成别的档。
-      expect(out.text).toContain("槽未接管（开关没拨");
-    } finally {
-      delete process.env.COMFY_CI_SLOT;
-    }
-  });
-});
-
-/**
- * pnpm 落点发现（ISSUE #2281）。现场：同机同时刻开发者会话 `pnpm -v` 正常，平台各格却写「pnpm 不可用」——
- * 那些格跑在服务账号会话，PATH 不含 pnpm；缺的是「把 pnpm 放回 PATH」。钉四件事：①PATH 上能跑就不动
- * PATH；②corepack 落点有 `pnpm-native.exe` 就前插且 `-v` 退 0；③候选起不来不许当选；④都没有则报且不装。
- */
 describe("pnpm 落点发现：服务账号的 PATH 上没它就是没装吗", () => {
   /* 「盘上还有哪些**目录**」—— 落点必须先存在，里面才谈得上有没有候选。
    * `exists` 同时回答这两问（真盘上 `fs.existsSync` 也是同一个判据）。 */
@@ -569,21 +502,25 @@ describe("pnpm 落点发现：服务账号的 PATH 上没它就是没装吗", ()
 });
 
 /**
- * 入口层不许绕过槽闸（ISSUE #2439）。#2286 的形态单测测不到：`main` 的 `install` 默认 `runInstallWithSlot`，
- * 入口层用 `{ install }` 覆盖成裸 `runInstall` ⇒ 单测全走注入路径、没人传覆盖，`.cnb.yml` 开关还置着而
- * `applySlot` 一次不被问，每格退回全量安装。源码形状是唯一测得到的现场。
+ * 入口层必须把「已亲眼看见 pnpm 起来」的探测事实传进安装（ISSUE #2281/#2439 的形态收口）。
+ * 旧口径是「不许绕过槽闸」；#3479 退役依赖槽后，同一处警戒换一个对象：探测结果不许被
+ * 裸调用丢掉 —— 而槽符号（runInstallWithSlot / applySlot / COMFY_CI_SLOT）不许残留在
+ * 脚本里（退役要剪干净，不留一条「看起来还在接槽」的死话术）。
  */
-describe("入口层不许绕过槽闸", () => {
+describe("入口层把探测事实传进安装，槽符号零残留（#3479）", () => {
   const source = fs.readFileSync(
     fileURLToPath(new URL("../scripts/ci-install-deps.mjs", import.meta.url)),
     "utf8",
   );
 
-  it("入口层的 install 必须是 runInstallWithSlot 的包装，探测结果作为依赖传进去", () => {
-    expect(source).toContain("runInstallWithSlot(boot.probing ?? null");
+  it("入口层的 install 必须是 runInstall(探测结果) 的直传", () => {
+    expect(source).toContain("runInstall(boot.probing ?? null)");
   });
 
-  it("不许再把裸 runInstall 直接当 main 的 install 依赖（#2286 的出事形状）", () => {
-    expect(source).not.toMatch(/install = \(\) => runInstall\(/);
+  it("槽符号零残留（退役剪干净：不留死话术、不留死开关）", () => {
+    expect(source).not.toContain("runInstallWithSlot");
+    expect(source).not.toContain("applySlot");
+    expect(source).not.toContain("COMFY_CI_SLOT");
+    expect(source).not.toContain("clearJobLink");
   });
 });
