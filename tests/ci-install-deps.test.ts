@@ -47,6 +47,19 @@ function installStub() {
   };
 }
 
+/** 外来值先落 `unknown`，过这道守卫才谈读字段（不用类型断言）。 */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** 只收「键 → 字符串」的那一格：`dependencies` / `scripts` 都是这个形状。 */
+function isStringRecord(v: unknown): v is Record<string, string> {
+  if (!isRecord(v)) {
+    return false;
+  }
+  return Object.values(v).every((item) => typeof item === "string");
+}
+
 describe("依赖面清单", () => {
   it("覆盖 pnpm install 读的那几份（判窄了 = 拿陈旧 node_modules 跑门禁）", () => {
     for (const f of ["pnpm-lock.yaml", "package.json", "pnpm-workspace.yaml", "next.config.js"]) {
@@ -177,12 +190,20 @@ describe("依赖面指纹：记的是「这次装用的输入」，不是「文�
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  /* SAFETY: 类型断言已复核 */
-  const readPkg = () =>
-    JSON.parse(fs.readFileSync(path.join(tmp, "package.json"), "utf8")) as {
-      dependencies: Record<string, string>;
-      scripts: Record<string, string>;
-    };
+  /* 读回整份 `package.json`：`dependencies` / `scripts` 两格收窄成「键 → 字符串」，
+   * 其余键（`name` 等）原样带着走 —— 写回时少一个键，指纹就变了。 */
+  const readPkg = () => {
+    const parsed: unknown = JSON.parse(fs.readFileSync(path.join(tmp, "package.json"), "utf8"));
+    if (!isRecord(parsed)) {
+      throw new TypeError("package.json 不是对象");
+    }
+    const dependencies = parsed.dependencies;
+    const scripts = parsed.scripts;
+    if (!isStringRecord(dependencies) || !isStringRecord(scripts)) {
+      throw new TypeError("package.json 的 dependencies / scripts 不是「键 → 字符串」");
+    }
+    return { parsed, dependencies, scripts };
+  };
 
   it("同一份依赖面 ⇒ 同一个指纹；锁文件改一个字 ⇒ 变", () => {
     const a = pnpmInstallFingerprint(tmp);
@@ -195,7 +216,8 @@ describe("依赖面指纹：记的是「这次装用的输入」，不是「文�
     const before = pnpmInstallFingerprint(tmp);
     const pkg = readPkg();
     pkg.scripts["setup:comfy-cli-venv"] = "node scripts/setup-comfy-cli-venv.mjs";
-    fs.writeFileSync(path.join(tmp, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
+    /* 回写**整份** `package.json`（`name` 等其余键一个都不能少 —— 少了指纹就换键）。 */
+    fs.writeFileSync(path.join(tmp, "package.json"), `${JSON.stringify(pkg.parsed, null, 2)}\n`);
     expect(pnpmInstallFingerprint(tmp), "scripts 变也换键 ⇒ 白付一次整装，而槽的内容逐字不变").toBe(
       before,
     );
@@ -205,7 +227,7 @@ describe("依赖面指纹：记的是「这次装用的输入」，不是「文�
     const before = pnpmInstallFingerprint(tmp);
     const pkg = readPkg();
     pkg.dependencies.leftpad = "1.0.1";
-    fs.writeFileSync(path.join(tmp, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
+    fs.writeFileSync(path.join(tmp, "package.json"), `${JSON.stringify(pkg.parsed, null, 2)}\n`);
     expect(pnpmInstallFingerprint(tmp)).not.toBe(before);
   });
 
@@ -429,15 +451,25 @@ describe("pnpm 落点发现：服务账号的 PATH 上没它就是没装吗", ()
   });
 
   const LOCAL = path.join("C:", "Users", "svc", "AppData", "Local");
-  /* SAFETY: 类型断言已复核 */
-  const baseEnv = () =>
-    ({
-      LOCALAPPDATA: LOCAL,
-      PATH: "",
-    }) as unknown as NodeJS.ProcessEnv;
+  /* `ProcessEnv` 在本仓被 next 增强成「必带 `NODE_ENV`」⇒ 字面量直接给得进去，不必断言。
+   * `NODE_ENV` 不参与被测判据（它只读 `PATH` / `LOCALAPPDATA` / `USERPROFILE`）。 */
+  const baseEnv = (): NodeJS.ProcessEnv => ({
+    NODE_ENV: "test",
+    LOCALAPPDATA: LOCAL,
+    PATH: "",
+  });
   /** 只造得出 `isDirectory` 的那几项 —— 被测判据只用它，别的字段与结论无关。 */
-  /* SAFETY: 类型断言已复核 */
-  const dirEntry = (name: string) => ({ name, isDirectory: () => true }) as unknown as Dirent;
+  const dirEntry = (name: string): Dirent => ({
+    name,
+    parentPath: "",
+    isFile: () => false,
+    isDirectory: () => true,
+    isBlockDevice: () => false,
+    isCharacterDevice: () => false,
+    isSymbolicLink: () => false,
+    isFIFO: () => false,
+    isSocket: () => false,
+  });
 
   it("PATH 上本来就能跑 ⇒ 不动 PATH（不许无条件前插）", () => {
     dirs.clear();

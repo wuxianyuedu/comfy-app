@@ -23,20 +23,38 @@ class FakeChild extends EventEmitter {
   }
 }
 
+/**
+ * 注入面的类型**直接取自契约**（`runInstallWithBudget` 的 `spawnImpl`）——`spawn` 是重载
+ * 函数类型，各重载的返回类型互不兼容，单形返回值的假函数没法字面构造。
+ */
+type SpawnImpl = NonNullable<Parameters<typeof runInstallWithBudget>[0]["spawnImpl"]>;
+
+/**
+ * 假 `spawn`：先落 `unknown`，运行期确认它可调用后再收窄成注入面要的那一型
+ * （与仓库里 `spawnSync` 假件同一手法）。
+ */
+function assertSpawnLike(value: unknown): asserts value is SpawnImpl {
+  if (typeof value !== "function") {
+    throw new TypeError("假的 spawn 必须是可调用函数");
+  }
+}
+
 function harness(script: (child: FakeChild) => void) {
   const child = new FakeChild();
   const lines: Array<string> = [];
+  /* 假 spawn：真脚本只用它换来的子进程挂 `error` / `close`、收场时 `kill`。 */
+  const spawnImpl: unknown = () => {
+    script(child);
+    return child;
+  };
+  assertSpawnLike(spawnImpl);
   const pending = runInstallWithBudget({
     command: "pnpm",
     args: ["install", "--frozen-lockfile"],
     /* 假定时器只需「别真等」：预算给 1ms、心跳索性关掉（见各条用例）。 */
     budgetMs: 30,
     heartbeatMs: 1_000_000,
-    /* SAFETY: 类型断言已复核 */
-    spawnImpl: (() => {
-      script(child);
-      return child;
-    }) as never,
+    spawnImpl,
     write: (s: string) => lines.push(s),
     now: () => Date.now(),
   });

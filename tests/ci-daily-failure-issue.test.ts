@@ -54,11 +54,34 @@ type Verdict = "green" | "failed" | "cancelled" | "running";
 
 /**
  * `pickPreviousDaily()` 的返回是判别联合（要么挑到、要么给一句为什么挑不到）。
- * 这里要的只是「读哪个字段」的形状，不是再写一套判决 —— 一次 `as`，字段全在这。
+ * 这里要的只是「读哪个字段」的形状，不是再写一套判决 —— 一次守卫，字段全在这。
  */
 type PickedLike = { none?: string; outcome?: { state: string }; sn?: string };
-/* SAFETY: 类型断言已复核 */
-const asPicked = (p: unknown): PickedLike => p as PickedLike;
+
+/** 对象视图：外来值先落 `unknown`，过这道守卫才谈读字段。 */
+function isRecordOf(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+/** `outcome` 那一格：只有 `state` 是字符串才算数。 */
+function isOutcome(v: unknown): v is { state: string } {
+  return isRecordOf(v) && typeof v.state === "string";
+}
+
+/**
+ * 把「挑到 / 挑不到」的返回读成那三格：读不出的字段就是没有，不替它猜。
+ */
+const readPicked = (p: unknown): PickedLike => {
+  if (!isRecordOf(p)) return {};
+  const none = p.none;
+  const sn = p.sn;
+  const outcome = p.outcome;
+  return {
+    none: typeof none === "string" ? none : undefined,
+    sn: typeof sn === "string" ? sn : undefined,
+    outcome: isOutcome(outcome) ? { state: outcome.state } : undefined,
+  };
+};
 
 /** 建单标题（去重键只认格名那一段，构建号 / 事件 / 时刻只给读者看 — ISSUE #2399）。 */
 const titleOf = (stage: string, sn = "sn-t", at = "2026-10-24T11:40:05.000Z") =>
@@ -115,7 +138,7 @@ const d = (sn: string, state: Verdict) => ({ sn, json: detail(state) });
 
 describe("挑「上一跑」：正在跑的那一跑不能当对象", () => {
   it("最新一条在跑 ⇒ 取它之前最近那条有终态的", () => {
-    const picked = asPicked(
+    const picked = readPicked(
       pickPreviousDaily({
         list: [build("sn-running"), build("sn-previous")],
         details: [d("sn-running", "running"), d("sn-previous", "failed")],
@@ -126,7 +149,7 @@ describe("挑「上一跑」：正在跑的那一跑不能当对象", () => {
   });
 
   it("全是「在跑」⇒ 不给结论，而不是判成绿或判成红", () => {
-    const picked = asPicked(
+    const picked = readPicked(
       pickPreviousDaily({
         list: [build("sn-running")],
         details: [d("sn-running", "running")],
@@ -136,12 +159,12 @@ describe("挑「上一跑」：正在跑的那一跑不能当对象", () => {
   });
 
   it("详情取不到的那一跑不算「跑坏了」，也不能拿来立案", () => {
-    const picked = asPicked(pickPreviousDaily({ list: [build("sn-x")], details: [] }));
+    const picked = readPicked(pickPreviousDaily({ list: [build("sn-x")], details: [] }));
     expect(picked.none).toContain("拿得到");
   });
 
   it("列表里没有每日类派发（PR 事件不算）⇒ 一句原因，不猜", () => {
-    const picked = asPicked(
+    const picked = readPicked(
       pickPreviousDaily({
         list: [build("x", "pull_request")],
         details: [d("x", "failed")],
@@ -178,7 +201,7 @@ describe("按流水线名认「这一跑是不是这一档的」", () => {
 
   it("桌包那一跑的事件名同样是 `crontab:` ⇒ 不按档过滤时会误挑它（现场形状）", () => {
     const pkg = build("cnb-7g8", "crontab: 0 2 * * *");
-    const picked = asPicked(
+    const picked = readPicked(
       pickPreviousDaily({
         list: [pkg],
         details: [{ sn: "cnb-7g8", json: packageDetail() }],
@@ -190,7 +213,7 @@ describe("按流水线名认「这一跑是不是这一档的」", () => {
 
   it("给了 lane ⇒ 桌包那一跑不算，且那句是「别的档」，不是「没有红」", () => {
     const pkg = build("cnb-7g8", "crontab: 0 2 * * *");
-    const picked = asPicked(
+    const picked = readPicked(
       pickPreviousDaily({
         list: [pkg],
         details: [{ sn: "cnb-7g8", json: packageDetail() }],
@@ -203,7 +226,7 @@ describe("按流水线名认「这一跑是不是这一档的」", () => {
   });
 
   it("每日档那一跑照旧被认出来（正路没被过滤掉）", () => {
-    const picked = asPicked(
+    const picked = readPicked(
       pickPreviousDaily({
         list: [build("sn-previous")],
         details: [d("sn-previous", "failed")],
@@ -214,7 +237,7 @@ describe("按流水线名认「这一跑是不是这一档的」", () => {
   });
 
   it("两跑都在 ⇒ 只挑本档的那一跑，不挑更新的那条别人的", () => {
-    const picked = asPicked(
+    const picked = readPicked(
       pickPreviousDaily({
         list: [build("cnb-pkg", "crontab: 0 2 * * *"), build("cnb-daily", "crontab: 0 0 * * *")],
         details: [{ sn: "cnb-pkg", json: packageDetail() }, d("cnb-daily", "failed")],

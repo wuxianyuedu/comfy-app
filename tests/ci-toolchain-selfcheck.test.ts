@@ -52,8 +52,32 @@ const { browserDirName, extractZipTo, fetchRangeToFile, fetchUrlResumable } =
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
+/** `platform` 是字符串字面量联合 —— 显式标注类型即可，不必写断言。 */
+const WIN32: NodeJS.Platform = "win32";
+
 function read(rel: string): string {
   return readFileSync(path.join(ROOT, rel), "utf8");
+}
+
+/** 外来值先落 `unknown`，过这道守卫才谈读字段（不用类型断言）。 */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** 读 `package.json` 里的 `engines.node` —— 读不出来就当场红，别让下面那条对账静默空转。 */
+function readEnginesNode(pkg: unknown): string {
+  if (!isRecord(pkg)) {
+    throw new TypeError("package.json 不是对象");
+  }
+  const engines = pkg.engines;
+  if (!isRecord(engines)) {
+    throw new TypeError("package.json 里没有 engines");
+  }
+  const node = engines.node;
+  if (typeof node !== "string") {
+    throw new TypeError("package.json 里没有 engines.node");
+  }
+  return node;
 }
 
 /** 解析一个**一定读得出来**的版本（读不出来就当场红，别让下面几条静默空转）。 */
@@ -212,11 +236,8 @@ describe("工具链自证：engines.node 的区间", () => {
   });
 
   it("与 package.json 的 engines.node 对账（改了一侧另一侧会红）", () => {
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(read("package.json")) as {
-      engines: { node: string };
-    };
-    const engines = pkg.engines.node;
+    const parsed: unknown = JSON.parse(read("package.json"));
+    const engines = readEnginesNode(parsed);
     /* 逐段核对：写死的范围与 `package.json` 声明的**同一批边界**。不解析语义版本区间
      * （那要一个依赖，而这一步要在「什么都还没装好」的机器上跑），只判「边界数字对得上」。
      *
@@ -420,10 +441,8 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
    * 故接缝按「会不会碰外部世界」列全：`run`/`findExe`、`existing`、`download`/`unzip`/`mkdir`/`cwd`（第三条通道的落点）。
    */
   const noExternalAction = {
-    /* SAFETY: 类型断言已复核 */
-    platform: "win32" as NodeJS.Platform,
-    /* SAFETY: 类型断言已复核 */
-    env: { LOCALAPPDATA: "/L" } as unknown as NodeJS.ProcessEnv,
+    platform: WIN32,
+    env: { LOCALAPPDATA: "/L" },
     existing: () => false,
     mkdir: () => undefined,
     download: () => undefined,
@@ -581,10 +600,9 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
       writeFileSync(path.join(links, "python.exe"), "");
       const r = installPython({
         ...noExternalAction,
-        /* SAFETY: 类型断言已复核 */
         env: {
           LOCALAPPDATA: localAppData,
-        } as unknown as NodeJS.ProcessEnv,
+        },
         run: () => ({ ok: true, out: "" }),
       });
       expect(r.installed).toBe(false);
@@ -611,14 +629,12 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
    * 所以最后那条「官方 embed 包解到检出本地」才是这里唯一真跑通过的一条。
    * 下面用注入的 run 把三条各自的**断点**逐条照亮。 */
   const win = {
-    /* SAFETY: 类型断言已复核 */
-    platform: "win32" as NodeJS.Platform,
-    /* SAFETY: 类型断言已复核 */
+    platform: WIN32,
     env: {
       LOCALAPPDATA: "/L",
       USERPROFILE: "/U",
       TEMP: "/T",
-    } as unknown as NodeJS.ProcessEnv,
+    },
     existing: () => false,
     /* 「装完找解释器」读真 fs —— 注入成一定找不到，结论才只取决于下面注入的 run。 */
     findExe: () => null,

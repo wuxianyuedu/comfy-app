@@ -21,11 +21,18 @@ import { symlinkDir } from "./helpers/symlink-dir";
 /* 区间两端的取法直接单测机制层（见「区间两端」那条用例的理由）。 */
 import { previewRangeEnds } from "../scripts/reformat-preview-range.mjs";
 
-/** `perCommitShapeOf` 是判据的**自测入口**（理由见那一条用例的头注）。判据是 `.cjs`，
- * 所以只能 `require` —— 与 `check-format.test.ts` 同形。 */
-/* SAFETY: 类型断言已复核 */
-// oxlint-disable-next-line typescript/no-require-imports
-const { perCommitShapeOf } = require("../scripts/check-reformat-only.cjs") as {
+/**
+ * 外来值是不是普通对象（数组不算）：本文件收窄判据导出面的统一入口。
+ *
+ * 判据是 `.cjs`，经 `require` 进来是 `any` —— 断言它等于把「读到的形状」与
+ * 「假定的形状」混成一句话。故先落 `unknown`，过下面几道守卫逐个导出收窄后才用。
+ */
+function isPlainRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** 判据导出面：逐提交读数（`perCommitShapeOf`）。 */
+function isPerCommitShapeOf(v: unknown): v is {
   perCommitShapeOf: (
     rev: string,
     spec?: { limit?: number; root?: string },
@@ -34,7 +41,38 @@ const { perCommitShapeOf } = require("../scripts/check-reformat-only.cjs") as {
     offenders: Array<string>;
     ok: boolean;
   };
-};
+} {
+  return isPlainRecord(v) && typeof v.perCommitShapeOf === "function";
+}
+
+/** 判据导出面：回读比对（`classifyReformatOnly`）。 */
+function isClassifyReformatOnly(v: unknown): v is {
+  classifyReformatOnly: (
+    entries: Array<{ after: string; before: string; file: string }>,
+  ) => Set<string>;
+} {
+  return isPlainRecord(v) && typeof v.classifyReformatOnly === "function";
+}
+
+/** 判据导出面：补丁解析（`collectChangedFiles`）与阈值（`LIMIT`）。 */
+function isPatchParser(v: unknown): v is {
+  collectChangedFiles: (patch: string) => Array<{ after: string; before: string }>;
+  LIMIT: number;
+} {
+  return (
+    isPlainRecord(v) && typeof v.collectChangedFiles === "function" && typeof v.LIMIT === "number"
+  );
+}
+
+/** `perCommitShapeOf` 是判据的**自测入口**（理由见那一条用例的头注）。判据是 `.cjs`，
+ * 所以只能 `require` —— 与 `check-format.test.ts` 同形。 */
+// oxlint-disable-next-line typescript/no-require-imports
+const requiredModule: unknown = require("../scripts/check-reformat-only.cjs");
+
+if (!isPerCommitShapeOf(requiredModule)) {
+  throw new Error("check-reformat-only.cjs 的导出面不对");
+}
+const { perCommitShapeOf } = requiredModule;
 
 /* 每条用例都要在临时仓库里真跑 git（init / add / commit / merge）+ 真起 oxfmt
  * （门禁按「整批一次 oxfmt」调用，但建库 / 提交 / 判定的固定成本仍在）：默认
@@ -900,13 +938,12 @@ describe("判定成本：整批一次 oxfmt，不按文件各起一次", { timeo
 describe("回读比对：本来就规范 / 改动后正是规范形态", { timeout: 300_000 }, () => {
   /** 真仓库里那份判据（`HERE` 就是真仓库，oxfmt 解析不受临时仓库影响）。 */
   function realJudge() {
-    /* SAFETY: 类型断言已复核 */
     // oxlint-disable-next-line typescript/no-require-imports
-    return require("../scripts/check-reformat-only.cjs") as {
-      classifyReformatOnly: (
-        entries: Array<{ after: string; before: string; file: string }>,
-      ) => Set<string>;
-    };
+    const required: unknown = require("../scripts/check-reformat-only.cjs");
+    if (!isClassifyReformatOnly(required)) {
+      throw new Error("check-reformat-only.cjs 的导出面不对");
+    }
+    return required;
   }
 
   test("改动前不规范、改动后正是 oxfmt 给的形态 → 判为纯格式化", ({ repo }) => {
@@ -945,14 +982,12 @@ describe("批量那一档：退出 0 一次给全部结论，非 0 逐文件兜�
     repo: GateRepo,
     entries: Array<{ after: string; before: string; file: string }>,
   ): Set<string> {
-    /* SAFETY: 类型断言已复核 */
     // oxlint-disable-next-line typescript/no-require-imports
-    const tempMod = require(join(repo.dir, "scripts", "check-reformat-only.cjs")) as {
-      classifyReformatOnly: typeof entries extends never
-        ? never
-        : (e: typeof entries) => Set<string>;
-    };
-    return tempMod.classifyReformatOnly(entries);
+    const required: unknown = require(join(repo.dir, "scripts", "check-reformat-only.cjs"));
+    if (!isClassifyReformatOnly(required)) {
+      throw new Error("临时仓库里 check-reformat-only.cjs 的导出面不对");
+    }
+    return required.classifyReformatOnly(entries);
   }
 
   test("本来就规范的文件：整批一次就够，不再为它另起一次", ({ repo }) => {
@@ -1001,12 +1036,12 @@ describe("批量那一档：退出 0 一次给全部结论，非 0 逐文件兜�
 });
 
 describe("补丁解析（纯函数，不跑 git）", () => {
-  /* SAFETY: 类型断言已复核 */
   // oxlint-disable-next-line typescript/no-require-imports
-  const mod = require("../scripts/check-reformat-only.cjs") as {
-    collectChangedFiles: (patch: string) => Array<{ after: string; before: string }>;
-    LIMIT: number;
-  };
+  const required: unknown = require("../scripts/check-reformat-only.cjs");
+  if (!isPatchParser(required)) {
+    throw new Error("check-reformat-only.cjs 的导出面不对");
+  }
+  const mod = required;
 
   test("只收源码扩展名，忽略图片", () => {
     const patch = [

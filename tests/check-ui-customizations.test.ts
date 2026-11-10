@@ -12,6 +12,11 @@ import { describe, expect, it } from "vitest";
 const SCRIPT = path.resolve(__dirname, "../scripts/check-ui-customizations.cjs");
 const DOC = "docs/standards/16-shadcn-ui与表单校验.md";
 
+/** execFileSync 抛出的失败对象：只认「是对象」这一层，字段各自再按 typeof 收窄。 */
+function isExecFailure(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
 /** 台账小节（形状与真实文档一致：标题 + 四列表格）。 */
 function docWithLedger(rows: Array<string>): string {
   return [
@@ -57,13 +62,10 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
       }),
     };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as {
-      status?: number;
-      stderr?: string;
-      stdout?: string;
-    };
-    return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+    const e: Record<string, unknown> = isExecFailure(error) ? error : {};
+    const stdout = typeof e.stdout === "string" ? e.stdout : "";
+    const stderr = typeof e.stderr === "string" ? e.stderr : "";
+    return { ok: false, output: `${stdout}${stderr}` };
   }
 }
 
