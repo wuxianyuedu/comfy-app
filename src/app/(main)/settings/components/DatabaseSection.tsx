@@ -14,7 +14,7 @@ import {
   StatusButton,
 } from "~/components/ui/service-status-row";
 
-import { SettingsCard } from "~/components/ui/settings-card";
+import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { RuntimeLogBox } from "~/components/studio/logs/RuntimeLogBox";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
@@ -40,7 +40,7 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
         <code className="text-ink/80">local.drizzle.studio</code>
         ），本地只起一个回连端口；点「打开查看」会用系统默认浏览器打开它。
       </p>
-      <div className={`border-border bg-surface-1 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}>
+      <div className={`${SETTINGS_ROW_CLASS} ${STATUS_ROW_CLASS}`}>
         <StatusDot state={dbStudioDotState(c)} />
         <span
           className={`text-ink/80 ${STATUS_TEXT_CLASS}`}

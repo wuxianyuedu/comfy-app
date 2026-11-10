@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 
-import { SettingsCard } from "~/components/ui/settings-card";
+import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { Button } from "~/components/ui/button";
 import { displayValue } from "~/lib/display-value";
 import { fmtBytes } from "~/lib/format-bytes";
@@ -32,7 +32,7 @@ function BackupRow({
 }) {
   const size = fmtBytes(entry.size);
   return (
-    <div className="border-border bg-surface-1 flex items-center gap-3 rounded-lg border px-3 py-2">
+    <div className={`${SETTINGS_ROW_CLASS} flex items-center gap-3`}>
       <span className="text-ink/80 min-w-0 flex-1 truncate font-mono text-xs">{entry.name}</span>
       <span className="text-muted-foreground shrink-0 text-xs">
         {/* 缺值占位符走 `~/lib/display-value`（规范 16 §16.2.3 的 P8）：

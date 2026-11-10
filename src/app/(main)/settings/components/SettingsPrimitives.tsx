@@ -18,8 +18,11 @@ export function Field({
   onChange,
   type = "text",
   placeholder,
+  onBlur,
 }: {
   label: string;
+  /** 失焦回调（即时自动保存：文本输入失焦即落库）。 */
+  onBlur?: () => void;
   onChange: (v: string) => void;
   placeholder?: string;
   type?: string;
@@ -36,6 +39,7 @@ export function Field({
         <Input
           {...a11y}
           className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm"
+          onBlur={onBlur}
           onChange={textHandler(onChange)}
           placeholder={placeholder}
           type={type}

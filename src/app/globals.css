@@ -76,6 +76,16 @@
   --color-surface-0: #ffffff;
   --color-surface-1: #f7f8fa;
   --color-surface-2: #f0f0f5;
+  /* 卡片内「一行」的承载面（ISSUE #3510）：设置页各分区卡片里的列表行 / 状态行 /
+     说明行 —— 此前它们要么透明、要么写 `bg-surface-1`（= 卡片同色），于是子项与
+     卡片糊成一片。取值方向 = **离页面底再远一档**（浅色更深、深色更亮）。
+     为什么单独一颗而不复用 `--color-surface-2`：那颗是**控件**（输入框）用的，
+     与 `surface-1` 只差 1.07:1（深色 1.04:1）—— 低于「看得见」的门槛
+     （`tests/sidebar-state-contrast.test.ts` 的下限是 1.10），两态都落空。
+     本颗与 `surface-1` 的对比度：浅色 1.09:1 / 深色 1.17:1，由
+     `tests/settings-surface-contrast.test.ts` 从编译产物真量（浅色档的上限被
+     AA 压住：行底再深一档，行上的弱文字 `#6b6b76` 就不够 4.5:1）。 */
+  --color-surface-row: #eceef4;
   /* 模态遮罩（scrim）—— `ui/dialog` / `ui/sheet` / `ui/fullscreen-dialog` 背后
      那层带色压暗底，出口 `ui/dialog-overlay.ts` 的 `dialogBackdropClass()`。
      它是**结构性表面**（覆盖整块内容区），所以随主题走 token、不写死 `bg-black/*`：
@@ -407,6 +417,7 @@
   --color-surface-0: #0a0a0f;
   --color-surface-1: #16161c;
   --color-surface-2: #1a1a24;
+  --color-surface-row: #24242f;
   --color-scrim: rgb(
     0 0 0 / 0.7
   ); /* 模态遮罩（见 @theme 里那颗 token 的说明）*/

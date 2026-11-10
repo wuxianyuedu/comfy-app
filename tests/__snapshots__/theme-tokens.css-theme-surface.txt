@@ -114,6 +114,7 @@
 --color-surface-0
 --color-surface-1
 --color-surface-2
+--color-surface-row
 --color-warning
 --color-warning-soft
 --color-warning-strong
