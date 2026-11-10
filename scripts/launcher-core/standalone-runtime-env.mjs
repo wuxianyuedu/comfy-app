@@ -23,6 +23,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
+import { resolveAppDataDir } from "./app-data-dir.mjs";
 
 /**
  * 本机回环地址。值与 `src/lib/endpoints.ts` 的 `LOOPBACK_HOST` 同形——写
@@ -162,10 +163,14 @@ export function ensureStandaloneSchema({ appRoot, dbFile = standaloneDbFile(appR
  * 见 `src/server/db.ts` 的注释），所以这里的必填清单与 `src/env.js` 的 `server` 段
  * 一一对应，由 tests/standalone-runtime.test.ts 钉住「少一项即红」。
  *
- * @param {{ appRoot: string, port: number, env?: NodeJS.ProcessEnv }} input
+ * `COMFY_APP_DATA_DIR` 也由这里逐个给：standalone 下 `process.cwd()` 被 server.js 钉成
+ * 载荷根（不可写 / 更新被清），日志与导出必须落进 OS app-data 目录（ISSUE #3498），而
+ * Next 侧的 `log-paths.ts` 只读这一个变量 —— 没给就是运行期日志面板读不到任何文件。
+ *
+ * @param {{ appRoot: string, port: number, env?: NodeJS.ProcessEnv, dataDir?: string }} input
  * @returns {NodeJS.ProcessEnv}
  */
-export function buildStandaloneRuntimeEnv({ appRoot, port, env = process.env }) {
+export function buildStandaloneRuntimeEnv({ appRoot, port, env = process.env, dataDir }) {
   if (!Number.isInteger(port) || port < 1 || port > 65_535) {
     throw new Error(
       `standalone runtime needs a valid PORT from the shell, got: ${JSON.stringify(port)}`,
@@ -194,5 +199,10 @@ export function buildStandaloneRuntimeEnv({ appRoot, port, env = process.env }) 
     BETTER_AUTH_URL: `http://${LOOPBACK_HOST}:${port}`,
     BETTER_AUTH_GITHUB_CLIENT_ID: OAUTH_PLACEHOLDER,
     BETTER_AUTH_GITHUB_CLIENT_SECRET: OAUTH_PLACEHOLDER,
+    // 运行期数据根（日志 / 导出）：standalone 下由启动器算好并传入；未显式传入时按 OS 算
+    // （测试与高级用户可用 `COMFY_APP_DATA_DIR` 覆盖，见 `app-data-dir.mjs`）。Next 侧的
+    // `log-paths.ts` 只读这一个变量，两侧（启动器写 server/host 日志、Next 读 log 根）必须
+    // 指向同一处，否则日志面板读不到启动器写的那份 server 日志。
+    COMFY_APP_DATA_DIR: dataDir ?? resolveAppDataDir({ env }),
   };
 }

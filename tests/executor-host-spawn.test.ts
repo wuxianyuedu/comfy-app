@@ -263,7 +263,7 @@ describe("四个启动入口都接线（回归到「没人起宿主」的那道�
     /* 桌包链的 env 复用外壳装配结果、日志落在载荷根，与两条检出路径形态不同；
      * 它的存在只需被看见，不在本判据里强行合并。 */
     expect(readScript("scripts/standalone-runtime.mjs")).toContain(
-      "spawnExecutorHost(childEnv, stamp)",
+      "spawnExecutorHost(childEnv, stamp, APP_DATA_DIR)",
     );
   });
 });
