@@ -3,7 +3,7 @@ import { isRecord } from "~/lib/is-record";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import { describeFetchFailure, getLLMConfig } from "~/lib/llm/server";
-import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
+import { httpFailureDetail } from "~/lib/llm/http-failure";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -79,14 +79,14 @@ export async function GET(req: NextRequest) {
 
     res = await probe(cfg.baseUrl);
     if (!res.ok) {
-      const snippet = clampText(await res.text().catch(() => ""), {
-        maxLength: INLINE_SNIPPET_MAX,
-        marker: "",
-      });
       return NextResponse.json({
         ok: false,
         models: [],
-        detail: `HTTP ${res.status}${snippet ? `：${snippet}` : ""}`,
+        detail: httpFailureDetail({
+          body: await res.text().catch(() => ""),
+          status: res.status,
+          url: `${cfg.baseUrl.replace(/\/$/, "")}/models`,
+        }),
       });
     }
     const parsed: unknown = await res.json();

@@ -164,15 +164,34 @@ describe("POST /api/llm/test", () => {
     ]);
   });
 
-  it("非 2xx（鉴权失败）原样透出状态码与片段，不重试", async () => {
+  it("非 2xx（鉴权失败）原样透出状态码与片段，并补密钥归因，不重试", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ error: "bad key" }, 401));
     const { POST } = await import("./route");
     const res = await POST(request({ baseUrl: "https://api.example.com/v1" }));
     await expect(res.json()).resolves.toEqual({
       ok: false,
-      detail: 'HTTP 401：{"error":"bad key"}',
+      detail:
+        'HTTP 401（https://api.example.com/v1/models）：{"error":"bad key"}（密钥无效，或该密钥没有这个接口的权限）',
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("上游返回 HTML 错误页 → 不把整页标记灌进提示，指出这不是接口地址（#3517）", async () => {
+    fetchMock.mockResolvedValue(
+      new Response("<!DOCTYPE html><html><body>404</body></html>", {
+        status: 404,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      }),
+    );
+    const { POST } = await import("./route");
+    const res = await POST(request({ baseUrl: "https://platform.example.com/v1" }));
+    const body = await bodyOf(res);
+    expect(body.ok).toBe(false);
+    const detail = String(body.detail);
+    expect(detail).toContain("HTTP 404（https://platform.example.com/v1/models）");
+    expect(detail).toContain("返回的是网页（HTML）而不是接口响应");
+    expect(detail).toContain("Base URL");
+    expect(detail).not.toContain("<!DOCTYPE");
   });
 
   it("指定模型不在服务端列表里 → 成功但仍提示核对名称", async () => {
