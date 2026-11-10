@@ -97,9 +97,16 @@ describe("配对注册表：一行 = 一个触发档的两个口 + 一个 GA 目
     for (const t of GA_TRIGGER_TARGETS) {
       expect(dispatchStageName(t), `${t.preset}：格名前缀`).toMatch(/^GA 派发·\S+$/);
     }
-    expect(() => dispatchStageName({ ...GA_TRIGGER_TARGETS[0], preset: "不存在的档" })).toThrow(
-      /preset 缺格名映射/,
-    );
+    const unknown = {
+      preset: "不存在的档",
+      eventWeb: "web_trigger_none",
+      eventApi: "api_trigger_none",
+      pipelineWeb: "没有这一档（手动触发）",
+      pipelineApi: "没有这一档（API 触发）",
+      workflow: "none.yml",
+      concurrencyGroup: "none",
+    };
+    expect(() => dispatchStageName(unknown)).toThrow(/preset 缺格名映射/);
   });
 
   it("findTriggerTarget：命中回那一行、未命中回 undefined、可注入替身", () => {
@@ -107,8 +114,18 @@ describe("配对注册表：一行 = 一个触发档的两个口 + 一个 GA 目
     expect(daily).toBeDefined();
     expect(findTriggerTarget("daily")).toBe(daily);
     expect(findTriggerTarget("没有这个档")).toBeUndefined();
-    const standIn = [{ preset: "x", workflow: "x.yml" }];
-    expect(findTriggerTarget("x", /** @type {any} */ (standIn))?.workflow).toBe("x.yml");
+    const standIn = [
+      {
+        preset: "x",
+        eventWeb: "web_trigger_x",
+        eventApi: "api_trigger_x",
+        pipelineWeb: "X 档（手动触发）",
+        pipelineApi: "X 档（API 触发）",
+        workflow: "x.yml",
+        concurrencyGroup: "x",
+      },
+    ];
+    expect(findTriggerTarget("x", standIn)?.workflow).toBe("x.yml");
   });
 
   it("dailyGateExecutor：命中回登记值、缺登记当场抛（不静默放行）", () => {
@@ -121,7 +138,7 @@ describe("配对注册表：一行 = 一个触发档的两个口 + 一个 GA 目
 });
 
 describe("GA workflow 结构真解析（接住退役的 actionlint 位，#3504）", () => {
-  it("每个 workflow 的 `on:` 都有 `workflow_dispatch` + `head_sha` 输入；定时只归每日档与桌包档", () => {
+  it("每个 workflow 的 `on:` 都有 `workflow_dispatch` + `head_sha` 输入（触发口的唯一入口）", () => {
     for (const t of GA_TRIGGER_TARGETS) {
       const on = topLevelBlock(read(`.github/workflows/${t.workflow}`), "on");
       expect(on, `${t.workflow} 没有 \`on:\` 顶层块`).toBeTruthy();
@@ -132,19 +149,32 @@ describe("GA workflow 结构真解析（接住退役的 actionlint 位，#3504�
       expect(body, `${t.workflow}：head_sha 输入在场（单跑哪一笔由入参决定）`).toMatch(
         /^ {6}head_sha:$/m,
       );
-      /* 定时：每日档（北京时间 01:37）与桌包档（03:37，滚动 Release）有；
-       * 单跑档**不许有** —— 「单跑」名不副实的那一形态在这里当场红。 */
-      if (t.preset === "daily") {
-        expect(body, "daily.yml：定时入口在场").toMatch(/^ {2}schedule:$/m);
-        expect(body, "daily.yml：cron 逐字").toMatch(/cron: "37 17 \* \* \*"/);
-      } else if (t.preset === "package") {
-        expect(body, "package-desktop.yml：定时入口在场（每晚滚动 Release）").toMatch(
-          /^ {2}schedule:$/m,
-        );
-        expect(body, "package-desktop.yml：cron 逐字").toMatch(/cron: "37 19 \* \* \*"/);
-      } else {
-        expect(body, `${t.workflow}：单跑档不许带 schedule`).not.toMatch(/^ {2}schedule:$/m);
-      }
+    }
+  });
+
+  it("每日档与桌包档带定时（北京时间 01:37 / 03:37），cron 逐字", () => {
+    /** 定时 cron 的登记（档位 → cron 字面值）。 */
+    const crons: Record<string, string> = { daily: "37 17 * * *", package: "37 19 * * *" };
+    const scheduled = GA_TRIGGER_TARGETS.filter((t) => crons[t.preset] !== undefined);
+    expect(scheduled.length, "定时档一个都没登记 —— 判据空转").toBeGreaterThan(0);
+    for (const t of scheduled) {
+      const body = topLevelBlock(read(`.github/workflows/${t.workflow}`), "on") ?? "";
+      const cron = crons[t.preset] ?? "";
+      expect(body, `${t.workflow}：定时入口在场`).toMatch(/^ {2}schedule:$/m);
+      expect(body, `${t.workflow}：cron 逐字（北京时间 ${cron}）`).toMatch(
+        new RegExp(`cron: "${cron.replace(/\*/g, "\\*")}"`),
+      );
+    }
+  });
+
+  it("单跑档不许带定时（「单跑」名不副实的那一形态在这里当场红）", () => {
+    const oneshots = GA_TRIGGER_TARGETS.filter(
+      (t) => t.preset !== "daily" && t.preset !== "package",
+    );
+    expect(oneshots.length, "单跑档一个都没有 —— 判据空转").toBeGreaterThan(0);
+    for (const t of oneshots) {
+      const body = topLevelBlock(read(`.github/workflows/${t.workflow}`), "on") ?? "";
+      expect(body, `${t.workflow}：单跑档不许带 schedule`).not.toMatch(/^ {2}schedule:$/m);
     }
   });
 
@@ -172,8 +202,8 @@ describe("GA workflow 结构真解析（接住退役的 actionlint 位，#3504�
     for (const t of GA_TRIGGER_TARGETS) {
       const jobs = topLevelBlock(read(`.github/workflows/${t.workflow}`), "jobs");
       expect(jobs, `${t.workflow} 没有 \`jobs:\` 顶层块`).toBeTruthy();
-      const jobNames = [...String(jobs).matchAll(/^ {2}([A-Za-z0-9_-]+):$/gm)].map(
-        (m) => m[1] ?? "",
+      const jobNames = [...String(jobs).matchAll(/^ {2}(?<job>[A-Za-z0-9_-]+):$/gm)].map(
+        (m) => m.groups?.job ?? "",
       );
       expect(jobNames.length, `${t.workflow}：一个 job 都没有`).toBeGreaterThan(0);
       /* 每个 job 的块：从它的键行到下一个 2 空格键行。 */
@@ -189,8 +219,8 @@ describe("GA workflow 结构真解析（接住退役的 actionlint 位，#3504�
         }
         const block = lines.slice(start, end).join("\n");
         expect(block, `${t.workflow} 的 job \`${job}\` 缺 runs-on`).toMatch(/^ {4}runs-on: /m);
-        const stepHeads = [...block.matchAll(/^ {6}- name: (.*)$/gm)].map((m) =>
-          (m[1] ?? "").trim(),
+        const stepHeads = [...block.matchAll(/^ {6}- name: (?<name>.*)$/gm)].map((m) =>
+          (m.groups?.name ?? "").trim(),
         );
         expect(
           stepHeads.length,
@@ -224,8 +254,8 @@ describe("与 .cnb.yml 的闭环：触发口双向登记（#3504）", () => {
     const registered = new Set(
       GA_TRIGGER_TARGETS.flatMap((t) => [t.eventWeb, t.eventApi]).concat(NON_DISPATCH_LANES),
     );
-    const lanes = [...CNB.matchAll(/^  ([A-Za-z0-9_]*trigger[A-Za-z0-9_]*):\s*$/gm)].map(
-      (m) => m[1] ?? "",
+    const lanes = [...CNB.matchAll(/^ {2}(?<lane>[A-Za-z0-9_]*trigger[A-Za-z0-9_]*):\s*$/gm)].map(
+      (m) => m.groups?.lane ?? "",
     );
     const unregistered = lanes.filter((lane) => !registered.has(lane));
     expect(

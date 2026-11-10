@@ -3680,11 +3680,11 @@ describe("单跑口：三档 + 桌包各自派发到 GA 对应 workflow，跨档
     for (const target of GA_TRIGGER_TARGETS) {
       const text = readFileAt(ROOT, path.join(".github/workflows", target.workflow));
       expect(
-        text.match(/^\s*workflow_dispatch:\s*$/m),
+        /^\s*workflow_dispatch:\s*$/m.exec(text),
         `${target.workflow} 没有 \`workflow_dispatch\` —— 派发那一跳会 404，触发口按了没反应`,
       ).toBeTruthy();
       expect(
-        text.match(/^\s*head_sha:\s*$/m),
+        /^\s*head_sha:\s*$/m.exec(text),
         `${target.workflow} 的 workflow_dispatch 没有 \`head_sha\` 输入 —— 派发口送的那笔 sha 没人接，` +
           "GA 会判在默认分支 HEAD 上而不是按下的那一刻",
       ).toBeTruthy();

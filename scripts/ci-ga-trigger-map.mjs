@@ -152,6 +152,7 @@ export function dailyGateExecutor(gate, executors = DAILY_GATE_EXECUTORS) {
  * @returns {string}
  */
 export function dispatchStageName(target) {
+  /** @type {Record<string, string>} */
   const labels = {
     daily: "每日档",
     build: "单跑生产构建",

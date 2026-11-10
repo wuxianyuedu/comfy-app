@@ -227,8 +227,7 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
        step 形态里**同形**：`- name:` 深一层是 step 自己的键，`env:` 的键再深一层。
        判据全按行读原文、本地无 YAML 解析器，故按层级判：`timeout` 属项自己（`- name:` 深一层），
        `env` 的键与项自己的键同层；更浅的都落在别层，YAML 会把 `env` 读成 null。 */
-    /** @type {string[]} */
-    const offenders = [];
+    const offenders: Array<string> = [];
     /**
      * 对一个「`- name:` 项块」跑层级扫描（缩进无关：`keyIndent` 从项自己的行算出来，
      * CNB 的 2 空格 stage 与 GA 的 6 空格 step 共用同一套判法）。
@@ -315,10 +314,9 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
     const daily = readFileSync(path.join(ROOT, ".github", "workflows", "daily.yml"), "utf8");
     const gaStepBlocks = (text: string): Array<[string, string]> => {
       const lines = text.split("\n");
-      /** @type {Array<[string, string]>} */
-      const out = [];
+      const out: Array<[string, string]> = [];
       for (let i = 0; i < lines.length; i += 1) {
-        const head = /^ {6}- name: (.+)$/.exec(lines[i] ?? "");
+        const head = /^ {6}- name: (?<name>.+)$/.exec(lines[i] ?? "");
         if (!head) {
           continue;
         }
@@ -329,7 +327,7 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
             break;
           }
         }
-        out.push([(head[1] ?? "").trim(), lines.slice(i, end).join("\n")]);
+        out.push([(head.groups?.name ?? "").trim(), lines.slice(i, end).join("\n")]);
       }
       return out;
     };

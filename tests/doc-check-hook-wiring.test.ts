@@ -16,7 +16,6 @@ import { DAILY_GATE_EXECUTORS } from "../scripts/ci-ga-trigger-map.mjs";
 
 import { groupShBody, runSteps, stepsInGroup } from "./helpers/hook-groups";
 import { HEAVY_GATES, heavyGateRegistryProblems } from "../scripts/ci-heavy-gates.mjs";
-import { parseStageScripts } from "../scripts/ci-autofix-duties.mjs";
 import { readHookSteps } from "../scripts/base-check/hook-steps.mjs";
 
 const REPO_ROOT = resolve(".");

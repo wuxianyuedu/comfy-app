@@ -159,6 +159,7 @@ export async function awaitShaVisible({ repo, sha, token, budgetSeconds, interva
     attempt += 1;
     let status = 0;
     try {
+      // oxlint-disable-next-line no-await-in-loop -- 轮询本就是串行等待，并行没有意义
       const res = await fetchImpl(url, {
         headers: {
           Accept: "application/vnd.github+json",
@@ -181,6 +182,7 @@ export async function awaitShaVisible({ repo, sha, token, budgetSeconds, interva
       );
       return null;
     }
+    // oxlint-disable-next-line no-await-in-loop -- 轮询本就是串行等待，并行没有意义
     await sleep(intervalSeconds * 1000);
   }
 }
