@@ -230,6 +230,10 @@ export const RUNTIME_SCRIPTS = [
   // standalone 桌包回到「起不来且没人知道为什么」。
   "standalone-runtime.mjs",
   "launcher-core/standalone-runtime-env.mjs",
+  // standalone 运行期数据根（日志 / 导出）：把 `process.cwd()` 钉死的「载荷根 / 安装目录」
+  // 换成 OS app-data 目录，避免不可写 / 更新被清（ISSUE #3498）。`standalone-runtime.mjs`
+  // 经 `buildStandaloneRuntimeEnv` 把算出的根透传给 Next server，两侧必须指同一处。
+  "launcher-core/app-data-dir.mjs",
 ];
 
 /**

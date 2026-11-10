@@ -277,6 +277,7 @@ describe("入口的运行期环境装配（分发产物不含 .env）", () => {
       "PORT",
       "HOSTNAME",
       "SKIP_ENV_VALIDATION",
+      "COMFY_APP_DATA_DIR",
     ]) {
       expect(typeof env[key], key).toBe("string");
       expect(String(env[key]).length, key).toBeGreaterThan(0);
@@ -415,16 +416,20 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
   }
 
   const entryPath = () => path.join(workdir, "scripts", "standalone-runtime.mjs");
+  /** 运行期数据根（日志 / 导出）：测试里钉死在载荷根之外的固定位置，让「日志真的离开载荷根」
+   *  这一条断言可跨平台复现（ISSUE #3498）。入口的 `resolveAppDataDir` 读 `COMFY_APP_DATA_DIR`
+   *  覆盖，所以这里注入后两侧（启动器写 server/host 日志、Next 读 log 根）都落在它身上。 */
+  const dataDirOf = () => path.join(workdir, "app-data");
   const runWith = (port: string, extraEnv: Record<string, string> = {}) =>
     spawnSync(process.execPath, [entryPath()], {
       encoding: "utf8",
-      env: { ...process.env, PORT: port, ...extraEnv },
+      env: { ...process.env, PORT: port, COMFY_APP_DATA_DIR: dataDirOf(), ...extraEnv },
       timeout: 90_000,
     });
   const both = (r: { stderr?: string; stdout?: string }) => `${r.stdout ?? ""}${r.stderr ?? ""}`;
   /** 宿主自己的输出通道内容（入口把这两份路径写在 `host pid=` 那一行里）。 */
   function hostStdout() {
-    const dir = path.join(workdir, "log", "current", "services");
+    const dir = path.join(workdir, "app-data", "log", "current", "services");
     if (!existsSync(dir)) {
       return "";
     }
@@ -442,7 +447,7 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     expect(text).toMatch(/boot pid=\d+ server=\d+ port=4210/);
     expect(text).toMatch(/schema bootstrap tables=0->2/);
     expect(text).toMatch(/closing \(server exited code=0/);
-    const dir = path.join(workdir, "log", "current", "nextjs");
+    const dir = path.join(dataDirOf(), "log", "current", "nextjs");
     const names = readdirSync(dir);
     // 本刀第一版用了带冒号与空格的日志行时间戳，Windows 上直接 ENOENT：钉住文件名形态。
     for (const name of names) {
@@ -451,8 +456,9 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     const stdoutName = names.find((n) => n.startsWith("standalone-server-stdout-"));
     expect(stdoutName, names.join(",")).toBeTruthy();
     expect(readFileSync(path.join(dir, String(stdoutName)), "utf8")).toContain("stub server up");
-    // 库与日志都落在载荷根，而不是调用者的 cwd。
+    // 库仍落在载荷根（db 迁移是另一单，ISSUE #3498 只动日志 / 导出）；但日志已离开载荷根。
     expect(existsSync(path.join(workdir, "db.sqlite"))).toBe(true);
+    expect(existsSync(path.join(workdir, "log"))).toBe(false);
   });
 
   it("桩 server 退 3 ⇒ 入口也退 3（壳据此写它的失败出口）", () => {
