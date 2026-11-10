@@ -34,7 +34,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
   const desktopManaged = c.comfyInstance?.desktopManaged === true;
 
   return (
-    <SettingsCard title="创作后端（ComfyUI）">
+    <SettingsCard>
       <Field
         label="ComfyUI 路径（源码根或桌面版实例根）"
         onBlur={() => {

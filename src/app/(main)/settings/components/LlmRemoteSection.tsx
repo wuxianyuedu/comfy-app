@@ -29,10 +29,9 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
 
   return (
     <>
-      <SettingsCard
-        description="每个供应商维护自己的 Base URL / API Key；接口格式在模型上（同一供应商下不同用途的模型可以各用一套协议）"
-        title="远程模型（供应商）"
-      >
+      {/* 卡片标题去掉（ISSUE #3527）：正文那一列已经有一行分区标题「远程模型」，
+          卡片再起一个同名标题就是重复；master 侧更新过的说明文案保留。 */}
+      <SettingsCard description="每个供应商维护自己的 Base URL / API Key；接口格式在模型上（同一供应商下不同用途的模型可以各用一套协议）">
         {p.errorText !== null && p.errorText !== "" && (
           <p className="bg-destructive/10 text-danger-strong mb-3 rounded-lg px-3 py-2 text-xs">
             读取供应商失败：{p.errorText}

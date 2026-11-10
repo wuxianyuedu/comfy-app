@@ -63,7 +63,7 @@ export function BackupSection({ c }: { c: ReadySettingsPageController }) {
 
   return (
     <>
-      <SettingsCard title="数据库备份">
+      <SettingsCard title="创建备份">
         {/* 段内正文一律 `text-xs`：`text-sm` 是**表单标签与控件值**那一档，
             正文段落用它会让一屏里的两档字（14px 正文 / 14px 标签）分不开，
             说明文字反而比它解释的控件更抢眼。卡片标题 → 标签 → 正文 →
@@ -102,7 +102,7 @@ export function BackupSection({ c }: { c: ReadySettingsPageController }) {
         </div>
       </SettingsCard>
 
-      <SettingsCard title="恢复">
+      <SettingsCard title="恢复备份">
         <p className="text-muted-foreground mb-3 text-xs leading-relaxed">
           恢复<strong className="text-ink/80">分两步</strong>
           ：点按钮只是登记一份待恢复的备份，

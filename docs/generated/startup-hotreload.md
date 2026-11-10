@@ -115,7 +115,7 @@ dev server HMR 自动生效，无需打扰；但上表第 2 列那批「**改完
   运行期被改过。dev server 重启后基线自然重置，重启后不再误报。
 - **触发**：运行时轮询（默认开启，可关）+ 快捷键 `Ctrl+Shift+U` 手动检测一次。
 - **形态**：应用内 toast（走项目 `ToastProvider`），安静、不抢焦点，不做系统级弹窗。
-- **开关**：设置页「外观主题 → 本地更新检测」卡片，纯前端偏好，存 `localStorage`。
+- **开关**：设置页「外观 → 本地更新检测」卡片，纯前端偏好，存 `localStorage`。
 - **实现**：后端路由 `src/app/api/update-check/route.ts`；前端网络收口
   `src/lib/update-check-client.ts`；控制器
   `src/components/update-check/hooks/use-update-check.ts`；挂载

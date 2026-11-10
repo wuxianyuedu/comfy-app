@@ -31,7 +31,7 @@ function dbStudioDotState(c: ReadySettingsPageController): StatusDotState {
 
 export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
   return (
-    <SettingsCard title="数据库（Drizzle Studio）">
+    <SettingsCard>
       {/* 「本分区是什么」那一段搬进了导航行右侧的说明（`sectionSummary`）——
           它回答的是导航问题，读一遍就不再需要，留着只会把第一个控件推到折叠线
           以下。这里只留**答案在别处拿不到的那句**：界面托管在官方远端域名上。 */}

@@ -13,7 +13,7 @@ import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 export function ExitSection({ c }: { c: ReadySettingsPageController }) {
   return (
-    <SettingsCard title="退出与后台服务">
+    <SettingsCard>
       {/* 同样只留「答案在别处拿不到的那句」：时机口径。开关的语义由每一条自己
           的说明文字讲（它们才是用户真正在选的东西）。 */}
       <p className="text-muted-foreground mb-4 text-xs">

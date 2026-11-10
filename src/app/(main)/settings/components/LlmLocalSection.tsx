@@ -48,7 +48,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
   };
 
   return (
-    <SettingsCard title="本地模型（Ollama）">
+    <SettingsCard>
       {/* Base URL 仅本地 Ollama 需要；远端的连接参数由模型条目各自携带 */}
       <Field
         label="Base URL"
