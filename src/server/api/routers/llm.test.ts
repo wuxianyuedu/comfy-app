@@ -272,6 +272,7 @@ describe("providers —— 供应商 / 模型的入参闸与全量回读（#3501
       providerId,
       name: "claude-sonnet-4",
       kind: "chat",
+      apiFormat: "responses",
       apiKey: "sk-model",
       contextWindow: 200_000,
       maxOutputTokens: 8192,
@@ -286,6 +287,7 @@ describe("providers —— 供应商 / 模型的入参闸与全量回读（#3501
       providerId,
       name: "claude-sonnet-4",
       kind: "chat",
+      apiFormat: "responses",
       enabled: true,
       hasApiKey: true,
       contextWindow: 200_000,
@@ -308,6 +310,34 @@ describe("providers —— 供应商 / 模型的入参闸与全量回读（#3501
     expect((await caller().providersGet()).models).toEqual([]);
   });
 
+  it("模型级接口格式：显式值优先，省略 = 跟随供应商默认（#3517）", async () => {
+    const providerId = (await saveProvider({ apiFormat: "anthropic-messages" })).providers[0]!.id;
+
+    const explicit = await caller().modelSave({
+      providerId,
+      name: "m-explicit",
+      apiFormat: "responses",
+    });
+    expect(explicit.models[0]?.apiFormat).toBe("responses");
+
+    const inherited = await caller().modelSave({ providerId, name: "m-inherit" });
+    expect(inherited.models.find((m) => m.name === "m-inherit")?.apiFormat).toBe(
+      "anthropic-messages",
+    );
+  });
+
+  it("模型指向已删除的供应商：生效格式回落 OpenAI 兼容，不因孤儿行报错（#3517）", async () => {
+    seedRemoteModel(tdb, { name: "orphan", providerId: "gone" });
+    const state = await caller().providersGet();
+    expect(state.models).toEqual([
+      expect.objectContaining({
+        name: "orphan",
+        providerId: "gone",
+        apiFormat: "chat-completions",
+      }),
+    ]);
+  });
+
   it("modelSave 的 zod 闸：缺 providerId / 空名 / 0 窗口 / 未知用途 / 未知输入类型都 BAD_REQUEST", async () => {
     const providerId = (await saveProvider()).providers[0]!.id;
     const base = { providerId, name: "m" };
@@ -318,6 +348,7 @@ describe("providers —— 供应商 / 模型的入参闸与全量回读（#3501
       { contextWindow: 0 },
       { maxOutputTokens: -1 },
       { kind: "audio" },
+      { apiFormat: "grpc" },
       { inputTypes: ["audio"] },
       { capabilities: ["telepathy"] },
       { reasoningParamMapping: { param: "x", values: { low: 1 } } },

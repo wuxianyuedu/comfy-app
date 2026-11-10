@@ -3,9 +3,14 @@
 /**
  * 「添加 / 编辑模型」弹窗（规范 17 §17.2 第③层，#3501）。
  *
- * 一条模型只声明「属于哪个供应商」+ 自己的窗口 / 输出上限 / 输入类型 / 能力 /
- * 推理映射；Base URL 与 API Key 属于供应商，不在这里重复填（历史行若带模型级
+ * 一条模型声明「属于哪个供应商」+ 自己的**接口格式** / 窗口 / 输出上限 / 输入类型 /
+ * 能力 / 推理映射；Base URL 与 API Key 属于供应商，不在这里重复填（历史行若带模型级
  * 接口覆盖，保存时原样保留，见 `modelSaveDraft`）。
+ *
+ * 接口格式为什么在模型上（#3517）：同一供应商下文本 / 图片 / 视频模型可能各用一套
+ * 协议（`chat/completions` vs `responses` vs `v1/messages`），供应商级只有一个选择时
+ * 必然有一条链探不通。弹窗把「格式 + 供应商 Base URL」拼出的最终请求地址直接显示，
+ * 用户不用心算路径段。
  *
  * 交互态与提交在 `use-provider-model-dialogs`（第②层），字段规则在
  * `~/lib/llm/provider-form`（纯函数）。
@@ -22,11 +27,15 @@ import { Toggle } from "~/components/ui/toggle";
 import { EMPTY_PLACEHOLDER } from "~/lib/display-value";
 import { textHandler } from "~/lib/form-props";
 import {
+  LLM_API_FORMATS,
+  LLM_API_FORMAT_LABELS,
   MODEL_CAPABILITIES,
   MODEL_CAPABILITY_LABELS,
   MODEL_INPUT_TYPES,
   MODEL_INPUT_TYPE_LABELS,
+  baseUrlVersionHint,
   formatContextWindow,
+  requestUrlForFormat,
 } from "~/lib/llm/provider-types";
 import { splitReasoningLevels } from "~/lib/llm/provider-form";
 import { REMOTE_MODEL_KINDS, REMOTE_MODEL_KIND_LABELS } from "~/lib/llm/types";
@@ -46,6 +55,9 @@ export function ProviderModelDialog({
 }) {
   const providerId = dialog.mode === "add" ? dialog.providerId : dialog.model.providerId;
   const provider = p.providers.find((candidate) => candidate.id === providerId);
+  const providerBaseUrl = provider?.baseUrl ?? "";
+  const requestUrl = requestUrlForFormat(providerBaseUrl, d.modelForm.apiFormat);
+  const versionHint = baseUrlVersionHint(providerBaseUrl, d.modelForm.apiFormat);
   const levels = splitReasoningLevels(d.modelForm.reasoningLevels);
   const windowPreview = formatContextWindow(Number(d.modelForm.contextWindow) || null);
 
@@ -142,6 +154,41 @@ export function ProviderModelDialog({
                 options={[...REMOTE_MODEL_KINDS]}
                 popoverMinWidth={160}
                 value={d.modelForm.kind}
+              />
+            )}
+          </FormField>
+
+          <FormField
+            className="mb-3"
+            hint={
+              providerBaseUrl === "" ? (
+                "所属供应商还没有 Base URL：先在供应商详情里填好，这里会显示最终请求地址"
+              ) : (
+                <span>
+                  实际请求地址：<code className="text-ink/80">{requestUrl}</code>
+                  {versionHint !== null && <span className="mt-0.5 block">{versionHint}</span>}
+                </span>
+              )
+            }
+            id="model-api-format"
+            label="API 格式"
+          >
+            {(a11y) => (
+              <SelectMenu
+                {...a11y}
+                autoFitFromOptions={false}
+                className="text-sm"
+                fullWidth
+                labels={LLM_API_FORMAT_LABELS}
+                onChange={(next) => {
+                  const apiFormat = LLM_API_FORMATS.find((format) => format === next);
+                  if (apiFormat !== undefined) {
+                    d.patchModelForm({ apiFormat });
+                  }
+                }}
+                options={[...LLM_API_FORMATS]}
+                popoverMinWidth={260}
+                value={d.modelForm.apiFormat}
               />
             )}
           </FormField>

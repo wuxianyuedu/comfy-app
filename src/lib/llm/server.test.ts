@@ -29,7 +29,11 @@ import {
 } from "~/lib/llm/server";
 import type { LLMConfig, LLMTool } from "~/lib/llm/types";
 import { isRecord } from "~/lib/is-record";
-import { llmConfigRepository } from "~/lib/core/repository-user";
+import {
+  llmConfigRepository,
+  llmProviderRepository,
+  remoteModelRepository,
+} from "~/lib/core/repository-user";
 import { getTestDb, seedRemoteModel } from "../../../tests/helpers/test-db";
 import { z } from "zod";
 
@@ -219,6 +223,24 @@ describe("getLLMConfig 的三层叠加（env → DB → 请求覆盖）", () => 
     const local = await getLLMConfig({ model: "local-only" });
     expect(local.baseUrl).toBe("https://global/v1");
     expect(local.apiKey).toBe("sk-global");
+  });
+
+  it("远端行：模型级格式优先，未设时回落供应商默认（#3517）", async () => {
+    await llmConfigRepository.upsertSingleton({ provider: "remote", baseUrl: "https://global/v1" });
+    const provider = await llmProviderRepository.save({
+      name: "Agnes",
+      baseUrl: "https://apihub.agnes-ai.com/v1",
+      apiFormat: "anthropic-messages",
+    });
+    await remoteModelRepository.saveModel({
+      name: "own-format",
+      providerId: provider.id,
+      apiFormat: "responses",
+    });
+    await remoteModelRepository.saveModel({ name: "inherit-format", providerId: provider.id });
+
+    expect((await getLLMConfig({ model: "own-format" })).apiFormat).toBe("responses");
+    expect((await getLLMConfig({ model: "inherit-format" })).apiFormat).toBe("anthropic-messages");
   });
 
   it("DB 的本地候选名 + remoteModel 表条目 + 遗留远端对象三者合并进 extraModels", async () => {

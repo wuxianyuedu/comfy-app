@@ -40,7 +40,8 @@ export type SettingsProviders = {
   loading: boolean;
   /** 全部模型（按供应商分组由视图自己筛）。 */
   models: Array<ProviderModelView>;
-  /** 连通性探测：给 `providerId` 时服务端代查已保存的 Base URL / 格式 / 密钥。 */
+  /** 连通性探测：给 `providerId` 时服务端代查已保存的 Base URL / 密钥
+   *  （接口格式按该供应商下各模型用到的格式逐个试，#3517）。 */
   probe: (input: RemoteProbeInput) => Promise<RemoteProbeResult>;
   providers: Array<ProviderView>;
   /** 重新读取清单（写操作后由本 hook 自动调用，视图一般不用手调）。 */

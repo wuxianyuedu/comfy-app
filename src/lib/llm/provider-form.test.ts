@@ -22,40 +22,28 @@ import {
 } from "./provider-form";
 
 describe("providerFormFromView / emptyProviderForm", () => {
-  it("新建表单：chat-completions、密钥与清除标记都为空", () => {
+  it("新建表单：密钥与清除标记都为空（接口格式已下移到模型级）", () => {
     expect(emptyProviderForm()).toEqual({
       name: "",
       baseUrl: "",
-      apiFormat: "chat-completions",
       apiKey: "",
       clearApiKey: false,
     });
   });
 
-  it("库里的视图回填：apiKey 不回填明文；未知 apiFormat 退回 chat-completions", () => {
+  it("库里的视图回填：apiKey 不回填明文", () => {
     expect(
       providerFormFromView({
         name: "Agnes",
-        baseUrl: "https://platform.agnes-ai.com",
-        apiFormat: "anthropic-messages",
+        baseUrl: "https://apihub.agnes-ai.com/v1",
         hasApiKey: true,
       }),
     ).toEqual({
       name: "Agnes",
-      baseUrl: "https://platform.agnes-ai.com",
-      apiFormat: "anthropic-messages",
+      baseUrl: "https://apihub.agnes-ai.com/v1",
       apiKey: "",
       clearApiKey: false,
     });
-
-    expect(
-      providerFormFromView({
-        name: "旧网关",
-        baseUrl: "https://x",
-        apiFormat: "grpc",
-        hasApiKey: false,
-      }).apiFormat,
-    ).toBe("chat-completions");
   });
 });
 
@@ -102,14 +90,12 @@ describe("providerSaveDraft", () => {
       providerSaveDraft(
         form({
           name: " Agnes ",
-          baseUrl: " https://platform.agnes-ai.com/ ",
-          apiFormat: "responses",
+          baseUrl: " https://apihub.agnes-ai.com/v1/ ",
         }),
       ),
     ).toEqual({
       name: "Agnes",
-      baseUrl: "https://platform.agnes-ai.com",
-      apiFormat: "responses",
+      baseUrl: "https://apihub.agnes-ai.com/v1",
     });
   });
 
@@ -128,7 +114,6 @@ describe("providerSaveDraft", () => {
       id: "p1",
       name: "Agnes",
       baseUrl: "https://agnes/v1",
-      apiFormat: "chat-completions",
       apiKey: "sk-new",
     });
   });
@@ -146,10 +131,11 @@ describe("providerSaveDraft", () => {
 });
 
 describe("emptyModelForm / modelFormFromView", () => {
-  it("新建模型：智能配置默认开、输入类型文本、系统消息能力", () => {
+  it("新建模型：智能配置默认开、接口格式回落 chat-completions、输入类型文本", () => {
     expect(emptyModelForm("image")).toMatchObject({
       name: "",
       kind: "image",
+      apiFormat: "chat-completions",
       smartConfig: true,
       contextWindow: "",
       maxOutputTokens: "",
@@ -163,11 +149,16 @@ describe("emptyModelForm / modelFormFromView", () => {
     });
   });
 
-  it("库行回填：数字转字符串、JSON 列容错解析、未知 kind 回落 chat", () => {
+  it("新建模型：可指定所属供应商的默认格式", () => {
+    expect(emptyModelForm("chat", "anthropic-messages").apiFormat).toBe("anthropic-messages");
+  });
+
+  it("库行回填：数字转字符串、JSON 列容错解析、未知 kind 回落 chat、未知格式回落默认", () => {
     expect(
       modelFormFromView({
         name: "claude-sonnet-4",
         kind: "audio",
+        apiFormat: "grpc",
         smartConfig: false,
         contextWindow: 200_000,
         maxOutputTokens: null,
@@ -181,6 +172,7 @@ describe("emptyModelForm / modelFormFromView", () => {
     ).toEqual({
       name: "claude-sonnet-4",
       kind: "chat",
+      apiFormat: "chat-completions",
       smartConfig: false,
       contextWindow: "200000",
       maxOutputTokens: "",
@@ -192,6 +184,25 @@ describe("emptyModelForm / modelFormFromView", () => {
       baseUrl: "https://model-override/v1",
       enabled: false,
     });
+  });
+
+  it("库行回填：合法的模型级格式原样保留", () => {
+    expect(
+      modelFormFromView({
+        name: "agnes-3.0-flash",
+        kind: "chat",
+        apiFormat: "anthropic-messages",
+        smartConfig: true,
+        contextWindow: null,
+        maxOutputTokens: null,
+        inputTypes: null,
+        capabilities: null,
+        reasoningLevels: null,
+        reasoningParamMapping: null,
+        baseUrl: null,
+        enabled: true,
+      }).apiFormat,
+    ).toBe("anthropic-messages");
   });
 });
 
@@ -279,6 +290,7 @@ describe("modelSaveDraft", () => {
       providerId: "p1",
       name: "claude-sonnet-4",
       kind: "chat",
+      apiFormat: "chat-completions",
       enabled: true,
       baseUrl: null,
       contextWindow: null,

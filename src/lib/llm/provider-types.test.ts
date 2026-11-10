@@ -18,6 +18,7 @@ import {
   parseReasoningLevels,
   parseReasoningParamMapping,
   requestUrlForFormat,
+  resolveApiFormat,
 } from "./provider-types";
 
 describe("isLlmApiFormat / requestUrlForFormat", () => {
@@ -39,6 +40,22 @@ describe("isLlmApiFormat / requestUrlForFormat", () => {
     );
     expect(requestUrlForFormat("https://agnes", "responses")).toBe("https://agnes/responses");
     expect(requestUrlForFormat("   ", "responses")).toBe("");
+  });
+});
+
+describe("resolveApiFormat：模型自己的格式优先，其次供应商默认，最后回落 OpenAI 兼容", () => {
+  it("取第一个合法候选", () => {
+    expect(resolveApiFormat("anthropic-messages", "responses")).toBe("anthropic-messages");
+    expect(resolveApiFormat(null, "responses", "chat-completions")).toBe("responses");
+  });
+
+  it("非法值 / 缺值跳过，不是「取到第一个非空」", () => {
+    expect(resolveApiFormat("grpc", undefined, "anthropic-messages")).toBe("anthropic-messages");
+  });
+
+  it("一条合法信息都没有时回落 chat-completions（历史行 / 全新配置）", () => {
+    expect(resolveApiFormat()).toBe("chat-completions");
+    expect(resolveApiFormat(null, "", 42)).toBe("chat-completions");
   });
 });
 

@@ -667,15 +667,22 @@
 
 - 状态：已上线
 - 需求：LLM 可配 provider（`local` / `remote`）、baseUrl、模型、密钥；
-  远端配置以「供应商」为单位（#3501）——每个供应商一套 Base URL / 接口格式 /
-  API Key，模型挂在供应商下，不再共用全局密钥。
+  远端配置以「供应商」为单位（#3501）——每个供应商一套 Base URL / API Key，
+  模型挂在供应商下，不再共用全局密钥；接口格式挂在**模型**上（#3517），
+  同一供应商下文本 / 图片 / 视频模型可以各用一套协议。
 - 行为与验收：provider 是收紧的 enum（不接受任意字符串）；接口格式三选一
   （Chat Completions `/chat/completions` / Anthropic Messages `/v1/messages` /
-  Responses `/responses`），设置页显示拼出的最终请求地址；供应商与模型的增删改
-  走 `providersGet` / `providerSave` / `providerDelete` / `modelSave` /
-  `modelDelete` / `modelToggle`；密钥脱敏——客户端只看到「有没有配」，不回明文，
-  保存表单三态（留空不改 / 显式清除 / 写入新值），读侧解密后再交给运行时；
-  连通性测试走 `/api/llm/test`（带 `providerId`，服务端取保存的地址与密钥发起）；
+  Responses `/responses`），在「添加 / 编辑模型」弹窗里选择并显示拼出的最终
+  请求地址（Base URL 取所属供应商）；供应商详情**没有保存按钮**——名称 /
+  Base URL / API Key 失焦即落库（与库里无差异不写、字段不合法只报错不写）；
+  供应商与模型的增删改走 `providersGet` / `providerSave` / `providerDelete` /
+  `modelSave` / `modelDelete` / `modelToggle`；密钥脱敏——客户端只看到「有没有配」，
+  不回明文，保存表单三态（留空不改 / 显式清除 / 写入新值），读侧解密后再交给
+  运行时；连通性测试走 `/api/llm/test`（带 `providerId`，服务端取保存的地址与
+  密钥发起）——供应商级测试按「该供应商下各模型用到的格式 → 供应商默认」逐个试
+  （一条格式信息都没有时才试全三种），网络层失败立即终止、HTTP 非 2xx 才换下一种；
+  模型行的测试连接只用**供应商地址 + 该模型自己的格式**（不再拿模型行历史
+  `baseUrl` 覆盖供应商地址，#3517 的现场就是它把 `apihub` 换成了旧域名）；
   探测失败给可读归因（#3517）——上游返回 HTML 页面时明说「这不是接口响应」并
   指向 Base URL（不再把整页 `<!DOCTYPE …>` 截一段灌进提示），401/403 与 404
   各补一句归因，提示里点名实际探测的地址；Base URL 看不出接口版本段时**只提示、
@@ -684,22 +691,26 @@
   密钥与模型名不变。
 - 落点：`src/server/api/routers/llm.ts`、`src/lib/llm/provider-types.ts`、
   `src/lib/llm/provider-form.ts`、`src/lib/core/repository-user.ts`、
-  `src/lib/llm/types.ts`
+  `src/lib/llm/types.ts`、`src/app/api/llm/test/route.ts`
 
 #### FR-LM-02 本地候选与远端独立模型
 
 - 状态：已上线
 - 需求：本地候选模型（纯名字串）与远端独立模型（挂在供应商下，可带模型级
-  baseUrl / apiKey）分开放。
+  baseUrl / apiKey / 接口格式）分开放。
 - 行为与验收：本地候选在 `llmConfig.extraModels`；远端独立模型在
   `remoteModel` 表（`providerId` 指回 `llmProvider`）；拆分逻辑单点
-  （`splitExtraModels()`）。远端模型名全局唯一（运行时与工坊按名解析）；
-  停用的模型保留配置但不进工坊下拉；整份清单保存只动历史遗留行
+  （`splitExtraModels()`）。模型级 `apiFormat` 为空 = 跟随供应商默认
+  （历史行），生效值由 `resolveApiFormat(model, provider)` 统一回落，
+  运行时与设置页视图共用同一份；供应商上的 `apiFormat` 只作为历史行与
+  新建模型的默认值，详情页不再编辑它。远端模型名全局唯一（运行时与工坊
+  按名解析）；停用的模型保留配置但不进工坊下拉；整份清单保存只动历史遗留行
   （`providerId` 为空），不覆盖、不删除供应商名下的模型；模型配置含启用状态、
-  上下文窗口、最大输出 Token、输入类型、能力、推理等级与参数映射，「智能配置」
-  按模型 id 预填窗口 / 输出上限 / 输入类型。
+  接口格式、上下文窗口、最大输出 Token、输入类型、能力、推理等级与参数映射，
+  「智能配置」按模型 id 预填窗口 / 输出上限 / 输入类型。
 - 落点：`src/server/db/schema.ts`（`llmProvider` / `remoteModel`）、
-  `src/lib/llm/types.ts`、`src/lib/llm/provider-form.ts`
+  `src/lib/llm/types.ts`、`src/lib/llm/provider-form.ts`、
+  `src/lib/llm/provider-types.ts`
 
 #### FR-LM-03 按任务温度
 

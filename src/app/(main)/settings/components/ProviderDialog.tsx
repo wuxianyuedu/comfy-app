@@ -3,31 +3,24 @@
 /**
  * 「新建供应商」弹窗（规范 17 §17.2 第③层，#3501）。
  *
- * 只收供应商的连接参数（名称 / Base URL / API 格式 / API Key），校验与提交在
+ * 只收供应商的连接参数（名称 / Base URL / API Key），校验与提交在
  * `use-provider-model-dialogs`（第②层），字段规则在 `~/lib/llm/provider-form`。
- * 编辑既有供应商走详情页的内联表单 —— 那里改完能立刻看到「最终请求地址」。
+ * 编辑既有供应商走详情页的内联表单（字段失焦即保存）。
+ *
+ * 接口格式自 #3517 起挂在**模型**上：新建供应商时只填到版本段，路径由各模型的
+ * 接口格式补全（添加模型时选择）。
  */
 
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { FormField } from "~/components/ui/form-field";
 import { Input } from "~/components/ui/input";
-import { SelectMenu } from "~/components/ui/select-menu";
 import { textHandler } from "~/lib/form-props";
-import {
-  LLM_API_FORMATS,
-  LLM_API_FORMAT_LABELS,
-  baseUrlVersionHint,
-  requestUrlForFormat,
-} from "~/lib/llm/provider-types";
 
 import type { ProviderModelDialogs } from "../hooks/use-provider-model-dialogs";
 import type { SettingsProviders } from "../hooks/use-settings-providers";
 
 export function ProviderDialog({ d, p }: { d: ProviderModelDialogs; p: SettingsProviders }) {
-  const finalUrl = requestUrlForFormat(d.providerForm.baseUrl, d.providerForm.apiFormat);
-  const versionHint = baseUrlVersionHint(d.providerForm.baseUrl, d.providerForm.apiFormat);
-
   return (
     <Dialog
       onOpenChange={(next) => {
@@ -82,16 +75,7 @@ export function ProviderDialog({ d, p }: { d: ProviderModelDialogs; p: SettingsP
           <FormField
             className="mb-3"
             error={d.providerErrors.baseUrl}
-            hint={
-              finalUrl === "" ? (
-                "填到版本段为止（如 https://api.example.com/v1），路径由接口格式补全"
-              ) : (
-                <span>
-                  实际请求地址：<code className="text-ink/80">{finalUrl}</code>
-                  {versionHint !== null && <span className="mt-0.5 block">{versionHint}</span>}
-                </span>
-              )
-            }
+            hint="填到版本段为止（如 https://api.example.com/v1）；路径段由各模型的接口格式补全"
             id="provider-base-url"
             label="Base URL"
             required
@@ -105,27 +89,6 @@ export function ProviderDialog({ d, p }: { d: ProviderModelDialogs; p: SettingsP
                 })}
                 placeholder="https://api.example.com/v1"
                 value={d.providerForm.baseUrl}
-              />
-            )}
-          </FormField>
-
-          <FormField className="mb-3" id="provider-api-format" label="API 格式">
-            {(a11y) => (
-              <SelectMenu
-                {...a11y}
-                autoFitFromOptions={false}
-                className="text-sm"
-                fullWidth
-                labels={LLM_API_FORMAT_LABELS}
-                onChange={(next) => {
-                  const apiFormat = LLM_API_FORMATS.find((format) => format === next);
-                  if (apiFormat !== undefined) {
-                    d.setProviderForm((prev) => ({ ...prev, apiFormat }));
-                  }
-                }}
-                options={[...LLM_API_FORMATS]}
-                popoverMinWidth={260}
-                value={d.providerForm.apiFormat}
               />
             )}
           </FormField>
