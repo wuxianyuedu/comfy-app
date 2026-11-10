@@ -15,10 +15,28 @@ type ExitModule = {
   writeAppServiceExit: (root: string, input: Record<string, unknown>) => boolean;
 };
 
-/* SAFETY: 类型断言已复核 */
-const mod = (await import(
+/** 外来值是不是普通对象（数组不算）：本文件收窄外来 JSON / 模块的统一入口。 */
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** 动态 import 的模块导出面：三个导出逐字段校验后才收成 ExitModule。 */
+function isExitModule(v: unknown): v is ExitModule {
+  return (
+    isPlainObject(v) &&
+    typeof v.APP_SERVICE_EXIT_FILE === "string" &&
+    typeof v.appServiceExitPath === "function" &&
+    typeof v.writeAppServiceExit === "function"
+  );
+}
+
+const imported: unknown = await import(
   pathToFileURL(join(process.cwd(), "scripts", "app-service-exit.mjs")).href
-)) as unknown as ExitModule;
+);
+if (!isExitModule(imported)) {
+  throw new Error("app-service-exit.mjs 的导出面不对");
+}
+const mod = imported;
 
 const dirs: Array<string> = [];
 function tmpRoot(): string {
@@ -34,11 +52,13 @@ afterEach(() => {
 });
 
 function read(root: string): Record<string, unknown> {
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(readFileSync(join(root, "run", mod.APP_SERVICE_EXIT_FILE), "utf8")) as Record<
-    string,
-    unknown
-  >;
+  const parsed: unknown = JSON.parse(
+    readFileSync(join(root, "run", mod.APP_SERVICE_EXIT_FILE), "utf8"),
+  );
+  if (!isPlainObject(parsed)) {
+    throw new Error("app-service-exit.json 不是对象");
+  }
+  return parsed;
 }
 
 describe("writeAppServiceExit", () => {

@@ -212,6 +212,24 @@ describe("main：三态与点名", () => {
   });
 
   it("`--json` 只发一份 JSON 文档，且 rows 只装非正常的那些", () => {
+    /** 外来值是不是普通对象 / 数组。 */
+    function isPlainObject(v: unknown): v is Record<string, unknown> {
+      return typeof v === "object" && v !== null && !Array.isArray(v);
+    }
+    function isUnknownArray(v: unknown): v is Array<unknown> {
+      return Array.isArray(v);
+    }
+
+    /** --json 结论的形状：外来 JSON 先落 unknown，再逐字段收窄。 */
+    function isJsonReport(v: unknown): v is { rows: Array<{ number: string }>; total: number } {
+      if (!isPlainObject(v) || typeof v.total !== "number") return false;
+      const rows: unknown = v.rows;
+      return (
+        isUnknownArray(rows) &&
+        rows.every((row) => isPlainObject(row) && typeof row.number === "string")
+      );
+    }
+
     const { run } = fake({
       issues: ISSUES,
       bodies: { "2265": `${HEAD("y")}\n\n正文`, "2195": "## 症状\n" },
@@ -220,11 +238,11 @@ describe("main：三态与点名", () => {
     main({ run, log, slug: "o/r", json: true });
     /* 追一行人类总结会让机器侧 `JSON.parse` 撞「尾部多余内容」，看起来像数据坏了。 */
     expect(heard).toHaveLength(1);
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(heard.join("\n")) as {
-      rows: Array<{ number: string }>;
-      total: number;
-    };
+    const raw: unknown = JSON.parse(heard.join("\n"));
+    if (!isJsonReport(raw)) {
+      throw new Error("--json 结论形状不对");
+    }
+    const parsed = raw;
     expect(parsed.total).toBe(3);
     expect(parsed.rows.map((r: { number: string }) => r.number)).toEqual(["2195", "2194"]);
   });

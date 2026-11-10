@@ -148,6 +148,34 @@ describe("check-barrel-heavy-deps.cjs（提交门槛）", () => {
   });
 
   test("--json 给机器读的结论（reports + findings）", ({ repo }) => {
+    /** 外来值是不是普通对象 / 数组。 */
+    function isPlainObject(v: unknown): v is Record<string, unknown> {
+      return typeof v === "object" && v !== null && !Array.isArray(v);
+    }
+    function isUnknownArray(v: unknown): v is Array<unknown> {
+      return Array.isArray(v);
+    }
+
+    /** --json 结论的形状：外来 JSON 先落 unknown，再逐字段收窄。 */
+    function isBarrelJson(v: unknown): v is {
+      findings: Array<{ chain?: Array<string>; dep?: string; entry: string; module: string }>;
+      reports: Array<{ entry: string; reachable: number }>;
+    } {
+      if (!isPlainObject(v)) return false;
+      const reports: unknown = v.reports;
+      const findings: unknown = v.findings;
+      return (
+        isUnknownArray(reports) &&
+        reports.every(
+          (r) => isPlainObject(r) && typeof r.entry === "string" && typeof r.reachable === "number",
+        ) &&
+        isUnknownArray(findings) &&
+        findings.every(
+          (f) => isPlainObject(f) && typeof f.entry === "string" && typeof f.module === "string",
+        )
+      );
+    }
+
     seedConfig(repo);
     seedCheapChain(repo);
     repo.write(
@@ -156,11 +184,11 @@ describe("check-barrel-heavy-deps.cjs（提交门槛）", () => {
     );
     const { code, output } = repo.run(["--json"]);
     expect(code).toBe(1);
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(output) as {
-      findings: Array<{ chain?: Array<string>; dep?: string; entry: string; module: string }>;
-      reports: Array<{ entry: string; reachable: number }>;
-    };
+    const raw: unknown = JSON.parse(output);
+    if (!isBarrelJson(raw)) {
+      throw new Error("--json 结论形状不对");
+    }
+    const parsed = raw;
     expect(parsed.reports[0]?.entry).toBe("src/app/entry.tsx");
     expect(parsed.reports[0]?.reachable).toBeGreaterThan(0);
     expect(parsed.findings[0]?.module).toBe("src/components/leaf.ts");

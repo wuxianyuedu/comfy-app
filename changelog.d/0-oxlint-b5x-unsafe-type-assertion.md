@@ -1,0 +1,9 @@
+## Changed
+
+- **B5 子批 24：20 份 / 实扫 56 处 `typescript/no-unsafe-type-assertion` 清零**（判决面删掉这 20 份路径行；挂账注记 54 处，+2 为代码漂移，按实扫清零）。本批全在 `tests/` 的判据自测：`app-port` / `app-service-exit-writer` / `base-check` / `check-a11y-rules` / `check-app-version` / `check-barrel-heavy-deps` / `check-bundle-budget` / `check-changelog-fragments` / `check-comfyui-port-contract` / `check-comment-headers` / `check-commit-claims` / `check-daily-attendance` / `check-doc-references` / `check-docs-api` / `check-file-structure` / `check-format` / `check-gate-thresholds` / `check-import-alias` / `check-inline-style` / `check-mirror-attendance`。
+  - 改法仍是「运行时校验 + 类型守卫」：`require(...)` / `JSON.parse(...)` / 动态 import / 子进程 stdout / mock 返回值先落 `unknown`，再用文件内最小 `v is T` 守卫或逐字段 `typeof` 收窄；`check-doc-references` 把四处动态 import 断言收成一处 `loadDocFacts()`、三处 catch 收成 `execFailure()`；测试桩用带签名的 `vi.fn` 与最小合法 mock 回执行。非法值按既有默认回落，合法输入结果不变，**没有删用例、没有弱化断言、没有改被测判据脚本**。
+  - **零新增静态 import**：`tests/base-check.test.ts` / `tests/check-bundle-budget.test.ts` / `tests/check-commit-claims.test.ts` 在 `scripts/fixed-gate-input-faces.mjs` 的 `INPUT_FACES` 名单里，新增直接 import 而不补 `face` 会让输入面判据当场红（PR #3490 的平台 CI 红因）。本批刻意不新增 import，改在各文件内写最小类型谓词守卫，因此不需要动输入面配置。
+  - **没有新增** `as` / `!` / `any` / `@ts-ignore` / `@ts-expect-error` / `oxlint-disable`；全批无「豁免不计入清零」的例外。旧 `/* SAFETY: 类型断言已复核 */` 注释对应未被规则命中的安全断言，按最小改动保留。
+- **顺带清掉 2 行死豁免**：`scripts/session-report.mjs` 与 `tests/session-report.test.ts` 在判决面挂账各 1 处，但台账没有对应行、源码里已无断言形状、单规则探针实扫 **0 诊断** —— 沿用上一批「按实扫清零、留待登记」的口径，本批确认它们是死豁免并删掉两行，台账无需补登记。
+- **台账同批**：B5 段 20 行「挂账」改「已清」，总览 B5 行同步为「子批1–24：**480 份 / 1211 处已清**」。总览沿用上一批「按实扫累加」口径（1155 + 56 = 1211）；逐行状态改完后注记处数合计 1204，差额 7 是历史批次注记与实扫的漂移（上一批遗留 5 + 本批 2），按既有口径不回改历史行。
+- 判决面剩余 **128 份 / 注记 294 处**（实扫 298 处）；另有 6 份挂账注记与实扫不等（`check-mirror-attendance` 本批已按实扫处理，其余留在后续批次按实扫口径清零）。归零那一批才 `Closes #3181`。

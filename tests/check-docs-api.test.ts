@@ -19,6 +19,13 @@ import {
   walk,
 } from "../scripts/check-docs-api.cjs";
 
+/**
+ * 外来值（`execFileSync` 抛出的对象）先落 `unknown`，过这道守卫后逐字段 `typeof` 收窄才使用。
+ */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
 const temps: Array<string> = [];
 
 function tempDir(prefix: string): string {
@@ -211,10 +218,11 @@ describe("--autofix 这一档已经不存在了（ISSUE #2231）", () => {
         stdio: ["ignore", "pipe", "pipe"],
       });
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      const e = error as { status?: number; stderr?: string };
-      code = e.status ?? -1;
-      out = e.stderr ?? "";
+      const fields = isRecord(error) ? error : null;
+      const status = fields?.status;
+      const stderr = fields?.stderr;
+      code = typeof status === "number" ? status : -1;
+      out = typeof stderr === "string" ? stderr : "";
     }
     expect(code).toBe(1);
     expect(out).toContain("--autofix");

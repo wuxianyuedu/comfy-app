@@ -32,6 +32,11 @@ function scanner(files: Record<string, string>) {
     mkdirSync(path.dirname(abs), { recursive: true });
     writeFileSync(abs, content);
   }
+  /** execFileSync 抛出的失败对象：只认对象这一层，字段缺省由 `??` 兜底。 */
+  function isExecFailure(v: unknown): v is Record<string, unknown> {
+    return typeof v === "object" && v !== null;
+  }
+
   const run = (): { ok: boolean; output: string } => {
     try {
       return {
@@ -43,9 +48,10 @@ function scanner(files: Record<string, string>) {
         ),
       };
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      const e = error as { stderr?: string; stdout?: string };
-      return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+      const e: Record<string, unknown> = isExecFailure(error) ? error : {};
+      const stdout = typeof e.stdout === "string" ? e.stdout : "";
+      const stderr = typeof e.stderr === "string" ? e.stderr : "";
+      return { ok: false, output: `${stdout}${stderr}` };
     }
   };
   return { root, run };

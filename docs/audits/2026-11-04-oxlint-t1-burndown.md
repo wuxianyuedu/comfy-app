@@ -13,7 +13,7 @@
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
 | B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 已清（子批1–12，判决面文件级豁免已整块删除）       |
-| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–23：460 份 / 1155 处已清）           |
+| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–24：480 份 / 1211 处已清）           |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
@@ -1205,26 +1205,26 @@
 | `tests/agent-index.test.ts`                                                                          | 1        | 已清 |
 | `tests/app-port-cross-language.test.ts`                                                              | 1        | 已清 |
 | `tests/app-port-vectors-timeout-classification.test.ts`                                              | 1        | 已清 |
-| `tests/app-port.test.ts`                                                                             | 1        | 挂账 |
-| `tests/app-service-exit-writer.test.ts`                                                              | 2        | 挂账 |
-| `tests/base-check.test.ts`                                                                           | 4        | 挂账 |
-| `tests/check-a11y-rules.test.ts`                                                                     | 6        | 挂账 |
-| `tests/check-app-version.test.ts`                                                                    | 1        | 挂账 |
-| `tests/check-barrel-heavy-deps.test.ts`                                                              | 1        | 挂账 |
-| `tests/check-bundle-budget.test.ts`                                                                  | 11       | 挂账 |
-| `tests/check-changelog-fragments.test.ts`                                                            | 1        | 挂账 |
-| `tests/check-comfyui-port-contract.test.ts`                                                          | 1        | 挂账 |
-| `tests/check-comment-headers.test.ts`                                                                | 1        | 挂账 |
-| `tests/check-commit-claims.test.ts`                                                                  | 3        | 挂账 |
-| `tests/check-daily-attendance.test.ts`                                                               | 3        | 挂账 |
-| `tests/check-doc-references.test.ts`                                                                 | 8        | 挂账 |
-| `tests/check-docs-api.test.ts`                                                                       | 1        | 挂账 |
-| `tests/check-file-structure.test.ts`                                                                 | 2        | 挂账 |
-| `tests/check-format.test.ts`                                                                         | 2        | 挂账 |
-| `tests/check-gate-thresholds.test.ts`                                                                | 2        | 挂账 |
-| `tests/check-import-alias.test.ts`                                                                   | 1        | 挂账 |
-| `tests/check-inline-style.test.ts`                                                                   | 1        | 挂账 |
-| `tests/check-mirror-attendance.test.ts`                                                              | 2        | 挂账 |
+| `tests/app-port.test.ts`                                                                             | 1        | 已清 |
+| `tests/app-service-exit-writer.test.ts`                                                              | 2        | 已清 |
+| `tests/base-check.test.ts`                                                                           | 4        | 已清 |
+| `tests/check-a11y-rules.test.ts`                                                                     | 6        | 已清 |
+| `tests/check-app-version.test.ts`                                                                    | 1        | 已清 |
+| `tests/check-barrel-heavy-deps.test.ts`                                                              | 1        | 已清 |
+| `tests/check-bundle-budget.test.ts`                                                                  | 11       | 已清 |
+| `tests/check-changelog-fragments.test.ts`                                                            | 1        | 已清 |
+| `tests/check-comfyui-port-contract.test.ts`                                                          | 1        | 已清 |
+| `tests/check-comment-headers.test.ts`                                                                | 1        | 已清 |
+| `tests/check-commit-claims.test.ts`                                                                  | 3        | 已清 |
+| `tests/check-daily-attendance.test.ts`                                                               | 3        | 已清 |
+| `tests/check-doc-references.test.ts`                                                                 | 8        | 已清 |
+| `tests/check-docs-api.test.ts`                                                                       | 1        | 已清 |
+| `tests/check-file-structure.test.ts`                                                                 | 2        | 已清 |
+| `tests/check-format.test.ts`                                                                         | 2        | 已清 |
+| `tests/check-gate-thresholds.test.ts`                                                                | 2        | 已清 |
+| `tests/check-import-alias.test.ts`                                                                   | 1        | 已清 |
+| `tests/check-inline-style.test.ts`                                                                   | 1        | 已清 |
+| `tests/check-mirror-attendance.test.ts`                                                              | 2        | 已清 |
 | `tests/check-oxlint-zero-rules.test.ts`                                                              | 1        | 挂账 |
 | `tests/check-react-updater-purity.test.ts`                                                           | 1        | 挂账 |
 | `tests/check-reformat-only.test.ts`                                                                  | 4        | 挂账 |
