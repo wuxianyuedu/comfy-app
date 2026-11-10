@@ -124,7 +124,7 @@ export function ShotRow({
 
       {/* Description */}
       <Textarea
-        className="field-sizing-normal border-border bg-bg text-ink placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/30 mt-2 min-h-0 rounded-md px-2 py-1.5 text-xs"
+        className="field-sizing-normal border-border bg-bg text-ink placeholder:text-muted-foreground focus-visible:border-primary mt-2 min-h-0 rounded-md px-2 py-1.5 text-xs"
         onChange={(event) => {
           onUpdate(shot.id, { description: event.target.value });
         }}

@@ -65,7 +65,7 @@ export function ContentAssetBody({
     return (
       <div className="relative">
         <Textarea
-          className="border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal focus-visible:ring-primary/30 focus-visible:border-primary/40 h-65 w-full resize-none rounded-xl border px-3 py-2.5 text-xs leading-relaxed transition-colors"
+          className="border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal focus-visible:border-primary/40 h-65 w-full resize-none rounded-xl border px-3 py-2.5 text-xs leading-relaxed transition-colors"
           onChange={textHandler((content) => {
             onPatch({ content });
           })}

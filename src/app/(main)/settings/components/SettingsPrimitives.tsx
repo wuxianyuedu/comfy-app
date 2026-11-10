@@ -35,7 +35,7 @@ export function Field({
       {(a11y) => (
         <Input
           {...a11y}
-          className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary focus-visible:ring-primary/30 h-auto rounded-lg px-3 py-2 text-sm"
+          className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm"
           onChange={textHandler(onChange)}
           placeholder={placeholder}
           type={type}
