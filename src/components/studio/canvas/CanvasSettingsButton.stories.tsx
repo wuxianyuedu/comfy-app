@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { CanvasSettingsButton } from "~/components/studio/canvas/CanvasSettingsButton";
 

@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { EMBEDDED_SCROLL_MAX_HEIGHT, OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 

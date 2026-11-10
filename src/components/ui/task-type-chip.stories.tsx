@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { TaskTypeChip } from "~/components/ui/task-type-chip";
 import { VALID_TASK_TYPE_CODES } from "~/lib/workflow/workflow-types";

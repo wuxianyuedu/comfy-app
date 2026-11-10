@@ -18,7 +18,7 @@ const main = readFileSync(MAIN, "utf8");
 
 /**
  * 从源码里读出一份 `as const` 的字符串清单。
- * 为什么读源码而不是 import 那个 `.tsx`：它是 React 组件模块（import 会把 `@storybook/nextjs` 一起拉进
+ * 为什么读源码而不是 import 那个 `.tsx`：它是 React 组件模块（import 会把 `@storybook/nextjs-vite` 一起拉进
  * vitest 的 node 环境）。这里判的正是「清单与磁盘对不对得上」，读文本足够且不引入运行期依赖。
  */
 function readConstArray(name: string): Array<string> {

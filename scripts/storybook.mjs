@@ -2,8 +2,8 @@
 // Storybook 启动入口（`pnpm storybook` / `pnpm build:storybook`）。
 //
 // 为什么不能直接在 package.json 里写 `storybook dev`：
-// `@storybook/nextjs` 会加载仓库根的 `next.config.js`，而它的**第一行**就是
-// `import "./src/env.js"` —— 后者在缺 `.env` 时抛 `MissingEnvFileError`。
+// webpack 版的 `@storybook/nextjs` 会加载仓库根的 `next.config.js`，而它的**第一行**
+// 就是 `import "./src/env.js"` —— 后者在缺 `.env` 时抛 `MissingEnvFileError`。
 // 也就是说「只是想看一眼按钮长什么样」会被应用启动期的环境校验拦住，而组件
 // 预览根本不需要 `BETTER_AUTH_SECRET` / `DATABASE_URL` 这些值。
 //
@@ -11,6 +11,12 @@
 // CI 的 `pnpm build` 都这么做）：注入 `SKIP_ENV_VALIDATION=1`。**不**为了这条
 // 去改 `next.config.js` —— 那份配置里的 env 导入是应用启动期的真实约束，
 // 不是它写错了。（`SKIP_ENV_VALIDATION` 的语义见 `src/env.js` 顶部。）
+//
+// **迁到 vite 版之后这条注入还要留着**（ISSUE #3372）：`@storybook/nextjs-vite`
+// 走的 `vite-plugin-storybook-nextjs` 只用 `@next/env` 的 `loadEnvConfig` 读
+// `.env` 文件（不读 `next.config.js`），所以今天它自己不会触发上面那条环境校验；
+// 但这条注入是**零成本的安全网** —— 将来任何一个插件读回 `next.config.js`，
+// 「组件预览被应用启动期的环境校验拦住」这条历史坑不该再踩一次。
 //
 // 为什么需要一个 .mjs 而不是一行 `SKIP_ENV_VALIDATION=1 storybook …`：
 // npm 脚本在 Windows 上由 cmd.exe 语义执行，`VAR=value cmd` 那套前缀赋值不是

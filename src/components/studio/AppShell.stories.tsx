@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { AppShell } from "~/components/studio/AppShell";
 import { WorksGallery } from "~/components/studio/WorksGallery";

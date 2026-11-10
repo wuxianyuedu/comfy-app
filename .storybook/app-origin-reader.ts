@@ -18,14 +18,22 @@
  *
  * | 环节                       | 谁                          | 怎么把值带过去                                    |
  * | -------------------------- | --------------------------- | ------------------------------------------------- |
- * | 读生成件（**Node** 侧）    | `.storybook/main.ts` 的 env | `SB_APP_DEV_PORT` / `SB_APP_DEV_ORIGIN` / `SB_APP_DEV_PORT_SOURCE` |
- * | 取值（**浏览器** bundle）  | 本模块                      | `process.env`（Storybook 的 env 是**编译期内联**） |
+ * | 读生成件（**Node** 侧）    | `.storybook/main.ts`        | `SB_APP_DEV_PORT` / `SB_APP_DEV_ORIGIN` / `SB_APP_DEV_PORT_SOURCE` |
+ * | 取值（**浏览器** bundle）  | 本模块                      | `process.env`（值是**编译期内联**的） |
  *
  * 为什么不在 `preview.tsx` 里直接读文件：preview 会被**打进浏览器 bundle**，
- * webpack 把 `node:fs` 换成 stub（实测编出来的调用是 `node_fs_ignored_default()`），
- * `readFileSync` 必然抛、永远走兜底 —— 那种「看起来在读、其实读不到」比没有更坏。
- * `main.ts` 不进浏览器 bundle，读文件是它的正常用法；`env` 由 Storybook 在编译期
- * 内联进 bundle（实测 bundle 里是字面量 `"3311"` 而不是 `process.env` 查找）。
+ * 浏览器侧没有 `node:fs`，`readFileSync` 必然抛、永远走兜底 —— 那种「看起来在读、
+ * 其实读不到」比没有更坏。`main.ts` 不进浏览器 bundle，读文件是它的正常用法；
+ * 值由 `main.ts` 编译期内联进 bundle（实测 bundle 里是字面量 `"3311"` 而不是
+ * `process.env` 查找）。
+ *
+ * **内联走哪条通道取决于 builder**（ISSUE #3372 从 webpack 迁到 vite 时改过）：
+ * webpack 版的 `@storybook/nextjs` 走 Storybook 的 `env` 选项（它 define 的是
+ * `process.env.<KEY>`）；vite 版把 `env` 落到 `import.meta.env`、落不到本模块
+ * 的读取面，所以承重的那条改由 `.storybook/main.ts` 的 `viteFinal` + `define`
+ * 承担（define 整个 `process.env` 对象 —— 本模块是**计算属性访问**
+ * `process.env[KEY]`，只 define 具体键会被 `process.env` → `{}` 先命中）。
+ * **本模块这三行一个字都不用改**，因为 define 的是整个对象。
  *
  * 类型与字段名由入库的 `app-origin-defaults.ts` 承担，所以本模块与 tsc 都不依赖
  * 那份生成件：它缺了只是一种**常态**（没跑过工作台的新检出）。

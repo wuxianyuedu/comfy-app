@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { ParamOwnerTag } from "~/components/studio/workflow-library/ParamOwnerTag";
 

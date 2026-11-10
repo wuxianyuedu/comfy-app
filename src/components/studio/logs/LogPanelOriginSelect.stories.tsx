@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { OriginSelect } from "~/components/studio/logs/LogPanelOriginSelect";
 import { useLogPanel } from "~/components/studio/logs/LogProvider";

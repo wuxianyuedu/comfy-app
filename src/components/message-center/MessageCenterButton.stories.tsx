@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { MessageCenterButton } from "./MessageCenterButton";
 import { messageSceneArgType } from "../../../.storybook/message-center-sources";

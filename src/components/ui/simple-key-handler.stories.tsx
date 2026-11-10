@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { isRecord } from "~/lib/is-record";

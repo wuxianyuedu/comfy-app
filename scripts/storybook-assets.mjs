@@ -99,12 +99,15 @@ export function ensureStorybookAssets(outDir) {
 /**
  * 把**本检出的解析链端口**写成一份 JSON，供注入层读。
  *
- * 为什么走「现生成一份数据」这条路（而不是 DefinePlugin / 环境变量）：
- *  · **环境变量到不了浏览器**：Storybook 的 webpack 把 `process.env` 换成一个
- *    白名单对象字面量（实测编出来的 bundle 里只有 `NODE_ENV` / `NODE_PATH` /
- *    `STORYBOOK` / `PUBLIC_URL`），业务变量进不去；
- *  · **DefinePlugin 要直接依赖 webpack**：它只经 `@storybook/nextjs` 传递引入，
- *    不在本仓的直接依赖里，`import "webpack"` 解析不到。
+ * 为什么走「现生成一份数据」这条路（而不是构建期常量注入口 / 环境变量）：
+ *  · **环境变量到不了浏览器**：构建器只把白名单里的变量编进 bundle
+ *    （webpack 版实测是 `NODE_ENV` / `NODE_PATH` / `STORYBOOK` / `PUBLIC_URL`；
+ *    vite 版只认 `envPrefix` 前缀的那些），业务变量进不去；
+ *  · **构建期常量注入口要直接依赖构建器**：webpack 的 `DefinePlugin` 只经
+ *    `@storybook/nextjs` 传递引入，不在本仓的直接依赖里，`import "webpack"`
+ *    解析不到（vite 版对应的是 `config.define`，但它同样只认**字面量成员表达式**
+ *    `process.env.KEY`，而注入层那边是**计算属性访问** `process.env[KEY]` ——
+ *    这条路怎么走见 `.storybook/main.ts` 的 `viteFinal` 那段说明）。
  *
  * 而应用端口**必须**是当前检出算出来的那一个：它由检出路径推导（3200~3999），
  * 写死一个值在别人的 checkout 上必然错。所以跟着启动脚本现算一次。

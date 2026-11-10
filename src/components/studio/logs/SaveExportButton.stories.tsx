@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { SaveExportButton } from "~/components/studio/logs/SaveExportButton";
 import { useLogPanel } from "~/components/studio/logs/LogProvider";
