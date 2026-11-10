@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { WorkshopStageItem } from "~/components/workshop/WorkshopStageItem";
 import { STAGE_DEFS } from "~/components/workshop/stage-config";

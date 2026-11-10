@@ -1,5 +1,5 @@
 import { Copy, Download, FolderOpen, Settings, Share2, Trash2 } from "lucide-react";
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { Button } from "~/components/ui/button";
 import {

@@ -35,7 +35,7 @@
  *    「横幅 + 时间线里那行」这对关系在画布上就是真的。
  */
 
-import type { Decorator } from "@storybook/nextjs";
+import type { Decorator } from "@storybook/nextjs-vite";
 
 import {
   appendWorkflowRunLog,

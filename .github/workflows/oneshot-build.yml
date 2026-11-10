@@ -1,0 +1,98 @@
+# 单跑生产构建（镜像档）—— 对位 `.cnb.yml` 已退役的「单跑生产构建」档（ISSUE #3504）
+#
+# #3504 起 CNB 侧不再执行构建：`web_trigger_build` / `api_trigger_build` 两条触发口
+# 改为单格派发（`scripts/ci-ga-dispatch.mjs --preset build`）落到本 workflow。
+# 保留「只跑一档」的粒度：刚合完一笔碰构建链的改动、想立刻验一次的人不必等夜里
+# 那一轮 `daily.yml`，也不为安装 / 建库之外的格付费。
+#
+# step 清单逐字对位 CNB `.oneshot-build` 锚点退役前的三格（判据
+# `tests/ci-ga-trigger-map.test.ts` 钉「本文件与 daily.yml 的对应 step 同款判据」）：
+#   安装依赖 → 同步数据库表结构 → 生产构建（`ci-daily-build.mjs`，与每日同一入口 ——
+#   含产物级两道防线 `check-standalone-contents` / `check-bundle-budget` 与冒烟）。
+# ⚠️ 不带 CNB 每日档的「每日新鲜度账」：单跑口径答的是「这一笔能不能构建出来」，
+#    不是「主干的新鲜度账今天有没有人记」（那是 schedule 档的事，同 CNB 单跑旧档）。
+#
+# 与 daily.yml 的两处同款差异（镜像档一贯口径）：
+#   · 安装用裸 `pnpm install --frozen-lockfile`（缓存由 setup-node 的 `cache: pnpm` 承担，
+#     CNB 那套槽登记在 GA 侧是空转）。
+#   · 无 `ci-cp936-exit.mjs` 包裹（那是中文 Windows 自托管控制台的转码层；GitHub runner
+#     原生 UTF-8，直跑真命令）。
+#
+# `workflow_dispatch`（可指 sha）是唯一入口（CNB 触发口 + 手动）：本档**没有 schedule**
+# —— 单跑从来是按需档，定时那一轮归 daily.yml。
+# `uses:` 版本口径同 daily.yml 文件头（有 v7 上 v7；pnpm/action-setup 只到 v6）。
+name: Oneshot build (mirror)
+
+# 只读代码、上传 artifact；不写仓库。
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      head_sha:
+        description: 要构建的那一笔 sha（留空 = 默认分支 HEAD）
+        required: false
+        default: ""
+
+concurrency:
+  # 对位 CNB 已退役的 `.lock-oneshot-build`：同一档连点两次只留最新那一跑。
+  # 与 daily 的 `group: daily` 是两把 —— 两件事各自要结论，互不掐停。
+  group: oneshot-build
+  cancel-in-progress: true
+
+env:
+  SKIP_ENV_VALIDATION: "1"
+  BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
+  CI: "true"
+  # 主体=master ⇒ 构建缓存槽与新鲜度读数按主干账走（对位 CNB 单跑那格的同名键）。
+  COMFY_CI_SUBJECT: "master"
+  # runner 不带 git 身份（#3095 同因）：ci-daily-build 的记账链里有真建提交的用例形态时
+  # 不至于落在 Author identity unknown 上。判据一字不改。
+  GIT_AUTHOR_NAME: ci-mirror
+  GIT_AUTHOR_EMAIL: ci-mirror@users.noreply.github.com
+  GIT_COMMITTER_NAME: ci-mirror
+  GIT_COMMITTER_EMAIL: ci-mirror@users.noreply.github.com
+
+jobs:
+  oneshot-build:
+    runs-on: ubuntu-24.04
+    # 三格预算之和（20 + 30 + 30）量级之上的整数档；GitHub 单 job 硬上限 6h，这条在它之内。
+    timeout-minutes: 90
+    steps:
+      - name: 检出（按派发那笔 sha）
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.head_sha || github.sha }}
+          # 构建链本身不读历史；与 daily.yml 同回全历史，是「单跑与每日同形」的形态对齐，
+          # 避免哪天给 build 链加一条读历史的判据时这里先假红。
+          fetch-depth: 0
+          # 产物装配会把 public/ 下的字体资产嵌进产物；只检 LFS 指针文件就是坏包。
+          # 对象由 push 镜像那一格 `git lfs push` 送到。
+          lfs: true
+
+      - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
+        uses: pnpm/action-setup@v6
+
+      - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+
+      # 以下三 step 与 daily.yml 的同名 step 同款判据（命令逐字相同；差异只有
+      # 「哪一档带着跑」—— 单跑不带每日档的新鲜度账与后续格）。
+      - name: 安装依赖（allowBuilds 清单见 pnpm-workspace.yaml）
+        timeout-minutes: 20
+        run: pnpm install --frozen-lockfile
+
+      - name: 同步数据库表结构（cnb 同款判据一字不改）
+        timeout-minutes: 30
+        run: node scripts/db-push.mjs
+
+      - name: 生产构建（cnb 同款判据一字不改）
+        timeout-minutes: 30
+        env:
+          # 构建缓存槽开关同 CNB 旧档与 daily.yml 同名 step（机制见 scripts/ci-build-cache-slot.mjs 头注）。
+          COMFY_CI_BUILD_CACHE: "1"
+        run: node scripts/ci-daily-build.mjs

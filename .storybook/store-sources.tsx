@@ -25,7 +25,7 @@
  * 「store 能不能存数组」，不是「面板长什么样」。
  */
 
-import type { Decorator } from "@storybook/nextjs";
+import type { Decorator } from "@storybook/nextjs-vite";
 
 import { parseFileLogs, useLogStore, type LogEntry } from "~/components/studio/logs/log-store";
 

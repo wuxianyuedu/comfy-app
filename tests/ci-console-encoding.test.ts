@@ -7,9 +7,6 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-/* 每个 stage 现在外面都包着 `ci-cp936-exit.mjs`（ISSUE #1977 的 CP936 出口），
- * 下面那两条「命令调用行」的判据要剥掉它才认得出被包的那条命令。 */
-import { unwrapCp936 } from "../scripts/ci-cp936-exit.mjs";
 import {
   applyConsoleEncoding,
   codePageIsUtf8,
@@ -132,35 +129,41 @@ describe("控制台输出编码：流水线上真的在纠它", () => {
     return next < 0 ? rest : rest.slice(0, next + 1);
   };
 
-  it("自托管流水线的**第一格**自己就把控制台编码钉住（在它打任何中文之前）；平台池格不钉", () => {
-    /* 这一条原来钉「第一步 = `工具链自证`」，2026-10-19 那一格撤到每日档后 PR 第一格换成 `镜像身份`，于是它红的方向成了**名字**而不是危险本身。
-     * 危险不变的那半是：第一个 stage 之前没人钉 `[Console]::OutputEncoding`，它打的每行非 ASCII 都会按宿主代码页（中文 Windows 是 CP936）落进平台日志
-     * （ISSUE #1959 的 `宸ュ叿閾捐嚜璇?` 就是这么来的）。所以按**位置**问不按名字问：每条流水线的第一个 stage，自己的 script 必须在任何输出之前先钉编码 ——
-     * 与那格叫什么、挂在哪个触发口无关，下次再挪档它不会变成假红。
-     * #3478 起 `.gates`（质量门禁主列）迁平台池 Linux —— 那一侧没有「宿主代码页」这回事，
-     * PowerShell 前缀反而不许带（契约在 no-platform-ci-config），所以它从本条射程摘出，
-     * 转为反面断言；`.daily-gates`（自托管每日/单跑/包）继续钉。 */
+  it("（#3504 反向登记）自托管执行面已整体退役：`.daily-gates` 锚与编码纠偏命令都不许回来", () => {
+    /* #3504 起构建执行全在 GA（Linux runner，无宿主代码页问题）；CNB 侧剩余的格
+     * 全跑在平台池 Linux 容器里。`.daily-gates` 锚点与 `--apply` 命令随执行面退役
+     * —— 谁把自托管 Windows 执行格加回 `.cnb.yml`，就把本条的**正向**判据
+     * （第一格先钉 `[Console]::OutputEncoding`，#1959）一起接回来。 */
     const yml = read(".cnb.yml");
-    for (const anchor of [/^\.daily-gates:[^\n]*$/m]) {
-      const lines = firstStageBody(yml, anchor)
-        .split("\n")
-        .filter((l) => l.trim() !== "");
-      const scriptAt = lines.findIndex((l) => /^\s+script:/.test(l));
-      expect(scriptAt, `锚点 ${anchor} 的第一格没有 script 行`).toBeGreaterThan(-1);
-      /* 两种形态都要认：单行 `script: $enc=…; node …`，与块标量 `script: |` 之后的第一行。 */
-      const scriptLine = lines[scriptAt] ?? "";
-      const isBlock = scriptLine.trim() === "script: |";
-      const firstStatement = lines[scriptAt + (isBlock ? 1 : 0)] ?? "";
-      expect(
-        firstStatement,
-        `锚点 ${anchor} 的第一格在打中文之前没钉 [Console]::OutputEncoding：${firstStatement
-          .trim()
-          .slice(0, 90)}`,
-      ).toContain("[Console]::OutputEncoding");
-    }
-    /* 平台池侧（质量门禁主列，#3478）：script 不许带 PowerShell 前缀 —— 它在 Linux 上
-     * 会被 sh 拆碎当场退 127（与 no-platform-ci-config 的质量门禁段同一组判据）。 */
-    const gatesLines = firstStageBody(yml, /^\.gates:[^\n]*$/m)
+    expect(
+      yml,
+      "`.daily-gates` 锚点回来了 —— 自托管执行清单随 #3504 退役，见 no-platform 台账",
+    ).not.toMatch(/^\.daily-gates:/m);
+    /* 只看执行面：剥掉整行注释再判 —— `.cnb.yml` 的历史读数注释里**提到**脚本名
+     * （规范 §13.5.3.5 的出处指引）不算执行者，反向登记管的是 `script:` 命令。 */
+    const code = yml
+      .split("\n")
+      .filter((l) => !l.trimStart().startsWith("#"))
+      .join("\n");
+    expect(
+      code,
+      "`.cnb.yml` 又在执行 ci-console-encoding --apply —— 编码纠偏的执行面已随 #3504 退役",
+    ).not.toContain("ci-console-encoding.mjs");
+  });
+
+  it("纠编码脚本留盘（本地开发仍用），但配置里没有它的执行者", () => {
+    expect(read("scripts/ci-console-encoding.mjs").length, "脚本留盘").toBeGreaterThan(0);
+    const code = read(".cnb.yml")
+      .split("\n")
+      .filter((l) => !l.trimStart().startsWith("#"))
+      .join("\n");
+    expect(code).not.toContain("ci-console-encoding");
+  });
+
+  it("平台池侧（质量门禁主列）：第一格的 script 不许带 PowerShell 编码前缀", () => {
+    /* 它在 Linux 上会被 sh 拆碎当场退 127（与 no-platform-ci-config 的质量门禁段
+     * 同一组判据）。#3504 起 `.gates` 里只剩回读格（Linux 容器），这一形态照旧成立。 */
+    const gatesLines = firstStageBody(read(".cnb.yml"), /^\.gates:[^\n]*$/m)
       .split("\n")
       .filter((l) => l.trim() !== "");
     const gatesScript = gatesLines.find((l) => /^\s+script:/.test(l)) ?? "";
@@ -168,36 +171,6 @@ describe("控制台输出编码：流水线上真的在纠它", () => {
       gatesScript,
       "`.gates` 第一格（平台池）带上了 PowerShell 编码前缀 —— sh 会当场退 127",
     ).not.toContain("[Console]::OutputEncoding");
-  });
-
-  it("纠编码那句仍在**它所在的那一格**里，且排在会打中文的命令之前", () => {
-    /* 名字不写死（上面那条管位置、这条管顺序）：判的是「`--apply` 与 `ci-toolchain-selfcheck` 同一格，且 apply 在前」。找的是**命令调用行**
-     * （行首就是 `node …`），不是「这个文件名的任意一次出现」——那一步的说明注释里正当地写着同一个文件名，按 `indexOf` 找会把注释算成调用，
-     * 于是这条顺序判据自己判错方向。 */
-    const yml = read(".cnb.yml");
-    const applyAt = yml.indexOf("ci-console-encoding.mjs --apply");
-    expect(applyAt, "没有人纠控制台输出编码 —— 日志乱码那一格因此没有任何执行者").toBeGreaterThan(
-      -1,
-    );
-    /* 从 apply 往上回到它所属那一格的 `- name:`、往下到下一格之前为止：
-     * 拿「自己那一格」当窗口，而不是「从这一格一直到文件末尾」（原来的写法）。 */
-    const stageAt = yml.slice(0, applyAt).lastIndexOf("\n  - name:");
-    expect(stageAt, "`--apply` 不在任何一个 stage 块里").toBeGreaterThan(-1);
-    const nextAt = yml.slice(applyAt).search(/\n {2}- name:/);
-    const block = yml.slice(stageAt + 1, nextAt < 0 ? undefined : applyAt + nextAt);
-    const invoked = block
-      .split("\n")
-      .findIndex((l) =>
-        unwrapCp936(l.trim()).startsWith("node scripts/ci-toolchain-selfcheck.mjs"),
-      );
-    expect(invoked, "同一步里找不到工具链自证的命令调用行").toBeGreaterThan(-1);
-    const applyLine = block
-      .split("\n")
-      .findIndex((l) => unwrapCp936(l.trim()).startsWith("node scripts/ci-console-encoding.mjs"));
-    expect(applyLine, "同一步里找不到纠编码的命令调用行").toBeGreaterThan(-1);
-    expect(applyLine < invoked, "纠编码排在了第一次中文输出之后 —— 那一段照着乱码打出来").toBe(
-      true,
-    );
   });
 
   it("「环境前提」把读数打出来（每一跑都能读到代码页，不靠人去猜）", () => {

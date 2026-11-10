@@ -18,11 +18,7 @@ import {
   planBuildCache,
   withBuildCacheSlot,
 } from "../scripts/ci-build-cache-slot.mjs";
-import {
-  CACHE_ROOT_ENV,
-  resolveBuildCacheRoot,
-  resolveCacheRoot,
-} from "../scripts/ci-cache-slot.mjs";
+import { resolveBuildCacheRoot } from "../scripts/ci-cache-slot.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
 const FACE = "a".repeat(64);
@@ -273,27 +269,14 @@ describe("槽根：与依赖面那套槽同源、不同目录", () => {
   const store = path.join(path.parse(ROOT).root, ".pnpm-store", "v11");
   const run = () => ({ status: 0, stdout: `${store}\\n` });
 
-  it("两者同卷、不同目录（混在一个根下时依赖面那侧的淘汰会删掉这边在用的目录）", () => {
-    const deps = resolveCacheRoot({ cwd: ROOT, env: {}, run });
+  it("构建缓存槽的根带自己的目录名（与成品 / 工具两套根互不相扰）", () => {
     const build = resolveBuildCacheRoot({ cwd: ROOT, env: {}, run });
-    expect(deps.root).not.toBeNull();
     expect(build.root).not.toBeNull();
-    expect(path.parse(String(build.root)).root).toBe(path.parse(String(deps.root)).root);
-    expect(String(build.root)).not.toBe(String(deps.root));
     expect(String(build.root)).toContain("ci-build-cache");
   });
 
-  it("显式出口只覆盖依赖面那套槽（构建缓存槽不跟着它搬走 —— 它的语义是「那个槽根」）", () => {
-    const env = { [CACHE_ROOT_ENV]: "H:/somewhere" };
-    expect(resolveCacheRoot({ cwd: ROOT, env, run }).root).toBe("H:/somewhere");
-    const build = resolveBuildCacheRoot({ cwd: ROOT, env, run });
-    expect(build.root).toBeNull();
-    expect(build.from).toContain(CACHE_ROOT_ENV);
-  });
-
-  it("问不出 store ⇒ 两边都答「不猜路径」（宁可不省，也不猜一个卷）", () => {
+  it("问不出 store ⇒ 答「不猜路径」（宁可不省，也不猜一个卷）", () => {
     const noStore = () => ({ status: 1, stdout: "" });
     expect(resolveBuildCacheRoot({ cwd: ROOT, env: {}, run: noStore }).root).toBeNull();
-    expect(resolveCacheRoot({ cwd: ROOT, env: {}, run: noStore }).root).toBeNull();
   });
 });

@@ -1,11 +1,12 @@
-# 手动触发按钮 —— 与 `.cnb.yml` 里的 `web_trigger_daily` 那一条**配成一对**
+# 手动触发按钮 —— 与 `.cnb.yml` 里的 `web_trigger_*` 那一族**配成一对**
 #
 # 官方出处：`docs.cnb.cool/zh/build/web-trigger.html`。要点三条，都是「写错了不报错」那一族：
 #
 #   1. **按钮定义在这个文件里，流水线定义在 `.cnb.yml` 里**，两边靠 `event:` 这个名字对上。
 #      对不上的两种失效形态：这里写了按钮、`.cnb.yml` 没有 `web_trigger_<名字>:` 那个键 ⇒
 #      按下去什么都不跑；反过来有键没按钮 ⇒ 那条流水线永远等不到人点。
-#      两个方向都由判据判（`tests/no-platform-ci-config.test.ts`）—— 这正是本仓对
+#      两个方向都由判据判（`tests/no-platform-ci-config.test.ts` 与
+#      `tests/ci-ga-trigger-map.test.ts`）—— 这正是本仓对
 #      「声明在一处、事实在另一处」的一贯处置。
 #   2. `reg` 是**正则**，控制「这个按钮在哪些分支的页面上显示」。写 `^master$` 而不是 `master`：
 #      后者作为正则会前缀匹配，`master-anything` 那样的分支也会长出按钮，而按下去跑的是
@@ -15,52 +16,59 @@
 #
 # 没有写 `permissions`：官方默认就是「仅仓库写权限者能触发」，比再列一份角色名单强 ——
 # 那份名单会漂（人的角色变了，配置不会跟着变），而这里的失败形态是「按了没反应」。
-# 没有写 `inputs`：这些按钮**各自指向一条固定清单**，没有一个按钮需要收参数 ——
+# 没有写 `inputs`：这些按钮**各自指向一个固定的 GA 派发档**，没有一个按钮需要收参数 ——
 # 「单独跑某一档」是靠**多开按钮**实现的（每个按钮配 `.cnb.yml` 里一条流水线），
 # 不是靠给一条流水线喂「跑哪几格」的参数。差别是刻意的：参数化的那份会长成
 # 「按输入内容分叉的档」，而它红的时候没人能从配置里读出这次跑的是什么。
+#
+# ⚠️ #3504 起这些按钮**都不在本机跑构建**：每条流水线的正文就是一格 `GA 派发·<档>`
+# （跑在平台池 Linux 容器上，把 master HEAD 派发到镜像仓 GitHub Actions 的对应
+# workflow）；实际构建全部由 GA runner 执行，档位 ⇄ workflow 文件的配对登记在
+# `scripts/ci-ga-trigger-map.mjs`（唯一出处，判据 import 它）。
 branch:
   - reg: ^master$
     buttons:
       - name: 跑每日档（全量单测 / 生产构建 / 全量 E2E）
         description: >-
-          以 master 当前 HEAD 跑一遍与每天定时那一跑完全相同的那七格
-          （时刻见 `.cnb.yml` 的 `crontab` 事件键；清单是同一份 `.daily-gates` 锚点）。红了先按「上一次绿的构建」
-          取提交区间定位，别按负责人机制直接派单。
+          以 master 当前 HEAD 派发 GA 的 `daily.yml` —— 与每天定时那一跑（北京时间 01:37）
+          是**同一个 workflow、同一份 step 清单**（全量单测 / 生产构建 / 全量 E2E / 覆盖率…）。
+          红了先按「上一次绿的构建」取提交区间定位，别按负责人机制直接派单。
         event: web_trigger_daily
       # ── 单跑某一档（三个按钮各对 `.cnb.yml` 里一条流水线）────────────────
-      # 每个按钮跑的是「最小前提 + 目标那一格」，六条流水线各引用一张**整表锚点**，
-      # 所以它与每日档跑的是同一份东西，不是抄的第二份。前提集与理由见
-      # `scripts/ci-oneshot-gates.mjs`；按钮 ↔ 事件键的配对由判据双向核对
+      # 每个按钮派发 GA 侧一个专用的 oneshot workflow（「最小前提 + 目标那一格」），
+      # 共享格与每日档逐字同形（判据钉着），不是抄的第二份。档位 ⇄ workflow 文件的
+      # 配对登记在 `scripts/ci-ga-trigger-map.mjs`；按钮 ↔ 事件键的配对由判据双向核对
       # （这里写了按钮而配置没那个键 ⇒ 按下去什么都不跑；反过来 ⇒ 永远没人点）。
       # ⚠️ 单跑**不等于每日档出勤**：它证「这一档现在过不过」，不证「今天定时那一跑跑过了」
       # （那条区分见 ISSUE #2114）。
       - name: 单跑全量E2E（带安装 / 建库 / 浏览器）
         description: >-
-          以 master 当前 HEAD 单独跑「每日安装依赖 → 每日同步数据库表结构 → 每日浏览器安装 → 每日全量E2E」。
-          想只看 E2E 那一格的答案时点这个，不必等定时那一跑，也不为另外六格付费。
-          与每日档共用同一把锁：定时那一跑还在跑时会互相掐停（ISSUE #2114 记的那条）。
+          以 master 当前 HEAD 派发 GA 的 `oneshot-e2e.yml`：安装依赖 → 同步数据库表结构 →
+          浏览器安装 → 全量E2E。想只看 E2E 那一格的答案时点这个，不必等定时那一跑，
+          也不为别的格付费。各档各一把锁（CNB）+ 各一个并发组（GA），互不掐停；
+          同一档连点两次才掐掉旧跑。
         event: web_trigger_e2e
       - name: 单跑生产构建（带安装 / 建库）
         description: >-
-          以 master 当前 HEAD 单独跑「每日安装依赖 → 每日同步数据库表结构 → 每日生产构建」，
-          里面那串仍是 `pnpm run build` 那条链（next build → 剥私有输入 → 数产物 → 冒烟）。
+          以 master 当前 HEAD 派发 GA 的 `oneshot-build.yml`：安装依赖 → 同步数据库表结构 →
+          生产构建，里面那串仍是 `pnpm run build` 那条链（next build → 剥私有输入 → 数产物 → 冒烟）。
           刚合完一笔碰构建链的改动、想立刻验一次的人不该等到夜里。
         event: web_trigger_build
       - name: 单跑全量单测（带安装）
         description: >-
-          以 master 当前 HEAD 单独跑「每日安装依赖 → 每日单元测试」（`full-suite-run.mjs` 整档，
-          含 §13.6.4.1 那张负载档位表）。它跑绿会刷整档凭证 —— 所以并发在场时别拿它当量级读。
+          以 master 当前 HEAD 派发 GA 的 `oneshot-unit.yml`：安装依赖 → 全量单测
+          （`full-suite-run.mjs` 整档，含 §13.6.4.1 那张负载档位表）。
+          它跑绿会刷整档凭证 —— 所以并发在场时别拿它当量级读。
         event: web_trigger_unit
       # ── 桌包那一档（ISSUE #2503）：与每日那一档**不同一条流水线** ────────────
-      # 它跑的是「装依赖 → 壳工具链自证 → 工具预置 → `pnpm tauri build`（内含 `pnpm run build` 那条产物链）
-      # → 发布到常驻目录」，
-      # 成品落在**这台机的常驻根**（`ci-artifacts/<包名>`，由 `pnpm store path` 所在卷推导），
-      # 留最近 2 份、`latest.txt` 是指针文件。取包不必等定时那一跑，也不必自己在本地打。
-      - name: 打桌面成品包并发布（留 2 份）
+      # 它派发 GA 的 `package-desktop.yml`（windows runner）：「装依赖 → 壳工具链自证 →
+      # 桌包工具预置 → `pnpm tauri build`（内含 `pnpm run build` 那条产物链）→ 上传安装版 /
+      # 免安装版 → 发布到滚动 Release（nightly）」。成品在 GitHub 的 run artifacts 与
+      # 仓库的 nightly Release 上取，不在本机常驻根。每晚 03:37（北京时间）也有一次定时桌包。
+      - name: 打桌面成品包并发布（GA 构建）
         description: >-
-          以 master 当前 HEAD 跑「安装依赖 → 壳工具链自证 → 桌包工具预置 → `pnpm tauri build` → 发布到常驻目录」。
-          产物不在工作区里（工作区每跑新建、收尾整目录删），发布那一格把安装包拷到常驻根并按
-          sn 落目录 + 写 manifest，轮转只留最近 2 份。与每日档各用一把锁，互不掐停；
+          以 master 当前 HEAD 派发 GA 的 `package-desktop.yml`（windows runner）：
+          桌包工具预置 → `pnpm tauri build` → 上传安装版 / 免安装版 artifact → 发布到滚动 Release（nightly）。
+          取包去 GitHub 的 Release / run artifacts。与每日档各用一把锁 + 一个并发组，互不掐停；
           红了是「这一跑没能把包放出去」，不是「今天没有新包」—— 两种读数在日志里逐字不同。
         event: web_trigger_package

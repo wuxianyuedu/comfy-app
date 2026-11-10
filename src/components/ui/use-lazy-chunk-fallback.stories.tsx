@@ -1,5 +1,5 @@
 import type React from "react";
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { ErrorBoundary } from "~/components/ui/error-boundary";
 import { useLazyChunkFallback } from "~/components/ui/use-lazy-chunk-fallback";

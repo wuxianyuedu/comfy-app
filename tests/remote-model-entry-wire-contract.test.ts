@@ -82,6 +82,8 @@ describe("远端模型条目 ⇄ configSave 的入参判据", () => {
         kind: "image",
         /* 回读只带「存过密钥」这个布尔：明文密钥一律不落客户端（台账 A4）。 */
         hasApiKey: true,
+        // #3501：历史遗留条目没有供应商归属。
+        providerId: null,
       },
     ]);
   });

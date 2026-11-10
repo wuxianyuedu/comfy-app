@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { WorkflowPreviewRunFeedback } from "~/components/studio/workflow-library/WorkflowPreviewRunFeedback";
 import type { Phase } from "~/components/studio/workflow-library/hooks/use-generation-runner";

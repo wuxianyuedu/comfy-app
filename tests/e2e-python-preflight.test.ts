@@ -155,31 +155,40 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     expect(text).toMatch(/COMFY_CLI_PYTHON_KEY\]\s*=\s*pythonPreflight\.interpreter/);
   });
 
-  it("`.cnb.yml` 里 E2E 之前那一步答的就是 Python 这一格", () => {
-    const yml = readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
-    /* 取的是「E2E 那一步的入口」，不是「E2E 那一步当时带的参数」：原来写 `node scripts/e2e-run.mjs --grep=@critical`，每日档改跑**整档**那一批里
-     * 被去掉后，`indexOf` 回 `-1`，而 `-1` 不比任何正数小 ⇒ 这条判据当场红。红得对（它确实在说「E2E 那一行被改了」），但**判据要的从来是顺序**，
-     * 不是那一串参数 —— 参数形态由 `tests/no-platform-ci-config.test.ts` 判（那里钉「每日那一格不许带 `--grep`」），这里不抄第二轮（§12.12）。 */
-    const pythonAt = yml.indexOf("node scripts/ci-toolchain-selfcheck.mjs --python-only");
-    const e2eAt = yml.indexOf("node scripts/e2e-run.mjs");
-    /* **前置断言**：两侧都必须取到数。`indexOf` 取不到回 `-1`，而 `-1` 参与大小比较
-     * 仍然「像一个答案」—— 那正是「解析失败伪装成结论」那一族（没有这两句，这一格会在
-     * 两边都找不到时继续绿着，从此不再判任何东西）。 */
+  it("（#3504 反向登记）E2E 执行面搬去 GA daily.yml；`.cnb.yml` 不许再有入口行", () => {
+    /* Python 预检的**平台级前置格**（`--python-only`）随 #3504 整体退役：daily.yml 文件头
+     * 「刻意不承接」清单写明 —— 自托管宿主机事实读数（每日 Python 可用性 / 探针读数 /
+     * 工具链自证）不搬，GA runner 的工具链由镜像与 setup-* 钉死。判据本体没丢：它仍在
+     * E2E 入口**内部**先跑（上面「`pnpm test:e2e` 在起 Playwright 之前判这一格，且判红不放行」
+     * 那一格判着），顺序由构造保证，平台级早停格不再需要。
+     * 这里钉两件事：E2E 的执行者在 GA daily.yml 里；`.cnb.yml`（剥掉整行注释，历史注释里
+     * 提到名字不算执行者）两个入口行都不许回来。 */
+    const daily = readFileSync(path.join(ROOT, ".github", "workflows", "daily.yml"), "utf8");
+    const e2eAt = daily.indexOf("node scripts/e2e-run.mjs");
     expect(
-      pythonAt,
-      "`.cnb.yml` 里没有 Python 预检那一步了 —— 顺序无从比起",
+      e2eAt,
+      "GA daily.yml 里没有 E2E 那一步了 —— 判据失去执行者，等于把这条接线删了",
     ).toBeGreaterThanOrEqual(0);
-    expect(e2eAt, "`.cnb.yml` 里没有 E2E 那一步了 —— 顺序无从比起").toBeGreaterThanOrEqual(0);
-    // 顺序是判据的一部分：它必须排在 E2E 那一步**之前**。
-    expect(pythonAt).toBeLessThan(e2eAt);
-    /* ⚠️ 顺带钉住**命令形态**：`--grep` 的值必须与开关连成一个 token（`=`）。写成空格（`--grep @critical`）时平台 runner 的命令行会把 `@` 开头的
-     * 裸 token 吃掉，Playwright 只收到没有值的 `--grep` —— 现场 `cnb-cdt-1k51s6mf1`：`error: option '-g, --grep <grep>' argument missing`。这条只在
-     * **平台**上红：本地 bash / PowerShell 两种写法都传得进去，属「停用期间看不见」那一类（`E2E 关键流程` 此前从没在那台节点上执行过）。今天 E2E 那一格
-     * 不带 `--grep`（整档跑），所以这一句判的是**回潮时的形状**：谁把收窄加回来，必须用 `=` 连写。 */
+
+    /* ⚠️ 命令形态钉在执行者所在的那份配置上：`--grep` 的值必须与开关连成一个 token（`=`）。
+     * 写成空格（`--grep @critical`）时平台 runner 的命令行会把 `@` 开头的裸 token 吃掉，
+     * Playwright 只收到没有值的 `--grep` —— 现场 `cnb-cdt-1k51s6mf1`：`error: option '-g, --grep <grep>'
+     * argument missing`。今天 E2E 那一格不带 `--grep`（整档跑），这一句判的是**回潮时的形状**：
+     * 谁把收窄加回来，必须用 `=` 连写。 */
     expect(
-      yml,
-      "`.cnb.yml` 里 E2E 那一步又写回了 `--grep @…`（空格那版）—— 平台命令行会吃掉那个 token",
+      daily,
+      "E2E 那一步又写回了 `--grep @…`（空格那版）—— 平台命令行会吃掉那个 token",
     ).not.toMatch(/e2e-run\.mjs\s+--grep\s+\S/);
+
+    const yml = readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
+    const code = yml
+      .split("\n")
+      .filter((l) => !l.trimStart().startsWith("#"))
+      .join("\n");
+    expect(
+      code.match(/ci-toolchain-selfcheck\.mjs|e2e-run\.mjs/g) ?? [],
+      "`.cnb.yml` 又出现工具链/E2E 入口行 —— 执行面已随 #3504 搬去 GA，CNB 只当触发入口",
+    ).toHaveLength(0);
   });
 
   it("本机真跑一次（这台机器上有没有 Python 都合法，判的是形状不空转）", () => {

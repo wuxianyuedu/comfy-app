@@ -391,22 +391,79 @@ export const llmConfig = sqliteTable("llmConfig", {
 });
 
 /**
+ * LLM 供应商表（#3501）：Base URL / API 格式 / API Key 挂在供应商上，
+ * 模型只声明「我属于哪个供应商」+ 自己的窗口 / 能力等配置。
+ *
+ * 为什么独立成表而不是继续塞进 `llmConfig`：用户会配多个供应商
+ * （OpenAI 兼容 / Anthropic / 自建网关），全局只有一份 apiKey 时换供应商
+ * 就得重填密钥；且远端模型的密钥与全局密钥是两回事，混在一格会互相覆盖。
+ */
+export const llmProvider = sqliteTable(
+  "llmProvider",
+  {
+    id: cuid(),
+    /** 供应商名（展示用），唯一 */
+    name: text("name").notNull(),
+    /** 接口地址（不含动作路径段，路径由 apiFormat 决定） */
+    baseUrl: text("baseUrl").notNull().default(""),
+    /** 接口格式：chat-completions / anthropic-messages / responses（词表见
+     *  `~/lib/llm/provider-types`；库里存字符串，读侧按白名单收窄） */
+    apiFormat: text("apiFormat").notNull().default("chat-completions"),
+    /** 供应商级密钥；密文(enc:v1:...)或历史明文。模型条目可另带自己的密钥。 */
+    apiKey: text("apiKey"),
+    createdAt: dateNotNull("createdAt")
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: dateNotNull("updatedAt")
+      .notNull()
+      .$defaultFn(() => new Date())
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [uniqueIndex("llmProvider_name_uniq").on(t.name)],
+);
+
+/**
  * 远端独立模型表（option C：与本地 Ollama 候选彻底分开存放）。
  * 设置页配置的「远端模型」落这里，不再与本地候选混在 llmConfig.extraModels。
  * 每个条目可带独立 baseUrl / apiKey —— apiKey 仅远端模型才有，本地模型没有。
+ *
+ * #3501 起每个模型可挂在 `providerId` 下（供应商提供 Base URL / 格式 / 密钥）；
+ * `providerId` 为空的行是历史遗留（旧设置页整份清单保存写入的），
+ * 首次读供应商列表时会被迁进「默认供应商」。
  */
 export const remoteModel = sqliteTable(
   "remoteModel",
   {
     id: cuid(),
-    /** 模型名，唯一（同名重复添加会被唯一索引拒绝） */
+    /** 模型名，唯一（同名重复添加会被唯一索引拒绝；运行时与工坊按名字引用） */
     name: text("name").notNull(),
-    /** 独立接口地址；空 = 跟随 llmConfig.baseUrl（远端全局默认） */
+    /** 所属供应商；NULL = 历史遗留条目（尚未归入供应商） */
+    providerId: text("providerId"),
+    /** 独立接口地址；空 = 跟随所属供应商 / llmConfig.baseUrl */
     baseUrl: text("baseUrl"),
+    /** 接口格式（#3517 起下移到模型级：同一供应商下文本 / 图片 / 视频模型
+     *  可能各用一套协议）。空 = 跟随所属供应商（历史行），读侧按白名单收窄。 */
+    apiFormat: text("apiFormat"),
     /** 独立密钥；仅远端模型持有。密文(enc:v1:...)或历史明文。 */
     apiKey: text("apiKey"),
     /** 用途：chat / image / video */
     kind: text("kind").notNull().default("chat"),
+    /** 是否启用（停用的模型不下发给工坊下拉、不参与按名解析） */
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    /** 上下文窗口（token）；NULL = 未知 */
+    contextWindow: integer("contextWindow"),
+    /** 最大输出 token；NULL = 未知 */
+    maxOutputTokens: integer("maxOutputTokens"),
+    /** 输入类型（JSON 数组：text / image / video / pdf） */
+    inputTypes: text("inputTypes", { mode: "json" }),
+    /** 模型能力（JSON 数组：structured-output / native-web-search / system-messages） */
+    capabilities: text("capabilities", { mode: "json" }),
+    /** 推理等级（JSON 数组；各家叫法不同，只做去重不做白名单） */
+    reasoningLevels: text("reasoningLevels", { mode: "json" }),
+    /** 推理参数映射（JSON：{ param, values }，见 `~/lib/llm/provider-types`） */
+    reasoningParamMapping: text("reasoningParamMapping", { mode: "json" }),
+    /** 「智能配置」：按模型名推断窗口 / 输出上限 / 输入类型（关掉 = 全部手填） */
+    smartConfig: integer("smartConfig", { mode: "boolean" }).notNull().default(true),
     /** 工坊按模式的输入/输出适配器（JSON 数组字符串；RemoteModeAdapter[]）。
      *  配置后工坊按该模型在对应模式下的字段映射发起请求，替代统一猜测。 */
     workshopAdapters: text("workshopAdapters"),
@@ -421,6 +478,7 @@ export const remoteModel = sqliteTable(
   (t) => [
     uniqueIndex("remoteModel_name_uniq").on(t.name),
     index("remoteModel_kind_idx").on(t.kind),
+    index("remoteModel_provider_idx").on(t.providerId),
   ],
 );
 
@@ -680,6 +738,8 @@ export type TaskImage = InferSelectModel<typeof taskImage>;
 export type WorkflowTemplate = InferSelectModel<typeof workflowTemplate>;
 export type WorkflowModelTag = InferSelectModel<typeof workflowModelTag>;
 export type LlmConfig = InferSelectModel<typeof llmConfig>;
+export type LlmProvider = InferSelectModel<typeof llmProvider>;
+export type LlmProviderInsert = InferInsertModel<typeof llmProvider>;
 export type RemoteModel = InferSelectModel<typeof remoteModel>;
 export type RemoteModelInsert = InferInsertModel<typeof remoteModel>;
 export type Skill = InferSelectModel<typeof skill>;

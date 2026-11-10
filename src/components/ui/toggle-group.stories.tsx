@@ -1,5 +1,5 @@
 import { AlignCenter, AlignLeft, AlignRight, Bold, Italic } from "lucide-react";
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 

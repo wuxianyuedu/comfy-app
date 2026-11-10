@@ -1,5 +1,5 @@
 import { FolderOpen, Home, Settings, Sparkles } from "lucide-react";
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import {
   Sidebar,

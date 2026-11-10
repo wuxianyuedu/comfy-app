@@ -14,6 +14,7 @@
 
 import { getLLMConfig } from "~/lib/llm/server";
 import { errorMessage } from "~/lib/error-message";
+import { httpFailureDetail } from "~/lib/llm/http-failure";
 import { INLINE_JSON_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 import {
   extractBase64DataUrl,
@@ -151,8 +152,9 @@ export async function readPayload(res: Response): Promise<unknown> {
   return res.json().catch(() => null);
 }
 
-/** 非 2xx 时取一次原始响应文本，供 `httpFailureDetail` 拼出可读原因。
- *  只读一次（`res.text()` 消费 body），因此仅在错误分支调用。 */
+/** 非 2xx 时读一次响应体原文（`res.text()` 消费 body，因此**必须排在
+ *  `readPayload` 之前**：反过来先 `json()` 再 `text()`，非 JSON 的原文永远
+ *  读不到 —— 网关的 HTML 错误页正是这样被丢掉的）。 */
 async function readRawText(res: Response): Promise<string> {
   try {
     return await res.text();
@@ -161,21 +163,10 @@ async function readRawText(res: Response): Promise<string> {
   }
 }
 
-/** 非 2xx 的统一错误文案（响应体截断，不把整页 HTML 灌进界面）。
- *
- *  非 JSON 响应体（网关的 HTML 错误页、反代的纯文本 502 等）此前会走
- *  `HTTP 503` 这条兜底，拼出来是 **`HTTP 503：HTTP 503`** —— 状态码说了两遍，
- *  而上游真正写的原因一个字都没带上，用户只能看到一个没有信息量的重复。
- *  现在把原始文本截断带出（同样限 240 字符，不把整页 HTML 灌进界面）。 */
-export function httpFailureDetail(status: number, payload: unknown, rawText = ""): string {
-  if (isRecord(payload)) {
-    return `HTTP ${status}：${clampText(JSON.stringify(payload), { maxLength: INLINE_JSON_SNIPPET_MAX, marker: "" })}`;
-  }
-  const snippet = clampText(rawText.trim(), {
-    maxLength: INLINE_JSON_SNIPPET_MAX,
-    marker: "",
-  });
-  return snippet ? `HTTP ${status}：${snippet}` : `HTTP ${status}`;
+/** 非 2xx → 可读归因（HTML 页面 / JSON / 纯文本同口径，唯一实现在
+ *  `~/lib/llm/http-failure`）；地址一并点名，用户能看出是哪条端点失败。 */
+async function failureDetail(res: Response, url: string): Promise<string> {
+  return httpFailureDetail({ body: await readRawText(res), status: res.status, url });
 }
 
 /** 额外参数（JSON 对象字符串）→ 逐键合并用的对象。 */
@@ -236,11 +227,17 @@ export async function callChat(
     }),
     signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
   });
-  const payload = await readPayload(res);
-  if (!res.ok || !isRecord(payload)) {
+  if (!res.ok) {
     return {
       ok: false,
-      detail: httpFailureDetail(res.status, payload, await readRawText(res)),
+      detail: await failureDetail(res, `${up.base}${up.path}`),
+    };
+  }
+  const payload = await readPayload(res);
+  if (!isRecord(payload)) {
+    return {
+      ok: false,
+      detail: `响应不是 JSON 对象（HTTP ${res.status}），无法解析回复`,
     };
   }
   const text = chatTextFrom(payload);
@@ -273,13 +270,13 @@ export async function callImage(
     }),
     signal: AbortSignal.timeout(MEDIA_TIMEOUT_MS),
   });
-  const payload = await readPayload(res);
   if (!res.ok) {
     return {
       ok: false,
-      detail: httpFailureDetail(res.status, payload, await readRawText(res)),
+      detail: await failureDetail(res, `${up.base}${up.path}`),
     };
   }
+  const payload = await readPayload(res);
   const url = extractMediaUrl(payload) ?? extractBase64DataUrl(payload);
   if (url === null) {
     return {
@@ -311,13 +308,13 @@ export async function callVideo(
     body: JSON.stringify({ model, prompt, ...extra }),
     signal: AbortSignal.timeout(MEDIA_TIMEOUT_MS),
   });
-  const payload = await readPayload(res);
   if (!res.ok) {
     return {
       status: "error",
-      detail: httpFailureDetail(res.status, payload, await readRawText(res)),
+      detail: await failureDetail(res, `${up.base}${up.path}`),
     };
   }
+  const payload = await readPayload(res);
   const directUrl = extractMediaUrl(payload);
   if (directUrl !== null) {
     return { status: "done", url: directUrl };

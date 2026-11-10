@@ -2980,6 +2980,14 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 同一个立案锚点 `*package_fail_stage`。判据（`tests/no-platform-ci-config.test.ts`）：桌包那几格
 不许出现在 `COMFYAPP_CI_DAILY_GATES` 里、两个触发口必须引用同一个 `*package_gates`。
 
+> ⚠️ **#3504（2026-11-10）起上面一段的 CNB 形态是历史**：`*package_gates` 锚点清单退役，
+> 两个触发口的正文收敛为一格 `GA 派发·桌面成品包`（`scripts/ci-ga-dispatch.mjs`），
+> 实际构建全部由 GA `package-desktop.yml`（windows runner）执行：桌包工具预置 →
+> `pnpm tauri build` → 上传安装版 / 免安装版 artifact → 发布滚动 Release（nightly，
+> 每晚北京时间 03:37 也有一次定时档）。**取包地在 GitHub 的 Release / run artifacts**，
+> 不再是本机常驻根 `ci-artifacts/<包名>`（留 2 份 + `latest.txt` 那一套随执行者退役）。
+> 档位 ⇄ workflow 文件的配对登记在 `scripts/ci-ga-trigger-map.mjs`。
+
 **发布档的触发与「三平台」现状（#2641，2026-10-31）**：设计里曾写「`tag: v*` 触发发布档、
 三平台（ubuntu / windows / macOS）打包，20–40min」—— 那是**前瞻**，不是今天的形状，也**不**
 在仓内任何配置里落地（仓库里没有 `tag` 事件键，只有 `pull_request` / `push` / `crontab` /

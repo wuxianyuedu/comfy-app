@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { AspectRatio } from "~/components/ui/aspect-ratio";
 import { fixed } from "~/lib/number-format";

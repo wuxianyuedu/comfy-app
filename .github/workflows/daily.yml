@@ -144,6 +144,10 @@ jobs:
         timeout-minutes: 20 # 对位 CNB `每日浏览器安装` 20m
         env:
           PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
+          # 与 CNB 同款（`cnb-rkr-1k510rsgg` 的取证）：180 MiB 包撞 Playwright 默认 30s
+          # **套接字**超时被掐断 —— 那不是「CDN 不通」的结论，是「这一次没量完」，
+          # 处置相反（换镜像 vs 放宽）。键缺失不会在解析期报错，只会在下一次下载时同形再红。
+          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
         run: node scripts/ci-toolchain-selfcheck.mjs --playwright-only
 
       - name: 全量E2E（cnb 同款判据一字不改）

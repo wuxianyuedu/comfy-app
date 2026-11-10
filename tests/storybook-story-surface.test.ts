@@ -54,7 +54,7 @@ export const thingVariants = cva("base", {
   });
 }
 
-const GOOD_STORY = `import type { Meta, StoryObj } from "@storybook/nextjs";
+const GOOD_STORY = `import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Thing } from "./thing";
 
 const meta = {
@@ -90,7 +90,7 @@ describe("故事面的判据（规范 16 §16.2.3.8）", () => {
   });
 
   it("放行适配件 —— 只要它把真组件渲染进去（注入层的常规写法，不许误伤）", () => {
-    const story = `import type { Meta, StoryObj } from "@storybook/nextjs";
+    const story = `import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Thing } from "./thing";
 
 /** 适配件：受控状态 / 值源解析都是这个形状（§16.2.3.6）。 */
@@ -117,7 +117,7 @@ export const Default: Story = {};
   });
 
   it("拦下真组件根本没接上的故事（画布上摆的是别的东西）", () => {
-    const story = `import type { Meta, StoryObj } from "@storybook/nextjs";
+    const story = `import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 function SomethingElse() {
   return <div>这不是 Thing</div>;
@@ -223,7 +223,7 @@ export const Probe = ({ label }: ProbeProps) => <div>{label}</div>;
 `,
     );
     const storyFile = join(dir, "probe.stories.tsx");
-    const story = `import type { Meta, StoryObj } from "@storybook/nextjs";
+    const story = `import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Probe } from "./probe";
 
 function ProbeHost({ tone }: { tone: string }) {
@@ -265,7 +265,7 @@ export function useProbe({ onPick }: ProbeProps) {
 `,
     );
     const storyFile = join(dir, "probe.stories.tsx");
-    const story = `import type { Meta, StoryObj } from "@storybook/nextjs";
+    const story = `import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { useProbe } from "./probe";
 
 function ProbeDemo() {
@@ -306,7 +306,7 @@ export function probeProps(): ProbeProps {
 `,
     );
     const storyFile = join(dir, "probe.stories.tsx");
-    const story = `import type { Meta, StoryObj } from "@storybook/nextjs";
+    const story = `import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { probeProps } from "./probe";
 
 function ProbeCard() {

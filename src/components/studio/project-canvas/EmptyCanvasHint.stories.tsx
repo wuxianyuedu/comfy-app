@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { EmptyCanvasHint } from "~/components/studio/project-canvas/EmptyCanvasHint";
 

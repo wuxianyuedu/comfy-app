@@ -7,14 +7,12 @@ import type { RuntimeLogController } from "~/components/studio/logs/use-runtime-
 import type { BackupEntry, PendingRestore } from "./use-settings-page-backup";
 import type { OllamaModel } from "~/lib/llm/ollama-client";
 import type { DesktopStoragePaths } from "~/lib/comfyui/desktop-storage-paths";
-import type { RemoteProbeResult } from "~/lib/llm/browser";
 import type {
   UsageTaskQueryInput,
   UsageTestInput,
   UsageTestResult,
 } from "~/lib/llm/usage-test-client";
 import { TASK_TYPES, type RemoteModelEntry, type TaskType } from "~/lib/llm/types";
-import type { RemoteModelDraftEntry } from "~/lib/llm/remote-model-schema";
 import type { CpuLimitMode } from "~/lib/comfyui/cpu-limit";
 
 export type Settings = {
@@ -94,10 +92,6 @@ export type SettingsPageDrafts = {
 export type SettingsPageController = {
   /** 跳转目标真正落定 —— 外壳命中锚点后调它（清空 `pendingJump` + 消费载荷）。 */
   ackJumpSection: () => void;
-  /* 入参形状由 lib 里那一份草稿→条目桥给出（`remoteModelEntryFromDraft` 的返回类型）：
-   * 这一层过去另写一遍字段，于是「弹窗拼的那枚条目」与「controller 收的那枚条目」
-   * 是两个各自自洽的形状。 */
-  addRemoteModel: (entry: RemoteModelDraftEntry) => Promise<{ error?: string; ok: boolean }>;
   /* 应用自更新（Tauri updater + process）：检测 / 下载安装 / 重启 */
   appUpdate: {
     /** 最近一次检测是否发现可用更新。 */
@@ -145,6 +139,12 @@ export type SettingsPageController = {
    *  共享输出）——**只读**；非桌面实例为 null（便携版 / venv 的目录只由启动参数
    *  决定）。与 `comfyInstance` 同为配置路径的函数，保存偏好后重取、不进轮询。 */
   comfyStorage: DesktopStoragePaths | null;
+  /** 提交一次 LLM 草稿局部补丁并立即落库（离散控件：模型选择 / 按任务温度等）。
+   *  成功静默、失败报错；返回本次结果供调用方回滚/刷新。 */
+  commitLlm: (patch: Partial<LlmConfig>) => Promise<{ error?: string; ok: boolean }>;
+  /** 提交一次偏好局部补丁并立即落库（离散控件：开关 / 单选 / CPU 档位等）。
+   *  成功静默、失败报错；返回本次结果供调用方回滚/刷新。 */
+  commitPrefs: (patch: Partial<Settings>) => Promise<{ error?: string; ok: boolean }>;
   createBackupNow: () => Promise<void>;
   /* 启动日志（log/services/*-runtime.log）：共用同一套「按会话切分 + 跟随 +
      刷新」的状态，见 `~/components/studio/logs/use-runtime-log-source`
@@ -195,23 +195,18 @@ export type SettingsPageController = {
    */
   pendingJump: Section | null;
   pendingRestore: PendingRestore | null;
-  probeRemote: (input: {
-    apiKey?: string;
-    baseUrl?: string;
-    model?: string;
-  }) => Promise<RemoteProbeResult>;
   /** 对已提交但仍在生成的异步视频任务「继续等待」一轮：只查既有任务，不重复提交扣费 */
   queryUsageTask: (input: UsageTaskQueryInput) => Promise<UsageTestResult>;
   relaunchApp: () => Promise<void>;
-  /* 远端模型管理：列表 + 添加 / 编辑 / 移除 + 测试。增删改即时落库
-   * （无需单独的保存按钮），返回本次保存结果供弹窗留在原地报错。 */
-  remoteModelList: Array<RemoteModelEntry>;
-  removeRemoteModel: (name: string) => Promise<{ error?: string; ok: boolean }>;
   restoreBusy: boolean;
   restoreFrom: (name: string) => Promise<void>;
   retry: () => void;
   saveLlm: () => Promise<void>;
-  savePrefs: () => Promise<void>;
+  /**
+   * 偏好落库（即时自动保存的失焦/提交出口，成功静默、仅报错提示）。
+   * 可选 `override`：commitPrefs 即时提交时传入算好的下一份草稿，避免读到 stale 闭包。
+   */
+  savePrefs: (override?: Settings | null) => Promise<{ error?: string; ok: boolean }>;
   /* 保存 */
   saving: boolean;
   /** 侧边栏当前分区（纯视觉偏好，但影响渲染哪个表单，故由逻辑层持有）。 */
@@ -235,15 +230,8 @@ export type SettingsPageController = {
   testModelUsage: (input: UsageTestInput) => Promise<UsageTestResult>;
   /* 外观主题：Light / Dark（持久化偏好，统一走 next-themes）。 */
   theme: "light" | "dark";
-  /** 勾选/取消一个候选模型（本地 Ollama 多模型管理） */
-  toggleExtraModel: (name: string) => void;
-  /** 编辑既有条目（只作用于已配置条目）；重名校验排除自身，改名时若生效
-   *  模型引用旧名会同步更新。
-   *  patch.baseUrl = null / clearApiKey = true 表示清掉独立配置、跟随全局。 */
-  updateRemoteModel: (
-    name: string,
-    patch: Partial<RemoteModelDraftEntry>,
-  ) => Promise<{ error?: string; ok: boolean }>;
+  /** 勾选/取消一个候选模型（本地 Ollama 多模型管理）；即时落库，返回保存结果 */
+  toggleExtraModel: (name: string) => Promise<{ error?: string; ok: boolean }>;
 };
 
 export const SETTINGS_SECTIONS: Array<{ id: Section; label: string }> = [

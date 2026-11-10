@@ -15,7 +15,7 @@ import { ViewActions } from "~/components/studio/ViewActions";
 import { StatusDot } from "~/components/ui/status-dot";
 import { Button } from "~/components/ui/button";
 import { PageHeader } from "~/components/ui/page-header";
-import { SettingsCard } from "~/components/ui/settings-card";
+import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { Hint } from "~/components/ui/hint";
 import { RuntimeLogBox } from "~/components/studio/logs/RuntimeLogBox";
 import {
@@ -76,9 +76,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
         description="提交任务时它没在跑，任务不会开始；状态变了自己会刷，不必手动点。"
         title="运行状态"
       >
-        <div
-          className={`border-border bg-surface-2 mb-3 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
-        >
+        <div className={`${SETTINGS_ROW_CLASS} mb-3 ${STATUS_ROW_CLASS}`}>
           <StatusDot state={comfyDotState(c.status, flags)} />
           {/* 状态行是**活区**（规范 16 §16.2.4）：状态变了自己会刷，读屏得跟着播报，
               否则「我点了启动、它到底起没起」只能靠肉眼盯。这也让「这一行在不在、

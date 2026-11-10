@@ -1,4 +1,4 @@
-import type { Decorator } from "@storybook/nextjs";
+import type { Decorator } from "@storybook/nextjs-vite";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 

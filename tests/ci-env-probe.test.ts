@@ -530,12 +530,12 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
   it("两份解析同一份答案：现役配置按**活的**形态对账，注释态回退拿夹具对账", () => {
     /* `stageBlockIn()` 从 ISSUE #1966 起活的不见就看注释态，那一支与 `.ts` 侧 `commentedStageBlock()` 必须同口径
      * （两份文本副本 + 一条对账判据）。现役 `.cnb.yml` 在 2026-10-16 换了题：两段注释原文被取消失效，所以活的那支
-     * （`^ {2}-`）才是要对账的形态；注释态那支改拿夹具，靠现役配置出题会让用例随停用清单一起失效。 */
+     * （`^ {2}-`）才是要对账的形态；注释态那支改拿夹具，靠现役配置出题会让用例随停用清单一起失效。
+     * #3504 起现役 `.gates` 锚里只剩**这一格**（其余执行格整体搬去了 GA daily.yml）——
+     * 对账对象随之换成它。**换格不换判**：判的还是「两份解析同口径」；带 `env:` 块与
+     * `script: |` 多行体两种形状由上面的夹具对账与 `stageEnvValue` 组钉着，不在这里重复。 */
     const live = readPipelineConfig(ROOT) ?? "";
-    /* 两格各代表一种形状：`每日浏览器安装` 带 `env:` 块，`每日安装依赖` 是
-     * `script: |` 的多行体（2026-11-05 PR 档的安装格撤到 GA 后，第二个名字从
-     * `Install dependencies` 换成每日档这一格。**换格不换判**：判的还是「两份解析同口径」）。 */
-    for (const name of [BROWSER_INSTALL_STAGE, "每日安装依赖"]) {
+    for (const name of ["GA 回调结论回读"]) {
       const active = stageBlockIn(live, name);
       expect(active, `${name} 解析不出内容`).toBeTruthy();
       expect(active, `活的形态下两份解析漂了（${name}）`).toBe(stageBlockGate(live, name));
@@ -567,16 +567,23 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
     ).toBe("120000");
     expect(stageEnvValue(YML, BROWSER_INSTALL_STAGE, "没有这个键")).toBeNull();
     expect(stageEnvValue(YML, "没有这一步", "PLAYWRIGHT_DOWNLOAD_HOST")).toBeNull();
-    /* 现役 `.cnb.yml` 里那一步真的配了它 —— 判据指着的那一行必须是**真的存在**的。
-     * 名字取 `BROWSER_INSTALL_STAGE`（与被测实现同一个常量）：2026-10-19 那一格撤到
+    /* 名字取 `BROWSER_INSTALL_STAGE`（与被测实现同一个常量）：那一格 2026-10-19 撤到
      * 每日档、名字加了前缀，判据与实现各写一份字符串就会在下次挪档时**同时指错** ——
-     * 实现读不到根就退回量候选，判据却还在为「读到了」而绿。 */
+     * 实现读不到根就退回量候选，判据却还在为「读到了」而绿。
+     * #3504 起那一格（连同它的 `env:`）整体搬到了 GA `daily.yml`（step
+     * `浏览器安装（cnb 同款入口；npmmirror 镜像源同 CNB）`，那里的键由
+     * no-platform-ci-config 的「套接字超时」判据钉着，这里不重复）。CNB 配置上
+     * 这一格**预期读不到**：`stageEnvValue` 回 `null`，实现退回「量候选根」——
+     * 那是「不知道」，不是「不达标」。这里反向登记：谁把这一格加回 `.cnb.yml`，
+     * 实现就会**静默**重新读到一份配置里的根 —— 那必须连脚本口径一起改，而不是
+     * 搬运时留下的残根。 */
     const live = readPipelineConfig(ROOT) ?? "";
     expect(
-      stageEnvValue(live, BROWSER_INSTALL_STAGE, "PLAYWRIGHT_DOWNLOAD_HOST"),
-      `现役 \`.cnb.yml\` 的 \`${BROWSER_INSTALL_STAGE}\` 没有 \`PLAYWRIGHT_DOWNLOAD_HOST\` —— ` +
-        "这一组判据量不到任何东西",
-    ).toMatch(/^https:\/\//);
+      stageBlockIn(live, BROWSER_INSTALL_STAGE),
+      `${BROWSER_INSTALL_STAGE} 又出现在现役 \`.cnb.yml\` 里 —— #3504 起它的执行者（连同 \`env:\`）在 GA daily.yml；` +
+        "把它加回来会让 ci-env-probe 的「配置里那个根」读数**静默**改指 CNB 旧格，须连 scripts/ci-env-probe.mjs 的口径一起改",
+    ).toBeNull();
+    expect(stageEnvValue(live, BROWSER_INSTALL_STAGE, "PLAYWRIGHT_DOWNLOAD_HOST")).toBeNull();
   });
 
   it("配置里那个根取不回字节 ⇒ **当场红**，并点名该换哪一行", () => {

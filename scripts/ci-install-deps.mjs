@@ -36,7 +36,7 @@
  * 上面两条只管「依赖面碰没碰」，而平台侧每一次构建都是**全新 clone**（自托管上没有
  * OverlayFS，§13.5.3.4.2）—— `node_modules` 一个都没有，于是那条「空转就跳过」的
  * 判据**一次都没生效过**：当时实测 `Install dependencies` 一直是 59~61s。
- * ⚠️ 那一句是**接槽之前**的历史读数，不要拿它当今天的代价 —— 今天的数要按格当场取
+ * ⚠️ 那一句是依赖槽时代（#3479 已退役）的历史读数，不要拿它当今天的代价 —— 今天的数要按格当场取
  * （`pnpm ship --stage-log <sn> <格名>`），别往散文里抄。
  *
  * 所以判据换成「装出来的那一套 ⇄ 锁文件说的那一套」对不对得上：装的顺序由
@@ -62,7 +62,6 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
-import { applySlot, clearJobLink, SLOT_ENABLED_ENV } from "./ci-slot-apply.mjs";
 import { installBudgetMs, runInstallWithBudget } from "./ci-install-deadline.mjs";
 import { DEP_FILES, FINGERPRINT_FILE, pnpmInstallFingerprint } from "./ci-deps-face.mjs";
 
@@ -259,11 +258,6 @@ export function decideInstall({
  * @returns {Promise<number>} 退出码（超时 / 起不来 ⇒ 2）
  */
 async function runInstall(explicit = null) {
-  /* 作业里那条指进槽的链必须先摘掉：留着它跑作业内的 install，pnpm 会顺着链把新的一套
-   * 写进**槽**、而键仍是旧的（规范 §13.5.3.4.3 第一条，从散文变成有执行者）。 */
-  if (clearJobLink(ROOT)) {
-    process.stdout.write("[ci-install-deps] 已摘掉作业里那条指进缓存槽的链接（不在链上装）\n");
-  }
   /* `explicit` = 上游已经**亲眼看见**它起了一次 `-v`（`ensurePnpmOnPath` 的结论）。
    * 那一份比形态判据更硬：判据按 `PATH × 扩展名` 找候选，而 `pnpm-native.exe` 这个
    * 名字不在候选集里 —— 于是「落点拼进 PATH 了、判据仍答没有」是**正常**的
@@ -304,57 +298,6 @@ async function runInstall(explicit = null) {
     return out.code;
   }
   return out.code;
-}
-
-/**
- * 入口层的那一把闸：**先问槽，接不上再真装**。
- *
- * 为什么放在这一层而不是塞进 `runInstall`：`runInstall` 的职责是「真跑一次 install」，
- * 把「跑不跑」的第二把闸叠进去，它就开始同时回答两个问题 —— 档位那一刀（§13.5.25）
- * 已经示范过这种叠法后来多难拆。
- *
- * 开关是 `COMFY_CI_SLOT`：置成 `1` 才问槽，不置时**一次槽都不问**（连空闲空间都不读）。
- * 现在的拨法是**按档**，而分档的那条线不是档名，是**这一档后面有没有会真构建的格子**：
- * 接槽把作业的 `node_modules` 整棵接成指向项目根之外的 junction，Turbopack 对这一条有硬
- * 要求（ISSUE #2081 那次的死法是 13.8s 就红 + 后面四格整片 `skipped`）。所以
- * **接**的是 PR 那格 `Install dependencies` 与 push 那格 `安装依赖`（两档都没有构建格，
- * push 那一半由 `tests/no-platform-ci-config.test.ts` 钉住「清单里不许出现构建格」）；
- * **不接**的是每日那格（它后面背着 `每日生产构建`）。其余几格（`单跑*·安装依赖`、
- * `打包·安装依赖`）也没置开关 —— 其中 `单跑构建` 后面同样背着构建格，另外几个该不该接
- * **不在这里当场当我们验过了**。为什么这样分、回退要动哪一行，写在 `.cnb.yml` 那两格上面
- * 与规范 §13.5.3.4.3。
- *
- * 三条出口都必须**在日志里读得出来**（规范 §13.5.3.4.3 那句「往上读收益时，出处只能是那几句打印」）：
- * 开关没拨／ 接上了（`✓ 走缓存槽（…）`）／ 接不上退回（`槽未接管（原因）⇒ 照常装`）。
- * 前两条在旧形态里逐字同形于「什么都没发生」—— 于是「这一档按策略不接槽」与「配了槽但没接管」
- * 在日志里分不开，下一个人只能靠猜；而**少一次读数比少一次收益更难查**。
- *
- * @param {string | null} _expected 装之前算出的指纹（成功后由 `main` 落盘，这里不消费它）
- * @param {{env?: Record<string, string | undefined>, write?: (s: string) => void,
- *   install?: () => number | Promise<number>}} [deps]
- *   单测据此注入：不碰真安装、不碰真槽、不改真 `process.env`。
- *   `install` 允许回 Promise —— 真那一跳自带墙钟（`ci-install-deadline.mjs`）。
- * @returns {Promise<number>} 退出码
- */
-export async function runInstallWithSlot(_expected, deps = {}) {
-  const env = deps.env ?? process.env;
-  const write = deps.write ?? ((s) => process.stdout.write(s));
-  const install = deps.install ?? runInstall;
-  if ((env[SLOT_ENABLED_ENV] ?? "").trim() !== "1") {
-    write(
-      "[ci-install-deps] 槽未接管（开关没拨：这一档按策略不接槽 —— `COMFY_CI_SLOT` 没置成 1；" +
-        "分档的那条线是「这一档后面有没有会真构建的格子」，哪几格置着见 .cnb.yml 里" +
-        "`每日安装依赖` 那段的注释与规范 §13.5.3.4.3）⇒ 照常装\n",
-    );
-    return await install();
-  }
-  const out = applySlot({ cwd: ROOT, env });
-  if (out.handled) {
-    write(`[ci-install-deps] ✓ 走缓存槽（${out.action}）：${out.why}\n`);
-    return 0;
-  }
-  write(`[ci-install-deps] 槽未接管（${out.why}）⇒ 照常装\n`);
-  return await install();
 }
 
 /**
@@ -552,7 +495,7 @@ function shimPnpm(dir, { platform = process.platform } = {}) {
  *
  * ## 为什么改 `process.env` 而不是返回一份 env
  *
- * 本文件后面的 `runPnpmSync` 与 `clearJobLink` 读的都是 `process.env`；只把 env 交给
+ * 本文件后面的安装那一跳读的是 `process.env`；只把 env 交给
  * 其中一处，就会出现「判据看得见、安装看不见」—— 那一族最贵的形状。
  *
  * @param {{
@@ -742,7 +685,7 @@ export async function main(deps = {}) {
       return { status: out.status ?? 1, stdout: out.stdout ?? "" };
     });
   const root = deps.root ?? ROOT;
-  const install = deps.install ?? runInstallWithSlot;
+  const install = deps.install ?? runInstall;
 
   const files = changedFiles(run);
   const installed = fs.existsSync(path.join(root, INSTALLED_PROBE));
@@ -794,13 +737,8 @@ if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.me
    * 平台那一跑上判据答 null 而起全路径的 `-v` 退 0 且打了版本号）。所以有这一条时
    * 调用方不再问判据，直接用它 —— 否则就是「判据看得见、安装看不见」那一族。
    *
-   * 探测事实要**传进**槽闸，不许替掉槽闸（ISSUE #2439）：#2286 一度把这里的
-   * `install` 覆盖成裸 `runInstall` 直接传给 `main` —— `.cnb.yml` 的
-   * `COMFY_CI_SLOT: "1"` 还置着，`applySlot` 却一次都不被问，平台侧每一格都退回
-   * 全量安装，且 `runInstallWithSlot` 的三种槽出口话术从日志里整段消失。 */
-  const install = () =>
-    runInstallWithSlot(boot.probing ?? null, {
-      install: () => runInstall(boot.probing ?? null),
-    });
-  void main({ install }).then((code) => process.exit(code));
+   * 探测事实要**传进**安装那一跳（ISSUE #2439 的形态警戒；#3479 起对象换成 runInstall
+   * 自己）：#2286 一度把它丢在入口层、让 `main` 的缺省安装不拿探测结论 —— 同一族
+   * 「判据看得见、安装看不见」。依赖槽已退役（#3479），这里不再有第二把闸。 */
+  void main({ install: () => runInstall(boot.probing ?? null) }).then((code) => process.exit(code));
 }

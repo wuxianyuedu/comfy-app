@@ -1,7 +1,8 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { COMFYUI_DEFAULT_PORT } from "~/lib/endpoints";
 import { StatusDot } from "~/components/ui/status-dot";
+import { SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import {
   STATUS_ACTIONS_CLASS,
   STATUS_ROW_CLASS,
@@ -35,9 +36,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   args: { children: "启动 ComfyUI", onClick: () => undefined },
   render: () => (
-    <div
-      className={`border-border bg-surface-2 w-160 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
-    >
+    <div className={`${SETTINGS_ROW_CLASS} w-160 ${STATUS_ROW_CLASS}`}>
       <StatusDot state="up" />
       <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>
         {`ComfyUI 运行中（${BASE}）·配置路径的实例`}
@@ -68,9 +67,7 @@ export const Default: Story = {
 export const Narrow: Story = {
   args: { children: "启动 ComfyUI", onClick: () => undefined },
   render: () => (
-    <div
-      className={`border-border bg-surface-2 w-90 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
-    >
+    <div className={`${SETTINGS_ROW_CLASS} w-90 ${STATUS_ROW_CLASS}`}>
       <StatusDot state="busy" />
       <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>ComfyUI 正在启动…（已拉起 8 秒）</span>
       <div className={STATUS_ACTIONS_CLASS}>
@@ -112,10 +109,7 @@ export const States: Story = {
           ["down", "ComfyUI 未运行", "启动 ComfyUI"],
         ] as const
       ).map(([state, text, action]) => (
-        <div
-          className={`border-border bg-surface-2 w-160 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
-          key={state}
-        >
+        <div className={`${SETTINGS_ROW_CLASS} w-160 ${STATUS_ROW_CLASS}`} key={state}>
           <StatusDot state={state} />
           <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>{text}</span>
           <div className={STATUS_ACTIONS_CLASS}>

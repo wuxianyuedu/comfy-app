@@ -140,7 +140,7 @@
     "@storybook/addon-a11y": "10.6.4",
     "@storybook/addon-docs": "10.6.4",
     "@storybook/addon-themes": "10.6.4",
-    "@storybook/nextjs": "10.6.4",
+    "@storybook/nextjs-vite": "10.6.4",
     "@tailwindcss/postcss": "^4.3.3",
     "@tauri-apps/cli": "^2.12.4",
     "@testing-library/dom": "^10.4.2",
