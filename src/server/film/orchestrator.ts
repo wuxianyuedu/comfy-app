@@ -15,7 +15,9 @@ import {
 import { productionRepository } from "~/lib/core/repository-production";
 import { logger } from "~/lib/core/logger";
 import { isSchemaReady } from "~/lib/db-schema-ready";
-import type { Shot, ProjectType } from "~/lib/workshop/types";
+import { isProjectType } from "~/lib/workshop/types";
+import type { Shot } from "~/lib/workshop/types";
+import { asRecord } from "~/lib/is-record";
 import { cancelTask } from "~/lib/comfyui/enqueue";
 import { synthesizeFirstFrame } from "~/lib/comfyui/firstframe";
 import { randomSeed } from "~/lib/comfyui/random-seed";
@@ -80,6 +82,18 @@ const CAMERA_KEYWORDS = [
 /** unknown → string：与原 `String(x)` / 模板插值行为逐值一致。 */
 const toStr = (v: unknown): string => String(v);
 
+// production.shots 是 JSON 列（unknown）：只判「是数组」这层，元素形状由写入端
+// 保证、读侧 draft-integrity 判（认不出就丢等于静默删数据）。
+function isShotArray(v: unknown): v is Array<Shot> {
+  return Array.isArray(v);
+}
+
+// 执行进度的 resultImages 是 JSON 列（unknown）：只判「是数组」这层，
+// 元素字段（mediaType / localPath）按可选字段读，不认的形状回落空数组。
+function isResultImages(v: unknown): v is Array<{ localPath?: string; mediaType?: unknown }> {
+  return Array.isArray(v);
+}
+
 // ── script → storyboard ────────────────────────────────────
 const ShotSchema = z.object({
   heading: z.unknown(),
@@ -140,8 +154,8 @@ async function parseScriptToShots(
     // 离线兜底 —— 复用工坊解析器
     const sc = parseIdeaToScenes(raw, {
       title: "",
-      /* SAFETY: 类型断言已复核 */
-      type: (type as ProjectType) ?? "short_video",
+      // type 是外来字符串：不在词表回落 "short_video"（parseIdeaToScenes 的既定默认）。
+      type: isProjectType(type) ? type : "short_video",
       tone: "",
       logline: "",
     });
@@ -293,8 +307,7 @@ export type CreateFilmFromProjectInput = {
  *  镜头的 prompt / negative 已是工坊定稿（含风格），这里不二次加工；顺序按镜号 index。 */
 export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
   const row = await productionRepository.getForUser(input.userId, input.projectId);
-  /* SAFETY: 类型断言已复核 */
-  const rawShots = row && Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [];
+  const rawShots = row && isShotArray(row.shots) ? row.shots : [];
   const shots = [...rawShots].sort((a, b) => a.index - b.index);
   if (!shots.length) {
     throw new Error("该项目还没有镜头，请先在工坊产出镜头再成片");
@@ -341,8 +354,8 @@ async function generateVideoShot(
   userId: string,
   shot: { negative?: string | null; params?: unknown; prompt: string },
 ): Promise<string> {
-  /* SAFETY: 类型断言已复核 */
-  const params = (shot.params ?? {}) as Record<string, unknown>;
+  // params 是外来 JSON：当成宽松对象读，非对象按空对象处理（各字段仍逐字段 typeof 校验）。
+  const params: Record<string, unknown> = asRecord(shot.params ?? {}) ?? {};
 
   const videoWorkflowId = typeof params.videoWorkflowId === "string" ? params.videoWorkflowId : "";
   if (!videoWorkflowId) {
@@ -351,10 +364,10 @@ async function generateVideoShot(
 
   const size = toSizeSpec(params.size ?? NATIVE_SHOT_VIDEO_SIZE);
 
-  // 断言仅收口类型（运行时擦除）：inputImage 为 "" 等 falsy 值时仍需走
-  // 下方合成首帧分支。
-  /* SAFETY: 类型断言已复核 */
-  let inputImage = (params.inputImage ?? params.firstFrame ?? null) as string;
+  // inputImage 为 "" 等 falsy 值时仍需走下方合成首帧分支：外来值不是字符串时
+  // 也按「没有首帧」回落（既有默认分支），不把脏值原样喂给工作流。
+  const rawInputImage = params.inputImage ?? params.firstFrame;
+  let inputImage: string = typeof rawInputImage === "string" ? rawInputImage : "";
 
   if (!inputImage) {
     const imageWorkflowId =
@@ -379,8 +392,7 @@ async function generateVideoShot(
       prompt: shot.prompt,
       ...(shot.negative !== null && shot.negative !== "" ? { negativePrompt: shot.negative } : {}),
       firstFrame: inputImage,
-      /* SAFETY: 类型断言已复核 */
-      frames: (params.frames ?? 81) as number,
+      frames: typeof params.frames === "number" ? params.frames : 81,
       size,
       seed: randomSeed(),
     },
@@ -557,24 +569,17 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
       let videoPath: string | undefined;
       let duration: number | undefined;
       if (next === "SUCCEEDED") {
-        /* SAFETY: 类型断言已复核 */
-        const imgs =
-          (task.resultImages as Array<{
-            localPath?: string;
-            mediaType?: unknown;
-          }> | null) ?? [];
+        const imgs = isResultImages(task.resultImages) ? task.resultImages : [];
 
         const vid = imgs.find((img) => img.mediaType === "video") ?? imgs[0];
 
         videoPath = vid?.localPath;
 
-        /* SAFETY: 类型断言已复核 */
-        const params = (shot.params ?? {}) as Record<string, unknown>;
+        // 同 generateVideoShot：params 当成宽松对象读，帧数/fps 逐字段 typeof 校验。
+        const params: Record<string, unknown> = asRecord(shot.params ?? {}) ?? {};
 
-        /* SAFETY: 类型断言已复核 */
-        const frames = (params.frames ?? 49) as number;
-        /* SAFETY: 类型断言已复核 */
-        const fps = (params.fps ?? 16) as number;
+        const frames = typeof params.frames === "number" ? params.frames : 49;
+        const fps = typeof params.fps === "number" ? params.fps : 16;
         duration = typeof params.duration === "number" ? params.duration : frames / fps;
       }
 

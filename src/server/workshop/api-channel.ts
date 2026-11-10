@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { isInlineMedia, toDataUrl } from "~/lib/media/data-url";
+import { isPlainRecord } from "~/lib/is-record";
 
 import {
   callImageGeneration,
@@ -25,6 +26,12 @@ const FILE = path.join(process.cwd(), "data", WORKSHOP_API_SETTINGS_FILE);
 
 const DEFAULTS = defaultChannelsFromEnv();
 
+// 配置文件是外来 JSON：只判「是非数组对象」这层，字段归一交给
+// normalizeSettings → sanitizeChannel 逐字段 typeof 校验（脏值各自回落 default）。
+function isSettingsPatch(v: unknown): v is Partial<WorkshopApiSettings> {
+  return isPlainRecord(v);
+}
+
 let cache: WorkshopApiSettings | null = null;
 
 /** 读取配置（进程内缓存）。 */
@@ -34,8 +41,8 @@ export function getWorkshopApiSettingsSync(): WorkshopApiSettings {
   }
   let stored: Partial<WorkshopApiSettings> = {};
   try {
-    /* SAFETY: 类型断言已复核 */
-    stored = JSON.parse(readFileSync(FILE, "utf8")) as Partial<WorkshopApiSettings>;
+    const raw: unknown = JSON.parse(readFileSync(FILE, "utf8"));
+    stored = isSettingsPatch(raw) ? raw : {};
   } catch {
     // 缺失/损坏 → 默认
   }

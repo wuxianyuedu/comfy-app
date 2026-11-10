@@ -2,7 +2,9 @@
 // 纯函数 rowToState / stateToRow 不触碰 DB，便于单测；CRUD 走 workshopDb。
 import { desc, eq } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
-import type { Character, PipelineStageId, ProjectMeta, Scene, Shot } from "~/lib/workshop/types";
+import { asRecord } from "~/lib/is-record";
+import { isProjectType } from "~/lib/workshop/types";
+import type { Character, PipelineStageId, Scene, Shot } from "~/lib/workshop/types";
 import {
   workshopSession,
   type WorkshopSession,
@@ -26,6 +28,18 @@ const VALID_STAGES: ReadonlyArray<PipelineStageId> = [
   "video_generation",
   "final_edit",
 ];
+
+// JSON 列只判「是数组」这一层（元素形状由写入端保证，读侧 draft-integrity 判），
+// 非数组回落 []。
+function isSceneArray(v: unknown): v is Array<Scene> {
+  return Array.isArray(v);
+}
+function isCharacterArray(v: unknown): v is Array<Character> {
+  return Array.isArray(v);
+}
+function isShotArray(v: unknown): v is Array<Shot> {
+  return Array.isArray(v);
+}
 
 export function isStage(v: unknown): v is PipelineStageId {
   return (
@@ -74,8 +88,8 @@ function applyContentToState(
     meta: {
       ...state.meta,
       title: content.title,
-      /* SAFETY: 类型断言已复核 */
-      type: (content.type as ProjectMeta["type"]) ?? state.meta.type,
+      // type 是外来字符串：不在词表回落 state.meta.type（既有回落口径）。
+      type: isProjectType(content.type) ? content.type : state.meta.type,
       tone: content.tone,
       logline: content.logline,
       scriptMarkdown: content.scriptMarkdown,
@@ -92,18 +106,15 @@ export function rowToState(row: WorkshopSession): WorkshopSessionState {
     idea: row.idea,
     meta: {
       title: row.title,
-      /* SAFETY: 类型断言已复核 */
-      type: (row.type as ProjectMeta["type"]) ?? "short_video",
+      // type 列是外来字符串：不在词表回落 "short_video"。
+      type: isProjectType(row.type) ? row.type : "short_video",
       tone: row.tone,
       logline: row.logline,
       scriptMarkdown: row.scriptMarkdown,
     },
-    /* SAFETY: 类型断言已复核 */
-    scenes: Array.isArray(row.scenes) ? (row.scenes as Array<Scene>) : [],
-    /* SAFETY: 类型断言已复核 */
-    characters: Array.isArray(row.characters) ? (row.characters as Array<Character>) : [],
-    /* SAFETY: 类型断言已复核 */
-    shots: Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [],
+    scenes: isSceneArray(row.scenes) ? row.scenes : [],
+    characters: isCharacterArray(row.characters) ? row.characters : [],
+    shots: isShotArray(row.shots) ? row.shots : [],
     stage: isStage(row.stage) ? row.stage : "script",
     projectId: row.projectId ?? null,
   };
@@ -228,7 +239,8 @@ export async function updateState(id: string, state: WorkshopSessionState): Prom
 export async function deleteSession(id: string): Promise<boolean> {
   const result = await workshopDb.delete(workshopSession).where(eq(workshopSession.id, id));
   // node:sqlite 的 sqlite-proxy run 结果给 changes（libsql ResultSet 的 rowsAffected 已随驱动退场，#3171）：
-  // drizzle 的 SqliteRemoteResult 类型只声明 rows，故按驱动实际返回形状收窄一次。
-  /* SAFETY: 类型断言已复核 */
-  return ((result as { changes?: number }).changes ?? 0) > 0;
+  // drizzle 的 SqliteRemoteResult 类型只声明 rows，故按驱动实际返回形状取一次；
+  // 只有数字才认，外来/异常值按 0 回落。
+  const changes = asRecord(result)?.changes;
+  return (typeof changes === "number" ? changes : 0) > 0;
 }

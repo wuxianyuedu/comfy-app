@@ -892,26 +892,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "src/server/film/compose-film.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/film/orchestrator.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/film/orchestrator.ts", // 存量 9 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/lib/audit.test.ts", // 存量 5 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/lib/request-body.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/mcp/workshop-mcp.test.ts", // 存量 5 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/mcp/workshop-mcp.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/workshop/api-channel.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/workshop/comfyui.ts", // 存量 7 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/workshop/draft-repository.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/workshop/llm.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/workshop/orchestrator.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/workshop/production-bridge.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "src/server/workshop/repository.ts", // 存量 5 处 · 清账目标 B5 · 新代码不禁用
-        "tests/a11y-axe-stories.test.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用
-        "tests/a11y-rules-gate.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/affected-launch-separation.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/agent-index.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/app-port-cross-language.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/app-port-vectors-timeout-classification.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/app-port.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/app-service-exit-writer.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "tests/base-check.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用

@@ -22,6 +22,18 @@ export type SessionContent = {
   type: string;
 };
 
+// JSON 列只判「是数组」这一层（元素形状由写入端保证，读侧 draft-integrity 判；
+// 认不出就丢等于静默删数据），非数组回落 []。
+function isSceneArray(v: unknown): v is Array<Scene> {
+  return Array.isArray(v);
+}
+function isCharacterArray(v: unknown): v is Array<Character> {
+  return Array.isArray(v);
+}
+function isShotArray(v: unknown): v is Array<Shot> {
+  return Array.isArray(v);
+}
+
 /** 解析会话内容的归属用户：显式 id 必须存在；缺省取本机最早的账号（确定性）。 */
 export async function resolveOwnerUserId(explicit: string | null): Promise<string> {
   if (explicit !== null && explicit !== "") {
@@ -147,11 +159,8 @@ export async function readProductionContent(projectId: string): Promise<SessionC
     tone: row.tone,
     logline: row.logline,
     scriptMarkdown: row.scriptMarkdown,
-    /* SAFETY: 类型断言已复核 */
-    scenes: Array.isArray(row.scenes) ? (row.scenes as Array<Scene>) : [],
-    /* SAFETY: 类型断言已复核 */
-    characters: Array.isArray(row.characters) ? (row.characters as Array<Character>) : [],
-    /* SAFETY: 类型断言已复核 */
-    shots: Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [],
+    scenes: isSceneArray(row.scenes) ? row.scenes : [],
+    characters: isCharacterArray(row.characters) ? row.characters : [],
+    shots: isShotArray(row.shots) ? row.shots : [],
   };
 }

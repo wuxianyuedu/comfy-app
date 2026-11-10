@@ -3,7 +3,20 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { isPlainRecord } from "~/lib/is-record";
 import { isErrorResponse, readJsonRecord } from "./request-body";
+
+/** 错误信封 { error: { code, message } } 的形状守卫（§10.9 唯一出口）。 */
+function isErrorEnvelope(v: unknown): v is { error: { code: string; message: string } } {
+  if (!isPlainRecord(v)) {
+    return false;
+  }
+  const error: unknown = v.error;
+  if (!isPlainRecord(error)) {
+    return false;
+  }
+  return typeof error.code === "string" && typeof error.message === "string";
+}
 
 function reqWith(body: string): Request {
   return new Request("http://localhost/api/x", {
@@ -23,24 +36,28 @@ describe("readJsonRecord", () => {
   it("畸形 JSON 回 400，**不再**被静默当成空对象", async () => {
     const result = await readJsonRecord(reqWith("{ 不是 JSON"));
     expect(isErrorResponse(result)).toBe(true);
-    /* SAFETY: 类型断言已复核 */
-    expect((result as Response).status).toBe(400);
-    /* SAFETY: 类型断言已复核 */
-    /* SAFETY: 类型断言已复核 */
-    const envelope = (await (result as Response).json()) as {
-      error: { code: string; message: string };
-    };
+    // 断言已判「是错误响应」，再用同一守卫让 NextResponse 的形状对 tsc 可见。
+    if (!isErrorResponse(result)) {
+      throw new Error("readJsonRecord 未返回错误响应");
+    }
+    expect(result.status).toBe(400);
+    const parsed: unknown = await result.json();
+    if (!isErrorEnvelope(parsed)) {
+      throw new Error("错误信封形状不对");
+    }
     /* 信封形状走 §10.9 的唯一出口：`{ error: { code, message } }`，
      * 而不是 `{ error: "…" }` 字符串。 */
-    expect(envelope.error.code).toBe("validation.invalid");
-    expect(envelope.error.message).toContain("JSON");
+    expect(parsed.error.code).toBe("validation.invalid");
+    expect(parsed.error.message).toContain("JSON");
   });
 
   it("数组正文算「不是对象」—— 回 400 而不是把它当记录用", async () => {
     const result = await readJsonRecord(reqWith("[1,2,3]"));
     expect(isErrorResponse(result)).toBe(true);
-    /* SAFETY: 类型断言已复核 */
-    expect((result as Response).status).toBe(400);
+    if (!isErrorResponse(result)) {
+      throw new Error("readJsonRecord 未返回错误响应");
+    }
+    expect(result.status).toBe(400);
   });
 
   it("字符串 / 数字 / null 正文同样回 400", async () => {

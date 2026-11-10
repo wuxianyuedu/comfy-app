@@ -6,7 +6,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LLMMessage } from "~/lib/llm/types";
 import type { WorkshopSessionState } from "./types";
 import type { WorkshopLLMConfig } from "./llm";
-import type { Character, Shot } from "~/lib/workshop/types";
+import { isProjectType, type Character, type Shot } from "~/lib/workshop/types";
+import { asRecord } from "~/lib/is-record";
 import type { CreateSessionInput } from "./repository";
 
 const { store } = vi.hoisted(() => ({
@@ -20,8 +21,8 @@ vi.mock("./repository", () => {
       idea: input.idea ?? "",
       meta: {
         title: input.title ?? "未命名工坊项目",
-        /* SAFETY: 类型断言已复核 */
-        type: (input.type ?? "short_video") as WorkshopSessionState["meta"]["type"],
+        // input.type 是外来 string，用运行期枚举守卫收进 ProjectType，认不出就回落默认档。
+        type: isProjectType(input.type) ? input.type : "short_video",
         tone: input.tone ?? "",
         logline: input.logline ?? "",
         scriptMarkdown: "",
@@ -175,8 +176,8 @@ describe("workshop orchestrator 全流程", () => {
     expect(after?.shots[0]?.imageUrl).toBe("http://img/1.png");
 
     const sub = await orchestrator.submitVideo(id, { shotId: shot.id });
-    /* SAFETY: 类型断言已复核 */
-    expect((sub as { remoteTaskId?: string }).remoteTaskId).toBe("task123");
+    // 各通道的回执形状不同，用宽松记录视图读 remoteTaskId。
+    expect(asRecord(sub)?.remoteTaskId).toBe("task123");
 
     const polled = await orchestrator.pollVideo(id, shot.id);
     expect(polled.url).toBe("http://vid/1.mp4");

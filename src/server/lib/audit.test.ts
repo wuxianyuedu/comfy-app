@@ -4,16 +4,21 @@
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+/** db 桩的全局开关：环境声明让 globalThis 上的键有类型，不再逐处强转。 */
+declare global {
+  var __REJECT_INSERT__: boolean | undefined;
+}
+
 const { loggerErrorMock } = vi.hoisted(() => ({
-  loggerErrorMock: vi.fn(),
+  // logger.error 的调用面：结构化字段在前、消息字符串在后（见 audit.ts）。
+  loggerErrorMock: vi.fn<(fields: { event?: string }, message: string) => void>(),
 }));
 
 vi.mock("~/server/db", () => ({
   db: {
     insert: vi.fn(() => ({
       values: () => {
-        /* SAFETY: 类型断言已复核 */
-        const rejectNow = (globalThis as { __REJECT_INSERT__?: boolean }).__REJECT_INSERT__;
+        const rejectNow = globalThis.__REJECT_INSERT__;
         return rejectNow === true ? Promise.reject(new Error("db down")) : Promise.resolve();
       },
     })),
@@ -37,9 +42,8 @@ function ctx() {
   };
 }
 
-/* SAFETY: 类型断言已复核 */
 beforeEach(() => {
-  (globalThis as { __REJECT_INSERT__?: boolean }).__REJECT_INSERT__ = false;
+  globalThis.__REJECT_INSERT__ = false;
   loggerErrorMock.mockClear();
 });
 
@@ -49,19 +53,14 @@ describe("audit 审计日志契约", () => {
     expect(loggerErrorMock).not.toHaveBeenCalled();
   });
 
-  /* SAFETY: 类型断言已复核 */
   it("失败路径：db 写入失败仍 logger.error('audit_write_failed')——关键路径不静默", async () => {
-    (globalThis as { __REJECT_INSERT__?: boolean }).__REJECT_INSERT__ = true;
+    globalThis.__REJECT_INSERT__ = true;
     // audit 内部 catch 住错误，不向调用方抛（不阻塞主流程）
     await expect(audit("role_changed", ctx(), { role: "admin" })).resolves.toBeUndefined();
     expect(loggerErrorMock).toHaveBeenCalled();
-    /* SAFETY: 类型断言已复核 */
-    const msg = loggerErrorMock.mock.calls[0]?.[1] as string;
+    const msg = loggerErrorMock.mock.calls[0]?.[1];
     expect(msg).toBe("audit_write_failed");
-    /* SAFETY: 类型断言已复核 */
-    const fields = loggerErrorMock.mock.calls[0]?.[0] as {
-      event?: string;
-    };
+    const fields = loggerErrorMock.mock.calls[0]?.[0];
     expect(fields?.event).toBe("role_changed");
   });
 });

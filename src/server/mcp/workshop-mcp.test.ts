@@ -6,6 +6,7 @@
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import { asRecord, isPlainRecord, isUnknownArray } from "~/lib/is-record";
 
 /** orchestrator 的全部出口换成记账用的桩：本文件判的是**翻译**，不是工坊逻辑
  *  （后者另有 `src/server/workshop/orchestrator.test.ts`）。 */
@@ -21,7 +22,14 @@ const seen = vi.hoisted(() => ({
 const orchestrator = vi.hoisted(() => ({
   createSession: vi.fn(() => "sess_1"),
   listSessions: vi.fn(() => [{ id: "sess_1" }]),
-  getSession: vi.fn(() => ({ id: "sess_1", characters: [], shots: [] })),
+  // getSession 的缺席形态（null）也是被测路径，返回类型显式含 null。
+  getSession: vi.fn(
+    (): { characters: Array<unknown>; id: string; shots: Array<unknown> } | null => ({
+      id: "sess_1",
+      characters: [],
+      shots: [],
+    }),
+  ),
   deleteSession: vi.fn(() => true),
   setMeta: vi.fn(() => ({ ok: true })),
   setIdea: vi.fn(() => ({ ok: true })),
@@ -37,7 +45,8 @@ const orchestrator = vi.hoisted(() => ({
     seen.shots = list;
     return [{ id: "s1" }];
   }),
-  generateImage: vi.fn(() => ({ taskId: "t1" })),
+  // 第二实参是服务端侧载荷；声明出来才能从 mock.calls 里类型安全地读它。
+  generateImage: vi.fn((_id: string, _payload: { size?: unknown }) => ({ taskId: "t1" })),
   submitVideo: vi.fn(() => ({ clipTaskId: "ct1" })),
   pollVideo: vi.fn(() => ({ status: "done" })),
   composeFinal: vi.fn(() => ({ filmUrl: "/api/generated/f.mp4" })),
@@ -120,11 +129,31 @@ function resetCalls(): void {
   }
 }
 
+/** 目标名来自字符串表：先确认它真是 orchestrator 的键再索引（不用断言）。 */
+function isOrchestratorTarget(v: unknown): v is keyof typeof orchestrator {
+  return typeof v === "string" && Object.hasOwn(orchestrator, v);
+}
+
+/** 目标名不在表里就是用例假设错了，当场红，不要静默拿到 undefined。 */
+function pickOrchestratorTarget(v: unknown) {
+  if (!isOrchestratorTarget(v)) {
+    throw new Error(`工具目标不是 orchestrator 出口：${String(v)}`);
+  }
+  return orchestrator[v];
+}
+
 /** MCP 的失败是**结果**（isError）而不是抛异常，取回文本便于断言与排错。 */
 function textOf(result: unknown): string {
-  /* SAFETY: 类型断言已复核 */
-  const content = (result as { content?: Array<{ text?: string; type: string }> }).content;
-  return (content ?? []).map((part) => part.text ?? "").join("\n");
+  const content = asRecord(result)?.content;
+  if (!isUnknownArray(content)) {
+    return "";
+  }
+  return content
+    .map((part) => {
+      const text = asRecord(part)?.text;
+      return typeof text === "string" ? text : "";
+    })
+    .join("\n");
 }
 
 describe("工坊 MCP 工具面", () => {
@@ -152,11 +181,7 @@ describe("工坊 MCP 工具面", () => {
      * 「工具报错」与「用例假设错了」混成一团（这条断言把实际文本带进失败信息）。 */
     expect(result.isError, textOf(result)).toBeFalsy();
     const target = TOOL_TARGETS[tool];
-    const fn =
-      /* SAFETY: 类型断言已复核 */
-      target === "saveComfySettings"
-        ? saveComfySettings
-        : orchestrator[target as keyof typeof orchestrator];
+    const fn = target === "saveComfySettings" ? saveComfySettings : pickOrchestratorTarget(target);
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
@@ -198,8 +223,8 @@ describe("工坊 MCP 工具面", () => {
         ],
       },
     });
-    /* SAFETY: 类型断言已复核 */
-    const shots = seen.shots as Array<Record<string, unknown>>;
+    // seen.shots 来自未知的入参列表：先确认是数组，再逐条收成普通记录。
+    const shots = isUnknownArray(seen.shots) ? seen.shots.filter(isPlainRecord) : [];
     expect(shots).toEqual([
       expect.objectContaining({
         id: "s1",
@@ -284,14 +309,12 @@ describe("工坊 MCP 工具面", () => {
   /** 最近一次 `generateImage` 收到的第二个实参（服务端侧真正看到的载荷）。 */
   function payloadOf(): { size?: unknown } {
     const calls = orchestrator.generateImage.mock.calls;
-    /* SAFETY: 类型断言已复核 */
-    return (calls.at(-1) ?? [undefined, {}])[1] as { size?: unknown };
+    return calls.at(-1)?.[1] ?? {};
   }
 
   it("get_session 遇到「库里没有这一行」时给的是可读错误，而不是一个 null 载荷", async () => {
     resetCalls();
-    /* SAFETY: 类型断言已复核 */
-    orchestrator.getSession.mockResolvedValueOnce(null as never);
+    orchestrator.getSession.mockResolvedValueOnce(null);
     const result = await client.callTool({
       name: "workshop_get_session",
       arguments: SESSION,

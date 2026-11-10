@@ -16,4 +16,13 @@
 export type FilmStatus = "PARSING" | "GENERATING" | "COMPOSING" | "DONE" | "FAILED" | "CANCELLED";
 
 /** 单个镜头的状态。`IDLE` 与「提交前就崩的 QUEUED」都算「还没有人在跑它」。 */
-export type ShotStatus = "IDLE" | "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
+export const FILM_SHOT_STATUSES = ["IDLE", "QUEUED", "RUNNING", "SUCCEEDED", "FAILED"] as const;
+export type ShotStatus = (typeof FILM_SHOT_STATUSES)[number];
+
+/**
+ * DB `status` 文本列是外来值：只认词表内的状态，脏值由调用点按 schema 默认
+ * `IDLE` 回落（B5 子批 23 起替掉读侧的盲断言，词表与类型保持同源）。
+ */
+export function isFilmShotStatus(v: unknown): v is ShotStatus {
+  return typeof v === "string" && (FILM_SHOT_STATUSES as ReadonlyArray<string>).includes(v);
+}

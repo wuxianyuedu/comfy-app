@@ -12,12 +12,12 @@ import { filmRepository, filmShotRepository } from "~/lib/core/repository";
 import { productionRepository } from "~/lib/core/repository-production";
 import { normalizeProductionProgress } from "~/lib/production/progress";
 import type { Shot } from "~/lib/workshop/types";
+import { isFilmShotStatus, type ShotStatus } from "~/lib/film/film-status";
 import { sizeSpecDims, toSizeSpec } from "~/lib/media/size-presets";
 import { artifactUrl, filmBgmRoot, filmsRoot } from "~/lib/media/output-paths";
 import { errorMessage, errorText } from "~/lib/error-message";
 import { withTimeoutResult } from "~/lib/with-timeout";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
-import type { ShotStatus } from "~/lib/film/film-status";
 import { buildNormalizeArgs, buildSegmentVf, buildSrtBody, clipPathOf } from "./compose-steps";
 import { appendFilmLog } from "./film-log";
 
@@ -29,6 +29,12 @@ export type FilmShotClip = {
   status: ShotStatus;
   videoPath: string | null;
 };
+
+// production.shots 是 JSON 列（unknown）：只判「是数组」这层，元素形状由写入端
+// 保证、读侧 draft-integrity 判（认不出就丢等于静默删数据）。
+function isShotArray(v: unknown): v is Array<Shot> {
+  return Array.isArray(v);
+}
 
 /** 把「从项目建的片」合成完成后的结果，回写进来源统一项目：
  *   1) 逐镜视频 —— 按 `shotId` 命中 `production.shots` 里的对应 Shot，写入 clipUrl / clipStatus；
@@ -45,8 +51,7 @@ export async function syncFilmToProject(
     return;
   }
   const progress = normalizeProductionProgress(row.progress);
-  /* SAFETY: 类型断言已复核 */
-  const rawShots = Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [];
+  const rawShots = isShotArray(row.shots) ? row.shots : [];
 
   // 按 shotId 索引成片结果（只取有 videoPath 的镜头回写 clip）。
   const clipByShotId = new Map<string, FilmShotClip>();
@@ -309,8 +314,7 @@ export async function composeFilm(id: string) {
           finalShots.map((s) => ({
             shotId: s.shotId ?? null,
             videoPath: s.videoPath ?? null,
-            /* SAFETY: 类型断言已复核 */
-            status: s.status as ShotStatus,
+            status: isFilmShotStatus(s.status) ? s.status : "IDLE",
           })),
         );
       } catch (error) {
