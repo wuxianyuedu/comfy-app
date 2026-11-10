@@ -428,7 +428,7 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   {
     name: "工作区复用读数",
     tier: "retired",
-    note: "PR 档 ephemeral 工作区复用形态读数（恒退 0）。CNB 主列不再有吃工作区热态的判据，无消费者 ⇒ 摘。脚本 ci-workspace-probe.mjs 留盘",
+    note: "PR 档 ephemeral 工作区复用形态读数（恒退 0）。CNB 主列不再有吃工作区热态的判据，无消费者 ⇒ 摘。脚本已随 #3480 退役",
   },
   {
     name: "缓存槽读数",
@@ -463,7 +463,7 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   {
     name: "工作区出处",
     tier: "retired",
-    note: "push 档自托管工作区出处判据（跑哪份源码 / 谁写脏过 tracked 面）。CNB 侧不再有写盘判据，GA runner 无此概念（ga-migration-checklist G-19）⇒ 摘。脚本 ci-workspace-provenance.mjs 留盘",
+    note: "push 档自托管工作区出处判据（跑哪份源码 / 谁写脏过 tracked 面）。CNB 侧不再有写盘判据，GA runner 无此概念（ga-migration-checklist G-19）⇒ 摘。脚本已随 #3480 退役",
   },
   {
     name: "GitHub master 镜像",

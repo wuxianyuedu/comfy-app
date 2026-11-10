@@ -9919,6 +9919,21 @@ fail-closed 承重锚一字未动：「GA 回调没终态 ⇒ 判红」（§13.6
 （`ci-cache-slot-quota.test.ts` 删）/ `.cnb.yml` 失真注释改记退役口径 / 本节 +
 §13.5.3.4.3 退役横幅 + 生成态镜像 / `changelog.d` 碎片。
 
+#### 13.5.38 2026-11-11 两件工作区读数判据退役：孤儿脚本落账（ISSUE #3480 / #3474 评估）
+
+§13.5.35 把 `工作区复用读数` / `工作区出处` 两格从流水线摘下时说了「脚本留盘」；
+#3474 评估把它们归入「执行面为零」，#3478 / #3504 两轮迁移之后这个判据更硬 ——
+CNB 侧再无任何会写工作区的判据，两份脚本只是无调用的孤儿。本轮退役：
+
+- `ci-workspace-probe.mjs`（工作区复用读数；结论「每次新建目录」已在
+  §13.5.35 的 retired 段留档）与 `ci-workspace-provenance.mjs`（工作区出处；
+  push 树级校验档退役后无对象）+ 两份用例，import 图核实零外部引用后删除。
+- `.cnb.yml` 两段退役叙事改写为简短退役注；`no-platform-ci-config` 的
+  retired 段两行「脚本留盘」改「已随 #3480 退役」。
+- 引用面里的**注释**引用（`git-dir.mjs` / `ci-token-scopes.mjs` /
+  `ci-autofix-duties.mjs` / `git-dir-literal-scan.mjs`）是共享惯用法的出处指引，
+  不构成 import —— 随各文件下次触碰时顺手更新，本批不动。
+
 ### 13.6 分支与合并策略
 
 - 功能分支：`feat/<short-desc>`；修复分支：`fix/<issue-id>-<desc>`。
