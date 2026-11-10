@@ -132,13 +132,16 @@ describe("控制台输出编码：流水线上真的在纠它", () => {
     return next < 0 ? rest : rest.slice(0, next + 1);
   };
 
-  it("每条流水线的**第一格**自己就把控制台编码钉住（在它打任何中文之前）", () => {
+  it("自托管流水线的**第一格**自己就把控制台编码钉住（在它打任何中文之前）；平台池格不钉", () => {
     /* 这一条原来钉「第一步 = `工具链自证`」，2026-10-19 那一格撤到每日档后 PR 第一格换成 `镜像身份`，于是它红的方向成了**名字**而不是危险本身。
      * 危险不变的那半是：第一个 stage 之前没人钉 `[Console]::OutputEncoding`，它打的每行非 ASCII 都会按宿主代码页（中文 Windows 是 CP936）落进平台日志
      * （ISSUE #1959 的 `宸ュ叿閾捐嚜璇?` 就是这么来的）。所以按**位置**问不按名字问：每条流水线的第一个 stage，自己的 script 必须在任何输出之前先钉编码 ——
-     * 与那格叫什么、挂在哪个触发口无关，下次再挪档它不会变成假红。 */
+     * 与那格叫什么、挂在哪个触发口无关，下次再挪档它不会变成假红。
+     * #3478 起 `.gates`（质量门禁主列）迁平台池 Linux —— 那一侧没有「宿主代码页」这回事，
+     * PowerShell 前缀反而不许带（契约在 no-platform-ci-config），所以它从本条射程摘出，
+     * 转为反面断言；`.daily-gates`（自托管每日/单跑/包）继续钉。 */
     const yml = read(".cnb.yml");
-    for (const anchor of [/^\.gates:[^\n]*$/m, /^\.daily-gates:[^\n]*$/m]) {
+    for (const anchor of [/^\.daily-gates:[^\n]*$/m]) {
       const lines = firstStageBody(yml, anchor)
         .split("\n")
         .filter((l) => l.trim() !== "");
@@ -155,6 +158,16 @@ describe("控制台输出编码：流水线上真的在纠它", () => {
           .slice(0, 90)}`,
       ).toContain("[Console]::OutputEncoding");
     }
+    /* 平台池侧（质量门禁主列，#3478）：script 不许带 PowerShell 前缀 —— 它在 Linux 上
+     * 会被 sh 拆碎当场退 127（与 no-platform-ci-config 的质量门禁段同一组判据）。 */
+    const gatesLines = firstStageBody(yml, /^\.gates:[^\n]*$/m)
+      .split("\n")
+      .filter((l) => l.trim() !== "");
+    const gatesScript = gatesLines.find((l) => /^\s+script:/.test(l)) ?? "";
+    expect(
+      gatesScript,
+      "`.gates` 第一格（平台池）带上了 PowerShell 编码前缀 —— sh 会当场退 127",
+    ).not.toContain("[Console]::OutputEncoding");
   });
 
   it("纠编码那句仍在**它所在的那一格**里，且排在会打中文的命令之前", () => {

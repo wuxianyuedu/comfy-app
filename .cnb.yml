@@ -129,8 +129,12 @@
     # group = 当前仓库所属根组织下的自托管构建节点（不是平台公共池）。
     # 漏掉这一行会退化成平台池 —— 那时核时重新开始计费，而配置看起来完全一样。
     #
-    # ⚠️ **既定决定：「永远不用平台池，容器用自托管节点上的」**。
-    # 所以这一段**不是**可调项，而是两道必须同时在场的门：
+    # ⚠️ **锚点只服务还留在自托管上的那几条**（每日 / 单跑 / 打包 / GA 判决回调）。
+    # 「永远不用平台池」（ISSUE #1993）的原始射程是**门禁主列** —— 那时主列三十七格
+    # 重判据都在这台机上，核时计费与并发挤占是当时的理由。主列此后逐格薄化、判据迁 GA
+    # （#3378 一族），到 #3478 整条迁平台池：那条流水线不再引用本锚点，这一决定对它
+    # 不再有对象。剩下这几条手动复验口继续吃本节点的缓存热态与 Windows 形态，
+    # 所以这一段仍是它们的门（两道缺一不可）：
     #   ① `namespace: group` —— 派到根组织的自托管节点，而不是公共池；
     #   ② `tags` 非空、且**不含** `cnb:arch:*` 那一族 —— 节点离线 / 满载时平台会
     #      **自动改派到其他可用节点**，而在这一档上「其他可用节点」就是平台池
@@ -1408,19 +1412,21 @@
 
 # ── PR 失败立案：这一跑红了 ⇒ 把红变成**看得见**的东西─────────────
 #
-# 这一档是 **Pipeline 级**的 `endStages`（不是 `stages` 里的一格），所以它是独立锚点、
-# 由 `pull_request` 那条流水线以 `<<: *pr_fail_stage` 引入。
+# 这一档是 **Pipeline 级**的 `endStages`（不是 `stages` 里的一格），内联在下面
+# `pull_request` 的「质量门禁」流水线里。曾经是独立锚点 `*pr_fail_stage`、以
+# `<<: *pr_fail_stage` 引入；#3478 把主列迁平台池时并入流水线本体 —— 立案格的
+# 形态判据（PowerShell 前缀 / cp936 外壳不许进平台池）由
+# `tests/no-platform-ci-config.test.ts` 的质量门禁段钉住。
 #
 # 补的是什么：`pull_request` 是一天里跑得最多的那条，而它的红**没有任何通知**。
 # 平台没有「构建结束 → 主动打你」的通用回调（`cnb event get-events` 只能主动拉、
 # 也不含 build 事件），所以今天知道它红的只有两种人：当场盯着 `pnpm ship` 的
 # （它轮询到终态才收工）、以及事后去翻构建列表的。其余时候「红了」=「没发生」。
 #
-# 为什么不是「挂个 IM 推送插件」：这条件路径上**没有 Docker**（头注第 1 条：带
-# `image:` 的 stage 70ms 就红 `Runner does not enable Docker`），插件镜像还默认要出网。
-# 所以那一档在本仓今天没有执行者，写进来只是一条会红或永远不响的格。这条走的是
-# 同一件事的另一个落点：**PR 的评论区就是通知面** —— 它进列表、有未读、能 @ 人，
-# 不需要任何新凭据，也不需要人先去看某个群。
+# 为什么通知面走 PR 评论而不是 IM 插件：PR 的评论区**就是**通知面 —— 它进列表、
+# 有未读、能 @ 人，不需要任何新凭据，也不需要人先去看某个群。立案格要的 `cnb`
+# 通道由平台池那条 Dockerfile 预装（#3457 端到端坐实），自托管时代「这条路径上
+# 没有 Docker、插件镜像没执行者」的约束随换机消失，但落点的选择不变。
 #
 # ── 形态：它是 `endStages`，不是 `stages` 的最后一格 ────────────────────
 #
@@ -1467,20 +1473,10 @@
 # 落点按「有没有人能收」分两档：`CNB_PULL_REQUEST_IID` 在场上 ⇒ 评论在那张 PR 下
 # （一条诉求一张单，不另开单）；认不出来 ⇒ 按格名去重建单。取舍与两种形状都在
 # `scripts/ci-pr-failure-issue.mjs` 头注里，这里不重抄。
-.pr-fail-stage: &pr_fail_stage
-  endStages:
-    - name: PR 失败立案
-      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-pr-failure-issue.mjs --no-block
-      # 5m：三次读命令（列表 / 逐格详情 / 逐格日志，后者最多三格）+ 一次写 + 一次回读。
-      # 与 `每日失败立案` 同量级（实测那条 1.6s）。给 5m 是留给节点冷启动与平台慢响应，
-      # 不是给「让它多试几次」—— 取不到读数时它**不重试也不写**，退 2 由话术说出来。
-      timeout: 5m
-    # ── `令牌权限读数` 与 `GitHub 镜像同步` 都不在这一档了────────────
-    #
-    # 它前移进主列（`.gates` 里 `缓存槽读数` 之后），为什么搬与「搬的是位置、不是那句不承重」
-    # 都写在那一格的锚点上。这里留一行是因为这一档剩下的两格**必须留在 `endStages`**：
-    # 它们的本职是「红也要跑」（平台 grammar：无论 stages 是否成功，endStages 都将执行），
-    # 挪进主列就会被那一次红一起 skip 掉 —— 而立案格要的正是红的时候才有用。
+#
+# ⚠️ **这两格必须留在 `endStages`**：它们的本职是「红也要跑」（平台 grammar：无论
+# stages 是否成功，endStages 都将执行），挪进主列就会被那一次红一起 skip 掉 ——
+# 而立案格要的正是红的时候才有用。
 
 # ── 桌面成品包那一档的失败立案──────────────────────────────────────
 #
@@ -1547,7 +1543,6 @@
   # 把「标签没钉版本 / digest 拼错」写成读数、以及**没有标识时给出下一动作**。
   # 逻辑在 `scripts/ci-image-identity.mjs` —— 不在配置里就地写 PowerShell，
   # 理由与 `工具链自证` 逐字相同（配置里的逻辑一条判据都测不到它）。
-
   # ── `Python 可用性` / `Python 探针读数` 已经不在这一条上──
   #
   # 两格的**理由与事故**跟着它们搬到了每日档（`每日 Python 可用性` /
@@ -1557,7 +1552,6 @@
   # 同一件事：`每日单元测试` 之前必有 `每日 Python 可用性`（顺序有判据），
   # 而 PR 侧「跑不动整条链」那一问 交给 GA 的 `安装依赖` step（这一档此后
   # 不装依赖，也就不再有一条会因 pnpm 解析面而红的链）。
-
   # ── 工作区复用读数（**读数，恒不退非零**）──
   #
   # 本文件头注第 4 条把「每次构建都是全量 clone、没有配置能省掉它」写成了这条路径的
@@ -1602,7 +1596,6 @@
   # 最后一段**恒等于 `workspace`**，只取 basename 时两跑并排一模一样 —— 有区分度的那一半在
   # 父目录，故现在由 `jobLabel()` 取「父目录名 + 最后一段」，判据钉住「两个不同 job 的标签必须
   # 不同」。与这一档开头那句是同一类病：**读数落在日志里读不出来，与没有读数等价**。
-
   # ── 缓存槽读数（恒不退非零）──
   # 只回答三问：有没有槽、该落哪个键、这一跑与它的关系是 `reuse` / `install-into-slot` /
   # `no-cache` 中哪一档。键刻意复用 `ci-deps-face.mjs` 的 `pnpmInstallFingerprint` ——
@@ -1620,7 +1613,6 @@
   # `pnpm store path`（同一条 cwd、同一条解析面，所以就是那次 install 真正会用的 store），
   # 取它所在卷下的 `ci-cache/<包名>`。写死盘符曾经把这台机器坑在什么位置上，见
   # §13.5.3.4.3 里「runner 换盘」那一段。
-
   # ── GitHub 镜像同步（**停用**）──
   #
   # 自托管节点到 github.com:443 的出网间歇不通，而「判断推送成功没成功」正是这格
@@ -1668,20 +1660,20 @@
   # 主列末尾的 `GitHub 判决回读` 读它，从而在「本跑根本没派发」时不再空转满 45m。
   # 两格共用一个工作区（本流水线单 job 串行），所以这一跳只是一次写文件 + 一次读文件。
   # 落盘失败不影响本格三态（回读格读不到就退回「自己猜」的老行为）。
-# - name: GitHub 镜像同步
-#   # --await-hosted：先等托管机实验格的结果 —— refs 回读见本跑 HEAD 即
-#   # 跳过推送（托管机那条影子流水线已推送并派发，本格只落回执），预算
-#   # （HOSTED_AWAIT_BUDGET_MS 300s）到点没见才走下面的正常推送（兜底语义不变）。
-#   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs --await-hosted
-#   # 三跳 git 调用各自带超时：内容推送与回读共用一份 240s 墙钟预算（不再探活，
-#   # 预算从推送第一刀起算；至多 10 次、退避 5s→50s）、LFS 整档 60s（至多 5 次）——
-#   # 同一份阶梯、两档窗口，常量与理由在 `scripts/ci-mirror-retry-policy.mjs` 与
-#   # `ci-mirror-wire-budget.mjs`。没有限时就得吃 git 自己那个 21s 的 connect 超时，
-#   # 而那一形过去只被念成「令牌活不活」。
-#   # 15m 是外框（外框从 10m 抬）：最坏账 300s（等托管机）+ 240s（推送）+ 60s（回读）
-#   # + 60s（LFS）≈ 660s —— 抬的是外框，判据与预算一个字没动。
-#   timeout: 15m
-#
+  # - name: GitHub 镜像同步
+  #   # --await-hosted：先等托管机实验格的结果 —— refs 回读见本跑 HEAD 即
+  #   # 跳过推送（托管机那条影子流水线已推送并派发，本格只落回执），预算
+  #   # （HOSTED_AWAIT_BUDGET_MS 300s）到点没见才走下面的正常推送（兜底语义不变）。
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs --await-hosted
+  #   # 三跳 git 调用各自带超时：内容推送与回读共用一份 240s 墙钟预算（不再探活，
+  #   # 预算从推送第一刀起算；至多 10 次、退避 5s→50s）、LFS 整档 60s（至多 5 次）——
+  #   # 同一份阶梯、两档窗口，常量与理由在 `scripts/ci-mirror-retry-policy.mjs` 与
+  #   # `ci-mirror-wire-budget.mjs`。没有限时就得吃 git 自己那个 21s 的 connect 超时，
+  #   # 而那一形过去只被念成「令牌活不活」。
+  #   # 15m 是外框（外框从 10m 抬）：最坏账 300s（等托管机）+ 240s（推送）+ 60s（回读）
+  #   # + 60s（LFS）≈ 660s —— 抬的是外框，判据与预算一个字没动。
+  #   timeout: 15m
+  #
   # ── 环境前提（**必须排在 `GitHub 判决回读` 之前**）──
   #
   # 上面三步答的是「四件工具在不在」「解释器住哪」，这一步答的是它们旁边那**三格**：
@@ -1715,7 +1707,6 @@
   # 「四个域全量一遍供人定位」的取证刻意不同 —— 后者是失败之后给人看的现场。
   # 也**不**在这里替 `浏览器安装` 去装：探测到「都不通」时的出路在人不在仓
   # （换根 / 配代理 / 预装进落点），这一步的作用是把结论提前，不是代办。
-
   # ── 薄化：GA 承接的 24 格从 PR 档撤出 ──
   #
   # 撤的是**执行者**，不是判据：`.github/workflows/pr-gate.yml` 在同一个 PR 事件上逐格跑
@@ -1755,7 +1746,6 @@
   # ⚠️ 下面这段**不是**薄化撤出的一部分：`单元测试` 是 就停用（并发 PR 会
   # 把带超时的读数变成不可信的红，§13.5.21），原文一直以注释形态留在这里供恢复 ——
   # 它恰好落在那 24 格说过的那段文本里，整段替换时必须一起搬出来，**别顺手删掉**。
-
   # ── ESLint（**临时撤到每日档**；本段与下一段都是停用原文，别删）──
   #
   # 每日那一档的名字是 `每日 ESLint 零警告`，命令与这里**逐字相同**（判据
@@ -1774,7 +1764,6 @@
   #   # ⚠️ 这条线**不是**用来兜「口径写宽了」的：上面那段那次 `eslint .` 就正好落在里面
   #   #   —— 它挂了整整 20m 才被掐断，而不是当场红。预算按设计只回答「卡死没有」。
   #   timeout: 20m
-
   # ── 换了执行者的两格（原文以注释形态留着；执行者是 GA 的 `重档静态判据` job）──
   #
   # 它们从来没有自己的 stage：判据本体是 `scripts/ci-heavy-gates.mjs` 里的条目
@@ -1790,7 +1779,6 @@
   #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-reformat-only.cjs
   # - name: 零消费导出
   #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-dead-exports.cjs
-
   # ── 新鲜度账（**临时撤到每日档**；停用原文，别删）──
   #
   # 每日那一格叫 `每日新鲜度账`（`.daily-gates` 里），`script` 与这里**逐字相同**，
@@ -1802,7 +1790,6 @@
   #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/freshness-gate.mjs
   #   # 秒级；给 5m 只是「卡死要早报」这条量级余量（判据本身远小于它，不需要更宽）。
   #   timeout: 5m
-
   # ── 测试（**临时停用**）──
   #
   # ⚠️ 这一步现在是**注释掉的**：宿主侧测试环境还没就绪（Windows 自托管节点上
@@ -1868,7 +1855,6 @@
   # 只有 `timeout of 8640000ms exceeded` —— 一条失败原因都读不到。
   # 给 45m：真跑得完的形态差三倍余量，卡死的形态 45m 报出来。
   # timeout: 45m
-
   # ── GitHub 判决回读：主列末尾的**承重档**（fail-closed 已落地）──
   #
   # 它回答一个问题：镜像格（主列开头那一格 `GitHub 镜像同步`）派发出去的那一笔
@@ -2003,7 +1989,10 @@
   # 本格判红时日志里也直接给那条 `pnpm ship --gh-logs pr:<号>`（§13.5.33.7）：
   # 回读格只有结论、没有失败 job 正文，看日志的人/AI 不用跳去翻 PR 评论才知道去哪取。
   - name: GA 回调结论回读
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-ga-verdict-readout.mjs
+    # 平台池 Linux 容器（#3478）：PowerShell 前缀与 cp936 外壳都不许带 —— sh 会把
+    # 前者拆碎当场退 127，后者在 Linux 上是直通的多余一层（契约由
+    # no-platform-ci-config 的质量门禁段钉住）。
+    script: node scripts/ci-ga-verdict-readout.mjs
     # 包住站内短轮询预算（脚本 DEFAULT_BUDGET_MS 45m）+ 进程开销；与最重格外框同级。
     timeout: 60m
 
@@ -2280,38 +2269,66 @@
 master:
   # PR 端的全套门禁：PR 不合并就不该结束，这里一步不省。
   pull_request:
-    # 两个锚点写在一个合并键里：`*common` 是 runner / lock / env（三条流水线共用），
-    # `*pr_fail_stage` 是**这一条流水线独有**的那一档 `endStages`（形态与理由见那个锚点）。
-    # ⚠️ 不能写成两行 `<<:`：同一层出现两个同名键是**非法 YAML**（`yaml` 解析器当场
-    # `Map keys must be unique`），而它坏掉的方式是静默的 —— 两个键里只有一个生效，
-    # 看上去配置完全正常。形态判据按 `- <<: *x` 数锚点引用（`tests/no-platform-ci-config.test.ts`
-    # 要求引用数等于带 `stages:` 的流水线数），所以流式写法不被那条判据认出来时，
-    # **要改的是判据的解析面，不是把锚点拆回去**。
-    - <<: [*common, *pr_fail_stage]
-      name: 质量门禁
-      # 镜像令牌不再由这一条导入：推送与派发已随 `GitHub 镜像同步`
-      # 停用挪到平台池那条流水线，它自带同一枚 `GITHUB_MIRROR_TOKEN` 的 imports
-      # （`allow_slugs: [moon-read/comfy-app-t3]` 的声明理由见那一格）。
+    # ── 质量门禁（平台池 · #3478 起）─────────────────────────────
+    #
+    # 主列的判据全部在 GA（`pr-gate.yml` 五个 job），CNB 这一侧只剩「站内回读 GA 送回
+    # 的结论」+「红了立案」两件纯 API 动作 —— 不吃 `node_modules`、不碰 Windows 特性，
+    # 自托管节点的算力与缓存对它们已经没有对象（#3474 评估：主列只剩一格时，留在
+    # 自托管的唯一理由是惯性）。整条迁平台池后**自托管节点退出 PR 路径**：
+    # PR 期间开发机零打扰，代价是平台池 1 核 × 分钟级（与镜像出口同量级，
+    # #3429 四档实测无核数敏感度）。
+    #
+    # 这是对 #1993「门禁主列永远自托管」的显式推翻：那条决定的射程是主列还扛着
+    # 三十七格重判据的时代（核时计费 + 并发挤占），判据走光之后顾虑随之消失；
+    # 「GA 回调没终态 ⇒ 判红」的 fail-closed 承重锚一字未动（§13.6「PR 跑绿才合并」）。
+    #
+    # 形态与两条镜像出口同族（平台池标签、自带 runner / docker / lock、不吃 `*common`、
+    # 无 PowerShell 前缀与 cp936 外壳）—— 由 `tests/no-platform-ci-config.test.ts`
+    # 的质量门禁段逐条钉住；`cnb` 通道（立案格要的）由这份 Dockerfile 预装（#3457）。
+    #
+    # ⚠️ 锁仍叫 `pr-$CNB_PULL_REQUEST_IID`：它是这把钥匙现在唯一的用户
+    # （镜像出口用 `mirror-pr-$IID`，两把不共用 —— 同 key + cancel-in-progress 会把
+    # 并行的另一条掐掉，#2114 同款）。
+    - name: 质量门禁
+      runner:
+        # 平台池 = 云托管 Linux 节点（不写 namespace: group 就是它）。
+        tags:
+          - cnb:arch:amd64
+        # 站内轮询 + 立案都是网络 IO 动作，CPU 密集部分只有 node 启动；
+        # 与镜像出口同一份四档实测结论（#3429）⇒ 取核时最小的 1 核。
+        cpus: 1
+      docker:
+        build:
+          dockerfile: .cnb/ci-image/Dockerfile
+          versionBy: .cnb/ci-image/Dockerfile
+      lock:
+        key: pr-$CNB_PULL_REQUEST_IID
+        cancel-in-progress: true
       stages: *gates
+      endStages:
+        - name: PR 失败立案
+          script: node scripts/ci-pr-failure-issue.mjs --no-block
+          # 5m：三次读命令（列表 / 逐格详情 / 逐格日志，后者最多三格）+ 一次写 + 一次回读。
+          # 取不到读数时它**不重试也不写**，退 2 由话术说出来（形态理由见上方立案叙述块）。
+          timeout: 5m
 
-  # ── GitHub 镜像同步（平台池 · 正式出口）──────────
-  #
-  # 自托管节点到 github.com:443 的出网间歇不通（实测一次：重试 6 次耗 203s 全败、整格红、判决格整片 skipped），而平台池的腾讯云侧是另一条出网路径、稳。
-  # 按 #3378 后续指令：自托管主列那格停用，推送与派发**整个**由这一条
-  # 承担 —— 与「门禁主列永远自托管」不冲突：这一条不是门禁主列，是镜像出口动作，
-  # 不装依赖、分钟级、单格。
-  #
-  # 实验期的两个旗标随转正一起摘掉：
-  #   · `--once`（四跳各只试一次、不重试）⇒ 恢复缺省的重试档：egress 抖动下按
-  #     `PUSH_RETRY_BUDGET_MS` / `LFS_PUSH_RETRY_BUDGET_MS` 退避重试，只有持续不通才交账；
-  #   · `--readout`（退码恒 0）⇒ 退码生效：推不出去 / 派发失败即非零。
-  # ⚠️ 退码承重**不**等于「靠判断推送成功拦合」：这一条在平台池、不在 `质量门禁`
-  # 的 `pull_request` build 里；后续流程走不通（GA 没跑起来 / 没送回结论）由 `质量门禁`
-  # 的 `GA 回调结论回读` 超时判红兜住（§13.6 承重锚不变）。
-  #
-  # ⚠️ 锁**不**共用 `pr-$CNB_PULL_REQUEST_IID`：锁是跨流水线的，同一把 key +
-  # cancel-in-progress 会把并行的「质量门禁」那条掐掉（同款死因）。
-  # 实验期的双派发竞态窗随自托管兜底推送一起消失：现在只有一个写者。
+    # ── GitHub 镜像同步（平台池 · 正式出口）──────────
+    #
+    # 自托管节点到 github.com:443 的出网间歇不通（实测一次：重试 6 次耗 203s 全败、整格红、判决格整片 skipped），而平台池的腾讯云侧是另一条出网路径、稳。
+    # 按 #3378 后续指令：自托管主列那格停用，推送与派发**整个**由这一条
+    # 承担 —— 不装依赖、分钟级、单格。
+    #
+    # 实验期的两个旗标随转正一起摘掉：
+    #   · `--once`（四跳各只试一次、不重试）⇒ 恢复缺省的重试档：egress 抖动下按
+    #     `PUSH_RETRY_BUDGET_MS` / `LFS_PUSH_RETRY_BUDGET_MS` 退避重试，只有持续不通才交账；
+    #   · `--readout`（退码恒 0）⇒ 退码生效：推不出去 / 派发失败即非零。
+    # ⚠️ 退码承重**不**等于「靠判断推送成功拦合」：这一条在平台池、不在 `质量门禁`
+    # 的 `pull_request` build 里；后续流程走不通（GA 没跑起来 / 没送回结论）由 `质量门禁`
+    # 的 `GA 回调结论回读` 超时判红兜住（§13.6 承重锚不变）。
+    #
+    # ⚠️ 锁**不**共用 `pr-$CNB_PULL_REQUEST_IID`：锁是跨流水线的，同一把 key +
+    # cancel-in-progress 会把并行的「质量门禁」那条掐掉（同款死因）。
+    # 实验期的双派发竞态窗随自托管兜底推送一起消失：现在只有一个写者。
     - name: GitHub 镜像同步（平台池）
       # 流水线名带「（平台池）」后缀：与 `质量门禁` 里那条**停用的同名 stage**
       # 区分开，也和 #3346 实验期的名字划清。下面的 stage 仍叫 `GitHub 镜像同步` ——

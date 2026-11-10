@@ -86,10 +86,23 @@ const HOSTED_MIRROR_PIPELINES = [
   "GitHub master 镜像（平台池）",
 ] as const;
 
+/** 质量门禁（#3478 起平台池例外）：主列只剩站内回读一格，形态见专用 describe。 */
+const PR_GATE_PIPELINE = "质量门禁" as const;
+
 /** 从 `- name:` 那一行起，收到**下一个 2 空格事件键**为止（含 push 之后的事件）。 */
 function nextEventAt(text: string, from: number): number {
   const rest = text.slice(from).split("\n").slice(1).join("\n");
   const m = /\n {2}[a-zA-Z_][\w"-]*:/.exec(rest);
+  return m ? from + 1 + m.index : text.length;
+}
+
+/** 从某个顶层锚点（`.xxx: &xxx`）起，收到**下一个顶层锚点**为止。
+ *  `.gates` 这类 stage 清单锚点没有「下一个事件键」可截，用它取正文段。
+ *  锚点名必须带**前导点**（`.gates:`），否则起始行自己的残段（「gates: &gates」）
+ *  会当场命中、把正文段截成空。 */
+function nextAnchorAt(text: string, from: number): number {
+  const rest = text.slice(from + 1);
+  const m = /^\.[a-z][\w.-]*:\s*&/m.exec(rest);
   return m ? from + 1 + m.index : text.length;
 }
 
@@ -1417,20 +1430,91 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     // ⚠️ 不钉写死条数（过去钉 5 = 把「今天有几条流水线」当判据）：基准从文本现推，一条流水线必然带且只带一个 6 空格 `stages:`，引用数与它对齐；删某条 `stages:` 同样红。
     const refs = text.match(/^\s+-\s*<<:\s*(?:\[\s*)?\*\w+/gm) ?? [];
     const stageLists = text.match(/^ {6}stages:/gm) ?? [];
-    /* 平台池镜像出口（ISSUE #3346 实验转正 / #3418；push 出口 #3426）是常驻例外：
-     * 它**刻意**不吃 `*common`（runner / docker / lock 全自带 —— 去 platform pool
-     * 正是「自托管出网不稳、换一条出网路径」这件事本身）。 */
-    const hostedMirror = HOSTED_MIRROR_PIPELINES.filter((name) => text.includes(`- name: ${name}`));
+    /* 平台池流水线（ISSUE #3346 实验转正 / #3418；push 出口 #3426；主列 #3478）是常驻例外：
+     * 它们**刻意**不吃 `*common`（runner / docker / lock 全自带 —— 镜像出口去 platform pool
+     * 正是「自托管出网不稳、换一条出网路径」这件事本身；主列只剩一格站内回读，
+     * 自托管的算力与缓存对它没有对象）。 */
+    const poolPipelines = [...HOSTED_MIRROR_PIPELINES, PR_GATE_PIPELINE].filter((name) =>
+      text.includes(`- name: ${name}`),
+    );
     expect(
-      refs.length + hostedMirror.length,
-      `锚点引用数（${refs.length}）+ 例外流水线数（${String(hostedMirror.length)}）` +
+      refs.length + poolPipelines.length,
+      `锚点引用数（${refs.length}）+ 平台池例外流水线数（${String(poolPipelines.length)}）` +
         `与带 \`stages:\` 的流水线数（${stageLists.length}）对不上 —— 有一条流水线既没接上 ` +
-        "`*common` 又没登记为例外，它会静默回落到计费的平台池",
+        "`*common` 又没登记为例外，它会静默回落到计费的平台池（或反向：例外登记了却还在吃锚点）",
     ).toBe(stageLists.length);
     expect(
       refs.length,
       "一条流水线都没引用锚点（`.common` 被删了或换了形状）",
     ).toBeGreaterThanOrEqual(5);
+  });
+
+  it("质量门禁（ISSUE #3478 迁平台池）：只剩站内回读一格，形态与镜像出口同族", () => {
+    /* 主列判据全在 GA（pr-gate.yml 五 job），CNB 这一侧只剩「站内回读结论」+「红了立案」
+     * 两件纯 API 动作 —— 不吃 node_modules、不碰 Windows 特性，留在自托管已无对象。
+     * 这是对 #1993「门禁主列永远自托管」的显式推翻，形态判据在这里钉死：
+     * 平台池标签、无 namespace: group、不吃锚点、script 无 PowerShell 前缀与 cp936 外壳、
+     * 锁仍是 pr-$CNB_PULL_REQUEST_IID 这把钥匙唯一的用户、endStages 是立案格。 */
+    const text = readRegisteredConfig();
+    const at = text.indexOf(`- name: ${PR_GATE_PIPELINE}`);
+    expect(at, "质量门禁流水线找不到条目起点").toBeGreaterThan(-1);
+    const chunk = text
+      .slice(at, nextEventAt(text, at))
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("#"))
+      .join("\n");
+    expect(chunk, "质量门禁没有点名平台池标签").toMatch(/^\s+tags:\s*\n\s+-\s*cnb:arch:amd64\s*$/m);
+    expect(
+      chunk,
+      "质量门禁写了 namespace: group —— 主列已迁平台池，写回自托管等于整条回退",
+    ).not.toMatch(/namespace:\s*group\b/);
+    expect(
+      chunk,
+      "质量门禁引用了 `*common` —— 它会继承自托管 runner（Windows 节点），迁移被静默撤销",
+    ).not.toMatch(/<<:\s*(?:\[\s*)?\*\w+/);
+    /* 平台池是 Linux 容器（node 镜像 + cnb-cli 预装，#3457）：stage shell 是 `sh`，
+     * PowerShell 前缀会被拆碎、cp936 外壳在 Linux 上是多余一层 —— 与镜像出口同一组判据。
+     * stage 正文住在 `.gates` 锚点里（流水线侧是 `stages: *gates` 引用），所以 script 行
+     * 的判据对象是**锚点段**，不是流水线 chunk。 */
+    expect(
+      chunk,
+      "质量门禁的 stages 不是 `.gates` 引用 —— 锚点结构变了，下面的 stage 判据落空",
+    ).toContain("stages: *gates");
+    const gatesAt = text.indexOf(".gates: &gates");
+    expect(gatesAt, "`.gates` 锚点找不到 —— stage 正文无从判起").toBeGreaterThan(-1);
+    const gatesChunk = text
+      .slice(gatesAt, nextAnchorAt(text, gatesAt))
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("#"))
+      .join("\n");
+    const gateScriptLines = gatesChunk.split("\n").filter((line) => /^\s+script:\s/.test(line));
+    expect(gateScriptLines.length, "`.gates` 解析不出 script 行").toBeGreaterThan(0);
+    for (const line of gateScriptLines) {
+      expect(
+        line,
+        "`.gates` 的 script 带了 Windows PowerShell 语法（[Text.Encoding]）",
+      ).not.toContain("[Text.Encoding]");
+      expect(
+        line,
+        "`.gates` 的 script 还包着 ci-cp936-exit.mjs —— 平台池上它是多余一层",
+      ).not.toContain("ci-cp936-exit.mjs");
+    }
+    /* 主列 stage 只剩一格：站内回读（fail-closed 承重锚，§13.6「PR 跑绿才合并」）。 */
+    expect(
+      gatesChunk,
+      "质量门禁的主列不是「GA 回调结论回读」一格 —— 又有格子回流自托管了",
+    ).toContain("- name: GA 回调结论回读");
+    expect(gatesChunk, "质量门禁的回读脚本被改写 —— 站内回读是唯一承重形态").toContain(
+      "node scripts/ci-ga-verdict-readout.mjs",
+    );
+    /* endStages 立案格内联在流水线里（sh 形态），锁仍是 pr-$IID 这把钥匙唯一的用户（镜像出口用 mirror-pr-$IID）。 */
+    expect(chunk, "质量门禁丢了 endStages 立案格 —— 红了没人立案").toContain("- name: PR 失败立案");
+    expect(chunk, "立案格 script 不是直跑形态").toContain(
+      "node scripts/ci-pr-failure-issue.mjs --no-block",
+    );
+    expect(chunk, "质量门禁的锁不是 pr-$CNB_PULL_REQUEST_IID —— 这把钥匙的唯一用户变了").toContain(
+      "key: pr-$CNB_PULL_REQUEST_IID",
+    );
   });
 
   it("平台池镜像出口（ISSUE #3418 转正）：刻意平台池、真实推送与派发、自带锁", () => {
