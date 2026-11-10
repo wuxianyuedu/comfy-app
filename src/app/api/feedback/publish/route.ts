@@ -69,7 +69,7 @@ export async function POST(request: Request) {
   if (packageName === null) {
     return NextResponse.json({ ok: false, error: "反馈包名不合法" }, { status: 400 });
   }
-  const packageDir = /*turbopackIgnore: true*/ path.join(LOG_EXPORT_DIR, packageName);
+  const packageDir = path.join(/*turbopackIgnore: true*/ LOG_EXPORT_DIR, packageName);
 
   try {
     const probe = await probeCnbCli();
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     }
 
     const issueMd = await fs.promises.readFile(
-      /*turbopackIgnore: true*/ path.join(packageDir, "issue.md"),
+      path.join(/*turbopackIgnore: true*/ packageDir, "issue.md"),
       "utf8",
     );
     const firstLine = issueMd.split("\n")[0] ?? "";
