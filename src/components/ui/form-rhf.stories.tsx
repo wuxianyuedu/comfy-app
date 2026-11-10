@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { useForm } from "react-hook-form";
 
 import { Button } from "~/components/ui/button";

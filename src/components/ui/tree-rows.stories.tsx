@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { Disclosure } from "~/components/ui/disclosure";
 import { TREE_INDENT_STEP, TreeChildren, TreeRow, indentClass } from "~/components/ui/tree-rows";

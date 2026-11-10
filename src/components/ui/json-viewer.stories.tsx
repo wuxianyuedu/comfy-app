@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { JsonViewer } from "~/components/ui/json-viewer";
 import { LazyJsonViewer } from "~/components/ui/lazy-json-viewer";

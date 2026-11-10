@@ -45,10 +45,6 @@ allowBuilds:
   esbuild: true
   # msw: 含 postinstall；按 §7 规则新增含构建脚本的依赖需在 allowBuilds 显式批准
   msw: true
-  # core-js-pure：@storybook/nextjs 经 @pmmmwh/react-refresh-webpack-plugin 传递引入。
-  # 其 postinstall 只是 `require('./postinstall')` 里打印捐献提示（try/catch 吞掉一切），
-  # 不产出任何产物 —— 显式拒绝，避免非交互 install 触发 ERR_PNPM_IGNORED_BUILDS。
-  core-js-pure: false
 
 # esbuild 安全修复 + 单实例收敛（ISSUE #1319 第二批）：drizzle-kit（当前 latest 0.31.11）
 # 依赖的 @esbuild-kit/esm-loader / @esbuild-kit/core-utils 都已废弃（包里自带
@@ -114,19 +110,6 @@ overrides:
   #     展开，`{a},b}` 形态的 ReDoS）。同 `fast-uri` 那条 —— **旧 override 会被新 advisory 追上**。
   'brace-expansion@1': '1.1.21'
   'brace-expansion@5': '5.0.12'
-  #   · webpack-dev-middleware 6.x → 7.4.5（`@storybook/nextjs >
-  #     @storybook/builder-webpack5 > webpack-dev-middleware`，advisory #1240027：
-  #     `publicPath` 不以 `/` 结尾时的路径穿越）。
-  #     本块里第一条**跨 major**（ISSUE #3267 之后又多了两条）：Storybook 10.6.1
-  #     把自己的 range 钉在 6.x，
-  #     不动到这条就消不掉，而 audit 判据给出的两条出路里「登记进基线」被明确排除
-  #     （棘轮的后门）。代价面只有组件工作台的 dev server（`pnpm storybook`）——
-  #     本地预览用、不对外提供服务。**验证走它真正干活的那一面**，不是「装得上」：
-  #     dev server 起来后 `/`、`/iframe.html`、`/index.json` 全 200，后两个正是 wdm 从
-  #     内存文件系统 serve 的（日志里 `[webpack-dev-middleware] wait until bundle finished`
-  #     在场）；`storybook:build` 出件；`pnpm why webpack-dev-middleware` 只剩 7.4.5 一个版本。
-  #     哪天 storybook dev 起不来，先回看这一条。
-  'webpack-dev-middleware@6': '7.4.5'
   #   · ISSUE #1282 第三批（advisory 库更新后新出现的三条，全部传递依赖、全部有最小可达
   #     修复版，所以按 §13.5.9 走出路 ① 而不是登记进基线）：
   #     proxy-addr 2.0.7 → 2.0.8（`shadcn > @modelcontextprotocol/sdk > express`，
@@ -172,9 +155,12 @@ overrides:
   #       4.13.7 → 4.13.11（ISSUE #3267）：#1242595（`serveStatic` 把请求路径二次解码，
   #       可绕过静态路径上的 middleware）patched `>=4.13.11`。
   'hono@4': '4.13.11'
-  #     · postcss-selector-parser 7.1.5 → 7.1.6（`@storybook/nextjs > css-loader >
-  #       postcss-modules-*` 与 `shadcn > postcss-selector-parser`，flat selector 解析的
-  #       二次复杂度）。构建期工具链，不进产物。
+  #     · postcss-selector-parser 7.1.5 → 7.1.6（`shadcn > postcss-selector-parser`，
+  #       flat selector 解析的二次复杂度）。构建期工具链，不进产物。
+  #       ⚠️ 它的**另一条路径**（`@storybook/nextjs > css-loader > postcss-modules-*`）
+  #       随 ISSUE #3372 的 webpack → vite 迁移一起消失了（`@storybook/nextjs` 已移除，
+  #       `pnpm why postcss-selector-parser` 现在只剩 shadcn 一条）。这条 override 留着
+  #       ——它守的是**还在**的那条路径。
   'postcss-selector-parser@7': '7.1.6'
   #     · fast-copy 4.0.4 → 4.1.0（`pino-pretty > fast-copy`，深拷贝深嵌套对象时栈耗尽）。
   #       本仓唯一一条**直接依赖链上**的（`pino-pretty` 在 dependencies 里）——

@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { WorksGallery } from "~/components/studio/WorksGallery";
 import { projectScene, useSeededProjects } from "../../../.storybook/screen-frame";

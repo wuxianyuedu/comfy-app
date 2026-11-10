@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { FolderOpen, HardDrive, Play, Trash2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";

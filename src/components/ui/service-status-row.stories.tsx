@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { COMFYUI_DEFAULT_PORT } from "~/lib/endpoints";
 import { StatusDot } from "~/components/ui/status-dot";

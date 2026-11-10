@@ -102,7 +102,7 @@ afterEach(() => {
   }
 });
 
-const GOOD_STORY = `import type { Meta, StoryObj } from "@storybook/nextjs";
+const GOOD_STORY = `import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Thing } from "./thing";
 
 type ThingVariant = NonNullable<React.ComponentProps<typeof Thing>["variant"]>;

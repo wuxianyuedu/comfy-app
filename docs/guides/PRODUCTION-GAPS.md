@@ -910,6 +910,14 @@
       收摊用 `scripts/reap-process.mjs` 杀整棵树。
       证据：`tests/helpers/symlink-dir.ts`、`pnpm-workspace.yaml`（overrides）、
       `changelog.d/0-storybook-check-junction-and-wdm.md`。
+      **后续（ISSUE #3372）**：那条链本身没了 —— 组件工作台从 webpack 版框架
+      （`@storybook/nextjs`）迁到 vite 版（`@storybook/nextjs-vite`），
+      `@storybook/builder-webpack5` 与 `webpack-dev-middleware` 一起离开依赖图
+      （`pnpm why webpack-dev-middleware` 现在是空输出），于是本条那条
+      `'webpack-dev-middleware@6': '7.4.5'` 的 override **随之删除**
+      （留着一条不再命中的 override = 给一个不存在的包钉版本）。
+      本条保留在台账里是因为它记的是**当时那次的因果**（为什么当时非要走
+      override ① 而不是登记进基线），不是「现在还有这个问题」。
 - [x] **E12 新落地的跨平台判据在开发机上「只能为不可能红而绿」：`executable-resolve` 的 POSIX 那几档（本批修复）**：
       发现路径是台账 E7 那一批 rebase 时撞上的 —— `99323be7`（ISSUE #1327，控制台起进程前先解析可执行形态）
       落进 master 时带着**它自己的 5 条红**：`executable-resolve.test.ts` 4 条 + `console-run.test.ts` 1 条，

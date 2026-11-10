@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { LogFilterBar } from "~/components/studio/logs/LogFilterBar";
 import { useLogPanel } from "~/components/studio/logs/LogProvider";

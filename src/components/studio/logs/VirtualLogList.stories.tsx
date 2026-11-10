@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { LogRow } from "~/components/studio/logs/LogRow";
 import { LOG_ROW_SINGLE } from "~/components/studio/logs/log-virtual";

@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { MessageCenterPanel } from "./MessageCenterPanel";
 /* 注入层走相对路径：`~` 别名映射的是 `./src/*`，`.storybook/` 不在它的取值域里
