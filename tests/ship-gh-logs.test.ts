@@ -489,7 +489,7 @@ describe("⑤ CNB 侧优先（ISSUE #3437）：站内读 relay，本地不出站
     let ghCalls = 0;
     const fetchImpl = ((input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-      if (url.includes("api.github.com")) ghCalls += 1;
+      if (new URL(url).hostname === "api.github.com") ghCalls += 1;
       return Promise.resolve(textResponse("not found", 404));
     }) as typeof fetch;
     const r = await runOnce({
