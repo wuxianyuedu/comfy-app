@@ -120,11 +120,18 @@ describe("产品版本号三处同步（D7）", () => {
   });
 
   test("④ `package.json` 有 `check:app-version` 入口（判据有执行者）", () => {
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(readFileSync(path.join(REPO_ROOT, "package.json"), "utf8")) as {
-      scripts: Record<string, string>;
-    };
-    expect(pkg.scripts["check:app-version"]).toBe("node scripts/check-app-version.cjs");
+    /** package.json 的只读形状：外来 JSON 先落 unknown，再校验 scripts 是对象。 */
+    function isPackageJson(v: unknown): v is { scripts: Record<string, unknown> } {
+      if (typeof v !== "object" || v === null || !("scripts" in v)) return false;
+      const scripts: unknown = v.scripts;
+      return typeof scripts === "object" && scripts !== null && !Array.isArray(scripts);
+    }
+
+    const parsed: unknown = JSON.parse(readFileSync(path.join(REPO_ROOT, "package.json"), "utf8"));
+    if (!isPackageJson(parsed)) {
+      throw new Error("package.json 的 scripts 不是对象");
+    }
+    expect(parsed.scripts["check:app-version"]).toBe("node scripts/check-app-version.cjs");
   });
 
   test("④ pre-commit 的 D 组真跑这一步（写在文件里没人跑 = 没有等价）", () => {

@@ -10,6 +10,22 @@ import { defineGateRepo, describe } from "./helpers/gate-repo";
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 import { vi } from "vitest";
 
+/**
+ * 外来值（`require` 的模块 / `execFileSync` 抛出的对象）先落 `unknown`，
+ * 过这道守卫后逐字段 `typeof` 收窄才使用，不用类型断言。
+ */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+/** `require` 进来的 CJS 模块导出面（下面两个函数）。 */
+function isFormatModule(v: unknown): v is {
+  globToRegExp: (glob: string) => RegExp;
+  isIgnored: (rel: string) => boolean;
+} {
+  return isRecord(v) && typeof v.globToRegExp === "function" && typeof v.isIgnored === "function";
+}
+
 /* 每条用例都要在临时工作区里真跑 git（init / add / commit）并**真起 prettier**：门禁按 glob 各调一次
  * `prettier --list-different`，实测单次约 300~550ms。默认 5s 超时本机「刚好够用」，CI 全量并行满载会被击穿
  * （`Test timed out in 5000ms`，且报错落在调度顺序靠后的任意一条上 —— 看似某条写得慢，实为整条固定成本顶着
@@ -155,12 +171,12 @@ describe("oxfmt 格式判据（硬闸）", () => {
 });
 
 describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
-  /* SAFETY: 类型断言已复核 */
   // oxlint-disable-next-line typescript/no-require-imports
-  const mod = require("../scripts/check-format.cjs") as {
-    globToRegExp: (glob: string) => RegExp;
-    isIgnored: (rel: string) => boolean;
-  };
+  const required: unknown = require("../scripts/check-format.cjs");
+  if (!isFormatModule(required)) {
+    throw new Error("check-format.cjs 的导出面不对");
+  }
+  const mod = required;
 
   /* SAFETY: 类型断言已复核 */
   test.for(
@@ -370,10 +386,17 @@ describe("oxfmt 格式判据 --staged 在合并态收窄输入面（ISSUE #2747�
         env: gitSandboxEnv(),
       }).trim();
     } catch (error) {
-      const err = error as { message: string; stderr?: string };
+      const fields = isRecord(error) ? error : null;
+      const stderr = fields?.stderr;
+      const message = fields?.message;
       /* 空串 stderr 也算「没拿到那句话」（git 走 stdout-only 失败形态时就是这样），
        * 所以这里判的是「有没有内容」而不是「是不是 undefined」—— 用 `??` 会把空串端出去。 */
-      const why = err.stderr !== undefined && err.stderr.trim() !== "" ? err.stderr : err.message;
+      let why: string;
+      if (typeof stderr === "string" && stderr.trim() !== "") {
+        why = stderr;
+      } else {
+        why = typeof message === "string" ? message : String(error);
+      }
       throw new Error(`git ${args.join(" ")} 失败：${why}`, { cause: error });
     }
   }

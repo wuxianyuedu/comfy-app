@@ -23,6 +23,18 @@ type Entry = {
   value: number;
 };
 
+/**
+ * 外来值（`JSON.parse` 的账本）先落 `unknown`，过这道守卫后逐字段 `typeof` 收窄才使用。
+ */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+/** 账本的导出面：逐字段认 `entries` 是数组。 */
+function isLedger(v: unknown): v is { entries: Array<Entry> } {
+  return isRecord(v) && Array.isArray(v.entries);
+}
+
 /** 一条 A 档阻断阈值 + 一条 B 档地板 + 一条 report，构成最小可判的账。 */
 const baseEntries = (): Array<Entry> => [
   {
@@ -269,10 +281,12 @@ describe("analyze：整份未入账的判据文件（扫描根 = 磁盘现算）
 
   it("自指面在扫描根里，且真仓在这张面上今天全绿", () => {
     const root = path.resolve(__dirname, "..");
-    /* SAFETY: 类型断言已复核 */
-    const ledger = JSON.parse(
+    const ledger: unknown = JSON.parse(
       readFileSync(path.join(root, "scripts/.gate-thresholds.json"), "utf8"),
-    ) as { entries: Array<Entry> };
+    );
+    if (!isLedger(ledger)) {
+      throw new Error(".gate-thresholds.json 里没有 entries");
+    }
     /* glob 写错的失效形态是「面为空 ⇒ 整格恒绿」，所以这里按磁盘自己数一遍：
        扫描根必须非空、必须含这份判据自己（`MIN_ENTRIES` 那条自证的下限在账里），
        否则「覆盖面」这句话只是断言里的一个装饰。 */
@@ -344,10 +358,12 @@ describe("账的覆盖面：export 前缀不是挡箭牌", () => {
 describe("真仓自证：这本账现在必须与源码一致", () => {
   it("账里每条都能在源码里定位到，且数值相等", () => {
     const root = path.resolve(__dirname, "..");
-    /* SAFETY: 类型断言已复核 */
-    const ledger = JSON.parse(
+    const ledger: unknown = JSON.parse(
       readFileSync(path.join(root, "scripts/.gate-thresholds.json"), "utf8"),
-    ) as { entries: Array<Entry> };
+    );
+    if (!isLedger(ledger)) {
+      throw new Error(".gate-thresholds.json 里没有 entries");
+    }
     const r = analyze({
       entries: ledger.entries,
       readSource: (f: string) => {

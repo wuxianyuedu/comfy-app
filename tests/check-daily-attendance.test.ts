@@ -25,6 +25,14 @@ import {
   readOffline,
 } from "../scripts/check-daily-attendance.mjs";
 
+/**
+ * 外来值（子进程 stdout 的 JSON / 平台列表原样）一律先落 `unknown`：
+ * 过这道守卫拿到宽松对象视图，再逐字段 `typeof` 收窄才使用，不用类型断言。
+ */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = path.join(ROOT, "scripts/check-daily-attendance.mjs");
 
@@ -223,13 +231,12 @@ describe("daily-attendance：出勤结论跟着读数走", () => {
       expect(isDailyDispatch({ event }), event).toBe(false);
     }
     /* 多条里挑最近的那一条 —— 拿旧的当「上一次」会把缺勤读成出勤。 */
-    /* SAFETY: 类型断言已复核 */
-    const picked = latestDailyDispatch([
+    const picked: unknown = latestDailyDispatch([
       listed("old", "crontab: 0 4 * * *", "2026-10-20T16:00:00.000Z"),
       listed("new", "crontab: 0 0 * * *", RECENT),
       listed("pr", "pull_request", "2026-10-23T01:00:00.000Z"),
-    ]) as { sn: string } | null;
-    expect(picked?.sn).toBe("new");
+    ]);
+    expect(isRecord(picked) ? picked.sn : undefined).toBe("new");
   });
 });
 
@@ -350,10 +357,10 @@ describe("daily-attendance：两条定时档交错时，判的是每日那一档
     ];
     const asOwn = pickDailySubject({ builds, details, lanes: ["桌面成品包"] });
     /* `found` 是那一族的判别式：两支的形状不同，`build` 只在 `found: true` 那一支上有意义，
-     * 而它是 `any`（平台列表原样）—— 直接点 `.sn` 会被 lint 判成不安全成员访问，
-     * 这里要的是「挑到了哪一跑」这句话，所以显式收窄成 `{ sn }` 再读。 */
+     * 而它是平台列表原样（`unknown`）—— 先过对象守卫收窄，再读 `sn`，不用类型断言。 */
     expect(asOwn.found).toBe(true);
-    expect(asOwn.found ? (asOwn.build as { sn: string }).sn : "").toBe("cnb-uuu-1k672u3j6");
+    const ownBuild: unknown = asOwn.found ? asOwn.build : null;
+    expect(isRecord(ownBuild) ? ownBuild.sn : "").toBe("cnb-uuu-1k672u3j6");
     const asDaily = pickDailySubject({ builds, details });
     expect(asDaily.found).toBe(false);
     /* `strays` 两支都有，所以它不需要判别就能读 —— 这一句才是「让开了而不是没收到」。 */
@@ -430,8 +437,8 @@ describe("daily-attendance：命令行那一跳", () => {
       ),
     });
     expect(detailFile.code, detailFile.out).toBe(CODE.PRESENT);
-    /* SAFETY: 类型断言已复核 */
-    expect((JSON.parse(detailFile.out) as { verdict: string }).verdict).toBe("present");
+    const payload: unknown = JSON.parse(detailFile.out);
+    expect(isRecord(payload) ? payload.verdict : undefined).toBe("present");
 
     /* **真**那份 `get-build-status -v` 只有 `status` + `pipelinesStatus`（实测），
      * 认不出它是哪一类派发、也认不出它是什么时候落的 ⇒ 必须落到「未校验」，

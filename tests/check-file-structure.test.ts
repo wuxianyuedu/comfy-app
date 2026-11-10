@@ -22,6 +22,25 @@ import { pythonCandidates } from "../src/lib/process/python-candidates";
 import { copyGateDeps } from "./helpers/gate-repo";
 import { stripComments } from "./helpers/strip-comments";
 
+/**
+ * 外来值（`JSON.parse` 的结果 / `execFileSync` 抛出的对象）一律先落 `unknown`：
+ * 过这道守卫拿到宽松对象视图，再逐字段 `typeof` 收窄才使用，不用类型断言。
+ */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+/** `tauri.conf.json` 里那张窗口表：逐字段认到 `app.windows` 这一层。 */
+type SplashWindowConf = {
+  decorations?: boolean;
+  height: number;
+  label?: string;
+  width: number;
+};
+function isSplashConfig(v: unknown): v is { app: { windows: Array<SplashWindowConf> } } {
+  return isRecord(v) && isRecord(v.app) && Array.isArray(v.app.windows);
+}
+
 /** 「这台机器上有没有某个解释器」的候选表与探测参数 —— 顺序取自各自判据，本文件不抄第二份。
  * `powershell` 在前：Windows PowerShell 5.1 每台 Windows 都有，`pwsh`(7) 是可选安装；反过来先试 `pwsh` 只会在
  * 装了 7 的机器上多起一次进程。`python` 那条走 `pythonCandidates()`（平台差异在原处回答，见那份模块头注）。 */
@@ -64,15 +83,13 @@ function runWith(args: Array<string>): { code: number; output: string } {
     );
     return { code: 0, output };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as {
-      status?: number;
-      stderr?: string;
-      stdout?: string;
-    };
+    const fields = isRecord(error) ? error : null;
+    const status = fields?.status;
+    const stdout = fields?.stdout;
+    const stderr = fields?.stderr;
     return {
-      code: typeof e.status === "number" ? e.status : 1,
-      output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
+      code: typeof status === "number" ? status : 1,
+      output: `${typeof stdout === "string" ? stdout : ""}${typeof stderr === "string" ? stderr : ""}`,
     };
   }
 }
@@ -1201,17 +1218,10 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     label?: string;
     width: number;
   } => {
-    /* SAFETY: 类型断言已复核 */
-    const conf = JSON.parse(readFileSync(CONF, "utf8")) as {
-      app: {
-        windows: Array<{
-          decorations?: boolean;
-          height: number;
-          label?: string;
-          width: number;
-        }>;
-      };
-    };
+    const conf: unknown = JSON.parse(readFileSync(CONF, "utf8"));
+    if (!isSplashConfig(conf)) {
+      throw new Error("tauri.conf.json 里没有窗口表");
+    }
     const win = conf.app.windows.find((w) => w.label === "splash") ?? conf.app.windows[0];
     if (!win) {
       throw new Error("tauri.conf.json 里没有窗口配置");

@@ -41,6 +41,41 @@ vi.setConfig({ hookTimeout: 30_000 });
 const REPO_ROOT = process.cwd();
 const SCRIPT = join(REPO_ROOT, "scripts", "base-check.mjs");
 
+/** execFileSync 抛出的失败对象：只认对象这一层，字段缺省由 `??` 兜底。 */
+function isExecFailure(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+/** 外来值是不是数组（元素按 unknown 读）。 */
+function isUnknownArray(v: unknown): v is Array<unknown> {
+  return Array.isArray(v);
+}
+
+/** --base --json 的结论形状：外来 stdout 逐字段收窄。 */
+function isBatchJson(v: unknown): v is {
+  ref: string;
+  rows: Array<{ baseCode: number | null; label: string; verdict: string }>;
+  summary: string;
+} {
+  if (typeof v !== "object" || v === null) return false;
+  if (!("ref" in v) || typeof v.ref !== "string") return false;
+  if (!("summary" in v) || typeof v.summary !== "string") return false;
+  if (!("rows" in v)) return false;
+  const rows: unknown = v.rows;
+  if (!isUnknownArray(rows)) return false;
+  return rows.every(
+    (row) =>
+      typeof row === "object" &&
+      row !== null &&
+      "label" in row &&
+      typeof row.label === "string" &&
+      "verdict" in row &&
+      typeof row.verdict === "string" &&
+      "baseCode" in row &&
+      (typeof row.baseCode === "number" || row.baseCode === null),
+  );
+}
+
 /** 在给定目录跑一条 git 命令。
  * @param cwd 工作目录
  * @param args git 的子命令与参数
@@ -77,16 +112,11 @@ function runBaseCheckOnce(
     });
     return { code: 0, stdout, stderr: "" };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as {
-      status?: number;
-      stderr?: string;
-      stdout?: string;
-    };
+    const e: Record<string, unknown> = isExecFailure(error) ? error : {};
     return {
-      code: e.status ?? -1,
-      stdout: String(e.stdout ?? ""),
-      stderr: String(e.stderr ?? ""),
+      code: typeof e.status === "number" ? e.status : -1,
+      stdout: typeof e.stdout === "string" ? e.stdout : "",
+      stderr: typeof e.stderr === "string" ? e.stderr : "",
     };
   }
 }
@@ -617,8 +647,7 @@ describe("base-check —— 命令解析", () => {
   test("标签不存在 ⇒ 判失败并列出候选（不许猜）", () => {
     const r = resolveGateCommand(["这个标签不存在"]);
     expect(r.ok).toBe(false);
-    /* SAFETY: 类型断言已复核 */
-    expect(String((r as { error: string }).error)).toContain("可用");
+    expect(r.ok ? "" : String(r.error)).toContain("可用");
   });
 
   test("没给命令 ⇒ 判失败", () => {
@@ -652,13 +681,12 @@ describe("base-check —— 目标存在性（127 那条边界）", () => {
   });
 
   test("normalizeRun 把 spawn error 归成 127", () => {
-    /* SAFETY: 类型断言已复核 */
-    const fake = {
+    const fake: Parameters<typeof normalizeRun>[0] = {
       error: new Error("ENOENT"),
       status: null,
       stdout: "",
       stderr: "",
-    } as unknown as Parameters<typeof normalizeRun>[0];
+    };
     expect(normalizeRun(fake).code).toBe(127);
   });
 });
@@ -1310,16 +1338,11 @@ describe("base-check --base —— 真仓库上的端到端", () => {
     const r = makeBatchRepo({ baselineRed: true });
     try {
       const { stdout } = runBaseCheck(r.work, ["--base", "--json"]);
-      /* SAFETY: 类型断言已复核 */
-      const parsed = JSON.parse(stdout) as {
-        ref: string;
-        rows: Array<{
-          baseCode: number | null;
-          label: string;
-          verdict: string;
-        }>;
-        summary: string;
-      };
+      const raw: unknown = JSON.parse(stdout);
+      if (!isBatchJson(raw)) {
+        throw new Error("--base --json 的结论形状不对");
+      }
+      const parsed = raw;
       expect(parsed.summary).toBe("baseline-red");
       expect(parsed.ref).toMatch(/up\/master/);
       const hit = parsed.rows.find((x) => x.label === "全仓判据甲");

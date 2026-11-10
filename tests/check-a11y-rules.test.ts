@@ -16,6 +16,16 @@ import { loadJudgeModule, REAL_ROOT, SCRIPT } from "./helpers/a11y-effective-con
  */
 const CLI_BUDGET = { timeout: 120_000 };
 
+/** 外来值是不是普通对象（数组不算）：本文件收窄配置 / 导出面的统一入口。 */
+function isObjectShape(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** 判据配置的只读形状：overrides 可有可无，在则必须是数组。 */
+function isOxlintConfig(v: unknown): v is { overrides?: Array<unknown> } {
+  return isObjectShape(v) && (v.overrides === undefined || Array.isArray(v.overrides));
+}
+
 /* 收集期暖机一次：把「每进程只付一次」的真加载放在用例计时之外，否则谁排第一条就替全文件付那笔。
  * `a11y-rules-gate.test.ts` 早有这一步（`await judgeWith(REAL_LEDGER)`）；暖机不替用例断言，失败时抛、整份文件红。 */
 await loadJudgeModule().loadOxlintConfig();
@@ -27,18 +37,18 @@ test("真加载：求值的是仓库根那份 `oxlint.parity.config.mjs`，且�
    * 它**只**作为下面那条话术的读数，不当断言：首次求值的墙钟是机器读数，
    * 不是判据的性质。 */
   const first = Date.now();
-  /* SAFETY: 类型断言已复核 */
-  const config = (await loadOxlintConfig()) as {
-    overrides?: Array<unknown>;
-  };
+  const config: unknown = await loadOxlintConfig();
+  if (!isOxlintConfig(config)) {
+    throw new Error("判据配置不是对象");
+  }
   const firstMs = Date.now() - first;
 
   // 第二次必须是「同一份」且是常数时间 —— 共进程的全部收益都在这一条上。
   const second = Date.now();
-  /* SAFETY: 类型断言已复核 */
-  const again = (await loadOxlintConfig()) as {
-    overrides?: Array<unknown>;
-  };
+  const again: unknown = await loadOxlintConfig();
+  if (!isOxlintConfig(again)) {
+    throw new Error("判据配置不是对象");
+  }
   const secondMs = Date.now() - second;
 
   expect(Array.isArray(config.overrides)).toBe(true);
@@ -64,17 +74,20 @@ test("真加载：那份配置里确实装着 jsx-a11y 插件（判据的四张�
 });
 
 test("导出面：每个导出都是可调用的（不是「导了没人用」的空壳）", () => {
-  /* SAFETY: 类型断言已复核 */
-  const mod = loadJudgeModule() as unknown as Record<string, unknown>;
-  /* SAFETY: 类型断言已复核 */
-  const { VERIFIED_SURFACES } = mod as {
-    VERIFIED_SURFACES: Record<string, string>;
-  };
-  for (const key of Object.keys(VERIFIED_SURFACES)) {
+  const raw: unknown = loadJudgeModule();
+  if (!isObjectShape(raw)) {
+    throw new Error("判据导出面不对");
+  }
+  const mod: Record<string, unknown> = raw;
+  const surfaces: unknown = raw.VERIFIED_SURFACES;
+  if (!isObjectShape(surfaces)) {
+    throw new Error("VERIFIED_SURFACES 不是对象");
+  }
+  for (const key of Object.keys(surfaces)) {
     expect(typeof mod[key], `导出 \`${key}\` 应当是函数`).toBe("function");
   }
   /* 元数据自己不是函数 —— 它是「导出面 ⇄ 执行者」那份自查表。 */
-  expect(typeof VERIFIED_SURFACES).toBe("object");
+  expect(typeof surfaces).toBe("object");
 });
 
 test("失败路径：真加载失败时带给原因冒出去，不吞（更不把半张表当结论）", () => {
@@ -84,17 +97,17 @@ test("失败路径：真加载失败时带给原因冒出去，不吞（更不�
    * 不许回「空的/半张」配置让上层四向判据静默全绿（§11.23「判据在场 ≠ 判据在跑」）。 */
   const { loadOxlintConfig } = loadJudgeModule();
   return loadOxlintConfig().then(
-    (config) => {
-      /* SAFETY: 类型断言已复核 */
-      const { overrides } = config as { overrides?: Array<unknown> };
-      expect(Array.isArray(overrides)).toBe(true);
-      expect(overrides).not.toHaveLength(0);
+    (config: unknown) => {
+      if (!isOxlintConfig(config)) {
+        throw new Error("判据配置不是对象");
+      }
+      expect(Array.isArray(config.overrides)).toBe(true);
+      expect(config.overrides).not.toHaveLength(0);
     },
     (error: unknown) => {
       // 抛是可以接受的那一支，但**必须**带原因（裸 throw 等于吞掉根因）。
       expect(error).toBeInstanceOf(Error);
-      /* SAFETY: 类型断言已复核 */
-      expect(String((error as Error).message).length).toBeGreaterThan(0);
+      expect(String(error instanceof Error ? error.message : error).length).toBeGreaterThan(0);
     },
   );
 });

@@ -11,6 +11,13 @@ import path from "node:path";
 import { copyGateDeps } from "./helpers/gate-repo";
 import { afterEach, describe, expect, it } from "vitest";
 
+/**
+ * 外来值（`execFileSync` 抛出的对象）先落 `unknown`，过这道守卫后逐字段 `typeof` 收窄才使用。
+ */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
 const SCRIPT = path.resolve(__dirname, "../scripts/check-import-alias.cjs");
 const tempDirs: Array<string> = [];
 
@@ -38,9 +45,10 @@ function scanner(files: Record<string, string>) {
         ),
       };
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      const e = error as { stderr?: string; stdout?: string };
-      return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+      const fields = isRecord(error) ? error : null;
+      const stdout = typeof fields?.stdout === "string" ? fields.stdout : "";
+      const stderr = typeof fields?.stderr === "string" ? fields.stderr : "";
+      return { ok: false, output: `${stdout}${stderr}` };
     }
   };
   return { run };

@@ -40,11 +40,54 @@ type Fact = {
   placeholder?: string;
 };
 
-async function loadFacts(): Promise<Array<Fact>> {
-  /* SAFETY: 类型断言已复核 */
-  const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
-    FACTS: Array<Fact>;
+/**
+ * 外来值（动态 import 的模块 / `execFileSync` 抛出的对象）一律先落 `unknown`：
+ * 过这道守卫拿到宽松对象视图，再逐字段 `typeof` 收窄才使用，不用类型断言。
+ */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+/** `doc-facts.cjs` 的导出面：只逐字段认本文件真正读的那几格。 */
+type DocFactsModule = {
+  FACTS: Array<Fact>;
+  SCOPED_DOC_DIRS: Array<string>;
+  SCOPED_DOC_EXEMPTIONS: Record<string, string>;
+  SCOPED_DOCS: Array<string>;
+};
+function isDocFactsModule(v: unknown): v is DocFactsModule {
+  return (
+    isRecord(v) &&
+    Array.isArray(v.FACTS) &&
+    Array.isArray(v.SCOPED_DOCS) &&
+    Array.isArray(v.SCOPED_DOC_DIRS) &&
+    isRecord(v.SCOPED_DOC_EXEMPTIONS)
+  );
+}
+
+/** 动态 import 的结果先落 `unknown`，过守卫再当模块用（不用双重断言）。 */
+async function loadDocFacts(): Promise<DocFactsModule> {
+  const mod: unknown = await import("../scripts/doc-facts.cjs");
+  if (!isDocFactsModule(mod)) {
+    throw new Error("doc-facts.cjs 的导出面不对");
+  }
+  return mod;
+}
+
+/** `execFileSync` 抛出的失败对象：逐字段 `typeof` 收窄，脏值按既有默认回落。 */
+function execFailure(error: unknown): { code: number; output: string } {
+  const fields = isRecord(error) ? error : null;
+  const status = fields?.status;
+  const stdout = fields?.stdout;
+  const stderr = fields?.stderr;
+  return {
+    code: typeof status === "number" ? status : 1,
+    output: `${typeof stdout === "string" ? stdout : ""}${typeof stderr === "string" ? stderr : ""}`,
   };
+}
+
+async function loadFacts(): Promise<Array<Fact>> {
+  const mod = await loadDocFacts();
   return mod.FACTS;
 }
 
@@ -57,16 +100,7 @@ function runCheck(): { code: number; output: string } {
     });
     return { code: 0, output };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as {
-      status?: number;
-      stderr?: string;
-      stdout?: string;
-    };
-    return {
-      code: typeof e.status === "number" ? e.status : 1,
-      output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
-    };
+    return execFailure(error);
   }
 }
 
@@ -139,8 +173,8 @@ function writeText(abs: string, text: string): void {
       }
       lastError = "写回后读回的内容与预期不一致";
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      lastError = (error as Error).message;
+      lastError =
+        isRecord(error) && typeof error.message === "string" ? error.message : String(error);
     }
   }
   throw new Error(
@@ -158,10 +192,7 @@ function restoreText(abs: string, text: string): void {
  * 「哪条判据在哪跑」写在 SCOPED_DOCS 之外的那几份文件里，不显式并入就没人核（§13.5.10 第 ② 条）。
  */
 async function gateDocs(): Promise<Array<string>> {
-  /* SAFETY: 类型断言已复核 */
-  const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
-    SCOPED_DOCS: Array<string>;
-  };
+  const mod = await loadDocFacts();
   return [
     ...new Set([
       "AGENTS.md",
@@ -279,9 +310,7 @@ describe("校验范围守卫（SCOPED_DOC_DIRS / SCOPED_DOC_EXEMPTIONS）", () =
   };
 
   async function loadScope(): Promise<ScopeMod> {
-    /* SAFETY: 类型断言已复核 */
-    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as ScopeMod;
-    return mod;
+    return await loadDocFacts();
   }
 
   it("仓库当前不存在「未登记也未豁免」的规范文档（守卫基线为绿）", async () => {
@@ -509,10 +538,7 @@ describe("AGENTS.md ↔ standards 漂移守卫", () => {
   });
 
   it("AGENTS.md 由 checkLedgerCommands 显式并入遍历（不进 SCOPED_DOCS、避免生成冗余副本）", async () => {
-    /* SAFETY: 类型断言已复核 */
-    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
-      SCOPED_DOCS: Array<string>;
-    };
+    const mod = await loadDocFacts();
     // AGENTS.md 刻意不入 SCOPED_DOCS：进则被 render-doc-placeholders 复制成
     // docs/generated/AGENTS.md，产物里没有占位符替换、只是同一份内容，反而
     // 让读者以为可以改产物（规范 §13.5.5 明确「禁止手改生成物」）。
@@ -1031,16 +1057,7 @@ describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () =
       });
       return { code: 0, output };
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      const e = error as {
-        status?: number;
-        stderr?: string;
-        stdout?: string;
-      };
-      return {
-        code: typeof e.status === "number" ? e.status : 1,
-        output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
-      };
+      return execFailure(error);
     }
   }
 
@@ -1151,16 +1168,7 @@ describe("doc:render 的 scoped 档（--only，ISSUE #2527）", () => {
       });
       return { code: 0, output };
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      const e = error as {
-        status?: number;
-        stderr?: string;
-        stdout?: string;
-      };
-      return {
-        code: typeof e.status === "number" ? e.status : 1,
-        output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
-      };
+      return execFailure(error);
     }
   }
 
