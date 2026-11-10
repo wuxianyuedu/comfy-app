@@ -44,3 +44,29 @@ const SECTION_SUMMARY: Record<Section, string> = {
 export function sectionSummary(section: Section): string {
   return SECTION_SUMMARY[section];
 }
+
+/**
+ * 分区 → 所属**大类**的标签（导航树里那一层，ISSUE #3519）。
+ *
+ * 正文那一列原先只说分区名，用户在长页里看不出「这几节属于一类」；大类标签是
+ * 导航树里已经有的信息，这里把它也接到正文上（每组只出现一次 —— 组的第一个分区）。
+ */
+export function sectionGroupLabel(section: Section): string {
+  return TREE_GROUPS.find((group) => group.sections.includes(section))?.label ?? "";
+}
+
+/**
+ * 该分区是不是所属大类的**第一个**（决定大类标题在正文里只出现一次）。
+ *
+ * 判据取「滚动顺序里的位置」而不是「分区内清单里的位置」：正文按
+ * `SETTINGS_SCROLL_ORDER`（= 导航树展开顺序）铺，两者是同一份顺序 ⇒ 组内第一个
+ * 就是正文里第一个。
+ */
+export function isGroupFirstSection(section: Section): boolean {
+  const order = SETTINGS_SCROLL_ORDER;
+  const index = order.indexOf(section);
+  if (index <= 0) {
+    return true;
+  }
+  return sectionGroupLabel(order[index]!) !== sectionGroupLabel(order[index - 1]!);
+}

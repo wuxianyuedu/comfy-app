@@ -30,10 +30,7 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
 
   return (
     <>
-      <SettingsCard
-        description="每个供应商维护自己的 Base URL / API 格式 / API Key，模型挂在供应商下"
-        title="远程模型（供应商）"
-      >
+      <SettingsCard description="每个供应商维护自己的 Base URL / API 格式 / API Key，模型挂在供应商下">
         {p.errorText !== null && p.errorText !== "" && (
           <p className="bg-destructive/10 text-danger-strong mb-3 rounded-lg px-3 py-2 text-xs">
             读取供应商失败：{p.errorText}
