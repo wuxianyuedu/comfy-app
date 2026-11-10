@@ -12,7 +12,6 @@
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
 import { SettingsCard } from "~/components/ui/settings-card";
-import { LLM_API_FORMATS, LLM_API_FORMAT_LABELS } from "~/lib/llm/provider-types";
 
 import { ProviderDetail } from "./ProviderDetail";
 import { ProviderDialog } from "./ProviderDialog";
@@ -30,7 +29,9 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
 
   return (
     <>
-      <SettingsCard description="每个供应商维护自己的 Base URL / API 格式 / API Key，模型挂在供应商下">
+      {/* 卡片标题去掉（ISSUE #3527）：正文那一列已经有一行分区标题「远程模型」，
+          卡片再起一个同名标题就是重复；master 侧更新过的说明文案保留。 */}
+      <SettingsCard description="每个供应商维护自己的 Base URL / API Key；接口格式在模型上（同一供应商下不同用途的模型可以各用一套协议）">
         {p.errorText !== null && p.errorText !== "" && (
           <p className="bg-destructive/10 text-danger-strong mb-3 rounded-lg px-3 py-2 text-xs">
             读取供应商失败：{p.errorText}
@@ -45,9 +46,6 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
               {p.providers.map((provider) => {
                 const active = p.selected?.id === provider.id;
                 const count = p.models.filter((model) => model.providerId === provider.id).length;
-                const format =
-                  LLM_API_FORMATS.find((candidate) => candidate === provider.apiFormat) ??
-                  "chat-completions";
                 return (
                   <Button
                     aria-current={active ? "true" : undefined}
@@ -66,7 +64,7 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
                     <span className="min-w-0 flex-1">
                       <span className="text-ink block truncate text-sm">{provider.name}</span>
                       <span className="text-muted-foreground text-2xs block truncate">
-                        {LLM_API_FORMAT_LABELS[format].split("（")[0]}
+                        {provider.baseUrl}
                         {provider.hasApiKey ? " · 已配密钥" : ""}
                       </span>
                     </span>

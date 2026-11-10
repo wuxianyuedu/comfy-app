@@ -20,7 +20,10 @@ import { trimFixed } from "~/lib/number-format";
  *  · `responses` → `{base}/responses`（OpenAI Responses）
  *  刻意不在 Base URL 后自动补 `/v1`：各家网关的版本段位置不同（有的在域名后、
  *  有的在 `/api/v1`），替用户猜会造出「看着填对了却 404」的地址。设置页把最终
- *  请求地址直接显示出来，填错时用户当场能看见。 */
+ *  请求地址直接显示出来，填错时用户当场能看见。
+ *
+ *  #3517 起格式挂在**模型**上（同一供应商下文本 / 图片 / 视频模型可能各用一套
+ *  协议），供应商那一格只是历史行与新模型的默认值，见 `resolveApiFormat()`。 */
 /* SAFETY: 类型断言已复核 */
 export const LLM_API_FORMATS = ["chat-completions", "anthropic-messages", "responses"] as const;
 export type LlmApiFormat = (typeof LLM_API_FORMATS)[number];
@@ -29,6 +32,13 @@ export const LLM_API_FORMAT_LABELS: Record<LlmApiFormat, string> = {
   "chat-completions": "Chat Completions（/chat/completions）",
   "anthropic-messages": "Anthropic Messages（/v1/messages）",
   responses: "Responses（/responses）",
+};
+
+/** 行内摘要用的短标签（模型行那句「上下文 … · 输出 …」用它：完整标签带路径段，太宽）。 */
+export const LLM_API_FORMAT_SHORT_LABELS: Record<LlmApiFormat, string> = {
+  "chat-completions": "Chat Completions",
+  "anthropic-messages": "Anthropic Messages",
+  responses: "Responses",
 };
 
 /** 格式 → 请求路径段（唯一出处；运行时与设置页的「最终地址」预览都取它）。 */
@@ -41,6 +51,20 @@ export const LLM_API_FORMAT_PATHS: Record<LlmApiFormat, string> = {
 export function isLlmApiFormat(value: unknown): value is LlmApiFormat {
   const formats: ReadonlyArray<string> = LLM_API_FORMATS;
   return typeof value === "string" && formats.includes(value);
+}
+
+/** 生效的接口格式：模型自己的优先 → 供应商默认 → 回落 OpenAI 兼容。
+ *
+ *  #3517 起格式是**模型级**配置（同一供应商下文本 / 图片模型可能各用一套协议），
+ *  供应商那一格只剩「历史行与新模型的默认值」这一层含义。运行时（`entryFromRemoteRow`）
+ *  与设置页视图（`modelView`）都走这一个函数，不各写一遍回落顺序。 */
+export function resolveApiFormat(...candidates: ReadonlyArray<unknown>): LlmApiFormat {
+  for (const candidate of candidates) {
+    if (isLlmApiFormat(candidate)) {
+      return candidate;
+    }
+  }
+  return "chat-completions";
 }
 
 /** 供应商最终请求地址（Base URL 去尾斜杠 + 格式路径）。空 Base URL 返回空串。 */

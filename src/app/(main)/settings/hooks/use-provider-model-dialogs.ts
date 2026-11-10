@@ -24,6 +24,7 @@ import {
   type ProviderFormErrors,
   type ProviderFormValues,
 } from "~/lib/llm/provider-form";
+import { isLlmApiFormat } from "~/lib/llm/provider-types";
 
 import type { ProviderModelView, SettingsProviders } from "./use-settings-providers";
 
@@ -50,7 +51,7 @@ export type ProviderModelDialogs = {
   modelError: string | null;
   modelErrors: ModelFormErrors;
   modelForm: ModelFormValues;
-  /** 模型行「测试连接」：按供应商配置探测、顺带核对模型是否在服务端清单里。 */
+  /** 模型行「测试连接」：用供应商地址 + 该模型的接口格式探测，顺带核对模型名。 */
   modelProbe: ProbeRow | null;
   openAddModel: (providerId: string) => void;
   openAddProvider: () => void;
@@ -60,7 +61,7 @@ export type ProviderModelDialogs = {
   providerError: string | null;
   providerErrors: ProviderFormErrors;
   providerForm: ProviderFormValues;
-  /** 弹窗内「测试连接」（可带尚未保存的 Base URL / 格式 / 密钥）。 */
+  /** 弹窗内「测试连接」（可带尚未保存的 Base URL / 密钥）。 */
   providerTesting: boolean;
   providerTestMsg: { kind: "ok" | "err"; text: string } | null;
   /** 「重置」：编辑态回到库里那份，新增态回到空白 + 智能默认。 */
@@ -112,7 +113,6 @@ export function useProviderModelDialogs(p: SettingsProviders): ProviderModelDial
       const typedKey = providerForm.apiKey.trim();
       const out = await p.probe({
         baseUrl: providerForm.baseUrl.trim() || undefined,
-        apiFormat: providerForm.apiFormat,
         apiKey: typedKey === "" ? undefined : typedKey,
       });
       setProviderTestMsg({ kind: out.ok ? "ok" : "err", text: out.detail });
@@ -141,7 +141,15 @@ export function useProviderModelDialogs(p: SettingsProviders): ProviderModelDial
 
   function openAddModel(providerId: string) {
     setModelDialog({ mode: "add", providerId });
-    setModelFormState(emptyModelForm());
+    /* 新模型的格式默认继承所属供应商那一格（历史行的默认值）：用户加第二条
+     * 同协议的模型时不必每次重选，不同协议再改。 */
+    const provider = p.providers.find((candidate) => candidate.id === providerId);
+    setModelFormState(
+      emptyModelForm(
+        "chat",
+        isLlmApiFormat(provider?.apiFormat) ? provider.apiFormat : "chat-completions",
+      ),
+    );
     setModelErrors({});
     setModelError(null);
   }
@@ -197,7 +205,14 @@ export function useProviderModelDialogs(p: SettingsProviders): ProviderModelDial
     if (modelDialog?.mode === "edit") {
       setModelFormState(modelFormFromView(modelDialog.model));
     } else {
-      setModelFormState(emptyModelForm());
+      const provider =
+        modelDialog === null ? undefined : p.providers.find((c) => c.id === modelDialog.providerId);
+      setModelFormState(
+        emptyModelForm(
+          "chat",
+          isLlmApiFormat(provider?.apiFormat) ? provider.apiFormat : "chat-completions",
+        ),
+      );
     }
     setModelErrors({});
     setModelError(null);
@@ -235,7 +250,10 @@ export function useProviderModelDialogs(p: SettingsProviders): ProviderModelDial
     setModelDialog(null);
   }
 
-  /** 模型行「测试连接」：按供应商配置探测，并核对模型名是否在服务端清单里。 */
+  /** 模型行「测试连接」：按**供应商**配置探测，并核对模型名是否在服务端清单里。
+   *  刻意不再把 `model.baseUrl` 传给服务端：那是历史行的模型级覆盖，界面从不展示它，
+   *  一旦它与供应商 Base URL 分叉，用户看到的是「供应商测试绿、模型测试红」——
+   *  #3517 的现场就是这么来的。 */
   async function testModel(model: ProviderModelView) {
     if (modelProbe?.running === true && modelProbe.id === model.id) {
       return;
@@ -244,7 +262,7 @@ export function useProviderModelDialogs(p: SettingsProviders): ProviderModelDial
     try {
       const out = await p.probe({
         ...(model.providerId === null ? {} : { providerId: model.providerId }),
-        baseUrl: model.baseUrl ?? undefined,
+        apiFormat: model.apiFormat,
         model: model.name,
       });
       setModelProbe({

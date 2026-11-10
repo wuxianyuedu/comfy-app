@@ -13,7 +13,7 @@ import {
   ARTIFACT_ROOT_ENV,
   resolveArtifactRoot,
   resolveBuildCacheRoot,
-  resolveCacheRoot,
+  resolveToolRoot,
 } from "../scripts/ci-cache-slot.mjs";
 import {
   DEFAULT_KEEP,
@@ -90,22 +90,12 @@ describe("常驻根（resolveArtifactRoot）", () => {
     );
   });
 
-  it("成品根不许落在缓存槽的根里（那边按键位淘汰会删掉安装包）", () => {
+  it("成品根不许落在别的常驻根里（构建缓存按键位回收、工具镜像另有一套 —— 互不相扰）", () => {
     const io = { cwd: ROOT, env: {}, run: storeOn(path.parse(ROOT).root) };
     const artifacts = resolveArtifactRoot(io).root ?? "";
-    for (const other of [resolveCacheRoot(io).root ?? "", resolveBuildCacheRoot(io).root ?? ""]) {
+    for (const other of [resolveBuildCacheRoot(io).root ?? "", resolveToolRoot(io).root ?? ""]) {
       expect(artifacts.startsWith(other)).toBe(false);
     }
-  });
-
-  it("`COMFY_CI_CACHE_ROOT` 只搬依赖槽，不带着成品根一起走 ⇒ 判「取不到」", () => {
-    const r = resolveArtifactRoot({
-      cwd: ROOT,
-      env: { COMFY_CI_CACHE_ROOT: "G:/slots" },
-      run: storeOn("G:"),
-    });
-    expect(r.root).toBeNull();
-    expect(r.from).toContain("成品目录不跟着它走");
   });
 });
 

@@ -1,8 +1,9 @@
 /**
- * `POST /api/llm/test` —— 连通性探测的服务端代查（#3501）。
+ * `POST /api/llm/test` —— 连通性探测的服务端代查（#3501 / #3517）。
  *
  * 供应商密钥不再下发到浏览器，所以「测试连接」必须由服务端按 `providerId`
- * 取已保存的 Base URL / 格式 / 密钥；这里钉住回落顺序与「探测失败不是硬错误」。
+ * 取已保存的 Base URL / 密钥；接口格式自 #3517 起是模型级配置，供应商级探测
+ * 按「格式候选」逐个试。这里钉住回落顺序与「探测失败不是硬错误」。
  */
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,10 +18,17 @@ type ProviderRow = {
   name: string;
 };
 
-const { requireRequestUser, getLLMConfig, findById } = vi.hoisted(() => ({
+type ModelRow = {
+  apiFormat: string | null;
+  name: string;
+  providerId: string | null;
+};
+
+const { requireRequestUser, getLLMConfig, findById, listModels } = vi.hoisted(() => ({
   requireRequestUser: vi.fn<() => Promise<{ id: string } | null>>(),
   getLLMConfig: vi.fn<() => Promise<{ apiKey: string | null; baseUrl: string }>>(),
   findById: vi.fn<(id: string) => Promise<ProviderRow | null>>(),
+  listModels: vi.fn<() => Promise<Array<ModelRow>>>(),
 }));
 
 vi.mock("~/server/auth/request-user", () => ({
@@ -29,6 +37,7 @@ vi.mock("~/server/auth/request-user", () => ({
 vi.mock("~/lib/llm/server", () => ({ getLLMConfig }));
 vi.mock("~/lib/core/repository", () => ({
   llmProviderRepository: { findById: (id: string) => findById(id) },
+  remoteModelRepository: { list: () => listModels() },
 }));
 
 const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>();
@@ -61,6 +70,7 @@ beforeEach(() => {
   requireRequestUser.mockResolvedValue({ id: "u-1" });
   getLLMConfig.mockResolvedValue({ baseUrl: "https://global.example.com/v1", apiKey: "sk-global" });
   findById.mockResolvedValue(null);
+  listModels.mockResolvedValue([]);
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
 });
@@ -111,6 +121,81 @@ describe("POST /api/llm/test", () => {
       "x-api-key": "sk-provider",
       "anthropic-version": "2023-06-01",
     });
+  });
+
+  it("供应商默认格式探不通、但该供应商某个模型用的是另一种格式 → 仍然报通（#3517）", async () => {
+    findById.mockResolvedValue({
+      id: "p1",
+      name: "Agnes",
+      baseUrl: "https://apihub.agnes-ai.com/v1",
+      apiFormat: "chat-completions",
+      apiKey: "sk-provider",
+    });
+    listModels.mockResolvedValue([
+      { name: "agnes-3.0-flash", providerId: "p1", apiFormat: "anthropic-messages" },
+    ]);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ error: "not found" }, 404))
+      .mockResolvedValueOnce(jsonResponse({ data: [{ id: "agnes-3.0-flash" }] }));
+    const { POST } = await import("./route");
+    const res = await POST(request({ providerId: "p1" }));
+    await expect(res.json()).resolves.toEqual({
+      ok: true,
+      detail: "连接成功，服务端共 1 个模型",
+      models: ["agnes-3.0-flash"],
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    /* 该供应商下模型用到的格式排在供应商默认值之前：第一条就是 anthropic。 */
+    const [first, second] = fetchMock.mock.calls;
+    expect(first?.[1]?.headers).toMatchObject({
+      "x-api-key": "sk-provider",
+      "anthropic-version": "2023-06-01",
+    });
+    expect(second?.[1]?.headers).toMatchObject({ Authorization: "Bearer sk-provider" });
+  });
+
+  it("模型行探测：用供应商地址 + 模型自己的格式（请求体不再带模型行历史 Base URL）", async () => {
+    findById.mockResolvedValue({
+      id: "p1",
+      name: "Agnes",
+      baseUrl: "https://apihub.agnes-ai.com/v1",
+      apiFormat: "chat-completions",
+      apiKey: "sk-provider",
+    });
+    fetchMock.mockResolvedValue(jsonResponse({ data: [{ id: "agnes-3.0-flash" }] }));
+    const { POST } = await import("./route");
+    const res = await POST(
+      request({
+        providerId: "p1",
+        apiFormat: "anthropic-messages",
+        model: "agnes-3.0-flash",
+      }),
+    );
+    await expect(res.json()).resolves.toMatchObject({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://apihub.agnes-ai.com/v1/models");
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({ "x-api-key": "sk-provider" });
+  });
+
+  it("模型行探测只按自己的格式试：它探不通时不再换别的格式（否则界面报绿而实际调用仍按原格式发）", async () => {
+    findById.mockResolvedValue({
+      id: "p1",
+      name: "Agnes",
+      baseUrl: "https://apihub.agnes-ai.com/v1",
+      apiFormat: "chat-completions",
+      apiKey: "sk-provider",
+    });
+    listModels.mockResolvedValue([
+      { name: "agnes-3.0-flash", providerId: "p1", apiFormat: "chat-completions" },
+    ]);
+    fetchMock.mockResolvedValue(jsonResponse({ error: "not found" }, 404));
+    const { POST } = await import("./route");
+    const res = await POST(
+      request({ providerId: "p1", apiFormat: "anthropic-messages", model: "agnes-3.0-flash" }),
+    );
+    await expect(res.json()).resolves.toMatchObject({ ok: false });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({ "x-api-key": "sk-provider" });
   });
 
   it("未给 providerId 时，请求体里的 baseUrl / apiKey / apiFormat 优先于全局配置", async () => {
@@ -164,7 +249,7 @@ describe("POST /api/llm/test", () => {
     ]);
   });
 
-  it("非 2xx（鉴权失败）原样透出状态码与片段，并补密钥归因，不重试", async () => {
+  it("非 2xx（鉴权失败）原样透出状态码与片段，并补密钥归因；无格式线索时三种格式都试", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ error: "bad key" }, 401));
     const { POST } = await import("./route");
     const res = await POST(request({ baseUrl: "https://api.example.com/v1" }));
@@ -173,7 +258,9 @@ describe("POST /api/llm/test", () => {
       detail:
         'HTTP 401（https://api.example.com/v1/models）：{"error":"bad key"}（密钥无效，或该密钥没有这个接口的权限）',
     });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    /* 一条格式信息都没有 ⇒ 三种格式各试一次；401 是「答了但拒了」，换鉴权头形状
+     * 有可能通（这正是供应商级测试要覆盖的），所以继续试；三条都 401 才报第一条。 */
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("上游返回 HTML 错误页 → 不把整页标记灌进提示，指出这不是接口地址（#3517）", async () => {
@@ -205,11 +292,12 @@ describe("POST /api/llm/test", () => {
     });
   });
 
-  it("网络层抛错 → 200 + ok:false（探测失败不是硬错误）", async () => {
+  it("网络层抛错 → 200 + ok:false，且不再试下一格式（换格式只会白等一轮超时）", async () => {
     fetchMock.mockRejectedValue(new Error("boom"));
     const { POST } = await import("./route");
     const res = await POST(request({ baseUrl: "https://api.example.com/v1" }));
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toMatchObject({ ok: false });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
