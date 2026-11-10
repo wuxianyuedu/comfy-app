@@ -10,7 +10,7 @@ import type { RemoteModelKind } from "~/lib/llm/types";
 import { Button } from "~/components/ui/button";
 
 import { Hint } from "~/components/ui/hint";
-import { SettingsCard } from "~/components/ui/settings-card";
+import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { RemoteModelDialog } from "./RemoteModelDialog";
 import { UsageTestDialog } from "./UsageTestDialog";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
@@ -55,7 +55,7 @@ export function LlmRemoteSection({
               const rowMsg = thisProbe ? thisProbe.msg : null;
               return (
                 <div className="flex-col gap-1" key={entry.name}>
-                  <div className="border-border flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                  <div className={`${SETTINGS_ROW_CLASS} flex items-center gap-2 text-sm`}>
                     <span className="min-w-0 flex-1 truncate">
                       <span className="text-ink">{entry.name}</span>
                       {entry.baseUrl !== null &&

@@ -6,7 +6,7 @@
  * 进程树的偏好。纯展示：读写都经 controller。
  */
 
-import { SettingsCard } from "~/components/ui/settings-card";
+import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { FieldLabel } from "~/components/ui/field";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
@@ -64,7 +64,7 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
           进程生效；Ollama 注册为系统服务 或你手动启动的不受此开关影响。
         </p>
       </div>
-      <div className="border-border bg-surface-1 mb-4 rounded-lg border px-3 py-2">
+      <div className={`${SETTINGS_ROW_CLASS} mb-4`}>
         <p className="text-ink/80 mb-1 text-sm font-medium">关于 Drizzle Studio</p>
         <p className="text-muted-foreground text-xs">
           数据库（SQLite）由 better-sqlite3 内嵌进应用进程，没有独立

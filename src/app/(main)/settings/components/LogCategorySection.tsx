@@ -11,7 +11,7 @@ import { LOG_CATEGORY_FILTERS, type LogCategoryFilter } from "~/components/studi
 import { useLogCategoryStore } from "~/components/studio/logs/log-category-store";
 import { ORIGIN_TEXT } from "~/components/studio/logs/LogPanelOriginSelect";
 
-import { SettingsCard } from "~/components/ui/settings-card";
+import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 
 /** 给每个分类一句简短说明，帮用户判断「这是不是我想关的那一类」。 */
 const CATEGORY_HINT: Record<LogCategoryFilter, string> = {
@@ -41,7 +41,7 @@ export function LogCategorySection() {
           const on = enabled[category] !== false;
           return (
             <li
-              className="border-border/60 flex items-start justify-between gap-4 rounded-lg border px-3 py-2.5"
+              className={`${SETTINGS_ROW_CLASS} flex items-start justify-between gap-4`}
               key={category}
             >
               <div className="min-w-0">

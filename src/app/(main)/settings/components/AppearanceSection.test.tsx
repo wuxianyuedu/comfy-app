@@ -93,7 +93,7 @@ describe("AppearanceSection 选中档的悬停值（ISSUE #1925）", () => {
     return new Set(el.className.split(/\s+/).filter(Boolean));
   }
 
-  it("主题卡（含 `data-unchecked:bg-surface-1` 那一组）钉住了选中档的悬停值", () => {
+  it("主题卡（含 `data-unchecked:bg-surface-row` 那一组）钉住了选中档的悬停值", () => {
     render(<AppearanceSection c={controller("dark")} />);
     const cls = radioAt(0).className;
     /* 选中档三层（描边 / 底色 / 字色）在悬停期间都必须成立 —— 少任何一层，
