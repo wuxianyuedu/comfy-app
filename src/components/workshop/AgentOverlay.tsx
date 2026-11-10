@@ -294,7 +294,7 @@ export function AgentOverlay({
             },
             excludeShift: true,
           })}
-          className="field-sizing-normal border-border bg-subtle text-ink placeholder:text-muted-foreground/50 focus-visible:border-primary focus-visible:ring-primary/30 min-h-0 flex-1 resize-none rounded-xl px-3 py-2 text-sm"
+          className="field-sizing-normal border-border bg-subtle text-ink placeholder:text-muted-foreground/50 focus-visible:border-primary min-h-0 flex-1 resize-none rounded-xl px-3 py-2 text-sm"
           placeholder="描述你的创作想法… (Enter 发送)"
           rows={1}
         />

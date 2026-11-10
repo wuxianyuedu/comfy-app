@@ -124,7 +124,7 @@ export function RemoteModelDialog({
             {(a11y) => (
               <Input
                 {...a11y}
-                className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary focus-visible:ring-primary/30 h-auto rounded-lg px-3 py-2 text-sm"
+                className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm"
                 onChange={textHandler((baseUrl) => {
                   d.setAddForm({ ...d.addForm, baseUrl });
                 })}
@@ -140,7 +140,7 @@ export function RemoteModelDialog({
               <div className="mb-1 flex gap-2">
                 <Input
                   {...a11y}
-                  className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary focus-visible:ring-primary/30 h-auto rounded-lg px-3 py-2 text-sm"
+                  className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm"
                   onChange={(event) => {
                     d.setAddForm({
                       ...d.addForm,
@@ -257,7 +257,7 @@ export function RemoteModelDialog({
             {(a11y) => (
               <Input
                 {...a11y}
-                className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary focus-visible:ring-primary/30 h-auto rounded-lg px-3 py-2 text-sm"
+                className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm"
                 onChange={(event) => {
                   d.setAddForm({ ...d.addForm, model: event.target.value });
                 }}
