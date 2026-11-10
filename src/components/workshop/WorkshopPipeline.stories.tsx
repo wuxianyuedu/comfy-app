@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { WorkshopPipeline } from "~/components/workshop/WorkshopPipeline";
 import { projectScene, useSeededProjects } from "../../../.storybook/screen-frame";

@@ -74,8 +74,12 @@ describe("Storybook 配置契约（ISSUE #1381）", () => {
     expect(preview).toMatch(/dark:\s*"dark"/);
   });
 
-  it("框架是 @storybook/nextjs（组件依赖 Next 运行期与 `~` 别名解析）", () => {
-    expect(main).toContain('"@storybook/nextjs"');
+  it("框架是 @storybook/nextjs-vite（组件依赖 Next 运行期与 `~` 别名解析；webpack 版已废弃）", () => {
+    expect(main).toContain('"@storybook/nextjs-vite"');
+    /* 反向断言：webpack 版框架在 Storybook 11 已标记废弃、12 移除。它同时会把整条
+       webpack 链拖进依赖图（builder-webpack5 → node-polyfill-webpack-plugin →
+       crypto-browserify → elliptic），所以「名字还在」不只是版本偏好问题。 */
+    expect(main).not.toContain('"@storybook/nextjs"');
   });
 
   it("启动器注入 SKIP_ENV_VALIDATION（否则缺 .env 的检出直接崩在 env.js）", () => {
@@ -97,6 +101,18 @@ describe("Storybook 配置契约（ISSUE #1381）", () => {
     expect(storybookDeps.length).toBeGreaterThanOrEqual(3);
     const versions = new Set(storybookDeps.map(([, version]) => version));
     expect(versions.size, `版本不一致：${JSON.stringify(storybookDeps)}`).toBe(1);
+  });
+
+  it("框架名在依赖清单里（改名只改一半 = 启动时「Cannot find module」）", () => {
+    /* `framework.name` 与 `package.json` 的 devDependencies 是**两处**事实：改名的
+       时候漏掉一处不会在 tsc / lint 上红，只在 `pnpm storybook` 起不来时才现形 ——
+       而那条报错指不到「依赖清单少了一条」。这条判据把那两处对起来。 */
+    const frameworkName = /name:\s*"(?<framework>@storybook\/[^"]+)"/.exec(main)?.groups?.framework;
+    expect(frameworkName, "主配置里读不出 framework.name").toBeTruthy();
+    expect(
+      Object.keys(pkg.devDependencies),
+      `框架 ${frameworkName} 不在 devDependencies 里`,
+    ).toContain(frameworkName);
   });
 
   it("静态产物路径已被忽略（`pnpm storybook:build` 的产物不入库）", () => {

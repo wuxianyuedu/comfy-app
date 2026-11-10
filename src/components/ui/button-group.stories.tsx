@@ -1,5 +1,5 @@
 import { Bold, Italic, Redo2, Undo2, Underline } from "lucide-react";
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { Button } from "~/components/ui/button";
 import { ButtonGroup } from "~/components/ui/button-group";

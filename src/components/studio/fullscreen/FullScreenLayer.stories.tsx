@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer";
 import { titleBarHeightPx } from "~/lib/full-screen-layer";

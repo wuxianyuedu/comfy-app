@@ -55,7 +55,7 @@
  *    由装饰器在**渲染期**写进 store（同 `withStoreScene`：子组件首帧就要读到它）。
  */
 
-import type { Decorator } from "@storybook/nextjs";
+import type { Decorator } from "@storybook/nextjs-vite";
 
 import {
   describeDevServerRestart,
