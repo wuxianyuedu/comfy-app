@@ -234,7 +234,7 @@ export function ShotCard({
             <FieldLabel className="text-2xs flex items-center gap-1">
               <span className="text-muted-foreground">时长(s)</span>
               <Input
-                className="border-border bg-bg text-ink focus-visible:border-primary focus-visible:ring-primary/30 text-2xs h-auto w-14 rounded-md px-2 py-0.5"
+                className="border-border bg-bg text-ink focus-visible:border-primary text-2xs h-auto w-14 rounded-md px-2 py-0.5"
                 max={20}
                 min={1}
                 onChange={(e) => {

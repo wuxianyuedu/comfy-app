@@ -112,7 +112,7 @@ export function LogFilterBar({
       <div className="relative flex w-56 min-w-24 shrink items-center">
         <Search className="text-ink-fainter pointer-events-none absolute left-2.5" size={14} />
         <Input
-          className="border-border-strong bg-canvas-deep text-ink-field placeholder:text-ink-fainter focus-visible:border-primary-500/40 focus-visible:ring-primary/30 h-8 rounded-lg pr-7 pl-8 text-sm"
+          className="border-border-strong bg-canvas-deep text-ink-field placeholder:text-ink-fainter focus-visible:border-primary-500/40 h-8 rounded-lg pr-7 pl-8 text-sm"
           onChange={textHandler(setSearch)}
           placeholder="搜索日志（支持命中高亮）..."
           type="text"

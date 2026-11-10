@@ -109,10 +109,11 @@ export function EditableLabel({
         })}
         /* 与展示态字体一致 — text-xs font-semibold
          *  text-ink-bright + 'Inter'，避免编辑切回展示态时出现字重跳变。
-         *  其余形态（`border-input` / `rounded-lg` / focus 换边不出阴影）照
+         *  其余形态（`border-input` / `rounded-lg` / focus 换边不出 ring/阴影）照
          *  `ui/input.tsx` 的缺省档：此前这里自己写了 `border-violet-400/40`
-         *  —— 既写死调色板、又不是全站其余输入框那一档（ISSUE #2031）。 */
-        className="nodrag nopan border-input text-ink-bright focus-visible:border-ring focus-visible:ring-ring/50 w-32 max-w-full min-w-0 shrink rounded-lg border bg-transparent px-2 py-px text-xs font-semibold outline-none focus-visible:ring-3"
+         *  —— 既写死调色板、又不是全站其余输入框那一档（ISSUE #2031）；
+         *  focus 只换 border、不出 ring（docs/DESIGN.md「输入」行签字口径，#3496）。 */
+        className="nodrag nopan border-input text-ink-bright focus-visible:border-ring w-32 max-w-full min-w-0 shrink rounded-lg border bg-transparent px-2 py-px text-xs font-semibold outline-none"
         onClick={(event) => {
           event.stopPropagation();
         }}

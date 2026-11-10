@@ -332,7 +332,7 @@ export function FinalComposer({
                   {(field) => (
                     <Input
                       {...field}
-                      className="border-border bg-bg text-ink focus-visible:border-primary focus-visible:ring-primary/30 h-auto w-14 rounded-md px-2 py-1 text-xs"
+                      className="border-border bg-bg text-ink focus-visible:border-primary h-auto w-14 rounded-md px-2 py-1 text-xs"
                       max={20}
                       min={1}
                       onChange={(event) => {

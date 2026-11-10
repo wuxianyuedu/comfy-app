@@ -272,7 +272,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                     </Hint>
                   )}
                   <Input
-                    className="border-border bg-surface-2 text-ink focus-visible:border-primary focus-visible:ring-primary/30 h-auto w-24 rounded-lg px-2 py-1.5 text-right text-sm"
+                    className="border-border bg-surface-2 text-ink focus-visible:border-primary h-auto w-24 rounded-lg px-2 py-1.5 text-right text-sm"
                     max={2}
                     min={0}
                     onBlur={() => {
