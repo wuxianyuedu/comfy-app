@@ -1,0 +1,3 @@
+## Fixed
+
+- **输入框聚焦双线（全局 outline 残留）彻底收敛为单线（ISSUE #3496 续）**：上一轮只删了 Tailwind 的 `ring` 发光层（`focus-visible:ring-*`），但 `src/app/globals.css` 里那段**未分层**的全局规则 `*：focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px }` 优先级压过文本输入的 `outline-none`，于是每个文本输入聚焦时仍画两道紫线（内侧 `border-ring` + 外侧全局 outline），反馈框「问题描述」最显眼。该全局 outline 是按钮/链接/原生控件的无障碍焦点安全网，不能删，故改为**按类排除**：在全局规则后追加 `input:not([type=checkbox/radio/range/color/file/image]):focus-visible` 与 `textarea:focus-visible` 的 `outline: none`（它们已有 `border-ring` 作焦点指示，符合 DESIGN.md「输入」行签字口径）；checkbox/radio/range 等原生控件不吃 border 变更、仍保留 outline 焦点指示。

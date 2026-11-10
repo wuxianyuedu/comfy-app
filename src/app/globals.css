@@ -722,6 +722,15 @@ select option {
   outline-offset: 2px;
 }
 
+/* 文本输入已有 `border-ring` 作焦点指示（docs/DESIGN.md「输入」行：focus 只换 border、不出阴影/ring），
+   上面那条全局 outline 会与它叠成双线（ISSUE #3496 反馈框最显眼）。故**按类排除**文本输入，
+   保留 `*：focus-visible` 给按钮/链接/原生控件作无障碍焦点安全网。
+   排除类型：checkbox/radio/range/color/file/image 不吃 border 变更、仍需 outline 指示焦点。 */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="image"]):focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
 html,
 body {
   /* Root surface follows the active theme (--color-bg is two-state). While the
