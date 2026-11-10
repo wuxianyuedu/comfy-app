@@ -75,7 +75,17 @@
   --color-surface: #ffffff;
   --color-surface-0: #ffffff;
   --color-surface-1: #f7f8fa;
-  --color-surface-2: #f0f0f5;
+  /* 控件的承载面（输入框 / 选中档 chip 等，ISSUE #3519）：阶梯上的第三级 ——
+     **卡片 → 行 → 控件**（离页面底一档比一档远）。
+     此前这一档与卡片只差 1.08:1（深色 1.04:1）—— 控件的底色等于没有，字段只剩
+     一圈发丝描边撑着；深色主题下更糟：`ui/input.tsx` 的 `dark:bg-input/30`
+     （变体规则在产物里排在基础 utility 之后）**压掉**了调用点写的底色，于是
+     深色下的输入框其实是一层「30% 描边色」叠在容器上。
+     取值：浅色 `#e4e7ef`（对卡片 1.20:1 / 对行 1.09:1）、深色 `#2e2e3a`
+     （对卡片 1.35:1 / 对行 1.15:1）—— 由 `tests/surface-ladder-contrast.test.ts`
+     从编译产物真量（下限：卡片 1.10 / 行 1.08，浅色档的压缩来自 AA：控件再深
+     一档，弱文字 `#6b6b76` 就不够 4.5:1）。 */
+  --color-surface-2: #e2e5ee;
   /* 卡片内「一行」的承载面（ISSUE #3510）：设置页各分区卡片里的列表行 / 状态行 /
      说明行 —— 此前它们要么透明、要么写 `bg-surface-1`（= 卡片同色），于是子项与
      卡片糊成一片。取值方向 = **离页面底再远一档**（浅色更深、深色更亮）。
@@ -92,7 +102,13 @@
      浅色主题需要更重的 α 才看得出「底下被压住」，深色主题本身已暗、同 α 会糊成一片。
      两个 α 由 `tests/dialog-backdrop-contrast.test.ts` 从编译产物真量区间。 */
   --color-scrim: rgb(15 15 23 / 0.55);
-  --color-subtle: #f7f8fa;
+  /* 通用极浅表面（悬停底 / chip / ghost 按钮底，ISSUE #3519）：此前浅色档与卡片
+     `--color-surface-1` **同值**（#f7f8fa）、深色档与卡片只差 1.02:1 —— 于是
+     「指针划过」在卡片上看不出任何变化，可点性等于没有提示。
+     取值方向与上面同一句话：**离页面底再远一档**（浅色更深、深色更亮）。
+     浅色 `#eceef4`（对卡片 1.10:1，且弱文字仍过 AA 4.54:1）/ 深色 `#1f1f2b`
+     （对卡片 1.11:1）—— 真量与下限见 `tests/surface-ladder-contrast.test.ts`。 */
+  --color-subtle: #eceef4;
   --color-border: #ececf1;
   --color-border-subtle: rgb(0 0 0 / 0.06);
   --color-ink: #1a1a1f;
@@ -416,12 +432,12 @@
   --color-surface: #16161c;
   --color-surface-0: #0a0a0f;
   --color-surface-1: #16161c;
-  --color-surface-2: #1a1a24;
+  --color-surface-2: #2e2e3a;
   --color-surface-row: #24242f;
   --color-scrim: rgb(
     0 0 0 / 0.7
   ); /* 模态遮罩（见 @theme 里那颗 token 的说明）*/
-  --color-subtle: #141419;
+  --color-subtle: #1f1f2b;
   --color-border: #26262e;
   --color-border-subtle: rgb(255 255 255 / 0.06);
   --color-ink: #ededf2;
