@@ -13,6 +13,7 @@
 
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { FieldLegend, FieldSet } from "~/components/ui/field";
 import { FormField } from "~/components/ui/form-field";
 import { Input } from "~/components/ui/input";
 import { SelectMenu } from "~/components/ui/select-menu";
@@ -189,7 +190,12 @@ export function ProviderModelDialog({
           <fieldset className="border-border mb-3 rounded-xl border p-3">
             <legend className="text-ink/80 px-1 text-sm font-medium">高级配置</legend>
 
-            <FormField className="mb-3" label="输入类型">
+            {/* 多选组没有单个控件能被 `htmlFor` 指到 ⇒ 用 `fieldset`/`legend` 给
+                整组一个可访问名（`FormField` 的标签行只覆盖单控件形态）。 */}
+            <FieldSet className="mb-3 gap-0">
+              <FieldLegend className="text-ink/80 mb-1.5 text-sm" variant="label">
+                输入类型
+              </FieldLegend>
               <div className="flex flex-wrap gap-1.5">
                 {MODEL_INPUT_TYPES.map((type) => (
                   <Toggle
@@ -206,9 +212,12 @@ export function ProviderModelDialog({
                   </Toggle>
                 ))}
               </div>
-            </FormField>
+            </FieldSet>
 
-            <FormField className="mb-3" label="模型能力">
+            <FieldSet className="mb-3 gap-0">
+              <FieldLegend className="text-ink/80 mb-1.5 text-sm" variant="label">
+                模型能力
+              </FieldLegend>
               <div className="flex flex-wrap gap-1.5">
                 {MODEL_CAPABILITIES.map((capability) => (
                   <Toggle
@@ -225,7 +234,7 @@ export function ProviderModelDialog({
                   </Toggle>
                 ))}
               </div>
-            </FormField>
+            </FieldSet>
 
             <FormField
               className="mb-3"
