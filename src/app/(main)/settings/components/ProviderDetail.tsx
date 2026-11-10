@@ -5,9 +5,13 @@
  * 模型清单。
  *
  * 为什么详情是内联表单而不是又一个弹窗：用户对照截图里的「左列供应商、右列详情」
- * 心智模型改 Base URL / 格式 / 密钥，改完要能立刻看到「最终请求地址」；开弹窗会把
- * 这层对照关系挡掉。表单草稿是组件本地态，父级用 `key={provider.id}` 挂载 ——
- * 切供应商时整棵重建，不需要 effect 同步。
+ * 心智模型改 Base URL / 密钥；开弹窗会把这层对照关系挡掉。表单草稿是组件本地态，
+ * 父级用 `key={provider.id}` 挂载 —— 切供应商时整棵重建，不需要 effect 同步。
+ *
+ * #3517 起**没有「保存」按钮**：字段失焦即落库（判据是「与库里那份有无差异」，
+ * 无差异不写）。最容易出事的顺序是「改完 Base URL 直接点测试连接」—— 有保存按钮时
+ * 用户会忘了点，探测拿的是旧地址，界面于是自相矛盾。接口格式也不再属于供应商，
+ * 而是模型级配置（同一供应商下文本 / 图片 / 视频模型可能各用一套协议）。
  *
  * 所有读写都经 `use-settings-providers`（第②层）与 `use-provider-model-dialogs`
  * （弹窗态）；本组件不直接发请求。
@@ -21,24 +25,21 @@ import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { FormField } from "~/components/ui/form-field";
 import { Hint } from "~/components/ui/hint";
 import { Input } from "~/components/ui/input";
-import { SelectMenu } from "~/components/ui/select-menu";
 import { SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { Switch } from "~/components/ui/switch";
 import { textHandler } from "~/lib/form-props";
 import {
-  LLM_API_FORMATS,
-  LLM_API_FORMAT_LABELS,
+  LLM_API_FORMAT_SHORT_LABELS,
   MODEL_INPUT_TYPE_LABELS,
-  baseUrlVersionHint,
   formatContextWindow,
   parseInputTypes,
-  requestUrlForFormat,
 } from "~/lib/llm/provider-types";
 import {
   providerFormFromView,
   providerSaveDraft,
   validateProviderForm,
   type ProviderFormErrors,
+  type ProviderFormValues,
 } from "~/lib/llm/provider-form";
 import { REMOTE_MODEL_KINDS, REMOTE_MODEL_KIND_LABELS } from "~/lib/llm/types";
 
@@ -66,30 +67,57 @@ export function ProviderDetail({
   const [form, setForm] = useState(() => providerFormFromView(provider));
   const [errors, setErrors] = useState<ProviderFormErrors>({});
   const [error, setError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saved" | "saving">("idle");
   const [probing, setProbing] = useState(false);
   const [probeMsg, setProbeMsg] = useState<ProbeMsg>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const models = p.models.filter((model) => model.providerId === provider.id);
-  const finalUrl = requestUrlForFormat(form.baseUrl, form.apiFormat);
-  const versionHint = baseUrlVersionHint(form.baseUrl, form.apiFormat);
 
-  async function saveProvider() {
-    setError(null);
-    const nextErrors = validateProviderForm(form);
+  /** 受控输入的统一更新口：改字就把「已保存」提示收回去（它只对上一次提交成立）。 */
+  function updateForm(patch: Partial<ProviderFormValues>) {
+    setSaveState("idle");
+    setForm((prev) => ({ ...prev, ...patch }));
+  }
+
+  /** 失焦即保存（#3517）：详情页不再有「保存」按钮 —— 用户改完 Base URL 直接点
+   *  「测试连接」时，最容易发生的正是忘了保存、拿旧地址去探。
+   *  判据是「与库里那份有没有差异」：没有差异就不写库（切个焦点不该产生写操作）；
+   *  字段不合法时只报错、不写库（半截地址落库比不保存更难查）。 */
+  async function commit(next: ProviderFormValues = form) {
+    const nextErrors = validateProviderForm(next);
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
       return;
     }
     setErrors({});
-    const result = await p.saveProvider(providerSaveDraft(form, provider.id));
+    const draft = providerSaveDraft(next, provider.id);
+    if (
+      draft.name === provider.name &&
+      draft.baseUrl === provider.baseUrl &&
+      draft.apiKey === undefined
+    ) {
+      return;
+    }
+    setError(null);
+    setSaveState("saving");
+    const result = await p.saveProvider(draft);
     if (!result.ok) {
+      setSaveState("idle");
       setError(result.error ?? "保存失败");
+      return;
+    }
+    setSaveState("saved");
+    /* 密钥写进去之后立刻清空输入框：明文只该在这次提交里存在，留在框里会让
+     * 「已保存密钥；留空保持不变」的提示与画面自相矛盾。 */
+    if (draft.apiKey !== undefined) {
+      setForm((prev) => ({ ...prev, apiKey: "", clearApiKey: false }));
     }
   }
 
-  /** 详情页「测试连接」：带上当前草稿（尚未保存的 Base URL / 格式 / 密钥也生效）；
-   *  密钥留空时服务端按 `providerId` 取已保存值，浏览器始终拿不到明文。 */
+  /** 详情页「测试连接」：带上当前草稿（尚未保存的 Base URL / 密钥也生效）；
+   *  密钥留空时服务端按 `providerId` 取已保存值，浏览器始终拿不到明文。
+   *  接口格式由服务端按「该供应商下各模型用到的格式」逐个试（#3517）。 */
   async function testProvider() {
     setProbing(true);
     setProbeMsg(null);
@@ -98,7 +126,6 @@ export function ProviderDetail({
       const out = await p.probe({
         providerId: provider.id,
         baseUrl: form.baseUrl.trim() || undefined,
-        apiFormat: form.apiFormat,
         ...(typedKey === "" ? {} : { apiKey: typedKey }),
       });
       setProbeMsg({ kind: out.ok ? "ok" : "err", text: out.detail });
@@ -142,8 +169,11 @@ export function ProviderDetail({
             <Input
               {...a11y}
               className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm"
+              onBlur={() => {
+                void commit();
+              }}
               onChange={textHandler((name) => {
-                setForm((prev) => ({ ...prev, name }));
+                updateForm({ name });
               })}
               value={form.name}
             />
@@ -153,16 +183,7 @@ export function ProviderDetail({
         <FormField
           className="mb-3"
           error={errors.baseUrl}
-          hint={
-            finalUrl === "" ? (
-              "填到版本段为止（如 https://api.example.com/v1），路径由接口格式补全"
-            ) : (
-              <span>
-                实际请求地址：<code className="text-ink/80">{finalUrl}</code>
-                {versionHint !== null && <span className="mt-0.5 block">{versionHint}</span>}
-              </span>
-            )
-          }
+          hint="填到版本段为止（如 https://api.example.com/v1）；路径段由各模型的接口格式补全"
           id="provider-detail-base-url"
           label="Base URL"
           required
@@ -171,32 +192,14 @@ export function ProviderDetail({
             <Input
               {...a11y}
               className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm"
+              onBlur={() => {
+                void commit();
+              }}
               onChange={textHandler((baseUrl) => {
-                setForm((prev) => ({ ...prev, baseUrl }));
+                updateForm({ baseUrl });
               })}
               placeholder="https://api.example.com/v1"
               value={form.baseUrl}
-            />
-          )}
-        </FormField>
-
-        <FormField className="mb-3" id="provider-detail-api-format" label="API 格式">
-          {(a11y) => (
-            <SelectMenu
-              {...a11y}
-              autoFitFromOptions={false}
-              className="text-sm"
-              fullWidth
-              labels={LLM_API_FORMAT_LABELS}
-              onChange={(next) => {
-                const apiFormat = LLM_API_FORMATS.find((format) => format === next);
-                if (apiFormat !== undefined) {
-                  setForm((prev) => ({ ...prev, apiFormat }));
-                }
-              }}
-              options={[...LLM_API_FORMATS]}
-              popoverMinWidth={260}
-              value={form.apiFormat}
             />
           )}
         </FormField>
@@ -215,13 +218,15 @@ export function ProviderDetail({
             <Input
               {...a11y}
               className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm"
+              onBlur={() => {
+                void commit();
+              }}
               onChange={(event) => {
                 const apiKey = event.target.value;
-                setForm((prev) => ({
-                  ...prev,
+                updateForm({
                   apiKey,
                   ...(apiKey === "" ? {} : { clearApiKey: false }),
-                }));
+                });
               }}
               placeholder={provider.hasApiKey ? "已保存密钥，留空保持不变" : "sk-…"}
               type="password"
@@ -234,7 +239,7 @@ export function ProviderDetail({
           <p className="text-muted-foreground text-2xs mb-2">
             {form.clearApiKey ? (
               <>
-                保存后将清除该供应商的 API Key。
+                将清除该供应商的 API Key。
                 <Button
                   className="text-primary mx-1 h-auto p-0 underline underline-offset-2"
                   onClick={() => {
@@ -249,7 +254,9 @@ export function ProviderDetail({
               <Button
                 className="text-primary h-auto p-0 underline underline-offset-2"
                 onClick={() => {
-                  setForm((prev) => ({ ...prev, clearApiKey: true }));
+                  const next = { ...form, clearApiKey: true };
+                  setForm(next);
+                  void commit(next);
                 }}
                 variant="link"
               >
@@ -277,7 +284,19 @@ export function ProviderDetail({
           </p>
         )}
 
-        <div className="flex justify-end gap-2">
+        <div className="flex items-center justify-end gap-2">
+          <span
+            aria-live="polite"
+            className={`text-2xs mr-auto ${
+              saveState === "saved" ? "text-success-strong" : "text-muted-foreground"
+            }`}
+          >
+            {saveState === "saving"
+              ? "保存中…"
+              : saveState === "saved"
+                ? "已自动保存"
+                : "字段失焦即自动保存"}
+          </span>
           <Button
             className="text-muted-foreground h-auto rounded-lg px-3 py-2 text-sm"
             disabled={probing}
@@ -287,15 +306,6 @@ export function ProviderDetail({
             variant="outline"
           >
             {probing ? "测试中…" : "测试连接"}
-          </Button>
-          <Button
-            className="h-auto rounded-lg px-4 py-2 text-sm font-semibold"
-            disabled={p.busy}
-            onClick={() => {
-              void saveProvider();
-            }}
-          >
-            {p.busy ? "保存中…" : "保存"}
           </Button>
         </div>
       </div>
@@ -351,12 +361,13 @@ export function ProviderDetail({
                     </div>
                     <p className="text-muted-foreground text-2xs truncate">
                       上下文 {formatContextWindow(model.contextWindow)} · 输出{" "}
-                      {formatContextWindow(model.maxOutputTokens)}
+                      {formatContextWindow(model.maxOutputTokens)} ·{" "}
+                      {LLM_API_FORMAT_SHORT_LABELS[model.apiFormat]}
                       {inputTypes.length > 0 &&
                         ` · ${inputTypes.map((type) => MODEL_INPUT_TYPE_LABELS[type]).join("/")}`}
                     </p>
                   </div>
-                  <Hint label="按供应商配置探测接口连通性（不生成、不耗额度）" wrap>
+                  <Hint label="用供应商地址 + 该模型的接口格式探测（不生成、不耗额度）" wrap>
                     <Button
                       className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
                       disabled={thisProbe?.running === true}
@@ -376,7 +387,8 @@ export function ProviderDetail({
                         usage.openUsageTest(kind, {
                           name: model.name,
                           kind,
-                          baseUrl: model.baseUrl ?? provider.baseUrl,
+                          apiFormat: model.apiFormat,
+                          baseUrl: provider.baseUrl,
                         });
                       }}
                       size="xs"

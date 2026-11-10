@@ -1790,6 +1790,7 @@ describe("RemoteModelRepository.saveModel / deleteModel / setEnabled（#3501）"
       name: " claude-sonnet-4 ",
       providerId: provider.id,
       baseUrl: " https://model-override/v1 ",
+      apiFormat: "responses",
       apiKey: " sk-model ",
       contextWindow: 200_000,
       maxOutputTokens: 8192,
@@ -1803,6 +1804,7 @@ describe("RemoteModelRepository.saveModel / deleteModel / setEnabled（#3501）"
       name: "claude-sonnet-4",
       providerId: provider.id,
       baseUrl: "https://model-override/v1",
+      apiFormat: "responses",
       apiKey: "sk-model",
       enabled: true,
       contextWindow: 200_000,
@@ -1831,6 +1833,7 @@ describe("RemoteModelRepository.saveModel / deleteModel / setEnabled（#3501）"
     });
     expect(minimal).toMatchObject({
       kind: "chat",
+      apiFormat: null,
       enabled: true,
       baseUrl: null,
       contextWindow: null,
@@ -1839,6 +1842,15 @@ describe("RemoteModelRepository.saveModel / deleteModel / setEnabled（#3501）"
       smartConfig: true,
     });
     expect(minimal.apiKey).toBeNull();
+
+    /* 非法格式折成 null（跟随供应商），不在写侧猜一个：猜错的表现是「请求发到了
+     * 一个不存在的端点」，比回落更难查。 */
+    const badFormat = await remoteModelRepository.saveModel({
+      name: "坏格式",
+      providerId: provider.id,
+      apiFormat: "grpc",
+    });
+    expect(badFormat.apiFormat).toBeNull();
 
     await expect(
       remoteModelRepository.saveModel({ name: "   ", providerId: provider.id }),

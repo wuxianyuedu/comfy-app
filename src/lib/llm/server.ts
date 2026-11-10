@@ -13,11 +13,11 @@ import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 import type { LlmProvider, RemoteModel } from "~/server/db/schema";
 import { extractStreamDelta, extractText, extractToolCalls, buildChatRequest } from "./api-format";
 import {
-  isLlmApiFormat,
   parseCapabilities,
   parseInputTypes,
   parseReasoningLevels,
   parseReasoningParamMapping,
+  resolveApiFormat,
   type LlmApiFormat,
 } from "./provider-types";
 import {
@@ -73,7 +73,7 @@ const ENV_DEFAULTS: LLMConfig = {
 };
 
 /** 一行远端模型 + 其供应商 → 运行期条目（连接参数优先取模型自己的，
- *  缺省回落到供应商；`apiFormat` 只有供应商能提供）。 */
+ *  缺省回落到供应商；`apiFormat` 模型自己的优先，其次供应商默认，#3517）。 */
 function entryFromRemoteRow(
   r: RemoteModel,
   providers: ReadonlyArray<LlmProvider>,
@@ -86,8 +86,7 @@ function entryFromRemoteRow(
     // 用途只认白名单；库里的非法值归一成 null（历史上写坏一列不该让整条消失）。
     kind: isRemoteModelKind(r.kind) ? r.kind : null,
     providerId: r.providerId,
-    apiFormat:
-      provider !== undefined && isLlmApiFormat(provider.apiFormat) ? provider.apiFormat : null,
+    apiFormat: resolveApiFormat(r.apiFormat, provider?.apiFormat),
     enabled: r.enabled,
     contextWindow: r.contextWindow,
     maxOutputTokens: r.maxOutputTokens,

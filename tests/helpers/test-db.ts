@@ -162,7 +162,7 @@ CREATE TABLE IF NOT EXISTS auditLog (
 );
 
 CREATE TABLE IF NOT EXISTS remoteModel (
-  id TEXT PRIMARY KEY, name TEXT NOT NULL, providerId TEXT, baseUrl TEXT, apiKey TEXT,
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, providerId TEXT, baseUrl TEXT, apiFormat TEXT, apiKey TEXT,
   kind TEXT NOT NULL DEFAULT 'chat', enabled INTEGER NOT NULL DEFAULT 1, contextWindow INTEGER,
   maxOutputTokens INTEGER, inputTypes TEXT, capabilities TEXT, reasoningLevels TEXT,
   reasoningParamMapping TEXT, smartConfig INTEGER NOT NULL DEFAULT 1, workshopAdapters TEXT,
@@ -765,6 +765,8 @@ export type SeedRemoteModelInput = {
   id?: string;
   kind?: string;
   name: string;
+  /** 所属供应商；给一个不存在的 id 可以造「孤儿行」（读侧回落格式用）。 */
+  providerId?: string | null;
   workshopAdapters?: unknown;
 };
 
@@ -779,6 +781,7 @@ export function seedRemoteModel(_tdb: TestDb, input: SeedRemoteModelInput): Row 
   insertInto("remoteModel", {
     id,
     name: input.name,
+    providerId: input.providerId ?? null,
     baseUrl: input.baseUrl ?? null,
     apiKey: encryptSeedLlmKey(input.apiKey),
     kind: input.kind ?? "chat",

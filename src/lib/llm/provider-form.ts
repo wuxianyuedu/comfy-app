@@ -27,9 +27,9 @@ import { REMOTE_MODEL_KINDS, type RemoteModelKind } from "./types";
 
 /* ── 供应商 ─────────────────────────────────────────────────────── */
 
-/** 供应商表单的受控值（`apiKey` 是本次输入的新值，不回填明文）。 */
+/** 供应商表单的受控值（`apiKey` 是本次输入的新值，不回填明文）。
+ *  接口格式自 #3517 起是**模型级**配置，供应商这一层不再持有它。 */
 export type ProviderFormValues = {
-  apiFormat: LlmApiFormat;
   apiKey: string;
   baseUrl: string;
   /** 编辑态显式清除已保存密钥（「留空不改」与「清空」是两件事）。 */
@@ -38,21 +38,19 @@ export type ProviderFormValues = {
 };
 
 export type ProviderFormSource = {
-  apiFormat: string;
   baseUrl: string;
   hasApiKey: boolean;
   name: string;
 };
 
 export function emptyProviderForm(): ProviderFormValues {
-  return { name: "", baseUrl: "", apiFormat: "chat-completions", apiKey: "", clearApiKey: false };
+  return { name: "", baseUrl: "", apiKey: "", clearApiKey: false };
 }
 
 export function providerFormFromView(source: ProviderFormSource): ProviderFormValues {
   return {
     name: source.name,
     baseUrl: source.baseUrl,
-    apiFormat: isLlmApiFormat(source.apiFormat) ? source.apiFormat : "chat-completions",
     apiKey: "",
     clearApiKey: false,
   };
@@ -75,7 +73,6 @@ export function validateProviderForm(form: ProviderFormValues): ProviderFormErro
 }
 
 export type ProviderSaveDraft = {
-  apiFormat: LlmApiFormat;
   /** 三态：非空串 = 写入；`null` = 显式清空；省略 = 保持既有。 */
   apiKey?: string | null;
   baseUrl: string;
@@ -89,7 +86,6 @@ export function providerSaveDraft(form: ProviderFormValues, id?: string): Provid
     ...(id === undefined ? {} : { id }),
     name: form.name.trim(),
     baseUrl: form.baseUrl.trim().replace(/\/$/, ""),
-    apiFormat: form.apiFormat,
     ...(typedKey === "" ? (form.clearApiKey ? { apiKey: null } : {}) : { apiKey: typedKey }),
   };
 }
@@ -97,6 +93,8 @@ export function providerSaveDraft(form: ProviderFormValues, id?: string): Provid
 /* ── 模型 ───────────────────────────────────────────────────────── */
 
 export type ModelFormValues = {
+  /** 模型级接口格式（#3517）：同一供应商下文本 / 图片模型可能各用一套协议。 */
+  apiFormat: LlmApiFormat;
   baseUrl: string;
   capabilities: Array<ModelCapability>;
   /** 数字字段用字符串存：空串 = 未填（`null`），输入中途不能被 Number("") 折成 0。 */
@@ -118,6 +116,7 @@ export type ModelFormValues = {
  *  drizzle 侧是 `unknown`，这里也收 `unknown` 交给 `parse*` 的容错解析 ——
  *  不在类型层假设「库里一定是干净数组」。 */
 export type ModelFormSource = {
+  apiFormat: string;
   baseUrl: string | null;
   capabilities: unknown;
   contextWindow: number | null;
@@ -136,10 +135,14 @@ function isRemoteModelKindValue(value: string): value is RemoteModelKind {
   return kinds.includes(value);
 }
 
-export function emptyModelForm(kind: RemoteModelKind = "chat"): ModelFormValues {
+export function emptyModelForm(
+  kind: RemoteModelKind = "chat",
+  apiFormat: LlmApiFormat = "chat-completions",
+): ModelFormValues {
   return {
     name: "",
     kind,
+    apiFormat,
     smartConfig: true,
     contextWindow: "",
     maxOutputTokens: "",
@@ -158,6 +161,7 @@ export function modelFormFromView(source: ModelFormSource): ModelFormValues {
   return {
     name: source.name,
     kind: isRemoteModelKindValue(source.kind) ? source.kind : "chat",
+    apiFormat: isLlmApiFormat(source.apiFormat) ? source.apiFormat : "chat-completions",
     smartConfig: source.smartConfig,
     contextWindow:
       source.contextWindow === null || source.contextWindow === undefined
@@ -227,6 +231,8 @@ export function validateModelForm(form: ModelFormValues): ModelFormErrors {
 }
 
 export type ModelSaveDraft = {
+  /** 模型级接口格式（#3517）：写入时按白名单收窄，模型弹窗必填。 */
+  apiFormat: LlmApiFormat;
   /** 模型级接口覆盖（历史行可能带；表单不改它，原样保留）。 */
   baseUrl: string | null;
   capabilities: Array<ModelCapability>;
@@ -260,6 +266,7 @@ export function modelSaveDraft(
     providerId: ctx.providerId,
     name: form.name.trim(),
     kind: form.kind,
+    apiFormat: form.apiFormat,
     enabled: form.enabled,
     /* 表单不暴露模型级接口覆盖：编辑历史行时保留原值（清掉它等于把这条模型
      * 静默指向供应商，用户没做这个决定）。 */

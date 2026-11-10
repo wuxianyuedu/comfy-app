@@ -441,6 +441,9 @@ export const remoteModel = sqliteTable(
     providerId: text("providerId"),
     /** 独立接口地址；空 = 跟随所属供应商 / llmConfig.baseUrl */
     baseUrl: text("baseUrl"),
+    /** 接口格式（#3517 起下移到模型级：同一供应商下文本 / 图片 / 视频模型
+     *  可能各用一套协议）。空 = 跟随所属供应商（历史行），读侧按白名单收窄。 */
+    apiFormat: text("apiFormat"),
     /** 独立密钥；仅远端模型持有。密文(enc:v1:...)或历史明文。 */
     apiKey: text("apiKey"),
     /** 用途：chat / image / video */

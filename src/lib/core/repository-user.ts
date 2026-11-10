@@ -386,10 +386,14 @@ export class RemoteModelRepository {
       throw new Error("模型名称不能为空");
     }
     const baseUrl = input.baseUrl?.trim() ? input.baseUrl.trim() : null;
+    /* 格式是模型级配置（#3517）：非法值折成 null = 跟随供应商，不在写侧猜一个格式
+     * （猜错的表现是「请求发到了一个不存在的端点」，比回落更难查）。 */
+    const apiFormat = isLlmApiFormat(input.apiFormat) ? input.apiFormat : null;
     const values = {
       name,
       providerId: input.providerId,
       baseUrl,
+      apiFormat,
       kind: input.kind ?? "chat",
       enabled: input.enabled ?? true,
       contextWindow: input.contextWindow ?? null,
@@ -444,8 +448,8 @@ export class RemoteModelRepository {
 /* ── LLM 供应商仓储（#3501）──────────────────────────────────────── */
 
 export type LlmProviderInput = {
-  /** 缺省 = 新建 */
-  apiFormat: string;
+  /** 缺省 = 新建；更新时省略 = 不动既有（格式已下移到模型级，见 #3517）。 */
+  apiFormat?: string;
   /** 三态：缺键 = 不动既有、`null`/空白 = 清空、非空串 = 加密后写入 */
   apiKey?: string | null;
   baseUrl: string;
@@ -454,6 +458,7 @@ export type LlmProviderInput = {
 };
 
 export type RemoteModelInput = {
+  apiFormat?: string | null;
   apiKey?: string | null;
   baseUrl?: string | null;
   capabilities?: Array<string> | null;
@@ -498,7 +503,12 @@ export class LlmProviderRepository {
     const baseUrl = input.baseUrl.trim();
     const apiFormat = isLlmApiFormat(input.apiFormat) ? input.apiFormat : "chat-completions";
     if (input.id !== undefined) {
-      const patch: Record<string, unknown> = { name, baseUrl, apiFormat, updatedAt: new Date() };
+      const patch: Record<string, unknown> = { name, baseUrl, updatedAt: new Date() };
+      /* 省略 apiFormat = 不动既有：格式已下移到模型级（#3517），详情页不再编辑它，
+       * 拿默认值覆盖会把历史供应商的协议悄悄改回 chat-completions。 */
+      if (input.apiFormat !== undefined) {
+        patch.apiFormat = apiFormat;
+      }
       if (input.apiKey !== undefined) {
         patch.apiKey =
           input.apiKey === null || input.apiKey.trim() === ""

@@ -2,7 +2,12 @@ import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { getConfigForClient } from "~/lib/llm/server";
 import { remoteModelEntrySchema } from "~/lib/llm/remote-model-schema";
-import { LLM_API_FORMATS, MODEL_CAPABILITIES, MODEL_INPUT_TYPES } from "~/lib/llm/provider-types";
+import {
+  LLM_API_FORMATS,
+  MODEL_CAPABILITIES,
+  MODEL_INPUT_TYPES,
+  resolveApiFormat,
+} from "~/lib/llm/provider-types";
 import { isHttpUrl } from "~/lib/url-scheme";
 import { llmProviderRepository, remoteModelRepository } from "~/lib/core/repository";
 import type { LlmProvider, RemoteModel } from "~/server/db/schema";
@@ -47,17 +52,21 @@ const taskTypeKeys = ["txt2img", "img2video", "chat", "code", "creative", "revie
 const extraModelsSchema = z.array(z.union([z.string(), remoteModelEntrySchema]));
 
 /** 供应商入参（#3501）：Base URL 必须是 http/https（与 configSave 同一判据）。
- *  `apiKey` 三态：缺键 = 不动既有、`null`/空白 = 清空、非空串 = 写入新值。 */
+ *  `apiKey` 三态：缺键 = 不动既有、`null`/空白 = 清空、非空串 = 写入新值。
+ *  `apiFormat` 自 #3517 起下移到模型级，这里省略 = 不动既有（历史供应商的协议
+ *  不该被一次「改个名字」的保存改回默认）。 */
 const providerInputSchema = z.object({
-  apiFormat: z.enum(LLM_API_FORMATS),
+  apiFormat: z.enum(LLM_API_FORMATS).optional(),
   apiKey: z.string().nullish(),
   baseUrl: z.string().refine(isHttpUrl, { message: "Base URL 必须为 http/https" }),
   id: z.string().min(1).optional(),
   name: z.string().trim().min(1, "供应商名称不能为空"),
 });
 
-/** 模型入参（#3501）：窗口 / 输出上限必须是正整数（0 与负数在上游都无意义）。 */
+/** 模型入参（#3501）：窗口 / 输出上限必须是正整数（0 与负数在上游都无意义）。
+ *  `apiFormat` 是模型级接口格式（#3517）：省略 = 跟随供应商（历史行）。 */
 const modelInputSchema = z.object({
+  apiFormat: z.enum(LLM_API_FORMATS).nullish(),
   apiKey: z.string().nullish(),
   baseUrl: z.string().nullish(),
   capabilities: z.array(z.enum(MODEL_CAPABILITIES)).nullish(),
@@ -87,8 +96,12 @@ function providerView(p: LlmProvider) {
   };
 }
 
-/** 模型下发给客户端的形状：密钥只报「有没有配」（供应商级密钥不在这里重复报）。 */
-function modelView(m: RemoteModel) {
+/** 模型下发给客户端的形状：密钥只报「有没有配」（供应商级密钥不在这里重复报）。
+ *  `apiFormat` 下发的是**生效值**（模型自己的 → 供应商默认 → chat-completions）：
+ *  设置页的模型行与编辑弹窗都按它显示，不再各自回落一次。
+ *  指向已删除供应商的行 `find` 自然取不到，格式回落默认值，不因一条孤儿行报错。 */
+function modelView(m: RemoteModel, providers: ReadonlyArray<LlmProvider>) {
+  const provider = providers.find((p) => p.id === m.providerId);
   return {
     id: m.id,
     providerId: m.providerId,
@@ -96,6 +109,7 @@ function modelView(m: RemoteModel) {
     kind: m.kind,
     enabled: m.enabled,
     baseUrl: m.baseUrl,
+    apiFormat: resolveApiFormat(m.apiFormat, provider?.apiFormat),
     hasApiKey: typeof m.apiKey === "string" && m.apiKey !== "",
     contextWindow: m.contextWindow,
     maxOutputTokens: m.maxOutputTokens,
@@ -116,7 +130,10 @@ async function readProviderState() {
     llmProviderRepository.list(),
     remoteModelRepository.list(),
   ]);
-  return { providers: providers.map(providerView), models: models.map(modelView) };
+  return {
+    providers: providers.map(providerView),
+    models: models.map((m) => modelView(m, providers)),
+  };
 }
 
 /** 一条模式契约的入参形状（本机保存与「保存为项目默认」共用同一份，ISSUE #3396）。
