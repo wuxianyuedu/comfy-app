@@ -83,8 +83,6 @@ env:
   SKIP_ENV_VALIDATION: "1"
   BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
   CI: "true"
-  # vitest 判据预算临时放宽 ×2（ISSUE #2959；`.cnb.yml` 同键同值，口径见那里的注释）。
-  COMFY_TEST_TIMEOUT_SCALE: "2"
   # 覆盖率 reporter 安静档（ISSUE #1959；逐文件明细在落盘的 lcov / json-summary 里）。
   COMFYAPP_QUIET_COVERAGE: "1"
   # vitest 并发：默认由 `scripts/ci-load.mjs:resolveCiWorkers()` 按平台分档推导 ——

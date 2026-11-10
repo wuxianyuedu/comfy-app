@@ -231,15 +231,20 @@ describe("判据预算的临时乘数（ISSUE #2959）", () => {
     }
   });
 
-  it("`COMFY_TEST_TIMEOUT_SCALE` 是流水线级 env 里**唯一**的一行（那是「临时」的承重处）", () => {
+  it("`COMFY_TEST_TIMEOUT_SCALE` 若出现，必须是流水线级 env 里**唯一**的一行（那是「临时」的承重处）", () => {
     const text = readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
     const hits = text.split("\n").filter((line) => /^\s*COMFY_TEST_TIMEOUT_SCALE\s*:/.test(line));
+    /* 两档合法形态（ISSUE #3489）：
+     *   · 0 行 = 已收回（#2959 的 ×2 放宽按业主口径撤掉，缺省乘数 1 逐字等价原状）；
+     *   · 1 行 = 又临时放宽了 —— 只许写在 `.common` 的 `env:` 里，写进某一格就只有那一格放宽。 */
     expect(
-      hits,
-      "这个键只该在 `.common` 的 `env:` 里出现一次 —— 写进某一格就只有那一格放宽",
-    ).toHaveLength(1);
+      hits.length,
+      "这个键要么不出现（已收回），要么只在 `.common` 的 `env:` 里出现一次",
+    ).toBeLessThanOrEqual(1);
     /* 值必须是「置着」的形态：空值 / 非数字 / 超过 3 都等于没放宽或放宽过头，
      * 而这两种在日志里只差一行 note。 */
-    expect(hits[0]).toMatch(/:\s*"?(?:1(?:\.\d+)?|2(?:\.\d+)?|3(?:\.\d+)?)"?\s*$/);
+    if (hits.length === 1) {
+      expect(hits[0]).toMatch(/:\s*"?(?:1(?:\.\d+)?|2(?:\.\d+)?|3(?:\.\d+)?)"?\s*$/);
+    }
   });
 });
