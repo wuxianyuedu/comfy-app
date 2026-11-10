@@ -1792,7 +1792,7 @@ describe("RemoteModelRepository.saveModel / deleteModel / setEnabled（#3501）"
       baseUrl: " https://model-override/v1 ",
       apiKey: " sk-model ",
       contextWindow: 200_000,
-      maxOutputTokens: 8_192,
+      maxOutputTokens: 8192,
       inputTypes: ["text", "image", "pdf"],
       capabilities: ["structured-output", "system-messages"],
       reasoningLevels: ["low", "high"],
@@ -1806,7 +1806,7 @@ describe("RemoteModelRepository.saveModel / deleteModel / setEnabled（#3501）"
       apiKey: "sk-model",
       enabled: true,
       contextWindow: 200_000,
-      maxOutputTokens: 8_192,
+      maxOutputTokens: 8192,
       inputTypes: ["text", "image", "pdf"],
       capabilities: ["structured-output", "system-messages"],
       reasoningLevels: ["low", "high"],
@@ -1863,9 +1863,9 @@ describe("RemoteModelRepository.saveModel / deleteModel / setEnabled（#3501）"
       providerId: provider.id,
       baseUrl: "https://model-override/v1",
       contextWindow: 200_000,
-      maxOutputTokens: 4_096,
+      maxOutputTokens: 4096,
     });
-    expect(updated).toMatchObject({ contextWindow: 200_000, maxOutputTokens: 4_096 });
+    expect(updated).toMatchObject({ contextWindow: 200_000, maxOutputTokens: 4096 });
     expect(cipher(), "缺键必须原样继承既有密文").toBe(before);
     expect(updated.apiKey).toBe("sk-keep");
 

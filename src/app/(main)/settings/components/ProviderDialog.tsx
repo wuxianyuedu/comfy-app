@@ -23,7 +23,7 @@ import {
 import type { ProviderModelDialogs } from "../hooks/use-provider-model-dialogs";
 import type { SettingsProviders } from "../hooks/use-settings-providers";
 
-export function ProviderDialog({ p, d }: { p: SettingsProviders; d: ProviderModelDialogs }) {
+export function ProviderDialog({ d, p }: { d: ProviderModelDialogs; p: SettingsProviders }) {
   const finalUrl = requestUrlForFormat(d.providerForm.baseUrl, d.providerForm.apiFormat);
 
   return (

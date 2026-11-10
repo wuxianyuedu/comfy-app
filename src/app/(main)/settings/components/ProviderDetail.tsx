@@ -51,13 +51,13 @@ import type { UsageTestDialogs } from "../hooks/use-usage-test-dialogs";
 type ProbeMsg = { kind: "ok" | "err"; text: string } | null;
 
 export function ProviderDetail({
-  p,
   d,
+  p,
   provider,
   usage,
 }: {
-  p: SettingsProviders;
   d: ProviderModelDialogs;
+  p: SettingsProviders;
   provider: ProviderView;
   usage: UsageTestDialogs;
 }) {
@@ -423,8 +423,8 @@ export function ProviderDetail({
       )}
 
       <ConfirmDialog
-        danger
         confirmLabel="删除"
+        danger
         description={`删除后，「${provider.name}」下的 ${String(models.length)} 个模型会一并移除，且无法恢复。`}
         onClose={() => {
           setConfirmDelete(false);

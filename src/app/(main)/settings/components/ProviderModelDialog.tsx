@@ -34,14 +34,14 @@ import type { ModelDialog, ProviderModelDialogs } from "../hooks/use-provider-mo
 import type { SettingsProviders } from "../hooks/use-settings-providers";
 
 export function ProviderModelDialog({
-  p,
   d,
   dialog,
+  p,
 }: {
-  p: SettingsProviders;
   d: ProviderModelDialogs;
   /** 非空由调用方保证：仅在弹窗打开时渲染。 */
   dialog: NonNullable<ModelDialog>;
+  p: SettingsProviders;
 }) {
   const providerId = dialog.mode === "add" ? dialog.providerId : dialog.model.providerId;
   const provider = p.providers.find((candidate) => candidate.id === providerId);

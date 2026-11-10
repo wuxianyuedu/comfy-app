@@ -77,9 +77,9 @@ export const REMOTE_MODEL_KIND_LABELS: Record<RemoteModelKind, string> = {
  * `hasApiKey` 是**只读视图字段**：服务端下发时逐条标「这条存过密钥」（与顶层同口径），
  * 供设置页显示「已配置」而不把明文送进浏览器；它不参与写入判定。 */
 export type RemoteModelEntry = {
-  apiKey?: string | null;
   /** 所属供应商的接口格式（#3501；服务端按它组装请求）。 */
   apiFormat?: LlmApiFormat | null;
+  apiKey?: string | null;
   baseUrl?: string | null;
   /** 模型能力（#3501）：structured-output / native-web-search / system-messages。 */
   capabilities?: Array<string> | null;

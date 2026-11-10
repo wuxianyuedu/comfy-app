@@ -77,8 +77,8 @@ describe("词表容错解析：坏值跳过、重复去掉、空白裁掉", () =
 describe("inferModelDefaults：按模型名给保守默认值", () => {
   it("空名 / 认不出的名字给兜底值（空窗口会让下游算错预算）", () => {
     const fallback = {
-      contextWindow: 8_192,
-      maxOutputTokens: 2_048,
+      contextWindow: 8192,
+      maxOutputTokens: 2048,
       inputTypes: ["text"],
       capabilities: ["system-messages"],
     };
@@ -90,7 +90,7 @@ describe("inferModelDefaults：按模型名给保守默认值", () => {
   it("各家族命中各自的窗口 / 输出上限 / 输入类型", () => {
     expect(inferModelDefaults("claude-sonnet-4-5")).toMatchObject({
       contextWindow: 200_000,
-      maxOutputTokens: 8_192,
+      maxOutputTokens: 8192,
       inputTypes: ["text", "image", "pdf"],
     });
     expect(inferModelDefaults("gemini-2.5-pro")).toMatchObject({
@@ -112,8 +112,8 @@ describe("inferModelDefaults：按模型名给保守默认值", () => {
     expect(inferModelDefaults("deepseek-chat")).toMatchObject({ contextWindow: 64_000 });
     expect(inferModelDefaults("qwen-max")).toMatchObject({ contextWindow: 32_768 });
     expect(inferModelDefaults("llama-3-8b")).toMatchObject({
-      contextWindow: 8_192,
-      maxOutputTokens: 4_096,
+      contextWindow: 8192,
+      maxOutputTokens: 4096,
       capabilities: ["system-messages"],
     });
   });
@@ -138,7 +138,7 @@ describe("formatContextWindow：未知给唯一占位符，大数按 K / M 档",
 
   it("千位以上用 K / M，小数去掉尾零", () => {
     expect(formatContextWindow(999)).toBe("999");
-    expect(formatContextWindow(2_500)).toBe("2.5K");
+    expect(formatContextWindow(2500)).toBe("2.5K");
     expect(formatContextWindow(200_000)).toBe("200K");
     expect(formatContextWindow(1_000_000)).toBe("1M");
     expect(formatContextWindow(1_500_000)).toBe("1.5M");

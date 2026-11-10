@@ -90,7 +90,7 @@ export function providerSaveDraft(form: ProviderFormValues, id?: string): Provid
     name: form.name.trim(),
     baseUrl: form.baseUrl.trim().replace(/\/$/, ""),
     apiFormat: form.apiFormat,
-    ...(typedKey !== "" ? { apiKey: typedKey } : form.clearApiKey ? { apiKey: null } : {}),
+    ...(typedKey === "" ? (form.clearApiKey ? { apiKey: null } : {}) : { apiKey: typedKey }),
   };
 }
 

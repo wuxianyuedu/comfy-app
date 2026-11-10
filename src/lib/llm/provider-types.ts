@@ -176,12 +176,12 @@ export type ModelSmartDefaults = {
 };
 
 type ModelFamilyRule = {
+  capabilities?: Array<ModelCapability>;
+  contextWindow: number;
+  inputTypes: Array<ModelInputType>;
   /** 命中模型名的小写正则。 */
   match: RegExp;
-  contextWindow: number;
   maxOutputTokens: number;
-  inputTypes: Array<ModelInputType>;
-  capabilities?: Array<ModelCapability>;
 };
 
 /* 规则表按「越具体越靠前」排列：先命中的那条生效。
@@ -190,14 +190,14 @@ const MODEL_FAMILY_RULES: Array<ModelFamilyRule> = [
   {
     match: /claude|anthropic/,
     contextWindow: 200_000,
-    maxOutputTokens: 8_192,
+    maxOutputTokens: 8192,
     inputTypes: ["text", "image", "pdf"],
     capabilities: ["structured-output", "system-messages"],
   },
   {
     match: /gemini/,
     contextWindow: 1_000_000,
-    maxOutputTokens: 8_192,
+    maxOutputTokens: 8192,
     inputTypes: ["text", "image", "video", "pdf"],
     capabilities: ["structured-output", "system-messages"],
   },
@@ -225,21 +225,21 @@ const MODEL_FAMILY_RULES: Array<ModelFamilyRule> = [
   {
     match: /deepseek/,
     contextWindow: 64_000,
-    maxOutputTokens: 8_192,
+    maxOutputTokens: 8192,
     inputTypes: ["text"],
     capabilities: ["structured-output", "system-messages"],
   },
   {
     match: /qwen|qwq/,
     contextWindow: 32_768,
-    maxOutputTokens: 8_192,
+    maxOutputTokens: 8192,
     inputTypes: ["text"],
     capabilities: ["structured-output", "system-messages"],
   },
   {
     match: /llama|mistral|mixtral/,
-    contextWindow: 8_192,
-    maxOutputTokens: 4_096,
+    contextWindow: 8192,
+    maxOutputTokens: 4096,
     inputTypes: ["text"],
     capabilities: ["system-messages"],
   },
@@ -247,8 +247,8 @@ const MODEL_FAMILY_RULES: Array<ModelFamilyRule> = [
 
 /** 兜底：认不出的模型给一组保守值（不会因为空窗口让下游算错预算）。 */
 const FALLBACK_SMART_DEFAULTS: ModelSmartDefaults = {
-  contextWindow: 8_192,
-  maxOutputTokens: 2_048,
+  contextWindow: 8192,
+  maxOutputTokens: 2048,
   inputTypes: ["text"],
   capabilities: ["system-messages"],
 };
@@ -290,8 +290,8 @@ export function formatContextWindow(value: number | null | undefined): string {
   if (value >= 1_000_000) {
     return `${trimFixed(value / 1_000_000, 1) ?? String(value / 1_000_000)}M`;
   }
-  if (value >= 1_000) {
-    return `${trimFixed(value / 1_000, 1) ?? String(value / 1_000)}K`;
+  if (value >= 1000) {
+    return `${trimFixed(value / 1000, 1) ?? String(value / 1000)}K`;
   }
   return String(value);
 }

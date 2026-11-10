@@ -128,9 +128,9 @@ export type RemoteProbeResult = {
 };
 
 export type RemoteProbeInput = {
-  apiKey?: string;
   /** 接口格式：决定鉴权头与 `/models` 探测路径（缺省 chat-completions）。 */
   apiFormat?: LlmApiFormat;
+  apiKey?: string;
   baseUrl?: string;
   model?: string;
   /** 已保存的供应商 id：Base URL / 格式 / 密钥由服务端按 id 代查（浏览器没有明文密钥）。 */
