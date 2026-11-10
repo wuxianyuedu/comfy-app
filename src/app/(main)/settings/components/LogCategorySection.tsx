@@ -29,7 +29,7 @@ export function LogCategorySection() {
   const setEnabled = useLogCategoryStore((s) => s.setEnabled);
 
   return (
-    <SettingsCard title="日志分类开关">
+    <SettingsCard>
       <p className="text-muted-foreground mb-4 text-xs leading-relaxed">
         关闭某一类，它的日志就
         <strong className="text-ink/80">不在日志面板里显示</strong>

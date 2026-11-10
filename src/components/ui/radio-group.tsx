@@ -19,7 +19,12 @@ function RadioGroupItem({ className, children, ...props }: RadioPrimitive.Root.P
   return (
     <RadioPrimitive.Root
       className={cn(
-        "group/radio-group-item peer border-input group-has-focus-visible/field-label:not-data-checked:border-input focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 aria-invalid:aria-checked:border-primary dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground group-has-focus-visible/field-label:data-checked:border-primary dark:data-checked:bg-primary relative flex aspect-square size-4 shrink-0 rounded-full border outline-none group-has-focus-visible/field-label:ring-0 after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:ring-3",
+        /* 未选中态与勾选框同一口径（ISSUE #3519）：描边走 ink 的 alpha 档
+         * （`border-ink/50` 浅 / `dark:border-ink/40` 深，对卡片 3.3:1 / 3.5:1）
+         * —— 此前是 `border-input` 那根 1px 发丝线，在 1.5 倍屏上与卡片底混成
+         * 1.09:1（深）/ 1.02:1（浅），未选中的单选圈等于不存在（用户现场：
+         * 「这个单选，暗色/亮色下未选择的根本看不清」）。选中态另走品牌色。 */
+        "group/radio-group-item peer border-ink/50 dark:border-ink/40 group-has-focus-visible/field-label:not-data-checked:border-ink/50 dark:group-has-focus-visible/field-label:not-data-checked:border-ink/40 focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 aria-invalid:aria-checked:border-primary dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground group-has-focus-visible/field-label:data-checked:border-primary dark:data-checked:bg-primary dark:data-unchecked:border-ink/40 dark:data-unchecked:bg-ink/5 relative flex aspect-square size-4 shrink-0 rounded-full border outline-none group-has-focus-visible/field-label:ring-0 after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:ring-3",
         className,
       )}
       data-slot="radio-group-item"

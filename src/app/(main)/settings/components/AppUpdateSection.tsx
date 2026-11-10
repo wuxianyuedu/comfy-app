@@ -29,7 +29,7 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
   );
 
   return (
-    <SettingsCard title="应用更新">
+    <SettingsCard>
       {versionLine}
       {c.appUpdate.inShell ? (
         <>

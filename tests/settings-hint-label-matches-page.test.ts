@@ -1,7 +1,7 @@
 /**
  * 提示语里的「设置 → <分区> → <字段>」必须真是设置页上的名字（ISSUE #1239）。名字对不上时提示本身就是走不通的出口
  * （比不给建议更糟：用户会照着去找不存在的地方），而分区改名不会让用例变红。判据：
- * ① `设置 → X` 的 X 必须是 `SETTINGS_SECTIONS` 里真实 label；② Y 必须能在创作后端那张卡的源码里找到（字段 label 与卡标题同组件，改名会一起提醒）。
+ * ① `设置 → X` 的 X 必须是 `SETTINGS_SECTIONS` 里真实 label；② Y 必须能在创作后端那张卡的源码里找到（字段 label 与那张卡同组件，改名会一起提醒）。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -51,9 +51,13 @@ describe("解释器提示指向的设置页位置", () => {
     const field = pointerOf(DESKTOP_HINT).field;
     expect(field).not.toBe("");
     expect(src).toContain(`label="${field}`);
-    /* 导航项与卡标题同前缀（导航「创作后端」/ 卡「创作后端（ComfyUI）」）：
-     * 用户按导航找得到卡。两张名字毫无关系时这条就该红。 */
-    const comfyLabel = SETTINGS_SECTIONS.find((s) => s.id === "comfyui")?.label ?? "";
-    expect(src).toContain(`title="${comfyLabel}`);
+    /* 导航项与「那一张卡」必须是同一件事（ISSUE #3527：卡片标题已去掉，正文里那一行
+       分区标题就是导航项的名字 —— 两者同源于 `SETTINGS_SECTIONS`，所以这里判的是
+       **那张卡确实挂在那个分区下**：分区名与卡对不上时，用户按导航找不到那张卡。 */
+    const view = readFileSync(
+      join(process.cwd(), "src/app/(main)/settings/SettingsPageView.tsx"),
+      "utf8",
+    );
+    expect(view).toMatch(/comfyui:\s*<ComfyuiSection/);
   });
 });

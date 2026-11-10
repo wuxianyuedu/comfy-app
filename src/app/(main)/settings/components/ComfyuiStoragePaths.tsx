@@ -8,6 +8,7 @@
 
 import type { DesktopStoragePaths } from "~/lib/comfyui/desktop-storage-paths";
 import { normalizeSlashes } from "~/lib/path-display";
+import { SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import {
   buildStorageRows,
   describeStorageHint,
@@ -48,8 +49,12 @@ export function ComfyuiStoragePaths({ storage }: { storage: DesktopStoragePaths 
       </div>
       <dl className="flex flex-col gap-2">
         {buildStorageRows(storage).map((row) => (
-          <div className="flex flex-col gap-0.5" key={row.key}>
-            <dt className="text-muted-foreground text-xs">{row.label}</dt>
+          /* 每组目录一块**独立的承载面**（ISSUE #3519，用户现场：「这部分内容显示的
+             乱糟糟的」）：此前标签是弱一档的灰、路径与说明挤成一整片，读起来像一堵
+             字墙。现在标签提到正文档、每组一块行表面（与设置页其它「卡片内的一行」
+             同一档 `SETTINGS_ROW_CLASS`），组与组之间也就有了间隔。 */
+          <div className={`${SETTINGS_ROW_CLASS} flex flex-col gap-1`} key={row.key}>
+            <dt className="text-ink text-xs font-medium">{row.label}</dt>
             <dd>
               {row.dirs.length === 0 ? (
                 <p className="text-muted-foreground text-xs">未配置共享目录</p>

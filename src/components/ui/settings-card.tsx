@@ -34,9 +34,19 @@ export function SettingsCard({
   className?: string;
   /** 可选副说明：写「答案在别处拿不到的那句话」，同义反复就不传。 */
   description?: React.ReactNode;
-  title: string;
+  /**
+   * 卡片标题 —— **可以不传**（ISSUE #3519）。
+   *
+   * 设置页各分区卡片的标题此前与**正上方的分区标题**重复（用户现场：「这两个标题
+   * 实际上是有些重复了…只留一个」）：正文里先来一行分区标题（`.u-title-stage`），
+   * 紧跟着又来一张同名标题的卡片。现在分区标题那一行留在正文里，卡片只留内容
+   * （`title` 不传 ⇒ 不渲染标题行）；一节里有多张卡片时（例如「备份与恢复」下的
+   * 「创建备份 / 恢复备份」）每张卡片仍各带自己的标题。
+   */
+  title?: string;
 }) {
   const hasDescription = Boolean(description);
+  const hasHeader = title !== undefined || hasDescription;
   return (
     <ShadcnCard
       className={cn(
@@ -45,11 +55,13 @@ export function SettingsCard({
       )}
     >
       {/* 标题行自带下边距与分隔线：把「这一段从哪开始」画出来，而不是靠字号
-          差距（16px vs 14px 的差距在同一屏里读不出来）。 */}
-      <CardHeader className="border-border-subtle border-b py-3">
-        <CardTitle className="u-title">{title}</CardTitle>
-        {hasDescription ? <p className="text-ink-muted text-xs">{description}</p> : null}
-      </CardHeader>
+          差距（16px vs 14px 的差距在同一屏里读不出来）。没有标题时整行不占位。 */}
+      {hasHeader ? (
+        <CardHeader className="border-border-subtle border-b py-3">
+          {title === undefined ? null : <CardTitle className="u-title">{title}</CardTitle>}
+          {hasDescription ? <p className="text-ink-muted text-xs">{description}</p> : null}
+        </CardHeader>
+      ) : null}
       <CardContent className="py-4">{children}</CardContent>
     </ShadcnCard>
   );

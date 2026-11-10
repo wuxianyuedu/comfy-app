@@ -13,7 +13,13 @@ import { Button } from "~/components/ui/button";
 import { TreeChildren } from "~/components/ui/tree-rows";
 import { cn } from "~/lib/utils";
 
-import { SETTINGS_SCROLL_ORDER, TREE_GROUPS, sectionSummary } from "./settings-section-summary";
+import {
+  SETTINGS_SCROLL_ORDER,
+  TREE_GROUPS,
+  isGroupFirstSection,
+  sectionGroupLabel,
+  sectionSummary,
+} from "./settings-section-summary";
 import { useSectionScrollSpy } from "./use-section-scroll-spy";
 
 /**
@@ -192,13 +198,26 @@ function sectionLabel(section: Section): string {
  * 分区在正文里的标题（ISSUE #1722：正文里要有「现在读的是哪一节」的本地线索）。
  * 走 `.u-title-stage`（段级档）：屏级与卡片之间那一层（规范 03 §3.10），数值只住在
  * `@theme` 里。字从 `SETTINGS_SECTIONS` 取，导航与正文标题不可能漂移。
+ *
+ * 两处按 ISSUE #3519 改过：
+ * · **大类标题**（`模型` / `后端` / …）接进正文 —— 每组只出现一次（在组内第一个
+ *   分区上），此前正文只说分区名，长页里读不出「这几节属于一类」。
+ * · `font-title` 补上：段级标题此前走**正文字体**，17px/600 的笔画在深色下只到
+ *   `#c2c2c8`（实测），比同屏 14px 的行标题（`#ededf2`）还暗 —— 「标题比正文还暗」
+ *   的观感就是这么来的（用户现场：「这里界面的字体是白色吗，怎么感觉有些暗」）。
  */
 function SettingsSectionHeading({ section }: { section: Section }) {
   return (
-    <h2 className="u-title-stage border-border-subtle mb-3 flex items-baseline gap-2 border-b pb-2">
-      {sectionLabel(section)}
-      <span className="text-ink-muted text-xs font-normal">{sectionSummary(section)}</span>
-    </h2>
+    <>
+      {isGroupFirstSection(section) ? (
+        /* 大类：弱一档的小标签（与左侧导航树里的父行同一档），它是「这一组从哪开始」。 */
+        <p className="text-ink-fainter mb-1 text-xs font-medium">{sectionGroupLabel(section)}</p>
+      ) : null}
+      <h2 className="u-title-stage font-title border-border-subtle mb-3 flex items-baseline gap-2 border-b pb-2">
+        {sectionLabel(section)}
+        <span className="text-ink-muted text-xs font-normal">{sectionSummary(section)}</span>
+      </h2>
+    </>
   );
 }
 

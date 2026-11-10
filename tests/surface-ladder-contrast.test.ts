@@ -114,6 +114,27 @@ describe("表面阶梯：每一档都要与下面那档分得开（ISSUE #3519�
   });
 });
 
+describe("控件的未选中边界不许是那根发丝线（ISSUE #3519）", () => {
+  /* 控件的描边只有 1px：沿用「分隔线」那一档（`--color-border`）时，它在
+   * 1.5 倍屏上与容器底**互相混色**（实测深色 1.09:1 / 浅色 1.02:1）—— 未选中的
+   * 单选圈与勾选框等于不存在（WCAG 1.4.11 对「控件的视觉边界」要 3:1）。
+   * 这一族是「类名写了、却看不见」，色值扫描与 tsc 都看不见。 */
+  it.for([
+    ["checkbox", "src/components/ui/checkbox.tsx"],
+    ["radio", "src/components/ui/radio-group.tsx"],
+  ] as const)("%s 的基类描边走 ink 的 alpha 档（不是 border-input）", ([, rel]) => {
+    const src = stripComments(readFileSync(path.join(ROOT, rel), "utf8"), { trailing: true });
+    expect(
+      /\bborder-ink\/\d+/.test(src),
+      `${rel} 的基类里没有 ink 档描边 —— 未选中态的控件边界看不见（实测 1.09:1 / 1.02:1）`,
+    ).toBe(true);
+    expect(
+      /(?<![\w-])border-input(?![\w-])/.test(src),
+      `${rel} 的基类里还有 \`border-input\` —— 那根发丝线在 1.5 倍屏上与容器底混色`,
+    ).toBe(false);
+  });
+});
+
 describe("输入框基类不许用变体底色压掉调用点（ISSUE #3519）", () => {
   it("`ui/input.tsx` 的基类里没有 `dark:bg-*` / `light:bg-*`", () => {
     /* 注释里正当会出现被禁的叙述（「此前基类带 `dark:bg-input/30`」），拿原文
