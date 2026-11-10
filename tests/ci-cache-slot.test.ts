@@ -1,256 +1,107 @@
 /**
- * 缓存槽读数档的判据（ISSUE #2022 第二步 · 第一增量）：不判「装得快不快」，钉三件事 —— ① 四档分得开：
- * 「没配槽」「键算不出」「槽不在」「槽在但键变了」是四件事，合成一档则日志的 `install-into-slot` 说不清是第一次还是被人改过依赖面；
- * ② 键与 `ci-install-deps` **同源**（同一条判决链，不另算 sha）；③ 它**不判红**（恒退 0），且不冒充开关已开。
+ * 缓存根推导家（`scripts/ci-cache-slot.mjs`）的判据。
+ *
+ * #3479 退役依赖面缓存槽之后，这份文件只剩**四套根共用的一份推导**
+ * （问 `pnpm store path` 取卷根 + 包名拼子目录）与三个入口
+ * （`resolveBuildCacheRoot` / `resolveArtifactRoot` / `resolveToolRoot`）。
+ * 钉四件事：① 推导只认**卷根**（store 搬家不换根、换盘跟着换）；
+ * ② 三套根各是各的子目录（互不相扰的边界）；③ 显式 env 只管自己那一套；
+ * ④ 问不出 store ⇒ 不猜路径。`SLOT_LOCK_FILE` 那一枚随锁原语住进了
+ * `ci-slot-apply.mjs`（它的唯一消费者）。
  */
-import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { FINGERPRINT_FILE, pnpmInstallFingerprint } from "../scripts/ci-install-deps.mjs";
 import {
-  CACHE_ROOT_ENV,
-  main,
-  planSlot,
-  resolveCacheRoot,
-  sameVolumeAs,
-  SLOT_ACTIONS,
-  slotPath,
+  ARTIFACT_ROOT_ENV,
+  resolveArtifactRoot,
+  resolveBuildCacheRoot,
+  resolveToolRoot,
+  TOOLS_ROOT_ENV,
 } from "../scripts/ci-cache-slot.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
-const KEY = "a".repeat(64);
 
-/**
- * 临时槽根：真实文件系统跑 `readSlot` 那一侧（夹具造不出「目录在但没指纹」这一档）。⚠️ 必须与 `ROOT` **同卷**：
- * 执行档会拦跨卷槽根（#2049 之后一次 `EXDEV` 真红换来的守卫），而 `os.tmpdir()` 在 C:、本仓在 F:，拿 tmp 当槽根
- * 会让「槽不在 ⇒ install-into-slot」永远测不到，看起来像判据坏了；落点取卷根下临时目录，与生产推导的位置同层。
- */
-const made: Array<string> = [];
-function tmpRoot(): string {
-  const onRepoVolume = path.join(path.parse(ROOT).root, "comfy-slot-test");
-  let dir: string;
-  try {
-    dir = fs.mkdtempSync(onRepoVolume);
-  } catch {
-    // POSIX 上卷根不可写 ⇒ 退回 tmp（此时同卷守卫在该平台上恒真，不影响这些用例）。
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), "ci-slot-"));
-  }
-  made.push(dir);
-  return dir;
-}
-afterEach(() => {
-  for (const dir of made.splice(0)) {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-describe("planSlot 的四档关系", () => {
-  it("没配槽 / 键算不出 ⇒ no-cache，且两句话不相同（合成一档就分不出「没环境」与「算不出」）", () => {
-    const noRoot = planSlot({ cacheRoot: null, key: KEY });
-    const noKey = planSlot({ cacheRoot: "C:/slots", key: null });
-    expect(noRoot.action).toBe("no-cache");
-    expect(noKey.action).toBe("no-cache");
-    expect(noRoot.why).toContain(CACHE_ROOT_ENV);
-    expect(noKey.why).toContain("算不出来");
-    expect(noRoot.why).not.toBe(noKey.why);
-    expect(noRoot.path).toBeNull();
-  });
-
-  it("槽不在 ⇒ install-into-slot 并给出槽路径；槽在但指纹不合 ⇒ 同样重装（宁可重装，不接来历不明的产物）", () => {
-    const missing = planSlot({
-      cacheRoot: "C:/slots",
-      key: KEY,
-      slotPresent: false,
-    });
-    expect(missing.action).toBe("install-into-slot");
-    expect(missing.path).toBe(slotPath("C:/slots", KEY));
-    const stale = planSlot({
-      cacheRoot: "C:/slots",
-      key: KEY,
-      slotPresent: true,
-      slotFingerprint: "b".repeat(64),
-    });
-    expect(stale.action).toBe("install-into-slot");
-    expect(stale.why).toContain("键变");
-  });
-
-  it("键与槽内指纹逐字相同 ⇒ reuse；三档之外的任何返回都是计划函数自己漂了", () => {
-    const hit = planSlot({
-      cacheRoot: "C:/slots",
-      key: KEY,
-      slotPresent: true,
-      slotFingerprint: KEY,
-    });
-    expect(hit.action).toBe("reuse");
-    for (const plan of [planSlot({}), planSlot({ cacheRoot: "C:/slots", key: KEY }), hit]) {
-      expect(SLOT_ACTIONS).toContain(plan.action);
-    }
-  });
-});
-
-describe("键的来源与读数形态", () => {
-  it("槽目录 = `<槽根>/<键>`（跨作业比较只需「同键同目录」）", () => {
-    expect(slotPath("C:/slots", KEY)).toBe(path.join("C:/slots", KEY));
-  });
-
-  it("打印出来的键就是 `pnpmInstallFingerprint` 那一份（同源，不是第二份 sha）", () => {
-    const lines: Array<string> = [];
-    const code = main({
-      cwd: ROOT,
-      env: { [CACHE_ROOT_ENV]: "" },
-      // 不注入就会真去起一次 pnpm 问 store（用例不许依赖宿主的 pnpm 与网络）。
-      run: () => ({ status: 1 }),
-      log: (l) => lines.push(l),
-    });
-    expect(code).toBe(0);
-    const expected = pnpmInstallFingerprint(ROOT)?.slice(0, 12);
-    expect(expected, "真仓库的依赖面指纹取不到 ⇒ 这条断言在守的东西本身没了").toBeTruthy();
-    expect(lines.join("\n")).toContain(`键 ${expected}`);
-  });
-
-  it("恒不退非零，且明说「今天不复制、不链接、不装」—— 开关没拨过去这件事必须读得出来", () => {
-    const lines: Array<string> = [];
-    const root = tmpRoot();
-    // 配一个真的槽根 + 里面摆一份合不上的指纹：仍只出读数、仍退 0。
-    const key = pnpmInstallFingerprint(ROOT) ?? KEY;
-    const slot = path.join(root, key);
-    fs.mkdirSync(path.join(slot, "node_modules"), { recursive: true });
-    fs.writeFileSync(
-      path.join(slot, FINGERPRINT_FILE),
-      "ffffffffffffffffffffffffffffffffffffffff\n",
-    );
-    const code = main({
-      cwd: ROOT,
-      env: { [CACHE_ROOT_ENV]: root },
-      log: (l) => lines.push(l),
-    });
-    const text = lines.join("\n");
-    expect(code).toBe(0);
-    expect(text).toContain("install-into-slot");
-    expect(text).toContain("不复制、不链接、不装");
-    expect(fs.readdirSync(slot).length).toBeGreaterThan(0);
-  });
-
-  it("槽里已经有本次指纹 ⇒ 读数走 reuse 那一句话（第二增量的开关就靠这句验证它接对了）", () => {
-    const lines: Array<string> = [];
-    const root = tmpRoot();
-    const key = pnpmInstallFingerprint(ROOT);
-    expect(key).toBeTruthy();
-    const slot = path.join(root, key ?? KEY);
-    fs.mkdirSync(path.join(slot, "node_modules"), { recursive: true });
-    fs.writeFileSync(path.join(slot, FINGERPRINT_FILE), `${key}\n`);
-    main({
-      cwd: ROOT,
-      env: { [CACHE_ROOT_ENV]: root },
-      log: (l) => lines.push(l),
-    });
-    expect(lines.join("\n")).toContain("结论 reuse");
-    /* 读数里要明说当前键就在盘上 —— 否则「键数 = 配额却报超额」看不出成因（ISSUE #2490）。 */
-    expect(lines.join("\n")).toContain("当前键已在盘上");
-  });
-});
-
-describe("槽根的推导（不写死盘符）", () => {
-  /** 与真仓库同卷的一个假 store 路径（`pnpm store path` 会答成这个形态）。 */
-  const storeOnThisVolume = () => path.join(path.parse(ROOT).root, ".pnpm-store", "v11");
-
-  it("显式 `COMFY_CI_CACHE_ROOT` 优先，且来源被点名（那是「这台机器要放另一块盘」的出口）", () => {
-    const out = resolveCacheRoot({
-      cwd: ROOT,
-      env: { [CACHE_ROOT_ENV]: "D:/somewhere/else" },
-      run: () => {
-        throw new Error("显式配了就不该再起 pnpm");
-      },
-    });
-    expect(out.root).toBe("D:/somewhere/else");
-    expect(out.from).toContain(CACHE_ROOT_ENV);
-  });
+describe("缓存根推导：四套根共用一份事实", () => {
+  /** 给定 store 路径，回一个「问 store 就答它」的替身。 */
+  const runStore = (store: string) => () => ({ status: 0, stdout: `${store}\n` });
 
   it("没配时由 store 推导，并且**与 store 同卷**（跨卷 ⇒ 硬链接退化成整树复制）", () => {
-    const store = storeOnThisVolume();
-    const out = resolveCacheRoot({
-      cwd: ROOT,
-      env: {},
-      run: () => ({ status: 0, stdout: `${store}\n` }),
-    });
+    const store = path.join(path.parse(ROOT).root, ".pnpm-store", "v11");
+    const out = resolveBuildCacheRoot({ cwd: ROOT, env: {}, run: runStore(store) });
     expect(out.root).not.toBeNull();
     expect(path.parse(out.root!).root).toBe(path.parse(store).root);
-    expect(out.root!.endsWith(path.join("ci-cache", "comfy-app-t3"))).toBe(true);
+    expect(out.root!.endsWith(path.join("ci-build-cache", "comfy-app-t3"))).toBe(true);
     expect(out.from).toContain(store);
   });
 
   it("runner 换盘 ⇒ 推导跟着换，配置一个字都不用改（这一条就是那次搬家要防的事）", () => {
     /* 「换盘」在单卷宿主上造不出来（`path.parse` 只认当前平台，任何绝对路径的卷根都是
-     * `/`），所以这一条改判同一条因果里可判的那一半：槽根**当且仅当**由 store 那一处
-     * 事实推出来 —— store 落在哪个卷根，槽根就落在哪个卷根，且不夹带任何一项配置。 */
+     * `/`），所以这一条改判同一条因果里可判的那一半：根**当且仅当**由 store 那一处
+     * 事实推出来 —— store 落在哪个卷根，根就落在哪个卷根，且不夹带任何一项配置。 */
     const storeRoot = path.parse(ROOT).root;
     const rootOf = (store: string) =>
-      resolveCacheRoot({
-        cwd: ROOT,
-        env: {},
-        run: () => ({ status: 0, stdout: `${store}\n` }),
-      }).root;
+      resolveBuildCacheRoot({ cwd: ROOT, env: {}, run: runStore(store) }).root;
     expect(path.parse(rootOf(path.join(storeRoot, ".pnpm-store", "v11"))!).root).toBe(storeRoot);
-    /* 卷根一样、store 的**父目录**换了 ⇒ 槽根不动：推导只认卷根，不跟着 store 的具体
-     * 位置漂（否则同一台机器上换一个 store 路径就会换一套槽，等于把已有的槽全弃了）。 */
+    /* 卷根一样、store 的**父目录**换了 ⇒ 根不动：推导只认卷根，不跟着 store 的具体
+     * 位置漂（否则同一台机器上换一个 store 路径就会换一套根，等于把已有的缓存全弃了）。 */
     expect(rootOf(path.join(storeRoot, "别的", "store"))).toBe(
       rootOf(path.join(storeRoot, ".pnpm-store", "v11")),
     );
-    expect(rootOf(path.join(storeRoot, ".pnpm-store", "v11"))).toContain("ci-cache");
+    expect(rootOf(path.join(storeRoot, ".pnpm-store", "v11"))).toContain("ci-build-cache");
   });
 
-  it("问不出 store ⇒ 不设槽（宁可不省，也不猜一个卷）", () => {
-    expect(resolveCacheRoot({ cwd: ROOT, env: {}, run: () => ({ status: 1 }) }).root).toBeNull();
-    expect(
-      resolveCacheRoot({
-        cwd: ROOT,
-        env: {},
-        run: () => ({ status: 0, stdout: "   \n" }),
-      }).root,
-    ).toBeNull();
-    expect(resolveCacheRoot({ cwd: ROOT, env: {} }).root).toBeNull();
-  });
-
-  it("读数里必须连着来源一起出现（一个路径孤零零摆在那儿，读的人不知道它是哪来的）", () => {
-    const lines: Array<string> = [];
-    main({
+  it("三套根各是各的子目录（构建缓存 / 成品 / 工具互不相扰）", () => {
+    const io = {
       cwd: ROOT,
       env: {},
-      run: () => ({ status: 0, stdout: `${storeOnThisVolume()}\n` }),
-      log: (l: string) => lines.push(l),
+      run: runStore(path.join(path.parse(ROOT).root, ".pnpm-store", "v11")),
+    };
+    const build = resolveBuildCacheRoot(io).root ?? "";
+    const artifact = resolveArtifactRoot(io).root ?? "";
+    const tools = resolveToolRoot(io).root ?? "";
+    expect(build).toContain(path.join("ci-build-cache", "comfy-app-t3"));
+    expect(artifact).toContain(path.join("ci-artifacts", "comfy-app-t3"));
+    expect(tools).toContain(path.join("ci-tools", "comfy-app-t3"));
+    /* 三份互不重叠：成品不是缓存（删了就没了），工具镜像也不是（删了今天就打不出包）。 */
+    expect(new Set([build, artifact, tools]).size).toBe(3);
+  });
+
+  it("显式 env 各管各的那一套，且来源被点名（那是「这台机器要放另一块盘」的出口）", () => {
+    const base = { cwd: ROOT, run: () => ({ status: 1, stdout: "" }) };
+    const artifact = resolveArtifactRoot({
+      ...base,
+      env: { [ARTIFACT_ROOT_ENV]: "D:/somewhere/artifacts" },
     });
-    const text = lines.join("\n");
-    expect(text).toContain("槽根来源");
-    expect(text).toContain(".pnpm-store");
-  });
-});
-
-describe("第二条同卷义务：槽与作业必须同卷", () => {
-  it("同卷判真、跨卷判假（Windows 上就是盘符；POSIX 上根恒 `/` ⇒ 恒真）", () => {
-    expect(sameVolumeAs(ROOT, path.join(ROOT, "node_modules"))).toBe(true);
-    // 空串**不是**「读不到」：`path.resolve("")` 落在 cwd ⇒ 判同卷（三平台同读数）。
-    // 「没有槽根」这件事由上一格（`planSlot` 的 `!cacheRoot`）去说，别指望这里拦。
-    expect(sameVolumeAs("", ROOT)).toBe(true);
-    // 跨卷只在 win32 有盘符语义（D: vs ROOT 卷）；POSIX 根恒 `/` ⇒ 恒真 ——
-    // 平台条件收进期望值，断言本体无条件跑（no-conditional-expect）。
-    expect(sameVolumeAs("D:/ci-cache/repo", ROOT)).toBe(process.platform !== "win32");
-  });
-
-  it("跨卷 ⇒ no-cache，且那句话把后果说清（红会落在别人一条用例里）", () => {
-    const out = planSlot({
-      cacheRoot: "D:/ci-cache/repo",
-      key: KEY,
-      sameVolume: false,
+    const tools = resolveToolRoot({
+      ...base,
+      env: { [TOOLS_ROOT_ENV]: "D:/somewhere/tools" },
     });
-    expect(out.action).toBe("no-cache");
-    expect(out.why).toContain("同一卷");
-    expect(out.why).toContain("EXDEV");
+    expect(artifact.root).toBe("D:/somewhere/artifacts");
+    expect(artifact.from).toContain(ARTIFACT_ROOT_ENV);
+    expect(tools.root).toBe("D:/somewhere/tools");
+    expect(tools.from).toContain(TOOLS_ROOT_ENV);
   });
 
-  it("没给这条事实时不拦（默认同卷 ⇒ 既有四档的形状不变）", () => {
-    expect(planSlot({ cacheRoot: "D:/ci-cache/repo", key: KEY }).action).toBe("install-into-slot");
+  it("问不出 store ⇒ 不猜路径（宁可不省，也不猜一个卷）", () => {
+    expect(
+      resolveBuildCacheRoot({ cwd: ROOT, env: {}, run: () => ({ status: 1 }) }).root,
+    ).toBeNull();
+    expect(
+      resolveBuildCacheRoot({ cwd: ROOT, env: {}, run: () => ({ status: 0, stdout: "   \n" }) })
+        .root,
+    ).toBeNull();
+    /* 没有 run 出口（用例注入漏了它）同判 —— 不猜，是这条推导的第一纪律。 */
+    expect(resolveBuildCacheRoot({ cwd: ROOT, env: {} }).root).toBeNull();
+    expect(resolveArtifactRoot({ cwd: ROOT, env: {} }).root).toBeNull();
+    expect(resolveToolRoot({ cwd: ROOT, env: {} }).root).toBeNull();
+  });
+
+  it("来源必须连着路径一起出现（一个路径孤零零摆在那儿，读的人不知道它是哪来的）", () => {
+    const store = path.join(path.parse(ROOT).root, ".pnpm-store", "v11");
+    const out = resolveBuildCacheRoot({ cwd: ROOT, env: {}, run: runStore(store) });
+    expect(out.from).toContain("由 store");
+    expect(out.from).toContain(".pnpm-store");
   });
 });
