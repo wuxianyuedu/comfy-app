@@ -87,7 +87,7 @@ Comfy-APP-T3/
 | `scripts/standalone-private-inputs.mjs`   | 从产物里剥掉开发机私有输入（`.env` / `db.sqlite*`），由 `pnpm build` 与 `build-desktop.mjs` 共用                                                                    |
 | `tsconfig.json`                           | TypeScript 配置                                                                                                                                                     |
 | `oxlint.parity.config.mjs` `oxlint.config.ts` | 通用 lint 的判决配置（oxlint；`lint:oxlint` **384 条**，含 2 条 jsPlugin、171 条预设 0 命中免费档与 5 条 T1 语义规则——后者存量按文件挂账、分批次清，见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`）。最终架构与已退役的 eslint 侧清单见 [AGENTS.md](AGENTS.md) |
-| `prettier.config.js`                      | 格式化（lint 判决面已只剩 oxlint 一档）                                                                                                                             |
+| `.oxfmtrc.json`                           | 格式化配置（格式化器是 **oxfmt**，prettier 已随 #2541 退役；`format:*` 脚本与格式门禁 `scripts/check-format.cjs` 共用这一份）                                       |
 | `postcss.config.js`                       | Tailwind CSS v4 接入                                                                                                                                                |
 | `vitest.config.ts` `playwright.config.ts` | 测试配置                                                                                                                                                            |
 | `typedoc.json`                            | API 文档生成配置                                                                                                                                                    |

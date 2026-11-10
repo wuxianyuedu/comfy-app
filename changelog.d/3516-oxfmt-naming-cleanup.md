@@ -1,0 +1,6 @@
+## Fixed
+
+- **清掉「以当前时态把 prettier 说成在役工具」的陈旧引用；prettier 已随 #2541 整体退役，现役格式化器是 oxfmt**（ISSUE #3516）。当时的调查结论：prettier 已在 #2541 整体退役（配置、`.prettierignore`、依赖全删），现役是 **oxfmt**（`.oxfmtrc.json` + `format:*` 脚本 + `scripts/check-format.cjs` 硬闸）；lockfile 里残留的 `prettier@3.9.10` 只是 storybook 的 peer 依赖，不是项目工具链的一部分。
+  - **教人跑一条已经跑不了的命令的两处**（「prettier YAML 语法错」的出处）：规范 13 章与 `.cnb.yml` 头注原来说「判 `.cnb.yml` 语法用 `pnpm exec prettier --check .cnb.yml`」——prettier 已不在依赖里，这条命令今天起不来；两处都改为 `pnpm check:ci-yaml`（`scripts/check-ci-yaml-parse.mjs`，用 `yaml` 包解析语法与锚点引用，历史括注保留）。仓库自身的 YAML 用 prettier 3.9.10 实测全部解析通过——编辑器里看到的「prettier YAML 语法错」来自插件自带的 prettier，与仓库工具链无关；且 YAML 不在任何格式化工具的扫描面里（`format:write` 的 glob 只收 `{ts,tsx,js,jsx,mjs,cjs,mdx}`）。
+  - **当前时态还挂着 prettier 名字的判据面**：`scripts/check-format.cjs` 文件头标题、判据句、入口解析注释（`COMFYAPP_PRETTIER_ENTRY` → 实际读的是 `COMFYAPP_OXFMT_ENTRY`）、调用形态段（逐 glob + `--cache` 的旧叙述）；`scripts/check-reformat-only.cjs` 的判据定义与批量口径段（stdout `(unchanged)` 三档解析的旧叙述 —— 现行口径是写盘前快照、写盘后回读比对）；`scripts/check-annotate-consumer.cjs` 的折行说明；运行时输出「0 个在 prettier 靶子内」改「oxfmt 靶子内」。
+  - **文档面同批**：README 根目录文件表把已删除的 `prettier.config.js` 换成 `.oxfmtrc.json`；应用内控制台预设命令的两条 `desc`（用户可见）；规范 11 / 12 / 13 / 18 章与主规范里以现在时陈述的格式化器名与门禁表行；18 章 §18.1 审计快照行加「现役 oxfmt + 已闭环」括注。历史叙述（「prettier 时代…」「当年…」）按 #2541 的既定口径保留，一处未动。

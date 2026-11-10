@@ -17,7 +17,7 @@
 | 视图/逻辑分离  | `check-ui-logic-separation.cjs`                                                                                                   | **不覆盖**：只扫 `src/components/**` 与 `src/app/**`                                                                                                                                                  |
 | 客户端安全     | `scripts/lib-node-only-scan.mjs`（用例 `tests/client-bundle-node-builtins.test.ts` / `tests/lib-node-only-declarations.test.ts`） | **覆盖**：从**全 `src/**`** 的 `"use client"` 入口做可达性 DFS，且只在 `server-only` / `.server.ts` 处停（`"use client"` 继续走）—— 判据只有这一份实现，见 §18.11.1                                   |
 | 覆盖率         | `vitest.config.ts` `thresholds`                                                                                                   | `src/lib/**` 已纳入 `include`，但**只给 5 个文件**设了门槛                                                                                                                                            |
-| 格式           | prettier                                                                                                                          | 未接入门禁（全库未过；`src/lib` 178 个）                                                                                                                                                              |
+| 格式           | prettier（审计当时的格式化器；#2541 起现役 oxfmt）                                                                                | 未接入门禁（全库未过；`src/lib` 178 个）—— **已闭环**：下方台账「#575 第 9 项」，现为硬闸（13 §13.5.1）                                                                                               |
 
 **根因一句话**：门禁是「按目录清单」声明的，而 `src/lib` 不在任何清单里。
 

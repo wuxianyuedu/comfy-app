@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // @ts-nocheck -- oxfmt 格式判据(判定型;执行者 = .githooks/pre-commit 的 D0(带 --staged)、GA .github/workflows/pr-gate.yml 的两格(带 --changed 的改动面档 + 不带旗标的全量档) 与 pnpm check:all(带 --changed),盘点出口 pnpm format:report(全量档只出清单))
 /**
- * prettier 格式判据（**硬闸**）—— 规范见 docs/standards/13-提交与-code-review.md §13.5.1。
+ * oxfmt 格式判据（**硬闸**）—— 规范见 docs/standards/13-提交与-code-review.md §13.5.1。
+ * （格式化器 prettier → oxfmt 的迁移见 ISSUE #2541；下文「prettier 时代」字样是历史叙述，
+ * 现役调用面只认 oxfmt。）
  *
  * ── 它在哪跑：本地 D0 判 + 平台侧判（ISSUE #2610，2026-10-29；中间那段历史见下）─────
  *
@@ -70,7 +72,8 @@
  * 但它长期不进门的代价是:每个新文件都可以带着任意格式进来,存量只会更多,
  * 「等基线整改完再接入」因此**永远不会发生**。
  *
- * 判据:**未过 prettier 的文件一个都不许有**(ISSUE #1811 收尾时从棘轮翻成硬闸)。
+ * 判据:**未过 oxfmt 的文件一个都不许有**(ISSUE #1811 收尾时从棘轮翻成硬闸;那时
+ * 格式化器还是 prettier,#2541 起换 oxfmt,判据对象随之迁移)。
  *
  * 它此前是棘轮(基线 `scripts/.format-baseline.json` + 只许下降):当年一次性
  * `--write` 全库会产出与本次改动无关的全文件 diff(违 §13.7),所以存量冻结在基线上。
@@ -95,9 +98,9 @@
  * prettier 时一并删了;这条历史上的根因与取证见 ISSUE #730 / #638)。产物既不该被
  * 格式化 —— 下一次构建会覆盖它,也不该进棘轮计数。
  *
- * 为什么逐个 glob 调 prettier 而不是一次性:需要把 glob 交给 shell 展开或引号
- * 透传,而 Windows 上 cmd/pwsh 的展开语义与 POSIX 不同;逐个 glob 调用对平台
- * 无感,且 prettier 的 `--cache` 让重复调用几乎零成本。
+ * 调用形态:oxfmt 一次 `--check <targets…>`,targets 是**展开后的文件路径**——glob 不交给
+ * shell 展开(Windows 上 cmd/pwsh 的展开语义与 POSIX 不同,逐个列路径对平台无感)。
+ * prettier 时代的 `--cache` 不再沿用(oxfmt 无缓存档,全量实测 2s 级,见文件头成本段)。
  *
  * 用法:
  *   node scripts/check-format.cjs             # 全库检查(硬闸:命中即退 1) —— 裸调用的硬闸语义;
@@ -152,18 +155,20 @@ const { spawnSync } = require("node:child_process");
 const { createRequire } = require("node:module");
 const { gateFail, gatePass, indentItems } = require("./ci-log.mjs");
 
-/* prettier 的调用**不再经 pnpm 层**（口径同台账 E10：平台 shim 那一层正是
- * 「命令没跑成却被读成没问题」的藏身处）。三级解析：
- *   1. `COMFYAPP_PRETTIER_ENTRY` —— 门禁自己的用例在临时目录里搭沙箱，那里没有
- *      `node_modules`，不给这条接缝就只能撞「Command "prettier" not found」；
- *   2. 本地安装的 `prettier/bin/prettier.cjs`（按扫描根解析，与真实门禁一致）；
- *   3. 两者都没有 → exit 2 并说明「没跑成」。
+/* oxfmt 的调用**不经 pnpm 层**（口径同台账 E10：平台 shim 那一层正是
+ * 「命令没跑成却被读成没问题」的藏身处；这条规矩是 prettier 时代立的，换 oxfmt 后照旧）。
+ * 入口三级解析（实现见下方 `resolveOxfmtEntry`）：
+ *   1. `COMFYAPP_OXFMT_ENTRY` —— 门禁自己的用例在临时目录里搭沙箱，那里没有
+ *      `node_modules`，不给这条接缝就只能撞「入口取不到」；
+ *   2. 按扫描根 resolve `oxfmt/package.json` → 同目录 `bin/oxfmt`；
+ *   3. resolve 失败时回落按扫描根拼 `node_modules/oxfmt/bin/oxfmt`；再取不到 →
+ *      exit 2 并说明「没跑成」。
  * **任何一档都不许回落成「0 个文件未过」** —— 那正是本脚本过去的 fail-open 形态。
  *
  * 取 ESM 判据模块（`launcher-core/shell.mjs`）的那段动态 import 随之删除：
  * 本脚本不再需要 pnpm 形态判定，`main()` 保持 async 只为收尾顺序不变。 */
 
-/* 扫描根取 cwd:门禁在仓库根被调用,而 prettier / git 都按 cwd 解析仓库
+/* 扫描根取 cwd:门禁在仓库根被调用,而 oxfmt / git 都按 cwd 解析仓库
  * (与 check-circular-deps.cjs 同口径)。基线取 __dirname 旁,与脚本同目录。 */
 const ROOT = process.cwd();
 const ARGS = new Set(process.argv.slice(2));
@@ -284,7 +289,7 @@ function isIgnored(rel) {
 }
 
 /**
- * 扫描面的**正形态**:先由 `GLOBS` 认出「prettier 会看的文件」,再剔掉
+ * 扫描面的**正形态**:先由 `GLOBS` 认出「oxfmt 会看的文件」,再剔掉
  * `IGNORE_GLOBS`。两者是同一份白名单的两个方向,所以这里不重复任何目录名。
  * ⚠️ 只服务**全量档**（`SCAN_ROOTS` 的收口）；改动面两档走 `isChangedFaceFile()`。
  * @param {string} rel 仓库根相对 POSIX 路径
@@ -348,7 +353,7 @@ function changedFaceOrExit() {
 function stagedFiles() {
   /* `-c core.quotePath=false`:路径要原样(ISSUE #2272,机制见 scripts/changed-scope.mjs 的
    * 文件头「口径 ④」)。git 默认把含非 ASCII 字符的路径转义加引号,而本仓有 38 份文件名
-   * 带非 ASCII 的文件(全在 docs/ 下)⇒ 转义过的路径认不出来,那些文件会**不进 prettier**。 */
+   * 带非 ASCII 的文件(全在 docs/ 下)⇒ 转义过的路径认不出来,那些文件会**不进 oxfmt**。 */
   const res = spawnSync("git", ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], {
     cwd: ROOT,
     encoding: "utf8",
@@ -400,7 +405,7 @@ function unstagedOverlap(hits) {
  * 三条 **fail-closed** 规则（本函数过去只有前两条的一半，因而存在一条
  * 「命令没跑成 → 报全库干净」的出路，见台账 E11）：
  *   · 子进程被信号杀掉（`status === null`，含超时被杀）→ exit 2；
- *   · 退出码不属于 {0, 1} → exit 2（配置写错 / 解析失败，prettier 会走这一档）；
+ *   · 退出码不属于 {0, 1} → exit 2（配置写错 / 解析失败，oxfmt 会走这一档）；
  *   · **退出 1 却一行文件都没列出来** → exit 2。
  * 第三条是关键：`--list-different` 返回 1 的含义是「有差异，清单在 stdout」，
  * 而清单为空与「命令根本没跑成」（例如 `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL
@@ -553,7 +558,7 @@ function collectUnformattedFiles(entry, files) {
 
 /** 入口解析失败的统一出口（原文一字不改：有测试钉着「找不到 oxfmt 入口」这句）。 */
 function entryMissing() {
-  /* 「取不到 prettier」与「全库都格式化好了」是两种结论，必须走不同的门。
+  /* 「取不到格式化器(oxfmt)」与「全库都格式化好了」是两种结论，必须走不同的门。
    * 旧代码在这一档会一路走到 `[format] OK`（空清单 = 0 个未过），
    * 也就是门禁在依赖缺失 / 形态选错的机器上**静默放行**（台账 E11）。 */
   console.error(
@@ -616,7 +621,7 @@ function main() {
     const hits = face.filter(isChangedFaceFile);
     if (!hits.length) {
       console.log(
-        `[format] ✓ 本次提交未触及扫描面（${face.length} 个暂存文件中 0 个在 prettier 靶子内），跳过。`,
+        `[format] ✓ 本次提交未触及扫描面（${face.length} 个暂存文件中 0 个在 oxfmt 靶子内），跳过。`,
       );
       process.exit(0);
     }

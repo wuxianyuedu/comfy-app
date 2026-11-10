@@ -23,7 +23,8 @@
 # 钉 65001 的 `$enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc;` 照旧要留
 # （PS 把 Node 的 UTF-8 读对是转码的前提）。⚠️ YAML 里 `[` 开头的纯量是流式序列，
 # 编码前缀要写成 `$enc=…` 而不是直接 `[Console]::OutputEncoding=…`；
-# 判 `.cnb.yml` 语法用 `pnpm exec prettier --check .cnb.yml`。
+# 判 `.cnb.yml` 语法用 `pnpm check:ci-yaml`（prettier 已随 #2541 退役，
+# `pnpm exec prettier` 今天跑不了）。
 #
 # ── 四条流水线：谁在什么事件上跑 ────────────────────────────────────────
 #

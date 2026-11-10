@@ -353,7 +353,7 @@ CHANGELOG 写**对外差异**。完整细则见
 
 - 单测聚焦纯函数与可单元化的业务逻辑（见 `docs/guides/TESTING.md`）；API 文档由 `pnpm run docs`（typedoc）生成。
 - 提交门槛最低要求：`typecheck` + 相关单测通过。
-- **格式化与行为改动必须分成两次提交**：一次提交里「过一遍 prettier 就变成另一种写法」的文件 ≥ 10 个即阻断（`scripts/check-reformat-only.cjs`），避免 `git blame` 被全文件重排冲掉。见文档集 13 §13.5.2。
+- **格式化与行为改动必须分成两次提交**：一次提交里「过一遍格式化器（现役 oxfmt）就变成另一种写法」的文件 ≥ 10 个即阻断（`scripts/check-reformat-only.cjs`），避免 `git blame` 被全文件重排冲掉。见文档集 13 §13.5.2。
 
 ---
 

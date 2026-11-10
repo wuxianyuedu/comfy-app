@@ -79,7 +79,8 @@ const LEDGER = "scripts/.annotate-consumers.json";
  *   · `ctx.annotate(` / `context.annotate(` —— vitest 的用例上下文（正常形态）；
  *   · `task.annotate(` —— programmatic API 那一侧。
  *
- * ⚠️ **折行形态要认**（同 §11.18.3.1 / §11.20.5 那条实测）：prettier 会把长行折开，
+ * ⚠️ **折行形态要认**（同 §11.18.3.1 / §11.20.5 那条实测）：oxfmt 会把长行折开
+ * （折行形态与 prettier 时代同形），
  * 只认行内字面量会整片漏出扫描面，而漏得**静默**。
  */
 const ANNOTATE_SITE_RE = /(?<![\w.$])(?:\w+\s*\.\s*)?annotate\s*\(/g;
