@@ -7,7 +7,6 @@
  */
 
 import { SettingsCard } from "~/components/ui/settings-card";
-import { StatusButton } from "~/components/ui/service-status-row";
 import { Checkbox } from "~/components/ui/checkbox";
 import { FieldLabel } from "~/components/ui/field";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
@@ -29,7 +28,7 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
             checked={c.drafts.settings.exitKillComfyui}
             id="exit-kill-comfyui"
             onCheckedChange={(next) => {
-              c.patchSettings({
+              void c.commitPrefs({
                 exitKillComfyui: next === true,
               });
             }}
@@ -51,7 +50,7 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
             checked={c.drafts.settings.exitKillOllama}
             id="exit-kill-ollama"
             onCheckedChange={(next) => {
-              c.patchSettings({
+              void c.commitPrefs({
                 exitKillOllama: next === true,
               });
             }}
@@ -71,17 +70,6 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
           数据库（SQLite）由 better-sqlite3 内嵌进应用进程，没有独立
           进程可「关」——应用退出即随之关闭，无需、也无法单独保活。 此项仅作说明，不提供开关。
         </p>
-      </div>
-      <div className="flex items-center gap-2">
-        <StatusButton
-          disabled={c.saving}
-          onClick={() => {
-            void c.savePrefs();
-          }}
-          variant="primary-solid"
-        >
-          保存偏好
-        </StatusButton>
       </div>
     </SettingsCard>
   );

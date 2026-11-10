@@ -53,6 +53,7 @@ function controller(
     comfyStorage: null,
     saving: false,
     savePrefs: vi.fn(() => undefined),
+    commitPrefs: vi.fn(),
     patchSettings: vi.fn(),
     drafts: {
       settings: {
@@ -90,7 +91,19 @@ describe("ComfyuiSection（只配置路径）", () => {
         name: "提交任务时 ComfyUI 未运行则自动启动",
       }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "保存偏好" })).toBeInTheDocument();
+    // 即时自动保存：不再有显式「保存偏好」按钮
+    expect(screen.queryByRole("button", { name: "保存偏好" })).not.toBeInTheDocument();
+  });
+
+  it("切换偏好即时落库（无保存按钮，commitPrefs 即调即存）", async () => {
+    const user = userEvent.setup();
+    const c = controller();
+    render(<ComfyuiSection c={c} />);
+    const cb = screen.getByRole("checkbox", {
+      name: "提交任务时 ComfyUI 未运行则自动启动",
+    });
+    await user.click(cb);
+    expect(c.commitPrefs).toHaveBeenCalled();
   });
 
   it("运行态那几颗按钮与日志框都不在这一分区了", () => {

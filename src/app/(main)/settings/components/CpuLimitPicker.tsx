@@ -43,7 +43,7 @@ export function CpuLimitPicker({ c }: { c: ReadySettingsPageController }) {
           const next: unknown = raw;
           const mode = CPU_LIMIT_MODES.find((candidate) => candidate === next);
           if (mode !== undefined) {
-            c.patchSettings({ comfyuiCpuLimit: mode });
+            void c.commitPrefs({ comfyuiCpuLimit: mode });
           }
         }}
         value={value}

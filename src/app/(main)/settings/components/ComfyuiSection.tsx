@@ -11,7 +11,6 @@ import { ArrowRight } from "lucide-react";
 import { emitAppEvent } from "~/lib/app-events";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Button } from "~/components/ui/button";
-import { StatusButton } from "~/components/ui/service-status-row";
 
 import { SettingsCard } from "~/components/ui/settings-card";
 import { Field } from "./SettingsPrimitives";
@@ -41,6 +40,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         onChange={(value) => {
           c.patchSettings({ comfyuiPath: value });
         }}
+        onBlur={() => {
+          void c.savePrefs();
+        }}
         placeholder="例如 D:\\ComfyUI 或 D:\\Comfy-Desktop\\ComfyUI-Installs\\ComfyUI2"
         value={c.drafts.settings.comfyuiPath}
       />
@@ -56,6 +58,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         label="comfy-cli 解释器（Python 绝对路径）"
         onChange={(value) => {
           c.patchSettings({ comfyCliPython: value });
+        }}
+        onBlur={() => {
+          void c.savePrefs();
         }}
         placeholder="例如 D:\\tools\\python-venv\\comfy-cli\\Scripts\\python.exe"
         value={c.drafts.settings.comfyCliPython}
@@ -94,6 +99,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
                 comfyuiPort: Math.max(0, Number(value) || 0),
               });
             }}
+            onBlur={() => {
+              void c.savePrefs();
+            }}
             placeholder={`留空使用默认 ${c.comfyDefaultPort}`}
             value={c.drafts.settings.comfyuiPort > 0 ? String(c.drafts.settings.comfyuiPort) : ""}
           />
@@ -106,6 +114,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
             label="ComfyUI 启动参数（可选）"
             onChange={(value) => {
               c.patchSettings({ comfyuiExtraArgs: value });
+            }}
+            onBlur={() => {
+              void c.savePrefs();
             }}
             placeholder="例如 --input-directory D:\\ComfyUI-Shared\\input"
             value={c.drafts.settings.comfyuiExtraArgs}
@@ -126,7 +137,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           checked={c.drafts.settings.comfyuiAutoStart}
           id="comfyui-autostart"
           onCheckedChange={(next) => {
-            c.patchSettings({ comfyuiAutoStart: next === true });
+            void c.commitPrefs({ comfyuiAutoStart: next === true });
           }}
         />
         <FieldLabel className="text-ink/80 text-sm" htmlFor="comfyui-autostart">
@@ -138,7 +149,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           checked={c.drafts.settings.autoSyncLocalWorkflow}
           id="auto-sync-local-workflow"
           onCheckedChange={(next) => {
-            c.patchSettings({ autoSyncLocalWorkflow: next === true });
+            void c.commitPrefs({ autoSyncLocalWorkflow: next === true });
           }}
         />
         <FieldLabel className="text-ink/80 text-sm" htmlFor="auto-sync-local-workflow">
@@ -171,15 +182,6 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           <ArrowRight aria-hidden className="size-3" data-icon="inline-end" />
         </Button>
       </div>
-      <StatusButton
-        disabled={c.saving}
-        onClick={() => {
-          void c.savePrefs();
-        }}
-        variant="primary-solid"
-      >
-        保存偏好
-      </StatusButton>
     </SettingsCard>
   );
 }

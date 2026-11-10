@@ -55,6 +55,9 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
         onChange={(value) => {
           c.patchLlm({ baseUrl: value });
         }}
+        onBlur={() => {
+          void c.saveLlm();
+        }}
         placeholder={OLLAMA_DEFAULT_BASE_URL}
         value={c.drafts.llm.baseUrl}
       />
@@ -137,7 +140,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
               <SelectMenu
                 fullWidth
                 onChange={(model: string) => {
-                  c.patchLlm({ model });
+                  void c.commitLlm({ model });
                 }}
                 options={c.ollamaModels.map((m) => m.name)}
                 value={c.drafts.llm.model}
@@ -159,7 +162,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                       className="h-auto rounded-lg border px-2.5 py-1 text-xs"
                       key={model.name}
                       onPressedChange={() => {
-                        c.toggleExtraModel(model.name);
+                        void c.toggleExtraModel(model.name);
                       }}
                       pressed={checked}
                       size="sm"
@@ -184,6 +187,9 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
           onChange={(value) => {
             c.patchLlm({ model: value });
           }}
+          onBlur={() => {
+            void c.saveLlm();
+          }}
           placeholder="请填写要使用的模型名，如 qwen3:14b"
           value={c.drafts.llm.model}
         />
@@ -195,12 +201,18 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
           onChange={(value) => {
             c.patchLlm({ temperature: Number(value) || 0 });
           }}
+          onBlur={() => {
+            void c.saveLlm();
+          }}
           value={String(c.drafts.llm.temperature)}
         />
         <Field
           label="最大 Token"
           onChange={(value) => {
             c.patchLlm({ maxTokens: Number(value) || 0 });
+          }}
+          onBlur={() => {
+            void c.saveLlm();
           }}
           value={String(c.drafts.llm.maxTokens)}
         />
@@ -277,6 +289,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                     min={0}
                     onBlur={() => {
                       clearTaskEdit(key);
+                      void c.saveLlm();
                     }}
                     onChange={(event) => {
                       setTaskEdit(key, event.target.value);
@@ -292,16 +305,6 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
           </div>
         </Disclosure>
       </div>
-
-      <StatusButton
-        disabled={c.saving}
-        onClick={() => {
-          void c.saveLlm();
-        }}
-        variant="primary-solid"
-      >
-        保存 LLM 配置
-      </StatusButton>
     </SettingsCard>
   );
 }

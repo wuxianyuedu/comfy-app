@@ -18,12 +18,15 @@ export function Field({
   onChange,
   type = "text",
   placeholder,
+  onBlur,
 }: {
   label: string;
   onChange: (v: string) => void;
   placeholder?: string;
   type?: string;
   value: string;
+  /** 失焦回调（即时自动保存：文本输入失焦即落库）。 */
+  onBlur?: () => void;
 }) {
   /* 标签 / 控件 / ARIA 关联走 `ui/form-field` + shadcn `ui/input`
    * （规范 §16.2.4.26 / §16.2.3）：裸 `<label>` 无 htmlFor（不聚焦、读屏孤立），
@@ -37,6 +40,7 @@ export function Field({
           {...a11y}
           className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm"
           onChange={textHandler(onChange)}
+          onBlur={onBlur}
           placeholder={placeholder}
           type={type}
           value={value}
