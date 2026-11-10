@@ -274,12 +274,14 @@ run_group D0 "形态前置档（这次提交自身的形态）" sh -c '
   #
   # ⚠️⚠️ **2026-10-19 起这一步只打读数、不再要求本地当天自证**（用户口径：「新鲜度都不要
   #   本地跑，都 CI 跑」）。机制是数据不是开关：`FRESHNESS_TRACKS[*].ciStage` 非空 ⇒
-  #   「今天必须有凭证」那一层整层跳过，执行者是 `.cnb.yml` 每日那一条的三格
-  #   （`每日单元测试` / `每日生产构建` / `每日全量E2E`）。
+  #   「今天必须有凭证」那一层整层跳过，执行者是 GA `daily.yml` 的对应 step
+  #   （#3504 起每日档整条在 GitHub Actions 上跑）。
   #   **这个豁免只在「那一格真的每天在跑」时成立** —— 由
-  #   `tests/no-platform-ci-config.test.ts` 判「每个非空 `ciStage` 都必须在
-  #   `COMFYAPP_CI_DAILY_GATES` 里」；没有那一条，「本地不拦」就悄悄变成「谁都不跑」，
-  #   而两边都是绿的（§11.23 那一族最坏的那种）。
+  #   `tests/no-platform-ci-config.test.ts` 判「每个非空 `ciStage` 的执行者 step
+  #   都必须真的在 GA `daily.yml` 里」（格名 ⇄ step 名登记在
+  #   `scripts/ci-ga-trigger-map.mjs` 的 `DAILY_GATE_EXECUTORS`；旧的
+  #   `COMFYAPP_CI_DAILY_GATES` 机制随 #3504 退役）；没有那一条，「本地不拦」就
+  #   悄悄变成「谁都不跑」，而两边都是绿的（§11.23 那一族最坏的那种）。
   #   仍然照旧判的是**账面的形状**（`who` / `how` / `verifiedAt` / `trackedBy` 抄混）：
   #   撤掉的是「必须跑」，不是让读数可以假。将来任何一档失去平台侧执行者时，
   #   把它的 `ciStage` 清空就回到本地拦截 —— 那几支判据现在也由合成档打着，

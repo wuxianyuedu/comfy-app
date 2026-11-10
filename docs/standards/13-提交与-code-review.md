@@ -4616,6 +4616,30 @@ e2e」变成「先花十分钟构建」。要那一档的人用 `PNPM_START=1` �
 
 #### 13.5.23 三档重档**每天一次**：定时任务回答的是另一个问题（ISSUE #2010 / #2018 / 2026-10-19）
 
+> ##### 2026-11-10（ISSUE #3504）：每日档的**执行者**整体迁到 GitHub Actions
+>
+> 本节以下写的 `.cnb.yml` 形态（`*daily_gates` 锚点、`每日*` 各格、
+> `COMFYAPP_CI_DAILY_GATES` 核对面、`ci-oneshot-gates.mjs` 注册表）是 **#3504 之前**
+> 的形状，按历史保留 —— 每一条判决与口径**仍然成立**，动的只有「谁在什么时候跑它」
+> （§13.5.17 那句话的又一次兑现）。#3504 起的形状：
+>
+> - 每日档整条迁到 GA `.github/workflows/daily.yml`（北京时间 01:37 定时 + 触发口
+>   手动派发，两个入口跑**同一份** step 清单）；CNB 侧 `crontab` 与手动 / API 触发
+>   流水线的正文收敛为一格 `GA 派发·每日档`（`scripts/ci-ga-dispatch.mjs`，
+>   `timeout: 10m`，平台池）—— **CNB 不再执行任何构建**。
+> - 「格名 ⇄ step 名」的执行者核对面从 `COMFYAPP_CI_DAILY_GATES`（连同其解析器
+>   一起删除）换到 `scripts/ci-ga-trigger-map.mjs` 的 `DAILY_GATE_EXECUTORS`；
+>   `FRESHNESS_TRACKS[*].ciStage` 的逻辑格名（`每日单元测试` 等）**保持不变**，
+>   freshness-gate / daily-tracks 的判据面零改动，对账对象换到 GA 的 step 名
+>   （`tests/no-platform-ci-config.test.ts` 判「每个非空 `ciStage` 的执行者 step
+>   必须真的在 GA `daily.yml` 里」）。
+> - 单跑三档各成 GA oneshot workflow（`oneshot-build/e2e/unit.yml`：
+>   `workflow_dispatch` + `head_sha`），与每日档的共享格**逐字同形**；
+>   桌包档 `package-desktop.yml`（windows runner）承接原 `*package_gates`。
+>   旧 `ci-oneshot-gates.mjs` 注册表退役，「每日名 ⇄ 单跑名」配对由
+>   `tests/ci-ga-trigger-map.test.ts` 与共享格同形判据接住。
+> - PR 档的 `GA 回调结论回读` 与镜像同步**留在 CNB**（只搬构建，用户拍板的口径）。
+
 **问题原话**先后有三句：「生产构建改为定时任务，每天 1 次」（#2010）、
 「可能会负载假红的都看看能不能挪 CI 去执行」（#2018，答成全量单测进每日档）、
 「生产构建放到每日档」（2026-10-18，把 PR 那一格撤掉）。三句合起来才是这一节。
@@ -4872,6 +4896,13 @@ master:
 这件事的全部理由是**延迟**：撤掉 PR 那一条之后，「master 行不行」这个答案最晚要等到第二天
 00:00 —— 而刚合完一笔碰构建链的改动、或夜里那次红修好了想立刻复验的人，不该被这个延迟按住。
 五件配套的事实，每件都有判据：
+
+> ⚠️ **#3504（2026-11-10）起下面两张表与两段里的 `.cnb.yml` 形态是历史**：触发口不再
+> `stages: *daily_gates` 本机执行，正文收敛为一格 `GA 派发·<档>`；`COMFYAPP_CI_DAILY_GATES`
+> 与 `ci-oneshot-gates.mjs` 注册表退役，配对登记换到 `scripts/ci-ga-trigger-map.mjs`
+> （`tests/ci-ga-trigger-map.test.ts` 双向钉住触发口 ⇄ workflow 文件）。决策与理由照旧成立：
+> 「两个入口同一件事」在 GA 侧由 daily.yml 的 schedule + workflow_dispatch 兑现，
+> 「单跑不是出勤」那条边界原文照用。
 
 | 事实                           | 落成                                                                                                                     | 判据                                                                                                                              |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |

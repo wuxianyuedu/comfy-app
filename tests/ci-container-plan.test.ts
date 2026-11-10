@@ -219,20 +219,22 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
     ).toEqual([]);
   });
 
-  it("容器格的 `env` / `timeout` 真的在 Job 那一层（不是「看着缩进对、其实挂在 stage 上」）", () => {
+  it("带 `env:` 的执行格，`env` / `timeout` 真的挂在它自己那一层（不是「看着缩进对、其实挂到了别层」）", () => {
     /* 真踩到的坑：`image:` 下移到 Job 时 `env:`/`timeout:` 缩进没跟着走 —— YAML 把
        `PLAYWRIGHT_DOWNLOAD_HOST` 读成 stage 项自己的键（`env:` 变 null），配置仍合法而 `env` 空了。
+       #3504 起带 `env:` 的执行格整体搬到了 GA `daily.yml`（CNB 侧只剩不带 `env:` 的回读格，
+       lane 级 `env:` 是整条流水线共享的，不存在「挂在某一格上」的形态），而同一个坑在 GA 的
+       step 形态里**同形**：`- name:` 深一层是 step 自己的键，`env:` 的键再深一层。
        判据全按行读原文、本地无 YAML 解析器，故按层级判：`timeout` 属项自己（`- name:` 深一层），
-       `env` 的键与项自己的键同层；更浅的都落在 stage 层，YAML 会把 `env` 读成 null。 */
-    /** @type {string[]} */
-    const offenders = [];
-    /* 名单按「配置里真的带 `env:` 的格」取，不写死：2026-10-19 撤掉 PR 那格的 `E2E 关键流程`、
-       再把 `浏览器安装` 挪到每日档后，PR 上已无带 `env:` 的格，写死的名字会以「找不到 stage 项」
-       红在一个**正确**的配置上（假红，同「解析失败伪装成结论」族）；故留显式名单 + 下方
-       「名单里的格必须在配置里取到块」的前置断言。 */
-    for (const name of ["每日浏览器安装", "每日全量E2E"]) {
-      const block = stageBlock(CNB, name);
-      expect(block, `找不到 stage 项：${name}`).toBeTruthy();
+       `env` 的键与项自己的键同层；更浅的都落在别层，YAML 会把 `env` 读成 null。 */
+    const offenders: Array<string> = [];
+    /**
+     * 对一个「`- name:` 项块」跑层级扫描（缩进无关：`keyIndent` 从项自己的行算出来，
+     * CNB 的 2 空格 stage 与 GA 的 6 空格 step 共用同一套判法）。
+     * @param {string} label 读数前缀（人照着它去改）
+     * @param {string} block 项块原文
+     */
+    const scan = (label: string, block: string): void => {
       /** 当前项的键应该在的缩进（`- name:` 缩进 + 2）。 */
       /** @type {number | null} */
       let keyIndent = null;
@@ -245,8 +247,8 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
         }
         const indent = raw.length - raw.trimStart().length;
         const body = raw.trim();
-        /* stage 块尾会带上**下一个 stage 之前那一段注释**（`stageBlock()` 只按缩进与
-         * 顶格键收尾），它不属于本项的任何一层 —— 跳过，否则深度判据会对着注释开火。 */
+        /* 项块尾会带上**下一项之前那一段注释**（块收口只按缩进与顶格键），它不属于
+         * 本项的任何一层 —— 跳过，否则深度判据会对着注释开火。 */
         if (body.startsWith("#")) {
           continue;
         }
@@ -262,20 +264,20 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
          * 是**合法**的更深层键 —— 只有当 `env` 正在收键时越过它才算挂错层。 */
         if (body.startsWith("- ")) {
           if (envKeyIndent !== null && indent <= envKeyIndent) {
-            offenders.push(`${name}：${body}`);
+            offenders.push(`${label}：${body}`);
             envKeyIndent = null;
           }
           continue;
         }
         /* `env:` 正在收键：比 `env:` 还浅（`indent < envKeyIndent`）就是跑到了项上面
-         * —— `env` 会被读成 null，那几个键挂到 stage 那一层，而本判据要抓的就是这一次。
+         * —— `env` 会被读成 null，那几个键挂到别层，而本判据要抓的就是这一次。
          * ⚠️ 这一支必须排在「比项自己的键更浅 ⇒ 结束」**之前**：挂错层时它们的缩进
          * 恰好等于项自己那一层，先判「结束」会悄悄放过去。 */
         if (envKeyIndent !== null) {
           if (indent >= envKeyIndent) {
             continue;
           }
-          offenders.push(`${name}：${body.slice(0, 30)}（缩进 ${indent}，该在 ${envKeyIndent}）`);
+          offenders.push(`${label}：${body.slice(0, 30)}（缩进 ${indent}，该在 ${envKeyIndent}）`);
           envKeyIndent = null;
           continue;
         }
@@ -285,23 +287,64 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
           continue;
         }
         if (body.startsWith("env:")) {
-          /* `env:` 的键与项自己的键**同一层**（这是 YAML 的形态：`env:` 深一层，
-           * 它的键再深一层 —— 正好落在项自己的键那一层上）。 */
+          /* `env:` 的键与项自己的键**同一层**（`env:` 深一层，它的键再深一层 ——
+           * 正好落在项自己的键那一层上）。 */
           envKeyIndent = keyIndent;
           if (indent !== keyIndent) {
-            offenders.push(`${name}：env:（缩进 ${indent}，该在 ${keyIndent}）`);
+            offenders.push(`${label}：env:（缩进 ${indent}，该在 ${keyIndent}）`);
           }
           continue;
         }
-        /* 不在 `env` 里：`timeout` 该在 `keyIndent` 那一层。 */
+        /* 不在 `env` 里：`timeout` 该在 `keyIndent` 那一层。
+         * （GA 的 `timeout-minutes:` 不以 `timeout:` 开头，不会被误抓。） */
         if (body.startsWith("timeout:") && indent !== keyIndent) {
-          offenders.push(`${name}：${body}`);
+          offenders.push(`${label}：${body}`);
         }
       }
+    };
+
+    /* CNB 侧：现役唯一带外置键的格是回读格（`timeout`）—— 写错层的话整个格的外框就没了。 */
+    const readout = stageBlock(CNB, "GA 回调结论回读");
+    expect(readout, "找不到 stage 项：GA 回调结论回读").toBeTruthy();
+    scan("GA 回调结论回读", readout ?? "");
+
+    /* GA 侧：带 `env:` 的 step（#3504 起执行格的家）。**名单不写死** —— 按 6 空格
+     * step 头全量扫，谁搬进来都逃不掉；但至少要扫到一块带 `env:` 的，不然这条
+     * 用例空转（同「解析失败伪装成结论」族）。 */
+    const daily = readFileSync(path.join(ROOT, ".github", "workflows", "daily.yml"), "utf8");
+    const gaStepBlocks = (text: string): Array<[string, string]> => {
+      const lines = text.split("\n");
+      const out: Array<[string, string]> = [];
+      for (let i = 0; i < lines.length; i += 1) {
+        const head = /^ {6}- name: (?<name>.+)$/.exec(lines[i] ?? "");
+        if (!head) {
+          continue;
+        }
+        let end = lines.length;
+        for (let j = i + 1; j < lines.length; j += 1) {
+          if (/^ {6}- name: /.test(lines[j] ?? "")) {
+            end = j;
+            break;
+          }
+        }
+        out.push([(head.groups?.name ?? "").trim(), lines.slice(i, end).join("\n")]);
+      }
+      return out;
+    };
+    let envBlocks = 0;
+    for (const [name, block] of gaStepBlocks(daily)) {
+      if (/\n {8}env:/.test(block)) {
+        envBlocks += 1;
+      }
+      scan(`${name}（GA daily.yml）`, block);
     }
     expect(
+      envBlocks,
+      "GA daily.yml 里一块带 `env:` 的 step 都没扫到 —— 这条判据空转了",
+    ).toBeGreaterThan(0);
+    expect(
       offenders,
-      "这些键没挂在它那一项的正确层级上 —— YAML 会把它们读成 stage 项自己的键（`env` 变 null），" +
+      "这些键没挂在它那一项的正确层级上 —— YAML 会把它们读成别层的键（`env` 变 null），" +
         "而配置文件仍然合法、本地判据（按行读）也全绿",
     ).toEqual([]);
   });

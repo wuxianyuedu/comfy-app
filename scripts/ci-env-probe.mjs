@@ -339,13 +339,19 @@ export function stagesWithImage(text) {
 }
 
 /**
- * 装 Playwright 浏览器那一格在 `.cnb.yml` 里的**当前名字**（本文件唯一的出处）。
+ * 装 Playwright 浏览器那一格在 **CNB 配置里的历史名字**（本文件唯一的出处）。
  *
  * 2026-10-19 它随「只判节点事实的格子不必每个 PR 都判」那次挪档从 PR 撤到每日档，
  * 名字带上「每日」前缀。这一步必须按**当下那个名字**去读它的 `env`：读不到就静默退回
  * 「量候选根」，而它唯一的职责是回答「**配置给的那一个根**到不到」—— 名字散在两份
  * 文件里写死，一定会漂到那种「不报错、只是换了个问题」的状态，所以这里出一个常量，
  * 判据 import 它（`tests/ci-env-probe.test.ts`）。
+ *
+ * ⚠️ #3504 起那一格的执行者（连同它的 `env:`）整体搬到了 GA `daily.yml`
+ * （step `浏览器安装（cnb 同款入口；npmmirror 镜像源同 CNB）`），CNB `.cnb.yml` 上
+ * **预期读不到**这一格 —— 本文件已无活体 stage 执行者（判据台账登记留盘），
+ * 这里的读数只对「谁把这一格加回 `.cnb.yml`」的形态负责；反向判据在
+ * `tests/ci-env-probe.test.ts`（「`env` 的取值去引号」那条）。
  */
 export const BROWSER_INSTALL_STAGE = "每日浏览器安装";
 
@@ -353,9 +359,9 @@ export const BROWSER_INSTALL_STAGE = "每日浏览器安装";
  * 某个 stage 的 `env:` 里某个键的**字面值**（去引号；找不到回 `null`）。
  *
  * 只看那一项自己的块（`stageBlockIn` 收的口），**不解析继承 / 锚点**：这一步要回答的
- * 是「浏览器那一格会拿到哪个下载根」（名字见 `BROWSER_INSTALL_STAGE`），而那一步的键
- * 就写在它自己的 `env:` 上（`.cnb.yml` 里逐字如此，
- * `tests/no-platform-ci-config.test.ts` 也判着它必须在）。
+ * 是「浏览器那一格会拿到哪个下载根」（名字见 `BROWSER_INSTALL_STAGE`）。那一格在
+ * CNB 配置上的时代，键就写在它自己的 `env:` 上；#3504 起执行格在 GA `daily.yml`，
+ * CNB 侧按这个口径读到 `null`（那是「不知道」，实现退回量候选根）。
  *
  * @param {string} text `.cnb.yml` 原文
  * @param {string} stage stage 名

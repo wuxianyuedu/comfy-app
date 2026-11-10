@@ -334,8 +334,15 @@ describe("接线：平台那一跳不许带 --strict", () => {
     const lines = scopeEntryScripts(readFileSync(CONFIG, "utf8"));
     /* ISSUE #3378 收尾：PR / 桌包 / push 三处 endStages 的读数退役，只剩每日档
      * 一格（`.daily-gates` 的第二格 `每日令牌权限读数`）。计数只认**会被执行的
-     * script 行**：剥注释后按 `script:` 取，注释里提一句脚本名不算第二个入口。 */
-    expect(lines.length, "只剩每日档一个入口，`.cnb.yml` 里应当有一条 script 命令").toBe(1);
+     * script 行**：剥注释后按 `script:` 取，注释里提一句脚本名不算第二个入口。
+     * ⚠️ #3504 起那最后一格也随构建执行面整体退役（CNB 侧不再执行任何构建），
+     * 清零是**预期**：谁把带这个脚本的 stage 加回 `.cnb.yml`，就把这里的数改回去
+     * —— 那必须是有意识的行为（平台的 --strict 教训见 ISSUE #2551）。 */
+    expect(
+      lines.length,
+      "`.cnb.yml` 里又有令牌读数的 script 入口 —— #3504 起它已随自托管执行面退役，" +
+        "加回来须连本条判据与 ISSUE #2551 的 --strict 口径一起过",
+    ).toBe(0);
     for (const line of lines) {
       expect(
         line,
