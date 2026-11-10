@@ -2080,12 +2080,13 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toBeGreaterThan(-1);
     for (const prerequisite of ["浏览器安装", "生产构建"]) {
       const at = steps.findIndex((n) => n.startsWith(prerequisite));
+      const why =
+        prerequisite === "生产构建"
+          ? "这一格的 webServer 起的是 `pnpm start`，产物来自它"
+          : "缺件时整档会以「每条都报同一个 launch 失败」的形态红";
       expect(
         at,
-        `GA daily.yml 里没有「${prerequisite}」step —— 「${prerequisite}」必须排在「全量E2E」之前 —— ` +
-          (prerequisite === "生产构建"
-            ? "这一格的 webServer 起的是 `pnpm start`，产物来自它"
-            : "缺件时整档会以「每条都报同一个 launch 失败」的形态红"),
+        `GA daily.yml 里没有「${prerequisite}」step —— 「${prerequisite}」必须排在「全量E2E」之前 —— ${why}`,
       ).toBeGreaterThanOrEqual(0);
       expect(at, `GA daily.yml 的「${prerequisite}」必须排在「全量E2E」之前`).toBeLessThan(e2eAt);
     }

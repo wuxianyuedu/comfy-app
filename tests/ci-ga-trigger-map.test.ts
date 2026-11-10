@@ -36,7 +36,7 @@ const CNB = read(".cnb.yml");
 const topLevelBlock = (text: string, key: string): string | null => {
   const lines = text.split("\n");
   const start = lines.findIndex((l) => l === `${key}:`);
-  if (start < 0) {
+  if (start === -1) {
     return null;
   }
   let end = lines.length;
@@ -162,7 +162,7 @@ describe("GA workflow 结构真解析（接住退役的 actionlint 位，#3504�
       const cron = crons[t.preset] ?? "";
       expect(body, `${t.workflow}：定时入口在场`).toMatch(/^ {2}schedule:$/m);
       expect(body, `${t.workflow}：cron 逐字（北京时间 ${cron}）`).toMatch(
-        new RegExp(`cron: "${cron.replace(/\*/g, "\\*")}"`),
+        new RegExp(`cron: "${cron.replaceAll("*", String.raw`\*`)}"`),
       );
     }
   });
@@ -187,7 +187,7 @@ describe("GA workflow 结构真解析（接住退役的 actionlint 位，#3504�
         `${t.workflow}：并发组应与注册表的 \`concurrencyGroup\` 逐字相等`,
       ).toMatch(
         new RegExp(
-          `^ {2}group: ${t.concurrencyGroup.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+          `^ {2}group: ${t.concurrencyGroup.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}$`,
           "m",
         ),
       );
@@ -251,9 +251,10 @@ describe("与 .cnb.yml 的闭环：触发口双向登记（#3504）", () => {
   });
 
   it("反向：.cnb.yml 里没有漏登记的 `*_trigger_*` 流水线（「按钮还在、派发目标没了」）", () => {
-    const registered = new Set(
-      GA_TRIGGER_TARGETS.flatMap((t) => [t.eventWeb, t.eventApi]).concat(NON_DISPATCH_LANES),
-    );
+    const registered = new Set([
+      ...GA_TRIGGER_TARGETS.flatMap((t) => [t.eventWeb, t.eventApi]),
+      ...NON_DISPATCH_LANES,
+    ]);
     const lanes = [...CNB.matchAll(/^ {2}(?<lane>[A-Za-z0-9_]*trigger[A-Za-z0-9_]*):\s*$/gm)].map(
       (m) => m.groups?.lane ?? "",
     );

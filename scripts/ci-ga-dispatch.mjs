@@ -100,7 +100,7 @@ export function parseArgs(argv, env = process.env) {
   /** @type {Record<string, string | boolean>} */
   const parsed = {};
   for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i];
+    const arg = argv[i] ?? "";
     if (arg === "--dry-run") {
       parsed.dryRun = true;
       continue;
@@ -145,6 +145,13 @@ export function parseArgs(argv, env = process.env) {
  * 轮询镜像仓直到该 sha 可见（`GET /repos/{repo}/commits/{sha}` 返 200 即对象在仓里）。
  * 预算耗尽返回 null —— 调用方据此退 1，**不派发一个注定检不出的 sha**。
  *
+ * @param {object} deps
+ * @param {string} deps.repo 镜像仓坐标（`owner/name`）
+ * @param {string} deps.sha 要等可见的那一笔
+ * @param {string} deps.token GitHub 令牌
+ * @param {number} deps.budgetSeconds 轮询预算（秒）
+ * @param {number} deps.intervalSeconds 轮询间隔（秒）
+ * @param {DispatchIo} deps.io 注入面（fetch / sleep / now / log）
  * @returns {Promise<number | null>} 花掉的秒数；null = 预算内没出现
  */
 export async function awaitShaVisible({ repo, sha, token, budgetSeconds, intervalSeconds, io }) {
@@ -192,6 +199,11 @@ export async function awaitShaVisible({ repo, sha, token, budgetSeconds, interva
  * 刻意**不含** Authorization 头：令牌只在 `sendDispatch` 那一跳接上 —— dry-run 打印
  * 计划时，请求对象里从头就不存在令牌，而不是「打了再摘」（硬规则 17 的那类事故）。
  *
+ * @param {object} deps
+ * @param {string} deps.repo 镜像仓坐标（`owner/name`）
+ * @param {string} deps.workflow 注册表里的 workflow 文件名
+ * @param {string} deps.ref 派发的 ref（缺省 master）
+ * @param {string} deps.sha 派发目标那一笔（进 `inputs.head_sha`）
  * @returns {{url: string, init: {method: string, headers: Record<string, string>, body: string}}}
  */
 export function dispatchRequest({ repo, workflow, ref, sha }) {
@@ -213,6 +225,10 @@ export function dispatchRequest({ repo, workflow, ref, sha }) {
 /**
  * 真实派发。返回平台回话状态码；204 = 送达。
  *
+ * @param {object} deps
+ * @param {{url: string, init: {method: string, headers: Record<string, string>, body: string}}} deps.request `dispatchRequest` 的产物
+ * @param {string} deps.token GitHub 令牌（只在这一跳接上）
+ * @param {DispatchIo} deps.io 注入面（fetch / log）
  * @returns {Promise<{status: number, body: string}>}
  */
 export async function sendDispatch({ request, token, io }) {
@@ -234,11 +250,11 @@ export async function sendDispatch({ request, token, io }) {
 /**
  * 主入口。返回三态退码；独立导出供测试整链注入（fetch / sleep / now 全可换）。
  *
- * @param {{argv: string[], env?: Record<string, string | undefined>} & DispatchIo} options
+ * @param {{argv?: string[], env?: Record<string, string | undefined>} & DispatchIo} [options]
  * @returns {Promise<number>}
  */
 export async function main(options = {}) {
-  const { argv, env = process.env, ...io } = options;
+  const { argv = process.argv.slice(2), env = process.env, ...io } = options;
   const log = io.log ?? console.log;
   let args;
   try {
