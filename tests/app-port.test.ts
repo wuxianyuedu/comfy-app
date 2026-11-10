@@ -173,17 +173,38 @@ describe("app-port 端口解析", () => {
  * 绝对路径（真实检出形态）不受影响，但「四侧一致」当时只是文档承诺。向量集中到 `tests/fixtures/app-port-vectors.json`，四侧读**同一份**，任一侧漂移即对应侧失败，而不是等 Windows 真机才发现。
  */
 describe("app-port 四语言共享校验向量", () => {
-  /* SAFETY: 类型断言已复核 */
-  const fixture = JSON.parse(
+  /** 外来值是不是普通对象 / 数组：收窄共享向量 JSON 的统一入口。 */
+  function isPlainObject(v: unknown): v is Record<string, unknown> {
+    return typeof v === "object" && v !== null && !Array.isArray(v);
+  }
+  function isUnknownArray(v: unknown): v is Array<unknown> {
+    return Array.isArray(v);
+  }
+
+  /** 共享向量文件的形状：外来 JSON 先落 unknown，再逐字段收窄。 */
+  function isVectorFixture(v: unknown): v is {
+    vectors: Array<{ fnv1a32: number; input: string; normalized: string; port: number }>;
+  } {
+    if (!isPlainObject(v)) return false;
+    const vectors: unknown = v.vectors;
+    if (!isUnknownArray(vectors)) return false;
+    return vectors.every(
+      (row) =>
+        isPlainObject(row) &&
+        typeof row.fnv1a32 === "number" &&
+        typeof row.input === "string" &&
+        typeof row.normalized === "string" &&
+        typeof row.port === "number",
+    );
+  }
+
+  const raw: unknown = JSON.parse(
     fs.readFileSync(path.join(process.cwd(), "tests", "fixtures", "app-port-vectors.json"), "utf8"),
-  ) as {
-    vectors: Array<{
-      fnv1a32: number;
-      input: string;
-      normalized: string;
-      port: number;
-    }>;
-  };
+  );
+  if (!isVectorFixture(raw)) {
+    throw new Error("app-port-vectors.json 的向量形状不对");
+  }
+  const fixture = raw;
 
   it("向量文件非空（防止误删后测试静默全绿）", () => {
     expect(fixture.vectors.length).toBeGreaterThanOrEqual(5);

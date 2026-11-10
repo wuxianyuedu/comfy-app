@@ -25,6 +25,21 @@ const { test, expect: repoExpect } = defineGateRepo({
 type Repo = GateRepo;
 
 /**
+ * 外来值（子进程 stdout 的 JSON / `execFileSync` 抛出的对象）一律先落 `unknown`：
+ * 过这道守卫拿到宽松对象视图，再逐字段 `typeof` 收窄才使用，不用类型断言。
+ */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+/** `--json` 的审计载荷：逐字段认 `verdict` 与 `audits` 这一层。 */
+type AuditRow = { claim: { target: string }; verdict: string };
+type AuditPayload = { audits: Array<{ rows: Array<AuditRow> }>; verdict: string };
+function isAuditPayload(v: unknown): v is AuditPayload {
+  return isRecord(v) && typeof v.verdict === "string" && Array.isArray(v.audits);
+}
+
+/**
  * 把当前工作区的全部改动提交上去。夹具自带的 `repo.commit` 只调 `git commit`（不 `add`），服务的是
  * 「提交拓扑」那类判据（`check-branch-guard` 显式 `add` 一次）。本判据每步都是「写 → 提交 → 再写 →
  * 再提交」，所以补一层 `add -A` 的本地包装，不改共享夹具（§11.16.1 的连带面，理由不足就别动）。
@@ -95,9 +110,8 @@ test("假声明在较早那笔上：只审 HEAD 漏过，审区间抓到", ({ re
   /* 逐条都审：区间里 2 笔，`--json` 的 `commits` 就得是 2 ——
    * 「拿到区间却只审顶端」会同时过掉上面两条断言。 */
   const asJson = repo.run(["HEAD~2..HEAD", "--json"]);
-  /* SAFETY: 类型断言已复核 */
-  const parsed = JSON.parse(asJson.output) as { commits: number };
-  repoExpect(parsed.commits).toBe(2);
+  const parsed: unknown = JSON.parse(asJson.output);
+  repoExpect(isRecord(parsed) ? parsed.commits : undefined).toBe(2);
 });
 
 test("区间里没有提交 ⇒ 退 0 并说「无可审，不是判过」（不许折成「取不到」）", ({ repo }) => {
@@ -132,13 +146,10 @@ test("同一句里并列的两个章节各报一条（不是只报一个）", ({
 
   const { code, output } = repo.run(["--commit", "HEAD", "--json"]);
   repoExpect(code).toBe(1);
-  /* SAFETY: 类型断言已复核 */
-  const parsed = JSON.parse(output) as {
-    audits: Array<{
-      rows: Array<{ claim: { target: string }; verdict: string }>;
-    }>;
-    verdict: string;
-  };
+  const parsed: unknown = JSON.parse(output);
+  if (!isAuditPayload(parsed)) {
+    throw new Error("check-commit-claims.mjs 的 --json 审计载荷形状不对");
+  }
   repoExpect(parsed.verdict).toBe("contradicted");
   const targets = parsed.audits[0]!.rows.filter((r) => r.verdict === "contradicted")
     .map((r) => r.claim.target)
@@ -387,14 +398,12 @@ describe("真历史（本仓库）", () => {
           stdio: ["ignore", "pipe", "pipe"],
         });
       } catch (error) {
-        /* SAFETY: 类型断言已复核 */
-        const e = error as {
-          status?: number;
-          stderr?: string;
-          stdout?: string;
-        };
-        code = e.status ?? -1;
-        out = `${e.stdout ?? ""}${e.stderr ?? ""}`;
+        const fields = isRecord(error) ? error : null;
+        const status = fields?.status;
+        const stdout = fields?.stdout;
+        const stderr = fields?.stderr;
+        code = typeof status === "number" ? status : -1;
+        out = `${typeof stdout === "string" ? stdout : ""}${typeof stderr === "string" ? stderr : ""}`;
       }
       expect(code).toBe(1);
       expect(out).toContain("§13.5.13");

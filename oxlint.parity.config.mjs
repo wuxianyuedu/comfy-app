@@ -892,26 +892,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "tests/app-port.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/app-service-exit-writer.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/base-check.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "tests/check-a11y-rules.test.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用
-        "tests/check-app-version.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/check-barrel-heavy-deps.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/check-bundle-budget.test.ts", // 存量 11 处 · 清账目标 B5 · 新代码不禁用
-        "tests/check-changelog-fragments.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/check-comfyui-port-contract.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/check-comment-headers.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/check-commit-claims.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "tests/check-daily-attendance.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "tests/check-doc-references.test.ts", // 存量 8 处 · 清账目标 B5 · 新代码不禁用
-        "tests/check-docs-api.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/check-file-structure.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/check-format.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/check-gate-thresholds.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/check-import-alias.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/check-inline-style.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/check-mirror-attendance.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "tests/check-oxlint-zero-rules.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/check-react-updater-purity.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/check-reformat-only.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
@@ -1040,8 +1020,6 @@ export default defineConfig({
         "tests/type-assertion-gate.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/workflow-disk-sync-single-writer.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/workshop-input-schema-derivation.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "scripts/session-report.mjs", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/session-report.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
       ],
       rules: { "typescript/no-unsafe-type-assertion": "off" },
     },

@@ -263,7 +263,7 @@ describe("egressWindowSignal：出勤照旧，环境红单独可读（ISSUE #327
     };
     const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     try {
-      expect(main(["--json"], { ...env, run: run as never })).toBe(0);
+      expect(main(["--json"], { ...env, run })).toBe(0);
       /* 按纯文本钉字段形状即可：这里要证的是「signal 真的进了 --json 的载荷」，
        * 再 JSON.parse 一遍只会把平台载荷类型重新引进用例（那份形状由判据自己给）。 */
       const jsonOut = spy.mock.calls.map((c) => String(c[0])).join("\n");
@@ -271,7 +271,7 @@ describe("egressWindowSignal：出勤照旧，环境红单独可读（ISSUE #327
       expect(jsonOut).toContain('"shouldFile": false');
 
       spy.mockClear();
-      expect(main([], { ...env, run: run as never })).toBe(0);
+      expect(main([], { ...env, run })).toBe(0);
       const lines = spy.mock.calls.map((c) => String(c[0]));
       expect(lines.some((l) => l.includes("signal=stable"))).toBe(true);
     } finally {
@@ -370,7 +370,7 @@ describe("readMirrorCell：按格名找到那一格，再按同一份实现取�
 describe("main：取数盖不住窗口 / 列表取不到 都落 2，不落在 1", () => {
   it("列表取不到 ⇒ 2（「我没取到」不许被念成「它没跑」）", () => {
     const run = () => ({ error: null, stderr: "", stdout: "not json", status: 0 });
-    expect(main([], { ...env, run: run as never })).toBe(2);
+    expect(main([], { ...env, run })).toBe(2);
   });
 
   it("在线那一跳：PR 档的格子被读到 ⇒ 三态照正文出", () => {
@@ -407,6 +407,6 @@ describe("main：取数盖不住窗口 / 列表取不到 都落 2，不落在 1"
         }),
       };
     };
-    expect(main([], { ...env, run: run as never })).toBe(0);
+    expect(main([], { ...env, run })).toBe(0);
   });
 });
