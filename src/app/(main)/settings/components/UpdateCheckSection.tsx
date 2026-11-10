@@ -14,7 +14,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Spinner } from "~/components/ui/spinner";
 
-import { SettingsCard } from "~/components/ui/settings-card";
+import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { FieldLabel } from "~/components/ui/field";
 
 export function UpdateCheckSection() {
@@ -55,7 +55,7 @@ export function UpdateCheckSection() {
           开启运行期「本地更新需重启」检测
         </FieldLabel>
       </div>
-      <div className="border-border bg-surface-1 mb-3 flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 text-sm">
+      <div className={`${SETTINGS_ROW_CLASS} mb-3 flex flex-wrap items-center gap-3 text-sm`}>
         <Button
           className="text-primary h-auto items-center gap-1.5 p-0 font-medium"
           disabled={checking}

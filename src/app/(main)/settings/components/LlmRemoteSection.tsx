@@ -57,7 +57,7 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
                     className={`h-auto w-full justify-start gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${
                       active
                         ? "border-primary-500/40 bg-primary-500/10"
-                        : "border-border hover:bg-surface-2"
+                        : "border-border bg-surface-row hover:bg-surface-2"
                     }`}
                     key={provider.id}
                     onClick={() => {

@@ -485,7 +485,7 @@ function UsageTestResultPanel({
                 ` · 耗时 ${fixed(result.elapsedMs / 1000, 1) ?? "0"}s`}
             </p>
             {result.chatText !== undefined && result.chatText !== "" && (
-              <p className="border-border/50 bg-surface-1 max-h-40 overflow-y-auto rounded-lg border p-3 text-xs whitespace-pre-wrap">
+              <p className="border-border/50 bg-surface-row max-h-40 overflow-y-auto rounded-lg border p-3 text-xs whitespace-pre-wrap">
                 {result.chatText}
               </p>
             )}
@@ -511,7 +511,7 @@ function UsageTestResultPanel({
             )}
             {result.savedPath !== undefined && result.savedPath !== "" && (
               <p
-                className="border-border/50 bg-surface-1 text-muted-foreground text-2xs mt-2 rounded-lg border px-3 py-2 break-all"
+                className="border-border/50 bg-surface-row text-muted-foreground text-2xs mt-2 rounded-lg border px-3 py-2 break-all"
                 title="本次产出的内容已在本地 temp 子目录保存一份"
               >
                 已保存到本地：

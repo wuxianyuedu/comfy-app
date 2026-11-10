@@ -153,6 +153,10 @@ const ALLOWED_SCRIPTS = new Set([
   // 首启建表与运行期 env 装配（分发产物按硬规则 17 不含 .env）一起失效。
   "standalone-runtime.mjs",
   "launcher-core/standalone-runtime-env.mjs",
+  // standalone 运行期数据根（日志 / 导出）：把「载荷根 / 安装目录」换成 OS app-data
+  // 目录（ISSUE #3498）。standalone-runtime.mjs 经 buildStandaloneRuntimeEnv 把算出的
+  // 根透传给 Next server，两侧必须指同一处。与 RUNTIME_SCRIPTS 同源，缺一份即红。
+  "launcher-core/app-data-dir.mjs",
 ]);
 
 /** Next 自带运行时脚本目录（相对产物根）。 */

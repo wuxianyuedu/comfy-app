@@ -323,7 +323,7 @@ export function useSettingsPage(options?: {
    * LLM 落库（含远程模型的即时保存出口）、偏好落库，以及落库后连带重取的
    * 实例元数据（安装形态 + 桌面实例的六个存储目录）。注入的是两份草稿、保存
    * 指示器与反馈通道 —— 与 ComfyUI / DbStudio 的运行态无共享 state。 */
-  const { saveLlm, savePrefs } = useSettingsSave({
+  const { persistLlmDraft, saveLlm, savePrefs } = useSettingsSave({
     settingsDraft,
     llmDraft,
     llmApiKey,
@@ -347,6 +347,34 @@ export function useSettingsPage(options?: {
     setSettingsDraft((draft) => (draft ? { ...draft, ...patch } : draft));
   }, []);
 
+  /* 即时提交：算好下一份草稿 → 写本地 state → 立即落库（成功静默、仅报错）。
+   * 与 `patchLlm`/`patchSettings`（只改草稿、等失焦/提交才存）互补：离散控件
+   * （下拉 / 开关 / 单选）无「失焦」概念，直接走这里。next 显式传入落库出口，
+   * 避免读到 stale 的草稿闭包。 */
+  const commitLlm = useCallback(
+    async (patch: Partial<LlmConfig>): Promise<{ error?: string; ok: boolean }> => {
+      if (!llmDraft) {
+        return { ok: false, error: "配置未就绪，请稍后重试" };
+      }
+      const next = { ...llmDraft, ...patch };
+      setLlmDraft(next);
+      return persistLlmDraft(next, { silentOk: true });
+    },
+    [llmDraft, setLlmDraft, persistLlmDraft],
+  );
+
+  const commitPrefs = useCallback(
+    async (patch: Partial<Settings>): Promise<{ error?: string; ok: boolean }> => {
+      if (!settingsDraft) {
+        return { ok: false, error: "配置未就绪，请稍后重试" };
+      }
+      const next = { ...settingsDraft, ...patch };
+      setSettingsDraft(next);
+      return savePrefs(next);
+    },
+    [settingsDraft, setSettingsDraft, savePrefs],
+  );
+
   /* ── 远端模型管理 / 本地候选勾选 / 按任务温度（沉在 sub-hook）──────
    * 这一块只依赖「当前 llm 草稿 + 草稿编辑 + 即时落库出口」，与 ComfyUI /
    * DbStudio / Ollama 无任何共享 state。返回形状与原 controller 逐字段一致。 */
@@ -357,6 +385,7 @@ export function useSettingsPage(options?: {
     setTaskTemperature,
   } = useSettingsRemoteModels({
     llmDraft,
+    persistLlmDraft,
     setLlmDraft,
     patchLlm,
   });
@@ -398,6 +427,8 @@ export function useSettingsPage(options?: {
     drafts,
     patchLlm,
     patchSettings,
+    commitLlm,
+    commitPrefs,
     toggleExtraModel,
     testModelUsage: testModelUsageFn,
     queryUsageTask: queryUsageTaskFn,

@@ -3,6 +3,22 @@
 import { cn } from "~/lib/utils";
 import { Card as ShadcnCard, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 
+/** 卡片内「一行」的承载面（ISSUE #3510）—— 设置页各分区卡片里的列表行 / 状态行 /
+ * 说明行共用这一份 class。
+ *
+ * 为什么单独立一件（而不是每处各写 `bg-surface-1`）：卡片自己的底色就是
+ * `bg-surface-1`，行再写一遍 = 行与卡片逐像素同色，一屏里读不出「一格一格」
+ * （#3495 的现场：日志分类那 7 行与卡片底都是 `#16161c`）。行要走
+ * `--color-surface-row`（离页面底再远一档），而这一档此前在色板里**根本不存在** ——
+ * 唯一高于卡片的 `--color-surface-2` 与卡片只差 1.04:1（深色）/ 1.07:1（浅色），
+ * 肉眼读不出来（`tests/sidebar-state-contrast.test.ts` 的下限是 1.10）。
+ *
+ * 出口是一处而不是 N 处：底色 / 描边 / 圆角 / 内边距都收在这里，改一次全页跟着走；
+ * 各分区只留**自己那行**的内容与排布（§12.18 复用优先 · 缺能力补地基）。
+ *
+ * 边距不进这份 class：各分区的行距不同（有的 `mb-2`、有的 `mb-4`），由调用处自己补。 */
+export const SETTINGS_ROW_CLASS = "border-border bg-surface-row rounded-lg border px-3 py-2";
+
 /** SettingsCard —— 设置页各段落使用的「有标题的卡片」的唯一出口。
  * 为什么单独立一件、不用裸 shadcn `<Card>`：设置页 11 段落都需要同一件事 ——「一段带标题的独立内容块」—— 每处手写 `<Card><CardHeader><CardTitle>…` 会重复 11 遍；沿用此前 `SettingsPrimitives.tsx` 的自绘 `<section>` + `<h2>`（且带两处 `dark:` 手写覆盖）又等于把装好的 `ui/card.tsx` 放着不用。本件是两者的中间形态：内部走官方 `Card` 组合、对外只暴露 `{title, description, children, className}`，一处收口，视图调用点保持 `<SettingsCard title="…">…</SettingsCard>`。
  * 与 `ui/card.tsx` 的关系：本件是薄封装（§12.18 复用优先 · 缺的差异用参数或薄封装补），不是平行实现 —— 底色 / 圆角 / 边框 / padding / 深浅两态全部来自 shadcn `Card` 与 `--color-card` / `--color-border` 语义 token；本件只补三件事：一个必填的字符串标题（`Card` 本体没有 title prop，标题走 `CardHeader + CardTitle`，本件把这一层结构固定下来）；一处外观微调（`rounded-2xl` + `shadow-sm shadow-black/5`）保留设置页现有视觉密度（两条都是中性 utility、不含颜色，不与主题色冲突；此前的 `dark:bg-…/60` 与 `dark:shadow-none dark:shadow-black/2` 是「手写 dark: 覆盖语义 token」—— 违反 shadcn `styling.md` 原则 4，随本批删除，token 自身已含浅/深两态）；`backdrop-blur` 本来也在这三条里、已随 ISSUE #2031 撤掉（模糊要「下面是活的、会动的东西」才有意义，设置页卡片坐在不透明的页面底上、0 像素效果，却把该卡与祖先链上的每一份内容都拖进一个 backdrop-filter 图层，扁平规范据此不让容器类表面带模糊，见规范 03 §3.13）。

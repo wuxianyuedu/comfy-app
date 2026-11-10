@@ -89,7 +89,7 @@ export function ProviderModelDialog({
 
           {/* 智能配置：按模型名推断窗口 / 输出上限 / 输入类型 / 能力。打开时
               改模型 ID 会自动重算；关掉则完全手填。 */}
-          <div className="border-border bg-surface-1 mb-3 flex items-center gap-3 rounded-lg border px-3 py-2.5">
+          <div className="border-border bg-surface-row mb-3 flex items-center gap-3 rounded-lg border px-3 py-2.5">
             <div className="min-w-0 flex-1">
               <p className="text-ink text-sm font-medium">智能配置</p>
               <p className="text-muted-foreground text-2xs">

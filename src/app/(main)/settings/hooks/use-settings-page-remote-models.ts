@@ -53,27 +53,36 @@ function isTaskTemperatureRecord(v: Record<string, unknown>): v is Record<TaskTy
 export function useSettingsRemoteModels(input: {
   llmDraft: LlmConfig | null;
   patchLlm: (patch: Partial<LlmConfig>) => void;
+  /** 增删改的即时落库出口（主 hook 的 `persistLlmDraft` 原样传入）；`silentOk` 沿用主 hook 口径。 */
+  persistLlmDraft: (
+    draft: LlmConfig,
+    opts?: { silentOk?: boolean },
+  ) => Promise<{ error?: string; ok: boolean }>;
   setLlmDraft: LlmDraftSetter;
 }) {
-  const { llmDraft, setLlmDraft, patchLlm } = input;
+  const { llmDraft, persistLlmDraft, setLlmDraft, patchLlm } = input;
 
   /** 勾选/取消一个本地候选模型（多选集 = 主模型 + 勾选项）。
    *  option C：本地候选只存名字（字符串、无 apiKey），与远端独立模型(extraModels)
-   *  彻底分开，不写进 remoteModel。 */
+   *  彻底分开，不写进 remoteModel。
+   *  勾选是离散动作，**即时落库**（与其它偏好一致改为自动保存），成功静默、失败报错。 */
   const toggleExtraModel = useCallback(
-    (name: string) => {
-      setLlmDraft((draft) => {
-        if (!draft) {
-          return draft;
-        }
-        const nextNames = mergeExtraModels(draft.localCandidates, draft.model, name);
-        const unchanged =
-          nextNames.length === draft.localCandidates.length &&
-          nextNames.every((n, i) => n === draft.localCandidates[i]);
-        return unchanged ? draft : { ...draft, localCandidates: nextNames };
-      });
+    async (name: string): Promise<{ error?: string; ok: boolean }> => {
+      if (!llmDraft) {
+        return { ok: false, error: "配置未就绪，请稍后重试" };
+      }
+      const nextNames = mergeExtraModels(llmDraft.localCandidates, llmDraft.model, name);
+      const unchanged =
+        nextNames.length === llmDraft.localCandidates.length &&
+        nextNames.every((n, i) => n === llmDraft.localCandidates[i]);
+      if (unchanged) {
+        return { ok: true };
+      }
+      const nextDraft = { ...llmDraft, localCandidates: nextNames };
+      setLlmDraft(nextDraft);
+      return persistLlmDraft(nextDraft, { silentOk: true });
     },
-    [setLlmDraft],
+    [llmDraft, persistLlmDraft, setLlmDraft],
   );
 
   /** 模型「实际使用」测试（chat / 生图 / 生视频各一次真实调用）。

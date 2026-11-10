@@ -765,7 +765,7 @@ describe("useSettingsPage", () => {
     expect(result.current.drafts?.llm.temperatureByTask).toBeUndefined();
   });
 
-  it("保存 LLM 成功 → ok 提示 + 清空 API Key 输入框", async () => {
+  it("保存 LLM 成功 → 静默（无成功提示）+ 清空 API Key 输入框", async () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
@@ -777,10 +777,8 @@ describe("useSettingsPage", () => {
     await act(async () => {
       await result.current.saveLlm();
     });
-    expect(result.current.flash).toEqual({
-      kind: "ok",
-      text: "LLM 配置已保存",
-    });
+    // 即时自动保存：成功静默（用户决策），不再弹「已保存」提示条
+    expect(result.current.flash).toBeNull();
     expect(result.current.llmApiKey).toBe("");
     expect(result.current.saving).toBe(false);
   });

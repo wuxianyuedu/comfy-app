@@ -44,7 +44,7 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
               className={`mb-4 rounded-lg border px-3 py-2 text-sm ${
                 c.appUpdate.available
                   ? "border-primary/40 bg-primary/5 text-primary"
-                  : "border-border bg-surface-1 text-ink/80"
+                  : "border-border bg-surface-row text-ink/80"
               }`}
             >
               {c.appUpdate.message}
@@ -94,7 +94,7 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
           </div>
           {c.appUpdate.busy === "installing" && c.appUpdate.progress && (
             <div className="mt-4">
-              <div className="border-border bg-surface-1 h-2 w-full overflow-hidden rounded-full border">
+              <div className="border-border bg-surface-row h-2 w-full overflow-hidden rounded-full border">
                 <div
                   className="bg-primary h-full rounded-full transition-transform"
                   style={{

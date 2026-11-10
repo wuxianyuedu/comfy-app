@@ -4,6 +4,7 @@
  * tsc/eslint/色值扫描都看不见（错的是两颗 token 的相对亮度），故必须真量对比度、量在编译产物上（Tailwind 会 tree-shake 未引用变量）。
  * 取值复用 `tests/helpers/theme-tokens.ts`；**别改回 `getComputedStyle`**：jsdom 不解析 `var()`，别名返回字面量。 */
 import { beforeAll, describe, expect, it } from "vitest";
+import { contrast } from "./helpers/contrast";
 import { loadThemeTokens, type ThemeTokens } from "./helpers/theme-tokens";
 
 let light: ThemeTokens;
@@ -12,33 +13,6 @@ let dark: ThemeTokens;
 beforeAll(async () => {
   ({ light, dark } = await loadThemeTokens());
 });
-
-/** `#rrggbb` → sRGB 三个通道（0~255）。产物里这几颗 token 都是 6 位 hex。 */
-function channels(value: string): [number, number, number] {
-  const m = /^#(?<hex>[0-9a-f]{6})$/i.exec(value.trim());
-  if (!m) {
-    throw new Error(`期望 6 位 hex 色值，实际是 ${JSON.stringify(value)}`);
-  }
-  const n = Number.parseInt(m.groups?.hex ?? "", 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-
-/** WCAG 相对亮度（sRGB 线性化后加权）。 */
-function luminance(value: string): number {
-  /* SAFETY: 类型断言已复核 */
-  const [r, g, b] = channels(value).map((c) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  }) as [number, number, number];
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
-/** WCAG 对比度，1:1 ~ 21:1。 */
-function contrast(a: string, b: string): number {
-  const [x, y] = [luminance(a), luminance(b)];
-  const [hi, lo] = x > y ? [x, y] : [y, x];
-  return (hi + 0.05) / (lo + 0.05);
-}
 
 /** 某态下某 token 的解析值；未定义即用例失败（比 `!` 断言给出更好的报错）。 */
 function token(t: ThemeTokens, name: string): string {
