@@ -45,6 +45,7 @@ const themeMock = vi.hoisted(() => ({
   resolvedTheme: "dark",
   setTheme: vi.fn(),
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => undefined }) }));
 vi.mock("next-themes", () => ({ useTheme: () => themeMock }));
 
 /** 工具条里的 `SidebarTrigger` 依赖 `ui/sidebar` 的 context，得包一层 provider。 */
