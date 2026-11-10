@@ -1,0 +1,78 @@
+# 单跑全量E2E（镜像档）—— 对位 `.cnb.yml` 已退役的「单跑全量E2E」档（ISSUE #3504）
+#
+# `web_trigger_e2e` / `api_trigger_e2e` 两条触发口派发（`--preset e2e`）落到本 workflow。
+# 保留「只跑一档」粒度：想只看 E2E 那一格的答案时点触发口，不必等 daily.yml 的整轮。
+#
+# step 清单逐字对位 CNB `.oneshot-e2e` 锚点退役前的四格：
+#   安装依赖 → 同步数据库表结构 → 浏览器安装 → 全量E2E（`COMFY_E2E_SERVER=start`，
+#   与每日档同款：E2E 自起 server，消费的是构建链之外的同仓源码形态）。
+# ⚠️ 浏览器安装排在全量E2E 之前是顺序判据（CNB 侧同一条）：缺件时 E2E 只红在
+#    launch 那一跳，指不到真正缺的那一格。
+#
+# 形态口径同 oneshot-build.yml 文件头（裸 install / 无 cp936 外壳 / 无 schedule）。
+name: Oneshot e2e (mirror)
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      head_sha:
+        description: 要跑 E2E 的那一笔 sha（留空 = 默认分支 HEAD）
+        required: false
+        default: ""
+
+concurrency:
+  group: oneshot-e2e
+  cancel-in-progress: true
+
+env:
+  SKIP_ENV_VALIDATION: "1"
+  BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
+  CI: "true"
+  COMFY_CI_SUBJECT: "master"
+
+jobs:
+  oneshot-e2e:
+    runs-on: ubuntu-24.04
+    # 四格预算之和（20 + 30 + 20 + 45）量级之上的整数档。
+    timeout-minutes: 120
+    steps:
+      - name: 检出（按派发那笔 sha）
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.head_sha || github.sha }}
+          fetch-depth: 0
+          # E2E 前置要字体真身（套件里有断言真身字节的用例）；指针文件即假红。
+          lfs: true
+
+      - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
+        uses: pnpm/action-setup@v6
+
+      - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: 安装依赖（allowBuilds 清单见 pnpm-workspace.yaml）
+        timeout-minutes: 20
+        run: pnpm install --frozen-lockfile
+
+      - name: 同步数据库表结构（cnb 同款判据一字不改）
+        timeout-minutes: 30
+        run: node scripts/db-push.mjs
+
+      - name: 浏览器安装（cnb 同款入口；npmmirror 镜像源同 CNB）
+        timeout-minutes: 20
+        env:
+          PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
+          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
+        run: node scripts/ci-toolchain-selfcheck.mjs --playwright-only
+
+      - name: 全量E2E（cnb 同款判据一字不改）
+        timeout-minutes: 45
+        env:
+          COMFY_E2E_SERVER: "start"
+        run: node scripts/e2e-run.mjs

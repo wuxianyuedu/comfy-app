@@ -17,11 +17,10 @@ import {
   readCnbConfig,
 } from "../scripts/ci-incremental-gates.mjs";
 import { HEAVY_GATES } from "../scripts/ci-heavy-gates.mjs";
-import { parseStageScripts } from "../scripts/ci-autofix-duties.mjs";
+import { DAILY_GATE_EXECUTORS } from "../scripts/ci-ga-trigger-map.mjs";
 import { INPUT_GLOBS, INPUT_RES, matchedInputs } from "../scripts/check-docs-api.cjs";
 import { SCAN_ROOTS, TRIGGER_GLOBS } from "../scripts/file-structure-rules.cjs";
 import { globToRe } from "../scripts/vitest-projects.cjs";
-import { stageBlock } from "./no-platform-ci-config.test";
 
 const CONFIG = readCnbConfig();
 /* ISSUE #3378 收尾：`生成态文档与源同步` 的收窄面由 GA `master-gate.yml` 的同名 step
@@ -171,24 +170,34 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     ).toBe(false);
 
     const dailyName = "每日 API 文档生成与自检";
-    const block = stageBlock(CONFIG, dailyName);
+    /* #3504 起执行者是 GA daily.yml 的 step（逻辑名 ⇄ step 名登记在
+     * `ci-ga-trigger-map.mjs` 的 `DAILY_GATE_EXECUTORS`），CNB 侧这一格已随构建
+     * 执行面整体退役 —— 「配置里解析不出 ⇒ 判据没有对象」的担忧搬到 GA step 名
+     * 这一侧（step 名改了而登记没跟，当场红在这里）。 */
+    const step = DAILY_GATE_EXECUTORS[dailyName];
+    const gaDaily = fs.readFileSync(
+      path.join(process.cwd(), ".github/workflows/daily.yml"),
+      "utf8",
+    );
+    const stepAt = gaDaily.indexOf(`      - name: ${step}`);
     expect(
-      block,
-      `配置里解析不出「${dailyName}」这一格 —— 每日档没有执行者，等于把这条判据删了`,
-    ).toBeTruthy();
+      stepAt,
+      `GA daily.yml 里解析不出「${step}」step —— 每日档没有执行者，等于把这条判据删了`,
+    ).toBeGreaterThan(-1);
+    const blockEnd = gaDaily.indexOf("\n      - name:", stepAt + 1);
+    const block = gaDaily.slice(stepAt, blockEnd === -1 ? undefined : blockEnd);
     expect(block).toContain("scripts/check-docs-api.cjs");
+    /* 每日档是「重跑一遍」的语义；GA 侧没有 ifModify 的概念，判的是反向：
+     * CNB 侧谁把这个格名加回带 `ifModify` 的 stage，就在这里红。 */
     expect(
       parseStageIfModify(CONFIG).has(dailyName),
-      "每日档那一格挂上了 `ifModify` —— 每日档是「重跑一遍」的语义，按改动面跳过就不是每日档",
+      "「每日 API 文档生成与自检」挂上了 `ifModify` —— 每日档是「重跑一遍」的语义，按改动面跳过就不是每日档",
     ).toBe(false);
-    /* 判定门不带 `--autofix`（ISSUE #2231）：产物不进 git，没有「自动修完再提交」的对象，
-     * 而「自动修 + 再判」正是让产物陈旧在 CI 上隐形的那一格。
-     * 核的是**那一行的 `script:`**，不是整块 —— 注释里出现旗标字面量不算「带着那个旗标」。 */
-    const scriptLine = parseStageScripts(CONFIG).get(dailyName) ?? "";
-    expect(scriptLine, `配置里解析不出「${dailyName}」那一行的 script`).not.toBe("");
-    expect(scriptLine).toContain("scripts/check-docs-api.cjs");
+    const runLine = block.split("\n").find((l) => l.trim().startsWith("run:")) ?? "";
+    expect(runLine, `「${step}」step 解析不出 run 行`).not.toBe("");
+    expect(runLine).toContain("scripts/check-docs-api.cjs");
     expect(
-      scriptLine,
+      runLine,
       "那一格又带上了 `--autofix` —— 产物不进 git，没有「自动修完再提交」的对象（#2231）",
     ).not.toContain("--autofix");
     /* 判据认的每一类输入面（解析根覆盖的目录 + 根级文件 + 锁文件）都得被认下来 ——

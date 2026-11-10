@@ -91,13 +91,13 @@ export function gitUser(fallback) {
  *     不吃这一档的那条出路、没动输入面时的宽限。
  *   · `skipHow` —— 记一条「写明理由的豁免」那条命令。它是**另一条出路**而不是绕过：
  *     留下的是一条能复核的事实。
- *   · `ciStage` —— 这一档**现在由平台侧哪一格跑**（`.cnb.yml` 的 stage 名）。非空 ⇒
- *     本地不拦：执行者是那一条流水线，本地这笔账退成**读数**（谁在本地自己证过一次）。
- *     这不是把判据放宽，是把「谁在什么时候跑它」这一栏换了值（§13.5.17 的口径）——
- *     用例、预算、覆盖率阈值一个字没动。
- *     ⚠️ **豁免只在平台侧真的有人跑时成立**：每个非空 `ciStage` 必须出现在
- *     `.cnb.yml` 的 `COMFYAPP_CI_DAILY_GATES` 里，由 `tests/daily-tracks.test.ts` 判。
- *     没有那一条判据时，「本地不拦」会变成「谁都不跑」的同义词。
+ *   · `ciStage` —— 这一档**现在由平台侧哪一格跑**（GA `daily.yml` 执行者 step 的逻辑格名，
+ *     #3504 起每日档整条在 GitHub Actions 上跑）。非空 ⇒ 本地不拦：执行者是那一格，
+ *     本地这笔账退成**读数**（谁在本地自己证过一次）。这不是把判据放宽，是把「谁在什么时候
+ *     跑它」这一栏换了值（§13.5.17 的口径）—— 用例、预算、覆盖率阈值一个字没动。
+ *     ⚠️ **豁免只在平台侧真的有人跑时成立**：每个非空 `ciStage` 的执行者 step 必须真的在
+ *     GA `daily.yml` 里（登记：`scripts/ci-ga-trigger-map.mjs` 的 `DAILY_GATE_EXECUTORS`，
+ *     判据：`tests/no-platform-ci-config.test.ts`）。没有那一条，「本地不拦」就是「谁都不跑」。
  */
 
 /**
@@ -477,8 +477,8 @@ export function checkFreshnessLedger(
    * ⚠️ 这里跳过的是**「今天必须自证」那一层**，不是整条判据：记录存在时它的形状
    * （`who` / `how` / `verifiedAt` / `trackedBy`）照旧逐项判 —— 读数也得是真的，
    * 一条写着「由 e2e 跑法证过」而挂在 full 账上的记录照样要红。
-   * 而「平台侧那一格真的在场」由 `tests/daily-tracks.test.ts` 判（每个非空 `ciStage`
-   * 必须出现在 `COMFYAPP_CI_DAILY_GATES` 里）—— 没有那一条，这里就变成「谁都不跑」。 */
+   * 而「平台侧那一格真的在场」由 `tests/no-platform-ci-config.test.ts` 判（每个非空 `ciStage` 的执行者
+   * step 必须真的在 GA `daily.yml` 里，登记见 `ci-ga-trigger-map.mjs`）—— 没有那一条，这里就变成「谁都不跑」。 */
   const ciOwned = String(track.ciStage ?? "").trim() !== "";
   for (const key of required) {
     const entry = ledger[key];

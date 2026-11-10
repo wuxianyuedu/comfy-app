@@ -25,11 +25,13 @@
  *
  * ⚠️ **而这三档现在都不必在本地跑**（2026-10-19 的口径，规范 §13.5.23）：登记里
  * `ciStage` 非空 ⇒ 「今天必须有凭证」那一层整层跳过，本地这笔账退成**读数** ——
- * 执行者是平台侧每日档的那三格（`每日单元测试` / `每日生产构建` / `每日全量E2E`）。
+ * 执行者在 GA `daily.yml` 的对应 step（#3504 起每日档整条在 GitHub Actions 上跑）。
  * 这不是把判据放宽：用例、预算、覆盖率阈值一个字没动，动的只有「谁在什么时候跑它」
- * （§13.5.17），而它换过去的条件是**那三格真在场** —— 由
- * `tests/daily-tracks.test.ts` 判「每个非空 `ciStage` 都必须在
- * `COMFYAPP_CI_DAILY_GATES` 里」。`dirty` / `graceMs` 那两栏仍然留着并照旧被读：
+ * （§13.5.17），而它换过去的条件是**那一格真在场** —— 由
+ * `tests/no-platform-ci-config.test.ts` 判「每个非空 `ciStage` 的执行者 step
+ * 都必须真的在 GA `daily.yml` 里」（格名 ⇄ step 名登记在
+ * `scripts/ci-ga-trigger-map.mjs` 的 `DAILY_GATE_EXECUTORS`）。
+ * `dirty` / `graceMs` 那两栏仍然留着并照旧被读：
  * 它们现在服务的是**读数**（「今天动过这一档的面」这件事仍然打在台面上），
  * 而任何一档日后没有平台侧执行者时，把 `ciStage` 清空就回到拦截口径。
  *

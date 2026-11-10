@@ -1,8 +1,8 @@
-/** 「CI 的落点指到开发盘」那件事的**契约**（临时根 + 浏览器落点）。这批改动把两处落点从系统盘
- * （服务账号的 `systemprofile` / 按 `%LOCALAPPDATA%` 推）挪到 `G:`（读数见 `docs/guides/dev-drive-refs.md`
- * 的「CI 侧」）。两种静默失效红法极贵：临时根不存在 ⇒ Node 仍返回它 ⇒ 第一笔写 ENOENT 且日志读不出；
- * 浏览器落点被挪进某一格 `env:` ⇒ 装的那格看得到、跑 E2E 的看不到（「装好了，探不到」）。
- * 所以守三条形状：三行在流水线级 env、`TEMP` 与 `TMP` 成对同卷、落点与配置同源（推导只有 `scripts/ci-toolchain-browser-root.mjs` 一处）。 */
+/** 「CI 的落点指到开发盘」那件事的**契约**（临时根 + 浏览器落点）。三行流水线级 env
+ * （`TEMP` / `TMP` / `PLAYWRIGHT_BROWSERS_PATH`）随 #3504 的构建执行外迁而退役 ——
+ * 本文件现在是**反向登记**（三行不许回来；构建格挂回本机时才恢复正向契约）。
+ * 落点推导本身（`scripts/ci-toolchain-browser-root.mjs` 那一族）仍是活代码：
+ * 本地开发机与将来任何自托管执行面都还在用同一份「装与判同源」。 */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -89,123 +89,40 @@ function pipelineEnv(text: string): Record<string, string> {
   return out;
 }
 
-/** 一个路径是不是绝对路径（Windows 盘符或 POSIX 根）。 */
-function isAbsolutePath(p: string): boolean {
-  return /^[A-Za-z]:[\\/]/.test(p) || p.startsWith("/");
-}
-
-/** 一个路径所在的**卷根**（`G:\Temp` ⇒ `G:\`；`/tmp/x` ⇒ `/`）。 */
-function volumeRootOf(p: string): string {
-  if (/^[A-Za-z]:[\\/]/.test(p)) {
-    return path.win32.parse(p).root.toLowerCase();
-  }
-  return path.posix.parse(p).root;
-}
-
-describe("CI 落点：临时根与浏览器落点都在开发盘上（契约）", () => {
+describe("CI 落点：临时根三行已随自托管执行面退役（#3504，反向登记）", () => {
   const env = pipelineEnv(readCnb());
 
-  it("三行都在**流水线级** env 里（每一格都要看到它们）", () => {
-    expect(
-      env.TEMP,
-      "`.cnb.yml` 的流水线级 env 里没有 `TEMP` —— CI 的临时目录于是落在服务账号的 " +
-        "`systemprofile` 下（在系统盘上），与检出、store、缓存槽所在的那块盘分家",
-    ).toBeTruthy();
-    expect(
-      env.TMP,
-      "`TMP` 与 `TEMP` 必须成对（Node 只看 `TEMP`，另一些工具只看 `TMP`）",
-    ).toBeTruthy();
-    expect(
-      env.PLAYWRIGHT_BROWSERS_PATH,
-      "`.cnb.yml` 的流水线级 env 里没有 `PLAYWRIGHT_BROWSERS_PATH` —— 浏览器于是按 " +
-        "`%LOCALAPPDATA%` 推，落在服务账号的系统盘那一侧",
-    ).toBeTruthy();
-  });
-
-  it("这三行**只**在流水线级出现（挪进某一格 ⇒ 装了但探不到）", () => {
+  /**
+   * #3504 把全部构建执行搬去 GA 之后，`TEMP` / `TMP` / `PLAYWRIGHT_BROWSERS_PATH`
+   * 三行流水线级 env **没有消费者了**：它们存在的原因是「构建 / 浏览器安装在本机跑，
+   * 临时目录与浏览器落点必须落在开发盘上，不能散进服务账号的 systemprofile」。
+   * 那个前提消失后留着的害处是「配置看着像在本机干活」——读到这份配置的人会以为
+   * 落点契约还活着，而真本机跑的格早已不存在。
+   *
+   * 退役是**反向判据**，不是删测试：谁把构建格挂回 `.cnb.yml`（那才是这三行的前提
+   * 重新成立的时候），必须同批把这三行加回来并把本判据改回正向 —— 不然第一笔写
+   * 临时文件就落在系统盘上，而红会落在别人的一条用例里（ISSUE #2939 的原案发形态）。
+   */
+  it("TEMP / TMP / PLAYWRIGHT_BROWSERS_PATH 三行不在配置的任何 env 里（正向 = 构建回本机时再加回）", () => {
     const text = readCnb();
-    const offLevel: Array<string> = [];
-    for (const line of text.split(/\r?\n/)) {
-      const m = /^(?<indent>[ \t]*)(?:TEMP|TMP|PLAYWRIGHT_BROWSERS_PATH):/.exec(line);
-      if (!m) {
-        continue;
-      }
-      const indent = (m.groups?.indent ?? "").replaceAll("	", "    ").length;
-      /* 流水线级 = 第 4 列；格级 = 第 6 列（`  - name:` ⇒ `    env:` ⇒ `      KEY:`）。 */
-      if (indent !== 4) {
-        offLevel.push(line.trim());
-      }
-    }
+    const offenders = text
+      .split(/\r?\n/)
+      .filter((line) => !line.trim().startsWith("#"))
+      .map((line, no) => ({ line, no: no + 1 }))
+      .filter(({ line }) => /^(?<indent>[ \t]*)(?:TEMP|TMP|PLAYWRIGHT_BROWSERS_PATH):/.test(line))
+      .map(({ line, no }) => `${no}: ${line.trim()}`);
     expect(
-      offLevel,
-      "这三行必须只在流水线级 env 里（缩进第 4 列）：挪进某一格的 `env:` 之后，" +
-        "装浏览器的那一格看得到、跑 E2E 的那一格看不到 ⇒ 装好了，探不到",
+      offenders,
+      "`.cnb.yml` 里出现了 TEMP / TMP / PLAYWRIGHT_BROWSERS_PATH —— 这三行是**本机构建**的落点契约，" +
+        "#3504 起构建格全部在 GA，触发口一格都不在本机跑；要挂回构建格就同批恢复三行并把本判据改回正向" +
+        "（否则临时文件落进服务账号的 systemprofile，红落在别人的一条用例里，#2939）",
     ).toEqual([]);
-  });
-
-  it("`TEMP` 与 `TMP` 指向同一个目录，且三个落点同卷", () => {
-    expect(env.TEMP).toBe(env.TMP);
-    /* SAFETY: 类型断言已复核 */
-    for (const key of ["TEMP", "TMP", "PLAYWRIGHT_BROWSERS_PATH"] as const) {
-      const value = env[key]!;
-      expect(
-        isAbsolutePath(value),
-        `${key} 必须写绝对路径（现在写的是 ${value}）—— 相对路径指的是作业目录，` +
-          "而作业目录每跑换一个，临时文件就散在各个工作区里",
-      ).toBe(true);
-    }
-    /* SAFETY: 类型断言已复核 */
-    const roots = (["TEMP", "TMP", "PLAYWRIGHT_BROWSERS_PATH"] as const).map((k) =>
-      volumeRootOf(env[k]!),
-    );
+    /* 双向钉：`pipelineEnv()` 在三行真的回来时要读得到 —— 否则上面那条反向判据
+     * 与「将来恢复的正向判据」都读不到同一份事实。 */
     expect(
-      new Set(roots).size,
-      `三个落点必须同卷（现在分别是 ${roots.join(" / ")}）—— 跨卷时「往落点里挪一个` +
-        "文件」这类动作会直接 EXDEV 失败，而红会落在别人的一条用例里",
-    ).toBe(1);
-  });
-
-  it("临时根**不落进会被整目录清空的那棵树**，也不指向检出根内部", () => {
-    /* 这一条守「跑 CI 的人随时能清空 G:\Temp」这个前提（ISSUE #2939）。「跑完再挪到 G:\Temp」本仓
-     * 不做（§13.5.3.4.4）：①那是逐进程一次性落点，挪过去的字节没有第二个读者；②「跑完」钩子在平台
-     * 不成立（`stages` 串行、前红后 skipped，`endStages` 并发且失败不影响流水线，最该收尾的那跑收不到）；
-     * ③整树跨卷拷贝十几万文件，换 0 秒收益。真正的前提是「G:\Temp 里只有可随手删的东西」，故判：临时根
-     * 不许落进会被整目录清空的树，也不许落进检出根内部（那时清空 = 删掉正在跑的工作区）。 */
-    const temp = env.TEMP!;
-    /* SAFETY: 类型断言已复核 */
-    const roots = (["TEMP", "PLAYWRIGHT_BROWSERS_PATH"] as const).map((k) => env[k]!);
-
-    /* ① 不许落进检出根。平台把每个 job 检出到 `…\<流水线 id>~<随机段>\workspace`，
-     *    而宿主把那个工作区的**父目录**记为 `ORANGE_RUNNER_DATA_DIR` —— 两者都认：
-     *    清空 G:\Temp 不许等于删掉正在跑的检出。 */
-    const workspaceLike = [env.COMFY_CI_WORKSPACE, env.ORANGE_RUNNER_DATA_DIR].filter(Boolean);
-    for (const root of workspaceLike) {
-      expect(
-        temp.toLowerCase().startsWith(`${root!.toLowerCase()}\\`) ||
-          temp.toLowerCase().startsWith(`${root!.toLowerCase()}/`),
-        `临时根 ${temp} 落在检出根 ${root} 内部 —— 那样「清空临时目录」就等于删掉正在跑的` +
-          "工作区，而这正是「随时可清」这条诉求要挡的那件事",
-      ).toBe(false);
-    }
-
-    /* ② 临时根本身**不许就是会被整棵树删掉的那几个缓存落点**：`G:\.cache`（浏览器）与
-     *    `G:\.cargo`（Rust 工具链）都有各自的清法，把临时根塞进去等于让「清浏览器缓存」
-     *    顺手抹掉这一跑的临时文件、反之亦然。 */
-    for (const cacheRoot of roots.slice(1)) {
-      const a = temp.toLowerCase();
-      const b = cacheRoot.toLowerCase();
-      expect(
-        a === b || a.startsWith(`${b}\\`) || b.startsWith(`${a}\\`),
-        `临时根 ${temp} 与缓存落点 ${cacheRoot} 互相嵌套 —— 两边的清理动作会互相误伤` +
-          "（清浏览器缓存顺手抹掉临时文件，或反之）",
-      ).toBe(false);
-    }
-
-    /* ③ 「清空 G:\Temp」这条动作必须**不碰**上面那两个缓存落点：它们与临时根同卷、
-     *    但必须是临时根的**兄弟**，不是子目录。 */
-    expect(volumeRootOf(temp), `临时根与缓存落点必须同卷（现在分别是 ${temp} / ${roots[1]}）`).toBe(
-      volumeRootOf(roots[1]!),
-    );
+      Object.keys(env).length,
+      "pipelineEnv() 连一行流水线级 env 都没读到 —— 解析器指错了地方",
+    ).toBeGreaterThan(0);
   });
 
   it("`stages` 里**没有**「跑完再挪」那一格（平台那一刻没有可靠的收尾钩子）", () => {
@@ -224,18 +141,14 @@ describe("CI 落点：临时根与浏览器落点都在开发盘上（契约）"
     expect(
       offenders,
       "`.cnb.yml` 里出现了搬文件的动作 —— 「跑完再挪到 G:\\Temp」在本仓不做（临时根" +
-        "本身就是一次性落点，挪过去的字节没有第二个读者），理由三格见「临时根不落进" +
-        "会被整目录清空的那棵树」那条用例的注释与规范 §13.5.3.4.4",
+        "本身就是一次性落点，挪过去的字节没有第二个读者），理由三格见规范 §13.5.3.4.4",
     ).toEqual([]);
-  });
-
-  it("浏览器落点**不是**容器里那个路径（它在宿主上不存在）", () => {
-    expect(env.PLAYWRIGHT_BROWSERS_PATH).not.toBe("/ms-playwright");
   });
 
   it("落点目录必须事先存在（临时根不存在 ⇒ 第一笔写就 ENOENT）", () => {
     /* 这一条**只判形状**：节点上的目录在不在，由 `环境前提` 那一格去补并打印读数
-     * （`ensureDir`），而它判的是「补不出来」那种真跑不下去的形态。 */
+     * （`ensureDir`），而它判的是「补不出来」那种真跑不下去的形态。
+     * 模块仍是活代码：本地开发机与将来任何自托管执行面都还在用同一份落点推导。 */
     const tmp = mkdtempSync(path.join(tmpdir(), "ci-devdrive-"));
     try {
       const target = path.join(tmp, "Temp");

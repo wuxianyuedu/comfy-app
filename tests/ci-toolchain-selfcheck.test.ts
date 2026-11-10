@@ -945,13 +945,22 @@ describe("工具链自证：浏览器安装的命令行（ISSUE #1961）", () =>
   });
 });
 
-describe("工具链自证：`.cnb.yml` 真的在跑它", () => {
+describe("工具链自证：执行入口走的是这份脚本（#3504 起执行者在 GA daily.yml）", () => {
   it("那一步走的是这份脚本，不再手写就地 PowerShell", () => {
-    const yml = read(".cnb.yml");
-    expect(yml).toContain("node scripts/ci-toolchain-selfcheck.mjs");
+    const daily = read(".github/workflows/daily.yml");
+    expect(
+      daily,
+      "GA daily.yml 里没有 `node scripts/ci-toolchain-selfcheck.mjs` —— 浏览器安装 step 的执行者丢了",
+    ).toContain("node scripts/ci-toolchain-selfcheck.mjs");
     // 老形态的两件特征：就地 winget、就地递归找安装根。
-    expect(yml).not.toContain("winget install");
-    expect(yml).not.toContain("Get-ChildItem");
+    expect(daily).not.toContain("winget install");
+    expect(daily).not.toContain("Get-ChildItem");
+    /* 反向登记：CNB 侧的执行面已随 #3504 退役，脚本不许再在 `.cnb.yml` 里被执行 ——
+     * 谁把它加回去，等于把自托管 Windows 那一跳悄悄接回来。 */
+    expect(
+      read(".cnb.yml"),
+      "`.cnb.yml` 又在执行 ci-toolchain-selfcheck —— #3504 起它的执行者在 GA daily.yml",
+    ).not.toContain("node scripts/ci-toolchain-selfcheck.mjs");
   });
 });
 
@@ -1301,9 +1310,12 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
     expect(r.args).toEqual(["-v"]);
   });
 
-  it("`.cnb.yml` 那一步走的是它 —— 不是裸起 pnpm 名字的旧写法", () => {
-    const yml = readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
-    expect(yml).toContain("node scripts/ci-toolchain-selfcheck.mjs");
+  it("执行入口走的是它 —— 不是裸起 pnpm 名字的旧写法（#3504 起执行者在 GA daily.yml）", () => {
+    const yml = readFileSync(path.join(ROOT, ".github/workflows/daily.yml"), "utf8");
+    expect(
+      yml,
+      "GA daily.yml 里没有 `node scripts/ci-toolchain-selfcheck.mjs` —— 执行者丢了",
+    ).toContain("node scripts/ci-toolchain-selfcheck.mjs");
     /* 脚本自己也不许退回裸名字（那正是这一格红掉的形态）。 */
     const scriptSrc = readFileSync(
       path.join(ROOT, "scripts", "ci-toolchain-selfcheck.mjs"),
@@ -1582,14 +1594,16 @@ describe("工具链自证：下载失败的读数是读数，不是又一句「�
     expect(playwrightInstallHints("")).toEqual([]);
   });
 
-  it("`.cnb.yml` 把套接字超时放宽了（只关「多久放弃」，不改任何判据）", () => {
-    const yml = read(".cnb.yml");
+  it("执行入口把套接字超时放宽了（只关「多久放弃」，不改任何判据；#3504 起在 GA daily.yml）", () => {
+    const daily = read(".github/workflows/daily.yml");
     /* 这一步是本档**唯一**能碰到「下载」这件事的地方：`env` 的键写错了不会有任何
-     * 解析期报错，只会在下一次下载时以同一个形态（180 MiB 撞 30s）再红一次。 */
+     * 解析期报错，只会在下一次下载时以同一个形态（180 MiB 撞 30s）再红一次。
+     * #3504 起这一格在 GA daily.yml 的浏览器安装 step（键的逐字在场由
+     * no-platform-ci-config 的「套接字超时」判据同钉）。 */
     expect(
-      yml,
-      "`浏览器安装` 没设 `PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT` —— 默认的 30s 是" +
-        "**套接字**超时，180 MiB 的包在慢链路上会被它按时掐断",
+      daily,
+      "GA daily.yml 的浏览器安装 step 没设 `PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT` —— " +
+        "默认的 30s 是**套接字**超时，180 MiB 的包在慢链路上会被它按时掐断",
     ).toContain("PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT");
   });
 
@@ -1682,11 +1696,11 @@ describe("工具链自证：下载失败的读数是读数，不是又一句「�
     }
   });
 
-  it("`.cnb.yml` 给了一个下载根 —— 同一族不通的节点上这是唯一的出路", () => {
-    const yml = read(".cnb.yml");
+  it("执行入口给了一个下载根 —— 同一族不通的节点上这是唯一的出路（#3504 起在 GA daily.yml）", () => {
+    const daily = read(".github/workflows/daily.yml");
     expect(
-      yml,
-      "`浏览器安装` 没给 `PLAYWRIGHT_DOWNLOAD_HOST`：Playwright 的三个内置镜像**同族**，" +
+      daily,
+      "GA daily.yml 的浏览器安装 step 没给 `PLAYWRIGHT_DOWNLOAD_HOST`：Playwright 的三个内置镜像**同族**，" +
         "这一族不通时它自己的重试等于没有（实测 5 次全落在同一个域名上）",
     ).toContain("PLAYWRIGHT_DOWNLOAD_HOST");
   });
@@ -2559,12 +2573,18 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
     }
   });
 
-  it("`.cnb.yml` 那一步仍然只调这一条入口（没有另起一步手写逻辑）", () => {
-    const yml = read(".cnb.yml");
-    expect(yml).toContain("--playwright-only");
+  it("（#3504 反向登记）执行面搬去 GA daily.yml：入口行只在那里，`.cnb.yml` 不许再有", () => {
+    /* #3504 起每日档构建全在 GA 侧跑，工具链自检的执行行随迁 daily.yml；CNB 只当触发入口。 */
+    const daily = read(".github/workflows/daily.yml");
+    expect(daily).toContain("--playwright-only");
 
     /* 自取是那一步**内部**多出来的一条路，不是新 stage：多一个 stage 就多一处
-     * 只在平台上跑、本地一条判据都测不到它的逻辑（§13.5.3.5 记过这一格）。 */
-    expect(yml.match(/ci-toolchain-browser-fetch/g) ?? []).toHaveLength(0);
+     * 只在平台上跑、本地一条判据都测不到它的逻辑（§13.5.3.5 记过这一格）。
+     * 反向只看执行面：剥掉整行注释再判（`.cnb.yml` 历史注释里提到名字不算执行者）。 */
+    const code = read(".cnb.yml")
+      .split("\n")
+      .filter((l) => !l.trimStart().startsWith("#"))
+      .join("\n");
+    expect(code.match(/--playwright-only|ci-toolchain-browser-fetch/g) ?? []).toHaveLength(0);
   });
 });
