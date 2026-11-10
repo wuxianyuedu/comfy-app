@@ -1,6 +1,7 @@
 "use client";
 
 import type { LLMMessage, LLMRequestOptions } from "./types";
+import type { LlmApiFormat } from "./provider-types";
 import { readApiError, readJsonBody } from "~/lib/api-error";
 import { errorMessage } from "~/lib/error-message";
 import { isRecord } from "~/lib/is-record";
@@ -126,16 +127,22 @@ export type RemoteProbeResult = {
   ok: boolean;
 };
 
-/**
- * 设置页「添加模型」弹窗：测试 OpenAI 兼容接口连通性并顺带拉取模型清单。
- * baseUrl / apiKey 留空时由服务端回落到已保存的全局配置（「留空则用全局」语义）。
- * 任何失败都返回 ok:false + 可读 detail，不抛异常——探测失败不是硬错误。
- */
-export async function probeRemoteApi(input: {
+export type RemoteProbeInput = {
   apiKey?: string;
+  /** 接口格式：决定鉴权头与 `/models` 探测路径（缺省 chat-completions）。 */
+  apiFormat?: LlmApiFormat;
   baseUrl?: string;
   model?: string;
-}): Promise<RemoteProbeResult> {
+  /** 已保存的供应商 id：Base URL / 格式 / 密钥由服务端按 id 代查（浏览器没有明文密钥）。 */
+  providerId?: string;
+};
+
+/**
+ * 设置页「供应商 / 模型」的连通性探测：测试上游接口并顺带拉取模型清单。
+ * 入参缺省时由服务端回落（给了 `providerId` 用该供应商已保存配置，否则用全局配置）。
+ * 任何失败都返回 ok:false + 可读 detail，不抛异常——探测失败不是硬错误。
+ */
+export async function probeRemoteApi(input: RemoteProbeInput): Promise<RemoteProbeResult> {
   let res: Response;
   try {
     res = await fetch("/api/llm/test", {

@@ -38,6 +38,10 @@ const jsonColumns = new Set<string>([
   "scriptReview",
   "styleTags",
   "portraits",
+  "inputTypes",
+  "capabilities",
+  "reasoningLevels",
+  "reasoningParamMapping",
 ]);
 
 const TABLES = [
@@ -56,6 +60,7 @@ const TABLES = [
   "workflowModelTag",
   "workflowModelTag_workflowTemplate",
   "llmConfig",
+  "llmProvider",
   "skill",
   "filmProject",
   "filmShot",
@@ -157,8 +162,16 @@ CREATE TABLE IF NOT EXISTS auditLog (
 );
 
 CREATE TABLE IF NOT EXISTS remoteModel (
-  id TEXT PRIMARY KEY, name TEXT NOT NULL, baseUrl TEXT, apiKey TEXT,
-  kind TEXT NOT NULL DEFAULT 'chat', workshopAdapters TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, providerId TEXT, baseUrl TEXT, apiKey TEXT,
+  kind TEXT NOT NULL DEFAULT 'chat', enabled INTEGER NOT NULL DEFAULT 1, contextWindow INTEGER,
+  maxOutputTokens INTEGER, inputTypes TEXT, capabilities TEXT, reasoningLevels TEXT,
+  reasoningParamMapping TEXT, smartConfig INTEGER NOT NULL DEFAULT 1, workshopAdapters TEXT,
+  createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS llmProvider (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, baseUrl TEXT NOT NULL DEFAULT '',
+  apiFormat TEXT NOT NULL DEFAULT 'chat-completions', apiKey TEXT,
+  createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS workshopSession (
   id TEXT PRIMARY KEY, userId TEXT, title TEXT NOT NULL DEFAULT '未命名工坊项目', type TEXT NOT NULL DEFAULT 'short_video',
@@ -214,12 +227,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS model_file_folder_uniq ON model (fileName, fol
 CREATE UNIQUE INDEX IF NOT EXISTS skill_slug_uniq ON skill (slug);
 CREATE UNIQUE INDEX IF NOT EXISTS wmt_user_name_uniq ON workflowModelTag (userId, name);
 CREATE UNIQUE INDEX IF NOT EXISTS remoteModel_name_uniq ON remoteModel (name);
+CREATE UNIQUE INDEX IF NOT EXISTS llmProvider_name_uniq ON llmProvider (name);
 CREATE UNIQUE INDEX IF NOT EXISTS episode_project_uniq ON episode (projectId);
 CREATE UNIQUE INDEX IF NOT EXISTS episode_character_uniq ON episode_character (episodeId, characterId);
 `;
 
 export type TestTables = {
   llmConfig: Array<Row>;
+  llmProviders: Array<Row>;
   models: Array<Row>;
   posts: Array<Row>;
   projects: Array<Row>;
@@ -457,6 +472,9 @@ export function createTestDb(): TestDb {
     },
     get llmConfig() {
       return allRows("llmConfig");
+    },
+    get llmProviders() {
+      return allRows("llmProvider");
     },
     get posts() {
       return allRows("post");

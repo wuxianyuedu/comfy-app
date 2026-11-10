@@ -2,10 +2,24 @@ import { errorMessage } from "~/lib/error-message";
 
 import "server-only";
 import type { ZodType } from "zod";
-import { llmConfigRepository, remoteModelRepository } from "~/lib/core/repository";
+import {
+  llmConfigRepository,
+  llmProviderRepository,
+  remoteModelRepository,
+} from "~/lib/core/repository";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 import { asRecord } from "~/lib/is-record";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
+import type { LlmProvider, RemoteModel } from "~/server/db/schema";
+import { extractStreamDelta, extractText, extractToolCalls, buildChatRequest } from "./api-format";
+import {
+  isLlmApiFormat,
+  parseCapabilities,
+  parseInputTypes,
+  parseReasoningLevels,
+  parseReasoningParamMapping,
+  type LlmApiFormat,
+} from "./provider-types";
 import {
   resolveTaskTemperature,
   splitExtraModels,
@@ -18,7 +32,6 @@ import {
 import type {
   LLMConfig,
   LLMMessage,
-  LLMContentPart,
   LLMRequestOptions,
   LLMProviderType,
   RemoteModelEntry,
@@ -59,6 +72,33 @@ const ENV_DEFAULTS: LLMConfig = {
   maxTokens: Number(process.env.LLM_MAX_TOKENS ?? 2048),
 };
 
+/** 一行远端模型 + 其供应商 → 运行期条目（连接参数优先取模型自己的，
+ *  缺省回落到供应商；`apiFormat` 只有供应商能提供）。 */
+function entryFromRemoteRow(
+  r: RemoteModel,
+  providers: ReadonlyArray<LlmProvider>,
+): RemoteModelEntry {
+  const provider = r.providerId === null ? undefined : providers.find((p) => p.id === r.providerId);
+  return {
+    name: r.name,
+    baseUrl: r.baseUrl ?? provider?.baseUrl ?? null,
+    apiKey: r.apiKey ?? provider?.apiKey ?? null,
+    // 用途只认白名单；库里的非法值归一成 null（历史上写坏一列不该让整条消失）。
+    kind: isRemoteModelKind(r.kind) ? r.kind : null,
+    providerId: r.providerId,
+    apiFormat:
+      provider !== undefined && isLlmApiFormat(provider.apiFormat) ? provider.apiFormat : null,
+    enabled: r.enabled,
+    contextWindow: r.contextWindow,
+    maxOutputTokens: r.maxOutputTokens,
+    inputTypes: parseInputTypes(r.inputTypes),
+    capabilities: parseCapabilities(r.capabilities),
+    reasoningLevels: parseReasoningLevels(r.reasoningLevels),
+    reasoningParamMapping: parseReasoningParamMapping(r.reasoningParamMapping),
+    smartConfig: r.smartConfig,
+  };
+}
+
 /* 按层叠加出最终生效的 LLM 配置：
  *   1. process.env（作为默认值）
  *   2. 数据库里的单例行（用户在设置界面里的覆盖）
@@ -94,13 +134,8 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
       //（运行时按名找 baseUrl/apiKey、设置页候选清单、工坊分组）行为不变。
       const split = splitExtraModels(rowRecord?.extraModels);
       const remoteRows = await remoteModelRepository.list();
-      const remoteEntries = remoteRows.map((r) => ({
-        name: r.name,
-        baseUrl: r.baseUrl,
-        apiKey: r.apiKey,
-        // 用途只认白名单；库里的非法值归一成 null（历史上写坏一列不该让整条消失）。
-        kind: isRemoteModelKind(r.kind) ? r.kind : null,
-      }));
+      const providerRows = await llmProviderRepository.list();
+      const remoteEntries = remoteRows.map((r) => entryFromRemoteRow(r, providerRows));
       // 合并两来源：本地候选名 + 远端表条目。`split.remoteEntries` 在列里不该再
       // 出现（写入侧只落字符串），仍一并合并是因为**读侧不假设写入侧守规矩**——
       // 列里真混进对象时把它当远端条目读出来，总好过把整份候选清单判成畸形丢掉。
@@ -155,6 +190,9 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
         if (typeof entry.apiKey === "string" && entry.apiKey !== "") {
           cfg.apiKey = entry.apiKey;
         }
+        if (entry.apiFormat !== null && entry.apiFormat !== undefined) {
+          cfg.apiFormat = entry.apiFormat;
+        }
       }
     }
     cfg.temperature = resolveTaskTemperature({
@@ -185,13 +223,12 @@ export async function getConfigForClient() {
   if (row) {
     const split = splitExtraModels(asRecord(row)?.extraModels);
     const remoteRows = await remoteModelRepository.list();
-    const tableEntries: Array<RemoteModelEntry> = remoteRows.map((r) => ({
-      name: r.name,
-      baseUrl: r.baseUrl,
-      apiKey: r.apiKey,
-      // 用途只认白名单；库里的非法值归一成 null（历史上写坏一列不该让整条消失）。
-      kind: isRemoteModelKind(r.kind) ? r.kind : null,
-    }));
+    const providerRows = await llmProviderRepository.list();
+    /* 停用的模型不下发给客户端（工坊下拉 / 设置页都不该出现它）；历史遗留
+     * （providerId 为空）的行照旧下发，迁移在供应商列表那一侧做。 */
+    const tableEntries: Array<RemoteModelEntry> = remoteRows
+      .filter((r) => r.enabled)
+      .map((r) => entryFromRemoteRow(r, providerRows));
     // 读取层兜底归并：`remoteModel` 表里若存着指向本机回环、且不带 apiKey 的条目，
     // 那是「本地 ollama 被错存成了远端」，折回本地候选字符串下发 —— 工坊下拉与设置页
     // 因此不会再把它挂「远端」小标。
@@ -220,21 +257,20 @@ export async function getConfigForClient() {
  * 那半个信息不是锦上添花：客户端拿不到密钥，就分不清「这条从来没配过」与
  * 「这条配过、这次用户没重填」，而设置页保存是「整份清单覆盖」（`replaceAll`）——
  * 于是「没带」被读成「清空」，密钥隔一次保存就没（台账 A11）。
- * 有了 `hasApiKey`，回写时未重填的条目就**省略** `apiKey` 键，而不是填 `null`。 */
+ * 有了 `hasApiKey`，回写时未重填的条目就**省略** `apiKey` 键，而不是填 `null`。
+ *
+ * #3501 起远端模型的窗口 / 能力 / 推理参数由供应商页（`providersGet`）维护，
+ * 这里只保留工坊下拉需要的身份与连接信息（外加 `providerId` 供分组），
+ * 不再把内部配置整包发给浏览器。 */
 function maskRemoteEntryForClient(e: RemoteModelEntry): RemoteModelEntry {
   const { apiKey, ...rest } = e;
   return {
-    ...rest,
+    name: rest.name,
+    baseUrl: rest.baseUrl ?? null,
+    kind: rest.kind ?? null,
+    providerId: rest.providerId ?? null,
     hasApiKey: Boolean(apiKey) || rest.hasApiKey === true,
   };
-}
-
-function headersFor(cfg: LLMConfig): Record<string, string> {
-  const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (cfg.provider === "remote" && typeof cfg.apiKey === "string" && cfg.apiKey !== "") {
-    h.Authorization = `Bearer ${cfg.apiKey}`;
-  }
-  return h;
 }
 
 /** 把 Node fetch 的网络层 TypeError（如 `fetch failed`）翻译成可操作的人话。
@@ -277,55 +313,8 @@ export function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
 }
 
 /**
- * 把内部 `LLMMessage` 序列化成上游 `/chat/completions` 的 wire 形状。统一处理多模态：
- *   · 纯文本 content（历史用法）→ `{role, content}`；
- *   · 内容块数组：
- *     - 远端（OpenAI 兼容，provider=remote）→ content 数组：`{type:"text"}` + `{type:"image_url"}`；
- *     - 本地（Ollama，provider=local）→ 文本拼进 `content`、图收进消息级 `images` 字段
- *       （Ollama 的视觉输入形态，与 OpenAI content 数组不同）。
- * 图块的 `url` 接受 http(s) 或 `data:` base64；本地 Ollama 可直接喂本机可达址。
- */
-function messagesToWire(
-  cfg: LLMConfig,
-  messages: Array<LLMMessage>,
-): Array<Record<string, unknown>> {
-  const local = cfg.provider === "local";
-  return messages.map((m) => {
-    const base: Record<string, unknown> = { role: m.role };
-    if (typeof m.content === "string") {
-      base.content = m.content;
-    } else if (local) {
-      const texts = m.content
-        .filter((p): p is Extract<LLMContentPart, { type: "text" }> => p.type === "text")
-        .map((p) => p.text)
-        .join("\n");
-      const images = m.content
-        .filter((p): p is Extract<LLMContentPart, { type: "image_url" }> => p.type === "image_url")
-        .map((p) => p.image_url.url);
-      base.content = texts;
-      if (images.length > 0) {
-        base.images = images;
-      }
-    } else {
-      base.content = m.content.map((p) =>
-        p.type === "text"
-          ? { type: "text", text: p.text }
-          : { type: "image_url", image_url: p.image_url },
-      );
-    }
-    if (m.tool_calls) {
-      base.tool_calls = m.tool_calls;
-    }
-    if (typeof m.tool_call_id === "string" && m.tool_call_id !== "") {
-      base.tool_call_id = m.tool_call_id;
-    }
-    return base;
-  });
-}
-
-/**
  * 取「视觉评审」生效配置（P8-2）：模型名走 `pickVisionModelName`（显式指定 → 候选里
- * kind=image 那条 → 主 model），并按名字回查远端条目的连接参数（baseUrl / apiKey）。
+ * kind=image 那条 → 主 model），并按名字回查远端条目的连接参数（baseUrl / apiKey / 格式）。
  * 未单独配视觉模型时回落主 model，连接参数沿用主配置。
  */
 export async function getVisionLLMConfig(override?: LLMRequestOptions): Promise<LLMConfig> {
@@ -344,19 +333,53 @@ export async function getVisionLLMConfig(override?: LLMRequestOptions): Promise<
       ? {
           baseUrl: entry.baseUrl ?? cfg.baseUrl,
           apiKey: entry.apiKey ?? cfg.apiKey,
+          ...(entry.apiFormat !== null && entry.apiFormat !== undefined
+            ? { apiFormat: entry.apiFormat }
+            : {}),
         }
       : {}),
   };
 }
 
-/** 统一的上游 /chat/completions 请求：网络层失败给出可读原因，HTTP 非 2xx 带状态码与响应片段。 */
-async function upstreamChat(cfg: LLMConfig, body: Record<string, unknown>): Promise<Response> {
+/** 生效的接口格式：缺省按 OpenAI 兼容（历史行为）。 */
+function formatOf(cfg: LLMConfig): LlmApiFormat {
+  return cfg.apiFormat ?? "chat-completions";
+}
+
+type ChatCallOptions = {
+  responseFormatJson?: boolean;
+  stream: boolean;
+  tools?: Array<LLMTool>;
+};
+
+/** 统一的上游对话请求（三种格式的 url / headers / body 由 `./api-format` 组装）：
+ *  网络层失败给出可读原因，HTTP 非 2xx 带状态码与响应片段。 */
+async function upstreamChat(
+  cfg: LLMConfig,
+  messages: Array<LLMMessage>,
+  options: ChatCallOptions,
+): Promise<Response> {
+  const request = buildChatRequest({
+    format: formatOf(cfg),
+    baseUrl: cfg.baseUrl,
+    /* 本地 Ollama 从不需要鉴权头（历史行为）：全局 provider=local 时即便配了
+     * `apiKey` 也不往外发 —— 那是给远端用的密钥，不该落到本机回环请求上。 */
+    apiKey: cfg.provider === "local" ? null : cfg.apiKey,
+    model: cfg.model,
+    messages,
+    temperature: cfg.temperature,
+    maxTokens: cfg.maxTokens,
+    stream: options.stream,
+    tools: options.tools,
+    responseFormatJson: options.responseFormatJson,
+    local: cfg.provider === "local",
+  });
   let res: Response;
   try {
-    res = await fetch(`${cfg.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    res = await fetch(request.url, {
       method: "POST",
-      headers: headersFor(cfg),
-      body: JSON.stringify(body),
+      headers: request.headers,
+      body: JSON.stringify(request.body),
     });
   } catch (error) {
     throw new Error(describeFetchFailure(error, cfg), { cause: error });
@@ -385,45 +408,17 @@ function assertModelConfigured(cfg: LLMConfig): void {
   }
 }
 
-/** 取响应体的 `choices[0]`（非数组 / 空数组时 undefined），收成宽松对象视图。 */
-function firstChoice(payload: unknown): Record<string, unknown> | null {
-  const rec = asRecord(payload);
-  const choices = rec === null ? undefined : rec.choices;
-  const first: unknown = Array.isArray(choices) ? choices[0] : undefined;
-  return asRecord(first);
-}
-
-/** 取 `choices[0].message` 的宽松对象视图（缺失 / 非对象时 null）。 */
-function firstMessage(payload: unknown): Record<string, unknown> | null {
-  const choice = firstChoice(payload);
-  return choice === null ? null : asRecord(choice.message);
-}
-
-/** 从宽松对象读字符串字段：缺失 / 非字符串一律回落 fallback。 */
-function stringField(rec: Record<string, unknown> | null, key: string, fallback: string): string {
-  const v = rec === null ? undefined : rec[key];
-  return typeof v === "string" ? v : fallback;
-}
-
 /* 一次性（非流式）补全。 */
 export async function completeLLM(cfg: LLMConfig, messages: Array<LLMMessage>): Promise<string> {
   assertModelConfigured(cfg);
-  const res = await upstreamChat(cfg, {
-    model: cfg.model,
-    messages: messagesToWire(cfg, messages),
-    temperature: cfg.temperature,
-    max_tokens: cfg.maxTokens,
-    stream: false,
-  });
-
+  const res = await upstreamChat(cfg, messages, { stream: false });
   const json: unknown = await res.json();
-  return stringField(firstMessage(json), "content", "");
+  return extractText(formatOf(cfg), json);
 }
 
-/* 流式补全。每收到一个增量就调用一次 `onToken`，
- * 最终以「拼接好的完整文本」resolve。
- * 兼容 Ollama、LM Studio、vLLM 与 OpenAI —— 它们发出的 SSE 分片形状一致，
- * 都形如 `{ choices: [{ delta: { content } }] }`。
+/* 流式补全。每收到一个增量就调用一次 `onToken`，最终以「拼接好的完整文本」resolve。
+ * SSE 分片形状按格式分派（chat-completions 的 `choices[0].delta.content`、
+ * Anthropic 的 `content_block_delta`、Responses 的 `response.output_text.delta`）。
  */
 export async function streamLLM(
   cfg: LLMConfig,
@@ -431,13 +426,8 @@ export async function streamLLM(
   onToken: (token: string) => void,
 ): Promise<string> {
   assertModelConfigured(cfg);
-  const res = await upstreamChat(cfg, {
-    model: cfg.model,
-    messages: messagesToWire(cfg, messages),
-    temperature: cfg.temperature,
-    max_tokens: cfg.maxTokens,
-    stream: true,
-  });
+  const format = formatOf(cfg);
+  const res = await upstreamChat(cfg, messages, { stream: true });
   if (!res.body) {
     throw new Error("LLM 服务未返回数据流，请重试");
   }
@@ -468,10 +458,7 @@ export async function streamLLM(
         continue;
       }
       try {
-        const json: unknown = JSON.parse(data);
-        const choice = firstChoice(json);
-        const delta = choice === null ? null : asRecord(choice.delta);
-        const token = stringField(delta, "content", "");
+        const token = extractStreamDelta(format, JSON.parse(data));
         if (token) {
           full += token;
           onToken(token);
@@ -495,17 +482,10 @@ export async function completeLLMStructured<T>(
   schema: ZodType<T>,
 ): Promise<T> {
   assertModelConfigured(cfg);
-  const res = await upstreamChat(cfg, {
-    model: cfg.model,
-    messages: messagesToWire(cfg, messages),
-    temperature: cfg.temperature,
-    max_tokens: cfg.maxTokens,
-    stream: false,
-    response_format: { type: "json_object" },
-  });
+  const res = await upstreamChat(cfg, messages, { stream: false, responseFormatJson: true });
 
   const json: unknown = await res.json();
-  const content = stringField(firstMessage(json), "content", "{}");
+  const content = extractText(formatOf(cfg), json) || "{}";
   let parsed: unknown;
   try {
     parsed = JSON.parse(content);
@@ -520,6 +500,10 @@ export async function completeLLMStructured<T>(
  * assistant message（可能含 tool_calls 或纯文本 content）。
  * 兼容 OpenAI / Ollama / LM Studio / vLLM —— 它们都实现 OpenAI 的
  * `tools` 参数与 tool_calls 回包结构。
+ *
+ * 供应商选了 `anthropic-messages` / `responses` 时**大声拒绝**：这两条协议的
+ * 工具定义与回包形状各不相同，仓里当前没有使用方，发一个半套的 tools 只会
+ * 让上游静默忽略、再以「模型不听话」的形态暴露。
  */
 export type CompleteToolsResult = {
   content: string;
@@ -536,44 +520,13 @@ export async function completeLLMTools(
   tools: Array<LLMTool>,
 ): Promise<CompleteToolsResult> {
   assertModelConfigured(cfg);
-  const res = await upstreamChat(cfg, {
-    model: cfg.model,
-    messages: messagesToWire(cfg, messages),
-    temperature: cfg.temperature,
-    max_tokens: cfg.maxTokens,
-    stream: false,
-    tools,
-  });
-
+  const format = formatOf(cfg);
+  if (format !== "chat-completions") {
+    throw new Error(
+      `当前供应商的接口格式（${format}）暂不支持工具调用：请在供应商设置里改用 Chat Completions 格式`,
+    );
+  }
+  const res = await upstreamChat(cfg, messages, { stream: false, tools });
   const json: unknown = await res.json();
-  const msg = firstMessage(json);
-  const content = stringField(msg, "content", "");
-  const rawCallsValue: unknown = msg === null ? undefined : msg.tool_calls;
-  const rawCalls: Array<unknown> = Array.isArray(rawCallsValue) ? rawCallsValue : [];
-  // 逐条显式判空（而非 filter 后依赖类型收窄）：不同 TS 版本对
-  // filter 回调的类型谓词推断不一致，显式守卫在两种版本下都能收窄。
-  const toolCalls = rawCalls.flatMap(
-    (call: unknown): Array<CompleteToolsResult["toolCalls"][number]> => {
-      const callRecord = asRecord(call);
-      const fn = callRecord === null ? null : asRecord(callRecord.function);
-      if (callRecord === null || fn === null) {
-        return [];
-      }
-      const id = callRecord.id;
-      const fnName = fn.name;
-      const fnArguments = fn.arguments;
-      if (
-        typeof id !== "string" ||
-        id === "" ||
-        typeof fnName !== "string" ||
-        fnName === "" ||
-        typeof fnArguments !== "string"
-      ) {
-        return [];
-      }
-      return [{ id, type: "function", function: { name: fnName, arguments: fnArguments } }];
-    },
-  );
-
-  return { content, toolCalls };
+  return { content: extractText(format, json), toolCalls: extractToolCalls(format, json) };
 }

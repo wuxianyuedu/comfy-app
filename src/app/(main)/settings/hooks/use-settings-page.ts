@@ -323,7 +323,7 @@ export function useSettingsPage(options?: {
    * LLM 落库（含远程模型的即时保存出口）、偏好落库，以及落库后连带重取的
    * 实例元数据（安装形态 + 桌面实例的六个存储目录）。注入的是两份草稿、保存
    * 指示器与反馈通道 —— 与 ComfyUI / DbStudio 的运行态无共享 state。 */
-  const { persistLlmDraft, saveLlm, savePrefs } = useSettingsSave({
+  const { saveLlm, savePrefs } = useSettingsSave({
     settingsDraft,
     llmDraft,
     llmApiKey,
@@ -352,11 +352,6 @@ export function useSettingsPage(options?: {
    * DbStudio / Ollama 无任何共享 state。返回形状与原 controller 逐字段一致。 */
   const {
     toggleExtraModel,
-    remoteModelList,
-    addRemoteModel,
-    updateRemoteModel,
-    removeRemoteModel,
-    probeRemote,
     testModelUsage: testModelUsageFn,
     queryUsageTask: queryUsageTaskFn,
     setTaskTemperature,
@@ -364,7 +359,6 @@ export function useSettingsPage(options?: {
     llmDraft,
     setLlmDraft,
     patchLlm,
-    persistLlmDraft,
   });
 
   /* 加载失败判定与补记日志（沉在 sub-hook；说明见其文件头）。 */
@@ -405,11 +399,6 @@ export function useSettingsPage(options?: {
     patchLlm,
     patchSettings,
     toggleExtraModel,
-    remoteModelList,
-    addRemoteModel,
-    updateRemoteModel,
-    removeRemoteModel,
-    probeRemote,
     testModelUsage: testModelUsageFn,
     queryUsageTask: queryUsageTaskFn,
     llmApiKey,

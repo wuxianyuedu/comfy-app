@@ -7,14 +7,12 @@ import type { RuntimeLogController } from "~/components/studio/logs/use-runtime-
 import type { BackupEntry, PendingRestore } from "./use-settings-page-backup";
 import type { OllamaModel } from "~/lib/llm/ollama-client";
 import type { DesktopStoragePaths } from "~/lib/comfyui/desktop-storage-paths";
-import type { RemoteProbeResult } from "~/lib/llm/browser";
 import type {
   UsageTaskQueryInput,
   UsageTestInput,
   UsageTestResult,
 } from "~/lib/llm/usage-test-client";
 import { TASK_TYPES, type RemoteModelEntry, type TaskType } from "~/lib/llm/types";
-import type { RemoteModelDraftEntry } from "~/lib/llm/remote-model-schema";
 import type { CpuLimitMode } from "~/lib/comfyui/cpu-limit";
 
 export type Settings = {
@@ -94,10 +92,6 @@ export type SettingsPageDrafts = {
 export type SettingsPageController = {
   /** 跳转目标真正落定 —— 外壳命中锚点后调它（清空 `pendingJump` + 消费载荷）。 */
   ackJumpSection: () => void;
-  /* 入参形状由 lib 里那一份草稿→条目桥给出（`remoteModelEntryFromDraft` 的返回类型）：
-   * 这一层过去另写一遍字段，于是「弹窗拼的那枚条目」与「controller 收的那枚条目」
-   * 是两个各自自洽的形状。 */
-  addRemoteModel: (entry: RemoteModelDraftEntry) => Promise<{ error?: string; ok: boolean }>;
   /* 应用自更新（Tauri updater + process）：检测 / 下载安装 / 重启 */
   appUpdate: {
     /** 最近一次检测是否发现可用更新。 */
@@ -195,18 +189,9 @@ export type SettingsPageController = {
    */
   pendingJump: Section | null;
   pendingRestore: PendingRestore | null;
-  probeRemote: (input: {
-    apiKey?: string;
-    baseUrl?: string;
-    model?: string;
-  }) => Promise<RemoteProbeResult>;
   /** 对已提交但仍在生成的异步视频任务「继续等待」一轮：只查既有任务，不重复提交扣费 */
   queryUsageTask: (input: UsageTaskQueryInput) => Promise<UsageTestResult>;
   relaunchApp: () => Promise<void>;
-  /* 远端模型管理：列表 + 添加 / 编辑 / 移除 + 测试。增删改即时落库
-   * （无需单独的保存按钮），返回本次保存结果供弹窗留在原地报错。 */
-  remoteModelList: Array<RemoteModelEntry>;
-  removeRemoteModel: (name: string) => Promise<{ error?: string; ok: boolean }>;
   restoreBusy: boolean;
   restoreFrom: (name: string) => Promise<void>;
   retry: () => void;
@@ -237,13 +222,6 @@ export type SettingsPageController = {
   theme: "light" | "dark";
   /** 勾选/取消一个候选模型（本地 Ollama 多模型管理） */
   toggleExtraModel: (name: string) => void;
-  /** 编辑既有条目（只作用于已配置条目）；重名校验排除自身，改名时若生效
-   *  模型引用旧名会同步更新。
-   *  patch.baseUrl = null / clearApiKey = true 表示清掉独立配置、跟随全局。 */
-  updateRemoteModel: (
-    name: string,
-    patch: Partial<RemoteModelDraftEntry>,
-  ) => Promise<{ error?: string; ok: boolean }>;
 };
 
 export const SETTINGS_SECTIONS: Array<{ id: Section; label: string }> = [

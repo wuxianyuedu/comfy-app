@@ -263,6 +263,8 @@ describe("getConfigForClient", () => {
         // 但「这条存没存过密钥」必须出门，否则客户端分不清「没配过」与「没重填」。
         hasApiKey: false,
         kind: "chat",
+        // #3501：所属供应商 id（历史遗留行为 null，供应商页据此分组）。
+        providerId: null,
       },
     ]);
     expect(out.apiKey).toBeUndefined();

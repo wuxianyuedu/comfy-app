@@ -16,15 +16,18 @@ import { db } from "~/lib/db";
 import { firstRowOfExisting, firstRowRequired } from "./repository-row";
 import { decryptLlmKey, encryptLlmKey } from "~/lib/llm/secrets";
 import { type RawExtraModel, splitExtraModels, type RemoteModelEntry } from "~/lib/llm/types";
+import { isLlmApiFormat } from "~/lib/llm/provider-types";
 import {
   user,
   llmConfig,
+  llmProvider,
   remoteModel,
   type User,
   type LlmConfig,
+  type LlmProvider,
   type RemoteModel,
 } from "~/server/db/schema";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, isNull, sql } from "drizzle-orm";
 import { SETTINGS_DB_WRITE } from "~/lib/retry-policy";
 import { runWithSqliteBusyRetry } from "~/lib/sqlite-busy-retry";
 import type { DbExecutor } from "./repository-executor-types";
@@ -219,7 +222,12 @@ async function syncRemoteModels(
    * 插队改掉，那时这里会按一份已经不存在的状态去继承（#2586 的期望 1 明确
    * 不许「只把两条写塞进事务、读仍留在外面」）。 */
   const rows = await exec.select().from(remoteModel).orderBy(remoteModel.createdAt);
-  const keyByName = new Map(rows.map((r) => [r.name, r.apiKey ?? null]));
+  /* #3501：整份清单保存只管**历史遗留行**（providerId IS NULL）。挂在供应商下的
+   * 模型由供应商页各自维护，整份覆盖读不到它们、也不许删它们 —— 否则设置页保存
+   * 一次别的设置，用户配好的供应商模型就整批消失。 */
+  const legacyRows = rows.filter((r) => r.providerId === null);
+  const providerNames = new Set(rows.filter((r) => r.providerId !== null).map((r) => r.name));
+  const keyByName = new Map(legacyRows.map((r) => [r.name, r.apiKey ?? null]));
   const seen = new Set<string>();
   const cleaned: Array<{
     apiKey: string | null;
@@ -229,7 +237,9 @@ async function syncRemoteModels(
   }> = [];
   for (const e of entries) {
     const name = e.name.trim();
-    if (!name || seen.has(name)) {
+    /* 供应商模型的同名条目一律不在这里写：那条连接参数属于供应商，不该被
+     * 一份「本地候选 + 遗留远端」的清单覆盖。 */
+    if (!name || seen.has(name) || providerNames.has(name)) {
       continue;
     }
     seen.add(name);
@@ -254,7 +264,7 @@ async function syncRemoteModels(
       kind: e.kind ?? "chat",
     });
   }
-  const removed = rows.filter((r) => !seen.has(r.name));
+  const removed = legacyRows.filter((r) => !seen.has(r.name));
   if (removed.length > 0) {
     await exec.delete(remoteModel).where(
       inArray(
@@ -292,17 +302,23 @@ async function syncRemoteModels(
   }
 }
 
+/** 远端模型行的读侧解密：`apiKey` 密文 → 明文（历史明文由 `decryptLlmKey` 原样透传）。 */
+function decryptRemoteRow(row: RemoteModel): RemoteModel {
+  return { ...row, apiKey: decryptLlmKey(row.apiKey) };
+}
+
 export class RemoteModelRepository {
-  /** 全部远端模型，按创建先后排序（配置视图稳定顺序）。 */
+  /** 全部远端模型，按创建先后排序（配置视图稳定顺序）。读侧解密独立 apiKey
+   *  （#3509：此前只在写侧加密，读侧把密文当密钥发给上游）。 */
   async list(): Promise<Array<RemoteModel>> {
     const rows = await db.select().from(remoteModel).orderBy(remoteModel.createdAt);
-    return rows;
+    return rows.map(decryptRemoteRow);
   }
 
-  /** 按名查找单个远端模型；不存在返回 null。 */
+  /** 按名查找单个远端模型；不存在返回 null（apiKey 已解密）。 */
   async findByName(name: string): Promise<RemoteModel | null> {
     const rows = await db.select().from(remoteModel).where(eq(remoteModel.name, name)).limit(1);
-    return rows[0] ?? null;
+    return rows[0] ? decryptRemoteRow(rows[0]) : null;
   }
 
   /**
@@ -360,6 +376,218 @@ export class RemoteModelRepository {
       .where(eq(remoteModel.id, row.id));
     return adapters;
   }
+
+  /** 新建 / 更新一条供应商下的模型（#3501）。
+   *  `apiKey` 三态与 `syncRemoteModels` 同一语义：缺键 = 不动既有、`null`/空白 = 清空、
+   *  非空串 = 加密后写入。 */
+  async saveModel(input: RemoteModelInput): Promise<RemoteModel> {
+    const name = input.name.trim();
+    if (name === "") {
+      throw new Error("模型名称不能为空");
+    }
+    const baseUrl = input.baseUrl?.trim() ? input.baseUrl.trim() : null;
+    const values = {
+      name,
+      providerId: input.providerId,
+      baseUrl,
+      kind: input.kind ?? "chat",
+      enabled: input.enabled ?? true,
+      contextWindow: input.contextWindow ?? null,
+      maxOutputTokens: input.maxOutputTokens ?? null,
+      inputTypes: input.inputTypes ?? null,
+      capabilities: input.capabilities ?? null,
+      reasoningLevels: input.reasoningLevels ?? null,
+      reasoningParamMapping: input.reasoningParamMapping ?? null,
+      smartConfig: input.smartConfig ?? true,
+    };
+    if (input.id !== undefined) {
+      const patch: Record<string, unknown> = { ...values, updatedAt: new Date() };
+      if (input.apiKey !== undefined) {
+        patch.apiKey =
+          input.apiKey === null || input.apiKey.trim() === ""
+            ? null
+            : encryptLlmKey(input.apiKey.trim());
+      }
+      const rows = await db
+        .update(remoteModel)
+        .set(patch)
+        .where(eq(remoteModel.id, input.id))
+        .returning();
+      return decryptRemoteRow(firstRowOfExisting(rows, `模型不存在: ${input.id}`));
+    }
+    const rows = await db
+      .insert(remoteModel)
+      .values({
+        ...values,
+        apiKey: encryptLlmKey(input.apiKey?.trim() ? input.apiKey.trim() : null),
+      })
+      .returning();
+    return decryptRemoteRow(firstRowRequired(rows, "模型写入"));
+  }
+
+  /** 删除一条模型（供应商页的行内删除）。 */
+  async deleteModel(id: string): Promise<void> {
+    await db.delete(remoteModel).where(eq(remoteModel.id, id));
+  }
+
+  /** 启用 / 停用一条模型（停用的模型不下发给工坊下拉）。 */
+  async setEnabled(id: string, enabled: boolean): Promise<RemoteModel> {
+    const rows = await db
+      .update(remoteModel)
+      .set({ enabled, updatedAt: new Date() })
+      .where(eq(remoteModel.id, id))
+      .returning();
+    return decryptRemoteRow(firstRowOfExisting(rows, `模型不存在: ${id}`));
+  }
+}
+
+/* ── LLM 供应商仓储（#3501）──────────────────────────────────────── */
+
+export type LlmProviderInput = {
+  /** 缺省 = 新建 */
+  apiFormat: string;
+  /** 三态：缺键 = 不动既有、`null`/空白 = 清空、非空串 = 加密后写入 */
+  apiKey?: string | null;
+  baseUrl: string;
+  id?: string;
+  name: string;
+};
+
+export type RemoteModelInput = {
+  apiKey?: string | null;
+  baseUrl?: string | null;
+  capabilities?: Array<string> | null;
+  contextWindow?: number | null;
+  enabled?: boolean;
+  id?: string;
+  inputTypes?: Array<string> | null;
+  kind?: string;
+  maxOutputTokens?: number | null;
+  name: string;
+  providerId: string;
+  reasoningLevels?: Array<string> | null;
+  reasoningParamMapping?: unknown;
+  smartConfig?: boolean;
+};
+
+function decryptProviderRow(row: LlmProvider): LlmProvider {
+  return { ...row, apiKey: decryptLlmKey(row.apiKey) };
+}
+
+/* 迁移要在 `LlmProviderRepository` 内部读单例行（默认供应商继承全局 Base URL），
+ * 所以这个单例必须先于该类声明 —— 其余单例仍在文件末尾集中导出。 */
+export const llmConfigRepository = new LlmConfigRepository();
+
+export class LlmProviderRepository {
+  /** 全部供应商（按创建先后），apiKey 已解密。 */
+  async list(): Promise<Array<LlmProvider>> {
+    const rows = await db.select().from(llmProvider).orderBy(llmProvider.createdAt);
+    return rows.map(decryptProviderRow);
+  }
+
+  async findById(id: string): Promise<LlmProvider | null> {
+    const rows = await db.select().from(llmProvider).where(eq(llmProvider.id, id)).limit(1);
+    return rows[0] ? decryptProviderRow(rows[0]) : null;
+  }
+
+  async save(input: LlmProviderInput): Promise<LlmProvider> {
+    const name = input.name.trim();
+    if (name === "") {
+      throw new Error("供应商名称不能为空");
+    }
+    const baseUrl = input.baseUrl.trim();
+    const apiFormat = isLlmApiFormat(input.apiFormat) ? input.apiFormat : "chat-completions";
+    if (input.id !== undefined) {
+      const patch: Record<string, unknown> = { name, baseUrl, apiFormat, updatedAt: new Date() };
+      if (input.apiKey !== undefined) {
+        patch.apiKey =
+          input.apiKey === null || input.apiKey.trim() === ""
+            ? null
+            : encryptLlmKey(input.apiKey.trim());
+      }
+      const rows = await db
+        .update(llmProvider)
+        .set(patch)
+        .where(eq(llmProvider.id, input.id))
+        .returning();
+      return decryptProviderRow(firstRowOfExisting(rows, `供应商不存在: ${input.id}`));
+    }
+    const rows = await db
+      .insert(llmProvider)
+      .values({
+        name,
+        baseUrl,
+        apiFormat,
+        apiKey: encryptLlmKey(input.apiKey?.trim() ? input.apiKey.trim() : null),
+      })
+      .returning();
+    return decryptProviderRow(firstRowRequired(rows, "供应商写入"));
+  }
+
+  /** 删除供应商及其名下模型（同一事务：留着孤儿模型会让列表出现「无主」条目）。 */
+  async delete(id: string): Promise<void> {
+    await runWithSqliteBusyRetry(
+      () =>
+        db.transaction(
+          async (tx) => {
+            await tx.delete(remoteModel).where(eq(remoteModel.providerId, id));
+            await tx.delete(llmProvider).where(eq(llmProvider.id, id));
+          },
+          { behavior: "immediate" },
+        ),
+      { policy: SETTINGS_DB_WRITE },
+    );
+  }
+
+  /**
+   * 历史遗留模型（`providerId IS NULL`）迁进「默认供应商」。
+   *
+   * 为什么读侧做而不是一次性迁移脚本：`remoteModel` 是用户已经配好的数据，
+   * 迁移必须幂等、且不能因为某次没跑就把模型从列表里藏起来。每次读供应商列表
+   * 前跑一遍，代价是一次 `WHERE providerId IS NULL LIMIT 1`（无孤儿时立刻返回）。
+   * 已有供应商时优先挂到最早创建的那一个（不新造第二个「默认」）。
+   */
+  async ensureLegacyProvider(): Promise<void> {
+    const orphans = await db
+      .select({ id: remoteModel.id })
+      .from(remoteModel)
+      .where(isNull(remoteModel.providerId))
+      .limit(1);
+    if (orphans.length === 0) {
+      return;
+    }
+    await runWithSqliteBusyRetry(
+      () =>
+        db.transaction(
+          async (tx) => {
+            const existing = await tx
+              .select()
+              .from(llmProvider)
+              .orderBy(llmProvider.createdAt)
+              .limit(1);
+            let provider = existing[0];
+            if (provider === undefined) {
+              const cfg = await llmConfigRepository.findSingleton(tx);
+              const rows = await tx
+                .insert(llmProvider)
+                .values({
+                  name: "默认供应商",
+                  baseUrl: cfg?.baseUrl ?? "",
+                  apiFormat: "chat-completions",
+                })
+                .returning();
+              provider = firstRowRequired(rows, "默认供应商创建");
+            }
+            await tx
+              .update(remoteModel)
+              .set({ providerId: provider.id })
+              .where(isNull(remoteModel.providerId));
+          },
+          { behavior: "immediate" },
+        ),
+      { policy: SETTINGS_DB_WRITE },
+    );
+  }
 }
 
 /** 解析 remoteModel.workshopAdapters JSON 列（坏数据按空处理）。 */
@@ -376,8 +604,8 @@ export function parseAdaptersJson(raw: string | null): Array<RemoteModeAdapter> 
 }
 
 export const userRepository = new UserRepository();
-export const llmConfigRepository = new LlmConfigRepository();
 export const remoteModelRepository = new RemoteModelRepository();
+export const llmProviderRepository = new LlmProviderRepository();
 
 /* ── 设置页保存的唯一跨表入口（ISSUE #2592）────────────────────────────── */
 

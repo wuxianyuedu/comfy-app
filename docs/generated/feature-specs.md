@@ -666,20 +666,36 @@
 #### FR-LM-01 LLM 配置
 
 - 状态：已上线
-- 需求：LLM 可配 provider（`local` / `remote`）、baseUrl、模型、密钥。
-- 行为与验收：provider 是收紧的 enum（不接受任意字符串）；
-  密钥脱敏——客户端只看到「有没有配」，不回明文。
-- 落点：`src/server/api/routers/llm.ts`、`src/lib/llm/types.ts`
+- 需求：LLM 可配 provider（`local` / `remote`）、baseUrl、模型、密钥；
+  远端配置以「供应商」为单位（#3501）——每个供应商一套 Base URL / 接口格式 /
+  API Key，模型挂在供应商下，不再共用全局密钥。
+- 行为与验收：provider 是收紧的 enum（不接受任意字符串）；接口格式三选一
+  （Chat Completions `/chat/completions` / Anthropic Messages `/v1/messages` /
+  Responses `/responses`），设置页显示拼出的最终请求地址；供应商与模型的增删改
+  走 `providersGet` / `providerSave` / `providerDelete` / `modelSave` /
+  `modelDelete` / `modelToggle`；密钥脱敏——客户端只看到「有没有配」，不回明文，
+  保存表单三态（留空不改 / 显式清除 / 写入新值），读侧解密后再交给运行时；
+  连通性测试走 `/api/llm/test`（带 `providerId`，服务端取保存的地址与密钥发起）；
+  历史遗留 `remoteModel`（`providerId` 为空）在首次读供应商列表时迁入「默认供应商」，
+  密钥与模型名不变。
+- 落点：`src/server/api/routers/llm.ts`、`src/lib/llm/provider-types.ts`、
+  `src/lib/llm/provider-form.ts`、`src/lib/core/repository-user.ts`、
+  `src/lib/llm/types.ts`
 
 #### FR-LM-02 本地候选与远端独立模型
 
 - 状态：已上线
-- 需求：本地候选模型（纯名字串）与远端独立模型（可带独立 baseUrl / apiKey）
-  分开放。
+- 需求：本地候选模型（纯名字串）与远端独立模型（挂在供应商下，可带模型级
+  baseUrl / apiKey）分开放。
 - 行为与验收：本地候选在 `llmConfig.extraModels`；远端独立模型在
-  `remoteModel` 表；拆分逻辑单点（`splitExtraModels()`）。
-- 落点：`src/server/db/schema.ts`（`remoteModel`）、
-  `src/lib/llm/types.ts`
+  `remoteModel` 表（`providerId` 指回 `llmProvider`）；拆分逻辑单点
+  （`splitExtraModels()`）。远端模型名全局唯一（运行时与工坊按名解析）；
+  停用的模型保留配置但不进工坊下拉；整份清单保存只动历史遗留行
+  （`providerId` 为空），不覆盖、不删除供应商名下的模型；模型配置含启用状态、
+  上下文窗口、最大输出 Token、输入类型、能力、推理等级与参数映射，「智能配置」
+  按模型 id 预填窗口 / 输出上限 / 输入类型。
+- 落点：`src/server/db/schema.ts`（`llmProvider` / `remoteModel`）、
+  `src/lib/llm/types.ts`、`src/lib/llm/provider-form.ts`
 
 #### FR-LM-03 按任务温度
 
@@ -736,7 +752,9 @@
   创作后端 / 数据库 / 备份与恢复 / 退出与后台服务 / 日志。
 - 行为与验收：分区表唯一出处（`SETTINGS_SECTIONS`）；外壳三态
   （首帧 loading / 失败降级 / 就绪）；同一份实现挂两个点
-  （工作区设置页签 + `/settings` 路由），只差视口高度。
+  （工作区设置页签 + `/settings` 路由），只差视口高度。「远程模型」分区是
+  左侧供应商列表 + 右侧供应商详情（Base URL / 接口格式 / API Key / 模型列表），
+  供应商与模型的增删改都在这一屏完成（#3501）。
 - 落点：`src/app/(main)/settings/hooks/use-settings-page-types.ts`、
   `src/components/settings/SettingsView.tsx`、`SettingsShell.tsx`
 

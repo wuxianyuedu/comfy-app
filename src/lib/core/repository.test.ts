@@ -36,6 +36,7 @@ import { skillRepository } from "~/lib/core/repository-skill";
 import {
   userRepository,
   llmConfigRepository,
+  llmProviderRepository,
   remoteModelRepository,
   saveLlmSettings,
   parseAdaptersJson,
@@ -1373,11 +1374,12 @@ describe("RemoteModelRepository", () => {
       baseUrl: "https://a/v1",
       kind: "chat",
     });
+    /* 读侧解密（#3509：此前只在写侧加密，读出来的密文被当密钥发给上游）。 */
+    expect(rows[0]!.apiKey).toBe("sk-a");
     // 密钥**不以明文落盘**（`llmConfig` 那条路径一直如此；`remoteModel` 此前直接
     // 落明文，而 `db.sqlite` 会被 next build 复制进 standalone 产物 —— 硬规则 17）
-    expect(rows[0]!.apiKey).not.toBe("sk-a");
-    expect(String(rows[0]!.apiKey).startsWith("enc:v1:")).toBe(true);
-    expect(decryptLlmKey(rows[0]!.apiKey)).toBe("sk-a");
+    const rawKey = tdb.$tables.remoteModels.find((r) => r.name === "甲")?.apiKey;
+    expect(String(rawKey).startsWith("enc:v1:")).toBe(true);
 
     /* 第二次保存没带 `apiKey` 键（= 服务端脱敏下发后原样回写的形态）→ 继承既有那把，
      * 不是清空。这正是台账 A11 修掉的语义，与 `workshopAdapters` 的继承同源。 */
@@ -1441,12 +1443,17 @@ describe("RemoteModelRepository", () => {
     await remoteModelRepository.replaceAll([
       { name: "甲", baseUrl: "https://a/v1", apiKey: "sk-keep-me" },
     ]);
-    const cipherOf = () => remoteModelRepository.findByName("甲").then((r) => r?.apiKey ?? null);
+    /* 读**原始表行**（不是 `findByName`，那条现在会解密）：继承要求密文一个字节
+     * 都不变 —— 重新加密会换 IV，而二次加密的东西读出来解不开。 */
+    const cipherOf = (): string | null => {
+      const raw = tdb.$tables.remoteModels.find((r) => r.name === "甲")?.apiKey ?? null;
+      return typeof raw === "string" ? raw : null;
+    };
 
     // ① 缺键 → 继承既有那份
-    const before = await cipherOf();
+    const before = cipherOf();
     await remoteModelRepository.replaceAll([{ name: "甲", baseUrl: "https://a2/v1" }]);
-    const after = await cipherOf();
+    const after = cipherOf();
     /* 继承必须是**原样搬运**：重新加密会换 IV、字节必然不同，而那份「二次加密」的
      * 东西读出来就解不开（`decryptLlmKey` 只解一层）。所以这里比的不是「能解出同一个
      * 明文」，而是「一个字节都没变」。 */
@@ -1455,13 +1462,13 @@ describe("RemoteModelRepository", () => {
 
     // ② 显式 null → 清空（这才是「用户按了清除密钥」的形状）
     await remoteModelRepository.replaceAll([{ name: "甲", apiKey: null }]);
-    expect(await cipherOf()).toBeNull();
+    expect(cipherOf()).toBeNull();
 
     // ③ 空串 / 全空白同样按清空处理（表单里「把字段删空」的形态）
     await remoteModelRepository.replaceAll([{ name: "甲", apiKey: "sk-again" }]);
-    expect(decryptLlmKey(await cipherOf())).toBe("sk-again");
+    expect(decryptLlmKey(cipherOf())).toBe("sk-again");
     await remoteModelRepository.replaceAll([{ name: "甲", apiKey: "   " }]);
-    expect(await cipherOf()).toBeNull();
+    expect(cipherOf()).toBeNull();
   });
 
   /* ── 事务性（ISSUE #2586）──────────────────────────────────────────
@@ -1565,6 +1572,376 @@ describe("RemoteModelRepository", () => {
     }
     expect(raw).not.toBe("sk-seed");
     expect(raw.startsWith("enc:v1:")).toBe(true);
+  });
+});
+
+/* ── #3501 供应商：一行 = 一套 Base URL / 接口格式 / 密钥 ──────────────────
+ * 这一族判的是「密钥落盘形态」与「删供应商不留下孤儿模型」两件事，都必须读
+ * **原始表行**：返回值的明文只能证明读侧解密，证明不了落盘不是明文。 */
+describe("LlmProviderRepository（#3501 供应商）", () => {
+  it("save 新建：名称 / Base URL 裁空白、apiFormat 按白名单收窄、密钥落库密文读侧明文", async () => {
+    const provider = await llmProviderRepository.save({
+      name: " Agnes ",
+      baseUrl: " https://platform.agnes-ai.com ",
+      apiFormat: "anthropic-messages",
+      apiKey: " sk-provider ",
+    });
+    expect(provider).toMatchObject({
+      name: "Agnes",
+      baseUrl: "https://platform.agnes-ai.com",
+      apiFormat: "anthropic-messages",
+      apiKey: "sk-provider",
+    });
+
+    const rawKey = tdb.$tables.llmProviders.find((r) => r.id === provider.id)?.apiKey;
+    expect(typeof rawKey, "密钥必须以密文落库").toBe("string");
+    expect(String(rawKey).startsWith("enc:v1:")).toBe(true);
+
+    // 读侧解密：findById 与 list 都拿得到明文
+    expect((await llmProviderRepository.findById(provider.id))?.apiKey).toBe("sk-provider");
+    expect((await llmProviderRepository.list())[0]?.apiKey).toBe("sk-provider");
+
+    // 未知格式退回最通用的一支；没给密钥就是 null（不是空串）
+    const fallback = await llmProviderRepository.save({
+      name: "旧网关",
+      baseUrl: "https://old.example.com",
+      apiFormat: "not-a-format",
+    });
+    expect(fallback.apiFormat).toBe("chat-completions");
+    expect(fallback.apiKey).toBeNull();
+    expect(await llmProviderRepository.findById("nope")).toBeNull();
+  });
+
+  it("save 更新是 apiKey 三态：缺键原样继承密文、null / 空白清空、非空串写新值", async () => {
+    const provider = await llmProviderRepository.save({
+      name: "Agnes",
+      baseUrl: "https://agnes/v1",
+      apiFormat: "chat-completions",
+      apiKey: "sk-keep",
+    });
+    /* 读原始行（不是返回值）：继承要求密文一个字节都不变 —— 重新加密会换 IV，
+     * 而二次加密的那份读出来解不开（`decryptLlmKey` 只解一层）。 */
+    const cipher = () => tdb.$tables.llmProviders.find((r) => r.id === provider.id)?.apiKey ?? null;
+
+    const before = cipher();
+    const updated = await llmProviderRepository.save({
+      id: provider.id,
+      name: "Agnes 2",
+      baseUrl: "https://agnes/v2",
+      apiFormat: "responses",
+    });
+    expect(updated).toMatchObject({
+      name: "Agnes 2",
+      baseUrl: "https://agnes/v2",
+      apiFormat: "responses",
+      apiKey: "sk-keep",
+    });
+    expect(cipher(), "缺键必须原样继承既有密文").toBe(before);
+
+    // 显式 null = 用户按了「清除密钥」
+    const cleared = await llmProviderRepository.save({
+      id: provider.id,
+      name: "Agnes 2",
+      baseUrl: "https://agnes/v2",
+      apiFormat: "responses",
+      apiKey: null,
+    });
+    expect(cleared.apiKey).toBeNull();
+    expect(cipher()).toBeNull();
+
+    // 全空白与 null 同义（表单里把字段删空的形态）
+    await llmProviderRepository.save({
+      id: provider.id,
+      name: "Agnes 2",
+      baseUrl: "https://agnes/v2",
+      apiFormat: "responses",
+      apiKey: "sk-again",
+    });
+    expect((await llmProviderRepository.findById(provider.id))?.apiKey).toBe("sk-again");
+    await llmProviderRepository.save({
+      id: provider.id,
+      name: "Agnes 2",
+      baseUrl: "https://agnes/v2",
+      apiFormat: "responses",
+      apiKey: "   ",
+    });
+    expect(cipher()).toBeNull();
+  });
+
+  it("空名与重名都当场拒绝（唯一索引在库上，不只靠 UI）", async () => {
+    await expect(
+      llmProviderRepository.save({
+        name: "   ",
+        baseUrl: "https://a",
+        apiFormat: "chat-completions",
+      }),
+    ).rejects.toThrow("供应商名称不能为空");
+
+    await llmProviderRepository.save({
+      name: "Agnes",
+      baseUrl: "https://a",
+      apiFormat: "chat-completions",
+    });
+    const failure = await llmProviderRepository
+      .save({ name: "Agnes", baseUrl: "https://b", apiFormat: "chat-completions" })
+      .then(() => null)
+      .catch(errorText);
+    expect(failure, "重名必须失败得看得见").not.toBeNull();
+    expect(`${failure?.message ?? ""} ${failure?.cause?.message ?? ""}`).toContain("UNIQUE");
+  });
+
+  it("delete 在同一事务里删掉名下模型，不留下「无主」条目", async () => {
+    const keep = await llmProviderRepository.save({
+      name: "保留",
+      baseUrl: "https://keep",
+      apiFormat: "chat-completions",
+    });
+    const drop = await llmProviderRepository.save({
+      name: "删除",
+      baseUrl: "https://drop",
+      apiFormat: "chat-completions",
+    });
+    await remoteModelRepository.saveModel({ name: "甲的模型", providerId: drop.id });
+    await remoteModelRepository.saveModel({ name: "乙的模型", providerId: drop.id });
+    await remoteModelRepository.saveModel({ name: "留的模型", providerId: keep.id });
+    // 历史遗留行（providerId IS NULL）不该被供应商删除波及
+    seedRemoteModel(tdb, { name: "遗留" });
+
+    tdb.$sqlTrace.length = 0;
+    await llmProviderRepository.delete(drop.id);
+
+    const heads = tdb.$sqlTrace.map((s) => (s.trim().split(/\s+/)[0] ?? "").toLowerCase());
+    const commit = heads.indexOf("commit");
+    expect(commit, "删除要收在 commit 上").toBeGreaterThan(0);
+    expect(heads.slice(0, commit + 1)).toEqual(["begin", "delete", "delete", "commit"]);
+
+    expect((await llmProviderRepository.list()).map((p) => p.name)).toEqual(["保留"]);
+    const names = (await remoteModelRepository.list()).map((m) => m.name).sort();
+    expect(names).toEqual(["留的模型", "遗留"].sort());
+    expect(await remoteModelRepository.findByName("甲的模型")).toBeNull();
+  });
+
+  it("ensureLegacyProvider：没有孤儿行时什么都不做", async () => {
+    tdb.$sqlTrace.length = 0;
+    await llmProviderRepository.ensureLegacyProvider();
+    // 只该有一次探测查询（幂等靠「无孤儿立刻返回」，不靠每次建供应商）
+    expect(tdb.$sqlTrace.map((s) => (s.trim().split(/\s+/)[0] ?? "").toLowerCase())).toEqual([
+      "select",
+    ]);
+    expect(await llmProviderRepository.list()).toEqual([]);
+    expect(tdb.$tables.llmProviders).toEqual([]);
+  });
+
+  it("ensureLegacyProvider：孤儿行迁进「默认供应商」，继承全局 Base URL 且幂等", async () => {
+    await llmConfigRepository.upsertSingleton({ baseUrl: "https://legacy-llm/v1" });
+    seedRemoteModel(tdb, { name: "甲", apiKey: "sk-legacy" });
+    seedRemoteModel(tdb, { name: "乙" });
+
+    await llmProviderRepository.ensureLegacyProvider();
+    const providers = await llmProviderRepository.list();
+    expect(providers).toHaveLength(1);
+    expect(providers[0]).toMatchObject({
+      name: "默认供应商",
+      baseUrl: "https://legacy-llm/v1",
+      apiFormat: "chat-completions",
+    });
+    expect(providers[0]?.apiKey).toBeNull();
+
+    const migrated = await remoteModelRepository.list();
+    expect(migrated.every((m) => m.providerId === providers[0]!.id)).toBe(true);
+    // 迁移只改归属，不动密钥
+    expect(migrated.find((m) => m.name === "甲")?.apiKey).toBe("sk-legacy");
+
+    // 幂等：再跑一次不新造第二个「默认供应商」、也不改已迁移的归属
+    await llmProviderRepository.ensureLegacyProvider();
+    expect(await llmProviderRepository.list()).toHaveLength(1);
+    expect(
+      (await remoteModelRepository.list()).every((m) => m.providerId === providers[0]!.id),
+    ).toBe(true);
+  });
+
+  it("ensureLegacyProvider：已有供应商时挂到最早创建的那一个，不新造默认供应商", async () => {
+    const existing = await llmProviderRepository.save({
+      name: "Agnes",
+      baseUrl: "https://agnes/v1",
+      apiFormat: "anthropic-messages",
+    });
+    seedRemoteModel(tdb, { name: "甲" });
+
+    await llmProviderRepository.ensureLegacyProvider();
+    expect((await llmProviderRepository.list()).map((p) => p.id)).toEqual([existing.id]);
+    expect((await remoteModelRepository.findByName("甲"))?.providerId).toBe(existing.id);
+  });
+});
+
+/* ── #3501 供应商下的模型：新增 / 编辑 / 启停 / 删除 ──────────────────── */
+describe("RemoteModelRepository.saveModel / deleteModel / setEnabled（#3501）", () => {
+  const makeProvider = () =>
+    llmProviderRepository.save({
+      name: "Agnes",
+      baseUrl: "https://platform.agnes-ai.com",
+      apiFormat: "anthropic-messages",
+      apiKey: "sk-provider",
+    });
+
+  it("saveModel 新建：JSON 列原样往返、enabled 默认 true、密钥落库密文读侧明文", async () => {
+    const provider = await makeProvider();
+    const model = await remoteModelRepository.saveModel({
+      name: " claude-sonnet-4 ",
+      providerId: provider.id,
+      baseUrl: " https://model-override/v1 ",
+      apiKey: " sk-model ",
+      contextWindow: 200_000,
+      maxOutputTokens: 8_192,
+      inputTypes: ["text", "image", "pdf"],
+      capabilities: ["structured-output", "system-messages"],
+      reasoningLevels: ["low", "high"],
+      reasoningParamMapping: { param: "reasoning_effort", values: { low: "low", high: "high" } },
+      smartConfig: false,
+    });
+    expect(model).toMatchObject({
+      name: "claude-sonnet-4",
+      providerId: provider.id,
+      baseUrl: "https://model-override/v1",
+      apiKey: "sk-model",
+      enabled: true,
+      contextWindow: 200_000,
+      maxOutputTokens: 8_192,
+      inputTypes: ["text", "image", "pdf"],
+      capabilities: ["structured-output", "system-messages"],
+      reasoningLevels: ["low", "high"],
+      reasoningParamMapping: { param: "reasoning_effort", values: { low: "low", high: "high" } },
+      smartConfig: false,
+    });
+
+    const raw = tdb.$tables.remoteModels.find((r) => r.id === model.id);
+    expect(typeof raw?.apiKey).toBe("string");
+    expect(String(raw?.apiKey).startsWith("enc:v1:")).toBe(true);
+    // 原始行的 JSON 列（test-db 已按 schema 解析）
+    expect(raw?.inputTypes).toEqual(["text", "image", "pdf"]);
+    expect(raw?.reasoningParamMapping).toEqual({
+      param: "reasoning_effort",
+      values: { low: "low", high: "high" },
+    });
+
+    // 只给名字时其余列取默认：kind=chat、enabled=true、数值 / 词表为 null
+    const minimal = await remoteModelRepository.saveModel({
+      name: "裸模型",
+      providerId: provider.id,
+    });
+    expect(minimal).toMatchObject({
+      kind: "chat",
+      enabled: true,
+      baseUrl: null,
+      contextWindow: null,
+      maxOutputTokens: null,
+      inputTypes: null,
+      smartConfig: true,
+    });
+    expect(minimal.apiKey).toBeNull();
+
+    await expect(
+      remoteModelRepository.saveModel({ name: "   ", providerId: provider.id }),
+    ).rejects.toThrow("模型名称不能为空");
+  });
+
+  it("saveModel 更新：apiKey 缺键保留密文、null / 空白清空；不存在的 id 抛错", async () => {
+    const provider = await makeProvider();
+    const model = await remoteModelRepository.saveModel({
+      name: "claude-sonnet-4",
+      providerId: provider.id,
+      baseUrl: "https://model-override/v1",
+      apiKey: "sk-keep",
+      contextWindow: 100_000,
+    });
+    const cipher = () => tdb.$tables.remoteModels.find((r) => r.id === model.id)?.apiKey ?? null;
+    const before = cipher();
+
+    const updated = await remoteModelRepository.saveModel({
+      id: model.id,
+      name: "claude-sonnet-4",
+      providerId: provider.id,
+      baseUrl: "https://model-override/v1",
+      contextWindow: 200_000,
+      maxOutputTokens: 4_096,
+    });
+    expect(updated).toMatchObject({ contextWindow: 200_000, maxOutputTokens: 4_096 });
+    expect(cipher(), "缺键必须原样继承既有密文").toBe(before);
+    expect(updated.apiKey).toBe("sk-keep");
+
+    await remoteModelRepository.saveModel({
+      id: model.id,
+      name: "claude-sonnet-4",
+      providerId: provider.id,
+      apiKey: null,
+    });
+    expect(cipher()).toBeNull();
+
+    await remoteModelRepository.saveModel({
+      id: model.id,
+      name: "claude-sonnet-4",
+      providerId: provider.id,
+      apiKey: "sk-again",
+    });
+    await remoteModelRepository.saveModel({
+      id: model.id,
+      name: "claude-sonnet-4",
+      providerId: provider.id,
+      apiKey: "  ",
+    });
+    expect(cipher()).toBeNull();
+
+    await expect(
+      remoteModelRepository.saveModel({ id: "nope", name: "x", providerId: provider.id }),
+    ).rejects.toThrow("模型不存在");
+  });
+
+  it("setEnabled 只改启停；deleteModel 删行；不存在的 id 抛错", async () => {
+    const provider = await makeProvider();
+    const model = await remoteModelRepository.saveModel({
+      name: "claude-sonnet-4",
+      providerId: provider.id,
+    });
+
+    const disabled = await remoteModelRepository.setEnabled(model.id, false);
+    expect(disabled.enabled).toBe(false);
+    expect(tdb.$tables.remoteModels.find((r) => r.id === model.id)?.enabled).toBe(0);
+    expect((await remoteModelRepository.setEnabled(model.id, true)).enabled).toBe(true);
+    await expect(remoteModelRepository.setEnabled("nope", false)).rejects.toThrow("模型不存在");
+
+    await remoteModelRepository.deleteModel(model.id);
+    expect(await remoteModelRepository.findByName("claude-sonnet-4")).toBeNull();
+    // 删不存在的行是幂等的（供应商页并发删两次不该报错）
+    await expect(remoteModelRepository.deleteModel("nope")).resolves.toBeUndefined();
+  });
+
+  it("replaceAll 只管遗留行：供应商名下的同名模型不被覆盖、也不被删除", async () => {
+    const provider = await makeProvider();
+    const owned = await remoteModelRepository.saveModel({
+      name: "甲",
+      providerId: provider.id,
+      baseUrl: "https://provider-owned/v1",
+      apiKey: "sk-owned",
+    });
+    await remoteModelRepository.replaceAll([{ name: "乙" }]);
+
+    const rows = await remoteModelRepository.replaceAll([
+      { name: "甲", baseUrl: "https://hijack/v1", apiKey: "sk-hijack" },
+      { name: "丙" },
+    ]);
+
+    const byName = new Map(rows.map((r) => [r.name, r]));
+    expect([...byName.keys()].sort()).toEqual(["丙", "甲"]);
+    // 供应商模型原样保留（含归属与密钥），整份清单保存碰不到它
+    expect(byName.get("甲")).toMatchObject({
+      id: owned.id,
+      providerId: provider.id,
+      baseUrl: "https://provider-owned/v1",
+      apiKey: "sk-owned",
+    });
+    // 遗留清单按「整份覆盖」：没给出的乙被删、新给的丙落成遗留行
+    expect(byName.get("乙")).toBeUndefined();
+    expect(byName.get("丙")?.providerId).toBeNull();
   });
 });
 
@@ -1691,8 +2068,10 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
     const rows = await remoteModelRepository.list();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ name: "乙", baseUrl: "https://b/v1" });
-    expect(decryptLlmKey(rows[0]!.apiKey)).toBe("sk-b");
-    expect(String(rows[0]!.apiKey).startsWith("enc:v1:")).toBe(true);
+    // 读侧解密；落盘仍是密文（两条断言各判一侧）。
+    expect(rows[0]!.apiKey).toBe("sk-b");
+    const rawRow = tdb.$tables.remoteModels.find((r) => r.name === "乙");
+    expect(String(rawRow?.apiKey).startsWith("enc:v1:")).toBe(true);
   });
 
   it("起事务撞锁 ⇒ 整条跨表事务按 SETTINGS_DB_WRITE 重试（与 #2586 同一份预算）", async () => {
