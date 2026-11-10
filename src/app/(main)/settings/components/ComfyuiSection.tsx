@@ -37,11 +37,11 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
     <SettingsCard title="创作后端（ComfyUI）">
       <Field
         label="ComfyUI 路径（源码根或桌面版实例根）"
-        onChange={(value) => {
-          c.patchSettings({ comfyuiPath: value });
-        }}
         onBlur={() => {
           void c.savePrefs();
+        }}
+        onChange={(value) => {
+          c.patchSettings({ comfyuiPath: value });
         }}
         placeholder="例如 D:\\ComfyUI 或 D:\\Comfy-Desktop\\ComfyUI-Installs\\ComfyUI2"
         value={c.drafts.settings.comfyuiPath}
@@ -56,11 +56,11 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
       </p>
       <Field
         label="comfy-cli 解释器（Python 绝对路径）"
-        onChange={(value) => {
-          c.patchSettings({ comfyCliPython: value });
-        }}
         onBlur={() => {
           void c.savePrefs();
+        }}
+        onChange={(value) => {
+          c.patchSettings({ comfyCliPython: value });
         }}
         placeholder="例如 D:\\tools\\python-venv\\comfy-cli\\Scripts\\python.exe"
         value={c.drafts.settings.comfyCliPython}
@@ -94,13 +94,13 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         <>
           <Field
             label="ComfyUI 端口"
+            onBlur={() => {
+              void c.savePrefs();
+            }}
             onChange={(value) => {
               c.patchSettings({
                 comfyuiPort: Math.max(0, Number(value) || 0),
               });
-            }}
-            onBlur={() => {
-              void c.savePrefs();
             }}
             placeholder={`留空使用默认 ${c.comfyDefaultPort}`}
             value={c.drafts.settings.comfyuiPort > 0 ? String(c.drafts.settings.comfyuiPort) : ""}
@@ -112,11 +112,11 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           </p>
           <Field
             label="ComfyUI 启动参数（可选）"
-            onChange={(value) => {
-              c.patchSettings({ comfyuiExtraArgs: value });
-            }}
             onBlur={() => {
               void c.savePrefs();
+            }}
+            onChange={(value) => {
+              c.patchSettings({ comfyuiExtraArgs: value });
             }}
             placeholder="例如 --input-directory D:\\ComfyUI-Shared\\input"
             value={c.drafts.settings.comfyuiExtraArgs}

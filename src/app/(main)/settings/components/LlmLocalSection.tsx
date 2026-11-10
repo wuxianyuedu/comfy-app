@@ -52,11 +52,11 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       {/* Base URL 仅本地 Ollama 需要；远端的连接参数由模型条目各自携带 */}
       <Field
         label="Base URL"
-        onChange={(value) => {
-          c.patchLlm({ baseUrl: value });
-        }}
         onBlur={() => {
           void c.saveLlm();
+        }}
+        onChange={(value) => {
+          c.patchLlm({ baseUrl: value });
         }}
         placeholder={OLLAMA_DEFAULT_BASE_URL}
         value={c.drafts.llm.baseUrl}
@@ -182,11 +182,11 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       ) : (
         <Field
           label="模型"
-          onChange={(value) => {
-            c.patchLlm({ model: value });
-          }}
           onBlur={() => {
             void c.saveLlm();
+          }}
+          onChange={(value) => {
+            c.patchLlm({ model: value });
           }}
           placeholder="请填写要使用的模型名，如 qwen3:14b"
           value={c.drafts.llm.model}
@@ -196,21 +196,21 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       <div className="mb-4 grid grid-cols-2 gap-3">
         <Field
           label="全局默认温度"
-          onChange={(value) => {
-            c.patchLlm({ temperature: Number(value) || 0 });
-          }}
           onBlur={() => {
             void c.saveLlm();
+          }}
+          onChange={(value) => {
+            c.patchLlm({ temperature: Number(value) || 0 });
           }}
           value={String(c.drafts.llm.temperature)}
         />
         <Field
           label="最大 Token"
-          onChange={(value) => {
-            c.patchLlm({ maxTokens: Number(value) || 0 });
-          }}
           onBlur={() => {
             void c.saveLlm();
+          }}
+          onChange={(value) => {
+            c.patchLlm({ maxTokens: Number(value) || 0 });
           }}
           value={String(c.drafts.llm.maxTokens)}
         />
