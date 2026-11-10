@@ -67,29 +67,23 @@
     # 该值只用于构建期冒烟，不参与任何真实部署。
     SKIP_ENV_VALIDATION: "1"
     BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
-    # 避免 corepack 在非交互环境下为拉取 pnpm 版本而等待输入。
+    # 避免非交互环境下 corepack 为拉取 pnpm 版本等待输入（`CI: "true"`）。
     CI: "true"
-    # ── 判据预算（vitest 的 testTimeout / hookTimeout）临时放宽 ×2 ──
-    # 它与 §11.13 / §13.6.4 那两条「不许抬预算」直接对撞，所以这一行只买一件事：
-    # ⚠️ 这一行是本档唯一的执行者 —— 不在任何 `script` 里（见规范 11 §11.7）。
+    # 覆盖率 reporter 安静档（ISSUE #1959：`text` reporter 逐文件打行会撑爆平台
+    # 102400 字节日志上限；置位后由 `vitest.config.ts` 切 `text-summary`，
+    # ⚠️ 本档唯一执行者，不在任何 `script` 里 —— 见规范 11 §11.7）。
     COMFYAPP_QUIET_COVERAGE: "1"
-    # 本题解析器要用 `steps` 里**没有**的那几个东西（`steps` 会内联进工作区、
-    #     ① `单元测试` 必须排在 `Python 可用性` 之后 —— 实测它跑到 **2h24m** 被 8640s
-    #     ② `环境前提` 必须排在 `GitHub 判决回读` 之前 —— 它答的是「这台节点此刻能力
-    #   · `DISABLED_GATES` —— **临时停用**的 stage 名清单（此刻是 `单元测试` /
-    # **`COMFYAPP_CI_DISABLED_GATES` 是「停用」这件事的执行者，不是备注。**
+    # ── CI 登记值（判据的双向对账面）────────────────────
+    # `DISABLED_GATES` —— **临时停用**的 stage 名清单。
+    # **它是「停用」这件事的执行者，不是备注。**
     #   · 不在 `GATES` 里、但在本清单里 ⇒ 停用，判据放行、并要求条目仍在 `.gates`
     # 恢复动作：`.gates` 里取消注释 → 把名字挪回 `GATES` → 从本清单删掉。
     # 判据见 `tests/no-platform-ci-config.test.ts` 的「停用登记」那两条。
     COMFYAPP_CI_PYTHON_PROBE: scripts/python-probe.mjs
-    # 这一项**留在停用清单里，但理由换了**（与每日档那条决定同批核对过）：
-    #     `next build`）只在每天 01:37 那一跑（§13.5.21）—— 同一台机上并行 PR 会把
-    #     （增量面是全量子集）。**全量**仍归 `每日单元测试`，这一格停用的理由没变。
     #   这一格在 `.gates` 里以注释形态留着（可 grep 回原文）—— 判据把「停用」与「删除」分开判。
     # ⚠️ 这个键**保留而不删除**：它是「停用」这件事的执行者（判据见
     # `tests/no-platform-ci-config.test.ts` 的「停用登记」那两条）。
-    # `COMFYAPP_CI_GATES` → 从本清单删」。停用 ≠ 删除，判据同上面那两条。
-    # 原文按注释形态留在 `.gates`，恢复动作与这五格同形。
+    # 停用 ≠ 删除；恢复动作 = 取消注释 → 名字挪回 `COMFYAPP_CI_GATES` → 从本清单删。
     COMFYAPP_CI_DISABLED_GATES: >-
       单元测试, ESLint 零警告, 新鲜度账, GitHub 镜像同步, GitHub 判决回读, 日志分块 1/3,
       日志分块 2/3, 日志分块 3/3, GitHub 判决判定
@@ -191,7 +185,6 @@
 .lock-ga-verdict: &lock_ga_verdict
   key: ga-verdict
   cancel-in-progress: true
-# ⚠️ 这里曾有 `.lock-formatfix`（`oxfmt 格式` 的委托回写口独占一把锁）。
 # 那个事件连同委托后来被整条摘掉（PR 事件的令牌推不动、也触发不了可信事件），
 # 所以这把锁没有引用者了 —— 留着它就是一条「在册而无人出勤」的配置（§13.5.x 那一族）。
 
@@ -212,12 +205,9 @@
   # 所以它必须排在任何可能红的格前面（否则被前面那次红一起 `skipped`，而它要治的正是
   # ⚠️ **不带 `--strict`**，而且这是踩过一脚之后的结论：带了之后这一格在
   # ⚠️ 它**不打令牌值**（硬规则 17）：打的是「哪些能力够得着」，不是「凭什么够得着」。
-  # ⚠️ **它走 HTTP，不起 `cnb`**（第五跑读数）：自托管 runner 的宿主 PATH 上**没有 cnb**
   - name: 每日令牌权限读数
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs
-    # 5m：14 条只读请求**并发**跑（实测本机合计 0.45s）。第五跑给的是 2m，而那一跑
     # 撞上了这个数 —— 读数全跑完了、却整格被判超时。预算按「卡死要早报」的量级给，
-    # 不按那次读数调：并发之后单条慢请求已经被掩盖掉，剩下的风险是平台整体慢。
     timeout: 5m
   # ── 前提三格：script 行与 PR 那条流水线上的同名档**逐字相同** ──────────
   # 排障成本远高于在这里花三秒正面回答。失败即非零退出 —— 它必须会红。
@@ -328,7 +318,6 @@
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- pnpm run lint
     # 冷跑（这条路径上 `--cache` 恒定失效：缓存键含工作区的绝对路径，而平台每个作业
     # 都是新目录，见 `.gates` 里那段）实测：本机 8 核 ≈311s；节点侧历史上热跑
-    # 256~274s、被压死时挂满过 8640s。给 30m 与 `每日生产构建` 同档 —— 一天只有这
     # 一跑，卡死要早报，而「跑得完的形态」与它差一个量级。
     timeout: 30m
   # ── 每日全量 E2E 的前提格：浏览器 ──────────────────────────────────
@@ -387,13 +376,11 @@
 # ── 单跑口：三档重档各自一条，前提自动带上 ────────────────────────────────
 # 「每日名 ⇄ 单跑名」的对照见 `scripts/ci-oneshot-gates.mjs` 与规范 §13.5.23。
 # ⚠️ 单跑那一跑**不是每日档的出勤**：它只证「这一档现在过不过」，
-# 不许被读成「今天定时那一跑跑过了」（「单跑 ≠ 每日出勤」那条区分在这里同样成立）。
 
 # ── 单跑那三张清单：整表锚点，格名每张都自带目标档前缀 ───────────────────────
 # 为什么不用「序列元素级别的别名」（`- *stage_daily_install`）：那种写法必须把列表项拆成
 # `ci-incremental-gates` / `no-platform-ci-config`），它们认的都是 `- name: X` 这一行形状。
 # 实测代价：平台「受影响用例」那一格红三处（「解析出的 stage 数比 `script:` 少 6」、
-# ——「每个 `单跑<档>·X` 的 script / env / timeout 必须与 `每日X` 那格逐字相同」，
 .oneshot-build: &oneshot_build
   - name: 单跑构建·安装依赖
     timeout: 20m
@@ -497,7 +484,6 @@
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-nsis-tool-probe.mjs
   - name: 打包·桌面成品构建
     # 整条链：`beforeBuildCommand`（`build-desktop.mjs` → `pnpm build` → 数产物 → 体积护栏）
-    # —— 那一带就等于回到「只有 app.exe，没有安装包」的原点（§7.0 那张表今天的形态）。
     # ⚠️ 同样要那一对变量 **并且**把 `$env:CARGO_HOME\bin` 前置到 `Path`：这一格是
     env: *cargo_env
     timeout: 30m
@@ -512,13 +498,11 @@
     timeout: 5m
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/publish-desktop-bundle.mjs
 
-# ── 这里曾有一条「格式修复的委托回写」流水线（已整条摘除）──────────
 # 恢复的不该只是这两段 YAML：**委托发的出去之前，PR 那一格不许再挂 `--autofix`** ——
 
 # ── PR 失败立案：这一跑红了 ⇒ 把红变成**看得见**的东西─────────────
 # 形态判据（PowerShell 前缀 / cp936 外壳不许进平台池）由
 # 通道由平台池那条 Dockerfile 预装（#3457 端到端坐实），自托管时代「这条路径上
-# ⚠️ 走过的那条弯路留着当读数：先写成 `stages` 最后一格 + `run: always()`，实测
 # ⚠️ 也**没有** `run:` 这个键：`.cnb.yml` 的 Stage / Pipeline 配置项表里都没有它，
 # ⚠️ 但**不是 `failStages`**：那一档只在「正常流程失败」时执行，于是「这一跑绿了」
 #     照打红话与手工出口，由 `tests/ci-pr-failure-issue.test.ts` 钉住不许静默）。
@@ -527,7 +511,6 @@
 
 # ── 桌面成品包那一档的失败立案──────────────────────────────────────
 #     这里不抄第二份（§12.12）；
-# ⚠️ 立案格跑了却一句结论都没写，是这一档曾经**常态化失效**的形状：
 .package-fail-stage: &package_fail_stage
   endStages:
     - name: 桌包失败立案
@@ -538,14 +521,9 @@
   # ── 环境类前提三格从这一条上撤到**每日档**（`COMFYAPP_CI_DAILY_GATES`）──
   # `tests/no-platform-ci-config.test.ts` 那条「撤下来的每一格必须有每日的对应」）。
   # 原文见 `COMFYAPP_CI_GATES` 上面那段与 §13.5.23。
-  # 反复红，根因正是**环境是隐形的**（§13.5.3.5）。
   # ⚠️ 它是**读数**、不是判据，三条理由：
-  # 固定成本。那个结论有**数字**（`Prepare` ≈31.5s，规范 §13.5.20 那张预算表），但从来
   # ⚠️ 账本跨构建对照要**两跑**才成立，所以**它自己那一跑**报「未定」—— 这不是缺陷，是
-  # SYSTEM，与 §13.5.3.5 那条「Python 装在 yuedu 会话里、SYSTEM 够不着」同源）：写进检出
-  # 父目录，故现在由 `jobLabel()` 取「父目录名 + 最后一段」，判据钉住「两个不同 job 的标签必须
   # ⚠️ 这一格**只读数、不碰盘**：动作在执行档 `scripts/ci-slot-apply.mjs`，而它由
-  # 理由同 §13.5.25 那条纪律：那一格每次构建都要过，键算错一次的代价是所有 PR 装不上。
   # §13.5.3.4.3 里「runner 换盘」那一段。
   # ── GitHub 镜像同步（**停用**）──
   # 流水线（`pull_request` 的第二条），本格停用 —— 原文按注释形态逐字留在下面，
@@ -614,11 +592,9 @@
   # 直接拦合（它不自己发明一红，只是如实报「判不了」，由承重链路拦下）。
   # ── 老轮询主列（GA 回调转正后停用，原文按注释形态留着供回退）──────────────
   # 判决改由 `GA 回调结论回读` 承担（§13.5.33 逐笔对账）：站内读 GA 送回
-  # commit-statuses 的结论，退码生效 —— 坏了既不许把门禁的红洗成绿，也不许漏过
-  # （fail-closed，与镜像格同一条规矩）。停用 ≠ 删除：恢复动作是
-  # `.gates` 里取消注释 → 名字挪回 `COMFYAPP_CI_GATES` → 从
-  # `COMFYAPP_CI_DISABLED_GATES` 删掉；判据 `tests/no-platform-ci-config.test.ts`
-  # 的「停用登记」两条钉着。五格原文逐字保留在下：
+  # commit-statuses 的结论，退码生效（fail-closed，与镜像格同一条规矩）。
+  # 恢复动作：`.gates` 里取消注释 → 名字挪回 `COMFYAPP_CI_GATES` → 从
+  # `COMFYAPP_CI_DISABLED_GATES` 删掉（判据钉着）。五格原文逐字保留在下：
   # - name: GitHub 判决回读
   # script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-verdict-read.mjs --decision-out .comfy-ci/tmp/github-verdict-logs/decision.json
   # timeout: 60m
@@ -638,7 +614,6 @@
   # script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-verdict-decide.mjs .comfy-ci/tmp/github-verdict-logs/decision.json
   # timeout: 2m
   # ── GA 回调结论回读：**承重**（§13.5.33）───────────────────
-  # 的退码 ⇒ 保护分支与 `ship` 仍认这条 `pull_request` build（§13.6 承重不换锚）。占位腿因此
   # 平台没回」⇒ 直接在构建日志看这一行；快速回退按上面停用段的恢复动作，出站
   # 本格判红时日志里也直接给那条 `pnpm ship --gh-logs pr:<号>`（§13.5.33.7）：
   - name: GA 回调结论回读
@@ -698,8 +673,6 @@ master:
   pull_request:
     # ── 质量门禁（平台池 · #3478 起）─────────────────────────────
     # 自托管节点的算力与缓存对它们已经没有对象（#3474 评估：主列只剩一格时，留在
-    # 「GA 回调没终态 ⇒ 判红」的 fail-closed 承重锚一字未动（§13.6「PR 跑绿才合并」）。
-    # 的质量门禁段逐条钉住；`cnb` 通道（立案格要的）由这份 Dockerfile 预装（#3457）。
     # ⚠️ 锁仍叫 `pr-$CNB_PULL_REQUEST_IID`：它是这把钥匙现在唯一的用户
     - name: 质量门禁
       runner:
@@ -726,8 +699,8 @@ master:
 
     # ── GitHub 镜像同步（平台池 · 正式出口）──────────
     # 按 #3378 后续指令：自托管主列那格停用，推送与派发**整个**由这一条
-    # ⚠️ 退码承重**不**等于「靠判断推送成功拦合」：这一条在平台池、不在 `质量门禁`
-    # 的 `GA 回调结论回读` 超时判红兜住（§13.6 承重锚不变）。
+    # 平台池流水线承担（判据由 `tests/no-platform-ci-config.test.ts` 的质量门禁段
+    # 逐条钉住；「GA 回调没终态 ⇒ 判红」的 fail-closed 承重锚一字未动，§13.6）。
     # ⚠️ 锁**不**共用 `pr-$CNB_PULL_REQUEST_IID`：锁是跨流水线的，同一把 key +
     - name: GitHub 镜像同步（平台池）
       # 流水线名带「（平台池）」后缀：与 `质量门禁` 里那条**停用的同名 stage**
@@ -866,14 +839,12 @@ master:
       lock: *lock_oneshot_unit
       stages: *oneshot_unit
 
-  # ── 这里曾有第四个 API 口：`api_trigger_formatfix`（已摘除）─────────
   # 并且记住：**委托发不出去之前，PR 那一格不许再挂 `--autofix`**（就地修 + 回不去
 
   # ── GA 回调（已转正）────────────────────────────────
   # **已转正**：`质量门禁` 的 `GA 回调结论回读`（§13.5.33 逐笔对账）站内读这条
   # 老主列五格已停用，双写消失，§13.6「PR 跑绿才合并」的承重仍在这条 build
   # ⚠️ 流水线 `name` **不改名**：commit-status 的 context 含这段名字，改名会让
-  # 是落地那一刻的称谓，只指「不接承重主列」；回调 build 本身一直由 GA 收尾
   # `git.enable: false` 时工作区没有代码（绑预合并 sha 必须关检出 —— 不关的话
   api_trigger_ga_verdict:
     - <<: *common
