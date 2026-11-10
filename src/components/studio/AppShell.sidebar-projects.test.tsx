@@ -8,6 +8,10 @@ import { cleanup, render, screen } from "@testing-library/react";
 
 import { AppShell } from "./AppShell";
 
+/* CommandPalette 新增的「其他」组用 useRouter 导航：测试环境没有 App Router 上下文，按
+ * BrowserStatusBar 用例的同一约定在渲染入口 mock 掉（真实链路在 workspace 页里）。 */
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => undefined }) }));
+
 /* jsdom 没有 `matchMedia`，`ui/sidebar` 挂载时就读它（与既有测试同一份桩）。 */
 if (typeof window.matchMedia !== "function") {
   window.matchMedia = (query: string): MediaQueryList => ({
