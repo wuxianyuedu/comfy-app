@@ -305,30 +305,30 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
      * 主路径三跳就到点。 */
     const nowStep = opts.nowStep ?? 0;
     let clock = 0;
-    const fetchImpl = ((url: string | URL) => {
-      calls.push(String(url));
-      const addr = String(url);
-      const isRuns = addr.includes("/actions/runs");
-      const isChecks = addr.includes("/check-runs");
-      const isWorkflows = addr.includes("/actions/workflows");
-      const isContents = addr.includes("/contents/");
+    const fetchImpl: typeof fetch = (input: RequestInfo | URL): Promise<Response> => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      calls.push(url);
+      const isRuns = url.includes("/actions/runs");
+      const isChecks = url.includes("/check-runs");
+      const isWorkflows = url.includes("/actions/workflows");
+      const isContents = url.includes("/contents/");
       const isChain = isWorkflows || isContents || (!isRuns && !isChecks);
       const head = (isChain ? chainSteps : isRuns ? runsSteps : checksSteps)?.shift();
       if (head instanceof Error) {
-        throw head;
+        return Promise.reject(head);
       }
       if (head) {
-        return head;
+        return Promise.resolve(head);
       }
       if (isChain) {
         /* 默认合形态：仓库可查、pr-gate active、默认分支上的文件仍监听 repository_dispatch。 */
         if (isWorkflows) {
-          return new Response(workflowsBodyOf(), { status: 200 });
+          return Promise.resolve(new Response(workflowsBodyOf(), { status: 200 }));
         }
         if (isContents) {
-          return new Response(workflowFileBodyOf(), { status: 200 });
+          return Promise.resolve(new Response(workflowFileBodyOf(), { status: 200 }));
         }
-        return new Response(repoBodyOf(), { status: 200 });
+        return Promise.resolve(new Response(repoBodyOf(), { status: 200 }));
       }
       /* 缺省形态：两条路径都读通、都读到 0 条（＝ GitHub 侧还没起跑）。**不**把兜底
        * 默认成 200 全绿 —— 那是 #3136 修之前那种「读到 0 条就当作有结论」的替身，
@@ -342,8 +342,8 @@ describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两�
           : new Response(checksBodyOf([]), { status: 200 });
       const pick = (fallback: Response | (() => Response) | undefined) =>
         fallback === undefined ? null : typeof fallback === "function" ? fallback() : fallback;
-      return pick(isRuns ? opts.runsFallback : opts.checksFallback) ?? fresh();
-    }) as unknown as typeof fetch;
+      return Promise.resolve(pick(isRuns ? opts.runsFallback : opts.checksFallback) ?? fresh());
+    };
     const io = {
       env: opts.env ?? okEnv,
       fetchImpl,

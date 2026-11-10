@@ -24,6 +24,54 @@ const { test, expect } = defineGateRepo({
   ],
 });
 
+/** 外来值是不是普通对象（数组不算）：本文件收窄基线 JSON 的统一入口。 */
+function isPlainRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
+ * 基线里 `rules` 段的形状：`规则号 → 该规则的说明文字`。
+ *
+ * 逐值校验过才收窄 —— 断言外来 JSON 一次等于把「读到的形状」与「假定的形状」
+ * 混成一句话，而这一段的判据恰恰是「某条规则还在不在基线里」：形状不对却照样
+ * 读，读出来的「不在」是假的。
+ */
+function isRuleLabelTable(v: unknown): v is Record<string, string> {
+  if (!isPlainRecord(v)) {
+    return false;
+  }
+  return Object.values(v).every((label) => typeof label === "string");
+}
+
+/**
+ * 基线 JSON 的形状：`rules` 是规则说明表，`total` 是计数。
+ *
+ * 收窄失败不静默回落成「空表」—— 那会把「基线写坏了」误读成「某条规则没进基线」。
+ */
+function isUiPrimitivesBaseline(v: unknown): v is {
+  rules: Record<string, string>;
+  total: number;
+} {
+  if (!isPlainRecord(v)) {
+    return false;
+  }
+  return isRuleLabelTable(v.rules) && typeof v.total === "number";
+}
+
+/** 解析一段基线文本并收窄成「规则说明表 + 计数」。 */
+function parseBaseline(text: string): { rules: Record<string, string>; total: number } {
+  const parsed: unknown = JSON.parse(text);
+  if (!isUiPrimitivesBaseline(parsed)) {
+    throw new Error("ui-primitives 基线的形状不对");
+  }
+  return parsed;
+}
+
+/** 读基线文件并收窄成「规则说明表 + 计数」。 */
+function readBaseline(repo: GateRepo): { rules: Record<string, string>; total: number } {
+  return parseBaseline(repo.read("scripts/.ui-primitives-baseline.json"));
+}
+
 /** 基线是首次 `--update` 写出的（门禁自身的常规用法）。 */
 function seedBaseline(repo: GateRepo): void {
   const { code, output } = repo.run(["--update"]);
@@ -262,19 +310,13 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 
   test("P9 的计数不进棘轮基线", ({ repo }) => {
     seedBaseline(repo);
-    /* SAFETY: 类型断言已复核 */
-    const baseline = JSON.parse(repo.read("scripts/.ui-primitives-baseline.json")) as {
-      rules: Record<string, string>;
-    };
+    const baseline = readBaseline(repo);
     expect(baseline.rules.P9).toBeUndefined();
   });
 
   test("P7/P8 的计数不进棘轮基线", ({ repo }) => {
     seedBaseline(repo);
-    /* SAFETY: 类型断言已复核 */
-    const baseline = JSON.parse(repo.read("scripts/.ui-primitives-baseline.json")) as {
-      rules: Record<string, string>;
-    };
+    const baseline = readBaseline(repo);
     expect(baseline.rules.P7).toBeUndefined();
     expect(baseline.rules.P8).toBeUndefined();
   });
@@ -288,8 +330,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline(repo);
     const baselinePath = "scripts/.ui-primitives-baseline.json";
     const before = repo.read(baselinePath);
-    /* SAFETY: 类型断言已复核 */
-    const rules = (JSON.parse(before) as { rules: Record<string, string> }).rules;
+    const rules = parseBaseline(before).rules;
     for (const id of [
       "P1",
       "P2",
@@ -382,20 +423,14 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 
   test("P5/P6 的计数不进棘轮基线", ({ repo }) => {
     seedBaseline(repo);
-    /* SAFETY: 类型断言已复核 */
-    const baseline = JSON.parse(repo.read("scripts/.ui-primitives-baseline.json")) as {
-      rules: Record<string, string>;
-    };
+    const baseline = readBaseline(repo);
     expect(baseline.rules.P5).toBeUndefined();
     expect(baseline.rules.P6).toBeUndefined();
   });
 
   test("P4 的计数不进棘轮基线（P4 只在 HARD_GATE_RULES 里判空）", ({ repo }) => {
     seedBaseline(repo);
-    /* SAFETY: 类型断言已复核 */
-    const baseline = JSON.parse(repo.read("scripts/.ui-primitives-baseline.json")) as {
-      rules: Record<string, string>;
-    };
+    const baseline = readBaseline(repo);
     expect(baseline.rules.P4).toBeUndefined();
   });
 
@@ -1222,10 +1257,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 
   test("P10/P11/P12 的计数不进棘轮基线", ({ repo }) => {
     seedBaseline(repo);
-    /* SAFETY: 类型断言已复核 */
-    const baseline = JSON.parse(repo.read("scripts/.ui-primitives-baseline.json")) as {
-      rules: Record<string, string>;
-    };
+    const baseline = readBaseline(repo);
     expect(baseline.rules.P10).toBeUndefined();
     expect(baseline.rules.P11).toBeUndefined();
     expect(baseline.rules.P12).toBeUndefined();
@@ -3891,11 +3923,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     demoteToRatchet(repo, "P1", "P2", "P3");
     repo.write("src/components/studio/M.tsx", BUTTON_VIEW);
     seedBaseline(repo);
-    /* SAFETY: 类型断言已复核 */
-    const baseline = JSON.parse(repo.read("scripts/.ui-primitives-baseline.json")) as {
-      rules: Record<string, string>;
-      total: number;
-    };
+    const baseline = readBaseline(repo);
     expect(baseline.total).toBe(1);
     expect(baseline.rules.P1).toBeTruthy();
     expect(baseline.rules.P2).toBeTruthy();

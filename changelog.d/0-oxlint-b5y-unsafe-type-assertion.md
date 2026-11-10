@@ -1,0 +1,10 @@
+## Changed
+
+- **B5 子批 25：20 份 / 实扫 75 处 `typescript/no-unsafe-type-assertion` 清零**（判决面删掉这 20 份路径行；挂账注记 71 处，+4 为代码漂移，按实扫清零）。本批全在 `tests/` 的 CI / 判据自测：`check-oxlint-zero-rules` / `check-react-updater-purity` / `check-reformat-only` / `check-title-bar-clearance` / `check-tsc-artifact-hint` / `check-ui-customizations` / `check-ui-primitives` / `check-void-floats` / `ci-build-readout` / `ci-cp936-exit` / `ci-daily-failure-issue` / `ci-github-mirror-push` / `ci-github-verdict-read` / `ci-image-plan` / `ci-incremental-gates` / `ci-install-deadline` / `ci-install-deps` / `ci-slot-apply` / `ci-step-verdict` / `ci-toolchain-selfcheck`。至此 `src/` 侧已在前几批清完，剩余挂账全部落在 `tests/`。
+  - 改法仍是「运行时校验 + 类型守卫」：外来值（`require` / `JSON.parse` / 动态 import / 子进程 stdout / mock 返回值）先落 `unknown`，再用文件内最小 `v is T` 守卫或逐字段 `typeof` 收窄；`require` 的导出面用「形状谓词 + 不符即抛错」接住（沿用上一批 `isJudgeModule` 形态），非法值按既有默认回落，合法输入结果不变。
+  - **零新增静态 import**：守卫全部写在各文件内，不需要动 `scripts/fixed-gate-input-faces.mjs` 的输入面登记。
+  - **没有新增** `as` / `!` / `any` / `@ts-ignore` / `@ts-expect-error` / `oxlint-disable`；全批无「豁免不计入清零」的例外。
+- **`ci-cp936-exit` 的 29 处（占本批近四成）**：原写法是 29 处 `as never`（把假 `spawn` / `spawnSync` / `Buffer.isEncoding` 假件硬塞给真实函数类型）。改法是「可调用性守卫 + 显式形参类型」：假件先落 `unknown`，运行期确认 `typeof value === "function"` 后收窄，形参直接声明结构化类型（`opts: { encoding: unknown; input: unknown }`），真 `spawn` 的 `options` 形参类型取自 `Parameters<typeof spawn>[2]`。**字节层面的期望（`0x4D` / `0x5A` / `0x3F` 等）与调用序列一律原样**，改的只是「怎么把值取出来」；该份 47 条用例全绿。
+- **两处夹具形态变化（如实记下）**：`ci-image-plan` 的两处 fetch 假件从「半截 Response 形状」换成**真 `Response`**（`Promise.resolve(new Response(...))`）——被测层只读 `res.ok` / `res.status` / `res.json()` 三格，结论一致；`ci-void-floats` 的一处写回从「就地改字段」改成「展开后改字段再整份写回」，键序与全部字段不丢。
+- **连带修掉 2 处 `require-await`**：把同步 fetch 假件改成 `async` 引入的连带红，本批改为「非 async + 显式 `Promise.resolve` / `Promise.reject`」后消掉，与仓库既有范式一致。
+- **判决面剩余 108 份 / 注记 223 处**（实扫同为 223 处 —— 本批清完后两个口径首次对齐）；台账 B5 段 20 行「挂账」→「已清」，总览同步为「子批1–25：**500 份 / 1286 处已清**」。总览沿用按实扫累加（1211 + 75 = 1286）；逐行注记合计 1275，差额 11 是历史批次注记与实扫的漂移（上批 7 + 本批 4），按既有口径不回改历史行。归零那一批才 `Closes #3181`。

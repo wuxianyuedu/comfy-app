@@ -13,7 +13,7 @@
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
 | B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 已清（子批1–12，判决面文件级豁免已整块删除）       |
-| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–24：480 份 / 1211 处已清）           |
+| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–25：500 份 / 1286 处已清）           |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
@@ -1225,26 +1225,26 @@
 | `tests/check-import-alias.test.ts`                                                                   | 1        | 已清 |
 | `tests/check-inline-style.test.ts`                                                                   | 1        | 已清 |
 | `tests/check-mirror-attendance.test.ts`                                                              | 2        | 已清 |
-| `tests/check-oxlint-zero-rules.test.ts`                                                              | 1        | 挂账 |
-| `tests/check-react-updater-purity.test.ts`                                                           | 1        | 挂账 |
-| `tests/check-reformat-only.test.ts`                                                                  | 4        | 挂账 |
-| `tests/check-title-bar-clearance.test.ts`                                                            | 1        | 挂账 |
-| `tests/check-tsc-artifact-hint.test.ts`                                                              | 1        | 挂账 |
-| `tests/check-ui-customizations.test.ts`                                                              | 1        | 挂账 |
-| `tests/check-ui-primitives.test.ts`                                                                  | 7        | 挂账 |
-| `tests/check-void-floats.test.ts`                                                                    | 2        | 挂账 |
-| `tests/ci-build-readout.test.ts`                                                                     | 4        | 挂账 |
-| `tests/ci-cp936-exit.test.ts`                                                                        | 28       | 挂账 |
-| `tests/ci-daily-failure-issue.test.ts`                                                               | 1        | 挂账 |
-| `tests/ci-github-mirror-push.test.ts`                                                                | 5        | 挂账 |
-| `tests/ci-github-verdict-read.test.ts`                                                               | 1        | 挂账 |
-| `tests/ci-image-plan.test.ts`                                                                        | 2        | 挂账 |
-| `tests/ci-incremental-gates.test.ts`                                                                 | 1        | 挂账 |
-| `tests/ci-install-deadline.test.ts`                                                                  | 1        | 挂账 |
-| `tests/ci-install-deps.test.ts`                                                                      | 3        | 挂账 |
-| `tests/ci-slot-apply.test.ts`                                                                        | 2        | 挂账 |
-| `tests/ci-step-verdict.test.ts`                                                                      | 1        | 挂账 |
-| `tests/ci-toolchain-selfcheck.test.ts`                                                               | 4        | 挂账 |
+| `tests/check-oxlint-zero-rules.test.ts`                                                              | 1        | 已清 |
+| `tests/check-react-updater-purity.test.ts`                                                           | 1        | 已清 |
+| `tests/check-reformat-only.test.ts`                                                                  | 4        | 已清 |
+| `tests/check-title-bar-clearance.test.ts`                                                            | 1        | 已清 |
+| `tests/check-tsc-artifact-hint.test.ts`                                                              | 1        | 已清 |
+| `tests/check-ui-customizations.test.ts`                                                              | 1        | 已清 |
+| `tests/check-ui-primitives.test.ts`                                                                  | 7        | 已清 |
+| `tests/check-void-floats.test.ts`                                                                    | 2        | 已清 |
+| `tests/ci-build-readout.test.ts`                                                                     | 4        | 已清 |
+| `tests/ci-cp936-exit.test.ts`                                                                        | 28       | 已清 |
+| `tests/ci-daily-failure-issue.test.ts`                                                               | 1        | 已清 |
+| `tests/ci-github-mirror-push.test.ts`                                                                | 5        | 已清 |
+| `tests/ci-github-verdict-read.test.ts`                                                               | 1        | 已清 |
+| `tests/ci-image-plan.test.ts`                                                                        | 2        | 已清 |
+| `tests/ci-incremental-gates.test.ts`                                                                 | 1        | 已清 |
+| `tests/ci-install-deadline.test.ts`                                                                  | 1        | 已清 |
+| `tests/ci-install-deps.test.ts`                                                                      | 3        | 已清 |
+| `tests/ci-slot-apply.test.ts`                                                                        | 2        | 已清 |
+| `tests/ci-step-verdict.test.ts`                                                                      | 1        | 已清 |
+| `tests/ci-toolchain-selfcheck.test.ts`                                                               | 4        | 已清 |
 | `tests/ci-workspace-probe.test.ts`                                                                   | 1        | 挂账 |
 | `tests/ci-workspace-provenance.test.ts`                                                              | 1        | 挂账 |
 | `tests/client-bundle-node-builtins.test.ts`                                                          | 2        | 挂账 |

@@ -20,6 +20,53 @@ function writeSrcFile(repo: GateRepo, rel: string, body: string): void {
   repo.write(join("src", "lib", rel), body);
 }
 
+/** 外来值是不是普通对象（数组不算）：本文件收窄基线 JSON 的统一入口。 */
+function isPlainRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
+ * 基线 JSON 的形状：`files` 是「文件 → 处数」的表，`ruleVersion` 是判据版本，
+ * `total` 是总数。
+ *
+ * 逐字段校验过才收窄 —— 断言外来 JSON 一次等于把「读到的形状」与「假定的形状」
+ * 混成一句话，而这里有一处**要把它原样写回盘**（改判据版本那条用例），
+ * 形状判错就会把基线改坏。故返回值带上 `Record<string, unknown>` ——
+ * 基线里还有 `generatedAt` / `note` 等字段，写回时不能丢。
+ */
+function isVoidFloatsBaseline(v: unknown): v is Record<string, unknown> & {
+  files: Record<string, number>;
+  ruleVersion: number;
+  total: number;
+} {
+  if (!isPlainRecord(v)) {
+    return false;
+  }
+  const files = v.files;
+  if (!isPlainRecord(files)) {
+    return false;
+  }
+  if (!Object.values(files).every((count) => typeof count === "number")) {
+    return false;
+  }
+  return typeof v.ruleVersion === "number" && typeof v.total === "number";
+}
+
+/** 读基线并收窄成「文件 → 处数」那张表。 */
+function readBaseline(repo: GateRepo): Record<string, unknown> & {
+  files: Record<string, number>;
+  ruleVersion: number;
+  total: number;
+} {
+  const parsed: unknown = JSON.parse(
+    readFileSync(join(repo.dir, "scripts", ".void-floats-baseline.json"), "utf8"),
+  );
+  if (!isVoidFloatsBaseline(parsed)) {
+    throw new Error("void-floats 基线的形状不对");
+  }
+  return parsed;
+}
+
 describe("check-void-floats AST 判据", () => {
   test("认 `void fn();` 与 `void obj.fn();` 两种形态作为一条悬空", ({ repo }) => {
     writeSrcFile(
@@ -90,10 +137,7 @@ void b();`,
     // 建立基线
     const upd = repo.run(["--update"]);
     expect(upd.code).toBe(0);
-    /* SAFETY: 类型断言已复核 */
-    const baseline = JSON.parse(
-      readFileSync(join(repo.dir, "scripts", ".void-floats-baseline.json"), "utf8"),
-    ) as { files: Record<string, number>; ruleVersion: number; total: number };
+    const baseline = readBaseline(repo);
     expect(baseline.total).toBe(2);
     expect(baseline.files["src/lib/mod.ts"]).toBe(2);
     // 同数量:OK
@@ -143,11 +187,13 @@ void a();`,
     );
     repo.run(["--update"]);
     const p = join(repo.dir, "scripts", ".void-floats-baseline.json");
-    /* SAFETY: 类型断言已复核 */
-    const json = JSON.parse(readFileSync(p, "utf8")) as {
-      ruleVersion: number;
-    };
-    json.ruleVersion = 999;
+    /* 改判据版本：**整份基线原样写回**（这里只改 ruleVersion 一个字段，
+       其余字段必须留着 —— 少了任何一个，判据下一句读到的就是「基线文件损坏」）。 */
+    const parsed: unknown = JSON.parse(readFileSync(p, "utf8"));
+    if (!isVoidFloatsBaseline(parsed)) {
+      throw new Error("void-floats 基线的形状不对");
+    }
+    const json = { ...parsed, ruleVersion: 999 };
     writeFileSync(p, `${JSON.stringify(json, null, 2)}\n`, "utf8");
     const r = repo.run();
     expect(r.code).toBe(1);

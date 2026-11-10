@@ -31,6 +31,28 @@ const GA_MASTER_GATE = fs.readFileSync(
   "utf8",
 );
 
+/**
+ * 外来值（`require` 进来的模块导出面）先落 `unknown`，
+ * 过这道守卫后逐字段 `typeof` 收窄才使用，不用类型断言。
+ */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+/** `check-format.cjs` 的导出面（下面三个成员）。 */
+function isFormatModule(v: unknown): v is {
+  IGNORE_GLOBS: ReadonlyArray<string>;
+  isChangedFaceFile: (rel: string) => boolean;
+  isScanned: (rel: string) => boolean;
+} {
+  return (
+    isRecord(v) &&
+    Array.isArray(v.IGNORE_GLOBS) &&
+    typeof v.isChangedFaceFile === "function" &&
+    typeof v.isScanned === "function"
+  );
+}
+
 describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", () => {
   it("真仓一致：登记表与 .cnb.yml 逐字同源", () => {
     const problems = checkIncrementalGates(CONFIG, GA_MASTER_GATE);
@@ -218,13 +240,13 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       /^[ \t]*run:\s*node scripts\/check-format\.cjs\s*$/m.test(workflow),
       "`.github/workflows/pr-gate.yml` 里没有不带旗标的全量档 —— 全库不变式没有自动执行者",
     ).toBe(true);
-    /* SAFETY: 类型断言已复核 */
+    /* `require` 进来的 CJS 模块导出面：先落 `unknown`，过守卫后逐字段收窄。 */
     // oxlint-disable-next-line typescript/no-require-imports
-    const fmt = require("../scripts/check-format.cjs") as {
-      IGNORE_GLOBS: ReadonlyArray<string>;
-      isChangedFaceFile: (rel: string) => boolean;
-      isScanned: (rel: string) => boolean;
-    };
+    const required: unknown = require("../scripts/check-format.cjs");
+    if (!isFormatModule(required)) {
+      throw new Error("check-format.cjs 的导出面不对");
+    }
+    const fmt = required;
     /* 全量档的两棵树照旧在面内。 */
     for (const rel of ["src/lib/a.ts", "src/app/b.tsx", ".storybook/preview.tsx"]) {
       expect(fmt.isScanned(rel), `判据面应当包含 ${rel}`).toBe(true);

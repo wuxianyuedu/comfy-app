@@ -19,6 +19,11 @@ import {
 
 const SCRIPT = join(process.cwd(), "scripts", "ci-step-verdict.mjs");
 
+/** 外来值先落 `unknown`，过这道守卫才谈读字段（不用类型断言）。 */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
 /** 跑外壳，返回退出码与 stdout（不碰真实判据，只喂合成子进程）。 */
 function runShell(args: string[]): { code: number; output: string } {
   try {
@@ -28,8 +33,16 @@ function runShell(args: string[]): { code: number; output: string } {
     });
     return { code: 0, output };
   } catch (error) {
-    const e = error as { status?: number; stderr?: string; stdout?: string };
-    return { code: e.status ?? 1, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+    /* `execFileSync` 失败时抛的是「带 `status` / `stdout` / `stderr` 的错」：
+     * 逐字段收窄，缺的那几项按既有默认回落（退出码 1、输出空串）。 */
+    const e: Record<string, unknown> = isRecord(error) ? error : {};
+    const status = e.status;
+    const stdout = e.stdout;
+    const stderr = e.stderr;
+    const code = typeof status === "number" ? status : 1;
+    const out = typeof stdout === "string" ? stdout : "";
+    const err = typeof stderr === "string" ? stderr : "";
+    return { code, output: out + err };
   }
 }
 

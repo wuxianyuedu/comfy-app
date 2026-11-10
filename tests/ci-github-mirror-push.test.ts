@@ -106,6 +106,19 @@ const gitOk = (args: Array<string>) => {
   return { code: 0, stdout: "", stderr: "" };
 };
 
+/**
+ * 外来值（`JSON.parse` 的结果）先落 `unknown`，过这道守卫后逐字段 `typeof`
+ * 收窄才使用，不用类型断言。
+ */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+/** 数组守卫：把 `unknown` 收成 `Array<unknown>`（`Array.isArray` 那一路是 `any[]`）。 */
+function isUnknownArray(v: unknown): v is Array<unknown> {
+  return Array.isArray(v);
+}
+
 /** 从落盘假件的量具里取出**最后一份**派发形状（#3148 给回读格的输入）。 */
 function dispatchedState(written: Array<string>): {
   dispatched?: boolean;
@@ -114,7 +127,42 @@ function dispatchedState(written: Array<string>): {
 } {
   const last = written.at(-1) ?? "";
   const json = last.slice(last.indexOf("\n") + 1).trim();
-  return json === "" ? {} : (JSON.parse(json) as { dispatched?: boolean; reason?: string });
+  if (json === "") return {};
+  const parsed: unknown = JSON.parse(json);
+  if (!isRecord(parsed)) return {};
+  const dispatched = parsed.dispatched;
+  const reason = parsed.reason;
+  const sha = parsed.sha;
+  return {
+    dispatched: typeof dispatched === "boolean" ? dispatched : undefined,
+    reason: typeof reason === "string" ? reason : undefined,
+    sha: typeof sha === "string" ? sha : undefined,
+  };
+}
+
+/**
+ * 派发请求体：先落 `unknown`，再逐字段收窄（读不出的字段就是没有，不替它猜）。
+ */
+function readDispatchBody(bodyText: string): {
+  client_payload?: { head_sha?: string; pr_title?: string };
+  event_type?: string;
+} {
+  const parsed: unknown = JSON.parse(bodyText);
+  if (!isRecord(parsed)) return {};
+  const payload = parsed.client_payload;
+  const client = isRecord(payload) ? payload : undefined;
+  const headSha = client?.head_sha;
+  const prTitle = client?.pr_title;
+  const eventType = parsed.event_type;
+  return {
+    client_payload: client
+      ? {
+          head_sha: typeof headSha === "string" ? headSha : undefined,
+          pr_title: typeof prTitle === "string" ? prTitle : undefined,
+        }
+      : undefined,
+    event_type: typeof eventType === "string" ? eventType : undefined,
+  };
 }
 
 describe("纯函数", () => {
@@ -990,37 +1038,44 @@ describe("runMirror（git 与 fetch 全假件）", () => {
       return gitOk(args);
     };
     let batchCalls = 0;
-    const fetchImpl = ((url: string | URL, init?: RequestInit) => {
+    const fetchImpl: typeof fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       calls.push({
-        url: String(url),
+        url,
         init: init ?? {},
         bodyText: typeof init?.body === "string" ? init.body : "",
       });
       if (opts.fetchThrows === true) {
-        throw new Error("network down");
+        return Promise.reject(new Error("network down"));
       }
-      if (opts.batchThrowsOnce === true && String(url).includes("objects/batch")) {
+      if (opts.batchThrowsOnce === true && url.includes("objects/batch")) {
         batchCalls += 1;
         if (batchCalls === 1) {
-          throw new TypeError("fetch failed");
+          return Promise.reject(new TypeError("fetch failed"));
         }
         /* 清单里的对象逐字回一条 download，让核对判 OK（对象形状与 OID 无关，只数条数）。 */
         const bodyText = typeof init?.body === "string" ? init.body : "{}";
-        const asked = JSON.parse(bodyText) as { objects?: Array<{ oid: string }> };
-        return new Response(
-          JSON.stringify({
-            objects: (asked.objects ?? []).map((o) => ({
-              actions: { download: { href: "https://lfs/ok" } },
-              oid: o.oid,
-            })),
-          }),
-          { status: 200 },
+        const asked: unknown = JSON.parse(bodyText);
+        const askedObjects = isRecord(asked) ? asked.objects : undefined;
+        const objects = isUnknownArray(askedObjects) ? askedObjects : [];
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              objects: objects.map((o) => ({
+                actions: { download: { href: "https://lfs/ok" } },
+                oid: isRecord(o) && typeof o.oid === "string" ? o.oid : "",
+              })),
+            }),
+            { status: 200 },
+          ),
         );
       }
-      return new Response(opts.dispatchBody ?? null, {
-        status: opts.dispatchStatus ?? 204,
-      });
-    }) as unknown as typeof fetch;
+      return Promise.resolve(
+        new Response(opts.dispatchBody ?? null, {
+          status: opts.dispatchStatus ?? 204,
+        }),
+      );
+    };
     /* 落盘假件（#3148）：一次真文件都不写，只把「留给回读格的那份派发形状」记进量具。 */
     const written: Array<string> = [];
     const io = {
@@ -1073,10 +1128,7 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(pushes[0]).toContain(buildPushUrl(DEFAULT_REPO, TOKEN));
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe(`https://api.github.com/repos/${DEFAULT_REPO}/dispatches`);
-    const body = JSON.parse(calls[0]?.bodyText ?? "") as {
-      client_payload?: { head_sha?: string };
-      event_type?: string;
-    };
+    const body = readDispatchBody(calls[0]?.bodyText ?? "");
     expect(body.event_type).toBe("cnb-pr-sync");
     expect(body.client_payload?.head_sha).toBe(SHA);
     expect(heard.some((l) => l.includes("已推") && l.includes("已派发"))).toBe(true);
@@ -1098,9 +1150,7 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     /* 只读一次、参数与 ship 那一族同形（-v 才带 data.title）。 */
     expect(titleCalls).toHaveLength(1);
     expect(titleCalls[0]).toEqual(pullTitleArgs("root/comfy-app", "2649"));
-    const body = JSON.parse(calls[0]?.bodyText ?? "") as {
-      client_payload?: { pr_title?: string };
-    };
+    const body = readDispatchBody(calls[0]?.bodyText ?? "");
     expect(body.client_payload?.pr_title).toBe("fix(ci): run 标题带上 PR 标题");
     /* 派发前的自证行与 workflow 的 run-name 同口径（sha 在末尾、不截断）。 */
     expect(heard.join("\n")).toContain(
@@ -1112,9 +1162,7 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     const { io, calls, heard } = harness();
     const code = await runMirror(io);
     expect(code).toBe(CODE.OK);
-    const body = JSON.parse(calls[0]?.bodyText ?? "") as {
-      client_payload?: { pr_title?: string };
-    };
+    const body = readDispatchBody(calls[0]?.bodyText ?? "");
     expect(body.client_payload?.pr_title).toBe("");
     /* 没有标题时不能出现 `PR #2649 ·  · sha` 的双空格。 */
     expect(heard.join("\n")).toContain(`[mirror] GitHub run 标题：PR #2649 · ${SHA}`);
@@ -2325,7 +2373,7 @@ describe("runMasterMirror（推送 + 回读，没有派发那一跳）", () => {
 
   it("LFS 核对失败 ⇒ 小结也念核对回话，不落到「其他 / git-lfs 原话」（ISSUE #3413 同批）", async () => {
     const { heard, io } = harness({
-      fetchImpl: (() => Promise.reject(new TypeError("fetch failed"))) as unknown as typeof fetch,
+      fetchImpl: () => Promise.reject(new TypeError("fetch failed")),
       lfsJsonStdout: JSON.stringify({ files: [{ oid: "a".repeat(64), size: 1 }] }),
     });
     const code = await runMasterMirror(io);
@@ -2830,7 +2878,7 @@ describe("once 档：四跳各只试一次，失败了也不重试（ISSUE #3346
     const io = {
       cnbJson: () => null,
       env: okEnv,
-      fetchImpl: (() => new Response(null, { status: 204 })) as unknown as typeof fetch,
+      fetchImpl: () => Promise.resolve(new Response(null, { status: 204 })),
       log: (line: string) => heard.push(line),
       mkdirSync: () => undefined,
       root: "/repo",
