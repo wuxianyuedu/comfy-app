@@ -1721,6 +1721,70 @@ describe("LlmProviderRepository（#3501 供应商）", () => {
     expect(await remoteModelRepository.findByName("甲的模型")).toBeNull();
   });
 
+  it("syncProviderCatalog 只补缺：已有的一行不动，新名字插成停用行并按名推断用途（#3577）", async () => {
+    const provider = await llmProviderRepository.save({
+      name: "agnes",
+      baseUrl: "https://apihub.agnes-ai.com/v1",
+      apiFormat: "chat-completions",
+    });
+    /* 用户已启用并配置过的模型行 */
+    await remoteModelRepository.saveModel({
+      name: "agnes-3.0-flash",
+      providerId: provider.id,
+      enabled: true,
+      contextWindow: 524_288,
+    });
+
+    /* 第一轮：目录里 3 个名字 → 只有 2 个是新名字 */
+    const inserted = await remoteModelRepository.syncProviderCatalog(provider.id, [
+      "agnes-3.0-flash",
+      "agnes-video-2.5-flash",
+      " agnes-image-2.5-flash ",
+    ]);
+    expect(inserted.sort()).toEqual(["agnes-image-2.5-flash", "agnes-video-2.5-flash"]);
+
+    const rows = await remoteModelRepository.list();
+    const byName = new Map(rows.map((r) => [r.name, r]));
+    /* 已配置行原样保留：启停、窗口、用途都没被目录覆盖 */
+    const kept = byName.get("agnes-3.0-flash");
+    expect(kept?.enabled).toBe(true);
+    expect(kept?.contextWindow).toBe(524_288);
+    /* 新行默认停用，用途按名字推断 */
+    expect(byName.get("agnes-video-2.5-flash")?.enabled).toBe(false);
+    expect(byName.get("agnes-video-2.5-flash")?.kind).toBe("video");
+    expect(byName.get("agnes-image-2.5-flash")?.kind).toBe("image");
+
+    /* 第二轮同样的目录：零新增（幂等，反复点测试连接不重复插行） */
+    expect(
+      await remoteModelRepository.syncProviderCatalog(provider.id, [
+        "agnes-3.0-flash",
+        "agnes-video-2.5-flash",
+        "agnes-image-2.5-flash",
+      ]),
+    ).toEqual([]);
+
+    /* 同名行挂在别的供应商下也跳过（name 全局唯一） */
+    const other = await llmProviderRepository.save({
+      name: "另一家",
+      baseUrl: "https://other/v1",
+      apiFormat: "chat-completions",
+    });
+    expect(await remoteModelRepository.syncProviderCatalog(other.id, ["agnes-3.0-flash"])).toEqual(
+      [],
+    );
+  });
+
+  it("syncProviderCatalog：空清单 / 全空白清单不做任何写入", async () => {
+    const provider = await llmProviderRepository.save({
+      name: "空目录",
+      baseUrl: "https://x/v1",
+      apiFormat: "chat-completions",
+    });
+    expect(await remoteModelRepository.syncProviderCatalog(provider.id, [])).toEqual([]);
+    expect(await remoteModelRepository.syncProviderCatalog(provider.id, ["  ", ""])).toEqual([]);
+    expect(await remoteModelRepository.list()).toEqual([]);
+  });
+
   it("ensureLegacyProvider：没有孤儿行时什么都不做", async () => {
     tdb.$sqlTrace.length = 0;
     await llmProviderRepository.ensureLegacyProvider();

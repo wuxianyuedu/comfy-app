@@ -456,6 +456,8 @@ export const remoteModel = sqliteTable(
     maxOutputTokens: integer("maxOutputTokens"),
     /** 输入类型（JSON 数组：text / image / video / pdf） */
     inputTypes: text("inputTypes", { mode: "json" }),
+    /** 输出类型（JSON 数组：text / image / video，#3577）；NULL = 未标注 */
+    outputTypes: text("outputTypes", { mode: "json" }),
     /** 模型能力（JSON 数组：structured-output / native-web-search / system-messages） */
     capabilities: text("capabilities", { mode: "json" }),
     /** 推理等级（JSON 数组；各家叫法不同，只做去重不做白名单） */

@@ -219,16 +219,33 @@ export async function POST(req: NextRequest) {
 
   const formats = await candidateFormats({ explicit: rec.apiFormat, model, provider });
   let firstFailure: ProbeOutcome | null = null;
+  let firstOk: Extract<ProbeOutcome, { kind: "ok" }> | null = null;
   for (const format of formats) {
     // oxlint-disable-next-line no-await-in-loop -- 逐个格式探测：前一种通了就不再发（省掉无谓请求）
     const outcome = await probeWithFormat(baseUrl, format, apiKey, model);
     if (outcome.kind === "ok") {
-      return NextResponse.json({ ok: true, detail: outcome.detail, models: outcome.models });
+      firstOk = outcome;
+      break;
     }
     if (outcome.kind === "network") {
       return NextResponse.json({ ok: false, detail: outcome.detail });
     }
     firstFailure ??= outcome;
+  }
+  if (firstOk !== null) {
+    /* 目录同步（#3577「获取到的模型应该全部显示出来，默认关闭状态」）：
+     * 连接成功即把服务端模型清单补进该供应商名下 —— 已存在的名字一行不动，
+     * 缺的插成停用行，启用 / 配置在模型列表上做。没有 providerId（弹窗草稿、
+     * 全局配置探测）不落库。落库失败不推翻连通性结论：下次成功的探测会再补。
+     * （放在探测循环之外：同步至多一次，也不在循环体里再叠一层 await。） */
+    if (providerId !== "" && firstOk.models.length > 0) {
+      try {
+        await remoteModelRepository.syncProviderCatalog(providerId, firstOk.models);
+      } catch (error) {
+        console.error("[llm/test] 服务端模型目录同步失败:", apiErrorDetail(error, "同步失败"));
+      }
+    }
+    return NextResponse.json({ ok: true, detail: firstOk.detail, models: firstOk.models });
   }
   return NextResponse.json({
     ok: false,
