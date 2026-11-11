@@ -250,14 +250,44 @@ export function registeredDisabledGates(text: string): Array<string> {
  * 每日档的执行面自 #3504 起全部在 GA：`.github/workflows/daily.yml` 是「每天跑什么」
  * 的唯一事实源。逻辑格名 ⇄ step 名的对照登记在 `scripts/ci-ga-trigger-map.mjs` 的
  * `DAILY_GATE_EXECUTORS`（判据 import 它，不在这里重抄）。
- * 顺序即执行序（GA 单 job 串行，与 CNB 每日档同一工作区语义对齐）：
- *   失败立案（`if: failure()`，只花在红的那一跑）在重格之后兜底；单元测试排最后
- *   （业主口径「最容易出问题的放最后」）—— 「必须最后」由下面判据钉住。
+ * 顺序即执行序（**重格链**单 job 串行，与 CNB 每日档同一工作区语义对齐）：
+ *   单元测试排最后（业主口径「最容易出问题的放最后」）—— 「必须最后」由下面判据钉住。
+ * ⚠️ 这份文件现在有**两个 job**：`daily`（重格链）与 `daily-failure-issue`（失败立案，
+ * `needs: daily`）。所以「有没有执行者」与「谁排在谁前面」是两个不同的问题，各用各的取法：
+ *   · 成员资格（总账 / 新鲜度 / 撤档对账）⇒ `gaDailySteps()`，**整份文件**的 step；
+ *   · 顺序（前提格 / 尾巴 / 最后一个会红的格）⇒ `gaDailyJobSteps()`，**只 `daily` 那个 job**。
+ * 混用会让顺序判据把另一个 job 的 step 也算进来 —— 那种红指不到真正的执行序。
  */
 const DAILY_YML = ".github/workflows/daily.yml" as const;
 
 /** GA workflow 的 steps 在 6 空格缩进层（`jobs.<id>.steps`）。 */
 const GA_STEP_RE = /^ {6}- name: (?<name>.+?)[ \t]*$/gm;
+
+/**
+ * GA workflow 里某个 job 的块原文（从 `  <id>:` 行起，到下一个 2 空格缩进的非空行为止 ——
+ * 那要么是下一个 job，要么是挂在它头上的注释段）；取不到给 null。
+ */
+function gaJobBlock(file: string, jobId: string): string | null {
+  const text = readFileAt(ROOT, file);
+  const marker = `  ${jobId}:`;
+  const at = text.indexOf(`\n${marker}\n`);
+  if (at === -1) {
+    return null;
+  }
+  const start = at + 1;
+  const after = start + marker.length;
+  const next = text.slice(after).search(/\n {2}\S/);
+  return next === -1 ? text.slice(start) : text.slice(start, after + next);
+}
+
+/**
+ * `daily` 那一个 job 的 step 名有序清单 —— **顺序判据专用**（见上面那段两个 job 的分工）。
+ * 取不到 job 块时给空数组，由调用方的「清单非空」前置断言接住（不静默恒放行）。
+ */
+function gaDailyJobSteps(): Array<string> {
+  const block = gaJobBlock(DAILY_YML, "daily") ?? "";
+  return [...block.matchAll(GA_STEP_RE)].map((m) => m.groups?.name ?? "");
+}
 
 /**
  * GA daily.yml 的 step 名有序清单（判据的匹配面就是这些**逐字**名字；
@@ -282,14 +312,18 @@ function gaStepBlock(file: string, name: string): string | null {
 /**
  * GA daily.yml 里**不进门格总账**的前提设施 step：检出是 checkout 动作、装 pnpm /
  * 装 Node 是工具链准备，环境证据是 `if: failure()` 的诊断读数（恒不判红）。
- * 它们不是门格 —— 总账 ⇄ step 名双向对账时把这四行豁免掉（豁免名单是显式的：
+ * 它们不是门格 —— 总账 ⇄ step 名双向对账时把这几行豁免掉（豁免名单是显式的：
  * 悄悄加一个「不判红也不立案」的 step 仍会被多出来的一格红）。
+ * 后两行属于 `daily-failure-issue` 那个 job（#3563 起立案是下游 job）：它不装依赖，
+ * 所以只有检出与装 Node 两件设施，没有「装 pnpm」。
  */
 const GA_DAILY_INFRA_STEPS: ReadonlyArray<string> = [
   "检出",
   "装 pnpm（按 package.json 的 packageManager 钉死版）",
   "装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）",
   "环境证据（失败时：dmesg 的 OOM 行 + 内存读数）",
+  "检出（立案脚本在仓库里）",
+  "装 Node（engines 下限 26.12.1；脚本只吃 node:*）",
 ];
 
 /** 读仓库内文件（相对路径），集中一处方便阅读。 */
@@ -390,7 +424,7 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   /* ── #3504：每日档迁 GA，七格在 CNB 与 GA 两侧都没有了执行者 ── */
   {
     name: "每日失败立案",
-    note: "#3504：立案对象（本机执行的每日跑）不存在了。GA daily.yml 末尾的 `失败立案` step（CNB 单子，#3436 同通道）承接本档这一跑自己的立案；格名进 `DAILY_GATE_EXECUTORS`",
+    note: "#3504：立案对象（本机执行的每日跑）不存在了。GA daily.yml 的下游 job `daily-failure-issue`（`失败立案` step，CNB 单子，#3436 同通道）承接本档这一跑自己的立案；格名进 `DAILY_GATE_EXECUTORS`",
     tier: "retired",
   },
   {
@@ -2125,7 +2159,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
 
     /* 顺序约束落到 GA 每日档：浏览器缺件时整档只红在 launch 那一跳，而产物不在时
      * 红在 webServer 的 180s 超时上 —— 两者都指不到真正缺的那一格。 */
-    const steps = gaDailySteps();
+    const steps = gaDailyJobSteps();
     const e2eAt = steps.findIndex((n) => n.startsWith("全量E2E"));
     expect(
       e2eAt,
@@ -2223,7 +2257,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "退役理由的原文丢了 —— 「GitHub runner 的工具链由镜像与 setup-* 钉死」是那七格退役的根据",
     ).toContain("无需自证");
 
-    const steps = gaDailySteps();
+    const steps = gaDailyJobSteps();
     const testAt = steps.findIndex((n) => n.startsWith("单元测试"));
     /* 两个名字都必须取到：取不到就是**这一格被从清单里删了**，而顺序判据会退化成
      * 「-1 比 -1 小」那种永远成立的空判（解析失败伪装成结论）。 */
@@ -2242,9 +2276,11 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   it("`单元测试` 是 GA 每日档最后一个**会红的格**；其后只允许读数型尾巴", () => {
     /* 业主口径：「将每日单元测试放最后，最容易出问题的放最后」。这是**覆盖面**不是偏好：GA 的 steps 串行且失败即停，而这一格是唯一会因机器负载红的 ——
      * 实测 `cnb-b0l-1k59op66t` 775 份只 1 份红在 `Test timed out in 30000ms`（同时另有两份在跑全量 vitest/eslint），其后三格全 `skipped` ⇒ 它排中间时一次抖动决定那三格这一天跑不跑。
-     * #3504 起顺序判在 GA daily.yml：其后只允许 `if: failure()`（环境证据 / 失败立案，绿跑不付钱、红跑不吞结论 —— 立案那格还有 `continue-on-error`）与
-     * `if: always()`（覆盖率报告 warn / 镜像漂移）这些**读数型尾巴**，不能再有会红的重格。 */
-    const steps = gaDailySteps();
+     * #3504 起顺序判在 GA daily.yml：其后只允许 `if: failure()`（环境证据，绿跑不付钱、红跑不吞结论）与
+     * `if: always()`（覆盖率报告 warn / 镜像漂移）这些**读数型尾巴**，不能再有会红的重格。
+     * ⚠️ 顺序只在 `daily` 这一个 job 内有意义 —— `失败立案` 自 #3563 起是**下游 job**，
+     * 它不在这条尾巴里（它的 `if: failure()` / `continue-on-error` 由立案那条判据钉在 job 级）。 */
+    const steps = gaDailyJobSteps();
     const idx = steps.findIndex((n) => n.startsWith("单元测试"));
     expect(steps.length, "GA daily.yml 解析不出 steps —— 这条顺序判据没有对象了").toBeGreaterThan(
       0,
@@ -2252,27 +2288,28 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(idx, "GA 每日档必须有 `单元测试`").toBeGreaterThanOrEqual(0);
     expect(
       steps.slice(idx + 1),
-      "`单元测试` 之后只能跟读数型尾巴（环境证据 / 失败立案 / 覆盖率报告 / 镜像漂移判据），不能再有会红的格",
+      "`单元测试` 之后只能跟读数型尾巴（环境证据 / 覆盖率报告 / 镜像漂移判据），不能再有会红的格",
     ).toEqual([
       "环境证据（失败时：dmesg 的 OOM 行 + 内存读数）",
-      "失败立案（补洞：GA 每日档跑红 ⇒ CNB 单，按格名去重）",
       "覆盖率报告（artifact；对位 CNB 的 `覆盖率上报` 格）",
       "镜像漂移判据（CNB master vs GitHub master）",
     ]);
-    /* 「读数型」不是嘴上说说：尾巴四格各自带 `if:` 限形 —— 证据 / 立案只在失败那一跑、
+    /* 「读数型」不是嘴上说说：尾巴三格各自带 `if:` 限形 —— 证据只在失败那一跑、
      * 覆盖率与漂移不挡树级读数。谁把尾巴换成无条件会红的格，上面那条 toEqual 已经红；
-     * 这里再钉 `if:` 形状，把「尾巴必须是读数」这件事留在机器可读的面上。 */
-    const dailyYml = readFileAt(ROOT, DAILY_YML);
-    const unitAt = dailyYml.indexOf("      - name: 单元测试");
-    const tail = dailyYml.slice(unitAt);
+     * 这里再钉 `if:` 形状，把「尾巴必须是读数」这件事留在机器可读的面上。
+     * 取的是 **`daily` 那个 job 的块**而不是整份文件：整份搜会把下游 job 的 `if:` 也算进来，
+     * 于是「尾巴被换成无条件重格」这种红会被别处的字面量掩盖过去。 */
+    const dailyJob = gaJobBlock(DAILY_YML, "daily") ?? "";
+    const unitAt = dailyJob.indexOf("      - name: 单元测试");
+    expect(
+      unitAt,
+      "在 `daily` job 块里定位不到「单元测试」—— 这条尾巴判据没有对象了",
+    ).toBeGreaterThan(-1);
+    const tail = dailyJob.slice(unitAt);
     expect(
       (tail.match(/if: (?:failure|always)\(\)/g) ?? []).length,
       "单元测试之后的尾巴没有 `if: failure()` / `if: always()` 限形 —— 它们必须是读数型格子",
     ).toBeGreaterThanOrEqual(3);
-    expect(
-      tail,
-      "失败立案必须带 `continue-on-error: true` —— 立案发不出去不该给这一跑叠第二个红（#3436 的口径）",
-    ).toContain("continue-on-error: true");
   });
 
   it("`API 文档生成与自检` 只在每日档：push 侧不再即时判，GA 每日档排在单元测试之前（ISSUE #2537）", () => {
@@ -2290,7 +2327,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "「API 文档生成与自检」回到了 push 清单 —— 2026-11-05 起它只在每日档（ISSUE #2537：98% 触发率、40.9s 中位、占 30.6%）",
     ).not.toContain("API 文档生成与自检");
 
-    const steps = gaDailySteps();
+    const steps = gaDailyJobSteps();
     const at = steps.findIndex((n) => n.startsWith("API 文档生成与自检"));
     const lastRed = steps.findIndex((n) => n.startsWith("单元测试"));
     expect(
@@ -3067,7 +3104,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("GA 每日档的前提格：安装、库表都必须排在单测之前", () => {
-    const steps = gaDailySteps();
+    const steps = gaDailyJobSteps();
     const suite = steps.findIndex((n) => n.startsWith("单元测试"));
     expect(suite, "「单元测试」不在 GA daily.yml 里").toBeGreaterThan(-1);
     /* 顺序不是风格：每次构建都是全新 runner（hosted runner 即弃机），没有
@@ -3329,11 +3366,50 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   /**
    * 「每日档红 ⇒ 自动立案」这格不能只在登记上有个名字（ISSUE #2274 / #3436）：上一条管「撤下的格还在不在」，这条管**新加那格点的还是同一个入口**。
    * 名字还在、step 被换成别的命令，两边都绿而自动立案谁都不做 —— 那是这一族（判据在场、执行者不在场）唯一的失效形态。
-   * #3504 起执行者是 GA daily.yml 末尾的 `失败立案` step（CNB 单子，CNB_ISSUE_TOKEN 同通道）：
-   * 位置也钉 —— `if: failure()` + 排在环境证据之后，红的那一跑先出证据再立案。
+   * #3504 起执行者在 GA daily.yml（CNB 单子，CNB_ISSUE_TOKEN 同通道）。
+   *
+   * ⚠️ #3563 起它必须是**下游 job**（`needs: daily`），不是 `daily` 里的一个 step —— 这一条
+   * 与「点的还是同一个脚本」同等承重，所以两边都钉：脚本只认 jobs API 的 `steps[].conclusion`，
+   * 跑在 `daily` 内部时那个 job 自己还在飞，实测读回 0 个红格 ⇒ 零写入（run `42915112854`）。
+   * 那种失效**不会红**：`--no-block` 把退码 2 折成 0，屏幕上与「今天没红」逐字同形。
+   * 「先出环境证据、再立案」的顺序现在由 `needs: daily` 承担（整个上游 job 跑完才轮到它），
+   * 不再靠同一 job 内的 step 排位 —— 所以这里钉 `needs`，不钉跨 job 的下标大小。
    */
-  it("GA 每日档的失败立案点的是 `ci-ga-daily-failure-issue.mjs --no-block`，且带 if: failure()", () => {
-    const step = gaStepBlock(DAILY_YML, DAILY_GATE_EXECUTORS["每日失败立案"] ?? "");
+  it("GA 每日档的失败立案是 `needs: daily` 的下游 job，点 `ci-ga-daily-failure-issue.mjs --no-block`", () => {
+    const filingName = DAILY_GATE_EXECUTORS["每日失败立案"] ?? "";
+    expect(filingName, "`DAILY_GATE_EXECUTORS` 里没有「每日失败立案」的执行者登记").toBeTruthy();
+
+    /* ① 反面：`daily` 那个 job 里**不许**再有这一格。挪回去 = 回到 #3563 的静默零写入。 */
+    const dailyJob = gaJobBlock(DAILY_YML, "daily");
+    expect(dailyJob, "GA daily.yml 里解析不出 `daily` job —— 这条判据没有对象了").toBeTruthy();
+    expect(
+      gaDailyJobSteps(),
+      "「失败立案」回到了 `daily` job 内部 —— 那个 job 还在飞时 jobs API 读不到它自己的红格，" +
+        "立案会静默零写入（#3563 / run 42915112854 打印「红格 0 个」）",
+    ).not.toContain(filingName);
+
+    /* ② 正面：它在一个 `needs: daily` 的下游 job 里，且 job 级限形齐全。 */
+    const filingJob = gaJobBlock(DAILY_YML, "daily-failure-issue");
+    expect(
+      filingJob,
+      "GA daily.yml 里没有 `daily-failure-issue` job ⇒ 自动立案没有执行者了",
+    ).toBeTruthy();
+    const job = filingJob ?? "";
+    expect(
+      job,
+      "立案 job 必须 `needs: daily` —— 上游不先 completed，读到的 conclusion 就不是终值（#3563）",
+    ).toMatch(/^ {4}needs: daily$/m);
+    expect(
+      job,
+      "立案 job 不是 `if: failure()` —— 绿的那一跑也要付这笔钱（起 runner + 读 jobs API + 写单）",
+    ).toMatch(/^ {4}if: failure\(\)$/m);
+    expect(
+      job,
+      "立案 job 必须带 `continue-on-error: true` —— 立案发不出去不该给这一跑叠第二个红；但**不静默**，失败话术由脚本原样打印",
+    ).toMatch(/^ {4}continue-on-error: true$/m);
+
+    /* ③ 点的还是同一个入口 + 同一枚旗标（名字在、命令被换掉是这一族唯一的失效形态）。 */
+    const step = gaStepBlock(DAILY_YML, filingName);
     expect(step, "GA daily.yml 里没有「失败立案」step ⇒ 自动立案没有执行者了").toBeTruthy();
     const run =
       step
@@ -3342,21 +3418,11 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         ?.trim() ?? "";
     expect(run).toContain("scripts/ci-ga-daily-failure-issue.mjs");
     expect(run).toContain("--no-block");
+    /* 这一格必须真的落在下游 job 里，而不是「文件里某处有个同名 step」。 */
     expect(
-      step,
-      "「失败立案」不是 `if: failure()` —— 绿的那一跑也要付这笔钱（读 jobs API + 写单）",
-    ).toContain("if: failure()");
-    expect(
-      step,
-      "「失败立案」必须带 `continue-on-error: true` —— 立案发不出去不该给这一跑叠第二个红；但**不静默**，失败话术由脚本原样打印",
-    ).toContain("continue-on-error: true");
-    /* 排在环境证据之后：两者同挂 `if: failure()`，中间不夹 `always()` 的格，
-     * 日志里「先读环境证据、再立案」的顺序才是读得出来的（§13.5.4 只报事实、不代写因果）。 */
-    const steps = gaDailySteps();
-    expect(
-      steps.indexOf(DAILY_GATE_EXECUTORS["每日失败立案"] ?? ""),
-      "「失败立案」必须排在「环境证据」之后 —— 先出证据、再立案的顺序要读得出来",
-    ).toBeGreaterThan(steps.indexOf("环境证据（失败时：dmesg 的 OOM 行 + 内存读数）"));
+      job.includes(`      - name: ${filingName}`),
+      "「失败立案」step 不在 `daily-failure-issue` job 块里 —— 上面那三条 job 级限形钉的就不是它",
+    ).toBe(true);
   });
 
   /**
