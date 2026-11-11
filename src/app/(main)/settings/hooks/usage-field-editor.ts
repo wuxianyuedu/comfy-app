@@ -31,7 +31,7 @@ export type UsageFieldEditorState = {
   kind: RemoteModelKind;
 };
 
-/** 字段行编辑器的动作集合（挂在 `RemoteModelDialogs` 上透给视图）。 */
+/** 字段行编辑器的动作集合（挂在 `useProviderModelDialogs` 的返回对象上透给视图）。 */
 export type UsageFieldEditor = {
   addField: (key?: string) => void;
   addPresetField: (key: string) => void;
