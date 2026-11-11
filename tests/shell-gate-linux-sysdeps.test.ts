@@ -1,5 +1,5 @@
 /**
- * Tauri 在 Linux 上的系统库前提（ISSUE #3572）。
+ * Tauri 在 Linux 上的系统库前提（ISSUE #3572 建口径、#3580 纠名单）。
  *
  * 这一格以前**从来没有真跑过** `cargo test`：承重门禁是 #3064 从 CNB 自托管节点
  * （**Windows**，走 MSVC + WebView2，不需要 glib/webkit）迁到 GA 的 Linux runner 的，
@@ -13,15 +13,31 @@
  *
  * cargo 退 101 = **编译期**失败，不是断言失败。
  *
- * 所以本文件钉两件事：
- *   ① 探针的**判决**（缺什么说什么、非 Linux 不探、缺了给出安装出口）；
- *   ② workflow 那一层**真的装了**那些包 —— 否则装在哪、装没装，全靠读的人自己信。
+ * #3572 补上「平台前提归 workflow 装、判据只说人话」这层分工之后，#3567 仍判红 ——
+ * 这次是**第二层根因**（#3580）：探针问的模块名不对，有四个**注定永远报缺**
+ * （`rsvg-2.0` 名字就错、`xdo` 不在依赖图、`ayatana-appindicator3-0.1` 是运行期
+ * `dlopen`、`openssl` 不参与编译）⇒ apt 明明装成功了、探针仍报「缺库」，那一格对任何
+ * 碰 `src-tauri/**` 的 PR 恒红。
+ *
+ * 所以本文件钉三件事：
+ *   ① 探针**问的模块**必须是编译期真会被问到的（那四个一个都不许在名单里）；
+ *   ② 探针的**判决**（缺什么说什么、非 Linux 不探、缺了给出可执行的安装出口）；
+ *   ③ workflow 那一层**真的装了**那些包 —— 少了就是「Linux 上编不出壳」，
+ *      多装了就是白付一次 apt。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { linesFor, missingLinuxSystemLibs, runCargoTest, runGate } from "../scripts/shell-gate.mjs";
+import {
+  TAURI_LINUX_PC_MODULES,
+  TAURI_LINUX_PC_PACKAGES,
+  linesFor,
+  missingLinuxSystemLibs,
+  runCargoTest,
+  runGate,
+  tauriLinuxAptPackages,
+} from "../scripts/shell-gate.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const PR_GATE = ".github/workflows/pr-gate.yml";
@@ -30,14 +46,64 @@ function read(rel: string): string {
   return readFileSync(path.join(ROOT, rel), "utf8");
 }
 
-/** 官方清单（Debian/Ubuntu 一栏）里**属于库**的那些 —— 构建期工具不算。 */
-const OFFICIAL_LIB_PACKAGES = [
-  "libwebkit2gtk-4.1-dev",
-  "libayatana-appindicator3-dev",
-  "librsvg2-dev",
-  "libxdo-dev",
-  "libssl-dev",
+/**
+ * 那四个**注定永远报缺**的模块 —— #3580 的事故现场。
+ *
+ * 探到它们 ⇒ 探针永远说「缺」⇒ 那一格对任何碰壳的 PR 恒红，而 apt 装没装都对。
+ */
+const NEVER_PROBEABLE = [
+  { mod: "rsvg-2.0", why: "发行版实名是 librsvg-2.0，且依赖图里无人链接 rsvg" },
+  { mod: "xdo", why: "不在依赖图（muda 的 libxdo feature 没开），发行版也不提供任何 .pc" },
+  { mod: "ayatana-appindicator3-0.1", why: "libappindicator-sys 没有 build.rs，运行期才 dlopen" },
+  { mod: "openssl", why: "依赖图里只有 rustls，没有 openssl-sys" },
 ];
+
+/** 编译期**硬失败**的那些 `.pc` —— 少了必编译不过，探针必须问到。 */
+const MUST_PROBE = [
+  "glib-2.0",
+  "gobject-2.0",
+  "gio-2.0",
+  "atk",
+  "cairo",
+  "cairo-gobject",
+  "gdk-pixbuf-2.0",
+  "pango",
+  "gdk-3.0",
+  "gdk-x11-3.0",
+  "gtk+-3.0",
+  "dbus-1",
+  "webkit2gtk-4.1",
+  "javascriptcoregtk-4.1",
+  "libsoup-3.0",
+];
+
+describe("编译期探针名单（ISSUE #3580）", () => {
+  it("那四个注定永远报缺的一个都不许在名单里 —— 这就是 #3567 红的那一层", () => {
+    for (const { mod, why } of NEVER_PROBEABLE) {
+      expect(TAURI_LINUX_PC_MODULES, `${mod}：${why}`).not.toContain(mod);
+    }
+  });
+
+  it("编译期真会被问到的 `.pc` 一个都不许少", () => {
+    for (const mod of MUST_PROBE) {
+      expect(TAURI_LINUX_PC_MODULES).toContain(mod);
+    }
+  });
+
+  it("名单里没有重复 —— 同一个模块问两遍只会让出口多念一遍", () => {
+    expect(new Set(TAURI_LINUX_PC_MODULES).size).toBe(TAURI_LINUX_PC_MODULES.length);
+  });
+
+  it("映射表的键与名单逐字相等 —— 出口必须指向一个装得上它的包", () => {
+    expect(Object.keys(TAURI_LINUX_PC_PACKAGES)).toEqual(TAURI_LINUX_PC_MODULES);
+  });
+
+  it("每个模块的提供包都是 `-dev` 包（少了 -dev 就是「pkg-config 找不到 .pc」）", () => {
+    for (const [mod, pkg] of Object.entries(TAURI_LINUX_PC_PACKAGES)) {
+      expect(pkg, `${mod} 的提供包`).toMatch(/^[a-z0-9.+-]+-dev$/);
+    }
+  });
+});
 
 describe("Tauri 的 Linux 系统库探针（ISSUE #3572）", () => {
   it("非 Linux 平台不探 —— Windows 走 MSVC + WebView2，macOS 走系统 framework", () => {
@@ -65,11 +131,12 @@ describe("Tauri 的 Linux 系统库探针（ISSUE #3572）", () => {
       platform: "linux",
       pkgConfigProbe: (mod) => mod !== "glib-2.0" && mod !== "webkit2gtk-4.1",
     });
-    expect(got.missing).toEqual(["webkit2gtk-4.1", "glib-2.0"]);
-    expect(got.hint).toContain("webkit2gtk-4.1");
+    expect(got.missing).toEqual(["glib-2.0", "webkit2gtk-4.1"]);
     expect(got.hint).toContain("glib-2.0");
+    expect(got.hint).toContain("webkit2gtk-4.1");
     // 没缺的那几个不许出现在「缺」那一行里。
     expect(got.hint?.split("\n")[0]).not.toContain("rsvg-2.0");
+    expect(got.hint?.split("\n")[0]).not.toContain("libsoup-3.0");
   });
 
   it("缺前提时给的是可执行的出口，不是 pkg-config 的原始噪音", () => {
@@ -78,8 +145,8 @@ describe("Tauri 的 Linux 系统库探针（ISSUE #3572）", () => {
       pkgConfigProbe: () => false,
     });
     expect(got.hint).toContain("apt-get install");
-    // 官方清单的库包逐个点名（少了哪个，用户就得自己去查）。
-    for (const pkg of OFFICIAL_LIB_PACKAGES) {
+    // 每个被探的模块都要点名到提供它的包（少了哪个，用户就得自己去查）。
+    for (const pkg of new Set(Object.values(TAURI_LINUX_PC_PACKAGES))) {
       expect(got.hint).toContain(pkg);
     }
     // 必须说清「101 是编译期失败」—— 否则读的人会以为是 Rust 侧代码坏了。
@@ -106,14 +173,7 @@ describe("探针接在 cargo test 之前（ISSUE #3572）", () => {
       cargoLookup: () => ({ path: "/nonexistent/cargo-sentinel", probes: [] }),
     });
     expect(got.code).toBe(1);
-    expect(got.missing).toEqual([
-      "webkit2gtk-4.1",
-      "glib-2.0",
-      "ayatana-appindicator3-0.1",
-      "rsvg-2.0",
-      "xdo",
-      "openssl",
-    ]);
+    expect(got.missing).toEqual(TAURI_LINUX_PC_MODULES);
   });
 
   it("缺前提时归因是「cargo test 没跑起来」，不是「cargo test 失败」", () => {
@@ -159,8 +219,24 @@ describe("探针接在 cargo test 之前（ISSUE #3572）", () => {
   });
 });
 
-describe("GA 侧真的装了那些系统库（ISSUE #3572）", () => {
+describe("GA 侧真的装了那些系统库（ISSUE #3572 / #3580）", () => {
   const workflow = read(PR_GATE);
+
+  /** 从 workflow 里读出「装 Tauri 的 Linux 系统依赖」那一步的 apt 包清单。 */
+  function aptPackagesInWorkflow(): string[] {
+    const start = workflow.indexOf("- name: 装 Tauri 的 Linux 系统依赖");
+    expect(start).toBeGreaterThan(-1);
+    const rest = workflow.slice(start);
+    const next = rest.indexOf("\n      - name:", 1);
+    const step = next === -1 ? rest : rest.slice(0, next);
+    const lines = step.split("\n");
+    const at = lines.findIndex((l) => l.includes("apt-get install"));
+    expect(at).toBeGreaterThan(-1);
+    return lines
+      .slice(at + 1)
+      .map((l) => l.trim().replace(/\\$/, "").trim())
+      .filter((l) => l.length > 0);
+  }
 
   it("装依赖的那一步在 GA 的 PR 门禁里，且在重档之前", () => {
     // ⚠️ 比的是 **step 的位置**，不是字符串的首次出现：文件头部注释里也写着
@@ -174,17 +250,14 @@ describe("GA 侧真的装了那些系统库（ISSUE #3572）", () => {
     expect(installAt).toBeLessThan(heavyAt);
   });
 
-  it("官方清单里的库包逐个在案 —— 少一个就是「Linux 上编不出壳」", () => {
-    for (const pkg of OFFICIAL_LIB_PACKAGES) {
-      expect(workflow).toContain(pkg);
-    }
-    // build-essential 是 C 依赖的链接器与头文件（tauri-sys / glib-sys / gtk-sys 全走它）。
-    expect(workflow).toContain("build-essential");
+  it("apt 清单与判据那份映射逐字对应 —— 少装即红、多装即白付", () => {
+    // 比的是**集合**不是次序：apt 不看次序，而次序只是人手写出来的排版。
+    expect([...aptPackagesInWorkflow()].sort()).toEqual([...tauriLinuxAptPackages()].sort());
   });
 
   it("装的是 dev 包 —— 少了 -dev 就是「pkg-config 找不到 .pc」", () => {
-    for (const pkg of OFFICIAL_LIB_PACKAGES) {
-      expect(pkg.endsWith("-dev")).toBe(true);
+    for (const pkg of aptPackagesInWorkflow()) {
+      expect(pkg === "build-essential" || pkg.endsWith("-dev")).toBe(true);
     }
   });
 
