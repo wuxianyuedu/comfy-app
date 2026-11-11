@@ -172,6 +172,85 @@ describe("installStreamCapture", () => {
       "业务输出",
     );
   });
+
+  it("original 抛 EPIPE 时降级：不冒泡、转录继续、后续写不再打到死管道上（ISSUE #3534）", async () => {
+    /* 现场复现（ISSUE #3534）：对端（dev-launcher 的日志采集侧）被强杀后，fd 上的
+     * 每一次 write 都同步抛 EPIPE；异常从 patched 冒出去 = uncaughtException，而
+     * Next 的默认处理器经 console.error 写 stderr → 再过 patched → 再抛，进程进入
+     * 「活着但不服务」的僵尸循环。钉四件事：①第一次写不冒泡（返回 false，不抛）；
+     * ②转录照常落盘（面板还能看到输出 —— 本模块存在的理由）；③死管道上的原写
+     * 只发生一次（降级后跳过，不重试一个永远失败的调用）；④callback 以成功形态
+     * 放行（console 的簿记靠它推进；错误形状会在流机制里变成无人监听的 error 事件，
+     * 等于把僵尸循环换条路再犯）。 */
+    let originalCalls = 0;
+    const epipe = Object.assign(new Error("write EPIPE"), { code: "EPIPE", errno: -4047 });
+    /* 桩与实现文件的 `patched` 同款：显式参数类型 + 可选标记，免类型断言。 */
+    type WriteFn = NodeJS.WriteStream["write"];
+    const throwingWrite: WriteFn = function throwingWrite(
+      _chunk: string | Uint8Array,
+      encodingOrCb?: BufferEncoding | ((err?: Error | null) => void),
+      cb?: (err?: Error | null) => void,
+    ): boolean {
+      originalCalls += 1;
+      const done =
+        typeof cb === "function"
+          ? cb
+          : typeof encodingOrCb === "function"
+            ? encodingOrCb
+            : undefined;
+      done?.(epipe);
+      throw epipe;
+    };
+    process.stdout.write = function capturedWrite(
+      chunk: string | Uint8Array,
+      encodingOrCb?: BufferEncoding | ((err?: Error | null) => void),
+      cb?: (err?: Error | null) => void,
+    ): boolean {
+      written.out.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
+      /* 重载类型的直调在 TS 侧只按最后一个签名解析，与实现同一形态走 apply。 */
+      const outcome: unknown = Reflect.apply(throwingWrite, process.stdout, [
+        chunk,
+        encodingOrCb,
+        cb,
+      ]);
+      return outcome === true;
+    };
+
+    const mod = await freshInstall();
+    const file = mod.panelCaptureLogPath();
+
+    /* 第一次写：EPIPE 在 original 里抛 —— patched 必须接住，不让它冒出去。 */
+    expect(() => process.stdout.write("第一次写\n", () => undefined)).not.toThrow();
+    expect(originalCalls).toBe(1);
+    /* 后续写：降级生效，死管道上的 original 不再被调用；callback 照常放行。 */
+    const secondCb = vi.fn();
+    expect(process.stdout.write("第二次写\n", secondCb)).toBe(false);
+    expect(originalCalls).toBe(1);
+    expect(secondCb).toHaveBeenCalledTimes(1);
+    expect(secondCb).toHaveBeenCalledWith();
+
+    /* 转录不随断流中断：两行都落在面板文件里（走缓冲，等到落盘再读）。 */
+    const text = await readCaptureWhenFilled(file, "第二次写\n");
+    expect(text).toContain("第一次写\n");
+    expect(text).toContain("第二次写\n");
+  });
+
+  it("original 抛非 EPIPE 错误时不掩盖（那是真正的程序缺陷）", async () => {
+    const boom = Object.assign(new Error("bad file descriptor"), { code: "EBADF" });
+    type WriteFn = NodeJS.WriteStream["write"];
+    const badFdWrite: WriteFn = function badFdWrite(
+      _chunk: string | Uint8Array,
+      _encodingOrCb?: BufferEncoding | ((err?: Error | null) => void),
+      cb?: (err?: Error | null) => void,
+    ): boolean {
+      cb?.(boom);
+      throw boom;
+    };
+    process.stdout.write = badFdWrite;
+
+    await freshInstall();
+    expect(() => process.stdout.write("走 EBADF\n")).toThrow(boom);
+  });
 });
 
 /* ISSUE #1365：转录文件的「取最新一份」与「轮转」都曾按**文件名**判断，而文件名
