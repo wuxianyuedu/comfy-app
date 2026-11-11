@@ -31,8 +31,8 @@ import {
 } from "../model-test-config";
 
 /** 视频任务轮询：与 VideoStudio 同一节奏（3s 一轮 / 10 分钟上限）。 */
-const POLL_INTERVAL_MS = 3_000;
-const POLL_DEADLINE_MS = 10 * 60 * 1000;
+const POLL_INTERVAL_MS = 3000;
+const POLL_DEADLINE_MS = 600_000;
 
 /** 一次测试的结果（工坊同款输出：图片 URL / 视频 URL）。 */
 export type ModelTestResult =
@@ -41,33 +41,33 @@ export type ModelTestResult =
   | null;
 
 export type ModelTestController = {
-  /** 候选模型（当前 kind 下启用的远端条目）。 */
-  candidates: Array<TestCandidate>;
-  /** 当前用途（图片 / 视频页签）。 */
-  kind: ModelTestKind;
-  /** 一次测试的失败文案（空 = 没失败）。 */
-  error: string | null;
-  /** 忙碌位：提交 / 轮询进行中。 */
-  generating: boolean;
   /** 选中模型的适配器草稿（workshopAdaptersGet 的解析结果）。 */
   adapters: Array<RemoteModeAdapter>;
-  /** 选中模型当前生效的模式码（"" = 未配适配器，走通道默认端点）。 */
-  mode: string;
+  /** 候选模型（当前 kind 下启用的远端条目）。 */
+  candidates: Array<TestCandidate>;
+  /** 一次测试的失败文案（空 = 没失败）。 */
+  error: string | null;
   /** 生成动作：按适配器映射收集统一输入并发起一次真实调用（消耗额度）。 */
   generate: () => Promise<void>;
+  /** 忙碌位：提交 / 轮询进行中。 */
+  generating: boolean;
+  /** 当前用途（图片 / 视频页签）。 */
+  kind: ModelTestKind;
   /** 适配器查询 / 候选读取的加载态。 */
   loading: boolean;
+  /** 选中模型当前生效的模式码（"" = 未配适配器，走通道默认端点）。 */
+  mode: string;
+  /** 局部更新表单值（文本 / 档位）。 */
+  patchValue: (type: keyof ModelTestValues, value: string) => void;
+  /** 最近一次成功产物。 */
+  result: ModelTestResult;
   selectedModel: string;
+  selectModel: (name: string) => void;
   /** 图片输入行选完文件后由视图调用：读成 data URL 存进表单值。 */
   setInputFromFile: (type: "first-frame" | "image", file: File) => Promise<void>;
   /** 切换用途页签（候选 / 选中 / 表单随之重置）。 */
   setKind: (kind: ModelTestKind) => void;
   setMode: (mode: string) => void;
-  selectModel: (name: string) => void;
-  /** 局部更新表单值（文本 / 档位）。 */
-  patchValue: (type: keyof ModelTestValues, value: string) => void;
-  /** 最近一次成功产物。 */
-  result: ModelTestResult;
   values: ModelTestValues;
 };
 

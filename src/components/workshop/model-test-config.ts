@@ -3,7 +3,7 @@
 // remoteModel 表 + 模式适配器直连）直接试已配置的模型。输入与输出都走
 // 工坊那一条链 —— 本文件只放它的纯函数与常量，DOM / 网络分居视图与 hook。
 
-import { type RemoteModeAdapter, type WorkshopInputType } from "~/lib/workshop/model-mode-contract";
+import type { RemoteModeAdapter, WorkshopInputType } from "~/lib/workshop/model-mode-contract";
 
 /** 本页可测的用途。工坊 API 通道目前只有 image / video 两条（contract 的
  *  output 词表虽有 audio，通道未接入 —— 出现死页签不如不出现，接入后再加）。 */
@@ -68,18 +68,24 @@ export type ModelTestControl =
 
 export function controlForInputType(type: WorkshopInputType): ModelTestControl {
   switch (type) {
-    case "prompt":
+    case "prompt": {
       return "prompt";
-    case "negative":
+    }
+    case "negative": {
       return "negative";
-    case "aspect-ratio":
+    }
+    case "aspect-ratio": {
       return "ratio";
-    case "megapixels":
+    }
+    case "megapixels": {
       return "megapixels";
-    case "multiple":
+    }
+    case "multiple": {
       return "multiple";
-    case "duration":
+    }
+    case "duration": {
       return "duration";
+    }
     case "image":
     case "first-frame":
     case "last-frame":
@@ -87,13 +93,16 @@ export function controlForInputType(type: WorkshopInputType): ModelTestControl {
     case "depth":
     case "pose":
     case "lineart":
-    case "edge":
+    case "edge": {
       return "image";
-    case "seed":
+    }
+    case "seed": {
       return "number";
+    }
     case "lora-model":
-    case "lora-weight":
+    case "lora-weight": {
       return "text";
+    }
   }
 }
 

@@ -49,7 +49,14 @@ function KindTabs({
   return (
     <div aria-label="选择用途" className="flex flex-wrap gap-2" role="radiogroup">
       {MODEL_TEST_KINDS.map((k) => (
-        <SelectChip key={k} onClick={() => onChange(k)} selected={kind === k} shape="pill">
+        <SelectChip
+          key={k}
+          onClick={() => {
+            onChange(k);
+          }}
+          selected={kind === k}
+          shape="pill"
+        >
           {MODEL_TEST_KIND_LABELS[k]}
         </SelectChip>
       ))}
@@ -133,7 +140,7 @@ function InputRow({
               size="sm"
               variant="outline"
             >
-              {value !== "" ? "换一张" : "上传图片"}
+              {value === "" ? "上传图片" : "换一张"}
             </FilePickerButton>
             {value !== "" && (
               <>
@@ -215,9 +222,9 @@ export function ModelTestView() {
   /* 渲染哪些输入行：有适配器 → 它声明的映射行（工坊同款）；没有 → 该用途的
      通道承接集合（OpenAI 兼容默认映射），让未配适配器的模型也能先试。 */
   const inputRows: Array<{ relayed: boolean; type: WorkshopInputType }> =
-    selectedAdapter !== null
-      ? selectedAdapter.inputs.map((row) => ({ type: row.type, relayed: relaySet.has(row.type) }))
-      : [...relaySet].map((type) => ({ type, relayed: true }));
+    selectedAdapter === null
+      ? [...relaySet].map((type) => ({ type, relayed: true }))
+      : selectedAdapter.inputs.map((row) => ({ type: row.type, relayed: relaySet.has(row.type) }));
 
   return (
     <DocumentFrame
