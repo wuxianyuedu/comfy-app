@@ -342,6 +342,14 @@ function scriptBearingPackage(raw) {
  * 但归属要按版本判 —— 磁盘上留着 `foo@1.0.0` 而锁文件里是 `foo@2.0.0` 时，
  * 前者是残留、后者才是当前依赖。
  *
+ * 键要**剥掉 peer 尾巴**（ISSUE #3533）：pnpm 12 的锁文件键带 peer 依赖括号，
+ * 如 `esbuild@0.25.0(unrs-resolver@1.15.0)`，而磁盘上装出来的 `package.json`
+ * 版本是裸的 `esbuild@0.25.0` —— 原样比对永远对不上，**在图里的现行依赖**会被
+ * 误判成 store 孤儿：只落进「另有 N 个已不在图里」的提示档、不参与对账。
+ * 一次「移掉带构建脚本的依赖」或陈旧检出（`node_modules` 与锁文件错位）正好
+ * 暴露成误报：门禁绿了、该包的构建脚本却从没被对过。剥尾巴只放宽「同一包
+ * 在图里」这一问，不放过「同名异版本」的残留判别。
+ *
  * @returns {Set<string> | null} 锁文件不在 / 读不到 / 解析不出 `packages` 段 ⇒ `null`
  *   （**没有输入可判归属**：此时按「不做归属过滤」处理，见调用点 —— 那个方向是
  *   **误红**而不是**误绿**，详见调用点那段注释）
@@ -354,7 +362,12 @@ function readGraphPackageIds() {
     }
     const parsed = parseLockfile(raw);
     const section = parsed.sections.get("packages");
-    const ids = section ? new Set(section.keys.keys()) : new Set();
+    const ids = new Set();
+    if (section) {
+      for (const key of section.keys.keys()) {
+        ids.add(key.replace(/\(.*\)$/, ""));
+      }
+    }
     return ids.size > 0 ? ids : null;
   } catch {
     /* 读不动（权限 / 是目录）或解析不动：归属这一问没输入。

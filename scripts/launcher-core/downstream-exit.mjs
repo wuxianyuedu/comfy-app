@@ -75,7 +75,7 @@ export function describeDownstreamExit(kind, ctx) {
       `本地服务随桌面壳一起退出（exit=${ctx.shellCode ?? "?"}），且 log/launcher/dev-launcher-stderr.log 里` +
       `**没有**壳写下的任何收尾标记——说明壳是被强行收走的（另一次启动把它顶掉 / 任务管理器结束了任务 / 壳崩溃）。` +
       `这次双击等于**从未启动**：请只双击一次启动入口并等启动页自己切到主界面。` +
-      `另请对照 log/shell/shell.log 与 dev-launcher-stderr.log。\n${tail}`
+      `另请对照 log/current/shell/shell.log 与 log/current/launcher/dev-launcher-stderr.log。\n${tail}`
     );
   }
   return (
