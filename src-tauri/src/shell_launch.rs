@@ -768,12 +768,71 @@ pub fn log_session_start(project_root: &str) {
 
 /// 追加一行（目录缺失时递归建）。返回 Err 而不是 panic —— 调用方一律只记 WARN。
 fn append_line(path: &std::path::Path, line: &str) -> std::io::Result<()> {
+  append_bytes(path, line.as_bytes())
+}
+
+/// 追加一段字节（目录缺失时递归建）。`append_line` 的字节形态，供按次开合的
+/// 日志写入器复用同一份「建目录 + 开-写-即关」的落盘语义。
+fn append_bytes(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
   use std::io::Write;
   if let Some(dir) = path.parent() {
     std::fs::create_dir_all(dir)?;
   }
   let mut file = std::fs::OpenOptions::new().create(true).append(true).open(path)?;
-  file.write_all(line.as_bytes())
+  file.write_all(bytes)
+}
+
+/// 壳自持日志的大小上限：超过即整份重建（丢旧保新，等效插件 Folder target 的
+/// KeepOne 轮转）。设防的是「壳长开数日 + 编排器转发日志把文件推到无界」，
+/// 不是常规路径——`current/` 每次运行结束会被归档清空，正常情况下远到不了这里。
+pub const SHELL_LOG_MAX_BYTES: u64 = 40 * 1024 * 1024;
+
+/// 壳自持日志（`log/current/shell/shell.log`）的**按次开合**写入器。
+///
+/// 为什么不沿用 tauri-plugin-log 的 Folder target（#3574）：它把文件句柄一直
+/// 攥到进程退出，而 `current/` 的生命周期里有多次「整目录清空」——启动时编排器
+/// 的崩溃补做（`recoverStaleCurrent`，把壳先写进来的会话头当成上一次的残留）、
+/// 退出时的收包归档（`archiveCurrent`）。任何一次清空都发生在壳还活着的时候：
+/// Windows 上删除对持句柄文件成功（Rust std 以含 FILE_SHARE_DELETE 打开），
+/// 目录项即刻消失，此后插件的所有写入都落进一个已解除链接的句柄——**静默丢失，
+/// 日志冻在清空发生前的那几行**。每次写入按路径重开 + 追加 + 即关，目录被清了
+/// 下一行自己重建（与 `append_line` 同一取向）；代价是每行一次 open/close，
+/// 桌面壳的日志频率下完全无感。
+pub struct ResilientShellLog {
+  path: std::path::PathBuf,
+  max_bytes: u64,
+}
+
+impl ResilientShellLog {
+  /// 按默认大小上限（[`SHELL_LOG_MAX_BYTES`]）建一个写入器。
+  pub fn new(path: std::path::PathBuf) -> Self {
+    Self {
+      path,
+      max_bytes: SHELL_LOG_MAX_BYTES,
+    }
+  }
+}
+
+impl std::io::Write for ResilientShellLog {
+  fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+    // fern 的 writer 输出每次给一整条格式化好的行，write_fmt 内部按 write_all
+    // 语义调用本函数；这里同步落盘，返回「全部写完」。
+    let oversized = std::fs::metadata(&self.path)
+      .map(|m| m.len() >= self.max_bytes)
+      .unwrap_or(false);
+    if oversized {
+      // 按次开合意味着没有谁长期攥着这份文件，删除是即时的；删失败（被瞬时
+      // 只读句柄占住）就先不轮转，下一行再试——丢上限与丢现场之间选后者。
+      let _ = std::fs::remove_file(&self.path);
+    }
+    append_bytes(&self.path, buf)?;
+    Ok(buf.len())
+  }
+
+  fn flush(&mut self) -> std::io::Result<()> {
+    // 落盘在 write() 里同步完成，没有缓冲可冲。
+    Ok(())
+  }
 }
 
 /// `YYYY-MM-DD HH:MM:SS.mmm` 时间戳（与 Node 侧 `formatLogLine` 的**形态**同形）。
@@ -1384,6 +1443,63 @@ mod tests {
     assert_eq!(
       nextjs_log_dir("/proj"),
       root.join("log").join("current").join("nextjs")
+    );
+  }
+
+  /// #3574 的回归判据：文件被清（编排器崩溃补做 / 退出归档的 `emptyDir`）之后，
+  /// 下一行写入必须自己把文件重建出来——而不是把内容写进已解除链接的旧句柄里。
+  #[test]
+  fn resilient_shell_log_survives_file_removal() {
+    let dir = std::env::temp_dir().join(format!(
+      "comfyapp-resilient-log-{}-{}",
+      std::process::id(),
+      std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0)
+    ));
+    let path = dir.join("shell").join("shell.log");
+    let mut writer = ResilientShellLog::new(path.clone());
+    std::io::Write::write_all(&mut writer, b"first\n").unwrap();
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "first\n");
+
+    // 模拟 current/ 被清：文件和目录整个删掉（此时「插件」手里还留着旧句柄——
+    // 本写入器没有长期句柄，这正是被测行为）。
+    std::fs::remove_dir_all(&dir).unwrap();
+
+    std::io::Write::write_all(&mut writer, b"second\n").unwrap();
+    assert_eq!(
+      std::fs::read_to_string(&path).unwrap(),
+      "second\n",
+      "清空后的写入必须重建文件；内容丢失 = 写进了已解除链接的句柄（#3574 的病根）"
+    );
+  }
+
+  /// 大小上限的等效 KeepOne：超过上限的下一行把文件整份重建（丢旧保新），
+  /// 别让长开会话把壳自持日志推到无界。
+  #[test]
+  fn resilient_shell_log_rebuilds_past_size_cap() {
+    let dir = std::env::temp_dir().join(format!(
+      "comfyapp-resilient-cap-{}-{}",
+      std::process::id(),
+      std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0)
+    ));
+    let path = dir.join("shell").join("shell.log");
+    let mut writer = ResilientShellLog {
+      path: path.clone(),
+      max_bytes: 8,
+    };
+    std::io::Write::write_all(&mut writer, b"12345678\n").unwrap();
+    // 恰好达到上限：这一行还在。
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "12345678\n");
+    std::io::Write::write_all(&mut writer, b"9\n").unwrap();
+    assert_eq!(
+      std::fs::read_to_string(&path).unwrap(),
+      "9\n",
+      "越过上限的下一行必须重建文件，而不是无限追加"
     );
   }
 

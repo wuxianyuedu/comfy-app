@@ -23,8 +23,8 @@ function isRuntimeLogSource(v: unknown): v is RuntimeLogSource {
   return typeof v === "string" && RUNTIME_LOG_SOURCES.some((source) => source === v);
 }
 
-/* 壳侧启动链路的两份日志（壳自持 log/shell/shell.log + 壳侧编排链路
- * log/launcher/shell-launch.log）。路径的唯一事实来源是 `launchPaths`——
+/* 壳侧启动链路的两份日志（壳自持 log/current/shell/shell.log + 壳侧编排链路
+ * log/current/launcher/shell-launch.log）。路径的唯一事实来源是 `launchPaths`——
  * 它与 Rust 壳侧共用同一组路径常量（tests/launch-diagnostics-paths.test.ts
  * 逐项核对），这里不再抄一份字面量。 */
 const SHELL_CHAIN_PATHS = launchPaths(process.cwd());

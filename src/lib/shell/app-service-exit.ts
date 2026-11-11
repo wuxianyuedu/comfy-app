@@ -170,7 +170,7 @@ export function describeAppServiceExit(record: AppServiceExitRecord): AppService
         why: "本地服务随桌面壳一起退出了（壳自身以非零码结束）",
         action:
           "若只是把已在运行的窗口唤到前台，本次双击不会启动新进程；" +
-          "否则重新双击一次启动入口，并对照 log/launcher/ 下的日志",
+          "否则重新双击一次启动入口，并对照 log/current/launcher/ 下的日志",
         detail,
       };
     }
@@ -179,7 +179,7 @@ export function describeAppServiceExit(record: AppServiceExitRecord): AppService
         why: "本地服务随桌面壳一起退出了，且壳没有留下任何收尾标记（被强行收走或崩溃）",
         action:
           "重新双击一次启动入口并**只双击一次**、等启动页自己切换；" +
-          "若反复发生，把 log/launcher/ 与 log/shell/ 一起带上排查",
+          "若反复发生，把 log/current/launcher/ 与 log/current/shell/ 一起带上排查",
         detail,
       };
     }

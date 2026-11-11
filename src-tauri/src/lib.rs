@@ -924,9 +924,9 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
       sections.push(format!("─ 错误输出（dev-launcher-stderr.log）─\n{}", tail));
     }
   }
-  // 壳自持日志（release 落 log/shell/shell.log；dev 由 launcher 重定向 stderr，
-  // 不产生此文件）。启动期壳的导航/看门狗/侧车诊断都经 log:: 打到这份文件，
-  // 正式版壳脱离 launcher（standalone 双击）崩溃时仍有可查日志。
+  // 壳自持日志（release 落 log/current/shell/shell.log；dev 由 launcher 重定向
+  // stderr，不产生此文件）。启动期壳的导航/看门狗/侧车诊断都经 log:: 打到这份
+  // 文件，正式版壳脱离 launcher（standalone 双击）崩溃时仍有可查日志。
   let shell_log = shell_launch::shell_log_path(&root);
   // 同上：追加不轮转，靠会话标记只取本次启动的壳自持日志（dev 模式下这份文件
   // 不产生，下面取不到标记会退回空切片，不影响其它段）。
@@ -937,7 +937,7 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
     120,
   ) {
     if !tail.trim().is_empty() {
-      sections.push(format!("─ 壳日志（log/shell/shell.log）─\n{}", tail));
+      sections.push(format!("─ 壳日志（log/current/shell/shell.log）─\n{}", tail));
     }
   }
   // 服务自身的输出（Next dev server 原始 stdout/stderr）。**编排器日志答不了
@@ -1555,7 +1555,7 @@ fn reap_process_tree(project_root: &str, pid: u32) {
 ///
 /// 判据刻意**不看平台专属文件**：此前校验的是 `scripts/dev-launcher.ps1`
 /// 是否存在，于是 Linux/macOS 上 `resolve_project_root()` 永远返回空串 ——
-/// 启动页读不到 `run/launch-status.json`、壳日志落不到 `log/shell/`，
+/// 启动页读不到 `run/launch-status.json`、壳日志落不到 `log/current/shell/`，
 /// 表现为「启动页一直转圈 + 没有日志可查」，而根因只是判据绑在了 Windows 上。
 /// 现在认两个**跨平台都存在**的仓库标识文件：`package.json`（必需）+
 /// `scripts/dev-launcher.mjs`（启动编排器的唯一实现；`.ps1` 只是它的 Windows
@@ -1663,29 +1663,41 @@ fn publish_shell_exe_env() {
 }
 
 /// 日志插件：开发模式走 stdout（launcher 已把 stderr 重定向进
-/// log/launcher/dev-launcher-stderr.log）；生产模式额外落一份壳自持日志到
-/// <项目根>/log/shell/（standalone 双击无 launcher 重定向时的兜底落盘，见
+/// log/current/launcher/dev-launcher-stderr.log）；生产模式额外落一份壳自持日志到
+/// log/current/shell/shell.log（standalone 双击无 launcher 重定向时的兜底落盘，见
 /// launch-and-build.md §4 日志布局：按子系统分区，新增 shell 子系统）。
 #[cfg(not(debug_assertions))]
 fn build_log_plugin(project_root: &str) -> tauri::plugin::TauriPlugin<Wry> {
   // 保留 stdout/stderr：launcher 下壳 stderr 被重定向进 dev-launcher-stderr.log；
-  // release（windows_subsystem）下无控制台，写 stderr 无害。生产模式另落一份
-  // 壳自持日志到 <项目根>/log/shell/shell.log——standalone 双击无 launcher 重定向，
-  // 壳若在 launcher 之外崩溃仍有日志可查（launch-and-build.md §4：按子系统分区）。
-  // 插件自带 KeepOne 轮转，避免文件无限增长。
-  // 时区固定 UseLocal：插件的默认策略是 UTC（`DEFAULT_TIMEZONE_STRATEGY`），
-  // 壳 stderr 被 launcher 重定向进 log/launcher/ 后面板直接展示——UTC 会让
-  // 同一份面板里的行与其余本地时钟的行差 8 小时。
+  // release（windows_subsystem）下无控制台，std 对无效 stdio 句柄静默丢弃，写之无害。
+  // 生产模式另落一份壳自持日志到 `log/current/shell/shell.log`——standalone 双击无
+  // launcher 重定向，壳若在 launcher 之外崩溃仍有日志可查（launch-and-build.md §4：
+  // 按子系统分区）。
+  //
+  // 这份日志**不能走插件的 Folder target**（#3574）：它把文件句柄一直攥到进程
+  // 退出，而 `current/` 会被编排器整目录清空（启动时的崩溃补做、退出时的收包）；
+  // 清空一发生，句柄就指向已删除的文件，此后所有写入静默丢失——壳日志冻在启动
+  // 头几行，navigate_to_app / 窗口交换等全程不可观测。改走自定义 fern 分发 +
+  // 按次开合的 [`shell_launch::ResilientShellLog`]：插件的总格式化管线原样生效
+  // （行形态不变），落盘换成每次按路径重开，目录被清了下一行自己重建。
+  // 大小上限见 `shell_launch::SHELL_LOG_MAX_BYTES`。
   let mut targets = vec![
     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stderr),
   ];
   if !project_root.is_empty() {
-    let shell_log_dir = shell_launch::shell_log_dir(project_root);
-    targets.push(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
-      path: shell_log_dir,
-      file_name: Some("shell.log".to_string()),
-    }));
+    // fern 经 tauri-plugin-log 的 re-export 使用（`tauri_plugin_log::fern`），
+    // 与插件内部分发共用同一版本，不新增直接依赖。
+    targets.push(tauri_plugin_log::Target::new(
+      tauri_plugin_log::TargetKind::Dispatch(tauri_plugin_log::fern::Dispatch::new().chain(
+        tauri_plugin_log::fern::Output::writer(
+          Box::new(shell_launch::ResilientShellLog::new(shell_launch::shell_log_path(
+            project_root,
+          ))),
+          "\n",
+        ),
+      )),
+    ));
   }
   tauri_plugin_log::Builder::new()
     .level(log::LevelFilter::Info)
@@ -2231,7 +2243,7 @@ fn start_own_orchestrator(app: &tauri::AppHandle, project_root: &str) {
         project_root,
         &format!(
           "无法启动本地服务（node scripts/dev-launcher.mjs 未能拉起）：{e}\n\
-           请确认已安装 Node.js / pnpm，详见 log/launcher/ 与 log/shell/shell.log。"
+           请确认已安装 Node.js / pnpm，详见 log/current/launcher/ 与 log/current/shell/shell.log。"
         ),
       );
     }
