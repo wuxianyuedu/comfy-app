@@ -93,12 +93,12 @@ export type RemoteModelEntry = {
   hasApiKey?: boolean;
   /** 输入类型（#3501）：text / image / video / pdf。 */
   inputTypes?: Array<string> | null;
-  /** 输出类型（#3577）：text / image / video。空 = 未标注（按 kind 推断）。 */
-  outputTypes?: Array<string> | null;
   kind?: RemoteModelKind | null;
   /** 最大输出 token（#3501）。 */
   maxOutputTokens?: number | null;
   name: string;
+  /** 输出类型（#3577）：text / image / video。空 = 未标注（按 kind 推断）。 */
+  outputTypes?: Array<string> | null;
   /** 所属供应商 id（#3501）；空 = 历史遗留条目。 */
   providerId?: string | null;
   /** 推理等级词表（#3501）。 */

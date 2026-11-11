@@ -81,15 +81,15 @@ export type ResolvedUpstream = {
  *  `ok:false` = 读库失败（SQLite busy 等）——按「查不到」处理，不让测试整条断掉。 */
 type ProviderChainLookup =
   | {
-      ok: true;
-      /** 供应商名（可读报错里点名用）；模型不挂供应商时为 null。 */
-      providerName: string | null;
-      /** 供应商自己的 Base URL（entry 缺席时的地址兜底）。 */
-      providerBaseUrl: string | null;
-      /** 供应商已保存的明文密钥（repository 读出即已解密；没配为 null）。 */
-      providerApiKey: string | null;
       /** 供应商有没有配密钥（可读报错的判据）。 */
       hasKey: boolean;
+      ok: true;
+      /** 供应商已保存的明文密钥（repository 读出即已解密；没配为 null）。 */
+      providerApiKey: string | null;
+      /** 供应商自己的 Base URL（entry 缺席时的地址兜底）。 */
+      providerBaseUrl: string | null;
+      /** 供应商名（可读报错里点名用）；模型不挂供应商时为 null。 */
+      providerName: string | null;
     }
   | { ok: false };
 
