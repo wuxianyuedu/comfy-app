@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * publish-desktop-bundle.mjs — 把 `pnpm tauri build` 打出的**安装包**发布到一个**常驻目录**
- * （ISSUE #2503）。
+ * publish-desktop-bundle.mjs — 把 `pnpm tauri build` 打出的**安装包**发布到一个**发布目录**
+ * （ISSUE #2503；本地落点见 ISSUE #3546）。
  *
  * ## 它补的是哪一格
  *
@@ -16,8 +16,10 @@
  *
  * ## 落成的形状（三条是不可换的）
  *
- * · **常驻根由推导给**：`resolveArtifactRoot`（同一个 `pnpm store path` 问法，拼
- *   `ci-artifacts/<包名>`）。**不硬编码盘符** —— 换卷就不成立。
+ * · **落点由调用方给，缺省才推导**：`--root <dir>` 优先（本地那条链指到项目内
+ *   `dist/desktop`，本机自己打的包不再写进常驻目录，ISSUE #3546）；没给时仍问
+ *   `resolveArtifactRoot`（同一个 `pnpm store path` 问法，拼 `ci-artifacts/<包名>`）。
+ *   **不硬编码盘符** —— 换卷就不成立。
  * · **一份一个目录，`latest` 只是指针文件**：目录名 = 标签（sha + 构建号/时刻），
  *   写 `<root>/latest.txt` 一行指过去。**不原地覆盖同名目录**：覆盖会让「latest 那一格
  *   到底是什么时候的东西」只能靠 mtime 猜，而这是规范 §4.3「运行图落后于源码」那一族的
@@ -30,14 +32,18 @@
  *
  * · `0` 发布完成（含轮转）。
  * · `1` 失败：没有可发布的成品 / 写盘被拒 / 同标签已存在（那是第二次构建，不是重发）。
- * · `2` **没有结论**：问不出常驻根、或目标卷空间不够。这两条都不许静默退 0 ——
+ * · `2` **没有结论**：问不出发布根、或目标卷空间不够。这两条都不许静默退 0 ——
  *   「今天没有新包」与「今天没能把包放出去」在日志里必须逐字不同。
  *
  * ## 用法
  *
- *   node scripts/publish-desktop-bundle.mjs              # 发布 src-tauri/target/release/bundle
- *   node scripts/publish-desktop-bundle.mjs --dry-run    # 只打印会做什么（本机自查 / 用例）
+ *   node scripts/publish-desktop-bundle.mjs                       # 发布 src-tauri/target/release/bundle
+ *   node scripts/publish-desktop-bundle.mjs --root dist/desktop   # 落到项目内（本地那条链）
+ *   node scripts/publish-desktop-bundle.mjs --dry-run             # 只打印会做什么（本机自查 / 用例）
  *   node scripts/publish-desktop-bundle.mjs --keep 2 --label <标签>
+ *
+ * `--root` 相对路径按 `cwd` 解析；优先级高于环境变量 `COMFY_CI_ARTIFACT_ROOT`
+ * 与 `pnpm store path` 推导。
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -175,7 +181,7 @@ function buildManifest({ label, sha, event, buildId, user, builtAt, appVersion, 
 }
 
 /**
- * 列出常驻根下的**成品目录**（跳过暂存目录与指针文件）。
+ * 列出发布根下的**成品目录**（跳过暂存目录与指针文件）。
  *
  * @param {string} root @returns {{name: string, dir: string, builtAt: string|null}[]}
  */
@@ -263,7 +269,10 @@ function resolvePlan(io = {}) {
   const keep = keepRaw ? Number.parseInt(keepRaw, 10) : DEFAULT_KEEP;
   const context = runContext(/** @type {NodeJS.ProcessEnv} */ (env));
   const sha = String(runGit(["rev-parse", "HEAD"]) ?? "").trim();
-  const resolved = resolveArtifactRoot({ cwd, env, run: runStore });
+  const rootFlag = flag("--root").trim();
+  const resolved = rootFlag
+    ? { root: path.resolve(cwd, rootFlag), from: `命令行 --root ${rootFlag}` }
+    : resolveArtifactRoot({ cwd, env, run: runStore });
   const label = flag("--label") || buildLabel({ sha, buildId: context.buildId, now });
   return {
     bundleDir,
@@ -313,11 +322,11 @@ function spawnSyncGit(args, cwd) {
 export function main(io = {}) {
   const log = io.log ?? ((line) => process.stdout.write(`${line}\n`));
   const plan = resolvePlan(io);
-  log(`[发布] 常驻根：${plan.root ?? "取不到"}（来源：${plan.rootFrom}）`);
+  log(`[发布] 发布根：${plan.root ?? "取不到"}（来源：${plan.rootFrom}）`);
   if (!plan.root) {
     log(
-      "[发布] **没有结论**：问不出常驻根 ⇒ 一份成品都不落。" +
-        `出口是配 ${ARTIFACT_ROOT_ENV}，或让 \`pnpm store path\` 答得出来。`,
+      "[发布] **没有结论**：问不出发布根 ⇒ 一份成品都不落。" +
+        `出口是传 --root <dir>、配 ${ARTIFACT_ROOT_ENV}，或让 \`pnpm store path\` 答得出来。`,
     );
     return 2;
   }
