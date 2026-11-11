@@ -86,6 +86,7 @@ function getHighlighter(): Promise<ShikiHighlighter> {
         "markdown",
         "yaml",
         "html",
+        "bash",
         "plaintext",
       ],
     });
