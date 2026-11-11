@@ -50,7 +50,11 @@ export function SettingsCard({
   return (
     <ShadcnCard
       className={cn(
-        "border-border-subtle bg-surface-1 text-ink rounded-2xl border py-0 shadow-sm shadow-black/5",
+        /* 卡片的外缘走 `--color-border` 那根**实线**描边（ISSUE #3520）：此前是
+           `border-border-subtle`（6% 黑），落在浅色主题的白色页面上只有 ≈1.05:1 ——
+           卡片没有边、浮在页面上（用户现场：「卡片在白底上几乎没有轮廓」）。
+           实线描边对页面 1.27:1 / 对卡片 1.20:1。 */
+        "border-border bg-surface-1 text-ink rounded-2xl border py-0 shadow-sm shadow-black/5",
         className,
       )}
     >
