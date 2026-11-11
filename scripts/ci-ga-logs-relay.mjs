@@ -96,8 +96,16 @@ export const RELAY_FILE_SUFFIX = ".b64";
 /** 平台附件文件名里只许这些字符（sha 与 run id 都是数字/十六进制，够用）。 */
 const SAFE_NAME = /[^0-9A-Za-z._-]/gu;
 
-/** GA 侧判红结论词表（与 `ci-github-verdict-read.mjs` 同一族，不另抄一份）。 */
-const RED = new Set(["failure", "timed_out", "cancelled", "action_required", "startup_failure"]);
+/** GA 侧判红结论词表（与 `ci-github-verdict-read.mjs` 同一族，不另抄一份）。
+ * 导出给 `ci-ga-failure-logs.mjs` 认「哪些 job 要给下载端点」用 —— 两处同一个集合，
+ * 免得「日志搬来了、端点却只给 failure 那几格」在换词表时悄悄分叉。 */
+export const FAILED_JOB_CONCLUSIONS = new Set([
+  "failure",
+  "timed_out",
+  "cancelled",
+  "action_required",
+  "startup_failure",
+]);
 
 /**
  * 是不是可按字段取值的对象。
@@ -343,7 +351,8 @@ export async function collectFailedJobLogs(io) {
   }
   const jobs = asList(isRecord(res.body) ? res.body.jobs : null);
   const failed = jobs.filter(
-    (j) => isRecord(j) && RED.has(String(j.conclusion)) && j.conclusion !== "skipped",
+    (j) =>
+      isRecord(j) && FAILED_JOB_CONCLUSIONS.has(String(j.conclusion)) && j.conclusion !== "skipped",
   );
   if (failed.length === 0) {
     log(`[ga-logs-relay] 这条 run 没有失败 job ⇒ 不搬运日志`);

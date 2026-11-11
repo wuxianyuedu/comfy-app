@@ -32,7 +32,8 @@
  * cnb CLI ⇒ 走 HTTP」那一格）：`ghGet` 读自身 run 的 jobs、`listOpenIssues` 取开着的单、
  * `createIssue` 建单 → 补标签 → 独立回读、`appendComment` 追加并回读、`ensureLabel` 备标签。
  * 这里只新增三件纯函数：**「哪几格算红」**（`failedStepsFromJobs`）、**「同一格不许重复建」**
- * （`titleKey` / `decideAction`）、**「正文只含事实」**（`composeBody`）。
+ * （`titleKey` / `decideAction`）、**「正文只含事实」**（`composeBody`）。日志取数 / 渲染整段复用
+ * `ci-ga-failure-logs.mjs`（它又复用 `ci-ga-logs-relay` / `ci-github-verdict-logs`），这里只接一次。
  *
  * ## 去重键是标题里的格名，不是 run 号 / sha
  *
@@ -45,10 +46,15 @@
  *
  * jobs 读不到 / 读得到却没有 failure 格 / 开着的单列表取不到 —— 一律退 2「没结论」，一次都不写。
  * 「查不到已有单」不等于「没有已有单」，据它新建就是每天多一张重复单。
+ * **日志取不到不进这一格**：它只让正文多一节「取不到 + 出口」，不阻断建单 —— 立案的价值是
+ * 「红了看得见」，不能因为日志那一跳不通就退回没人问（与 `ci-ga-logs-relay` 同一条边界）。
  *
  * ## 机器建单只报事实，不代写因果
  *
- * 正文 = 症状 + 当场读数（run URL / sha）+ 「根因：未判定」+ 既有定性出口。署名走
+ * 正文 = 症状 + 当场读数（run URL / sha）+ **失败日志摘录** + 「根因：未判定」+ 既有定性出口。
+ * 日志摘录由 `ci-ga-failure-logs.mjs` 给：红色失败窗口（注解 + 失败 step 原始行）优先，
+ * 完整日志装得下就整份贴、装不下就给窗口 + 下载端点；取不到日志如实写「取不到」并给出口，
+ * 绝不写成「日志里没有失败行」。署名走
  * `machineHandle("ci-ga-daily")`（`ci-ga-daily` 打头，**不取**平台账号昵称 —— 那是人的名字）。
  *
  * ## 用法
@@ -74,11 +80,12 @@ import {
   ghGet,
   listOpenIssues,
 } from "./ci-code-scanning-triage-platform.mjs";
+import { collectFailureLogReading, renderLogReadout } from "./ci-ga-failure-logs.mjs";
 import { machineHandle } from "./dev-handle.mjs";
 import { commentHeader } from "./ship-ticket.mjs";
 
-/** @typedef {import("./ci-code-scanning-triage-model.mjs").FetchLike} FetchLike */
 /** @typedef {import("./ci-code-scanning-triage-model.mjs").IssueRow} IssueRow */
+/** @typedef {import("./ci-code-scanning-triage-model.mjs").FetchLike} FetchLike */
 
 /** 三态退码与仓内其余档同口径（`0` 有结论 / `1` 该写的没写成 / `2` 没拿到读数）。 */
 export const CODE = { DONE: 0, NO_FACT: 2, WRITE_FAILED: 1 };
@@ -179,10 +186,10 @@ export function decideAction({ existing, failedSteps }) {
 /**
  * 拼正文：只有事实与出口。
  *
- * @param {{ghRepo: string, handle: string, runId: string, sha: string, step: string}} input
+ * @param {{ghRepo: string, handle: string, logReadout?: string, runId: string, sha: string, step: string}} input
  * @returns {string}
  */
-export function composeBody({ ghRepo, handle, runId, sha, step }) {
+export function composeBody({ ghRepo, handle, logReadout = "", runId, sha, step }) {
   const runUrl = `https://github.com/${ghRepo}/actions/runs/${runId}`;
   return [
     commentHeader(handle),
@@ -195,8 +202,8 @@ export function composeBody({ ghRepo, handle, runId, sha, step }) {
     "",
     "## 当场读数（出处）",
     "",
-    "本档只读 jobs 的 conclusion 认出红格，不摘录日志正文；失败行在 run 页面：",
-    runUrl,
+    ...(logReadout ? [logReadout, ""] : []),
+    `- 完整日志与失败行的出处：${runUrl}`,
     "",
     "## 根因：**未判定**",
     "",
@@ -223,6 +230,7 @@ export function composeBody({ ghRepo, handle, runId, sha, step }) {
  *   cnbCtx: {base: string, fetchImpl: FetchLike, slug: string, token: string},
  *   ghRepo: string,
  *   log: (s: string) => void,
+ *   logReadout: string,
  *   runId: string,
  *   sha: string,
  * }} writeCtx 连接 + 这一跳的共用读数
@@ -237,8 +245,15 @@ async function writeStages(writeCtx, stages, index, ledger) {
   if (!stage) {
     return;
   }
-  const { authorLabel, cnbCtx, ghRepo, log, runId, sha } = writeCtx;
-  const body = composeBody({ ghRepo, handle: `ci-ga-daily`, runId, sha, step: stage.step });
+  const { authorLabel, cnbCtx, ghRepo, log, logReadout, runId, sha } = writeCtx;
+  const body = composeBody({
+    ghRepo,
+    handle: `ci-ga-daily`,
+    logReadout,
+    runId,
+    sha,
+    step: stage.step,
+  });
   if (stage.number) {
     const said = await appendComment(cnbCtx, stage.number, body, runId);
     if (said.ok) {
@@ -265,6 +280,23 @@ async function writeStages(writeCtx, stages, index, ledger) {
 }
 
 /**
+ * `FetchLike` → `typeof fetch`：把「只有 `ok`/`status`/`text()`」的应答原样包成
+ * `Response`，让日志那一跳的 `requestJson` / `requestText` 能按同一形状读。
+ *
+ * 只在**用例注入了 `ghFetch`** 时才用：真跑时直接走 `globalThis.fetch`，
+ * 不把几十 MB 的日志正文先读成字符串再包一遍。
+ *
+ * @param {FetchLike} f 注入件
+ * @returns {typeof fetch} 适配后的 fetch
+ */
+function adaptFetchLike(f) {
+  return async (input) => {
+    const r = await f(String(input));
+    return new Response(await r.text(), { status: r.status });
+  };
+}
+
+/**
  * 入口。
  *
  * @param {{
@@ -273,6 +305,8 @@ async function writeStages(writeCtx, stages, index, ledger) {
  *   ghFetch?: FetchLike,
  *   cnbFetch?: FetchLike,
  *   log?: (s: string) => void,
+ *   logFetch?: typeof fetch,
+ *   logReading?: Awaited<ReturnType<typeof collectFailureLogReading>> | null,
  * }} [io]
  * @returns {Promise<number>} `CODE` 之一（带 `--no-block` 时非零都落 0，话术照打）
  */
@@ -288,6 +322,10 @@ export async function main(io = {}) {
   const noBlock = argv.includes("--no-block");
   const ghFetch = io.ghFetch ?? fetch;
   const cnbFetch = io.cnbFetch ?? fetch;
+  /* 日志那一跳要 `typeof fetch`（`requestJson` / `requestText` 的读数面带 `json()`），
+   * 而本档既有的注入件是 `FetchLike`（只有 `text()`）。给一枚适配：把那一族假件
+   * 的应答原样包成 `Response`。平台那一跳没有注入件 ⇒ 直接用真 fetch，不付适配的代价。 */
+  const logFetch = io.logFetch ?? (io.ghFetch ? adaptFetchLike(io.ghFetch) : fetch);
 
   const ghRepo = String(env.GITHUB_REPOSITORY ?? "").trim() || DEFAULT_GH_REPO;
   const cnbSlug = String(env.CNB_REPO_SLUG ?? "").trim() || DEFAULT_CNB_SLUG;
@@ -354,11 +392,50 @@ export async function main(io = {}) {
     return finish(CODE.NO_FACT, `${decision.reason ?? "(没给出原因)"} ⇒ 不写。`);
   }
 
+  /* 日志摘录：**能取到就贴，取不到只多一节读数**。它不参与「写不写单」的判定 ——
+   * 立案的前提是「jobs 里有 failure 格」，不是「日志端点通」。这一跳失败时正文会如实写
+   * 「取不到」并给可粘贴命令，绝不退化成「日志里没有失败行」。 */
+  let reading = io.logReading ?? null;
+  if (reading === null) {
+    reading = await collectFailureLogReading({
+      fetchImpl: logFetch,
+      ghRepo,
+      ghToken,
+      /* 立案已经问过一次 jobs（step conclusion 认红格）：把那份原值递过去，
+       * 日志这一跳只逐 job 拉 logs，不再问第二遍清单。 */
+      jobsJson: jobs.json,
+      log,
+      runId,
+    }).catch((error) => {
+      log(`[ga-daily-failure] 日志读数异常（不拦立案）：${String(error)}`);
+      return null;
+    });
+  }
+  const logReadout = reading
+    ? renderLogReadout(reading)
+    : renderLogReadout({
+        ghRepo,
+        jobs: [],
+        ok: false,
+        reason: "日志取数这一跳异常退出",
+        runId,
+        text: "",
+      });
+  if (reading?.ok === true) {
+    log(`[ga-daily-failure] 日志正文已取到 ⇒ 红色失败窗口（完整日志按预算贴）进单子正文。`);
+  } else {
+    log(`[ga-daily-failure] 日志正文没取到 ⇒ 正文只多一节「取不到 + 出口」，立案照写。`);
+  }
+
   if (dryRun) {
     for (const stage of decision.stages) {
       const plan = stage.number ? `追加到 #${stage.number}` : "新建";
       log(`[ga-daily-failure] DRY-RUN：${plan} · ${issueTitle({ runId, sha, step: stage.step })}`);
     }
+    log(
+      `[ga-daily-failure] DRY-RUN 正文的日志段（${String(Buffer.byteLength(logReadout, "utf8"))} 字节）：`,
+    );
+    log(logReadout);
     return finish(CODE.DONE, `--dry-run：计划 ${decision.stages.length} 个动作，一条都没写。`);
   }
 
@@ -372,7 +449,12 @@ export async function main(io = {}) {
   }
 
   const ledger = { failures: /** @type {string[]} */ ([]), wrote: 0 };
-  await writeStages({ authorLabel, cnbCtx, ghRepo, log, runId, sha }, decision.stages, 0, ledger);
+  await writeStages(
+    { authorLabel, cnbCtx, ghRepo, log, logReadout, runId, sha },
+    decision.stages,
+    0,
+    ledger,
+  );
   const { failures, wrote } = ledger;
   if (failures.length > 0) {
     return finish(

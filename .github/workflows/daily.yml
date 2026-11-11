@@ -245,7 +245,10 @@ jobs:
     # 本格自己发没发出去不该给这一跑叠第二个红；但**不静默** —— 失败话术与手工出口由脚本
     # 原样打印（`tests/ci-ga-daily-failure-issue.test.ts` 钉住）。
     continue-on-error: true
-    timeout-minutes: 5
+    # 立案要读上游那一跑的**失败 job 日志正文**（#3584：正文直接贴红的那部分）。
+    # 5m 是「只读 jobs API + 写单」那一版的预算，逐 job 拉日志（含重试与脱敏）会超；
+    # 10m 让日志取不到时也有时间走完「取不到 + 出口」那一节，而不是被平台掐成半截单。
+    timeout-minutes: 10
     steps:
       # 只要脚本自己与它 import 的那几个模块，不要历史也不要 LFS 字体（对位 pr-gate.yml
       # 的 `ga-verdict-callback`：整条 import 链只吃 node:*，所以这一 job 不装依赖）。
