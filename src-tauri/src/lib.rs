@@ -48,9 +48,14 @@ struct AppState {
   /// 别的窗口，加载完成后突然抢焦点会把正在看的内容打断。由启动器按
   /// COMFYAPP_FOREGROUND 控制；应用已在前台 / 用户主动唤起时不改配置直接放行。
   foreground: Mutex<bool>,
-  /// 已按「不抢前台」方式显示过但用户还没看过的应用窗口，供托盘「打开主界面」
-  /// 时清掉闪烁提醒。
+  /// 「窗口只显示到任务栏、用户还没看过」——**只用于退出时的一条诊断日志**。
+  /// ISSUE #3562 起不再驱动任何窗口动作：此前它对应一次任务栏闪烁请求，而闪烁
+  /// 被重复触发又从没有停止动作，用户看到的是后台莫名的红色高亮。
   attention: Mutex<bool>,
+  /// 本次启动的「前端自动唤起前台」是否已被消费。
+  /// `COMFYAPP_FOREGROUND` 是进程级持久值，而 `useStartupForeground` 会在组件
+  /// 每次挂载时重问一次；不消费掉就是「页面一重挂就抢一次前台」（ISSUE #3562）。
+  startup_activation_consumed: Mutex<bool>,
   /// 用户在启动期关闭了启动页（放弃本次启动）。壳进程随即整体退出；置位是
   /// 为了在退出生效前的瞬间，拦住所有「把隐藏主窗显示出来」的后续路径
   /// （页面加载完成的窗口交接、150s 安全网、就绪兜底导航），避免用户已经
@@ -78,6 +83,7 @@ impl AppState {
       shown: Mutex::new(false),
       foreground: Mutex::new(foreground),
       attention: Mutex::new(false),
+      startup_activation_consumed: Mutex::new(false),
       abandoned: Mutex::new(false),
       standalone: Mutex::new(standalone),
     }
@@ -97,6 +103,24 @@ impl AppState {
 
   fn foreground(&self) -> bool {
     *self.foreground.lock().unwrap()
+  }
+
+  /// 前端「本次启动要不要自动给前台」的**一次性**答复。
+  ///
+  /// 判据仍是 `foreground`，但只放行第一次：应用内页签切换 / 路由重挂 /
+  /// WebView 重载都会重新跑 `useStartupForeground`，若每次都返回 true，
+  /// 用户切到别的应用后会被一次次拉回来（ISSUE #3562）。壳在窗口交接那一刻
+  /// 已经按 `configured` 给过前台，前端这一跳只是补唤，消费掉不影响启动体验。
+  fn take_startup_activation(&self) -> bool {
+    if !self.foreground() {
+      return false;
+    }
+    let mut consumed = self.startup_activation_consumed.lock().unwrap();
+    if *consumed {
+      return false;
+    }
+    *consumed = true;
+    true
   }
 
   /// 标记应用窗口已显示过并返回「本次是否为首次显示」。
@@ -313,9 +337,13 @@ fn activate_main_window(app_handle: tauri::AppHandle) -> Result<(), String> {
 /// 显式冷启动 / 唤起已有实例」注入，见 scripts/start_tauri_launcher.py 的
 /// decide_foreground）。放在 Rust 侧而不是前端读 env，是因为只有服务端渲染
 /// 阶段能拿到非 `NEXT_PUBLIC_` 前缀的变量，客户端读不到会一律降级成「不给前台」。
+///
+/// **一次性消费**（ISSUE #3562）：这个命令在组件每次挂载时都会被问到，而
+/// `foreground` 是进程级持久值。不消费就会把「启动那一次该给前台」演成
+/// 「页面每重挂一次就抢一次前台」。
 #[tauri::command]
 fn should_activate_on_launch(state: tauri::State<'_, AppState>) -> bool {
-  state.foreground()
+  state.take_startup_activation()
 }
 
 /// 供启动页读取当前应用目标 URL，用于自主探测后端是否就绪。
@@ -385,8 +413,10 @@ fn shell_owns_foreground(app: &tauri::AppHandle) -> bool {
 /// 可能在这段时间切去别的窗口干活。启动页会一直待在他眼皮底下——只要他没动手
 /// 切走，前台就还在本壳的窗口上，那就是「他还在等这个应用」，加载完成必须把前台
 /// 真的给他（只丢进任务栏的观感就是「点了启动，窗口自己在后台待着」）；只有前台
-/// 已经换成别人的窗口（他手动让出了前台）才「只显示、不激活」：窗口出现在任务栏，
-/// 同时请求一次任务栏闪烁提醒（request_user_attention），他处理完手上的事自己点开。
+/// 已经换成别人的窗口（他手动让出了前台）才「只显示、不激活」：窗口安静地出现在
+/// 任务栏，他处理完手上的事自己点开。任务栏按钮与常驻托盘就是入口——ISSUE #3562
+/// 起**不再请求任务栏闪烁**：那一下红色高亮会被自动路径的重复显示反复点燃，用户
+/// 读到的是「后台莫名在闪」。
 ///
 /// 三种情况给前台，其余一律「只显示」：
 /// 1. `request_focus`——调用方的显式意图（托盘「打开主界面」、二次启动的单实例
@@ -407,6 +437,20 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
     return;
   };
   let state = app.try_state::<AppState>();
+
+  /* 自动交接只允许发生一次（ISSUE #3562）。
+   *
+   * 页面导航 Finished、150s 安全网、无启动页兜底都会走到这里，而窗口的
+   * `show()` 在 Windows 上是 SW_SHOW —— 对**已经可见**的窗口同样带激活语义、
+   * 会把它提到 Z 序最前。启动完成后任何一次重放，用户看到的就是「我切去别的
+   * 应用，几秒后它又弹出来盖住我正在用的窗口」。窗口显示过之后，显隐只归用户
+   * 操作：任务栏 / 托盘 / 二次启动（这些都带 request_focus = true）。 */
+  let already_shown = state.as_ref().map(|s| s.is_main_shown()).unwrap_or(false);
+  if already_shown && !request_focus {
+    log::debug!("[ComfyAPP] main window already shown, skip automatic re-show");
+    return;
+  }
+
   let first_show = state.as_ref().map(|s| s.mark_shown()).unwrap_or(false);
   let configured = state.as_ref().map(|s| s.foreground()).unwrap_or(false);
   /* 「用户手动让出前台」在采样这一刻就是「前台已经不是本壳的窗口了」。
@@ -433,35 +477,52 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
     apply_saved_main_window_state(&win);
   }
 
-  /* 最小化时先还原：`show()`（tao 走 SW_SHOW）对最小化窗口不会还原——Windows
-   * 只把它「按原尺寸/原状态」显示出来，仍是任务栏上一条不动的按钮；随后的
-   * `set_focus()` 也只是把「最小化的窗口」记为前台。用户双击启动或点托盘得到的
-   * 观感就是「点了没法切到前台」，而再点一次任务栏又能出来（第二次点击走的是
-   * 系统自己的还原路径）——正是「有时候切不到前台」。
-   * 仅在确实最小化时调 unminimize：它的实现是 SW_RESTORE，对非最小化窗口带激活
-   * 语义，无条件调会把「不抢前台」策略架空（见本函数开头与 §1.3）。 */
-  if win.is_minimized().unwrap_or(false) {
+  /* 只对「确实需要改变可见状态」的那一档发窗口动作（ISSUE #3562）：已可见的
+   * 窗口再走一次 show 就是重复激活 + 重绘，托盘唤起因此发卡，还会把用户正在
+   * 用的应用盖住。最小化的窗口仍要先 unminimize（SW_RESTORE 自带显示语义），
+   * 之后不必再 show。 */
+  let minimized = win.is_minimized().unwrap_or(false);
+  let visible = win.is_visible().unwrap_or(false);
+  if minimized {
     if let Err(e) = win.unminimize() {
       log::warn!("[ComfyAPP] unminimize main window failed: {:?}", e);
     }
+  } else if !visible {
+    if let Err(e) = win.show() {
+      log::warn!("[ComfyAPP] show main window failed: {:?}", e);
+    }
   }
-  if let Err(e) = win.show() {
-    log::warn!("[ComfyAPP] show main window failed: {:?}", e);
-  }
-  // 显示动作本身会不会把前台带过来由系统决定（交接瞬间 Windows 当真当「新窗口」
-  // 放行）。这里只把结论记下来，交给启动器的交接复核进程把不该给的前台还回去。
+
   let focused_after_show = win.is_focused().unwrap_or(false);
+  // 纯诊断状态：窗口曾以「不抢前台」的方式出现、用户还没看过（见 AppState）。
   let keep_attention = !activate && !focused_after_show;
   if let Some(s) = state.as_ref() {
     s.set_attention(keep_attention);
   }
 
   if activate {
-    // 用户主动唤起 / 启动器判定用户就在等它：必须把前台拿到手——系统可能因
-    // 前台锁定（用户在别的窗口上刚有点击）拦下 set_focus，未获前台时补一次
-    // 任务栏闪烁，用户才不至于「点了没反应」。
-    let _ = win.set_focus();
-    if !win.is_focused().unwrap_or(false) {
+    // 已经聚焦就不必再发一次前台请求；只有确实没拿到前台时才争取一次。
+    if !focused_after_show {
+      let _ = win.set_focus();
+    }
+    if win.is_focused().unwrap_or(false) {
+      /* 窗口真的到前台了：把可能残留的闪烁收掉。tao 的 Windows 实现里
+       * request_user_attention(None) = FlashWindowEx(FLASHW_STOP)；此前壳只请求
+       * 「闪 4 次」、从不停止，自动路径的重复显示还会一次次重新点燃它 ——
+       * 就是 #3562 里「后台莫名红色闪烁」。 */
+      let _ = win.request_user_attention(None);
+      if let Some(s) = state.as_ref() {
+        s.set_attention(false);
+      }
+      log::info!(
+        "[ComfyAPP] main window activated \
+         (request={} configured={} user_yielded={} first={})",
+        request_focus,
+        configured,
+        user_yielded,
+        first_show
+      );
+    } else {
       log::warn!(
         "[ComfyAPP] main window shown, foreground request not granted \
          (request={} configured={} user_yielded={})",
@@ -472,16 +533,7 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
       if let Some(s) = state.as_ref() {
         s.set_attention(true);
       }
-      let _ = win.request_user_attention(Some(tauri::UserAttentionType::Informational));
-    } else {
-      log::info!(
-        "[ComfyAPP] main window shown with focus \
-         (request={} configured={} user_yielded={} first={})",
-        request_focus,
-        configured,
-        user_yielded,
-        first_show
-      );
+      // 不再补闪烁：任务栏按钮与常驻托盘已经是稳定的「应用在这里」入口。
     }
     return;
   }
@@ -493,13 +545,7 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
     focused_after_show,
     first_show
   );
-  // 不抢前台：让任务栏按钮持续闪烁到用户点开，作为「加载好了」的提示。
-  if keep_attention {
-    match win.request_user_attention(Some(tauri::UserAttentionType::Informational)) {
-      Ok(()) => log::info!("[ComfyAPP] taskbar attention requested"),
-      Err(e) => log::warn!("[ComfyAPP] request_user_attention failed: {:?}", e),
-    }
-  }
+  // 不抢前台这一档不再请求任务栏闪烁（ISSUE #3562）：窗口安静地留在任务栏。
 }
 
 /// 桌面壳内打开 ComfyUI：把运行中的 ComfyUI 网页界面放进 Tauri 壳的独立
@@ -2186,8 +2232,10 @@ fn setup_splash_window(app: &mut tauri::App) {
 ///
 /// 用 `set_focus()` 而不是 `always_on_top`：置顶是**持续**语义（窗口会一直压在
 /// 别人上面，用户在启动期想切走也切不掉），而这里要的只是「出现的那一刻在前面」。
-/// Windows 的前台锁定可能让 `set_focus()` 落空（用户刚在别的窗口上点过），
-/// 此时补一次任务栏闪烁作为可见提醒，与主窗的策略保持一致。
+/// Windows 的前台锁定可能让 `set_focus()` 落空（用户刚在别的窗口上点过），此时
+/// 只记日志：ISSUE #3562 起不再为「启动页没拿到前台」请求任务栏闪烁——启动页是
+/// `WS_EX_TOOLWINDOW`，闪烁却落在应用主窗的任务栏按钮上，用户读到的是「后台
+/// 莫名有个红色提醒」。
 fn bring_splash_to_front(splash: &tauri::WebviewWindow) {
   // 声明式窗口（tauri.conf.json 的 windows[0]）默认已可见，但显式 `show()` 一次
   // 更稳：某些窗口状态插件/系统还原会把首次显示推迟，未显示的窗口 set_focus 无意义。
@@ -2196,14 +2244,12 @@ fn bring_splash_to_front(splash: &tauri::WebviewWindow) {
   }
   if let Err(e) = splash.set_focus() {
     log::warn!("[ComfyAPP] splash set_focus failed: {:?}", e);
-    let _ = splash.request_user_attention(Some(tauri::UserAttentionType::Informational));
     return;
   }
   if splash.is_focused().unwrap_or(false) {
     log::info!("[ComfyAPP] splash window brought to front");
   } else {
     log::warn!("[ComfyAPP] splash window shown but foreground not granted");
-    let _ = splash.request_user_attention(Some(tauri::UserAttentionType::Informational));
   }
 }
 
@@ -2321,6 +2367,12 @@ fn on_main_page_finished(handle: &tauri::AppHandle, url: tauri::Url) {
     || (!url_str.starts_with("http://") && !url_str.starts_with("https://"))
   {
     log::debug!("[ComfyAPP] ignoring initial/non-app page load");
+    return;
+  }
+  // 交接只在启动页还在时发生（ISSUE #3562）：启动完成后应用内的整页导航 /
+  // 重载同样会触发 Finished，再走一遍交接就会把已可见的主窗重新激活一次。
+  if handle.get_webview_window("splash").is_none() {
+    log::debug!("[ComfyAPP] window handover already done, ignoring page load");
     return;
   }
   log::info!("[ComfyAPP] app page loaded, swapping windows");
@@ -3017,6 +3069,60 @@ mod window_startup_tests {
       owns.contains("webview_windows()") && owns.contains("is_focused()"),
       "前台归属按本壳窗口的 focused 判，不看进程名 / 句柄：{owns}"
     );
+  }
+
+  /// ISSUE #3562 的三个现象（后台红色闪烁 / 反复抢前台 / 点图标发卡）同源：
+  /// 「显示窗口」被重复执行，且任务栏闪烁只请求、从不停止。Win32 前台在 CI 里
+  /// 取不到，这里按源码形态钉住四条不变量。
+  #[test]
+  fn window_show_is_idempotent_and_never_restarts_taskbar_flashing() {
+    let show = fn_body("fn show_main_window_without_focus");
+
+    // ① 自动路径只交接一次：窗口显示过之后再被调用必须早退。
+    assert!(
+      show.contains("if already_shown && !request_focus {"),
+      "自动显示路径必须一次性（页面导航 / 安全网重放会把窗口又顶到前面）：{show}"
+    );
+    // ② 已可见的窗口不再发窗口动作：SW_SHOW 对可见窗口同样带激活语义。
+    assert!(
+      show.contains("} else if !visible {"),
+      "只对隐藏窗口发 show 动作：{show}"
+    );
+    // ③ 不再请求闪烁，改为焦点到位时 FLASHW_STOP 收掉残留。
+    assert!(
+      !show.contains("UserAttentionType::Informational"),
+      "主窗不许再请求任务栏闪烁（#3562）：{show}"
+    );
+    assert!(
+      show.contains("request_user_attention(None)"),
+      "窗口到前台时必须主动停掉闪烁：{show}"
+    );
+    // ④ 前台请求只有一处，且前台归属仍早于任何窗口动作采样。
+    assert_eq!(
+      show.matches("win.set_focus()").count(),
+      1,
+      "前台请求只允许一处：{show}"
+    );
+    let sampled = show.find("let user_yielded").expect("采样点不见了");
+    let shown = show.find("win.show()").expect("窗口显示动作不见了");
+    assert!(sampled < shown, "前台归属必须早于窗口动作采样：{show}");
+
+    let splash = fn_body("fn bring_splash_to_front");
+    assert!(
+      !splash.contains("UserAttentionType::Informational"),
+      "启动页拿不到前台时不许闪任务栏：{splash}"
+    );
+  }
+
+  /// 启动前台标记是进程级持久值，前端组件却会反复挂载：答复必须一次性。
+  #[test]
+  fn startup_foreground_is_consumed_only_once() {
+    let state = AppState::new(String::new(), String::new(), true, false);
+    assert!(state.take_startup_activation());
+    assert!(!state.take_startup_activation());
+    assert!(!state.take_startup_activation());
+    let background = AppState::new(String::new(), String::new(), false, false);
+    assert!(!background.take_startup_activation());
   }
 }
 
