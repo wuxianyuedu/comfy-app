@@ -59,7 +59,15 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
   return (
     <header className="border-border-subtle bg-canvas z-base flex h-12 shrink-0 items-center gap-2 border-b px-3">
       <SidebarTrigger className="-ml-1" />
-      <Separator className="data-[orientation=vertical]:h-4" orientation="vertical" />
+      {/* 竖档基元默认 `data-vertical:self-stretch`，而 flexbox 规则里 stretch 在
+          交叉尺寸非 auto（这里给了 `h-4`）时退化为顶对齐 —— 这根短线会被钉在
+          顶栏上沿成一截孤线（ISSUE #3587）。用**同形变体**声明居中：cn 合并时
+          同组同变体会把基类的 self-stretch 挤掉，覆盖是确定性的；换成任意变体
+          `data-[orientation=vertical]:` 的写法两类并存、要输给样式表顺序，别改。 */}
+      <Separator
+        className="data-vertical:self-center data-[orientation=vertical]:h-4"
+        orientation="vertical"
+      />
       <span className="text-ink-strong min-w-0 truncate text-sm font-medium" title={label}>
         {label}
       </span>
