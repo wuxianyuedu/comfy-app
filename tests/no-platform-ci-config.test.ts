@@ -95,6 +95,9 @@ const HOSTED_MIRROR_PIPELINES = [
 /** 质量门禁（#3478 起平台池例外）：主列只剩站内回读一格，形态见专用 describe。 */
 const PR_GATE_PIPELINE = "质量门禁" as const;
 
+/** GA 判决回调（#3529 起平台池例外）：CNB 侧最后一条离开自托管的流水线。 */
+const VERDICT_PIPELINE = "GA 判决回调（骨架·休眠）" as const;
+
 /** 从 `- name:` 那一行起，收到**下一个 2 空格事件键**为止（含 push 之后的事件）。 */
 function nextEventAt(text: string, from: number): number {
   const rest = text.slice(from).split("\n").slice(1).join("\n");
@@ -1481,8 +1484,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 它们**刻意**不吃 `*common`（runner / docker / lock 全自带 —— 镜像出口去 platform pool
      * 正是「自托管出网不稳、换一条出网路径」这件事本身；主列只剩一格站内回读，
      * 自托管的算力与缓存对它没有对象）。 */
-    const poolPipelines = [...HOSTED_MIRROR_PIPELINES, PR_GATE_PIPELINE].filter((name) =>
-      text.includes(`- name: ${name}`),
+    const poolPipelines = [...HOSTED_MIRROR_PIPELINES, PR_GATE_PIPELINE, VERDICT_PIPELINE].filter(
+      (name) => text.includes(`- name: ${name}`),
     );
     expect(
       refs.length + poolPipelines.length,
@@ -1928,12 +1931,13 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 以前只打 `conclusion`，排查「这条回调绑的是哪笔预合并 sha」得跳去 GA run
      * 页面翻（#3378 03:48 贴图）。GA 侧把 sha 随 `env.GA_CALLBACK_SHA` 送进来后，
      * 这份 script 必须把它打进日志，并保留与 `CNB_COMMIT` 的交叉核对 ——
-     * 平台对 `api_trigger*` 事件的 `CNB_COMMIT` 没有明文取值保证。 */
+     * 平台对 `api_trigger*` 事件的 `CNB_COMMIT` 没有明文取值保证。
+     * #3529 起这条流水线在平台池 Linux：内联脚本换 sh 形态（PowerShell 残留零容忍）。 */
     const script = stageScriptLine(readRegisteredConfig(), "GA 结论判定");
     expect(script, "解析不出 `GA 结论判定` 的 script").not.toBe("");
-    expect(script).toContain("$env:GA_CALLBACK_SHA");
-    expect(script).toContain("$env:GA_PR_NUMBER");
-    expect(script).toContain("$env:CNB_COMMIT");
+    expect(script).toContain("${GA_CALLBACK_SHA:-}");
+    expect(script).toContain("${GA_PR_NUMBER:-}");
+    expect(script).toContain("${CNB_COMMIT:-}");
     expect(script).toContain("[ga-verdict] callback sha=");
     expect(script).toContain("[ga-verdict] callback cnb_commit=");
     expect(script).toContain("sha_check=");
@@ -1943,6 +1947,55 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(script).toContain("exit 1");
     expect(script).toContain("conclusion=$v sha=$short -> success");
     expect(script).toContain("conclusion=$v sha=$short -> failure");
+    /* 平台池是 sh 容器：PowerShell 残留（前缀 / $env: 取值 / Write-Host）零容忍。 */
+    expect(script, "判定脚本残留 PowerShell 语法（$env:）—— sh 读不到这个取值形态").not.toContain(
+      "$env:",
+    );
+    expect(script, "判定脚本残留 Write-Host —— sh 容器里那是一条外部命令").not.toContain(
+      "Write-Host",
+    );
+  });
+
+  it("GA 判决回调流水线（ISSUE #3529 迁平台池）：判决必经链不再等开发机醒来", () => {
+    /* #3528 现场：这条流水线是每条 PR 判决的必经链，钉在自托管上时节点离线
+     * （睡眠 / runner 连接掉）⇒ build 死在 prepare，fail-closed 把 error 送回主列，
+     * 所有 PR 的判决变红 —— 与代码无关。它是纯 env 折叠动作，不吃节点算力。
+     * 形态判据与质量门禁段同一族：平台池标签、无 namespace: group、不吃锚点、
+     * script 无 PowerShell 残留、锁仍是 ga-verdict、git.enable: false 在（不检出）。 */
+    const text = readRegisteredConfig();
+    const at = text.indexOf(`- name: ${VERDICT_PIPELINE}`);
+    expect(at, "GA 判决回调流水线找不到条目起点").toBeGreaterThan(-1);
+    const chunk = text
+      .slice(at, nextEventAt(text, at))
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("#"))
+      .join("\n");
+    expect(chunk, "判决回调没有点名平台池标签").toMatch(/^\s+tags:\s*\n\s+-\s*cnb:arch:amd64\s*$/m);
+    expect(
+      chunk,
+      "判决回调写了 namespace: group —— 迁移被静默撤销，开发机睡着时所有 PR 判红",
+    ).not.toMatch(/namespace:\s*group/);
+    expect(chunk, "判决回调引用了 `*common` —— 它会继承自托管 runner（Windows 节点）").not.toMatch(
+      /<<:\s*(?:\[\s*)?\*\w+/,
+    );
+    expect(chunk, "判决回调丢了 `git.enable: false` —— 不检出是它内联判定的前提").toContain(
+      "enable: false",
+    );
+    /* 锁经 `*lock_ga_verdict` 锚点引用（key 在锚点定义处）；断言两层都在。 */
+    expect(chunk, "判决回调的锁不是 *lock_ga_verdict —— 同一 PR 连派发的互斥没了").toContain(
+      "lock: *lock_ga_verdict",
+    );
+    expect(text, "`*lock_ga_verdict` 锚点的 key 不是 ga-verdict —— 钥匙被人换了").toContain(
+      "key: ga-verdict",
+    );
+    const scriptLines = chunk.split("\n").filter((line) => /^\s+script:/.test(line));
+    expect(scriptLines.length, "判决回调解析不出 script 行").toBeGreaterThan(0);
+    for (const line of scriptLines) {
+      expect(line, "判决回调的 script 带了 Windows PowerShell 语法").not.toContain(
+        "[Text.Encoding]",
+      );
+      expect(line, "判决回调的 script 还包着 ci-cp936-exit.mjs").not.toContain("ci-cp936-exit.mjs");
+    }
   });
 
   it("GA 判红日志正文搬到 CNB：relay step 在收尾 job，且不碰承重主列（ISSUE #3437）", () => {

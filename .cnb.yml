@@ -1637,7 +1637,6 @@ master:
           script: node scripts/ci-ga-dispatch.mjs --preset unit
           timeout: 10m
 
-
   # ── 这里曾有第四个 API 口：`api_trigger_formatfix`（已摘除）─────────
   #
   # 它存在的唯一理由是「`oxfmt 格式` 那一格在 PR 事件上推不动，要换一个可信事件做回写口」。
@@ -1694,42 +1693,58 @@ master:
   # 两者不一致时以 `GA_CALLBACK_SHA` 为准并明写 `mismatch`，别把绑错的 sha
   # 读成「平台又合成了一棵新树」。只加日志，不改三态退码与 `GA_VERDICT` 折叠。
   api_trigger_ga_verdict:
-    - <<: *common
-      name: GA 判决回调（骨架·休眠）
+    # ── #3529：这条也迁平台池 —— 它是每条 PR 判决的必经链 ──────────
+    # GA pr-gate 收尾 job 起这条 build，`GA 结论判定` 把 GA 送回的 verdict
+    # 折成三态退码，PR 主列的「GA 回调结论回读」读它的终态（fail-closed）。
+    # 钉在自托管上的唯一残余后果：**开发机睡着 / runner 连接掉 ⇒ 这条 build
+    # 死在 prepare，所有 PR 的判决变红**（#3528 现场：runner not connected，
+    # 与代码无关）。它是纯 env 折叠动作，不吃节点算力 —— 迁平台池后
+    # 「开发机睡着 = 全仓 PR 判红」这一族连根消失。
+    #
+    # 形态与两条镜像出口 / 质量门禁同族（平台池标签、自带 runner / lock、
+    # 不吃 `*common`、sh 直跑）；契约由 no-platform-ci-config 的判决回调段钉住。
+    - name: GA 判决回调（骨架·休眠）
+      runner:
+        # 平台池 = 云托管 Linux 节点（不写 namespace: group 就是它）。
+        tags:
+          - cnb:arch:amd64
+        # 纯 env 折叠（毫秒级），CPU 密集部分只有 node/shell 启动 ⇒ 取 1 核。
+        cpus: 1
       lock: *lock_ga_verdict
       git:
         enable: false
       stages:
         - name: GA 结论判定
-          # 全 ASCII 日志：`git.enable: false` 时工作区没有
-          # `scripts/ci-cp936-exit.mjs`，包不了那层转码；这一格自己不写中文，
-          # CP936 对 ASCII 逐字通过，乱码面从源头就不存在。
-          # PS 5.1 原生写法（`-contains` / 无 `?.` `??`），与头注第 3、6 两条
-          # 和 §13.5.3.4.1 的解析期判据对齐。
+          # 全 ASCII 日志：`git.enable: false` 时工作区没有代码，判定逻辑
+          # 必须内联（调不了 `scripts/` 下任何入口）。平台池是 Linux 容器、
+          # stage shell 是 `sh`：PowerShell 前缀与 `$env:` 写法都不许带
+          # （契约由 no-platform-ci-config 的判决回调段钉住）。
           script: |
-            $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
-            $role = [string]$env:GA_ROLE
-            $sha = [string]$env:GA_CALLBACK_SHA
-            $pr = [string]$env:GA_PR_NUMBER
-            $cnbSha = [string]$env:CNB_COMMIT
-            $short = $sha
-            if ($short.Length -gt 8) { $short = $short.Substring(0, 8) }
-            $cnbShort = $cnbSha
-            if ($cnbShort.Length -gt 8) { $cnbShort = $cnbShort.Substring(0, 8) }
-            $match = 'match'
-            if ($sha -ne '' -and $cnbSha -ne '' -and $sha -ne $cnbSha) { $match = 'mismatch' }
-            Write-Host "[ga-verdict] callback sha=$sha (short=$short) pr=$pr role=$role"
-            Write-Host "[ga-verdict] callback cnb_commit=$cnbSha (short=$cnbShort) sha_check=$match"
-            if ($role -ne 'callback') {
-              Write-Host "[ga-verdict] role is not callback, inconclusive (not a pass)"
+            role=${GA_ROLE:-}
+            sha=${GA_CALLBACK_SHA:-}
+            pr=${GA_PR_NUMBER:-}
+            cnb_sha=${CNB_COMMIT:-}
+            short=$(printf '%s' "$sha" | cut -c1-8)
+            cnb_short=$(printf '%s' "$cnb_sha" | cut -c1-8)
+            match=match
+            if [ -n "$sha" ] && [ -n "$cnb_sha" ] && [ "$sha" != "$cnb_sha" ]; then
+              match=mismatch
+            fi
+            echo "[ga-verdict] callback sha=$sha (short=$short) pr=$pr role=$role"
+            echo "[ga-verdict] callback cnb_commit=$cnb_sha (short=$cnb_short) sha_check=$match"
+            if [ "$role" != "callback" ]; then
+              echo "[ga-verdict] role is not callback, inconclusive (not a pass)"
               exit 2
-            }
-            $v = ([string]$env:GA_VERDICT).ToLower()
-            $green = @('success', 'neutral', 'skipped') -contains $v
-            if ($green) {
-              Write-Host "[ga-verdict] callback conclusion=$v sha=$short -> success"
-              exit 0
-            }
-            Write-Host "[ga-verdict] callback conclusion=$v sha=$short -> failure"
-            exit 1
+            fi
+            v=$(printf '%s' "${GA_VERDICT:-}" | tr '[:upper:]' '[:lower:]')
+            case "$v" in
+              success | neutral | skipped)
+                echo "[ga-verdict] callback conclusion=$v sha=$short -> success"
+                exit 0
+                ;;
+              *)
+                echo "[ga-verdict] callback conclusion=$v sha=$short -> failure"
+                exit 1
+                ;;
+            esac
           timeout: 5m
