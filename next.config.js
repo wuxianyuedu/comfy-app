@@ -111,6 +111,25 @@ const config = {
   // lib/typescript.js API）；类型正确性仍由独立 `tsc --noEmit`（TS7 native）门禁保证。
   experimental: {
     useTypeScriptCli: false,
+    // ⚠️ Turbopack dev 持久缓存必须关闭（Next 16.4.3 默认 true，config-shared.js L293）。
+    // 为什么：16.4 起持久缓存跨会话存活 + turbopack-subscribe 的 hmrVersion 校验
+    // （上游 #97966 引入）组合出「整页 reload 死循环」——每次页面加载，主 client 入口
+    // 的 chunk list 首条消息是 restart，经 subscribeToClientHmrEvents 推送后
+    // clientHmrVersion 自增；页面随后发出的 turbopack-subscribe 携带构建时刻的旧版本，
+    // 服务端判 mismatch 直接回 RELOAD_PAGE（hot-reloader-turbopack.js 的
+    // turbopack-subscribe 分支），客户端静默 window.location.reload()。新页面自己的
+    // 路由请求又 bump 版本 → 下一轮订阅再次过期 → 无限循环。现场特征：整页每 ~2.3s
+    // 重载一次（dev server 每 cycle 打一条 GET /workspace 200 + ✓ Compiled）、浏览器
+    // console 零报错、无 CSP/ChunkLoadError，任务栏图标随 on_page_load 反复闪烁
+    // （CNB issue #3559「启动后界面不断切换」的真实根因）。
+    // 上游复现与记录：vercel/next.js #100267（16.4.1 起，16.3.8 不复现；
+    // 「plain restart on a cache the previous session had just built looped 3 of 3」
+    // —— 与本项目每次启动都命中上一次会话留下的 .next/dev/cache 的场景一致）。
+    // 官方记录的规避手段就是关掉它（issue 原文：the loop goes away if you …
+    // set experimental.turbopackFileSystemCacheForDev: false）。
+    // 代价：放弃 dev 暖启动的编译缓存（冷启动变慢）；等上游修复（跟踪 #100267）
+    // 后删掉这一行即可回退。
+    turbopackFileSystemCacheForDev: false,
     // #2542 第一格：Turbopack 插件运行时从默认的 childProcesses 换成 workerThreads
     // （Next 16.4.3 config-shared.d.ts L691：'workerThreads' | 'childProcesses' |
     // 'forceWorkerThreads'，默认 childProcesses）。动机是子进程冷启开销：每个插件
