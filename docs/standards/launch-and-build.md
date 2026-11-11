@@ -3647,6 +3647,27 @@ sidecar」两种不同形态的失败。
 回归测试：`tests/cross-platform-launcher.test.ts`、
 `src/lib/process/kill-process-tree.windows.test.ts`。
 
+**但「源码跨平台了」不等于「在哪都能编出来」**（ISSUE #3572 的现场）。上面那张表修的是
+**Rust 源码层**的 Windows 独占；Linux 上编 Tauri 还要**系统库**这一层：Tauri v2 的
+webview 后端（`webkit2gtk-4.1`）、`glib-2.0`、托盘（`ayatana-appindicator3-0.1`）、
+图标（`rsvg-2.0`）、窗口交互（`xdo`）、updater 的 TLS（`openssl`）——
+每一项都是一条 `pkg-config` 描述文件（`.pc`）。少了它们，`cargo` 退的是 **101**，
+而 101 是**编译期**失败（`glib-sys` 找不到系统库），与「Rust 侧代码坏了 / 单测红了」
+**同一个退码** ⇒ 光看退出码分不出真因。
+
+这层是**平台前提**，归**装它的那一层**管（CI 上是 workflow 的 `apt-get`，本机是
+`sudo apt-get install`，清单照抄 Tauri 官方 Prerequisites 的 Debian/Ubuntu 一栏），
+**不归判据管** —— 判据 `sudo` 改本机是错的边界（提交一次就被 sudo 改一次机器）。
+判据那一侧只做一件事：**缺前提时说人话**（探一遍、点名缺哪几个、给出安装出口），
+而不是把 pkg-config 的原始噪音甩给读的人。分工与判据见规范 §11.10.4。
+
+> ⚠️ **这一层曾经**整个**不存在，而账面全绿**：承重门禁是 #3064（2026-11-02）从 CNB
+> 自托管节点（**Windows**，走 MSVC + WebView2，不需要 glib/webkit）迁到 GA 的 Linux
+> runner 的，迁移后 master 上 418 笔提交里没有一笔碰过 `src-tauri/src/` ⇒ 这一格在 GA 上
+> **从来没真跑过 `cargo test`**。第一次真跑就是 ISSUE #3562 那一笔，当场编译失败
+> （PR #3567 判红）。**这不是「CI 坏了」，是「CI 那一格此前从没被触发过」** ——
+> 潜伏缺口的标准形态：它一直在那儿，只是没人碰过那条路。
+
 ### 9.4 这个模式**仍不**解决的问题（别误当成完整跨平台支持）
 
 - **`.ps1` 入口**：`tools/**/*.ps1` 是 Windows 的**双击/打包入口**（定位项目根、

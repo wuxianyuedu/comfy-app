@@ -289,16 +289,121 @@ export function materializeCargoTestInputs({
 }
 
 /**
+ * Tauri v2 在 Linux 上真正要探的那几个 `pkg-config` 模块。
+ *
+ * 取的是**编译期真正会被问到的那几个**，不是「Tauri 官方全清单」：
+ * `tauri` ⇒ `wry` ⇒ `webkit2gtk-4.1`（webview 后端）、`glib-2.0`（被 webkit2gtk 拉进来，
+ * 也是 `glib-sys` 直接要的）、`ayatana-appindicator3-0.1`（tray-icon feature 的托盘后端）、
+ * `rsvg-2.0`（图标）、`xdo`（窗口交互）、`openssl`（updater plugin 的 TLS）。
+ * 官方清单里 `curl` / `wget` / `file` / `pkg-config` 是**构建期工具**而非库，runner 上已有，
+ * 不进这一列（少探一个就少一条「明明在却报缺」的可能）。
+ */
+const TAURI_LINUX_PC_MODULES = [
+  "webkit2gtk-4.1",
+  "glib-2.0",
+  "ayatana-appindicator3-0.1",
+  "rsvg-2.0",
+  "xdo",
+  "openssl",
+];
+
+/**
+ * 默认探针：`pkg-config --exists <mod>`（与编译期同一把尺 —— pkg-config 自己问）。
+ *
+ * @param {string} mod pkg-config 的模块名（`glib-2.0` 那一类）
+ * @returns {boolean} 找得到那个 `.pc` 描述文件就是 true
+ */
+function defaultPkgConfigProbe(mod) {
+  const r = spawnSync("pkg-config", ["--exists", mod], { stdio: "ignore" });
+  return r.status === 0;
+}
+
+/**
+ * Tauri 在 Linux 上编译要的系统库 —— **平台前提**，不是判据（ISSUE #3572）。
+ *
+ * 这一层归 workflow / CI 镜像那一档去准备（`.github/workflows/pr-gate.yml` 的
+ * 「装 Tauri 的 Linux 系统依赖」），判据**不自己装**：判据去改系统包意味着本地开发者
+ * 提交一次就被 sudo 改一次机器，那是错的边界。判据该做的是「缺前提时说人话」——
+ * 给出缺哪个包、去哪装，而不是把 pkg-config 的原始噪音（`Package glib-2.0 was not
+ * found in the pkg-config search path`）甩给读的人。
+ *
+ * ⚠️ 为什么这个缺口直到 2026-11 才现形：承重门禁是 #3064 从 CNB 自托管节点（**Windows**，
+ * 走 MSVC + WebView2，不需要 glib/webkit）迁到 GA 的 Linux runner 的，迁移后 master 上
+ * 418 笔提交里没有一笔碰过 `src-tauri/src/` ⇒ 「桌面壳（改了 src-tauri 才跑）」那一格
+ * 在 GA 上**从来没真跑过 cargo test**。第一次真跑（#3562）当场编译失败：cargo 退 101
+ * = **编译期**失败（`glib-sys` 找不到 `glib-2.0.pc`），不是断言失败。
+ *
+ * 探的是 `pkg-config` 能不能找到那几个 `.pc`（`glib-sys` 走的就是 pkg-config，
+ * 探测口径与编译期完全同源 —— 探得过就是编得过）。
+ *
+ * @param {{
+ *   platform?: NodeJS.Platform,
+ *   pkgConfigProbe?: (mod: string) => boolean,
+ * }} [deps] 全部可注入 —— 用例据此判「缺什么 / 说什么」，不碰真机。
+ * @returns {{ missing: string[], hint: string | null }}
+ *   `missing` = 探不到的系统库（空数组 = 前提齐了）；`hint` = 给读的人的那句出口。
+ */
+export function missingLinuxSystemLibs({
+  platform = process.platform,
+  pkgConfigProbe = defaultPkgConfigProbe,
+} = {}) {
+  /* Windows / macOS 不走 pkg-config 这一层（Windows 走 MSVC + WebView2，macOS 走系统
+   * framework），所以只有 Linux 需要探。 */
+  if (platform !== "linux") {
+    return { missing: [], hint: null };
+  }
+  const missing = TAURI_LINUX_PC_MODULES.filter((mod) => !pkgConfigProbe(mod));
+  if (missing.length === 0) {
+    return { missing: [], hint: null };
+  }
+  return {
+    missing,
+    hint:
+      `这台机器缺 Tauri 在 Linux 上编译要的系统库：${missing.join(" / ")}。\n` +
+      "        （pkg-config 找不到它们的 `.pc` 描述文件 ⇒ cargo 编译 glib-sys / webkit2gtk 时失败，\n" +
+      "         退出码 101 是**编译期**失败，不是断言失败。）\n" +
+      "        装（Tauri 官方 Prerequisites 的 Debian/Ubuntu 一栏）：\n" +
+      "          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \\\n" +
+      "            librsvg2-dev libxdo-dev libssl-dev build-essential",
+  };
+}
+
+/**
  * 跑 cargo test。
  *
- * @returns {{code: number | null, probes?: CargoProbe[]}} `code === null` = 找不到 cargo
- *   （由调用方给指路），此时**带上探针读数** —— 那一句「找不到」必须说得出探了哪几处。
+ * @param {{ platform?: NodeJS.Platform, pkgConfigProbe?: (mod: string) => boolean,
+ *   cargoLookup?: () => { path: string | null, probes?: CargoProbe[] } }} [deps]
+ *   全部可注入 —— 用例据此判「缺前提时 cargo 压根没跑」，不碰真机（ISSUE #3572）。
+ * @returns {{code: number | null, probes?: CargoProbe[], missing?: string[]}}
+ *   `code === null` = 找不到 cargo（由调用方给指路），此时**带上探针读数** ——
+ *   那一句「找不到」必须说得出探了哪几处。
+ *   `missing` = 探不到的系统库（前提没备齐，cargo **没跑**）。
  */
-function runCargoTest() {
-  const lookup = findCargoLookup();
+export function runCargoTest({
+  platform = process.platform,
+  pkgConfigProbe = defaultPkgConfigProbe,
+  cargoLookup = findCargoLookup,
+} = {}) {
+  const lookup = cargoLookup();
   const cargo = lookup.path;
   if (!cargo) {
     return { code: null, probes: lookup.probes };
+  }
+  /* 系统库探针在 cargo test **之前**：缺库时 cargo 会退 101，而 101 与「Rust 侧编译
+   * 坏了 / 单测红了」同码 ⇒ 光看退出码分不出真因。这一层先把「前提齐不齐」分出来
+   * （ISSUE #3572）。
+   *
+   * ⚠️ 退 **1** 而不是 2：平台侧最终都是红（退 2 会被聚合层归进「没跑起来」那一档，
+   * 那一档**只打印标签、不打印判据的输出** ⇒ 真正的原因会整段消失，读的人只看到
+   * 「没跑起来」四个字）。这一档必须把「缺哪几个包、去哪装」露出来 ⇒ 只能走「红」
+   * 那条路（红步会打判据输出的头 5 行 + 尾 15 行）。归因写在步的那一行里，
+   * 不让读的人误以为「Rust 侧代码坏了」（那是「先修再提」那一句管的事）。 */
+  const libs = missingLinuxSystemLibs({ platform, pkgConfigProbe });
+  if (libs.missing.length > 0) {
+    for (const line of (libs.hint ?? "").split("\n")) {
+      process.stderr.write(`${line}\n`);
+    }
+    return { code: 1, missing: libs.missing };
   }
   const prep = materializeCargoTestInputs({ cargo });
   for (const line of prep.lines) {
@@ -360,7 +465,8 @@ export function freshnessProblem(root = ROOT) {
  * `findCargoLookup`）。那句话是「找不到 cargo」唯一的取证面 —— 没有它，拿
  * `CARGO_HOME` 配着工具链的人只能猜（ISSUE #2293）。
  *
- * @typedef {{ kind: "cargo", state: "skipped" | "missing" | "ok" | "failed", code?: number, probes?: CargoProbe[] }
+ * @typedef {{ kind: "cargo", state: "skipped" | "missing" | "prereq-missing" | "ok" | "failed",
+ *   code?: number, probes?: CargoProbe[], missing?: string[] }
  *   | { kind: "freshness", state: "ok" | "blocked" | "skipped", problem?: string }} GateStep
  */
 
@@ -375,11 +481,12 @@ export function freshnessProblem(root = ROOT) {
  * 注入只是让分支可测，出厂行为不变（§12.18，不再发明第二套）。
  *
  * @param {{staged?: string[], root?: string,
- *   cargoRunner?: () => ({code: number | null, probes?: CargoProbe[]} | null),
+ *   cargoRunner?: () => ({code: number | null, probes?: CargoProbe[], missing?: string[]} | null),
  *   mode?: "staged" | "base"}} [options]
  *   `mode` = `"staged"`（默认，本地那一跳）/ `"base"`（平台侧以 PR diff 为判决面）。
  *   `cargoRunner` 的 `null` = 这台机器上找不到 cargo（≈ `findCargoLookup().path === null`），
  *   它顺带把探针读数交上来，好让调用方那句话能说出「探了哪几处」。
+ *   `missing` = 探不到的系统库（Linux 上编 Tauri 的前提没备齐，ISSUE #3572）。
  * @returns {{ exitCode: number, steps: GateStep[] }}
  */
 export function runGate({ staged, root = ROOT, cargoRunner = runCargoTest, mode = "staged" } = {}) {
@@ -403,6 +510,13 @@ export function runGate({ staged, root = ROOT, cargoRunner = runCargoTest, mode 
       return { exitCode: mode === "base" ? 2 : 1, steps };
     }
     const code = got.code;
+    /* 前提没备齐（缺 Tauri 的 Linux 系统库）：**不是「cargo test 失败」** ——
+     * cargo 压根没跑起来，判据判出的是「这台机器编不了」。归因必须分开写，
+     * 否则读的人会去修一条根本没跑过的判据（ISSUE #3572）。 */
+    if ((got.missing ?? []).length > 0) {
+      steps.push({ kind: "cargo", state: "prereq-missing", code, missing: got.missing });
+      return { exitCode: code, steps };
+    }
     if (code !== 0) {
       steps.push({ kind: "cargo", state: "failed", code });
       // 顺序也是判据：编不过就不再往下判时效 —— 时效消息会把真因（Rust 侧编译/单测坏了）
@@ -475,10 +589,13 @@ function probesText(probes) {
 /**
  * 把 `runGate` 的走格打成人类可读的行（打印只在 `main`，判决不在这里）。
  *
+ * 导出是为了让用例能**执行**这句话 —— 归因（「cargo test 失败」vs「cargo test 没跑起来」
+ * 缺系统库」）是这一格最贵的一处，抠源码文本断言它等于没锁（§11.10.4）。
+ *
  * @param {{ exitCode: number, steps: GateStep[] }} result
  * @returns {{ to: "out" | "err", text: string }[]}
  */
-function linesFor(result, mode = "staged") {
+export function linesFor(result, mode = "staged") {
   /** @type {{ to: "out" | "err", text: string }[]} */
   const out = [];
   for (const step of result.steps) {
@@ -495,6 +612,18 @@ function linesFor(result, mode = "staged") {
                 ? "\n        这一格按「没跑起来」收（退 2）—— 判据在场、执行者不在，不是「判出失败」。"
                 : ""
             }`,
+        });
+      } else if (step.state === "prereq-missing") {
+        /* 归因必须与「cargo test 失败」分开：这一格 cargo **压根没跑**，
+         * 缺的是编 Tauri 要的系统库。判据不自己装（sudo 改本机是错的边界），
+         * 它只把缺哪几个、去哪装念出来（ISSUE #3572）。 */
+        out.push({
+          to: "err",
+          text:
+            `[shell-gate] ✗ cargo test 没跑起来：这台机器缺 Tauri 在 Linux 上编译要的系统库` +
+            `（${(step.missing ?? []).join(" / ")}）—— 补上它们再跑（上面有安装出口）。\n` +
+            `        这不是「Rust 侧代码坏了」：判据判出的是「这台机器编不了」，` +
+            `而 cargo 缺系统库时退的是 101（**编译期**失败），与断言失败同码。`,
         });
       } else if (step.state === "failed") {
         out.push({

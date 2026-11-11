@@ -391,6 +391,47 @@ jobs:
       - name: 安装依赖
         run: pnpm install --frozen-lockfile
 
+      # Tauri 在 Linux 上编译要的系统库（ISSUE #3572）。
+      #
+      # 为什么这一格以前不需要它：承重门禁是 #3064（2026-11-02）从 CNB 自托管节点迁到 GA 的，
+      # 而那个节点是 **Windows**（`.cnb.yml` 节点 tag = win）—— Windows 编 Tauri 走 MSVC +
+      # WebView2，不需要 glib / webkit 这套 Linux 系统库。迁移之后 master 上 418 笔提交里
+      # 没有一笔碰过 `src-tauri/src/`，所以「桌面壳（改了 src-tauri 才跑）」那一格在 GA 上
+      # **从来没有真跑过 `cargo test`**；第一次真跑就是 ISSUE #3562 那一笔，当场编译失败：
+      #
+      #     pkg-config exited with status code 1
+      #     > pkg-config --libs --cflags glib-2.0 'glib-2.0 >= 2.70'
+      #     The system library `glib-2.0` required by crate `glib-sys` was not found.
+      #     （cargo 退 101 = **编译期**失败，不是断言失败）
+      #
+      # ubuntu-24.04 runner 只预装 `pkg-config`，不预装下面这些（actions/runner-images 的
+      # Ubuntu2404 apt 清单逐条核对过）。清单**照抄 Tauri 官方 Prerequisites 页**
+      # （https://v2.tauri.app/start/prerequisites/ 的 Debian/Ubuntu 一栏），不自造：
+      # libwebkit2gtk-4.1-dev 是 Tauri v2 的 webview 后端（tauri ⇒ wry ⇒ webkit2gtk），
+      # libayatana-appindicator3-dev 是 tray-icon feature 的托盘后端，
+      # librsvg2-dev 是图标，libxdo-dev 是窗口交互，libssl-dev 是 updater plugin 的 TLS，
+      # build-essential 是 C 依赖的链接器与头文件（tauri-sys / glib-sys / gtk-sys 全走它）。
+      #
+      # ⚠️ 装的是 **dev** 包不是运行时包：cargo test 要的是头文件与 `.pc` 描述文件
+      # （pkg-config 读的就是 `.pc`），不是 `.so` 本身 —— 少了 `-dev` 就是「pkg-config 找不到
+      # glib-2.0」这一句。
+      #
+      # 这一步**只在重档真会碰壳时**才需要，但重档是「一条龙」跑几十条判据、触发面在判据
+      # 内部算（判据本人才知道有没有改壳），workflow 层拿不到那个面 ⇒ 只能无条件装。
+      # 代价是每个 PR 多付约 30s 的 apt（apt 源走 GitHub runner 的本地缓存，
+      # 不额外引入出网依赖）。换来的是「这一格不再恒红于环境」—— 它第一次真跑就撞上缺库，
+      # 那样每一次改壳的 PR 都会红在一条与代码无关的地方。
+      - name: 装 Tauri 的 Linux 系统依赖（壳门禁要在本机编 Tauri）
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
+            build-essential
+
       - name: 重档静态判据（cnb 同款判据一字不改）
         # 「没判」那一档（缺 CNB_COMMIT 等前提）由脚本自己打结论行，外壳据此折成非红；
         # 有红 / 有缺件不折，红照样红（ISSUE #3102）。
