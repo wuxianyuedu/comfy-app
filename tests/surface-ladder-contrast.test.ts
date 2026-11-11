@@ -149,6 +149,29 @@ describe("描边这一档看得见（浅色主题，ISSUE #3520）", () => {
   });
 });
 
+describe("设置页外壳的形态判据（ISSUE #3547）", () => {
+  /* 这两条是**形态**：滚动条浮在内容上（Windows）时，内容列不给它留位置就会压住
+     内容的右缘；分区里多张卡片时不给容器，卡片就贴在一起像一块。两者都没有数字
+     会红 —— 只能靠形态判。 */
+  const SHELL = path.join(ROOT, "src/components/settings/SettingsShell.tsx");
+
+  it("内容列给浮层滚动条留出右侧位置（`pr-*`）", () => {
+    const src = stripComments(readFileSync(SHELL, "utf8"), { trailing: true });
+    expect(
+      /custom-scrollbar[^"]*\bpr-\d/.test(src),
+      "设置页内容列没有给浮层滚动条留位置 —— 内容的右缘会被压住（卡片右边框显示不全）",
+    ).toBe(true);
+  });
+
+  it("分区正文走 gap 容器（一节里多张卡片时不贴在一起）", () => {
+    const src = stripComments(readFileSync(SHELL, "utf8"), { trailing: true });
+    expect(
+      /flex flex-col gap-\d[^"]*">\{sections\?\.\[id\]\}/.test(src),
+      "分区正文没有走带间距的容器 —— 一节里多张卡片会贴在一起",
+    ).toBe(true);
+  });
+});
+
 describe("控件的未选中边界不许是那根发丝线（ISSUE #3519）", () => {
   /* 控件的描边只有 1px：沿用「分隔线」那一档（`--color-border`）时，它在
    * 1.5 倍屏上与容器底**互相混色**（实测深色 1.09:1 / 浅色 1.02:1）—— 未选中的
