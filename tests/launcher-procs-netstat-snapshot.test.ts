@@ -14,6 +14,7 @@
  * 失败那一支：netstat 起不来要抛可识别的异常，不许退化成空数组（那会被
  * `inspectPort` 念成「端口空闲」、被 `runningAppInstances` 念成「没有实例」）。
  */
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -53,6 +54,32 @@ beforeEach(() => {
   });
 });
 
+/**
+ * 本机有没有可读的 `/proc/net/tcp{,6}` —— **POSIX 分支的输入面**。
+ *
+ * 为什么用例要自己判一次（ISSUE #3522）：那一支的输入是**文件系统**、不是平台名 ——
+ * Linux 有 `/proc`，**Windows 与 macOS 都没有**。所以「POSIX 分支给出数组」这件事
+ * 只在有 `/proc` 的机器上成立；在没有的机器上它按本仓三态口径抛
+ * `ProbeUnavailableError`（「没量到 ≠ 量到空」，见
+ * `scripts/launcher-core/procs.mjs` 的 `listeningPidsPosix`）——
+ * 那是**契约的一部分**，不是缺陷。
+ *
+ * 原先那条断言把「有 /proc」当前提写死了，于是它在 Windows 与 macOS 上恒红
+ * （`base-check` 判 baseline-red）。改成按本机的真实输入面分两支断言：
+ * 有 `/proc` ⇒ 给出数组；没有 ⇒ 抛第三态。**两支都是契约**，
+ * 而「不碰 netstat」这一条在两支上都成立。
+ */
+function hostHasProcNetTcp(): boolean {
+  return ["/proc/net/tcp", "/proc/net/tcp6"].some((file) => {
+    try {
+      readFileSync(file, "utf8");
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
 describe("netstat 快照的同步/异步契约", () => {
   it("冷缓存首次调用 ⇒ 返回 Promise 且解析出监听 PID，不抛 TypeError", async () => {
     const { listeningPidsOnPort } = await import("../scripts/launcher-core/procs.mjs");
@@ -84,11 +111,22 @@ describe("netstat 快照的同步/异步契约", () => {
     expect(mocks.execFile).toHaveBeenCalledTimes(1);
   });
 
-  it("POSIX 分支不受影响 ⇒ 仍给出数组，且不碰 netstat", async () => {
-    const { listeningPidsOnPort } = await import("../scripts/launcher-core/procs.mjs");
+  it("POSIX 分支不受影响 ⇒ 不碰 netstat，且按本机有没有 /proc 给读数或第三态", async () => {
+    const { listeningPidsOnPort, ProbeUnavailableError } =
+      await import("../scripts/launcher-core/procs.mjs");
     const result = listeningPidsOnPort(1, "linux");
     expect(result).toBeInstanceOf(Promise);
-    await expect(result).resolves.toBeInstanceOf(Array);
+    /* 断言**不写成条件分支**（`vitest/no-conditional-expect` 不许条件里出现 expect ——
+       条件本身不是被测行为，被测的是「这一支在本机给出哪种契约结论」）。
+       所以把「本机属于哪一支」折进**期望值**里，一次 expect 断言两件事。 */
+    const outcome = await result.then(
+      (value) => (Array.isArray(value) ? "array" : "not-array"),
+      (error) =>
+        error instanceof ProbeUnavailableError
+          ? "probe-unavailable"
+          : `other-error:${String(error)}`,
+    );
+    expect(outcome).toBe(hostHasProcNetTcp() ? "array" : "probe-unavailable");
     expect(mocks.execFile).not.toHaveBeenCalled();
   });
 });
