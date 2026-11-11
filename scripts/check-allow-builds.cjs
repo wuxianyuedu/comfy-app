@@ -501,7 +501,8 @@ function printOrphans() {
   }
   console.log(
     "     它们不会让别人的 `pnpm install --frozen-lockfile` 失败（不在依赖图里 ⇒ 不会被装）；\n" +
-      "     要清掉：删掉 `node_modules/.pnpm/<对应条目>` 目录后重跑 `pnpm install`。",
+      "     要清掉：先 `pnpm deps:prune --dry-run` 看清单，再 `pnpm deps:prune` 收掉\n" +
+      "     （别手工删目录，也别整棵重装 —— 入口见规范 §12.20）。",
   );
 }
 
