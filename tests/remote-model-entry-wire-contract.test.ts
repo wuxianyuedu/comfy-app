@@ -9,7 +9,7 @@ import type * as LoggerModule from "~/lib/core/logger";
 import {
   remoteModelEntryFromDraft,
   remoteModelEntrySchema,
-  type RemoteModelFieldValues,
+  type RemoteModelDraft,
 } from "~/lib/llm/remote-model-schema";
 import { REMOTE_MODEL_KINDS, normalizeExtraModels, splitExtraModels } from "~/lib/llm/types";
 import { createCallerFactory } from "~/server/api/trpc";
@@ -36,7 +36,7 @@ const tdb = getTestDb();
 
 /** 弹窗里那份**未判过**的表单状态（生产调用点交给桥的就是这一份 —— 字段级判据
  *  只用于「哪一项标红」，不产出值）→ 真桥。缺的键由 `ModelDialogForm` 的初始值补齐。 */
-function entryFromDialog(form: Partial<RemoteModelFieldValues> = {}) {
+function entryFromDialog(form: Partial<RemoteModelDraft> = {}) {
   return remoteModelEntryFromDraft({
     model: "gpt-x",
     baseUrl: "",
