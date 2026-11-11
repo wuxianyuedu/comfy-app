@@ -248,21 +248,23 @@ export function ProviderModelDialog({
           </div>
 
           <fieldset className="border-border mb-3 rounded-xl border p-3">
-            {/* 折叠头（#3577）：整个 legend 是按钮，点击展开 / 收起；箭头随态旋转。 */}
-            <button
+            {/* 折叠头（#3577）：整个头部是按钮，点击展开 / 收起；箭头随态旋转。
+                用 ui/button 的 <Button> —— 视图层手写 <button> 是基元棘轮 P1。 */}
+            <Button
               aria-expanded={advancedOpen}
-              className="text-ink/80 hover:text-ink -mx-1 flex w-full items-center gap-1 rounded px-1 py-0.5 text-sm font-medium"
+              className="text-ink/80 hover:text-ink -mx-1 h-auto rounded px-1 py-0.5 text-sm font-medium"
               onClick={() => {
                 setAdvancedOpen((prev) => !prev);
               }}
-              type="button"
+              variant="ghost"
             >
               <ChevronDownIcon
                 aria-hidden
                 className={`size-3.5 transition-transform ${advancedOpen ? "" : "-rotate-90"}`}
+                data-icon="inline-start"
               />
               高级配置
-            </button>
+            </Button>
 
             {advancedOpen && (
               <>
