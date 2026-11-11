@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 
 import {
+  defaultUsageTestPath,
   defaultVideoFields,
   usageFieldsToJson,
   usageTestDraftKey,
@@ -114,31 +115,16 @@ export function useUsageTestDialogs(c: ReadySettingsPageController): UsageTestDi
    * `./usage-field-editor`；状态仍由本 hook 一处持有，子模块只提供动作。 */
   const editor = createUsageFieldEditor(setUsageTest);
 
-  /** 打开「实际使用」测试弹窗：按用途预填端点路径与提示词；
-   *  base 已含资源子路径（如 …/v1/images）时路径只补动作段。 */
+  /** 打开「实际使用」测试弹窗：按用途预填端点路径与提示词
+   *  （路径预填是纯函数 `defaultUsageTestPath`，单测在 usage-test-config.test）。 */
   function openUsageTest(kind: UsageTestKind, entry: RemoteModelEntry) {
     const base = entry.baseUrl ?? "";
-    const defaults: Record<UsageTestKind, { path: string; prompt: string }> = {
-      chat: {
-        path: "/chat/completions",
-        prompt: "用一句话介绍你自己",
-      },
-      image: {
-        path: "/images/generations",
-        prompt: "一只戴宇航员头盔的柴犬，写实风格，高清",
-      },
-      video: {
-        path: "/videos/generations",
-        prompt: "一只柴犬在草地上奔跑，阳光明媚，电影感",
-      },
+    const prompts: Record<UsageTestKind, string> = {
+      chat: "用一句话介绍你自己",
+      image: "一只戴宇航员头盔的柴犬，写实风格，高清",
+      video: "一只柴犬在草地上奔跑，阳光明媚，电影感",
     };
-    const preset = defaults[kind];
-    const path =
-      kind === "image" && /\/images$/i.test(base)
-        ? "/generations"
-        : kind === "video" && /\/videos$/i.test(base)
-          ? ""
-          : preset.path;
+    const path = defaultUsageTestPath(kind, base);
     /* 若该 kind + 条目此前打开过并填过内容（含上次执行结果 / 状态），
      * 关闭后重开时恢复，而不是回到默认预填——内容不因关闭而丢。 */
     const prev = restoreUsageTestDraft(kind, entry.name);
@@ -148,7 +134,7 @@ export function useUsageTestDialogs(c: ReadySettingsPageController): UsageTestDi
       baseUrl: prev?.baseUrl ?? base,
       path: prev?.path ?? path,
       apiKey: prev?.apiKey ?? "",
-      prompt: prev?.prompt ?? preset.prompt,
+      prompt: prev?.prompt ?? prompts[kind],
       size: prev?.size ?? "",
       /* 视频接口普遍必填 mode（如 Agnes：text / keyframe / reference）。
        * 这里直接给一行可见、可改的 mode 字段，替代原先手填整段 JSON；

@@ -11,6 +11,10 @@ const toggleVariants = cva(
       variant: {
         default: "bg-transparent",
         outline: "border border-input bg-transparent hover:bg-muted",
+        /* 多选 chip（#3577）：default/outline 的选中态只是 bg-muted —— 暗色主题下
+         * 与未选的描边底色几乎同灰，「选中了和没选中根本看不出来」。chip 的
+         * 选中态改用品牌色描边 + 15% 品牌底，明暗两态都拉开一档。 */
+        chip: "border border-input bg-transparent hover:bg-muted data-pressed:border-primary data-pressed:bg-primary/15 data-pressed:text-foreground aria-pressed:border-primary aria-pressed:bg-primary/15 aria-pressed:text-foreground",
       },
       size: {
         default:

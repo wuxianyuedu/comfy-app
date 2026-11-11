@@ -15,6 +15,7 @@ import { extractStreamDelta, extractText, extractToolCalls, buildChatRequest } f
 import {
   parseCapabilities,
   parseInputTypes,
+  parseOutputTypes,
   parseReasoningLevels,
   parseReasoningParamMapping,
   resolveApiFormat,
@@ -91,6 +92,7 @@ function entryFromRemoteRow(
     contextWindow: r.contextWindow,
     maxOutputTokens: r.maxOutputTokens,
     inputTypes: parseInputTypes(r.inputTypes),
+    outputTypes: parseOutputTypes(r.outputTypes),
     capabilities: parseCapabilities(r.capabilities),
     reasoningLevels: parseReasoningLevels(r.reasoningLevels),
     reasoningParamMapping: parseReasoningParamMapping(r.reasoningParamMapping),

@@ -162,7 +162,7 @@ export function ModelAdaptersView() {
           <p className="text-muted-foreground text-sm">加载中…</p>
         ) : candidates.length === 0 ? (
           <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs">
-            还没有远端模型 —— 到「设置 → 模型」添加 kind=图片 / 视频 的远端条目后，
+            还没有远端模型 —— 到「设置 → 模型」添加用途为 图像 / 视频 的远端条目后，
             回来为它配置各模式的输入输出。
           </p>
         ) : (

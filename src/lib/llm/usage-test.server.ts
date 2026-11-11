@@ -28,6 +28,7 @@ import {
 } from "~/lib/llm/video-task-util";
 import { isRecord } from "~/lib/is-record";
 import { REMOTE_MODEL_KINDS, type RemoteModelKind } from "~/lib/llm/types";
+import { llmProviderRepository, remoteModelRepository } from "~/lib/core/repository";
 
 /** chat / 生图 / 生视频的单次调用超时（生视频提交后若走任务制则由
  *  video-task-util 轮询取回，不受此上限约束，见 VIDEO_POLL_TOTAL_MS）。 */
@@ -76,8 +77,61 @@ export type ResolvedUpstream = {
   path: string;
 };
 
+/** 供应商链直查的结论（#3577）：模型挂在哪个供应商下、那家的地址与密钥。
+ *  `ok:false` = 读库失败（SQLite busy 等）——按「查不到」处理，不让测试整条断掉。 */
+type ProviderChainLookup =
+  | {
+      /** 供应商有没有配密钥（可读报错的判据）。 */
+      hasKey: boolean;
+      ok: true;
+      /** 供应商已保存的明文密钥（repository 读出即已解密；没配为 null）。 */
+      providerApiKey: string | null;
+      /** 供应商自己的 Base URL（entry 缺席时的地址兜底）。 */
+      providerBaseUrl: string | null;
+      /** 供应商名（可读报错里点名用）；模型不挂供应商时为 null。 */
+      providerName: string | null;
+    }
+  | { ok: false };
+
+/** 按模型名直查 remoteModel → llmProvider 一轮（**不经过 `getLLMConfig`**）。
+ *  为什么要独立于 entry 解析再查一次：`getLLMConfig` 的读库失败会被 catch 吞掉、
+ *  整体回落 env 默认（`extraModels` 变空）——表现恰好是「请求地址对（弹窗 typed
+ *  值还在）、密钥却没带」，上游答 401 "Token not provided"，现场看不出原因
+ *  （#3577 评论 4 的截图）。这条直查是**第二把钥匙**：第一把（entry 合并）失手
+ *  时它仍能从供应商行里拿回密钥与地址；两把都失手时至少能给出「供应商没配密钥」
+ *  的可读报错，而不是让上游替我们说一句谜语。 */
+async function lookupProviderChain(name: string): Promise<ProviderChainLookup> {
+  try {
+    const row = await remoteModelRepository.findByName(name);
+    const provider =
+      row?.providerId === null || row?.providerId === undefined
+        ? null
+        : await llmProviderRepository.findById(row.providerId);
+    if (provider === null) {
+      return {
+        ok: true,
+        hasKey: false,
+        providerApiKey: null,
+        providerBaseUrl: null,
+        providerName: null,
+      };
+    }
+    return {
+      ok: true,
+      hasKey: Boolean(provider.apiKey),
+      providerApiKey: provider.apiKey?.trim() ? provider.apiKey.trim() : null,
+      providerBaseUrl: provider.baseUrl.trim() === "" ? null : provider.baseUrl.trim(),
+      providerName: provider.name,
+    };
+  } catch {
+    return { ok: false };
+  }
+}
+
 /** 连接参数解析（**两个路由同一口径**，解析顺序改了只有这一处）：
- *  弹窗内填的 → 该条目已保存的 → 全局配置。 */
+ *  弹窗内填的 → 该条目已保存的 → 该条目所属供应商的（#3577 直查兜底）→ 全局配置。
+ *  密钥全空且模型确有所属供应商（又没配密钥）时给可读报错 —— 密钥缺失不该被
+ *  静默发出去，让上游用 401 谜语代替我们说话。 */
 export async function resolveUpstream(
   name: string,
   typedBase: string,
@@ -86,13 +140,42 @@ export async function resolveUpstream(
 ): Promise<ResolvedUpstream | { error: string }> {
   const cfg = await getLLMConfig();
   const entry = cfg.extraModels?.find((e) => e.name === name);
-  const baseUrl = firstNonEmpty(typedBase, entry?.baseUrl, cfg.baseUrl);
+  const chain = await lookupProviderChain(name);
+
+  const baseUrl = firstNonEmpty(
+    typedBase,
+    entry?.baseUrl,
+    /* 供应商地址：entry 合并成功时它已折进 entry.baseUrl，这里是 entry 缺席
+     * （读库失败 / 历史行）时的兜底。弹窗 typed 值永远最优先。 */
+    chain.ok ? chain.providerBaseUrl : null,
+    cfg.baseUrl,
+  );
   if (!baseUrl) {
     return {
       error: "接口地址为空：请在弹窗内填写，或先在条目里保存接口地址",
     };
   }
-  const apiKey = firstNonEmpty(typedKey, entry?.apiKey, cfg.apiKey);
+  const apiKey = firstNonEmpty(
+    typedKey,
+    entry?.apiKey,
+    /* 供应商密钥：entry 合并成功时它已折进 entry.apiKey，这里是 entry 缺席
+     * （读库失败 / 历史行）时的兜底 —— 供应商密钥比全局密钥更具体，排在它前面。 */
+    chain.ok ? chain.providerApiKey : null,
+    cfg.apiKey,
+  );
+  if (
+    apiKey === "" &&
+    chain.ok &&
+    chain.providerName !== null &&
+    !chain.hasKey &&
+    /* 独立 baseUrl（模型行自带的接口覆盖）可能本身就不需要密钥；只有「跟着
+     *  供应商走」（没有独立覆盖）还两手空空的才算配置缺口。 */
+    (entry?.baseUrl ?? "") === ""
+  ) {
+    return {
+      error: `「${name}」挂在供应商「${chain.providerName}」下，但该供应商未配置 API 密钥 —— 到「设置 → 远程模型」的供应商详情里填好密钥再测。`,
+    };
+  }
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };

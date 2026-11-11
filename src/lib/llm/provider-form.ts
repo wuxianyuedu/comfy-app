@@ -17,13 +17,15 @@ import {
   isLlmApiFormat,
   parseCapabilities,
   parseInputTypes,
+  parseOutputTypes,
   parseReasoningLevels,
   parseReasoningParamMapping,
   type LlmApiFormat,
   type ModelCapability,
   type ModelInputType,
+  type ModelOutputType,
 } from "./provider-types";
-import { REMOTE_MODEL_KINDS, type RemoteModelKind } from "./types";
+import { inferOutputTypesFromName, REMOTE_MODEL_KINDS, type RemoteModelKind } from "./types";
 
 /* ── 供应商 ─────────────────────────────────────────────────────── */
 
@@ -104,6 +106,8 @@ export type ModelFormValues = {
   kind: RemoteModelKind;
   maxOutputTokens: string;
   name: string;
+  /** 输出类型（#3577）：text / image / video。 */
+  outputTypes: Array<ModelOutputType>;
   /** 推理等级（逗号 / 空格分隔的自由文本，各家叫法不同）。 */
   reasoningLevels: string;
   /** 推理参数映射：请求体字段名 + 「等级 → 取值」。 */
@@ -125,6 +129,7 @@ export type ModelFormSource = {
   kind: string;
   maxOutputTokens: number | null;
   name: string;
+  outputTypes: unknown;
   reasoningLevels: unknown;
   reasoningParamMapping: unknown;
   smartConfig: boolean;
@@ -133,6 +138,18 @@ export type ModelFormSource = {
 function isRemoteModelKindValue(value: string): value is RemoteModelKind {
   const kinds: ReadonlyArray<string> = REMOTE_MODEL_KINDS;
   return kinds.includes(value);
+}
+
+/** 用途 → 默认输出类型（#3577）：文本模型出文本、图像模型出图、视频模型出视频。
+ *  只做「未标注时的起点」，用户可在弹窗里改（多模态输出模型可多选）。 */
+export function defaultOutputTypesForKind(kind: RemoteModelKind): Array<ModelOutputType> {
+  if (kind === "image") {
+    return ["image"];
+  }
+  if (kind === "video") {
+    return ["video"];
+  }
+  return ["text"];
 }
 
 export function emptyModelForm(
@@ -147,6 +164,7 @@ export function emptyModelForm(
     contextWindow: "",
     maxOutputTokens: "",
     inputTypes: ["text"],
+    outputTypes: defaultOutputTypesForKind(kind),
     capabilities: ["system-messages"],
     reasoningLevels: "",
     reasoningParam: "",
@@ -158,9 +176,10 @@ export function emptyModelForm(
 
 export function modelFormFromView(source: ModelFormSource): ModelFormValues {
   const mapping = parseReasoningParamMapping(source.reasoningParamMapping);
+  const kindValue = isRemoteModelKindValue(source.kind) ? source.kind : "chat";
   return {
     name: source.name,
-    kind: isRemoteModelKindValue(source.kind) ? source.kind : "chat",
+    kind: kindValue,
     apiFormat: isLlmApiFormat(source.apiFormat) ? source.apiFormat : "chat-completions",
     smartConfig: source.smartConfig,
     contextWindow:
@@ -172,6 +191,11 @@ export function modelFormFromView(source: ModelFormSource): ModelFormValues {
         ? ""
         : String(source.maxOutputTokens),
     inputTypes: parseInputTypes(source.inputTypes),
+    outputTypes: (() => {
+      const parsed = parseOutputTypes(source.outputTypes);
+      // 库里没标注（历史行）→ 按用途给起点，界面不留一排全空的开关。
+      return parsed.length > 0 ? parsed : defaultOutputTypesForKind(kindValue);
+    })(),
     capabilities: parseCapabilities(source.capabilities),
     reasoningLevels: parseReasoningLevels(source.reasoningLevels).join(", "),
     reasoningParam: mapping?.param ?? "",
@@ -195,6 +219,9 @@ export function applySmartDefaults(form: ModelFormValues): ModelFormValues {
     contextWindow: defaults.contextWindow === null ? "" : String(defaults.contextWindow),
     maxOutputTokens: defaults.maxOutputTokens === null ? "" : String(defaults.maxOutputTokens),
     inputTypes: [...defaults.inputTypes],
+    /* 输出类型按模型名推断（名字带 video / image 的直接命中），推断不出来的
+     * 时候按当前用途给起点 —— 用户改用途开关时输出跟着换一次底色。 */
+    outputTypes: inferOutputTypesFromName(form.name),
     capabilities: [...defaults.capabilities],
   };
 }
@@ -243,6 +270,7 @@ export type ModelSaveDraft = {
   kind: RemoteModelKind;
   maxOutputTokens: number | null;
   name: string;
+  outputTypes: Array<ModelOutputType>;
   providerId: string;
   reasoningLevels: Array<string>;
   reasoningParamMapping: { param: string; values: Record<string, string> } | null;
@@ -274,6 +302,7 @@ export function modelSaveDraft(
     contextWindow: readPositiveInt(form.contextWindow).value,
     maxOutputTokens: readPositiveInt(form.maxOutputTokens).value,
     inputTypes: form.inputTypes,
+    outputTypes: form.outputTypes,
     capabilities: form.capabilities,
     reasoningLevels: splitReasoningLevels(form.reasoningLevels),
     reasoningParamMapping: parseReasoningParamMapping({
