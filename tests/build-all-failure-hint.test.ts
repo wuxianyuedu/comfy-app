@@ -52,6 +52,11 @@ describe("build-all.ps1 构建失败出口（ISSUE #3468）", () => {
     expect(publishAt).toBeGreaterThan(failAt);
   });
 
+  it("发布落点是项目内 dist 目录（ISSUE #3546：本地包不写常驻目录）", () => {
+    expect(SRC).toContain(String.raw`$publishRoot = Join-Path $PROJECT_ROOT "dist\desktop"`);
+    expect(SRC).toContain("node scripts/publish-desktop-bundle.mjs --root");
+  });
+
   it("含中文的 .ps1 保持 UTF-8 with BOM（§8.4）", () => {
     const buf = fs.readFileSync(FILE);
     expect(buf[0]).toBe(0xef);
