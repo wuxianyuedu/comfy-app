@@ -60,10 +60,16 @@ export type ApiImageRequest = {
 
 /** 视频提交请求（同步 URL 与异步任务两种上游都走它）。 */
 export type ApiVideoSubmitRequest = {
+  /** 秒数（#3590：适配器 duration 输入的直接取值；工坊镜头链路继续传 frames/fps）。 */
+  duration?: number;
   fps?: number;
   frames?: number;
   /* 图生视频用的参考首帧图（内联 data URL）。 */
   imageDataUrl?: string;
+  /** 工坊模式码（T2V / I2V …，#3590）：远端模型有该模式适配器时按它翻译字段。 */
+  mode?: string;
+  /** 设置页「远端模型」的名字（#3590）：按 remoteModel 表条目的连接参数直连。 */
+  model?: string;
   negative?: string;
   prompt: string;
 };
@@ -225,8 +231,15 @@ export type ApiChannelFetchOptions = {
   bodyOverride?: Record<string, unknown>;
   /** 上游结果字段路径（适配器的 outputField）：命中即直接当结果 URL 返回。 */
   outputField?: string;
+  /** 异步视频任务的轮询地址候选（#3590）：远端模型有自己的任务查询形状
+   *  （Agnes 系 /agnesapi?video_id=…、REST /videos/{id}），给出时**逐个试**，
+   *  缺省回落通道设置那条 `baseUrl/{taskId}`。 */
+  pollUrls?: Array<string>;
   /** 上游响应体解析器（Next 侧传 `readUpstreamJson`，MCP 侧用默认）。 */
   readJson?: UpstreamJsonReader;
+  /** 上游目标覆盖（#3590）：远端模型按 remoteModel 表解析出的
+   *  endpoint / apiKey / model。给出时提交不再用通道设置那一格。 */
+  targetOverride?: ApiUpstreamTarget;
 };
 
 /**
@@ -279,21 +292,39 @@ export async function callImageGeneration(
   return url;
 }
 
-/** 提交视频任务；支持同步 URL 与异步任务两种上游。 */
+/** 提交视频任务；支持同步 URL 与异步任务两种上游。
+ *  `options.targetOverride`（#3590）给出时按远端模型的连接参数发（endpoint /
+ *  apiKey / model 都来自 remoteModel 表条目），请求体也优先用适配器翻译的
+ *  `bodyOverride` —— 与 `callImageGeneration` 的注入形状对齐。 */
 export async function callVideoSubmit(
   req: ApiVideoSubmitRequest,
   channel: ApiChannelStored,
   options: ApiChannelFetchOptions = {},
 ): Promise<ApiVideoSubmitResult> {
-  if (!channel.baseUrl) {
+  const target = options.targetOverride ?? {
+    endpoint: endpointFor(channel),
+    apiKey: channel.apiKey,
+    model: channel.model,
+  };
+  /* 既有守卫保留：没给远端模型覆盖时，通道没配 Base URL 就别发（endpointFor
+   * 在 baseUrl 为空时会拼出一条相对路径端点，发出去是打给自己的 404）。 */
+  if (options.targetOverride === undefined && !channel.baseUrl) {
+    throw new Error("API 视频通道未配置：请先填写 Base URL 与 API Key");
+  }
+  if (!target.endpoint) {
     throw new Error("API 视频通道未配置：请先填写 Base URL 与 API Key");
   }
   let res: Response;
   try {
-    res = await fetch(endpointFor(channel), {
+    res = await fetch(target.endpoint, {
       method: "POST",
-      headers: headersFor(channel),
-      body: JSON.stringify(videoBody(req, channel.model)),
+      headers: target.apiKey
+        ? {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${target.apiKey}`,
+          }
+        : { "Content-Type": "application/json" },
+      body: JSON.stringify(options.bodyOverride ?? videoBody(req, target.model)),
       signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
     });
   } catch (error) {
@@ -302,6 +333,11 @@ export async function callVideoSubmit(
   const payload = await (options.readJson ?? defaultJsonReader)(res);
   if (!res.ok) {
     throw upstreamError("API 视频提交失败", res.status, payload);
+  }
+  /* 适配器指定了产物字段：与生图同一口径 —— 命中即取，未命中回落通用提取。 */
+  const picked = pickStringByPath(payload, options.outputField);
+  if (picked !== null) {
+    return { url: picked };
   }
   const url = extractMediaUrl(payload);
   if (url !== null) {
@@ -314,12 +350,54 @@ export async function callVideoSubmit(
   throw new Error("API 视频响应中未找到视频 URL 或任务 ID");
 }
 
-/** 轮询一次异步视频任务。 */
+/** 轮询一次异步视频任务。
+ *  `options.pollUrls`（#3590）给出时逐个候选试（远端模型有自己的任务查询形状，
+ *  如 Agnes 系 /agnesapi?video_id=… 与 REST /videos/{id}），鉴权头用
+ *  `targetOverride.apiKey`（远端模型的密钥）；单个候选失败换下一个，全空 =
+ *  仍在生成。都缺省时回落通道设置那条 —— **保持既有语义**：网络失败 /
+ *  非 2xx 当场大声报错（工坊的轮询循环靠它把失败送到界面上，硬规则 4）。 */
 export async function callVideoPoll(
   remoteTaskId: string,
   channel: ApiChannelStored,
   options: ApiChannelFetchOptions = {},
 ): Promise<{ pending: boolean; url?: string }> {
+  const apiKey = options.targetOverride?.apiKey ?? channel.apiKey;
+  /* 候选列表模式（远端模型）：失败换下一个，全失败按「仍在生成」交回 ——
+   * 轮询本来就要一轮轮试，个别候选 404（任务还不挂在那个地址上）不算故障。 */
+  if (options.pollUrls !== undefined && options.pollUrls.length > 0) {
+    for (const pollUrl of options.pollUrls) {
+      if (pollUrl === "") {
+        continue;
+      }
+      let payload: unknown;
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：前一候选没读到就换下一个
+        const res = await fetch(pollUrl, {
+          method: "GET",
+          headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+          signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
+        });
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：同上，候选串行试
+        payload = await (options.readJson ?? defaultJsonReader)(res);
+        if (!res.ok) {
+          continue;
+        }
+      } catch {
+        continue;
+      }
+      /* 适配器指定了产物字段：与提交同一口径。 */
+      const picked = pickStringByPath(payload, options.outputField);
+      if (picked !== null) {
+        return { url: picked, pending: false };
+      }
+      const mediaUrl = extractMediaUrl(payload);
+      if (mediaUrl !== null) {
+        return { url: mediaUrl, pending: false };
+      }
+    }
+    return { pending: true };
+  }
+  /* 通道设置模式（既有行为）：只有一条地址，失败就是失败。 */
   if (!channel.baseUrl) {
     throw new Error("API 视频通道未配置");
   }

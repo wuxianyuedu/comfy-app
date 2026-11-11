@@ -655,10 +655,16 @@ export type ApiVideoSubmitResult = {
 
 /* API 通道：提交一个（图生）视频任务。 */
 export async function apiSubmitVideo(req: {
+  /** 秒数（#3590 测试页；适配器 duration 输入的直接取值）。 */
+  duration?: number;
   fps?: number;
   frames?: number;
   /* 参考首帧（任何可解析的来源都行：/generated/… 、data URL、http）。 */
   image?: string;
+  /** 工坊模式码（T2V / I2V …，#3590）：远端模型按它选适配器。 */
+  mode?: string;
+  /** 设置页配置的远端模型名（#3590）：按 remoteModel 表条目直连。 */
+  model?: string;
   negative?: string;
   prompt: string;
 }): Promise<ApiVideoSubmitResult> {
@@ -669,6 +675,10 @@ export async function apiSubmitVideo(req: {
     image: req.image,
     frames: req.frames,
     fps: req.fps,
+    /* 空串 / 缺省都省略 —— 服务端按「没带」回落，不按空串回落。 */
+    ...(req.model !== undefined && req.model !== "" ? { model: req.model } : {}),
+    ...(req.mode !== undefined && req.mode !== "" ? { mode: req.mode } : {}),
+    ...(req.duration === undefined ? {} : { duration: req.duration }),
   });
   if (!data) {
     throw new Error("API 视频响应格式错误");
@@ -682,11 +692,18 @@ export async function apiSubmitVideo(req: {
   return { url, remoteTaskId };
 }
 
-/* API 通道：对异步视频任务做一次轮询。 */
+/* API 通道：对异步视频任务做一次轮询。model/mode 跟着提交那一步走（#3590）：
+ * 远端模型的任务查询地址与密钥都挂在条目上。 */
 export async function apiPollVideo(
   remoteTaskId: string,
+  opts: { mode?: string; model?: string } = {},
 ): Promise<{ pending: boolean; url?: string }> {
-  const data = await postRelay({ kind: "video", remoteTaskId });
+  const data = await postRelay({
+    kind: "video",
+    remoteTaskId,
+    ...(opts.model !== undefined && opts.model !== "" ? { model: opts.model } : {}),
+    ...(opts.mode !== undefined && opts.mode !== "" ? { mode: opts.mode } : {}),
+  });
   if (!data) {
     return { pending: true };
   }

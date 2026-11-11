@@ -7,6 +7,7 @@ import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
 import {
   ALL_CONTRACT_MODES,
   adapterInputsFromContract,
+  parseRemoteModeAdapters,
   configuredModeContracts,
   derivedModeContract,
   contractToStatusEntries,
@@ -359,5 +360,44 @@ describe("projectDefaultDiff：保存为项目默认时写下的差集（ISSUE #
     const a = { ...derivedModeContract("I2I"), output: "video" as const };
     const b = { ...derivedModeContract("T2I"), output: "video" as const };
     expect(projectDefaultDiff([a, b]).map((c) => c.mode)).toEqual(["I2I", "T2I"]);
+  });
+});
+
+describe("parseRemoteModeAdapters：固定值字段（#3590）", () => {
+  it("constants 原样读回：field trim、空 field 丢行、同名字段留先到的", () => {
+    const out = parseRemoteModeAdapters([
+      {
+        mode: "t2v",
+        endpointPath: "/videos",
+        inputs: [{ type: "prompt", field: "prompt" }],
+        constants: [
+          { field: " mode ", value: "text" },
+          { field: "mode", value: "keyframe" },
+          { field: "", value: "x" },
+          { field: "size", value: 720 },
+          "bad-row",
+        ],
+      },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.constants).toEqual([
+      { field: "mode", value: "text" },
+      { field: "size", value: "720" },
+    ]);
+  });
+
+  it("没有 constants / 空数组时不挂键（与「缺省 = 没有常量」一致）", () => {
+    const out = parseRemoteModeAdapters([
+      { mode: "T2I", endpointPath: "/i", inputs: [{ type: "prompt", field: "prompt" }] },
+      {
+        mode: "I2V",
+        endpointPath: "/v",
+        inputs: [{ type: "prompt", field: "prompt" }],
+        constants: [],
+      },
+    ]);
+    expect(out).toHaveLength(2);
+    expect("constants" in out[0]!).toBe(false);
+    expect("constants" in out[1]!).toBe(false);
   });
 });

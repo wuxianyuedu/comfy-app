@@ -34,6 +34,7 @@ import {
   type ApiVideoSubmitResult,
   type WorkshopApiSettings,
 } from "./api-channel-core";
+import { buildVideoPollUrls } from "~/lib/llm/usage-test-config";
 import {
   resolveImagesGenerationsEndpoint,
   type ApiChannelKind,
@@ -111,6 +112,10 @@ function bodyFromAdapter(
 ): Record<string, unknown> {
   const unified = unifiedImageInputs(req);
   const body: Record<string, unknown> = {};
+  /* 固定值字段（#3590）先落：同名字段让输入映射赢 —— 当次给的值比写死的更具体。 */
+  for (const { field, value } of adapter.constants ?? []) {
+    body[field] = value;
+  }
   for (const { type, field } of adapter.inputs) {
     const value = unified[type];
     if (value === undefined || value === "") {
@@ -196,18 +201,139 @@ export async function generateImageViaApi(req: ApiImageRequest): Promise<string>
   });
 }
 
-/* 把视频任务提交到配置好的端点。 */
+/* ── 视频的远端模型定向（#3590）──────────────────────────────────────────
+ * 与生图的 resolveTarget 同构：请求带 model 时按 remoteModel 表条目直连，
+ * 有该模式适配器时按它翻译统一输入；没带 / 查不到回落通道设置。
+ * 之所以不是改造 resolveTarget 加个 kind 参数：两条链的统一输入集合不同
+ * （图是 aspect-ratio/megapixels/multiple，视频是 first-frame/duration），
+ * 分开两份各自贴着各自的请求类型，比一把共用更不容易在加输入时漏一半。 */
+
+/** 视频统一输入的当前取值（适配器按类型取值落字段）。 */
+function unifiedVideoInputs(
+  req: ApiVideoSubmitRequest,
+): Partial<Record<WorkshopInputType, unknown>> {
+  return {
+    duration: req.duration ?? undefined,
+    "first-frame": req.imageDataUrl ?? undefined,
+    negative: req.negative ?? undefined,
+    prompt: req.prompt ?? undefined,
+  };
+}
+
+/** 按视频请求带的适配器把统一输入翻译成上游字段（与 bodyFromAdapter 同一合并
+ *  顺序：常量先落，输入映射可覆盖同名字段）。 */
+function bodyFromVideoAdapter(
+  adapter: RemoteModeAdapter,
+  req: ApiVideoSubmitRequest,
+  model: string,
+): Record<string, unknown> {
+  const unified = unifiedVideoInputs(req);
+  const body: Record<string, unknown> = {};
+  for (const { field, value } of adapter.constants ?? []) {
+    body[field] = value;
+  }
+  for (const { type, field } of adapter.inputs) {
+    const value = unified[type];
+    if (value === undefined || value === "") {
+      continue;
+    }
+    body[field] = value;
+  }
+  if (model) {
+    body.model = model;
+  }
+  return body;
+}
+
+/** 视频侧的上游解析（镜像生图 resolveTarget，只多产出适配器行）。 */
+async function resolveVideoTarget(
+  req: ApiVideoSubmitRequest,
+  channel: ApiChannelStored,
+): Promise<{ adapter: RemoteModeAdapter | null; target: ApiUpstreamTarget }> {
+  const wantedModel = (req.model ?? "").trim();
+  if (!wantedModel) {
+    return { adapter: null, target: fallbackTarget(channel) };
+  }
+  try {
+    const entries = await remoteModelRepository.list();
+    const entry = entries.find((r) => r.name === wantedModel && (r.baseUrl ?? "") !== "");
+    if (!entry) {
+      return { adapter: null, target: fallbackTarget(channel) };
+    }
+    const adapters = await remoteModelRepository.getWorkshopAdapters(wantedModel);
+    const wantedMode = upperToken(req.mode);
+    const [onlyAdapter] = adapters;
+    const adapter =
+      adapters.find((a) => a.mode === wantedMode) ??
+      (adapters.length === 1 ? (onlyAdapter ?? null) : null);
+    /* 无适配器时回落 OpenAI 兼容惯例的 /videos（与 usage-test 的视频预设一致）。 */
+    const endpoint = adapter
+      ? `${(entry.baseUrl ?? "").replace(/\/+$/, "")}${adapter.endpointPath}`
+      : `${(entry.baseUrl ?? "").replace(/\/+$/, "")}/videos`;
+    return {
+      adapter,
+      target: { endpoint, apiKey: entry.apiKey ?? "", model: entry.name },
+    };
+  } catch {
+    // 表不可用（未迁移等）→ 回落通道设置
+    return { adapter: null, target: fallbackTarget(channel) };
+  }
+}
+
+/* 把视频任务提交到配置好的端点：带 model 时按 remoteModel 条目直连（#3590），
+ * 未带 model 的工坊镜头链路保持既有行为（全局通道设置）。 */
 export async function submitVideoViaApi(req: ApiVideoSubmitRequest): Promise<ApiVideoSubmitResult> {
+  const resolved = await resolveVideoTarget(req, getWorkshopApiSettingsSync().video);
   return callVideoSubmit(req, getWorkshopApiSettingsSync().video, {
     readJson: readUpstreamJson,
+    targetOverride: resolved.target,
+    bodyOverride: resolved.adapter
+      ? bodyFromVideoAdapter(resolved.adapter, req, resolved.target.model)
+      : undefined,
+    outputField: resolved.adapter?.outputField,
   });
 }
 
-/* 轮询一次异步视频任务：返回成品 URL，或 { pending: true } 表示仍在进行。 */
+/* 轮询一次异步视频任务：返回成品 URL，或 { pending: true } 表示仍在进行。
+ * `model` 给出且能在 remoteModel 表里找到时（#3590），轮询地址按该条目 +
+ * 适配器端点构造成候选（Agnes 系 /agnesapi?video_id=… 与 REST /videos/{id}），
+ * 鉴权用该条目自己的密钥；查不到 / 未给 model 时回落通道设置（既有行为，
+ * 工坊镜头链路的失败语义原样保留）。 */
 export async function pollVideoViaApi(
   remoteTaskId: string,
+  opts: { mode?: string; model?: string } = {},
 ): Promise<{ pending: boolean; url?: string }> {
-  return callVideoPoll(remoteTaskId, getWorkshopApiSettingsSync().video, {
+  const channel = getWorkshopApiSettingsSync().video;
+  const wantedModel = (opts.model ?? "").trim();
+  if (wantedModel !== "") {
+    try {
+      const entries = await remoteModelRepository.list();
+      const entry = entries.find((r) => r.name === wantedModel && (r.baseUrl ?? "") !== "");
+      if (entry) {
+        const adapters = await remoteModelRepository.getWorkshopAdapters(wantedModel);
+        const wantedMode = upperToken(opts.mode);
+        const [onlyAdapter] = adapters;
+        const adapter =
+          adapters.find((a) => a.mode === wantedMode) ??
+          (adapters.length === 1 ? (onlyAdapter ?? null) : null);
+        const endpointPath = adapter?.endpointPath ?? "/videos";
+        const { rest, agnes } = buildVideoPollUrls(
+          entry.baseUrl ?? "",
+          endpointPath,
+          wantedModel,
+          remoteTaskId,
+        );
+        return callVideoPoll(remoteTaskId, channel, {
+          readJson: readUpstreamJson,
+          pollUrls: [rest, ...(agnes === null ? [] : [agnes])],
+          targetOverride: { endpoint: rest, apiKey: entry.apiKey ?? "", model: wantedModel },
+        });
+      }
+    } catch {
+      // 表不可用 → 落到下面的通道设置路径
+    }
+  }
+  return callVideoPoll(remoteTaskId, channel, {
     readJson: readUpstreamJson,
   });
 }

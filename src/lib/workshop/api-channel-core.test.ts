@@ -332,3 +332,86 @@ describe("callVideoPoll", () => {
     );
   });
 });
+
+describe("callVideoSubmit：远端模型定向（#3590）", () => {
+  it("targetOverride 生效：端点 / 密钥 / 模型都来自远端模型条目", async () => {
+    const fetchMock = stubFetch(() => jsonResponse({ url: "https://v/out.mp4" }));
+    await expect(
+      callVideoSubmit({ prompt: "p", model: "agnes-video-2.5-flash", mode: "T2V" }, VIDEO, {
+        targetOverride: {
+          endpoint: "https://apihub.agnes-ai.com/v1/videos",
+          apiKey: "sk-ag",
+          model: "agnes-video-2.5-flash",
+        },
+      }),
+    ).resolves.toEqual({ url: "https://v/out.mp4" });
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://apihub.agnes-ai.com/v1/videos");
+    const init = fetchMock.mock.calls[0]![1] ?? {};
+    const headers = new Headers(init.headers);
+    expect(headers.get("Authorization")).toBe("Bearer sk-ag");
+    const body = bodyOf(fetchMock);
+    expect(body.model).toBe("agnes-video-2.5-flash");
+  });
+
+  it("bodyOverride 优先于默认 videoBody（适配器翻译的请求体原样发出）", async () => {
+    const fetchMock = stubFetch(() => jsonResponse({ url: "u" }));
+    await callVideoSubmit({ prompt: "p", duration: 5 }, VIDEO, {
+      targetOverride: { endpoint: "https://x/v1/videos", apiKey: "k", model: "m" },
+      bodyOverride: { model: "m", prompt: "p", mode: "text", size: "720P", seconds: "5" },
+    });
+    const body = bodyOf(fetchMock);
+    expect(body.mode).toBe("text");
+    expect(body.size).toBe("720P");
+    expect(body.seconds).toBe("5");
+    expect(body.image_url).toBeUndefined();
+  });
+
+  it("outputField 命中时优先于通用提取", async () => {
+    stubFetch(() => jsonResponse({ video: { url: "https://picked" }, url: "https://other" }));
+    await expect(
+      callVideoSubmit({ prompt: "p" }, VIDEO, {
+        outputField: "video.url",
+      }),
+    ).resolves.toEqual({ url: "https://picked" });
+  });
+});
+
+describe("callVideoPoll：候选地址模式（#3590）", () => {
+  it("给了 pollUrls 时逐个试：第一个失败换下一个，命中即返回", async () => {
+    const fetchMock = stubFetch((url) =>
+      String(url).includes("/agnesapi")
+        ? jsonResponse({ status: "completed", url: "https://agnes/done.mp4" })
+        : jsonResponse({ status: "running" }, false, 404),
+    );
+    await expect(
+      callVideoPoll("t-1", VIDEO, {
+        pollUrls: [
+          "https://api.example.com/v1/videos/t-1",
+          "https://api.example.com/agnesapi?video_id=t-1",
+        ],
+        targetOverride: {
+          endpoint: "https://api.example.com/v1/videos",
+          apiKey: "sk-ag",
+          model: "agnes",
+        },
+      }),
+    ).resolves.toEqual({ url: "https://agnes/done.mp4", pending: false });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const headers = new Headers(fetchMock.mock.calls[1]![1]?.headers);
+    expect(headers.get("Authorization")).toBe("Bearer sk-ag");
+  });
+
+  it("候选全落空 → pending=true（不抛错，轮询循环继续）", async () => {
+    stubFetch(() => jsonResponse({}, false, 404));
+    await expect(
+      callVideoPoll("t-1", VIDEO, {
+        pollUrls: ["https://x/1", "https://x/2"],
+      }),
+    ).resolves.toEqual({ pending: true });
+  });
+
+  it("未给 pollUrls 时保持既有语义：非 2xx 当场抛错", async () => {
+    stubFetch(() => jsonResponse({ message: "no" }, false, 401));
+    await expect(callVideoPoll("t-1", VIDEO)).rejects.toThrow("API 视频轮询失败");
+  });
+});

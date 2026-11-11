@@ -6,6 +6,7 @@ import {
   Box,
   Cable,
   Film,
+  FlaskConical,
   Folder,
   FolderOpen,
   History,
@@ -19,8 +20,8 @@ import {
 } from "lucide-react";
 
 /**
- * 共享的导航注册表 —— 侧栏 / 顶部标题 / 命令面板 / 项目内切换器的唯一事实来源。三个分区：全局项（`globalNavItems`，十件项目无关的事；控制台跑仓库级脚本、设置读写应用级配置、模型适配/模式契约读写全局注册表，故都该能开能关）；项目页签（`projectTabs`，只在项目界面顶部的标签栏出现，脱离项目无意义）；项目入口（`PROJECTS_ENTRY`，侧栏底部「项目」分组）。
- * 全局项共十件，但侧栏只列九件（`sidebarNavItems`）：设置撤出侧栏（入口在顶栏应用菜单）并标 `transient`（切走即关）；「全局的 / 侧栏列不列 / 瞬时」是三个独立属性，见 `NavItem` 字段说明。
+ * 共享的导航注册表 —— 侧栏 / 顶部标题 / 命令面板 / 项目内切换器的唯一事实来源。三个分区：全局项（`globalNavItems`，十一件项目无关的事；控制台跑仓库级脚本、设置读写应用级配置、模型适配/测试模型/模式契约读写全局配置，故都该能开能关）；项目页签（`projectTabs`，只在项目界面顶部的标签栏出现，脱离项目无意义）；项目入口（`PROJECTS_ENTRY`，侧栏底部「项目」分组）。
+ * 全局项共十一件，但侧栏只列十件（`sidebarNavItems`）：设置撤出侧栏（入口在顶栏应用菜单）并标 `transient`（切走即关）；「全局的 / 侧栏列不列 / 瞬时」是三个独立属性，见 `NavItem` 字段说明。
  * 历史教训：此前用 `visibleNavItems(active)` 按「首页 vs 非首页」切换项目页签显隐，导致点非首页视图时画布/工坊复现、点首页又消失；现改为「按分区归属」一次性决定，显隐不随当前视图漂移。
  */
 export type WorkspaceView =
@@ -40,6 +41,7 @@ export type WorkspaceView =
   | "console"
   | "settings"
   | "model-adapters"
+  | "model-test"
   | "mode-contract";
 
 export type NavItem = {
@@ -167,6 +169,16 @@ export const NAV_ITEMS: Array<NavItem> = [
     enabled: true,
     transient: true,
     icon: <Cable size={22} strokeWidth={1.8} />,
+  },
+  {
+    /* 测试模型能力（#3590）：紧跟「模型适配」—— 这页消费的正是适配器配出来的
+       工坊同款输入 / 输出。放全局项（与模型适配同族）：它测的是「配置层」的模型
+       能力，与「当前是哪个画布项目」无关。 */
+    id: "model-test",
+    label: "测试模型",
+    enabled: true,
+    transient: true,
+    icon: <FlaskConical size={22} strokeWidth={1.8} />,
   },
   {
     /* 模式契约：与工作流库页头那枚「模式契约」按钮同图标 —— 同一件事在两处出现时
