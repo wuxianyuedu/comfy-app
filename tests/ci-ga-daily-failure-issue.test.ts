@@ -266,7 +266,7 @@ describe("下游 job 拓扑（#3563）：红格在上游那个 job 里", () => {
     });
     const wrapped: FetchLike = (url, init) => {
       if ((init?.method ?? "").toUpperCase() === "POST" && url.endsWith("/issues")) {
-        seen.posted = readFields(init?.body, ["priority", "title"]);
+        seen.posted = readFields(init?.body, ["body", "priority", "title"]);
       }
       return cnbFetch(url, init);
     };
@@ -434,7 +434,7 @@ describe("main：该写就写", () => {
     /** 只在建单那一次 POST 上截正文，其余原样转给假 CNB。 */
     const wrapped: FetchLike = (url, init) => {
       if ((init?.method ?? "").toUpperCase() === "POST" && url.endsWith("/issues")) {
-        seen.posted = readFields(init?.body, ["priority", "title"]);
+        seen.posted = readFields(init?.body, ["body", "priority", "title"]);
       }
       return cnbFetch(url, init);
     };
@@ -443,6 +443,105 @@ describe("main：该写就写", () => {
     expect(code).toBe(CODE.DONE);
     expect(seen.posted?.title ?? "").toContain(titleKey("全量E2E"));
     expect(seen.posted?.priority).toBe(AUTO_PRIORITY);
+  });
+
+  it("建单正文真的带上失败日志读数（#3584：立案时把红的那部分粘进单子）", async () => {
+    const seen: { posted?: Record<string, string | undefined> } = {};
+    const { ghFetch, cnbFetch } = fakeFetch({
+      gh: () => res(200, jobsJson([{ name: "全量E2E", conclusion: "failure" }])),
+      cnb: (method, path) => {
+        if (method === "GET" && path.startsWith(`/${SLUG}/-/labels`)) {
+          return res(200, [{ name: "提单人:ci-ga-daily" }]);
+        }
+        if (method === "GET" && path === `/${SLUG}/-/issues/3500`) {
+          return res(200, {
+            labels: [{ name: "提单人:ci-ga-daily" }],
+            number: 3500,
+            title: seen.posted?.title ?? "",
+          });
+        }
+        if (method === "GET" && path.startsWith(`/${SLUG}/-/issues`)) return res(200, []);
+        if (method === "POST" && path === `/${SLUG}/-/issues`) return res(201, { number: 3500 });
+        if (method === "POST" && path.endsWith("/labels")) return res(200, {});
+        return res(404, { message: `${method} ${path}` });
+      },
+    });
+    const wrapped: FetchLike = (url, init) => {
+      if ((init?.method ?? "").toUpperCase() === "POST" && url.endsWith("/issues")) {
+        seen.posted = readFields(init?.body, ["body", "title"]);
+      }
+      return cnbFetch(url, init);
+    };
+    const { log } = logs();
+    /* 日志读数由用例注入（与真跑共用同一个 `renderLogReadout` 产物）：这一条钉的是
+     * 「取到的读数有没有真的进 POST 正文」，不是再测一遍日志取数那一跳。 */
+    const code = await main({
+      argv: [],
+      env: env(),
+      ghFetch,
+      cnbFetch: wrapped,
+      log,
+      logReading: {
+        ghRepo: GH_REPO,
+        jobs: [{ conclusion: "failure", id: 9, name: "daily" }],
+        ok: true,
+        runId: RUN_ID,
+        text: "##[error]FAIL  tests/full-suite-run.test.ts\n##[endgroup]",
+      },
+    });
+    expect(code).toBe(CODE.DONE);
+    expect(seen.posted?.body ?? "").toContain("## 失败日志（平台原样摘录，已脱敏）");
+    expect(seen.posted?.body ?? "").toContain("##[error]FAIL  tests/full-suite-run.test.ts");
+    expect(seen.posted?.body ?? "").toContain("## 当场读数（出处）");
+  });
+
+  it("日志取不到也照建单，正文只多一节「取不到 + 出口」", async () => {
+    const seen: { posted?: Record<string, string | undefined> } = {};
+    const { ghFetch, cnbFetch } = fakeFetch({
+      gh: () => res(200, jobsJson([{ name: "全量E2E", conclusion: "failure" }])),
+      cnb: (method, path) => {
+        if (method === "GET" && path.startsWith(`/${SLUG}/-/labels`)) {
+          return res(200, [{ name: "提单人:ci-ga-daily" }]);
+        }
+        if (method === "GET" && path === `/${SLUG}/-/issues/3500`) {
+          return res(200, {
+            labels: [{ name: "提单人:ci-ga-daily" }],
+            number: 3500,
+            title: seen.posted?.title ?? "",
+          });
+        }
+        if (method === "GET" && path.startsWith(`/${SLUG}/-/issues`)) return res(200, []);
+        if (method === "POST" && path === `/${SLUG}/-/issues`) return res(201, { number: 3500 });
+        if (method === "POST" && path.endsWith("/labels")) return res(200, {});
+        return res(404, {});
+      },
+    });
+    const wrapped: FetchLike = (url, init) => {
+      if ((init?.method ?? "").toUpperCase() === "POST" && url.endsWith("/issues")) {
+        seen.posted = readFields(init?.body, ["body", "title"]);
+      }
+      return cnbFetch(url, init);
+    };
+    const { log } = logs();
+    const code = await main({
+      argv: [],
+      env: env(),
+      ghFetch,
+      cnbFetch: wrapped,
+      log,
+      logReading: {
+        ghRepo: GH_REPO,
+        jobs: [],
+        ok: false,
+        reason: "job 清单 HTTP 403（令牌缺 actions: read）",
+        runId: RUN_ID,
+        text: "",
+      },
+    });
+    expect(code).toBe(CODE.DONE);
+    expect(seen.posted?.body ?? "").toContain("取不到");
+    expect(seen.posted?.body ?? "").toContain("HTTP 403");
+    expect(seen.posted?.body ?? "").toContain("--log-failed");
   });
 
   it("有旧单 ⇒ 追加评论、不新建", async () => {

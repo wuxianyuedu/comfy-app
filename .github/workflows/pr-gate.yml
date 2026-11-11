@@ -441,10 +441,16 @@ jobs:
       # 代价是每个 PR 多付约 30s 的 apt（apt 源走 GitHub runner 的本地缓存，
       # 不额外引入出网依赖）。换来的是「这一格不再恒红于环境」—— 它第一次真跑就撞上缺库，
       # 那样每一次改壳的 PR 都会红在一条与代码无关的地方。
+      #
+      # 镜像侧瞬时故障（DNS 解析 / 连接不上）会让 apt 无声空等二十多分钟才 exit 100，
+      # 而这一格原来既无重试、也无连接 / 步级超时 ⇒ 整条 PR 流水线被压在 pending。
+      # 两条 apt 命令加重试与空闲超时让短暂抖动自愈、死镜像早退；步级超时兜住真挂住，
+      # 让失败落在这一步自己的名字上。判据一字不改，只硬化这层环境前置（#3589）。
       - name: 装 Tauri 的 Linux 系统依赖（壳门禁要在本机编 Tauri）
+        timeout-minutes: 15
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends \
+          sudo apt-get update -qq -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
+          sudo apt-get install -y -qq --no-install-recommends -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
             libglib2.0-dev \
             libatk1.0-dev \
             libcairo2-dev \
