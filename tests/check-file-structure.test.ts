@@ -894,6 +894,51 @@ describe("启动链路「不抢前台」判据（唯一的入口是壳）", () =
   });
 });
 
+describe("窗口显示幂等与任务栏闪烁（ISSUE #3562）", () => {
+  /** 用户报的三个现象同源：① 点图标收起/显示发卡、② 后台莫名红色闪烁、
+   * ③ 切到别的应用几秒后窗口自己又弹回来。`show_main_window_without_focus`
+   * 无条件 show()（Windows 的 SW_SHOW 会激活并提到 Z 序最前），而页面导航
+   * Finished / 前端组件重挂 / 安全网都会重放它；任务栏闪烁又只请求、从不停止。
+   * Win32 前台在 CI 取不到，判据按源码形态钉住。 */
+  const rust = readFileSync(join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
+  const show = rust.slice(
+    rust.indexOf("fn show_main_window_without_focus"),
+    rust.indexOf("fn open_comfyui_window"),
+  );
+
+  it("自动显示路径只允许交接一次（页面导航重放不许再把窗口顶到前面）", () => {
+    expect(show).toContain("if already_shown && !request_focus {");
+  });
+
+  it("已可见的窗口不再重复发窗口动作（托盘唤起不卡、不盖住别的应用）", () => {
+    expect(show).toContain("} else if !visible {");
+  });
+
+  it("不再请求任务栏闪烁，改为窗口到前台时主动停止", () => {
+    // tao 0.37 Windows：Informational = FLASHW_TRAY 闪 4 次，None = FLASHW_STOP。
+    expect(show).not.toContain("UserAttentionType::Informational");
+    expect(show).toContain("request_user_attention(None)");
+    const splash = rust.slice(
+      rust.indexOf("fn bring_splash_to_front"),
+      rust.indexOf("/// 为什么 main 窗上必须调"),
+    );
+    expect(splash).not.toContain("UserAttentionType::Informational");
+  });
+
+  it("启动前台标记被前端一次性消费（组件重挂不再抢前台）", () => {
+    expect(rust).toContain("fn take_startup_activation(");
+    expect(rust).toContain("state.take_startup_activation()");
+  });
+
+  it("窗口交接完成后，页面再次导航不再重放交接", () => {
+    const handover = rust.slice(
+      rust.indexOf("fn on_main_page_finished"),
+      rust.indexOf("/// 启动页关闭 = 放弃本次启动"),
+    );
+    expect(handover).toContain('get_webview_window("splash").is_none()');
+  });
+});
+
 describe("窗口交接时刻的前台归属复核（独立进程，ISSUE #359 回归）", () => {
   /** ISSUE #359 回归：启动期判决只管「双击后是否立刻走开」，用户一走几分钟即失真。真正要紧的是交接
    * 时刻 —— 启动页带 WS_EX_TOOLWINDOW，关掉它主窗任务栏按钮重建，Windows 会把前台**自动放行**给主窗，
