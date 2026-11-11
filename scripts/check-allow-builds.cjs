@@ -57,6 +57,14 @@
  *   · `node_modules/.pnpm/<条目>/node_modules/<包>/package.json` 是**已经装出来的事实**，
  *     与 pnpm 判定构建脚本时读的是同一份输入，不存在「判据与工具看不同来源」的缝。
  *
+ * 但**锁文件仍要读** —— 读的是**另一个问题**：「这个包还在不在当前依赖图里」
+ * （ISSUE #3523）。pnpm 12 在「移掉一个依赖」之后**不回收虚拟 store 里那个条目的目录**：
+ * 磁盘上留着上一份依赖图的条目，而名单（`allowBuilds`）是按**当前**依赖图维护的。
+ * 两者不对齐，判据就会把「曾经装过、现在不在图里」的包当成已安装的依赖 ⇒
+ * 一次「移掉一个带构建脚本的依赖」的提交在本地被判红，而平台流水线（全新检出）是绿的。
+ * 所以扫描面收窄成「**当前依赖图里**、且**已装出来**的包」：生命周期脚本问磁盘，
+ * 归属问锁文件（`pnpm-lock.yaml` 的 `packages` 段就是当前依赖图的解析结果）。
+ *
  * 代价：一次全量 `package.json` 读取（实测本仓 1379 个安装条目、亚秒级），
  * 且**只在本地钩子里跑** —— 它不需要 CI 兜底（流水线已随 ISSUE #623 删除，
  * 见 §13.5.12 那句「判据在场但没有执行者」正是本档要防的形态）。
@@ -136,9 +144,20 @@ const {
    `launcher-core/worktree.mjs` 一串下游，为一个常量拖进整条链，代价落在门禁自测的
    临时工作区上（少拷一个就是 `ERR_MODULE_NOT_FOUND`，读起来像被测判据坏了）。 */
 const { DEPENDENCY_FILES } = require("./dependency-face.mjs");
+/* 锁文件解析器：`scripts/lockfile/lock-diff.mjs` —— **本仓已有的那一份**，不是新写一个。
+ * 为什么复用它（§12.18「写之前先查」）：① 它已经把 pnpm 12 的「两份 YAML 文档」形态处理好了
+ * （仓库里的 `pnpm-lock.yaml` 头一份文档描述 pnpm 自身的二进制，`stripBundledSection()`
+ * 剥掉它）；② 它**零依赖**（不引 yaml 解析器，standalone 产物里也不带第三方解析器）；
+ * ③ 本判据的文件头刻意不引 `yaml`（那是给「`键: 值` 一行一条 + 整行注释」那种窄形状用的），
+ * 而锁文件是**大而嵌套**的 —— 手抄一份解析器就是 §12.12 说的那份孪生对。
+ * `.cjs` 里 `require()` 一个 `.mjs` 是本仓既有的写法（`ci-log.mjs` / `dependency-face.mjs`
+ * / `changed-scope.mjs` 都是这一路）。 */
+const { parseLockfile } = require("./lockfile/lock-diff.mjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const WORKSPACE_FILE = path.join(ROOT, "pnpm-workspace.yaml");
+/** 当前依赖图的权威源：锁文件的 `packages` 段（ISSUE #3523）。 */
+const LOCKFILE = path.join(ROOT, "pnpm-lock.yaml");
 const PNPM_DIR = path.join(ROOT, "node_modules", ".pnpm");
 /** pnpm 的 hoisted 虚拟目录名：它是 `.pnpm/` 下的一个目录，不是 `<name>@<ver>` 那种 store 条目。 */
 const HOISTED_DIR = "node_modules";
@@ -304,6 +323,49 @@ function scriptBearingPackage(raw) {
   };
 }
 
+/**
+ * 当前依赖图里的包身份（`name@version`）集合 —— 读锁文件的 `packages` 段。
+ *
+ * **为什么需要它**（ISSUE #3523）：pnpm 12 在「移掉一个依赖」之后**不回收虚拟 store
+ * 里那个条目的目录** —— 磁盘上留着上一份依赖图的条目（实测：`@storybook/nextjs`
+ * 整条 webpack 链移走之后，`node_modules/.pnpm/core-js-pure@3.51.0/` 还在），
+ * 而名单（`allowBuilds`）是按**当前**依赖图维护的。不把两者对齐，判据就会把
+ * 「曾经装过、现在不在图里」的包当成已安装的依赖 ⇒ 一次「移掉一个带构建脚本的依赖」
+ * 的提交在本地被判红，而平台流水线（全新检出、没有残留）是绿的 —— 同一份代码、
+ * 两台机器两个结论。
+ *
+ * **权威源是锁文件**：`pnpm-lock.yaml` 的 `packages` 段就是当前依赖图的解析结果
+ * （`parseLockfile()` 已经把 pnpm 自举段剥掉 —— 那份文件是**两份** YAML 文档，
+ * 头一份描述 pnpm 自身的二进制）。
+ *
+ * **粒度是 `name@version`**：pnpm 按名字批准，同名多版本共享一条 `allowBuilds` 条目；
+ * 但归属要按版本判 —— 磁盘上留着 `foo@1.0.0` 而锁文件里是 `foo@2.0.0` 时，
+ * 前者是残留、后者才是当前依赖。
+ *
+ * @returns {Set<string> | null} 锁文件不在 / 读不到 / 解析不出 `packages` 段 ⇒ `null`
+ *   （**没有输入可判归属**：此时按「不做归属过滤」处理，见调用点 —— 那个方向是
+ *   **误红**而不是**误绿**，详见调用点那段注释）
+ */
+function readGraphPackageIds() {
+  try {
+    const raw = readForScan(LOCKFILE);
+    if (raw === null) {
+      return null;
+    }
+    const parsed = parseLockfile(raw);
+    const section = parsed.sections.get("packages");
+    const ids = section ? new Set(section.keys.keys()) : new Set();
+    return ids.size > 0 ? ids : null;
+  } catch {
+    /* 读不动（权限 / 是目录）或解析不动：归属这一问没输入。
+     *
+     * 共用读取那份只对 ENOENT 降级、其余照原样冒出去（它那层要防的是
+     * 「扫描面读不到被静默放行」）；这里把它收成「没有归属输入」，
+     * 因为那一格的后果是**误红**而不是**误绿**（见调用点那段注释）。 */
+    return null;
+  }
+}
+
 /* ── 判定 ────────────────────────────────────────────────────────── */
 
 /* `--staged`：没动依赖面就跳过（省下那一次全树扫描），并打印理由让「跳过」与
@@ -324,6 +386,12 @@ let unread = 0;
 let untrusted = 0;
 const untrustedPaths = [];
 const bearing = [];
+/**
+ * store 孤儿：磁盘上还在、但**已不在当前依赖图里**的带构建脚本的包
+ * （ISSUE #3523）。它们不参与对账 —— 见 `readGraphPackageIds()` 那段说明。
+ * @type {string[]}
+ */
+const orphans = [];
 
 if (dirExists(WORKSPACE_FILE)) {
   const workspaceText = readForScan(WORKSPACE_FILE);
@@ -343,6 +411,12 @@ if (dirExists(WORKSPACE_FILE)) {
       const collected = collectInstalledPackages();
       unread += collected.vanished;
       const seenNames = new Set();
+      /* 当前依赖图（锁文件的 `packages` 段）。读不到 ⇒ 不做归属过滤。
+       *
+       * **为什么「读不到就不过滤」是安全的方向**：过滤漏掉一个真依赖 ⇒ 判绿 ⇒
+       * 别人的安装会炸（**误绿**）；不过滤而把一个残留算进来 ⇒ 判红 ⇒
+       * 只是让人多清一次目录（**误红**）。这一格宁可误红也不误绿。 */
+      const graphIds = readGraphPackageIds();
       for (const entry of collected.entries) {
         scanned += 1;
         const raw = readForScan(entry.absPath);
@@ -357,6 +431,13 @@ if (dirExists(WORKSPACE_FILE)) {
           continue;
         }
         if (found === null) {
+          continue;
+        }
+        /* 归属先判、去重后判：同名多版本里可能一个在图里、一个是残留 ——
+           先按名字去重会把**在图里**的那一个一起跳掉（`seenNames` 只记名字）。 */
+        const id = `${found.name}@${found.version}`;
+        if (graphIds && !graphIds.has(id)) {
+          orphans.push(id);
           continue;
         }
         if (seenNames.has(found.name)) {
@@ -388,6 +469,39 @@ if (dirExists(WORKSPACE_FILE)) {
   problems.push(
     `读不到 pnpm-workspace.yaml（${path.relative(ROOT, WORKSPACE_FILE)}）。` +
       `本判据的名单在那一份文件里 —— 它不在，判据就没有输入，跳过等于报绿。`,
+  );
+}
+
+/**
+ * 把「store 孤儿」念出来（ISSUE #3523）。
+ *
+ * 为什么念：它们**不参与**对账（判据只判当前依赖图里的包），但它们是**磁盘上真实的
+ * 残留** —— 下一个人看到「本地判据绿了、而某个包明明带 postinstall 却没进名单」时，
+ * 这一行就是那句话的答案。不念的话，那份残留就完全不可见（判据绿了、它还在那儿）。
+ *
+ * 为什么只念带构建脚本的那些：没有生命周期脚本的残留不影响任何安装行为，
+ * 念出来只是噪音（一次移掉一条 webpack 链能留下几十个这样的目录）。
+ *
+ * @returns {void}
+ */
+function printOrphans() {
+  if (orphans.length === 0) {
+    return;
+  }
+  const unique = [...new Set(orphans)].sort();
+  console.log(
+    `\n  ℹ️ 另有 ${unique.length} 个带构建脚本的包**已不在当前依赖图里**（store 残留，` +
+      "pnpm 移掉依赖后不回收虚拟 store 的条目目录）—— 不参与上面的对账：",
+  );
+  for (const id of unique.slice(0, 10)) {
+    console.log(`     · ${id}`);
+  }
+  if (unique.length > 10) {
+    console.log(`     ……另有 ${unique.length - 10} 个`);
+  }
+  console.log(
+    "     它们不会让别人的 `pnpm install --frozen-lockfile` 失败（不在依赖图里 ⇒ 不会被装）；\n" +
+      "     要清掉：删掉 `node_modules/.pnpm/<对应条目>` 目录后重跑 `pnpm install`。",
   );
 }
 
@@ -429,6 +543,7 @@ if (unread > 0 || untrusted > 0) {
       "既不判绿、也不判红，更不冒充「覆盖了全部」。\n" +
       "  出口：重跑一次；若稳定复现，先 `pnpm install --frozen-lockfile` 把 node_modules 修好。",
   );
+  printOrphans();
   process.exit(2);
 }
 
@@ -438,10 +553,12 @@ if (problems.length > 0) {
     console.error(`  · ${problem}`);
   }
   console.error(`\n  本轮扫描 ${scanned} 个安装条目，其中 ${bearing.length} 个带构建脚本。`);
+  printOrphans();
   process.exit(1);
 }
 
 console.log(
   `✅ allowBuilds 覆盖了全部带构建脚本的依赖：${bearing.length} 个（扫了 ${scanned} 个安装条目）`,
 );
+printOrphans();
 process.exit(0);
