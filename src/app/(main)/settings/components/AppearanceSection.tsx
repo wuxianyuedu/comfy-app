@@ -90,17 +90,12 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
           ] as const
         ).map(({ value, label, Icon, hint }) => (
           <RadioGroupItem
-            /* 选中档改用**软品牌紫** + 品牌描边，不再是一整块实心紫（ISSUE #3547）：
-               基元的根元素带 `data-checked:bg-primary`（那是给 16px 的小单选圈准备的），
-               而这里它被 `render` 成了一张**卡片** ⇒ 整张卡被填成实心品牌紫；基元的类与
-               `render` 元素上的类合并时基元那份排在后面，所以覆盖要写在这里。
-               `dark:` 那一档也要跟：基元另有一条 `dark:data-checked:bg-primary`，它是
-               **另一个变体组**，tailwind-merge 不会把它一起收掉。 */
-            className="data-checked:bg-primary-soft dark:data-checked:bg-primary-soft data-checked:text-ink dark:data-checked:text-ink"
             key={value}
             /* 整卡可点选项：基元尺寸全部归还调用处 —— 基类是小圆点形态（`size-4`+`aspect-square`），
                必须连宽度与宽高比一起还（`size-auto!`/`aspect-auto!`），否则宽度仍 16px、卡片被压竖排。
-               基元的中心圆点指示器是小圆点形态用的；此处选中态已由边框+底色表达，圆点隐藏。 */
+               基元的中心圆点指示器是小圆点形态用的；此处选中态已由边框+底色表达，圆点隐藏
+               （选中实心底自 ISSUE #3553 起已下沉到 Indicator 层，卡片形态不再被基元根的
+               `data-checked:bg-primary` 填紫，调用方无需再写覆盖 hack）。 */
             nativeButton
             render={
               <Button
