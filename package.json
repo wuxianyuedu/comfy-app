@@ -21,6 +21,7 @@
     "db:studio": "drizzle-kit studio",
     "dev": "node scripts/dev.mjs",
     "deps:guard": "node scripts/deps-install-guard.mjs",
+    "deps:prune": "node scripts/prune-virtual-store.mjs",
     "format:check": "node scripts/check-format.cjs --changed",
     "format:report": "node scripts/check-format.cjs --report",
     "format:write": "oxfmt \"**/*.{ts,tsx,js,jsx,mjs,cjs,mdx}\"",
