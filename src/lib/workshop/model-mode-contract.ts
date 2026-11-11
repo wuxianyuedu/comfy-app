@@ -25,10 +25,19 @@ import {
 } from "~/lib/workflow/workflow-exposed-params";
 import { getWorkflowType } from "~/lib/workflow/workflow-types";
 
-/* 项目默认的**显式覆盖**（ISSUE #3396）：界面「保存为项目默认」写出来的那份，
+/* 项目默认（#3603 起即**完整基线**）：界面「保存为项目默认」写出来的那份，
  * 入库、跟代码走。静态 import（不走 fs）——编译进产物后读到的就是这份快照，
  * 与写回侧（`mode-contract.server.ts` 落 `MODE_CONTRACT_DEFAULTS_REL_PATH`）
- * 指向同一份文件。内容为空（`[]`）= 没有任何显式覆盖，纯推导。 */
+ * 指向同一份文件。
+ *
+ * #3603 起这份 JSON 是**全部生成类模式的完整注册表**（不再是「与推导的差集」）：
+ * 每个模式的口清单 / 输出 / 必备口都显式写在文件里（`required` 一并固化），
+ * 编辑器写回时也是全量落盘。为什么不再留「差集 + 代码推导」两层：改多了之后
+ * 几乎所有模式都会被显式配置过（业主原话），到那时「JSON 里有的以 JSON 为准、
+ * 没有的跟推导」就是两套出处各管一半 —— 现在单一出处是这份 JSON；推导
+ * （`derivedModeContract`）退居两处：本 PR 迁移的**生成源**（一次性逐字导出），
+ * 以及手改 JSON 误删某模式时的**兜底**（那个模式照常出现在界面上，而不是
+ * 静默消失 —— 完整性由 `model-mode-contract.test.ts` 的基线判据守着）。 */
 import defaultsJson from "./mode-contract-defaults.json";
 
 /** 可作为输入的统一类型（供适配器配置选用）。
@@ -605,17 +614,16 @@ export const ALL_CONTRACT_MODES: ReadonlyArray<string> = [
 
 /** ── 成品配置：编译进源码的那份契约注册表 ────────────────────────────────
  *
- * 过去契约是**入库的文件**（`config/workshop-mode-contracts.json`）：每个检出
- * 与每个桌包都读同一份，代价是「要改它得先找到那个文件」。现在它回到源码里 ——
- * 每种模式的口清单与输出类别由 `derivedModeContract` 现算，这一份是默认的**第一
- * 出处**。
+ * #3603 起**第一出处是入库的 `mode-contract-defaults.json`**（完整基线：全部
+ * 生成类模式的口清单 / 输出 / 必备口都显式在文件里，编辑器全量写回）。历史上
+ * 它经历了三站：入库 config 文件（ISSUE #1901）→ 源码推导 + JSON 只存差集
+ * （ISSUE #3396）→ 现在的完整 JSON 基线 —— 迁移的方向由业主的使用方式决定：
+ * 改多了之后几乎每个模式都会被显式配置，那时「差集 + 推导」就是两套出处各管
+ * 一半；单一出处回到文件，「跟代码走」与「改它要走改代码 / 提 PR」的纪律不变。
  *
- * 在推导之上有一层**显式覆盖**（ISSUE #3396）：编辑器「保存为项目默认」把
- * 「与推导不同的模式」写进入库的 `mode-contract-defaults.json`，这里按模式整份
- * 替换推导值。只写差异是这一层的全部要点：没显式覆盖的模式继续跟随推导演进
- * （改了某模式的预制口清单，界面上立刻跟上），显式覆盖的模式以快照为准。
- * 「仓库里没有第二个地方定义 T2I 有哪些口」仍然成立 —— JSON 里的条目是
- * 「作者对 T2I 的显式决定」，不是第二份推导。
+ * `derivedModeContract` 仍保留两职：迁移时的**生成源**（2026-11 逐字导出成
+ * 这份 JSON），以及 JSON 手改坏了（某模式被误删）时的**兜底** —— 那个模式
+ * 照常出现在界面上，完整性由基线判据守着，正常到不了兜底。
  *
  * 仍然保留的编辑入口（ISSUE #632 的「哪个口必备应该能配」）写的是**本机覆盖**
  * （`mode-contract.server.ts`），不改这一份 —— 成品配置跟着构建走，覆盖跟着这台
@@ -632,13 +640,9 @@ export function configuredModeContracts(
   const overrides = new Map(explicit.map((contract) => [contract.mode, contract]));
   return modes.map((mode) => {
     const code = upperToken(mode);
+    /* JSON 基线里的条目原样直读；缺失（手改误删）才回落推导兜底。 */
     return overrides.get(code) ?? derivedModeContract(code);
   });
-}
-
-/** 「保存为项目默认」该写进入库 JSON 的内容：与**推导**有差异的那些契约。 */
-export function projectDefaultDiff(contracts: ReadonlyArray<ModeContract>): Array<ModeContract> {
-  return contractsDiffAgainstBase(contracts, (mode) => derivedModeContract(mode));
 }
 
 /** 「保存模式契约」（本机覆盖）该写进 `data/` 的内容：与**成品配置**（推导 +
