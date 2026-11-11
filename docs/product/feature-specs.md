@@ -716,11 +716,23 @@
   新建模型的默认值，详情页不再编辑它。远端模型名全局唯一（运行时与工坊
   按名解析）；停用的模型保留配置但不进工坊下拉；整份清单保存只动历史遗留行
   （`providerId` 为空），不覆盖、不删除供应商名下的模型；模型配置含启用状态、
-  接口格式、上下文窗口、最大输出 Token、输入类型、能力、推理等级与参数映射，
-  「智能配置」按模型 id 预填窗口 / 输出上限 / 输入类型。
+  接口格式、上下文窗口、最大输出 Token、输入类型、输出类型、能力、推理等级
+  与参数映射，「智能配置」按模型 id 预填窗口 / 输出上限 / 输入类型 / 输出类型。
+  #3577 起新增两条：
+  ① **模型目录导入**——供应商「测试连接」成功后，服务端把探测到的模型清单
+  补进该供应商名下（`syncProviderCatalog`）：已有名字一行不动（不重置启停
+  与已配字段），缺的名字插成**停用**行、用途按模型名推断（video/image
+  关键词），反复探测幂等；验收 = 探测成功后模型列表出现全部服务端模型且
+  默认停用，启用 / 配置在列表项上完成。
+  ② **实际调用测试的密钥解析带供应商链兜底**——「测试生成」的连接解析顺序
+  为 弹窗填的 → 条目已保存的 → 所属供应商的（独立于全局配置直查一轮，规避
+  `getLLMConfig` 读库失败被吞后静默丢密钥）→ 全局配置；密钥全空且模型确属
+  某供应商（又未配密钥）时报「供应商未配置 API 密钥」而不是把无鉴权请求发往
+  上游。
 - 落点：`src/server/db/schema.ts`（`llmProvider` / `remoteModel`）、
   `src/lib/llm/types.ts`、`src/lib/llm/provider-form.ts`、
-  `src/lib/llm/provider-types.ts`
+  `src/lib/llm/provider-types.ts`、`src/lib/llm/usage-test.server.ts`
+  （`resolveUpstream`）、`src/lib/core/repository-user.ts`（`syncProviderCatalog`）
 
 #### FR-LM-03 按任务温度
 

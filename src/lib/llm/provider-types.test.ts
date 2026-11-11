@@ -12,9 +12,12 @@ import {
   baseUrlVersionHint,
   formatContextWindow,
   inferModelDefaults,
+  inferOutputTypesFromName,
+  inferRemoteKindFromName,
   isLlmApiFormat,
   parseCapabilities,
   parseInputTypes,
+  parseOutputTypes,
   parseReasoningLevels,
   parseReasoningParamMapping,
   requestUrlForFormat,
@@ -133,7 +136,15 @@ describe("inferModelDefaults：按模型名给保守默认值", () => {
     };
     expect(inferModelDefaults("")).toEqual(fallback);
     expect(inferModelDefaults("   ")).toEqual(fallback);
-    expect(inferModelDefaults("agnes-1")).toEqual(fallback);
+    expect(inferModelDefaults("mystery-model")).toEqual(fallback);
+  });
+
+  it("agnes 家族（#3577）：512K 窗口 / 65,536 输出 / 输入含图像", () => {
+    expect(inferModelDefaults("agnes-3.0-flash")).toMatchObject({
+      contextWindow: 524_288,
+      maxOutputTokens: 65_536,
+      inputTypes: ["text", "image"],
+    });
   });
 
   it("各家族命中各自的窗口 / 输出上限 / 输入类型", () => {
@@ -173,6 +184,39 @@ describe("inferModelDefaults：按模型名给保守默认值", () => {
     first.capabilities.push("native-web-search");
     expect(inferModelDefaults("").inputTypes).toEqual(["text"]);
     expect(inferModelDefaults("").capabilities).toEqual(["system-messages"]);
+  });
+});
+
+describe("inferRemoteKindFromName / inferOutputTypesFromName（#3577 目录导入的按名推断）", () => {
+  it("名字带 video / image / img 关键词分别命中视频 / 图像，其余回落 chat", () => {
+    expect(inferRemoteKindFromName("agnes-video-2.5-flash")).toBe("video");
+    expect(inferRemoteKindFromName("veo-3")).toBe("chat"); // veo 无关键词，回落文本
+    expect(inferRemoteKindFromName("kling-v2-video")).toBe("video");
+    expect(inferRemoteKindFromName("agnes-image-2.5-flash")).toBe("image");
+    expect(inferRemoteKindFromName("gpt-image-1")).toBe("image");
+    expect(inferRemoteKindFromName("flux-img-dev")).toBe("image");
+    expect(inferRemoteKindFromName("agnes-3.0-flash")).toBe("chat");
+    expect(inferRemoteKindFromName("")).toBe("chat");
+  });
+
+  it("关键词必须按词命中：videoinside 这类连写不算（防 agnes-videosource 误判）", () => {
+    expect(inferRemoteKindFromName("videoinside-pro")).toBe("chat");
+    expect(inferRemoteKindFromName("imagefx")).toBe("chat");
+  });
+
+  it("输出类型与用途同规律：video 名字 → 视频，image 名字 → 图像，其余 → 文本", () => {
+    expect(inferOutputTypesFromName("agnes-video-2.5-flash")).toEqual(["video"]);
+    expect(inferOutputTypesFromName("agnes-image-2.5-flash")).toEqual(["image"]);
+    expect(inferOutputTypesFromName("agnes-3.0-flash")).toEqual(["text"]);
+  });
+});
+
+describe("parseOutputTypes（#3577 输出类型词表容错解析）", () => {
+  it("只认 text / image / video；坏值跳过、重复去掉；非数组给空", () => {
+    expect(parseOutputTypes(["text", "unknown", "image", "text"])).toEqual(["text", "image"]);
+    expect(parseOutputTypes(null)).toEqual([]);
+    expect(parseOutputTypes("text")).toEqual([]);
+    expect(parseOutputTypes(["pdf"])).toEqual([]);
   });
 });
 

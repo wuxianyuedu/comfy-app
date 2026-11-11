@@ -16,7 +16,7 @@ import { db } from "~/lib/db";
 import { firstRowOfExisting, firstRowRequired } from "./repository-row";
 import { decryptLlmKey, encryptLlmKey } from "~/lib/llm/secrets";
 import { type RawExtraModel, splitExtraModels, type RemoteModelEntry } from "~/lib/llm/types";
-import { isLlmApiFormat } from "~/lib/llm/provider-types";
+import { isLlmApiFormat, inferRemoteKindFromName } from "~/lib/llm/provider-types";
 import {
   user,
   llmConfig,
@@ -399,6 +399,7 @@ export class RemoteModelRepository {
       contextWindow: input.contextWindow ?? null,
       maxOutputTokens: input.maxOutputTokens ?? null,
       inputTypes: input.inputTypes ?? null,
+      outputTypes: input.outputTypes ?? null,
       capabilities: input.capabilities ?? null,
       reasoningLevels: input.reasoningLevels ?? null,
       reasoningParamMapping: input.reasoningParamMapping ?? null,
@@ -443,6 +444,48 @@ export class RemoteModelRepository {
       .returning();
     return decryptRemoteRow(firstRowOfExisting(rows, `模型不存在: ${id}`));
   }
+
+  /** 把探测到的服务端模型目录落进该供应商名下（#3577「获取到的模型应该全部
+   *  显示出来，默认关闭状态」）：
+   *  · 已存在的名字**一行不动**（不重置启停、不覆盖任何已配字段）——目录同步
+   *    是「补缺」，不是「整份覆盖」，反复点测试连接不能把用户启用过的模型又关掉；
+   *  · 缺的名字插入为**停用**行（enabled=false），用途按名字推断（video/image
+   *    关键词），窗口 / 能力留空由「智能配置」在编辑时补；
+   *  · 同名行已挂在**别的供应商**下也跳过（name 全局唯一索引，撞了就跳）。
+   *  返回本次新插入的名字（空数组 = 没有新增）。 */
+  async syncProviderCatalog(
+    providerId: string,
+    names: ReadonlyArray<string>,
+  ): Promise<Array<string>> {
+    const cleaned = [...new Set(names.map((n) => n.trim()).filter((n) => n !== ""))];
+    if (cleaned.length === 0) {
+      return [];
+    }
+    const existing = await db
+      .select({ name: remoteModel.name })
+      .from(remoteModel)
+      .where(inArray(remoteModel.name, cleaned));
+    const known = new Set(existing.map((r) => r.name));
+    const toInsert = cleaned.filter((n) => !known.has(n));
+    if (toInsert.length === 0) {
+      return [];
+    }
+    await runWithSqliteBusyRetry(
+      () =>
+        db.insert(remoteModel).values(
+          toInsert.map((name) => ({
+            name,
+            providerId,
+            apiFormat: null,
+            kind: inferRemoteKindFromName(name),
+            enabled: false,
+            smartConfig: true,
+          })),
+        ),
+      { policy: SETTINGS_DB_WRITE },
+    );
+    return toInsert;
+  }
 }
 
 /* ── LLM 供应商仓储（#3501）──────────────────────────────────────── */
@@ -469,6 +512,7 @@ export type RemoteModelInput = {
   kind?: string;
   maxOutputTokens?: number | null;
   name: string;
+  outputTypes?: Array<string> | null;
   providerId: string;
   reasoningLevels?: Array<string> | null;
   reasoningParamMapping?: unknown;

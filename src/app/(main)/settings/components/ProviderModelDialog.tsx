@@ -16,6 +16,9 @@
  * `~/lib/llm/provider-form`（纯函数）。
  */
 
+import { useState } from "react";
+
+import { ChevronDownIcon } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { FieldLegend, FieldSet } from "~/components/ui/field";
@@ -33,6 +36,8 @@ import {
   MODEL_CAPABILITY_LABELS,
   MODEL_INPUT_TYPES,
   MODEL_INPUT_TYPE_LABELS,
+  MODEL_OUTPUT_TYPES,
+  MODEL_OUTPUT_TYPE_LABELS,
   baseUrlVersionHint,
   formatContextWindow,
   requestUrlForFormat,
@@ -60,6 +65,10 @@ export function ProviderModelDialog({
   const versionHint = baseUrlVersionHint(providerBaseUrl, d.modelForm.apiFormat);
   const levels = splitReasoningLevels(d.modelForm.reasoningLevels);
   const windowPreview = formatContextWindow(Number(d.modelForm.contextWindow) || null);
+  /* 高级配置默认折叠（#3577「高级设置需要能折叠和展开」）：新增时先看到的是
+   * 模型 ID / 用途 / 格式 / 窗口这几格主项；编辑既有模型时默认展开 —— 那时
+   * 用户本来就是要改里面的东西。 */
+  const [advancedOpen, setAdvancedOpen] = useState(dialog.mode === "edit");
 
   return (
     <Dialog
@@ -196,7 +205,11 @@ export function ProviderModelDialog({
           <div className="mb-3 grid grid-cols-2 gap-3">
             <FormField
               error={d.modelErrors.contextWindow}
-              hint={windowPreview === EMPTY_PLACEHOLDER ? "留空 = 未知" : `约 ${windowPreview}`}
+              hint={
+                windowPreview === EMPTY_PLACEHOLDER
+                  ? "常见文本模型 128K～1M；留空 = 未知"
+                  : `约 ${windowPreview}`
+              }
               id="model-context-window"
               label="上下文窗口"
             >
@@ -235,117 +248,157 @@ export function ProviderModelDialog({
           </div>
 
           <fieldset className="border-border mb-3 rounded-xl border p-3">
-            <legend className="text-ink/80 px-1 text-sm font-medium">高级配置</legend>
+            {/* 折叠头（#3577）：整个 legend 是按钮，点击展开 / 收起；箭头随态旋转。 */}
+            <button
+              aria-expanded={advancedOpen}
+              className="text-ink/80 hover:text-ink -mx-1 flex w-full items-center gap-1 rounded px-1 py-0.5 text-sm font-medium"
+              onClick={() => {
+                setAdvancedOpen((prev) => !prev);
+              }}
+              type="button"
+            >
+              <ChevronDownIcon
+                aria-hidden
+                className={`size-3.5 transition-transform ${advancedOpen ? "" : "-rotate-90"}`}
+              />
+              高级配置
+            </button>
 
-            {/* 多选组没有单个控件能被 `htmlFor` 指到 ⇒ 用 `fieldset`/`legend` 给
+            {advancedOpen && (
+              <>
+                {/* 多选组没有单个控件能被 `htmlFor` 指到 ⇒ 用 `fieldset`/`legend` 给
                 整组一个可访问名（`FormField` 的标签行只覆盖单控件形态）。 */}
-            <FieldSet className="mb-3 gap-0">
-              <FieldLegend className="text-ink/80 mb-1.5 text-sm" variant="label">
-                输入类型
-              </FieldLegend>
-              <div className="flex flex-wrap gap-1.5">
-                {MODEL_INPUT_TYPES.map((type) => (
-                  <Toggle
-                    className="h-auto rounded-lg border px-2.5 py-1 text-xs"
-                    key={type}
-                    onPressedChange={() => {
-                      d.toggleInputType(type);
-                    }}
-                    pressed={d.modelForm.inputTypes.includes(type)}
-                    size="sm"
-                    variant="outline"
-                  >
-                    {MODEL_INPUT_TYPE_LABELS[type]}
-                  </Toggle>
-                ))}
-              </div>
-            </FieldSet>
-
-            <FieldSet className="mb-3 gap-0">
-              <FieldLegend className="text-ink/80 mb-1.5 text-sm" variant="label">
-                模型能力
-              </FieldLegend>
-              <div className="flex flex-wrap gap-1.5">
-                {MODEL_CAPABILITIES.map((capability) => (
-                  <Toggle
-                    className="h-auto rounded-lg border px-2.5 py-1 text-xs"
-                    key={capability}
-                    onPressedChange={() => {
-                      d.toggleCapability(capability);
-                    }}
-                    pressed={d.modelForm.capabilities.includes(capability)}
-                    size="sm"
-                    variant="outline"
-                  >
-                    {MODEL_CAPABILITY_LABELS[capability]}
-                  </Toggle>
-                ))}
-              </div>
-            </FieldSet>
-
-            <FormField
-              className="mb-3"
-              hint="逗号或空格分隔，例如 low, medium, high（各家叫法不同，不做白名单）"
-              id="model-reasoning-levels"
-              label="推理等级"
-            >
-              {(a11y) => (
-                <Input
-                  {...a11y}
-                  className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm"
-                  onChange={textHandler((reasoningLevels) => {
-                    d.patchModelForm({ reasoningLevels });
-                  })}
-                  placeholder="low, medium, high"
-                  value={d.modelForm.reasoningLevels}
-                />
-              )}
-            </FormField>
-
-            <FormField
-              className="mb-2"
-              hint="请求体里承接推理等级的字段名，例如 reasoning_effort 或 thinking.budget_tokens"
-              id="model-reasoning-param"
-              label="推理参数映射"
-            >
-              {(a11y) => (
-                <Input
-                  {...a11y}
-                  className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm"
-                  onChange={textHandler((reasoningParam) => {
-                    d.patchModelForm({ reasoningParam });
-                  })}
-                  placeholder="reasoning_effort"
-                  value={d.modelForm.reasoningParam}
-                />
-              )}
-            </FormField>
-
-            {levels.length === 0 ? (
-              <p className="text-muted-foreground text-2xs">
-                先在上面填推理等级，这里会为每个等级生成一行「等级 → 取值」。
-              </p>
-            ) : (
-              <div className="flex flex-col gap-1.5">
-                {levels.map((level) => (
-                  <div className="flex items-center gap-2" key={level}>
-                    <span className="text-muted-foreground w-20 shrink-0 truncate text-xs">
-                      {level}
-                    </span>
-                    <Input
-                      aria-label={`${level} 对应的取值`}
-                      className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-2 py-1.5 text-sm"
-                      onChange={textHandler((value) => {
-                        d.patchModelForm({
-                          reasoningValues: { ...d.modelForm.reasoningValues, [level]: value },
-                        });
-                      })}
-                      placeholder="例如 high / 8192"
-                      value={d.modelForm.reasoningValues[level] ?? ""}
-                    />
+                <FieldSet className="mt-3 mb-3 gap-0">
+                  <FieldLegend className="text-ink/80 mb-1.5 text-sm" variant="label">
+                    输入类型
+                  </FieldLegend>
+                  <div className="flex flex-wrap gap-1.5">
+                    {MODEL_INPUT_TYPES.map((type) => (
+                      <Toggle
+                        className="h-auto rounded-lg border px-2.5 py-1 text-xs"
+                        key={type}
+                        onPressedChange={() => {
+                          d.toggleInputType(type);
+                        }}
+                        pressed={d.modelForm.inputTypes.includes(type)}
+                        size="sm"
+                        variant="chip"
+                      >
+                        {MODEL_INPUT_TYPE_LABELS[type]}
+                      </Toggle>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </FieldSet>
+
+                <FieldSet className="mb-3 gap-0">
+                  <FieldLegend className="text-ink/80 mb-1.5 text-sm" variant="label">
+                    输出类型
+                  </FieldLegend>
+                  <div className="flex flex-wrap gap-1.5">
+                    {MODEL_OUTPUT_TYPES.map((type) => (
+                      <Toggle
+                        className="h-auto rounded-lg border px-2.5 py-1 text-xs"
+                        key={type}
+                        onPressedChange={() => {
+                          d.toggleOutputType(type);
+                        }}
+                        pressed={d.modelForm.outputTypes.includes(type)}
+                        size="sm"
+                        variant="chip"
+                      >
+                        {MODEL_OUTPUT_TYPE_LABELS[type]}
+                      </Toggle>
+                    ))}
+                  </div>
+                </FieldSet>
+
+                <FieldSet className="mb-3 gap-0">
+                  <FieldLegend className="text-ink/80 mb-1.5 text-sm" variant="label">
+                    模型能力
+                  </FieldLegend>
+                  <div className="flex flex-wrap gap-1.5">
+                    {MODEL_CAPABILITIES.map((capability) => (
+                      <Toggle
+                        className="h-auto rounded-lg border px-2.5 py-1 text-xs"
+                        key={capability}
+                        onPressedChange={() => {
+                          d.toggleCapability(capability);
+                        }}
+                        pressed={d.modelForm.capabilities.includes(capability)}
+                        size="sm"
+                        variant="chip"
+                      >
+                        {MODEL_CAPABILITY_LABELS[capability]}
+                      </Toggle>
+                    ))}
+                  </div>
+                </FieldSet>
+
+                <FormField
+                  className="mb-3"
+                  hint="逗号或空格分隔，例如 low, medium, high（各家叫法不同，不做白名单）"
+                  id="model-reasoning-levels"
+                  label="推理等级"
+                >
+                  {(a11y) => (
+                    <Input
+                      {...a11y}
+                      className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm"
+                      onChange={textHandler((reasoningLevels) => {
+                        d.patchModelForm({ reasoningLevels });
+                      })}
+                      placeholder="low, medium, high"
+                      value={d.modelForm.reasoningLevels}
+                    />
+                  )}
+                </FormField>
+
+                <FormField
+                  className="mb-2"
+                  hint="请求体里承接推理等级的字段名，例如 reasoning_effort 或 thinking.budget_tokens"
+                  id="model-reasoning-param"
+                  label="推理参数映射"
+                >
+                  {(a11y) => (
+                    <Input
+                      {...a11y}
+                      className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm"
+                      onChange={textHandler((reasoningParam) => {
+                        d.patchModelForm({ reasoningParam });
+                      })}
+                      placeholder="reasoning_effort"
+                      value={d.modelForm.reasoningParam}
+                    />
+                  )}
+                </FormField>
+
+                {levels.length === 0 ? (
+                  <p className="text-muted-foreground text-2xs">
+                    先在上面填推理等级，这里会为每个等级生成一行「等级 → 取值」。
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    {levels.map((level) => (
+                      <div className="flex items-center gap-2" key={level}>
+                        <span className="text-muted-foreground w-20 shrink-0 truncate text-xs">
+                          {level}
+                        </span>
+                        <Input
+                          aria-label={`${level} 对应的取值`}
+                          className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-2 py-1.5 text-sm"
+                          onChange={textHandler((value) => {
+                            d.patchModelForm({
+                              reasoningValues: { ...d.modelForm.reasoningValues, [level]: value },
+                            });
+                          })}
+                          placeholder="例如 high / 8192"
+                          value={d.modelForm.reasoningValues[level] ?? ""}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </fieldset>
 

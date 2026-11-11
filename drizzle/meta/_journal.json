@@ -15,6 +15,13 @@
       "when": 1793234398910,
       "tag": "0001_perfect_sinister_six",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1794415526565,
+      "tag": "0002_dapper_mikhail_rasputin",
+      "breakpoints": true
     }
   ]
 }

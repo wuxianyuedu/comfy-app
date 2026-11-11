@@ -103,8 +103,20 @@ const MEDIA_URL_KEYS = [
   "resultUrl",
 ];
 
-/* 生成响应里常见「放异步任务标识」的键名。 */
-const TASK_ID_KEYS = ["id", "task_id", "taskId", "job_id", "jobId", "request_id", "requestId"];
+/* 生成响应里常见「放异步任务标识」的键名。`video_id` 是 Agnes 视频接口的
+ * 原生任务键（#3577：提交响应里 `id` 虽然同值，但点名原生键免得依赖
+ * 「恰好也有 id」这一巧合）。 */
+const TASK_ID_KEYS = [
+  "id",
+  "task_id",
+  "taskId",
+  "video_id",
+  "videoId",
+  "job_id",
+  "jobId",
+  "request_id",
+  "requestId",
+];
 
 /* 常见「放 base64 载荷」的键名（例如 OpenAI 图片的 b64_json）。 */
 const B64_KEYS = ["b64_json", "b64Json", "image_base64", "base64"];

@@ -6,6 +6,7 @@ import {
   LLM_API_FORMATS,
   MODEL_CAPABILITIES,
   MODEL_INPUT_TYPES,
+  MODEL_OUTPUT_TYPES,
   resolveApiFormat,
 } from "~/lib/llm/provider-types";
 import { isHttpUrl } from "~/lib/url-scheme";
@@ -74,6 +75,7 @@ const modelInputSchema = z.object({
   enabled: z.boolean().optional(),
   id: z.string().min(1).optional(),
   inputTypes: z.array(z.enum(MODEL_INPUT_TYPES)).nullish(),
+  outputTypes: z.array(z.enum(MODEL_OUTPUT_TYPES)).nullish(),
   kind: z.enum(["chat", "image", "video"]).optional(),
   maxOutputTokens: z.number().int().positive().nullish(),
   name: z.string().trim().min(1, "模型名称不能为空"),
@@ -114,6 +116,7 @@ function modelView(m: RemoteModel, providers: ReadonlyArray<LlmProvider>) {
     contextWindow: m.contextWindow,
     maxOutputTokens: m.maxOutputTokens,
     inputTypes: m.inputTypes,
+    outputTypes: m.outputTypes,
     capabilities: m.capabilities,
     reasoningLevels: m.reasoningLevels,
     reasoningParamMapping: m.reasoningParamMapping,

@@ -25,6 +25,7 @@ import {
   type ProviderFormValues,
 } from "~/lib/llm/provider-form";
 import { isLlmApiFormat } from "~/lib/llm/provider-types";
+import type { ModelOutputType } from "~/lib/llm/provider-types";
 
 import type { ProviderModelView, SettingsProviders } from "./use-settings-providers";
 
@@ -73,6 +74,7 @@ export type ProviderModelDialogs = {
   testProviderDraft: () => Promise<void>;
   toggleCapability: (capability: ModelFormValues["capabilities"][number]) => void;
   toggleInputType: (type: ModelFormValues["inputTypes"][number]) => void;
+  toggleOutputType: (type: ModelOutputType) => void;
 };
 
 export function useProviderModelDialogs(p: SettingsProviders): ProviderModelDialogs {
@@ -192,6 +194,15 @@ export function useProviderModelDialogs(p: SettingsProviders): ProviderModelDial
     }));
   }
 
+  function toggleOutputType(type: ModelOutputType) {
+    setModelForm((prev) => ({
+      ...prev,
+      outputTypes: prev.outputTypes.includes(type)
+        ? prev.outputTypes.filter((t) => t !== type)
+        : [...prev.outputTypes, type],
+    }));
+  }
+
   function toggleCapability(capability: ModelFormValues["capabilities"][number]) {
     setModelForm((prev) => ({
       ...prev,
@@ -253,7 +264,8 @@ export function useProviderModelDialogs(p: SettingsProviders): ProviderModelDial
   /** 模型行「测试连接」：按**供应商**配置探测，并核对模型名是否在服务端清单里。
    *  刻意不再把 `model.baseUrl` 传给服务端：那是历史行的模型级覆盖，界面从不展示它，
    *  一旦它与供应商 Base URL 分叉，用户看到的是「供应商测试绿、模型测试红」——
-   *  #3517 的现场就是这么来的。 */
+   *  #3517 的现场就是这么来的。成功后重取清单（#3577）：服务端会把探测到的
+   *  模型目录补进名下（缺的插成停用行）。 */
   async function testModel(model: ProviderModelView) {
     if (modelProbe?.running === true && modelProbe.id === model.id) {
       return;
@@ -270,6 +282,9 @@ export function useProviderModelDialogs(p: SettingsProviders): ProviderModelDial
         running: false,
         msg: { kind: out.ok ? "ok" : "err", text: out.detail },
       });
+      if (out.ok) {
+        p.refetch();
+      }
     } catch {
       setModelProbe({
         id: model.id,
@@ -302,6 +317,7 @@ export function useProviderModelDialogs(p: SettingsProviders): ProviderModelDial
     submitModel,
     resetModelForm,
     toggleInputType,
+    toggleOutputType,
     toggleCapability,
     modelProbe,
     testModel,

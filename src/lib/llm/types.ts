@@ -52,14 +52,17 @@ export const TASK_TYPES = {
 
 export type TaskType = keyof typeof TASK_TYPES;
 
-/** 远端模型的用途：对话（语言模型）/ 图片 / 视频。当前仅对话参与运行时，
- *  图片 / 视频模型先落配置，供后续远程生图 / 生视频接入。 */
+/** 远端模型的用途：文本（语言模型）/ 图像 / 视频。当前仅文本参与运行时，
+ *  图像 / 视频模型先落配置，供后续远程生图 / 生视频与「模型适配」页接入。
+ *  存储值（chat / image / video）保持历史不变 —— 改的只是界面词（#3577：
+ *  「对话/图片」改成行业通行的「文本/图像」，与模态口吻一致），换存储值等于
+ *  无谓的数据迁移。 */
 /* SAFETY: 类型断言已复核 */
 export const REMOTE_MODEL_KINDS = ["chat", "image", "video"] as const;
 export type RemoteModelKind = (typeof REMOTE_MODEL_KINDS)[number];
 export const REMOTE_MODEL_KIND_LABELS: Record<RemoteModelKind, string> = {
-  chat: "对话",
-  image: "图片",
+  chat: "文本",
+  image: "图像",
   video: "视频",
 };
 
@@ -90,6 +93,8 @@ export type RemoteModelEntry = {
   hasApiKey?: boolean;
   /** 输入类型（#3501）：text / image / video / pdf。 */
   inputTypes?: Array<string> | null;
+  /** 输出类型（#3577）：text / image / video。空 = 未标注（按 kind 推断）。 */
+  outputTypes?: Array<string> | null;
   kind?: RemoteModelKind | null;
   /** 最大输出 token（#3501）。 */
   maxOutputTokens?: number | null;
