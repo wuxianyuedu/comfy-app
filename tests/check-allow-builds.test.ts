@@ -64,6 +64,31 @@ function installed(dirName: string, name: string, scripts?: Record<string, strin
   };
 }
 
+/**
+ * 造一份最小 `pnpm-lock.yaml` —— **当前依赖图的权威源**（ISSUE #3523）。
+ *
+ * 只列 `packages` 段：判据要的只是「哪些 `name@version` 还在图里」。
+ * 形态照真锁文件（键在两格缩进、值是 `resolution:` 那块）。
+ */
+function lockfile(packages: Array<string>): string {
+  return [
+    "lockfileVersion: '9.0'",
+    "",
+    "settings:",
+    "  autoInstallPeers: true",
+    "",
+    "importers:",
+    "",
+    "  .:",
+    "    dependencies: {}",
+    "",
+    "packages:",
+    "",
+    ...packages.map((id) => `  '${id}':\n    resolution: {integrity: sha512-probe}`),
+    "",
+  ].join("\n");
+}
+
 test("登记为 true 的构建脚本判绿", ({ repo }) => {
   repo.write("pnpm-workspace.yaml", workspace(['"esbuild": true']));
   const one = installed("esbuild@0.28.2", "esbuild", {
@@ -414,6 +439,71 @@ describe("读到了但读不成：输入不可信（ISSUE #3274）", () => {
     expect(code, output).toBe(2);
     expect(output).toContain("esbuild@1.0.0");
     expect(output).toContain("不给结论");
+  });
+});
+
+/**
+ * ISSUE #3523：pnpm 移掉一个依赖之后**不回收虚拟 store 里那个条目的目录** ——
+ * 磁盘上留着上一份依赖图的条目，而名单（`allowBuilds`）是按**当前**依赖图维护的。
+ * 判据若把残留也当成已安装的依赖，一次「移掉一个带构建脚本的依赖」的提交就会在
+ * **本地**被判红，而平台流水线（全新检出、没有残留）是绿的 —— 同一份代码、两台机器
+ * 两个结论，且那一台红的那台上残留还随时间越积越多。
+ *
+ * 三条都要钉：
+ * ① 残留**不参与**对账（判绿，且被点名 —— 不点名的话那份残留就完全不可见）；
+ * ② 当前依赖图里的包**照旧**判（判据没被放松成「什么都不查」）；
+ * ③ 锁文件不在 ⇒ 归属问不出来 ⇒ 按「磁盘上的一切实打实算」处理 ——
+ *    那个方向是**误红**而不是**误绿**（把真依赖漏掉才会让别人的安装炸）。
+ */
+describe("store 残留不算已安装的依赖（ISSUE #3523）", () => {
+  test("已在当前依赖图里、但没登记 ⇒ 照旧红（判据没被放松）", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    repo.write("pnpm-lock.yaml", lockfile(["esbuild@1.0.0"]));
+    const one = installed("esbuild@0.28.2", "esbuild", {
+      postinstall: "node install.js",
+    });
+    repo.write(one.path, one.body);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    expect(output).toContain("esbuild@1.0.0");
+    expect(output).toContain("ERR_PNPM_IGNORED_BUILDS");
+  });
+
+  test("不在当前依赖图里（store 残留）⇒ 不参与对账，且被点名", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    // 锁文件里没有它 ⇒ 它是上一份依赖图留下的残留。
+    repo.write("pnpm-lock.yaml", lockfile(["esbuild@1.0.0"]));
+    const orphan = installed("core-js-pure@3.51.0", "core-js-pure", {
+      postinstall: "node post.js",
+    });
+    repo.write(orphan.path, orphan.body);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("覆盖了全部带构建脚本的依赖");
+    // 残留必须**被看见**：它还在磁盘上，不点名的话下一个人只会看到「判据绿了」。
+    expect(output).toContain("core-js-pure@1.0.0");
+    expect(output).toContain("已不在当前依赖图里");
+  });
+
+  test("锁文件不在 ⇒ 归属问不出来 ⇒ 按磁盘上的一切实打实算（误红不误绿）", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    const one = installed("esbuild@0.28.2", "esbuild", {
+      postinstall: "node install.js",
+    });
+    repo.write(one.path, one.body);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    expect(output).toContain("esbuild@1.0.0");
+    expect(output).not.toContain("已不在当前依赖图里");
+  });
+
+  it("判据源码里那处归属过滤在（删掉它上面那条就失去执行者）", () => {
+    const source = readFileSync(GATE_SCRIPT, "utf8");
+    expect(source).toContain("readGraphPackageIds");
+    expect(source).toContain("graphIds");
+    // 过滤必须在「按名字去重」**之前**：同名多版本里可能一个在图里、一个是残留，
+    // 先按名字去重会把在图里的那一个一起跳掉。
+    expect(source).toMatch(/graphIds[\s\S]*?orphans\.push\([\s\S]*?seenNames\.has\(found\.name\)/);
   });
 });
 
