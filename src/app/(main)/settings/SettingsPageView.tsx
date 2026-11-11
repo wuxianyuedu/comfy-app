@@ -40,14 +40,16 @@ export function SettingsPageView({
   const sections = useMemo(
     () =>
       ({
-        appearance: (
+        appearance: <AppearanceSection c={c} />,
+        appUpdate: (
           <>
-            <AppearanceSection c={c} />
-            {/* 本地更新检测（纯前端偏好：不写入后端设置，存 localStorage） */}
+            <AppUpdateSection c={c} />
+            {/* 本地更新检测（纯前端偏好：不写入后端设置，存 localStorage）——
+                它讲的是「改完要不要重启」，那是**应用更新**的事，原先挂在「外观」下
+                （ISSUE #3547）。 */}
             <UpdateCheckSection />
           </>
         ),
-        appUpdate: <AppUpdateSection c={c} />,
         llmLocal: <LlmLocalSection c={c} />,
         llmRemote: <LlmRemoteSection c={c} />,
         comfyui: <ComfyuiSection c={c} />,
