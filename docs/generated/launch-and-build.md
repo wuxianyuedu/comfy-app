@@ -268,12 +268,37 @@ POSIX 上 `python3 -m venv` 缺 `ensurepip`（Debian/Ubuntu 系在单独的 `pyt
 4. **前端启动标记一次性消费**：`should_activate_on_launch` 改走
    `AppState::take_startup_activation()`，只放行第一次；壳在交接那一刻已经按
    `configured` 给过前台，前端这一跳只是补唤。
+5. **前端补前台的时间边界**（ISSUE #3568）：`useStartupForeground` 同一组件实例
+   只问壳一次（StrictMode 双跑 effect 共享同一份答复，否则首轮就吃掉壳的
+   一次性标记、活着的第二轮反而拿不到前台）；答复落地前组件已卸载则不再补唤，
+   命令 reject 静默降级。判据见
+   `src/components/studio/hooks/use-startup-foreground.test.ts` 的 6 条用例。
 
 回归判据：`src-tauri/src/lib.rs` 的
 `window_show_is_idempotent_and_never_restarts_taskbar_flashing` /
 `startup_foreground_is_consumed_only_once`，以及
 `tests/check-file-structure.test.ts` 的「窗口显示幂等与任务栏闪烁（ISSUE #3562）」用例组。
 §11 排障手册里 #359 那几条描述的是**当时**那一版（含「闪烁提醒」），现行口径以本节为准。
+
+#### 1.3.2 运行期读数：交接完成后有没有被重放（ISSUE #3569）
+
+上面那些判据都是**源码形态**层，回答不了「这次启动里窗口动作到底发了几次」。
+#3562 的事故恰恰是「同一次启动里被重放」，所以壳另留一组只读诊断信号：
+
+| 读数                  | 记在哪                                                | 怎么读                                       |
+| --------------------- | ----------------------------------------------------- | -------------------------------------------- |
+| `attempts`            | 每次进入 `show_main_window_without_focus()`           | 自动交接 + 显式唤起的总次数                  |
+| `auto_show_skipped`   | 自动路径被 `already_shown` 早退拦下                   | **交接完成后每多一次，就是一次重放**         |
+| `focus_granted`       | 窗口真正聚焦到前台                                    | 补前台动作实际生效了几次                     |
+
+- 早退时落一条结构化日志：`window-show diagnostics: reason=already_shown skipped=N attempts=M`，带当时的总读数；
+- 退出时在壳日志落一行汇总：`window-show diagnostics at exit: attempts=… auto_show_skipped=… focus_granted=…`；
+- 运行期可读出口是 Tauri 命令 `window_show_diagnostics`（只读快照，**不推断重放合不合法**）。
+
+这三个计数**只做诊断**：不参与 `activate` 判决，也不改变任何窗口动作（见 `AppState`
+字段注释与 Rust 单测 `window_show_replays_are_counted_for_diagnostics`）。真实 Win32
+前台 / Z 序 / 任务栏闪烁是否收敛仍要由真实 `app.exe` 的壳冒烟去判（ISSUE #3570）；
+本节只保证「有没有重放」在日志里看得见。
 
 ### 交接时刻的复核（`scripts/win32-window-focus.py`）
 

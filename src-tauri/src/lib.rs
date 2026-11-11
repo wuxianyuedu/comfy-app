@@ -1,6 +1,7 @@
 use std::net::TcpStream;
 #[cfg(not(debug_assertions))]
 use std::net::TcpListener;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -61,6 +62,13 @@ struct AppState {
   /// （页面加载完成的窗口交接、150s 安全网、就绪兜底导航），避免用户已经
   /// 放弃的启动又把窗口弹出来。
   abandoned: Mutex<bool>,
+  /// 窗口显示链路的运行期读数（ISSUE #3569）：**只做诊断，不参与前台判决**。
+  /// Win32 前台 / Z 序在 CI 里取不到，源码形态判据也看不出「交接完成后又被
+  /// 重放了几次」；这三个计数与对应日志把重放变成可机器读的信号，供壳冒烟
+  /// 脚本与人工排查取用（只读出口见 `window_show_diagnostics`）。
+  show_attempts: AtomicU32,
+  auto_show_skipped: AtomicU32,
+  focus_granted: AtomicU32,
   /// 本次启动是不是 standalone 形态（壳自己拉起内嵌 server）。
   ///
   /// 值来自 `run()` 里那次 `ensure_launch_mode`（判据只在那一处），在建状态时
@@ -84,6 +92,9 @@ impl AppState {
       foreground: Mutex::new(foreground),
       attention: Mutex::new(false),
       startup_activation_consumed: Mutex::new(false),
+      show_attempts: AtomicU32::new(0),
+      auto_show_skipped: AtomicU32::new(0),
+      focus_granted: AtomicU32::new(0),
       abandoned: Mutex::new(false),
       standalone: Mutex::new(standalone),
     }
@@ -165,6 +176,35 @@ impl AppState {
 
   fn is_standalone(&self) -> bool {
     *self.standalone.lock().unwrap()
+  }
+
+  /// 进入一次「显示主窗」请求（含随后被早退拦下的那一次）。
+  fn note_show_attempt(&self) -> u32 {
+    self.show_attempts.fetch_add(1, Ordering::Relaxed) + 1
+  }
+
+  /// 自动交接被幂等早退拦下 —— 「交接完成后又被重放」唯一的机器读信号。
+  /// 壳冒烟脚本只要看交接完成后这个数还在不在涨即可，不必去猜 Win32 前台。
+  fn note_auto_show_skipped(&self) -> u32 {
+    let skipped = self.auto_show_skipped.fetch_add(1, Ordering::Relaxed) + 1;
+    log::info!(
+      "[ComfyAPP] window-show diagnostics: reason=already_shown skipped={} attempts={}",
+      skipped,
+      self.show_attempts.load(Ordering::Relaxed)
+    );
+    skipped
+  }
+
+  fn note_focus_granted(&self) -> u32 {
+    self.focus_granted.fetch_add(1, Ordering::Relaxed) + 1
+  }
+
+  fn window_show_snapshot(&self) -> WindowShowSnapshot {
+    WindowShowSnapshot {
+      attempts: self.show_attempts.load(Ordering::Relaxed),
+      auto_show_skipped: self.auto_show_skipped.load(Ordering::Relaxed),
+      focus_granted: self.focus_granted.load(Ordering::Relaxed),
+    }
   }
 }
 
@@ -346,6 +386,23 @@ fn should_activate_on_launch(state: tauri::State<'_, AppState>) -> bool {
   state.take_startup_activation()
 }
 
+/// 窗口显示链路的运行期读数（ISSUE #3569）：给排查与壳冒烟的**只读**诊断出口。
+///
+/// 判据仍在 `show_main_window_without_focus()`；这里只把 `AppState` 的三个计数
+/// 原样返回，不推断「这次重放合不合法」——那要由壳冒烟脚本结合 Win32 前台 /
+/// Z 序读数去判。壳日志里另有一份退出汇总（见 `RunEvent::ExitRequested`）。
+#[derive(serde::Serialize)]
+struct WindowShowSnapshot {
+  attempts: u32,
+  auto_show_skipped: u32,
+  focus_granted: u32,
+}
+
+#[tauri::command]
+fn window_show_diagnostics(state: tauri::State<'_, AppState>) -> WindowShowSnapshot {
+  state.window_show_snapshot()
+}
+
 /// 供启动页读取当前应用目标 URL，用于自主探测后端是否就绪。
 #[tauri::command]
 fn get_app_url(state: tauri::State<'_, AppState>) -> String {
@@ -437,6 +494,7 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
     return;
   };
   let state = app.try_state::<AppState>();
+  let _ = state.as_ref().map(|s| s.note_show_attempt());
 
   /* 自动交接只允许发生一次（ISSUE #3562）。
    *
@@ -447,7 +505,8 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
    * 操作：任务栏 / 托盘 / 二次启动（这些都带 request_focus = true）。 */
   let already_shown = state.as_ref().map(|s| s.is_main_shown()).unwrap_or(false);
   if already_shown && !request_focus {
-    log::debug!("[ComfyAPP] main window already shown, skip automatic re-show");
+    // 计数 + 结构化日志都在 AppState 里：交接完成后每多一次都是「被重放」的证据。
+    let _ = state.as_ref().map(|s| s.note_auto_show_skipped());
     return;
   }
 
@@ -513,6 +572,7 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
       let _ = win.request_user_attention(None);
       if let Some(s) = state.as_ref() {
         s.set_attention(false);
+        s.note_focus_granted();
       }
       log::info!(
         "[ComfyAPP] main window activated \
@@ -2039,6 +2099,7 @@ pub fn run() {
       open_comfyui_window,
       activate_main_window,
       should_activate_on_launch,
+      window_show_diagnostics,
       open_devtools,
       devtools_available
     ])
@@ -2593,6 +2654,15 @@ fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
                 "[ComfyAPP] exiting while the window was only shown in the taskbar (never opened by the user)"
               );
             }
+            /* 退出时把整段启动的窗口读数落一行（ISSUE #3569）：交接完成后
+             * `auto_show_skipped` 还在涨，就说明自动显示链路又被重放了。 */
+            let snap = state.window_show_snapshot();
+            log::info!(
+              "[ComfyAPP] window-show diagnostics at exit: attempts={} auto_show_skipped={} focus_granted={}",
+              snap.attempts,
+              snap.auto_show_skipped,
+              snap.focus_granted
+            );
           }
         }
         _ => {}
@@ -3123,6 +3193,37 @@ mod window_startup_tests {
     assert!(!state.take_startup_activation());
     let background = AppState::new(String::new(), String::new(), false, false);
     assert!(!background.take_startup_activation());
+  }
+
+  /// 运行期读数是「交接完成后有没有被重放」唯一的机器读信号（ISSUE #3569）。
+  /// 计数与快照在这里测；「早退分支确实记了一次」由源码形态钉住 —— Win32
+  /// 窗口在单测里造不出来，而形态回退正是这一层最可能发生的回退方式。
+  #[test]
+  fn window_show_replays_are_counted_for_diagnostics() {
+    let state = AppState::new(String::new(), String::new(), false, false);
+    assert_eq!(state.note_show_attempt(), 1);
+    assert_eq!(state.note_show_attempt(), 2);
+    assert_eq!(state.note_auto_show_skipped(), 1);
+    assert_eq!(state.note_focus_granted(), 1);
+    let snap = state.window_show_snapshot();
+    assert_eq!(snap.attempts, 2);
+    assert_eq!(snap.auto_show_skipped, 1);
+    assert_eq!(snap.focus_granted, 1);
+    assert_eq!(state.window_show_snapshot().auto_show_skipped, 1);
+
+    let show = fn_body("fn show_main_window_without_focus");
+    assert!(
+      show.contains("note_show_attempt()"),
+      "每次进入显示链路都要记一次：{show}"
+    );
+    assert!(
+      show.contains("note_auto_show_skipped()"),
+      "自动交接早退必须记一次 skipped（重放的唯一机器读信号）：{show}"
+    );
+    assert!(
+      show.contains("note_focus_granted()"),
+      "前台真正到手要记一次：{show}"
+    );
   }
 }
 
