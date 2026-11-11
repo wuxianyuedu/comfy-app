@@ -61,7 +61,7 @@ Comfy-APP-T3/
 │  │  ├─ sync-lint.ps1           # 同步依赖 + pnpm lint（拉取更新/改码后日常自检）
 │  │  └─ register-comfyapp-protocol.ps1  # 注册 comfyapp:// 协议（免管理员）
 │  ├─ build/                # 构建打包入口
-│  │  ├─ build-all.ps1            # 一键发布构建（安装包 + 常驻目录留 2 份；入口仍是 app.exe）
+│  │  ├─ build-all.ps1            # 一键发布构建（安装包 + 发布到项目内 dist\desktop；入口仍是 app.exe）
 │  │  ├─ build-tauri-release.ps1  # 仅构建 release 版 Tauri 壳
 │  │  └─ rebuild-static.ps1       # 清理并重建 src-tauri/static
 │  ├─ shadcn-registry/      # 团队 shadcn Registry（start-shadcn-registry.ps1）
@@ -322,7 +322,7 @@ pnpm tauri build
 ```
 
 它执行 `pnpm tauri build` → 编译出 `src-tauri/target/release/app.exe` **并打出安装包**
-（nsis / msi），收尾把安装包发布到常驻目录（留最近 2 份，`latest.txt` 只是指针文件）。
+（nsis / msi），收尾把安装包发布到项目内 `dist\desktop`（留最近 2 份，`latest.txt` 只是指针文件）。
 装配由 `beforeBuildCommand`（`node scripts/build-desktop.mjs`）负责：`pnpm build` 出
 standalone → 组装 `src-tauri/static`（数产物 + 体积护栏两道防线都在那条链上）→
 同步 `splash.html` 进 `src-tauri/splash-assets/`（启动页是编译期嵌入的）→
@@ -387,11 +387,11 @@ tools\build\build-standalone.ps1   # 组装 standalone 资源（server.js + .nex
 | --------------------------------- | --------------------------------------------------------- |
 | 浏览器开发                        | `pnpm dev`                                                |
 | 桌面壳开发（热重载）              | `pnpm tauri dev` 或双击 `tools\start\start-tauri-dev.ps1` |
-| 一键构建（安装包 + 发布到常驻目录）   | `tools\build\build-all.ps1`                               |
+| 一键构建（安装包 + 发布到项目内）   | `tools\build\build-all.ps1`                               |
 | 仅 release 壳（不含安装包）           | `tools\build\build-tauri-release.ps1`                     |
 | 独立模式资源（standalone）        | `tools\build\build-standalone.ps1`                        |
 | 完整安装包（不发布）              | `pnpm tauri build`                                        |
-| 把打好的安装包发布到常驻目录      | `node scripts/publish-desktop-bundle.mjs`                 |
+| 把打好的安装包发布到指定目录      | `node scripts/publish-desktop-bundle.mjs --root <dir>`     |
 | 组装免安装版（解压即用 zip）      | `pnpm package:portable`                                   |
 | 清理重建前端资源                  | `tools\build\rebuild-static.ps1`                          |
 
@@ -409,12 +409,14 @@ pnpm dev          # 前端开发服务器
 pnpm build        # Next.js 生产构建（standalone）
 pnpm check        # eslint + tsc --noEmit
 pnpm ship         # 交出去：提交 → push → 开 PR → 等 CI（--mode auto 全托管 / --mode confirm 关键步确认 / 合并要显式）
+pnpm report:session --range A..B  # 开发汇报骨架（第五节：本轮发现**已立案的号**，不是「要不要提单」的待办；§13.10.9 / §13.10.14）
 pnpm test         # Vitest 单元测试
 pnpm test:e2e     # Playwright e2e
 pnpm run docs     # 生成 API 文档到 docs/api（必须是 run docs：pnpm docs 是内建命令）
 pnpm storybook    # 起组件工作台（http://127.0.0.1:6006）
 pnpm db:push      # 同步 Drizzle schema 到 db.sqlite（非交互、复核建表结果）
 pnpm env:init     # 生成/补齐本地 .env（随机密钥 + 本地 OAuth 占位值）
+pnpm deps:prune   # 清掉 node_modules/.pnpm 里不在当前依赖图的残留条目（--dry-run 只看清单；pnpm store prune 管不到这一层）
 pnpm qoder:ignore # 写/刷新 .qoderignore（代码索引排除表；改完要重启 Qoder CN 才生效）
 ```
 

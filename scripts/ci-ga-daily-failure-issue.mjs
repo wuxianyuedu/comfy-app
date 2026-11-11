@@ -11,13 +11,20 @@
  * 「没人想起来去问」的那一天等于没发生（现场：换页漏更 E2E，靠人手动读 `gh run --log-failed`
  * 再手动立案）。这一格把那条交接补上：GA 跑红 ⇒ 自动在 CNB 出现一张按格名去重的单。
  *
- * ## 落点在末尾 `if: failure()`，且自己坏掉不叠第二个红
+ * ## 落点是**下游 job**（`needs: daily` + `if: failure()`），且自己坏掉不叠第二个红
  *
- * 它判的是**这一跑自己**（与 CNB 那一格判「上一跑」不同）：GA 的 jobs API 在本格运行时
- * 已把前面那些红格的 `conclusion=failure` 写好了，而本格自己还在 `in_progress` ⇒ 读得到
- * 「哪几格红了」却不会把自己读进去。workflow 步带 `continue-on-error: true`，脚本带
- * `--no-block`：这一格自己发没发出去不该反过来给本 run 叠第二个红 —— 但**不静默**，
- * 失败时把红话原样打印并给可粘贴的手工出口（由用例钉住「不许改成静默 return」）。
+ * 它判的是**这一跑自己**（与 CNB 那一格判「上一跑」不同），但**不能跑在 `daily` 内部**：
+ * 唯一的红格来源是 jobs API 的 `steps[].conclusion`，而 step 形态下那个 job 自己还在
+ * `in_progress` —— 实测读回 **0 个红格**（run `42915112854`：`单元测试` 22:39:17 判 failure，
+ * 立案步 22:39:17→22:39:19 就跑了，打印「红格 0 个」⇒ 零写入，#3563）。这里原先写的
+ * 「jobs API 在本格运行时已把前面那些红格的 conclusion 写好了」是**未经复核的前提**，
+ * 已被那一跑推翻；API 是「在飞的 job 根本不报」还是「报得慢」没有结论，而下游 job 形态
+ * 在两种成因下都成立（上游已 `completed`，conclusion 是终值），所以不必先分清成因。
+ * ⚠️ 别改回 step 形态，也别在 job 内部轮询等自己 completed —— 那是死锁。
+ *
+ * job 带 `continue-on-error: true`，脚本带 `--no-block`：这一格自己发没发出去不该反过来
+ * 给本 run 叠第二个红 —— 但**不静默**，失败时把红话原样打印并给可粘贴的手工出口
+ * （由用例钉住「不许改成静默 return」）。
  *
  * ## 判决链一个字都不另立（复用优先）
  *
@@ -111,8 +118,12 @@ export function issueTitle({ runId, sha, step }) {
  * 从 jobs API 的读数里取「红的那几格」。**纯函数**（用例直接钉它）。
  *
  * 只认 `conclusion === "failure"` 的 step：被带下去没跑的格是 `skipped`（不是红），
- * `if: failure()` / `if: always()` 的读数格自己通常 success，本格运行时自己还在
- * `in_progress` ⇒ 都不会落进来。格名空的跳过；同名去重、保留出现顺序。
+ * `if: failure()` / `if: always()` 的读数格自己通常 success，而立案 job 自己那三步在读取
+ * 这一刻是 success / 还没有 conclusion ⇒ 都不会落进来。格名空的跳过；同名去重、保留出现顺序。
+ *
+ * ⚠️ 本函数**不按 job 状态过滤**：它只转述应答里已有的 conclusion。「读得到红格」这件事
+ * 成立的前提是调用点落在**下游 job**（上游 `daily` 已 `completed`）—— 前提由 workflow 拓扑
+ * 承担，不由这里补一层判断（#3563：跑在 `daily` 内部时同一份代码读回 0 个红格）。
  *
  * @param {any} json `GET /repos/{repo}/actions/runs/{id}/jobs` 的应答
  * @returns {string[]} 红的格名（取不到形状时给空数组，由调用方按「没结论」处置）

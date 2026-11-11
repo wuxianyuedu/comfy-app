@@ -93,7 +93,9 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
             key={value}
             /* 整卡可点选项：基元尺寸全部归还调用处 —— 基类是小圆点形态（`size-4`+`aspect-square`），
                必须连宽度与宽高比一起还（`size-auto!`/`aspect-auto!`），否则宽度仍 16px、卡片被压竖排。
-               基元的中心圆点指示器是小圆点形态用的；此处选中态已由边框+底色表达，圆点隐藏。 */
+               基元的中心圆点指示器是小圆点形态用的；此处选中态已由边框+底色表达，圆点隐藏
+               （选中实心底自 ISSUE #3553 起已下沉到 Indicator 层，卡片形态不再被基元根的
+               `data-checked:bg-primary` 填紫，调用方无需再写覆盖 hack）。 */
             nativeButton
             render={
               <Button

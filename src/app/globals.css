@@ -811,6 +811,20 @@ body {
      滚动条，保住面板右缘干净（滚轮 / PgDn / 方向键照常可用）。
    `ui/scroll-area` 另有一套 base-ui 自绘滚动条，口径见规范 16 §16.2.4.6 第三档。 */
 
+/* ── 数字输入框的原生上下箭头（ISSUE #3547）────────────────────────────
+   Chromium 给 `input[type=number]` 的上下箭头自带一块**浅色按钮底**，浅色
+   主题下那块白底压在字段上很突兀（用户现场：「那个箭头还带有白色背景」）。
+   这里只把按钮底去掉、箭头本身留着（能上下调值），颜色跟着前景色。 */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  background-color: transparent;
+  opacity: 0.55;
+}
+input[type="number"]::-webkit-inner-spin-button:hover,
+input[type="number"]::-webkit-outer-spin-button:hover {
+  opacity: 1;
+}
+
 /* Thin, modern scrollbar（全局兜底） */
 ::-webkit-scrollbar {
   width: 10px;

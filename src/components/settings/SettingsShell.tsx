@@ -142,7 +142,7 @@ export function SettingsShell({
 
         {/* 导航在左、内容在右：树需要的是**纵向**空间（父行 + 缩进子行），
             而横排那条带子只能靠分隔符暗示分组 —— 层级读不出来。 */}
-        <div className="flex min-h-0 flex-1 gap-6 pt-4">
+        <div className="flex min-h-0 flex-1 gap-8 pt-4">
           <SettingsSectionNav onSelect={handleSelect} section={section} />
 
           {/* 内容区：**全部**分区节，唯一一根滚动条。每个节自带 `id` 与
@@ -151,7 +151,7 @@ export function SettingsShell({
               主操作按钮仍在各区卡片自己的末尾（规范 §4.12 管的是「列表容器内
               不要放主操作」，这里是文档式长页、卡片不是滚动容器的直接子项）。 */}
           <div
-            className="custom-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto pb-6"
+            className="custom-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto pr-4 pb-6"
             ref={scrollRef}
           >
             {fallback === undefined ? (
@@ -170,7 +170,9 @@ export function SettingsShell({
                     ref={registerSection(id)}
                   >
                     <SettingsSectionHeading section={id} />
-                    {sections?.[id]}
+                    {/* 一节里可能有多张卡片（「备份与恢复」下的「创建备份 / 恢复备份」）：
+                        卡片之间要有间距，否则两张卡贴在一起像一块（ISSUE #3547）。 */}
+                    <div className="flex flex-col gap-4">{sections?.[id]}</div>
                   </section>
                 ))}
               </>
@@ -234,7 +236,7 @@ function SettingsSectionNav({
   section: Section;
 }) {
   return (
-    <nav aria-label="设置分区" className="custom-scrollbar w-40 shrink-0 overflow-y-auto pb-2">
+    <nav aria-label="设置分区" className="custom-scrollbar w-40 shrink-0 overflow-y-auto pr-2 pb-2">
       {TREE_GROUPS.map((group) => {
         const items = SETTINGS_SECTIONS.filter((item) => group.sections.includes(item.id));
         if (items.length === 0) {
@@ -245,7 +247,7 @@ function SettingsSectionNav({
             {/* 分组名是父行：弱一档、不可点 —— 它只回答「这几项属于一类」，
                 不是导航目标（点了也不会切到某个分区）。读屏不进可访问名，
                 分区自身由子行的 `aria-current` 表达。 */}
-            <p aria-hidden className="text-ink-fainter px-2 text-xs font-medium">
+            <p aria-hidden className="text-ink-muted px-2 text-sm font-medium">
               {group.label}
             </p>
             {/* 子行集合走 `TreeChildren`：缩进档 + 引导线一处给全（§16.2.4.39）。

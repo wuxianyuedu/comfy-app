@@ -95,7 +95,7 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
                 />
               ) : (
                 <EmptyState
-                  className="border-border/60"
+                  className="border-border"
                   description="先「新建供应商」填好 Base URL / 格式 / 密钥，再往里添加模型。"
                   minHeightClass="min-h-36"
                   title="还没有供应商"

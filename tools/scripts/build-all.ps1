@@ -11,7 +11,7 @@ Initialize-Log "build-all.log"
 Log "=========================================================="
 Log "  Comfy APP - 一键发布构建"
 Log "=========================================================="
-Log "  打安装包（pnpm tauri build）→ 发布到常驻目录（留最近 2 份）"
+Log "  打安装包（pnpm tauri build）→ 发布到项目内 dist\desktop（留最近 2 份）"
 Log "  口径见规范 launch-and-build.md §7.0 与 §7.7"
 Log "=========================================================="
 Log ""
@@ -99,17 +99,21 @@ if (Test-Path $shortcutScript) {
 }
 Log ""
 
-Log "[4/4] 发布到常驻目录（一份一个目录 + manifest，latest.txt 是指针，轮转留 2 份）..."
-# 与平台那条桌包流水线**同一个入口**（scripts/publish-desktop-bundle.mjs），不各写一遍。
-# 退出码三态：0 发布完成 / 1 没有成品 / 2 没有结论（问不出常驻根或盘不够）—— 后两档
+Log "[4/4] 发布到项目内 dist\desktop（一份一个目录 + manifest，latest.txt 是指针，轮转留 2 份）..."
+# 发布那一格只有这一个入口（scripts/publish-desktop-bundle.mjs）——平台侧自 #3504 起走 GA
+# 的 artifact + 滚动 Release，不跑它；本地这里不另写一套发布逻辑。
+# `--root` 指到项目内（ISSUE #3546）：本机自己打的包不写进常驻目录，也不占别的卷；
+# 不传它时该入口仍按 `pnpm store path` 推导常驻根（平台侧形态）。
+# 退出码三态：0 发布完成 / 1 没有成品 / 2 没有结论（问不出发布根或盘不够）—— 后两档
 # 都不许被读成「今天没有新包」。
-Invoke-Logged "node scripts/publish-desktop-bundle.mjs"
+$publishRoot = Join-Path $PROJECT_ROOT "dist\desktop"
+Invoke-Logged "node scripts/publish-desktop-bundle.mjs --root `"$publishRoot`""
 $publishErr = $script:LAST_INVOKE_CODE
 if ($publishErr -ne 0) {
     Log ""
     if ($publishErr -eq 2) {
         Log "[没有结论] 发布那一格没能落盘（exit=2）：安装包在 "
-        Log "  $PROJECT_ROOT\src-tauri\target\release\bundle 里，但常驻目录没有新的一份。"
+        Log "  $PROJECT_ROOT\src-tauri\target\release\bundle 里，但 $publishRoot 没有新的一份。"
         Log "  上一段给的是「为什么问不出来」，照它修完重跑本步即可（不必重新构建）。"
     } else {
         Log "[错误] 发布失败（exit=$publishErr），详情见上面那段。"
@@ -126,6 +130,6 @@ Log ("  总耗时：{0}" -f (Format-Elapsed -Elapsed $totalWatch.Elapsed))
 Log "  壳      : $PROJECT_ROOT\src-tauri\target\release\app.exe（可双击启动，或用入口 tools\start\start-tauri.ps1）"
 Log "  启动入口: $PROJECT_ROOT\Comfy APP.lnk（双击即启动，指向上面的 app.exe）"
 Log "  安装包  : $PROJECT_ROOT\src-tauri\target\release\bundle"
-Log "  常驻目录: 见上面那行「[发布] 已落 …」（latest.txt 是指针文件，只留最近 2 份）"
+Log "  发布目录: $publishRoot（见上面那行「[发布] 已落 …」，latest.txt 是指针文件，只留最近 2 份）"
 Log "=========================================================="
 Log ""

@@ -24,14 +24,24 @@ function RadioGroupItem({ className, children, ...props }: RadioPrimitive.Root.P
          * —— 此前是 `border-input` 那根 1px 发丝线，在 1.5 倍屏上与卡片底混成
          * 1.09:1（深）/ 1.02:1（浅），未选中的单选圈等于不存在（用户现场：
          * 「这个单选，暗色/亮色下未选择的根本看不清」）。选中态另走品牌色。 */
-        "group/radio-group-item peer border-ink/50 dark:border-ink/40 group-has-focus-visible/field-label:not-data-checked:border-ink/50 dark:group-has-focus-visible/field-label:not-data-checked:border-ink/40 focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 aria-invalid:aria-checked:border-primary dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground group-has-focus-visible/field-label:data-checked:border-primary dark:data-checked:bg-primary dark:data-unchecked:border-ink/40 dark:data-unchecked:bg-ink/5 relative flex aspect-square size-4 shrink-0 rounded-full border outline-none group-has-focus-visible/field-label:ring-0 after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:ring-3",
+        "group/radio-group-item peer border-ink/50 dark:border-ink/40 group-has-focus-visible/field-label:not-data-checked:border-ink/50 dark:group-has-focus-visible/field-label:not-data-checked:border-ink/40 focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 aria-invalid:aria-checked:border-primary dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:border-primary group-has-focus-visible/field-label:data-checked:border-primary dark:data-checked:border-primary dark:data-unchecked:border-ink/40 dark:data-unchecked:bg-ink/5 relative flex aspect-square size-4 shrink-0 rounded-full border outline-none group-has-focus-visible/field-label:ring-0 after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:ring-3",
         className,
       )}
       data-slot="radio-group-item"
       {...props}
     >
       <RadioPrimitive.Indicator
-        className="flex size-4 items-center justify-center"
+        /* 选中实心底色（`bg-primary`）与内点都在**这里**，不在根元素 —— 坑点
+         * （ISSUE #3553）：base-ui 对 `render` 元素的 className 合并是**纯字符串
+         * 拼接**（`mergeClassNames`，"rightmost first"，不走 tailwind-merge），
+         * 基元根上的 `data-checked:bg-primary`（为 16px 小圆点准备的实心紫）与
+         * 卡片形态调用方的底色类**同 specificity 共存**，胜负由 tailwind 生成
+         * 顺序决定 ⇒ 外观分区把 item render 成卡片时整卡被填实心紫，且只能靠
+         * 调用点再写一份 `dark:` 变体组去压（那是另一个变体组，twMerge 不会
+         * 一起收掉）。下沉到 Indicator 后：Indicator 只在选中态渲染
+         * （`keepMounted=false`），实心底天然只落在圆点本体；卡片形态隐藏
+         * indicator（`:hidden`）后底色完全归调用方，无需任何覆盖 hack。 */
+        className="bg-primary flex size-4 items-center justify-center rounded-full"
         data-slot="radio-group-indicator"
       >
         <span className="bg-primary-foreground absolute top-1/2 left-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full" />

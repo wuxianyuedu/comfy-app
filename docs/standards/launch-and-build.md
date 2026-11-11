@@ -2127,7 +2127,7 @@ better-sqlite3 实例），而 `$reset` / `$tables` / 六个 `seed*` 本来就�
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 只改了 Rust 壳 / 窗口配置 / 启动页               | `cd src-tauri && cargo build --release --features custom-protocol`（Windows 上 `;` 亦可）                    | **必须带 `--features custom-protocol`**（见 §5「启动先看到 Edge 错误页」条目：不带会把启动页导航到 devUrl 且资源不内嵌）；增量编译约 1 分钟；启动器预检会提醒壳过期。注意：裸 `cargo build` 要求 `src-tauri\binaries` 已有 Node sidecar（`tauri.conf.json` 的 externalBin 在编译期被校验，缺失即 panic）——缺失时先跑一次 `tools\build\build-tauri-release.ps1` 自动补齐，见 §5 对应条目                     |
 | 生产构建（standalone，**不出安装包**）           | `tools\build\build-standalone.ps1`（内部 `pnpm tauri build --no-bundle`）                                   | build-desktop.mjs 组装 static（含体积护栏 1.5GB + 装配后再数一次产物，§7.6「装配之后必须再数一次产物」）+ Node sidecar，再 `pnpm tauri build --no-bundle`。`--no-bundle` 那一档**不产 nsis/msi** —— 只要「能跑的壳」时走这条                                                                                                                                                                                     |
-| 桌包成品（**含安装包**）+ 发布到常驻目录         | `tools\build\build-all.ps1`（`pnpm tauri build` → `node scripts/publish-desktop-bundle.mjs`）               | 与平台那条桌包流水线同一份实现（§7.7）。收尾报各步与总耗时（§7.0），并把安装包拷到常驻目录留最近 2 份。**过去这一行写的是「build-standalone → build-tauri-release → build-all 出安装包」，而 `build-all` 当时只跑 `cargo build`（产不出安装包）—— 正文与代码不一致，§7.7 那批把它改齐了**                                                                                                            |
+| 桌包成品（**含安装包**）+ 发布到项目内 `dist\desktop` | `tools\build\build-all.ps1`（`pnpm tauri build` → `node scripts/publish-desktop-bundle.mjs --root dist\desktop`） | 发布那一格是**本地唯一入口**（§7.7；平台侧自 #3504 起走 GA 的 artifact + 滚动 Release，不跑它）。收尾报各步与总耗时（§7.0），并把安装包拷到项目内 `dist\desktop` 留最近 2 份（#3546：本机自己的包不落常驻目录）。**过去这一行写的是「build-standalone → build-tauri-release → build-all 出安装包」，而 `build-all` 当时只跑 `cargo build`（产不出安装包）—— 正文与代码不一致，§7.7 那批把它改齐了** |
 | 前端/standalone 体积分析                         | `pnpm analyze` （`node scripts/analyze-bundle.mjs` → `ANALYZE=true next build --webpack`）                   | `@next/bundle-analyzer` 量化各 bundle 体积。**仅 webpack 支持**（Turbopack 不支持），默认 `next build` 走 Turbopack 不受影响；因此分析时强制 `--webpack`。产物 `.next/analyze/client.html` / `nodejs.html` / `edge.html`，并监听 `http://127.0.0.1:8888` 可视化报告。`output: standalone` 以 webpack 构建时同样生效，可量化独立 server 侧 bundle。用 Node 包装以兼容 Windows（内联 `VAR=cmd` POSIX 专属）。 |
 | 前端 bundle 体积预算（判定档，ISSUE #1781）      | `pnpm check:bundle`（`node scripts/check-bundle-budget.cjs`；也挂在 `pnpm build` 收尾）                      | client chunk（`.next/static/chunks` 下 `.js`）的 **gzip 总量 + 文件数**棘轮，基线 `scripts/.bundle-budget-baseline.json`（另存逐文件 `sha256` 指纹，只服务诊断：诊断按**内容**对齐，同内容换名不计变化）。量的是**默认 Turbopack 链**的产物（与 `pnpm analyze` 的强制 `--webpack` 别混着比）；抬高基线要在 PR 里贴 before/after 两档读数 + 理由，**由造成这批字节的那条 PR 同批** `--allow-increase --update`（ISSUE #2149）。规范 §13.5.4。     |
 | 页面级运行时读数（e2e 档，ISSUE #1781 的右半边） | `pnpm test:e2e`（随全量 e2e 一起跑；`e2e/runtime-budget.spec.ts` + `e2e/support/runtime-budget.ts`）         | 首页 `/workspace` 首屏的 `loadEventEnd` / `FCP`，口径是**每轮开新 page + 弃前 4 轮取 `min`**（同一 page 反复导航时 FCP 结构性缺失，成因与实测见规范 11 §11.8.1）。阈值 = 基线 × 2，基线读数与口径常量同源（`scripts/.runtime-budget-baseline.json`）。**不新增档/账/入口** —— 与全量 e2e 是同一笔开销（起 webServer + 浏览器）                                                                              |
@@ -2997,7 +2997,7 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 
 ---
 
-### 7.7 桌包成品档：独立流水线 + 常驻目录发布（ISSUE #2503）
+### 7.7 桌包成品档：独立流水线 + 发布目录（ISSUE #2503）
 
 **这一节答的是「安装包在哪儿」**。§7.0 那张表与 §7.6 讲的是怎么把包打出来，而打完之后
 它只活在工作区里：平台每次构建都新建 job 目录、收尾整目录删（实测不穿符号链接，见
@@ -3137,13 +3137,15 @@ tauri 判定工具缓存目录不完整时会**先删掉** `%LOCALAPPDATA%\tauri
 `tests/no-platform-ci-config.test.ts` 钉：预置必须在 `pnpm tauri build` 之前 ——
 排在它后面等于没有，那一刻 bundler 已经自己去撞那条下载预算了。
 
-**发布那一格的形状**（`scripts/publish-desktop-bundle.mjs`，本地与平台**同一个入口**）：
+**发布那一格的形状**（`scripts/publish-desktop-bundle.mjs`，**本地发布那一格的唯一入口** ——
+平台侧自 #3504 起是 GA 的 artifact + 滚动 Release，与它不同形）：
 
-- **常驻根由推导给**：`ci-cache-slot.mjs` 的 `resolveArtifactRoot` —— 问 `pnpm store path`
-  拿它所在的卷，拼 `<卷>\ci-artifacts\<包名>`（本机实测落点 `G:\ci-artifacts\comfy-app-t3`）。
-  **配置与脚本里都不写盘符**。它是两份缓存槽的**第三个兄弟目录**，不许放进 `ci-build-cache/`：
-  那两套的淘汰器把槽根下的**每个目录都当成一个键**，成品混进去就是「一个 TTL 到期的键位
-  删掉人要取的安装包」。
+- **落点由调用方给，缺省才推导**：`--root <dir>` 优先（相对路径按 `cwd` 解析；本地那条链
+  传 `dist/desktop`，见下方 #3546 那段）；没给时走 `ci-cache-slot.mjs` 的
+  `resolveArtifactRoot` —— 问 `pnpm store path` 拿它所在的卷，拼 `<卷>\ci-artifacts\<包名>`
+  （本机实测落点 `G:\ci-artifacts\comfy-app-t3`）。**配置与脚本里都不写盘符**。它是两份缓存槽的
+  **第三个兄弟目录**，不许放进 `ci-build-cache/`：那两套的淘汰器把槽根下的**每个目录都当成一个键**，
+  成品混进去就是「一个 TTL 到期的键位删掉人要取的安装包」。
 - **一份一个目录 + `manifest.json`**（sha / 构建号 / 事件键 / 时刻 / 体积 / 文件清单），
   目录名 = 标签；**`latest.txt` 只是指针文件**，不原地覆盖同名目录 —— 覆盖之后「这一份是
   什么时候的东西」就只能靠 mtime 猜，那是 §4.3「运行图落后于源码」那一族的第二个源。
@@ -3151,14 +3153,22 @@ tauri 判定工具缓存目录不完整时会**先删掉** `%LOCALAPPDATA%\tauri
 - **轮转留 2 份**，排序键是 manifest 的 `builtAt`；读不到时按目录 mtime 退档**并念出来**
   （没有 manifest 的目录是缺陷，但把轮转停在那里等于让盘无限长）。
 - **退出码三态**：0 发布完成 / 1 没有成品（构建那格没打出来）或写盘被拒 / 2 **没有结论**
-  （问不出常驻根、或目标卷不够）。「今天没有新包」与「没能把包放出去」在日志里逐字不同，
+  （问不出发布根、或目标卷不够）。「今天没有新包」与「没能把包放出去」在日志里逐字不同，
   后两档一律不许退 0 —— 静默降级成「今天没包」正是本单点名不许的形态。
 
 **本地那条链同批改**（`tools\build\build-all.ps1` → `tools/scripts/build-all.ps1`）：它过去
 只跑 `build-tauri-release.ps1`（`cargo build` + 占位 `static`），**产不出安装包**，而 §7.0
-那张表一直写着它产得出 —— 这一节把正文改成与代码一致：`[1/3]` 壳未在运行 → `[2/3]`
-`pnpm tauri build` → `[3/3]` 发布（同一个入口）。`build-standalone.ps1` 的 `--no-bundle`
-形态不变（那是「只要能跑的壳」那条路）。
+那张表一直写着它产得出 —— 这一节把正文改成与代码一致：`[1/4]` 壳未在运行 → `[2/4]`
+`pnpm tauri build` → `[3/4]` 仓库根快捷方式 → `[4/4]` 发布
+（`publish-desktop-bundle.mjs --root dist\desktop`）。`build-standalone.ps1`
+的 `--no-bundle` 形态不变（那是「只要能跑的壳」那条路）。
+
+**本地落点改到项目内（ISSUE #3546）**：本地那条链调发布入口时带
+`--root "$PROJECT_ROOT\dist\desktop"` —— 本机自己打的包不再写进 `<卷>\ci-artifacts\<包名>`，
+诉求是「本地的包直落自己项目目录」。`--root` 优先于 `COMFY_CI_ARTIFACT_ROOT` 与
+`pnpm store path` 推导，所以不传它时（平台侧形态）行为一个字没变。`dist/` 已在 `.gitignore`
+的 `/dist/` 与 `scripts/qoder-ignore.mjs` 的忽略名单里，不新增忽略项；一份一个目录、
+`manifest.json`、`latest.txt` 指针、轮转留 2 份、三态退出码全部不变 —— 变的只是根。
 
 **NSIS 工具现场读数（ISSUE #3297；只加读数、不改判据、恒退 0）**：桌包档曾每一次都死在
 最后一格 `Running makensis … / Unable to start child process, error 0x2`，而前一格
@@ -3197,7 +3207,8 @@ tauri 判定工具缓存目录不完整时会**先删掉** `%LOCALAPPDATA%\tauri
 ```bash
 pnpm tauri build                                  # 整条链（本机实测见上面那张表）
 node scripts/publish-desktop-bundle.mjs --dry-run # 只打印会往哪儿落、会删谁
-node scripts/publish-desktop-bundle.mjs           # 真发布；常驻根会打在第一行
+node scripts/publish-desktop-bundle.mjs           # 真发布；发布根会打在第一行
+node scripts/publish-desktop-bundle.mjs --root dist/desktop  # 落到项目内（本地那条链）
 node scripts/ci-nsis-tool-probe.mjs               # 只量 NSIS 工具现场（恒退 0，只读）
 ```
 
@@ -3242,10 +3253,11 @@ ComfyAPP-portable.zip
 缺任一类即退 1 —— 少 sidecar / `server.js` 的免安装包在用户机器上是「双击没反应」，
 构建侧静默放行等于发一个起不来的包。
 
-**CNB 那一档不改**：`publish-desktop-bundle.mjs` 仍只收安装包（它的
-`INSTALLER_EXTENSIONS` 不认 `.zip`），常驻目录留 2 份的口径不变 —— 这次诉求是
-「GA 侧下载页分开」，本地发布面没有被要求改。本地想自查免安装版，先跑
-`pnpm tauri build`，再 `pnpm package:portable`（`--dry-run` 只打印计划）。
+**发布那一格不改**：`publish-desktop-bundle.mjs` 仍只收安装包（它的
+`INSTALLER_EXTENSIONS` 不认 `.zip`），留 2 份的口径不变 —— 这次诉求是
+「GA 侧下载页分开」，发布面没有被要求改；本地落点是项目内 `dist\desktop`（见上面 #3546
+那一段）。本地想自查免安装版，先跑 `pnpm tauri build`，再 `pnpm package:portable`
+（`--dry-run` 只打印计划）。
 
 #### 7.7.1 无效 workflow 会伪造一条它没声明事件的空 run —— 别拿 `event` 反推触发面（ISSUE #3299）
 
@@ -3668,6 +3680,27 @@ sidecar」两种不同形态的失败。
 回归测试：`tests/cross-platform-launcher.test.ts`、
 `src/lib/process/kill-process-tree.windows.test.ts`。
 
+**但「源码跨平台了」不等于「在哪都能编出来」**（ISSUE #3572 的现场）。上面那张表修的是
+**Rust 源码层**的 Windows 独占；Linux 上编 Tauri 还要**系统库**这一层：Tauri v2 的
+webview 后端（`webkit2gtk-4.1`）、`glib-2.0`、托盘（`ayatana-appindicator3-0.1`）、
+图标（`rsvg-2.0`）、窗口交互（`xdo`）、updater 的 TLS（`openssl`）——
+每一项都是一条 `pkg-config` 描述文件（`.pc`）。少了它们，`cargo` 退的是 **101**，
+而 101 是**编译期**失败（`glib-sys` 找不到系统库），与「Rust 侧代码坏了 / 单测红了」
+**同一个退码** ⇒ 光看退出码分不出真因。
+
+这层是**平台前提**，归**装它的那一层**管（CI 上是 workflow 的 `apt-get`，本机是
+`sudo apt-get install`，清单照抄 Tauri 官方 Prerequisites 的 Debian/Ubuntu 一栏），
+**不归判据管** —— 判据 `sudo` 改本机是错的边界（提交一次就被 sudo 改一次机器）。
+判据那一侧只做一件事：**缺前提时说人话**（探一遍、点名缺哪几个、给出安装出口），
+而不是把 pkg-config 的原始噪音甩给读的人。分工与判据见规范 §11.10.4。
+
+> ⚠️ **这一层曾经**整个**不存在，而账面全绿**：承重门禁是 #3064（2026-11-02）从 CNB
+> 自托管节点（**Windows**，走 MSVC + WebView2，不需要 glib/webkit）迁到 GA 的 Linux
+> runner 的，迁移后 master 上 418 笔提交里没有一笔碰过 `src-tauri/src/` ⇒ 这一格在 GA 上
+> **从来没真跑过 `cargo test`**。第一次真跑就是 ISSUE #3562 那一笔，当场编译失败
+> （PR #3567 判红）。**这不是「CI 坏了」，是「CI 那一格此前从没被触发过」** ——
+> 潜伏缺口的标准形态：它一直在那儿，只是没人碰过那条路。
+
 ### 9.4 这个模式**仍不**解决的问题（别误当成完整跨平台支持）
 
 - **`.ps1` 入口**：`tools/**/*.ps1` 是 Windows 的**双击/打包入口**（定位项目根、
@@ -3715,6 +3748,7 @@ sidecar」两种不同形态的失败。
 
 | 目的                                                                          | Windows 双击入口                                                                                    | 跨平台入口（Linux / macOS / CI）                                                                                                                                               |
 | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 清掉 pnpm 虚拟 store 的残留条目（`pnpm store prune` 管不到） | `scripts/quality-gate.ps1`（暂无 Windows 双击入口：它是开发者命令，`pnpm deps:prune` 在两侧同形） | `scripts/prune-virtual-store.mjs`（`pnpm deps:prune`，先 `--dry-run` 看清单；权威源是 `pnpm-lock.yaml` 的 `packages` 段） |
 | 启动开发环境（完整编排）                                                      | `scripts/dev-launcher.ps1`                                                                          | `scripts/dev-launcher.mjs`（`pnpm dev`）                                                                                                                                       |
 | 质量门禁（typecheck / lint / test）                                           | `scripts/quality-gate.ps1`                                                                          | `scripts/quality-gate.mjs`（`pnpm check:all`）                                                                                                                                 |
 | 只跑测试（排除基线失败 / `-Full`）                                            | `scripts/run-tests.ps1`                                                                             | `scripts/run-tests.mjs`（`pnpm test:file` / `pnpm test:full`）                                                                                                                 |

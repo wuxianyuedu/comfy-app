@@ -6,9 +6,9 @@
 # 刻意不承接 / 不同形：
 #   · `打包·壳工具链自证`（--rust-only）是自托管宿主机事实读数；windows-latest 镜像
 #     自带 Rust 工具链，无需自证，cargo 缓存由 swatinem/rust-cache 承担。
-#   · **发布落点不同形（已定）**：CNB 那一格 `publish-desktop-bundle.mjs` 发布到
-#     **本机常驻目录**（留 2 份）；GitHub runner 是即弃机，回写那台机既没有通道也不该
-#     让一次 CI 反过来写开发机。所以这里是 `upload-artifact`（14 天，按 run 取）+
+#   · **发布落点不同形（已定）**：CNB 桌包档已随 #3504 退役，`publish-desktop-bundle.mjs`
+#     今天只有本地一个执行者（落点见规范 §7.7）；GitHub runner 是即弃机，回写开发机既没有
+#     通道也不该让一次 CI 反过来写它。所以这里是 `upload-artifact`（14 天，按 run 取）+
 #     滚动 `nightly` GitHub Release（按名字取，每天都指向最新一份）。两者各答一件事：
 #     「这一跑产了什么」与「现在要拿一个包去哪拿」。Release 用 runner 自带的 `gh`
 #     与 workflow 级 `permissions: contents: write`，不引第三方 action。
