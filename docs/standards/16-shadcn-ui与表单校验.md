@@ -1826,25 +1826,41 @@ dark:text-emerald-300` 这类写死值）。
 
 **替代口径（这才是这次真正的产出）——校验规则按「要不要看别的数据」切开：**
 
-| 规则                                 | 住哪                                    | 判据                                                                                    |
-| ------------------------------------ | --------------------------------------- | --------------------------------------------------------------------------------------- |
-| **字段级**（该字段自己的值就能判定） | `src/lib/<domain>/*-schema.ts` 的纯函数 | 不 import React、不读列表；可在这里穷举单测                                             |
-| **集合级**（要看别的数据）           | controller（feature hook）              | 返回 `{ ok, error }`；失败**错位到具体字段**（重名 → 名称字段），没有对应字段的才走横幅 |
+| 规则                                 | 住哪                                                                                 | 判据                                                                                    |
+| ------------------------------------ | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| **字段级**（该字段自己的值就能判定） | `src/lib/<domain>/` 的**纯函数模块**（首个落点 `~/lib/llm/provider-form`）           | 不 import React、不读列表；可在这里穷举单测                                             |
+| **集合级**（要看别的数据）           | controller（feature hook）                                                           | 返回 `{ ok, error }`；失败**错位到具体字段**（重名 → 名称字段），没有对应字段的才走横幅 |
 
-首个落点：`src/lib/llm/remote-model-schema.ts` 的 `validateRemoteModelFields`，
-由 `useRemoteModelDialogs` 在 `submitDialog` 的第一关调用。**顺带修掉一处真实的
-交互缺陷**：提交按钮原先 `disabled={!addForm.model.trim()}` —— 名称空时**点不动
-按钮**，字段级提示就永远出不来（用户只看到灰按钮，不知道该填哪）。现在按钮可用，
-点下去逐字段标红。
+当前落点：`~/lib/llm/provider-form.ts` 的 `validateProviderForm` / `validateModelForm`，
+由 `useProviderModelDialogs` 在提交的第一关调用；弹窗视图（`ProviderModelDialog` /
+`ProviderDialog`）只消费 controller 转述的 `providerErrors` / `modelErrors`。
+**顺带修掉一处真实的交互缺陷**：提交按钮原先 `disabled={!addForm.model.trim()}` ——
+名称空时**点不动按钮**，字段级提示就永远出不来（用户只看到灰按钮，不知道该填哪）。
+现在按钮可用（`disabled={p.busy}`），点下去逐字段标红。
 
-**为什么不是两套口径**：上面两条（字段级住 `*-schema.ts`、集合级住 controller）
+**命名口径（#3566 拍板）**：字段级纯函数**不要求** `*-schema.ts` 命名 —— `*-schema.ts`
+留给 zod schema 模块（如 `remote-model-schema.ts` 的 `remoteModelEntrySchema`，那是
+服务端 `configSave` 入参的线上契约形状）；字段级纯函数按内容取名（`provider-form.ts`）。
+判据守的是「规则住 lib 纯函数、可单测、单一出处」，不是文件名。
+
+**详情面板的例外（#3566 拍板）**：`ProviderDetail` 的失焦保存（#3517）在视图里直调
+`validateProviderForm` —— **允许**。调 lib **纯函数**不等于在视图里 author 规则（规则
+仍唯一地住在 lib、可单测）；「controller 是唯一调用方」约束的是**弹窗草稿流**（draft
+状态的唯一持有者必须是 controller hook，防双头），详情面板的本地草稿在视图内闭环、
+没有第二持有者，直调换来的即时反馈值得保留。
+
+**为什么不是两套口径**：上面两条（字段级住 lib 纯函数、集合级住 controller）
 判的是同一件事 ——「规则是纯函数、住在 lib 的域模块里、视图不自己判定」，
 只是按「要不要看别的数据」切开落点。
 `WorkflowFormControls` / `DynamicWorkflowForm` 里的「Form」**仍与 `ui/form` 无关**
 （那是按 `workflowIO` 动态生成的工作流参数表单）。
 
-**机器判据**（写进 `tests/ui-primitives-coverage.test.ts`）：schema 模块存在、
-不 import React；弹窗视图不 import `zod`、只消费 controller 转述的 `fieldErrors`。
+**机器判据**（写进 `tests/ui-primitives-coverage.test.ts`，#3566 起钉**形态**不钉
+名字字面量 —— 上一版钉 `RemoteModelDialog` / `fieldErrors`，重构改名后红在 ENOENT
+上而设计决定其实没破）：`provider-form` 模块存在、不 import React；controller 里有
+两个校验器的调用；**弹窗视图**不 import `zod`、不直接调 `validate*Form(`、只消费
+controller 转述的 errors。视图里出现调点或 zod import = 归属变了 = 判据红
+（`ProviderDetail` 的直调是上面写明的例外，不在判据的视图清单里）。
 
 #### 16.2.4.9 自绘滚动条外观收成一处（P4 硬闸）
 
