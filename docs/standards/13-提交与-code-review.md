@@ -9933,6 +9933,35 @@ CNB 侧再无任何会写工作区的判据，两份脚本只是无调用的孤�
   `ci-autofix-duties.mjs` / `git-dir-literal-scan.mjs`）是共享惯用法的出处指引，
   不构成 import —— 随各文件下次触碰时顺手更新，本批不动。
 
+#### 13.5.39 2026-11-11 GA 判决回调流水线迁平台池：自托管节点退出判决必经链（ISSUE #3529 / #3528 现场）
+
+**改的是判决回调在哪台机，不是三态退码。** `api_trigger_ga_verdict` 的
+「GA 判决回调（骨架·休眠）」是每条 PR 判决的必经链：GA pr-gate 收尾 job 起这条
+build，`GA 结论判定` 把 GA 送回的 verdict 折成三态退码，主列「GA 回调结论回读」
+读它的终态（fail-closed）。#3528 现场：它是 #3504 迁移后 CNB 侧**唯一**还钉自托管
+的流水线，节点 runner 连接掉 ⇒ build 死在 prepare（`runner not connected`），
+fail-closed 把 error 送回主列，**所有 PR 的判决变红** —— 与代码无关，与「开发机
+几点睡觉」有关。整条迁平台池 Linux（`cnb:arch:amd64` + `cpus: 1`，与质量门禁 /
+镜像出口同族）后，CNB 侧再无任何钉自托管的活流水线。
+
+**迁移的形态**：判定逻辑**保持内联**（`git.enable: false` 时工作区没有代码，调不了
+`scripts/` 下任何入口 —— 这是当初内联的原因，不是惯性），从 PowerShell 换 **sh**
+（`$env:` 取值 → `${VAR:-}`、`-contains` → `case`，三态退码 `exit 2 / 0 / 1` 与
+身份日志逐字同语义）。锁仍 `*lock_ga_verdict`（同 PR 连派发的互斥）；
+`git.enable: false` 在平台池上照常生效。
+
+**里程碑记一笔**：至此 `.cnb.yml` 活配置的 PowerShell / cp936 调用**归零**
+（此前 41 处），cp936 外壳族（`ci-cp936-exit` / `ci-console-encoding` /
+`ci-cp936-glyphs` / `ci-cp936-write`）从 CI 面完全退出 —— 它们的判据与用例留盘
+（本地 Windows 开发场景仍可能用到），退役另立单据评估。
+
+**逐笔对账**：`.cnb.yml`（`api_trigger_ga_verdict` 块重写）/ `no-platform-ci-config`
+（例外清单收编判决回调 + 专用形态段 + 判定脚本断言换 sh 形态，PowerShell 残留
+零容忍）/ 本节 + 生成态镜像 / `changelog.d` 碎片，同批改动。
+
+**边界**：首次真验看下一个 PR build 的 `GA 结论判定` 读数（平台池上跑一次）；
+fail-closed 语义与 5m 预算一字未动 —— 迁歪的表现是那格红，不是假绿。
+
 ### 13.6 分支与合并策略
 
 - 功能分支：`feat/<short-desc>`；修复分支：`fix/<issue-id>-<desc>`。
