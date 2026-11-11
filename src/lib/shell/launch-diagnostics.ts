@@ -75,9 +75,9 @@ export type LaunchPaths = {
   orchestratorStderr: string;
   /** 项目根（<root>/run 与 <root>/log 的锚点）。 */
   root: string;
-  /** 壳侧编排链路日志（log/launcher/shell-launch.log）。 */
+  /** 壳侧编排链路日志（log/current/launcher/shell-launch.log）。 */
   shellLaunchLog: string;
-  /** 壳自持日志（release，log/shell/shell.log）。 */
+  /** 壳自持日志（release，log/current/shell/shell.log）。 */
   shellLog: string;
   /** run/launch-status.json：编排器与壳共写的进度文件。 */
   statusFile: string;
