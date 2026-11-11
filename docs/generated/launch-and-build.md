@@ -3679,15 +3679,24 @@ sidecar」两种不同形态的失败。
 `src/lib/process/kill-process-tree.windows.test.ts`。
 
 **但「源码跨平台了」不等于「在哪都能编出来」**（ISSUE #3572 的现场）。上面那张表修的是
-**Rust 源码层**的 Windows 独占；Linux 上编 Tauri 还要**系统库**这一层：Tauri v2 的
-webview 后端（`webkit2gtk-4.1`）、`glib-2.0`、托盘（`ayatana-appindicator3-0.1`）、
-图标（`rsvg-2.0`）、窗口交互（`xdo`）、updater 的 TLS（`openssl`）——
+**Rust 源码层**的 Windows 独占；Linux 上编 Tauri 还要**系统库**这一层：GLib 系
+（`glib-2.0` / `gobject-2.0` / `gio-2.0`）、GTK 系（`gtk+-3.0` / `gdk-3.0` /
+`gdk-x11-3.0`）、绘制系（`cairo` / `cairo-gobject` / `pango` / `atk` /
+`gdk-pixbuf-2.0`）、webview 系（`webkit2gtk-4.1` / `javascriptcoregtk-4.1` /
+`libsoup-3.0`）、总线（`dbus-1`）——
 每一项都是一条 `pkg-config` 描述文件（`.pc`）。少了它们，`cargo` 退的是 **101**，
 而 101 是**编译期**失败（`glib-sys` 找不到系统库），与「Rust 侧代码坏了 / 单测红了」
 **同一个退码** ⇒ 光看退出码分不出真因。
 
+⚠️ **这一层要装什么，由「编译期真会问到什么」定，不由「官方清单列了什么」定**
+（ISSUE #3580 的现场）。托盘（`ayatana-appindicator3-0.1`）是**运行期** `dlopen`、
+不是编译期；图标（`rsvg`）依赖图里无人链接；窗口交互（`xdo`）压根不在依赖图
+（`muda` 的 `libxdo` 是可选 feature）；updater 走 `rustls`、不碰 `openssl`。把这四个
+当编译期前提去探 ⇒ 探针**永远报缺** ⇒ 那一格对任何碰 `src-tauri/**` 的 PR 恒红，
+而 apt 装没装都对。逐项裁定见 ISSUE #3580 正文。
+
 这层是**平台前提**，归**装它的那一层**管（CI 上是 workflow 的 `apt-get`，本机是
-`sudo apt-get install`，清单照抄 Tauri 官方 Prerequisites 的 Debian/Ubuntu 一栏），
+`sudo apt-get install`，清单是「每个被探的 `.pc` 由哪个 `-dev` 包提供」那张映射表），
 **不归判据管** —— 判据 `sudo` 改本机是错的边界（提交一次就被 sudo 改一次机器）。
 判据那一侧只做一件事：**缺前提时说人话**（探一遍、点名缺哪几个、给出安装出口），
 而不是把 pkg-config 的原始噪音甩给读的人。分工与判据见规范 §11.10.4。

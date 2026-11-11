@@ -9823,7 +9823,7 @@ in windows_core::imp` 失败」）；`single_instance.rs` / `shell_launch.rs` /
 
 | 面 | 动作 |
 | --- | --- |
-| 平台前提（workflow 那一层） | `pr-gate.yml` 的 `heavy-gates` job 在跑重档**之前**装 Tauri 官方 Prerequisites（Debian/Ubuntu 一栏）那批 dev 包（`libwebkit2gtk-4.1-dev` / `libayatana-appindicator3-dev` / `librsvg2-dev` / `libxdo-dev` / `libssl-dev` / `build-essential`）。清单**照抄官方**，不自造 |
+| 平台前提（workflow 那一层） | `pr-gate.yml` 的 `heavy-gates` job 在跑重档**之前**装 Tauri 在 Linux 上编译要的那批 dev 包。清单**照抄官方**这条已被 #3580 推翻（官方那一栏是「给人装环境」用的，其中四项**编译期根本不问**）—— 现行清单是「每个被探的 `.pc` 由哪个 `-dev` 包提供」那张映射表，见 §13.5.33.9 |
 | 判据（只说人话，不自己装） | `shell-gate` 在跑 `cargo test` **之前**探一次 `pkg-config --exists`（与编译期同一把尺）：缺哪个点哪个，并给出安装出口。**判据不 `sudo` 装** —— 判据 `sudo` 改本机是错的边界（提交一次就被 sudo 改一次机器）。缺前提时归因是独立的一格「cargo test 没跑起来：缺哪几个系统库」，**不与「cargo test 失败」混**（后者是「Rust 侧真坏了」） |
 
 **为什么不动判决链**：退出码语义、GA 结论回读、`GA_VERDICT` 折叠、三态退码、
@@ -9838,6 +9838,60 @@ in windows_core::imp` 失败」）；`single_instance.rs` / `shell_launch.rs` /
 `tests/shell-gate-linux-sysdeps.test.ts`（12 条：探针 5 + 接线 3 + workflow 4）/
 规范 §11.10.4 与 launch-and-build §9.3 + 生成态镜像 / `ga-migration-checklist.md` + 镜像 /
 `## Fixed` 碎片挂 #3572，与 §13.5.33.4 同形同批。
+
+##### 13.5.33.9 2026-11-11 探针问的模块名按「编译期真会问到的」定，不是按官方清单（ISSUE #3580）
+
+**改的是探针问的模块名与 apt 清单的对应关系，不是判决链、不是三态退码、不是承重锚。**
+§13.5.33.8 补上「平台前提归 workflow 装、判据只说人话」这层分工之后，PR #3567 在 GA
+侧**仍判红**，红的那一格还是「桌面壳（改了 src-tauri 才跑）」：
+
+```
+[shell-gate] ✗ cargo test 没跑起来：这台机器缺 Tauri 在 Linux 上编译要的系统库
+（ayatana-appindicator3-0.1 / rsvg-2.0 / xdo / openssl）—— 补上它们再跑（上面有安装出口）。
+```
+
+而 GA 日志里 apt 那一段**成功**（`Setting up librsvg2-dev` / `Setting up libxdo-dev`
+都在，10:59:20），探针 22 秒后才跑 ⇒ **不是安装失败，是探针问错了模块名**。
+
+**根因**：§13.5.33.8 的探针名单是照 Tauri 官方 Prerequisites 的库清单写的，而**编译期真正
+会被 pkg-config 问到的模块**是另一批。那四个**注定永远报缺**：
+
+| 原名单里的 | 裁定 | 依据 |
+| --- | --- | --- |
+| `rsvg-2.0` | **名字就错**，且依赖图里无人链接 rsvg | 发行版给的实名是 `librsvg-2.0`（`librsvg2-dev` 的文件清单）；锁文件全文检索 `rsvg` / `resvg` 零命中 |
+| `xdo` | **不在依赖图**，且发行版不提供任何 `.pc` | 锁文件里 `libxdo` 计数 = 0（`muda` 的 `libxdo` 是可选 feature，而 `tauri` 依赖 `muda` 时写死 `default-features = false` 且只要 `serde` / `gtk3`）；`libxdo-dev` 的文件清单里只有 `xdo.h` 与 `libxdo.so` |
+| `ayatana-appindicator3-0.1` | **不是编译期**：运行期 `dlopen` | `libappindicator-sys-0.9.0` **没有 build.rs**，源码是 `Library::new("libayatana-appindicator3.so.1")` |
+| `openssl` | **不参与编译** | 依赖图里只有 `rustls`，没有 `openssl-sys` |
+
+⇒ apt 明明装成功了、探针仍报「缺库」⇒ 那一格对**任何**碰 `src-tauri/**` 的 PR 恒红。
+
+⚠️ **这一层「装得对」不等于「探得对」**：实测 `libwebkit2gtk-4.1-dev` 的 apt 依赖闭包
+（395 个包）**已经把那 15 个 `.pc` 的提供包全部带进来**（含 `libdbus-1-dev`，路径是
+`libwebkit2gtk-4.1-dev → libgtk-3-dev → libatk-bridge2.0-dev → libatspi2.0-dev →
+libdbus-1-dev`）⇒ GA runner 上**其实不缺任何库**，红的**只**是探针名单。
+「平台前提装齐了」与「探针问对了」是**两件事**，前者绿不表示后者绿。
+
+**名单怎么定下来的**：穷尽扫描，不是照抄 —— Linux 目标依赖图 334 个包、其中 69 个带
+`build.rs`，逐个读 build.rs ⇒ 17 个碰 pkg-config；编译期**硬失败**的（缺了必编译不过）
+是那 15 个 `.pc`。另有四处**软失败**不进这一列：`x11` 按 feature 逐个探、而依赖它时一个
+feature 都没开；`x11-dl` 与 `gtk` / `gdk-sys` 各自的 `get_variable` 把错误吞掉了。
+
+**落地的两件事**：
+
+| 面 | 动作 |
+| --- | --- |
+| 判据（名单与出口） | `scripts/shell-gate.mjs` 的 `TAURI_LINUX_PC_MODULES` 换成那 15 个 `.pc`；新增 `TAURI_LINUX_PC_PACKAGES`（「模块 → 提供它的 `-dev` 包」）与 `tauriLinuxAptPackages()`；缺前提时的出口从「一句笼统的装官方清单」改成「缺哪个点哪个包 + 一条可复制的 apt 命令」。探的是**在不在**，版本够不够由 pkg-config 在编译期按 crate 自己的要求再问一次（那种失败 cargo 的报错里会点名 crate 与版本要求） |
+| 平台前提（workflow 那一层） | `pr-gate.yml` 的 apt 清单与那张映射表**一一对应**（`tauriLinuxAptPackages()` 是唯一出处）：去掉 `librsvg2-dev` / `libxdo-dev` / `libssl-dev`（依赖图里无人链接 rsvg、无 `libxdo`、`openssl` 不参与编译），`libdbus-1-dev` 从「靠闭包带进来」改成**写明**，`libayatana-appindicator3-dev` 保留但标注为**运行期**托盘后端（编译期不探它） |
+
+**为什么不动判决链**：退出码语义、GA 结论回读、`GA_VERDICT` 折叠、三态退码、
+`COMFYAPP_CI_GATES` / `GATE_TIER_LEDGER` 一个字节未动。缺前提那一档仍**退 1**（§13.5.33.8
+的理由原样成立）。
+
+**逐笔对账**：`scripts/shell-gate.mjs`（名单 + 映射表 + 出口文案）/
+`.github/workflows/pr-gate.yml`（apt 清单与根因注释）/
+`tests/shell-gate-linux-sysdeps.test.ts`（17 条：名单 5 + 探针 5 + 接线 3 + workflow 4）/
+规范 §11.10.4 与 launch-and-build §9.3 + 生成态镜像 / `ga-migration-checklist.md` + 镜像 /
+`## Fixed` 碎片挂 #3580，与 §13.5.33.8 同形同批。
 
 #### 13.5.34 2026-11-06 GA push 档：镜像仓 master 的文档链并行执行者（任务 3 并行期）
 

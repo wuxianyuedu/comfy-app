@@ -391,7 +391,7 @@ jobs:
       - name: 安装依赖
         run: pnpm install --frozen-lockfile
 
-      # Tauri 在 Linux 上编译要的系统库（ISSUE #3572）。
+      # Tauri 在 Linux 上编译要的系统库（ISSUE #3572 / #3580）。
       #
       # 为什么这一格以前不需要它：承重门禁是 #3064（2026-11-02）从 CNB 自托管节点迁到 GA 的，
       # 而那个节点是 **Windows**（`.cnb.yml` 节点 tag = win）—— Windows 编 Tauri 走 MSVC +
@@ -405,12 +405,32 @@ jobs:
       #     （cargo 退 101 = **编译期**失败，不是断言失败）
       #
       # ubuntu-24.04 runner 只预装 `pkg-config`，不预装下面这些（actions/runner-images 的
-      # Ubuntu2404 apt 清单逐条核对过）。清单**照抄 Tauri 官方 Prerequisites 页**
-      # （https://v2.tauri.app/start/prerequisites/ 的 Debian/Ubuntu 一栏），不自造：
-      # libwebkit2gtk-4.1-dev 是 Tauri v2 的 webview 后端（tauri ⇒ wry ⇒ webkit2gtk），
-      # libayatana-appindicator3-dev 是 tray-icon feature 的托盘后端，
-      # librsvg2-dev 是图标，libxdo-dev 是窗口交互，libssl-dev 是 updater plugin 的 TLS，
-      # build-essential 是 C 依赖的链接器与头文件（tauri-sys / glib-sys / gtk-sys 全走它）。
+      # Ubuntu2404 apt 清单逐条核对过）。
+      #
+      # 清单**不是照抄 Tauri 官方 Prerequisites 页**：官方那一栏是「给人装环境」用的，
+      # 而这一格要的是「编译期真会被问到的 `.pc`」—— 两者差着四个（#3580 的现场：#3572 照
+      # 官方清单写探针，`rsvg-2.0` / `xdo` / `ayatana-appindicator3-0.1` / `openssl` 这四个
+      # 模块**注定永远报缺** —— 名字错 / 不在依赖图 / 运行期 dlopen / 不参与编译 ⇒ GA
+      # runner 上 apt 明明装成功了、探针仍报缺 ⇒ 那一格对任何碰 `src-tauri/**` 的 PR 恒红）。
+      # 下面这份清单与 `scripts/shell-gate.mjs` 的 `TAURI_LINUX_PC_PACKAGES` **一一对应**：
+      # 每个被探的 `.pc` 模块由哪个 `-dev` 包提供，写在同一个地方，两边脱钩由用例挡。
+      #
+      #   libglib2.0-dev               → glib-2.0 / gobject-2.0 / gio-2.0
+      #   libatk1.0-dev                → atk
+      #   libcairo2-dev                → cairo / cairo-gobject
+      #   libgdk-pixbuf-2.0-dev        → gdk-pixbuf-2.0
+      #   libpango1.0-dev              → pango
+      #   libgtk-3-dev                 → gtk+-3.0 / gdk-3.0 / gdk-x11-3.0
+      #   libdbus-1-dev                → dbus-1（`libdbus-sys` 缺它直接 panic）
+      #   libwebkit2gtk-4.1-dev        → webkit2gtk-4.1（webview 后端）
+      #   libsoup-3.0-dev              → libsoup-3.0
+      #   libjavascriptcoregtk-4.1-dev → javascriptcoregtk-4.1
+      #
+      # 另外两个不是 `.pc` 的提供者：
+      #   libayatana-appindicator3-dev —— **运行期**托盘后端（`libappindicator-sys` 没有
+      #     build.rs，它在运行期 `dlopen` `libayatana-appindicator3.so.1`）⇒ 编译期不探它，
+      #     但 Linux 上真跑起来要它，托盘没了会静默失败。
+      #   build-essential —— C 依赖的链接器与头文件（glib-sys / gtk-sys 全走它）。
       #
       # ⚠️ 装的是 **dev** 包不是运行时包：cargo test 要的是头文件与 `.pc` 描述文件
       # （pkg-config 读的就是 `.pc`），不是 `.so` 本身 —— 少了 `-dev` 就是「pkg-config 找不到
@@ -425,12 +445,18 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends \
+            libglib2.0-dev \
+            libatk1.0-dev \
+            libcairo2-dev \
+            libgdk-pixbuf-2.0-dev \
+            libpango1.0-dev \
+            libgtk-3-dev \
+            libdbus-1-dev \
             libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libxdo-dev \
-            libssl-dev \
-            build-essential
+            libjavascriptcoregtk-4.1-dev \
+            libsoup-3.0-dev \
+            build-essential \
+            libayatana-appindicator3-dev
 
       - name: 重档静态判据（cnb 同款判据一字不改）
         # 「没判」那一档（缺 CNB_COMMIT 等前提）由脚本自己打结论行，外壳据此折成非红；
