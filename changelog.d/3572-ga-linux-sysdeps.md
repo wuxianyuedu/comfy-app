@@ -12,8 +12,9 @@
   这一格在 GA 上**从来没真跑过 `cargo test`**，#3562 是第一次；③ 仓库里没有任何一层准备
   这层系统库（`.github/workflows/**` 与 `.cnb.yml` 全文检索 `apt-get` / `webkit2gtk` /
   `libgtk` / `appindicator` / `librsvg` 零命中）。处置分两半、边界不越：**平台前提归
-  workflow 那一层**（`pr-gate.yml` 的 `heavy-gates` job 在跑重档之前装 Tauri 官方
-  Prerequisites 的 Debian/Ubuntu 一栏那批 dev 包，清单照抄官方不自造）；**判据只说人话、
+  workflow 那一层**（`pr-gate.yml` 的 `heavy-gates` job 在跑重档之前装 Tauri 在 Linux 上
+  编译要的那批 dev 包 —— 清单按「每个被探的 `.pc` 由哪个 `-dev` 包提供」定，见 #3580）；
+  **判据只说人话、
   不自己装**（`shell-gate` 在跑 `cargo test` 之前用 `pkg-config --exists` 探一遍 ——
   与编译期同一把尺，探得过就是编得过 —— 缺哪个点哪个并给出安装出口；判据 `sudo` 改本机
   是错的边界，提交一次就被 sudo 改一次机器）。缺前提时归因是独立的一格「cargo test 没跑
