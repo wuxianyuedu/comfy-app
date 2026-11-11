@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { contrast } from "./helpers/contrast";
+import { contrast, luminance } from "./helpers/contrast";
 import { stripComments } from "./helpers/strip-comments";
 import { loadThemeTokens, type ThemeTokens } from "./helpers/theme-tokens";
 
@@ -111,6 +111,41 @@ describe("表面阶梯：每一档都要与下面那档分得开（ISSUE #3519�
         `${name}（${surface}）上的正文对比度不足 4.5:1`,
       ).toBeGreaterThanOrEqual(MIN_TEXT_VS_SURFACE);
     }
+  });
+});
+
+describe("描边这一档看得见（浅色主题，ISSUE #3520）", () => {
+  it("浅色：描边对卡片与对页面都要 ≥1.10（此前 ≈1.05 ⇒ 卡片在白底上没有边）", () => {
+    const card = token(light, "--color-surface-1");
+    const page = token(light, "--color-bg");
+    const border = token(light, "--color-border");
+    expect(
+      contrast(border, card),
+      `描边 ${border} 对卡片 ${card} 太弱 —— 卡片在白底上就没有边`,
+    ).toBeGreaterThanOrEqual(MIN_SURFACE_PAIR_LIGHT);
+    expect(
+      contrast(border, page),
+      `描边 ${border} 对页面 ${page} 太弱 —— 输入框、行、chip 的边全都看不见`,
+    ).toBeGreaterThanOrEqual(MIN_SURFACE_PAIR_LIGHT);
+  });
+
+  it("浅色：强描边比普通描边更重（两档不许倒挂）", () => {
+    /* 浅色是「越深越重」，所以强档的亮度必须更低；这一条钉的是两档的次序 ——
+       描边加深后，普通档一度比强档还深（`#e2e4ec` vs `#d6d8dd`）。 */
+    expect(luminance(token(light, "--color-border-strong"))).toBeLessThan(
+      luminance(token(light, "--color-border")),
+    );
+  });
+
+  it("设置页卡片的外缘走实线描边（不是那根 6% 黑的 translucent）", () => {
+    /* 卡片的外缘 class 决定「边」取哪颗 token：`border-border-subtle` 在浅色主题的
+       白底上只有 ≈1.05:1（看不见）。这一条钉的是**卡片外缘**走实线那档。 */
+    const src = stripComments(
+      readFileSync(path.join(ROOT, "src/components/ui/settings-card.tsx"), "utf8"),
+      { trailing: true },
+    );
+    expect(src).toContain("border-border bg-surface-1");
+    expect(src).not.toContain("border-border-subtle bg-surface-1");
   });
 });
 

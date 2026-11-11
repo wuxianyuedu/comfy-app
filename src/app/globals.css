@@ -109,7 +109,14 @@
      浅色 `#eceef4`（对卡片 1.10:1，且弱文字仍过 AA 4.54:1）/ 深色 `#1f1f2b`
      （对卡片 1.11:1）—— 真量与下限见 `tests/surface-ladder-contrast.test.ts`。 */
   --color-subtle: #eceef4;
-  --color-border: #ececf1;
+  /* 描边这一档（ISSUE #3520，浅色主题的「卡片在白底上没有边」）：
+     此前浅色 `#ececf1` 落在白色页面上只有 ≈1.05:1 —— 卡片、输入框、行、chip 的边
+     全都看不见（深色档 `#26262e` 对卡片 1.19:1，本来就看得见）。
+     加深到 `#e2e4ec` 后：对卡片 1.20:1、对页面 1.27:1（真量与下限见
+     `tests/surface-ladder-contrast.test.ts`）。**三档表面底色一个都没动** ——
+     浅色色板的总落差只有 0.19，把阶梯重排会撞上「行上的弱文字不过 AA」那条
+     （见 #3520 的两个候选与取舍）。 */
+  --color-border: #e2e4ec;
   --color-border-subtle: rgb(0 0 0 / 0.06);
   --color-ink: #1a1a1f;
 
@@ -212,7 +219,9 @@
   --color-glow-warning: var(--color-warning); /* 琥珀光晕（浅色=基准琥珀） */
   --color-glow-danger: var(--color-destructive); /* 红光晕（浅色=基准红） */
   --color-glow-brand: var(--color-primary); /* 品牌紫光晕（连线 / 品牌点） */
-  --color-border-strong: #d6d8dd; /* 强边框/分隔线 (light default) */
+  --color-border-strong: #d2d5df; /* 强边框/分隔线 (light default) —— 与 `--color-border`
+     保持「强档更重」的次序（此前 `#d6d8dd` 反而比 `#ececf1` 浅，描边加深后两档会
+     倒挂；ISSUE #3520）。对卡片 1.39:1。 */
   --color-ink-bright: #18181b; /* 主文字 (light default) */
   --color-ink-field: #27272a; /* 输入控件文字 (light default) */
   --color-ink-strong: #3f3f46; /* 连接高亮文字 (light default) */
