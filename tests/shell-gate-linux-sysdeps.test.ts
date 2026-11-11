@@ -265,4 +265,22 @@ describe("GA 侧真的装了那些系统库（ISSUE #3572 / #3580）", () => {
     expect(workflow).toContain("sudo apt-get install");
     expect(workflow).toContain("sudo apt-get update");
   });
+
+  /* 镜像侧瞬时 DNS / 连接故障曾让这一步无声空等 22 分钟才 exit 100、整条 PR 流水线
+   * 压在 pending（#3589）。两条 apt 命令都要带重试与空闲超时，步级还要有超时兜底：
+   * 短暂抖动自愈、死镜像早退、真挂住时失败落在这一步自己的名字上。 */
+  it("两条 apt 命令都带重试与空闲超时，且该 step 有步级超时（#3589）", () => {
+    const start = workflow.indexOf("- name: 装 Tauri 的 Linux 系统依赖");
+    const rest = workflow.slice(start);
+    const next = rest.indexOf("\n      - name:", 1);
+    const step = next === -1 ? rest : rest.slice(0, next);
+    const update = step.split("\n").find((l) => l.includes("apt-get update")) ?? "";
+    const install = step.split("\n").find((l) => l.includes("apt-get install")) ?? "";
+    for (const line of [update, install]) {
+      expect(line).toContain("Acquire::Retries");
+      expect(line).toContain("Acquire::http::Timeout");
+      expect(line).toContain("Acquire::https::Timeout");
+    }
+    expect(step).toContain("timeout-minutes:");
+  });
 });
