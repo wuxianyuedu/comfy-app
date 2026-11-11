@@ -2092,7 +2092,7 @@ better-sqlite3 实例），而 `$reset` / `$tables` / 六个 `seed*` 本来就�
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 只改了 Rust 壳 / 窗口配置 / 启动页               | `cd src-tauri && cargo build --release --features custom-protocol`（Windows 上 `;` 亦可）                    | **必须带 `--features custom-protocol`**（见 §5「启动先看到 Edge 错误页」条目：不带会把启动页导航到 devUrl 且资源不内嵌）；增量编译约 1 分钟；启动器预检会提醒壳过期。注意：裸 `cargo build` 要求 `src-tauri\binaries` 已有 Node sidecar（`tauri.conf.json` 的 externalBin 在编译期被校验，缺失即 panic）——缺失时先跑一次 `tools\build\build-tauri-release.ps1` 自动补齐，见 §5 对应条目                     |
 | 生产构建（standalone，**不出安装包**）           | `tools\build\build-standalone.ps1`（内部 `pnpm tauri build --no-bundle`）                                   | build-desktop.mjs 组装 static（含体积护栏 1.5GB + 装配后再数一次产物，§7.6「装配之后必须再数一次产物」）+ Node sidecar，再 `pnpm tauri build --no-bundle`。`--no-bundle` 那一档**不产 nsis/msi** —— 只要「能跑的壳」时走这条                                                                                                                                                                                     |
-| 桌包成品（**含安装包**）+ 发布到常驻目录         | `tools\build\build-all.ps1`（`pnpm tauri build` → `node scripts/publish-desktop-bundle.mjs`）               | 与平台那条桌包流水线同一份实现（§7.7）。收尾报各步与总耗时（§7.0），并把安装包拷到常驻目录留最近 2 份。**过去这一行写的是「build-standalone → build-tauri-release → build-all 出安装包」，而 `build-all` 当时只跑 `cargo build`（产不出安装包）—— 正文与代码不一致，§7.7 那批把它改齐了**                                                                                                            |
+| 桌包成品（**含安装包**）+ 发布到项目内 `dist\desktop` | `tools\build\build-all.ps1`（`pnpm tauri build` → `node scripts/publish-desktop-bundle.mjs --root dist\desktop`） | 与平台那条桌包流水线同一份实现（§7.7）。收尾报各步与总耗时（§7.0），并把安装包拷到项目内 `dist\desktop` 留最近 2 份（#3546：本机自己的包不落常驻目录）。**过去这一行写的是「build-standalone → build-tauri-release → build-all 出安装包」，而 `build-all` 当时只跑 `cargo build`（产不出安装包）—— 正文与代码不一致，§7.7 那批把它改齐了** |
 | 前端/standalone 体积分析                         | `pnpm analyze` （`node scripts/analyze-bundle.mjs` → `ANALYZE=true next build --webpack`）                   | `@next/bundle-analyzer` 量化各 bundle 体积。**仅 webpack 支持**（Turbopack 不支持），默认 `next build` 走 Turbopack 不受影响；因此分析时强制 `--webpack`。产物 `.next/analyze/client.html` / `nodejs.html` / `edge.html`，并监听 `http://127.0.0.1:8888` 可视化报告。`output: standalone` 以 webpack 构建时同样生效，可量化独立 server 侧 bundle。用 Node 包装以兼容 Windows（内联 `VAR=cmd` POSIX 专属）。 |
 | 前端 bundle 体积预算（判定档，ISSUE #1781）      | `pnpm check:bundle`（`node scripts/check-bundle-budget.cjs`；也挂在 `pnpm build` 收尾）                      | client chunk（`.next/static/chunks` 下 `.js`）的 **gzip 总量 + 文件数**棘轮，基线 `scripts/.bundle-budget-baseline.json`（另存逐文件 `sha256` 指纹，只服务诊断：诊断按**内容**对齐，同内容换名不计变化）。量的是**默认 Turbopack 链**的产物（与 `pnpm analyze` 的强制 `--webpack` 别混着比）；抬高基线要在 PR 里贴 before/after 两档读数 + 理由，**由造成这批字节的那条 PR 同批** `--allow-increase --update`（ISSUE #2149）。规范 §13.5.4。     |
 | 页面级运行时读数（e2e 档，ISSUE #1781 的右半边） | `pnpm test:e2e`（随全量 e2e 一起跑；`e2e/runtime-budget.spec.ts` + `e2e/support/runtime-budget.ts`）         | 首页 `/workspace` 首屏的 `loadEventEnd` / `FCP`，口径是**每轮开新 page + 弃前 4 轮取 `min`**（同一 page 反复导航时 FCP 结构性缺失，成因与实测见规范 11 §11.8.1）。阈值 = 基线 × 2，基线读数与口径常量同源（`scripts/.runtime-budget-baseline.json`）。**不新增档/账/入口** —— 与全量 e2e 是同一笔开销（起 webServer + 浏览器）                                                                              |
@@ -2962,7 +2962,7 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 
 ---
 
-### 7.7 桌包成品档：独立流水线 + 常驻目录发布（ISSUE #2503）
+### 7.7 桌包成品档：独立流水线 + 发布目录（ISSUE #2503）
 
 **这一节答的是「安装包在哪儿」**。§7.0 那张表与 §7.6 讲的是怎么把包打出来，而打完之后
 它只活在工作区里：平台每次构建都新建 job 目录、收尾整目录删（实测不穿符号链接，见
@@ -3104,11 +3104,12 @@ tauri 判定工具缓存目录不完整时会**先删掉** `%LOCALAPPDATA%\tauri
 
 **发布那一格的形状**（`scripts/publish-desktop-bundle.mjs`，本地与平台**同一个入口**）：
 
-- **常驻根由推导给**：`ci-cache-slot.mjs` 的 `resolveArtifactRoot` —— 问 `pnpm store path`
-  拿它所在的卷，拼 `<卷>\ci-artifacts\<包名>`（本机实测落点 `G:\ci-artifacts\comfy-app-t3`）。
-  **配置与脚本里都不写盘符**。它是两份缓存槽的**第三个兄弟目录**，不许放进 `ci-build-cache/`：
-  那两套的淘汰器把槽根下的**每个目录都当成一个键**，成品混进去就是「一个 TTL 到期的键位
-  删掉人要取的安装包」。
+- **落点由调用方给，缺省才推导**：`--root <dir>` 优先（相对路径按 `cwd` 解析；本地那条链
+  传 `dist/desktop`，见下方 #3546 那段）；没给时走 `ci-cache-slot.mjs` 的
+  `resolveArtifactRoot` —— 问 `pnpm store path` 拿它所在的卷，拼 `<卷>\ci-artifacts\<包名>`
+  （本机实测落点 `G:\ci-artifacts\comfy-app-t3`）。**配置与脚本里都不写盘符**。它是两份缓存槽的
+  **第三个兄弟目录**，不许放进 `ci-build-cache/`：那两套的淘汰器把槽根下的**每个目录都当成一个键**，
+  成品混进去就是「一个 TTL 到期的键位删掉人要取的安装包」。
 - **一份一个目录 + `manifest.json`**（sha / 构建号 / 事件键 / 时刻 / 体积 / 文件清单），
   目录名 = 标签；**`latest.txt` 只是指针文件**，不原地覆盖同名目录 —— 覆盖之后「这一份是
   什么时候的东西」就只能靠 mtime 猜，那是 §4.3「运行图落后于源码」那一族的第二个源。
@@ -3116,14 +3117,21 @@ tauri 判定工具缓存目录不完整时会**先删掉** `%LOCALAPPDATA%\tauri
 - **轮转留 2 份**，排序键是 manifest 的 `builtAt`；读不到时按目录 mtime 退档**并念出来**
   （没有 manifest 的目录是缺陷，但把轮转停在那里等于让盘无限长）。
 - **退出码三态**：0 发布完成 / 1 没有成品（构建那格没打出来）或写盘被拒 / 2 **没有结论**
-  （问不出常驻根、或目标卷不够）。「今天没有新包」与「没能把包放出去」在日志里逐字不同，
+  （问不出发布根、或目标卷不够）。「今天没有新包」与「没能把包放出去」在日志里逐字不同，
   后两档一律不许退 0 —— 静默降级成「今天没包」正是本单点名不许的形态。
 
 **本地那条链同批改**（`tools\build\build-all.ps1` → `tools/scripts/build-all.ps1`）：它过去
 只跑 `build-tauri-release.ps1`（`cargo build` + 占位 `static`），**产不出安装包**，而 §7.0
-那张表一直写着它产得出 —— 这一节把正文改成与代码一致：`[1/3]` 壳未在运行 → `[2/3]`
-`pnpm tauri build` → `[3/3]` 发布（同一个入口）。`build-standalone.ps1` 的 `--no-bundle`
-形态不变（那是「只要能跑的壳」那条路）。
+那张表一直写着它产得出 —— 这一节把正文改成与代码一致：`[1/4]` 壳未在运行 → `[2/4]`
+`pnpm tauri build` → `[3/4]` 仓库根快捷方式 → `[4/4]` 发布（同一个入口）。`build-standalone.ps1`
+的 `--no-bundle` 形态不变（那是「只要能跑的壳」那条路）。
+
+**本地落点改到项目内（ISSUE #3546）**：本地那条链调发布入口时带
+`--root "$PROJECT_ROOT\dist\desktop"` —— 本机自己打的包不再写进 `<卷>\ci-artifacts\<包名>`，
+诉求是「本地的包直落自己项目目录」。`--root` 优先于 `COMFY_CI_ARTIFACT_ROOT` 与
+`pnpm store path` 推导，所以不传它时（平台侧形态）行为一个字没变。`dist/` 已在 `.gitignore`
+的 `/dist/` 与 `scripts/qoder-ignore.mjs` 的忽略名单里，不新增忽略项；一份一个目录、
+`manifest.json`、`latest.txt` 指针、轮转留 2 份、三态退出码全部不变 —— 变的只是根。
 
 **NSIS 工具现场读数（ISSUE #3297；只加读数、不改判据、恒退 0）**：桌包档曾每一次都死在
 最后一格 `Running makensis … / Unable to start child process, error 0x2`，而前一格
@@ -3162,7 +3170,8 @@ tauri 判定工具缓存目录不完整时会**先删掉** `%LOCALAPPDATA%\tauri
 ```bash
 pnpm tauri build                                  # 整条链（本机实测见上面那张表）
 node scripts/publish-desktop-bundle.mjs --dry-run # 只打印会往哪儿落、会删谁
-node scripts/publish-desktop-bundle.mjs           # 真发布；常驻根会打在第一行
+node scripts/publish-desktop-bundle.mjs           # 真发布；发布根会打在第一行
+node scripts/publish-desktop-bundle.mjs --root dist/desktop  # 落到项目内（本地那条链）
 node scripts/ci-nsis-tool-probe.mjs               # 只量 NSIS 工具现场（恒退 0，只读）
 ```
 
@@ -3207,10 +3216,11 @@ ComfyAPP-portable.zip
 缺任一类即退 1 —— 少 sidecar / `server.js` 的免安装包在用户机器上是「双击没反应」，
 构建侧静默放行等于发一个起不来的包。
 
-**CNB 那一档不改**：`publish-desktop-bundle.mjs` 仍只收安装包（它的
-`INSTALLER_EXTENSIONS` 不认 `.zip`），常驻目录留 2 份的口径不变 —— 这次诉求是
-「GA 侧下载页分开」，本地发布面没有被要求改。本地想自查免安装版，先跑
-`pnpm tauri build`，再 `pnpm package:portable`（`--dry-run` 只打印计划）。
+**发布那一格不改**：`publish-desktop-bundle.mjs` 仍只收安装包（它的
+`INSTALLER_EXTENSIONS` 不认 `.zip`），留 2 份的口径不变 —— 这次诉求是
+「GA 侧下载页分开」，发布面没有被要求改；本地落点是项目内 `dist\desktop`（见上面 #3546
+那一段）。本地想自查免安装版，先跑 `pnpm tauri build`，再 `pnpm package:portable`
+（`--dry-run` 只打印计划）。
 
 #### 7.7.1 无效 workflow 会伪造一条它没声明事件的空 run —— 别拿 `event` 反推触发面（ISSUE #3299）
 

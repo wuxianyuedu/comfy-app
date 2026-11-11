@@ -61,7 +61,7 @@ Comfy-APP-T3/
 │  │  ├─ sync-lint.ps1           # 同步依赖 + pnpm lint（拉取更新/改码后日常自检）
 │  │  └─ register-comfyapp-protocol.ps1  # 注册 comfyapp:// 协议（免管理员）
 │  ├─ build/                # 构建打包入口
-│  │  ├─ build-all.ps1            # 一键发布构建（安装包 + 常驻目录留 2 份；入口仍是 app.exe）
+│  │  ├─ build-all.ps1            # 一键发布构建（安装包 + 发布到项目内 dist\desktop；入口仍是 app.exe）
 │  │  ├─ build-tauri-release.ps1  # 仅构建 release 版 Tauri 壳
 │  │  └─ rebuild-static.ps1       # 清理并重建 src-tauri/static
 │  ├─ shadcn-registry/      # 团队 shadcn Registry（start-shadcn-registry.ps1）
@@ -322,7 +322,7 @@ pnpm tauri build
 ```
 
 它执行 `pnpm tauri build` → 编译出 `src-tauri/target/release/app.exe` **并打出安装包**
-（nsis / msi），收尾把安装包发布到常驻目录（留最近 2 份，`latest.txt` 只是指针文件）。
+（nsis / msi），收尾把安装包发布到项目内 `dist\desktop`（留最近 2 份，`latest.txt` 只是指针文件）。
 装配由 `beforeBuildCommand`（`node scripts/build-desktop.mjs`）负责：`pnpm build` 出
 standalone → 组装 `src-tauri/static`（数产物 + 体积护栏两道防线都在那条链上）→
 同步 `splash.html` 进 `src-tauri/splash-assets/`（启动页是编译期嵌入的）→
@@ -387,11 +387,11 @@ tools\build\build-standalone.ps1   # 组装 standalone 资源（server.js + .nex
 | --------------------------------- | --------------------------------------------------------- |
 | 浏览器开发                        | `pnpm dev`                                                |
 | 桌面壳开发（热重载）              | `pnpm tauri dev` 或双击 `tools\start\start-tauri-dev.ps1` |
-| 一键构建（安装包 + 发布到常驻目录）   | `tools\build\build-all.ps1`                               |
+| 一键构建（安装包 + 发布到项目内）   | `tools\build\build-all.ps1`                               |
 | 仅 release 壳（不含安装包）           | `tools\build\build-tauri-release.ps1`                     |
 | 独立模式资源（standalone）        | `tools\build\build-standalone.ps1`                        |
 | 完整安装包（不发布）              | `pnpm tauri build`                                        |
-| 把打好的安装包发布到常驻目录      | `node scripts/publish-desktop-bundle.mjs`                 |
+| 把打好的安装包发布到指定目录      | `node scripts/publish-desktop-bundle.mjs --root <dir>`     |
 | 组装免安装版（解压即用 zip）      | `pnpm package:portable`                                   |
 | 清理重建前端资源                  | `tools\build\rebuild-static.ps1`                          |
 

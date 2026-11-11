@@ -1,7 +1,8 @@
 /**
  * 桌包发布判据（ISSUE #2503），钉的是形状不是包大小：①常驻根与两份缓存槽同卷、不同目录 —— 混进
  * `ci-build-cache/` 会被 TTL 淘汰刀删掉人取的安装包；②一份一个目录 + `latest` 是指针文件，否则只能靠 mtime 猜；
- * ③每份自带 manifest（轮转排序键，读不到按 mtime 退档并念出来）；④三态退出码分得开（1 = 今天没新包，2 = 没放出去，不许都退 0）。临时目录落仓库所在卷。
+ * ③每份自带 manifest（轮转排序键，读不到按 mtime 退档并念出来）；④三态退出码分得开（1 = 今天没新包，2 = 没放出去，不许都退 0）。
+ * ⑤落点可由 `--root` 显式给出（ISSUE #3546：本地那条链落项目内 `dist/desktop`），优先于环境变量与 store 推导。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -258,5 +259,46 @@ describe("发布那一跑（main）", () => {
     expect(code).toBe(0);
     expect(log).toContain("--dry-run：不落盘");
     expect(fs.readdirSync(root)).toEqual([]);
+  });
+});
+
+describe("--root（本地落点，ISSUE #3546）", () => {
+  it("压过环境变量；相对路径按 cwd 解析，env 指的常驻根一个字不写", () => {
+    const envRoot = tmpDir("envroot");
+    const repo = fakeBundleRepo("rootflag");
+    const sink: Array<string> = [];
+    const code = main({
+      argv: ["--label", "r1", "--root", path.join("dist", "desktop")],
+      cwd: repo,
+      env: { [ARTIFACT_ROOT_ENV]: envRoot },
+      log: (line: string) => sink.push(line),
+      runStore: storeOn("G:"),
+      runGit: () => "cafe1234567890",
+      now: new Date("2026-11-11T00:00:00.000Z"),
+    });
+    expect(code).toBe(0);
+    const target = path.join(repo, "dist", "desktop", "r1");
+    expect(fs.existsSync(path.join(target, MANIFEST_FILE))).toBe(true);
+    /* 显式落点是**唯一**的落点：环境变量指的那份常驻根不许被顺带写一份。 */
+    expect(fs.readdirSync(envRoot)).toEqual([]);
+    /* 来源要念得出来 —— 「为什么这次落在项目里」不能只靠读代码。 */
+    expect(sink.join("\n")).toContain("来源：命令行 --root");
+  });
+
+  it("绝对路径自己就是落点：问不出 store 也照落、退 0", () => {
+    const root = tmpDir("absroot");
+    const sink: Array<string> = [];
+    const code = main({
+      argv: ["--label", "r1", "--root", root],
+      cwd: fakeBundleRepo("absroot"),
+      env: {},
+      log: (line: string) => sink.push(line),
+      runStore: noStore,
+      runGit: () => "cafe1234567890",
+      now: new Date("2026-11-11T00:00:00.000Z"),
+    });
+    expect(code).toBe(0);
+    expect(fs.readFileSync(path.join(root, LATEST_POINTER_FILE), "utf8").trim()).toBe("r1");
+    expect(sink.join("\n")).toContain(root);
   });
 });

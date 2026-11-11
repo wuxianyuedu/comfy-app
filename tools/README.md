@@ -65,7 +65,7 @@
 | `start/Create-AppShortcut.ps1` | start/ | 一次性配置 | 在仓库根生成 `Comfy APP.lnk` 启动快捷方式（由 `build-tauri-release.ps1` / `build-all.ps1` 构建成功后自动调用；手动 `cargo build --release --features custom-protocol` 之后想单独补生成时也可直接双击） |
 | `build/build-tauri-release.ps1` | build/ | 壳 | 构建 `src-tauri/target/release/app.exe`（唯一入口；prebuilt / tauri dev 都用它） |
 | `build/build-standalone.ps1` | build/ | 壳（standalone 用） | 完整生产构建独立壳：`pnpm tauri build --no-bundle`，产出不连 dev server 的可分发壳 |
-| `build/build-all.ps1` | build/ | 一键编排 | `pnpm tauri build`（app.exe + nsis/msi 安装包）→ 在仓库根生成 `Comfy APP.lnk` 双击入口 → 发布到常驻目录留 2 份（规范 §7.7） |
+| `build/build-all.ps1` | build/ | 一键编排 | `pnpm tauri build`（app.exe + nsis/msi 安装包）→ 在仓库根生成 `Comfy APP.lnk` 双击入口 → 发布到项目内 `dist\desktop` 留 2 份（规范 §7.7） |
 | `build/rebuild-static.ps1` | build/ | 资源 | 清理并重建 `src-tauri/static`（standalone / 嵌入资源来源） |
 | `build/package-portable.ps1` | build/ | 免安装版 | 组装解压即用的 portable zip（逻辑 `scripts/package-desktop-portable.mjs`，跨平台 `pnpm package:portable`，规范 §7.7 / ISSUE #3345） |
 | `docs/generate-docs.ps1` | docs/ | 文档 | 一键生成原文文档：`pnpm doc:check` 校验一致性 + `pnpm doc:render` 生成 `docs/generated/`（跨平台等价：`pnpm doc:gen`；逻辑在 `scripts/generate-docs.ps1` / `scripts/generate-docs.mjs`） |
@@ -296,8 +296,8 @@ cargo build --release --features custom-protocol
 
 1. `pnpm tauri build` —— 整条桌包链：`build-desktop.mjs`（`pnpm build` → 装配 `static`
    → Node sidecar）→ cargo 编译 → bundle，产出 **nsis / msi 安装包**；
-2. `node scripts/publish-desktop-bundle.mjs` —— 把安装包发布到**常驻目录**
-   （`<store 所在卷>\ci-artifacts\<包名>`，盘符由 `pnpm store path` 推导）：一份一个目录
+2. `node scripts/publish-desktop-bundle.mjs --root dist\desktop` —— 把安装包发布到**项目内**
+   `dist\desktop`（本机自己打的包不再写常驻目录，ISSUE #3546）：一份一个目录
    + `manifest.json`，`latest.txt` 是指针文件，轮转留最近 2 份；
 3. 产物仍是唯一入口 `src-tauri\target\release\app.exe`（安装包只是它的分发形态，
    **没有第二层启动器 exe** —— 那一步已随 ISSUE #784 移除）；
