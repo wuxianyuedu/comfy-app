@@ -14,7 +14,6 @@
 import { isHttpUrl } from "~/lib/url-scheme";
 import {
   inferModelDefaults,
-  inferOutputTypesFromName,
   isLlmApiFormat,
   parseCapabilities,
   parseInputTypes,
@@ -26,7 +25,7 @@ import {
   type ModelInputType,
   type ModelOutputType,
 } from "./provider-types";
-import { REMOTE_MODEL_KINDS, type RemoteModelKind } from "./types";
+import { inferOutputTypesFromName, REMOTE_MODEL_KINDS, type RemoteModelKind } from "./types";
 
 /* ── 供应商 ─────────────────────────────────────────────────────── */
 

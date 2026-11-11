@@ -14,8 +14,6 @@ import { EMPTY_PLACEHOLDER } from "~/lib/display-value";
 import { isRecord } from "~/lib/is-record";
 import { trimFixed } from "~/lib/number-format";
 
-import type { RemoteModelKind } from "./types";
-
 /** 上游接口协议格式。Base URL 由用户填写，路径段由格式决定：
  *  · `chat-completions` → `{base}/chat/completions`（OpenAI 兼容，最通用）
  *  · `anthropic-messages` → `{base}/v1/messages`（Anthropic Messages）
@@ -365,34 +363,7 @@ export function inferModelDefaults(modelId: string): ModelSmartDefaults {
   };
 }
 
-/* ── 按模型名推断（智能配置 / 目录导入共用）──────────────────────── */
-
-/** 按模型名推断用途（#3577 目录导入用）：名字带 video → video、带 image/img
- *  → image，其余 → chat。只是「落库起点」，用户可在模型行上改用途。
- *  通用命名规律，不针对特定厂商（gpt-image-* / *-video-* / veo-* 同样命中）。 */
-export function inferRemoteKindFromName(modelId: string): RemoteModelKind {
-  const id = modelId.trim().toLowerCase();
-  if (/(?:^|[^a-z])video(?:[^a-z]|$)/.test(id)) {
-    return "video";
-  }
-  if (/(?:^|[^a-z])(?:image|img)(?:[^a-z]|$)/.test(id)) {
-    return "image";
-  }
-  return "chat";
-}
-
-/** 按模型名推断输出类型（#3577）：与 `inferRemoteKindFromName` 同一套命名规律，
- *  但返回的是**输出**词表（video 名字的模型输出视频、image 名字的输出图像）。 */
-export function inferOutputTypesFromName(modelId: string): Array<ModelOutputType> {
-  const kind = inferRemoteKindFromName(modelId);
-  if (kind === "video") {
-    return ["video"];
-  }
-  if (kind === "image") {
-    return ["image"];
-  }
-  return ["text"];
-}
+/* ── 上下文窗口展示 ─────────────────────────────────────────────── */
 
 /** 上下文窗口的展示格式：`200K` / `1M` / `8,192`（未知给 `EMPTY_PLACEHOLDER`）。
  *  设置页的行内摘要与表单提示共用它，别在两处各写一套除法。 */

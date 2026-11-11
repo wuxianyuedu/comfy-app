@@ -3,7 +3,7 @@
 // 都讲 OpenAI 的 /v1/chat/completions 协议。
 
 import { isRecord } from "~/lib/is-record";
-import type { LlmApiFormat } from "./provider-types";
+import type { LlmApiFormat, ModelOutputType } from "./provider-types";
 
 export type LLMProviderType = "local" | "remote";
 
@@ -65,6 +65,35 @@ export const REMOTE_MODEL_KIND_LABELS: Record<RemoteModelKind, string> = {
   image: "图像",
   video: "视频",
 };
+
+/** 按模型名推断用途（#3577 目录导入用）：名字带 video → video、带 image/img
+ *  → image，其余 → chat。只是「落库起点」，用户可在模型行上改用途。
+ *  通用命名规律，不针对特定厂商（gpt-image-* / *-video-* / veo-* 同样命中）。
+ *  住在本文件而不是 provider-types：它返回的是 kind 词表本身，放对面要回指
+ *  本文件（模块循环依赖硬闸 §12.7 断过一次的那类环）。 */
+export function inferRemoteKindFromName(modelId: string): RemoteModelKind {
+  const id = modelId.trim().toLowerCase();
+  if (/(?:^|[^a-z])video(?:[^a-z]|$)/.test(id)) {
+    return "video";
+  }
+  if (/(?:^|[^a-z])(?:image|img)(?:[^a-z]|$)/.test(id)) {
+    return "image";
+  }
+  return "chat";
+}
+
+/** 按模型名推断输出类型（#3577）：与 `inferRemoteKindFromName` 同一套命名规律，
+ *  但返回的是**输出**词表（video 名字的模型输出视频、image 名字的输出图像）。 */
+export function inferOutputTypesFromName(modelId: string): Array<ModelOutputType> {
+  const kind = inferRemoteKindFromName(modelId);
+  if (kind === "video") {
+    return ["video"];
+  }
+  if (kind === "image") {
+    return ["image"];
+  }
+  return ["text"];
+}
 
 /** 远端候选模型条目。
  *

@@ -15,8 +15,13 @@ import "server-only";
 import { db } from "~/lib/db";
 import { firstRowOfExisting, firstRowRequired } from "./repository-row";
 import { decryptLlmKey, encryptLlmKey } from "~/lib/llm/secrets";
-import { type RawExtraModel, splitExtraModels, type RemoteModelEntry } from "~/lib/llm/types";
-import { isLlmApiFormat, inferRemoteKindFromName } from "~/lib/llm/provider-types";
+import {
+  type RawExtraModel,
+  splitExtraModels,
+  type RemoteModelEntry,
+  inferRemoteKindFromName,
+} from "~/lib/llm/types";
+import { isLlmApiFormat } from "~/lib/llm/provider-types";
 import {
   user,
   llmConfig,
