@@ -83,9 +83,12 @@ const SettingsView = lazyView("settings", () =>
   import("~/components/settings/SettingsView").then((m) => m.SettingsView),
 );
 
-/* 模型适配 / 模式契约：与设置同一族（项目无关的全局配置视图）。 */
+/* 模型适配 / 测试模型 / 模式契约：与设置同一族（项目无关的全局配置视图）。 */
 const ModelAdaptersView = lazyView("model-adapters", () =>
   import("~/components/workshop/ModelAdaptersView").then((mod) => mod.ModelAdaptersView),
+);
+const ModelTestView = lazyView("model-test", () =>
+  import("~/components/workshop/ModelTestView").then((mod) => mod.ModelTestView),
 );
 const ModeContractView = lazyView("mode-contract", () =>
   import("~/components/workshop/mode-contract/ModeContractView").then(
@@ -253,6 +256,10 @@ export function WorkspaceViewStack({
 
       case "model-adapters": {
         return <ModelAdaptersView />;
+      }
+
+      case "model-test": {
+        return <ModelTestView />;
       }
 
       case "mode-contract": {

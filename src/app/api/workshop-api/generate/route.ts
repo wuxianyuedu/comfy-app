@@ -42,6 +42,9 @@ export async function POST(req: NextRequest) {
   const remoteTaskId = strField(body, "remoteTaskId");
   const frames = intField(body, "frames", 1, 1000);
   const fps = intField(body, "fps", 1, 120);
+  /* 视频秒数（#3590 测试页与适配器 duration 输入用）：1~60s 的宽松界 ——
+   * 各家视频接口的合法区间不同（Agnes 4~12s），越界由上游报错。 */
+  const duration = intField(body, "duration", 1, 60);
 
   try {
     if (kind === "image") {
@@ -63,9 +66,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (kind === "video") {
-      // 异步提供方的轮询步。
+      // 异步提供方的轮询步。model/mode 跟着走（#3590）：远端模型的任务查询
+      // 地址与密钥都在该条目上，轮询要按它构造候选。
       if (remoteTaskId !== undefined && remoteTaskId !== "") {
-        const result = await pollVideoViaApi(remoteTaskId);
+        const result = await pollVideoViaApi(remoteTaskId, { mode, model });
         return NextResponse.json(result);
       }
       if (!prompt) {
@@ -81,6 +85,9 @@ export async function POST(req: NextRequest) {
         imageDataUrl,
         frames,
         fps,
+        model,
+        mode,
+        ...(duration === undefined ? {} : { duration }),
       });
       return NextResponse.json(result);
     }

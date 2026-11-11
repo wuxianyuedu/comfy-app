@@ -34,6 +34,8 @@ const adapterInputSchema = z.object({
   field: z.string().min(1),
 });
 const adapterSchema = z.object({
+  /* 固定值字段（#3590）：每次请求原样带上的键值（如 Agnes 视频的 mode/size）。 */
+  constants: z.array(z.object({ field: z.string().min(1), value: z.string() })).optional(),
   mode: z.string().min(1),
   endpointPath: z.string().min(1),
   inputs: z.array(adapterInputSchema).min(1),
