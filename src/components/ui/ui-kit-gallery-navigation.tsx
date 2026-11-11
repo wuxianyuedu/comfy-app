@@ -130,7 +130,12 @@ export function NavigationSection() {
                 </NavigationMenuContent>
               </NavigationMenuItem>
               <NavigationMenuItem>
-                <NavigationMenuTrigger render={<Link aria-label="资源库" href="/models" />}>
+                {/* render 成 <Link>（锚点）时不再是原生 <button>：
+                 * base-ui 要求显式 nativeButton=false，否则控制台报错。 */}
+                <NavigationMenuTrigger
+                  nativeButton={false}
+                  render={<Link aria-label="资源库" href="/models" />}
+                >
                   资源库
                 </NavigationMenuTrigger>
               </NavigationMenuItem>
