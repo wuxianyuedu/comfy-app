@@ -114,6 +114,58 @@ function InputMappingRow({
   );
 }
 
+/** 固定值的一行（#3590）：请求体字段名 → 每次请求原样带上的值。
+ *  有些接口要求请求体里带「不是用户输入」的字段（如 Agnes 视频必填的
+ *  mode:"text" / size:"720P"）—— 统一输入表达不了这类常量，单列一栏。 */
+function ConstantRow({
+  mode,
+  row,
+  index,
+  onChange,
+  onRemove,
+}: {
+  index: number;
+  mode: string;
+  onChange: (next: { field: string; value: string }) => void;
+  onRemove: () => void;
+  row: { field: string; value: string };
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        aria-label={`${modeLabel(mode)} 第 ${index + 1} 行固定值的请求体字段名`}
+        className="border-border bg-bg focus:border-primary w-40 shrink-0 rounded-lg border px-2.5 py-1.5 font-mono text-xs outline-none"
+        onChange={(event) => {
+          onChange({ field: event.target.value, value: row.value });
+        }}
+        placeholder="请求体字段名"
+        value={row.field}
+      />
+      <span aria-hidden className="text-muted-foreground/50 shrink-0 text-xs">
+        =
+      </span>
+      <input
+        aria-label={`${modeLabel(mode)} 第 ${index + 1} 行固定值的取值`}
+        className="border-border bg-bg focus:border-primary min-w-0 flex-1 rounded-lg border px-2.5 py-1.5 font-mono text-xs outline-none"
+        onChange={(event) => {
+          onChange({ field: row.field, value: event.target.value });
+        }}
+        placeholder="固定值，如 text / 720P"
+        value={row.value}
+      />
+      <Button
+        aria-label={`删除第 ${index + 1} 行固定值`}
+        className="text-muted-foreground/60 hover:text-danger-strong shrink-0 hover:bg-transparent"
+        onClick={onRemove}
+        size="icon-sm"
+        variant="ghost"
+      >
+        ✕
+      </Button>
+    </div>
+  );
+}
+
 export function ModelAdaptersView() {
   const controller = useModelAdapters();
   const {
@@ -344,6 +396,49 @@ export function ModelAdaptersView() {
                     shape="dashed"
                   >
                     ＋ 添加输入映射
+                  </SelectChip>
+                </div>
+              </div>
+
+              {/* 固定值字段（#3590）：不是用户输入、每次请求都带上的键值。
+                  与输入映射同占一栏位的编辑器，行数通常 0~3 行。 */}
+              <div className="mt-4">
+                <SectionLabel hint="每次请求都原样带上的请求体键值（接口必填的固定参数写这里）">
+                  固定值
+                </SectionLabel>
+                <div className="flex flex-col gap-2">
+                  {(a.constants ?? []).map((row, i) => (
+                    <ConstantRow
+                      index={i}
+                      key={`${a.mode}-const-${row.field}-${i}`}
+                      mode={a.mode}
+                      onChange={(next) => {
+                        updateAdapter(a.mode, (x) => ({
+                          ...x,
+                          constants: (x.constants ?? []).map((r, j) => (j === i ? next : r)),
+                        }));
+                      }}
+                      onRemove={() => {
+                        updateAdapter(a.mode, (x) => ({
+                          ...x,
+                          constants: (x.constants ?? []).filter((_, j) => j !== i),
+                        }));
+                      }}
+                      row={row}
+                    />
+                  ))}
+                  <SelectChip
+                    className="self-start px-2.5 py-1 text-xs"
+                    onClick={() => {
+                      updateAdapter(a.mode, (x) => ({
+                        ...x,
+                        constants: [...(x.constants ?? []), { field: "", value: "" }],
+                      }));
+                    }}
+                    selected={false}
+                    shape="dashed"
+                  >
+                    ＋ 添加固定值
                   </SelectChip>
                 </div>
               </div>

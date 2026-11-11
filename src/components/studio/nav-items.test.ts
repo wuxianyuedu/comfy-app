@@ -33,6 +33,9 @@ const GLOBAL_IDS: Array<WorkspaceView> = [
      跟在「工作流库」之后（契约口清单是工作流库配落点的依据、适配器是远端模型的字段
      映射，两件事都服务这条链路），在「控制台」之前。 */
   "model-adapters",
+  /* 测试模型（#3590）：紧跟「模型适配」—— 它消费的正是适配器配出来的
+     工坊同款输入 / 输出，两者是同一条链路的配置面与试验面。 */
+  "model-test",
   "mode-contract",
   "console",
 ];
@@ -107,6 +110,7 @@ describe("模型适配 / 模式契约：已经是全局视图（此前是浮层�
     const ids = globalNavItems().map((i) => i.id);
     expect(ids.slice(ids.indexOf("workflows") + 1, ids.indexOf("console"))).toEqual([
       "model-adapters",
+      "model-test",
       "mode-contract",
     ]);
     const labels = Object.fromEntries(globalNavItems().map((i) => [i.id, i.label]));
@@ -131,7 +135,12 @@ describe("瞬时页签与侧栏隐藏（ISSUE #1784）", () => {
   /* 这两张清单是**产品判断**的落点，不是实现细节：改一个视图就换一种行为，
      而界面上不会有任何东西提示"这一页的规则变了"。所以逐项钉死 ——
      以后想把画布也改成瞬时、或想把设置放回侧栏，必须先来改这里并说明理由。 */
-  const TRANSIENT_IDS: Array<WorkspaceView> = ["settings", "model-adapters", "mode-contract"];
+  const TRANSIENT_IDS: Array<WorkspaceView> = [
+    "settings",
+    "model-adapters",
+    "model-test",
+    "mode-contract",
+  ];
 
   it("恰好这三项是瞬时页签（切走即关），其余都不是", () => {
     const actual = NAV_ITEMS.filter((item) => isTransientView(item.id)).map((item) => item.id);

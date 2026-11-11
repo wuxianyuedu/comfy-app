@@ -771,12 +771,40 @@
 
 #### FR-LM-06 远端生图 / 生视频接入
 
-- 状态：计划中（配置已在，运行时未接）
-- 需求：远端模型除 chat 外，还将承画图 / 视频生成。
-- 行为与验收：`REMOTE_MODEL_KINDS` 已含 `image` / `video`（先落配置）；
-  当前运行时只有 chat 参与；接入时以 FR-WP-04 的 relay 为落点，
-  不新开第三条通道。
-- 落点：`src/lib/llm/types.ts`（`REMOTE_MODEL_KINDS`）
+- 状态：已上线
+- 需求：远端模型除 chat 外，还承担画图 / 视频生成。
+- 行为与验收：统一走 FR-WP-04 的 relay（不另开通道）。生图：按请求里的
+  `model` 在 `remoteModel` 表按名直连，适配器把统一输入翻译成接口字段、
+  产物按 `outputField` 提取（`resolveTarget` + `bodyFromAdapter`）。
+  视频（#3590 补齐）：`submitVideoViaApi` 同样按 `model` 定向
+  （`resolveVideoTarget`，无适配器回落 OpenAI 兼容惯例 `/videos`），
+  轮询按该条目 + 适配器端点构造候选（Agnes 系 `/agnesapi?video_id=…` 与
+  REST `/videos/{id}`，`buildVideoPollUrls`），鉴权用条目自己的密钥；
+  未带 `model` 的工坊镜头链路保持全局通道设置与既有失败语义。
+- 落点：`src/lib/workshop/api-channel.server.ts`、
+  `src/lib/workshop/api-channel-core.ts`、`src/lib/llm/types.ts`
+
+#### FR-LM-07 测试模型能力
+
+- 状态：已上线
+- 需求（ISSUE #3590）：主界面左侧有入口，能简单测试已配置的模型 ——
+  所有配好工坊适配的远端模型都能用，输入与输出都是工坊同款。
+- 行为与验收：工作区侧栏全局项「测试模型」（瞬态页签，`navId=model-test`）。
+  用途分图片 / 视频（音频等通道接入后再加页签）；候选 = configGet 下发的
+  启用条目按用途过滤（baseUrl 为空的不进，那种条目按名解析会回落全局通道，
+  测试对象就不再是这个模型）。选中模型 → 选模式（「模型适配」里配的适配器，
+  没配时提示并按 OpenAI 兼容默认映射直连）→ 输入行**逐行来自适配器映射**
+  （工坊同款；通道未承接的类型显式标「未承接」并禁用，不静默丢弃）→
+  生成走 `/api/workshop-api/generate`（与 ShotStudio / VideoStudio 同一条链），
+  视频任务制自动轮询（3s 一轮 / 10 分钟上限），产物用 `MediaThumbnail`
+  就地展示并给原链。适配器新增「固定值」栏：每次请求原样带上的请求体键值
+  （如 Agnes 视频必填的 `mode:"text"` / `size:"720P"`），先常量后输入映射、
+  同名字段输入赢。
+- 落点：`src/components/workshop/ModelTestView.tsx`、
+  `src/components/workshop/hooks/use-model-test.ts`、
+  `src/components/workshop/model-test-config.ts`、
+  `src/components/workshop/ModelAdaptersView.tsx`（固定值编辑器）、
+  `src/lib/workshop/model-mode-contract.ts`（constants）
 
 ---
 

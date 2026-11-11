@@ -71,6 +71,12 @@ export function workshopInputLabel(type: WorkshopInputType): string {
 
 /** 一种远端模式在工坊下的适配器。 */
 export type RemoteModeAdapter = {
+  /** 固定值字段（#3590）：每次请求都原样带上的请求体键值（如 Agnes 视频接口
+   *  必填的 mode:"text" / size:"720P"）。它们不是用户输入，适配器层给不出
+   *  「统一输入」的表达（17 种输入类型都是每次请求的值），所以单列一栏。
+   *  合并顺序：先常量、后输入映射 —— 同名字段让输入映射赢（用户当次给值
+   *  比写死的更具体）。缺省 / 空数组 = 没有常量。 */
+  constants?: Array<{ field: string; value: string }>;
   /** 上游端点路径（拼在条目 baseUrl 后），如 /v1/images/generations。 */
   endpointPath: string;
   /** 统一输入 → 请求体字段名。同一类型只能出现一次。 */
@@ -222,11 +228,35 @@ export function parseRemoteModeAdapters(raw: unknown): Array<RemoteModeAdapter> 
         ? rec.endpointPath.trim()
         : defaultEndpointPathForMode(mode);
     const outputField = typeof rec.outputField === "string" ? rec.outputField.trim() : "";
+    /* 固定值字段：field 非空才算一行；同名字段保留**先到的那条**（与 inputs
+     * 的「同一类型只留一行」同精神）；value 原样保留（空串也合法 —— 有些
+     * 接口就是要显式的空值）。坏行丢弃不报错（库里一行写坏不该让整条消失）。 */
+    const constants: Array<{ field: string; value: string }> = [];
+    if (Array.isArray(rec.constants)) {
+      for (const row of rec.constants) {
+        if (!isRecord(row)) {
+          continue;
+        }
+        const r = row;
+        const field = typeof r.field === "string" ? r.field.trim() : "";
+        if (!field || constants.some((c) => c.field === field)) {
+          continue;
+        }
+        const raw = r.value;
+        /* value 只收字符串 / 数字 / 布尔（JSON 里的标量）；对象 / 数组不是
+         * 「固定值」该有的形状，整行丢弃而不是 String() 出 [object Object]。 */
+        if (typeof raw !== "string" && typeof raw !== "number" && typeof raw !== "boolean") {
+          continue;
+        }
+        constants.push({ field, value: String(raw) });
+      }
+    }
     out.push({
       mode,
       endpointPath,
       inputs,
       outputField,
+      ...(constants.length > 0 ? { constants } : {}),
     });
   }
   return out;
