@@ -16,6 +16,7 @@ import {
   DECLARED_STEPS,
   registryProblems,
 } from "../scripts/base-check/declared-hook-steps.mjs";
+import { DAILY_GATE_EXECUTORS } from "../scripts/ci-ga-trigger-map.mjs";
 import { fullTreeArgv, main as heavyMain } from "../scripts/ci-heavy-gates.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
@@ -120,9 +121,28 @@ describe("档位：跳过必须被说出来", () => {
     expect(cnb).not.toContain("类型检查, 固定结构用例, 受影响用例,");
     expect(cnb).not.toMatch(/^\s*- name: 受影响用例\s*$/m);
     expect(cnb).not.toMatch(/^\s*- name: 固定结构用例\s*$/m);
-    // `覆盖率上报` 从 PR 挪到了每日档（PR 上不再有产出 lcov 的测试格，它只会静默空转）；
-    // 它现在以 `- name: 覆盖率上报` 的形态在 `*daily_gates` 末尾。
-    expect(cnb).toMatch(/^\s*- name: 覆盖率上报\s*$/m);
+    // `覆盖率上报` 从 PR 挪到了每日档（PR 上不再有产出 lcov 的测试格，它只会静默空转）。
+    // #3504 起每日档的执行者整体迁 GA：逻辑名 ⇄ step 名登记在 `ci-ga-trigger-map.mjs`
+    // 的 `DAILY_GATE_EXECUTORS`，执行面在 `.github/workflows/daily.yml` —— step 名改了
+    // 而登记没跟，当场红在这里（与 `ci-incremental-gates.test.ts` 的「每日 API 文档」
+    // 那条同一模式）。CNB 侧谁把旧 stage 名加回来，也在上面两条否定断言红。
+    const gaDaily = readFileSync(path.join(ROOT, ".github", "workflows", "daily.yml"), "utf8");
+    const coverageStep = DAILY_GATE_EXECUTORS["覆盖率上报"];
+    expect(coverageStep, "`覆盖率上报` 在 DAILY_GATE_EXECUTORS 里没有登记对位 step").toBeTruthy();
+    const stepAt = gaDaily.indexOf(`      - name: ${coverageStep}`);
+    expect(
+      stepAt,
+      `GA daily.yml 里解析不出「${coverageStep}」step —— 每日档的覆盖率出口没有执行者`,
+    ).toBeGreaterThan(-1);
+    const blockEnd = gaDaily.indexOf("\n      - name:", stepAt + 1);
+    const block = gaDaily.slice(stepAt, blockEnd === -1 ? undefined : blockEnd);
+    // 执行语义是「产物出口」：报告由上一格的 `full-suite-run.mjs` 产出，这一格上传
+    // artifact；「没有报告时跳过而不是判红」由 `if: always()` + `if-no-files-found: warn`
+    // 兑现（对位 CNB 那格的跳过口径，见 daily.yml step 注释）。
+    expect(block).toContain("actions/upload-artifact");
+    expect(block).toContain("path: coverage/");
+    expect(block).toContain("if: always()");
+    expect(block).toContain("if-no-files-found: warn");
     // 拿不到改动面 / 清单为空必须退 2（没判 ≠ 绿）。
     expect(ci).toMatch(/files\.length === 0[\s\S]{0,400}return 2/);
   });
