@@ -9784,6 +9784,64 @@ Docker、自托管节点没开），与本格的 PR 描述不是一回事。
 本节 + 生成态镜像 / `ga-migration-checklist.md` + 镜像 / `## Changed` 碎片挂 #3469，
 与 §13.5.33.4 同形同批。
 
+##### 13.5.33.8 2026-11-11 GA 侧那一格要在 Linux 上编 Tauri：系统库归 workflow 那一层装（ISSUE #3572）
+
+**改的是平台前提的归属与判据缺前提时的归因，不是判决链、不是三态退码、不是承重锚。**
+PR #3567（ISSUE #3562 的修复）在 GA 侧判红，红的是 `heavy-gates` job 的「重档静态判据」
+里那一格「桌面壳（改了 src-tauri 才跑）」：
+
+```
+[红] 桌面壳（改了 src-tauri 才跑）（退出码 101 · 147 行输出 · 27947ms）
+    pkg-config exited with status code 1
+    > PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --libs --cflags glib-2.0 'glib-2.0 >= 2.70'
+    The system library `glib-2.0` required by crate `glib-sys' was not found.
+```
+
+CNB 侧 `pull_request` build 因此读到 `state: error`、`GA 判决回调`读到 `conclusion: failure`
+（run 42991680023 · sha `1c92b95c`）—— **两者是同一根因的两个下游**，不是两个独立问题。
+
+**根因三段事实**（缺一段就不成立）：
+
+| 段 | 事实 |
+| --- | --- |
+| 这一格在 Linux 上跑 | `pr-gate.yml` 六个 job 全部 `runs-on: ubuntu-24.04`；ubuntu-24.04 runner 只预装 `pkg-config`，不预装 `libwebkit2gtk-4.1-dev` / `libglib2.0-dev` / `libayatana-appindicator3-dev` / `librsvg2-dev`（actions/runner-images 的 Ubuntu2404 apt 清单逐条核对过） |
+| 它以前不在 Linux 上跑 | ISSUE #3064（2026-11-02，`feat(ci): 承重流水线迁 GitHub Actions`）把承重门禁从 CNB 自托管节点迁到 GA，而那个节点是 **Windows**（`.cnb.yml` 节点 tag = win）—— Windows 编 Tauri 走 MSVC + WebView2，不需要 glib/webkit。迁移后 master 上**没有一笔提交**碰过 `src-tauri/src/`（立案时的读数：连续 418 笔）⇒ 这一格在 GA 上**从来没真跑过 `cargo test`**。ISSUE #3562 是第一次 |
+| 仓库里没有一层准备系统库 | `.github/workflows/**` 与 `.cnb.yml` 全文检索 `apt-get` / `webkit2gtk` / `libgtk` / `appindicator` / `librsvg`：**零命中**（`.cnb/ci-image/Dockerfile` 只装 `git-lfs`） |
+
+对照 `shell-gate` 自己做的准备 —— sidecar 按 Linux 三元组落位
+（`node-x86_64-unknown-linux-gnu`）、`static/` 空目录建好 —— 都齐了。**唯独系统库这一层，
+判据管不着也不该管**（它不是判据，是平台前提），于是无人负责。
+
+**为什么不能靠「换个平台」绕开**：这个 crate **刻意**支持跨平台构建，不是 Windows-only ——
+`src-tauri/Cargo.toml` 的 `windows` 是 target 条件依赖（注释明写「无条件声明时整棵
+windows crate 会在 Linux/macOS 上参与编译并以 `error[E0425]: cannot find type IMarshal
+in windows_core::imp` 失败」）；`single_instance.rs` / `shell_launch.rs` /
+`detached_spawn.rs` 都有 `#[cfg(not(windows))]` 的 POSIX 实现；壳内那批 `#[test]`
+**全部平台无关**（逐个查过：测试模块里没有一处 `windows::` 调用；路径断言用 `/proj`；
+`normalize_is_platform_and_cwd_independent` 还显式断言了 POSIX 路径）。
+⇒ 补齐系统库后 Linux 上 `cargo test` 能编能跑；挪去 Windows runner 是更大的改动
+（要动 runner 分配与门禁归属），且会让「Linux 上编不出壳」这件事继续藏着。
+
+**落地的两件事**：
+
+| 面 | 动作 |
+| --- | --- |
+| 平台前提（workflow 那一层） | `pr-gate.yml` 的 `heavy-gates` job 在跑重档**之前**装 Tauri 官方 Prerequisites（Debian/Ubuntu 一栏）那批 dev 包（`libwebkit2gtk-4.1-dev` / `libayatana-appindicator3-dev` / `librsvg2-dev` / `libxdo-dev` / `libssl-dev` / `build-essential`）。清单**照抄官方**，不自造 |
+| 判据（只说人话，不自己装） | `shell-gate` 在跑 `cargo test` **之前**探一次 `pkg-config --exists`（与编译期同一把尺）：缺哪个点哪个，并给出安装出口。**判据不 `sudo` 装** —— 判据 `sudo` 改本机是错的边界（提交一次就被 sudo 改一次机器）。缺前提时归因是独立的一格「cargo test 没跑起来：缺哪几个系统库」，**不与「cargo test 失败」混**（后者是「Rust 侧真坏了」） |
+
+**为什么不动判决链**：退出码语义、GA 结论回读、`GA_VERDICT` 折叠、三态退码、
+`COMFYAPP_CI_GATES` / `GATE_TIER_LEDGER` 一个字节未动。缺前提那一档**退 1** 而不是退 2 ——
+平台侧最终都是红（退 2 会被聚合层归进「没跑起来」那一档，而那一档**只打印标签、不打印
+判据的输出** ⇒ 真正的原因会整段消失，读的人只看到「没跑起来」四个字）。这一档必须把
+「缺哪几个包、去哪装」**露出来** ⇒ 只能走「红」那条路。
+
+**逐笔对账**：`.github/workflows/pr-gate.yml`（装库那一步 + 根因注释）/
+`scripts/shell-gate.mjs`（`missingLinuxSystemLibs()` 探针 + `prereq-missing` 那一格 +
+`linesFor` 的归因句 + `runCargoTest` 的可注入依赖）/
+`tests/shell-gate-linux-sysdeps.test.ts`（12 条：探针 5 + 接线 3 + workflow 4）/
+规范 §11.10.4 与 launch-and-build §9.3 + 生成态镜像 / `ga-migration-checklist.md` + 镜像 /
+`## Fixed` 碎片挂 #3572，与 §13.5.33.4 同形同批。
+
 #### 13.5.34 2026-11-06 GA push 档：镜像仓 master 的文档链并行执行者（任务 3 并行期）
 
 新增 `.github/workflows/master-gate.yml`，在镜像仓 master 的 `push` 上跑文档链两格：
@@ -11718,6 +11776,24 @@ node scripts/merge-changelog-fragments.mjs --release 0.2.0    # 并入并把待�
 （同 `--close-issue` 那条边界）。它只把入口摆出来（那两条命令与它们各自管哪一格见下方 §13.10.10），
 按不按由人决定。
 
+**交付收尾那一格：发现即建单，不许只「询问是否提单」（ISSUE #3560）。** 全托管（`--mode auto`）
+跑完，代理给任务派发者的交付 / 流程总结，是「发现」最密集、也最容易漏的最后一处：过程中读到的
+缺陷 / 坑 / 不规范 / 可优化点，常被写成「要不要提单」「是否提单」这类**等人点头**的询问句，
+总结一刷过去就随会话消失，下一次又从零查起。本仓口径没有给「立案」留这道表决：**立案不是决策，
+排期才是** —— §13.10.9 第 1 格「在不在账上不由人决定」在收尾同样成立。所以：
+
+- 读到一条发现，代理**当场**用 `pnpm ship --new-issue "<标题>" --issue-body-file <正文>
+  --priority <P0..P3>` 立案，不先问、不攒到下次会话、不写进「待办清单」等人认领；
+- **「后续是否处理」在对应单子里讨论**，不在本次交付里替人决定 —— 这正是「立案与处理是两件事」；
+- 总结里只放**已立案的号 + 一句话**（或「本轮没有发现」的显式说明），不放没有号的「建议」；
+- 一条诉求一张单（§13.10.9 末段 / ISSUE #2251），别把清单式大单留到关单时才发现欠着条目。
+
+**不为此写自动扫描建单的工具**：判「什么算一条发现、标题正文怎么写」是判断（§12.18 /
+§12.20），启发式扫描器会误报一片且本身就成了「会静默失效的清单」。执行者是代理自己，
+编排层一次也不代写标题与正文（§13.10.12、§13.6 四条红线）。汇报骨架把第五节从「人填待办」
+改成「已立案清单 + 不许只询问」的形状（`scripts/session-report.mjs`），用例逐字钉住
+（`tests/session-report.test.ts`）；回顾窗口补的口径见 §13.10.14。
+
 **已经写完改动才想起没立案**：先立案，把那张单的正文写成「症状 / 读数 / 根因」而不是事后追述，
 再按 §13.10.8 第 1 条确认号与改动是同一件；碎片改名 `<号>-<slug>.md` 与 commit 说明在
 **同一次 PR 内**一起改（已合并的历史够不着，处理方式见 §13.10.8 第 3 条），别只改一处。
@@ -12199,6 +12275,15 @@ fetch 零调用 / 退 0）、超长（head/tail 标记与省略行数自洽、�
 
 **这一格不是闸**：它是读数与出口，不参与退码、不阻断合并。做成闸的后果是「为了让它闭嘴而
 随手勾完」—— 与 §13.5.25 那条「本地没跑的那几组」同一族：**念出来 ≠ 已处置**。
+
+**但「发现即立案」这一格不是「读数与出口」，是动作（ISSUE #3560）。** 清单里点出的每一条
+发现，处置只有两种：5 分钟内顺手修（§13.11），或**当场** `pnpm ship --new-issue` 立案
+（§13.10.9 的交付收尾段）。**不许**把回顾结果写成「建议提单 / 要不要提单」的询问句留给交付
+总结——那等于把「在不在账上」重新交回一次表决，而本仓每一例「第二次才发现」都出在这一格。
+收尾总结里只出现**已立案的号**，不出现没有号的建议；「后续是否处理」在对应单子里讨论。
+`pnpm report:session`（§12.20 第三件标本）生成的汇报骨架，第五节就是这一格的落点：它从
+「人填待办」改成「已立案清单 + 不许只询问」的形状，机器填事实、判断（发现了什么、怎么立案）
+归代理，工具一次也不写平台、不代建单。
 
 #### 13.10.16 把「这一跑的令牌够得着哪些能力」变成读数（ISSUE #2551）
 

@@ -20,6 +20,7 @@
 | 回调 status 红了分不清送达失败 / GA 判红：PR 评论并列念「送达 / 判决」 | #3452 | `ci-ga-logs-relay.mjs` 复用结论折叠；只补可读性，承重退码与 status 颜色一字未改 |
 | 判红日志附件挂到 PR 本体（描述镜像）+ 另配 `CNB_PULL_REQUEST_TOKEN` | #3454 | `ci-ga-logs-relay.mjs` 评论后读改写 `PATCH /-/pulls/{n}`，只换自己 marker 块；描述只写镜像、评论仍是权威读源，`repo-pr:rw` 专用令牌不给旧令牌扩权 |
 | GA 回读结论判红时补「错误日志怎么取」的指针 | #3469 | `ci-ga-verdict-readout.mjs` 明确判红那一眼把 `pnpm ship --gh-logs pr:<号>` 念进 stage 日志；绿 / 没判过 / `--json` 不给，不改三态与退码 |
+| GA 侧那一格在 Linux 上编 Tauri：系统库归 workflow 那一层装 | #3572 | `pr-gate.yml` 的 `heavy-gates` job 装 Tauri 官方 Prerequisites 那批 dev 包；`shell-gate` 加 `pkg-config` 探针，缺前提时归因「cargo test 没跑起来」而不是「失败」；判据不自己装 |
 
 ## 待落地（按优先级 + 主题分组）
 

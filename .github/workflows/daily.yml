@@ -1,8 +1,9 @@
 # 每日档（镜像档）—— 对位 `.cnb.yml` 的「每日生产构建」（crontab 0 1 * * *，北京时间）
 #
-# 承接的格（命令与 env 逐字对位 CNB 每日档，顺序一致 —— 单 job 串行，与 CNB 同一
+# 承接的格（命令与 env 逐字对位 CNB 每日档，顺序一致 —— **重格链**单 job 串行，与 CNB 同一
 # 工作区语义对齐：`每日生产构建` 的产物接着给 `每日全量E2E` 的 `COMFY_E2E_SERVER=start`
-# 用，拆成多 job 就要跨 job 传产物，那不是等价形态）：
+# 用，拆成多 job 就要跨 job 传产物，那不是等价形态。唯一的例外是末尾那个 `daily-failure-issue`
+# job：它只读 jobs API、一个工作区产物都不碰，拆出去不损失等价性 —— 理由见下面那段）：
 #   安装依赖 → 同步数据库表结构 → 新鲜度账 → 生产构建 → ESLint 零警告 →
 #   浏览器安装 → 全量E2E → API 文档自检 → 单元测试（排最后，与 CNB「最容易出问题的放最后」同口径）
 #   → 失败时补一步环境证据（dmesg 的 OOM 行 + 内存读数；ISSUE #3333，`if: failure()`
@@ -16,10 +17,24 @@
 # 由镜像与 setup-* 钉死，无需自证）。
 #
 # 每日失败立案**原本**在这份清单里，理由是它依赖 CNB API / cnb CLI —— 那条理由在「脚本走
-# HTTP 而不是 cnb CLI」之后不再成立：本档末尾的 `失败立案` 步用内置 GITHUB_TOKEN 读自身这一跑
-# 的 jobs、用 CNB_ISSUE_TOKEN 写单（与 code-scanning-triage.yml 同一条通道），把「这一跑红了」
-# 变成一张按格名去重的 CNB 单（#3436；缺口现场 #3368 / #3435）。CNB 自己的 `每日失败立案`
+# HTTP 而不是 cnb CLI」之后不再成立：它用内置 GITHUB_TOKEN 读这一跑的 jobs、用
+# CNB_ISSUE_TOKEN 写单（与 code-scanning-triage.yml 同一条通道），把「这一跑红了」变成一张
+# 按格名去重的 CNB 单（#3436；缺口现场 #3368 / #3435）。CNB 自己的 `每日失败立案`
 # 判的是 CNB 上一跑，与本档这一跑互不覆盖。
+#
+# ⚠️ 它是**下游 job**（`daily-failure-issue`：`needs: daily` + `if: failure()`），不是 `daily`
+# 里的一个 step。这一条是 #3563 治出来的，**别挪回去**：
+# 脚本唯一的红格来源是 jobs API 的 `steps[].conclusion === "failure"`。它作为 step 跑在 `daily`
+# 内部时那个 job 自己还是 `in_progress`，实测读回来 **0 个红格** —— run `42915112854`：
+# `单元测试` 22:39:17 判 failure，`失败立案` 22:39:17→22:39:19 就跑了，打印「红格 0 个」⇒
+# 零写入、退码 2 被 `--no-block` 折成 0，于是「红了」与「没红」在账上长得一样。
+# 这里原先写的「jobs API 此时已把前面红格的 conclusion 写好」是**未经复核的前提**，已被那一跑
+# 推翻。至于 API 是「在飞的 job 根本不报 step conclusion」还是「报得慢」**没有结论**：338 个
+# 在飞 job 的抽样 0 命中，而「job 在飞且已有红 step」那个窗口只有几秒，取不到不等于没有。
+# 挪到下游之后 `daily` 已 `completed`、conclusion 是终值 —— 这个修法在两种成因下都成立，
+# 不必先把成因分清（也分不清：在 job 内部轮询等它自己 completed 是死锁）。
+# 同族先例：pr-gate.yml 的 `ga-verdict-callback` 与 `ci-ga-logs-relay.mjs` 一直是「下游 job 读
+# 上游终态」，实测读得到失败 job。
 #
 # 两处与 CNB 不同形、但判据不变：
 #   · 安装用裸 `pnpm install --frozen-lockfile`：CNB 的 `ci-install-deps.mjs` 多出来的
@@ -181,33 +196,6 @@ jobs:
           echo "== 内存读数 =="
           free -h
 
-      # 立案（#3436 / 同族 #2274）：把「这一跑红了」变成一张 CNB 单。
-      # 本档此前**没有**这一格 —— CNB 的 `每日失败立案` 判的是 CNB 自己的上一跑，本档这一跑
-      # 不在它的读数面里；于是那次掉页（#3368 换了模型库的 UI 形状、e2e 用例没跟着改，2026-11-08
-      # 全量E2E 红）只能靠人手动 `gh run view --log-failed` 再手动立案。判据在场、执行者不在场，
-      # 这一格补的就是那个执行者。
-      #
-      # 三个落点选择都是判据：
-      #   · `if: failure()` —— 判的是**这一跑自己**：jobs API 此时已把前面红格的 conclusion 写好，
-      #     本格自己还在 in_progress ⇒ 读得到红格、不会把自己读进去。
-      #   · `continue-on-error: true` —— 本格自己发没发出去不该给这一跑叠第二个红；但**不静默**，
-      #     失败话术与手工出口由脚本原样打印（`tests/ci-ga-daily-failure-issue.test.ts` 钉住）。
-      #   · 排在 `环境证据` 之后、且紧挨着它：两者同挂 `if: failure()`，中间不夹 `always()` 的格，
-      #     日志里「先读环境证据、再立案」的顺序才是读得出来的（§13.5.4 只报事实、不代写因果）。
-      - name: 失败立案（补洞：GA 每日档跑红 ⇒ CNB 单，按格名去重）
-        timeout-minutes: 5
-        if: failure()
-        continue-on-error: true
-        env:
-          # 内置 token 只读自身这一跑的 jobs（`actions: read` 见顶层 permissions）。
-          GITHUB_TOKEN: ${{ github.token }}
-          # CNB 侧建单 / 贴标签 / 评论（repo-issue:rw + repo-notes:rw），与 code-scanning-triage 同一枚。
-          CNB_ISSUE_TOKEN: ${{ secrets.CNB_ISSUE_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        # `--no-block`：脚本自己的出口话术按「平台那一跳」念（非零落 0 + 手工出口），
-        # 与 workflow 侧的 continue-on-error 同向，两边口径一致（同 .cnb.yml 那一格）。
-        run: node scripts/ci-ga-daily-failure-issue.mjs --no-block
-
       # 覆盖率上报的对位落点。CNB 那一格是 `ci-coverage-report.mjs`，走 `cnb` CLI
       # 把 lcov 交给平台；GitHub runner 没有那个 CLI，判据本体不该为换平台重抄一遍。
       # 这里退成**产物出口**：`full-suite-run.mjs` 已经产出 lcov / json-summary，
@@ -239,3 +227,47 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+
+  # 失败立案（#3436 / 同族 #2274）：把「这一跑红了」变成一张 CNB 单。
+  # 本档此前**没有**这一格 —— CNB 的 `每日失败立案` 判的是 CNB 自己的上一跑，本档这一跑
+  # 不在它的读数面里；于是那次掉页（#3368 换了模型库的 UI 形状、e2e 用例没跟着改，
+  # 全量E2E 红）只能靠人手动 `gh run view --log-failed` 再手动立案。判据在场、执行者不在场，
+  # 这一格补的就是那个执行者。
+  #
+  # **为什么是独立 job 而不是 `daily` 里的一个 step**：见文件头那段（#3563）。一句话 ——
+  # 脚本只认 jobs API 的 `steps[].conclusion`，而 step 形态下那个 job 自己还在飞，
+  # 实测读回 0 个红格 ⇒ 零写入。`needs: daily` 让上游先 `completed`，conclusion 才是终值。
+  daily-failure-issue:
+    runs-on: ubuntu-24.04
+    needs: daily
+    # 判的是**上游那一跑**：`daily` 里任一格红即成立。绿跑一个字节都不付（job 直接 skipped）。
+    if: failure()
+    # 本格自己发没发出去不该给这一跑叠第二个红；但**不静默** —— 失败话术与手工出口由脚本
+    # 原样打印（`tests/ci-ga-daily-failure-issue.test.ts` 钉住）。
+    continue-on-error: true
+    timeout-minutes: 5
+    steps:
+      # 只要脚本自己与它 import 的那几个模块，不要历史也不要 LFS 字体（对位 pr-gate.yml
+      # 的 `ga-verdict-callback`：整条 import 链只吃 node:*，所以这一 job 不装依赖）。
+      - name: 检出（立案脚本在仓库里）
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.head_sha || github.sha }}
+          fetch-depth: 1
+          lfs: false
+
+      - name: 装 Node（engines 下限 26.12.1；脚本只吃 node:*）
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: 失败立案（补洞：GA 每日档跑红 ⇒ CNB 单，按格名去重）
+        env:
+          # 内置 token 只读这一跑的 jobs（`actions: read` 见顶层 permissions）。
+          GITHUB_TOKEN: ${{ github.token }}
+          # CNB 侧建单 / 贴标签 / 评论（repo-issue:rw + repo-notes:rw），与 code-scanning-triage 同一枚。
+          CNB_ISSUE_TOKEN: ${{ secrets.CNB_ISSUE_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        # `--no-block`：脚本自己的出口话术按「平台那一跳」念（非零落 0 + 手工出口），
+        # 与 job 侧的 continue-on-error 同向，两边口径一致（同 .cnb.yml 那一格）。
+        run: node scripts/ci-ga-daily-failure-issue.mjs --no-block
