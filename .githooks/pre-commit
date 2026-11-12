@@ -409,6 +409,10 @@ run_group D0 "形态前置档（这次提交自身的形态）" sh -c '
   # 几百个文件的重排里」，后果不可逆（blame 永久失真、squash 后没有拆分的机会），
   # 必须留在提交那一刻，而且它本来就在这里。
   run "oxfmt 格式（动了 src/.storybook 才扫全库，红了只格式化点名的文件）" node scripts/check-format.cjs --staged
+  # 已清零 oxlint 规则集（ISSUE #3016 / #3585）的提交前置快检：只扫本次暂存源码，
+  # 把「新文件带回清零规则」提前到提交时拦。全仓 155 秒档仍留在下方 D 组，
+  # 由重档与合并前复算付，不在每次提交里重复。
+  run "已清零 oxlint 规则集（暂存面快检）" node scripts/check-oxlint-zero-rules.mjs --staged
 '
 
 # 立刻等这一组 —— 它存在的全部意义就是「在 A/B/C 启动之前先拿到结论」；往下继续并行
@@ -462,7 +466,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(60 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(61 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与钩子里
@@ -927,6 +931,7 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 成本实测：oxlint type-aware 全仓档约 155s —— 远超 §13.5.4 的钩子预算，它在这里
   # 的唯一理由是「防回潮判据没有别的自动执行者」：本组整体只在重档那一跑
   # （`COMFY_HEAVY_GATES=1` / `pnpm check:all`）里付，默认提交档整组跳过。
+  # 提交时那一格由上方 D0 的 `--staged` 快检承担：只扫本次暂存源码，不是这里的全仓档。
   run "已清零 oxlint 规则集（41 条全仓 0 命中）" node scripts/check-oxlint-zero-rules.mjs
 '
 

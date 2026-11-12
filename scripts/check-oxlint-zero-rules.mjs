@@ -36,10 +36,15 @@
  *
  *   node scripts/check-oxlint-zero-rules.mjs              # 全仓判定（--type-aware）
  *   node scripts/check-oxlint-zero-rules.mjs <路径…>      # 契约自测档：只扫给定路径
+ *   node scripts/check-oxlint-zero-rules.mjs --staged     # 提交前置快检：暂存面 + --type-aware
  *
  *   0 = 清单内规则 0 命中；1 = 有回潮（逐条列 `文件:行:列`）；2 = **没跑起来**
  *   （oxlint 起不来 / 输出不是 JSON / 全仓档一份文件都没扫到）——「没跑起来」
  *   排在红前面：环境不可信时红与绿都不构成结论。
+ *
+ *   `--staged` 只取本次暂存的新增 / 修改 / 重命名文件：它不是全仓档的替代，而是把
+ *   「新文件带回禁用形态」这一格提前到提交时拦。暂存面没有可扫文件时按输入面跳过；
+ *   与路径参数互斥（同时给 = 用法错退 2）。全仓档仍由重档 / 合并前复算执行。
  *
  *   带路径参数时不挂 `--type-aware`：自测夹具在仓外临时目录、没有 tsconfig 可挂；
  *   负控因此只选语法级规则（`unicorn/no-negated-condition`、`import/no-duplicates`、
@@ -56,6 +61,13 @@ import awesomeness from "oxlint-config-awesomeness";
 import { resolveBinEntryByName } from "./package-bin-entry.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+
+/**
+ * `--staged` 快检只扫这些可被 oxlint 解析的源码扩展名；git 返回的删除项已被
+ * `--diff-filter=ACMR` 排除，这里再把锁文件 / 文档 / 资源等无关路径滤掉。
+ * @type {Set<string>}
+ */
+const STAGED_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
 
 /**
  * 已清零 oxlint 规则清单（本闸唯一登记面；新增 = 清零一条就往这里加一行）。
@@ -300,8 +312,43 @@ ${pluginsLine}${jsPluginsLines()}  categories: {
   return configPath;
 }
 
+/**
+ * `--staged` 的输入面：只取暂存区里新增 / 修改 / 重命名后的源码文件。
+ *
+ * 用 `git diff --cached` 而不是 `git status`：后者会把未暂存改动混进来，快检就不再
+ * 对应「这次提交带进来的内容」。删除项由 `--diff-filter=ACMR` 排除；扩展名过滤见
+ * `STAGED_EXTENSIONS`。读不到暂存清单时报 2，不冒充「没有可扫文件」。
+ */
+function stagedSourcePaths() {
+  const res = spawnSync("git", ["diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if ((res.error !== undefined && res.error !== null) || res.status !== 0) {
+    const reason =
+      res.error !== undefined && res.error !== null ? res.error.message : String(res.stderr);
+    console.error(`[没跑起来] 读不到暂存文件清单：${reason.trim()}`);
+    process.exit(2);
+  }
+  return String(res.stdout ?? "")
+    .split("\0")
+    .filter((file) => STAGED_EXTENSIONS.has(path.extname(file).toLowerCase()));
+}
+
 function main() {
-  const paths = process.argv.slice(2);
+  const argv = process.argv.slice(2);
+  const staged = argv.includes("--staged");
+  const paths = argv.filter((arg) => arg !== "--staged");
+  if (staged && paths.length > 0) {
+    console.error("[没跑起来] --staged 与显式路径参数互斥；快检的输入面只能是本次暂存区。");
+    process.exit(2);
+  }
+  const stagedPaths = staged ? stagedSourcePaths() : [];
+  if (staged && stagedPaths.length === 0) {
+    console.log("[skip] 暂存区没有源码文件，已清零 oxlint 规则集快检按输入面跳过。");
+    return;
+  }
   const configPath = writeProbeConfig();
   /* 直起包真身（#2572 同一条路）：`.bin/oxlint.cmd` 只有 cmd.exe 解释得动，
    * 挂 `shell: true` 去起它撞的是 Node 26 的 DEP0190（spawn-shell-scan 那条
@@ -316,13 +363,12 @@ function main() {
     process.exit(2);
   }
   const args = ["--config", configPath, "--format", "json"];
-  // 全仓档（不传路径）才挂 --type-aware，与历次复扫口径一致；契约自测档扫的是
-  // 仓外临时夹具，没有 tsconfig 可挂，且负控只选语法级规则（见文件头）。
+  // 全仓档与 --staged 都挂 --type-aware，保持同一套类型层规则的判决口径；契约自测档
+  // 扫的是仓外临时夹具，没有 tsconfig 可挂，且负控只选语法级规则（见文件头）。
   if (paths.length === 0) {
     args.push("--type-aware");
-  } else {
-    args.push(...paths);
   }
+  args.push(...(staged ? stagedPaths : paths));
   const res = spawnSync(process.execPath, [entry, ...args], {
     cwd: ROOT,
     encoding: "utf8",
@@ -342,7 +388,7 @@ function main() {
     process.exit(2);
   }
   const files = typeof report.number_of_files === "number" ? report.number_of_files : 0;
-  if (paths.length === 0 && files === 0) {
+  if (!staged && paths.length === 0 && files === 0) {
     console.error("[没跑起来] 全仓档扫到 0 份文件 —— 「一条都没判」不许读成「0 命中」。");
     process.exit(2);
   }
@@ -367,7 +413,7 @@ function main() {
     process.exit(1);
   }
   console.log(
-    `[ok] 已清零 oxlint 规则集 ${ZERO_RULES.length} 条全仓 0 命中（扫描 ${files} 份文件）。`,
+    `[ok] 已清零 oxlint 规则集 ${ZERO_RULES.length} 条${staged ? "暂存面" : "全仓"} 0 命中（扫描 ${files} 份文件）。`,
   );
 }
 

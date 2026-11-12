@@ -314,6 +314,8 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 ✅ node scripts/check-oxlint-zero-rules.mjs # 已清零 oxlint 规则集防回潮（见下 13.5.32，ISSUE #3016）：
    # `ZERO_RULES` 在册清单（41 条）全仓 `--type-aware` 复扫判 0 命中，命中逐条列位置退 1；
    # 实测约 155s，只在重档付
+✅ node scripts/check-oxlint-zero-rules.mjs --staged # 同一清单的提交前置快检（ISSUE #3585）：
+   # 只扫本次暂存源码，本机实测约 7s / 3 份暂存文件；全仓档仍按上一行在重档复算
 ```
 
 > **本地钩子没接的判据**（`test:coverage` / `build` / E2E `@critical` / `db:push`）：
@@ -10470,9 +10472,11 @@ eslint 配置）：本机 1s 级；用库里那条 bin 的预算仍与 a11y 同�
   （41 条 = #2775 批 39 条 + #2776 的 `eqeqeq` / `no-void`），**清单是唯一登记面：
   每清零一条新规则就往那里加一行**。闸的形态是探针而非根级 config 条目（理由见脚本
   文件头：extends 同一预设、categories 全关、只抬清单内规则为 error 的全仓
-  `--type-aware` 扫描，判 0 命中，命中逐条列位置退 1）；挂载在 `.githooks/pre-commit`
-  D 组尾部与 `quality-gate` 的 `oxlintZeroRules`（实测约 155s，只在重档付；
-  契约测试 `tests/check-oxlint-zero-rules.test.ts`）。
+  `--type-aware` 扫描，判 0 命中，命中逐条列位置退 1）；挂载分两档：
+  `.githooks/pre-commit` D0 的 `--staged` 快检只扫本次暂存源码，把「新文件带回清零规则」
+  提前到提交时拦（ISSUE #3585；本机实测约 7s / 3 份暂存文件，成本主要是一次
+  oxlint / TS 程序启动）；D 组尾部与 `quality-gate` 的 `oxlintZeroRules` 保留
+  全仓判定（实测约 155s，只在重档付；契约测试 `tests/check-oxlint-zero-rules.test.ts`）。
 
 **#3441「类型参数有默认值」不等于「可以交给空数组推断」：`no-unnecessary-type-arguments` 的例外口径。**
 
