@@ -58,9 +58,9 @@ describe("日志行路径识别（ISSUE #1365 的用户原文）", () => {
   });
 
   it("POSIX 形态与 UNC 形态都认", () => {
-    expect(paths("  1) 壳侧编排链路（壳自己写的）：/workspace/log/launcher/x.log")).toEqual([
-      "/workspace/log/launcher/x.log",
-    ]);
+    expect(paths("  1) 壳侧编排链路（壳自己写的）：/workspace/log/current/launcher/x.log")).toEqual(
+      ["/workspace/log/current/launcher/x.log"],
+    );
     expect(paths(String.raw`resolved to \\server\share\dir\x.log`)).toEqual([
       String.raw`\\server\share\dir\x.log`,
     ]);
@@ -172,8 +172,8 @@ describe("日志行路径识别：边界形状", () => {
   it("**左侧与方法无关**的真磁盘路径照旧认（防这条判据收得过宽）", () => {
     /* 这几条与上面同样以 `/` 起头、同样出现在日志里，但左侧没有 HTTP 方法 ——
      * 判据必须只挡请求行，不能把「以 `/` 起头的绝对路径」整类端掉。 */
-    expect(paths("shell log: /workspace/log/launcher/shell.log")).toEqual([
-      "/workspace/log/launcher/shell.log",
+    expect(paths("shell log: /workspace/log/current/launcher/shell.log")).toEqual([
+      "/workspace/log/current/launcher/shell.log",
     ]);
     expect(paths("/var/log/app.log")).toEqual(["/var/log/app.log"]);
     expect(paths("log at /home/user/data/a.txt")).toEqual(["/home/user/data/a.txt"]);

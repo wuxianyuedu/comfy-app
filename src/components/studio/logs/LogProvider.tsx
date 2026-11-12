@@ -312,7 +312,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
             message:
               "日志面板暂时读不到日志：应用服务（Next dev server）当前不可达。" +
               "常见原因：还在首屏编译、进程已退出、或端口被别的实例占用。" +
-              "请先确认应用能正常打开；启动相关的日志见「启动器」来源与 log/launcher/。",
+              "请先确认应用能正常打开；启动相关的日志见「启动器」来源与 log/current/launcher/。",
             source: "system",
           });
         }
