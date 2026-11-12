@@ -122,6 +122,14 @@ describe("已清零 oxlint 规则集闸（#3016）", () => {
     }
   });
 
+  it("用法错：--staged 与显式路径同时给必须退 2，不能静默二选一", () => {
+    const r = spawnSync(process.execPath, [SCRIPT, "--staged", "src/example.ts"], {
+      encoding: "utf8",
+    });
+    expect(r.status, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(2);
+    expect(`${r.stdout}${r.stderr}`).toContain("互斥");
+  });
+
   it("探针配置声明了清单涉及的全部内建族（plugins 是替换语义，漏一个挤一个）", () => {
     // `plugins:` 行存在 ⇒ 缺省族被这一行**替换**（实测：只写 import/react 时
     // unicorn 从 --rules 的 Enabled 列消失，ISSUE #3340）。声明集合必须是
@@ -141,6 +149,21 @@ describe("已清零 oxlint 规则集闸（#3016）", () => {
  * package.json 的独立入口脚本。少任何一面，这扇闸就只剩「文档承诺」。
  */
 describe("门槛接线", () => {
+  it("pre-commit 同时登记暂存面快检与全仓重档", () => {
+    const hook = readFileSync(".githooks/pre-commit", "utf8");
+    const zeroRuleLines = hook
+      .split("\n")
+      .filter((line) => line.includes("node scripts/check-oxlint-zero-rules.mjs"));
+    // D0 快检在提交时拦「这次带进来的新文件」；D 组全仓档继续由重档 / 推送前复算执行。
+    expect(zeroRuleLines.some((line) => line.includes(" --staged"))).toBe(true);
+    expect(zeroRuleLines.some((line) => !line.includes(" --staged"))).toBe(true);
+  });
+
+  it("暂存面快检登记进 D0 名单", () => {
+    const registry = readFileSync("scripts/base-check/declared-hook-steps.mjs", "utf8");
+    expect(registry).toContain('"已清零 oxlint 规则集（暂存面快检）"');
+  });
+
   it("pre-commit D 组有这条 run 行", () => {
     const hook = readFileSync(".githooks/pre-commit", "utf8");
     expect(hook).toContain("node scripts/check-oxlint-zero-rules.mjs");

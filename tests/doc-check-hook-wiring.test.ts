@@ -983,6 +983,9 @@ const FORM_PREPASS: ReadonlyArray<readonly [string, string]> = [
     "oxfmt 格式（动了 src/.storybook 才扫全库，红了只格式化点名的文件）",
     "node scripts/check-format.cjs --staged",
   ],
+  /* 已清零规则集的提交前置快检（ISSUE #3585）：同一份 ZERO_RULES 探针，输入面换成
+   * 本次暂存源码；全仓 155s 档仍留在 D 组。放在格式之后，维持「毫秒级先出、贵者殿后」。 */
+  ["已清零 oxlint 规则集（暂存面快检）", "node scripts/check-oxlint-zero-rules.mjs --staged"],
 ];
 
 describe("D0 形态前置档：串行的那一条线（钩子重构 1）", () => {
