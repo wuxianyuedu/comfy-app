@@ -99,20 +99,23 @@ describe("ProviderModelDialog 按用途分叉（#3618 补充）", () => {
     expect(screen.queryByText("高级配置")).toBeNull();
     expect(screen.getByText("接口端点")).toBeInTheDocument();
     expect(
-      screen.getByText("POST https://apihub.example/v1/images/generations"),
+      screen.getByDisplayValue("POST https://apihub.example/v1/images/generations"),
     ).toBeInTheDocument();
+    /* 标签 ⇄ 控件接上线（§16.2.4.26）：端点是只读**控件**，不是一段展示文本 ——
+     * plain children 形态会落进接线棘轮。 */
+    expect(screen.getByLabelText("接口端点")).toHaveAttribute("readonly");
   });
 
   it("视频模型：端点按用途给 /videos/generations", () => {
     renderDialog("video", "https://apihub.example/v1");
     expect(
-      screen.getByText("POST https://apihub.example/v1/videos/generations"),
+      screen.getByDisplayValue("POST https://apihub.example/v1/videos/generations"),
     ).toBeInTheDocument();
   });
 
   it("供应商还没有 Base URL 时：端点仍显示路径段，并提示先去填 Base URL", () => {
     renderDialog("image", "");
-    expect(screen.getByText("POST /images/generations")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("POST /images/generations")).toBeInTheDocument();
     expect(
       screen.getByText("所属供应商还没有 Base URL：先在供应商详情里填好，这里会显示最终请求地址"),
     ).toBeInTheDocument();

@@ -77,12 +77,7 @@ export function ProviderModelDialog({
     ? ""
     : defaultUsageTestPath(d.modelForm.kind, providerBaseUrl);
   const imageVideoEndpointUrl = providerBaseUrl.trim().replace(/\/+$/, "") + imageVideoEndpointPath;
-  const levels = splitReasoningLevels(d.modelForm.reasoningLevels);
   const windowPreview = formatContextWindow(Number(d.modelForm.contextWindow) || null);
-  /* 高级配置默认折叠（#3577「高级设置需要能折叠和展开」）：新增时先看到的是
-   * 模型 ID / 用途 / 格式 / 窗口这几格主项；编辑既有模型时默认展开 —— 那时
-   * 用户本来就是要改里面的东西。 */
-  const [advancedOpen, setAdvancedOpen] = useState(dialog.mode === "edit");
 
   return (
     <Dialog
@@ -236,9 +231,19 @@ export function ProviderModelDialog({
               id="model-endpoint"
               label="接口端点"
             >
-              <p className="border-border bg-surface-2 text-ink rounded-lg px-3 py-2 text-sm">
-                POST {imageVideoEndpointUrl}
-              </p>
+              {(a11y) => (
+                /* 只读控件而不是一段展示文本：`<FormField>` 的标签只在
+                 * render-prop 形态下才接得上控件（§16.2.4.26）—— plain
+                 * children 是接线棘轮上的新站点（`check-form-field-wiring.cjs`）。
+                 * 端点值是算出来的，不给改；`readOnly` 的输入框可聚焦、可复制，
+                 * 标签与控件的关联也真正接上。 */
+                <Input
+                  {...a11y}
+                  className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm"
+                  readOnly
+                  value={`POST ${imageVideoEndpointUrl}`}
+                />
+              )}
             </FormField>
           )}
 
@@ -289,164 +294,7 @@ export function ProviderModelDialog({
             </div>
           )}
 
-          {isChat && (
-            <fieldset className="border-border mb-3 rounded-xl border p-3">
-              {/* 折叠头（#3577）：整个头部是按钮，点击展开 / 收起；箭头随态旋转。
-                用 ui/button 的 <Button> —— 视图层手写 <button> 是基元棘轮 P1。 */}
-              <Button
-                aria-expanded={advancedOpen}
-                className="text-ink/80 hover:text-ink -mx-1 h-auto rounded px-1 py-0.5 text-sm font-medium"
-                onClick={() => {
-                  setAdvancedOpen((prev) => !prev);
-                }}
-                variant="ghost"
-              >
-                <ChevronDownIcon
-                  aria-hidden
-                  className={`size-3.5 transition-transform ${advancedOpen ? "" : "-rotate-90"}`}
-                  data-icon="inline-start"
-                />
-                高级配置
-              </Button>
-
-              {advancedOpen && (
-                <>
-                  {/* 多选组没有单个控件能被 `htmlFor` 指到 ⇒ 用 `fieldset`/`legend` 给
-                整组一个可访问名（`FormField` 的标签行只覆盖单控件形态）。 */}
-                  <FieldSet className="mt-3 mb-3 gap-0">
-                    <FieldLegend className="text-ink/80 mb-1.5 text-sm" variant="label">
-                      输入类型
-                    </FieldLegend>
-                    <div className="flex flex-wrap gap-1.5">
-                      {MODEL_INPUT_TYPES.map((type) => (
-                        <Toggle
-                          className="h-auto rounded-lg border px-2.5 py-1 text-xs"
-                          key={type}
-                          onPressedChange={() => {
-                            d.toggleInputType(type);
-                          }}
-                          pressed={d.modelForm.inputTypes.includes(type)}
-                          size="sm"
-                          variant="chip"
-                        >
-                          {MODEL_INPUT_TYPE_LABELS[type]}
-                        </Toggle>
-                      ))}
-                    </div>
-                  </FieldSet>
-
-                  <FieldSet className="mb-3 gap-0">
-                    <FieldLegend className="text-ink/80 mb-1.5 text-sm" variant="label">
-                      输出类型
-                    </FieldLegend>
-                    <div className="flex flex-wrap gap-1.5">
-                      {MODEL_OUTPUT_TYPES.map((type) => (
-                        <Toggle
-                          className="h-auto rounded-lg border px-2.5 py-1 text-xs"
-                          key={type}
-                          onPressedChange={() => {
-                            d.toggleOutputType(type);
-                          }}
-                          pressed={d.modelForm.outputTypes.includes(type)}
-                          size="sm"
-                          variant="chip"
-                        >
-                          {MODEL_OUTPUT_TYPE_LABELS[type]}
-                        </Toggle>
-                      ))}
-                    </div>
-                  </FieldSet>
-
-                  <FieldSet className="mb-3 gap-0">
-                    <FieldLegend className="text-ink/80 mb-1.5 text-sm" variant="label">
-                      模型能力
-                    </FieldLegend>
-                    <div className="flex flex-wrap gap-1.5">
-                      {MODEL_CAPABILITIES.map((capability) => (
-                        <Toggle
-                          className="h-auto rounded-lg border px-2.5 py-1 text-xs"
-                          key={capability}
-                          onPressedChange={() => {
-                            d.toggleCapability(capability);
-                          }}
-                          pressed={d.modelForm.capabilities.includes(capability)}
-                          size="sm"
-                          variant="chip"
-                        >
-                          {MODEL_CAPABILITY_LABELS[capability]}
-                        </Toggle>
-                      ))}
-                    </div>
-                  </FieldSet>
-
-                  <FormField
-                    className="mb-3"
-                    hint="逗号或空格分隔，例如 low, medium, high（各家叫法不同，不做白名单）"
-                    id="model-reasoning-levels"
-                    label="推理等级"
-                  >
-                    {(a11y) => (
-                      <Input
-                        {...a11y}
-                        className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm"
-                        onChange={textHandler((reasoningLevels) => {
-                          d.patchModelForm({ reasoningLevels });
-                        })}
-                        placeholder="low, medium, high"
-                        value={d.modelForm.reasoningLevels}
-                      />
-                    )}
-                  </FormField>
-
-                  <FormField
-                    className="mb-2"
-                    hint="请求体里承接推理等级的字段名，例如 reasoning_effort 或 thinking.budget_tokens"
-                    id="model-reasoning-param"
-                    label="推理参数映射"
-                  >
-                    {(a11y) => (
-                      <Input
-                        {...a11y}
-                        className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm"
-                        onChange={textHandler((reasoningParam) => {
-                          d.patchModelForm({ reasoningParam });
-                        })}
-                        placeholder="reasoning_effort"
-                        value={d.modelForm.reasoningParam}
-                      />
-                    )}
-                  </FormField>
-
-                  {levels.length === 0 ? (
-                    <p className="text-muted-foreground text-2xs">
-                      先在上面填推理等级，这里会为每个等级生成一行「等级 → 取值」。
-                    </p>
-                  ) : (
-                    <div className="flex flex-col gap-1.5">
-                      {levels.map((level) => (
-                        <div className="flex items-center gap-2" key={level}>
-                          <span className="text-muted-foreground w-20 shrink-0 truncate text-xs">
-                            {level}
-                          </span>
-                          <Input
-                            aria-label={`${level} 对应的取值`}
-                            className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-2 py-1.5 text-sm"
-                            onChange={textHandler((value) => {
-                              d.patchModelForm({
-                                reasoningValues: { ...d.modelForm.reasoningValues, [level]: value },
-                              });
-                            })}
-                            placeholder="例如 high / 8192"
-                            value={d.modelForm.reasoningValues[level] ?? ""}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-            </fieldset>
-          )}
+          {isChat && <ModelAdvancedFieldset d={d} defaultOpen={dialog.mode === "edit"} />}
 
           {d.modelError !== null && d.modelError !== "" && (
             <p className="bg-destructive/10 text-danger-strong mt-2 rounded-lg px-3 py-2 text-xs">
@@ -486,5 +334,178 @@ export function ProviderModelDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** 「高级配置」折叠块（#3577 可折叠；编辑既有模型默认展开）。#3618 起只服务
+ *  文本模型：图像 / 视频模型没有输入 / 输出类型、能力、推理映射这些文本协议
+ *  的配置项。从主函数拆出来（规范 §12.13 函数长度硬闸：整块 JSX 挂在主函数
+ *  上把它顶过了 400 行）。 */
+function ModelAdvancedFieldset({
+  d,
+  defaultOpen,
+}: {
+  d: ProviderModelDialogs;
+  defaultOpen: boolean;
+}) {
+  const [advancedOpen, setAdvancedOpen] = useState(defaultOpen);
+  const levels = splitReasoningLevels(d.modelForm.reasoningLevels);
+  return (
+    <fieldset className="border-border mb-3 rounded-xl border p-3">
+      {/* 折叠头（#3577）：整个头部是按钮，点击展开 / 收起；箭头随态旋转。
+      用 ui/button 的 <Button> —— 视图层手写 <button> 是基元棘轮 P1。 */}
+      <Button
+        aria-expanded={advancedOpen}
+        className="text-ink/80 hover:text-ink -mx-1 h-auto rounded px-1 py-0.5 text-sm font-medium"
+        onClick={() => {
+          setAdvancedOpen((prev) => !prev);
+        }}
+        variant="ghost"
+      >
+        <ChevronDownIcon
+          aria-hidden
+          className={`size-3.5 transition-transform ${advancedOpen ? "" : "-rotate-90"}`}
+          data-icon="inline-start"
+        />
+        高级配置
+      </Button>
+
+      {advancedOpen && (
+        <>
+          {/* 多选组没有单个控件能被 `htmlFor` 指到 ⇒ 用 `fieldset`/`legend` 给
+      整组一个可访问名（`FormField` 的标签行只覆盖单控件形态）。 */}
+          <FieldSet className="mt-3 mb-3 gap-0">
+            <FieldLegend className="text-ink/80 mb-1.5 text-sm" variant="label">
+              输入类型
+            </FieldLegend>
+            <div className="flex flex-wrap gap-1.5">
+              {MODEL_INPUT_TYPES.map((type) => (
+                <Toggle
+                  className="h-auto rounded-lg border px-2.5 py-1 text-xs"
+                  key={type}
+                  onPressedChange={() => {
+                    d.toggleInputType(type);
+                  }}
+                  pressed={d.modelForm.inputTypes.includes(type)}
+                  size="sm"
+                  variant="chip"
+                >
+                  {MODEL_INPUT_TYPE_LABELS[type]}
+                </Toggle>
+              ))}
+            </div>
+          </FieldSet>
+
+          <FieldSet className="mb-3 gap-0">
+            <FieldLegend className="text-ink/80 mb-1.5 text-sm" variant="label">
+              输出类型
+            </FieldLegend>
+            <div className="flex flex-wrap gap-1.5">
+              {MODEL_OUTPUT_TYPES.map((type) => (
+                <Toggle
+                  className="h-auto rounded-lg border px-2.5 py-1 text-xs"
+                  key={type}
+                  onPressedChange={() => {
+                    d.toggleOutputType(type);
+                  }}
+                  pressed={d.modelForm.outputTypes.includes(type)}
+                  size="sm"
+                  variant="chip"
+                >
+                  {MODEL_OUTPUT_TYPE_LABELS[type]}
+                </Toggle>
+              ))}
+            </div>
+          </FieldSet>
+
+          <FieldSet className="mb-3 gap-0">
+            <FieldLegend className="text-ink/80 mb-1.5 text-sm" variant="label">
+              模型能力
+            </FieldLegend>
+            <div className="flex flex-wrap gap-1.5">
+              {MODEL_CAPABILITIES.map((capability) => (
+                <Toggle
+                  className="h-auto rounded-lg border px-2.5 py-1 text-xs"
+                  key={capability}
+                  onPressedChange={() => {
+                    d.toggleCapability(capability);
+                  }}
+                  pressed={d.modelForm.capabilities.includes(capability)}
+                  size="sm"
+                  variant="chip"
+                >
+                  {MODEL_CAPABILITY_LABELS[capability]}
+                </Toggle>
+              ))}
+            </div>
+          </FieldSet>
+
+          <FormField
+            className="mb-3"
+            hint="逗号或空格分隔，例如 low, medium, high（各家叫法不同，不做白名单）"
+            id="model-reasoning-levels"
+            label="推理等级"
+          >
+            {(a11y) => (
+              <Input
+                {...a11y}
+                className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm"
+                onChange={textHandler((reasoningLevels) => {
+                  d.patchModelForm({ reasoningLevels });
+                })}
+                placeholder="low, medium, high"
+                value={d.modelForm.reasoningLevels}
+              />
+            )}
+          </FormField>
+
+          <FormField
+            className="mb-2"
+            hint="请求体里承接推理等级的字段名，例如 reasoning_effort 或 thinking.budget_tokens"
+            id="model-reasoning-param"
+            label="推理参数映射"
+          >
+            {(a11y) => (
+              <Input
+                {...a11y}
+                className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm"
+                onChange={textHandler((reasoningParam) => {
+                  d.patchModelForm({ reasoningParam });
+                })}
+                placeholder="reasoning_effort"
+                value={d.modelForm.reasoningParam}
+              />
+            )}
+          </FormField>
+
+          {levels.length === 0 ? (
+            <p className="text-muted-foreground text-2xs">
+              先在上面填推理等级，这里会为每个等级生成一行「等级 → 取值」。
+            </p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {levels.map((level) => (
+                <div className="flex items-center gap-2" key={level}>
+                  <span className="text-muted-foreground w-20 shrink-0 truncate text-xs">
+                    {level}
+                  </span>
+                  <Input
+                    aria-label={`${level} 对应的取值`}
+                    className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-2 py-1.5 text-sm"
+                    onChange={textHandler((value) => {
+                      d.patchModelForm({
+                        reasoningValues: { ...d.modelForm.reasoningValues, [level]: value },
+                      });
+                    })}
+                    placeholder="例如 high / 8192"
+                    value={d.modelForm.reasoningValues[level] ?? ""}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </fieldset>
   );
 }
