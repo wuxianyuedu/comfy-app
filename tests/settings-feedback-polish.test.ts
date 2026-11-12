@@ -60,17 +60,20 @@ describe("设置页反馈整改的形态判据（ISSUE #3495）", () => {
   });
 
   it("「重置」按钮带可见底色与边界（暗色下不再是透明 ghost）", () => {
-    const text = read("src/app/(main)/settings/components/ProviderModelDialog.tsx");
-    /* 浅色走 bg-surface-2；暗色下 surface-2 对弹窗底只有 1.35:1（用户现场：
-     * 「暗色重置按钮背景还是看不见」）—— 三轮加码后的最终形态：outline 变体
-     * （自带边界）+ ink/25 填充（≈2.1:1）+ ink/40 描边（3:1 档）+ 文字提到
-     * ink 档保 AA。与「取消」按钮同档可见。 */
-    expect(text, "重置按钮要是 outline 变体（自带边界，与取消按钮同档可见）").toContain(
+    const dialog = read("src/app/(main)/settings/components/ProviderModelDialog.tsx");
+    const local = read("src/app/(main)/settings/components/LlmLocalSection.tsx");
+    /* 浅色走 bg-surface-2 / outline；暗色下 surface-2 对弹窗底只有 1.35:1、
+     * outline 的 bg-input/30 比行底还暗（用户现场：「重置按钮背景看不清」，
+     * 两处：模型弹窗的「重置」与温度行的「↺ 恢复推荐默认」）—— 统一加
+     * ink/25 填充 + ink/40 描边（3:1 边界档）+ 文字提到 ink 档保 AA。 */
+    expect(dialog, "模型弹窗的重置按钮要是 outline 变体（自带边界）").toContain(
       'variant="outline"',
     );
-    expect(text, "重置按钮要有 bg-surface-2 这一档可见底色").toContain("bg-surface-2");
-    expect(text, "暗色下重置按钮的底要再提一档（ink/25）").toContain("dark:bg-ink/25");
-    expect(text, "暗色下重置按钮要有 ink/40 描边").toContain("dark:border-ink/40");
+    expect(dialog, "模型弹窗的重置按钮要有可见底色").toContain("bg-surface-2");
+    expect(dialog, "暗色下重置按钮的底要再提一档（ink/25）").toContain("dark:bg-ink/25");
+    expect(dialog, "暗色下重置按钮要有 ink/40 描边").toContain("dark:border-ink/40");
+    expect(local, "温度行的 ↺ 恢复按钮暗色下要有 ink/25 填充").toContain("dark:bg-ink/25");
+    expect(local, "温度行的 ↺ 恢复按钮暗色下要有 ink/40 描边").toContain("dark:border-ink/40");
   });
 
   it("供应商分区的控件边界在暗色下走 ink 档", () => {
