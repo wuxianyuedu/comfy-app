@@ -20,6 +20,7 @@ import { SelectChip } from "~/components/ui/select-chip";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { PageHeader } from "~/components/ui/page-header";
 import { SectionLabel } from "~/components/ui/section-label";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { cn } from "~/lib/utils";
 import { useModelAdapters } from "./hooks/use-model-adapters";
@@ -205,7 +206,10 @@ export function ModelAdaptersView() {
           跳转），那句字段映射口径挂成悬浮「说明」—— 由顶栏标题右侧那颗问号承载
           （`viewHelp()`），页眉因此不占那一行。屏名仍从注册表
           取（`pageHeaderTitle`），与侧栏 / 页签同一个出处。 */}
-      <PageHeader srTitle={pageHeaderTitle("model-adapters")} />
+      <PageHeader
+        extra={<DataLocationBadge id="model-adapter" label="存放位置" />}
+        srTitle={pageHeaderTitle("model-adapters")}
+      />
 
       {/* 选择远端模型 */}
       <section>
