@@ -106,6 +106,52 @@ function runCheck(): { code: number; output: string } {
 
 const docText = (rel: string) => readFileSync(join(REPO_ROOT, rel), "utf8");
 
+/**
+ * #3586 后干净检出上没有 `docs/generated/**`：想读「带真实值的原文」的人得自己本地
+ * 跑一次 `pnpm doc:render`。下面两格回归用例因此不再读仓库里的入库镜像，而是把**当前
+ * 编辑态源**喂给真渲染器、在一次性夹具里生成一份再读 —— 与读者的动作同一条路径
+ * （`renderDocContent()`），既避开「干净检出上没有产物」的恒红，也照旧钉住
+ * 「占位符确实解析得出真实值」那一格。夹具落在 `REPO_ROOT` 之外（#2665：探针不写
+ * 真实工作树），用完即删。
+ */
+function renderLocalMirror(sources: Array<string>): {
+  dispose: () => void;
+  text: (name: string) => string;
+} {
+  const root = mkdtempSync(join(tmpdir(), "doc-render-reader-"));
+  for (const rel of sources) {
+    const abs = join(root, rel);
+    mkdirSync(dirname(abs), { recursive: true });
+    writeFileSync(abs, docText(rel), "utf8");
+  }
+  try {
+    execFileSync(process.execPath, [join(REPO_ROOT, "scripts", "render-doc-placeholders.cjs")], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        DOC_RENDER_ROOT: root,
+        DOC_RENDER_SCOPED: sources.join(","),
+      },
+    });
+  } catch (error) {
+    /* 重抛要带上原始错误：eslint(preserve-caught-error) 认的是 `cause`，把子进程
+     * 的现场只塞进话术里会丢掉堆栈，下一次排障就只剩一句转述。 */
+    throw new Error(`本地 doc:render 失败（夹具 ${root}）：${execFailure(error).output}`, {
+      cause: error,
+    });
+  }
+  return {
+    text: (name) => readFileSync(join(root, "docs", "generated", name), "utf8"),
+    /* 块体而不是表达式箭头：`rmSync` 返回 void，简写会被「已清零 oxlint 规则集」里的
+     * `typescript(no-confusing-void-expression)` 点名（本仓 41 条 0 命中硬闸）。 */
+    dispose: () => {
+      rmSync(root, { recursive: true, force: true });
+    },
+  };
+}
+
 /* ── 探针收尾的最后一道网（ISSUE #2415 → #2593 订正 → #2665 换形）─────────
  * #2593 把「收尾」从 `git checkout --`（吃过两次未提交的文档改动）换成「进本文件那一刻的字节快照」；#2665 把
  * **写的那一侧**整段搬进一次性克隆（`tests/helpers/probe-worktree.ts`），真实工作树不再被写。于是语义从「还原」
@@ -116,6 +162,8 @@ const PROBE_TARGETS = [
   "docs/reference-facts.md",
   "docs/standards/13-提交与-code-review.md",
   "docs/guides/DEV-QUERIES.md",
+  /* #3586 起这份是**本机产物、不入库**：干净检出上没有它，快照取到 null 也正常。
+   * 仍留在这里，是给「本地跑过 doc:render 的机器」留一道反向网 —— 探针同样不许写它。 */
   "docs/generated/DEV-QUERIES.md",
   "docs/standards/99-temp-unregistered.md",
   "changelog.d/zz-step-index-probe.md",
@@ -271,11 +319,18 @@ describe("07 章 splash 三份副本（shell.splash 引用点）", () => {
     expect(text).toContain("docs/reference-facts.md");
   });
 
-  it("生成态文档把占位符还原成真实值供直接阅读", () => {
-    const text = docText("docs/generated/07-日志系统.md");
-    expect(text).toContain("src-tauri/splash-assets/splash.html");
-    expect(text).toContain("public/splash.html");
-    expect(text).not.toContain("{{shell.splash}}");
+  it("谁需要原文谁本地生成：doc:render 把占位符还原成真实值供直接阅读", () => {
+    /* #3586：镜像退出入库产物，测试不再读 `REPO_ROOT/docs/generated/`（干净检出上
+     * 根本没有它），而是走读者那条路 —— 本地跑一遍渲染器，读自己刚生成的那份。 */
+    const mirror = renderLocalMirror([doc]);
+    try {
+      const text = mirror.text("07-日志系统.md");
+      expect(text).toContain("src-tauri/splash-assets/splash.html");
+      expect(text).toContain("public/splash.html");
+      expect(text).not.toContain("{{shell.splash}}");
+    } finally {
+      mirror.dispose();
+    }
   });
 });
 
@@ -290,11 +345,16 @@ describe("主规范「开发端口」行（comfyui.port 第二引用点）", () 
     expect(text).not.toContain(":8188`");
   });
 
-  it("占位符仍解析得出 ComfyUI 默认端口（生成态可见真实值）", async () => {
+  it("占位符仍解析得出 ComfyUI 默认端口（本地生成的原文可见真实值）", async () => {
     const facts = await loadFacts();
     const fact = facts.find((f) => f.key === "comfyui.port");
     expect(fact?.extract()).toBe("8188");
-    expect(docText("docs/generated/Comfy-APP-T3-项目开发规范.md")).toContain(":8188`");
+    const mirror = renderLocalMirror([doc]);
+    try {
+      expect(mirror.text("Comfy-APP-T3-项目开发规范.md")).toContain(":8188`");
+    } finally {
+      mirror.dispose();
+    }
   });
 });
 

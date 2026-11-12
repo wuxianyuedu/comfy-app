@@ -5,7 +5,7 @@ generate-docs.ps1 — 一键生成原文文档（编辑文档 → docs/generated
 给「文档不直观、想看原文数值」的场景：双击本脚本即自动
   1. 先跑 pnpm doc:check 校验编辑文档的占位符/裸值/路径与权威源码一致；
   2. 再跑 pnpm doc:render 把占位符替换成从源码实时提取的真实值，
-     输出到 docs/generated/ 供直接阅读。
+     输出到本机 docs/generated/ 供直接阅读（#3586 起不入库、不提交，谁需要谁本地生成）。
 
 实际逻辑在 scripts\generate-docs.ps1，本入口只负责定位项目根、调用逻辑、透传退出码。
 

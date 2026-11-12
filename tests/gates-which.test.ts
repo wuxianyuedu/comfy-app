@@ -85,10 +85,10 @@ describe("gates:which —— 门禁分堆（分档与收窄面都转述既有登
   const steps = [
     { label: "分支守卫", argv: ["node", "scripts/check-branch-guard.cjs"] },
     {
-      /* 2026-11-05 薄化后 `CHANGELOG 碎片` 随静态判据搬到 GA，不再有 CNB stage 的
-       * `ifModify` ⇒ 它已从收窄登记表撤出，样本换成仍登记在表里的那一份
-       * （`API 文档生成与自检` 同日撤到每日档、也不在表里了）。 */
-      label: "生成态文档与源同步",
+      /* 收窄面由下面 `deps.faceFor` 的**夹具表**给：#3586 后真仓 INCREMENTAL_GATES
+       * 暂空，但 hit / skippable / noFace 三堆的分堆机制仍要各自有正/负控 ——
+       * 把机制用例绑在真表内容上，表一空这段判据就没人测了。 */
+      label: "样本收窄判据",
       argv: ["node", "scripts/render-doc-placeholders.cjs"],
     },
     { label: "类型检查", argv: ["pnpm", "exec", "tsc", "--noEmit"] },
@@ -96,6 +96,8 @@ describe("gates:which —— 门禁分堆（分档与收窄面都转述既有登
   const deps = {
     readSteps: () => steps,
     tierLabels: () => new Set(["分支守卫"]),
+    faceFor: (script: string) =>
+      script === "scripts/render-doc-placeholders.cjs" ? { globs: ["docs/**"] } : null,
   };
 
   test("碰到收窄面 ⇒ hit；没碰到 ⇒ skippable；没有登记 ⇒ noFace", () => {
@@ -103,20 +105,20 @@ describe("gates:which —— 门禁分堆（分档与收窄面都转述既有登
     expect(cls.localTier).toBe(1);
     expect(cls.totalSteps).toBe(3);
     expect(cls.heavy).toBe(2);
-    expect(cls.hit.map((x) => x.label)).toEqual(["生成态文档与源同步"]);
+    expect(cls.hit.map((x) => x.label)).toEqual(["样本收窄判据"]);
     expect(cls.skippable).toEqual([]);
     expect(cls.noFace.map((x) => x.label)).toEqual(["类型检查"]);
 
     const skipped = classifyHeavySteps(["src/lib/x.ts"], deps);
     expect(skipped.hit).toEqual([]);
-    expect(skipped.skippable.map((x) => x.label)).toEqual(["生成态文档与源同步"]);
+    expect(skipped.skippable.map((x) => x.label)).toEqual(["样本收窄判据"]);
   });
 
   test("空改动面 ⇒ 当成「不知道」照跑（不读成「没改」）", () => {
     /* 这条与 `faceTouched()` 的语义同源：把空清单读成「没改」会让整批收窄判据静默消失，
      * 而本入口的输出里「可跳过」是要被读成「不用跑」的。 */
     const cls = classifyHeavySteps([], deps);
-    expect(cls.hit.map((x) => x.label)).toEqual(["生成态文档与源同步"]);
+    expect(cls.hit.map((x) => x.label)).toEqual(["样本收窄判据"]);
     expect(cls.skippable).toEqual([]);
   });
 

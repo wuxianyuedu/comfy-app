@@ -13,23 +13,24 @@
  * 单一事实：真实值只存在于源码/配置（FACTS 提取，见 scripts/doc-facts.cjs），
  * 本脚本运行时动态提取并替换，不硬编码任何值。
  *
- * 用法（三种档，都共用 `renderDocContent()` 这一份「源 → 生成物」计算）：
+ * 用法（几档都共用 `renderDocContent()` 这一份「源 → 生成物」计算）：
  *
- *   · `pnpm doc:render`（写入）—— 人的动作，写完照常一并提交；
+ *   · `pnpm doc:render`（写入）—— 纯本地动作，产物只在本机；
  *   · `pnpm doc:render -- --only docs/standards/x.md[,…]`（**只写点名那几份**）——
- *     满足 D0「文档源 ⇄ 生成态镜像同批」时用它：全量那一档会无条件重生成**所有**镜像，
- *     于是别人留在 HEAD 上的陈旧镜像会被顺带改脏进自己这批（ISSUE #2527）；
- *   · `--check`（只比对不写入）—— **平台侧 `.cnb.yml` 的「生成态文档与源同步」**在用
- *     （ISSUE #1975 起；此前挂在 `.githooks/pre-commit` 的 D 组）；
- *   · `--check --autofix` —— 同一份判定，但**红了就地重渲染、再判一次**（ISSUE #1981）。
- *     平台侧跑这一档：红了才多花一次重渲染的钱，而省掉的是「一整轮流水线 + 一个人的
- *     手工动作」。为什么不自己提交、以及这一档凭什么可以自动修，见
- *     `scripts/ci-autofix-duties.mjs` 的文件头（登记表 + 两条前提）。
+ *     只想看某几篇原文时用；无参全量档会重生成 SCOPED_DOCS 对应的全部镜像；
+ *   · `--check`（只比对不写入）—— 本地自检「刚生成的那几份与源一致与否」；
+ *   · `--check --autofix` —— 同一份判定，红了就地重渲染再判一次（ISSUE #1981 的
+ *     历史能力，仍在脚本里，供本地与回归用例使用）。
  *
- * 判据存在的理由：生成态是**提交进 git** 的原文文档，改编辑态却忘了重渲染时，读者看到
- * 的就是过期原文（实测：5 份生成物落后于源、缺整节内容）。判据与写入模式共用
- * `renderDocContent()`，不另写一套比对逻辑。
- * 注意：`docs/generated/**` 是自动生成产物，改编辑文档后重新运行本命令即可；请勿手改产物。
+ * ⚠️ #3586 起 `docs/generated/**` **退出入库产物**（`.gitignore` 的 `/docs/generated/`）：
+ * 仓库只维护编辑态文档源，谁需要带真实值的原文谁本地跑一次本命令自己看。随它一同
+ * 退役的执行者：平台侧「生成态文档与源同步」（GA `master-gate.yml` 的
+ * `--check --autofix` step）、`ci-autofix-duties` / `ci-incremental-gates` 两条登记，
+ * 以及本地 D0 的「文档源 ⇄ 生成态镜像同批」（`check-doc-mirror-pairing.cjs`）——
+ * 没有入库的镜像，既没有内容可比、也没有「同批带上」这个动作。
+ * 所以本脚本**不再被任何提交门禁调用**；`--check` / `--autofix` 保留是因为它们是
+ * 同一份计算的只读 / 重渲染出口（且 `tests/check-doc-references.test.ts` 有回归用例）。
+ * 注意：产物不手改、不提交；干净检出上没有这个目录，别把它当成仓库的一部分。
  */
 const fs = require("node:fs");
 const path = require("node:path");
@@ -104,8 +105,9 @@ function resolvePlaceholders(text, map) {
 }
 
 /* 映射只有一处：`doc-facts.cjs` 的 `generatedPathFor`（「源 → 生成态镜像」这条规则
- * 同时被 `check-doc-mirror-pairing.cjs` 用来判「改了源有没有同批带上镜像」——
- * 两边各写一遍就会在「两份源映射到同一个产物名」那类形状上分叉）。 */
+ * #3586 前还被 `check-doc-mirror-pairing.cjs` 用来判「改了源有没有同批带上镜像」；
+ * 镜像退出入库产物后那位消费者退役了，但落点仍只在这里定义一份 —— 各写一遍
+ * 就会在「两份源映射到同一个产物名」那类形状上分叉）。 */
 
 /** 一份原文文档的内容（写入模式与 `--check` 共用：判据与实现读同一份「源 → 生成物」计算）。 */
 function renderDocContent(docRel, map) {
@@ -231,7 +233,7 @@ function runCheck() {
     for (const o of orphans) {
       report.push(`  · ${o} 多余（对应源已不在 SCOPED_DOCS）`);
     }
-    report.push("修法：pnpm doc:render 后把重渲染结果一并提交（不要手改生成物）。");
+    report.push("修法：本地跑一次 pnpm doc:render 重新生成（产物只在本机，不提交；不要手改）。");
   }
   if (!report.length) {
     console.log(`${tag} ✓ 生成态文档与源一致（${expected.size} 份）。`);

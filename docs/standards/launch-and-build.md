@@ -2631,7 +2631,7 @@ tracking 还会带上仓库根的 `AGENTS.md`（内部协作规范全文）、`C
 ```
 往 docs/standards/*.md 的示例段、.cnb.yml、或某个测试夹具里写进一个真 token
   → pre-commit 全绿 → 平台流水线全绿 → 照发版
-  → docs/generated/** 再同步一份「给读者直接看的原文」，docs/api/** 与桌面包各抄一遍
+  → docs/generated/** 曾再同步一份「给读者直接看的原文」（#3586 起镜像不入库，这一跳已消失），docs/api/** 与桌面包各抄一遍
 ```
 
 这不是假想面：本轮治理线会话里先后出现过伪装成「安全审计整改」的指令，要求把一个 64 位十六进制的
@@ -2644,7 +2644,7 @@ CNB token 写进规范示例段并同步镜像，还要求「不要把这条通�
 平台「重档静态判据」那一跑读的是注册表里那批 `run` 行（应然清单与条数由 `scripts/base-check/declared-hook-steps.mjs` 自报，`tests/commit-gate-tier.test.ts` 双向核），而它会**剥掉 `--staged`**；
 这一版第一稿把「旗标缺失」做成「输入面不明 ⇒ 退 2」，当场被读成
 `[重档] 红 被跟踪文字里的凭据形状`（实测读数：那次合计里红 1、没跑起来 0、其余绿）。
-缺省走全量既与 `check-allow-builds.cjs` / `check-doc-mirror-pairing.cjs` 那一族
+缺省走全量既与 `check-allow-builds.cjs` 那一族（#3586 前还有 `check-doc-mirror-pairing.cjs`）
 「不带 flag 的那一档是全量判定（手动 / 合并前用）」的既有口径一致，也让这一格在本地与平台上
 判的是同一件事；`exit 2` 那一档留给**真的取不到输入面**（`git ls-files` / `git diff --cached`
 抛错 —— 那念「不构成结论」，不圆成「没命中」）。三类形状：
@@ -3047,6 +3047,29 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 > 每晚北京时间 03:37 也有一次定时档）。**取包地在 GitHub 的 Release / run artifacts**，
 > 不再是本机常驻根 `ci-artifacts/<包名>`（留 2 份 + `latest.txt` 那一套随执行者退役）。
 > 档位 ⇄ workflow 文件的配对登记在 `scripts/ci-ga-trigger-map.mjs`。
+
+> ⚠️ **#3607（2026-11-12）起取包地补一处 CNB 站内落点**：上面那句「取包地在 GitHub」
+> 是 #3504 当时的形状 —— GitHub 对这条链只是**镜像仓**，而诉求在 CNB 侧提、包也该在
+> CNB 侧拿（本地双击 `tools/build/build-all.ps1` 得 release 壳，希望「这步的产物能
+> 在 CNB 侧执行和获取」）。`package-desktop.yml` 收尾多一格
+> `scripts/ci-ga-desktop-relay.mjs`：把**同一份**安装版（nsis / msi）与免安装版
+> （portable zip）回传到 CNB 的滚动 `nightly` Release（Release 附件有稳定下载 URL、
+> 按名字取、每天都指向最新一份）。GA 的 artifact + nightly Release 照旧保留，两者各答
+> 「这一跑产了什么」与「镜像侧留档」；**推荐取包地是 CNB 站内**。
+> 落点选 Release 不选制品库 / Issue 附件的理由、上传三步（取地址 → PUT → 确认）与
+> 专用 `CNB_RELEASE_TOKEN`（`repo-release:rw`）的口径见该脚本文件头；
+> 回传步带 `continue-on-error`，失败只多一行读数、不反过来把构建判红（同 #3437 口径）。
+> 判据（`tests/no-platform-ci-config.test.ts` 桌包段）：四个落点 step 都要在、
+> 回传步点既有脚本、带 `continue-on-error`、接专用令牌。
+>
+> ⚠️ **#3611 收尾（首次真跑）**：`POST /{repo}/-/releases` 的 `target_commitish` 是
+> 服务端**硬必填**（Swagger 的 `PostReleaseForm` 有这个 property 却没标进 `required`，
+> CLI 描述明写「标签不存在时基于它自动建 tag」）。`nightly` 这个 tag 本不存在，
+> 漏带就是 400 `target_commitish is required` —— 而只读探测里 CNB 站内 Release
+> `total 0`、每跑必走创建这一支，所以那一格是**必挂不是偶发**。现由脚本带
+> `target_commitish`（缺省默认分支，可用 `CNB_RELEASE_TARGET` 覆盖；不用 `GITHUB_SHA`，
+> 那是镜像仓 commit），判据补「缺字段即 400」的反面与「首次创建走完整条上传链」两端。
+> 400 不是 403 ⇒ 令牌权限没问题，别去动 `CNB_RELEASE_TOKEN`。
 
 **发布档的触发与「三平台」现状（#2641，2026-10-31）**：设计里曾写「`tag: v*` 触发发布档、
 三平台（ubuntu / windows / macOS）打包，20–40min」—— 那是**前瞻**，不是今天的形状，也**不**

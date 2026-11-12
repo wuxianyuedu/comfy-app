@@ -631,11 +631,11 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
 
 /**
  * GA push 档 `master-gate.yml`（任务 3 并行期，2026-11-06 立）：文档链两格从 CNB push
- * 挪到镜像仓 master 的 push 上，与 CNB 侧并行跑。判法只问「两条命令逐字在场 + 触发/并发/
- * 检出面是 push 语义」—— 不在这份用例里问 CNB 三格（切换是下一笔 PR），也不问失败回传
- * （用户已定：不回传 CNB、不改 ship 判据）。
+ * 挪到镜像仓 master 的 push 上，与 CNB 侧并行跑。#3586 起 `生成态文档与源同步` 随
+ * `docs/generated/**` 退出入库产物一并退役，这一档只剩「文档引用与权威源一致」一格。
+ * 判法只问「那一格逐字在场 + 退役那格不许回来 + 触发/并发/检出面是 push 语义」。
  */
-describe("GA push 档 `master-gate.yml`：文档链两格的并行执行者（任务 3 并行期）", () => {
+describe("GA push 档 `master-gate.yml`：文档链剩余一格的并行执行者（任务 3 并行期）", () => {
   const WORKFLOW = join(REPO_ROOT, ".github", "workflows", "master-gate.yml");
   const workflow = readFileSync(WORKFLOW, "utf8");
 
@@ -652,16 +652,25 @@ describe("GA push 档 `master-gate.yml`：文档链两格的并行执行者（�
     ).toBe(true);
   });
 
-  it("两条文档链命令逐字在场（与 CNB push 档同一入口、同一旗标）", () => {
-    const renderLine =
-      /^[ \t]*run:\s*node scripts\/render-doc-placeholders\.cjs --check --autofix[ \t]*$/m.exec(
-        workflow,
-      )?.[0] ?? "";
+  it("文档链只剩一格；退役的 render 判据不许被加回来（与 CNB push 档同一入口）", () => {
+    /* #3586 退役的是「产物」而不是「引用判据」：`docs/generated/**` 不再入库 ⇒
+     * 没有对象可重渲染、也没有镜像要同批带上，因此这一格连同 `--autofix` 一起撤。
+     * 反向钉住它不许回来：留着一行没人读的 render 会让「镜像仍在被判」看起来成立，
+     * 而实际产物根本不在树里（与 §13.5.17「挪走 ≠ 没人跑」同一条判法的反面）。 */
+    /* 只判 `run:` 执行行：头注里保留「这一格曾在这里、#3586 退役」的沿革是本仓惯例
+     * （与 §13.5.33 撤档纪律一致），拿全文 `includes` 会把注释里的退役说明也判成
+     * 「还在跑」，那是误导人的红。 */
+    const runLines = workflow.split("\n").filter((l) => /^\s*run:/.test(l));
     expect(
-      renderLine,
-      "`master-gate.yml` 里找不到 `render-doc-placeholders.cjs --check --autofix` 那一行 —— " +
-        "并行期的口径是「同一入口、同一旗标」，换旗标等于换判据（§13.5.33 的撤档纪律）",
-    ).not.toBe("");
+      runLines.some((l) => l.includes("render-doc-placeholders.cjs")),
+      "`master-gate.yml` 的执行行里还留着 `render-doc-placeholders.cjs` —— 生成态镜像已" +
+        "退出入库产物（#3586），这一格没有判决对象，留在配置里等于一份恒绿的空壳",
+    ).toBe(false);
+    expect(
+      runLines.some((l) => l.includes("--autofix")),
+      "`master-gate.yml` 的执行行里还有 `--autofix` —— 平台侧那一族已整族退役（#3586），" +
+        "自动修登记表 AUTOFIX_DUTIES 现在是空的",
+    ).toBe(false);
     const refsLine =
       /^[ \t]*run:\s*node scripts\/check-doc-references\.cjs[ \t]*$/m.exec(workflow)?.[0] ?? "";
     expect(
@@ -672,10 +681,10 @@ describe("GA push 档 `master-gate.yml`：文档链两格的并行执行者（�
   });
 
   it("检出面按文档链的真实输入收窄（浅克隆、无 LFS），且装依赖在场（不靠未验证的「无 node_modules 也能跑」）", () => {
-    /* 2026-11-06 核对两格的真实输入面：`check-doc-references.cjs` 没有 git 调用、也不读文件内容
-     * （只判引用路径在不在）；`render-doc-placeholders.cjs` 只 `readFileSync` 当前树的文档与源文件。
-     * 两格都不做三点 diff，也不读字体 —— `.gitattributes` 的 LFS 面只有 `*.woff2` / `*.ttf`。
-     * 所以 `fetch-depth: 0` + `lfs: true` 对它们没有输入贡献，浅克隆即可（GA 冷装读数）。 */
+    /* 2026-11-06 核对文档链的真实输入面：`check-doc-references.cjs` 没有 git 调用、也不读
+     * 文件内容（只判引用路径在不在）；退役的 `render-doc-placeholders.cjs` 同样只读当前树。
+     * 都不做三点 diff，也不读字体 —— `.gitattributes` 的 LFS 面只有 `*.woff2` / `*.ttf`。
+     * 所以 `fetch-depth: 0` + `lfs: true` 没有输入贡献，浅克隆即可（GA 冷装读数）。 */
     expect(
       workflow.includes("fetch-depth: 1") && !workflow.includes("lfs: true"),
       "检出面不是 `fetch-depth: 1` 且不开 LFS —— 文档链两格只读 HEAD 树，不做三点 diff、" +
@@ -940,10 +949,9 @@ describe("新鲜度账：平台侧的第二个执行者（ISSUE #1979）", () =>
 const FORM_PREPASS: ReadonlyArray<readonly [string, string]> = [
   ["CHANGELOG 碎片", "node scripts/check-changelog-fragments.cjs"],
   ["待发段落的来源锚 ⇄ 条目归属", "node scripts/check-changelog-versions.cjs"],
-  /* 「改了文档源就得同批带上镜像」—— 这条从平台回到本地是有理由的（平台那格跑
-   * `--check --autofix`，会就地修好，红只落在下一个动文档面的人身上），
-   * 理由与被挪走的那两条（内容一致 / 引用权威）不同：那两条读全库内容，这条只读暂存清单。 */
-  ["文档源 ⇄ 生成态镜像同批", "node scripts/check-doc-mirror-pairing.cjs --staged"],
+  /* 「改了文档源就得同批带上镜像」这条已随 #3586 从 D0 摘除：镜像退出入库产物，
+   * 既没有可配对的产物、也没有「同批带上」这个动作。摘除时同步改这里，是因为
+   * 名单与钩子步骤逐字对账 —— 留一行等于给一个已不存在的判据挂空账。 */
   /* 「把判据自己的阈值调松」此前没有任何一格会红（ISSUE #2156）：它不读代码、只把
    * 源码里的具名常量与 scripts/.gate-thresholds.json 对账，毫秒级，而它必须落在
    * 「改阈值那一笔」上 —— 挪去平台侧等于把红推给下一个动判据的人（同上一条的理由）。 */
@@ -983,6 +991,9 @@ const FORM_PREPASS: ReadonlyArray<readonly [string, string]> = [
     "oxfmt 格式（动了 src/.storybook 才扫全库，红了只格式化点名的文件）",
     "node scripts/check-format.cjs --staged",
   ],
+  /* 已清零规则集的提交前置快检（ISSUE #3585）：同一份 ZERO_RULES 探针，输入面换成
+   * 本次暂存源码；全仓 155s 档仍留在 D 组。放在格式之后，维持「毫秒级先出、贵者殿后」。 */
+  ["已清零 oxlint 规则集（暂存面快检）", "node scripts/check-oxlint-zero-rules.mjs --staged"],
 ];
 
 describe("D0 形态前置档：串行的那一条线（钩子重构 1）", () => {
