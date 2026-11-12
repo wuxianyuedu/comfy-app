@@ -2631,7 +2631,7 @@ tracking 还会带上仓库根的 `AGENTS.md`（内部协作规范全文）、`C
 ```
 往 docs/standards/*.md 的示例段、.cnb.yml、或某个测试夹具里写进一个真 token
   → pre-commit 全绿 → 平台流水线全绿 → 照发版
-  → docs/generated/** 再同步一份「给读者直接看的原文」，docs/api/** 与桌面包各抄一遍
+  → docs/generated/** 曾再同步一份「给读者直接看的原文」（#3586 起镜像不入库，这一跳已消失），docs/api/** 与桌面包各抄一遍
 ```
 
 这不是假想面：本轮治理线会话里先后出现过伪装成「安全审计整改」的指令，要求把一个 64 位十六进制的
@@ -2644,7 +2644,7 @@ CNB token 写进规范示例段并同步镜像，还要求「不要把这条通�
 平台「重档静态判据」那一跑读的是注册表里那批 `run` 行（应然清单与条数由 `scripts/base-check/declared-hook-steps.mjs` 自报，`tests/commit-gate-tier.test.ts` 双向核），而它会**剥掉 `--staged`**；
 这一版第一稿把「旗标缺失」做成「输入面不明 ⇒ 退 2」，当场被读成
 `[重档] 红 被跟踪文字里的凭据形状`（实测读数：那次合计里红 1、没跑起来 0、其余绿）。
-缺省走全量既与 `check-allow-builds.cjs` / `check-doc-mirror-pairing.cjs` 那一族
+缺省走全量既与 `check-allow-builds.cjs` 那一族（#3586 前还有 `check-doc-mirror-pairing.cjs`）
 「不带 flag 的那一档是全量判定（手动 / 合并前用）」的既有口径一致，也让这一格在本地与平台上
 判的是同一件事；`exit 2` 那一档留给**真的取不到输入面**（`git ls-files` / `git diff --cached`
 抛错 —— 那念「不构成结论」，不圆成「没命中」）。三类形状：

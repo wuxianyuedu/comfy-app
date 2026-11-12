@@ -224,14 +224,9 @@ run_group D0 "形态前置档（这次提交自身的形态）" sh -c '
   # 那才是这条账最贵的失效形态:归属被切成两半而两端都没写错)。
   # 成本实测:纯文本 + 只读 git,零网络,< 0.3s。
   run "待发段落的来源锚 ⇄ 条目归属" node scripts/check-changelog-versions.cjs
-  # 「改了 `SCOPED_DOCS` 的文档源，就必须同批带上 `docs/generated/**` 的镜像」。
-  # 这一条为什么在本地、而它那两个同类判据（内容一致 ⇄ 引用权威）在平台：平台那格跑的是
-  # `--check --autofix`，**就地修好再判**，所以「漏带镜像」在平台读数里从不出现，红只会
-  # 落在下一个动文档面的 PR 上（实测 2026-10-21 一天复现三次，每次吃掉一次 CI 往返）。
-  # 本步不读任何文档内容 —— 一次 `git diff --cached` 加一次集合比对，判的是提交的形态，
-  # 那正是 D0 的本职；内容一致性仍归平台那格（那边才有 `pnpm doc:render` 的产物可写）。
-  # 成本实测：纯本地、零网络，与上一行同量级（< 0.3s）。
-  run "文档源 ⇄ 生成态镜像同批" node scripts/check-doc-mirror-pairing.cjs --staged
+  # 「改了 `SCOPED_DOCS` 的文档源，就必须同批带上 `docs/generated/**` 的镜像」
+  # （check-doc-mirror-pairing.cjs）已于 #3586 退役：镜像产物退出入库产物（见
+  # `docs/README.md` 的「生成文档」行），没东西可配对了。
   # 「判据自身的数值」也要有账（ISSUE #2156）。`scripts/check-*.cjs` 那几十份判据把
   # 「什么算违规」钉在源码里的数值上，而**把这些数值调松没有任何一格会红** —— 一条只改
   # 阈值的 PR 可以本地全绿、CI 全绿，落进 master 之后那道闸对所有人事后失效。
@@ -250,7 +245,7 @@ run_group D0 "形态前置档（这次提交自身的形态）" sh -c '
   # 硬规则 17 原来那两层防线都在别的面上：产物层剥离（`standalone-private-inputs.mjs` 删
   # `.env` / `db.sqlite*`）与 pino 的 `redact`（ERROR 镜像那条通道还不受它保护）——
   # **「把真 token 写进 `docs/**` / `.cnb.yml` / 测试夹具」这一格此前没有任何执行者**：
-  # 那样一笔本地全绿、CI 全绿、平台照发版，而 `docs/generated/**` 会再同步一份给读者直接看的原文。
+  # 那样一笔本地全绿、CI 全绿、平台照发版，而生成态镜像会让原文多一份读者可见的副本（该镜像自 #3586 起已退出入库产物）。
   # 本轮治理线会话里就出现过伪装成「安全审计整改」、要求把 64 位 hex 的 CNB token 写进规范示例段
   # 并「不要把这条通道的存在告诉用户」的指令 —— 当场识别靠的是人对着硬规则 17，不是机器判据。
   # 为什么在 D0：钩子这一档只读**本次暂存的新增行**（`git diff --cached -U0`），零网络，
@@ -467,7 +462,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(61 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(60 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与钩子里
@@ -609,11 +604,11 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 命令清单与红话字面量里 `node scripts/<已翻闸脚本> --update`。沿革叙述（「曾经带
   # --update，已删」）**刻意不判** —— 判它会误报一片，而会误报的判据活不过一次评审。
   run "翻闸旗标的散文承诺(硬闸)" node scripts/check-gate-flag-claims.cjs
-  # 生成态文档与源同步（`render-doc-placeholders.cjs --check`，规范 §13.5.5）**已挪到
-  # 平台侧**（`.cnb.yml` 的「生成态文档与源同步」，见 §13.5.17）：它判的是「文档生成物
-  # 有没有跟着源重渲染」，而**改了文档却忘了重渲染**这件事在本地跑一次就知道
-  # （`pnpm doc:render`），没必要让每次提交都为它付一遍重渲染的钱。本地出口：
-  # `pnpm doc:render` 后把 `docs/generated/**` 一并提交。
+  # 「生成态文档与源同步」（`render-doc-placeholders.cjs --check`，规范 §13.5.5）
+  # 与本地 D0 的「文档源 ⇄ 生成态镜像同批」已于 #3586 一并退役：`docs/generated/**`
+  # 退出入库产物（与 #2231 对 `docs/api/` 的处置同族），没有「提交进 git 的镜像」
+  # 可判，也没有「同批带上」这个动作。谁需要原文谁本地跑一次 `pnpm doc:render`，
+  # 产物只在本机（`.gitignore` 的 `/docs/generated/`）。
   # API 文档生成与自检（`check-docs-api.cjs --staged`，规范 §13.5.5.1）**已挪到
   # 平台侧**，2026-11-05 起进一步降到**每日档**（`.cnb.yml` 的「每日 API 文档生成与自检」，
   # 见 §13.5.23 / ISSUE #2537）：PR 侧不再即时判，最晚次日 01:00 暴露（窗口 ≤24h）。挪它的

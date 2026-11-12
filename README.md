@@ -95,7 +95,7 @@ Comfy-APP-T3/
 | `CHANGELOG.md`                            | 变更日志（**不要直接改**：条目先进 `changelog.d/` 碎片，见 [规范 §13.10.5](docs/standards/13-提交与-code-review.md#13105-碎片化落地改-changelogd不改-changelogmd)） |
 | `CHANGELOG-archive.md`                    | 历史条目归档：`changelog.d/` 建成至 2026-10 的全部碎片原文（逐份收录、一字未改），供检索历史变更（**它入库给人读，但不进代码索引** —— 单份体量最大，检索走 `grep`/`git`，见下方 `.qoderignore` 那一行）                                                                 |
 | `changelog.d/`                            | 变更日志碎片：一件变更一个文件，避免并行分支在 `CHANGELOG.md` 上冲突；**只放尚未并入的条目**                                                                        |
-| `.qoderignore`                            | Qoder 代码索引的排除表（**不要手改**：由 `scripts/qoder-ignore.mjs` 渲染，`pnpm qoder:ignore` 写 / 刷新、`pnpm qoder:ignore:check` 比对；绝大多数条目本来也被 `.gitignore` 忽略，另有**入库但刻意只出索引**的那一组（`docs/generated/` 生成态镜像、`CHANGELOG-archive.md` 历史归档）—— 它们给人读、由配对门禁判同批，只是不该让每次文档检索都命中两份；改完要重启 Qoder CN 进程才生效，见 [规范 §12.20](docs/standards/12-代码组织与文件结构.md#1220-重复的手工流程收成有名字的入口能做成工具的就做成工具)）  |
+| `.qoderignore`                            | Qoder 代码索引的排除表（**不要手改**：由 `scripts/qoder-ignore.mjs` 渲染，`pnpm qoder:ignore` 写 / 刷新、`pnpm qoder:ignore:check` 比对；绝大多数条目本来也被 `.gitignore` 忽略，另有**入库但刻意只出索引**的 `CHANGELOG-archive.md` 历史归档 —— 它给人读，只是不该让每次文档检索都命中历史碎片；`docs/generated/` 生成态镜像自 #3586 起**不再入库**（谁需要谁本地 `pnpm doc:render`），这一条排除项保留是为了本地生成后仍不进索引；改完要重启 Qoder CN 进程才生效，见 [规范 §12.20](docs/standards/12-代码组织与文件结构.md#1220-重复的手工流程收成有名字的入口能做成工具的就做成工具)）  |
 
 > **双击入口都在 `tools/` 下**（启动类 `tools/start/`、构建类 `tools/build/`），
 > 根目录只保留工程配置与文档，见下方「双击入口速查」与 `tools/README.md`。
