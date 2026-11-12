@@ -268,7 +268,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                   {isOverridden && (
                     <Hint accessibleName label="恢复推荐默认">
                       <Button
-                        className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
+                        className="text-muted-foreground dark:text-ink dark:bg-ink/25 dark:border-ink/40 text-2xs h-auto rounded px-1.5 py-0.5"
                         onClick={() => {
                           clearTaskEdit(key);
                           c.setTaskTemperature(key, "");
