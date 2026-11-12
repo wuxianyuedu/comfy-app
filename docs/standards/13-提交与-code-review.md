@@ -315,6 +315,8 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 ✅ node scripts/check-oxlint-zero-rules.mjs # 已清零 oxlint 规则集防回潮（见下 13.5.32，ISSUE #3016）：
    # `ZERO_RULES` 在册清单（41 条）全仓 `--type-aware` 复扫判 0 命中，命中逐条列位置退 1；
    # 实测约 155s，只在重档付
+✅ node scripts/check-oxlint-zero-rules.mjs --staged # 同一清单的提交前置快检（ISSUE #3585）：
+   # 只扫本次暂存源码，本机实测约 7s / 3 份暂存文件；全仓档仍按上一行在重档复算
 ```
 
 > **本地钩子没接的判据**（`test:coverage` / `build` / E2E `@critical` / `db:push`）：
