@@ -654,6 +654,12 @@ export function planCommands(st) {
   for (const a of st.adds) {
     p.push(`git add -- ${a}`);
   }
+  /* 封闭暂存面那一读（ISSUE #3597）：只在给了 `--add` 时执行 —— 没给 `--add` 的那条路
+   * 暂存面本来就由调用方负责，没有「声明」可收口。计划里省掉这一条，dry-run 就会教给
+   * 读者一个没有收口的执行面，而那个收口正是这次补上的东西。 */
+  if (st.adds.length > 0) {
+    p.push("git diff --cached --name-only -z");
+  }
   if (st.hasMessage) {
     p.push("git commit --message=<提交信息原文>");
   }

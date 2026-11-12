@@ -114,6 +114,9 @@
  *   · **不 `git add -A`**。暂存面是「这次提交包含什么」的声明，要由调用方给
  *     （`--add <path>` 逐个点名，或你自己先 `git add`）。它会**打印**暂存了什么、
  *     以及还有什么没暂存。
+ *   · **`--add` 在场时暂存面是封闭的**（ISSUE #3597）：`git commit` 吃整个 index，所以
+ *     「点名了这些」与「index 里还有别的」是两件事 —— 调用之前就已暂存的文件默认让这一笔
+ *     **退 2** 并逐个念出路径；确认要一起走才显式 `--allow-staged`。
  *   · **不重跑 `premerge-check`**。push 钩子已经跑过并落了证明；重跑是分钟级的
  *     重复付费，且两份结论会开始漂移。这里只**读**那份证明。
  *   · **不生成因果句进提交信息**：`check-commit-claims.mjs` 会把「§x.y 照旧保留」
@@ -150,6 +153,10 @@
  *   pnpm ship --message-file .git/msg.txt      # 多行提交信息走文件 —— `pnpm run` 会把
  *                                              #  argv 里的真换行改写成字面量 \n，多行别从命令行进
  *   pnpm ship --add src/a.ts --add changelog.d/0-x.md --message "…"   # 由它代为暂存（逐个点名，不 -A）
+ *                                              #  **点名即封闭面**：index 里另有未点名的
+ *                                              #  文件 ⇒ 退 2 并逐个念出来（ISSUE #3597）
+ *   pnpm ship --add src/a.ts --allow-staged     # 显式放行上面那一格（只有确认它们该
+ *                                              #  一起走时才给；不给就是不许）
  *   pnpm ship --title "…"                      # 覆盖标题（默认取分支第一笔非常规提交）
  *   pnpm ship --branch feat/x                  # 当前没有可用分支时先把分支建出来再往下走
  *                                              #  （名字只能人给：脚本不从 issue 号/标题里造）
@@ -452,6 +459,18 @@ async function runFlow(deps, tmpFiles) {
   const confirmSkipped = /** @type {string[]} */ ([]);
   if (opt.only && !PHASES.includes(opt.only)) {
     log(`[ship] [ERROR] --only 不认的阶段：${opt.only}（可选：${PHASES.join(" / ")}）`);
+    return CODE.NOT_RUN;
+  }
+  /* `--allow-staged` 只对「`--add` 声明了这一次的提交面」那一格有意义（ISSUE #3597）：
+   * 没有 `--add` 时暂存面本来就由调用方负责，脚本没有声明可收口 —— 收下它会让人以为
+   * 「已经批准过某个提交面」，而实际什么都没发生（与 `--as-merged` 没带 `--close-issue`
+   * 同一条纪律：无执行者的旗标当场点名，不留一句沉默）。 */
+  if (opt.allowStaged === true && opt.adds.length === 0) {
+    log(
+      "[ship] [ERROR] --allow-staged 是给 --add 那一格放行用的：这一跳没给 --add ⇒ " +
+        `没有「点名集合」，也就没有可放行的对象（${codeTag(CODE.NOT_RUN)}）。` +
+        "要放行就逐个点名 `--add <路径>`，否则别带这枚。",
+    );
     return CODE.NOT_RUN;
   }
   /* `--close-issue` 后面跟的东西必须像 issue 号（ISSUE #2199）。把它当未知旗标收下是

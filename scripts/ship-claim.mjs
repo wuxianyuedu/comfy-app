@@ -757,6 +757,7 @@ export function runIssueAction(ctx) {
     opt.messageFile === null || opt.messageFile === undefined ? null : "--message-file",
     opt.title === null || opt.title === undefined ? null : "--title",
     opt.adds.length > 0 ? "--add" : null,
+    opt.allowStaged === true ? "--allow-staged" : null,
     opt.only ? "--only" : null,
   ].filter(Boolean);
   if (clashes.length > 0) {

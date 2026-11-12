@@ -25,6 +25,8 @@ description: 把「分支 → 提交 → push → PR → 等 CI → 绿了合并
 pnpm ship --dry-run          # 先看它打算跑哪些命令（一条都不执行，但阻塞照报）
 pnpm ship --no-preflight-d0  # 关掉阶段 0 的 D0 预跑（默认开：提交前把钩子 D0 只读判据预跑一遍、红一次报齐；双付明说，提交时钩子照判）
 pnpm ship --branch feat/x    # 还没有分支时，让它先把分支建出来再往下走（名字必须人给）
+pnpm ship --add src/a.ts --allow-staged   # --add 的暂存面默认封闭：index 里另有未点名
+                                          # 文件 ⇒ 退 2；只有确认它们该一起走才给这枚
 pnpm ship                    # 到「CI 出终态 + 打印下一动作」为止
 pnpm ship --merge            # CI 绿了才合并（squash）
 pnpm ship --merge --close-issue --clean-branch   # 合上之后关单、并把**这一次那条**分支收掉
@@ -89,6 +91,12 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
 2. **它不代写提交信息，也不替你 `git add -A`。** 提交信息是判断（症状 / 读数 / 因果），
    暂存面是「这次包含什么」的声明。树脏而没给 `--message` ⇒ 它会停在阶段 1 并说明原因。
    要它代为暂存就逐个点名：`--add src/a.ts --add changelog.d/0-x.md`。
+   **`--add` 在场时暂存面是封闭的（ISSUE #3597）**：`git commit` 吃的是整个 index，
+   所以点名之外、**在调用 ship 之前就已暂存**的文件（`git apply --3way` 解的基线冲突、
+   手工 `git add`、并行检出的在途工作）默认让这一笔**退 2**，并逐个念出路径与三条出口
+   （补点名 / `git restore --staged` 撤出去 / 确认要一起走就 `--allow-staged`）。
+   点名目录 ⇒ 该目录下已暂存的文件都算声明过。没给 `--add` 的那条路不看暂存面
+   （暂存面本来就由你负责），行为一字不变。
    **点名的改动已全部在 HEAD ⇒ 跳过提交段**（#3602）：并行检出树上挂着**别的会话**的
    常驻脏文件时，已提交（含 amend 过）的那一轮不再被推进 `git commit`——旧判据「树上有
    任何改动就提交」会让钩子在空暂存面上判红（doc-mirror-pairing 退 2），push / PR 全堵死。
@@ -331,6 +339,7 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | 提交门槛                   | `.githooks/pre-commit`（由 `git commit` 触发；阶段 0 只预跑它的 D0 只读子集）                                             |
 | 这次提交的形态红（预报）   | 阶段 0 的 D0 预跑（ISSUE #3200）：清单从 `.githooks/pre-commit` 的 D0 组解析（单一出处，不抄第二份），每步按原样命令起、红不短路 ⇒ 所有红一次报齐落 `1` 停手（与提交钩子同权）；清单取不到 ⇒ 跳过不冒充结论；跳过条件各念一行（`--add` / dry-run / 依赖没就绪 / 旗标关），暂存面为空静默；双付明说（`--no-preflight-d0` 关） |
+| 这一笔会带进哪些文件（#3597） | 提交段自己读一次 `git diff --cached --name-only -z` 并比对 `--add` 点名集合（`ship-local.mjs` 的 `classifyStagedSurface`）：点名之外还有已暂存文件 ⇒ 退 `2` 并逐个点名；`--allow-staged` 才放行。没给 `--add` 时不判（暂存面本来就由调用方负责） |
 | 合并前固定动作三段         | `.githooks/pre-push` → `premerge-proof.mjs`，落一份机器本地证明                                                         |
 | 「这条红是我的还是主干的」 | `scripts/base-check.mjs`（CI 红时它会点名这个入口，不自己归因）                                                         |
 | 流水线终态                 | 平台 build 的 `data.status`                                                                                             |
