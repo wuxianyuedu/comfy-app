@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { useFilePicker } from "~/components/ui/file-picker";
 import { Input } from "~/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import {
@@ -21,9 +22,11 @@ import {
   FONT_SCALE_STEPS,
   RADIUS_STEPS,
   readAppearance,
+  registerUserFont,
   saveAppearance,
   type AppearancePrefs,
   type AppearanceStep,
+  type FontTier,
 } from "~/lib/appearance";
 
 import { SettingsCard } from "~/components/ui/settings-card";
@@ -152,6 +155,7 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
         onReset={() => {
           update({ interfaceFont: DEFAULT_INTERFACE_FONT });
         }}
+        tier="interface"
         value={prefs.interfaceFont}
       />
       <FontRow
@@ -163,6 +167,7 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
         onReset={() => {
           update({ codeFont: DEFAULT_CODE_FONT });
         }}
+        tier="code"
         value={prefs.codeFont}
       />
       <FontRow
@@ -174,6 +179,7 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
         onReset={() => {
           update({ terminalFont: DEFAULT_TERMINAL_FONT });
         }}
+        tier="terminal"
         value={prefs.terminalFont}
       />
       {notPersisted && (
@@ -234,18 +240,22 @@ function StepRow({
   );
 }
 
-/** 一档字体：文本输入框 + 恢复默认。自由字符串，可填任意字体栈（如 `Inter`）。 */
+/** 一档字体：文本输入框 + 恢复默认 + 运行时字体文件加载器。自由字符串档既可在
+ *  文本框里填系统字体名，也可通过 `FontFileLoader` 拖入 / 选择字体文件让本机未装的
+ *  字体也能用（`FontFace` 注册 + IndexedDB 持久化）。 */
 function FontRow({
   label,
   hint,
   value,
   onChange,
   onReset,
+  tier,
 }: {
   hint: string;
   label: string;
   onChange: (value: string) => void;
   onReset: () => void;
+  tier: FontTier;
   value: string;
 }) {
   /* 输入框的 aria-label 直接用档名，读屏用户也能定位到「界面字体」这一格；
@@ -280,6 +290,67 @@ function FontRow({
           恢复默认
         </Button>
       </div>
+      <FontFileLoader onChange={onChange} tier={tier} />
+    </div>
+  );
+}
+
+/** 一档字体的运行时替换入口：拖入或选择 `.ttf` / `.otf` / `.woff` / `.woff2` 文件，
+ *  经 `registerUserFont` 把字形注册进文档并持久化，再把生成的字体栈写回对应档。
+ *  视图层只负责「拿到 File」，文件 IO 与 `FontFace` 注册在 `~/lib/appearance` 里。 */
+function FontFileLoader({ onChange, tier }: { onChange: (value: string) => void; tier: FontTier }) {
+  const [busy, setBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const handleFile = async (file: File) => {
+    setError(null);
+    setBusy(true);
+    try {
+      const { stack } = await registerUserFont(file, tier);
+      onChange(stack);
+    } catch {
+      setError("字体文件无法加载，请换一个 .ttf / .otf / .woff / .woff2 文件。");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const picker = useFilePicker({
+    accept: ".ttf,.otf,.woff,.woff2",
+    onPick: (file) => {
+      void handleFile(file);
+    },
+  });
+  return (
+    <div className="mt-2">
+      <div
+        className={
+          dragOver
+            ? "border-primary bg-primary-soft/40 flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-xs"
+            : "border-border flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-xs"
+        }
+        onDragLeave={() => {
+          setDragOver(false);
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragOver(true);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragOver(false);
+          const file = event.dataTransfer?.files?.[0];
+          if (file) {
+            void handleFile(file);
+          }
+        }}
+      >
+        <span className="text-muted-foreground">拖入字体文件，或</span>
+        <Button disabled={busy} onClick={picker.open} size="sm" variant="outline">
+          {busy ? "加载中…" : "选择文件"}
+        </Button>
+        <picker.Input />
+      </div>
+      {error ? <p className="text-danger-strong mt-1 text-xs">{error}</p> : null}
     </div>
   );
 }

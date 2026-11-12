@@ -141,3 +141,26 @@ describe("AppearanceSection 选中档的悬停值（ISSUE #1925）", () => {
     }
   });
 });
+
+describe("AppearanceSection 字体文件加载器（#3513 运行时替换）", () => {
+  it("每档字体都带「选择文件」入口（拖入或选择字体文件）", () => {
+    render(<AppearanceSection c={controller("dark")} />);
+    /* 三档各一个浏览按钮 + 一句拖拽提示，且不应产生额外的 radiogroup。 */
+    expect(screen.getAllByRole("button", { name: "选择文件" })).toHaveLength(3);
+    expect(screen.getAllByText(/拖入字体文件/)).toHaveLength(3);
+    const labels = screen.getAllByRole("radiogroup").map((g) => g.getAttribute("aria-label"));
+    expect(labels).toEqual(["主题外观", "圆角", "标题字阶"]);
+  });
+
+  it("文件输入框接受字体扩展名（.ttf / .otf / .woff / .woff2）", () => {
+    const { container } = render(<AppearanceSection c={controller("dark")} />);
+    const inputs = container.querySelectorAll('input[type="file"][accept*=".ttf"]');
+    expect(inputs).toHaveLength(3);
+    inputs.forEach((el) => {
+      const accept = el.getAttribute("accept") ?? "";
+      expect(accept).toContain(".otf");
+      expect(accept).toContain(".woff");
+      expect(accept).toContain(".woff2");
+    });
+  });
+});

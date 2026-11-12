@@ -153,3 +153,96 @@ test.describe("外观字体自定义 #3513 @critical", () => {
     expect(sansAfter).toBe(sansBefore);
   });
 });
+
+test.describe("外观字体拖拽加载 #3513 @critical", () => {
+  /* 用桩替换 FontFace / document.fonts：本测试验证「文件 → family 名 → 文本框 → 持久化 →
+   * 刷新」这条接线，字形解析是浏览器原生能力、不是本仓库代码的责任，故用桩代替真实字体
+   * 二进制（不在仓库里塞一份真实字体做夹具）。桩会把注册过的 family 名记到
+   * `globalThis.__registeredFonts`，供断言 `document.fonts.add` 真的被调用过。 */
+  test.beforeEach(async ({ context }) => {
+    await context.addInitScript(() => {
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- 在浏览器全局上挂测试桩（非仓库代码责任范围）
+      const w = globalThis as unknown as {
+        __registeredFonts: string[];
+        FontFace?: unknown;
+        fonts?: unknown;
+      };
+      w.__registeredFonts = [];
+      class StubFontFace {
+        family: string;
+        constructor(family: string) {
+          this.family = family;
+        }
+        load() {
+          return Promise.resolve(this);
+        }
+      }
+      w.FontFace = StubFontFace;
+      Object.defineProperty(document, "fonts", {
+        configurable: true,
+        value: {
+          add: (face: { family: string }) => {
+            w.__registeredFonts.push(face.family);
+          },
+          check: () => true,
+          load: () => Promise.resolve([]),
+          ready: Promise.resolve(),
+        },
+      });
+    });
+  });
+
+  const registeredFamilies = (page: Page) =>
+    page.evaluate(
+      () =>
+        // eslint-disable-next-line typescript/no-unsafe-type-assertion -- 读取测试桩记录的 family
+        (globalThis as unknown as { __registeredFonts?: string[] }).__registeredFonts ?? [],
+    );
+
+  const fontInput = (page: Page, name: string) => page.getByRole("textbox", { name });
+
+  test("选择字体文件后，界面字体档写入 family 名、字形被注册，且跨刷新保留", async ({ page }) => {
+    await openAppearance(page);
+
+    /* 一档一个隐藏的文件输入框（accept 筛字体扩展名）；界面字体档排在最前。 */
+    const fontInputEl = page.locator('input[type="file"][accept*=".ttf"]').first();
+    await fontInputEl.setInputFiles({
+      buffer: Buffer.from([1, 2, 3, 4]),
+      mimeType: "font/ttf",
+      name: "MyFont.ttf",
+    });
+
+    /* 文本框被写回「family 名 + 回退族」，说明加载器跑通并映射到了对应档。 */
+    await expect(fontInput(page, "界面字体")).toHaveValue(/MyFont/);
+    /* 字形经 FontFace 注册进 document.fonts（桩记录）。 */
+    await expect.poll(() => registeredFamilies(page)).toContain("MyFont");
+
+    /* 刷新后文本框仍保留 family 名：family 名在 localStorage，二进制在 IndexedDB，
+       启动时 AppearanceBootstrap 重新注册字形。 */
+    await page.reload();
+    await page.getByRole("button", { name: "外观", exact: true }).first().click();
+    await expect(fontInput(page, "界面字体")).toHaveValue(/MyFont/);
+    await expect.poll(() => registeredFamilies(page)).toContain("MyFont");
+  });
+
+  test("同一档再次选择不同文件，只保留最后一次（按 family 主键覆盖）", async ({ page }) => {
+    await openAppearance(page);
+    const fontInputEl = page.locator('input[type="file"][accept*=".ttf"]').first();
+
+    await fontInputEl.setInputFiles({
+      buffer: Buffer.from([1, 2, 3, 4]),
+      mimeType: "font/ttf",
+      name: "First.ttf",
+    });
+    await expect(fontInput(page, "界面字体")).toHaveValue(/First/);
+
+    await fontInputEl.setInputFiles({
+      buffer: Buffer.from([5, 6, 7, 8]),
+      mimeType: "font/ttf",
+      name: "Second.ttf",
+    });
+    await expect(fontInput(page, "界面字体")).toHaveValue(/Second/);
+    /* 旧 family 名不再出现在文本框里（被覆盖，不是叠加）。 */
+    await expect(fontInput(page, "界面字体")).not.toHaveValue(/First/);
+  });
+});

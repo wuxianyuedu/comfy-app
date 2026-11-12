@@ -6,7 +6,7 @@
 //
 // 纯函数与存储往返写在同一份文件里：`src/lib` 根目录只认 `<name>.test.ts` 这一种
 // 测试命名，点号命名的 `appearance.storage.test.ts` 会被判成裸模块。
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   APPEARANCE_STORAGE_KEY,
@@ -18,8 +18,11 @@ import {
   RADIUS_STEPS,
   appearanceVars,
   applyAppearance,
+  fontStackForFamily,
   parseAppearance,
   readAppearance,
+  registerUserFont,
+  restoreUserFonts,
   saveAppearance,
   serializeAppearance,
 } from "./appearance";
@@ -220,5 +223,156 @@ describe("readAppearance / saveAppearance", () => {
   it("存的是坏值时读回默认，且不抛", () => {
     window.localStorage.setItem(APPEARANCE_STORAGE_KEY, "not-json");
     expect(readAppearance()).toEqual(DEFAULT_APPEARANCE);
+  });
+});
+
+describe("fontStackForFamily", () => {
+  it("界面档回退 sans-serif，代码 / 终端档回退 monospace", () => {
+    expect(fontStackForFamily("Inter", "interface")).toBe("Inter, sans-serif");
+    expect(fontStackForFamily("IBM Plex Mono", "code")).toBe('"IBM Plex Mono", monospace');
+    expect(fontStackForFamily("JetBrains Mono", "terminal")).toBe('"JetBrains Mono", monospace');
+  });
+
+  it("含空格的 family 必须加引号（否则 CSS 把空格当分隔符）", () => {
+    expect(fontStackForFamily("Sarasa UI SC", "interface")).toBe('"Sarasa UI SC", sans-serif');
+    expect(fontStackForFamily("Fira Code", "code")).toBe('"Fira Code", monospace');
+  });
+
+  it("纯 ASCII 无空格的 family 不加引号", () => {
+    expect(fontStackForFamily("Inter", "interface")).toBe("Inter, sans-serif");
+    expect(fontStackForFamily("JetBrainsMono", "terminal")).toBe("JetBrainsMono, monospace");
+  });
+});
+
+/** 一个够用的内存版 IndexedDB 桩：只实现本模块用到的 `open / transaction / put / getAll`。 */
+function makeFakeIDB(store: Map<string, unknown>) {
+  function open() {
+    const db = {
+      objectStoreNames: { contains: () => true },
+      createObjectStore: () => ({}),
+      transaction: () => {
+        const tx: {
+          objectStore: () => unknown;
+          oncomplete: null | (() => void);
+          onerror: null | (() => void);
+        } = {
+          objectStore: () => ({
+            put: (record: { family: string }) => {
+              store.set(record.family, record);
+              queueMicrotask(() => {
+                if (tx.oncomplete) {
+                  tx.oncomplete();
+                }
+              });
+            },
+            getAll: () => {
+              const request: { onsuccess: null | (() => void); result: unknown } = {
+                onsuccess: null,
+                result: [],
+              };
+              queueMicrotask(() => {
+                request.result = [...store.values()];
+                if (request.onsuccess) {
+                  request.onsuccess();
+                }
+              });
+              return request;
+            },
+          }),
+          oncomplete: null,
+          onerror: null,
+        };
+        return tx;
+      },
+    };
+    const request: {
+      onsuccess: null | (() => void);
+      onupgradeneeded: null | (() => void);
+      result: unknown;
+    } = {
+      onsuccess: null,
+      onupgradeneeded: null,
+      result: db,
+    };
+    queueMicrotask(() => {
+      if (request.onsuccess) {
+        request.onsuccess();
+      }
+    });
+    return request;
+  }
+  return { open };
+}
+
+describe("registerUserFont / restoreUserFonts（IndexedDB + FontFace 桩）", () => {
+  let registered: Array<string>;
+  let fontDb: Map<string, unknown>;
+
+  beforeEach(() => {
+    registered = [];
+    fontDb = new Map();
+    Object.defineProperty(document, "fonts", {
+      configurable: true,
+      value: {
+        add: (face: { family: string }) => {
+          registered.push(face.family);
+        },
+        check: () => true,
+        load: () => Promise.resolve([]),
+        ready: Promise.resolve(),
+      },
+    });
+    class StubFontFace {
+      family: string;
+      constructor(family: string) {
+        this.family = family;
+      }
+      load() {
+        return Promise.resolve(this);
+      }
+    }
+    /* 测试桩：jsdom 没有 IndexedDB / FontFace，手动塞进全局。 */
+    // @ts-expect-error 测试桩
+    globalThis.FontFace = StubFontFace;
+    // @ts-expect-error 测试桩
+    globalThis.indexedDB = makeFakeIDB(fontDb);
+  });
+
+  afterEach(() => {
+    // @ts-expect-error 还原测试桩
+    delete globalThis.FontFace;
+    // @ts-expect-error 还原测试桩
+    delete globalThis.indexedDB;
+    // @ts-expect-error 还原测试桩
+    delete document.fonts;
+  });
+
+  it("registerUserFont 注册字形、落库，并返回带回退的字体栈", async () => {
+    const file = new File([new Uint8Array([1, 2, 3])], "MyFont.ttf", { type: "font/ttf" });
+    const { family, stack } = await registerUserFont(file, "interface");
+    expect(family).toBe("MyFont");
+    expect(stack).toBe("MyFont, sans-serif");
+    expect(registered).toContain("MyFont");
+    expect(fontDb.has("MyFont")).toBe(true);
+  });
+
+  it("同名文件重拖是幂等覆盖（按 family 主键）", async () => {
+    const first = new File([new Uint8Array([1])], "Dup.ttf", { type: "font/ttf" });
+    const second = new File([new Uint8Array([2])], "Dup.ttf", { type: "font/ttf" });
+    await registerUserFont(first, "interface");
+    await registerUserFont(second, "interface");
+    expect(fontDb.size).toBe(1);
+    expect(fontDb.has("Dup")).toBe(true);
+  });
+
+  it("restoreUserFonts 把库里所有 family 重新注册进 document.fonts", async () => {
+    fontDb.set("SavedFont", {
+      blob: new Blob([new Uint8Array([9])]),
+      family: "SavedFont",
+      fileName: "SavedFont.otf",
+      format: "opentype",
+    });
+    await restoreUserFonts();
+    expect(registered).toContain("SavedFont");
   });
 });

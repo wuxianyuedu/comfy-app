@@ -190,3 +190,180 @@ export function saveAppearance(prefs: AppearancePrefs): boolean {
   applyAppearance(prefs);
   return writeStorageItem(APPEARANCE_STORAGE_KEY, serializeAppearance(prefs));
 }
+
+/**
+ * 运行时用户字体加载器（#3513 第二部分）：把用户**拖入 / 选择的字体文件**经
+ * `FontFace` API 注册进当前文档，并以二进制形式持久化到 IndexedDB，使换上的字体
+ * 跨刷新 / 重启仍在。纯 Web API，浏览器与 Tauri WebView 同款，不依赖任何 Rust / FS
+ * 插件 —— 字体文件**不进仓库**，那是发布产物的用户侧替换入口（设置页的设计口径）。
+ *
+ * 分工：本模块只负责「让某个 family 名真的能解析出字形」（注册 + 留存），而
+ * 「某一档用哪个 family」仍由 `AppearancePrefs` 那三个自由字符串字段说了算 ——
+ * 拖入后把 family 名写回对应档的文本框，沿用已有的变量落点。文本框是 family 名的
+ * 来源，`restoreUserFonts` 在启动时把二进制重新喂给同名 family，于是「名在、字形也在」。
+ *
+ * 为什么是 IndexedDB 而不是 localStorage：字体二进制动辄数 MB（CJK woff2 单档
+ * 8MB 上下），localStorage 的 5MB 硬上限装不下；IndexedDB 原生存 Blob、配额宽裕，
+ * 且 WebView 的数据目录随应用留存，正好对应「成品给用户替换用的」。
+ */
+
+/** 三档字体的档位标识，决定 family 写回哪一档与回退族。 */
+export type FontTier = "code" | "interface" | "terminal";
+
+/** 持久化到 IndexedDB 的一条用户字体记录（字段按字母序，零规则 `sort-object-types`）。 */
+export type UserFontRecord = {
+  blob: Blob;
+  family: string;
+  fileName: string;
+  format: string;
+};
+
+const FONT_DB_NAME = "comfyapp-user-fonts";
+const FONT_STORE = "fonts";
+
+/** 文件扩展名 → `@font-face` 的 format 提示（不写也能解析，只是更准）。 */
+function formatForFile(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".otf")) {
+    return "opentype";
+  }
+  if (lower.endsWith(".ttf")) {
+    return "truetype";
+  }
+  if (lower.endsWith(".woff")) {
+    return "woff";
+  }
+  if (lower.endsWith(".woff2")) {
+    return "woff2";
+  }
+  return "truetype";
+}
+
+/** 由文件名派生一个稳定 family 名：去扩展名、清掉会破坏 CSS 引号字符串的字符。
+ *  同名文件重拖 = 幂等覆盖；没有可读名字时兜底为 `Custom Font`。 */
+function familyFromFileName(name: string): string {
+  const base = name
+    .replace(/\.[^.]+$/, "")
+    .replaceAll(/["\\]/g, "")
+    .trim();
+  return base.length > 0 ? base : "Custom Font";
+}
+
+/** 把 family 包成带合理回退的字体栈，写回对应档的文本框。含空格 / 非 ASCII 的
+ *  family 名必须加引号，否则 CSS 把空格当分隔符解析断句。 */
+export function fontStackForFamily(family: string, tier: FontTier): string {
+  const needsQuote = /\s/.test(family) || /[^A-Za-z0-9_ -]/.test(family);
+  const quoted = needsQuote ? `"${family}"` : family;
+  const fallback = tier === "interface" ? "sans-serif" : "monospace";
+  return `${quoted}, ${fallback}`;
+}
+
+/** 打开用户字体库（首次访问时建表，按 family 作主键）。非浏览器 / 无 IndexedDB
+ *  时调用方已提前返回，这里不再判。 */
+function openFontDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(FONT_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(FONT_STORE)) {
+        db.createObjectStore(FONT_STORE, { keyPath: "family" });
+      }
+    };
+    request.onsuccess = () => {
+      resolve(request.result);
+    };
+    request.onerror = () => {
+      reject(new Error(request.error?.message ?? "打开用户字体库失败"));
+    };
+  });
+}
+
+function putUserFont(record: UserFontRecord): Promise<void> {
+  return openFontDB().then(
+    (db) =>
+      new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(FONT_STORE, "readwrite");
+        tx.objectStore(FONT_STORE).put(record);
+        tx.oncomplete = () => {
+          resolve();
+        };
+        tx.onerror = () => {
+          reject(new Error(tx.error?.message ?? "写入用户字体失败"));
+        };
+      }),
+  );
+}
+
+function allUserFonts(): Promise<Array<UserFontRecord>> {
+  return openFontDB().then(
+    (db) =>
+      new Promise<Array<UserFontRecord>>((resolve, reject) => {
+        const tx = db.transaction(FONT_STORE, "readonly");
+        const request = tx.objectStore(FONT_STORE).getAll();
+        request.onsuccess = () => {
+          // eslint-disable-next-line typescript/no-unsafe-type-assertion -- IndexedDB 的 result 在 DOM 类型里是 any，落库数据由本模块自身写入、形状可信
+          resolve(request.result as Array<UserFontRecord>);
+        };
+        request.onerror = () => {
+          reject(new Error(request.error?.message ?? "读取用户字体失败"));
+        };
+      }),
+  );
+}
+
+/** 由二进制 BufferSource 注册一个 family 到 `document.fonts`（抛错由调用方接）。 */
+async function registerFace(family: string, buffer: ArrayBuffer): Promise<void> {
+  const face = new FontFace(family, buffer, { weight: "1 1000" });
+  await face.load();
+  document.fonts.add(face);
+}
+
+/**
+ * 注册一个用户字体文件：读二进制 → `FontFace` 注册进 `document.fonts` → 存进
+ * IndexedDB，返回 family 名与可直接写回文本框的字体栈。任一环节失败都向上抛，由
+ * 调用处（设置页）把错误告诉用户，而不是静默吞掉。
+ */
+export async function registerUserFont(
+  file: File,
+  tier: FontTier,
+): Promise<{ family: string; stack: string }> {
+  if (typeof document === "undefined" || typeof indexedDB === "undefined") {
+    throw new Error("当前环境不支持运行时字体加载");
+  }
+  const family = familyFromFileName(file.name);
+  await registerFace(family, await file.arrayBuffer());
+  await putUserFont({
+    blob: file,
+    family,
+    fileName: file.name,
+    format: formatForFile(file.name),
+  });
+  return { family, stack: fontStackForFamily(family, tier) };
+}
+
+/**
+ * 启动时把 IndexedDB 里所有用户字体重新注册进 `document.fonts`。必须在
+ * `applyAppearance` 之前跑（或之后也无妨：`font-display: swap` 语义下 family 没就绪
+ * 时文字先走回退栈，注册完成再换上）。单条记录坏掉只跳过它，不让一条损坏字体堵死
+ * 整次恢复。
+ */
+export async function restoreUserFonts(): Promise<void> {
+  if (typeof document === "undefined" || typeof indexedDB === "undefined") {
+    return;
+  }
+  let records: Array<UserFontRecord>;
+  try {
+    records = await allUserFonts();
+  } catch {
+    return;
+  }
+  await Promise.all(
+    records.map(async (record) => {
+      try {
+        await registerFace(record.family, await record.blob.arrayBuffer());
+      } catch {
+        /* 坏记录跳过：恢复是尽力而为，一处损坏不该拖垮其他字体。 */
+      }
+    }),
+  );
+}
