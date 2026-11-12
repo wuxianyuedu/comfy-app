@@ -11,7 +11,7 @@
 # 与 `.cnb.yml` 质量门禁的对应（命令一字不改，判据同源）：
 #   · 本文件**承接**：分支守卫 / 提交声明核对 / 同步数据库表结构 / 类型检查 /
 #     固定结构用例 / 受影响用例 / 14 个 check-* 静态格 / lib Node-only 声明 /
-#     oxfmt 格式 / 重档静态判据。
+#     oxfmt 格式 / 重档静态判据 / schema⇄迁移等价（ISSUE #3599）。
 #   · **留在 CNB**（平台专有，本文件刻意不跑）：镜像身份 / 工作区复用读数 /
 #     缓存槽读数 / 环境前提（自托管节点事实读数）/ GitHub 镜像同步（平台池出口，
 #     ISSUE #3418 起不在自托管主列）/ 覆盖率上报（`ci-coverage-report.mjs`
@@ -220,6 +220,28 @@ jobs:
 
       - name: 同步数据库表结构（cnb 同款判据一字不改）
         run: node scripts/db-push.mjs
+
+      - name: schema⇄迁移等价（cnb 同款判据一字不改）
+        # 「版本化迁移 ⇄ `schema.ts`」这一格（ISSUE #1624 验收第 2 条）：
+        # `db:migrate` 建出来的库与 `db:push` 建出来的库必须是**同一份形状**
+        # （表集合 / 逐表逐列 / 索引集合）。漂开了不报错，只在某处业务写入时炸 ——
+        # #3565 的现场：migrate 侧少一张表 / 十列 / 一个索引，在 master 上活了两周，
+        # 暴露通道只剩次日 01:37 的全量单测。
+        #
+        # 为什么它能进 PR 档（§13.5.30 三条门槛，逐条评过）：
+        #   · **确定性** —— 结论由这份树决定（两次真起 drizzle 建两个临时库再比结构），
+        #     不随节点负载 / 并发条数 / 网络抖动变；锁（真 `drizzle/` 的跨进程独占锁）
+        #     在这一条流水线里只有一个用户，不与别的 job 争。
+        #   · **快** —— 本机实跑 7 条 / 墙钟 87s（首跑，drizzle-kit 冷）/ 53s（暖态），
+        #     用例本身 ~50s；它落在**已经装好依赖**的这一格里，不新增一次
+        #     `pnpm install`，也不新增一个 job ⇒ PR 的关键路径不受影响。
+        #     （对照 §13.5.30 那条参照：全仓 ESLint 121s 那一量级属 L2。）
+        #   · **本地可复现** —— 一条命令就能先跑一遍：
+        #     `pnpm exec vitest run tests/db-migrate-equivalence.test.ts`。
+        #
+        # 判据本体一字未改（`tests/db-migrate-equivalence.test.ts` 是这件事的**唯一**
+        # 判据，别为平台侧另写一份 —— §12.12 / §12.18）。
+        run: node scripts/ci-run-tool.mjs vitest run tests/db-migrate-equivalence.test.ts
 
       - name: 类型检查（cnb 同款判据一字不改）
         run: node scripts/ci-run-tool.mjs tsc --noEmit

@@ -5816,8 +5816,10 @@ basename 会把半个测试面误拉进来（`route.ts` / `index.ts` 这类名�
 现在的口径：**「换了执行者」在配置里机器可读**（`.cnb.yml` 的
 `COMFYAPP_CI_GATES_ELSEWHERE`，键名与 `COMFYAPP_CI_DISABLED_GATES` 同一形态）。登记的值是
 **入口路径**（`scripts/xxx.cjs` / `tests/xxx.test.ts`），不是执行者自己的定义 ⇒ 判据
-`scripts/check-gate-name-executors.mjs` 去执行面（复合档条目 / 固定清单用例 / 钩子步骤
-三面）核「这个路径真的会被跑」，**不抄第二份**（§12.12 / §12.18）。
+`scripts/check-gate-name-executors.mjs` 去执行面（复合档条目 / 固定清单用例 / 钩子步骤 /
+**GA PR 门禁 workflow 的 `run:` 行** 四面）核「这个路径真的会被跑」，**不抄第二份**
+（§12.12 / §12.18）。第四面是 2026-11-13 补的（§13.5.40）：PR 主列的代码判据全在 GA 侧，
+而前三面一处都不在 GA ⇒ 指向 GA step 的入口路径会被误判成「没有执行者」。
 
 判三件事：① 清单里的每个名字 ⇒（自己的 stage ｜「执行者在别处」的登记）二选一，且登记的
 入口真在执行面里；② 登记的每个名字都在清单里、每个入口都真在执行面里、且不与「活 stage」
@@ -12589,5 +12591,54 @@ cnb issues comment --number <诉求单号> --body '改后截图：<asset_link> �
   成立，见 11 §11.8）；本条是「人眼及时核对」的交付纪律，与 Storybook 逐 story 截图、
   与自动化测试各管一段，互不顶替。
 - 自查清单 §13.1 与 PR 模板 §13.3 各留一行提醒（本节是唯一展开处，那两处不抄细则）。
+
+#### 13.5.40 「schema⇄迁移等价」这一格进 PR 档：§13.5.30 三条门槛的逐条裁决（ISSUE #3599，2026-11-13）
+
+- **单子的形状**：#3565（`drizzle/` 迁移生成物落后 `schema.ts`，每日全量单测三条红）修掉时
+  留了一道**不代拍**的判断题 —— 「schema 改动是确定性红（与机器负载无关），值不值得给
+  `drizzle/` ⇄ `schema.ts` 的等价性一条 PR 档判据」。#3565 关单后该题另立为 #3599；
+  业主拍板口径：**进 PR 档**（#3599 评论「进pr档」）。本节是那道题的**落档**：
+  三条门槛逐条评、逐条给读数，裁决只认读数。
+- **判据本体**：`tests/db-migrate-equivalence.test.ts`（ISSUE #1624 验收第 2 条的契约用例：
+  表集合 / 逐表逐列（名 / 类型 / NOT NULL / 主键四维，**不比列序**，#2655）/ 索引集合，
+  外加「同一行数据按名取回逐字段一致」与「迁移幂等」两条自证）。它是这件事的**唯一**判据 ——
+  平台侧沿用它，**不为 PR 档另写一份**（§12.12 / §12.18；本单提过的「轻量形态」
+  ——「journal 顶端 snapshot 与 schema 的表集合 diff」——经评估**不采用**：它只比表集合，
+  盖不住 #3565 那次真正漂掉的那十列与那个索引，而那张 snapshot 与 `schema.ts` 的逐维比对
+  要重造 drizzle 的模型 —— 那才是第二轮子）。
+- **三条门槛（§13.5.30）逐条读数**：
+  1. **确定性 ✓** —— 结论由这份树决定：两条路各起一次 drizzle 建两个临时库再比结构，
+     不随节点负载 / 并发条数 / 网络抖动变。它**起子进程**（drizzle-kit ×2 + 幂等复核 ×1），
+     但读数**不是墙钟**而是结构差异 ⇒ 与 §13.5.21 那族（「读数在并发下不可信」）不同族。
+     唯一的并发敏感点是**真 `drizzle/` 的跨进程独占锁**
+     （`tests/helpers/repo-drizzle-lock.ts`）：等不到锁会退成「没判过」而不是假绿 ——
+     而在 PR 这一条流水线里这一格是该锁的**唯一**用户（GA 每个 job 一份检出），
+     不与别的 job 争。
+  2. **快 ✓（带读数）** —— 本机实跑（Node 26.12.1 / vitest 5.0.5）：**7 条全绿**；
+     墙钟 **87s（首跑，drizzle-kit 冷）/ 53s（暖态）**，用例本身 51.4s / 48.7s。
+     对照 §13.5.30 那条「全仓 ESLint（121s）那一量级属 L2」：
+     87s 在它**之下**，且这一格**不落在 PR 的关键路径上** —— 它进的是 GA `pr-gate.yml` 的
+     `typecheck-db-format` job（那一格**已经装好依赖**），**不新增一次 `pnpm install`、
+     不新增一个 job** ⇒ PR 的墙钟只在那一个 job 上多 ~1~1.5 min，而那一格本来就不是最长的一格。
+     ⚠️ 这条读数是**本机**的（Linux GA runner 上 drizzle-kit 起手更慢，估 2~3 min），
+     而那一格的 job 预算是 30 min —— 余量够，但**真实读数以平台那一跑为准**。
+  3. **本地可复现 ✓** —— 一条命令：`pnpm exec vitest run tests/db-migrate-equivalence.test.ts`。
+- **落档的形状**（三处同批，缺一处就红）：
+  - **执行者**：GA `.github/workflows/pr-gate.yml` 的 `typecheck-db-format` job 里那一步
+    （`node scripts/ci-run-tool.mjs vitest run tests/db-migrate-equivalence.test.ts`，
+    与同 job 的 `lib Node-only 声明` 同一形状）。**判据一字未改**。
+  - **登记**：`.cnb.yml` 的 `COMFYAPP_CI_GATES` 加名 + `COMFYAPP_CI_GATES_ELSEWHERE`
+    登记入口路径（`tests/db-migrate-equivalence.test.ts`）+ `GATE_TIER_LEDGER` 的 **PR** 段
+    加同名条目（档位 = L1，§13.5.30 的三条门槛由人判、本账只拦「改档却没定级 /
+    撤档却没登记」）。
+  - **判据面补一处**：④`scripts/check-gate-name-executors.mjs` 的**执行面从三处补到四处**
+    —— 增的是「GA PR 门禁 workflow 的 `run:` 行」。补它的理由是**执行者搬家了而判据没跟**：
+    PR 主列的代码判据全在 GA 侧（`.cnb.yml` 的 PR 档自 #3378 起只剩「站内回读结论 +
+    红了立案」两件纯 API 动作），而另三处执行面（复合档条目 / 固定清单用例 / 钩子步骤）
+    **一处都不在 GA** ⇒ 指向 GA step 的入口路径会被误判成「没有执行者」。
+    ⇒ **这一格「执行者没了」现在当场红**（GA 那一步被删 ⇒ 登记指向没人跑的东西）。
+- **复评触发**：① GA 那一跑的实测墙钟超过那一格 job 预算的 1/3（本题的余量口径）；
+  ② 这一格被指出**误报**（真问题在别处而它红了）⇒ 按 §13.5.30「降级不许等于删除」
+  降一级观察（PR → 每日档 L2），名字与理由留在 `GATE_TIER_LEDGER` 的 retired 段。
 
 ---
