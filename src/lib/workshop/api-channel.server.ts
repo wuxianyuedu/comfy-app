@@ -35,8 +35,10 @@ import {
   type WorkshopApiSettings,
 } from "./api-channel-core";
 import { buildVideoPollUrls } from "~/lib/llm/usage-test-config";
+import { isMediaEndpointPath } from "~/lib/llm/provider-types";
 import {
   resolveImagesGenerationsEndpoint,
+  resolveVideoSubmitEndpoint,
   type ApiChannelKind,
   type ApiChannelStored,
 } from "./api-channel-shared";
@@ -162,9 +164,12 @@ async function resolveTarget(
       (adapters.length === 1 ? (onlyAdapter ?? null) : null);
     return {
       target: {
+        /* 无适配器时端点由「显式配置的动作路径（#3656 下拉落库）→ Base 归一 +
+         * OpenAI 兼容惯例」两级决定；适配器路径保持逐字拼接（那是用户在
+         * 「模型适配」里配的完整覆盖，含 /agnesapi 这类非版本段形态）。 */
         endpoint: adapter
           ? `${(entry.baseUrl ?? "").replace(/\/+$/, "")}${adapter.endpointPath}`
-          : resolveImagesGenerationsEndpoint(entry.baseUrl ?? ""),
+          : resolveImagesGenerationsEndpoint(entry.baseUrl ?? "", entry.endpointPath),
         apiKey: entry.apiKey ?? "",
         model: entry.name,
       },
@@ -266,10 +271,11 @@ async function resolveVideoTarget(
     const adapter =
       adapters.find((a) => a.mode === wantedMode) ??
       (adapters.length === 1 ? (onlyAdapter ?? null) : null);
-    /* 无适配器时回落 OpenAI 兼容惯例的 /videos（与 usage-test 的视频预设一致）。 */
+    /* 无适配器时回落视频端点解析（#3656 收口到 `resolveVideoSubmitEndpoint`：
+     * 显式配置的动作路径优先，缺省按任务制惯例 /videos，版本段缺则补 /v1）。 */
     const endpoint = adapter
       ? `${(entry.baseUrl ?? "").replace(/\/+$/, "")}${adapter.endpointPath}`
-      : `${(entry.baseUrl ?? "").replace(/\/+$/, "")}/videos`;
+      : resolveVideoSubmitEndpoint(entry.baseUrl ?? "", entry.endpointPath);
     return {
       adapter,
       target: { endpoint, apiKey: entry.apiKey ?? "", model: entry.name },
@@ -316,7 +322,14 @@ export async function pollVideoViaApi(
         const adapter =
           adapters.find((a) => a.mode === wantedMode) ??
           (adapters.length === 1 ? (onlyAdapter ?? null) : null);
-        const endpointPath = adapter?.endpointPath ?? "/videos";
+        /* 轮询目录与提交同一口径：适配器路径优先 → 条目显式配置（#3656）→
+         * 任务制惯例 /videos。REST 候选的版本段补全在 `buildVideoPollUrls` 里。 */
+        const configuredPath = entry.endpointPath;
+        const endpointPath =
+          adapter?.endpointPath ??
+          (typeof configuredPath === "string" && isMediaEndpointPath("video", configuredPath)
+            ? configuredPath
+            : "/videos");
         const { rest, agnes } = buildVideoPollUrls(
           entry.baseUrl ?? "",
           endpointPath,

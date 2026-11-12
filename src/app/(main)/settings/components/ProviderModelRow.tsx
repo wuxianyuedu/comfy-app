@@ -9,8 +9,8 @@
  * 连通性与模型目录同步由供应商级「测试连接」一并完成。
  *
  * 摘要按用途分叉（#3618 补充）：文本模型念「上下文 / 输出 / 接口格式」；
- * 图像 / 视频模型没有窗口 / 输出这些配置项，念的是自己那条真实端点路径
- * （唯一出处 `defaultUsageTestPath`，与设置页弹窗和「实际使用」测试弹窗同源）。
+ * 图像 / 视频模型没有窗口 / 输出这些配置项，念自己生效的那条端点路径
+ * （#3656：`modelView` 下发的 `endpointPath`，库里没配 = 用途默认第一项）。
  *
  * 拆出来的原因只有一条：`ProviderDetail` 的函数体已经顶到 400 行硬闸
  * （规范 §12.13），而这一行的 JSX 与父级的状态无关 —— 它需要的全部输入
@@ -28,7 +28,6 @@ import {
   formatContextWindow,
   parseInputTypes,
 } from "~/lib/llm/provider-types";
-import { defaultUsageTestPath } from "~/lib/llm/usage-test-config";
 import { REMOTE_MODEL_KINDS, REMOTE_MODEL_KIND_LABELS } from "~/lib/llm/types";
 
 import type { ProviderModelDialogs } from "../hooks/use-provider-model-dialogs";
@@ -96,8 +95,9 @@ export function ProviderModelRow({
               </>
             ) : (
               <>
-                {kind === "image" ? "图像端点" : "视频端点"}{" "}
-                {defaultUsageTestPath(kind, provider.baseUrl)}
+                {/* #3656：摘要念模型自己生效的端点路径（下拉落库值；库里没配 =
+                    用途默认第一项，`modelView` 已回落），不再是与配置无关的预设 */}
+                {kind === "image" ? "图像端点" : "视频端点"} {model.endpointPath}
               </>
             )}
           </p>

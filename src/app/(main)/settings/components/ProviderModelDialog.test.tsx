@@ -1,10 +1,10 @@
 /**
- * `ProviderModelDialog` 的按用途分叉判据（#3618 补充）：
+ * `ProviderModelDialog` 的按用途分叉判据（#3618 补充；#3656 改判）：
  * ① 文本模型：智能配置 / 上下文窗口 / 最大输出 Token / 「API 格式」下拉 / 高级配置
  *    全部照常出现；
- * ② 图像 / 视频模型：上述文本协议的配置项**全部不出现**，取而代之的是一条只读的
- *    「接口端点」（`POST {base}{路径}`，路径唯一出处 `defaultUsageTestPath`）——
- *    图像 `/images/generations`、视频 `/videos/generations`。
+ * ② 图像 / 视频模型：上述文本协议的配置项**全部不出现**，取而代之的是「接口端点」
+ *    **下拉**（词表 `REMOTE_MEDIA_ENDPOINT_OPTIONS`，生效值 = 用途默认第一项；
+ *    选项标签是按 Base URL 拼出的最终请求地址）。
  *
  * 桩按本仓惯例走「unknown + 类型谓词收窄」（见 `ComfyuiSection.test.tsx`）：
  * 只在运行期校验本组件真正读的字段，字段改名时这里会红。
@@ -90,7 +90,7 @@ describe("ProviderModelDialog 按用途分叉（#3618 补充）", () => {
     expect(screen.queryByText("接口端点")).toBeNull();
   });
 
-  it("图像模型：文本协议配置全部消失，只显示只读接口端点（/images/generations）", () => {
+  it("图像模型：文本协议配置全部消失，「接口端点」是下拉且默认第一项（#3656）", () => {
     renderDialog("image", "https://apihub.example/v1");
     expect(screen.queryByText("智能配置")).toBeNull();
     expect(screen.queryByText("上下文窗口")).toBeNull();
@@ -98,24 +98,27 @@ describe("ProviderModelDialog 按用途分叉（#3618 补充）", () => {
     expect(screen.queryByText("API 格式")).toBeNull();
     expect(screen.queryByText("高级配置")).toBeNull();
     expect(screen.getByText("接口端点")).toBeInTheDocument();
-    expect(
-      screen.getByDisplayValue("POST https://apihub.example/v1/images/generations"),
-    ).toBeInTheDocument();
-    /* 标签 ⇄ 控件接上线（§16.2.4.26）：端点是只读**控件**，不是一段展示文本 ——
-     * plain children 形态会落进接线棘轮。 */
-    expect(screen.getByLabelText("接口端点")).toHaveAttribute("readonly");
+    /* 下拉 Trigger（base-ui combobox）显示选中项的标签：默认 = 用途词表第一项，
+     * 标签是按 Base URL 拼出的最终请求地址（Base 已带 /v1 → 不重复补）。 */
+    expect(screen.getByRole("combobox", { name: "接口端点" })).toHaveTextContent(
+      "POST https://apihub.example/v1/images/generations",
+    );
+    /* 标签 ⇄ 控件接上线（§16.2.4.26）：下拉是可交互控件，由 FormField 关联。 */
+    expect(screen.getByLabelText("接口端点")).toBeInTheDocument();
   });
 
-  it("视频模型：端点按用途给 /videos/generations", () => {
+  it("视频模型：端点按用途给 /v1/videos（#3656 新词表）", () => {
     renderDialog("video", "https://apihub.example/v1");
-    expect(
-      screen.getByDisplayValue("POST https://apihub.example/v1/videos/generations"),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "接口端点" })).toHaveTextContent(
+      "POST https://apihub.example/v1/videos",
+    );
   });
 
-  it("供应商还没有 Base URL 时：端点仍显示路径段，并提示先去填 Base URL", () => {
+  it("供应商还没有 Base URL 时：选项显示路径段本身，并提示先去填 Base URL", () => {
     renderDialog("image", "");
-    expect(screen.getByDisplayValue("POST /images/generations")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "接口端点" })).toHaveTextContent(
+      "POST /v1/images/generations",
+    );
     expect(
       screen.getByText("所属供应商还没有 Base URL：先在供应商详情里填好，这里会显示最终请求地址"),
     ).toBeInTheDocument();

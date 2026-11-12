@@ -12,10 +12,10 @@
  * 必然有一条链探不通。弹窗把「格式 + 供应商 Base URL」拼出的最终请求地址直接显示，
  * 用户不用心算路径段。
  *
- * 图像 / 视频模型按用途分叉渲染（#3618 补充）：它们的端点路径由**用途**决定
- * （唯一出处 `defaultUsageTestPath`，与文本协议的三词表无关），所以「API 格式」
- * 下拉、智能配置、上下文窗口 / 输出上限、高级配置这些文本协议的配置对它们
- * 全部不出现，只展示一条只读的「接口端点」。
+ * 图像 / 视频模型按用途分叉渲染（#3618 补充）：它们的「API 格式」下拉、
+ * 智能配置、上下文窗口 / 输出上限、高级配置这些文本协议的配置全部不出现，
+ * 换成按用途给词表的「接口端点」下拉（#3656：词表 `REMOTE_MEDIA_ENDPOINT_OPTIONS`，
+ * 落库 `remoteModel.endpointPath`；没选 = 用途默认第一项，最终请求地址在提示里展示）。
  *
  * 交互态与提交在 `use-provider-model-dialogs`（第②层），字段规则在
  * `~/lib/llm/provider-form`（纯函数）。
@@ -43,12 +43,12 @@ import {
   MODEL_INPUT_TYPE_LABELS,
   MODEL_OUTPUT_TYPES,
   MODEL_OUTPUT_TYPE_LABELS,
-  baseUrlVersionHint,
+  REMOTE_MEDIA_ENDPOINT_OPTIONS,
   formatContextWindow,
+  joinApiUrl,
   requestUrlForFormat,
 } from "~/lib/llm/provider-types";
 import { splitReasoningLevels } from "~/lib/llm/provider-form";
-import { defaultUsageTestPath } from "~/lib/llm/usage-test-config";
 import { REMOTE_MODEL_KINDS, REMOTE_MODEL_KIND_LABELS } from "~/lib/llm/types";
 
 import type { ModelDialog, ProviderModelDialogs } from "../hooks/use-provider-model-dialogs";
@@ -68,15 +68,23 @@ export function ProviderModelDialog({
   const provider = p.providers.find((candidate) => candidate.id === providerId);
   const providerBaseUrl = provider?.baseUrl ?? "";
   const requestUrl = requestUrlForFormat(providerBaseUrl, d.modelForm.apiFormat);
-  const versionHint = baseUrlVersionHint(providerBaseUrl, d.modelForm.apiFormat);
-  /* 图像 / 视频（#3618 补充）：端点路径由用途决定（唯一出处
-   * `defaultUsageTestPath`；Agnes 视频按 host 判 /videos、base 已含资源段时
-   * 只补动作段都由它管），这里只拼最终地址做只读展示。 */
+  /* 图像 / 视频（#3656）：「接口端点」是下拉（词表 `REMOTE_MEDIA_ENDPOINT_OPTIONS`，
+   * 生效值在表单里，库里没配 = 用途默认第一项）；这里只拼最终地址做提示展示。 */
   const isChat = d.modelForm.kind === "chat";
-  const imageVideoEndpointPath = isChat
-    ? ""
-    : defaultUsageTestPath(d.modelForm.kind, providerBaseUrl);
-  const imageVideoEndpointUrl = providerBaseUrl.trim().replace(/\/+$/, "") + imageVideoEndpointPath;
+  const mediaOptions: ReadonlyArray<string> =
+    d.modelForm.kind === "chat" ? [] : REMOTE_MEDIA_ENDPOINT_OPTIONS[d.modelForm.kind];
+  /* 选项标签 = 按 Base URL 拼出的最终请求地址；Base 还没填时给路径段本身
+   * （joinApiUrl 对空 Base 返回空串，直接拼会只剩一个光秃秃的 POST）。 */
+  const mediaEndpointLabels: Record<string, string> = Object.fromEntries(
+    mediaOptions.map((path) => [
+      path,
+      `POST ${providerBaseUrl === "" ? path : joinApiUrl(providerBaseUrl, path)}`,
+    ]),
+  );
+  const mediaEndpointUrl =
+    !isChat && d.modelForm.endpointPath !== ""
+      ? joinApiUrl(providerBaseUrl, d.modelForm.endpointPath)
+      : "";
   const windowPreview = formatContextWindow(Number(d.modelForm.contextWindow) || null);
 
   return (
@@ -173,7 +181,13 @@ export function ProviderModelDialog({
                 onChange={(next) => {
                   const kind = REMOTE_MODEL_KINDS.find((candidate) => candidate === next);
                   if (kind !== undefined) {
-                    d.patchModelForm({ kind });
+                    /* 用途切换连带端点词表换一套（#3656）：生效路径回到新用途的
+                     * 默认第一项，旧用途选中的路径不该带到新用途上。 */
+                    d.patchModelForm({
+                      kind,
+                      endpointPath:
+                        kind === "chat" ? "" : (REMOTE_MEDIA_ENDPOINT_OPTIONS[kind][0] ?? ""),
+                    });
                   }
                 }}
                 options={[...REMOTE_MODEL_KINDS]}
@@ -192,7 +206,6 @@ export function ProviderModelDialog({
                 ) : (
                   <span>
                     实际请求地址：<code className="text-ink/80">{requestUrl}</code>
-                    {versionHint !== null && <span className="mt-0.5 block">{versionHint}</span>}
                   </span>
                 )
               }
@@ -219,30 +232,37 @@ export function ProviderModelDialog({
               )}
             </FormField>
           ) : (
-            /* 图像 / 视频（#3618 补充）：没有文本协议的「API 格式」下拉 ——
-             * 三种文本格式对图像 / 视频端点都无意义；只读展示按用途拼出的
-             * 最终端点（路径唯一出处 `defaultUsageTestPath`）。 */
+            /* 图像 / 视频（#3656）：没有文本协议的「API 格式」下拉 —— 三种文本
+             * 格式对图像 / 视频端点都无意义。「接口端点」按用途给下拉（词表
+             * `REMOTE_MEDIA_ENDPOINT_OPTIONS`），没选 = 第一项（生效值在表单里，
+             * 打开弹窗就已带上），下方提示展示按 Base URL 拼出的最终请求地址。 */
             <FormField
               className="mb-3"
               hint={
-                providerBaseUrl === ""
-                  ? "所属供应商还没有 Base URL：先在供应商详情里填好，这里会显示最终请求地址"
-                  : undefined
+                providerBaseUrl === "" ? (
+                  "所属供应商还没有 Base URL：先在供应商详情里填好，这里会显示最终请求地址"
+                ) : (
+                  <span>
+                    实际请求地址：<code className="text-ink/80">{mediaEndpointUrl}</code>
+                  </span>
+                )
               }
               id="model-endpoint"
               label="接口端点"
             >
               {(a11y) => (
-                /* 只读控件而不是一段展示文本：`<FormField>` 的标签只在
-                 * render-prop 形态下才接得上控件（§16.2.4.26）—— plain
-                 * children 是接线棘轮上的新站点（`check-form-field-wiring.cjs`）。
-                 * 端点值是算出来的，不给改；`readOnly` 的输入框可聚焦、可复制，
-                 * 标签与控件的关联也真正接上。 */
-                <Input
+                <SelectMenu
                   {...a11y}
-                  className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm"
-                  readOnly
-                  value={`POST ${imageVideoEndpointUrl}`}
+                  autoFitFromOptions={false}
+                  className="text-sm"
+                  fullWidth
+                  labels={mediaEndpointLabels}
+                  onChange={(next) => {
+                    d.patchModelForm({ endpointPath: next });
+                  }}
+                  options={[...mediaOptions]}
+                  popoverMinWidth={320}
+                  value={d.modelForm.endpointPath}
                 />
               )}
             </FormField>

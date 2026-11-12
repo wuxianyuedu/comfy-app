@@ -22,6 +22,13 @@
       "when": 1794415526565,
       "tag": "0002_dapper_mikhail_rasputin",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1794503640028,
+      "tag": "0003_open_starjammers",
+      "breakpoints": true
     }
   ]
 }

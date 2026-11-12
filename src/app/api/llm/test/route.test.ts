@@ -234,18 +234,24 @@ describe("POST /api/llm/test", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("404 时回退到上一层 base 再试（用户把资源子路径填进了 Base URL）", async () => {
-    fetchMock
-      .mockResolvedValueOnce(jsonResponse({ error: "not found" }, 404))
-      .mockResolvedValueOnce(jsonResponse({ data: [{ id: "m1" }] }));
+  it("Base URL 带资源子路径（用户按完整端点减动作的习惯填）先归一再探（#3656）", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ data: [{ id: "m1" }] }));
     const { POST } = await import("./route");
     const res = await POST(request({ baseUrl: "https://api.example.com/v1/images" }));
     const body = await bodyOf(res);
     expect(body.ok).toBe(true);
-    expect(body.detail).toContain("探测已回退到 https://api.example.com/v1/models");
+    /* 资源段（/images）剥掉后直接探 {版本段}/models，不再先打一发注定 404 的地址 */
     expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
-      "https://api.example.com/v1/images/models",
       "https://api.example.com/v1/models",
+    ]);
+  });
+
+  it("Base URL 不带版本段（#3656 新口径）探 /v1/models；裸域同样补全", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ data: [{ id: "m1" }] }));
+    const { POST } = await import("./route");
+    await POST(request({ baseUrl: "https://apihub.agnes-ai.com" }));
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
+      "https://apihub.agnes-ai.com/v1/models",
     ]);
   });
 

@@ -21,7 +21,7 @@ import {
   type RemoteModelEntry,
   inferRemoteKindFromName,
 } from "~/lib/llm/types";
-import { isLlmApiFormat } from "~/lib/llm/provider-types";
+import { isLlmApiFormat, isMediaEndpointKind, isMediaEndpointPath } from "~/lib/llm/provider-types";
 import {
   user,
   llmConfig,
@@ -394,12 +394,23 @@ export class RemoteModelRepository {
     /* 格式是模型级配置（#3517）：非法值折成 null = 跟随供应商，不在写侧猜一个格式
      * （猜错的表现是「请求发到了一个不存在的端点」，比回落更难查）。 */
     const apiFormat = isLlmApiFormat(input.apiFormat) ? input.apiFormat : null;
+    /* 图像 / 视频的接口端点动作路径（#3656）：按**该行用途**的白名单收窄，
+     * 非法值折成 null = 用途默认第一项；文本行（chat）恒为 null。省略（undefined，
+     * 历史调用方没传）= 不动既有。 */
+    const kind = input.kind ?? "chat";
+    const endpointPath =
+      input.endpointPath === undefined
+        ? undefined
+        : isMediaEndpointKind(kind) && isMediaEndpointPath(kind, input.endpointPath)
+          ? input.endpointPath
+          : null;
     const values = {
       name,
       providerId: input.providerId,
       baseUrl,
       apiFormat,
-      kind: input.kind ?? "chat",
+      kind,
+      endpointPath,
       enabled: input.enabled ?? true,
       contextWindow: input.contextWindow ?? null,
       maxOutputTokens: input.maxOutputTokens ?? null,
@@ -512,6 +523,9 @@ export type RemoteModelInput = {
   capabilities?: Array<string> | null;
   contextWindow?: number | null;
   enabled?: boolean;
+  /** 图像 / 视频模型的接口端点动作路径（#3656）：按行用途白名单收窄落库，
+   *  非法值 = null（用途默认第一项）；省略 = 不动既有（文本行恒 null）。 */
+  endpointPath?: string | null;
   id?: string;
   inputTypes?: Array<string> | null;
   kind?: string;

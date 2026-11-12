@@ -469,6 +469,10 @@ export const remoteModel = sqliteTable(
     /** 工坊按模式的输入/输出适配器（JSON 数组字符串；RemoteModeAdapter[]）。
      *  配置后工坊按该模型在对应模式下的字段映射发起请求，替代统一猜测。 */
     workshopAdapters: text("workshopAdapters"),
+    /** 图像 / 视频模型的接口端点动作路径（#3656，词表见
+     *  `~/lib/llm/provider-types` 的 `REMOTE_MEDIA_ENDPOINT_OPTIONS`）：
+     *  设置页「接口端点」下拉落库；NULL = 没选 → 按用途回落第一项。 */
+    endpointPath: text("endpointPath"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),

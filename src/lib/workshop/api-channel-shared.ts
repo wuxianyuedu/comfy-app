@@ -9,6 +9,7 @@
 /* 某个 API 通道服务哪个生成阶段。 */
 import { isDataUrl, wrapBase64 } from "~/lib/media/data-url";
 import { isRecord } from "~/lib/is-record";
+import { isMediaEndpointPath, joinApiUrl } from "~/lib/llm/provider-types";
 
 export type ApiChannelKind = "image" | "video";
 
@@ -195,20 +196,43 @@ export function extractSavedOutputs(value: unknown): Array<SavedOutput> {
   return out;
 }
 
-/** 由远端模型条目的 Base URL 解析「生图」端点（OpenAI 兼容 images/generations）。
- *  用户在设置页填的 Base URL 三种形态都兼容：
+/** Base URL 末段的资源段归一：…/images、…/videos 这类「用户把资源段填进了
+ *  base」的历史形态剥掉，动作段交给 `joinApiUrl` 统一拼（#3656）。
+ *  完整动作段（…/images/generations）不以这两段结尾，不受影响。 */
+function stripTrailingResourceSegment(baseUrl: string): string {
+  return baseUrl.replace(/\/+$/, "").replace(/\/(?:images|videos)$/i, "");
+}
+
+/** 由远端模型条目解析「生图」端点（OpenAI 兼容 images/generations）。
+ *  `endpointPath` 是模型条目显式配置的动作路径（设置页下拉落库，
+ *  `remoteModel.endpointPath`，#3656）：在白名单内时优先于一切启发式；
+ *  缺省时 Base URL 按这几种形态兼容：
  *    已含完整动作段（…/v1/images/generations）→ 原样使用；
- *    只到资源段（…/v1/images）→ 只补动作段 /generations；
- *    只到根（…/v1）→ 补全 /images/generations。
+ *    只到资源段（…/v1/images 或 …/images）→ 归一后补动作段；
+ *    只到根（…/v1 或裸域，#3656 新口径）→ 补全 /v1/images/generations。
  *  历史事故：条目里填了完整端点仍被无条件再拼一次，请求打到
  *  /v1/images/images/generations 而 404。纯字符串拼装，可单测。 */
-export function resolveImagesGenerationsEndpoint(baseUrl: string): string {
-  const base = String(baseUrl).trim().replace(/\/+$/, "");
+export function resolveImagesGenerationsEndpoint(
+  baseUrl: string,
+  endpointPath?: string | null,
+): string {
+  const base = stripTrailingResourceSegment(String(baseUrl).trim());
+  if (typeof endpointPath === "string" && isMediaEndpointPath("image", endpointPath)) {
+    return joinApiUrl(base, endpointPath);
+  }
   if (/\/images\/generations$/i.test(base)) {
     return base;
   }
-  if (/\/images$/i.test(base)) {
-    return `${base}/generations`;
+  return joinApiUrl(base, "/images/generations");
+}
+
+/** 由远端模型条目解析「生视频」提交端点（#3656 收口成函数，此前是调用点的
+ *  行内 `${base}/videos`）。`endpointPath` 与生图同一语义：显式配置优先；
+ *  缺省按任务制惯例补 /videos（Agnes 系端点）。 */
+export function resolveVideoSubmitEndpoint(baseUrl: string, endpointPath?: string | null): string {
+  const base = stripTrailingResourceSegment(String(baseUrl).trim());
+  if (typeof endpointPath === "string" && isMediaEndpointPath("video", endpointPath)) {
+    return joinApiUrl(base, endpointPath);
   }
-  return `${base}/images/generations`;
+  return joinApiUrl(base, "/videos");
 }

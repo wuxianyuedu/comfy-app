@@ -9,10 +9,10 @@ import { describe, expect, it } from "vitest";
 import { EMPTY_PLACEHOLDER } from "~/lib/display-value";
 
 import {
-  baseUrlVersionHint,
   formatContextWindow,
   inferModelDefaults,
   isLlmApiFormat,
+  joinApiUrl,
   knownApiEndpointHint,
   parseCapabilities,
   parseInputTypes,
@@ -33,15 +33,61 @@ describe("isLlmApiFormat / requestUrlForFormat", () => {
     expect(isLlmApiFormat(42)).toBe(false);
   });
 
-  it("Base URL 去尾斜杠后按格式拼路径；空 Base URL 给空串（不是半截地址）", () => {
+  it("#3656 新口径：Base 不带版本段时补 /v1 再接动作路径；空 Base URL 给空串", () => {
     expect(requestUrlForFormat("https://platform.agnes-ai.com/", "chat-completions")).toBe(
-      "https://platform.agnes-ai.com/chat/completions",
+      "https://platform.agnes-ai.com/v1/chat/completions",
     );
     expect(requestUrlForFormat(" https://agnes ", "anthropic-messages")).toBe(
       "https://agnes/v1/messages",
     );
-    expect(requestUrlForFormat("https://agnes", "responses")).toBe("https://agnes/responses");
+    expect(requestUrlForFormat("https://agnes", "responses")).toBe("https://agnes/v1/responses");
     expect(requestUrlForFormat("   ", "responses")).toBe("");
+  });
+
+  it("历史形态：Base 已带版本段（…/v1、/api/v1、/v1beta）不重复补，行为与 #3656 之前一致", () => {
+    expect(requestUrlForFormat("https://api.example.com/v1/", "chat-completions")).toBe(
+      "https://api.example.com/v1/chat/completions",
+    );
+    expect(requestUrlForFormat("https://api.example.com/api/v1", "responses")).toBe(
+      "https://api.example.com/api/v1/responses",
+    );
+    expect(requestUrlForFormat("https://api.example.com/v1beta", "chat-completions")).toBe(
+      "https://api.example.com/v1beta/chat/completions",
+    );
+  });
+
+  it("Base 与动作路径都带版本段时 Base 的让位（本地 Ollama 地址 + Anthropic 不出 /v1/v1）", () => {
+    expect(requestUrlForFormat("https://gateway.example.com/v1", "anthropic-messages")).toBe(
+      "https://gateway.example.com/v1/messages",
+    );
+    expect(requestUrlForFormat("http://127.0.0.1:11434/v1", "chat-completions")).toBe(
+      "http://127.0.0.1:11434/v1/chat/completions",
+    );
+  });
+});
+
+describe("joinApiUrl：版本段统一拼装的唯一出处（#3656）", () => {
+  it("裸域 Base 补 /v1；带路径前缀的 Base 在前缀后补", () => {
+    expect(joinApiUrl("https://apihub.agnes-ai.com", "/models")).toBe(
+      "https://apihub.agnes-ai.com/v1/models",
+    );
+    expect(joinApiUrl("https://gateway.example.com/api/", "/chat/completions")).toBe(
+      "https://gateway.example.com/api/v1/chat/completions",
+    );
+  });
+
+  it("动作路径自带版本段时不叠（Anthropic /v1/messages）", () => {
+    expect(joinApiUrl("https://api.anthropic.com", "/v1/messages")).toBe(
+      "https://api.anthropic.com/v1/messages",
+    );
+    expect(joinApiUrl("https://api.anthropic.com/v1", "/v1/messages")).toBe(
+      "https://api.anthropic.com/v1/messages",
+    );
+  });
+
+  it("空动作路径 = 去尾斜杠的 Base 本身；空 Base = 空串", () => {
+    expect(joinApiUrl("https://x/v1/videos/", "")).toBe("https://x/v1/videos");
+    expect(joinApiUrl("", "/models")).toBe("");
   });
 });
 
@@ -61,34 +107,24 @@ describe("resolveApiFormat：模型自己的格式优先，其次供应商默认
   });
 });
 
-describe("baseUrlVersionHint：只提示「看不出版本段」，不改写用户输入", () => {
-  it("路径最后一段不是版本段时提示（含完全没有路径的域名）", () => {
-    expect(baseUrlVersionHint("https://api.example.com", "chat-completions")).toContain(
-      "看不出接口版本段",
-    );
-    expect(baseUrlVersionHint("https://api.example.com/api", "chat-completions")).toContain(
-      "看不出接口版本段",
-    );
-  });
-
-  it("/v1、/api/v1、/v1beta 都算有版本段（去尾斜杠后判）", () => {
+describe("joinApiUrl 的版本段判定沿用原 hint 判据（v1 / v1beta / v2 都算，末段之外不看）", () => {
+  it("历史形态 Base 已带版本段的（含 /api/v1/、v1beta、v2）不再补", () => {
     for (const base of [
       "https://api.example.com/v1",
       "https://api.example.com/api/v1/",
       "https://api.example.com/v1beta",
       "https://api.example.com/v2",
     ]) {
-      expect(baseUrlVersionHint(base, "chat-completions"), base).toBeNull();
+      expect(joinApiUrl(base, "/chat/completions"), base).toBe(
+        `${base.replace(/\/$/, "")}/chat/completions`,
+      );
     }
   });
 
-  it("格式路径自带版本段时不提示（Anthropic 的 Base URL 通常只到域名）", () => {
-    expect(baseUrlVersionHint("https://api.anthropic.com", "anthropic-messages")).toBeNull();
-  });
-
-  it("空值 / 非 URL 不提示（那归字段校验管，别在输入中途唠叨）", () => {
-    expect(baseUrlVersionHint("   ", "chat-completions")).toBeNull();
-    expect(baseUrlVersionHint("not a url", "chat-completions")).toBeNull();
+  it("裸域 / 路径前缀不带版本段的补 /v1（#3656 新口径的默认形状）", () => {
+    for (const base of ["https://api.example.com", "https://api.example.com/api"]) {
+      expect(joinApiUrl(base, "/chat/completions"), base).toBe(`${base}/v1/chat/completions`);
+    }
   });
 });
 

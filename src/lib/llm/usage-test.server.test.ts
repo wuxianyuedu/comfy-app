@@ -165,6 +165,7 @@ describe("resolveUpstream（两个路由同一口径的连接参数解析）", (
     await expect(resolveUpstream("entry", "", "", "")).resolves.toEqual({
       base: "https://entry/v1",
       path: "",
+      url: "https://entry/v1",
       headers: {
         "Content-Type": "application/json",
         Authorization: "Bearer sk-entry",
@@ -175,6 +176,7 @@ describe("resolveUpstream（两个路由同一口径的连接参数解析）", (
     await expect(resolveUpstream("entry", "https://typed/v1/", "sk-typed", "x")).resolves.toEqual({
       base: "https://typed/v1",
       path: "/x",
+      url: "https://typed/v1/x",
       headers: {
         "Content-Type": "application/json",
         Authorization: "Bearer sk-typed",
@@ -244,6 +246,7 @@ describe("resolveUpstream（两个路由同一口径的连接参数解析）", (
     ).resolves.toEqual({
       base: "https://apihub.agnes-ai.com/v1",
       path: "",
+      url: "https://apihub.agnes-ai.com/v1",
       headers: {
         "Content-Type": "application/json",
         Authorization: "Bearer sk-provider",
@@ -374,6 +377,7 @@ describe("readPayload / parseExtraJson / chatTextFrom", () => {
 const UP = {
   base: "https://u/v1",
   path: "/chat/completions",
+  url: "https://u/v1/chat/completions",
   headers: { "Content-Type": "application/json", Authorization: "Bearer sk" },
 };
 

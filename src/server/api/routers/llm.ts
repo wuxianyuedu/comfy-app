@@ -7,7 +7,9 @@ import {
   MODEL_CAPABILITIES,
   MODEL_INPUT_TYPES,
   MODEL_OUTPUT_TYPES,
+  isMediaEndpointKind,
   resolveApiFormat,
+  resolveMediaEndpointPath,
 } from "~/lib/llm/provider-types";
 import { isHttpUrl } from "~/lib/url-scheme";
 import { llmProviderRepository, remoteModelRepository } from "~/lib/core/repository";
@@ -74,6 +76,8 @@ const modelInputSchema = z.object({
   baseUrl: z.string().nullish(),
   capabilities: z.array(z.enum(MODEL_CAPABILITIES)).nullish(),
   contextWindow: z.number().int().positive().nullish(),
+  /** 图像 / 视频模型的接口端点动作路径（#3656）：写侧按行用途白名单收窄。 */
+  endpointPath: z.string().nullish(),
   enabled: z.boolean().optional(),
   id: z.string().min(1).optional(),
   inputTypes: z.array(z.enum(MODEL_INPUT_TYPES)).nullish(),
@@ -103,7 +107,9 @@ function providerView(p: LlmProvider) {
 /** 模型下发给客户端的形状：密钥只报「有没有配」（供应商级密钥不在这里重复报）。
  *  `apiFormat` 下发的是**生效值**（模型自己的 → 供应商默认 → chat-completions）：
  *  设置页的模型行与编辑弹窗都按它显示，不再各自回落一次。
- *  指向已删除供应商的行 `find` 自然取不到，格式回落默认值，不因一条孤儿行报错。 */
+ *  指向已删除供应商的行 `find` 自然取不到，格式回落默认值，不因一条孤儿行报错。
+ *  `endpointPath`（#3656）同口径：图像 / 视频行下发生效值（库里值按用途白名单
+ *  收窄 → 默认第一项），文本行恒 null。 */
 function modelView(m: RemoteModel, providers: ReadonlyArray<LlmProvider>) {
   const provider = providers.find((p) => p.id === m.providerId);
   return {
@@ -114,6 +120,9 @@ function modelView(m: RemoteModel, providers: ReadonlyArray<LlmProvider>) {
     enabled: m.enabled,
     baseUrl: m.baseUrl,
     apiFormat: resolveApiFormat(m.apiFormat, provider?.apiFormat),
+    endpointPath: isMediaEndpointKind(m.kind)
+      ? resolveMediaEndpointPath(m.kind, m.endpointPath)
+      : null,
     hasApiKey: typeof m.apiKey === "string" && m.apiKey !== "",
     contextWindow: m.contextWindow,
     maxOutputTokens: m.maxOutputTokens,
