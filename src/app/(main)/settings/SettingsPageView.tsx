@@ -18,6 +18,7 @@ import { BackupSection } from "./components/BackupSection";
 import { AppearanceSection } from "./components/AppearanceSection";
 import { ComfyuiSection } from "./components/ComfyuiSection";
 import { DatabaseSection } from "./components/DatabaseSection";
+import { DataLocationSection } from "./components/DataLocationSection";
 import { ExitSection } from "./components/ExitSection";
 import { LogCategorySection } from "./components/LogCategorySection";
 import { LlmLocalSection } from "./components/LlmLocalSection";
@@ -55,6 +56,7 @@ export function SettingsPageView({
         comfyui: <ComfyuiSection c={c} />,
         database: <DatabaseSection c={c} />,
         backup: <BackupSection c={c} />,
+        dataLocation: <DataLocationSection />,
         exit: <ExitSection c={c} />,
         logs: <LogCategorySection />,
       }) satisfies Record<Section, React.ReactNode>,

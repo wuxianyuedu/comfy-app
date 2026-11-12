@@ -12,6 +12,7 @@
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
 import { SettingsCard } from "~/components/ui/settings-card";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 
 import { ProviderDetail } from "./ProviderDetail";
 import { ProviderDialog } from "./ProviderDialog";
@@ -109,16 +110,19 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
           </div>
         )}
 
-        <p className="text-muted-foreground text-2xs mt-4 mb-2 leading-relaxed">
-          <strong className="text-ink/80">保存位置</strong>
-          ：供应商落在本地 SQLite 的 <code className="text-ink/80">
-            llmProvider
-          </code> 表、模型落在{" "}
-          <code className="text-ink/80">remoteModel</code> 表（默认{" "}
-          <code className="text-ink/80">db.sqlite</code>，路径由{" "}
-          <code className="text-ink/80">DATABASE_URL</code> 指定）。API Key 以 AES-256-GCM
-          加密存放，不会以明文下发到浏览器。
-        </p>
+        <div className="mt-4 mb-2 flex flex-wrap items-start gap-2">
+          <DataLocationBadge id="remote-model" />
+          <p className="text-muted-foreground text-2xs leading-relaxed">
+            <strong className="text-ink/80">保存位置</strong>
+            ：供应商落在本地 SQLite 的 <code className="text-ink/80">
+              llmProvider
+            </code> 表、模型落在{" "}
+            <code className="text-ink/80">remoteModel</code> 表（默认{" "}
+            <code className="text-ink/80">db.sqlite</code>，路径由{" "}
+            <code className="text-ink/80">DATABASE_URL</code> 指定）。API Key 以 AES-256-GCM
+            加密存放，不会以明文下发到浏览器。
+          </p>
+        </div>
 
         <p className="text-muted-foreground text-2xs leading-relaxed">
           「测试连接」按当前填写的 Base URL / 格式 /
