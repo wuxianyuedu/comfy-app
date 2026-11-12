@@ -37,13 +37,13 @@ function isModelView(v: unknown): v is ProviderModelView {
   );
 }
 
-/** 一条停用中的文本模型（本行读的字段都在：启停 / 摘要行 / 用途徽标）。 */
-function modelFixture(): ProviderModelView {
+/** 一条停用中的模型（本行读的字段都在：启停 / 摘要行 / 用途徽标）。 */
+function modelFixture(kind: "chat" | "image" | "video" = "chat"): ProviderModelView {
   const stub: unknown = {
     id: "m1",
     providerId: "p1",
     name: "agnes-3.0-flash",
-    kind: "chat",
+    kind,
     enabled: false,
     baseUrl: null,
     apiFormat: "chat-completions",
@@ -84,7 +84,7 @@ function isRowUsage(v: unknown): v is UsageTestDialogs {
   return isRecord(v) && typeof v.openUsageTest === "function";
 }
 
-function renderRow() {
+function renderRow(kind: "chat" | "image" | "video" = "chat") {
   const toggleModel = vi.fn().mockResolvedValue({ ok: true });
   const deleteModel = vi.fn().mockResolvedValue({ ok: true });
   const p: unknown = { busy: false, toggleModel, deleteModel };
@@ -98,7 +98,7 @@ function renderRow() {
   render(
     <ProviderModelRow
       d={d}
-      model={modelFixture()}
+      model={modelFixture(kind)}
       onAction={onAction}
       p={p}
       provider={provider}
@@ -128,5 +128,19 @@ describe("ProviderModelRow（#3618）", () => {
     const { toggleModel } = renderRow();
     await user.click(screen.getByRole("switch", { name: "启用模型 agnes-3.0-flash" }));
     expect(toggleModel).toHaveBeenCalledWith("m1", true);
+  });
+
+  it("图像行摘要（#3618 补充）：念图像端点路径，不念上下文 / 输出 / 文本格式", () => {
+    renderRow("image");
+    expect(screen.getByText(/图像端点 \/images\/generations/)).toBeInTheDocument();
+    expect(screen.queryByText(/上下文/)).toBeNull();
+    expect(screen.queryByText(/输出/)).toBeNull();
+    expect(screen.queryByText(/Chat Completions/)).toBeNull();
+  });
+
+  it("视频行摘要（#3618 补充）：念视频端点路径", () => {
+    renderRow("video");
+    expect(screen.getByText(/视频端点 \/videos\/generations/)).toBeInTheDocument();
+    expect(screen.queryByText(/Chat Completions/)).toBeNull();
   });
 });

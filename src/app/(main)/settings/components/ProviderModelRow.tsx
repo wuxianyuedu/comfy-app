@@ -1,12 +1,16 @@
 "use client";
 
 /**
- * 供应商详情里的一行模型（#3517 拆出）：启停开关、名称 / 用途 / 接口格式摘要，
+ * 供应商详情里的一行模型（#3517 拆出）：启停开关、名称 / 用途 / 接口摘要，
  * 以及「测试生成 / 编辑 / 移除」三个动作。
  *
  * 没有「测试连接」（#3618）：同一供应商下每个模型的探测都是同一条
  * `GET {base}/models`、同一份供应商密钥，逐模型按钮没有增量信息 ——
  * 连通性与模型目录同步由供应商级「测试连接」一并完成。
+ *
+ * 摘要按用途分叉（#3618 补充）：文本模型念「上下文 / 输出 / 接口格式」；
+ * 图像 / 视频模型没有窗口 / 输出这些配置项，念的是自己那条真实端点路径
+ * （唯一出处 `defaultUsageTestPath`，与设置页弹窗和「实际使用」测试弹窗同源）。
  *
  * 拆出来的原因只有一条：`ProviderDetail` 的函数体已经顶到 400 行硬闸
  * （规范 §12.13），而这一行的 JSX 与父级的状态无关 —— 它需要的全部输入
@@ -24,6 +28,7 @@ import {
   formatContextWindow,
   parseInputTypes,
 } from "~/lib/llm/provider-types";
+import { defaultUsageTestPath } from "~/lib/llm/usage-test-config";
 import { REMOTE_MODEL_KINDS, REMOTE_MODEL_KIND_LABELS } from "~/lib/llm/types";
 
 import type { ProviderModelDialogs } from "../hooks/use-provider-model-dialogs";
@@ -53,6 +58,8 @@ export function ProviderModelRow({
 }) {
   const kind = REMOTE_MODEL_KINDS.find((candidate) => candidate === model.kind) ?? "chat";
   const inputTypes = parseInputTypes(model.inputTypes);
+  /* 图像 / 视频（#3618 补充）：摘要念自己的端点路径，不念窗口 / 输出 / 文本格式。 */
+  const isChat = kind === "chat";
 
   return (
     <div className="flex-col gap-1">
@@ -79,11 +86,20 @@ export function ProviderModelRow({
             )}
           </div>
           <p className="text-muted-foreground text-2xs truncate">
-            上下文 {formatContextWindow(model.contextWindow)} · 输出{" "}
-            {formatContextWindow(model.maxOutputTokens)} ·{" "}
-            {LLM_API_FORMAT_SHORT_LABELS[model.apiFormat]}
-            {inputTypes.length > 0 &&
-              ` · ${inputTypes.map((type) => MODEL_INPUT_TYPE_LABELS[type]).join("/")}`}
+            {isChat ? (
+              <>
+                上下文 {formatContextWindow(model.contextWindow)} · 输出{" "}
+                {formatContextWindow(model.maxOutputTokens)} ·{" "}
+                {LLM_API_FORMAT_SHORT_LABELS[model.apiFormat]}
+                {inputTypes.length > 0 &&
+                  ` · ${inputTypes.map((type) => MODEL_INPUT_TYPE_LABELS[type]).join("/")}`}
+              </>
+            ) : (
+              <>
+                {kind === "image" ? "图像端点" : "视频端点"}{" "}
+                {defaultUsageTestPath(kind, provider.baseUrl)}
+              </>
+            )}
           </p>
         </div>
         <Hint label="按实际用法发起一次真实生成调用（参数可在弹窗内自定义）">
@@ -103,7 +119,7 @@ export function ProviderModelRow({
             测试生成
           </Button>
         </Hint>
-        <Hint label="编辑窗口 / 输入类型 / 模型能力 / 推理映射">
+        <Hint label={isChat ? "编辑窗口 / 输入类型 / 模型能力 / 推理映射" : "编辑用途 / 模型 ID"}>
           <Button
             className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
             onClick={() => {
