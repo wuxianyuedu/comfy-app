@@ -123,6 +123,7 @@
 --container-medium
 --container-narrow
 --container-wide
+--font-code
 --font-heading
 --font-mono
 --font-sans

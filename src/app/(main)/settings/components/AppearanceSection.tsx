@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { FieldLabel } from "~/components/ui/field";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { Input } from "~/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
@@ -264,9 +265,9 @@ function FontRow({
   return (
     <div className="mt-5">
       <div className="mb-2 flex flex-wrap items-baseline gap-2">
-        <label className="text-ink text-sm font-semibold" htmlFor={inputId}>
+        <FieldLabel className="text-ink text-sm font-semibold" htmlFor={inputId}>
           {label}
-        </label>
+        </FieldLabel>
         <span className="text-muted-foreground text-xs">{hint}</span>
       </div>
       <div className="flex items-center gap-2">
