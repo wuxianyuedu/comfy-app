@@ -318,6 +318,47 @@ describe("providers —— 供应商 / 模型的入参闸与全量回读（#3501
     expect((await caller().providersGet()).models).toEqual([]);
   });
 
+  it("图像行的接口端点：下拉值落模型级适配器存档、白名单外回落默认第一项（#3656）", async () => {
+    const providerId = (await saveProvider()).providers[0]!.id;
+
+    /* 图像行：显式带 endpointPath → 落 workshopAdapters envelope 的那一格，
+     * modelView 下发生效值 */
+    const saved = await caller().modelSave({
+      providerId,
+      name: "m-image",
+      kind: "image",
+      endpointPath: "/v1/images/generations",
+    });
+    expect(saved.models[0]?.endpointPath).toBe("/v1/images/generations");
+    /* workshopAdapters 列是 JSON 字符串（drizzle 侧 unknown）—— 解析成 doc 信封
+     * 再比对，不做不安全断言（零回潮判据 no-unsafe-type-assertion） */
+    const adaptersRaw: unknown = tdb.$tables.remoteModels[0]!.workshopAdapters;
+    expect(JSON.parse(String(adaptersRaw))).toMatchObject({
+      endpointPath: "/v1/images/generations",
+      adapters: [],
+    });
+
+    /* 白名单外的值折成空串 → 读侧回落用途默认第一项（=「没选用第一项」） */
+    const invalid = await caller().modelSave({
+      providerId,
+      id: saved.models[0]!.id,
+      name: "m-image",
+      kind: "image",
+      endpointPath: "/not/known",
+    });
+    expect(invalid.models[0]?.endpointPath).toBe("/v1/images/generations");
+
+    /* 文本行（或存 null）恒清空该格，视图下发 null */
+    const chat = await caller().modelSave({
+      providerId,
+      id: saved.models[0]!.id,
+      name: "m-image",
+      kind: "chat",
+      endpointPath: null,
+    });
+    expect(chat.models[0]?.endpointPath).toBeNull();
+  });
+
   it("模型级接口格式：显式值优先，省略 = 跟随供应商默认（#3517）", async () => {
     const providerId = (await saveProvider({ apiFormat: "anthropic-messages" })).providers[0]!.id;
 

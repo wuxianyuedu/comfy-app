@@ -7,7 +7,10 @@ import {
   MODEL_CAPABILITIES,
   MODEL_INPUT_TYPES,
   MODEL_OUTPUT_TYPES,
+  isMediaEndpointKind,
+  isMediaEndpointPath,
   resolveApiFormat,
+  resolveMediaEndpointPath,
 } from "~/lib/llm/provider-types";
 import { isHttpUrl } from "~/lib/url-scheme";
 import {
@@ -76,6 +79,8 @@ const modelInputSchema = z.object({
   baseUrl: z.string().nullish(),
   capabilities: z.array(z.enum(MODEL_CAPABILITIES)).nullish(),
   contextWindow: z.number().int().positive().nullish(),
+  /** 图像 / 视频模型的接口端点动作路径（#3656）：写侧按行用途白名单收窄。 */
+  endpointPath: z.string().nullish(),
   enabled: z.boolean().optional(),
   id: z.string().min(1).optional(),
   inputTypes: z.array(z.enum(MODEL_INPUT_TYPES)).nullish(),
@@ -105,9 +110,13 @@ function providerView(p: LlmProvider) {
 /** 模型下发给客户端的形状：密钥只报「有没有配」（供应商级密钥不在这里重复报）。
  *  `apiFormat` 下发的是**生效值**（模型自己的 → 供应商默认 → chat-completions）：
  *  设置页的模型行与编辑弹窗都按它显示，不再各自回落一次。
- *  指向已删除供应商的行 `find` 自然取不到，格式回落默认值，不因一条孤儿行报错。 */
+ *  指向已删除供应商的行 `find` 自然取不到，格式回落默认值，不因一条孤儿行报错。
+ *  `endpointPath`（#3656）同口径，来源是模型级适配器存档（`workshopAdapters`
+ *  envelope 的模型级端点一格，#3622/#3659）：图像 / 视频行下发生效值（存档值
+ *  按用途白名单收窄 → 缺省回落用途默认第一项），文本行恒 null。 */
 function modelView(m: RemoteModel, providers: ReadonlyArray<LlmProvider>) {
   const provider = providers.find((p) => p.id === m.providerId);
+  const doc = parseAdaptersDocJson(m.workshopAdapters);
   return {
     id: m.id,
     providerId: m.providerId,
@@ -116,6 +125,9 @@ function modelView(m: RemoteModel, providers: ReadonlyArray<LlmProvider>) {
     enabled: m.enabled,
     baseUrl: m.baseUrl,
     apiFormat: resolveApiFormat(m.apiFormat, provider?.apiFormat),
+    endpointPath: isMediaEndpointKind(m.kind)
+      ? resolveMediaEndpointPath(m.kind, doc.endpointPath)
+      : null,
     hasApiKey: typeof m.apiKey === "string" && m.apiKey !== "",
     contextWindow: m.contextWindow,
     maxOutputTokens: m.maxOutputTokens,
@@ -209,7 +221,27 @@ export const llmRouter = createTRPCRouter({
 
   /** 新建 / 更新供应商下的一条模型。 */
   modelSave: authedProcedure.input(modelInputSchema).mutation(async ({ input }) => {
-    await remoteModelRepository.saveModel(input);
+    const saved = await remoteModelRepository.saveModel(input);
+    /* 图像 / 视频的接口端点（#3656）落**模型级适配器存档**（workshopAdapters
+     * envelope 的 endpointPath 一格，#3622/#3659 的同一份存储），不另开列。
+     * `null`（文本行 / 弹窗重置）= 清空该格；白名单外的值折成空串 = 按用途
+     * 默认第一项（读侧 `resolveMediaEndpointPath` 统一回落）。省略 = 不动既有
+     * （旧调用方不带这格）。 */
+    if (input.endpointPath !== undefined) {
+      const doc = await remoteModelRepository.getWorkshopAdaptersDoc(saved.name);
+      const path =
+        isMediaEndpointKind(saved.kind) &&
+        typeof input.endpointPath === "string" &&
+        isMediaEndpointPath(saved.kind, input.endpointPath)
+          ? input.endpointPath
+          : "";
+      if (path !== doc.endpointPath) {
+        await remoteModelRepository.saveWorkshopAdaptersDoc(saved.name, {
+          ...doc,
+          endpointPath: path,
+        });
+      }
+    }
     return readProviderState();
   }),
 

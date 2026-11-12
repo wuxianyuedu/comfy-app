@@ -27,6 +27,7 @@ import {
   saveMediaToLocalTemp,
 } from "~/lib/llm/video-task-util";
 import { isRecord } from "~/lib/is-record";
+import { joinApiUrl } from "~/lib/llm/provider-types";
 import { REMOTE_MODEL_KINDS, type RemoteModelKind } from "~/lib/llm/types";
 import { llmProviderRepository, remoteModelRepository } from "~/lib/core/repository";
 
@@ -70,11 +71,13 @@ export function normalizeEndpointPath(raw: string): string {
 }
 
 export type ResolvedUpstream = {
-  /** 去掉尾斜杠的连接基址。 */
+  /** 去掉尾斜杠、剥过资源段的连接基址（版本段补全不落在这里，见 `url`）。 */
   base: string;
   headers: Record<string, string>;
   /** 根相对的端点路径（空串 = 直接用 base）。 */
   path: string;
+  /** 最终请求地址：`joinApiUrl(base, path)` —— Base 缺版本段时补 /v1（#3656）。 */
+  url: string;
 };
 
 /** 供应商链直查的结论（#3577）：模型挂在哪个供应商下、那家的地址与密钥。
@@ -131,12 +134,17 @@ async function lookupProviderChain(name: string): Promise<ProviderChainLookup> {
 /** 连接参数解析（**两个路由同一口径**，解析顺序改了只有这一处）：
  *  弹窗内填的 → 该条目已保存的 → 该条目所属供应商的（#3577 直查兜底）→ 全局配置。
  *  密钥全空且模型确有所属供应商（又没配密钥）时给可读报错 —— 密钥缺失不该被
- *  静默发出去，让上游用 401 谜语代替我们说话。 */
+ *  静默发出去，让上游用 401 谜语代替我们说话。
+ *
+ *  `kind`（#3656）用于 Base URL 的历史形态归一：图像 / 视频弹窗历史上按
+ *  「资源段 base + 短动作段」预填（如 base=…/images + path=/generations），
+ *  归一后版本段补全（`joinApiUrl`）才能只见「根或根+版本段」两种形态。 */
 export async function resolveUpstream(
   name: string,
   typedBase: string,
   typedKey: string,
   rawPath: string,
+  kind = "",
 ): Promise<ResolvedUpstream | { error: string }> {
   const cfg = await getLLMConfig();
   const entry = cfg.extraModels?.find((e) => e.name === name);
@@ -182,9 +190,25 @@ export async function resolveUpstream(
   if (apiKey) {
     headers.Authorization = `Bearer ${apiKey}`;
   }
+  let base = baseUrl.replace(/\/+$/, "");
+  let path = normalizeEndpointPath(rawPath);
+  /* 图像（#3656）：Base URL 带资源段（…/images）的历史形态 → 剥掉，老弹窗草稿
+   * 的短动作段（/generations）并进 path。 */
+  if (kind === "image" && /\/images\/?$/i.test(base)) {
+    base = base.replace(/\/images\/?$/i, "");
+    if (path === "/generations") {
+      path = "/images/generations";
+    }
+  }
+  /* 视频（#3656）：Base URL 带资源段（…/videos）且动作段非空（动作段为空 =
+   * 「直接用 base 当端点」的历史预填，剥了反而丢段）→ 同样归一。 */
+  if (kind === "video" && path !== "" && /\/videos\/?$/i.test(base)) {
+    base = base.replace(/\/videos\/?$/i, "");
+  }
   return {
-    base: baseUrl.replace(/\/+$/, ""),
-    path: normalizeEndpointPath(rawPath),
+    base,
+    path,
+    url: joinApiUrl(base, path),
     headers,
   };
 }
@@ -222,6 +246,8 @@ export async function readUsageTestPrologue(req: Request): Promise<UsageTestProl
     strField(rec, "baseUrl"),
     strField(rec, "apiKey"),
     strField(rec, "path"),
+    /* 用途一并交给连接解析：图像 / 视频的 Base URL 历史形态归一按它分叉（#3656） */
+    strField(rec, "kind"),
   );
   if ("error" in up) {
     return { ok: false, detail: up.error };
@@ -300,7 +326,7 @@ export async function callChat(
   prompt: string,
   extra: Record<string, unknown>,
 ): Promise<{ ok: true; text: string } | { detail: string; ok: false }> {
-  const res = await fetch(`${up.base}${up.path}`, {
+  const res = await fetch(up.url, {
     method: "POST",
     headers: up.headers,
     body: JSON.stringify({
@@ -313,7 +339,7 @@ export async function callChat(
   if (!res.ok) {
     return {
       ok: false,
-      detail: await failureDetail(res, `${up.base}${up.path}`),
+      detail: await failureDetail(res, up.url),
     };
   }
   const payload = await readPayload(res);
@@ -341,7 +367,7 @@ export async function callImage(
   size: string,
   extra: Record<string, unknown>,
 ): Promise<{ ok: true; url: string } | { detail: string; ok: false }> {
-  const res = await fetch(`${up.base}${up.path}`, {
+  const res = await fetch(up.url, {
     method: "POST",
     headers: up.headers,
     body: JSON.stringify({
@@ -356,7 +382,7 @@ export async function callImage(
   if (!res.ok) {
     return {
       ok: false,
-      detail: await failureDetail(res, `${up.base}${up.path}`),
+      detail: await failureDetail(res, up.url),
     };
   }
   const payload = await readPayload(res);
@@ -385,7 +411,7 @@ export async function callVideo(
   prompt: string,
   extra: Record<string, unknown>,
 ): Promise<VideoSubmitOutcome> {
-  const res = await fetch(`${up.base}${up.path}`, {
+  const res = await fetch(up.url, {
     method: "POST",
     headers: up.headers,
     body: JSON.stringify({ model, prompt, ...extra }),
@@ -394,7 +420,7 @@ export async function callVideo(
   if (!res.ok) {
     return {
       status: "error",
-      detail: await failureDetail(res, `${up.base}${up.path}`),
+      detail: await failureDetail(res, up.url),
     };
   }
   const payload = await readPayload(res);

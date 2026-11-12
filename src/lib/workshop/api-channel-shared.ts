@@ -9,6 +9,7 @@
 /* 某个 API 通道服务哪个生成阶段。 */
 import { isDataUrl, wrapBase64 } from "~/lib/media/data-url";
 import { isRecord } from "~/lib/is-record";
+import { joinApiUrl } from "~/lib/llm/provider-types";
 
 export type ApiChannelKind = "image" | "video";
 
@@ -195,22 +196,27 @@ export function extractSavedOutputs(value: unknown): Array<SavedOutput> {
   return out;
 }
 
+/** Base URL 末段的资源段归一：…/images、…/videos 这类「用户把资源段填进了
+ *  base」的历史形态剥掉，动作段交给 `joinApiUrl` 统一拼（#3656）。
+ *  完整动作段（…/images/generations）不以这两段结尾，不受影响。 */
+function stripTrailingResourceSegment(baseUrl: string): string {
+  return baseUrl.replace(/\/+$/, "").replace(/\/(?:images|videos)$/i, "");
+}
+
 /** 由远端模型条目的 Base URL 解析「生图」端点（OpenAI 兼容 images/generations）。
- *  用户在设置页填的 Base URL 三种形态都兼容：
+ *  显式的模型级端点路径（`RemoteModelAdaptersDoc.endpointPath`，#3622/#3656）
+ *  由调用方经 `joinApiUrl` 拼，不在这里兜；Base URL 按这几种形态兼容：
  *    已含完整动作段（…/v1/images/generations）→ 原样使用；
- *    只到资源段（…/v1/images）→ 只补动作段 /generations；
- *    只到根（…/v1）→ 补全 /images/generations。
+ *    只到资源段（…/v1/images 或 …/images）→ 归一后补动作段；
+ *    只到根（…/v1 或裸域，#3656 新口径）→ 补全 /v1/images/generations。
  *  历史事故：条目里填了完整端点仍被无条件再拼一次，请求打到
  *  /v1/images/images/generations 而 404。纯字符串拼装，可单测。 */
 export function resolveImagesGenerationsEndpoint(baseUrl: string): string {
-  const base = String(baseUrl).trim().replace(/\/+$/, "");
+  const base = stripTrailingResourceSegment(String(baseUrl).trim());
   if (/\/images\/generations$/i.test(base)) {
     return base;
   }
-  if (/\/images$/i.test(base)) {
-    return `${base}/generations`;
-  }
-  return `${base}/images/generations`;
+  return joinApiUrl(base, "/images/generations");
 }
 
 /** 由远端模型条目的 Base URL 解析「生视频」端点（与生图同一套三形态兼容，
@@ -219,14 +225,12 @@ export function resolveImagesGenerationsEndpoint(baseUrl: string): string {
  *  为什么与生图成对而不是复用：两张表的资源名（images / videos）与动作段
  *  是同一套惯例的两份实例，参数化（资源名进参）会让调用点读不出「这是哪条
  *  通道的端点」，镜像两份各自贴着各自的资源名更直白（与 api-channel.server
- *  里图 / 视频两份 resolveTarget 的拆分同一取舍）。 */
+ *  里图 / 视频两份 resolveTarget 的拆分同一取舍）。#3656 起版本段缺省由
+ *  `joinApiUrl` 统一补（Base 只到裸域时不再发一个注定 404 的地址）。 */
 export function resolveVideosGenerationsEndpoint(baseUrl: string): string {
-  const base = String(baseUrl).trim().replace(/\/+$/, "");
+  const base = stripTrailingResourceSegment(String(baseUrl).trim());
   if (/\/videos\/generations$/i.test(base)) {
     return base;
   }
-  if (/\/videos$/i.test(base)) {
-    return `${base}/generations`;
-  }
-  return `${base}/videos/generations`;
+  return joinApiUrl(base, "/videos/generations");
 }

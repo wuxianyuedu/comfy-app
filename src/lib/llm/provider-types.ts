@@ -14,13 +14,13 @@ import { EMPTY_PLACEHOLDER } from "~/lib/display-value";
 import { isRecord } from "~/lib/is-record";
 import { trimFixed } from "~/lib/number-format";
 
-/** 上游接口协议格式。Base URL 由用户填写，路径段由格式决定：
- *  · `chat-completions` → `{base}/chat/completions`（OpenAI 兼容，最通用）
+/** 上游接口协议格式。Base URL 由用户填写（**不带版本段**，如
+ *  `https://api.example.com`），版本段与动作路径由应用按格式拼接（#3656）：
+ *  · `chat-completions` → `{base}/v1/chat/completions`（OpenAI 兼容，最通用）
  *  · `anthropic-messages` → `{base}/v1/messages`（Anthropic Messages）
- *  · `responses` → `{base}/responses`（OpenAI Responses）
- *  刻意不在 Base URL 后自动补 `/v1`：各家网关的版本段位置不同（有的在域名后、
- *  有的在 `/api/v1`），替用户猜会造出「看着填对了却 404」的地址。设置页把最终
- *  请求地址直接显示出来，填错时用户当场能看见。
+ *  · `responses` → `{base}/v1/responses`（OpenAI Responses）
+ *  拼接规则见 `joinApiUrl()`：Base 已带版本段（历史行 / 本地 Ollama 默认地址）
+ *  时不再重复补，动作路径自带版本段时也不叠。
  *
  *  #3517 起格式挂在**模型**上（同一供应商下文本 / 图片 / 视频模型可能各用一套
  *  协议），供应商那一格只是历史行与新模型的默认值，见 `resolveApiFormat()`。 */
@@ -29,9 +29,9 @@ export const LLM_API_FORMATS = ["chat-completions", "anthropic-messages", "respo
 export type LlmApiFormat = (typeof LLM_API_FORMATS)[number];
 
 export const LLM_API_FORMAT_LABELS: Record<LlmApiFormat, string> = {
-  "chat-completions": "Chat Completions（/chat/completions）",
+  "chat-completions": "Chat Completions（/v1/chat/completions）",
   "anthropic-messages": "Anthropic Messages（/v1/messages）",
-  responses: "Responses（/responses）",
+  responses: "Responses（/v1/responses）",
 };
 
 /** 行内摘要用的短标签（模型行那句「上下文 … · 输出 …」用它：完整标签带路径段，太宽）。 */
@@ -58,6 +58,66 @@ export function isLlmApiFormat(value: unknown): value is LlmApiFormat {
  *  #3517 起格式是**模型级**配置（同一供应商下文本 / 图片模型可能各用一套协议），
  *  供应商那一格只剩「历史行与新模型的默认值」这一层含义。运行时（`entryFromRemoteRow`）
  *  与设置页视图（`modelView`）都走这一个函数，不各写一遍回落顺序。 */
+/** Base URL 末段是否「版本段」（`v1` / `v1beta` / `v2` 这类，`/api/v1` 的末段也算）。
+ *  与历史上 `baseUrlVersionHint` 的判据同源（末段形如 `v<数字>` 开头的短段）。 */
+function hasTrailingVersionSegment(base: string): boolean {
+  const pathname: string = (() => {
+    try {
+      return new URL(base).pathname;
+    } catch {
+      /* 不是合法 URL（字段校验会在上游拦）——按裸路径判，末段 v1 同样认 */
+      return base;
+    }
+  })();
+  const last = pathname.split("/").filter(Boolean).at(-1) ?? "";
+  return /^v\d+[a-z0-9]*$/i.test(last);
+}
+
+/** 动作路径是否自带版本段（如 Anthropic 的 `/v1/messages`）。 */
+function hasLeadingVersionSegment(actionPath: string): boolean {
+  return /^\/v\d/i.test(actionPath);
+}
+
+/** 最终请求地址的唯一拼装口（#3656）：`joinApiUrl(baseUrl, actionPath)`。
+ *
+ *  #3656 起的口径是「Base URL 不带版本段，版本段由应用统一补」，所以这里
+ *  不是简单字符串相接，规则有三条：
+ *  · Base 末段是版本段（历史行填了 `…/v1`、本地 Ollama 默认地址 `…:11434/v1`）
+ *    → 原样 + 动作路径，不重复补；
+ *  · 动作路径自带版本段（Anthropic 的 `/v1/messages`）且 Base 也带 → Base 的
+ *    版本段让位，防 `/v1/v1/messages`；
+ *  · 其余（新口径的裸域 Base + 无版本动作路径）→ Base + `/v1` + 动作路径。
+ *
+ *  空动作路径返回去尾斜杠的 Base 本身；空 Base 返回空串。纯函数，运行时、
+ *  探测路由与设置页预览共用这一份，不在各处各拼一遍。 */
+export function joinApiUrl(baseUrl: string, actionPath: string): string {
+  const base = baseUrl.trim().replace(/\/+$/, "");
+  if (base === "") {
+    return "";
+  }
+  /* 空动作路径 = Base 本身就是端点（如「实际使用」弹窗把完整端点填进地址、
+   * 路径留空的历史用法）：不补版本段，原样返回。 */
+  if (actionPath === "") {
+    return base;
+  }
+  const action = actionPath.startsWith("/") ? actionPath : `/${actionPath}`;
+  const baseVersioned = hasTrailingVersionSegment(base);
+  if (baseVersioned && hasLeadingVersionSegment(action)) {
+    /* Base 的版本段让位：把末段版本剥掉再接自带版本的动作路径 */
+    const stripped = base.replace(/\/v\d+[a-z0-9]*$/i, "");
+    return `${stripped}${action}`;
+  }
+  if (baseVersioned || hasLeadingVersionSegment(action)) {
+    return `${base}${action}`;
+  }
+  return `${base}/v1${action}`;
+}
+
+/** 生效的接口格式：模型自己的优先 → 供应商默认 → 回落 OpenAI 兼容。
+ *
+ *  #3517 起格式是**模型级**配置（同一供应商下文本 / 图片模型可能各用一套协议），
+ *  供应商那一格只剩「历史行与新模型的默认值」这一层含义。运行时（`entryFromRemoteRow`）
+ *  与设置页视图（`modelView`）都走这一个函数，不各写一遍回落顺序。 */
 export function resolveApiFormat(...candidates: ReadonlyArray<unknown>): LlmApiFormat {
   for (const candidate of candidates) {
     if (isLlmApiFormat(candidate)) {
@@ -67,50 +127,20 @@ export function resolveApiFormat(...candidates: ReadonlyArray<unknown>): LlmApiF
   return "chat-completions";
 }
 
-/** 供应商最终请求地址（Base URL 去尾斜杠 + 格式路径）。空 Base URL 返回空串。 */
+/** 供应商最终请求地址（版本段与动作路径的拼装见 `joinApiUrl`）。空 Base URL 返回空串。 */
 export function requestUrlForFormat(baseUrl: string, format: LlmApiFormat): string {
-  const base = baseUrl.trim().replace(/\/$/, "");
-  return base === "" ? "" : `${base}${LLM_API_FORMAT_PATHS[format]}`;
-}
-
-/** Base URL 看不出「接口版本段」时的提示（只提示、不改写，返回 `null` 表示不提示）。
- *
- *  版本段是路径最后一段 `v1` / `v1beta` / `v2` 这类（`/api/v1` 也算有）。
- *  两个例外不提示：格式路径**自带**版本段（Anthropic 的 `/v1/messages`，Base URL
- *  通常只到域名），以及 Base URL 还没填 / 不是合法 URL（那由字段校验管）。
- *
- *  为什么不自动补：各家网关版本段位置不同（有的在域名后、有的在 `/api/v1`），
- *  替用户猜会造出「看着填对了却 404」的地址（#3501 的既定口径，#3517 只加提示）。 */
-export function baseUrlVersionHint(baseUrl: string, format: LlmApiFormat): string | null {
-  if (/^\/v\d/i.test(LLM_API_FORMAT_PATHS[format])) {
-    return null;
-  }
-  const trimmed = baseUrl.trim().replace(/\/+$/, "");
-  if (trimmed === "") {
-    return null;
-  }
-  let pathname: string;
-  try {
-    pathname = new URL(trimmed).pathname;
-  } catch {
-    return null;
-  }
-  const last = pathname.split("/").filter(Boolean).at(-1) ?? "";
-  if (/^v\d+[a-z0-9]*$/i.test(last)) {
-    return null;
-  }
-  return "看不出接口版本段（如 /v1）—— 有些网关要求 Base URL 带版本号，若测试连接报 404 请对照服务商文档补上";
+  return joinApiUrl(baseUrl, LLM_API_FORMAT_PATHS[format]);
 }
 
 /* ── 已核实的厂商端点提示（#3612）───────────────────────────────── */
 
 type KnownApiEndpoint = {
-  /** 给用户照抄的 API 端点（Base URL 形态，含版本段）。 */
-  apiBaseUrl: string;
   /** 厂商真正的 API 主机：Base URL 落在它上面 = 没填错，不再提示。 */
   apiHost: string;
   /** 命中判定：主机名等于该域或以「.该域」结尾（子域一起算）。 */
   domain: string;
+  /** 推荐用户照抄的 Base URL（#3656 口径：**不带版本段**，接口端点 = 它 + `/v1`）。 */
+  recommendedBaseUrl: string;
   /** 厂商名（提示文案里点名用）。 */
   vendor: string;
 };
@@ -126,15 +156,15 @@ type KnownApiEndpoint = {
  */
 const KNOWN_API_ENDPOINTS: ReadonlyArray<KnownApiEndpoint> = [
   {
-    apiBaseUrl: "https://apihub.agnes-ai.com/v1",
-    apiHost: "apihub.agnes-ai.com",
     domain: "agnes-ai.com",
+    apiHost: "apihub.agnes-ai.com",
+    recommendedBaseUrl: "https://apihub.agnes-ai.com",
     vendor: "Agnes",
   },
 ];
 
-/** Base URL 落在已知厂商的「非接口域」上时给一句指路提示（只提示、不改写，
- *  与 `baseUrlVersionHint` 同一口径）；返回 `null` 表示不提示。
+/** Base URL 落在已知厂商的「非接口域」上时给一句指路提示（只提示、不改写）；
+ *  返回 `null` 表示不提示。
  *
  *  刻意只在「核实过的域」上开口：对未知域猜「这是控制台域」会误伤把 API 就
  *  架在主域上的服务商。 */
@@ -151,7 +181,7 @@ export function knownApiEndpointHint(url: string): string | null {
   if (entry === undefined || host === entry.apiHost) {
     return null;
   }
-  return `「${entry.vendor}」的接口端点在 ${entry.apiBaseUrl} —— ${host} 是官网侧的域（只认网页登录态，不接受 API 密钥），请把 Base URL 改成接口端点`;
+  return `「${entry.vendor}」的接口端点在 ${entry.recommendedBaseUrl}/v1 —— ${host} 是官网侧的域（只认网页登录态，不接受 API 密钥），请把 Base URL 改成 ${entry.recommendedBaseUrl}（不带 /v1，版本段由应用自动拼接）`;
 }
 
 /* ── 模型输入类型 ───────────────────────────────────────────────── */
@@ -430,4 +460,50 @@ export function formatContextWindow(value: number | null | undefined): string {
     return `${trimFixed(value / 1000, 1) ?? String(value / 1000)}K`;
   }
   return String(value);
+}
+
+/* ── 图像 / 视频模型的「接口端点」词表（#3656）───────────────────── */
+
+/** 图像 / 视频模型的接口端点候选路径（动作路径**自带版本段**，#3656 新口径）：
+ *  设置页「添加 / 编辑模型」弹窗按用途给成下拉，落库在模型级适配器存档
+ *  `RemoteModelAdaptersDoc.endpointPath`（#3622/#3659 的同一份存储，不另开列）。
+ *  与文本协议三词表（`LLM_API_FORMAT_*`）刻意分开：图像 / 视频端点由**用途**决定，
+ *  不吃 `chat-completions` 那套格式。运行时（工坊生图 / 生视频的目标解析）与
+ *  设置页展示都从这里取默认值 —— 「没选 = 第一项」的唯一出处。 */
+/* SAFETY: 类型断言已复核 */
+export const REMOTE_MEDIA_ENDPOINT_OPTIONS = {
+  image: ["/v1/images/generations"],
+  video: ["/v1/videos"],
+} as const;
+
+export type MediaEndpointKind = keyof typeof REMOTE_MEDIA_ENDPOINT_OPTIONS;
+
+export function isMediaEndpointKind(value: unknown): value is MediaEndpointKind {
+  return value === "image" || value === "video";
+}
+
+/** 该用途的默认端点（下拉的第一项；库里没配 = 用它）。 */
+export function defaultMediaEndpointPath(kind: MediaEndpointKind): string {
+  return REMOTE_MEDIA_ENDPOINT_OPTIONS[kind][0];
+}
+
+/** 库里存的端点路径是否是「该用途认识的白名单值」。读侧收窄用：
+ *  库里坏值（手改 / 旧数据）不报错，回落默认第一项。 */
+export function isMediaEndpointPath(kind: MediaEndpointKind, value: unknown): boolean {
+  const options: ReadonlyArray<string> = REMOTE_MEDIA_ENDPOINT_OPTIONS[kind];
+  return typeof value === "string" && options.includes(value);
+}
+
+/** 生效的接口端点路径：候选拼在一起按顺序回落（模型自己的 → 默认第一项），
+ *  与 `resolveApiFormat()` 同一形状。只服务图像 / 视频两种用途。 */
+export function resolveMediaEndpointPath(
+  kind: MediaEndpointKind,
+  ...candidates: ReadonlyArray<unknown>
+): string {
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && isMediaEndpointPath(kind, candidate)) {
+      return candidate;
+    }
+  }
+  return defaultMediaEndpointPath(kind);
 }

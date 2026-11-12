@@ -87,7 +87,7 @@ export function ProviderConnectionFields({
       <FormField
         className="mb-3"
         error={errors.baseUrl}
-        hint="填到版本段为止（如 https://api.example.com/v1）；路径段由各模型的接口格式补全"
+        hint="填到域名或路径前缀为止，不带 /v1（如 https://api.example.com）；版本段与动作路径由应用按接口格式自动拼接"
         id="provider-detail-base-url"
         label="Base URL"
         required
@@ -100,7 +100,7 @@ export function ProviderConnectionFields({
             onChange={textHandler((baseUrl) => {
               onChange({ baseUrl });
             })}
-            placeholder="https://api.example.com/v1"
+            placeholder="https://api.example.com"
             value={form.baseUrl}
           />
         )}

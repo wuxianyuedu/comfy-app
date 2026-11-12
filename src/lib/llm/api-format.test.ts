@@ -44,8 +44,9 @@ describe("chatRequestUrl / chatHeaders", () => {
       "https://agnes/v1/chat/completions",
     );
     expect(chatRequestUrl("https://agnes", "anthropic-messages")).toBe("https://agnes/v1/messages");
-    expect(chatRequestUrl(" https://agnes/ ", "responses")).toBe("https://agnes/responses");
-    expect(chatRequestUrl("", "responses")).toBe("/responses");
+    /* #3656：Base 不带版本段补 /v1 再接格式路径；空 Base 给空串（不发半截地址） */
+    expect(chatRequestUrl(" https://agnes/ ", "responses")).toBe("https://agnes/v1/responses");
+    expect(chatRequestUrl("", "responses")).toBe("");
   });
 
   it("Anthropic 用 x-api-key + anthropic-version；其余用 Bearer；空密钥只留 Content-Type", () => {
@@ -72,7 +73,7 @@ describe("buildChatRequest —— chat-completions", () => {
     const req = buildChatRequest(
       baseInput({ apiKey: "sk-1", stream: true, maxTokens: 2048, temperature: 0.2 }),
     );
-    expect(req.url).toBe("https://platform.agnes-ai.com/chat/completions");
+    expect(req.url).toBe("https://platform.agnes-ai.com/v1/chat/completions");
     expect(req.headers.Authorization).toBe("Bearer sk-1");
     expect(req.body).toEqual({
       model: "claude-sonnet-4",
@@ -249,7 +250,7 @@ describe("buildChatRequest —— responses", () => {
         ],
       }),
     );
-    expect(req.url).toBe("https://platform.agnes-ai.com/responses");
+    expect(req.url).toBe("https://platform.agnes-ai.com/v1/responses");
     expect(req.headers.Authorization).toBe("Bearer sk-r");
     expect(req.body).toEqual({
       model: "claude-sonnet-4",

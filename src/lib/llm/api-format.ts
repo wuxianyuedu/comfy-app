@@ -21,7 +21,7 @@
  */
 
 import { asRecord } from "~/lib/is-record";
-import { LLM_API_FORMAT_PATHS, type LlmApiFormat } from "./provider-types";
+import { requestUrlForFormat, type LlmApiFormat } from "./provider-types";
 import type { LLMContentPart, LLMMessage, LLMTool } from "./types";
 
 export type ChatRequestInput = {
@@ -41,9 +41,10 @@ export type ChatRequestInput = {
   tools?: Array<LLMTool>;
 };
 
-/** 上游请求地址：Base URL 去尾斜杠 + 格式路径段。 */
+/** 上游请求地址：版本段与动作路径的拼装唯一出处是 `requestUrlForFormat`
+ *  （→ `joinApiUrl`，#3656 起版本段由应用统一补）。这里只转发，不再自己拼。 */
 export function chatRequestUrl(baseUrl: string, format: LlmApiFormat): string {
-  return `${baseUrl.trim().replace(/\/$/, "")}${LLM_API_FORMAT_PATHS[format]}`;
+  return requestUrlForFormat(baseUrl, format);
 }
 
 /** 鉴权头：Anthropic 用 `x-api-key` + `anthropic-version`；其余用 Bearer。 */

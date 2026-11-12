@@ -1,18 +1,9 @@
 [
   {
     "mode": "T2I",
-    "inputs": [
-      "prompt",
-      "negative",
-      "size",
-      "seed",
-      "lora-name",
-      "lora-strength"
-    ],
+    "inputs": ["prompt", "negative", "size", "seed", "lora-name", "lora-strength"],
     "output": "image",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "I2I",
@@ -27,24 +18,13 @@
       "lora-strength"
     ],
     "output": "image",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "TI2I",
-    "inputs": [
-      "prompt",
-      "negative",
-      "size",
-      "seed",
-      "lora-name",
-      "lora-strength"
-    ],
+    "inputs": ["prompt", "negative", "size", "seed", "lora-name", "lora-strength"],
     "output": "image",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "R2I",
@@ -59,9 +39,7 @@
       "lora-strength"
     ],
     "output": "image",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "E2I",
@@ -76,9 +54,7 @@
       "lora-strength"
     ],
     "output": "image",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "D2I",
@@ -93,9 +69,7 @@
       "lora-strength"
     ],
     "output": "image",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "P2I",
@@ -110,55 +84,25 @@
       "lora-strength"
     ],
     "output": "image",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "S2I",
-    "inputs": [
-      "prompt",
-      "negative",
-      "size",
-      "seed",
-      "lora-name",
-      "lora-strength"
-    ],
+    "inputs": ["prompt", "negative", "size", "seed", "lora-name", "lora-strength"],
     "output": "image",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "M2I",
-    "inputs": [
-      "prompt",
-      "negative",
-      "size",
-      "seed",
-      "lora-name",
-      "lora-strength"
-    ],
+    "inputs": ["prompt", "negative", "size", "seed", "lora-name", "lora-strength"],
     "output": "image",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "T2V",
-    "inputs": [
-      "prompt",
-      "negative",
-      "size",
-      "duration",
-      "seed",
-      "lora-name",
-      "lora-strength"
-    ],
+    "inputs": ["prompt", "negative", "size", "duration", "seed", "lora-name", "lora-strength"],
     "output": "video",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "I2V",
@@ -173,9 +117,7 @@
       "lora-strength"
     ],
     "output": "video",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "TI2V",
@@ -190,9 +132,7 @@
       "lora-strength"
     ],
     "output": "video",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "FLF2V",
@@ -208,9 +148,7 @@
       "lora-strength"
     ],
     "output": "video",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "FMF2V",
@@ -226,9 +164,7 @@
       "lora-strength"
     ],
     "output": "video",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "R2V",
@@ -243,9 +179,7 @@
       "lora-strength"
     ],
     "output": "video",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "S2V",
@@ -260,9 +194,7 @@
       "lora-strength"
     ],
     "output": "video",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "IA2V",
@@ -277,69 +209,30 @@
       "lora-strength"
     ],
     "output": "video",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "A2V",
-    "inputs": [
-      "prompt",
-      "negative",
-      "size",
-      "duration",
-      "seed",
-      "lora-name",
-      "lora-strength"
-    ],
+    "inputs": ["prompt", "negative", "size", "duration", "seed", "lora-name", "lora-strength"],
     "output": "video",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "T2A",
-    "inputs": [
-      "prompt",
-      "negative",
-      "size",
-      "seed",
-      "lora-name",
-      "lora-strength"
-    ],
+    "inputs": ["prompt", "negative", "size", "seed", "lora-name", "lora-strength"],
     "output": "audio",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "T2M",
-    "inputs": [
-      "prompt",
-      "negative",
-      "size",
-      "seed",
-      "lora-name",
-      "lora-strength"
-    ],
+    "inputs": ["prompt", "negative", "size", "seed", "lora-name", "lora-strength"],
     "output": "audio",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   },
   {
     "mode": "T2S",
-    "inputs": [
-      "prompt",
-      "negative",
-      "size",
-      "seed",
-      "lora-name",
-      "lora-strength"
-    ],
+    "inputs": ["prompt", "negative", "size", "seed", "lora-name", "lora-strength"],
     "output": "audio",
-    "required": [
-      "prompt"
-    ]
+    "required": ["prompt"]
   }
 ]

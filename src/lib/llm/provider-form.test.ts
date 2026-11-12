@@ -171,6 +171,7 @@ describe("emptyModelForm / modelFormFromView", () => {
         reasoningParamMapping: { param: "reasoning_effort", values: { low: "low" } },
         baseUrl: "https://model-override/v1",
         enabled: false,
+        endpointPath: null,
       }),
     ).toEqual({
       name: "claude-sonnet-4",
@@ -187,7 +188,48 @@ describe("emptyModelForm / modelFormFromView", () => {
       reasoningValues: { low: "low" },
       baseUrl: "https://model-override/v1",
       enabled: false,
+      endpointPath: "",
     });
+  });
+
+  it("库行回填：图像行的端点路径取下发生效值（#3656）", () => {
+    expect(
+      modelFormFromView({
+        name: "agnes-image-2.5-flash",
+        kind: "image",
+        apiFormat: "chat-completions",
+        smartConfig: true,
+        contextWindow: null,
+        maxOutputTokens: null,
+        inputTypes: null,
+        outputTypes: null,
+        capabilities: null,
+        reasoningLevels: null,
+        reasoningParamMapping: null,
+        baseUrl: null,
+        enabled: true,
+        endpointPath: "/v1/images/generations",
+      }).endpointPath,
+    ).toBe("/v1/images/generations");
+    /* 库坏值（不在该用途的词表里）回落用途默认第一项，不留空白 */
+    expect(
+      modelFormFromView({
+        name: "agnes-video-2.5",
+        kind: "video",
+        apiFormat: "chat-completions",
+        smartConfig: true,
+        contextWindow: null,
+        maxOutputTokens: null,
+        inputTypes: null,
+        outputTypes: null,
+        capabilities: null,
+        reasoningLevels: null,
+        reasoningParamMapping: null,
+        baseUrl: null,
+        enabled: true,
+        endpointPath: "/not/known",
+      }).endpointPath,
+    ).toBe("/v1/videos");
   });
 
   it("库行回填：合法的模型级格式原样保留", () => {
@@ -206,6 +248,7 @@ describe("emptyModelForm / modelFormFromView", () => {
         reasoningParamMapping: null,
         baseUrl: null,
         enabled: true,
+        endpointPath: null,
       }).apiFormat,
     ).toBe("anthropic-messages");
   });
@@ -298,6 +341,7 @@ describe("modelSaveDraft", () => {
       apiFormat: "chat-completions",
       enabled: true,
       baseUrl: null,
+      endpointPath: null,
       contextWindow: null,
       maxOutputTokens: null,
       inputTypes: ["text"],
@@ -309,6 +353,15 @@ describe("modelSaveDraft", () => {
     });
     expect("id" in draft).toBe(false);
     expect("apiKey" in draft).toBe(false);
+  });
+
+  it("图像行保存带上生效的端点路径；文本行恒 null（#3656）", () => {
+    const imageDraft = modelSaveDraft(form({ name: "agnes-image-2.5-flash", kind: "image" }), {
+      providerId: "p1",
+    });
+    /* emptyModelForm("image")（默认 kind 是 chat，这里手动给图像行）没有端点时
+     * 由 modelSaveDraft 的回落兜成用途默认第一项 */
+    expect(imageDraft.endpointPath).toBe("/v1/images/generations");
   });
 
   it("编辑：保留模型级接口覆盖；数字字段空串 = null", () => {

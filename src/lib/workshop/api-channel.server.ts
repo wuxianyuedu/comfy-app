@@ -35,6 +35,7 @@ import {
   type WorkshopApiSettings,
 } from "./api-channel-core";
 import { buildVideoPollUrls } from "~/lib/llm/usage-test-config";
+import { joinApiUrl } from "~/lib/llm/provider-types";
 import {
   resolveImagesGenerationsEndpoint,
   resolveVideosGenerationsEndpoint,
@@ -173,7 +174,9 @@ async function resolveTarget(
         endpoint:
           doc.endpointPath === ""
             ? resolveImagesGenerationsEndpoint(entry.baseUrl ?? "")
-            : `${base}${doc.endpointPath}`,
+            : /* #3656：显式路径走 joinApiUrl——Base 已带版本段不重复补（防 /v1/v1），
+               * Base 缺版本段补 /v1；设置页下拉存的就是带版本段的完整路径。 */
+              joinApiUrl(base, doc.endpointPath),
         apiKey: entry.apiKey ?? "",
         model: entry.name,
       },
@@ -284,8 +287,9 @@ async function resolveVideoTarget(
       doc.endpointPath === ""
         ? adapter
           ? resolveVideosGenerationsEndpoint(base)
-          : `${base}/videos`
-        : `${base}${doc.endpointPath}`;
+          : /* #3656：无适配器的既有回落（/videos）也走统一拼装，Base 缺版本段补 /v1 */
+            joinApiUrl(base, "/videos")
+        : joinApiUrl(base, doc.endpointPath);
     return {
       adapter,
       target: { endpoint, apiKey: entry.apiKey ?? "", model: entry.name },
@@ -336,12 +340,15 @@ export async function pollVideoViaApi(
           adapters.find((a) => a.mode === wantedMode) ??
           (adapters.length === 1 ? (onlyAdapter ?? null) : null);
         const base = (entry.baseUrl ?? "").replace(/\/+$/, "");
+        /* 轮询候选的目录段从「动作路径」推导（buildVideoPollUrls 内部补版本段）：
+         * 显式路径存的是带版本段的完整路径（/v1/videos），先剥掉版本段再取目录，
+         * 否则 videoEndpointDir 会把 /v1 当成目录（#3656）。 */
         const submitPath =
           doc.endpointPath === ""
             ? adapter
               ? resolveVideosGenerationsEndpoint(base).slice(base.length)
               : "/videos"
-            : doc.endpointPath;
+            : doc.endpointPath.replace(/^\/v\d+/i, "");
         const { rest, agnes } = buildVideoPollUrls(
           entry.baseUrl ?? "",
           submitPath,
