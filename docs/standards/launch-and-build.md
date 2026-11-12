@@ -3061,6 +3061,15 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 > 回传步带 `continue-on-error`，失败只多一行读数、不反过来把构建判红（同 #3437 口径）。
 > 判据（`tests/no-platform-ci-config.test.ts` 桌包段）：四个落点 step 都要在、
 > 回传步点既有脚本、带 `continue-on-error`、接专用令牌。
+>
+> ⚠️ **#3611 收尾（首次真跑）**：`POST /{repo}/-/releases` 的 `target_commitish` 是
+> 服务端**硬必填**（Swagger 的 `PostReleaseForm` 有这个 property 却没标进 `required`，
+> CLI 描述明写「标签不存在时基于它自动建 tag」）。`nightly` 这个 tag 本不存在，
+> 漏带就是 400 `target_commitish is required` —— 而只读探测里 CNB 站内 Release
+> `total 0`、每跑必走创建这一支，所以那一格是**必挂不是偶发**。现由脚本带
+> `target_commitish`（缺省默认分支，可用 `CNB_RELEASE_TARGET` 覆盖；不用 `GITHUB_SHA`，
+> 那是镜像仓 commit），判据补「缺字段即 400」的反面与「首次创建走完整条上传链」两端。
+> 400 不是 403 ⇒ 令牌权限没问题，别去动 `CNB_RELEASE_TOKEN`。
 
 **发布档的触发与「三平台」现状（#2641，2026-10-31）**：设计里曾写「`tag: v*` 触发发布档、
 三平台（ubuntu / windows / macOS）打包，20–40min」—— 那是**前瞻**，不是今天的形状，也**不**

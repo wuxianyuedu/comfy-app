@@ -5,7 +5,8 @@
  *   ① 前提 fail-closed：缺令牌 / 仓库 / 成品一份都没有 ⇒ 没判过（2），不是绿；
  *   ② 成品从盘上真读，不硬编码 tauri 生成名；安装包带形态前缀免同名撞车；
  *   ③ `verify_url` 拆 upload_token / asset_path（含含斜杠的 path、绝对 / 相对 URL）；
- *   ④ 上传链「取地址 → PUT → 确认」三步，缺一步即失败，不假装送达；
+ *   ④ 创建 Release 必带 `target_commitish`（#3611 现场：服务端 400 `target_commitish is
+ *      required`），上传链「取地址 → PUT → 确认」三步缺一步即失败，不假装送达；
  *   ⑤ PUT 不带 Authorization（预签名 URL 自带授权），确认带 `ttl=0`；
  *   ⑥ 失败回话脱敏（令牌形状不回显）；
  *   ⑦ `--dry-run` 一条网络都不发；
@@ -168,6 +169,7 @@ function cnbFetch(
   opts: {
     badVerify?: boolean;
     fail?: "get" | "create" | "url" | "put" | "confirm";
+    missingTargetCommitish?: boolean;
     releaseExists?: boolean;
   } = {},
 ) {
@@ -200,6 +202,16 @@ function cnbFetch(
     }
     if (method === "POST" && url.endsWith("/-/releases")) {
       if (opts.fail === "create") return json({ errcode: 403 }, 403);
+      /* 服务端对 target_commitish 是硬必填（#3611 现场 400），假件按同一形状判。 */
+      const raw = typeof body === "string" ? body : "{}";
+      const parsed: unknown = JSON.parse(raw);
+      const form = isRecord(parsed) ? parsed : {};
+      if (opts.missingTargetCommitish) {
+        return json({ errcode: 2_000_001, errmsg: "target_commitish is required" }, 400);
+      }
+      if (typeof form.target_commitish !== "string" || form.target_commitish === "") {
+        return json({ errcode: 2_000_001, errmsg: "target_commitish is required" }, 400);
+      }
       return json({ data: { id: "77" } }, 201);
     }
     if (method === "POST" && url.endsWith("/asset-upload-url")) {
@@ -235,7 +247,7 @@ describe("④ ensureRelease：复用已存在的 nightly，缺席才建", () => 
     const { log } = lines();
     const r = await ensureRelease(
       { ctx: CTX, fetchImpl, log },
-      { runId: "4242", sha: "a".repeat(40) },
+      { runId: "4242", sha: "a".repeat(40), targetCommitish: "master" },
     );
     expect(r).toEqual({ created: false, id: "77", ok: true });
     expect(calls.map((c) => c.method)).toEqual(["GET"]);
@@ -246,7 +258,7 @@ describe("④ ensureRelease：复用已存在的 nightly，缺席才建", () => 
     const { log } = lines();
     const r = await ensureRelease(
       { ctx: CTX, fetchImpl, log },
-      { runId: "4242", sha: "a".repeat(40) },
+      { runId: "4242", sha: "a".repeat(40), targetCommitish: "master" },
     );
     expect(r.ok).toBe(true);
     expect(r.ok && r.created).toBe(true);
@@ -257,14 +269,48 @@ describe("④ ensureRelease：复用已存在的 nightly，缺席才建", () => 
     const body = isRecord(parsed) ? parsed : {};
     expect(body.tag_name).toBe(RELEASE_TAG);
     expect(body.prerelease).toBe(true);
+    expect(body.target_commitish).toBe("master");
   });
 
   it("GET 非 404 的失败不冒充「没有」接着建", async () => {
     const { calls, fetchImpl } = cnbFetch({ fail: "get" });
     const { log } = lines();
-    const r = await ensureRelease({ ctx: CTX, fetchImpl, log }, { runId: "", sha: "" });
+    const r = await ensureRelease(
+      { ctx: CTX, fetchImpl, log },
+      { runId: "", sha: "", targetCommitish: "master" },
+    );
     expect(r.ok).toBe(false);
     expect(calls.some((c) => c.method === "POST")).toBe(false);
+  });
+
+  /* ISSUE #3611 现场：服务端对 target_commitish 是硬必填，漏带 ⇒ 400
+   * {"errcode":2_000_001,"errmsg":"target_commitish is required"}。判据要在本地就
+   * 把这一形拦下来 —— 旧假件对 create 无条件 201，正是缺口漏到真跑的原因。 */
+  it("创建 payload 缺 target_commitish ⇒ 服务端 400 被如实传回，不吞、不判绿", async () => {
+    const { fetchImpl } = cnbFetch({ missingTargetCommitish: true, releaseExists: false });
+    const { log } = lines();
+    const r = await ensureRelease(
+      { ctx: CTX, fetchImpl, log },
+      { runId: "4242", sha: "a".repeat(40), targetCommitish: "master" },
+    );
+    expect(r.ok).toBe(false);
+    /* r.ok 为 true 时给一个不可能匹配的空串，让下面两条断言无条件跑、且必然红。 */
+    const detail = r.ok ? "" : r.detail;
+    expect(detail).toContain("HTTP 400");
+    expect(detail).toContain("target_commitish is required");
+  });
+
+  it("resolveDesktopRelayContext：target_commitish 缺省 master、可由 CNB_RELEASE_TARGET 覆盖", () => {
+    const base = resolveDesktopRelayContext(BASE_ENV);
+    expect(base.ok && base.targetCommitish).toBe("master");
+    const overridden = resolveDesktopRelayContext({
+      ...BASE_ENV,
+      CNB_RELEASE_TARGET: "release/1.0",
+    });
+    expect(overridden.ok && overridden.targetCommitish).toBe("release/1.0");
+    /* 空串不算覆盖：回落到默认分支，不把空 target_commitish 发给服务端。 */
+    const blank = resolveDesktopRelayContext({ ...BASE_ENV, CNB_RELEASE_TARGET: "  " });
+    expect(blank.ok && blank.targetCommitish).toBe("master");
   });
 });
 
@@ -404,5 +450,33 @@ describe("⑧ 端到端：出口话术给 CNB 站内取包地", () => {
     expect(text).not.toContain("github.com");
     /* 3 份成品：每份 3 步 = 9，加 1 次读 tag = 10。 */
     expect(calls.length).toBe(10);
+  });
+
+  /* #3611 补的盲区：真实跑里 create 一挂，其后的「取地址 → PUT → 确认」三步从没
+   * 在假件上连着跑过。这里让 nightly 首次创建（GET 404）走完整条链，坐实修完
+   * create 之后不会在下一步又挂。 */
+  it("nightly 首次创建：GET 404 ⇒ create 带 target_commitish ⇒ 3 份成品各走三步全绿", async () => {
+    const root = makeBundles();
+    tempRoots.push(root);
+    const { calls, fetchImpl } = cnbFetch({ releaseExists: false });
+    const { out, log } = lines();
+    const code = await main({
+      argv: [],
+      cwd: root,
+      env: {
+        ...BASE_ENV,
+        DESKTOP_BUNDLE_DIR: root,
+        DESKTOP_PORTABLE: path.join(root, "portable/ComfyAPP-portable.zip"),
+      },
+      fetchImpl,
+      log,
+    });
+    expect(code).toBe(CODE.OK);
+    const create = calls.find((c) => c.method === "POST" && c.url.endsWith("/-/releases"));
+    const form: unknown = JSON.parse(typeof create?.body === "string" ? create.body : "{}");
+    expect(isRecord(form) && form.target_commitish).toBe("master");
+    /* 读 tag(1) + create(1) + 3 份 × 3 步 = 11。 */
+    expect(calls.length).toBe(11);
+    expect(out.join("\n")).toContain("已搬到 CNB");
   });
 });
