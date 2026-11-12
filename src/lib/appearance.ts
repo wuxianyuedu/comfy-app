@@ -1,10 +1,11 @@
 /**
- * 外观偏好（圆角 / 标题字阶）—— 令牌的唯一应用点与持久化形状。
+ * 外观偏好（圆角 / 标题字阶 / 字体）—— 令牌的唯一应用点与持久化形状。
  *
- * 为什么是顶层单例而不是某个页面的局部逻辑：这两档改的是**全局 CSS 变量**
- * （`--radius` 与 `--font-scale`），必须在任何路由下都成立。若只在设置页里
- * setProperty，用户离开设置页、或刷新到别的路由，偏好就悄悄不生效了 ——
- * 表现是"设置有时管用有时不管用"，这类半生效比没做更难查。
+ * 为什么是顶层单例而不是某个页面的局部逻辑：这些档改的是**全局 CSS 变量**
+ * （`--radius` / `--font-scale` / `--font-sans` / `--font-code` / `--font-mono`），
+ * 必须在任何路由下都成立。若只在设置页里 setProperty，用户离开设置页、或刷新到
+ * 别的路由，偏好就悄悄不生效了 —— 表现是"设置有时管用有时不管用"，这类半生效
+ * 比没做更难查。
  *
  * 令牌形状（都在 `app/globals.css`，本模块不重复定义数值基准）：
  *   · `--radius` 是圆角总闸，`--radius-sm…4xl` 全部由它 calc 派生；
@@ -12,6 +13,10 @@
  *     （正文主力是 `text-sm`/14px，微标签 `text-2xs`/`text-3xs`）。这里曾写
  *     「正文锚定 13px」并被设置页当承诺展示给用户，实测 body 是 preflight 的
  *     16px、全站并无 13px 基准 —— 界面文案不要再写具体 px，写「保持原尺寸」。
+ *   · 三档字体（`--font-sans` 界面 / `--font-code` 代码块 / `--font-mono` 终端）
+ *     是**自由字符串**而非预置档位：用户可在设置面板里填任意字体栈。默认值就是
+ *     `globals.css` 里那三颗的原值（逐字相同），因此「从没设过」与「设了默认」渲染
+ *     完全一致；非法的空串只回落该档、不连坐圆角与字阶。
  *
  * 刻意**没有**「界面密度」这一档：仓库里没有全局密度令牌（唯一的 `DENSITY_CLASS`
  * 是画布编辑器内部的局部常量）。做一个只影响半屏的假开关，比不做更糟。
@@ -51,15 +56,38 @@ export const FONT_SCALE_STEPS: Array<AppearanceStep> = [
   { id: "125", label: "宽松 125%", value: "1.25" },
 ];
 
+/**
+ * 三档字体的默认栈。**逐字**等于 `globals.css` 里对应的 `@theme` 声明：运行时
+ * 这份默认值会被写回 `<html>` 上的同名变量，若与源码那串不一致，「设了默认」就会
+ * 和「从没设过」渲染出两套字体。改一处必须两处同批。
+ *
+ * 它们是**自由字符串**：用户可在设置面板填任意字体栈（如 `Inter`、`IBM Plex Mono`），
+ * 不必局限于已知档位 —— 这也意味着这里只校验「非空」，不校验「认不认得」。
+ */
+export const DEFAULT_INTERFACE_FONT =
+  'var(--font-geist-sans), "Sarasa UI SC", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif';
+export const DEFAULT_CODE_FONT = 'ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace';
+export const DEFAULT_TERMINAL_FONT =
+  '"SF Mono", ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", Consolas, "Sarasa Mono SC", monospace';
+
 export type AppearancePrefs = {
+  /** 代码块字体栈（映射到 `--font-code`，`.cb-code-block` 等代码展示用）。 */
+  codeFont: string;
   fontScale: string;
+  /** 界面字体栈（映射到 `--font-sans`，覆盖全站正文与界面文字）。 */
+  interfaceFont: string;
   radius: string;
+  /** 终端字体栈（映射到 `--font-mono`，终端与等宽展示用）。 */
+  terminalFont: string;
 };
 
 /** 默认值 = `globals.css` 里 `--radius` / `--font-scale` 的基数（两者必须同批改）。 */
 export const DEFAULT_APPEARANCE: AppearancePrefs = {
   radius: "md",
   fontScale: "100",
+  interfaceFont: DEFAULT_INTERFACE_FONT,
+  codeFont: DEFAULT_CODE_FONT,
+  terminalFont: DEFAULT_TERMINAL_FONT,
 };
 
 function stepValue(steps: Array<AppearanceStep>, id: string, fallbackId: string): string {
@@ -86,9 +114,14 @@ export function parseAppearance(raw: string | null | undefined): AppearancePrefs
   }
   /* SAFETY: 类型断言已复核 */
   const record = parsed as {
+    codeFont?: unknown;
     fontScale?: unknown;
+    interfaceFont?: unknown;
     radius?: unknown;
+    terminalFont?: unknown;
   };
+  /* 圆角 / 字阶是预置档位，仍是「任一非法整份回落」（不许圆角新的、字号旧的那种
+     无法解释的组合）。字体三档是自由字符串，缺省或非法只回落该档、不连坐上面两档。 */
   if (
     typeof record.radius !== "string" ||
     typeof record.fontScale !== "string" ||
@@ -97,7 +130,15 @@ export function parseAppearance(raw: string | null | undefined): AppearancePrefs
   ) {
     return { ...DEFAULT_APPEARANCE };
   }
-  return { radius: record.radius, fontScale: record.fontScale };
+  const fontField = (value: unknown, fallback: string): string =>
+    typeof value === "string" && value.trim().length > 0 ? value : fallback;
+  return {
+    radius: record.radius,
+    fontScale: record.fontScale,
+    interfaceFont: fontField(record.interfaceFont, DEFAULT_INTERFACE_FONT),
+    codeFont: fontField(record.codeFont, DEFAULT_CODE_FONT),
+    terminalFont: fontField(record.terminalFont, DEFAULT_TERMINAL_FONT),
+  };
 }
 
 export function serializeAppearance(prefs: AppearancePrefs): string {
@@ -109,6 +150,11 @@ export function appearanceVars(prefs: AppearancePrefs): Record<string, string> {
   return {
     "--radius": stepValue(RADIUS_STEPS, prefs.radius, DEFAULT_APPEARANCE.radius),
     "--font-scale": stepValue(FONT_SCALE_STEPS, prefs.fontScale, DEFAULT_APPEARANCE.fontScale),
+    /* 三档字体：直接把用户字体栈写进同名 CSS 变量，覆盖 globals.css 的默认值。
+       默认值与源码逐字相同，因此「没设过」与「设了默认」渲染一致。 */
+    "--font-sans": prefs.interfaceFont,
+    "--font-code": prefs.codeFont,
+    "--font-mono": prefs.terminalFont,
   };
 }
 

@@ -76,3 +76,80 @@ test.describe("外观两档 @critical", () => {
     expect(bodyAfter).toBe(bodyBefore);
   });
 });
+
+test.describe("外观字体自定义 #3513 @critical", () => {
+  const fontInput = (page: Page, name: string) => page.getByRole("textbox", { name });
+
+  test("三个字体输入框可见，填值写进 --font-sans 并跨刷新保留", async ({ page }) => {
+    await openAppearance(page);
+
+    await expect(fontInput(page, "界面字体")).toBeVisible();
+    await expect(fontInput(page, "代码字体")).toBeVisible();
+    await expect(fontInput(page, "终端字体")).toBeVisible();
+
+    /* 默认值非空：说明默认值与 globals.css 的原字体栈一致（未退化成浏览器默认）。 */
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          getComputedStyle(document.documentElement).getPropertyValue("--font-sans").trim(),
+        ),
+      )
+      .not.toBe("");
+
+    /* 填入自定义字体名 —— 判据落在 CSS 变量值而非实际渲染字形（不要求本机真装该字体）。 */
+    await fontInput(page, "界面字体").fill("Inter");
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          getComputedStyle(document.documentElement).getPropertyValue("--font-sans").trim(),
+        ),
+      )
+      .toBe("Inter");
+
+    /* 刷新后仍生效：偏好挂在根布局，跨路由 / 刷新都成立（与 #1434 同一根）。 */
+    await page.reload();
+    await page.getByRole("button", { name: "外观", exact: true }).first().click();
+    await expect(fontInput(page, "界面字体")).toHaveValue("Inter");
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          getComputedStyle(document.documentElement).getPropertyValue("--font-sans").trim(),
+        ),
+      )
+      .toBe("Inter");
+  });
+
+  test("「恢复默认」把该档回落到项目原字体栈（含 CJK 回退）", async ({ page }) => {
+    await openAppearance(page);
+    await fontInput(page, "界面字体").fill("Inter");
+
+    await page.getByRole("button", { name: "界面字体恢复默认" }).click();
+    /* 默认栈逐字等于 globals.css 的 --font-sans：必须含 CJK 回退，否则恢复回去的
+       是退化字体。 */
+    const value = await fontInput(page, "界面字体").inputValue();
+    expect(value).toContain("Sarasa UI SC");
+    expect(value).toContain("PingFang SC");
+  });
+
+  test("三档字体相互独立：代码字体档只写 --font-code，不污染 --font-sans", async ({ page }) => {
+    await openAppearance(page);
+    const sansBefore = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue("--font-sans").trim(),
+    );
+
+    await fontInput(page, "代码字体").fill("IBM Plex Mono");
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          getComputedStyle(document.documentElement).getPropertyValue("--font-code").trim(),
+        ),
+      )
+      .toBe("IBM Plex Mono");
+
+    /* 改代码字体不动界面字体（两档各写各的变量）。 */
+    const sansAfter = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue("--font-sans").trim(),
+    );
+    expect(sansAfter).toBe(sansBefore);
+  });
+});

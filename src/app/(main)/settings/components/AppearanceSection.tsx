@@ -11,9 +11,13 @@ import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import {
   DEFAULT_APPEARANCE,
+  DEFAULT_CODE_FONT,
+  DEFAULT_INTERFACE_FONT,
+  DEFAULT_TERMINAL_FONT,
   FONT_SCALE_STEPS,
   RADIUS_STEPS,
   readAppearance,
@@ -134,6 +138,44 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
         steps={FONT_SCALE_STEPS}
         value={prefs.fontScale}
       />
+
+      {/* 字体三档是自由字符串（非预置档位）：用文本输入框，不进 radiogroup ——
+          既贴合「可填任意字体栈」的语义，也不破坏「恰好三个 radiogroup」的契约
+          （AppearanceSection.test.tsx 锚定 ["主题外观", "圆角", "标题字阶"]）。
+          每档各带「恢复默认」：把该档回落到 globals.css 的原值。 */}
+      <FontRow
+        hint="自定义整个界面使用的字体（正文与界面文字）。"
+        label="界面字体"
+        onChange={(value) => {
+          update({ interfaceFont: value });
+        }}
+        onReset={() => {
+          update({ interfaceFont: DEFAULT_INTERFACE_FONT });
+        }}
+        value={prefs.interfaceFont}
+      />
+      <FontRow
+        hint="自定义代码块使用的字体。"
+        label="代码字体"
+        onChange={(value) => {
+          update({ codeFont: value });
+        }}
+        onReset={() => {
+          update({ codeFont: DEFAULT_CODE_FONT });
+        }}
+        value={prefs.codeFont}
+      />
+      <FontRow
+        hint="自定义终端使用的字体（等宽展示）。"
+        label="终端字体"
+        onChange={(value) => {
+          update({ terminalFont: value });
+        }}
+        onReset={() => {
+          update({ terminalFont: DEFAULT_TERMINAL_FONT });
+        }}
+        value={prefs.terminalFont}
+      />
       {notPersisted && (
         <p className="text-warning mt-3 text-xs">
           浏览器拒绝了本地存储：本次设置立即生效，但下次打开会回到默认值。
@@ -188,6 +230,56 @@ function StepRow({
           </RadioGroupItem>
         ))}
       </RadioGroup>
+    </div>
+  );
+}
+
+/** 一档字体：文本输入框 + 恢复默认。自由字符串，可填任意字体栈（如 `Inter`）。 */
+function FontRow({
+  label,
+  hint,
+  value,
+  onChange,
+  onReset,
+}: {
+  hint: string;
+  label: string;
+  onChange: (value: string) => void;
+  onReset: () => void;
+  value: string;
+}) {
+  /* 输入框的 aria-label 直接用档名，读屏用户也能定位到「界面字体」这一格；
+     恢复默认按钮同样带可读名，方向键之外也能操作。 */
+  const inputId = `font-${label}`;
+  return (
+    <div className="mt-5">
+      <div className="mb-2 flex flex-wrap items-baseline gap-2">
+        <label className="text-ink text-sm font-semibold" htmlFor={inputId}>
+          {label}
+        </label>
+        <span className="text-muted-foreground text-xs">{hint}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <Input
+          aria-label={label}
+          className="max-w-md"
+          id={inputId}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
+          placeholder="例如 Inter / IBM Plex Mono"
+          value={value}
+        />
+        <Button
+          aria-label={`${label}恢复默认`}
+          className="shrink-0"
+          onClick={onReset}
+          size="sm"
+          variant="outline"
+        >
+          恢复默认
+        </Button>
+      </div>
     </div>
   );
 }

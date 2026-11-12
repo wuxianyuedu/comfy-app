@@ -11,6 +11,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   APPEARANCE_STORAGE_KEY,
   DEFAULT_APPEARANCE,
+  DEFAULT_CODE_FONT,
+  DEFAULT_INTERFACE_FONT,
+  DEFAULT_TERMINAL_FONT,
   FONT_SCALE_STEPS,
   RADIUS_STEPS,
   appearanceVars,
@@ -47,6 +50,54 @@ describe("默认档 = 引入前的原值", () => {
     expect(RADIUS_STEPS.find((s) => s.id === DEFAULT_APPEARANCE.radius)).toBeTruthy();
     expect(FONT_SCALE_STEPS.find((s) => s.id === DEFAULT_APPEARANCE.fontScale)?.value).toBe("1");
   });
+
+  it("默认三档字体就是 globals.css 的原字体栈（与引入前逐字相同）", () => {
+    const vars = appearanceVars(DEFAULT_APPEARANCE);
+    expect(vars["--font-sans"]).toBe(DEFAULT_INTERFACE_FONT);
+    expect(vars["--font-code"]).toBe(DEFAULT_CODE_FONT);
+    expect(vars["--font-mono"]).toBe(DEFAULT_TERMINAL_FONT);
+  });
+});
+
+describe("parseAppearance：字体档缺省/非法只回落该档", () => {
+  it("字体字段缺失时用默认值、不连坐圆角与字阶", () => {
+    const raw = JSON.stringify({ radius: "lg", fontScale: "110" });
+    expect(parseAppearance(raw)).toEqual({
+      radius: "lg",
+      fontScale: "110",
+      interfaceFont: DEFAULT_INTERFACE_FONT,
+      codeFont: DEFAULT_CODE_FONT,
+      terminalFont: DEFAULT_TERMINAL_FONT,
+    });
+  });
+
+  it("字体字段为空串/null 时用默认值", () => {
+    const raw = JSON.stringify({
+      radius: "md",
+      fontScale: "100",
+      interfaceFont: "",
+      codeFont: "  ",
+      terminalFont: null,
+    });
+    const parsed = parseAppearance(raw);
+    expect(parsed.interfaceFont).toBe(DEFAULT_INTERFACE_FONT);
+    expect(parsed.codeFont).toBe(DEFAULT_CODE_FONT);
+    expect(parsed.terminalFont).toBe(DEFAULT_TERMINAL_FONT);
+  });
+
+  it("字体字段合法时原样保留（自由字符串，不校验是否认得）", () => {
+    const raw = JSON.stringify({
+      radius: "md",
+      fontScale: "100",
+      interfaceFont: "Inter",
+      codeFont: "IBM Plex Mono",
+      terminalFont: "JetBrains Mono",
+    });
+    const parsed = parseAppearance(raw);
+    expect(parsed.interfaceFont).toBe("Inter");
+    expect(parsed.codeFont).toBe("IBM Plex Mono");
+    expect(parsed.terminalFont).toBe("JetBrains Mono");
+  });
 });
 
 describe("parseAppearance：不认就整份回落", () => {
@@ -71,17 +122,35 @@ describe("parseAppearance：不认就整份回落", () => {
   });
 
   it("合法值原样读回", () => {
-    const prefs = { radius: "lg", fontScale: "110" };
+    const prefs = {
+      radius: "lg",
+      fontScale: "110",
+      interfaceFont: DEFAULT_INTERFACE_FONT,
+      codeFont: DEFAULT_CODE_FONT,
+      terminalFont: DEFAULT_TERMINAL_FONT,
+    };
     expect(parseAppearance(serializeAppearance(prefs))).toEqual(prefs);
   });
 });
 
 describe("applyAppearance", () => {
-  it("一次写入两个变量", () => {
+  it("一次写入五个变量（圆角 / 字阶 / 三档字体）", () => {
     const el = fakeElement();
-    applyAppearance({ radius: "lg", fontScale: "125" }, el);
+    applyAppearance(
+      {
+        radius: "lg",
+        fontScale: "125",
+        interfaceFont: "Inter",
+        codeFont: "IBM Plex Mono",
+        terminalFont: "JetBrains Mono",
+      },
+      el,
+    );
     expect(el.store.get("--radius")).toBe("1.25rem");
     expect(el.store.get("--font-scale")).toBe("1.25");
+    expect(el.store.get("--font-sans")).toBe("Inter");
+    expect(el.store.get("--font-code")).toBe("IBM Plex Mono");
+    expect(el.store.get("--font-mono")).toBe("JetBrains Mono");
   });
 
   it("没有元素时是空操作（SSR 不炸）", () => {
@@ -121,17 +190,31 @@ describe("readAppearance / saveAppearance", () => {
   });
 
   it("存进去能原样读回", () => {
-    expect(saveAppearance({ radius: "xl", fontScale: "90" })).toBe(true);
-    expect(readAppearance()).toEqual({ radius: "xl", fontScale: "90" });
-    expect(window.localStorage.getItem(APPEARANCE_STORAGE_KEY)).toBe(
-      '{"radius":"xl","fontScale":"90"}',
-    );
+    const prefs = {
+      radius: "xl",
+      fontScale: "90",
+      interfaceFont: DEFAULT_INTERFACE_FONT,
+      codeFont: DEFAULT_CODE_FONT,
+      terminalFont: DEFAULT_TERMINAL_FONT,
+    };
+    expect(saveAppearance(prefs)).toBe(true);
+    expect(readAppearance()).toEqual(prefs);
+    expect(JSON.parse(window.localStorage.getItem(APPEARANCE_STORAGE_KEY)!)).toEqual(prefs);
   });
 
   it("保存时同步写到 <html> 上（离开设置页也必须成立）", () => {
-    saveAppearance({ radius: "lg", fontScale: "110" });
+    saveAppearance({
+      radius: "lg",
+      fontScale: "110",
+      interfaceFont: "Inter",
+      codeFont: "IBM Plex Mono",
+      terminalFont: "JetBrains Mono",
+    });
     expect(document.documentElement.style.getPropertyValue("--radius")).toBe("1.25rem");
     expect(document.documentElement.style.getPropertyValue("--font-scale")).toBe("1.1");
+    expect(document.documentElement.style.getPropertyValue("--font-sans")).toBe("Inter");
+    expect(document.documentElement.style.getPropertyValue("--font-code")).toBe("IBM Plex Mono");
+    expect(document.documentElement.style.getPropertyValue("--font-mono")).toBe("JetBrains Mono");
   });
 
   it("存的是坏值时读回默认，且不抛", () => {
