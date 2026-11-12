@@ -116,9 +116,9 @@ export function redact(text, token) {
   let out = text;
   if (token) out = out.split(token).join("<redacted>");
   return out
-    .replace(/gh[pousr]_[A-Za-z0-9_]{20,}/gu, "<redacted>")
-    .replace(/github_pat_[A-Za-z0-9_]{20,}/gu, "<redacted>")
-    .replace(/Bearer\s+[A-Za-z0-9._-]{12,}/giu, "Bearer <redacted>");
+    .replaceAll(/gh[pousr]_[A-Za-z0-9_]{20,}/gu, "<redacted>")
+    .replaceAll(/github_pat_[A-Za-z0-9_]{20,}/gu, "<redacted>")
+    .replaceAll(/Bearer\s+[A-Za-z0-9._-]{12,}/giu, "Bearer <redacted>");
 }
 
 /**
@@ -188,7 +188,7 @@ export function parseVerifyUrl(verifyUrl) {
   }
   const marker = "/asset-upload-confirmation/";
   const at = pathname.indexOf(marker);
-  if (at < 0) return null;
+  if (at === -1) return null;
   const tail = pathname.slice(at + marker.length);
   const slash = tail.indexOf("/");
   if (slash <= 0 || slash === tail.length - 1) return null;
@@ -368,7 +368,11 @@ export async function uploadAsset(io, releaseId, file) {
 export async function main(io = {}) {
   const env = io.env ?? process.env;
   const argv = io.argv ?? process.argv.slice(2);
-  const log = io.log ?? ((line) => console.log(line));
+  const log =
+    io.log ??
+    ((line) => {
+      console.log(line);
+    });
   const fetchImpl = io.fetchImpl ?? fetch;
   const cwd = io.cwd ?? process.cwd();
   const dryRun = argv.includes("--dry-run");

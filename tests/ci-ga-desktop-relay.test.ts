@@ -166,9 +166,9 @@ describe("③ verify_url 拆解（CLI 明示的两个 path 参数来源）", () 
 /** CNB 侧假 fetch：按 method + URL 分派，记录每一步，可让任一步失败。 */
 function cnbFetch(
   opts: {
+    badVerify?: boolean;
     fail?: "get" | "create" | "url" | "put" | "confirm";
     releaseExists?: boolean;
-    badVerify?: boolean;
   } = {},
 ) {
   const calls: Array<{ auth: string; body: unknown; method: string; url: string }> = [];
