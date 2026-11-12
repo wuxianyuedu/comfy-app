@@ -18,7 +18,9 @@ import { SelectChip } from "~/components/ui/select-chip";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { getWorkflowType } from "~/lib/workflow/workflow-types";
-import { workshopInputLabel, type WorkshopInputType } from "~/lib/workshop/model-mode-contract";
+import { workshopInputLabel } from "~/lib/workshop/remote-model-adapter";
+import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
+
 import { cn } from "~/lib/utils";
 import {
   ASPECT_RATIO_PRESETS,
@@ -27,6 +29,7 @@ import {
   MODEL_TEST_KIND_LABELS,
   MULTIPLE_PRESETS,
   RELAY_INPUT_TYPES,
+  RESOLUTION_PRESETS,
   controlForInputType,
   type ModelTestControl,
   type ModelTestKind,
@@ -168,13 +171,20 @@ function InputRow({
       </FormField>
     );
   }
-  if (control === "ratio" || control === "megapixels" || control === "multiple") {
+  if (
+    control === "ratio" ||
+    control === "megapixels" ||
+    control === "resolution" ||
+    control === "multiple"
+  ) {
     const presets: ReadonlyArray<{ label: string; value: string }> =
       control === "ratio"
         ? ASPECT_RATIO_PRESETS.map((r) => ({ label: r, value: r }))
         : control === "megapixels"
           ? MEGAPIXEL_PRESETS
-          : MULTIPLE_PRESETS.map((n) => ({ label: String(n), value: String(n) }));
+          : control === "resolution"
+            ? RESOLUTION_PRESETS
+            : MULTIPLE_PRESETS.map((n) => ({ label: String(n), value: String(n) }));
     return (
       <FormField hint={hint} id={id} label={label} labelClassName="mb-1.5">
         {() => (

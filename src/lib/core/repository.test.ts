@@ -21,7 +21,8 @@ vi.mock("~/server/db", async () => {
 });
 import { DrizzleRepository } from "~/lib/core/repository-base";
 import { isRecord } from "~/lib/is-record";
-import type { RemoteModeAdapter } from "~/lib/workshop/model-mode-contract";
+import type { RemoteModelAdaptersDoc } from "~/lib/workshop/remote-model-adapter";
+
 /** `NotFoundError` 从**定义处**导入而不是 `repository-base`：基类只是 import 它
  *  （没有 re-export），`TaskWithCover` 也只经 `repository-task` 可用 —— 见本文件
  *  末尾「零消费导出」那一组断言。 */
@@ -39,7 +40,7 @@ import {
   llmProviderRepository,
   remoteModelRepository,
   saveLlmSettings,
-  parseAdaptersJson,
+  parseAdaptersDocJson,
 } from "~/lib/core/repository-user";
 import { decryptLlmKey } from "~/lib/llm/secrets";
 import type { DbExecutor } from "~/lib/core/repository-executor-types";
@@ -1402,35 +1403,41 @@ describe("RemoteModelRepository", () => {
     expect(await remoteModelRepository.replaceAll([])).toEqual([]);
   });
 
-  it("replaceAll 保留已有的工坊适配器（不被配置同步清掉）", async () => {
-    const adapters: Array<RemoteModeAdapter> = [
-      {
-        mode: "t2i",
-        inputs: [{ type: "prompt", field: "prompt" }],
-        outputField: "data.0.url",
-        endpointPath: "/v1/images/generations",
-      },
-    ];
+  it("replaceAll 保留已有的工坊适配器存档（不被配置同步清掉）", async () => {
+    const doc: RemoteModelAdaptersDoc = {
+      endpointPath: "/v1/images/generations",
+      adapters: [
+        {
+          mode: "t2i",
+          inputs: [{ type: "prompt", field: "prompt" }],
+          outputField: "data.0.url",
+        },
+      ],
+    };
     const created = await remoteModelRepository.replaceAll([{ name: "甲" }]);
-    await remoteModelRepository.saveWorkshopAdapters("甲", adapters);
-    expect(await remoteModelRepository.getWorkshopAdapters("甲")).toEqual([
-      {
-        mode: "T2I",
-        inputs: [{ type: "prompt", field: "prompt" }],
-        outputField: "data.0.url",
-        endpointPath: "/v1/images/generations",
-      },
-    ]);
+    await remoteModelRepository.saveWorkshopAdaptersDoc("甲", doc);
+    expect(await remoteModelRepository.getWorkshopAdaptersDoc("甲")).toEqual({
+      endpointPath: "/v1/images/generations",
+      adapters: [
+        {
+          mode: "T2I",
+          inputs: [{ type: "prompt", field: "prompt" }],
+          outputField: "data.0.url",
+        },
+      ],
+    });
 
     await remoteModelRepository.replaceAll([{ name: "甲", baseUrl: "https://new/v1" }]);
-    expect(await remoteModelRepository.getWorkshopAdapters("甲")).toEqual([
-      {
-        mode: "T2I",
-        inputs: [{ type: "prompt", field: "prompt" }],
-        outputField: "data.0.url",
-        endpointPath: "/v1/images/generations",
-      },
-    ]);
+    expect(await remoteModelRepository.getWorkshopAdaptersDoc("甲")).toEqual({
+      endpointPath: "/v1/images/generations",
+      adapters: [
+        {
+          mode: "T2I",
+          inputs: [{ type: "prompt", field: "prompt" }],
+          outputField: "data.0.url",
+        },
+      ],
+    });
     expect((await remoteModelRepository.list())[0]!.id).toBe(created[0]!.id);
   });
 
@@ -1542,22 +1549,39 @@ describe("RemoteModelRepository", () => {
     expect(rows.map((r) => r.name)).toEqual(["甲"]);
   });
 
-  it("findByName / 适配器读写 / 模型不存在时的空返回", async () => {
+  it("findByName / 适配器存档读写 / 模型不存在时的空档返回", async () => {
     expect(await remoteModelRepository.findByName("nope")).toBeNull();
-    expect(await remoteModelRepository.getWorkshopAdapters("nope")).toEqual([]);
-    expect(await remoteModelRepository.saveWorkshopAdapters("nope", [])).toEqual([]);
+    expect(await remoteModelRepository.getWorkshopAdaptersDoc("nope")).toEqual({
+      endpointPath: "",
+      adapters: [],
+    });
+    expect(
+      await remoteModelRepository.saveWorkshopAdaptersDoc("nope", {
+        endpointPath: "",
+        adapters: [],
+      }),
+    ).toEqual({ endpointPath: "", adapters: [] });
 
     await remoteModelRepository.replaceAll([{ name: "甲" }]);
     expect((await remoteModelRepository.findByName("甲"))?.name).toBe("甲");
-    expect(await remoteModelRepository.getWorkshopAdapters("甲")).toEqual([]);
+    expect(await remoteModelRepository.getWorkshopAdaptersDoc("甲")).toEqual({
+      endpointPath: "",
+      adapters: [],
+    });
   });
 
-  it("parseAdaptersJson 对坏数据（非 JSON / 非数组）给空数组而不是抛错", () => {
-    expect(parseAdaptersJson(null)).toEqual([]);
-    expect(parseAdaptersJson("")).toEqual([]);
-    expect(parseAdaptersJson("{")).toEqual([]);
-    expect(parseAdaptersJson("null")).toEqual([]);
-    expect(parseAdaptersJson('{"a":1}')).toEqual([]);
+  it("parseAdaptersDocJson 对坏数据（非 JSON / 非对象非数组）给空档而不是抛错", () => {
+    expect(parseAdaptersDocJson(null)).toEqual({ endpointPath: "", adapters: [] });
+    expect(parseAdaptersDocJson("")).toEqual({ endpointPath: "", adapters: [] });
+    expect(parseAdaptersDocJson("{")).toEqual({ endpointPath: "", adapters: [] });
+    expect(parseAdaptersDocJson("null")).toEqual({ endpointPath: "", adapters: [] });
+    /* 旧版裸数组形状兼容读取（#3622）：端点视为未配置 */
+    expect(
+      parseAdaptersDocJson('[{"mode":"T2I","inputs":[{"type":"prompt","field":"p"}]}]'),
+    ).toEqual({
+      endpointPath: "",
+      adapters: [{ mode: "T2I", inputs: [{ type: "prompt", field: "p" }], outputField: "" }],
+    });
   });
 
   it("seedRemoteModel 落库的是密文（测试基建与生产写入同形）", () => {

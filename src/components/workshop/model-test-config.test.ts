@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { RemoteModeAdapter } from "~/lib/workshop/model-mode-contract";
+import type { RemoteModeAdapter } from "~/lib/workshop/remote-model-adapter";
 
 import {
   assembleImageRequest,
@@ -99,7 +99,6 @@ describe("controlForInputType / relayInputCount", () => {
   it("relayInputCount 只数通道承接得住的行（其余是工坊完整链路的输入）", () => {
     const adapter: RemoteModeAdapter = {
       mode: "T2I",
-      endpointPath: "/i",
       inputs: [
         { type: "prompt", field: "prompt" },
         { type: "seed", field: "seed" },
