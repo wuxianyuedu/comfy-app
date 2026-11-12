@@ -10,14 +10,14 @@ import {
   resolveApiFormat,
 } from "~/lib/llm/provider-types";
 import { isHttpUrl } from "~/lib/url-scheme";
-import { llmProviderRepository, remoteModelRepository } from "~/lib/core/repository";
-import type { LlmProvider, RemoteModel } from "~/server/db/schema";
 import {
-  isCustomContractInputId,
-  isModeContractInputId,
-  parseRemoteModeAdapters,
-  WORKSHOP_INPUT_TYPES,
-} from "~/lib/workshop/model-mode-contract";
+  llmProviderRepository,
+  parseAdaptersDocJson,
+  remoteModelRepository,
+} from "~/lib/core/repository";
+import type { LlmProvider, RemoteModel } from "~/server/db/schema";
+import { isCustomContractInputId, isModeContractInputId } from "~/lib/workshop/model-mode-contract";
+import { parseRemoteModeAdapters, WORKSHOP_INPUT_TYPES } from "~/lib/workshop/remote-model-adapter";
 import {
   loadModeContractLayers,
   resetModeContractOverride,
@@ -33,11 +33,13 @@ const adapterInputSchema = z.object({
   type: z.enum(WORKSHOP_INPUT_TYPES.map((t) => t.type)),
   field: z.string().min(1),
 });
+/* 端点路径不在适配器行里（ISSUE #3622）：它是模型本身的配置、与模式无关，
+ * 存档升成模型级 envelope（workshopAdaptersSave 的入参带 endpointPath 一格，
+ * 所有模式共用）。 */
 const adapterSchema = z.object({
   /* 固定值字段（#3590）：每次请求原样带上的键值（如 Agnes 视频的 mode/size）。 */
   constants: z.array(z.object({ field: z.string().min(1), value: z.string() })).optional(),
   mode: z.string().min(1),
-  endpointPath: z.string().min(1),
   inputs: z.array(adapterInputSchema).min(1),
   outputField: z.string().optional(),
 });
@@ -273,18 +275,21 @@ export const llmRouter = createTRPCRouter({
       return { contracts, effective };
     }),
 
-  /** 读取某条远端模型的工坊模式适配器 */
+  /** 读取某条远端模型的工坊适配器存档（模型级：端点路径 + 各模式适配器） */
   workshopAdaptersGet: authedProcedure
     .input(z.object({ name: z.string().min(1) }))
     .query(async ({ input }) => {
-      const adapters = await remoteModelRepository.getWorkshopAdapters(input.name);
-      return { adapters };
+      const doc = await remoteModelRepository.getWorkshopAdaptersDoc(input.name);
+      return doc;
     }),
 
-  /** 保存某条远端模型的工坊模式适配器（整份覆盖） */
+  /** 保存某条远端模型的工坊适配器存档（整份覆盖；端点路径模型级共用） */
   workshopAdaptersSave: authedProcedure
     .input(
       z.object({
+        /* 模型级端点路径（拼在条目 Base URL 后）：空 = 未配置，请求侧按
+         * 产物类别推导（ISSUE #3622）。 */
+        endpointPath: z.string().optional(),
         name: z.string().min(1),
         adapters: z.array(adapterSchema),
       }),
@@ -293,9 +298,26 @@ export const llmRouter = createTRPCRouter({
       const adapters = parseRemoteModeAdapters(
         input.adapters.map((a) => ({ ...a, mode: a.mode.toUpperCase() })),
       );
-      const saved = await remoteModelRepository.saveWorkshopAdapters(input.name, adapters);
-      return { adapters: saved };
+      const saved = await remoteModelRepository.saveWorkshopAdaptersDoc(input.name, {
+        endpointPath: input.endpointPath?.trim() ?? "",
+        adapters,
+      });
+      return saved;
     }),
+
+  /** 各模型的适配器概览（哪些模型配了、各配了几个模式）——「模型适配」页
+   *  的模型清单标「已配」用，免得逐模型拉全量存档。 */
+  workshopAdaptersSummary: authedProcedure.query(async () => {
+    const rows = await remoteModelRepository.list();
+    return {
+      models: rows.flatMap((row) => {
+        const doc = parseAdaptersDocJson(row.workshopAdapters);
+        return doc.adapters.length === 0
+          ? []
+          : [{ modes: doc.adapters.map((a) => a.mode), name: row.name }];
+      }),
+    };
+  }),
 
   /* POST /api/llm/config —— 新建：update singleton config */
   configSave: authedProcedure

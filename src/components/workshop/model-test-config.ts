@@ -4,7 +4,9 @@
 // 工坊那一条链 —— 本文件只放它的纯函数与常量，DOM / 网络分居视图与 hook。
 
 import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
-import type { RemoteModeAdapter, WorkshopInputType } from "~/lib/workshop/model-mode-contract";
+import type { RemoteModeAdapter, WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
+
+import { RESOLUTION_TIERS } from "~/lib/media/size-presets";
 
 /** 本页可测的用途。工坊 API 通道目前只有 image / video 两条（contract 的
  *  output 词表虽有 audio，通道未接入 —— 出现死页签不如不出现，接入后再加）。 */
@@ -37,6 +39,12 @@ export const MEGAPIXEL_PRESETS: ReadonlyArray<{ label: string; value: string }> 
   { label: "2K", value: "2" },
 ];
 
+/** 分辨率档：统一输入 resolution 的取值（清晰度档位名，#3622）。
+ *  值就是档位名本身 —— 目录只有一份（`size-presets` 的 RESOLUTION_TIERS），
+ *  这里只换皮成 chip 需要的 {label, value} 形状。 */
+export const RESOLUTION_PRESETS: ReadonlyArray<{ label: string; value: string }> =
+  RESOLUTION_TIERS.map((tier) => ({ label: tier.toUpperCase(), value: tier }));
+
 /** 生成数量档（统一输入 multiple）。 */
 /* SAFETY: 类型断言已复核 */
 export const MULTIPLE_PRESETS = [1, 2, 3, 4] as const;
@@ -50,7 +58,7 @@ export type ModelTestValues = Partial<Record<WorkshopInputType, string>>;
  *  这里多给控件 = 用户填了却被通道静默丢掉，比不给更糟）。适配器映射行里
  *  落在集合外的类型渲染成「通道未承接」的禁用态。 */
 export const RELAY_INPUT_TYPES: Record<ModelTestKind, ReadonlyArray<WorkshopInputType>> = {
-  image: ["prompt", "negative", "aspect-ratio", "megapixels", "multiple", "image"],
+  image: ["prompt", "negative", "aspect-ratio", "megapixels", "resolution", "multiple", "image"],
   video: ["prompt", "negative", "first-frame", "duration"],
 };
 
@@ -65,6 +73,7 @@ export type ModelTestControl =
   | "number"
   | "prompt"
   | "ratio"
+  | "resolution"
   | "text";
 
 export function controlForInputType(type: WorkshopInputType): ModelTestControl {
@@ -80,6 +89,9 @@ export function controlForInputType(type: WorkshopInputType): ModelTestControl {
     }
     case "megapixels": {
       return "megapixels";
+    }
+    case "resolution": {
+      return "resolution";
     }
     case "multiple": {
       return "multiple";
@@ -149,6 +161,7 @@ export function assembleImageRequest(opts: {
   multiple?: number;
   negative?: string;
   prompt: string;
+  resolution?: string;
 } {
   const v = opts.values;
   const multiple = numericValue(v.multiple);
@@ -159,6 +172,7 @@ export function assembleImageRequest(opts: {
     ...(v.negative?.trim() ? { negative: v.negative.trim() } : {}),
     ...(v["aspect-ratio"]?.trim() ? { aspectRatio: v["aspect-ratio"].trim() } : {}),
     ...(v.megapixels?.trim() ? { megapixels: v.megapixels.trim() } : {}),
+    ...(v.resolution?.trim() ? { resolution: v.resolution.trim() } : {}),
     ...(multiple === undefined ? {} : { multiple }),
     ...(v.image?.trim() ? { image: v.image.trim() } : {}),
   };

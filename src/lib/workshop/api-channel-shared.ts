@@ -212,3 +212,21 @@ export function resolveImagesGenerationsEndpoint(baseUrl: string): string {
   }
   return `${base}/images/generations`;
 }
+
+/** 由远端模型条目的 Base URL 解析「生视频」端点（与生图同一套三形态兼容，
+ *  动作段换成 OpenAI 兼容视频惯例 /videos/generations）。
+ *
+ *  为什么与生图成对而不是复用：两张表的资源名（images / videos）与动作段
+ *  是同一套惯例的两份实例，参数化（资源名进参）会让调用点读不出「这是哪条
+ *  通道的端点」，镜像两份各自贴着各自的资源名更直白（与 api-channel.server
+ *  里图 / 视频两份 resolveTarget 的拆分同一取舍）。 */
+export function resolveVideosGenerationsEndpoint(baseUrl: string): string {
+  const base = String(baseUrl).trim().replace(/\/+$/, "");
+  if (/\/videos\/generations$/i.test(base)) {
+    return base;
+  }
+  if (/\/videos$/i.test(base)) {
+    return `${base}/generations`;
+  }
+  return `${base}/videos/generations`;
+}

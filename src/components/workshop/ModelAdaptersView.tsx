@@ -3,27 +3,37 @@
 // ── 「模型适配」**视图**（规范 §17.2 第③层：只渲染 + 上抛）。项目无关的配置面（此前是弹窗）：给每条远端模型 × 每种工坊模式配输入/输出适配器
 //（统一输入清单见 lib/workshop/model-mode-contract.ts，产物按 outputField 提取）。只管**模型适配**（接口级）；模式级的「模式契约」是并列独立视图
 //（`mode-contract/ModeContractView.tsx`），两处读写同一份注册表。（ISSUE #1423 改版：选中态走 `ui/select-chip`，根因与修法见其文件头。）
+// ISSUE #3622 改版：① 模型清单收成左侧树形页签（图像 / 视频分组、已配的模型标「已配」），
+// 与模式契约的 `ModeContractModeNav` 同一形态；② 端点路径升成**模型级**一格（与模式无关，
+// 各模式共用）；③ 同一时刻只显示一个模式的编辑卡，模式 chip 即切换页签；④ 删除模式走二次确认。
 
 import React from "react";
 
 import {
+  defaultEndpointPathForKind,
   WORKSHOP_INPUT_TYPES,
   isWorkshopInputType,
   workshopInputLabel,
-  type WorkshopInputType,
-} from "~/lib/workshop/model-mode-contract";
+} from "~/lib/workshop/remote-model-adapter";
+import type { RemoteModeAdapter, WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
+
 import { ALL_WORKFLOW_TYPES, getWorkflowType } from "~/lib/workflow/workflow-types";
 import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
+import { Disclosure } from "~/components/ui/disclosure";
 import { FormField } from "~/components/ui/form-field";
-import { DocumentFrame } from "~/components/studio/ViewContainer";
+import { Hint } from "~/components/ui/hint";
+import { WorkspaceFrame } from "~/components/studio/ViewContainer";
 import { SelectChip } from "~/components/ui/select-chip";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { PageHeader } from "~/components/ui/page-header";
 import { SectionLabel } from "~/components/ui/section-label";
 import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
+import { TreeChildren } from "~/components/ui/tree-rows";
+import { useExpansionSet } from "~/components/ui/expansion-set";
 import { cn } from "~/lib/utils";
-import { useModelAdapters } from "./hooks/use-model-adapters";
+import { useModelAdapters, type AdapterCandidate } from "./hooks/use-model-adapters";
 
 const MODE_GROUPS: Array<{
   category: "image" | "video" | "audio";
@@ -32,6 +42,12 @@ const MODE_GROUPS: Array<{
   { category: "image", label: "图像" },
   { category: "video", label: "视频" },
   { category: "audio", label: "音频" },
+];
+
+/** 左栏模型树的分组（候选只有 image / video 两类；chat 不参与工坊生图视频）。 */
+const MODEL_KIND_GROUPS: Array<{ kind: "image" | "video"; label: string }> = [
+  { kind: "image", label: "图像" },
+  { kind: "video", label: "视频" },
 ];
 
 function modeLabel(mode: string): string {
@@ -167,6 +183,262 @@ function ConstantRow({
   );
 }
 
+/** 左栏的模型导航：一棵竖向的树（与模式契约的 `ModeContractModeNav` 同一形态，
+ *  #3622：候选多了平铺 chip 会乱，按图像 / 视频分组、可折叠、已配置的模型标
+ *  「已配」）。父行 = 模型用途，子行 = 模型（`aria-checked` 标当前）。 */
+function ModelNav({
+  activeModel,
+  adaptedCountOf,
+  candidates,
+  onSelect,
+}: {
+  /** 当前选中的模型名（null / 空串 = 未选）。 */
+  activeModel: string;
+  /** 该模型已配置的模式数（>0 标「已配」）。 */
+  adaptedCountOf: (name: string) => number;
+  candidates: Array<AdapterCandidate>;
+  onSelect: (name: string) => void;
+}) {
+  /* 类别 → 是否展开。**初始全部展开**（把每个类别先表一次态），收起是「先看
+     别的类别」的临时动作，默认折着等于把当前模型藏起来。 */
+  const groups = MODEL_KIND_GROUPS.map((group) => ({
+    ...group,
+    models: candidates.filter((c) => c.kind === group.kind),
+  })).filter((group) => group.models.length > 0);
+  const categoryExpansion = useExpansionSet(Object.fromEntries(groups.map((g) => [g.kind, true])));
+
+  return (
+    /* 一排模型里只有一个能选中 —— 单选语义（`role="radiogroup"` / `radio`），
+       与模式契约的模式清单同一条契约。 */
+    <div aria-label="选择要配置的模型" className="flex flex-col gap-3" role="radiogroup">
+      {groups.map((group) => {
+        const open = categoryExpansion.isExpanded(group.kind);
+        return (
+          <Disclosure
+            className="hover:text-ink gap-1 px-2 text-xs font-medium"
+            key={group.kind}
+            marker="caret"
+            onOpenChange={() => {
+              categoryExpansion.toggle(group.kind);
+            }}
+            open={open}
+            trigger={
+              <span className="text-ink-fainter min-w-0 flex-1 truncate" data-kind={group.kind}>
+                {group.label}
+              </span>
+            }
+          >
+            <TreeChildren className="flex flex-col gap-0.5" depth={1}>
+              {group.models.map((c) => {
+                const active = activeModel === c.name;
+                const adapted = adaptedCountOf(c.name) > 0;
+                return (
+                  /* 全名悬停提示走 `ui/hint`（P82：原生 title= 不走）——行名
+                     truncate 后看不全，Hover 看全名是这一行的显性需求。 */
+                  <Hint key={c.name} label={c.name}>
+                    <Button
+                      aria-checked={active}
+                      className={cn(
+                        "h-auto w-full justify-start gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium",
+                        active
+                          ? "bg-primary-soft text-primary-strong hover:bg-primary-soft hover:text-primary-strong"
+                          : "text-ink-muted hover:text-ink",
+                      )}
+                      /* `data-model` 是给用例锚「这一行是哪条模型」的记号（按可访问名
+                         找会随文案变，name 才是身份）。 */
+                      data-model={c.name}
+                      onClick={() => {
+                        onSelect(c.name);
+                      }}
+                      role="radio"
+                      variant="ghost"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-left">{c.name}</span>
+                      {adapted && (
+                        <span
+                          className={cn(
+                            "text-2xs shrink-0",
+                            active ? "text-primary/70" : "text-ink-fainter",
+                          )}
+                        >
+                          已配
+                        </span>
+                      )}
+                    </Button>
+                  </Hint>
+                );
+              })}
+            </TreeChildren>
+          </Disclosure>
+        );
+      })}
+    </div>
+  );
+}
+
+/** 「＋ 添加模式」展开的分类面板（图像 / 视频 / 音频各一组）。 */
+function AddModePopover({
+  availableModes,
+  onPick,
+}: {
+  availableModes: Array<(typeof ALL_WORKFLOW_TYPES)[number]>;
+  onPick: (code: string) => void;
+}) {
+  return (
+    <div className="border-border bg-bg mt-3 flex flex-col gap-3 rounded-xl border p-3">
+      {MODE_GROUPS.map((group) => {
+        const modes = availableModes.filter((t) => t.category === group.category);
+        if (modes.length === 0) {
+          return null;
+        }
+        return (
+          <div key={group.category}>
+            <p className="text-muted-foreground mb-1.5 text-xs font-medium">{group.label}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {modes.map((t) => (
+                <SelectChip
+                  key={t.code}
+                  onClick={() => {
+                    onPick(t.code);
+                  }}
+                  selected={false}
+                  shape="compact"
+                  title={t.code}
+                >
+                  {t.label}
+                </SelectChip>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** 当前选中模式的适配编辑卡：输入映射 + 固定值 + 产物字段路径。
+ *  端点路径不在这张卡里 —— 它是模型级配置（ISSUE #3622），在上方独立一格。 */
+function AdapterCard({
+  adapter,
+  onChange,
+}: {
+  adapter: RemoteModeAdapter;
+  onChange: (updater: (a: RemoteModeAdapter) => RemoteModeAdapter) => void;
+}) {
+  const update = onChange;
+  return (
+    <section className="border-border bg-surface mt-4 rounded-xl border p-4">
+      <div className="border-border mb-3 flex flex-wrap items-baseline justify-between gap-2 border-b pb-2">
+        <h4 className="text-ink text-sm font-semibold">
+          {modeLabel(adapter.mode)}
+          <span className="text-muted-foreground/60 text-2xs ml-1.5 font-mono">{adapter.mode}</span>
+        </h4>
+        <span className="text-muted-foreground text-xs">
+          产物：
+          {getWorkflowType(adapter.mode)?.category === "video" ? "视频（video）" : "图片（image）"}
+        </span>
+      </div>
+
+      <div className="mt-1">
+        <SectionLabel hint="每行把一种统一输入映射到该接口的请求字段">输入映射</SectionLabel>
+        <div className="flex flex-col gap-2">
+          {adapter.inputs.map((row, i) => (
+            <InputMappingRow
+              index={i}
+              key={`${adapter.mode}-${row.type}-${i}`}
+              mode={adapter.mode}
+              onChange={(next) => {
+                update((x) => ({ ...x, inputs: x.inputs.map((r, j) => (j === i ? next : r)) }));
+              }}
+              onRemove={() => {
+                update((x) => ({ ...x, inputs: x.inputs.filter((_, j) => j !== i) }));
+              }}
+              row={row}
+            />
+          ))}
+          <SelectChip
+            className="self-start px-2.5 py-1 text-xs"
+            onClick={() => {
+              update((x) => {
+                const used = new Set(x.inputs.map((r) => r.type));
+                const next =
+                  WORKSHOP_INPUT_TYPES.find((t) => !used.has(t.type)) ?? WORKSHOP_INPUT_TYPES[0];
+                return { ...x, inputs: [...x.inputs, { type: next.type, field: next.type }] };
+              });
+            }}
+            selected={false}
+            shape="dashed"
+          >
+            ＋ 添加输入映射
+          </SelectChip>
+        </div>
+      </div>
+
+      {/* 固定值字段（#3590）：不是用户输入、每次请求都带上的键值。 */}
+      <div className="mt-4">
+        <SectionLabel hint="每次请求都原样带上的请求体键值（接口必填的固定参数写这里）">
+          固定值
+        </SectionLabel>
+        <div className="flex flex-col gap-2">
+          {(adapter.constants ?? []).map((row, i) => (
+            <ConstantRow
+              index={i}
+              key={`${adapter.mode}-const-${row.field}-${i}`}
+              mode={adapter.mode}
+              onChange={(next) => {
+                update((x) => ({
+                  ...x,
+                  constants: (x.constants ?? []).map((r, j) => (j === i ? next : r)),
+                }));
+              }}
+              onRemove={() => {
+                update((x) => ({
+                  ...x,
+                  constants: (x.constants ?? []).filter((_, j) => j !== i),
+                }));
+              }}
+              row={row}
+            />
+          ))}
+          <SelectChip
+            className="self-start px-2.5 py-1 text-xs"
+            onClick={() => {
+              update((x) => ({
+                ...x,
+                constants: [...(x.constants ?? []), { field: "", value: "" }],
+              }));
+            }}
+            selected={false}
+            shape="dashed"
+          >
+            ＋ 添加固定值
+          </SelectChip>
+        </div>
+      </div>
+
+      <FormField
+        /* 「通用提取」说清楚找哪些字段（#3622）：留空不该是一句黑话。 */
+        hint="留空走通用提取：按 url / image_url / video_url / download_url 等常见字段名在响应里自动搜索（b64_json 等载荷转成 data URL）；视频响应还会认 id / task_id / video_id 等任务键，命中后进轮询。"
+        id={`adapter-output-${adapter.mode}`}
+        label={<FieldLabelRow id="响应 JSON 内，如 url / data.0.url" label="产物字段路径" />}
+        labelClassName="mt-4 mb-1.5"
+      >
+        {(a11y) => (
+          <input
+            {...a11y}
+            className="border-border bg-bg focus:border-primary w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs outline-none"
+            onChange={(event) => {
+              update((x) => ({ ...x, outputField: event.target.value }));
+            }}
+            placeholder="url"
+            value={adapter.outputField}
+          />
+        )}
+      </FormField>
+    </section>
+  );
+}
+
 export function ModelAdaptersView() {
   const controller = useModelAdapters();
   const {
@@ -180,9 +452,32 @@ export function ModelAdaptersView() {
     save,
     saving,
     message,
+    summary,
+    endpointPath,
+    setEndpointPath,
   } = controller;
 
   const [addModeOpen, setAddModeOpen] = React.useState(false);
+  /* 删除模式的二次确认（#3622）：chip 上的 ✕ 只记下「待删谁」，真删在确认弹窗里。 */
+  const [pendingRemove, setPendingRemove] = React.useState<string | null>(null);
+  /* 当前展示哪张适配卡（#3622：所有模式不再一条条堆叠，同一时刻只显示一个）。 */
+  const [activeMode, setActiveMode] = React.useState<string | null>(null);
+
+  const adaptedCount = React.useMemo(
+    () => new Map(summary.map((s) => [s.name, s.modes.length])),
+    [summary],
+  );
+
+  const availableModes = ALL_WORKFLOW_TYPES.filter((t) => t.isGenerative);
+
+  /* 未点选 chip 时回落第一份草稿（新选模型 / 删掉激活模式后都有得看）。 */
+  const current = draft.find((a) => a.mode === activeMode) ?? draft[0] ?? null;
+
+  const selectedKind = candidates.find((c) => c.name === selectedModel)?.kind;
+  const endpointPlaceholder =
+    selectedKind === "image" || selectedKind === "video"
+      ? defaultEndpointPathForKind(selectedKind)
+      : "";
 
   const updateAdapter = (
     mode: string,
@@ -191,321 +486,205 @@ export function ModelAdaptersView() {
     setDraft((prev) => prev.map((a) => (a.mode === mode ? updater(a) : a)));
   };
 
-  const availableModes = ALL_WORKFLOW_TYPES.filter((t) => t.isGenerative);
-
-  /* 视图型外壳：整屏滚动、居中宽栏，高度与滚动都由 `DocumentFrame` 给。
-     页眉**不自绘关闭按钮** —— 「关」这件事在视图这一层由页签自己的关闭按钮承担，
-     这里再画一枚就是两个入口做同一件事（弹窗时代才需要自绘，那时没有页签）。 */
   return (
-    <DocumentFrame
-      className="flex flex-col gap-6 px-4 pt-4 pb-8 sm:px-8 sm:pt-5 sm:pb-12"
-      width="wide"
-    >
-      {/* 页头走 `ui/page-header`（规范 03 §3.10 / 16 §16.2.4.73）。屏名已经由页签给出，
-          按 ISSUE #1693 那一档收：不传可见 `title`（屏名退成 `sr-only`，读屏仍按标题
-          跳转），那句字段映射口径挂成悬浮「说明」—— 由顶栏标题右侧那颗问号承载
-          （`viewHelp()`），页眉因此不占那一行。屏名仍从注册表
-          取（`pageHeaderTitle`），与侧栏 / 页签同一个出处。 */}
-      <PageHeader
-        extra={<DataLocationBadge id="model-adapter" label="存放位置" />}
-        srTitle={pageHeaderTitle("model-adapters")}
-      />
-
-      {/* 选择远端模型 */}
-      <section>
-        <SectionLabel hint="选中一个模型，下面为它逐模式配字段映射">远端模型</SectionLabel>
-        {loading ? (
-          <p className="text-muted-foreground text-sm">加载中…</p>
-        ) : candidates.length === 0 ? (
-          <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs">
-            还没有远端模型 —— 到「设置 → 模型」添加用途为 图像 / 视频 的远端条目后，
-            回来为它配置各模式的输入输出。
-          </p>
-        ) : (
-          <div aria-label="选择远端模型" className="flex flex-wrap gap-2" role="radiogroup">
-            {candidates.map((c) => (
-              <SelectChip
-                key={c.name}
-                onClick={() => {
-                  selectModel(c.name);
-                }}
-                selected={selectedModel === c.name}
-                shape="pill"
-              >
-                {c.name}
-                <span
-                  className={cn(
-                    "text-2xs ml-1.5",
-                    selectedModel === c.name ? "text-primary/70" : "text-muted-foreground/70",
-                  )}
-                >
-                  {c.kind === "image" ? "生图" : "视频"}
-                </span>
-              </SelectChip>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {selectedModel && (
-        <>
-          {/* 支持的工坊模式 */}
-          <section>
-            <SectionLabel hint="每个模式一张卡片，下面配它的字段映射">支持的工坊模式</SectionLabel>
-            <div className="flex flex-wrap items-center gap-2">
-              {draft.map((a) => (
-                <span
-                  className="border-border text-ink/80 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs"
-                  key={a.mode}
-                >
-                  {modeLabel(a.mode)}
-                  <Button
-                    aria-label={`移除模式 ${modeLabel(a.mode)}`}
-                    className="text-muted-foreground/60 hover:text-danger-strong hover:bg-transparent"
-                    onClick={() => {
-                      setDraft((prev) => prev.filter((x) => x.mode !== a.mode));
-                    }}
-                    size="icon-xs"
-                    variant="ghost"
-                  >
-                    ✕
-                  </Button>
-                </span>
-              ))}
-              <SelectChip
-                aria-expanded={addModeOpen}
-                className="px-3 py-1 text-xs"
-                onClick={() => {
-                  setAddModeOpen((v) => !v);
-                }}
-                selected={false}
-                shape="dashed"
-              >
-                ＋ 添加模式
-              </SelectChip>
-            </div>
-            {addModeOpen && (
-              <div className="border-border bg-bg mt-3 flex flex-col gap-3 rounded-xl border p-3">
-                {MODE_GROUPS.map((group) => {
-                  const modes = availableModes.filter((t) => t.category === group.category);
-                  if (modes.length === 0) {
-                    return null;
-                  }
-                  return (
-                    <div key={group.category}>
-                      <p className="text-muted-foreground mb-1.5 text-xs font-medium">
-                        {group.label}
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {modes.map((t) => (
-                          <SelectChip
-                            key={t.code}
-                            onClick={() => {
-                              addMode(t.code);
-                              setAddModeOpen(false);
-                            }}
-                            selected={false}
-                            shape="compact"
-                            title={t.code}
-                          >
-                            {t.label}
-                          </SelectChip>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-
-          {/* 每个已配置模式的适配器编辑 */}
-          {draft.map((a) => (
-            <section className="border-border bg-surface rounded-xl border p-4" key={a.mode}>
-              <div className="border-border mb-3 flex flex-wrap items-baseline justify-between gap-2 border-b pb-2">
-                <h4 className="text-ink text-sm font-semibold">
-                  {modeLabel(a.mode)}
-                  <span className="text-muted-foreground/60 text-2xs ml-1.5 font-mono">
-                    {a.mode}
-                  </span>
-                </h4>
-                <span className="text-muted-foreground text-xs">
-                  产物：
-                  {getWorkflowType(a.mode)?.category === "video"
-                    ? "视频（video）"
-                    : "图片（image）"}
-                </span>
-              </div>
-
-              <FormField
-                id={`adapter-endpoint-${a.mode}`}
-                label={<FieldLabelRow id="拼在模型 Base URL 后" label="端点路径" />}
-                labelClassName="mb-1.5"
-              >
-                {(a11y) => (
-                  <input
-                    {...a11y}
-                    className="border-border bg-bg focus:border-primary w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs outline-none"
-                    onChange={(event) => {
-                      updateAdapter(a.mode, (x) => ({
-                        ...x,
-                        endpointPath: event.target.value,
-                      }));
-                    }}
-                    value={a.endpointPath}
-                  />
-                )}
-              </FormField>
-
-              <div className="mt-4">
-                <SectionLabel hint="每行把一种统一输入映射到该接口的请求字段">
-                  输入映射
-                </SectionLabel>
-                <div className="flex flex-col gap-2">
-                  {a.inputs.map((row, i) => (
-                    <InputMappingRow
-                      index={i}
-                      key={`${a.mode}-${row.type}-${i}`}
-                      mode={a.mode}
-                      onChange={(next) => {
-                        updateAdapter(a.mode, (x) => ({
-                          ...x,
-                          inputs: x.inputs.map((r, j) => (j === i ? next : r)),
-                        }));
-                      }}
-                      onRemove={() => {
-                        updateAdapter(a.mode, (x) => ({
-                          ...x,
-                          inputs: x.inputs.filter((_, j) => j !== i),
-                        }));
-                      }}
-                      row={row}
-                    />
-                  ))}
-                  <SelectChip
-                    className="self-start px-2.5 py-1 text-xs"
-                    onClick={() => {
-                      updateAdapter(a.mode, (x) => {
-                        const used = new Set(x.inputs.map((r) => r.type));
-                        const next =
-                          WORKSHOP_INPUT_TYPES.find((t) => !used.has(t.type)) ??
-                          WORKSHOP_INPUT_TYPES[0];
-                        return {
-                          ...x,
-                          inputs: [...x.inputs, { type: next.type, field: next.type }],
-                        };
-                      });
-                    }}
-                    selected={false}
-                    shape="dashed"
-                  >
-                    ＋ 添加输入映射
-                  </SelectChip>
-                </div>
-              </div>
-
-              {/* 固定值字段（#3590）：不是用户输入、每次请求都带上的键值。
-                  与输入映射同占一栏位的编辑器，行数通常 0~3 行。 */}
-              <div className="mt-4">
-                <SectionLabel hint="每次请求都原样带上的请求体键值（接口必填的固定参数写这里）">
-                  固定值
-                </SectionLabel>
-                <div className="flex flex-col gap-2">
-                  {(a.constants ?? []).map((row, i) => (
-                    <ConstantRow
-                      index={i}
-                      key={`${a.mode}-const-${row.field}-${i}`}
-                      mode={a.mode}
-                      onChange={(next) => {
-                        updateAdapter(a.mode, (x) => ({
-                          ...x,
-                          constants: (x.constants ?? []).map((r, j) => (j === i ? next : r)),
-                        }));
-                      }}
-                      onRemove={() => {
-                        updateAdapter(a.mode, (x) => ({
-                          ...x,
-                          constants: (x.constants ?? []).filter((_, j) => j !== i),
-                        }));
-                      }}
-                      row={row}
-                    />
-                  ))}
-                  <SelectChip
-                    className="self-start px-2.5 py-1 text-xs"
-                    onClick={() => {
-                      updateAdapter(a.mode, (x) => ({
-                        ...x,
-                        constants: [...(x.constants ?? []), { field: "", value: "" }],
-                      }));
-                    }}
-                    selected={false}
-                    shape="dashed"
-                  >
-                    ＋ 添加固定值
-                  </SelectChip>
-                </div>
-              </div>
-
-              <FormField
-                hint="留空走通用提取。"
-                id={`adapter-output-${a.mode}`}
-                label={
-                  <FieldLabelRow id="响应 JSON 内，如 url / data.0.url" label="产物字段路径" />
-                }
-                labelClassName="mt-4 mb-1.5"
-              >
-                {(a11y) => (
-                  <input
-                    {...a11y}
-                    className="border-border bg-bg focus:border-primary w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs outline-none"
-                    onChange={(event) => {
-                      updateAdapter(a.mode, (x) => ({
-                        ...x,
-                        outputField: event.target.value,
-                      }));
-                    }}
-                    placeholder="url"
-                    value={a.outputField}
-                  />
-                )}
-              </FormField>
-            </section>
-          ))}
-        </>
-      )}
-
-      {message && (
-        <p
-          className={`rounded-lg px-3 py-2 text-xs ${
-            message.kind === "ok"
-              ? "bg-success/10 text-success-strong"
-              : "bg-destructive/10 text-destructive"
-          }`}
-        >
-          {message.text}
-        </p>
-      )}
-
-      {/* 保存这一行跟着上面那段映射表单一起出现（同一判据 `selectedModel`）：
-          没选模型时上面什么都不渲染，这一颗就成了一条悬在空白里的禁用件 ——
-          它此刻既点不动，也没有任何东西可保存。主 CTA 档（h-auto px-4 py-2），
-          与全站其余实心按钮同形；此前它吃基元缺省 h-8 px-2.5，比这一屏上面
-          每一行的控件都矮一档。 */}
-      {selectedModel && (
-        <div className="flex items-center justify-end">
-          <Button
-            className="h-auto px-4 py-2"
-            disabled={saving}
-            onClick={() => {
-              void save();
-            }}
-            variant="primary-solid"
-          >
-            {saving ? "保存中…" : "保存适配器"}
-          </Button>
+    <WorkspaceFrame className="bg-canvas text-ink">
+      <div className="flex h-full min-h-0 flex-col">
+        {/* 页头走 `ui/page-header`（规范 03 §3.10 / 16 §16.2.4.73）。屏名已经由页签给出，
+            按 ISSUE #1693 那一档收：不传可见 `title`（屏名退成 `sr-only`，读屏仍按标题
+            跳转），那句字段映射口径挂成悬浮「说明」—— 由顶栏标题右侧那颗问号承载
+            （`viewHelp()`），页眉因此不占那一行。**不自绘关闭按钮**：「关」由页签承担。
+            存放位置徽标（#3625）随页眉的 `extra` 进顶栏说明那侧。 */}
+        <div className="px-4 sm:px-8">
+          <PageHeader
+            className="pt-4 pb-3 sm:pt-5"
+            extra={<DataLocationBadge id="model-adapter" label="存放位置" />}
+            srTitle={pageHeaderTitle("model-adapters")}
+          />
         </div>
-      )}
-    </DocumentFrame>
+
+        {/* 两栏分屏（与模式契约同一外壳，ISSUE #1870 同款）：左 = 模型树，右 = 当前模型
+            的适配编辑区，两栏各自滚动。`min-h-0` 让两栏都能在自己的滚动条里收缩。 */}
+        <div className="flex min-h-0 flex-1 gap-6 px-4 pb-5 sm:px-8">
+          {/* 左栏：模型树（自己的滚动条，不推正文）。 */}
+          <nav
+            aria-label="选择要配置的模型"
+            className="custom-scrollbar w-48 shrink-0 overflow-y-auto pb-2"
+          >
+            <SectionLabel>选择要配置的模型</SectionLabel>
+            {loading ? (
+              <p className="text-muted-foreground pt-2 text-sm">加载中…</p>
+            ) : candidates.length === 0 ? (
+              <p className="bg-warning/10 text-warning-strong mt-2 rounded-lg px-3 py-2 text-xs">
+                还没有远端模型 —— 到「设置 → 模型」添加用途为 图像 / 视频 的远端条目后，
+                回来为它配置各模式的输入输出。
+              </p>
+            ) : (
+              <ModelNav
+                activeModel={selectedModel}
+                adaptedCountOf={(name) => adaptedCount.get(name) ?? 0}
+                candidates={candidates}
+                onSelect={selectModel}
+              />
+            )}
+          </nav>
+
+          {/* 右栏：当前模型的适配编辑区（自己的滚动条）。 */}
+          <div className="custom-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto pb-6">
+            {selectedModel === "" ? (
+              <p className="text-muted-foreground pt-2 text-sm">
+                从左侧选一条模型，为它的各模式配字段映射。
+              </p>
+            ) : (
+              <>
+                {/* 端点路径：模型级配置（ISSUE #3622）—— 端点与模式无关，该模型的
+                    所有模式共用同一条路径；留空时请求侧按图片 / 视频的默认惯例推导。 */}
+                <section>
+                  <FormField
+                    hint="该模型的所有模式共用这条路径；留空按图片 / 视频的默认端点自动推导。"
+                    id="adapter-endpoint-model"
+                    label={<FieldLabelRow id="拼在模型 Base URL 后" label="端点路径" />}
+                    labelClassName="mb-1.5"
+                  >
+                    {(a11y) => (
+                      <input
+                        {...a11y}
+                        className="border-border bg-bg focus:border-primary w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs outline-none"
+                        onChange={(event) => {
+                          setEndpointPath(event.target.value);
+                        }}
+                        placeholder={endpointPlaceholder}
+                        value={endpointPath}
+                      />
+                    )}
+                  </FormField>
+                </section>
+
+                {/* 支持的工坊模式：chip 即页签（点一枚切到它的编辑卡）。 */}
+                <section className="mt-4">
+                  <SectionLabel hint="同一时刻只显示一个模式的编辑卡，点 chip 切换">
+                    支持的工坊模式
+                  </SectionLabel>
+                  <div
+                    aria-label="选择要编辑的模式"
+                    className="flex flex-wrap items-center gap-1.5"
+                    role="radiogroup"
+                  >
+                    {draft.map((a) => (
+                      <span className="inline-flex items-center" key={a.mode}>
+                        <SelectChip
+                          className="pr-1.5"
+                          onClick={() => {
+                            setActiveMode(a.mode);
+                          }}
+                          selected={current?.mode === a.mode}
+                          shape="pill"
+                          title={a.mode}
+                        >
+                          {modeLabel(a.mode)}
+                        </SelectChip>
+                        <Button
+                          aria-label={`删除模式 ${modeLabel(a.mode)}`}
+                          className="text-muted-foreground/60 hover:text-danger-strong -ml-0.5 hover:bg-transparent"
+                          onClick={() => {
+                            setPendingRemove(a.mode);
+                          }}
+                          size="icon-xs"
+                          variant="ghost"
+                        >
+                          ✕
+                        </Button>
+                      </span>
+                    ))}
+                    <SelectChip
+                      aria-expanded={addModeOpen}
+                      className="px-3 py-1 text-xs"
+                      onClick={() => {
+                        setAddModeOpen((v) => !v);
+                      }}
+                      selected={false}
+                      shape="dashed"
+                    >
+                      ＋ 添加模式
+                    </SelectChip>
+                  </div>
+                  {addModeOpen && (
+                    <AddModePopover
+                      availableModes={availableModes}
+                      onPick={(code) => {
+                        addMode(code);
+                        setActiveMode(code);
+                        setAddModeOpen(false);
+                      }}
+                    />
+                  )}
+                </section>
+
+                {/* 当前模式的适配编辑卡：同一时刻只渲染一份（#3622）。 */}
+                {current === null ? (
+                  <p className="text-muted-foreground mt-4 text-sm">
+                    还没有配置任何模式 —— 点「＋ 添加模式」为它配第一个模式的字段映射。
+                  </p>
+                ) : (
+                  <AdapterCard
+                    adapter={current}
+                    onChange={(updater) => {
+                      updateAdapter(current.mode, updater);
+                    }}
+                  />
+                )}
+
+                {message && (
+                  <p
+                    className={`mt-4 rounded-lg px-3 py-2 text-xs ${
+                      message.kind === "ok"
+                        ? "bg-success/10 text-success-strong"
+                        : "bg-destructive/10 text-destructive"
+                    }`}
+                  >
+                    {message.text}
+                  </p>
+                )}
+
+                {/* 保存这一行跟着上面那段映射表单一起出现（同一判据 `selectedModel`）：
+                    没选模型时右栏只有引导语，这一颗就成了一条悬在空白里的禁用件。
+                    主 CTA 档（h-auto px-4 py-2），与全站其余实心按钮同形。 */}
+                <div className="mt-4 flex items-center justify-end">
+                  <Button
+                    className="h-auto px-4 py-2"
+                    disabled={saving}
+                    onClick={() => {
+                      void save();
+                    }}
+                    variant="primary-solid"
+                  >
+                    {saving ? "保存中…" : "保存适配器"}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 删除模式的二次确认（#3622）：确认才从草稿里摘掉（保存后落库）。
+          删的是「还没保存」的配置也不会静默 —— 弹窗里写明动作对象。 */}
+      <ConfirmDialog
+        danger
+        description={`将移除「${pendingRemove === null ? "" : modeLabel(pendingRemove)}」模式的字段映射配置，点「保存适配器」后生效。`}
+        onClose={() => {
+          setPendingRemove(null);
+        }}
+        onConfirm={() => {
+          if (pendingRemove !== null) {
+            const removed = pendingRemove;
+            setDraft((prev) => prev.filter((x) => x.mode !== removed));
+            setActiveMode(null);
+          }
+          setPendingRemove(null);
+        }}
+        open={pendingRemove !== null}
+        title="删除这个模式？"
+      />
+    </WorkspaceFrame>
   );
 }

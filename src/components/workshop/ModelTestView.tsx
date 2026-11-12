@@ -25,7 +25,9 @@ import {
 } from "~/components/ui/segment-popover";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { parseRatioFromLabel } from "~/components/studio/workflow-io";
-import { workshopInputLabel, type WorkshopInputType } from "~/lib/workshop/model-mode-contract";
+import { workshopInputLabel } from "~/lib/workshop/remote-model-adapter";
+import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
+
 import { cn } from "~/lib/utils";
 import {
   ASPECT_RATIO_PRESETS,
@@ -34,6 +36,7 @@ import {
   MODEL_TEST_KIND_LABELS,
   MULTIPLE_PRESETS,
   RELAY_INPUT_TYPES,
+  RESOLUTION_PRESETS,
   controlForInputType,
   type ModelTestControl,
   type ModelTestKind,
@@ -293,6 +296,32 @@ function InputRow({
       </FormField>
     );
   }
+  /* 分辨率档（#3622）：接口原生认 1k/2k/4k 的直接映射。它不在
+     SIZE_INPUT_TYPES 的多段下拉里 —— 比例 / 百万像素 / 倍数三件套由
+     SizeField 一并承担（#3635），分辨率是适配器层新增的独立口。 */
+  if (control === "resolution") {
+    return (
+      <FormField hint={hint} id={id} label={label} labelClassName="mb-1.5">
+        {() => (
+          <div aria-label={label} className="flex flex-wrap gap-1.5" role="radiogroup">
+            {RESOLUTION_PRESETS.map((p) => (
+              <SelectChip
+                key={p.value}
+                onClick={() => {
+                  onChange(p.value);
+                }}
+                selected={value === p.value}
+                shape="compact"
+              >
+                {p.label}
+              </SelectChip>
+            ))}
+          </div>
+        )}
+      </FormField>
+    );
+  }
+
   /* duration / number / text → 单行输入 */
   return (
     <FormField hint={hint} id={id} label={label} labelClassName="mb-1.5">

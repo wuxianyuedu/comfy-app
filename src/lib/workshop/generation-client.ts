@@ -608,9 +608,10 @@ async function postRelay(body: Record<string, unknown>): Promise<RelayResponse> 
  * 当 `model` 传的是设置页里的远端模型名（remoteModel 表）时，服务端按该条目的
  * 连接参数生图；不传则回落到工坊 API 通道设置（旧行为）。 */
 export async function apiGenerateImage(req: {
-  /** 统一输入：宽高比（如 "16:9"）/ 百万像素（如 "1.5"）/ 宽高对齐倍数 / 输入图。
-   *  三者合起来就是工坊的「比例 + 百万像素 + 倍数」尺寸表达 —— 选「分辨率」时
-   *  由调用方（`shotSizeToRelay`）换算后再传，不把 "1k" 这种档位名丢给远端。 */
+  /** 统一输入：宽高比（如 "16:9"）/ 百万像素（如 "1.5"）/ 分辨率档（"1k"）/
+   *  宽高对齐倍数 / 输入图。合起来就是工坊的尺寸表达 —— 百万像素由
+   *  `shotSizeToRelay` 换算下发；分辨率档位名（ISSUE #3622）原样带出，
+   *  适配器映射了「分辨率」口的远端接口直接拿到 "1k"/"2k"/"4k"。 */
   aspectRatio?: string;
   image?: string;
   megapixels?: string;
@@ -621,6 +622,8 @@ export async function apiGenerateImage(req: {
   multiple?: number;
   negative?: string;
   prompt: string;
+  /** 统一输入「分辨率」的取值（清晰度档位名，如 "1k"）。 */
+  resolution?: string;
   size?: string;
 }): Promise<string> {
   const data = await postRelay({
@@ -635,6 +638,9 @@ export async function apiGenerateImage(req: {
       : {}),
     ...(req.megapixels !== undefined && req.megapixels !== ""
       ? { megapixels: req.megapixels }
+      : {}),
+    ...(req.resolution !== undefined && req.resolution !== ""
+      ? { resolution: req.resolution }
       : {}),
     ...(req.multiple === undefined ? {} : { multiple: req.multiple }),
     ...(req.image !== undefined && req.image !== "" ? { image: req.image } : {}),
