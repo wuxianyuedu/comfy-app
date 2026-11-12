@@ -85,7 +85,10 @@ export function ProviderModelDialog({
         popupClassName="max-w-lg"
         showCloseButton={false}
       >
-        <div className="border-border bg-surface max-h-[calc(100vh-4rem)] w-full max-w-lg overflow-y-auto rounded-2xl border p-5 shadow-2xl">
+        {/* 高度封顶要给上沿留出空隙（#3618）：弹窗居中定位，内容顶到
+            `100vh-4rem` 时上下只剩 1rem，顶部被 3rem 的顶栏吃掉后看起来
+            「顶着窗口上沿」；收到 `100vh-12rem` 后上下各保底 5rem。 */}
+        <div className="border-border bg-surface max-h-[calc(100vh-12rem)] w-full max-w-lg overflow-y-auto rounded-2xl border p-5 shadow-2xl">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h3 className="u-title">{dialog.mode === "edit" ? "编辑模型" : "添加模型"}</h3>
