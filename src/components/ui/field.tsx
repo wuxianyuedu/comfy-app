@@ -124,7 +124,10 @@ function FieldDescription({ className, ...props }: React.ComponentProps<"p">) {
     <p
       className={cn(
         "text-muted-foreground text-left text-sm leading-normal font-normal group-has-data-horizontal/field:text-balance [[data-variant=legend]+&]:-mt-1.5",
-        "last:mt-0 nth-last-2:-mt-1",
+        /* 不带 `nth-last-2:-mt-1`（官方版用它把说明往控件收紧一档）：FormField
+           是 `gap-0` 布局，这条负边距在错误行出现时会把说明上拉 4px 压进控件
+           （#3618「最大输出 Token」的现场），收紧在那一档里只有害处。 */
+        "last:mt-0",
         "[&>a:hover]:text-primary [&>a]:underline [&>a]:underline-offset-4",
         className,
       )}

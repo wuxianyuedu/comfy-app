@@ -85,11 +85,11 @@ export function ProviderModelDialog({
         popupClassName="max-w-lg"
         showCloseButton={false}
       >
-        {/* 高度上限把应用标题栏算进去（ISSUE #3495）：弹窗是相对**视口**居中的，
-            上限只留 4rem 时高窗口内容会把上沿顶到视口 2rem 处 —— 比 48px 的
-            标题栏还高，看起来「紧贴标题栏」。这里给标题栏让位再各留一档：
-            上沿落在标题栏之下至少 1rem。 */}
-        <div className="border-border bg-surface max-h-[calc(100vh-var(--toolbar-height,48px)-5rem)] w-full max-w-lg overflow-y-auto rounded-2xl border p-5 shadow-2xl">
+        {/* 高度封顶要给上沿留出空隙（#3618 已落在 master，本分支沿用同一解）：
+            弹窗居中定位，内容顶到 `100vh-4rem` 时上下只剩 1rem，顶部被
+            3rem 的顶栏吃掉后看起来「顶着窗口上沿」；收到 `100vh-12rem`
+            后上下各保底 5rem。 */}
+        <div className="border-border bg-surface max-h-[calc(100vh-12rem)] w-full max-w-lg overflow-y-auto rounded-2xl border p-5 shadow-2xl">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h3 className="u-title">{dialog.mode === "edit" ? "编辑模型" : "添加模型"}</h3>

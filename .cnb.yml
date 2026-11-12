@@ -1591,8 +1591,10 @@ master:
   # 按 run 取）+ 滚动 nightly Release（每天都指向最新一份），不再是本机常驻目录的
   # 「留 2 份」（runner 是即弃机，回写开发机既没有通道也不该有）。
   # #3607 起收尾再把同一份成品回传到 CNB 站内滚动 nightly Release（推荐取包地）——
-  # 诉求在 CNB 侧提、包也该在 CNB 侧拿，GitHub 只是镜像仓；见 package-desktop.yml 收尾
-  # 那格与 scripts/ci-ga-desktop-relay.mjs 文件头（规范 §7.7 同批订正）。
+  # 诉求在 CNB 侧提、包也该在 CNB 侧拿，GitHub 只是镜像仓；四类并列：安装版 / 免安装版 /
+  # 纯壳单文件 ComfyAPP-shell.exe（只编壳不打包、放进检出根连本地 dev server）/ 以及
+  # #3621 之后二进制 PUT 的分钟级墙钟与网络类重试。见 package-desktop.yml 收尾那格与
+  # scripts/ci-ga-desktop-relay.mjs 文件头（规范 §7.7 同批订正）。
   # `*package_fail_stage`（桌包失败立案）随本批退役：立案脚本的执行者与它的对象
   # （本机执行的桌包跑）一起消失；GA 桌包失败目前落在 GA run 页面（自动立案是后续账）。
   web_trigger_package:

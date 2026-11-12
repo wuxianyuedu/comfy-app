@@ -37,13 +37,6 @@ export type ModelDialog =
   | { mode: "edit"; model: ProviderModelView }
   | null;
 
-/** 一行探测（供应商详情 / 模型行）的进行态与结果。 */
-export type ProbeRow = {
-  id: string;
-  msg: { kind: "ok" | "err"; text: string } | null;
-  running: boolean;
-};
-
 export type ProviderModelDialogs = {
   closeModelDialog: () => void;
   closeProviderDialog: () => void;
@@ -52,8 +45,6 @@ export type ProviderModelDialogs = {
   modelError: string | null;
   modelErrors: ModelFormErrors;
   modelForm: ModelFormValues;
-  /** 模型行「测试连接」：用供应商地址 + 该模型的接口格式探测，顺带核对模型名。 */
-  modelProbe: ProbeRow | null;
   openAddModel: (providerId: string) => void;
   openAddProvider: () => void;
   openEditModel: (model: ProviderModelView) => void;
@@ -70,7 +61,6 @@ export type ProviderModelDialogs = {
   setProviderForm: React.Dispatch<React.SetStateAction<ProviderFormValues>>;
   submitModel: () => Promise<void>;
   submitProvider: () => Promise<void>;
-  testModel: (model: ProviderModelView) => Promise<void>;
   testProviderDraft: () => Promise<void>;
   toggleCapability: (capability: ModelFormValues["capabilities"][number]) => void;
   toggleInputType: (type: ModelFormValues["inputTypes"][number]) => void;
@@ -92,7 +82,6 @@ export function useProviderModelDialogs(p: SettingsProviders): ProviderModelDial
   const [modelForm, setModelFormState] = useState<ModelFormValues>(emptyModelForm);
   const [modelErrors, setModelErrors] = useState<ModelFormErrors>({});
   const [modelError, setModelError] = useState<string | null>(null);
-  const [modelProbe, setModelProbe] = useState<ProbeRow | null>(null);
 
   /* ── 供应商弹窗 ─────────────────────────────────────────────── */
 
@@ -261,39 +250,6 @@ export function useProviderModelDialogs(p: SettingsProviders): ProviderModelDial
     setModelDialog(null);
   }
 
-  /** 模型行「测试连接」：按**供应商**配置探测，并核对模型名是否在服务端清单里。
-   *  刻意不再把 `model.baseUrl` 传给服务端：那是历史行的模型级覆盖，界面从不展示它，
-   *  一旦它与供应商 Base URL 分叉，用户看到的是「供应商测试绿、模型测试红」——
-   *  #3517 的现场就是这么来的。成功后重取清单（#3577）：服务端会把探测到的
-   *  模型目录补进名下（缺的插成停用行）。 */
-  async function testModel(model: ProviderModelView) {
-    if (modelProbe?.running === true && modelProbe.id === model.id) {
-      return;
-    }
-    setModelProbe({ id: model.id, running: true, msg: null });
-    try {
-      const out = await p.probe({
-        ...(model.providerId === null ? {} : { providerId: model.providerId }),
-        apiFormat: model.apiFormat,
-        model: model.name,
-      });
-      setModelProbe({
-        id: model.id,
-        running: false,
-        msg: { kind: out.ok ? "ok" : "err", text: out.detail },
-      });
-      if (out.ok) {
-        p.refetch();
-      }
-    } catch {
-      setModelProbe({
-        id: model.id,
-        running: false,
-        msg: { kind: "err", text: "连接测试失败，请检查接口地址与网络" },
-      });
-    }
-  }
-
   return {
     providerDialog,
     openAddProvider,
@@ -319,7 +275,5 @@ export function useProviderModelDialogs(p: SettingsProviders): ProviderModelDial
     toggleInputType,
     toggleOutputType,
     toggleCapability,
-    modelProbe,
-    testModel,
   };
 }

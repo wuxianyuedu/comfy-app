@@ -14,6 +14,7 @@ import { FormField } from "~/components/ui/form-field";
 import { Input } from "~/components/ui/input";
 import { textHandler } from "~/lib/form-props";
 import type { ProviderFormErrors, ProviderFormValues } from "~/lib/llm/provider-form";
+import { knownApiEndpointHint } from "~/lib/llm/provider-types";
 
 import type { ProviderView } from "../hooks/use-settings-providers";
 
@@ -53,6 +54,11 @@ export function ProviderConnectionFields({
 }) {
   const inputClass =
     "border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm";
+
+  /* 已核实厂商的端点指路（#3612）：Base URL 落在官网域上时，在字段下面
+   * 当场指路 —— 不用等「测试连接」失败才看到（那条链的文案在 http-failure）。
+   * 纯派生：只读 form.baseUrl，不持有状态。 */
+  const endpointHint = knownApiEndpointHint(form.baseUrl);
 
   return (
     /* 这一块是**分组框**（供应商连接参数的外壳），不是「一行」：与卡片同底、
@@ -99,6 +105,10 @@ export function ProviderConnectionFields({
           />
         )}
       </FormField>
+
+      {endpointHint !== null && (
+        <p className="text-2xs text-muted-foreground -mt-2 mb-3">{endpointHint}</p>
+      )}
 
       <FormField
         className="mb-2"

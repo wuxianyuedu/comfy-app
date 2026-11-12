@@ -13,6 +13,7 @@ import {
   formatContextWindow,
   inferModelDefaults,
   isLlmApiFormat,
+  knownApiEndpointHint,
   parseCapabilities,
   parseInputTypes,
   parseOutputTypes,
@@ -88,6 +89,41 @@ describe("baseUrlVersionHint：只提示「看不出版本段」，不改写用�
   it("空值 / 非 URL 不提示（那归字段校验管，别在输入中途唠叨）", () => {
     expect(baseUrlVersionHint("   ", "chat-completions")).toBeNull();
     expect(baseUrlVersionHint("not a url", "chat-completions")).toBeNull();
+  });
+});
+
+describe("knownApiEndpointHint：只对核实过的「端点在另一个域」的厂商指路（#3612）", () => {
+  it("官网 / 控制台子域给指路提示，带出真正的 API 端点", () => {
+    const hint = knownApiEndpointHint("https://api.agnes-ai.com/api/v1");
+    expect(hint).toContain("https://apihub.agnes-ai.com/v1");
+    expect(hint).toContain("api.agnes-ai.com");
+    expect(hint).toContain("Agnes");
+    // #3612 的现场：401 但密钥没问题 —— 提示要说出「不接受 API 密钥」这件事
+    expect(hint).toContain("不接受 API 密钥");
+  });
+
+  it("厂商主域与其余子域一并命中（子域一起算，路径不影响判定）", () => {
+    expect(knownApiEndpointHint("https://agnes-ai.com")).toContain("apihub.agnes-ai.com");
+    expect(knownApiEndpointHint("https://www.agnes-ai.com/v1")).toContain("apihub.agnes-ai.com");
+    expect(knownApiEndpointHint("https://platform.agnes-ai.com/")).toContain("apihub.agnes-ai.com");
+  });
+
+  it("已落在真正的 API 主机上 = 没填错，不再提示", () => {
+    expect(knownApiEndpointHint("https://apihub.agnes-ai.com/v1")).toBeNull();
+    expect(knownApiEndpointHint("https://apihub.agnes-ai.com")).toBeNull();
+  });
+
+  it("未知域一概不开口（对未知域猜「这是控制台域」会误伤 API 架在主域上的服务商）", () => {
+    expect(knownApiEndpointHint("https://api.example.com/api/v1")).toBeNull();
+    expect(knownApiEndpointHint("https://openai.com/v1")).toBeNull();
+    // 长得像但不是同一个域：按「.域」后缀判，不按子串判
+    expect(knownApiEndpointHint("https://agnes-ai.com.evil.example")).toBeNull();
+  });
+
+  it("空值 / 非 URL 不提示", () => {
+    expect(knownApiEndpointHint("")).toBeNull();
+    expect(knownApiEndpointHint("   ")).toBeNull();
+    expect(knownApiEndpointHint("not a url")).toBeNull();
   });
 });
 

@@ -128,27 +128,19 @@
   --color-port-surface: #ffffff; /* 端口圆点的载体色：节点表面（浅色） */
   --color-edge-hub-dot: #52525b; /* 连线中点圆点（浅色画布上的深点） (light default) */
   --color-edge-default: #a78bfa; /* 默认连线描边（紫，与端口/类别色系一致） (light default) */
-  --color-port-halo-ring: rgb(
-    0 0 0 / 0.45
-  ); /* 端口内圈高光（强档） (light default) */
-  --color-port-halo-ring-weak: rgb(
-    0 0 0 / 0.22
-  ); /* 端口内圈高光（常规档） (light default) */
+  --color-port-halo-ring: rgb(0 0 0 / 0.45); /* 端口内圈高光（强档） (light default) */
+  --color-port-halo-ring-weak: rgb(0 0 0 / 0.22); /* 端口内圈高光（常规档） (light default) */
   /* 便签节点内 Markdown 渲染色（markdown.ts 内联 style 直接引用） */
   --color-md-code-bg: rgb(0 0 0 / 0.05); /* 代码块底 (light default) */
   --color-md-inline-code-bg: rgb(0 0 0 / 0.04); /* 行内代码底 (light default) */
   --color-md-border: rgb(0 0 0 / 0.12); /* 分隔线/表格边框 (light default) */
   --color-md-quote-border: rgb(0 0 0 / 0.2); /* 引用左边线 (light default) */
   --color-md-link: #1d4ed8; /* 链接 (light default) */
-  --color-canvas-ruler-ink: rgb(
-    51 65 85 / 0.9
-  ); /* 画布标尺文字 (light default) */
+  --color-canvas-ruler-ink: rgb(51 65 85 / 0.9); /* 画布标尺文字 (light default) */
   --color-canvas-ruler-shadow:
     0 0 3px rgb(255 255 255 / 0.9), 0 0 1px rgb(255 255 255 / 0.9); /* 标尺文字描边 (light default) */
   --color-canvas-deep: #eef0f4; /* 输入控件/深面板底 (light default) */
-  --color-canvas-minimap-mask: rgb(
-    0 0 0 / 0.12
-  ); /* 小地图非视口遮罩 (light default) */
+  --color-canvas-minimap-mask: rgb(0 0 0 / 0.12); /* 小地图非视口遮罩 (light default) */
   --color-canvas-grid-dot: rgb(0 0 0 / 0.22); /* 画布点阵底纹 (light default) */
   /* 画布网格**线**色。与上一行 `--color-canvas-grid-dot` 有意不同：**这里不烤 α**。
      点阵的强度是设计定死的，而网格线的强度是**用户在画布设置里调的**（`gridMinorAlpha`
@@ -363,12 +355,18 @@
 
   /* Body / default — next/font 加载的 Latin 字体 + 系统 CJK 字体回退 */
   --font-sans:
-    var(--font-geist-sans), "Sarasa UI SC", "PingFang SC", "Microsoft YaHei",
-    "Noto Sans SC", system-ui, -apple-system, sans-serif;
+    var(--font-geist-sans), "Sarasa UI SC", "PingFang SC", "Microsoft YaHei", "Noto Sans SC",
+    system-ui, -apple-system, sans-serif;
   /* Mono / code — unified stack（原先是各处内联 fontFamily，已收口到此） */
   --font-mono:
-    "SF Mono", ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", Consolas,
-    "Sarasa Mono SC", monospace;
+    "SF Mono", ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", Consolas, "Sarasa Mono SC",
+    monospace;
+  /* Code block — 代码块专用字体栈（独立于 --font-mono：设置面板的「代码字体」
+     只改这一颗，不影响终端等宽展示）。默认值与下方 `.cb-code-block` 原先写死的栈
+     逐字相同，且可被 `<html>` 上的同名变量（Appearance 偏好）在运行时覆盖。
+     新增 `--font-*` 命名空间受主题令牌单一来源判据的白名单保护（`KNOWN_PREFIXES`
+     含 `--font-`），不影响既有的字体链校验（该判据只钉 --font-sans/heading/title/mono 四档）。 */
+  --font-code: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
   /* 标题字阶三颗（`--text-section` / `--text-page` / `--text-stage`）**刻意不在本块里** ——
      它们住在下面的 `:root`。理由不是排版偏好：`@theme` 的 `--text-*` 命名空间会**顺带生成
      工具类**（实测产物里有 `.text-page { font-size: var(--text-page) }` 等三条，零消费者），
@@ -406,8 +404,8 @@
 
   /* Display / titles — Sarasa Gothic SC Bold preferred, falls back to Noto/PingFang (Ardot #169~#177) */
   --font-title:
-    "Sarasa Gothic SC", var(--font-geist-sans), "PingFang SC",
-    "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+    "Sarasa Gothic SC", var(--font-geist-sans), "PingFang SC", "Microsoft YaHei", "Noto Sans SC",
+    system-ui, -apple-system, sans-serif;
 }
 
 /* 标题字阶三颗 —— 唯一档位来源（规范 03 §3.2「魔法值提取到主题」），
@@ -424,12 +422,8 @@
    ⚠️ 它们**没有 `.dark` 覆盖**，所以放在裸 `:root` 不撞 03 §3.6.3 那条「浅色档不得用裸
    `:root`」—— 那条治的是「同名属性两处声明、谁在后面谁生效」；这里只有一处声明。 */
 :root {
-  --text-section: calc(
-    0.875rem * var(--font-scale, 1)
-  ); /* 卡片 / 区块标题（.u-title） */
-  --text-page: calc(
-    1.5rem * var(--font-scale, 1)
-  ); /* 屏级标题（.u-title-page —— 每屏唯一的 h1） */
+  --text-section: calc(0.875rem * var(--font-scale, 1)); /* 卡片 / 区块标题（.u-title） */
+  --text-page: calc(1.5rem * var(--font-scale, 1)); /* 屏级标题（.u-title-page —— 每屏唯一的 h1） */
   --text-stage: calc(
     1.0625rem * var(--font-scale, 1)
   ); /* 段级标题（.u-title-stage，工坊六段当前段的标题） */
@@ -443,9 +437,7 @@
   --color-surface-1: #16161c;
   --color-surface-2: #2e2e3a;
   --color-surface-row: #24242f;
-  --color-scrim: rgb(
-    0 0 0 / 0.7
-  ); /* 模态遮罩（见 @theme 里那颗 token 的说明）*/
+  --color-scrim: rgb(0 0 0 / 0.7); /* 模态遮罩（见 @theme 里那颗 token 的说明）*/
   --color-subtle: #1f1f2b;
   --color-border: #26262e;
   --color-border-subtle: rgb(255 255 255 / 0.06);
@@ -460,9 +452,7 @@
   --color-port-surface: #0b0b10; /* 端口圆点的载体色：节点内层面板（深色） */
   --color-edge-hub-dot: #ffffff; /* 连线中点圆点 */
   --color-port-halo-ring: rgb(255 255 255 / 0.5); /* 端口内圈高光（强档） */
-  --color-port-halo-ring-weak: rgb(
-    255 255 255 / 0.25
-  ); /* 端口内圈高光（常规档） */
+  --color-port-halo-ring-weak: rgb(255 255 255 / 0.25); /* 端口内圈高光（常规档） */
   /* 便签节点内 Markdown 渲染色（markdown.ts 内联 style 直接引用） */
   --color-md-code-bg: rgb(0 0 0 / 0.2); /* 代码块底 */
   --color-md-inline-code-bg: rgb(255 255 255 / 0.05); /* 行内代码底 */
@@ -514,9 +504,7 @@
   --color-success-strong: #10b981; /* 成功绿 */
   --color-warning-strong: #fbbf24; /* 警告文字档（琥珀-400 同值） */
   --color-danger-strong: #fca5a5; /* 危险文字档（红-300 同值） */
-  --color-destructive: oklch(
-    0.704 0.191 22.216
-  ); /* 危险原色（深色档，红-400 同值） */
+  --color-destructive: oklch(0.704 0.191 22.216); /* 危险原色（深色档，红-400 同值） */
   --color-info-strong: #7dd3fc; /* 信息文字档（天蓝-300 同值） */
   --color-status-online: #33d499; /* 「本机/在线」状态点与文字（深色档 — 即原写死值） */
   --color-encap-pending: #fbbf24; /* 未配置对外参数的文字档 */
@@ -532,14 +520,10 @@
   --color-accent-soft: #ff8ac4; /* accent */
   --color-accent-deep: #c026d3; /* 深色档：刻意与浅色同值（品牌渐变不随主题换色相，理由见 @theme） */
   --color-shadow-strong: rgb(0 0 0 / 0.55); /* 浮层重投影 */
-  --color-ring-shadow: rgb(
-    255 255 255 / 0.1
-  ); /* 浮层 1px ring（深色下用中性白） */
+  --color-ring-shadow: rgb(255 255 255 / 0.1); /* 浮层 1px ring（深色下用中性白） */
   --shadow-card: 0 4px 20px rgb(0 0 0 / 0.55); /* 浮层卡片投影（深色档） */
   --color-note-tint-base: #22222c; /* note 混色基准 */
-  --color-node-mix-base: var(
-    --color-node
-  ); /* 子图标题栏混色基准：深色档由 --color-node 自己带 */
+  --color-node-mix-base: var(--color-node); /* 子图标题栏混色基准：深色档由 --color-node 自己带 */
 }
 
 /* ── 内嵌的三档中文字面（正文 / 标题 / 等宽）──────────────────────
@@ -762,7 +746,9 @@ select option {
    上面那条全局 outline 会与它叠成双线（ISSUE #3496 反馈框最显眼）。故**按类排除**文本输入，
    保留 `*：focus-visible` 给按钮/链接/原生控件作无障碍焦点安全网。
    排除类型：checkbox/radio/range/color/file/image 不吃 border 变更、仍需 outline 指示焦点。 */
-input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="image"]):focus-visible,
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not(
+    [type="file"]
+  ):not([type="image"]):focus-visible,
 textarea:focus-visible {
   outline: none;
 }
@@ -874,10 +860,7 @@ textarea::-webkit-scrollbar {
   --xy-minimap-mask-stroke-width: 1.5;
   fill: var(
     --xy-minimap-mask-background-color-props,
-    var(
-      --xy-minimap-mask-background-color,
-      var(--xy-minimap-mask-background-color-default)
-    )
+    var(--xy-minimap-mask-background-color, var(--xy-minimap-mask-background-color-default))
   );
 }
 .react-flow__minimap {
@@ -924,11 +907,7 @@ textarea::-webkit-scrollbar {
 }
 .react-flow__controls-button:hover {
   background: var(--color-node-accent) !important;
-  border-color: color-mix(
-    in srgb,
-    var(--color-primary) 45%,
-    var(--color-border-strong)
-  ) !important;
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border-strong)) !important;
   fill: var(--color-ink-bright) !important;
 }
 
@@ -950,11 +929,7 @@ textarea::-webkit-scrollbar {
   }
   .u-card-hover:hover {
     background: var(--color-subtle);
-    border-color: color-mix(
-      in srgb,
-      var(--color-primary) 35%,
-      var(--color-border)
-    );
+    border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
   }
   .u-surface {
     background: var(--color-surface);
@@ -984,11 +959,7 @@ textarea::-webkit-scrollbar {
       background-color 0.15s ease;
   }
   .u-chip:hover {
-    border-color: color-mix(
-      in srgb,
-      var(--color-primary) 45%,
-      var(--color-border)
-    );
+    border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
     background: var(--color-subtle);
     color: var(--color-ink);
   }
@@ -1007,11 +978,7 @@ textarea::-webkit-scrollbar {
      此前由 `TabButton` 用 `from-violet-500 to-fuchsia-500` 写在视图里 ——
      换成 `ui/tabs` 基元后，指示条的颜色只有一个出口，走 token 现取。 */
   .detail-tab-trigger::after {
-    background: linear-gradient(
-      to right,
-      var(--color-primary),
-      var(--color-accent)
-    );
+    background: linear-gradient(to right, var(--color-primary), var(--color-accent));
   }
   /* 头像/图标占位：纯色块，去掉渐变 */
   .u-avatar {
@@ -1069,11 +1036,7 @@ textarea::-webkit-scrollbar {
      收成一个类而不是四处改 token 名，是因为渐变**方向**（to-r / to-b /
      to-br）属于调用处：色相只有一个来源，方向留在原地。 */
   .u-gradient-brand {
-    background-image: linear-gradient(
-      to right,
-      var(--color-primary-500),
-      var(--color-accent)
-    );
+    background-image: linear-gradient(to right, var(--color-primary-500), var(--color-accent));
   }
   /* 页签选中态（当前打开的那一页）。
      为什么不是「换个背景色」就完事：暗色下标题行的底是 `--color-panel-deep`
@@ -1191,21 +1154,9 @@ textarea::-webkit-scrollbar {
   /* 搜索命中高亮（`json-viewer` 的 HIT CSS）：底色一律走 warning 家族，
      两态各自取值 —— 原先写死 `rgba(251,191,36,*)`（amber-400），浅色下
      近白字压浅琥珀底看不清。 */
-  --json-view-hit-bg: color-mix(
-    in srgb,
-    var(--color-warning-strong) 12%,
-    transparent
-  );
-  --json-view-hit-ring: color-mix(
-    in srgb,
-    var(--color-warning-strong) 32%,
-    transparent
-  );
-  --json-view-hit-bg-active: color-mix(
-    in srgb,
-    var(--color-warning-strong) 32%,
-    transparent
-  );
+  --json-view-hit-bg: color-mix(in srgb, var(--color-warning-strong) 12%, transparent);
+  --json-view-hit-ring: color-mix(in srgb, var(--color-warning-strong) 32%, transparent);
+  --json-view-hit-bg-active: color-mix(in srgb, var(--color-warning-strong) 32%, transparent);
   --json-view-hit-solid: var(--color-warning-strong);
   --json-view-hit-active-ink: #ffffff;
 }
@@ -1417,9 +1368,7 @@ textarea::-webkit-scrollbar {
   --secondary: var(--color-subtle);
   --secondary-foreground: var(--color-ink);
   --muted: var(--color-subtle); /* 表面语义：bg-muted（shadcn 约定） */
-  --muted-foreground: var(
-    --color-ink-muted
-  ); /* 文字语义：text-muted-foreground */
+  --muted-foreground: var(--color-ink-muted); /* 文字语义：text-muted-foreground */
   --accent: var(--color-accent);
   --accent-foreground: var(--color-on-brand);
   --border: var(--color-border);
@@ -1504,7 +1453,9 @@ textarea::-webkit-scrollbar {
    宽度是布局契约，与「行号必然可见」这条修复绑定。 */
 .cb-code-block {
   padding: 12px 16px;
-  font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+  /* 代码块字体改走 `--font-code`（设置面板的「代码字体」档可在运行时覆盖；默认值
+     与上面 `@theme` 里的 --font-code 逐字相同，迁移零视觉变化）。 */
+  font-family: var(--font-code);
   font-size: 11.5px;
   line-height: 1.65;
   overflow: auto;

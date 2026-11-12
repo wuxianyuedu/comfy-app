@@ -49,12 +49,14 @@ describe("设置页反馈整改的形态判据（ISSUE #3495）", () => {
     ).toEqual([]);
   });
 
-  it("「添加模型」弹窗的高度上限把标题栏算进去", () => {
+  it("「添加模型」弹窗的高度上限给上沿留出空隙", () => {
     const text = read("src/app/(main)/settings/components/ProviderModelDialog.tsx");
+    /* #3618 已把这一格落在 master（max-h 收到 100vh-12rem，上下各保底 5rem）；
+     * 本分支解冲突时沿用同一解，这里钉住它不被改回小间距。 */
     expect(
       text,
-      "弹窗 max-h 必须含 var(--toolbar-height,48px)：相对视口居中的弹窗要给标题栏让位",
-    ).toContain("max-h-[calc(100vh-var(--toolbar-height,48px)-5rem)]");
+      "弹窗 max-h 必须给上沿留出空隙：相对视口居中的弹窗，内容顶满时会压到标题栏",
+    ).toContain("max-h-[calc(100vh-12rem)]");
   });
 
   it("「重置」按钮带可见底色（暗色下不再是透明 ghost）", () => {

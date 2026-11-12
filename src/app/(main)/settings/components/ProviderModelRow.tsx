@@ -2,7 +2,11 @@
 
 /**
  * 供应商详情里的一行模型（#3517 拆出）：启停开关、名称 / 用途 / 接口格式摘要，
- * 以及「测试连接 / 测试生成 / 编辑 / 移除」四个动作。
+ * 以及「测试生成 / 编辑 / 移除」三个动作。
+ *
+ * 没有「测试连接」（#3618）：同一供应商下每个模型的探测都是同一条
+ * `GET {base}/models`、同一份供应商密钥，逐模型按钮没有增量信息 ——
+ * 连通性与模型目录同步由供应商级「测试连接」一并完成。
  *
  * 拆出来的原因只有一条：`ProviderDetail` 的函数体已经顶到 400 行硬闸
  * （规范 §12.13），而这一行的 JSX 与父级的状态无关 —— 它需要的全部输入
@@ -47,7 +51,6 @@ export function ProviderModelRow({
   provider: ProviderView;
   usage: UsageTestDialogs;
 }) {
-  const thisProbe = d.modelProbe?.id === model.id ? d.modelProbe : null;
   const kind = REMOTE_MODEL_KINDS.find((candidate) => candidate === model.kind) ?? "chat";
   const inputTypes = parseInputTypes(model.inputTypes);
 
@@ -83,19 +86,6 @@ export function ProviderModelRow({
               ` · ${inputTypes.map((type) => MODEL_INPUT_TYPE_LABELS[type]).join("/")}`}
           </p>
         </div>
-        <Hint label="用供应商地址 + 该模型的接口格式探测（不生成、不耗额度）" wrap>
-          <Button
-            className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
-            disabled={thisProbe?.running === true}
-            onClick={() => {
-              void d.testModel(model);
-            }}
-            size="xs"
-            variant="outline"
-          >
-            {thisProbe?.running === true ? "连接测试中…" : "测试连接"}
-          </Button>
-        </Hint>
         <Hint label="按实际用法发起一次真实生成调用（参数可在弹窗内自定义）">
           <Button
             className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
@@ -139,17 +129,6 @@ export function ProviderModelRow({
           </Button>
         </Hint>
       </div>
-      {thisProbe?.msg && (
-        <div
-          className={`text-2xs mr-1 ml-1 rounded border px-2 py-1 ${
-            thisProbe.msg.kind === "ok"
-              ? "border-success/30 bg-success/10 text-success-strong"
-              : "border-destructive/30 bg-destructive/10 text-danger-strong"
-          }`}
-        >
-          {thisProbe.msg.text}
-        </div>
-      )}
     </div>
   );
 }

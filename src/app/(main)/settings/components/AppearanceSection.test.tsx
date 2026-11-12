@@ -82,6 +82,29 @@ describe("AppearanceSection 的单选组键盘契约", () => {
   });
 });
 
+describe("AppearanceSection 字体自定义（#3513）", () => {
+  it("渲染三个字体输入框（界面 / 代码 / 终端），带可访问名", () => {
+    render(<AppearanceSection c={controller("dark")} />);
+    for (const name of ["界面字体", "代码字体", "终端字体"]) {
+      const input = screen.getByRole("textbox", { name });
+      expect(input).toBeInTheDocument();
+    }
+  });
+
+  it("每档字体都带「恢复默认」按钮", () => {
+    render(<AppearanceSection c={controller("dark")} />);
+    for (const name of ["界面字体", "代码字体", "终端字体"]) {
+      expect(screen.getByRole("button", { name: `${name}恢复默认` })).toBeInTheDocument();
+    }
+  });
+
+  it("字体输入框不增加 radiogroup 数量（恰好仍是三个）", () => {
+    render(<AppearanceSection c={controller("dark")} />);
+    const labels = screen.getAllByRole("radiogroup").map((g) => g.getAttribute("aria-label"));
+    expect(labels).toEqual(["主题外观", "圆角", "标题字阶"]);
+  });
+});
+
 /**
  * 三组的选中档都缺过「悬停值」（ISSUE #1925 第五批）：底是 `Button variant="ghost"` 自带无条件 `hover:`（(0,2,0)），
  * 而 `data-checked:*` 经 `:where()` 只有 (0,1,0) —— 悬停档稳赢，划过已选中项会被改回「未选中」；修法是就地钉
@@ -116,5 +139,28 @@ describe("AppearanceSection 选中档的悬停值（ISSUE #1925）", () => {
         expect(tokensOf(radio).has("data-checked:hover:bg-primary-soft")).toBe(true);
       }
     }
+  });
+});
+
+describe("AppearanceSection 字体文件加载器（#3513 运行时替换）", () => {
+  it("每档字体都带「选择文件」入口（拖入或选择字体文件）", () => {
+    render(<AppearanceSection c={controller("dark")} />);
+    /* 三档各一个浏览按钮 + 一句拖拽提示，且不应产生额外的 radiogroup。 */
+    expect(screen.getAllByRole("button", { name: "选择文件" })).toHaveLength(3);
+    expect(screen.getAllByText(/拖入字体文件/)).toHaveLength(3);
+    const labels = screen.getAllByRole("radiogroup").map((g) => g.getAttribute("aria-label"));
+    expect(labels).toEqual(["主题外观", "圆角", "标题字阶"]);
+  });
+
+  it("文件输入框接受字体扩展名（.ttf / .otf / .woff / .woff2）", () => {
+    const { container } = render(<AppearanceSection c={controller("dark")} />);
+    const inputs = container.querySelectorAll('input[type="file"][accept*=".ttf"]');
+    expect(inputs).toHaveLength(3);
+    inputs.forEach((el) => {
+      const accept = el.getAttribute("accept") ?? "";
+      expect(accept).toContain(".otf");
+      expect(accept).toContain(".woff");
+      expect(accept).toContain(".woff2");
+    });
   });
 });
