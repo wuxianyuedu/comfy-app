@@ -23,6 +23,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { PageHeader } from "~/components/ui/page-header";
 import { SectionLabel } from "~/components/ui/section-label";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { ContractInputCatalog } from "./ContractInputCatalog";
 import { ModeContractModeNav } from "./ModeContractModeNav";
@@ -248,6 +249,10 @@ function ModeContractDraftPanel({
             {controller.savingProjectDefaults ? "写入中…" : "保存为项目默认（跟代码走）"}
           </Button>
         )}
+        {/* 契约有两层，各存在一处（ISSUE #3625）：本机覆盖跟着这台机器走、项目默认
+            入库跟代码走。徽标说清「保存落到哪儿」，迁移时才不会只搬走一半。 */}
+        <DataLocationBadge id="mode-contract-local" label="存放位置" />
+        <DataLocationBadge id="mode-contract-project" />
       </div>
     </section>
   );

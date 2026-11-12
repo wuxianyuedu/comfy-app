@@ -9,6 +9,7 @@
 import type { DesktopStoragePaths } from "~/lib/comfyui/desktop-storage-paths";
 import { normalizeSlashes } from "~/lib/path-display";
 import { SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import {
   buildStorageRows,
   describeStorageHint,
@@ -43,9 +44,12 @@ export function ComfyuiStoragePaths({ storage }: { storage: DesktopStoragePaths 
 
   return (
     <section aria-label="实例目录（只读）" className="border-border mb-4 border-t pt-3">
-      <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
+      <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
         <h3 className="text-ink text-sm font-medium">实例目录（只读）</h3>
         <span className="text-muted-foreground text-xs">模型 / 输入 / 输出指向哪些盘符</span>
+        {/* 这些盘符路径本身记在本机应用数据里（ISSUE #3625）：换机器时照着
+            徽标的落点把那份设置带走，否则这一屏读到的是空的。 */}
+        <DataLocationBadge id="app-settings" label="存放位置" />
       </div>
       <dl className="flex flex-col gap-2">
         {buildStorageRows(storage).map((row) => (
