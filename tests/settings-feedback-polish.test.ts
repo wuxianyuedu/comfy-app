@@ -61,7 +61,13 @@ describe("设置页反馈整改的形态判据（ISSUE #3495）", () => {
 
   it("「重置」按钮带可见底色（暗色下不再是透明 ghost）", () => {
     const text = read("src/app/(main)/settings/components/ProviderModelDialog.tsx");
+    /* 浅色走 bg-surface-2；暗色下 surface-2 对弹窗底只有 1.35:1（用户现场：
+     * 「暗色重置按钮背景还是看不见」），再叠 ink/25 的填充（约 2.1:1）并把
+     * 文字提到 ink 档保 AA。 */
     expect(text, "重置按钮要有 bg-surface-2 这一档可见底色").toContain("bg-surface-2");
+    expect(text, "暗色下重置按钮的底要再提一档（ink/25），否则在弹窗深底上仍看不见").toContain(
+      "dark:bg-ink/25",
+    );
   });
 
   it("供应商分区的控件边界在暗色下走 ink 档", () => {
