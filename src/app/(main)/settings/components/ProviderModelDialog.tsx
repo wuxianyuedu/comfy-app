@@ -85,7 +85,11 @@ export function ProviderModelDialog({
         popupClassName="max-w-lg"
         showCloseButton={false}
       >
-        <div className="border-border bg-surface max-h-[calc(100vh-4rem)] w-full max-w-lg overflow-y-auto rounded-2xl border p-5 shadow-2xl">
+        {/* 高度上限把应用标题栏算进去（ISSUE #3495）：弹窗是相对**视口**居中的，
+            上限只留 4rem 时高窗口内容会把上沿顶到视口 2rem 处 —— 比 48px 的
+            标题栏还高，看起来「紧贴标题栏」。这里给标题栏让位再各留一档：
+            上沿落在标题栏之下至少 1rem。 */}
+        <div className="border-border bg-surface max-h-[calc(100vh-var(--toolbar-height,48px)-5rem)] w-full max-w-lg overflow-y-auto rounded-2xl border p-5 shadow-2xl">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h3 className="u-title">{dialog.mode === "edit" ? "编辑模型" : "添加模型"}</h3>
@@ -412,7 +416,7 @@ export function ProviderModelDialog({
 
           <div className="mt-4 flex items-center justify-end gap-2">
             <Button
-              className="text-muted-foreground mr-auto h-auto rounded-lg px-3 py-2 text-sm"
+              className="text-muted-foreground hover:bg-surface-2/80 bg-surface-2 mr-auto h-auto rounded-lg px-3 py-2 text-sm"
               onClick={() => {
                 d.resetModelForm();
               }}

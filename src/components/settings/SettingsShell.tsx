@@ -127,7 +127,7 @@ export function SettingsShell({
       {/* 宽度取统一档位（`--container-medium` = 从前这里写的 max-w-275）：
           设置页是「标题 + 全宽内容」的文档型壳，不并入更宽的编辑器容器，
           但同一个数不该有两个家。 */}
-      <div className="max-w-medium mx-auto flex min-h-0 w-full flex-1 flex-col px-6 pt-6">
+      <div className="max-w-medium mx-auto flex min-h-0 w-full flex-1 flex-col px-6 pt-4">
         {/* 屏名：页签（或顶栏）已经在说时**不出现这一行**（`title` 不传），只把
             名字留在 `sr-only` —— 读屏仍能按标题跳转，视觉上不重复第二次
             （规范 03 §3.10 / 06）。`h1` 始终在位，一屏一个；那一行不占位，
@@ -142,7 +142,7 @@ export function SettingsShell({
 
         {/* 导航在左、内容在右：树需要的是**纵向**空间（父行 + 缩进子行），
             而横排那条带子只能靠分隔符暗示分组 —— 层级读不出来。 */}
-        <div className="flex min-h-0 flex-1 gap-8 pt-4">
+        <div className="flex min-h-0 flex-1 gap-8 pt-2">
           <SettingsSectionNav onSelect={handleSelect} section={section} />
 
           {/* 内容区：**全部**分区节，唯一一根滚动条。每个节自带 `id` 与
@@ -242,8 +242,10 @@ function SettingsSectionNav({
         if (items.length === 0) {
           return null;
         }
+        /* 分组间距与行高取紧凑档（ISSUE #3495）：9 个分区 + 5 个分组名全靠
+            这一列的纵向空间，矮窗口下松一档就会把末尾几项裁出可视区。 */
         return (
-          <div className="mb-3 last:mb-0" key={group.label}>
+          <div className="mb-2 last:mb-0" key={group.label}>
             {/* 分组名是父行：弱一档、不可点 —— 它只回答「这几项属于一类」，
                 不是导航目标（点了也不会切到某个分区）。读屏不进可访问名，
                 分区自身由子行的 `aria-current` 表达。 */}
@@ -252,14 +254,16 @@ function SettingsSectionNav({
             </p>
             {/* 子行集合走 `TreeChildren`：缩进档 + 引导线一处给全（§16.2.4.39）。
                 `depth=1` 是「父行是分组头」这一档的标准形态。 */}
-            <TreeChildren className="flex flex-col gap-0.5" depth={1}>
+            <TreeChildren className="mt-0.5 flex flex-col gap-0.5 py-0.5" depth={1}>
               {items.map((item) => {
                 const active = section === item.id;
                 return (
                   <Button
                     aria-current={active ? "true" : undefined}
                     className={cn(
-                      "h-auto w-full justify-start rounded-lg px-3 py-1.5 text-sm font-medium",
+                      /* `h-6` 压过 `size="sm"` 的 `h-7`：这一列要的是行距紧凑的
+                          目录树，不是按钮尺寸档（矮窗口下整列才放得下，#3495）。 */
+                      "h-6 w-full justify-start rounded-lg px-3 text-sm font-medium",
                       active
                         ? "bg-primary-soft text-primary-strong hover:bg-primary-soft hover:text-primary-strong"
                         : "text-ink-muted hover:text-ink",

@@ -52,7 +52,9 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
                     className={`h-auto w-full justify-start gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${
                       active
                         ? "border-primary-500/40 bg-primary-500/10"
-                        : "border-border bg-surface-row hover:bg-surface-2"
+                        : /* 深色下 `border-border` 与行底几乎同色，清单会糊成一块 ——
+                             控件可见边界走 ink 档（与 #3527 勾选框同一口径，ISSUE #3495）。 */
+                          "border-border bg-surface-row hover:bg-surface-2 dark:border-ink/40"
                     }`}
                     key={provider.id}
                     onClick={() => {
@@ -95,7 +97,7 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
                 />
               ) : (
                 <EmptyState
-                  className="border-border"
+                  className="border-border dark:border-ink/40"
                   description="先「新建供应商」填好 Base URL / 格式 / 密钥，再往里添加模型。"
                   minHeightClass="min-h-36"
                   title="还没有供应商"
