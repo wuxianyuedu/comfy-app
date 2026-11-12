@@ -45,7 +45,8 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
             <aside aria-label="供应商列表" className="flex min-w-0 flex-col gap-1.5">
               {p.providers.map((provider) => {
                 const active = p.selected?.id === provider.id;
-                const count = p.models.filter((model) => model.providerId === provider.id).length;
+                const owned = p.models.filter((model) => model.providerId === provider.id);
+                const enabledCount = owned.filter((model) => model.enabled).length;
                 return (
                   <Button
                     aria-current={active ? "true" : undefined}
@@ -61,14 +62,15 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
                     type="button"
                     variant="ghost"
                   >
+                    {/* 只显示必要内容（#3618）：窄列里塞 Base URL 必然截断成「已…」，
+                        第二行改念启停读数 —— 右上角那个总数（不分启停）一并撤掉。 */}
                     <span className="min-w-0 flex-1">
                       <span className="text-ink block truncate text-sm">{provider.name}</span>
                       <span className="text-muted-foreground text-2xs block truncate">
-                        {provider.baseUrl}
+                        {owned.length === 0 ? "暂无模型" : `已启用 ${enabledCount}/${owned.length}`}
                         {provider.hasApiKey ? " · 已配密钥" : ""}
                       </span>
                     </span>
-                    <span className="text-ink-fainter text-2xs shrink-0 tabular-nums">{count}</span>
                   </Button>
                 );
               })}
