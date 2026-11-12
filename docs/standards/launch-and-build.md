@@ -2550,12 +2550,17 @@ node scripts/check-standalone-contents.cjs   # [standalone] ✓ 产物干净
   | `src-tauri/static` | 上面这些 + `schema.sql` `{{shell.splash}}` `index.html`（装配步才产出的三件） | `STATIC_ALLOWED_TOPLEVEL`     |
 
   > 仓库根曾有一层 `config/`（只装模式契约注册表）、并随包分发。PR #1917 之后
-  > **这一层不存在了**：模式契约的内置默认回到源码里（`model-mode-contract.ts` 的
-  > `configuredModeContracts`，编译进产物，不需要任何文件随包），机器上的改动是
-  > 本机覆盖（`data/workshop-mode-contracts.json`，`data/` 那条线照旧不入库、
-  > 不随包）。所以两层白名单里都不再有 `config`，`build-desktop.mjs` 的 `§入库配置`
+  > **这一层不存在了**：模式契约的内置默认是入库的那份基线
+  > （`src/lib/workshop/mode-contract-defaults.json`，#3603 起是完整基线；它被
+  > `model-mode-contract.ts` 静态 import ⇒ **编译进产物**，不需要任何文件随包），
+  > 机器上的改动是本机覆盖（`data/workshop-mode-contracts.json`，`data/` 那条线
+  > 照旧不入库、不随包）。所以两层白名单里都不再有 `config`，`build-desktop.mjs` 的 `§入库配置`
   > 与 `check-standalone-contents.cjs` 的 `REQUIRED_CONFIG_FILES` 同批删除 ——
   > 「删掉随包的那一份」不会让契约跑丢：它本来就在构建产物里。
+  >
+  > 读侧分两种形态（#3634）：**开发检出**里服务端**现读磁盘**上那份（写完即生效、
+  > 不必重启进程）；**桌包**里没有这份源码（`src/` 不随包）⇒ 回落编译进产物的那份。
+  > 两种形态读到的都是同一份基线。
 
   `src` **不在任何一层**：它走「祖先放行、叶子逐文件判」——`scripts/reap-process.mjs` 与
   `scripts/dev-launcher.mjs` 都要 `await import("../src/lib/process/kill-process-tree.ts")`

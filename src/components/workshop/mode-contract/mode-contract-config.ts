@@ -52,21 +52,28 @@ export function contractModeLabel(mode: string): string {
   return ALL_WORKFLOW_TYPES.find((t) => t.code === mode.toUpperCase())?.label ?? mode;
 }
 
-/** 成品配置（推导 + 项目默认显式覆盖）按模式码的索引 —— 见
- *  `effectiveModeContract` 的回落分支。 */
-const CONFIGURED_BY_MODE: ReadonlyMap<string, ModeContract> = new Map(
-  configuredModeContracts().map((contract) => [contract.mode, contract]),
+/** 成品配置的**静态快照**（编译进包的那份）—— 服务端读数到达前的兜底。
+ *
+ *  服务端下发的是**现读**的项目默认基线（写完即生效的那份，#3634）；这份静态
+ *  快照只在「读数还没到」这一小段时间里顶一下，读数到了就以它为准。 */
+const STATIC_CONFIGURED: ReadonlyArray<ModeContract> = configuredModeContracts();
+const STATIC_BY_MODE: ReadonlyMap<string, ModeContract> = new Map(
+  STATIC_CONFIGURED.map((contract) => [contract.mode, contract]),
 );
 
-/** 某模式当前生效的契约：本机覆盖里有就用它，没有就按成品配置（推导 + 项目默认显式覆盖）。
+/** 某模式当前生效的契约：本机覆盖里有就用它，没有就按成品配置（项目默认显式覆盖）。
  *  「改过/没改过」的判据收在这一处（两个入口的徽标、编辑器初值、封装视图都读它）。
- *  `stored` 是**本机覆盖**（`useModeContracts` 的读取结果），不是成品配置。 */
+ *  `stored` 是**生效注册表**（服务端合好的：成品配置 + 本机覆盖），
+ *  `configured` 是**成品配置基准**（判「已改」用；缺省 = 静态快照）。 */
 export function effectiveModeContract(
   mode: string,
   stored: ReadonlyArray<ModeContract>,
+  configured?: ReadonlyArray<ModeContract>,
 ): { contract: ModeContract; customized: boolean } {
   const code = upperToken(mode);
-  const fallback = CONFIGURED_BY_MODE.get(code) ?? derivedModeContract(code);
+  const base = configured && configured.length > 0 ? configured : STATIC_CONFIGURED;
+  const fallback =
+    base.find((c) => c.mode === code) ?? STATIC_BY_MODE.get(code) ?? derivedModeContract(code);
   const found = stored.find((c) => c.mode === code);
   if (found && modeContractSignature(found) !== modeContractSignature(fallback)) {
     return { contract: found, customized: true };
@@ -82,8 +89,9 @@ export function effectiveModeContract(
 export function isModeContractCustomized(
   mode: string,
   stored: ReadonlyArray<ModeContract>,
+  configured?: ReadonlyArray<ModeContract>,
 ): boolean {
-  return effectiveModeContract(mode, stored).customized;
+  return effectiveModeContract(mode, stored, configured).customized;
 }
 
 /** 契约里还没有的固定口（供「＋ 添加口」按钮清单）。
