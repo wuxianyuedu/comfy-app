@@ -23,6 +23,7 @@ vi.mock("./hooks/use-model-adapters", () => ({
 /** 模式契约钩子的替身：视图只透传它、不消费，给全字段的最小桩（无断言窄化）。 */
 function stubModeContracts(): ReturnType<typeof useModeContracts> {
   return {
+    configured: [],
     contracts: [],
     loading: false,
     projectDefaultEditable: false,

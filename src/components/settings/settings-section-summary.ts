@@ -15,8 +15,8 @@ export const TREE_GROUPS: Array<{
 }> = [
   { label: "模型", sections: ["llmLocal", "llmRemote"] },
   { label: "后端", sections: ["comfyui"] },
-  { label: "数据", sections: ["database", "backup"] },
-  { label: "应用", sections: ["appearance", "appUpdate", "exit"] },
+  { label: "数据", sections: ["database", "backup", "dataLocation"] },
+  { label: "应用", sections: ["appearance", "sidebar", "appUpdate", "exit"] },
   { label: "诊断", sections: ["logs"] },
 ];
 
@@ -34,7 +34,9 @@ const SECTION_SUMMARY: Record<Section, string> = {
   comfyui: "出图后端装在哪、端口与实例目录（启动与日志在侧栏「ComfyUI」页）",
   database: "本地 SQLite 的可视化浏览与运行 SQL",
   backup: "库的快照与恢复，换文件发生在下次启动",
+  dataLocation: "每类数据存在哪儿、迁移时怎么搬",
   appearance: "主题、圆角与标题字阶",
+  sidebar: "侧栏各项点开后是独立标签页还是共享标签页",
   appUpdate: "检测并安装应用新版本",
   exit: "退出应用时后台服务是保活还是连带关闭",
   logs: "日志面板里显示哪几类来源",

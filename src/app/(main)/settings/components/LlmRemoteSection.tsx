@@ -12,6 +12,7 @@
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
 import { SettingsCard } from "~/components/ui/settings-card";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 
 import { ProviderDetail } from "./ProviderDetail";
 import { ProviderDialog } from "./ProviderDialog";
@@ -45,14 +46,17 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
             <aside aria-label="供应商列表" className="flex min-w-0 flex-col gap-1.5">
               {p.providers.map((provider) => {
                 const active = p.selected?.id === provider.id;
-                const count = p.models.filter((model) => model.providerId === provider.id).length;
+                const owned = p.models.filter((model) => model.providerId === provider.id);
+                const enabledCount = owned.filter((model) => model.enabled).length;
                 return (
                   <Button
                     aria-current={active ? "true" : undefined}
                     className={`h-auto w-full justify-start gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${
                       active
                         ? "border-primary-500/40 bg-primary-500/10"
-                        : "border-border bg-surface-row hover:bg-surface-2"
+                        : /* 深色下 `border-border` 与行底几乎同色，清单会糊成一块 ——
+                             控件可见边界走 ink 档（与 #3527 勾选框同一口径，ISSUE #3495）。 */
+                          "border-border bg-surface-row hover:bg-surface-2 dark:border-ink/40"
                     }`}
                     key={provider.id}
                     onClick={() => {
@@ -61,14 +65,15 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
                     type="button"
                     variant="ghost"
                   >
+                    {/* 只显示必要内容（#3618）：窄列里塞 Base URL 必然截断成「已…」，
+                        第二行改念启停读数 —— 右上角那个总数（不分启停）一并撤掉。 */}
                     <span className="min-w-0 flex-1">
                       <span className="text-ink block truncate text-sm">{provider.name}</span>
                       <span className="text-muted-foreground text-2xs block truncate">
-                        {provider.baseUrl}
+                        {owned.length === 0 ? "暂无模型" : `已启用 ${enabledCount}/${owned.length}`}
                         {provider.hasApiKey ? " · 已配密钥" : ""}
                       </span>
                     </span>
-                    <span className="text-ink-fainter text-2xs shrink-0 tabular-nums">{count}</span>
                   </Button>
                 );
               })}
@@ -95,7 +100,7 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
                 />
               ) : (
                 <EmptyState
-                  className="border-border"
+                  className="border-border dark:border-ink/40"
                   description="先「新建供应商」填好 Base URL / 格式 / 密钥，再往里添加模型。"
                   minHeightClass="min-h-36"
                   title="还没有供应商"
@@ -105,16 +110,19 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
           </div>
         )}
 
-        <p className="text-muted-foreground text-2xs mt-4 mb-2 leading-relaxed">
-          <strong className="text-ink/80">保存位置</strong>
-          ：供应商落在本地 SQLite 的 <code className="text-ink/80">
-            llmProvider
-          </code> 表、模型落在{" "}
-          <code className="text-ink/80">remoteModel</code> 表（默认{" "}
-          <code className="text-ink/80">db.sqlite</code>，路径由{" "}
-          <code className="text-ink/80">DATABASE_URL</code> 指定）。API Key 以 AES-256-GCM
-          加密存放，不会以明文下发到浏览器。
-        </p>
+        <div className="mt-4 mb-2 flex flex-wrap items-start gap-2">
+          <DataLocationBadge id="remote-model" />
+          <p className="text-muted-foreground text-2xs leading-relaxed">
+            <strong className="text-ink/80">保存位置</strong>
+            ：供应商落在本地 SQLite 的 <code className="text-ink/80">
+              llmProvider
+            </code> 表、模型落在{" "}
+            <code className="text-ink/80">remoteModel</code> 表（默认{" "}
+            <code className="text-ink/80">db.sqlite</code>，路径由{" "}
+            <code className="text-ink/80">DATABASE_URL</code> 指定）。API Key 以 AES-256-GCM
+            加密存放，不会以明文下发到浏览器。
+          </p>
+        </div>
 
         <p className="text-muted-foreground text-2xs leading-relaxed">
           「测试连接」按当前填写的 Base URL / 格式 /

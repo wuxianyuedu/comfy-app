@@ -27,6 +27,7 @@ import { SelectChip } from "~/components/ui/select-chip";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { PageHeader } from "~/components/ui/page-header";
 import { SectionLabel } from "~/components/ui/section-label";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { TreeChildren } from "~/components/ui/tree-rows";
 import { useExpansionSet } from "~/components/ui/expansion-set";
@@ -325,9 +326,14 @@ export function ModelAdaptersView() {
         {/* 页头走 `ui/page-header`（规范 03 §3.10 / 16 §16.2.4.73）。屏名已经由页签给出，
             按 ISSUE #1693 那一档收：不传可见 `title`（屏名退成 `sr-only`，读屏仍按标题
             跳转），那句字段映射口径挂成悬浮「说明」—— 由顶栏标题右侧那颗问号承载
-            （`viewHelp()`），页眉因此不占那一行。**不自绘关闭按钮**：「关」由页签承担。 */}
+            （`viewHelp()`），页眉因此不占那一行。**不自绘关闭按钮**：「关」由页签承担。
+            存放位置徽标（#3625）随页眉的 `extra` 进顶栏说明那侧。 */}
         <div className="px-4 sm:px-8">
-          <PageHeader className="pt-4 pb-3 sm:pt-5" srTitle={pageHeaderTitle("model-adapters")} />
+          <PageHeader
+            className="pt-4 pb-3 sm:pt-5"
+            extra={<DataLocationBadge id="model-adapter" label="存放位置" />}
+            srTitle={pageHeaderTitle("model-adapters")}
+          />
         </div>
 
         {/* 两栏分屏（与模式契约同一外壳，ISSUE #1870 同款）：左 = 模型树，右 = 当前模型

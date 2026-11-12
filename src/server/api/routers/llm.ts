@@ -19,12 +19,12 @@ import type { LlmProvider, RemoteModel } from "~/server/db/schema";
 import { isCustomContractInputId, isModeContractInputId } from "~/lib/workshop/model-mode-contract";
 import { parseRemoteModeAdapters, WORKSHOP_INPUT_TYPES } from "~/lib/workshop/remote-model-adapter";
 import {
-  isDevCheckout,
-  loadModeContracts,
+  loadModeContractLayers,
   resetModeContractOverride,
   saveModeContracts,
   saveModeContractsAsProjectDefaults,
 } from "~/lib/workshop/mode-contract.server";
+import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 
 /** 适配器输入行：统一输入类型 → 请求体字段名 */
 const adapterInputSchema = z.object({
@@ -229,37 +229,50 @@ export const llmRouter = createTRPCRouter({
       return readProviderState();
     }),
 
-  /** 模式契约注册表：每种模式的统一输入 / 输出（只含用户改过的模式）。
+  /** 模式契约注册表：每种模式的统一输入 / 输出。
+   *
+   *  下发**两层**：`configured` = 成品配置（项目默认基线，开发检出里现读磁盘，
+   *  写完即生效不必重启）；`contracts` = 生效注册表（成品配置逐模式压上本机
+   *  覆盖）。界面读 `contracts` 显示与编辑，读 `configured` 判「已改」——
+   *  两层各给一份，省得界面自己再合一次（合的规则只有一处：`mode-contract-registry`）。
    *  `projectDefaultEditable` 供界面决定要不要渲染「保存为项目默认」——
    *  只有开发检出有可写的目标文件（ISSUE #3396）。 */
   modeContractsGet: authedProcedure.query(async () => {
-    const contracts = await loadModeContracts();
-    return { contracts, projectDefaultEditable: isDevCheckout() };
+    const { configured, contracts } = await loadModeContractLayers();
+    return { configured, contracts, projectDefaultEditable: isDevCheckout() };
   }),
 
   modeContractsSave: authedProcedure.input(modeContractsInputSchema).mutation(async ({ input }) => {
     // 口 id 由 isModeContractInputId 做类型守卫（zod 随之把入参窄化成契约口），
     // saveModeContracts 内部再做一次契约归一化。
-    const contracts = await saveModeContracts(input.contracts);
+    await saveModeContracts(input.contracts);
+    // 返回**保存后的生效注册表**（覆盖落盘 → 重读三层），界面据此刷新，
+    // 不用再等一次查询往返。
+    const { contracts } = await loadModeContractLayers();
     return { contracts };
   }),
 
-  /** 「保存为项目默认」：与推导有差异的契约写进入库 JSON（跟代码走）。
+  /** 「保存为项目默认」：编辑器现状**全量**写进入库 JSON（跟代码走）。
    *  只有开发检出可用 —— 正式包大声失败（判据与出口都在
-   *  `saveModeContractsAsProjectDefaults`）。 */
+   *  `saveModeContractsAsProjectDefaults`）。写完读取侧现读磁盘 ⇒ 不必重启。 */
   modeContractsSaveProjectDefaults: authedProcedure
     .input(modeContractsInputSchema)
     .mutation(async ({ input }) => {
-      const { contracts, file } = await saveModeContractsAsProjectDefaults(input.contracts);
+      const { file } = await saveModeContractsAsProjectDefaults(input.contracts);
+      // 重读三层：刚写进项目默认的那份立刻成为成品配置，生效注册表随之更新
+      // （界面这一跳就能看到新口径，不必重启应用）。
+      const { contracts } = await loadModeContractLayers();
       return { contracts, file };
     }),
 
   /** 「还原默认」：把一个模式从本机覆盖里移除（生效值回落成品配置）。
-   *  返回移除后的覆盖整份与该模式的生效契约（界面直接拿它刷新草稿）。 */
+   *  返回移除后的生效注册表与该模式的生效契约（界面直接拿它刷新草稿）。 */
   modeContractReset: authedProcedure
     .input(z.object({ mode: z.string().min(1) }))
     .mutation(async ({ input }) => {
-      return resetModeContractOverride(input.mode);
+      const { effective } = await resetModeContractOverride(input.mode);
+      const { contracts } = await loadModeContractLayers();
+      return { contracts, effective };
     }),
 
   /** 读取某条远端模型的工坊适配器存档（模型级：端点路径 + 各模式适配器） */
