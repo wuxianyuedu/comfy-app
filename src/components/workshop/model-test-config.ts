@@ -3,6 +3,7 @@
 // remoteModel 表 + 模式适配器直连）直接试已配置的模型。输入与输出都走
 // 工坊那一条链 —— 本文件只放它的纯函数与常量，DOM / 网络分居视图与 hook。
 
+import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
 import type { RemoteModeAdapter, WorkshopInputType } from "~/lib/workshop/model-mode-contract";
 
 /** 本页可测的用途。工坊 API 通道目前只有 image / video 两条（contract 的
@@ -194,4 +195,41 @@ export function assembleVideoRequest(opts: {
 export function relayInputCount(adapter: RemoteModeAdapter, kind: ModelTestKind): number {
   const relay = new Set<string>(RELAY_INPUT_TYPES[kind]);
   return adapter.inputs.filter((row) => relay.has(row.type)).length;
+}
+
+/* ── 左栏「所有模式」页签（#3635）─────────────────────────────────────
+ * 页签清单 = 当前用途分类下的**全部生成类**工作流类型（与「模型适配」页的
+ * availableModes 同一份出处）；页签上的模型数 = 候选里**配了该模式适配器**
+ * 的条目数（没配适配器的模型走通道默认映射，不计入任何模式 —— 计入会让
+ * 每个页签的数字都一样，页签间就分不出差异了）。 */
+
+export type ModeTab = {
+  /** 中文名（文生图 / 图生图 …），来自工作流类型注册表。 */
+  label: string;
+  /** 模式码（T2I / I2V / T2V …），即生成请求里带的 mode。 */
+  mode: string;
+  /** 配了该模式适配器的候选模型数。 */
+  modelCount: number;
+};
+
+/** 候选模型的适配器索引：模型名 → 它已配置的模式适配器清单。 */
+export type AdaptersByModel = Record<string, ReadonlyArray<{ mode: string }>>;
+
+export function modeTabsForKind(
+  kind: ModelTestKind,
+  adaptersByModel: AdaptersByModel,
+): Array<ModeTab> {
+  return ALL_WORKFLOW_TYPES.filter((t) => t.isGenerative && t.category === kind).map((t) => ({
+    mode: t.code,
+    label: t.label,
+    modelCount: Object.values(adaptersByModel).filter((adapters) =>
+      adapters.some((a) => a.mode === t.code),
+    ).length,
+  }));
+}
+
+/** 用途的默认模式：该分类下第一个生成类类型码（image → T2I、video → T2V）。
+ *  左栏页签常显，模式必须有初值才能让「选模型 → 填输入」的表单一次成立。 */
+export function defaultModeForKind(kind: ModelTestKind): string {
+  return ALL_WORKFLOW_TYPES.find((t) => t.isGenerative && t.category === kind)?.code ?? "";
 }
