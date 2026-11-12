@@ -3048,6 +3048,20 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 > 不再是本机常驻根 `ci-artifacts/<包名>`（留 2 份 + `latest.txt` 那一套随执行者退役）。
 > 档位 ⇄ workflow 文件的配对登记在 `scripts/ci-ga-trigger-map.mjs`。
 
+> ⚠️ **#3607（2026-11-12）起取包地补一处 CNB 站内落点**：上面那句「取包地在 GitHub」
+> 是 #3504 当时的形状 —— GitHub 对这条链只是**镜像仓**，而诉求在 CNB 侧提、包也该在
+> CNB 侧拿（本地双击 `tools/build/build-all.ps1` 得 release 壳，希望「这步的产物能
+> 在 CNB 侧执行和获取」）。`package-desktop.yml` 收尾多一格
+> `scripts/ci-ga-desktop-relay.mjs`：把**同一份**安装版（nsis / msi）与免安装版
+> （portable zip）回传到 CNB 的滚动 `nightly` Release（Release 附件有稳定下载 URL、
+> 按名字取、每天都指向最新一份）。GA 的 artifact + nightly Release 照旧保留，两者各答
+> 「这一跑产了什么」与「镜像侧留档」；**推荐取包地是 CNB 站内**。
+> 落点选 Release 不选制品库 / Issue 附件的理由、上传三步（取地址 → PUT → 确认）与
+> 专用 `CNB_RELEASE_TOKEN`（`repo-release:rw`）的口径见该脚本文件头；
+> 回传步带 `continue-on-error`，失败只多一行读数、不反过来把构建判红（同 #3437 口径）。
+> 判据（`tests/no-platform-ci-config.test.ts` 桌包段）：四个落点 step 都要在、
+> 回传步点既有脚本、带 `continue-on-error`、接专用令牌。
+
 **发布档的触发与「三平台」现状（#2641，2026-10-31）**：设计里曾写「`tag: v*` 触发发布档、
 三平台（ubuntu / windows / macOS）打包，20–40min」—— 那是**前瞻**，不是今天的形状，也**不**
 在仓内任何配置里落地（仓库里没有 `tag` 事件键，只有 `pull_request` / `push` / `crontab` /

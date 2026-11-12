@@ -12,6 +12,9 @@
 #     滚动 `nightly` GitHub Release（按名字取，每天都指向最新一份）。两者各答一件事：
 #     「这一跑产了什么」与「现在要拿一个包去哪拿」。Release 用 runner 自带的 `gh`
 #     与 workflow 级 `permissions: contents: write`，不引第三方 action。
+#     **#3607 起再多一个 CNB 站内落点**：同一份成品由收尾步
+#     `ci-ga-desktop-relay.mjs` 回传到 CNB 的滚动 `nightly` Release（站内取包地）——
+#     GitHub 对这条链只是镜像仓，用户在 CNB 侧提诉求、也该在 CNB 侧拿包。
 #   · **两类成品分开下载（ISSUE #3345）**：安装版（nsis / msi）与免安装版（解压即用的
 #     portable zip）是两种分发形态，不再混进同一个 artifact。`pnpm tauri build` 只产
 #     安装包；紧接着那一格用 `scripts/package-desktop-portable.mjs` 把同一份载荷按
@@ -216,3 +219,25 @@ jobs:
             gh release create nightly --title "每日桌面成品" \
               --notes "定时任务滚动更新，保留最新一份。安装版 = setup.exe / msi；免安装版 = *-portable.zip（解压后双击 app.exe 即用）" --prerelease
           gh release upload nightly "${installers[@]}" "$portable" --clobber
+
+      # ISSUE #3607：把**同一份成品**回传到 CNB 侧的滚动 `nightly` Release —— 用户是在
+      # CNB 这一侧提诉求、拿包的（本地双击 build-all.ps1 得 release 壳，希望「这步的产物
+      # 能在 CNB 侧执行和获取」），GitHub 只是镜像仓，不是取包地。与 #3437 日志搬运同一条
+      # 「GA 写 / CNB 站内读」分工，载荷换成真正的二进制成品；落点是 Release 附件（有稳定
+      # 下载 URL），不是制品库（裸 exe/msi/zip 不适配）也不是 Issue 附件（随 PR 号找）。
+      #
+      # 刻意排在 GH Release 之后：GH 那一步已保证「两类成品都在盘上」，本步只读现成文件、
+      # 不重跑任何构建。`continue-on-error: true` 与 #3437 同口径 —— 回传失败只多一行读数、
+      # 绝不反过来把「桌包打出来了」判成失败（判闸在 CNB 侧，与本格无关）。
+      #
+      # 令牌专用 `CNB_RELEASE_TOKEN`（`repo-release:rw`）：现有 `CNB_ISSUE_TOKEN` 只有
+      # `repo-notes:rw`（写 Release 会 403），给它扩权违反最小权限；这枚只服务本格。
+      # 脚本复用 `ci-ga-logs-relay.mjs` 导出的 `cnbRequest` 底座，不另写一套请求层。
+      - name: 回传成品到 CNB（滚动 nightly Release）
+        continue-on-error: true
+        env:
+          CNB_RELEASE_TOKEN: ${{ secrets.CNB_RELEASE_TOKEN }}
+          CNB_REPO_SLUG: moon-read/comfy-app-t3
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: node scripts/ci-ga-desktop-relay.mjs
