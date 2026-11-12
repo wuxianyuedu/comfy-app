@@ -320,16 +320,32 @@
   不静默导入一份半成品。
 - 落点：`src/lib/workflow/`（RAW 识别）、`workflow-mutations.ts`
 
-#### FR-WF-04 详情四页签
+#### FR-WF-04 详情页签
 
 - 状态：已上线
-- 需求：打开一条工作流的详情有四个页签，顺序即渲染顺序：
-  **工坊封装**（默认）/ **编辑对外参数** / **实际使用** / **源文件**。
+- 需求：打开一条工作流的详情以页签组织，顺序即渲染顺序：
+  **工坊封装**（默认）/ **编辑对外参数** / **IO 预览** / **实际使用** / **源文件**
+  （页签集合以 `DETAIL_TABS` 为准）。
 - 行为与验收：默认落最轻的页签（工坊封装）——不牵画布引擎与 JSON 树；
   「编辑对外参数 / 实际使用」共用同一常驻实例，切页签只切视图模式，
   表单值与运行态不丢。
 - 落点：`src/components/studio/workflow-library/workflow-library-detail-config.ts`
   （`DETAIL_TABS` / `DEFAULT_DETAIL_TAB`）
+
+#### FR-WF-09 详情 IO 预览页签
+
+- 状态：已上线
+- 需求：工作流库主界面提供「IO 预览」页签，不打开工作流编辑器也能查看并调整
+  已暴露参数的显隐 / 默认值 / 必填 / 显示名 / seed 行为（ISSUE #3632）。
+- 行为与验收：显示源是 `workflow.detailFull` 富化后的 workflowIO，落库以模板
+  原始 DB 列为底稿（富化字段不写回）；每次编辑即时经 `workflow.update` 的
+  `workflowIO` 整列 PATCH 落库并失效 detail / detailFull 缓存；模式页签与
+  「类型」同源，按模式分别保留覆盖层；与编辑器 IO 预览共用
+  `src/lib/workflow/workflow-io-edit.ts` 的变换规则。编辑器内「IO 编辑模式」
+  的提示条位于顶栏下方、不叠在画布上。
+- 落点：`src/components/studio/workflow-library/sections/WorkflowLibraryIoPanel.tsx`、
+  `src/lib/workflow/workflow-io-edit.ts`、
+  `src/components/studio/workflow-editor/WorkflowEditorCanvasOverlays.tsx`
 
 #### FR-WF-05 工作流参数与 IO 编辑
 

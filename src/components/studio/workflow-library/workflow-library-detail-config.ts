@@ -6,7 +6,7 @@ import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { isPlainRecord } from "~/lib/is-record";
 import type { WorkflowRow } from "./workflow-library-config";
 
-/** 详情面板的四个页签 —— 数组顺序即渲染顺序，**第一项也是默认页签**。
+/** 详情面板的页签 —— 数组顺序即渲染顺序，**第一项也是默认页签**。
  *  「编辑对外参数 / 实际使用」原是「画布节点」内的子页签，拆成顶层页签少一层嵌套；
  *  两者共用同一个常驻实例（见 `WorkflowLibraryDetailView`），切页签只切视图模式，
  *  表单值与运行态不丢。默认页签取最轻的「工坊封装」：纯文字清单，不牵画布引擎与
@@ -15,6 +15,9 @@ import type { WorkflowRow } from "./workflow-library-config";
 export const DETAIL_TABS = [
   { key: "params", label: "工坊封装" },
   { key: "canvas", label: "编辑对外参数" },
+  /* IO 预览：不进编辑器就能改显隐 / 默认值 / 必填 / 显示名（ISSUE #3632）。
+   * 与「编辑对外参数」相邻 —— 两者都是对外参数配置，只是后者要拉画布引擎。 */
+  { key: "io", label: "IO 预览" },
   { key: "use", label: "实际使用" },
   { key: "source", label: "源文件" },
 ] as const;

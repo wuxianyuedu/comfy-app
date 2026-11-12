@@ -67,11 +67,14 @@ export function SubgraphLoadingOverlay() {
   );
 }
 
-/** IO 编辑模式的顶部提示气泡。 */
+/** IO 编辑模式的提示条：作为**流内横条**放在顶栏与画布之间。
+ *  此前它是画布内的 absolute 浮层，居中压在节点上挡住内容（ISSUE #3632）；
+ *  改成顶栏下方的独立一行后不占据画布任何一层，勾选框仍在画布上照常用。 */
 export function IoEditModeBanner() {
   return (
-    <div className="border-warning/40 bg-warning/15 text-warning-strong z-canvas-ui pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 rounded-full border px-4 py-1.5 text-xs font-medium shadow-lg">
-      📌 IO 编辑模式：勾选节点参数前的复选框，即可将其暴露为工作流的「输入」或「输出」
+    <div className="border-warning/40 bg-warning/10 text-warning-strong flex shrink-0 items-center justify-center gap-2 border-b px-4 py-1.5 text-xs font-medium">
+      <span aria-hidden="true">📌</span>
+      <span>IO 编辑模式：勾选节点参数前的复选框，即可将其暴露为工作流的「输入」或「输出」</span>
     </div>
   );
 }

@@ -82,6 +82,7 @@
 | FR-WF-06    | 磁盘跟踪（校验和重链 / diskDirty / diskMissing） | 已上线 |
 | FR-WF-07    | 就地运行（两个入口、同一份运行态） | 已上线 |
 | FR-WF-08    | 模式与模型标签（modes / defaultMode / 标签库 / resync） | 已上线 |
+| FR-WF-09    | 详情 IO 预览页签（库内改显隐 / 默认值 / 必填 / 显示名） | 已上线 |
 
 ### 2.6 生成与任务（FR-GN）
 

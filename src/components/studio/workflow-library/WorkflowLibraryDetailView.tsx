@@ -10,6 +10,7 @@ import type { WorkflowLibraryDetailController } from "./hooks/use-workflow-libra
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { DETAIL_TABS, type DetailTab } from "./workflow-library-detail-config";
 import { DetailBody } from "./sections/DetailBody";
+import { WorkflowLibraryIoPanel } from "./sections/WorkflowLibraryIoPanel";
 import { DetailHeader } from "./sections/DetailHeader";
 
 /** Tabs 的值来自 `DETAIL_TABS` 的 key；集合外的值忽略。 */
@@ -36,8 +37,10 @@ export function WorkflowLibraryDetailView({
     isLoading,
     errorMessage,
     workflowIO,
+    storedIO,
     paramMap,
     sourceData,
+    patchWorkflowIO,
     usable,
     canResync,
     missing,
@@ -141,6 +144,27 @@ export function WorkflowLibraryDetailView({
             />
           </div>
         )}
+
+        {/* IO 预览页签：独立面板（不拉画布引擎）。改动即时经
+             controller.patchWorkflowIO 落库，显示源是富化后的 workflowIO，
+            落库底稿是模板原始 DB 列。 */}
+        <TabsContent className="min-h-0 flex-1 overflow-y-auto p-5" value="io">
+          {/* 详情查询未排空时不渲染：否则会先按空 IO 闪一屏「还没有暴露任何
+              IO」再被真实数据顶掉（与 DetailBody 的 isLoading 同款口径）。 */}
+          {!isLoading && (
+            <WorkflowLibraryIoPanel
+              /* 换工作流时重建草稿：详情面板是共用实例，不按 id 卸载，
+               * 不重建会把上一条工作流的乐观编辑带到这一条。 */
+              activeMode={activeMode}
+              key={workflow.id}
+              modes={metaEditor.modes}
+              onActiveModeChange={setActiveMode}
+              onPatchWorkflowIO={patchWorkflowIO}
+              storedIO={storedIO}
+              workflowIO={workflowIO}
+            />
+          )}
+        </TabsContent>
 
         {(["params", "source"] as const).map((tab) => (
           <TabsContent className="min-h-0 flex-1 overflow-y-auto p-5" key={tab} value={tab}>
