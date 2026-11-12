@@ -524,6 +524,23 @@ describe("workshopAdapters —— 适配器形状与大写归一", () => {
     save.mockRestore();
   });
 
+  it("概览只收非空存档：每条给模型名与该模型已配的模式码清单", async () => {
+    /* 「模型适配」页左栏的「已配」标记读这一格 —— 没配过的模型不出现在清单里。 */
+    seedRemoteModel(tdb, {
+      name: "agnes-image",
+      workshopAdapters: {
+        endpointPath: "/v1/images/generations",
+        adapters: [
+          { mode: "T2I", inputs: [{ type: "prompt", field: "prompt" }], outputField: "url" },
+          { mode: "I2I", inputs: [{ type: "image", field: "image" }], outputField: "" },
+        ],
+      },
+    });
+    seedRemoteModel(tdb, { name: "bare-model" });
+    const res = await caller().workshopAdaptersSummary();
+    expect(res.models).toEqual([{ modes: ["T2I", "I2I"], name: "agnes-image" }]);
+  });
+
   it("读取按名字取整份存档（模型级 envelope），不隐式带上全部模型", async () => {
     const get = vi
       .spyOn(remoteModelRepository, "getWorkshopAdaptersDoc")

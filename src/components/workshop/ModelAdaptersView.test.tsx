@@ -96,8 +96,8 @@ describe("模型清单：分组树与「已配」标记", () => {
     const selectModel = vi.fn();
     current = baseController({ selectModel });
     render(<ModelAdaptersView />);
-    /* 行按钮的可见名就是模型名（title 同值，用于截断时看全名）。 */
-    await user.click(screen.getByTitle("sora-video"));
+    /* 行按钮的可见名就是模型名（全名悬停提示走 Hint/P82，不再有原生 title）。 */
+    await user.click(screen.getByText("sora-video"));
     expect(selectModel).toHaveBeenCalledWith("sora-video");
   });
 });
