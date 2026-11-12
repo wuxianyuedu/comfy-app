@@ -5,7 +5,7 @@
 // ③ 切换选中模型时草稿与模型级端点一起播种。
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type * as TanStackQuery from "@tanstack/react-query";
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -110,16 +110,12 @@ describe("useModelAdapters：保存后的缓存失效（#3622 评论 1）", () =
   it("保存成功 → 失效该模型的存档查询与概览查询，并把返回值回灌草稿", async () => {
     adaptersByName["agnes-image"] = { endpointPath: "", adapters: [] };
     const { result, invalidateSpy } = renderAdapters();
-    await waitFor(() => {
-      expect(result.current.candidates).toHaveLength(2);
-    });
+    await expect.poll(() => result.current.candidates).toHaveLength(2);
 
     act(() => {
       result.current.selectModel("agnes-image");
     });
-    await waitFor(() => {
-      expect(result.current.selectedModel).toBe("agnes-image");
-    });
+    await expect.poll(() => result.current.selectedModel).toBe("agnes-image");
 
     act(() => {
       result.current.addMode("T2I");
@@ -151,15 +147,11 @@ describe("useModelAdapters：保存后的缓存失效（#3622 评论 1）", () =
   it("保存入参带模型级端点路径（与模式无关的一格）", async () => {
     adaptersByName["agnes-image"] = { endpointPath: "/x", adapters: [] };
     const { result } = renderAdapters();
-    await waitFor(() => {
-      expect(result.current.candidates).toHaveLength(2);
-    });
+    await expect.poll(() => result.current.candidates).toHaveLength(2);
     act(() => {
       result.current.selectModel("agnes-image");
     });
-    await waitFor(() => {
-      expect(result.current.endpointPath).toBe("/x");
-    });
+    await expect.poll(() => result.current.endpointPath).toBe("/x");
     act(() => {
       result.current.addMode("T2I");
     });
@@ -181,23 +173,17 @@ describe("useModelAdapters：保存后的缓存失效（#3622 评论 1）", () =
       "sora-video": { endpointPath: "/v", adapters: [] },
     };
     const { result } = renderAdapters();
-    await waitFor(() => {
-      expect(result.current.candidates).toHaveLength(2);
-    });
+    await expect.poll(() => result.current.candidates).toHaveLength(2);
     act(() => {
       result.current.selectModel("agnes-image");
     });
-    await waitFor(() => {
-      expect(result.current.draft.map((a) => a.mode)).toEqual(["T2I"]);
-    });
+    await expect.poll(() => result.current.draft.map((a) => a.mode)).toEqual(["T2I"]);
     expect(result.current.endpointPath).toBe("/i");
 
     act(() => {
       result.current.selectModel("sora-video");
     });
-    await waitFor(() => {
-      expect(result.current.selectedModel).toBe("sora-video");
-    });
+    await expect.poll(() => result.current.selectedModel).toBe("sora-video");
     expect(result.current.draft).toEqual([]);
     expect(result.current.endpointPath).toBe("/v");
   });
