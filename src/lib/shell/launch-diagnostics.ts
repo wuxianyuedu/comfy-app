@@ -17,7 +17,7 @@
 //      与「项目根 / 路径不对」。
 //
 // 结果就是启动页截图里那一幕：面板写着「暂时读不到日志」，并让用户去翻
-// run/launch-status.json 与 log/launcher/dev-launcher.log —— 而那两处恰恰
+// run/launch-status.json 与 log/current/launcher/dev-launcher.log —— 而那两处恰恰
 // 是空的那两处。诊断信息指向了自己缺席的地方。
 //
 // ## 判据放哪
@@ -206,7 +206,7 @@ export function trimReportValue(value: string): string {
 /**
  * 启动页面板「按顺序看这几处」的清单。
  *
- * 用户在截图里被指向 log/launcher/dev-launcher.log，而当时真正有内容的正是
+ * 用户在截图里被指向 log/current/launcher/dev-launcher.log，而当时真正有内容的正是
  * **壳自持**的那一份 —— 清单必须把这一层写在最前面，否则「按提示查了、还是
  * 没有」会重复发生（ISSUE #784 手验反馈正是这么来的）。
  */

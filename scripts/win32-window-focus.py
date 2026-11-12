@@ -99,7 +99,7 @@ if _IS_WINDOWS:  # pragma: no cover - Windows 专用 ctypes 原型
 
 
 def _log(message: str) -> None:
-    """日志：独立进程直接写 stdout（启动器把它重定向到 log/launcher/foreground-watch.log）。"""
+    """日志：独立进程直接写 stdout（启动器把它重定向到 log/current/launcher/foreground-watch.log）。"""
     try:
         print(message, flush=True)
     except Exception:

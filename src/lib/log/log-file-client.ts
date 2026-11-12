@@ -52,7 +52,7 @@ export type LogSourceKind =
   | "app-runtime"
   /** 壳自持日志（log/shell/shell.log，双击启动链路最早的一段现场）。 */
   | "shell"
-  /** 壳侧编排链路（log/launcher/shell-launch.log）。 */
+  /** 壳侧编排链路（log/current/launcher/shell-launch.log）。 */
   | "shell-launch";
 
 /** source 参数 → /api/logs/current 的 source 查询值。 */

@@ -39,7 +39,7 @@
 //! 同路径、同形态；那边的单测锁住路径与行形态，这里保持逐项一致）：
 //!   1. 写**常驻进度快照**（`run/launch-status.json`，`fallback: true`）——
 //!      编排器一写自己的状态就把它顶掉，因此它只服务启动窗口期；
-//!   2. 落一份**壳自持的编排链路日志**（`log/launcher/shell-launch.log`）——
+//!   2. 落一份**壳自持的编排链路日志**（`log/current/launcher/shell-launch.log`）——
 //!      编排器输出（`[orchestrator] …`）与其启动报告都写它，release 也可靠；
 //!   3. 起不来时**先写状态再回一条可行动的出口**，别让日志面板指向空文件。
 

@@ -1404,7 +1404,7 @@ describe("parseFileLogs 文件日志解析", () => {
     });
 
     /*
-     * 壳侧编排链路日志（`log/launcher/shell-launch.log`）的形态：`[时刻] [级别] [orchestrator] 正文`。行结构必须**只有一层**时刻 + 级别——时刻走面板行首、级别走徽标，正文只剩 `[orchestrator] 正文`。
+     * 壳侧编排链路日志（`log/current/launcher/shell-launch.log`）的形态：`[时刻] [级别] [orchestrator] 正文`。行结构必须**只有一层**时刻 + 级别——时刻走面板行首、级别走徽标，正文只剩 `[orchestrator] 正文`。
      * 回归背景（ISSUE #1365）：壳曾把编排器已带的「时刻 + 级别」原样塞进正文再补自己的，用户读到两份时刻两份级别；现在由 `shell_launch.rs` 的 `strip_orchestrator_line_prefix` 在源头摘掉，面板只认「一层前缀」。
      */
     it("壳转发编排器输出：只保留一层时刻与级别，正文不再嵌套", () => {
