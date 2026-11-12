@@ -12,7 +12,8 @@
 > **占位符约定**：本文中 `{{...}}` 形式的占位符代表文档引用的真实值，由
 > `pnpm doc:check` 运行时从源码/配置动态提取核对；语义见
 > [`docs/reference-facts.md`](../reference-facts.md)。改动上游源码后运行
-> `pnpm doc:gen` 同步 `docs/generated/`。
+> 改本文档由 `pnpm doc:check` 把关引用；`docs/generated/` 不入库（#3586），
+> 谁需要带真实值的原文谁本地 `pnpm doc:gen` 自己生成。
 
 ---
 
@@ -336,7 +337,7 @@ flowchart LR
 - [ ] 改可执行性 / 执行分流 → 判据只能出自 `src/lib/comfyui/execution-shape.ts`，别在别处再写一遍 `Object.keys(graph).length`
 - [ ] 新增运行入口 → 必须登记进**同一份**运行登记表（否则又会出现「两个执行视角」）
 - [ ] 改动任何 `src/lib/**` → 先读 [规范 18](../standards/18-lib层规范.md)
-- [ ] 文档改动后跑 `pnpm doc:gen`（先 `doc:check` 后 `doc:render`）
+- [ ] 文档改动后跑 `pnpm doc:check`（镜像不入库，无需同批重渲染）
 
 ---
 

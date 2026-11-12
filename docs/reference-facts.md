@@ -188,7 +188,7 @@
 > `tests/audits-doc-references.test.ts` 管，判的是「点名一份**已删的棘轮基线**时必须在
 > 同一行写明它是历史快照」；射程刻意不收「台账里的路径都得存在」，因为 `src-tauri/static`
 > 是构建产物、`docs/standards/12` 是章节号，判它们等于造假红）、`docs/superpowers/`（设计归档）、
-> `docs/generated/`（本体系自动生成产物）、`docs/api/`（TypeDoc 自动生成 —— 它由**另一条**
+> `docs/generated/`（本体系自动生成产物，#3586 起**不进 git**）、`docs/api/`（TypeDoc 自动生成 —— 它由**另一条**
 > 判据管：`check-docs-api.cjs` 生成一份并判这份可不可用（跑得通 / 骨架齐全 / 可移植），
 > 见规范 13 §13.5.5.1；⚠️ 2026-10-23 起它**不再进 git**，所以「那份产物与源一致与否」
 > 这个问题**没有对象**了 —— 别把这里的豁免读成「没人管」，它现在由「这一份能不能生成
@@ -234,16 +234,18 @@
 > | 态           | 位置                                                                     | 内容                                               | 维护者                                           |
 > | ------------ | ------------------------------------------------------------------------ | -------------------------------------------------- | ------------------------------------------------ |
 > | **编辑文档** | 上表 SCOPED_DOCS 对应的源文件（如 "docs/standards/launch-and-build.md"） | 用语义化占位符 {{shell.app.exe}} 作单一事实        | 人写，配合 pnpm doc:check 防裸值回潮             |
-> | **生成文档** | 运行 pnpm doc:render 输出到 docs/generated/                              | 占位符已替换成从源码提取的**真实值**（如 app.exe） | 脚本自动生成，**禁止手改**；改编辑文档后重新生成 |
+> | **生成文档** | 运行 pnpm doc:render 输出到本机 docs/generated/（**不进 git**）         | 占位符已替换成从源码提取的**真实值**（如 app.exe） | 脚本自动生成，**不手改、不提交**；谁需要原文谁本地生成 |
 >
 > - **单一事实**：两态共用同一份 FACTS（scripts/doc-facts.cjs），真实值只从
->   源码/配置动态提取，不存在第二事实。改源码 → 跑 pnpm doc:render → 生成文档自动同步。
+>   源码/配置动态提取，不存在第二事实。改源码 → 谁需要原文谁跑一次
+>   pnpm doc:render → 本机那份随之更新（它不进 git，没有「同步到仓库」这一跳）。
 > - **生成文档不参与 doc:check**：它含真实裸值，不属于校验范围；校验只针对编辑文档
 >   （SCOPED_DOCS），防止编辑态被裸值侵蚀后生成文档误当编辑文档。
-> - **何时重新生成**：改动编辑文档或上游源码真实值后，运行 pnpm doc:render 刷新
->   docs/generated/。生成文档随源码一起提交，读者可直接查看原文。
+> - **何时重新生成**：本地想看带真实值的原文时，运行 pnpm doc:render 刷新本机的
+>   docs/generated/。**它不随源码提交**（#3586，`.gitignore` 的 `/docs/generated/`），
+>   仓库里只维护编辑态那一态，也没有「同批带上」的配对门禁。
 > - **可执行工具**：`tools/docs/generate-docs.ps1` 是傻瓜式入口（双击即跑
->   `doc:check` + `doc:render`），逻辑在 `scripts/generate-docs.ps1`。
+>   `doc:check` + `doc:render`，产物只在本机），逻辑在 `scripts/generate-docs.ps1`。
 
 ## 3.6 AGENTS.md ↔ standards 漂移守卫
 
@@ -312,7 +314,8 @@
 **刻意不扫的面**：`changelog.d/**` 与 `CHANGELOG.md`。碎片是**当时那次变更的账本**
 （AGENTS 硬规则 14 / §13.10.5），里面的序号是历史事实，回头改写等于伪造证据。
 这条边界由 `tests/check-doc-references.test.ts` 的「历史碎片不被扫」钉住。
-`docs/generated/**` 也不扫 —— 它是产物，改编辑态源文档后由 `pnpm doc:render` 还原。
+`docs/generated/**` 也不扫 —— 它是**本机产物**（#3586 起不入库），改编辑态源文档后
+本地跑一次 `pnpm doc:render` 即可还原，没有「提交进 git 的副本」要核。
 
 **标签从哪来**：`grep -n '^  run "' .githooks/pre-commit` 逐字取，或跑一次提交看
 `── check:` 那些行；`tests/doc-check-hook-wiring.test.ts` 里的 `dGroupSteps()` 是同一形状的解析器。
@@ -376,5 +379,7 @@ dev-only 测试基建」念成红。「散文 ⇄ 散文互斥」要真做成判
    > 例外的边界：§1.1 表格里出现的 `:3100` / `:3311` 是**文档形态示例**（说明「这类值在文档里
    > 长什么样」），核对一律由脚本运行时提取；`dev.port.derived` 的示例值取自某个检出上的运行
    > 结果，换个检出就是别的数字——这正是它必须由脚本提取、不能写死的原因。
-5. **双文档同步**：改了编辑文档或源码真实值后，跑 `pnpm doc:render` 重新生成
-   `docs/generated/` 并一并提交，保证读者看到的生成文档是最新原文。
+5. **双文档只有一个入库态**：`docs/generated/` 自 #3586 起不进 git，改了编辑文档
+   或源码真实值后**不需要也不应该**跑 `pnpm doc:render` 去「同步并提交」；谁需要
+   带真实值的原文谁本地跑一次，产物只在本机。仍随提交判的是 `pnpm doc:check`
+   （编辑态引用与权威源一致，GA `master-gate.yml` 每笔 master push 跑）。

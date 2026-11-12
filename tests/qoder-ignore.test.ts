@@ -31,8 +31,9 @@ const MUST_COVER = [
    * 既没意义又让「索引为什么这么贵」重新长回来（ISSUE #2762）。 */
   "/.codegraph/",
   "/.zvec-grep/",
-  /* 入库的那两条：正文与源逐字重复（镜像）或纯历史（归档），它们在检索面里常驻
-   * 就等于让每一次文档检索都命中两份 —— 见 ISSUE #2761。 */
+  /* 两条文字产物：`docs/generated/` 是本机渲染态镜像（#3586 起不入库），
+   * `CHANGELOG-archive.md` 是入库的纯历史归档。两者都与源 / 历史正文逐字重复，
+   * 在检索面里常驻就等于每次文档检索都命中两份 —— 见 ISSUE #2761。 */
   "/docs/generated/",
   "/CHANGELOG-archive.md",
 ];
@@ -80,19 +81,38 @@ describe("渲染出的形状：每条排除都带着它的理由", () => {
     expect(head).toContain("只出索引");
   });
 
-  it("入库那一组的「入库」是事实：git 确实跟踪这些路径", () => {
-    /* 反向也判：若它们哪天不再入库（镜像出库、归档被拆走），这条排除就是在藏一份
+  it("入库那一组的「入库」是事实：git 确实跟踪这份归档", () => {
+    /* 反向也判：若它哪天不再入库（归档被拆走），这条排除就是在藏一份
      * 不存在的产物，该整条删掉 —— 而不是留一句会过期的理由占着排除面。 */
-    for (const one of ["docs/generated", "CHANGELOG-archive.md"]) {
-      const out = execFileSync("git", ["-c", "core.quotePath=false", "ls-files", "-z", "--", one], {
-        cwd: ROOT,
-        encoding: "utf8",
-      });
-      expect(
-        out.split("\0").filter(Boolean).length,
-        `${one} 并不入库 —— 那这一条排除该归到「构建产物」那一组，或直接删掉`,
-      ).toBeGreaterThan(0);
-    }
+    const out = execFileSync(
+      "git",
+      ["-c", "core.quotePath=false", "ls-files", "-z", "--", "CHANGELOG-archive.md"],
+      { cwd: ROOT, encoding: "utf8" },
+    );
+    expect(out.split("\0").filter(Boolean).length, "CHANGELOG-archive.md 并不入库").toBeGreaterThan(
+      0,
+    );
+  });
+
+  it("生成态镜像确实不入库：排除项守的是本地生成物，不是漏配", () => {
+    /* #3586：`docs/generated/**` 退出入库产物，排除项仍在（谁本地跑了
+     * `pnpm doc:render` 就不该让索引多命中一份），但它的**理由**归到了
+     * 「生成物与工具缓存」组。这条反向钉住事实：哪天有人把镜像重新提交进
+     * git，这里会红，逼他回来把分组与 why 一起改回「入库」口径。 */
+    const out = execFileSync(
+      "git",
+      ["-c", "core.quotePath=false", "ls-files", "-z", "--", "docs/generated"],
+      { cwd: ROOT, encoding: "utf8" },
+    );
+    expect(
+      out.split("\0").filter(Boolean),
+      "docs/generated 又被提交进 git 了 —— 分组与理由要同步改",
+    ).toEqual([]);
+    const generated = IGNORE_SECTIONS.find((s) => s.section === "生成物与工具缓存");
+    expect(
+      generated?.entries.map((e) => e.pattern),
+      "生成态镜像的排除项不在「生成物与工具缓存」组里",
+    ).toContain("/docs/generated/");
   });
 
   it("产物里没有绝对体积读数（那是「这台机器、这一刻」的数）", () => {

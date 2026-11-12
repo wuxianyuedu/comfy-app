@@ -251,33 +251,15 @@ describe("复合档 —— 逐条按面收窄（ISSUE #2255）", () => {
     return { code, out: lines.join("\n") };
   };
 
-  it("改动面没碰到那条的面 ⇒ 判定为跳过，且面念得出来", () => {
-    /* 2026-11-05 薄化后，原来这批收窄登记的静态判据（`主题色扫描` / `CHANGELOG 碎片` …）
-     * 随 PR 档一起搬到 GA —— `.cnb.yml` 里没有同名 stage 了，登记表不能再收它们
-     * （`tests/ci-incremental-gates.test.ts` 的「登记 ⇄ 配置」会当场红）。所以这里
-     * 直接判**机制**：面取自仍登记在表里的判据（`scripts/render-doc-placeholders.cjs`），
-     * 改动面落在面外 ⇒ 跳过，并把那组 glob 念出来（跳过不是判过）。 */
-    const step = {
-      label: "生成态文档与源同步",
-      argv: ["node", "scripts/render-doc-placeholders.cjs"],
-    };
-    const decision = narrowingDecision(step, { files: ["src/app/x.tsx"] });
-    expect(decision.skip).toBe(true);
-    if (!decision.skip) {
-      return;
-    }
-    expect(decision.stage).toBe("生成态文档与源同步");
-    expect(decision.globs, "跳过的理由必须把面念出来").toEqual(
-      narrowingEntryForScript("scripts/render-doc-placeholders.cjs")?.globs,
+  it("登记表为空 ⇒ 任何判据都不被收窄（#3586 后表暂空；机制保留，样本判据随退役移除）", () => {
+    /* `生成态文档与源同步` 退役后 INCREMENTAL_GATES 暂无成员 —— 收窄机制
+     * （判据脚本反查 → 面比对）保留给未来的单执行者一格；登记表空 ⇒
+     * narrowingEntryForScript 恒 null ⇒ 一条都不跳（宁可多跑）。 */
+    expect(narrowingEntryForScript("scripts/render-doc-placeholders.cjs")).toBeNull();
+    const decision = narrowingDecision(
+      { label: "任一格", argv: ["node", "scripts/render-doc-placeholders.cjs"] },
+      { files: ["docs/README.md"] },
     );
-  });
-
-  it("改动面碰到了那条的面 ⇒ 这一条照跑（不跳）", () => {
-    const step = {
-      label: "生成态文档与源同步",
-      argv: ["node", "scripts/render-doc-placeholders.cjs"],
-    };
-    const decision = narrowingDecision(step, { files: ["docs/README.md"] });
     expect(decision.skip).toBe(false);
   });
 
@@ -296,18 +278,11 @@ describe("复合档 —— 逐条按面收窄（ISSUE #2255）", () => {
     expect(got.out).not.toMatch(/按面未触及/);
   });
 
-  it("面取自**收窄登记表**，不是手抄的第二份", () => {
-    /* 反查：登记表里那一条的脚本 ⇒ 它的面就是登记表里那组 glob。 */
-    const entry = INCREMENTAL_GATES.find((e) => e.script === "scripts/render-doc-placeholders.cjs");
-    expect(entry, "收窄登记表里没有「生成态文档与源同步」这一条").toBeTruthy();
-    if (!entry) {
-      return;
-    }
-    expect(narrowingEntryForScript("scripts/render-doc-placeholders.cjs")?.globs).toEqual(
-      entry.globs,
-    );
-    /* 不在登记表里的判据（这里拿一条没有收窄面的）⇒ 查不到 ⇒ 不许收窄。 */
+  it("不在登记表里的判据 ⇒ 查不到 ⇒ 不许收窄", () => {
+    /* 反查口径（#3586 后登记表暂空，任何脚本都查不到）：查不到就是不许收窄 ——
+       收窄只能来自登记表，不能手抄第二份面。 */
     expect(narrowingEntryForScript("scripts/check-gate-executors.cjs")).toBeNull();
+    expect(narrowingEntryForScript("scripts/render-doc-placeholders.cjs")).toBeNull();
   });
 
   it("收窄判据按**判据脚本**查（不看标签名）", () => {
@@ -321,13 +296,11 @@ describe("复合档 —— 逐条按面收窄（ISSUE #2255）", () => {
     expect(judgmentScriptOf(["node", "-e", "1"])).toBeNull();
   });
 
-  it("收窄**不能**把一条该跑的判据吞掉：面碰到 ⇒ 不跳（反向验证）", () => {
+  it("收窄**不能**把一条该跑的判据吞掉：查不到登记 ⇒ 不跳（反向验证）", () => {
     const step = {
       label: "生成态文档与源同步",
       argv: ["node", "scripts/render-doc-placeholders.cjs"],
     };
-    const skipped = narrowingDecision(step, { files: ["src/app/x.tsx"] });
-    expect(skipped.skip).toBe(true);
     const ran = narrowingDecision(step, { files: ["docs/README.md"] });
     expect(ran.skip).toBe(false);
   });
@@ -380,16 +353,16 @@ describe("复合档 —— 绿步的读数也要有出口（ISSUE #2256）", () 
  */
 describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
   it("这一族拿 `--base`，而且**把 `--staged` 一起剥掉**（判据只该有一个判决面来源）", () => {
-    const got = heavyGateArgv(["node", "scripts/check-doc-mirror-pairing.cjs", "--staged"], {
+    /* 样本：`shell-gate`（连旗标都没有的那一形）。样本判据
+     * `check-doc-mirror-pairing.cjs` 已随 #3586 退役。 */
+    const got = heavyGateArgv(["node", "scripts/shell-gate.mjs", "--staged"], {
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
     });
     expect(got.ok).toBe(true);
     if (!got.ok) {
       return;
     }
-    /* `--staged` 必须不在：这条判据「剥掉旗标之后判的仍是暂存集」，两个都挂着
-     * 就分不清它到底按哪个面判。 */
-    expect(got.argv).toEqual(["node", "scripts/check-doc-mirror-pairing.cjs", "--base", "abc123"]);
+    expect(got.argv).toEqual(["node", "scripts/shell-gate.mjs", "--base", "abc123"]);
     expect(got.argv).not.toContain("--staged");
   });
 
@@ -409,10 +382,12 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
     ]);
   });
 
-  it("登记表是**一处**出处：这三条都在 `CHANGED_SCOPED` 里", () => {
-    /* 反查：这两条判据若没登记，复合档就会对它们走「剥旗标 ⇒ 判全仓」那一手，
-     * 而那对它们**无效**（剥掉旗标之后判的仍是暂存集）。 */
-    expect(CHANGED_SCOPED).toContain("scripts/check-doc-mirror-pairing.cjs");
+  it("登记表是**一处**出处：这些都在 `CHANGED_SCOPED` 里（退役的除外）", () => {
+    /* 反查：判据若没登记，复合档就会对它走「剥旗标 ⇒ 判全仓」那一手，
+     * 而那对它们**无效**（剥掉旗标之后判的仍是暂存集）。
+     * `check-doc-mirror-pairing.cjs` 曾也在（#2265），#3586 随镜像退役退出 ——
+     * 退役判据不留在名单里：留着它 = 复合档仍会为它发 `--base`，而脚本已不在。 */
+    expect(CHANGED_SCOPED).not.toContain("scripts/check-doc-mirror-pairing.cjs");
     expect(CHANGED_SCOPED).toContain("scripts/known-failed-selftest-gate.mjs");
     expect(CHANGED_SCOPED).toContain("scripts/shell-gate.mjs");
   });
