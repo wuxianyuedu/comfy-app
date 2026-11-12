@@ -697,6 +697,10 @@
   指向 Base URL（不再把整页 `<!DOCTYPE …>` 截一段灌进提示），401/403 与 404
   各补一句归因，提示里点名实际探测的地址；Base URL 看不出接口版本段时**只提示、
   不自动补**（各家版本段位置不同，替用户猜会造出看着对却 404 的地址）；
+  #3612 起再加一层「已核实厂商的端点指路」：Base URL 落在已知厂商的官网 /
+  控制台域（清单在 `provider-types.ts` 的 `knownApiEndpointHint`，只收当面
+  验证过上游行为的条目）时，字段下面与失败归因之后各补一句「接口端点在
+  <API 端点>，请改 Base URL」——只提示、不改写，清单外的域不开口；
   历史遗留 `remoteModel`（`providerId` 为空）在首次读供应商列表时迁入「默认供应商」，
   密钥与模型名不变。
 - 落点：`src/server/api/routers/llm.ts`、`src/lib/llm/provider-types.ts`、

@@ -102,6 +102,58 @@ export function baseUrlVersionHint(baseUrl: string, format: LlmApiFormat): strin
   return "看不出接口版本段（如 /v1）—— 有些网关要求 Base URL 带版本号，若测试连接报 404 请对照服务商文档补上";
 }
 
+/* ── 已核实的厂商端点提示（#3612）───────────────────────────────── */
+
+type KnownApiEndpoint = {
+  /** 给用户照抄的 API 端点（Base URL 形态，含版本段）。 */
+  apiBaseUrl: string;
+  /** 厂商真正的 API 主机：Base URL 落在它上面 = 没填错，不再提示。 */
+  apiHost: string;
+  /** 命中判定：主机名等于该域或以「.该域」结尾（子域一起算）。 */
+  domain: string;
+  /** 厂商名（提示文案里点名用）。 */
+  vendor: string;
+};
+
+/**
+ * 「接口端点在另一个域」的厂商清单。这是**当面验证过的厂商知识**（数据，不是
+ * 启发式扫描）：只收对上游真实行为核实过的条目，不猜。#3612 的现场——
+ * `api.agnes-ai.com/api/v1/*` 对**任何**请求（含带任意 Bearer 密钥）都答
+ * 401 `Login expired`：那是官网登录态的后端，API 密钥在它面前永远无效；
+ * 真正的 OpenAI 兼容端点在 `apihub.agnes-ai.com/v1`（`/models` 不带密钥也
+ * 返回模型清单）。这类「401 但密钥没问题」的错，只凭状态码归因会把用户
+ * 引去反复换密钥，所以按域名点名指路。
+ */
+const KNOWN_API_ENDPOINTS: ReadonlyArray<KnownApiEndpoint> = [
+  {
+    apiBaseUrl: "https://apihub.agnes-ai.com/v1",
+    apiHost: "apihub.agnes-ai.com",
+    domain: "agnes-ai.com",
+    vendor: "Agnes",
+  },
+];
+
+/** Base URL 落在已知厂商的「非接口域」上时给一句指路提示（只提示、不改写，
+ *  与 `baseUrlVersionHint` 同一口径）；返回 `null` 表示不提示。
+ *
+ *  刻意只在「核实过的域」上开口：对未知域猜「这是控制台域」会误伤把 API 就
+ *  架在主域上的服务商。 */
+export function knownApiEndpointHint(url: string): string | null {
+  let host: string;
+  try {
+    host = new URL(url.trim()).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+  const entry = KNOWN_API_ENDPOINTS.find(
+    (candidate) => host === candidate.domain || host.endsWith(`.${candidate.domain}`),
+  );
+  if (entry === undefined || host === entry.apiHost) {
+    return null;
+  }
+  return `「${entry.vendor}」的接口端点在 ${entry.apiBaseUrl} —— ${host} 是官网侧的域（只认网页登录态，不接受 API 密钥），请把 Base URL 改成接口端点`;
+}
+
 /* ── 模型输入类型 ───────────────────────────────────────────────── */
 
 /* SAFETY: 类型断言已复核 */

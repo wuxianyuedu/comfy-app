@@ -300,4 +300,25 @@ describe("POST /api/llm/test", () => {
     await expect(res.json()).resolves.toMatchObject({ ok: false });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("Base URL 填成官网域（#3612 的现场）：401 归因之外补端点指路，不再只让用户换密钥", async () => {
+    /* api.agnes-ai.com/api/v1 对任何请求（含带任意密钥）都答 401 Login expired
+     * —— 它要网页登录态，API 密钥在它面前永远无效。 */
+    findById.mockResolvedValue({
+      id: "p1",
+      name: "Agnes",
+      baseUrl: "https://api.agnes-ai.com/api/v1",
+      apiFormat: "chat-completions",
+      apiKey: "sk-provider",
+    });
+    fetchMock.mockResolvedValue(jsonResponse({ code: "000501", message: "Login expired" }, 401));
+    const { POST } = await import("./route");
+    const res = await POST(request({ providerId: "p1" }));
+    const body = await bodyOf(res);
+    expect(body.ok).toBe(false);
+    const detail = String(body.detail);
+    expect(detail).toContain("HTTP 401（https://api.agnes-ai.com/api/v1/models）");
+    expect(detail).toContain("（密钥无效，或该密钥没有这个接口的权限）");
+    expect(detail).toContain("「Agnes」的接口端点在 https://apihub.agnes-ai.com/v1");
+  });
 });
