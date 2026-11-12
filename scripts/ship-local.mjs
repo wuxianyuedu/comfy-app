@@ -107,9 +107,9 @@ export function splitStagedNames(stdout) {
  * @returns {string} 归一后的键
  */
 export function addPathKey(p, root) {
-  let s = String(p ?? "").replace(/\\/g, "/");
+  let s = String(p ?? "").replaceAll("\\", "/");
   const absRoot = String(root ?? "")
-    .replace(/\\/g, "/")
+    .replaceAll("\\", "/")
     .replace(/\/+$/, "");
   if (absRoot && (s === absRoot || s.startsWith(`${absRoot}/`))) {
     s = s.slice(absRoot.length).replace(/^\/+/, "");
@@ -152,7 +152,7 @@ export function classifyStagedSurface({ staged, adds, root, allowStaged = false 
   const covered = [];
   const unclaimed = [];
   for (const file of staged) {
-    const f = String(file ?? "").replace(/\\/g, "/");
+    const f = String(file ?? "").replaceAll("\\", "/");
     /* 点名目录：`scripts` / `scripts/` 都算覆盖 `scripts/x.mjs`。用「前缀 + 斜杠」
      * 而不是裸 startsWith —— 否则点名 `src/lib` 会把 `src/libfoo.ts` 也算进去。 */
     const hit = keys.some((k) => f === k || f.startsWith(`${k}/`));

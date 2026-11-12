@@ -918,11 +918,11 @@ describe("classifyStagedSurface：封闭暂存面的纯判据（#3597）", () =>
   });
 
   it("Windows 形态的点名（反斜杠 / `./` 前缀 / 绝对路径）归一后仍命中", () => {
-    for (const add of ["src\\a.ts", "./src/a.ts", "G:\\repo\\src\\a.ts"]) {
+    for (const add of [String.raw`src\a.ts`, "./src/a.ts", String.raw`G:\repo\src\a.ts`]) {
       const r = classifyStagedSurface({
         staged: ["src/a.ts"],
         adds: [add],
-        root: "G:\\repo",
+        root: String.raw`G:\repo`,
       });
       expect(r.unclaimed, `add=${add}`).toEqual([]);
       expect(r.allowed).toBe(true);
@@ -957,10 +957,12 @@ describe("classifyStagedSurface：封闭暂存面的纯判据（#3597）", () =>
   });
 
   it("addPathKey：反斜杠 / `./` / 绝对路径 / 结尾斜杠都归一，且不改大小写", () => {
-    expect(addPathKey("scripts\\a.mjs", "G:\\repo")).toBe("scripts/a.mjs");
-    expect(addPathKey(".\\scripts/a.mjs", "G:\\repo")).toBe("scripts/a.mjs");
-    expect(addPathKey("G:\\repo\\scripts\\a.mjs", "G:\\repo")).toBe("scripts/a.mjs");
-    expect(addPathKey("scripts/", "G:\\repo")).toBe("scripts");
+    expect(addPathKey(String.raw`scripts\a.mjs`, String.raw`G:\repo`)).toBe("scripts/a.mjs");
+    expect(addPathKey(String.raw`.\scripts/a.mjs`, String.raw`G:\repo`)).toBe("scripts/a.mjs");
+    expect(addPathKey(String.raw`G:\repo\scripts\a.mjs`, String.raw`G:\repo`)).toBe(
+      "scripts/a.mjs",
+    );
+    expect(addPathKey("scripts/", String.raw`G:\repo`)).toBe("scripts");
     expect(addPathKey("Docs/Readme.md", "/repo")).toBe("Docs/Readme.md");
   });
 });
