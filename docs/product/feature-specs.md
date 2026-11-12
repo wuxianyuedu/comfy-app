@@ -707,6 +707,14 @@
   <API 端点>，请改 Base URL」——只提示、不改写，清单外的域不开口；
   历史遗留 `remoteModel`（`providerId` 为空）在首次读供应商列表时迁入「默认供应商」，
   密钥与模型名不变。
+  图像 / 视频模型的弹窗按**用途**分叉（#3618 补充）：端点路径由用途决定
+  （唯一出处 `defaultUsageTestPath`，图像 `/images/generations`、视频
+  `/videos/generations`，与文本协议三词表无关），所以「API 格式」下拉换成
+  只读的「接口端点」（`POST {base}{路径}`；供应商还没 Base URL 时显示路径段
+  并提示先去填），「智能配置」「上下文窗口」「最大输出 Token」「高级配置」
+  全部不出现——图像 / 视频模型没有文本协议那些高级配置；模型行摘要同批
+  分叉：文本模型念「上下文 / 输出 / 接口格式」，图像 / 视频模型念自己的
+  端点路径（`图像端点 /images/generations` 这类）。
 - 落点：`src/server/api/routers/llm.ts`、`src/lib/llm/provider-types.ts`、
   `src/lib/llm/provider-form.ts`、`src/lib/core/repository-user.ts`、
   `src/lib/llm/types.ts`、`src/app/api/llm/test/route.ts`
