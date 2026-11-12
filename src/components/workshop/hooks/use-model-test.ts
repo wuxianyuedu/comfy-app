@@ -15,10 +15,9 @@ import { sleep } from "~/lib/with-timeout";
 import { isRecord } from "~/lib/is-record";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { apiGenerateImage, apiPollVideo, apiSubmitVideo } from "~/lib/workshop/generation-client";
-import {
-  parseRemoteModeAdapters,
-  type RemoteModeAdapter,
-} from "~/lib/workshop/model-mode-contract";
+import { parseRemoteModeAdapters } from "~/lib/workshop/remote-model-adapter";
+import type { RemoteModeAdapter } from "~/lib/workshop/remote-model-adapter";
+
 import { useTRPC } from "~/trpc/react";
 
 import {

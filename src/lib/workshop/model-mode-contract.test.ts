@@ -5,7 +5,6 @@ import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
 import {
   ALL_CONTRACT_MODES,
   adapterInputsFromContract,
-  parseRemoteModeAdapters,
   configuredModeContracts,
   derivedModeContract,
   contractToStatusEntries,
@@ -20,10 +19,10 @@ import {
   modeContractInputLabel,
   parseModeContracts,
   referenceImageSlotIndex,
-  WORKSHOP_INPUT_TYPES,
   type ModeContract,
   type ModeContractInputId,
 } from "./model-mode-contract";
+import { parseRemoteModeAdapters, WORKSHOP_INPUT_TYPES } from "./remote-model-adapter";
 
 /** 工作流库里所有「生成类」模式（契约编辑器只对它们开放）。 */
 const GENERATIVE_MODES = ALL_WORKFLOW_TYPES.filter((t) => t.isGenerative).map((t) => t.code);
@@ -363,7 +362,6 @@ describe("parseRemoteModeAdapters：固定值字段（#3590）", () => {
     const out = parseRemoteModeAdapters([
       {
         mode: "t2v",
-        endpointPath: "/videos",
         inputs: [{ type: "prompt", field: "prompt" }],
         constants: [
           { field: " mode ", value: "text" },
@@ -383,10 +381,9 @@ describe("parseRemoteModeAdapters：固定值字段（#3590）", () => {
 
   it("没有 constants / 空数组时不挂键（与「缺省 = 没有常量」一致）", () => {
     const out = parseRemoteModeAdapters([
-      { mode: "T2I", endpointPath: "/i", inputs: [{ type: "prompt", field: "prompt" }] },
+      { mode: "T2I", inputs: [{ type: "prompt", field: "prompt" }] },
       {
         mode: "I2V",
-        endpointPath: "/v",
         inputs: [{ type: "prompt", field: "prompt" }],
         constants: [],
       },

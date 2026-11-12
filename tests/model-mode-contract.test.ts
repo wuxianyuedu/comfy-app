@@ -1,20 +1,21 @@
 import { describe, expect, it } from "vitest";
 
+import { adapterInputsFromContract } from "../src/lib/workshop/model-mode-contract";
 import {
-  adapterInputsFromContract,
-  defaultEndpointPathForMode,
+  defaultEndpointPathForKind,
   defaultInputsForMode,
   parseRemoteModeAdapters,
+  parseRemoteModelAdaptersDoc,
   readFieldPath,
-} from "../src/lib/workshop/model-mode-contract";
+} from "../src/lib/workshop/remote-model-adapter";
 
 describe("远端模型工坊模式适配器：默认契约", () => {
   it("文生图默认输入 = 提示词 + 宽高比 + 百万像素 + 倍数，输出图片", () => {
-    /* 「尺寸」在适配器层就是这三行（比例 + 百万像素 + 倍数）——与工坊尺寸
-     *  选择器的统一口径一致：选「分辨率」时换算成这三个值再下发。 */
+    /* 「尺寸」在适配器层就是这几行（比例 + 百万像素 + 倍数）——与工坊尺寸
+     *  选择器的统一口径一致：选「分辨率」表达时档位名走 resolution 口
+     *  （#3622），百万像素值照旧换算下发。 */
     const inputs = defaultInputsForMode("T2I");
     expect(inputs.map((i) => i.type)).toEqual(["prompt", "aspect-ratio", "megapixels", "multiple"]);
-    expect(defaultEndpointPathForMode("T2I")).toBe("/images/generations");
   });
 
   it("图生图默认输入以图片打头；深度图生图带深度图", () => {
@@ -23,8 +24,9 @@ describe("远端模型工坊模式适配器：默认契约", () => {
     expect(defaultInputsForMode("S2I").map((i) => i.type)).toContain("lineart");
   });
 
-  it("视频模式端点走 /videos/generations，I2V 以首帧图输入", () => {
-    expect(defaultEndpointPathForMode("I2V")).toBe("/videos/generations");
+  it("端点不再按模式配置（#3622）：默认路径只按类别给（未配置时请求侧推导用）", () => {
+    expect(defaultEndpointPathForKind("image")).toBe("/images/generations");
+    expect(defaultEndpointPathForKind("video")).toBe("/videos/generations");
     expect(defaultInputsForMode("I2V")[0]?.type).toBe("image");
   });
 });
@@ -34,7 +36,6 @@ describe("远端模型工坊模式适配器：解析与归一化", () => {
     const adapters = parseRemoteModeAdapters([
       {
         mode: "t2i",
-        endpointPath: "/v1/images/generations",
         inputs: [
           { type: "prompt", field: "prompt" },
           { type: "bogus", field: "x" },
@@ -52,11 +53,43 @@ describe("远端模型工坊模式适配器：解析与归一化", () => {
     expect(adapters[0]?.outputField).toBe("data.0.url");
   });
 
-  it("endpointPath 缺省按模式类别补默认值", () => {
+  it("适配器行不再带端点（#3622）：旧数据里的 endpointPath 被丢弃，不进归一化结果", () => {
     const adapters = parseRemoteModeAdapters([
-      { mode: "I2V", inputs: [{ type: "image", field: "image" }] },
+      {
+        mode: "I2V",
+        endpointPath: "/videos/generations",
+        inputs: [{ type: "image", field: "image" }],
+      },
     ]);
-    expect(adapters[0]?.endpointPath).toBe("/videos/generations");
+    expect(adapters[0]).not.toHaveProperty("endpointPath");
+  });
+});
+
+describe("远端模型工坊适配器存档（模型级 envelope，#3622）", () => {
+  it("新版形状：端点路径 + 各模式适配器一起归一化", () => {
+    const doc = parseRemoteModelAdaptersDoc({
+      endpointPath: "/v1/images/generations",
+      adapters: [{ mode: "t2i", inputs: [{ type: "prompt", field: "prompt" }] }],
+    });
+    expect(doc.endpointPath).toBe("/v1/images/generations");
+    expect(doc.adapters).toHaveLength(1);
+    expect(doc.adapters[0]?.mode).toBe("T2I");
+  });
+
+  it("旧版形状（裸适配器数组）兼容读取：端点视为未配置，请求侧按类别推导", () => {
+    const doc = parseRemoteModelAdaptersDoc([
+      { mode: "T2I", endpointPath: "/x", inputs: [{ type: "prompt", field: "prompt" }] },
+    ]);
+    expect(doc.endpointPath).toBe("");
+    expect(doc.adapters).toHaveLength(1);
+  });
+
+  it("端点路径强制根相对；坏数据按空档处理", () => {
+    expect(
+      parseRemoteModelAdaptersDoc({ endpointPath: "v1/images", adapters: [] }).endpointPath,
+    ).toBe("/v1/images");
+    expect(parseRemoteModelAdaptersDoc("junk")).toEqual({ endpointPath: "", adapters: [] });
+    expect(parseRemoteModelAdaptersDoc(null)).toEqual({ endpointPath: "", adapters: [] });
   });
 });
 

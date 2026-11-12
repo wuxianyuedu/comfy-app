@@ -1,5 +1,5 @@
 // 工坊 API 通道生成中转（POST /api/workshop-api/generate）。契约：
-//   图片 { kind:"image", prompt, negative?, size?, aspectRatio?, megapixels?, multiple?, image? } → { url }
+//   图片 { kind:"image", prompt, negative?, size?, aspectRatio?, megapixels?, resolution?, multiple?, image? } → { url }
 //   视频 { kind:"video", prompt, image?, frames?, fps? } → { url?, remoteTaskId? }；轮询 { kind:"video", remoteTaskId } → { url } | { pending:true }
 // 中转把提供方 apiKey 留在服务端，并经共享辅助归一化上游响应形状（直给 URL vs b64 vs 异步任务 id）。
 import { type NextRequest, NextResponse } from "next/server";
@@ -34,6 +34,9 @@ export async function POST(req: NextRequest) {
   const mode = strField(body, "mode");
   const aspectRatio = strField(body, "aspectRatio");
   const megapixels = strField(body, "megapixels");
+  /* 分辨率档位名（"1k"/"2k"/"4k"，ISSUE #3622）：与百万像素同口的另一种
+   * 表达，适配器映射了「分辨率」口的远端接口直接拿到它。 */
+  const resolution = strField(body, "resolution");
   const multiple = intField(body, "multiple", 1, 512);
   const image = strField(body, "image");
   const prompt = strField(body, "prompt") ?? "";
@@ -59,6 +62,7 @@ export async function POST(req: NextRequest) {
         mode,
         aspectRatio,
         megapixels,
+        ...(resolution === undefined ? {} : { resolution }),
         ...(multiple === undefined ? {} : { multiple }),
         image,
       });

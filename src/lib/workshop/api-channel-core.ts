@@ -44,7 +44,10 @@ export type ApiUpstreamTarget = {
 
 /** 生图请求：字段与工坊「统一输入」的对应关系由适配器决定，见调用方。 */
 export type ApiImageRequest = {
-  /** 统一输入：宽高比 / 百万像素 / 宽高对齐倍数 / 输入图。 */
+  /** 统一输入：宽高比 / 百万像素 / 分辨率档（"1k"/"2k"/"4k"）/ 对齐倍数 / 输入图。
+   *  分辨率与百万像素是同一「尺寸」口的两种表达：工坊选「分辨率」表达时
+   *  `resolution` 带档位名，`megapixels` 仍带换算值 —— 适配器映射了哪个
+   *  就下发哪个（ISSUE #3622：接口原生认 1k/2k/4k 这类档位的直接映射）。 */
   aspectRatio?: string;
   image?: string;
   megapixels?: string;
@@ -55,6 +58,8 @@ export type ApiImageRequest = {
   multiple?: number;
   negative?: string;
   prompt: string;
+  /** 统一输入「分辨率」的取值（清晰度档位名，如 "1k"）。 */
+  resolution?: string;
   size?: string;
 };
 
