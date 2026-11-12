@@ -113,7 +113,7 @@ function ModeTabs({
             <span className="min-w-0 text-left leading-tight">
               <span
                 className={cn(
-                  "block truncate text-[13px] font-semibold",
+                  "block truncate text-sm font-semibold",
                   selected ? "text-primary" : "text-ink",
                 )}
               >
