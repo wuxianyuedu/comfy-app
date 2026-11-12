@@ -4,6 +4,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  configurableSidebarItems,
+  defaultSidebarTabConfig,
   globalNavItems,
   isProjectTab,
   isTransientView,
@@ -134,7 +136,10 @@ describe("模型适配 / 模式契约：已经是全局视图（此前是浮层�
 describe("瞬时页签与侧栏隐藏（ISSUE #1784）", () => {
   /* 这两张清单是**产品判断**的落点，不是实现细节：改一个视图就换一种行为，
      而界面上不会有任何东西提示"这一页的规则变了"。所以逐项钉死 ——
-     以后想把画布也改成瞬时、或想把设置放回侧栏，必须先来改这里并说明理由。 */
+     以后想把画布也改成瞬时、或想把设置放回侧栏，必须先来改这里并说明理由。
+     ⚠️ 自 ISSUE #3623 起，侧栏那几项的「瞬时与否」**可配置**了（配置面是
+     `~/lib/shell/sidebar-tab-behavior` 那份 JSON）：这份清单因此断言的是
+     **项目默认**那份配置下的行为 —— 出厂即如此，用户改了是他自己的选择。 */
   const TRANSIENT_IDS: Array<WorkspaceView> = [
     "settings",
     "model-adapters",
@@ -143,7 +148,10 @@ describe("瞬时页签与侧栏隐藏（ISSUE #1784）", () => {
   ];
 
   it("恰好这三项是瞬时页签（切走即关），其余都不是", () => {
-    const actual = NAV_ITEMS.filter((item) => isTransientView(item.id)).map((item) => item.id);
+    const config = defaultSidebarTabConfig();
+    const actual = NAV_ITEMS.filter((item) => isTransientView(item.id, config)).map(
+      (item) => item.id,
+    );
     expect(actual.sort()).toEqual([...TRANSIENT_IDS].sort());
     const nonTransientIds: Array<WorkspaceView> = [
       "home",
@@ -153,8 +161,25 @@ describe("瞬时页签与侧栏隐藏（ISSUE #1784）", () => {
       "console",
     ];
     for (const id of nonTransientIds) {
-      expect(isTransientView(id)).toBe(false);
+      expect(isTransientView(id, config)).toBe(false);
     }
+  });
+
+  it("注册表里只剩「设置」带瞬时标记 —— 侧栏那几项归配置面管（ISSUE #3623）", () => {
+    /* 两处出处不许并存：侧栏项的瞬时与否由 JSON 决定，注册表再写一份就成了
+       「两个地方各说各话」，而界面上没有任何东西提示用户该信哪个。 */
+    const flagged = NAV_ITEMS.filter((item) => item.transient === true).map((item) => item.id);
+    expect(flagged).toEqual(["settings"]);
+  });
+
+  it("项目默认那份 JSON 恰好覆盖配置面内的每一项（漏登记 = 那一项默默回落成常驻）", () => {
+    const configured = Object.keys(defaultSidebarTabConfig()).sort();
+    const configurable = configurableSidebarItems()
+      .map((item) => item.id)
+      .sort();
+    expect(configured).toEqual(configurable);
+    /* 首页不在配置面内（固定页签，「切走即关」对它没有意义）。 */
+    expect(configurable).not.toContain("home");
   });
 
   it("只有「设置」不在侧栏列表里，但它仍在全局项清单里", () => {

@@ -68,6 +68,7 @@ export type QueryLlmConfig = Omit<
 
 export type Section =
   | "appearance"
+  | "sidebar"
   | "appUpdate"
   | "llmLocal"
   | "llmRemote"
@@ -237,6 +238,7 @@ export type SettingsPageController = {
 
 export const SETTINGS_SECTIONS: Array<{ id: Section; label: string }> = [
   { id: "appearance", label: "外观" },
+  { id: "sidebar", label: "侧边栏" },
   { id: "appUpdate", label: "应用更新" },
   { id: "llmLocal", label: "本地模型" },
   { id: "llmRemote", label: "远程模型" },

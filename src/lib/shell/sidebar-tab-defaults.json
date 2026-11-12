@@ -1,0 +1,11 @@
+{
+  "models": "independent",
+  "history": "independent",
+  "queue": "independent",
+  "comfyui": "independent",
+  "workflows": "independent",
+  "model-adapters": "shared",
+  "model-test": "shared",
+  "mode-contract": "shared",
+  "console": "independent"
+}
