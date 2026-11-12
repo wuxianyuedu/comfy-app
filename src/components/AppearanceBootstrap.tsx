@@ -7,11 +7,23 @@
  */
 import { useEffect } from "react";
 
-import { applyAppearance, readAppearance } from "~/lib/appearance";
+import { applyAppearance, readAppearance, restoreUserFonts } from "~/lib/appearance";
+import { beginStaleRun } from "~/lib/stale-run";
 
 export function AppearanceBootstrap() {
   useEffect(() => {
-    applyAppearance(readAppearance());
+    const guard = beginStaleRun();
+    /* 先恢复用户拖入的自定义字体（把它们重新注册进 document.fonts），再应用已保存的
+       外观偏好 —— 这样偏好里引用的 family 名在首帧就已经能解析出字形，不用等闪一下
+       回退栈。任一环节失败都不影响另一条：恢复出错时外观仍按保存值应用。 */
+    void restoreUserFonts().finally(() => {
+      guard.commit(() => {
+        applyAppearance(readAppearance());
+      });
+    });
+    return () => {
+      guard.dispose();
+    };
   }, []);
   return null;
 }
