@@ -1,1 +1,345 @@
-[]
+[
+  {
+    "mode": "T2I",
+    "inputs": [
+      "prompt",
+      "negative",
+      "size",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "image",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "I2I",
+    "inputs": [
+      "prompt",
+      "negative",
+      "reference-image",
+      "reference-image-2",
+      "size",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "image",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "TI2I",
+    "inputs": [
+      "prompt",
+      "negative",
+      "size",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "image",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "R2I",
+    "inputs": [
+      "prompt",
+      "negative",
+      "reference-image",
+      "reference-image-2",
+      "size",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "image",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "E2I",
+    "inputs": [
+      "prompt",
+      "negative",
+      "reference-image",
+      "reference-image-2",
+      "size",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "image",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "D2I",
+    "inputs": [
+      "prompt",
+      "negative",
+      "reference-image",
+      "reference-image-2",
+      "size",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "image",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "P2I",
+    "inputs": [
+      "prompt",
+      "negative",
+      "reference-image",
+      "reference-image-2",
+      "size",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "image",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "S2I",
+    "inputs": [
+      "prompt",
+      "negative",
+      "size",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "image",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "M2I",
+    "inputs": [
+      "prompt",
+      "negative",
+      "size",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "image",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "T2V",
+    "inputs": [
+      "prompt",
+      "negative",
+      "size",
+      "duration",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "video",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "I2V",
+    "inputs": [
+      "prompt",
+      "negative",
+      "first-frame",
+      "size",
+      "duration",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "video",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "TI2V",
+    "inputs": [
+      "prompt",
+      "negative",
+      "first-frame",
+      "size",
+      "duration",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "video",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "FLF2V",
+    "inputs": [
+      "prompt",
+      "negative",
+      "first-frame",
+      "last-frame",
+      "size",
+      "duration",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "video",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "FMF2V",
+    "inputs": [
+      "prompt",
+      "negative",
+      "first-frame",
+      "last-frame",
+      "size",
+      "duration",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "video",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "R2V",
+    "inputs": [
+      "prompt",
+      "negative",
+      "first-frame",
+      "size",
+      "duration",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "video",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "S2V",
+    "inputs": [
+      "prompt",
+      "negative",
+      "first-frame",
+      "size",
+      "duration",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "video",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "IA2V",
+    "inputs": [
+      "prompt",
+      "negative",
+      "first-frame",
+      "size",
+      "duration",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "video",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "A2V",
+    "inputs": [
+      "prompt",
+      "negative",
+      "size",
+      "duration",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "video",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "T2A",
+    "inputs": [
+      "prompt",
+      "negative",
+      "size",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "audio",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "T2M",
+    "inputs": [
+      "prompt",
+      "negative",
+      "size",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "audio",
+    "required": [
+      "prompt"
+    ]
+  },
+  {
+    "mode": "T2S",
+    "inputs": [
+      "prompt",
+      "negative",
+      "size",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "output": "audio",
+    "required": [
+      "prompt"
+    ]
+  }
+]
