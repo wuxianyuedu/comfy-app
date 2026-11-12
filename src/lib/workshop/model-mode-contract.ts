@@ -645,41 +645,25 @@ export function configuredModeContracts(
   });
 }
 
-/** 「保存模式契约」（本机覆盖）该写进 `data/` 的内容：与**成品配置**（推导 +
- *  项目默认）有差异的那些契约。
- *
- *  两个覆盖层各比各的基准，不是同一把尺子：项目默认盖在推导上，本机覆盖盖在
- *  「项目默认 + 推导」上 —— 基准不同是语义的一部分。本机里存一条与成品配置
- *  相同的契约，读出来还是同一份内容，只会徒增「已改」的假象（ISSUE #3396
- *  反馈 1 的现场：保存整份注册表后，二十多个模式全量亮「已改」）。 */
-export function localOverrideDiff(contracts: ReadonlyArray<ModeContract>): Array<ModeContract> {
-  const configured = new Map(configuredModeContracts().map((c) => [c.mode, c]));
-  return contractsDiffAgainstBase(contracts, (mode) => {
-    const found = configured.get(upperToken(mode));
-    return found ?? derivedModeContract(mode);
-  });
-}
-
-/** 差集的共用实现：逐字段稳定比较（显式字段序，别依赖对象键序），与基准相同
- *  的模式被丢掉。mode 大写、口顺序、必备固化、自定义口定义都参与 —— 任何一处
- *  不同都算「作者显式决定了这个模式」。留一条与基准相同的覆盖只会压住基准的
- *  演进（占位的覆盖是覆盖层唯一的漂移形态）。 */
-function contractsDiffAgainstBase(
-  contracts: ReadonlyArray<ModeContract>,
-  baseFor: (mode: string) => ModeContract,
-): Array<ModeContract> {
-  return contracts.filter(
-    (contract) => modeContractSignature(contract) !== modeContractSignature(baseFor(contract.mode)),
-  );
-}
-
 /** 契约的稳定比较键：显式字段序序列化。`required` 走 `requiredInputsFor` 固化
  *  （编辑器里 undefined 与「固化后的内置默认」是同一件事）。判「这个模式改没改」
- *  也用它（`mode-contract-config` 的徽标判据，ISSUE #3396 反馈 1）。 */
+ *  也用它（`mode-contract-config` 的徽标判据，ISSUE #3396 反馈 1）。
+ *
+ *  字段序**写死**（不靠对象键序）：同一个契约的两份来源（落盘那份 / 编辑器草稿
+ *  那份）的键序可能不同（`required` 有没有、`customInputs` 写在哪），按键序
+ *  序列化会把「内容一样」读成「不一样」—— 那会让差集把没改过的模式也留下来，
+ *  也会让「已改」徽标点亮一堆没动过的模式。 */
 export function modeContractSignature(contract: ModeContract): string {
   return JSON.stringify({
-    ...contract,
+    mode: contract.mode,
+    inputs: contract.inputs,
+    output: contract.output,
     required: requiredInputsFor(contract),
+    /* 自定义口定义是**查表**（真正的顺序由 `inputs` 决定），按 id 排一遍再比：
+     * 两份来源的书写顺序不同不算「改过」。 */
+    customInputs: [...(contract.customInputs ?? [])]
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((def) => ({ id: def.id, kind: def.kind, label: def.label })),
   });
 }
 /** 校验并归一化一份注册表（去重、剔非法口、模式大写）。

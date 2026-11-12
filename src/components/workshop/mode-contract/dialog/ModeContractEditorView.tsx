@@ -72,7 +72,9 @@ export function ModeContractEditorView({
           <ModeContractModeNav
             activeMode={mode}
             onSelect={controller.selectMode}
-            storedCustomized={(code) => isModeContractCustomized(code, stored)}
+            storedCustomized={(code) =>
+              isModeContractCustomized(code, stored, controller.configured)
+            }
           />
         </nav>
 
@@ -104,7 +106,7 @@ function ModeContractDraftPanel({
 }) {
   const { saving, saved, nextReferenceImageId } = controller;
   /* 「还原默认」只对真改过的模式出现：判据与左栏「已改」徽标同源（内容比较）。 */
-  const customized = isModeContractCustomized(draft.mode, controller.stored);
+  const customized = isModeContractCustomized(draft.mode, controller.stored, controller.configured);
 
   return (
     <section className="border-border bg-surface flex flex-col gap-4 rounded-xl border p-4">
@@ -207,7 +209,7 @@ function ModeContractDraftPanel({
           已保存 —— 工坊与工作流库读的是同一份注册表，另一处刷新后即生效。
           <span className="text-ink font-medium">
             {controller.savedKind === "project"
-              ? "已写入项目默认（src/lib/workshop/mode-contract-defaults.json），提交后每个检出与桌包都是这一份；本进程内要重启应用才读到新默认。"
+              ? "已写入项目默认（src/lib/workshop/mode-contract-defaults.json）：本进程立即生效，不必重启；提交后每个检出与桌包都是这一份。"
               : "改动只落在这台机器上，不会跟着代码走。"}
           </span>
         </p>

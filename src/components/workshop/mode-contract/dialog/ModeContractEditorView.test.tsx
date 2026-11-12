@@ -21,6 +21,7 @@ function stubController(
   return {
     mode,
     draft,
+    configured: [],
     stored: [],
     saving: false,
     saved: false,

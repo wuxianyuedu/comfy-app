@@ -126,18 +126,19 @@ export function useModelAdapters(): ModelAdaptersController {
                 mode,
                 endpointPath: defaultEndpointPathForMode(mode),
                 // 默认输入清单来自**生效的模式契约**（effectiveModeContract =
-                // 本机覆盖 → 成品配置〔推导 + 项目默认显式覆盖，#3396〕）——
+                // 成品配置〔项目默认〕→ 本机覆盖逐模式压过它，#3634）——
                 // 统一口在这里先定义、适配器只做翻译；与契约编辑器的初值同源，
                 // 不会出现「编辑器看到 A、适配器预填 B」。
                 inputs: adapterInputsFromContract(
-                  effectiveModeContract(mode, modeContracts.contracts).contract,
+                  effectiveModeContract(mode, modeContracts.contracts, modeContracts.configured)
+                    .contract,
                 ),
                 outputField: "",
               },
             ],
       );
     },
-    [modeContracts.contracts],
+    [modeContracts.configured, modeContracts.contracts],
   );
 
   const save = useCallback(async () => {

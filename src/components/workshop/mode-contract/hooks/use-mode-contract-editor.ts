@@ -25,6 +25,8 @@ export type ModeContractEditorController = {
   addCustomInput: (label: string, kind: ModeContractCustomKind) => void;
   /** 追加一个输入口（参考图由调用方传 `nextReferenceImageId` 的结果）。 */
   appendInput: (id: ModeContractInputId) => void;
+  /** 成品配置基准（项目默认）—— 判「已改」用它（服务端现读，写完即生效）。 */
+  configured: Array<ModeContract>;
   /** 当前编辑的契约草稿（null = 未选模式）。 */
   draft: ModeContract | null;
   /** 曲线救国的兜底：契约里一个必备口都没勾时要不要提示（视图据此给提示）。 */
@@ -62,7 +64,7 @@ export type ModeContractEditorController = {
   selectMode: (mode: string) => void;
   setDraft: (draft: ModeContract) => void;
   setOutput: (output: ModeContract["output"]) => void;
-  /** 注册表里用户改过的模式。 */
+  /** 生效注册表（成品配置 + 本机覆盖，逐模式合并）。 */
   stored: Array<ModeContract>;
   /** 切换某个口的「必备」状态。 */
   toggleRequired: (id: ModeContractInputId) => void;
@@ -78,11 +80,11 @@ export function useModeContractEditor(): ModeContractEditorController {
   const selectMode = useCallback(
     (next: string) => {
       setMode(next);
-      setDraft(effectiveModeContract(next, registry.contracts).contract);
+      setDraft(effectiveModeContract(next, registry.contracts, registry.configured).contract);
       setSaved(false);
       setSavedKind(null);
     },
-    [registry.contracts],
+    [registry.configured, registry.contracts],
   );
 
   const appendInput = useCallback((id: ModeContractInputId) => {
@@ -202,8 +204,12 @@ export function useModeContractEditor(): ModeContractEditorController {
     setDraft((prev) => (prev ? { ...prev, output } : prev));
   }, []);
 
-  /** 整份注册表 = 其余模式（用户已改过的）+ 当前草稿。两种保存共用这一步：
-   *  服务端都是「整份收下、各自归一」，这里不重复归一。 */
+  /** 整份注册表 = 其余模式（生效值）+ 当前草稿。两种保存共用这一步：
+   *  服务端都是「整份收下、各自归一」，这里不重复归一。
+   *
+   *  这里是**全量**（生效注册表覆盖到全部生成类模式），不是「用户改过的那几条」
+   *  —— 「保存为项目默认」写的是完整基线，若这里只交「改过的几条」，文件里其余
+   *  模式的内容会被抹掉（#3634 的现场：文件里只剩一项）。 */
   const mergedRegistry = useCallback((): Array<ModeContract> | null => {
     if (!draft) {
       return null;
@@ -248,6 +254,7 @@ export function useModeContractEditor(): ModeContractEditorController {
   return {
     mode,
     draft,
+    configured: registry.configured,
     stored: registry.contracts,
     resetting: registry.resetting,
     saving: registry.saving,
