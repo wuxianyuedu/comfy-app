@@ -331,7 +331,7 @@ function readFileAt(root: string, rel: string): string {
   return readFileSync(path.join(root, rel), "utf8");
 }
 
-/** 桌包档的 GA workflow（artifact + nightly Release 落点，#3504 起不再回写常驻目录）。 */
+/** 桌包档的 GA workflow（GA artifact + nightly Release + #3607 CNB 站内回传，#3504 起不再回写常驻目录）。 */
 const PACKAGE_YML = ".github/workflows/package-desktop.yml" as const;
 
 /**
@@ -2913,13 +2913,31 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
 
     /* 成品落点随执行面换形（#3504）：GA 产 artifact（按 run 取）+ 滚动 nightly Release，
      * 不再是本机常驻目录的「留 2 份」（hosted runner 是即弃机，回写开发机既没有通道也不该有）。
-     * 三个落点都要有 step：少一个，「跑成功了但产物去哪了」就没人回答。 */
-    for (const landing of ["上传安装版", "上传免安装版", "发布到滚动 Release"]) {
+     * 四个落点都要有 step：少一个，「跑成功了但产物去哪了」就没人回答。
+     * #3607 起补第四个：CNB 站内滚动 Release（用户在 CNB 侧提诉求、也该在 CNB 侧拿包，
+     * GitHub 只是镜像仓）。 */
+    for (const landing of ["上传安装版", "上传免安装版", "发布到滚动 Release", "回传成品到 CNB"]) {
       expect(
         steps.some((n) => n.startsWith(landing)),
         `package-desktop.yml 里没有「${landing}」step —— 成品落点少了一个`,
       ).toBe(true);
     }
+
+    /* #3607 接线判据：回传步必须点既有脚本、带 continue-on-error（回传失败不碰构建结论）、
+     * 且用专用 repo-release:rw 令牌。少一件，「CNB 侧能拿到包」这句话就没有执行者，
+     * 或反过来把「桌包打出来了」判红 —— 正是这一格最容易静默失效的两头。 */
+    const relayStep = gaStepBlock(PACKAGE_YML, "回传成品到 CNB（滚动 nightly Release）");
+    expect(relayStep, "回传 step 解析不出来").toBeTruthy();
+    expect(
+      relayStep,
+      "回传 step 没点既有入口 `ci-ga-desktop-relay.mjs`（别把上传链抄进 workflow 内联）",
+    ).toContain("node scripts/ci-ga-desktop-relay.mjs");
+    expect(relayStep, "回传 step 缺 continue-on-error —— 回传失败会反过来把构建结论判红").toContain(
+      "continue-on-error: true",
+    );
+    expect(relayStep, "回传 step 没接专用 CNB_RELEASE_TOKEN（repo-release:rw）").toContain(
+      "CNB_RELEASE_TOKEN",
+    );
 
     /* 锁：两个触发口同一把，且是桌包自己那把 —— 与每日档共用会互相掐停。
      * 两个触发口也要都在（ISSUE #3297：按钮要一双手，而 `#3302` 那格 NSIS 现场读数
