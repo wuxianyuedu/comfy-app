@@ -14,6 +14,7 @@
 // 输出类型由模式的类别决定（图像 → 图片，视频 → 视频，音频 → 音频）。
 
 import { isRecord } from "~/lib/is-record";
+import { compareText } from "~/lib/ordered-set";
 import { upperToken } from "~/lib/upper-token";
 import {
   EXPOSED_PARAM_DISPLAY_LABEL,
@@ -660,9 +661,10 @@ export function modeContractSignature(contract: ModeContract): string {
     output: contract.output,
     required: requiredInputsFor(contract),
     /* 自定义口定义是**查表**（真正的顺序由 `inputs` 决定），按 id 排一遍再比：
-     * 两份来源的书写顺序不同不算「改过」。 */
+     * 两份来源的书写顺序不同不算「改过」。排序走 `ordered-set` 的 `compareText`
+     * （区域设置排序只有那一处实现，规范 16 §16.2.4.55）。 */
     customInputs: [...(contract.customInputs ?? [])]
-      .sort((a, b) => a.id.localeCompare(b.id))
+      .sort((a, b) => compareText(a.id, b.id))
       .map((def) => ({ id: def.id, kind: def.kind, label: def.label })),
   });
 }
