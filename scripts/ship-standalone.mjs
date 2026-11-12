@@ -60,6 +60,7 @@ function namedActions(opt, self) {
     ["messageFile", opt.messageFile !== null && opt.messageFile !== undefined, "--message-file"],
     ["title", opt.title !== null && opt.title !== undefined, "--title"],
     ["add", opt.adds.length > 0, "--add"],
+    ["allowStaged", opt.allowStaged === true, "--allow-staged"],
     ["only", opt.only, "--only"],
     ["reap", opt.reap, "--reap"],
     [
@@ -296,6 +297,7 @@ export async function runStandaloneAction(io) {
       opt.release === null || opt.release === undefined ? null : "--release",
       opt.newIssue === null || opt.newIssue === undefined ? null : "--new-issue",
       opt.adds.length > 0 ? "--add" : null,
+      opt.allowStaged === true ? "--allow-staged" : null,
       opt.claims ? "--claims" : null,
       opt.whoami ? "--whoami" : null,
       opt.only ? "--only" : null,
