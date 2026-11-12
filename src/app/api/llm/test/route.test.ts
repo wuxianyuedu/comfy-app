@@ -154,7 +154,7 @@ describe("POST /api/llm/test", () => {
     expect(second?.[1]?.headers).toMatchObject({ Authorization: "Bearer sk-provider" });
   });
 
-  it("模型行探测：用供应商地址 + 模型自己的格式（请求体不再带模型行历史 Base URL）", async () => {
+  it("显式 apiFormat 探测：用供应商地址 + 指名格式（#3618 起 UI 不再发这个形状，API 口径保留）", async () => {
     findById.mockResolvedValue({
       id: "p1",
       name: "Agnes",
@@ -177,7 +177,7 @@ describe("POST /api/llm/test", () => {
     expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({ "x-api-key": "sk-provider" });
   });
 
-  it("模型行探测只按自己的格式试：它探不通时不再换别的格式（否则界面报绿而实际调用仍按原格式发）", async () => {
+  it("显式 apiFormat 只按指名格式试：探不通时不换别的格式（否则报绿而实际调用仍按原格式发）", async () => {
     findById.mockResolvedValue({
       id: "p1",
       name: "Agnes",
