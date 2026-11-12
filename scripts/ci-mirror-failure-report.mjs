@@ -35,6 +35,12 @@ import path from "node:path";
  *   · `schannel: server closed abruptly (missing close_notify)` —— TLS 层断流；
  *   · `Recv failure` 前缀本身（配别的错因时仍属传输层）。
  *
+ * Node `fetch` 的 `AbortSignal.timeout()` 抛的是 `TimeoutError: The operation was
+ * aborted due to timeout` —— 这是**客户端自己掐断**的一形，既不是 HTTP 应答也不是
+ * git 的措辞，旧正则一条都不命中，于是本该重试的超时被念成「其他」、一次就交账。
+ * 二进制上传（GA 桌包回传 CNB 的 PUT，ISSUE #3621）正是撞在这一形上，故按现场
+ * 原话补进 egress 判据；认证 / 权限类仍是 HTTP 应答，不受影响。
+ *
  * git-lfs 是 Go 写的，它的 batch 请求不走 git / curl 那一套，回话是 Go net 包在
  * 出网那一层自己抛的措辞 —— 与上面三形讲的是同一件事（网络根本没到 github.com:443），
  * 却一个字都对不上，于是那一跳被念成「其他」、`shouldRetryGitFailure()` 也不认，
@@ -53,7 +59,7 @@ import path from "node:path";
  * @returns {boolean} true ⇒ 网络根本没到 GitHub（或中途断流），重试有意义
  */
 export function isEgressFailure(text) {
-  return /failed to connect|could not connect to server|couldn't connect to host|could not resolve host|connection\s+(?:was\s+)?reset|connection timed out|connection refused|name resolution|getaddrinfo|empty reply from server|server closed abruptly|recv failure|a connection attempt failed|dial tcp|i\/o timeout|no such host|超时/i.test(
+  return /failed to connect|could not connect to server|couldn't connect to host|could not resolve host|connection\s+(?:was\s+)?reset|connection timed out|connection refused|name resolution|getaddrinfo|empty reply from server|server closed abruptly|recv failure|a connection attempt failed|dial tcp|i\/o timeout|no such host|超时|aborted due to timeout|TimeoutError/i.test(
     text,
   );
 }

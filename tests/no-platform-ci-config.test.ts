@@ -2938,6 +2938,15 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(relayStep, "回传 step 没接专用 CNB_RELEASE_TOKEN（repo-release:rw）").toContain(
       "CNB_RELEASE_TOKEN",
     );
+    /* #3607 诉求原意含「只要 build-tauri-release.ps1 那个纯壳、dev server 照用」：
+     * 回传步要把现成 app.exe 的落点传给脚本，否则脚本只回传完整成品，纯壳那一半
+     * 又随会话消失。判据钉的是接线形状（env 名 + 现成产物路径），不是脚本内部实现。 */
+    expect(relayStep, "回传 step 没把纯壳产物落点 DESKTOP_SHELL_EXE 传给脚本").toContain(
+      "DESKTOP_SHELL_EXE",
+    );
+    expect(relayStep, "纯壳落点不是 target/release/app.exe（别指向打包器后的别处）").toContain(
+      "src-tauri/target/release/app.exe",
+    );
 
     /* 锁：两个触发口同一把，且是桌包自己那把 —— 与每日档共用会互相掐停。
      * 两个触发口也要都在（ISSUE #3297：按钮要一双手，而 `#3302` 那格 NSIS 现场读数

@@ -11,6 +11,9 @@
  *   ⑥ 失败回话脱敏（令牌形状不回显）；
  *   ⑦ `--dry-run` 一条网络都不发；
  *   ⑧ 出口话术给出 CNB 站内取包地（不是 GitHub）。
+ *   ⑨ #3607 纯壳：单文件 `ComfyAPP-shell.exe` 从盘上真读（不重编 / 不打包），
+ *      与完整成品分列；#3621 PUT 墙钟是分钟级、超时 / 网络类失败按既有判据重试、
+ *      HTTP 应答一次交账不重试。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -24,11 +27,20 @@ import {
   main,
   parseVerifyUrl,
   putAsset,
+  PUT_MAX_ATTEMPTS,
+  PUT_TIMEOUT_MS,
   redact,
   RELEASE_TAG,
   resolveDesktopRelayContext,
+  SHELL_ASSET_NAME,
   uploadAsset,
 } from "../scripts/ci-ga-desktop-relay.mjs";
+
+const tempRoots: string[] = [];
+afterEach(() => {
+  for (const r of tempRoots) fs.rmSync(r, { force: true, recursive: true });
+  tempRoots.length = 0;
+});
 
 const BASE_ENV = {
   CNB_RELEASE_TOKEN: "release-token",
@@ -37,6 +49,18 @@ const BASE_ENV = {
   GITHUB_RUN_ID: "4242",
   GITHUB_SHA: "a".repeat(40),
 };
+
+/** 造一棵独立的纯壳树：真实 GA 里 `app.exe` 在 `target/release/`、bundle 在
+ * `target/release/bundle/`（父子不相交），夹具照这个关系放在**另一个**临时根，
+ * 免得 `collectBundles` 遍历 bundleDir 时把这一个 .exe 又当安装包收一遍。 */
+function makeShell() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "ga-desktop-shell-"));
+  tempRoots.push(root);
+  const dir = path.join(root, "src-tauri", "target", "release");
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "app.exe"), "SHELL");
+  return path.join(dir, "app.exe");
+}
 
 const CTX = {
   endpoint: "https://api.cnb.cool",
@@ -74,17 +98,21 @@ function makeBundles() {
   return root;
 }
 
-const tempRoots: string[] = [];
-afterEach(() => {
-  for (const r of tempRoots) fs.rmSync(r, { force: true, recursive: true });
-  tempRoots.length = 0;
-});
-
 describe("① 前提 fail-closed：缺一件就是没判过", () => {
   it("齐全时可发起", () => {
     const ctx = resolveDesktopRelayContext(BASE_ENV);
     expect(ctx.ok).toBe(true);
     expect(ctx.ok && ctx.repo).toBe("moon-read/comfy-app-t3");
+  });
+
+  it("纯壳落点缺省 app.exe、可由 DESKTOP_SHELL_EXE 覆盖", () => {
+    const base = resolveDesktopRelayContext(BASE_ENV);
+    expect(base.ok && base.shellExe).toBe("src-tauri/target/release/app.exe");
+    const overridden = resolveDesktopRelayContext({
+      ...BASE_ENV,
+      DESKTOP_SHELL_EXE: "out/shell.exe",
+    });
+    expect(overridden.ok && overridden.shellExe).toBe("out/shell.exe");
   });
 
   it("缺 CNB_RELEASE_TOKEN / CNB_REPO_SLUG 都退 2，且逐条点名", async () => {
@@ -128,6 +156,41 @@ describe("② 成品收集：从盘上真读，不硬编码文件名", () => {
     ]);
     expect(files.every((f) => f.bytes > 0)).toBe(true);
     expect(files.find((f) => f.kind === "portable")?.assetName).toBe("ComfyAPP-portable.zip");
+  });
+
+  it("纯壳单文件从盘上真读，资产名固定、kind=shell、与完整成品分列", () => {
+    const root = makeBundles();
+    tempRoots.push(root);
+    const shellRel = makeShell();
+    const files = collectBundles(
+      {
+        bundleDir: root,
+        portable: path.join(root, "portable/ComfyAPP-portable.zip"),
+        shellExe: shellRel,
+      },
+      root,
+    );
+    const shell = files.find((f) => f.kind === "shell");
+    expect(shell?.assetName).toBe(SHELL_ASSET_NAME);
+    expect(shell?.bytes).toBe(5);
+    /* 纯壳不在 bundle 目录里被当安装包收一遍：仍只有 nsis / msi 两个 installer。 */
+    expect(files.filter((f) => f.kind === "installer")).toHaveLength(2);
+    expect(files.filter((f) => f.kind === "shell")).toHaveLength(1);
+  });
+
+  it("纯壳缺席不补造、不抛：其余成品照收", () => {
+    const root = makeBundles();
+    tempRoots.push(root);
+    const files = collectBundles(
+      {
+        bundleDir: root,
+        portable: path.join(root, "portable/ComfyAPP-portable.zip"),
+        shellExe: path.join(root, "nope/app.exe"),
+      },
+      root,
+    );
+    expect(files.some((f) => f.kind === "shell")).toBe(false);
+    expect(files.length).toBe(3);
   });
 
   it("bundle 目录不存在时也认 portable（不抛）", () => {
@@ -391,6 +454,99 @@ describe("⑤ 上传链：取地址 → PUT → 确认，PUT 不带 auth", () =>
     expect(headers["Content-Length"]).toBe(String(byteLength));
     expect(seen && "duplex" in seen ? seen.duplex : undefined).toBeUndefined();
   });
+
+  /* ISSUE #3621：二进制 PUT 的墙钟按分钟级给，不用 JSON 请求的 30/60s 口径。 */
+  it("PUT 墙钟是分钟级（>=300000ms），不是 cnbRequest 那档 60s", () => {
+    expect(PUT_TIMEOUT_MS).toBeGreaterThanOrEqual(300_000);
+    expect(PUT_MAX_ATTEMPTS).toBe(3);
+  });
+
+  it("超时 / 网络类失败重试到绿：假 sleep 不真等，重试送同一份 Buffer", async () => {
+    const root = makeBundles();
+    tempRoots.push(root);
+    const absPath = path.join(root, "nsis/ComfyAPP_0.1.0_x64-setup.exe");
+    let attempts = 0;
+    const bodies: Buffer[] = [];
+    const sleeps: number[] = [];
+    const fetchImpl: typeof fetch = (_u: RequestInfo | URL, init?: RequestInit) => {
+      attempts += 1;
+      if (init?.body instanceof Buffer) bodies.push(init.body);
+      if (attempts < 3) {
+        /* 现场原话：AbortSignal.timeout 抛出的客户端掐断形。 */
+        return Promise.reject(new Error("TimeoutError: The operation was aborted due to timeout"));
+      }
+      return Promise.resolve(new Response("", { status: 200 }));
+    };
+    const log = lines();
+    const r = await putAsset(
+      {
+        fetchImpl,
+        log: log.log,
+        sleep: (ms) => {
+          sleeps.push(ms);
+          return Promise.resolve();
+        },
+      },
+      { absPath, assetName: "x.exe", bytes: 3, uploadUrl: "https://asset.cnb.cool/put" },
+    );
+    expect(r.ok).toBe(true);
+    expect(attempts).toBe(3);
+    expect(sleeps).toEqual([5000, 10_000]);
+    /* 整轮只读一次盘：三跳送的是同一份字节，Content-Length 与正文不分家。 */
+    expect(bodies).toHaveLength(3);
+    expect(bodies[0]).toBe(bodies[1]);
+    expect(bodies[1]).toBe(bodies[2]);
+    expect(log.out.join("\n")).toContain("后重试");
+  });
+
+  it("HTTP 应答（4xx/5xx）一次交账、不重发整份二进制", async () => {
+    const root = makeBundles();
+    tempRoots.push(root);
+    const absPath = path.join(root, "nsis/ComfyAPP_0.1.0_x64-setup.exe");
+    let attempts = 0;
+    const fetchImpl: typeof fetch = () => {
+      attempts += 1;
+      return Promise.resolve(new Response("no", { status: 500 }));
+    };
+    const sleeps: number[] = [];
+    const r = await putAsset(
+      {
+        fetchImpl,
+        log: () => undefined,
+        sleep: (ms) => {
+          sleeps.push(ms);
+          return Promise.resolve();
+        },
+      },
+      { absPath, assetName: "x.exe", bytes: 3, uploadUrl: "https://asset.cnb.cool/put" },
+    );
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.detail).toContain("HTTP 500");
+    expect(attempts).toBe(1);
+    expect(sleeps).toEqual([]);
+  });
+
+  it("网络类失败用尽尝试仍红：detail 带最后一次原话，不假装送达", async () => {
+    const root = makeBundles();
+    tempRoots.push(root);
+    const absPath = path.join(root, "nsis/ComfyAPP_0.1.0_x64-setup.exe");
+    let attempts = 0;
+    const fetchImpl: typeof fetch = () => {
+      attempts += 1;
+      return Promise.reject(new Error("fetch failed"));
+    };
+    const r = await putAsset(
+      {
+        fetchImpl,
+        log: () => undefined,
+        sleep: () => Promise.resolve(),
+      },
+      { absPath, assetName: "x.exe", bytes: 3, uploadUrl: "https://asset.cnb.cool/put" },
+    );
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.detail).toContain("fetch failed");
+    expect(attempts).toBe(PUT_MAX_ATTEMPTS);
+  });
 });
 
 describe("⑥ 脱敏：令牌形状不回显", () => {
@@ -448,8 +604,36 @@ describe("⑧ 端到端：出口话术给 CNB 站内取包地", () => {
     expect(text).toContain("已搬到 CNB");
     expect(text).toContain("moon-read/comfy-app-t3/-/releases/download/nightly/");
     expect(text).not.toContain("github.com");
-    /* 3 份成品：每份 3 步 = 9，加 1 次读 tag = 10。 */
+    /* 3 份完整成品：每份 3 步 = 9，加 1 次读 tag = 10。 */
     expect(calls.length).toBe(10);
+  });
+
+  /* #3607 纯壳那一半：连单文件壳一起回传，出口话术给出「放进检出根、dev server 照用」。 */
+  it("带纯壳的端到端：4 份全绿，出口念出纯壳落点与 dev server 用法", async () => {
+    const root = makeBundles();
+    tempRoots.push(root);
+    const shellRel = makeShell();
+    const { calls, fetchImpl } = cnbFetch();
+    const { out, log } = lines();
+    const code = await main({
+      argv: [],
+      cwd: root,
+      env: {
+        ...BASE_ENV,
+        DESKTOP_BUNDLE_DIR: root,
+        DESKTOP_PORTABLE: path.join(root, "portable/ComfyAPP-portable.zip"),
+        DESKTOP_SHELL_EXE: shellRel,
+      },
+      fetchImpl,
+      log,
+    });
+    expect(code).toBe(CODE.OK);
+    /* 4 份成品：每份 3 步 = 12，加 1 次读 tag = 13。 */
+    expect(calls.length).toBe(13);
+    const text = out.join("\n");
+    expect(text).toContain(SHELL_ASSET_NAME);
+    expect(text).toContain("src-tauri/target/release/app.exe");
+    expect(text).toContain("dev server");
   });
 
   /* #3611 补的盲区：真实跑里 create 一挂，其后的「取地址 → PUT → 确认」三步从没

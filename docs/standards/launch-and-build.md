@@ -3052,15 +3052,35 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 > 是 #3504 当时的形状 —— GitHub 对这条链只是**镜像仓**，而诉求在 CNB 侧提、包也该在
 > CNB 侧拿（本地双击 `tools/build/build-all.ps1` 得 release 壳，希望「这步的产物能
 > 在 CNB 侧执行和获取」）。`package-desktop.yml` 收尾多一格
-> `scripts/ci-ga-desktop-relay.mjs`：把**同一份**安装版（nsis / msi）与免安装版
-> （portable zip）回传到 CNB 的滚动 `nightly` Release（Release 附件有稳定下载 URL、
-> 按名字取、每天都指向最新一份）。GA 的 artifact + nightly Release 照旧保留，两者各答
-> 「这一跑产了什么」与「镜像侧留档」；**推荐取包地是 CNB 站内**。
+> `scripts/ci-ga-desktop-relay.mjs`：把**同一份**安装版（nsis / msi）、免安装版
+> （portable zip）与**纯壳单文件** `ComfyAPP-shell.exe` 回传到 CNB 的滚动 `nightly`
+> Release（Release 附件有稳定下载 URL、按名字取、每天都指向最新一份）。GA 的
+> artifact + nightly Release 照旧保留，两者各答「这一跑产了什么」与「镜像侧留档」；
+> **推荐取包地是 CNB 站内**。
+>
+> **「只有完全成品的包吗」不是**：诉求原意含 `build-tauri-release.ps1` 那个**只编壳、
+> 不打包**的形态（本地 dev server 照用，免去本地编壳这一步）。`pnpm tauri build` 在打
+> nsis/msi 之前先编出的 `src-tauri/target/release/{{shell.app.exe}}` 就是它：启动页已
+> 编译期内嵌、不依赖外挂 `static/**`（那层是打包器后才挂的资源目录）。脚本从盘上真读
+> 这一个文件、以固定名 `ComfyAPP-shell.exe` 并列回传；下载后放进项目检出根的
+> `src-tauri/target/release/{{shell.app.exe}}`（与本地 `build-tauri-release.ps1` 同一
+> 落点），壳推得出项目根 ⇒ `ensure_launch_mode` 判 prebuilt ⇒ 自编排起
+> `scripts/dev-launcher.mjs`（§1.5），页面由本地 dev server 提供 —— 不用装完整桌包、
+> 不用本地重编壳。`tools/start/start-tauri.ps1` / 根目录快捷方式都不用改。
 > 落点选 Release 不选制品库 / Issue 附件的理由、上传三步（取地址 → PUT → 确认）与
 > 专用 `CNB_RELEASE_TOKEN`（`repo-release:rw`）的口径见该脚本文件头；
 > 回传步带 `continue-on-error`，失败只多一行读数、不反过来把构建判红（同 #3437 口径）。
 > 判据（`tests/no-platform-ci-config.test.ts` 桌包段）：四个落点 step 都要在、
-> 回传步点既有脚本、带 `continue-on-error`、接专用令牌。
+> 回传步点既有脚本、带 `continue-on-error`、接专用令牌、传 `DESKTOP_SHELL_EXE`。
+>
+> **二进制 PUT 的墙钟与重试（#3621）**：回传的 `PUT` 送的是几十 MB 二进制、跨网，
+> 单次给分钟级墙钟，不用 `cnbRequest` 那档 JSON 请求口径；超时 / 网络类失败按
+> `isRetryableFetchFailure` 重试（含 `AbortSignal.timeout` 那句 `TimeoutError`），
+> HTTP 应答一次交账不重试。现场是一次 60s `TimeoutError` 就整格 `exit 1`，并在
+> `asset-upload-url` 与 `asset-upload-confirmation` 之间留下未确认的**空资产**（页面上
+> 表现为「附件 (N)」几个一样的空占位）；放宽墙钟 + 重试之后不再因一次抖动新增空槽，
+> 已残留的空槽由人在页面手动删一次（本地流水线 token 无 `repo-release:rw`，不为
+> 删槽另开需要写权限的通道）。
 >
 > ⚠️ **#3611 收尾（首次真跑）**：`POST /{repo}/-/releases` 的 `target_commitish` 是
 > 服务端**硬必填**（Swagger 的 `PostReleaseForm` 有这个 property 却没标进 `required`，
