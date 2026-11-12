@@ -206,15 +206,52 @@ export function startRun(
   return { runId, dir, runJson, startedAt: at };
 }
 
-/** 原子写 JSON（先写临时文件再 rename；崩溃不会留下半截 run.json）。 */
+/** rename 撞车时的重试预算：写方是多个进程（编排器记 pid、壳记退出码，各写
+ *  run.json 的一半），而 Windows 上「目标文件正被对方替换」的那一瞬间 rename
+ *  会 EPERM / EBUSY（POSIX 不会）。对方的 rename 是微秒级，重的几毫秒就够。 */
+const RENAME_RETRIES = 20;
+const RENAME_RETRY_MS = 2;
+
+/**
+ * 原子写 JSON（先写临时文件再 rename；崩溃不会留下半截 run.json）。
+ *
+ * 两件事都是「多进程同时写」逼出来的：
+ *   · 临时名**必须带进程号** —— 固定名会让并发的那两次撞在同一个 `${file}.tmp`
+ *     上，先 rename 的把它移走、后到的 rename 当场 ENOENT。`dev-launcher-session.mjs`
+ *     早就用 pid 后缀，这里是同一口径。
+ *   · rename 要能**短暂重试** —— 目标文件在对方 rename 的那一瞬间是「正在被替换」，
+ *     Windows 上这时 rename 会 EPERM / EBUSY（POSIX 上直接覆盖）。
+ */
 /**
  * @param {string} file
  * @param {unknown} value
  */
 function writeJson(file, value) {
-  const tmp = `${file}.tmp`;
+  const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-  fs.renameSync(tmp, file);
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      fs.renameSync(tmp, file);
+      return;
+    } catch (error) {
+      const code =
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        typeof error.code === "string"
+          ? error.code
+          : "";
+      const replacing = code === "EPERM" || code === "EACCES" || code === "EBUSY";
+      if (!replacing || attempt >= RENAME_RETRIES) {
+        /* 放弃前先把自己那份临时文件收掉：留着会让 hasCurrentContent 之外的人
+         * 看见半截现场（它虽然按 `.tmp` 跳过，但下一次 emptyDir 才清）。 */
+        fs.rmSync(tmp, { force: true });
+        throw error;
+      }
+      /* 同步睡：`writeJson` 在同步路径上（startRun / patchRun 都是），不能 await。 */
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, RENAME_RETRY_MS);
+    }
+  }
 }
 
 /** 读 run.json（无则 null）。 */
