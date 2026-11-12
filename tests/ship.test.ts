@@ -57,7 +57,14 @@ import {
   readPullVerdict,
   resolveUpstream,
 } from "../scripts/ship-core.mjs";
-import { runCommitStage, runPushStage, runRerunCiStage } from "../scripts/ship-local.mjs";
+import {
+  addPathKey,
+  classifyStagedSurface,
+  runCommitStage,
+  runPushStage,
+  runRerunCiStage,
+  splitStagedNames,
+} from "../scripts/ship-local.mjs";
 /* 旗标层单独一份（ISSUE #2491）：这一族的用例读的是「命令行长什么样」，不是「执行者给了什么读数」。 */
 import { parseArgs, parseIssueNumberToken } from "../scripts/ship-args.mjs";
 import {
@@ -340,6 +347,15 @@ describe("parseArgs：拼错的旗标不许被静默忽略", () => {
   it("--no-wait 与 --only 各自独立", () => {
     expect(parseArgs(["--no-wait"]).wait).toBe(false);
     expect(parseArgs(["--only=poll"]).only).toBe("poll");
+  });
+
+  it("#3597：--allow-staged 默认关，只认显式那一枚（不给就是不许，绝不静默放行）", () => {
+    expect(parseArgs([]).allowStaged).toBe(false);
+    expect(parseArgs(["--add", "a.ts"]).allowStaged).toBe(false);
+    expect(parseArgs(["--add", "a.ts", "--allow-staged"]).allowStaged).toBe(true);
+    /* 它没有等号写法：它不收值。给了值那种形态是拼错，按未知旗标停 ——
+     * 与「收下一个不存在的东西」相比，当场点名是更便宜的错。 */
+    expect(parseArgs(["--allow-staged=yes"]).unknown).toEqual(["--allow-staged=yes"]);
   });
 
   it("--comment 两种写法都收号；--body-file 与它各自独立（拼错不许静默）", () => {
@@ -680,7 +696,7 @@ describe("runCommitStage：--add 点名的改动已全部在 HEAD ⇒ 跳过提�
    * 提交（甚至 amend 过）。旧的「树上有任何改动就进提交段」在这一形态下把已提交
    * 的工作堵死在本地：`git add` 全是空操作，钩子在空暂存面上判红。 */
   type Dirty = Record<string, string>;
-  function makeCtx(opts: { adds: Array<string>; dirty: Dirty }) {
+  function makeCtx(opts: { adds: Array<string>; dirty: Dirty; staged?: Array<string> }) {
     const logs: Array<string> = [];
     const calls: Array<string> = [];
     const run = (cmd: string, args: Array<string>) => {
@@ -689,6 +705,17 @@ describe("runCommitStage：--add 点名的改动已全部在 HEAD ⇒ 跳过提�
         /* 按路径限定查询：输出非空 = 这条路径还有可提交的差异。 */
         const p = args[3] ?? "";
         return { error: null, status: 0, stderr: "", stdout: opts.dirty[p] ?? "" };
+      }
+      /* 封闭暂存面那一读（ISSUE #3597）：`git diff --cached --name-only -z`。
+       * 夹具默认「暂存面 = 点名里那些 dirty 路径」，用例要造「预暂存文件」时给 `staged`。 */
+      if (cmd === "git" && args[0] === "-c" && args[2] === "diff") {
+        const list = opts.staged ?? Object.keys(opts.dirty);
+        return {
+          error: null,
+          status: 0,
+          stderr: "",
+          stdout: list.map((f) => `${f}\u0000`).join(""),
+        };
       }
       if (cmd === "git" && args[0] === "rev-parse") {
         return { error: null, status: 0, stderr: "", stdout: "065c2fb79f\n" };
@@ -760,6 +787,181 @@ describe("runCommitStage：--add 点名的改动已全部在 HEAD ⇒ 跳过提�
     const line = logs.join("\n");
     expect(line).toContain("已全部在 HEAD");
     expect(line).not.toContain("另有");
+  });
+});
+
+describe("runCommitStage：--add 的暂存面是封闭的（#3597）", () => {
+  /* 现场还原（#3596）：另一份并行检出的在途工作被基线同步的 `git apply --3way`
+   * 放进暂存区，而 `--add` 只点名本次那几份 —— `git commit` 吃整个 index，
+   * 于是那 15 行 `scripts/check-allow-builds.cjs` 随提交上了主干（不在点名名单里、
+   * 没有配套用例、事后要三张单子披露）。下面的用例把三条分支钉住：
+   * 命中即拦 / 点名目录算覆盖 / 显式 `--allow-staged` 才放行。 */
+  function stage(adds: Array<string>, staged: Array<string>, allowStaged = false) {
+    const logs: Array<string> = [];
+    const calls: Array<string> = [];
+    const run = (cmd: string, args: Array<string>) => {
+      calls.push([cmd, ...args].join(" "));
+      if (cmd === "git" && args[0] === "status") {
+        /* 点名路径「还有差异」那一查：这里让每条点名都脏（否则会先走「全在 HEAD」那支）。 */
+        const p = args[3] ?? "";
+        return { error: null, status: 0, stderr: "", stdout: adds.includes(p) ? ` M ${p}` : "" };
+      }
+      if (cmd === "git" && args[0] === "-c" && args[2] === "diff") {
+        return {
+          error: null,
+          status: 0,
+          stderr: "",
+          stdout: staged.map((f) => `${f}\u0000`).join(""),
+        };
+      }
+      return { error: null, status: 0, stderr: "", stdout: "" };
+    };
+    const got = runCommitStage({
+      opt: { message: "fix(x): y", messageFile: null, adds, allowStaged },
+      root: "/tmp/nowhere",
+      staged,
+      unstagedModified: [],
+      untracked: [],
+      log: (s: string) => logs.push(s),
+      run,
+      relay: () => undefined,
+    });
+    return { got, logs, calls };
+  }
+
+  it("暂存区里另有未点名的预暂存文件 ⇒ 退 2、逐个念出路径、一次 commit 都不发", () => {
+    const { got, logs, calls } = stage(
+      ["src/a.ts", "changelog.d/3597-x.md"],
+      ["scripts/check-allow-builds.cjs", "src/a.ts"],
+    );
+    expect(got).toEqual({ stop: true, codes: [CODE.NOT_RUN] });
+    expect(calls.some((c) => c.startsWith("git commit"))).toBe(false);
+    const line = logs.join("\n");
+    expect(line).toContain("另有 1 个文件不在本次 --add 点名里");
+    /* 泄漏的是谁必须逐个念出来：只说「有未点名文件」等于让人自己回去翻 index。 */
+    expect(line).toContain("· scripts/check-allow-builds.cjs");
+    expect(line).toContain("这一笔不提交（退 2 NOT_RUN）");
+    /* 三条出口都在话术里（撤暂存 / 补点名 / 显式放行）—— 只给「停」不给出口就是死路。 */
+    expect(line).toContain("git restore --staged");
+    expect(line).toContain("--allow-staged");
+  });
+
+  it("点名覆盖整个目录 ⇒ 该目录下已暂存的文件都算声明过（不误拦）", () => {
+    const { got, logs } = stage(["scripts"], ["scripts/a.mjs", "scripts/nested/b.mjs"]);
+    expect(got).toEqual({ stop: false, codes: [CODE.GREEN] });
+    expect(logs.join("\n")).toContain("暂存面封闭：2 个已暂存文件全部在 --add 点名里");
+  });
+
+  it("`scripts/lib` 那种前缀不许把 `scripts/libfoo.ts` 也算进来", () => {
+    const { got, logs } = stage(["src/lib"], ["src/libfoo.ts"]);
+    expect(got).toEqual({ stop: true, codes: [CODE.NOT_RUN] });
+    expect(logs.join("\n")).toContain("· src/libfoo.ts");
+  });
+
+  it("显式 --allow-staged ⇒ 放行，并把「提交面比点名更大」念出来", () => {
+    const { got, logs, calls } = stage(
+      ["src/a.ts"],
+      ["scripts/check-allow-builds.cjs", "src/a.ts"],
+      true,
+    );
+    expect(got).toEqual({ stop: false, codes: [CODE.GREEN] });
+    expect(calls.some((c) => c.startsWith("git commit"))).toBe(true);
+    expect(logs.join("\n")).toContain("--allow-staged：放行");
+  });
+
+  it("负控：没给 --add ⇒ 一次都不读暂存面（那条路的暂存面由调用方负责）", () => {
+    const { got, calls } = stage([], ["scripts/check-allow-builds.cjs"]);
+    expect(got).toEqual({ stop: false, codes: [CODE.GREEN] });
+    expect(calls.some((c) => c.includes("--cached"))).toBe(false);
+    expect(calls.some((c) => c.startsWith("git commit"))).toBe(true);
+  });
+
+  it("读不到暂存清单 ⇒ 不按「没有多余文件」放行（拿不到测量 ≠ 结果是绿的）", () => {
+    const logs: Array<string> = [];
+    const calls: Array<string> = [];
+    const run = (cmd: string, args: Array<string>) => {
+      calls.push([cmd, ...args].join(" "));
+      if (cmd === "git" && args[0] === "status") {
+        return { error: null, status: 0, stderr: "", stdout: " M src/a.ts" };
+      }
+      if (cmd === "git" && args[0] === "-c") {
+        return { error: null, status: 128, stderr: "fatal: bad index", stdout: "" };
+      }
+      return { error: null, status: 0, stderr: "", stdout: "" };
+    };
+    const got = runCommitStage({
+      opt: { message: "fix(x): y", messageFile: null, adds: ["src/a.ts"] },
+      root: "/tmp/nowhere",
+      staged: ["src/a.ts"],
+      unstagedModified: [],
+      untracked: [],
+      log: (s: string) => logs.push(s),
+      run,
+      relay: () => undefined,
+    });
+    expect(got).toEqual({ stop: true, codes: [CODE.NOT_RUN] });
+    expect(calls.some((c) => c.startsWith("git commit"))).toBe(false);
+    expect(logs.join("\n")).toContain("读不到暂存清单");
+  });
+});
+
+describe("classifyStagedSurface：封闭暂存面的纯判据（#3597）", () => {
+  it("点名目录算覆盖，点名文件算覆盖，其余都是未点名", () => {
+    const r = classifyStagedSurface({
+      staged: ["src/a.ts", "docs/b.md", "scripts/c.mjs", "src/libfoo.ts"],
+      adds: ["src", "docs/b.md"],
+      root: "/repo",
+    });
+    expect(r.covered).toEqual(["docs/b.md", "src/a.ts", "src/libfoo.ts"]);
+    expect(r.unclaimed).toEqual(["scripts/c.mjs"]);
+    expect(r.allowed).toBe(false);
+  });
+
+  it("Windows 形态的点名（反斜杠 / `./` 前缀 / 绝对路径）归一后仍命中", () => {
+    for (const add of ["src\\a.ts", "./src/a.ts", "G:\\repo\\src\\a.ts"]) {
+      const r = classifyStagedSurface({
+        staged: ["src/a.ts"],
+        adds: [add],
+        root: "G:\\repo",
+      });
+      expect(r.unclaimed, `add=${add}`).toEqual([]);
+      expect(r.allowed).toBe(true);
+    }
+  });
+
+  it("空点名集合 ⇒ 一切都算未点名（只在真有 --add 时才被调用）", () => {
+    const r = classifyStagedSurface({ staged: ["a.ts"], adds: [], root: "/repo" });
+    expect(r.unclaimed).toEqual(["a.ts"]);
+    expect(r.allowed).toBe(false);
+  });
+
+  it("allowStaged 打开 ⇒ 放行但清单照旧给出来（读数不被吞掉）", () => {
+    const r = classifyStagedSurface({
+      staged: ["a.ts", "b.ts"],
+      adds: ["a.ts"],
+      root: "/repo",
+      allowStaged: true,
+    });
+    expect(r.allowed).toBe(true);
+    expect(r.unclaimed).toEqual(["b.ts"]);
+  });
+
+  it("splitStagedNames：NUL 分隔原样切开，中文与空格名不被转义", () => {
+    /* 读出来的是原值：本仓文档名含中文，而 `core.quotePath` 默认的八进制转义形态
+     * 与 `--add` 里的人写的原值逐字对不上，名单匹配会永远「没命中自己」。 */
+    expect(splitStagedNames("docs/中文 名.md\u0000src/a.ts\u0000")).toEqual([
+      "docs/中文 名.md",
+      "src/a.ts",
+    ]);
+    expect(splitStagedNames("")).toEqual([]);
+  });
+
+  it("addPathKey：反斜杠 / `./` / 绝对路径 / 结尾斜杠都归一，且不改大小写", () => {
+    expect(addPathKey("scripts\\a.mjs", "G:\\repo")).toBe("scripts/a.mjs");
+    expect(addPathKey(".\\scripts/a.mjs", "G:\\repo")).toBe("scripts/a.mjs");
+    expect(addPathKey("G:\\repo\\scripts\\a.mjs", "G:\\repo")).toBe("scripts/a.mjs");
+    expect(addPathKey("scripts/", "G:\\repo")).toBe("scripts");
+    expect(addPathKey("Docs/Readme.md", "/repo")).toBe("Docs/Readme.md");
   });
 });
 
@@ -1255,6 +1457,32 @@ describe("#2491 --as-merged：凭据由人点名，合并与否仍由平台回�
     expect(log.join("\n")).toContain("没有任何执行者");
     /* 这一格一次写动作都不该发：它连「要关哪张」都还没拿到。 */
     expect(calls.filter((c) => /update-issue|merge-pull|git push|git commit/.test(c))).toEqual([]);
+  });
+});
+
+describe("#3597 --allow-staged 没有 --add 时没有执行者：当场点名，不留一句沉默", () => {
+  it("只给 --allow-staged ⇒ 退 2，且一条 git / cnb 写动作都不发", async () => {
+    const calls: Array<string> = [];
+    const log: Array<string> = [];
+    const run = (cmd: string, args: Array<string>): FakeResult => {
+      calls.push([cmd, ...args].join(" "));
+      if (cmd === "cnb" && args[0] === "--version") {
+        return { status: 0, stdout: "1.15.25", stderr: "", error: null };
+      }
+      return { status: 0, stdout: "", stderr: "", error: null };
+    };
+    const code = await main({
+      args: ["--message-file", ".git/msg.txt", "--allow-staged"],
+      env: {},
+      run,
+      log: (l: string) => log.push(l),
+    });
+    expect(code).toBe(CODE.NOT_RUN);
+    const line = log.join("\n");
+    expect(line).toContain("--allow-staged 是给 --add 那一格放行用的");
+    /* 两条出口都要在话术里：点名该带的、或干脆不带这枚（那条路本来由调用方负责暂存面）。 */
+    expect(line).toContain("--add <路径>");
+    expect(calls.filter((c) => /git (?:commit|push|add)/.test(c))).toEqual([]);
   });
 });
 
@@ -4471,6 +4699,21 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
     for (const line of plan.filter((l) => l.startsWith("cnb "))) {
       expect(line, `计划里这条 cnb 调用没带 -v：${line}`).toContain("-v");
     }
+  });
+
+  it("#3597 封闭暂存面那一读在计划里：只在给了 --add 时出现", () => {
+    /* dry-run 是给人的第一份说明书。执行面在 `git add` 与 `git commit` 之间多了一次
+     * 暂存清单的读，计划里不写它，读者就会以为这两个动作之间没有收口 —— 而那个收口
+     * 正是 #3597 补上的东西。没给 `--add` 时那条路不判暂存面，计划里也不该有它。 */
+    const withAdd = planCommands(st);
+    expect(withAdd).toContain("git diff --cached --name-only -z");
+    expect(withAdd.indexOf("git add -- src/a.ts")).toBeLessThan(
+      withAdd.indexOf("git diff --cached --name-only -z"),
+    );
+    expect(withAdd.indexOf("git diff --cached --name-only -z")).toBeLessThan(
+      withAdd.indexOf("git commit --message=<提交信息原文>"),
+    );
+    expect(planCommands({ ...st, adds: [] }).join("\n")).not.toContain("--cached");
   });
 
   it("PR 处理人标签与独立回读成对出现，且只在配了留痕时进计划", () => {
