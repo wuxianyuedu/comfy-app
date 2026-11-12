@@ -27,11 +27,7 @@ import {
 } from "../scripts/ci-heavy-gates.mjs";
 import { syntheticMergeRange } from "../scripts/reformat-preview-range.mjs";
 import { createGateRepo, type GateRepo } from "./helpers/gate-repo";
-import {
-  faceTouched,
-  INCREMENTAL_GATES,
-  narrowingEntryForScript,
-} from "../scripts/ci-incremental-gates.mjs";
+import { faceTouched, narrowingEntryForScript } from "../scripts/ci-incremental-gates.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 

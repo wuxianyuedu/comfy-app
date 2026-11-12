@@ -136,7 +136,11 @@ function renderLocalMirror(sources: Array<string>): {
       },
     });
   } catch (error) {
-    throw new Error(`本地 doc:render 失败（夹具 ${root}）：${execFailure(error).output}`);
+    /* 重抛要带上原始错误：eslint(preserve-caught-error) 认的是 `cause`，把子进程
+     * 的现场只塞进话术里会丢掉堆栈，下一次排障就只剩一句转述。 */
+    throw new Error(`本地 doc:render 失败（夹具 ${root}）：${execFailure(error).output}`, {
+      cause: error,
+    });
   }
   return {
     text: (name) => readFileSync(join(root, "docs", "generated", name), "utf8"),
