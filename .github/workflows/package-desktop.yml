@@ -233,6 +233,9 @@ jobs:
       # 令牌专用 `CNB_RELEASE_TOKEN`（`repo-release:rw`）：现有 `CNB_ISSUE_TOKEN` 只有
       # `repo-notes:rw`（写 Release 会 403），给它扩权违反最小权限；这枚只服务本格。
       # 脚本复用 `ci-ga-logs-relay.mjs` 导出的 `cnbRequest` 底座，不另写一套请求层。
+      # 首次创建 CNB `nightly` Release 时脚本带 `target_commitish`（缺省默认分支 master，
+      # 可用 `CNB_RELEASE_TARGET` 覆盖）——服务端硬必填，漏带即 400（ISSUE #3611）；
+      # 这里不用 `GITHUB_SHA`，那是镜像仓的 commit，CNB 仓未必有同一个 sha。
       - name: 回传成品到 CNB（滚动 nightly Release）
         continue-on-error: true
         env:

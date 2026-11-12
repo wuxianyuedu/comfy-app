@@ -24,7 +24,13 @@
  * ## 上传链路（Swagger 逐格坐实，`repo-release:rw`）
  *
  *   1. `GET /{repo}/-/releases/tags/nightly`：拿到滚动 tag 的 `id`；404 ⇒ 第 2 步建。
- *   2. `POST /{repo}/-/releases`（缺席时）：`{tag_name, name, prerelease:true, body}` ⇒ `id`。
+ *   2. `POST /{repo}/-/releases`（缺席时）：`{tag_name, name, prerelease:true, body,
+ *      target_commitish}` ⇒ `id`。`target_commitish` 是服务端硬必填（swagger 的
+ *      `PostReleaseForm` 有这个 property 却没标进 `required`，按 schema 抄字段极易漏）：
+ *      `nightly` 这个 tag 本不存在，服务端要基于它给 tag 定目标提交 / 自动建 tag，
+ *      漏带就是 400 `target_commitish is required`（ISSUE #3611 现场）。缺省取默认分支
+ *      `MASTER_REF`（CNB 与镜像仓同名），可由 `CNB_RELEASE_TARGET` 覆盖；**不用
+ *      `GITHUB_SHA`** —— 那是镜像仓的 commit，CNB 仓未必有同一个 sha。
  *   3. 对每个文件 `POST /{repo}/-/releases/{id}/asset-upload-url`
  *      `{asset_name, size, overwrite:true}` ⇒ `{upload_url, verify_url}`。
  *   4. `PUT <upload_url>`：二进制正文（`Content-Type: application/octet-stream`、
@@ -54,13 +60,14 @@
  * `CNB_REPO_SLUG`、`CNB_API_ENDPOINT`（缺省 `https://api.cnb.cool`）、
  * `GITHUB_RUN_ID` / `GITHUB_SHA`（进 Release 描述与文件名，便于追哪一跑）、
  * `DESKTOP_BUNDLE_DIR`（缺省 `src-tauri/target/release/bundle`）、
- * `DESKTOP_PORTABLE`（缺省 `portable/ComfyAPP-portable.zip`）。
+ * `DESKTOP_PORTABLE`（缺省 `portable/ComfyAPP-portable.zip`）、
+ * `CNB_RELEASE_TARGET`（缺省默认分支 `master`；建 `nightly` tag 时的 `target_commitish`）。
  */
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-import { CODE } from "./ci-github-mirror-push.mjs";
+import { CODE, MASTER_REF } from "./ci-github-mirror-push.mjs";
 import { cnbRequest } from "./ci-ga-logs-relay.mjs";
 
 /** 滚动 tag：每天都指向最新一份，与 GA nightly 同名同义。 */
@@ -86,7 +93,7 @@ const INSTALLER_EXTENSIONS = new Set([".exe", ".msi"]);
  * （`repo-notes:rw`）会 403，给它扩权又违反最小权限；这枚是新配的、只服务本格。
  *
  * @param {Record<string, string | undefined>} env
- * @returns {{ok:true, token:string, repo:string, endpoint:string, runId:string, sha:string, bundleDir:string, portable:string} | {ok:false, reasons:string[]}}
+ * @returns {{ok:true, token:string, repo:string, endpoint:string, runId:string, sha:string, bundleDir:string, portable:string, targetCommitish:string} | {ok:false, reasons:string[]}}
  */
 export function resolveDesktopRelayContext(env) {
   const token = String(env.CNB_RELEASE_TOKEN ?? "").trim();
@@ -96,12 +103,24 @@ export function resolveDesktopRelayContext(env) {
   const sha = String(env.GITHUB_SHA ?? "").trim();
   const bundleDir = String(env.DESKTOP_BUNDLE_DIR || "src-tauri/target/release/bundle").trim();
   const portable = String(env.DESKTOP_PORTABLE || "portable/ComfyAPP-portable.zip").trim();
+  /* 建 nightly tag 的 target_commitish：缺省默认分支，env 可覆盖（不用 GITHUB_SHA，见文件头）。 */
+  const targetCommitish = String(env.CNB_RELEASE_TARGET ?? "").trim() || MASTER_REF;
   /** @type {string[]} */
   const reasons = [];
   if (!token) reasons.push("`CNB_RELEASE_TOKEN` 缺席（写 CNB Release 要 repo-release:rw）");
   if (!repo) reasons.push("`CNB_REPO_SLUG` 缺席");
   if (reasons.length > 0) return { ok: false, reasons };
-  return { bundleDir, endpoint, ok: true, portable, repo, runId, sha, token };
+  return {
+    bundleDir,
+    endpoint,
+    ok: true,
+    portable,
+    repo,
+    runId,
+    sha,
+    targetCommitish,
+    token,
+  };
 }
 
 /**
@@ -240,7 +259,7 @@ function unwrap(json) {
  * 拿（或建）滚动 `nightly` Release，返回 `release_id`。
  *
  * @param {{ctx:{endpoint:string,repo:string,token:string}, fetchImpl:typeof fetch, log:(l:string)=>void}} io
- * @param {{runId:string, sha:string}} meta
+ * @param {{runId:string, sha:string, targetCommitish:string}} meta
  * @returns {Promise<{ok:true, id:string, created:boolean} | {ok:false, detail:string}>}
  */
 export async function ensureRelease(io, meta) {
@@ -264,7 +283,14 @@ export async function ensureRelease(io, meta) {
     "安装版 = *-setup.exe / *.msi；免安装版 = *-portable.zip（解压后双击 app.exe 即用）。",
   ].join("\n");
   const created = await jsonRequest(io, "POST", `${api}/-/releases`, {
-    json: { body, name: "每日桌面成品（CNB 站内）", prerelease: true, tag_name: RELEASE_TAG },
+    json: {
+      body,
+      name: "每日桌面成品（CNB 站内）",
+      prerelease: true,
+      tag_name: RELEASE_TAG,
+      /* 服务端硬必填：nightly tag 不存在，要基于它定目标提交 / 自动建 tag（ISSUE #3611）。 */
+      target_commitish: meta.targetCommitish,
+    },
   });
   if (!created.ok) {
     return {
@@ -399,7 +425,11 @@ export async function main(io = {}) {
   }
   const relayCtx = { endpoint: ctx.endpoint, repo: ctx.repo, token: ctx.token };
   const wiring = { ctx: relayCtx, fetchImpl, log };
-  const release = await ensureRelease(wiring, { runId: ctx.runId, sha: ctx.sha });
+  const release = await ensureRelease(wiring, {
+    runId: ctx.runId,
+    sha: ctx.sha,
+    targetCommitish: ctx.targetCommitish,
+  });
   if (!release.ok) {
     log(`[ga-desktop-relay] 回传失败：${release.detail}`);
     return CODE.FAIL;
