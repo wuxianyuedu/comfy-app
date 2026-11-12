@@ -63,7 +63,7 @@ export function ProviderConnectionFields({
   return (
     /* 这一块是**分组框**（供应商连接参数的外壳），不是「一行」：与卡片同底、
        只留一圈描边，靠内里的行（`bg-surface-row`）分层（ISSUE #3510 的口径）。 */
-    <div className="border-border mb-4 rounded-xl border p-3">
+    <div className="border-border dark:border-ink/40 mb-4 rounded-xl border p-3">
       <FormField
         className="mb-3"
         error={errors.name}
