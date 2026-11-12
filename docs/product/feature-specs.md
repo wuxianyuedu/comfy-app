@@ -754,15 +754,17 @@
   图像 / 视频模型的弹窗按**用途**分叉（#3618 补充；#3656 改判）：「API 格式」
   下拉换成按用途给词表的「接口端点」**下拉**（#3656：词表
   `REMOTE_MEDIA_ENDPOINT_OPTIONS`——图像 `/v1/images/generations`、视频
-  `/v1/videos`，与文本协议三词表无关），选择落库在 `remoteModel.endpointPath`
-  （按行用途白名单收窄），**没选 = 用途默认第一项**；选项标签与提示念按
-  Base URL 拼出的最终请求地址（供应商还没 Base URL 时念路径段并提示先去填），
-  「智能配置」「上下文窗口」「最大输出 Token」「高级配置」
+  `/v1/videos`，与文本协议三词表无关），选择落库在模型级适配器存档
+  （`workshopAdapters` envelope 的 `endpointPath` 一格，#3622/#3659 的同一份
+  存储，不另开列；按行用途白名单收窄），**没选 = 用途默认第一项**；选项标签
+  与提示念按 Base URL 拼出的最终请求地址（供应商还没 Base URL 时念路径段并
+  提示先去填），「智能配置」「上下文窗口」「最大输出 Token」「高级配置」
   全部不出现——图像 / 视频模型没有文本协议那些高级配置；工坊生图 / 生视频的
-  远端定向同一口径：显式配置的动作路径优先，缺省按用途默认（图像
-  `/v1/images/generations`、视频 `/v1/videos`，版本段缺则补 /v1）；模型行摘要
-  同批分叉：文本模型念「上下文 / 输出 / 接口格式」，图像 / 视频模型念自己的
-  端点路径（`图像端点 /v1/images/generations` 这类）。
+  远端定向同一口径（#3622 的模型级端点 + #3656 的版本段拼装）：显式配置的
+  动作路径经 `joinApiUrl` 拼（Base 带版本段不重复补），缺省按类别惯例推导
+  （图像 `/v1/images/generations`、视频 `/v1/videos`，版本段缺则补 /v1）；
+  模型行摘要同批分叉：文本模型念「上下文 / 输出 / 接口格式」，图像 / 视频
+  模型念自己的端点路径（`图像端点 /v1/images/generations` 这类）。
 - 落点：`src/server/api/routers/llm.ts`、`src/lib/llm/provider-types.ts`、
   `src/lib/llm/provider-form.ts`、`src/lib/core/repository-user.ts`、
   `src/lib/llm/types.ts`、`src/app/api/llm/test/route.ts`
@@ -839,12 +841,20 @@
 
 - 状态：已上线
 - 需求：每个远端模型 × 每个模式可配字段映射（统一输入 → 接口字段名）。
-- 行为与验收：适配器可读可写（`workshopAdaptersGet` / `Save`）；
-  「模型适配」是全局瞬态视图。
+- 行为与验收（#3622 改版后）：适配器存档是**模型级 envelope** —— 一格
+  模型级端点路径（该模型所有模式共用；留空时请求侧按图片 / 视频惯例按
+  Base URL 形态推导，旧版裸数组存档兼容读取）+ 每模式一份字段映射
+  （`workshopAdaptersGet` / `Save`）。模型清单是左侧分组树（图像 / 视频分组、
+  已配置的标「已配」）；同一时刻只显示一个模式的编辑卡（模式 chip 即切换
+  页签）；删除模式要过二次确认；输入映射含「分辨率」统一输入（1k/2k/4k
+  档位随请求下发，#3622）；保存成功后失效存档与概览查询（页签往返不丢
+  刚配的模式）。「模型适配」是全局瞬态视图。
 - 存放位置提示（#3625）：本页配置的适配器落在 `remoteModel` 表的
   `workshopAdapters` 列，页头挂「存放位置」徽标（数据库），悬浮说明给出落点与
   迁移办法（FR-ST-05）。
 - 落点：`src/components/workshop/ModelAdaptersView.tsx`、
+  `src/components/workshop/hooks/use-model-adapters.ts`、
+  `src/lib/workshop/remote-model-adapter.ts`（envelope 与统一输入词表）、
   `src/server/api/routers/llm.ts`
 
 #### FR-LM-06 远端生图 / 生视频接入
@@ -853,12 +863,15 @@
 - 需求：远端模型除 chat 外，还承担画图 / 视频生成。
 - 行为与验收：统一走 FR-WP-04 的 relay（不另开通道）。生图：按请求里的
   `model` 在 `remoteModel` 表按名直连，适配器把统一输入翻译成接口字段、
-  产物按 `outputField` 提取（`resolveTarget` + `bodyFromAdapter`）。
+  产物按 `outputField` 提取（`resolveTarget` + `bodyFromAdapter`）；端点按
+  模型级配置（FR-LM-05，#3622），未配置时按 Base URL 形态推导
+  images/generations 惯例。
   视频（#3590 补齐）：`submitVideoViaApi` 同样按 `model` 定向
   （`resolveVideoTarget`，无适配器回落 OpenAI 兼容惯例 `/videos`），
-  轮询按该条目 + 适配器端点构造候选（Agnes 系 `/agnesapi?video_id=…` 与
-  REST `/videos/{id}`，`buildVideoPollUrls`），鉴权用条目自己的密钥；
-  未带 `model` 的工坊镜头链路保持全局通道设置与既有失败语义。
+  轮询按该条目 + 模型级提交端点的目录段构造候选（Agnes 系
+  `/agnesapi?video_id=…` 与 REST `/videos/{id}`，`buildVideoPollUrls`），
+  鉴权用条目自己的密钥；未带 `model` 的工坊镜头链路保持全局通道设置与
+  既有失败语义。
 - 落点：`src/lib/workshop/api-channel.server.ts`、
   `src/lib/workshop/api-channel-core.ts`、`src/lib/llm/types.ts`
 

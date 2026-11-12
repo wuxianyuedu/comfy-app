@@ -15,7 +15,8 @@
  * 图像 / 视频模型按用途分叉渲染（#3618 补充）：它们的「API 格式」下拉、
  * 智能配置、上下文窗口 / 输出上限、高级配置这些文本协议的配置全部不出现，
  * 换成按用途给词表的「接口端点」下拉（#3656：词表 `REMOTE_MEDIA_ENDPOINT_OPTIONS`，
- * 落库 `remoteModel.endpointPath`；没选 = 用途默认第一项，最终请求地址在提示里展示）。
+ * 落库在模型级适配器存档 `RemoteModelAdaptersDoc.endpointPath`（#3622/#3659 的
+ * 同一份存储）；没选 = 用途默认第一项，最终请求地址在提示里展示）。
  *
  * 交互态与提交在 `use-provider-model-dialogs`（第②层），字段规则在
  * `~/lib/llm/provider-form`（纯函数）。

@@ -315,9 +315,19 @@
     # 的 `HEAVY_GATES` 条目 → 钩子步骤）。所以这两行照旧留在这里：这里的键是**入口路径**，
     # 不是「哪条流水线在跑它」；名字继续留在 `COMFYAPP_CI_GATES`，因为它们仍然在 PR 上
     # 被判，只是换了一台 runner（档位注释见 `GATE_TIER_LEDGER` 的同名条目）。
+    #
+    # `schema⇄迁移等价` 是**第四行**，形状与前两行**不同**：它的执行者**不在**复合格里，
+    # 而是 GA `pr-gate.yml` 的 `typecheck-db-format` job 里那一步
+    # （`node scripts/ci-run-tool.mjs vitest run tests/db-migrate-equivalence.test.ts`）。
+    # ⇒ 判据 `scripts/check-gate-name-executors.mjs` 的**第四处执行面**（GA PR 门禁的
+    # `run:` 行）就是为它补的（ISSUE #3599）：另三面（复合档条目 / 固定清单用例 /
+    # 钩子步骤）一处都不在 GA，指向 GA step 的入口路径会被误判成「没有执行者」。
+    # 登记的**仍是入口路径**（那份用例文件），不是执行者自己的定义 —— 判据去执行面
+    # 核那个指针，不抄第二份（§12.12 / §12.18）。
     COMFYAPP_CI_GATES_ELSEWHERE: >-
       格式化提交分离=scripts/check-reformat-only.cjs,
-      零消费导出=scripts/check-dead-exports.cjs
+      零消费导出=scripts/check-dead-exports.cjs,
+      schema⇄迁移等价=tests/db-migrate-equivalence.test.ts
     # 恢复动作照旧三步：`.gates` 里取消注释 → 名字挪回 `GATES` → 从本清单删掉。
     # `ESLint 零警告` 现在的落点：它是台上唯一真的会挂满预算的静态判据
     # （起一堆子进程，并行 PR 下墙钟读数不可信，§13.5.21），执行者换成
@@ -345,8 +355,19 @@
     # 整个挪到平台池那条同名流水线（另一条出网路径），本档此后只剩
     # 「平台读数 + 站内回读判决」两类。自托管机一台都不碰 github.com；
     # 「后续流程走不通」由 `GA 回调结论回读` 的 fail-closed（没终态 / 超时 ⇒ 判红）兜住。
+    # `schema⇄迁移等价`（ISSUE #3599）：版本化迁移（`drizzle/`）与 `schema.ts` 必须是
+    # 同一份形状（表集合 / 逐表逐列 / 索引集合）。漂开了不报错，只在某处业务写入时炸；
+    # #3565 的现场是 migrate 侧少一张表 / 十列 / 一个索引，在 master 上活了两周，
+    # 暴露通道只剩次日 01:37 的全量单测（#3052 之后增量面也撤到了每日档）。
+    # ⇒ 这一类红是**确定性**的（结论只由这份树决定，与负载无关），三条门槛评过 ⇒ 进 PR 档
+    # （§13.5.30 的裁决与逐条读数见 `docs/standards/13-提交与-code-review.md` §13.5.40）。
+    # 执行者是 GA `pr-gate.yml` 的 `typecheck-db-format` job 里那一步（落在**已经装好
+    # 依赖**的那一格里，不新增一次 `pnpm install`，也不新增一个 job ⇒ PR 关键路径不变）。
+    # 判据本体是 `tests/db-migrate-equivalence.test.ts`（这件事的**唯一**判据）。
+    # 恢复动作：名字从这份清单摘掉 → 从 `COMFYAPP_CI_GATES_ELSEWHERE` 删掉那一行 →
+    # 删掉 GA 那一步 → 从 `GATE_TIER_LEDGER` 的 PR 段删掉同名条目。
     COMFYAPP_CI_GATES: >-
-      GA 回调结论回读, 格式化提交分离, 零消费导出
+      GA 回调结论回读, 格式化提交分离, 零消费导出, schema⇄迁移等价
     # master 合并复核那条流水线（push 档）自己的 stage 清单 —— 第三份，按档登记。
     # master 合并复核那条流水线（push 档）自己的 stage 清单 —— 第三份，按档登记。
     # 这一档是「树级校验档」：判的是**合并后的树**一致不一致、这次运行的事实是什么，

@@ -167,7 +167,6 @@ CREATE TABLE IF NOT EXISTS remoteModel (
   kind TEXT NOT NULL DEFAULT 'chat', enabled INTEGER NOT NULL DEFAULT 1, contextWindow INTEGER,
   maxOutputTokens INTEGER, inputTypes TEXT, outputTypes TEXT, capabilities TEXT, reasoningLevels TEXT,
   reasoningParamMapping TEXT, smartConfig INTEGER NOT NULL DEFAULT 1, workshopAdapters TEXT,
-  endpointPath TEXT,
   createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS llmProvider (

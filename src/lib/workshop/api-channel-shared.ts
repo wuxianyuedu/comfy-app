@@ -9,7 +9,7 @@
 /* 某个 API 通道服务哪个生成阶段。 */
 import { isDataUrl, wrapBase64 } from "~/lib/media/data-url";
 import { isRecord } from "~/lib/is-record";
-import { isMediaEndpointPath, joinApiUrl } from "~/lib/llm/provider-types";
+import { joinApiUrl } from "~/lib/llm/provider-types";
 
 export type ApiChannelKind = "image" | "video";
 
@@ -203,36 +203,34 @@ function stripTrailingResourceSegment(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, "").replace(/\/(?:images|videos)$/i, "");
 }
 
-/** 由远端模型条目解析「生图」端点（OpenAI 兼容 images/generations）。
- *  `endpointPath` 是模型条目显式配置的动作路径（设置页下拉落库，
- *  `remoteModel.endpointPath`，#3656）：在白名单内时优先于一切启发式；
- *  缺省时 Base URL 按这几种形态兼容：
+/** 由远端模型条目的 Base URL 解析「生图」端点（OpenAI 兼容 images/generations）。
+ *  显式的模型级端点路径（`RemoteModelAdaptersDoc.endpointPath`，#3622/#3656）
+ *  由调用方经 `joinApiUrl` 拼，不在这里兜；Base URL 按这几种形态兼容：
  *    已含完整动作段（…/v1/images/generations）→ 原样使用；
  *    只到资源段（…/v1/images 或 …/images）→ 归一后补动作段；
  *    只到根（…/v1 或裸域，#3656 新口径）→ 补全 /v1/images/generations。
  *  历史事故：条目里填了完整端点仍被无条件再拼一次，请求打到
  *  /v1/images/images/generations 而 404。纯字符串拼装，可单测。 */
-export function resolveImagesGenerationsEndpoint(
-  baseUrl: string,
-  endpointPath?: string | null,
-): string {
+export function resolveImagesGenerationsEndpoint(baseUrl: string): string {
   const base = stripTrailingResourceSegment(String(baseUrl).trim());
-  if (typeof endpointPath === "string" && isMediaEndpointPath("image", endpointPath)) {
-    return joinApiUrl(base, endpointPath);
-  }
   if (/\/images\/generations$/i.test(base)) {
     return base;
   }
   return joinApiUrl(base, "/images/generations");
 }
 
-/** 由远端模型条目解析「生视频」提交端点（#3656 收口成函数，此前是调用点的
- *  行内 `${base}/videos`）。`endpointPath` 与生图同一语义：显式配置优先；
- *  缺省按任务制惯例补 /videos（Agnes 系端点）。 */
-export function resolveVideoSubmitEndpoint(baseUrl: string, endpointPath?: string | null): string {
+/** 由远端模型条目的 Base URL 解析「生视频」端点（与生图同一套三形态兼容，
+ *  动作段换成 OpenAI 兼容视频惯例 /videos/generations）。
+ *
+ *  为什么与生图成对而不是复用：两张表的资源名（images / videos）与动作段
+ *  是同一套惯例的两份实例，参数化（资源名进参）会让调用点读不出「这是哪条
+ *  通道的端点」，镜像两份各自贴着各自的资源名更直白（与 api-channel.server
+ *  里图 / 视频两份 resolveTarget 的拆分同一取舍）。#3656 起版本段缺省由
+ *  `joinApiUrl` 统一补（Base 只到裸域时不再发一个注定 404 的地址）。 */
+export function resolveVideosGenerationsEndpoint(baseUrl: string): string {
   const base = stripTrailingResourceSegment(String(baseUrl).trim());
-  if (typeof endpointPath === "string" && isMediaEndpointPath("video", endpointPath)) {
-    return joinApiUrl(base, endpointPath);
+  if (/\/videos\/generations$/i.test(base)) {
+    return base;
   }
-  return joinApiUrl(base, "/videos");
+  return joinApiUrl(base, "/videos/generations");
 }

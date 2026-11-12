@@ -465,7 +465,8 @@ export function formatContextWindow(value: number | null | undefined): string {
 /* ── 图像 / 视频模型的「接口端点」词表（#3656）───────────────────── */
 
 /** 图像 / 视频模型的接口端点候选路径（动作路径**自带版本段**，#3656 新口径）：
- *  设置页「添加 / 编辑模型」弹窗按用途给成下拉，落库在 `remoteModel.endpointPath`。
+ *  设置页「添加 / 编辑模型」弹窗按用途给成下拉，落库在模型级适配器存档
+ *  `RemoteModelAdaptersDoc.endpointPath`（#3622/#3659 的同一份存储，不另开列）。
  *  与文本协议三词表（`LLM_API_FORMAT_*`）刻意分开：图像 / 视频端点由**用途**决定，
  *  不吃 `chat-completions` 那套格式。运行时（工坊生图 / 生视频的目标解析）与
  *  设置页展示都从这里取默认值 —— 「没选 = 第一项」的唯一出处。 */

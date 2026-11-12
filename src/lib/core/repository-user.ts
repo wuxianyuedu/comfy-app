@@ -21,7 +21,7 @@ import {
   type RemoteModelEntry,
   inferRemoteKindFromName,
 } from "~/lib/llm/types";
-import { isLlmApiFormat, isMediaEndpointKind, isMediaEndpointPath } from "~/lib/llm/provider-types";
+import { isLlmApiFormat } from "~/lib/llm/provider-types";
 import {
   user,
   llmConfig,
@@ -36,10 +36,9 @@ import { eq, inArray, isNull, sql } from "drizzle-orm";
 import { SETTINGS_DB_WRITE } from "~/lib/retry-policy";
 import { runWithSqliteBusyRetry } from "~/lib/sqlite-busy-retry";
 import type { DbExecutor } from "./repository-executor-types";
-import {
-  parseRemoteModeAdapters,
-  type RemoteModeAdapter,
-} from "~/lib/workshop/model-mode-contract";
+import { parseRemoteModelAdaptersDoc } from "~/lib/workshop/remote-model-adapter";
+import type { RemoteModelAdaptersDoc } from "~/lib/workshop/remote-model-adapter";
+
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 
 export class UserRepository {
@@ -357,29 +356,33 @@ export class RemoteModelRepository {
     return this.list();
   }
 
-  /** 读取某条远端模型的工坊模式适配器（JSON 列；未配置返回空数组）。 */
-  async getWorkshopAdapters(name: string) {
+  /** 读取某条远端模型的工坊适配器存档（模型级 envelope，ISSUE #3622；
+   *  兼容旧版裸数组形状。未配置 / 模型不存在返回空档）。 */
+  async getWorkshopAdaptersDoc(name: string): Promise<RemoteModelAdaptersDoc> {
     const row = await this.findByName(name);
     if (!row) {
-      return [];
+      return { endpointPath: "", adapters: [] };
     }
-    return parseAdaptersJson(row.workshopAdapters);
+    return parseAdaptersDocJson(row.workshopAdapters);
   }
 
-  /** 保存某条远端模型的工坊模式适配器（整份覆盖）。模型不存在返回空数组。 */
-  async saveWorkshopAdapters(name: string, adapters: Array<RemoteModeAdapter>) {
+  /** 保存某条远端模型的工坊适配器存档（整份覆盖）。模型不存在时静默不动。 */
+  async saveWorkshopAdaptersDoc(
+    name: string,
+    doc: RemoteModelAdaptersDoc,
+  ): Promise<RemoteModelAdaptersDoc> {
     const row = await this.findByName(name);
     if (!row) {
-      return [];
+      return doc;
     }
     await db
       .update(remoteModel)
       .set({
-        workshopAdapters: JSON.stringify(adapters),
+        workshopAdapters: JSON.stringify(doc),
         updatedAt: new Date(),
       })
       .where(eq(remoteModel.id, row.id));
-    return adapters;
+    return doc;
   }
 
   /** 新建 / 更新一条供应商下的模型（#3501）。
@@ -394,23 +397,12 @@ export class RemoteModelRepository {
     /* 格式是模型级配置（#3517）：非法值折成 null = 跟随供应商，不在写侧猜一个格式
      * （猜错的表现是「请求发到了一个不存在的端点」，比回落更难查）。 */
     const apiFormat = isLlmApiFormat(input.apiFormat) ? input.apiFormat : null;
-    /* 图像 / 视频的接口端点动作路径（#3656）：按**该行用途**的白名单收窄，
-     * 非法值折成 null = 用途默认第一项；文本行（chat）恒为 null。省略（undefined，
-     * 历史调用方没传）= 不动既有。 */
-    const kind = input.kind ?? "chat";
-    const endpointPath =
-      input.endpointPath === undefined
-        ? undefined
-        : isMediaEndpointKind(kind) && isMediaEndpointPath(kind, input.endpointPath)
-          ? input.endpointPath
-          : null;
     const values = {
       name,
       providerId: input.providerId,
       baseUrl,
       apiFormat,
-      kind,
-      endpointPath,
+      kind: input.kind ?? "chat",
       enabled: input.enabled ?? true,
       contextWindow: input.contextWindow ?? null,
       maxOutputTokens: input.maxOutputTokens ?? null,
@@ -523,9 +515,6 @@ export type RemoteModelInput = {
   capabilities?: Array<string> | null;
   contextWindow?: number | null;
   enabled?: boolean;
-  /** 图像 / 视频模型的接口端点动作路径（#3656）：按行用途白名单收窄落库，
-   *  非法值 = null（用途默认第一项）；省略 = 不动既有（文本行恒 null）。 */
-  endpointPath?: string | null;
   id?: string;
   inputTypes?: Array<string> | null;
   kind?: string;
@@ -663,16 +652,16 @@ export class LlmProviderRepository {
   }
 }
 
-/** 解析 remoteModel.workshopAdapters JSON 列（坏数据按空处理）。 */
-export function parseAdaptersJson(raw: string | null): Array<RemoteModeAdapter> {
+/** 解析 remoteModel.workshopAdapters JSON 列（模型级 envelope，坏数据按空档处理）。 */
+export function parseAdaptersDocJson(raw: string | null): RemoteModelAdaptersDoc {
   /* DB 读出的 JSON 列空串与 null 同义 = 没有数据 */
   if (raw === null || raw === "") {
-    return [];
+    return { endpointPath: "", adapters: [] };
   }
   try {
-    return parseRemoteModeAdapters(JSON.parse(raw));
+    return parseRemoteModelAdaptersDoc(JSON.parse(raw));
   } catch {
-    return [];
+    return { endpointPath: "", adapters: [] };
   }
 }
 

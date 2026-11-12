@@ -16,7 +16,7 @@ import { promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { remoteModelRepository } from "~/lib/core/repository";
-import type { RemoteModeAdapter, WorkshopInputType } from "~/lib/workshop/model-mode-contract";
+import type { RemoteModeAdapter, WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
 
 import {
   callImageGeneration,
@@ -35,10 +35,10 @@ import {
   type WorkshopApiSettings,
 } from "./api-channel-core";
 import { buildVideoPollUrls } from "~/lib/llm/usage-test-config";
-import { isMediaEndpointPath } from "~/lib/llm/provider-types";
+import { joinApiUrl } from "~/lib/llm/provider-types";
 import {
   resolveImagesGenerationsEndpoint,
-  resolveVideoSubmitEndpoint,
+  resolveVideosGenerationsEndpoint,
   type ApiChannelKind,
   type ApiChannelStored,
 } from "./api-channel-shared";
@@ -101,6 +101,9 @@ function unifiedImageInputs(req: ApiImageRequest): Partial<Record<WorkshopInputT
     negative: req.negative ?? undefined,
     "aspect-ratio": req.aspectRatio ?? undefined,
     megapixels: req.megapixels ?? undefined,
+    /* 分辨率档（"1k"/"2k"/"4k"）：与百万像素同口的另一种表达，适配器映射了
+     * 哪个就下发哪个（ISSUE #3622）。 */
+    resolution: req.resolution ?? undefined,
     multiple: req.multiple ?? undefined,
     image: req.image ?? undefined,
   };
@@ -156,20 +159,24 @@ async function resolveTarget(
       return { target: fallbackTarget(channel), channel, adapter: null };
     }
     // 模式适配器优先：条目配置了该模式的输入映射就按它翻译统一输入。
-    const adapters = await remoteModelRepository.getWorkshopAdapters(wantedModel);
+    // 端点是模型级配置（ISSUE #3622）：模型级路径配了就用它；没配则一律按
+    // Base URL 形态推导 images/generations 惯例端点 —— 与有没有适配器无关。
+    const doc = await remoteModelRepository.getWorkshopAdaptersDoc(wantedModel);
+    const adapters = doc.adapters;
     const wantedMode = upperToken(req.mode);
     const [onlyAdapter] = adapters;
     const adapter =
       adapters.find((a) => a.mode === wantedMode) ??
       (adapters.length === 1 ? (onlyAdapter ?? null) : null);
+    const base = (entry.baseUrl ?? "").replace(/\/+$/, "");
     return {
       target: {
-        /* 无适配器时端点由「显式配置的动作路径（#3656 下拉落库）→ Base 归一 +
-         * OpenAI 兼容惯例」两级决定；适配器路径保持逐字拼接（那是用户在
-         * 「模型适配」里配的完整覆盖，含 /agnesapi 这类非版本段形态）。 */
-        endpoint: adapter
-          ? `${(entry.baseUrl ?? "").replace(/\/+$/, "")}${adapter.endpointPath}`
-          : resolveImagesGenerationsEndpoint(entry.baseUrl ?? "", entry.endpointPath),
+        endpoint:
+          doc.endpointPath === ""
+            ? resolveImagesGenerationsEndpoint(entry.baseUrl ?? "")
+            : /* #3656：显式路径走 joinApiUrl——Base 已带版本段不重复补（防 /v1/v1），
+               * Base 缺版本段补 /v1；设置页下拉存的就是带版本段的完整路径。 */
+              joinApiUrl(base, doc.endpointPath),
         apiKey: entry.apiKey ?? "",
         model: entry.name,
       },
@@ -265,17 +272,24 @@ async function resolveVideoTarget(
     if (!entry) {
       return { adapter: null, target: fallbackTarget(channel) };
     }
-    const adapters = await remoteModelRepository.getWorkshopAdapters(wantedModel);
+    /* 端点是模型级配置（ISSUE #3622）：模型级路径配了就用它；没配时有适配器
+     * 按 Base URL 形态推导 videos/generations 惯例端点，无适配器保持既有回落
+     * （OpenAI 兼容惯例的 /videos，与 usage-test 的视频预设一致）。 */
+    const doc = await remoteModelRepository.getWorkshopAdaptersDoc(wantedModel);
+    const adapters = doc.adapters;
     const wantedMode = upperToken(req.mode);
     const [onlyAdapter] = adapters;
     const adapter =
       adapters.find((a) => a.mode === wantedMode) ??
       (adapters.length === 1 ? (onlyAdapter ?? null) : null);
-    /* 无适配器时回落视频端点解析（#3656 收口到 `resolveVideoSubmitEndpoint`：
-     * 显式配置的动作路径优先，缺省按任务制惯例 /videos，版本段缺则补 /v1）。 */
-    const endpoint = adapter
-      ? `${(entry.baseUrl ?? "").replace(/\/+$/, "")}${adapter.endpointPath}`
-      : resolveVideoSubmitEndpoint(entry.baseUrl ?? "", entry.endpointPath);
+    const base = (entry.baseUrl ?? "").replace(/\/+$/, "");
+    const endpoint =
+      doc.endpointPath === ""
+        ? adapter
+          ? resolveVideosGenerationsEndpoint(base)
+          : /* #3656：无适配器的既有回落（/videos）也走统一拼装，Base 缺版本段补 /v1 */
+            joinApiUrl(base, "/videos")
+        : joinApiUrl(base, doc.endpointPath);
     return {
       adapter,
       target: { endpoint, apiKey: entry.apiKey ?? "", model: entry.name },
@@ -302,9 +316,11 @@ export async function submitVideoViaApi(req: ApiVideoSubmitRequest): Promise<Api
 
 /* 轮询一次异步视频任务：返回成品 URL，或 { pending: true } 表示仍在进行。
  * `model` 给出且能在 remoteModel 表里找到时（#3590），轮询地址按该条目 +
- * 适配器端点构造成候选（Agnes 系 /agnesapi?video_id=… 与 REST /videos/{id}），
- * 鉴权用该条目自己的密钥；查不到 / 未给 model 时回落通道设置（既有行为，
- * 工坊镜头链路的失败语义原样保留）。 */
+ * 提交端点的目录段构造成候选（Agnes 系 /agnesapi?video_id=… 与
+ * REST /videos/{id}），鉴权用该条目自己的密钥；查不到 / 未给 model 时回落
+ * 通道设置（既有行为，工坊镜头链路的失败语义原样保留）。
+ * 提交路径的口径与 resolveVideoTarget 同源（ISSUE #3622）：模型级端点优先，
+ * 其次按 Base URL 形态推导，最后既有回落 /videos。 */
 export async function pollVideoViaApi(
   remoteTaskId: string,
   opts: { mode?: string; model?: string } = {},
@@ -316,23 +332,26 @@ export async function pollVideoViaApi(
       const entries = await remoteModelRepository.list();
       const entry = entries.find((r) => r.name === wantedModel && (r.baseUrl ?? "") !== "");
       if (entry) {
-        const adapters = await remoteModelRepository.getWorkshopAdapters(wantedModel);
+        const doc = await remoteModelRepository.getWorkshopAdaptersDoc(wantedModel);
+        const adapters = doc.adapters;
         const wantedMode = upperToken(opts.mode);
         const [onlyAdapter] = adapters;
         const adapter =
           adapters.find((a) => a.mode === wantedMode) ??
           (adapters.length === 1 ? (onlyAdapter ?? null) : null);
-        /* 轮询目录与提交同一口径：适配器路径优先 → 条目显式配置（#3656）→
-         * 任务制惯例 /videos。REST 候选的版本段补全在 `buildVideoPollUrls` 里。 */
-        const configuredPath = entry.endpointPath;
-        const endpointPath =
-          adapter?.endpointPath ??
-          (typeof configuredPath === "string" && isMediaEndpointPath("video", configuredPath)
-            ? configuredPath
-            : "/videos");
+        const base = (entry.baseUrl ?? "").replace(/\/+$/, "");
+        /* 轮询候选的目录段从「动作路径」推导（buildVideoPollUrls 内部补版本段）：
+         * 显式路径存的是带版本段的完整路径（/v1/videos），先剥掉版本段再取目录，
+         * 否则 videoEndpointDir 会把 /v1 当成目录（#3656）。 */
+        const submitPath =
+          doc.endpointPath === ""
+            ? adapter
+              ? resolveVideosGenerationsEndpoint(base).slice(base.length)
+              : "/videos"
+            : doc.endpointPath.replace(/^\/v\d+/i, "");
         const { rest, agnes } = buildVideoPollUrls(
           entry.baseUrl ?? "",
-          endpointPath,
+          submitPath,
           wantedModel,
           remoteTaskId,
         );

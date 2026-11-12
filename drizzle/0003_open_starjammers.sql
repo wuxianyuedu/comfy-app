@@ -1,1 +1,0 @@
-ALTER TABLE `remoteModel` ADD `endpointPath` text;

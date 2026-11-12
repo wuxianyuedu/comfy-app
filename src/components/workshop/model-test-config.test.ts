@@ -3,12 +3,14 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { RemoteModeAdapter } from "~/lib/workshop/model-mode-contract";
+import type { RemoteModeAdapter } from "~/lib/workshop/remote-model-adapter";
 
 import {
   assembleImageRequest,
   assembleVideoRequest,
   controlForInputType,
+  defaultModeForKind,
+  modeTabsForKind,
   relayInputCount,
   testCandidatesForKind,
 } from "./model-test-config";
@@ -99,7 +101,6 @@ describe("controlForInputType / relayInputCount", () => {
   it("relayInputCount 只数通道承接得住的行（其余是工坊完整链路的输入）", () => {
     const adapter: RemoteModeAdapter = {
       mode: "T2I",
-      endpointPath: "/i",
       inputs: [
         { type: "prompt", field: "prompt" },
         { type: "seed", field: "seed" },
@@ -109,5 +110,38 @@ describe("controlForInputType / relayInputCount", () => {
     expect(relayInputCount(adapter, "image")).toBe(1);
     /* prompt 也在视频承接集里，seed 不在 */
     expect(relayInputCount(adapter, "video")).toBe(1);
+  });
+});
+
+describe("modeTabsForKind / defaultModeForKind", () => {
+  const adaptersByModel = {
+    "agnes-image": [{ mode: "T2I" }, { mode: "I2I" }],
+    "agnes-image-2": [{ mode: "T2I" }],
+  };
+
+  it("列出该用途下全部生成类模式；徽标数 = 配了该模式适配器的候选数", () => {
+    const tabs = modeTabsForKind("image", adaptersByModel);
+    /* 图片侧生成类模式的第一个与最后一个都在列（全部生成类，含 0 配置的） */
+    const t2i = tabs.find((t) => t.mode === "T2I");
+    const i2i = tabs.find((t) => t.mode === "I2I");
+    expect(t2i).toMatchObject({ label: "文生图", modelCount: 2 });
+    expect(i2i).toMatchObject({ label: "图生图", modelCount: 1 });
+    /* 生成类（isGenerative）之外的后处理模式不进页签 */
+    expect(tabs.some((t) => t.mode === "Upscale")).toBe(false);
+    /* 没有候选配适配器的模式也在列，计数为 0 */
+    expect(tabs.every((t) => typeof t.modelCount === "number")).toBe(true);
+  });
+
+  it("视频用途只列视频侧模式；空适配器索引全为 0", () => {
+    const tabs = modeTabsForKind("video", {});
+    expect(tabs.length).toBeGreaterThan(0);
+    expect(tabs.some((t) => t.mode === "T2V")).toBe(true);
+    expect(tabs.some((t) => t.mode === "T2I")).toBe(false);
+    expect(tabs.every((t) => t.modelCount === 0)).toBe(true);
+  });
+
+  it("默认模式 = 该用途的第一个生成类类型码", () => {
+    expect(defaultModeForKind("image")).toBe("T2I");
+    expect(defaultModeForKind("video")).toBe("T2V");
   });
 });
