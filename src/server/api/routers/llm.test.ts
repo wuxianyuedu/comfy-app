@@ -13,7 +13,11 @@ const { llmServer, contracts } = vi.hoisted(() => ({
     })),
   },
   contracts: {
-    loadModeContracts: vi.fn(() => [{ mode: "TXT2IMG" }]),
+    loadModeContractLayers: vi.fn(() => ({
+      configured: [{ mode: "TXT2IMG" }],
+      override: [],
+      contracts: [{ mode: "TXT2IMG" }],
+    })),
     saveModeContracts: vi.fn((c: unknown) => c),
     isDevCheckout: vi.fn(() => false),
     saveModeContractsAsProjectDefaults: vi.fn(() => ({
@@ -41,7 +45,7 @@ vi.mock("~/lib/llm/server", () => ({
   getConfigForClient: llmServer.getConfigForClient,
 }));
 vi.mock("~/lib/workshop/mode-contract.server", () => ({
-  loadModeContracts: contracts.loadModeContracts,
+  loadModeContractLayers: contracts.loadModeContractLayers,
   saveModeContracts: contracts.saveModeContracts,
   isDevCheckout: contracts.isDevCheckout,
   saveModeContractsAsProjectDefaults: contracts.saveModeContractsAsProjectDefaults,
@@ -445,6 +449,8 @@ describe("modeContracts —— 契约口 id 的类型守卫", () => {
   it("读取走同一个出口（不在路由里再造一份默认契约）", async () => {
     const res = await caller().modeContractsGet();
     expect(res.contracts).toEqual([{ mode: "TXT2IMG" }]);
+    /* 下发两层：成品配置基准（判「已改」）+ 生效注册表（显示 / 编辑）。 */
+    expect(res.configured).toEqual([{ mode: "TXT2IMG" }]);
     /* 「保存为项目默认」入口的开关来自服务端判据（isDevCheckout），不是界面猜的
      *（ISSUE #3396）。 */
     expect(res.projectDefaultEditable).toBe(false);
@@ -516,6 +522,6 @@ describe("configGet —— 脱敏出口", () => {
   it("走 getConfigForClient 取脱敏配置，不顺手加载模式契约", async () => {
     await caller().configGet();
     expect(llmServer.getConfigForClient).toHaveBeenCalledTimes(1);
-    expect(contracts.loadModeContracts).not.toHaveBeenCalled();
+    expect(contracts.loadModeContractLayers).not.toHaveBeenCalled();
   });
 });
