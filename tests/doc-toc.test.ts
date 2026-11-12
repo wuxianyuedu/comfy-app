@@ -4,19 +4,22 @@
  * 源与生成态镜像必须显式区分（同名两份、行号不同）；「没读成」（退 2）与「关键词 0 命中」（退 0）分开。
  */
 import { execFileSync } from "node:child_process";
-import { join } from "node:path";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { describe, expect, test } from "vitest";
 
 import { parseHeadings, resolveDoc, sectionRange } from "../scripts/doc-toc.mjs";
 
 const SCRIPT = join(process.cwd(), "scripts", "doc-toc.mjs");
 
-function run(args: Array<string> = []) {
+function run(args: Array<string> = [], env: Record<string, string> = {}) {
   try {
     const output = execFileSync(process.execPath, [SCRIPT, ...args], {
       cwd: process.cwd(),
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, ...env },
     });
     return { code: 0, output };
   } catch (error) {
@@ -136,12 +139,42 @@ describe("doc-toc —— 入口三态", () => {
     expect(output).toContain("（源）");
   });
 
-  test("`--rendered` 明确写出「行号属于生成态镜像」", () => {
-    const { code, output } = run(["13", "--rendered", "合并前"]);
-    expect(code).toBe(0);
-    expect(output).toContain("生成态镜像");
-    expect(output).toContain("docs/generated/13-");
-    expect(output).toContain("与源文档的行号不同");
+  test("`--rendered` 明确写出「行号属于生成态镜像」（谁要读谁本地先生成）", () => {
+    /* #3586：干净检出上没有 `docs/generated/**`（镜像退出入库产物）。本机跑过
+     * `pnpm doc:render` 时这条用例会意外绿，CI 干净检出却退 2 —— 正是「本机产物
+     * 掩盖了判据」那一族（实测 PR #3609 的 affected-tests 就红在这里）。所以这里走
+     * 读者那条路：在一次性夹具里自己造一份镜像、用 `DOC_TOC_ROOT` 指过去，
+     * 不写真实工作树（#2665）。 */
+    const root = mkdtempSync(join(tmpdir(), "doc-toc-rendered-"));
+    const mirror = join(root, "docs", "generated", "13-提交与-code-review.md");
+    try {
+      mkdirSync(dirname(mirror), { recursive: true });
+      writeFileSync(
+        mirror,
+        "# 13 章（夹具镜像）\n\n## 13.1 合并前清单\n\n## 13.2 别的节\n",
+        "utf8",
+      );
+      const { code, output } = run(["13", "--rendered", "合并前"], { DOC_TOC_ROOT: root });
+      expect(code, output).toBe(0);
+      expect(output).toContain("生成态镜像");
+      expect(output).toContain("docs/generated/13-");
+      expect(output).toContain("与源文档的行号不同");
+      expect(output).toContain("13.1 合并前清单");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("没本地生成过镜像 ⇒ 退 2 并给出「先 doc:render」的修法（#3586）", () => {
+    const root = mkdtempSync(join(tmpdir(), "doc-toc-no-mirror-"));
+    try {
+      const { code, output } = run(["13", "--rendered", "合并前"], { DOC_TOC_ROOT: root });
+      expect(code, output).toBe(2);
+      expect(output).toContain("生成态镜像不在盘上");
+      expect(output).toContain("pnpm run doc:render");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("关键词 0 命中是退 0（文档读到了，只是没有这一节）", () => {
