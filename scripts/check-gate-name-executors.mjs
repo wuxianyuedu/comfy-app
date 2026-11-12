@@ -15,7 +15,8 @@
  * ── 这一格判什么 ─────────────────────────────────────────────────────────
  *
  *   ① **正向**：清单里的每个名字 ⇒（自己的 stage ｜ 「执行者在别处」的登记）二选一，
- *      且登记的入口路径**真的**在执行面里（复合档条目 / 固定清单用例 / 钩子步骤三面）。
+ *      且登记的入口路径**真的**在执行面里（复合档条目 / 固定清单用例 / 钩子步骤 /
+ *      **GA PR 门禁 step** 四面）。
  *   ② **反向**：登记的每个名字都在清单里、每个入口路径都真在执行面里、且不与「活 stage」重复登记。
  *   ③ **残留**：配置里以注释形态留着、却三处登记都没有的名字 —— 既不是停用也不是在跑。
  *
@@ -23,18 +24,45 @@
  * `COMFYAPP_CI_DISABLED_GATES` 同一形态），登记的是**入口路径**而不是执行者自己的定义 ——
  * 判据去执行面核那个指针，不抄第二份（§12.12 / §12.18）。
  *
+ * ⚠️ **GA PR 门禁那一面是第四面，不是可选的**（ISSUE #3599）：PR 主列的代码判据全在
+ * GA 侧（`.cnb.yml` 的 PR 档自 #3378 起只剩「站内回读结论 + 红了立案」两件纯 API 动作），
+ * 而另三面一处都不在 GA ⇒ 指向 GA step 的入口路径会被误判成「没有执行者」。
+ * 那一面读的是 `.github/workflows/pr-gate.yml` 的 `run:` 行。
+ *
  * 退出码：`0` 通过；`1` 有不一致（逐条点名）。
  */
+import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
 import { readHookSteps } from "./base-check/hook-steps.mjs";
 import { HEAVY_GATES } from "./ci-heavy-gates.mjs";
-import { gateNameExecutorProblems } from "./ci-gate-names.mjs";
+import { gateNameExecutorProblems, gaWorkflowStepArgvs } from "./ci-gate-names.mjs";
 import { parseStageScripts, readCnbConfig } from "./ci-autofix-duties.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+
+/** GA 的 PR 质量门禁 workflow（PR 主列的代码判据都在它里面）。 */
+const GA_PR_WORKFLOW = ".github/workflows/pr-gate.yml";
+
+/**
+ * 第四面：GA PR 门禁的 step 行。
+ *
+ * 读不到那份文件 ⇒ 那一面为空（**不是「有执行者」**）—— 判据要的是「这个入口路径真的会
+ * 被跑」的正面读数，取不到执行面就当没有。
+ *
+ * @param {string} root 检出根
+ * @returns {Array<{argv: string[]}>}
+ */
+function readGaSteps(root) {
+  try {
+    const text = fs.readFileSync(path.join(root, GA_PR_WORKFLOW), "utf8");
+    return gaWorkflowStepArgvs(text).map((argv) => ({ argv }));
+  } catch {
+    return [];
+  }
+}
 
 /**
  * 入口。
@@ -54,6 +82,7 @@ export function main(io = {}) {
     heavyGates: HEAVY_GATES,
     fixedTests: FIXED_STRUCTURAL_TESTS,
     hookSteps,
+    gaSteps: readGaSteps(root),
   });
   if (problems.length > 0) {
     for (const p of problems) {
