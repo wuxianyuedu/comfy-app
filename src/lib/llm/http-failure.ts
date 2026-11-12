@@ -15,6 +15,8 @@
 
 import { INLINE_JSON_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 
+import { knownApiEndpointHint } from "./provider-types";
+
 /** 响应体开头像 HTML 文档（控制台页面 / 网关错误页），而不是接口响应。
  *  只看开头一小段：正文里偶然出现的 `<body` 不该被当成整页 HTML。 */
 function isHtmlDocument(body: string): boolean {
@@ -45,11 +47,16 @@ export type HttpFailureInput = {
 export function httpFailureDetail({ body, status, url }: HttpFailureInput): string {
   const at = url === undefined || url === "" ? "" : `（${url}）`;
   const text = body.trim();
+  /* 已核实厂商的「端点在另一个域」指路（#3612）：Base URL 落在官网域上时，
+   * 401 的「密钥无效」归因会把用户引去反复换密钥 —— 指路句比归因句更该出现。
+   * 没给 url（那一档本就点不了名）或域不在清单里时保持原样。 */
+  const endpointHint = url === undefined || url === "" ? null : knownApiEndpointHint(url);
+  const suffix = endpointHint === null ? "" : `。${endpointHint}`;
   if (isHtmlDocument(text)) {
-    return `HTTP ${status}${at}：这个地址返回的是网页（HTML）而不是接口响应 —— 多半把控制台或官网地址填进了 Base URL，请改填 API 端点（常见形如 https://api.example.com/v1）`;
+    return `HTTP ${status}${at}：这个地址返回的是网页（HTML）而不是接口响应 —— 多半把控制台或官网地址填进了 Base URL，请改填 API 端点（常见形如 https://api.example.com/v1）${suffix}`;
   }
   /* 接口响应体是结构化的（JSON 错误对象或反代的纯文本），用 JSON 那一档上限；
    * 空响应体只留状态码与归因，不拼一个空的冒号。 */
   const snippet = clampText(text, { maxLength: INLINE_JSON_SNIPPET_MAX, marker: "" });
-  return `HTTP ${status}${at}${snippet === "" ? "" : `：${snippet}`}${statusHint(status)}`;
+  return `HTTP ${status}${at}${snippet === "" ? "" : `：${snippet}`}${statusHint(status)}${suffix}`;
 }
