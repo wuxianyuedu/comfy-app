@@ -160,7 +160,7 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 | 平台（push 保护）     | CNB **分支保护设置**                                                                          | `master` 的直接 push（放行 PR 合并）                                                                                                                                           | 需管理员改设置                            |
 | 平台（代码判据）      | `.github/workflows/pr-gate.yml` → GitHub Actions                                              | 分支守卫 / 提交声明核对 / 同步数据库表结构 / 类型检查 / 十四格静态判据 / `oxfmt 格式` / `lib Node-only 声明` / 重档静态判据（2026-11-05 起这些格从 CNB 整格搬来，见 §13.5.33） | 无（PR 必跑）                             |
 | 平台（流水线）        | 仓库根 `.cnb.yml` → 自托管节点（标签 `win`）                                                  | **平台读数**（镜像身份 / 工作区复用读数 / 缓存槽读数 / 环境前提）+ **判决**（`GA 回调结论回读` 站内读 GA 送回的 status）+ `master` 合并形态复核；镜像推送与派发在**平台池**那条流水线（§13.5.33.2） | 源分支删入口（见 13.6.1 服务端那两条）    |
-| 平台（push 树级判据） | `.github/workflows/master-gate.yml` → GitHub Actions                                          | `生成态文档与源同步` / `文档引用与权威源一致`（2026-11-06 起与 CNB push 档**并行**判，同一入口、同一旗标，见 §13.5.34）                                                        | 无（镜像仓 master 每笔 push 必跑）        |
+| 平台（push 树级判据） | `.github/workflows/master-gate.yml` → GitHub Actions                                          | `文档引用与权威源一致`（2026-11-06 起与 CNB push 档**并行**判，同一入口，见 §13.5.34）；`生成态文档与源同步` 那一格已随 `docs/generated/**` 退出入库产物于 #3586 退役                                  | 无（镜像仓 master 每笔 push 必跑）        |
 
 > **服务端形态重新有了调用方**：`scripts/check-branch-guard.cjs` 的
 > `--pr-check` / `--merge-commit` 由 `.github/workflows/pr-gate.yml`（前者）与
@@ -190,7 +190,6 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 ✅ node scripts/check-ui-logic-separation.cjs   # 视图层 IO 硬闸（命中即阻断，见 17）
 ✅ node scripts/check-changelog-fragments.cjs
 ✅ node scripts/check-changelog-versions.cjs # 待发段落的**来源锚** ⇄ 条目归属：锚写歪了 / 解析不出提交 / 同一 ISSUE 号跨锚分裂（见 §13.10.6）
-✅ node scripts/check-doc-mirror-pairing.cjs --staged # 改了 `SCOPED_DOCS` 的文档源 ⇒ 同批必须带上 `docs/generated/**` 的镜像；不读内容、一次 `git diff --cached`（见下 13.5.5 的那个「例外」）
 ✅ node scripts/check-gate-thresholds.cjs # 判据自身的数值 ⇄ 账：把 R5 的 900、函数长度 400 这类阈值**调松而不同批改 `scripts/.gate-thresholds.json`** 即红（方向逐条记，见下 §13.5.26）
 ✅ node scripts/check-tracked-secrets.cjs --staged # 被跟踪的文字里的凭据形状：明文凭据进 `docs/**` / `.cnb.yml` / 夹具即红，只点名位置与形状、不回显内容，无基线无 `--allow`（见 launch-and-build.md §7.3 末节）
 ✅ node scripts/check-import-alias.cjs --staged # import 别名只有一种前缀 `~`（R13，见 §12.8.0）；`--staged` 见下 13.5.8.2
@@ -323,7 +322,8 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 > 它们**不为每次 commit 服务**，但在平台侧 `.cnb.yml` 里有执行者（#1959 起）。
 >
 > **另有三条 2026-10-16 从钩子挪到平台侧**（`生成态文档与源同步` /
-> `API 文档生成与自检` / `文档引用与权威源一致`）—— 它们判的是**文档与文档生成物**，
+> `API 文档生成与自检` / `文档引用与权威源一致`；其中第一条已随 #3586 退役）——
+> 它们判的是**文档与文档生成物**，
 > 挡不住任何一次代码回归，而 `check-docs-api.cjs` 只要真做事就是**数十秒级**
 > （这一族秒数在本仓只有**一份出处**，带取法与量具：见 §13.5.17 —— 不往各处抄现价，
 > 抄一份就会漂第二次，而账面一条红都不会出现）。判据一字未改，
@@ -2470,7 +2470,7 @@ stream-log（`G:\runner\data\orange-ci\stream-log\cnb-<sn>-001.log`）：
 | R5 超 900 行文件（`check-file-structure.cjs` 的那一半）                         | 也跑（与钩子同一脚本，无 `--strict` 之类的模式差）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | **已在本地钩子里，且已是硬闸**（D 组「文件结构硬规则(R1-R12，R5 硬闸)」；沿革 = 只提醒 → ISSUE #1404 加 `--strict` 棘轮 → ISSUE #1811 基线归零后收成硬闸、`--strict` 一并删除）                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `pnpm doc:check`（文档引用与权威源一致）                                        | **有**（2026-10-16 起：它从钩子挪到了这里，理由见 §13.5.17；2026-10-19 起跑在聚合档 `重档静态判据` 的条目里，仍是一次不落）                                                                                                                                                                                                                                                                                                                                                                                                                                                      | **已不在钩子里**（D 组那一步撤销）。ISSUE #1371 翻掉旧「手动档」签字的结论不撤回 —— 它只是换了个执行者。本地出口：`pnpm doc:check`                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `docs/api/**` 生成与自检（`check-docs-api.cjs`）                                | **有**（2026-10-16 起从钩子挪到这里，理由见 §13.5.17；2026-10-22 起恢复成各自的活 stage，带 `ifModify`；⚠️ **2026-10-23 起判据对象变了** —— 产物不再进 git、那一格改判「生成一份 + 可不可用」，也不再带 `--autofix`，见 §13.5.5.1）                                                                                                                                                                                                                                                                                                                                              | **已不在钩子里**（D 组那一步撤销）。它按输入面触发，但**只要触发就是百秒级**（这一族秒数只有一份出处，含取法与量具：见 §13.5.17）—— 它在撤销出 D 组之前是那一组最贵的一步。本地出口：`pnpm run docs` 生成一份（**只在本机**，`.gitignore` 已收）；**不再有「一并提交」这回事**。历史：翻档前实测 2627 个文件差异、留着指向已删模块的 `lib_comfyui_markdown.html`（ISSUE #1329 收尾）                                                                                                                                                                                                                      |
-| `docs/generated/**` 生成态文档与源同步（`render-doc-placeholders.cjs --check`） | **有**（2026-10-16 起从钩子挪到这里，理由见 §13.5.17；2026-10-19 起跑在聚合档 `重档静态判据` 的条目里）                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | **已不在钩子里**（D 组那一步撤销）。本地出口：`pnpm run doc:render -- --only <动过的那几份源>` 后把自己那几份镜像一并提交（**别跑无参全量档** —— 它会顺带代改别人留在 HEAD 上的陈旧镜像，见 §13.5.5 那张表）                                                                                                                                                                                                                                                                                                                                                                                              |
+| `docs/generated/**` 生成态文档与源同步（`render-doc-placeholders.cjs --check`） | **已退役（#3586）** —— `docs/generated/**` 退出入库产物（`.gitignore` 的 `/docs/generated/`）：平台侧这一格、GA `master-gate.yml` 的 `--check --autofix` step、两张收窄/自动修登记与本地 D0 配对判据一并撤掉（沿革见 §13.5.5）                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | **没有「提交进 git 的镜像」可比，也没有「同批带上」这个动作**。谁想看带真实值的原文，本地跑一次 `pnpm doc:render`（`--only <源>` 只生成点名那几份），产物只在本机；`--check` 保留给本地自检，不进任何提交门禁。编辑态引用仍由 `pnpm doc:check` 把关（上一行）                                                                                                                                                                                                                                                                                                                                                                                              |
 | `tw4-canonical-report` / `tw4-spacing-canonical`（CSS 等价改写汇总）            | **不跑**（起 Tailwind 引擎 ~6s/次，代价判据见 13.5.4）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | **按需召唤 + 硬闸**：各带 `--check` 判定档（候选须为 0），并登记 `scripts/.gate-executor-ledger.json`（详见 §13.5.12）。ISSUE #1811 的 tw4 项已把它们从「基线 `total: 0` 的棘轮」翻成硬闸                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `report-ts-duplicate-keys`（同一属性指定两次）                                  | **不跑**（同上）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | **已收成判定档**：`check-ts-duplicate-keys.cjs` 接进 D 组「TS 重复属性判定」。落地时实测 0 处，按硬闸落、不走棘轮（ISSUE #1451）                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
@@ -5458,9 +5458,20 @@ ISSUE #1404 摘掉：基线 `total: 0`（那句「本地保持只提醒」的前
 - **不要在自动触发的流水线里 `@` NPC**：`@` 是**人的动作**。把它写进流水线
   等于按事件触发，而且判据（NPC 说得对不对）本来就不可机器复核。
 
-#### 13.5.5 生成态文档与源同步（`node scripts/render-doc-placeholders.cjs --check`）
+#### 13.5.5 生成态文档与源同步（**已退役，#3586**；以下为沿革留档）
 
-`docs/generated/**` 是**提交进 git** 的原文文档（把 `{{…}}` 占位符替换成真实值，供直接
+> ⚠️ **本档自 #3586 起整档退役，以下全部是历史沿革，不是现行口径。**
+> `docs/generated/**` 退出入库产物（`.gitignore` 的 `/docs/generated/`）：仓库只维护
+> 编辑态文档源，谁需要带真实值的原文谁本地 `pnpm doc:render` 自己生成自己看。
+> 随它一同撤掉的执行者：平台侧「生成态文档与源同步」（GA `master-gate.yml` 的
+> `--check --autofix` step）、`ci-autofix-duties` / `ci-incremental-gates` 两条登记、
+> 本地 D0 的「文档源 ⇄ 生成态镜像同批」（`check-doc-mirror-pairing.cjs` 及其自测）。
+> **现行口径只有两条**：`pnpm doc:check`（编辑态引用与权威源一致，GA 每笔 master
+> push 跑）与本地 `pnpm doc:render`（纯生成入口，不进任何门禁）；总纲见 AGENTS 硬规则 7。
+> 本节保留下来，是为了那几类失效形态（「自动修 + 再判」让陈旧隐形、配对判据的
+> 执行者不在漏做的那个人身上、`--only` 与全量档的分工）不再被第二次重新发明。
+
+`docs/generated/**` **曾是**提交进 git 的原文文档（把 `{{…}}` 占位符替换成真实值，供直接
 阅读），由 `pnpm doc:render` 从编辑态重渲染。**读者看的是它，而它此前没有任何判据**：
 改了编辑文档却忘了重渲染，生成物就静默过期 —— 实测 5 份落后于源、缺整节内容
 （如 `12-代码组织与文件结构.md` 的 §12.4.6），而这类差异在 `pnpm doc:check` 眼里是
@@ -5647,7 +5658,9 @@ CI 往返，且红话指着那个人根本没碰过的文件 —— 与 §13.6.2
    那一格现在自己的墙钟见 §13.5.17）。
 3. **`--autofix` 不再被接受**（2026-10-23）。产物不进 git ⇒ 没有「自动修完再提交」的
    对象 ⇒ 那一档在 `scripts/ci-autofix-duties.mjs` 的登记表里**被删掉**（自动修名单
-   只剩 `docs/generated/**` 那一族）。撞上 `--autofix` 的调用直接退 1 并说明为什么 ——
+   当时只剩 `docs/generated/**` 那一族；#3586 把这一族也摘了，登记表自此为空。
+   空表是合法终态，不是「清单被掏空」，反向半判据见 `tests/ci-autofix-duties.test.ts`）。
+   撞上 `--autofix` 的调用直接退 1 并说明为什么 ——
    静默忽略一个旗标正是本仓最恨的那族（脚自称与实际不一致）。
 
 **产物面本身的三条口径**：递归收集**不穿符号链接**（同 §7.3 的减法口径）；
@@ -8047,7 +8060,8 @@ D 组里比它们贵、也同样「不必每次跑」的步骤还有的是（`ch
 那一列。**那个归类后来被推翻了一条**（ISSUE #2010，见 §13.5.1.1）：格式漂了不构成真回归
 （没有运行时症状、改回来只是再跑一次 `--write`），所以它按同一把尺子（「结论挡不挡得住
 一次代码回归」）挪到了平台侧 —— 挪它的理由与这三条**逐字同源**，不是新开一套口径。
-而这三条的落点是**文档与文档生成物**：`docs/generated/**` 是**提交进 git 的产物**，
+而这三条的落点是**文档与文档生成物**：`docs/generated/**` 当时是**提交进 git 的产物**
+（#3586 起已退出入库产物，见 §13.5.5 的退役块），
 漂了不会有任何运行时症状，只会在下一次有人读文档时误导他。
 （⚠️ **2026-10-23 起 `docs/api/**` 不再提交进 git**（ISSUE #2231）—— 那一族的判据对象
 随之从「与源同不同步」改成「生成一份 + 自检」，见 §13.5.5.1。）
@@ -9301,7 +9315,8 @@ Pipeline prepare error: Pipeline was stoped，Pipeline: cnb-jpf-1k5qok15v-001 go
    `API 文档生成与自检` 的面 = `check-docs-api.cjs` 自己的 `INPUT_GLOBS`
    （**上界**形态）**+ 产物面 `docs/api/**`**（⚠️ **2026-10-23 起产物面已从面里去掉**
    —— 产物不再进 git，见 §13.5.5.1）；`生成态文档与源同步` 的面 = `docs/**`
-   （源 `SCOPED_DOCS` 与产物 `docs/generated/**` 同在它下面）。
+   （源 `SCOPED_DOCS` 与产物 `docs/generated/**` 同在它下面 —— 这一格连同它的
+   `ifModify` 登记已随 #3586 退役，所以现在 `INCREMENTAL_GATES` 是一张空表）。
    `文档引用与权威源一致` **不挂** `ifModify`（它判的是全库文档里的引用与权威源，
    域不是某几个目录，收窄成任何子集都是漏判；而它自己只要 0.42s）。
 2. **复合执行者的成员表收成真相**：只剩钩子里真有的那几条，而这一格**先自证、后跑** ——
@@ -9783,6 +9798,118 @@ Docker、自托管节点没开），与本格的 PR 描述不是一回事。
 本节 + 生成态镜像 / `ga-migration-checklist.md` + 镜像 / `## Changed` 碎片挂 #3469，
 与 §13.5.33.4 同形同批。
 
+##### 13.5.33.8 2026-11-11 GA 侧那一格要在 Linux 上编 Tauri：系统库归 workflow 那一层装（ISSUE #3572）
+
+**改的是平台前提的归属与判据缺前提时的归因，不是判决链、不是三态退码、不是承重锚。**
+PR #3567（ISSUE #3562 的修复）在 GA 侧判红，红的是 `heavy-gates` job 的「重档静态判据」
+里那一格「桌面壳（改了 src-tauri 才跑）」：
+
+```
+[红] 桌面壳（改了 src-tauri 才跑）（退出码 101 · 147 行输出 · 27947ms）
+    pkg-config exited with status code 1
+    > PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --libs --cflags glib-2.0 'glib-2.0 >= 2.70'
+    The system library `glib-2.0` required by crate `glib-sys' was not found.
+```
+
+CNB 侧 `pull_request` build 因此读到 `state: error`、`GA 判决回调`读到 `conclusion: failure`
+（run 42991680023 · sha `1c92b95c`）—— **两者是同一根因的两个下游**，不是两个独立问题。
+
+**根因三段事实**（缺一段就不成立）：
+
+| 段 | 事实 |
+| --- | --- |
+| 这一格在 Linux 上跑 | `pr-gate.yml` 六个 job 全部 `runs-on: ubuntu-24.04`；ubuntu-24.04 runner 只预装 `pkg-config`，不预装 `libwebkit2gtk-4.1-dev` / `libglib2.0-dev` / `libayatana-appindicator3-dev` / `librsvg2-dev`（actions/runner-images 的 Ubuntu2404 apt 清单逐条核对过） |
+| 它以前不在 Linux 上跑 | ISSUE #3064（2026-11-02，`feat(ci): 承重流水线迁 GitHub Actions`）把承重门禁从 CNB 自托管节点迁到 GA，而那个节点是 **Windows**（`.cnb.yml` 节点 tag = win）—— Windows 编 Tauri 走 MSVC + WebView2，不需要 glib/webkit。迁移后 master 上**没有一笔提交**碰过 `src-tauri/src/`（立案时的读数：连续 418 笔）⇒ 这一格在 GA 上**从来没真跑过 `cargo test`**。ISSUE #3562 是第一次 |
+| 仓库里没有一层准备系统库 | `.github/workflows/**` 与 `.cnb.yml` 全文检索 `apt-get` / `webkit2gtk` / `libgtk` / `appindicator` / `librsvg`：**零命中**（`.cnb/ci-image/Dockerfile` 只装 `git-lfs`） |
+
+对照 `shell-gate` 自己做的准备 —— sidecar 按 Linux 三元组落位
+（`node-x86_64-unknown-linux-gnu`）、`static/` 空目录建好 —— 都齐了。**唯独系统库这一层，
+判据管不着也不该管**（它不是判据，是平台前提），于是无人负责。
+
+**为什么不能靠「换个平台」绕开**：这个 crate **刻意**支持跨平台构建，不是 Windows-only ——
+`src-tauri/Cargo.toml` 的 `windows` 是 target 条件依赖（注释明写「无条件声明时整棵
+windows crate 会在 Linux/macOS 上参与编译并以 `error[E0425]: cannot find type IMarshal
+in windows_core::imp` 失败」）；`single_instance.rs` / `shell_launch.rs` /
+`detached_spawn.rs` 都有 `#[cfg(not(windows))]` 的 POSIX 实现；壳内那批 `#[test]`
+**全部平台无关**（逐个查过：测试模块里没有一处 `windows::` 调用；路径断言用 `/proj`；
+`normalize_is_platform_and_cwd_independent` 还显式断言了 POSIX 路径）。
+⇒ 补齐系统库后 Linux 上 `cargo test` 能编能跑；挪去 Windows runner 是更大的改动
+（要动 runner 分配与门禁归属），且会让「Linux 上编不出壳」这件事继续藏着。
+
+**落地的两件事**：
+
+| 面 | 动作 |
+| --- | --- |
+| 平台前提（workflow 那一层） | `pr-gate.yml` 的 `heavy-gates` job 在跑重档**之前**装 Tauri 在 Linux 上编译要的那批 dev 包。清单**照抄官方**这条已被 #3580 推翻（官方那一栏是「给人装环境」用的，其中四项**编译期根本不问**）—— 现行清单是「每个被探的 `.pc` 由哪个 `-dev` 包提供」那张映射表，见 §13.5.33.9 |
+| 判据（只说人话，不自己装） | `shell-gate` 在跑 `cargo test` **之前**探一次 `pkg-config --exists`（与编译期同一把尺）：缺哪个点哪个，并给出安装出口。**判据不 `sudo` 装** —— 判据 `sudo` 改本机是错的边界（提交一次就被 sudo 改一次机器）。缺前提时归因是独立的一格「cargo test 没跑起来：缺哪几个系统库」，**不与「cargo test 失败」混**（后者是「Rust 侧真坏了」） |
+
+**为什么不动判决链**：退出码语义、GA 结论回读、`GA_VERDICT` 折叠、三态退码、
+`COMFYAPP_CI_GATES` / `GATE_TIER_LEDGER` 一个字节未动。缺前提那一档**退 1** 而不是退 2 ——
+平台侧最终都是红（退 2 会被聚合层归进「没跑起来」那一档，而那一档**只打印标签、不打印
+判据的输出** ⇒ 真正的原因会整段消失，读的人只看到「没跑起来」四个字）。这一档必须把
+「缺哪几个包、去哪装」**露出来** ⇒ 只能走「红」那条路。
+
+**逐笔对账**：`.github/workflows/pr-gate.yml`（装库那一步 + 根因注释）/
+`scripts/shell-gate.mjs`（`missingLinuxSystemLibs()` 探针 + `prereq-missing` 那一格 +
+`linesFor` 的归因句 + `runCargoTest` 的可注入依赖）/
+`tests/shell-gate-linux-sysdeps.test.ts`（12 条：探针 5 + 接线 3 + workflow 4）/
+规范 §11.10.4 与 launch-and-build §9.3 + 生成态镜像 / `ga-migration-checklist.md` + 镜像 /
+`## Fixed` 碎片挂 #3572，与 §13.5.33.4 同形同批。
+
+##### 13.5.33.9 2026-11-11 探针问的模块名按「编译期真会问到的」定，不是按官方清单（ISSUE #3580）
+
+**改的是探针问的模块名与 apt 清单的对应关系，不是判决链、不是三态退码、不是承重锚。**
+§13.5.33.8 补上「平台前提归 workflow 装、判据只说人话」这层分工之后，PR #3567 在 GA
+侧**仍判红**，红的那一格还是「桌面壳（改了 src-tauri 才跑）」：
+
+```
+[shell-gate] ✗ cargo test 没跑起来：这台机器缺 Tauri 在 Linux 上编译要的系统库
+（ayatana-appindicator3-0.1 / rsvg-2.0 / xdo / openssl）—— 补上它们再跑（上面有安装出口）。
+```
+
+而 GA 日志里 apt 那一段**成功**（`Setting up librsvg2-dev` / `Setting up libxdo-dev`
+都在，10:59:20），探针 22 秒后才跑 ⇒ **不是安装失败，是探针问错了模块名**。
+
+**根因**：§13.5.33.8 的探针名单是照 Tauri 官方 Prerequisites 的库清单写的，而**编译期真正
+会被 pkg-config 问到的模块**是另一批。那四个**注定永远报缺**：
+
+| 原名单里的 | 裁定 | 依据 |
+| --- | --- | --- |
+| `rsvg-2.0` | **名字就错**，且依赖图里无人链接 rsvg | 发行版给的实名是 `librsvg-2.0`（`librsvg2-dev` 的文件清单）；锁文件全文检索 `rsvg` / `resvg` 零命中 |
+| `xdo` | **不在依赖图**，且发行版不提供任何 `.pc` | 锁文件里 `libxdo` 计数 = 0（`muda` 的 `libxdo` 是可选 feature，而 `tauri` 依赖 `muda` 时写死 `default-features = false` 且只要 `serde` / `gtk3`）；`libxdo-dev` 的文件清单里只有 `xdo.h` 与 `libxdo.so` |
+| `ayatana-appindicator3-0.1` | **不是编译期**：运行期 `dlopen` | `libappindicator-sys-0.9.0` **没有 build.rs**，源码是 `Library::new("libayatana-appindicator3.so.1")` |
+| `openssl` | **不参与编译** | 依赖图里只有 `rustls`，没有 `openssl-sys` |
+
+⇒ apt 明明装成功了、探针仍报「缺库」⇒ 那一格对**任何**碰 `src-tauri/**` 的 PR 恒红。
+
+⚠️ **这一层「装得对」不等于「探得对」**：实测 `libwebkit2gtk-4.1-dev` 的 apt 依赖闭包
+（395 个包）**已经把那 15 个 `.pc` 的提供包全部带进来**（含 `libdbus-1-dev`，路径是
+`libwebkit2gtk-4.1-dev → libgtk-3-dev → libatk-bridge2.0-dev → libatspi2.0-dev →
+libdbus-1-dev`）⇒ GA runner 上**其实不缺任何库**，红的**只**是探针名单。
+「平台前提装齐了」与「探针问对了」是**两件事**，前者绿不表示后者绿。
+
+**名单怎么定下来的**：穷尽扫描，不是照抄 —— Linux 目标依赖图 334 个包、其中 69 个带
+`build.rs`，逐个读 build.rs ⇒ 17 个碰 pkg-config；编译期**硬失败**的（缺了必编译不过）
+是那 15 个 `.pc`。另有四处**软失败**不进这一列：`x11` 按 feature 逐个探、而依赖它时一个
+feature 都没开；`x11-dl` 与 `gtk` / `gdk-sys` 各自的 `get_variable` 把错误吞掉了。
+
+**落地的两件事**：
+
+| 面 | 动作 |
+| --- | --- |
+| 判据（名单与出口） | `scripts/shell-gate.mjs` 的 `TAURI_LINUX_PC_MODULES` 换成那 15 个 `.pc`；新增 `TAURI_LINUX_PC_PACKAGES`（「模块 → 提供它的 `-dev` 包」）与 `tauriLinuxAptPackages()`；缺前提时的出口从「一句笼统的装官方清单」改成「缺哪个点哪个包 + 一条可复制的 apt 命令」。探的是**在不在**，版本够不够由 pkg-config 在编译期按 crate 自己的要求再问一次（那种失败 cargo 的报错里会点名 crate 与版本要求） |
+| 平台前提（workflow 那一层） | `pr-gate.yml` 的 apt 清单与那张映射表**一一对应**（`tauriLinuxAptPackages()` 是唯一出处）：去掉 `librsvg2-dev` / `libxdo-dev` / `libssl-dev`（依赖图里无人链接 rsvg、无 `libxdo`、`openssl` 不参与编译），`libdbus-1-dev` 从「靠闭包带进来」改成**写明**，`libayatana-appindicator3-dev` 保留但标注为**运行期**托盘后端（编译期不探它） |
+
+**为什么不动判决链**：退出码语义、GA 结论回读、`GA_VERDICT` 折叠、三态退码、
+`COMFYAPP_CI_GATES` / `GATE_TIER_LEDGER` 一个字节未动。缺前提那一档仍**退 1**（§13.5.33.8
+的理由原样成立）。
+
+**逐笔对账**：`scripts/shell-gate.mjs`（名单 + 映射表 + 出口文案）/
+`.github/workflows/pr-gate.yml`（apt 清单与根因注释）/
+`tests/shell-gate-linux-sysdeps.test.ts`（17 条：名单 5 + 探针 5 + 接线 3 + workflow 4）/
+规范 §11.10.4 与 launch-and-build §9.3 + 生成态镜像 / `ga-migration-checklist.md` + 镜像 /
+`## Fixed` 碎片挂 #3580，与 §13.5.33.8 同形同批。
+
 #### 13.5.34 2026-11-06 GA push 档：镜像仓 master 的文档链并行执行者（任务 3 并行期）
 
 新增 `.github/workflows/master-gate.yml`，在镜像仓 master 的 `push` 上跑文档链两格：
@@ -9866,9 +9993,11 @@ Docker、自托管节点没开），与本格的 PR 描述不是一回事。
 
 **边界（写进配置注释了，没假装已验）**：① 「保护分支是否把 `cnb/api_trigger_ga_verdict/*`
 计成必需状态检查」的端到端合并按钮实测仍缺 `repo-manage:r` 令牌没坐实 —— 这正是
-承重回读格不能删的理由；② GA `master-gate.yml` 的 `--check --autofix` 就地重渲染
-写的是 GA 自己的工作区，不回写 CNB；`docs/generated/**` 的镜像带不带仍由本地
-D0「文档源 ⇄ 生成态镜像同批」判据守（§13.5.5），不靠 CI 回写；③ `push 失败立案`
+承重回读格不能删的理由；② GA `master-gate.yml` 当时的 `--check --autofix` 就地重渲染
+写的是 GA 自己的工作区、不回写 CNB，`docs/generated/**` 的镜像带不带由本地
+D0「文档源 ⇄ 生成态镜像同批」判据守（§13.5.5）—— **这一整格已随 #3586 退役**：
+镜像退出入库产物后，GA 那份 workflow 只剩 `check-doc-references.cjs` 一条纯文本
+判据，不写工作区也不判镜像（见本节开头那张表）；③ `push 失败立案`
 内联进平台池出口那一跳已在 push 节点上实测：因为照抄了自托管那句 Windows
 PowerShell 编码前缀，整格 `sh` 退 127（ISSUE #3453）—— 修法是把该格收成 Linux 原生
 `node scripts/ci-pr-failure-issue.mjs --no-block --lane push`，并给平台池镜像的

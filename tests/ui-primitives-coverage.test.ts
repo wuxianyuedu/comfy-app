@@ -115,31 +115,44 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
     ).toBeGreaterThan(0);
   });
 
-  /* ── 第二档 `ui/form` 的设计决定（规范 16 §16.2.4.6 / §16.2.4.8）：**不进业务表单**，字段级规则改住
-   * `src/lib/<domain>/*-schema.ts` 的纯函数（首个落点 `~/lib/llm/remote-model-schema`），跨条目规则
-   * （重名查重）留在 controller。钉成事实的理由：上一轮记成「须先决策」就没人再复查，会一直挂在台账里。 */
-  it("表单校验规则的归属：字段级在 lib 的 schema 模块里，不在视图里", () => {
-    const schemaPath = join(SRC, "lib", "llm", "remote-model-schema.ts");
-    expect(statSync(schemaPath).isFile()).toBe(true);
-    const schema = readFileSync(schemaPath, "utf8");
-    // 纯函数：不碰 React，也不碰列表（集合级规则不在这里）。
-    expect(schema).not.toMatch(/from\s+["']react["']/);
-    expect(schema).toContain("validateRemoteModelFields");
+  /* ── 第二档 `ui/form` 的设计决定（规范 16 §16.2.4.6 / §16.2.4.8）：**不进业务表单**，字段级规则住
+   * `src/lib/<domain>/` 的纯函数模块（首个落点 `~/lib/llm/provider-form`），跨条目规则（重名查重）
+   * 留在 controller。判据钉**形态**不钉名字字面量：上一版钉 `RemoteModelDialog` / `fieldErrors`
+   * 这些名字，供应商级重构（#3514）把名字全换了，判据红在 ENOENT 上而设计决定其实没破（#3566）。
+   * 变异判据：把校验搬回视图（视图 import zod 或直接调 validate*）⇒ 这里必须红。 */
+  it("表单校验规则的归属：字段级校验住 lib 纯函数，弹窗视图只转述 controller 的判定", () => {
+    /* ① lib：纯函数模块存在，两个字段级校验器都在；不碰 React（只依赖字段自己的值）。 */
+    const formModule = readFileSync(join(SRC, "lib", "llm", "provider-form.ts"), "utf8");
+    expect(formModule).not.toMatch(/from\s+["']react["']/);
+    expect(formModule).toContain("export function validateProviderForm");
+    expect(formModule).toContain("export function validateModelForm");
 
-    /* 视图只转述，不自己判定：`RemoteModelDialog` 里不得出现 zod / trim 校验。
-       （视图消费 `d.fieldErrors` 是允许的 —— 那正是「controller 是唯一数据
-       出入口」的形态。） */
-    const dialogPath = join(
-      SRC,
-      "app",
-      "(main)",
-      "settings",
-      "components",
-      "RemoteModelDialog.tsx",
+    /* ② controller：弹窗草稿流的唯一调用方 —— 提交的第一关在那里。 */
+    const controller = readFileSync(
+      join(SRC, "app", "(main)", "settings", "hooks", "use-provider-model-dialogs.ts"),
+      "utf8",
     );
-    const dialog = readFileSync(dialogPath, "utf8");
-    expect(dialog).not.toMatch(/from\s+["']zod["']/);
-    expect(dialog).toContain("fieldErrors");
+    expect(controller).toContain("validateProviderForm(");
+    expect(controller).toContain("validateModelForm(");
+
+    /* ③ 弹窗视图：不 import zod（不在视图里 author 规则）、不直接调字段级校验
+       （弹窗草稿流的调用方是 controller），只消费 controller 转述的错误
+       （`d.providerErrors.*` / `d.modelErrors.*`）。详情面板的失焦直调
+       （`ProviderDetail.commit`）是规范写明的例外（调 lib 纯函数 ≠ author 规则），
+       不在本判据的视图清单里。 */
+    for (const view of ["ProviderModelDialog.tsx", "ProviderDialog.tsx"]) {
+      const text = readFileSync(join(SRC, "app", "(main)", "settings", "components", view), "utf8");
+      expect(text, `${view} 不得 import zod —— 字段级规则住在 lib 纯函数，不在视图`).not.toMatch(
+        /from\s+["']zod["']/,
+      );
+      expect(
+        text,
+        `${view} 不得直接调字段级校验 —— 弹窗草稿流的调用方是 controller（含把校验函数当引用传出，如 onBlur={validateModelForm}）`,
+      ).not.toMatch(/\bvalidate(?:Provider|Model)Form\b/);
+      expect(text, `${view} 只消费 controller 转述的错误（视图只渲染文案，不参与判定）`).toMatch(
+        /Errors\./,
+      );
+    }
   });
 
   /* ── 按形态扫描：同一件事的「唯一出口」（规范 16 §16.2.4.10）—— P5/P6 是硬闸，判「视图里又写了一份」；

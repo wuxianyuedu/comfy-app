@@ -19,6 +19,8 @@ const VIEW_HELP: Partial<Record<WorkspaceView, ReactNode>> = {
   console: "在项目根执行命令；命令与其子进程在切走视图或点「停止」时一并回收。",
   "model-adapters":
     "为远端模型配置工坊各模式下的输入 / 输出：统一输入映射到该接口请求体的字段名，产物按字段路径提取。",
+  "model-test":
+    "用工坊同款通道直接试已配置的远端模型：选中模型与模式，输入跟着「模型适配」里配的映射走，产物按同一条链提取。",
   settings:
     "全部设置在同一页里：左侧是目录，点一项滚到那一节，右侧只有一根滚动条。ComfyUI 的启动 / 关闭与日志在侧栏「ComfyUI」页。",
   "mode-contract":

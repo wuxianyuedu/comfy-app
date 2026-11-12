@@ -39,6 +39,7 @@ const jsonColumns = new Set<string>([
   "styleTags",
   "portraits",
   "inputTypes",
+  "outputTypes",
   "capabilities",
   "reasoningLevels",
   "reasoningParamMapping",
@@ -164,7 +165,7 @@ CREATE TABLE IF NOT EXISTS auditLog (
 CREATE TABLE IF NOT EXISTS remoteModel (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, providerId TEXT, baseUrl TEXT, apiFormat TEXT, apiKey TEXT,
   kind TEXT NOT NULL DEFAULT 'chat', enabled INTEGER NOT NULL DEFAULT 1, contextWindow INTEGER,
-  maxOutputTokens INTEGER, inputTypes TEXT, capabilities TEXT, reasoningLevels TEXT,
+  maxOutputTokens INTEGER, inputTypes TEXT, outputTypes TEXT, capabilities TEXT, reasoningLevels TEXT,
   reasoningParamMapping TEXT, smartConfig INTEGER NOT NULL DEFAULT 1, workshopAdapters TEXT,
   createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
 );

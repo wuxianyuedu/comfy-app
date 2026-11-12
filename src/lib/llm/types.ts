@@ -3,7 +3,7 @@
 // 都讲 OpenAI 的 /v1/chat/completions 协议。
 
 import { isRecord } from "~/lib/is-record";
-import type { LlmApiFormat } from "./provider-types";
+import type { LlmApiFormat, ModelOutputType } from "./provider-types";
 
 export type LLMProviderType = "local" | "remote";
 
@@ -52,16 +52,48 @@ export const TASK_TYPES = {
 
 export type TaskType = keyof typeof TASK_TYPES;
 
-/** 远端模型的用途：对话（语言模型）/ 图片 / 视频。当前仅对话参与运行时，
- *  图片 / 视频模型先落配置，供后续远程生图 / 生视频接入。 */
+/** 远端模型的用途：文本（语言模型）/ 图像 / 视频。当前仅文本参与运行时，
+ *  图像 / 视频模型先落配置，供后续远程生图 / 生视频与「模型适配」页接入。
+ *  存储值（chat / image / video）保持历史不变 —— 改的只是界面词（#3577：
+ *  「对话/图片」改成行业通行的「文本/图像」，与模态口吻一致），换存储值等于
+ *  无谓的数据迁移。 */
 /* SAFETY: 类型断言已复核 */
 export const REMOTE_MODEL_KINDS = ["chat", "image", "video"] as const;
 export type RemoteModelKind = (typeof REMOTE_MODEL_KINDS)[number];
 export const REMOTE_MODEL_KIND_LABELS: Record<RemoteModelKind, string> = {
-  chat: "对话",
-  image: "图片",
+  chat: "文本",
+  image: "图像",
   video: "视频",
 };
+
+/** 按模型名推断用途（#3577 目录导入用）：名字带 video → video、带 image/img
+ *  → image，其余 → chat。只是「落库起点」，用户可在模型行上改用途。
+ *  通用命名规律，不针对特定厂商（gpt-image-* / *-video-* / veo-* 同样命中）。
+ *  住在本文件而不是 provider-types：它返回的是 kind 词表本身，放对面要回指
+ *  本文件（模块循环依赖硬闸 §12.7 断过一次的那类环）。 */
+export function inferRemoteKindFromName(modelId: string): RemoteModelKind {
+  const id = modelId.trim().toLowerCase();
+  if (/(?:^|[^a-z])video(?:[^a-z]|$)/.test(id)) {
+    return "video";
+  }
+  if (/(?:^|[^a-z])(?:image|img)(?:[^a-z]|$)/.test(id)) {
+    return "image";
+  }
+  return "chat";
+}
+
+/** 按模型名推断输出类型（#3577）：与 `inferRemoteKindFromName` 同一套命名规律，
+ *  但返回的是**输出**词表（video 名字的模型输出视频、image 名字的输出图像）。 */
+export function inferOutputTypesFromName(modelId: string): Array<ModelOutputType> {
+  const kind = inferRemoteKindFromName(modelId);
+  if (kind === "video") {
+    return ["video"];
+  }
+  if (kind === "image") {
+    return ["image"];
+  }
+  return ["text"];
+}
 
 /** 远端候选模型条目。
  *
@@ -94,6 +126,8 @@ export type RemoteModelEntry = {
   /** 最大输出 token（#3501）。 */
   maxOutputTokens?: number | null;
   name: string;
+  /** 输出类型（#3577）：text / image / video。空 = 未标注（按 kind 推断）。 */
+  outputTypes?: Array<string> | null;
   /** 所属供应商 id（#3501）；空 = 历史遗留条目。 */
   providerId?: string | null;
   /** 推理等级词表（#3501）。 */

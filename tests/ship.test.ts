@@ -57,7 +57,7 @@ import {
   readPullVerdict,
   resolveUpstream,
 } from "../scripts/ship-core.mjs";
-import { runPushStage, runRerunCiStage } from "../scripts/ship-local.mjs";
+import { runCommitStage, runPushStage, runRerunCiStage } from "../scripts/ship-local.mjs";
 /* 旗标层单独一份（ISSUE #2491）：这一族的用例读的是「命令行长什么样」，不是「执行者给了什么读数」。 */
 import { parseArgs, parseIssueNumberToken } from "../scripts/ship-args.mjs";
 import {
@@ -672,6 +672,94 @@ describe("classifyPushFailure：push 失败按原话分型，不固定猜 premer
     expect(line).toContain("push 失败（exit 128）");
     expect(line).toContain("远端拒了");
     expect(line).not.toContain("多半是 pre-push");
+  });
+});
+
+describe("runCommitStage：--add 点名的改动已全部在 HEAD ⇒ 跳过提交段（#3602）", () => {
+  /* 现场还原：并行检出的树上挂着**别的会话**的常驻脏文件，而本次工作的改动已经
+   * 提交（甚至 amend 过）。旧的「树上有任何改动就进提交段」在这一形态下把已提交
+   * 的工作堵死在本地：`git add` 全是空操作，钩子在空暂存面上判红。 */
+  type Dirty = Record<string, string>;
+  function makeCtx(opts: { adds: Array<string>; dirty: Dirty }) {
+    const logs: Array<string> = [];
+    const calls: Array<string> = [];
+    const run = (cmd: string, args: Array<string>) => {
+      calls.push([cmd, ...args].join(" "));
+      if (cmd === "git" && args[0] === "status") {
+        /* 按路径限定查询：输出非空 = 这条路径还有可提交的差异。 */
+        const p = args[3] ?? "";
+        return { error: null, status: 0, stderr: "", stdout: opts.dirty[p] ?? "" };
+      }
+      if (cmd === "git" && args[0] === "rev-parse") {
+        return { error: null, status: 0, stderr: "", stdout: "065c2fb79f\n" };
+      }
+      if (cmd === "git" && args[0] === "commit") {
+        return { error: null, status: 0, stderr: "", stdout: "" };
+      }
+      return { error: null, status: 0, stderr: "", stdout: "" };
+    };
+    /* 三份名单由装配层从整树 porcelain 算出来 —— 名单含**所有**脏路径（含被点名的
+     * 那些 dirty 路径），这里直接摆出对应形态。 */
+    const ctx = {
+      opt: { message: "test: x", messageFile: null, adds: opts.adds },
+      root: "/tmp/nowhere",
+      staged: [] as Array<string>,
+      unstagedModified: Object.keys(opts.dirty),
+      untracked: [] as Array<string>,
+      log: (s: string) => logs.push(s),
+      run,
+      relay: () => undefined,
+    };
+    return { calls, logs, ctx };
+  }
+
+  it("点名全在 HEAD + 树上有他人脏文件 ⇒ 跳过提交段（不发起 commit、不碰 git add），树上的改动被读出来", () => {
+    const { calls, logs, ctx } = makeCtx({
+      adds: ["src/a.ts", "docs/b.md"],
+      dirty: {
+        /* 他人会话的三份常驻脏文件（#3602 现场）：不随本次提交。 */
+        "oxlint.config.ts": " M oxlint.config.ts",
+        "tests/x.test.ts": " M tests/x.test.ts",
+        "tests/y.test.ts": " M tests/y.test.ts",
+      },
+    });
+    const got = runCommitStage(ctx);
+    expect(got).toEqual({ stop: false, codes: [CODE.GREEN] });
+    expect(calls.some((c) => c.startsWith("git commit"))).toBe(false);
+    expect(calls.some((c) => c.startsWith("git add"))).toBe(false);
+    const line = logs.join("\n");
+    expect(line).toContain("已全部在 HEAD（065c2fb7）");
+    expect(line).toContain("另有 3 项未提交改动");
+    expect(line).toContain("保持原样留在工作区");
+  });
+
+  it("点名里有一条还有差异 ⇒ 照旧进提交段（git add + git commit 原样发生）", () => {
+    const { calls, logs, ctx } = makeCtx({
+      adds: ["src/a.ts", "docs/b.md"],
+      dirty: { "src/a.ts": " M src/a.ts" },
+    });
+    const got = runCommitStage(ctx);
+    expect(got).toEqual({ stop: false, codes: [CODE.GREEN] });
+    expect(calls.some((c) => c.startsWith("git add -- src/a.ts"))).toBe(true);
+    expect(calls.some((c) => c.startsWith("git commit"))).toBe(true);
+    expect(logs.join("\n")).toContain("已提交（门槛全过）");
+  });
+
+  it("负控：没给 --add 且树脏 ⇒ 现状不变（仍走提交段，不加新的豁免）", () => {
+    const { calls, ctx } = makeCtx({
+      adds: [],
+      dirty: { "oxlint.config.ts": " M oxlint.config.ts" },
+    });
+    runCommitStage(ctx);
+    expect(calls.some((c) => c.startsWith("git commit"))).toBe(true);
+  });
+
+  it("点名全在 HEAD 且树净 ⇒ 跳过但不念「另有」那行（没有可念的事实）", () => {
+    const { logs, ctx } = makeCtx({ adds: ["src/a.ts"], dirty: {} });
+    runCommitStage(ctx);
+    const line = logs.join("\n");
+    expect(line).toContain("已全部在 HEAD");
+    expect(line).not.toContain("另有");
   });
 });
 

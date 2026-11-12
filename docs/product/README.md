@@ -54,9 +54,10 @@
    （catalog 加行或改状态、specs 补验收口径）；只改实现不改行为的不动本目录。
 4. **验收口径可核验**：每条需求的「行为与验收」写成能跑命令 / 能指路径的形态，
   不写「体验良好」这类不可判的词。
-5. **与规范同批维护**：本目录是 `SCOPED_DOCS` 纳管文档 —— 改了源要同批带
-   `docs/generated/` 镜像（`pnpm doc:render`），并由 `pnpm doc:check` 把关
-   （口径见 `docs/reference-facts.md` §3）。
+5. **与规范同批维护**：本目录是 `SCOPED_DOCS` 纳管文档 —— 改了源由 `pnpm doc:check`
+   把关引用与权威源一致（口径见 `docs/reference-facts.md` §3）。`docs/generated/`
+   镜像自 #3586 起不再入库，谁需要带真实值的原文谁本地 `pnpm doc:render` 自己生成，
+   **没有「同批带上」这一步**。
 
 ## 6. 维护规则
 

@@ -6,6 +6,7 @@ import {
   LLM_API_FORMATS,
   MODEL_CAPABILITIES,
   MODEL_INPUT_TYPES,
+  MODEL_OUTPUT_TYPES,
   resolveApiFormat,
 } from "~/lib/llm/provider-types";
 import { isHttpUrl } from "~/lib/url-scheme";
@@ -33,6 +34,8 @@ const adapterInputSchema = z.object({
   field: z.string().min(1),
 });
 const adapterSchema = z.object({
+  /* 固定值字段（#3590）：每次请求原样带上的键值（如 Agnes 视频的 mode/size）。 */
+  constants: z.array(z.object({ field: z.string().min(1), value: z.string() })).optional(),
   mode: z.string().min(1),
   endpointPath: z.string().min(1),
   inputs: z.array(adapterInputSchema).min(1),
@@ -74,6 +77,7 @@ const modelInputSchema = z.object({
   enabled: z.boolean().optional(),
   id: z.string().min(1).optional(),
   inputTypes: z.array(z.enum(MODEL_INPUT_TYPES)).nullish(),
+  outputTypes: z.array(z.enum(MODEL_OUTPUT_TYPES)).nullish(),
   kind: z.enum(["chat", "image", "video"]).optional(),
   maxOutputTokens: z.number().int().positive().nullish(),
   name: z.string().trim().min(1, "模型名称不能为空"),
@@ -114,6 +118,7 @@ function modelView(m: RemoteModel, providers: ReadonlyArray<LlmProvider>) {
     contextWindow: m.contextWindow,
     maxOutputTokens: m.maxOutputTokens,
     inputTypes: m.inputTypes,
+    outputTypes: m.outputTypes,
     capabilities: m.capabilities,
     reasoningLevels: m.reasoningLevels,
     reasoningParamMapping: m.reasoningParamMapping,

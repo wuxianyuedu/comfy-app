@@ -69,6 +69,8 @@ build_log*.txt
 # generated & temp
 /generated/
 /public/generated/
+# 文档生成态镜像（#3586：谁需要谁本地生成 —— `pnpm doc:render`；不再进 git）
+/docs/generated/
 /temp/
 /temp/comfy-cli/
 # 全量单测分文件耗时读数的 junit 落点（ISSUE #2697）：仓库内、非链接、不入库。

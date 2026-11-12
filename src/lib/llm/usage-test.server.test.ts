@@ -6,8 +6,9 @@
  * 模式全是**用户可感知的**：密钥解析错 → 401 却说「网络问题」；错误文案分裂
  * → 同一个故障两条提示。
  *
- * mock 边界只有两处：
+ * mock 边界只有三处：
  *   · `~/lib/llm/server` 的 `getLLMConfig`（配置分层已在 server.test.ts 覆盖）；
+ *   · `~/lib/core/repository` 的两条仓储（#3577 供应商链直查：见 resolveUpstream）；
  *   · 全局 `fetch`（断言上行 URL / 鉴权头 / 超时与回包处置）。
  * `api-channel-shared` 的抽取器与 `usage-test-config` 的纯函数走真实实现。
  */
@@ -33,6 +34,23 @@ vi.mock("~/lib/llm/server", () => ({
     temperature: 0.7,
     maxTokens: 2048,
   })),
+}));
+
+/* 供应商链直查的桩（#3577）：只声明被测代码真正读的字段（本地最小类型，与
+ * route.test.ts 的 mock 形状同款），避免为凑齐整行而断言（no-unsafe-type-assertion）。
+ * vi.hoisted 声明必须在 vi.mock 引用它之前（no-use-before-define）。 */
+const { findByName, findById } = vi.hoisted(() => ({
+  findByName:
+    vi.fn<(name: string) => Promise<{ name: string; providerId: string | null } | null>>(),
+  findById:
+    vi.fn<
+      (id: string) => Promise<{ apiKey: string | null; baseUrl: string; name: string } | null>
+    >(),
+}));
+
+vi.mock("~/lib/core/repository", () => ({
+  remoteModelRepository: { findByName: (name: string) => findByName(name) },
+  llmProviderRepository: { findById: (id: string) => findById(id) },
 }));
 
 import {
@@ -101,6 +119,10 @@ function containsText(text: string): unknown {
 
 beforeEach(() => {
   fetchMock.mockReset();
+  findByName.mockReset();
+  findByName.mockResolvedValue(null);
+  findById.mockReset();
+  findById.mockResolvedValue(null);
   vi.stubGlobal("fetch", fetchMock);
 });
 
@@ -196,6 +218,66 @@ describe("resolveUpstream（两个路由同一口径的连接参数解析）", (
     });
     const up = await resolveUpstream("x", "", "", "");
     expect(up).not.toHaveProperty("headers.Authorization");
+  });
+
+  it("供应商链直查（#3577）：entry 缺席（getLLMConfig 读库失败回落空）也能从供应商行补回地址与密钥", async () => {
+    const { getLLMConfig } = await import("~/lib/llm/server");
+    vi.mocked(getLLMConfig).mockResolvedValueOnce({
+      provider: "remote",
+      baseUrl: "https://global/v1",
+      model: "m",
+      extraModels: [],
+      apiKey: null,
+      temperature: 0.7,
+      maxTokens: 2048,
+    });
+    findByName.mockResolvedValueOnce({ name: "agnes-3.0-flash", providerId: "p1" });
+    findById.mockResolvedValueOnce({
+      apiKey: "sk-provider",
+      baseUrl: "https://apihub.agnes-ai.com/v1",
+      name: "agnes",
+    });
+    /* typedBase 模拟弹窗带来的供应商地址（它不依赖读库，所以 401 现场地址是对的）；
+     * 密钥则由直查补回 —— 这正是「地址对、密钥丢」那一形 repaired 后的样子。 */
+    await expect(
+      resolveUpstream("agnes-3.0-flash", "https://apihub.agnes-ai.com/v1", "", ""),
+    ).resolves.toEqual({
+      base: "https://apihub.agnes-ai.com/v1",
+      path: "",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer sk-provider",
+      },
+    });
+  });
+
+  it("供应商存在但没配密钥 → 可读报错，不再静默裸发让上游 401 说谜语（#3577）", async () => {
+    /* 全局密钥置空：它仍是最后一档回落（历史行为），但「模型挂在供应商下、
+     * 供应商没配密钥」的缺口不该被一把不相干的全局钥匙掩盖。 */
+    const { getLLMConfig } = await import("~/lib/llm/server");
+    vi.mocked(getLLMConfig).mockResolvedValueOnce({
+      provider: "remote",
+      baseUrl: "https://global/v1",
+      model: "m",
+      extraModels: [],
+      apiKey: null,
+      temperature: 0.7,
+      maxTokens: 2048,
+    });
+    findByName.mockResolvedValueOnce({ name: "agnes-3.0-flash", providerId: "p1" });
+    /* 供应商行没有密钥 */
+    findById.mockResolvedValueOnce({
+      apiKey: null,
+      baseUrl: "https://apihub.agnes-ai.com/v1",
+      name: "agnes",
+    });
+    const out = await resolveUpstream("agnes-3.0-flash", "https://apihub.agnes-ai.com/v1", "", "");
+    /* 单条断言同时钉住两件事：返回的是 error 形（不是 = 静默放行了无密钥请求，
+     * 当场红），且文案里点到了供应商名与「未配置 API 密钥」。
+     * 刻意不用 if 收窄 + expect —— no-conditional-expect 不许条件内断言；
+     * 匹配器先收成 unknown 再进对象 —— 本文件 containsText 的同一手法。 */
+    const matcher: unknown = expect.stringMatching(/agnes.*未配置 API 密钥/s);
+    expect(out).toEqual({ error: matcher });
   });
 });
 

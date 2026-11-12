@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import defaultsJson from "./mode-contract-defaults.json";
-
 import { exposedParamDisplayLabel } from "~/lib/workflow/workflow-exposed-params";
 import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
 import {
   ALL_CONTRACT_MODES,
   adapterInputsFromContract,
+  parseRemoteModeAdapters,
   configuredModeContracts,
   derivedModeContract,
   contractToStatusEntries,
@@ -20,7 +19,6 @@ import {
   nextReferenceImageId,
   modeContractInputLabel,
   parseModeContracts,
-  projectDefaultDiff,
   referenceImageSlotIndex,
   WORKSHOP_INPUT_TYPES,
   type ModeContract,
@@ -323,41 +321,78 @@ describe("成品配置覆盖全部生成类模式", () => {
     expect(configuredModeContracts(undefined, [])).toEqual(configuredModeContracts(undefined, []));
   });
 
-  it("入库 JSON 的显式覆盖每一条都与推导有差异（占位覆盖会在推导演进时压住新默认）", () => {
-    // 读的是**真实入库文件**（静态 import 那份）：任何人手改 exposedParamsForMode
-    // 让某条覆盖与推导变得相同，这条就会红 —— 该删那条覆盖了。
-    const explicit = parseModeContracts(defaultsJson);
-    for (const contract of explicit) {
-      expect(
-        JSON.stringify(contract),
-        `${contract.mode} 的显式覆盖与推导相同，应从 mode-contract-defaults.json 删掉`,
-      ).not.toBe(JSON.stringify(derivedModeContract(contract.mode)));
+  /* 「入库 JSON 的显式覆盖每一条都与推导有差异」（ISSUE #3396 的占位覆盖判据）
+     随 #3603 退役：基线不再是「与推导的差集」，而是**完整注册表** —— 条目与
+     推导逐字相同是迁移的正常形态（整份 JSON 就是从推导逐字固化的），不算
+     「该删的占位」。出处唯一化的守卫由下面 `mode-contract-defaults.json：
+     完整基线` 那一组承担（完整性 / 自描述 / 直读层序）。 */
+});
+
+describe("mode-contract-defaults.json：完整基线（#3603）", () => {
+  it("基线覆盖全部生成类模式、无重复（parse 去重后数量不变）", () => {
+    const baseline = configuredModeContracts();
+    expect(baseline).toHaveLength(ALL_CONTRACT_MODES.length);
+    expect(new Set(baseline.map((c) => c.mode)).size).toBe(ALL_CONTRACT_MODES.length);
+  });
+
+  it("每条必备口都显式固化（基线自描述，读取侧不留「缺省回落」这一层）", () => {
+    for (const contract of configuredModeContracts()) {
+      expect(Array.isArray(contract.required), contract.mode).toBe(true);
+      for (const id of contract.required ?? []) {
+        expect(contract.inputs.includes(id), `${contract.mode}:${id}`).toBe(true);
+      }
     }
+  });
+
+  it("成品配置直读 JSON 条目（推导不会反盖基线 —— 层序反了这里当场红）", () => {
+    const baseline = configuredModeContracts();
+    const t2i = baseline.find((c) => c.mode === "T2I");
+    /* 迁移时刻的 T2I 基线与推导一致是事实，但**判据锚的是出处**：
+       configuredModeContracts 的返回必须逐字等于 JSON 里那条。 */
+    expect(t2i).toEqual({
+      mode: "T2I",
+      inputs: ["prompt", "negative", "size", "seed", "lora-name", "lora-strength"],
+      output: "image",
+      required: ["prompt"],
+    });
   });
 });
 
-describe("projectDefaultDiff：保存为项目默认时写下的差集（ISSUE #3396）", () => {
-  it("与推导相同的契约被丢掉，不同的保留（必备 / 口清单 / 输出 / 自定义口任一不同都算）", () => {
-    const derived = derivedModeContract("T2I");
-    const tweaked: ModeContract = {
-      ...derived,
-      required: derived.inputs.filter((id) => id !== "prompt"),
-    };
-    const custom: ModeContract = {
-      ...derived,
-      inputs: [...derived.inputs, "custom-text-1"],
-      customInputs: [{ id: "custom-text-1", label: "画风", kind: "text" }],
-    };
-    const diff = projectDefaultDiff([derived, tweaked, custom]);
-    expect(diff.map((c) => c.mode)).toEqual(["T2I", "T2I"]);
-    // required 未固化（undefined）与「固化后的内置默认」是同一件事，不算差异。
-    const unset: ModeContract = { ...derivedModeContract("I2I"), required: undefined };
-    expect(projectDefaultDiff([unset])).toEqual([]);
+describe("parseRemoteModeAdapters：固定值字段（#3590）", () => {
+  it("constants 原样读回：field trim、空 field 丢行、同名字段留先到的", () => {
+    const out = parseRemoteModeAdapters([
+      {
+        mode: "t2v",
+        endpointPath: "/videos",
+        inputs: [{ type: "prompt", field: "prompt" }],
+        constants: [
+          { field: " mode ", value: "text" },
+          { field: "mode", value: "keyframe" },
+          { field: "", value: "x" },
+          { field: "size", value: 720 },
+          "bad-row",
+        ],
+      },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.constants).toEqual([
+      { field: "mode", value: "text" },
+      { field: "size", value: "720" },
+    ]);
   });
 
-  it("差集顺序跟随输入（写盘的 JSON 顺序可预期）", () => {
-    const a = { ...derivedModeContract("I2I"), output: "video" as const };
-    const b = { ...derivedModeContract("T2I"), output: "video" as const };
-    expect(projectDefaultDiff([a, b]).map((c) => c.mode)).toEqual(["I2I", "T2I"]);
+  it("没有 constants / 空数组时不挂键（与「缺省 = 没有常量」一致）", () => {
+    const out = parseRemoteModeAdapters([
+      { mode: "T2I", endpointPath: "/i", inputs: [{ type: "prompt", field: "prompt" }] },
+      {
+        mode: "I2V",
+        endpointPath: "/v",
+        inputs: [{ type: "prompt", field: "prompt" }],
+        constants: [],
+      },
+    ]);
+    expect(out).toHaveLength(2);
+    expect("constants" in out[0]!).toBe(false);
+    expect("constants" in out[1]!).toBe(false);
   });
 });

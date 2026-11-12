@@ -89,6 +89,12 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
 2. **它不代写提交信息，也不替你 `git add -A`。** 提交信息是判断（症状 / 读数 / 因果），
    暂存面是「这次包含什么」的声明。树脏而没给 `--message` ⇒ 它会停在阶段 1 并说明原因。
    要它代为暂存就逐个点名：`--add src/a.ts --add changelog.d/0-x.md`。
+   **点名的改动已全部在 HEAD ⇒ 跳过提交段**（#3602）：并行检出树上挂着**别的会话**的
+   常驻脏文件时，已提交（含 amend 过）的那一轮不再被推进 `git commit`——旧判据「树上有
+   任何改动就提交」会让钩子在空暂存面上判红（doc-mirror-pairing 退 2），push / PR 全堵死。
+   判据是逐条**按路径限定**问 `git status`（空输出 = 与 HEAD 一致），不解析 porcelain 的
+   路径名单（`core.quotePath` 会转义中文路径，名单匹配会把脏的中文名路径误判成已提交）；
+   跳过时会念出 HEAD 的 sha 与「树上另有 N 项未提交改动」——那句是读数，不是「全部已处理」。
    **多行提交信息一律用 `--message-file`**：`pnpm run`（`pnpm ship` 就是它）会把 argv 里的
    真换行改写成字面量 `\n`，于是整条信息变成**一行 subject** 直接进历史（那样一笔当时就是 PR 标题、被平台拒过一次）。它现在会在提交前认出这个形状并停下，给出两条出口
    （`--message-file`，或 `pnpm exec node scripts/ship.mjs --message "…"`）。

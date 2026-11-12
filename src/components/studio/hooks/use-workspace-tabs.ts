@@ -42,6 +42,7 @@ export const WORKSPACE_VIEWS: Array<WorkspaceView> = [
      改成视图页签后必须登记：漏一个的后果不是报错，而是**这一页开不了也恢复不了**
      —— `navigateTo` 与 sessionStorage 恢复都按这份白名单收敛未知 id。 */
   "model-adapters",
+  "model-test",
   "mode-contract",
 ];
 

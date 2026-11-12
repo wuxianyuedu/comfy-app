@@ -15,6 +15,7 @@ import {
   isLlmApiFormat,
   parseCapabilities,
   parseInputTypes,
+  parseOutputTypes,
   parseReasoningLevels,
   parseReasoningParamMapping,
   requestUrlForFormat,
@@ -133,7 +134,15 @@ describe("inferModelDefaults：按模型名给保守默认值", () => {
     };
     expect(inferModelDefaults("")).toEqual(fallback);
     expect(inferModelDefaults("   ")).toEqual(fallback);
-    expect(inferModelDefaults("agnes-1")).toEqual(fallback);
+    expect(inferModelDefaults("mystery-model")).toEqual(fallback);
+  });
+
+  it("agnes 家族（#3577）：512K 窗口 / 65,536 输出 / 输入含图像", () => {
+    expect(inferModelDefaults("agnes-3.0-flash")).toMatchObject({
+      contextWindow: 524_288,
+      maxOutputTokens: 65_536,
+      inputTypes: ["text", "image"],
+    });
   });
 
   it("各家族命中各自的窗口 / 输出上限 / 输入类型", () => {
@@ -173,6 +182,15 @@ describe("inferModelDefaults：按模型名给保守默认值", () => {
     first.capabilities.push("native-web-search");
     expect(inferModelDefaults("").inputTypes).toEqual(["text"]);
     expect(inferModelDefaults("").capabilities).toEqual(["system-messages"]);
+  });
+});
+
+describe("parseOutputTypes（#3577 输出类型词表容错解析）", () => {
+  it("只认 text / image / video；坏值跳过、重复去掉；非数组给空", () => {
+    expect(parseOutputTypes(["text", "unknown", "image", "text"])).toEqual(["text", "image"]);
+    expect(parseOutputTypes(null)).toEqual([]);
+    expect(parseOutputTypes("text")).toEqual([]);
+    expect(parseOutputTypes(["pdf"])).toEqual([]);
   });
 });
 

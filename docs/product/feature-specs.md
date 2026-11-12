@@ -716,11 +716,23 @@
   新建模型的默认值，详情页不再编辑它。远端模型名全局唯一（运行时与工坊
   按名解析）；停用的模型保留配置但不进工坊下拉；整份清单保存只动历史遗留行
   （`providerId` 为空），不覆盖、不删除供应商名下的模型；模型配置含启用状态、
-  接口格式、上下文窗口、最大输出 Token、输入类型、能力、推理等级与参数映射，
-  「智能配置」按模型 id 预填窗口 / 输出上限 / 输入类型。
+  接口格式、上下文窗口、最大输出 Token、输入类型、输出类型、能力、推理等级
+  与参数映射，「智能配置」按模型 id 预填窗口 / 输出上限 / 输入类型 / 输出类型。
+  #3577 起新增两条：
+  ① **模型目录导入**——供应商「测试连接」成功后，服务端把探测到的模型清单
+  补进该供应商名下（`syncProviderCatalog`）：已有名字一行不动（不重置启停
+  与已配字段），缺的名字插成**停用**行、用途按模型名推断（video/image
+  关键词），反复探测幂等；验收 = 探测成功后模型列表出现全部服务端模型且
+  默认停用，启用 / 配置在列表项上完成。
+  ② **实际调用测试的密钥解析带供应商链兜底**——「测试生成」的连接解析顺序
+  为 弹窗填的 → 条目已保存的 → 所属供应商的（独立于全局配置直查一轮，规避
+  `getLLMConfig` 读库失败被吞后静默丢密钥）→ 全局配置；密钥全空且模型确属
+  某供应商（又未配密钥）时报「供应商未配置 API 密钥」而不是把无鉴权请求发往
+  上游。
 - 落点：`src/server/db/schema.ts`（`llmProvider` / `remoteModel`）、
   `src/lib/llm/types.ts`、`src/lib/llm/provider-form.ts`、
-  `src/lib/llm/provider-types.ts`
+  `src/lib/llm/provider-types.ts`、`src/lib/llm/usage-test.server.ts`
+  （`resolveUpstream`）、`src/lib/core/repository-user.ts`（`syncProviderCatalog`）
 
 #### FR-LM-03 按任务温度
 
@@ -738,14 +750,18 @@
 - 行为与验收：契约可读可写（`modeContractsGet` / `modeContractsSave`）；
   「模式契约」是全局瞬态视图（与当前项目无关）。保存分两种（#3396）：
   「保存模式契约」只落本机（`data/workshop-mode-contracts.json`，不入库，
-  正式包与开发检出都可用）；「保存为项目默认（跟代码走）」把与推导有差异的
-  契约写进入库的 `src/lib/workshop/mode-contract-defaults.json`（提交后每个
-  检出与桌包都是它），**只在开发检出可用**（正式包无源码可写，入口随之隐藏、
-  服务端大声拒绝）；生效顺序是 本机覆盖 → 项目默认 → 按模式推导。
-  两种保存都**只落与默认有差异的模式**（与默认相同的条目不进覆盖文件）；
-  「已改」徽标判的是内容（与本模式默认深比较），不是「覆盖文件里有没有」；
-  改过的模式可一键「还原默认」（从本机覆盖移除，生效值回落默认）。
+  正式包与开发检出都可用），**只落与成品配置有差异的模式**；「保存为项目
+  默认（跟代码走）」把编辑器现状**全量**写进入库的
+  `src/lib/workshop/mode-contract-defaults.json`（#3603：该文件是**完整基线**
+  —— 全部生成类模式的口清单 / 输出 / 必备口都显式在文件里，`required`
+  一并固化，读取侧不再有「代码推导」这一出处；推导只承担迁移生成源与
+  手改缺模时的兜底），**只在开发检出可用**（正式包无源码可写，入口随之
+  隐藏、服务端大声拒绝）；生效顺序是 本机覆盖 → 项目默认 JSON（完整）→
+  推导兜底。「已改」徽标判的是内容（与本模式成品配置深比较），不是
+  「覆盖文件里有没有」；改过的模式可一键「还原默认」（从本机覆盖移除，
+  生效值回落默认）。
 - 落点：`src/components/workshop/mode-contract/ModeContractView.tsx`、
+  `src/lib/workshop/mode-contract-defaults.json`（完整基线）、
   `src/server/api/routers/llm.ts`
 
 #### FR-LM-05 模型适配器
@@ -759,12 +775,40 @@
 
 #### FR-LM-06 远端生图 / 生视频接入
 
-- 状态：计划中（配置已在，运行时未接）
-- 需求：远端模型除 chat 外，还将承画图 / 视频生成。
-- 行为与验收：`REMOTE_MODEL_KINDS` 已含 `image` / `video`（先落配置）；
-  当前运行时只有 chat 参与；接入时以 FR-WP-04 的 relay 为落点，
-  不新开第三条通道。
-- 落点：`src/lib/llm/types.ts`（`REMOTE_MODEL_KINDS`）
+- 状态：已上线
+- 需求：远端模型除 chat 外，还承担画图 / 视频生成。
+- 行为与验收：统一走 FR-WP-04 的 relay（不另开通道）。生图：按请求里的
+  `model` 在 `remoteModel` 表按名直连，适配器把统一输入翻译成接口字段、
+  产物按 `outputField` 提取（`resolveTarget` + `bodyFromAdapter`）。
+  视频（#3590 补齐）：`submitVideoViaApi` 同样按 `model` 定向
+  （`resolveVideoTarget`，无适配器回落 OpenAI 兼容惯例 `/videos`），
+  轮询按该条目 + 适配器端点构造候选（Agnes 系 `/agnesapi?video_id=…` 与
+  REST `/videos/{id}`，`buildVideoPollUrls`），鉴权用条目自己的密钥；
+  未带 `model` 的工坊镜头链路保持全局通道设置与既有失败语义。
+- 落点：`src/lib/workshop/api-channel.server.ts`、
+  `src/lib/workshop/api-channel-core.ts`、`src/lib/llm/types.ts`
+
+#### FR-LM-07 测试模型能力
+
+- 状态：已上线
+- 需求（ISSUE #3590）：主界面左侧有入口，能简单测试已配置的模型 ——
+  所有配好工坊适配的远端模型都能用，输入与输出都是工坊同款。
+- 行为与验收：工作区侧栏全局项「测试模型」（瞬态页签，`navId=model-test`）。
+  用途分图片 / 视频（音频等通道接入后再加页签）；候选 = configGet 下发的
+  启用条目按用途过滤（baseUrl 为空的不进，那种条目按名解析会回落全局通道，
+  测试对象就不再是这个模型）。选中模型 → 选模式（「模型适配」里配的适配器，
+  没配时提示并按 OpenAI 兼容默认映射直连）→ 输入行**逐行来自适配器映射**
+  （工坊同款；通道未承接的类型显式标「未承接」并禁用，不静默丢弃）→
+  生成走 `/api/workshop-api/generate`（与 ShotStudio / VideoStudio 同一条链），
+  视频任务制自动轮询（3s 一轮 / 10 分钟上限），产物用 `MediaThumbnail`
+  就地展示并给原链。适配器新增「固定值」栏：每次请求原样带上的请求体键值
+  （如 Agnes 视频必填的 `mode:"text"` / `size:"720P"`），先常量后输入映射、
+  同名字段输入赢。
+- 落点：`src/components/workshop/ModelTestView.tsx`、
+  `src/components/workshop/hooks/use-model-test.ts`、
+  `src/components/workshop/model-test-config.ts`、
+  `src/components/workshop/ModelAdaptersView.tsx`（固定值编辑器）、
+  `src/lib/workshop/model-mode-contract.ts`（constants）
 
 ---
 

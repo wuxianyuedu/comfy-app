@@ -2,9 +2,10 @@
 // 每种模式的统一输入 / 输出是工坊全局口径（本地工作流按它配落点、远端模型按它
 // 建适配器）。读这一侧要合**两处**来源，顺序与「谁压谁」是这一层的全部内容：
 //
-//   ① 成品配置（`model-mode-contract.ts` 的 `CONFIGURED_MODE_CONTRACTS`）——
-//      编译进源码的那一份，随构建走、每个检出与每个桌包都是同一份。改它要走
-//      改代码 / 提 PR 那条路，这是内置默认**本体**（不再是「没配过时的回落」）。
+//   ① 成品配置（`model-mode-contract.ts` 的 `configuredModeContracts`）——
+//      编译进源码的**完整基线**（#3603 起全部生成类模式都显式在
+//      `mode-contract-defaults.json` 里），随构建走、每个检出与每个桌包都是
+//      同一份。改它要走改代码 / 提 PR 那条路。
 //   ② 本机覆盖（`data/workshop-mode-contracts.json`）—— 编辑器保存出来的那份，
 //      按 `process.cwd()` 锚在应用根。它在而不空才生效，**整份压过** ①。
 //
@@ -34,7 +35,7 @@ import {
   configuredModeContracts,
   localOverrideDiff,
   parseModeContracts,
-  projectDefaultDiff,
+  requiredInputsFor,
   type ModeContract,
 } from "./model-mode-contract";
 
@@ -149,13 +150,18 @@ export function isDevCheckout(root: string = process.cwd()): boolean {
   return existsSync(path.join(root, "scripts", "dev-launcher.mjs"));
 }
 
-/** 把「当前编辑的契约」里与推导**有差异**的部分写进入库的项目默认
+/** 把「当前编辑的契约注册表」**全量**写进入库的项目默认
  *  （`src/lib/workshop/mode-contract-defaults.json`，跟代码走）。
  *
+ *  #3603 起这份 JSON 是**完整基线**（全部生成类模式的口清单 / 输出 / 必备口
+ *  都显式在文件里），不再是「与推导的差集」—— 差集 + 推导的双出处形态在
+ *  「大部分模式都被显式配置过」之后只剩歧义（业主原话：修改多了，大部分
+ *  也都会在这个 json 中配置的）。写全量 = 编辑器里的现状逐模式落盘，
+ *  `required` 一并固化（基线自描述，不留「缺省回落」这一层）。
+ *
  *  只有开发检出可以调：正式包没有源码可写，这格调用本身就是错用 —— 大声失败
- *  而不是假装成功。写的是 `projectDefaultDiff` 的差集（与推导相同的模式不写），
- *  未显式覆盖的模式继续跟随推导演进；写完后读取侧（静态 import 的那份快照）
- *  要**重启进程**才会变 —— 返回值里把这一点说清，由界面转告。 */
+ *  而不是假装成功。写完后读取侧（静态 import 的那份快照）要**重启进程**才会
+ *  变 —— 返回值里把这一点说清，由界面转告。 */
 export async function saveModeContractsAsProjectDefaults(
   contracts: Array<ModeContract>,
   root: string = process.cwd(),
@@ -166,14 +172,17 @@ export async function saveModeContractsAsProjectDefaults(
         "正式包的契约改动请用「保存模式契约」（只落本机）。",
     );
   }
-  const normalized = parseModeContracts(contracts);
-  const diff = projectDefaultDiff(normalized);
+  /* 全量落盘 + required 固化：读侧拿到的每一条都自描述。 */
+  const full = parseModeContracts(contracts).map((c) => ({
+    ...c,
+    required: requiredInputsFor(c),
+  }));
   const file = path.join(/*turbopackIgnore: true*/ root, MODE_CONTRACT_DEFAULTS_REL_PATH);
   try {
     await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, `${JSON.stringify(diff, null, 2)}\n`, "utf8");
+    await fs.writeFile(file, `${JSON.stringify(full, null, 2)}\n`, "utf8");
   } catch (error) {
     throw new Error(errorText(error, `项目默认写入失败（${file}）`), { cause: error });
   }
-  return { contracts: diff, file };
+  return { contracts: full, file };
 }

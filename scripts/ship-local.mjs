@@ -88,6 +88,38 @@ export function parsePorcelain(stdout) {
  */
 export function runCommitStage(ctx) {
   const { opt, root, staged, unstagedModified, untracked, log, run, relay } = ctx;
+  /* 「本次点名的改动是否已经全部在 HEAD」——#3602。逐条**按路径限定**问 git status：
+   * 输出为空 = 这条路径与 HEAD 逐字一致（干净），非空 = 还有可提交的差异。
+   *
+   * 为什么不走 parsePorcelain 那三份名单做匹配：porcelain 的路径会按
+   * `core.quotePath` 转义（本仓 docs 有中文文件名，非 ASCII 路径在名单里是带引号的
+   * 八进制转义形态），与 `opt.adds` 里的原值逐字对不上 —— 名单匹配会把「脏的中文
+   * 路径」误判成「已在 HEAD」，跳过提交后那部分改动就静默丢了。按路径限定查询的
+   * 输出**只看空不空**，不解析路径本身，转义形态无关紧要。
+   *
+   * 为什么这事值得判：本仓是多人并检出的工作区，树上常年挂着**别的会话**的未提交
+   * 改动 —— 旧的「树上有任何改动就进提交段」会把「我的工作已全部在 HEAD」的那一轮
+   * 也推进 `git commit`：`git add` 全是空操作，钩子在**空暂存面**上判
+   * （doc-mirror-pairing 退 2「没有判决面」）⇒ 已提交的工作被堵死在本地，push / PR
+   * 全部无法继续（#3602 现场；该配对判据已随 #3586 退役，这里记的是当时的因果）。 */
+  /** @param {string} a 一条 `--add` 点名路径（仓库相对形态）。 */
+  const addIsClean = (a) => {
+    const r = run("git", ["status", "--porcelain", "--", a]);
+    return r.status === 0 && r.stdout.trim() === "";
+  };
+  const addsAllInHead = opt.adds.length > 0 && opt.adds.every((a) => addIsClean(a));
+  if (addsAllInHead) {
+    const head = short(run("git", ["rev-parse", "HEAD"]).stdout.trim());
+    log(`[ship] 本次 --add 点名的改动已全部在 HEAD（${head}）⇒ 跳过提交段，直接进推送段。`);
+    const others = staged.length + unstagedModified.length + untracked.length;
+    if (others > 0) {
+      /* 读数不是客套：树上确实还挂着别的改动（并行会话的在途工作 / 常驻脏文件）。
+         它们不属于本次点名，一次也没有随提交 —— 这一句必须被读出来，不许长得像
+         「全部已处理」。 */
+      log(`[ship]   树上另有 ${others} 项未提交改动，不在本次点名里 —— 保持原样留在工作区。`);
+    }
+    return { stop: false, codes: [CODE.GREEN] };
+  }
   const msg = opt.messageFile ? safeRead(root, opt.messageFile) : opt.message;
   if (staged.length + unstagedModified.length + untracked.length > 0) {
     if (!msg) {

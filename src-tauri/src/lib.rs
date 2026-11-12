@@ -1,6 +1,7 @@
 use std::net::TcpStream;
 #[cfg(not(debug_assertions))]
 use std::net::TcpListener;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -48,14 +49,26 @@ struct AppState {
   /// 别的窗口，加载完成后突然抢焦点会把正在看的内容打断。由启动器按
   /// COMFYAPP_FOREGROUND 控制；应用已在前台 / 用户主动唤起时不改配置直接放行。
   foreground: Mutex<bool>,
-  /// 已按「不抢前台」方式显示过但用户还没看过的应用窗口，供托盘「打开主界面」
-  /// 时清掉闪烁提醒。
+  /// 「窗口只显示到任务栏、用户还没看过」——**只用于退出时的一条诊断日志**。
+  /// ISSUE #3562 起不再驱动任何窗口动作：此前它对应一次任务栏闪烁请求，而闪烁
+  /// 被重复触发又从没有停止动作，用户看到的是后台莫名的红色高亮。
   attention: Mutex<bool>,
+  /// 本次启动的「前端自动唤起前台」是否已被消费。
+  /// `COMFYAPP_FOREGROUND` 是进程级持久值，而 `useStartupForeground` 会在组件
+  /// 每次挂载时重问一次；不消费掉就是「页面一重挂就抢一次前台」（ISSUE #3562）。
+  startup_activation_consumed: Mutex<bool>,
   /// 用户在启动期关闭了启动页（放弃本次启动）。壳进程随即整体退出；置位是
   /// 为了在退出生效前的瞬间，拦住所有「把隐藏主窗显示出来」的后续路径
   /// （页面加载完成的窗口交接、150s 安全网、就绪兜底导航），避免用户已经
   /// 放弃的启动又把窗口弹出来。
   abandoned: Mutex<bool>,
+  /// 窗口显示链路的运行期读数（ISSUE #3569）：**只做诊断，不参与前台判决**。
+  /// Win32 前台 / Z 序在 CI 里取不到，源码形态判据也看不出「交接完成后又被
+  /// 重放了几次」；这三个计数与对应日志把重放变成可机器读的信号，供壳冒烟
+  /// 脚本与人工排查取用（只读出口见 `window_show_diagnostics`）。
+  show_attempts: AtomicU32,
+  auto_show_skipped: AtomicU32,
+  focus_granted: AtomicU32,
   /// 本次启动是不是 standalone 形态（壳自己拉起内嵌 server）。
   ///
   /// 值来自 `run()` 里那次 `ensure_launch_mode`（判据只在那一处），在建状态时
@@ -78,6 +91,10 @@ impl AppState {
       shown: Mutex::new(false),
       foreground: Mutex::new(foreground),
       attention: Mutex::new(false),
+      startup_activation_consumed: Mutex::new(false),
+      show_attempts: AtomicU32::new(0),
+      auto_show_skipped: AtomicU32::new(0),
+      focus_granted: AtomicU32::new(0),
       abandoned: Mutex::new(false),
       standalone: Mutex::new(standalone),
     }
@@ -97,6 +114,24 @@ impl AppState {
 
   fn foreground(&self) -> bool {
     *self.foreground.lock().unwrap()
+  }
+
+  /// 前端「本次启动要不要自动给前台」的**一次性**答复。
+  ///
+  /// 判据仍是 `foreground`，但只放行第一次：应用内页签切换 / 路由重挂 /
+  /// WebView 重载都会重新跑 `useStartupForeground`，若每次都返回 true，
+  /// 用户切到别的应用后会被一次次拉回来（ISSUE #3562）。壳在窗口交接那一刻
+  /// 已经按 `configured` 给过前台，前端这一跳只是补唤，消费掉不影响启动体验。
+  fn take_startup_activation(&self) -> bool {
+    if !self.foreground() {
+      return false;
+    }
+    let mut consumed = self.startup_activation_consumed.lock().unwrap();
+    if *consumed {
+      return false;
+    }
+    *consumed = true;
+    true
   }
 
   /// 标记应用窗口已显示过并返回「本次是否为首次显示」。
@@ -141,6 +176,35 @@ impl AppState {
 
   fn is_standalone(&self) -> bool {
     *self.standalone.lock().unwrap()
+  }
+
+  /// 进入一次「显示主窗」请求（含随后被早退拦下的那一次）。
+  fn note_show_attempt(&self) -> u32 {
+    self.show_attempts.fetch_add(1, Ordering::Relaxed) + 1
+  }
+
+  /// 自动交接被幂等早退拦下 —— 「交接完成后又被重放」唯一的机器读信号。
+  /// 壳冒烟脚本只要看交接完成后这个数还在不在涨即可，不必去猜 Win32 前台。
+  fn note_auto_show_skipped(&self) -> u32 {
+    let skipped = self.auto_show_skipped.fetch_add(1, Ordering::Relaxed) + 1;
+    log::info!(
+      "[ComfyAPP] window-show diagnostics: reason=already_shown skipped={} attempts={}",
+      skipped,
+      self.show_attempts.load(Ordering::Relaxed)
+    );
+    skipped
+  }
+
+  fn note_focus_granted(&self) -> u32 {
+    self.focus_granted.fetch_add(1, Ordering::Relaxed) + 1
+  }
+
+  fn window_show_snapshot(&self) -> WindowShowSnapshot {
+    WindowShowSnapshot {
+      attempts: self.show_attempts.load(Ordering::Relaxed),
+      auto_show_skipped: self.auto_show_skipped.load(Ordering::Relaxed),
+      focus_granted: self.focus_granted.load(Ordering::Relaxed),
+    }
   }
 }
 
@@ -313,9 +377,30 @@ fn activate_main_window(app_handle: tauri::AppHandle) -> Result<(), String> {
 /// 显式冷启动 / 唤起已有实例」注入，见 scripts/start_tauri_launcher.py 的
 /// decide_foreground）。放在 Rust 侧而不是前端读 env，是因为只有服务端渲染
 /// 阶段能拿到非 `NEXT_PUBLIC_` 前缀的变量，客户端读不到会一律降级成「不给前台」。
+///
+/// **一次性消费**（ISSUE #3562）：这个命令在组件每次挂载时都会被问到，而
+/// `foreground` 是进程级持久值。不消费就会把「启动那一次该给前台」演成
+/// 「页面每重挂一次就抢一次前台」。
 #[tauri::command]
 fn should_activate_on_launch(state: tauri::State<'_, AppState>) -> bool {
-  state.foreground()
+  state.take_startup_activation()
+}
+
+/// 窗口显示链路的运行期读数（ISSUE #3569）：给排查与壳冒烟的**只读**诊断出口。
+///
+/// 判据仍在 `show_main_window_without_focus()`；这里只把 `AppState` 的三个计数
+/// 原样返回，不推断「这次重放合不合法」——那要由壳冒烟脚本结合 Win32 前台 /
+/// Z 序读数去判。壳日志里另有一份退出汇总（见 `RunEvent::ExitRequested`）。
+#[derive(serde::Serialize)]
+struct WindowShowSnapshot {
+  attempts: u32,
+  auto_show_skipped: u32,
+  focus_granted: u32,
+}
+
+#[tauri::command]
+fn window_show_diagnostics(state: tauri::State<'_, AppState>) -> WindowShowSnapshot {
+  state.window_show_snapshot()
 }
 
 /// 供启动页读取当前应用目标 URL，用于自主探测后端是否就绪。
@@ -385,8 +470,10 @@ fn shell_owns_foreground(app: &tauri::AppHandle) -> bool {
 /// 可能在这段时间切去别的窗口干活。启动页会一直待在他眼皮底下——只要他没动手
 /// 切走，前台就还在本壳的窗口上，那就是「他还在等这个应用」，加载完成必须把前台
 /// 真的给他（只丢进任务栏的观感就是「点了启动，窗口自己在后台待着」）；只有前台
-/// 已经换成别人的窗口（他手动让出了前台）才「只显示、不激活」：窗口出现在任务栏，
-/// 同时请求一次任务栏闪烁提醒（request_user_attention），他处理完手上的事自己点开。
+/// 已经换成别人的窗口（他手动让出了前台）才「只显示、不激活」：窗口安静地出现在
+/// 任务栏，他处理完手上的事自己点开。任务栏按钮与常驻托盘就是入口——ISSUE #3562
+/// 起**不再请求任务栏闪烁**：那一下红色高亮会被自动路径的重复显示反复点燃，用户
+/// 读到的是「后台莫名在闪」。
 ///
 /// 三种情况给前台，其余一律「只显示」：
 /// 1. `request_focus`——调用方的显式意图（托盘「打开主界面」、二次启动的单实例
@@ -407,6 +494,22 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
     return;
   };
   let state = app.try_state::<AppState>();
+  let _ = state.as_ref().map(|s| s.note_show_attempt());
+
+  /* 自动交接只允许发生一次（ISSUE #3562）。
+   *
+   * 页面导航 Finished、150s 安全网、无启动页兜底都会走到这里，而窗口的
+   * `show()` 在 Windows 上是 SW_SHOW —— 对**已经可见**的窗口同样带激活语义、
+   * 会把它提到 Z 序最前。启动完成后任何一次重放，用户看到的就是「我切去别的
+   * 应用，几秒后它又弹出来盖住我正在用的窗口」。窗口显示过之后，显隐只归用户
+   * 操作：任务栏 / 托盘 / 二次启动（这些都带 request_focus = true）。 */
+  let already_shown = state.as_ref().map(|s| s.is_main_shown()).unwrap_or(false);
+  if already_shown && !request_focus {
+    // 计数 + 结构化日志都在 AppState 里：交接完成后每多一次都是「被重放」的证据。
+    let _ = state.as_ref().map(|s| s.note_auto_show_skipped());
+    return;
+  }
+
   let first_show = state.as_ref().map(|s| s.mark_shown()).unwrap_or(false);
   let configured = state.as_ref().map(|s| s.foreground()).unwrap_or(false);
   /* 「用户手动让出前台」在采样这一刻就是「前台已经不是本壳的窗口了」。
@@ -433,35 +536,53 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
     apply_saved_main_window_state(&win);
   }
 
-  /* 最小化时先还原：`show()`（tao 走 SW_SHOW）对最小化窗口不会还原——Windows
-   * 只把它「按原尺寸/原状态」显示出来，仍是任务栏上一条不动的按钮；随后的
-   * `set_focus()` 也只是把「最小化的窗口」记为前台。用户双击启动或点托盘得到的
-   * 观感就是「点了没法切到前台」，而再点一次任务栏又能出来（第二次点击走的是
-   * 系统自己的还原路径）——正是「有时候切不到前台」。
-   * 仅在确实最小化时调 unminimize：它的实现是 SW_RESTORE，对非最小化窗口带激活
-   * 语义，无条件调会把「不抢前台」策略架空（见本函数开头与 §1.3）。 */
-  if win.is_minimized().unwrap_or(false) {
+  /* 只对「确实需要改变可见状态」的那一档发窗口动作（ISSUE #3562）：已可见的
+   * 窗口再走一次 show 就是重复激活 + 重绘，托盘唤起因此发卡，还会把用户正在
+   * 用的应用盖住。最小化的窗口仍要先 unminimize（SW_RESTORE 自带显示语义），
+   * 之后不必再 show。 */
+  let minimized = win.is_minimized().unwrap_or(false);
+  let visible = win.is_visible().unwrap_or(false);
+  if minimized {
     if let Err(e) = win.unminimize() {
       log::warn!("[ComfyAPP] unminimize main window failed: {:?}", e);
     }
+  } else if !visible {
+    if let Err(e) = win.show() {
+      log::warn!("[ComfyAPP] show main window failed: {:?}", e);
+    }
   }
-  if let Err(e) = win.show() {
-    log::warn!("[ComfyAPP] show main window failed: {:?}", e);
-  }
-  // 显示动作本身会不会把前台带过来由系统决定（交接瞬间 Windows 当真当「新窗口」
-  // 放行）。这里只把结论记下来，交给启动器的交接复核进程把不该给的前台还回去。
+
   let focused_after_show = win.is_focused().unwrap_or(false);
+  // 纯诊断状态：窗口曾以「不抢前台」的方式出现、用户还没看过（见 AppState）。
   let keep_attention = !activate && !focused_after_show;
   if let Some(s) = state.as_ref() {
     s.set_attention(keep_attention);
   }
 
   if activate {
-    // 用户主动唤起 / 启动器判定用户就在等它：必须把前台拿到手——系统可能因
-    // 前台锁定（用户在别的窗口上刚有点击）拦下 set_focus，未获前台时补一次
-    // 任务栏闪烁，用户才不至于「点了没反应」。
-    let _ = win.set_focus();
-    if !win.is_focused().unwrap_or(false) {
+    // 已经聚焦就不必再发一次前台请求；只有确实没拿到前台时才争取一次。
+    if !focused_after_show {
+      let _ = win.set_focus();
+    }
+    if win.is_focused().unwrap_or(false) {
+      /* 窗口真的到前台了：把可能残留的闪烁收掉。tao 的 Windows 实现里
+       * request_user_attention(None) = FlashWindowEx(FLASHW_STOP)；此前壳只请求
+       * 「闪 4 次」、从不停止，自动路径的重复显示还会一次次重新点燃它 ——
+       * 就是 #3562 里「后台莫名红色闪烁」。 */
+      let _ = win.request_user_attention(None);
+      if let Some(s) = state.as_ref() {
+        s.set_attention(false);
+        s.note_focus_granted();
+      }
+      log::info!(
+        "[ComfyAPP] main window activated \
+         (request={} configured={} user_yielded={} first={})",
+        request_focus,
+        configured,
+        user_yielded,
+        first_show
+      );
+    } else {
       log::warn!(
         "[ComfyAPP] main window shown, foreground request not granted \
          (request={} configured={} user_yielded={})",
@@ -472,16 +593,7 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
       if let Some(s) = state.as_ref() {
         s.set_attention(true);
       }
-      let _ = win.request_user_attention(Some(tauri::UserAttentionType::Informational));
-    } else {
-      log::info!(
-        "[ComfyAPP] main window shown with focus \
-         (request={} configured={} user_yielded={} first={})",
-        request_focus,
-        configured,
-        user_yielded,
-        first_show
-      );
+      // 不再补闪烁：任务栏按钮与常驻托盘已经是稳定的「应用在这里」入口。
     }
     return;
   }
@@ -493,13 +605,7 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
     focused_after_show,
     first_show
   );
-  // 不抢前台：让任务栏按钮持续闪烁到用户点开，作为「加载好了」的提示。
-  if keep_attention {
-    match win.request_user_attention(Some(tauri::UserAttentionType::Informational)) {
-      Ok(()) => log::info!("[ComfyAPP] taskbar attention requested"),
-      Err(e) => log::warn!("[ComfyAPP] request_user_attention failed: {:?}", e),
-    }
-  }
+  // 不抢前台这一档不再请求任务栏闪烁（ISSUE #3562）：窗口安静地留在任务栏。
 }
 
 /// 桌面壳内打开 ComfyUI：把运行中的 ComfyUI 网页界面放进 Tauri 壳的独立
@@ -818,9 +924,9 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
       sections.push(format!("─ 错误输出（dev-launcher-stderr.log）─\n{}", tail));
     }
   }
-  // 壳自持日志（release 落 log/shell/shell.log；dev 由 launcher 重定向 stderr，
-  // 不产生此文件）。启动期壳的导航/看门狗/侧车诊断都经 log:: 打到这份文件，
-  // 正式版壳脱离 launcher（standalone 双击）崩溃时仍有可查日志。
+  // 壳自持日志（release 落 log/current/shell/shell.log；dev 由 launcher 重定向
+  // stderr，不产生此文件）。启动期壳的导航/看门狗/侧车诊断都经 log:: 打到这份
+  // 文件，正式版壳脱离 launcher（standalone 双击）崩溃时仍有可查日志。
   let shell_log = shell_launch::shell_log_path(&root);
   // 同上：追加不轮转，靠会话标记只取本次启动的壳自持日志（dev 模式下这份文件
   // 不产生，下面取不到标记会退回空切片，不影响其它段）。
@@ -831,7 +937,7 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
     120,
   ) {
     if !tail.trim().is_empty() {
-      sections.push(format!("─ 壳日志（log/shell/shell.log）─\n{}", tail));
+      sections.push(format!("─ 壳日志（log/current/shell/shell.log）─\n{}", tail));
     }
   }
   // 服务自身的输出（Next dev server 原始 stdout/stderr）。**编排器日志答不了
@@ -1449,7 +1555,7 @@ fn reap_process_tree(project_root: &str, pid: u32) {
 ///
 /// 判据刻意**不看平台专属文件**：此前校验的是 `scripts/dev-launcher.ps1`
 /// 是否存在，于是 Linux/macOS 上 `resolve_project_root()` 永远返回空串 ——
-/// 启动页读不到 `run/launch-status.json`、壳日志落不到 `log/shell/`，
+/// 启动页读不到 `run/launch-status.json`、壳日志落不到 `log/current/shell/`，
 /// 表现为「启动页一直转圈 + 没有日志可查」，而根因只是判据绑在了 Windows 上。
 /// 现在认两个**跨平台都存在**的仓库标识文件：`package.json`（必需）+
 /// `scripts/dev-launcher.mjs`（启动编排器的唯一实现；`.ps1` 只是它的 Windows
@@ -1557,29 +1663,41 @@ fn publish_shell_exe_env() {
 }
 
 /// 日志插件：开发模式走 stdout（launcher 已把 stderr 重定向进
-/// log/launcher/dev-launcher-stderr.log）；生产模式额外落一份壳自持日志到
-/// <项目根>/log/shell/（standalone 双击无 launcher 重定向时的兜底落盘，见
+/// log/current/launcher/dev-launcher-stderr.log）；生产模式额外落一份壳自持日志到
+/// log/current/shell/shell.log（standalone 双击无 launcher 重定向时的兜底落盘，见
 /// launch-and-build.md §4 日志布局：按子系统分区，新增 shell 子系统）。
 #[cfg(not(debug_assertions))]
 fn build_log_plugin(project_root: &str) -> tauri::plugin::TauriPlugin<Wry> {
   // 保留 stdout/stderr：launcher 下壳 stderr 被重定向进 dev-launcher-stderr.log；
-  // release（windows_subsystem）下无控制台，写 stderr 无害。生产模式另落一份
-  // 壳自持日志到 <项目根>/log/shell/shell.log——standalone 双击无 launcher 重定向，
-  // 壳若在 launcher 之外崩溃仍有日志可查（launch-and-build.md §4：按子系统分区）。
-  // 插件自带 KeepOne 轮转，避免文件无限增长。
-  // 时区固定 UseLocal：插件的默认策略是 UTC（`DEFAULT_TIMEZONE_STRATEGY`），
-  // 壳 stderr 被 launcher 重定向进 log/launcher/ 后面板直接展示——UTC 会让
-  // 同一份面板里的行与其余本地时钟的行差 8 小时。
+  // release（windows_subsystem）下无控制台，std 对无效 stdio 句柄静默丢弃，写之无害。
+  // 生产模式另落一份壳自持日志到 `log/current/shell/shell.log`——standalone 双击无
+  // launcher 重定向，壳若在 launcher 之外崩溃仍有日志可查（launch-and-build.md §4：
+  // 按子系统分区）。
+  //
+  // 这份日志**不能走插件的 Folder target**（#3574）：它把文件句柄一直攥到进程
+  // 退出，而 `current/` 会被编排器整目录清空（启动时的崩溃补做、退出时的收包）；
+  // 清空一发生，句柄就指向已删除的文件，此后所有写入静默丢失——壳日志冻在启动
+  // 头几行，navigate_to_app / 窗口交换等全程不可观测。改走自定义 fern 分发 +
+  // 按次开合的 [`shell_launch::ResilientShellLog`]：插件的总格式化管线原样生效
+  // （行形态不变），落盘换成每次按路径重开，目录被清了下一行自己重建。
+  // 大小上限见 `shell_launch::SHELL_LOG_MAX_BYTES`。
   let mut targets = vec![
     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stderr),
   ];
   if !project_root.is_empty() {
-    let shell_log_dir = shell_launch::shell_log_dir(project_root);
-    targets.push(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
-      path: shell_log_dir,
-      file_name: Some("shell.log".to_string()),
-    }));
+    // fern 经 tauri-plugin-log 的 re-export 使用（`tauri_plugin_log::fern`），
+    // 与插件内部分发共用同一版本，不新增直接依赖。
+    targets.push(tauri_plugin_log::Target::new(
+      tauri_plugin_log::TargetKind::Dispatch(tauri_plugin_log::fern::Dispatch::new().chain(
+        tauri_plugin_log::fern::Output::writer(
+          Box::new(shell_launch::ResilientShellLog::new(shell_launch::shell_log_path(
+            project_root,
+          ))),
+          "\n",
+        ),
+      )),
+    ));
   }
   tauri_plugin_log::Builder::new()
     .level(log::LevelFilter::Info)
@@ -1993,6 +2111,7 @@ pub fn run() {
       open_comfyui_window,
       activate_main_window,
       should_activate_on_launch,
+      window_show_diagnostics,
       open_devtools,
       devtools_available
     ])
@@ -2124,7 +2243,7 @@ fn start_own_orchestrator(app: &tauri::AppHandle, project_root: &str) {
         project_root,
         &format!(
           "无法启动本地服务（node scripts/dev-launcher.mjs 未能拉起）：{e}\n\
-           请确认已安装 Node.js / pnpm，详见 log/launcher/ 与 log/shell/shell.log。"
+           请确认已安装 Node.js / pnpm，详见 log/current/launcher/ 与 log/current/shell/shell.log。"
         ),
       );
     }
@@ -2186,8 +2305,10 @@ fn setup_splash_window(app: &mut tauri::App) {
 ///
 /// 用 `set_focus()` 而不是 `always_on_top`：置顶是**持续**语义（窗口会一直压在
 /// 别人上面，用户在启动期想切走也切不掉），而这里要的只是「出现的那一刻在前面」。
-/// Windows 的前台锁定可能让 `set_focus()` 落空（用户刚在别的窗口上点过），
-/// 此时补一次任务栏闪烁作为可见提醒，与主窗的策略保持一致。
+/// Windows 的前台锁定可能让 `set_focus()` 落空（用户刚在别的窗口上点过），此时
+/// 只记日志：ISSUE #3562 起不再为「启动页没拿到前台」请求任务栏闪烁——启动页是
+/// `WS_EX_TOOLWINDOW`，闪烁却落在应用主窗的任务栏按钮上，用户读到的是「后台
+/// 莫名有个红色提醒」。
 fn bring_splash_to_front(splash: &tauri::WebviewWindow) {
   // 声明式窗口（tauri.conf.json 的 windows[0]）默认已可见，但显式 `show()` 一次
   // 更稳：某些窗口状态插件/系统还原会把首次显示推迟，未显示的窗口 set_focus 无意义。
@@ -2196,14 +2317,12 @@ fn bring_splash_to_front(splash: &tauri::WebviewWindow) {
   }
   if let Err(e) = splash.set_focus() {
     log::warn!("[ComfyAPP] splash set_focus failed: {:?}", e);
-    let _ = splash.request_user_attention(Some(tauri::UserAttentionType::Informational));
     return;
   }
   if splash.is_focused().unwrap_or(false) {
     log::info!("[ComfyAPP] splash window brought to front");
   } else {
     log::warn!("[ComfyAPP] splash window shown but foreground not granted");
-    let _ = splash.request_user_attention(Some(tauri::UserAttentionType::Informational));
   }
 }
 
@@ -2321,6 +2440,12 @@ fn on_main_page_finished(handle: &tauri::AppHandle, url: tauri::Url) {
     || (!url_str.starts_with("http://") && !url_str.starts_with("https://"))
   {
     log::debug!("[ComfyAPP] ignoring initial/non-app page load");
+    return;
+  }
+  // 交接只在启动页还在时发生（ISSUE #3562）：启动完成后应用内的整页导航 /
+  // 重载同样会触发 Finished，再走一遍交接就会把已可见的主窗重新激活一次。
+  if handle.get_webview_window("splash").is_none() {
+    log::debug!("[ComfyAPP] window handover already done, ignoring page load");
     return;
   }
   log::info!("[ComfyAPP] app page loaded, swapping windows");
@@ -2541,6 +2666,15 @@ fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
                 "[ComfyAPP] exiting while the window was only shown in the taskbar (never opened by the user)"
               );
             }
+            /* 退出时把整段启动的窗口读数落一行（ISSUE #3569）：交接完成后
+             * `auto_show_skipped` 还在涨，就说明自动显示链路又被重放了。 */
+            let snap = state.window_show_snapshot();
+            log::info!(
+              "[ComfyAPP] window-show diagnostics at exit: attempts={} auto_show_skipped={} focus_granted={}",
+              snap.attempts,
+              snap.auto_show_skipped,
+              snap.focus_granted
+            );
           }
         }
         _ => {}
@@ -3016,6 +3150,91 @@ mod window_startup_tests {
     assert!(
       owns.contains("webview_windows()") && owns.contains("is_focused()"),
       "前台归属按本壳窗口的 focused 判，不看进程名 / 句柄：{owns}"
+    );
+  }
+
+  /// ISSUE #3562 的三个现象（后台红色闪烁 / 反复抢前台 / 点图标发卡）同源：
+  /// 「显示窗口」被重复执行，且任务栏闪烁只请求、从不停止。Win32 前台在 CI 里
+  /// 取不到，这里按源码形态钉住四条不变量。
+  #[test]
+  fn window_show_is_idempotent_and_never_restarts_taskbar_flashing() {
+    let show = fn_body("fn show_main_window_without_focus");
+
+    // ① 自动路径只交接一次：窗口显示过之后再被调用必须早退。
+    assert!(
+      show.contains("if already_shown && !request_focus {"),
+      "自动显示路径必须一次性（页面导航 / 安全网重放会把窗口又顶到前面）：{show}"
+    );
+    // ② 已可见的窗口不再发窗口动作：SW_SHOW 对可见窗口同样带激活语义。
+    assert!(
+      show.contains("} else if !visible {"),
+      "只对隐藏窗口发 show 动作：{show}"
+    );
+    // ③ 不再请求闪烁，改为焦点到位时 FLASHW_STOP 收掉残留。
+    assert!(
+      !show.contains("UserAttentionType::Informational"),
+      "主窗不许再请求任务栏闪烁（#3562）：{show}"
+    );
+    assert!(
+      show.contains("request_user_attention(None)"),
+      "窗口到前台时必须主动停掉闪烁：{show}"
+    );
+    // ④ 前台请求只有一处，且前台归属仍早于任何窗口动作采样。
+    assert_eq!(
+      show.matches("win.set_focus()").count(),
+      1,
+      "前台请求只允许一处：{show}"
+    );
+    let sampled = show.find("let user_yielded").expect("采样点不见了");
+    let shown = show.find("win.show()").expect("窗口显示动作不见了");
+    assert!(sampled < shown, "前台归属必须早于窗口动作采样：{show}");
+
+    let splash = fn_body("fn bring_splash_to_front");
+    assert!(
+      !splash.contains("UserAttentionType::Informational"),
+      "启动页拿不到前台时不许闪任务栏：{splash}"
+    );
+  }
+
+  /// 启动前台标记是进程级持久值，前端组件却会反复挂载：答复必须一次性。
+  #[test]
+  fn startup_foreground_is_consumed_only_once() {
+    let state = AppState::new(String::new(), String::new(), true, false);
+    assert!(state.take_startup_activation());
+    assert!(!state.take_startup_activation());
+    assert!(!state.take_startup_activation());
+    let background = AppState::new(String::new(), String::new(), false, false);
+    assert!(!background.take_startup_activation());
+  }
+
+  /// 运行期读数是「交接完成后有没有被重放」唯一的机器读信号（ISSUE #3569）。
+  /// 计数与快照在这里测；「早退分支确实记了一次」由源码形态钉住 —— Win32
+  /// 窗口在单测里造不出来，而形态回退正是这一层最可能发生的回退方式。
+  #[test]
+  fn window_show_replays_are_counted_for_diagnostics() {
+    let state = AppState::new(String::new(), String::new(), false, false);
+    assert_eq!(state.note_show_attempt(), 1);
+    assert_eq!(state.note_show_attempt(), 2);
+    assert_eq!(state.note_auto_show_skipped(), 1);
+    assert_eq!(state.note_focus_granted(), 1);
+    let snap = state.window_show_snapshot();
+    assert_eq!(snap.attempts, 2);
+    assert_eq!(snap.auto_show_skipped, 1);
+    assert_eq!(snap.focus_granted, 1);
+    assert_eq!(state.window_show_snapshot().auto_show_skipped, 1);
+
+    let show = fn_body("fn show_main_window_without_focus");
+    assert!(
+      show.contains("note_show_attempt()"),
+      "每次进入显示链路都要记一次：{show}"
+    );
+    assert!(
+      show.contains("note_auto_show_skipped()"),
+      "自动交接早退必须记一次 skipped（重放的唯一机器读信号）：{show}"
+    );
+    assert!(
+      show.contains("note_focus_granted()"),
+      "前台真正到手要记一次：{show}"
     );
   }
 }

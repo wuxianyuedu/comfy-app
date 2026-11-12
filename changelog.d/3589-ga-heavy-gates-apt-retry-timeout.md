@@ -1,0 +1,3 @@
+## Fixed
+
+- **GA `heavy-gates` 的「装 Tauri 的 Linux 系统依赖」遇镜像瞬时故障会无声空等 22 分钟才判红、把整条 PR 流水线压在 pending（ISSUE #3589）**：现场是 GA run `43059300768`（PR #3588 的 `pr-gate.yml`）该 step 的 `apt-get update`/`install` 因 `Temporary failure resolving 'azure.archive.ubuntu.com'` / `E: Unable to fetch some archives` 从 16:33:36 挂到 16:56:10 才 `exit 100`——`pnpm install` 已成功、`重档静态判据` 与后续判据一步没跑，属 GA 托管 runner 的 Azure Ubuntu 镜像侧抖动，与本 PR 改动面无关（本 PR 41+17 条用例本地全绿、另四个 GA job 全 success）。这一步原来既无重试、也无连接 / 步级超时。修法：两条 apt 命令都带 `Acquire::Retries=5` 与 `Acquire::http::Timeout` / `Acquire::https::Timeout=30`（短暂抖动自愈、死镜像早退），并给该 step 补 `timeout-minutes: 15`（真挂住时失败落在这一步自己的名字上，不再等满 job 的 60m 预算）。判据一字未改，只硬化环境前置。回归在 `tests/shell-gate-linux-sysdeps.test.ts`（新增一条钉重试 / 超时 / 步级超时三件在场，存量 17 条同绿）。

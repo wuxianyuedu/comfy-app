@@ -1,10 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
   extractBase64DataUrl,
+  extractRemoteTaskId,
   extractSavedOutputs,
   guessMediaKind,
   resolveImagesGenerationsEndpoint,
 } from "~/lib/workshop/api-channel-shared";
+
+describe("extractRemoteTaskId", () => {
+  it("认得 Agnes 视频接口的原生任务键 video_id（#3577）", () => {
+    expect(extractRemoteTaskId({ video_id: "vid_abc" })).toBe("vid_abc");
+    expect(extractRemoteTaskId({ videoId: "vid_abc" })).toBe("vid_abc");
+    /* 既有键不回退：id / task_id 仍按原顺序优先 */
+    expect(extractRemoteTaskId({ id: "t1", video_id: "t2" })).toBe("t1");
+    expect(extractRemoteTaskId({ task_id: "t1" })).toBe("t1");
+  });
+});
 
 describe("guessMediaKind", () => {
   it("视频扩展名(含 query 与大小写) → video", () => {

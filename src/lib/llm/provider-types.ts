@@ -115,6 +115,21 @@ export const MODEL_INPUT_TYPE_LABELS: Record<ModelInputType, string> = {
   pdf: "PDF",
 };
 
+/* ── 模型输出类型 ───────────────────────────────────────────────── */
+
+/* 输出与输入的词表刻意不共用：输入有 pdf（读文档），输出没有——没有模型
+ * 「输出 PDF」；输出也不收 audio（当前工坊不消费，等真接入再扩词表，
+ * 免得出现「能配但哪都不生效」的摆设档）。 */
+/* SAFETY: 类型断言已复核 */
+export const MODEL_OUTPUT_TYPES = ["text", "image", "video"] as const;
+export type ModelOutputType = (typeof MODEL_OUTPUT_TYPES)[number];
+
+export const MODEL_OUTPUT_TYPE_LABELS: Record<ModelOutputType, string> = {
+  text: "文本",
+  image: "图片",
+  video: "视频",
+};
+
 /* ── 模型能力 ───────────────────────────────────────────────────── */
 
 /* SAFETY: 类型断言已复核 */
@@ -196,6 +211,10 @@ export function parseInputTypes(raw: unknown): Array<ModelInputType> {
   return pickKnown(raw, MODEL_INPUT_TYPES);
 }
 
+export function parseOutputTypes(raw: unknown): Array<ModelOutputType> {
+  return pickKnown(raw, MODEL_OUTPUT_TYPES);
+}
+
 export function parseCapabilities(raw: unknown): Array<ModelCapability> {
   return pickKnown(raw, MODEL_CAPABILITIES);
 }
@@ -240,6 +259,16 @@ type ModelFamilyRule = {
 /* 规则表按「越具体越靠前」排列：先命中的那条生效。
  * 数字取各家公开文档的常见值（宁小勿大：填大了只会让上游拒绝，填小了才是真丢上下文）。 */
 const MODEL_FAMILY_RULES: Array<ModelFamilyRule> = [
+  {
+    /* Agnes（apihub.agnes-ai.com）：文本模型 512K 窗口 / 65,536 输出，
+     * 图像与视频模型同名前缀（agnes-image-* / agnes-video-*）。输入含图像
+     * （官方文档：文本、图像 URL）。取值来自其模型卡公开数值（#3577）。 */
+    match: /agnes/,
+    contextWindow: 524_288,
+    maxOutputTokens: 65_536,
+    inputTypes: ["text", "image"],
+    capabilities: ["structured-output", "system-messages"],
+  },
   {
     match: /claude|anthropic/,
     contextWindow: 200_000,
@@ -333,6 +362,8 @@ export function inferModelDefaults(modelId: string): ModelSmartDefaults {
     capabilities: [...(rule.capabilities ?? FALLBACK_SMART_DEFAULTS.capabilities)],
   };
 }
+
+/* ── 上下文窗口展示 ─────────────────────────────────────────────── */
 
 /** 上下文窗口的展示格式：`200K` / `1M` / `8,192`（未知给 `EMPTY_PLACEHOLDER`）。
  *  设置页的行内摘要与表单提示共用它，别在两处各写一套除法。 */

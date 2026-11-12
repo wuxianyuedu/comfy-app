@@ -208,7 +208,7 @@ describe("保存为项目默认：开发检出的写回入口（ISSUE #3396）",
     ).rejects.toThrow();
   });
 
-  it("写的是与推导的**差集**，与推导相同的模式不写（未覆盖的继续跟随推导演进）", async () => {
+  it("全量落盘（#3603）：编辑器现状逐模式写入，required 固化成自描述基线", async () => {
     await asDevCheckout();
     const derivedT2I = derivedModeContract("T2I");
     const tweaked: typeof derivedT2I = {
@@ -219,20 +219,16 @@ describe("保存为项目默认：开发检出的写回入口（ISSUE #3396）",
       [derivedT2I, tweaked, derivedModeContract("T2A")],
       root,
     );
-    // 与推导相同的 T2I / T2A 被丢掉；I2I（输出类别被改）保留。
-    expect(res.contracts.map((c) => c.mode)).toEqual(["I2I"]);
+    // 全量语义：三条输入三条落盘（差集时代的「与推导相同不写」已退役 ——
+    // 基线出处唯一化后不再有「跟随推导演进」那一层）。
+    expect(res.contracts.map((c) => c.mode)).toEqual(["T2I", "I2I", "T2A"]);
+    // required 固化：显式数组，哪怕与内置默认相同也写出来。
+    for (const contract of res.contracts) {
+      expect(Array.isArray(contract.required), contract.mode).toBe(true);
+    }
     const raw = await fs.readFile(path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH), "utf8");
     expect(JSON.parse(raw)).toEqual(res.contracts);
     // 落点就是入库的那一份（跟代码走的文件）
     expect(res.file).toBe(path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH));
-  });
-
-  it("全都与推导相同 ⇒ 写出空数组（= 没有任何显式覆盖，读取侧纯推导）", async () => {
-    await asDevCheckout();
-    const res = await saveModeContractsAsProjectDefaults([derivedModeContract("T2I")], root);
-    expect(res.contracts).toEqual([]);
-    await expect(
-      fs.readFile(path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH), "utf8"),
-    ).resolves.toBe("[]\n");
   });
 });
