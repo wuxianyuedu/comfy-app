@@ -305,11 +305,11 @@ export function ProviderModelDialog({
 
           <div className="mt-4 flex items-center justify-end gap-2">
             <Button
-              className="text-muted-foreground dark:text-ink hover:bg-surface-2/80 dark:hover:bg-ink/30 bg-surface-2 dark:bg-ink/25 dark:border-ink/30 mr-auto h-auto rounded-lg px-3 py-2 text-sm"
+              className="text-muted-foreground dark:text-ink hover:bg-surface-2/80 dark:hover:bg-ink/30 bg-surface-2 dark:bg-ink/25 dark:border-ink/40 mr-auto h-auto rounded-lg px-3 py-2 text-sm"
               onClick={() => {
                 d.resetModelForm();
               }}
-              variant="ghost"
+              variant="outline"
             >
               重置
             </Button>

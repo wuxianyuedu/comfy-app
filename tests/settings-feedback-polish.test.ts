@@ -59,18 +59,18 @@ describe("设置页反馈整改的形态判据（ISSUE #3495）", () => {
     ).toContain("max-h-[calc(100vh-12rem)]");
   });
 
-  it("「重置」按钮带可见底色（暗色下不再是透明 ghost）", () => {
+  it("「重置」按钮带可见底色与边界（暗色下不再是透明 ghost）", () => {
     const text = read("src/app/(main)/settings/components/ProviderModelDialog.tsx");
     /* 浅色走 bg-surface-2；暗色下 surface-2 对弹窗底只有 1.35:1（用户现场：
-     * 「暗色重置按钮背景还是看不见」），再叠 ink/25 的填充 + ink/30 描边
-     * （填充约 2.1:1、边界 3:1 档）并把文字提到 ink 档保 AA。 */
+     * 「暗色重置按钮背景还是看不见」）—— 三轮加码后的最终形态：outline 变体
+     * （自带边界）+ ink/25 填充（≈2.1:1）+ ink/40 描边（3:1 档）+ 文字提到
+     * ink 档保 AA。与「取消」按钮同档可见。 */
+    expect(text, "重置按钮要是 outline 变体（自带边界，与取消按钮同档可见）").toContain(
+      'variant="outline"',
+    );
     expect(text, "重置按钮要有 bg-surface-2 这一档可见底色").toContain("bg-surface-2");
-    expect(text, "暗色下重置按钮的底要再提一档（ink/25），否则在弹窗深底上仍看不见").toContain(
-      "dark:bg-ink/25",
-    );
-    expect(text, "暗色下重置按钮要有 ink 档描边（填充之外再给边界）").toContain(
-      "dark:border-ink/30",
-    );
+    expect(text, "暗色下重置按钮的底要再提一档（ink/25）").toContain("dark:bg-ink/25");
+    expect(text, "暗色下重置按钮要有 ink/40 描边").toContain("dark:border-ink/40");
   });
 
   it("供应商分区的控件边界在暗色下走 ink 档", () => {
