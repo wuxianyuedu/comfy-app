@@ -58,10 +58,17 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     expect(problems, `平台侧增量登记与配置不一致：\n${problems.join("\n")}`).toEqual([]);
   });
 
-  it("登记表非空（清单被掏空时这条会红，而不是让上面那条恒绿）", () => {
-    /* 反向验证：没有这一条，把 INCREMENTAL_GATES 清空会让上面那条变成恒真 ——
-     * 「判据不是空转」的同一形态（见 tests/no-platform-ci-config.test.ts 的头注）。 */
-    expect(INCREMENTAL_GATES.length).toBeGreaterThan(0);
+  it("登记表为空是合法终态：真仓没有任何一格被收窄", () => {
+    /* #3586 摘掉 `生成态文档与源同步` 后，这条登记表暂无成员 —— 收窄机制
+     * （判据脚本反查 → 面比对）保留给未来的单执行者一格，但**不造一条占位条目**：
+     * 一条没有真实收窄需求的登记正是「会静默失效的清单」（硬规则 24 末句）。
+     * 空表是结论而不是「清单被掏空」：`checkIncrementalGates` 的方向二（配置里带
+     * `ifModify` ⇒ 必须在登记表里）与方向三（复合执行者不许收窄）此刻等价于禁令。
+     * 把空表钉成当前形态，将来真要恢复收窄必须连同这条用例一起改。 */
+    expect(
+      INCREMENTAL_GATES.length,
+      "收窄登记表不为空 —— 新增一格必须同步改这条用例，并写清「为什么这条收窄安全」",
+    ).toBe(0);
     for (const gate of INCREMENTAL_GATES) {
       expect(gate.globs.length, `${gate.name} 的 globs 是空的`).toBeGreaterThan(0);
       expect(gate.script, `${gate.name} 没写它守的是哪份脚本`).toMatch(
@@ -69,6 +76,16 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       );
       expect(gate.why.length, `${gate.name} 没写「为什么这条收窄安全」`).toBeGreaterThan(20);
     }
+    /* 正向核对：真仓 `.cnb.yml` 里一个带 `ifModify` 的 stage 都没有。少了这一半，
+     * 「表空」也可能只是「忘了登记」（那会让某一格被静默收窄而没人知道）。 */
+    expect([...parseStageIfModify(CONFIG).keys()], "真仓还有被收窄的 stage").toEqual([]);
+    /* 反向验证：造一份带 `ifModify` 的假配置，方向二必须当场点名 ——
+     * 表空时判据仍然会响，而不是退化成恒绿。 */
+    expect(
+      checkIncrementalGates(
+        "gates: &gates\n  - name: 样本判据\n    ifModify: docs/**\n    script: node x.cjs\n",
+      ),
+    ).toContainEqual(expect.stringContaining("不在登记表里"));
   });
 
   it("解析出的 stage 数 == 配置里 `ifModify:` 出现次数（解析器不空转、也不误吞）", () => {

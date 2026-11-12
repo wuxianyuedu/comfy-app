@@ -101,7 +101,7 @@ export function runCommitStage(ctx) {
    * 改动 —— 旧的「树上有任何改动就进提交段」会把「我的工作已全部在 HEAD」的那一轮
    * 也推进 `git commit`：`git add` 全是空操作，钩子在**空暂存面**上判
    * （doc-mirror-pairing 退 2「没有判决面」）⇒ 已提交的工作被堵死在本地，push / PR
-   * 全部无法继续（#3602 现场）。 */
+   * 全部无法继续（#3602 现场；该配对判据已随 #3586 退役，这里记的是当时的因果）。 */
   /** @param {string} a 一条 `--add` 点名路径（仓库相对形态）。 */
   const addIsClean = (a) => {
     const r = run("git", ["status", "--porcelain", "--", a]);

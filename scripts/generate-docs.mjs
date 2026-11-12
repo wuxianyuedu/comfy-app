@@ -4,7 +4,8 @@
  *
  * 与 `scripts/generate-docs.ps1` 同一套两步（顺序不能颠倒）：
  *   1. `pnpm doc:check`  校验编辑文档的占位符 / 裸值 / 路径与权威源码一致；
- *   2. `pnpm doc:render` 把占位符替换成从源码实时提取的真实值，写 docs/generated/。
+ *   2. `pnpm doc:render` 把占位符替换成从源码实时提取的真实值，写本机
+ *      docs/generated/（#3586 起不入库：产物只在本机，不随任何提交走）。
  *
  * 为什么「先 check 再 render」：只有编辑文档与权威源一致时，生成出来的「原文」
  * 才有意义 —— 否则读到的是**一份看起来权威、实际已经过期**的数值副本，比没有
@@ -77,7 +78,7 @@ function main() {
     console.log("[INFO] 请确认权威源文件存在、doc-facts.cjs 的 extract 规则能读到值。");
     return render;
   }
-  console.log("[OK]   原文文档已生成到 docs/generated/");
+  console.log("[OK]   原文文档已生成到本机 docs/generated/（#3586 起不入库、不提交）");
   return 0;
 }
 

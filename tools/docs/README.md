@@ -2,7 +2,7 @@
 
 | 入口 | 用途 | 逻辑 |
 |---|---|---|
-| `generate-docs.ps1` | 一键生成原文文档：先 `pnpm doc:check` 校验编辑文档与权威源一致，再 `pnpm doc:render` 把占位符替换成真实值写入 `docs/generated/` | `scripts/generate-docs.ps1` |
+| `generate-docs.ps1` | 一键生成原文文档：先 `pnpm doc:check` 校验编辑文档与权威源一致，再 `pnpm doc:render` 把占位符替换成真实值写入本机 `docs/generated/`（**不入库、不提交**，#3586） | `scripts/generate-docs.ps1` |
 | `generate-api-docs.ps1` | 一键重生成 TypeDoc 产物 `docs/api/**`（= `pnpm run docs`）：跑 typedoc，并按产物判成败（退出 0 却没写的失败会重试，全失败退非零） | `scripts/generate-api-docs.mjs`（跑 + 验 + 重试在 `scripts/typedoc-run.mjs`） |
 
 **为什么先 check 再 render**：只有编辑文档与权威源一致时，生成的「原文」才有意义——

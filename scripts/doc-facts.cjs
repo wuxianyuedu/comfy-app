@@ -12,7 +12,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
-// 纳入「单一事实引用校验」的文档集合（编辑态用占位符/核对，生成态 doc:render 出原文）。
+// 纳入「单一事实引用校验」的文档集合（只维护编辑态；生成态 doc:render 出原文、不入库）。
 // 范围：standards 规范正文（01~17 章）+ guides 规范指南 + 启动链路/含值类文档，全量纳入。
 
 const SCOPED_DOCS = [
@@ -510,9 +510,10 @@ const GENERATED_DOCS_DIR = "docs/generated";
 
 /**
  * 源文档 → 生成态镜像的落点。**这条映射只有这一处**：
- * `render-doc-placeholders.cjs` 按它写与判，`check-doc-mirror-pairing.cjs` 按它判
- * 「改了源有没有同批带上镜像」。各写一遍（`path.join(GENERATED_DOCS_DIR, basename)`）
- * 早晚会在「两份源映射到同一个产物名」那类形状上分叉 —— 而那正是这里的判据对象。
+ * `render-doc-placeholders.cjs` 按它写与判；#3586 前 `check-doc-mirror-pairing.cjs`
+ * 还按它判「改了源有没有同批带上镜像」，那位消费者随镜像退出入库产物一并退役。
+ * 落点仍只在这里定义一份 —— 各写一遍（`path.join(GENERATED_DOCS_DIR, basename)`）
+ * 早晚会在「两份源映射到同一个产物名」那类形状上分叉。
  *
  * @param {string} docRel 源文档的仓库相对路径（`SCOPED_DOCS` 里的那种正斜杠形式）
  * @returns {string} 镜像的相对路径（带平台分隔符，比较前需归一）
