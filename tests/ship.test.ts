@@ -125,6 +125,7 @@ import {
 } from "../scripts/ship-issue-new.mjs";
 import {
   appendComment,
+  normalizeImageAssetLinks,
   readCommentBodies,
   sameCommentBody,
   stripTrailingNewline,
@@ -3341,6 +3342,24 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
       expect(sameCommentBody("a\n\nb\n\n", "a\n\nb")).toBe(false);
       expect(stripTrailingNewline("x\r\n")).toBe("x");
     });
+
+    it("带图正文：平台把上传图片的相对链接改写成绝对地址后，逐字比对仍判同一条（ISSUE #3655）", () => {
+      /* 平台改写的真实形状：正文里是相对形态，落库后每张图被加上域名前缀
+       * （#3623 那条截图回帖实测：四张图各差 39 字 = `https://cnb.cool/moon-read/comfy-app-t3`）。 */
+      const rel = "/-/imgs/issues/3623/abc/screenshot.png";
+      const abs = `https://cnb.cool/moon-read/comfy-app-t3${rel}`;
+      expect(normalizeImageAssetLinks(`![](${abs})`)).toBe(`![](${rel})`);
+      expect(sameCommentBody(`![](${rel})`, `![](${abs})`)).toBe(true);
+      expect(sameCommentBody(`![](${abs})`, `![](${rel})`)).toBe(true);
+      expect(sameCommentBody(`![](${abs})`, `![](${abs})`)).toBe(true);
+      // 归一只覆盖「指向 /-/imgs/ 资产的绝对地址」这一类：不同的图、不同的文字仍判不同。
+      expect(sameCommentBody(`![](${rel})`, "![](/-/imgs/issues/3623/abc/other.png)")).toBe(false);
+      expect(sameCommentBody(`![](${rel}) 前文`, `![](${abs}) 后文`)).toBe(false);
+      // 非 /-/imgs/ 的绝对地址不归一 —— 别的 URL 差异照旧逐字，不放宽。
+      expect(
+        sameCommentBody("见 https://cnb.cool/x/y/-/pulls/1", "见 https://cnb.cool/x/z/-/pulls/1"),
+      ).toBe(false);
+    });
   });
 });
 
@@ -5161,6 +5180,8 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
       openPullsPages?: Array<string>;
       patchPull?: FakeResult;
       postPull?: FakeResult;
+      /** 平台落库时对正文的改写（ISSUE #3655：上传图片的相对链接 → 绝对地址）。 */
+      rewriteBody?: (body: string) => string;
       stat?: string;
       /** 目标分支的远端跟踪引用在本地解析不到（`rev-parse --verify` 退非 0）。 */
       targetRefMissing?: boolean;
@@ -5200,7 +5221,9 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
       if (cmd === "cnb" && key.includes("get-pull")) {
         if (env.echoBody) {
           /* 平台形状：目标分支在 `base.ref`，正文在 `body`。回读拿到的就是刚
-           * `mkTmp` 落过的那一份 —— 与真平台「写什么读什么」同形。 */
+           * `mkTmp` 落过的那一份 —— 与真平台「写什么读什么」同形；`rewriteBody`
+           * 模拟平台对正文内容的改写（图片链接绝对化，ISSUE #3655）。 */
+          const echoed = bodies.at(-1) ?? "";
           return ok(
             JSON.stringify({
               status: 200,
@@ -5211,7 +5234,7 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
                 blocked_on: "",
                 is_merged: false,
                 state: "open",
-                body: bodies.at(-1) ?? "",
+                body: env.rewriteBody ? env.rewriteBody(echoed) : echoed,
               },
             }),
           );
@@ -5553,6 +5576,21 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
     expect(out.stop).toBeNull();
     expect(calls.some((c) => c.includes("patch-pull"))).toBe(false);
     expect(bodies, "不给旗标却写了一次正文文件").toEqual([]);
+  });
+
+  it("复用 PR 带图正文：平台把图片相对链接改写成绝对地址后回读仍一致 ⇒ stop:null（ISSUE #3655）", () => {
+    const rel = "/-/imgs/issues/1/a/img.png";
+    const { calls, io } = pullHarness({
+      openPullsPages: [
+        '{"data":[{"head":{"ref":"refs/heads/feat/big"},"number":2649}],"status":200}',
+      ],
+      echoBody: true,
+      rewriteBody: (b) => b.replaceAll(rel, `https://cnb.cool/moon-read/comfy-app-t3${rel}`),
+    });
+    const out = createOrReusePull({ ...io, prBody: `![](${rel})` });
+    expect(out.number).toBe(2649);
+    expect(out.stop).toBeNull();
+    expect(calls.some((c) => c.includes("patch-pull"))).toBe(true);
   });
 
   it("复用 PR 回写后回读不一致 ⇒ stop=1（有写入但没落地是红，不是「没跑起来」）", () => {

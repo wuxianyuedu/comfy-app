@@ -32,6 +32,7 @@
  * 等）：这一族是本仓的私有伴生模块，不对外承诺形状；多一层手抄字段只会多一处漂移。
  */
 import { CODE, readPullVerdict } from "./ship-core.mjs";
+import { normalizeImageAssetLinks } from "./ship-comment.mjs";
 import { cnbJson } from "./ship-exec.mjs";
 import { buildPullBody, PULL_BODY_LIMIT } from "./ship-pull-body.mjs";
 import { diffBaseRef } from "./ship-title.mjs";
@@ -222,12 +223,13 @@ export function writePullBody({ run, log, mkTmp, slug, number, body }) {
   }
   /* 平台会吞掉文件末尾那一个换行（§13.10.17 评论侧实测）；两边各去掉一个再比，
    * **除此之外任何差异都退 1**。长度一起念出来：少了几个字与「末尾换行差一个」
-   * 在终端里长得一样，读数要能分开。 */
+   * 在终端里长得一样，读数要能分开。图片资产链接同评论那一格归一（ISSUE #3655）：
+   * 平台会把相对形态改写成绝对地址，不归一 ⇒ 带图正文恒假红。 */
   /**
    * @param {string} s 回读或发出的正文
-   * @returns {string} 归一末尾换行（与 CRLF）之后的文本
+   * @returns {string} 归一末尾换行（与 CRLF）与图片资产链接之后的文本
    */
-  const norm = (s) => s.replaceAll("\r\n", "\n").replace(/\n$/, "");
+  const norm = (s) => normalizeImageAssetLinks(s.replaceAll("\r\n", "\n").replace(/\n$/, ""));
   if (norm(back) !== norm(body)) {
     log(
       `[ship] ✗ PR #${number} 正文**回写后回读不一致**（发 ${body.length} 字节 / 读回 ${back.length} 字节；` +
