@@ -17,6 +17,7 @@ import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { deriveEncapsulationStatus } from "~/lib/workshop/workshop-encapsulation-status";
 import { SourceTag } from "~/components/ui/source-tag";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import { EmptyState } from "~/components/ui/empty-state";
 import { StatusDot } from "~/components/ui/status-dot";
 import { ListBadge } from "~/components/ui/list-badge";
@@ -103,6 +104,13 @@ export function WorkflowLibraryList({
             type="text"
             value={search}
           />
+        </div>
+        {/* 列表里的工作流有两个来源（ISSUE #3625）：原件在用户自己配的磁盘目录里、
+            导入后的记录在库里。徽标把两处落点说清 —— 换机器时两样都得搬，
+            只搬一样会变成「有记录没有原件」。 */}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <DataLocationBadge id="workflow-library-disk" label="存放位置" />
+          <DataLocationBadge id="workflow-library-db" />
         </div>
       </div>
 

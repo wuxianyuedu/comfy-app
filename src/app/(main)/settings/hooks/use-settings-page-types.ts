@@ -75,6 +75,7 @@ export type Section =
   | "comfyui"
   | "database"
   | "backup"
+  | "dataLocation"
   | "exit"
   | "logs";
 export type OllamaStatus = "checking" | "starting" | "up" | "down";
@@ -244,6 +245,7 @@ export const SETTINGS_SECTIONS: Array<{ id: Section; label: string }> = [
   { id: "comfyui", label: "创作后端" },
   { id: "database", label: "数据库" },
   { id: "backup", label: "备份与恢复" },
+  { id: "dataLocation", label: "数据存放位置" },
   { id: "exit", label: "退出与后台服务" },
   { id: "logs", label: "日志" },
 ];

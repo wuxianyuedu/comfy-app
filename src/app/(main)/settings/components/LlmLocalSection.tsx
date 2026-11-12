@@ -15,8 +15,8 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { FormField } from "~/components/ui/form-field";
 import { Hint } from "~/components/ui/hint";
-import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
+import { StepperInput } from "~/components/ui/stepper-input";
 import { StatusDot } from "~/components/ui/status-dot";
 import { Disclosure } from "~/components/ui/disclosure";
 
@@ -29,6 +29,7 @@ import {
 import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { Toggle } from "~/components/ui/toggle";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import { Field } from "./SettingsPrimitives";
 import { RuntimeLogBox } from "~/components/studio/logs/RuntimeLogBox";
 
@@ -49,6 +50,12 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
 
   return (
     <SettingsCard>
+      {/* 这张卡上的每一项（连接地址、默认模型、按任务的温度）都落在同一处 ——
+          徽标说清是哪儿，迁移配置时才知道该带走什么（ISSUE #3625）。 */}
+      <div className="mb-3">
+        <DataLocationBadge id="llm-config" label="存放位置" />
+      </div>
+
       {/* Base URL 仅本地 Ollama 需要；远端的连接参数由模型条目各自携带 */}
       <Field
         label="Base URL"
@@ -268,7 +275,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                   {isOverridden && (
                     <Hint accessibleName label="恢复推荐默认">
                       <Button
-                        className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
+                        className="text-muted-foreground dark:text-ink dark:bg-ink/25 dark:border-ink/40 text-2xs h-auto rounded px-1.5 py-0.5"
                         onClick={() => {
                           clearTaskEdit(key);
                           c.setTaskTemperature(key, "");
@@ -280,20 +287,23 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                       </Button>
                     </Hint>
                   )}
-                  <Input
-                    className="border-border bg-surface-2 text-ink focus-visible:border-primary h-auto w-24 rounded-lg px-2 py-1.5 text-right text-sm"
+                  {/* 箭头悬浮框内、悬停浮现（ISSUE #3495）：原生 number spinner 的
+                      浅色按钮底压在字段上，这里换自绘步进。 */}
+                  <StepperInput
+                    ariaLabel={meta.label}
+                    className="w-24"
+                    inputClassName="border-border bg-surface-2 text-ink focus-visible:border-primary h-auto rounded-lg py-1.5 pl-2 text-right text-sm"
                     max={2}
                     min={0}
-                    onBlur={() => {
+                    onCommit={() => {
                       clearTaskEdit(key);
                       void c.saveLlm();
                     }}
-                    onChange={(event) => {
-                      setTaskEdit(key, event.target.value);
-                      c.setTaskTemperature(key, event.target.value);
+                    onValueChange={(next) => {
+                      setTaskEdit(key, next);
+                      c.setTaskTemperature(key, next);
                     }}
                     step={0.05}
-                    type="number"
                     value={shown}
                   />
                 </div>

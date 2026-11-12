@@ -316,6 +316,10 @@
 - 需求：库列表 = 已入库工作流 + 本地磁盘扫到未入库的「待载入」占位行。
 - 行为与验收：待载入行的 id 由绝对路径 sha1 派生（`pendingId`），记住
   `sourcePath`；扫描根来自设置里的 ComfyUI 路径推导，不在库里另配一份。
+- 存放位置提示（#3625）：工作流有**两个**落点 —— 原件在用户自己配的磁盘目录
+  （`LOCAL_WORKFLOWS_PATH` / ComfyUI workflows 目录）、导入后的记录在
+  `workflowTemplate` 表；列表顶部挂两枚「存放位置」徽标说清这件事（换机器时两样
+  都要搬，只搬一样会变成「有记录没有原件」，见 FR-ST-05）。
 - 落点：`src/server/api/routers/workflow-list.ts`、
   `src/lib/workflow/localWorkflows.ts`
 
@@ -338,16 +342,32 @@
   不静默导入一份半成品。
 - 落点：`src/lib/workflow/`（RAW 识别）、`workflow-mutations.ts`
 
-#### FR-WF-04 详情四页签
+#### FR-WF-04 详情页签
 
 - 状态：已上线
-- 需求：打开一条工作流的详情有四个页签，顺序即渲染顺序：
-  **工坊封装**（默认）/ **编辑对外参数** / **实际使用** / **源文件**。
+- 需求：打开一条工作流的详情以页签组织，顺序即渲染顺序：
+  **工坊封装**（默认）/ **编辑对外参数** / **IO 预览** / **实际使用** / **源文件**
+  （页签集合以 `DETAIL_TABS` 为准）。
 - 行为与验收：默认落最轻的页签（工坊封装）——不牵画布引擎与 JSON 树；
   「编辑对外参数 / 实际使用」共用同一常驻实例，切页签只切视图模式，
   表单值与运行态不丢。
 - 落点：`src/components/studio/workflow-library/workflow-library-detail-config.ts`
   （`DETAIL_TABS` / `DEFAULT_DETAIL_TAB`）
+
+#### FR-WF-09 详情 IO 预览页签
+
+- 状态：已上线
+- 需求：工作流库主界面提供「IO 预览」页签，不打开工作流编辑器也能查看并调整
+  已暴露参数的显隐 / 默认值 / 必填 / 显示名 / seed 行为（ISSUE #3632）。
+- 行为与验收：显示源是 `workflow.detailFull` 富化后的 workflowIO，落库以模板
+  原始 DB 列为底稿（富化字段不写回）；每次编辑即时经 `workflow.update` 的
+  `workflowIO` 整列 PATCH 落库并失效 detail / detailFull 缓存；模式页签与
+  「类型」同源，按模式分别保留覆盖层；与编辑器 IO 预览共用
+  `src/lib/workflow/workflow-io-edit.ts` 的变换规则。编辑器内「IO 编辑模式」
+  的提示条位于顶栏下方、不叠在画布上。
+- 落点：`src/components/studio/workflow-library/sections/WorkflowLibraryIoPanel.tsx`、
+  `src/lib/workflow/workflow-io-edit.ts`、
+  `src/components/studio/workflow-editor/WorkflowEditorCanvasOverlays.tsx`
 
 #### FR-WF-05 工作流参数与 IO 编辑
 
@@ -791,11 +811,17 @@
   一并固化，读取侧不再有「代码推导」这一出处；推导只承担迁移生成源与
   手改缺模时的兜底），**只在开发检出可用**（正式包无源码可写，入口随之
   隐藏、服务端大声拒绝）；生效顺序是 本机覆盖 → 项目默认 JSON（完整）→
-  推导兜底。「已改」徽标判的是内容（与本模式成品配置深比较），不是
+  推导兜底，**逐模式**合并（本机覆盖存的是差集，拿它整份替换注册表会让其余
+  模式回落推导）。「已改」徽标判的是内容（与本模式成品配置深比较），不是
   「覆盖文件里有没有」；改过的模式可一键「还原默认」（从本机覆盖移除，
   生效值回落默认）。
+- 写入即生效（#3634）：项目默认由服务端**现读**磁盘上那份文件（开发检出），
+  「保存为项目默认」之后**不必重启进程**即读得到新口径；写出的文件**始终是
+  完整基线**（全部生成类模式都在，其余模式的内容不会被抹掉）。正式包载荷里
+  没有这份源码 ⇒ 回落编译进产物的那份基线。
 - 落点：`src/components/workshop/mode-contract/ModeContractView.tsx`、
   `src/lib/workshop/mode-contract-defaults.json`（完整基线）、
+  `src/lib/workshop/mode-contract-registry.ts`（三层合并与差集）、
   `src/server/api/routers/llm.ts`
 
 #### FR-LM-05 模型适配器
@@ -804,6 +830,9 @@
 - 需求：每个远端模型 × 每个模式可配字段映射（统一输入 → 接口字段名）。
 - 行为与验收：适配器可读可写（`workshopAdaptersGet` / `Save`）；
   「模型适配」是全局瞬态视图。
+- 存放位置提示（#3625）：本页配置的适配器落在 `remoteModel` 表的
+  `workshopAdapters` 列，页头挂「存放位置」徽标（数据库），悬浮说明给出落点与
+  迁移办法（FR-ST-05）。
 - 落点：`src/components/workshop/ModelAdaptersView.tsx`、
   `src/server/api/routers/llm.ts`
 
@@ -848,11 +877,11 @@
 
 ## 13. 设置（FR-ST）
 
-#### FR-ST-01 九个设置分区
+#### FR-ST-01 十个设置分区
 
 - 状态：已上线
-- 需求：设置九分区：外观 / 应用更新 / 本地模型（Ollama）/ 远程模型 /
-  创作后端 / 数据库 / 备份与恢复 / 退出与后台服务 / 日志。
+- 需求：设置十分区：外观 / 应用更新 / 本地模型（Ollama）/ 远程模型 /
+  创作后端 / 数据库 / 备份与恢复 / 数据存放位置 / 退出与后台服务 / 日志。
 - 行为与验收：分区表唯一出处（`SETTINGS_SECTIONS`）；外壳三态
   （首帧 loading / 失败降级 / 就绪）；同一份实现挂两个点
   （工作区设置页签 + `/settings` 路由），只差视口高度。「远程模型」分区是
@@ -888,6 +917,24 @@
 - 需求：可从这里起停 Drizzle Studio、在浏览器打开。
 - 行为与验收：起停有状态回显（不假装「已起」）；端口不撞 dev 端口族。
 - 落点：`src/server/api/routers/setting.ts`（`dbStudio*` procedures）
+
+#### FR-ST-05 数据存放位置提示
+
+- 状态：已上线
+- 需求：每类数据都配一枚图标标明**存在哪儿**，并在该类数据被配置的地方显示
+  这枚图标；知道存在哪儿之后，迁移这一部分数据才知道怎么操作。
+- 行为与验收：① **落点登记是唯一出处**（`src/lib/data-location/data-locations.ts`：
+  数据种类 × 存放位置 → 类别 / 图标 / 落点 / 迁移办法），界面上的徽标与总表都
+  从这儿取，不存在第二份落点字面量；② **图标按「存放位置类别」配**（数据库 /
+  本机应用数据 / 项目代码库 / 本机磁盘 / 浏览器存储），同一落点上的数据用同一枚
+  图标 —— 用户问的是「存在哪儿」，不是「是哪类数据」；③ 徽标落在该类数据被配置的
+  地方（模型适配、模式契约编辑器、设置各分区、工作流库列表），悬浮说明里给出
+  具体落点与迁移办法；④ 设置页「数据存放位置」分区按数据种类铺一张总表
+  （每类数据一行，说清存在哪儿、迁移时怎么搬）；⑤ 本应用**不把数据托管到远端
+  服务**，所以登记表里没有「远端服务」这一类（不预置空转的位置）。
+- 落点：`src/lib/data-location/data-locations.ts`、
+  `src/components/data-location/`（徽标与总表）、
+  `src/app/(main)/settings/components/DataLocationSection.tsx`
 
 ---
 

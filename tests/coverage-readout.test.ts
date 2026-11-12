@@ -15,9 +15,9 @@ import {
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 describe("coverage-readout", () => {
-  it("登记处直接 import vitest.config.ts（单源、零正则），共 150 条对象", async () => {
+  it("登记处直接 import vitest.config.ts（单源、零正则），共 151 条对象", async () => {
     const t = await readRegisteredThresholds();
-    expect(Object.keys(t).length).toBe(150);
+    expect(Object.keys(t).length).toBe(151);
     for (const v of Object.values(t)) {
       expect(typeof v.lines).toBe("number");
       expect(typeof v.branches).toBe("number");
@@ -65,7 +65,7 @@ describe("coverage-readout", () => {
       summaryPath: path.join(ROOT, "coverage", "definitely-not-there-2697.json"),
     });
     expect(r.state).toBe("no-report");
-    expect(r.registeredCount).toBe(150);
+    expect(r.registeredCount).toBe(151);
     expect(r.rows).toEqual([]);
   });
 });

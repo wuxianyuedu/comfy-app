@@ -94,9 +94,10 @@ export function ProviderModelDialog({
         popupClassName="max-w-lg"
         showCloseButton={false}
       >
-        {/* 高度封顶要给上沿留出空隙（#3618）：弹窗居中定位，内容顶到
-            `100vh-4rem` 时上下只剩 1rem，顶部被 3rem 的顶栏吃掉后看起来
-            「顶着窗口上沿」；收到 `100vh-12rem` 后上下各保底 5rem。 */}
+        {/* 高度封顶要给上沿留出空隙（#3618 已落在 master，本分支沿用同一解）：
+            弹窗居中定位，内容顶到 `100vh-4rem` 时上下只剩 1rem，顶部被
+            3rem 的顶栏吃掉后看起来「顶着窗口上沿」；收到 `100vh-12rem`
+            后上下各保底 5rem。 */}
         <div className="border-border bg-surface max-h-[calc(100vh-12rem)] w-full max-w-lg overflow-y-auto rounded-2xl border p-5 shadow-2xl">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -304,11 +305,11 @@ export function ProviderModelDialog({
 
           <div className="mt-4 flex items-center justify-end gap-2">
             <Button
-              className="text-muted-foreground mr-auto h-auto rounded-lg px-3 py-2 text-sm"
+              className="text-muted-foreground dark:text-ink hover:bg-surface-2/80 dark:hover:bg-ink/30 bg-surface-2 dark:bg-ink/25 dark:border-ink/40 mr-auto h-auto rounded-lg px-3 py-2 text-sm"
               onClick={() => {
                 d.resetModelForm();
               }}
-              variant="ghost"
+              variant="outline"
             >
               重置
             </Button>

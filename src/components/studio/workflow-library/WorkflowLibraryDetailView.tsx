@@ -3,7 +3,10 @@
 // WorkflowLibraryDetail 的纯展示视图：只消费 controller，不发请求、不算业务
 // 规则，交互一律通过 controller.actions 上抛。
 
+import React from "react";
 import { ExternalLink } from "lucide-react";
+import { ErrorBoundary } from "~/components/ui/error-boundary";
+import { useLazyChunkFallback } from "~/components/ui/use-lazy-chunk-fallback";
 
 import { SourceModal } from "~/components/studio/SourceModal";
 import type { WorkflowLibraryDetailController } from "./hooks/use-workflow-library-detail";
@@ -16,6 +19,16 @@ import { DetailHeader } from "./sections/DetailHeader";
 function isDetailTab(value: unknown): value is DetailTab {
   return typeof value === "string" && DETAIL_TABS.some((tab) => tab.key === value);
 }
+
+/* IO 预览页签懒加载：它下面挂着 DynamicWorkflowForm 的编辑态，后者经 barrel
+ * 拖出 @xyflow/react（见 check-barrel-heavy-deps 的静态可达图）。静态 import 会
+ * 让打开工作流库就把画布引擎拉进 workspace 入口的静态图（规范 §12.19 / 02 §2.9），
+ * 改成 dynamic 分块：只在切到 IO 预览页签时下载。 */
+const LazyWorkflowLibraryIoPanel = React.lazy(() =>
+  import("./sections/WorkflowLibraryIoPanel").then((m) => ({
+    default: m.WorkflowLibraryIoPanel,
+  })),
+);
 
 export function WorkflowLibraryDetailView({
   controller,
@@ -36,8 +49,10 @@ export function WorkflowLibraryDetailView({
     isLoading,
     errorMessage,
     workflowIO,
+    storedIO,
     paramMap,
     sourceData,
+    patchWorkflowIO,
     usable,
     canResync,
     missing,
@@ -46,6 +61,8 @@ export function WorkflowLibraryDetailView({
     busyResync,
     actions,
   } = controller;
+  /* dev server 重建后懒分块可能已被换掉，这一块自己给出路（与画布预览同款）。 */
+  const ioChunkFallback = useLazyChunkFallback("IO 预览");
 
   if (!workflow) {
     return (
@@ -141,6 +158,31 @@ export function WorkflowLibraryDetailView({
             />
           </div>
         )}
+
+        {/* IO 预览页签：独立面板（不拉画布引擎）。改动即时经
+             controller.patchWorkflowIO 落库，显示源是富化后的 workflowIO，
+            落库底稿是模板原始 DB 列。 */}
+        <TabsContent className="min-h-0 flex-1 overflow-y-auto p-5" value="io">
+          {/* 详情查询未排空时不渲染：否则会先按空 IO 闪一屏「还没有暴露任何
+              IO」再被真实数据顶掉（与 DetailBody 的 isLoading 同款口径）。 */}
+          {!isLoading && (
+            <ErrorBoundary fallback={ioChunkFallback}>
+              <React.Suspense fallback={null}>
+                <LazyWorkflowLibraryIoPanel
+                  /* 换工作流时重建草稿：详情面板是共用实例，不按 id 卸载，
+                   * 不重建会把上一条工作流的乐观编辑带到这一条。 */
+                  activeMode={activeMode}
+                  key={workflow.id}
+                  modes={metaEditor.modes}
+                  onActiveModeChange={setActiveMode}
+                  onPatchWorkflowIO={patchWorkflowIO}
+                  storedIO={storedIO}
+                  workflowIO={workflowIO}
+                />
+              </React.Suspense>
+            </ErrorBoundary>
+          )}
+        </TabsContent>
 
         {(["params", "source"] as const).map((tab) => (
           <TabsContent className="min-h-0 flex-1 overflow-y-auto p-5" key={tab} value={tab}>
