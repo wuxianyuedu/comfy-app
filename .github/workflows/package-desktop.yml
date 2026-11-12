@@ -226,6 +226,13 @@ jobs:
       # 「GA 写 / CNB 站内读」分工，载荷换成真正的二进制成品；落点是 Release 附件（有稳定
       # 下载 URL），不是制品库（裸 exe/msi/zip 不适配）也不是 Issue 附件（随 PR 号找）。
       #
+      # ⚠️ 诉求原意含「只要 build-tauri-release.ps1 那个壳、dev server 照用」：本格除
+      # 安装版 / 免安装版外，另回传一个**单文件纯壳** `ComfyAPP-shell.exe`（读现成的
+      # `src-tauri/target/release/app.exe`，不重编、不打包）。它与本地编出来的壳同为
+      # prebuilt 形态：放进项目检出根后壳自编排起 dev-launcher.mjs（§1.5），页面由本地
+      # dev server 提供。二进制 PUT 的墙钟与网络类重试在脚本内（ISSUE #3621），这一格
+      # 只负责把现成产物的落点传进去。
+      #
       # 刻意排在 GH Release 之后：GH 那一步已保证「两类成品都在盘上」，本步只读现成文件、
       # 不重跑任何构建。`continue-on-error: true` 与 #3437 同口径 —— 回传失败只多一行读数、
       # 绝不反过来把「桌包打出来了」判成失败（判闸在 CNB 侧，与本格无关）。
@@ -243,4 +250,5 @@ jobs:
           CNB_REPO_SLUG: moon-read/comfy-app-t3
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_SHA: ${{ github.sha }}
+          DESKTOP_SHELL_EXE: src-tauri/target/release/app.exe
         run: node scripts/ci-ga-desktop-relay.mjs

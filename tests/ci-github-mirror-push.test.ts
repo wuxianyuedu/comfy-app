@@ -530,6 +530,10 @@ describe("纯函数", () => {
     expect(isEgressFailure("Failed to connect to github.com port 443 after 21114 ms")).toBe(true);
     expect(isEgressFailure("git ls-remote 超时（>30000 ms）：这一跳没拿到任何回话")).toBe(true);
     expect(isEgressFailure("fatal: unable to access: Could not resolve host")).toBe(true);
+    /* ISSUE #3621：GA 桌包回传 CNB 的二进制 PUT 撞的是 Node fetch 自己掐断的那一形，
+     * 既不是 HTTP 应答也不是 git 措辞 —— 旧正则不认，超时一次就交账、不重试。 */
+    expect(isEgressFailure("TimeoutError: The operation was aborted due to timeout")).toBe(true);
+    expect(isEgressFailure("PUT 网络层没跑起来：TimeoutError: 操作超时")).toBe(true);
     /* 这三类「再试一百次也一样」⇒ 不许消耗重试（文件头第 8 条）。 */
     expect(isEgressFailure("remote: Repository not found.\nfatal: Authentication failed")).toBe(
       false,

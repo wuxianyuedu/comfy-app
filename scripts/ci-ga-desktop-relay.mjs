@@ -13,6 +13,19 @@
  * 最新一份。与 #3437 的日志搬运、#3102 一族的结论回调同一条「GA 写 / CNB 站内读」分工，
  * 载荷从日志/结论换成真正的二进制成品。
  *
+ * ## #3607 的「纯壳」那一半（本地 dev server 照用）
+ *
+ * 诉求原文要的是 `tools/build/build-all.ps1` 产出的**release 壳**本身（连本地 dev
+ * server、免去本地编壳）。`pnpm tauri build` 在编出 nsis/msi 之前先编出的
+ * `src-tauri/target/release/app.exe` 就是它：启动页已编译期内嵌、不依赖外挂的
+ * `static/**`（那层是打包器后才挂上的资源目录）。把这个 app.exe 单独放进项目检出根，
+ * 壳推得出项目根 ⇒ `ensure_launch_mode` 判 prebuilt ⇒ 自编排起 `dev-launcher.mjs`
+ * （§1.5），页面由本地 dev server 提供 —— 与本地 `build-tauri-release.ps1` 编出来的
+ * 是同一种东西。所以本格额外回传一个**单文件** `ComfyAPP-shell.exe`（从盘上真读
+ * `target/release/app.exe`，不重编、不打包、不改名 tauri 生成的名字），
+ * 与三类完整成品并列；下载后放进 `src-tauri/target/release/app.exe` 即可用
+ * `tools/start/start-tauri.ps1` / 根目录快捷方式启动。
+ *
  * ## 为什么用 CNB Release（不是制品库 / Issue 附件）
  *
  *   · Release 附件有**稳定下载 URL**（`/{repo}/-/releases/download/{tag}/{filename}`），
@@ -35,6 +48,10 @@
  *      `{asset_name, size, overwrite:true}` ⇒ `{upload_url, verify_url}`。
  *   4. `PUT <upload_url>`：二进制正文（`Content-Type: application/octet-stream`、
  *      `Content-Length`），**不带 Authorization**（预签名 URL 自带授权，见 cnb CLI 的 Yy）。
+ *      这一跳送的是几十 MB 二进制、跨网，墙钟按 {@link PUT_TIMEOUT_MS}（分钟级）
+ *      给，不用 `cnbRequest` 那档 30/60s 的 JSON 请求口径；超时 / 网络类失败按
+ *      `isRetryableFetchFailure` 重试（ISSUE #3621 现场：60s 一次 `TimeoutError` 就
+ *      整格交账，且 PUT 挂掉会留一个未确认的空资产），认证 / HTTP 类不重试。
  *   5. `POST /{repo}/-/releases/{id}/asset-upload-confirmation/{upload_token}/{asset_path}?ttl=0`：
  *      `upload_token` / `asset_path` 从 `verify_url` 的路径尾段拆（CLI 明示这一口径）。
  *      确认之后附件才正式关联到版本；`ttl=0` = 永久（滚动 tag 自己轮替，不靠 TTL 淘汰）。
@@ -61,6 +78,7 @@
  * `GITHUB_RUN_ID` / `GITHUB_SHA`（进 Release 描述与文件名，便于追哪一跑）、
  * `DESKTOP_BUNDLE_DIR`（缺省 `src-tauri/target/release/bundle`）、
  * `DESKTOP_PORTABLE`（缺省 `portable/ComfyAPP-portable.zip`）、
+ * `DESKTOP_SHELL_EXE`（缺省 `src-tauri/target/release/app.exe`；**纯壳**单文件）、
  * `CNB_RELEASE_TARGET`（缺省默认分支 `master`；建 `nightly` tag 时的 `target_commitish`）。
  */
 import fs from "node:fs";
@@ -69,12 +87,20 @@ import process from "node:process";
 
 import { CODE, MASTER_REF } from "./ci-github-mirror-push.mjs";
 import { cnbRequest } from "./ci-ga-logs-relay.mjs";
+import { isRetryableFetchFailure } from "./ci-mirror-failure-report.mjs";
+import { RETRY_BACKOFF_MS } from "./ci-mirror-retry-policy.mjs";
 
 /** 滚动 tag：每天都指向最新一份，与 GA nightly 同名同义。 */
 export const RELEASE_TAG = "nightly";
 
-/** 单次请求的墙钟上限（与 `cnbRequest` 同源，这里只给二进制 PUT 用）。 */
-const REQUEST_TIMEOUT_MS = 60_000;
+/** 二进制 PUT 的单次墙钟上限：分钟级（几十 MB 跨网上传，不是 JSON 请求）。 */
+export const PUT_TIMEOUT_MS = 300_000;
+
+/** 二进制 PUT 的尝试上限（首跳 + 2 次重试），退避取公共表前两项。 */
+export const PUT_MAX_ATTEMPTS = 3;
+
+/** 纯壳单文件附件的固定名（与完整成品分列，方便按名字取）。 */
+export const SHELL_ASSET_NAME = "ComfyAPP-shell.exe";
 
 /** 安装包扩展名（`pnpm tauri build` 的 bundle 主形，Windows）。 */
 const INSTALLER_EXTENSIONS = new Set([".exe", ".msi"]);
@@ -83,7 +109,7 @@ const INSTALLER_EXTENSIONS = new Set([".exe", ".msi"]);
  * 收集的单个成品：`assetName` 是上传时的附件名（带形态前缀，避免 nsis/msi 同名撞车），
  * `absPath` / `bytes` 供 PUT 与 `size` 用。
  *
- * @typedef {{assetName: string, absPath: string, bytes: number, kind: "installer" | "portable"}} BundleFile
+ * @typedef {{assetName: string, absPath: string, bytes: number, kind: "installer" | "portable" | "shell"}} BundleFile
  */
 
 /**
@@ -93,7 +119,7 @@ const INSTALLER_EXTENSIONS = new Set([".exe", ".msi"]);
  * （`repo-notes:rw`）会 403，给它扩权又违反最小权限；这枚是新配的、只服务本格。
  *
  * @param {Record<string, string | undefined>} env
- * @returns {{ok:true, token:string, repo:string, endpoint:string, runId:string, sha:string, bundleDir:string, portable:string, targetCommitish:string} | {ok:false, reasons:string[]}}
+ * @returns {{ok:true, token:string, repo:string, endpoint:string, runId:string, sha:string, bundleDir:string, portable:string, shellExe:string, targetCommitish:string} | {ok:false, reasons:string[]}}
  */
 export function resolveDesktopRelayContext(env) {
   const token = String(env.CNB_RELEASE_TOKEN ?? "").trim();
@@ -103,6 +129,7 @@ export function resolveDesktopRelayContext(env) {
   const sha = String(env.GITHUB_SHA ?? "").trim();
   const bundleDir = String(env.DESKTOP_BUNDLE_DIR || "src-tauri/target/release/bundle").trim();
   const portable = String(env.DESKTOP_PORTABLE || "portable/ComfyAPP-portable.zip").trim();
+  const shellExe = String(env.DESKTOP_SHELL_EXE || "src-tauri/target/release/app.exe").trim();
   /* 建 nightly tag 的 target_commitish：缺省默认分支，env 可覆盖（不用 GITHUB_SHA，见文件头）。 */
   const targetCommitish = String(env.CNB_RELEASE_TARGET ?? "").trim() || MASTER_REF;
   /** @type {string[]} */
@@ -118,6 +145,7 @@ export function resolveDesktopRelayContext(env) {
     repo,
     runId,
     sha,
+    shellExe,
     targetCommitish,
     token,
   };
@@ -146,11 +174,11 @@ export function redact(text, token) {
  * 安装包：递归 `bundleDir`，只收 `.exe` / `.msi`；附件名带 `nsis-` / `msi-` 前缀，
  * 免得两种打包器偶然同名互相覆盖。免安装版：单个固定落点的 zip。
  *
- * @param {{bundleDir: string, portable: string}} paths
+ * @param {{bundleDir: string, portable: string, shellExe?: string}} paths
  * @param {string} cwd 相对落点的解析根
  * @returns {BundleFile[]}
  */
-export function collectBundles({ bundleDir, portable }, cwd = process.cwd()) {
+export function collectBundles({ bundleDir, portable, shellExe }, cwd = process.cwd()) {
   /** @type {BundleFile[]} */
   const files = [];
   const root = path.resolve(cwd, bundleDir);
@@ -184,6 +212,19 @@ export function collectBundles({ bundleDir, portable }, cwd = process.cwd()) {
       bytes: fs.statSync(portableAbs).size,
       kind: "portable",
     });
+  }
+  /* 纯壳单文件：从盘上真读，不重编、不打包、不猜 tauri 生成名。资产名固定，
+   * 与安装版 / 免安装版分列 —— 拿包的人一眼分得出「完整成品」与「只编壳」。 */
+  if (shellExe) {
+    const shellAbs = path.resolve(cwd, shellExe);
+    if (fs.existsSync(shellAbs) && fs.statSync(shellAbs).isFile()) {
+      files.push({
+        absPath: shellAbs,
+        assetName: SHELL_ASSET_NAME,
+        bytes: fs.statSync(shellAbs).size,
+        kind: "shell",
+      });
+    }
   }
   return files.sort((a, b) => a.assetName.localeCompare(b.assetName));
 }
@@ -281,6 +322,8 @@ export async function ensureRelease(io, meta) {
     "桌包每日滚动成品（GA 构建 → CNB 站内回传，ISSUE #3607）。",
     `run ${meta.runId || "noid"} · sha ${meta.sha.slice(0, 12) || "noid"}`,
     "安装版 = *-setup.exe / *.msi；免安装版 = *-portable.zip（解压后双击 app.exe 即用）。",
+    `纯壳 = ${SHELL_ASSET_NAME}（只编壳、不打包；放进项目检出根的 ` +
+      "src-tauri/target/release/app.exe，双击由壳自编排起本地 dev server）。",
   ].join("\n");
   const created = await jsonRequest(io, "POST", `${api}/-/releases`, {
     json: {
@@ -311,37 +354,75 @@ export async function ensureRelease(io, meta) {
  * 用 `readFileSync` 的 Buffer 而非 `createReadStream`：成品是有界的（安装包 ~85MB、
  * portable zip 同量级，远在 Node Buffer 上限内），Buffer 让 Content-Length 与正文同源、
  * 且不带「流谁消费 / 失败时谁 destroy」的生命周期问题（那一族在假件与网络抖动下会冒出
- * 未处理的 `error` 事件）。
+ * 未处理的 `error` 事件）。只读一次、整轮复用同一个 Buffer —— 重试送的是同一份字节，
+ * 不重新读盘、也不让 Content-Length 与正文分家。
  *
- * @param {{fetchImpl:typeof fetch, log:(l:string)=>void}} io
+ * **墙钟与重试（ISSUE #3621）**：这一跳送几十 MB 跨网，单次给 {@link PUT_TIMEOUT_MS}
+ * （分钟级），不吃 `cnbRequest` 的 JSON 请求口径。只有**网络层失败**（`fetch` 抛异常：
+ * 超时 / 断流 / DNS）才重试，判据复用 `isRetryableFetchFailure`（含 `AbortSignal.timeout`
+ * 那句 `TimeoutError`）；`res.ok === false` 是 HTTP 应答（401/403/5xx），一次交账、不重试
+ * —— 与 `ci-github-verdict-request.mjs` 同一纪律：重试权限 / 服务端错误只会把真问题
+ * 拖慢，还把「令牌缺 scope」读成「网络不好」。重试退避取公共表前两项，`io.sleep` 可注入，
+ * 用例不必真等。
+ *
+ * @param {{fetchImpl:typeof fetch, log:(l:string)=>void, sleep?:(ms:number)=>Promise<void>, maxAttempts?:number}} io
  * @param {{uploadUrl:string, absPath:string, bytes:number, assetName:string}} job
  * @returns {Promise<{ok:true} | {ok:false, detail:string}>}
  */
 export async function putAsset(io, job) {
+  const log = io.log;
+  const sleep =
+    io.sleep ??
+    ((ms) =>
+      new Promise((resolve) => {
+        setTimeout(resolve, ms);
+      }));
+  const maxAttempts = io.maxAttempts ?? PUT_MAX_ATTEMPTS;
+  let body;
   try {
-    const body = fs.readFileSync(job.absPath);
-    const res = await io.fetchImpl(job.uploadUrl, {
-      body,
-      headers: {
-        "Content-Length": String(body.byteLength),
-        "Content-Type": "application/octet-stream",
-      },
-      method: "PUT",
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-    if (!res.ok) {
-      return { detail: `PUT 失败（HTTP ${String(res.status)}）`, ok: false };
-    }
-    return { ok: true };
+    body = fs.readFileSync(job.absPath);
   } catch (error) {
-    return { detail: `PUT 网络层没跑起来：${String(error)}`, ok: false };
+    return { detail: `PUT 读盘失败：${String(error)}`, ok: false };
   }
+  let lastDetail = "";
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      // oxlint-disable-next-line no-await-in-loop -- 上传按份串行（共享 release_id），失败才重试，不并发放大
+      const res = await io.fetchImpl(job.uploadUrl, {
+        body,
+        headers: {
+          "Content-Length": String(body.byteLength),
+          "Content-Type": "application/octet-stream",
+        },
+        method: "PUT",
+        signal: AbortSignal.timeout(PUT_TIMEOUT_MS),
+      });
+      if (!res.ok) {
+        /* HTTP 应答：认证 / 权限 / 服务端错误一律一次交账，不重发整份二进制。 */
+        return { detail: `PUT 失败（HTTP ${String(res.status)}）`, ok: false };
+      }
+      return { ok: true };
+    } catch (error) {
+      lastDetail = `PUT 网络层没跑起来：${String(error)}`;
+      if (!isRetryableFetchFailure(error) || attempt === maxAttempts) {
+        break;
+      }
+      const wait = RETRY_BACKOFF_MS[attempt - 1] ?? RETRY_BACKOFF_MS.at(-1) ?? 5000;
+      log(
+        `[ga-desktop-relay] [${job.assetName}] PUT 第 ${String(attempt)}/${String(maxAttempts)} 次` +
+          ` 网络层没通 ⇒ ${String(wait / 1000)}s 后重试（超时 / 断流类重试；HTTP 应答不重试）`,
+      );
+      // oxlint-disable-next-line no-await-in-loop -- 退避后串行重试同一份 PUT，顺序即判据
+      await sleep(wait);
+    }
+  }
+  return { detail: lastDetail, ok: false };
 }
 
 /**
  * 上传单个成品：取上传地址 → PUT → 确认。三步任一失败即返回失败（不假装送达）。
  *
- * @param {{ctx:{endpoint:string,repo:string,token:string}, fetchImpl:typeof fetch, log:(l:string)=>void}} io
+ * @param {{ctx:{endpoint:string,repo:string,token:string}, fetchImpl:typeof fetch, log:(l:string)=>void, sleep?:(ms:number)=>Promise<void>, maxAttempts?:number}} io
  * @param {string} releaseId
  * @param {BundleFile} file
  * @returns {Promise<{ok:true, assetName:string, bytes:number} | {ok:false, detail:string}>}
@@ -388,7 +469,7 @@ export async function uploadAsset(io, releaseId, file) {
 /**
  * 主流程：收前提 → 收成品 → 拿/建 Release → 逐个上传 → 确认。
  *
- * @param {{argv?:string[], env?:Record<string,string|undefined>, fetchImpl?:typeof fetch, log?:(l:string)=>void, cwd?:string}} io
+ * @param {{argv?:string[], env?:Record<string,string|undefined>, fetchImpl?:typeof fetch, log?:(l:string)=>void, cwd?:string, sleep?:(ms:number)=>Promise<void>, maxPutAttempts?:number}} io
  * @returns {Promise<number>} 0 送达 / 1 失败 / 2 没判过
  */
 export async function main(io = {}) {
@@ -407,11 +488,14 @@ export async function main(io = {}) {
     for (const r of ctx.reasons) log(`[ga-desktop-relay] 没判过：${r}`);
     return CODE.NO_FACT;
   }
-  const files = collectBundles({ bundleDir: ctx.bundleDir, portable: ctx.portable }, cwd);
+  const files = collectBundles(
+    { bundleDir: ctx.bundleDir, portable: ctx.portable, shellExe: ctx.shellExe },
+    cwd,
+  );
   if (files.length === 0) {
     log(
-      `[ga-desktop-relay] 没判过：${ctx.bundleDir} 下没有安装包、也没有 ${ctx.portable} —— ` +
-        "构建那一格没打出成品，或落点改了没同步本脚本",
+      `[ga-desktop-relay] 没判过：${ctx.bundleDir} 下没有安装包、也没有 ${ctx.portable}、` +
+        `也没有 ${ctx.shellExe}（纯壳）—— 构建那一格没打出产物，或落点改了没同步本脚本`,
     );
     return CODE.NO_FACT;
   }
@@ -424,7 +508,15 @@ export async function main(io = {}) {
     return CODE.OK;
   }
   const relayCtx = { endpoint: ctx.endpoint, repo: ctx.repo, token: ctx.token };
-  const wiring = { ctx: relayCtx, fetchImpl, log };
+  /* sleep / maxPutAttempts 只给二进制 PUT 的重试用；用例注入假 sleep 不真等，
+   * 主流程其它跳仍走真实 fetch。 */
+  const wiring = {
+    ctx: relayCtx,
+    fetchImpl,
+    log,
+    maxAttempts: io.maxPutAttempts,
+    sleep: io.sleep,
+  };
   const release = await ensureRelease(wiring, {
     runId: ctx.runId,
     sha: ctx.sha,
@@ -447,6 +539,13 @@ export async function main(io = {}) {
       `${String(files.length)} 份 · run ${ctx.runId || "noid"} · ` +
       `下载 ${ctx.endpoint}/${ctx.repo}/-/releases/download/${RELEASE_TAG}/<文件名>`,
   );
+  if (files.some((f) => f.kind === "shell")) {
+    log(
+      `[ga-desktop-relay] 纯壳 ${SHELL_ASSET_NAME}：下载后放进项目检出根的 ` +
+        "src-tauri/target/release/app.exe（与本地 build-tauri-release.ps1 同一落点），" +
+        "双击由壳自编排起本地 dev server —— 不用装完整桌包、不用 npm 包前端。",
+    );
+  }
   return CODE.OK;
 }
 
