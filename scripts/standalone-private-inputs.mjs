@@ -53,6 +53,10 @@ export const PRIVATE_INPUTS = [
   // 会话签名密钥。它是**运行期产物**：跑过一次再重新打包（`tauri bundle` 不重装配）就会
   // 被当成分发内容带出去，与 `.env` 同性质。
   "data/runtime-secret.json",
+  // 侧栏项页签行为的**本机覆盖**（ISSUE #3623）：它是「造这个包的那台机器上改过的那
+  // 点界面偏好」，随包出去就等于让所有用户都拿到造包者的侧栏选择 —— 出厂件该读的是
+  // 项目默认那份（编译进产物）。
+  "data/sidebar-tab-behavior.json",
 ];
 
 /**

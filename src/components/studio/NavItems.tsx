@@ -19,6 +19,12 @@ import {
   Terminal,
 } from "lucide-react";
 
+import {
+  projectSidebarTabConfig,
+  sidebarTabModeOf,
+  type SidebarTabConfig,
+} from "~/lib/shell/sidebar-tab-behavior";
+
 /**
  * 共享的导航注册表 —— 侧栏 / 顶部标题 / 命令面板 / 项目内切换器的唯一事实来源。三个分区：全局项（`globalNavItems`，十一件项目无关的事；控制台跑仓库级脚本、设置读写应用级配置、模型适配/测试模型/模式契约读写全局配置，故都该能开能关）；项目页签（`projectTabs`，只在项目界面顶部的标签栏出现，脱离项目无意义）；项目入口（`PROJECTS_ENTRY`，侧栏底部「项目」分组）。
  * 全局项共十一件，但侧栏只列十件（`sidebarNavItems`）：设置撤出侧栏（入口在顶栏应用菜单）并标 `transient`（切走即关）；「全局的 / 侧栏列不列 / 瞬时」是三个独立属性，见 `NavItem` 字段说明。
@@ -65,6 +71,11 @@ export type NavItem = {
    * 「瞬时页签」：切走就关，不常驻页签条。页签的意义是让打开的界面保持打开（切回来接着用、不丢态），那是对画布/工坊这类有编辑态、跑着长任务的界面说的。
    * 设置 / 模型适配 / 模式契约是「读过即走的配置屏」，留在页签条上只贡献占宽与「又开了个窗口」的错觉。
    * 判据是语义不是实现：transient 的视图照常有自己的一页、也能手动关，只是切到别处时自动退场，见 `workspace-tabs.ts` 的 `withTransientPruned`（「最多只有当前页可以是 transient」）。
+   *
+   * ⚠️ **侧栏项的这一格不再写在这里**（ISSUE #3623）：侧栏那些项「独立还是共享」
+   * 是**可配置**的，配置面是 `~/lib/shell/sidebar-tab-behavior` 那份 JSON（项目默认
+   * + 本机覆盖两层）。本字段只留给**不在配置面内**的视图（设置：它不在侧栏，
+   * 入口在顶栏应用菜单），作为兜底标记。
    */
   transient?: boolean;
   /**
@@ -167,7 +178,6 @@ export const NAV_ITEMS: Array<NavItem> = [
     id: "model-adapters",
     label: "模型适配",
     enabled: true,
-    transient: true,
     icon: <Cable size={22} strokeWidth={1.8} />,
   },
   {
@@ -177,7 +187,6 @@ export const NAV_ITEMS: Array<NavItem> = [
     id: "model-test",
     label: "测试模型",
     enabled: true,
-    transient: true,
     icon: <FlaskConical size={22} strokeWidth={1.8} />,
   },
   {
@@ -186,7 +195,6 @@ export const NAV_ITEMS: Array<NavItem> = [
     id: "mode-contract",
     label: "模式契约",
     enabled: true,
-    transient: true,
     icon: <Puzzle size={22} strokeWidth={1.8} />,
   },
   {
@@ -264,9 +272,60 @@ export function sidebarNavItems(): Array<NavItem> {
   return globalNavItems().filter((item) => item.sidebarHidden !== true);
 }
 
-/** 某视图是不是「瞬时页签」（切走即关，不常驻）—— 规则见 `NavItem.transient`。 */
-export function isTransientView(view: WorkspaceView): boolean {
+/** 首页视图 id —— 固定页签，恒在、不可关（`workspace-tabs.ts` 的 `HOME_VIEW` 同值）。 */
+const FIXED_HOME_VIEW: WorkspaceView = "home";
+
+/**
+ * **配置面内**的侧栏项（可配「独立标签页 / 共享标签页」的那几项，ISSUE #3623）。
+ *
+ * 首页不在其中：它是**固定页签**（恒在、不可关），「切走即关」对它没有意义 ——
+ * 真按它那样做，「首页永远在列表里」这条不变式就得靠另一条规则兜着，而那条规则
+ * 本身没有任何用户可见的收益。
+ */
+export function configurableSidebarItems(): Array<NavItem> {
+  return sidebarNavItems().filter((item) => item.id !== FIXED_HOME_VIEW);
+}
+
+/**
+ * 某视图是不是「瞬时页签」（切走即关，不常驻）—— 规则见 `NavItem.transient`。
+ *
+ * 判据是**两层**：配置面（`SidebarTabConfig`，ISSUE #3623 的 JSON 配置）优先，
+ * 配置里没有这一项时回落到注册表内置标记（设置 —— 它不在配置面内）。
+ *
+ * `config` 传的是**生效配置**（项目默认 + 本机覆盖）；服务端那份还没取回时，
+ * 调用方传项目默认（编译进产物的那份），于是「配置还没到」与「配置就是默认」
+ * 两件事在界面上长得一样 —— 那正是它们该有的样子（默认值本来就是用户看到的第一眼）。
+ */
+export function isTransientView(view: WorkspaceView, config: SidebarTabConfig): boolean {
+  const mode = sidebarTabModeOf(view, config);
+  if (mode !== undefined) {
+    return mode === "shared";
+  }
   return NAV_ITEMS.some((item) => item.id === view && item.transient === true);
+}
+
+/**
+ * 「这一项是不是瞬时页签」的判据 —— 由调用方注入。
+ *
+ * 为什么是参数而不是常量：配置化之后（ISSUE #3623）这个判据**因配置而异**，
+ * 纯函数层不该自己去读配置（那是 IO 面的事）。页签规则（`workspace-tabs.ts`）
+ * 只管「按判据行动」，判据由装配层给。
+ */
+export type TransientJudge = (view: WorkspaceView) => boolean;
+
+/** 按生效配置造一个判据（配置面优先，注册表兜底）。 */
+export function makeTransientJudge(config: SidebarTabConfig): TransientJudge {
+  return (view) => isTransientView(view, config);
+}
+
+/**
+ * 项目默认那份配置（编译进产物的那份）—— 「配置还没从服务端取回」时的兜底。
+ *
+ * 单独导出而不是让调用方各自 import JSON：项目默认的**形状**（哪些项、各是什么档）
+ * 只有这一份判据，调用方自己读 JSON 就会各自解析、各自兜底（§12.18）。
+ */
+export function defaultSidebarTabConfig(): SidebarTabConfig {
+  return projectSidebarTabConfig();
 }
 
 /**

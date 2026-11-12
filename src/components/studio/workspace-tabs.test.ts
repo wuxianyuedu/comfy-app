@@ -19,6 +19,7 @@ import {
   type WorkspaceTabsState,
 } from "./workspace-tabs";
 import type { WorkspaceView } from "./NavItems";
+import { defaultSidebarTabConfig, makeTransientJudge } from "./NavItems";
 
 const VIEWS: Array<WorkspaceView> = [
   "home",
@@ -155,12 +156,15 @@ describe("关闭语义", () => {
 
 describe("瞬时页签：切走即关（最多只有当前页可以是 transient）", () => {
   it("设置 / 模型适配 / 模式契约 是瞬时页签，画布 / 工坊 / 模型不是", () => {
-    expect(isTabTransient(makeTab("settings", null)!)).toBe(true);
-    expect(isTabTransient(makeTab("model-adapters", null)!)).toBe(true);
-    expect(isTabTransient(makeTab("mode-contract", null)!)).toBe(true);
-    expect(isTabTransient(makeTab("canvas", "p1")!)).toBe(false);
-    expect(isTabTransient(makeTab("workshop", "p1")!)).toBe(false);
-    expect(isTabTransient(makeTab("models", null)!)).toBe(false);
+    /* 默认判据 = 项目默认那份配置（ISSUE #3623：侧栏项的瞬时与否可配置了，
+       没注入判据时走出厂默认）。 */
+    const judge = makeTransientJudge(defaultSidebarTabConfig());
+    expect(isTabTransient(makeTab("settings", null)!, judge)).toBe(true);
+    expect(isTabTransient(makeTab("model-adapters", null)!, judge)).toBe(true);
+    expect(isTabTransient(makeTab("mode-contract", null)!, judge)).toBe(true);
+    expect(isTabTransient(makeTab("canvas", "p1")!, judge)).toBe(false);
+    expect(isTabTransient(makeTab("workshop", "p1")!, judge)).toBe(false);
+    expect(isTabTransient(makeTab("models", null)!, judge)).toBe(false);
   });
 
   it("从设置切到别页：设置那一页退场，不动别的常驻页", () => {

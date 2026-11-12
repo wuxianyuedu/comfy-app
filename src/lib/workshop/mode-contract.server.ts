@@ -22,10 +22,11 @@
 
 import "server-only";
 
-import { existsSync, promises as fs } from "node:fs";
+import { promises as fs } from "node:fs";
 import path from "node:path";
 
 import { errorText } from "~/lib/error-message";
+import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 
 import {
   MODE_CONTRACTS_REL_PATH,
@@ -139,15 +140,6 @@ async function readOverrideFile(file: string): Promise<Array<ModeContract> | nul
   } catch {
     return null;
   }
-}
-
-/** 这份检出是不是**开发检出**（ISSUE #3396 的「非正式版形态」）。
- *
- *  判据与壳的形态判据（规范 §1.5）同一条：检出里有没有启动编排器
- *  `scripts/dev-launcher.mjs`。它同时在 = 源码在手，「保存为项目默认」才有
- *  可写的目标文件；standalone 分发载荷里没有编排器，这一格必为 false。 */
-export function isDevCheckout(root: string = process.cwd()): boolean {
-  return existsSync(path.join(root, "scripts", "dev-launcher.mjs"));
 }
 
 /** 把「当前编辑的契约注册表」**全量**写进入库的项目默认

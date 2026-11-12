@@ -96,6 +96,24 @@
 - 落点：`src/app/(main)/ui-kit/page.tsx`、
   `src/components/ui/ui-kit-gallery*.tsx`、`src/components/studio/CommandPalette.tsx`
 
+#### FR-WS-10 侧栏项的页签行为（独立 / 共享标签页，按项配置）
+
+- 状态：已上线
+- 需求：主界面侧栏的每一项，点开后是**独立标签页**（常驻，切走不关）还是
+  **共享标签页**（切走即关，不在页签条上留位置），按项配置；配置落在 JSON 里，
+  并可在设置中修改（ISSUE #3623）。
+- 行为与验收：配置面 = 侧栏的九个全局项（首页是固定页签，不在配置面内）；
+  两档行为对每一项都可选，当前生效值在界面上看得出来；改动即时生效 ——
+  已经开着的页签按新规则在下次切换时生效。设置页给出两个保存出口：
+  「保存」只落本机（开发版与正式包都能用），「保存为项目默认（跟代码走）」写进
+  入库那份 JSON、只在开发检出出现；「还原默认」只在真有本机覆盖时出现。
+  项目默认那份 JSON 恰好覆盖配置面内的每一项（漏登记由用例拦下）。
+- 落点：`src/lib/shell/sidebar-tab-behavior.ts`（纯函数层）、
+  `src/lib/shell/sidebar-tab-defaults.json`（项目默认）、
+  `src/lib/shell/sidebar-tab-behavior.server.ts`（落盘）、
+  `src/server/api/routers/sidebar.ts`、
+  `src/app/(main)/settings/components/SidebarTabSection.tsx`
+
 ---
 
 ## 2. 账号与访问（FR-AU）

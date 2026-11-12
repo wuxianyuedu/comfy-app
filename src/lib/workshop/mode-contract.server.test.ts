@@ -26,12 +26,12 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
-  isDevCheckout,
   loadModeContracts,
   resetModeContractOverride,
   saveModeContracts,
   saveModeContractsAsProjectDefaults,
 } from "./mode-contract.server";
+import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 import {
   MODE_CONTRACTS_REL_PATH,
   MODE_CONTRACT_DEFAULTS_REL_PATH,

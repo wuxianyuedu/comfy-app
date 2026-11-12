@@ -43,9 +43,13 @@ vi.mock("~/lib/llm/server", () => ({
 vi.mock("~/lib/workshop/mode-contract.server", () => ({
   loadModeContracts: contracts.loadModeContracts,
   saveModeContracts: contracts.saveModeContracts,
-  isDevCheckout: contracts.isDevCheckout,
   saveModeContractsAsProjectDefaults: contracts.saveModeContractsAsProjectDefaults,
   resetModeContractOverride: contracts.resetModeContractOverride,
+}));
+/* 「是不是开发检出」这条判据已搬到 `~/lib/shell/dev-checkout.server`（ISSUE #3623
+   起两处配置面共用它）—— 桩跟着搬家，不搬的话这条真函数在仓库根跑会答 true。 */
+vi.mock("~/lib/shell/dev-checkout.server", () => ({
+  isDevCheckout: contracts.isDevCheckout,
 }));
 
 import { createCallerFactory } from "~/server/api/trpc";

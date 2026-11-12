@@ -19,12 +19,12 @@ import {
   WORKSHOP_INPUT_TYPES,
 } from "~/lib/workshop/model-mode-contract";
 import {
-  isDevCheckout,
   loadModeContracts,
   resetModeContractOverride,
   saveModeContracts,
   saveModeContractsAsProjectDefaults,
 } from "~/lib/workshop/mode-contract.server";
+import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 
 /** 适配器输入行：统一输入类型 → 请求体字段名 */
 const adapterInputSchema = z.object({
