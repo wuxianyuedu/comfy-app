@@ -240,6 +240,33 @@ function extractComfyUIPort() {
   return m.groups?.port;
 }
 
+/**
+ * 产品需求总表的两个计数（ISSUE #3649）：**功能域数**与**编号化需求条数**。
+ *
+ * 权威源是 `docs/product/feature-catalog.md` 的总表本身：
+ *   · 功能域 = §2「分域需求总表」下的分节小节（`### 2.x`）；
+ *   · 编号化需求 = 总表里以 `FR-` 开头的行。
+ *
+ * 这两个数从前只以**手抄**形式出现在两份索引文档里（`docs/README.md` /
+ * `docs/product/README.md`），抄错了没有任何判据会发现（#3649 的现场：一边写
+ * 「14 个功能域 76 条」、另一边写「17 个功能域」）。现在由本函数现场提取，
+ * 文档侧的数字交给 `pnpm doc:check` 核对（事实 kind = "count"）。
+ */
+function extractProductCatalogCounts() {
+  const text = readText("docs/product/feature-catalog.md");
+  const domains = [...text.matchAll(/^### 2\.\d+\s/gm)].length;
+  const requirements = [...text.matchAll(/^\|\s*FR-[A-Z]+-\d+/gm)].length;
+  /* 计数为 0 说明总表的结构变了（标题层级或表格形态）—— 那时「现场计数」是假的，
+   * 静默返回 0 会让文档侧的数字对着 0 核对 = 恒绿（§12.16 的同款教训：判据自己
+   * 失效时必须当场报错，而不是判「通过」）。 */
+  if (!domains || !requirements) {
+    throw new Error(
+      `无法从 docs/product/feature-catalog.md 提取计数（功能域 ${domains} / 需求 ${requirements}）—— 总表结构变了？`,
+    );
+  }
+  return { domains, requirements };
+}
+
 // --------------------------------------------------------------------------
 
 /* ── 注释语言的「纯 ASCII 模块」白名单（ISSUE #678 / 规范 12 §12.4.6）────
@@ -326,6 +353,7 @@ function extractResolveProbes() {
 //   placeholder 类：文档用占位符替代裸值，doc:check 发现裸值即报错，
 //                    doc:render 把占位符替换成真实值。
 //   verify 类：文档保留直观值，doc:check 核对权威源当前端口族。
+//   count 类：文档保留直观数字，doc:check 核对它等于权威源的现场计数。
 //   path 类：核对路径指向的文件存在。
 // --------------------------------------------------------------------------
 const FACTS = [
@@ -420,6 +448,29 @@ const FACTS = [
     kind: "placeholder",
     extract: extractAppVersion,
     onlyDocs: ["docs/guides/PRODUCTION-GAPS.md", "docs/standards/Comfy-APP-T3-项目开发规范.md"],
+  },
+  /* 计数类（ISSUE #3649）：文档**保留直观数字**（"17 个功能域 100 条编号化需求"
+   * 这种最可读的形态），脚本从权威源现场提取计数并核对 —— 与上面 `dev.port` 那族
+   * 「直观值核对类」同一条思路。不改成占位符：这两个数字恰恰是读者第一眼想知道的，
+   * 换成 `{{…}}` 只会更难读；留在文档里、漂了由判据拦下。
+   *
+   * 适用文档按 `onlyDocs` 声明（两份索引文档各写一次同样的数字，判据逐处核对，
+   * 于是「两处口径统一」不再靠人记得两处一起改）。 */
+  {
+    key: "product.domains.count",
+    kind: "count",
+    label: "功能域数",
+    pattern: /(?<count>\d+)\s*个功能域/g,
+    extract: () => extractProductCatalogCounts().domains,
+    onlyDocs: ["docs/README.md", "docs/product/README.md"],
+  },
+  {
+    key: "product.requirements.count",
+    kind: "count",
+    label: "编号化需求条数",
+    pattern: /(?<count>\d+)\s*条编号化需求/g,
+    extract: () => extractProductCatalogCounts().requirements,
+    onlyDocs: ["docs/README.md", "docs/product/README.md"],
   },
   // 注释语言白名单（ISSUE #678 / 规范 12 §12.4.6）：名单本身是权威定义，
   // 由 reference-facts 的一行承载，脚本解析它 —— 两侧只有一份清单。
@@ -541,4 +592,5 @@ module.exports = {
   extractMcpHttpPort,
   extractAsciiOnlyModules,
   extractResolveProbes,
+  extractProductCatalogCounts,
 };
