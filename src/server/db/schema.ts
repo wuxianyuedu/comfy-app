@@ -467,7 +467,9 @@ export const remoteModel = sqliteTable(
     /** 「智能配置」：按模型名推断窗口 / 输出上限 / 输入类型（关掉 = 全部手填） */
     smartConfig: integer("smartConfig", { mode: "boolean" }).notNull().default(true),
     /** 工坊按模式的输入/输出适配器（JSON 数组字符串；RemoteModeAdapter[]）。
-     *  配置后工坊按该模型在对应模式下的字段映射发起请求，替代统一猜测。 */
+     *  配置后工坊按该模型在对应模式下的字段映射发起请求，替代统一猜测。
+     *  #3622/#3659 起是模型级 envelope（RemoteModelAdaptersDoc）：含模型级
+     *  端点路径 endpointPath（#3656 设置页下拉也落这一格）。 */
     workshopAdapters: text("workshopAdapters"),
     createdAt: dateNotNull("createdAt")
       .notNull()

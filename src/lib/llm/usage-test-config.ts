@@ -3,6 +3,7 @@
 // 每行一个字段名 key + 一个值 value，值可为文本 / 数字 / 图片。
 // 本文件只放可被单测的纯函数与常量，DOM / FileReader 等留在视图层。
 
+import { joinApiUrl } from "~/lib/llm/provider-types";
 import { withQuery } from "~/lib/query-string";
 import { nextId } from "~/lib/unique-id";
 
@@ -325,7 +326,9 @@ export function buildVideoPollUrls(
     agnes = null;
   }
   return {
-    rest: `${base}${dir}/${taskId.replace(/^\/+/, "")}`,
+    /* REST 候选走 `joinApiUrl`：Base 缺版本段时补 /v1（#3656），历史带版本段的
+     * Base 行为不变（join 原样接）。dir 为空串时 join 返回 base 本身（同旧行为）。 */
+    rest: `${joinApiUrl(base, dir)}/${taskId.replace(/^\/+/, "")}`,
     agnes,
   };
 }

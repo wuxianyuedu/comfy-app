@@ -20,6 +20,7 @@ import {
   parseOutputTypes,
   parseReasoningLevels,
   parseReasoningParamMapping,
+  resolveMediaEndpointPath,
   type LlmApiFormat,
   type ModelCapability,
   type ModelInputType,
@@ -102,6 +103,9 @@ export type ModelFormValues = {
   /** 数字字段用字符串存：空串 = 未填（`null`），输入中途不能被 Number("") 折成 0。 */
   contextWindow: string;
   enabled: boolean;
+  /** 图像 / 视频模型的接口端点动作路径（#3656）：生效值（库里值或用途默认
+   *  第一项）；文本模型（chat）为空串，不渲染也不落库。 */
+  endpointPath: string;
   inputTypes: Array<ModelInputType>;
   kind: RemoteModelKind;
   maxOutputTokens: string;
@@ -125,6 +129,8 @@ export type ModelFormSource = {
   capabilities: unknown;
   contextWindow: number | null;
   enabled: boolean;
+  /** 图像 / 视频行的生效端点路径（`modelView` 已按用途回落第一项）；文本行为 null。 */
+  endpointPath: string | null;
   inputTypes: unknown;
   kind: string;
   maxOutputTokens: number | null;
@@ -160,6 +166,8 @@ export function emptyModelForm(
     name: "",
     kind,
     apiFormat,
+    /* 图像 / 视频行预填用途默认端点（下拉的第一项，#3656）；文本行为空串。 */
+    endpointPath: kind === "chat" ? "" : resolveMediaEndpointPath(kind),
     smartConfig: true,
     contextWindow: "",
     maxOutputTokens: "",
@@ -181,6 +189,10 @@ export function modelFormFromView(source: ModelFormSource): ModelFormValues {
     name: source.name,
     kind: kindValue,
     apiFormat: isLlmApiFormat(source.apiFormat) ? source.apiFormat : "chat-completions",
+    /* 图像 / 视频行取下发的生效路径（兜底再按用途收窄一次，库坏值不至于渲染空白）；
+     * 文本行恒空串。 */
+    endpointPath:
+      kindValue === "chat" ? "" : resolveMediaEndpointPath(kindValue, source.endpointPath),
     smartConfig: source.smartConfig,
     contextWindow:
       source.contextWindow === null || source.contextWindow === undefined
@@ -265,6 +277,9 @@ export type ModelSaveDraft = {
   capabilities: Array<ModelCapability>;
   contextWindow: number | null;
   enabled: boolean;
+  /** 图像 / 视频模型的接口端点动作路径（#3656）：文本行为 null，图像 / 视频行
+   *  为下拉生效值（服务端写侧再按用途白名单收窄一次）。 */
+  endpointPath: string | null;
   id?: string;
   inputTypes: Array<ModelInputType>;
   kind: RemoteModelKind;
@@ -295,6 +310,9 @@ export function modelSaveDraft(
     name: form.name.trim(),
     kind: form.kind,
     apiFormat: form.apiFormat,
+    /* 文本行为 null；图像 / 视频行带上拉选的生效路径（服务端再按用途白名单收窄） */
+    endpointPath:
+      form.kind === "chat" ? null : resolveMediaEndpointPath(form.kind, form.endpointPath),
     enabled: form.enabled,
     /* 表单不暴露模型级接口覆盖：编辑历史行时保留原值（清掉它等于把这条模型
      * 静默指向供应商，用户没做这个决定）。 */

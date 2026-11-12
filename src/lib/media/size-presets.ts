@@ -603,21 +603,24 @@ export function sizeSpecMultiple(
   return normalizeAlignMultiple(spec.multiple);
 }
 
-/** 尺寸表达 → 远端通道认的「比例 + 百万像素 + 倍数」三元组。
+/** 尺寸表达 → 远端通道认的「比例 + 百万像素（+ 分辨率档）+ 倍数」。
  *
  *  只认这个形状的是 OpenAI 兼容图像的通道（`aspect_ratio` / `megapixels` /
  *  `multiple` 三个字段名），与只认 `"WxH"` 的老接口是两套口径，同源在这里
  *  算 —— 两边各拼一次就会漂移（比例取短标签、百万像素取实际总像素还是幂次
- *  近似，任一处不同就是「设置页显示 A、请求发的是 B」）。 */
+ *  近似，任一处不同就是「设置页显示 A、请求发的是 B」）。
+ *  `resolution`（ISSUE #3622）：选「分辨率」表达时带档位名（"1k"/"2k"/"4k"），
+ *  让原生认档位的接口直接映射；百万像素档为 undefined（它没有档位概念）。 */
 export function sizeSpecToRelay(
   spec: SizeSpec,
   scene: SizeScene = "image",
   table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
-): { aspectRatio: string; megapixels: string; multiple: AlignMultiple } {
+): { aspectRatio: string; megapixels: string; multiple: AlignMultiple; resolution?: string } {
   return {
     aspectRatio: sizeSpecAspect(spec),
     megapixels: String(sizeSpecMegapixels(spec, scene, table)),
     multiple: sizeSpecMultiple(spec, scene, table),
+    ...(resolutionTierOfLabel(spec.clarity) === null ? {} : { resolution: spec.clarity }),
   };
 }
 

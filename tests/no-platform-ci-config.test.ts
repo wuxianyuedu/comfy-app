@@ -390,6 +390,13 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
    * 因为它们在 PR 上仍然被判，只是换了一台 runner。 */
   { name: "格式化提交分离", tier: "PR" },
   { name: "零消费导出", tier: "PR" },
+  /* `schema⇄迁移等价`（ISSUE #3599）：**L1** —— §13.5.30 的三条门槛（确定性 / 快 /
+   * 本地可复现）逐条评过，逐条读数与裁决见规范 §13.5.40。
+   * 形状与上面两条同形：**没有自己的 stage**（登记在 `COMFYAPP_CI_GATES_ELSEWHERE`，
+   * 入口路径 = `tests/db-migrate-equivalence.test.ts`），执行者是 GA `pr-gate.yml` 的
+   * `typecheck-db-format` job 里那一步 —— 判据 `scripts/check-gate-name-executors.mjs`
+   * 的**第四处执行面**（GA PR 门禁的 `run:` 行）就是为它补的：另三面一处都不在 GA。 */
+  { name: "schema⇄迁移等价", tier: "PR" },
   // ── push 档（COMFYAPP_CI_PUSH_GATES）──
   /* ISSUE #3378 收尾：push 主列整条撤掉。文档链两格由 GA `master-gate.yml` 同款逐字
    * 承接（§13.5.34 并行期已验），`安装依赖` 只被那两格吃、`合并形态复核` 是形态留痕

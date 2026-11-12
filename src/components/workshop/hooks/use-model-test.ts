@@ -7,7 +7,7 @@
 // 视图（ModelTestView）只渲染 + 上抛，不出现 fetch / api.*。
 
 import { useCallback, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { readFileAsDataUrl } from "~/lib/file-io";
 import { runAsyncAction } from "~/lib/async-action";
@@ -15,24 +15,30 @@ import { sleep } from "~/lib/with-timeout";
 import { isRecord } from "~/lib/is-record";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { apiGenerateImage, apiPollVideo, apiSubmitVideo } from "~/lib/workshop/generation-client";
-import {
-  parseRemoteModeAdapters,
-  type RemoteModeAdapter,
-} from "~/lib/workshop/model-mode-contract";
+import { parseRemoteModeAdapters } from "~/lib/workshop/remote-model-adapter";
+import type { RemoteModeAdapter } from "~/lib/workshop/remote-model-adapter";
+
 import { useTRPC } from "~/trpc/react";
 
 import {
   assembleImageRequest,
   assembleVideoRequest,
+  defaultModeForKind,
+  modeTabsForKind,
   testCandidatesForKind,
+  type AdaptersByModel,
   type ModelTestKind,
   type ModelTestValues,
+  type ModeTab,
   type TestCandidate,
 } from "../model-test-config";
 
 /** 视频任务轮询：与 VideoStudio 同一节奏（3s 一轮 / 10 分钟上限）。 */
 const POLL_INTERVAL_MS = 3000;
 const POLL_DEADLINE_MS = 600_000;
+
+/** 空适配器索引的稳定引用：查询数据未到时兜底，让 useMemo 依赖不逐渲染变化。 */
+const EMPTY_ADAPTERS_BY_MODEL: AdaptersByModel = {};
 
 /** 一次测试的结果（工坊同款输出：图片 URL / 视频 URL）。 */
 export type ModelTestResult =
@@ -55,8 +61,10 @@ export type ModelTestController = {
   kind: ModelTestKind;
   /** 适配器查询 / 候选读取的加载态。 */
   loading: boolean;
-  /** 选中模型当前生效的模式码（"" = 未配适配器，走通道默认端点）。 */
+  /** 当前生效的模式码（左栏页签选中项；"" = 尚未落到任何模式）。 */
   mode: string;
+  /** 左栏「所有模式」页签：当前用途的全部生成类模式 + 各自配了适配器的候选数。 */
+  modeTabs: Array<ModeTab>;
   /** 局部更新表单值（文本 / 档位）。 */
   patchValue: (type: keyof ModelTestValues, value: string) => void;
   /** 最近一次成功产物。 */
@@ -73,10 +81,14 @@ export type ModelTestController = {
 
 export function useModelTest(): ModelTestController {
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const configQ = useQuery(trpc.llm.configGet.queryOptions());
   const [kind, setKindState] = useState<ModelTestKind>("image");
   const [selectedModel, setSelectedModel] = useState("");
-  const [mode, setModeState] = useState("");
+  /* 模式由左栏页签直接选定（#3635）：初值与切用途时的重置都取该用途的
+   * 第一个生成类模式，不再从「选中模型的适配器」里播种 —— 模式是用户
+   * 先选的入口，模型是其后在下拉里挑的具体执行者。 */
+  const [mode, setModeState] = useState(() => defaultModeForKind("image"));
   const [values, setValues] = useState<ModelTestValues>({});
   const [result, setResult] = useState<ModelTestResult>(null);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +113,30 @@ export function useModelTest(): ModelTestController {
     return testCandidatesForKind(kind, out);
   }, [configQ.data, kind]);
 
+  const candidateNames = useMemo(() => candidates.map((c) => c.name), [candidates]);
+
+  /* 全部候选的适配器（#3635：左栏每个模式页签要显示「配了几个可用模型」）。
+   * 候选是设置页配置的少量条目，并行逐个取已配适配器即可，不为此新增批量端点。 */
+  const adaptersByModelQ = useQuery({
+    queryKey: ["llm", "workshopAdaptersAll", candidateNames],
+    queryFn: async (): Promise<AdaptersByModel> => {
+      const entries = await Promise.all(
+        candidateNames.map(async (name) => {
+          const res = await queryClient.fetchQuery(
+            trpc.llm.workshopAdaptersGet.queryOptions({ name }),
+          );
+          return [name, parseRemoteModeAdapters(res.adapters ?? [])] as const;
+        }),
+      );
+      return Object.fromEntries(entries);
+    },
+    enabled: candidateNames.length > 0,
+  });
+  const modeTabs = useMemo<Array<ModeTab>>(
+    () => modeTabsForKind(kind, adaptersByModelQ.data ?? EMPTY_ADAPTERS_BY_MODEL),
+    [kind, adaptersByModelQ.data],
+  );
+
   const adaptersQ = useQuery(
     trpc.llm.workshopAdaptersGet.queryOptions(
       { name: selectedModel },
@@ -112,20 +148,10 @@ export function useModelTest(): ModelTestController {
     [adaptersQ.data],
   );
 
-  /** 选中模型变化时把模式重置到它的第一个适配器（渲染期播种，React 19 模式：
-   *  查询晚于选中到达时补种一次；用户手选的模式不被覆盖）。 */
-  const [modeSeededFor, setModeSeededFor] = useState<{ mode: string; model: string } | null>(null);
-  if (selectedModel !== "" && modeSeededFor?.model !== selectedModel) {
-    setModeSeededFor({ model: selectedModel, mode: adapters[0]?.mode ?? "" });
-    setModeState(adapters[0]?.mode ?? "");
-  } else if (selectedModel !== "" && mode === "" && adapters.length > 0) {
-    setModeState(adapters[0]?.mode ?? "");
-  }
-
   const setKind = useCallback((next: ModelTestKind) => {
     setKindState(next);
     setSelectedModel("");
-    setModeState("");
+    setModeState(defaultModeForKind(next));
     setValues({});
     setResult(null);
     setError(null);
@@ -133,7 +159,6 @@ export function useModelTest(): ModelTestController {
 
   const selectModel = useCallback((name: string) => {
     setSelectedModel(name);
-    setModeState("");
     setValues({});
     setResult(null);
     setError(null);
@@ -230,6 +255,7 @@ export function useModelTest(): ModelTestController {
     generating: busy.busy,
     adapters,
     mode,
+    modeTabs,
     generate,
     loading: configQ.isLoading,
     selectedModel,

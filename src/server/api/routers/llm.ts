@@ -7,17 +7,20 @@ import {
   MODEL_CAPABILITIES,
   MODEL_INPUT_TYPES,
   MODEL_OUTPUT_TYPES,
+  isMediaEndpointKind,
+  isMediaEndpointPath,
   resolveApiFormat,
+  resolveMediaEndpointPath,
 } from "~/lib/llm/provider-types";
 import { isHttpUrl } from "~/lib/url-scheme";
-import { llmProviderRepository, remoteModelRepository } from "~/lib/core/repository";
-import type { LlmProvider, RemoteModel } from "~/server/db/schema";
 import {
-  isCustomContractInputId,
-  isModeContractInputId,
-  parseRemoteModeAdapters,
-  WORKSHOP_INPUT_TYPES,
-} from "~/lib/workshop/model-mode-contract";
+  llmProviderRepository,
+  parseAdaptersDocJson,
+  remoteModelRepository,
+} from "~/lib/core/repository";
+import type { LlmProvider, RemoteModel } from "~/server/db/schema";
+import { isCustomContractInputId, isModeContractInputId } from "~/lib/workshop/model-mode-contract";
+import { parseRemoteModeAdapters, WORKSHOP_INPUT_TYPES } from "~/lib/workshop/remote-model-adapter";
 import {
   loadModeContractLayers,
   resetModeContractOverride,
@@ -33,11 +36,13 @@ const adapterInputSchema = z.object({
   type: z.enum(WORKSHOP_INPUT_TYPES.map((t) => t.type)),
   field: z.string().min(1),
 });
+/* 端点路径不在适配器行里（ISSUE #3622）：它是模型本身的配置、与模式无关，
+ * 存档升成模型级 envelope（workshopAdaptersSave 的入参带 endpointPath 一格，
+ * 所有模式共用）。 */
 const adapterSchema = z.object({
   /* 固定值字段（#3590）：每次请求原样带上的键值（如 Agnes 视频的 mode/size）。 */
   constants: z.array(z.object({ field: z.string().min(1), value: z.string() })).optional(),
   mode: z.string().min(1),
-  endpointPath: z.string().min(1),
   inputs: z.array(adapterInputSchema).min(1),
   outputField: z.string().optional(),
 });
@@ -74,6 +79,8 @@ const modelInputSchema = z.object({
   baseUrl: z.string().nullish(),
   capabilities: z.array(z.enum(MODEL_CAPABILITIES)).nullish(),
   contextWindow: z.number().int().positive().nullish(),
+  /** 图像 / 视频模型的接口端点动作路径（#3656）：写侧按行用途白名单收窄。 */
+  endpointPath: z.string().nullish(),
   enabled: z.boolean().optional(),
   id: z.string().min(1).optional(),
   inputTypes: z.array(z.enum(MODEL_INPUT_TYPES)).nullish(),
@@ -103,9 +110,13 @@ function providerView(p: LlmProvider) {
 /** 模型下发给客户端的形状：密钥只报「有没有配」（供应商级密钥不在这里重复报）。
  *  `apiFormat` 下发的是**生效值**（模型自己的 → 供应商默认 → chat-completions）：
  *  设置页的模型行与编辑弹窗都按它显示，不再各自回落一次。
- *  指向已删除供应商的行 `find` 自然取不到，格式回落默认值，不因一条孤儿行报错。 */
+ *  指向已删除供应商的行 `find` 自然取不到，格式回落默认值，不因一条孤儿行报错。
+ *  `endpointPath`（#3656）同口径，来源是模型级适配器存档（`workshopAdapters`
+ *  envelope 的模型级端点一格，#3622/#3659）：图像 / 视频行下发生效值（存档值
+ *  按用途白名单收窄 → 缺省回落用途默认第一项），文本行恒 null。 */
 function modelView(m: RemoteModel, providers: ReadonlyArray<LlmProvider>) {
   const provider = providers.find((p) => p.id === m.providerId);
+  const doc = parseAdaptersDocJson(m.workshopAdapters);
   return {
     id: m.id,
     providerId: m.providerId,
@@ -114,6 +125,9 @@ function modelView(m: RemoteModel, providers: ReadonlyArray<LlmProvider>) {
     enabled: m.enabled,
     baseUrl: m.baseUrl,
     apiFormat: resolveApiFormat(m.apiFormat, provider?.apiFormat),
+    endpointPath: isMediaEndpointKind(m.kind)
+      ? resolveMediaEndpointPath(m.kind, doc.endpointPath)
+      : null,
     hasApiKey: typeof m.apiKey === "string" && m.apiKey !== "",
     contextWindow: m.contextWindow,
     maxOutputTokens: m.maxOutputTokens,
@@ -207,7 +221,27 @@ export const llmRouter = createTRPCRouter({
 
   /** 新建 / 更新供应商下的一条模型。 */
   modelSave: authedProcedure.input(modelInputSchema).mutation(async ({ input }) => {
-    await remoteModelRepository.saveModel(input);
+    const saved = await remoteModelRepository.saveModel(input);
+    /* 图像 / 视频的接口端点（#3656）落**模型级适配器存档**（workshopAdapters
+     * envelope 的 endpointPath 一格，#3622/#3659 的同一份存储），不另开列。
+     * `null`（文本行 / 弹窗重置）= 清空该格；白名单外的值折成空串 = 按用途
+     * 默认第一项（读侧 `resolveMediaEndpointPath` 统一回落）。省略 = 不动既有
+     * （旧调用方不带这格）。 */
+    if (input.endpointPath !== undefined) {
+      const doc = await remoteModelRepository.getWorkshopAdaptersDoc(saved.name);
+      const path =
+        isMediaEndpointKind(saved.kind) &&
+        typeof input.endpointPath === "string" &&
+        isMediaEndpointPath(saved.kind, input.endpointPath)
+          ? input.endpointPath
+          : "";
+      if (path !== doc.endpointPath) {
+        await remoteModelRepository.saveWorkshopAdaptersDoc(saved.name, {
+          ...doc,
+          endpointPath: path,
+        });
+      }
+    }
     return readProviderState();
   }),
 
@@ -273,18 +307,21 @@ export const llmRouter = createTRPCRouter({
       return { contracts, effective };
     }),
 
-  /** 读取某条远端模型的工坊模式适配器 */
+  /** 读取某条远端模型的工坊适配器存档（模型级：端点路径 + 各模式适配器） */
   workshopAdaptersGet: authedProcedure
     .input(z.object({ name: z.string().min(1) }))
     .query(async ({ input }) => {
-      const adapters = await remoteModelRepository.getWorkshopAdapters(input.name);
-      return { adapters };
+      const doc = await remoteModelRepository.getWorkshopAdaptersDoc(input.name);
+      return doc;
     }),
 
-  /** 保存某条远端模型的工坊模式适配器（整份覆盖） */
+  /** 保存某条远端模型的工坊适配器存档（整份覆盖；端点路径模型级共用） */
   workshopAdaptersSave: authedProcedure
     .input(
       z.object({
+        /* 模型级端点路径（拼在条目 Base URL 后）：空 = 未配置，请求侧按
+         * 产物类别推导（ISSUE #3622）。 */
+        endpointPath: z.string().optional(),
         name: z.string().min(1),
         adapters: z.array(adapterSchema),
       }),
@@ -293,9 +330,26 @@ export const llmRouter = createTRPCRouter({
       const adapters = parseRemoteModeAdapters(
         input.adapters.map((a) => ({ ...a, mode: a.mode.toUpperCase() })),
       );
-      const saved = await remoteModelRepository.saveWorkshopAdapters(input.name, adapters);
-      return { adapters: saved };
+      const saved = await remoteModelRepository.saveWorkshopAdaptersDoc(input.name, {
+        endpointPath: input.endpointPath?.trim() ?? "",
+        adapters,
+      });
+      return saved;
     }),
+
+  /** 各模型的适配器概览（哪些模型配了、各配了几个模式）——「模型适配」页
+   *  的模型清单标「已配」用，免得逐模型拉全量存档。 */
+  workshopAdaptersSummary: authedProcedure.query(async () => {
+    const rows = await remoteModelRepository.list();
+    return {
+      models: rows.flatMap((row) => {
+        const doc = parseAdaptersDocJson(row.workshopAdapters);
+        return doc.adapters.length === 0
+          ? []
+          : [{ modes: doc.adapters.map((a) => a.mode), name: row.name }];
+      }),
+    };
+  }),
 
   /* POST /api/llm/config —— 新建：update singleton config */
   configSave: authedProcedure

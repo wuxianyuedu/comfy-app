@@ -47,6 +47,9 @@ function modelFixture(kind: "chat" | "image" | "video" = "chat"): ProviderModelV
     enabled: false,
     baseUrl: null,
     apiFormat: "chat-completions",
+    /* #3656：图像 / 视频行念生效端点路径（modelView 已按用途回落第一项） */
+    endpointPath:
+      kind === "chat" ? null : kind === "image" ? "/v1/images/generations" : "/v1/videos",
     hasApiKey: false,
     contextWindow: 200_000,
     maxOutputTokens: 8192,
@@ -132,7 +135,8 @@ describe("ProviderModelRow（#3618）", () => {
 
   it("图像行摘要（#3618 补充）：念图像端点路径，不念上下文 / 输出 / 文本格式", () => {
     renderRow("image");
-    expect(screen.getByText(/图像端点 \/images\/generations/)).toBeInTheDocument();
+    /* #3656：路径念模型自己生效的那条（词表含版本段） */
+    expect(screen.getByText(/图像端点 \/v1\/images\/generations/)).toBeInTheDocument();
     expect(screen.queryByText(/上下文/)).toBeNull();
     expect(screen.queryByText(/输出/)).toBeNull();
     expect(screen.queryByText(/Chat Completions/)).toBeNull();
@@ -140,7 +144,7 @@ describe("ProviderModelRow（#3618）", () => {
 
   it("视频行摘要（#3618 补充）：念视频端点路径", () => {
     renderRow("video");
-    expect(screen.getByText(/视频端点 \/videos\/generations/)).toBeInTheDocument();
+    expect(screen.getByText(/视频端点 \/v1\/videos/)).toBeInTheDocument();
     expect(screen.queryByText(/Chat Completions/)).toBeNull();
   });
 });
