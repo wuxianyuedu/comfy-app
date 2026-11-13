@@ -578,8 +578,11 @@ async function runFlow(deps, tmpFiles) {
       return CODE.GREEN;
     }
     /* slug 由 preflight 的 `!slug` 闸收窄后带回：阶段 0 之后的平台动作不再面对 null。 */
-    const { branch, frags, staged, unstagedModified, untracked, sha } = pf;
+    const { branch, frags, landableFrags, staged, unstagedModified, untracked, sha } = pf;
     slug = pf.slug;
+    /* 落地验真的碎片面 = 本分支带进来的那几份（#3714）：工作区在途的下一件差事
+     * 的碎片不属于这次合并的证据，混进去会把下一次合并误判成「没验真」。 */
+    const mergeFrags = landableFrags ?? frags;
     /* 「走到哪了」第一格（ISSUE #3083）：阶段名 + 关键身份。进度与退码是两套信息 ——
      * 这一行说「预检走完了」，结论那行才说「结果是什么」。 */
     reportStage(log, "预检通过", {
@@ -691,7 +694,7 @@ async function runFlow(deps, tmpFiles) {
         root,
         slug,
         branch,
-        frags,
+        frags: mergeFrags,
         baseRef,
         baseBranch,
         explicitTitle: opt.title,
@@ -780,7 +783,7 @@ async function runFlow(deps, tmpFiles) {
         confirmSkipped,
         slug,
         number,
-        frags,
+        frags: mergeFrags,
         baseRef,
         up,
         buildState,

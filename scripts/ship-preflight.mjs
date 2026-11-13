@@ -76,7 +76,7 @@ import { envInitHint } from "./env-preflight.mjs";
  *   | {action:"finish", codes:number[]}
  *   | {action:"dry-run", codes:number[]}
  *   | {action:"continue", codes:number[], branch:string, sha:string, slug:string,
- *      frags:string[], staged:string[], unstagedModified:string[], untracked:string[]}
+ *      frags:string[], landableFrags:string[], staged:string[], unstagedModified:string[], untracked:string[]}
  * >}
  *   `stop` = 原样返回那个码（不打印「结论」，与本段此前那几处提前 return 同形）；
  *   `finish` = 把 `codes` 交给装配层的 `finish`；`dry-run` = 装配层直接退 `GREEN`。
@@ -219,6 +219,21 @@ export async function runPreflightStage(ctx) {
         .filter((p) => p.endsWith(".md")),
     ]),
   ];
+  /* 落地验真只认**本分支带进来的**碎片（ISSUE #3714）：工作区里可能躺着下一件
+   * 差事的在途碎片（未提交、不属于本分支），把它也算进「必须在合并提交里」
+   * 会让并行工作的下一次合并被误判成「没验真」。分支侧 diff 是「这个 PR 带了
+   * 什么」的权威面；只在工作区的碎片照常进 `frags`（单子读数用），但不参与
+   * 落地验真，这里念一行说明去向。 */
+  const landableFrags = branchFragRes.stdout
+    .split("\n")
+    .map((s) => s.trim())
+    .filter((p) => p.endsWith(".md"));
+  const workOnlyFrags = frags.filter((p) => !landableFrags.includes(p));
+  if (workOnlyFrags.length > 0) {
+    log(
+      `[ship] 在途碎片（工作区有、未随本分支落地 ⇒ 不参与合并验真）：${workOnlyFrags.join("、")}`,
+    );
+  }
 
   log(
     `[ship] 分支 ${branch} · sha ${sha.slice(0, 8)} · 仓库 ${slug ?? "(取不到)"}` +
@@ -463,6 +478,8 @@ export async function runPreflightStage(ctx) {
      * 不再对 `string|null` 做一次「反正不会空」的断言。 */
     slug,
     frags,
+    /* 落地验真只认本分支带进来的碎片（#3714）；工作区在途的那几份只进读数。 */
+    landableFrags,
     /* 工作树三列状态由本段读一次、交给 commit 那一段用：同一轮里读两次会让
      * 「该暂存什么」与「刚才念的读数」出现两个答案。 */
     staged,
