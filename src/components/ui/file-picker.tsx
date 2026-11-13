@@ -78,7 +78,9 @@ export function FilePicker({
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { files } = event.target;
-    const first = files?.item(0);
+    /* 按下标取第一个：真实 `FileList` 与测试桩（数组形）都认下标访问，
+     * `.item()` 只有真 DOM 里有（#3657 平台受影响用例格的现场）。 */
+    const first = files?.[0];
     if (!files || !first) {
       return;
     }
