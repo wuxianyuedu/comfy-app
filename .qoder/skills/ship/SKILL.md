@@ -40,7 +40,7 @@ pnpm ship --claim 2187                           # 领取：打 `处理人:` + `
 pnpm ship --release 2187                         # 结束：评论「开发结束」+ 撤 `处理人:`（`参与人:` 保留）
 pnpm ship --claims                               # 列出自己领取中（state=open）的单子
 pnpm ship --branches                             # 只读：逐条本地分支给「落地了没有」（判据只有 PR 的 `is_merged`）—— 一次也不删，与任何显式动作同行退 2
-pnpm ship --rerun-ci                         # CI 红/未判定要重跑：在**当前 PR 分支**推一笔空提交重新派生流水线（平台侧没有 PR 重跑入口）
+pnpm ship --rerun-ci                         # CI 红/未判定要重跑：在**当前 PR 分支**推一笔空提交重新派生流水线（平台侧没有 PR 重跑入口）；动手前有一层只读前置读数（ISSUE #3341）：在跑的提醒先等终态、红的念红在哪些格与「重跑不会改变 infra 故障」、被取消的念「重跑正是对的」—— 读数不是闸，空提交照推
 pnpm ship --diagnose cnb-xxx-yyy                  # CI 红了：只读取回失败格 + 失败行（带行号）+ 日志链接（不给 sn 按 HEAD 的 sha 归属）
 pnpm ship --stage-log [cnb-xxx-yyy] <格名|格 id>   # 只读：念出某一格的日志正文（绿跑也能用）——按格名反查 stageId，认不出/命中多格退 2，不替你挑一格
 pnpm ship --new-issue "fix(x): …" --issue-body-file .git/issue.md --priority P1   # 一步建单：建 → 补提单人标签 → 独立回读（标题/正文人给）

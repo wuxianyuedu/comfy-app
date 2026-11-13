@@ -265,6 +265,10 @@ export async function runStandaloneAction(io) {
           run,
           relay,
           opt,
+          /* 前置读数（ISSUE #3341）要按 sha 归属当前 head 的 build：slug 与 cnb 在场性
+           * 一起传下去；取不到时那一格自己念「没有执行者」，照常执行。 */
+          slug,
+          cnbOk,
         }),
       ]),
     };
