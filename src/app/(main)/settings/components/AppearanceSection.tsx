@@ -31,6 +31,7 @@ import {
 } from "~/lib/appearance";
 
 import { SettingsCard } from "~/components/ui/settings-card";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
@@ -58,8 +59,7 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
   };
 
   return (
-    /* SAFETY: 类型断言已复核 */
-    <SettingsCard>
+    <SettingsCard titleExtra={<DataLocationBadge id="appearance" />}>
       <p className="text-muted-foreground mb-4 text-xs leading-relaxed">
         选择应用的主题外观：深色（Dark）或浅色（Light）。切换即时生效并自动保存，
         也可通过顶部导航栏的太阳/月亮按钮随时切换。

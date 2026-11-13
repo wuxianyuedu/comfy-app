@@ -27,15 +27,26 @@ import { Icon } from "~/components/ui/icon";
 import {
   DATA_LOCATION_CATEGORIES,
   DATA_LOCATIONS,
+  type DataLocationCategory,
   type DataLocationId,
 } from "~/lib/data-location/data-locations";
 
-/** 悬浮说明的拼装口径：落点与迁移办法各占一句，中间用「；」断开。 */
+/** 悬浮说明只说**落点**（ISSUE #3724）：哪张表 / 哪个文件，一行说完。数据种类名与
+ * 类别名徽标上已经有了，迁移时「在新机器重填一次」这类话对迁移没有操作价值，
+ * 都不再重复。 */
 function badgeTitle(id: DataLocationId): string {
-  const entry = DATA_LOCATIONS[id];
-  const category = DATA_LOCATION_CATEGORIES[entry.category];
-  return `${entry.kindLabel} · ${category.label}：${entry.target}；迁移：${entry.migration}`;
+  return DATA_LOCATIONS[id].target;
 }
+
+/** 悬停时**同色系加深**（ISSUE #3724）：底色从一成加深到两成，不再是「只剩描边」。
+ * 每类各配各的（与 `DATA_LOCATION_CATEGORIES` 的 tone 同键）。 */
+const HOVER_DEEPEN: Record<DataLocationCategory, string> = {
+  "app-data-file": "hover:bg-muted",
+  "browser-storage": "hover:bg-destructive/20",
+  database: "hover:bg-primary-500/20",
+  "local-disk": "hover:bg-warning/20",
+  "repo-file": "hover:bg-success/20",
+};
 
 /**
  * 一枚「数据存放位置」徽标。
@@ -55,7 +66,7 @@ export function DataLocationBadge({ id }: { id: DataLocationId }) {
       {/* `side="top"`：徽标坐在设置卡片正文里，气泡向上让出下方那两行说明；
           与顶栏问号（`side="bottom"`）分档的理由是锚点在屏幕里的位置，不是风格。 */}
       <Hint label={badgeTitle(id)} side="top">
-        <Badge size="sm" tone={category.tone}>
+        <Badge className={HOVER_DEEPEN[entry.category]} size="sm" tone={category.tone}>
           <Icon name={category.icon} />
           {category.label}
         </Badge>
