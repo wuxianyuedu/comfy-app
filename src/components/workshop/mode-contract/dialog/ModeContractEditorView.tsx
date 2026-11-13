@@ -20,6 +20,7 @@ import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
 import { FieldLabel } from "~/components/ui/field";
 import { Checkbox } from "~/components/ui/checkbox";
+import { Hint } from "~/components/ui/hint";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { PageHeader } from "~/components/ui/page-header";
 import { SectionLabel } from "~/components/ui/section-label";
@@ -332,23 +333,29 @@ function ContractInputRow({
           />
           必备
         </FieldLabel>
-        <Button
-          aria-label={`移除 ${label}`}
-          className="text-muted-foreground/60 hover:text-danger-strong disabled:opacity-25"
-          disabled={draft.inputs.length <= 1}
-          onClick={() => {
-            controller.removeInput(input);
-          }}
-          size="icon-sm"
-          title={
+        {/* 最后一口禁删的说明走 Hint（P82：不用原生 title=）；禁用态弹不出
+            原因，按组件口径挂 wrap 锚点。 */}
+        <Hint
+          label={
             draft.inputs.length <= 1
               ? "至少保留一个输入口：空清单的契约保存不了，工坊也驱动不起来"
               : undefined
           }
-          variant="ghost"
+          wrap
         >
-          ✕
-        </Button>
+          <Button
+            aria-label={`移除 ${label}`}
+            className="text-muted-foreground/60 hover:text-danger-strong disabled:opacity-25"
+            disabled={draft.inputs.length <= 1}
+            onClick={() => {
+              controller.removeInput(input);
+            }}
+            size="icon-sm"
+            variant="ghost"
+          >
+            ✕
+          </Button>
+        </Hint>
       </span>
     </div>
   );

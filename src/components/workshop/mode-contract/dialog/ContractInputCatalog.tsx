@@ -129,23 +129,29 @@ export function ContractInputCatalog({
                 {customInputKindLabel(def.kind)}
               </span>
               <span className="text-muted-foreground/50 text-2xs shrink-0 font-mono">{def.id}</span>
-              <Button
-                aria-label={`删除自定义参数 ${def.label}`}
-                className="text-muted-foreground/60 hover:text-danger-strong shrink-0 disabled:opacity-25"
-                disabled={inputs.length <= 1}
-                onClick={() => {
-                  onRemoveCustom(def.id);
-                }}
-                size="icon-sm"
-                title={
+              {/* 最后一口禁删的说明走 Hint（P82：不用原生 title=）；禁用态弹不出
+                  原因，按组件口径挂 wrap 锚点。 */}
+              <Hint
+                label={
                   inputs.length <= 1
                     ? "至少保留一个输入口：空清单的契约保存不了，工坊也驱动不起来"
                     : undefined
                 }
-                variant="ghost"
+                wrap
               >
-                ✕
-              </Button>
+                <Button
+                  aria-label={`删除自定义参数 ${def.label}`}
+                  className="text-muted-foreground/60 hover:text-danger-strong shrink-0 disabled:opacity-25"
+                  disabled={inputs.length <= 1}
+                  onClick={() => {
+                    onRemoveCustom(def.id);
+                  }}
+                  size="icon-sm"
+                  variant="ghost"
+                >
+                  ✕
+                </Button>
+              </Hint>
             </div>
           ))}
 
