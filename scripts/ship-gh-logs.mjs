@@ -57,7 +57,8 @@ import {
   truncateJobLog,
 } from "./ci-github-verdict-logs.mjs";
 import { RED_RUN_CONCLUSIONS, workflowRunsUrl } from "./ci-github-verdict-read.mjs";
-import { readRelayLogs } from "./ship-ga-logs-cnb.mjs";
+import { findRelayComment, readRelayLogs } from "./ship-ga-logs-cnb.mjs";
+import { ensureOnDemandLogs, triggerOnDemandLogs } from "./ship-ga-logs-on-demand.mjs";
 
 /** 全量日志落点（系统临时目录；不进仓库）。 */
 export const GH_LOGS_DIR = path.join(os.tmpdir(), "comfy-ship-gh-logs");
@@ -515,6 +516,7 @@ function renderRelayLogs(text, meta, io) {
  *   windowMaxBytes?: number,
  *   dir?: string,
  *   cnbIo?: {run: (cmd: string, args: string[]) => {stdout:string,stderr:string,status:number,error:string|null}, slug: string} | undefined,
+ *   onDemand?: {sleep?: (ms:number)=>void|Promise<void>, now?:()=>number, intervalMs?:number, maxMs?:number} | undefined,
  * }} io 注入面
  * @returns {Promise<number>} 退码（只在「输入认不出」时是 2）
  */
@@ -531,25 +533,64 @@ export async function runGhLogs(io) {
   /* ── CNB 侧优先（ISSUE #3437）：按 PR 号站内读 relay 正文 ──────────────
    * 放在「GitHub 令牌」那一闸**之前**：CNB 命中时本地不需要任何 GitHub 凭据，
    * 也不发一条 api.github.com。只有 `pr:` 形态够得着（CNB 附件按 PR 号归属）；
-   * `run:` 形态照旧走 GA 出站链路。缺席时如实念一行，再退回下面那条链。 */
-  if (target.kind === "pr" && io.cnbIo && !io.dryRun) {
-    try {
-      const relay = readRelayLogs({
-        number: target.number,
-        run: io.cnbIo.run,
-        slug: io.cnbIo.slug,
-      });
-      if (relay) {
-        renderRelayLogs(relay.text, relay.meta, {
-          dir: io.dir,
-          log,
-          windowMaxBytes: io.windowMaxBytes,
-        });
-        return CODE.GREEN;
+   * `run:` 形态照旧走 GA 出站链路。
+   *
+   * §12.20：给了 `onDemand` 时，一条 `--gh-logs pr:<号>` 自己把「按需发起搬运 →
+   * 等 CNB 站内回读」也做完 —— 判绿的 run 没有失败 job、relay 一条评论都不写，
+   * 过去这一格必须先手工敲一遍 `cnb build start-build`。`onDemand` 缺席的旧调用方
+   * （判红自动回读 / 单测）行为逐字不变。 */
+  if (target.kind === "pr" && io.cnbIo) {
+    const cnb = { run: io.cnbIo.run, slug: io.cnbIo.slug };
+    if (io.dryRun) {
+      if (io.onDemand) {
+        triggerOnDemandLogs({ ...cnb, dryRun: true, log, pr: target.number });
+        log(
+          `[ship] --dry-run 计划：随后轮询 CNB PR #${String(target.number)} 的 scope=all relay 评论并站内读回（一条写动作都不发）。`,
+        );
       }
-      log("[ship] CNB 侧没有 GA 日志 relay 评论 ⇒ 退回 GitHub 链路（快速回退留盘）");
-    } catch (error) {
-      log(`[ship] CNB 侧读回异常 ⇒ 退回 GitHub 链路（不改三态）：${String(error)}`);
+    } else {
+      try {
+        const relay = readRelayLogs({ ...cnb, number: target.number });
+        if (relay) {
+          renderRelayLogs(relay.text, relay.meta, {
+            dir: io.dir,
+            log,
+            windowMaxBytes: io.windowMaxBytes,
+          });
+          return CODE.GREEN;
+        }
+        /* 有 marker 却读不回正文 = 读失败，不是「日志不存在」；此时**不**重复发起
+         * 搬运（那会白派一条 GA run），如实退回原链路。只有连 marker 都没有，才是
+         * #3667 那个根因：判绿 run 一条评论都没写。 */
+        const stale = findRelayComment(cnb.run, cnb.slug, target.number);
+        if (io.onDemand && stale === null) {
+          const ensured = await ensureOnDemandLogs({
+            ...cnb,
+            dryRun: false,
+            intervalMs: io.onDemand.intervalMs,
+            log,
+            maxMs: io.onDemand.maxMs,
+            now: io.onDemand.now,
+            pr: target.number,
+            sleep: io.onDemand.sleep ?? (() => Promise.resolve()),
+          });
+          if (ensured.relay) {
+            renderRelayLogs(ensured.relay.text, ensured.relay.meta, {
+              dir: io.dir,
+              log,
+              windowMaxBytes: io.windowMaxBytes,
+            });
+            return CODE.GREEN;
+          }
+          log("[ship] 按需搬运没拿到日志 ⇒ 退回 GitHub 链路（快速回退留盘，缺的只是日志）");
+        } else if (stale === null) {
+          log("[ship] CNB 侧没有 GA 日志 relay 评论 ⇒ 退回 GitHub 链路（快速回退留盘）");
+        } else {
+          log("[ship] CNB 侧有 relay 评论但附件没读回 ⇒ 退回 GitHub 链路（不重复发起搬运）");
+        }
+      } catch (error) {
+        log(`[ship] CNB 侧读回异常 ⇒ 退回 GitHub 链路（不改三态）：${String(error)}`);
+      }
     }
   }
   const token = resolveGhToken(env);

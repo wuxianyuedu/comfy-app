@@ -7215,6 +7215,9 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     "cnb pulls merge-pull",
     /* 关一张单子是把状态写到别人也看得见、且不会自动回退的地方 —— 与合并同一档。 */
     "cnb issues update-issue",
+    /* `--gh-logs pr:<号>` 的按需搬运会代发一条 GA `workflow_dispatch`（平台侧写动作），
+     * dry-run 也不许发。 */
+    "cnb build start-build",
     /* 杀进程是这一族里最不可逆的一格：dev server 里可能正跑着人没存的东西。 */
     "node scripts/reap-process.mjs",
   ];
