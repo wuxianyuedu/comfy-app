@@ -922,18 +922,6 @@ export default defineConfig({
         "tests/on-demand-duties-gate.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "tests/oxlint-jsplugin-rules.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
         "tests/oxlint-policy-rules.test.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用
-        "tests/postinstall-cross-platform.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/precommit-timing.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/premerge-check.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/premerge-timing.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/ps1-consistency.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/publish-desktop-bundle.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "tests/qoder-ignore.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/ratchet-update-guards.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/remote-model-entry-wire-contract.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/router-error-envelope.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "tests/scripts-typecheck-ratchet.test.ts", // 存量 7 处 · 清账目标 B5 · 新代码不禁用
-        "tests/shell-gate.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "tests/ship-exec.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/ship.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
         "tests/sidebar-selected-state.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用

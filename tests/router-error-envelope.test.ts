@@ -8,6 +8,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import oxlintConfig from "../oxlint.parity.config.mjs";
+import { isRecord, isUnknownArray } from "~/lib/is-record";
 import { probeRules } from "./helpers/oxlint-probe";
 import { stripComments } from "./helpers/strip-comments";
 
@@ -32,19 +33,45 @@ function routerSources(): Array<string> {
 }
 
 /** 从真实判决配置里取 router 那一档生效的规则条目（配置变了，这里跟着变）。 */
+/** 判决配置里 router 那一档的形状守卫（B5 清账：不走 `as` 断言）。 */
+function isConfigBlock(value: unknown): value is ConfigBlock {
+  return isRecord(value) && isUnknownArray(value.files);
+}
+
 function routerRestrictedSyntax(): { block: ConfigBlock; entries: Array<RestrictedSyntaxEntry> } {
-  const overrides = (oxlintConfig as unknown as { overrides?: Array<ConfigBlock> }).overrides ?? [];
-  const blocks = overrides.filter(
-    (block) => Array.isArray(block.files) && block.files.includes(ROUTER_GLOB),
-  );
+  /* overrides 用运行时守卫收窄，不走 `as` 断言（B5 清账）。 */
+  const overrides: unknown = oxlintConfig.overrides;
+  const blocks: Array<ConfigBlock> = [];
+  if (isUnknownArray(overrides)) {
+    for (const entry of overrides) {
+      if (
+        isConfigBlock(entry) &&
+        isUnknownArray(entry.files) &&
+        entry.files.includes(ROUTER_GLOB)
+      ) {
+        blocks.push(entry);
+      }
+    }
+  }
   expect(blocks).toHaveLength(1);
   const block = blocks[0];
   if (!block) {
     throw new Error(`oxlint.parity.config.mjs 里没有 ${ROUTER_GLOB} 这一档（glob 改过？）`);
   }
-  const rules = block.rules?.["eslint-js/no-restricted-syntax"];
-  expect(Array.isArray(rules)).toBe(true);
-  const entries = (rules as Array<unknown>).slice(1) as Array<RestrictedSyntaxEntry>;
+  const rules: unknown = block.rules?.["eslint-js/no-restricted-syntax"];
+  expect(isUnknownArray(rules), "router 档的 no-restricted-syntax 不是数组").toBe(true);
+  const entries: Array<RestrictedSyntaxEntry> = [];
+  if (isUnknownArray(rules)) {
+    for (const entry of rules) {
+      if (
+        isRecord(entry) &&
+        typeof entry.message === "string" &&
+        typeof entry.selector === "string"
+      ) {
+        entries.push({ message: entry.message, selector: entry.selector });
+      }
+    }
+  }
   return { block, entries };
 }
 
