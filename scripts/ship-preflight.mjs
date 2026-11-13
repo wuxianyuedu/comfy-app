@@ -76,7 +76,7 @@ import { envInitHint } from "./env-preflight.mjs";
  *   | {action:"finish", codes:number[]}
  *   | {action:"dry-run", codes:number[]}
  *   | {action:"continue", codes:number[], branch:string, sha:string, slug:string,
- *      frags:string[], staged:string[], unstagedModified:string[], untracked:string[]}
+ *      frags:string[], landableFrags:string[], staged:string[], unstagedModified:string[], untracked:string[]}
  * >}
  *   `stop` = 原样返回那个码（不打印「结论」，与本段此前那几处提前 return 同形）；
  *   `finish` = 把 `codes` 交给装配层的 `finish`；`dry-run` = 装配层直接退 `GREEN`。
