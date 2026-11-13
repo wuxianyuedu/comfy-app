@@ -32,12 +32,11 @@ function dbStudioDotState(c: ReadySettingsPageController): StatusDotState {
 
 export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
   return (
-    <SettingsCard>
-      {/* 库文件在哪儿（ISSUE #3625）：这一节就是「可视化浏览本地 SQLite」，
-          徽标把库本体的落点说清 —— 换机器时照着它搬。 */}
-      <div className="mb-2">
-        <DataLocationBadge id="app-database" label="存放位置" />
-      </div>
+    <SettingsCard
+      /* 库文件在哪儿（ISSUE #3625）：这一节就是「可视化浏览本地 SQLite」，
+          徽标把库本体的落点说清 —— 换机器时照着它搬。徽标放标题行、说明走悬浮气泡。 */
+      titleExtra={<DataLocationBadge id="app-database" />}
+    >
       {/* 「本分区是什么」那一段搬进了导航行右侧的说明（`sectionSummary`）——
           它回答的是导航问题，读一遍就不再需要，留着只会把第一个控件推到折叠线
           以下。这里只留**答案在别处拿不到的那句**：界面托管在官方远端域名上。 */}

@@ -32,7 +32,12 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
     <>
       {/* 卡片标题去掉（ISSUE #3527）：正文那一列已经有一行分区标题「远程模型」，
           卡片再起一个同名标题就是重复；master 侧更新过的说明文案保留。 */}
-      <SettingsCard description="每个供应商维护自己的 Base URL / API Key；接口格式在模型上（同一供应商下不同用途的模型可以各用一套协议）">
+      <SettingsCard
+        description="每个供应商维护自己的 Base URL / API Key；接口格式在模型上（同一供应商下不同用途的模型可以各用一套协议）"
+        /* 供应商与模型落在库里（ISSUE #3625）：徽标放标题行，落点与迁移办法
+            （含 API Key 密文存放、换机器要重填）在悬浮气泡里。 */
+        titleExtra={<DataLocationBadge id="remote-model" />}
+      >
         {p.errorText !== null && p.errorText !== "" && (
           <p className="bg-destructive/10 text-danger-strong mb-3 rounded-lg px-3 py-2 text-xs">
             读取供应商失败：{p.errorText}
@@ -109,20 +114,6 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
             </section>
           </div>
         )}
-
-        <div className="mt-4 mb-2 flex flex-wrap items-start gap-2">
-          <DataLocationBadge id="remote-model" />
-          <p className="text-muted-foreground text-2xs leading-relaxed">
-            <strong className="text-ink/80">保存位置</strong>
-            ：供应商落在本地 SQLite 的 <code className="text-ink/80">
-              llmProvider
-            </code> 表、模型落在{" "}
-            <code className="text-ink/80">remoteModel</code> 表（默认{" "}
-            <code className="text-ink/80">db.sqlite</code>，路径由{" "}
-            <code className="text-ink/80">DATABASE_URL</code> 指定）。API Key 以 AES-256-GCM
-            加密存放，不会以明文下发到浏览器。
-          </p>
-        </div>
 
         <p className="text-muted-foreground text-2xs leading-relaxed">
           「测试连接」按当前填写的 Base URL / 格式 /
