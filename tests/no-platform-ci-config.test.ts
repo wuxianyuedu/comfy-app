@@ -2110,11 +2110,18 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 内置 github.token 读本 run 的 job logs。 */
     expect(workflow).toContain("secrets.CNB_ISSUE_TOKEN");
     expect(workflow).toMatch(/GITHUB_TOKEN:\s*\$\{\{ github\.token \}\}/u);
-    /* step 级 continue-on-error：日志搬不到绝不改本 run 的 conclusion。
-     * 判决链 / commit-statuses / 流水线 name 一个字都不许动。 */
-    const relayBlock = workflow.slice(workflow.indexOf("把 GA 判红日志正文搬到 CNB"));
-    expect(relayBlock).toContain("continue-on-error: true");
-    expect(relayBlock).toContain("if: always()");
+    /* step 级 continue-on-error 已摘（ISSUE #3710）：前提不成立的失败（0s 退出）
+     * 此前被这枚旗标盖成绿色 ✓，与「跑过但没日志」在 run 列表里不可区分。
+     * job 级仍在：relay 失败绝不改本 run 的 conclusion，判决链 /
+     * commit-statuses / 流水线 name 一个字都不许动。 */
+    const relayStep = workflow.slice(
+      workflow.indexOf("把 GA 判红日志正文搬到 CNB"),
+      workflow.indexOf("run: node scripts/ci-ga-logs-relay.mjs"),
+    );
+    expect(relayStep).not.toContain("continue-on-error: true");
+    expect(relayStep).toContain("if: always()");
+    const jobBlock = workflow.slice(workflow.indexOf("ga-verdict-callback:"));
+    expect(jobBlock).toContain("continue-on-error: true");
     /* 流水线 name 在 `.cnb.yml`（commit-status context 含它），本格一个字不动。 */
     expect(readRegisteredConfig()).toContain("name: GA 判决回调（骨架·休眠）");
     /* 本地读者在场：ship 侧从 CNB 站内读回的模块。 */
@@ -2171,10 +2178,16 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(reader).toContain("pulls");
     expect(reader).toContain("list-comments");
     expect(reader).not.toContain("get-pull");
-    /* 承重一字不动：step 仍不承重，流水线 name 与三态退码不变。 */
-    const relayBlock = workflow.slice(workflow.indexOf("把 GA 判红日志正文搬到 CNB"));
-    expect(relayBlock).toContain("continue-on-error: true");
-    expect(relayBlock).toContain("if: always()");
+    /* 承重一字不动：step 失败可见（#3710），job 级 continue-on-error 仍在，
+     * 流水线 name 与三态退码不变。 */
+    const relayStep = workflow.slice(
+      workflow.indexOf("把 GA 判红日志正文搬到 CNB"),
+      workflow.indexOf("run: node scripts/ci-ga-logs-relay.mjs"),
+    );
+    expect(relayStep).not.toContain("continue-on-error: true");
+    expect(relayStep).toContain("if: always()");
+    const jobBlock = workflow.slice(workflow.indexOf("ga-verdict-callback:"));
+    expect(jobBlock).toContain("continue-on-error: true");
     expect(readRegisteredConfig()).toContain("name: GA 判决回调（骨架·休眠）");
     expect(relay).toContain("不碰承重");
   });
@@ -2213,10 +2226,16 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     /* 本地读者：旧评论（无 scope）回落 failed 逐字兼容，全量档不把判绿误报成失败。 */
     expect(reader).toContain('meta.scope === "all"');
     expect(reader).toContain("判绿 job 的正常形态");
-    /* 承重一字不动：relay step 仍不承重，流水线 name 与三态退码不变。 */
-    const relayBlock = workflow.slice(workflow.indexOf("把 GA 判红日志正文搬到 CNB"));
-    expect(relayBlock).toContain("continue-on-error: true");
-    expect(relayBlock).toContain("if: always()");
+    /* 承重一字不动：relay step 失败可见（#3710），job 级 continue-on-error 仍在，
+     * 流水线 name 与三态退码不变。 */
+    const relayStep = workflow.slice(
+      workflow.indexOf("把 GA 判红日志正文搬到 CNB"),
+      workflow.indexOf("run: node scripts/ci-ga-logs-relay.mjs"),
+    );
+    expect(relayStep).not.toContain("continue-on-error: true");
+    expect(relayStep).toContain("if: always()");
+    const jobBlock = workflow.slice(workflow.indexOf("ga-verdict-callback:"));
+    expect(jobBlock).toContain("continue-on-error: true");
     expect(cnb).toContain("name: GA 判决回调（骨架·休眠）");
   });
 
