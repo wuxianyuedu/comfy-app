@@ -183,6 +183,46 @@ export function decideCleanBranch({ requested, landedVerified, branch }) {
 }
 
 /**
+ * `git branch -D` 拒删的**现场归因** —— 只读 git 自己吐回的 stderr 原话，不猜。
+ *
+ * 为什么要归因（ISSUE #3617 的现场）：`--clean-branch` 的本地删除段被拒时，
+ * 旧读数只有一句「本地那一半没删掉（exit 1）」，不说为什么、也不给出口 —— 而本仓
+ * 常态是 opencode / 并行 worktree 检出（硬规则 30），「分支被某个 worktree 占着」
+ * 不是边角，是每一轮都会撞的形状。git 的 stderr 里其实带着占用的检出路径，
+ * 分出「当前检出占着」还是「别的检出占着」才能给出对应的切走出口。
+ *
+ * 两种原话（同机实测；老 git 对当前检出的措辞是 `checked out at`）：
+ *   · `error: cannot delete branch 'x' used by worktree at '<路径>'`；
+ *   · `error: Cannot delete branch 'x' checked out at '<路径>'`。
+ * 路径与当前检出根（`rev-parse --show-toplevel`）逐字同形 ⇒ 当前；其余 ⇒ 别的检出。
+ *
+ * @param {string | null | undefined} stderr `git branch -D` 的 stderr 原文
+ * @param {string | null | undefined} [currentRoot] 当前检出的根；不给（或给空）时
+ *   解析出占用路径也只报 `other-worktree` —— 宁可少分一档，不猜。
+ * @returns {{kind: "current-worktree" | "other-worktree" | "other", path: string | null}}
+ */
+export function classifyBranchDeleteRefusal(stderr, currentRoot = null) {
+  const hit = /(?:used by worktree at|checked out at)\s+'(?<path>[^']+)'/i.exec(
+    String(stderr ?? ""),
+  );
+  if (!hit) {
+    return { kind: "other", path: null };
+  }
+  const path = hit.groups?.path ?? null;
+  /** @param {string | null | undefined} p git 输出的路径（统一成正斜杠再比） */
+  const norm = (p) => String(p ?? "").replaceAll("\\", "/");
+  const a = norm(path);
+  const b = norm(currentRoot);
+  /** Windows 盘符形态的路径（`G:/…`）大小写不敏感；POSIX 路径严格比。 */
+  const winLike = (/** @type {string} */ p) => /^[a-z]:\//i.test(p);
+  const same = a === b || (winLike(a) && winLike(b) && a.toLowerCase() === b.toLowerCase());
+  if (b && same) {
+    return { kind: "current-worktree", path };
+  }
+  return { kind: "other-worktree", path };
+}
+
+/**
  * push 失败的**现场分型** —— 只读 push 自己吐回来的原话，不猜。
  *
  * 为什么要分型（ISSUE #2825 的现场）：远端回 `Repository Not Found`（exit 128）的那一跳，
