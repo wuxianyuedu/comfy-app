@@ -10,6 +10,8 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import { readAppOrigin } from "../.storybook/app-origin-reader";
 import { APP_ORIGIN_DEFAULTS } from "../.storybook/app-origin-defaults";
 import { writeStorybookAppOrigin } from "../scripts/storybook-assets.mjs";
@@ -139,24 +141,38 @@ async function writeNarrowTsconfig(): Promise<{
  * 悄悄多扫）。用 `typescript` 自己的解析器而非手剥注释 + `JSON.parse`：真配置带块/行注释与尾逗号，手搓剥离器是第三
  * 事实源；`extends` 链也一并展开。
  */
+/** `typescript` 解析器的消费形状守卫（B5 清账）：只取 readConfigFile 一件。 */
+function isTsCompilerApi(value: unknown): value is {
+  readConfigFile: (file: string, read: (p: string) => string | undefined) => unknown;
+} {
+  return isRecord(value) && typeof value.readConfigFile === "function";
+}
+
+/** 「名 → 串」映射守卫（B5 清账）：scripts / bin 这类字段都按它收窄。 */
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return isRecord(value) && Object.values(value).every((entry) => typeof entry === "string");
+}
+
 function repoExclude(): Array<string> {
-  /* SAFETY: 类型断言已复核 */
   // oxlint-disable-next-line typescript/no-require-imports
-  const ts = require("typescript") as {
-    readConfigFile: (
-      file: string,
-      read: (p: string) => string | undefined,
-    ) => { config?: { exclude?: Array<string> } };
-  };
-  const parsed = ts.readConfigFile("tsconfig.json", (f) => fs.readFileSync(f, "utf8"));
-  const exclude = parsed.config?.exclude;
+  const tsModule: unknown = require("typescript");
+  if (!isTsCompilerApi(tsModule)) {
+    throw new Error("typescript 的 API 形状变了：缺 readConfigFile");
+  }
+  const parsed: unknown = tsModule.readConfigFile("tsconfig.json", (f) =>
+    fs.readFileSync(f, "utf8"),
+  );
+  if (!isRecord(parsed) || !isRecord(parsed.config)) {
+    throw new Error("tsconfig.json 读不出 config —— typescript 解析器返回形状变了？");
+  }
+  const exclude: unknown = parsed.config.exclude;
   expect(
     Array.isArray(exclude) && exclude.length > 0,
     "读不出仓库 tsconfig.json 的 exclude —— 窄项目无法据此解开 node_modules 这一条",
   ).toBe(true);
-  /* 上面那条断言已经把 `undefined` / 非数组挡掉了，这里用 `!` 表达「到此已非空」
-     （而不是再写一次 `as` —— 那是同一件事的更啰嗦说法）。 */
-  return exclude!;
+  /* 数组元素仍按串收窄（B5 清账）：非串条目不进清单，而不是断言整个数组。 */
+  const list = isUnknownArray(exclude) ? exclude : [];
+  return list.filter((entry): entry is string => typeof entry === "string");
 }
 
 describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输入：四条判据", () => {
@@ -197,8 +213,11 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
     try {
       const outFile = path.join(dir, GENERATED_REL);
       writeStorybookAppOrigin(dir, outFile);
-      /* SAFETY: 类型断言已复核 */
-      payload = JSON.parse(fs.readFileSync(outFile, "utf8")) as Record<string, unknown>;
+      const parsed: unknown = JSON.parse(fs.readFileSync(outFile, "utf8"));
+      if (!isRecord(parsed)) {
+        throw new Error("app-origin.json 生成件不是对象 —— 生成器坏了？");
+      }
+      payload = parsed;
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -479,10 +498,10 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
   });
 
   it("postinstall 的唯一入口仍然把它补上，且这一步失败只提示", () => {
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(read("package.json")) as {
-      scripts?: Record<string, string>;
-    };
+    /* package.json 的消费形状守卫（B5 清账）：只取 scripts 映射这一面。 */
+    const pkgParsed: unknown = JSON.parse(read("package.json"));
+    const pkgScripts: unknown = isRecord(pkgParsed) ? pkgParsed.scripts : undefined;
+    const pkg = { scripts: isStringRecord(pkgScripts) ? pkgScripts : undefined };
     // 契约：postinstall 必须逐字是那一条、禁止 `&&`（launcher-core 的
     // checkPostinstall() 守的就是它，#636 的形态），所以「补输入」只能并进入口内部。
     expect(String(pkg.scripts?.postinstall)).toBe("node scripts/install-git-hooks.mjs");
@@ -556,8 +575,10 @@ function moveFileAcrossVolumes(from: string, to: string): void {
   try {
     fs.renameSync(from, to);
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    if ((error as NodeJS.ErrnoException).code !== "EXDEV") {
+    /* 失败形状按字段读（B5 清账）：只有 code === "EXDEV"（跨卷）才走拷贝回退。 */
+    const code: unknown =
+      typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+    if (code !== "EXDEV") {
       throw error;
     }
     fs.copyFileSync(from, to);
@@ -613,11 +634,11 @@ function resolveTscBin(): {
     const pkgJson = path.join(ROOT, "node_modules", pkg, "package.json");
     let bin: string | undefined;
     try {
-      /* SAFETY: 类型断言已复核 */
-      const pkgData = JSON.parse(fs.readFileSync(pkgJson, "utf8")) as {
-        bin?: Record<string, string> | string;
-      };
-      bin = typeof pkgData.bin === "string" ? pkgData.bin : pkgData.bin?.[binName];
+      /* bin 字段两形皆可（串 = 单入口，映射 = 多入口），按字段读后收窄（B5 清账）。 */
+      const pkgData: unknown = JSON.parse(fs.readFileSync(pkgJson, "utf8"));
+      const binField: unknown = isRecord(pkgData) ? pkgData.bin : undefined;
+      const entry: unknown = isRecord(binField) ? binField[binName] : binField;
+      bin = typeof entry === "string" ? entry : undefined;
     } catch {
       continue;
     }
@@ -725,10 +746,11 @@ describe("restoreGeneratedFile：挪不动也必须把开发期输入找回来",
         fs.existsSync(generatedFile),
         "承诺是「一次判据不该把开发期输入弄丢」—— 挪不动时两侧都不许是空的",
       ).toBe(true);
-      /* SAFETY: 类型断言已复核 */
-      const restored = JSON.parse(fs.readFileSync(generatedFile, "utf8")) as {
-        APP_DEV_PORT?: number;
-      };
+      const restoredParsed: unknown = JSON.parse(fs.readFileSync(generatedFile, "utf8"));
+      if (!isRecord(restoredParsed)) {
+        throw new Error("挪回来的 app-origin.json 不是对象 —— 暂存/恢复链路坏了？");
+      }
+      const restored = restoredParsed;
       expect(typeof restored.APP_DEV_PORT).toBe("number");
       expect(fs.existsSync(path.dirname(stash)), "暂存目录不许留在缓存里").toBe(false);
     } finally {

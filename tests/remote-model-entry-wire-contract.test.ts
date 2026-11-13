@@ -34,6 +34,23 @@ vi.mock("~/lib/core/logger", async (importOriginal) => {
 const createCaller = createCallerFactory(llmRouter);
 const tdb = getTestDb();
 
+/** 故意传错键名的负载：经一个 unknown 入口的「端口函数」调用（B5 清账：不走 as
+ *  断言）。谓词只核「可调用」，键名漂移由 zod 在服务端拒绝。 */
+function isConfigSaveFn(
+  value: unknown,
+): value is (input: { extraModels: Array<Record<string, unknown>> }) => Promise<unknown> {
+  return typeof value === "function";
+}
+
+function configSavePort(
+  value: unknown,
+): (input: { extraModels: Array<Record<string, unknown>> }) => Promise<unknown> {
+  if (!isConfigSaveFn(value)) {
+    throw new TypeError("configSave 必须是可调用函数");
+  }
+  return value;
+}
+
 /** 弹窗里那份**未判过**的表单状态（生产调用点交给桥的就是这一份 —— 字段级判据
  *  只用于「哪一项标红」，不产出值）→ 真桥。缺的键由 `ModelDialogForm` 的初始值补齐。 */
 function entryFromDialog(form: Partial<RemoteModelDraft> = {}) {
@@ -108,12 +125,12 @@ describe("远端模型条目 ⇄ configSave 的入参判据", () => {
     /* 把条目写成草稿那一侧的键名 —— 「两边各写一份、中间手写桥接」最典型的事故形状：
      * 它不会编译红，只会让用户刚加的模型没进列表。 */
     const drifted = { model: "gpt-x", baseUrl: "https://api.example/v1" };
-    await expect(
-      createCaller(makeCtx()).configSave({
-        /* SAFETY: 类型断言已复核 */
-        extraModels: [drifted as never],
-      }),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    /* 故意传错键名的负载：经一个 unknown 入口的「端口函数」调用（B5 清账：
+     * 不走 as 断言）。谓词只核「可调用」，键名漂移由 zod 在服务端拒绝。 */
+    const save = configSavePort(createCaller(makeCtx()).configSave);
+    await expect(save({ extraModels: [drifted] })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
     expect(tdb.$tables.remoteModels).toHaveLength(0);
   });
 

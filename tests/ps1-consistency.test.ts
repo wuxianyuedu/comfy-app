@@ -9,6 +9,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import { parseMjsGates, parsePs1Gates } from "./helpers/quality-gate-gates";
 
 const GUARD = path.join(process.cwd(), "scripts", "check-ps1-consistency.mjs");
@@ -133,13 +135,12 @@ function runGuard(overrides: Record<string, string | null>): string {
     });
     return "CODE=0";
   } catch (error: unknown) {
-    /* SAFETY: 类型断言已复核 */
-    const err = error as {
-      status?: number;
-      stderr?: string;
-      stdout?: string;
-    };
-    return `CODE=${err.status ?? 1}\n${err.stdout ?? ""}${err.stderr ?? ""}`;
+    /* 失败形状用运行时守卫取字段，不走 `as` 断言（B5 清账）。 */
+    const err: { status?: unknown; stderr?: unknown; stdout?: unknown } =
+      typeof error === "object" && error !== null ? error : {};
+    return `CODE=${typeof err.status === "number" ? err.status : 1}\n${
+      typeof err.stdout === "string" ? err.stdout : ""
+    }${typeof err.stderr === "string" ? err.stderr : ""}`;
   }
 }
 
@@ -261,15 +262,23 @@ describe("跨平台动作的实现契约", () => {
     }
     // lint 的零警告语义由 oxlint `--deny-warnings` 承担，唯一真源在 package.json，
     // 别让它静默丢失（否则零警告门禁形同虚设却没人发现）。
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
-      scripts?: Record<string, string>;
-    };
-    expect(pkg.scripts?.lint, "package.json 的 lint 必须委托给 lint:oxlint").toBe(
+    /* package.json 的 scripts 段用运行时守卫收窄（B5 清账，不走 as 断言）。 */
+    const pkgRaw: unknown = JSON.parse(
+      fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
+    );
+    const scripts: Record<string, string> = {};
+    if (isRecord(pkgRaw) && isRecord(pkgRaw.scripts)) {
+      for (const [key, value] of Object.entries(pkgRaw.scripts)) {
+        if (typeof value === "string") {
+          scripts[key] = value;
+        }
+      }
+    }
+    expect(scripts.lint, "package.json 的 lint 必须委托给 lint:oxlint").toBe(
       "pnpm run lint:oxlint",
     );
     expect(
-      pkg.scripts?.["lint:oxlint"] ?? "",
+      scripts["lint:oxlint"] ?? "",
       "package.json 的 lint:oxlint 缺 --deny-warnings（零警告门槛丢失）",
     ).toContain("--deny-warnings");
     // 两侧的三项门禁名必须一致（增减门禁时只改一侧 = 两个平台给出不同结论）

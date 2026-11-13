@@ -236,7 +236,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                     className="px-4"
                     onClick={openScriptEditor}
                     type="button"
-                    variant="gradient"
+                    variant="primary-solid"
                   >
                     编辑剧本
                   </Button>
@@ -273,7 +273,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                       className="px-4"
                       onClick={openScriptEditor}
                       type="button"
-                      variant="gradient"
+                      variant="primary-solid"
                     >
                       新建剧本
                     </Button>

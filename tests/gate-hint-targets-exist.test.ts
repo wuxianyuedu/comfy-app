@@ -138,9 +138,9 @@ function exitCodeOfGate(rel: string): number {
     });
     return 0;
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const code = (error as { status?: number | null }).status;
-    return typeof code === "number" ? code : -1;
+    /* 失败形状用运行时守卫取字段，不走 `as` 断言（B5 清账）。 */
+    const e: { status?: unknown } = typeof error === "object" && error !== null ? error : {};
+    return typeof e.status === "number" ? e.status : -1;
   }
 }
 

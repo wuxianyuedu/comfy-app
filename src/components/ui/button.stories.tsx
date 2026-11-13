@@ -23,7 +23,6 @@ const VARIANTS: Array<ButtonVariant> = [
   "danger-solid",
   "success-solid",
   "warning-solid",
-  "gradient",
   "link",
 ];
 const SIZES: Array<ButtonSize> = [

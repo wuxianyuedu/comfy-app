@@ -7,6 +7,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 const ROOT = process.cwd();
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 
@@ -17,12 +19,22 @@ const runtimeGraph = read("src/lib/comfyui/host-runtime.ts");
 const privateInputs = read("scripts/standalone-private-inputs.mjs");
 const devArtifacts = read("scripts/standalone-dev-artifacts.mjs");
 const buildDesktop = read("scripts/build-desktop.mjs");
-/* SAFETY: 类型断言已复核 */
-const pkg = JSON.parse(read("package.json")) as {
+/* package.json 的相关段：JSON.parse 的 any 用运行时守卫收窄（B5 清账，不走 as）。 */
+function isPackageJson(value: unknown): value is {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   scripts: Record<string, string>;
-};
+} {
+  if (!isRecord(value) || !isRecord(value.scripts)) {
+    return false;
+  }
+  return Object.values(value.scripts).every((line) => typeof line === "string");
+}
+
+const pkg: unknown = JSON.parse(read("package.json"));
+if (!isPackageJson(pkg)) {
+  throw new Error("package.json 形状不对（缺 scripts）");
+}
 
 describe("构建链顺序：预编译 → 剪枝 → 冒烟", () => {
   const steps = (pkg.scripts.build ?? "").split("&&").map((s) => s.trim());

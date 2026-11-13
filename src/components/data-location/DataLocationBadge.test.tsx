@@ -57,7 +57,7 @@ describe("DataLocationBadge", () => {
     expect(screen.getByText("数据库")).toBeTruthy();
   });
 
-  it("悬浮说明里带上落点与迁移办法（迁移时照着这两句做）", async () => {
+  it("悬浮说明只说落点（ISSUE #3724：种类名 / 类别名 / 迁移话术都不再重复）", async () => {
     const user = userEvent.setup();
     render(wrap(<DataLocationBadge id="model-adapter" />));
     const badge = screen.getByText("数据库");
@@ -72,7 +72,15 @@ describe("DataLocationBadge", () => {
     });
     const popup = document.querySelector('[data-slot="tooltip-content"]');
     expect(popup?.textContent).toContain("remoteModel");
-    expect(popup?.textContent).toContain("迁移");
+    expect(popup?.textContent).not.toContain("迁移");
+    expect(popup?.textContent).not.toContain("模型适配");
+  });
+
+  it("悬停时同色系加深（ISSUE #3724：不再只剩描边）", () => {
+    const { container } = render(<DataLocationBadge id="model-adapter" />);
+    const badge =
+      container.querySelector('[data-slot="tooltip-trigger"]') ?? container.firstElementChild;
+    expect(badge?.className).toContain("hover:bg-primary-500/20");
   });
 
   it("徽标不再带「存放位置」引导字（ISSUE #3625 reopen：说明走悬浮气泡，界面不留额外描述）", () => {

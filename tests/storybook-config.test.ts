@@ -7,6 +7,20 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
+/** loader 的消费形状守卫（B5 清账）：上游模块无随包类型（见上），按成员形状收窄。 */
+function hasAddExtensions(
+  value: unknown,
+): value is { addExtensionsToRelativeImports: (source: string, filePath: string) => string } {
+  return isRecord(value) && typeof value.addExtensionsToRelativeImports === "function";
+}
+
+/** package.json 的消费形状守卫（B5 清账）：两个映射的值都得是串。 */
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return isRecord(value) && Object.values(value).every((entry) => typeof entry === "string");
+}
+
 /**
  * Storybook 自己的「补后缀」尺子（Node ESM loader 加载 `.storybook/main.ts` 用的同一个函数）。直接用它而非
  * 抄正则：判据量的就是「Storybook 会不会为这次加载打 deprecation」，规则由它实现定义，抄一份会规则变了还绿（§12.18）。
@@ -15,10 +29,10 @@ import { describe, expect, it } from "vitest";
 // @ts-expect-error -- storybook 未随包提供该子路径的类型声明（exports 只有 default 条件）
 import * as storybookLoader from "storybook/internal/bin/loader";
 
-/* SAFETY: 类型断言已复核 */
-const { addExtensionsToRelativeImports } = storybookLoader as {
-  addExtensionsToRelativeImports: (source: string, filePath: string) => string;
-};
+if (!hasAddExtensions(storybookLoader)) {
+  throw new Error("storybook loader 缺 addExtensionsToRelativeImports —— 上游 API 形状变了");
+}
+const { addExtensionsToRelativeImports } = storybookLoader;
 
 const REPO_ROOT = resolve(".");
 const STORYBOOK_DIR = resolve(REPO_ROOT, ".storybook");
@@ -53,11 +67,15 @@ describe("Storybook 配置契约（ISSUE #1381）", () => {
   const main = readFileSync(MAIN, "utf8");
   const preview = readFileSync(PREVIEW, "utf8");
   const launcher = readFileSync(LAUNCHER, "utf8");
-  /* SAFETY: 类型断言已复核 */
-  const pkg = JSON.parse(readFileSync(resolve(REPO_ROOT, "package.json"), "utf8")) as {
-    devDependencies: Record<string, string>;
-    scripts: Record<string, string>;
-  };
+  const pkgParsed: unknown = JSON.parse(readFileSync(resolve(REPO_ROOT, "package.json"), "utf8"));
+  if (!isRecord(pkgParsed)) {
+    throw new Error("package.json 形状不对：根不是对象");
+  }
+  const { devDependencies, scripts } = pkgParsed;
+  if (!isStringRecord(devDependencies) || !isStringRecord(scripts)) {
+    throw new Error("package.json 形状不对：devDependencies / scripts 应是字符串映射");
+  }
+  const pkg = { devDependencies, scripts };
 
   it("主配置扫的就是 src/ 下的 stories（glob 写错 = 侧栏空着但构建成功）", () => {
     expect(main).toContain(STORY_GLOB);

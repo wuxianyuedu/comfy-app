@@ -25,15 +25,14 @@ function run(args: Array<string> = []) {
     });
     return { code: 0, output };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as {
-      status?: number;
-      stderr?: string;
-      stdout?: string;
-    };
+    /* 失败形状用运行时守卫取字段，不走 `as` 断言（B5 清账）。 */
+    const e: { status?: unknown; stderr?: unknown; stdout?: unknown } =
+      typeof error === "object" && error !== null ? error : {};
     return {
       code: typeof e.status === "number" ? e.status : 1,
-      output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
+      output: `${typeof e.stdout === "string" ? e.stdout : ""}${
+        typeof e.stderr === "string" ? e.stderr : ""
+      }`,
     };
   }
 }
@@ -135,15 +134,27 @@ describe("gates:which —— 门禁分堆（分档与收窄面都转述既有登
 /** 一次子进程读数的形状（只列 `affectedTests` 真正读的那几个字段）。 */
 type FakeResult = { status: number | null; stderr?: string; stdout?: string };
 
+/** 假 spawnSync 的收窄口径与 `ci-cp936-exit.test.ts` 同款：运行期确认可调用后再收窄
+ *  （B5 清账：不走 `as` 断言）。 */
+function isSpawnSyncLike(value: unknown): value is typeof spawnSync {
+  return typeof value === "function";
+}
+
+function spawnSyncPort(fake: unknown): typeof spawnSync {
+  if (!isSpawnSyncLike(fake)) {
+    throw new TypeError("假的 spawnSync 必须是可调用函数");
+  }
+  return fake;
+}
+
 /**
  * 造一个假的 `spawnSync`。`affectedTests` 的 JSDoc 是 `typeof spawnSync`，其重载与 `stdio` 联合类型
- * 套不进手写假件 —— 这里显式过一道 cast，并保证假件的参数形状与真实调用同形。
+ * 套不进手写假件 —— 这里经上面的收窄口过一道，并保证假件的参数形状与真实调用同形。
  */
 function fakeSpawn(impl: (args: Array<string>, opts: { input?: string }) => FakeResult) {
   const fn = (_cmd: string, args: Array<string>, opts: { input?: string }): FakeResult =>
     impl(args, opts);
-  /* SAFETY: 只用 affectedTests 实际读的字段（status/stdout/stderr），与 spawnSync 的重载等价于此形状 */
-  return fn as unknown as typeof spawnSync;
+  return spawnSyncPort(fn);
 }
 
 describe("gates:which —— 用例那一半不重算 import 图", () => {

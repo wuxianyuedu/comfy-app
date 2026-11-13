@@ -24,10 +24,20 @@ type RuntimeExitRecord = {
   signal: string | null;
 };
 
-/* SAFETY: 类型断言已复核 */
-const { runtimeExitRecord } = (await import(
+/** downstream-exit.mjs 无类型：出口形状在这里做运行时守卫（B5 清账，不走 as 断言）。 */
+function isExitModule(value: unknown): value is {
+  runtimeExitRecord: (input: RuntimeExitInput) => RuntimeExitRecord;
+} {
+  return typeof value === "object" && value !== null && "runtimeExitRecord" in value;
+}
+
+const loadedExitModule: unknown = await import(
   pathToFileURL(join(process.cwd(), "scripts", "launcher-core", "downstream-exit.mjs")).href
-)) as { runtimeExitRecord: (input: RuntimeExitInput) => RuntimeExitRecord };
+);
+if (!isExitModule(loadedExitModule)) {
+  throw new Error("downstream-exit.mjs 缺 runtimeExitRecord");
+}
+const { runtimeExitRecord } = loadedExitModule;
 
 /** dev server 以退出码非零结束。 */
 const DEV_DIED: RuntimeExitInput = {

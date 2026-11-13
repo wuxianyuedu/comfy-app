@@ -1008,27 +1008,7 @@ textarea::-webkit-scrollbar {
     letter-spacing: -0.02em;
     color: var(--color-ink);
   }
-  /* 主按钮渐变：紫→品红，用于工作流库、画布生成等关键 CTA。
-     这是扁平规范中的有意例外，回应用户对渐变强调色的偏好。
-     三颗星一律取品牌 token（起点 primary-600 / 中间 accent-deep / 终点
-     accent-soft），不再抄字面量 —— 改品牌色时这条渐变跟手。
-     **能用 Button 就用 `variant="gradient"`**（它就是把这一类挂上去的），
-     只有**不是 Button** 的落点（画布节点里的共享 class）才直接写类名。 */
-  .btn-gradient {
-    background: var(--gradient-brand);
-    transition:
-      filter 0.15s ease,
-      transform 0.15s ease,
-      box-shadow 0.15s ease;
-  }
-  .btn-gradient:hover:not(:disabled) {
-    filter: brightness(1.08);
-  }
-  .btn-gradient:active:not(:disabled) {
-    transform: translateY(1px);
-  }
-  /* 品牌双色渐变的**条 / 点 / 填充**档（与 `.btn-gradient` 同一对端点：
-     primary → accent）。此前这四个落点（Agent 头像、历史分组竖条、
+  /* 品牌双色渐变的**条 / 点 / 填充**档（primary → accent）。此前这四个落点（Agent 头像、历史分组竖条、
      两处进度条填充）各自手抄 `from-violet-500 to-fuchsia-500` ——
      那是 Tailwind 调色板里的两格，与品牌 token 不同源：改品牌色时它们
      **不跟手**，而且 `violet-500` 已经不是当前 `--color-primary-500`

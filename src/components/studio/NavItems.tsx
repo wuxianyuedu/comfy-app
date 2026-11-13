@@ -2,6 +2,7 @@
 
 import React from "react";
 import {
+  Blocks,
   BookOpen,
   Box,
   Cable,
@@ -26,8 +27,8 @@ import {
 } from "~/lib/shell/sidebar-tab-behavior";
 
 /**
- * 共享的导航注册表 —— 侧栏 / 顶部标题 / 命令面板 / 项目内切换器的唯一事实来源。三个分区：全局项（`globalNavItems`，十一件项目无关的事；控制台跑仓库级脚本、设置读写应用级配置、模型适配/测试模型/模式契约读写全局配置，故都该能开能关）；项目页签（`projectTabs`，只在项目界面顶部的标签栏出现，脱离项目无意义）；项目入口（`PROJECTS_ENTRY`，侧栏底部「项目」分组）。
- * 全局项共十一件，但侧栏只列十件（`sidebarNavItems`）：设置撤出侧栏（入口在顶栏应用菜单）并标 `transient`（切走即关）；「全局的 / 侧栏列不列 / 瞬时」是三个独立属性，见 `NavItem` 字段说明。
+ * 共享的导航注册表 —— 侧栏 / 顶部标题 / 命令面板 / 项目内切换器的唯一事实来源。三个分区：全局项（`globalNavItems`，十二件项目无关的事；控制台跑仓库级脚本、设置读写应用级配置、模型适配/测试模型/模式契约读写全局配置、UI 控件总览是开发者的基元对照页，故都该能开能关）；项目页签（`projectTabs`，只在项目界面顶部的标签栏出现，脱离项目无意义）；项目入口（`PROJECTS_ENTRY`，侧栏底部「项目」分组）。
+ * 全局项共十二件，但侧栏只列十件（`sidebarNavItems`）：设置与 UI 控件总览撤出侧栏（设置的入口在顶栏应用菜单、控件总览的入口在命令面板）并标 `transient`（切走即关）；「全局的 / 侧栏列不列 / 瞬时」是三个独立属性，见 `NavItem` 字段说明。
  * 历史教训：此前用 `visibleNavItems(active)` 按「首页 vs 非首页」切换项目页签显隐，导致点非首页视图时画布/工坊复现、点首页又消失；现改为「按分区归属」一次性决定，显隐不随当前视图漂移。
  */
 export type WorkspaceView =
@@ -46,6 +47,7 @@ export type WorkspaceView =
   | "outputs"
   | "console"
   | "settings"
+  | "uiKit"
   | "model-adapters"
   | "model-test"
   | "mode-contract";
@@ -154,6 +156,18 @@ export const NAV_ITEMS: Array<NavItem> = [
     transient: true,
     sidebarHidden: true,
     icon: <Settings size={22} strokeWidth={1.8} />,
+  },
+  {
+    /* UI 控件总览（ISSUE #3525/#3726）：开发者的基元对照页。原先走独立路由
+       `/ui-kit` 整窗跳转，会把工作区的页签条与关闭按钮整个盖住（ISSUE #3726）
+       —— 改成**视图页签**：命令面板 /「+」菜单里打开，页签条留在原地。
+       与设置同族：全局项、读过即走（transient）、不进侧栏。 */
+    id: "uiKit",
+    label: "UI 控件总览",
+    enabled: true,
+    transient: true,
+    sidebarHidden: true,
+    icon: <Blocks size={22} strokeWidth={1.8} />,
   },
   {
     /* 名字从「流程」改成「工作流库」（ISSUE #1847）：主页那张功能卡一直写的是

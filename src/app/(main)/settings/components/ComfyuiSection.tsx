@@ -17,6 +17,7 @@ import { Field } from "./SettingsPrimitives";
 import { FieldLabel } from "~/components/ui/field";
 import { ComfyuiStoragePaths } from "./ComfyuiStoragePaths";
 import { CpuLimitPicker } from "./CpuLimitPicker";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 /** 安装形态 → 设置页徽标文案。 */
@@ -34,7 +35,12 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
   const desktopManaged = c.comfyInstance?.desktopManaged === true;
 
   return (
-    <SettingsCard>
+    <SettingsCard
+      /* 创作后端的各项配置（路径 / 解释器 / CPU 上限）落在本机应用数据里
+          （ISSUE #3724：这一节此前没有存放位置标识）。徽标放标题行；桌面实例的
+          只读目录清单里不再重复挂这枚（它随实例形态整块显隐）。 */
+      titleExtra={<DataLocationBadge id="app-settings" />}
+    >
       <Field
         label="ComfyUI 路径（源码根或桌面版实例根）"
         onBlur={() => {

@@ -52,14 +52,18 @@ export type DataLocationCategoryInfo = {
 /** 数据种类（用户心里的一类数据；同一类可能有多个存放位置，如「模式契约」）。 */
 export type DataKind =
   | "app-settings"
+  | "appearance"
   | "backup"
   | "database"
   | "llm-config"
+  | "log-categories"
   | "mode-contract"
   | "model-adapter"
   | "project-canvas"
   | "remote-model"
+  | "sidebar-tab"
   | "task-artifacts"
+  | "update-check"
   | "user-account"
   | "workflow-library"
   | "workshop-draft";
@@ -82,16 +86,21 @@ export type DataLocationEntry = {
 export type DataLocationId =
   | "app-database"
   | "app-settings"
+  | "appearance"
   | "backup-archive"
   | "canvas-browser"
   | "canvas-server"
   | "llm-config"
+  | "log-categories"
   | "mode-contract-local"
   | "mode-contract-project"
   | "model-adapter"
   | "remote-model"
+  | "sidebar-tab-local"
+  | "sidebar-tab-project"
   | "task-artifacts-db"
   | "task-artifacts-disk"
+  | "update-check"
   | "user-account"
   | "workflow-library-db"
   | "workflow-library-disk"
@@ -149,6 +158,14 @@ export const DATA_LOCATIONS: Record<DataLocationId, DataLocationEntry> = {
       "这份文件只跟着这台机器走：迁移时把 data/app-settings.json 拷到新机器的同一路径（它记的是 ComfyUI 装在哪、端口、实例目录这类本机事实）。",
     target: "data/app-settings.json",
   },
+  appearance: {
+    category: "browser-storage",
+    kind: "appearance",
+    kindLabel: "外观偏好",
+    migration:
+      "跟着浏览器走：换机器 / 清浏览器数据会回到默认；自定义字体的字体文件在浏览器的 IndexedDB 里，迁移时也要一并导出。",
+    target: "浏览器 localStorage（comfyapp:appearance-v1）",
+  },
   "backup-archive": {
     category: "app-data-file",
     kind: "backup",
@@ -180,6 +197,13 @@ export const DATA_LOCATIONS: Record<DataLocationId, DataLocationEntry> = {
       "Ollama 的连接地址、默认模型与按任务的温度都记在 llmConfig 表里，跟着库走；在新机器上重新填一次也可以。",
     target: "llmConfig 表",
   },
+  "log-categories": {
+    category: "browser-storage",
+    kind: "log-categories",
+    kindLabel: "日志分类",
+    migration: "跟着浏览器走：换机器 / 清浏览器数据会回到默认。",
+    target: "浏览器 localStorage（comfyapp.logCategories.enabled）",
+  },
   "mode-contract-local": {
     category: "app-data-file",
     kind: "mode-contract",
@@ -202,7 +226,7 @@ export const DATA_LOCATIONS: Record<DataLocationId, DataLocationEntry> = {
     kindLabel: "模型适配",
     migration:
       "每条远程模型的工坊字段映射存在 remoteModel 表的 workshopAdapters 列里，跟着库走；换机器时带库，或在新机器重新配一遍字段映射。",
-    target: "remoteModel 表的 workshopAdapters 列",
+    target: "remoteModel 表：workshopAdapters 列",
   },
   "remote-model": {
     category: "database",
@@ -211,6 +235,21 @@ export const DATA_LOCATIONS: Record<DataLocationId, DataLocationEntry> = {
     migration:
       "供应商与模型在 llmProvider / remoteModel 表里，跟着库走；API Key 以密文存放，换机器要在新机器上重新填（或用新机器的密钥重新加密）。",
     target: "llmProvider / remoteModel 表",
+  },
+  "sidebar-tab-local": {
+    category: "app-data-file",
+    kind: "sidebar-tab",
+    kindLabel: "侧栏页签行为",
+    migration:
+      "本机覆盖只跟着这台机器走：迁移时把 data/sidebar-tab-behavior.json 拷到新机器的同一路径，它会盖掉项目默认那份。",
+    target: "data/sidebar-tab-behavior.json",
+  },
+  "sidebar-tab-project": {
+    category: "repo-file",
+    kind: "sidebar-tab",
+    kindLabel: "侧栏页签行为",
+    migration: "项目默认入库、跟代码走：迁移就是把这个文件一起提交，别的检出与桌包都是这一份。",
+    target: "src/lib/shell/sidebar-tab-defaults.json",
   },
   "task-artifacts-db": {
     category: "database",
@@ -226,6 +265,13 @@ export const DATA_LOCATIONS: Record<DataLocationId, DataLocationEntry> = {
     migration:
       "产物的字节在 generated/ 目录里，库里只存路径：迁移要单独把整个 generated/ 目录拷过去（否则记录还在、图没了）。",
     target: "<应用根>/generated/",
+  },
+  "update-check": {
+    category: "browser-storage",
+    kind: "update-check",
+    kindLabel: "更新检测偏好",
+    migration: "本地偏好存在浏览器的 localStorage 里：换机器 / 清浏览器数据会回到默认（开）。",
+    target: "浏览器 localStorage（更新检测开关）",
   },
   "user-account": {
     category: "database",

@@ -1,6 +1,8 @@
 import superjson, { type SuperJSONResult } from "superjson";
 import { describe, expect, it } from "vitest";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import { planStubResults, trpcJsonlBody } from "../e2e/support/trpc-stub";
 
 /**
@@ -20,6 +22,7 @@ const payload = {
  * 施加点是 `createConsumerStream` 的 `JSON.parse(line)` **之后、往 head/chunk 分派之前**，即逐**行**解信封，
  * 正是 `httpBatchStreamLink` 传 `transformer.output.deserialize` 那层；传恒等函数时 `{json, meta}` 原样漏进下游，head 槽位就不是结果信封。
  */
+
 async function consume(body: string) {
   const { jsonlStreamConsumer } = await import("@trpc/server/unstable-core-do-not-import");
   const stream = new ReadableStream<Uint8Array>({
@@ -32,28 +35,32 @@ async function consume(body: string) {
     from: stream,
     /* 与客户端 `resolvedOpts.transformer.output.deserialize` 同源。逐行解
        `{json, meta}` 信封，所以传 `superjson.deserialize` 而不是恒等函数。 */
-    /* `superjson.deserialize` 的签名要求 `SuperJSONResult`；这一层的入参在
-       tRPC 侧是 `any`，所以显式收一次口，返回 `unknown` 交给下游自己拆。 */
-    deserialize: (v: unknown): unknown =>
-      /* SAFETY: 类型断言已复核 */
-      superjson.deserialize<SuperJSONResult>(v as SuperJSONResult),
+    deserialize: (v: SuperJSONResult): unknown => superjson.deserialize(v),
     abortController: new AbortController(),
   });
-  /* SAFETY: 类型断言已复核 */
-  return head as Record<number, unknown>;
+  if (!isRecord(head)) {
+    throw new Error("head 不是对象");
+  }
+  return head;
 }
 
 /** 拆开「两层异步值」拿到 `result.data`（协议形状，与客户端同一次拆解）。 */
 async function unwrap(slot: unknown) {
-  /* SAFETY: 类型断言已复核 */
-  const envelope = (await Promise.resolve(slot)) as {
-    result: unknown;
-  };
-  /* SAFETY: 类型断言已复核 */
-  const result = (await Promise.resolve(envelope.result)) as {
-    data: unknown;
-  };
+  const envelope: unknown = await Promise.resolve(slot);
+  if (!isRecord(envelope) || !("result" in envelope)) {
+    throw new Error("信封缺 result");
+  }
+  const result: unknown = await Promise.resolve(envelope.result);
+  if (!isRecord(result) || !("data" in result)) {
+    throw new Error("信封缺 data");
+  }
   return Promise.resolve(result.data);
+}
+
+/** 桩负载的形状守卫（B5 清账）：`unknown` → 桩里那份负载的类型。 */
+/** 桩负载的形状守卫（B5 清账）：`unknown` → 桩里那份负载的类型。 */
+function isPayload(value: unknown): value is typeof payload {
+  return isRecord(value) && isUnknownArray(value.tasks);
 }
 
 describe("e2e tRPC 桩产出真 JSON Lines 协议", () => {
@@ -62,15 +69,17 @@ describe("e2e tRPC 桩产出真 JSON Lines 协议", () => {
     expect(lines).toHaveLength(4);
 
     const [firstLine, ...rest] = lines;
-    /* SAFETY: 类型断言已复核 */
-    const head = JSON.parse(firstLine!) as {
-      json: Record<string, unknown>;
-    };
+    const head: unknown = JSON.parse(firstLine ?? "");
+    if (!isRecord(head) || !isRecord(head.json)) {
+      throw new Error("head 行不是对象");
+    }
     expect(Object.keys(head.json)).toEqual(["0"]);
 
     for (const line of rest) {
-      /* SAFETY: 类型断言已复核 */
-      const parsed = JSON.parse(line) as { json?: unknown };
+      const parsed: unknown = JSON.parse(line);
+      if (!isRecord(parsed)) {
+        throw new Error("json 信封行不是对象");
+      }
       expect("json" in parsed).toBe(true);
       /* 不能是裸数组：裸行的 `type` 会落空 → 槽位静默变 undefined。 */
       expect(Array.isArray(parsed)).toBe(false);
@@ -89,8 +98,7 @@ describe("e2e tRPC 桩产出真 JSON Lines 协议", () => {
     /* `createdAt` 过线之后仍然是 `Date`（superjson 的 meta 路径带对了）；
      * 丢了 meta 时这里是字符串，而客户端 `row.createdAt.getTime()` 会抛
      * `is not a function` —— 真现场见 ISSUE #1442 的复现步骤。 */
-    /* SAFETY: 类型断言已复核 */
-    const [first] = (data as typeof payload).tasks;
+    const [first] = isPayload(data) ? data.tasks : [];
     expect(first?.createdAt).toBeInstanceOf(Date);
     expect(first?.createdAt.toISOString()).toBe("2026-01-01T00:00:01.000Z");
   });
