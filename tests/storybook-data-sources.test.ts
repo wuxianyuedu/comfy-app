@@ -51,13 +51,26 @@ describe("Storybook 数据源注入层的契约（ISSUE #1381）", () => {
     expect(sources).toContain("现有的：");
   });
 
-  it("media 源的名字清单与磁盘上的真文件对得上", () => {
+  it("media 源的名字清单与磁盘上的真文件对得上", async () => {
     const names = readConstArray("MEDIA_SOURCE_NAMES");
     expect(names.length, "media 源一个名字都没有 —— 判据在空转").toBeGreaterThan(0);
 
     /* `missing.png` 是**故意不存在**的那一个（失败兜底那条分支的现场），
        所以用它做判据的锚点：它在清单里，就必须真的不在磁盘上。 */
     expect(names, "失败兜底的现场没了（`missing.png`）—— 那条分支没人验").toContain("missing.png");
+
+    /* 资产是**现生成件**（`.gitignore` 的 `/.storybook/assets/`，不入库）：干净检出的
+       CI runner 上这个目录不存在，「清单 ⇄ 磁盘」会红在环境而不是红在漂移（ISSUE
+       #3746）。真名缺了就地用**生成脚本本体**补齐（`ensureStorybookAssets` 幂等、
+       只写这个 gitignore 目录），再判一致性 —— 判据从此不依赖「这台机器碰巧跑过
+       storybook」。`missing.png` 永远不补：它必须真的不在。 */
+    const missingOnDisk = names.filter(
+      (name) => name !== "missing.png" && !existsSync(join(ASSETS, name)),
+    );
+    if (missingOnDisk.length > 0) {
+      const { ensureStorybookAssets } = await import("../scripts/storybook-assets.mjs");
+      ensureStorybookAssets(ASSETS);
+    }
 
     for (const name of names) {
       const onDisk = existsSync(join(ASSETS, name));
