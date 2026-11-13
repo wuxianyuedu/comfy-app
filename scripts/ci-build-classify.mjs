@@ -657,6 +657,47 @@ function numericOrNull(v) {
 }
 
 /**
+ * 「GA 回调结论回读」格的名字（`.cnb.yml` 里那格的本名）。
+ *
+ * 这一条流水线的形态：CNB 侧只有 Prepare + GA 回调结论回读 + 收尾几格，
+ * **门禁本体在 GA** —— 轮询 / 诊断的读数要靠它分辨「11 秒的绿是谁给的」
+ * （ISSUE #3620）。
+ */
+export const GA_READOUT_STAGE_NAME = "GA 回调结论回读";
+
+/**
+ * 这一跑里「GA 回调结论回读」那一格的读数（ISSUE #3620）。
+ *
+ * 有这一格 = 这一跑的门禁本体在 GA、CNB 侧只是回读 —— 它与「一条只有六格的
+ * 小流水线」在签名上同形，轮询只报构建级 success 时读者分不清绿是谁给的。
+ * 纯函数：从 `get-build-status -v` 的读数里按格名找，找到带出 status 与
+ * duration（毫秒；平台的 duration 字段是毫秒，ISSUE #2442 同一口径）。
+ *
+ * @param {any} json `cnb build get-build-status -v` 的解析结果
+ * @returns {{name: string, status: string, durationMs: number | null} | null}
+ *   没有这一格时 null（那就是普通的 CNB 侧流水线，不需要特别读数）。
+ */
+export function gaReadoutStage(json) {
+  const data = json && typeof json === "object" ? json.data : null;
+  const table =
+    data?.pipelinesStatus && typeof data.pipelinesStatus === "object" ? data.pipelinesStatus : {};
+  for (const key of Object.keys(table)) {
+    const p = table[key];
+    const stages = p && Array.isArray(p.stages) ? p.stages : [];
+    for (const s of stages) {
+      if (s && typeof s.name === "string" && s.name.includes(GA_READOUT_STAGE_NAME)) {
+        return {
+          name: s.name,
+          status: typeof s.status === "string" ? s.status : "",
+          durationMs: numericOrNull(s.duration),
+        };
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * 停摆的格：`status` 是在飞那一族（`start` 为典型），而平台给它的 `endTime` **不大于**
  * `startTime`（走完的格是 `结束 > 开始`，被掐断的格也是；只有「还没回来」的那一形是相等）。
  *

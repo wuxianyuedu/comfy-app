@@ -122,7 +122,12 @@ import {
 } from "../scripts/ship-platform.mjs";
 import { pollUntilTerminal } from "../scripts/ship-poll.mjs";
 import { conflictFiles, reportStage } from "../scripts/ship-stage.mjs";
-import { stalledStages, stallReadout as stallReadoutLines } from "../scripts/ci-build-readout.mjs";
+import {
+  gaReadoutStage,
+  GA_READOUT_STAGE_NAME,
+  stalledStages,
+  stallReadout as stallReadoutLines,
+} from "../scripts/ci-build-readout.mjs";
 import {
   readIssueBody,
   runAppendIssueComment,
@@ -4147,6 +4152,128 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
   });
 });
 
+describe("#3620：门禁本体在 GA 的那一跑，读数要说明「绿是谁给的」", () => {
+  const GA_SHA = "d02ec96364d5f3713b77c91b0d3fe789878f1747";
+  const ok = (body: string) => ({ status: 0, stdout: body, stderr: "", error: null });
+  const GA_STATUS = {
+    status: 200,
+    data: {
+      sn: "b1",
+      status: "success",
+      pipelinesStatus: {
+        p0: {
+          status: "success",
+          stages: [
+            { id: "prepare", name: "Prepare", status: "success", duration: 4202 },
+            { id: "ga", name: "GA 回调结论回读", status: "success", duration: 201_265 },
+            { id: "end", name: "End", status: "success", duration: 1200 },
+          ],
+        },
+      },
+    },
+  };
+
+  it("gaReadoutStage：按格名找到 GA 回读格，带出 status 与 duration（毫秒）", () => {
+    expect(gaReadoutStage(GA_STATUS)).toEqual({
+      name: "GA 回调结论回读",
+      status: "success",
+      durationMs: 201_265,
+    });
+    expect(gaReadoutStage({ data: { status: "success", pipelinesStatus: {} } })).toBeNull();
+    expect(gaReadoutStage(null)).toBeNull();
+    expect(GA_READOUT_STAGE_NAME).toBe("GA 回调结论回读");
+  });
+
+  it("轮询命中终态 ⇒ 念「门禁本体在 GA」+ 等了多久 + --gh-logs 出口", async () => {
+    const log: Array<string> = [];
+    const run = (_cmd: string, args: Array<string>): FakeResult => {
+      if (args[1] === "get-build-logs") {
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: { data: [{ sn: "b1", sha: GA_SHA, event: "pull_request", createTime: "t" }] },
+          }),
+        );
+      }
+      if (args[1] === "get-build-status") {
+        return ok(JSON.stringify(GA_STATUS));
+      }
+      return ok("");
+    };
+    const out = await pollUntilTerminal({
+      run,
+      log: (s) => log.push(s),
+      slug: "org/repo",
+      newSha: GA_SHA,
+      now: () => 0,
+      sleep: () => undefined,
+      number: 3616,
+    });
+    expect(out.buildState).toBe("green");
+    const all = log.join("\n");
+    expect(all).toContain("门禁本体在 GA");
+    expect(all).toContain("等了 3m21s");
+    expect(all).toContain("pnpm ship --gh-logs 3616");
+  });
+
+  it("--diagnose：绿 ⇒ 念「本次绿来自 GA 回读」，不再让 11s 的 success 冒充门禁", () => {
+    const log: Array<string> = [];
+    const run = (_cmd: string, args: Array<string>): FakeResult => {
+      if (args[1] === "get-build-status") {
+        return ok(JSON.stringify(GA_STATUS));
+      }
+      return ok("");
+    };
+    const code = runDiagnose({
+      run,
+      log: (s) => log.push(s),
+      slug: "org/repo",
+      cnbOk: true,
+      sn: "b1",
+    });
+    expect(code).toBe(CODE.GREEN);
+    const all = log.join("\n");
+    expect(all).toContain("本次绿来自 GA 回读");
+    expect(all).toContain("门禁本体在 GA");
+    expect(all).toContain("等了 3m21s");
+  });
+
+  it("--diagnose：GA 回读还在跑 ⇒ 念「未取到终态」，不许把 CNB 侧的壳当绿", () => {
+    const log: Array<string> = [];
+    const running = {
+      status: 200,
+      data: {
+        sn: "b1",
+        status: "running",
+        pipelinesStatus: {
+          p0: {
+            status: "running",
+            stages: [
+              { id: "prepare", name: "Prepare", status: "success", duration: 4202 },
+              { id: "ga", name: "GA 回调结论回读", status: "start", duration: 201_265 },
+            ],
+          },
+        },
+      },
+    };
+    const run = (_cmd: string, args: Array<string>): FakeResult => {
+      if (args[1] === "get-build-status") {
+        return ok(JSON.stringify(running));
+      }
+      return ok("");
+    };
+    const code = runDiagnose({
+      run,
+      log: (s) => log.push(s),
+      slug: "org/repo",
+      cnbOk: true,
+      sn: "b1",
+    });
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(log.join("\n")).toContain("GA 回读未取到终态");
+  });
+});
+
 describe("被取消的那一跑：结论是「没有结论」，不是「CI 红」（ISSUE #2158 第 2 条）", () => {
   type FakeResult = {
     error: string | null;
@@ -5415,12 +5542,18 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
       echoBody?: boolean;
       /** `echoBody` 时平台回读的 `base.ref`（默认主干；栈式用例给父分支）。 */
       echoBodyBase?: string;
+      /** 平台上**已有**的正文（复用路径没给 `--pr-body-file` 时，get-pull 回读拿它）。 */
+      existingBody?: string;
+      /** 平台上**已有**的标题（复用路径的标题回读比对用；#3629）。 */
+      existingTitle?: string;
       /** `git fetch` 退非 0 且 stdout 无可解析内容 —— 引用可能过期那一格。 */
       fetchFail?: boolean;
       getPull?: FakeResult;
       /** 首拉就取不到（stdout 里没有可解析 JSON）—— `scanPullPages` 的 `ran=false` 那一格。 */
       openPullsFail?: boolean;
       openPullsPages?: Array<string>;
+      /** 覆盖 io 里的 `explicitTitle`（默认「fix(x): 一句话说得完」；#3629 的标题用例用）。 */
+      overrideExplicitTitle?: string | null;
       patchPull?: FakeResult;
       postPull?: FakeResult;
       /** 平台落库时对正文的改写（ISSUE #3655：上传图片的相对链接 → 绝对地址）。 */
@@ -5467,15 +5600,16 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
       }
       if (cmd === "cnb" && key.includes("get-pull")) {
         if (env.echoBody) {
-          /* 平台形状：目标分支在 `base.ref`，正文在 `body`。回读拿到的就是刚
+          /* 平台形状：目标分支在 `base.ref`，标题在 `title`，正文在 `body`。回读拿到的就是刚
            * `mkTmp` 落过的那一份 —— 与真平台「写什么读什么」同形；`rewriteBody`
            * 模拟平台对正文内容的改写（图片链接绝对化，ISSUE #3655）。 */
-          const echoed = bodies.at(-1) ?? "";
+          const echoed = bodies.at(-1) ?? env.existingBody ?? "";
           return ok(
             JSON.stringify({
               status: 200,
               data: {
                 number: 2649,
+                title: env.existingTitle ?? "fix(x): 一句话说得完",
                 base: { ref: env.echoBodyBase ?? "refs/heads/master" },
                 mergeable_state: "mergeable",
                 blocked_on: "",
@@ -5510,7 +5644,10 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
       frags: ["changelog.d/0-x.md"],
       baseRef: "cnb/master",
       baseBranch: "master",
-      explicitTitle: "fix(x): 一句话说得完",
+      explicitTitle:
+        env.overrideExplicitTitle === undefined
+          ? "fix(x): 一句话说得完"
+          : env.overrideExplicitTitle,
       handle: null,
     };
     return { calls, bodies, heard, io };
@@ -5811,18 +5948,91 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
     expect(heard.join("\n")).toContain("正文已更新并回读一致");
   });
 
-  it("复用 PR 但没给 --pr-body-file：一个字节都不写（不发 patch-pull）", () => {
-    const { calls, bodies, io } = pullHarness({
+  it("#3629：复用 PR 未给 --pr-body-file ⇒ 自动事实段仍刷新，标记前的人写内容原样保留", () => {
+    const existing = [
+      "**[评论人：yuedu-win]**",
+      "",
+      "人写的正文（平台上手工补过的也算）。",
+      "",
+      "---",
+      "",
+      "> 以下为 `pnpm ship` 自动拼装的事实段（碎片清单 + diffstat），不是上面那份正文的一部分。",
+      "",
+      "## 本 PR 带的变更碎片（`changelog.d/`）",
+      "",
+      "- `changelog.d/0-x.md` → ## Added",
+      "",
+      "## 改动量（`git diff --stat` 对 PR 的目标分支）",
+      "",
+      "```",
+      "1 file changed",
+      "```",
+    ].join("\n");
+    const { calls, bodies, io, heard } = pullHarness({
       openPullsPages: [
         '{"data":[{"head":{"ref":"refs/heads/feat/big"},"number":2649}],"status":200}',
       ],
       echoBody: true,
+      existingBody: existing,
+      stat: "3 files changed, 12 insertions(+)",
     });
     const out = createOrReusePull(io);
     expect(out.number).toBe(2649);
     expect(out.stop).toBeNull();
-    expect(calls.some((c) => c.includes("patch-pull"))).toBe(false);
-    expect(bodies, "不给旗标却写了一次正文文件").toEqual([]);
+    expect(calls.some((c) => c.includes("patch-pull") && c.includes("--body-file"))).toBe(true);
+    const [body = ""] = bodies;
+    /* 人写部分（含平台上手工补的内容）原样保留；自动事实段是这一跑现量的。 */
+    expect(body).toContain("人写的正文（平台上手工补过的也算）。");
+    expect(body).toContain("3 files changed, 12 insertions(+)");
+    expect(body).not.toContain("1 file changed");
+    expect(heard.join("\n")).toContain("自动事实段已刷新");
+  });
+
+  it("#3629：复用 PR 现正文没有自动事实段标记 ⇒ 不动正文并念出原因", () => {
+    const { calls, bodies, io, heard } = pullHarness({
+      openPullsPages: [
+        '{"data":[{"head":{"ref":"refs/heads/feat/big"},"number":2649}],"status":200}',
+      ],
+      echoBody: true,
+      existingBody: "纯手工写的正文（平台上改的）",
+    });
+    const out = createOrReusePull(io);
+    expect(out.number).toBe(2649);
+    expect(out.stop).toBeNull();
+    expect(calls.some((c) => c.includes("patch-pull") && c.includes("--body-file"))).toBe(false);
+    expect(bodies, "正文没动就不该有落盘").toEqual([]);
+    expect(heard.join("\n")).toContain("正文未刷新");
+  });
+
+  it("#3629：复用 PR 给了 --title ⇒ patch-pull 更新标题并独立回读", () => {
+    const { calls, io, heard } = pullHarness({
+      openPullsPages: [
+        '{"data":[{"head":{"ref":"refs/heads/feat/big"},"number":2649}],"status":200}',
+      ],
+      echoBody: true,
+      existingTitle: "fix(x): 一句话说得完（含拖入字体文件）",
+      overrideExplicitTitle: "fix(x): 一句话说得完（含拖入字体文件）",
+    });
+    const out = createOrReusePull(io);
+    expect(out.number).toBe(2649);
+    expect(out.stop).toBeNull();
+    expect(calls.some((c) => c.includes("--title") && c.includes("含拖入字体文件"))).toBe(true);
+    expect(heard.join("\n")).toContain("标题已按 --title 更新并回读一致");
+  });
+
+  it("#3629：复用 PR 未给 --title ⇒ 念「标题未刷新」，不再两头沉默", () => {
+    const { calls, io, heard } = pullHarness({
+      openPullsPages: [
+        '{"data":[{"head":{"ref":"refs/heads/feat/big"},"number":2649}],"status":200}',
+      ],
+      echoBody: true,
+      overrideExplicitTitle: null,
+    });
+    const out = createOrReusePull(io);
+    expect(out.number).toBe(2649);
+    expect(out.stop).toBeNull();
+    expect(calls.some((c) => c.includes("--title"))).toBe(false);
+    expect(heard.join("\n")).toContain("标题未刷新");
   });
 
   it("复用 PR 带图正文：平台把图片相对链接改写成绝对地址后回读仍一致 ⇒ stop:null（ISSUE #3655）", () => {
@@ -7612,9 +7822,10 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   });
 
   it("平台标题回读没跑起来 ⇒ 明念「读数缺失」并退回 branch-first，不静默（ISSUE #2806 配套）", async () => {
-    /* get-pull 在这条链上被读四眼：建 PR 后的冲突回读（ISSUE #3083）、verdict（阶段 5）、
-     * 合并前的标题回读、合并后验真。只让**标题那一眼**（第 3 眼）取不到 —— 其余照常，
-     * 否则验真那格会把退码搅浑。 */
+    /* get-pull 在这条链上被读六眼：复用路径的基线读（#3629 起自动事实段刷新也要读
+     * 目标分支）、复用路径的现正文读（同上）、建 PR 后的冲突回读（ISSUE #3083）、
+     * verdict（阶段 5）、合并前的标题回读、合并后验真。只让**标题那一眼**（第 5 眼）
+     * 取不到 —— 其余照常，否则验真那格会把退码搅浑。 */
     const { tmpRoot, gitDir } = proofRoot("title-read-fail");
     try {
       const heard: Array<string> = [];
@@ -7624,7 +7835,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
         const key = args.join(" ");
         if (cmd === "cnb" && key.includes("get-pull")) {
           getPulls += 1;
-          if (getPulls === 3) {
+          if (getPulls === 5) {
             return { status: 0, stdout: "不是 JSON", stderr: "", error: null };
           }
         }
