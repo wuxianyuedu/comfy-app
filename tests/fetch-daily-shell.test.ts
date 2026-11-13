@@ -113,10 +113,11 @@ describe("fetch-daily-shell 默认形态", () => {
     const fromFile = resolveToken({}, "", {
       configPaths: ["/cfg/missing", "/cfg/token"],
       readFileSync: (p) => {
-        if (!(p in files)) {
+        const key = String(p);
+        if (!(key in files)) {
           throw new Error("ENOENT");
         }
-        return files[p]!;
+        return files[key]!;
       },
     });
     expect(fromFile.token).toBe("file-token");

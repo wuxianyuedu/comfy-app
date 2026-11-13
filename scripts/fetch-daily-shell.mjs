@@ -123,7 +123,7 @@ export function tokenConfigPaths(env = process.env, platform = process.platform)
 
 /**
  * @param {string[]} paths
- * @param {{readFileSync?: typeof fs.readFileSync}} [io]
+ * @param {{readFileSync?: (path: string, encoding: BufferEncoding) => string | Buffer}} [io]
  */
 export function readTokenFromConfigFiles(paths, io = {}) {
   const readFileSync = io.readFileSync ?? fs.readFileSync;
@@ -150,7 +150,7 @@ export function readTokenFromConfigFiles(paths, io = {}) {
 /**
  * @param {Record<string, string | undefined>} env
  * @param {string} explicit
- * @param {{platform?: NodeJS.Platform, configPaths?: string[], readFileSync?: typeof fs.readFileSync}} [opts]
+ * @param {{platform?: NodeJS.Platform, configPaths?: string[], readFileSync?: (path: string, encoding: BufferEncoding) => string | Buffer}} [opts]
  */
 export function resolveToken(env, explicit, opts = {}) {
   const direct = explicit.trim();
