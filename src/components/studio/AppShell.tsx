@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { LayoutGrid, Plus } from "lucide-react";
+import { LayoutGrid, Plus, X } from "lucide-react";
 
+import { Button } from "~/components/ui/button";
 import { useHotkey } from "~/components/ui/use-hotkey";
 import { Disclosure } from "~/components/ui/disclosure";
 import { cn } from "~/lib/utils";
@@ -24,7 +25,7 @@ import { CommandPalette } from "./CommandPalette";
 import { TopBar } from "./TopBar";
 import { ViewTabStrip, type OpenableView } from "./ViewTabStrip";
 import { useTitleBarTabsActive } from "./hooks/use-title-bar-tabs-active";
-import type { ViewTab } from "./workspace-tabs";
+import { isTabClosable, type ViewTab } from "./workspace-tabs";
 import { ViewActionsProvider } from "./ViewActions";
 
 /** 侧栏底部「项目」分组里列出的一条项目（只需 id + 展示名）。 */
@@ -149,6 +150,12 @@ export function AppShell({
                 <SidebarMenu>
                   {navItems.map((item) => {
                     const enabled = item.enabled !== false;
+                    /* 这一项的视图当前开着哪一页（ISSUE #3740）：侧栏顶部列的是全局项，
+                       无项目维度，取第一张命中的页签即可。首页是固定页签（恒在、不可关），
+                       `isTabClosable` 判它为不可关 ⇒ 不会拿到打开态。 */
+                    const openTab = viewTabs?.find(
+                      (tab) => tab.view === item.id && isTabClosable(tab),
+                    );
                     return (
                       <SidebarMenuItem key={item.id}>
                         {/* 未上线的视图留在列表里但禁用：移除会让「以后有这个」这件事消失，
@@ -163,9 +170,51 @@ export function AppShell({
                           }}
                           tooltip={enabled ? item.label : `${item.label}（即将推出）`}
                         >
-                          {item.icon}
+                          {openTab ? (
+                            /* 打开态（ISSUE #3740）：图标右上角一枚品牌色实心点。
+                               形状通道（有/无点）与颜色正交，缩略成图标轨时也读得出
+                               「这一页开着」；点与选中指示条互不替代（一个是页签开着、
+                               一个是当前在这页）。 */
+                            <span className="relative inline-flex">
+                              {item.icon}
+                              <span
+                                aria-hidden
+                                className="bg-primary-strong absolute -top-0.5 -right-1 size-1.5 rounded-full"
+                              />
+                            </span>
+                          ) : (
+                            item.icon
+                          )}
                           <span>{item.label}</span>
                         </SidebarMenuButton>
+                        {openTab ? (
+                          /* 关闭按钮（ISSUE #3740）：只在悬停 / 聚焦时浮现 —— 打开态
+                             已由图标角点常驻表达，按钮不必一直占位。做成菜单按钮的
+                             **兄弟**而不是子元素（button 里不许再套 button）；挂
+                             `data-sidebar="menu-action"` 让按钮的
+                             `group-has-data-[sidebar=menu-action]:pr-8` 自动给文字让位。
+                             缩略成图标轨时不显示（那里没有放它的位置，关页签走页签条）。 */
+                          <Button
+                            aria-label={`关闭 ${item.label} 页签`}
+                            className={cn(
+                              "absolute top-1/2 right-2 -translate-y-1/2",
+                              "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                              "opacity-0 transition-opacity group-hover/menu-item:opacity-100",
+                              "group-focus-within/menu-item:opacity-100 focus-visible:opacity-100",
+                              "group-data-[collapsible=icon]:hidden",
+                            )}
+                            data-sidebar="menu-action"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onCloseViewTab?.(openTab.key);
+                            }}
+                            size="icon-xs"
+                            type="button"
+                            variant="ghost"
+                          >
+                            <X data-icon="inline-start" size={12} />
+                          </Button>
+                        ) : null}
                       </SidebarMenuItem>
                     );
                   })}
