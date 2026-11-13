@@ -289,7 +289,7 @@ function FontRow({
         </Badge>
         <span className="text-muted-foreground text-xs">{hint}</span>
       </div>
-      <div className="border-border bg-surface-1/40 mb-2 flex flex-col gap-1.5 rounded-lg border p-3 text-xs">
+      <div className="border-border bg-surface-row mb-2 flex flex-col gap-1.5 rounded-lg border p-3 text-xs">
         <p className="text-ink font-medium">
           {isDefault
             ? "当前为默认字体栈（多种字体按优先级回退，不是单一字体）"
