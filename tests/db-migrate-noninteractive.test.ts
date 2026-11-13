@@ -271,3 +271,27 @@ describe("库地址形态：交给 drizzle-kit 的必须是 libsql 认的那一�
     ).toBeGreaterThan(1);
   }, 300_000);
 });
+
+/** push 管的既有检出（ISSUE #3665）：账本恒空、但结构已与 schema.ts 收敛。 */
+describe("push 管的检出：账本空但 schema 已收敛", () => {
+  it("不再报「迁移没应用全、别直接起应用」，按读数返回并可直接起应用", () => {
+    // 先用 db:push 建出与当前 schema 一致、且已登记指纹的库（push 管的检出形态）。
+    const push = spawnSync(process.execPath, [path.join(process.cwd(), "scripts", "db-push.mjs")], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: { ...process.env, DATABASE_URL: `file:${dbFile}` },
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 300_000,
+    });
+    expect(push.status, `${push.stdout}\n${push.stderr}`).toBe(0);
+
+    // 此时 __drizzle_migrations 为空（push 不写账），但 schema 已收敛；
+    // 再跑 migrate 不应误报「半途状态、别直接起应用」。
+    const r = runMigrate();
+    expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(0);
+    expect(r.stdout).toContain("本检出的库由 `pnpm db:push` 管理");
+    expect(r.stdout).toContain("迁移账本为空、结构已收敛，可直接起应用");
+    expect(r.stderr).not.toContain("迁移没应用全");
+    expect(r.stderr).not.toContain("别直接起应用");
+  }, 600_000);
+});
