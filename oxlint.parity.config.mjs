@@ -891,9 +891,7 @@ export default defineConfig({
        * --type-aware 探针实测（2026-11-04），不是估读。下面每行 = 一份文件 + 该文件存量处数
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
-      files: [
-        "tests/oxlint-jsplugin-rules.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-      ],
+      files: [],
       rules: { "typescript/no-unsafe-type-assertion": "off" },
     },
   ],

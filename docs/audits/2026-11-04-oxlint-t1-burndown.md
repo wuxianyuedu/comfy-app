@@ -13,7 +13,7 @@
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
 | B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 已清（子批1–12，判决面文件级豁免已整块删除）       |
-| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–34：607/608 份已清；仅余 oxlint-jsplugin-rules 1 份 —— 它带着 #3440 的在途改动，等那一笔落地后同批摘除豁免）           |
+| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 已清（子批1–35：608/608 份全部摘账 —— 末份 oxlint-jsplugin-rules 随 #3440 落地后收尾；B2–B5 四个批次全部完成）           |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
@@ -1308,7 +1308,7 @@
 | `tests/no-platform-ci-config.test.ts`                                                                | 1        | 已清 |
 | `tests/node-engines.test.ts`                                                                         | 1        | 已清 |
 | `tests/on-demand-duties-gate.test.ts`                                                                | 2        | 已清 |
-| `tests/oxlint-jsplugin-rules.test.ts`                                                                | 3        | 挂账 |
+| `tests/oxlint-jsplugin-rules.test.ts`                                                                | 3        | 已清 |
 | `tests/oxlint-policy-rules.test.ts`                                                                  | 6        | 已清 |
 | `tests/postinstall-cross-platform.test.ts`                                                           | 1        | 已清 |
 | `tests/precommit-timing.test.ts`                                                                     | 1        | 已清 |

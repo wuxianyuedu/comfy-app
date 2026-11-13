@@ -27,6 +27,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import rulerConfig from "../oxlint.config.ts";
 import oxlintConfig from "../oxlint.parity.config.mjs";
 
@@ -63,8 +65,40 @@ type ConfigBlock = {
   settings?: { react?: { version?: string } };
 };
 
-const PARITY = oxlintConfig as unknown as ConfigBlock;
-const RULER = rulerConfig as unknown as ConfigBlock;
+/** 两份配置的消费形状守卫（B5 清账）：jsPlugins / overrides 逐层对型。 */
+function isConfigBlock(value: unknown): value is ConfigBlock {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const pluginsOk =
+    value.jsPlugins === undefined ||
+    (isUnknownArray(value.jsPlugins) && value.jsPlugins.every((p) => isRecord(p)));
+  const overridesOk =
+    value.overrides === undefined ||
+    (isUnknownArray(value.overrides) && value.overrides.every(isConfigBlock));
+  return pluginsOk && overridesOk;
+}
+
+/** oxlint JSON 报告的 diagnostics 守卫（B5 清账）：filename / message 都可选串。 */
+function isDiagnostics(value: unknown): value is Array<{ filename?: string; message?: string }> {
+  return (
+    isUnknownArray(value) &&
+    value.every(
+      (d) =>
+        isRecord(d) &&
+        (d.filename === undefined || typeof d.filename === "string") &&
+        (d.message === undefined || typeof d.message === "string"),
+    )
+  );
+}
+
+const parityParsed: unknown = oxlintConfig;
+const rulerParsed: unknown = rulerConfig;
+if (!isConfigBlock(parityParsed) || !isConfigBlock(rulerParsed)) {
+  throw new Error("oxlint 两份配置的形状变了 —— 重读配置再改这份守卫");
+}
+const PARITY = parityParsed;
+const RULER = rulerParsed;
 
 function filesOf(block: ConfigBlock): Array<string> {
   const files = block.files;
@@ -135,9 +169,12 @@ function runProbe(probeConfig: string, fixtures: Array<string>): Map<string, Arr
   );
   const out = r.stdout;
   expect(out, `oxlint 没输出 JSON：${r.stderr}`).toBeTruthy();
-  const report = JSON.parse(out) as {
-    diagnostics?: Array<{ filename?: string; message?: string }>;
-  };
+  const reportParsed: unknown = JSON.parse(out);
+  const diagnostics: unknown = isRecord(reportParsed) ? reportParsed.diagnostics : [];
+  if (!isDiagnostics(diagnostics)) {
+    throw new Error(`oxlint 的 JSON 报告形状变了：${out.slice(0, 200)}`);
+  }
+  const report = { diagnostics };
   const map = new Map<string, Array<string>>();
   for (const diag of report.diagnostics ?? []) {
     const name = path.basename(diag.filename ?? "");
