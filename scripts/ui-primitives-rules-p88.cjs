@@ -9,9 +9,8 @@
  *
  * ── 为什么有这条判据（ISSUE #3681）─────────────────────────────────────
  *
- * 治理线的原文（P82 的注释里引的 shadcn `composition.md`）：
- *
- *   For icon-only or hover-help affordances use Tooltip, not native `title=`.
+ * 治理线的原文（P82 的注释里引的 shadcn `composition.md`）：图标按钮与悬停说明
+ * 一律走 Tooltip，不走原生 `title=`。
  *
  * 浏览器画的原生 `title=` 气泡样式 / 延迟 / 主题全部不归设计 token 管（暗色主题下是
  * 一块白底气泡、长文案单行铺开；`#3672` 的现场就是这一面）。P82 把
