@@ -908,17 +908,6 @@ export default defineConfig({
         "tests/helpers/trpc.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
         "tests/helpers/wire-contract.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
         "tests/oxlint-jsplugin-rules.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "tests/oxlint-policy-rules.test.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用
-        "tests/ship-exec.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/ship.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "tests/theme-token-single-source.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/trpc-surface-executors.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/tsc-diagnostic-executors.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "tests/turbopack-tracing-excludes.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/tw4-canonical-ratchet.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/type-assertion-gate.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/workflow-disk-sync-single-writer.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/workshop-input-schema-derivation.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
       ],
       rules: { "typescript/no-unsafe-type-assertion": "off" },
     },

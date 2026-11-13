@@ -8,6 +8,8 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, TestRunner } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 /* 与 `ship-exec.mjs` 的 `ExecResult` 同形（`error` 是**必需**的：把它写成可选，
  * 注入时就过不了类型 —— 而那正是这层接缝唯一的形状约束）。放在模块层是因为
  * 不止一组假执行者要用它（后面的 `describe` 各自那份是局部收窄，不冲突）。 */
@@ -2202,9 +2204,11 @@ describe("issueItemShapes：一张单子正文里的条目形态（#2251 —— 
   it("`###` 后面没内容不算小节；空正文与非字符串输入都归零而不是抛", () => {
     expect(issueItemShapes("###   \n### 有内容\n").headings).toBe(1);
     expect(issueItemShapes("").total).toBe(0);
-    /* SAFETY: 类型断言已复核 */
+    /* 故意喂非串（undefined / null）——判的就是「非字符串输入归零而不是抛」。
+       类型层不让直说，就地豁免这一格（B5 清账：文件级豁免收到行级）。 */
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     expect(issueItemShapes(undefined as never).total).toBe(0);
-    /* SAFETY: 类型断言已复核 */
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     expect(issueItemShapes(null as never).total).toBe(0);
   });
 });
@@ -4870,7 +4874,9 @@ describe("findMergedPullForHeadSha：这一笔是不是已经随某条已合并�
     expect(findMergedPullForHeadSha(CLOSED, "ff99ee88")).toBeNull();
     expect(findMergedPullForHeadSha(CLOSED, "")).toBeNull();
     expect(
-      /* SAFETY: 类型断言已复核 */
+      /* 故意喂非串（undefined）——判的就是「sha 缺席要落 null」。
+         类型层不让直说，就地豁免这一格（B5 清账：文件级豁免收到行级）。 */
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       findMergedPullForHeadSha(CLOSED, undefined as never),
     ).toBeNull();
   });
@@ -6275,8 +6281,8 @@ describe("readFreshnessState：判据原值里三件不同的事必须分开读"
   }
 
   const json = (o: unknown): FakeResult => ({
-    /* SAFETY: 类型断言已复核 */
-    status: Number((o as { code?: number }).code ?? 0),
+    /* code 按字段读（B5 清账）：缺席 / 空值都当 0。 */
+    status: Number(isRecord(o) && o.code !== undefined && o.code !== null ? o.code : 0),
     stdout: JSON.stringify(o),
     stderr: "",
     error: null,
@@ -6393,8 +6399,8 @@ describe("readFreshnessState：判据原值里三件不同的事必须分开读"
  */
 describe("freshnessDriftAdvice：drift 按判据原值分形态给下一动作（ISSUE #3201）", () => {
   const json = (o: unknown): FakeResult => ({
-    /* SAFETY: 类型断言已复核 */
-    status: Number((o as { code?: number }).code ?? 0),
+    /* code 按字段读（B5 清账）：缺席 / 空值都当 0。 */
+    status: Number(isRecord(o) && o.code !== undefined && o.code !== null ? o.code : 0),
     stdout: JSON.stringify(o),
     stderr: "",
     error: null,
