@@ -1,9 +1,11 @@
 /**
- * `scripts/fetch-daily-shell.mjs` 的判据（ISSUE #3722）：规范落点、下载 URL、
- * 404 失败出口、鉴权重试与成功落盘。该工具自上线起一直没有判据，落点改过一次
- * 之后也没有用例钉住，所以「目录还是旧的」这一类误读要在这里被挡住。
+ * `scripts/fetch-daily-shell.mjs` 的判据（ISSUE #3722 / #3728）：规范落点、
+ * 下载端点、401/404 失败出口、鉴权重试与成功落盘。该工具自上线起一直没有判据，
+ * 落点与端点各改过一次都没有用例钉住，所以「目录还是旧的」「资产没产出」
+ * 这两类误读要在这里被挡住。
  *
- * 纯壳资产由每日桌包档回传步产出；它缺席时是上游还没产出，不是本地路径写错。
+ * 下载端点必须是 CNB OpenAPI 的 api.cnb.cool（官方文档、与回传侧同源），不是网页站
+ * cnb.cool：后者匿名 404、带令牌 400，曾把一次「打错主机」误读成「上游没产出」。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -11,12 +13,14 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  DEFAULT_API_ENDPOINT,
   DEFAULT_ASSET,
   DEFAULT_OUT,
   buildDownloadUrl,
   downloadToBuffer,
   main,
   parseArgs,
+  resolveEndpoint,
   resolveToken,
   usage,
 } from "../scripts/fetch-daily-shell.mjs";
@@ -71,11 +75,29 @@ describe("fetch-daily-shell 默认形态", () => {
     expect(parseArgs([]).out).toBe(DEFAULT_OUT);
   });
 
-  it("下载 URL 与回传侧同一形态", () => {
+  it("下载 URL 走 CNB OpenAPI 端点，与回传侧同一形态", () => {
+    expect(DEFAULT_API_ENDPOINT).toBe("https://api.cnb.cool");
     expect(
       buildDownloadUrl({ asset: DEFAULT_ASSET, repo: "moon-read/comfy-app-t3", tag: "nightly" }),
     ).toBe(
-      "https://cnb.cool/moon-read/comfy-app-t3/-/releases/download/nightly/ComfyAPP-shell.exe",
+      "https://api.cnb.cool/moon-read/comfy-app-t3/-/releases/download/nightly/ComfyAPP-shell.exe",
+    );
+  });
+
+  it("端点可由 CNB_API_ENDPOINT 覆盖，尾斜杠不重复拼", () => {
+    expect(resolveEndpoint({})).toBe(DEFAULT_API_ENDPOINT);
+    expect(resolveEndpoint({ CNB_API_ENDPOINT: "https://cnb.example/" })).toBe(
+      "https://cnb.example",
+    );
+    expect(
+      buildDownloadUrl({
+        asset: DEFAULT_ASSET,
+        endpoint: "https://cnb.example/",
+        repo: "moon-read/comfy-app-t3",
+        tag: "nightly",
+      }),
+    ).toBe(
+      "https://cnb.example/moon-read/comfy-app-t3/-/releases/download/nightly/ComfyAPP-shell.exe",
     );
   });
 
@@ -89,8 +111,8 @@ describe("fetch-daily-shell 默认形态", () => {
   });
 });
 
-describe("404 失败出口（ISSUE #3722）", () => {
-  it("说清是上游资产未产出，给出本地编壳出口，不把人引向改路径", async () => {
+describe("401 / 404 失败出口（ISSUE #3728）", () => {
+  it("404 只指向资产名/tag/repo，不再念成上游未产出，也不引向改路径", async () => {
     const dir = makeTmpDir();
     const result = await captureMain({
       argv: [],
@@ -101,13 +123,29 @@ describe("404 失败出口（ISSUE #3722）", () => {
     });
     expect(result.code).toBe(1);
     expect(result.err).toContain("下载失败（HTTP 404）");
-    expect(result.err).toContain("还没有纯壳资产");
-    expect(result.err).toContain("每日桌包档回传步");
-    expect(result.err).toContain("CNB_RELEASE_TOKEN");
-    expect(result.err).toContain("build-tauri-release.ps1");
+    expect(result.err).toContain("该地址下没有");
     expect(result.err).toContain("不要改落点");
+    expect(result.err).toContain("build-tauri-release.ps1");
+    expect(result.err).not.toContain("上游资产尚未产出");
+    expect(result.out).toContain("https://api.cnb.cool/");
     expect(result.out).toContain(DEFAULT_OUT);
     expect(fs.existsSync(path.join(dir, DEFAULT_OUT))).toBe(false);
+  });
+
+  it("401 明确要求登录态与 repo-release:r，不再误报资产不存在", async () => {
+    const dir = makeTmpDir();
+    const result = await captureMain({
+      argv: [],
+      cwd: dir,
+      env: { NODE_ENV: "test" },
+      fetchImpl: () => Promise.resolve(respond(401, '{"errcode":16,"errmsg":"not logged in"}')),
+      platform: "linux",
+    });
+    expect(result.code).toBe(1);
+    expect(result.err).toContain("下载失败（HTTP 401）");
+    expect(result.err).toContain("repo-release:r");
+    expect(result.err).toContain("CNB_RELEASE_TOKEN");
+    expect(result.err).not.toContain("该地址下没有");
   });
 });
 
