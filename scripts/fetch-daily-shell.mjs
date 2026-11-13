@@ -299,8 +299,14 @@ export async function main(io = {}) {
         "[fetch-daily-shell] 提示：CNB Release 资产需要访问权限时，可设置 CNB_RELEASE_TOKEN / CNB_TOKEN / CNB_ISSUE_TOKEN 或传 --token。\n",
       );
     } else if (downloaded.status === 404) {
+      /* 纯壳资产由每日桌包档的回传步产出：tag 在而这份资产缺席，是上游还没产出，
+       * 不是本地落点写错。出口要说清这一层，否则会被当成「目录还是旧的」去改路径。 */
       process.stderr.write(
-        "[fetch-daily-shell] 提示：请确认 nightly Release 中存在该资产（默认 ComfyAPP-shell.exe），或每日桌包是否已成功产出。\n",
+        `[fetch-daily-shell] 提示：nightly Release 里还没有纯壳资产 ${args.asset}（由每日桌包档回传步产出）；` +
+          "请确认回传步跑成功、CNB_RELEASE_TOKEN 已配置，或等下一轮每日成品；资产名不同时用 --asset 指定。\n",
+      );
+      process.stderr.write(
+        `[fetch-daily-shell] 立即可用的替代：双击 tools/build/build-tauri-release.ps1 本地编译纯壳；本次失败与保存路径无关（默认 ${DEFAULT_OUT}），不要改落点。\n`,
       );
     }
     return 1;
