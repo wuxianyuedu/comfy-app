@@ -411,6 +411,7 @@ pnpm check        # eslint + tsc --noEmit
 pnpm ship         # 交出去：提交 → push → 开 PR → 等 CI（--mode auto 全托管 / --mode confirm 关键步确认 / 合并要显式）
 pnpm report:session --range A..B  # 开发汇报骨架（第五节：本轮发现**已立案的号**，不是「要不要提单」的待办；§13.10.9 / §13.10.14）
 pnpm test         # Vitest 单元测试
+pnpm shell:smoke  # 真实 Windows 会话的壳冒烟（前台 / Z 序 / 闪烁收口；需先重编 release 壳，见 §11.10.4）
 pnpm test:e2e     # Playwright e2e
 pnpm run docs     # 生成 API 文档到 docs/api（必须是 run docs：pnpm docs 是内建命令）
 pnpm storybook    # 起组件工作台（http://127.0.0.1:6006）
