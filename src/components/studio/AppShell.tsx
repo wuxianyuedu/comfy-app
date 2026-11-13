@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { LayoutGrid, Plus, X } from "lucide-react";
 
+import { Button } from "~/components/ui/button";
 import { useHotkey } from "~/components/ui/use-hotkey";
 import { Disclosure } from "~/components/ui/disclosure";
 import { cn } from "~/lib/utils";
@@ -193,12 +194,11 @@ export function AppShell({
                              `data-sidebar="menu-action"` 让按钮的
                              `group-has-data-[sidebar=menu-action]:pr-8` 自动给文字让位。
                              缩略成图标轨时不显示（那里没有放它的位置，关页签走页签条）。 */
-                          <button
+                          <Button
                             aria-label={`关闭 ${item.label} 页签`}
                             className={cn(
-                              "absolute top-1/2 right-2 flex size-5 -translate-y-1/2 items-center justify-center rounded-md p-0",
+                              "absolute top-1/2 right-2 -translate-y-1/2",
                               "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                              "outline-hidden ring-sidebar-ring focus-visible:ring-2",
                               "opacity-0 transition-opacity group-hover/menu-item:opacity-100",
                               "group-focus-within/menu-item:opacity-100 focus-visible:opacity-100",
                               "group-data-[collapsible=icon]:hidden",
@@ -208,10 +208,12 @@ export function AppShell({
                               event.stopPropagation();
                               onCloseViewTab?.(openTab.key);
                             }}
+                            size="icon-xs"
                             type="button"
+                            variant="ghost"
                           >
-                            <X size={12} />
-                          </button>
+                            <X data-icon="inline-start" size={12} />
+                          </Button>
                         ) : null}
                       </SidebarMenuItem>
                     );
