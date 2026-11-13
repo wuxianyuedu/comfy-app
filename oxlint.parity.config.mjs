@@ -924,18 +924,6 @@ export default defineConfig({
         "tests/oxlint-policy-rules.test.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用
         "tests/ship-exec.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/ship.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "tests/sidebar-selected-state.test.tsx", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/sidebar-state-contrast.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/soft-assertion-gate.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/spawn-shell-scan.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "tests/splash-log-scroll-follow.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "tests/standalone-link-repair.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/standalone-runtime.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/storybook-check-script.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/storybook-component-coverage.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/storybook-config.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/storybook-cva-variant-source.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/storybook-tsc-input.test.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用
         "tests/tauri-tools-cache.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
         "tests/test-concurrency-gate.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "tests/test-config-inheritance.test.ts", // 存量 7 处 · 清账目标 B5 · 新代码不禁用

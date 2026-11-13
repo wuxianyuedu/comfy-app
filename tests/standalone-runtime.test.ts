@@ -17,7 +17,6 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { MODE_CONTRACTS_REL_PATH } from "../src/lib/workshop/mode-contract-write-path";
@@ -29,41 +28,12 @@ const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
 
 /**
  * 被测的两个模块是纯 Node 宿主模块（§18.4 第三类：既不加 `server-only` 也不是
- * `.server.ts`），TS 侧没有声明文件。这里**显式声明消费的这一小片面**而不是收 `any`：
- * 判据的形状必须由用例自己写清楚，否则模块改签名时用例会静默变宽。
+ * `.server.ts`）。用**字面量说明符**动态 import：TS 沿 import 图拿到 .mjs 的推断
+ * 导出类型（JSDoc），不再需要 `as Promise<T>` 断言收型（B5 清账）。消费成员的
+ * 形状由下面的用例自己证——模块改签名时用例会红，而不是静默变宽。
  */
-type StaticAllowModule = {
-  BUILT_RUNTIME_SCRIPTS: Array<string>;
-  isStaticPathAllowed: (rel: string) => boolean;
-  PREBUNDLED_SRC_ROOTS: Array<string>;
-  PRIVATE_INPUTS: Array<string>;
-  pruneStaticToAllowList: (dir: string, onRemoved?: (name: string) => void) => Array<string>;
-  RUNTIME_SCRIPTS: Array<string>;
-  RUNTIME_SRC: Array<string>;
-  stripPrivateInputs: (dir: string, onRemoved?: (name: string) => void) => Array<string>;
-};
-type RuntimeEnvModule = {
-  AUTH_SECRET_FILE_REL: string;
-  buildStandaloneRuntimeEnv: (input: {
-    appRoot: string;
-    env?: NodeJS.ProcessEnv;
-    port: number;
-  }) => NodeJS.ProcessEnv;
-  ensureStandaloneSchema: (input: { appRoot: string; dbFile?: string }) => {
-    applied: boolean;
-    tablesAfter: number;
-    tablesBefore: number;
-  };
-  OAUTH_PLACEHOLDER: string;
-  readOrCreateAuthSecret: (appRoot: string) => string;
-  standaloneDbFile: (appRoot: string) => string;
-};
-
-/* SAFETY: 类型断言已复核 */
-const load = <T>(rel: string): Promise<T> =>
-  import(pathToFileURL(path.join(ROOT, rel)).href) as Promise<T>;
-const loadStatic = () => load<StaticAllowModule>("scripts/standalone-private-inputs.mjs");
-const loadEnv = () => load<RuntimeEnvModule>("scripts/launcher-core/standalone-runtime-env.mjs");
+const loadStatic = () => import("../scripts/standalone-private-inputs.mjs");
+const loadEnv = () => import("../scripts/launcher-core/standalone-runtime-env.mjs");
 
 /** 只含结构的最小 DDL（真实 DDL 由 §首启建表 每轮构建现生成）。 */
 const FIXTURE_DDL = [
