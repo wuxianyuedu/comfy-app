@@ -70,6 +70,7 @@
  *   · `CNB_ISSUE_TOKEN` / `CNB_TOKEN` —— 写 CNB issue（需 `repo-issue:rw` + `repo-notes:rw`）
  *   · `GITHUB_REPOSITORY`（缺省 `wuxianyuedu/comfy-app`）· `GITHUB_RUN_ID` · `GITHUB_SHA`
  *   · `CNB_REPO_SLUG`（缺省 `moon-read/comfy-app-t3`）· `CNB_API_ENDPOINT`（缺省 `https://api.cnb.cool`）
+ *   · `GA_FAILURE_ISSUE_HANDLE` / `GA_FAILURE_ISSUE_PREFIX` / `GA_FAILURE_ISSUE_WORKFLOW` —— 从别的 GA 档复用同一脚本时改这三枚；缺省 = 每日档（`ci-ga-daily` / `ci(ga-daily): ` / `Daily (mirror)`）。桌包档给 `ci-ga-package-desktop` / `ci(ga-package-desktop): ` / `Package desktop (mirror)`。
  */
 import process from "node:process";
 
@@ -90,7 +91,8 @@ import { commentHeader } from "./ship-ticket.mjs";
 /** 三态退码与仓内其余档同口径（`0` 有结论 / `1` 该写的没写成 / `2` 没拿到读数）。 */
 export const CODE = { DONE: 0, NO_FACT: 2, WRITE_FAILED: 1 };
 
-/** 标题前缀 —— 它**不进键**，只有 `titleKey()` 那一段进键。 */
+/** 标题前缀 —— 它**不进键**，只有 `titleKey()` 那一段进键。
+ *  可按 workflow 覆盖（每个下游立案 job 各给自己的前缀；缺省 = 每日档）。 */
 export const TITLE_PREFIX = "ci(ga-daily): ";
 
 /** 优先级写死并说明：每日档红挡住的是全链唯一的行为面执行者（同 CNB 每日失败立案）。 */
@@ -116,9 +118,9 @@ export function titleKey(stepName) {
  * @param {{runId: string, sha: string, step: string}} input
  * @returns {string} 标题
  */
-export function issueTitle({ runId, sha, step }) {
+export function issueTitle({ runId, sha, step, prefix = TITLE_PREFIX }) {
   const short = sha.slice(0, 8);
-  return `${TITLE_PREFIX}run ${runId || "(无)"} · sha ${short || "(无)"} · ${titleKey(step)}`;
+  return `${prefix}run ${runId || "(无)"} · sha ${short || "(无)"} · ${titleKey(step)}`;
 }
 
 /**
@@ -189,14 +191,23 @@ export function decideAction({ existing, failedSteps }) {
  * @param {{ghRepo: string, handle: string, logReadout?: string, runId: string, sha: string, step: string}} input
  * @returns {string}
  */
-export function composeBody({ ghRepo, handle, logReadout = "", runId, sha, step }) {
+export function composeBody({
+  ghRepo,
+  handle,
+  logReadout = "",
+  runId,
+  sha,
+  step,
+  prefix = TITLE_PREFIX,
+  workflowName = "Daily (mirror)",
+}) {
   const runUrl = `https://github.com/${ghRepo}/actions/runs/${runId}`;
   return [
     commentHeader(handle),
     "",
     "## 症状（由 GA 每日档跑红自动立案，正文只含读数）",
     "",
-    `- 镜像仓：\`${ghRepo}\` · workflow \`Daily (mirror)\``,
+    `- 镜像仓：\`${ghRepo}\` · workflow \`${workflowName}\``,
     `- 构建：run ${runId || "(无)"} · sha \`${sha || "(无)"}\``,
     `- 红在：**「${step}」**`,
     "",
@@ -245,14 +256,26 @@ async function writeStages(writeCtx, stages, index, ledger) {
   if (!stage) {
     return;
   }
-  const { authorLabel, cnbCtx, ghRepo, log, logReadout, runId, sha } = writeCtx;
+  const {
+    authorLabel,
+    cnbCtx,
+    ghRepo,
+    log,
+    logReadout,
+    runId,
+    sha,
+    prefix = TITLE_PREFIX,
+    workflowName = "Daily (mirror)",
+    handle = "ci-ga-daily",
+  } = writeCtx;
   const body = composeBody({
     ghRepo,
-    handle: `ci-ga-daily`,
+    handle,
     logReadout,
     runId,
     sha,
     step: stage.step,
+    workflowName,
   });
   if (stage.number) {
     const said = await appendComment(cnbCtx, stage.number, body, runId);
@@ -265,7 +288,11 @@ async function writeStages(writeCtx, stages, index, ledger) {
   } else {
     const made = await createIssue(
       cnbCtx,
-      { body, priority: AUTO_PRIORITY, title: issueTitle({ runId, sha, step: stage.step }) },
+      {
+        body,
+        priority: AUTO_PRIORITY,
+        title: issueTitle({ runId, sha, step: stage.step, prefix }),
+      },
       log,
       { labels: [authorLabel], logPrefix: "[ga-daily-failure]" },
     );
@@ -334,7 +361,9 @@ export async function main(io = {}) {
   const cnbToken = String(env.CNB_ISSUE_TOKEN ?? env.CNB_TOKEN ?? "").trim();
   const runId = String(env.GITHUB_RUN_ID ?? "").trim();
   const sha = String(env.GITHUB_SHA ?? "").trim();
-  const handle = machineHandle("ci-ga-daily", env);
+  const handle = machineHandle(env.GA_FAILURE_ISSUE_HANDLE ?? "ci-ga-daily", env);
+  const prefix = env.GA_FAILURE_ISSUE_PREFIX ?? TITLE_PREFIX;
+  const workflowName = env.GA_FAILURE_ISSUE_WORKFLOW ?? "Daily (mirror)";
 
   /** @type {(code: number, why: string) => number} 退码出口：`--no-block` 只改码，不改话术。 */
   const finish = (code, why) => {
@@ -430,7 +459,9 @@ export async function main(io = {}) {
   if (dryRun) {
     for (const stage of decision.stages) {
       const plan = stage.number ? `追加到 #${stage.number}` : "新建";
-      log(`[ga-daily-failure] DRY-RUN：${plan} · ${issueTitle({ runId, sha, step: stage.step })}`);
+      log(
+        `[ga-daily-failure] DRY-RUN：${plan} · ${issueTitle({ runId, sha, step: stage.step, prefix })}`,
+      );
     }
     log(
       `[ga-daily-failure] DRY-RUN 正文的日志段（${String(Buffer.byteLength(logReadout, "utf8"))} 字节）：`,
@@ -450,7 +481,7 @@ export async function main(io = {}) {
 
   const ledger = { failures: /** @type {string[]} */ ([]), wrote: 0 };
   await writeStages(
-    { authorLabel, cnbCtx, ghRepo, log, logReadout, runId, sha },
+    { authorLabel, cnbCtx, ghRepo, log, logReadout, runId, sha, prefix, workflowName, handle },
     decision.stages,
     0,
     ledger,
