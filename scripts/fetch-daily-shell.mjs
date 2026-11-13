@@ -13,14 +13,14 @@
  * ## 默认落点（与 ISSUE #3699 同口径）
  *
  *   · 下载资产：`ComfyAPP-shell.exe`
- *   · 保存为：  `src-tauri/release/app.exe`（相对项目根；父目录不存在会自动创建）
+ *   · 保存为：  `src-tauri/target/release/app.exe`（相对项目根；父目录不存在会自动创建）
  *   · 快捷方式：项目根 `Comfy APP.lnk`（仅 Windows；已存在则不覆盖，除非显式要求）
  *
  * ## 用法
  *
  *   node scripts/fetch-daily-shell.mjs
  *   node scripts/fetch-daily-shell.mjs --dry-run
- *   node scripts/fetch-daily-shell.mjs --out src-tauri/release/app.exe
+ *   node scripts/fetch-daily-shell.mjs --out src-tauri/target/release/app.exe
  *   node scripts/fetch-daily-shell.mjs --repo moon-read/comfy-app-t3 --tag nightly
  *
  * 下载需要能访问 CNB nightly Release 资产。若直连返回 401/403，可通过环境变量提供令牌
@@ -38,7 +38,7 @@ export const ROOT = path.resolve(HERE, "..");
 export const DEFAULT_REPO = "moon-read/comfy-app-t3";
 export const DEFAULT_TAG = "nightly";
 export const DEFAULT_ASSET = "ComfyAPP-shell.exe";
-export const DEFAULT_OUT = path.join("src-tauri", "release", "app.exe");
+export const DEFAULT_OUT = path.join("src-tauri", "target", "release", "app.exe");
 export const SHORTCUT_NAME = "Comfy APP.lnk";
 
 /**
@@ -70,7 +70,7 @@ export function usage() {
   return [
     "用法：node scripts/fetch-daily-shell.mjs [选项]",
     "",
-    "  --out <path>         保存路径（默认 src-tauri/release/app.exe）",
+    "  --out <path>         保存路径（默认 src-tauri/target/release/app.exe）",
     "  --repo <slug>        CNB 仓库（默认 moon-read/comfy-app-t3）",
     "  --tag <tag>          Release tag（默认 nightly）",
     "  --asset <name>       资产文件名（默认 ComfyAPP-shell.exe）",
