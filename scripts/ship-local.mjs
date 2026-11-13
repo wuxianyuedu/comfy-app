@@ -21,7 +21,8 @@
 
 /**
  * 一次 `run` 的最小形状（与 `ship.mjs` 注入的那份同源，不在此重新定义判据）。
- * @typedef {(cmd: string, args: string[], opts?: {env?: Record<string,string>}) => {status: number, stdout: string, stderr?: string, error?: string | null}} PlatformRun
+ * `stderr` 必给（`makeRunner` 的承诺：钩子把原因写在 stderr 侧，吞了就是「只剩一句没理由的红」）。
+ * @typedef {(cmd: string, args: string[], opts?: {env?: Record<string,string>}) => {status: number, stdout: string, stderr: string, error: string | null}} PlatformRun
  */
 
 import {
@@ -31,6 +32,8 @@ import {
   looksNewlineMangled,
   readProof,
 } from "./ship-core.mjs";
+import { failedStageNames, fetchBuildStatus, resolveBuildSn } from "./ci-build-readout.mjs";
+import { readBuildVerdict } from "./ship-build.mjs";
 import { safeRead, short } from "./ship-exec.mjs";
 import { reportStage } from "./ship-stage.mjs";
 /* 「这一笔是刻意的空提交」不靠猜索引 —— 由被触发的两条 D0 判据认这个说出来的旗标
@@ -386,6 +389,69 @@ export function runPushStage(ctx) {
 }
 
 /**
+ * `--rerun-ci` 的**只读前置读数**（ISSUE #3341）：动手前看当前 head 已有的 build 终态。
+ *
+ * 为什么要有这一格（#3338 现场）：节点侧 egress 中断 / runner 掉线期间，同一条 PR 分支上
+ * `--rerun-ci` 被反复调用，7 分钟连推 5 笔 `ci: rerun` 空提交、4 条 build 白烧 —— 平台没有
+ * 重跑按钮，「再推一笔」是唯一出口，但没有任何一处把「再推也不会变」说出口。这一格把
+ * 当前 head 的 build 终态先念出来：在跑的（再推是重复派生）、红的（带红在哪些格 ——
+ * 人靠格名认节点形还是内容形，节点故障期重跑大概率还是红）、被取消的（重跑正是对的）。
+ * **它是读数、不是闸**：不改退码、不拦显式动作 —— 推不推仍由发起这一跳的人决定
+ * （单子原话：「不是硬闸，显式动作不许被推断」）。
+ *
+ * 取数复用 `ci-build-readout.mjs` 的既有出口（`resolveBuildSn` 按 sha 归属 +
+ * `fetchBuildStatus`）与 `ship-build.mjs` 的三态判（`readBuildVerdict`），不另立第二套判定；
+ * 读数取不到（cnb 不在 / 列表取不到 / 归属不到）时照实念一句，然后照常执行。
+ *
+ * @param {{run: PlatformRun, log: (s: string) => void, slug: string | null, cnbOk: boolean, headSha: string}} ctx
+ */
+export function rerunCiPreReadout({ run, log, slug, cnbOk, headSha }) {
+  if (!cnbOk || !slug) {
+    log("[ship] 前置读数没有执行者（cnb 不在 / 仓库路径取不到）⇒ 照常执行。");
+    return;
+  }
+  const sn = resolveBuildSn({ run, log, slug, headSha, command: "pnpm ship --diagnose" });
+  if (!sn) {
+    /* 归属不到 / 列表取不到：resolveBuildSn 已把原因念出来（「还没推 / CI 还没起」那一族
+     * 与「平台没答」是两句话），这里不再补一句冒充结论，照常执行。 */
+    return;
+  }
+  const statusJson = fetchBuildStatus(run, slug, sn);
+  if (!statusJson) {
+    log(`[ship] 前置读数：构建 ${sn} 取不到状态 ⇒ 没有结论，照常执行。`);
+    return;
+  }
+  const verdict = readBuildVerdict(statusJson);
+  if (verdict.state === "running") {
+    log(
+      `[ship] 前置读数：当前 head 已有一条在跑的 build（${sn} · status=${verdict.raw}）⇒ ` +
+        "现在再推一笔会为同一内容再派一条 build；先等它出终态（pnpm ship / pnpm ship --diagnose）。",
+    );
+    return;
+  }
+  if (verdict.state === "red") {
+    const raw = String(verdict.raw ?? "").toLowerCase();
+    if (raw === "cancelled" || raw === "canceled") {
+      log(`[ship] 前置读数：上一跑（${sn}）被取消 ⇒ 那一跑没有结论，重跑正是对的动作。`);
+      return;
+    }
+    const names = failedStageNames(statusJson);
+    const where = names.length > 0 ? ` · 红在：${names.join("、")}` : "";
+    log(`[ship] 前置读数：当前 head 最近的 build 是红（${sn} · status=${verdict.raw}${where}）。`);
+    log(
+      "[ship]   若红是节点形（Prepare / GitHub 镜像同步那类 egress 断网、runner 掉线），" +
+        "节点恢复前再推大概率还是红 —— 重跑不会改变 infra 故障；要归因：" +
+        `pnpm ship --diagnose ${sn}。`,
+    );
+    return;
+  }
+  if (verdict.state === "unknown") {
+    log(`[ship] 前置读数：构建 ${sn} 状态认不出（status=${verdict.raw}）⇒ 照常执行。`);
+  }
+  /* green：不在 #3341 的命中面（未终态 / 近期 error / 节点不在场），不出声。 */
+}
+
+/**
  * 阶段：CI 失败重试 —— 在当前分支推一个空提交以触发平台重新构建（规范 §13.6）。
  *
  * 平台侧 CI 是 push 触发的：没有「重跑按钮」时，唯一能重新派生一条流水线的方式就是
@@ -398,11 +464,11 @@ export function runPushStage(ctx) {
  * 排在 `--diagnose` 之后、preflight 之前直接返回，与 `--merge` 那一路互斥。
  * 返回的是三态结论（与 `--diagnose` 那一路同口径）：由 `ship.mjs` 直接 `finish([...])`。
  *
- * @param {{up:{remote:string|null}, branch:string, root:string, log:(s:string)=>void, run:PlatformRun, relay:(r:{stdout:string,stderr?:string})=>void, opt:{dryRun:boolean}}} ctx
+ * @param {{up:{remote:string|null}, branch:string, root:string, log:(s:string)=>void, run:PlatformRun, relay:(r:{stdout:string,stderr?:string})=>void, opt:{dryRun:boolean}, slug?:string|null, cnbOk?:boolean}} ctx
  * @returns {number} 三态结论（GREEN / RED / NOT_RUN）
  */
 export function runRerunCiStage(ctx) {
-  const { up, branch, log, run, relay, opt } = ctx;
+  const { up, branch, log, run, relay, opt, slug = null, cnbOk = false } = ctx;
   if (!up.remote) {
     log(
       "[ship] 推不出远端名（既没有上游、也不是「唯一远端」）⇒ 没有 push 执行者，" +
@@ -420,6 +486,10 @@ export function runRerunCiStage(ctx) {
   const env = { [EMPTY_COMMIT_ENV]: "1" };
   if (opt.dryRun) {
     log("[ship] [dry-run] 将执行：");
+    log(
+      "[ship]   （先跑一步**只读前置读数**：按 HEAD sha 归属最近一条 build、念终态与" +
+        "「节点形红重跑不会改变 infra 故障」的提醒 —— 读数不是闸，ISSUE #3341）",
+    );
     log(`[ship]   ${EMPTY_COMMIT_ENV}=1 git commit --allow-empty --message="${msg}"`);
     log(`[ship]   git push -u ${up.remote} ${branch}`);
     log(
@@ -428,6 +498,15 @@ export function runRerunCiStage(ctx) {
     );
     return CODE.GREEN;
   }
+  /* 前置读数（ISSUE #3341）排在空提交**之前**：归属的是「当前这笔」的 build ——
+   * 提交之后 sha 已变，按新 sha 归属不到任何东西，读数就永远空转了。 */
+  rerunCiPreReadout({
+    run,
+    log,
+    slug,
+    cnbOk,
+    headSha: run("git", ["rev-parse", "HEAD"]).stdout.trim(),
+  });
   const cm = run("git", ["commit", "--allow-empty", `--message=${msg}`], { env });
   relay(cm);
   if (cm.status !== 0) {

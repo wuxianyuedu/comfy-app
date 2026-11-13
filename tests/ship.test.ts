@@ -9377,6 +9377,156 @@ describe("--rerun-ci：空提交要说出自己的意图，否则 D0 把它读�
 });
 
 /**
+ * `--rerun-ci` 的只读前置读数（ISSUE #3341）：动手前按当前 head 的 sha 归属最近一条
+ * build、念终态 —— 在跑的（再推是重复派生）、红的（带红在哪些格 + 节点形提醒）、被取消的
+ * （重跑正是对的）。它是**读数不是闸**：所有情形下空提交照推、退码不变；读数取不到
+ * （cnb 不在 / 列表取不到 / 归属不到）念一句照实，不冒充结论。
+ */
+describe("--rerun-ci 前置读数（ISSUE #3341）：读数不是闸，推不推仍由人", () => {
+  function preIo(
+    opts: {
+      builds?: Array<{ createTime?: string; event?: string; sha?: string; sn?: string }>;
+      cnbOk?: boolean;
+      headSha?: string;
+      listUnreadable?: boolean;
+      /** `get-build-status -v` 的应答（data 形状按平台原样给）。 */
+      statusData?: unknown;
+    } = {},
+  ) {
+    const seen: Array<string> = [];
+    const log: Array<string> = [];
+    const sha = opts.headSha ?? "abc123def4567890";
+    const run = (cmd: string, args: Array<string>): FakeResult => {
+      seen.push(`${cmd} ${args.join(" ")}`);
+      if (cmd === "cnb") {
+        const key = args.join(" ");
+        if (key.includes("get-build-logs")) {
+          if (opts.listUnreadable === true) {
+            return { status: 1, stdout: "boom", stderr: "", error: null };
+          }
+          return {
+            status: 0,
+            stdout: JSON.stringify({ status: 200, data: opts.builds ?? [] }),
+            stderr: "",
+            error: null,
+          };
+        }
+        if (key.includes("get-build-status")) {
+          return {
+            status: 0,
+            stdout: JSON.stringify({ status: 200, data: opts.statusData ?? null }),
+            stderr: "",
+            error: null,
+          };
+        }
+      }
+      if (args[0] === "commit") {
+        return { status: 0, stdout: "", stderr: "", error: null };
+      }
+      if (args[0] === "rev-parse") {
+        return { status: 0, stdout: `${sha}\n`, stderr: "", error: null };
+      }
+      if (args[0] === "push") {
+        return { status: 0, stdout: "", stderr: "", error: null };
+      }
+      return { status: 0, stdout: "", stderr: "", error: null };
+    };
+    const code = runRerunCiStage({
+      up: { remote: "cnb" },
+      branch: "feat/x",
+      root: "G:/nowhere",
+      log: (s: string) => log.push(s),
+      run,
+      relay: () => undefined,
+      opt: { dryRun: false },
+      slug: "o/r",
+      cnbOk: opts.cnbOk ?? true,
+    });
+    return { code, log: log.join("\n"), seen };
+  }
+
+  const buildFor = (sn: string) => ({
+    sn,
+    sha: "abc123def4567890",
+    event: "pull_request",
+    createTime: "2026-11-07T12:52:00Z",
+  });
+
+  it("在跑的 build ⇒ 念「再推会为同一内容再派一条」，空提交照推、退码不变", () => {
+    const { code, log, seen } = preIo({
+      builds: [buildFor("cnb-x-1")],
+      statusData: { status: "running" },
+    });
+    expect(log).toContain("在跑的 build（cnb-x-1 · status=running）");
+    expect(log).toContain("先等它出终态");
+    expect(seen.find((c) => c.includes("commit")) ?? "").toContain("--allow-empty");
+    expect(code).toBe(0);
+  });
+
+  it("红的 build ⇒ 念终态、红在哪些格与「重跑不会改变 infra 故障」，并点名 --diagnose", () => {
+    const { code, log } = preIo({
+      builds: [buildFor("cnb-y-2")],
+      statusData: {
+        status: "error",
+        pipelinesStatus: {
+          "cnb-y-2-001": {
+            id: "cnb-y-2-001",
+            name: "质量门禁",
+            stages: [
+              { id: "prepare", name: "Prepare", status: "error" },
+              { id: "stage-1", name: "受影响用例", status: "success" },
+            ],
+          },
+        },
+      },
+    });
+    expect(log).toContain("最近的 build 是红（cnb-y-2 · status=error · 红在：Prepare）");
+    expect(log).toContain("重跑不会改变 infra 故障");
+    expect(log).toContain("pnpm ship --diagnose cnb-y-2");
+    expect(code).toBe(0);
+  });
+
+  it("被取消的那一跑 ⇒ 念「重跑正是对的动作」，不冒充红", () => {
+    const { code, log } = preIo({
+      builds: [buildFor("cnb-z-3")],
+      statusData: { status: "cancelled" },
+    });
+    expect(log).toContain("被取消");
+    expect(log).toContain("重跑正是对的动作");
+    expect(code).toBe(0);
+  });
+
+  it("绿 build ⇒ 不在命中面，不出声；空提交照推", () => {
+    const { code, log } = preIo({
+      builds: [buildFor("cnb-g-4")],
+      statusData: { status: "success" },
+    });
+    expect(log).not.toContain("前置读数：当前 head");
+    expect(code).toBe(0);
+  });
+
+  it("cnb 不在 ⇒ 一句「没有执行者」，不冒充结论，照常执行", () => {
+    const { code, log, seen } = preIo({ cnbOk: false });
+    expect(log).toContain("前置读数没有执行者");
+    expect(seen.some((c) => c.startsWith("cnb "))).toBe(false);
+    expect(code).toBe(0);
+  });
+
+  it("构建列表取不到 ⇒ resolveBuildSn 念原因，无终态读数也不拦", () => {
+    const { code, log } = preIo({ listUnreadable: true });
+    expect(log).toContain("取不到 build 列表");
+    expect(code).toBe(0);
+  });
+
+  it("归属不到（列表里没有这一笔的 pull_request 构建）⇒ 念原因，照常执行", () => {
+    const { code, log } = preIo({ builds: [], statusData: { status: "success" } });
+    expect(log).toContain("没找到 pull_request 构建");
+    expect(log).not.toContain("前置读数：当前 head");
+    expect(code).toBe(0);
+  });
+});
+
+/**
  * `--stage-log`（ISSUE #2455）：绿跑里取「某一格到底念了什么」。① 按格名取正文并带完整日志行号（不必手工拼
  * `pipelineId` / `stageId`，拼错不报错、读到别格）；② 认不出 / 命中多格 ⇒ 2，且不替你挑一格；③ 只读，一条写动作
  * 不发；点了名就不再问构建列表；④ 缺格名 / 与写动作同行 ⇒ 2，且一条 build 命令都不发。
