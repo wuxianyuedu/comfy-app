@@ -2,7 +2,8 @@
 // 两个查询 —— 此前保存只写库不碰缓存，页签切走再切回来时草稿按旧缓存播种，
 // 刚配的模式「消失」一轮。本文件锁：① 保存后 invalidate 的 queryKey 对得上
 // （存档按模型点名 + 概览整份）；② 保存返回值回灌草稿（与服务端归一化一致）；
-// ③ 切换选中模型时草稿与模型级端点一起播种。
+// ③ 切换选中模型时草稿按新模型存档播种；④ 保存入参**不带**端点路径
+// （#3631：端点是模型级配置，在设置页「接口端点」下拉配，本页不读不写）。
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type * as TanStackQuery from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
@@ -138,20 +139,19 @@ describe("useModelAdapters：保存后的缓存失效（#3622 评论 1）", () =
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ["llm", "workshopAdaptersSummary"],
     });
-    /* 返回值回灌：草稿与服务端归一化后的形态一致；模型级端点也一起回灌。 */
+    /* 返回值回灌：草稿与服务端归一化后的形态一致。 */
     expect(result.current.draft.map((a) => a.mode)).toEqual(["T2I"]);
-    expect(result.current.endpointPath).toBe("/v1/images/generations");
     expect(result.current.message?.kind).toBe("ok");
   });
 
-  it("保存入参带模型级端点路径（与模式无关的一格）", async () => {
+  it("保存入参不带端点路径（#3631：这格在设置页配，本页不读不写）", async () => {
     adaptersByName["agnes-image"] = { endpointPath: "/x", adapters: [] };
     const { result } = renderAdapters();
     await expect.poll(() => result.current.candidates).toHaveLength(2);
     act(() => {
       result.current.selectModel("agnes-image");
     });
-    await expect.poll(() => result.current.endpointPath).toBe("/x");
+    await expect.poll(() => result.current.selectedModel).toBe("agnes-image");
     act(() => {
       result.current.addMode("T2I");
     });
@@ -159,12 +159,15 @@ describe("useModelAdapters：保存后的缓存失效（#3622 评论 1）", () =
     await act(async () => {
       await result.current.save();
     });
-    expect(mutateAsync).toHaveBeenCalledWith(
-      expect.objectContaining({ endpointPath: "/x", name: "agnes-image" }),
-    );
+    const call: unknown = mutateAsync.mock.calls[0]?.[0];
+    expect(call).toMatchObject({ name: "agnes-image" });
+    /* 端点路径整格不出现在保存入参里 —— 服务端按「省略 = 保住既有」处理。 */
+    const hasEndpointKey = (value: unknown): boolean =>
+      value !== null && typeof value === "object" && "endpointPath" in value;
+    expect(hasEndpointKey(call)).toBe(false);
   });
 
-  it("切换选中模型：草稿与端点按新模型的存档播种", async () => {
+  it("切换选中模型：草稿按新模型的存档播种", async () => {
     adaptersByName = {
       "agnes-image": {
         endpointPath: "/i",
@@ -178,13 +181,11 @@ describe("useModelAdapters：保存后的缓存失效（#3622 评论 1）", () =
       result.current.selectModel("agnes-image");
     });
     await expect.poll(() => result.current.draft.map((a) => a.mode)).toEqual(["T2I"]);
-    expect(result.current.endpointPath).toBe("/i");
 
     act(() => {
       result.current.selectModel("sora-video");
     });
     await expect.poll(() => result.current.selectedModel).toBe("sora-video");
     expect(result.current.draft).toEqual([]);
-    expect(result.current.endpointPath).toBe("/v");
   });
 });

@@ -53,8 +53,6 @@ function baseController(over: Partial<ModelAdaptersController> = {}): ModelAdapt
     save: vi.fn(() => Promise.resolve()),
     saving: false,
     summary: [],
-    endpointPath: "",
-    setEndpointPath: vi.fn(),
     selectedModel: "agnes-image",
     selectModel: vi.fn(),
     setDraft: vi.fn(),
@@ -131,15 +129,14 @@ describe("模式编辑卡：同一时刻只显示一个（chip 即页签）", ()
     expect(screen.queryByRole("heading", { name: /文生图/ })).not.toBeInTheDocument();
   });
 
-  it("端点路径是模型级一格（不在模式卡里重复出现）", () => {
+  it("端点路径整格撤出本页（#3631）：这格在「设置 → 远程模型」的接口端点下拉配", () => {
     current = baseController({
-      endpointPath: "/v1/images/generations",
       draft: [{ mode: "T2I", inputs: [{ type: "prompt", field: "prompt" }], outputField: "url" }],
     });
     render(<ModelAdaptersView />);
-    expect(screen.getByLabelText(/端点路径/)).toBeInTheDocument();
-    /* 全文件只有一处端点路径输入（模型级）；模式卡里不再有第二份。 */
-    expect(screen.getAllByLabelText(/端点路径/)).toHaveLength(1);
+    /* 端点与模式无关且已在设置页配置 —— 本页不再显示 / 编辑它。 */
+    expect(screen.queryByLabelText(/端点路径/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/拼在模型 Base URL 后/)).not.toBeInTheDocument();
   });
 });
 

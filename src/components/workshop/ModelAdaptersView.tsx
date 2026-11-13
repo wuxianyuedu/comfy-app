@@ -4,13 +4,14 @@
 //（统一输入清单见 lib/workshop/model-mode-contract.ts，产物按 outputField 提取）。只管**模型适配**（接口级）；模式级的「模式契约」是并列独立视图
 //（`mode-contract/ModeContractView.tsx`），两处读写同一份注册表。（ISSUE #1423 改版：选中态走 `ui/select-chip`，根因与修法见其文件头。）
 // ISSUE #3622 改版：① 模型清单收成左侧树形页签（图像 / 视频分组、已配的模型标「已配」），
-// 与模式契约的 `ModeContractModeNav` 同一形态；② 端点路径升成**模型级**一格（与模式无关，
-// 各模式共用）；③ 同一时刻只显示一个模式的编辑卡，模式 chip 即切换页签；④ 删除模式走二次确认。
+// 与模式契约的 `ModeContractModeNav` 同一形态；② 同一时刻只显示一个模式的编辑卡，
+// 模式 chip 即切换页签；③ 删除模式走二次确认。
+// ISSUE #3631：端点路径整格撤出本页 —— 它是模型级配置，与模式无关，且已在
+// 「设置 → 远程模型」的接口端点下拉配置过（#3656）；本页只管字段映射与产物提取。
 
 import React from "react";
 
 import {
-  defaultEndpointPathForKind,
   WORKSHOP_INPUT_TYPES,
   isWorkshopInputType,
   workshopInputLabel,
@@ -317,7 +318,7 @@ function AddModePopover({
 }
 
 /** 当前选中模式的适配编辑卡：输入映射 + 固定值 + 产物字段路径。
- *  端点路径不在这张卡里 —— 它是模型级配置（ISSUE #3622），在上方独立一格。 */
+ *  端点路径不在这页（#3631）—— 模型级端点在「设置 → 远程模型」的接口端点下拉。 */
 function AdapterCard({
   adapter,
   onChange,
@@ -453,8 +454,6 @@ export function ModelAdaptersView() {
     saving,
     message,
     summary,
-    endpointPath,
-    setEndpointPath,
   } = controller;
 
   const [addModeOpen, setAddModeOpen] = React.useState(false);
@@ -472,12 +471,6 @@ export function ModelAdaptersView() {
 
   /* 未点选 chip 时回落第一份草稿（新选模型 / 删掉激活模式后都有得看）。 */
   const current = draft.find((a) => a.mode === activeMode) ?? draft[0] ?? null;
-
-  const selectedKind = candidates.find((c) => c.name === selectedModel)?.kind;
-  const endpointPlaceholder =
-    selectedKind === "image" || selectedKind === "video"
-      ? defaultEndpointPathForKind(selectedKind)
-      : "";
 
   const updateAdapter = (
     mode: string,
@@ -536,31 +529,11 @@ export function ModelAdaptersView() {
               </p>
             ) : (
               <>
-                {/* 端点路径：模型级配置（ISSUE #3622）—— 端点与模式无关，该模型的
-                    所有模式共用同一条路径；留空时请求侧按图片 / 视频的默认惯例推导。 */}
-                <section>
-                  <FormField
-                    hint="该模型的所有模式共用这条路径；留空按图片 / 视频的默认端点自动推导。"
-                    id="adapter-endpoint-model"
-                    label={<FieldLabelRow id="拼在模型 Base URL 后" label="端点路径" />}
-                    labelClassName="mb-1.5"
-                  >
-                    {(a11y) => (
-                      <input
-                        {...a11y}
-                        className="border-border bg-bg focus:border-primary w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs outline-none"
-                        onChange={(event) => {
-                          setEndpointPath(event.target.value);
-                        }}
-                        placeholder={endpointPlaceholder}
-                        value={endpointPath}
-                      />
-                    )}
-                  </FormField>
-                </section>
+                {/* 端点路径不在这页（#3631）：它是模型级配置，与模式无关，且已在
+                    「设置 → 远程模型」的接口端点下拉配置过 —— 这里只管字段映射。 */}
 
                 {/* 支持的工坊模式：chip 即页签（点一枚切到它的编辑卡）。 */}
-                <section className="mt-4">
+                <section>
                   <SectionLabel hint="同一时刻只显示一个模式的编辑卡，点 chip 切换">
                     支持的工坊模式
                   </SectionLabel>

@@ -551,6 +551,28 @@ describe("workshopAdapters —— 适配器形状与大写归一", () => {
     save.mockRestore();
   });
 
+  it("入参省略 endpointPath = 保住既有值（#3631）：适配页不再编辑这格", async () => {
+    /* 「模型适配」页的保存不再带端点路径 —— 服务端必须拿库里既有的那个
+     *（设置页「接口端点」下拉写的），不能把省略折成空串冲掉配置。 */
+    seedRemoteModel(tdb, {
+      name: "agnes-image",
+      workshopAdapters: {
+        endpointPath: "/v1/videos",
+        adapters: [],
+      },
+    });
+    const save = vi
+      .spyOn(remoteModelRepository, "saveWorkshopAdaptersDoc")
+      /* SAFETY: 类型断言已复核 */
+      .mockResolvedValue({ endpointPath: "/v1/videos", adapters: [] });
+    await caller().workshopAdaptersSave({
+      name: "agnes-image",
+      adapters: [{ mode: "t2v", inputs: [{ type: "prompt", field: "prompt" }] }],
+    });
+    expect(save.mock.calls[0]?.[1]).toMatchObject({ endpointPath: "/v1/videos" });
+    save.mockRestore();
+  });
+
   it("inputs 空数组 → BAD_REQUEST，不落库", async () => {
     const save = vi.spyOn(remoteModelRepository, "saveWorkshopAdaptersDoc");
     expect(

@@ -315,12 +315,15 @@ export const llmRouter = createTRPCRouter({
       return doc;
     }),
 
-  /** 保存某条远端模型的工坊适配器存档（整份覆盖；端点路径模型级共用） */
+  /** 保存某条远端模型的工坊适配器存档（整份覆盖；端点路径模型级共用）。
+   *  端点路径**不由「模型适配」页编辑**（#3631：它已在设置页「接口端点」
+   *  下拉配置）—— 入参省略这格 = 保住既有值不被冲掉；显式带上（设置侧
+   *  modelSave 与旧调用方）= 原语义（trim 后整格覆盖）。 */
   workshopAdaptersSave: authedProcedure
     .input(
       z.object({
         /* 模型级端点路径（拼在条目 Base URL 后）：空 = 未配置，请求侧按
-         * 产物类别推导（ISSUE #3622）。 */
+         * 产物类别推导（ISSUE #3622）。省略 = 不动既有（#3631）。 */
         endpointPath: z.string().optional(),
         name: z.string().min(1),
         adapters: z.array(adapterSchema),
@@ -330,8 +333,12 @@ export const llmRouter = createTRPCRouter({
       const adapters = parseRemoteModeAdapters(
         input.adapters.map((a) => ({ ...a, mode: a.mode.toUpperCase() })),
       );
+      const existing = await remoteModelRepository.getWorkshopAdaptersDoc(input.name);
       const saved = await remoteModelRepository.saveWorkshopAdaptersDoc(input.name, {
-        endpointPath: input.endpointPath?.trim() ?? "",
+        endpointPath:
+          input.endpointPath === undefined
+            ? existing.endpointPath
+            : (input.endpointPath.trim() ?? ""),
         adapters,
       });
       return saved;
