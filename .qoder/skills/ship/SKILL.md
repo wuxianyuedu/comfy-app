@@ -27,6 +27,11 @@ pnpm ship --no-preflight-d0  # 关掉阶段 0 的 D0 预跑（默认开：提交
 pnpm ship --branch feat/x    # 还没有分支时，让它先把分支建出来再往下走（名字必须人给）
 pnpm ship --add src/a.ts --allow-staged   # --add 的暂存面默认封闭：index 里另有未点名
                                           # 文件 ⇒ 退 2；只有确认它们该一起走才给这枚
+pnpm ship --no-commit                     # 「这一笔我自己已经提交（甚至已推送）过 ⇒ 跳过提交段、
+                                          # 不看工作树，HEAD 原样进推送段」（#3619/#3676）—— 纯合并
+                                          # 那一跳（--mode auto --no-commit）靠它免掉重报 --add；
+                                          # 与 --add / --message / --message-file / --allow-staged
+                                          # 任一同行退 2（没有提交段，那些旗标没有对象）
 pnpm ship                    # 到「CI 出终态 + 打印下一动作」为止
 pnpm ship --merge            # CI 绿了才合并（squash）
 pnpm ship --merge --close-issue --clean-branch   # 合上之后关单、并把**这一次那条**分支收掉

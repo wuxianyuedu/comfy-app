@@ -157,6 +157,15 @@
  *                                              #  文件 ⇒ 退 2 并逐个念出来（ISSUE #3597）
  *   pnpm ship --add src/a.ts --allow-staged     # 显式放行上面那一格（只有确认它们该
  *                                              #  一起走时才给；不给就是不许）
+ *   pnpm ship --no-commit                       # 「这一笔我自己已经提交（甚至已推送）过 ⇒
+ *                                              #  跳过提交段、不看工作树，HEAD 原样进推送段」——
+ *                                              #  说出来的判定（ISSUE #3619 / #3676）：并行检出的
+ *                                              #  工作树上挂着别的会话的常驻脏文件，「哪些是我的」
+ *                                              #  没有可靠判据，由人点名跳过，脚本不去猜。
+ *                                              #  与 --add / --message / --message-file /
+ *                                              #  --allow-staged 任一同行 ⇒ 退 2（没有提交段，
+ *                                              #  那些旗标没有对象）。纯合并那一跳
+ *                                              #  （--mode auto --no-commit）靠它免掉重报 --add。
  *   pnpm ship --title "…"                      # 覆盖标题（默认取分支第一笔非常规提交）
  *   pnpm ship --branch feat/x                  # 当前没有可用分支时先把分支建出来再往下走
  *                                              #  （名字只能人给：脚本不从 issue 号/标题里造）
@@ -253,16 +262,9 @@ import path from "node:path";
 import { resolveGitDir } from "./git-dir.mjs";
 /* 旗标解析在 `ship-args.mjs`：它跟着「命令行长什么样」动，而 `ship-core` 跟着「外部执行者的
  * 读数形状」动（ISSUE #2491 把这一层拆出去的那条理由写在文件头）。 */
-import { parseArgs } from "./ship-args.mjs";
-import { expandMode, makeStdinConfirm, runFinalStages, SHIP_MODES } from "./ship-mode.mjs";
-import {
-  CODE,
-  codeTag,
-  combineShipCodes,
-  parseSlug,
-  PHASES,
-  resolveUpstream,
-} from "./ship-core.mjs";
+import { flagConflicts, parseArgs } from "./ship-args.mjs";
+import { expandMode, makeStdinConfirm, runFinalStages } from "./ship-mode.mjs";
+import { CODE, codeTag, combineShipCodes, parseSlug, resolveUpstream } from "./ship-core.mjs";
 import { makeRunner, short, writeScratch } from "./ship-exec.mjs";
 import { reportStage } from "./ship-stage.mjs";
 import { createShipResultSink } from "./ship-result.mjs";
@@ -434,18 +436,14 @@ async function runFlow(deps, tmpFiles) {
     }
   };
 
-  if (opt.unknown.length > 0) {
-    log(`[ship] [ERROR] unknown flag(s): ${opt.unknown.join(" ")}`);
-    log("[ship] 拼错的旗标会被读成「没要那个动作」，所以这里直接停。见文件头「用法」。");
-    return CODE.NOT_RUN;
-  }
-  /* 模式词表外的值不静默收下（#3512）：拼错的模式会被读成「没授权那组动作」，
-   * 而人以为全托管在跑 —— 与未知旗标同一族最贵的误读，所以哪怕眼熟也当场点名。 */
-  if (opt.modeBad.length > 0) {
-    log(
-      `[ship] [ERROR] --mode 不认识：${opt.modeBad.join("；")}（可选：${SHIP_MODES.join(" / ")}）`,
-    );
-    log("[ship] 这一跳没有结论（exit 2），不是「没要那个动作」。");
+  /* 旗标组合的合法性判在 `ship-args.mjs`（与 `parseArgs` 同一层 —— 那一层跟着「命令行
+   * 长什么样」动；ISSUE #3619 现场把本文件顶过 900 行硬闸，按「声明层与机制层分开」
+   * 迁出）。命中 ⇒ 逐行打出后停，一条 git / cnb 命令都不发。 */
+  const flagErrors = flagConflicts(opt);
+  if (flagErrors.length > 0) {
+    for (const line of flagErrors) {
+      log(line);
+    }
     return CODE.NOT_RUN;
   }
   /** `--mode confirm`：合并 / 关单 / 删分支每步先问一次。确认应答器**恒定义**
@@ -457,65 +455,6 @@ async function runFlow(deps, tmpFiles) {
   const confirmStep = deps.confirm ?? makeStdinConfirm();
   /** confirm 模式下被拒的动作（读数，不改退码；收尾结论行前汇总一遍）。 */
   const confirmSkipped = /** @type {string[]} */ ([]);
-  if (opt.only && !PHASES.includes(opt.only)) {
-    log(`[ship] [ERROR] --only 不认的阶段：${opt.only}（可选：${PHASES.join(" / ")}）`);
-    return CODE.NOT_RUN;
-  }
-  /* `--allow-staged` 只对「`--add` 声明了这一次的提交面」那一格有意义（ISSUE #3597）：
-   * 没有 `--add` 时暂存面本来就由调用方负责，脚本没有声明可收口 —— 收下它会让人以为
-   * 「已经批准过某个提交面」，而实际什么都没发生（与 `--as-merged` 没带 `--close-issue`
-   * 同一条纪律：无执行者的旗标当场点名，不留一句沉默）。 */
-  if (opt.allowStaged === true && opt.adds.length === 0) {
-    log(
-      "[ship] [ERROR] --allow-staged 是给 --add 那一格放行用的：这一跳没给 --add ⇒ " +
-        `没有「点名集合」，也就没有可放行的对象（${codeTag(CODE.NOT_RUN)}）。` +
-        "要放行就逐个点名 `--add <路径>`，否则别带这枚。",
-    );
-    return CODE.NOT_RUN;
-  }
-  /* `--close-issue` 后面跟的东西必须像 issue 号（ISSUE #2199）。把它当未知旗标收下是
-   * 最坏的一种读法：那一跑会退成「拼错的旗标」，而人真正想要的那个动作（补关一张
-   * 早已落地的单子）连被讨论都没被讨论。 */
-  if (opt.closeIssueBad.length > 0) {
-    log(
-      `[ship] [ERROR] --close-issue 收的是 issue 号（2 位以上数字，可写 #2179），` +
-        `这里不像：${opt.closeIssueBad.join(" ")}`,
-    );
-    log("[ship] 一个都不认 ⇒ 不动任何单子；这一格没有结论（不是「已经关好了」）。");
-    return CODE.NOT_RUN;
-  }
-  /* `--as-merged` 收的是 **PR 号**（ISSUE #2491）。它自己不做任何动作，只给「只补关」那一路
-   * 供凭据（合没合并仍由 `ship-close.mjs` 去平台回读）。两种误用都得当场点名、共用同一个出口：
-   * 不像号（打错或把标题粘进来），以及**没带 `--close-issue`** —— 那时它没有任何执行者，
-   * 而屏幕上会留下一句看起来像「已经处理过了」的沉默。 */
-  if (opt.asMergedBad.length > 0 || (opt.asMerged !== null && !opt.closeIssue)) {
-    if (opt.asMergedBad.length > 0) {
-      log(
-        `[ship] [ERROR] --as-merged 收的是 PR 号（2 位以上数字，可写 #2487），` +
-          `这里不像：${opt.asMergedBad.join(" ")}`,
-      );
-    } else {
-      log(
-        `[ship] [ERROR] --as-merged ${opt.asMerged} 是**给关单那一格供凭据**的，` +
-          "而这一跳没要 --close-issue ⇒ 它没有任何执行者。",
-      );
-    }
-    log(
-      "[ship] 要补关就两条一起写：pnpm ship --close-issue <单号> --as-merged <PR号>" +
-        "（单号 = 要关的那张，PR号 = 平台回读 is_merged 的那条）⇒ 这一格没有结论。",
-    );
-    return CODE.NOT_RUN;
-  }
-  /* poll / verdict / merge / close-issue / clean-branch 要用「本次跑里解析出来的 PR 号」
-   * 或「合并那一段才有的验真结果」，而它们是在 pull-request / merge 那两段拿到的 ——
-   * 单独 --only=poll 会走进「一段都没跑、于是没有任何结论」却退 0 的形态。那是假绿灯，
-   * 正是本工具要防的那一类，所以显式拒绝，而不是让它安静地成功。 */
-  const NEEDS_PR_NUMBER = ["poll", "verdict", "merge", "close-issue", "clean-branch"];
-  if (opt.only && NEEDS_PR_NUMBER.includes(opt.only)) {
-    log(`[ship] [ERROR] --only=${opt.only} 不能单独跑：它要用 pull-request 那一段解析出的 PR 号。`);
-    log("[ship] 要接着上一次的进度就整段重跑（PR 已存在时会复用，不重建）：pnpm ship");
-    return CODE.NOT_RUN;
-  }
 
   /* ── 远端名与主干基线：在两道守卫（未知旗标 / `--only` 单独跑）之后解析一次 ──
    * push / PR 正文 / fetch / 「回读主干顶端」四段都要用它，所以不能等各段各自去推。

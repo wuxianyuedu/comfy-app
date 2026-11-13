@@ -364,6 +364,12 @@ describe("parseArgs：拼错的旗标不许被静默忽略", () => {
     expect(parseArgs(["--allow-staged=yes"]).unknown).toEqual(["--allow-staged=yes"]);
   });
 
+  it("#3619/#3676：--no-commit 默认关，只认显式那一枚（没有等号写法）", () => {
+    expect(parseArgs([]).noCommit).toBe(false);
+    expect(parseArgs(["--no-commit"]).noCommit).toBe(true);
+    expect(parseArgs(["--no-commit=yes"]).unknown).toEqual(["--no-commit=yes"]);
+  });
+
   it("--comment 两种写法都收号；--body-file 与它各自独立（拼错不许静默）", () => {
     expect(parseArgs([]).comment).toBeNull();
     expect(parseArgs(["--comment", "2719"]).comment).toBe(2719);
@@ -856,6 +862,31 @@ describe("runCommitStage：--add 的暂存面是封闭的（#3597）", () => {
     const { got, logs } = stage(["scripts"], ["scripts/a.mjs", "scripts/nested/b.mjs"]);
     expect(got).toEqual({ stop: false, codes: [CODE.GREEN] });
     expect(logs.join("\n")).toContain("暂存面封闭：2 个已暂存文件全部在 --add 点名里");
+  });
+
+  it("#3619/#3676：--no-commit ⇒ 跳过提交段、一条 git 命令都不发，HEAD 原样进推送段", () => {
+    const logs: Array<string> = [];
+    const calls: Array<string> = [];
+    const run = (cmd: string, args: Array<string>) => {
+      calls.push([cmd, ...args].join(" "));
+      return { error: null, status: 0, stderr: "", stdout: "" };
+    };
+    const got = runCommitStage({
+      opt: { message: null, messageFile: null, adds: [], allowStaged: false, noCommit: true },
+      root: "/tmp/nowhere",
+      /* 树上挂着别的会话的常驻脏文件（#3619 现场）：它们不属于这一跳，保持原样。 */
+      staged: ["oxlint.config.ts"],
+      unstagedModified: ["tests/check-allow-builds.test.ts"],
+      untracked: [".scratch-t3597/x"],
+      log: (s: string) => logs.push(s),
+      run,
+      relay: () => undefined,
+    });
+    expect(got).toEqual({ stop: false, codes: [CODE.GREEN] });
+    expect(calls, "跳过提交段 = 一次 git 伸手都没有").toEqual([]);
+    const line = logs.join("\n");
+    expect(line).toContain("--no-commit：这一笔已由我自己提交过");
+    expect(line).toContain("HEAD 原样进推送段");
   });
 
   it("`scripts/lib` 那种前缀不许把 `scripts/libfoo.ts` 也算进来", () => {
@@ -3440,6 +3471,17 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
       expect(sameCommentBody(`![](${rel})`, `![](${abs})`)).toBe(true);
       expect(sameCommentBody(`![](${abs})`, `![](${rel})`)).toBe(true);
       expect(sameCommentBody(`![](${abs})`, `![](${abs})`)).toBe(true);
+      // 附件（/-/files/）与 HTML <img src> 形态同吃（ISSUE #3636 的现场：总结评论
+      // 带四张 <img src='/-/imgs/...'> 相对链接，回读被平台绝对化）。
+      expect(normalizeImageAssetLinks("https://cnb.cool/o/r/-/files/issues/1/k/a.zip")).toBe(
+        "/-/files/issues/1/k/a.zip",
+      );
+      expect(
+        sameCommentBody(
+          "<img alt='s.png' src='/-/imgs/issues/1/k/s.png'>",
+          "<img alt='s.png' src='https://cnb.cool/moon-read/comfy-app-t3/-/imgs/issues/1/k/s.png'>",
+        ),
+      ).toBe(true);
       // 归一只覆盖「指向 /-/imgs/ 资产的绝对地址」这一类：不同的图、不同的文字仍判不同。
       expect(sameCommentBody(`![](${rel})`, "![](/-/imgs/issues/3623/abc/other.png)")).toBe(false);
       expect(sameCommentBody(`![](${rel}) 前文`, `![](${abs}) 后文`)).toBe(false);
@@ -4910,6 +4952,16 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
       withAdd.indexOf("git commit --message=<提交信息原文>"),
     );
     expect(planCommands({ ...st, adds: [] }).join("\n")).not.toContain("--cached");
+  });
+
+  it("#3619/#3676：--no-commit ⇒ 计划里没有 add / 暂存面 / commit，代之以一句跳过说明", () => {
+    const plan = planCommands({ ...st, noCommit: true }).join("\n");
+    expect(plan).not.toContain("git add -- src/a.ts");
+    expect(plan).not.toContain("--cached");
+    expect(plan).not.toContain("git commit --message=");
+    expect(plan).toContain("--no-commit：跳过提交段");
+    /* push 与平台段照旧：跳过的只是提交段，后面的链路原样走。 */
+    expect(plan).toContain("git push -u cnb feat/x");
   });
 
   it("PR 处理人标签与独立回读成对出现，且只在配了留痕时进计划", () => {
@@ -8300,6 +8352,31 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       );
     } finally {
       fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("#3619/#3676：--no-commit 与 --add 同行 ⇒ 退 2（提交段才有的对象，矛盾当场点名）", async () => {
+    const { tmpRoot, gitDir } = proofRoot("no-commit-clash");
+    try {
+      const heard: Array<string> = [];
+      const base = fake();
+      const code = await main({
+        root: tmpRoot,
+        run: base.run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--no-commit", "--add", "src/a.ts"],
+      });
+      expect(code).toBe(CODE.NOT_RUN);
+      const all = heard.join("\n");
+      expect(all).toContain("--no-commit 说的是");
+      expect(all).toContain("--add");
+      expect(all).toContain("两件矛盾");
+      /* 矛盾在进任何阶段之前就点名：一条 git / cnb 命令都不该发。 */
+      expect(base.calls).toEqual([]);
+    } finally {
+      rmSync(tmpRoot, { recursive: true, force: true });
     }
   });
 

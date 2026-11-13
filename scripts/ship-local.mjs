@@ -176,7 +176,7 @@ export function classifyStagedSurface({ staged, adds, root, allowStaged = false 
  * 阶段 1：把点名的路径暂存下来并提交 —— **不代写提交信息，也不 `git add -A`**。
  *
  * @param {{
- *   opt: {message: string | null, messageFile: string | null, adds: string[], allowStaged?: boolean},
+ *   opt: {message: string | null, messageFile: string | null, adds: string[], allowStaged?: boolean, noCommit?: boolean},
  *   root: string,
  *   staged: string[],
  *   unstagedModified: string[],
@@ -189,6 +189,18 @@ export function classifyStagedSurface({ staged, adds, root, allowStaged = false 
  */
 export function runCommitStage(ctx) {
   const { opt, root, staged, unstagedModified, untracked, log, run, relay } = ctx;
+  /* `--no-commit`（ISSUE #3619 / #3676）：「这一笔我自己已经提交（甚至已推送）过」是
+   * **说出来的**判定 —— 提交段整段跳过、不看工作树，HEAD 原样进推送段。并行检出的
+   * 工作树上挂着别的会话的常驻脏文件，「树上哪些是我的」没有可靠判据（porcelain 里
+   * 长得一样），所以由人点名跳过，脚本不去猜。与 #3602 那条豁免（给 `--add` 且点名
+   * 全部干净 ⇒ 跳过）并存：那条是「逐个点名证明干净」，这条是「人声明没有要提交的」。 */
+  if (opt.noCommit === true) {
+    log(
+      "[ship] --no-commit：这一笔已由我自己提交过 ⇒ 跳过提交段，不看工作树，HEAD 原样进推送段" +
+        "（树上若挂着别的会话的常驻脏文件，不属于这一跳，保持原样）。",
+    );
+    return { stop: false, codes: [CODE.GREEN] };
+  }
   /* 「本次点名的改动是否已经全部在 HEAD」——#3602。逐条**按路径限定**问 git status：
    * 输出为空 = 这条路径与 HEAD 逐字一致（干净），非空 = 还有可提交的差异。
    *
