@@ -563,7 +563,10 @@ jobs:
         env:
           CNB_TRIGGER_TOKEN: ${{ secrets.CNB_TRIGGER_TOKEN }}
           CNB_REPO_SLUG: moon-read/comfy-app-t3
-          CNB_PULL_REQUEST_IID: ${{ github.event.client_payload.pr_number || '' }}
+          # 两条触发形态都读（ISSUE #3710）：自动档（repository_dispatch）在
+          # client_payload，按需档（workflow_dispatch，#3667）在 inputs ——
+          # 只读后者会让按需档的结论回调恒 failure（0s 退出那一格的病灶）。
+          CNB_PULL_REQUEST_IID: ${{ github.event.inputs.pr_number || github.event.client_payload.pr_number || '' }}
           CNB_PULL_REQUEST_MERGE_SHA: ${{ github.event.client_payload.cnb_merge_sha || '' }}
           GA_JOB_RESULTS: ${{ join(needs.*.result, ',') }}
         run: node scripts/ci-ga-verdict-callback.mjs
@@ -595,9 +598,13 @@ jobs:
       # （Swagger 三条 commit-status 路径全是 get），承重退码更一字不能动，
       # 于是把解释念进这条本来就会发的 PR 评论。`GA_JOB_RESULTS` 与结论回调
       # 那一跳同源，脚本复用同一份结论折叠，不另立判据。判绿时不发评论（无失败 job）。
+      # ISSUE #3710：这一步**不再带 step 级 continue-on-error** —— 前提不成立时
+      # （按需档最典型：inputs 没送达 / PR 号不是数字）脚本会 0s 退出，此前被
+      # 这枚旗标盖成绿色 ✓，与「跑过但没日志」在 run 列表里不可区分。摘掉后
+      # 失败在这格上可见（✗）；job 级的 continue-on-error 仍在，run 的结论
+      # （判红该拦的闸在 CNB 侧）不随日志搬运成败变化。
       - name: 把 GA 判红日志正文搬到 CNB
         if: always()
-        continue-on-error: true
         env:
           CNB_ISSUE_TOKEN: ${{ secrets.CNB_ISSUE_TOKEN }}
           CNB_PULL_REQUEST_TOKEN: ${{ secrets.CNB_PULL_REQUEST_TOKEN }}

@@ -596,6 +596,16 @@ describe("⑩ 判绿按需全量（ISSUE #3667）", () => {
     });
   });
 
+  it("resolveRelayContext：GA_LOG_RUN_ID 为空串时回落本 run 的 GITHUB_RUN_ID（#3710）", () => {
+    /* workflow_dispatch 的 YAML 侧给缺席 input 写的是空串（`inputs.run_id || ''`）——
+     * 空串要透传到 GITHUB_RUN_ID；用 `??` 会被空串遮成「runId 缺席」，按需档就在
+     * relay 里 0s 退出（continue-on-error 把它盖成绿，现场见 GA run 43401202149）。 */
+    expect(resolveRelayContext({ ...BASE_ENV, GA_LOG_RUN_ID: "" })).toMatchObject({
+      ok: true,
+      runId: "4242",
+    });
+  });
+
   it("collectFailedJobLogs：scope=all 把 success job 也收进包，skipped 仍排除", async () => {
     const fetchImpl = gaFetch({
       jobs: {

@@ -182,8 +182,12 @@ export function resolveRelayContext(env) {
   const pr = String(env.CNB_PULL_REQUEST_IID ?? "").trim();
   const sha = String(env.CNB_PULL_REQUEST_MERGE_SHA ?? "").trim();
   /* ISSUE #3667：按需档可点名另一条已跑完的 run（含判绿的），搬它的 job 日志；
-   * 缺省仍是本 run 的 GITHUB_RUN_ID ⇒ #3437 自动路径逐字不变。 */
-  const runId = String(env.GA_LOG_RUN_ID ?? env.GITHUB_RUN_ID ?? "").trim();
+   * 缺省仍是本 run 的 GITHUB_RUN_ID ⇒ #3437 自动路径逐字不变。
+   * 用 `||` 不用 `??`（ISSUE #3710）：workflow_dispatch 的 YAML 侧给缺席 input
+   * 写的是**空串**（`inputs.run_id || ''`），`??` 不拦空串 —— 会让空串遮住
+   * GITHUB_RUN_ID，按需档就在「runId 缺席」上 0s 退出（continue-on-error 把
+   * 它盖成绿，肉眼看到的是「成功但没日志」）。 */
+  const runId = String(env.GA_LOG_RUN_ID || env.GITHUB_RUN_ID || "").trim();
   const ghToken = String(env.GITHUB_TOKEN ?? "").trim();
   const ghRepo = String(env.GITHUB_REPOSITORY ?? "").trim();
   const endpoint = String(env.CNB_API_ENDPOINT || "https://api.cnb.cool").replace(/\/+$/u, "");
