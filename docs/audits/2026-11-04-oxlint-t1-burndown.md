@@ -13,7 +13,7 @@
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
 | B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 已清（子批1–12，判决面文件级豁免已整块删除）       |
-| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–25：500 份 / 1286 处已清）           |
+| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–26：514 份 / 1310 处已清）           |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
@@ -1245,20 +1245,20 @@
 | `tests/ci-slot-apply.test.ts`                                                                        | 2        | 已清 |
 | `tests/ci-step-verdict.test.ts`                                                                      | 1        | 已清 |
 | `tests/ci-toolchain-selfcheck.test.ts`                                                               | 4        | 已清 |
-| `tests/ci-workspace-probe.test.ts`                                                                   | 1        | 挂账 |
-| `tests/ci-workspace-provenance.test.ts`                                                              | 1        | 挂账 |
-| `tests/client-bundle-node-builtins.test.ts`                                                          | 2        | 挂账 |
-| `tests/comfy-state-envelope-contract.test.ts`                                                        | 2        | 挂账 |
-| `tests/comment-language.test.ts`                                                                     | 3        | 挂账 |
-| `tests/core-barrel-entry-discipline.test.ts`                                                         | 1        | 挂账 |
-| `tests/coverage-targets-exist.test.ts`                                                               | 3        | 挂账 |
-| `tests/daily-tracks.test.ts`                                                                         | 2        | 挂账 |
-| `tests/db-migrate-equivalence.test.ts`                                                               | 1        | 挂账 |
-| `tests/db-migrate-noninteractive.test.ts`                                                            | 2        | 挂账 |
-| `tests/db-push-noninteractive.test.ts`                                                               | 1        | 挂账 |
-| `tests/db-schema-current.test.ts`                                                                    | 2        | 挂账 |
-| `tests/declaration-readers-gate.test.ts`                                                             | 1        | 挂账 |
-| `tests/dependency-audit.test.ts`                                                                     | 2        | 挂账 |
+| `tests/ci-workspace-probe.test.ts`                                                                   | 1        | 已清 |
+| `tests/ci-workspace-provenance.test.ts`                                                              | 1        | 已清 |
+| `tests/client-bundle-node-builtins.test.ts`                                                          | 2        | 已清 |
+| `tests/comfy-state-envelope-contract.test.ts`                                                        | 2        | 已清 |
+| `tests/comment-language.test.ts`                                                                     | 3        | 已清 |
+| `tests/core-barrel-entry-discipline.test.ts`                                                         | 1        | 已清 |
+| `tests/coverage-targets-exist.test.ts`                                                               | 3        | 已清 |
+| `tests/daily-tracks.test.ts`                                                                         | 2        | 已清 |
+| `tests/db-migrate-equivalence.test.ts`                                                               | 1        | 已清 |
+| `tests/db-migrate-noninteractive.test.ts`                                                            | 2        | 已清 |
+| `tests/db-push-noninteractive.test.ts`                                                               | 1        | 已清 |
+| `tests/db-schema-current.test.ts`                                                                    | 2        | 已清 |
+| `tests/declaration-readers-gate.test.ts`                                                             | 1        | 已清 |
+| `tests/dependency-audit.test.ts`                                                                     | 2        | 已清 |
 | `tests/deps-freshness-gate.test.ts`                                                                  | 5        | 挂账 |
 | `tests/dev-drive-tune.test.ts`                                                                       | 1        | 挂账 |
 | `tests/dev-launcher-downstream-exit.test.ts`                                                         | 1        | 挂账 |

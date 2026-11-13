@@ -77,15 +77,50 @@ function runMigrate(databaseUrl = `file:${dbFile}`, extraArgs: Array<string> = [
   );
 }
 
+/** package.json 的 scripts 段：`JSON.parse` 的 any 用运行时守卫收窄（B5 清账，不走 `as` 断言）。 */
+function packageScripts(): Record<string, string> {
+  const parsed: unknown = JSON.parse(
+    fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
+  );
+  if (typeof parsed !== "object" || parsed === null || !("scripts" in parsed)) {
+    throw new Error("package.json 形状不对（缺 scripts）");
+  }
+  const scripts: unknown = parsed.scripts;
+  if (typeof scripts !== "object" || scripts === null) {
+    throw new Error("package.json 形状不对（scripts 不是对象）");
+  }
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(scripts)) {
+    if (typeof value === "string") {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+/** drizzle.config 的默认导出类型不展开 `dbCredentials`：运行时守卫取值
+ * （B5 清账，不走 `as` 断言 —— 那会同时吃 no-unsafe-assignment/member-access）。 */
+function drizzleConfigUrl(value: unknown): unknown {
+  if (typeof value !== "object" || value === null || !("default" in value)) {
+    return undefined;
+  }
+  const config: unknown = value.default;
+  if (typeof config !== "object" || config === null || !("dbCredentials" in config)) {
+    return undefined;
+  }
+  const credentials: unknown = config.dbCredentials;
+  if (typeof credentials !== "object" || credentials === null || !("url" in credentials)) {
+    return undefined;
+  }
+  return credentials.url;
+}
+
 describe("pnpm db:migrate 非交互可用", () => {
   it("package.json 的 db:migrate 经 scripts/db-migrate.mjs，而不是裸 drizzle-kit migrate", () => {
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
-      scripts: Record<string, string>;
-    };
+    const scripts = packageScripts();
     // 裸 `drizzle-kit migrate` 在前提不成立时「先建库、再退 1、留空壳」（实测）。
-    expect(pkg.scripts["db:migrate"]).toBe("node scripts/db-migrate.mjs");
-    expect(pkg.scripts["db:migrate"]).not.toContain("drizzle-kit");
+    expect(scripts["db:migrate"]).toBe("node scripts/db-migrate.mjs");
+    expect(scripts["db:migrate"]).not.toContain("drizzle-kit");
   });
 
   it("判定依据是库里的真事实（表数 + 账本），不是 drizzle-kit 的退出码", () => {
@@ -203,12 +238,8 @@ describe("库地址形态：交给 drizzle-kit 的必须是 libsql 认的那一�
         /* 配置在 **import 时**读环境变量，所以每一档都要重新求值模块，
          * 否则第一档的常量会被 module 缓存带到后面四档去（那是自证式的假绿）。 */
         vi.resetModules();
-        /* SAFETY: 类型断言已复核 */
         // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
-        const imported = (await import("../drizzle.config")) as {
-          default?: { dbCredentials?: { url?: string } };
-        };
-        const url = imported.default?.dbCredentials?.url;
+        const url = drizzleConfigUrl(await import("../drizzle.config"));
         if (typeof url !== "string" || url === "") {
           problems.push(`DATABASE_URL="${value}" → 配置里拿不到 dbCredentials.url`);
           continue;

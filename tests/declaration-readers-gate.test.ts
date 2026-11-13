@@ -103,9 +103,15 @@ function gate(fx: Fixture): { ok: boolean; output: string } {
       }),
     };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as { stderr?: string; stdout?: string };
-    return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+    /* 失败形状用运行时守卫取字段，不走 `as` 断言（B5 清账）。 */
+    const e: { stderr?: unknown; stdout?: unknown } =
+      typeof error === "object" && error !== null ? error : {};
+    return {
+      ok: false,
+      output: `${typeof e.stdout === "string" ? e.stdout : ""}${
+        typeof e.stderr === "string" ? e.stderr : ""
+      }`,
+    };
   }
 }
 

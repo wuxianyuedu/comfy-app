@@ -12,13 +12,30 @@ import { describe, expect, it } from "vitest";
  * 是它自己的判据）：`tests/` 下那些自造自删的并发探针（`.setup-cleanup-probe-*.test.tsx`）
  * 与本用例同时活动，CI 上撞出来的是一条不含本判据、也不含真凶的 `ENOENT` 栈。 */
 const requireCjs = createRequire(import.meta.url);
-/* SAFETY: 类型断言已复核 */
-const reader = requireCjs("../scripts/gate-scan-read.cjs") as {
+
+/** `gate-scan-read.cjs` 是无类型的 CJS：出口形状在这里做运行时守卫（B5 清账，不走不安全断言）。 */
+type ScanReader = {
   dirExists: (dir: string) => boolean;
   readForScan: (abs: string) => string | null;
   vanishedNote: (count: number) => string;
   walkForScan: (dir: string, fileRe: RegExp, opts?: { skipDirs?: Set<string> }) => Array<string>;
 };
+
+function isScanReader(value: unknown): value is ScanReader {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const keys = new Set(Object.keys(value));
+  return (["dirExists", "readForScan", "vanishedNote", "walkForScan"] as const).every((k) =>
+    keys.has(k),
+  );
+}
+
+const loadedReader: unknown = requireCjs("../scripts/gate-scan-read.cjs");
+if (!isScanReader(loadedReader)) {
+  throw new Error("gate-scan-read.cjs 的出口形状不对（缺 dirExists/readForScan/…）");
+}
+const reader = loadedReader;
 
 const ROOT = process.cwd();
 const INDEX = join(ROOT, "src", "lib", "core", "index.ts");
