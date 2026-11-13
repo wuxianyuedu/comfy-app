@@ -7,6 +7,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import { stripComments } from "./helpers/strip-comments";
 
 const REPO_ROOT = resolve(".");
@@ -64,8 +66,9 @@ describe.for([
     const ledger: unknown = JSON.parse(
       readFileSync(join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"), "utf8"),
     );
-    /* SAFETY: 类型断言已复核 */
-    const onDemand = (ledger as { onDemand?: Record<string, unknown> }).onDemand ?? {};
+    /* 台账按 unknown 读（B5 清账）：onDemand 缺席当空映射。 */
+    const onDemand: Record<string, unknown> =
+      isRecord(ledger) && isRecord(ledger.onDemand) ? ledger.onDemand : {};
     const hits = Object.keys(onDemand).filter(
       (k) => script.endsWith(k) || k === script.split("/").pop(),
     );

@@ -19,7 +19,9 @@ describe("buildSnFromOutput：start-build 的 sn 回读", () => {
     expect(buildSnFromOutput("The token's authorization scope does not match")).toBeNull();
     expect(buildSnFromOutput("")).toBeNull();
     expect(
-      /* SAFETY: 类型断言已复核 */
+      /* 故意喂非串（undefined）——判的就是「解析不出来要落 null」。
+         类型层不让直说，就地豁免这一格（B5 清账：文件级豁免收到行级）。 */
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       buildSnFromOutput(undefined as unknown as string),
     ).toBeNull();
   });
