@@ -65,6 +65,7 @@
     "check:claims": "node scripts/check-commit-claims.mjs",
     "check:secrets": "node scripts/check-tracked-secrets.cjs --all",
     "scan:spawn-shell": "node scripts/spawn-shell-scan.mjs",
+    "shell:smoke": "node scripts/shell-smoke.mjs",
     "qoder:ignore": "node scripts/qoder-ignore.mjs",
     "qoder:ignore:check": "node scripts/qoder-ignore.mjs --check",
     "ship": "node scripts/ship.mjs",
