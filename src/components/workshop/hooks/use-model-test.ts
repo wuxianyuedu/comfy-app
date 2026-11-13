@@ -24,7 +24,9 @@ import {
   assembleImageRequest,
   assembleVideoRequest,
   defaultModeForKind,
+  defaultSizeValues,
   modeTabsForKind,
+  randomPromptFor,
   testCandidatesForKind,
   type AdaptersByModel,
   type ModelTestKind,
@@ -67,6 +69,8 @@ export type ModelTestController = {
   modeTabs: Array<ModeTab>;
   /** 局部更新表单值（文本 / 档位）。 */
   patchValue: (type: keyof ModelTestValues, value: string) => void;
+  /** 提示词随机按钮（ISSUE #3742）：从常用样本里随机填一条。 */
+  randomizePrompt: () => void;
   /** 最近一次成功产物。 */
   result: ModelTestResult;
   selectedModel: string;
@@ -89,7 +93,11 @@ export function useModelTest(): ModelTestController {
    * 第一个生成类模式，不再从「选中模型的适配器」里播种 —— 模式是用户
    * 先选的入口，模型是其后在下拉里挑的具体执行者。 */
   const [mode, setModeState] = useState(() => defaultModeForKind("image"));
-  const [values, setValues] = useState<ModelTestValues>({});
+  /* 尺寸带默认档（ISSUE #3742）：表单一打开就是最常用的 1:1 + 1K，触发器
+   * 常显摘要而不是「可选」占位。 */
+  const [values, setValues] = useState<ModelTestValues>(() =>
+    defaultSizeValues(defaultModeForKind("image")),
+  );
   const [result, setResult] = useState<ModelTestResult>(null);
   const [error, setError] = useState<string | null>(null);
   const busy = useBusyAction();
@@ -151,21 +159,31 @@ export function useModelTest(): ModelTestController {
   const setKind = useCallback((next: ModelTestKind) => {
     setKindState(next);
     setSelectedModel("");
-    setModeState(defaultModeForKind(next));
-    setValues({});
+    const nextMode = defaultModeForKind(next);
+    setModeState(nextMode);
+    setValues(defaultSizeValues(nextMode));
     setResult(null);
     setError(null);
   }, []);
 
-  const selectModel = useCallback((name: string) => {
-    setSelectedModel(name);
-    setValues({});
-    setResult(null);
-    setError(null);
-  }, []);
+  const selectModel = useCallback(
+    (name: string) => {
+      setSelectedModel(name);
+      /* 换模型重填输入，但尺寸保留默认档（ISSUE #3742）：表单一次成立。 */
+      setValues(defaultSizeValues(mode));
+      setResult(null);
+      setError(null);
+    },
+    [mode],
+  );
 
   const patchValue = useCallback((type: keyof ModelTestValues, value: string) => {
     setValues((prev) => ({ ...prev, [type]: value }));
+  }, []);
+
+  /* 提示词随机按钮（ISSUE #3742）：从常用样本里随机填一条。 */
+  const randomizePrompt = useCallback(() => {
+    setValues((prev) => ({ ...prev, prompt: randomPromptFor() }));
   }, []);
 
   const setInputFromFile = useCallback(async (type: "first-frame" | "image", file: File) => {
@@ -264,6 +282,7 @@ export function useModelTest(): ModelTestController {
     setMode: setModeState,
     selectModel,
     patchValue,
+    randomizePrompt,
     result,
     values,
   };
