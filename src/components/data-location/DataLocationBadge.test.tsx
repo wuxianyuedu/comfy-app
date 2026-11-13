@@ -64,12 +64,15 @@ describe("DataLocationBadge", () => {
     /* 原生 `title=` 撤干净：它不由主题控制（ISSUE #3672 的现场就是暗色下一块白底气泡）。 */
     expect(badge).not.toHaveAttribute("title");
     await user.hover(badge);
-    /* 浮层走 portal 挂在 body 上，按 `data-slot` 取（同 `ui/hint.test.tsx` 的取法）。 */
+    /* 浮层走 portal 挂在 body 上；等的是「浮层出现」这个 DOM 状态，
+     * 按 §11.14.3 的口径用 jest-dom 匹配器认等待条件（本例只许 waitFor，
+     * 不可换成 expect.poll —— poll 的 matcher 与 jest-dom 类型不兼容）。 */
     await waitFor(() => {
-      const popup = document.querySelector('[data-slot="tooltip-content"]');
-      expect(popup?.textContent).toContain("remoteModel");
-      expect(popup?.textContent).toContain("迁移");
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
     });
+    const popup = document.querySelector('[data-slot="tooltip-content"]');
+    expect(popup?.textContent).toContain("remoteModel");
+    expect(popup?.textContent).toContain("迁移");
   });
 
   it("引导语可给可不给（给了就显示，不给就不多一个字）", () => {
