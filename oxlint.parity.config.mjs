@@ -892,46 +892,33 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "tests/deps-freshness-gate.test.ts", // 存量 5 处 · 清账目标 B5 · 新代码不禁用
-        "tests/dev-drive-tune.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/dev-launcher-downstream-exit.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/dev-launcher-port-reclaim.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/dev-launcher-toolchain-gate.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/dialog-backdrop-contrast.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/dist-artifact-hygiene.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "tests/doc-check-hook-wiring.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/doc-toc.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/downstream-exit.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/form-field-wiring-gate.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/freshness-ledger-backend.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/gate-executors.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "tests/gate-hint-targets-exist.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/gate-repo-boilerplate-gate.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/gate-scan-read.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "tests/gates-which.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/generate-api-docs-args.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/global-setup-cleanup.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/a11y-effective-config.coverage.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/a11y-effective-config.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/gate-repo.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/jsdom-capability.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/oxlint-probe.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/probe-restore.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/repo-drizzle-lock.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/test-db.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/theme-tokens.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/trpc.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/wire-contract.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/hook-affected-launch.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/jsdom-capability-gate.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/lib-layer-boundaries.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "tests/lib-node-only-declarations.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/linux-env-bootstrap.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/lockfile-diff.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/log-run-layout.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/merge-changelog-anchor.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/no-platform-ci-config.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/node-engines.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
+        "tests/dev-drive-tune.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/dev-launcher-downstream-exit.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/dev-launcher-port-reclaim.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/dev-launcher-toolchain-gate.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/dialog-backdrop-contrast.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/dist-artifact-hygiene.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/helpers/a11y-effective-config.coverage.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/helpers/a11y-effective-config.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/helpers/gate-repo.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/helpers/jsdom-capability.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/helpers/oxlint-probe.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/helpers/probe-restore.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/helpers/repo-drizzle-lock.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/helpers/test-db.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/helpers/theme-tokens.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/helpers/trpc.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/helpers/wire-contract.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/hook-affected-launch.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/jsdom-capability-gate.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/lib-layer-boundaries.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/lib-node-only-declarations.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/linux-env-bootstrap.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/lockfile-diff.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/log-run-layout.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/merge-changelog-anchor.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/no-platform-ci-config.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
+        "tests/node-engines.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
         "tests/on-demand-duties-gate.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "tests/oxlint-jsplugin-rules.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
         "tests/oxlint-policy-rules.test.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用
