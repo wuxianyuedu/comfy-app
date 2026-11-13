@@ -30,6 +30,10 @@ const stripModule = readFileSync(
   join(process.cwd(), "scripts", "standalone-private-inputs.mjs"),
   "utf8",
 );
+const devArtifactsModule = readFileSync(
+  join(process.cwd(), "scripts", "standalone-dev-artifacts.mjs"),
+  "utf8",
+);
 const checker = readFileSync(
   join(process.cwd(), "scripts", "check-standalone-contents.cjs"),
   "utf8",
@@ -170,9 +174,11 @@ describe("桌包载荷里的第三方包文档：判它的删它，谁都不让�
   });
 });
 
-/* ── 开发期文件与内部门禁脚本：白名单剔除（ISSUE #489）─────────────────── */
-const stripDevArtifactsBody = stripModule.slice(
-  stripModule.indexOf("export function stripDevArtifacts"),
+/* ── 开发期文件与内部门禁脚本：白名单剔除（ISSUE #489）───────────────────
+ * 实现从 standalone-private-inputs.mjs 拆到 standalone-dev-artifacts.mjs（#3646 收尾拆分），
+ * 文本形状断言跟着落到实现所在文件；导出面与行为仍由 standalone-private-inputs.mjs 承载。 */
+const stripDevArtifactsBody = devArtifactsModule.slice(
+  devArtifactsModule.indexOf("export function stripDevArtifacts"),
 );
 
 describe("开发期文件与内部门禁脚本的白名单剔除", () => {
@@ -191,7 +197,7 @@ describe("开发期文件与内部门禁脚本的白名单剔除", () => {
       '"changelog.d"',
       '"docs"',
     ]) {
-      expect(stripModule, `剔除清单缺少 ${name}`).toContain(name);
+      expect(devArtifactsModule, `剔除清单缺少 ${name}`).toContain(name);
     }
   });
 

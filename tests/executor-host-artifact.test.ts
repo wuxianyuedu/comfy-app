@@ -15,6 +15,7 @@ const smokeScript = read("scripts/smoke-executor-host-standalone.mjs");
 const hostEntry = read("scripts/executor-host.mjs");
 const runtimeGraph = read("src/lib/comfyui/host-runtime.ts");
 const privateInputs = read("scripts/standalone-private-inputs.mjs");
+const devArtifacts = read("scripts/standalone-dev-artifacts.mjs");
 const buildDesktop = read("scripts/build-desktop.mjs");
 /* SAFETY: 类型断言已复核 */
 const pkg = JSON.parse(read("package.json")) as {
@@ -125,11 +126,14 @@ describe("宿主入口的加载判据（内容，不是 env）", () => {
 
 describe("白名单两侧与桌包断言", () => {
   it("BUILT_RUNTIME_SCRIPTS 是 RUNTIME_SCRIPTS 的子集（否则剪枝照删）", () => {
-    const runtime = privateInputs.slice(
-      privateInputs.indexOf("export const RUNTIME_SCRIPTS"),
-      privateInputs.indexOf("export const BUILT_RUNTIME_SCRIPTS"),
-    );
-    const built = /export const BUILT_RUNTIME_SCRIPTS = \[(?<body>[\s\S]*?)\];/.exec(privateInputs)
+    // 实现从 standalone-private-inputs.mjs 拆到 standalone-dev-artifacts.mjs（#3646 收尾拆分）：
+    // RUNTIME_SCRIPTS 仍在减法主入口，BUILT_RUNTIME_SCRIPTS 在剔除实现侧定义并由主入口转出。
+    const runtimeStart = privateInputs.indexOf("export const RUNTIME_SCRIPTS");
+    const runtimeEnd = privateInputs.indexOf("export const STATIC_ALLOWED_TOPLEVEL");
+    expect(runtimeStart, "找不到 RUNTIME_SCRIPTS").toBeGreaterThan(-1);
+    expect(runtimeEnd, "找不到 STATIC_ALLOWED_TOPLEVEL").toBeGreaterThan(runtimeStart);
+    const runtime = privateInputs.slice(runtimeStart, runtimeEnd);
+    const built = /export const BUILT_RUNTIME_SCRIPTS = \[(?<body>[\s\S]*?)\];/.exec(devArtifacts)
       ?.groups?.body;
     expect(built, "找不到 BUILT_RUNTIME_SCRIPTS").toBeTruthy();
     for (const name of [...built!.matchAll(/"(?<name>[^"]+)"/g)].map((m) => m.groups?.name)) {
