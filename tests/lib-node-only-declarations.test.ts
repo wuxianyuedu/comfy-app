@@ -6,6 +6,8 @@
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 const REPO_ROOT = process.cwd();
 
 /** §18.4 第二类：纯 Node 宿主（由 `scripts/*.mjs` 动态加载，不经 Next 打包）。 */
@@ -137,14 +139,42 @@ type Report = {
   unguarded: Array<string>;
 };
 
+/** 可达行（chain + module）的消费形状守卫（B5 清账）。 */
+function isReachableRow(value: unknown): value is { chain: Array<string>; module: string } {
+  return (
+    isRecord(value) &&
+    isUnknownArray(value.chain) &&
+    value.chain.every((hop) => typeof hop === "string") &&
+    typeof value.module === "string"
+  );
+}
+
+/** 报告的消费形状守卫（B5 清账）：四个字段逐个对型，不再整段断言。 */
+function isReport(value: unknown): value is Report {
+  return (
+    isRecord(value) &&
+    isUnknownArray(value.clientReachable) &&
+    value.clientReachable.every(isReachableRow) &&
+    isRecord(value.counts) &&
+    Object.values(value.counts).every((count) => typeof count === "number") &&
+    isUnknownArray(value.libOnlyReachable) &&
+    value.libOnlyReachable.every(isReachableRow) &&
+    isUnknownArray(value.unguarded) &&
+    value.unguarded.every((rel) => typeof rel === "string")
+  );
+}
+
 /** 跑一次可达性分析（实现收在 `scripts/lib-node-only-scan.mjs`，本用例不复制一份）。 */
 function scan(): Report {
   const out = execFileSync(process.execPath, ["scripts/lib-node-only-scan.mjs", "--json"], {
     cwd: REPO_ROOT,
     encoding: "utf8",
   });
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(out) as Report;
+  const parsed: unknown = JSON.parse(out);
+  if (!isReport(parsed)) {
+    throw new Error("lib-node-only-scan 的 JSON 报告形状变了 —— 重读脚本再改这份守卫");
+  }
+  return parsed;
 }
 
 describe("src/lib 的 Node-only 声明（规范 §18.4）", () => {

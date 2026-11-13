@@ -2634,8 +2634,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       (m) => m.groups?.name ?? "",
     );
     const stray = used.filter(
-      /* SAFETY: 类型断言已复核 */
-      (name) => !LOCK_KEY_ALLOWED_VARS.includes(name as never),
+      /* 成员判断改 some + 等值（B5 清账）：不再为 includes 的参数型断言收窄。 */
+      (name) => !LOCK_KEY_ALLOWED_VARS.some((allowed) => allowed === name),
     );
     expect(
       stray,

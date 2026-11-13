@@ -9,6 +9,8 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { describe, expect, it, vi } from "vitest";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import { symlinkDir } from "./helpers/symlink-dir";
 
 // 运行时真的调用白名单剔除（不是只读源码文本）：嵌套条目 / 未登记新文件的
@@ -38,10 +40,9 @@ const checker = readFileSync(
   join(process.cwd(), "scripts", "check-standalone-contents.cjs"),
   "utf8",
 );
-/* SAFETY: 类型断言已复核 */
-const pkg = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as {
-  scripts: Record<string, string>;
-};
+const pkgParsed: unknown = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8"));
+const pkgScripts: unknown = isRecord(pkgParsed) ? pkgParsed.scripts : undefined;
+const pkg = { scripts: isStringRecord(pkgScripts) ? pkgScripts : {} };
 
 /* ── 白名单判据的两个取样器（供下面的用例共用）────────────────────────── */
 
@@ -274,11 +275,47 @@ type CheckerExports = {
   STATIC_ALLOWED_TOPLEVEL: Array<string>;
 };
 
+/** 「名 → 串」映射守卫（B5 清账）。 */
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return isRecord(value) && Object.values(value).every((entry) => typeof entry === "string");
+}
+
+/** CheckerExports 的消费形状守卫（B5 清账）：13 个导出逐个对型，不再整段断言。 */
+function isCheckerExports(value: unknown): value is CheckerExports {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const fns = [
+    "allowedTopLevelFor",
+    "checkDir",
+    "collectFiles",
+    "isAllowedSrcPath",
+    "missingRequiredRuntimeFiles",
+  ];
+  const lists = [
+    "ALLOWED_SRC_FILES",
+    "REQUIRED_HOST_FILES",
+    "REQUIRED_PAYLOAD_FILES",
+    "REQUIRED_RUNTIME_FILES",
+    "STANDALONE_ALLOWED_TOPLEVEL",
+    "STATIC_ALLOWED_TOPLEVEL",
+  ];
+  const fnsOk = fns.every((key) => typeof value[key] === "function");
+  const listsOk = lists.every((key) => isUnknownArray(value[key]));
+  const forbiddenOk =
+    isUnknownArray(value.FORBIDDEN) &&
+    value.FORBIDDEN.every(
+      (pair) => isUnknownArray(pair) && typeof pair[0] === "string" && pair[1] instanceof RegExp,
+    );
+  return fnsOk && listsOk && typeof value.RUNTIME_DIR === "string" && forbiddenOk;
+}
+
 function checkerExports(): CheckerExports {
-  /* SAFETY: 类型断言已复核 */
-  return createRequire(import.meta.url)(
-    "../scripts/check-standalone-contents.cjs",
-  ) as CheckerExports;
+  const mod: unknown = createRequire(import.meta.url)("../scripts/check-standalone-contents.cjs");
+  if (!isCheckerExports(mod)) {
+    throw new Error("check-standalone-contents.cjs 的导出面形状变了 —— 重读该脚本再改这份守卫");
+  }
+  return mod;
 }
 
 function checkerForbidden(): Array<[string, RegExp]> {
