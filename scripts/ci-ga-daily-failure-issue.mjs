@@ -115,7 +115,7 @@ export function titleKey(stepName) {
 /**
  * 标题：**哪一跑**（run 号 + sha）+ **红在哪一步**（格名）。run 号 / sha 只进标题、不进键。
  *
- * @param {{runId: string, sha: string, step: string}} input
+ * @param {{runId: string, sha: string, step: string, prefix?: string}} input
  * @returns {string} 标题
  */
 export function issueTitle({ runId, sha, step, prefix = TITLE_PREFIX }) {
@@ -188,7 +188,7 @@ export function decideAction({ existing, failedSteps }) {
 /**
  * 拼正文：只有事实与出口。
  *
- * @param {{ghRepo: string, handle: string, logReadout?: string, runId: string, sha: string, step: string}} input
+ * @param {{ghRepo: string, handle: string, logReadout?: string, runId: string, sha: string, step: string, workflowName?: string}} input
  * @returns {string}
  */
 export function composeBody({
@@ -198,7 +198,6 @@ export function composeBody({
   runId,
   sha,
   step,
-  prefix = TITLE_PREFIX,
   workflowName = "Daily (mirror)",
 }) {
   const runUrl = `https://github.com/${ghRepo}/actions/runs/${runId}`;
@@ -244,7 +243,10 @@ export function composeBody({
  *   logReadout: string,
  *   runId: string,
  *   sha: string,
- * }} writeCtx 连接 + 这一跳的共用读数
+ *   prefix?: string,
+ *   workflowName?: string,
+ *   handle?: string,
+ *   }} writeCtx 连接 + 这一跳的共用读数
  * @param {Array<{number?: number, step: string}>} stages 计划
  * @param {number} index 当前下标
  * @param {{failures: string[], wrote: number}} ledger 计数账（写回调用方）
