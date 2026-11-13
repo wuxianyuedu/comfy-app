@@ -45,7 +45,7 @@ export function ProjectGate({ onEnter, onExit }: ProjectGateProps) {
             className="border-border bg-canvas-deep text-ink placeholder:text-ink-fainter focus:border-border-strong min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
             placeholder="项目名称（可留空，默认「未命名」）"
           />
-          <Button onClick={handleCreate} variant="gradient">
+          <Button onClick={handleCreate} variant="primary-solid">
             新建并进入
           </Button>
         </div>

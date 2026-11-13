@@ -82,7 +82,7 @@ export function NumberField({
       } ${className ?? ""}`}
     >
       <Button
-        className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink size-6 shrink-0 rounded-none px-0"
+        className="text-ink-muted hover:text-ink-bright active:text-ink size-6 shrink-0 rounded-none px-0 hover:bg-transparent dark:hover:bg-transparent"
         disabled={disabled || value <= min}
         onMouseDown={(event) => {
           event.preventDefault();
@@ -127,7 +127,7 @@ export function NumberField({
         disabled={disabled}
       />
       <Button
-        className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink size-6 shrink-0 rounded-none px-0"
+        className="text-ink-muted hover:text-ink-bright active:text-ink size-6 shrink-0 rounded-none px-0 hover:bg-transparent dark:hover:bg-transparent"
         disabled={disabled || value >= max}
         onMouseDown={(event) => {
           event.preventDefault();
