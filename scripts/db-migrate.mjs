@@ -29,7 +29,7 @@ import { DatabaseSync } from "node:sqlite";
 import { runPnpmSync } from "./launcher-core/shell.mjs";
 import { pnpmCli } from "./ci-install-deps.mjs";
 import { rejectUnknownArgs } from "./cli-arg-contract.mjs";
-import { resolveSqlitePath } from "./db-schema-state.mjs";
+import { probeSchemaFresh, resolveSqlitePath } from "./db-schema-state.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const dbPath = resolveSqlitePath(root);
@@ -239,6 +239,24 @@ if (afterTables <= 0) {
 }
 
 if (afterApplied !== files.length) {
+  /* push 管的既有检出：账本从不写（恒 0），但库结构可能早已与 schema.ts 收敛
+   * （启动链路走 schema 摘要 + push，不读迁移账本）。把这档判成「半途状态、别起应用」
+   * 是误导；只有结构也没对齐时才保留下面那句硬话术。 */
+  if (afterApplied === 0) {
+    const fresh = probeSchemaFresh(root);
+    if (fresh.state === "synced") {
+      process.stdout.write(
+        [
+          `[db:migrate] 本检出的库由 \`pnpm db:push\` 管理（迁移账本为空、结构已收敛，可直接起应用）。`,
+          "[db:migrate] 迁移账本只对生产 / 崭新库有意义：这里不会把它当成「迁移没应用全」。",
+          `[db:migrate] 读数：drizzle/ 里有 ${files.length} 份迁移文件，账本里记了 0 份；schema 指纹与当前源码一致。`,
+          "",
+        ].join("\n"),
+      );
+      process.exit(0);
+    }
+  }
+
   fail(
     [
       `迁移没应用全：drizzle/ 里有 ${files.length} 份，账本里记了 ${afterApplied} 份。`,
