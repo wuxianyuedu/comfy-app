@@ -9,17 +9,19 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { SidebarMenuButton, SidebarProvider } from "~/components/ui/sidebar";
 
 /* jsdom 没有 matchMedia，`use-mobile` 会直接抛。桩只求「不窄」——本文件的判据
-   与视口无关（形态同 `sidebar-auto-collapse.test.tsx`）。 */
+   与视口无关（形态同 `sidebar-auto-collapse.test.tsx`）。返回类型按平台 API
+   写全（含旧式 addListener / removeListener 两个成员），赋值不需要断言收型。 */
 beforeEach(() => {
-  /* SAFETY: 类型断言已复核 */
-  window.matchMedia = ((query: string) => ({
+  window.matchMedia = (query: string): MediaQueryList => ({
     matches: false,
     media: query,
     onchange: null,
+    addListener: () => undefined,
+    removeListener: () => undefined,
     addEventListener: () => undefined,
     removeEventListener: () => undefined,
     dispatchEvent: () => false,
-  })) as unknown as typeof window.matchMedia;
+  });
 });
 
 afterEach(cleanup);
