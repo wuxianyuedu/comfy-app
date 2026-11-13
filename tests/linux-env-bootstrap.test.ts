@@ -480,6 +480,9 @@ describe("dev/start 在起 Next 之前预检", () => {
       // `applyPendingRestoreAtBoot`，它静态 import 这份唯一实现 —— 少拷一份，
       // 红出来的就是 ERR_MODULE_NOT_FOUND 而不是预检结论（同下一条注释）。
       "db-backup-core.mjs",
+      // #3732：`db-backup-core.mjs` 静态 import 这份本机应用数据备份实现，
+      // 同理必须随最小检出副本一起拷，否则红的是模块找不到。
+      "app-data-backup.mjs",
       "standalone-private-inputs.mjs",
     ];
     for (const name of needed) {
