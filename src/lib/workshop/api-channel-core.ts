@@ -234,6 +234,9 @@ const POLL_TIMEOUT_MS = 30_000;
 export type ApiChannelFetchOptions = {
   /** 请求体覆盖（远端模型的模式适配器翻译统一输入后给出；缺省走 OpenAI 兼容默认映射）。 */
   bodyOverride?: Record<string, unknown>;
+  /** 模型级透传字段（#3626）：厂商特有 JSON 字段（如 `extra_body.response_format`），
+   *  落在请求 body **最后** —— 覆盖适配器/默认映射组装出的字段。 */
+  extraBody?: Record<string, unknown>;
   /** 上游结果字段路径（适配器的 outputField）：命中即直接当结果 URL 返回。 */
   outputField?: string;
   /** 异步视频任务的轮询地址候选（#3590）：远端模型有自己的任务查询形状
@@ -269,6 +272,8 @@ export async function callImageGeneration(
   }
   let res: Response;
   try {
+    /* 模型级透传字段盖在**最后**（#3626）：厂商字段覆盖默认映射/适配器组装。 */
+    const imageBody = options.bodyOverride ?? defaultImageBody(req, target.model);
     res = await fetch(target.endpoint, {
       method: "POST",
       headers: target.apiKey
@@ -277,7 +282,9 @@ export async function callImageGeneration(
             Authorization: `Bearer ${target.apiKey}`,
           }
         : { "Content-Type": "application/json" },
-      body: JSON.stringify(options.bodyOverride ?? defaultImageBody(req, target.model)),
+      body: JSON.stringify(
+        options.extraBody === undefined ? imageBody : { ...imageBody, ...options.extraBody },
+      ),
       signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
     });
   } catch (error) {
@@ -321,6 +328,8 @@ export async function callVideoSubmit(
   }
   let res: Response;
   try {
+    /* 模型级透传字段盖在**最后**（#3626）：与生图同一口径。 */
+    const submitBody = options.bodyOverride ?? videoBody(req, target.model);
     res = await fetch(target.endpoint, {
       method: "POST",
       headers: target.apiKey
@@ -329,7 +338,9 @@ export async function callVideoSubmit(
             Authorization: `Bearer ${target.apiKey}`,
           }
         : { "Content-Type": "application/json" },
-      body: JSON.stringify(options.bodyOverride ?? videoBody(req, target.model)),
+      body: JSON.stringify(
+        options.extraBody === undefined ? submitBody : { ...submitBody, ...options.extraBody },
+      ),
       signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
     });
   } catch (error) {

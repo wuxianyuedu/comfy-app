@@ -113,6 +113,14 @@ describe("ProviderModelDialog 按用途分叉（#3618 补充）", () => {
     expect(screen.getByRole("combobox", { name: "接口端点" })).toHaveTextContent("/v1/videos");
   });
 
+  it("额外请求体字段（#3626）：文本 / 图像 / 视频三种 kind 都出现（厂商扩展不分协议）", () => {
+    for (const kind of ["chat", "image", "video"] as const) {
+      cleanup();
+      renderDialog(kind, "https://api.example/v1");
+      expect(screen.getByText("额外请求体字段（JSON · 透传）")).toBeInTheDocument();
+    }
+  });
+
   it("供应商还没有 Base URL 时：选项仍显示路径段本身，并提示先去填 Base URL（#3671）", () => {
     renderDialog("image", "");
     expect(screen.getByRole("combobox", { name: "接口端点" })).toHaveTextContent(

@@ -28,6 +28,7 @@ import {
 } from "~/lib/llm/video-task-util";
 import { isRecord } from "~/lib/is-record";
 import { joinApiUrl } from "~/lib/llm/provider-types";
+import { parseExtraBodyObject } from "~/lib/llm/extra-body";
 import { REMOTE_MODEL_KINDS, type RemoteModelKind } from "~/lib/llm/types";
 import { llmProviderRepository, remoteModelRepository } from "~/lib/core/repository";
 
@@ -226,6 +227,9 @@ export async function resolveUpstream(
  *  抛异常会让「空接口地址」这类**用户可修正**的输入走成 500。 */
 export type UsageTestPrologue =
   | {
+      /** 模型级透传字段（#3626）：库里配的 `extraBody` 解析后的对象；
+       *  坏行 / 未配置一律 `{}` —— 读库绝不影响测试调用。 */
+      modelExtra: Record<string, unknown>;
       name: string;
       ok: true;
       rec: Record<string, unknown>;
@@ -253,7 +257,11 @@ export async function readUsageTestPrologue(req: Request): Promise<UsageTestProl
     return { ok: false, detail: up.error };
   }
 
-  return { ok: true, name, rec, up };
+  /* 模型级透传字段（#3626）：读库一份兑底 —— 坏行按未配置（`{}`），不阻断测试。 */
+  const modelRow = await remoteModelRepository.findByName(name).catch(() => null);
+  const modelExtra = parseExtraBodyObject(modelRow?.extraBody) ?? {};
+
+  return { ok: true, name, rec, up, modelExtra };
 }
 
 /** 上游响应体：非 JSON 或解析失败一律给 null（调用方按 HTTP 状态给文案）。 */

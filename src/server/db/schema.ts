@@ -471,6 +471,10 @@ export const remoteModel = sqliteTable(
      *  #3622/#3659 起是模型级 envelope（RemoteModelAdaptersDoc）：含模型级
      *  端点路径 endpointPath（#3656 设置页下拉也落这一格）。 */
     workshopAdapters: text("workshopAdapters"),
+    /** 额外请求体字段（#3626）：raw JSON 对象文本，透传进请求 body 且覆盖运行时默认
+     *  组装（用途是把厂商特有的字段原样带上，如 `extra_body.response_format`）。
+     *  文本 / 图像 / 视频三种 kind 都生效；空串 / NULL = 未配置、不发送。 */
+    extraBody: text("extraBody"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),

@@ -40,8 +40,13 @@ vi.mock("~/lib/llm/server", () => ({
  * route.test.ts 的 mock 形状同款），避免为凑齐整行而断言（no-unsafe-type-assertion）。
  * vi.hoisted 声明必须在 vi.mock 引用它之前（no-use-before-define）。 */
 const { findByName, findById } = vi.hoisted(() => ({
-  findByName:
-    vi.fn<(name: string) => Promise<{ name: string; providerId: string | null } | null>>(),
+  findByName: vi.fn<
+    (name: string) => Promise<{
+      extraBody?: string | null;
+      name: string;
+      providerId: string | null;
+    } | null>
+  >(),
   findById:
     vi.fn<
       (id: string) => Promise<{ apiKey: string | null; baseUrl: string; name: string } | null>
@@ -329,6 +334,27 @@ describe("readUsageTestPrologue（两个路由共用的请求前言）", () => {
       up: { base: "https://entry/v1", path: "/v1/chat/completions" },
       rec: { prompt: "hi" },
     });
+  });
+
+  it("模型级透传字段（#3626）：库里配了 `extraBody` 解析进 modelExtra；坏行按未配置", async () => {
+    findByName.mockResolvedValue({
+      name: "entry",
+      providerId: null,
+      extraBody: '{"extra_body":{"response_format":{"type":"json_object"}}}',
+    });
+    const out = await readUsageTestPrologue(reqOf({ name: "entry", prompt: "hi" }));
+    expect(out).toMatchObject({
+      ok: true,
+      modelExtra: { extra_body: { response_format: { type: "json_object" } } },
+    });
+
+    findByName.mockResolvedValue({ name: "entry", providerId: null, extraBody: "{" });
+    const broken = await readUsageTestPrologue(reqOf({ name: "entry", prompt: "hi" }));
+    expect(broken).toMatchObject({ ok: true, modelExtra: {} });
+
+    findByName.mockResolvedValue({ name: "entry", providerId: null, extraBody: null });
+    const empty = await readUsageTestPrologue(reqOf({ name: "entry", prompt: "hi" }));
+    expect(empty).toMatchObject({ ok: true, modelExtra: {} });
   });
 });
 
