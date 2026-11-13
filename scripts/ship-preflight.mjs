@@ -318,6 +318,7 @@ export async function runPreflightStage(ctx) {
       adds: opt.adds,
       // 这里刻意保留 ||：判的是「有没有给」，两者都空才算没给（空串也是没给）。
       hasMessage: Boolean(opt.message || opt.messageFile),
+      noCommit: opt.noCommit === true,
       merge: opt.merge,
       closeIssue: opt.closeIssue,
       cleanBranch: opt.cleanBranch,

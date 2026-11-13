@@ -631,7 +631,7 @@ export function looksNewlineMangled(msg) {
  * ⚠️ 它**不**保证恒退 0：dry-run 免掉的是「执行写动作」，不免掉「报出阻塞」。正在
  * `master` 上、或缺 `changelog.d/` 碎片时照样退 1 —— 一个会藏掉阻塞事实的预览比不预览更糟。
  *
- * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,asMerged?:number|null,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,comment?:boolean,branches?:boolean,newIssue?:boolean,diagnose?:boolean,stageLog?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null,prBodyFile?:boolean}} st 当前状态
+ * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,noCommit?:boolean,closeIssue?:boolean,asMerged?:number|null,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,comment?:boolean,branches?:boolean,newIssue?:boolean,diagnose?:boolean,stageLog?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null,prBodyFile?:boolean}} st 当前状态
  * @returns {string[]} 逐条命令
  */
 export function planCommands(st) {
@@ -652,16 +652,23 @@ export function planCommands(st) {
   p.push(`git diff --name-only ${remote}/${trunk}...HEAD -- changelog.d`);
   p.push("git status --porcelain -- changelog.d");
   p.push("node scripts/check-deps-freshness.mjs");
-  for (const a of st.adds) {
+  /* `--no-commit`（ISSUE #3619 / #3676）：提交段整段跳过 —— 计划里也要如实反映
+   * 「不 add、不看暂存面、不 commit」，别让 dry-run 教给读者一套不会执行的形状。 */
+  if (st.noCommit) {
+    p.push(
+      "（--no-commit：跳过提交段 —— 不 git add、不看暂存面、不 git commit，HEAD 原样进推送段）",
+    );
+  }
+  for (const a of st.noCommit ? [] : st.adds) {
     p.push(`git add -- ${a}`);
   }
   /* 封闭暂存面那一读（ISSUE #3597）：只在给了 `--add` 时执行 —— 没给 `--add` 的那条路
    * 暂存面本来就由调用方负责，没有「声明」可收口。计划里省掉这一条，dry-run 就会教给
    * 读者一个没有收口的执行面，而那个收口正是这次补上的东西。 */
-  if (st.adds.length > 0) {
+  if (!st.noCommit && st.adds.length > 0) {
     p.push("git diff --cached --name-only -z");
   }
-  if (st.hasMessage) {
+  if (st.hasMessage && !st.noCommit) {
     p.push("git commit --message=<提交信息原文>");
   }
   /* 远端名与主干分支都来自解析（`resolveUpstream`），不写死 `origin` / `master` ——
