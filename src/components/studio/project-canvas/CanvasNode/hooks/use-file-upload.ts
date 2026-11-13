@@ -77,9 +77,9 @@ export function useFileUpload({ patch }: UseFileUploadArgs) {
   };
 
   return {
-    ImageInput: imagePicker.Input,
+    imageInputProps: imagePicker.inputProps,
     pickFile,
-    MediaInput: mediaPicker.Input,
+    mediaInputProps: mediaPicker.inputProps,
     pickMedia,
     onUploadFile,
   };

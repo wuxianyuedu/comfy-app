@@ -4,7 +4,7 @@ import { ChevronLeft, CircleHelp, Plus, Search, X } from "lucide-react";
 import { Hint } from "~/components/ui/hint";
 import { textHandler } from "~/lib/form-props";
 import { ARTIFACT_ROOT_DIR } from "~/lib/media/output-layout";
-import { useFilePicker } from "~/components/ui/file-picker";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
@@ -172,7 +172,7 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
             </Hint>
           )}
         </div>
-        <uploadPicker.Input />
+        <FilePicker {...uploadPicker.inputProps} />
         <Hint
           label={
             folder === null
