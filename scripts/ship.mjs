@@ -247,6 +247,10 @@
  *                                             #   一行结论；全量日志落系统临时目录并打印绝对路径
  *   pnpm ship --gh-logs run:4242               # 按 run id 直取；`run:` / `pr:` 可消歧，裸数字按位数判。
  *                                             #   ship 轮询判红时也会自动回读一次（无令牌只念一行跳过）
+ *   pnpm ship --gh-prs                         # 只读：列 GitHub 仓库侧（镜像仓 wuxianyuedu/comfy-app）的 PR ——
+ *                                             #   号 / 标题 / 作者 / 分支 / mergeable / 网页 URL（dependabot[bot]
+ *                                             #   的 PR 只在这一侧，CNB 看不见）。值可选：缺省 = open；
+ *                                             #   `open` / `closed` / `all` 按状态列；数字 = 单条 PR 详情
  *   pnpm ship --rerun-ci                       # CI 挂了想重跑：在当前 PR 分支推一个空提交触发新 build（平台侧没有 PR 重跑入口，
  *                                            # 不去 cnbcli 翻）。它同时带上 COMFY_INTENTIONAL_EMPTY_COMMIT —— D0 里有两步读当场暂存区，
  *                                            # 空索引本来被它们读成「取不到判决面」；口径与反滥用见规范 §13.5.5 末段
