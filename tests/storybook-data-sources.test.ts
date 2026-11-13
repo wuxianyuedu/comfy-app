@@ -5,13 +5,22 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+
+import { ensureStorybookAssets } from "../scripts/storybook-assets.mjs";
 
 const ROOT = resolve(".");
 const SOURCES = join(ROOT, ".storybook", "data-sources.tsx");
 const ASSETS = join(ROOT, ".storybook", "assets");
 const MAIN = join(ROOT, ".storybook", "main.ts");
 const ASSET_SCRIPT = join(ROOT, "scripts", "storybook-assets.mjs");
+
+/* 前置：这条用例判的是「注入层清单 ⇄ 磁盘」的对位，不该假设谁替环境生成过文件。
+   `.storybook/assets/` 是 postinstall 现生成的 gitignored 夹具，而本机 / 缓存命中的安装
+   （pnpm 不重跑 postinstall）都会让它缺席 ⇒ 环境先行现生成，用例自己不依赖上一次 install。 */
+beforeAll(() => {
+  ensureStorybookAssets(ASSETS);
+});
 
 const sources = readFileSync(SOURCES, "utf8");
 const main = readFileSync(MAIN, "utf8");
