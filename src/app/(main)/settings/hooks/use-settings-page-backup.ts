@@ -21,19 +21,34 @@ export type BackupEntry = {
 
 /** 待恢复标记（写入后到下次启动之间一直有效）。 */
 export type PendingRestore = {
+  /** 同套的本机应用数据备份目录（#3732）；旧标记没有这一格。 */
+  appDataDir: string | null;
   at: string | null;
   file: string;
 };
 
+/** 一套本机应用数据备份（目录名 + 文件数 + 字节；#3732）。 */
+export type AppDataBackupSet = {
+  at: number | null;
+  bytes: number;
+  files: number;
+  name: string;
+};
+
 export type UseSettingsBackup = {
+  /** 本机应用数据的备份套（与数据库备份按同刻配对；#3732）。 */
+  appDataBackups: Array<AppDataBackupSet>;
   backupBusy: boolean;
   backups: Array<BackupEntry>;
   createBackupNow: () => Promise<void>;
+  /** 从用户指定的目录导入备份件（#3732）。 */
+  importBusy: boolean;
+  importFromDir: (dir: string) => Promise<void>;
   /** 备份清单首次加载完成前为 true（视图据此避免把「还没读到」当「一份都没有」）。 */
   loading: boolean;
   pending: PendingRestore | null;
   restoreBusy: boolean;
-  restoreFrom: (name: string) => Promise<void>;
+  restoreFrom: (name: string, appDataDir?: string | null) => Promise<void>;
 };
 
 export function useSettingsBackup({
@@ -53,8 +68,10 @@ export function useSettingsBackup({
   );
   const createM = useMutation(trpc.setting.backupCreate.mutationOptions());
   const restoreM = useMutation(trpc.setting.backupRestore.mutationOptions());
+  const importM = useMutation(trpc.setting.backupImportFromDir.mutationOptions());
   const [backupBusy, setBackupBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
 
   /* 备份失败是**可预期的一档**（磁盘满 / 库被独占），服务端因此返回
    * `{ ok: false, reason }` 而不是抛；这里把它翻成一句带原因的提示，而不是笼统的
@@ -69,20 +86,57 @@ export function useSettingsBackup({
       } else {
         showFlash("err", `备份没能完成：${result.reason}`);
       }
+      /* 本机应用数据随同一刻备份（#3732）：两份独立，成败各自念清。 */
+      const appData = result.appData;
+      if (appData.ok) {
+        showFlash("ok", `已备份本机应用数据：${appData.name}`);
+      } else if (!("nothing" in appData)) {
+        showFlash("err", `本机应用数据备份没能完成：${appData.reason}`);
+      }
     } finally {
       setBackupBusy(false);
     }
   }, [createM, listQ, showFlash]);
 
+  /* 从用户指定的目录导入备份件（#3732）：导入后进清单，恢复照常走两步制。 */
+  const importFromDir = useCallback(
+    async (dir: string) => {
+      setImportBusy(true);
+      try {
+        await runAsyncAction(
+          async () => {
+            const result = await importM.mutateAsync({ dir });
+            if (!result.ok) {
+              throw new Error(result.reason);
+            }
+            return {
+              ok: true as const,
+              text: `已从目录导入 ${result.imported.length} 份备份件 —— 在下面的清单里选一份恢复`,
+            };
+          },
+          { report: showFlash, failureText: "导入失败" },
+        );
+        await listQ.refetch();
+      } finally {
+        setImportBusy(false);
+      }
+    },
+    [importM, listQ, showFlash],
+  );
+
   /* 恢复只写标记：**不断言「已恢复」**，说的是「已登记，重启后生效」——
-   * 换文件还没发生（见文件头）。 */
+   * 换文件还没发生（见文件头）。`appDataDir` 是同套的本机应用数据备份
+   * （#3732）—— 恢复时随数据库一起覆盖回 `data/`。 */
   const restoreFrom = useCallback(
-    async (name: string) => {
+    async (name: string, appDataDir?: string | null) => {
       setRestoreBusy(true);
       try {
         await runAsyncAction(
           async () => {
-            const result = await restoreM.mutateAsync({ name });
+            const result = await restoreM.mutateAsync({
+              name,
+              appDataDir: appDataDir ?? undefined,
+            });
             if (!result.ok) {
               throw new Error(result.reason);
             }
@@ -104,11 +158,14 @@ export function useSettingsBackup({
 
   return {
     backups: listQ.data?.backups ?? [],
+    appDataBackups: listQ.data?.appDataBackups ?? [],
     pending: listQ.data?.pending ?? null,
     loading: listQ.isLoading,
     backupBusy,
     restoreBusy,
+    importBusy,
     createBackupNow,
     restoreFrom,
+    importFromDir,
   };
 }

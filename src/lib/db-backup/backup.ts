@@ -34,6 +34,11 @@ import {
   requestRestore,
   verifyBackupFile,
 } from "../../../scripts/db-backup-core.mjs";
+import {
+  createAppDataBackup as createAppDataBackupCore,
+  importBackupFromDir as importBackupFromDirCore,
+  listAppDataBackups as listAppDataBackupSetsCore,
+} from "../../../scripts/app-data-backup.mjs";
 
 export { BACKUP_KEEP, backupDir, createBackup, listBackups, pruneBackups };
 export { readRestoreRequest, requestRestore, verifyBackupFile };
@@ -53,4 +58,34 @@ export function listBackupEntries(root: string): Array<BackupEntry> {
     size: entry.size,
     at: entry.at,
   }));
+}
+
+/** 一套本机应用数据备份（目录名 + 文件数 + 字节；时刻与数据库快照同刻配对）。 */
+export type AppDataBackupSet = {
+  at: number | null;
+  bytes: number;
+  files: number;
+  name: string;
+};
+
+/** 列出本机应用数据的备份套（新→旧；与数据库备份按同刻配对）。
+ *  @param {string} root 应用根 */
+export function listAppDataBackupSets(root: string): Array<AppDataBackupSet> {
+  return listAppDataBackupSetsCore(root);
+}
+
+/** 做一份本机应用数据备份（与数据库备份同一 `now`，两份合成一套完整备份）。
+ *  @param {string} root 应用根 */
+export function createAppDataBackup(root: string): ReturnType<typeof createAppDataBackupCore> {
+  return createAppDataBackupCore(root);
+}
+
+/** 从用户指定的目录导入备份件（数据库快照过 integrity_check；应用数据整目录拷回）。
+ *  @param {string} root 应用根
+ *  @param {string} dir 用户指定的目录 */
+export function importBackupFromDirectory(
+  root: string,
+  dir: string,
+): ReturnType<typeof importBackupFromDirCore> {
+  return importBackupFromDirCore(root, dir, { verify: verifyBackupFile });
 }
