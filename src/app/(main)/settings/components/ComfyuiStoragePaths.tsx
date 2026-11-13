@@ -49,7 +49,7 @@ export function ComfyuiStoragePaths({ storage }: { storage: DesktopStoragePaths 
         <span className="text-muted-foreground text-xs">模型 / 输入 / 输出指向哪些盘符</span>
         {/* 这些盘符路径本身记在本机应用数据里（ISSUE #3625）：换机器时照着
             徽标的落点把那份设置带走，否则这一屏读到的是空的。 */}
-        <DataLocationBadge id="app-settings" label="存放位置" />
+        <DataLocationBadge id="app-settings" />
       </div>
       <dl className="flex flex-col gap-2">
         {buildStorageRows(storage).map((row) => (

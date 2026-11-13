@@ -43,16 +43,15 @@ function badgeTitle(id: DataLocationId): string {
  * `id` 指的是登记项（一种数据 × 它的某一个存放位置），不是数据种类 —— 一类数据
  * 落在两个地方时（例如模式契约的本机覆盖与项目默认）要挂两枚，各说各的落点。
  *
- * `label` 是徽标左边那句引导语（如「存放位置」）：徽标本身只说「哪一类位置」，
- * 单独飘在界面里会读不出它管的是哪件事，所以多数落点给一句引导；不需要时
- * 不传（那几处上下文已经足够，页头就是一个例子）。
+ * 徽标**只画图标与类别名**，不带「存放位置」引导字，旁边也不再有说明段（ISSUE
+ * #3625 reopen 的口径：徽标放在标题处，说明一律走悬浮气泡，界面上不留关于
+ * 存放在哪的额外描述）—— 落点与迁移办法都在上面的悬浮说明里。
  */
-export function DataLocationBadge({ id, label }: { id: DataLocationId; label?: string }) {
+export function DataLocationBadge({ id }: { id: DataLocationId }) {
   const entry = DATA_LOCATIONS[id];
   const category = DATA_LOCATION_CATEGORIES[entry.category];
   return (
-    <span className="inline-flex items-center gap-1.5">
-      {label === undefined ? null : <span className="text-muted-foreground text-2xs">{label}</span>}
+    <span className="inline-flex items-center">
       {/* `side="top"`：徽标坐在设置卡片正文里，气泡向上让出下方那两行说明；
           与顶栏问号（`side="bottom"`）分档的理由是锚点在屏幕里的位置，不是风格。 */}
       <Hint label={badgeTitle(id)} side="top">

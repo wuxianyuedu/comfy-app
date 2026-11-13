@@ -64,12 +64,13 @@ export function BackupSection({ c }: { c: ReadySettingsPageController }) {
 
   return (
     <>
-      <SettingsCard title="创建备份">
-        {/* 快照落在哪儿（ISSUE #3625）：迁移时先在旧机器出一份，再把
-            `data/backups/` 整个拷到新机器 —— 这一步照着徽标的落点做即可。 */}
-        <div className="mb-2">
-          <DataLocationBadge id="backup-archive" label="存放位置" />
-        </div>
+      <SettingsCard
+        title="创建备份"
+        /* 快照落在哪儿（ISSUE #3625）：迁移时先在旧机器出一份，再把
+            `data/backups/` 整个拷到新机器 —— 这一步照着徽标的落点做即可。
+            徽标放标题行（reopen 的口径），说明走悬浮气泡。 */
+        titleExtra={<DataLocationBadge id="backup-archive" />}
+      >
         {/* 段内正文一律 `text-xs`：`text-sm` 是**表单标签与控件值**那一档，
             正文段落用它会让一屏里的两档字（14px 正文 / 14px 标签）分不开，
             说明文字反而比它解释的控件更抢眼。卡片标题 → 标签 → 正文 →

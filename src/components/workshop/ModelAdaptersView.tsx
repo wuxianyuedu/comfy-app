@@ -490,7 +490,7 @@ export function ModelAdaptersView() {
         <div className="px-4 sm:px-8">
           <PageHeader
             className="pt-4 pb-3 sm:pt-5"
-            extra={<DataLocationBadge id="model-adapter" label="存放位置" />}
+            extra={<DataLocationBadge id="model-adapter" />}
             srTitle={pageHeaderTitle("model-adapters")}
           />
         </div>
