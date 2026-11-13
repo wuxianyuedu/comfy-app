@@ -43,6 +43,9 @@ name: Package desktop (mirror)
 # 不写成仓库级默认写权限 —— 这一档是唯一需要它的 workflow。
 permissions:
   contents: write
+  # 失败立案要读这一跑的 jobs（`/actions/runs/{id}/jobs`），因此显式要 actions: read；
+  # 其余权限按最小面给（本档只需要写 Release + 读自身 jobs）。
+  actions: read
 
 on:
   schedule:
@@ -252,3 +255,51 @@ jobs:
           GITHUB_SHA: ${{ github.sha }}
           DESKTOP_SHELL_EXE: src-tauri/target/release/app.exe
         run: node scripts/ci-ga-desktop-relay.mjs
+
+  # 失败立案（#2874 的立案格：桌包档跑红 ⇒ CNB 单，按格名去重）。
+  # 本档此前**没有**这一格 —— CNB 的 `桌包失败立案` 判的是 CNB 自己的上一跑
+  # （`.cnb.yml` 的 `package` 格），那条自托管链已随 #3504 退役，桌包跑红只剩 GA 侧
+  # 匿名可见 ⇒ 判据在场、执行者不在场。`needs: package` 只让本格在上游 completed 之后跑，
+  # 脚本认得的是 jobs API 的终值（step conclusion=failure）。
+  #
+  # **为什么是独立 job 而不是 `package` 里的一个 step**：与 daily.yml 同一理由（#3563）——
+  # 脚本只认 jobs API 的 `steps[].conclusion`，跑在 `package` 内部时那个 job 自己还是
+  # in_progress，实测读回 0 个红格 ⇒ 零写入。`needs: package` 让上游先 completed。
+  package-failure-issue:
+    runs-on: ubuntu-24.04
+    needs: package
+    # 判的是**上游那一跑**：`package` 里任一格红即成立。绿跑一个字节都不付（job 直接 skipped）。
+    if: failure()
+    # 本格自己发没发出去不该给这一跑叠第二个红；但**不静默** —— 失败话术与手工出口由脚本
+    # 原样打印（`tests/ci-ga-daily-failure-issue.test.ts` 钉住）。
+    continue-on-error: true
+    timeout-minutes: 10
+    steps:
+      # 只要脚本自己与它 import 的那几个模块，不要历史也不要 LFS 字体，对位 daily.yml
+      # 的 `daily-failure-issue`（整条 import 链只吃 node:*，这一 job 不装依赖）。
+      - name: 检出（立案脚本在仓库里）
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.head_sha || github.sha }}
+          fetch-depth: 1
+          lfs: false
+
+      - name: 装 Node（engines 下限 26.12.1；脚本只吃 node:*）
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: 桌包失败立案（补洞：桌包档跑红 ⇒ CNB 单，按格名去重）
+        env:
+          # 内置 token 只读这一跑的 jobs（`actions: read` 见顶层 permissions）。
+          GITHUB_TOKEN: ${{ github.token }}
+          # CNB 侧建单 / 贴标签 / 评论（repo-issue:rw + repo-notes:rw），与 code-scanning-triage 同一枚。
+          CNB_ISSUE_TOKEN: ${{ secrets.CNB_ISSUE_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          # 桌包档自己的标识 —— 标题前缀、自动 handle、workflow 名分别对位 daily.yml 那一枚。
+          GA_FAILURE_ISSUE_HANDLE: ci-ga-package-desktop
+          GA_FAILURE_ISSUE_PREFIX: "ci(ga-package-desktop): "
+          GA_FAILURE_ISSUE_WORKFLOW: Package desktop (mirror)
+        # `--no-block`：脚本自己的出口话术按「平台那一跳」念（非零落 0 + 手工出口），
+        # 与 job 侧的 continue-on-error 同向，两边口径一致（同 daily.yml 那一格）。
+        run: node scripts/ci-ga-daily-failure-issue.mjs --no-block
