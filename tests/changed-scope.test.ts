@@ -504,9 +504,11 @@ describe("changed-scope —— 空改动面的两半读法（#3026）", () => {
   });
 
   it("两个父的对称差只进「只在一侧之下」的那一份", () => {
-    /* 钉的是**判据的形状**：两个父各自往前走了、谁也包不住谁时，对称差里两边的新文件
-     * 都在；而 `<第一父>..HEAD` 只看得见第二父那一侧。两个答案不同 —— 这正是它与
-     * 「单个父的两点 diff」的实质差别。 */
+    /* 钉的是 **git 自身的行为**：两个父各自往前走了、谁也包不住谁时，`第一父...第二父`
+     * 的三点对称差里两边的新文件都在；而 `<第一父>..HEAD` 只看得见第二父那一侧。
+     * ⚠️ 这不再是「空改动面」判据的形状（#3644）：对称差在 squash 拓扑下会把分支
+     * 自己已落地的提交误算成分叉，判据的第二半已改读 `第一父..HEAD` 的两点树差
+     * —— 留着这条是钉 git 行为本身，免得有人把旧形状当判据接回去。 */
     const { dir, base } = initRepo();
     write(dir, "m.txt", "m\n");
     commit(dir, "main＃1");
@@ -548,5 +550,46 @@ describe("changed-scope —— 空改动面的两半读法（#3026）", () => {
       return;
     }
     expect(got.reason).toContain("取不到");
+  });
+
+  it("净零 PR：目标分支 squash 落地同批改动、分支从旧分叉点重带 ⇒ 判「零个文件」（#3644）", () => {
+    /* #3644 的现场：master 已用**一笔 squash** 把同批改动落地（第一父），PR 分支从
+     * 旧分叉点把同批改动又带了一遍 —— 平台合成 merge 的树与第一父逐字节相同
+     * （净贡献为零）。旧读法 `第一父...第二父` 的 merge-base 退回旧分叉点，把分支
+     * 自己那几笔**已落地**的提交误算成「这个 PR 带进来的」⇒ 退 2 假红；改读
+     * `第一父..HEAD`（两点树差）后，空就是直接证据。 */
+    const { base, dir } = initRepo();
+    /* 分支从基线分出来，落 3 笔（k1/k2/k3）。 */
+    git(dir, "checkout", "-q", "-b", "feat");
+    write(dir, "k1.txt", "1\n");
+    commit(dir, "feat: k1");
+    write(dir, "k2.txt", "2\n");
+    commit(dir, "feat: k2");
+    write(dir, "k3.txt", "3\n");
+    commit(dir, "feat: k3");
+    /* 目标分支在基线上以一笔 squash 落地**同批内容**（与分支历史不相交）。 */
+    git(dir, "checkout", "-q", "main");
+    write(dir, "k1.txt", "1\n");
+    write(dir, "k2.txt", "2\n");
+    write(dir, "k3.txt", "3\n");
+    const target = commit(dir, "main: squash 落地 k1-k3");
+    /* 平台合成 merge：树与第一父（target）逐字节相同。 */
+    git(dir, "checkout", "-q", "main");
+    git(dir, "merge", "-q", "--no-ff", "-m", "Merge feat into main", "feat");
+
+    /* 前置读数一：旧读法在这里读出 3 个「分叉」（本单要修掉的正是它）。 */
+    expect(git(dir, "diff", "--name-status", "-M", `${target}...feat`).trim()).toBe(
+      "A\tk1.txt\nA\tk2.txt\nA\tk3.txt",
+    );
+    /* 前置读数二：两点树差为空 —— 「净零」的直接证据。 */
+    expect(git(dir, "diff", "--name-status", "-M", `${target}..HEAD`).trim()).toBe("");
+
+    const got = confirmEmptyChangeFace({ cwd: dir, env: { CNB_PULL_REQUEST_TARGET_SHA: target } });
+    expect(got.ok).toBe(true);
+    if (!got.ok) {
+      return;
+    }
+    expect(got.firstParent).toBe(target);
+    expect(base === "").toBe(false);
   });
 });
