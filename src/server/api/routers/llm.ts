@@ -12,6 +12,7 @@ import {
   resolveApiFormat,
   resolveMediaEndpointPath,
 } from "~/lib/llm/provider-types";
+import { EXTRA_BODY_TEXT_MAX, isExtraBodyJsonObject } from "~/lib/llm/extra-body";
 import { isHttpUrl } from "~/lib/url-scheme";
 import {
   llmProviderRepository,
@@ -88,6 +89,16 @@ const modelInputSchema = z.object({
   kind: z.enum(["chat", "image", "video"]).optional(),
   maxOutputTokens: z.number().int().positive().nullish(),
   name: z.string().trim().min(1, "模型名称不能为空"),
+  /** 额外请求体字段（#3626）：raw JSON 对象文本；空串 = 合法（未配置、不发送）。
+   *  与客户端 `validateModelForm` 同一判据（~/lib/llm/extra-body）。 */
+  extraBody: z
+    .string()
+    .trim()
+    .max(EXTRA_BODY_TEXT_MAX, `额外请求体字段超过 ${EXTRA_BODY_TEXT_MAX} 字符`)
+    .refine(isExtraBodyJsonObject, {
+      message: '额外请求体字段必须是 JSON 对象（如 {"response_format":{"type":"json_object"}}）',
+    })
+    .nullish(),
   providerId: z.string().min(1),
   reasoningLevels: z.array(z.string()).nullish(),
   reasoningParamMapping: z
@@ -137,6 +148,9 @@ function modelView(m: RemoteModel, providers: ReadonlyArray<LlmProvider>) {
     reasoningLevels: m.reasoningLevels,
     reasoningParamMapping: m.reasoningParamMapping,
     smartConfig: m.smartConfig,
+    /* 额外请求体字段（#3626）：原文下发（raw JSON 对象文本），弹窗原样回填；
+     * 读取端（运行时）各自按需解析，坏行按「未配置」处理。 */
+    extraBody: m.extraBody ?? "",
   };
 }
 

@@ -32,6 +32,7 @@ import { FormField } from "~/components/ui/form-field";
 import { Input } from "~/components/ui/input";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { Switch } from "~/components/ui/switch";
+import { Textarea } from "~/components/ui/textarea";
 import { Toggle } from "~/components/ui/toggle";
 import { EMPTY_PLACEHOLDER } from "~/lib/display-value";
 import { textHandler } from "~/lib/form-props";
@@ -311,6 +312,11 @@ export function ProviderModelDialog({
 
           {isChat && <ModelAdvancedFieldset d={d} defaultOpen={dialog.mode === "edit"} />}
 
+          <ModelExtraBodyFieldset
+            d={d}
+            defaultOpen={dialog.mode === "edit" && d.modelForm.extraBody.trim() !== ""}
+          />
+
           {d.modelError !== null && d.modelError !== "" && (
             <p className="bg-destructive/10 text-danger-strong mt-2 rounded-lg px-3 py-2 text-xs">
               {d.modelError}
@@ -520,6 +526,68 @@ function ModelAdvancedFieldset({
             </div>
           )}
         </>
+      )}
+    </fieldset>
+  );
+}
+
+/** 额外请求体字段折叠块的静态文案（模块级常量：JSX 属性不塞长串）。 */
+const EXTRA_BODY_HINT =
+  '透传进请求体，覆盖运行时默认组装；空 = 不发送。按厂商文档原样抄即可，例如：{"extra_body":{"response_format":{"type":"json_object"}}}';
+const EXTRA_BODY_PLACEHOLDER =
+  '{\n  "extra_body": { "response_format": { "type": "json_object" } }\n}';
+
+/** 「额外请求体字段（JSON · 透传）」折叠块（#3626）：**文本 / 图像 / 视频三种 kind
+ *  都出现**（厂商扩展不分协议）。这一格整体未配置 = 请求体零变化；配了就原样盖进
+ *  请求体、覆盖运行时默认组装同名键。从主函数拆出来（规范 §12.13 函数长度硬闸）。 */
+function ModelExtraBodyFieldset({
+  d,
+  defaultOpen,
+}: {
+  d: ProviderModelDialogs;
+  defaultOpen: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <fieldset className="border-border mb-3 rounded-xl border p-3">
+      <Button
+        aria-expanded={open}
+        className="text-ink/80 hover:text-ink -mx-1 h-auto rounded px-1 py-0.5 text-sm font-medium"
+        onClick={() => {
+          setOpen((prev) => !prev);
+        }}
+        variant="ghost"
+      >
+        <ChevronDownIcon
+          aria-hidden
+          className={`size-3.5 transition-transform ${open ? "" : "-rotate-90"}`}
+          data-icon="inline-start"
+        />
+        额外请求体字段（JSON · 透传）
+      </Button>
+
+      {open && (
+        <FormField
+          className="mt-3"
+          error={d.modelErrors.extraBody}
+          hint={EXTRA_BODY_HINT}
+          id="model-extra-body"
+          label="额外请求体字段"
+        >
+          {(a11y) => (
+            <Textarea
+              {...a11y}
+              className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/50 focus-visible:border-primary h-auto min-h-20 rounded-lg px-3 py-2 font-mono text-xs leading-relaxed"
+              onChange={textHandler((extraBody) => {
+                d.patchModelForm({ extraBody });
+              })}
+              placeholder={EXTRA_BODY_PLACEHOLDER}
+              rows={4}
+              spellCheck={false}
+              value={d.modelForm.extraBody}
+            />
+          )}
+        </FormField>
       )}
     </fieldset>
   );
