@@ -10,7 +10,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { MultiModeSelect } from "~/components/ui/multi-mode-select";
 import { FormField } from "~/components/ui/form-field";
 import { Button } from "~/components/ui/button";
-import { useFilePicker } from "~/components/ui/file-picker";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import type { useWorkflowImport } from "./workflow-library/hooks/use-workflow-import";
 
 /* 导入面板的字段标签档：比设置页小一号（此处是密集的导入表单）。
@@ -159,7 +159,7 @@ export function WorkflowImportPanel({ state, onClose, onImport }: WorkflowImport
         >
           选择文件…
         </Button>
-        <importPicker.Input />
+        <FilePicker {...importPicker.inputProps} />
       </div>
 
       <div className="mt-3">

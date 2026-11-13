@@ -31,7 +31,7 @@ import { FieldLabel } from "~/components/ui/field";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
-import { useFilePicker } from "~/components/ui/file-picker";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import type { FeedbackController } from "./hooks/use-feedback-dialog";
 
 type FeedbackDialogProps = {
@@ -111,7 +111,7 @@ export function FeedbackDialog({ controller: c, onClose, open }: FeedbackDialogP
                 <ImagePlus data-icon="inline-start" size={14} />
                 添加截图
               </Button>
-              <picker.Input />
+              <FilePicker {...picker.inputProps} />
             </div>
             <p className="text-ink-muted text-2xs">
               最多 6 张 PNG / JPG / WebP / GIF，单张不超过 10MB。

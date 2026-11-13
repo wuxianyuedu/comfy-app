@@ -21,7 +21,7 @@ import {
 import type { UsageTestKind } from "~/lib/llm/usage-test-client";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
-import { useFilePicker } from "~/components/ui/file-picker";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import { Hint } from "~/components/ui/hint";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
@@ -576,7 +576,7 @@ function FieldImageButton({ hint, onPick }: { hint: string; onPick: (file: File)
           上传
         </Button>
       </Hint>
-      <picker.Input />
+      <FilePicker {...picker.inputProps} />
     </>
   );
 }

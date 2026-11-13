@@ -5,7 +5,7 @@ import React from "react";
 import { ExtractModelSelect } from "~/components/workshop/ExtractModelSelect";
 import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
-import { useFilePicker } from "~/components/ui/file-picker";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
 import { fetchGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
@@ -153,7 +153,7 @@ export function ExtractToolbar({
         >
           外部导入
         </Button>
-        <importPicker.Input />
+        <FilePicker {...importPicker.inputProps} />
       </div>
       {/* 实时流式输出（提取中单独展示，便于跟随 token 累积） */}
       {busy && progressText !== undefined && progressText !== "" && (

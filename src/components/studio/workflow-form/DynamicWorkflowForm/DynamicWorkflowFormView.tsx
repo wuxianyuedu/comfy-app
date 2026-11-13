@@ -6,6 +6,7 @@
 import type { ReactNode } from "react";
 
 import { Button } from "~/components/ui/button";
+import { FilePicker } from "~/components/ui/file-picker";
 
 import { GroupedControls } from "~/components/studio/workflow-form/GroupedControls";
 import { WirePortRows } from "~/components/studio/workflow-form/WorkflowFormControls";
@@ -95,7 +96,7 @@ export function DynamicWorkflowFormView({
     dropPosition,
     beginPortDrag,
     endDrag,
-    FileInput,
+    fileInputProps,
   } = controller;
 
   /* ioLabel() 需要全量 pin 才能在标签撞名时回退到原始 name。 */
@@ -187,7 +188,7 @@ export function DynamicWorkflowFormView({
 
   return (
     <div className={compact ? "" : "flex-col gap-3"}>
-      <FileInput />
+      <FilePicker {...fileInputProps} />
 
       {/* 上传失败的可读出口：ComfyUI 未运行 / 启动超时 / 素材不合规时给出原因，
  用户才知道该重试还是该去设置页启动（ISSUE #345）。 */}
