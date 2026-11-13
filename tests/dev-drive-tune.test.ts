@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import {
   buildLevers,
   classifyFilesystem,
@@ -492,11 +494,9 @@ describe("报告与计数", () => {
     const report = makeReport();
     report.levers = buildLevers(report);
     report.summary = summarizeLevers(report.levers);
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(JSON.stringify(report)) as {
-      levers: Array<unknown>;
-    };
-    expect(Array.isArray(parsed.levers)).toBe(true);
+    /* 序列化结果按 unknown 收窄（B5 清账）：levers 是数组即通过。 */
+    const parsed: unknown = JSON.parse(JSON.stringify(report));
+    expect(isRecord(parsed) && isUnknownArray(parsed.levers)).toBe(true);
   });
 
   it("动作里的命令不得出现 npm / npx 形态（仓库口径：只用 pnpm）", () => {

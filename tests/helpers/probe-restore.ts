@@ -22,6 +22,11 @@ export type ProbeIo = {
 /** Windows 上刚被子进程读过的文件会短暂占用，实测 `writeFileSync` 会连抛 `UNKNOWN`。 */
 const WRITE_ATTEMPTS = 8;
 
+/** 失败原因取正文（B5 清账）：Error 用 message，其余 String 兜底。 */
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export const realProbeIo: ProbeIo = {
   read: (abs) => (existsSync(abs) ? readFileSync(abs) : null),
   write: (abs, bytes) => {
@@ -34,8 +39,7 @@ export const realProbeIo: ProbeIo = {
         }
         last = "写回后读回的内容与快照不一致";
       } catch (error) {
-        /* SAFETY: 类型断言已复核 */
-        last = (error as Error).message;
+        last = errorText(error);
       }
     }
     throw new Error(`还原写不进去（${WRITE_ATTEMPTS} 次仍失败）：${last}`);
@@ -80,8 +84,7 @@ export function restoreToSnapshot(
     } catch (error) {
       failed.push({
         abs,
-        /* SAFETY: 类型断言已复核 */
-        why: `读不到当前内容：${(error as Error).message}`,
+        why: `读不到当前内容：${errorText(error)}`,
       });
       continue;
     }
@@ -97,8 +100,7 @@ export function restoreToSnapshot(
       }
       restored.push(abs);
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      failed.push({ abs, why: (error as Error).message });
+      failed.push({ abs, why: errorText(error) });
     }
   }
   return { restored, unchanged, failed };
