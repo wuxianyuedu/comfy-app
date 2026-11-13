@@ -892,21 +892,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "tests/dev-drive-tune.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
-        "tests/dev-launcher-downstream-exit.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
-        "tests/dev-launcher-port-reclaim.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
-        "tests/dev-launcher-toolchain-gate.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/a11y-effective-config.coverage.test.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/a11y-effective-config.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/gate-repo.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/jsdom-capability.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/oxlint-probe.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/probe-restore.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/repo-drizzle-lock.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/test-db.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/theme-tokens.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/trpc.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
-        "tests/helpers/wire-contract.ts", // 存量挂账 · 清账目标 B5 · 新代码不禁用
         "tests/oxlint-jsplugin-rules.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
       ],
       rules: { "typescript/no-unsafe-type-assertion": "off" },

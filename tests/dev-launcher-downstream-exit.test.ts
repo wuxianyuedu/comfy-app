@@ -10,6 +10,8 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import { launcherChainSource } from "./helpers/launcher-source";
 
 const LAUNCHER = join(process.cwd(), "scripts", "dev-launcher.mjs");
@@ -40,10 +42,11 @@ function markersFor(stderrText: string): {
       encoding: "utf8",
       cwd: process.cwd(),
     });
-    /* SAFETY: 类型断言已复核 */
-    return JSON.parse(out.stdout || "{}") as {
-      abandoned: boolean;
-      crashed: boolean;
+    /* 读数按 unknown 收窄（B5 清账）：两个标记缺席都当 false。 */
+    const parsed: unknown = JSON.parse(out.stdout || "{}");
+    return {
+      abandoned: isRecord(parsed) && parsed.abandoned === true,
+      crashed: isRecord(parsed) && parsed.crashed === true,
     };
   } finally {
     rmSync(dir, { recursive: true, force: true });
