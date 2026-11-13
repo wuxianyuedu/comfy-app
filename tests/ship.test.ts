@@ -480,6 +480,20 @@ describe("claimNumbersFromTitle / referencedNotClaimed：认领形态与正文�
     expect(claimNumbersFromTitle("修 #2070 与 #2096")).toEqual([]);
   });
 
+  it("#3688：同一括号内空格分隔的多个 #号都算认领（全角 / 半角括号、全角空格）", () => {
+    // PR #3686 的真实标题形状：一条 PR 点名两张单，旧正则只认单号形态 ⇒ 两张都没关。
+    expect(claimNumbersFromTitle("feat(ship): …（#3619 #3676）")).toEqual([3619, 3676]);
+    expect(claimNumbersFromTitle("feat(ship): …(#3619 #3676)")).toEqual([3619, 3676]);
+    expect(claimNumbersFromTitle("feat(ship): …（#3619　#3676）")).toEqual([3619, 3676]);
+    expect(claimNumbersFromTitle("feat(ship): …(#3619, #3676)")).toEqual([3619, 3676]);
+    // 三个号照旧逐个认。
+    expect(claimNumbersFromTitle("修（#2070 #2071 #2072）")).toEqual([2070, 2071, 2072]);
+    // 括号里没有 # 的裸数字仍不是认领（平台的 PR 尾数 / 正文引用不越界）。
+    expect(claimNumbersFromTitle("修 (2070 2071)")).toEqual([]);
+    // 裸写引用仍不进认领面。
+    expect(referencedNotClaimed("feat(ship): …（#3619 #3676）")).toEqual([]);
+  });
+
   it("decideCloseIssue 那一层：裸写的号不进待关集合", () => {
     const d = decideCloseIssue({
       requested: true,

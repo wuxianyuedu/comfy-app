@@ -86,8 +86,15 @@ export function issueNumbersFromText(text) {
 export function claimNumbersFromTitle(text) {
   /** @type {number[]} */
   const out = [];
-  for (const m of String(text ?? "").matchAll(/[(（]\s*#\s?(?<issue>\d{2,})\s*[)）]/g)) {
-    out.push(Number(m.groups?.issue));
+  /* 认领形态（ISSUE #3688 扩）：括号内**空格分隔的多个 `#号`**也算 —— 本仓允许在
+   * 一条 PR 标题里点名多张单（`…（#3619 #3676）`），只认单号形态会让自动关单对
+   * 多号标题静默跳过。仍然**必须带 `#`**：括号里的裸数字（`(#2648)` 那种被平台
+   * 拼上来的 PR 号、正文引用）不算认领 —— 收窄语义一字未动，放宽的只是
+   * 「一个括号里的号数」与分隔符（空格 / 全半角逗号顿号都认）。 */
+  for (const m of String(text ?? "").matchAll(/[(（]\s*(?<claim>[#\s\d，,]+)[)）]/g)) {
+    for (const n of String(m.groups?.claim ?? "").matchAll(/#\s?(?<issue>\d{2,})/g)) {
+      out.push(Number(n.groups?.issue));
+    }
   }
   return [...new Set(out)];
 }
