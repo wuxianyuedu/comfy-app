@@ -329,6 +329,13 @@ jobs:
       - name: 安装依赖
         run: pnpm install --frozen-lockfile --prefer-offline
 
+      # 缓存命中 ⇒ pnpm 不再重跑 postinstall ⇒ `.storybook/assets/` 缺席（那三张 svg 是
+      # postinstall 按当前检出现生成的开发期夹具，gitignored、不入库，也不在 node_modules
+      # 缓存里）。故障现场：#3748 —— FIXED_STRUCTURAL 段里 storybook-data-sources 判据红。
+      # 这里无条件补一次同款入口（幂等，毫秒级），与 fresh 检出行为对齐。
+      - name: Storybook 开发期资源（postinstall 不重跑时现生成）
+        run: node scripts/install-git-hooks.mjs
+
       - name: 固定结构用例（cnb 同款判据一字不改）
         env:
           COMFY_AFFECTED_SEGMENT: fixed
