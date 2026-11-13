@@ -44,11 +44,34 @@
  * PR 与 Issue 是两套独立编号（探测 `issues get --number 3432` 回 404），所以这里
  * 只用 `pulls` 那组端点；GA 侧没有 `cnb` CLI（四跑读数 #2551），全程裸 fetch。
  *
+ * ## 判绿按需也能取（ISSUE #3667）
+ *
+ * 上面那条链只在**判红**时搬日志：`collectFailedJobLogs` 没有失败 job 就返回 null，
+ * 判绿的 run 一条评论都不留 —— 本地 `--gh-logs pr:<n>` 在 CNB 侧读不到，只能退回
+ * `api.github.com` 出站拉，而本地 / 自托管机到 github.com 的出网正是本单要绕开的。
+ *
+ * 本格给同一个脚本加一个**只读口径开关** `GA_LOG_SCOPE`：
+ *   · `failed`（缺省）—— 逐字等于 #3437 现状：只搬失败 job，判绿不写评论；
+ *   · `all`          —— 搬本 run **全部** job（含判绿的 success），判绿也写一条评论。
+ * 两者共用同一套「脱敏 → gzip → base64 → CNB 附件 → PR 评论 / 描述镜像」载体，
+ * marker 多一个 `scope=` 字段，本地读者按它把「失败 job」口径换成「全部 job」。
+ * 旧评论没有 `scope` ⇒ 本地按 `failed` 读，逐字兼容（不需要数据迁移）。
+ *
+ * 「按需」的发起口是 GA 的 `workflow_dispatch`（`pr-gate.yml` 的 `pr_number` /
+ * `relay_scope` / `run_id` 三个 input）：有需要时在 GA 侧手动跑一跑，或由 CNB
+ * 平台池那条 `api_trigger_ga_logs` 短 build 代发（`ci-ga-logs-on-demand.mjs`，
+ * 本地不必出站）。`GA_LOG_RUN_ID` 缺省 = 本 run（#3437 原样）；按需档点名另一条
+ * **已跑完的绿 run** 时，relay 就搬那一条的 job 日志（`actions: read` 读同仓任意
+ * run 的 jobs），不必为了看日志重跑一遍判据。读不到只多一行读数、不改三态。
+ * 日志正文的流向仍是 **GA（托管机，出网稳）→ CNB（站内）→ 本地（站内读）**，
+ * 本地一台都不碰 `api.github.com`；`#3437` 的判红自动搬运默认路径一字未改。
+ *
  * ## 边界（与 `--gh-logs` 同一口径）
  *
  *   · **日志搬不到 ≠ 判红**：前提不全 / 401 / 403 / 404 / 网络不通，都只多一行读数，
  *     不改三态、不改本 run 的 conclusion。收尾 job 带 `continue-on-error: true`。
- *   · **只搬判红 job 的日志**：与 `ci-github-verdict-logs.mjs` 同口径，成功 job 不进包。
+ *   · **只搬判红 job 的日志**（`GA_LOG_SCOPE=failed`，缺省）：与 `ci-github-verdict-logs.mjs`
+ *     同口径，成功 job 不进包；`GA_LOG_SCOPE=all` 是 #3667 的按需档，搬全部 job。
  *   · **落 CNB 的是脱敏后的正文**（硬规则 17）：`redactSecrets` 抹精确令牌 /
  *     `ghp_` `github_pat_` / env / JSON 形状；再 gzip + base64 编成纯文本
  *     （`cnb` CLI 读附件走 JSON 信封，二进制会被转坏，端到端探针验过）。
@@ -74,7 +97,9 @@
  * `CNB_REPO_SLUG`、`CNB_PULL_REQUEST_IID`、`CNB_PULL_REQUEST_MERGE_SHA`、
  * `GITHUB_RUN_ID`、`GITHUB_TOKEN`（内置 `github.token`，`actions: read`）、
  * `GITHUB_REPOSITORY`（镜像仓 `owner/repo`，不是 CNB origin）、
- * `GA_JOB_RESULTS`（同结论回调那一跳，用来在评论里念出本次 verdict）。
+ * `GA_JOB_RESULTS`（同结论回调那一跳，用来在评论里念出本次 verdict）、
+ * `GA_LOG_SCOPE`（ISSUE #3667：`failed` 缺省 / `all` 判绿按需搬全部 job）、
+ * `GA_LOG_RUN_ID`（ISSUE #3667：按需档点名要搬哪条 run；缺省 `GITHUB_RUN_ID`）。
  */
 import path from "node:path";
 import process from "node:process";
@@ -92,6 +117,21 @@ export const RELAY_MARKER = "GA_LOG_RELAY_V1";
  * 不直接 PUT gzip 字节：`cnb assets get-files` 走 JSON 信封，二进制会被转坏；
  * base64 逐字读回后 decode+gunzip 还原（端到端探针验过）。 */
 export const RELAY_FILE_SUFFIX = ".b64";
+
+/** 搬运范围（ISSUE #3667）：缺省 `failed` = #3437 原样；`all` = 判绿也搬全部 job。
+ * 只有字面值 `all` 切档，其余任何值（含缺席 / 拼错）一律回落 `failed` —— 不新增前提、
+ * 不改三态、不把一次拼错的 env 变成「没判过」。 */
+export const RELAY_SCOPE = Object.freeze({ ALL: "all", FAILED: "failed" });
+
+/** 从 env 读搬运范围；缺席 / 未知值都回 `failed`。
+ * @param {Record<string, string | undefined>} env 进程环境
+ * @returns {string} `failed` | `all`
+ */
+export function relayScopeFromEnv(env) {
+  return String(env.GA_LOG_SCOPE ?? "").trim() === RELAY_SCOPE.ALL
+    ? RELAY_SCOPE.ALL
+    : RELAY_SCOPE.FAILED;
+}
 
 /** 平台附件文件名里只许这些字符（sha 与 run id 都是数字/十六进制，够用）。 */
 const SAFE_NAME = /[^0-9A-Za-z._-]/gu;
@@ -133,7 +173,7 @@ function asList(v) {
  * 不改三态）。两枚令牌分开取，是因为写评论要 `repo-notes:rw`、写描述要 `repo-pr:rw`，
  * 不给 `CNB_ISSUE_TOKEN` 扩权（ISSUE #3454 期望 3 的答案：另配写描述专用令牌）。
  *
- * @returns {{ok:true, token:string, prToken:string, repo:string, pr:string, sha:string, runId:string, ghToken:string, ghRepo:string, endpoint:string} | {ok:false, reasons:string[]}}
+ * @returns {{ok:true, token:string, prToken:string, repo:string, pr:string, sha:string, runId:string, ghToken:string, ghRepo:string, endpoint:string, scope:string} | {ok:false, reasons:string[]}}
  */
 export function resolveRelayContext(env) {
   const token = String(env.CNB_ISSUE_TOKEN ?? env.CNB_TOKEN ?? "").trim();
@@ -141,10 +181,13 @@ export function resolveRelayContext(env) {
   const repo = String(env.CNB_REPO_SLUG ?? "").trim();
   const pr = String(env.CNB_PULL_REQUEST_IID ?? "").trim();
   const sha = String(env.CNB_PULL_REQUEST_MERGE_SHA ?? "").trim();
-  const runId = String(env.GITHUB_RUN_ID ?? "").trim();
+  /* ISSUE #3667：按需档可点名另一条已跑完的 run（含判绿的），搬它的 job 日志；
+   * 缺省仍是本 run 的 GITHUB_RUN_ID ⇒ #3437 自动路径逐字不变。 */
+  const runId = String(env.GA_LOG_RUN_ID ?? env.GITHUB_RUN_ID ?? "").trim();
   const ghToken = String(env.GITHUB_TOKEN ?? "").trim();
   const ghRepo = String(env.GITHUB_REPOSITORY ?? "").trim();
   const endpoint = String(env.CNB_API_ENDPOINT || "https://api.cnb.cool").replace(/\/+$/u, "");
+  const scope = relayScopeFromEnv(env);
   /** @type {string[]} */
   const reasons = [];
   if (!token) reasons.push("`CNB_ISSUE_TOKEN` / `CNB_TOKEN` 缺席（写 CNB 要 repo-notes:rw）");
@@ -154,7 +197,7 @@ export function resolveRelayContext(env) {
   if (!ghToken) reasons.push("`GITHUB_TOKEN` 缺席（要 actions: read 读 job logs）");
   if (!ghRepo) reasons.push("`GITHUB_REPOSITORY` 缺席（镜像仓 owner/repo）");
   if (reasons.length > 0) return { ok: false, reasons };
-  return { endpoint, ghRepo, ghToken, ok: true, pr, prToken, repo, runId, sha, token };
+  return { endpoint, ghRepo, ghToken, ok: true, pr, prToken, repo, runId, scope, sha, token };
 }
 
 /**
@@ -195,11 +238,12 @@ function relayAssetLink(c) {
 }
 
 /** 身份读数那一行（marker），评论与镜像共用同一形状。
- * @param {{pr:string, runId:string, sha:string, jobs:number, bytes:number}} c
+ * @param {{pr:string, runId:string, sha:string, jobs:number, bytes:number, scope?:string}} c
  * @returns {string} 一行 HTML 注释 marker
  */
 export function relayMarkerLine(c) {
-  return `<!-- ${RELAY_MARKER} run=${c.runId} sha=${c.sha} pr=${c.pr} jobs=${String(c.jobs)} bytes=${String(c.bytes)} -->`;
+  const scope = c.scope ?? RELAY_SCOPE.FAILED;
+  return `<!-- ${RELAY_MARKER} run=${c.runId} sha=${c.sha} pr=${c.pr} jobs=${String(c.jobs)} bytes=${String(c.bytes)} scope=${scope} -->`;
 }
 
 /** PR 描述里那块「最新镜像」的闭合标记；与起始 marker 成对，读改写只认这一块。 */
@@ -211,16 +255,25 @@ export const RELAY_DESCRIPTION_END = "<!-- /GA_LOG_RELAY_V1 -->";
  * 与评论正文**不是同一段**：评论是 append-only 的历史 + 权威读源，描述是 relay 的
  * 只写镜像，本地读者从不读描述（两个来源显式分开，见头注边界）。
  *
- * @param {{pr:string, runId:string, sha:string, fileName:string, assetPath:string, jobs:number, bytes:number}} c
+ * @param {{pr:string, runId:string, sha:string, fileName:string, assetPath:string, jobs:number, bytes:number, scope?:string}} c
  * @returns {string} 一块可整体替换的描述片段
  */
 export function renderRelayDescriptionBlock(c) {
   const short = c.sha ? c.sha.slice(0, 8) : "n/a";
+  const scope = c.scope ?? RELAY_SCOPE.FAILED;
+  const title =
+    scope === RELAY_SCOPE.ALL
+      ? "### GA 日志附件（按需全量，挂在 PR 本体，ISSUE #3667）"
+      : "### GA 判红日志附件（挂在 PR 本体，ISSUE #3454）";
+  const what =
+    scope === RELAY_SCOPE.ALL
+      ? `本次按需全量（GA run ${c.runId} · sha ${short} · ${String(c.jobs)} 个 job · ${String(c.bytes)} 字节 gzip）的日志正文附件，与评论区同源：`
+      : `本次判红（GA run ${c.runId} · sha ${short} · ${String(c.jobs)} 个失败 job · ${String(c.bytes)} 字节 gzip）的日志正文附件，与评论区同源：`;
   return [
     relayMarkerLine(c),
-    "### GA 判红日志附件（挂在 PR 本体，ISSUE #3454）",
+    title,
     "",
-    `本次判红（GA run ${c.runId} · sha ${short} · ${String(c.jobs)} 个失败 job · ${String(c.bytes)} 字节 gzip）的日志正文附件，与评论区同源：`,
+    what,
     "",
     `- ${relayAssetLink(c)}`,
     "",
@@ -268,26 +321,20 @@ export function mergeRelayDescription(previous, block) {
  * 「送达 / 判决」那一段是只读解释，**不进 marker、不参与 parseRelayComment**
  * （本地读者只认 marker 与附件链，形状不变，ISSUE #3452）。
  *
- * @param {{pr:string, runId:string, sha:string, fileName:string, assetPath:string, jobs:number, bytes:number, verdictReadout?:string}} c
- * @returns {string} 评论正文（纯函数）
- */
-/**
- * 评论正文：一行 marker（本地按它认）+ 送达/判决并列读数 + 人读摘要 + 附件链。
- *
- * marker 里带 run id 与预合并 sha 的前 8 位 —— 本地能把「这条日志是哪一跑」念出来，
- * 不用跳 GA 页面（与 #3430 给回调日志补身份读数是同一条理由）。
- * 「送达 / 判决」那一段是只读解释，**不进 marker、不参与 parseRelayComment**
- * （本地读者只认 marker 与附件链，形状不变，ISSUE #3452）。
- *
- * @param {{pr:string, runId:string, sha:string, fileName:string, assetPath:string, jobs:number, bytes:number, verdictReadout?:string}} c
+ * @param {{pr:string, runId:string, sha:string, fileName:string, assetPath:string, jobs:number, bytes:number, verdictReadout?:string, scope?:string}} c
  * @returns {string} 评论正文（纯函数）
  */
 export function relayCommentBody(c) {
   const short = c.sha ? c.sha.slice(0, 8) : "n/a";
   const readout = c.verdictReadout ?? "";
+  const scope = c.scope ?? RELAY_SCOPE.FAILED;
+  const headline =
+    scope === RELAY_SCOPE.ALL
+      ? `GA 日志正文·按需全量（ISSUE #3667）：run ${c.runId} · sha ${short} · ${String(c.jobs)} 个 job（含判绿） · ${String(c.bytes)} 字节（gzip）。`
+      : `GA 判红日志正文（ISSUE #3437）：run ${c.runId} · sha ${short} · ${String(c.jobs)} 个失败 job · ${String(c.bytes)} 字节（gzip）。`;
   return [
     relayMarkerLine(c),
-    `GA 判红日志正文（ISSUE #3437）：run ${c.runId} · sha ${short} · ${String(c.jobs)} 个失败 job · ${String(c.bytes)} 字节（gzip）。`,
+    headline,
     ...(readout ? ["", readout] : []),
     `本地取回：\`pnpm ship --gh-logs pr:${c.pr}\`（优先读本评论的附件，无需出站 github.com）。`,
     "",
@@ -302,7 +349,7 @@ export function relayCommentBody(c) {
  * 按列表顺序从新到旧扫，命中即停）。
  *
  * @param {string} body 评论正文
- * @returns {{run:string, sha:string, pr:string, jobs:number, bytes:number, assetPath:string} | null}
+ * @returns {{run:string, sha:string, pr:string, jobs:number, bytes:number, assetPath:string, scope:string} | null}
  */
 export function parseRelayComment(body) {
   const text = String(body ?? "");
@@ -323,21 +370,27 @@ export function parseRelayComment(body) {
     jobs: Number(kv.jobs ?? 0),
     pr: kv.pr ?? "",
     run: kv.run ?? "",
+    scope: kv.scope === RELAY_SCOPE.ALL ? RELAY_SCOPE.ALL : RELAY_SCOPE.FAILED,
     sha: kv.sha ?? "",
   };
 }
 
 /**
- * 取本次 run 的失败 job 日志，脱敏后拼成一份正文（不压缩、不写盘）。
+ * 取本次 run 的 job 日志，脱敏后拼成一份正文（不压缩、不写盘）。
  *
- * 与 `ship-gh-logs.mjs` 的判红读数同一份 GA API：runs/{id}/jobs → 逐个失败 job
+ * 与 `ship-gh-logs.mjs` 的判红读数同一份 GA API：runs/{id}/jobs → 逐个目标 job
  * 拉 `/actions/jobs/{id}/logs`。取不到只多一行读数，不抛、不改三态。
  *
- * @param {{ctx:{ghRepo:string,ghToken:string,runId:string}, fetchImpl:typeof fetch, log:(l:string)=>void, sleep:(ms:number)=>Promise<void>}} io
- * @returns {Promise<{text:string, jobs:number} | null>} 拼好的正文；没有失败 job 日志时 null
+ * 范围由 `ctx.scope` 定（ISSUE #3667）：`failed`（缺省）= #3437 原样，只搬失败 job；
+ * `all` = 搬全部 job（含判绿的 success），判绿也有一份可站内读的正文。旧调用方
+ * （`ci-ga-failure-logs.mjs`）不给 `scope` ⇒ 落到 `failed`，逐字兼容。
+ *
+ * @param {{ctx:{ghRepo:string,ghToken:string,runId:string,scope?:string}, fetchImpl:typeof fetch, log:(l:string)=>void, sleep:(ms:number)=>Promise<void>}} io
+ * @returns {Promise<{text:string, jobs:number} | null>} 拼好的正文；没有目标 job 日志时 null
  */
 export async function collectFailedJobLogs(io) {
   const { ctx, fetchImpl, log } = io;
+  const scope = ctx.scope === RELAY_SCOPE.ALL ? RELAY_SCOPE.ALL : RELAY_SCOPE.FAILED;
   const reqIo = {
     fetchImpl,
     log,
@@ -350,18 +403,27 @@ export async function collectFailedJobLogs(io) {
     return null;
   }
   const jobs = asList(isRecord(res.body) ? res.body.jobs : null);
-  const failed = jobs.filter(
-    (j) =>
-      isRecord(j) && FAILED_JOB_CONCLUSIONS.has(String(j.conclusion)) && j.conclusion !== "skipped",
-  );
-  if (failed.length === 0) {
-    log(`[ga-logs-relay] 这条 run 没有失败 job ⇒ 不搬运日志`);
+  /** @param {unknown} j 一条 job 回话 @returns {boolean} 是否失败 job */
+  const isFailed = (j) =>
+    isRecord(j) && FAILED_JOB_CONCLUSIONS.has(String(j.conclusion)) && j.conclusion !== "skipped";
+  /** `all` 只排除 `skipped`（没有日志正文的 job），其余 conclusion 全收 —— 判绿的
+   * success / neutral 也在内。`failed` 维持 #3437 的集合，一词未改。
+   * @param {unknown} j 一条 job 回话 @returns {boolean} 是否进本次搬运 */
+  const inScope = (j) =>
+    scope === RELAY_SCOPE.ALL ? isRecord(j) && j.conclusion !== "skipped" : isFailed(j);
+  const target = jobs.filter(inScope);
+  if (target.length === 0) {
+    log(
+      scope === RELAY_SCOPE.ALL
+        ? `[ga-logs-relay] 这条 run 没有可搬的 job ⇒ 不搬运日志`
+        : `[ga-logs-relay] 这条 run 没有失败 job ⇒ 不搬运日志`,
+    );
     return null;
   }
   /** @type {string[]} */
   const parts = [];
   let count = 0;
-  for (const job of failed) {
+  for (const job of target) {
     if (!isRecord(job)) continue;
     const name = String(job.name ?? "(未命名 job)");
     const id = job.id;
@@ -380,7 +442,11 @@ export async function collectFailedJobLogs(io) {
     count += 1;
   }
   if (count === 0) return null;
-  parts.unshift(`# GA 判红日志正文（run ${ctx.runId} · 已脱敏 · ISSUE #3437）`);
+  const title =
+    scope === RELAY_SCOPE.ALL
+      ? `# GA 日志正文·按需全量（run ${ctx.runId} · 已脱敏 · ISSUE #3667）`
+      : `# GA 判红日志正文（run ${ctx.runId} · 已脱敏 · ISSUE #3437）`;
+  parts.unshift(title);
   return { jobs: count, text: parts.join("\n") };
 }
 
@@ -479,8 +545,8 @@ export async function mirrorRelayDescription(io, c) {
 /**
  * 把一份已拼好的正文搬上 CNB：上传 → PUT → 发PR评论（发布）。
  *
- * @param {{ctx:{endpoint:string,repo:string,token:string,prToken:string,pr:string,runId:string,sha:string,verdictReadout?:string}, fetchImpl:typeof fetch, log:(l:string)=>void, gzipSync:(b:Buffer)=>Buffer}} io
- * @param {{text:string, jobs:number}} collected 失败 job 日志正文
+ * @param {{ctx:{endpoint:string,repo:string,token:string,prToken:string,pr:string,runId:string,sha:string,scope?:string,verdictReadout?:string}, fetchImpl:typeof fetch, log:(l:string)=>void, gzipSync:(b:Buffer)=>Buffer}} io
+ * @param {{text:string, jobs:number}} collected 目标 job 日志正文
  * @returns {Promise<number>} 0 送达成功 / 2 没判过（前提不全或没发出去）
  */
 export async function relayLogs(io, collected) {
@@ -524,6 +590,7 @@ export async function relayLogs(io, collected) {
     jobs: collected.jobs,
     pr: ctx.pr,
     runId: ctx.runId,
+    scope: ctx.scope ?? RELAY_SCOPE.FAILED,
     sha: ctx.sha,
   };
   const posted = await cnbRequest({ ctx, fetchImpl }, "POST", `${api}/-/pulls/${ctx.pr}/comments`, {
@@ -574,10 +641,13 @@ export async function main(io = {}) {
   }
   if (argv.includes("--dry-run")) {
     log(
-      `[ga-logs-relay] DRY-RUN：将从 GA run ${ctx.runId} 取失败 job 日志，搬到 CNB PR #${ctx.pr}（一条网络都不发）`,
+      `[ga-logs-relay] DRY-RUN：将从 GA run ${ctx.runId} 按 scope=${ctx.scope} 取 job 日志，搬到 CNB PR #${ctx.pr}（一条网络都不发）`,
     );
     return CODE.OK;
   }
+  log(
+    `[ga-logs-relay] 搬运范围：scope=${ctx.scope}（${ctx.scope === RELAY_SCOPE.ALL ? "全部 job，判绿也搬" : "只搬失败 job，#3437 默认"}）`,
+  );
   try {
     const collected = await collectFailedJobLogs({ ctx, fetchImpl, log, sleep });
     if (!collected) return CODE.OK;

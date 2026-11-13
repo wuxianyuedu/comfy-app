@@ -2179,6 +2179,47 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(relay).toContain("不碰承重");
   });
 
+  it("ISSUE #3667：判绿按需档接线在场，且不碰承重（scope=all / CNB 触发口 / 本地读回）", () => {
+    /* 判红 relay 默认只搬失败 job（#3437）；本单让「有需要时」判绿也能经
+     * GA→CNB→本地 取到日志：GA 侧 scope=all 搬全部 job，CNB 侧一条平台池触发口
+     * 代发 workflow_dispatch，本地 --gh-logs 按 marker 的 scope 呈现。
+     * 这几条钉住「接线在场 + 不承重」：少一条就会静默退回出站链路。 */
+    const workflow = readFileSync(path.join(ROOT, ".github/workflows/pr-gate.yml"), "utf8");
+    const relay = readFileSync(path.join(ROOT, "scripts/ci-ga-logs-relay.mjs"), "utf8");
+    const onDemand = readFileSync(path.join(ROOT, "scripts/ci-ga-logs-on-demand.mjs"), "utf8");
+    const reader = readFileSync(path.join(ROOT, "scripts/ship-gh-logs.mjs"), "utf8");
+    /* GA 侧：workflow_dispatch 多三个按需 input，relay step 读 scope / run_id / PR 号。 */
+    expect(workflow).toMatch(/^ {6}pr_number:$/m);
+    expect(workflow).toMatch(/^ {6}relay_scope:$/m);
+    expect(workflow).toMatch(/^ {6}run_id:$/m);
+    expect(workflow).toContain("GA_LOG_SCOPE: ${{ github.event.inputs.relay_scope || '' }}");
+    expect(workflow).toContain("GA_LOG_RUN_ID: ${{ github.event.inputs.run_id || '' }}");
+    expect(workflow).toContain(
+      "github.event.inputs.pr_number || github.event.client_payload.pr_number",
+    );
+    /* relay 脚本：默认 failed、只认字面 all、marker 带 scope、判绿全量也走同一载体。 */
+    expect(relay).toContain("relayScopeFromEnv");
+    expect(relay).toContain("RELAY_SCOPE.ALL");
+    expect(relay).toContain("scope=${scope}");
+    expect(relay).toContain("按需全量");
+    /* CNB 侧：触发口在册、平台池形态、点的是专用脚本（不是 --preset）、有独占锁。 */
+    const cnb = readRegisteredConfig();
+    expect(cnb).toContain("api_trigger_ga_logs:");
+    expect(cnb).toContain("node scripts/ci-ga-logs-on-demand.mjs");
+    expect(cnb).toContain("*lock_ga_logs");
+    const lane = /^[ ]{2}api_trigger_ga_logs:[\s\S]*?(?=^[ ]{2}\S|^\S)/m.exec(cnb);
+    expect(lane?.[0]).not.toContain("--preset");
+    expect(onDemand).toContain("dispatchRequest");
+    /* 本地读者：旧评论（无 scope）回落 failed 逐字兼容，全量档不把判绿误报成失败。 */
+    expect(reader).toContain('meta.scope === "all"');
+    expect(reader).toContain("判绿 job 的正常形态");
+    /* 承重一字不动：relay step 仍不承重，流水线 name 与三态退码不变。 */
+    const relayBlock = workflow.slice(workflow.indexOf("把 GA 判红日志正文搬到 CNB"));
+    expect(relayBlock).toContain("continue-on-error: true");
+    expect(relayBlock).toContain("if: always()");
+    expect(cnb).toContain("name: GA 判决回调（骨架·休眠）");
+  });
+
   it("Python 探测入口被登记在 env 里，且真的在盘上", () => {
     const text = readRegisteredConfig();
     const m = /^\s*COMFYAPP_CI_PYTHON_PROBE:\s*(?<path>\S+)\s*$/m.exec(text);
