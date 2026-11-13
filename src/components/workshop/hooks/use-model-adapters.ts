@@ -2,8 +2,10 @@
 
 // ── 工坊「模型适配」：逻辑层（规范 17 §17.2 第②层）────────────────────────
 // 列出设置页配置的远端模型（image / video 类），按模型读取/保存「工坊模式
-// 适配器存档」—— 模型级端点路径 + 每模式一份字段映射（统一输入 → 请求体
-// 字段名 + 产物字段路径；端点与模式无关，ISSUE #3622）。
+// 适配器存档」—— 每模式一份字段映射（统一输入 → 请求体字段名 + 产物字段
+// 路径）。端点是模型级配置，与模式无关：#3656 起在「设置 → 远程模型」的
+// 接口端点下拉配置，#3631 起本页不再读、不再写、也不显示它（保存入参省略
+// 这格，服务端保住既有值）。
 // 视图（ModelAdaptersView）只渲染 + 上抛，不直接出现 api.*。
 
 import React, { useCallback, useState } from "react";
@@ -38,8 +40,6 @@ export type ModelAdaptersController = {
   candidates: Array<AdapterCandidate>;
   /** 当前选中模型的适配器草稿（选中变化时自动播种）。 */
   draft: Array<RemoteModeAdapter>;
-  /** 当前选中模型的模型级端点路径（空 = 请求侧按类别推导）。 */
-  endpointPath: string;
   loading: boolean;
   message: { kind: "ok" | "err"; text: string } | null;
   /** 模式契约注册表（每种模式的统一输入 / 输出）。 */
@@ -49,7 +49,6 @@ export type ModelAdaptersController = {
   selectedModel: string;
   selectModel: (name: string) => void;
   setDraft: React.Dispatch<React.SetStateAction<Array<RemoteModeAdapter>>>;
-  setEndpointPath: (path: string) => void;
   /** 各模型已配置的适配器概览（「已配」标记；保存后自动刷新）。 */
   summary: Array<AdapterSummary>;
 };
@@ -63,7 +62,6 @@ export function useModelAdapters(): ModelAdaptersController {
   const summaryQ = useQuery(trpc.llm.workshopAdaptersSummary.queryOptions());
   const [selectedModel, setSelectedModel] = useState("");
   const [draft, setDraft] = useState<Array<RemoteModeAdapter>>([]);
-  const [endpointPath, setEndpointPath] = useState("");
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
   const saveBusy = useBusyAction();
   const [message, setMessage] = useState<{
@@ -114,12 +112,10 @@ export function useModelAdapters(): ModelAdaptersController {
     // 切换选中模型：用当前（可能还没回来的）结果播种一次。
     setSeeded({ model: selectedModel, tag: fetchedTag });
     setDraft(parseRemoteModeAdapters(fetchedDoc?.adapters ?? []));
-    setEndpointPath(fetchedDoc?.endpointPath ?? "");
   } else if (selectedModel && seeded?.tag === "" && fetchedTag) {
     // 查询晚于选中到达：首次结果落地时补种一次（之后不再覆盖用户编辑）。
     setSeeded({ model: selectedModel, tag: fetchedTag });
     setDraft(parseRemoteModeAdapters(fetchedDoc?.adapters ?? []));
-    setEndpointPath(fetchedDoc?.endpointPath ?? "");
   }
 
   const saveMutation = useMutation(trpc.llm.workshopAdaptersSave.mutationOptions());
@@ -127,7 +123,6 @@ export function useModelAdapters(): ModelAdaptersController {
   const selectModel = useCallback((name: string) => {
     setSelectedModel(name);
     setDraft([]);
-    setEndpointPath("");
     setMessage(null);
   }, []);
 
@@ -162,10 +157,11 @@ export function useModelAdapters(): ModelAdaptersController {
     }
     setMessage(null);
     try {
+      /* 保存入参不带端点路径（#3631）：本页不读不写它 —— 服务端在入参省略
+       * 时保住既有值（设置页「接口端点」下拉写的那个），不会被这里冲掉。 */
       const saved = await saveBusy.run(() =>
         saveMutation.mutateAsync({
           name: selectedModel,
-          endpointPath,
           adapters: draft,
         }),
       );
@@ -179,7 +175,6 @@ export function useModelAdapters(): ModelAdaptersController {
         queryKey: trpc.llm.workshopAdaptersSummary.queryKey(),
       });
       setDraft(parseRemoteModeAdapters(saved.adapters));
-      setEndpointPath(saved.endpointPath);
       setMessage({
         kind: "ok",
         text: `已保存 ${selectedModel} 的模式适配器。`,
@@ -190,7 +185,7 @@ export function useModelAdapters(): ModelAdaptersController {
         text: errorMessage(error, "保存失败"),
       });
     }
-  }, [selectedModel, endpointPath, draft, saveMutation, saveBusy, queryClient, trpc]);
+  }, [selectedModel, draft, saveMutation, saveBusy, queryClient, trpc]);
 
   return {
     candidates,
@@ -205,7 +200,5 @@ export function useModelAdapters(): ModelAdaptersController {
     saving: saveBusy.busy,
     message,
     summary: summaryQ.data?.models ?? [],
-    endpointPath,
-    setEndpointPath,
   };
 }
