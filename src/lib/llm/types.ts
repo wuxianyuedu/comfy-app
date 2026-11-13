@@ -119,6 +119,9 @@ export type RemoteModelEntry = {
   contextWindow?: number | null;
   /** 是否启用（#3501；停用的模型不下发给工坊下拉）。 */
   enabled?: boolean;
+  /** 额外请求体字段（#3626）：raw JSON 对象文本（如 `{"extra_body":{"response_format":{"type":"json_object"}}}`），
+   *  透传进请求 body 且覆盖运行时默认组装。空 = 未配置、不发送。 */
+  extraBody?: string | null;
   hasApiKey?: boolean;
   /** 输入类型（#3501）：text / image / video / pdf。 */
   inputTypes?: Array<string> | null;
@@ -363,6 +366,9 @@ export type LLMConfig = {
   /** OpenAI-compatible base URL: 本机 Ollama 默认值见 `~/lib/endpoints`
    *  （`OLLAMA_DEFAULT_BASE_URL`），也可以指向任意远端 `https://…/v1`。 */
   baseUrl: string;
+  /** 额外请求体字段（#3626）：raw JSON 对象文本（命中远端模型条目时从条目带入，
+   *  运行期 `~/lib/llm/extra-body` 解析）；透传进请求 body 且覆盖运行时默认组装。 */
+  extraBody?: string | null;
   /** 候选模型（设置页可配置多个）：本地 Ollama 为纯名字；远端条目可带独立 baseUrl / apiKey */
   extraModels?: Array<RemoteModelEntry> | null;
   maxTokens: number;

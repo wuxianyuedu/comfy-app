@@ -11,6 +11,7 @@
 import { isRecord } from "~/lib/is-record";
 import { upperToken } from "~/lib/upper-token";
 import "server-only";
+import { parseExtraBodyObject } from "~/lib/llm/extra-body";
 
 import { promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
@@ -144,19 +145,21 @@ async function resolveTarget(
 ): Promise<{
   adapter: RemoteModeAdapter | null;
   channel: ApiChannelStored;
+  /** 模型级透传字段（#3626）：未配置/查不到 → `null`（调用方按「不发送」处理）。 */
+  modelExtra: Record<string, unknown> | null;
   target: ApiUpstreamTarget;
 }> {
   /* 返回体里带上 channel 是为了让调用方把「同一份配置」交给 callImageGeneration
    * 做端点的最终拼装（未配置时的可读错误也在那里判）。 */
   const wantedModel = (req.model ?? "").trim();
   if (!wantedModel) {
-    return { target: fallbackTarget(channel), channel, adapter: null };
+    return { target: fallbackTarget(channel), channel, adapter: null, modelExtra: null };
   }
   try {
     const entries = await remoteModelRepository.list();
     const entry = entries.find((r) => r.name === wantedModel && (r.baseUrl ?? "") !== "");
     if (!entry) {
-      return { target: fallbackTarget(channel), channel, adapter: null };
+      return { target: fallbackTarget(channel), channel, adapter: null, modelExtra: null };
     }
     // 模式适配器优先：条目配置了该模式的输入映射就按它翻译统一输入。
     // 端点是模型级配置（ISSUE #3622）：模型级路径配了就用它；没配则一律按
@@ -182,10 +185,12 @@ async function resolveTarget(
       },
       channel,
       adapter,
+      /* 模型级透传字段（#3626）：原样带上，由 callImageGeneration 盖在请求体最后。 */
+      modelExtra: parseExtraBodyObject(entry.extraBody),
     };
   } catch {
     // 表不可用（未迁移等）→ 回落通道设置
-    return { target: fallbackTarget(channel), channel, adapter: null };
+    return { target: fallbackTarget(channel), channel, adapter: null, modelExtra: null };
   }
 }
 
@@ -210,6 +215,8 @@ export async function generateImageViaApi(req: ApiImageRequest): Promise<string>
       ? bodyFromAdapter(resolved.adapter, req, resolved.target.model)
       : undefined,
     outputField: resolved.adapter?.outputField,
+    /* 模型级透传字段（#3626）：盖在请求体最后，覆盖默认映射/适配器输出同名键。 */
+    extraBody: resolved.modelExtra ?? undefined,
   });
 }
 
@@ -261,16 +268,21 @@ function bodyFromVideoAdapter(
 async function resolveVideoTarget(
   req: ApiVideoSubmitRequest,
   channel: ApiChannelStored,
-): Promise<{ adapter: RemoteModeAdapter | null; target: ApiUpstreamTarget }> {
+): Promise<{
+  adapter: RemoteModeAdapter | null;
+  /** 模型级透传字段（#3626）。 */
+  modelExtra: Record<string, unknown> | null;
+  target: ApiUpstreamTarget;
+}> {
   const wantedModel = (req.model ?? "").trim();
   if (!wantedModel) {
-    return { adapter: null, target: fallbackTarget(channel) };
+    return { adapter: null, target: fallbackTarget(channel), modelExtra: null };
   }
   try {
     const entries = await remoteModelRepository.list();
     const entry = entries.find((r) => r.name === wantedModel && (r.baseUrl ?? "") !== "");
     if (!entry) {
-      return { adapter: null, target: fallbackTarget(channel) };
+      return { adapter: null, target: fallbackTarget(channel), modelExtra: null };
     }
     /* 端点是模型级配置（ISSUE #3622）：模型级路径配了就用它；没配时有适配器
      * 按 Base URL 形态推导 videos/generations 惯例端点，无适配器保持既有回落
@@ -293,10 +305,12 @@ async function resolveVideoTarget(
     return {
       adapter,
       target: { endpoint, apiKey: entry.apiKey ?? "", model: entry.name },
+      /* 模型级透传字段（#3626）：原样带上，由 callVideoSubmit 盖在提交体最后。 */
+      modelExtra: parseExtraBodyObject(entry.extraBody),
     };
   } catch {
     // 表不可用（未迁移等）→ 回落通道设置
-    return { adapter: null, target: fallbackTarget(channel) };
+    return { adapter: null, target: fallbackTarget(channel), modelExtra: null };
   }
 }
 
@@ -311,6 +325,8 @@ export async function submitVideoViaApi(req: ApiVideoSubmitRequest): Promise<Api
       ? bodyFromVideoAdapter(resolved.adapter, req, resolved.target.model)
       : undefined,
     outputField: resolved.adapter?.outputField,
+    /* 模型级透传字段（#3626）：盖在提交体最后，覆盖默认组装同名键。 */
+    extraBody: resolved.modelExtra ?? undefined,
   });
 }
 

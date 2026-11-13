@@ -397,11 +397,16 @@ export class RemoteModelRepository {
     /* 格式是模型级配置（#3517）：非法值折成 null = 跟随供应商，不在写侧猜一个格式
      * （猜错的表现是「请求发到了一个不存在的端点」，比回落更难查）。 */
     const apiFormat = isLlmApiFormat(input.apiFormat) ? input.apiFormat : null;
+    const extraBody =
+      typeof input.extraBody === "string" && input.extraBody.trim() !== ""
+        ? input.extraBody.trim()
+        : null;
     const values = {
       name,
       providerId: input.providerId,
       baseUrl,
       apiFormat,
+      extraBody,
       kind: input.kind ?? "chat",
       enabled: input.enabled ?? true,
       contextWindow: input.contextWindow ?? null,
@@ -515,6 +520,8 @@ export type RemoteModelInput = {
   capabilities?: Array<string> | null;
   contextWindow?: number | null;
   enabled?: boolean;
+  /** 额外请求体字段（#3626）：raw JSON 对象文本；空白串落 null。 */
+  extraBody?: string | null;
   id?: string;
   inputTypes?: Array<string> | null;
   kind?: string;

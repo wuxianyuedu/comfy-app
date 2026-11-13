@@ -1872,6 +1872,32 @@ describe("RemoteModelRepository.saveModel / deleteModel / setEnabled（#3501）"
       apiKey: "sk-provider",
     });
 
+  it("saveModel 新建：extraBody（#3626）原文往返；空串 / 未给 → null", async () => {
+    const provider = await makeProvider();
+    const model = await remoteModelRepository.saveModel({
+      name: "agnes-image-2.5-flash",
+      providerId: provider.id,
+      kind: "image",
+      extraBody: '{\n  "extra_body": { "response_format": { "type": "json_object" } }\n}',
+    });
+    expect(model.extraBody).toBe(
+      '{\n  "extra_body": { "response_format": { "type": "json_object" } }\n}',
+    );
+
+    const empty = await remoteModelRepository.saveModel({
+      name: "空透传",
+      providerId: provider.id,
+      extraBody: "   ",
+    });
+    expect(empty.extraBody).toBeNull();
+
+    const missing = await remoteModelRepository.saveModel({
+      name: "不给透传",
+      providerId: provider.id,
+    });
+    expect(missing.extraBody).toBeNull();
+  });
+
   it("saveModel 新建：JSON 列原样往返、enabled 默认 true、密钥落库密文读侧明文", async () => {
     const provider = await makeProvider();
     const model = await remoteModelRepository.saveModel({

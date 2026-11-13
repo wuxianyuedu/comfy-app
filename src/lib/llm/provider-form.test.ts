@@ -172,6 +172,7 @@ describe("emptyModelForm / modelFormFromView", () => {
         baseUrl: "https://model-override/v1",
         enabled: false,
         endpointPath: null,
+        extraBody: null,
       }),
     ).toEqual({
       name: "claude-sonnet-4",
@@ -189,6 +190,7 @@ describe("emptyModelForm / modelFormFromView", () => {
       baseUrl: "https://model-override/v1",
       enabled: false,
       endpointPath: "",
+      extraBody: "",
     });
   });
 
@@ -209,6 +211,7 @@ describe("emptyModelForm / modelFormFromView", () => {
         baseUrl: null,
         enabled: true,
         endpointPath: "/v1/images/generations",
+        extraBody: null,
       }).endpointPath,
     ).toBe("/v1/images/generations");
     /* 库坏值（不在该用途的词表里）回落用途默认第一项，不留空白 */
@@ -228,6 +231,7 @@ describe("emptyModelForm / modelFormFromView", () => {
         baseUrl: null,
         enabled: true,
         endpointPath: "/not/known",
+        extraBody: null,
       }).endpointPath,
     ).toBe("/v1/videos");
   });
@@ -249,6 +253,7 @@ describe("emptyModelForm / modelFormFromView", () => {
         baseUrl: null,
         enabled: true,
         endpointPath: null,
+        extraBody: null,
       }).apiFormat,
     ).toBe("anthropic-messages");
   });
@@ -303,6 +308,26 @@ describe("validateModelForm", () => {
       validateModelForm(form({ name: "m", contextWindow: "8192", maxOutputTokens: "1024" })),
     ).toEqual({});
   });
+
+  it("额外请求体字段（#3626）：空 = 合法，非空必须是 JSON 对象，数组不许存", () => {
+    expect(validateModelForm(form({ name: "m", extraBody: "" }))).toEqual({});
+    expect(validateModelForm(form({ name: "m", extraBody: "   " }))).toEqual({});
+    expect(
+      validateModelForm(
+        form({ name: "m", extraBody: '{"response_format":{"type":"json_object"}}' }),
+      ),
+    ).toEqual({});
+    expect(validateModelForm(form({ name: "m", extraBody: '{"extra_body":{"a":1}}' }))).toEqual({});
+    expect(validateModelForm(form({ name: "m", extraBody: "[1]" })).extraBody).toBe(
+      '额外请求体字段必须是 JSON 对象（如 {"response_format":{"type":"json_object"}}）',
+    );
+    expect(validateModelForm(form({ name: "m", extraBody: "{" })).extraBody).toBe(
+      '额外请求体字段必须是 JSON 对象（如 {"response_format":{"type":"json_object"}}）',
+    );
+    expect(validateModelForm(form({ name: "m", extraBody: "42" })).extraBody).toBe(
+      '额外请求体字段必须是 JSON 对象（如 {"response_format":{"type":"json_object"}}）',
+    );
+  });
 });
 
 describe("splitReasoningLevels / cleanReasoningValues", () => {
@@ -342,6 +367,7 @@ describe("modelSaveDraft", () => {
       enabled: true,
       baseUrl: null,
       endpointPath: null,
+      extraBody: null,
       contextWindow: null,
       maxOutputTokens: null,
       inputTypes: ["text"],

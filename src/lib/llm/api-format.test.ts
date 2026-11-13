@@ -84,6 +84,35 @@ describe("buildChatRequest —— chat-completions", () => {
     });
   });
 
+  it("模型级透传字段（#3626）盖在请求体**最后**，覆盖同名默认字段", () => {
+    const req = buildChatRequest(
+      baseInput({
+        extraBody: {
+          extra_body: { response_format: { type: "json_object" } },
+          temperature: 0,
+          top_p: 1,
+        },
+      }),
+    );
+    expect(req.body).toMatchObject({
+      extra_body: { response_format: { type: "json_object" } },
+      temperature: 0,
+      top_p: 1,
+    });
+    expect(req.body).not.toHaveProperty("response_format");
+  });
+
+  it("模型级透传字段：未配置时请求体形状不变（不多不少）", () => {
+    const req = buildChatRequest(baseInput({ stream: true, maxTokens: 2048, temperature: 0.2 }));
+    expect(Object.keys(req.body)).toEqual([
+      "model",
+      "messages",
+      "temperature",
+      "max_tokens",
+      "stream",
+    ]);
+  });
+
   it("多模态：远端走 content 数组（image_url 对象），本地 Ollama 走 images 字段", () => {
     const messages: Array<LLMMessage> = [
       {
