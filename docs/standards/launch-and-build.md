@@ -3546,6 +3546,14 @@ pnpm db:push                # Drizzle 同步表结构（经 scripts/db-push.mjs�
 pnpm dev                    # 经 scripts/dev.mjs 解析端口（缺省按检出路径推导）
 ```
 
+**`next dev` 会改仓库根的 `AGENTS.md`（Next 16 的 `agentRules`，ISSUE #3669）**：
+Next 16 默认在开发服务器启动时往 `AGENTS.md` 末尾追加一段 `nextjs-agent-rules`
+（给 AI 代理看的 Next 版本提示）。本仓已在 `next.config.js` 设 `agentRules: false`
+明确关闭——本仓的 `AGENTS.md` 是入库的协作规范，那段追加只会制造一处与本次工作
+无关的稳定脏改动（每次 dev 都重写一遍，删掉它下次还会写回来，`pnpm ship` 的
+「工作树干净」检查会被它绊住）。若在旧检出上看到 `M AGENTS.md` 且 diff 是这一段，
+还原掉即可；不要当成自己改坏了规范文件。
+
 **`.env` 引导（`pnpm env:init`）为什么不能只写 `cp .env.example .env`**：
 `src/env.js` 的 createEnv 配了 `emptyStringAsUndefined: true`，而
 `.env.example` 里 `BETTER_AUTH_SECRET` 与两个 `BETTER_AUTH_GITHUB_*` 正是
