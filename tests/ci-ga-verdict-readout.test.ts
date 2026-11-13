@@ -9,9 +9,11 @@
  *   ④ 前提不全 / 平台没回 / 到预算仍非终态 ⇒ 2，绝不静默成绿；
  *   ⑤ 明确判红时补「错误日志怎么取」的只读指针（绿 / 没判过 / --json 都不给）。
  */
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_BUDGET_MS,
   errorLogsHint,
   main,
   readCallbackStatus,
@@ -160,6 +162,9 @@ describe("主流程：站内短轮询，前提不全不静默", () => {
     });
     expect(code).toBe(2);
     expect(lines.join("\n")).toContain("还没判完");
+    /* 「没判过」要念出已等墙钟与预算（#3593）：别让「GA 还在预算里跑」与
+     * 「GA 压根没起跑」共用一句无声的 state=pending。 */
+    expect(lines.join("\n")).toContain("已等");
   });
 
   it("status 缺席到预算 ⇒ 2，且把「没送回」念出来", async () => {
@@ -174,6 +179,7 @@ describe("主流程：站内短轮询，前提不全不静默", () => {
     });
     expect(code).toBe(2);
     expect(lines.join("\n")).toContain("status 缺席");
+    expect(lines.join("\n")).toContain("已等");
   });
 
   it("--json 给机器可读的一行结论", async () => {
@@ -185,6 +191,39 @@ describe("主流程：站内短轮询，前提不全不静默", () => {
       log: collect(lines),
     });
     expect(JSON.parse(lines.at(-1) ?? "{}")).toMatchObject({ code: 0, present: true });
+    expect(typeof JSON.parse(lines.at(-1) ?? "{}").waitedMs).toBe("number");
+  });
+});
+
+describe("回读预算对齐 GA 的最坏路径（#3593）", () => {
+  const WORKFLOW = ".github/workflows/pr-gate.yml";
+  /** 取某个 job 顶层的 `timeout-minutes`：job 键在 2 空格缩进，job 级预算在 4 空格
+   * （step 级在 8 空格，不会被这一式命中）。 */
+  const jobTimeoutMinutes = (source: string, job: string): number => {
+    let inJob = false;
+    for (const line of source.split("\n")) {
+      if (/^  \S/.test(line)) {
+        inJob = line.startsWith(`  ${job}:`);
+        continue;
+      }
+      if (inJob) {
+        const m = /^    timeout-minutes:\s*(\d+)/.exec(line);
+        if (m) return Number(m[1]);
+      }
+    }
+    return Number.NaN;
+  };
+  const wf = readFileSync(WORKFLOW, "utf8");
+  const heavy = jobTimeoutMinutes(wf, "heavy-gates");
+  const callback = jobTimeoutMinutes(wf, "ga-verdict-callback");
+
+  it("workflow 里两个 job 的顶层预算都读得到（读不到 = 解析面漂了，不变式失效）", () => {
+    expect(heavy).toBeGreaterThan(0);
+    expect(callback).toBeGreaterThan(0);
+  });
+
+  it("DEFAULT_BUDGET_MS ≥ 最重 job + 回调 job + 5m 余量 —— GA 正常跑满也等得到结论", () => {
+    expect(DEFAULT_BUDGET_MS).toBeGreaterThanOrEqual((heavy + callback + 5) * 60_000);
   });
 });
 
