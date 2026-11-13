@@ -37,6 +37,7 @@ import {
 import {
   CODE,
   CODE_TABLE,
+  classifyBranchDeleteRefusal,
   classifyIsMerged,
   classifyPrMergeable,
   classifyPushFailure,
@@ -1727,10 +1728,14 @@ describe("cleanBranch：删的是 ref，判的还是回读 —— 两边各问�
   function gitIo(
     opts: {
       branchStatus?: number;
+      /** `git branch -D` 的 stderr 原文（ISSUE #3617：拒删时 git 把占用路径写在这一侧）。 */
+      branchStderr?: string;
       localStillThere?: boolean;
       lsRemoteFails?: boolean;
       pushStatus?: number;
       remoteStillThere?: boolean;
+      /** `git rev-parse --show-toplevel` 的应答（当前检出根）。 */
+      toplevel?: string;
     } = {},
   ) {
     const calls: Array<string> = [];
@@ -1747,6 +1752,9 @@ describe("cleanBranch：删的是 ref，判的还是回读 —— 两边各问�
       if (key.startsWith("rev-parse --short")) {
         return ok("dead123");
       }
+      if (key.startsWith("rev-parse --show-toplevel")) {
+        return ok(opts.toplevel ?? "");
+      }
       if (key.startsWith("push cnb --delete")) {
         return ok("", opts.pushStatus ?? 0);
       }
@@ -1757,7 +1765,12 @@ describe("cleanBranch：删的是 ref，判的还是回读 —— 两边各问�
         return ok(opts.remoteStillThere === true ? "abc123\trefs/heads/feat/x" : "", 0);
       }
       if (key.startsWith("branch -D")) {
-        return ok("", opts.branchStatus ?? 0);
+        return {
+          status: opts.branchStatus ?? 0,
+          stdout: "",
+          stderr: opts.branchStderr ?? "",
+          error: null,
+        };
       }
       if (key.startsWith("show-ref --verify")) {
         return ok("", opts.localStillThere === true ? 0 : 1);
@@ -1863,6 +1876,77 @@ describe("cleanBranch：删的是 ref，判的还是回读 —— 两边各问�
     });
     expect(code).toBe(CODE.NOT_RUN);
     expect(f.calls.filter((c) => c.startsWith("branch -D"))).toEqual([]);
+  });
+
+  it("本地删被别的 worktree 占用拒掉 ⇒ 仍红，但带出占用路径与切走出口（ISSUE #3617）", () => {
+    const f = gitIo({
+      branchStatus: 1,
+      branchStderr: "error: cannot delete branch 'feat/x' used by worktree at 'C:/ws/sunny-canyon'",
+      localStillThere: true,
+      toplevel: "C:/ws/branch3",
+    });
+    const code = cleanBranch({
+      run: f.run,
+      log: (l) => f.log.push(l),
+      ...base,
+      cleanBranch: true,
+    });
+    expect(code).toBe(CODE.RED);
+    const all = f.log.join("\n");
+    expect(all).toContain("原因与出口");
+    expect(all).toContain("别的 worktree 检出占用");
+    expect(all).toContain("C:/ws/sunny-canyon");
+    expect(all).toContain("git branch -D feat/x");
+  });
+
+  it("被当前检出占用 ⇒ 出口是先 detach 到恢复线那一笔再删（ISSUE #3617）", () => {
+    const f = gitIo({
+      branchStatus: 1,
+      branchStderr: "error: cannot delete branch 'feat/x' used by worktree at 'C:/ws/branch3'",
+      localStillThere: true,
+      toplevel: "C:/ws/branch3",
+    });
+    const code = cleanBranch({
+      run: f.run,
+      log: (l) => f.log.push(l),
+      ...base,
+      cleanBranch: true,
+    });
+    expect(code).toBe(CODE.RED);
+    const all = f.log.join("\n");
+    expect(all).toContain("当前检出");
+    expect(all).toContain("git checkout --detach dead123");
+  });
+});
+
+describe("classifyBranchDeleteRefusal：git branch -D 拒删的现场归因（ISSUE #3617）", () => {
+  it("别的 worktree 占用：从 stderr 原话里分出占用路径", () => {
+    const r = classifyBranchDeleteRefusal(
+      "error: cannot delete branch 'feat/x' used by worktree at 'C:/ws/sunny-canyon'",
+      "C:/ws/branch3",
+    );
+    expect(r.kind).toBe("other-worktree");
+    expect(r.path).toBe("C:/ws/sunny-canyon");
+  });
+
+  it("当前检出占用：路径与 show-toplevel 同形 ⇒ current-worktree（Windows 盘符路径大小写不敏感）", () => {
+    const r = classifyBranchDeleteRefusal(
+      "error: cannot delete branch 'feat/x' checked out at 'G:/Ws/Branch3'",
+      "G:/ws/branch3",
+    );
+    expect(r.kind).toBe("current-worktree");
+    expect(r.path).toBe("G:/Ws/Branch3");
+  });
+
+  it("认不出的形状 ⇒ other 且 path 为空（不猜）；不给当前根时占用路径只报 other-worktree", () => {
+    expect(classifyBranchDeleteRefusal("error: some other reason", "G:/ws")).toEqual({
+      kind: "other",
+      path: null,
+    });
+    expect(classifyBranchDeleteRefusal("error: x used by worktree at 'C:/a'")).toEqual({
+      kind: "other-worktree",
+      path: "C:/a",
+    });
   });
 });
 

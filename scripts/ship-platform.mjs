@@ -33,6 +33,7 @@ import path from "node:path";
 
 import { asArray } from "./ship-build.mjs";
 import {
+  classifyBranchDeleteRefusal,
   classifyPrMergeable,
   CODE,
   codeTag,
@@ -858,6 +859,20 @@ export function cleanBranch(ctx) {
   const verify = run("git", ["show-ref", "--verify", "--quiet", `refs/heads/${name}`]);
   if (rm.status !== 0 && verify.status === 0) {
     log(`[ship] 本地那一半没删掉（exit ${rm.status}）⇒ 这一格是红的，不记「已清理」`);
+    /* 归因与出口（ISSUE #3617）：git 拒删最常见的一形是「分支被 worktree 检出占用」——
+     * 本仓常态是并行 worktree 检出（硬规则 30）。stderr 里的占用路径按形给出口，退码不改：
+     * 诚实红是对的，缺的是「为什么」与「怎么手工收」。 */
+    const toplevel = run("git", ["rev-parse", "--show-toplevel"]).stdout.trim();
+    const refusal = classifyBranchDeleteRefusal(rm.stderr, toplevel || null);
+    const cause =
+      refusal.kind === "current-worktree"
+        ? `这条分支正被**当前检出**占着（${refusal.path}）⇒ 先切走再删：` +
+          `\`git checkout --detach ${sha || "<恢复线 sha>"}\` 然后 \`git branch -D ${name}\``
+        : refusal.kind === "other-worktree"
+          ? `这条分支被别的 worktree 检出占用（${refusal.path}）⇒ 到那个检出切走（或收掉它）` +
+            `后再删：\`git branch -D ${name}\``
+          : "git 拒删（stderr 原话在上面）⇒ 手工出口：`git worktree list` 看哪个检出占着它，切走后再删";
+    log(`[ship]   原因与出口：${cause}`);
     localOutcome = "仍在";
     codes.push(CODE.RED);
   } else if (verify.status === 0) {
