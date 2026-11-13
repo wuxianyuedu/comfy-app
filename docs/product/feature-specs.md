@@ -832,6 +832,10 @@
   「保存为项目默认」之后**不必重启进程**即读得到新口径；写出的文件**始终是
   完整基线**（全部生成类模式都在，其余模式的内容不会被抹掉）。正式包载荷里
   没有这份源码 ⇒ 回落编译进产物的那份基线。
+- 输入口**至少保留一个**（#3637）：服务端入参对 `inputs` 有 `min(1)`、归一化
+  侧也丢弃空条目 —— 空清单的契约存不下来。编辑器在源头拦住：删到最后一口时
+  移除按钮禁用并提示「至少保留一个输入口」，空清单根本发不出去；保存失败
+  （服务端打回 / 网络故障）必须有用户可见文案，不许只静默转圈。
 - 落点：`src/components/workshop/mode-contract/ModeContractView.tsx`、
   `src/lib/workshop/mode-contract-defaults.json`（完整基线）、
   `src/lib/workshop/mode-contract-registry.ts`（三层合并与差集）、
