@@ -359,6 +359,7 @@ const GA_PR_INFRA_STEPS: ReadonlyArray<string> = [
   "装 Node（engines 下限 26.12.1；脚本只吃 node:*）",
   "装 Tauri 的 Linux 系统依赖（壳门禁要在本机编 Tauri）",
   "cargo 缓存",
+  "恢复 node_modules 缓存（灰度）",
   "安装依赖",
   "安装依赖（allowBuilds 清单见 pnpm-workspace.yaml）",
   "失败时上传诊断产物",
