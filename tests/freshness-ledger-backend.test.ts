@@ -33,8 +33,13 @@ const PRISTINE = snapshotPaths([path.join(ROOT, E2E_REL)]);
  * @param ledger 读回来那份账（读不出时 `null`）；@returns `e2e` 档，没有时 `undefined`
  */
 function e2eTrack(ledger: Record<string, unknown> | null): { verifiedAt?: string } | undefined {
-  /* SAFETY: 类型断言已复核 */
-  return ledger?.e2e as { verifiedAt?: string } | undefined;
+  /* 运行时守卫收窄（B5 清账，不走 as 断言）。 */
+  const track: unknown = ledger?.e2e;
+  if (typeof track !== "object" || track === null || !("verifiedAt" in track)) {
+    return undefined;
+  }
+  const verifiedAt: unknown = track.verifiedAt;
+  return typeof verifiedAt === "string" ? { verifiedAt } : undefined;
 }
 
 function git(args: string): string {

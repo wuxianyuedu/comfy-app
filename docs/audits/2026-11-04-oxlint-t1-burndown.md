@@ -13,7 +13,7 @@
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
 | B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 已清（子批1–12，判决面文件级豁免已整块删除）       |
-| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–27：522 份 / 1343 处已清）           |
+| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–28：535 份 / 1365 处已清）           |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
@@ -1259,16 +1259,16 @@
 | `tests/db-schema-current.test.ts`                                                                    | 2        | 已清 |
 | `tests/declaration-readers-gate.test.ts`                                                             | 1        | 已清 |
 | `tests/dependency-audit.test.ts`                                                                     | 2        | 已清 |
-| `tests/deps-freshness-gate.test.ts`                                                                  | 5        | 挂账 |
+| `tests/deps-freshness-gate.test.ts`                                                                  | 5        | 已清 |
 | `tests/dev-drive-tune.test.ts`                                                                       | 1        | 挂账 |
 | `tests/dev-launcher-downstream-exit.test.ts`                                                         | 1        | 挂账 |
 | `tests/dev-launcher-port-reclaim.test.ts`                                                            | 2        | 挂账 |
 | `tests/dev-launcher-toolchain-gate.test.ts`                                                          | 1        | 挂账 |
 | `tests/dialog-backdrop-contrast.test.ts`                                                             | 2        | 挂账 |
 | `tests/dist-artifact-hygiene.test.ts`                                                                | 3        | 挂账 |
-| `tests/doc-check-hook-wiring.test.ts`                                                                | 1        | 挂账 |
-| `tests/doc-toc.test.ts`                                                                              | 1        | 挂账 |
-| `tests/downstream-exit.test.ts`                                                                      | 1        | 挂账 |
+| `tests/doc-check-hook-wiring.test.ts`                                                                | 1        | 已清 |
+| `tests/doc-toc.test.ts`                                                                              | 1        | 已清 |
+| `tests/downstream-exit.test.ts`                                                                      | 1        | 已清 |
 | `tests/e2e-reclaim-own-fake-port.test.ts`                                                            | 2        | 已清 |
 | `tests/e2e-run.test.ts`                                                                              | 6        | 已清 |
 | `tests/e2e-runtime-budget.test.ts`                                                                   | 14       | 已清 |
@@ -1277,15 +1277,15 @@
 | `tests/executor-host-artifact.test.ts`                                                               | 1        | 已清 |
 | `tests/executor-host-spawn.test.ts`                                                                  | 1        | 已清 |
 | `tests/executor-mode-consistency.test.ts`                                                            | 1        | 已清 |
-| `tests/form-field-wiring-gate.test.ts`                                                               | 1        | 挂账 |
-| `tests/freshness-ledger-backend.test.ts`                                                             | 1        | 挂账 |
-| `tests/gate-executors.test.ts`                                                                       | 3        | 挂账 |
-| `tests/gate-hint-targets-exist.test.ts`                                                              | 1        | 挂账 |
-| `tests/gate-repo-boilerplate-gate.test.ts`                                                           | 1        | 挂账 |
-| `tests/gate-scan-read.test.ts`                                                                       | 3        | 挂账 |
-| `tests/gates-which.test.ts`                                                                          | 2        | 挂账 |
-| `tests/generate-api-docs-args.test.ts`                                                               | 1        | 挂账 |
-| `tests/global-setup-cleanup.test.ts`                                                                 | 1        | 挂账 |
+| `tests/form-field-wiring-gate.test.ts`                                                               | 1        | 已清 |
+| `tests/freshness-ledger-backend.test.ts`                                                             | 1        | 已清 |
+| `tests/gate-executors.test.ts`                                                                       | 3        | 已清 |
+| `tests/gate-hint-targets-exist.test.ts`                                                              | 1        | 已清 |
+| `tests/gate-repo-boilerplate-gate.test.ts`                                                           | 1        | 已清 |
+| `tests/gate-scan-read.test.ts`                                                                       | 3        | 已清 |
+| `tests/gates-which.test.ts`                                                                          | 2        | 已清 |
+| `tests/generate-api-docs-args.test.ts`                                                               | 1        | 已清 |
+| `tests/global-setup-cleanup.test.ts`                                                                 | 1        | 已清 |
 | `tests/helpers/a11y-effective-config.coverage.test.ts`                                               | 3        | 挂账 |
 | `tests/helpers/a11y-effective-config.ts`                                                             | 1        | 挂账 |
 | `tests/helpers/gate-repo.ts`                                                                         | 1        | 挂账 |

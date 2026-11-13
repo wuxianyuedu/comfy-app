@@ -29,11 +29,8 @@ function runBin(args: Array<string>) {
     });
     return { status: 0, stdout: out, stderr: "" };
   } catch (error) {
-    /* SAFETY: `execFileSync` 非零退出抛的就是「子进程结果 + Error」那一件，
-     * node 的公开类型里没有具名形状（`ExecFileSyncException` 不存在），
-     * 所以这里按实测字段声明：status / stdout / stderr / message 四个都在抛件上，
-     * 读法只有 `?? 空值` 的兜底，没有别的假设。 */
-    const err = error as SpawnedFailure;
+    /* 失败形状全可选：运行时守卫取字段，不走 `as` 断言（B5 清账）。 */
+    const err: SpawnedFailure = typeof error === "object" && error !== null ? error : {};
     return {
       status: err.status ?? -1,
       stdout: err.stdout ?? "",
