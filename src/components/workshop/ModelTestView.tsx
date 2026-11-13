@@ -25,18 +25,17 @@ import {
 } from "~/components/ui/segment-popover";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { parseRatioFromLabel } from "~/components/studio/workflow-io";
+import { ALIGN_MULTIPLE_OPTIONS, RESOLUTION_TIERS, sceneFromMode } from "~/lib/media/size-presets";
 import { workshopInputLabel } from "~/lib/workshop/remote-model-adapter";
 import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
 
 import { cn } from "~/lib/utils";
 import {
   ASPECT_RATIO_PRESETS,
-  MEGAPIXEL_PRESETS,
   MODEL_TEST_KINDS,
   MODEL_TEST_KIND_LABELS,
-  MULTIPLE_PRESETS,
   RELAY_INPUT_TYPES,
-  RESOLUTION_PRESETS,
+  clarityOptionsFor,
   controlForInputType,
   type ModelTestControl,
   type ModelTestKind,
@@ -45,11 +44,12 @@ import {
 } from "./model-test-config";
 import { useModelTest } from "./hooks/use-model-test";
 
-/** 统一输入里的「尺寸 / 数量」三件套：由工作流库同款多段下拉一并承担，
- *  不再各占一排离散档位 chips（#3635）。 */
+/** 统一输入里的「尺寸」四行（比例 / 百万像素 / 分辨率 / 倍数）：由工作流库
+ *  同款多段下拉一并承担（ISSUE #3742），不再各占一排离散档位 chips。 */
 const SIZE_INPUT_TYPES: ReadonlyArray<WorkshopInputType> = [
   "aspect-ratio",
   "megapixels",
+  "resolution",
   "multiple",
 ];
 
@@ -141,19 +141,51 @@ function ModeTabs({
   );
 }
 
-/** 尺寸 / 数量：工作流库同款多段下拉（比例 / 像素 / 数量一次选完，#3635）。
- *  触发器折一行摘要（如 `16:9 / 2K / ×2`），未设的段不出现 —— 没选过的键
- *  组装请求时本就不带（由服务端按「没带」回落默认）。 */
+/** 倍数段候选：对齐倍数（8/16/32/64，与工作流库同一份档）；当前值不在
+ *  候选里时动态补上并排序（自由值也要可见、可再次选中）。 */
+function multipleOptionsFor(current: string): Array<{ label: string; value: string }> {
+  const options = ALIGN_MULTIPLE_OPTIONS.map((n) => String(n));
+  if (current !== "" && !options.includes(current)) {
+    const n = Number(current);
+    if (Number.isFinite(n) && n > 0) {
+      options.push(current);
+      options.sort((a, b) => Number(a) - Number(b));
+    }
+  }
+  return options.map((v) => ({ label: v, value: v }));
+}
+
+/** 尺寸：工作流库同款多段下拉（比例 / 像素（分辨率 · 百万像素）/ 倍数，
+ *  ISSUE #3742）。与工作流库的两类表达同口径：选分辨率档时档位名随
+ *  `resolution`、换算值随 `megapixels`、对齐倍数随 `multiple` 一起写回；
+ *  选百万像素档只写总像素。倍数段只在适配器映射了它时出现；表单已按
+ *  最常用档（1:1 + 1K）预置默认值，触发器常显摘要。 */
 function SizeField({
+  hasMultiple,
+  mode,
   onPatch,
   values,
 }: {
+  hasMultiple: boolean;
+  mode: string;
   onPatch: (type: keyof ModelTestValues, value: string) => void;
   values: ModelTestValues;
 }) {
+  const scene = sceneFromMode(mode);
   const ratioValue = values["aspect-ratio"] ?? "";
+  const activeRatio = parseRatioFromLabel(ratioValue) ?? 1;
+  const resolutionValue = values.resolution ?? "";
   const mpValue = values.megapixels ?? "";
   const multipleValue = values.multiple ?? "";
+
+  const clarity = clarityOptionsFor(scene, activeRatio);
+  /* 像素段的当前显示：分辨率档优先（档名大写），自由百万像素次之（M 值）。 */
+  const mpLabel =
+    resolutionValue === ""
+      ? mpValue === ""
+        ? ""
+        : `${mpValue}M`
+      : (RESOLUTION_TIERS.find((t) => t === resolutionValue) ?? resolutionValue).toUpperCase();
 
   const sections: Array<SegmentSection> = [
     {
@@ -170,28 +202,39 @@ function SizeField({
     },
     {
       label: "像素",
-      onChange: (value) => {
-        onPatch("megapixels", value);
+      onChange: (label) => {
+        const hit = clarity.find((o) => o.label === label);
+        if (hit === undefined) {
+          return;
+        }
+        /* 分辨率档：档位名与换算值一起写回；百万像素档：清掉档名只带总像素。 */
+        onPatch("resolution", hit.resolution);
+        onPatch("megapixels", hit.megapixels);
+        if (hit.multiple !== "") {
+          onPatch("multiple", hit.multiple);
+        }
       },
-      options: MEGAPIXEL_PRESETS.map((p) => ({ label: p.label, value: p.value })),
-      value: mpValue,
+      options: clarity.map((o) => ({ label: o.label, subgroup: o.subgroup, value: o.label })),
+      value: mpLabel,
     },
-    {
-      label: "数量",
-      onChange: (value) => {
-        onPatch("multiple", value);
-      },
-      options: MULTIPLE_PRESETS.map((n) => ({ label: String(n), value: String(n) })),
-      value: multipleValue,
-    },
+    ...(hasMultiple
+      ? [
+          {
+            label: "倍数",
+            onChange: (value: string) => {
+              onPatch("multiple", value);
+            },
+            options: multipleOptionsFor(multipleValue),
+            value: multipleValue,
+          } satisfies SegmentSection,
+        ]
+      : []),
   ];
 
-  const mpLabel = MEGAPIXEL_PRESETS.find((p) => p.value === mpValue)?.label;
-  /* 没选过的段不出现在摘要里 —— 组装请求时它们本就不带（no-negated-condition：正形写分支） */
   const summary = [
     ratioValue === "" ? null : ratioValue,
-    mpLabel ?? null,
-    multipleValue === "" ? null : `×${multipleValue}`,
+    mpLabel === "" ? null : mpLabel,
+    hasMultiple && multipleValue !== "" ? `×${multipleValue}` : null,
   ]
     .filter((part): part is string => part !== null)
     .join(" / ");
@@ -200,17 +243,17 @@ function SizeField({
     <div className="w-64 min-w-0">
       <MultiSegmentPopover
         align="left"
-        ariaLabel="选择尺寸与数量"
+        ariaLabel="选择尺寸"
         sections={sections}
-        triggerContent={summary === "" ? "尺寸 / 数量（可选）" : summary}
+        triggerContent={summary === "" ? "尺寸（可选）" : summary}
       />
     </div>
   );
 }
 
 /** 一行统一输入的渲染（按类型给控件；文案 = 输入类型的工坊名）。
- *  尺寸三件套（比例 / 像素 / 数量）不在这里 —— 它们由 SizeField 的
- *  多段下拉统一承担（#3635）。 */
+ *  尺寸四行（比例 / 百万像素 / 分辨率 / 倍数）不在这里 —— 它们由 SizeField 的
+ *  多段下拉统一承担（ISSUE #3742）。 */
 function InputRow({
   control,
   disabled,
@@ -219,6 +262,7 @@ function InputRow({
   label,
   onChange,
   onPickFile,
+  onRandom,
   value,
 }: {
   control: ModelTestControl;
@@ -229,26 +273,42 @@ function InputRow({
   onChange: (value: string) => void;
   /** 图片类控件：选完文件回调（data URL 由逻辑层读）。 */
   onPickFile?: (file: File) => void;
+  /** 提示词的随机按钮（ISSUE #3742）；给了才渲染。 */
+  onRandom?: () => void;
   value: string;
 }) {
   if (control === "prompt" || control === "negative") {
     return (
       <FormField hint={hint} id={id} label={label} labelClassName="mb-1.5">
         {(a11y) => (
-          <textarea
-            {...a11y}
-            className={cn(
-              "border-border bg-bg focus:border-primary w-full resize-y rounded-lg border px-3 py-2 text-sm outline-none",
-              disabled && "opacity-50",
+          <div className="flex items-start gap-2">
+            <textarea
+              {...a11y}
+              className={cn(
+                "border-border bg-bg focus:border-primary w-full flex-1 resize-y rounded-lg border px-3 py-2 text-sm outline-none",
+                disabled && "opacity-50",
+              )}
+              disabled={disabled}
+              onChange={(e) => {
+                onChange(e.target.value);
+              }}
+              placeholder={
+                control === "prompt" ? "描述你想要生成的画面" : "不想出现的内容（可留空）"
+              }
+              rows={control === "prompt" ? 3 : 2}
+              value={value}
+            />
+            {control === "prompt" && onRandom !== undefined && (
+              <Button
+                className="h-auto shrink-0 px-3 py-2 text-xs"
+                disabled={disabled}
+                onClick={onRandom}
+                variant="outline"
+              >
+                随机
+              </Button>
             )}
-            disabled={disabled}
-            onChange={(e) => {
-              onChange(e.target.value);
-            }}
-            placeholder={control === "prompt" ? "描述你想要生成的画面" : "不想出现的内容（可留空）"}
-            rows={control === "prompt" ? 3 : 2}
-            value={value}
-          />
+          </div>
         )}
       </FormField>
     );
@@ -296,31 +356,8 @@ function InputRow({
       </FormField>
     );
   }
-  /* 分辨率档（#3622）：接口原生认 1k/2k/4k 的直接映射。它不在
-     SIZE_INPUT_TYPES 的多段下拉里 —— 比例 / 百万像素 / 倍数三件套由
-     SizeField 一并承担（#3635），分辨率是适配器层新增的独立口。 */
-  if (control === "resolution") {
-    return (
-      <FormField hint={hint} id={id} label={label} labelClassName="mb-1.5">
-        {() => (
-          <div aria-label={label} className="flex flex-wrap gap-1.5" role="radiogroup">
-            {RESOLUTION_PRESETS.map((p) => (
-              <SelectChip
-                key={p.value}
-                onClick={() => {
-                  onChange(p.value);
-                }}
-                selected={value === p.value}
-                shape="compact"
-              >
-                {p.label}
-              </SelectChip>
-            ))}
-          </div>
-        )}
-      </FormField>
-    );
-  }
+  /* 分辨率档（#3622）已并入 SizeField 的「像素」段（分辨率 · 百万像素两行，
+   * ISSUE #3742）—— 这里不再有独立的分辨率 chips。 */
 
   /* duration / number / text → 单行输入 */
   return (
@@ -432,12 +469,19 @@ export function ModelTestView() {
                   </SectionLabel>
                   {hasSizeRow && (
                     <FormField
-                      hint="比例 / 像素 / 数量一次选完，与工作流库同款"
+                      hint="比例 / 像素（分辨率 · 百万像素）/ 倍数一次选完，与工作流库同款；已按最常用档预置默认值"
                       id="model-test-size"
-                      label="尺寸 / 数量"
+                      label="尺寸"
                       labelClassName="mb-1.5"
                     >
-                      {() => <SizeField onPatch={c.patchValue} values={c.values} />}
+                      {() => (
+                        <SizeField
+                          hasMultiple={inputRows.some((row) => row.type === "multiple")}
+                          mode={c.mode}
+                          onPatch={c.patchValue}
+                          values={c.values}
+                        />
+                      )}
                     </FormField>
                   )}
                   {otherRows.map((row, i) => {
@@ -464,6 +508,13 @@ export function ModelTestView() {
                             void c.setInputFromFile(row.type, file);
                           }
                         }}
+                        onRandom={
+                          row.type === "prompt"
+                            ? () => {
+                                c.randomizePrompt();
+                              }
+                            : undefined
+                        }
                         value={c.values[row.type] ?? ""}
                       />
                     );

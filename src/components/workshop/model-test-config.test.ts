@@ -6,11 +6,15 @@ import { describe, expect, it } from "vitest";
 import type { RemoteModeAdapter } from "~/lib/workshop/remote-model-adapter";
 
 import {
+  PROMPT_PRESETS,
   assembleImageRequest,
   assembleVideoRequest,
+  clarityOptionsFor,
   controlForInputType,
   defaultModeForKind,
+  defaultSizeValues,
   modeTabsForKind,
+  randomPromptFor,
   relayInputCount,
   testCandidatesForKind,
 } from "./model-test-config";
@@ -143,5 +147,36 @@ describe("modeTabsForKind / defaultModeForKind", () => {
   it("默认模式 = 该用途的第一个生成类类型码", () => {
     expect(defaultModeForKind("image")).toBe("T2I");
     expect(defaultModeForKind("video")).toBe("T2V");
+  });
+});
+
+describe("尺寸默认档与像素候选（ISSUE #3742）", () => {
+  it("图片模式预置最常用档：1:1 + 1k（换算值随 megapixels、对齐倍数随 multiple）", () => {
+    const image = defaultSizeValues("T2I");
+    expect(image["aspect-ratio"]).toBe("1:1");
+    expect(image.resolution).toBe("1k");
+    expect(image.megapixels).toMatch(/^\d+(?:\.\d+)?$/);
+    expect(image.multiple).toMatch(/^\d+$/);
+    /* 视频模式的 API 通道不承接尺寸 ⇒ 不给默认。 */
+    expect(defaultSizeValues("T2V")).toEqual({});
+  });
+
+  it("像素候选：分辨率档带档位名与换算值；百万像素档不带 resolution", () => {
+    const rows = clarityOptionsFor("image", 1);
+    const res2k = rows.find((r) => r.label === "2K");
+    expect(res2k?.subgroup).toBe("resolution");
+    expect(res2k?.resolution).toBe("2k");
+    expect(Number(res2k?.megapixels)).toBeGreaterThan(0);
+    expect(Number(res2k?.multiple)).toBeGreaterThan(0);
+    const mega2 = rows.find((r) => r.label === "2M");
+    expect(mega2?.megapixels).toBe("2");
+    expect(mega2?.resolution).toBe("");
+    expect(mega2?.multiple).toBe("");
+  });
+
+  it("随机提示词总落在常用样本表里", () => {
+    for (let i = 0; i < 20; i += 1) {
+      expect(PROMPT_PRESETS).toContain(randomPromptFor());
+    }
   });
 });

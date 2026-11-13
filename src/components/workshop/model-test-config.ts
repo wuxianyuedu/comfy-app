@@ -6,7 +6,15 @@
 import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
 import type { RemoteModeAdapter, WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
 
-import { RESOLUTION_TIERS } from "~/lib/media/size-presets";
+import {
+  MEGAPIXEL_TIERS,
+  RESOLUTION_TIERS,
+  alignMultipleOf,
+  megapixelsOf,
+  resolutionDims,
+  sceneFromMode,
+  type SizeScene,
+} from "~/lib/media/size-presets";
 
 /** 本页可测的用途。工坊 API 通道目前只有 image / video 两条（contract 的
  *  output 词表虽有 audio，通道未接入 —— 出现死页签不如不出现，接入后再加）。 */
@@ -32,22 +40,61 @@ export const ASPECT_RATIO_PRESETS = [
   "21:9",
 ] as const;
 
-/** 分辨率档：统一输入 megapixels 的取值（百万像素），界面按 K 档叫法。 */
-export const MEGAPIXEL_PRESETS: ReadonlyArray<{ label: string; value: string }> = [
-  { label: "1K", value: "1" },
-  { label: "1.5K", value: "1.5" },
-  { label: "2K", value: "2" },
-];
+/** 「像素」段的候选（工作流库同款两类表达，ISSUE #3742）：分辨率档
+ *  （1k/2k/4k，按场景尺寸表换算成「百万像素 + 对齐倍数」）与百万像素档
+ *  （1M/2M/4M）。选分辨率档时档位名随 `resolution`、换算值随 `megapixels`
+ *  一起下发（适配器映射了哪个就走哪个）。 */
+export type ModelTestClarityOption = {
+  /** 弹层芯片标签（"1K" / "2M"）。 */
+  label: string;
+  /** 写回 megapixels 的总像素（串形态，与本页表单值同型）。 */
+  megapixels: string;
+  /** 写回 multiple 的对齐倍数；百万像素档不改倍数（空串 = 不写）。 */
+  multiple: string;
+  /** 写回 resolution 的档位名；百万像素档清空它（空串 = 不带）。 */
+  resolution: string;
+  subgroup: "megapixel" | "resolution";
+};
 
-/** 分辨率档：统一输入 resolution 的取值（清晰度档位名，#3622）。
- *  值就是档位名本身 —— 目录只有一份（`size-presets` 的 RESOLUTION_TIERS），
- *  这里只换皮成 chip 需要的 {label, value} 形状。 */
-export const RESOLUTION_PRESETS: ReadonlyArray<{ label: string; value: string }> =
-  RESOLUTION_TIERS.map((tier) => ({ label: tier.toUpperCase(), value: tier }));
+export function clarityOptionsFor(scene: SizeScene, ratio: number): Array<ModelTestClarityOption> {
+  const rows: Array<ModelTestClarityOption> = [];
+  for (const tier of RESOLUTION_TIERS) {
+    const dims = resolutionDims(scene, ratio, tier);
+    rows.push({
+      label: tier.toUpperCase(),
+      megapixels: String(megapixelsOf(dims)),
+      multiple: String(alignMultipleOf(dims)),
+      resolution: tier,
+      subgroup: "resolution",
+    });
+  }
+  for (const tier of MEGAPIXEL_TIERS) {
+    rows.push({
+      label: `${tier}M`,
+      megapixels: String(tier),
+      multiple: "",
+      resolution: "",
+      subgroup: "megapixel",
+    });
+  }
+  return rows;
+}
 
-/** 生成数量档（统一输入 multiple）。 */
-/* SAFETY: 类型断言已复核 */
-export const MULTIPLE_PRESETS = [1, 2, 3, 4] as const;
+/** 提示词的常用随机样本（ISSUE #3742：随机按钮从这里取）。 */
+export const PROMPT_PRESETS = [
+  "一只柯基犬在草地上奔跑，阳光明媚，毛发细节丰富，照片级真实感",
+  "赛博朋克城市夜景，霓虹灯与雨后街道倒影，电影感构图",
+  "水彩风格的猫头鹰特写，白色背景，柔和笔触，插画",
+  "云雾缭绕的中国山水画，水墨风格，留白意境",
+  "未来感电动跑车，产品摄影，棚拍灯光，深色背景",
+  "日式庭院里的樱花树，花瓣飘落，柔和晨光，动画电影质感",
+] as const;
+
+/** 随机取一条常用提示词（随机按钮的落点；随机源可注入便于测试）。 */
+export function randomPromptFor(rand: () => number = Math.random): string {
+  const picked = PROMPT_PRESETS[Math.floor(rand() * PROMPT_PRESETS.length)];
+  return picked ?? PROMPT_PRESETS[0];
+}
 
 /** 表单值：按统一输入类型收值。数字类（multiple / duration / seed）也先存
  *  字符串 —— 输入中途不能被 Number("") 折成 0，组装时再转。 */
@@ -246,4 +293,25 @@ export function modeTabsForKind(
  *  左栏页签常显，模式必须有初值才能让「选模型 → 填输入」的表单一次成立。 */
 export function defaultModeForKind(kind: ModelTestKind): string {
   return ALL_WORKFLOW_TYPES.find((t) => t.isGenerative && t.category === kind)?.code ?? "";
+}
+
+/** 尺寸默认档：比例首档（1:1 正方）+ 分辨率首档（1k）。 */
+export const MODEL_TEST_DEFAULT_RATIO = "1:1";
+export const MODEL_TEST_DEFAULT_RESOLUTION = RESOLUTION_TIERS[0];
+
+/** 尺寸的默认取值（ISSUE #3742「给一个最常用的默认选项」）：1:1 + 1K
+ *  （与工作流库的首档默认同源；分辨率档位名随 `resolution`、按场景尺寸表
+ *  换算出的总像素随 `megapixels`、对齐倍数随 `multiple` 一并预置）。视频
+ *  模式的 API 通道不承接尺寸，不给默认。 */
+export function defaultSizeValues(mode: string): ModelTestValues {
+  if (sceneFromMode(mode) !== "image") {
+    return {};
+  }
+  const dims = resolutionDims("image", 1, MODEL_TEST_DEFAULT_RESOLUTION);
+  return {
+    "aspect-ratio": MODEL_TEST_DEFAULT_RATIO,
+    megapixels: String(megapixelsOf(dims)),
+    multiple: String(alignMultipleOf(dims)),
+    resolution: MODEL_TEST_DEFAULT_RESOLUTION,
+  };
 }
