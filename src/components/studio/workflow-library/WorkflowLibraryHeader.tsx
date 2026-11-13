@@ -72,11 +72,8 @@ export function WorkflowLibraryHeader({
       </div>
 
       <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
-        {/* 渐变档不再补投影：`.btn-gradient` 的 hover 已经是 brightness，
-            而这圈 `shadow-lg shadow-primary-500/*` 是扁平规范明确不发的
-            「渐变发光」（DESIGN.md §Elevation：纯色、无阴影、无模糊、无渐变发光）。
-            剧本侧那两颗同款渐变按钮上的同一圈发光此前已刻意撤掉。 */}
-        <Button className={HEADER_ACTION_BTN} onClick={onToggleImport} variant="gradient">
+        {/* 渐变按钮退役（#3720）：改用实心品牌色（primary-solid），不再带投影。 */}
+        <Button className={HEADER_ACTION_BTN} onClick={onToggleImport} variant="primary-solid">
           <FolderInput data-icon="inline-start" size={13} />
           导入工作流
         </Button>

@@ -367,7 +367,7 @@ export function AspectMegapixelControl({
         className={
           narrow === true
             ? "flex items-start justify-end gap-3"
-            : "border-accent/30 bg-accent/4 rounded-lg border p-2.5"
+            : "border-primary/30 bg-primary/4 rounded-lg border p-2.5"
         }
       >
         {narrow === true ? (
@@ -409,10 +409,10 @@ export function AspectMegapixelControl({
             {/* 组合控件本体（表头 + 下拉），整块贴右沿：框里不再重复列那三个参数
  —— 它们已经以真正的参数行形态摆在框外左侧了。 */}
             <div
-              className="border-accent/30 bg-accent/4 w-fit max-w-full shrink-0 rounded-lg border p-2"
+              className="border-primary/30 bg-primary/4 w-fit max-w-full shrink-0 rounded-lg border p-2"
               data-grouped-box
             >
-              <span className="text-accent text-3xs font-semibold tracking-wider uppercase">
+              <span className="text-primary text-3xs font-semibold tracking-wider uppercase">
                 比例 + 像素{multiple ? " + 倍数" : ""}
               </span>
               <div className="mt-1 w-42 min-w-0">
@@ -437,7 +437,7 @@ export function AspectMegapixelControl({
         ) : (
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-accent text-3xs shrink-0 font-semibold tracking-wider uppercase">
+              <span className="text-primary text-3xs shrink-0 font-semibold tracking-wider uppercase">
                 比例 + 像素{multiple ? " + 倍数" : ""}
               </span>
               <div className="min-w-0 flex-1">
