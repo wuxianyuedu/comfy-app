@@ -131,11 +131,17 @@ export function ContractInputCatalog({
               <span className="text-muted-foreground/50 text-2xs shrink-0 font-mono">{def.id}</span>
               <Button
                 aria-label={`删除自定义参数 ${def.label}`}
-                className="text-muted-foreground/60 hover:text-danger-strong shrink-0"
+                className="text-muted-foreground/60 hover:text-danger-strong shrink-0 disabled:opacity-25"
+                disabled={inputs.length <= 1}
                 onClick={() => {
                   onRemoveCustom(def.id);
                 }}
                 size="icon-sm"
+                title={
+                  inputs.length <= 1
+                    ? "至少保留一个输入口：空清单的契约保存不了，工坊也驱动不起来"
+                    : undefined
+                }
                 variant="ghost"
               >
                 ✕

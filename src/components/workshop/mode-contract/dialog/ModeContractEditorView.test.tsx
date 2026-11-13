@@ -5,7 +5,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { derivedModeContract } from "~/lib/workshop/model-mode-contract";
+import { derivedModeContract, type ModeContract } from "~/lib/workshop/model-mode-contract";
 
 import type { ModeContractEditorController } from "../hooks/use-mode-contract-editor";
 import { ModeContractEditorView } from "./ModeContractEditorView";
@@ -26,6 +26,7 @@ function stubController(
     saving: false,
     saved: false,
     savedKind: null,
+    saveError: null,
     projectDefaultEditable: false,
     resetting: false,
     savingProjectDefaults: false,
@@ -80,5 +81,28 @@ describe("模式契约编辑器的两栏布局（ISSUE #1870）", () => {
       />,
     );
     expect(screen.getByRole("button", { name: /保存为项目默认/ })).toBeTruthy();
+  });
+
+  it("保存失败的原因要给用户看得见（#3637：失败不许只静默转圈）", () => {
+    render(
+      <ModeContractEditorView
+        controller={stubController("T2I", { saveError: "每个模式至少要有一个输入口" })}
+      />,
+    );
+    expect(screen.getByText(/保存失败/)).toBeTruthy();
+    expect(screen.getByText(/至少要有一个输入口/)).toBeTruthy();
+  });
+
+  it("只剩最后一个输入口时不许删（#3637：空清单的契约保存不了、工坊也驱动不起来）", () => {
+    const single: ModeContract = { ...derivedModeContract("T2I"), inputs: ["prompt"] };
+    render(<ModeContractEditorView controller={stubController("T2I", { draft: single })} />);
+    expect(screen.getByRole("button", { name: "移除 提示词" })).toBeDisabled();
+  });
+
+  it("输入口还有多个时移除按钮照常可用（#3637 的回归守卫）", () => {
+    render(<ModeContractEditorView controller={stubController("T2I")} />);
+    for (const button of screen.getAllByRole("button", { name: /^移除 / })) {
+      expect(button).toBeEnabled();
+    }
   });
 });

@@ -8,6 +8,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 
+import { errorMessage } from "~/lib/error-message";
 import {
   moveContractInput,
   nextCustomInputId,
@@ -57,6 +58,10 @@ export type ModeContractEditorController = {
   /** 本次打开期间是否已成功保存过（视图据此提示「另一处已生效」）。 */
   saved: boolean;
   savedKind: "local" | "project" | null;
+  /** 最近一次保存失败的**用户可读**原因（null = 没有挂起的失败）。
+   *  失败路径必须有用户可见出口（#3637）：此前错误一路抛到无人接的
+   *  `void controller.save()` 上，界面只转圈、不提示、改动也不生效。 */
+  saveError: string | null;
   saving: boolean;
   /** 「保存为项目默认」进行中。 */
   savingProjectDefaults: boolean;
@@ -76,6 +81,7 @@ export function useModeContractEditor(): ModeContractEditorController {
   const [draft, setDraft] = useState<ModeContract | null>(null);
   const [saved, setSaved] = useState(false);
   const [savedKind, setSavedKind] = useState<"local" | "project" | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const selectMode = useCallback(
     (next: string) => {
@@ -83,6 +89,7 @@ export function useModeContractEditor(): ModeContractEditorController {
       setDraft(effectiveModeContract(next, registry.contracts, registry.configured).contract);
       setSaved(false);
       setSavedKind(null);
+      setSaveError(null);
     },
     [registry.configured, registry.contracts],
   );
@@ -97,6 +104,13 @@ export function useModeContractEditor(): ModeContractEditorController {
   const removeInput = useCallback((id: ModeContractInputId) => {
     setDraft((prev) => {
       if (!prev) {
+        return prev;
+      }
+      /* 至少保留一个输入口（#3637）：服务端 `modeContractsInputSchema` 对
+       * `inputs` 有 `min(1)`，空清单的保存必被打回；归一化侧也把空条目丢弃。
+       * 界面若放行「删到空」，用户会进一个怎么都存不下来的死状态 —— 在源头
+       * 拦住（视图同步禁用最后一口的移除按钮并给提示）。 */
+      if (prev.inputs.length <= 1) {
         return prev;
       }
       const inputs = prev.inputs.filter((x) => x !== id);
@@ -228,6 +242,7 @@ export function useModeContractEditor(): ModeContractEditorController {
     }
     setSaved(false);
     setSavedKind(null);
+    setSaveError(null);
   }, [mode, registry]);
 
   const save = useCallback(async () => {
@@ -235,9 +250,16 @@ export function useModeContractEditor(): ModeContractEditorController {
     if (!all) {
       return;
     }
-    await registry.save(all);
-    setSaved(true);
-    setSavedKind("local");
+    /* 失败要有用户可见出口（#3637）：错误在这里接住、落到 `saveError`，
+     * 视图据此给失败文案 —— 不再抛给无人接的 `void` promise。 */
+    setSaveError(null);
+    try {
+      await registry.save(all);
+      setSaved(true);
+      setSavedKind("local");
+    } catch (error) {
+      setSaveError(errorMessage(error, "保存失败，请稍后重试"));
+    }
   }, [mergedRegistry, registry]);
 
   const saveAsProjectDefault = useCallback(async (): Promise<string | null> => {
@@ -245,10 +267,16 @@ export function useModeContractEditor(): ModeContractEditorController {
     if (!all) {
       return null;
     }
-    const file = await registry.saveAsProjectDefaults(all);
-    setSaved(true);
-    setSavedKind("project");
-    return file;
+    setSaveError(null);
+    try {
+      const file = await registry.saveAsProjectDefaults(all);
+      setSaved(true);
+      setSavedKind("project");
+      return file;
+    } catch (error) {
+      setSaveError(errorMessage(error, "写入项目默认失败，请稍后重试"));
+      return null;
+    }
   }, [mergedRegistry, registry]);
 
   return {
@@ -268,6 +296,7 @@ export function useModeContractEditor(): ModeContractEditorController {
       setDraft(next);
       setSaved(false);
       setSavedKind(null);
+      setSaveError(null);
     },
     appendInput,
     removeInput,
@@ -279,6 +308,7 @@ export function useModeContractEditor(): ModeContractEditorController {
     setOutput,
     save,
     saveAsProjectDefault,
+    saveError,
     saved,
     savedKind,
   };

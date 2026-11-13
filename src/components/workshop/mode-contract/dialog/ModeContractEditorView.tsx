@@ -215,6 +215,12 @@ function ModeContractDraftPanel({
           </span>
         </p>
       )}
+      {/* 失败要有用户可见出口（#3637）：此前保存失败只静默转圈，改动不生效也不提示。 */}
+      {controller.saveError !== null && (
+        <p className="bg-danger/10 text-danger-strong rounded-lg px-3 py-2 text-xs">
+          保存失败：{controller.saveError}
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <Button
@@ -328,11 +334,17 @@ function ContractInputRow({
         </FieldLabel>
         <Button
           aria-label={`移除 ${label}`}
-          className="text-muted-foreground/60 hover:text-danger-strong"
+          className="text-muted-foreground/60 hover:text-danger-strong disabled:opacity-25"
+          disabled={draft.inputs.length <= 1}
           onClick={() => {
             controller.removeInput(input);
           }}
           size="icon-sm"
+          title={
+            draft.inputs.length <= 1
+              ? "至少保留一个输入口：空清单的契约保存不了，工坊也驱动不起来"
+              : undefined
+          }
           variant="ghost"
         >
           ✕
