@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { IoEndpointsSection } from "./IoEndpointsSection";
+import { TooltipProvider } from "~/components/ui/tooltip";
 import type { EnrichedWidget, WorkflowIOEntry } from "../../../workflow-io";
 
 // vitest globals: false 下 RTL 不会自动 cleanup,需手动注册
@@ -45,36 +47,47 @@ describe("IoEndpointsSection", () => {
     expect(screen.getByText("I/O 端点")).toBeInTheDocument();
     expect(headerCount()).toBe("0");
     expect(screen.queryByText("输出端点")).not.toBeInTheDocument();
-    expect(screen.queryByTitle(/仅可通过连线输入/)).not.toBeInTheDocument();
+    /* 没有 pack 渲染任何 chip —— 类型徽标缺席即「无连线输入」。 */
+    expect(screen.queryByText("CONDITIONING")).not.toBeInTheDocument();
   });
 
-  it("渲染 wire 输入 chip:label + 原始类型 + 「仅可通过连线输入」title", () => {
+  it("渲染 wire 输入 chip:label + 原始类型 + 「仅可通过连线输入」悬停提示", async () => {
+    const user = userEvent.setup();
     render(
-      <IoEndpointsSection
-        inputs={[
-          wireInput({
-            ioKey: "10::param::positive",
-            name: "positive",
-            label: "正向提示",
-          }),
-        ]}
-        outputs={[]}
-        showOutputs={false}
-        wireInputs={[
-          wireInput({
-            ioKey: "10::param::positive",
-            name: "positive",
-            label: "正向提示",
-            type: "CONDITIONING",
-            nodeTitle: "K采样器",
-          }),
-        ]}
-      />,
+      <TooltipProvider delay={0}>
+        <IoEndpointsSection
+          inputs={[
+            wireInput({
+              ioKey: "10::param::positive",
+              name: "positive",
+              label: "正向提示",
+            }),
+          ]}
+          outputs={[]}
+          showOutputs={false}
+          wireInputs={[
+            wireInput({
+              ioKey: "10::param::positive",
+              name: "positive",
+              label: "正向提示",
+              type: "CONDITIONING",
+              nodeTitle: "K采样器",
+            }),
+          ]}
+        />
+      </TooltipProvider>,
     );
     expect(headerCount()).toBe("1");
     expect(screen.getByText("正向提示")).toBeInTheDocument();
     expect(screen.getByText("CONDITIONING")).toBeInTheDocument();
-    expect(screen.getByTitle("K采样器 · positive · 仅可通过连线输入")).toBeInTheDocument();
+    /* 原生 title= 撤干净：连线输入说明走 <Hint>，悬停落在 tooltip 浮层里。 */
+    await user.hover(screen.getByText("正向提示"));
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
+    });
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+      "K采样器 · positive · 仅可通过连线输入",
+    );
   });
 
   it("ioLabel 冲突回退:多个 entry 共用同一 label 时改用 name 区分", () => {
@@ -108,30 +121,39 @@ describe("IoEndpointsSection", () => {
     expect(screen.queryByText("最终图像")).not.toBeInTheDocument();
   });
 
-  it("showOutputs=true 时渲染「输出端点」与 output chip(类型经 normalizeTypeChip)", () => {
+  it("showOutputs=true 时渲染「输出端点」与 output chip(类型经 normalizeTypeChip)", async () => {
+    const user = userEvent.setup();
     render(
-      <IoEndpointsSection
-        inputs={[]}
-        outputs={[
-          output({
-            ioKey: "o1",
-            name: "IMAGE_FINAL",
-            label: "最终图像",
-            type: "IMAGE",
-          }),
-        ]}
-        showOutputs
-        wireInputs={[]}
-      />,
+      <TooltipProvider delay={0}>
+        <IoEndpointsSection
+          inputs={[]}
+          outputs={[
+            output({
+              ioKey: "o1",
+              name: "IMAGE_FINAL",
+              label: "最终图像",
+              type: "IMAGE",
+            }),
+          ]}
+          showOutputs
+          wireInputs={[]}
+        />
+      </TooltipProvider>,
     );
     expect(headerCount()).toBe("1");
     expect(screen.getByText("输出端点")).toBeInTheDocument();
     expect(screen.getByText("最终图像")).toBeInTheDocument();
     // IMAGE 在 normalizeTypeChip 的白名单内,原样大写展示
     expect(screen.getByText("IMAGE")).toBeInTheDocument();
-    // nodeTitle 为空时 title 为 " · IMAGE_FINAL";getByTitle 的字符串匹配
-    // 只对属性值做 trim/折叠归一,matcher 本身不归一,因此传归一后的值。
-    expect(screen.getByTitle("· IMAGE_FINAL")).toBeInTheDocument();
+    /* nodeTitle 为空时悬浮提示文案为 " · IMAGE_FINAL"；原生 title= 撤干净，
+     * 说明走 <Hint>，悬停落在 tooltip 浮层里。 */
+    await user.hover(screen.getByText("最终图像"));
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
+    });
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+      "· IMAGE_FINAL",
+    );
   });
 
   it("自定义输出类型原样展示(type 是什么就显示什么)", () => {

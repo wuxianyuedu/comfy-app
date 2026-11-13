@@ -235,9 +235,29 @@ describe("GA workflow 结构真解析（接住退役的 actionlint 位，#3504�
 });
 
 describe("与 .cnb.yml 的闭环：触发口双向登记（#3504）", () => {
-  /* 回读 / 判定面（`api_trigger_ga_verdict` → `GA 结论判定`）不派发构建，不在注册表 ——
-   * 它由 no-platform-ci-config 的回读段钉着，这里是它唯一的豁免登记处。 */
-  const NON_DISPATCH_LANES = ["api_trigger_ga_verdict"];
+  /* 两类「在 .cnb.yml 里有触发口、但刻意不进 GA_TRIGGER_TARGETS 注册表」的流水线：
+   *   · `api_trigger_ga_verdict` —— 回读 / 判定面，不派发构建（no-platform-ci-config
+   *     的回读段钉着）；
+   *   · `api_trigger_ga_logs` —— ISSUE #3667 的按需日志搬运，发的是 `workflow_dispatch`
+   *     带 `relay_scope=all`，**不是**「跑哪套固定判据」的 preset（没有 web 按钮、没有
+   *     head_sha 判据面、也不等 sha 在镜像仓可见）。它由下面那条用例单独钉住脚本接线。
+   * 这里是这两类的唯一豁免登记处 —— 多一口就当场红，不许悄悄绕过双向登记。 */
+  const NON_DISPATCH_LANES = ["api_trigger_ga_logs", "api_trigger_ga_verdict"];
+
+  it("ISSUE #3667：按需日志口跑的是专用脚本，不是任一 preset（豁免登记有对象）", () => {
+    const block = /^[ ]{2}api_trigger_ga_logs:[\s\S]*?(?=^[ ]{2}\S|^\S)/m.exec(CNB);
+    expect(block?.[0], ".cnb.yml 里解析不出 api_trigger_ga_logs 那一段").toBeTruthy();
+    expect(block?.[0]).toContain("node scripts/ci-ga-logs-on-demand.mjs");
+    /* 刻意不带 --preset：这一口搬的是「已跑完的 run 的日志」，不是「跑哪套判据」。 */
+    expect(block?.[0]).not.toContain("--preset");
+    /* GA 侧 relay 认这个 scope，按需档才真的会把判绿 job 也搬进 CNB。 */
+    const relay = readFileSync(path.join(ROOT, "scripts/ci-ga-logs-relay.mjs"), "utf8");
+    expect(relay).toContain("relayScopeFromEnv");
+    expect(relay).toContain("RELAY_SCOPE.ALL");
+    const onDemand = readFileSync(path.join(ROOT, "scripts/ci-ga-logs-on-demand.mjs"), "utf8");
+    expect(onDemand).toContain('ON_DEMAND_SCOPE = "all"');
+    expect(onDemand).toContain("dispatchRequest");
+  });
 
   it("注册表的每个事件键都在 .cnb.yml 里有一条同名的顶层流水线", () => {
     for (const t of GA_TRIGGER_TARGETS) {

@@ -17,6 +17,7 @@ import { timeAgo } from "~/lib/time-format";
 import type { ProjectOrigin } from "~/lib/project-canvas/canvas-store";
 import { PROJECTS_ENTRY } from "./NavItems";
 import { useWorksGallery } from "./works/hooks/use-works-gallery";
+import { Hint } from "~/components/ui/hint";
 
 /* 作品/视频项目卡**类别装饰色**——cyan 在这套 UI 里代表"视频/作品"类别
  * (与 `MaterialLibraryPanel KIND_STYLE.video` 蓝调装饰一脉相承)。是"这一
@@ -178,12 +179,11 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
 
                   {/* 出处标：只给「只在一侧」的行。`both` 是正常行，标出来是噪声。 */}
                   {badge !== undefined && badge !== "" && (
-                    <span
-                      className="text-ink-fainter border-border-subtle bg-surface-2 text-3xs absolute bottom-2.5 left-3.5 rounded-md border px-1.5 py-0.5"
-                      title={hint}
-                    >
-                      {badge}
-                    </span>
+                    <Hint label={hint}>
+                      <span className="text-ink-fainter border-border-subtle bg-surface-2 text-3xs absolute bottom-2.5 left-3.5 rounded-md border px-1.5 py-0.5">
+                        {badge}
+                      </span>
+                    </Hint>
                   )}
 
                   {/* 逐卡片删除：仅悬停显示，右上角。

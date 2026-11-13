@@ -385,6 +385,14 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
 | 进程收干净没有             | 阶段 0 念 `runningAppInstances()` 的归属读数；`--reap` 只发 `reap-process.mjs`，**收完再读一次同一份判据**才算数        |
 | 这条流水线还在不在动       | 轮询的签名 `(sn, data.status, pipeline 完成数, stage 完成数)` **加上「此刻有没有一格在飞」**（`inFlightStages`）—— 两件同时成立才断流，不做无新读数的等待 |
 
+**`--gh-logs pr:<号>` 现在一条命令就够了（§12.20 / ISSUE #3667 后续）。** 判绿的 GA run
+在 CNB 侧没有 relay 评论（#3437 的 relay 只搬失败 job），本地这一句会自己代发
+`api_trigger_ga_logs`、轮询等一条 `scope=all` 的新评论，再站内读回呈现 —— 不用先手工敲
+`cnb build start-build --event api_trigger_ga_logs --env GA_LOG_PR_NUMBER=<号> --sync false`。
+`--dry-run` 只念这一跳的计划、一条平台写动作都不发；派发成没成只认回读到的 `sn`，
+等不到只给「没结论」再退回 GitHub 快速回退链路，不改三态。`run:` 形态与判红自动回读
+逐字不变。见 §13.10.13。
+
 ⚠️ **`ship` 提交段「全过」不等于 tsc / eslint / 用例过了**。`pre-commit` 默认只跑形态档，
 重档由 `COMFY_HEAVY_GATES=1` 那一档与平台兜底（规范 §13.5.25）—— 钩子自己会打印
 「本地**没跑**：组 A B C D」，那句话不是客套，别把它读成「已通过」。

@@ -247,6 +247,10 @@
  *                                             #   一行结论；全量日志落系统临时目录并打印绝对路径
  *   pnpm ship --gh-logs run:4242               # 按 run id 直取；`run:` / `pr:` 可消歧，裸数字按位数判。
  *                                             #   ship 轮询判红时也会自动回读一次（无令牌只念一行跳过）
+ *                                             #   #3667 起：判绿按需档（GA_LOG_SCOPE=all）也把日志搬进 CNB；
+ *                                             #   `--gh-logs pr:<号>` 站内没有 relay 时自己发起搬运并等回读，
+ *                                             #   一条命令拿到结果，零 api.github.com（不用先敲 start-build）；
+ *                                             #   代发那一跳是平台写动作，--dry-run 只念计划不发
  *   pnpm ship --gh-prs                         # 只读：列 GitHub 仓库侧（镜像仓 wuxianyuedu/comfy-app）的 PR ——
  *                                             #   号 / 标题 / 作者 / 分支 / mergeable / 网页 URL（dependabot[bot]
  *                                             #   的 PR 只在这一侧，CNB 看不见）。值可选：缺省 = open；

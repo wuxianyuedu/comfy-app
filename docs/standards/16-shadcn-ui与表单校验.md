@@ -137,20 +137,20 @@ ui/（工具生成，界面源码）        ← 尽量不碰
 不许升）→ 清零后升为硬闸（恒为 0）**。顺序不能反：把硬闸建在看不见的存量上，就是
 P82 那次「基线写着 78、真存量 157」的形态。
 
-**当前状态：86 条判据全部是硬闸**（`HARD_GATE_RULES`），棘轮基线 `total` 为 0。
+**当前状态：87 条判据全部是硬闸**（`HARD_GATE_RULES`），棘轮基线 `total` 为 0。
 棘轮这条路径**不是死代码** —— 它是**新引入判据的起步形态**：新判据一上来通常有存量，
 先冻结、清完再升硬闸。`--update` 因此只有一种合法用途：给旧基线里从未出现过的
 rule id 登记起点；任何「已有 rule id 上升」都直接拒绝，硬闸未清零时连登记都不给。
 
 ```bash
-pnpm ui:primitives            # 检查（86 条硬闸须为 0；pre-commit D 组「UI 基元复用棘轮」）
+pnpm ui:primitives            # 检查（87 条硬闸须为 0；pre-commit D 组「UI 基元复用棘轮」）
 pnpm ui:primitives:report     # 只出清单（排批次用，不判失败）
 node scripts/check-ui-primitives.cjs --update   # 只给新引入的判据登记起点
 ```
 
 ##### 16.2.3.1 分层：预计算层 + 判据分档（ISSUE #1747）
 
-这一节回答「这样一个 86 条判据、4800 行的脚本能不能分层」。**「分层」有三种含义，
+这一节回答「这样一个 87 条判据、4800 行的脚本能不能分层」。**「分层」有三种含义，
 只有一种能省时间**，所以先说清哪一种是哪一种：
 
 | 含义                                             | 能不能省 | 为什么                                                                                                                                                                                                               |
@@ -170,7 +170,7 @@ node scripts/check-ui-primitives.cjs --update   # 只给新引入的判据登记
 实测（1070 份源文件 · 8 核 · 本机）：逐条现剥 **8.6s** / 单文件算一次 **0.4s**；
 整脚本墙钟 **5.1–5.5s → 0.84–0.87s**（约 6 倍）。
 
-**② 判据分档**（`RULE_TIER_IDS`）：把 86 条按「它守的那件事稳不稳」分成两档 ——
+**② 判据分档**（`RULE_TIER_IDS`）：把 87 条按「它守的那件事稳不稳」分成两档 ——
 轴是**出口的稳定度**，不是「代码在哪个目录」：
 
 - **CORE（基元层，80 条）** —— 答「视图层有没有绕过那个已经建好的基元」：出口是
@@ -181,7 +181,7 @@ node scripts/check-ui-primitives.cjs --update   # 只给新引入的判据登记
   形态还会随业务调整。这一档是**新增判据的入口**：先在这里冻结、清完升硬闸。
 
 **分档不放松任何判据**：两档都是硬闸、都要跑。它只做两件事 ——
-`--report` 与失败输出**按档分组**（86 条一眼看得出「响的是哪一层」），以及
+`--report` 与失败输出**按档分组**（87 条一眼看得出「响的是哪一层」），以及
 **分档本身受机器约束**：每条 rule id 必须**恰好**落在一档里，新增判据忘记登记时
 `tierProblems()` 直接报错（`--report` 少列一条、失败输出漏掉它的形态是**静默**的，
 与 §13.5.12「判据在场 ≠ 判据在跑」同族 —— 这里判的是「判据在场 ≠ 判据被分类」）。
@@ -270,15 +270,16 @@ pnpm ui:primitives:report   # 按档分组出清单（CORE / SURFACE 两段）
 | **P85**     | 视图层手写 `<table>`（裸标签，丢掉基元的 `data-slot` 与统一排版）                                                                                                                                                                    | `~/components/ui/table` 的 `Table` / `TableHeader` / `TableRow` / `TableCell` / `TableHead`（见 §16.2.4.72）                                                                                                    |
 | **P86**     | 视图层手搓「`h1` + 副说明 + 右侧动作组」的屏级页头（**形态锚**：`.u-title-page` 的标题与 `mt-1 text-sm` 的副说明**在同一段窗口内同现**；色类不进锚，见 §16.2.4.73）                                                                  | `~/components/ui/page-header` 的 `PageHeader`（标题从 `pageHeaderTitle(view)` 取，一屏不许有第二个名字）（见 §16.2.4.73）                                                                                       |
 | **P87**     | 整块容器自带背景模糊（卡片 / 弹窗 / 浮层 / 抽屉；贴边条按行内形状放行）                                                                                                                                                              | 整块不透明、撤 `backdrop-blur`：它下面是一层遮罩或静止页面，模糊 0 像素效果却整树多一个图层。贴边条（顶栏 / 页脚 / 状态栏）**留模糊、去半透**（见规范 03 §3.13）                                                |
+| **P88**     | 视图层 host 元素用原生 `title=`（`<span>` / `<div>` / `<p>` / `<code>` / `<kbd>` …；`iframe` / `object` / `embed` 与 SVG `<title>` 豁免——前者是无障碍强制项、后者是合法落点）                                                        | `~/components/ui/hint` 的 `<Hint label=…>`（Base UI Tooltip，走设计 token、主题化）—— 与 P82 `<Button>` 的出口同一件东西（shadcn composition.md「悬停说明走 Tooltip、不走原生 title」）（见 §16.2.4.77）        |
 
 **「引入时的起点」不同，不是「性质」不同**：P1/P2/P3 落地时视图里摆着 408 / 10 / 40
 处存量，只能先冻结成棘轮逐批降；P4 之后的大多数判据引入时那个形态已经是 0
-（同批一起清零），所以一上来就是硬闸。**两者现在终点重合：86 条全部是硬闸**。
+（同批一起清零），所以一上来就是硬闸。**两者现在终点重合：87 条全部是硬闸**。
 逐条的名字与实时计数看 `pnpm ui:primitives:report` —— 正文与脚本都不再抄一份清单：
 脚本里那份手写的「P4 自绘滚动条 / … / P66 重入闸门」名字表就漂过一回（写着 66，
 判据早已到 83，而升闸的 12 条一个都没被提到）。
 
-硬闸的口径是「这四十六件事的**定义**只能有一处」，没有「冻结在某个数字」的中间态
+硬闸的口径是「这八十七件事的**定义**只能有一处」，没有「冻结在某个数字」的中间态
 可言。因此它们**不进基线**（`--update` 也不接受带违规的基线，否则「把违规一起写进
 基线」就成了唯一的绕过方式）。
 清零过程：P4 见 §16.2.4.9、P5/P6 见 §16.2.4.10、P7/P8 见 §16.2.4.11、
@@ -416,10 +417,10 @@ P2 先把自搓浮层收进 `ui/` 原语、定下两条刻度；**P4 复查时�
    页签与右上角的最小化/最大化/关闭**整排点不动**（遮罩在 `elementFromPoint`
    里赢下了顶部 36px）。
    取层级一律走 `TITLE_BAR_CHROME_CLASS`（`~/lib/full-screen-layer`，= `relative
-z-chrome`）；`relative` 不能省 —— `z-index` 对 `position: static` 的元素不生效
+   z-chrome`）；`relative` 不能省 —— `z-index` 对 `position: static` 的元素不生效
    （flex item 是特例，但依赖「父容器恰好是 flex」会让层级在布局重构后静默失效）。
    底部状态栏不在此列：它已经是 `fixed` + `z-toast`（正数层级），不会被 `z-index:
-auto` 的遮罩压过。
+   auto` 的遮罩压过。
 
 **两条硬约束（不在表里的写法一律阻断）**：
 
@@ -552,9 +553,7 @@ Storybook 接入的那一轮（ISSUE #1381）踩到一个只在**运行时**发�
 const variants = Object.keys(buttonVariants.variants.variant);
 
 // ✅ 从 props 派生 —— cva 的轴已经在组件侧求过值了
-type ButtonVariant = NonNullable<
-  React.ComponentProps<typeof Button>["variant"]
->;
+type ButtonVariant = NonNullable<React.ComponentProps<typeof Button>["variant"]>;
 const VARIANTS: ButtonVariant[] = ["default", "outline" /* … */];
 ```
 
@@ -1245,7 +1244,7 @@ story 不经 store 读）。
 | 对话框/浮层              | ~~`ui/dialog.tsx`（业务零引用） / `studio/ui/ModalDialog.tsx` / 10 个文件各自 `createPortal`~~                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `ModalDialog` 改基于 `ui/dialog`；10 处自建 portal 全部换成 `ui/dialog` / `ui/popover` / `ui/sheet`                                                                                                                                                                                                                                                                                                                        | ✅ **P2 完成（P2 判据清零）**               |
 | 空态                     | ~~`ui/empty-state.tsx` / `studio/ui/EmptyState.tsx` / `DynamicWorkflowForm/sections/EmptyStateHint.tsx` 三份~~                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 合并到 `ui/empty-state.tsx`（props 取并集，`variant` 分流 `page`/`error`/`hint`）                                                                                                                                                                                                                                                                                                                                          | ✅ **P2 完成**                              |
 | 按钮                     | ~~`ui/button.tsx` + 视图里的 400+ 处手写 `<button>`~~                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | P1 棘轮逐批换 `<Button>`；变体见 §16.2.4.1                                                                                                                                                                                                                                                                                                                                                                                 | ✅ **P1 判据清零**（分 5 批，见 §16.2.4.2） |
-| 加载态                   | ~~`ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 17 个文件自写 spinner~~ ⚠️ 这一格写的是**收口之前**的账，别当现状读：现在 `skeleton` 有消费点（复算：`grep -rl "components/ui/skeleton\"" src` 取文件数）、`progress` 也有，自写 spinner 只剩零星几处（`grep -rl "animate-spin" src --include=*.tsx`） | P3 棘轮；`ui/page-loading` 的 `Spinner` 是**内联**加载态的唯一出口（按钮内/一行文字里） | ✅ **P3 判据清零** |
+| 加载态                   | ~~`ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 17 个文件自写 spinner~~ ⚠️ 这一格写的是**收口之前**的账，别当现状读：现在 `skeleton` 有消费点（复算：`grep -rl "components/ui/skeleton\"" src` 取文件数）、`progress` 也有，自写 spinner 只剩零星几处（`grep -rl "animate-spin" src --include=*.tsx`）                                                                                                                                                                                                                                                                                                                                                                                                           | P3 棘轮；`ui/page-loading` 的 `Spinner` 是**内联**加载态的唯一出口（按钮内/一行文字里）                                                                                                                                                                                                                                                                                                                                    | ✅ **P3 判据清零**                          |
 | 状态圆点                 | ~~ComfyUI / Drizzle Studio / Ollama 三条状态行各自写一份四分支三元套娃 + 各写各的 `bg-emerald-400` 等色值~~                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `ui/status-dot.tsx` 的 `StatusDot`（状态语义 `up`/`busy`/`probing`/`down` → 语义 token）                                                                                                                                                                                                                                                                                                                                   | ✅ **全库唯一实现（余量见 §16.2.4.5）**     |
 | 状态胶囊                 | ~~**七个文件**各写一份「状态 → 配色」表（`emerald-500/15` / `emerald-400/10` / `emerald-100` 三种深浅各不相同）~~                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `ui/status-badge.tsx` 一份（`dot` 形态 / `dot={false}` 角标）；文案留在调用处                                                                                                                                                                                                                                                                                                                                              | ✅ **见 §16.2.4.5 ①**                       |
 | UI kit 目录              | ~~`components/ui/`（33）/ `components/studio/ui/`（11）/ `shared/` / `DynamicWorkflowForm/sections/`~~                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 见 §16.2.4.3                                                                                                                                                                                                                                                                                                                                                                                                               | ✅ **归并完成（豁免已归还）**               |
@@ -1614,12 +1613,12 @@ token —— 「合并」这一步**不需要动 `ui/` 里的任何一行**，�
 
 **可观测的行为变化只有 4 处，逐条列出**（UI 一致性改动不许藏差异）：
 
-| token                    | 变化                  | 说明                                                                |
-| ------------------------ | --------------------- | ------------------------------------------------------------------- |
-| `--color-muted`（深）    | `#9a9aad` → `#141419` | 名字归位：它是 shadcn 的**表面**语义（`bg-muted`），浅色档本就如此  |
-| `--secondary`（深）      | `#16161c` → `#141419` | 归一化到 `--color-subtle`（浅色档不变；原深色档与浅色档语义不一致） |
+| token                    | 变化                  | 说明                                                                                                                                                                                                                                                                                                         |
+| ------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--color-muted`（深）    | `#9a9aad` → `#141419` | 名字归位：它是 shadcn 的**表面**语义（`bg-muted`），浅色档本就如此                                                                                                                                                                                                                                           |
+| `--secondary`（深）      | `#16161c` → `#141419` | 归一化到 `--color-subtle`（浅色档不变；原深色档与浅色档语义不一致）                                                                                                                                                                                                                                          |
 | `--sidebar-accent`（深） | `#16161c` → `#141419` | 同上。⚠️ **这一族不是「零引用」**：`ui/sidebar.tsx` 里 `hover:bg-sidebar-accent` / `active:bg-sidebar-accent` / `text-sidebar-accent-foreground` 共 6 处在用，且同文件登记着 ISSUE #1291「此前悬停与选中**共用同一档底色**（`--sidebar-accent`）」——这档是被专门拆过的那一档，改它会动侧栏按钮的悬停与选中态 |
-| `--sidebar`（浅）        | `#ffffff` → `#f0f1f5` | 归一化到 `--color-panel-deep`。`--sidebar` 基色由 `ui/sidebar.tsx` 的 `bg-sidebar` 一族 utility 消费（复算：`grep -c "bg-sidebar\b" src/components/ui/sidebar.tsx`），**也不是零引用** —— 动这档之前先读那些调用处 |
+| `--sidebar`（浅）        | `#ffffff` → `#f0f1f5` | 归一化到 `--color-panel-deep`。`--sidebar` 基色由 `ui/sidebar.tsx` 的 `bg-sidebar` 一族 utility 消费（复算：`grep -c "bg-sidebar\b" src/components/ui/sidebar.tsx`），**也不是零引用** —— 动这档之前先读那些调用处                                                                                           |
 
 另新增两颗项目 token：`--color-on-brand`（品牌实心底上的文字色）与
 `--color-ring-shadow`（浮层 1px ring，原先只存在于别名里）。**编译产物的
@@ -1739,11 +1738,11 @@ dark:text-emerald-300` 这类写死值）。
 
 ##### 第三档：确有近似形态，但接上会改变外观或交互语义（按现状不动）
 
-| 基元          | 近似形态                                                                                                                                               | 为什么不动                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `scroll-area` | 滚动容器遍布全库（**计数只给复算入口**：`grep -rl "overflow-y-auto" src --include=*.tsx` 与 `grep -rl "overflow-auto" src --include=*.tsx` 取并集数文件；自绘滚动条外观的那几处数 `grep -rl "custom-scrollbar" src`。2026-10-21 量到 **68** 与 **15**，旧写的「54 / 5」是更早一次的读数）                     | 判据**已更正**（见下）。**真正挡住迁移的不是「高度由 flex 链推出」** —— `ScrollArea.Root` 的 `Viewport` 是 `size-full`，flex 链推得出来的高度它照样撑满。挡住的是**命令式滚动跟随**：那几处全部持有滚动容器的 `ref` 并直接读写 `scrollTop`（贴底跟随 / 只滚不跳 / 加载更多），而 `ui/scroll-area` 的 `Viewport` 是内部子树、不转发 ref（`ScrollAreaViewport` 本身是 `ForwardRefExoticComponent`，是 `ui/` 这份封装没把它透出来）。要接就得改 `ui/`（工具生成目录，下次 `shadcn add` 会覆盖）—— 代价大于收益 |
-| `accordion`   | 6 个文件用原生 `<details>/<summary>`（历史详情原始 JSON、节点错误面板参数、工坊三处生成过程），另有若干 `{isOpen && …}` 条件渲染的展开块（训练页日志） | 原生 `<details>` 的**展开态是浏览器原生 a11y 语义**（`<summary>` 自带可聚焦与 toggle 角色）且支持「查找时自动展开」；`accordion` 的价值在于「一组互斥面板 + 动画 + 键盘导航」，而这 6 处是**单个独立折叠块**，没有互斥分组。训练页的 `{isOpen && …}` 反而更像 accordion 的落点，但它当前是按钮触发的，接上要改触发器形态（外观会变）                                                                                                                                                                         |
-| `avatar`      | 首页顶栏一个 `u-avatar`（纯 CSS 底 + 圆形 div），工坊 5 处「首字母圆形徽标」                                                                           | 两者都不是**头像**：顶栏那个没有图片（`AvatarImage` 无从渲染、`AvatarFallback` 恰好够用但换成基元只多一层嵌套），工坊那 5 处是**首字母初值**徽标（`bg-primary-soft` + 单字），语义是「角色编号」不是「用户头像」。接上基元 = 为一个 div 加两层包装                                                                                                                                                                                                                                                           |
+| 基元          | 近似形态                                                                                                                                                                                                                                                                                  | 为什么不动                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scroll-area` | 滚动容器遍布全库（**计数只给复算入口**：`grep -rl "overflow-y-auto" src --include=*.tsx` 与 `grep -rl "overflow-auto" src --include=*.tsx` 取并集数文件；自绘滚动条外观的那几处数 `grep -rl "custom-scrollbar" src`。2026-10-21 量到 **68** 与 **15**，旧写的「54 / 5」是更早一次的读数） | 判据**已更正**（见下）。**真正挡住迁移的不是「高度由 flex 链推出」** —— `ScrollArea.Root` 的 `Viewport` 是 `size-full`，flex 链推得出来的高度它照样撑满。挡住的是**命令式滚动跟随**：那几处全部持有滚动容器的 `ref` 并直接读写 `scrollTop`（贴底跟随 / 只滚不跳 / 加载更多），而 `ui/scroll-area` 的 `Viewport` 是内部子树、不转发 ref（`ScrollAreaViewport` 本身是 `ForwardRefExoticComponent`，是 `ui/` 这份封装没把它透出来）。要接就得改 `ui/`（工具生成目录，下次 `shadcn add` 会覆盖）—— 代价大于收益 |
+| `accordion`   | 6 个文件用原生 `<details>/<summary>`（历史详情原始 JSON、节点错误面板参数、工坊三处生成过程），另有若干 `{isOpen && …}` 条件渲染的展开块（训练页日志）                                                                                                                                    | 原生 `<details>` 的**展开态是浏览器原生 a11y 语义**（`<summary>` 自带可聚焦与 toggle 角色）且支持「查找时自动展开」；`accordion` 的价值在于「一组互斥面板 + 动画 + 键盘导航」，而这 6 处是**单个独立折叠块**，没有互斥分组。训练页的 `{isOpen && …}` 反而更像 accordion 的落点，但它当前是按钮触发的，接上要改触发器形态（外观会变）                                                                                                                                                                        |
+| `avatar`      | 首页顶栏一个 `u-avatar`（纯 CSS 底 + 圆形 div），工坊 5 处「首字母圆形徽标」                                                                                                                                                                                                              | 两者都不是**头像**：顶栏那个没有图片（`AvatarImage` 无从渲染、`AvatarFallback` 恰好够用但换成基元只多一层嵌套），工坊那 5 处是**首字母初值**徽标（`bg-primary-soft` + 单字），语义是「角色编号」不是「用户头像」。接上基元 = 为一个 div 加两层包装                                                                                                                                                                                                                                                          |
 
 **判据归属**：§16.2.4.4 ① 的 `REQUIRED_CONSUMERS` 清单仍然是「**已经用上的不许
 掉回 0**」；第一档（`tabs` / `alert` / `dropdown-menu`）接上后**同批登记进该清单**。
@@ -1826,10 +1825,10 @@ dark:text-emerald-300` 这类写死值）。
 
 **替代口径（这才是这次真正的产出）——校验规则按「要不要看别的数据」切开：**
 
-| 规则                                 | 住哪                                                                                 | 判据                                                                                    |
-| ------------------------------------ | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| **字段级**（该字段自己的值就能判定） | `src/lib/<domain>/` 的**纯函数模块**（首个落点 `~/lib/llm/provider-form`）           | 不 import React、不读列表；可在这里穷举单测                                             |
-| **集合级**（要看别的数据）           | controller（feature hook）                                                           | 返回 `{ ok, error }`；失败**错位到具体字段**（重名 → 名称字段），没有对应字段的才走横幅 |
+| 规则                                 | 住哪                                                                       | 判据                                                                                    |
+| ------------------------------------ | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| **字段级**（该字段自己的值就能判定） | `src/lib/<domain>/` 的**纯函数模块**（首个落点 `~/lib/llm/provider-form`） | 不 import React、不读列表；可在这里穷举单测                                             |
+| **集合级**（要看别的数据）           | controller（feature hook）                                                 | 返回 `{ ok, error }`；失败**错位到具体字段**（重名 → 名称字段），没有对应字段的才走横幅 |
 
 当前落点：`~/lib/llm/provider-form.ts` 的 `validateProviderForm` / `validateModelForm`，
 由 `useProviderModelDialogs` 在提交的第一关调用；弹窗视图（`ProviderModelDialog` /
@@ -2232,7 +2231,7 @@ Enter/Space 处理 —— 而它的注释里写着「**不能**用原生 button�
    `className` 给（如 `buttonVariants({ variant: "outline" })`，它本身就是按钮，
    不必再套一层 `<Button>`）。「同排」是**布局**：`leading` / `trailing` 是
    Root 的子元素，必须给 Root 传 `rootClassName="flex flex-wrap items-center
-gap-2"` 才真排成一行（Root 默认是块级容器，而触发按钮基类带 `w-full`，
+   gap-2"` 才真排成一行（Root 默认是块级容器，而触发按钮基类带 `w-full`，
    不写就是三个各自独占一行）；面板要独占一行配 `panelClassName="basis-full"`
    （面板基类带 `w-full`，在 flex 行里不随内容收缩）。落点：设置页的
    「重试 / 完整错误 / 复制」、`NodesTab` 分组头右侧的「解析本目录」、
@@ -2982,7 +2981,7 @@ TS/TSX 视图，而 **`public/{{shell.splash}}`（启动页源，编译期内嵌
 两条明确的边界：
 
 1. **「整块可点的开关行」不是这个形态**（`<label className="flex cursor-pointer
-items-center justify-between">` 包住一个 `<Switch>`）：标签与控件**并排**、
+   items-center justify-between">` 包住一个 `<Switch>`）：标签与控件**并排**、
    点哪都切换，套上块级标签行会改掉那条排布（§16.2.4.2 第 9 条）。
    `CanvasSettingsPanel` 的 `SliderRow` 同理（标签与**实时读数**并排），
    已按 `EXEMPT_FILES` 显式登记并写明理由。
@@ -3516,10 +3515,7 @@ return () => guard.dispose();
 按形态扫描时撞出来的账：`src/app/api/**` 里有十二处逐字同形的
 
 ```ts
-return NextResponse.json(
-  { error: errorMessage(e, "读取素材库失败") },
-  { status: 500 },
-);
+return NextResponse.json({ error: errorMessage(e, "读取素材库失败") }, { status: 500 });
 ```
 
 而**读它们的客户端有六种写法**（都在 `src/lib/**`）：
@@ -3553,10 +3549,9 @@ return NextResponse.json(
 写侧（服务端）：
 
 ```ts
-return NextResponse.json(
-  apiErrorBody(e, "读取素材库失败", { folders: [], items: [] }),
-  { status: 500 },
-);
+return NextResponse.json(apiErrorBody(e, "读取素材库失败", { folders: [], items: [] }), {
+  status: 500,
+});
 ```
 
 读侧（客户端，`src/lib/**` 的网络层）：
@@ -6137,10 +6132,10 @@ type SettingsShellProps = { section; onSelect; className?; banner? } & (
 业主一句话：「UI 先都按扁平化来，不符合的都改掉」。落这一刀之前，仓里对「扁平」
 其实已经有**三类执行者**，也真的在跑：
 
-| 面向            | 执行者                                     | 它管住的是什么                                                                                |
-| --------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------- |
-| 语义色 / 字面量 | `pnpm theme:check`（`check-theme-colors`） | 视图层不再写死 `#rrggbb` / `rgba(...)`；豁免 281 处逐文件登记了理由                           |
-| 调色板类名      | P71 / P79（本节 §16.2.3 的硬闸）           | `dark:violet-500` 与 `bg-violet-500` 这类「绕开语义 token 的调色板档」                        |
+| 面向            | 执行者                                     | 它管住的是什么                                                                             |
+| --------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| 语义色 / 字面量 | `pnpm theme:check`（`check-theme-colors`） | 视图层不再写死 `#rrggbb` / `rgba(...)`；豁免 281 处逐文件登记了理由                        |
+| 调色板类名      | P71 / P79（本节 §16.2.3 的硬闸）           | `dark:violet-500` 与 `bg-violet-500` 这类「绕开语义 token 的调色板档」                     |
 | 分层阴影        | 无（靠 review）                            | 浮层阴影保留、按钮装饰发光撤掉 —— 这条在 `CHANGELOG-archive.md` 与 PR #2027 里各签过一次字 |
 
 **这一刀补的是第四格与两处空洞**，逐条记下来（它们都不是「新想法」，是「没人查」）：
@@ -6171,6 +6166,44 @@ type SettingsShellProps = { section; onSelect; className?; banner? } & (
   既有语义族（品牌紫 / 信息青 / 警告琥珀）之后，若今后要**彻底**把「图片类型」与
   「品牌紫」解耦，做法是补三颗两态类型色 token（与端口类型色同族），不是回到写死
   调色板。这条留在 `task-type-chip.tsx` 的文件头，改的人会先看见。
+
+#### 16.2.4.77 host 元素原生 `title=` 治理线：P82 的宿主面补齐（ISSUE #3681 · P88）
+
+P82 只盯 `<Button title=` 一个锚点 —— #3672 清掉 `<Badge title=…>`（走 `<Hint>`）之后，
+视图层 host 元素（`<span>` / `<div>` / `<p>` / `<code>` / `<kbd>` …）上的**原生
+`title=`** 照旧散落，而 P82 永远不会红：**治理线的口径比它自称的小**。业主在 #3681
+下裁决「出口 A」= 把治理线扩到 host 元素面，做成与 P82 同款的判据（**P88**），不
+动 P82 自身（它仍只管 `<Button>`，出口仍是 `<Hint>`）。
+
+落地三步（与 P82 引入-治理-升硬闸同款顺序，**反了就会把硬闸建在看不见的存量上**）：
+
+1. **让判据看见全部存量**：`countHostTitle()`（`scripts/ui-primitives-engine.cjs`）
+   与 `countButtonTitle` 同源——剥注释 → `scanJsxAttrs` 平衡扫描属性段 →
+   `parseJsxProps` → 五档判定（clean/empty/static/dynamic/unknown，`violations =
+   static + dynamic`）。差异只有一处：锚点从字面 `<Button` 换成**小写 host 标签**
+   （capitalized 组件是组件 prop、不是原生 tooltip，不计）。门禁首轮实测
+   **107 处 / 59 文件**（`span` 82 + `div` 17 + 其余标签）。
+2. **棘轮冻结只许降不许升**：存量登记进 `scripts/.ui-primitives-baseline.json`，
+   P88 先只进 `RULE_TIERS`、不进 `HARD_GATE_RULES`。
+3. **一次治理清零，升为硬闸**：107 处全部改写成 `<Hint label=…>`（`~/components/ui/hint`，
+   Base UI Tooltip），基线归零、P88 进 `HARD_GATE_RULES` —— 基线里空对象是正常状态，
+   不再登记任何仍是棘轮的规则。
+
+三个治理时真踩到的坑，写下来免得下一批重来：
+
+- **`key=` 不能留在内层**。`<Hint>` 成了映射迭代子的直属子元素后，内层
+  `<span key=…>` 的 key 对 React 来说消失了 —— `react/jsx-key` 当场红。8 处 key 挪到
+  `<Hint>` 上（`IoEndpointsSection` / `WorkflowParamCard` / `NodesTab` /
+  `StepLogTaskPicker` / `key-value-rows`）。
+- **`iframe` 的 `title` 不能搬**。它是 `react/jsx-a11y` 的强制项（`iframe-has-title`），
+  删了无障碍名就没了 —— `ShellTabs` 那处保留原生 `title={tab.label}`，判据把
+  `iframe` / `object` / `embed` 与 SVG `<title>` 一并豁免。
+- **`.stories.tsx` 也在扫描面里**。治理当批漏扫 stories → 硬闸 `--update` 当场拒绝
+  （1 处），补迁后才归零 —— 「粗计数面」与「门禁扫描面」本来就不一致，**以门禁为准**。
+
+**P88 的生效面 = `pnpm ui:primitives` 的全扫描面**（含 stories；capitalized 组件
+prop、注释里的 `title=`、spread 展开（unknown 单列人工抽查）都不计违规）；与
+`pnpm ui:primitives` 同口径，pre-commit D 组照常跑。
 
 ### 16.3 新增一个组件的标准动作
 
@@ -6251,10 +6284,7 @@ export function LoginForm() {
   });
   return (
     <Form {...form}>
-      <form
-        onSubmit={form.handleSubmit((v) => submit(v))}
-        className="grid gap-3"
-      >
+      <form onSubmit={form.handleSubmit((v) => submit(v))} className="grid gap-3">
         <FormField
           control={form.control}
           name="email"

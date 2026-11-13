@@ -57,7 +57,8 @@ import {
   truncateJobLog,
 } from "./ci-github-verdict-logs.mjs";
 import { RED_RUN_CONCLUSIONS, workflowRunsUrl } from "./ci-github-verdict-read.mjs";
-import { readRelayLogs } from "./ship-ga-logs-cnb.mjs";
+import { findRelayComment, readRelayLogs } from "./ship-ga-logs-cnb.mjs";
+import { ensureOnDemandLogs, triggerOnDemandLogs } from "./ship-ga-logs-on-demand.mjs";
 
 /** 全量日志落点（系统临时目录；不进仓库）。 */
 export const GH_LOGS_DIR = path.join(os.tmpdir(), "comfy-ship-gh-logs");
@@ -448,23 +449,31 @@ export function renderFailureWindow(label, win) {
  * 分节，逐节过 `extractFailureWindow`，没有 GA job 回话里的 step 清单就按 job 名归因。
  *
  * @param {string} text 还原后的日志正文
- * @param {{run:string,sha:string,pr:string,jobs:number,bytes:number,assetPath:string}} meta marker 身份读数
+ * @param {{run:string,sha:string,pr:string,jobs:number,bytes:number,assetPath:string,scope?:string}} meta marker 身份读数（scope 缺省 failed，兼容 #3437 旧评论）
  * @param {{log:(l:string)=>void, windowMaxBytes?:number, dir?:string}} io 注入面
  * @returns {void}
  */
 function renderRelayLogs(text, meta, io) {
   const log = io.log;
   const shortSha = meta.sha ? meta.sha.slice(0, 8) : "n/a";
-  log(
-    `[ship] CNB 侧 GA 判红日志（ISSUE #3437）：run ${meta.run} · sha ${shortSha} · ${String(meta.jobs)} 个失败 job · 站内读取，未出站 github.com`,
-  );
+  /* ISSUE #3667：旧评论没有 scope ⇒ 按 `failed` 读，逐字兼容 #3437 的呈现；
+   * `all` 是判绿按需全量档，正文里没有 `##[error]` 是**正常形态**（绿跑本就没有
+   * 失败注解），不许把「没有注解」念成「失败 job 缺了日志」。 */
+  const scope = meta.scope === "all" ? "all" : "failed";
+  const heading =
+    scope === "all"
+      ? `[ship] CNB 侧 GA 日志·按需全量（ISSUE #3667）：run ${meta.run} · sha ${shortSha} · ${String(meta.jobs)} 个 job（含判绿） · 站内读取，未出站 github.com`
+      : `[ship] CNB 侧 GA 判红日志（ISSUE #3437）：run ${meta.run} · sha ${shortSha} · ${String(meta.jobs)} 个失败 job · 站内读取，未出站 github.com`;
+  log(heading);
   const sections = String(text).split(/^== run /mu);
   /** @type {Array<{name:string, kind:"content"|"environment"|"unknown"}>} */
   const readings = [];
   /** @type {string[]} */
   const archive = [
-    "# ship GA 失败日志回读（CNB 侧 relay 正文，已脱敏）",
-    `# run ${meta.run} / sha ${meta.sha} / pr ${meta.pr} / jobs ${String(meta.jobs)}`,
+    scope === "all"
+      ? "# ship GA 日志回读·按需全量（CNB 侧 relay 正文，已脱敏）"
+      : "# ship GA 失败日志回读（CNB 侧 relay 正文，已脱敏）",
+    `# run ${meta.run} / sha ${meta.sha} / pr ${meta.pr} / jobs ${String(meta.jobs)} / scope ${scope}`,
   ];
   for (const sec of sections) {
     if (!sec.trim()) continue;
@@ -476,7 +485,11 @@ function renderRelayLogs(text, meta, io) {
       log(`[ship] ✗ job「${label}」失败注解（共 ${String(raw.errors.length)} 条）：`);
       for (const line of raw.errors) log(`[ship]     ${line}`);
     } else {
-      log(`[ship] ✗ job「${label}」：没有 ##[error] 行（日志里没有注解）`);
+      log(
+        scope === "all"
+          ? `[ship] ✓ job「${label}」：无 ##[error] 行（判绿 job 的正常形态，正文照常落盘）`
+          : `[ship] ✗ job「${label}」：没有 ##[error] 行（日志里没有注解）`,
+      );
     }
     const win = shipFailureWindow(raw.lines, io.windowMaxBytes ?? SHIP_WINDOW_MAX_BYTES);
     for (const line of renderFailureWindow(`job「${label}」`, win)) log(line);
@@ -503,6 +516,7 @@ function renderRelayLogs(text, meta, io) {
  *   windowMaxBytes?: number,
  *   dir?: string,
  *   cnbIo?: {run: (cmd: string, args: string[]) => {stdout:string,stderr:string,status:number,error:string|null}, slug: string} | undefined,
+ *   onDemand?: {sleep?: (ms:number)=>void|Promise<void>, now?:()=>number, intervalMs?:number, maxMs?:number} | undefined,
  * }} io 注入面
  * @returns {Promise<number>} 退码（只在「输入认不出」时是 2）
  */
@@ -519,25 +533,64 @@ export async function runGhLogs(io) {
   /* ── CNB 侧优先（ISSUE #3437）：按 PR 号站内读 relay 正文 ──────────────
    * 放在「GitHub 令牌」那一闸**之前**：CNB 命中时本地不需要任何 GitHub 凭据，
    * 也不发一条 api.github.com。只有 `pr:` 形态够得着（CNB 附件按 PR 号归属）；
-   * `run:` 形态照旧走 GA 出站链路。缺席时如实念一行，再退回下面那条链。 */
-  if (target.kind === "pr" && io.cnbIo && !io.dryRun) {
-    try {
-      const relay = readRelayLogs({
-        number: target.number,
-        run: io.cnbIo.run,
-        slug: io.cnbIo.slug,
-      });
-      if (relay) {
-        renderRelayLogs(relay.text, relay.meta, {
-          dir: io.dir,
-          log,
-          windowMaxBytes: io.windowMaxBytes,
-        });
-        return CODE.GREEN;
+   * `run:` 形态照旧走 GA 出站链路。
+   *
+   * §12.20：给了 `onDemand` 时，一条 `--gh-logs pr:<号>` 自己把「按需发起搬运 →
+   * 等 CNB 站内回读」也做完 —— 判绿的 run 没有失败 job、relay 一条评论都不写，
+   * 过去这一格必须先手工敲一遍 `cnb build start-build`。`onDemand` 缺席的旧调用方
+   * （判红自动回读 / 单测）行为逐字不变。 */
+  if (target.kind === "pr" && io.cnbIo) {
+    const cnb = { run: io.cnbIo.run, slug: io.cnbIo.slug };
+    if (io.dryRun) {
+      if (io.onDemand) {
+        triggerOnDemandLogs({ ...cnb, dryRun: true, log, pr: target.number });
+        log(
+          `[ship] --dry-run 计划：随后轮询 CNB PR #${String(target.number)} 的 scope=all relay 评论并站内读回（一条写动作都不发）。`,
+        );
       }
-      log("[ship] CNB 侧没有 GA 日志 relay 评论 ⇒ 退回 GitHub 链路（快速回退留盘）");
-    } catch (error) {
-      log(`[ship] CNB 侧读回异常 ⇒ 退回 GitHub 链路（不改三态）：${String(error)}`);
+    } else {
+      try {
+        const relay = readRelayLogs({ ...cnb, number: target.number });
+        if (relay) {
+          renderRelayLogs(relay.text, relay.meta, {
+            dir: io.dir,
+            log,
+            windowMaxBytes: io.windowMaxBytes,
+          });
+          return CODE.GREEN;
+        }
+        /* 有 marker 却读不回正文 = 读失败，不是「日志不存在」；此时**不**重复发起
+         * 搬运（那会白派一条 GA run），如实退回原链路。只有连 marker 都没有，才是
+         * #3667 那个根因：判绿 run 一条评论都没写。 */
+        const stale = findRelayComment(cnb.run, cnb.slug, target.number);
+        if (io.onDemand && stale === null) {
+          const ensured = await ensureOnDemandLogs({
+            ...cnb,
+            dryRun: false,
+            intervalMs: io.onDemand.intervalMs,
+            log,
+            maxMs: io.onDemand.maxMs,
+            now: io.onDemand.now,
+            pr: target.number,
+            sleep: io.onDemand.sleep ?? (() => Promise.resolve()),
+          });
+          if (ensured.relay) {
+            renderRelayLogs(ensured.relay.text, ensured.relay.meta, {
+              dir: io.dir,
+              log,
+              windowMaxBytes: io.windowMaxBytes,
+            });
+            return CODE.GREEN;
+          }
+          log("[ship] 按需搬运没拿到日志 ⇒ 退回 GitHub 链路（快速回退留盘，缺的只是日志）");
+        } else if (stale === null) {
+          log("[ship] CNB 侧没有 GA 日志 relay 评论 ⇒ 退回 GitHub 链路（快速回退留盘）");
+        } else {
+          log("[ship] CNB 侧有 relay 评论但附件没读回 ⇒ 退回 GitHub 链路（不重复发起搬运）");
+        }
+      } catch (error) {
+        log(`[ship] CNB 侧读回异常 ⇒ 退回 GitHub 链路（不改三态）：${String(error)}`);
+      }
     }
   }
   const token = resolveGhToken(env);

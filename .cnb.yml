@@ -556,6 +556,12 @@
 .lock-ga-verdict: &lock_ga_verdict
   key: ga-verdict
   cancel-in-progress: true
+# ISSUE #3667：按需日志搬运那一口的锁。它既不是判决回调、也不是任一固定档 ——
+# 与 ga-verdict 共用会把「有人想看一眼绿跑日志」变成「把还在等结论的回调掐掉」。
+# 同一张 PR 连点两次只留最新一跑（GA 侧 pr-gate 的并发组是另半边）。
+.lock-ga-logs: &lock_ga_logs
+  key: ga-logs-on-demand
+  cancel-in-progress: true
 .ga-dispatch: &ga_dispatch
   # 「GA 派发」触发口共用的平台池形态（runner / docker / imports），#3504 起。
   # 平台池 = 云托管 Linux 节点（不写 namespace: group 就是它）；派发是网络 IO 动作，
@@ -1116,8 +1122,11 @@
     # 前者拆碎当场退 127，后者在 Linux 上是直通的多余一层（契约由
     # no-platform-ci-config 的质量门禁段钉住）。
     script: node scripts/ci-ga-verdict-readout.mjs
-    # 包住站内短轮询预算（脚本 DEFAULT_BUDGET_MS 45m）+ 进程开销；与最重格外框同级。
-    timeout: 60m
+    # 包住站内短轮询预算（脚本 DEFAULT_BUDGET_MS 70m = GA 最重 job 60m + 回调 5m +
+    # 余量，对齐见 #3593；不变式由 ci-ga-verdict-readout.test.ts 现算 pr-gate.yml 钉住）
+    # + 进程开销。旧 45m/60m 都会比 GA 的最坏路径先死 —— GA 正常跑满才回调时，
+    # 这里先判「没判过」，红的是「没等到」不是 GA 判了红。
+    timeout: 75m
 
   # ── 构建与产物：**这一格 不在 PR 上跑了**（口径见 §13.5.23）──
   #
@@ -1668,6 +1677,26 @@ master:
       stages:
         - name: GA 派发·单跑全量单测
           script: node scripts/ci-ga-dispatch.mjs --preset unit
+          timeout: 10m
+  # ── ISSUE #3667：判绿时「有需要」也要能经 GA→CNB→本地 拿到日志 ──────────
+  #
+  # #3437 的 relay 只在判红时搬日志（无失败 job ⇒ 不写 CNB 评论），判绿的 run 想
+  # 看日志就得让本地出站 api.github.com —— 而那正是 #3437 要绕开的一跳。这一口
+  # 是「按需发起」：平台池代发一次 GA `workflow_dispatch`（`relay_scope=all`），
+  # GA 收尾 relay 把**全部 job**（含判绿）的日志搬进 CNB 附件 + PR 评论，本地
+  # `pnpm ship --gh-logs pr:<n>` 站内读回。本地全程零 `api.github.com`。
+  #
+  # 与五个固定档刻意**不**共用 `--preset` 注册表：那五个是「跑哪套判据」，这一口
+  # 是「把某条已跑完的 run 的日志搬过来」，两件事的前提与去重面都不同。
+  # `GA_LOG_PR_NUMBER` 由触发者（`start-build --env`）注入；`GA_LOG_RUN_ID` 可选，
+  # 点名另一条已跑完的绿 run 时连判据都不必重跑。
+  api_trigger_ga_logs:
+    - <<: *ga_dispatch
+      name: GA 日志按需搬运（API 触发）
+      lock: *lock_ga_logs
+      stages:
+        - name: GA 派发·日志按需搬运
+          script: node scripts/ci-ga-logs-on-demand.mjs
           timeout: 10m
 
   # ── 这里曾有第四个 API 口：`api_trigger_formatfix`（已摘除）─────────

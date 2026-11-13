@@ -87,7 +87,10 @@ function pinRow(handle: string): HTMLElement {
 }
 
 function labelColor(row: HTMLElement): string {
-  const span = row.querySelector<HTMLElement>("span[title]");
+  /* 标签 span 上的行内色（`var(--color-ink-bright)`）—— 原生 `title=` 撤干净，
+   * 悬浮说明改走 <Hint>，所以不能再按 title 找；同一行里第一个带行内色的
+   * span 就是（输入侧）标签。 */
+  const span = row.querySelector<HTMLElement>("span[style*='color']");
   expect(span).not.toBeNull();
   return span!.style.color;
 }

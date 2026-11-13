@@ -165,6 +165,12 @@ async function runOnce(
     env?: Record<string, string>;
     fetchImpl?: typeof fetch;
     input?: string;
+    onDemand?: {
+      intervalMs?: number;
+      maxMs?: number;
+      now?: () => number;
+      sleep?: (ms: number) => void | Promise<void>;
+    };
     windowMaxBytes?: number;
   } = {},
 ) {
@@ -180,6 +186,7 @@ async function runOnce(
     dryRun: opts.dryRun,
     dir: tempDir(),
     cnbIo: opts.cnbIo,
+    onDemand: opts.onDemand,
   });
   return { code, lines, text: lines.join("\n") };
 }
@@ -447,10 +454,12 @@ function relayB64(text: string): string {
   return Buffer.from(gzipNode(Buffer.from(text, "utf8"))).toString("base64");
 }
 
-/** 假 cnb 执行者：按命令返回 -v 的 JSON 信封。 */
-function fakeCnbIo(text: string | null) {
+/** 假 cnb 执行者：按命令返回 -v 的 JSON 信封。
+ * `scope` 不给 ⇒ 造的是 #3437 旧评论（marker 无 scope），本地按 failed 读、逐字兼容。 */
+function fakeCnbIo(text: string | null, scope?: string) {
   const relayText = text ?? "";
-  const marker = `<!-- ${RELAY_MARKER} run=4242 sha=${"c".repeat(40)} pr=3195 jobs=1 bytes=99 -->\n[f.b64](/-/files/u/key/f.b64)`;
+  const scopePart = scope === undefined ? "" : ` scope=${scope}`;
+  const marker = `<!-- ${RELAY_MARKER} run=4242 sha=${"c".repeat(40)} pr=3195 jobs=1 bytes=99${scopePart} -->\n[f.b64](/-/files/u/key/f.b64)`;
   return {
     run: (_cmd: string, args: string[]) => {
       const key = args.join(" ");
@@ -529,5 +538,182 @@ describe("⑤ CNB 侧优先（ISSUE #3437）：站内读 relay，本地不出站
     const r = await runOnce({ input: `run:${String(RUN_ID)}` });
     expect(r.code).toBe(CODE.GREEN);
     expect(r.text).toContain(`GH run #${String(RUN_ID)}`);
+  });
+
+  /* ISSUE #3667：判绿按需档。marker 带 scope=all ⇒ 呈现成「按需全量」而不是
+   * 「判红日志」，且绿跑没有 ##[error] 是正常形态、正文照常落盘。 */
+  it("CNB 命中 scope=all：判绿日志也站内读回，零 api.github.com，且无失败注解不误报", async () => {
+    const greenLog = [
+      "== run 4242 / job「static-gates」（success）==",
+      "##[group]Run pnpm lint",
+      "lint ok",
+      "##[endgroup]",
+    ].join("\n");
+    let ghCalls = 0;
+    const fetchImpl = ((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (new URL(url).hostname === "api.github.com") ghCalls += 1;
+      return Promise.resolve(textResponse("not found", 404));
+    }) as typeof fetch;
+    const r = await runOnce({
+      cnbIo: fakeCnbIo(greenLog, "all"),
+      env: {},
+      fetchImpl,
+      input: "pr:3195",
+    });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(r.text).toContain("CNB 侧 GA 日志·按需全量（ISSUE #3667）");
+    expect(r.text).not.toContain("CNB 侧 GA 判红日志");
+    expect(r.text).toContain("无 ##[error] 行（判绿 job 的正常形态");
+    expect(r.text).toContain("全量日志已落盘");
+    expect(ghCalls).toBe(0);
+  });
+
+  it("旧评论（marker 无 scope）按 failed 读：呈现逐字兼容 #3437", async () => {
+    const r = await runOnce({ cnbIo: fakeCnbIo(CNB_LOG), env: {}, input: "pr:3195" });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(r.text).toContain("CNB 侧 GA 判红日志（ISSUE #3437）");
+    expect(r.text).not.toContain("无 ##[error] 行（判绿 job 的正常形态");
+    expect(r.text).toContain("##[error]Process completed with exit code 1.");
+  });
+});
+
+/**
+ * 一条 `--gh-logs pr:<号>` 自己完成按需搬运（§12.20）：过去要先手工敲
+ * `cnb build start-build …`，现在 `--gh-logs` 在 CNB 侧没有 relay 时自己发起、自己等回读。
+ * 用假的 cnb 执行者模拟「第一眼还没评论、第二眼 GA 把 scope=all 写回来了」。
+ */
+describe("⑥ 按需档：一条 --gh-logs pr:<号> 自己发起搬运并站内读回", () => {
+  /** 可编排的 cnb 执行者：relay 评论只在「触发已派出」之后才出现（模拟 GA 跑完写回）。 */
+  function onDemandCnbIo(opts: { alreadyThere?: boolean; attachment: string; scope?: string }) {
+    const calls: string[] = [];
+    let triggered = opts.alreadyThere ?? false;
+    const asset = "u/key/new.b64";
+    const marker = `<!-- ${RELAY_MARKER} run=4242 sha=${"c".repeat(40)} pr=3195 jobs=2 bytes=99${
+      opts.scope === undefined ? "" : ` scope=${opts.scope}`
+    } -->\n[f.b64](/-/files/${asset})`;
+    const run = (_cmd: string, args: string[]) => {
+      const key = args.join(" ");
+      calls.push(key);
+      if (key.includes("start-build")) {
+        triggered = true;
+        return {
+          error: null,
+          status: 0,
+          stderr: "",
+          stdout: `status: 200\n${JSON.stringify({ data: { sn: "cnb-test-1k79abc" } })}`,
+        };
+      }
+      if (key.includes("list-comments")) {
+        return {
+          error: null,
+          status: 0,
+          stderr: "",
+          stdout: `status: 200\n${JSON.stringify({
+            data: triggered ? [{ body: marker, id: "2" }] : [],
+          })}`,
+        };
+      }
+      if (key.includes("get-files")) {
+        return {
+          error: null,
+          status: 0,
+          stderr: "",
+          stdout: `status: 200\n${JSON.stringify({ data: relayB64(opts.attachment) })}`,
+        };
+      }
+      return { error: null, status: 0, stderr: "", stdout: "{}" };
+    };
+    return { calls, run, slug: "moon-read/comfy-app-t3" };
+  }
+
+  it("CNB 侧原本没有 relay ⇒ 自动发起一次触发，等回读后呈现全量档，零 api.github.com", async () => {
+    const greenLog = [
+      "== run 4242 / job「static-gates」（success）==",
+      "##[group]Run pnpm lint",
+      "lint ok",
+      "##[endgroup]",
+    ].join("\n");
+    const io = onDemandCnbIo({ attachment: greenLog, scope: "all" });
+    let ghCalls = 0;
+    const fetchImpl = ((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (new URL(url).hostname === "api.github.com") ghCalls += 1;
+      return Promise.resolve(textResponse("not found", 404));
+    }) as typeof fetch;
+    const r = await runOnce({
+      input: "pr:3195",
+      env: {},
+      fetchImpl,
+      cnbIo: io,
+      onDemand: { intervalMs: 1, maxMs: 10_000, sleep: () => Promise.resolve() },
+    });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(io.calls.filter((c) => c.includes("start-build")).length).toBe(1);
+    expect(r.text).toContain("按需触发已派发：build cnb-test-1k79abc");
+    expect(r.text).toContain("站内回读命中");
+    expect(r.text).toContain("CNB 侧 GA 日志·按需全量（ISSUE #3667）");
+    expect(r.text).toContain("lint ok");
+    expect(r.text).toContain("全量日志已落盘");
+    expect(ghCalls).toBe(0);
+  });
+
+  it("没给 onDemand（判红自动回读那种旧调用方）⇒ 不伸手触发，行为逐字不变", async () => {
+    const io = onDemandCnbIo({ alreadyThere: true, attachment: "unused", scope: "all" });
+    const r = await runOnce({ input: "pr:3195", cnbIo: io, env: {} });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(io.calls.filter((c) => c.includes("start-build")).length).toBe(0);
+    expect(r.text).toContain("CNB 侧 GA 日志·按需全量（ISSUE #3667）");
+  });
+
+  it("CNB 侧已有旧评论但附件读不回 ⇒ 不重复发起搬运（如实退回 GitHub 链路）", async () => {
+    const io = onDemandCnbIo({ alreadyThere: true, attachment: "", scope: "all" });
+    io.run = (_cmd: string, args: string[]) => {
+      const key = args.join(" ");
+      if (key.includes("list-comments")) {
+        return {
+          error: null,
+          status: 0,
+          stderr: "",
+          stdout: `status: 200\n${JSON.stringify({
+            data: [
+              {
+                body: `<!-- ${RELAY_MARKER} run=4242 sha=${"c".repeat(40)} pr=3195 jobs=1 bytes=99 -->\n[f](/-/files/u/key/old.b64)`,
+                id: "1",
+              },
+            ],
+          })}`,
+        };
+      }
+      if (key.includes("get-files")) {
+        return { error: null, status: 0, stderr: "", stdout: "{}" };
+      }
+      return { error: null, status: 0, stderr: "", stdout: "{}" };
+    };
+    const r = await runOnce({
+      input: "pr:3195",
+      cnbIo: io,
+      env: {},
+      onDemand: { intervalMs: 1, maxMs: 10_000, sleep: () => Promise.resolve() },
+    });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(io.calls.filter((c) => c.includes("start-build")).length).toBe(0);
+    expect(r.text).toContain("不重复发起搬运");
+    expect(r.text).toContain("退回 GitHub 链路");
+  });
+
+  it("--dry-run 只念触发计划，一条 cnb 写动作都不发", async () => {
+    const io = onDemandCnbIo({ attachment: "" });
+    const r = await runOnce({
+      input: "pr:3195",
+      cnbIo: io,
+      dryRun: true,
+      env: {},
+      onDemand: { intervalMs: 1, maxMs: 10_000, sleep: () => Promise.resolve() },
+    });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(io.calls).toHaveLength(0);
+    expect(r.text).toContain("--dry-run 计划：cnb build start-build");
+    expect(r.text).toContain("api_trigger_ga_logs");
   });
 });

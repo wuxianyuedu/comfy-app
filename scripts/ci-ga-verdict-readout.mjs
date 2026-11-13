@@ -60,8 +60,16 @@ export const STATUS_PREFIX = "cnb/api_trigger_ga_verdict";
 /** CNB OpenAPI 的缺省服务地址。 */
 export const DEFAULT_API_ENDPOINT = "https://api.cnb.cool";
 
-/** 站内短轮询的缺省预算（GA 判据跑完通常远小于它；超时即「没判过」）。 */
-export const DEFAULT_BUDGET_MS = 45 * 60 * 1000;
+/** 站内短轮询的缺省预算（GA 判据跑完通常远小于它；超时即「没判过」）。
+ *
+ * 预算对齐 **GA 的最坏路径**（#3593）：`pr-gate.yml` 最重的 `heavy-gates` job 顶层
+ * `timeout-minutes: 60`，收尾回调 job（`ga-verdict-callback`）再要 5m，加派发/排队
+ * 余量 5m ⇒ 70m。旧值 45m 比 GA 自己的预算还短：GA 正常跑满被 cancel 后才由
+ * `if: always()` 发回调时，这里先到点判「没判过」—— 红的是「没等到」，不是 GA 判了红。
+ * **别单独动这个数**：`tests/ci-ga-verdict-readout.test.ts` 的不变式用例会拿
+ * `pr-gate.yml` 的 job 预算现算这条下限 —— 抬 GA 的 job 预算而不抬这里，当场红。
+ */
+export const DEFAULT_BUDGET_MS = 70 * 60 * 1000;
 
 /** 两眼之间的间隔。 */
 export const DEFAULT_POLL_MS = 20 * 1000;
@@ -253,10 +261,23 @@ export async function main(io = {}) {
     lastState = status.state;
     const code = verdictFromStatus(status);
     if (code !== CODE.NO_FACT || now() >= deadline) {
+      /* 「没判过」那一档要能把「等了多久、预算多少」念出来（#3593）：
+       * 「GA 还在预算里跑」与「GA 压根没起跑」不该共用一句无声的 status 缺席。 */
+      const waitedMin = Math.round(Math.max(0, now() - (deadline - budgetMs)) / 60_000);
+      const waited = `已等 ${waitedMin}m / 预算 ${Math.round(budgetMs / 60_000)}m`;
       const line = status.present
-        ? `[ga-readout] ${STATUS_PREFIX}：state=${status.state || "(空)"} ⇒ ${code === CODE.OK ? "绿" : code === CODE.FAIL ? "红" : "还没判完"}`
-        : `[ga-readout] ${STATUS_PREFIX}：status 缺席 ⇒ GA 还没送回结论`;
-      log(json ? JSON.stringify({ code, state: lastState, present: lastPresent }) : line);
+        ? `[ga-readout] ${STATUS_PREFIX}：state=${status.state || "(空)"} ⇒ ${code === CODE.OK ? "绿" : code === CODE.FAIL ? "红" : `还没判完（${waited}）`}`
+        : `[ga-readout] ${STATUS_PREFIX}：status 缺席 ⇒ GA 还没送回结论（${waited}）`;
+      log(
+        json
+          ? JSON.stringify({
+              code,
+              state: lastState,
+              present: lastPresent,
+              waitedMs: Math.max(0, now() - (deadline - budgetMs)),
+            })
+          : line,
+      );
       if (!json && code === CODE.FAIL) {
         for (const hint of errorLogsHint(pr)) {
           log(hint);

@@ -6,6 +6,7 @@ import { compareText } from "~/lib/ordered-set";
 import { useRgthreeGroups } from "./IOEditContext";
 import type { WorkflowGroup } from "../workflow-types";
 import { Toggle } from "~/components/ui/toggle";
+import { Hint } from "~/components/ui/hint";
 
 export function RgthreeFastGroupsBypasserBody({
   matchTitle,
@@ -44,15 +45,16 @@ export function RgthreeFastGroupsBypasserBody({
             className="group text-2xs relative flex h-5.5 items-center gap-1.5 pr-2 pl-2"
             key={group.id}
           >
-            <span
-              className={`text-2xs min-w-0 shrink truncate text-left ${
-                bypass ? "text-ink-faint" : "text-ink-subtle"
-              }`}
-              style={{ flex: "0 1 auto" }}
-              title={group.title}
-            >
-              {label}
-            </span>
+            <Hint label={group.title}>
+              <span
+                className={`text-2xs min-w-0 shrink truncate text-left ${
+                  bypass ? "text-ink-faint" : "text-ink-subtle"
+                }`}
+                style={{ flex: "0 1 auto" }}
+              >
+                {label}
+              </span>
+            </Hint>
             <span
               className={`text-2xs min-w-0 truncate text-left tabular-nums ${
                 bypass ? "text-accent-soft" : "text-ink-fainter"
@@ -213,15 +215,16 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown
               key={`pll-r-${index}`}
               style={{ background: "var(--color-subtle)" }}
             >
-              <span
-                className="min-widget-0 flex-1 truncate"
-                style={{
-                  color: name ? "var(--color-ink-bright)" : "var(--color-ink-fainter)",
-                }}
-                title={name}
-              >
-                {name}
-              </span>
+              <Hint label={name}>
+                <span
+                  className="min-widget-0 flex-1 truncate"
+                  style={{
+                    color: name ? "var(--color-ink-bright)" : "var(--color-ink-fainter)",
+                  }}
+                >
+                  {name}
+                </span>
+              </Hint>
               {modelStr !== undefined && (
                 <span
                   className="shrink-0 tabular-nums"
@@ -302,21 +305,22 @@ export function RgthreeLabelBody({
         overflow: "hidden",
       }}
     >
-      <span
-        style={{
-          fontFamily,
-          fontSize,
-          color: fontColor,
-          textAlign,
-          width: "100%",
-          lineHeight: 1.1,
-          wordBreak: "break-word",
-          whiteSpace: "pre-wrap",
-        }}
-        title={text}
-      >
-        {text || "（空标签）"}
-      </span>
+      <Hint label={text}>
+        <span
+          style={{
+            fontFamily,
+            fontSize,
+            color: fontColor,
+            textAlign,
+            width: "100%",
+            lineHeight: 1.1,
+            wordBreak: "break-word",
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {text || "（空标签）"}
+        </span>
+      </Hint>
     </div>
   );
 }

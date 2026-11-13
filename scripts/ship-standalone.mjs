@@ -228,11 +228,13 @@ export async function runStandaloneAction(io) {
       ]),
     };
   }
-  /* ── `--gh-logs <run-id|pr号>`：直接回读 GA 失败日志（规范 §13.6）──────────
-   * 与 `--diagnose` / `--stage-log` 同一条纪律：只读、一次只做一件、排在 preflight
-   * 之前。**优先从 CNB 站内读 relay 日志**（ISSUE #3437，站内、稳），缺席才走
-   * GitHub API；不必等 ship 判红 —— 显式入口就是
-   * 「先看一眼红在哪」。没有令牌时只念一行，不改退码。 */
+  /* ── `--gh-logs <run-id|pr号>`：回读 GA 日志（规范 §13.6）─────────────────
+   * 与主流程互斥、一次只做一件、排在 preflight 之前。**优先从 CNB 站内读 relay
+   * 日志**（ISSUE #3437，站内、稳），缺席才走 GitHub API；不必等 ship 判红。
+   * §12.20（#3667 后续）：`pr:` 形态在 CNB 侧连 marker 都没有时，会代发一次
+   * `api_trigger_ga_logs` 把判绿日志搬进 CNB 再站内读回 —— 这一格是**平台侧写动作**，
+   * 所以 `--dry-run` 必须拦住它（`tests/ship.test.ts` 的 WRITE_SHAPES 钉着）。
+   * 判红自动回读那条路不给 `onDemand` ⇒ 逐字不变。没有令牌时只念一行，不改退码。 */
   if (opt.ghLogs || opt.ghLogsBad.length > 0) {
     const clashes = namedActions(opt, "ghLogs");
     if (clashes.length > 0) {
@@ -262,6 +264,10 @@ export async function runStandaloneAction(io) {
           log,
           fetchImpl,
           sleep,
+          /* 一条 `--gh-logs pr:<号>` 自己把按需搬运也发起（§12.20）：判绿的 run
+           * CNB 侧没有 relay 评论时，不再要求人先手工敲一遍 `start-build`。
+           * 判红自动回读那条路（`runGhLogsOnRed`）不给这一格 ⇒ 逐字不变。 */
+          onDemand: { sleep },
           dryRun: opt.dryRun,
         }),
       ]),

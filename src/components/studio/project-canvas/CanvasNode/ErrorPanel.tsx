@@ -160,17 +160,16 @@ export function ErrorPanel({
             </span>
             <div className="flex shrink-0 items-center gap-1">
               {kind === "workflow" && workflowName !== undefined && workflowName !== "" && (
-                <span
-                  className="border-destructive/15 bg-destructive/10 text-danger-strong/80 rounded border px-1.5 py-0.5 font-mono text-[9.5px]"
-                  title="执行的工作流"
-                >
-                  {/* 转型说明：CanvasNodeData 有 [key: string]: unknown
-                   * 索引签名，会在 JSX 读取时把 d.workflowName 放宽成
-                   * unknown。显式 String() 修好
-                   * ReactNode 兼容性，照顾少见的包裹联合。
-                   */}
-                  {String(workflowName)}
-                </span>
+                <Hint label="执行的工作流">
+                  <span className="border-destructive/15 bg-destructive/10 text-danger-strong/80 rounded border px-1.5 py-0.5 font-mono text-[9.5px]">
+                    {/* 转型说明：CanvasNodeData 有 [key: string]: unknown
+                     * 索引签名，会在 JSX 读取时把 d.workflowName 放宽成
+                     * unknown。显式 String() 修好
+                     * ReactNode 兼容性，照顾少见的包裹联合。
+                     */}
+                    {String(workflowName)}
+                  </span>
+                </Hint>
               )}
               {/* 用同一份参数重跑。仅当有 taskId（即任务真的跑过）且不是
                * 预检阶段的校验错误时才出现。用 Boolean() 包一层是为了让 TS

@@ -5,10 +5,12 @@
  * 只标「只在一侧」的出处标、删除的两步（点删除只弹确认框且标题按出处分叉）、空态 / 加载态下列行都不该在；判据打在文本 / 可访问名上。 */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import { ToastProvider } from "./ToastProvider";
 import { WorksGallery } from "./WorksGallery";
+import { TooltipProvider } from "~/components/ui/tooltip";
 import type { ProjectListEntry } from "~/lib/project-canvas/canvas-store";
 import { defaultData, type CanvasNodeType } from "~/lib/project-canvas/canvas-types";
 import type { WorksGalleryController } from "./works/hooks/use-works-gallery";
@@ -20,12 +22,16 @@ vi.mock("./works/hooks/use-works-gallery", () => ({
 }));
 
 /* 用**真** ToastProvider 包一层，而不是把提示通道 mock 掉：这一屏的删除确认流
- * 会用到它，mock 掉就等于换掉被渲染的那棵树（本文件断言的正是渲染结果）。 */
+ * 会用到它，mock 掉就等于换掉被渲染的那棵树（本文件断言的正是渲染结果）。
+ * TooltipProvider 同理（应用里挂在根布局 `app/layout` 上）：`Hint` 的浮层要
+ * 它，否则悬停不弹浮层。 */
 function renderScreen(): HTMLElement {
   const { container } = render(
-    <ToastProvider>
-      <WorksGallery />
-    </ToastProvider>,
+    <TooltipProvider delay={0}>
+      <ToastProvider>
+        <WorksGallery />
+      </ToastProvider>
+    </TooltipProvider>,
   );
   return container;
 }
@@ -133,12 +139,21 @@ describe("WorksGallery 出处标", () => {
     expect(screen.getByText("两侧都有")).toBeInTheDocument();
   });
 
-  it("出处标带悬停说明：说清删它动的是哪一份", () => {
+  it("出处标带悬停说明：说清删它动的是哪一份", async () => {
+    const user = userEvent.setup();
     renderWith({
       projects: [entry({ id: "srv", name: "只在服务端", origin: "server" })],
     });
     const badge = screen.getByText("仅服务端");
-    expect(badge.getAttribute("title")).toMatch(/服务端/);
+    /* 原生 title= 撤干净：出处说明走 <Hint>，悬停落在 tooltip 浮层里。 */
+    expect(badge).not.toHaveAttribute("title");
+    await user.hover(badge);
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
+    });
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+      "服务端",
+    );
   });
 
   it("每张卡的删除入口带上这一行的名字（多处同名时读屏也分得清）", () => {
