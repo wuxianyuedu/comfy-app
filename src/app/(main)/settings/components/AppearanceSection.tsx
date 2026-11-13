@@ -14,6 +14,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { FieldLabel } from "~/components/ui/field";
 import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
+import { Hint } from "~/components/ui/hint";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Textarea } from "~/components/ui/textarea";
 import {
@@ -288,7 +289,7 @@ function FontRow({
         </Badge>
         <span className="text-muted-foreground text-xs">{hint}</span>
       </div>
-      <div className="border-border bg-surface-1/40 mb-2 space-y-1.5 rounded-lg border p-3 text-xs">
+      <div className="border-border bg-surface-1/40 mb-2 flex flex-col gap-1.5 rounded-lg border p-3 text-xs">
         <p className="text-ink font-medium">
           {isDefault
             ? "当前为默认字体栈（多种字体按优先级回退，不是单一字体）"
@@ -302,13 +303,11 @@ function FontRow({
               <span className="text-muted-foreground min-w-24 shrink-0">{category}</span>
               <div className="flex flex-wrap gap-1">
                 {items.map((item, i) => (
-                  <span
-                    className="bg-surface-2 text-ink rounded px-1.5 py-0.5"
-                    key={`${category}-${item}-${i}`}
-                    title={item}
-                  >
-                    {describeFontPart(item)}
-                  </span>
+                  <Hint key={`${category}-${item}-${i}`} label={item}>
+                    <span className="bg-surface-2 text-ink rounded px-1.5 py-0.5">
+                      {describeFontPart(item)}
+                    </span>
+                  </Hint>
                 ))}
               </div>
             </div>
