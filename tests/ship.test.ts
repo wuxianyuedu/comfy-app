@@ -4557,6 +4557,8 @@ describe("ISSUE #3465：合并验真读的是合并后的那一笔提交", () =>
   function mergeIo(opts: {
     /** 合并提交对象在不在本地（模拟 ref 传播窗口）。 */
     commitLocal?: boolean;
+    /** 首查碎片不在、复取后在（模拟 #3714 的 ref 传播窗口）。 */
+    fragHitsAfterRefetch?: boolean;
     /** 碎片在不在合并提交里。 */
     fragInCommit?: boolean;
     /** PR 回读的 is_merged；缺键用 undefined。 */
@@ -4566,6 +4568,7 @@ describe("ISSUE #3465：合并验真读的是合并后的那一笔提交", () =>
   }) {
     const log: Array<string> = [];
     const calls: Array<string> = [];
+    let fragmentProbes = 0;
     const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
       if (cmd === "cnb" && args[0] === "pulls" && args[1] === "merge-pull") {
@@ -4590,6 +4593,11 @@ describe("ISSUE #3465：合并验真读的是合并后的那一笔提交", () =>
         const spec = args[2];
         if (spec.endsWith("^{commit}")) {
           return opts.commitLocal === false ? { ...ok(), status: 1 } : ok();
+        }
+        fragmentProbes += 1;
+        if (opts.fragHitsAfterRefetch === true && fragmentProbes === 1) {
+          /* 首查落在传播窗口里：对象已在、引用/内容还在路上。 */
+          return { ...ok(), status: 1 };
         }
         return opts.fragInCommit === false ? { ...ok(), status: 1 } : ok();
       }
@@ -4650,6 +4658,25 @@ describe("ISSUE #3465：合并验真读的是合并后的那一笔提交", () =>
     const all = f.log.join("\n");
     expect(all).toContain("合并提交可解析=true");
     expect(all).toContain("碎片在合并提交里=false");
+    /* #3714：判 false 时把比对对象与缺的路径念出来 —— 「没找到」要可归因
+     * （本地滞后 / 传播窗口 ≠ 平台没落地）。 */
+    expect(all).toContain("碎片验真比对对象：合并提交 b7663a9b");
+    expect(all).toContain("changelog.d/3457-push-real-red-revert.md");
+  });
+
+  it("首查落在传播窗口（碎片暂时查不到）⇒ 复取一次再判，仍在 ⇒ 退 0（#3714）", () => {
+    const f = mergeIo({
+      commitLocal: true,
+      fragHitsAfterRefetch: true,
+      fragInCommit: true,
+      isMerged: true,
+    });
+    expect(mergeAndVerify(ctx(f))).toBe(CODE.GREEN);
+    const all = f.log.join("\n");
+    expect(all).toContain("复取主干后确认碎片都在合并提交里");
+    expect(all).toContain("碎片在合并提交里=true");
+    /* 复取那一次真的又 fetch 了一回：窗口内的第一眼不算结论。 */
+    expect(f.calls.filter((c) => c === "git fetch origin master").length).toBe(2);
   });
 
   it("PR 回读 is_merged=false ⇒ 仍是红（平台明确说没合上，与窗口那一格分开）", () => {
@@ -8094,6 +8121,31 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     const all = heard.join("\n");
     expect(all).toContain("碎片 1 份");
     expect(all).not.toContain("没有 changelog.d/ 碎片");
+    expect(code).toBe(CODE.GREEN);
+  });
+
+  it("工作区躺着下一件差事的在途碎片 ⇒ 单子照念，落地验真只认本分支的（#3714）", async () => {
+    /* #3714 的第二形（#3717 的现场）：并行差事的未提交碎片混进「碎片面」，
+     * 合并验真要求它也在合并提交里 ⇒ 本分支自己的碎片明明落地了，验真却给
+     * false，关单与清分支被跳过。落地证据只认本分支带进来的；在途的那份照常
+     * 进单子读数、不参与验真。 */
+    const heard: Array<string> = [];
+    const { run } = fake({
+      frags: ["changelog.d/3714-in-flight.md"],
+      branchFrags: ["changelog.d/3669-landed.md"],
+    });
+    const code = await main({
+      root: process.cwd(),
+      run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => true,
+      args: ["--dry-run"],
+    });
+    const all = heard.join("\n");
+    expect(all).toContain(
+      "在途碎片（工作区有、未随本分支落地 ⇒ 不参与合并验真）：changelog.d/3714-in-flight.md",
+    );
+    expect(all).toContain("碎片 2 份");
     expect(code).toBe(CODE.GREEN);
   });
 

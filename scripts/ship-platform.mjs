@@ -707,9 +707,23 @@ export function mergeAndVerify(ctx) {
    * 与 `is_merged` 缺键同一口径：拿不到测量 ≠ 测量结果是红的。 */
   const mergeCommitLocal =
     mergeSha !== "" && run("git", ["cat-file", "-e", `${mergeSha}^{commit}`]).status === 0;
-  const fragOnMaster = mergeCommitLocal
-    ? frags.every((f) => run("git", ["cat-file", "-e", `${mergeSha}:${f}`]).status === 0)
-    : false;
+  const fragMissing = (/** @type {string} */ sha) =>
+    frags.filter((f) => run("git", ["cat-file", "-e", `${sha}:${f}`]).status !== 0);
+  let fragOnMaster = mergeCommitLocal ? fragMissing(mergeSha).length === 0 : false;
+  /* ISSUE #3714：首查 false 未必是「碎片真的不在」——上面的 fetch 可能正落在
+   * squash 回执与 git 服务端 ref 传播的窗口里，取回来的引用还指上一笔。
+   * 重取一次再判；仍不在才落 false，并把比对对象（哪个 sha、缺哪些路径）念出来，
+   * 让「没找到」可归因（本地滞后 / 传播窗口 ≠ 平台没落地）。 */
+  if (mergeCommitLocal && !fragOnMaster) {
+    run("git", ["fetch", remote, trunkBranch || "master"]);
+    fragOnMaster = fragMissing(mergeSha).length === 0;
+    if (fragOnMaster) {
+      log("[ship] 碎片验真：复取主干后确认碎片都在合并提交里（首查落在传播窗口内）。");
+    } else {
+      const missing = fragMissing(mergeSha).join("、") || "(无)";
+      log(`[ship] 碎片验真比对对象：合并提交 ${short(mergeSha)}；未在其树中的碎片：${missing}`);
+    }
+  }
   log(
     `[ship] 合并回执 sha=${short(mergeData.sha)} 回读 is_merged=${back ? (back.isMergedTri === "unknown" ? "(缺键)" : back.isMerged) : "?"} 合并提交可解析=${mergeCommitLocal} 碎片在合并提交里=${mergeCommitLocal ? fragOnMaster : "(未判定)"}`,
   );
