@@ -99,9 +99,10 @@ describe("ProviderModelDialog 按用途分叉（#3618 补充）", () => {
     expect(screen.queryByText("高级配置")).toBeNull();
     expect(screen.getByText("接口端点")).toBeInTheDocument();
     /* 下拉 Trigger（base-ui combobox）显示选中项的标签：默认 = 用途词表第一项，
-     * 标签是按 Base URL 拼出的最终请求地址（Base 已带 /v1 → 不重复补）。 */
+     * 标签就是词表路径段本身（/v1 起那段）—— 完整请求地址由下方
+     * 「实际请求地址」提示承担，不在这里重复念（#3671）。 */
     expect(screen.getByRole("combobox", { name: "接口端点" })).toHaveTextContent(
-      "POST https://apihub.example/v1/images/generations",
+      "/v1/images/generations",
     );
     /* 标签 ⇄ 控件接上线（§16.2.4.26）：下拉是可交互控件，由 FormField 关联。 */
     expect(screen.getByLabelText("接口端点")).toBeInTheDocument();
@@ -109,15 +110,13 @@ describe("ProviderModelDialog 按用途分叉（#3618 补充）", () => {
 
   it("视频模型：端点按用途给 /v1/videos（#3656 新词表）", () => {
     renderDialog("video", "https://apihub.example/v1");
-    expect(screen.getByRole("combobox", { name: "接口端点" })).toHaveTextContent(
-      "POST https://apihub.example/v1/videos",
-    );
+    expect(screen.getByRole("combobox", { name: "接口端点" })).toHaveTextContent("/v1/videos");
   });
 
-  it("供应商还没有 Base URL 时：选项显示路径段本身，并提示先去填 Base URL", () => {
+  it("供应商还没有 Base URL 时：选项仍显示路径段本身，并提示先去填 Base URL（#3671）", () => {
     renderDialog("image", "");
     expect(screen.getByRole("combobox", { name: "接口端点" })).toHaveTextContent(
-      "POST /v1/images/generations",
+      "/v1/images/generations",
     );
     expect(
       screen.getByText("所属供应商还没有 Base URL：先在供应商详情里填好，这里会显示最终请求地址"),
