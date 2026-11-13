@@ -13,6 +13,7 @@
 import { useMemo } from "react";
 import { textHandler } from "~/lib/form-props";
 
+import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Textarea } from "~/components/ui/textarea";
 import { MultiModeSelect } from "~/components/ui/multi-mode-select";
@@ -102,7 +103,7 @@ export function WorkflowImportPanel({ state, onClose, onImport }: WorkflowImport
             </Button>
           </div>
 
-          <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto pr-1">
+          <div className={`${OVERLAY_MAX_HEIGHT} flex flex-col gap-4 overflow-y-auto pr-1`}>
             {/* 通用：名字 + 模式。模式不给默认（ISSUE #3759）—— 留给用户自己选。 */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_220px]">
               <FormField
