@@ -34,12 +34,12 @@ function parseColor(value: string): { a: number; rgb: [number, number, number] }
 
 /** WCAG 相对亮度（0~1）。 */
 function luminance([r, g, b]: [number, number, number]): number {
-  /* SAFETY: 类型断言已复核 */
-  const lin = [r, g, b].map((c) => {
+  const lin = (c: number): number => {
     const s = c / 255;
     return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  }) as [number, number, number];
-  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+  };
+  /* 逐分量显式写出（B5 清账）：不再对 map 的返回断言成三元组。 */
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
 }
 
 /** WCAG 对比度，1:1 ~ 21:1。 */
@@ -54,11 +54,11 @@ function over(
   src: { a: number; rgb: [number, number, number] },
   bg: [number, number, number],
 ): [number, number, number] {
-  /* SAFETY: 类型断言已复核 */
-  return src.rgb.map((c, i) => Math.round(c * src.a + bg[i]! * (1 - src.a))) as [
-    number,
-    number,
-    number,
+  /* 逐分量显式写出（B5 清账）：不再对 map 的返回断言成三元组。 */
+  return [
+    Math.round(src.rgb[0] * src.a + bg[0] * (1 - src.a)),
+    Math.round(src.rgb[1] * src.a + bg[1] * (1 - src.a)),
+    Math.round(src.rgb[2] * src.a + bg[2] * (1 - src.a)),
   ];
 }
 

@@ -6,6 +6,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+
+import { isRecord } from "~/lib/is-record";
+
 import {
   diffLockfiles,
   isEmptyDiff,
@@ -20,10 +23,20 @@ const LOCK = readFileSync(join(ROOT, "pnpm-lock.yaml"), "utf8");
 /** package.json 的声明范围：下面断言「lockfile 记的 specifier」时以它为准，
  *  而不是把某个版本号抄进用例 —— 抄字面量的那版在 next 升个小版本时就红了，
  *  而它要验的是**解析器**，不是「当前钉的是哪一版」。 */
-/* SAFETY: 类型断言已复核 */
-const PKG = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as {
-  dependencies: Record<string, string>;
-};
+/** 消费形状守卫（B5 清账）：dependencies 必须是「名 → 串」映射。 */
+function isDependencyMap(value: unknown): value is { dependencies: Record<string, string> } {
+  return (
+    isRecord(value) &&
+    isRecord(value.dependencies) &&
+    Object.values(value.dependencies).every((entry) => typeof entry === "string")
+  );
+}
+
+const pkgParsed: unknown = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+if (!isDependencyMap(pkgParsed)) {
+  throw new Error("package.json 形状不对：dependencies 应是「名 → 串」映射");
+}
+const PKG = pkgParsed;
 
 /**
  * 真 lockfile 的正文段：仓库 lockfile 头部含一段 pnpm 自举（bundled CLI）内容，
