@@ -226,7 +226,7 @@ export const DATA_LOCATIONS: Record<DataLocationId, DataLocationEntry> = {
     kindLabel: "模型适配",
     migration:
       "每条远程模型的工坊字段映射存在 remoteModel 表的 workshopAdapters 列里，跟着库走；换机器时带库，或在新机器重新配一遍字段映射。",
-    target: "remoteModel 表的 workshopAdapters 列",
+    target: "remoteModel 表：workshopAdapters 列",
   },
   "remote-model": {
     category: "database",

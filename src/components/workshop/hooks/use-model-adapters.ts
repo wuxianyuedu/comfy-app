@@ -44,6 +44,8 @@ export type ModelAdaptersController = {
   message: { kind: "ok" | "err"; text: string } | null;
   /** 模式契约注册表（每种模式的统一输入 / 输出）。 */
   modeContracts: ReturnType<typeof useModeContracts>;
+  /** 还原默认：丢弃本地草稿，回到服务端当前存档（ISSUE #3741）。 */
+  reset: () => void;
   save: () => Promise<void>;
   saving: boolean;
   selectedModel: string;
@@ -187,12 +189,19 @@ export function useModelAdapters(): ModelAdaptersController {
     }
   }, [selectedModel, draft, saveMutation, saveBusy, queryClient, trpc]);
 
+  /* 还原默认（ISSUE #3741）：回到服务端当前存档——没有存档就是空草稿。 */
+  const reset = useCallback(() => {
+    setDraft(parseRemoteModeAdapters(adaptersQ.data?.adapters ?? []));
+    setMessage(null);
+  }, [adaptersQ.data]);
+
   return {
     candidates,
     loading: configQ.isLoading,
     modeContracts,
     draft,
     setDraft,
+    reset,
     selectModel,
     selectedModel,
     addMode,

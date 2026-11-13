@@ -50,6 +50,7 @@ function baseController(over: Partial<ModelAdaptersController> = {}): ModelAdapt
     loading: false,
     message: null,
     modeContracts: stubModeContracts(),
+    reset: vi.fn(),
     save: vi.fn(() => Promise.resolve()),
     saving: false,
     summary: [],
