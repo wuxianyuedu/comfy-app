@@ -4,9 +4,11 @@
 // （两个周期源），逐个换桩。
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import { BrowserStatusBar } from "./BrowserStatusBar";
+import { TooltipProvider } from "~/components/ui/tooltip";
 import type * as ComfyQueueModule from "./hooks/use-comfy-queue";
 import type { ComfyStatusViewModel } from "./hooks/use-comfy-readiness";
 import type * as FpsModule from "./hooks/use-fps";
@@ -137,7 +139,13 @@ function renderBar(
   readinessMock.mockReturnValue(vm);
   fpsMock.mockReturnValue(fps);
   devServerMock.mockReturnValue(server);
-  return render(<BrowserStatusBar />);
+  /* `Hint` 的浮层要 `TooltipProvider`（应用里挂在根布局 `app/layout` 上），否则
+   * 悬停不弹浮层 —— 包一层即等价。 */
+  return render(
+    <TooltipProvider delay={0}>
+      <BrowserStatusBar />
+    </TooltipProvider>,
+  );
 }
 
 describe("BrowserStatusBar 指标显隐与降级", () => {
@@ -145,15 +153,23 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
     renderBar(viewModel());
 
     expect(screen.getByText("显存·ComfyUI")).toBeInTheDocument();
-    expect(screen.queryByTitle(/nvidia-smi 物理专用显存/)).toBeNull();
+    expect(screen.queryByText("显存")).toBeNull();
     expect(screen.getByText("内存")).toBeInTheDocument();
   });
 
-  it("双口径同时可用：nvidia-smi 与 ComfyUI 两项并列且有可读标签", () => {
+  it("双口径同时可用：nvidia-smi 与 ComfyUI 两项并列且有可读标签", async () => {
+    const user = userEvent.setup();
     renderBar(viewModel({ smiVram: { used: 3 * GIB, total: 12 * GIB, pct: 25 } }));
 
-    expect(screen.getByTitle(/nvidia-smi 物理专用显存/)).toBeInTheDocument();
-    expect(screen.getByText("显存")).toBeInTheDocument();
+    /* 原生 title= 撤干净：口径说明走 <Hint>，悬停后文案落在 tooltip 浮层里。 */
+    expect(screen.getByText("显存")).not.toHaveAttribute("title");
+    await user.hover(screen.getByText("显存"));
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
+    });
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+      "nvidia-smi 物理专用显存",
+    );
     expect(screen.getByText("显存·ComfyUI")).toBeInTheDocument();
   });
 
@@ -214,10 +230,11 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
     expect(screen.getByText(/08:30:00/)).toBeInTheDocument();
   });
 
-  it("断开且原因已知：把原因作为**可见文字**摆出来，而不是只挂在 hover 上（ISSUE #1692）", () => {
+  it("断开且原因已知：把原因作为**可见文字**摆出来，而不是只挂在 hover 上（ISSUE #1692）", async () => {
+    const user = userEvent.setup();
     /* 悬停不是可发现的动作：用户盯着「已断开」四个字，唯一想问的就是为什么。
      * 状态栏那一格窄，只放「为什么」这一句，完整三句（为什么 / 这一次的具体
-     * 退出事实 / 现在做什么）在 title 里。 */
+     * 退出事实 / 现在做什么）在 <Hint> 里。 */
     renderBar(
       viewModel(),
       60,
@@ -234,13 +251,18 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
       }),
     );
 
-    // 可见：不只是 title 里有（断开那一格自己也带 title，所以这里锁**文字节点**）。
+    // 可见：不只是 <Hint> 里有（断开那一格的可见句子本身必须存在）。
     const visible = screen.getByText(/本地服务自身退出了/);
     expect(visible).toBeInTheDocument();
-    // 完整三句挂在它自己的 title 上（悬停能看全：为什么 / 这一次的具体退出事实 / 做什么）。
-    const full = visible.getAttribute("title") ?? "";
-    expect(full).toContain("SIGKILL");
-    expect(full).toContain("重新启动一次");
+    /* 完整三句挂在 <Hint> 上：原生 title= 撤干净，悬停能看全三句（为什么 / 退出事实 / 做什么）。 */
+    expect(visible).not.toHaveAttribute("title");
+    await user.hover(visible);
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
+    });
+    const popup = document.querySelector('[data-slot="tooltip-content"]');
+    expect(popup?.textContent).toContain("SIGKILL");
+    expect(popup?.textContent).toContain("重新启动一次");
   });
 
   it("没有原因可讲时不占位（不摆一句「原因未知」的噪声）", () => {
@@ -257,11 +279,20 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
     expect(screen.queryByText(/未知/)).toBeNull();
   });
 
-  it("FPS 归属：状态栏渲染实时帧率（画布内已无 FpsMeter）", () => {
+  it("FPS 归属：状态栏渲染实时帧率（画布内已无 FpsMeter）", async () => {
+    const user = userEvent.setup();
     renderBar(viewModel(), 60);
     expect(screen.getByText("FPS")).toBeInTheDocument();
     expect(screen.getByText("60")).toBeInTheDocument();
-    expect(screen.getByTitle(/全应用实时帧率/)).toBeInTheDocument();
+    /* 原生 title= 撤干净：帧率口径说明走 <Hint>。 */
+    expect(screen.getByText("FPS")).not.toHaveAttribute("title");
+    await user.hover(screen.getByText("FPS"));
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
+    });
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+      "全应用实时帧率",
+    );
   });
 });
 

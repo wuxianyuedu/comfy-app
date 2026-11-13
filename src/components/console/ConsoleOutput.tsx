@@ -12,6 +12,7 @@ import { EmptyState } from "~/components/ui/empty-state";
 import { Spinner } from "~/components/ui/spinner";
 import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 import { cn } from "~/lib/utils";
+import { Hint } from "~/components/ui/hint";
 
 export type ConsoleOutputProps = {
   /** 空态提示。 */
@@ -91,9 +92,9 @@ export function ConsoleOutput({
           ) : (
             <AlertTriangle size={14} />
           )}
-          <span className="min-w-0 truncate" title={verdict}>
-            {verdict}
-          </span>
+          <Hint label={verdict}>
+            <span className="min-w-0 truncate">{verdict}</span>
+          </Hint>
         </div>
       )}
     </div>

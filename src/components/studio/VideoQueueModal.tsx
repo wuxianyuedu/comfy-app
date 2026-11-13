@@ -175,19 +175,20 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
                             {meta.label}
                           </span>
                         </div>
-                        <p className="text-ink-soft truncate text-xs" title={task.prompt}>
-                          {task.prompt || "（无提示词）"}
-                        </p>
+                        <Hint label={task.prompt}>
+                          <p className="text-ink-soft truncate text-xs">
+                            {task.prompt || "（无提示词）"}
+                          </p>
+                        </Hint>
                         <p className="text-ink-fainter text-3xs mt-0.5 truncate font-mono">
                           {task.workflowName}
                         </p>
                         {task.status === "FAILED" && task.error !== null && task.error !== "" && (
-                          <p
-                            className="text-destructive text-3xs mt-0.5 truncate"
-                            title={task.error}
-                          >
-                            {task.error}
-                          </p>
+                          <Hint label={task.error}>
+                            <p className="text-destructive text-3xs mt-0.5 truncate">
+                              {task.error}
+                            </p>
+                          </Hint>
                         )}
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1">

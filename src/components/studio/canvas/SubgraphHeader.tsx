@@ -91,26 +91,26 @@ export function SubgraphHeader({
           </svg>
         </Button>
       </Hint>
-      <span
-        className="text-4xs inline-flex size-3.5 shrink-0 items-center justify-center rounded font-bold"
-        style={{
-          background: accent,
-          color: "var(--color-canvas)",
-          boxShadow: `0 0 6px ${accent}`,
-        }}
-        title="子工作流"
-      >
-        S
-      </span>
+      <Hint label="子工作流">
+        <span
+          className="text-4xs inline-flex size-3.5 shrink-0 items-center justify-center rounded font-bold"
+          style={{
+            background: accent,
+            color: "var(--color-canvas)",
+            boxShadow: `0 0 6px ${accent}`,
+          }}
+        >
+          S
+        </span>
+      </Hint>
       {/* 展开入口只保留右上角的 ExternalLink 钻入按钮——标题点击与
        *  回车聚焦不再触发进入子工作流（见 WorkflowSubgraphNode 双击移除
        *  同一决策），避免用户误触。标题保持纯文本，禁止选中。 */}
-      <span
-        className="text-ink-bright min-w-0 flex-1 truncate text-xs font-semibold tracking-wide select-none"
-        title={title || "子工作流"}
-      >
-        {title || "子工作流"}
-      </span>
+      <Hint label={title || "子工作流"}>
+        <span className="text-ink-bright min-w-0 flex-1 truncate text-xs font-semibold tracking-wide select-none">
+          {title || "子工作流"}
+        </span>
+      </Hint>
       {/* 子图节点右上角的**按节点**输出复选框。
        *  理由同 WorkflowNode —— 输出按节点标识，
        *  所以逐端口复选框已移除；一个复选框标记

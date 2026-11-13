@@ -168,15 +168,14 @@ export function WorkflowParamCard({
             boxShadow: `0 0 6px ${style.color}`,
           }}
         />
-        <span
-          className="text-ink-bright text-2xs min-w-0 flex-1 truncate font-semibold"
-          title={`${classLabel} · ${hostNodeId}`}
-        >
-          {label}
-          {idLabel !== undefined && idLabel !== "" && (
-            <span className="text-ink-faint text-3xs ml-1 font-mono font-normal">{idLabel}</span>
-          )}
-        </span>
+        <Hint label={`${classLabel} · ${hostNodeId}`}>
+          <span className="text-ink-bright text-2xs min-w-0 flex-1 truncate font-semibold">
+            {label}
+            {idLabel !== undefined && idLabel !== "" && (
+              <span className="text-ink-faint text-3xs ml-1 font-mono font-normal">{idLabel}</span>
+            )}
+          </span>
+        </Hint>
         {onReset && (
           <Hint
             label={
@@ -213,47 +212,41 @@ export function WorkflowParamCard({
           端点压在行右端，所以「类型 + 名称」整组右对齐到端点，才读得出这颗点连到谁。 */}
       <div className="flex flex-col px-2 pb-1">
         {outputPorts.map((port, index) => (
-          <div
-            /* `relative` 是端点定位的锚：注入的端点（画布上的 <Handle>、库内
-             *  的只读圆点）都以**这一行**为参照居中，而不是整张卡片 —— 否则
-             *  多行输出端口时圆点会全部叠在卡片中线，看不出连的是哪一行。 */
-            className={`text-2xs relative flex min-w-0 items-center gap-1.5 ${
-              side === "left" ? "justify-start" : "justify-end"
-            }`}
-            data-testid={`param-node-out-${entryId}-${index}`}
-            key={`${port.name}-${index}`}
-            style={{ height: PARAM_NODE_OUTPUT_ROW_H }}
-            title={
-              /* 行上显示的是对外参数自己的名字（`display`）与类型（`type`）；
-               *  **落到工作流的哪一行**在这里可查（`ioKey`）—— 显示与落点是两件事，
-               *  行上不写内部键。落点那一行声明成别的类型时（首帧图片 → IMAGEUPLOAD
-               *  装载口）补一句，否则「类型不同」在界面上就没处查了。 */
-              rowTitle(port, side)
-            }
-          >
-            {/* 端点槽位与「名字 + 类型」的相对顺序跟着端点所在的一侧走：
-                圆点在左时槽位在前（DOM 顺序 = 视觉顺序），在右时槽位在后。 */}
-            {side === "left" ? endpoint?.(port, index) : null}
-            <span
-              className={`min-w-0 truncate ${
-                port.connected ? "text-ink-soft" : "text-ink-fainter"
+          <Hint key={`${port.name}-${index}`} label={rowTitle(port, side)}>
+            <div
+              /* `relative` 是端点定位的锚：注入的端点（画布上的 <Handle>、库内
+               *  的只读圆点）都以**这一行**为参照居中，而不是整张卡片 —— 否则
+               *  多行输出端口时圆点会全部叠在卡片中线，看不出连的是哪一行。 */
+              className={`text-2xs relative flex min-w-0 items-center gap-1.5 ${
+                side === "left" ? "justify-start" : "justify-end"
               }`}
+              data-testid={`param-node-out-${entryId}-${index}`}
+              style={{ height: PARAM_NODE_OUTPUT_ROW_H }}
             >
-              {port.display ?? port.name}
-            </span>
-            <span
-              className="text-4xs shrink-0 rounded px-1 font-mono leading-3.5"
-              data-testid={`param-node-out-type-${entryId}-${index}`}
-              style={{
-                color: style.color,
-                background: `${style.color}1f`,
-                border: `1px solid ${style.color}44`,
-              }}
-            >
-              {port.type}
-            </span>
-            {side === "right" ? endpoint?.(port, index) : null}
-          </div>
+              {/* 端点槽位与「名字 + 类型」的相对顺序跟着端点所在的一侧走：
+                圆点在左时槽位在前（DOM 顺序 = 视觉顺序），在右时槽位在后。 */}
+              {side === "left" ? endpoint?.(port, index) : null}
+              <span
+                className={`min-w-0 truncate ${
+                  port.connected ? "text-ink-soft" : "text-ink-fainter"
+                }`}
+              >
+                {port.display ?? port.name}
+              </span>
+              <span
+                className="text-4xs shrink-0 rounded px-1 font-mono leading-3.5"
+                data-testid={`param-node-out-type-${entryId}-${index}`}
+                style={{
+                  color: style.color,
+                  background: `${style.color}1f`,
+                  border: `1px solid ${style.color}44`,
+                }}
+              >
+                {port.type}
+              </span>
+              {side === "right" ? endpoint?.(port, index) : null}
+            </div>
+          </Hint>
         ))}
       </div>
 

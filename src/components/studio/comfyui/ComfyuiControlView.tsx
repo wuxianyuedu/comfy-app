@@ -82,14 +82,11 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
               否则「我点了启动、它到底起没起」只能靠肉眼盯。这也让「这一行在不在、
               落没落定」有了一个**不读文案**的稳定锚点 —— 文案里的地址长度会变、
               跨元素分布会给量可见性带来补间窗口（E2E 侧据此等状态落地）。 */}
-          <span
-            aria-live="polite"
-            className={`text-ink/80 ${STATUS_TEXT_CLASS}`}
-            role="status"
-            title={comfyDotTitle(c.status)}
-          >
-            {comfyStatusText(c.status, flags)}
-          </span>
+          <Hint label={comfyDotTitle(c.status)}>
+            <span aria-live="polite" className={`text-ink/80 ${STATUS_TEXT_CLASS}`} role="status">
+              {comfyStatusText(c.status, flags)}
+            </span>
+          </Hint>
           <div className={STATUS_ACTIONS_CLASS}>
             {/* 「打开查看」是**看**，不是这一态的主行动：它走软底，主行动的实心档
                 留给「启动 / 关闭」。只在「明确未运行」时禁用 —— 探测进行中也允许
