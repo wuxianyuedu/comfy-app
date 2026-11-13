@@ -13,7 +13,7 @@
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
 | B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 已清（子批1–12，判决面文件级豁免已整块删除）       |
-| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–26：514 份 / 1310 处已清）           |
+| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–27：522 份 / 1343 处已清）           |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
@@ -1269,14 +1269,14 @@
 | `tests/doc-check-hook-wiring.test.ts`                                                                | 1        | 挂账 |
 | `tests/doc-toc.test.ts`                                                                              | 1        | 挂账 |
 | `tests/downstream-exit.test.ts`                                                                      | 1        | 挂账 |
-| `tests/e2e-reclaim-own-fake-port.test.ts`                                                            | 2        | 挂账 |
-| `tests/e2e-run.test.ts`                                                                              | 6        | 挂账 |
-| `tests/e2e-runtime-budget.test.ts`                                                                   | 14       | 挂账 |
-| `tests/e2e-trpc-stub.test.ts`                                                                        | 7        | 挂账 |
-| `tests/eslint-exemption-staleness.test.ts`                                                           | 1        | 挂账 |
-| `tests/executor-host-artifact.test.ts`                                                               | 1        | 挂账 |
-| `tests/executor-host-spawn.test.ts`                                                                  | 1        | 挂账 |
-| `tests/executor-mode-consistency.test.ts`                                                            | 1        | 挂账 |
+| `tests/e2e-reclaim-own-fake-port.test.ts`                                                            | 2        | 已清 |
+| `tests/e2e-run.test.ts`                                                                              | 6        | 已清 |
+| `tests/e2e-runtime-budget.test.ts`                                                                   | 14       | 已清 |
+| `tests/e2e-trpc-stub.test.ts`                                                                        | 7        | 已清 |
+| `tests/eslint-exemption-staleness.test.ts`                                                           | 1        | 已清 |
+| `tests/executor-host-artifact.test.ts`                                                               | 1        | 已清 |
+| `tests/executor-host-spawn.test.ts`                                                                  | 1        | 已清 |
+| `tests/executor-mode-consistency.test.ts`                                                            | 1        | 已清 |
 | `tests/form-field-wiring-gate.test.ts`                                                               | 1        | 挂账 |
 | `tests/freshness-ledger-backend.test.ts`                                                             | 1        | 挂账 |
 | `tests/gate-executors.test.ts`                                                                       | 3        | 挂账 |
