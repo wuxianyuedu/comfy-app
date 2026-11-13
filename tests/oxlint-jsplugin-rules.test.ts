@@ -88,7 +88,9 @@ function packageReactVersion(): string {
   return match.groups.version;
 }
 
-/** 在 `node_modules/.cache/` 写一份只含这 2 条规则的最小探针配置（跑完即删）。 */
+/** 在 `node_modules/.cache/` 写一份只含这 2 条规则的最小探针配置（跑完即删）。
+ *  这里只取 2 个别名是探针夹具的范围（§① 只考这两条规则）；
+ *  「两份配置同一组别名」的整组合同在 §② 单独对拍，别在这里复用。 */
 function writeProbeConfig(probePath: string): void {
   const plugins = PARITY.jsPlugins ?? [];
   const used = plugins.filter(
@@ -199,15 +201,17 @@ describe("② 两份 oxlint 配置的清单逐字一致", () => {
     const parityBlock = tsBlockOf(PARITY);
     const rulerBlock = tsBlockOf(RULER);
 
-    const parityPlugins = (PARITY.jsPlugins ?? [])
-      .filter((plugin) => plugin.name === "react-js" || plugin.name === "nextjs-js")
-      .map((plugin) => [plugin.name, plugin.specifier]);
-    const rulerPlugins = (RULER.jsPlugins ?? [])
-      .filter((plugin) => plugin.name === "react-js" || plugin.name === "nextjs-js")
-      .map((plugin) => [plugin.name, plugin.specifier]);
+    // 文件头合同的「同一组 jsPlugin 别名」按**整组**逐字对拍（#3440）：
+    // 只挑 2 个别名比对，会漏掉判决面新增 / 评估尺缺失的别名
+    // （`unused-imports` 曾在判决面存在而评估尺缺失，被旧写法放过）。
+    const parityPlugins = (PARITY.jsPlugins ?? []).map((plugin) => [plugin.name, plugin.specifier]);
+    const rulerPlugins = (RULER.jsPlugins ?? []).map((plugin) => [plugin.name, plugin.specifier]);
     expect(parityPlugins).toEqual([
+      ["boundaries", "eslint-plugin-boundaries"],
+      ["eslint-js", "oxlint-plugin-eslint"],
       ["nextjs-js", "@next/eslint-plugin-next"],
       ["react-js", "eslint-plugin-react"],
+      ["unused-imports", "eslint-plugin-unused-imports"],
     ]);
     expect(rulerPlugins).toEqual(parityPlugins);
 
@@ -225,6 +229,10 @@ describe("② 两份 oxlint 配置的清单逐字一致", () => {
     expect(parityBlock.rules?.[DEPRECATED_RULE]).toBe("error");
     expect(rulerBlock.rules?.[LOCATION_RULE]).toBe("error");
     expect(rulerBlock.rules?.[DEPRECATED_RULE]).toBe("error");
+    // `unused-imports/no-unused-imports` 也两处同源（#3440 后续跟开）。
+    const UNUSED_IMPORTS_RULE = "unused-imports/no-unused-imports";
+    expect(parityBlock.rules?.[UNUSED_IMPORTS_RULE]).toBe("error");
+    expect(rulerBlock.rules?.[UNUSED_IMPORTS_RULE]).toBe("error");
 
     const expectedVersion = packageReactVersion();
     expect(PARITY.settings?.react?.version).toBe(expectedVersion);

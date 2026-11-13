@@ -148,11 +148,14 @@ export default defineConfig({
   ],
   // `eslint` 是 oxlint 原生保留名，oxlint-plugin-eslint 必须显式别名成 eslint-js。
   // eslint-plugin-boundaries 经 jsPlugins 跑（用 resolver 解析别名导入）。
+  // `unused-imports` 与判决配置整组同源（#3440 整组逐字对拍）：别名必须 5 个都声明；
+  // 其规则 `unused-imports/no-unused-imports` 已跟开（见下方 TS 档，与判决配置同批生效）。
   jsPlugins: [
     { name: "boundaries", specifier: "eslint-plugin-boundaries" },
     { name: "eslint-js", specifier: "oxlint-plugin-eslint" },
     { name: "nextjs-js", specifier: "@next/eslint-plugin-next" },
     { name: "react-js", specifier: "eslint-plugin-react" },
+    { name: "unused-imports", specifier: "eslint-plugin-unused-imports" },
   ],
   settings: {
     // eslint-plugin-boundaries 的元素表（根级 settings）。
@@ -473,6 +476,9 @@ export default defineConfig({
       rules: {
         "nextjs-js/no-location-assign-relative-destination": "error",
         "react-js/no-deprecated": "error",
+        /* `unused-imports/no-unused-imports` 与判决配置同批跟开（#3440 后续）：
+         * IDE 评估尺不再对未使用导入留白，CI 判决面报的这里也要报。 */
+        "unused-imports/no-unused-imports": "error",
       },
     },
   ],
