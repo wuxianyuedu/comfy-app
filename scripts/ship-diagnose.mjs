@@ -49,6 +49,7 @@ import {
   fetchBuildStatus,
   fetchStageReason,
   formatOutcome,
+  gaReadoutStage,
   pipelineForStage,
   progressReadout,
   resolveBuildSn,
@@ -57,6 +58,7 @@ import {
      （ISSUE #2901），所以进来就改名，免得两件事在同一个文件里读成一件事。 */
   stallReadout as stalledStageReadout,
 } from "./ci-build-readout.mjs";
+import { formatDurationMs } from "../src/lib/time-format.ts";
 
 /**
  * 连续两眼签名一致、且此刻没有一格在飞，要隔到多少分钟才念「疑似派发未出勤」。
@@ -318,6 +320,22 @@ export function runDiagnose({
     prefix: "[ship]",
   })) {
     log(line);
+  }
+  /* 「这一跑的绿是谁给的」要念出来（ISSUE #3620）：门禁本体在 GA 的那一跑，
+   * CNB 侧只有「GA 回调结论回读」一格 —— 整跑判决要说明绿来自 GA 回读；
+   * 而回读还没拿到终态时更要明说「现在不是结论」，别让构建级的 success 冒充门禁绿。 */
+  const ga = gaReadoutStage(statusJson);
+  if (ga) {
+    if (outcome.state === "green") {
+      const dur = ga.durationMs ? formatDurationMs(ga.durationMs) : "";
+      log(
+        `[ship]   本次绿来自 GA 回读（「${ga.name}」成功${dur ? `，等了 ${dur}` : ""}）：门禁本体在 GA，CNB 侧只是回读；要看 GA 侧逐格读数：pnpm ship --gh-logs ${String(target)}`,
+      );
+    } else if (outcome.state === "running") {
+      log(
+        `[ship]   GA 回读未取到终态（「${ga.name}」${ga.status || "还在跑"}）⇒ 现在的 success 只是 CNB 侧回读格的壳，门禁结论以 GA 回读为准，别当绿用。`,
+      );
+    }
   }
   if (outcome.state === "running") {
     /* 单发读数没有「上一眼」可比 ⇒ 自己留一份基数（`.git/` 下，按构建号分文件，不入库）。
