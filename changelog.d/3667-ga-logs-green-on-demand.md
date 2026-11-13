@@ -1,0 +1,3 @@
+## Added
+
+- **判绿时按需也能经 GA→CNB→本地 拿到 GA 日志（ISSUE #3667）**：`ci-ga-logs-relay.mjs` 加 `GA_LOG_SCOPE=all`（缺省 `failed`，#3437 判红路径逐字不变），把本 run 全部 job（含判绿）脱敏后搬进 CNB 附件 + PR 评论；`GA_LOG_RUN_ID` 可点名另一条已跑完的绿 run。`pr-gate.yml` 的 `workflow_dispatch` 加 `pr_number` / `relay_scope` / `run_id` 三个只服务手动档的 input；CNB 侧新增 `api_trigger_ga_logs`（`ci-ga-logs-on-demand.mjs`，复用 `dispatchRequest` / `sendDispatch` 代发，本地零 `api.github.com`）。marker 多一个 `scope=` 字段，旧评论按 `failed` 读、免数据迁移；`pnpm ship --gh-logs pr:<号>` 按 scope 换呈现，判绿 job 没有 `##[error]` 不再被误报成「缺日志」。承重（commit-statuses / 流水线 name / `GA_VERDICT` 折叠 / 三态退码 / 门格总账）一字未动。

@@ -27,6 +27,8 @@ import {
   relayLogs,
   RELAY_DESCRIPTION_END,
   RELAY_MARKER,
+  RELAY_SCOPE,
+  relayScopeFromEnv,
   renderRelayDescriptionBlock,
   renderVerdictReadout,
   resolveRelayContext,
@@ -567,5 +569,135 @@ describe("⑨ PR 描述镜像：读改写只换自己那块（ISSUE #3454）", (
     const patch = calls.find((c) => c.method === "PATCH");
     expect(comment?.auth).toBe(`Bearer ${CTX.token}`);
     expect(patch?.auth).toBe(`Bearer ${CTX.prToken}`);
+  });
+});
+
+/** ISSUE #3667：判绿按需档（`GA_LOG_SCOPE=all`）。默认路径逐字不变，全量档把
+ * 判绿的 job 也搬进 CNB，marker 带 `scope=` 让本地读者把呈现换过来。 */
+describe("⑩ 判绿按需全量（ISSUE #3667）", () => {
+  it("relayScopeFromEnv：只有字面值 all 切档，其余（含缺席/拼错）回落 failed", () => {
+    expect(relayScopeFromEnv({})).toBe(RELAY_SCOPE.FAILED);
+    expect(relayScopeFromEnv({ GA_LOG_SCOPE: "all" })).toBe(RELAY_SCOPE.ALL);
+    /* 只认字面值：大小写不同也是「拼错」，一律回落 failed，不替人猜。 */
+    expect(relayScopeFromEnv({ GA_LOG_SCOPE: " ALL " })).toBe(RELAY_SCOPE.FAILED);
+    expect(relayScopeFromEnv({ GA_LOG_SCOPE: "everything" })).toBe(RELAY_SCOPE.FAILED);
+    expect(relayScopeFromEnv({ GA_LOG_SCOPE: "" })).toBe(RELAY_SCOPE.FAILED);
+  });
+
+  it("resolveRelayContext：scope 从 env 读；GA_LOG_RUN_ID 可覆盖本 run", () => {
+    expect(resolveRelayContext(BASE_ENV)).toMatchObject({ ok: true, scope: RELAY_SCOPE.FAILED });
+    expect(resolveRelayContext({ ...BASE_ENV, GA_LOG_SCOPE: "all" })).toMatchObject({
+      ok: true,
+      scope: RELAY_SCOPE.ALL,
+    });
+    expect(resolveRelayContext({ ...BASE_ENV, GA_LOG_RUN_ID: "9999" })).toMatchObject({
+      ok: true,
+      runId: "9999",
+    });
+  });
+
+  it("collectFailedJobLogs：scope=all 把 success job 也收进包，skipped 仍排除", async () => {
+    const fetchImpl = gaFetch({
+      jobs: {
+        jobs: [
+          { conclusion: "success", id: 1, name: "static-gates" },
+          { conclusion: "failure", id: 2, name: "heavy-gates" },
+          { conclusion: "skipped", id: 3, name: "skipped-job" },
+        ],
+      },
+      logText: "plain log",
+    });
+    const r = await collectFailedJobLogs({
+      ctx: { ...CTX, scope: RELAY_SCOPE.ALL },
+      fetchImpl,
+      log: () => undefined,
+      sleep: () => Promise.resolve(),
+    });
+    expect(r?.jobs).toBe(2);
+    expect(r?.text).toContain("job「static-gates」");
+    expect(r?.text).toContain("job「heavy-gates」");
+    expect(r?.text).not.toContain("job「skipped-job」");
+    expect(r?.text).toContain("按需全量");
+  });
+
+  it("collectFailedJobLogs：不给 scope（旧调用方 ci-ga-failure-logs）仍只收失败 job", async () => {
+    const fetchImpl = gaFetch({
+      jobs: {
+        jobs: [
+          { conclusion: "success", id: 1, name: "static-gates" },
+          { conclusion: "failure", id: 2, name: "heavy-gates" },
+        ],
+      },
+      logText: "plain log",
+    });
+    const r = await collectFailedJobLogs({
+      ctx: CTX,
+      fetchImpl,
+      log: () => undefined,
+      sleep: () => Promise.resolve(),
+    });
+    expect(r?.jobs).toBe(1);
+    expect(r?.text).toContain("job「heavy-gates」");
+    expect(r?.text).not.toContain("job「static-gates」");
+  });
+
+  it("marker / 评论 / 描述带 scope=all；旧正文（无 scope）parse 回落 failed", () => {
+    const all = relayCommentBody({
+      assetPath: "u/key/f.b64",
+      bytes: 99,
+      fileName: "f.b64",
+      jobs: 2,
+      pr: "3437",
+      runId: "4242",
+      scope: RELAY_SCOPE.ALL,
+      sha: SHA,
+    });
+    expect(all).toContain("scope=all");
+    expect(all).toContain("按需全量");
+    expect(parseRelayComment(all)?.scope).toBe(RELAY_SCOPE.ALL);
+    const block = renderRelayDescriptionBlock({
+      assetPath: "u/key/f.b64",
+      bytes: 99,
+      fileName: "f.b64",
+      jobs: 2,
+      pr: "3437",
+      runId: "4242",
+      scope: RELAY_SCOPE.ALL,
+      sha: SHA,
+    });
+    expect(block).toContain("按需全量");
+    /* #3437 老评论没有 scope ⇒ 本地按判红档读，逐字兼容，不需要数据迁移。 */
+    const legacy = `<!-- ${RELAY_MARKER} run=8 sha=${SHA} pr=9 jobs=3 bytes=42 -->\n[f](/-/files/u/key/f.b64)`;
+    expect(parseRelayComment(legacy)?.scope).toBe(RELAY_SCOPE.FAILED);
+  });
+
+  it("main 端到端：GA_LOG_SCOPE=all 且全绿 run ⇒ 仍写一条评论（判绿也有日志可取）", async () => {
+    const { calls, fetchImpl } = cnbFetch();
+    const gaFetchImpl: typeof fetch = async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("/actions/runs/4242/jobs")) {
+        return new Response(
+          JSON.stringify({ jobs: [{ conclusion: "success", id: 1, name: "static-gates" }] }),
+          { headers: { "content-type": "application/json" }, status: 200 },
+        );
+      }
+      if (url.includes("/actions/jobs/")) {
+        return new Response("lint ok\nall green", { status: 200 });
+      }
+      return fetchImpl(input, init);
+    };
+    const { out, log } = lines();
+    const code = await main({
+      argv: [],
+      env: { ...BASE_ENV, GA_JOB_RESULTS: "success,success", GA_LOG_SCOPE: "all" },
+      fetchImpl: gaFetchImpl,
+      gzipSync,
+      log,
+    });
+    expect(code).toBe(CODE.OK);
+    const comment = calls.find((c) => c.method === "POST" && c.url.includes("/comments"));
+    expect(comment?.body).toContain("scope=all");
+    expect(comment?.body).toContain("按需全量");
+    expect(out.join("\n")).toContain("scope=all");
   });
 });

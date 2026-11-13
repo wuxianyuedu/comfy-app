@@ -447,10 +447,12 @@ function relayB64(text: string): string {
   return Buffer.from(gzipNode(Buffer.from(text, "utf8"))).toString("base64");
 }
 
-/** 假 cnb 执行者：按命令返回 -v 的 JSON 信封。 */
-function fakeCnbIo(text: string | null) {
+/** 假 cnb 执行者：按命令返回 -v 的 JSON 信封。
+ * `scope` 不给 ⇒ 造的是 #3437 旧评论（marker 无 scope），本地按 failed 读、逐字兼容。 */
+function fakeCnbIo(text: string | null, scope?: string) {
   const relayText = text ?? "";
-  const marker = `<!-- ${RELAY_MARKER} run=4242 sha=${"c".repeat(40)} pr=3195 jobs=1 bytes=99 -->\n[f.b64](/-/files/u/key/f.b64)`;
+  const scopePart = scope === undefined ? "" : ` scope=${scope}`;
+  const marker = `<!-- ${RELAY_MARKER} run=4242 sha=${"c".repeat(40)} pr=3195 jobs=1 bytes=99${scopePart} -->\n[f.b64](/-/files/u/key/f.b64)`;
   return {
     run: (_cmd: string, args: string[]) => {
       const key = args.join(" ");
@@ -529,5 +531,42 @@ describe("⑤ CNB 侧优先（ISSUE #3437）：站内读 relay，本地不出站
     const r = await runOnce({ input: `run:${String(RUN_ID)}` });
     expect(r.code).toBe(CODE.GREEN);
     expect(r.text).toContain(`GH run #${String(RUN_ID)}`);
+  });
+
+  /* ISSUE #3667：判绿按需档。marker 带 scope=all ⇒ 呈现成「按需全量」而不是
+   * 「判红日志」，且绿跑没有 ##[error] 是正常形态、正文照常落盘。 */
+  it("CNB 命中 scope=all：判绿日志也站内读回，零 api.github.com，且无失败注解不误报", async () => {
+    const greenLog = [
+      "== run 4242 / job「static-gates」（success）==",
+      "##[group]Run pnpm lint",
+      "lint ok",
+      "##[endgroup]",
+    ].join("\n");
+    let ghCalls = 0;
+    const fetchImpl = ((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (new URL(url).hostname === "api.github.com") ghCalls += 1;
+      return Promise.resolve(textResponse("not found", 404));
+    }) as typeof fetch;
+    const r = await runOnce({
+      cnbIo: fakeCnbIo(greenLog, "all"),
+      env: {},
+      fetchImpl,
+      input: "pr:3195",
+    });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(r.text).toContain("CNB 侧 GA 日志·按需全量（ISSUE #3667）");
+    expect(r.text).not.toContain("CNB 侧 GA 判红日志");
+    expect(r.text).toContain("无 ##[error] 行（判绿 job 的正常形态");
+    expect(r.text).toContain("全量日志已落盘");
+    expect(ghCalls).toBe(0);
+  });
+
+  it("旧评论（marker 无 scope）按 failed 读：呈现逐字兼容 #3437", async () => {
+    const r = await runOnce({ cnbIo: fakeCnbIo(CNB_LOG), env: {}, input: "pr:3195" });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(r.text).toContain("CNB 侧 GA 判红日志（ISSUE #3437）");
+    expect(r.text).not.toContain("无 ##[error] 行（判绿 job 的正常形态");
+    expect(r.text).toContain("##[error]Process completed with exit code 1.");
   });
 });

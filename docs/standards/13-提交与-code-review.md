@@ -9914,6 +9914,53 @@ feature 都没开；`x11-dl` 与 `gtk` / `gdk-sys` 各自的 `get_variable` 把�
 规范 §11.10.4 与 launch-and-build §9.3 + 生成态镜像 / `ga-migration-checklist.md` + 镜像 /
 `## Fixed` 碎片挂 #3580，与 §13.5.33.8 同形同批。
 
+##### 13.5.33.10 2026-11-13 判绿时按需也能拿到 GA 日志：scope=all + CNB 代发口（ISSUE #3667）
+
+**改的是「日志正文什么时候搬」这一格，不是判决链、不是载体、不是承重锚。** §13.5.33.4
+把判红日志正文搬进 CNB（GA 侧写 / CNB 站内读），本地 `pnpm ship --gh-logs pr:<n>`
+从此不必出站 `api.github.com`；但 `ci-ga-logs-relay.mjs` 的 `collectFailedJobLogs` 只收
+**失败 job**，判绿的 run 没有失败 job ⇒ 一条评论都不写 ⇒ 本地在 CNB 侧读不到，只能退回
+GitHub 出站链路。月读原话：「现在只有红了才能拉取 ga 日志，而绿的情况不行。需要绿了在
+有需要的情况下，不直接从 GA 侧获取日志，因为可能网络受限，所以要先通过 cnb 侧拿到 GA
+日志然后，再本地从获取。」
+
+**落地的三件事（与前面几节同形：改执行者，不另立判定）**：
+
+| 面 | 动作 |
+| --- | --- |
+| GA 侧写者 | 同一个 `ci-ga-logs-relay.mjs` 加只读口径 `GA_LOG_SCOPE`：`failed`（缺省）= #3437 逐字原样，只搬失败 job、判绿不写评论；`all` = 搬本 run **全部 job**（含 `success`，只排除 `skipped`），判绿也写一条评论。两者共用同一套「脱敏 → gzip → base64 → CNB 附件 → PR 评论 / 描述镜像」载体，`RELAY_MARKER` 多一个 `scope=` 字段；旧评论没有 `scope` ⇒ 本地按 `failed` 读，**不需要数据迁移**。`GA_LOG_RUN_ID` 可点名另一条**已跑完的绿 run**，连判据都不必重跑；缺省仍是本 run 的 `GITHUB_RUN_ID`。`GA_LOG_SCOPE` 只认字面 `all`，其余任何值（含拼错 / 大小写不同）一律回落 `failed` —— 不新增前提、不把一次拼错的 env 变成「没判过」 |
+| 按需发起 | `pr-gate.yml` 的 `workflow_dispatch` 加 `pr_number` / `relay_scope` / `run_id` 三个**只服务手动档**的 input；`repository_dispatch`（PR 自动档）不带它们 ⇒ 收尾 relay step 读到空串 ⇒ #3437 默认路径一字未改。CNB 侧新增 `api_trigger_ga_logs`（平台池，复用 `*ga_dispatch` 的 runner / docker / `GITHUB_MIRROR_TOKEN` imports，独占 `*lock_ga_logs`），跑 `ci-ga-logs-on-demand.mjs`：复用 `ci-ga-dispatch.mjs` 已导出的 `dispatchRequest` / `sendDispatch` 发一次 `workflow_dispatch`（带 `relay_scope=all`），**不是** `--preset` 固定档（它搬的是「已跑完的 run 的日志」，不是「跑哪套判据」）。触发口由 `start-build --event api_trigger_ga_logs --env GA_LOG_PR_NUMBER=<号>` 点名；本地只写平台、零 `api.github.com` |
+| 本地读者 | `parseRelayComment` 认 `scope`（缺省 `failed`）；`ship-gh-logs.mjs` 的 `renderRelayLogs` 按它换呈现：`all` 念「按需全量 · N 个 job（含判绿）」，绿跑没有 `##[error]` 是**正常形态**、不刷成「失败 job 缺日志」，窗口 / 落盘 / 一行结论仍复用既有函数（§12.18）。`--gh-logs pr:<n>` 与判红自动回读的 CNB 优先分支一行不改 —— 它们本来就只读最新一条 marker 评论，scope 是评论正文里的一个字段 |
+
+**为什么不动承重**：与 §13.5.33.4/.5/.6 同一句 —— 不写 commit-statuses、不改流水线
+`name`、不改 `GA_VERDICT` 折叠、不改三态退码、`COMFYAPP_CI_GATES` /
+`GATE_TIER_LEDGER` / 停用清单一个字节未动。relay step 仍 `if: always()` + step 级
+`continue-on-error`；日志是证据不是判决，「取不到 ≠ 判红」不变。新增的那条 CNB 触发口
+也不在门格总账里（它是人点名的读日志动作，不是每次 PR 都判的格）。
+
+**「按需」为什么不在本地直接拉 GA**：本地 / 自托管机到 `api.github.com` 出网间歇不通，
+正是 #3437 绕开的那一跳。整条链仍是 **GA（托管机，`actions: read` 读日志）→ CNB（站内
+附件 + 评论）→ 本地（站内读回）**；CNB 平台池只代发一次 `workflow_dispatch`（它出网稳），
+写 CNB 评论 / 附件仍由 GA 侧那两枚已坐实的 secret 承担，不给 `CNB_TOKEN` 扩权
+（§13.5.33.6 的权限面口径一字未改）。
+
+**逐笔对账**：`ci-ga-logs-relay.mjs`（头注 #3667 节 / `RELAY_SCOPE` / `relayScopeFromEnv` /
+`collectFailedJobLogs` 按 scope 选 job / marker 与评论、描述带 `scope`）/ `pr-gate.yml`
+（三个 input + relay step 三行 env）/ `ci-ga-logs-on-demand.mjs`（新入口，复用
+`dispatchRequest` / `sendDispatch`）/ `ci-ga-dispatch.mjs`（`dispatchRequest` 加可选
+`extraInputs`，五个固定档请求体逐字不变）/ `.cnb.yml`（`*lock_ga_logs` +
+`api_trigger_ga_logs`）/ `ship-ga-logs-cnb.mjs`（JSDoc 透传 `scope`，代码一行不改）/
+`ship-gh-logs.mjs`（`renderRelayLogs` 按 scope 换措辞）/ 三份用例新增 29 + 7 + 2 条 /
+`tests/ci-ga-trigger-map.test.ts`（`NON_DISPATCH_LANES` 豁免登记 + 专用脚本接线）/
+`tests/no-platform-ci-config.test.ts`（#3667 接线在场 + 不承重）/ 本节 +
+`ga-migration-checklist.md` + `## Added` 碎片挂 #3667，与 §13.5.33.4 同形同批。
+
+**边界（没假装已验）**：`workflow_dispatch` 那三个 input 在**镜像仓这一跑**带不带得进来、
+`GA_LOG_RUN_ID` 点名的旧 run 其 job logs 是否仍在 GA 保留期内、`CNB_ISSUE_TOKEN` 在
+手动档带不带 `repo-notes:rw`，看首跑那条 relay step 的 stage 读数
+（`[ga-logs-relay] 搬运范围：scope=all` / `已搬到 CNB` / 「前提不成立」那几行）。
+坐实不了只是这次按需没搬到日志，退回 §13.5.33.4 的判红默认行为，不拦合、不改结论。
+
 #### 13.5.34 2026-11-06 GA push 档：镜像仓 master 的文档链并行执行者（任务 3 并行期）
 
 新增 `.github/workflows/master-gate.yml`，在镜像仓 master 的 `push` 上跑文档链两格：

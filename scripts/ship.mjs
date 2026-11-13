@@ -238,6 +238,8 @@
  *                                             #   一行结论；全量日志落系统临时目录并打印绝对路径
  *   pnpm ship --gh-logs run:4242               # 按 run id 直取；`run:` / `pr:` 可消歧，裸数字按位数判。
  *                                             #   ship 轮询判红时也会自动回读一次（无令牌只念一行跳过）
+ *                                             #   #3667 起：判绿按需档（GA_LOG_SCOPE=all）也把日志搬进 CNB，
+ *                                             #   同一句 `--gh-logs pr:<号>` 站内读回，零 api.github.com
  *   pnpm ship --rerun-ci                       # CI 挂了想重跑：在当前 PR 分支推一个空提交触发新 build（平台侧没有 PR 重跑入口，
  *                                            # 不去 cnbcli 翻）。它同时带上 COMFY_INTENTIONAL_EMPTY_COMMIT —— D0 里有两步读当场暂存区，
  *                                            # 空索引本来被它们读成「取不到判决面」；口径与反滥用见规范 §13.5.5 末段

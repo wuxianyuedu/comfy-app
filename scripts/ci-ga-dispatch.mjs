@@ -94,6 +94,9 @@ const USER_AGENT = "comfy-app-cnb-ga-dispatch";
  * 解析命令行。独立成纯函数：测试直接喂 argv 数组，不走 process.argv。
  *
  * @param {string[]} argv
+ * @param {Record<string, string | undefined>} [env] 环境变量（缺省 process.env；显式声明
+ *   成宽松 Record，让 main 注入的 env 与 CLI 默认值同一类型，不把 ProcessEnv 的
+ *   必填 NODE_ENV 带进这一格的签名）
  * @returns {{preset: string, sha: string, ref: string, repo: string, waitBudgetSeconds: number, pollIntervalSeconds: number, dryRun: boolean}}
  */
 export function parseArgs(argv, env = process.env) {
@@ -204,9 +207,11 @@ export async function awaitShaVisible({ repo, sha, token, budgetSeconds, interva
  * @param {string} deps.workflow 注册表里的 workflow 文件名
  * @param {string} deps.ref 派发的 ref（缺省 master）
  * @param {string} deps.sha 派发目标那一笔（进 `inputs.head_sha`）
+ * @param {Record<string, string>} [deps.extraInputs] 额外 inputs（ISSUE #3667 按需档用；
+ *   缺省不带 ⇒ 现有五个 preset 的请求体逐字不变，不引入第二套判定）
  * @returns {{url: string, init: {method: string, headers: Record<string, string>, body: string}}}
  */
-export function dispatchRequest({ repo, workflow, ref, sha }) {
+export function dispatchRequest({ repo, workflow, ref, sha, extraInputs = {} }) {
   return {
     url: `${API_BASE}/repos/${repo}/actions/workflows/${workflow}/dispatches`,
     init: {
@@ -217,7 +222,7 @@ export function dispatchRequest({ repo, workflow, ref, sha }) {
         "User-Agent": USER_AGENT,
         "X-GitHub-Api-Version": "2022-11-28",
       },
-      body: JSON.stringify({ ref, inputs: { head_sha: sha } }),
+      body: JSON.stringify({ ref, inputs: { head_sha: sha, ...extraInputs } }),
     },
   };
 }

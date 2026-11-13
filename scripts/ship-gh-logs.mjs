@@ -448,23 +448,31 @@ export function renderFailureWindow(label, win) {
  * 分节，逐节过 `extractFailureWindow`，没有 GA job 回话里的 step 清单就按 job 名归因。
  *
  * @param {string} text 还原后的日志正文
- * @param {{run:string,sha:string,pr:string,jobs:number,bytes:number,assetPath:string}} meta marker 身份读数
+ * @param {{run:string,sha:string,pr:string,jobs:number,bytes:number,assetPath:string,scope?:string}} meta marker 身份读数（scope 缺省 failed，兼容 #3437 旧评论）
  * @param {{log:(l:string)=>void, windowMaxBytes?:number, dir?:string}} io 注入面
  * @returns {void}
  */
 function renderRelayLogs(text, meta, io) {
   const log = io.log;
   const shortSha = meta.sha ? meta.sha.slice(0, 8) : "n/a";
-  log(
-    `[ship] CNB 侧 GA 判红日志（ISSUE #3437）：run ${meta.run} · sha ${shortSha} · ${String(meta.jobs)} 个失败 job · 站内读取，未出站 github.com`,
-  );
+  /* ISSUE #3667：旧评论没有 scope ⇒ 按 `failed` 读，逐字兼容 #3437 的呈现；
+   * `all` 是判绿按需全量档，正文里没有 `##[error]` 是**正常形态**（绿跑本就没有
+   * 失败注解），不许把「没有注解」念成「失败 job 缺了日志」。 */
+  const scope = meta.scope === "all" ? "all" : "failed";
+  const heading =
+    scope === "all"
+      ? `[ship] CNB 侧 GA 日志·按需全量（ISSUE #3667）：run ${meta.run} · sha ${shortSha} · ${String(meta.jobs)} 个 job（含判绿） · 站内读取，未出站 github.com`
+      : `[ship] CNB 侧 GA 判红日志（ISSUE #3437）：run ${meta.run} · sha ${shortSha} · ${String(meta.jobs)} 个失败 job · 站内读取，未出站 github.com`;
+  log(heading);
   const sections = String(text).split(/^== run /mu);
   /** @type {Array<{name:string, kind:"content"|"environment"|"unknown"}>} */
   const readings = [];
   /** @type {string[]} */
   const archive = [
-    "# ship GA 失败日志回读（CNB 侧 relay 正文，已脱敏）",
-    `# run ${meta.run} / sha ${meta.sha} / pr ${meta.pr} / jobs ${String(meta.jobs)}`,
+    scope === "all"
+      ? "# ship GA 日志回读·按需全量（CNB 侧 relay 正文，已脱敏）"
+      : "# ship GA 失败日志回读（CNB 侧 relay 正文，已脱敏）",
+    `# run ${meta.run} / sha ${meta.sha} / pr ${meta.pr} / jobs ${String(meta.jobs)} / scope ${scope}`,
   ];
   for (const sec of sections) {
     if (!sec.trim()) continue;
@@ -476,7 +484,11 @@ function renderRelayLogs(text, meta, io) {
       log(`[ship] ✗ job「${label}」失败注解（共 ${String(raw.errors.length)} 条）：`);
       for (const line of raw.errors) log(`[ship]     ${line}`);
     } else {
-      log(`[ship] ✗ job「${label}」：没有 ##[error] 行（日志里没有注解）`);
+      log(
+        scope === "all"
+          ? `[ship] ✓ job「${label}」：无 ##[error] 行（判绿 job 的正常形态，正文照常落盘）`
+          : `[ship] ✗ job「${label}」：没有 ##[error] 行（日志里没有注解）`,
+      );
     }
     const win = shipFailureWindow(raw.lines, io.windowMaxBytes ?? SHIP_WINDOW_MAX_BYTES);
     for (const line of renderFailureWindow(`job「${label}」`, win)) log(line);
