@@ -208,10 +208,17 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
    的失效形态不是用例红而是 `Failed to start forks worker / Timeout waiting for worker`
    （实测拦下一次、隔离复跑 88 文件 1116 条全绿）⇒ 它的两个本地执行者（pre-commit 的 C 组、
    pre-push 的 `unitTests` 段）都撤了，先改成平台侧 PR 流水线的 `受影响用例` 一格；
-   2026-11-02 那一格连同 `固定结构用例` 也随 ISSUE #3052 撤到每日全量单测（增量面是全量
-   子集，覆盖不丢；`scripts/ci-affected-tests.mjs` → `run-affected-tests.mjs` 这条判决链
-   脚本保留，仍可手动 / 复验时跑；C 组的 `run_group C` 行仍留在钩子里当登记，
+   2026-11-02 那一格连同 `固定结构用例` 也随 ISSUE #3052 从 **CNB 侧**撤到每日全量单测
+   （增量面是全量子集，覆盖不丢；`scripts/ci-affected-tests.mjs` → `run-affected-tests.mjs`
+   这条判决链脚本保留，仍可手动 / 复验时跑；C 组的 `run_group C` 行仍留在钩子里当登记，
    `COMFY_HEAVY_GATES=1` 也换不回来它）。
+   ⚠️ **但 PR 档（作为事件）仍跑这两格**——执行者是 **GA 侧** `.github/workflows/pr-gate.yml`
+   的 `affected-tests` / `fixed-structural-tests` 两个 job（2026-11-13 实测墙钟 37~135s /
+   87~133s，10 跑全绿，且那几次红全是**真红**）：撤档只针对 CNB 侧与本地，GA 侧那两格
+   原样留着 —— 撤档理由「45m 预算 / 冷节点 25m+ / AggregateError 假红」在 GA 的 4 核托管
+   runner 上**不成立**（逐条读数见规范 §13.5.41）。账面以门格总账的 **ga-pr 段**为准
+   （ISSUE #3662：此前总账只认三份清单，GA 的 PR job 一处都不在 ⇒ 「记成 retired 却仍在
+   PR 上跑」对判据隐形）。
    **兜底分两层**：`pnpm check:premerge` 在推送那一跳复算 `base` 段（干净快照上的全仓判据），
    平台是第二层。**PR 上在场哪几格以 `.cnb.yml` 的
      `COMFYAPP_CI_GATES` 为准，每日那一跑以 `COMFYAPP_CI_DAILY_GATES` 为准——本文不抄格名**
@@ -219,8 +226,7 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
      判据一字未改，改的只是执行者）。
      **全量单测不在 PR 档**（§13.5.21）：节点上并行 PR 会把带超时的读数变成不可信的红，且它跑绿
      要刷「整档凭证」——拿并发下的绿刷那张账比不刷更坏。所以全量单测的执行者仍是每天 01:00 那一跑
-     （`每日单元测试`）；PR 档连**增量面**也不跑了（`受影响用例` / `固定结构用例` 两格
-     2026-11-02 随 ISSUE #3052 撤到每日全量单测，增量面是全量子集）。
+     （`每日单元测试`）；**全量**那一面不在 PR 档 —— 增量面仍在（GA 侧那两格，见上面那段）。
      **在册 ≠ 出勤**：「执行者在平台」这句话过去只被「格名在每日清单里」守着，而 2026-10-18→10-22
      五派发零跑完期间账面全绿（ISSUE #2114）。现在有了反面判据：
      `pnpm check:daily-attendance`（0 出勤 / 1 缺勤 / 2 没结论或取不到读数，退 2 **不算绿**），
