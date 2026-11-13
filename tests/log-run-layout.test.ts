@@ -7,6 +7,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import { hasPython, runPython } from "./helpers/python-exe";
 
 import {
@@ -66,16 +68,27 @@ function runs(): string {
   return path.join(root, "log", "runs");
 }
 
+/** run.json 的消费形状守卫（B5 清账）：字段全可选，是对象即认。 */
+function isRunMeta(value: unknown): value is RunMeta {
+  return isRecord(value);
+}
+
 /** 当前这份 run.json（判据都建立在「它一定写出来了」之上）。 */
 function meta(): RunMeta {
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(fs.readFileSync(path.join(cur(), LOG_LAYOUT.runJson), "utf8")) as RunMeta;
+  const parsed: unknown = JSON.parse(fs.readFileSync(path.join(cur(), LOG_LAYOUT.runJson), "utf8"));
+  if (!isRunMeta(parsed)) {
+    throw new Error("run.json 不是对象 —— 日志布局或写入方漂移了");
+  }
+  return parsed;
 }
 
 /** 指定目录下的 run.json（归档包里那份）。 */
 function metaAt(dir: string): RunMeta {
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(fs.readFileSync(path.join(dir, LOG_LAYOUT.runJson), "utf8")) as RunMeta;
+  const parsed: unknown = JSON.parse(fs.readFileSync(path.join(dir, LOG_LAYOUT.runJson), "utf8"));
+  if (!isRunMeta(parsed)) {
+    throw new Error("run.json 不是对象 —— 日志布局或写入方漂移了");
+  }
+  return parsed;
 }
 
 /** 写一份 current/ 下的日志文件（模拟各写方）。 */

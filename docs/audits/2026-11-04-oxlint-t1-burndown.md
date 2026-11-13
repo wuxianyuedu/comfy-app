@@ -13,7 +13,7 @@
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
 | B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 已清（子批1–12，判决面文件级豁免已整块删除）       |
-| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–31：568 份 / 1435 处已清（余 40 份 / 61 处））           |
+| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–32：581 份 / 1454 处已清（余 27 份 / 42 处））           |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
@@ -1264,8 +1264,8 @@
 | `tests/dev-launcher-downstream-exit.test.ts`                                                         | 1        | 挂账 |
 | `tests/dev-launcher-port-reclaim.test.ts`                                                            | 2        | 挂账 |
 | `tests/dev-launcher-toolchain-gate.test.ts`                                                          | 1        | 挂账 |
-| `tests/dialog-backdrop-contrast.test.ts`                                                             | 2        | 挂账 |
-| `tests/dist-artifact-hygiene.test.ts`                                                                | 3        | 挂账 |
+| `tests/dialog-backdrop-contrast.test.ts`                                                             | 2        | 已清 |
+| `tests/dist-artifact-hygiene.test.ts`                                                                | 3        | 已清 |
 | `tests/doc-check-hook-wiring.test.ts`                                                                | 1        | 已清 |
 | `tests/doc-toc.test.ts`                                                                              | 1        | 已清 |
 | `tests/downstream-exit.test.ts`                                                                      | 1        | 已清 |
@@ -1297,17 +1297,17 @@
 | `tests/helpers/theme-tokens.ts`                                                                      | 2        | 挂账 |
 | `tests/helpers/trpc.ts`                                                                              | 2        | 挂账 |
 | `tests/helpers/wire-contract.ts`                                                                     | 1        | 挂账 |
-| `tests/hook-affected-launch.test.ts`                                                                 | 1        | 挂账 |
-| `tests/jsdom-capability-gate.test.ts`                                                                | 1        | 挂账 |
-| `tests/lib-layer-boundaries.test.ts`                                                                 | 3        | 挂账 |
-| `tests/lib-node-only-declarations.test.ts`                                                           | 1        | 挂账 |
-| `tests/linux-env-bootstrap.test.ts`                                                                  | 1        | 挂账 |
-| `tests/lockfile-diff.test.ts`                                                                        | 1        | 挂账 |
-| `tests/log-run-layout.test.ts`                                                                       | 2        | 挂账 |
-| `tests/merge-changelog-anchor.test.ts`                                                               | 1        | 挂账 |
-| `tests/no-platform-ci-config.test.ts`                                                                | 1        | 挂账 |
-| `tests/node-engines.test.ts`                                                                         | 1        | 挂账 |
-| `tests/on-demand-duties-gate.test.ts`                                                                | 2        | 挂账 |
+| `tests/hook-affected-launch.test.ts`                                                                 | 1        | 已清 |
+| `tests/jsdom-capability-gate.test.ts`                                                                | 1        | 已清 |
+| `tests/lib-layer-boundaries.test.ts`                                                                 | 3        | 已清 |
+| `tests/lib-node-only-declarations.test.ts`                                                           | 1        | 已清 |
+| `tests/linux-env-bootstrap.test.ts`                                                                  | 1        | 已清 |
+| `tests/lockfile-diff.test.ts`                                                                        | 1        | 已清 |
+| `tests/log-run-layout.test.ts`                                                                       | 2        | 已清 |
+| `tests/merge-changelog-anchor.test.ts`                                                               | 1        | 已清 |
+| `tests/no-platform-ci-config.test.ts`                                                                | 1        | 已清 |
+| `tests/node-engines.test.ts`                                                                         | 1        | 已清 |
+| `tests/on-demand-duties-gate.test.ts`                                                                | 2        | 已清 |
 | `tests/oxlint-jsplugin-rules.test.ts`                                                                | 3        | 挂账 |
 | `tests/oxlint-policy-rules.test.ts`                                                                  | 6        | 挂账 |
 | `tests/postinstall-cross-platform.test.ts`                                                           | 1        | 已清 |
