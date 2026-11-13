@@ -679,7 +679,7 @@ describe("classifyPushFailure：push 失败按原话分型，不固定猜 premer
       log: (s: string) => logs.push(s),
       run: () => {
         pushed += 1;
-        return { status: 128, stdout: "", stderr: REMOTE_404_STDERR };
+        return { status: 128, stdout: "", stderr: REMOTE_404_STDERR, error: null };
       },
       relay: () => undefined,
     };
@@ -9327,12 +9327,13 @@ describe("--rerun-ci：空提交要说出自己的意图，否则 D0 把它读�
             env.commitStatus !== undefined && env.commitStatus !== 0
               ? "no changes added to commit"
               : "",
+          error: null,
         };
       }
       if (args[0] === "rev-parse") {
-        return { status: 0, stdout: "abc123\n", stderr: "" };
+        return { status: 0, stdout: "abc123\n", stderr: "", error: null };
       }
-      return { status: 0, stdout: "", stderr: "" };
+      return { status: 0, stdout: "", stderr: "", error: null };
     };
     const code = runRerunCiStage({
       up: { remote: "cnb" },
