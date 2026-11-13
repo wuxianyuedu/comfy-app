@@ -61,7 +61,9 @@ test.describe("外观两档 @critical", () => {
   test("字阶只作用于标题，正文不跟着变（界面就是这么承诺的）", async ({ page }) => {
     await openAppearance(page);
 
-    const title = page.getByRole("heading", { name: "设置" });
+    /* 页面里另有分区小标题（如数据存放位置总览的「应用设置」h4），子串匹配会
+       撞车（ISSUE #3657）—— 钉 h1 全字匹配，与 `settings-view.spec.ts` 同一口径。 */
+    const title = page.getByRole("heading", { level: 1, name: "设置", exact: true });
     const bodyText = page.getByText("适合低光环境");
 
     const titleBefore = await title.evaluate((el) => getComputedStyle(el).fontSize);

@@ -77,15 +77,21 @@ export function FilePicker({
   React.useImperativeHandle(handleRef, () => ({ open }), [open]);
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    /* 必须复位：`value` 不归零时，用户第二次选**同一个文件**不会触发
-     * `change`，表现成「上传按钮坏了」。复位要在取完 `files` 之后 ——
-     * 赋值 `""` 会把 `FileList` 清空。 */
-    const picked = files && files.length > 0 ? files : null;
-    event.target.value = "";
-    const first = picked?.[0];
-    if (first) {
-      onPick(first, picked);
+    const { files } = event.target;
+    /* 按下标取第一个：真实 `FileList` 与测试桩（数组形）都认下标访问，
+     * `.item()` 只有真 DOM 里有（#3657 平台受影响用例格的现场）。 */
+    const first = files?.[0];
+    if (!files || !first) {
+      return;
+    }
+    /* 先交付**再**复位（ISSUE #3657）：`FileList` 是活对象，`value = ""` 会当场把
+     * 它清空 —— 复位若写在取文件之前，`picked[0]` 读到的就是 `undefined`，
+     * onPick 永远不触发，界面上就是「选了文件毫无反应」。复位仍要执行：不归零时
+     * 用户第二次选**同一个文件**不会触发 `change`，表现成「上传按钮坏了」。 */
+    try {
+      onPick(first, files);
+    } finally {
+      event.target.value = "";
     }
   };
 
