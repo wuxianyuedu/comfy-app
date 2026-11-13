@@ -45,7 +45,7 @@ import {
   readPullVerdict,
 } from "./ship-core.mjs";
 import { findLandedPull, openScanReadout, scanPullPages } from "./ship-scan.mjs";
-import { planCreateBody, updatePullBodyOnReuse } from "./ship-pr-body.mjs";
+import { planCreateBody, updatePullBodyOnReuse, updatePullTitleOnReuse } from "./ship-pr-body.mjs";
 import { diffBaseRef, pickTitle } from "./ship-title.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
 import { reportConflictStage, reportStage } from "./ship-stage.mjs";
@@ -236,8 +236,15 @@ export function createOrReusePull(ctx) {
   let number = open.hit;
   if (number) {
     log(`[ship] 已有开放 PR #${number} ⇒ 复用，不重建（幂等）`);
-    /* 给了 `--pr-body-file` 就整篇更新（口径见 `ship-pr-body.mjs`）；写没落地就停在这里，
-     * 不带着一份旧正文去等 CI（那等于让人照着过期正文评审）。 */
+    /* 标题：给了 `--title` 就更新并独立回读；没给就明说「标题未刷新」（ISSUE #3629）——
+     * 复用路径此前根本不读这枚旗标，人给了却两头没有回音。 */
+    const titleStop = updatePullTitleOnReuse({ run, log, slug, number, explicitTitle });
+    if (titleStop !== null) {
+      return { number, stop: titleStop };
+    }
+    /* 正文：自动事实段无条件刷新（机器当场量的当前事实）；人写的正文按
+     * 「给了才覆盖」注入（ISSUE #3629）。写没落地就停在这里，不带着一份
+     * 过期正文去等 CI。 */
     const bodyStop = updatePullBodyOnReuse({ ...ctx, prBody, number });
     if (bodyStop !== null) {
       return { number, stop: bodyStop };
