@@ -40,12 +40,11 @@ import {
   combineShipCodes,
   conflictAdviceLines,
   decideCleanBranch,
-  findMergedPullForHeadSha,
   findPullForBranch,
   readPullCreateError,
   readPullVerdict,
 } from "./ship-core.mjs";
-import { openScanReadout, scanPullPages } from "./ship-scan.mjs";
+import { findLandedPull, openScanReadout, scanPullPages } from "./ship-scan.mjs";
 import { planCreateBody, updatePullBodyOnReuse } from "./ship-pr-body.mjs";
 import { diffBaseRef, pickTitle } from "./ship-title.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
@@ -135,40 +134,6 @@ function stampHandlerLabel({ run, log, slug, number, handle, root }) {
       "这一格是读数、不改退码。手工补：",
   );
   log(`[ship]   cnb pulls post-pull-labels --repo ${slug} --number ${number} --labels ${label} -v`);
-}
-
-/**
- * 落地判定（ISSUE #2250）：这一笔 HEAD 是不是已经随某条**已合并**的 PR 进过主干。
- *
- * 为什么问平台而不问 diff 或 `merge-base`：squash 合并只保证**内容**相同，主干那笔 sha
- * 与分支头不同，祖先判据对它恒假（实测：今天两条已合并分支的三点 diff 仍给出 7 / 4 个文件，
- * 而分支头都不是 master 的祖先）。平台在 PR 记录里留着 `head.sha` 与 `is_merged`，
- * 这两件才是正面事实，且与 `ship-close.mjs` 的落地反查同一套取法。
- *
- * 有界扫（页参数与那一路一致）：扫不到就照实念，**不撤销结论** —— 「取不到」不等于「没落地」，
- * 那一格照常建 PR。
- *
- * @param {{run:(cmd:string,args:string[])=>import("./ship-exec.mjs").ExecResult, slug:string, headSha:string, pages?:number, pageSize?:number}} ctx
- * @returns {{prNumber: number | null, unknownPr: number | null, scanned: number, ran: boolean}}
- *   `unknownPr`：head.sha 逐字相同而 `is_merged` 缺键的那条（ISSUE #3059，判读交给调用方）。
- */
-function findLandedPull(ctx) {
-  const { slug, headSha } = ctx;
-  /** @type {{unknownPr?: number|null}} */
-  const sink = {};
-  const scan =
-    slug && headSha
-      ? scanPullPages(ctx, {
-          state: "closed",
-          visit: (json) => findMergedPullForHeadSha(json, headSha, sink) ?? sink.unknownPr ?? null,
-        })
-      : { hit: null, scanned: 0, ran: false };
-  return {
-    prNumber: sink.unknownPr ? null : scan.hit,
-    unknownPr: sink.unknownPr ?? null,
-    scanned: scan.scanned,
-    ran: scan.ran,
-  };
 }
 
 /**
@@ -287,14 +252,28 @@ export function createOrReusePull(ctx) {
   }
   /* 开放清单里没有 ⇒ 还不能直接建：这条分支可能**已经合过了**（ISSUE #2250）。 */
   const headSha = run("git", ["rev-parse", "HEAD"]).stdout.trim();
-  const landed = findLandedPull({ run, slug, headSha });
-  if (landed.prNumber) {
+  const landed = findLandedPull({ run, slug, headSha, branch });
+  if (landed.prNumber && landed.kind === "sha") {
     log(
       `[ship] 不建新 PR：HEAD ${short(headSha)} 已随 PR #${landed.prNumber} 落地（平台逐条认的 \`is_merged\`；${codeTag(CODE.GUARD_REFUSED)}）。`,
     );
     log(
       "[ship]   这一批内容已经在主干里 ⇒ 要接着改请开新分支（`pnpm ship --branch feat/<描述>`）。" +
         "把同一批内容再合一次，主干上就多一笔重复提交，还白烧一轮 CI。",
+    );
+    return { number: null, stop: CODE.GUARD_REFUSED };
+  }
+  if (landed.prNumber && landed.kind === "branch") {
+    /* ISSUE #3642：squash 合并在同一条分支上补笔后 head.sha 对不上历史 PR（主干那笔是
+     * squash 出来的新 sha），只按 sha 认落地在这一形上失明 —— 开放清单又没有这条分支的
+     * PR，于是「没有就建」长出重复 PR。按 `head.ref` 认已合并的历史 PR 补上这一档：
+     * 命中同样停（守卫类退码），话术念的是「分支的历史 PR 已合并」，不是「这一笔已落地」。 */
+    log(
+      `[ship] 不建新 PR：这条分支已随 PR #${landed.prNumber} 落地（closed 清单按 \`head.ref\` 认的已合并历史 PR；${codeTag(CODE.GUARD_REFUSED)}）。`,
+    );
+    log(
+      "[ship]   同名分支重开 PR 会把旧落地的内容混进同一条（#3642 现场：内容已落地的分支照样派生出" +
+        "重复 PR + 一轮白烧的红 CI）⇒ 要接着改请开新分支：`pnpm ship --branch feat/<描述>`。",
     );
     return { number: null, stop: CODE.GUARD_REFUSED };
   }

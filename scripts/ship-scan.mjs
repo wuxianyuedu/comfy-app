@@ -9,6 +9,7 @@
  * `capped` 只表示清单被页界截断，**不表示**「确实没有更多」。
  */
 import { asArray } from "./ship-build.mjs";
+import { cnbRecords } from "./cnb-fields.mjs";
 import { LIST_MAX_PAGES, LIST_PAGE_SIZE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
 
@@ -106,4 +107,125 @@ export function openScanReadout(open) {
     ];
   }
   return [];
+}
+
+/**
+ * 「这一笔 sha 是不是已经随某条**已合并**的 PR 落进主干」（ISSUE #2250）。
+ *
+ * 复用路径那条幂等只认**开放** PR：squash 合并成功那一刻 PR 转 `closed`，于是同一条
+ * 分支上再跑一次 ship 会走「没有就建」，长出一条内容已在主干的幽灵 PR（能被再合一次、
+ * 白烧一轮 CI）。这一格认的是平台的正面事实：`is_merged === true` 那条上的 `head.sha`
+ * 与这一笔逐字相等 —— squash 改的是主干那笔的 sha，分支头那笔在 PR 记录里留着。
+ *
+ * 与 `ship-close.mjs` 的落地反查同一条取法：列表的 `--state` 没有 `merged` 这一档，
+ * `closed` 里混着「合了」与「关了没合」，所以只认逐条 `is_merged`，不认状态词。
+ *
+ * @param {any} json `list-pulls --state closed` 的原样 JSON
+ * @param {string} headSha 本地 HEAD 的 sha
+ * @param {{unknownPr?: number|null} | null} [sink] 可选出站口：head.sha 逐字相同、
+ *   而 `is_merged` **缺键 / null / 非布尔**的那条经它报出（`unknownPr` = 那条的号）——
+ *   缺键不按「未合并」处理（ISSUE #3059），判读留给调用方（落地守卫按读数缺失收口）。
+ * @returns {number | null} 命中的 PR 号；认不出（含空 sha）时 `null`
+ */
+export function findMergedPullForHeadSha(json, headSha, sink = null) {
+  const sha = String(headSha ?? "").trim();
+  if (!sha) {
+    return null;
+  }
+  for (const p of cnbRecords(json)) {
+    /* head 是平台给的（形状不在本仓手里），按信封收窄后取 sha。 */
+    const head = /** @type {{sha?: unknown} | null} */ (
+      typeof p?.head === "object" && p.head !== null ? p.head : null
+    );
+    if (String(head?.sha ?? "") !== sha) {
+      continue;
+    }
+    if (p?.is_merged === true) {
+      return Number(p.number);
+    }
+    if (typeof p?.is_merged !== "boolean" && sink) {
+      sink.unknownPr = Number(p.number) || null;
+    }
+  }
+  return null;
+}
+
+/**
+ * 「这条**分支**是不是已经随某条已合并的 PR 落过地」—— 按 `head.ref` 认（ISSUE #3642）。
+ *
+ * 与上一条同一份判据（closed 清单里逐条认 `is_merged === true`），匹配键从 sha 换成
+ * ref：squash 合并之后在同一条分支上补一笔再跑 ship，分支头已是新 sha，按 sha 永远
+ * 对不上那条历史 PR —— 而平台上它还挂着这条分支的名字（#3642 现场：内容已随 #3640
+ * 落地的分支照样派生出重复 PR #3641 + 一轮白烧的红 CI）。只认严格 `true`：关了没合的
+ * 不算（那条分支可以再开 PR）；`is_merged` 缺键也不算 —— 按分支认本来就是较弱的证据，
+ * 缺读数不拦建 PR（与 sha 形的「缺键退 5」刻意不同档，两种在读数上要分得开）。
+ *
+ * @param {any} json `list-pulls --state closed` 的原样 JSON
+ * @param {string} [branch] 源分支名（不含 `refs/heads/`）；findLandedPull 的 ctx 里是可选
+ * @returns {number | null} 命中的 PR 号；认不出时 `null`
+ */
+export function findMergedPullForBranch(json, branch) {
+  const name = String(branch ?? "").trim();
+  if (!name) {
+    return null;
+  }
+  for (const p of cnbRecords(json)) {
+    const head = /** @type {{ref?: unknown} | null} */ (
+      typeof p?.head === "object" && p.head !== null ? p.head : null
+    );
+    const ref = typeof head?.ref === "string" ? head.ref : "";
+    if (ref === `refs/heads/${name}` && p?.is_merged === true) {
+      return Number(p.number);
+    }
+  }
+  return null;
+}
+
+/**
+ * 落地判定（ISSUE #2250 / #3642）：这条分支的内容是不是已经随某条**已合并**的 PR 进过主干。
+ *
+ * 为什么问平台而不问 diff 或 `merge-base`：squash 合并只保证**内容**相同，主干那笔 sha
+ * 与分支头不同，祖先判据对它恒假。平台在 PR 记录里留着 `head.sha` / `head.ref` 与
+ * `is_merged`，这些才是正面事实。两档命中分开报（`kind`）：sha 命中是「这一笔已经在
+ * 主干里」的强证据；ref 命中是「这条分支的历史 PR 已合并」的弱证据（分支上可能还有
+ * 未落地的新提交）—— 两者都停建 PR，话术各念各的。
+ *
+ * 有界扫（页参数与那一路一致）：扫不到就照实念，**不撤销结论** —— 「取不到」不等于
+ * 「没落地」，那一格照常建 PR。
+ *
+ * @param {{run:(cmd:string,args:string[])=>import("./ship-exec.mjs").ExecResult, slug:string, headSha:string, branch?:string, pages?:number, pageSize?:number}} ctx
+ * @returns {{prNumber: number | null, kind: "sha" | "branch" | null, unknownPr: number | null, scanned: number, ran: boolean}}
+ *   `unknownPr`：head.sha 逐字相同而 `is_merged` 缺键的那条（ISSUE #3059，判读交给调用方）。
+ */
+export function findLandedPull(ctx) {
+  const { slug, headSha, branch } = ctx;
+  /** @type {{unknownPr?: number|null, kind?: "sha"|"branch"|null}} */
+  const sink = {};
+  const scan =
+    slug && headSha
+      ? scanPullPages(ctx, {
+          state: "closed",
+          visit: (json) => {
+            /* sha 先于 ref：逐字相同是更强的证据，同一页里两者都在时按 sha 报。 */
+            const bySha = findMergedPullForHeadSha(json, headSha, sink);
+            if (bySha) {
+              sink.kind = "sha";
+              return bySha;
+            }
+            const byBranch = findMergedPullForBranch(json, branch);
+            if (byBranch) {
+              sink.kind = "branch";
+              return byBranch;
+            }
+            return sink.unknownPr ?? null;
+          },
+        })
+      : { hit: null, scanned: 0, ran: false };
+  return {
+    prNumber: sink.unknownPr ? null : (scan.hit ?? null),
+    kind: sink.unknownPr ? null : scan.hit ? (sink.kind ?? null) : null,
+    unknownPr: sink.unknownPr ?? null,
+    scanned: scan.scanned,
+    ran: scan.ran,
+  };
 }
