@@ -296,12 +296,15 @@ export function useSettingsPage(options?: {
    * 所以产出里有一个 `pending` 供视图说清「重启后生效」。 */
   const {
     backups,
+    appDataBackups,
     pending: pendingRestore,
     loading: backupListLoading,
     backupBusy,
     restoreBusy,
+    importBusy,
     createBackupNow,
     restoreFrom,
+    importFromDir,
   } = useSettingsBackup({ statusQueriesEnabled, showFlash });
 
   /** 用系统默认浏览器打开生成的远程资源（视频 / 公网图片等）。
@@ -448,12 +451,15 @@ export function useSettingsPage(options?: {
     stopDbStudio,
     openDbStudio,
     backups,
+    appDataBackups,
     pendingRestore,
     backupListLoading,
     backupBusy,
     restoreBusy,
+    importBusy,
     createBackupNow,
     restoreFrom,
+    importFromDir,
     openExternalUrl,
     dbStudioLog,
     ollamaLog,
