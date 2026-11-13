@@ -230,15 +230,16 @@ export function MaterialLibraryContent({
                       </Button>
                     </Hint>
                   )}
-                  <a
-                    className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
-                    download={item.name}
-                    draggable={false}
-                    href={item.url}
-                    title="下载"
-                  >
-                    <Download size={13} />
-                  </a>
+                  <Hint label="下载">
+                    <a
+                      className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
+                      download={item.name}
+                      draggable={false}
+                      href={item.url}
+                    >
+                      <Download size={13} />
+                    </a>
+                  </Hint>
                   <Hint accessibleName label="删除">
                     <Button
                       className="text-ink-muted hover:bg-subtle hover:text-destructive rounded-md"

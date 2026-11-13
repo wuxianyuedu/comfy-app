@@ -68,9 +68,9 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
         className="data-vertical:self-center data-[orientation=vertical]:h-4"
         orientation="vertical"
       />
-      <span className="text-ink-strong min-w-0 truncate text-sm font-medium" title={label}>
-        {label}
-      </span>
+      <Hint label={label}>
+        <span className="text-ink-strong min-w-0 truncate text-sm font-medium">{label}</span>
+      </Hint>
       {/* 视图说明问号：挂在标题右侧（读者在「这一屏叫什么」的地方顺路看见「还有
           一句解释」）。没有登记的视图不渲染 —— 「没有说明的不显示」。屏内页头不再
           放第二颗：那句话的单一出处是 `viewHelp()`。 */}

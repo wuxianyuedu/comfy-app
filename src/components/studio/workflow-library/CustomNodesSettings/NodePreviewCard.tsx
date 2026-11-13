@@ -3,6 +3,7 @@
 import { colorFor, type ManifestNodeRaw } from "~/config/custom-nodes";
 import { PortRow, WidgetValueChip } from "./SettingsParts";
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 
 /* ──────────────────────────────────────────────────────────────────────── */
 /* NodePreviewCard —— 一个自定义节点的小型 ComfyUI 风预览。       */
@@ -71,13 +72,11 @@ export function NodePreviewCard({
         variant="ghost"
       >
         <span className="text-2xs leading-none">{expanded ? "▾" : "▸"}</span>
-        <span
-          className="flex-1 truncate text-[11.5px] font-bold"
-          style={{ letterSpacing: 0.2 }}
-          title={title}
-        >
-          {title}
-        </span>
+        <Hint label={title}>
+          <span className="flex-1 truncate text-[11.5px] font-bold" style={{ letterSpacing: 0.2 }}>
+            {title}
+          </span>
+        </Hint>
         {data?.category !== undefined && data?.category !== "" && (
           <span
             className="rounded-full px-1.5 py-px text-[8.5px] font-semibold"
@@ -87,13 +86,14 @@ export function NodePreviewCard({
           </span>
         )}
         {data?.outputNode === true && (
-          <span
-            className="rounded-full px-1.5 py-px text-[8.5px] font-semibold"
-            style={{ background: "rgba(255,255,255,0.22)" }}
-            title="前端专属 (OUTPUT_NODE)"
-          >
-            ⇪
-          </span>
+          <Hint label="前端专属 (OUTPUT_NODE)">
+            <span
+              className="rounded-full px-1.5 py-px text-[8.5px] font-semibold"
+              style={{ background: "rgba(255,255,255,0.22)" }}
+            >
+              ⇪
+            </span>
+          </Hint>
         )}
       </Button>
 
@@ -145,9 +145,9 @@ export function NodePreviewCard({
                         opacity: 0.7,
                       }}
                     />
-                    <span className="text-ink-soft min-w-0 flex-1 truncate" title={widget.name}>
-                      {widget.name}
-                    </span>
+                    <Hint label={widget.name}>
+                      <span className="text-ink-soft min-w-0 flex-1 truncate">{widget.name}</span>
+                    </Hint>
                     <WidgetValueChip value={widget.default} widget={widget.widget ?? null} />
                   </div>
                 ))}

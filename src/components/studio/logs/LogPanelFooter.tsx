@@ -76,22 +76,18 @@ export function LogPanelFooter(input: {
           {pageSummary({ page: safePage, totalPages, pageSize, total, all: totalAll, search })}
         </span>
         {droppedTotal > 0 && (
-          <span
-            className="text-ink-fainter shrink-0"
-            title={`内存时间线已折叠更早的 ${droppedTotal} 条（完整历史见磁盘日志文件）`}
-          >
-            · 更早 {droppedTotal} 条已折叠
-          </span>
+          <Hint label={`内存时间线已折叠更早的 ${droppedTotal} 条（完整历史见磁盘日志文件）`}>
+            <span className="text-ink-fainter shrink-0">· 更早 {droppedTotal} 条已折叠</span>
+          </Hint>
         )}
         {/* 服务端进程标识：用户报障时能说清「日志来自哪个应用服务进程」，
           也让面板在服务真重启后能自证（时间线已重置）。 */}
         {bootId !== null && bootId !== "" && (
-          <span
-            className="border-border-strong text-ink-muted text-2xs shrink-0 rounded border px-1.5 py-px"
-            title={`应用服务进程标识：${bootId}（重启后会变化，面板据此重置时间线）`}
-          >
-            服务 {bootId.split(":").slice(-2).join(":")}
-          </span>
+          <Hint label={`应用服务进程标识：${bootId}（重启后会变化，面板据此重置时间线）`}>
+            <span className="border-border-strong text-ink-muted text-2xs shrink-0 rounded border px-1.5 py-px">
+              服务 {bootId.split(":").slice(-2).join(":")}
+            </span>
+          </Hint>
         )}
       </span>
       <span className="flex items-center gap-3">

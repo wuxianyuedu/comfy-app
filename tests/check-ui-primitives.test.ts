@@ -5661,6 +5661,86 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
+  /* ── P88「视图层 host 元素用原生 `title=`」（硬闸，ISSUE #3681 · 规范 16 §16.2.4.77）
+   * 与 P82《Button title=》同一条治理线的宿主面。判据锚点是**小写 host 标签**，
+   * 五档与 P82 同口径；capitalized 组件（EmptyState title= 这类）是组件 prop，
+   * 不计；SVG <title> 与 iframe/object/embed 的 title 是无障碍落点，也不计。
+   */
+
+  test("P88 host 元素（span）带原生 title= → 阻断", ({ repo }) => {
+    repo.write(
+      "src/components/studio/P88HostTitle.tsx",
+      [
+        "export function V() {",
+        '  return <span className="text-ink-soft" title="行内提示">x</span>;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    expect(output).toContain("P88");
+    expect(output).toContain("P88HostTitle.tsx");
+  });
+
+  test("P88 改用 <Hint label=…> 包装不计（出口侧）", ({ repo }) => {
+    repo.write(
+      "src/components/studio/P88HostHint.tsx",
+      [
+        'import { Hint } from "~/components/ui/hint";',
+        "",
+        "export function V() {",
+        "  return (",
+        '    <Hint label="行内提示">',
+        '      <span className="text-ink-soft">x</span>',
+        "    </Hint>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+  });
+
+  test("P88 capitalized 组件的 title= 是组件 prop，不计", ({ repo }) => {
+    repo.write(
+      "src/components/studio/P88CapitalizedProp.tsx",
+      [
+        "export function V() {",
+        '  return <EmptyState icon="Terminal" title="暂无数据" />;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+  });
+
+  test("P88 iframe 的 title= 是无障碍强制项，不计", ({ repo }) => {
+    repo.write(
+      "src/components/studio/P88IframeA11y.tsx",
+      [
+        "export function V() {",
+        '  return <iframe src="https://example.com" title="预览" className="h-full w-full" />;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+  });
+
+  test("P88 注释里提到 title= 不计（剥注释那一层的回归钉）", ({ repo }) => {
+    repo.write(
+      "src/components/studio/P88Comment.tsx",
+      [
+        "export function V() {",
+        '  /* 这里曾经是 <span title="行内提示">，已迁 <Hint> */',
+        '  return <span className="text-ink-soft">x</span>;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+  });
+
   /* ── 分层（ISSUE #1747）：预计算层 + 判据分档 ────────────────────────
    * 两条机制都不是判据本身，但都会**静默**失效，所以各配正例：
    *   · 预计算层失效的形态是「算得更慢」（不报错）—— 只能靠行为断言钉住；
@@ -5704,7 +5784,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     const calls = Number(m?.groups?.stripCalls ?? "");
     /* 上界：**唯一**文本数 × 1（缓存命中 ⇒ 与「多少条判据问过它」无关）。
      * 给一点余量：probe 自己与 `--report` 之外的分支各可能再问一次。
-     * 关键判据是「远小于 判据数 × 文本数」（85 × 2 = 170）。 */
+     * 关键判据是「远小于 判据数 × 文本数」（87 × 2 = 174）。 */
     expect(calls, output).toBeLessThan(30);
   });
 

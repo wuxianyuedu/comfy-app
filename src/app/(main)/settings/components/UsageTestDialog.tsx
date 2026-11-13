@@ -400,12 +400,11 @@ function UsageFieldEditor({
                   value={f.value}
                 />
                 {f.key === "mode" ? (
-                  <span
-                    className="text-muted-foreground/40 border-border/40 text-2xs shrink-0 cursor-not-allowed rounded-lg border px-2 py-1.5"
-                    title="mode 是模式名（text / keyframe / reference），不能填图片；先添加 images / first_frame 行再传图"
-                  >
-                    上传
-                  </span>
+                  <Hint label="mode 是模式名（text / keyframe / reference），不能填图片；先添加 images / first_frame 行再传图">
+                    <span className="text-muted-foreground/40 border-border/40 text-2xs shrink-0 cursor-not-allowed rounded-lg border px-2 py-1.5">
+                      上传
+                    </span>
+                  </Hint>
                 ) : (
                   <FieldImageButton
                     hint="本地上传一张图片作为该字段的值（自动转 data URL）"
@@ -510,13 +509,12 @@ function UsageTestResultPanel({
               </Hint>
             )}
             {result.savedPath !== undefined && result.savedPath !== "" && (
-              <p
-                className="border-border/50 bg-surface-row text-muted-foreground text-2xs mt-2 rounded-lg border px-3 py-2 break-all"
-                title="本次产出的内容已在本地 temp 子目录保存一份"
-              >
-                已保存到本地：
-                <span className="font-mono">{result.savedPath}</span>
-              </p>
+              <Hint label="本次产出的内容已在本地 temp 子目录保存一份">
+                <p className="border-border/50 bg-surface-row text-muted-foreground text-2xs mt-2 rounded-lg border px-3 py-2 break-all">
+                  已保存到本地：
+                  <span className="font-mono">{result.savedPath}</span>
+                </p>
+              </Hint>
             )}
             {result.pending === true &&
               result.taskId !== undefined &&

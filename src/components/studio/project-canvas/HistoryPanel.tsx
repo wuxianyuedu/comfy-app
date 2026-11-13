@@ -313,12 +313,11 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                         </span>
                       )}
                       {task.status === "FAILED" && task.error !== null && task.error !== "" && (
-                        <span
-                          className="text-destructive/80 text-3xs min-w-0 truncate"
-                          title={task.error}
-                        >
-                          {task.error}
-                        </span>
+                        <Hint label={task.error}>
+                          <span className="text-destructive/80 text-3xs min-w-0 truncate">
+                            {task.error}
+                          </span>
+                        </Hint>
                       )}
                     </div>
                   </div>
@@ -343,15 +342,16 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                       </Hint>
                     )}
                     {task.cover !== null && task.cover !== "" && (
-                      <a
-                        className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
-                        download
-                        draggable={false}
-                        href={task.cover}
-                        title="下载"
-                      >
-                        <Download size={13} />
-                      </a>
+                      <Hint label="下载">
+                        <a
+                          className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
+                          download
+                          draggable={false}
+                          href={task.cover}
+                        >
+                          <Download size={13} />
+                        </a>
+                      </Hint>
                     )}
                   </div>
                 </div>

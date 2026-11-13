@@ -201,9 +201,9 @@ export function WorkflowLibraryList({
                 return (
                   <li key={pending.id}>
                     <div className="border-border-subtle bg-subtle flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-2">
-                      <span className="text-ink-strong text-2xs truncate" title={pending.name}>
-                        {pending.name}
-                      </span>
+                      <Hint label={pending.name}>
+                        <span className="text-ink-strong text-2xs truncate">{pending.name}</span>
+                      </Hint>
                       <Hint label={`载入「${pending.name}」`} wrap>
                         <Button
                           className="text-3xs h-auto shrink-0 gap-1 rounded-md px-2 py-1 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
@@ -273,16 +273,17 @@ function WorkflowListItem({
       >
         {/* 单行布局：名称 + 徽标同一行，降低每项高度 */}
         <div className="flex min-w-0 items-center gap-1.5">
-          <span
-            className={[
-              NAME_MAX_WIDTH_CLASS,
-              "shrink truncate text-xs leading-tight font-medium",
-              isTech ? "text-ink-strong font-mono" : "text-ink-bright",
-            ].join("")}
-            title={workflow.name}
-          >
-            {workflow.name}
-          </span>
+          <Hint label={workflow.name}>
+            <span
+              className={[
+                NAME_MAX_WIDTH_CLASS,
+                "shrink truncate text-xs leading-tight font-medium",
+                isTech ? "text-ink-strong font-mono" : "text-ink-bright",
+              ].join("")}
+            >
+              {workflow.name}
+            </span>
+          </Hint>
           {!usable && (
             <ListBadge title="没有工作流(RAW)原件 —— 没有可执行内容" tone="danger">
               无可执行内容

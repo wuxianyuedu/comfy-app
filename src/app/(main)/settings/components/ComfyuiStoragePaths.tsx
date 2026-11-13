@@ -15,19 +15,21 @@ import {
   describeStorageHint,
   type StoragePathRow,
 } from "../comfyui-storage-paths-config";
+import { Hint } from "~/components/ui/hint";
 
 /** 一个目录行：路径（斜杠统一，便于逐字对照盘符）+ 存在性标注。 */
 function StorageDirLine({ dir, shared }: { dir: StoragePathRow["dirs"][number]; shared: boolean }) {
   const shown = normalizeSlashes(dir.path);
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-      <span
-        className="text-ink/85 font-mono text-xs break-all"
-        data-testid={`storage-dir-${shared ? "shared" : "primary"}`}
-        title={dir.path}
-      >
-        {shown}
-      </span>
+      <Hint label={dir.path}>
+        <span
+          className="text-ink/85 font-mono text-xs break-all"
+          data-testid={`storage-dir-${shared ? "shared" : "primary"}`}
+        >
+          {shown}
+        </span>
+      </Hint>
       {dir.source !== null && dir.source !== "" && (
         <span className="text-muted-foreground text-2xs">（来自 {dir.source}）</span>
       )}

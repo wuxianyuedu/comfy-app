@@ -19,6 +19,7 @@ import { ViewActions } from "./ViewActions";
 import { useModelLibrary } from "./hooks/use-model-library";
 import { type ModelFolder, type ModelRow, fmtSize } from "./model-library-config";
 import { EMBEDDED_SCROLL_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
+import { Hint } from "~/components/ui/hint";
 
 /**
  * 工作室模型库 —— 视图层（规范 17 §17.2 第③层）。
@@ -270,23 +271,23 @@ function ModelRowLine({
       role="listitem"
       style={style}
     >
-      <span
-        className="text-ink-bright min-w-0 flex-1 truncate font-mono text-xs"
-        title={model.fileName}
-      >
-        {model.fileName}
-      </span>
-      {!model.isAvailable && (
-        <span
-          className="bg-surface-2 text-ink-faint text-3xs shrink-0 rounded-md px-1.5 py-0.5"
-          title="当前未在 ComfyUI 扫描结果中"
-        >
-          不可用
+      <Hint label={model.fileName}>
+        <span className="text-ink-bright min-w-0 flex-1 truncate font-mono text-xs">
+          {model.fileName}
         </span>
+      </Hint>
+      {!model.isAvailable && (
+        <Hint label="当前未在 ComfyUI 扫描结果中">
+          <span className="bg-surface-2 text-ink-faint text-3xs shrink-0 rounded-md px-1.5 py-0.5">
+            不可用
+          </span>
+        </Hint>
       )}
-      <span className="text-ink-muted shrink-0 text-xs tabular-nums" title="文件大小">
-        {fmtSize(model.fileSize)}
-      </span>
+      <Hint label="文件大小">
+        <span className="text-ink-muted shrink-0 text-xs tabular-nums">
+          {fmtSize(model.fileSize)}
+        </span>
+      </Hint>
     </div>
   );
 }

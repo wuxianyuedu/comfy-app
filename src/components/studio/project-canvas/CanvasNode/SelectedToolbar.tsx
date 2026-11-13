@@ -106,13 +106,14 @@ export function OutputRowPort({
         type={outType}
       />
       <div className="flex h-5 items-center justify-end gap-1.5 px-3.5 pt-1.5">
-        <span
-          className="text-ink-bright min-w-0 truncate text-xs font-semibold"
-          style={{ fontFamily: "var(--font-sans)" }}
-          title={`IO 输出 · ${outLabel}${outType ? ` · ${outType}` : ""}`}
-        >
-          {outLabel}
-        </span>
+        <Hint label={`IO 输出 · ${outLabel}${outType ? ` · ${outType}` : ""}`}>
+          <span
+            className="text-ink-bright min-w-0 truncate text-xs font-semibold"
+            style={{ fontFamily: "var(--font-sans)" }}
+          >
+            {outLabel}
+          </span>
+        </Hint>
         <TypeChip>{typeDisplay(outType)}</TypeChip>
       </div>
       <div className="pb-2" />

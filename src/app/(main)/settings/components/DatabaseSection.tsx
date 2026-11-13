@@ -18,6 +18,7 @@ import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card"
 import { RuntimeLogBox } from "~/components/studio/logs/RuntimeLogBox";
 import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
+import { Hint } from "~/components/ui/hint";
 
 /** Drizzle Studio 状态 → 圆点语义（过渡态优先，口径同 ComfyUI 那条）。 */
 function dbStudioDotState(c: ReadySettingsPageController): StatusDotState {
@@ -48,20 +49,21 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
       </p>
       <div className={`${SETTINGS_ROW_CLASS} ${STATUS_ROW_CLASS}`}>
         <StatusDot state={dbStudioDotState(c)} />
-        <span
-          className={`text-ink/80 ${STATUS_TEXT_CLASS}`}
-          title={
+        <Hint
+          label={
             c.dbStudioStatus?.up === true
               ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port}）`
               : undefined
           }
         >
-          {c.dbStudioStatus?.up === true
-            ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port}）`
-            : c.dbStudioStarting || c.dbStudioStatus?.starting === true
-              ? "Drizzle Studio 正在启动…"
-              : "Drizzle Studio 未运行"}
-        </span>
+          <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>
+            {c.dbStudioStatus?.up === true
+              ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port}）`
+              : c.dbStudioStarting || c.dbStudioStatus?.starting === true
+                ? "Drizzle Studio 正在启动…"
+                : "Drizzle Studio 未运行"}
+          </span>
+        </Hint>
         <div className={STATUS_ACTIONS_CLASS}>
           {/* 按钮只看自身动作的在途状态（dbStudioStarting/Stopping/
               Opening），不看全局 saving——saving 是保存偏好/ComfyUI
