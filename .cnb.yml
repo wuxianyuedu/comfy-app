@@ -1116,8 +1116,11 @@
     # 前者拆碎当场退 127，后者在 Linux 上是直通的多余一层（契约由
     # no-platform-ci-config 的质量门禁段钉住）。
     script: node scripts/ci-ga-verdict-readout.mjs
-    # 包住站内短轮询预算（脚本 DEFAULT_BUDGET_MS 45m）+ 进程开销；与最重格外框同级。
-    timeout: 60m
+    # 包住站内短轮询预算（脚本 DEFAULT_BUDGET_MS 70m = GA 最重 job 60m + 回调 5m +
+    # 余量，对齐见 #3593；不变式由 ci-ga-verdict-readout.test.ts 现算 pr-gate.yml 钉住）
+    # + 进程开销。旧 45m/60m 都会比 GA 的最坏路径先死 —— GA 正常跑满才回调时，
+    # 这里先判「没判过」，红的是「没等到」不是 GA 判了红。
+    timeout: 75m
 
   # ── 构建与产物：**这一格 不在 PR 上跑了**（口径见 §13.5.23）──
   #

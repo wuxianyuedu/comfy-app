@@ -9550,8 +9550,11 @@ GitHub Actions conclusion（45m）→ 日志分块 ×3 → `GitHub 判决判定`
 `GET /{repo}/-/pulls/{n}/commit-statuses`（api.cnb.cool，站内，与镜像格
 `get-pull` 回读同族、同一枚平台注入 `CNB_TOKEN`），只认
 `cnb/api_trigger_ga_verdict/*` 这条 context 的终态 —— success ⇒ 0、
-failure/error ⇒ 1、pending / 缺席 / 未知词 / 到 45m 预算仍没终态 ⇒ 2。
-2 与 1 一样折成 `pull_request` build 的退码，**保护分支与 `ship` 仍认这条
+failure/error ⇒ 1、pending / 缺席 / 未知词 / 到 70m 预算仍没终态 ⇒ 2。
+预算对齐 **GA 的最坏路径**（#3593）：最重 job `heavy-gates` 顶层 60m + 收尾回调
+job 5m + 派发/排队余量 5m ⇒ 70m；不变式由 `tests/ci-ga-verdict-readout.test.ts`
+现算 `pr-gate.yml` 的 job 预算钉住，`.cnb.yml` 的 stage 外框（75m）再包住它 ——
+单独改任何一处都会当场红。2 与 1 一样折成 `pull_request` build 的退码，**保护分支与 `ship` 仍认这条
 build**（§13.6「PR 跑绿才合并」的承重锚一个字没换）。
 
 **为什么不选「让 `质量门禁` 秒级结束、靠 api_trigger context 拦合」**：那条要求
@@ -9597,12 +9600,12 @@ build**（§13.6「PR 跑绿才合并」的承重锚一个字没换）。
 | --- | --- |
 | 自托管主列 | `GitHub 镜像同步` **停用**：出 `COMFYAPP_CI_GATES`、进 `COMFYAPP_CI_DISABLED_GATES`、`.gates` 原文按注释形态留着（恢复三步同 §13.5.33.1）、`GATE_TIER_LEDGER` 进 retired。`质量门禁` 的 `GITHUB_MIRROR_TOKEN` imports 一并撤掉（这一条不再出站） |
 | 平台池出口 | `pull_request` 第二条流水线从「实验」转正：摘 `--once`（恢复缺省重试档）与 `--readout`（退码生效，推不出去/派发失败即非零），流水线名带「（平台池）」后缀、stage 名仍是 `GitHub 镜像同步`（出勤入口按格名认，换机器不换名）。`--await-hosted` 等托管机前置随自托管那格一起停用，双派发竞态窗消失、单写者 |
-| 承重 | **不换锚**：`质量门禁` 的 `pull_request` build 仍是 `ship` / 保护分支 / PR 聚合认的那一条。GA 没跑起来 / 没送回结论 ⇒ `GA 回调结论回读` 站内回读撑到 45m 预算、超时即红（fail-closed）⇐ 这就是「后续流程走不通再红」 |
+| 承重 | **不换锚**：`质量门禁` 的 `pull_request` build 仍是 `ship` / 保护分支 / PR 聚合认的那一条。GA 没跑起来 / 没送回结论 ⇒ `GA 回调结论回读` 站内回读撑到 70m 预算、超时即红（fail-closed）⇐ 这就是「后续流程走不通再红」 |
 
 **为什么「不再判断推送成功」不等于「没人推」**：平台池那条 `--readout` 已摘，
 它自己推不出去会退非零；但那个退码落在**另一条流水线**上，不进 `质量门禁`
 的 build。会不会因此假绿？不会 —— 没推送就没有 `repository_dispatch`、GA 不起跑、
-`GA 回调结论回读` 等不到 `cnb/api_trigger_ga_verdict/*` 的终态，45m 预算到点判红，
+`GA 回调结论回读` 等不到 `cnb/api_trigger_ga_verdict/*` 的终态，70m 预算到点判红，
 `pull_request` build 照样拦合。把「判断推送成功」从承重主列摘掉，换来的是
 **自托管机一台都不碰 github.com**，而 fail-closed 由本来就在场的回读格承担。
 

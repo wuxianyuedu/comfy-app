@@ -30,6 +30,7 @@ import {
 /* 预算这一格的判据要拿**脚本自己那份预算**当基准，而不是在测试里再抄一个常数：
  * 抄一份的话「改了脚本预算、忘了改配置」两种漂移里只会看见一种。 */
 import { FULL_SUITE_TIMEOUT_MS } from "../scripts/full-suite-run.mjs";
+import { DEFAULT_BUDGET_MS } from "../scripts/ci-ga-verdict-readout.mjs";
 import { DAILY_LANE_PIPELINES } from "../scripts/check-daily-attendance.mjs";
 import { FRESHNESS_TRACKS } from "../scripts/freshness-ledger.mjs";
 import { describe, expect, it } from "vitest";
@@ -2492,7 +2493,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "ESLint 零警告",
       "单元测试",
       /* 2026-11-08 转正（ISSUE #3378）：`GitHub 判决回读` 随老轮询主列停用，换成
-       * `GA 回调结论回读` —— 它同样要活到 GA 出结论（站内短轮询 45m 预算），
+       * `GA 回调结论回读` —— 它同样要活到 GA 出结论（站内短轮询 70m 预算，
+       * #3593：≥ GA 最重 job 60m + 回调 5m + 余量），
        * 预算缺席时卡死要等满 2h 才有人知道，所以这一列不能空。 */
       "GA 回调结论回读",
       // 2026-11-02 `受影响用例` / `固定结构用例` 从 **CNB 侧**撤到每日全量单测：这两个
@@ -2517,15 +2519,24 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       const unit = m.groups?.unit;
       const minutes =
         Number(m.groups?.amount ?? 0) * (unit === "h" ? 60 : unit === "s" ? 1 / 60 : 1);
+      /* `GA 回调结论回读` 的本职是**等 GA 出结论**（#3593）：下限跟着脚本预算走
+       * （「脚本预算 ≥ GA 最坏路径」由 ci-ga-verdict-readout.test.ts 现算
+       * `pr-gate.yml` 钉住），这里只钉「stage 外框包得住脚本预算、且不贴平台
+       * 2h 上限」；其余 stage 仍是「卡死要早报」的 10~60m 量级窗。 */
+      const isGaReadout = name === "GA 回调结论回读";
+      const floorMin = isGaReadout ? Math.ceil(DEFAULT_BUDGET_MS / 60_000) : 10;
+      const ceilMin = isGaReadout ? Math.ceil(DEFAULT_BUDGET_MS / 60_000) + 15 : 60;
+      const overReason = isGaReadout
+        ? "外框要比脚本预算宽出进程开销，又不与平台默认的 2h 上限没有区别"
+        : "那与平台默认的 2h 上限没有区别，起不到「卡死要早报」的作用";
       expect(
         minutes,
-        `${name} 的 timeout=${raw} 是小时量级 —— 那与平台默认的 2h 上限没有区别，` +
-          "起不到「卡死要早报」的作用",
-      ).toBeLessThanOrEqual(60);
+        `${name} 的 timeout=${raw} 超出量级窗（上限 ${String(ceilMin)}m）—— ${overReason}`,
+      ).toBeLessThanOrEqual(ceilMin);
       expect(
         minutes,
-        `${name} 的 timeout=${raw} 太紧（真跑得完的形态会被误杀）`,
-      ).toBeGreaterThanOrEqual(10);
+        `${name} 的 timeout=${raw} 太紧（真跑得完的形态会被误杀；下限 ${String(floorMin)}m）`,
+      ).toBeGreaterThanOrEqual(floorMin);
     }
   });
 
