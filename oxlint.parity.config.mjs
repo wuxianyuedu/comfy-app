@@ -902,14 +902,6 @@ export default defineConfig({
         "tests/doc-check-hook-wiring.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/doc-toc.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/downstream-exit.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/e2e-reclaim-own-fake-port.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/e2e-run.test.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用
-        "tests/e2e-runtime-budget.test.ts", // 存量 14 处 · 清账目标 B5 · 新代码不禁用
-        "tests/e2e-trpc-stub.test.ts", // 存量 7 处 · 清账目标 B5 · 新代码不禁用
-        "tests/eslint-exemption-staleness.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/executor-host-artifact.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/executor-host-spawn.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/executor-mode-consistency.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/form-field-wiring-gate.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/freshness-ledger-backend.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/gate-executors.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
