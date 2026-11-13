@@ -70,18 +70,12 @@ export function ProviderModelDialog({
   const providerBaseUrl = provider?.baseUrl ?? "";
   const requestUrl = requestUrlForFormat(providerBaseUrl, d.modelForm.apiFormat);
   /* 图像 / 视频（#3656）：「接口端点」是下拉（词表 `REMOTE_MEDIA_ENDPOINT_OPTIONS`，
-   * 生效值在表单里，库里没配 = 用途默认第一项）；这里只拼最终地址做提示展示。 */
+   * 生效值在表单里，库里没配 = 用途默认第一项）；下拉的触发框与选项只显示词表
+   * 路径段本身（/v1 起那段），完整请求地址由下方「实际请求地址」提示承担（#3671）
+   * —— 同一信息不念两遍，也不让整串地址挤爆一行。 */
   const isChat = d.modelForm.kind === "chat";
   const mediaOptions: ReadonlyArray<string> =
     d.modelForm.kind === "chat" ? [] : REMOTE_MEDIA_ENDPOINT_OPTIONS[d.modelForm.kind];
-  /* 选项标签 = 按 Base URL 拼出的最终请求地址；Base 还没填时给路径段本身
-   * （joinApiUrl 对空 Base 返回空串，直接拼会只剩一个光秃秃的 POST）。 */
-  const mediaEndpointLabels: Record<string, string> = Object.fromEntries(
-    mediaOptions.map((path) => [
-      path,
-      `POST ${providerBaseUrl === "" ? path : joinApiUrl(providerBaseUrl, path)}`,
-    ]),
-  );
   const mediaEndpointUrl =
     !isChat && d.modelForm.endpointPath !== ""
       ? joinApiUrl(providerBaseUrl, d.modelForm.endpointPath)
@@ -257,7 +251,6 @@ export function ProviderModelDialog({
                   autoFitFromOptions={false}
                   className="text-sm"
                   fullWidth
-                  labels={mediaEndpointLabels}
                   onChange={(next) => {
                     d.patchModelForm({ endpointPath: next });
                   }}
