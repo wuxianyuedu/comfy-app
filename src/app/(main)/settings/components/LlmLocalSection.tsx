@@ -49,13 +49,11 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
   };
 
   return (
-    <SettingsCard>
-      {/* 这张卡上的每一项（连接地址、默认模型、按任务的温度）都落在同一处 ——
-          徽标说清是哪儿，迁移配置时才知道该带走什么（ISSUE #3625）。 */}
-      <div className="mb-3">
-        <DataLocationBadge id="llm-config" label="存放位置" />
-      </div>
-
+    <SettingsCard
+      /* 这张卡上的每一项（连接地址、默认模型、按任务的温度）都落在同一处 ——
+          徽标说清是哪儿，迁移配置时才知道该带走什么（ISSUE #3625）。 */
+      titleExtra={<DataLocationBadge id="llm-config" />}
+    >
       {/* Base URL 仅本地 Ollama 需要；远端的连接参数由模型条目各自携带 */}
       <Field
         label="Base URL"

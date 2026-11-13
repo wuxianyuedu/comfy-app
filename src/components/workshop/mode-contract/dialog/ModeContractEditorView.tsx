@@ -251,7 +251,7 @@ function ModeContractDraftPanel({
         )}
         {/* 契约有两层，各存在一处（ISSUE #3625）：本机覆盖跟着这台机器走、项目默认
             入库跟代码走。徽标说清「保存落到哪儿」，迁移时才不会只搬走一半。 */}
-        <DataLocationBadge id="mode-contract-local" label="存放位置" />
+        <DataLocationBadge id="mode-contract-local" />
         <DataLocationBadge id="mode-contract-project" />
       </div>
     </section>

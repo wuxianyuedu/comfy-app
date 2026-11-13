@@ -75,13 +75,11 @@ describe("DataLocationBadge", () => {
     expect(popup?.textContent).toContain("迁移");
   });
 
-  it("引导语可给可不给（给了就显示，不给就不多一个字）", () => {
-    const { container, rerender } = render(
-      wrap(<DataLocationBadge id="model-adapter" label="存放位置" />),
-    );
-    expect(container.textContent).toContain("存放位置");
-    rerender(wrap(<DataLocationBadge id="model-adapter" />));
+  it("徽标不再带「存放位置」引导字（ISSUE #3625 reopen：说明走悬浮气泡，界面不留额外描述）", () => {
+    const { container } = render(wrap(<DataLocationBadge id="model-adapter" />));
     expect(container.textContent).not.toContain("存放位置");
+    /* 类别名（「数据库」）仍在：它是徽标自己的语义，不是引导语。 */
+    expect(container.textContent).toContain("数据库");
   });
 });
 

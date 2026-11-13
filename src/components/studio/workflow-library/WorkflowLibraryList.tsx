@@ -109,7 +109,7 @@ export function WorkflowLibraryList({
             导入后的记录在库里。徽标把两处落点说清 —— 换机器时两样都得搬，
             只搬一样会变成「有记录没有原件」。 */}
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <DataLocationBadge id="workflow-library-disk" label="存放位置" />
+          <DataLocationBadge id="workflow-library-disk" />
           <DataLocationBadge id="workflow-library-db" />
         </div>
       </div>
