@@ -924,15 +924,6 @@ export default defineConfig({
         "tests/oxlint-policy-rules.test.ts", // 存量 6 处 · 清账目标 B5 · 新代码不禁用
         "tests/ship-exec.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/ship.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "tests/tauri-tools-cache.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "tests/test-concurrency-gate.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/test-config-inheritance.test.ts", // 存量 7 处 · 清账目标 B5 · 新代码不禁用
-        "tests/test-db-schema-drift.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
-        "tests/test-environment-gate.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/test-it-each-gate.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/test-sleep-gate.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/test-todo-gate.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/test-waitfor-gate.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/theme-token-single-source.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/trpc-surface-executors.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/tsc-diagnostic-executors.test.ts", // 存量 4 处 · 清账目标 B5 · 新代码不禁用
