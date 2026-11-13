@@ -2589,6 +2589,47 @@ node scripts/check-standalone-contents.cjs   # [standalone] ✓ 产物干净
 > `scripts/standalone-private-inputs.mjs` 的清单里加一项，并向
 > `check-standalone-contents.cjs` 的禁忌清单补一条形状。**别只加 excludes 就当修好了。**
 
+> **`data/` 这一族是「逐条点名」的，登记规则只有一条**（ISSUE #3646 把这一族的缺口
+> 补齐）：**凡是按 `process.cwd()` 落在 `data/` 下的本机私有文件，都必须逐个点名
+> 登记进 `scripts/standalone-private-inputs.mjs` 的 `PRIVATE_INPUTS`**；新增写入方时
+> **同批登记**，并写清「谁在运行期读它」——出厂件该读的是项目默认 / 编译进产物的那份，
+> 本机覆盖只属于「这台机器上额外改的那点东西」。
+>
+> 这一族分三类，表现不同：**凭据类**（`llm-secret.key` / `runtime-secret.json` /
+> `workshop-api-settings.json` 里那把上游 apiKey）随包出去是**泄漏**；
+> **本机覆盖类**（`app-settings.json` / `sidebar-tab-behavior.json` /
+> `workshop-mode-contracts.json` / `workshop-comfy-settings.json`）随包出去是
+> **所有用户都拿到造包者的口径**（出厂件读到的不是项目默认那份，而是造包者本机改过
+> 的那份）；**目录类**（`data/backups/` 的整库快照、`data/workshop-outputs/` 与
+> `data/workshop-compositions/` 的产物）随包出去是**把造包者的数据发给每个用户**——
+> 它们装不进「逐文件」那一层，只能按**目录**点名，所以减法侧的删除动作必须能删目录
+> （`rmSync` 不带 `recursive` 撞上目录会抛 `ERR_FS_EISDIR`）。三类都不许随包。
+> **唯一事实源是 `PRIVATE_INPUTS` 那份清单**，本段只是规则与分类。
+>
+> ⚠️ **这份名单不是唯一那道网**：顶层默认拒绝（ISSUE #1217）把产物根那一整个 `data/`
+> 目录都不在两层顶层白名单里，所以整目录都会被剪掉（实测：减法跑完
+> `.next/standalone/data` 不复存在）。本名单是**逐项**的第二道网——两道网认的
+> 形状不同（目录级那一刀认「这个目录整体不进产物」，这一份认「这一项具体的东西不许
+> 随包」），**只登记一份就会漏**：`db.sqlite` 当年就是这么漏的（那次表现是构建全绿、
+> 开发库进了出厂件）。
+>
+> **这一族没有向 `check-standalone-contents.cjs` 的禁忌清单补形状，是有理由的**：
+> 那份禁忌清单判的是「产物里**任意深度**出现了不该有的东西」，所以 `.env` /
+> `db.sqlite` 两条形状都不锚在产物根（Next 会把 `.env` 从任何层级复制进来）。而
+> `data/` 这一族的入口只有**产物根那一个**，顶层默认拒绝已经判住它（产物里多一个
+> `data/` 顶层条目 ⇒ 「顶层出现白名单外的条目」当场点名），**再补一条不锚根的
+> `data/` 形状只会误伤第三方包自带的 `data/` 目录**（`node_modules/<pkg>/data/**`
+> 是它们自己的内容，不是本机的私有输入）。
+>
+> ⚠️ **这一族含目录 ⇒ 减法的删除动作必须能删目录、且不顺着链接删**：那三处
+> `data/` 目录装不进「逐文件」那一层，只能按目录点名，而 `rmSync` 不带 `recursive`
+> 撞上目录会抛 `ERR_FS_EISDIR`（构建在「减法」这一跳当场崩）；反过来，`recursive`
+> 删目录时若 `data/` 在产物里是个链接，**顺着删会删掉开发机上的那一份**（开发机的
+> `data/backups/` 里躺着整库快照，而被删的是产物）—— 所以减法侧先逐段 `lstat` 判
+> **父段**是不是链接：是就**整项跳过**（那一格与 `stripForbiddenShapes` 的纪律
+> 同源，§7.2 第六件事）。叶子本身是链接时删的是**链接本身**（实测目标文件仍在），
+> 那一格是安全的。
+
 **同族缺陷：开发期文件与整套内部门禁脚本也在产物里**（同一轮实测）。全项目
 tracking 还会带上仓库根的 `AGENTS.md`（内部协作规范全文）、`CHANGELOG.md`、
 `README.md`、各 `*.config.*`（`eslint` / `playwright` / `vitest` / `drizzle` /

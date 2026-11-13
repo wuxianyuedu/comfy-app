@@ -20,6 +20,10 @@ import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { MODE_CONTRACTS_REL_PATH } from "../src/lib/workshop/mode-contract-write-path";
+
+import { symlinkDir } from "./helpers/symlink-dir";
+
 const ROOT = process.cwd();
 const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
 
@@ -255,6 +259,95 @@ describe("开发机私有输入：data 下的密钥与设置不许随包", () =>
     expect(removed).toContain("data/llm-secret.key");
     expect(removed).toContain(".env");
     expect(existsSync(path.join(workdir, "data/llm-secret.key"))).toBe(false);
+  });
+});
+
+/**
+ * `data/` 下的**本机覆盖**不许随包（ISSUE #3646）。
+ *
+ * 这一族与上面那份「密钥与整机设置」走同一道减法，但性质不同：它们大多不是凭据，
+ * 而是「造这个包的那台机器上改过的那点配置」。随包出去的表现不是「泄漏」，而是
+ * **所有用户都拿到造包者的口径**（模式契约 / 侧栏页签行为），或者拿到造包者的
+ * 上游 key。
+ *
+ * 判据是「名单里逐个点名」与「真删一次」两件都要成立：只断言名单里有那份名字，
+ * 断言的只是清单文本；真删一次才是「产物里没有它」。
+ */
+describe("本机覆盖：data/ 下的配置不许随包（ISSUE #3646）", () => {
+  it("模式契约的本机覆盖登记进名单，且真的被删掉", async () => {
+    const { PRIVATE_INPUTS, stripPrivateInputs } = await loadStatic();
+    // 名单里的名字必须与**写入方自己的路径常量**逐字相同（常量在
+    // `src/lib/workshop/mode-contract-write-path.ts`，是落盘路径的唯一出处）：
+    // 登记名与落盘名漂了 ⇒ 减法侧删的是另一份文件，而泄漏照旧、没人看见。
+    expect(PRIVATE_INPUTS).toContain(MODE_CONTRACTS_REL_PATH);
+    mkdirSync(path.join(workdir, "data"), { recursive: true });
+    writeFileSync(path.join(workdir, MODE_CONTRACTS_REL_PATH), "[]", "utf8");
+    const removed = stripPrivateInputs(workdir);
+    expect(removed).toContain(MODE_CONTRACTS_REL_PATH);
+    expect(existsSync(path.join(workdir, MODE_CONTRACTS_REL_PATH))).toBe(false);
+  });
+
+  it("同族其余各项（上游 apiKey / ComfyUI 通道配置 / 三处目录）也在名单里，且真被删掉", async () => {
+    const { PRIVATE_INPUTS, stripPrivateInputs } = await loadStatic();
+    // 文件的写入方：`src/lib/workshop/api-channel.server.ts` 与 MCP 侧
+    // `src/server/workshop/api-channel.ts`（两者共用 `api-channel-core.ts` 的
+    // `WORKSHOP_API_SETTINGS_FILE`）、以及 `src/server/workshop/comfyui.ts` 的
+    // `SETTINGS_FILE`。前者含上游 apiKey —— 随包出去 = 造包者的 key 落到每个用户手里。
+    const files = ["data/workshop-api-settings.json", "data/workshop-comfy-settings.json"];
+    // 目录的写入方：`scripts/db-backup-core.mjs`（**这台机器的整库快照**）、
+    // `src/server/workshop/comfyui.ts`（通道产物）、`src/server/workshop/final-compose.ts`
+    // （合成产物）。它们装不进「逐文件」那一层，只能按目录点名 ⇒ 减法的删除动作
+    // 必须能删目录（否则 `rmSync` 撞上目录会抛 `ERR_FS_EISDIR`，构建当场崩）。
+    const dirs = ["data/backups", "data/workshop-outputs", "data/workshop-compositions"];
+    mkdirSync(path.join(workdir, "data"), { recursive: true });
+    for (const rel of files) {
+      expect(PRIVATE_INPUTS, `剔除清单缺少 ${rel}`).toContain(rel);
+      writeFileSync(path.join(workdir, rel), "{}", "utf8");
+    }
+    for (const rel of dirs) {
+      expect(PRIVATE_INPUTS, `剔除清单缺少 ${rel}`).toContain(rel);
+      mkdirSync(path.join(workdir, rel), { recursive: true });
+      writeFileSync(path.join(workdir, rel, "inside.txt"), "本机的东西", "utf8");
+    }
+    const removed = stripPrivateInputs(workdir);
+    for (const rel of [...files, ...dirs]) {
+      expect(removed).toContain(rel);
+      expect(existsSync(path.join(workdir, rel))).toBe(false);
+    }
+  });
+
+  /**
+   * **不顺着符号链接删**：产物里的 `data/` 万一是链接（tracing 今天复制的是真实目录，
+   * 但「换了复制方式」就未必），顺着递归删会**删掉开发机上的那一份** —— 开发机的
+   * `data/backups/` 里躺着整库快照，而被删的是产物。这是最贵的一类事故。
+   *
+   * 判据落在**行为**上（真摆一个链接、真删一次、真看目标还在不在），不是源码里有没有
+   * 那句判断 —— 结构断言会在换写法时无谓变红，也会在检查真被删掉时变成无谓的绿。
+   */
+  it("产物里的 data/ 是链接时不跟着删（不损坏开发机那一份）", async () => {
+    const { stripPrivateInputs } = await loadStatic();
+    const store = mkdtempSync(path.join(tmpdir(), "comfyapp-store-data-"));
+    const prod = mkdtempSync(path.join(tmpdir(), "comfyapp-prod-data-"));
+    try {
+      // 开发机那一份：`data/` 里有密钥与备份快照
+      mkdirSync(path.join(store, "data", "backups"), { recursive: true });
+      writeFileSync(path.join(store, "data", "llm-secret.key"), "SECRET-ISH", "utf8");
+      writeFileSync(path.join(store, "data", "backups", "db-backup-x.sqlite"), "快照", "utf8");
+      // 产物那一份：`data/` 是个链接，指向开发机那份
+      symlinkDir(path.join(store, "data"), path.join(prod, "data"));
+
+      const removed = stripPrivateInputs(prod);
+
+      // 链接后面的东西一个都不许动（这是这一条的全部内容）
+      expect(existsSync(path.join(store, "data", "llm-secret.key"))).toBe(true);
+      expect(existsSync(path.join(store, "data", "backups", "db-backup-x.sqlite"))).toBe(true);
+      // 减法也没把「链接本身」当成产物内容删掉（叶子是链接时删链接是安全的，但这一格
+      // 认的是「父段是链接 ⇒ 整项跳过」）
+      expect(removed).toEqual([]);
+    } finally {
+      rmSync(store, { recursive: true, force: true });
+      rmSync(prod, { recursive: true, force: true });
+    }
   });
 });
 
