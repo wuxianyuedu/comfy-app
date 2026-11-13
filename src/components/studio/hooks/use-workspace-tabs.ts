@@ -18,7 +18,12 @@ import {
   serializeWorkspaceTabs,
   type WorkspaceTabsState,
 } from "../workspace-tabs";
-import { defaultSidebarTabConfig, makeTransientJudge, type WorkspaceView } from "../NavItems";
+import {
+  defaultSidebarTabConfig,
+  makeTransientJudge,
+  type TransientJudge,
+  type WorkspaceView,
+} from "../NavItems";
 import type { SidebarTabConfig } from "~/lib/shell/sidebar-tab-behavior";
 import { getActiveId } from "~/lib/project-canvas/canvas-store";
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
@@ -59,11 +64,11 @@ function readTabsState(): WorkspaceTabsState | null {
   return parseWorkspaceTabs(raw, WORKSPACE_VIEWS);
 }
 
-function writeTabsState(state: WorkspaceTabsState): void {
+function writeTabsState(state: WorkspaceTabsState, isTransient: TransientJudge): void {
   if (typeof window === "undefined") {
     return;
   }
-  sessionStorage.setItem(WS_TABS_KEY, serializeWorkspaceTabs(state));
+  sessionStorage.setItem(WS_TABS_KEY, serializeWorkspaceTabs(state, isTransient));
 }
 
 export type WorkspaceTabsController = {
@@ -94,9 +99,6 @@ export function useWorkspaceTabs(): WorkspaceTabsController {
   const fallbackConfig = useMemo(() => defaultSidebarTabConfig(), []);
   const config: SidebarTabConfig = configQuery.data?.config ?? fallbackConfig;
   const isTransient = useMemo(() => makeTransientJudge(config), [config]);
-  /* 配置面是否已取回：落盘要等它 —— 否则「配置说这一项常驻、落盘却按默认的切走即关
-   * 剔掉了」，用户重启后会发现那一页不见了（而它本该常驻）。 */
-  const configSettled = !configQuery.isPending;
 
   /* ── 恢复：把上次离开时的页签从 sessionStorage 播回来 ──
    * 不能放进 `useState` 初始值：SSR 读不到 sessionStorage、hydration 不重跑 initializer，恢复永远不生效。
@@ -115,12 +117,17 @@ export function useWorkspaceTabs(): WorkspaceTabsController {
   useEffect(() => {
     /* 对账完成前一律不落盘（机制见上）：否则挂载这一轮会先把初始态（只有首页
        一页）写进 sessionStorage，把用户存好的列表冲掉，随后才读到空。
-       配置面没取回前也不落盘（见上面 `configSettled` 的说明）。 */
-    if (!hydrated || !configSettled) {
+       落盘**不等**配置面取回（ISSUE #3657）：页签的存与取都在客户端
+       （sessionStorage），等一趟服务端往返才落盘，等于把「刷新后仍在」这条
+       客户端不变式押在服务端可用性上 —— 配置接口一旦没答上来（GA 每日档的
+       e2e 桩、或任何后端故障），页签就再也不落盘，新建项目刷新后回到首页。
+       判据未取回时本就回落项目默认，落盘形状与界面所见一致；配置取回后判据
+       变化，这里的依赖会把最新判据下的状态重写一遍。 */
+    if (!hydrated) {
       return;
     }
-    writeTabsState(tabsState);
-  }, [tabsState, hydrated, configSettled]);
+    writeTabsState(tabsState, isTransient);
+  }, [tabsState, hydrated, isTransient]);
 
   /* 当前视图 id —— 判据只认「视图」，同一视图的两个项目页签算同一屏。
    * 「界面打开」的日志（含耗时）不在这里写：它要等这一屏**内容真的挂载**才算
