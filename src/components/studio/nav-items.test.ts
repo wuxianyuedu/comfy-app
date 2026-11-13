@@ -28,6 +28,9 @@ const GLOBAL_IDS: Array<WorkspaceView> = [
      workflows 之前：尾部那一组（workflows + console）是「工作流库」链路的收尾，
      设置不属于那条链路，不该挤进去。 */
   "settings",
+  /* UI 控件总览（#3726）：开发者的基元对照页，紧跟设置（同族：全局工具屏、
+     transient、不进侧栏），同样在「工作流库」链路那组之前。 */
+  "uiKit",
   "workflows",
   /* 这两个此前不在本清单里 —— 它们是「全局浮层入口」（`OVERLAY_NAV_ITEMS`），
      点开弹窗、不改视图，所以 `WorkspaceView` 里根本没有这两个值。改成视图页签后
@@ -142,12 +145,13 @@ describe("瞬时页签与侧栏隐藏（ISSUE #1784）", () => {
      **项目默认**那份配置下的行为 —— 出厂即如此，用户改了是他自己的选择。 */
   const TRANSIENT_IDS: Array<WorkspaceView> = [
     "settings",
+    "uiKit",
     "model-adapters",
     "model-test",
     "mode-contract",
   ];
 
-  it("恰好这三项是瞬时页签（切走即关），其余都不是", () => {
+  it("恰好这几项是瞬时页签（切走即关），其余都不是", () => {
     const config = defaultSidebarTabConfig();
     const actual = NAV_ITEMS.filter((item) => isTransientView(item.id, config)).map(
       (item) => item.id,
@@ -165,11 +169,11 @@ describe("瞬时页签与侧栏隐藏（ISSUE #1784）", () => {
     }
   });
 
-  it("注册表里只剩「设置」带瞬时标记 —— 侧栏那几项归配置面管（ISSUE #3623）", () => {
+  it("注册表里带瞬时标记的只有「设置」与「UI 控件总览」—— 侧栏那几项归配置面管（ISSUE #3623）", () => {
     /* 两处出处不许并存：侧栏项的瞬时与否由 JSON 决定，注册表再写一份就成了
        「两个地方各说各话」，而界面上没有任何东西提示用户该信哪个。 */
     const flagged = NAV_ITEMS.filter((item) => item.transient === true).map((item) => item.id);
-    expect(flagged).toEqual(["settings"]);
+    expect(flagged).toEqual(["settings", "uiKit"]);
   });
 
   it("项目默认那份 JSON 恰好覆盖配置面内的每一项（漏登记 = 那一项默默回落成常驻）", () => {
@@ -182,17 +186,20 @@ describe("瞬时页签与侧栏隐藏（ISSUE #1784）", () => {
     expect(configurable).not.toContain("home");
   });
 
-  it("只有「设置」不在侧栏列表里，但它仍在全局项清单里", () => {
+  it("只有「设置」与「UI 控件总览」不在侧栏列表里，但它们仍在全局项清单里", () => {
     const sidebarIds = sidebarNavItems().map((item) => item.id);
     expect(sidebarIds).not.toContain("settings");
-    /* 侧栏与全局项只差这一项 —— 多差出第二项就说明有人顺手把别的也撤了。 */
+    expect(sidebarIds).not.toContain("uiKit");
+    /* 侧栏与全局项只差这两项 —— 多差出第三项就说明有人顺手把别的也撤了。 */
     expect(
       globalNavItems()
         .map((i) => i.id)
-        .filter((id) => id !== "settings"),
+        .filter((id) => id !== "settings" && id !== "uiKit"),
     ).toEqual(sidebarIds);
-    /* 仍在全局项里：它是可打开的视图（顶栏菜单 / 「+」菜单 / 命令面板都要能到它），
+    /* 仍在全局项里：它们是可打开的视图（顶栏菜单 / 「+」菜单 / 命令面板都要能到），
        撤的只是「侧栏列表里那一行」。 */
-    expect(globalNavItems().map((i) => i.id)).toContain("settings");
+    const globalIds = globalNavItems().map((i) => i.id);
+    expect(globalIds).toContain("settings");
+    expect(globalIds).toContain("uiKit");
   });
 });
