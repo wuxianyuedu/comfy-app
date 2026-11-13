@@ -299,7 +299,7 @@ platformTest("同步入口在 Windows 上是 /PID …", ({ asPlatform }) => {
 - [x] 存量 `.snap` 结构快照已按行为断言迁移完并删除（见 §11.9）。
 - [ ] `log-store.parseFileLogs`：`[WARNING]` 行当前回退 info 级（源码怪癖，测试已按现状断言并标注）。
 - [x] Tauri 壳冒烟自动化落地（ISSUE #3570）：真实 Windows 会话里跑 release 版
-      `app.exe`，观察 Win32 前台归属 / Z 序 / 任务栏闪烁收口与「交接后不重放」
+      `{{shell.app.exe}}`，观察 Win32 前台归属 / Z 序 / 任务栏闪烁收口与「交接后不重放」
       （运行期计数信号 #3569 + 壳日志交叉印证）。入口 `pnpm shell:smoke`
       （`scripts/shell-smoke.mjs` → `scripts/win32-shell-smoke.py`，只吃标准库）；
       五个场景、读数口径与退出码见规范 §11.10.4 末段。改动 src-tauri 仍需
