@@ -28,31 +28,29 @@ export type FilePickerHandle = {
   open: () => void;
 };
 
-/** 命令式用法：`open()` 挂在任意既有按钮上，`Input` 挂在本组件树里。`const picker = useFilePicker({ onPick: (f) => void upload(f), accept: "image/*" })`；`<Button onClick={picker.open}>上传</Button>` 触发，`<picker.Input />` 挂载隐藏 input（不用你管 ref）。
- * `Input` 用 `useMemo` 固定身份：它在 JSX 里是组件位置，每次渲染重建会让 React 卸载再挂载 input（正在进行的文件对话框会被打断）。 */
+/** 命令式用法：`open()` 挂在任意既有按钮上，隐藏 input 挂在本组件树里。`const picker = useFilePicker({ onPick: (f) => void upload(f), accept: "image/*" })`；`<Button onClick={picker.open}>上传</Button>` 触发，`<FilePicker {...picker.inputProps} />` 挂载隐藏 input（不用你管 ref）。
+ *
+ *  **为什么返回 props 而不是返回一个 `<picker.Input />` 组件**（#3692）：`Input`
+ *  在 JSX 里占的是组件位置，身份必须逐渲染恒定，否则 React 会把它卸载再重挂 ——
+ *  重挂窗口里落下的文件选择事件会打在已脱离 DOM 的旧节点上，选择结果整个丢失。
+ *  而 `onPick` 几乎总是调用方的内联箭头，把它放进 `useMemo` 的 deps，身份就每
+ *  渲染必变（形同虚设）。`FilePicker` 本身是模块级组件、身份天然恒定：返回
+ *  **现成的 props** 让调用点展开到它身上，重渲染只更新 props、不重挂。 */
 export function useFilePicker({ onPick, accept, multiple, inputProps }: FilePickerProps) {
   const handleRef = React.useRef<FilePickerHandle | null>(null);
 
   /* `open` 必须身份稳定：调用方会把它放进 `onClick` 甚至依赖数组。 */
   const open = React.useCallback(() => handleRef.current?.open(), []);
 
-  const Input = React.useMemo(
-    () =>
-      function PickerInput() {
-        return (
-          <FilePicker
-            accept={accept}
-            handleRef={handleRef}
-            inputProps={inputProps}
-            multiple={multiple}
-            onPick={onPick}
-          />
-        );
-      },
-    [onPick, accept, multiple, inputProps],
-  );
+  const pickerInputProps = {
+    accept,
+    handleRef,
+    inputProps,
+    multiple,
+    onPick,
+  };
 
-  return { open, Input };
+  return { open, inputProps: pickerInputProps };
 }
 
 /**

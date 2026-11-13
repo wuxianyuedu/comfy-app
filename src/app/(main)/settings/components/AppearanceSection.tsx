@@ -12,7 +12,7 @@ import { Moon, Sun } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { FieldLabel } from "~/components/ui/field";
-import { useFilePicker } from "~/components/ui/file-picker";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import { Input } from "~/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import {
@@ -349,7 +349,7 @@ function FontFileLoader({ onChange, tier }: { onChange: (value: string) => void;
         <Button disabled={busy} onClick={picker.open} size="sm" variant="outline">
           {busy ? "加载中…" : "选择文件"}
         </Button>
-        <picker.Input />
+        <FilePicker {...picker.inputProps} />
       </div>
       {error ? <p className="text-danger-strong mt-1 text-xs">{error}</p> : null}
     </div>

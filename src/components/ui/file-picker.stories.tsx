@@ -2,11 +2,11 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { Button } from "~/components/ui/button";
-import { useFilePicker } from "~/components/ui/file-picker";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 
 /** `useFilePicker` 是「隐藏 `<input type="file">` + 谁来点它」的唯一出口（视图层用它；`FilePicker` 那个组件是它的实现细节）。
  * 它收的是全库 9 个文件里各写一份的三件事：① `click()` 在 ref 未挂上时是静默空操作（界面「点了没反应」，既没反馈也不知道该查什么），出口把 ref 转发与 `open()` 收成一对；② 选完没复位 `event.target.value` —— 用户第二次选同一文件不触发 `change`（浏览器只在取值变化时派发，看起来像上传坏了），出口内置复位；③ 同一文件里两个隐藏 input + 两个 ref + 两个 `click()` 的样板重复。
- * `picker.Input` 是组件位置，用 `useMemo` 固定身份 —— 每次渲染重建会让 React 卸载再挂载 input，正在进行的系统文件对话框会被打断；它必须挂在 JSX 里（`<picker.Input />`），不能在条件分支里。
+ * 隐藏 input 用 `<FilePicker {...picker.inputProps} />` 挂在 JSX 里，不能在条件分支里：`FilePicker` 是模块级组件、身份恒定，重渲染只更新 props、不卸载重挂（#3692）—— 重挂会打断正在进行的系统文件对话框，也会让重挂窗口里的选择事件落在脱离 DOM 的旧节点上。
  * `open` 也身份稳定（`useCallback`），可以放进 `onClick` 甚至依赖数组。
  * ⚠️ Storybook 里点开会真的弹出系统文件对话框（浏览器行为）；选完后画布上会显示「选了什么」，这就是「同一文件选两次仍然有反应」那条的现场。 */
 const meta = {
@@ -36,7 +36,7 @@ function FilePickerDemo({ accept, multiple }: { accept?: string; multiple?: bool
           选择文件
         </Button>
         {/* 隐藏 input 挂在树里，ref 转发由出口负责 —— 调用处不用管。 */}
-        <picker.Input />
+        <FilePicker {...picker.inputProps} />
       </div>
       <p className="text-ink-muted text-sm">
         {picked.length === 0 ? "还没选" : `选了：${picked.join(" / ")}`}
