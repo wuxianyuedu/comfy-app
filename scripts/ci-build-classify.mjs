@@ -602,6 +602,31 @@ export function inFlightStages(json) {
 }
 
 /**
+ * 「没跑成的格名」—— 真失败族 + 可见性面里状态是错的那几格（ISSUE #3341）。
+ *
+ * `--rerun-ci` 的前置读数用它把「上一跑红在哪」念出来：人靠格名认「这是节点形
+ * （Prepare / GitHub 镜像同步那一类 egress 断网、runner 掉线）还是内容形
+ * （lint / 用例）」，这正是「再推一笔会不会白烧」的判断依据。取的是
+ * `get-build-status -v` 里**已有**的字段，一次平台调用都不加。
+ * 被取消的格不在里面 —— 那一跑没有结论，读数走「被取消」那一支，不冒充红。
+ *
+ * @param {any} json `cnb build get-build-status -v` 的解析结果
+ * @returns {string[]} 格名列表（去重、保序；没有就空数组）
+ */
+export function failedStageNames(json) {
+  const outcome = classifyBuildOutcome(json);
+  /** @type {string[]} */
+  const names = [];
+  for (const ref of [...outcome.failed, ...outcome.endFailed]) {
+    const name = ref.name || ref.id;
+    if (name && !names.includes(name)) {
+      names.push(name);
+    }
+  }
+  return names;
+}
+
+/**
  * 毫秒 → 「2h24m」这种读法（只用于把工具的兜底超时念成人话）。
  *
  * @param {number | null} ms 毫秒（null / 非正数 ⇒ 空串，调用方据此少念一句）
