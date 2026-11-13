@@ -23,8 +23,11 @@
  *   node scripts/fetch-daily-shell.mjs --out src-tauri/target/release/app.exe
  *   node scripts/fetch-daily-shell.mjs --repo moon-read/comfy-app-t3 --tag nightly
  *
- * 下载需要能访问 CNB nightly Release 资产。若直连返回 401/403，可通过环境变量提供令牌
- * （按顺序尝试：`CNB_RELEASE_TOKEN` / `CNB_TOKEN` / `CNB_ISSUE_TOKEN`）或传 `--token`。
+ * 下载走 CNB OpenAPI 端点 `https://api.cnb.cool`（官方文档地址，也与
+ * `ci-ga-desktop-relay.mjs` 回传后打印的取包地址同源），**不是**网页站 `cnb.cool`：
+ * 后者不带 Bearer 时匿名 404、带令牌 400 `Invalid argument`。私有仓库的 Release 附件
+ * 需要登录态（`repo-release:r`），可用 `CNB_RELEASE_TOKEN` / `CNB_TOKEN` /
+ * `CNB_ISSUE_TOKEN` 或 `--token` 提供；`CNB_API_ENDPOINT` 可覆盖端点（私有化部署）。
  */
 
 import fs from "node:fs";
@@ -35,6 +38,8 @@ import { spawnSync } from "node:child_process";
 const HERE = import.meta.dirname;
 export const ROOT = path.resolve(HERE, "..");
 
+/** CNB OpenAPI 缺省端点；与回传侧同一个口径，私有化部署用 CNB_API_ENDPOINT 覆盖。 */
+export const DEFAULT_API_ENDPOINT = "https://api.cnb.cool";
 export const DEFAULT_REPO = "moon-read/comfy-app-t3";
 export const DEFAULT_TAG = "nightly";
 export const DEFAULT_ASSET = "ComfyAPP-shell.exe";
@@ -78,6 +83,9 @@ export function usage() {
     "  --force-shortcut     即使快捷方式已存在也重新生成",
     "  --dry-run            只打印计划，不下载、不写文件",
     "  -h, --help           显示帮助",
+    "",
+    "环境变量：CNB_API_ENDPOINT 覆盖下载端点（缺省 https://api.cnb.cool）；",
+    "          CNB_RELEASE_TOKEN / CNB_TOKEN / CNB_ISSUE_TOKEN 提供下载鉴权（repo-release:r）。",
   ].join("\n");
 }
 
@@ -100,13 +108,27 @@ export function resolveToken(env, explicit) {
 }
 
 /**
- * @param {{repo: string, tag: string, asset: string}} ctx
+ * 取下载端点：与仓内其它 CNB API 脚本一样，缺省 api.cnb.cool、允许环境变量覆盖。
+ *
+ * @param {Record<string, string | undefined>} env
+ */
+export function resolveEndpoint(env) {
+  return (
+    String(env.CNB_API_ENDPOINT ?? "")
+      .trim()
+      .replace(/\/+$/u, "") || DEFAULT_API_ENDPOINT
+  );
+}
+
+/**
+ * @param {{asset: string, endpoint?: string, repo: string, tag: string}} ctx
  */
 export function buildDownloadUrl(ctx) {
   const repo = ctx.repo.replaceAll(/^\/+|\/+$/gu, "");
   const tag = encodeURIComponent(ctx.tag);
   const asset = encodeURIComponent(ctx.asset);
-  return `https://cnb.cool/${repo}/-/releases/download/${tag}/${asset}`;
+  const endpoint = (ctx.endpoint || DEFAULT_API_ENDPOINT).replace(/\/+$/u, "");
+  return `${endpoint}/${repo}/-/releases/download/${tag}/${asset}`;
 }
 
 /**
@@ -267,8 +289,14 @@ export async function main(io = {}) {
 
   const root = path.resolve(io.cwd ?? ROOT);
   const outAbs = path.isAbsolute(args.out) ? args.out : path.resolve(root, args.out);
-  const url = buildDownloadUrl({ asset: args.asset, repo: args.repo, tag: args.tag });
-  const { token, from } = resolveToken(io.env ?? process.env, args.token);
+  const env = io.env ?? process.env;
+  const url = buildDownloadUrl({
+    asset: args.asset,
+    endpoint: resolveEndpoint(env),
+    repo: args.repo,
+    tag: args.tag,
+  });
+  const { token, from } = resolveToken(env, args.token);
 
   process.stdout.write(`[fetch-daily-shell] 来源：${url}\n`);
   process.stdout.write(`[fetch-daily-shell] 保存到：${outAbs}\n`);
@@ -296,17 +324,16 @@ export async function main(io = {}) {
     }
     if (downloaded.status === 401 || downloaded.status === 403) {
       process.stderr.write(
-        "[fetch-daily-shell] 提示：CNB Release 资产需要访问权限时，可设置 CNB_RELEASE_TOKEN / CNB_TOKEN / CNB_ISSUE_TOKEN 或传 --token。\n",
+        "[fetch-daily-shell] 提示：该 Release 附件需要登录态与 repo-release:r 权限，请设置 CNB_RELEASE_TOKEN / CNB_TOKEN / CNB_ISSUE_TOKEN 或传 --token。\n",
       );
     } else if (downloaded.status === 404) {
-      /* 纯壳资产由每日桌包档的回传步产出：tag 在而这份资产缺席，是上游还没产出，
-       * 不是本地落点写错。出口要说清这一层，否则会被当成「目录还是旧的」去改路径。 */
+      /* 端点修对以后，404 才是真的「这个 tag / 资产名下没有这份附件」；与落点无关，
+       * 别再引向改路径，也别把网页端点的匿名 404 念成「上游没产出」。 */
       process.stderr.write(
-        `[fetch-daily-shell] 提示：nightly Release 里还没有纯壳资产 ${args.asset}（由每日桌包档回传步产出）；` +
-          "请确认回传步跑成功、CNB_RELEASE_TOKEN 已配置，或等下一轮每日成品；资产名不同时用 --asset 指定。\n",
+        `[fetch-daily-shell] 提示：该地址下没有 ${args.asset}；请核对 nightly Release 页的附件清单、--tag 与 --repo，资产名不同时用 --asset 指定。\n`,
       );
       process.stderr.write(
-        `[fetch-daily-shell] 立即可用的替代：双击 tools/build/build-tauri-release.ps1 本地编译纯壳；本次失败与保存路径无关（默认 ${DEFAULT_OUT}），不要改落点。\n`,
+        `[fetch-daily-shell] 本次失败与保存路径无关（默认 ${DEFAULT_OUT}），不要改落点；立即可用的替代是 tools/build/build-tauri-release.ps1 本地编壳。\n`,
       );
     }
     return 1;
