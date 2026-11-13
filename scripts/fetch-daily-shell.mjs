@@ -27,10 +27,12 @@
  * `ci-ga-desktop-relay.mjs` 回传后打印的取包地址同源），**不是**网页站 `cnb.cool`：
  * 后者不带 Bearer 时匿名 404、带令牌 400 `Invalid argument`。私有仓库的 Release 附件
  * 需要登录态（`repo-release:r`），可用 `CNB_RELEASE_TOKEN` / `CNB_TOKEN` /
- * `CNB_ISSUE_TOKEN` 或 `--token` 提供；`CNB_API_ENDPOINT` 可覆盖端点（私有化部署）。
+ * `CNB_ISSUE_TOKEN`、`--token`，或用户级令牌文件（见 `tokenConfigPaths()`）提供；
+ * `CNB_API_ENDPOINT` 可覆盖端点（私有化部署）。
  */
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
@@ -72,6 +74,7 @@ export function parseArgs(argv = process.argv.slice(2)) {
 }
 
 export function usage() {
+  const paths = tokenConfigPaths(process.env, process.platform);
   return [
     "用法：node scripts/fetch-daily-shell.mjs [选项]",
     "",
@@ -79,21 +82,77 @@ export function usage() {
     "  --repo <slug>        CNB 仓库（默认 moon-read/comfy-app-t3）",
     "  --tag <tag>          Release tag（默认 nightly）",
     "  --asset <name>       资产文件名（默认 ComfyAPP-shell.exe）",
-    "  --token <token>      下载鉴权 token（也可用 CNB_RELEASE_TOKEN/CNB_TOKEN/CNB_ISSUE_TOKEN）",
+    "  --token <token>      下载鉴权 token（也可用环境变量或令牌文件）",
     "  --force-shortcut     即使快捷方式已存在也重新生成",
     "  --dry-run            只打印计划，不下载、不写文件",
     "  -h, --help           显示帮助",
     "",
-    "环境变量：CNB_API_ENDPOINT 覆盖下载端点（缺省 https://api.cnb.cool）；",
-    "          CNB_RELEASE_TOKEN / CNB_TOKEN / CNB_ISSUE_TOKEN 提供下载鉴权（repo-release:r）。",
+    "鉴权（私有仓 Release 附件需 repo-release:r）：",
+    "  环境变量：CNB_RELEASE_TOKEN / CNB_TOKEN / CNB_ISSUE_TOKEN",
+    "  令牌文件：将 token 单独写入以下任一路径（按顺序读取首个非空文件，内容取首行/trim）：",
+    ...paths.map((p) => `    - ${p}`),
+    "",
+    "环境变量：CNB_API_ENDPOINT 覆盖下载端点（缺省 https://api.cnb.cool）。",
   ].join("\n");
+}
+
+/**
+ * 用户级令牌文件候选路径（按优先级）。用于双击/无参运行时的持久化鉴权配置（ISSUE #3736）。
+ *
+ * @param {Record<string, string | undefined>} env
+ * @param {NodeJS.Platform} [platform]
+ * @returns {string[]}
+ */
+export function tokenConfigPaths(env = process.env, platform = process.platform) {
+  const home = os.homedir();
+  /** @type {string[]} */
+  const paths = [];
+  if (platform === "win32") {
+    const appData = (env.APPDATA ?? "").trim();
+    if (appData) {
+      paths.push(path.join(appData, "comfy-app", "cnb-release-token"));
+    }
+    paths.push(path.join(home, "AppData", "Roaming", "comfy-app", "cnb-release-token"));
+  }
+  // 通用位置（跨平台兜底，Windows 上也可用）
+  paths.push(path.join(home, ".config", "comfy-app", "cnb-release-token"));
+  paths.push(path.join(home, ".comfy-app", "cnb-release-token"));
+  // 去重并保序
+  return [...new Set(paths.map((p) => path.normalize(p)))];
+}
+
+/**
+ * @param {string[]} paths
+ * @param {{readFileSync?: typeof fs.readFileSync}} [io]
+ */
+export function readTokenFromConfigFiles(paths, io = {}) {
+  const readFileSync = io.readFileSync ?? fs.readFileSync;
+  for (const file of paths) {
+    try {
+      const raw = readFileSync(file, "utf8");
+      // 仅取首个非空行，避免误读多行文件里的注释/噪声
+      const token =
+        String(raw)
+          .replace(/^\uFEFF/u, "")
+          .split(/\r?\n/u)
+          .map((l) => l.trim())
+          .find((l) => l.length > 0) ?? "";
+      if (token) {
+        return { token, from: path.normalize(file) };
+      }
+    } catch {
+      // 文件不存在或不可读：继续尝试下一候选
+    }
+  }
+  return { token: "", from: "" };
 }
 
 /**
  * @param {Record<string, string | undefined>} env
  * @param {string} explicit
+ * @param {{platform?: NodeJS.Platform, configPaths?: string[], readFileSync?: typeof fs.readFileSync}} [opts]
  */
-export function resolveToken(env, explicit) {
+export function resolveToken(env, explicit, opts = {}) {
   const direct = explicit.trim();
   if (direct) {
     return { token: direct, from: "--token" };
@@ -104,7 +163,8 @@ export function resolveToken(env, explicit) {
       return { token: value, from: key };
     }
   }
-  return { token: "", from: "" };
+  const paths = opts.configPaths ?? tokenConfigPaths(env, opts.platform ?? process.platform);
+  return readTokenFromConfigFiles(paths, { readFileSync: opts.readFileSync });
 }
 
 /**
@@ -323,9 +383,21 @@ export async function main(io = {}) {
       process.stderr.write(`[fetch-daily-shell] 响应片段：${downloaded.detail}\n`);
     }
     if (downloaded.status === 401 || downloaded.status === 403) {
+      const cfg = tokenConfigPaths(env, io.platform ?? process.platform)[0] ?? "";
       process.stderr.write(
-        "[fetch-daily-shell] 提示：该 Release 附件需要登录态与 repo-release:r 权限，请设置 CNB_RELEASE_TOKEN / CNB_TOKEN / CNB_ISSUE_TOKEN 或传 --token。\n",
+        "[fetch-daily-shell] 提示：该 Release 附件需要登录态与 repo-release:r 权限。\n",
       );
+      process.stderr.write(
+        "[fetch-daily-shell] 可选配置：\n" +
+          "  · 环境变量：CNB_RELEASE_TOKEN / CNB_TOKEN / CNB_ISSUE_TOKEN\n" +
+          `  · 令牌文件：将带 repo-release:r 权限的 token 写入 ${cfg || "用户级 comfy-app/cnb-release-token 文件"}（仅首个非空行生效）\n` +
+          "  · 或本次传入：--token <token>\n",
+      );
+      if (!token) {
+        process.stderr.write(
+          "[fetch-daily-shell] 当前未检测到可用令牌（环境变量与令牌文件均为空/缺失）。\n",
+        );
+      }
     } else if (downloaded.status === 404) {
       /* 端点修对以后，404 才是真的「这个 tag / 资产名下没有这份附件」；与落点无关，
        * 别再引向改路径，也别把网页端点的匿名 404 念成「上游没产出」。 */
