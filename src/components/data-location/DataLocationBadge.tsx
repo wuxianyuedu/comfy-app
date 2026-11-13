@@ -12,11 +12,17 @@
  * 说明里 —— 那两句是迁移操作时唯一要照着做的东西，所以它们跟着徽标走，而不是
  * 散在别的文档里。
  *
+ * ⚠️ 悬浮说明走 `ui/hint` 的 `<Hint>`（`Tooltip`），**不用原生 `title=`**：原生
+ * tooltip 由浏览器画，样式与主题都不归设计 token 管（暗色下就是一块白底气泡、
+ * 长文案单行铺开读着费劲，ISSUE #3672）—— 换成 Tooltip 后两态都跟随主题、
+ * 长文案按 `max-w-xs` 折行，与顶栏那颗问号（`ui/header-help`）同一件东西。
+ *
  * 口径全部来自 `~/lib/data-location/data-locations`（登记本体的**唯一出处**），
  * 本件不持有任何落点字面量 —— 改落点时不需要碰界面。
  */
 
 import { Badge } from "~/components/ui/badge";
+import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import {
   DATA_LOCATION_CATEGORIES,
@@ -24,7 +30,7 @@ import {
   type DataLocationId,
 } from "~/lib/data-location/data-locations";
 
-/** 悬浮说明的拼装口径：落点与迁移办法各占一句，中间用「；」断开（`title` 是单行提示）。 */
+/** 悬浮说明的拼装口径：落点与迁移办法各占一句，中间用「；」断开。 */
 function badgeTitle(id: DataLocationId): string {
   const entry = DATA_LOCATIONS[id];
   const category = DATA_LOCATION_CATEGORIES[entry.category];
@@ -47,10 +53,14 @@ export function DataLocationBadge({ id, label }: { id: DataLocationId; label?: s
   return (
     <span className="inline-flex items-center gap-1.5">
       {label === undefined ? null : <span className="text-muted-foreground text-2xs">{label}</span>}
-      <Badge size="sm" title={badgeTitle(id)} tone={category.tone}>
-        <Icon name={category.icon} />
-        {category.label}
-      </Badge>
+      {/* `side="top"`：徽标坐在设置卡片正文里，气泡向上让出下方那两行说明；
+          与顶栏问号（`side="bottom"`）分档的理由是锚点在屏幕里的位置，不是风格。 */}
+      <Hint label={badgeTitle(id)} side="top">
+        <Badge size="sm" tone={category.tone}>
+          <Icon name={category.icon} />
+          {category.label}
+        </Badge>
+      </Hint>
     </span>
   );
 }
