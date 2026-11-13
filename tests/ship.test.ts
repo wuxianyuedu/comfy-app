@@ -47,7 +47,6 @@ import {
   decideCleanBranch,
   decideCreateBranch,
   deriveTitle,
-  findMergedPullForHeadSha,
   findPullForBranch,
   LIST_MAX_PAGES,
   LIST_PAGE_SIZE,
@@ -58,6 +57,11 @@ import {
   readPullVerdict,
   resolveUpstream,
 } from "../scripts/ship-core.mjs";
+import {
+  findLandedPull,
+  findMergedPullForBranch,
+  findMergedPullForHeadSha,
+} from "../scripts/ship-scan.mjs";
 import {
   addPathKey,
   classifyStagedSurface,
@@ -4676,6 +4680,93 @@ describe("findMergedPullForHeadSha：这一笔是不是已经随某条已合并�
   });
 });
 
+describe("findMergedPullForBranch：这条分支是不是已有已合并的历史 PR（ISSUE #3642）", () => {
+  it("head.ref 同名且 is_merged 为真 ⇒ 命中那条 PR 号", () => {
+    const closed = {
+      data: [
+        {
+          number: 3640,
+          state: "closed",
+          is_merged: true,
+          head: { ref: "refs/heads/fix/3632-io-panel", sha: "c5ced5fd" },
+        },
+      ],
+    };
+    expect(findMergedPullForBranch(closed, "fix/3632-io-panel")).toBe(3640);
+  });
+
+  it("三条反面各拦一种：关了没合 / 缺键 / 别的分支名都不算", () => {
+    const closed = {
+      data: [
+        { number: 1, is_merged: false, head: { ref: "refs/heads/feat/x" } },
+        { number: 2, state: "closed", head: { ref: "refs/heads/feat/x" } },
+        { number: 3, is_merged: true, head: { ref: "refs/heads/feat/y" } },
+      ],
+    };
+    expect(findMergedPullForBranch(closed, "feat/x")).toBeNull();
+    expect(findMergedPullForBranch(closed, "feat/y")).toBe(3);
+    expect(findMergedPullForBranch(closed, "feat/none")).toBeNull();
+    expect(findMergedPullForBranch(closed, "")).toBeNull();
+    expect(findMergedPullForBranch(null, "feat/x")).toBeNull();
+  });
+});
+
+describe("findLandedPull：两档命中分开报 kind（sha 强证据 / ref 弱证据，ISSUE #3642）", () => {
+  const okJson = (body: string): FakeResult => ({
+    status: 0,
+    stdout: body,
+    stderr: "",
+    error: null,
+  });
+
+  function scanIo(pages: Array<string>) {
+    const calls: Array<string> = [];
+    const run = (_cmd: string, args: Array<string>): FakeResult => {
+      calls.push(args.join(" "));
+      const page = Number(/--page (?<page>\d+)/.exec(args.join(" "))?.groups?.page ?? "1");
+      return okJson(pages[page - 1] ?? '{"status":200,"data":[]}');
+    };
+    return { run, calls };
+  }
+
+  it("sha 命中 ⇒ kind=sha（比同页的 ref 命中优先）", () => {
+    const f = scanIo([
+      '{"status":200,"data":[{"number":7,"is_merged":true,"head":{"ref":"refs/heads/fix/a","sha":"dd16f7ec"}}]}',
+    ]);
+    const landed = findLandedPull({
+      run: f.run,
+      slug: "o/r",
+      headSha: "dd16f7ec",
+      branch: "fix/a",
+    });
+    expect(landed).toMatchObject({ prNumber: 7, kind: "sha", unknownPr: null, ran: true });
+  });
+
+  it("sha 对不上但同名分支有已合并历史 PR ⇒ kind=branch（#3642 的那一形）", () => {
+    const f = scanIo([
+      '{"status":200,"data":[{"number":3640,"is_merged":true,"head":{"ref":"refs/heads/fix/a","sha":"c5ced5fd"}}]}',
+    ]);
+    const landed = findLandedPull({
+      run: f.run,
+      slug: "o/r",
+      headSha: "3ea02903",
+      branch: "fix/a",
+    });
+    expect(landed).toMatchObject({ prNumber: 3640, kind: "branch" });
+  });
+
+  it("closed 清单取不到 ⇒ ran=false（未判定，不撤销建 PR）", () => {
+    const run = (_cmd: string, _args: Array<string>): FakeResult => ({
+      status: 1,
+      stdout: "boom",
+      stderr: "",
+      error: null,
+    });
+    const landed = findLandedPull({ run, slug: "o/r", headSha: "dd16f7ec", branch: "fix/a" });
+    expect(landed).toMatchObject({ prNumber: null, kind: null, ran: false });
+  });
+});
+
 describe("readPullVerdict：字段缺省时不抛，缺键走 unknown 三态（ISSUE #3059）", () => {
   it("缺 data / 缺字段都归一到安全默认", () => {
     expect(readPullVerdict(null)).toEqual({
@@ -5253,6 +5344,8 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
    *  `--page N`（ISSUE #2964：复用判定必须翻页，量具得能按页给不同的答案）。 */
   function pullHarness(
     env: {
+      /** closed 清单的分页（落地判定那一格用；#3642 的分支形守卫样本）。 */
+      closedPullsPages?: Array<string>;
       echoBody?: boolean;
       /** `echoBody` 时平台回读的 `base.ref`（默认主干；栈式用例给父分支）。 */
       echoBodyBase?: string;
@@ -5285,6 +5378,10 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
         if (env.openPullsPages && key.includes("--state open")) {
           const page = Number(/--page (?<page>\d+)/.exec(key)?.groups?.page ?? "1");
           return ok(env.openPullsPages[page - 1] ?? '{"status":200,"data":[]}');
+        }
+        if (env.closedPullsPages && key.includes("--state closed")) {
+          const page = Number(/--page (?<page>\d+)/.exec(key)?.groups?.page ?? "1");
+          return ok(env.closedPullsPages[page - 1] ?? '{"status":200,"data":[]}');
         }
         return ok('{"status":200,"data":[]}');
       }
@@ -8231,6 +8328,69 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
         base.calls.find((c) => c.includes("post-pull")) ?? "",
         "关了没合的那条不算落地，PR 该建",
       ).toContain("--title");
+      expect(code).toBe(CODE.GREEN);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("分支形守卫（#3642）：同名分支的已合并历史 PR 与当前 HEAD sha 对不上 ⇒ 也不建，退 6", async () => {
+    /* #3642 现场：PR #3640 在代理工作期间被 squash 合并，分支上补了一笔再跑 ship ——
+     * head.sha 已是新 sha、按 sha 认落地失明，开放清单又没有这条分支 ⇒ 旧形状直接
+     * 建出重复 PR #3641。现在按 `head.ref` 认已合并的历史 PR，同样停（守卫退 6）。 */
+    const { tmpRoot, gitDir } = proofRoot("landed-branch");
+    try {
+      const heard: Array<string> = [];
+      const base = fake();
+      const run = overrideRun(base, {
+        "--state open": '{"status":200,"data":[]}',
+        "--state closed":
+          '{"status":200,"data":[{"number":3640,"state":"closed","is_merged":true,"head":{"ref":"refs/heads/feat/x","sha":"c5ced5fd0000000000000000000000000000000a"}}]}',
+      });
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--no-wait"],
+      });
+      expect(
+        base.calls.some((c) => c.includes("post-pull")),
+        "分支的历史 PR 已合并还建 ⇒ 就是那条重复 PR",
+      ).toBe(false);
+      const all = heard.join("\n");
+      expect(all).toContain("已随 PR #3640 落地");
+      expect(all).toContain("head.ref");
+      expect(all).toContain("开新分支");
+      expect(code).toBe(CODE.GUARD_REFUSED);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("分支形缺键：同名分支的 closed PR 缺 is_merged ⇒ 按弱证据不拦，照常建 PR", async () => {
+    /* 刻意与 sha 形的「缺键退 5」不同档：按 ref 认本来就是较弱的证据（分支上可能有
+     * 未落地的新提交），缺读数时拦下建 PR 等于让一次平台键抖动静默挡住正常工作。 */
+    const { tmpRoot, gitDir } = proofRoot("landed-branch-unknown");
+    try {
+      const heard: Array<string> = [];
+      const base = fake();
+      const run = overrideRun(base, {
+        "--state open": '{"status":200,"data":[]}',
+        "--state closed":
+          '{"status":200,"data":[{"number":3640,"state":"closed","head":{"ref":"refs/heads/feat/x","sha":"c5ced5fd0000000000000000000000000000000a"}}]}',
+        "post-pull": '{"status":201,"data":{"number":3004}}',
+      });
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--no-wait"],
+      });
+      expect(base.calls.find((c) => c.includes("post-pull")) ?? "").toContain("--title");
       expect(code).toBe(CODE.GREEN);
     } finally {
       fs.rmSync(tmpRoot, { recursive: true, force: true });
