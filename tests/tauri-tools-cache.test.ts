@@ -10,6 +10,8 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import {
   TOOLS_ROOT_ENV,
   resolveBuildCacheRoot,
@@ -29,6 +31,21 @@ import {
 
 const ROOT = path.resolve(__dirname, "..");
 const made: Array<string> = [];
+
+/** 工具清单的消费形状守卫（B5 清账）：version + files（path/sha256 都是串），downloadedAt 可缺席。 */
+function isToolsManifest(value: unknown): value is {
+  downloadedAt?: string;
+  files: Array<{ path: string; sha256: string }>;
+  version: string;
+} {
+  if (!isRecord(value) || typeof value.version !== "string" || !isUnknownArray(value.files)) {
+    return false;
+  }
+  const filesOk = value.files.every(
+    (file) => isRecord(file) && typeof file.path === "string" && typeof file.sha256 === "string",
+  );
+  return filesOk && (value.downloadedAt === undefined || typeof value.downloadedAt === "string");
+}
 
 function tmpDir(tag: string): string {
   const onRepoVolume = path.join(path.parse(ROOT).root, `comfy-tools-${tag}`);
@@ -110,11 +127,8 @@ describe("落点与根", () => {
     /* store 落在**本机真实存在的卷根**上（`path.parse` 认宿主平台，盘符写死会解析不出卷根）。 */
     const volumeRoot = path.parse(ROOT).root;
     const run = () => ({ status: 0, stdout: path.join(volumeRoot, ".pnpm-store", "v11") });
-    /* SAFETY: 类型断言已复核 */
-    const pkgName = String(
-      (JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as { name?: string })
-        .name,
-    ).toLowerCase();
+    const pkgParsed: unknown = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+    const pkgName = String(isRecord(pkgParsed) ? pkgParsed.name : "").toLowerCase();
     expect(resolveToolRoot({ cwd: ROOT, env: {}, run }).root).toBe(
       path.join(volumeRoot, "ci-tools", pkgName),
     );
@@ -159,10 +173,13 @@ describe("--seed", () => {
     const lines: Array<string> = [];
     const log = (line: string) => lines.push(line);
     expect(seed({ cacheDir: la, mirror, dryRun: false, log, plan })).toBe(0);
-    /* SAFETY: 类型断言已复核 */
-    const manifest = JSON.parse(
+    const manifestParsed: unknown = JSON.parse(
       fs.readFileSync(path.join(mirror, TOOLS_MANIFEST_FILE), "utf8"),
-    ) as { files: Array<{ path: string; sha256: string }>; version: string };
+    );
+    if (!isToolsManifest(manifestParsed)) {
+      throw new Error("工具清单形状不对：缺 version 或 files（path/sha256）");
+    }
+    const manifest = manifestParsed;
     expect(manifest.version).toBe(plan.version);
     expect(manifest.files.map((f) => f.path)).toContain(plan.dllRel);
     /* 清单里的哈希必须真能对上盘上的内容 —— 否则 ensure 那侧的复算就是走过场。 */
@@ -383,10 +400,13 @@ describe("--download（即弃机那一族：从被钉的公开资产直接建镜
     /* curl×2（zip + dll）+ tar×1，顺序也是这个顺序。 */
     expect(calls.map((c) => c.cmd)).toEqual(["curl", "tar", "curl"]);
     expect(missingRequired(mirror, plan.required)).toEqual([]);
-    /* SAFETY: 类型断言已复核 */
-    const manifest = JSON.parse(
+    const manifestParsed: unknown = JSON.parse(
       fs.readFileSync(path.join(mirror, TOOLS_MANIFEST_FILE), "utf8"),
-    ) as { downloadedAt?: string; files: Array<{ path: string; sha256: string }>; version: string };
+    );
+    if (!isToolsManifest(manifestParsed)) {
+      throw new Error("工具清单形状不对：缺 version 或 files（path/sha256）");
+    }
+    const manifest = manifestParsed;
     expect(manifest.version).toBe(plan.version);
     expect(manifest.downloadedAt).toBeTruthy();
     expect(manifest.files.map((f) => f.path)).toContain(plan.dllRel);
