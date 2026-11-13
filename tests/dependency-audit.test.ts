@@ -100,10 +100,22 @@ type LedgerFile = { entries: Array<LedgerEntry>; ruleVersion: number };
 
 const LEDGER_REL = path.join("scripts", ".dependency-audit-baseline.json");
 
+/** 台账形状的运行时守卫（B5 清账，不走 as 断言）：entries 必须是数组。 */
+function isLedgerFile(value: unknown): value is LedgerFile {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "entries" in value &&
+    Array.isArray(value.entries)
+  );
+}
+
 function readLedger(dir: string): LedgerFile {
   const raw: unknown = JSON.parse(readFileSync(path.join(dir, LEDGER_REL), "utf8"));
-  /* SAFETY: 类型断言已复核 */
-  return raw as LedgerFile;
+  if (!isLedgerFile(raw)) {
+    throw new Error("台账形状不对（缺 entries 数组）");
+  }
+  return raw;
 }
 
 function writeLedger(dir: string, ledger: LedgerFile): void {
@@ -220,13 +232,13 @@ describe("真脚本：--update 只许降（验收点名要求的形态）", () =
       );
       return { code: 0, out };
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      const e = error as {
-        status?: number;
-        stderr?: string;
-        stdout?: string;
-      };
-      return { code: e.status ?? 1, out: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+      /* 失败形状用运行时守卫取字段，不走 `as` 断言（B5 清账）。 */
+      const e: { status?: unknown; stderr?: unknown; stdout?: unknown } =
+        typeof error === "object" && error !== null ? error : {};
+      const status = typeof e.status === "number" ? e.status : 1;
+      const stdout = typeof e.stdout === "string" ? e.stdout : "";
+      const stderr = typeof e.stderr === "string" ? e.stderr : "";
+      return { code: status, out: `${stdout}${stderr}` };
     }
   }
 

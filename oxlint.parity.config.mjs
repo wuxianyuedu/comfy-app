@@ -892,20 +892,6 @@ export default defineConfig({
        * （「存量 N 处 · 清账目标 B5 · 新代码不禁用」）；名单是逐字路径而不是 glob，
        * 所以新增文件**不自动继承**豁免。清账进度见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`。 */
       files: [
-        "tests/ci-workspace-probe.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/ci-workspace-provenance.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/client-bundle-node-builtins.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/comfy-state-envelope-contract.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/comment-language.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "tests/core-barrel-entry-discipline.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/coverage-targets-exist.test.ts", // 存量 3 处 · 清账目标 B5 · 新代码不禁用
-        "tests/daily-tracks.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/db-migrate-equivalence.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/db-migrate-noninteractive.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/db-push-noninteractive.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/db-schema-current.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
-        "tests/declaration-readers-gate.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
-        "tests/dependency-audit.test.ts", // 存量 2 处 · 清账目标 B5 · 新代码不禁用
         "tests/deps-freshness-gate.test.ts", // 存量 5 处 · 清账目标 B5 · 新代码不禁用
         "tests/dev-drive-tune.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用
         "tests/dev-launcher-downstream-exit.test.ts", // 存量 1 处 · 清账目标 B5 · 新代码不禁用

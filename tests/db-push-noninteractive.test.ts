@@ -35,15 +35,33 @@ afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
+/** package.json 的 scripts 段：`JSON.parse` 的 any 用运行时守卫收窄（B5 清账，不走 `as` 断言）。 */
+function packageScripts(): Record<string, string> {
+  const parsed: unknown = JSON.parse(
+    fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
+  );
+  if (typeof parsed !== "object" || parsed === null || !("scripts" in parsed)) {
+    throw new Error("package.json 形状不对（缺 scripts）");
+  }
+  const scripts: unknown = parsed.scripts;
+  if (typeof scripts !== "object" || scripts === null) {
+    throw new Error("package.json 形状不对（scripts 不是对象）");
+  }
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(scripts)) {
+    if (typeof value === "string") {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
 describe("pnpm db:push 非交互可用", () => {
   it("package.json 的 db:push 经 scripts/db-push.mjs，而不是裸 drizzle-kit push", () => {
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
-      scripts: Record<string, string>;
-    };
+    const scripts = packageScripts();
     // 裸 `drizzle-kit push` 在无 TTY 上「报错 + exit 0 + 留空库」，是本条缺陷的形态。
-    expect(pkg.scripts["db:push"]).toBe("node scripts/db-push.mjs");
-    expect(pkg.scripts["db:push"]).not.toContain("drizzle-kit");
+    expect(scripts["db:push"]).toBe("node scripts/db-push.mjs");
+    expect(scripts["db:push"]).not.toContain("drizzle-kit");
   });
 
   it("以 --force 运行 drizzle-kit，且判定依据不是它的退出码", () => {

@@ -9,12 +9,21 @@ import { describe, expect, it } from "vitest";
 
 import vitestConfig, { COVERAGE_THRESHOLDS } from "../vitest.config";
 
-/* SAFETY: 类型断言已复核 */
-// oxlint-disable-next-line typescript/no-require-imports
-const { globToRegExp } = require("../scripts/check-format.cjs") as {
-  globToRegExp: (glob: string) => RegExp;
-};
+/** `check-format.cjs` 是无类型的 CJS：出口形状在这里做运行时守卫（B5 清账，不走 `as` 断言）。 */
+type FormatModule = { globToRegExp: (glob: string) => RegExp };
 
+function isFormatModule(value: unknown): value is FormatModule {
+  return typeof value === "object" && value !== null && "globToRegExp" in value;
+}
+
+const requiredFormat: unknown =
+  // oxlint-disable-next-line typescript/no-require-imports
+  require("../scripts/check-format.cjs");
+
+if (!isFormatModule(requiredFormat)) {
+  throw new Error("check-format.cjs 的出口形状不对（缺 globToRegExp）");
+}
+const { globToRegExp } = requiredFormat;
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 /** 配置里的 glob 是转义形态，磁盘路径不是 —— 比之前先脱转义。 */
@@ -43,14 +52,24 @@ function sourceFiles(): Array<string> {
  * （ISSUE #2669：默认档下那份被开关摘空了 —— 拿它当输入，本判据就会在没人改任何门槛
  * 的那一天静默变成空转，而这正是本文件立单要治的「写着有、其实没人判」）。
  * `include` 没有开关，仍读默认导出。 */
-/* SAFETY: 类型断言已复核 */
-const coverage = (
-  vitestConfig as unknown as {
-    test?: {
-      coverage?: { include?: Array<string> };
-    };
+/** vitest.config 的导出类型不展开 `test` 段：按需做运行时守卫，不走 `as` 断言（B5 清账）。 */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function coverageSection(config: unknown):
+  | {
+      include?: Array<string>;
+      thresholds?: Record<string, unknown>;
+    }
+  | undefined {
+  if (!isRecord(config) || !isRecord(config.test) || !isRecord(config.test.coverage)) {
+    return undefined;
   }
-).test?.coverage;
+  return config.test.coverage;
+}
+
+const coverage = coverageSection(vitestConfig);
 
 const includeEntries = coverage?.include ?? [];
 const thresholdKeys = Object.keys(COVERAGE_THRESHOLDS).filter(
@@ -80,13 +99,7 @@ describe("覆盖率配置的每一条都要落到真实文件", () => {
     const enforce = process.env.COMFY_COVERAGE_ENFORCE === "1";
     const registered = Object.keys(COVERAGE_THRESHOLDS).length;
     expect(registered, "登记处空了 —— 门槛被连账一起摘掉，本判据从此没有对象").toBeGreaterThan(100);
-    const applied = Object.keys(
-      (
-        vitestConfig as unknown as {
-          test?: { coverage?: { thresholds?: Record<string, unknown> } };
-        }
-      ).test?.coverage?.thresholds ?? {},
-    ).length;
+    const applied = Object.keys(coverageSection(vitestConfig)?.thresholds ?? {}).length;
     expect(
       applied,
       enforce
