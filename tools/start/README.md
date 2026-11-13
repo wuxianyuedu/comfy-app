@@ -18,7 +18,7 @@ Windows 双击入口，逻辑在 [`../../scripts/`](../../scripts/) 同名或对
 | `register-comfyapp-protocol.ps1` | 一次性：注册 `comfyapp://` 协议（HKCU，免管理员） | `scripts/install-comfyapp-helper.ps1` |
 | `storybook.ps1` | 起组件工作台 Storybook（http://127.0.0.1:6006），看 ui/ 组件形态与 a11y | `scripts/storybook.mjs` |
 | `tune-dev-drive.ps1` | 探测开发盘（ReFS / Dev Drive）红利：实测硬链接 / 块克隆 / 稀疏文件，给动作矩阵 | `scripts/dev-drive-tune.mjs`（指南 `docs/guides/dev-drive-refs.md`） |
-| `fetch-daily-shell.ps1` | 从 CNB 站内每日成品获取纯壳：下载 `ComfyAPP-shell.exe` → `src-tauri/release/app.exe`，缺快捷方式时补根目录 `Comfy APP.lnk` | `scripts/fetch-daily-shell.mjs` |
+| `fetch-daily-shell.ps1` | 从 CNB 站内每日成品获取纯壳：下载 `ComfyAPP-shell.exe` → `src-tauri/target/release/app.exe`，缺快捷方式时补根目录 `Comfy APP.lnk` | `scripts/fetch-daily-shell.mjs` |
 
 ## 非 Windows 平台（同一件事的跨平台入口）
 

@@ -8,7 +8,7 @@ fetch-daily-shell.ps1 — 从 CNB 站内每日成品获取纯壳并补齐本地�
 
 作用：
   1. 从 CNB 滚动 nightly Release 下载每日成品中的 ComfyAPP-shell.exe；
-  2. 保存为 src-tauri\release\app.exe（正确位置与名称，父目录自动创建）；
+  2. 保存为 src-tauri\target\release\app.exe（正确位置与名称，父目录自动创建）；
   3. 若项目根缺少 "Comfy APP.lnk"，则生成指向该壳的快捷方式。
 
 逻辑在 scripts/fetch-daily-shell.mjs（跨平台）；本入口只负责定位项目根、调用 node 脚本、
@@ -27,7 +27,7 @@ $ErrorActionPreference = "Stop"
 $root = Get-ProjectRoot -StartDir $PSScriptRoot
 Set-Location $root
 
-Write-Host "[INFO] 正在从 CNB 每日成品获取纯壳（ComfyAPP-shell.exe -> src-tauri\release\app.exe）..." -ForegroundColor Cyan
+Write-Host "[INFO] 正在从 CNB 每日成品获取纯壳（ComfyAPP-shell.exe -> src-tauri\target\release\app.exe）..." -ForegroundColor Cyan
 Write-Host ""
 
 $nodeArgs = @("scripts/fetch-daily-shell.mjs") + $ScriptArgs
@@ -46,4 +46,4 @@ if ($code -ne 0) {
     Write-Host "[ERROR] 获取每日纯壳失败，退出码 $code 。请检查网络、CNB nightly Release 是否可用，以及必要时设置 CNB_RELEASE_TOKEN/CNB_TOKEN。" -ForegroundColor Red
 }
 
-exit (Complete-Entry -ExitCode $code -SuccessMessage "每日纯壳已就位（src-tauri\release\app.exe），项目根快捷方式已检查/补齐。")
+exit (Complete-Entry -ExitCode $code -SuccessMessage "每日纯壳已就位（src-tauri\target\release\app.exe），项目根快捷方式已检查/补齐。")
