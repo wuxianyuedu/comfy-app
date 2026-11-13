@@ -62,6 +62,21 @@ on:
         description: 三点 diff 的基线（留空 = 各判据退回 merge-base）
         required: false
         default: ""
+      # ISSUE #3667：判绿时「有需要」也能经 GA→CNB→本地 拿到日志正文。
+      # 这两个输入只服务手动/按需那一跑：repository_dispatch（PR 自动档）不带它们，
+      # 收尾 relay step 读到的就是空串 ⇒ 逐字保持 #3437「只搬失败 job」的默认路径。
+      pr_number:
+        description: 按需把日志挂到哪张 PR（留空 = 不写 CNB，仅本 run 自检）
+        required: false
+        default: ""
+      relay_scope:
+        description: 搬运范围 failed（缺省，只搬失败 job）/ all（全部 job，判绿也搬）
+        required: false
+        default: ""
+      run_id:
+        description: 要搬哪条 GA run 的日志（留空 = 本 run；按需档可点名已跑完的绿 run）
+        required: false
+        default: ""
 
 # 显式最小权限（CodeQL `actions/missing-workflow-permissions`，#3–#7）：本工作流只读仓库
 # —— checkout、装依赖、跑各判据、上传 artifact。不写这一栏时 GITHUB_TOKEN 拿仓库默认
@@ -587,8 +602,12 @@ jobs:
           CNB_ISSUE_TOKEN: ${{ secrets.CNB_ISSUE_TOKEN }}
           CNB_PULL_REQUEST_TOKEN: ${{ secrets.CNB_PULL_REQUEST_TOKEN }}
           CNB_REPO_SLUG: moon-read/comfy-app-t3
-          CNB_PULL_REQUEST_IID: ${{ github.event.client_payload.pr_number || '' }}
+          CNB_PULL_REQUEST_IID: ${{ github.event.inputs.pr_number || github.event.client_payload.pr_number || '' }}
           CNB_PULL_REQUEST_MERGE_SHA: ${{ github.event.client_payload.cnb_merge_sha || '' }}
           GITHUB_TOKEN: ${{ github.token }}
           GA_JOB_RESULTS: ${{ join(needs.*.result, ',') }}
+          # ISSUE #3667：按需档给 relay_scope=all ⇒ 判绿也把全部 job 搬进 CNB；
+          # 自动档（repository_dispatch）没有这个 input ⇒ 空串 ⇒ scope=failed，#3437 原样。
+          GA_LOG_SCOPE: ${{ github.event.inputs.relay_scope || '' }}
+          GA_LOG_RUN_ID: ${{ github.event.inputs.run_id || '' }}
         run: node scripts/ci-ga-logs-relay.mjs
