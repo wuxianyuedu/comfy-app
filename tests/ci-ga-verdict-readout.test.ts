@@ -191,24 +191,26 @@ describe("主流程：站内短轮询，前提不全不静默", () => {
       log: collect(lines),
     });
     expect(JSON.parse(lines.at(-1) ?? "{}")).toMatchObject({ code: 0, present: true });
-    expect(typeof JSON.parse(lines.at(-1) ?? "{}").waitedMs).toBe("number");
+    /* `waitedMs` 是 number（JSON.stringify 的入参类型保证），这里只钉「字段在场」：
+     * `expect.any(Number)` 的 any 值会吃 no-unsafe-assignment，不走那条。 */
+    expect(lines.at(-1)).toContain('"waitedMs":');
   });
 });
 
 describe("回读预算对齐 GA 的最坏路径（#3593）", () => {
   const WORKFLOW = ".github/workflows/pr-gate.yml";
   /** 取某个 job 顶层的 `timeout-minutes`：job 键在 2 空格缩进，job 级预算在 4 空格
-   * （step 级在 8 空格，不会被这一式命中）。 */
+   * （step 级在 8 空格，第 5 个字符是空格进不了 ` {4}t`，不会被这一式命中）。 */
   const jobTimeoutMinutes = (source: string, job: string): number => {
     let inJob = false;
     for (const line of source.split("\n")) {
-      if (/^  \S/.test(line)) {
+      if (/^ {2}\S/.test(line)) {
         inJob = line.startsWith(`  ${job}:`);
         continue;
       }
       if (inJob) {
-        const m = /^    timeout-minutes:\s*(\d+)/.exec(line);
-        if (m) return Number(m[1]);
+        const m = /^ {4}timeout-minutes:\s*(?<minutes>\d+)/.exec(line);
+        if (m?.groups?.minutes) return Number(m.groups.minutes);
       }
     }
     return Number.NaN;
