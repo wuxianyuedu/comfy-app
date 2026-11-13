@@ -2245,8 +2245,13 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       "src/components/studio/panels/CopyRow.tsx",
       [
         'import { copyFailureText } from "~/components/ui/use-copy-feedback";',
+        'import { Hint } from "~/components/ui/hint";',
         "export function CopyRow({ failed }: { failed: boolean }) {",
-        "  return <span title={failed ? copyFailureText() : '复制'} />;",
+        "  return (",
+        "    <Hint label={failed ? copyFailureText() : '复制'}>",
+        "      <span>{failed ? '复制失败' : '复制'}</span>",
+        "    </Hint>",
+        "  );",
         "}",
       ].join("\n"),
     );
@@ -2261,8 +2266,13 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     repo.write(
       "src/components/studio/panels/CopyRow.tsx",
       [
+        'import { Hint } from "~/components/ui/hint";',
         "export function CopyRow({ failed }: { failed: boolean }) {",
-        '  return <span title={failed ? "复制失败，请重试" : "复制"} />;',
+        "  return (",
+        "    <Hint label={failed ? '复制失败，请重试' : '复制'}>",
+        "      <span>{failed ? '复制失败，请重试' : '复制'}</span>",
+        "    </Hint>",
+        "  );",
         "}",
       ].join("\n"),
     );
