@@ -277,46 +277,6 @@ function ModelNav({
   );
 }
 
-/** 「＋ 添加模式」展开的分类面板（图像 / 视频 / 音频各一组）。 */
-function AddModePopover({
-  availableModes,
-  onPick,
-}: {
-  availableModes: Array<(typeof ALL_WORKFLOW_TYPES)[number]>;
-  onPick: (code: string) => void;
-}) {
-  return (
-    <div className="border-border bg-bg mt-3 flex flex-col gap-3 rounded-xl border p-3">
-      {MODE_GROUPS.map((group) => {
-        const modes = availableModes.filter((t) => t.category === group.category);
-        if (modes.length === 0) {
-          return null;
-        }
-        return (
-          <div key={group.category}>
-            <p className="text-muted-foreground mb-1.5 text-xs font-medium">{group.label}</p>
-            <div className="flex flex-wrap gap-1.5">
-              {modes.map((t) => (
-                <SelectChip
-                  key={t.code}
-                  onClick={() => {
-                    onPick(t.code);
-                  }}
-                  selected={false}
-                  shape="compact"
-                  title={t.code}
-                >
-                  {t.label}
-                </SelectChip>
-              ))}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 /** 当前选中模式的适配编辑卡：输入映射 + 固定值 + 产物字段路径。
  *  端点路径不在这页（#3631）—— 模型级端点在「设置 → 远程模型」的接口端点下拉。 */
 function AdapterCard({
@@ -452,11 +412,11 @@ export function ModelAdaptersView() {
     addMode,
     save,
     saving,
+    reset,
     message,
     summary,
   } = controller;
 
-  const [addModeOpen, setAddModeOpen] = React.useState(false);
   /* 删除模式的二次确认（#3622）：chip 上的 ✕ 只记下「待删谁」，真删在确认弹窗里。 */
   const [pendingRemove, setPendingRemove] = React.useState<string | null>(null);
   /* 当前展示哪张适配卡（#3622：所有模式不再一条条堆叠，同一时刻只显示一个）。 */
@@ -568,28 +528,26 @@ export function ModelAdaptersView() {
                         </Button>
                       </span>
                     ))}
-                    <SelectChip
-                      aria-expanded={addModeOpen}
-                      className="px-3 py-1 text-xs"
-                      onClick={() => {
-                        setAddModeOpen((v) => !v);
-                      }}
-                      selected={false}
-                      shape="dashed"
-                    >
-                      ＋ 添加模式
-                    </SelectChip>
-                  </div>
-                  {addModeOpen && (
-                    <AddModePopover
-                      availableModes={availableModes}
-                      onPick={(code) => {
+                    {/* 添加模式走工作流库同款的紧凑下拉（ISSUE #3741）：不再整版摊开。
+                        选中即挂一枚新 chip，下拉回到「＋ 添加模式」的占位态。 */}
+                    <SelectMenu
+                      aria-label="添加模式"
+                      className="w-auto rounded-full border-dashed px-3 py-1 text-xs"
+                      labels={Object.fromEntries(
+                        availableModes.map((t) => [
+                          t.code,
+                          `${MODE_GROUPS.find((g) => g.category === t.category)?.label ?? ""} · ${t.label}`,
+                        ]),
+                      )}
+                      onChange={(code) => {
                         addMode(code);
                         setActiveMode(code);
-                        setAddModeOpen(false);
                       }}
+                      options={availableModes.map((t) => t.code)}
+                      placeholder="＋ 添加模式"
+                      value=""
                     />
-                  )}
+                  </div>
                 </section>
 
                 {/* 当前模式的适配编辑卡：同一时刻只渲染一份（#3622）。 */}
@@ -620,8 +578,19 @@ export function ModelAdaptersView() {
 
                 {/* 保存这一行跟着上面那段映射表单一起出现（同一判据 `selectedModel`）：
                     没选模型时右栏只有引导语，这一颗就成了一条悬在空白里的禁用件。
-                    主 CTA 档（h-auto px-4 py-2），与全站其余实心按钮同形。 */}
-                <div className="mt-4 flex items-center justify-end">
+                    主 CTA 档（h-auto px-4 py-2），与全站其余实心按钮同形。
+                    「还原默认」（ISSUE #3741）回到服务端当前存档，与保存并列。 */}
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  <Button
+                    className="h-auto px-4 py-2"
+                    disabled={saving}
+                    onClick={() => {
+                      reset();
+                    }}
+                    variant="outline"
+                  >
+                    还原默认
+                  </Button>
                   <Button
                     className="h-auto px-4 py-2"
                     disabled={saving}
