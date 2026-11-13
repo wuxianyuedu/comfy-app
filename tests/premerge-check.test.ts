@@ -9,6 +9,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 
 import {
@@ -47,15 +49,14 @@ function run(args: Array<string> = [], baseline: string = headBaseline()) {
     });
     return { code: 0, output };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as {
-      status?: number;
-      stderr?: string;
-      stdout?: string;
-    };
+    /* 失败形状用运行时守卫取字段，不走 `as` 断言（B5 清账）。 */
+    const e: { status?: unknown; stderr?: unknown; stdout?: unknown } =
+      typeof error === "object" && error !== null ? error : {};
     return {
       code: typeof e.status === "number" ? e.status : 1,
-      output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
+      output: `${typeof e.stdout === "string" ? e.stdout : ""}${
+        typeof e.stderr === "string" ? e.stderr : ""
+      }`,
     };
   }
 }
@@ -159,14 +160,16 @@ describe("premerge-check —— 段的筛选", () => {
     const { code, output } = run(["--only=claims", "--json"]);
     expectAnchorMissRead(code, output);
     expect(code).toBe(0);
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(output) as {
-      code: number;
-      segments: Array<{ code: number; key: string }>;
-    };
+    const parsed: unknown = JSON.parse(output);
+    if (!isRecord(parsed) || !isUnknownArray(parsed.segments)) {
+      throw new Error("--json 输出形状不对（缺 segments 数组）");
+    }
     expect(parsed.code).toBe(0);
     expect(parsed.segments).toHaveLength(1);
-    expect(parsed.segments[0]!.key).toBe("claims");
+    const firstSegment = parsed.segments[0];
+    if (!isRecord(firstSegment) || firstSegment.key !== "claims") {
+      throw new Error("--json 的第一段不是 claims");
+    }
   });
 });
 

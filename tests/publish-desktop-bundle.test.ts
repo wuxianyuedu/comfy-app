@@ -10,6 +10,8 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import {
   ARTIFACT_ROOT_ENV,
   resolveArtifactRoot,
@@ -82,13 +84,9 @@ describe("常驻根（resolveArtifactRoot）", () => {
     const volumeRoot = path.parse(ROOT).root;
     const derived = resolveArtifactRoot({ cwd: ROOT, env: {}, run: storeOn(volumeRoot) });
     /* 目录名取的是**本仓 package.json 的 name**（同依赖槽那一份推导），不写死字面量。 */
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
-      name?: string;
-    };
-    expect(derived.root).toBe(
-      path.join(volumeRoot, "ci-artifacts", String(pkg.name).toLowerCase()),
-    );
+    const pkg: unknown = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+    const pkgName = isRecord(pkg) && typeof pkg.name === "string" ? pkg.name : "";
+    expect(derived.root).toBe(path.join(volumeRoot, "ci-artifacts", pkgName.toLowerCase()));
   });
 
   it("成品根不许落在别的常驻根里（构建缓存按键位回收、工具镜像另有一套 —— 互不相扰）", () => {
@@ -177,16 +175,16 @@ describe("发布那一跑（main）", () => {
     const { code } = runPublish({ root });
     expect(code).toBe(0);
     const dir = path.join(root, "r1");
-    /* SAFETY: 类型断言已复核 */
-    const manifest = JSON.parse(fs.readFileSync(path.join(dir, MANIFEST_FILE), "utf8")) as Record<
-      string,
-      unknown
-    >;
+    /* manifest 用运行时守卫收窄（B5 清账，不走 as 断言）。 */
+    const manifest: unknown = JSON.parse(fs.readFileSync(path.join(dir, MANIFEST_FILE), "utf8"));
+    if (!isRecord(manifest)) {
+      throw new Error("manifest 不是对象");
+    }
     expect(manifest.label).toBe("r1");
     expect(manifest.sha).toBe("cafe1234567890");
     expect(manifest.keep).toBe(DEFAULT_KEEP);
-    /* SAFETY: 类型断言已复核 */
-    expect((manifest.files as Array<{ path: string }>).map((f) => f.path)).toEqual([
+    const files = isUnknownArray(manifest.files) ? manifest.files : [];
+    expect(files.map((f) => (isRecord(f) ? f.path : ""))).toEqual([
       "msi/app.msi",
       "nsis/app-setup.exe",
     ]);

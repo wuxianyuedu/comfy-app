@@ -8,6 +8,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import { stripComments } from "./helpers/strip-comments";
 import { defineGateRepo, expectGateRan } from "./helpers/gate-repo";
 import { IGNORE_SECTIONS, diffIgnore, renderIgnore } from "../scripts/qoder-ignore.mjs";
@@ -156,11 +158,18 @@ describe("入库那份 ⇄ 工具会写的那份", () => {
   });
 
   it("pnpm 出口在册：写/刷新 与 只比对 各一条，且都指向这一份脚本", () => {
-    const pkg = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
-      scripts: Record<string, string>;
-    };
-    expect(pkg.scripts["qoder:ignore"]).toBe("node scripts/qoder-ignore.mjs");
-    expect(pkg.scripts["qoder:ignore:check"]).toBe("node scripts/qoder-ignore.mjs --check");
+    /* package.json 的 scripts 段用运行时守卫收窄（B5 清账，不走 as 断言）。 */
+    const pkgRaw: unknown = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8"));
+    const scripts: Record<string, string> = {};
+    if (isRecord(pkgRaw) && isRecord(pkgRaw.scripts)) {
+      for (const [key, value] of Object.entries(pkgRaw.scripts)) {
+        if (typeof value === "string") {
+          scripts[key] = value;
+        }
+      }
+    }
+    expect(scripts["qoder:ignore"]).toBe("node scripts/qoder-ignore.mjs");
+    expect(scripts["qoder:ignore:check"]).toBe("node scripts/qoder-ignore.mjs --check");
   });
 });
 

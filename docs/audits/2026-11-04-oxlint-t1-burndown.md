@@ -13,7 +13,7 @@
 | B2   | `no-await-in-loop`                               | 304      | 123      | 已清（保留型：123 份 / 304 处逐行理由，子批1/2/3） |
 | B3   | `typescript/require-await`                       | 754      | 188      | 已清（754 处 / 188 份，子批1–4）                   |
 | B4   | `eslint/prefer-named-capture-group`              | 1094     | 332      | 已清（子批1–12，判决面文件级豁免已整块删除）       |
-| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–28：535 份 / 1365 处已清）           |
+| B5   | `typescript/no-unsafe-type-assertion`            | 1496     | 608      | 清账中（子批1–29：547 份 / 1389 处已清）           |
 
 合计：**3727 处 / 1213 份文件级豁免**（同一文件命中多条规则时逐规则各记一行）。
 
@@ -1310,18 +1310,18 @@
 | `tests/on-demand-duties-gate.test.ts`                                                                | 2        | 挂账 |
 | `tests/oxlint-jsplugin-rules.test.ts`                                                                | 3        | 挂账 |
 | `tests/oxlint-policy-rules.test.ts`                                                                  | 6        | 挂账 |
-| `tests/postinstall-cross-platform.test.ts`                                                           | 1        | 挂账 |
-| `tests/precommit-timing.test.ts`                                                                     | 1        | 挂账 |
-| `tests/premerge-check.test.ts`                                                                       | 2        | 挂账 |
-| `tests/premerge-timing.test.ts`                                                                      | 1        | 挂账 |
-| `tests/ps1-consistency.test.ts`                                                                      | 2        | 挂账 |
-| `tests/publish-desktop-bundle.test.ts`                                                               | 3        | 挂账 |
-| `tests/qoder-ignore.test.ts`                                                                         | 1        | 挂账 |
-| `tests/ratchet-update-guards.test.ts`                                                                | 1        | 挂账 |
-| `tests/remote-model-entry-wire-contract.test.ts`                                                     | 1        | 挂账 |
-| `tests/router-error-envelope.test.ts`                                                                | 3        | 挂账 |
-| `tests/scripts-typecheck-ratchet.test.ts`                                                            | 7        | 挂账 |
-| `tests/shell-gate.test.ts`                                                                           | 2        | 挂账 |
+| `tests/postinstall-cross-platform.test.ts`                                                           | 1        | 已清 |
+| `tests/precommit-timing.test.ts`                                                                     | 1        | 已清 |
+| `tests/premerge-check.test.ts`                                                                       | 2        | 已清 |
+| `tests/premerge-timing.test.ts`                                                                      | 1        | 已清 |
+| `tests/ps1-consistency.test.ts`                                                                      | 2        | 已清 |
+| `tests/publish-desktop-bundle.test.ts`                                                               | 3        | 已清 |
+| `tests/qoder-ignore.test.ts`                                                                         | 1        | 已清 |
+| `tests/ratchet-update-guards.test.ts`                                                                | 1        | 已清 |
+| `tests/remote-model-entry-wire-contract.test.ts`                                                     | 1        | 已清 |
+| `tests/router-error-envelope.test.ts`                                                                | 3        | 已清 |
+| `tests/scripts-typecheck-ratchet.test.ts`                                                            | 7        | 已清 |
+| `tests/shell-gate.test.ts`                                                                           | 2        | 已清 |
 | `tests/ship-exec.test.ts`                                                                            | 1        | 挂账 |
 | `tests/ship.test.ts`                                                                                 | 4        | 挂账 |
 | `tests/sidebar-selected-state.test.tsx`                                                              | 1        | 挂账 |

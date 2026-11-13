@@ -9,6 +9,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 import { groupShBody, stepsInGroup } from "./helpers/hook-groups";
 
@@ -48,13 +50,16 @@ type LedgerRun = {
 };
 
 /**
- * 读 `--json` 的输出。用显式收窄而不是裸 `JSON.parse`：后者给 `any`，eslint 的 `no-unsafe-*` 族会逐行报
- * （本仓零警告下就是 11 条 error）。收窄成 `unknown` → 断言成已知形状，形状漂了由用例断言兜。
+ * 读 `--json` 的输出。运行时守卫收窄（B5 清账：不走 `as` 断言）—— 元素只做
+ * 「是对象」这一层浅核，字段断言由各用例自己兜。
  * @param {{out: string}} result  @returns {LedgerRun[]}
  */
 function readLedger(result: { out: string }): Array<LedgerRun> {
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(result.out) as Array<LedgerRun>;
+  const parsed: unknown = JSON.parse(result.out);
+  if (!isUnknownArray(parsed)) {
+    throw new Error("账本不是数组");
+  }
+  return parsed.filter((entry): entry is LedgerRun => isRecord(entry));
 }
 
 /**
