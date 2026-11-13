@@ -57,9 +57,11 @@ describe("主题别名 token 在两态下各自生效（ISSUE #609）", () => {
   });
 
   it("浅色下（无 .dark）仍取浅色值", () => {
+    /* 这几枚写死值是 `src/app/globals.css` `@theme` 浅色档的镜子：改 token 时
+     * 同批改这里（#3651：--border 曾在 #3540 加深后没跟，基线红了一阵）。 */
     expect(light.get("--card")).toBe("#ffffff");
     expect(light.get("--background")).toBe("#ffffff");
-    expect(light.get("--border")).toBe("#ececf1");
+    expect(light.get("--border")).toBe("#e2e4ec");
   });
 });
 
