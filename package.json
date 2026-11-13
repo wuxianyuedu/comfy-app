@@ -41,6 +41,7 @@
     "test:coverage:tracked": "node scripts/full-suite-run.mjs",
     "test:coverage:dry": "node scripts/full-suite-run.mjs --dry-run",
     "package:portable": "node scripts/package-desktop-portable.mjs",
+    "fetch:daily-shell": "node scripts/fetch-daily-shell.mjs",
     "build:tracked": "node scripts/artifact-run.mjs",
     "build:tracked:dry": "node scripts/artifact-run.mjs --dry-run",
     "docs": "node scripts/generate-api-docs.mjs",

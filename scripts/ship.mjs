@@ -251,6 +251,10 @@
  *                                             #   `--gh-logs pr:<号>` 站内没有 relay 时自己发起搬运并等回读，
  *                                             #   一条命令拿到结果，零 api.github.com（不用先敲 start-build）；
  *                                             #   代发那一跳是平台写动作，--dry-run 只念计划不发
+ *   pnpm ship --gh-prs                         # 只读：列 GitHub 仓库侧（镜像仓 wuxianyuedu/comfy-app）的 PR ——
+ *                                             #   号 / 标题 / 作者 / 分支 / mergeable / 网页 URL（dependabot[bot]
+ *                                             #   的 PR 只在这一侧，CNB 看不见）。值可选：缺省 = open；
+ *                                             #   `open` / `closed` / `all` 按状态列；数字 = 单条 PR 详情
  *   pnpm ship --rerun-ci                       # CI 挂了想重跑：在当前 PR 分支推一个空提交触发新 build（平台侧没有 PR 重跑入口，
  *                                            # 不去 cnbcli 翻）。它同时带上 COMFY_INTENTIONAL_EMPTY_COMMIT —— D0 里有两步读当场暂存区，
  *                                            # 空索引本来被它们读成「取不到判决面」；口径与反滥用见规范 §13.5.5 末段
