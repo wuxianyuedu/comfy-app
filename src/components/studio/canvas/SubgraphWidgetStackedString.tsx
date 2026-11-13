@@ -6,6 +6,7 @@
 import { StringTextarea } from "../StringTextarea";
 import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
 import type { RawInputMeta } from "../workflow-types";
+import { Hint } from "~/components/ui/hint";
 
 /** 该 widget 槽是否按「上下堆叠」渲染成多行文本框：服务端盖的
  *  `multiline` 章（节点类型声明 `("STRING", {"multiline": true})`）加上
@@ -65,24 +66,24 @@ export function SubgraphWidgetStackedString({
               }}
             />
           )}
-          <span
-            /* 子图 STRING 堆叠行的标签同样去掉 `truncate` ——
-             *  理由与 WorkflowNode 内联分支相同。 */
-            className="text-2xs shrink-0 text-left wrap-break-word whitespace-normal"
-            style={{
-              color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)",
-            }}
-            title={label}
-          >
-            {label}
-          </span>
+          <Hint label={label}>
+            <span
+              /* 子图 STRING 堆叠行的标签同样去掉 `truncate` ——
+               *  理由与 WorkflowNode 内联分支相同。 */
+              className="text-2xs shrink-0 text-left wrap-break-word whitespace-normal"
+              style={{
+                color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)",
+              }}
+            >
+              {label}
+            </span>
+          </Hint>
           {/* 标签与字数之间同样不画分隔线（与 ComfyUI 同款版式）。 */}
-          <span
-            className="text-ink-muted text-3xs text-right tracking-wider uppercase"
-            title={`STRING · ${stringText.length} chars`}
-          >
-            {stringText.length}c
-          </span>
+          <Hint label={`STRING · ${stringText.length} chars`}>
+            <span className="text-ink-muted text-3xs text-right tracking-wider uppercase">
+              {stringText.length}c
+            </span>
+          </Hint>
         </div>
         {stringText.length > 0 ? (
           <StringTextarea hasSize={hasSize} mono value={stringText} />

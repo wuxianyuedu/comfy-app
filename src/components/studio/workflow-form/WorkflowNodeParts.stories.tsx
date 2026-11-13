@@ -9,6 +9,7 @@ import {
   WorkflowNodePill,
   WorkflowStaticChip,
 } from "~/components/studio/workflow-form/WorkflowNodeParts";
+import { Hint } from "~/components/ui/hint";
 import type { WorkflowIOEntry } from "~/lib/workflow/workflow-io-types";
 
 /** 工作流节点卡片共享视觉部件 story —— 唯一事实源。项目画布（project-canvas/WorkflowNode）与
@@ -75,11 +76,9 @@ function NodeCardSample({
             renderHandle={
               withHandle
                 ? ({ id, type }) => (
-                    <span
-                      className="bg-primary absolute top-1/2 right-0 size-2.5 translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-white/20"
-                      key={id}
-                      title={`输出端点 · ${type}`}
-                    />
+                    <Hint key={id} label={`输出端点 · ${type}`}>
+                      <span className="bg-primary absolute top-1/2 right-0 size-2.5 translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-white/20" />
+                    </Hint>
                   )
                 : undefined
             }

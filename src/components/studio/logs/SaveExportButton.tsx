@@ -71,9 +71,9 @@ export function SaveExportButton({
       </Hint>
       {/* 路径就是这次保存的「回执」：没有它，用户只能自己去猜文件在哪。 */}
       {savedPath !== null && savedPath !== "" && (
-        <span className="text-ink-fainter text-2xs max-w-56 truncate" title={savedPath}>
-          已保存 {savedPath}
-        </span>
+        <Hint label={savedPath}>
+          <span className="text-ink-fainter text-2xs max-w-56 truncate">已保存 {savedPath}</span>
+        </Hint>
       )}
       {failed && <span className="text-danger-strong text-2xs">保存失败</span>}
     </span>

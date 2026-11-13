@@ -245,11 +245,13 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
               <span aria-hidden className="text-warning-strong/90 text-sm">
                 ◈
               </span>
-              <code className="text-ink-bright truncate font-mono text-xs" title={viewedFile}>
-                {/* 路径的语义在尾部（哪个文件）—— CSS `truncate` 只留头部，
+              <Hint label={viewedFile}>
+                <code className="text-ink-bright truncate font-mono text-xs">
+                  {/* 路径的语义在尾部（哪个文件）—— CSS `truncate` 只留头部，
                     恰好把它切掉，故显式取末几段。 */}
-                {lastSegments(viewedFile, 3)}
-              </code>
+                  {lastSegments(viewedFile, 3)}
+                </code>
+              </Hint>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <Hint label="在 Visual Studio Code 中打开该文件（需已安装 VSCode）" wrap>

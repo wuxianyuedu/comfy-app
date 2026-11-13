@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { displayValue } from "~/lib/display-value";
 import { cn } from "~/lib/utils";
+import { Hint } from "~/components/ui/hint";
 
 /**
  * KeyValueRows —— 「把一个对象渲染成键值行」的唯一出口（规范 16 §16.2.4.20）。`items` 每项是 `key` + `value`（已渲染节点，可含徽标 / 链接）或 `key` + `raw`（原始值交 `displayValue`，缺值给 `—`），互斥。
@@ -80,16 +81,16 @@ export function KeyValueRows({
     return (
       <span className={cn("inline-flex items-center gap-1", className)}>
         {items.map((item) => (
-          <span
-            className={cn("inline-flex items-center gap-1", itemClassName, item.itemClassName)}
-            key={item.id ?? itemLabelText(item)}
-            title={item.title}
-          >
-            <span className={cn("text-ink-muted", keyClassName)}>{item.key}</span>
-            <span className={cn("text-ink-bright", valueClassName, item.valueClassName)}>
-              {renderValue(item, mono)}
+          <Hint key={item.id ?? itemLabelText(item)} label={item.title}>
+            <span
+              className={cn("inline-flex items-center gap-1", itemClassName, item.itemClassName)}
+            >
+              <span className={cn("text-ink-muted", keyClassName)}>{item.key}</span>
+              <span className={cn("text-ink-bright", valueClassName, item.valueClassName)}>
+                {renderValue(item, mono)}
+              </span>
             </span>
-          </span>
+          </Hint>
         ))}
       </span>
     );
@@ -101,25 +102,23 @@ export function KeyValueRows({
     return (
       <div className={cn("grid gap-x-4 gap-y-3", colClass, className)}>
         {items.map((item) => (
-          <div
-            className={cn("flex min-w-0 flex-col gap-0.5", itemClassName, item.itemClassName)}
-            key={item.id ?? itemLabelText(item)}
-            title={item.title}
-          >
-            <span className={cn("text-ink-fainter text-3xs", keyClassName)}>{item.key}</span>
-            <span
-              className={cn(
-                "text-ink-field truncate text-sm font-medium",
-                valueClassName,
-                item.valueClassName,
+          <Hint key={item.id ?? itemLabelText(item)} label={item.title}>
+            <div className={cn("flex min-w-0 flex-col gap-0.5", itemClassName, item.itemClassName)}>
+              <span className={cn("text-ink-fainter text-3xs", keyClassName)}>{item.key}</span>
+              <span
+                className={cn(
+                  "text-ink-field truncate text-sm font-medium",
+                  valueClassName,
+                  item.valueClassName,
+                )}
+              >
+                {renderValue(item, false)}
+              </span>
+              {item.hint !== undefined && (
+                <span className="text-ink-muted/80 text-3xs leading-tight">{item.hint}</span>
               )}
-            >
-              {renderValue(item, false)}
-            </span>
-            {item.hint !== undefined && (
-              <span className="text-ink-muted/80 text-3xs leading-tight">{item.hint}</span>
-            )}
-          </div>
+            </div>
+          </Hint>
         ))}
       </div>
     );
@@ -138,16 +137,17 @@ export function KeyValueRows({
                 className={cn("border-border-subtle border-b last:border-b-0", item.itemClassName)}
                 key={item.id ?? itemLabelText(item)}
               >
-                <th
-                  className={cn(
-                    "border-border-subtle bg-card w-[36%] max-w-45 truncate border-r px-2.5 py-1.5 text-left align-top font-mono",
-                    keyClassName,
-                  )}
-                  scope="row"
-                  title={item.title}
-                >
-                  {item.key}
-                </th>
+                <Hint key={item.id ?? itemLabelText(item)} label={item.title}>
+                  <th
+                    className={cn(
+                      "border-border-subtle bg-card w-[36%] max-w-45 truncate border-r px-2.5 py-1.5 text-left align-top font-mono",
+                      keyClassName,
+                    )}
+                    scope="row"
+                  >
+                    {item.key}
+                  </th>
+                </Hint>
                 <td
                   className={cn(
                     "text-ink-bright px-2.5 py-1.5 text-left font-normal wrap-break-word",
@@ -173,30 +173,30 @@ export function KeyValueRows({
       )}
     >
       {items.map((item, index) => (
-        <div
-          className={cn(
-            "flex items-center justify-between gap-3 text-xs",
-            bordered ? "px-3 py-2" : "py-1",
-            striped && index % 2 === 0 && "bg-subtle",
-            bordered && index > 0 && "border-border-subtle border-t",
-            itemClassName,
-            item.itemClassName,
-          )}
-          key={item.id ?? itemLabelText(item)}
-          title={item.title}
-        >
-          <span className={cn("text-ink-muted", keyClassName)}>{item.key}</span>
-          <span
+        <Hint key={item.id ?? itemLabelText(item)} label={item.title}>
+          <div
             className={cn(
-              "text-ink-bright min-w-0 truncate text-right",
-              mono && "font-mono",
-              valueClassName,
-              item.valueClassName,
+              "flex items-center justify-between gap-3 text-xs",
+              bordered ? "px-3 py-2" : "py-1",
+              striped && index % 2 === 0 && "bg-subtle",
+              bordered && index > 0 && "border-border-subtle border-t",
+              itemClassName,
+              item.itemClassName,
             )}
           >
-            {renderValue(item, false)}
-          </span>
-        </div>
+            <span className={cn("text-ink-muted", keyClassName)}>{item.key}</span>
+            <span
+              className={cn(
+                "text-ink-bright min-w-0 truncate text-right",
+                mono && "font-mono",
+                valueClassName,
+                item.valueClassName,
+              )}
+            >
+              {renderValue(item, false)}
+            </span>
+          </div>
+        </Hint>
       ))}
     </div>
   );

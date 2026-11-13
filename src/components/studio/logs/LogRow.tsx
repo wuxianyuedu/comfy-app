@@ -331,17 +331,18 @@ export const LogRow = memo(function LogRow({
       ? undefined
       : entry.message;
   const messageNode = (
-    <span
-      /* 选区判定的落点：面板贴底前要知道「用户框选的是不是日志正文」，
-       * 这个属性就是那件事的载体（见 selectionInsideLogs）。 */
-      {...{ [LOG_ROW_TEXT_ATTRIBUTE]: "" }}
-      className={`min-w-0 flex-1 ${
-        truncated ? "truncate" : "wrap-break-word whitespace-pre-wrap"
-      } ${LEVEL_TEXT_STYLES[entry.level]}`}
-      title={messageTitle}
-    >
-      <HighlightedText keyword={keyword} text={entry.message} />
-    </span>
+    <Hint label={messageTitle}>
+      <span
+        /* 选区判定的落点：面板贴底前要知道「用户框选的是不是日志正文」，
+         * 这个属性就是那件事的载体（见 selectionInsideLogs）。 */
+        {...{ [LOG_ROW_TEXT_ATTRIBUTE]: "" }}
+        className={`min-w-0 flex-1 ${
+          truncated ? "truncate" : "wrap-break-word whitespace-pre-wrap"
+        } ${LEVEL_TEXT_STYLES[entry.level]}`}
+      >
+        <HighlightedText keyword={keyword} text={entry.message} />
+      </span>
+    </Hint>
   );
   /* 位置分两态（ISSUE #1703）：`src/…:123` 是可点开的业务位置；`pkg → fn` 是「这条日志
    * 不是我们写的，是哪个库在哪层打的」。后者没有文件可打开，提示语必须说清「这是库」。

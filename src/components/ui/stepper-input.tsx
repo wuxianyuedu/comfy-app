@@ -21,6 +21,7 @@ import { Input } from "~/components/ui/input";
 import { clamp } from "~/lib/clamp";
 import { trimmed } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
+import { Hint } from "~/components/ui/hint";
 
 type StepperInputProps = {
   /** 无外部 label 挂点时的可访问名。 */
@@ -97,37 +98,39 @@ export function StepperInput({
         value={value}
       />
       <div className="absolute top-1/2 right-0.5 flex -translate-y-1/2 flex-col opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
-        <button
-          aria-label={`增加 ${step}`}
-          className="text-muted-foreground hover:text-ink hover:bg-surface-2 flex h-3.5 w-5 items-center justify-center rounded-sm"
-          disabled={disabled}
-          onClick={() => {
-            bump(1);
-          }}
-          /* mousedown 不夺焦：点箭头不让输入框失焦，落库只走 onCommit 这一条路。 */
-          onMouseDown={(event) => {
-            event.preventDefault();
-          }}
-          title={`增加 ${step}`}
-          type="button"
-        >
-          <ChevronUpIcon aria-hidden size={12} strokeWidth={2.5} />
-        </button>
-        <button
-          aria-label={`减少 ${step}`}
-          className="text-muted-foreground hover:text-ink hover:bg-surface-2 flex h-3.5 w-5 items-center justify-center rounded-sm"
-          disabled={disabled}
-          onClick={() => {
-            bump(-1);
-          }}
-          onMouseDown={(event) => {
-            event.preventDefault();
-          }}
-          title={`减少 ${step}`}
-          type="button"
-        >
-          <ChevronDownIcon aria-hidden size={12} strokeWidth={2.5} />
-        </button>
+        <Hint label={`增加 ${step}`}>
+          <button
+            aria-label={`增加 ${step}`}
+            className="text-muted-foreground hover:text-ink hover:bg-surface-2 flex h-3.5 w-5 items-center justify-center rounded-sm"
+            disabled={disabled}
+            onClick={() => {
+              bump(1);
+            }}
+            /* mousedown 不夺焦：点箭头不让输入框失焦，落库只走 onCommit 这一条路。 */
+            onMouseDown={(event) => {
+              event.preventDefault();
+            }}
+            type="button"
+          >
+            <ChevronUpIcon aria-hidden size={12} strokeWidth={2.5} />
+          </button>
+        </Hint>
+        <Hint label={`减少 ${step}`}>
+          <button
+            aria-label={`减少 ${step}`}
+            className="text-muted-foreground hover:text-ink hover:bg-surface-2 flex h-3.5 w-5 items-center justify-center rounded-sm"
+            disabled={disabled}
+            onClick={() => {
+              bump(-1);
+            }}
+            onMouseDown={(event) => {
+              event.preventDefault();
+            }}
+            type="button"
+          >
+            <ChevronDownIcon aria-hidden size={12} strokeWidth={2.5} />
+          </button>
+        </Hint>
       </div>
     </div>
   );

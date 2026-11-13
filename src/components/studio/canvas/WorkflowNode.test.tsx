@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithFlow } from "../../../../tests/helpers/react-flow";
 import { FlowNode } from "./WorkflowNode";
+import { TooltipProvider } from "~/components/ui/tooltip";
 import type { ComfyGraphNode, WorkflowDetail, WorkflowNodeData } from "../workflow-types";
 import {
   WFStoresProvider,
@@ -51,9 +52,12 @@ function makeDetail(nodes: Array<ComfyGraphNode>): WorkflowDetail {
 
 function renderFlowNode(data: WorkflowNodeData, stores: WFStores = makeStores()): WFStores {
   renderWithFlow(
-    <WFStoresProvider stores={stores}>
-      <FlowNode data={data} />
-    </WFStoresProvider>,
+    /* `Hint` 的浮层要 `TooltipProvider`（应用里挂在根布局 `app/layout` 上）。 */
+    <TooltipProvider delay={0}>
+      <WFStoresProvider stores={stores}>
+        <FlowNode data={data} />
+      </WFStoresProvider>
+    </TooltipProvider>,
   );
   return stores;
 }
@@ -88,16 +92,23 @@ const RAW_INPUTS = [
 ];
 
 describe("FlowNode（WorkflowNode 渲染冒烟）", () => {
-  it("渲染标题、#id chip、TOP PINS 连接行与 widget 参数行", () => {
+  it("渲染标题、#id chip、TOP PINS 连接行与 widget 参数行", async () => {
+    const user = userEvent.setup();
     renderFlowNode(nodeData({ rawInputs: RAW_INPUTS }));
     expect(screen.getByText("主采样器")).toBeInTheDocument(); // displayTitle（作者标题优先）
     expect(screen.getByText("#9")).toBeInTheDocument(); // NodeIdChip（始终是真实节点 id）
     // TOP PINS：连接输入行（KSampler 静态输出 LATENT 组成共享行）
     expect(document.querySelector('[data-pin-input="model"]')).not.toBeNull();
     expect(document.querySelector('[data-pin-output="LATENT"]')).not.toBeNull();
-    // widget 参数行 + 值 cell（title=String(v)）
+    // widget 参数行 + 值 cell（悬停出完整值，走 <Hint>）
     expect(document.querySelector('[data-input-key="seed"]')).not.toBeNull();
-    expect(screen.getByTitle("42")).toBeInTheDocument();
+    const valueCell = screen.getByText("42");
+    expect(valueCell).not.toHaveAttribute("title");
+    await user.hover(valueCell);
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
+    });
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain("42");
   });
 
   it("点击折叠按钮隐藏主体行，aria-label 翻转为「展开节点」", async () => {
@@ -116,7 +127,7 @@ describe("FlowNode（WorkflowNode 渲染冒烟）", () => {
     await userEvent.click(screen.getByRole("button", { name: "展开节点" }));
     expect(screen.getByRole("button", { name: "折叠节点" })).toBeInTheDocument();
     expect(document.querySelector('[data-input-key="seed"]')).not.toBeNull();
-    expect(screen.getByTitle("42")).toBeInTheDocument();
+    expect(screen.getByText("42")).toBeInTheDocument();
   });
   /* 输出端点在 IO 编辑模式下必须继续挂载 —— 它同时是下游 `out:<name>` 边的
    * 锚点。此前 IO 编辑模式整个不渲染它，React Flow 解析不到 handle 就丢掉整条
