@@ -836,8 +836,7 @@ export function resolutionTierOf(
 }
 
 /* ── 校验与逐格合并（ISSUE #3788：覆盖表落应用数据文件，读取侧逐格回退默认）──
- * 纯函数、无 IO：客户端 store 与服务端存储模块共用同一份判据。
- * （记录形状的收窄就地内联，不另起 isRecord 函数——P41 不允许视图/库层自写它。） */
+ * 纯函数、无 IO：客户端 store 与服务端存储模块共用同一份判据。 */
 
 /** 单格宽高是否合法（正整数且在常识范围内；非法值逐格回退默认）。 */
 function isValidDims(value: unknown): value is SizeDims {
@@ -887,10 +886,7 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-/**
- * 覆盖表逐格合并：默认表打底，合法覆盖项才生效（ISSUE #3788）。
- * 缺行、缺档、改坏的值一律回退默认 —— 升级新增比例行不需要写迁移。
- */
+/** 覆盖表逐格合并：默认表打底，合法覆盖项才生效；缺行、缺档、改坏的值一律回退默认（ISSUE #3788）。 */
 export function mergeSizePresetTable(raw: unknown): SizePresetTable {
   const record = isPlainRecord(raw) ? raw : {};
   return {
