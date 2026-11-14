@@ -315,9 +315,8 @@ export function ModelTestView() {
   const mappedTypes = new Set<WorkshopInputType>(
     (selectedAdapter?.inputs ?? []).map((row) => row.type),
   );
-  /* 统一输入行来自模式契约（ISSUE #3778）；尺寸复合口单独走尺寸下拉。 */
-  const sizeRow = c.inputRows.find((row) => row.control === "size") ?? null;
-  const otherRows = c.inputRows.filter((row) => row.control !== "size");
+  /* 统一输入行来自模式契约（ISSUE #3778），行序 = 契约口序（ISSUE #3785）：
+   * 复合尺寸口也在它契约里的位置上渲染，不整体前移。 */
   const modeLabel = c.modeTabs.find((t) => t.mode === c.mode)?.label ?? c.mode;
 
   return (
@@ -394,48 +393,41 @@ export function ModelTestView() {
                 <SectionLabel hint="与工坊生成走同一份统一输入（模式契约的对外参数）；适配器把它们翻译成接口字段">
                   统一输入
                 </SectionLabel>
-                {sizeRow !== null &&
-                  (sizeRow.disabled ? (
-                    <FormField
-                      hint="API 通道暂未承接尺寸输入（工坊完整链路才有）"
-                      id="model-test-size"
-                      label={
-                        <span className="flex min-w-0 items-center gap-1.5">
-                          <span className="truncate">{sizeRow.label}（未承接）</span>
-                          <RequiredBadge required={sizeRow.required} />
-                        </span>
-                      }
-                      labelClassName="mb-1.5"
-                    >
-                      {() => (
-                        <SizeField
-                          disabled
-                          mode={c.mode}
-                          onPatchValues={c.patchValues}
-                          values={c.values}
-                        />
-                      )}
-                    </FormField>
-                  ) : (
-                    <FormField
-                      hint="比例 / 像素（分辨率 · 百万像素）/ 倍数一次选完，与工作流库同款；已按最常用档预置默认值"
-                      id="model-test-size"
-                      label={
-                        <span className="flex min-w-0 items-center gap-1.5">
-                          <span className="truncate">{sizeRow.label}</span>
-                          <RequiredBadge required={sizeRow.required} />
-                        </span>
-                      }
-                      labelClassName="mb-1.5"
-                    >
-                      {() => (
-                        <SizeField mode={c.mode} onPatchValues={c.patchValues} values={c.values} />
-                      )}
-                    </FormField>
-                  ))}
-                {otherRows.map((row, i) => {
-                  /* 判别收窄：复合尺寸口已在 sizeRow 渲染，这里恒为普通行。 */
-                  const control: ModelTestControl = row.control === "size" ? "text" : row.control;
+                {c.inputRows.map((row, i) => {
+                  /* 行序 = 契约口序（ISSUE #3785）：复合尺寸口也在它契约
+                   * 里的位置上渲染，不整体前移。 */
+                  if (row.control === "size") {
+                    return (
+                      <FormField
+                        hint={
+                          row.disabled
+                            ? "API 通道暂未承接尺寸输入（工坊完整链路才有）"
+                            : "比例 / 像素（分辨率 · 百万像素）/ 倍数一次选完，与工作流库同款；已按最常用档预置默认值"
+                        }
+                        id={`model-test-size-${String(i)}`}
+                        key={`${row.id}-${String(i)}`}
+                        label={
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <span className="truncate">
+                              {row.disabled ? `${row.label}（未承接）` : row.label}
+                            </span>
+                            <RequiredBadge required={row.required} />
+                          </span>
+                        }
+                        labelClassName="mb-1.5"
+                      >
+                        {() => (
+                          <SizeField
+                            disabled={row.disabled}
+                            mode={c.mode}
+                            onPatchValues={c.patchValues}
+                            values={c.values}
+                          />
+                        )}
+                      </FormField>
+                    );
+                  }
+                  const control: ModelTestControl = row.control;
                   const id = `model-test-input-${row.id}`;
                   /* 通道承接得住、但适配器没映射 → 提示「生成不会带上」，别让
                    * 用户填了值却在请求里静默消失。 */
