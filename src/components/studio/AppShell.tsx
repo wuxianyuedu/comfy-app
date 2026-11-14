@@ -31,6 +31,7 @@ import { CommandPalette } from "./CommandPalette";
 import { TopBar } from "./TopBar";
 import { ViewTabStrip, type OpenableView } from "./ViewTabStrip";
 import { useTitleBarTabsActive } from "./hooks/use-title-bar-tabs-active";
+import { useTitleBarSlot } from "./TitleBarSlot";
 import { isTabClosable, type ViewTab } from "./workspace-tabs";
 import { ViewActionsProvider } from "./ViewActions";
 
@@ -129,6 +130,8 @@ export function AppShell({
    * P20 唯一出口 useHotkey，面板本身由 CommandPalette 渲染。 */
   /* 桌面壳里这条栏由窗口标题行承载（与 `ShellTabs` 同一个判据）。 */
   const titleBarTabs = useTitleBarTabsActive();
+  /* 壳态标题行由 `ShellTabs` 组装后经插槽交下来，落在本壳的内容列顶部（ISSUE #3807）。 */
+  const titleBarSlot = useTitleBarSlot();
   const [commandOpen, setCommandOpen] = useState(false);
   useHotkey({ key: "k", mod: true }, () => {
     setCommandOpen(true);
@@ -323,10 +326,16 @@ export function AppShell({
         </Sidebar>
 
         <SidebarInset className="bg-canvas text-ink min-w-0 overflow-hidden">
-          {/* 浏览器 / dev 形态的视图页签栏：放到内容列最顶端（TopBar 上方），
-            而不是 TopBar 下方。桌面壳里这条栏由窗口标题行承载，这里按同一个判据让位。
-            保留在 `SidebarInset` 内部是为了让 fixed 侧栏自然让位，避免被侧栏压住关闭按钮。 */}
-          {titleBarTabs ? null : (
+          {/* 顶部那一条：两形态**同位**（ISSUE #3807）。
+              浏览器 / dev 渲染 `ViewTabStrip`；桌面壳渲染 `ShellTabs` 经
+              `TitleBarSlotProvider` 交下来的 `TitleBarTabs`（页签 + 拖拽区 + 窗口按钮）。
+              都在内容列最顶端、TopBar 上方 —— 此前壳把标题行画成整窗第一行，侧栏与
+              内容一起被推下 36px，首页就不贴顶了。放内容列里还有一层好处：侧栏折叠
+              成图标轨时，这条栏的左边缘自动跟着收窄，不用再算偏移量。
+              `AppShell` 单独挂载（Storybook / 单测）时没有 slot，退回浏览器形态。 */}
+          {titleBarTabs && titleBarSlot ? (
+            titleBarSlot
+          ) : (
             <ViewTabStrip
               activeKey={activeViewKey ?? ""}
               onClose={(key) => onCloseViewTab?.(key)}
