@@ -26,8 +26,16 @@ export type ModeContractEditorController = {
   addCustomInput: (label: string, kind: ModeContractCustomKind) => void;
   /** 追加一个输入口（参考图由调用方传 `nextReferenceImageId` 的结果）。 */
   appendInput: (id: ModeContractInputId) => void;
+  /** 确认弹窗 · 留在此模式（什么都不改）。 */
+  cancelSwitch: () => void;
   /** 成品配置基准（项目默认）—— 判「已改」用它（服务端现读，写完即生效）。 */
   configured: Array<ModeContract>;
+  /** 确认弹窗 · 保存并切换（先落当前草稿再切）。 */
+  confirmSwitch: () => Promise<void>;
+  /** 当前草稿相对生效值有没有未保存的修改（ISSUE #3762：左栏标「未保存」、切走前先问）。 */
+  dirty: boolean;
+  /** 确认弹窗 · 不保存，直接切换（草稿丢弃）。 */
+  discardSwitch: () => void;
   /** 当前编辑的契约草稿（null = 未选模式）。 */
   draft: ModeContract | null;
   /** 曲线救国的兜底：契约里一个必备口都没勾时要不要提示（视图据此给提示）。 */
@@ -40,6 +48,8 @@ export type ModeContractEditorController = {
   moveInput: (id: ModeContractInputId, delta: number) => void;
   /** 下一个可追加的参考图口 id（没有选中模式时为 null）。 */
   nextReferenceImageId: ModeContractInputId | null;
+  /** 确认弹窗开着时的目标模式码（null = 没有挂起的切换）。 */
+  pendingMode: string | null;
   /** 这份检出能不能「保存为项目默认」（正式包 false，入口随之隐藏）。 */
   projectDefaultEditable: boolean;
   /** 移除某个输入口（自定义口连着它的定义一起移除）。 */
@@ -65,7 +75,8 @@ export type ModeContractEditorController = {
   saving: boolean;
   /** 「保存为项目默认」进行中。 */
   savingProjectDefaults: boolean;
-  /** 打开某模式的契约编辑（初值 = 已改过的用改过的，否则内置默认）。 */
+  /** 打开某模式的契约编辑（初值 = 已改过的用改过的，否则内置默认）。
+   *  有未保存修改时先弹确认（ISSUE #3762），不直接切。 */
   selectMode: (mode: string) => void;
   setDraft: (draft: ModeContract) => void;
   setOutput: (output: ModeContract["output"]) => void;
@@ -82,8 +93,20 @@ export function useModeContractEditor(): ModeContractEditorController {
   const [saved, setSaved] = useState(false);
   const [savedKind, setSavedKind] = useState<"local" | "project" | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  /* 未保存就点切走的那一格（ISSUE #3762）：非 null = 确认弹窗开着。 */
+  const [pendingMode, setPendingMode] = useState<string | null>(null);
 
-  const selectMode = useCallback(
+  /* 草稿相对生效值有没有改动（ISSUE #3762）：左栏「未保存」标记与切换确认
+   * 共用这一份判据。保存 / 还原默认之后草稿回到生效值，自动归为不脏。 */
+  const dirty = useMemo(() => {
+    if (!draft || !mode) {
+      return false;
+    }
+    const effective = effectiveModeContract(mode, registry.contracts, registry.configured).contract;
+    return JSON.stringify(draft) !== JSON.stringify(effective);
+  }, [draft, mode, registry.contracts, registry.configured]);
+
+  const doSelect = useCallback(
     (next: string) => {
       setMode(next);
       setDraft(effectiveModeContract(next, registry.contracts, registry.configured).contract);
@@ -92,6 +115,23 @@ export function useModeContractEditor(): ModeContractEditorController {
       setSaveError(null);
     },
     [registry.configured, registry.contracts],
+  );
+
+  const selectMode = useCallback(
+    (next: string) => {
+      if (next === mode) {
+        return;
+      }
+      /* 有未保存修改先问「要不要保存」（ISSUE #3762），不直接丢弃草稿。
+         确认弹窗的三向出口（保存并切换 / 丢弃 / 留下）在下方 —— 它们要用到
+         `save`，所以挂在保存定义之后。 */
+      if (dirty) {
+        setPendingMode(next);
+        return;
+      }
+      doSelect(next);
+    },
+    [dirty, mode, doSelect],
   );
 
   const appendInput = useCallback((id: ModeContractInputId) => {
@@ -279,6 +319,30 @@ export function useModeContractEditor(): ModeContractEditorController {
     }
   }, [mergedRegistry, registry]);
 
+  /** 确认弹窗的「保存并切换」：先落盘再切（落的是当前草稿）。 */
+  const confirmSwitch = useCallback(async () => {
+    if (pendingMode === null) {
+      return;
+    }
+    await save();
+    doSelect(pendingMode);
+    setPendingMode(null);
+  }, [pendingMode, save, doSelect]);
+
+  /** 确认弹窗的「不保存，直接切换」：草稿就地丢弃。 */
+  const discardSwitch = useCallback(() => {
+    if (pendingMode === null) {
+      return;
+    }
+    doSelect(pendingMode);
+    setPendingMode(null);
+  }, [pendingMode, doSelect]);
+
+  /** 确认弹窗的「留在此模式」：什么都不改。 */
+  const cancelSwitch = useCallback(() => {
+    setPendingMode(null);
+  }, []);
+
   return {
     mode,
     draft,
@@ -311,5 +375,10 @@ export function useModeContractEditor(): ModeContractEditorController {
     saveError,
     saved,
     savedKind,
+    dirty,
+    pendingMode,
+    confirmSwitch,
+    discardSwitch,
+    cancelSwitch,
   };
 }
