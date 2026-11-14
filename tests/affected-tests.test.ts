@@ -819,3 +819,63 @@ describe("启动器消费 --changed-stdin，读不到就显式降级（ISSUE #28
     expect(r.stderr).toContain("--changed-files=tests/ship.test.ts");
   });
 });
+
+/**
+ * 编排器产物清单判据的增量面（ISSUE #3812）：`tests/dist-artifact-hygiene.test.ts`
+ * 对编排器闭包成员（`db-backup-core.mjs` / `launcher-core/*` …）的消费是**运行时读文本
+ * 解析**，③ 的静态 import 图追不到 —— 不补这一格，「新增内部分件漏登记
+ * `RUNTIME_SCRIPTS`」会以同一形态反复漏出增量面（#3732 那批就是这样落到主干的）。
+ */
+describe("affected-tests：编排器闭包成员带进产物清单判据（ISSUE #3812）", () => {
+  const HYGIENE = "tests/dist-artifact-hygiene.test.ts";
+
+  /** 最小夹具：判据用例在输出候选里，其余是可能被改到的 scripts 模块。 */
+  function run(changed: Array<string>, closure: Array<string>) {
+    const files: Record<string, string> = {
+      [HYGIENE]: "it('x', () => {});",
+      "scripts/db-backup-core.mjs": "export {};",
+      "scripts/check-standalone-contents.cjs": "module.exports = {};",
+      "scripts/tw4-scan-core.mjs": "export {};",
+    };
+    return resolveAffectedTests({
+      changedPaths: changed,
+      testFiles: Object.keys(files).filter(isTestPath),
+      sourceFiles: Object.keys(files).filter(isSourcePath),
+      readText: (rel) => files[rel] ?? null,
+      launcherClosure: new Set(closure),
+    });
+  }
+
+  it("⑤ 改编排器闭包内的模块（db-backup-core.mjs）→ 产物清单判据进面", () => {
+    const res = run(
+      ["scripts/db-backup-core.mjs"],
+      ["scripts/dev-launcher.mjs", "scripts/db-backup-core.mjs"],
+    );
+    expect(res.tests).toContain(HYGIENE);
+    expect(res.reasons[HYGIENE] ?? "").toContain("编排器产物清单判据");
+  });
+
+  it("改判据直接读文本的检查侧本体（check-standalone-contents.cjs）→ 同样进面", () => {
+    const res = run(["scripts/check-standalone-contents.cjs"], []);
+    expect(res.tests).toContain(HYGIENE);
+  });
+
+  it("不在闭包、也不是消费源的 scripts/*.mjs 不拉判据（面不许无限扩大）", () => {
+    const res = run(["scripts/tw4-scan-core.mjs"], ["scripts/dev-launcher.mjs"]);
+    expect(res.tests).not.toContain(HYGIENE);
+  });
+
+  it("真仓库上 main 接线：改 db-backup-core.mjs 的面里带判据（真实闭包算过了）", () => {
+    const CLI = path.join(ROOT, "scripts", "affected-tests.mjs");
+    // 用默认输出（空格分隔的测试清单）而不是 --json：解析 JSON 要再立一条类型守卫，
+    // 这里只断言「清单里有这一份」，字符串包含就够。
+    const out = spawnSync(process.execPath, [CLI, "--changed", "scripts/db-backup-core.mjs"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      env: SPAWN_ENV,
+      maxBuffer: 64 << 20,
+    });
+    expect(out.status, out.stderr ?? "").toBe(0);
+    expect(out.stdout).toContain(HYGIENE);
+  });
+});
