@@ -1,9 +1,17 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /**
- * 视图页签条在真浏览器里的行为（@critical）：判「装配 + 交互」这层，jsdom 替代不了 —— 页签状态挂在
- * workspace 页面、侧栏导航要真的把它推起来、关闭要真的落回左邻。边界：浏览器/dev 形态下没有 iframe
- * 页签栏（可访问名「应用页签」，那是桌面壳才有的），视图页签条叫「已打开的视图」，两者名字不能混。
+ * 视图页签条在真浏览器里的行为（@critical）：判「装配 + 交互」这层，jsdom 替代不了 ——
+ * 页签状态挂在 workspace 页面、侧栏导航要真的把它推起来、关闭要真的落回左邻。
+ *
+ * ISSUE #3740 之后页签条的口径变了：**侧栏常驻项**（首页 / 模型 / 历史 / 队列 /
+ * ComfyUI / 工作流库 / 模型适配 / 测试模型 / 模式契约 / 控制台）不再平铺进页签条 ——
+ * 它们在侧栏里恒在、可切可关，打开态与关闭入口都收在侧栏项上。页签条只承载项目类
+ * 页签与**不在侧栏的界面**（设置、UI 控件总览）。所以起步是 0 页签，「点侧栏多一页」
+ * 那类旧断言已不成立；这里的用例一律按新口径判，别再按老印象改回去。
+ *
+ * 边界：浏览器/dev 形态下没有 iframe 页签栏（可访问名「应用页签」，那是桌面壳才有的），
+ * 视图页签条叫「已打开的视图」，两者名字不能混。
  */
 async function openWorkspace(page: Page) {
   await page.goto("/workspace");
@@ -12,50 +20,62 @@ async function openWorkspace(page: Page) {
   return strip;
 }
 
+/** 「+」菜单开一个界面。挑非侧栏界面才会在页签条上留下一页（ISSUE #3740）。 */
+async function openFromPlus(page: Page, strip: Locator, name: string) {
+  await strip.getByRole("button", { name: "新页签", exact: true }).click();
+  const item = page.getByRole("menuitem", { name, exact: true });
+  await expect(item).toBeVisible();
+  await item.click();
+}
+
 test.describe("视图页签条 @critical", () => {
-  test("起步只有首页一页，且首页那一页没有关闭按钮", async ({ page }) => {
+  test("起步页签条为空：侧栏常驻项（含首页）不占页签", async ({ page }) => {
     const strip = await openWorkspace(page);
-    const tabs = strip.getByRole("tab");
-    await expect(tabs).toHaveCount(1);
-    await expect(tabs.first()).toHaveAttribute("aria-selected", "true");
-    await expect(tabs.first()).toContainText("首页");
+    await expect(strip.getByRole("tab")).toHaveCount(0);
     await expect(strip.getByRole("button", { name: /^关闭 / })).toHaveCount(0);
+    /* 首页是固定页签：恒在、不可关，只是不再在条上平铺（ISSUE #3740）。 */
+    await expect(page.locator('[data-view="home"]')).toBeVisible();
   });
 
-  test("侧栏切视图会多出一页并高亮；再点同一项是聚焦而不是开第二页", async ({ page }) => {
+  test("侧栏切视图不往页签条加页；再点同一项是聚焦而不是开第二屏", async ({ page }) => {
     const strip = await openWorkspace(page);
     await page.getByRole("button", { name: "模型", exact: true }).first().click();
-    await expect(strip.getByRole("tab")).toHaveCount(2);
-    await expect(strip.getByRole("tab").nth(1)).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator('[data-view="models"]')).toBeVisible();
+    await expect(strip.getByRole("tab")).toHaveCount(0);
 
+    const models = page.locator('[data-view="models"]');
+    const before = await models.elementHandle();
     await page.getByRole("button", { name: "模型", exact: true }).first().click();
-    await expect(strip.getByRole("tab")).toHaveCount(2);
+    await expect(strip.getByRole("tab")).toHaveCount(0);
+    expect(
+      await models.evaluate((el, prev) => el === prev, before),
+      "再点同一项把那一屏重挂了 —— 编辑态会丢",
+    ).toBe(true);
   });
 
-  test("关掉当前页落到左邻，关不掉首页", async ({ page }) => {
+  test("关掉当前页落到左邻，首页不受影响", async ({ page }) => {
     const strip = await openWorkspace(page);
-    await page.getByRole("button", { name: "模型", exact: true }).first().click();
-    await page.getByRole("button", { name: "历史", exact: true }).first().click();
-    await expect(strip.getByRole("tab")).toHaveCount(3);
-
-    await strip.getByRole("button", { name: "关闭 历史" }).click();
+    await openFromPlus(page, strip, "UI 控件总览");
+    await openFromPlus(page, strip, "设置");
     await expect(strip.getByRole("tab")).toHaveCount(2);
-    /* 落左邻：历史右侧没有东西，左邻就是「模型」那一页。 */
-    await expect(strip.getByRole("tab").nth(1)).toHaveAttribute("aria-selected", "true");
-    await expect(strip.getByRole("tab").nth(1)).toContainText("模型");
+
+    await strip.getByRole("button", { name: "关闭 设置" }).click();
+    await expect(strip.getByRole("tab")).toHaveCount(1);
+    /* 落左邻：设置的左邻就是「UI 控件总览」，且它成为当前页。 */
+    await expect(strip.getByRole("tab").first()).toContainText("UI 控件总览");
+    await expect(strip.getByRole("tab").first()).toHaveAttribute("aria-selected", "true");
+    /* 首页没有关闭入口，任何一页被关都不该把它带走。 */
+    await expect(page.locator('[data-view="home"]')).toHaveCount(1);
   });
 
   test("「+」能开一页；浏览器形态下不存在 iframe 页签栏", async ({ page }) => {
     const strip = await openWorkspace(page);
-    await strip.getByRole("button", { name: "新页签", exact: true }).click();
-    const item = page.getByRole("menuitem", { name: "队列", exact: true });
-    await expect(item).toBeVisible();
-    await item.click();
-    await expect(strip.getByRole("tab")).toHaveCount(2);
-    await expect(strip.getByRole("tab").nth(1)).toContainText("队列");
+    await openFromPlus(page, strip, "UI 控件总览");
+    await expect(strip.getByRole("tab")).toHaveCount(1);
+    await expect(strip.getByRole("tab").first()).toContainText("UI 控件总览");
 
     /* 定位一律 exact：`name` 默认是非精确匹配，页签上的关闭按钮可访问名是
-   「关闭 模型」这种包含式写法，不 exact 就会先命中它 —— 这条我自己踩过。 */
+       「关闭 UI 控件总览」这种包含式写法，不 exact 就会先命中它 —— 这条我自己踩过。 */
     /* 这条栏是「已打开的视图」；「应用页签」属于桌面壳的 iframe 栏，浏览器里没有。 */
     await expect(page.getByRole("tablist", { name: "应用页签" })).toHaveCount(0);
   });
@@ -65,17 +85,25 @@ test.describe("视图页签条 @critical", () => {
        `transient`，配置面里又没有条目 ⇒ 设置怎么配都不认。现在默认档是
        independent，判据只认配置面（src/lib/shell/sidebar-tab-defaults.json）。 */
     const strip = await openWorkspace(page);
-    await strip.getByRole("button", { name: "新页签", exact: true }).click();
-    const item = page.getByRole("menuitem", { name: "UI 控件总览", exact: true });
-    await expect(item).toBeVisible();
-    await item.click();
-    await expect(strip.getByRole("tab")).toHaveCount(2);
-    await expect(strip.getByRole("tab").nth(1)).toContainText("UI 控件总览");
+    await openFromPlus(page, strip, "UI 控件总览");
+    await expect(strip.getByRole("tab")).toHaveCount(1);
+    await expect(strip.getByRole("tab").first()).toContainText("UI 控件总览");
 
+    /* 切到侧栏项是「切到别的界面」最常见的路径。#3740 后侧栏项自己不进页签条，
+       所以条上仍只有 UI 控件总览 —— 这正是「切走不关」最干净的可观测证据。 */
     await page.getByRole("button", { name: "模型", exact: true }).first().click();
-    await expect(strip.getByRole("tab")).toHaveCount(3);
-    await expect(strip.getByRole("tab").nth(1)).toContainText("UI 控件总览");
-    await expect(strip.getByRole("tab").nth(2)).toContainText("模型");
+    await expect(strip.getByRole("tab")).toHaveCount(1);
+    await expect(strip.getByRole("tab").first()).toContainText("UI 控件总览");
+    await expect(page.locator('[data-view="models"]')).toBeVisible();
+    await expect(page.locator('[data-view="uiKit"]')).toBeHidden();
+
+    /* 同一份配置里的另一档：设置出厂 `shared`（切走即关）。把它开成第二页再切走，
+       条上只剩 independent 的 UI 控件总览 —— 两档行为在真浏览器里一次都验到。 */
+    await openFromPlus(page, strip, "设置");
+    await expect(strip.getByRole("tab")).toHaveCount(2);
+    await page.getByRole("button", { name: "历史", exact: true }).first().click();
+    await expect(strip.getByRole("tab")).toHaveCount(1);
+    await expect(strip.getByRole("tab").first()).toContainText("UI 控件总览");
   });
 
   test("切走的那一页仍然挂载（页签的意义就是让打开的界面保持打开）", async ({ page }) => {
@@ -83,32 +111,34 @@ test.describe("视图页签条 @critical", () => {
        收口前 `renderCenter()` 用 `switch (viewMode)` 只渲染当前那一屏，切走即卸载
        —— 表现是切回画布得到一张重开的空网、控制台里跑着的命令断连。 */
     const strip = await openWorkspace(page);
+    await openFromPlus(page, strip, "UI 控件总览");
     await page.getByRole("button", { name: "模型", exact: true }).first().click();
     await page.getByRole("button", { name: "历史", exact: true }).first().click();
-    await expect(strip.getByRole("tab")).toHaveCount(3);
 
-    /* 三个视图容器都在 DOM 里（`data-view` 是各页 wrapper 的锚），
-       当前那一页可见、另外两页带 `hidden`。 */
-    for (const view of ["home", "models", "history"]) {
+    /* 四个视图容器都在 DOM 里（`data-view` 是各页 wrapper 的锚），
+       当前那一页可见、另外三页带 `hidden`。 */
+    for (const view of ["home", "uiKit", "models", "history"]) {
       // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       await expect(
         page.locator(`[data-view="${view}"]`),
         `${view} 那一页被卸载了 —— 切回去会重新挂载`,
       ).toHaveCount(1);
     }
-    await expect(page.locator('[data-view="home"]')).toBeHidden();
-    await expect(page.locator('[data-view="models"]')).toBeHidden();
     await expect(page.locator('[data-view="history"]')).toBeVisible();
+    for (const view of ["home", "uiKit", "models"]) {
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
+      await expect(page.locator(`[data-view="${view}"]`)).toBeHidden();
+    }
 
-    /* 切回「模型」：它一直是同一个 DOM 节点（不是重新挂载的新节点）。
+    /* 切回「UI 控件总览」：它一直是同一个 DOM 节点（不是重新挂载的新节点）。
        用元素句柄判同一性 —— 重新挂载会让旧 handle 变成 detached。 */
-    const models = page.locator('[data-view="models"]');
-    const before = await models.elementHandle();
-    await strip.getByRole("tab").nth(1).click();
-    await expect(models).toBeVisible();
+    const uiKit = page.locator('[data-view="uiKit"]');
+    const before = await uiKit.elementHandle();
+    await strip.getByRole("tab").first().click();
+    await expect(uiKit).toBeVisible();
     expect(
-      await models.evaluate((el, prev) => el === prev, before),
-      "切回「模型」后拿到的是另一个元素 = 那一页重新挂载了，状态会丢",
+      await uiKit.evaluate((el, prev) => el === prev, before),
+      "切回「UI 控件总览」后拿到的是另一个元素 = 那一页重新挂载了，状态会丢",
     ).toBe(true);
   });
 
@@ -119,8 +149,10 @@ test.describe("视图页签条 @critical", () => {
      语义属性兜。 */
   test("当前页那一张看得出来：选中页签的背景与顶部色条都不同于未选中", async ({ page }) => {
     const strip = await openWorkspace(page);
-    /* 开第二页，场上才同时有「选中」与「未选中」可比。 */
-    await page.getByRole("button", { name: "模型", exact: true }).first().click();
+    /* 场上要同时有「选中 / 未选中」两张可比：得开两个都不在侧栏的界面，
+       它们才都会进页签条（ISSUE #3740）。 */
+    await openFromPlus(page, strip, "UI 控件总览");
+    await openFromPlus(page, strip, "设置");
     await expect(strip.getByRole("tab")).toHaveCount(2);
 
     for (const dark of [true, false]) {

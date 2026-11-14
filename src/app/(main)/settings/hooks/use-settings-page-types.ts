@@ -4,7 +4,7 @@
  * 本文件只有类型与常量、没有 React —— 不带 `"use client"`，服务端也能安全引它。
  */
 import type { RuntimeLogController } from "~/components/studio/logs/use-runtime-log-source";
-import type { BackupEntry, PendingRestore } from "./use-settings-page-backup";
+import type { AppDataBackupSet, BackupEntry, PendingRestore } from "./use-settings-page-backup";
 import type { OllamaModel } from "~/lib/llm/ollama-client";
 import type { DesktopStoragePaths } from "~/lib/comfyui/desktop-storage-paths";
 import type {
@@ -94,6 +94,8 @@ export type SettingsPageDrafts = {
 export type SettingsPageController = {
   /** 跳转目标真正落定 —— 外壳命中锚点后调它（清空 `pendingJump` + 消费载荷）。 */
   ackJumpSection: () => void;
+  /** 本机应用数据的备份套（与数据库备份按同刻配对；#3732）。 */
+  appDataBackups: Array<AppDataBackupSet>;
   /* 应用自更新（Tauri updater + process）：检测 / 下载安装 / 重启 */
   appUpdate: {
     /** 最近一次检测是否发现可用更新。 */
@@ -171,6 +173,9 @@ export type SettingsPageController = {
   flash: FlashMessage | null;
   /** 加载失败**且**两份草稿都没就绪 —— 容器据此渲染错误降级视图。 */
   hasError: boolean;
+  /** 从用户指定的目录导入备份件（#3732）。 */
+  importBusy: boolean;
+  importFromDir: (dir: string) => Promise<void>;
   installAppUpdate: () => Promise<void>;
   /* 加载 / 错误 */
   isInitialLoad: boolean;
@@ -201,7 +206,7 @@ export type SettingsPageController = {
   queryUsageTask: (input: UsageTaskQueryInput) => Promise<UsageTestResult>;
   relaunchApp: () => Promise<void>;
   restoreBusy: boolean;
-  restoreFrom: (name: string) => Promise<void>;
+  restoreFrom: (name: string, appDataDir?: string | null) => Promise<void>;
   retry: () => void;
   saveLlm: () => Promise<void>;
   /**

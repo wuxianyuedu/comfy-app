@@ -82,13 +82,29 @@ describe("AppearanceSection 的单选组键盘契约", () => {
   });
 });
 
-describe("AppearanceSection 字体自定义（#3513）", () => {
-  it("渲染三个字体输入框（界面 / 代码 / 终端），带可访问名", () => {
+describe("AppearanceSection 字体自定义（#3513 / #3784）", () => {
+  it("渲染字体输入框（每档按部分各一个，带可访问名）", () => {
     render(<AppearanceSection c={controller("dark")} />);
-    for (const name of ["界面字体", "代码字体", "终端字体"]) {
+    for (const name of [
+      "界面字体 · 西文字体",
+      "界面字体 · 中文字体",
+      "代码字体 · 等宽字体",
+      "终端字体 · 等宽字体",
+      "终端字体 · 中文字体",
+    ]) {
       const input = screen.getByRole("textbox", { name });
       expect(input).toBeInTheDocument();
     }
+  });
+
+  it("在西文部分填一种字体，整条栈 = 该字体 + 其余默认回退（ISSUE #3784）", async () => {
+    const user = userEvent.setup();
+    render(<AppearanceSection c={controller("dark")} />);
+    const input = screen.getByRole("textbox", { name: "界面字体 · 西文字体" });
+    await user.type(input, "Inter");
+    expect(document.documentElement.style.getPropertyValue("--font-sans")).toBe(
+      'Inter, "Sarasa UI SC", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif',
+    );
   });
 
   it("每档字体都带「恢复默认」按钮", () => {

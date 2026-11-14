@@ -101,6 +101,11 @@ export type WorkflowLibraryDetailController = {
   /** null = 左侧未选中工作流，视图据此渲染空态。 */
   workflow: WorkflowRow | null;
   workflowIO: WorkflowIOMap | null;
+  /** 工作流**真实声明**的模式（不做 `[taskType]` 兜底）—— IO 预览页签与编辑器
+   *  IO 面板同一口径：没配就是没配，如实显示「还没有配置模式」并给就地选模式
+   *  的入口（ISSUE #3800）。兜底后的展示值仍走 `metaEditor.modes`（画布卡片 /
+   *  封装面板等旧消费方不变）。 */
+  workflowModes: Array<string>;
 };
 
 /** 生效模式：用户在这条工作流上切过就用切过的，否则用默认模式解析值。
@@ -398,6 +403,8 @@ export function useWorkflowLibraryDetail(
     canResync: syncFlags.canResync,
     missing: syncFlags.missing,
     isTechnical: !!workflow && isTechnicalName(workflow.name),
+    /* 真实声明的模式，不做兜底 —— 消费方与口径见 controller 类型上的说明。 */
+    workflowModes: workflow?.modes ?? [],
     busyDownload: !!workflow && isBundleBusy(workflow.id),
     busyResync: !!workflow && isResyncBusy(workflow.id),
     actions,

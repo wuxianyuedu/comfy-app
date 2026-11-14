@@ -8,6 +8,7 @@
 import { X } from "lucide-react";
 import type { ShellTab } from "~/lib/shell/shell-tabs-store";
 import { MAIN_TAB_ID } from "~/lib/shell/shell-tabs-store";
+import { sidebarPinnedViewIds } from "./NavItems";
 import { ViewTabStrip } from "./ViewTabStrip";
 import type { ViewTab } from "./workspace-tabs";
 import type { OpenableView } from "./ViewTabStrip";
@@ -112,6 +113,11 @@ export function TitleBarTabs({
   /* 有视图页签时，「主应用」那一个伪页签由它们代表 —— 同一条横条里出现
      「主应用」+「首页」+「模型」这种并列，用户分不清哪个才是当前页。 */
   const hasViewTabs = !!viewTabs && viewTabs.length > 0;
+  /* 侧栏常驻项对应的页签不在标题行 / 页签条再渲染一遍（ISSUE #3740 追加反馈）：
+     它们在侧栏里恒在、可切可关，这里再列只贡献占宽。`hasViewTabs` 仍按**原始**
+     页签数判定 ——「要不要用页签代表「主应用」这一格」的规则不受显隐影响。 */
+  const pinnedViewIds = sidebarPinnedViewIds();
+  const stripTabs = viewTabs?.filter((tab) => !pinnedViewIds.has(tab.view)) ?? [];
   const shellTabs = hasViewTabs ? tabs.filter((tab) => tab.id !== MAIN_TAB_ID) : tabs;
   /* 最大化状态与拖拽判据走 `./WindowControls` 的共享实现（与整屏路由页自带的
      精简标题行 `WindowTitleBar` 同一份 —— 两处各写一遍就是孪生）。 */
@@ -145,7 +151,7 @@ export function TitleBarTabs({
             onSelect={(key) => onSelectViewTab?.(key)}
             openableViews={openableViews}
             projectNameOf={projectNameOf}
-            tabs={viewTabs}
+            tabs={stripTabs}
           />
         ) : null}
         {shellTabs.length > 0 ? (

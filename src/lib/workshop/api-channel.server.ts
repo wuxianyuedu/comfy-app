@@ -16,10 +16,15 @@ import { parseExtraBodyObject } from "~/lib/llm/extra-body";
 import { promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { remoteModelRepository } from "~/lib/core/repository";
-import type { RemoteModeAdapter, WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
+import { remoteModelRepository, llmProviderRepository } from "~/lib/core/repository";
+import type {
+  RemoteModeAdapter,
+  RemoteModelAdaptersDoc,
+  WorkshopInputType,
+} from "~/lib/workshop/remote-model-adapter";
 
 import {
+  type ApiCallDebugRow,
   callImageGeneration,
   callVideoPoll,
   callVideoSubmit,
@@ -107,6 +112,9 @@ function unifiedImageInputs(req: ApiImageRequest): Partial<Record<WorkshopInputT
     resolution: req.resolution ?? undefined,
     multiple: req.multiple ?? undefined,
     image: req.image ?? undefined,
+    /* 种子（ISSUE #3778）：生图通道承接的通行字段，适配器映射了 `seed` 口
+     * 就按映射下发（无适配器的默认映射经 defaultImageBody 直带）。 */
+    seed: req.seed ?? undefined,
   };
 }
 
@@ -135,6 +143,71 @@ function bodyFromAdapter(
   return body;
 }
 
+/** 按名解析远端模型的连接参数与适配器存档（生图 / 生视频 / 轮询三路共用）。
+ *
+ *  连接参数按「条目自己的 → 所属供应商的」折算（ISSUE #3778 问题 5）：
+ *  #3501 起 Base URL / 密钥以**供应商**为单位，模型行自己的两格为空是常态 ——
+ *  只认条目自己的话，这类模型会被误判成「未配置」而回落全局通道，测试页
+ *  表现为「远端模型明明配了却报远端 API 生图通道未配置」。停用的条目不参与
+ *  按名解析（表注释的既有口径）。三态：`unavailable`（查无此模型 / 表不可用
+ *  → 调用方回落通道设置）、`no-address`（模型在但条目与供应商都没填地址
+ *  → 调用方给**定向**报错，不再套「通道未配置」的通用文案）、`ok`。 */
+async function resolveRemoteModelConnection(wantedModel: string): Promise<
+  | {
+      apiKey: string;
+      base: string;
+      doc: RemoteModelAdaptersDoc;
+      extraBody: string | null;
+      kind: "ok";
+      name: string;
+    }
+  | { kind: "no-address"; name: string }
+  | { kind: "unavailable" }
+> {
+  try {
+    const entries = await remoteModelRepository.list();
+    const entry = entries.find((r) => r.name === wantedModel && r.enabled);
+    if (!entry) {
+      return { kind: "unavailable" };
+    }
+    /* 连接参数取值链：条目自己的 → 所属供应商的（#3501 起 Base URL / 密钥
+     * 挂在供应商上，模型行两格为空是常态）。条目自己填全了就不查供应商
+     * （少一轮读）。 */
+    let base = (entry.baseUrl ?? "").trim().replace(/\/+$/, "");
+    let apiKey = entry.apiKey ?? "";
+    if (base === "") {
+      const provider =
+        entry.providerId === null || entry.providerId === undefined
+          ? null
+          : await llmProviderRepository.findById(entry.providerId);
+      base = (provider?.baseUrl ?? "").trim().replace(/\/+$/, "");
+      apiKey = entry.apiKey ?? provider?.apiKey ?? "";
+    }
+    if (base === "") {
+      return { kind: "no-address", name: entry.name };
+    }
+    return {
+      kind: "ok",
+      base,
+      apiKey,
+      doc: await remoteModelRepository.getWorkshopAdaptersDoc(wantedModel),
+      extraBody: entry.extraBody,
+      name: entry.name,
+    };
+  } catch {
+    // 表不可用（未迁移等）→ 回落通道设置
+    return { kind: "unavailable" };
+  }
+}
+
+/** 模型存在但条目与所属供应商都没有接口地址时的定向报错
+ *  （与 api-channel-core 的通用「通道未配置」文案分工：这里能点名模型）。 */
+function noAddressError(name: string): Error {
+  return new Error(
+    `模型「${name}」没有可用的接口地址 —— 到「设置 → 远程模型」给它或其所属供应商填 Base URL`,
+  );
+}
+
 /** Next 侧的上游解析：设置页「远端模型」优先，未命中回落通道设置。
  *
  *  这是本文件**唯一**比纯逻辑多出来的东西 —— 它要读 `remoteModel` 表，
@@ -155,43 +228,38 @@ async function resolveTarget(
   if (!wantedModel) {
     return { target: fallbackTarget(channel), channel, adapter: null, modelExtra: null };
   }
-  try {
-    const entries = await remoteModelRepository.list();
-    const entry = entries.find((r) => r.name === wantedModel && (r.baseUrl ?? "") !== "");
-    if (!entry) {
-      return { target: fallbackTarget(channel), channel, adapter: null, modelExtra: null };
-    }
-    // 模式适配器优先：条目配置了该模式的输入映射就按它翻译统一输入。
-    // 端点是模型级配置（ISSUE #3622）：模型级路径配了就用它；没配则一律按
-    // Base URL 形态推导 images/generations 惯例端点 —— 与有没有适配器无关。
-    const doc = await remoteModelRepository.getWorkshopAdaptersDoc(wantedModel);
-    const adapters = doc.adapters;
-    const wantedMode = upperToken(req.mode);
-    const [onlyAdapter] = adapters;
-    const adapter =
-      adapters.find((a) => a.mode === wantedMode) ??
-      (adapters.length === 1 ? (onlyAdapter ?? null) : null);
-    const base = (entry.baseUrl ?? "").replace(/\/+$/, "");
-    return {
-      target: {
-        endpoint:
-          doc.endpointPath === ""
-            ? resolveImagesGenerationsEndpoint(entry.baseUrl ?? "")
-            : /* #3656：显式路径走 joinApiUrl——Base 已带版本段不重复补（防 /v1/v1），
-               * Base 缺版本段补 /v1；设置页下拉存的就是带版本段的完整路径。 */
-              joinApiUrl(base, doc.endpointPath),
-        apiKey: entry.apiKey ?? "",
-        model: entry.name,
-      },
-      channel,
-      adapter,
-      /* 模型级透传字段（#3626）：原样带上，由 callImageGeneration 盖在请求体最后。 */
-      modelExtra: parseExtraBodyObject(entry.extraBody),
-    };
-  } catch {
-    // 表不可用（未迁移等）→ 回落通道设置
+  const conn = await resolveRemoteModelConnection(wantedModel);
+  if (conn.kind === "no-address") {
+    throw noAddressError(conn.name);
+  }
+  if (conn.kind === "unavailable") {
     return { target: fallbackTarget(channel), channel, adapter: null, modelExtra: null };
   }
+  // 模式适配器优先：条目配置了该模式的输入映射就按它翻译统一输入。
+  // 端点是模型级配置（ISSUE #3622）：模型级路径配了就用它；没配则一律按
+  // Base URL 形态推导 images/generations 惯例端点 —— 与有没有适配器无关。
+  const adapters = conn.doc.adapters;
+  const wantedMode = upperToken(req.mode);
+  const [onlyAdapter] = adapters;
+  const adapter =
+    adapters.find((a) => a.mode === wantedMode) ??
+    (adapters.length === 1 ? (onlyAdapter ?? null) : null);
+  return {
+    target: {
+      endpoint:
+        conn.doc.endpointPath === ""
+          ? resolveImagesGenerationsEndpoint(conn.base)
+          : /* #3656：显式路径走 joinApiUrl——Base 已带版本段不重复补（防 /v1/v1），
+             * Base 缺版本段补 /v1；设置页下拉存的就是带版本段的完整路径。 */
+            joinApiUrl(conn.base, conn.doc.endpointPath),
+      apiKey: conn.apiKey,
+      model: conn.name,
+    },
+    channel,
+    adapter,
+    /* 模型级透传字段（#3626）：原样带上，由 callImageGeneration 盖在请求体最后。 */
+    modelExtra: parseExtraBodyObject(conn.extraBody),
+  };
 }
 
 /** 通道设置里的生图上游（含「未配置」时端点为空串的既有行为）。 */
@@ -204,8 +272,13 @@ function fallbackTarget(channel: ApiChannelStored): ApiUpstreamTarget {
 }
 
 /* 调一个 OpenAI 兼容的 images/generations 端点；返回可用的 URL
- *（远程 URL，或 b64 载荷内联成 data URL）。 */
-export async function generateImageViaApi(req: ApiImageRequest): Promise<string> {
+ *（远程 URL，或 b64 载荷内联成 data URL）。
+ * `opts.debug`（ISSUE #3791）：给出时每次实际发出的请求都上报一条读数，
+ * 由调用方（relay 路由）转给测试页的请求详情面板。 */
+export async function generateImageViaApi(
+  req: ApiImageRequest,
+  opts: { debug?: (row: ApiCallDebugRow) => void } = {},
+): Promise<string> {
   const resolved = await resolveTarget(req, getWorkshopApiSettingsSync().image);
   /* 有适配器：请求体按字段映射落统一输入 + 按 outputField 取结果；
    * 无适配器：OpenAI 兼容默认映射（含「未配置」时抛既有的可读错误）。 */
@@ -217,6 +290,7 @@ export async function generateImageViaApi(req: ApiImageRequest): Promise<string>
     outputField: resolved.adapter?.outputField,
     /* 模型级透传字段（#3626）：盖在请求体最后，覆盖默认映射/适配器输出同名键。 */
     extraBody: resolved.modelExtra ?? undefined,
+    debug: opts.debug,
   });
 }
 
@@ -278,45 +352,43 @@ async function resolveVideoTarget(
   if (!wantedModel) {
     return { adapter: null, target: fallbackTarget(channel), modelExtra: null };
   }
-  try {
-    const entries = await remoteModelRepository.list();
-    const entry = entries.find((r) => r.name === wantedModel && (r.baseUrl ?? "") !== "");
-    if (!entry) {
-      return { adapter: null, target: fallbackTarget(channel), modelExtra: null };
-    }
-    /* 端点是模型级配置（ISSUE #3622）：模型级路径配了就用它；没配时有适配器
-     * 按 Base URL 形态推导 videos/generations 惯例端点，无适配器保持既有回落
-     * （OpenAI 兼容惯例的 /videos，与 usage-test 的视频预设一致）。 */
-    const doc = await remoteModelRepository.getWorkshopAdaptersDoc(wantedModel);
-    const adapters = doc.adapters;
-    const wantedMode = upperToken(req.mode);
-    const [onlyAdapter] = adapters;
-    const adapter =
-      adapters.find((a) => a.mode === wantedMode) ??
-      (adapters.length === 1 ? (onlyAdapter ?? null) : null);
-    const base = (entry.baseUrl ?? "").replace(/\/+$/, "");
-    const endpoint =
-      doc.endpointPath === ""
-        ? adapter
-          ? resolveVideosGenerationsEndpoint(base)
-          : /* #3656：无适配器的既有回落（/videos）也走统一拼装，Base 缺版本段补 /v1 */
-            joinApiUrl(base, "/videos")
-        : joinApiUrl(base, doc.endpointPath);
-    return {
-      adapter,
-      target: { endpoint, apiKey: entry.apiKey ?? "", model: entry.name },
-      /* 模型级透传字段（#3626）：原样带上，由 callVideoSubmit 盖在提交体最后。 */
-      modelExtra: parseExtraBodyObject(entry.extraBody),
-    };
-  } catch {
-    // 表不可用（未迁移等）→ 回落通道设置
+  const conn = await resolveRemoteModelConnection(wantedModel);
+  if (conn.kind === "no-address") {
+    throw noAddressError(conn.name);
+  }
+  if (conn.kind === "unavailable") {
     return { adapter: null, target: fallbackTarget(channel), modelExtra: null };
   }
+  /* 端点是模型级配置（ISSUE #3622）：模型级路径配了就用它；没配时有适配器
+   * 按 Base URL 形态推导 videos/generations 惯例端点，无适配器保持既有回落
+   * （OpenAI 兼容惯例的 /videos，与 usage-test 的视频预设一致）。 */
+  const adapters = conn.doc.adapters;
+  const wantedMode = upperToken(req.mode);
+  const [onlyAdapter] = adapters;
+  const adapter =
+    adapters.find((a) => a.mode === wantedMode) ??
+    (adapters.length === 1 ? (onlyAdapter ?? null) : null);
+  const endpoint =
+    conn.doc.endpointPath === ""
+      ? adapter
+        ? resolveVideosGenerationsEndpoint(conn.base)
+        : /* #3656：无适配器的既有回落（/videos）也走统一拼装，Base 缺版本段补 /v1 */
+          joinApiUrl(conn.base, "/videos")
+      : joinApiUrl(conn.base, conn.doc.endpointPath);
+  return {
+    adapter,
+    target: { endpoint, apiKey: conn.apiKey, model: conn.name },
+    /* 模型级透传字段（#3626）：原样带上，由 callVideoSubmit 盖在提交体最后。 */
+    modelExtra: parseExtraBodyObject(conn.extraBody),
+  };
 }
 
 /* 把视频任务提交到配置好的端点：带 model 时按 remoteModel 条目直连（#3590），
  * 未带 model 的工坊镜头链路保持既有行为（全局通道设置）。 */
-export async function submitVideoViaApi(req: ApiVideoSubmitRequest): Promise<ApiVideoSubmitResult> {
+export async function submitVideoViaApi(
+  req: ApiVideoSubmitRequest,
+  opts: { debug?: (row: ApiCallDebugRow) => void } = {},
+): Promise<ApiVideoSubmitResult> {
   const resolved = await resolveVideoTarget(req, getWorkshopApiSettingsSync().video);
   return callVideoSubmit(req, getWorkshopApiSettingsSync().video, {
     readJson: readUpstreamJson,
@@ -327,6 +399,7 @@ export async function submitVideoViaApi(req: ApiVideoSubmitRequest): Promise<Api
     outputField: resolved.adapter?.outputField,
     /* 模型级透传字段（#3626）：盖在提交体最后，覆盖默认组装同名键。 */
     extraBody: resolved.modelExtra ?? undefined,
+    debug: opts.debug,
   });
 }
 
@@ -339,50 +412,40 @@ export async function submitVideoViaApi(req: ApiVideoSubmitRequest): Promise<Api
  * 其次按 Base URL 形态推导，最后既有回落 /videos。 */
 export async function pollVideoViaApi(
   remoteTaskId: string,
-  opts: { mode?: string; model?: string } = {},
+  opts: { debug?: (row: ApiCallDebugRow) => void; mode?: string; model?: string } = {},
 ): Promise<{ pending: boolean; url?: string }> {
   const channel = getWorkshopApiSettingsSync().video;
   const wantedModel = (opts.model ?? "").trim();
   if (wantedModel !== "") {
-    try {
-      const entries = await remoteModelRepository.list();
-      const entry = entries.find((r) => r.name === wantedModel && (r.baseUrl ?? "") !== "");
-      if (entry) {
-        const doc = await remoteModelRepository.getWorkshopAdaptersDoc(wantedModel);
-        const adapters = doc.adapters;
-        const wantedMode = upperToken(opts.mode);
-        const [onlyAdapter] = adapters;
-        const adapter =
-          adapters.find((a) => a.mode === wantedMode) ??
-          (adapters.length === 1 ? (onlyAdapter ?? null) : null);
-        const base = (entry.baseUrl ?? "").replace(/\/+$/, "");
-        /* 轮询候选的目录段从「动作路径」推导（buildVideoPollUrls 内部补版本段）：
-         * 显式路径存的是带版本段的完整路径（/v1/videos），先剥掉版本段再取目录，
-         * 否则 videoEndpointDir 会把 /v1 当成目录（#3656）。 */
-        const submitPath =
-          doc.endpointPath === ""
-            ? adapter
-              ? resolveVideosGenerationsEndpoint(base).slice(base.length)
-              : "/videos"
-            : doc.endpointPath.replace(/^\/v\d+/i, "");
-        const { rest, agnes } = buildVideoPollUrls(
-          entry.baseUrl ?? "",
-          submitPath,
-          wantedModel,
-          remoteTaskId,
-        );
-        return callVideoPoll(remoteTaskId, channel, {
-          readJson: readUpstreamJson,
-          pollUrls: [rest, ...(agnes === null ? [] : [agnes])],
-          targetOverride: { endpoint: rest, apiKey: entry.apiKey ?? "", model: wantedModel },
-        });
-      }
-    } catch {
-      // 表不可用 → 落到下面的通道设置路径
+    const conn = await resolveRemoteModelConnection(wantedModel);
+    if (conn.kind === "ok") {
+      const adapters = conn.doc.adapters;
+      const wantedMode = upperToken(opts.mode);
+      const [onlyAdapter] = adapters;
+      const adapter =
+        adapters.find((a) => a.mode === wantedMode) ??
+        (adapters.length === 1 ? (onlyAdapter ?? null) : null);
+      /* 轮询候选的目录段从「动作路径」推导（buildVideoPollUrls 内部补版本段）：
+       * 显式路径存的是带版本段的完整路径（/v1/videos），先剥掉版本段再取目录，
+       * 否则 videoEndpointDir 会把 /v1 当成目录（#3656）。 */
+      const submitPath =
+        conn.doc.endpointPath === ""
+          ? adapter
+            ? resolveVideosGenerationsEndpoint(conn.base).slice(conn.base.length)
+            : "/videos"
+          : conn.doc.endpointPath.replace(/^\/v\d+/i, "");
+      const { rest, agnes } = buildVideoPollUrls(conn.base, submitPath, wantedModel, remoteTaskId);
+      return callVideoPoll(remoteTaskId, channel, {
+        readJson: readUpstreamJson,
+        pollUrls: [rest, ...(agnes === null ? [] : [agnes])],
+        targetOverride: { endpoint: rest, apiKey: conn.apiKey, model: wantedModel },
+        debug: opts.debug,
+      });
     }
   }
   return callVideoPoll(remoteTaskId, channel, {
     readJson: readUpstreamJson,
+    debug: opts.debug,
   });
 }
 

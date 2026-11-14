@@ -9,7 +9,15 @@ import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+
+import { isRecord } from "~/lib/is-record";
+
 import { copyGateDeps } from "./helpers/gate-repo";
+
+/** 判据模块的消费形状守卫（B5 清账）：只取 maskNonCode 一件。 */
+function isMaskModule(value: unknown): value is { maskNonCode: (src: string) => string } {
+  return isRecord(value) && typeof value.maskNonCode === "function";
+}
 
 const SCRIPT = path.resolve(__dirname, "../scripts/check-test-concurrency.cjs");
 
@@ -35,9 +43,12 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
       }),
     };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as { stderr?: string; stdout?: string };
-    return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+    /* 失败形状按字段读（B5 清账）：两股输出缺省当空串。 */
+    const e: { stderr?: unknown; stdout?: unknown } =
+      typeof error === "object" && error !== null ? error : {};
+    const out = typeof e.stdout === "string" ? e.stdout : "";
+    const err = typeof e.stderr === "string" ? e.stderr : "";
+    return { ok: false, output: `${out}${err}` };
   }
 }
 
@@ -187,10 +198,12 @@ describe("字符串状态机：挖掉非代码区间（§11.19.4）", () => {
    * 而 eslint 禁止裸 `require()`。两者的语义在这里一样（跑一次就拿到导出），
    * 取 `createRequire` 是因为它**同步** —— 不必让一条纯函数用例变成 async。 */
   const requireCjs = createRequire(import.meta.url);
-  /* SAFETY: 类型断言已复核 */
-  const { maskNonCode } = requireCjs("../scripts/check-test-concurrency.cjs") as {
-    maskNonCode: (src: string) => string;
-  };
+  /* 消费形状守卫（B5 清账）：谓词收窄后解构，不再断言。 */
+  const maskModule: unknown = requireCjs("../scripts/check-test-concurrency.cjs");
+  if (!isMaskModule(maskModule)) {
+    throw new Error("check-test-concurrency.cjs 缺 maskNonCode —— 判据脚本形状变了");
+  }
+  const { maskNonCode } = maskModule;
 
   it("模板串的整体被挖掉（含里面的站点字样）", () => {
     const masked = maskNonCode('const F = `it.concurrent("x", () => {});`;\nconst G = 1;');

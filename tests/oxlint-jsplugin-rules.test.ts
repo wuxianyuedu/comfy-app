@@ -27,6 +27,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import rulerConfig from "../oxlint.config.ts";
 import oxlintConfig from "../oxlint.parity.config.mjs";
 
@@ -63,8 +65,40 @@ type ConfigBlock = {
   settings?: { react?: { version?: string } };
 };
 
-const PARITY = oxlintConfig as unknown as ConfigBlock;
-const RULER = rulerConfig as unknown as ConfigBlock;
+/** 两份配置的消费形状守卫（B5 清账）：jsPlugins / overrides 逐层对型。 */
+function isConfigBlock(value: unknown): value is ConfigBlock {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const pluginsOk =
+    value.jsPlugins === undefined ||
+    (isUnknownArray(value.jsPlugins) && value.jsPlugins.every((p) => isRecord(p)));
+  const overridesOk =
+    value.overrides === undefined ||
+    (isUnknownArray(value.overrides) && value.overrides.every(isConfigBlock));
+  return pluginsOk && overridesOk;
+}
+
+/** oxlint JSON 报告的 diagnostics 守卫（B5 清账）：filename / message 都可选串。 */
+function isDiagnostics(value: unknown): value is Array<{ filename?: string; message?: string }> {
+  return (
+    isUnknownArray(value) &&
+    value.every(
+      (d) =>
+        isRecord(d) &&
+        (d.filename === undefined || typeof d.filename === "string") &&
+        (d.message === undefined || typeof d.message === "string"),
+    )
+  );
+}
+
+const parityParsed: unknown = oxlintConfig;
+const rulerParsed: unknown = rulerConfig;
+if (!isConfigBlock(parityParsed) || !isConfigBlock(rulerParsed)) {
+  throw new Error("oxlint 两份配置的形状变了 —— 重读配置再改这份守卫");
+}
+const PARITY = parityParsed;
+const RULER = rulerParsed;
 
 function filesOf(block: ConfigBlock): Array<string> {
   const files = block.files;
@@ -88,7 +122,9 @@ function packageReactVersion(): string {
   return match.groups.version;
 }
 
-/** 在 `node_modules/.cache/` 写一份只含这 2 条规则的最小探针配置（跑完即删）。 */
+/** 在 `node_modules/.cache/` 写一份只含这 2 条规则的最小探针配置（跑完即删）。
+ *  这里只取 2 个别名是探针夹具的范围（§① 只考这两条规则）；
+ *  「两份配置同一组别名」的整组合同在 §② 单独对拍，别在这里复用。 */
 function writeProbeConfig(probePath: string): void {
   const plugins = PARITY.jsPlugins ?? [];
   const used = plugins.filter(
@@ -133,9 +169,12 @@ function runProbe(probeConfig: string, fixtures: Array<string>): Map<string, Arr
   );
   const out = r.stdout;
   expect(out, `oxlint 没输出 JSON：${r.stderr}`).toBeTruthy();
-  const report = JSON.parse(out) as {
-    diagnostics?: Array<{ filename?: string; message?: string }>;
-  };
+  const reportParsed: unknown = JSON.parse(out);
+  const diagnostics: unknown = isRecord(reportParsed) ? reportParsed.diagnostics : [];
+  if (!isDiagnostics(diagnostics)) {
+    throw new Error(`oxlint 的 JSON 报告形状变了：${out.slice(0, 200)}`);
+  }
+  const report = { diagnostics };
   const map = new Map<string, Array<string>>();
   for (const diag of report.diagnostics ?? []) {
     const name = path.basename(diag.filename ?? "");
@@ -199,15 +238,17 @@ describe("② 两份 oxlint 配置的清单逐字一致", () => {
     const parityBlock = tsBlockOf(PARITY);
     const rulerBlock = tsBlockOf(RULER);
 
-    const parityPlugins = (PARITY.jsPlugins ?? [])
-      .filter((plugin) => plugin.name === "react-js" || plugin.name === "nextjs-js")
-      .map((plugin) => [plugin.name, plugin.specifier]);
-    const rulerPlugins = (RULER.jsPlugins ?? [])
-      .filter((plugin) => plugin.name === "react-js" || plugin.name === "nextjs-js")
-      .map((plugin) => [plugin.name, plugin.specifier]);
+    // 文件头合同的「同一组 jsPlugin 别名」按**整组**逐字对拍（#3440）：
+    // 只挑 2 个别名比对，会漏掉判决面新增 / 评估尺缺失的别名
+    // （`unused-imports` 曾在判决面存在而评估尺缺失，被旧写法放过）。
+    const parityPlugins = (PARITY.jsPlugins ?? []).map((plugin) => [plugin.name, plugin.specifier]);
+    const rulerPlugins = (RULER.jsPlugins ?? []).map((plugin) => [plugin.name, plugin.specifier]);
     expect(parityPlugins).toEqual([
+      ["boundaries", "eslint-plugin-boundaries"],
+      ["eslint-js", "oxlint-plugin-eslint"],
       ["nextjs-js", "@next/eslint-plugin-next"],
       ["react-js", "eslint-plugin-react"],
+      ["unused-imports", "eslint-plugin-unused-imports"],
     ]);
     expect(rulerPlugins).toEqual(parityPlugins);
 
@@ -225,6 +266,10 @@ describe("② 两份 oxlint 配置的清单逐字一致", () => {
     expect(parityBlock.rules?.[DEPRECATED_RULE]).toBe("error");
     expect(rulerBlock.rules?.[LOCATION_RULE]).toBe("error");
     expect(rulerBlock.rules?.[DEPRECATED_RULE]).toBe("error");
+    // `unused-imports/no-unused-imports` 也两处同源（#3440 后续跟开）。
+    const UNUSED_IMPORTS_RULE = "unused-imports/no-unused-imports";
+    expect(parityBlock.rules?.[UNUSED_IMPORTS_RULE]).toBe("error");
+    expect(rulerBlock.rules?.[UNUSED_IMPORTS_RULE]).toBe("error");
 
     const expectedVersion = packageReactVersion();
     expect(PARITY.settings?.react?.version).toBe(expectedVersion);

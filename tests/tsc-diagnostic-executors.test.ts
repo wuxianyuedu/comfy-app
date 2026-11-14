@@ -9,17 +9,11 @@ import { expectActionableRefusal } from "./helpers/ratchet-refusal";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 const REAL_ROOT = process.cwd();
 const LEDGER = path.join(REAL_ROOT, "scripts", ".tsc-diagnostic-executors.json");
 const READERS = path.join(REAL_ROOT, "scripts", ".declaration-readers.json");
-
-/** 真台账的一份深拷贝（用例里改完必须还原的那份）。 */
-/* SAFETY: 类型断言已复核 */
-const REAL_LEDGER = JSON.parse(readFileSync(LEDGER, "utf8")) as Ledger;
-/* SAFETY: 类型断言已复核 */
-const REAL_READERS = JSON.parse(readFileSync(READERS, "utf8")) as {
-  carriers: Array<{ id: string; reader: string }>;
-};
 
 type Entry = {
   baseline: Record<string, number>;
@@ -36,6 +30,89 @@ type Entry = {
 type Ledger = {
   entries: Array<Entry>;
 };
+
+/** 台账条目的消费形状守卫（B5 清账）：逐字段对型，不再整段断言。 */
+function isEntry(value: unknown): value is Entry {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const executorOk =
+    isRecord(value.executor) &&
+    typeof value.executor.kind === "string" &&
+    (value.executor.label === undefined || typeof value.executor.label === "string") &&
+    (value.executor.test === undefined || typeof value.executor.test === "string");
+  const stringArrayOk = (v: unknown): v is Array<string> =>
+    isUnknownArray(v) && v.every((s) => typeof s === "string");
+  return (
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    typeof value.section === "string" &&
+    typeof value.reader === "string" &&
+    stringArrayOk(value.paths) &&
+    isRecord(value.baseline) &&
+    Object.values(value.baseline).every((n) => typeof n === "number") &&
+    executorOk &&
+    (value.markers === undefined || stringArrayOk(value.markers)) &&
+    (value.verifiedSurfaces === undefined || stringArrayOk(value.verifiedSurfaces))
+  );
+}
+
+/** 台账的消费形状守卫（B5 清档）。 */
+function isLedger(value: unknown): value is Ledger {
+  return isRecord(value) && isUnknownArray(value.entries) && value.entries.every(isEntry);
+}
+
+/** `--update` 落盘结果的消费形状守卫（B5 清账）：只取 entries[].baseline 这一面。 */
+function isBaselineLedger(value: unknown): value is {
+  entries: Array<{ baseline: Record<string, number> }>;
+} {
+  return (
+    isRecord(value) &&
+    isUnknownArray(value.entries) &&
+    value.entries.every(
+      (e) =>
+        isRecord(e) &&
+        isRecord(e.baseline) &&
+        Object.values(e.baseline).every((n) => typeof n === "number"),
+    )
+  );
+}
+
+/** 读回 `--update` 落盘的那份台账（形状不对当场炸，不再断言收型）。 */
+function readWrittenLedger(repo: GateRepo): {
+  entries: Array<{ baseline: Record<string, number> }>;
+} {
+  const parsed: unknown = JSON.parse(repo.read("scripts/.tsc-diagnostic-executors.json"));
+  if (!isBaselineLedger(parsed)) {
+    throw new Error("落盘的 .tsc-diagnostic-executors.json 形状变了 —— 重读脚本再改这份守卫");
+  }
+  return parsed;
+}
+
+/** 读者索引的消费形状守卫（B5 清账）。 */
+function isReaders(value: unknown): value is {
+  carriers: Array<{ id: string; reader: string }>;
+} {
+  return (
+    isRecord(value) &&
+    isUnknownArray(value.carriers) &&
+    value.carriers.every(
+      (c) => isRecord(c) && typeof c.id === "string" && typeof c.reader === "string",
+    )
+  );
+}
+
+/** 真台账的一份深拷贝（用例里改完必须还原的那份）。 */
+const realLedgerParsed: unknown = JSON.parse(readFileSync(LEDGER, "utf8"));
+if (!isLedger(realLedgerParsed)) {
+  throw new Error(".tsc-diagnostic-executors.json 形状变了 —— 重读脚本再改这份守卫");
+}
+const REAL_LEDGER = realLedgerParsed;
+const realReadersParsed: unknown = JSON.parse(readFileSync(READERS, "utf8"));
+if (!isReaders(realReadersParsed)) {
+  throw new Error(".declaration-readers.json 形状变了 —— 重读脚本再改这份守卫");
+}
+const REAL_READERS = realReadersParsed;
 
 const { test, expect } = defineGateRepo({
   script: "check-tsc-diagnostic-executors.cjs",
@@ -455,10 +532,7 @@ test("--update 收紧变短的基线 → 退 0 且真的写回台账", ({ repo }
   });
   const { code } = repo.run(["--update"]);
   expect(code).toBe(0);
-  /* SAFETY: 类型断言已复核 */
-  const written = JSON.parse(repo.read("scripts/.tsc-diagnostic-executors.json")) as {
-    entries: Array<{ baseline: Record<string, number> }>;
-  };
+  const written = readWrittenLedger(repo);
   expect(written.entries[0]!.baseline["scripts/check-type-assertion-executor.cjs"]).toBe(30);
 });
 
@@ -478,10 +552,7 @@ test("--update 遇到基线**上涨**时拒绝写入并退 2", ({ repo }) => {
   expect(code).toBe(2);
   expect(output).toContain("只许降不许升");
   /* 台账必须原样不动 —— 「顺手把上涨记进基线」正是零增量那一档的失效形态。 */
-  /* SAFETY: 类型断言已复核 */
-  const written = JSON.parse(repo.read("scripts/.tsc-diagnostic-executors.json")) as {
-    entries: Array<{ baseline: Record<string, number> }>;
-  };
+  const written = readWrittenLedger(repo);
   expect(written.entries[0]!.baseline["scripts/check-type-assertion-executor.cjs"]).toBe(57);
 });
 

@@ -10,6 +10,7 @@ import {
   derivedModeContract,
   modeContractSignature,
   type ModeContract,
+  type ModeContractCustomInput,
   type ModeContractCustomKind,
   type ModeContractInputType,
 } from "~/lib/workshop/model-mode-contract";
@@ -121,6 +122,68 @@ export const CUSTOM_INPUT_KINDS: ReadonlyArray<{
 /** 自定义口类型 → 展示名。 */
 export function customInputKindLabel(kind: ModeContractCustomKind): string {
   return CUSTOM_INPUT_KINDS.find((item) => item.kind === kind)?.label ?? kind;
+}
+
+/** 契约口的**类型说明**（ISSUE #3762：变量名悬停可见类型；ISSUE #3778：
+ *  类型一行、描述另起一行，类型值用英文 —— 与口 id 同一语言，不再中译一层的
+ *  「文本 / 数字」）。
+ *
+ *  `size` 是复合口，描述里展开它的两类等价组成（与编辑器「口径说明」同源，
+ *  不另抄一份规则）；自定义口的类型就是作者选的简单类型（kind 本身是英文词），
+ *  描述取该类型的常驻说明。返回**结构**而不是拼好的一整句：分两行渲染由视图
+ *  负责，这里只管内容。 */
+export function contractInputTypeInfo(
+  id: string,
+  customInputs: ReadonlyArray<ModeContractCustomInput>,
+): { description: string; type: string } {
+  const custom = customInputs.find((def) => def.id === id);
+  if (custom) {
+    return {
+      description:
+        CUSTOM_INPUT_KINDS.find((item) => item.kind === custom.kind)?.hint ?? "自定义参数",
+      type: custom.kind,
+    };
+  }
+  switch (id) {
+    case "prompt": {
+      return { description: "生成内容的描述", type: "text" };
+    }
+    case "negative": {
+      return { description: "不想出现的内容，可留空", type: "text" };
+    }
+    case "size": {
+      return {
+        description:
+          "两类等价写法任选：比例 + 分辨率（1k/2k/4k），" +
+          "或 比例 + 百万像素（1M/2M/4M）+ 倍数（8/16/32/64）；选分辨率时按场景尺寸表换算",
+        type: "size",
+      };
+    }
+    case "seed": {
+      return { description: "抽卡种子，同一种子同一结果", type: "number" };
+    }
+    case "duration": {
+      return { description: "视频时长（秒）", type: "number" };
+    }
+    case "lora-name": {
+      return { description: "角色 LoRA 名称", type: "text" };
+    }
+    case "lora-strength": {
+      return { description: "LoRA 强度（0~1）", type: "number" };
+    }
+    case "reference-image": {
+      return { description: "参考图（可多个，按序号槽追加）", type: "image" };
+    }
+    case "first-frame": {
+      return { description: "视频首帧", type: "image" };
+    }
+    case "last-frame": {
+      return { description: "视频尾帧", type: "image" };
+    }
+    default: {
+      return { description: "统一输入口", type: "" };
+    }
+  }
 }
 
 /** **全部预制口** + 「本契约是否已经用了它」—— 「浏览全部参数」用。

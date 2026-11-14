@@ -5,6 +5,7 @@ import { Activity, Copy, FileText, FolderOpen, X } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { displayValue } from "~/lib/display-value";
 import { isTerminalTaskStatus, taskStatusLabel } from "~/lib/task-state";
 import { timeAgo } from "~/lib/time-format";
@@ -72,15 +73,17 @@ export function QueueRowLine({
       <span className="text-ink-faint w-16 shrink-0 text-xs tabular-nums">
         {leading ?? displayValue(ago, { fallback: "时间未知" })}
       </span>
-      <span className="text-ink min-w-0 flex-1 basis-40 truncate text-sm">
+      <TruncatedText className="text-ink min-w-0 flex-1 basis-40 truncate text-sm">
         {displayValue(row.workflowName)}
-      </span>
-      <span className="text-ink-fainter min-w-0 basis-40 truncate text-xs sm:flex-1">
+      </TruncatedText>
+      <TruncatedText className="text-ink-fainter min-w-0 basis-40 truncate text-xs sm:flex-1">
         {displayValue(row.prompt)}
-      </span>
+      </TruncatedText>
       {terminal ? <StatusBadge label={taskStatusLabel(row.status)} status={row.status} /> : null}
       {row.error !== null && row.error !== "" ? (
-        <span className="text-danger-strong min-w-0 basis-full truncate text-xs">{row.error}</span>
+        <TruncatedText className="text-danger-strong min-w-0 basis-full truncate text-xs">
+          {row.error}
+        </TruncatedText>
       ) : null}
       <span className="flex shrink-0 items-center gap-1">
         <Button

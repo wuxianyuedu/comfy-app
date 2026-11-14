@@ -11,12 +11,14 @@ import {
   type ModeContract,
 } from "~/lib/workshop/model-mode-contract";
 import {
+  contractInputTypeInfo,
   contractModeLabel,
   customInputKindLabel,
   isModeContractCustomized,
 } from "../mode-contract-config";
 import type { ModeContractEditorController } from "../hooks/use-mode-contract-editor";
 import { Button } from "~/components/ui/button";
+import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Disclosure } from "~/components/ui/disclosure";
 import { FieldLabel } from "~/components/ui/field";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -77,6 +79,7 @@ export function ModeContractEditorView({
             storedCustomized={(code) =>
               isModeContractCustomized(code, stored, controller.configured)
             }
+            unsavedMode={controller.dirty ? mode : null}
           />
         </nav>
 
@@ -91,6 +94,54 @@ export function ModeContractEditorView({
           )}
         </div>
       </div>
+
+      {/* 切换确认（ISSUE #3762）：有未保存草稿时点左栏其他模式，先问「要不要保存」。
+          三向出口：保存并切换 / 丢弃草稿直接切 / 留下继续编辑。 */}
+      <Dialog
+        onOpenChange={(next) => {
+          if (!next) controller.cancelSwitch();
+        }}
+        open={controller.pendingMode !== null}
+      >
+        <DialogContent
+          aria-label="未保存的修改"
+          className="bg-transparent p-0 ring-0"
+          popupClassName="max-w-md"
+          showCloseButton={false}
+        >
+          <div className="border-border-strong bg-panel w-full max-w-md rounded-2xl border p-5 shadow-2xl shadow-black/20 dark:shadow-black/50">
+            <h3 className="text-ink-bright text-base font-semibold">
+              「{contractModeLabel(controller.mode ?? "")}」有未保存的修改
+            </h3>
+            <p className="text-ink-soft mt-2 text-xs leading-relaxed">
+              切换到「{contractModeLabel(controller.pendingMode ?? "")}」前，要保存当前这份草稿吗？
+            </p>
+            <div className="mt-4 flex flex-col gap-2">
+              <Button
+                className="h-auto py-2"
+                disabled={controller.saving}
+                onClick={() => {
+                  void controller.confirmSwitch();
+                }}
+                variant="primary-solid"
+              >
+                {controller.saving ? "保存中…" : "保存并切换"}
+              </Button>
+              <Button
+                className="h-auto py-2"
+                disabled={controller.saving}
+                onClick={controller.discardSwitch}
+                variant="outline"
+              >
+                不保存，直接切换
+              </Button>
+              <Button className="h-auto py-2" onClick={controller.cancelSwitch} variant="ghost">
+                留在此模式
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -265,7 +316,8 @@ function ModeContractDraftPanel({
   );
 }
 
-/** 输入口清单里的一行：序号 + 名称 + 调序 / 必备 / 移除。 */
+/** 输入口清单里的一行：序号 + 名称（悬停给类型，`size` 展开到组成，ISSUE #3762）
+ *  + 调序 / 必备 / 移除。 */
 function ContractInputRow({
   controller,
   draft,
@@ -279,18 +331,31 @@ function ContractInputRow({
 }) {
   const label = modeContractInputIdLabel(input, draft.customInputs);
   const kind = customInputKindOf(input);
+  const typeInfo = contractInputTypeInfo(input, draft.customInputs ?? []);
 
   return (
     <div className="border-border bg-bg flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
-      <span className="text-ink min-w-0 text-sm">
-        <span className="text-muted-foreground mr-1 tabular-nums">{index + 1}.</span>
-        <LabelWithId id={input} label={label} />
-        {kind && (
-          <span className="text-muted-foreground bg-subtle border-border-strong text-2xs ml-2 rounded border px-1.5 py-0.5">
-            {customInputKindLabel(kind)}
+      {/* 类型与描述分两行（ISSUE #3778）：类型值用英文（与口 id 同一语言），
+          描述另起一行；无类型信息（未知口）时只给描述一行。 */}
+      <Hint
+        label={
+          <span>
+            {typeInfo.type !== "" && <span className="block">类型：{typeInfo.type}</span>}
+            <span className="block">{typeInfo.description}</span>
           </span>
-        )}
-      </span>
+        }
+        wrap
+      >
+        <span className="text-ink min-w-0 cursor-help text-sm">
+          <span className="text-muted-foreground mr-1 tabular-nums">{index + 1}.</span>
+          <LabelWithId id={input} label={label} />
+          {kind && (
+            <span className="text-muted-foreground bg-subtle border-border-strong text-2xs ml-2 rounded border px-1.5 py-0.5">
+              {customInputKindLabel(kind)}
+            </span>
+          )}
+        </span>
+      </Hint>
       <span className="flex shrink-0 items-center gap-1.5">
         {/* 顺序**就是**工坊对外的参数顺序（序号即数组下标），
             所以调序改的是契约本身，不是界面偏好。 */}

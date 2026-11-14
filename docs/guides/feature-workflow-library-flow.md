@@ -269,6 +269,7 @@ flowchart LR
 | 判据 | 实现 |
 | --- | --- |
 | 为什么单独一个页签 | 只想改一个参数的显隐 / 默认值时不必进全屏编辑器（ISSUE #3632）；编辑器 IO 预览仍在画布右侧 |
+| 模式行与编辑器什么关系 | **同一形式**（ISSUE #3800）：读工作流**真实** modes（不做 `[taskType]` 兜底——兜底会为没配模式的行造假模式，表单与编辑器的「还没有配置模式」对不上）；页签右侧挂「选择模式」（MultiModeSelect）就地增删模式，落库走 `patchModes`；没配模式时与编辑器同句提示，不渲染参数表单 |
 | 显示源与落库底稿为什么分开 | 富化链补的 label / type / defaultValue 是派生结果，整列写回会把图内读出的值固化进库；编辑只改原始列上的身份字段与 modeOverrides |
 | 两处编辑规则怎么不漂移 | 编辑器 store 动作与库端页签都调用 `src/lib/workflow/workflow-io-edit.ts` 的纯变换（withModeOverride / clearModeOverrides / withIOLabel） |
 | 模式覆盖层 | 与「类型」同一份 modes；按模式写 `modeOverrides[mode]`，「恢复默认」清该模式全部覆盖 |

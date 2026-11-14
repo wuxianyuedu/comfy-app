@@ -279,6 +279,16 @@ export function sidebarNavItems(): Array<NavItem> {
   return globalNavItems().filter((item) => item.sidebarHidden !== true);
 }
 
+/**
+ * 侧栏常驻项的视图 id 集合（`sidebarNavItems()`）。
+ *
+ * 顶部视图页签条不再渲染这些页签（ISSUE #3740 的后续反馈）：它们在侧栏里恒在、可以切换与关闭，
+ * 页签条再列一遍只贡献占宽。设置 / UI 控件总览等瞬时页签与项目类页签仍照常进页签条。
+ */
+export function sidebarPinnedViewIds(): ReadonlySet<WorkspaceView> {
+  return new Set(sidebarNavItems().map((item) => item.id));
+}
+
 /** 首页视图 id —— 固定页签，恒在、不可关（`workspace-tabs.ts` 的 `HOME_VIEW` 同值）。 */
 const FIXED_HOME_VIEW: WorkspaceView = "home";
 

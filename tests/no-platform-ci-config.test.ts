@@ -346,6 +346,9 @@ const PR_GATE_YML = ".github/workflows/pr-gate.yml" as const;
  *   · `安装依赖`（3 个 job）与 `安装依赖（allowBuilds 清单见 pnpm-workspace.yaml）`
  *     （1 个 job）—— **每个 job 自己装一次**的前提设施：装不上 ⇒ 那个 job 红，
  *     读数已经在账上（daily 段那一条 `安装依赖（…）` 是**整跑一次**的安装 ⇒ 是门格）。
+ *   · `Storybook 开发期资源（postinstall 不重跑时现生成）` —— test-gates 的前提补齐（#3748）：
+ *     缓存命中时 pnpm 不重跑 postinstall ⇒ 这三张 svg 不存在；它补生成、恒不承重，
+ *     缺了由后面那两格用例自己红。
  *   · `失败时上传诊断产物` —— `if: failure()` 的诊断动作，恒不判红。
  *   · `把结论送回 CNB` / `把 GA 判红日志正文搬到 CNB` —— **判决的运输腿**
  *     （`continue-on-error: true`，不承重；承重退码在 CNB 侧的 `GA 回调结论回读`，
@@ -359,8 +362,10 @@ const GA_PR_INFRA_STEPS: ReadonlyArray<string> = [
   "装 Node（engines 下限 26.12.1；脚本只吃 node:*）",
   "装 Tauri 的 Linux 系统依赖（壳门禁要在本机编 Tauri）",
   "cargo 缓存",
+  "恢复 node_modules 缓存（灰度）",
   "安装依赖",
   "安装依赖（allowBuilds 清单见 pnpm-workspace.yaml）",
+  "Storybook 开发期资源（postinstall 不重跑时现生成）",
   "失败时上传诊断产物",
   "把结论送回 CNB",
   "把 GA 判红日志正文搬到 CNB",
@@ -2629,8 +2634,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       (m) => m.groups?.name ?? "",
     );
     const stray = used.filter(
-      /* SAFETY: 类型断言已复核 */
-      (name) => !LOCK_KEY_ALLOWED_VARS.includes(name as never),
+      /* 成员判断改 some + 等值（B5 清账）：不再为 includes 的参数型断言收窄。 */
+      (name) => !LOCK_KEY_ALLOWED_VARS.some((allowed) => allowed === name),
     );
     expect(
       stray,

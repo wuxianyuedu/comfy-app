@@ -12,7 +12,6 @@ import { useLogCategoryStore } from "~/components/studio/logs/log-category-store
 import { ORIGIN_TEXT } from "~/components/studio/logs/LogPanelOriginSelect";
 
 import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
-import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 
 /** 给每个分类一句简短说明，帮用户判断「这是不是我想关的那一类」。 */
 const CATEGORY_HINT: Record<LogCategoryFilter, string> = {
@@ -30,7 +29,7 @@ export function LogCategorySection() {
   const setEnabled = useLogCategoryStore((s) => s.setEnabled);
 
   return (
-    <SettingsCard titleExtra={<DataLocationBadge id="log-categories" />}>
+    <SettingsCard>
       <p className="text-muted-foreground mb-4 text-xs leading-relaxed">
         关闭某一类，它的日志就
         <strong className="text-ink/80">不在日志面板里显示</strong>

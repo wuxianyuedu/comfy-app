@@ -22,6 +22,7 @@ import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { Switch } from "~/components/ui/switch";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import {
   LLM_API_FORMAT_SHORT_LABELS,
   MODEL_INPUT_TYPE_LABELS,
@@ -74,7 +75,7 @@ export function ProviderModelRow({
         />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="text-ink truncate text-sm">{model.name}</span>
+            <TruncatedText className="text-ink truncate text-sm">{model.name}</TruncatedText>
             <Badge size="xs" tone="neutral">
               {REMOTE_MODEL_KIND_LABELS[kind]}
             </Badge>

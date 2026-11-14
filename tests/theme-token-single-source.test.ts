@@ -170,8 +170,8 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
     const stray = [...declared].filter(
       (n) =>
         !KNOWN_PREFIXES.some((p) => n.startsWith(p)) &&
-        /* SAFETY: 类型断言已复核 */
-        !ALIASES.includes(n as (typeof ALIASES)[number]) &&
+        /* 成员判断改 some + 等值（B5 清账）：不再为 includes 的参数型断言收窄。 */
+        !ALIASES.some((alias) => alias === n) &&
         !Object.keys(LITERAL_ALLOWED).includes(n),
     );
     expect(

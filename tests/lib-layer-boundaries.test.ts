@@ -6,38 +6,46 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
+
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import oxlintConfig from "@/../oxlint.parity.config.mjs";
 
 type ElementDef = { pattern: string; type: string };
-type Policy = {
-  disallow?: { to?: { element?: { type?: string } } };
-  from?: { element?: { type?: string } };
-};
+
+/** 元素声明的消费形状守卫（B5 清账）：pattern / type 都是串。 */
+function isElementDef(value: unknown): value is ElementDef {
+  return isRecord(value) && typeof value.pattern === "string" && typeof value.type === "string";
+}
 
 /**
  * 从 **oxlint 判决配置**里取出 boundaries 那一节（含 elements 声明与策略）。
  * #2777 PR-B 起 boundaries 的生效面在 oxlint（jsPlugin `boundaries`）；
  * #3157 起 eslint 已退役，判决面只有 oxlint。
+ * 配置按 unknown 读、形状由守卫现场答（B5 清账）：policies 的字段只有一处消费者，
+ * 就地逐层判，不再整段断言成类型。
  */
-function boundariesSection(): { elements: Array<ElementDef>; policies: Array<Policy> } {
-  /* SAFETY: 类型断言已复核 */
-  const config = oxlintConfig as unknown as {
-    overrides?: Array<{ rules?: Record<string, unknown> }>;
-    settings?: Record<string, unknown>;
-  };
-  /* SAFETY: 类型断言已复核 */
-  const elements = (config.settings?.["boundaries/elements"] ?? []) as Array<ElementDef>;
-  let rule: [string, { policies?: Array<Policy> }] | undefined;
-  for (const one of config.overrides ?? []) {
-    const candidate = one.rules?.["boundaries/dependencies"] as
-      | [string, { policies?: Array<Policy> }]
-      | undefined;
-    if (candidate) {
-      rule = candidate;
+function boundariesSection(): { elements: Array<ElementDef>; policies: Array<unknown> } {
+  const config: unknown = oxlintConfig;
+  const root = isRecord(config) ? config : {};
+  const settings = isRecord(root.settings) ? root.settings : {};
+  const elementsUnknown: unknown = settings["boundaries/elements"];
+  const elements = isUnknownArray(elementsUnknown) ? elementsUnknown.filter(isElementDef) : [];
+  let policies: Array<unknown> = [];
+  const overrides = isUnknownArray(root.overrides) ? root.overrides : [];
+  for (const one of overrides) {
+    const rules: unknown = isRecord(one) ? one.rules : undefined;
+    const candidate: unknown = isRecord(rules) ? rules["boundaries/dependencies"] : undefined;
+    /* 规则项是 [名, { policies }] 二元组；这里只取 policies 这一半。 */
+    if (isUnknownArray(candidate) && isRecord(candidate[1])) {
+      const rawPolicies: unknown = candidate[1].policies;
+      if (isUnknownArray(rawPolicies)) {
+        policies = rawPolicies;
+      }
     }
   }
-  expect(rule, "oxlint 判决配置里找不到 boundaries/dependencies").toBeTruthy();
-  return { elements, policies: rule?.[1]?.policies ?? [] };
+  expect(elements.length > 0, "oxlint 判决配置里缺 boundaries/elements 声明").toBe(true);
+  return { elements, policies };
 }
 
 describe("src/lib 的分层边界（规范 §18.3）", () => {
@@ -66,7 +74,15 @@ describe("src/lib 的分层边界（规范 §18.3）", () => {
   it("`lib` → `components` 被显式禁止（H1 依赖倒置）", () => {
     const { policies } = boundariesSection();
     const hasRule = policies.some(
-      (p) => p.from?.element?.type === "lib" && p.disallow?.to?.element?.type === "components",
+      (p) =>
+        isRecord(p) &&
+        isRecord(p.from) &&
+        isRecord(p.from.element) &&
+        p.from.element.type === "lib" &&
+        isRecord(p.disallow) &&
+        isRecord(p.disallow.to) &&
+        isRecord(p.disallow.to.element) &&
+        p.disallow.to.element.type === "components",
     );
     expect(hasRule, "缺少 lib → components 的 disallow 策略").toBe(true);
   });

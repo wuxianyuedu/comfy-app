@@ -615,3 +615,45 @@ export function adapterInputsFromContract(
   }
   return out;
 }
+
+/** 契约口 → **按契约口分组**的输入行（ISSUE #3778：测试页的统一输入改按契约渲染）。
+ *
+ *  与 `adapterInputsFromContract` 的分工：那份拍平成适配器行（丢掉「来自哪个
+ *  契约口」），这份保留归属 —— 调用方要按契约口标「必备 / 可选」、按契约口的
+ *  顺序展示、并给复合口（size）整体渲染一个控件而不是三行离散输入。展开表
+ *  仍是 `CONTRACT_INPUT_TO_ADAPTER` 这一份（TS 强制穷尽），这里不另抄映射。
+ *
+ *  带序号参考图（第 2 张起）与自定义口 `types` 为空：远端 API 通道没有对应的
+ *  输入类型（第 1 张参考图映射到 `image`，其余通道不承接），由调用方按
+ *  「未承接」渲染 —— 显式标出来，不静默丢弃。 */
+export type ContractInputEntry = {
+  /** 契约口 id（原样带出；必备判断与展示名都按它查）。 */
+  id: ModeContractInputId;
+  /** 该口是否必备（`requiredInputsFor` 的生效集，含缺省回落内置默认）。 */
+  required: boolean;
+  /** 适配器层的输入类型行（预制口按展开表；空数组 = 通道无对应类型）。 */
+  types: Array<WorkshopInputType>;
+};
+
+export function expandContractInputs(contract: {
+  inputs: ReadonlyArray<string>;
+  required?: ReadonlyArray<string>;
+}): Array<ContractInputEntry> {
+  const requiredSet = new Set<string>(requiredInputsFor(contract));
+  const out: Array<ContractInputEntry> = [];
+  for (const id of contract.inputs) {
+    /* 非契约口 id（脏数据）跳过：下游读不出标签与类型，留着只会渲染出
+     * 一行没有名字的口。归一化链路本就丢这类 id，这里同口径。 */
+    if (!isModeContractInputId(id)) {
+      continue;
+    }
+    out.push({
+      id,
+      required: requiredSet.has(id),
+      types: isModeContractInputType(id)
+        ? CONTRACT_INPUT_TO_ADAPTER[id].map((row) => row.type)
+        : [],
+    });
+  }
+  return out;
+}

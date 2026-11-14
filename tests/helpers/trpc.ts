@@ -7,6 +7,9 @@
 import type { SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
 import type * as schema from "~/server/db/schema";
 import type { TRPCUser } from "~/server/api/trpc";
+
+import { isRecord } from "~/lib/is-record";
+
 import { getTestDb } from "./test-db";
 
 /** 与 `createTRPCContext` 返回形状一致的 db 类型（Drizzle sqlite-proxy 实例）。
@@ -35,7 +38,9 @@ export function makeCtx(opts: { user?: TRPCUser | null } = {}): {
 } {
   const user = opts.user === undefined ? makeUser() : opts.user;
   return {
-    /* SAFETY: 类型断言已复核 */
+    /* test-db 的 TestDb 没有 $client（那是 ~/server/db 侧的句柄出口形状），两边差异是
+       既定事实、ctx 只消费 db 的 Drizzle 面 —— 就地豁免这一格（B5 清账：文件级豁免收到行级）。 */
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     db: getTestDb() as unknown as TestDb,
     session: null,
     user,
@@ -55,13 +60,12 @@ export async function errorEnvelope(promise: Promise<unknown>): Promise<{
   return promise.then(
     () => ({ code: "OK", message: "" }),
     (error: unknown) => {
-      /* SAFETY: 类型断言已复核 */
-      const err = error as { code?: unknown; message?: unknown } | null;
-      // 逐维按类型收窄：拿 `String(unknown)` 兜底会在错误对象上打出
-      // `[object Object]`，那等于把「码不对」这一维又判回成看运气。
+      /* 失败形状按字段读（B5 清账）：逐维按类型收窄。拿 `String(unknown)` 兜底会在
+         错误对象上打出 `[object Object]`，那等于把「码不对」这一维又判回成看运气。 */
+      const err = isRecord(error) ? error : {};
       return {
-        code: typeof err?.code === "string" ? err.code : "UNKNOWN",
-        message: typeof err?.message === "string" ? err.message : "",
+        code: typeof err.code === "string" ? err.code : "UNKNOWN",
+        message: typeof err.message === "string" ? err.message : "",
       };
     },
   );

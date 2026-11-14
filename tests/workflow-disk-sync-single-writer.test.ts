@@ -27,7 +27,9 @@ vi.mock("~/lib/app-settings/app-settings.server", async (importOriginal) => {
   const mod = await importOriginal<typeof AppSettingsModule>();
   return {
     ...mod,
-    /* SAFETY: 类型断言已复核 */
+    /* 桩只回本用例关心的那一格（autoSyncLocalWorkflow），不是完整设置面 —— 故意不满型。
+       类型层不让直说，就地豁免这一格（B5 清账：文件级豁免收到行级）。 */
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     getSettingsSync: getSettingsMock as unknown as typeof mod.getSettingsSync,
   };
 });

@@ -10,6 +10,7 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from "~/components/u
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
 import { PageHeader } from "~/components/ui/page-header";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { displayValue } from "~/lib/display-value";
@@ -128,10 +129,12 @@ export function QueueMonitorView({
             {running ? (
               <article className="bg-card border-border rounded-2xl border p-4">
                 <div className="flex flex-wrap items-center gap-3">
-                  <h3 className="text-ink-bright min-w-0 flex-1 truncate text-sm font-semibold">
-                    {displayValue(running.workflowName, {
-                      fallback: "（未知工作流）",
-                    })}
+                  <h3 className="text-ink-bright min-w-0 flex-1 text-sm font-semibold">
+                    <TruncatedText className="block truncate">
+                      {displayValue(running.workflowName, {
+                        fallback: "（未知工作流）",
+                      })}
+                    </TruncatedText>
                   </h3>
                   <StatusBadge label={taskStatusLabel("RUNNING")} status="RUNNING" />
                 </div>
@@ -177,10 +180,12 @@ export function QueueMonitorView({
                 {offlineRunning.map((row) => (
                   <li className="bg-card border-border rounded-2xl border p-4" key={row.id}>
                     <div className="flex flex-wrap items-center gap-3">
-                      <h3 className="text-ink-bright min-w-0 flex-1 truncate text-sm font-semibold">
-                        {displayValue(row.workflowName, {
-                          fallback: "（未知工作流）",
-                        })}
+                      <h3 className="text-ink-bright min-w-0 flex-1 text-sm font-semibold">
+                        <TruncatedText className="block truncate">
+                          {displayValue(row.workflowName, {
+                            fallback: "（未知工作流）",
+                          })}
+                        </TruncatedText>
                       </h3>
                       <StatusBadge label={taskStatusLabel("RUNNING")} status="RUNNING" />
                     </div>

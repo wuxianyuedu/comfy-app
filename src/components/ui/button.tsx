@@ -11,7 +11,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/80",
+        default:
+          "bg-primary text-primary-foreground hover:bg-primary/80 dark:bg-primary-600 dark:hover:bg-primary-hover",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
@@ -34,11 +35,11 @@ const buttonVariants = cva(
         /* 实心档：视图里的「主行动按钮」还有 `bg-<色>-500/90 text-white`，不属于软底形态，故各出一支 -solid。
            P1 第一批只出品牌/危险/成功（实测仅这三色有实心用法）；设置页批次补 `warning-solid`（「继续等待视频生成」实心琥珀，兼「进行中」与「需用户动手」两种语义，软底不足以表达）。 */
         "primary-solid":
-          "bg-primary-500 text-primary-foreground hover:bg-primary-600 focus-visible:border-primary-600 focus-visible:ring-primary-500/40",
+          "bg-primary-500 text-primary-foreground hover:bg-primary-600 focus-visible:border-primary-600 focus-visible:ring-primary-500/40 dark:bg-primary-600 dark:hover:bg-primary-hover",
         "danger-solid":
           "bg-destructive text-primary-foreground hover:bg-destructive/90 focus-visible:border-destructive focus-visible:ring-destructive/30",
         "success-solid":
-          "bg-success text-primary-foreground hover:bg-success/90 focus-visible:border-success focus-visible:ring-success/30",
+          "bg-success text-on-success hover:bg-success/90 focus-visible:border-success focus-visible:ring-success/30",
         "warning-solid":
           "bg-warning-strong text-primary-foreground hover:bg-warning-strong/90 focus-visible:border-warning-strong focus-visible:ring-warning/30",
         link: "text-primary underline-offset-4 hover:underline",

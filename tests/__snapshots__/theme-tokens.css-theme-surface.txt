@@ -70,7 +70,9 @@
 --color-node-accent
 --color-node-mix-base
 --color-note-tint-base
+--color-on-accent-soft
 --color-on-brand
+--color-on-success
 --color-overlay-accent-surface
 --color-panel
 --color-panel-deep

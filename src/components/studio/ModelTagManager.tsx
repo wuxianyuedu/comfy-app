@@ -8,6 +8,7 @@ import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 
 import { useModelTags, type TagItem } from "./hooks/use-model-tags";
 
@@ -92,6 +93,11 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
             ，可跨多个工作流复用。 在这里新增/删除后，即可在工作流卡片上「＋
             标签」绑定，并在上方按模型筛选。
           </p>
+
+          {/* 模型标签库的数据存放位置（ISSUE #3759）：与工作流库列表同款徽标。 */}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <DataLocationBadge id="model-tag-library" />
+          </div>
 
           <div className="mb-4 flex gap-2">
             <input
