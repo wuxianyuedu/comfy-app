@@ -135,11 +135,13 @@ export async function composeFilm(id: string) {
   if (!film) {
     return;
   }
-  if (film.status === "COMPOSING" || film.status === "DONE") {
+  /* 条件抢占（ISSUE #3836）：双击「重新合成」此前会双双通过读态判断，
+   * 两个 ffmpeg 同时写同一个临时目录与最终 mp4。改成单语句条件写：
+   * 抢不到（已在 COMPOSING/DONE）就让位。 */
+  const claimed = await filmRepository.claimComposing(id);
+  if (!claimed) {
     return;
   }
-
-  await filmRepository.markComposing(id);
   await appendFilmLog(id, "info", "所有镜头完成，开始合成影片…");
 
   const ok = await isFFmpegAvailable();

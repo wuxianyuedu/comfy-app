@@ -8,7 +8,7 @@ import { db } from "~/lib/db";
 import { filmProject, filmShot, type FilmProject } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
 import { tailWindow } from "~/lib/page-window";
-import { eq, and, desc, asc, inArray, isNotNull, count } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, isNotNull, notInArray, count } from "drizzle-orm";
 import { firstRowRequired } from "./repository-row";
 
 /** 单个成片任务的日志行数上限：`logs` 是 JSON 列，每打一条日志都要把整个
@@ -179,6 +179,33 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
       .update(filmProject)
       .set({ status: "COMPOSING", progress: 90, error: null })
       .where(eq(filmProject.id, id));
+  }
+
+  /**
+   * 条件置位 GENERATING（ISSUE #3836）：仅当影片不在 GENERATING/COMPOSING 时才写入，
+   * 返回是否抢到。startFilm 原先「先读 status → 判断 → 无条件 markGenerating」，
+   * 双击/并发会在窗口内双双通过，给每个镜头排两批视频任务 —— 把判断与置位收进
+   * 同一条 UPDATE（SQLite 单写者下原子），抢不到（0 行更新）即让位。
+   */
+  async claimGenerating(id: string): Promise<boolean> {
+    const rows = await db
+      .update(filmProject)
+      .set({ status: "GENERATING", progress: 0, error: null })
+      .where(
+        and(eq(filmProject.id, id), notInArray(filmProject.status, ["GENERATING", "COMPOSING"])),
+      )
+      .returning({ id: filmProject.id });
+    return rows.length > 0;
+  }
+
+  /** 同 {@link claimGenerating}，合成侧：仅当不在 COMPOSING/DONE 时写成 COMPOSING。 */
+  async claimComposing(id: string): Promise<boolean> {
+    const rows = await db
+      .update(filmProject)
+      .set({ status: "COMPOSING", progress: 90, error: null })
+      .where(and(eq(filmProject.id, id), notInArray(filmProject.status, ["COMPOSING", "DONE"])))
+      .returning({ id: filmProject.id });
+    return rows.length > 0;
   }
 
   async markDone(id: string, finalVideo: string): Promise<void> {

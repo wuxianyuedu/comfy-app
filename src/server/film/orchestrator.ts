@@ -407,16 +407,20 @@ export async function startFilm(id: string) {
   if (!film) {
     throw new Error("影片不存在");
   }
-  if (film.status === "GENERATING" || film.status === "COMPOSING") {
-    return;
-  }
 
   const shots = await filmShotRepository.listByFilm(id, { status: "IDLE" });
   if (!shots.length) {
     throw new Error("没有可生成的镜头，请重新创建");
   }
 
-  await filmRepository.markGenerating(id);
+  /* 条件抢占（ISSUE #3836）：原先「读 status → 判断 → 无条件 markGenerating」
+   * 在双击 / 并发下会双双通过，给每个镜头排两批视频任务（重复算力）。改成
+   * 单语句条件写：抢不到（已在 GENERATING/COMPOSING）就直接让位。 */
+  const claimed = await filmRepository.claimGenerating(id);
+  if (!claimed) {
+    return;
+  }
+
   await appendFilmLog(id, "info", `开始逐镜生成（共 ${shots.length} 镜）`);
 
   for (const shot of shots) {

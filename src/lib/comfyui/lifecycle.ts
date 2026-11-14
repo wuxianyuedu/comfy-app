@@ -656,12 +656,49 @@ export async function ensureComfyUiReady(
     return { ok: true, base: upBase, detail: "ComfyUI 已在运行" };
   }
 
-  // 单飞：并发调用共享同一次启动
+  // 单飞：并发调用共享同一次启动。
+  //
+  // 检查与占锁之间**不许有 await**（ISSUE #3831）：startOnce 里的进程级快照探测
+  // （getComfyRuntimeSnapshot）高负载时能到秒级，若照旧「先探测、后赋锁」，两个
+  // 并发调用会在探测处先后让出、读到的 st.starting 都是 undefined，双双通过单飞
+  // 检查并各自 spawn —— 两个 ComfyUI 竞争同一端口。所以这里只做检查；startOnce
+  // 的函数体同步执行到第一个 await 才让出，而赋锁紧跟在调用之后 —— 占锁先于
+  // 任何 await，窗口关闭。
   if (st.starting) {
     note("ComfyUI 正在启动中，等待就绪…");
     return st.starting;
   }
+  const starting = startOnce(opts, host, settings, note, upBase);
+  st.starting = starting;
+  /* 落锁挂在这一侧（不放进 startOnce 的 finally）：无 await 的 async 函数整体
+   * 同步执行，skip 判决那类「同步就返回」的路径，其 finally 会跑在调用方赋锁
+   * **之前** —— 清掉之后赋值又把已完结的 promise 按回锁位，锁从此无人释放
+   * （后续所有调用都拿到第一条的旧结果）。这里在赋值**之后**按 settlement 释放，
+   * 并带身份判据：只清自己这一把，不误伤后来者的新锁。 */
+  const release = () => {
+    if (st.starting === starting) {
+      st.starting = undefined;
+    }
+  };
+  starting.then(release, release);
+  return starting;
+}
 
+/**
+ * 单飞锁保护下的启动体（ISSUE #3831）：闩锁 / 判决 / 探测 / 拉起全部收在这里。
+ * 调用方（ensureComfyUiReady）在调用之后**同步**把返回的 promise 赋给
+ * `st.starting`，并在其 settlement 时释放 —— 本函数体到第一个 await（快照探测）
+ * 之前都是同步执行，所以占锁必然先于探测让出控制权。锁的取得与释放都归调用方：
+ * 无 await 的 async 函数整体同步执行，「函数自带 finally 清锁」会跑在调用方赋锁
+ * 之前，把锁清掉之后又被赋值按回锁位（实测卡死全部后续调用）。
+ */
+async function startOnce(
+  opts: { manual?: boolean; timeoutMs?: number | null },
+  host: LaunchHost,
+  settings: ReturnType<typeof getSettingsSync>,
+  note: (msg: string) => void,
+  upBase: string | null,
+): Promise<EnsureResult> {
   // 手动启动＝用户明确要求拉起：先清掉两把「自动路径先别动」闩锁，否则上次
   // 手动关闭 / 上次启动失败的小尾巴会把这次明确启动也拦住。
   if (opts.manual === true) {
@@ -741,7 +778,7 @@ export async function ensureComfyUiReady(
   if (existingRunning) {
     note("ComfyUI 进程已在运行但接口暂未响应，等待其就绪（不重复拉起）…");
   }
-  st.starting = existingRunning
+  const launch = existingRunning
     ? waitForExistingInstanceReady({
         host,
         settings,
@@ -755,24 +792,20 @@ export async function ensureComfyUiReady(
         note,
       });
 
-  try {
-    const r = await st.starting;
-    /* 自动启动失败后落闩锁：后续 WS 重连 / 状态轮询触发的自动启动不再重试，
-     * 直到用户手动启动或重新开启自动启动（ISSUE #335）。只对「明确失败」落锁
-     * （见 isTerminalAutoStartFailure）——「已经在运行」「未开启自动启动」这类
-     * 结果不该把后续重试永久钉死。手动启动自己不算自动启动，不落锁。 */
-    if (opts.manual !== true && !r.ok && isTerminalAutoStartFailure(r.detail)) {
-      st.autoStartFailed = true;
-      st.autoStartFailureDetail = r.detail;
-    }
-    /* 单飞锁**还没放开**时通知（写在 finally 之前）：收到通知的人会立刻重问
-     * 状态，而 `starting` 取的是那里的瞬时值 —— 锁放开之后再通知，那一问可能
-     * 刚好落在「锁没了、还没探到就绪」的空窗上（ISSUE #442 那条来回跳）。 */
-    noteComfyLaunchSettled(r.ok);
-    return r;
-  } finally {
-    st.starting = undefined;
+  const r = await launch;
+  /* 自动启动失败后落闩锁：后续 WS 重连 / 状态轮询触发的自动启动不再重试，
+   * 直到用户手动启动或重新开启自动启动（ISSUE #335）。只对「明确失败」落锁
+   * （见 isTerminalAutoStartFailure）——「已经在运行」「未开启自动启动」这类
+   * 结果不该把后续重试永久钉死。手动启动自己不算自动启动，不落锁。 */
+  if (opts.manual !== true && !r.ok && isTerminalAutoStartFailure(r.detail)) {
+    st.autoStartFailed = true;
+    st.autoStartFailureDetail = r.detail;
   }
+  /* 通知写在锁释放之前：收到通知的人会立刻重问状态，而 `starting` 取的是那里的
+   * 瞬时值 —— 锁放开之后再通知，那一问可能刚好落在「锁没了、还没探到就绪」的
+   * 空窗上（ISSUE #442 那条来回跳）。 */
+  noteComfyLaunchSettled(r.ok);
+  return r;
 }
 
 /**
