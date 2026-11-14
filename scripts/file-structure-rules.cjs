@@ -395,6 +395,13 @@ const DOMAIN_EXEMPT = new Set([
    * 串行执行，串行提交会在「落定 → 再提交」之间空转。与 `with-timeout` 同款：
    * 异步编排原语，进任何子域都会让其余消费方反向依赖它。顶层单例。 */
   "src/lib/async-pool.ts",
+  /* 进程内异步互斥（ISSUE #3832/#3833/#3836 审计地基）：「先读 → 判断 → 写」
+   * 的多语句序列在并发下互相覆盖 / 重复落行，SQLite 单写者只保证单条语句原子。
+   * 消费方横跨 `server/api/routers`（series-generation 批量入队）、`lib/core`
+   * （repository-film 日志追加）、`lib/app-settings`（设置保存，即将接入）——
+   * 进任何子域都会让其余消费方反向依赖它。与 `async-pool` / `with-timeout`
+   * 同款：异步编排原语，顶层单例。 */
+  "src/lib/async-mutex.ts",
 ]);
 
 /* R2 豁免:src/ 根下的 Next 约定文件。proxy.ts(Next 16 起取代 middleware.ts)

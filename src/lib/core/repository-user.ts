@@ -465,7 +465,9 @@ export class RemoteModelRepository {
    *  · 缺的名字插入为**停用**行（enabled=false），用途按名字推断（video/image
    *    关键词），窗口 / 能力留空由「智能配置」在编辑时补；
    *  · 同名行已挂在**别的供应商**下也跳过（name 全局唯一索引，撞了就跳）。
-   *  返回本次新插入的名字（空数组 = 没有新增）。 */
+   *  单语句 `onConflictDoNothing` + returning（ISSUE #3835）：注释自述「反复点
+   *  测试连接不能重复」—— 先查后插在并发点按下会同抢 `remoteModel_name_uniq`
+   *  让后到者 500；现在重复执行成功且无害，返回真正新插入的名字。 */
   async syncProviderCatalog(
     providerId: string,
     names: ReadonlyArray<string>,
@@ -474,30 +476,25 @@ export class RemoteModelRepository {
     if (cleaned.length === 0) {
       return [];
     }
-    const existing = await db
-      .select({ name: remoteModel.name })
-      .from(remoteModel)
-      .where(inArray(remoteModel.name, cleaned));
-    const known = new Set(existing.map((r) => r.name));
-    const toInsert = cleaned.filter((n) => !known.has(n));
-    if (toInsert.length === 0) {
-      return [];
-    }
-    await runWithSqliteBusyRetry(
+    const inserted = await runWithSqliteBusyRetry(
       () =>
-        db.insert(remoteModel).values(
-          toInsert.map((name) => ({
-            name,
-            providerId,
-            apiFormat: null,
-            kind: inferRemoteKindFromName(name),
-            enabled: false,
-            smartConfig: true,
-          })),
-        ),
+        db
+          .insert(remoteModel)
+          .values(
+            cleaned.map((name) => ({
+              name,
+              providerId,
+              apiFormat: null,
+              kind: inferRemoteKindFromName(name),
+              enabled: false,
+              smartConfig: true,
+            })),
+          )
+          .onConflictDoNothing()
+          .returning({ name: remoteModel.name }),
       { policy: SETTINGS_DB_WRITE },
     );
-    return toInsert;
+    return inserted.map((r) => r.name);
   }
 }
 

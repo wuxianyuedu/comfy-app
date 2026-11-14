@@ -11,7 +11,7 @@
 // 供 Next server 与纯 Node 的 Workshop MCP 两侧共用。
 
 import { createCipheriv, createDecipheriv, hash, randomBytes, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ALGO = "aes-256-gcm";
@@ -38,11 +38,18 @@ function loadOrCreateKey(): Buffer {
   // 项目根拉起，读同一文件即用同一密钥，加密 / 解密互通。文件不可用时再退回
   // 环境变量或进程内随机兜底。
   try {
-    if (!existsSync(KEY_FILE)) {
-      mkdirSync(join(process.cwd(), "data"), { recursive: true });
-      // 文件里放一个随机口令，由它派生 AES 密钥；不直接存密钥字节。
-      const fileKey = randomUUID().replaceAll("-", "") + randomBytes(16).toString("hex");
-      writeFileSync(KEY_FILE, fileKey, { encoding: "utf8", mode: 0o600 });
+    mkdirSync(join(process.cwd(), "data"), { recursive: true });
+    // 文件里放一个随机口令，由它派生 AES 密钥；不直接存密钥字节。
+    const fileKey = randomUUID().replaceAll("-", "") + randomBytes(16).toString("hex");
+    /* `wx` 独占创建（ISSUE #3836）：Next server 与 Workshop MCP 两进程首启同时
+     * 走到这里时，原先「existsSync → writeFileSync」会让双方各写一个随机密钥、
+     * 后写覆盖先写 —— 先写进程读走的密钥与盘上的不一致，加解密静默失败（表现
+     * 成「明明配了 key 却说未配置」）。独占创建保证只有一份落盘，后到者拿
+     * EEXIST 后与对方读同一个文件。 */
+    try {
+      writeFileSync(KEY_FILE, fileKey, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    } catch {
+      /* EEXIST = 对方先建好了：不视为故障，落回下面的统一读取。 */
     }
     cachedKey = deriveKey(readFileSync(KEY_FILE, "utf8").trim());
     return cachedKey;

@@ -8,8 +8,15 @@ import { db } from "~/lib/db";
 import { filmProject, filmShot, type FilmProject } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
 import { tailWindow } from "~/lib/page-window";
+import { KeyedAsyncMutex } from "~/lib/async-mutex";
 import { eq, and, desc, asc, inArray, isNotNull, notInArray, count } from "drizzle-orm";
 import { firstRowRequired } from "./repository-row";
+
+/** 影片日志追加的按片互斥（ISSUE #3836）：`logs` 是 JSON 列，追加是
+ * 「读整列 → push → 写回」三条语句，`watchFilm`（每 4s 打进度）与
+ * `composeFilm`（合成起止各打一条）并发时互相覆盖丢日志行。SQLite 单写者
+ * 只保证单条语句原子，这里把整段追加以影片为粒度串行化（都在本进程内）。 */
+const filmLogMutexes = new KeyedAsyncMutex();
 
 /** 单个成片任务的日志行数上限：`logs` 是 JSON 列，每打一条日志都要把整个
  *  数组读出来、再整列写回去 —— 无上限时这条路的成本随日志条数线性变贵
@@ -126,19 +133,21 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
       t: number;
     },
   ): Promise<void> {
-    const film = await db
-      .select({ logs: filmProject.logs })
-      .from(filmProject)
-      .where(eq(filmProject.id, id))
-      .limit(1);
-    const logs = film[0]?.logs;
-    const arr: Array<unknown> = isUnknownArray(logs) ? logs : [];
-    arr.push(entry);
-    await db
-      .update(filmProject)
-      .set({ logs: tailWindow(arr, LOGS_MAX) })
-      .where(eq(filmProject.id, id))
-      .catch(() => undefined);
+    await filmLogMutexes.run(id, async () => {
+      const film = await db
+        .select({ logs: filmProject.logs })
+        .from(filmProject)
+        .where(eq(filmProject.id, id))
+        .limit(1);
+      const logs = film[0]?.logs;
+      const arr: Array<unknown> = isUnknownArray(logs) ? logs : [];
+      arr.push(entry);
+      await db
+        .update(filmProject)
+        .set({ logs: tailWindow(arr, LOGS_MAX) })
+        .where(eq(filmProject.id, id))
+        .catch(() => undefined);
+    });
   }
 
   /** 按状态列出影片（进程重启后的恢复扫描用），`createdAt` 升序 = 先起先续。
