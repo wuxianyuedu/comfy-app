@@ -33,17 +33,20 @@ const stored = {
 function setup() {
   const onPatchWorkflowIO = vi.fn().mockResolvedValue(undefined);
   const onActiveModeChange = vi.fn();
+  const onModesChange = vi.fn();
   const view = render(
     <WorkflowLibraryIoPanel
       activeMode="t2i"
+      defaultMode="t2i"
       modes={["t2i", "i2v"]}
       onActiveModeChange={onActiveModeChange}
+      onModesChange={onModesChange}
       onPatchWorkflowIO={onPatchWorkflowIO}
       storedIO={stored}
       workflowIO={enriched}
     />,
   );
-  return { onPatchWorkflowIO, onActiveModeChange, view };
+  return { onPatchWorkflowIO, onActiveModeChange, onModesChange, view };
 }
 
 describe("工作流库 IO 预览页签（ISSUE #3632）", () => {
@@ -76,31 +79,61 @@ describe("工作流库 IO 预览页签（ISSUE #3632）", () => {
     expect(steps).not.toHaveProperty("defaultValue");
   });
 
-  it("没有模式时表单不渲染，并给出可行动提示", () => {
-    render(
-      <WorkflowLibraryIoPanel
-        activeMode={null}
-        modes={[]}
-        onActiveModeChange={vi.fn()}
-        onPatchWorkflowIO={vi.fn().mockResolvedValue(undefined)}
-        storedIO={stored}
-        workflowIO={enriched}
-      />,
-    );
-    expect(screen.getByText(/没有配置模式，参数配置暂不可用/)).toBeInTheDocument();
-  });
-
   it("还没有暴露任何 IO 时给出去编辑器勾选的提示", () => {
     render(
       <WorkflowLibraryIoPanel
         activeMode="t2i"
+        defaultMode="t2i"
         modes={["t2i"]}
         onActiveModeChange={vi.fn()}
+        onModesChange={vi.fn()}
         onPatchWorkflowIO={vi.fn().mockResolvedValue(undefined)}
         storedIO={{}}
         workflowIO={{}}
       />,
     );
     expect(screen.getByText(/还没有暴露任何 IO/)).toBeInTheDocument();
+  });
+});
+
+/* ISSUE #3800：IO 预览页签与编辑器 IO 面板同一形式 —— 模式数据用真实 modes
+ * （不做 [taskType] 兜底），没配模式时给编辑器同款提示，并就地给「选择模式」
+ * 入口（MultiModeSelect），不再指去已不存在的「类型」页签。 */
+describe("IO 预览页签与编辑器同形（ISSUE #3800）", () => {
+  it("模式行右侧挂「选择模式」就地管理入口（MultiModeSelect）", () => {
+    setup();
+    expect(screen.getByRole("button", { name: "选择模式" })).toBeInTheDocument();
+  });
+
+  it("多模式时每个模式页签带移除按钮，点它经 onModesChange 落库剩余模式", () => {
+    const { onModesChange } = setup();
+    /* 移除按钮带可读名称（与编辑器 IO 面板同款）。两个模式各有一枚。 */
+    const removeBtns = screen.getAllByRole("button", { name: /从工作流模式中移除/ });
+    expect(removeBtns).toHaveLength(2);
+    fireEvent.click(removeBtns[0]!);
+    expect(onModesChange).toHaveBeenCalledTimes(1);
+    expect(onModesChange).toHaveBeenCalledWith(["i2v"], "i2v");
+  });
+
+  it("没有真实模式时：表单不渲染，给编辑器同款提示，且仍可就地选模式", () => {
+    render(
+      <WorkflowLibraryIoPanel
+        activeMode={null}
+        defaultMode=""
+        modes={[]}
+        onActiveModeChange={vi.fn()}
+        onModesChange={vi.fn()}
+        onPatchWorkflowIO={vi.fn().mockResolvedValue(undefined)}
+        storedIO={stored}
+        workflowIO={enriched}
+      />,
+    );
+    /* 提示与编辑器 IO 面板同一句（口径只有一份，见面板内注释）。 */
+    expect(screen.getByText(/该工作流还没有配置模式/)).toBeInTheDocument();
+    expect(screen.getByText(/之后才能在这里配置参数/)).toBeInTheDocument();
+    /* 出路就在本页签：选择模式入口照常在。 */
+    expect(screen.getByRole("button", { name: "选择模式" })).toBeInTheDocument();
+    /* 参数表单不渲染（旧兜底会拿 [taskType] 造一个空模式把表单摆出来）。 */
+    expect(screen.queryByText("步数")).not.toBeInTheDocument();
   });
 });
