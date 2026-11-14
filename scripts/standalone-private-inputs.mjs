@@ -241,6 +241,13 @@ export const RUNTIME_SCRIPTS = [
   // `db-backup.mjs`（`pnpm db:backup` 的手动档）**不在**这里：它是给人敲的
   // 命令，桌包里没有它也不影响任何运行时路径。
   "db-backup-core.mjs",
+  // 本机应用数据备份 / 恢复的实现（ISSUE #3732，PR #3758 引入）：`db-backup-core.mjs`
+  // 顶层静态 import 它的 `restoreAppDataBackup` —— 缺这份同样是整个编排器加载即
+  // ENOENT，而表现只是「双击没反应」。⚠️ 它当初**漏登记**过：#3732 那批把内部分件
+  // 加进了编排器闭包，却没同批补这两份清单 ⇒ 主干上的
+  // `tests/dist-artifact-hygiene.test.ts`（清单覆盖编排器的相对 import 闭包）长期红着
+  // （2026-11-14 由 #3780 那次 PR 的 CI 撞见并就地补上）。
+  "app-data-backup.mjs",
   // 统一的进程树回收入口：编排器收尾、Python 启动器的兜底补刀、Rust 壳的
   // `kill_sidecar` 补刀都调它（平台判据只此一份，见 AGENTS 硬规则 3），
   // 连同它 import 的 kill-process-tree 一起缺不了。
