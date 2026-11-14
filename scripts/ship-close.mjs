@@ -34,7 +34,7 @@
 import { asArray } from "./ship-build.mjs";
 import { CODE, codeTag, combineShipCodes } from "./ship-core.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
-import { finishIssueWork } from "./ship-claim.mjs";
+import { finishIssueWork } from "./ship-release.mjs";
 import { reportStage } from "./ship-stage.mjs";
 import { issueItemShapes } from "./ship-ticket.mjs";
 import { cnbData } from "./cnb-fields.mjs";

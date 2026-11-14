@@ -1,7 +1,6 @@
 // ── 单子领取 / 释放的**平台读写**（自 ship-claim.mjs 按职责拆出，规范 §12.6 R5）。
 // 判据在 ship-claim-rules.mjs（纯函数）；这里只做三件事：读单子、写标签、
 // 写状态评论 —— 每件写动作之后都**独立回读**（回执不算结论）。
-
 import { appendComment, readCommentBodies } from "./ship-comment.mjs";
 import { CODE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
@@ -168,7 +167,7 @@ export function applyClaimLabels(ctx) {
  * 撤掉给定的标签（逐枚发 delete）并回读确认**全部撤没**；回读里还有 ⇒ 红。
  *
  * @param {{run:any, log:(s:string)=>void, slug:string, number:number}} ctx
- * @param {Array<string|null|undefined>} names 要撤的标签全名（如 `处理人:x` / `参与人:x`；空值跳过）
+ * @param {Array<string|null|undefined>} names 要撤的标签全名（空值跳过）
  * @param {string} note 成功日志的补充说明（可为空串）
  * @returns {number} `CODE` 之一
  */
