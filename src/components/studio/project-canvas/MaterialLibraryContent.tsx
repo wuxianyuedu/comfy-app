@@ -279,9 +279,9 @@ export function MaterialLibraryContent({
               >
                 <Folder size={22} strokeWidth={1.8} />
               </div>
-              <span className="text-ink-soft min-w-0 truncate text-center text-xs">
+              <TruncatedText className="text-ink-soft min-w-0 truncate text-center text-xs">
                 {folder.name}
-              </span>
+              </TruncatedText>
               {folder.count > 0 && (
                 <span className="text-ink-fainter text-3xs tabular-nums">{folder.count}</span>
               )}

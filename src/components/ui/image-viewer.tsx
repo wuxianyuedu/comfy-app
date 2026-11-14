@@ -11,6 +11,7 @@ import { Maximize2, Minus, Plus, X, ZoomIn } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
+import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail, type MediaFallback } from "~/components/ui/media-thumbnail";
 import { SelectChip } from "~/components/ui/select-chip";
 import { useElementBox } from "~/components/ui/use-element-box";
@@ -262,9 +263,11 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
           <div className="border-border-subtle flex h-11 shrink-0 items-center justify-between gap-3 border-b px-4">
             <div className="flex min-w-0 items-center gap-2">
               <ZoomIn aria-hidden="true" className="text-ink-muted shrink-0" size={15} />
-              <DialogTitle className="text-ink min-w-0 truncate text-sm font-semibold">
-                {title}
-              </DialogTitle>
+              <Hint label={title}>
+                <DialogTitle className="text-ink min-w-0 truncate text-sm font-semibold">
+                  {title}
+                </DialogTitle>
+              </Hint>
               {naturalWidth !== null && naturalHeight !== null && (
                 <span className="text-ink-fainter text-2xs shrink-0 tabular-nums">
                   {naturalWidth} × {naturalHeight}

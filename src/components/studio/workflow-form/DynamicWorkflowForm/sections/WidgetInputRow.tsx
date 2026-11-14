@@ -8,6 +8,7 @@ import { Eye, EyeOff } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { EditableLabel } from "~/components/ui/editable-label";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { PortHandle } from "~/components/studio/workflow-form/WorkflowFormControls";
 import {
   ioLabel,
@@ -190,7 +191,9 @@ export function WidgetInputRow({
         {withHandle && <PortHandle dir="in" id={handleId ?? entry.ioKey} type={entry.type} />}
         <div className="bg-canvas-deep flex items-center gap-2 rounded-md px-2.5 py-1.5 pr-3.5 pl-3.5">
           <span className="size-2 shrink-0 rounded-full" style={{ background: accent }} />
-          <span className="text-ink-soft text-2xs min-w-0 flex-1 truncate">{label}</span>
+          <TruncatedText className="text-ink-soft text-2xs min-w-0 flex-1 truncate">
+            {label}
+          </TruncatedText>
           {/* link 行同样打印 pin 真实声明的类型：MODEL / CLIP / LATENT /
               IMAGEUPLOAD 等自定义类型一律原样展示，不回退成 "*"。 */}
           <TypeChip>{typeDisplay(entry.type)}</TypeChip>

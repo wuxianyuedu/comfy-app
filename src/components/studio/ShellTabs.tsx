@@ -14,6 +14,7 @@ import type { ViewTab } from "./workspace-tabs";
 import type { OpenableView } from "./ViewTabStrip";
 import type { WorkspaceView } from "./NavItems";
 import { Button } from "~/components/ui/button";
+import { TruncatedText } from "~/components/ui/truncated-text";
 
 type ShellTabsProps = {
   /** 当前视图页签 key。 */
@@ -74,7 +75,7 @@ function TabBlockedNotice({
        * 「已阻止此内容」一句时，两种情形长得一模一样（ISSUE #310）。 */}
       {url !== undefined && url !== null && url !== "" && (
         <div className="border-border-subtle bg-subtle/40 flex max-w-xl items-center gap-2 rounded-md border px-3 py-2">
-          <code className="text-ink-muted truncate text-xs">{url}</code>
+          <TruncatedText className="text-ink-muted truncate font-mono text-xs">{url}</TruncatedText>
           <Button
             className="text-ink-muted hover:bg-subtle hover:text-ink-strong h-auto shrink-0 rounded px-2 py-1"
             onClick={() => {

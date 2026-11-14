@@ -4,6 +4,7 @@
  *  浮层壳与选项行走 `ui/option-list-popover`（规范 16 §16.2.4.14）。
  */
 import { OptionListPopover } from "~/components/ui/option-list-popover";
+import { TruncatedText } from "~/components/ui/truncated-text";
 
 type WorkflowModelFilterChipProps = {
   onChange: (v: string) => void;
@@ -41,12 +42,9 @@ export function WorkflowModelFilterChip({ value, tags, onChange }: WorkflowModel
               value === "all" ? "bg-accent" : "bg-accent-soft"
             }`}
           />
-          <span
-            className="text-accent-soft max-w-20 truncate font-semibold"
-            style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
-          >
+          <TruncatedText className="text-accent-soft max-w-20 truncate font-sans text-[10px] font-semibold">
             {label}
-          </span>
+          </TruncatedText>
         </>
       }
       triggerClassName="border-accent/35 bg-node-accent h-6 shrink-0 rounded-lg border px-2.5 text-xs"

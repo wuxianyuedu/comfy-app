@@ -10,6 +10,7 @@ import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
 import { useExpansionSet } from "~/components/ui/expansion-set";
 import { TreeChildren } from "~/components/ui/tree-rows";
+import { TruncatedText } from "~/components/ui/truncated-text";
 
 import { contractModeTree } from "../mode-contract-config";
 
@@ -58,8 +59,10 @@ export function ModeContractModeNav({
                §16.2.4.39）；`data-category` 是给用例锚「哪一类」的记号。 */
             panelClassName="mb-3"
             trigger={
-              <span className="text-ink min-w-0 flex-1 truncate" data-category={group.category}>
-                {group.label}
+              <span className="flex min-w-0 flex-1" data-category={group.category}>
+                <TruncatedText className="text-ink min-w-0 flex-1 truncate">
+                  {group.label}
+                </TruncatedText>
               </span>
             }
           >
@@ -87,7 +90,9 @@ export function ModeContractModeNav({
                     role="radio"
                     variant="ghost"
                   >
-                    <span className="min-w-0 flex-1 truncate text-left">{t.label}</span>
+                    <TruncatedText className="min-w-0 flex-1 truncate text-left">
+                      {t.label}
+                    </TruncatedText>
                     {customized && (
                       <span
                         className={cn(

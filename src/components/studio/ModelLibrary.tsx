@@ -10,6 +10,7 @@ import { Button, ButtonLink } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { EmptyState } from "~/components/ui/empty-state";
 import { PageHeader } from "~/components/ui/page-header";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { Skeleton } from "~/components/ui/skeleton";
 import { pageHeaderTitle } from "./NavItems";
 import { cn } from "~/lib/utils";
@@ -151,7 +152,7 @@ function ModelFolderNav({
               size="sm"
               variant="ghost"
             >
-              <span className="truncate">{folder.label}</span>
+              <TruncatedText className="truncate">{folder.label}</TruncatedText>
               <span className="text-ink-faint shrink-0 text-xs tabular-nums">{folder.count}</span>
             </Button>
           );

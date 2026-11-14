@@ -6,6 +6,7 @@
 // 入口在侧栏（`studio/NavItems.tsx` 的 `OVERLAY_NAV_ITEMS`）。
 
 import { ProgressBar } from "~/components/ui/progress-bar";
+import { Hint } from "~/components/ui/hint";
 import { toPct } from "~/lib/progress";
 import { cn } from "~/lib/utils";
 import { countPendingStages } from "~/components/workshop/stage-config";
@@ -32,7 +33,9 @@ export function WorkshopHeader({ title, progressPct, health }: WorkshopHeaderPro
         {/* 图标块已经说明「这是工坊」（`NAV_ITEMS` 里 `workshop` 的图标就是它），
             此前下面还压一行「工坊 · 全链路项目管线」—— 与侧栏 / 页签那一项是同一件事
             的第二个名字，还把 h1 挤成两行（ISSUE #1423）。留项目名一行。 */}
-        <h1 className="u-title-page min-w-0 truncate">{title}</h1>
+        <Hint label={title}>
+          <h1 className="u-title-page min-w-0 truncate">{title}</h1>
+        </Hint>
       </div>
 
       {/* 各段流程的健康度：一段一根细条，条长 = 该段完成度，颜色 = 收没收尾。

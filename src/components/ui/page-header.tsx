@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { HeaderHelp } from "~/components/ui/header-help";
+import { Hint } from "~/components/ui/hint";
 import { cn } from "~/lib/utils";
 
 /** PageHeader —— 屏级页头（全库唯一实现，规范 16 §16.2.4.73）。三件事一处说清，因为此前在 11 个屏上各拼一遍、还越拼越不一致：
@@ -82,7 +83,9 @@ export function PageHeader({
         <div className="min-w-0">
           <div className="flex items-baseline gap-2">
             {title === undefined ? null : (
-              <Heading className="font-title u-title-page min-w-0 truncate">{title}</Heading>
+              <Hint label={title}>
+                <Heading className="font-title u-title-page min-w-0 truncate">{title}</Heading>
+              </Hint>
             )}
             {hasTitleSuffix ? (
               <span className="text-ink-fainter shrink-0 text-xs">{titleSuffix}</span>
