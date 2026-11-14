@@ -76,14 +76,11 @@ describe("perf-trace 落点与录制类别", () => {
     expect(outputPathFor({ root: "/repo", route: "/", out: "trace.json", now: new Date() })).toBe(
       path.resolve("/repo", "trace.json"),
     );
+    /* POSIX 形态的绝对路径在两平台都判「绝对」⇒ 原样使用。别用盘符路径断言：
+     * `path.isAbsolute("D:\\…")` 在 Linux 是 false，会走相对解析分支（GA 首跑实测）。 */
     expect(
-      outputPathFor({
-        root: "/repo",
-        route: "/",
-        out: String.raw`D:\tmp\trace.json`,
-        now: new Date(),
-      }),
-    ).toBe(String.raw`D:\tmp\trace.json`);
+      outputPathFor({ root: "/repo", route: "/", out: "/tmp/trace.json", now: new Date() }),
+    ).toBe("/tmp/trace.json");
   });
 
   it("录制类别含主线程任务与 CPU 采样（定位「哪段代码在烧主线程」的最低配置）", () => {
