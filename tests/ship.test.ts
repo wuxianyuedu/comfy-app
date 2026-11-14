@@ -73,7 +73,7 @@ import {
   splitStagedNames,
 } from "../scripts/ship-local.mjs";
 /* 旗标层单独一份（ISSUE #2491）：这一族的用例读的是「命令行长什么样」，不是「执行者给了什么读数」。 */
-import { parseArgs, parseIssueNumberToken } from "../scripts/ship-args.mjs";
+import { flagConflicts, parseArgs, parseIssueNumberToken } from "../scripts/ship-args.mjs";
 import {
   buildPullBody,
   capDiffstat,
@@ -357,6 +357,29 @@ describe("parseArgs：拼错的旗标不许被静默忽略", () => {
     expect(parseArgs(["--title", "feat(a): 人给的标题"]).title).toBe("feat(a): 人给的标题");
     expect(parseArgs(["--title=feat(b): 等号写法"]).title).toBe("feat(b): 等号写法");
     expect(parseArgs([]).title).toBeNull();
+  });
+
+  it("#3826：--add 跟多个路径时，多出的进 addMultiBad，不落 unknown", () => {
+    const a = parseArgs(["--add", "a.ts", "b.ts", "c.ts"]);
+    expect(a.adds).toEqual(["a.ts"]);
+    expect(a.addMultiBad).toEqual(["b.ts", "c.ts"]);
+    expect(a.unknown).toEqual([]);
+    /* 等号写法同一格：`--add=a b` 的 b 同样不算未知旗标。 */
+    const eq = parseArgs(["--add=a.ts", "b.ts"]);
+    expect(eq.adds).toEqual(["a.ts"]);
+    expect(eq.addMultiBad).toEqual(["b.ts"]);
+    /* 逐个重复 --add 仍是唯一的多文件写法，不算多值。 */
+    expect(parseArgs(["--add", "a.ts", "--add", "b.ts"]).addMultiBad).toEqual([]);
+    /* 收集跟到下一枚旗标为止：旗标照常归旗标。 */
+    expect(parseArgs(["--add", "a.ts", "--merge"]).addMultiBad).toEqual([]);
+  });
+
+  it("#3826：多值写法的报错指向真实原因，不与「拼错旗标」共用一句", () => {
+    const lines = flagConflicts(parseArgs(["--add", "a.ts", "b.ts", "c.ts"]));
+    expect(lines.join("\n")).toContain("--add 每次只收一个路径");
+    expect(lines.join("\n")).toContain("b.ts c.ts");
+    expect(lines.join("\n")).toContain("逐个重复 --add");
+    expect(lines.join("\n")).not.toContain("unknown flag");
   });
 
   it("--no-wait 与 --only 各自独立", () => {

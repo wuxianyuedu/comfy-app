@@ -114,6 +114,11 @@ export function parseIssueNumberToken(token) {
  * 而落空给出的那句「这一跑没有这一格」会把人引去怀疑单子，不是怀疑命令行。
  * 首段像构建号形状（`BUILD_SN_SHAPE`）才当构建号收下，否则整串都是格名（走按 HEAD 归属）。
  *
+ * **`--add <路径>`**（ISSUE #3826）：每次只收**一个**路径。多值写法（`--add a b c`）里
+ * 跟在后面的路径此前会落进未知旗标分支，那句 `unknown flag(s)` 会让人先去怀疑文件名；
+ * 现在它们进 `addMultiBad`，由 `flagConflicts` 给出指向真实原因的提示（逐个重复
+ * `--add`，或先自行 `git add`）——「写法错」与「旗标拼错」不再共用同一句报错。
+ *
  * **`--no-preflight-d0`**（ISSUE #3200）：关掉阶段 0 的 D0 预跑（默认开：提交之前把钩子
  * D0 组那批只读形态判据先跑一遍，所有红一次报齐，省「阶段 0 红一次、提交钩子再红一次」
  * 的往返）。它存在是因为预跑是**双付**（阶段 0 付一遍、提交钩子还会再付一遍）——
@@ -132,16 +137,17 @@ export function parseIssueNumberToken(token) {
  * 其余 = 分支名。重复给值进 `statusBad`，一次也不静默收下（与 `--gh-logs` 同档）。
  *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果 */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果 */
   const out = {
     message: null,
     messageFile: null,
     title: null,
     branch: null,
     adds: [],
+    addMultiBad: [],
     merge: false,
     noCommit: false,
     closeIssue: false,
@@ -428,6 +434,14 @@ export function parseArgs(argv) {
       out.branch = argv[++i] ?? "";
     } else if (a === "--add") {
       out.adds.push(argv[++i] ?? "");
+      /* `--add` 每次只收**一个**路径（ISSUE #3826）：多值写法（`--add a b c`）里，
+       * b、c 此前会落进未知旗标分支，报错读起来像「这些文件路径是拼错的旗标」，
+       * 而真实原因是写法。这里把它们收走、单独记账，由 `flagConflicts` 给出指向
+       * 真实原因的那句话 —— 不让「写法错」与「旗标拼错」共用同一句报错。
+       * 收集跟到下一枚旗标（`-` 开头）为止；逐个重复 `--add` 仍是唯一的多文件写法。 */
+      while (i + 1 < argv.length && !String(argv[i + 1] ?? "").startsWith("-")) {
+        out.addMultiBad.push(String(argv[++i] ?? ""));
+      }
     } else if (a.startsWith("--message=")) {
       out.message = a.slice("--message=".length);
     } else if (a.startsWith("--message-file=")) {
@@ -438,6 +452,11 @@ export function parseArgs(argv) {
       out.branch = a.slice("--branch=".length);
     } else if (a.startsWith("--add=")) {
       out.adds.push(a.slice("--add=".length));
+      /* 等号写法与空格写法同一格（ISSUE #3826）：`--add=a b` 的 b 同样会被读成
+       * 未知旗标，同样在这里收走、单独记账。 */
+      while (i + 1 < argv.length && !String(argv[i + 1] ?? "").startsWith("-")) {
+        out.addMultiBad.push(String(argv[++i] ?? ""));
+      }
     } else if (a.startsWith("--only=")) {
       out.only = a.slice("--only=".length);
     } else if (a === "--mode") {
@@ -516,7 +535,7 @@ export function parseArgs(argv) {
  * `CODE.NOT_RUN` 收口 —— 「没有结论」不是「没要那个动作」。
  *
  * @param {{unknown:string[], modeBad:string[], only:string|null, allowStaged:boolean,
- *   adds:string[], noCommit?:boolean, message:string|null, messageFile:string|null,
+ *   adds:string[], addMultiBad:string[], noCommit?:boolean, message:string|null, messageFile:string|null,
  *   closeIssueBad:string[], asMergedBad:string[], asMerged:number|null, closeIssue:boolean}} opt
  *   `parseArgs` 的解析结果（用到的那几个字段）
  * @returns {string[]} 要逐行打出的错误读数；空数组 = 旗标组合合法
@@ -540,6 +559,20 @@ export function flagConflicts(opt) {
   }
   if (opt.only && !PHASES.includes(opt.only)) {
     lines.push(`[ship] [ERROR] --only 不认的阶段：${opt.only}（可选：${PHASES.join(" / ")}）`);
+    return lines;
+  }
+  /* `--add` 的多值写法（ISSUE #3826）：路径不是旗标，但 `--add` 后面跟的第二个路径
+   * 此前会落进「unknown flag(s)」那句报错里，让人先去怀疑文件名拼错。这里单独点名
+   * 真实原因：每次只收一个路径，多文件请逐个重复 `--add`（或先自行 git add）。 */
+  if (opt.addMultiBad.length > 0) {
+    lines.push(
+      `[ship] [ERROR] --add 每次只收一个路径，这里又跟了：${opt.addMultiBad.join(" ")}（${codeTag(
+        CODE.NOT_RUN,
+      )}）。`,
+    );
+    lines.push(
+      "[ship] 多个文件请逐个重复 --add（如 --add a.ts --add b.md），或先自行 git add 再跑。",
+    );
     return lines;
   }
   /* `--allow-staged` 只对「`--add` 声明了这一次的提交面」那一格有意义（ISSUE #3597）：
