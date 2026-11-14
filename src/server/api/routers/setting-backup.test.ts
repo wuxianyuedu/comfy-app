@@ -171,6 +171,33 @@ describe("setting.backupImportFromDir", () => {
   });
 });
 
+describe("setting.sizePresetGet / sizePresetSave（ISSUE #3788：尺寸配置表）", () => {
+  it("默认读到项目默认表；保存后本机覆盖逐格生效，未改的场景仍是默认", async () => {
+    const caller = createCaller(makeCtx());
+    const initial = await caller.sizePresetGet();
+    expect(initial.image["16:9 横屏"]["1k"]).toEqual({ width: 1024, height: 576 });
+
+    const customized = structuredClone(initial);
+    customized.image["16:9 横屏"]["1k"] = { width: 1280, height: 720 };
+    const saved = await caller.sizePresetSave(customized);
+    expect(saved.image["16:9 横屏"]["1k"]).toEqual({ width: 1280, height: 720 });
+
+    const reread = await caller.sizePresetGet();
+    expect(reread.image["16:9 横屏"]["1k"]).toEqual({ width: 1280, height: 720 });
+    /* 未改的场景仍是项目默认 */
+    expect(reread.video["16:9 横屏"]["1k"]).toEqual({ width: 1280, height: 720 });
+  });
+
+  it("坏值逐格回退默认（保存任意形状都安全）", async () => {
+    const caller = createCaller(makeCtx());
+    const saved = await caller.sizePresetSave({
+      image: { "16:9 横屏": { "1k": { width: -1, height: 0 } } },
+      video: "not-an-object",
+    });
+    expect(saved.image["16:9 横屏"]["1k"]).toEqual({ width: 1024, height: 576 });
+  });
+});
+
 describe("落点", () => {
   it("备份落在 <应用根>/data/backups/，不在项目根旁边", async () => {
     const caller = createCaller(makeCtx());
