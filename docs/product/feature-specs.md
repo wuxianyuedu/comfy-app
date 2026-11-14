@@ -25,10 +25,11 @@
 
 - 状态：已上线
 - 需求：视图以页签打开，可同时开多个；切走再切回来保留编辑态；
-  设置 / 模型适配 / 模式契约是瞬时页签（切走即关）。
-- 行为与验收：同一份注册表里 `transient` 标记决定行为；不变式是
-  「最多只有当前页可以是 transient」（`withTransientPruned`）。
-  画布 / 工坊这类有编辑态、跑长任务的视图**不得**标 transient。
+  哪些界面切走即关由配置面逐项决定（见 FR-WS-10）。
+- 行为与验收：`isTransientView(view, config)` 只认**生效配置**（项目默认 + 本机覆盖），
+  注册表不再写 `transient` 标记（ISSUE #3798）；不变式是「最多只有当前页可以是
+  transient」（`withTransientPruned`）。画布 / 工坊这类有编辑态、跑长任务的视图
+  出厂**不得**设为共享标签页。
 - 落点：`src/lib/shell/shell-tabs-store.ts`、`src/components/studio/ShellTabs.tsx`、
   `workspace-tabs.ts`
 
@@ -92,23 +93,34 @@
   边框 / 品牌 / 状态五组）与七个基元分组，全部走语义 token 类名
   （`theme:check` 判 0 写死色值）；右上角开关切换的是应用全局主题
   （与设置页同源）；命令面板（⌘/Ctrl+K）「其他」组有「UI 控件总览」
-  入口；不进工作区 17 视图注册表。逐 prop 的形态矩阵归 Storybook。
+  入口；工作区里以 `uiKit` 视图页签打开（ISSUE #3726），默认独立标签页、
+  切走不关（ISSUE #3798）。根节点自带**独立滚动容器**：工作区页签形态撑满父级
+  高度（`fillHeight`），独立路由形态用视口档，两处都能用滚轮看到全部基元
+  （ISSUE #3798 —— 此前内容被外层 `overflow-hidden` 裁掉、看不全）。
+  逐 prop 的形态矩阵归 Storybook。
 - 落点：`src/app/(main)/ui-kit/page.tsx`、
-  `src/components/ui/ui-kit-gallery*.tsx`、`src/components/studio/CommandPalette.tsx`
+  `src/components/ui/ui-kit-gallery*.tsx`、`src/components/studio/CommandPalette.tsx`、
+  `src/components/studio/WorkspaceViewStack.tsx`
 
-#### FR-WS-10 侧栏项的页签行为（独立 / 共享标签页，按项配置）
+#### FR-WS-10 界面页签行为（独立 / 共享标签页，按项配置）
 
 - 状态：已上线
-- 需求：主界面侧栏的每一项，点开后是**独立标签页**（常驻，切走不关）还是
+- 需求：工作区的每个全局视图，点开后是**独立标签页**（常驻，切走不关）还是
   **共享标签页**（切走即关，不在页签条上留位置），按项配置；配置落在 JSON 里，
-  并可在设置中修改（ISSUE #3623）。
-- 行为与验收：配置面 = 侧栏的九个全局项（首页是固定页签，不在配置面内）；
-  两档行为对每一项都可选，当前生效值在界面上看得出来；改动即时生效 ——
+  并可在设置中修改（ISSUE #3623 / #3798）。非侧栏的常驻界面（设置、UI 控件总览）
+  同样受这一份配置管 —— 入口在顶栏菜单 / 命令面板，不改变「行为该能配」这件事。
+- 行为与验收：配置面 = `configurableTabViews()`，即首页以外的**全部 11 个全局视图**
+  （首页是固定页签，不在配置面内）；判据 `isTransientView()` 只认配置面，项目默认
+  为每一屏都显式写了档位：`uiKit` 出厂 `independent`（切走不关）、`settings` 出厂
+  `shared`（读过即走）。注册表不再保留 `transient` 标记，避免「设置里配了、界面
+  却不认」。两档行为对每一项都可选，当前生效值在界面上看得出来；改动即时生效 ——
   已经开着的页签按新规则在下次切换时生效。设置页给出两个保存出口：
   「保存」只落本机（开发版与正式包都能用），「保存为项目默认（跟代码走）」写进
   入库那份 JSON、只在开发检出出现；「还原默认」只在真有本机覆盖时出现。
   项目默认那份 JSON 恰好覆盖配置面内的每一项（漏登记由用例拦下）。
-- 落点：`src/lib/shell/sidebar-tab-behavior.ts`（纯函数层）、
+- 落点：`src/components/studio/NavItems.tsx`（配置面清单 + 判据）、
+  `src/components/studio/workspace-tabs.ts`（状态规则）、
+  `src/lib/shell/sidebar-tab-behavior.ts`（纯函数层）、
   `src/lib/shell/sidebar-tab-defaults.json`（项目默认）、
   `src/lib/shell/sidebar-tab-behavior.server.ts`（落盘）、
   `src/server/api/routers/sidebar.ts`、

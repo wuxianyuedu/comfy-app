@@ -273,7 +273,9 @@ export function WorkspaceViewStack({
       }
 
       case "uiKit": {
-        return <UIKitGalleryView />;
+        /* 与 settings 同形：页签里由本栈的 `h-full` 给出高度，控件总览自己那根
+         * 滚动条才滚得起来（ISSUE #3798）。独立路由 `/ui-kit` 不传，走视口档。 */
+        return <UIKitGalleryView fillHeight />;
       }
 
       case "canvas": {

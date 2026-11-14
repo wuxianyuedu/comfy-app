@@ -109,6 +109,7 @@ import {
 } from "../scripts/ship-ticket.mjs";
 import {
   claimComment,
+  misclaimReleaseComment,
   decideClaim,
   decideRelease,
   finishIssueWork,
@@ -2887,6 +2888,104 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
       expect(f.labels()).toContain(`处理人:${handle}`);
       expect(f.calls.some((c) => c.includes("delete-issue-label"))).toBe(false);
       expect(f.log.join("\n")).toContain("保留");
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--release --misclaim：评论用误领文案，处理人与参与人两枚都撤（#3809）", () => {
+    const f = issueIo({ labels: [`处理人:${handle}`, `参与人:${handle}`] });
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--release", "2187", "--misclaim"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.GREEN);
+      expect(f.comments()[0]).toContain("误领释放");
+      expect(f.comments()[0]).not.toContain("开发结束");
+      expect(f.labels()).not.toContain(`处理人:${handle}`);
+      expect(f.labels()).not.toContain(`参与人:${handle}`);
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--release --misclaim：幂等 —— 误领释放在场就不再发评论，直接补撤标签", () => {
+    const f = issueIo({
+      labels: [`处理人:${handle}`, `参与人:${handle}`],
+      comments: [misclaimReleaseComment(handle)],
+    });
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--release", "2187", "--misclaim"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.GREEN);
+      expect(f.calls.some((c) => c.includes("post-issue-comment"))).toBe(false);
+      expect(f.labels()).not.toContain(`处理人:${handle}`);
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--misclaim：单独出现 ⇒ 2（只跟 --release 同用，不当独立旗标）", () => {
+    const f = issueIo();
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--misclaim"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.NOT_RUN);
+      expect(f.log.join("\n")).toContain("只跟 --release");
+      expect(f.calls.some((c) => c.includes("issues"))).toBe(false);
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--claim：先念「领取对象」读数（标题 / 状态 / 现有处理人）再动手（#3809）", () => {
+    const f = issueIo({ labels: ["处理人:someone-else"] });
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--claim", "2187"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.RED);
+      const text = f.log.join("\n");
+      const at = text.indexOf("领取对象");
+      expect(at).toBeGreaterThan(-1);
+      expect(text.slice(at)).toContain("领一张单试试");
+      expect(text.slice(at)).toContain("someone-else");
+      /* 读数在判决之前：先看到要领的是哪张，再看到「不领取」。 */
+      expect(text.indexOf("已在 处理人")).toBeGreaterThan(at);
     } finally {
       s.cleanup();
     }
