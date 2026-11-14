@@ -42,7 +42,7 @@ export function WorkflowModelFilterChip({ value, tags, onChange }: WorkflowModel
               value === "all" ? "bg-accent" : "bg-accent-soft"
             }`}
           />
-          <TruncatedText className="text-accent-soft max-w-20 truncate font-sans text-[10px] font-semibold">
+          <TruncatedText className="text-accent-soft text-3xs max-w-20 truncate font-sans font-semibold">
             {label}
           </TruncatedText>
         </>

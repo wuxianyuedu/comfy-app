@@ -72,7 +72,7 @@ export function WorkflowPickChip({
       onSelect={onSelect}
       trigger={
         <Hint label={sel?.name}>
-          <span className="text-ink-bright min-w-0 flex-1 truncate text-left font-sans text-[11px] font-semibold">
+          <span className="text-ink-bright text-2xs min-w-0 flex-1 truncate text-left font-sans font-semibold">
             {loading && !sel ? (
               <span className="text-ink-muted">加载中…</span>
             ) : sel ? (
