@@ -1,6 +1,6 @@
 "use client";
 
-// 页头：标题 + 筛选下拉（来源 / 类型 / 模型）+ 导入按钮 + 模式契约 + 自定义节点设置。
+// 页头：标题 + 筛选下拉（来源 / 类型 / 模型）+ 导入按钮 + 自定义节点设置。
 //
 // **水平布局**（ISSUE #716）：各段 `shrink-0`（可点目标不许压扁，规范 03 §3.8.1），
 // 排不下时整组换行（根容器 `flex-wrap`）。筛选组单独包一层 `flex-nowrap`，
@@ -10,10 +10,13 @@ import { FolderInput } from "lucide-react";
 
 import { pageHeaderTitle } from "../NavItems";
 import { Button } from "~/components/ui/button";
-import { ModeContractSettings } from "./ModeContractSettings";
 import { CustomNodesSettings } from "./CustomNodesSettings";
 import { WorkflowLibraryFilters } from "./WorkflowLibraryFilters";
-import { HEADER_ACTION_BTN, type SourceFilter, type TypeFilter } from "./workflow-library-config";
+import {
+  HEADER_ACTION_OUTLINE_BTN,
+  type SourceFilter,
+  type TypeFilter,
+} from "./workflow-library-config";
 import type { ModelTagCount } from "./WorkflowLibraryFilters";
 
 type WorkflowLibraryHeaderProps = {
@@ -72,12 +75,12 @@ export function WorkflowLibraryHeader({
       </div>
 
       <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
-        {/* 渐变按钮退役（#3720）：改用实心品牌色（primary-solid），不再带投影。 */}
-        <Button className={HEADER_ACTION_BTN} onClick={onToggleImport} variant="primary-solid">
+        {/* 导入按钮与右侧两枚动作按钮同款（ISSUE #3759）：描边 + 弱底，不再单独
+            用实心品牌色抬高。 */}
+        <Button className={HEADER_ACTION_OUTLINE_BTN} onClick={onToggleImport} variant="outline">
           <FolderInput data-icon="inline-start" size={13} />
           导入工作流
         </Button>
-        <ModeContractSettings />
         <CustomNodesSettings />
       </div>
     </div>
