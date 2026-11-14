@@ -127,11 +127,15 @@ export function parseIssueNumberToken(token) {
  * 的纯合并一跳）。与提交段才有的对象矛盾：`--add` / `--message` / `--message-file` /
  * `--allow-staged` 任一在场 ⇒ 退 2（没有提交段，它们没有对象），执行层当场点名。
  *
+ * **`--status [<PR号|分支名>]`**（ISSUE #3811）：只读状态查询口。目标可选：缺省 =
+ * 当前分支（在主干上时回落「上一次跑的 PR」，来源念出来）；`#3804` / `3804` = PR 号；
+ * 其余 = 分支名。重复给值进 `statusBad`，一次也不静默收下（与 `--gh-logs` 同档）。
+ *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果 */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果 */
   const out = {
     message: null,
     messageFile: null,
@@ -158,6 +162,9 @@ export function parseArgs(argv) {
     releaseBad: [],
     claims: false,
     branches: false,
+    status: false,
+    statusRef: null,
+    statusBad: [],
     newIssue: null,
     newIssueBad: [],
     issueBodyFile: null,
@@ -194,6 +201,29 @@ export function parseArgs(argv) {
       out.claims = true;
     } else if (a === "--branches") {
       out.branches = true;
+    } else if (a === "--status" || a.startsWith("--status=")) {
+      /* 与 `--gh-logs` 同一档：只读、一次只做一件，值可选（缺省 = 当前分支，在主干上
+       * 回落「上一次跑的 PR」，来源由执行层念出来）。目标收**一个** token —— 分支名
+       * 与号都不带空格，不需要 `--stage-log` 那种自由文本；两种写法（空格 / 等号）
+       * 共用这一支。重复给值进 statusBad，一次也不静默收下。 */
+      out.status = true;
+      let tok = "";
+      if (a.startsWith("--status=")) {
+        tok = a.slice("--status=".length);
+      } else if (i + 1 < argv.length) {
+        const next = String(argv[i + 1] ?? "");
+        if (next.startsWith("-") === false) {
+          tok = next;
+          i += 1;
+        }
+      }
+      if (tok.trim() === "") {
+        /* 缺省目标（当前分支 / 上一次跑）是合法形态，不算缺值 —— 交执行层解析。 */
+      } else if (out.statusRef === null) {
+        out.statusRef = tok.trim();
+      } else {
+        out.statusBad.push(`重复的 --status（前一个 ${out.statusRef}）`);
+      }
     }
     /* `--diagnose` 的构建号是**可选**的：不给就按 HEAD 的 sha 归属（红灯现场最常用的
      * 那一形）。所以下一个 token 只在不像旗标时才当构建号收下。 */

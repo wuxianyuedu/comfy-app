@@ -457,11 +457,15 @@ export function classifyIsMerged(v) {
  * 读 PR JSON 的判决字段（同样只读 `data.*`）。
  *
  * @param {{data?:{number?:number|string,mergeable_state?:string,blocked_on?:string,is_merged?:boolean,state?:string,title?:string,base?:{ref?:string}}} | null} json 解析结果
- * @returns {{number:number|null,mergeableState:string,blockedOn:string,isMerged:boolean,isMergedTri:"merged"|"not_merged"|"unknown",state:string,title:string,baseBranch:string}} 归一后的字段
+ * @returns {{number:number|null,mergeableState:string,blockedOn:string,isMerged:boolean,isMergedTri:"merged"|"not_merged"|"unknown",state:string,title:string,baseBranch:string,headSha:string,headBranch:string}} 归一后的字段
  *   `title` 是平台上这条 PR 的**现标题**（合并那一跳取 squash 标题要用它，ISSUE #2806）。
  *   `baseBranch` 是平台 `base.ref` 去 `refs/heads/` 后的分支名（ISSUE #3021：标题与
  *   diffstat 的区间跟它走，不跟本地 upstream）。缺键给空串，调用方按「取不到」处理。
  *   `isMerged` 是 `isMergedTri === "merged"` 的派生展示值；判读走 `isMergedTri`（ISSUE #3059）。
+ *   `headSha` 是源分支头的 sha（`--status` 按 sha 归属 build 用，ISSUE #3811）；
+ *   平台在 `head.sha` 里留着源分支头那一笔（squash 改的只是主干那笔），缺键给空串。
+ *   `headBranch` 是源分支名（`head.ref` 去 `refs/heads/`；清单截断时按它核对
+ *   「落盘读数记的那条 PR 是不是这条分支的」—— 对 base 比会恒真，#3811）。
  */
 export function readPullVerdict(json) {
   /* 信封解包走单一出处（ISSUE #3060）：「data 缺了」与「拆错层」在这里分型。 */
@@ -477,6 +481,8 @@ export function readPullVerdict(json) {
     state: String(d.state ?? "unknown"),
     title: String(d.title ?? ""),
     baseBranch: String(d.base?.ref ?? "").replace(/^refs\/heads\//, ""),
+    headSha: String(d.head?.sha ?? ""),
+    headBranch: String(d.head?.ref ?? "").replace(/^refs\/heads\//, ""),
   };
 }
 

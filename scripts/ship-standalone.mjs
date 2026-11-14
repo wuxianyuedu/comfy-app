@@ -25,6 +25,7 @@
  */
 import { CODE } from "./ship-core.mjs";
 import { runBranches } from "./ship-branches.mjs";
+import { runStatus } from "./ship-status.mjs";
 import { closeIssues } from "./ship-close.mjs";
 import { runIssueAction } from "./ship-claim.mjs";
 import { runIssueComment, runNewIssue } from "./ship-issue-new.mjs";
@@ -92,6 +93,7 @@ function namedActions(opt, self) {
     ["release", opt.release !== null && opt.release !== undefined, "--release"],
     ["claims", opt.claims, "--claims"],
     ["branches", opt.branches, "--branches"],
+    ["status", opt.status, "--status"],
     [
       "newIssue",
       (opt.newIssue !== null && opt.newIssue !== undefined) || opt.newIssueBad.length > 0,
@@ -128,6 +130,7 @@ function namedActions(opt, self) {
  *   mkTmp: (name: string, text: string) => string | null,
  *   settle: (codes: number[]) => number,
  *   env?: Record<string, string | undefined>,
+ *   currentArgv?: string[],
  *   fetchImpl?: typeof fetch,
  *   sleep?: (ms: number) => void | Promise<void>,
  * }} io 全部由装配层注入 —— 本模块不自己解析命令行、不自己拼退出码。
@@ -153,6 +156,7 @@ export async function runStandaloneAction(io) {
     mkTmp,
     settle,
     env,
+    currentArgv,
     fetchImpl,
     sleep,
   } = io;
@@ -387,6 +391,47 @@ export async function runStandaloneAction(io) {
           slug,
           remote: up.remote ?? "origin",
           trunk: up.base ?? "master",
+        }),
+      ]),
+    };
+  }
+
+  /* ── `--status [<PR号|分支名>]`：每一格状态的只读统一查询口（ISSUE #3811）────
+   * 与 `--branches` 同一条纪律：只读、一次只做一件、排在 preflight 之前 —— 查状态
+   * 的人常常在主干上、工作树脏、没有碎片，那些阻塞对「读一跑状态」都不成立。
+   * 判定本体全在 `ship-status.mjs`（复用轮询 / --diagnose 的分类器与 PR 读数），
+   * 这里只做分派与互斥。主干上的目标回落（上一次跑的 PR）在本格里做：trunk
+   * 分支名从 `up.base` 剥远端前缀得到（与 --branches 同一条剥法）。 */
+  if (opt.status || opt.statusBad.length > 0) {
+    const clashes = namedActions(opt, "status");
+    if (clashes.length > 0) {
+      log(`[ship] [ERROR] --status 只读、一次只做一件：不与 ${clashes.join(" / ")} 同跑。`);
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    if (opt.statusBad.length > 0) {
+      log(
+        `[ship] [ERROR] --status 的值收不下来（${opt.statusBad.join(" / ")}）：` +
+          "目标给一个（PR 号或分支名，缺省 = 当前分支），例如 pnpm ship --status 3804。",
+      );
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    const rawTrunk = String(up.base ?? "").trim();
+    return {
+      handled: true,
+      code: settle([
+        runStatus({
+          run,
+          log,
+          slug,
+          cnbOk,
+          target: opt.statusRef,
+          dryRun: opt.dryRun,
+          localBranch,
+          trunkBranch: rawTrunk.startsWith(`${up.remote ?? "origin"}/`)
+            ? rawTrunk.slice((up.remote ?? "origin").length + 1)
+            : rawTrunk,
+          root,
+          currentArgv,
         }),
       ]),
     };
