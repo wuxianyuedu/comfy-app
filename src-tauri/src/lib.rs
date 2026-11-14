@@ -881,8 +881,8 @@ fn no_log_guidance(root: &str) -> String {
 }
 
 /// 启动编排器的日志在文件被占用时会回退改名，以 sentinel
-/// log/launcher/dev-launcher-current.txt 指向的真实文件为准；附带 stderr 尾部、
-/// 壳自持日志与**壳侧编排链路日志**（`log/launcher/shell-launch.log`，启动期
+/// log/current/launcher/dev-launcher-current.txt 指向的真实文件为准；附带 stderr 尾部、
+/// 壳自持日志与**壳侧编排链路日志**（`log/current/launcher/shell-launch.log`，启动期
 /// 最先有内容的一份，见 §1.5.1），启动卡住时用户能直接在启动页看到
 ///「执行到哪一步 / 卡在哪里」。
 #[tauri::command]
@@ -966,7 +966,7 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
       }
     }
   }
-  // 壳侧的编排链路日志（`log/launcher/shell-launch.log`）：**这是启动期最先
+  // 壳侧的编排链路日志（`log/current/launcher/shell-launch.log`）：**这是启动期最先
   // 有内容的一份**——它由壳自己落，不依赖编排器起来（编排器写的三份日志在
   // 「壳已接手、编排器还没写」的窗口期全是空的，正是手验反馈里「暂时读不到
   // 日志」的现场）。放在最后一段是因为它信息密度最高（启动报告 + 编排器输出）。
@@ -982,7 +982,7 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
   ) {
     if !tail.trim().is_empty() {
       sections.push(format!(
-        "─ 壳侧编排链路（log/launcher/shell-launch.log）─\n{}",
+        "─ 壳侧编排链路（log/current/launcher/shell-launch.log）─\n{}",
         tail
       ));
     }
@@ -1708,7 +1708,7 @@ fn build_log_plugin(project_root: &str) -> tauri::plugin::TauriPlugin<Wry> {
 
 #[cfg(debug_assertions)]
 fn build_log_plugin(_project_root: &str) -> tauri::plugin::TauriPlugin<Wry> {
-  // dev 模式：壳日志由 launcher 把 stderr 重定向进 log/launcher/，无需壳自持文件。
+  // dev 模式：壳日志由 launcher 把 stderr 重定向进 log/current/launcher/，无需壳自持文件。
   // 时区同样固定 UseLocal（理由见 release 分支的注释）。
   tauri_plugin_log::Builder::new()
     .level(log::LevelFilter::Info)
@@ -2652,7 +2652,7 @@ fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
       /* 壳的退出码是「谁结束了这次启动」在壳侧唯一可靠的出口：prebuilt 链路里
        * dev server 的退出码对三种成因完全一样（见 dev-launcher.mjs 的
        * downstreamExitKind），而壳写下的这一行会随 stderr 进
-       * log/launcher/dev-launcher-stderr.log，启动器能据此把「壳自己退出」与
+       * log/current/launcher/dev-launcher-stderr.log，启动器能据此把「壳自己退出」与
        * 「壳被杀」分开。异常码（0 以外的）一律记 warn：正常路径是交接完成后
        * 关主窗（code=None）与「关掉启动页 = 放弃启动」（exit(0)）。 */
       match code {

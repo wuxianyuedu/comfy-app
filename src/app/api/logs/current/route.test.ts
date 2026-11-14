@@ -32,7 +32,7 @@ const panelLogFile = path.join(nextjsLogDir, "nextjs-panel-test.log");
 
 /* 壳侧两路的路径同样落到临时目录：`launchPaths` 是它们的事实来源（与 Rust
  * 壳侧契约同源），不 mock 时 `source=shell` / `shell-launch` 会去读检出里
- * 真实的 `log/shell/`、`log/launcher/`——本机绿、CI 红，与上面同一类 flaky。 */
+ * 真实的 `log/current/shell/`、`log/current/launcher/`——本机绿、CI 红，与上面同一类 flaky。 */
 const shellLogFile = path.join(tmp, "shell.log");
 const shellLaunchLogFile = path.join(tmp, "shell-launch.log");
 

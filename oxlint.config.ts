@@ -3,6 +3,78 @@ import { readFileSync } from "node:fs";
 import awesomeness from "oxlint-config-awesomeness";
 import { defineConfig } from "oxlint";
 
+/**
+ * awesomeness 预设会把若干外部 jsPlugin 挂进来，但本仓未必逐个直接安装；
+ * 单独用评估尺配置跑 oxlint 时，任一插件解析失败都会让整份配置加载失败（#3488）。
+ * 评估尺只保留预设随包自带的子路径插件，并同步剥掉其余插件承载的规则/覆盖项，
+ * 让 `--config oxlint.config.ts` 在当前检出可独立加载与评估。
+ */
+const awesomenessJsPlugins = awesomeness.jsPlugins ?? [];
+
+const resolvableJsPlugins = awesomenessJsPlugins.filter((plugin) => {
+  if (typeof plugin === "string") {
+    return plugin.startsWith("oxlint-config-awesomeness/");
+  }
+  return plugin.specifier.startsWith("oxlint-config-awesomeness/");
+});
+
+const removedRulePrefixes = new Set<string>();
+for (const plugin of awesomenessJsPlugins) {
+  if (typeof plugin === "string") {
+    if (plugin.startsWith("oxlint-config-awesomeness/")) {
+      continue;
+    }
+    // 字符串形式既可能是 npm 包名（规则前缀常为去掉 `eslint-plugin-` 的短名），
+    // 也可能本身就是带 scope 的规则命名空间（如 `@nkzw/eslint-plugin` -> `@nkzw/*`）。
+    removedRulePrefixes.add(plugin);
+    const short = plugin.replace(/^eslint-plugin-/, "");
+    if (short !== plugin) {
+      removedRulePrefixes.add(short);
+    }
+    if (plugin.startsWith("@") && plugin.includes("/")) {
+      const [scope] = plugin.split("/");
+      if (scope) {
+        removedRulePrefixes.add(scope);
+      }
+    }
+    continue;
+  }
+
+  if (plugin.specifier.startsWith("oxlint-config-awesomeness/")) {
+    continue;
+  }
+  removedRulePrefixes.add(plugin.name);
+}
+
+// SAFETY: 预设规则值类型由 awesomeness 定义；这里只按规则名做过滤，不解析/改写规则值。
+type PresetRules = NonNullable<(typeof awesomeness)["rules"]>;
+
+const withoutRemovedPluginRules = (rules: PresetRules | undefined): PresetRules => {
+  const entries = Object.entries(rules ?? {}).filter(([name]) => {
+    for (const prefix of removedRulePrefixes) {
+      if (name === prefix || name.startsWith(`${prefix}/`)) {
+        return false;
+      }
+    }
+    return true;
+  });
+  // SAFETY: 只按规则名过滤，未改写任何规则值；值类型仍与 awesomeness 预设一致。
+  return Object.fromEntries(entries);
+};
+
+// SAFETY: awesomeness 预设来自已安装包；评估尺只剔除当前检出不可独立加载的外部 jsPlugin
+// 及其规则，不改写其余预设语义。extends 接受预设配置对象，这里按原始结构做浅映射生成可独立评估版本。
+const awesomenessForEval = {
+  ...awesomeness,
+  jsPlugins: resolvableJsPlugins,
+  rules: withoutRemovedPluginRules(awesomeness.rules),
+  // oxlint-disable-next-line oxc/no-map-spread -- 逐项浅拷贝 override 并替换 rules；这里保持声明式写法，避免与 prefer-object-spread 冲突。
+  overrides: (awesomeness.overrides ?? []).map((override) => ({
+    ...override,
+    rules: withoutRemovedPluginRules(override.rules),
+  })),
+} as typeof awesomeness;
+
 /** react 的实际版本（去掉 `^` / `~` 前缀）。
  *
  * `eslint-plugin-react` 的 `no-deprecated` 靠 `settings.react.version` 判「这条 API 在这个
@@ -11,13 +83,14 @@ import { defineConfig } from "oxlint";
 const REACT_VERSION = parseReactVersion();
 
 function parseReactVersion(): string {
-  const match = /"react"\s*:\s*"[^\d]*([\d.]+)"/.exec(
+  const match = /"react"\s*:\s*"[^\d]*(?<version>[\d.]+)"/.exec(
     readFileSync(new URL("package.json", import.meta.url), "utf8"),
   );
-  if (match?.[1] === undefined) {
+  const version = match?.groups?.version;
+  if (version === undefined) {
     throw new Error("package.json 里读不到 react 版本");
   }
-  return match[1];
+  return version;
 }
 
 /** 视图层做**精确订阅**的 store hook 名单（单一出处，与 `oxlint.parity.config.mjs` 同口径）。
@@ -53,7 +126,7 @@ const boundariesElements = [
 ];
 
 export default defineConfig({
-  extends: [awesomeness],
+  extends: [awesomenessForEval],
   /* 显式声明插件（不写就只开 `unicorn` / `typescript` / `oxc`，预设里其余插件的规则会
    * 静默失效）。前 9 个与预设自身的 `plugins` 逐字一致 —— 覆盖时不增不减，避免把预设
    * 没声明的插件拉进来制造噪声。
@@ -75,11 +148,14 @@ export default defineConfig({
   ],
   // `eslint` 是 oxlint 原生保留名，oxlint-plugin-eslint 必须显式别名成 eslint-js。
   // eslint-plugin-boundaries 经 jsPlugins 跑（用 resolver 解析别名导入）。
+  // `unused-imports` 与判决配置整组同源（#3440 整组逐字对拍）：别名必须 5 个都声明；
+  // 其规则 `unused-imports/no-unused-imports` 已跟开（见下方 TS 档，与判决配置同批生效）。
   jsPlugins: [
     { name: "boundaries", specifier: "eslint-plugin-boundaries" },
     { name: "eslint-js", specifier: "oxlint-plugin-eslint" },
     { name: "nextjs-js", specifier: "@next/eslint-plugin-next" },
     { name: "react-js", specifier: "eslint-plugin-react" },
+    { name: "unused-imports", specifier: "eslint-plugin-unused-imports" },
   ],
   settings: {
     // eslint-plugin-boundaries 的元素表（根级 settings）。
@@ -400,6 +476,9 @@ export default defineConfig({
       rules: {
         "nextjs-js/no-location-assign-relative-destination": "error",
         "react-js/no-deprecated": "error",
+        /* `unused-imports/no-unused-imports` 与判决配置同批跟开（#3440 后续）：
+         * IDE 评估尺不再对未使用导入留白，CI 判决面报的这里也要报。 */
+        "unused-imports/no-unused-imports": "error",
       },
     },
   ],

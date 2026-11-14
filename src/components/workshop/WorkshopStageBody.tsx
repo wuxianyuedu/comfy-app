@@ -8,7 +8,7 @@
 
 import React from "react";
 import { Button } from "~/components/ui/button";
-import { useFilePicker } from "~/components/ui/file-picker";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import { readFileAsText } from "~/lib/file-io";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Icon } from "~/components/ui/icon";
@@ -236,7 +236,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                     className="px-4"
                     onClick={openScriptEditor}
                     type="button"
-                    variant="gradient"
+                    variant="primary-solid"
                   >
                     编辑剧本
                   </Button>
@@ -273,11 +273,11 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                       className="px-4"
                       onClick={openScriptEditor}
                       type="button"
-                      variant="gradient"
+                      variant="primary-solid"
                     >
                       新建剧本
                     </Button>
-                    <scriptPicker.Input />
+                    <FilePicker {...scriptPicker.inputProps} />
                   </div>
                 </div>
               </section>

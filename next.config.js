@@ -95,6 +95,11 @@ const CSP = [
 
 /** @type {import("next").NextConfig} */
 const config = {
+  // Next 16 默认在 `next dev` 时往仓库根的 AGENTS.md 追加 `nextjs-agent-rules` 块
+  //（「给 AI 代理看的 Next 版本提示」）。本仓的 AGENTS.md 是协作规范本体且已入库，
+  // 这段追加只会制造一处与工作无关的稳定脏改动（每次 dev 都重写一遍，删了又回来，
+  // ISSUE #3669）⇒ 明确关闭，不让 Next 碰本仓的规范文件。
+  agentRules: false,
   // Tauri 桌面壳生产链路：输出 standalone（server.js + 裁剪版 node_modules），
   // 由 scripts/build-desktop.mjs 组装进 src-tauri/static，并以 Node sidecar 运行
   output: "standalone",

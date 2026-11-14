@@ -3,6 +3,8 @@ import { clamp } from "~/lib/clamp";
 import React from "react";
 import { Icon } from "~/components/ui/icon";
 import { EmptyState } from "~/components/ui/empty-state";
+import { Hint } from "~/components/ui/hint";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { Button } from "~/components/ui/button";
 import { downloadJson } from "~/lib/browser-io";
 import { fixed } from "~/lib/number-format";
@@ -315,17 +317,29 @@ export function FinalComposer({
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-ink truncate text-xs font-medium">{shot.sceneHeading}</div>
-                <div className="text-muted-foreground text-2xs mt-0.5 truncate">
-                  {shot.clipUrl !== undefined && shot.clipUrl !== ""
-                    ? "片段就绪"
-                    : shot.imageUrl !== undefined && shot.imageUrl !== ""
-                      ? "待生成视频（以静帧占位）"
-                      : "待生成画面"}
-                  {shot.dialogue !== undefined && shot.dialogue !== ""
-                    ? ` · 字幕: ${shot.dialogue}`
-                    : ""}
-                </div>
+                <TruncatedText className="text-ink truncate text-xs font-medium">
+                  {shot.sceneHeading}
+                </TruncatedText>
+                <Hint
+                  label={`${
+                    shot.clipUrl !== undefined && shot.clipUrl !== ""
+                      ? "片段就绪"
+                      : shot.imageUrl !== undefined && shot.imageUrl !== ""
+                        ? "待生成视频（以静帧占位）"
+                        : "待生成画面"
+                  }${shot.dialogue !== undefined && shot.dialogue !== "" ? ` · 字幕: ${shot.dialogue}` : ""}`}
+                >
+                  <div className="text-muted-foreground text-2xs mt-0.5 truncate">
+                    {shot.clipUrl !== undefined && shot.clipUrl !== ""
+                      ? "片段就绪"
+                      : shot.imageUrl !== undefined && shot.imageUrl !== ""
+                        ? "待生成视频（以静帧占位）"
+                        : "待生成画面"}
+                    {shot.dialogue !== undefined && shot.dialogue !== ""
+                      ? ` · 字幕: ${shot.dialogue}`
+                      : ""}
+                  </div>
+                </Hint>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <FormField label="时长(s)" labelClassName="text-muted-foreground mb-0.5 text-3xs">

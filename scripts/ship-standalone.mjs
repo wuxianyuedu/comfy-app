@@ -25,14 +25,34 @@
  */
 import { CODE } from "./ship-core.mjs";
 import { runBranches } from "./ship-branches.mjs";
+import { runStatus } from "./ship-status.mjs";
 import { closeIssues } from "./ship-close.mjs";
 import { runIssueAction } from "./ship-claim.mjs";
 import { runIssueComment, runNewIssue } from "./ship-issue-new.mjs";
 import { runDiagnose } from "./ship-diagnose.mjs";
-import { resolveGhRepo, runGhLogs } from "./ship-gh-logs.mjs";
+import { resolveGhRepo, resolveGhToken, runGhLogs } from "./ship-gh-logs.mjs";
+import { runGhPrs } from "./ship-gh-prs.mjs";
 import { runStageLog } from "./ship-stage-log.mjs";
 import { runRerunCiStage } from "./ship-local.mjs";
 import { whoamiLines } from "./ship-ticket.mjs";
+
+/**
+ * 环境变量里没有 GitHub 令牌时，回落本机 `gh` CLI 的 keyring（`gh auth token`；
+ * `gh auth status` 已认证的开发机直接复用，免得为了一格只读工具再配一份 env）。
+ * 取不到（gh 不在 / 未认证）就原样返回 —— 那一格自己念「跳过」。
+ *
+ * @param {Record<string, string | undefined>} env 进程环境
+ * @param {(cmd: string, args: string[]) => {stdout: string, stderr: string, status: number, error: string | null}} run 执行者
+ * @returns {Record<string, string | undefined>} 带令牌（或原样）的环境
+ */
+function withGhKeyringToken(env, run) {
+  try {
+    const token = run("gh", ["auth", "token"]).stdout.trim();
+    return token === "" ? env : { ...env, GITHUB_TOKEN: token };
+  } catch {
+    return env;
+  }
+}
 
 /**
  * 「这一跑里人还点名了哪些动作」—— 只读动作的互斥守卫共用这一份清单（排掉自己那一条）。
@@ -52,6 +72,7 @@ function namedActions(opt, self) {
     ["diagnose", opt.diagnose, "--diagnose"],
     ["stageLog", opt.stageLog, "--stage-log"],
     ["ghLogs", opt.ghLogs, "--gh-logs"],
+    ["ghPrs", opt.ghPrs, "--gh-prs"],
     ["merge", opt.merge, "--merge"],
     ["closeIssue", opt.closeIssue, "--close-issue"],
     ["cleanBranch", opt.cleanBranch, "--clean-branch"],
@@ -72,6 +93,7 @@ function namedActions(opt, self) {
     ["release", opt.release !== null && opt.release !== undefined, "--release"],
     ["claims", opt.claims, "--claims"],
     ["branches", opt.branches, "--branches"],
+    ["status", opt.status, "--status"],
     [
       "newIssue",
       (opt.newIssue !== null && opt.newIssue !== undefined) || opt.newIssueBad.length > 0,
@@ -108,6 +130,7 @@ function namedActions(opt, self) {
  *   mkTmp: (name: string, text: string) => string | null,
  *   settle: (codes: number[]) => number,
  *   env?: Record<string, string | undefined>,
+ *   currentArgv?: string[],
  *   fetchImpl?: typeof fetch,
  *   sleep?: (ms: number) => void | Promise<void>,
  * }} io 全部由装配层注入 —— 本模块不自己解析命令行、不自己拼退出码。
@@ -133,6 +156,7 @@ export async function runStandaloneAction(io) {
     mkTmp,
     settle,
     env,
+    currentArgv,
     fetchImpl,
     sleep,
   } = io;
@@ -208,11 +232,13 @@ export async function runStandaloneAction(io) {
       ]),
     };
   }
-  /* ── `--gh-logs <run-id|pr号>`：直接回读 GA 失败日志（规范 §13.6）──────────
-   * 与 `--diagnose` / `--stage-log` 同一条纪律：只读、一次只做一件、排在 preflight
-   * 之前。**优先从 CNB 站内读 relay 日志**（ISSUE #3437，站内、稳），缺席才走
-   * GitHub API；不必等 ship 判红 —— 显式入口就是
-   * 「先看一眼红在哪」。没有令牌时只念一行，不改退码。 */
+  /* ── `--gh-logs <run-id|pr号>`：回读 GA 日志（规范 §13.6）─────────────────
+   * 与主流程互斥、一次只做一件、排在 preflight 之前。**优先从 CNB 站内读 relay
+   * 日志**（ISSUE #3437，站内、稳），缺席才走 GitHub API；不必等 ship 判红。
+   * §12.20（#3667 后续）：`pr:` 形态在 CNB 侧连 marker 都没有时，会代发一次
+   * `api_trigger_ga_logs` 把判绿日志搬进 CNB 再站内读回 —— 这一格是**平台侧写动作**，
+   * 所以 `--dry-run` 必须拦住它（`tests/ship.test.ts` 的 WRITE_SHAPES 钉着）。
+   * 判红自动回读那条路不给 `onDemand` ⇒ 逐字不变。没有令牌时只念一行，不改退码。 */
   if (opt.ghLogs || opt.ghLogsBad.length > 0) {
     const clashes = namedActions(opt, "ghLogs");
     if (clashes.length > 0) {
@@ -242,6 +268,49 @@ export async function runStandaloneAction(io) {
           log,
           fetchImpl,
           sleep,
+          /* 一条 `--gh-logs pr:<号>` 自己把按需搬运也发起（§12.20）：判绿的 run
+           * CNB 侧没有 relay 评论时，不再要求人先手工敲一遍 `start-build`。
+           * 判红自动回读那条路（`runGhLogsOnRed`）不给这一格 ⇒ 逐字不变。 */
+          onDemand: { sleep },
+          dryRun: opt.dryRun,
+        }),
+      ]),
+    };
+  }
+
+  /* ── `--gh-prs [状态|PR号]`：读 GitHub 仓库侧（镜像仓）的 PR 清单 / 单条详情 ──
+   * 与 `--gh-logs` 同一条纪律：只读、一次只做一件、排在 preflight 之前。镜像仓
+   * 那一侧的 PR（最典型：dependabot[bot] 的依赖升级）在 CNB 侧看不见 —— 这一口
+   * 把它们列到台面上，带作者 / 分支 / mergeable / 网页 URL。没有令牌只念一行，
+   * 不改退码。 */
+  if (opt.ghPrs || opt.ghPrsBad.length > 0) {
+    const clashes = namedActions(opt, "ghPrs");
+    if (clashes.length > 0) {
+      log(`[ship] [ERROR] --gh-prs 只读、一次只做一件：不与 ${clashes.join(" / ")} 同跑。`);
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    if (opt.ghPrsBad.length > 0) {
+      log(
+        `[ship] [ERROR] --gh-prs 的值认不出（${opt.ghPrsBad.join(" / ")}）：` +
+          "给 open / closed / all（缺省 open）或一个 PR 号，例如 pnpm ship --gh-prs 或 pnpm ship --gh-prs=42。",
+      );
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    return {
+      handled: true,
+      code: settle([
+        await runGhPrs({
+          filterRaw: opt.ghPrsRef ?? "",
+          /* 镜像仓坐标只认 `GITHUB_MIRROR_REPO`（缺省 `wuxianyuedu/comfy-app`），
+           * 不能拿 CNB origin 的 slug 顶替（打 GitHub API 一律 404）。 */
+          repo: resolveGhRepo(env),
+          /* 令牌三层：`GITHUB_MIRROR_TOKEN` / `GITHUB_TOKEN` 之外，本机 `gh`
+           * 已认证时直接复用它的 keyring（`gh auth token`）—— 免得为了这一格
+           * 只读工具再配一份 env。取不到就维持原样（那一格自己念「跳过」）。 */
+          env: resolveGhToken(env) === "" ? withGhKeyringToken(env ?? {}, run) : env,
+          log,
+          fetchImpl,
+          sleep,
           dryRun: opt.dryRun,
         }),
       ]),
@@ -265,6 +334,10 @@ export async function runStandaloneAction(io) {
           run,
           relay,
           opt,
+          /* 前置读数（ISSUE #3341）要按 sha 归属当前 head 的 build：slug 与 cnb 在场性
+           * 一起传下去；取不到时那一格自己念「没有执行者」，照常执行。 */
+          slug,
+          cnbOk,
         }),
       ]),
     };
@@ -318,6 +391,47 @@ export async function runStandaloneAction(io) {
           slug,
           remote: up.remote ?? "origin",
           trunk: up.base ?? "master",
+        }),
+      ]),
+    };
+  }
+
+  /* ── `--status [<PR号|分支名>]`：每一格状态的只读统一查询口（ISSUE #3811）────
+   * 与 `--branches` 同一条纪律：只读、一次只做一件、排在 preflight 之前 —— 查状态
+   * 的人常常在主干上、工作树脏、没有碎片，那些阻塞对「读一跑状态」都不成立。
+   * 判定本体全在 `ship-status.mjs`（复用轮询 / --diagnose 的分类器与 PR 读数），
+   * 这里只做分派与互斥。主干上的目标回落（上一次跑的 PR）在本格里做：trunk
+   * 分支名从 `up.base` 剥远端前缀得到（与 --branches 同一条剥法）。 */
+  if (opt.status || opt.statusBad.length > 0) {
+    const clashes = namedActions(opt, "status");
+    if (clashes.length > 0) {
+      log(`[ship] [ERROR] --status 只读、一次只做一件：不与 ${clashes.join(" / ")} 同跑。`);
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    if (opt.statusBad.length > 0) {
+      log(
+        `[ship] [ERROR] --status 的值收不下来（${opt.statusBad.join(" / ")}）：` +
+          "目标给一个（PR 号或分支名，缺省 = 当前分支），例如 pnpm ship --status 3804。",
+      );
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    const rawTrunk = String(up.base ?? "").trim();
+    return {
+      handled: true,
+      code: settle([
+        runStatus({
+          run,
+          log,
+          slug,
+          cnbOk,
+          target: opt.statusRef,
+          dryRun: opt.dryRun,
+          localBranch,
+          trunkBranch: rawTrunk.startsWith(`${up.remote ?? "origin"}/`)
+            ? rawTrunk.slice((up.remote ?? "origin").length + 1)
+            : rawTrunk,
+          root,
+          currentArgv,
         }),
       ]),
     };

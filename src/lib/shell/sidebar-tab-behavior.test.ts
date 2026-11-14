@@ -1,5 +1,5 @@
 /**
- * 侧栏项页签行为配置的纯函数层（ISSUE #3623）。
+ * 界面页签行为配置的纯函数层（ISSUE #3623 / #3798）。
  *
  * 这一层的题目是**一份配置怎么被读懂**：手改坏的 JSON 会不会把工作区打成 500、
  * 本机覆盖是「整份压过」还是「逐项压过」、差集化之后「改回默认」成不成立。
@@ -52,6 +52,10 @@ describe("项目默认（跟代码走的那份）", () => {
     expect(config["mode-contract"]).toBe("shared");
     expect(config.models).toBe("independent");
     expect(config.console).toBe("independent");
+    /* ISSUE #3798：非侧栏的两屏也有出厂档位 —— 设置读过即走，控件总览切走不关。
+       漏登记任何一屏，它就没有配置条目、界面上也不出现那一行。 */
+    expect(config.settings).toBe("shared");
+    expect(config.uiKit).toBe("independent");
   });
 
   it("返回的是副本：调用方改了它不会污染下一位调用方", () => {

@@ -15,6 +15,7 @@ import { Switch } from "~/components/ui/switch";
 import { FieldLabel } from "~/components/ui/field";
 
 import type { CanvasSettings } from "./canvas-settings-types";
+import { Hint } from "~/components/ui/hint";
 
 /* 读数格式化：`fixed` 是全库 `toFixed` 的唯一落点（~/lib/number-format），
  * 非有限数返回 null —— 这里以空串兜底，不渲染出「NaN」。 */
@@ -265,9 +266,9 @@ function SliderRow({
   return (
     <FieldLabel className="block">
       <div className="mb-1 flex items-baseline justify-between gap-2 text-[11.5px]">
-        <span className="text-ink-soft" title={tooltip}>
-          {label}
-        </span>
+        <Hint label={tooltip}>
+          <span className="text-ink-soft">{label}</span>
+        </Hint>
         <span className="text-ink-soft font-mono tabular-nums">{format(value)}</span>
       </div>
       <RangeSlider max={max} min={min} onChange={onChange} step={step} value={value} />
@@ -288,9 +289,9 @@ function ToggleRow({
 }) {
   return (
     <FieldLabel className="flex cursor-pointer items-center justify-between gap-2 text-[11.5px]">
-      <span className="text-ink-soft" title={tooltip}>
-        {label}
-      </span>
+      <Hint label={tooltip}>
+        <span className="text-ink-soft">{label}</span>
+      </Hint>
       {/* 与 ProjectCanvasSettings 的 ToggleRow 是同一件事（开关），此前各画
  一份 —— 现在都走 ui/switch（规范 16 §16.2.3）。 */}
       <Switch checked={value} className="shrink-0" onCheckedChange={onChange} />

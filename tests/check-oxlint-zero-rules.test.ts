@@ -130,17 +130,23 @@ describe("已清零 oxlint 规则集闸（#3016）", () => {
     expect(`${r.stdout}${r.stderr}`).toContain("互斥");
   });
 
-  it("探针配置声明了清单涉及的全部内建族（plugins 是替换语义，漏一个挤一个）", () => {
-    // `plugins:` 行存在 ⇒ 缺省族被这一行**替换**（实测：只写 import/react 时
-    // unicorn 从 --rules 的 Enabled 列消失，ISSUE #3340）。声明集合必须是
-    // 清单涉及的内建族全集 —— 直接起探针（顺带刷新生成物）后钉**行为**。
-    const r = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8" });
-    expect(r.status, `stderr: ${r.stderr}`).toBe(0);
-    const probe = readFileSync("node_modules/.cache/oxlint-zero-rules.config.mjs", "utf8");
-    expect(probe).toContain('plugins: ["import", "react", "typescript", "unicorn"]');
-    // jsPlugins 的名字不进 plugins 数组（写进去反而 Unknown plugin，实测）。
-    expect(probe).not.toContain('"perfectionist"]');
-  });
+  // 这一条要真起一次全仓扫描（无参 ≈ 2597 份文件，本机实测 ≈38.5s）才拿到探针生成物，
+  // 默认 30s 必超时（ISSUE #3652）：与上面正控那条同档显式预算，断言一字不动。
+  it(
+    "探针配置声明了清单涉及的全部内建族（plugins 是替换语义，漏一个挤一个）",
+    { timeout: 300_000 },
+    () => {
+      // `plugins:` 行存在 ⇒ 缺省族被这一行**替换**（实测：只写 import/react 时
+      // unicorn 从 --rules 的 Enabled 列消失，ISSUE #3340）。声明集合必须是
+      // 清单涉及的内建族全集 —— 直接起探针（顺带刷新生成物）后钉**行为**。
+      const r = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8" });
+      expect(r.status, `stderr: ${r.stderr}`).toBe(0);
+      const probe = readFileSync("node_modules/.cache/oxlint-zero-rules.config.mjs", "utf8");
+      expect(probe).toContain('plugins: ["import", "react", "typescript", "unicorn"]');
+      // jsPlugins 的名字不进 plugins 数组（写进去反而 Unknown plugin，实测）。
+      expect(probe).not.toContain('"perfectionist"]');
+    },
+  );
 });
 
 /**

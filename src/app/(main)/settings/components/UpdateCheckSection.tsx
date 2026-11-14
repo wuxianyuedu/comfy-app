@@ -16,6 +16,7 @@ import { Spinner } from "~/components/ui/spinner";
 
 import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { FieldLabel } from "~/components/ui/field";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 
 export function UpdateCheckSection() {
   const updateCheckEnabled = useUpdateCheckStore((s) => s.enabled);
@@ -35,7 +36,7 @@ export function UpdateCheckSection() {
   };
 
   return (
-    <SettingsCard title="本地更新检测">
+    <SettingsCard title="本地更新检测" titleExtra={<DataLocationBadge id="update-check" />}>
       <p className="text-muted-foreground mb-4 text-xs leading-relaxed">
         桌面壳开着时，本地源码由 dev server 自动热更（无需提示）。仅当
         <strong className="text-ink/80">改完当前窗口不生效、得重启</strong>

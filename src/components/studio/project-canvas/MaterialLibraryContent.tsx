@@ -23,6 +23,7 @@ import { mediaDragSourceProps } from "~/components/ui/media-drag-source";
 import { fmtBytes } from "~/lib/format-bytes";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { displayValue } from "~/lib/display-value";
 import type { MaterialItem } from "~/lib/media/materials-client";
 import type { MaterialLibraryController } from "./hooks/use-material-library";
@@ -146,7 +147,9 @@ export function MaterialLibraryContent({
                     </div>
                   )}
                 </div>
-                <p className="text-ink-soft text-2xs truncate px-2 py-1.5">{item.name}</p>
+                <p className="text-ink-soft text-2xs px-2 py-1.5">
+                  <TruncatedText className="block truncate">{item.name}</TruncatedText>
+                </p>
                 {/* hover 操作 */}
                 <div className="absolute top-1 right-1 hidden gap-1 group-hover:flex">
                   {onUse && (
@@ -209,7 +212,9 @@ export function MaterialLibraryContent({
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="text-ink-bright truncate text-sm">{item.name}</p>
+                  <p className="text-ink-bright text-sm">
+                    <TruncatedText className="block truncate">{item.name}</TruncatedText>
+                  </p>
                   <p className="text-ink-fainter text-2xs mt-0.5">
                     {searching ? `${item.folderName} ·` : ""}
                     {displayValue(fmtBytes(item.size))}
@@ -230,15 +235,16 @@ export function MaterialLibraryContent({
                       </Button>
                     </Hint>
                   )}
-                  <a
-                    className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
-                    download={item.name}
-                    draggable={false}
-                    href={item.url}
-                    title="下载"
-                  >
-                    <Download size={13} />
-                  </a>
+                  <Hint label="下载">
+                    <a
+                      className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
+                      download={item.name}
+                      draggable={false}
+                      href={item.url}
+                    >
+                      <Download size={13} />
+                    </a>
+                  </Hint>
                   <Hint accessibleName label="删除">
                     <Button
                       className="text-ink-muted hover:bg-subtle hover:text-destructive rounded-md"
@@ -273,9 +279,9 @@ export function MaterialLibraryContent({
               >
                 <Folder size={22} strokeWidth={1.8} />
               </div>
-              <span className="text-ink-soft min-w-0 truncate text-center text-xs">
+              <TruncatedText className="text-ink-soft min-w-0 truncate text-center text-xs">
                 {folder.name}
-              </span>
+              </TruncatedText>
               {folder.count > 0 && (
                 <span className="text-ink-fainter text-3xs tabular-nums">{folder.count}</span>
               )}
@@ -298,7 +304,9 @@ export function MaterialLibraryContent({
               >
                 <Folder size={18} strokeWidth={1.8} />
               </div>
-              <span className="text-ink-bright min-w-0 flex-1 truncate text-sm">{folder.name}</span>
+              <TruncatedText className="text-ink-bright min-w-0 flex-1 truncate text-sm">
+                {folder.name}
+              </TruncatedText>
               <span className="text-ink-fainter text-2xs shrink-0 tabular-nums">
                 {folder.count > 0 ? folder.count : ""}
               </span>

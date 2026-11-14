@@ -193,6 +193,7 @@ comfy-cli 解释器」填它的绝对路径即可，留空时行上的错误与�
 | 建库                                    | `pnpm db:push`                                 | （双击启动链路会自动做）          |
 | 生成原文文档                            | `pnpm doc:gen`                                 | `tools/docs/generate-docs.ps1`    |
 | 起组件工作台                            | `pnpm storybook`                               | `tools/start/storybook.ps1`       |
+| 截「改后真实运行」界面（UI 改动交付截图） | `pnpm screenshot [路由]`                       | `tools/start/take-screenshot.ps1`  |
 | 出一份节点镜像的操作计划（装机提速）    | `pnpm ci:image-plan`                           | （Windows 侧同一条命令）          |
 | 组装免安装版（portable zip）             | `pnpm package:portable`                        | `tools/build/package-portable.ps1` |
 | 探测开发盘红利并调优                    | `pnpm dev:drive`                               | `tools/start/tune-dev-drive.ps1`  |
@@ -411,6 +412,7 @@ pnpm check        # eslint + tsc --noEmit
 pnpm ship         # 交出去：提交 → push → 开 PR → 等 CI（--mode auto 全托管 / --mode confirm 关键步确认 / 合并要显式）
 pnpm report:session --range A..B  # 开发汇报骨架（第五节：本轮发现**已立案的号**，不是「要不要提单」的待办；§13.10.9 / §13.10.14）
 pnpm test         # Vitest 单元测试
+pnpm shell:smoke  # 真实 Windows 会话的壳冒烟（前台 / Z 序 / 闪烁收口；需先重编 release 壳，见 §11.10.4）
 pnpm test:e2e     # Playwright e2e
 pnpm run docs     # 生成 API 文档到 docs/api（必须是 run docs：pnpm docs 是内建命令）
 pnpm storybook    # 起组件工作台（http://127.0.0.1:6006）

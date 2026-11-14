@@ -68,9 +68,9 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
         className="data-vertical:self-center data-[orientation=vertical]:h-4"
         orientation="vertical"
       />
-      <span className="text-ink-strong min-w-0 truncate text-sm font-medium" title={label}>
-        {label}
-      </span>
+      <Hint label={label}>
+        <span className="text-ink-strong min-w-0 truncate text-sm font-medium">{label}</span>
+      </Hint>
       {/* 视图说明问号：挂在标题右侧（读者在「这一屏叫什么」的地方顺路看见「还有
           一句解释」）。没有登记的视图不渲染 —— 「没有说明的不显示」。屏内页头不再
           放第二颗：那句话的单一出处是 `viewHelp()`。 */}
@@ -106,6 +106,14 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
           </Button>
         </Hint>
         <MessageCenterButton />
+
+        {/* 设置直达入口（ISSUE #3789）：顶栏右上角一键打开设置，不再「菜单 → 设置」
+            点两次。应用菜单里的「设置」项保留（菜单还在兜底）。 */}
+        <Hint label="设置">
+          <Button aria-label="设置" onClick={onOpenSettings} size="icon-sm" variant="ghost">
+            <Settings data-icon="inline-start" size={16} />
+          </Button>
+        </Hint>
 
         <DropdownMenu>
           {/* `render` 必须直接收那颗 `<Button>`：`DropdownMenuTrigger` 会把 menu 的触发属性（pointerdown / click / `aria-haspopup`）以 props 形式灌进它收到的元素，而 `Hint` 只吃 `label` / `side` / `accessibleName` / `wrap` / `children`、不转发任意 props —— 套在中间（`render={<Hint>…</Hint>}`）等于把这串 props 全丢掉，表现是**按钮点不开菜单**（ISSUE #1384）。

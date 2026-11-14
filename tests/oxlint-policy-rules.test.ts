@@ -10,6 +10,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import oxlintConfig from "../oxlint.parity.config.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -25,7 +27,34 @@ type Override = {
   files?: Array<string> | string;
   rules?: Record<string, unknown>;
 };
-type OxlintConfig = { overrides?: Array<Override> };
+/** 作用面档的消费形状守卫（B5 清账）：files / excludeFiles / rules 逐个对型。 */
+function isOverride(value: unknown): value is Override {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const stringOrStrings = (v: unknown): boolean =>
+    v === undefined ||
+    typeof v === "string" ||
+    (isUnknownArray(v) && v.every((s) => typeof s === "string"));
+  return (
+    stringOrStrings(value.files) &&
+    stringOrStrings(value.excludeFiles) &&
+    (value.rules === undefined || isRecord(value.rules))
+  );
+}
+
+/** oxlint JSON 报告的 diagnostics 守卫（B5 清账）：filename / message 都可选串。 */
+function isDiagnostics(value: unknown): value is Array<{ filename?: string; message?: string }> {
+  return (
+    isUnknownArray(value) &&
+    value.every(
+      (d) =>
+        isRecord(d) &&
+        (d.filename === undefined || typeof d.filename === "string") &&
+        (d.message === undefined || typeof d.message === "string"),
+    )
+  );
+}
 
 const storeSelectorMessage =
   "store selector 里现拼对象字面量 = 每次 store 写入都返回新引用（字段没变也重渲染）。改成只返回原始值/稳定引用，或把派生下沉进 store；useShallow 是最后手段（规范 01 §1.2 / 07 §7.15.1）。";
@@ -36,10 +65,10 @@ const routerMessage =
 const drizzleMessage = "UI/features 不得直接依赖 Drizzle orm,请经 src/lib/core 仓储访问数据。";
 
 function overrides(): Array<Override> {
-  const config = oxlintConfig as unknown as OxlintConfig;
-  const list = config.overrides;
-  expect(Array.isArray(list)).toBe(true);
-  return list ?? [];
+  const config: unknown = oxlintConfig;
+  const list: unknown = isRecord(config) ? config.overrides : undefined;
+  expect(isUnknownArray(list), "判决配置缺 overrides 数组").toBe(true);
+  return isUnknownArray(list) ? list.filter(isOverride) : [];
 }
 
 function filesOf(one: Override): Array<string> {
@@ -52,22 +81,24 @@ function filesOf(one: Override): Array<string> {
 function ruleEntries(rule: string, fileGlob: string): Array<unknown> {
   const block = overrides().find((one) => filesOf(one).includes(fileGlob));
   if (block === undefined) throw new Error(`判决配置里没有 ${fileGlob} 这一档`);
-  const setting = block.rules?.[rule];
-  expect(Array.isArray(setting), `${fileGlob} 那一档没有 ${rule}`).toBe(true);
-  return (setting as RuleSetting).slice(1);
+  const setting: unknown = block.rules?.[rule];
+  expect(isUnknownArray(setting), `${fileGlob} 那一档没有 ${rule}`).toBe(true);
+  return isUnknownArray(setting) ? setting.slice(1) : [];
 }
 
 /** 判决配置里出现过的全部 `no-restricted-syntax` 条目（按 message 去重：
  *  router 专档会为了「层覆盖」再把 store 那两条带一遍，探针只需要一份）。 */
-function syntaxEntries(): Array<{ message: string }> {
-  const seen = new Map<string, { message: string }>();
+function syntaxEntries(): Array<Record<string, unknown>> {
+  const seen = new Map<string, Record<string, unknown>>();
   for (const one of overrides()) {
-    const setting = one.rules?.["eslint-js/no-restricted-syntax"];
-    if (!Array.isArray(setting)) continue;
-    for (const entry of setting.slice(1) as Array<{ message?: string }>) {
-      const message = entry.message;
-      if (typeof message === "string") {
-        seen.set(message, entry as { message: string });
+    const setting: unknown = one.rules?.["eslint-js/no-restricted-syntax"];
+    if (!isUnknownArray(setting)) continue;
+    /* 整条 entry 原样保留（selector + message）——探针少一个字段 oxlint 的
+       options 校验就拒（实测 "Options validation failed"）。 */
+    for (const entry of setting.slice(1)) {
+      const message: unknown = isRecord(entry) ? entry.message : undefined;
+      if (typeof message === "string" && isRecord(entry)) {
+        seen.set(message, entry);
       }
     }
   }
@@ -113,9 +144,12 @@ function runProbe(probeConfig: string, fixtures: Array<string>): Map<string, Arr
   );
   const out = r.stdout;
   expect(out, `oxlint 没输出 JSON：${r.stderr}`).toBeTruthy();
-  const report = JSON.parse(out) as {
-    diagnostics?: Array<{ filename?: string; message?: string }>;
-  };
+  const reportParsed: unknown = JSON.parse(out);
+  const diagnostics: unknown = isRecord(reportParsed) ? reportParsed.diagnostics : undefined;
+  if (!isDiagnostics(diagnostics)) {
+    throw new Error(`oxlint 的 JSON 报告形状变了：${out.slice(0, 200)}`);
+  }
+  const report = { diagnostics };
   const map = new Map<string, Array<string>>();
   for (const diag of report.diagnostics ?? []) {
     const name = path.basename(diag.filename ?? "");
@@ -190,8 +224,12 @@ describe("③ 文件作用面与原来一致", () => {
 
   it("drizzle 档只覆盖 components / features", () => {
     const entries = ruleEntries("eslint-js/no-restricted-imports", "src/components/**");
-    const options = entries[0] as { patterns?: Array<{ group?: Array<string> }> };
-    expect(options.patterns?.[0]?.group).toEqual(["drizzle-orm", "drizzle-orm/*"]);
+    /* 条目形状按 unknown 读（B5 清账）：patterns[0].group 逐层守卫。 */
+    const options: unknown = entries[0];
+    const patterns: unknown = isRecord(options) ? options.patterns : undefined;
+    const first: unknown = isUnknownArray(patterns) ? patterns[0] : undefined;
+    const group: unknown = isRecord(first) ? first.group : undefined;
+    expect(isUnknownArray(group) ? group : undefined).toEqual(["drizzle-orm", "drizzle-orm/*"]);
     const scoped = overrides().filter((one) => filesOf(one).includes("src/components/**"));
     expect(scoped).toHaveLength(1);
     expect(filesOf(scoped[0] ?? {})).toEqual(["src/components/**", "src/features/**"]);

@@ -63,6 +63,7 @@
 | `start/tune-dev-drive.ps1` | start/ | 开发环境 | 探测开发盘（ReFS / Dev Drive）红利并给动作矩阵（逻辑在 `scripts/dev-drive-tune.mjs`，= `pnpm dev:drive`；指南 `docs/guides/dev-drive-refs.md`） |
 | `start/register-comfyapp-protocol.ps1` | start/ | 一次性配置 | 注册 `comfyapp://` 协议（HKCU，免管理员） |
 | `start/Create-AppShortcut.ps1` | start/ | 一次性配置 | 在仓库根生成 `Comfy APP.lnk` 启动快捷方式（由 `build-tauri-release.ps1` / `build-all.ps1` 构建成功后自动调用；手动 `cargo build --release --features custom-protocol` 之后想单独补生成时也可直接双击） |
+| `start/fetch-daily-shell.ps1` | start/ | 获取成品 | 从 CNB 站内每日成品（nightly Release）下载 `ComfyAPP-shell.exe` → `src-tauri/target/release/app.exe`，并在项目根缺少 `Comfy APP.lnk` 时补齐快捷方式（跨平台等价：`pnpm fetch:daily-shell`） |
 | `build/build-tauri-release.ps1` | build/ | 壳 | 构建 `src-tauri/target/release/app.exe`（唯一入口；prebuilt / tauri dev 都用它） |
 | `build/build-standalone.ps1` | build/ | 壳（standalone 用） | 完整生产构建独立壳：`pnpm tauri build --no-bundle`，产出不连 dev server 的可分发壳 |
 | `build/build-all.ps1` | build/ | 一键编排 | `pnpm tauri build`（app.exe + nsis/msi 安装包）→ 在仓库根生成 `Comfy APP.lnk` 双击入口 → 发布到项目内 `dist\desktop` 留 2 份（规范 §7.7） |
@@ -103,6 +104,7 @@
 | `docs/generate-docs.ps1` | `scripts/generate-docs.ps1` |
 | `docs/generate-api-docs.ps1` | `scripts/generate-api-docs.mjs`（跨平台逻辑，入口直调 node —— 这类没有 `.ps1` 逻辑层，见 `scripts/entry-common.ps1` 的说明） |
 | `start/register-comfyapp-protocol.ps1` | `scripts/install-comfyapp-helper.ps1` |
+| `start/fetch-daily-shell.ps1` | `scripts/fetch-daily-shell.mjs`（跨平台逻辑，入口直调 node —— 无 `tools/scripts/*.ps1` 逻辑层） |
 | `start/start-desktop.ps1` | —（自检逻辑内联在入口里，不另起逻辑脚本） |
 
 > **启动类入口原先平铺在仓库根**（`start-web.ps1` / `run-local.ps1` …），2026-09-04

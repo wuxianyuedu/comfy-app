@@ -1,5 +1,6 @@
 "use client";
 /* 影片工坊中栏的时间线：标尺 + 播放头 + 视频/字幕/BGM 三条轨道。 */
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { VIDEO_CLIPS } from "./film-studio-config";
 
 type FilmStudioTimelineProps = {
@@ -85,9 +86,9 @@ export function FilmStudioTimeline({ playheadPos, bgmName }: FilmStudioTimelineP
             >
               <path d="M9 18V5l12-2v13M9 18a3 3 0 01-3-3H3a3 3 0 006 3z" />
             </svg>
-            <span className="text-primary-strong text-4xs truncate">
+            <TruncatedText className="text-primary-strong text-4xs truncate">
               {bgmName ?? "背景音乐 · 氛围感配乐"}
-            </span>
+            </TruncatedText>
           </div>
         </div>
       </div>

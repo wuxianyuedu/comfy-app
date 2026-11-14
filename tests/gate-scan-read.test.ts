@@ -39,8 +39,22 @@ type ScanReader = {
   ) => Array<string>;
 };
 
-/* SAFETY: 类型断言已复核 */
-const reader = requireCjs(READER_PATH) as ScanReader;
+/** `gate-scan-read.cjs` 无类型：出口形状在这里做运行时守卫（B5 清账，不走 `as` 断言）。 */
+function isScanReader(value: unknown): value is ScanReader {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const keys = new Set(Object.keys(value));
+  return (["readdirForScan", "readForScan", "vanishedNote", "walkForScan"] as const).every((k) =>
+    keys.has(k),
+  );
+}
+
+const loadedReader: unknown = requireCjs(READER_PATH);
+if (!isScanReader(loadedReader)) {
+  throw new Error("gate-scan-read.cjs 的出口形状不对（缺 readdirForScan/readForScan/…）");
+}
+const reader = loadedReader;
 
 /** 每格自己建、自己拆：这些用例只在临时目录里活动，不碰工作树。 */
 const made: Array<string> = [];
@@ -84,8 +98,10 @@ describe("readForScan —— 文件级消失窗口", () => {
       thrown = error;
     }
     expect(thrown, "读目录必须抛（吞成 null 就等于静默放行）").toBeTruthy();
-    /* SAFETY: 类型断言已复核 */
-    expect((thrown as NodeJS.ErrnoException).code).not.toBe("ENOENT");
+    /* code 用 `in` 守卫取值，不走 `as` 断言（B5 清账）。 */
+    const code: unknown =
+      typeof thrown === "object" && thrown !== null && "code" in thrown ? thrown.code : null;
+    expect(code).not.toBe("ENOENT");
   });
 });
 
@@ -294,14 +310,13 @@ describe("立案现场回归 —— 从仓库根递归的判据撞上并发删�
         },
       );
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      const e = error as {
-        status?: number;
-        stderr?: string;
-        stdout?: string;
-      };
+      /* 失败形状用运行时守卫取字段，不走 `as` 断言（B5 清账）。 */
+      const e: { status?: unknown; stderr?: unknown; stdout?: unknown } =
+        typeof error === "object" && error !== null ? error : {};
       code = typeof e.status === "number" ? e.status : 1;
-      output = `${e.stdout ?? ""}${e.stderr ?? ""}`;
+      output = `${typeof e.stdout === "string" ? e.stdout : ""}${
+        typeof e.stderr === "string" ? e.stderr : ""
+      }`;
     }
 
     /* ① 不崩：`ENOENT` 的那条栈不许出现在输出里（它出现说明异常冒到了顶层）。 */

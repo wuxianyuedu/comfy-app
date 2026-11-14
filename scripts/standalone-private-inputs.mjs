@@ -38,6 +38,25 @@ import { join } from "node:path";
  * file tracing 一起带进 `.next/standalone`，再随 `src-tauri/static` 进安装包——
  * **解包即得开发机的密钥与全部本机设置**。`data/` 目录本身是运行期按需建的
  * （两处写入方都有 `mkdirSync(..., { recursive: true })`），剔除不会改变任何行为。
+ *
+ * ## `data/` 这一族是**逐条点名**的（不是默认拒绝）
+ *
+ * 规则只有一句：**凡是按 `process.cwd()` 落在 `data/` 下的本机私有文件或目录，都必须
+ * 在这份名单里逐个点名**；新增写入方时**同批登记**，并写清「谁在运行期读它」——
+ * 出厂件该读的是项目默认 / 编译进产物的那份，本机覆盖只属于「这台机器上额外改的
+ * 那点东西」。
+ *
+ * 为什么这一族逐条点名、而不是再写一条「`data/` 整目录删」：整目录那一刀**已经有了**
+ * ——顶层默认拒绝（ISSUE #1217，见下面那段）。这一份是**逐文件 / 逐目录**的那一层：
+ * 它认的是「这一份具体的东西不许随包」，与目录级那一刀认的形状不同，所以将来任一处
+ * 改了形状，另一处仍认得这份东西。再写一条整目录条目只会是同一个决定的第三份副本。
+ *
+ * ⚠️ 这份名单**不是唯一那道网**：顶层默认拒绝（ISSUE #1217）把产物根那一整个
+ * `data/` 目录都不在两层顶层白名单里，所以整目录都会被剪掉（实测：减法跑完
+ * `.next/standalone/data` 不复存在）。本名单是**逐项**的第二道网，两道网认的
+ * 形状不同（目录级那一刀认「这个目录整体不进产物」，这一份认「这一项具体的东西不许
+ * 随包」），**只登记一份就会漏**——`db.sqlite` 当年就是这么漏的（那次表现是构建全绿、
+ * 开发库进了出厂件）。
  */
 export const PRIVATE_INPUTS = [
   ".env",
@@ -57,10 +76,85 @@ export const PRIVATE_INPUTS = [
   // 点界面偏好」，随包出去就等于让所有用户都拿到造包者的侧栏选择 —— 出厂件该读的是
   // 项目默认那份（编译进产物）。
   "data/sidebar-tab-behavior.json",
+  // 模式契约的**本机覆盖**（ISSUE #3646）：写入方是
+  // `src/lib/workshop/mode-contract.server.ts`，落盘路径取自
+  // `src/lib/workshop/mode-contract-write-path.ts` 的 `MODE_CONTRACTS_REL_PATH`。
+  // 它是「这台机器上改过的那点契约配置」，随包出去就等于让所有用户拿到**造包者**的
+  // 契约口径。运行期该读的是项目默认那份（`src/lib/workshop/mode-contract-defaults.json`，
+  // 被 `model-mode-contract.ts` 静态 import ⇒ 编译进产物；桌包里 `src/` 不随包 ⇒
+  // 读到的就是编译进包的那份快照）。
+  "data/workshop-mode-contracts.json",
+  // 工坊 API 通道的**本机配置**，**含上游 apiKey**（写入方：
+  // `src/lib/workshop/api-channel.server.ts` 与 MCP 侧 `src/server/workshop/api-channel.ts`，
+  // 两者共用 `api-channel-core.ts` 的 `WORKSHOP_API_SETTINGS_FILE`）。凭据类，随包出去
+  // = 造包者的 key 落到每个用户手里；出厂件的通道配置由用户自己在设置页填。
+  "data/workshop-api-settings.json",
+  // 工坊 ComfyUI 通道的**本机配置**（写入方 `src/server/workshop/comfyui.ts` 的
+  // `SETTINGS_FILE`）：这台机器上装了哪个 checkpoint、i2v / 自定义图的工作流模板。
+  // 它记的是「这台机器上装了什么」，出厂件该走内置的 SDXL txt2img 那份默认。
+  "data/workshop-comfy-settings.json",
+  // `data/` 下剩下的三处是**目录**（不是单文件）：数据库备份快照（写入方
+  // `scripts/db-backup-core.mjs` 的 `BACKUP_DIR`）、工坊 ComfyUI 通道的产物
+  // （`src/server/workshop/comfyui.ts` 的 `OUTPUT_DIR`）、工坊合成的产物
+  // （`src/server/workshop/final-compose.ts` 的 `COMPOSE_DIR`）。
+  // 它们装不进「逐文件」那一层，只能按**目录**点名 —— 所以 `stripPrivateInputs`
+  // 的删除动作必须能删目录（见下面那个函数）。
+  //
+  // 为什么它们也必须点名：备份快照里躺着**这台机器的整库**（用户的数据），产物目录里
+  // 躺着**这台机器生成的图**；随包出去就等于把造包者的数据发给每个用户。
+  "data/backups",
+  "data/workshop-outputs",
+  "data/workshop-compositions",
 ];
 
 /**
+ * 这条路径**穿过**符号链接了吗（逐段判父段，不跟进去）。
+ *
+ * 为什么要有这一格：登记的三处 `data/` **目录**要用 `rmSync(recursive)` 删，而
+ * `data/` 在产物里**理论上**可能是链接（tracing 今天复制的是真实目录，但「换了复制
+ * 方式」就未必）—— 顺着链接递归删会**直接删掉开发机上的那一份**（开发机的
+ * `data/backups/` 里躺着整库快照）。本仓最贵的一类事故正是这一族：被删的是产物，
+ * 消失的是别人的数据。
+ *
+ * 判法与 `stripForbiddenShapes` 同一套纪律（逐段 `lstat`，撞上链接就停），只是
+ * 形态不同：那份是**递归走**时逐段判，那份是**按名点名**时先判父段。
+ *
+ * 只判**父段**不判叶子：叶子本身是链接时 `rmSync` 删的是**链接本身**（实测：
+ * 目标文件仍在），那正是我们要的；父段是链接时，删叶子就等于删到链接外面去了。
+ *
+ * @param {string} base 产物根
+ * @param {string} rel 相对产物根的路径
+ * @returns {boolean}
+ */
+function traversesSymlink(base, rel) {
+  const segments = String(rel ?? "")
+    .split(/[\\/]+/)
+    .filter((segment) => segment !== "");
+  let current = base;
+  // 叶子不算在内（见上面那段）
+  for (const segment of segments.slice(0, -1)) {
+    current = join(current, segment);
+    try {
+      if (lstatSync(current).isSymbolicLink()) {
+        return true;
+      }
+    } catch {
+      return false; // 读不到 ⇒ 后面也不存在，当作没穿过链接
+    }
+  }
+  return false;
+}
+
+/**
  * 从某个产物目录里删除开发机私有输入。
+ *
+ * 删除动作**能删目录**（`recursive: true`）：`PRIVATE_INPUTS` 里登记了三处
+ * `data/` 下的**目录**（备份快照 / 工坊产物），而 `rmSync` 不带 `recursive` 撞上
+ * 目录会抛 `ERR_FS_EISDIR` —— 那会让一次构建在「减法」这一跳当场崩掉。
+ *
+ * ⚠️ **不顺着符号链接删**（`traversesSymlink`）：父段是链接时**跳过这一项** ——
+ * 跟着删会损坏开发机上的那一份（那是别人机器上的数据，删的是产物）。
+ * 叶子本身是链接时删的是**链接本身**（实测：目标文件仍在），那一格是安全的。
  *
  * @param {string} dir 产物目录（`.next/standalone` 或 `src-tauri/static`）
  * @param {(name: string) => void} [onRemoved] 每删一项的回调（用于日志）
@@ -70,11 +164,16 @@ export function stripPrivateInputs(dir, onRemoved) {
   const removed = [];
   for (const name of PRIVATE_INPUTS) {
     const p = join(dir, name);
-    if (existsSync(p)) {
-      rmSync(p, { force: true });
-      removed.push(name);
-      onRemoved?.(name);
+    if (!existsSync(p)) {
+      continue;
     }
+    if (traversesSymlink(dir, name)) {
+      // 链接后面的东西不是产物自己的内容 ⇒ 不碰（留着由顶层默认拒绝那一刀收整目录）
+      continue;
+    }
+    rmSync(p, { recursive: true, force: true });
+    removed.push(name);
+    onRemoved?.(name);
   }
   return removed;
 }
@@ -142,6 +241,13 @@ export const RUNTIME_SCRIPTS = [
   // `db-backup.mjs`（`pnpm db:backup` 的手动档）**不在**这里：它是给人敲的
   // 命令，桌包里没有它也不影响任何运行时路径。
   "db-backup-core.mjs",
+  // 本机应用数据备份 / 恢复的实现（ISSUE #3732，PR #3758 引入）：`db-backup-core.mjs`
+  // 顶层静态 import 它的 `restoreAppDataBackup` —— 缺这份同样是整个编排器加载即
+  // ENOENT，而表现只是「双击没反应」。⚠️ 它当初**漏登记**过：#3732 那批把内部分件
+  // 加进了编排器闭包，却没同批补这两份清单 ⇒ 主干上的
+  // `tests/dist-artifact-hygiene.test.ts`（清单覆盖编排器的相对 import 闭包）长期红着
+  // （2026-11-14 由 #3780 那次 PR 的 CI 撞见并就地补上）。
+  "app-data-backup.mjs",
   // 统一的进程树回收入口：编排器收尾、Python 启动器的兜底补刀、Rust 壳的
   // `kill_sidecar` 补刀都调它（平台判据只此一份，见 AGENTS 硬规则 3），
   // 连同它 import 的 kill-process-tree 一起缺不了。
@@ -517,166 +623,14 @@ export function pruneStandaloneToAllowList(dir, onRemoved) {
   return pruneToAllowList(dir, isStandalonePathAllowed, onRemoved);
 }
 
-/**
- * 构建期产出、不在仓库源码里的白名单条目（相对 scripts/）。
- *
- * scripts/build-desktop.mjs 拷 RUNTIME_SCRIPTS 时**跳过**这些名字（仓库里没有同名
- * 源文件，按缺件失败会把人引向「清单漂了」这个错方向），改在组装完整树之后断言它们
- * 还在——真正的故障是「忘了跑 pnpm build 里的那一步」或「被剪枝误删」。
- */
-export const BUILT_RUNTIME_SCRIPTS = ["executor-host.runtime.mjs", "executor-host.build.json"];
-
-/** 产物根下不该随分发包出去的开发文件（相对产物根）。 */
-export const DEV_ARTIFACTS = [
-  "AGENTS.md",
-  "CHANGELOG-archive.md",
-  "CHANGELOG.md",
-  "README.md",
-  "components.json",
-  "drizzle.config.ts",
-  "playwright.config.ts",
-  "pnpm-lock.yaml",
-  "pnpm-workspace.yaml",
-  "prettier.config.js",
-  "tsconfig.json",
-  "typedoc.json",
-  "vitest.config.ts",
-  // TypeScript 增量编译缓存：构建期产物，不是运行时依赖
-  "tsconfig.tsbuildinfo",
-  "__pycache__",
-  // 文档目录与变更碎片（都是产物根下的整目录，直接整删最省事）。
-  // 「`.md` 不该随分发包出去」这条主张有两处判据在数：
-  // `check-standalone-contents.cjs` 的 `["变更碎片"]`/`["文档目录"]` 两行，以及
-  // `tests/turbopack-tracing-excludes.test.ts` 的同名产物探针。
-  // `./docs/**`、`./changelog.d/**` 早就写在 `next.config.js` 的
-  // outputFileTracingExcludes 里，**但实测对 tracing 带进来的文件不做减法**
-  // （写在清单里的同一批目录，产物里仍有 747 个变更碎片真文件）——
-  // 与 AGENTS 硬规则 17 记的 `.env` 是同一件事：兜底只能在这里显式删。
-  "docs",
-  "changelog.d",
-  // `tools/docs/` 单列而不整删 `tools/`：后者该不该进产物是打包线的判断，
-  // 这里只清无争议的文档。
-  "tools/docs",
-];
-
-/**
- * 按**形状**递归剔除的条目（相对产物根的路径命中即删）。
- *
- * 为什么根级清单（DEV_ARTIFACTS）不够：这三类形状有相当一部分不在产物根，而是
- * 藏在解引用之后的依赖包里 —— `src-tauri/static`（最终被编译期内嵌进 exe 的那份）
- * 实测有 472 个 `node_modules/<pkg>/docs/` 下的 .md、24 个 `src/` 下的 .test.tsx，
- * 都不是「某个根目录」，列不进按目录名删的那张表。
- *
- * **判据必须与 `check-standalone-contents.cjs` 的 FORBIDDEN 同源**（这几条正则逐字
- * 相同，由 `tests/dist-artifact-hygiene.test.ts` 核对）：剔除侧与检查侧一旦漂移，
- * 表现是「删掉了却仍判违规」或「判违规却没人删」，两边都白跑。
- *
- * @type {Array<[string, RegExp]>}
- */
-export const FORBIDDEN_SHAPES = [
-  ["测试文件", /(?:^|\/)src\/.*\.test\.tsx?$/],
-  ["变更碎片", /(?:^|\/)changelog\.d\/.*\.md$/],
-  ["文档目录", /(?:^|\/)docs\/.*\.md$/],
-];
-
-/**
- * 密钥与开发库的**形状**（同样按产物根相对路径判，命中即删）。
- *
- * 为什么根级清单（PRIVATE_INPUTS）不够：那条只删产物根那层的
- * `.env` / `db.sqlite`，而全项目 tracing 会把藏在子目录里的开发库一起带进来
- * （实测 `check-standalone-contents.cjs` 在 `static` 上报出过旧布局下的 `db.sqlite`
- * 这一条 —— 判据早就写了「开发库文件绝不能出现」，减法却一直没人做）。
- * 表现不是多个文件，而是**上一台机器的数据成为出厂数据**。
- *
- * @type {Array<[string, RegExp]>}
- */
-export const PRIVATE_SHAPES = [
-  ["开发机私有输入", /(?:^|\/)\.env(?:\.[^/]*)?$/],
-  ["开发库文件", /(?:^|\/)db\.sqlite(?:-wal|-shm)?$/],
-];
-
-/**
- * 剔除侧实际用的全集（形状级 + 密钥/开发库级）。
- *
- * @type {Array<[string, RegExp]>}
- */
-const ALL_SHAPES = [...PRIVATE_SHAPES, ...FORBIDDEN_SHAPES];
-
-/**
- * 递归剔除命中形状清单的文件，并收掉被掏空的目录。
- *
- * ⚠️ **不穿符号链接**（用 `lstatSync` 判类型、是链接就整条跳过）：
- * `.next/standalone/node_modules/<pkg>` 是指向本仓库 `node_modules/.pnpm/...`
- * 真 store 的链接（实测 `node_modules/next` 的链接目标就是开发机那份 Next），
- * 顺着链接删 `.md` 会**直接损坏开发机的依赖**，而不是清理产物。
- * 依赖包的内容真正变成产物里的真文件，是在 `build-desktop.mjs` 用
- * `dereference: true` 拷进 `static` 之后 —— 所以同一次剔除在 `staticDir` 上
- * 才会命中那 472 个文档；在 standalone 上命中的是 `src/` 下那些真文件。
- * 这条分工也是产物探针只信「真文件」的依据（见规范 §7.2）。
- *
- * @param {string} dir 产物目录（`.next/standalone` 或 `src-tauri/static`）
- * @param {(name: string) => void} [onRemoved] 每删一项的回调（用于日志）
- * @param {number} [reportLimit] 最多回调几条：这类文件成百，全打会淹掉构建输出，
- *   而**返回值不受它影响**（调用方要计数时拿到的是全量）
- * @returns {string[]} 实际删掉的相对路径
- */
-export function stripForbiddenShapes(dir, onRemoved, reportLimit = Infinity) {
-  /** @type {string[]} */
-  const removed = [];
-  pruneShapeWalk(dir, "", removed, onRemoved, reportLimit);
-  return removed;
-}
-
-/**
- * 深度优先剔除；删空了的目录顺手收掉（空目录不参与模块解析，删它没有副作用）。
- *
- * @param {string} absDir 当前目录的绝对路径
- * @param {string} prefix 相对产物根的路径前缀（顶层调用传空串）
- * @param {string[]} removed 输出：实际删掉的相对路径（全量，不受 reportLimit 影响）
- * @param {((name: string) => void) | undefined} onRemoved
- * @param {number} reportLimit 只回调前这么多条（见 stripForbiddenShapes）
- */
-function pruneShapeWalk(absDir, prefix, removed, onRemoved, reportLimit) {
-  let names;
-  try {
-    names = readdirSync(absDir);
-  } catch {
-    return; // 读不到的目录不是违规，跳过（断链 / 权限）
-  }
-  for (const name of names) {
-    const abs = join(absDir, name);
-    const rel = prefix ? `${prefix}/${name}` : name;
-    let st;
-    try {
-      st = lstatSync(abs);
-    } catch {
-      continue;
-    }
-    if (st.isSymbolicLink()) {
-      continue;
-    }
-    if (st.isDirectory()) {
-      pruneShapeWalk(abs, rel, removed, onRemoved, reportLimit);
-      try {
-        if (readdirSync(abs).length === 0) {
-          rmSync(abs, { recursive: true, force: true });
-        }
-      } catch {
-        /* 收不掉就留着：空目录无害，不值得为它把整趟剔除判成失败 */
-      }
-      continue;
-    }
-    if (!ALL_SHAPES.some(([, re]) => re.test(rel))) {
-      continue;
-    }
-    rmSync(abs, { force: true });
-    removed.push(rel);
-    // 只回报名额内的几条：这类文件成百，全打会把构建输出淹掉
-    if (removed.length <= reportLimit) {
-      onRemoved?.(rel);
-    }
-  }
-}
+export {
+  BUILT_RUNTIME_SCRIPTS,
+  DEV_ARTIFACTS,
+  FORBIDDEN_SHAPES,
+  PRIVATE_SHAPES,
+  stripForbiddenShapes,
+} from "./standalone-dev-artifacts.mjs";
+import { stripDevArtifacts as stripDevArtifactsImpl } from "./standalone-dev-artifacts.mjs";
 
 /**
  * 剔除开发期文件与内部门禁脚本（白名单保留 RUNTIME_SCRIPTS）。
@@ -686,99 +640,7 @@ function pruneShapeWalk(absDir, prefix, removed, onRemoved, reportLimit) {
  * @returns {string[]} 实际删掉的条目名
  */
 export function stripDevArtifacts(dir, onRemoved) {
-  const removed = [];
-  for (const name of DEV_ARTIFACTS) {
-    const p = join(dir, name);
-    if (existsSync(p)) {
-      rmSync(p, { recursive: true, force: true });
-      removed.push(name);
-      onRemoved?.(name);
-    }
-  }
-  // scripts/：白名单之外一律剔除（新增脚本默认不进产物）。
-  // 白名单条目允许是相对路径（如 `launcher-core/orchestrator.mjs`）：逐层比对，
-  // 目录只有在「白名单里有它的子项」时才保留。
-  const scriptsDir = join(dir, "scripts");
-  if (existsSync(scriptsDir)) {
-    pruneNotWhitelisted(scriptsDir, "", RUNTIME_SCRIPTS, removed, onRemoved);
-    // 全部被剔（未来 RUNTIME_SCRIPTS 变空）时不留空目录
-    if (readdirSync(scriptsDir).length === 0) {
-      rmSync(scriptsDir, { recursive: true, force: true });
-    }
-  }
-  // 形状级剔除（测试文件 / 变更碎片 / 依赖包文档）。量大：实测 standalone 有
-  // 406 个测试文件、static 有 472 个依赖包文档，逐条打日志会把构建输出淹掉，
-  // 所以只点名前几条（走调用方的 onRemoved，它们是真实相对路径），
-  // 分类计数作为返回值的一项汇总出现。
-  const shapeRemoved = stripForbiddenShapes(dir, (rel) => onRemoved?.(rel), 5);
-  if (shapeRemoved.length > 0) {
-    const byTag = new Map();
-    for (const rel of shapeRemoved) {
-      const tag = ALL_SHAPES.find(([, re]) => re.test(rel))?.[0] ?? "其它";
-      byTag.set(tag, (byTag.get(tag) ?? 0) + 1);
-    }
-    removed.push(
-      `形状剔除 ${shapeRemoved.length} 个（${[...byTag]
-        .map(([tag, n]) => `${tag} ${n}`)
-        .join(" / ")}）`,
-    );
-  }
-  return removed;
-}
-
-/**
- * 按白名单剔除目录内的条目（支持 `a/b.mjs` 形式的相对路径）。
- *
- * 为什么白名单允许嵌套路径而不是「目录级放行」：目录级放行会让**以后新增**的
- * 脚本自动进产物 —— 而「新增脚本默认不进产物、要留下必须显式登记」正是这条
- * 白名单存在的全部意义。
- *
- * @param {string} absDir 当前扫描的绝对目录
- * @param {string} prefix 相对产物根的相对前缀（顶层调用传空串）
- * @param {string[]} allowed 白名单（相对 `scripts/` 的路径）
- * @param {string[]} removed 输出：实际删掉的条目（相对 `scripts/`）
- * @param {(name: string) => void} [onRemoved]
- */
-function pruneNotWhitelisted(absDir, prefix, allowed, removed, onRemoved) {
-  const direct = new Set();
-  const nested = new Set();
-  for (const rel of allowed) {
-    if (prefix && !rel.startsWith(`${prefix}/`)) {
-      continue;
-    }
-    const rest = prefix ? rel.slice(prefix.length + 1) : rel;
-    const [head] = rest.split("/");
-    if (!head) {
-      continue;
-    }
-    direct.add(head);
-    if (rest.includes("/")) {
-      nested.add(head);
-    }
-  }
-  for (const name of readdirSync(absDir)) {
-    const rel = prefix ? `${prefix}/${name}` : name;
-    const abs = join(absDir, name);
-    let isDir = false;
-    try {
-      isDir = statSync(abs).isDirectory();
-    } catch {
-      /* 读不到时按需删除处理 */
-    }
-    if (isDir && direct.has(name) && nested.has(name)) {
-      pruneNotWhitelisted(abs, rel, allowed, removed, onRemoved);
-      continue;
-    }
-    if (!isDir && direct.has(name)) {
-      continue;
-    }
-    if (isDir && nested.has(name)) {
-      continue;
-    }
-    rmSync(abs, { recursive: true, force: true });
-    removed.push(`scripts/${rel}`);
-    onRemoved?.(`scripts/${rel}`);
-  }
+  return stripDevArtifactsImpl(dir, onRemoved, RUNTIME_SCRIPTS);
 }
 
 /** 作为脚本直接执行：清理 `.next/standalone`。 */

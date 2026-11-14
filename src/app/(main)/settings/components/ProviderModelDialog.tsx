@@ -26,13 +26,16 @@ import { useState } from "react";
 
 import { ChevronDownIcon } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { FieldLegend, FieldSet } from "~/components/ui/field";
 import { FormField } from "~/components/ui/form-field";
 import { Input } from "~/components/ui/input";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { Switch } from "~/components/ui/switch";
+import { Textarea } from "~/components/ui/textarea";
 import { Toggle } from "~/components/ui/toggle";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { EMPTY_PLACEHOLDER } from "~/lib/display-value";
 import { textHandler } from "~/lib/form-props";
 import {
@@ -70,18 +73,12 @@ export function ProviderModelDialog({
   const providerBaseUrl = provider?.baseUrl ?? "";
   const requestUrl = requestUrlForFormat(providerBaseUrl, d.modelForm.apiFormat);
   /* 图像 / 视频（#3656）：「接口端点」是下拉（词表 `REMOTE_MEDIA_ENDPOINT_OPTIONS`，
-   * 生效值在表单里，库里没配 = 用途默认第一项）；这里只拼最终地址做提示展示。 */
+   * 生效值在表单里，库里没配 = 用途默认第一项）；下拉的触发框与选项只显示词表
+   * 路径段本身（/v1 起那段），完整请求地址由下方「实际请求地址」提示承担（#3671）
+   * —— 同一信息不念两遍，也不让整串地址挤爆一行。 */
   const isChat = d.modelForm.kind === "chat";
   const mediaOptions: ReadonlyArray<string> =
     d.modelForm.kind === "chat" ? [] : REMOTE_MEDIA_ENDPOINT_OPTIONS[d.modelForm.kind];
-  /* 选项标签 = 按 Base URL 拼出的最终请求地址；Base 还没填时给路径段本身
-   * （joinApiUrl 对空 Base 返回空串，直接拼会只剩一个光秃秃的 POST）。 */
-  const mediaEndpointLabels: Record<string, string> = Object.fromEntries(
-    mediaOptions.map((path) => [
-      path,
-      `POST ${providerBaseUrl === "" ? path : joinApiUrl(providerBaseUrl, path)}`,
-    ]),
-  );
   const mediaEndpointUrl =
     !isChat && d.modelForm.endpointPath !== ""
       ? joinApiUrl(providerBaseUrl, d.modelForm.endpointPath)
@@ -112,9 +109,11 @@ export function ProviderModelDialog({
             <div className="min-w-0">
               <h3 className="u-title">{dialog.mode === "edit" ? "编辑模型" : "添加模型"}</h3>
               {provider && (
-                <p className="text-muted-foreground text-2xs mt-0.5 truncate">
-                  所属供应商：{provider.name}
-                </p>
+                <Hint label={`所属供应商：${provider.name}`}>
+                  <p className="text-muted-foreground text-2xs mt-0.5 truncate">
+                    所属供应商：{provider.name}
+                  </p>
+                </Hint>
               )}
             </div>
             <Button
@@ -257,7 +256,6 @@ export function ProviderModelDialog({
                   autoFitFromOptions={false}
                   className="text-sm"
                   fullWidth
-                  labels={mediaEndpointLabels}
                   onChange={(next) => {
                     d.patchModelForm({ endpointPath: next });
                   }}
@@ -317,6 +315,11 @@ export function ProviderModelDialog({
           )}
 
           {isChat && <ModelAdvancedFieldset d={d} defaultOpen={dialog.mode === "edit"} />}
+
+          <ModelExtraBodyFieldset
+            d={d}
+            defaultOpen={dialog.mode === "edit" && d.modelForm.extraBody.trim() !== ""}
+          />
 
           {d.modelError !== null && d.modelError !== "" && (
             <p className="bg-destructive/10 text-danger-strong mt-2 rounded-lg px-3 py-2 text-xs">
@@ -508,9 +511,9 @@ function ModelAdvancedFieldset({
             <div className="flex flex-col gap-1.5">
               {levels.map((level) => (
                 <div className="flex items-center gap-2" key={level}>
-                  <span className="text-muted-foreground w-20 shrink-0 truncate text-xs">
+                  <TruncatedText className="text-muted-foreground w-20 shrink-0 truncate text-xs">
                     {level}
-                  </span>
+                  </TruncatedText>
                   <Input
                     aria-label={`${level} 对应的取值`}
                     className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-2 py-1.5 text-sm"
@@ -527,6 +530,68 @@ function ModelAdvancedFieldset({
             </div>
           )}
         </>
+      )}
+    </fieldset>
+  );
+}
+
+/** 额外请求体字段折叠块的静态文案（模块级常量：JSX 属性不塞长串）。 */
+const EXTRA_BODY_HINT =
+  '透传进请求体，覆盖运行时默认组装；空 = 不发送。按厂商文档原样抄即可，例如：{"extra_body":{"response_format":{"type":"json_object"}}}';
+const EXTRA_BODY_PLACEHOLDER =
+  '{\n  "extra_body": { "response_format": { "type": "json_object" } }\n}';
+
+/** 「额外请求体字段（JSON · 透传）」折叠块（#3626）：**文本 / 图像 / 视频三种 kind
+ *  都出现**（厂商扩展不分协议）。这一格整体未配置 = 请求体零变化；配了就原样盖进
+ *  请求体、覆盖运行时默认组装同名键。从主函数拆出来（规范 §12.13 函数长度硬闸）。 */
+function ModelExtraBodyFieldset({
+  d,
+  defaultOpen,
+}: {
+  d: ProviderModelDialogs;
+  defaultOpen: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <fieldset className="border-border mb-3 rounded-xl border p-3">
+      <Button
+        aria-expanded={open}
+        className="text-ink/80 hover:text-ink -mx-1 h-auto rounded px-1 py-0.5 text-sm font-medium"
+        onClick={() => {
+          setOpen((prev) => !prev);
+        }}
+        variant="ghost"
+      >
+        <ChevronDownIcon
+          aria-hidden
+          className={`size-3.5 transition-transform ${open ? "" : "-rotate-90"}`}
+          data-icon="inline-start"
+        />
+        额外请求体字段（JSON · 透传）
+      </Button>
+
+      {open && (
+        <FormField
+          className="mt-3"
+          error={d.modelErrors.extraBody}
+          hint={EXTRA_BODY_HINT}
+          id="model-extra-body"
+          label="额外请求体字段"
+        >
+          {(a11y) => (
+            <Textarea
+              {...a11y}
+              className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/50 focus-visible:border-primary h-auto min-h-20 rounded-lg px-3 py-2 font-mono text-xs leading-relaxed"
+              onChange={textHandler((extraBody) => {
+                d.patchModelForm({ extraBody });
+              })}
+              placeholder={EXTRA_BODY_PLACEHOLDER}
+              rows={4}
+              spellCheck={false}
+              value={d.modelForm.extraBody}
+            />
+          )}
+        </FormField>
       )}
     </fieldset>
   );

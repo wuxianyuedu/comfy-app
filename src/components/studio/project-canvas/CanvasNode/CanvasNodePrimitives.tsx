@@ -1,5 +1,6 @@
 import React from "react";
 import { Handle, Position } from "@xyflow/react";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import {
   type CanvasNodeData,
   NODE_META,
@@ -10,8 +11,9 @@ import {
 import { StatusBadge as StatusBadgePrimitive } from "~/components/ui/status-badge";
 
 /* ── 小型共享 UI 原语 ── */
+/* 渐变按钮退役（#3720）：与 `variant="primary-solid"` 同一观感的实心品牌色。 */
 export const btnCls =
-  "rounded-md btn-gradient px-2.5 py-1 text-xs font-medium text-white disabled:opacity-40";
+  "rounded-md bg-primary-500 text-primary-foreground hover:bg-primary-600 px-2.5 py-1 text-xs font-medium disabled:opacity-40";
 
 /* ── Parameter-level port colors (粉彩渐变 6 色对应 6 类参数) ──
    灵感来源：用户偏好柔和粉彩渐变（紫粉/蓝青/黄橙/青绿/蓝紫/粉红）。
@@ -213,9 +215,11 @@ export function NodeChip({
       >
         {meta.typeChar}
       </span>
-      <span className={`text-ink-bright truncate font-semibold ${isSm ? "text-2xs" : "text-sm"}`}>
+      <TruncatedText
+        className={`text-ink-bright truncate font-semibold ${isSm ? "text-2xs" : "text-sm"}`}
+      >
         {name}
-      </span>
+      </TruncatedText>
     </div>
   );
 }

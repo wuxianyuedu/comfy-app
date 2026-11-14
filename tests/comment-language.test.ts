@@ -27,6 +27,16 @@ const { test, expect } = defineGateRepo({
   },
 });
 
+/** execFileSync 抛出的失败形状（status / stdout / stderr 都可能缺）：运行时守卫取字段，
+ * 不走 `as` 断言（B5 清账）。 */
+function failureFields(value: unknown): {
+  status?: unknown;
+  stderr?: unknown;
+  stdout?: unknown;
+} {
+  return typeof value === "object" && value !== null ? value : {};
+}
+
 /** 跑门禁：直接在本仓库工作区跑（验「仓库里的基线 ⇄ 仓库里的代码」）。 */
 function runInRepo(args: Array<string> = []): { code: number; output: string } {
   try {
@@ -37,15 +47,12 @@ function runInRepo(args: Array<string> = []): { code: number; output: string } {
     });
     return { code: 0, output };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as {
-      status?: number;
-      stderr?: string;
-      stdout?: string;
-    };
+    const e = failureFields(error);
     return {
       code: typeof e.status === "number" ? e.status : 1,
-      output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
+      output: `${typeof e.stdout === "string" ? e.stdout : ""}${
+        typeof e.stderr === "string" ? e.stderr : ""
+      }`,
     };
   }
 }
@@ -475,12 +482,32 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
 });
 
 describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
+  /** `doc-facts.cjs` 无类型：按出口键做运行时守卫，不走 `as` 断言（B5 清账）。 */
+  function isDocFactsModule(value: unknown): value is {
+    extractAsciiOnlyModules: () => Array<string>;
+    FACTS: Array<{ key: string; kind: string }>;
+  } {
+    return (
+      typeof value === "object" &&
+      value !== null &&
+      "extractAsciiOnlyModules" in value &&
+      "FACTS" in value
+    );
+  }
+
+  async function loadDocFacts(): Promise<{
+    extractAsciiOnlyModules: () => Array<string>;
+    FACTS: Array<{ key: string; kind: string }>;
+  }> {
+    const mod: unknown = await import("../scripts/doc-facts.cjs");
+    if (!isDocFactsModule(mod)) {
+      throw new Error("doc-facts.cjs 的出口形状不对（缺 extractAsciiOnlyModules / FACTS）");
+    }
+    return mod;
+  }
+
   test("doc-facts 从 reference-facts 的那一行解析出名单，而不是另存一份", async () => {
-    /* SAFETY: 类型断言已复核 */
-    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
-      extractAsciiOnlyModules: () => Array<string>;
-      FACTS: Array<{ key: string; kind: string }>;
-    };
+    const mod = await loadDocFacts();
     const paths = mod.extractAsciiOnlyModules();
     expect(paths).toContain("src/lib/db-schema-ready.ts");
     expect(paths).toContain("src/server/db.ts");
@@ -494,10 +521,7 @@ describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
   });
 
   test("事实已登记在 FACTS 里（有 key 才参与 doc:check 的核对）", async () => {
-    /* SAFETY: 类型断言已复核 */
-    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
-      FACTS: Array<{ key: string }>;
-    };
+    const mod = await loadDocFacts();
     expect(mod.FACTS.some((f) => f.key === "comment.language.asciiOnly")).toBe(true);
   });
 

@@ -70,9 +70,12 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
       }),
     };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as { stderr?: string; stdout?: string };
-    return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+    /* 失败形状按字段读（B5 清账）：两股输出缺省当空串。 */
+    const e: { stderr?: unknown; stdout?: unknown } =
+      typeof error === "object" && error !== null ? error : {};
+    const out = typeof e.stdout === "string" ? e.stdout : "";
+    const err = typeof e.stderr === "string" ? e.stderr : "";
+    return { ok: false, output: `${out}${err}` };
   }
 }
 
@@ -271,10 +274,13 @@ describe("用例环境档门禁：判据自己不许静默降级", () => {
         stdio: ["ignore", "pipe", "pipe"],
       });
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      const e = error as { stderr?: string; stdout?: string };
+      /* 失败形状按字段读（B5 清账）：两股输出缺省当空串。 */
+      const e: { stderr?: unknown; stdout?: unknown } =
+        typeof error === "object" && error !== null ? error : {};
+      const out = typeof e.stdout === "string" ? e.stdout : "";
+      const err = typeof e.stderr === "string" ? e.stderr : "";
       ok = false;
-      output = `${e.stdout ?? ""}${e.stderr ?? ""}`;
+      output = `${out}${err}`;
     }
     expect(ok).toBe(false);
     expect(output).toContain("解析 `vitest.config.ts` 的 `projects` 失败");

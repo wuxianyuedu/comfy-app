@@ -4,13 +4,14 @@
 //（统一输入清单见 lib/workshop/model-mode-contract.ts，产物按 outputField 提取）。只管**模型适配**（接口级）；模式级的「模式契约」是并列独立视图
 //（`mode-contract/ModeContractView.tsx`），两处读写同一份注册表。（ISSUE #1423 改版：选中态走 `ui/select-chip`，根因与修法见其文件头。）
 // ISSUE #3622 改版：① 模型清单收成左侧树形页签（图像 / 视频分组、已配的模型标「已配」），
-// 与模式契约的 `ModeContractModeNav` 同一形态；② 端点路径升成**模型级**一格（与模式无关，
-// 各模式共用）；③ 同一时刻只显示一个模式的编辑卡，模式 chip 即切换页签；④ 删除模式走二次确认。
+// 与模式契约的 `ModeContractModeNav` 同一形态；② 同一时刻只显示一个模式的编辑卡，
+// 模式 chip 即切换页签；③ 删除模式走二次确认。
+// ISSUE #3631：端点路径整格撤出本页 —— 它是模型级配置，与模式无关，且已在
+// 「设置 → 远程模型」的接口端点下拉配置过（#3656）；本页只管字段映射与产物提取。
 
 import React from "react";
 
 import {
-  defaultEndpointPathForKind,
   WORKSHOP_INPUT_TYPES,
   isWorkshopInputType,
   workshopInputLabel,
@@ -276,48 +277,8 @@ function ModelNav({
   );
 }
 
-/** 「＋ 添加模式」展开的分类面板（图像 / 视频 / 音频各一组）。 */
-function AddModePopover({
-  availableModes,
-  onPick,
-}: {
-  availableModes: Array<(typeof ALL_WORKFLOW_TYPES)[number]>;
-  onPick: (code: string) => void;
-}) {
-  return (
-    <div className="border-border bg-bg mt-3 flex flex-col gap-3 rounded-xl border p-3">
-      {MODE_GROUPS.map((group) => {
-        const modes = availableModes.filter((t) => t.category === group.category);
-        if (modes.length === 0) {
-          return null;
-        }
-        return (
-          <div key={group.category}>
-            <p className="text-muted-foreground mb-1.5 text-xs font-medium">{group.label}</p>
-            <div className="flex flex-wrap gap-1.5">
-              {modes.map((t) => (
-                <SelectChip
-                  key={t.code}
-                  onClick={() => {
-                    onPick(t.code);
-                  }}
-                  selected={false}
-                  shape="compact"
-                  title={t.code}
-                >
-                  {t.label}
-                </SelectChip>
-              ))}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 /** 当前选中模式的适配编辑卡：输入映射 + 固定值 + 产物字段路径。
- *  端点路径不在这张卡里 —— 它是模型级配置（ISSUE #3622），在上方独立一格。 */
+ *  端点路径不在这页（#3631）—— 模型级端点在「设置 → 远程模型」的接口端点下拉。 */
 function AdapterCard({
   adapter,
   onChange,
@@ -451,13 +412,11 @@ export function ModelAdaptersView() {
     addMode,
     save,
     saving,
+    reset,
     message,
     summary,
-    endpointPath,
-    setEndpointPath,
   } = controller;
 
-  const [addModeOpen, setAddModeOpen] = React.useState(false);
   /* 删除模式的二次确认（#3622）：chip 上的 ✕ 只记下「待删谁」，真删在确认弹窗里。 */
   const [pendingRemove, setPendingRemove] = React.useState<string | null>(null);
   /* 当前展示哪张适配卡（#3622：所有模式不再一条条堆叠，同一时刻只显示一个）。 */
@@ -472,12 +431,6 @@ export function ModelAdaptersView() {
 
   /* 未点选 chip 时回落第一份草稿（新选模型 / 删掉激活模式后都有得看）。 */
   const current = draft.find((a) => a.mode === activeMode) ?? draft[0] ?? null;
-
-  const selectedKind = candidates.find((c) => c.name === selectedModel)?.kind;
-  const endpointPlaceholder =
-    selectedKind === "image" || selectedKind === "video"
-      ? defaultEndpointPathForKind(selectedKind)
-      : "";
 
   const updateAdapter = (
     mode: string,
@@ -497,7 +450,7 @@ export function ModelAdaptersView() {
         <div className="px-4 sm:px-8">
           <PageHeader
             className="pt-4 pb-3 sm:pt-5"
-            extra={<DataLocationBadge id="model-adapter" label="存放位置" />}
+            extra={<DataLocationBadge id="model-adapter" />}
             srTitle={pageHeaderTitle("model-adapters")}
           />
         </div>
@@ -536,31 +489,11 @@ export function ModelAdaptersView() {
               </p>
             ) : (
               <>
-                {/* 端点路径：模型级配置（ISSUE #3622）—— 端点与模式无关，该模型的
-                    所有模式共用同一条路径；留空时请求侧按图片 / 视频的默认惯例推导。 */}
-                <section>
-                  <FormField
-                    hint="该模型的所有模式共用这条路径；留空按图片 / 视频的默认端点自动推导。"
-                    id="adapter-endpoint-model"
-                    label={<FieldLabelRow id="拼在模型 Base URL 后" label="端点路径" />}
-                    labelClassName="mb-1.5"
-                  >
-                    {(a11y) => (
-                      <input
-                        {...a11y}
-                        className="border-border bg-bg focus:border-primary w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs outline-none"
-                        onChange={(event) => {
-                          setEndpointPath(event.target.value);
-                        }}
-                        placeholder={endpointPlaceholder}
-                        value={endpointPath}
-                      />
-                    )}
-                  </FormField>
-                </section>
+                {/* 端点路径不在这页（#3631）：它是模型级配置，与模式无关，且已在
+                    「设置 → 远程模型」的接口端点下拉配置过 —— 这里只管字段映射。 */}
 
                 {/* 支持的工坊模式：chip 即页签（点一枚切到它的编辑卡）。 */}
-                <section className="mt-4">
+                <section>
                   <SectionLabel hint="同一时刻只显示一个模式的编辑卡，点 chip 切换">
                     支持的工坊模式
                   </SectionLabel>
@@ -595,28 +528,26 @@ export function ModelAdaptersView() {
                         </Button>
                       </span>
                     ))}
-                    <SelectChip
-                      aria-expanded={addModeOpen}
-                      className="px-3 py-1 text-xs"
-                      onClick={() => {
-                        setAddModeOpen((v) => !v);
-                      }}
-                      selected={false}
-                      shape="dashed"
-                    >
-                      ＋ 添加模式
-                    </SelectChip>
-                  </div>
-                  {addModeOpen && (
-                    <AddModePopover
-                      availableModes={availableModes}
-                      onPick={(code) => {
+                    {/* 添加模式走工作流库同款的紧凑下拉（ISSUE #3741）：不再整版摊开。
+                        选中即挂一枚新 chip，下拉回到「＋ 添加模式」的占位态。 */}
+                    <SelectMenu
+                      aria-label="添加模式"
+                      className="w-auto rounded-full border-dashed px-3 py-1 text-xs"
+                      labels={Object.fromEntries(
+                        availableModes.map((t) => [
+                          t.code,
+                          `${MODE_GROUPS.find((g) => g.category === t.category)?.label ?? ""} · ${t.label}`,
+                        ]),
+                      )}
+                      onChange={(code) => {
                         addMode(code);
                         setActiveMode(code);
-                        setAddModeOpen(false);
                       }}
+                      options={availableModes.map((t) => t.code)}
+                      placeholder="＋ 添加模式"
+                      value=""
                     />
-                  )}
+                  </div>
                 </section>
 
                 {/* 当前模式的适配编辑卡：同一时刻只渲染一份（#3622）。 */}
@@ -647,8 +578,19 @@ export function ModelAdaptersView() {
 
                 {/* 保存这一行跟着上面那段映射表单一起出现（同一判据 `selectedModel`）：
                     没选模型时右栏只有引导语，这一颗就成了一条悬在空白里的禁用件。
-                    主 CTA 档（h-auto px-4 py-2），与全站其余实心按钮同形。 */}
-                <div className="mt-4 flex items-center justify-end">
+                    主 CTA 档（h-auto px-4 py-2），与全站其余实心按钮同形。
+                    「还原默认」（ISSUE #3741）回到服务端当前存档，与保存并列。 */}
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  <Button
+                    className="h-auto px-4 py-2"
+                    disabled={saving}
+                    onClick={() => {
+                      reset();
+                    }}
+                    variant="outline"
+                  >
+                    还原默认
+                  </Button>
                   <Button
                     className="h-auto px-4 py-2"
                     disabled={saving}

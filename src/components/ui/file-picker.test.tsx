@@ -94,11 +94,11 @@ describe("FilePicker", () => {
 });
 
 describe("useFilePicker（命令式）", () => {
-  it("open() 点到真 input；没挂上 Input 时不抛异常（静默空操作，与旧写法一致）", () => {
+  it("open() 点到真 input；没挂上 FilePicker 时不抛异常（静默空操作，与旧写法一致）", () => {
     const click = vi.fn();
     function Probe() {
       const picker = useFilePicker({ onPick: noop });
-      return <picker.Input />;
+      return <FilePicker {...picker.inputProps} />;
     }
     render(<Probe />);
     const input = fileInput();
@@ -110,12 +110,13 @@ describe("useFilePicker（命令式）", () => {
     expect(click).toHaveBeenCalled();
   });
 
-  it("Input 身份稳定：多次渲染不重建 input（否则会打断正开着的文件对话框）", () => {
-    const seen: Array<string> = [];
+  it("Input 身份稳定：onPick 每渲染都是新箭头也不重建 input（#3692）", () => {
     function Probe() {
       const [, force] = useState(0);
-      const picker = useFilePicker({ onPick: noop });
-      seen.push(picker.Input.name);
+      /* onPick 故意用内联箭头（调用方的真实形态）：旧实现把它放进
+       * `useMemo` deps，隐藏 input 随每次渲染卸载重挂——重挂窗口里落下的
+       * 选择事件会打在已脱离 DOM 的旧节点上（ISSUE #3692 的现场）。 */
+      const picker = useFilePicker({ onPick: () => undefined });
       return (
         <button
           aria-label="重渲染"
@@ -123,7 +124,7 @@ describe("useFilePicker（命令式）", () => {
             force((n) => n + 1);
           }}
         >
-          <picker.Input />
+          <FilePicker {...picker.inputProps} />
         </button>
       );
     }

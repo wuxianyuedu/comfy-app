@@ -33,19 +33,19 @@ import path from "node:path";
 
 import { asArray } from "./ship-build.mjs";
 import {
+  classifyBranchDeleteRefusal,
   classifyPrMergeable,
   CODE,
   codeTag,
   combineShipCodes,
   conflictAdviceLines,
   decideCleanBranch,
-  findMergedPullForHeadSha,
   findPullForBranch,
   readPullCreateError,
   readPullVerdict,
 } from "./ship-core.mjs";
-import { openScanReadout, scanPullPages } from "./ship-scan.mjs";
-import { planCreateBody, updatePullBodyOnReuse } from "./ship-pr-body.mjs";
+import { findLandedPull, openScanReadout, scanPullPages } from "./ship-scan.mjs";
+import { planCreateBody, updatePullBodyOnReuse, updatePullTitleOnReuse } from "./ship-pr-body.mjs";
 import { diffBaseRef, pickTitle } from "./ship-title.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
 import { reportConflictStage, reportStage } from "./ship-stage.mjs";
@@ -134,40 +134,6 @@ function stampHandlerLabel({ run, log, slug, number, handle, root }) {
       "这一格是读数、不改退码。手工补：",
   );
   log(`[ship]   cnb pulls post-pull-labels --repo ${slug} --number ${number} --labels ${label} -v`);
-}
-
-/**
- * 落地判定（ISSUE #2250）：这一笔 HEAD 是不是已经随某条**已合并**的 PR 进过主干。
- *
- * 为什么问平台而不问 diff 或 `merge-base`：squash 合并只保证**内容**相同，主干那笔 sha
- * 与分支头不同，祖先判据对它恒假（实测：今天两条已合并分支的三点 diff 仍给出 7 / 4 个文件，
- * 而分支头都不是 master 的祖先）。平台在 PR 记录里留着 `head.sha` 与 `is_merged`，
- * 这两件才是正面事实，且与 `ship-close.mjs` 的落地反查同一套取法。
- *
- * 有界扫（页参数与那一路一致）：扫不到就照实念，**不撤销结论** —— 「取不到」不等于「没落地」，
- * 那一格照常建 PR。
- *
- * @param {{run:(cmd:string,args:string[])=>import("./ship-exec.mjs").ExecResult, slug:string, headSha:string, pages?:number, pageSize?:number}} ctx
- * @returns {{prNumber: number | null, unknownPr: number | null, scanned: number, ran: boolean}}
- *   `unknownPr`：head.sha 逐字相同而 `is_merged` 缺键的那条（ISSUE #3059，判读交给调用方）。
- */
-function findLandedPull(ctx) {
-  const { slug, headSha } = ctx;
-  /** @type {{unknownPr?: number|null}} */
-  const sink = {};
-  const scan =
-    slug && headSha
-      ? scanPullPages(ctx, {
-          state: "closed",
-          visit: (json) => findMergedPullForHeadSha(json, headSha, sink) ?? sink.unknownPr ?? null,
-        })
-      : { hit: null, scanned: 0, ran: false };
-  return {
-    prNumber: sink.unknownPr ? null : scan.hit,
-    unknownPr: sink.unknownPr ?? null,
-    scanned: scan.scanned,
-    ran: scan.ran,
-  };
 }
 
 /**
@@ -270,8 +236,15 @@ export function createOrReusePull(ctx) {
   let number = open.hit;
   if (number) {
     log(`[ship] 已有开放 PR #${number} ⇒ 复用，不重建（幂等）`);
-    /* 给了 `--pr-body-file` 就整篇更新（口径见 `ship-pr-body.mjs`）；写没落地就停在这里，
-     * 不带着一份旧正文去等 CI（那等于让人照着过期正文评审）。 */
+    /* 标题：给了 `--title` 就更新并独立回读；没给就明说「标题未刷新」（ISSUE #3629）——
+     * 复用路径此前根本不读这枚旗标，人给了却两头没有回音。 */
+    const titleStop = updatePullTitleOnReuse({ run, log, slug, number, explicitTitle });
+    if (titleStop !== null) {
+      return { number, stop: titleStop };
+    }
+    /* 正文：自动事实段无条件刷新（机器当场量的当前事实）；人写的正文按
+     * 「给了才覆盖」注入（ISSUE #3629）。写没落地就停在这里，不带着一份
+     * 过期正文去等 CI。 */
     const bodyStop = updatePullBodyOnReuse({ ...ctx, prBody, number });
     if (bodyStop !== null) {
       return { number, stop: bodyStop };
@@ -286,14 +259,28 @@ export function createOrReusePull(ctx) {
   }
   /* 开放清单里没有 ⇒ 还不能直接建：这条分支可能**已经合过了**（ISSUE #2250）。 */
   const headSha = run("git", ["rev-parse", "HEAD"]).stdout.trim();
-  const landed = findLandedPull({ run, slug, headSha });
-  if (landed.prNumber) {
+  const landed = findLandedPull({ run, slug, headSha, branch });
+  if (landed.prNumber && landed.kind === "sha") {
     log(
       `[ship] 不建新 PR：HEAD ${short(headSha)} 已随 PR #${landed.prNumber} 落地（平台逐条认的 \`is_merged\`；${codeTag(CODE.GUARD_REFUSED)}）。`,
     );
     log(
       "[ship]   这一批内容已经在主干里 ⇒ 要接着改请开新分支（`pnpm ship --branch feat/<描述>`）。" +
         "把同一批内容再合一次，主干上就多一笔重复提交，还白烧一轮 CI。",
+    );
+    return { number: null, stop: CODE.GUARD_REFUSED };
+  }
+  if (landed.prNumber && landed.kind === "branch") {
+    /* ISSUE #3642：squash 合并在同一条分支上补笔后 head.sha 对不上历史 PR（主干那笔是
+     * squash 出来的新 sha），只按 sha 认落地在这一形上失明 —— 开放清单又没有这条分支的
+     * PR，于是「没有就建」长出重复 PR。按 `head.ref` 认已合并的历史 PR 补上这一档：
+     * 命中同样停（守卫类退码），话术念的是「分支的历史 PR 已合并」，不是「这一笔已落地」。 */
+    log(
+      `[ship] 不建新 PR：这条分支已随 PR #${landed.prNumber} 落地（closed 清单按 \`head.ref\` 认的已合并历史 PR；${codeTag(CODE.GUARD_REFUSED)}）。`,
+    );
+    log(
+      "[ship]   同名分支重开 PR 会把旧落地的内容混进同一条（#3642 现场：内容已落地的分支照样派生出" +
+        "重复 PR + 一轮白烧的红 CI）⇒ 要接着改请开新分支：`pnpm ship --branch feat/<描述>`。",
     );
     return { number: null, stop: CODE.GUARD_REFUSED };
   }
@@ -720,9 +707,23 @@ export function mergeAndVerify(ctx) {
    * 与 `is_merged` 缺键同一口径：拿不到测量 ≠ 测量结果是红的。 */
   const mergeCommitLocal =
     mergeSha !== "" && run("git", ["cat-file", "-e", `${mergeSha}^{commit}`]).status === 0;
-  const fragOnMaster = mergeCommitLocal
-    ? frags.every((f) => run("git", ["cat-file", "-e", `${mergeSha}:${f}`]).status === 0)
-    : false;
+  const fragMissing = (/** @type {string} */ sha) =>
+    frags.filter((f) => run("git", ["cat-file", "-e", `${sha}:${f}`]).status !== 0);
+  let fragOnMaster = mergeCommitLocal ? fragMissing(mergeSha).length === 0 : false;
+  /* ISSUE #3714：首查 false 未必是「碎片真的不在」——上面的 fetch 可能正落在
+   * squash 回执与 git 服务端 ref 传播的窗口里，取回来的引用还指上一笔。
+   * 重取一次再判；仍不在才落 false，并把比对对象（哪个 sha、缺哪些路径）念出来，
+   * 让「没找到」可归因（本地滞后 / 传播窗口 ≠ 平台没落地）。 */
+  if (mergeCommitLocal && !fragOnMaster) {
+    run("git", ["fetch", remote, trunkBranch || "master"]);
+    fragOnMaster = fragMissing(mergeSha).length === 0;
+    if (fragOnMaster) {
+      log("[ship] 碎片验真：复取主干后确认碎片都在合并提交里（首查落在传播窗口内）。");
+    } else {
+      const missing = fragMissing(mergeSha).join("、") || "(无)";
+      log(`[ship] 碎片验真比对对象：合并提交 ${short(mergeSha)}；未在其树中的碎片：${missing}`);
+    }
+  }
   log(
     `[ship] 合并回执 sha=${short(mergeData.sha)} 回读 is_merged=${back ? (back.isMergedTri === "unknown" ? "(缺键)" : back.isMerged) : "?"} 合并提交可解析=${mergeCommitLocal} 碎片在合并提交里=${mergeCommitLocal ? fragOnMaster : "(未判定)"}`,
   );
@@ -858,6 +859,20 @@ export function cleanBranch(ctx) {
   const verify = run("git", ["show-ref", "--verify", "--quiet", `refs/heads/${name}`]);
   if (rm.status !== 0 && verify.status === 0) {
     log(`[ship] 本地那一半没删掉（exit ${rm.status}）⇒ 这一格是红的，不记「已清理」`);
+    /* 归因与出口（ISSUE #3617）：git 拒删最常见的一形是「分支被 worktree 检出占用」——
+     * 本仓常态是并行 worktree 检出（硬规则 30）。stderr 里的占用路径按形给出口，退码不改：
+     * 诚实红是对的，缺的是「为什么」与「怎么手工收」。 */
+    const toplevel = run("git", ["rev-parse", "--show-toplevel"]).stdout.trim();
+    const refusal = classifyBranchDeleteRefusal(rm.stderr, toplevel || null);
+    const cause =
+      refusal.kind === "current-worktree"
+        ? `这条分支正被**当前检出**占着（${refusal.path}）⇒ 先切走再删：` +
+          `\`git checkout --detach ${sha || "<恢复线 sha>"}\` 然后 \`git branch -D ${name}\``
+        : refusal.kind === "other-worktree"
+          ? `这条分支被别的 worktree 检出占用（${refusal.path}）⇒ 到那个检出切走（或收掉它）` +
+            `后再删：\`git branch -D ${name}\``
+          : "git 拒删（stderr 原话在上面）⇒ 手工出口：`git worktree list` 看哪个检出占着它，切走后再删";
+    log(`[ship]   原因与出口：${cause}`);
     localOutcome = "仍在";
     codes.push(CODE.RED);
   } else if (verify.status === 0) {

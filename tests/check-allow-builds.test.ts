@@ -507,6 +507,62 @@ describe("store 残留不算已安装的依赖（ISSUE #3523）", () => {
   });
 });
 
+/**
+ * ISSUE #3533：pnpm 12 的锁文件键带 peer 依赖尾巴，如 `esbuild@0.25.0(unrs-resolver@1.15.0)`，
+ * 而磁盘上装出来的 `package.json` 版本是裸的 `esbuild@0.25.0`。旧实现把键**原样**收进
+ * 归属集合，裸 id 永远对不上 ⇒ **在图里的现行依赖**被误判成 store 孤儿：只落进
+ * 「另有 N 个已不在图里」的提示档、不参与对账 —— 它的构建脚本没登记，门禁照样绿。
+ * 修法：判归属前剥掉键尾的 peer 括号。两个方向都要钉：
+ * ① 带 peer 尾巴的现行依赖**照旧参与对账**（漏登记 ⇒ 红，判据没被放松）；
+ * ② 登记了即放行，且**不**出现在「已不在当前依赖图里」的孤儿提示里。
+ */
+describe("锁文件键的 peer 尾巴不是版本的一部分（ISSUE #3533）", () => {
+  test("带 peer 尾巴的现行依赖照旧对账：未登记 ⇒ 红", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    repo.write("pnpm-lock.yaml", lockfile(["esbuild@1.0.0(unrs-resolver@1.15.0)"]));
+    const one = installed("esbuild@0.28.2", "esbuild", {
+      postinstall: "node install.js",
+    });
+    repo.write(one.path, one.body);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    expect(output).toContain("esbuild@1.0.0");
+    expect(output).toContain("ERR_PNPM_IGNORED_BUILDS");
+    expect(output).not.toContain("已不在当前依赖图里");
+  });
+
+  test("带 peer 尾巴的现行依赖已登记 ⇒ 绿，且不报孤儿", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace(['"esbuild": true']));
+    repo.write("pnpm-lock.yaml", lockfile(["esbuild@1.0.0(unrs-resolver@1.15.0)"]));
+    const one = installed("esbuild@0.28.2", "esbuild", {
+      postinstall: "node install.js",
+    });
+    repo.write(one.path, one.body);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("覆盖了全部带构建脚本的依赖");
+    expect(output).not.toContain("已不在当前依赖图里");
+  });
+
+  test("剥尾巴不放过同名异版本的残留：孤儿照旧点名", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace(['"esbuild": true']));
+    repo.write("pnpm-lock.yaml", lockfile(["esbuild@1.0.0(bar@1.0.0)"]));
+    const orphan = installed("core-js-pure@3.51.0", "core-js-pure", {
+      postinstall: "node post.js",
+    });
+    repo.write(orphan.path, orphan.body);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("core-js-pure@1.0.0");
+    expect(output).toContain("已不在当前依赖图里");
+  });
+
+  it("判据源码里那处剥尾在（删掉它上面两条就失去执行者）", () => {
+    const source = readFileSync(GATE_SCRIPT, "utf8");
+    expect(source).toMatch(/replace\(/);
+  });
+});
+
 describe("allow-builds 判据的接线（判据在场 ≠ 判据在跑）", () => {
   it("钩子 D 组真的执行这一步（被注释掉的行不算在场）", () => {
     const steps = dGroupSteps(readFileSync(HOOK, "utf8"));

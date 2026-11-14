@@ -12,11 +12,13 @@ import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { PageHeader } from "~/components/ui/page-header";
 import { timeAgo } from "~/lib/time-format";
 import type { ProjectOrigin } from "~/lib/project-canvas/canvas-store";
 import { PROJECTS_ENTRY } from "./NavItems";
 import { useWorksGallery } from "./works/hooks/use-works-gallery";
+import { Hint } from "~/components/ui/hint";
 
 /* 作品/视频项目卡**类别装饰色**——cyan 在这套 UI 里代表"视频/作品"类别
  * (与 `MaterialLibraryPanel KIND_STYLE.video` 蓝调装饰一脉相承)。是"这一
@@ -164,12 +166,12 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
                           铺满整行，长名字会径直压到「删除」两个字底下（用户看到
                           的是两段字叠在一起）。`pr-*` 在这里是给它的**让位**，
                           不是内边距：宽度不够时标题先截断，按钮始终完整。 */}
-                      <p className="text-ink-bright group-hover:text-ink truncate pr-12 text-sm font-medium">
+                      <TruncatedText className="text-ink-bright group-hover:text-ink truncate pr-12 text-sm font-medium">
                         {displayName}
-                      </p>
-                      <p className="text-ink-muted text-2xs mt-1 truncate">
+                      </TruncatedText>
+                      <TruncatedText className="text-ink-muted text-2xs mt-1 truncate">
                         {bodySummary(nodeCount, edgeCount)}
-                      </p>
+                      </TruncatedText>
                       <p className="text-ink-fainter text-2xs mt-0.5">
                         {timeAgo(project.updatedAt, { suffix: "修改" }) ?? "刚刚修改"}
                       </p>
@@ -178,12 +180,11 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
 
                   {/* 出处标：只给「只在一侧」的行。`both` 是正常行，标出来是噪声。 */}
                   {badge !== undefined && badge !== "" && (
-                    <span
-                      className="text-ink-fainter border-border-subtle bg-surface-2 text-3xs absolute bottom-2.5 left-3.5 rounded-md border px-1.5 py-0.5"
-                      title={hint}
-                    >
-                      {badge}
-                    </span>
+                    <Hint label={hint}>
+                      <span className="text-ink-fainter border-border-subtle bg-surface-2 text-3xs absolute bottom-2.5 left-3.5 rounded-md border px-1.5 py-0.5">
+                        {badge}
+                      </span>
+                    </Hint>
                   )}
 
                   {/* 逐卡片删除：仅悬停显示，右上角。

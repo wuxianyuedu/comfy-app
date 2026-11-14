@@ -6,6 +6,8 @@
 import { createRequire } from "node:module";
 import path from "node:path";
 
+import { isRecord } from "~/lib/is-record";
+
 /** 判据脚本本体（`scripts/check-a11y-rules.cjs`）。 */
 export const SCRIPT = path.resolve(__dirname, "../../scripts/check-a11y-rules.cjs");
 
@@ -57,12 +59,33 @@ export type A11yJudgeModule = {
 
 const requireCjs = createRequire(__filename);
 
+/** 判据模块的消费形状守卫（B5 清账）：八个函数 + 一张表逐个对型。 */
+function isA11yJudgeModule(value: unknown): value is A11yJudgeModule {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const fns = [
+    "effectiveRules",
+    "judge",
+    "loadOxlintConfig",
+    "normalize",
+    "officialRecommended",
+    "officialRuleMap",
+    "readLedger",
+    "rulesInNeitherConfig",
+  ];
+  return fns.every((key) => typeof value[key] === "function") && isRecord(value.VERIFIED_SURFACES);
+}
+
 /**
  * 拿判据模块（**整个进程共享同一份**，判据配置只求值一次）。用同步 `createRequire` 而非 `await import()`：
  * 语义相同（同一模块实例），同步写法让取模块这一步不必异步，用例只有真 `judge()` 时才让出事件循环。
  * 加载失败**抛出**、不吞也不返回半张表（判据对它的沉默正是要拦的，见文件头「失败路径」）。
  */
 export function loadJudgeModule(): A11yJudgeModule {
-  /* SAFETY: 类型断言已复核 */
-  return requireCjs(SCRIPT) as A11yJudgeModule;
+  const mod: unknown = requireCjs(SCRIPT);
+  if (!isA11yJudgeModule(mod)) {
+    throw new Error("check-a11y-rules.cjs 的导出面形状变了 —— 重读该脚本再改这份守卫");
+  }
+  return mod;
 }

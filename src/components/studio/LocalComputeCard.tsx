@@ -15,6 +15,7 @@ import {
   selectVisibleResourceMetrics,
 } from "./comfy-resource-metrics";
 import { useComfyReadiness } from "./hooks/use-comfy-readiness";
+import { Hint } from "~/components/ui/hint";
 
 /**
  * 首页「本机算力」总览卡。放在首页而非让人滚到底部状态栏去看：状态栏那一格是**结果**（三个百分比数字），用户问的却是**原因** —— 后端在不在线、显存够不够、读不到是「没启动」还是「暂时读不到」，三种情形处置完全不同，卡片把它们分开说（徽标 + 状态行 + 一句可见降级说明）。数据来源**只有** `useComfyReadiness()`：轮询收在 `src/lib/comfy/comfy-stats-store.ts` 这一个持有者里（与状态栏共用同一条，首页挂这份不会多一路轮询），视图层零 IO（规范 §17）。
@@ -44,12 +45,11 @@ export function LocalComputeCard() {
           <span className="text-ink-bright text-sm font-medium">ComfyUI</span>
           {/* 设备名来自同一份采样：读不到就不占一行，不写「未知设备」这种废话占位。 */}
           {gpuName !== undefined && gpuName !== "" && (
-            <span
-              className="text-ink-fainter min-w-0 flex-1 truncate font-mono text-[11.5px]"
-              title={gpuName}
-            >
-              {gpuName}
-            </span>
+            <Hint label={gpuName}>
+              <span className="text-ink-fainter min-w-0 flex-1 truncate font-mono text-[11.5px]">
+                {gpuName}
+              </span>
+            </Hint>
           )}
         </div>
 
@@ -61,7 +61,9 @@ export function LocalComputeCard() {
                 key={descriptor.key}
                 label={
                   <>
-                    <span title={descriptor.title}>{descriptor.label}</span>
+                    <Hint label={descriptor.title}>
+                      <span>{descriptor.label}</span>
+                    </Hint>
                     <span className="text-ink-fainter ml-1.5 tabular-nums">
                       {displayValue(fmtBytes(bar.used))}/{displayValue(fmtBytes(bar.total))}
                     </span>

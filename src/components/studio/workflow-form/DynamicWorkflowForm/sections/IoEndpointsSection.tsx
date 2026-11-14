@@ -7,6 +7,7 @@ import {
 import { SectionHeader } from "../SectionHeader";
 import { PIN_ACCENT } from "../constants";
 import { Separator } from "~/components/ui/separator";
+import { Hint } from "~/components/ui/hint";
 
 type IoEndpointsSectionProps = {
   /** 全部已富化输入；传给 ioLabel() 做冲突感知标签。 */
@@ -39,16 +40,19 @@ export function IoEndpointsSection({
              * 因此必须传全量 pin，而不只是当前这一段。 */
             const label = ioLabel(wireInput, [...inputs, ...outputs]);
             return (
-              <span
-                className="border-info/25 bg-info/10 text-info text-3xs inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5"
+              <Hint
                 key={wireInput.ioKey}
-                title={`${wireInput.nodeTitle ?? ""} · ${wireInput.name} · 仅可通过连线输入`}
+                label={`${wireInput.nodeTitle ?? ""} · ${wireInput.name} · 仅可通过连线输入`}
               >
-                <span className="bg-info size-1.5 rounded-full" />
-                {label}
-                {/* chip 打印 pin 真实类型（含 IMAGEUPLOAD 等自定义类型）。 */}
-                <span className="text-4xs font-mono opacity-70">{typeDisplay(wireInput.type)}</span>
-              </span>
+                <span className="border-info/25 bg-info/10 text-info text-3xs inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5">
+                  <span className="bg-info size-1.5 rounded-full" />
+                  {label}
+                  {/* chip 打印 pin 真实类型（含 IMAGEUPLOAD 等自定义类型）。 */}
+                  <span className="text-4xs font-mono opacity-70">
+                    {typeDisplay(wireInput.type)}
+                  </span>
+                </span>
+              </Hint>
             );
           })}
         </div>
@@ -64,16 +68,14 @@ export function IoEndpointsSection({
           </div>
           <div className="flex flex-wrap gap-1.5">
             {outputs.map((output) => (
-              <span
-                className="border-success/25 bg-success/10 text-success text-3xs inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5"
-                key={output.ioKey}
-                title={`${output.nodeTitle ?? ""} · ${output.name}`}
-              >
-                <span className="bg-success size-1.5 rounded-full" />
-                {/* conflict-aware：同上，撞名时回退到原始 name。 */}
-                {ioLabel(output, [...inputs, ...outputs])}
-                <span className="text-4xs font-mono opacity-70">{typeDisplay(output.type)}</span>
-              </span>
+              <Hint key={output.ioKey} label={`${output.nodeTitle ?? ""} · ${output.name}`}>
+                <span className="border-success/25 bg-success/10 text-success text-3xs inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5">
+                  <span className="bg-success size-1.5 rounded-full" />
+                  {/* conflict-aware：同上，撞名时回退到原始 name。 */}
+                  {ioLabel(output, [...inputs, ...outputs])}
+                  <span className="text-4xs font-mono opacity-70">{typeDisplay(output.type)}</span>
+                </span>
+              </Hint>
             ))}
           </div>
         </>

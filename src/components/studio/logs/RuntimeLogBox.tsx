@@ -153,9 +153,9 @@ function LogToolbar({
             : "text-ink/80 flex min-w-0 items-center gap-2 text-sm font-medium"
         }
       >
-        <span className="truncate" title={title}>
-          {title}
-        </span>
+        <Hint label={title}>
+          <span className="truncate">{title}</span>
+        </Hint>
         {log.active && (
           <span className="text-success-strong text-3xs inline-flex shrink-0 items-center gap-1.5 font-normal">
             <StatusDot pulse sizeClass="size-1.5" state="up" />

@@ -6,19 +6,30 @@
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+
+import { isRecord } from "~/lib/is-record";
+
 import { defineGateRepo, describe, expectGateRan } from "./helpers/gate-repo";
 
 const SCRIPT = path.resolve(__dirname, "../scripts/check-test-waitfor.cjs");
+
+/** 判据模块的消费形状守卫（B5 清账）：只取 scanFile 一件。 */
+function isScanModule(
+  value: unknown,
+): value is { scanFile: (abs: string) => Array<unknown> | null } {
+  return isRecord(value) && typeof value.scanFile === "function";
+}
 
 /**
  * 「文件在扫描期间消失」那一支只能在**进程内**判：它要的是 `scanFile` 对一份
  * 读不到的路径返回什么，而临时仓库 + 子进程那条路造不出「列到名字、读时已没」
  * 这个时刻（造得出就只能靠删文件，那是一次概率窗口，不是判据）。
  */
-/* SAFETY: 类型断言已复核 */
-const { scanFile } = createRequire(import.meta.url)(SCRIPT) as {
-  scanFile: (abs: string) => Array<unknown> | null;
-};
+const scanModule: unknown = createRequire(import.meta.url)(SCRIPT);
+if (!isScanModule(scanModule)) {
+  throw new Error("check-test-waitfor.cjs 缺 scanFile —— 判据脚本形状变了");
+}
+const { scanFile } = scanModule;
 
 const { test, expect } = defineGateRepo({
   script: "check-test-waitfor.cjs",

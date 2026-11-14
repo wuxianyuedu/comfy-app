@@ -12,24 +12,55 @@
  * 说明里 —— 那两句是迁移操作时唯一要照着做的东西，所以它们跟着徽标走，而不是
  * 散在别的文档里。
  *
+ * ⚠️ 悬浮说明走 `ui/hint` 的 `<Hint>`（`Tooltip`），**不用原生 `title=`**：原生
+ * tooltip 由浏览器画，样式与主题都不归设计 token 管（暗色下就是一块白底气泡、
+ * 长文案单行铺开读着费劲，ISSUE #3672）—— 换成 Tooltip 后两态都跟随主题、
+ * 长文案按 `max-w-xs` 折行，与顶栏那颗问号（`ui/header-help`）同一件东西。
+ *
  * 口径全部来自 `~/lib/data-location/data-locations`（登记本体的**唯一出处**），
  * 本件不持有任何落点字面量 —— 改落点时不需要碰界面。
  */
 
 import { Badge } from "~/components/ui/badge";
+import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import {
   DATA_LOCATION_CATEGORIES,
   DATA_LOCATIONS,
+  type DataLocationCategory,
   type DataLocationId,
 } from "~/lib/data-location/data-locations";
+import type { ReactNode } from "react";
 
-/** 悬浮说明的拼装口径：落点与迁移办法各占一句，中间用「；」断开（`title` 是单行提示）。 */
-function badgeTitle(id: DataLocationId): string {
+/** 悬浮说明（ISSUE #3724）：单落点一行说完；多表落点按「表名：哪里用」逐行拆，
+ * 不再挤成一句「A / B 表」。数据种类名与类别名徽标上已经有了，迁移话术对迁移
+ * 没有操作价值，都不进气泡。 */
+function badgeLabel(id: DataLocationId): ReactNode {
   const entry = DATA_LOCATIONS[id];
-  const category = DATA_LOCATION_CATEGORIES[entry.category];
-  return `${entry.kindLabel} · ${category.label}：${entry.target}；迁移：${entry.migration}`;
+  const lines = entry.targetLines;
+  if (lines === undefined) {
+    return entry.target;
+  }
+  return (
+    <span className="flex flex-col gap-0.5">
+      {lines.map((line) => (
+        <span key={line.name}>
+          {line.name}：{line.note}
+        </span>
+      ))}
+    </span>
+  );
 }
+
+/** 悬停时**同色系加深**（ISSUE #3724）：底色从一成加深到两成，不再是「只剩描边」。
+ * 每类各配各的（与 `DATA_LOCATION_CATEGORIES` 的 tone 同键）。 */
+const HOVER_DEEPEN: Record<DataLocationCategory, string> = {
+  "app-data-file": "hover:bg-muted",
+  "browser-storage": "hover:bg-destructive/20",
+  database: "hover:bg-primary-500/20",
+  "local-disk": "hover:bg-warning/20",
+  "repo-file": "hover:bg-success/20",
+};
 
 /**
  * 一枚「数据存放位置」徽标。
@@ -37,20 +68,23 @@ function badgeTitle(id: DataLocationId): string {
  * `id` 指的是登记项（一种数据 × 它的某一个存放位置），不是数据种类 —— 一类数据
  * 落在两个地方时（例如模式契约的本机覆盖与项目默认）要挂两枚，各说各的落点。
  *
- * `label` 是徽标左边那句引导语（如「存放位置」）：徽标本身只说「哪一类位置」，
- * 单独飘在界面里会读不出它管的是哪件事，所以多数落点给一句引导；不需要时
- * 不传（那几处上下文已经足够，页头就是一个例子）。
+ * 徽标**只画图标与类别名**，不带「存放位置」引导字，旁边也不再有说明段（ISSUE
+ * #3625 reopen 的口径：徽标放在标题处，说明一律走悬浮气泡，界面上不留关于
+ * 存放在哪的额外描述）—— 落点与迁移办法都在上面的悬浮说明里。
  */
-export function DataLocationBadge({ id, label }: { id: DataLocationId; label?: string }) {
+export function DataLocationBadge({ id }: { id: DataLocationId }) {
   const entry = DATA_LOCATIONS[id];
   const category = DATA_LOCATION_CATEGORIES[entry.category];
   return (
-    <span className="inline-flex items-center gap-1.5">
-      {label === undefined ? null : <span className="text-muted-foreground text-2xs">{label}</span>}
-      <Badge size="sm" title={badgeTitle(id)} tone={category.tone}>
-        <Icon name={category.icon} />
-        {category.label}
-      </Badge>
+    <span className="inline-flex items-center">
+      {/* `side="top"`：徽标坐在设置卡片正文里，气泡向上让出下方那两行说明；
+          与顶栏问号（`side="bottom"`）分档的理由是锚点在屏幕里的位置，不是风格。 */}
+      <Hint label={badgeLabel(id)} side="top">
+        <Badge className={HOVER_DEEPEN[entry.category]} size="sm" tone={category.tone}>
+          <Icon name={category.icon} />
+          {category.label}
+        </Badge>
+      </Hint>
     </span>
   );
 }

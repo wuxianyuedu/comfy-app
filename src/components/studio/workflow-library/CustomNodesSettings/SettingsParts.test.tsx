@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import {
   ManifestSummary,
   ParseProgressBanner,
@@ -7,7 +9,12 @@ import {
   ReportCards,
   WidgetValueChip,
 } from "./SettingsParts";
+import { TooltipProvider } from "~/components/ui/tooltip";
 import type { ParseProgress, ParseReport, SettingsResp } from "./types";
+
+/* `Hint` 的浮层要 `TooltipProvider`（应用里挂在根布局上）；`delay={0}` 让
+ * 悬停断言不必干等。 */
+const wrap = (ui: ReactNode) => <TooltipProvider delay={0}>{ui}</TooltipProvider>;
 
 // vitest globals: false 下 RTL 不会自动 cleanup,需手动注册
 afterEach(cleanup);
@@ -58,11 +65,20 @@ const REPORT: ParseReport = {
 };
 
 describe("PortRow", () => {
-  it("输入行:色点用入参 color,类型徽标大写展示,name 带 title", () => {
+  it("输入行:色点用入参 color,类型徽标大写展示,name 悬停出完整名", async () => {
+    const user = userEvent.setup();
     const { container } = render(
-      <PortRow color="#FF9C5B" name="positive" side="in" type="CONDITIONING" />,
+      wrap(<PortRow color="#FF9C5B" name="positive" side="in" type="CONDITIONING" />),
     );
-    expect(screen.getByText("positive")).toHaveAttribute("title", "positive");
+    /* 原生 title= 撤干净：整名走 <Hint>（截断只发生在视觉上），悬停落在 tooltip 浮层里。 */
+    expect(screen.getByText("positive")).not.toHaveAttribute("title");
+    await user.hover(screen.getByText("positive"));
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
+    });
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+      "positive",
+    );
     expect(screen.getByText("CONDITIONING")).toBeInTheDocument();
     const dot = container.querySelector("span.rounded-full")!;
     expect(dot).toHaveStyle({ background: "#FF9C5B" });
@@ -92,10 +108,17 @@ describe("WidgetValueChip", () => {
     expect(screen.getByText("✗")).toBeInTheDocument();
   });
 
-  it("select:值经 String() 渲染并同步 title,null 显示 —", () => {
-    const { rerender } = render(<WidgetValueChip value="sdxl" widget="select" />);
-    expect(screen.getByText("sdxl")).toHaveAttribute("title", "sdxl");
-    rerender(<WidgetValueChip value={null} widget="select" />);
+  it("select:值经 String() 渲染并悬停可看见完整值,null 显示 —", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(wrap(<WidgetValueChip value="sdxl" widget="select" />));
+    /* 原生 title= 撤干净：完整值走 <Hint>，悬停落在 tooltip 浮层里。 */
+    expect(screen.getByText("sdxl")).not.toHaveAttribute("title");
+    await user.hover(screen.getByText("sdxl"));
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
+    });
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain("sdxl");
+    rerender(wrap(<WidgetValueChip value={null} widget="select" />));
     expect(screen.getByText("—")).toBeInTheDocument();
   });
 
@@ -139,18 +162,21 @@ describe("ManifestSummary", () => {
 });
 
 describe("ParseProgressBanner", () => {
-  it("hash 阶段:显示 done/total 包数、父目录末两段与确定进度条宽度", () => {
+  it("hash 阶段:显示 done/total 包数、父目录末两段与确定进度条宽度", async () => {
+    const user = userEvent.setup();
     const { container } = render(
-      <ParseProgressBanner
-        progress={{
-          ...PROGRESS,
-          phase: "hash",
-          done: 3,
-          total: 8,
-          parent: String.raw`C:\ComfyUI\custom_nodes\ipadapter_plus`,
-          msg: "hashing packages…",
-        }}
-      />,
+      wrap(
+        <ParseProgressBanner
+          progress={{
+            ...PROGRESS,
+            phase: "hash",
+            done: 3,
+            total: 8,
+            parent: String.raw`C:\ComfyUI\custom_nodes\ipadapter_plus`,
+            msg: "hashing packages…",
+          }}
+        />,
+      ),
     );
     expect(screen.getByText(/正在处理/)).toBeInTheDocument();
     expect(screen.getByText("3/8")).toBeInTheDocument();
@@ -162,7 +188,15 @@ describe("ParseProgressBanner", () => {
        `~/components/ui/progress-bar` 的 `data-slot` 取节点。 */
     const bar = container.querySelector<HTMLElement>('[data-slot="progress-bar-fill"]')!;
     expect(bar.style.transform).toBe("translateX(-62%)");
-    expect(screen.getByTitle("hashing packages…")).toBeInTheDocument();
+    /* 原生 title= 撤干净：进度消息走 <Hint>，悬停落在 tooltip 浮层里。 */
+    expect(screen.getByText("hashing packages…")).not.toHaveAttribute("title");
+    await user.hover(screen.getByText("hashing packages…"));
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
+    });
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+      "hashing packages…",
+    );
   });
 
   it("scan 阶段:显示已发现包数与「总数待定」提示,进度条为不定态(无确定宽度)", () => {
@@ -221,7 +255,7 @@ describe("ReportCards", () => {
     const okCard = screen.getByText("ipadapter").closest<HTMLDivElement>("div.rounded-xl")!;
     expect(within(okCard).getByText("已加载")).toBeInTheDocument(); // STATUS_STYLE.ok
     /* 路径按**末几段**渲染（语义在尾部，CSS `truncate` 只留头部会把它切掉），
-     * 完整路径仍在 `title` 上（hover 可见 / 可复制）。 */
+     * 完整路径仍在 <Hint> 的悬浮说明里（hover 可见 / 可复制）。 */
     expect(within(okCard).getByText("ComfyUI/custom_nodes/ipadapter")).toBeInTheDocument();
     expect(within(okCard).getByText("18")).toBeInTheDocument();
     expect(within(okCard).getByText("IPAdapter")).toBeInTheDocument();

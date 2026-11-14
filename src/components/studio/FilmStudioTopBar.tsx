@@ -26,7 +26,9 @@ export function FilmStudioTopBar({
       {/* 项目名 —— 它本身就是这一屏的标题。此前右侧还挂一个「· 视频成片工作室」：
           与侧栏 / 页签那一项（`NAV_ITEMS` 的 `film` → 「成片」）指同一件事，
           只是换了套说法，既挤宽度又没多给信息（ISSUE #1423）。 */}
-      <h1 className="font-title u-title-page min-w-0 truncate">{c.title}</h1>
+      <Hint label={c.title}>
+        <h1 className="font-title u-title-page min-w-0 truncate">{c.title}</h1>
+      </Hint>
 
       <div className="bg-surface-2 h-5 w-px" />
 

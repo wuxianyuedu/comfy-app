@@ -11,6 +11,7 @@ import { useMemo } from "react";
 import { SettingsShell } from "~/components/settings/SettingsShell";
 import { Button } from "~/components/ui/button";
 import { Alert, AlertAction, AlertDescription } from "~/components/ui/alert";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import type { Section, ReadySettingsPageController } from "./hooks/use-settings-page";
 
 import { AppUpdateSection } from "./components/AppUpdateSection";
@@ -24,6 +25,7 @@ import { LogCategorySection } from "./components/LogCategorySection";
 import { LlmLocalSection } from "./components/LlmLocalSection";
 import { LlmRemoteSection } from "./components/LlmRemoteSection";
 import { SidebarTabSection } from "./components/SidebarTabSection";
+import { SizePresetSection } from "./components/SizePresetSection";
 import { UpdateCheckSection } from "./components/UpdateCheckSection";
 
 export function SettingsPageView({
@@ -43,8 +45,9 @@ export function SettingsPageView({
     () =>
       ({
         appearance: <AppearanceSection c={c} />,
-        /* 侧栏项的页签行为（ISSUE #3623）：独立标签页 / 共享标签页，按项配置。
-            它自己取数（配置面只有这一处读），故不吃 `c`。 */
+        /* 界面页签的行为（ISSUE #3623 / #3798）：独立标签页 / 共享标签页，按项配置；
+           清单含设置与「UI 控件总览」这类不进侧栏的界面。它自己取数（配置面只有
+           这一处读），故不吃 `c`。 */
         sidebar: <SidebarTabSection />,
         appUpdate: (
           <>
@@ -61,10 +64,33 @@ export function SettingsPageView({
         database: <DatabaseSection c={c} />,
         backup: <BackupSection c={c} />,
         dataLocation: <DataLocationSection />,
+        sizePresets: <SizePresetSection />,
         exit: <ExitSection c={c} />,
         logs: <LogCategorySection />,
       }) satisfies Record<Section, React.ReactNode>,
     [c],
+  );
+
+  /* 分区标题行右侧的存放位置徽标（ISSUE #3724）：卡片自身没有标题可挂的
+   * （整节一张无标题卡），徽标上移到大标题（`.u-title-stage`）行右侧，
+   * 不再为一张图标独占卡片头的一行。卡片自带标题的（备份 / 本地更新检测 /
+   * 远程模型）仍挂在卡片标题行。 */
+  const sectionTitleExtra = useMemo(
+    () =>
+      ({
+        appearance: <DataLocationBadge id="appearance" />,
+        comfyui: <DataLocationBadge id="app-settings" />,
+        llmLocal: <DataLocationBadge id="llm-config" />,
+        llmRemote: <DataLocationBadge id="remote-model" />,
+        logs: <DataLocationBadge id="log-categories" />,
+        sidebar: (
+          <span className="flex items-center gap-1.5">
+            <DataLocationBadge id="sidebar-tab-local" />
+            <DataLocationBadge id="sidebar-tab-project" />
+          </span>
+        ),
+      }) satisfies Partial<Record<Section, React.ReactNode>>,
+    [],
   );
 
   return (
@@ -113,6 +139,7 @@ export function SettingsPageView({
       jumpSection={c.pendingJump}
       onJumpApplied={c.ackJumpSection}
       sections={sections}
+      sectionTitleExtra={sectionTitleExtra}
     />
   );
 }

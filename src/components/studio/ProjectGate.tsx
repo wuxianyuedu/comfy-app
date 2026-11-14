@@ -5,6 +5,7 @@
 
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { textHandler } from "~/lib/form-props";
 import { createProject, listProjects, setActive } from "~/lib/project-canvas/canvas-store";
@@ -45,7 +46,7 @@ export function ProjectGate({ onEnter, onExit }: ProjectGateProps) {
             className="border-border bg-canvas-deep text-ink placeholder:text-ink-fainter focus:border-border-strong min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
             placeholder="项目名称（可留空，默认「未命名」）"
           />
-          <Button onClick={handleCreate} variant="gradient">
+          <Button onClick={handleCreate} variant="primary-solid">
             新建并进入
           </Button>
         </div>
@@ -66,7 +67,9 @@ export function ProjectGate({ onEnter, onExit }: ProjectGateProps) {
                       }}
                       variant="ghost"
                     >
-                      <span className="truncate">{project.name || "未命名项目"}</span>
+                      <TruncatedText className="truncate">
+                        {project.name || "未命名项目"}
+                      </TruncatedText>
                       <span className="text-ink-fainter shrink-0 text-xs">
                         {nodeCount > 0 ? `${nodeCount} 节点` : "空"}
                       </span>

@@ -12,6 +12,7 @@ import { asRecord } from "~/lib/is-record";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 import type { LlmProvider, RemoteModel } from "~/server/db/schema";
 import { extractStreamDelta, extractText, extractToolCalls, buildChatRequest } from "./api-format";
+import { parseExtraBodyObject } from "./extra-body";
 import {
   parseCapabilities,
   parseInputTypes,
@@ -89,6 +90,8 @@ function entryFromRemoteRow(
     providerId: r.providerId,
     apiFormat: resolveApiFormat(r.apiFormat, provider?.apiFormat),
     enabled: r.enabled,
+    /* 额外请求体字段（#3626）：raw JSON 对象文本原样带（读侧 parseExtraBodyObject 收窄）。 */
+    extraBody: r.extraBody ?? null,
     contextWindow: r.contextWindow,
     maxOutputTokens: r.maxOutputTokens,
     inputTypes: parseInputTypes(r.inputTypes),
@@ -193,6 +196,10 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
         }
         if (entry.apiFormat !== null && entry.apiFormat !== undefined) {
           cfg.apiFormat = entry.apiFormat;
+        }
+        if (typeof entry.extraBody === "string" && entry.extraBody.trim() !== "") {
+          /* 额外请求体字段（#3626）：空白 / 非字符串 → 未配置，不发送。 */
+          cfg.extraBody = entry.extraBody.trim();
         }
       }
     }
@@ -360,6 +367,7 @@ async function upstreamChat(
   messages: Array<LLMMessage>,
   options: ChatCallOptions,
 ): Promise<Response> {
+  const extraBodyJson = parseExtraBodyObject(cfg.extraBody);
   const request = buildChatRequest({
     format: formatOf(cfg),
     baseUrl: cfg.baseUrl,
@@ -374,6 +382,7 @@ async function upstreamChat(
     tools: options.tools,
     responseFormatJson: options.responseFormatJson,
     local: cfg.provider === "local",
+    ...(extraBodyJson === null ? {} : { extraBody: extraBodyJson }),
   });
   let res: Response;
   try {

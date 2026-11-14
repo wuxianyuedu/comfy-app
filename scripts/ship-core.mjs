@@ -183,6 +183,46 @@ export function decideCleanBranch({ requested, landedVerified, branch }) {
 }
 
 /**
+ * `git branch -D` 拒删的**现场归因** —— 只读 git 自己吐回的 stderr 原话，不猜。
+ *
+ * 为什么要归因（ISSUE #3617 的现场）：`--clean-branch` 的本地删除段被拒时，
+ * 旧读数只有一句「本地那一半没删掉（exit 1）」，不说为什么、也不给出口 —— 而本仓
+ * 常态是 opencode / 并行 worktree 检出（硬规则 30），「分支被某个 worktree 占着」
+ * 不是边角，是每一轮都会撞的形状。git 的 stderr 里其实带着占用的检出路径，
+ * 分出「当前检出占着」还是「别的检出占着」才能给出对应的切走出口。
+ *
+ * 两种原话（同机实测；老 git 对当前检出的措辞是 `checked out at`）：
+ *   · `error: cannot delete branch 'x' used by worktree at '<路径>'`；
+ *   · `error: Cannot delete branch 'x' checked out at '<路径>'`。
+ * 路径与当前检出根（`rev-parse --show-toplevel`）逐字同形 ⇒ 当前；其余 ⇒ 别的检出。
+ *
+ * @param {string | null | undefined} stderr `git branch -D` 的 stderr 原文
+ * @param {string | null | undefined} [currentRoot] 当前检出的根；不给（或给空）时
+ *   解析出占用路径也只报 `other-worktree` —— 宁可少分一档，不猜。
+ * @returns {{kind: "current-worktree" | "other-worktree" | "other", path: string | null}}
+ */
+export function classifyBranchDeleteRefusal(stderr, currentRoot = null) {
+  const hit = /(?:used by worktree at|checked out at)\s+'(?<path>[^']+)'/i.exec(
+    String(stderr ?? ""),
+  );
+  if (!hit) {
+    return { kind: "other", path: null };
+  }
+  const path = hit.groups?.path ?? null;
+  /** @param {string | null | undefined} p git 输出的路径（统一成正斜杠再比） */
+  const norm = (p) => String(p ?? "").replaceAll("\\", "/");
+  const a = norm(path);
+  const b = norm(currentRoot);
+  /** Windows 盘符形态的路径（`G:/…`）大小写不敏感；POSIX 路径严格比。 */
+  const winLike = (/** @type {string} */ p) => /^[a-z]:\//i.test(p);
+  const same = a === b || (winLike(a) && winLike(b) && a.toLowerCase() === b.toLowerCase());
+  if (b && same) {
+    return { kind: "current-worktree", path };
+  }
+  return { kind: "other-worktree", path };
+}
+
+/**
  * push 失败的**现场分型** —— 只读 push 自己吐回来的原话，不猜。
  *
  * 为什么要分型（ISSUE #2825 的现场）：远端回 `Repository Not Found`（exit 128）的那一跳，
@@ -417,11 +457,15 @@ export function classifyIsMerged(v) {
  * 读 PR JSON 的判决字段（同样只读 `data.*`）。
  *
  * @param {{data?:{number?:number|string,mergeable_state?:string,blocked_on?:string,is_merged?:boolean,state?:string,title?:string,base?:{ref?:string}}} | null} json 解析结果
- * @returns {{number:number|null,mergeableState:string,blockedOn:string,isMerged:boolean,isMergedTri:"merged"|"not_merged"|"unknown",state:string,title:string,baseBranch:string}} 归一后的字段
+ * @returns {{number:number|null,mergeableState:string,blockedOn:string,isMerged:boolean,isMergedTri:"merged"|"not_merged"|"unknown",state:string,title:string,baseBranch:string,headSha:string,headBranch:string}} 归一后的字段
  *   `title` 是平台上这条 PR 的**现标题**（合并那一跳取 squash 标题要用它，ISSUE #2806）。
  *   `baseBranch` 是平台 `base.ref` 去 `refs/heads/` 后的分支名（ISSUE #3021：标题与
  *   diffstat 的区间跟它走，不跟本地 upstream）。缺键给空串，调用方按「取不到」处理。
  *   `isMerged` 是 `isMergedTri === "merged"` 的派生展示值；判读走 `isMergedTri`（ISSUE #3059）。
+ *   `headSha` 是源分支头的 sha（`--status` 按 sha 归属 build 用，ISSUE #3811）；
+ *   平台在 `head.sha` 里留着源分支头那一笔（squash 改的只是主干那笔），缺键给空串。
+ *   `headBranch` 是源分支名（`head.ref` 去 `refs/heads/`；清单截断时按它核对
+ *   「落盘读数记的那条 PR 是不是这条分支的」—— 对 base 比会恒真，#3811）。
  */
 export function readPullVerdict(json) {
   /* 信封解包走单一出处（ISSUE #3060）：「data 缺了」与「拆错层」在这里分型。 */
@@ -437,6 +481,8 @@ export function readPullVerdict(json) {
     state: String(d.state ?? "unknown"),
     title: String(d.title ?? ""),
     baseBranch: String(d.base?.ref ?? "").replace(/^refs\/heads\//, ""),
+    headSha: String(d.head?.sha ?? ""),
+    headBranch: String(d.head?.ref ?? "").replace(/^refs\/heads\//, ""),
   };
 }
 
@@ -559,45 +605,6 @@ export function findPullForBranch(json, branch) {
 }
 
 /**
- * 「这一笔 sha 是不是已经随某条**已合并**的 PR 落进主干」（ISSUE #2250）。
- *
- * 上面那条幂等只认**开放** PR：squash 合并成功那一刻 PR 转 `closed`，于是同一条分支上
- * 再跑一次 ship 会走「没有就建」，长出一条内容已在主干的幽灵 PR（能被再合一次、
- * 白烧一轮 CI）。这一格认的是平台的正面事实：`is_merged === true` 那条上的
- * `head.sha` 与这一笔逐字相等 —— squash 改的是主干那笔的 sha，分支头那笔在 PR 记录里留着。
- *
- * 与 `ship-close.mjs` 的落地反查同一条取法：列表的 `--state` 没有 `merged` 这一档，
- * `closed` 里混着「合了」与「关了没合」，所以只认逐条 `is_merged`，不认状态词。
- *
- * @param {any} json `list-pulls --state closed` 的原样 JSON
- * @param {string} headSha 本地 HEAD 的 sha
- * @param {{unknownPr?: number|null} | null} [sink] 可选出站口：head.sha 逐字相同、
- *   而 `is_merged` **缺键 / null / 非布尔**的那条经它报出（`unknownPr` = 那条的号）——
- *   缺键不按「未合并」处理（ISSUE #3059），判读留给调用方（落地守卫按读数缺失收口）。
- * @returns {number | null} 命中的 PR 号；认不出（含空 sha）时 `null`
- */
-export function findMergedPullForHeadSha(json, headSha, sink = null) {
-  const sha = String(headSha ?? "").trim();
-  if (!sha) {
-    return null;
-  }
-  const raw = json?.data;
-  const list = Array.isArray(raw) ? raw : raw && Array.isArray(raw.data) ? raw.data : [];
-  for (const p of list) {
-    if (String(p?.head?.sha ?? "") !== sha) {
-      continue;
-    }
-    if (p?.is_merged === true) {
-      return Number(p.number);
-    }
-    if (typeof p?.is_merged !== "boolean" && sink) {
-      sink.unknownPr = Number(p.number) || null;
-    }
-  }
-  return null;
-}
-
-/**
  * 识别「这条提交信息已经被 `pnpm run` 压成一行」的形状 —— 只判形状，不判内容。
  *
  * 形状从哪来的（本仓实测，两个出口行为不同）：
@@ -630,7 +637,7 @@ export function looksNewlineMangled(msg) {
  * ⚠️ 它**不**保证恒退 0：dry-run 免掉的是「执行写动作」，不免掉「报出阻塞」。正在
  * `master` 上、或缺 `changelog.d/` 碎片时照样退 1 —— 一个会藏掉阻塞事实的预览比不预览更糟。
  *
- * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,asMerged?:number|null,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,comment?:boolean,branches?:boolean,newIssue?:boolean,diagnose?:boolean,stageLog?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null,prBodyFile?:boolean}} st 当前状态
+ * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,noCommit?:boolean,closeIssue?:boolean,asMerged?:number|null,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,comment?:boolean,branches?:boolean,newIssue?:boolean,diagnose?:boolean,stageLog?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null,prBodyFile?:boolean}} st 当前状态
  * @returns {string[]} 逐条命令
  */
 export function planCommands(st) {
@@ -651,16 +658,23 @@ export function planCommands(st) {
   p.push(`git diff --name-only ${remote}/${trunk}...HEAD -- changelog.d`);
   p.push("git status --porcelain -- changelog.d");
   p.push("node scripts/check-deps-freshness.mjs");
-  for (const a of st.adds) {
+  /* `--no-commit`（ISSUE #3619 / #3676）：提交段整段跳过 —— 计划里也要如实反映
+   * 「不 add、不看暂存面、不 commit」，别让 dry-run 教给读者一套不会执行的形状。 */
+  if (st.noCommit) {
+    p.push(
+      "（--no-commit：跳过提交段 —— 不 git add、不看暂存面、不 git commit，HEAD 原样进推送段）",
+    );
+  }
+  for (const a of st.noCommit ? [] : st.adds) {
     p.push(`git add -- ${a}`);
   }
   /* 封闭暂存面那一读（ISSUE #3597）：只在给了 `--add` 时执行 —— 没给 `--add` 的那条路
    * 暂存面本来就由调用方负责，没有「声明」可收口。计划里省掉这一条，dry-run 就会教给
    * 读者一个没有收口的执行面，而那个收口正是这次补上的东西。 */
-  if (st.adds.length > 0) {
+  if (!st.noCommit && st.adds.length > 0) {
     p.push("git diff --cached --name-only -z");
   }
-  if (st.hasMessage) {
+  if (st.hasMessage && !st.noCommit) {
     p.push("git commit --message=<提交信息原文>");
   }
   /* 远端名与主干分支都来自解析（`resolveUpstream`），不写死 `origin` / `master` ——

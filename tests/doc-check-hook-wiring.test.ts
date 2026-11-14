@@ -7,6 +7,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import {
   registeredDisabledGates,
   registeredGateOrder,
@@ -536,10 +538,11 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
       scriptLine,
       "平台侧那一格不再带 `--changed`：判面漂回全库，本地 `format:check` 立刻与平台分叉",
     ).toContain("--changed");
-    const pkg = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
-      devDependencies: Record<string, string>;
-      scripts: Record<string, string>;
-    };
+    const pkg: unknown = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8"));
+    /* 运行时守卫收窄（B5 清账，不走 `as` 断言）。 */
+    if (!isRecord(pkg) || !isRecord(pkg.scripts) || !isRecord(pkg.devDependencies)) {
+      throw new Error("package.json 形状不对（缺 scripts/devDependencies）");
+    }
     expect(pkg.scripts["format:check"], "本地 `format:check` 必须与平台格同一条命令").toBe(
       "node scripts/check-format.cjs --changed",
     );

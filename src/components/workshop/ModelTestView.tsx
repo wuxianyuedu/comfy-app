@@ -1,11 +1,14 @@
 "use client";
 
+import { useState } from "react";
+
 // ── 「测试模型能力」**视图**（规范 §17.2 第③层：只渲染 + 上抛）─────────────
 // 用工坊同款通道直接试已配置的远端模型（#3590）：左栏「用途 → 所有模式」
-// 页签（#3635：每个模式页签显示配了适配器的候选模型数）→ 右栏模型下拉 →
-// 尺寸（工作流库同款多段下拉）→ 按「模型适配」里配的统一输入逐项填 →
-// 生成 → 工坊同款产物展示。
-// 候选 / 适配器 / 生成动作都在 `hooks/use-model-test.ts`（第②层）与
+// 页签（#3635：每个模式页签显示配了适配器的候选模型数）→ 右栏模型下拉
+// （#3778：按所选模式收窄，只列配了该模式适配器的模型）→ 统一输入
+// （#3778：行清单来自模式契约，带必备 / 可选标识）→ 尺寸（工作流库同款
+// ShotSizePicker）→ 生成 → 工坊同款产物展示。
+// 候选 / 适配器 / 契约 / 生成动作都在 `hooks/use-model-test.ts`（第②层）与
 // `model-test-config.ts`（第①层）；本文件不出现 fetch / api.*。
 
 import { Button } from "~/components/ui/button";
@@ -13,45 +16,32 @@ import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { FilePickerButton } from "~/components/ui/file-picker";
 import { FormField } from "~/components/ui/form-field";
 import { Input } from "~/components/ui/input";
+import { useInterval } from "~/components/ui/use-interval";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { ViewableImage } from "~/components/ui/image-viewer";
 import { PageHeader } from "~/components/ui/page-header";
 import { SectionLabel } from "~/components/ui/section-label";
 import { SelectChip } from "~/components/ui/select-chip";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { SelectMenu } from "~/components/ui/select-menu";
-import {
-  MultiSegmentPopover,
-  RatioIcon,
-  type SegmentSection,
-} from "~/components/ui/segment-popover";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
-import { parseRatioFromLabel } from "~/components/studio/workflow-io";
-import { workshopInputLabel } from "~/lib/workshop/remote-model-adapter";
+import { fixed } from "~/lib/number-format";
+import { sceneFromMode } from "~/lib/media/size-presets";
+import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
 import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
 
 import { cn } from "~/lib/utils";
 import {
-  ASPECT_RATIO_PRESETS,
-  MEGAPIXEL_PRESETS,
   MODEL_TEST_KINDS,
   MODEL_TEST_KIND_LABELS,
-  MULTIPLE_PRESETS,
-  RELAY_INPUT_TYPES,
-  RESOLUTION_PRESETS,
-  controlForInputType,
+  sizeSpecToValues,
+  sizeValuesToSpec,
   type ModelTestControl,
   type ModelTestKind,
   type ModelTestValues,
   type ModeTab,
 } from "./model-test-config";
 import { useModelTest } from "./hooks/use-model-test";
-
-/** 统一输入里的「尺寸 / 数量」三件套：由工作流库同款多段下拉一并承担，
- *  不再各占一排离散档位 chips（#3635）。 */
-const SIZE_INPUT_TYPES: ReadonlyArray<WorkshopInputType> = [
-  "aspect-ratio",
-  "megapixels",
-  "multiple",
-];
 
 /** 用途页签（图片 / 视频）：SelectChip 的 pill 单选组，与「模型适配」的
  *  候选选择同一交互件。 */
@@ -114,14 +104,14 @@ function ModeTabs({
             variant="ghost"
           >
             <span className="min-w-0 text-left leading-tight">
-              <span
+              <TruncatedText
                 className={cn(
                   "block truncate text-sm font-semibold",
                   selected ? "text-primary" : "text-ink",
                 )}
               >
                 {t.label}
-              </span>
+              </TruncatedText>
               <span className="text-muted-foreground text-2xs block">{t.mode}</span>
             </span>
             <span
@@ -141,76 +131,77 @@ function ModeTabs({
   );
 }
 
-/** 尺寸 / 数量：工作流库同款多段下拉（比例 / 像素 / 数量一次选完，#3635）。
- *  触发器折一行摘要（如 `16:9 / 2K / ×2`），未设的段不出现 —— 没选过的键
- *  组装请求时本就不带（由服务端按「没带」回落默认）。 */
+/** 尺寸：与工作流库**同一个**选择器（ShotSizePicker，ISSUE #3778 问题 4）。
+ *  比例 / 像素（分辨率 · 百万像素）/ 倍数一段不缺，倍数段只在选中百万像素档
+ *  时出现（分辨率档宽高由场景尺寸表给定，倍数没有意义）。表单值与 SizeSpec
+ *  两套形状的换算在 model-test-config（sizeValuesToSpec / sizeSpecToValues，
+ *  全部走 size-presets 的既有纯函数）。 */
 function SizeField({
-  onPatch,
+  disabled,
+  mode,
+  onPatchValues,
   values,
 }: {
-  onPatch: (type: keyof ModelTestValues, value: string) => void;
+  disabled?: boolean;
+  mode: string;
+  onPatchValues: (patch: Partial<ModelTestValues>) => void;
   values: ModelTestValues;
 }) {
-  const ratioValue = values["aspect-ratio"] ?? "";
-  const mpValue = values.megapixels ?? "";
-  const multipleValue = values.multiple ?? "";
-
-  const sections: Array<SegmentSection> = [
-    {
-      label: "比例",
-      onChange: (value) => {
-        onPatch("aspect-ratio", value);
-      },
-      options: ASPECT_RATIO_PRESETS.map((r) => ({
-        label: r,
-        render: <RatioIcon ratio={parseRatioFromLabel(r) ?? 1} />,
-        value: r,
-      })),
-      value: ratioValue,
-    },
-    {
-      label: "像素",
-      onChange: (value) => {
-        onPatch("megapixels", value);
-      },
-      options: MEGAPIXEL_PRESETS.map((p) => ({ label: p.label, value: p.value })),
-      value: mpValue,
-    },
-    {
-      label: "数量",
-      onChange: (value) => {
-        onPatch("multiple", value);
-      },
-      options: MULTIPLE_PRESETS.map((n) => ({ label: String(n), value: String(n) })),
-      value: multipleValue,
-    },
-  ];
-
-  const mpLabel = MEGAPIXEL_PRESETS.find((p) => p.value === mpValue)?.label;
-  /* 没选过的段不出现在摘要里 —— 组装请求时它们本就不带（no-negated-condition：正形写分支） */
-  const summary = [
-    ratioValue === "" ? null : ratioValue,
-    mpLabel ?? null,
-    multipleValue === "" ? null : `×${multipleValue}`,
-  ]
-    .filter((part): part is string => part !== null)
-    .join(" / ");
-
+  const scene = sceneFromMode(mode);
   return (
     <div className="w-64 min-w-0">
-      <MultiSegmentPopover
-        align="left"
-        ariaLabel="选择尺寸与数量"
-        sections={sections}
-        triggerContent={summary === "" ? "尺寸 / 数量（可选）" : summary}
+      <ShotSizePicker
+        disabled={disabled}
+        onChange={(next) => {
+          onPatchValues(sizeSpecToValues(next, scene));
+        }}
+        scene={scene}
+        value={sizeValuesToSpec(values)}
       />
     </div>
   );
 }
 
-/** 一行统一输入的渲染（按类型给控件；文案 = 输入类型的工坊名）。
- *  尺寸三件套（比例 / 像素 / 数量）不在这里 —— 它们由 SizeField 的
- *  多段下拉统一承担（#3635）。 */
+/** 生成中已过时间（ISSUE #3799）：本地 500ms 一跳，只重渲自己这格文本；
+ *  生成结束后组件随行消失（行徽标换回「已发送」）。 */
+function GeneratingElapsed({ since }: { since: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  /* 走秒走 useInterval（P12：视图里不自写 setInterval）。 */
+  useInterval(
+    () => {
+      setNow(Date.now());
+    },
+    { ms: 500 },
+  );
+  return <>进行中 {fixed((now - since) / 1000, 1)}s</>;
+}
+
+/** 响应摘要的格式化显示（ISSUE #3799）：结构化摘要默认 JSON 缩进；
+ *  万一是字符串（历史读数）原样给出。 */
+function prettyOrRaw(excerpt: unknown): string {
+  if (typeof excerpt === "string") {
+    return excerpt;
+  }
+  return JSON.stringify(excerpt, null, 2) ?? "";
+}
+
+/** 必备 / 可选标识（ISSUE #3778 问题 2）：来自模式契约的 required 生效集。 */
+function RequiredBadge({ required }: { required: boolean }) {
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded-full px-1.5 py-0.5 text-2xs",
+        required ? "bg-primary/12 text-primary-strong" : "bg-elevated text-muted-foreground",
+      )}
+    >
+      {required ? "必填" : "可选"}
+    </span>
+  );
+}
+
+/** 一行统一输入的渲染（按类型给控件；文案 = 契约口的展示名）。行标签右侧带
+ *  必填 / 可选标识（ISSUE #3778，来自契约 required）。尺寸复合口不在这里 ——
+ *  由 SizeField 的 ShotSizePicker 统一承担。 */
 function InputRow({
   control,
   disabled,
@@ -219,6 +210,8 @@ function InputRow({
   label,
   onChange,
   onPickFile,
+  onRandom,
+  required,
   value,
 }: {
   control: ModelTestControl;
@@ -229,33 +222,56 @@ function InputRow({
   onChange: (value: string) => void;
   /** 图片类控件：选完文件回调（data URL 由逻辑层读）。 */
   onPickFile?: (file: File) => void;
+  /** 提示词的随机按钮（ISSUE #3742）；给了才渲染。 */
+  onRandom?: () => void;
+  required: boolean;
   value: string;
 }) {
+  const labelNode = (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <TruncatedText className="truncate">{label}</TruncatedText>
+      <RequiredBadge required={required} />
+    </span>
+  );
   if (control === "prompt" || control === "negative") {
     return (
-      <FormField hint={hint} id={id} label={label} labelClassName="mb-1.5">
+      <FormField hint={hint} id={id} label={labelNode} labelClassName="mb-1.5">
         {(a11y) => (
-          <textarea
-            {...a11y}
-            className={cn(
-              "border-border bg-bg focus:border-primary w-full resize-y rounded-lg border px-3 py-2 text-sm outline-none",
-              disabled && "opacity-50",
+          <div className="flex items-start gap-2">
+            <textarea
+              {...a11y}
+              className={cn(
+                "border-border bg-bg focus:border-primary w-full flex-1 resize-y rounded-lg border px-3 py-2 text-sm outline-none",
+                disabled && "opacity-50",
+              )}
+              disabled={disabled}
+              onChange={(e) => {
+                onChange(e.target.value);
+              }}
+              placeholder={
+                control === "prompt" ? "描述你想要生成的画面" : "不想出现的内容（可留空）"
+              }
+              rows={control === "prompt" ? 3 : 2}
+              value={value}
+            />
+            {control === "prompt" && onRandom !== undefined && (
+              <Button
+                className="h-auto shrink-0 px-3 py-2 text-xs"
+                disabled={disabled}
+                onClick={onRandom}
+                variant="outline"
+              >
+                随机
+              </Button>
             )}
-            disabled={disabled}
-            onChange={(e) => {
-              onChange(e.target.value);
-            }}
-            placeholder={control === "prompt" ? "描述你想要生成的画面" : "不想出现的内容（可留空）"}
-            rows={control === "prompt" ? 3 : 2}
-            value={value}
-          />
+          </div>
         )}
       </FormField>
     );
   }
   if (control === "image") {
     return (
-      <FormField hint={hint} id={id} label={label} labelClassName="mb-1.5">
+      <FormField hint={hint} id={id} label={labelNode} labelClassName="mb-1.5">
         {(a11y) => (
           <div className="flex items-center gap-2">
             <FilePickerButton
@@ -296,35 +312,12 @@ function InputRow({
       </FormField>
     );
   }
-  /* 分辨率档（#3622）：接口原生认 1k/2k/4k 的直接映射。它不在
-     SIZE_INPUT_TYPES 的多段下拉里 —— 比例 / 百万像素 / 倍数三件套由
-     SizeField 一并承担（#3635），分辨率是适配器层新增的独立口。 */
-  if (control === "resolution") {
-    return (
-      <FormField hint={hint} id={id} label={label} labelClassName="mb-1.5">
-        {() => (
-          <div aria-label={label} className="flex flex-wrap gap-1.5" role="radiogroup">
-            {RESOLUTION_PRESETS.map((p) => (
-              <SelectChip
-                key={p.value}
-                onClick={() => {
-                  onChange(p.value);
-                }}
-                selected={value === p.value}
-                shape="compact"
-              >
-                {p.label}
-              </SelectChip>
-            ))}
-          </div>
-        )}
-      </FormField>
-    );
-  }
+  /* 分辨率档（#3622）已并入 SizeField 的「像素」段（分辨率 · 百万像素两行，
+   * ISSUE #3742）—— 这里不再有独立的分辨率 chips。 */
 
   /* duration / number / text → 单行输入 */
   return (
-    <FormField hint={hint} id={id} label={label} labelClassName="mb-1.5">
+    <FormField hint={hint} id={id} label={labelNode} labelClassName="mb-1.5">
       {(a11y) => (
         <Input
           {...a11y}
@@ -344,20 +337,20 @@ function InputRow({
 
 export function ModelTestView() {
   const c = useModelTest();
+  /* 响应摘要的显示形态（#3799）：默认格式化，可切回原始单行。 */
+  const [excerptPretty, setExcerptPretty] = useState(true);
 
-  const relaySet: ReadonlySet<WorkshopInputType> = new Set(RELAY_INPUT_TYPES[c.kind]);
   const selectedAdapter = c.adapters.find((a) => a.mode === c.mode) ?? null;
-  /* 渲染哪些输入行：有适配器 → 它声明的映射行（工坊同款）；没有 → 该用途的
-     通道承接集合（OpenAI 兼容默认映射），让未配适配器的模型也能先试。 */
-  const inputRows: Array<{ relayed: boolean; type: WorkshopInputType }> =
-    selectedAdapter === null
-      ? [...relaySet].map((type) => ({ type, relayed: true }))
-      : selectedAdapter.inputs.map((row) => ({ type: row.type, relayed: relaySet.has(row.type) }));
-
-  /* 尺寸三件套走 SizeField 的多段下拉，其余类型仍逐行渲染。 */
-  const otherRows = inputRows.filter((row) => !SIZE_INPUT_TYPES.includes(row.type));
-  const hasSizeRow = otherRows.length !== inputRows.length;
+  /* 适配器映射了的统一输入类型集合：契约行通道承接得住、但适配器没映射时，
+   * 生成不会带上那个值 —— 行上明说，不静默丢（映射关系只在有适配器时存在）。 */
+  const mappedTypes = new Set<WorkshopInputType>(
+    (selectedAdapter?.inputs ?? []).map((row) => row.type),
+  );
+  /* 统一输入行来自模式契约（ISSUE #3778），行序 = 契约口序（ISSUE #3785）：
+   * 复合尺寸口也在它契约里的位置上渲染，不整体前移。 */
   const modeLabel = c.modeTabs.find((t) => t.mode === c.mode)?.label ?? c.mode;
+  /* 回调里读 c.result 会丢掉 JSX 条件的收窄 —— 先取一次稳定引用。 */
+  const resultUrl = c.result?.url ?? null;
 
   return (
     <DocumentFrame
@@ -367,8 +360,10 @@ export function ModelTestView() {
       <PageHeader srTitle={pageHeaderTitle("model-test")} />
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
-        {/* 左栏：用途 + 所有模式（每个页签显示配了适配器的候选模型数，#3635） */}
-        <aside className="flex shrink-0 flex-col gap-5 lg:w-60">
+        {/* 左栏：用途 + 所有模式（每个页签显示配了适配器的候选模型数，#3635）。
+            桌面下吸附成独立滚动区（ISSUE #3806）：右侧内容滚动不带动左栏，
+            页签超出视口时在栏内自己滚。 */}
+        <aside className="flex shrink-0 flex-col gap-5 lg:sticky lg:top-5 lg:max-h-[calc(100dvh-120px)] lg:w-60 lg:overflow-y-auto">
           <section>
             <SectionLabel hint="同一模型的图片 / 视频分栏测试">用途</SectionLabel>
             <KindTabs kind={c.kind} onChange={c.setKind} />
@@ -384,17 +379,25 @@ export function ModelTestView() {
         {/* 右栏：模型下拉 → 统一输入 → 生成 → 产物 */}
         <div className="flex min-w-0 flex-1 flex-col gap-6">
           <section>
-            <SectionLabel hint="「设置 → 远程模型」里启用的条目，按用途过滤">模型</SectionLabel>
+            <SectionLabel hint="「设置 → 远程模型」里启用的条目；按用途与所选模式过滤 —— 只列配了该模式适配器的模型">
+              模型
+            </SectionLabel>
             {c.loading ? (
               <p className="text-muted-foreground text-sm">加载中…</p>
             ) : c.candidates.length === 0 ? (
-              <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs">
-                还没有可测的{MODEL_TEST_KIND_LABELS[c.kind]}
-                模型 —— 到「设置 → 远程模型」添加并启用用途为 {c.kind === "image"
-                  ? "图像"
-                  : "视频"}{" "}
-                的条目。
-              </p>
+              c.kindCandidateCount === 0 ? (
+                <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs">
+                  还没有可测的{MODEL_TEST_KIND_LABELS[c.kind]}
+                  模型 —— 到「设置 → 远程模型」添加并启用用途为{" "}
+                  {c.kind === "image" ? "图像" : "视频"} 的条目。
+                </p>
+              ) : (
+                <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs">
+                  还没有模型配置「{modeLabel}
+                  」模式的适配器（页签徽标的数字就是它的候选数）——
+                  不支持这个模式的模型不会出现在下拉里；先到「模型适配」给模型添加该模式的适配器。
+                </p>
+              )
             ) : (
               <SelectMenu
                 aria-label="选择模型"
@@ -420,56 +423,90 @@ export function ModelTestView() {
                 </p>
               )}
 
-              {/* 统一输入（工坊同款：有适配器按它的映射行，没有按通道默认集合） */}
-              {selectedAdapter !== null && selectedAdapter.inputs.length === 0 ? (
-                <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs">
-                  该模式没有声明任何输入映射 —— 到「模型适配」为它添加输入行。
-                </p>
-              ) : (
-                <section className="flex flex-col gap-4">
-                  <SectionLabel hint="与工坊生成走同一份统一输入；适配器把它们翻译成接口字段">
-                    统一输入
-                  </SectionLabel>
-                  {hasSizeRow && (
-                    <FormField
-                      hint="比例 / 像素 / 数量一次选完，与工作流库同款"
-                      id="model-test-size"
-                      label="尺寸 / 数量"
-                      labelClassName="mb-1.5"
-                    >
-                      {() => <SizeField onPatch={c.patchValue} values={c.values} />}
-                    </FormField>
-                  )}
-                  {otherRows.map((row, i) => {
-                    const control = controlForInputType(row.type);
-                    const id = `model-test-input-${row.type}`;
-                    const label = workshopInputLabel(row.type);
-                    const relayed = row.relayed;
-                    const hint = relayed
-                      ? undefined
-                      : "API 通道暂未承接这类输入（工坊完整链路才有）—— 填了也会被忽略";
+              {/* 统一输入（行清单来自模式契约，必备 / 可选随契约走；ISSUE #3778） */}
+              <section className="flex flex-col gap-4">
+                <SectionLabel hint="与工坊生成走同一份统一输入（模式契约的对外参数）；适配器把它们翻译成接口字段">
+                  统一输入
+                </SectionLabel>
+                {c.inputRows.map((row, i) => {
+                  /* 行序 = 契约口序（ISSUE #3785）：复合尺寸口也在它契约
+                   * 里的位置上渲染，不整体前移。 */
+                  if (row.control === "size") {
                     return (
-                      <InputRow
-                        control={control}
-                        disabled={!relayed}
-                        hint={hint}
-                        id={`${id}-${String(i)}`}
-                        key={`${row.type}-${String(i)}`}
-                        label={relayed ? label : `${label}（未承接）`}
-                        onChange={(value) => {
-                          c.patchValue(row.type, value);
-                        }}
-                        onPickFile={(file) => {
-                          if (row.type === "first-frame" || row.type === "image") {
-                            void c.setInputFromFile(row.type, file);
-                          }
-                        }}
-                        value={c.values[row.type] ?? ""}
-                      />
+                      <FormField
+                        hint={
+                          row.disabled
+                            ? "API 通道暂未承接尺寸输入（工坊完整链路才有）"
+                            : "比例 / 像素（分辨率 · 百万像素）/ 倍数一次选完，与工作流库同款；已按最常用档预置默认值"
+                        }
+                        id={`model-test-size-${String(i)}`}
+                        key={`${row.id}-${String(i)}`}
+                        label={
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <TruncatedText className="truncate">
+                              {row.disabled ? `${row.label}（未承接）` : row.label}
+                            </TruncatedText>
+                            <RequiredBadge required={row.required} />
+                          </span>
+                        }
+                        labelClassName="mb-1.5"
+                      >
+                        {() => (
+                          <SizeField
+                            disabled={row.disabled}
+                            mode={c.mode}
+                            onPatchValues={c.patchValues}
+                            values={c.values}
+                          />
+                        )}
+                      </FormField>
                     );
-                  })}
-                </section>
-              )}
+                  }
+                  const control: ModelTestControl = row.control;
+                  const id = `model-test-input-${row.id}`;
+                  /* 通道承接得住、但适配器没映射 → 提示「生成不会带上」，别让
+                   * 用户填了值却在请求里静默消失。 */
+                  const unmapped =
+                    !row.disabled &&
+                    row.valueKey !== null &&
+                    selectedAdapter !== null &&
+                    !mappedTypes.has(row.valueKey);
+                  const hint = row.disabled
+                    ? "API 通道暂未承接这类输入（工坊完整链路才有）—— 填了也会被忽略"
+                    : unmapped
+                      ? "适配器没有映射这个输入 —— 本次生成不会带上它；要带上请到「模型适配」为它配字段映射"
+                      : undefined;
+                  return (
+                    <InputRow
+                      control={control}
+                      disabled={row.disabled}
+                      hint={hint}
+                      id={`${id}-${String(i)}`}
+                      key={`${row.id}-${String(i)}`}
+                      label={row.disabled ? `${row.label}（未承接）` : row.label}
+                      onChange={(value) => {
+                        if (row.valueKey !== null) {
+                          c.patchValue(row.valueKey, value);
+                        }
+                      }}
+                      onPickFile={(file) => {
+                        if (row.valueKey === "first-frame" || row.valueKey === "image") {
+                          void c.setInputFromFile(row.valueKey, file);
+                        }
+                      }}
+                      onRandom={
+                        row.valueKey === "prompt"
+                          ? () => {
+                              c.randomizePrompt();
+                            }
+                          : undefined
+                      }
+                      required={row.required}
+                      value={row.valueKey === null ? "" : (c.values[row.valueKey] ?? "")}
+                    />
+                  );
+                })}
+              </section>
 
               {/* 生成 */}
               <div className="flex items-center gap-3">
@@ -494,28 +531,149 @@ export function ModelTestView() {
                 </p>
               )}
 
+              {c.notice !== null && (
+                <p
+                  className={cn(
+                    "rounded-lg px-3 py-2 text-xs",
+                    c.notice.kind === "ok"
+                      ? "bg-elevated text-muted-foreground"
+                      : "bg-destructive/10 text-destructive",
+                  )}
+                >
+                  {c.notice.text}
+                </p>
+              )}
+
               {c.result !== null && (
                 <section className="flex flex-col gap-2">
-                  <SectionLabel hint="工坊同款产物提取（适配器 outputField / 通用提取）">
+                  <SectionLabel hint="工坊同款产物提取（适配器 outputField / 通用提取）；图片点开进查看器，可缩放并显示原始尺寸">
                     产物
                   </SectionLabel>
                   <div className="border-border bg-bg overflow-hidden rounded-xl border">
-                    <MediaThumbnail
-                      alt="生成结果"
-                      as={c.result.kind === "video" ? "video" : "image"}
-                      className="max-h-[28rem] w-full object-contain"
-                      controls
-                      src={c.result.url}
-                    />
+                    {c.result.kind === "image" ? (
+                      /* 图片查看器（ISSUE #3791）：点缩略图进 ImageViewer（缩放 +
+                       * 原始宽高显示）；视频保持既有播放器。 */
+                      <ViewableImage
+                        alt="生成结果"
+                        className="max-h-[28rem] w-full object-contain"
+                        label="生成结果"
+                        src={c.result.url}
+                      />
+                    ) : (
+                      <MediaThumbnail
+                        alt="生成结果"
+                        as="video"
+                        className="max-h-[28rem] w-full object-contain"
+                        controls
+                        src={c.result.url}
+                      />
+                    )}
                   </div>
-                  <a
-                    className="text-primary text-xs underline-offset-2 hover:underline"
-                    href={c.result.url}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    打开原始产物
-                  </a>
+                  {/* 外链统一走服务端 openExternal（ISSUE #3791）：桌面壳内
+                      target=_blank 会被壳的 shell ACL 拦下（Runtime Error）。 */}
+                  <div>
+                    <Button
+                      className="text-primary h-auto px-0 text-xs"
+                      disabled={c.openBusy}
+                      onClick={() => {
+                        if (resultUrl !== null) {
+                          void c.openResultInBrowser(resultUrl);
+                        }
+                      }}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      打开原始产物（系统浏览器）
+                    </Button>
+                  </div>
+                </section>
+              )}
+
+              {/* 请求详情（ISSUE #3791；#3799：点生成即显示本地提交行 + 生成中
+                  走秒 + 响应摘要默认格式化、可切原始）。 */}
+              {c.debugRows.length > 0 && (
+                <section className="flex flex-col gap-2">
+                  <SectionLabel hint="本次生成实际发出的请求（密钥在请求头，不在此显示；请求体里的长值已截断）">
+                    请求详情
+                  </SectionLabel>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-muted-foreground text-2xs">响应摘要</span>
+                    <SelectChip
+                      onClick={() => {
+                        setExcerptPretty(true);
+                      }}
+                      selected={excerptPretty}
+                      shape="pill"
+                    >
+                      格式化
+                    </SelectChip>
+                    <SelectChip
+                      onClick={() => {
+                        setExcerptPretty(false);
+                      }}
+                      selected={!excerptPretty}
+                      shape="pill"
+                    >
+                      原始
+                    </SelectChip>
+                  </div>
+                  {c.debugRows.map((row, i) => (
+                    <div
+                      className="border-border bg-bg overflow-hidden rounded-lg border"
+                      key={`${row.phase}-${String(i)}`}
+                    >
+                      <div className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
+                        {row.phase === "relay" ? (
+                          /* 本地提交行（#3799）：点生成即出现；生成中走秒。 */
+                          <span className="bg-primary/12 text-primary-strong text-2xs rounded-full px-2 py-0.5 tabular-nums">
+                            {c.generating && c.generatingSince !== null ? (
+                              <GeneratingElapsed since={c.generatingSince} />
+                            ) : (
+                              "已发送"
+                            )}
+                          </span>
+                        ) : (
+                          <span
+                            className={cn(
+                              "rounded-full px-2 py-0.5 text-2xs tabular-nums",
+                              row.ok
+                                ? "bg-elevated text-muted-foreground"
+                                : "bg-destructive/10 text-destructive",
+                            )}
+                          >
+                            {row.status === null ? "网络失败" : `HTTP ${String(row.status)}`}
+                          </span>
+                        )}
+                        <span className="text-muted-foreground text-2xs">
+                          {row.phase === "relay"
+                            ? "本地提交"
+                            : row.phase === "image"
+                              ? "生图"
+                              : row.phase === "video-submit"
+                                ? "视频提交"
+                                : "视频轮询"}
+                        </span>
+                        {row.durationMs !== null && (
+                          <span className="text-muted-foreground text-2xs tabular-nums">
+                            {String(row.durationMs)}ms
+                          </span>
+                        )}
+                        <TruncatedText className="min-w-0 flex-1 truncate font-mono">
+                          {row.endpoint}
+                        </TruncatedText>
+                      </div>
+                      <pre className="border-border/60 text-2xs overflow-x-auto border-t px-3 py-2 font-mono break-all whitespace-pre-wrap">
+                        {JSON.stringify(row.body, null, 2)}
+                      </pre>
+                      {row.excerpt !== null && row.excerpt !== undefined && (
+                        <pre className="text-muted-foreground border-border/60 text-2xs overflow-x-auto border-t px-3 py-2 font-mono break-all whitespace-pre-wrap">
+                          {excerptPretty
+                            ? prettyOrRaw(row.excerpt)
+                            : (JSON.stringify(row.excerpt) ?? "")}
+                        </pre>
+                      )}
+                    </div>
+                  ))}
                 </section>
               )}
             </>

@@ -16,8 +16,8 @@ import {
 
 import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { RuntimeLogBox } from "~/components/studio/logs/RuntimeLogBox";
-import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
+import { Hint } from "~/components/ui/hint";
 
 /** Drizzle Studio 状态 → 圆点语义（过渡态优先，口径同 ComfyUI 那条）。 */
 function dbStudioDotState(c: ReadySettingsPageController): StatusDotState {
@@ -33,11 +33,6 @@ function dbStudioDotState(c: ReadySettingsPageController): StatusDotState {
 export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
   return (
     <SettingsCard>
-      {/* 库文件在哪儿（ISSUE #3625）：这一节就是「可视化浏览本地 SQLite」，
-          徽标把库本体的落点说清 —— 换机器时照着它搬。 */}
-      <div className="mb-2">
-        <DataLocationBadge id="app-database" label="存放位置" />
-      </div>
       {/* 「本分区是什么」那一段搬进了导航行右侧的说明（`sectionSummary`）——
           它回答的是导航问题，读一遍就不再需要，留着只会把第一个控件推到折叠线
           以下。这里只留**答案在别处拿不到的那句**：界面托管在官方远端域名上。 */}
@@ -48,20 +43,21 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
       </p>
       <div className={`${SETTINGS_ROW_CLASS} ${STATUS_ROW_CLASS}`}>
         <StatusDot state={dbStudioDotState(c)} />
-        <span
-          className={`text-ink/80 ${STATUS_TEXT_CLASS}`}
-          title={
+        <Hint
+          label={
             c.dbStudioStatus?.up === true
               ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port}）`
               : undefined
           }
         >
-          {c.dbStudioStatus?.up === true
-            ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port}）`
-            : c.dbStudioStarting || c.dbStudioStatus?.starting === true
-              ? "Drizzle Studio 正在启动…"
-              : "Drizzle Studio 未运行"}
-        </span>
+          <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>
+            {c.dbStudioStatus?.up === true
+              ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port}）`
+              : c.dbStudioStarting || c.dbStudioStatus?.starting === true
+                ? "Drizzle Studio 正在启动…"
+                : "Drizzle Studio 未运行"}
+          </span>
+        </Hint>
         <div className={STATUS_ACTIONS_CLASS}>
           {/* 按钮只看自身动作的在途状态（dbStudioStarting/Stopping/
               Opening），不看全局 saving——saving 是保存偏好/ComfyUI

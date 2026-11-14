@@ -133,7 +133,10 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.Item.Prop
   return (
     <SelectPrimitive.Item
       className={cn(
-        "focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground relative flex w-full cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
+        /* 悬停 = 浅灰、选中 = 品牌紫（#3720）：与 `ui/select-menu` 的选项口径对齐
+         * （那边是 `data-highlighted:bg-surface-2` + `data-selected:bg-primary-500/20`），
+         * 此前这里的聚焦高亮走 `bg-accent`（粉色），与别处的下拉不一致。 */
+        "focus:bg-surface-2 focus:text-ink-bright not-data-[variant=destructive]:focus:**:text-ink-bright data-selected:bg-primary-500/20 data-selected:font-medium data-selected:text-primary-strong relative flex w-full cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
         className,
       )}
       data-slot="select-item"

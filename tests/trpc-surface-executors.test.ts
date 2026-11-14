@@ -6,6 +6,9 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
+
+import { isRecord } from "~/lib/is-record";
+
 import type * as LoggerModule from "~/lib/core/logger";
 import { stripComments } from "./helpers/strip-comments";
 
@@ -161,10 +164,10 @@ function scanSurface() {
       base: path.basename(f).replace(/\.tsx?$/, ""),
       text: stripComments(readFileSync(f, "utf8")),
     }));
-  /* SAFETY: 类型断言已复核 */
-  const procedurePaths = Object.keys(
-    (appRouter._def as unknown as { procedures: Record<string, unknown> }).procedures,
-  ).sort();
+  /* _def 的形状按 unknown 读（B5 清账）：procedures 缺席当空映射。 */
+  const def: unknown = appRouter._def;
+  const procedures: unknown = isRecord(def) ? def.procedures : {};
+  const procedurePaths = Object.keys(isRecord(procedures) ? procedures : {}).sort();
   return { mounts, closures, tests, consumers, procedurePaths };
 }
 

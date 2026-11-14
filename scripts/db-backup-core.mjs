@@ -30,6 +30,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import { resolveSqlitePath } from "./db-schema-state.mjs";
+import { restoreAppDataBackup } from "./app-data-backup.mjs";
 
 /** 备份落点（相对应用根）：`<应用根>/data/backups/`。
  *
@@ -440,7 +441,9 @@ export function restoreMarkerPath(root) {
  *
  * @param {string} root 应用根
  * @param {unknown} name 备份文件名（**不是路径**，必须是 `listBackups` 里那批之一）
- * @param {{ now?: Date }} [options]
+ * @param {{ now?: Date, appDataDir?: string | null }} [options]
+ *   `appDataDir`：同套的本机应用数据备份目录名（`app-data-backup-…`，ISSUE #3732）；
+ *   恢复时随数据库一起覆盖回 `data/`。缺席 = 这份备份没有应用数据部分。
  * @returns {{ ok: true, marker: string } | { ok: false, reason: string }}
  */
 export function requestRestore(root, name, options = {}) {
@@ -455,12 +458,27 @@ export function requestRestore(root, name, options = {}) {
   if (!verify.ok) {
     return { ok: false, reason: `这份备份读不通（${verify.reason}），不能用它覆盖数据库` };
   }
+  /* 应用数据那一份可选：给了就当场确认目录在（真正覆盖在启动链上，
+   * 那时再逐文件校验并留退路 —— 见 `applyPendingRestore`）。 */
+  const appDataDir =
+    typeof options.appDataDir === "string" && options.appDataDir.startsWith("app-data-backup-")
+      ? options.appDataDir
+      : null;
+  if (appDataDir === null || fs.existsSync(path.join(backupDir(root), appDataDir))) {
+    /* 缺席 = 这份备份没有应用数据部分；存在 = 启动恢复时会一并覆盖回 data/。 */
+  } else {
+    return { ok: false, reason: `找不到同套的本机应用数据备份：${appDataDir}` };
+  }
   const marker = restoreMarkerPath(root);
   try {
     fs.mkdirSync(path.dirname(marker), { recursive: true });
     fs.writeFileSync(
       marker,
-      `${JSON.stringify({ file: name, at: (options.now ?? new Date()).toISOString() })}\n`,
+      `${JSON.stringify({
+        file: name,
+        at: (options.now ?? new Date()).toISOString(),
+        ...(appDataDir === null ? {} : { appDataDir }),
+      })}\n`,
       "utf8",
     );
     return { ok: true, marker };
@@ -471,7 +489,7 @@ export function requestRestore(root, name, options = {}) {
 
 /** 有没有待恢复的请求（读取侧只回答「哪一份」，不碰数据库）。
  *  @param {string} root 应用根
- *  @returns {{ file: string, at: string | null } | null} */
+ *  @returns {{ file: string, at: string | null, appDataDir: string | null } | null} */
 export function readRestoreRequest(root) {
   try {
     const parsed = JSON.parse(fs.readFileSync(restoreMarkerPath(root), "utf8"));
@@ -482,6 +500,11 @@ export function readRestoreRequest(root) {
     return {
       file: name,
       at: typeof parsed.at === "string" ? parsed.at : null,
+      /* 同套的本机应用数据备份目录（#3732）；旧标记没有这一格 ⇒ null（只恢复数据库）。 */
+      appDataDir:
+        typeof parsed.appDataDir === "string" && parsed.appDataDir.startsWith("app-data-backup-")
+          ? parsed.appDataDir
+          : null,
     };
   } catch {
     return null;
@@ -490,7 +513,7 @@ export function readRestoreRequest(root) {
 
 /**
  * @typedef {{ status: "nothing-to-do" }
- *         | { status: "restored", from: string, safetyBackup: string | null }
+ *         | { status: "restored", from: string, safetyBackup: string | null, appDataNote?: string }
  *         | { status: "failed", reason: string, from: string | null }} RestoreResult
  */
 
@@ -575,6 +598,20 @@ export function applyPendingRestore(root, options = {}) {
     return { status: "failed", from, reason: `换文件失败：${messageOf(error)}` };
   }
 
+  /* 本机应用数据随同恢复（ISSUE #3732）：数据库换完之后，把同套备份里的
+   * `data/` 文件也覆盖回去。失败只折成一行读数 —— 库已经换好，应用数据这一半
+   * 的失败不该把「恢复成功」整个推翻；而且恢复前的 `data/` 已被存进
+   * pre-restore 退路目录，需要时手工取回。 */
+  let appDataNote = "";
+  if (request.appDataDir) {
+    const appData = restoreAppDataBackup(root, request.appDataDir, {
+      now: options.now,
+    });
+    appDataNote = appData.ok
+      ? `本机应用数据已随同恢复（${request.appDataDir}）。`
+      : `本机应用数据没能恢复：${appData.reason}（恢复前的 data/ 已存进 ${appData.safety ?? "退路目录"}）。`;
+  }
+
   /* 标记用完即销：换完还留着它，下一次启动会把同一份备份再覆盖一遍 —— 而那时
    * 用户已经在新库上干了一天的活。 */
   try {
@@ -584,7 +621,7 @@ export function applyPendingRestore(root, options = {}) {
      * 当时的库备份下来 —— 数据不丢，只是多一步。 */
   }
 
-  return { status: "restored", from, safetyBackup: safety };
+  return { status: "restored", from, safetyBackup: safety, appDataNote };
 }
 
 /**
@@ -606,7 +643,7 @@ export function restoreNotice(result) {
             result.safetyBackup
               ? `恢复前的那一份已另存为 ${result.safetyBackup}，需要回退时可在设置页选它。`
               : ""
-          }`,
+          }${result.appDataNote ? ` ${result.appDataNote}` : ""}`,
         ],
       };
     }

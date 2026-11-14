@@ -199,23 +199,24 @@ export function ZoomIndicator({
 
   if (editing) {
     return (
-      <input
-        autoFocus
-        inputMode="numeric"
-        onBlur={commit}
-        onChange={textHandler(setDraft, digitsOnly)}
-        value={draft}
-        {...enterCommit({
-          onCommit: commit,
-          /* Esc 关掉编辑态即可 —— 草稿在下次进入编辑时由 `beginEdit()` 重置，
-           * 所以这里不需要显式回退原值。 */
-          onCancel: () => {
-            setEditing(false);
-          },
-        })}
-        className="bg-panel text-ink-bright z-base border-primary/60 text-2xs absolute top-3 right-3 h-7 w-16 rounded-md border px-2 text-right font-medium tabular-nums shadow-lg outline-none"
-        title="输入缩放百分比后回车"
-      />
+      <Hint label="输入缩放百分比后回车">
+        <input
+          autoFocus
+          inputMode="numeric"
+          onBlur={commit}
+          onChange={textHandler(setDraft, digitsOnly)}
+          value={draft}
+          {...enterCommit({
+            onCommit: commit,
+            /* Esc 关掉编辑态即可 —— 草稿在下次进入编辑时由 `beginEdit()` 重置，
+             * 所以这里不需要显式回退原值。 */
+            onCancel: () => {
+              setEditing(false);
+            },
+          })}
+          className="bg-panel text-ink-bright z-base border-primary/60 text-2xs absolute top-3 right-3 h-7 w-16 rounded-md border px-2 text-right font-medium tabular-nums shadow-lg outline-none"
+        />
+      </Hint>
     );
   }
 

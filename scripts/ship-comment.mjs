@@ -15,7 +15,7 @@
  *
  *   · 状态评论认正文那句（`handleCommentState`，`ship-claim.mjs`）；
  *   · CI 读数认 marker（构建号，`runAppendIssueComment`）；
- *   · `--comment` 认**逐字相同**（去末尾换行后，见 `sameCommentBody`）。
+ *   · `--comment` 认**逐字相同**（去末尾换行 + 图片资产链接归一后，见 `sameCommentBody`）。
  */
 
 import { asArray } from "./ship-build.mjs";
@@ -104,6 +104,25 @@ export function stripTrailingNewline(text) {
 }
 
 /**
+ * 把「指向 `/-/imgs/`、`/-/files/` 资产的绝对地址」剥回相对形态。
+ *
+ * 平台存评论 / PR 正文时会把**上传图片与附件**的相对链接改写成绝对地址（ISSUE #3655、
+ * #3636）：发出去的是相对形态 `/-/imgs/issues/<id>/<key>/<file>.png`（附件是
+ * `/-/files/...`），落库后变成 `https://<host>/<组织>/<仓库>/-/imgs/...`。只归一这一类
+ * **平台会改写**的形状，且对两边同做 —— 对称归一只让「同一份正文」能对上，不吞任何
+ * 别的差异：其余 URL、正文、标点仍逐字比对，不放宽成「包含即算命中」。
+ *
+ * @param {unknown} text 发出的或回读的正文
+ * @returns {string} 图片 / 附件资产链接已归一成相对形态的文本
+ */
+export function normalizeImageAssetLinks(text) {
+  return String(text ?? "").replaceAll(
+    /https?:\/\/[^\s)"'<>]+?(?<asset>\/-\/(?:imgs|files)\/)/g,
+    "$<asset>",
+  );
+}
+
+/**
  * 「发出去的那份」与「回读回来的那份」是不是同一条评论。
  *
  * @param {unknown} sent 落盘发给文件的那份原文
@@ -111,5 +130,8 @@ export function stripTrailingNewline(text) {
  * @returns {boolean}
  */
 export function sameCommentBody(sent, readBack) {
-  return stripTrailingNewline(sent) === stripTrailingNewline(readBack);
+  return (
+    normalizeImageAssetLinks(stripTrailingNewline(sent)) ===
+    normalizeImageAssetLinks(stripTrailingNewline(readBack))
+  );
 }

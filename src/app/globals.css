@@ -50,10 +50,18 @@
      文字」，深色下它会变亮；而深色渐变底（影片时间轴片段）需要的是
      「暗底上的浅琥珀字」，与它取的是两侧。 */
   --color-warning-soft: #fde8c0;
-  --color-accent: #ff5ca8;
+  /* 品红强调（第二品牌）。#ff5ca8 压白只有 2.86，白字/浅字根本压不住 ——
+     加深到 #fb4599（白字 3.27，ISSUE #3768）；色相不变，渐变终点是
+     accent-soft / accent-deep，不受这一档影响。 */
+  --color-accent: #fb4599;
   /* 品牌实心底（primary / accent）上的文字色。两态同值，但仍是 token ——
      它由「底」的颜色决定，不是一处独立的美术选择。 */
   --color-on-brand: #ffffff;
+  /* 亮彩实心底（success / accent-soft）上的文字色。这两枚底色在**暗色档更亮**
+     （#5be3c4 / #ff8ac4），白字压不住（实测 1.59 / 1.06，ISSUE #3767 / #3768）——
+     亮色档仍用白，暗色档翻成深墨。 */
+  --color-on-success: #ffffff;
+  --color-on-accent-soft: #ffffff;
   /* 极光晕的三档色相（装饰性背景，两态同名 —— 浅色下靠外面那层
      `opacity-*` 调低，深色下配 `mix-blend-screen`）。强度由使用处的
      `AuroraGlow` alpha 决定，不在这里再出一份 token。 */
@@ -221,7 +229,7 @@
   --color-ink-subtle: #3f3f46; /* 次级文字 2 (light default) */
   --color-ink-muted: #6b6b76; /* 弱文字 (light default) */
   --color-ink-faint: #71717a; /* 标签/更弱文字 (light default) */
-  --color-ink-fainter: #a1a1aa; /* 辅助说明文字 (light default) */
+  --color-ink-fainter: #8e8e99; /* 辅助说明文字 (light default)：#a1a1aa 压白 2.56 太淡，加深到 3.24（ISSUE #3770） */
   --color-ink-faintest: #b6b6bf; /* 极弱文字 (light default) */
   --color-ink-icon: #8e8e98; /* 折叠箭头/图标弱文字 (light default) */
   --color-ink-placeholder: #a1a1aa; /* placeholder (light default) */
@@ -232,7 +240,7 @@
   --color-widget-value-dim: #6b6b76; /* 参数值文字·已连线（低一档）(light default) */
   --color-info: #2563eb; /* 信息/链接强调 (light default) */
   --color-success: #0ea472; /* 成功/薄荷强调 (light default) */
-  --color-success-strong: #10b981; /* 成功绿 (light default) */
+  --color-success-strong: #059669; /* 成功绿·文字档：#10b981 压白 2.54 太淡，加深到 3.77（ISSUE #3767；暗色档仍 #10b981） (light default) */
   /* 状态色的「浅底上的文字档」：与 -strong 同一用意 —— 同一个色相当底色可以、
      当浅底上的文字色对比度不够（ISSUE #672）。`text-warning-strong` 一度被
      status-badge 引用却从没定义过，那三个状态因此渲染成无色。 */
@@ -502,6 +510,7 @@
   --color-info: #5bc6ff; /* 信息/链接强调 */
   --color-success: #5be3c4; /* 成功/薄荷强调 */
   --color-success-strong: #10b981; /* 成功绿 */
+  --color-on-success: #06251d; /* 亮薄荷实心底上的深墨字：白字只有 1.59（ISSUE #3767） */
   --color-warning-strong: #fbbf24; /* 警告文字档（琥珀-400 同值） */
   --color-danger-strong: #fca5a5; /* 危险文字档（红-300 同值） */
   --color-destructive: oklch(0.704 0.191 22.216); /* 危险原色（深色档，红-400 同值） */
@@ -518,6 +527,7 @@
   --color-glow-brand: #b79bff; /* 深色档用浅彩（压 #14141a 有 7.99，旧值 6.74）*/
   --color-amber: #ffb553; /* 琥珀强调 */
   --color-accent-soft: #ff8ac4; /* accent */
+  --color-on-accent-soft: #2b0a18; /* 亮粉实心底上的深墨字：primary-strong 压它只有 1.06（ISSUE #3768） */
   --color-accent-deep: #c026d3; /* 深色档：刻意与浅色同值（品牌渐变不随主题换色相，理由见 @theme） */
   --color-shadow-strong: rgb(0 0 0 / 0.55); /* 浮层重投影 */
   --color-ring-shadow: rgb(255 255 255 / 0.1); /* 浮层 1px ring（深色下用中性白） */
@@ -1008,27 +1018,7 @@ textarea::-webkit-scrollbar {
     letter-spacing: -0.02em;
     color: var(--color-ink);
   }
-  /* 主按钮渐变：紫→品红，用于工作流库、画布生成等关键 CTA。
-     这是扁平规范中的有意例外，回应用户对渐变强调色的偏好。
-     三颗星一律取品牌 token（起点 primary-600 / 中间 accent-deep / 终点
-     accent-soft），不再抄字面量 —— 改品牌色时这条渐变跟手。
-     **能用 Button 就用 `variant="gradient"`**（它就是把这一类挂上去的），
-     只有**不是 Button** 的落点（画布节点里的共享 class）才直接写类名。 */
-  .btn-gradient {
-    background: var(--gradient-brand);
-    transition:
-      filter 0.15s ease,
-      transform 0.15s ease,
-      box-shadow 0.15s ease;
-  }
-  .btn-gradient:hover:not(:disabled) {
-    filter: brightness(1.08);
-  }
-  .btn-gradient:active:not(:disabled) {
-    transform: translateY(1px);
-  }
-  /* 品牌双色渐变的**条 / 点 / 填充**档（与 `.btn-gradient` 同一对端点：
-     primary → accent）。此前这四个落点（Agent 头像、历史分组竖条、
+  /* 品牌双色渐变的**条 / 点 / 填充**档（primary → accent）。此前这四个落点（Agent 头像、历史分组竖条、
      两处进度条填充）各自手抄 `from-violet-500 to-fuchsia-500` ——
      那是 Tailwind 调色板里的两格，与品牌 token 不同源：改品牌色时它们
      **不跟手**，而且 `violet-500` 已经不是当前 `--color-primary-500`
@@ -1495,12 +1485,14 @@ textarea::-webkit-scrollbar {
   filter: drop-shadow(0 0 5px rgba(196, 181, 253, 0.95));
 }
 
-/* ── 桌面壳：让 fixed 侧栏从自定义标题行之下开始 ──────────────────────
- * shadcn `ui/sidebar` 的容器是 `fixed inset-y-0 h-svh`（钉死视口顶）。桌面壳里
- * ShellTabs 顶部多了一条自定义标题行 TitleBarTabs（高 `--spacing-title-bar`），
- * 不让位的话侧栏顶部会被那条标题行压住。壳态（ShellTabs 根打 `data-shell`）下把
- * 侧栏容器的 top 让出标题行高度、高度相应减去。浏览器 / dev 无标题行（#982 起
- * ShellTabs 不再渲染应用内页签栏），不打 data-shell，侧栏仍从视口顶起。
+/* ── 整屏路由页：让 fixed 侧栏从精简标题行之下开始 ────────────────────
+ * 这条只服务 `ShellFullPage` 自带的 `WindowTitleBar`（错误页 / 404 / 加载态等替换掉
+ * 整个 children 的整屏页）。它们没有 `ShellTabs`，标题行确实是整窗第一行，所以
+ * fixed 侧栏容器（`inset-y-0 h-svh`）要让出 `--spacing-title-bar`。
+ *
+ * **主窗口不再打 `data-shell`（ISSUE #3807）**：`TitleBarTabs` 已移到 `AppShell`
+ * 的内容列顶部，与浏览器态 `ViewTabStrip` 同位；主窗口的侧栏与内容列都从视口
+ * y=0 起，两形态一致。若哪天把 `data-shell` 加回主窗口，首页又会不贴顶。
  * 顶层规则（非 @layer）+ 双属性选择器，压过 Tailwind 的 inset-y-0 / h-svh 工具类。 */
 [data-shell] [data-slot="sidebar-container"] {
   top: var(--spacing-title-bar);

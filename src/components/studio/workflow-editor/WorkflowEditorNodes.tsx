@@ -11,6 +11,7 @@ import { WorkflowSubgraphNode } from "../canvas/WorkflowSubgraphNode";
 import type { WorkflowGroupData, WorkflowIoPortData, WorkflowNoteData } from "../workflow-types";
 import { NODE_TITLE_H, lightenHex, hexToRgba, mixHex } from "../workflow-utils";
 import { useCssColorToken } from "../hooks/use-css-color-token";
+import { Hint } from "~/components/ui/hint";
 
 export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({
   data,
@@ -103,59 +104,64 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
    * tooltip 就只剩端口标签 + 类型。 */
   const hoverLabel = data.parentNodeTitle ? `${data.parentNodeTitle} · ${data.title}` : data.title;
   return (
-    <div
-      /* 输入面板标签右对齐、紧贴右边的 handle（`noise_seed  ●`），输出面板左对齐、
-       *  紧贴**左**边的 handle（`● noise_seed`），与参考图一致。React Flow 用
-       *  `Position` 把 Handle 绝对定位，改 flex 的 `justify-…` 只挪得动可见标签/值，
-       *  圆点始终钉在 wfGroup 那一侧。 */
-      className={`relative flex items-center ${isInput ? "justify-end" : "justify-start"} text-ink-bright/90 text-2xs gap-1 px-1.5 py-0.25 leading-[1.4]`}
-      style={{
-        width: IO_PORT_WIDTH,
-        background: "transparent",
-        border: "none",
-      }}
-      title={`${hoverLabel}${data.type !== undefined && data.type !== "" ? ` · ${data.type}` : ""}${valueStr !== null && valueStr !== "" ? ` · ${valueStr}` : ""}`}
+    <Hint
+      label={`${hoverLabel}${data.type !== undefined && data.type !== "" ? ` · ${data.type}` : ""}${valueStr !== null && valueStr !== "" ? ` · ${valueStr}` : ""}`}
     >
-      {/* 边界针脚信号模型：针脚朝向画布**中心**，线才短而直。INPUT（"in"）把数据
+      <div
+        /* 输入面板标签右对齐、紧贴右边的 handle（`noise_seed  ●`），输出面板左对齐、
+         *  紧贴**左**边的 handle（`● noise_seed`），与参考图一致。React Flow 用
+         *  `Position` 把 Handle 绝对定位，改 flex 的 `justify-…` 只挪得动可见标签/值，
+         *  圆点始终钉在 wfGroup 那一侧。 */
+        className={`relative flex items-center ${isInput ? "justify-end" : "justify-start"} text-ink-bright/90 text-2xs gap-1 px-1.5 py-0.25 leading-[1.4]`}
+        style={{
+          width: IO_PORT_WIDTH,
+          background: "transparent",
+          border: "none",
+        }}
+      >
+        {/* 边界针脚信号模型：针脚朝向画布**中心**，线才短而直。INPUT（"in"）把数据
           带**入**子图（React Flow `type="source"`，供应内部节点的目标句柄），句柄坐在
           标签**右**缘；OUTPUT（"out"）接收流出数据（`type="target"`），句柄在**左**缘。
           "in" / "out" 这两个 id 保留，`buildEdges` 靠它解析稳定的句柄名。 */}
-      {!isInput || isBoth ? (
-        <Handle
-          id="out"
-          position={Position.Left}
-          style={{ background: dotColor, left: -4 }}
-          type="target"
-        />
-      ) : null}
-      <span
-        className="truncate font-medium"
-        /* 边界 pin 标签的「字距被拉开」：画布缩得很小时浏览器默认文字渲染产生柔化
-         *  抗锯齿，读成「s a m p l e s」。`geometricPrecision` + 一点负字距收拢字形。
-         *  字体族与 `font-medium` **刻意不动**：这一列只有 11px，500 字重正是合适的
-         *  光学重量，收拢后再抬到 600 会过重。 */
-        style={{
-          maxWidth: IO_PORT_WIDTH - (valueStr !== null && valueStr !== "" ? 56 : 24),
-          textRendering: "geometricPrecision",
-          letterSpacing: "-0.01em",
-        }}
-      >
-        {data.title}
-      </span>
-      {valueStr !== null && valueStr !== "" ? (
-        <span className="text-warning-strong/90 text-3xs shrink-0 font-mono tabular-nums">
-          {valueStr}
-        </span>
-      ) : null}
-      {isInput || isBoth ? (
-        <Handle
-          id="in"
-          position={Position.Right}
-          style={{ background: dotColor, right: -4 }}
-          type="source"
-        />
-      ) : null}
-    </div>
+        {!isInput || isBoth ? (
+          <Handle
+            id="out"
+            position={Position.Left}
+            style={{ background: dotColor, left: -4 }}
+            type="target"
+          />
+        ) : null}
+        <Hint label={data.title}>
+          <span
+            className="truncate font-medium"
+            /* 边界 pin 标签的「字距被拉开」：画布缩得很小时浏览器默认文字渲染产生柔化
+             *  抗锯齿，读成「s a m p l e s」。`geometricPrecision` + 一点负字距收拢字形。
+             *  字体族与 `font-medium` **刻意不动**：这一列只有 11px，500 字重正是合适的
+             *  光学重量，收拢后再抬到 600 会过重。 */
+            style={{
+              maxWidth: IO_PORT_WIDTH - (valueStr !== null && valueStr !== "" ? 56 : 24),
+              textRendering: "geometricPrecision",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            {data.title}
+          </span>
+        </Hint>
+        {valueStr !== null && valueStr !== "" ? (
+          <span className="text-warning-strong/90 text-3xs shrink-0 font-mono tabular-nums">
+            {valueStr}
+          </span>
+        ) : null}
+        {isInput || isBoth ? (
+          <Handle
+            id="in"
+            position={Position.Right}
+            style={{ background: dotColor, right: -4 }}
+            type="source"
+          />
+        ) : null}
+      </div>
+    </Hint>
   );
 });
 /* ── 便签 / MarkdownNote 注释节点 ── ComfyUI 便签叠着两部分：① 标题栏 —— 带小圆点
@@ -212,9 +218,9 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({
             className="inline-block size-2 shrink-0 rounded-full"
             style={{ background: titleText, boxShadow: `0 0 6px ${titleText}` }}
           />
-          <span className="truncate" title={data.title}>
-            Note: {data.title}
-          </span>
+          <Hint label={data.title}>
+            <span className="truncate">Note: {data.title}</span>
+          </Hint>
         </div>
       )}
       <div

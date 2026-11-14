@@ -8,6 +8,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 
+import { errorMessage } from "~/lib/error-message";
 import {
   moveContractInput,
   nextCustomInputId,
@@ -25,8 +26,16 @@ export type ModeContractEditorController = {
   addCustomInput: (label: string, kind: ModeContractCustomKind) => void;
   /** 追加一个输入口（参考图由调用方传 `nextReferenceImageId` 的结果）。 */
   appendInput: (id: ModeContractInputId) => void;
+  /** 确认弹窗 · 留在此模式（什么都不改）。 */
+  cancelSwitch: () => void;
   /** 成品配置基准（项目默认）—— 判「已改」用它（服务端现读，写完即生效）。 */
   configured: Array<ModeContract>;
+  /** 确认弹窗 · 保存并切换（先落当前草稿再切）。 */
+  confirmSwitch: () => Promise<void>;
+  /** 当前草稿相对生效值有没有未保存的修改（ISSUE #3762：左栏标「未保存」、切走前先问）。 */
+  dirty: boolean;
+  /** 确认弹窗 · 不保存，直接切换（草稿丢弃）。 */
+  discardSwitch: () => void;
   /** 当前编辑的契约草稿（null = 未选模式）。 */
   draft: ModeContract | null;
   /** 曲线救国的兜底：契约里一个必备口都没勾时要不要提示（视图据此给提示）。 */
@@ -39,6 +48,8 @@ export type ModeContractEditorController = {
   moveInput: (id: ModeContractInputId, delta: number) => void;
   /** 下一个可追加的参考图口 id（没有选中模式时为 null）。 */
   nextReferenceImageId: ModeContractInputId | null;
+  /** 确认弹窗开着时的目标模式码（null = 没有挂起的切换）。 */
+  pendingMode: string | null;
   /** 这份检出能不能「保存为项目默认」（正式包 false，入口随之隐藏）。 */
   projectDefaultEditable: boolean;
   /** 移除某个输入口（自定义口连着它的定义一起移除）。 */
@@ -57,10 +68,15 @@ export type ModeContractEditorController = {
   /** 本次打开期间是否已成功保存过（视图据此提示「另一处已生效」）。 */
   saved: boolean;
   savedKind: "local" | "project" | null;
+  /** 最近一次保存失败的**用户可读**原因（null = 没有挂起的失败）。
+   *  失败路径必须有用户可见出口（#3637）：此前错误一路抛到无人接的
+   *  `void controller.save()` 上，界面只转圈、不提示、改动也不生效。 */
+  saveError: string | null;
   saving: boolean;
   /** 「保存为项目默认」进行中。 */
   savingProjectDefaults: boolean;
-  /** 打开某模式的契约编辑（初值 = 已改过的用改过的，否则内置默认）。 */
+  /** 打开某模式的契约编辑（初值 = 已改过的用改过的，否则内置默认）。
+   *  有未保存修改时先弹确认（ISSUE #3762），不直接切。 */
   selectMode: (mode: string) => void;
   setDraft: (draft: ModeContract) => void;
   setOutput: (output: ModeContract["output"]) => void;
@@ -76,15 +92,46 @@ export function useModeContractEditor(): ModeContractEditorController {
   const [draft, setDraft] = useState<ModeContract | null>(null);
   const [saved, setSaved] = useState(false);
   const [savedKind, setSavedKind] = useState<"local" | "project" | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  /* 未保存就点切走的那一格（ISSUE #3762）：非 null = 确认弹窗开着。 */
+  const [pendingMode, setPendingMode] = useState<string | null>(null);
 
-  const selectMode = useCallback(
+  /* 草稿相对生效值有没有改动（ISSUE #3762）：左栏「未保存」标记与切换确认
+   * 共用这一份判据。保存 / 还原默认之后草稿回到生效值，自动归为不脏。 */
+  const dirty = useMemo(() => {
+    if (!draft || !mode) {
+      return false;
+    }
+    const effective = effectiveModeContract(mode, registry.contracts, registry.configured).contract;
+    return JSON.stringify(draft) !== JSON.stringify(effective);
+  }, [draft, mode, registry.contracts, registry.configured]);
+
+  const doSelect = useCallback(
     (next: string) => {
       setMode(next);
       setDraft(effectiveModeContract(next, registry.contracts, registry.configured).contract);
       setSaved(false);
       setSavedKind(null);
+      setSaveError(null);
     },
     [registry.configured, registry.contracts],
+  );
+
+  const selectMode = useCallback(
+    (next: string) => {
+      if (next === mode) {
+        return;
+      }
+      /* 有未保存修改先问「要不要保存」（ISSUE #3762），不直接丢弃草稿。
+         确认弹窗的三向出口（保存并切换 / 丢弃 / 留下）在下方 —— 它们要用到
+         `save`，所以挂在保存定义之后。 */
+      if (dirty) {
+        setPendingMode(next);
+        return;
+      }
+      doSelect(next);
+    },
+    [dirty, mode, doSelect],
   );
 
   const appendInput = useCallback((id: ModeContractInputId) => {
@@ -97,6 +144,13 @@ export function useModeContractEditor(): ModeContractEditorController {
   const removeInput = useCallback((id: ModeContractInputId) => {
     setDraft((prev) => {
       if (!prev) {
+        return prev;
+      }
+      /* 至少保留一个输入口（#3637）：服务端 `modeContractsInputSchema` 对
+       * `inputs` 有 `min(1)`，空清单的保存必被打回；归一化侧也把空条目丢弃。
+       * 界面若放行「删到空」，用户会进一个怎么都存不下来的死状态 —— 在源头
+       * 拦住（视图同步禁用最后一口的移除按钮并给提示）。 */
+      if (prev.inputs.length <= 1) {
         return prev;
       }
       const inputs = prev.inputs.filter((x) => x !== id);
@@ -228,6 +282,7 @@ export function useModeContractEditor(): ModeContractEditorController {
     }
     setSaved(false);
     setSavedKind(null);
+    setSaveError(null);
   }, [mode, registry]);
 
   const save = useCallback(async () => {
@@ -235,9 +290,16 @@ export function useModeContractEditor(): ModeContractEditorController {
     if (!all) {
       return;
     }
-    await registry.save(all);
-    setSaved(true);
-    setSavedKind("local");
+    /* 失败要有用户可见出口（#3637）：错误在这里接住、落到 `saveError`，
+     * 视图据此给失败文案 —— 不再抛给无人接的 `void` promise。 */
+    setSaveError(null);
+    try {
+      await registry.save(all);
+      setSaved(true);
+      setSavedKind("local");
+    } catch (error) {
+      setSaveError(errorMessage(error, "保存失败，请稍后重试"));
+    }
   }, [mergedRegistry, registry]);
 
   const saveAsProjectDefault = useCallback(async (): Promise<string | null> => {
@@ -245,11 +307,41 @@ export function useModeContractEditor(): ModeContractEditorController {
     if (!all) {
       return null;
     }
-    const file = await registry.saveAsProjectDefaults(all);
-    setSaved(true);
-    setSavedKind("project");
-    return file;
+    setSaveError(null);
+    try {
+      const file = await registry.saveAsProjectDefaults(all);
+      setSaved(true);
+      setSavedKind("project");
+      return file;
+    } catch (error) {
+      setSaveError(errorMessage(error, "写入项目默认失败，请稍后重试"));
+      return null;
+    }
   }, [mergedRegistry, registry]);
+
+  /** 确认弹窗的「保存并切换」：先落盘再切（落的是当前草稿）。 */
+  const confirmSwitch = useCallback(async () => {
+    if (pendingMode === null) {
+      return;
+    }
+    await save();
+    doSelect(pendingMode);
+    setPendingMode(null);
+  }, [pendingMode, save, doSelect]);
+
+  /** 确认弹窗的「不保存，直接切换」：草稿就地丢弃。 */
+  const discardSwitch = useCallback(() => {
+    if (pendingMode === null) {
+      return;
+    }
+    doSelect(pendingMode);
+    setPendingMode(null);
+  }, [pendingMode, doSelect]);
+
+  /** 确认弹窗的「留在此模式」：什么都不改。 */
+  const cancelSwitch = useCallback(() => {
+    setPendingMode(null);
+  }, []);
 
   return {
     mode,
@@ -268,6 +360,7 @@ export function useModeContractEditor(): ModeContractEditorController {
       setDraft(next);
       setSaved(false);
       setSavedKind(null);
+      setSaveError(null);
     },
     appendInput,
     removeInput,
@@ -279,7 +372,13 @@ export function useModeContractEditor(): ModeContractEditorController {
     setOutput,
     save,
     saveAsProjectDefault,
+    saveError,
     saved,
     savedKind,
+    dirty,
+    pendingMode,
+    confirmSwitch,
+    discardSwitch,
+    cancelSwitch,
   };
 }

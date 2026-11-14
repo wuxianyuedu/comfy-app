@@ -62,6 +62,21 @@ on:
         description: 三点 diff 的基线（留空 = 各判据退回 merge-base）
         required: false
         default: ""
+      # ISSUE #3667：判绿时「有需要」也能经 GA→CNB→本地 拿到日志正文。
+      # 这两个输入只服务手动/按需那一跑：repository_dispatch（PR 自动档）不带它们，
+      # 收尾 relay step 读到的就是空串 ⇒ 逐字保持 #3437「只搬失败 job」的默认路径。
+      pr_number:
+        description: 按需把日志挂到哪张 PR（留空 = 不写 CNB，仅本 run 自检）
+        required: false
+        default: ""
+      relay_scope:
+        description: 搬运范围 failed（缺省，只搬失败 job）/ all（全部 job，判绿也搬）
+        required: false
+        default: ""
+      run_id:
+        description: 要搬哪条 GA run 的日志（留空 = 本 run；按需档可点名已跑完的绿 run）
+        required: false
+        default: ""
 
 # 显式最小权限（CodeQL `actions/missing-workflow-permissions`，#3–#7）：本工作流只读仓库
 # —— checkout、装依赖、跑各判据、上传 artifact。不写这一栏时 GITHUB_TOKEN 拿仓库默认
@@ -270,32 +285,27 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # ── 固定结构用例（FIXED_STRUCTURAL_TESTS 静态清单，不解析改动面）─────────
-  fixed-structural-tests:
+  # ── 固定结构 + 受影响用例（同脚本两段，合并为单格以省一次装链；ISSUE #3076）──
+  # 方案 1：两段串行共用同一检出与依赖安装（装链从 2 次降 1 次）。脚本 / 命令 /
+  # segment env 一字不改；失败矩阵变窄（前段失败截断后段）与 wall-clock 串行相加
+  # 的取舍按 #3076 记录（当前私有仓口径）。检出取并集：受影响段需要全历史做三点
+  # diff（CNB_PULL_REQUEST_TARGET_SHA 基线，ISSUE #3375），两段都需要 LFS 真身（字体
+  # 用例），故合并后 `fetch-depth: 0` + `lfs: true`。
+  test-gates:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       COMFY_AFFECTED_QUIET: "1"
       COMFY_AFFECTED_NOISE_FILTER: "1"
-      COMFY_AFFECTED_SEGMENT: "fixed"
     steps:
       - name: 检出（按镜像 payload 的 sha）
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
-          # 与受影响那格同一份检出形状：合成 merge 的两个父（base 与 head）在场即够。
-          # 全量核过固定清单（ISSUE #3255）：没有任何判据问 git 全历史 ——
-          # audits-doc-references 的已删基线名单改读仓内台账（#3245，与检出深度解耦）；
-          # check-commit-claims 唯一读真历史的那条自带浅克隆 skip（hasCommit 守卫）；
-          # 其余要么自建沙箱仓库，要么只读 index / HEAD 树。曾因全历史判据退回 0
-          # （#3242），判据改台账后该前提已不成立，随 #3236 的优化意图回到浅检出。
-          # 字体真身仍由下面的 `lfs: true` 拉（与深度无关）。
-          fetch-depth: 2
-          # 固定结构用例清单里有字体用例（tests/embedded-title-font.test.ts）：它断言
-          # 工作树里的字体是**真身字节**（与 index 里 LFS 指针记的 size 一致），只检指针
-          # 文件必红 ⇒ 这一格必须拉 LFS 真身。对象由镜像那一格 `git lfs push` 送过去。
-          # 配额：GitHub 免费档 LFS 1 GiB 存储 + 1 GiB/月带宽，**每次拉取都计带宽**
-          # （字体约 8.6 MB）—— 撞墙是 Billing 的事，不是这一格的事。
+          # 取两段检出形状的并集：受影响段依赖三点 diff 的目标分支基线（PR 事件快照，
+          # 非合成 merge 的 base 父；老 PR 重跑 + master 前进时 depth=2 取不到 ⇒ fail-closed
+          # 退 2，ISSUE #3375）⇒ 全量历史；字体用例断言 LFS 真身字节 ⇒ lfs: true。
+          fetch-depth: 0
           lfs: true
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
@@ -305,66 +315,42 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 26
-          cache: pnpm
+
+      # node_modules 直缓存灰度（ISSUE #3076，方案 2，先单格）：只缓存 node_modules，
+      # 锁文件/Node/runner 维度作 key；命中时 install 仍会校验链接但应显著快于冷装。
+      # pnpm symlink 与原生产物在恢复后的正确性需持续观察（回滚 = 删本步 + 恢复 store 缓存）。
+      - name: 恢复 node_modules 缓存（灰度）
+        id: node-modules-cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node26-node_modules-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: 安装依赖
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      # 缓存命中 ⇒ pnpm 不再重跑 postinstall ⇒ `.storybook/assets/` 缺席（那三张 svg 是
+      # postinstall 按当前检出现生成的开发期夹具，gitignored、不入库，也不在 node_modules
+      # 缓存里）。故障现场：#3748 —— FIXED_STRUCTURAL 段里 storybook-data-sources 判据红。
+      # 这里无条件补一次同款入口（幂等，毫秒级），与 fresh 检出行为对齐。
+      - name: Storybook 开发期资源（postinstall 不重跑时现生成）
+        run: node scripts/install-git-hooks.mjs
 
       - name: 固定结构用例（cnb 同款判据一字不改）
+        env:
+          COMFY_AFFECTED_SEGMENT: fixed
         run: node scripts/ci-step-verdict.mjs --label "固定结构用例" -- node scripts/ci-affected-tests.mjs
 
-      - name: 失败时上传诊断产物
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: pr-gate-fixed-structural-tests
-          path: coverage/
-          if-no-files-found: ignore
-          retention-days: 7
-
-  # ── 受影响用例（固定清单之外 + 这个 PR 改动牵扯到的用例，三点 diff）──────
-  affected-tests:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    env:
-      COMFY_AFFECTED_QUIET: "1"
-      COMFY_AFFECTED_NOISE_FILTER: "1"
-      COMFY_AFFECTED_SEGMENT: "affected"
-    steps:
-      - name: 检出（按镜像 payload 的 sha）
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
-          # 与 typecheck 那格同因：diff 基线是 payload 的 `CNB_PULL_REQUEST_TARGET_SHA`
-          # （PR 事件的目标分支快照），不是合成 merge 的 base 父。老 PR 重跑 + master 前进时
-          # 基线比 base 父更老，depth=2 取不到 ⇒ 三点 diff fail-closed 退 2（ISSUE #3375）。
-          # 回到全量历史，判据脚本一字不改。
-          fetch-depth: 0
-          # 与 fixed 那格同因：改动面含字体资产 / 字体用例时这一格也会跑到
-          # tests/embedded-title-font.test.ts，只检指针文件必红 ⇒ 同开 lfs: true。
-          # 配额口径见 fixed 那格（每次拉取计带宽，撞墙是 Billing 的事）。
-          lfs: true
-
-      - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
-        uses: pnpm/action-setup@v6
-
-      - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
-        uses: actions/setup-node@v7
-        with:
-          node-version: 26
-          cache: pnpm
-
-      - name: 安装依赖
-        run: pnpm install --frozen-lockfile
-
       - name: 受影响用例（cnb 同款判据一字不改）
+        env:
+          COMFY_AFFECTED_SEGMENT: affected
         run: node scripts/ci-step-verdict.mjs --label "受影响用例" -- node scripts/ci-affected-tests.mjs
 
       - name: 失败时上传诊断产物
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: pr-gate-affected-tests
+          name: pr-gate-test-gates
           path: coverage/
           if-no-files-found: ignore
           retention-days: 7
@@ -524,8 +510,7 @@ jobs:
     needs:
       - static-gates
       - typecheck-db-format
-      - fixed-structural-tests
-      - affected-tests
+      - test-gates
       - heavy-gates
     if: always()
     # 这一跳是「送结论」，不该反过来改本 run 的 conclusion（自指面见上）。
@@ -548,7 +533,10 @@ jobs:
         env:
           CNB_TRIGGER_TOKEN: ${{ secrets.CNB_TRIGGER_TOKEN }}
           CNB_REPO_SLUG: moon-read/comfy-app-t3
-          CNB_PULL_REQUEST_IID: ${{ github.event.client_payload.pr_number || '' }}
+          # 两条触发形态都读（ISSUE #3710）：自动档（repository_dispatch）在
+          # client_payload，按需档（workflow_dispatch，#3667）在 inputs ——
+          # 只读后者会让按需档的结论回调恒 failure（0s 退出那一格的病灶）。
+          CNB_PULL_REQUEST_IID: ${{ github.event.inputs.pr_number || github.event.client_payload.pr_number || '' }}
           CNB_PULL_REQUEST_MERGE_SHA: ${{ github.event.client_payload.cnb_merge_sha || '' }}
           GA_JOB_RESULTS: ${{ join(needs.*.result, ',') }}
         run: node scripts/ci-ga-verdict-callback.mjs
@@ -580,15 +568,23 @@ jobs:
       # （Swagger 三条 commit-status 路径全是 get），承重退码更一字不能动，
       # 于是把解释念进这条本来就会发的 PR 评论。`GA_JOB_RESULTS` 与结论回调
       # 那一跳同源，脚本复用同一份结论折叠，不另立判据。判绿时不发评论（无失败 job）。
+      # ISSUE #3710：这一步**不再带 step 级 continue-on-error** —— 前提不成立时
+      # （按需档最典型：inputs 没送达 / PR 号不是数字）脚本会 0s 退出，此前被
+      # 这枚旗标盖成绿色 ✓，与「跑过但没日志」在 run 列表里不可区分。摘掉后
+      # 失败在这格上可见（✗）；job 级的 continue-on-error 仍在，run 的结论
+      # （判红该拦的闸在 CNB 侧）不随日志搬运成败变化。
       - name: 把 GA 判红日志正文搬到 CNB
         if: always()
-        continue-on-error: true
         env:
           CNB_ISSUE_TOKEN: ${{ secrets.CNB_ISSUE_TOKEN }}
           CNB_PULL_REQUEST_TOKEN: ${{ secrets.CNB_PULL_REQUEST_TOKEN }}
           CNB_REPO_SLUG: moon-read/comfy-app-t3
-          CNB_PULL_REQUEST_IID: ${{ github.event.client_payload.pr_number || '' }}
+          CNB_PULL_REQUEST_IID: ${{ github.event.inputs.pr_number || github.event.client_payload.pr_number || '' }}
           CNB_PULL_REQUEST_MERGE_SHA: ${{ github.event.client_payload.cnb_merge_sha || '' }}
           GITHUB_TOKEN: ${{ github.token }}
           GA_JOB_RESULTS: ${{ join(needs.*.result, ',') }}
+          # ISSUE #3667：按需档给 relay_scope=all ⇒ 判绿也把全部 job 搬进 CNB；
+          # 自动档（repository_dispatch）没有这个 input ⇒ 空串 ⇒ scope=failed，#3437 原样。
+          GA_LOG_SCOPE: ${{ github.event.inputs.relay_scope || '' }}
+          GA_LOG_RUN_ID: ${{ github.event.inputs.run_id || '' }}
         run: node scripts/ci-ga-logs-relay.mjs

@@ -1404,7 +1404,7 @@ log/
 | `log/current/launcher/foreground-watch.log`                                                                                         | 交接复核进程（`scripts/win32-window-focus.py`，**当前无调用方**，见 §1.3）                                                                 | 窗口交接时刻的前台归属裁定与执行结果（`give` / `restore` / `leave` + 句柄），排查「启动仍然抢前台」先看这里                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 追加写                                                                                                               |
 | `log/current/launcher/shell-launch.log`                                                                                             | 壳（`src-tauri/src/shell_launch.rs` 的 `log_launch_line`；首行会话标记由 `log_session_start` 直接写，因为三份要共用一个时刻，见 §1.5.1.1） | **壳侧编排链路**：拉起编排器的完整命令与 cwd、启动报告（项目根 / 编排脚本 / 依赖门禁 / 端口 / 各日志路径）、编排器输出 `[orchestrator] …`、退出码。**启动期最先有内容的一份**（不依赖编排器起来），见 §1.5.1。开头那行**会话标记自带说明**（本次启动的会话边界 / 壳已接手 / 即将拉起编排器），且与另两份的副本逐字同形，见 §1.5.1.1                                                                                                                                                                                                                                                              | 追加不轮转                                                                                                           |
 | `run/launch-status.json`                                                                                                            | dev-launcher.mjs（进度）+ 壳（常驻快照与失败出口，`write_idle_status` / `mark_launch_failed`）                                             | 结构化启动进度，splash 页展示。壳写两种：**常驻快照**（`fallback: true`，编排器写第一份之前的那 1~2 秒，见 §1.5.1）与**失败**（`phase=error` + 可行动作 + `diagnostics` 路径）；编排器写则权威，`ready === true` 才是就绪判据                                                                                                                                                                                                                                                                                                                                                                    | —                                                                                                                    |
-| 启动页「查看日志」面板                                                                                                              | splash 前端轮询 `get_launch_log`                                                                                                           | 五段尾部（去 ANSI、限长）：dev-launcher.log（经 sentinel 定位）+ dev-launcher-stderr.log（含 `[orchestrator] …`）+ log/current/shell/shell.log（release）+ **服务自己那两份**（`log/current/nextjs/` 里 mtime 最新的 stdout/stderr，见 §4.5）+ log/launcher/shell-launch.log。启动页实时看执行到哪一步，以及**服务说了什么**                                                                                                                                                                                                                                                                     | —                                                                                                                    |
+| 启动页「查看日志」面板                                                                                                              | splash 前端轮询 `get_launch_log`                                                                                                           | 五段尾部（去 ANSI、限长）：dev-launcher.log（经 sentinel 定位）+ dev-launcher-stderr.log（含 `[orchestrator] …`）+ log/current/shell/shell.log（release）+ **服务自己那两份**（`log/current/nextjs/` 里 mtime 最新的 stdout/stderr，见 §4.5）+ log/current/launcher/shell-launch.log。启动页实时看执行到哪一步，以及**服务说了什么**                                                                                                                                                                                                                                                                     | —                                                                                                                    |
 | `.next/dev/logs/next-development.log`                                                                                               | Next dev server                                                                                                                            | dev server 内部日志（含锁冲突提示）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Next 自管                                                                                                            |
 | `log/current/services/comfyui-runtime-<YYYYMMDD>-<HHmmss>.log`                                                                      | Next server（src/lib/comfyui/lifecycle.ts）                                                                                                | ComfyUI 拉起/spawn 参数/等待与就绪结论 + 子进程 stdout/stderr（`[out]`/`[err]` 前缀），时间戳为本地时间。**一次启动一份文件**（ISSUE #1326）：`beginRuntimeSession()` 在拉起前换一份新的，因此「这个文件属于哪一次启动」由文件本身回答 —— 不再有会话横幅，也不再需要「跨运行累积」那套判据；侧栏「ComfyUI」页的「启动日志」面板经 `GET /api/logs/sessions?source=comfyui-runtime` 列出各份（**跨包**：本次运行在前、各历史包在后）并跟随最新那份。手动启动不设硬超时（冷加载慢不误报，可在侧栏「ComfyUI」页手动关闭中止）；任务自动启动保留 420s 上限（防止 reaper 启动窗口被无限拉长）          | 每个来源留最近 20 份（`pruneRuntimeLogFiles`，启动时静默清）；接口回正文时取尾部窗口（40 万字符，按行对齐，见 §4.1） |
 | `log/current/services/comfyui-keepalive-<ts>.out/.err.log`                                                                          | dev-launcher 保活中介（Start-Process 重定向）                                                                                              | 保活模式下 ComfyUI 的完整原始输出，等待循环增量跟随进本次启动那一份 runtime 日志                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 按次命名，不自动清理                                                                                                 |
@@ -2589,6 +2589,47 @@ node scripts/check-standalone-contents.cjs   # [standalone] ✓ 产物干净
 > `scripts/standalone-private-inputs.mjs` 的清单里加一项，并向
 > `check-standalone-contents.cjs` 的禁忌清单补一条形状。**别只加 excludes 就当修好了。**
 
+> **`data/` 这一族是「逐条点名」的，登记规则只有一条**（ISSUE #3646 把这一族的缺口
+> 补齐）：**凡是按 `process.cwd()` 落在 `data/` 下的本机私有文件，都必须逐个点名
+> 登记进 `scripts/standalone-private-inputs.mjs` 的 `PRIVATE_INPUTS`**；新增写入方时
+> **同批登记**，并写清「谁在运行期读它」——出厂件该读的是项目默认 / 编译进产物的那份，
+> 本机覆盖只属于「这台机器上额外改的那点东西」。
+>
+> 这一族分三类，表现不同：**凭据类**（`llm-secret.key` / `runtime-secret.json` /
+> `workshop-api-settings.json` 里那把上游 apiKey）随包出去是**泄漏**；
+> **本机覆盖类**（`app-settings.json` / `sidebar-tab-behavior.json` /
+> `workshop-mode-contracts.json` / `workshop-comfy-settings.json`）随包出去是
+> **所有用户都拿到造包者的口径**（出厂件读到的不是项目默认那份，而是造包者本机改过
+> 的那份）；**目录类**（`data/backups/` 的整库快照、`data/workshop-outputs/` 与
+> `data/workshop-compositions/` 的产物）随包出去是**把造包者的数据发给每个用户**——
+> 它们装不进「逐文件」那一层，只能按**目录**点名，所以减法侧的删除动作必须能删目录
+> （`rmSync` 不带 `recursive` 撞上目录会抛 `ERR_FS_EISDIR`）。三类都不许随包。
+> **唯一事实源是 `PRIVATE_INPUTS` 那份清单**，本段只是规则与分类。
+>
+> ⚠️ **这份名单不是唯一那道网**：顶层默认拒绝（ISSUE #1217）把产物根那一整个 `data/`
+> 目录都不在两层顶层白名单里，所以整目录都会被剪掉（实测：减法跑完
+> `.next/standalone/data` 不复存在）。本名单是**逐项**的第二道网——两道网认的
+> 形状不同（目录级那一刀认「这个目录整体不进产物」，这一份认「这一项具体的东西不许
+> 随包」），**只登记一份就会漏**：`db.sqlite` 当年就是这么漏的（那次表现是构建全绿、
+> 开发库进了出厂件）。
+>
+> **这一族没有向 `check-standalone-contents.cjs` 的禁忌清单补形状，是有理由的**：
+> 那份禁忌清单判的是「产物里**任意深度**出现了不该有的东西」，所以 `.env` /
+> `db.sqlite` 两条形状都不锚在产物根（Next 会把 `.env` 从任何层级复制进来）。而
+> `data/` 这一族的入口只有**产物根那一个**，顶层默认拒绝已经判住它（产物里多一个
+> `data/` 顶层条目 ⇒ 「顶层出现白名单外的条目」当场点名），**再补一条不锚根的
+> `data/` 形状只会误伤第三方包自带的 `data/` 目录**（`node_modules/<pkg>/data/**`
+> 是它们自己的内容，不是本机的私有输入）。
+>
+> ⚠️ **这一族含目录 ⇒ 减法的删除动作必须能删目录、且不顺着链接删**：那三处
+> `data/` 目录装不进「逐文件」那一层，只能按目录点名，而 `rmSync` 不带 `recursive`
+> 撞上目录会抛 `ERR_FS_EISDIR`（构建在「减法」这一跳当场崩）；反过来，`recursive`
+> 删目录时若 `data/` 在产物里是个链接，**顺着删会删掉开发机上的那一份**（开发机的
+> `data/backups/` 里躺着整库快照，而被删的是产物）—— 所以减法侧先逐段 `lstat` 判
+> **父段**是不是链接：是就**整项跳过**（那一格与 `stripForbiddenShapes` 的纪律
+> 同源，§7.2 第六件事）。叶子本身是链接时删的是**链接本身**（实测目标文件仍在），
+> 那一格是安全的。
+
 **同族缺陷：开发期文件与整套内部门禁脚本也在产物里**（同一轮实测）。全项目
 tracking 还会带上仓库根的 `AGENTS.md`（内部协作规范全文）、`CHANGELOG.md`、
 `README.md`、各 `*.config.*`（`eslint` / `playwright` / `vitest` / `drizzle` /
@@ -3505,6 +3546,14 @@ pnpm db:push                # Drizzle 同步表结构（经 scripts/db-push.mjs�
 pnpm dev                    # 经 scripts/dev.mjs 解析端口（缺省按检出路径推导）
 ```
 
+**`next dev` 会改仓库根的 `AGENTS.md`（Next 16 的 `agentRules`，ISSUE #3669）**：
+Next 16 默认在开发服务器启动时往 `AGENTS.md` 末尾追加一段 `nextjs-agent-rules`
+（给 AI 代理看的 Next 版本提示）。本仓已在 `next.config.js` 设 `agentRules: false`
+明确关闭——本仓的 `AGENTS.md` 是入库的协作规范，那段追加只会制造一处与本次工作
+无关的稳定脏改动（每次 dev 都重写一遍，删掉它下次还会写回来，`pnpm ship` 的
+「工作树干净」检查会被它绊住）。若在旧检出上看到 `M AGENTS.md` 且 diff 是这一段，
+还原掉即可；不要当成自己改坏了规范文件。
+
 **`.env` 引导（`pnpm env:init`）为什么不能只写 `cp .env.example .env`**：
 `src/env.js` 的 createEnv 配了 `emptyStringAsUndefined: true`，而
 `.env.example` 里 `BETTER_AUTH_SECRET` 与两个 `BETTER_AUTH_GITHUB_*` 正是
@@ -3854,6 +3903,8 @@ sidecar」两种不同形态的失败。
 | 依赖表结构自愈（Drizzle push 失败后补列 / 补索引）                            | `scripts/dev-launcher.ps1`（schema 同步阶段）                                                       | `scripts/heal-db.cjs`（被启动链路的 schema 同步阶段调用）                                                                                                                      |
 | 「现在能不能安全地 `pnpm install`」—— 原生模块锁定前置检查（AGENTS 硬规则 9） | `scripts/sync-lint.ps1`（装之前的前置检查那一步）                                                   | `scripts/deps-install-guard.mjs`（`pnpm deps:guard`，契约测试 `tests/dev-launcher-dependency-sync.test.ts`；判据本体见 §3.2 的 `runningAppInstances`）                         |
 | 组装免安装版（解压即用的 portable zip，ISSUE #3345） | `tools/build/package-portable.ps1`（薄入口 → `tools/scripts/package-portable.ps1`） | `scripts/package-desktop-portable.mjs`（`pnpm package:portable`；与 `pnpm tauri build` 同一份载荷，规范 §7.7） |
+| 从 CNB 站内每日成品获取纯壳并补齐本地快捷方式（ISSUE #3699） | `tools/start/fetch-daily-shell.ps1` | `scripts/fetch-daily-shell.mjs`（`pnpm fetch:daily-shell`；下载 nightly `ComfyAPP-shell.exe` → `src-tauri/target/release/{{shell.app.exe}}`，缺快捷方式时补根目录 `Comfy APP.lnk`） |
+| 截「改后真实运行」界面（UI 改动交付截图，ISSUE #3780 / 规范 §13.12） | `tools/start/take-screenshot.ps1` | `scripts/screenshot.mjs`（`pnpm screenshot [路由]`；起应用 → 无头 chromium → 明暗两态各一张 → 落 `log/screenshots/`，用法见 `docs/guides/ui-screenshot.md`） |
 | 桌包 standalone 运行（不经编排器的内嵌 server 与宿主，ISSUE #1216）           | `src-tauri\target\release\{{shell.app.exe}}`（双击，壳自己起入口）/ `tools/start/start-desktop.ps1` | `scripts/standalone-runtime.mjs`（由壳经 Node sidecar 起；它再按 `COMFY_EXECUTOR` 起 `scripts/executor-host.mjs`。刻意**不**挂 `pnpm` 脚本——它不是开发者命令，是一种运行形态） |
 | 接上提交门槛（`core.hooksPath=.githooks`）                                    | `scripts/prepare-local-run.ps1`（由 `pnpm install` 的 postinstall 触发）                            | `scripts/install-git-hooks.mjs`（`node scripts/install-git-hooks.mjs`；postinstall 逐字调用它，契约测试 `tests/postinstall-cross-platform.test.ts`）                           |
 | 组件工作台 Storybook（开发期预览）                                            | `tools/start/storybook.ps1`                                                                         | `scripts/storybook.mjs`（`pnpm storybook` / `pnpm storybook:build`；契约测试 `tests/storybook-config.test.ts`）                                                                |

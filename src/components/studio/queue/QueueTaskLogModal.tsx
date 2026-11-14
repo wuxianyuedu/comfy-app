@@ -96,12 +96,11 @@ export function QueueTaskLogModal({
             <div className="flex min-w-0 items-center gap-2">
               <FileText className="text-primary-strong shrink-0" size={16} />
               <span className="text-ink truncate text-[15px] font-semibold">执行日志</span>
-              <span
-                className="text-ink-muted text-2xs max-w-55 truncate"
-                title={task.workflowName ?? undefined}
-              >
-                {task.workflowName ?? "（未知工作流）"}
-              </span>
+              <Hint label={task.workflowName ?? undefined}>
+                <span className="text-ink-muted text-2xs max-w-55 truncate">
+                  {task.workflowName ?? "（未知工作流）"}
+                </span>
+              </Hint>
               <StatusBadge
                 className="text-3xs px-1.5 py-px"
                 dot={false}

@@ -1,102 +1,61 @@
+"use client";
+
 /* ── 尺寸预设表的持久化与订阅 ──
  *
- * 用户改过的「比例 × 分辨率」表按场景（图片 / 视频）落在 localStorage，
- * 读取时与默认表逐格合并 —— 缺行、缺档、改坏的值一律回退默认，
- * 因此升级新增比例行不需要写迁移。
+ * 首行标 `"use client"` 与 `project-canvas/sync-notice.ts` 同款：本模块只跑在
+ * 浏览器（读 `localStorage`、经 `/api/size-presets` 读写应用数据），保存失败的
+ * 诊断走 `console` —— 那是项目规定的客户端日志口（`LogProvider` 拦截后落进
+ * 应用日志面板，规范 07 §7.6），也让「日志实现只有一处」的门禁
+ * （`tests/single-logger-channel.test.ts`）能把这里的 console 与**服务端**
+ * 的直接 console 区分开（服务端直写会绕开脱敏与 ERROR 镜像）。
+ *
+ * 用户改过的「比例 × 分辨率」表按场景（图片 / 视频）落在本机应用数据
+ * （`data/size-presets.json`，经 `/api/size-presets` 读写，ISSUE #3788），
+ * 读取时与项目默认表（`size-presets.ts` 的 `DEFAULT_SIZE_PRESET_TABLE`，跟代码走）
+ * 逐格合并 —— 缺行、缺档、改坏的值一律回退默认，升级新增比例行不需要写迁移。
  *
  * 为什么不是普通 `getItem` + 组件本地 state：同一页面上常常同时挂着好几处
  * 尺寸控件（画布节点 / 库内预览 / 表单），在配置弹窗里改一格必须让**已经挂载**
  * 的那些控件同步换值。这里用「模块级快照 + 订阅」给 `useSyncExternalStore`
  * 用，快照对象在未变更时保持引用不变。
  *
- * `src/lib/` 里读写 localStorage 并非新起法（见 `lib/project-canvas/canvas-store`），
+ * 历史形态：这张表此前落浏览器 localStorage（不随机器迁移、清浏览器数据就丢），
+ * 现改为应用数据文件；启动时把旧键里还留着的自定义表迁移到应用数据（一次性）。
+ *
+ * `src/lib/` 里发请求并非新起法（见 `lib/log/log-file-client` 的运行时日志上报），
  * 本模块只做存取与合并，不含 React。 */
 
-import { isRecord } from "~/lib/is-record";
-import { readStorageJson, writeStorageJson } from "../browser-storage";
+import { fireAndForget } from "~/lib/async-action";
 import {
   DEFAULT_SIZE_PRESET_TABLE,
-  RESOLUTION_TIERS,
-  SIZE_RATIO_PRESETS,
+  mergeSizePresetTable,
   type ResolutionTier,
-  type SceneResolutionTable,
   type SizeDims,
   type SizePresetTable,
   type SizeScene,
 } from "./size-presets";
 
-/** localStorage 键（带版本后缀，表结构变更时换版本而不是写迁移）。 */
-export const SIZE_PRESET_STORAGE_KEY = "comfyapp:size-presets:v1";
+/** 旧 localStorage 键（迁移源：历史版本把这张表存在浏览器里）。 */
+export const SIZE_PRESET_LEGACY_STORAGE_KEY = "comfyapp:size-presets:v1";
+
+/** 本机覆盖在服务端的落点（应用数据文件，经 `/api/size-presets` 读写）。 */
+const SIZE_PRESETS_ENDPOINT = "/api/size-presets";
 
 export type Listener = () => void;
 
-/** 单格宽高是否合法（正整数且在常识范围内）。 */
-function isValidDims(value: unknown): value is SizeDims {
-  if (!isRecord(value)) {
-    return false;
-  }
-  const width = value.width;
-  const height = value.height;
-  return (
-    typeof width === "number" &&
-    typeof height === "number" &&
-    Number.isFinite(width) &&
-    Number.isFinite(height) &&
-    width > 0 &&
-    height > 0
-  );
-}
-
-/** 逐格合并：默认表打底，合法覆盖项才生效。 */
-function mergeScene(fallback: SceneResolutionTable, raw: unknown): SceneResolutionTable {
-  const out: SceneResolutionTable = {};
-  for (const preset of SIZE_RATIO_PRESETS) {
-    const fallbackRow = fallback[preset.label];
-    const rawRow = isRecord(raw) ? raw[preset.label] : undefined;
-    const row: Record<ResolutionTier, SizeDims> = {
-      "1k": { width: 1024, height: 1024 },
-      "2k": { width: 1024, height: 1024 },
-      "4k": { width: 1024, height: 1024 },
-    };
-    for (const tier of RESOLUTION_TIERS) {
-      const candidate = isRecord(rawRow) ? rawRow[tier] : undefined;
-      row[tier] = isValidDims(candidate)
-        ? {
-            width: Math.round(candidate.width),
-            height: Math.round(candidate.height),
-          }
-        : { ...(fallbackRow?.[tier] ?? { width: 1024, height: 1024 }) };
-    }
-    out[preset.label] = row;
-  }
-  return out;
-}
-
-function mergeTable(raw: unknown): SizePresetTable {
-  const record = isRecord(raw) ? raw : {};
-  return {
-    image: mergeScene(DEFAULT_SIZE_PRESET_TABLE.image, record.image),
-    video: mergeScene(DEFAULT_SIZE_PRESET_TABLE.video, record.video),
-  };
-}
-
-function readStored(): SizePresetTable {
-  /* 存储不可用 / JSON 损坏 / SSR：一律按默认表走，不影响生成 ——
-   * 三条判据收在 `~/lib/browser-storage`（§16.2.4.28）。 */
-  return mergeTable(
-    readStorageJson<unknown>(SIZE_PRESET_STORAGE_KEY, null, (raw) => JSON.parse(raw)),
-  );
-}
-
-let snapshot: SizePresetTable = readStored();
+/* ── 模块状态：快照 + 订阅者 + 水合进度 ── */
+let snapshot: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE;
 const listeners = new Set<Listener>();
+let hydrateStarted = false;
+let hydrated = false;
+let dirtyWhileHydrating = false;
 
 /** 当前生效的尺寸表（引用稳定，可直接喂给 `useSyncExternalStore`）。 */
 export function getSizePresetTable(): SizePresetTable {
   return snapshot;
 }
 
-/** 服务端渲染快照：localStorage 不可读，一律给默认表。 */
+/** 服务端渲染快照：水合前一律给默认表。 */
 export function getSizePresetServerSnapshot(): SizePresetTable {
   return DEFAULT_SIZE_PRESET_TABLE;
 }
@@ -110,10 +69,78 @@ export function subscribeSizePresetTable(listener: Listener): () => void {
 
 function commit(next: SizePresetTable): void {
   snapshot = next;
-  /* 存储不可用（配额满 / 隐私模式）静默：本次会话内仍然生效。 */
-  writeStorageJson(SIZE_PRESET_STORAGE_KEY, next);
   for (const listener of listeners) {
     listener();
+  }
+  /* 服务端尚未就绪（首屏水合还没回来）时先把本地改动态记下，水合完成后补传 ——
+     否则早于水合的一次改动会用「默认表 + 这一处」把用户已存的覆盖冲掉。 */
+  if (hydrated) {
+    fireAndForget(persist(next), (error) => {
+      console.error("尺寸配置表保存失败", error);
+    });
+  } else {
+    dirtyWhileHydrating = true;
+  }
+}
+
+async function persist(table: SizePresetTable): Promise<void> {
+  try {
+    const response = await fetch(SIZE_PRESETS_ENDPOINT, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(table),
+    });
+    if (!response.ok) {
+      console.error(`尺寸配置表保存失败（HTTP ${response.status}）`);
+    }
+  } catch (error) {
+    console.error("尺寸配置表保存失败", error);
+  }
+}
+
+/**
+ * 启动时从服务端水合尺寸表（ISSUE #3788）：读应用数据里的本机覆盖，并把
+ * 旧 localStorage 键里还留着的自定义表一次性迁移过来（旧键随后清除）。
+ * 幂等：重复调用只水合一次。
+ */
+export async function hydrateSizePresetsFromServer(): Promise<void> {
+  if (typeof window === "undefined" || typeof fetch === "undefined" || hydrateStarted) {
+    return;
+  }
+  hydrateStarted = true;
+  let serverTable: SizePresetTable | null = null;
+  try {
+    const response = await fetch(SIZE_PRESETS_ENDPOINT);
+    if (response.ok) {
+      serverTable = mergeSizePresetTable(await response.json());
+    }
+  } catch {
+    /* 服务端读不到（应用服务未起等）：保持默认表，不影响生成。 */
+  }
+  /* 旧键迁移：浏览器里还留着的自定义表比「服务端没有覆盖」要新 —— 用它压一格。 */
+  let legacyTable: SizePresetTable | null = null;
+  try {
+    const raw = window.localStorage.getItem(SIZE_PRESET_LEGACY_STORAGE_KEY);
+    if (raw) {
+      legacyTable = mergeSizePresetTable(JSON.parse(raw));
+    }
+  } catch {
+    /* 旧键损坏按没有处理。 */
+  }
+  const effective = legacyTable ?? serverTable ?? DEFAULT_SIZE_PRESET_TABLE;
+  /* 水合前若已有本地改动（早于引导水合的极端窗口），以本检出的改动为准合并，
+     免得那次改动被水合值悄悄冲掉。 */
+  const pending = dirtyWhileHydrating ? snapshot : null;
+  const merged = pending === null ? effective : mergeSizePresetTable({ ...effective, ...pending });
+  hydrated = true;
+  dirtyWhileHydrating = false;
+  commit(merged);
+  if (legacyTable !== null) {
+    try {
+      window.localStorage.removeItem(SIZE_PRESET_LEGACY_STORAGE_KEY);
+    } catch {
+      /* 清不掉就算了：下次启动还会尝试迁移（幂等）。 */
+    }
   }
 }
 
@@ -128,7 +155,7 @@ export function setSizePresetDims(
   if (!row) {
     return;
   }
-  const nextScene: SceneResolutionTable = {
+  const nextScene: SizePresetTable["image"] = {
     ...snapshot[scene],
     [ratioLabel]: {
       ...row,
@@ -140,7 +167,7 @@ export function setSizePresetDims(
 
 /** 把某个场景整表恢复默认（另一个场景不受影响）。 */
 export function resetSizePresetScene(scene: SizeScene): void {
-  const fresh = mergeTable(null);
+  const fresh = mergeSizePresetTable(null);
   commit(
     scene === "image" ? { ...snapshot, image: fresh.image } : { ...snapshot, video: fresh.video },
   );

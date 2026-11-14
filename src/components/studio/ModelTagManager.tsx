@@ -8,6 +8,7 @@ import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 
 import { useModelTags, type TagItem } from "./hooks/use-model-tags";
 
@@ -93,6 +94,11 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
             标签」绑定，并在上方按模型筛选。
           </p>
 
+          {/* 模型标签库的数据存放位置（ISSUE #3759）：与工作流库列表同款徽标。 */}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <DataLocationBadge id="model-tag-library" />
+          </div>
+
           <div className="mb-4 flex gap-2">
             <input
               onChange={textHandler(c.setDraft)}
@@ -172,20 +178,21 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                        *  的反面：不是「点了没反应」，是根本进不来）。这里保留双击
                        *  作为快捷方式，同时补上焦点与 Enter/F2 —— F2 是各平台通用
                        *  的「重命名」键，Enter 是 `role="button"` 的默认激活键。 */
-                      <span
-                        onDoubleClick={() => {
-                          beginEdit(tag.id, tag.name);
-                        }}
-                        role="button"
-                        tabIndex={0}
-                        {...simpleKeyHandler(["Enter", "F2"], () => {
-                          beginEdit(tag.id, tag.name);
-                        })}
-                        className="text-ink-bright hover:bg-subtle hover:text-ink-bright focus-visible:ring-primary/40 cursor-text truncate rounded-sm px-0.5 text-sm select-none focus-visible:ring-2 focus-visible:outline-none"
-                        title="双击（或 Enter / F2）重命名"
-                      >
-                        {tag.name}
-                      </span>
+                      <Hint label={`双击（或 Enter / F2）重命名「${tag.name}」`}>
+                        <span
+                          onDoubleClick={() => {
+                            beginEdit(tag.id, tag.name);
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          {...simpleKeyHandler(["Enter", "F2"], () => {
+                            beginEdit(tag.id, tag.name);
+                          })}
+                          className="text-ink-bright hover:bg-subtle hover:text-ink-bright focus-visible:ring-primary/40 cursor-text truncate rounded-sm px-0.5 text-sm select-none focus-visible:ring-2 focus-visible:outline-none"
+                        >
+                          {tag.name}
+                        </span>
+                      </Hint>
                     )}
                     <div className="flex shrink-0 items-center gap-2">
                       <span className="bg-surface-2 text-ink-soft text-2xs rounded-full px-2 py-0.5 tabular-nums">

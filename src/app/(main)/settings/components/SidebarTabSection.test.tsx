@@ -1,5 +1,5 @@
 /**
- * `SidebarTabSection` 的视图判据（ISSUE #3623）。
+ * `SidebarTabSection` 的视图判据（ISSUE #3623 / #3798）。
  *
  * 这一节要判的是**这一格界面长什么样**：配置面里的每一项都给出两档选择、当前
  * 生效值落在选中态上、两个保存出口按「是不是开发检出」显隐、「还原默认」只在真有
@@ -71,10 +71,32 @@ describe("SidebarTabSection 的配置面", () => {
   it("配置面里的每一项都给出两档选择，且当前生效值落在选中态上", () => {
     seedController();
     render(<SidebarTabSection />);
-    // 九项侧栏项（首页是固定页签，不在配置面内）
-    expect(screen.getAllByRole("radiogroup")).toHaveLength(9);
+    // 十一项全局视图（首页是固定页签，不在配置面内）；设置与 UI 控件总览也算在内
+    expect(screen.getAllByRole("radiogroup")).toHaveLength(11);
     expect(checkedMode("模型适配")).toBe("共享标签页");
     expect(checkedMode("模型")).toBe("独立标签页");
+    /* ISSUE #3798：非侧栏的两屏出现在配置面里，默认档位分别是共享 / 独立。 */
+    expect(checkedMode("设置")).toBe("共享标签页");
+    expect(checkedMode("UI 控件总览")).toBe("独立标签页");
+  });
+
+  it("非侧栏的「UI 控件总览」也能逐项改（ISSUE #3798）", async () => {
+    const user = userEvent.setup();
+    seedController();
+    controller.section.setMode.mockClear();
+    render(<SidebarTabSection />);
+
+    const shared = within(groupOf("UI 控件总览")).getAllByRole("radio")[1];
+    if (!shared) {
+      throw new Error("「UI 控件总览」组里没有第二个 radio");
+    }
+    await user.click(shared);
+
+    expect(controller.section.setMode).toHaveBeenCalledTimes(1);
+    expect(controller.section.setMode.mock.calls[0]).toEqual([
+      "uiKit",
+      "shared" satisfies SidebarTabMode,
+    ]);
   });
 
   it("改一档只把那一项交出去（逐项的）", async () => {

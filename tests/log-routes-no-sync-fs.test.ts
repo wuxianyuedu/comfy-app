@@ -1,5 +1,6 @@
 /**
- * 「被轮询的日志路由不许用同步 fs IO」这条账的守卫（ISSUE #2193）。原住址是性能审计 `docs/audits/2026-09-26-performance-audit.md` §C.5 M12 与一份
+ * 「被轮询的日志路由不许用同步 fs IO」这条账的守卫（ISSUE #2193）。源自 2026-09 性能审计的
+ * M12（原过程台账已按 docs/README.md §7.3 闭环删除）与一份
  * 手抄清单（点名两处、实面五份 route）：手点数的东西没人守，新增 route 或退回同步写法账面不会红；形态确定（一目录下的 `route.ts`）、成本可控、能指到行，正合 AGENTS 硬规则 27。
  * 判的是调用不是叙述：注释里必须能出现 `statSync`，匹配前先过 `tests/helpers/strip-comments.ts`；覆盖面按目录取，新 route 自动进面、目录空则当场红（`length > 0` 防判据恒真）。
  */

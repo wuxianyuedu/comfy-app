@@ -96,6 +96,12 @@ const ModeContractView = lazyView("mode-contract", () =>
   ),
 );
 
+/* UI 控件总览（ISSUE #3525/#3726）：开发者的基元对照页。与设置同族（项目无关的
+ * 全局视图），懒加载 —— 只在从命令面板 /「+」菜单点开时才拉那一块。 */
+const UIKitGalleryView = lazyView("uiKit", () =>
+  import("~/components/ui/ui-kit-gallery").then((mod) => mod.UIKitGallery),
+);
+
 /* 资源库：整页素材管理（分类 / 搜索 / 上传 / 删除），与画布那块抽屉同源取数。 */
 const ResourceLibrary = lazyView("library", () =>
   import("~/components/studio/library/ResourceLibrary").then((mod) => mod.ResourceLibrary),
@@ -264,6 +270,12 @@ export function WorkspaceViewStack({
 
       case "mode-contract": {
         return <ModeContractView />;
+      }
+
+      case "uiKit": {
+        /* 与 settings 同形：页签里由本栈的 `h-full` 给出高度，控件总览自己那根
+         * 滚动条才滚得起来（ISSUE #3798）。独立路由 `/ui-kit` 不传，走视口档。 */
+        return <UIKitGalleryView fillHeight />;
       }
 
       case "canvas": {

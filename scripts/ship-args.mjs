@@ -21,6 +21,7 @@
  * @module scripts/ship-args — `pnpm ship` 的旗标解析层（纯函数，不摸世界）
  */
 import { SHIP_MODES } from "./ship-mode.mjs";
+import { CODE, codeTag, PHASES } from "./ship-core.mjs";
 
 /**
  * 平台构建号的形状（`cnb-<短码>-<轮次>`，实测 `cnb-68q-1k5sc5kgq`）。
@@ -113,24 +114,42 @@ export function parseIssueNumberToken(token) {
  * 而落空给出的那句「这一跑没有这一格」会把人引去怀疑单子，不是怀疑命令行。
  * 首段像构建号形状（`BUILD_SN_SHAPE`）才当构建号收下，否则整串都是格名（走按 HEAD 归属）。
  *
+ * **`--add <路径>`**（ISSUE #3826）：每次只收**一个**路径。多值写法（`--add a b c`）里
+ * 跟在后面的路径此前会落进未知旗标分支，那句 `unknown flag(s)` 会让人先去怀疑文件名；
+ * 现在它们进 `addMultiBad`，由 `flagConflicts` 给出指向真实原因的提示（逐个重复
+ * `--add`，或先自行 `git add`）——「写法错」与「旗标拼错」不再共用同一句报错。
+ *
  * **`--no-preflight-d0`**（ISSUE #3200）：关掉阶段 0 的 D0 预跑（默认开：提交之前把钩子
  * D0 组那批只读形态判据先跑一遍，所有红一次报齐，省「阶段 0 红一次、提交钩子再红一次」
  * 的往返）。它存在是因为预跑是**双付**（阶段 0 付一遍、提交钩子还会再付一遍）——
  * 不愿付的人显式关掉；提交那一刻的结论不受这枚旗标影响（钩子照判）。
  * 没有对应的肯定旗标：默认就是开的。
  *
+ * **`--no-commit`**（ISSUE #3619 / #3676）：「这一笔我自己已经提交（甚至已推送）过 ⇒
+ * 跳过提交段、不看工作树」—— **说出来的判定**，不由脚本去猜树上哪些脏文件是谁的
+ * （并行检出的工作区里，别人的脏文件与我的在 porcelain 里长得一样，没有可靠判据）。
+ * 典型场景：改动已全部在 HEAD、只差 push / 等 CI / 合并的那几跳（含 `--mode auto`
+ * 的纯合并一跳）。与提交段才有的对象矛盾：`--add` / `--message` / `--message-file` /
+ * `--allow-staged` 任一在场 ⇒ 退 2（没有提交段，它们没有对象），执行层当场点名。
+ *
+ * **`--status [<PR号|分支名>]`**（ISSUE #3811）：只读状态查询口。目标可选：缺省 =
+ * 当前分支（在主干上时回落「上一次跑的 PR」，来源念出来）；`#3804` / `3804` = PR 号；
+ * 其余 = 分支名。重复给值进 `statusBad`，一次也不静默收下（与 `--gh-logs` 同档）。
+ *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果 */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果 */
   const out = {
     message: null,
     messageFile: null,
     title: null,
     branch: null,
     adds: [],
+    addMultiBad: [],
     merge: false,
+    noCommit: false,
     closeIssue: false,
     closeIssueNumbers: [],
     closeIssueBad: [],
@@ -148,7 +167,11 @@ export function parseArgs(argv) {
     release: null,
     releaseBad: [],
     claims: false,
+    misclaim: false,
     branches: false,
+    status: false,
+    statusRef: null,
+    statusBad: [],
     newIssue: null,
     newIssueBad: [],
     issueBodyFile: null,
@@ -166,6 +189,9 @@ export function parseArgs(argv) {
     ghLogs: false,
     ghLogsRef: null,
     ghLogsBad: [],
+    ghPrs: false,
+    ghPrsRef: null,
+    ghPrsBad: [],
     rerunCi: false,
     only: null,
     mode: null,
@@ -180,8 +206,33 @@ export function parseArgs(argv) {
       out.whoami = true;
     } else if (a === "--claims") {
       out.claims = true;
+    } else if (a === "--misclaim") {
+      out.misclaim = true;
     } else if (a === "--branches") {
       out.branches = true;
+    } else if (a === "--status" || a.startsWith("--status=")) {
+      /* 与 `--gh-logs` 同一档：只读、一次只做一件，值可选（缺省 = 当前分支，在主干上
+       * 回落「上一次跑的 PR」，来源由执行层念出来）。目标收**一个** token —— 分支名
+       * 与号都不带空格，不需要 `--stage-log` 那种自由文本；两种写法（空格 / 等号）
+       * 共用这一支。重复给值进 statusBad，一次也不静默收下。 */
+      out.status = true;
+      let tok = "";
+      if (a.startsWith("--status=")) {
+        tok = a.slice("--status=".length);
+      } else if (i + 1 < argv.length) {
+        const next = String(argv[i + 1] ?? "");
+        if (next.startsWith("-") === false) {
+          tok = next;
+          i += 1;
+        }
+      }
+      if (tok.trim() === "") {
+        /* 缺省目标（当前分支 / 上一次跑）是合法形态，不算缺值 —— 交执行层解析。 */
+      } else if (out.statusRef === null) {
+        out.statusRef = tok.trim();
+      } else {
+        out.statusBad.push(`重复的 --status（前一个 ${out.statusRef}）`);
+      }
     }
     /* `--diagnose` 的构建号是**可选**的：不给就按 HEAD 的 sha 归属（红灯现场最常用的
      * 那一形）。所以下一个 token 只在不像旗标时才当构建号收下。 */
@@ -251,6 +302,27 @@ export function parseArgs(argv) {
         out.ghLogsRef = tok;
       } else {
         out.ghLogsBad.push(`重复的 --gh-logs（前一个 ${out.ghLogsRef}）`);
+      }
+    } else if (a === "--gh-prs" || a.startsWith("--gh-prs=")) {
+      /* 与 `--gh-logs` 同一档：只读、一次只做一件。值可选：缺省 = 开着的 PR；
+       * `open` / `closed` / `all` = 按状态列清单；数字 = 单条 PR 详情。 */
+      out.ghPrs = true;
+      let tok = "";
+      if (a.startsWith("--gh-prs=")) {
+        tok = a.slice("--gh-prs=".length);
+      } else if (i + 1 < argv.length) {
+        const next = String(argv[i + 1] ?? "");
+        if (next.startsWith("-") === false) {
+          tok = next;
+          i += 1;
+        }
+      }
+      if (tok.trim() === "") {
+        out.ghPrsRef = "open";
+      } else if (out.ghPrsRef === null) {
+        out.ghPrsRef = tok;
+      } else {
+        out.ghPrsBad.push(`重复的 --gh-prs（前一个 ${out.ghPrsRef}）`);
       }
     } else if (a === "--rerun-ci") {
       out.rerunCi = true;
@@ -341,6 +413,11 @@ export function parseArgs(argv) {
        * 退 2。这一枚是**人的显式放行**，只对「确实要一起走」打开，语义与 `--merge` 同档
        * ——不给就是不许，不给也绝不静默放行。 */
       out.allowStaged = true;
+    } else if (a === "--no-commit") {
+      /* 「这一笔我自己已经提交（甚至已推送）过 ⇒ 跳过提交段、不看工作树」—— 说出来的
+       * 判定（ISSUE #3619 / #3676）：并行检出的工作树上挂着别的会话的常驻脏文件，
+       * 「树上有没有我的东西」没有可靠判据，所以由人点名跳过，脚本不去猜。 */
+      out.noCommit = true;
     } else if (a === "--dry-run") {
       out.dryRun = true;
     } else if (a === "--no-preflight-d0") {
@@ -357,6 +434,14 @@ export function parseArgs(argv) {
       out.branch = argv[++i] ?? "";
     } else if (a === "--add") {
       out.adds.push(argv[++i] ?? "");
+      /* `--add` 每次只收**一个**路径（ISSUE #3826）：多值写法（`--add a b c`）里，
+       * b、c 此前会落进未知旗标分支，报错读起来像「这些文件路径是拼错的旗标」，
+       * 而真实原因是写法。这里把它们收走、单独记账，由 `flagConflicts` 给出指向
+       * 真实原因的那句话 —— 不让「写法错」与「旗标拼错」共用同一句报错。
+       * 收集跟到下一枚旗标（`-` 开头）为止；逐个重复 `--add` 仍是唯一的多文件写法。 */
+      while (i + 1 < argv.length && !String(argv[i + 1] ?? "").startsWith("-")) {
+        out.addMultiBad.push(String(argv[++i] ?? ""));
+      }
     } else if (a.startsWith("--message=")) {
       out.message = a.slice("--message=".length);
     } else if (a.startsWith("--message-file=")) {
@@ -367,6 +452,11 @@ export function parseArgs(argv) {
       out.branch = a.slice("--branch=".length);
     } else if (a.startsWith("--add=")) {
       out.adds.push(a.slice("--add=".length));
+      /* 等号写法与空格写法同一格（ISSUE #3826）：`--add=a b` 的 b 同样会被读成
+       * 未知旗标，同样在这里收走、单独记账。 */
+      while (i + 1 < argv.length && !String(argv[i + 1] ?? "").startsWith("-")) {
+        out.addMultiBad.push(String(argv[++i] ?? ""));
+      }
     } else if (a.startsWith("--only=")) {
       out.only = a.slice("--only=".length);
     } else if (a === "--mode") {
@@ -433,4 +523,134 @@ export function parseArgs(argv) {
     }
   }
   return out;
+}
+
+/**
+ * 旗标组合的**合法性**判 —— main 进阶段前的最后一道命令行闸（纯函数，只拼读数行，
+ * 不摸世界）。搬进这一份的理由：它判的全部是「命令行长什么样」（哪几枚旗标不能同时
+ * 在场、哪枚的值不像号），与 `parseArgs` 是同一层；叠在 `ship.mjs` 里时那一层被顶过
+ * 900 行硬闸（ISSUE #3619 现场实测 924 行）。
+ *
+ * 每一句都是**给人看的原话**：命中即返回（不叠加），调用方逐行打出后按
+ * `CODE.NOT_RUN` 收口 —— 「没有结论」不是「没要那个动作」。
+ *
+ * @param {{unknown:string[], modeBad:string[], only:string|null, allowStaged:boolean,
+ *   adds:string[], addMultiBad:string[], noCommit?:boolean, message:string|null, messageFile:string|null,
+ *   closeIssueBad:string[], asMergedBad:string[], asMerged:number|null, closeIssue:boolean}} opt
+ *   `parseArgs` 的解析结果（用到的那几个字段）
+ * @returns {string[]} 要逐行打出的错误读数；空数组 = 旗标组合合法
+ */
+export function flagConflicts(opt) {
+  /** @type {string[]} */
+  const lines = [];
+  if (opt.unknown.length > 0) {
+    lines.push(`[ship] [ERROR] unknown flag(s): ${opt.unknown.join(" ")}`);
+    lines.push("[ship] 拼错的旗标会被读成「没要那个动作」，所以这里直接停。见文件头「用法」。");
+    return lines;
+  }
+  /* 模式词表外的值不静默收下（#3512）：拼错的模式会被读成「没授权那组动作」，
+   * 而人以为全托管在跑 —— 与未知旗标同一族最贵的误读，所以哪怕眼熟也当场点名。 */
+  if (opt.modeBad.length > 0) {
+    lines.push(
+      `[ship] [ERROR] --mode 不认识：${opt.modeBad.join("；")}（可选：${SHIP_MODES.join(" / ")}）`,
+    );
+    lines.push("[ship] 这一跳没有结论（exit 2），不是「没要那个动作」。");
+    return lines;
+  }
+  if (opt.only && !PHASES.includes(opt.only)) {
+    lines.push(`[ship] [ERROR] --only 不认的阶段：${opt.only}（可选：${PHASES.join(" / ")}）`);
+    return lines;
+  }
+  /* `--add` 的多值写法（ISSUE #3826）：路径不是旗标，但 `--add` 后面跟的第二个路径
+   * 此前会落进「unknown flag(s)」那句报错里，让人先去怀疑文件名拼错。这里单独点名
+   * 真实原因：每次只收一个路径，多文件请逐个重复 `--add`（或先自行 git add）。 */
+  if (opt.addMultiBad.length > 0) {
+    lines.push(
+      `[ship] [ERROR] --add 每次只收一个路径，这里又跟了：${opt.addMultiBad.join(" ")}（${codeTag(
+        CODE.NOT_RUN,
+      )}）。`,
+    );
+    lines.push(
+      "[ship] 多个文件请逐个重复 --add（如 --add a.ts --add b.md），或先自行 git add 再跑。",
+    );
+    return lines;
+  }
+  /* `--allow-staged` 只对「`--add` 声明了这一次的提交面」那一格有意义（ISSUE #3597）：
+   * 没有 `--add` 时暂存面本来就由调用方负责，脚本没有声明可收口 —— 收下它会让人以为
+   * 「已经批准过某个提交面」，而实际什么都没发生（与 `--as-merged` 没带 `--close-issue`
+   * 同一条纪律：无执行者的旗标当场点名，不留一句沉默）。 */
+  if (opt.allowStaged === true && opt.adds.length === 0) {
+    lines.push(
+      "[ship] [ERROR] --allow-staged 是给 --add 那一格放行用的：这一跳没给 --add ⇒ " +
+        `没有「点名集合」，也就没有可放行的对象（${codeTag(CODE.NOT_RUN)}）。` +
+        "要放行就逐个点名 `--add <路径>`，否则别带这枚。",
+    );
+    return lines;
+  }
+  /* `--no-commit`（ISSUE #3619 / #3676）说的是「这一笔我自己已经提交过 ⇒ 跳过提交段、
+   * 不看工作树」；而 `--add` / `--message` / `--message-file` / `--allow-staged` 都是
+   * **提交段才有的对象** —— 没有提交段它们就没有执行者，收下任何一枚都会让人以为
+   * 「声明过某件事」，而实际什么都没发生（与上面 `--allow-staged` 单独出现同一纪律）。 */
+  if (opt.noCommit === true) {
+    const clash = [
+      opt.adds.length > 0 ? "--add" : null,
+      opt.message !== null && opt.message !== undefined ? "--message" : null,
+      opt.messageFile !== null && opt.messageFile !== undefined ? "--message-file" : null,
+      opt.allowStaged === true ? "--allow-staged" : null,
+    ].filter(Boolean);
+    if (clash.length > 0) {
+      lines.push(
+        `[ship] [ERROR] --no-commit 说的是「这一笔已由我自己提交过 ⇒ 跳过提交段」，` +
+          `而 ${clash.join(" / ")} 是提交段才有的对象 ⇒ 两件矛盾（${codeTag(CODE.NOT_RUN)}）。` +
+          "要嘛删掉 --no-commit 走正常提交段，要嘛去掉那几枚旗标、让 HEAD 原样进推送段。",
+      );
+      return lines;
+    }
+  }
+  /* `--close-issue` 后面跟的东西必须像 issue 号（ISSUE #2199）。把它当未知旗标收下是
+   * 最坏的一种读法：那一跑会退成「拼错的旗标」，而人真正想要的那个动作（补关一张
+   * 早已落地的单子）连被讨论都没被讨论。 */
+  if (opt.closeIssueBad.length > 0) {
+    lines.push(
+      `[ship] [ERROR] --close-issue 收的是 issue 号（2 位以上数字，可写 #2179），` +
+        `这里不像：${opt.closeIssueBad.join(" ")}`,
+    );
+    lines.push("[ship] 一个都不认 ⇒ 不动任何单子；这一格没有结论（不是「已经关好了」）。");
+    return lines;
+  }
+  /* `--as-merged` 收的是 **PR 号**（ISSUE #2491）。它自己不做任何动作，只给「只补关」那一路
+   * 供凭据（合没合并仍由 `ship-close.mjs` 去平台回读）。两种误用都得当场点名、共用同一个出口：
+   * 不像号（打错或把标题粘进来），以及**没带 `--close-issue`** —— 那时它没有任何执行者，
+   * 而屏幕上会留下一句看起来像「已经处理过了」的沉默。 */
+  if (opt.asMergedBad.length > 0 || (opt.asMerged !== null && !opt.closeIssue)) {
+    if (opt.asMergedBad.length > 0) {
+      lines.push(
+        `[ship] [ERROR] --as-merged 收的是 PR 号（2 位以上数字，可写 #2487），` +
+          `这里不像：${opt.asMergedBad.join(" ")}`,
+      );
+    } else {
+      lines.push(
+        `[ship] [ERROR] --as-merged ${opt.asMerged} 是**给关单那一格供凭据**的，` +
+          "而这一跳没要 --close-issue ⇒ 它没有任何执行者。",
+      );
+    }
+    lines.push(
+      "[ship] 要补关就两条一起写：pnpm ship --close-issue <单号> --as-merged <PR号>" +
+        "（单号 = 要关的那张，PR号 = 平台回读 is_merged 的那条）⇒ 这一格没有结论。",
+    );
+    return lines;
+  }
+  /* poll / verdict / merge / close-issue / clean-branch 要用「本次跑里解析出来的 PR 号」
+   * 或「合并那一段才有的验真结果」，而它们是在 pull-request / merge 那两段拿到的 ——
+   * 单独 --only=poll 会走进「一段都没跑、于是没有任何结论」却退 0 的形态。那是假绿灯，
+   * 正是本工具要防的那一类，所以显式拒绝，而不是让它安静地成功。 */
+  const NEEDS_PR_NUMBER = ["poll", "verdict", "merge", "close-issue", "clean-branch"];
+  if (opt.only && NEEDS_PR_NUMBER.includes(opt.only)) {
+    lines.push(
+      `[ship] [ERROR] --only=${opt.only} 不能单独跑：它要用 pull-request 那一段解析出的 PR 号。`,
+    );
+    lines.push("[ship] 要接着上一次的进度就整段重跑（PR 已存在时会复用，不重建）：pnpm ship");
+    return lines;
+  }
+  return lines;
 }

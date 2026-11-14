@@ -7,6 +7,7 @@ import { Hint } from "~/components/ui/hint";
 import { Skeleton } from "~/components/ui/skeleton";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { SelectChip } from "~/components/ui/select-chip";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { DisplayDensityToggle } from "~/components/ui/display-density-toggle";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { mediaDragSourceProps } from "~/components/ui/media-drag-source";
@@ -245,7 +246,9 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                       {pill.label}
                     </span>
                   )}
-                  <p className="text-ink-soft text-2xs truncate px-2 py-1.5">{titleOf(task)}</p>
+                  <p className="text-ink-soft text-2xs px-2 py-1.5">
+                    <TruncatedText className="block truncate">{titleOf(task)}</TruncatedText>
+                  </p>
                   {onUse && cover !== null && cover !== "" && (
                     <Hint accessibleName label="加入画布">
                       <Button
@@ -304,7 +307,9 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                   )}
 
                   <div className="min-w-0 flex-1">
-                    <p className="text-ink-bright truncate text-sm">{titleOf(task)}</p>
+                    <p className="text-ink-bright text-sm">
+                      <TruncatedText className="block truncate">{titleOf(task)}</TruncatedText>
+                    </p>
                     <div className="mt-0.5 flex items-center gap-1.5">
                       <span className="text-ink-fainter text-2xs">{timeAgo(task.createdAt)}</span>
                       {pill && (
@@ -313,12 +318,11 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                         </span>
                       )}
                       {task.status === "FAILED" && task.error !== null && task.error !== "" && (
-                        <span
-                          className="text-destructive/80 text-3xs min-w-0 truncate"
-                          title={task.error}
-                        >
-                          {task.error}
-                        </span>
+                        <Hint label={task.error}>
+                          <span className="text-destructive/80 text-3xs min-w-0 truncate">
+                            {task.error}
+                          </span>
+                        </Hint>
                       )}
                     </div>
                   </div>
@@ -343,15 +347,16 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                       </Hint>
                     )}
                     {task.cover !== null && task.cover !== "" && (
-                      <a
-                        className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
-                        download
-                        draggable={false}
-                        href={task.cover}
-                        title="下载"
-                      >
-                        <Download size={13} />
-                      </a>
+                      <Hint label="下载">
+                        <a
+                          className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
+                          download
+                          draggable={false}
+                          href={task.cover}
+                        >
+                          <Download size={13} />
+                        </a>
+                      </Hint>
                     )}
                   </div>
                 </div>

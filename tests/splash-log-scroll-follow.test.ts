@@ -8,6 +8,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 const ROOT = process.cwd();
 /** 用例读**内嵌进壳的那一份**（`index.html` 是窗口会加载的兜底名，与
  * `splash.html` 内容一致），而不是 `public/` 的源——加载的是它，就测它。 */
@@ -34,6 +36,11 @@ type SplashInternals = {
   renderLog: (text: string) => void;
 };
 
+/** 形状守卫替代断言收型（B5 清账）：页面交出的必须是可调用的 renderLog。 */
+function isSplashInternals(value: unknown): value is SplashInternals {
+  return isRecord(value) && typeof value.renderLog === "function";
+}
+
 /**
  * 把启动页装载进**当前** jsdom 文档并跑它的脚本。
  * 定时器全部停掉：只关心「刷新一帧」这一动作，让页面按 250ms / 1.5s 自己转起来只会引入不确定性。
@@ -48,10 +55,10 @@ function bootSplash(): {
 } {
   document.documentElement.innerHTML = PAGE_HTML;
 
-  /* SAFETY: 类型断言已复核 */
-  window.setInterval = (() => 0) as unknown as typeof window.setInterval;
-  /* SAFETY: 类型断言已复核 */
-  window.setTimeout = (() => 0) as unknown as typeof window.setTimeout;
+  /* 定时器桩走 defineProperty：descriptor.value 不参与类型检查，
+     「() => 0 不满足 Node 侧重载返回 Timeout」的形状争议就不再需要断言（B5 清账）。 */
+  Object.defineProperty(window, "setInterval", { configurable: true, value: () => 0 });
+  Object.defineProperty(window, "setTimeout", { configurable: true, value: () => 0 });
   /* 页面自己的 warn 与本组用例无关（壳 IPC 与网络都不可用时各喊一嗓子），
    * 静音掉——真红应当来自断言，而不是一屏噪声。 */
   window.console.warn = (): void => {
@@ -62,8 +69,13 @@ function bootSplash(): {
    * 那不是本组用例的红，却会把「6 errors」挂在结果上。一律拒掉。 */
   window.fetch = () => Promise.reject(new Error("网络在用例里不可用"));
 
-  /* SAFETY: 类型断言已复核 */
-  const internals = window.eval(`${pageScript(PAGE_HTML)}\n;({ renderLog })`) as SplashInternals;
+  /* eval 的返回是 any → 先落 unknown，再走形状守卫收窄（B5 清账）。
+     守卫不过说明内联脚本被改得交不出 renderLog —— 这本身就是该红的漂移。 */
+  const evaluated: unknown = window.eval(`${pageScript(PAGE_HTML)}\n;({ renderLog })`);
+  if (!isSplashInternals(evaluated)) {
+    throw new Error("启动页脚本没有交出可调用的 renderLog —— 内联脚本被改了？");
+  }
+  const internals = evaluated;
 
   const scroll = document.getElementById("log-scroll")!;
   Object.defineProperty(scroll, "scrollHeight", {

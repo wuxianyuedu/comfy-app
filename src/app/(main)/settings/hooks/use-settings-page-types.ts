@@ -4,7 +4,7 @@
  * 本文件只有类型与常量、没有 React —— 不带 `"use client"`，服务端也能安全引它。
  */
 import type { RuntimeLogController } from "~/components/studio/logs/use-runtime-log-source";
-import type { BackupEntry, PendingRestore } from "./use-settings-page-backup";
+import type { AppDataBackupSet, BackupEntry, PendingRestore } from "./use-settings-page-backup";
 import type { OllamaModel } from "~/lib/llm/ollama-client";
 import type { DesktopStoragePaths } from "~/lib/comfyui/desktop-storage-paths";
 import type {
@@ -76,6 +76,7 @@ export type Section =
   | "database"
   | "backup"
   | "dataLocation"
+  | "sizePresets"
   | "exit"
   | "logs";
 export type OllamaStatus = "checking" | "starting" | "up" | "down";
@@ -94,6 +95,8 @@ export type SettingsPageDrafts = {
 export type SettingsPageController = {
   /** 跳转目标真正落定 —— 外壳命中锚点后调它（清空 `pendingJump` + 消费载荷）。 */
   ackJumpSection: () => void;
+  /** 本机应用数据的备份套（与数据库备份按同刻配对；#3732）。 */
+  appDataBackups: Array<AppDataBackupSet>;
   /* 应用自更新（Tauri updater + process）：检测 / 下载安装 / 重启 */
   appUpdate: {
     /** 最近一次检测是否发现可用更新。 */
@@ -171,6 +174,9 @@ export type SettingsPageController = {
   flash: FlashMessage | null;
   /** 加载失败**且**两份草稿都没就绪 —— 容器据此渲染错误降级视图。 */
   hasError: boolean;
+  /** 从用户指定的目录导入备份件（#3732）。 */
+  importBusy: boolean;
+  importFromDir: (dir: string) => Promise<void>;
   installAppUpdate: () => Promise<void>;
   /* 加载 / 错误 */
   isInitialLoad: boolean;
@@ -201,7 +207,7 @@ export type SettingsPageController = {
   queryUsageTask: (input: UsageTaskQueryInput) => Promise<UsageTestResult>;
   relaunchApp: () => Promise<void>;
   restoreBusy: boolean;
-  restoreFrom: (name: string) => Promise<void>;
+  restoreFrom: (name: string, appDataDir?: string | null) => Promise<void>;
   retry: () => void;
   saveLlm: () => Promise<void>;
   /**
@@ -211,7 +217,7 @@ export type SettingsPageController = {
   savePrefs: (override?: Settings | null) => Promise<{ error?: string; ok: boolean }>;
   /* 保存 */
   saving: boolean;
-  /** 侧边栏当前分区（纯视觉偏好，但影响渲染哪个表单，故由逻辑层持有）。 */
+  /** 当前分区（纯视觉偏好，但影响渲染哪个表单，故由逻辑层持有）。 */
   section: Section;
   /**
    * 「读不到 / 刚保存的配置」类失败的**可续用**状态（ISSUE #360）：草稿已由缓存
@@ -238,7 +244,9 @@ export type SettingsPageController = {
 
 export const SETTINGS_SECTIONS: Array<{ id: Section; label: string }> = [
   { id: "appearance", label: "外观" },
-  { id: "sidebar", label: "侧边栏" },
+  /* ISSUE #3798：这一节管的已是「全部全局视图」而非仅侧栏项，名字跟着改；
+     内部 id 沿用 `sidebar`（分区 id 是数据键，改名会牵动跳转载荷与持久化，无用户收益）。 */
+  { id: "sidebar", label: "界面页签" },
   { id: "appUpdate", label: "应用更新" },
   { id: "llmLocal", label: "本地模型" },
   { id: "llmRemote", label: "远程模型" },
@@ -246,6 +254,7 @@ export const SETTINGS_SECTIONS: Array<{ id: Section; label: string }> = [
   { id: "database", label: "数据库" },
   { id: "backup", label: "备份与恢复" },
   { id: "dataLocation", label: "数据存放位置" },
+  { id: "sizePresets", label: "尺寸配置表" },
   { id: "exit", label: "退出与后台服务" },
   { id: "logs", label: "日志" },
 ];

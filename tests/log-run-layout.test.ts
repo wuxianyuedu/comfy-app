@@ -7,6 +7,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import { hasPython, runPython } from "./helpers/python-exe";
 
 import {
@@ -66,16 +68,27 @@ function runs(): string {
   return path.join(root, "log", "runs");
 }
 
+/** run.json 的消费形状守卫（B5 清账）：字段全可选，是对象即认。 */
+function isRunMeta(value: unknown): value is RunMeta {
+  return isRecord(value);
+}
+
 /** 当前这份 run.json（判据都建立在「它一定写出来了」之上）。 */
 function meta(): RunMeta {
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(fs.readFileSync(path.join(cur(), LOG_LAYOUT.runJson), "utf8")) as RunMeta;
+  const parsed: unknown = JSON.parse(fs.readFileSync(path.join(cur(), LOG_LAYOUT.runJson), "utf8"));
+  if (!isRunMeta(parsed)) {
+    throw new Error("run.json 不是对象 —— 日志布局或写入方漂移了");
+  }
+  return parsed;
 }
 
 /** 指定目录下的 run.json（归档包里那份）。 */
 function metaAt(dir: string): RunMeta {
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(fs.readFileSync(path.join(dir, LOG_LAYOUT.runJson), "utf8")) as RunMeta;
+  const parsed: unknown = JSON.parse(fs.readFileSync(path.join(dir, LOG_LAYOUT.runJson), "utf8"));
+  if (!isRunMeta(parsed)) {
+    throw new Error("run.json 不是对象 —— 日志布局或写入方漂移了");
+  }
+  return parsed;
 }
 
 /** 写一份 current/ 下的日志文件（模拟各写方）。 */
@@ -182,6 +195,26 @@ describe("current/ 与 run.json", () => {
     const m = meta();
     expect(m.runId).toBe("a1b2c3");
     expect(m.exitCode).toBe(0);
+  });
+
+  /* 回归（#3663）：临时文件名若固定成 `run.json.tmp`，两个进程并发写就会互相
+   * 抢同一份临时文件 —— 先 rename 的把它移走，后到的 rename 当场 ENOENT。
+   * 现场是 CI 的「受影响用例」：两个用例文件被两个 worker 同时加载，而它们
+   * import 的 `dev-launcher.mjs` 在模块顶层就 `startRun(ROOT)`。
+   *
+   * 判据取**确定性的那一面**：先放一份「别人的固定名临时文件」在场上，本进程
+   * 写完之后它必须原样还在 —— 有 pid 后缀就不会去动它；固定名则会被覆盖并
+   * rename 走（那一份正是「被并发方抢走」的同一件事）。并起两个真进程的写法
+   * 在这里只有 2/4 命中（本机实测），不能当回归判据。 */
+  it("临时文件名带进程区分：场上那份固定名 .tmp 不被本进程吞掉", () => {
+    const foreign = path.join(cur(), `${LOG_LAYOUT.runJson}.tmp`);
+    fs.mkdirSync(cur(), { recursive: true });
+    fs.writeFileSync(foreign, "别的进程写到一半的那份", "utf8");
+
+    startRun(root, { runId: "a1b2c3" });
+
+    expect(fs.readFileSync(foreign, "utf8")).toBe("别的进程写到一半的那份");
+    expect(meta().runId).toBe("a1b2c3");
   });
 });
 
