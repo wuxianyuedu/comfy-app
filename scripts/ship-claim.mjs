@@ -24,9 +24,10 @@ import { asArray } from "./ship-build.mjs";
 import { CODE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
 import { handlerLabel, ISSUE_LABEL_ROLES, labelValues, participantLabel } from "./ship-ticket.mjs";
+
+import { runRelease } from "./ship-release.mjs";
 import { applyClaimLabels, ensureComment, readIssue } from "./ship-issue-io.mjs";
 import { decideClaim } from "./ship-claim-rules.mjs";
-import { runRelease } from "./ship-release.mjs";
 
 /* 纯判断与文案、平台读写自拆出的模块再导出：测试与 ship-close 的既有引用
  * （`../scripts/ship-claim.mjs`）保持不变。 */
@@ -284,14 +285,14 @@ export function runIssueAction(ctx) {
     );
     return CODE.NOT_RUN;
   }
-  const wantsNewIssue =
-    (opt.newIssue !== null && opt.newIssue !== undefined) || newIssueBad.length > 0;
-  const wantsComment = (opt.comment !== null && opt.comment !== undefined) || commentBad.length > 0;
   /* --misclaim 是 --release 的形态开关（ISSUE #3809）：单独出现 = 用法错，当场点名。 */
   if (opt.misclaim === true && (opt.release === null || opt.release === undefined)) {
     log("[ship] [ERROR] --misclaim 只跟 --release <号> 同用：它是误领释放的形态开关。");
     return CODE.NOT_RUN;
   }
+  const wantsNewIssue =
+    (opt.newIssue !== null && opt.newIssue !== undefined) || newIssueBad.length > 0;
+  const wantsComment = (opt.comment !== null && opt.comment !== undefined) || commentBad.length > 0;
   const wanted = [
     opt.claim === null || opt.claim === undefined ? null : "--claim",
     opt.release === null || opt.release === undefined ? null : "--release",
