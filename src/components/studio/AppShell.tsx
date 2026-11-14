@@ -221,7 +221,11 @@ export function AppShell({
                               "group-data-[collapsible=icon]:hidden",
                             )}
                             data-sidebar="menu-action"
-                            onClick={(event) => {
+                            /* 关闭走 pointerdown 而不是 click（ISSUE #3789）：行级 tooltip
+                               在 pointerdown 时收起会引发一次重渲染，真实点击的 click
+                               事件会落到行 <li> 上、关不掉页签；pointerdown 阶段目标
+                               稳定是这枚按钮本身。 */
+                            onPointerDown={(event) => {
                               event.stopPropagation();
                               onCloseViewTab?.(openTab.key);
                             }}
