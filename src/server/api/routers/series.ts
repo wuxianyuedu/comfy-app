@@ -796,10 +796,13 @@ export const seriesRouter = createTRPCRouter({
           const [prod] = await tx
             .select()
             .from(production)
-            .where(and(eq(production.id, input.projectId), eq(production.userId, ctx.user.id)))
+            .where(eq(production.id, input.projectId))
             .limit(1);
           if (!prod) {
-            throw new TRPCError({ code: "NOT_FOUND", message: "生产数据不存在或无权操作" });
+            throw new TRPCError({ code: "NOT_FOUND", message: "生产数据不存在" });
+          }
+          if (prod.userId !== ctx.user.id) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "无权操作该项目" });
           }
           const links = await tx
             .select({ character })
@@ -840,7 +843,7 @@ export const seriesRouter = createTRPCRouter({
             .where(and(eq(production.id, input.projectId), eq(production.userId, ctx.user.id)))
             .returning({ id: production.id });
           if (!updated[0]) {
-            throw new TRPCError({ code: "NOT_FOUND", message: "生产数据不存在或无权操作" });
+            throw new TRPCError({ code: "FORBIDDEN", message: "无权操作该项目" });
           }
           return { injected, merged, total: prodChars.length };
         },
