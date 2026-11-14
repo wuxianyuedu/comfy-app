@@ -30,12 +30,26 @@ import {
   type DataLocationCategory,
   type DataLocationId,
 } from "~/lib/data-location/data-locations";
+import type { ReactNode } from "react";
 
-/** 悬浮说明只说**落点**（ISSUE #3724）：哪张表 / 哪个文件，一行说完。数据种类名与
- * 类别名徽标上已经有了，迁移时「在新机器重填一次」这类话对迁移没有操作价值，
- * 都不再重复。 */
-function badgeTitle(id: DataLocationId): string {
-  return DATA_LOCATIONS[id].target;
+/** 悬浮说明（ISSUE #3724）：单落点一行说完；多表落点按「表名：哪里用」逐行拆，
+ * 不再挤成一句「A / B 表」。数据种类名与类别名徽标上已经有了，迁移话术对迁移
+ * 没有操作价值，都不进气泡。 */
+function badgeLabel(id: DataLocationId): ReactNode {
+  const entry = DATA_LOCATIONS[id];
+  const lines = entry.targetLines;
+  if (lines === undefined) {
+    return entry.target;
+  }
+  return (
+    <span className="flex flex-col gap-0.5">
+      {lines.map((line) => (
+        <span key={line.name}>
+          {line.name}：{line.note}
+        </span>
+      ))}
+    </span>
+  );
 }
 
 /** 悬停时**同色系加深**（ISSUE #3724）：底色从一成加深到两成，不再是「只剩描边」。
@@ -65,7 +79,7 @@ export function DataLocationBadge({ id }: { id: DataLocationId }) {
     <span className="inline-flex items-center">
       {/* `side="top"`：徽标坐在设置卡片正文里，气泡向上让出下方那两行说明；
           与顶栏问号（`side="bottom"`）分档的理由是锚点在屏幕里的位置，不是风格。 */}
-      <Hint label={badgeTitle(id)} side="top">
+      <Hint label={badgeLabel(id)} side="top">
         <Badge className={HOVER_DEEPEN[entry.category]} size="sm" tone={category.tone}>
           <Icon name={category.icon} />
           {category.label}
