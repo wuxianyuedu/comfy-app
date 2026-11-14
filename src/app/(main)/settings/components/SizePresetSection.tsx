@@ -12,10 +12,10 @@ import { DataLocationBadge } from "~/components/data-location/DataLocationBadge"
 import { SettingsCard } from "~/components/ui/settings-card";
 import { SizePresetTablePanel } from "~/components/studio/workflow-form/SizePresetTableModal";
 
-import { useSizePresetSection } from "../hooks/use-size-preset-section";
+import { useSizePresetTable } from "~/components/studio/workflow-form/hooks/use-size-preset-table";
 
 export function SizePresetSection() {
-  const c = useSizePresetSection();
+  const c = useSizePresetTable();
   return (
     <SettingsCard
       title="尺寸配置表"
