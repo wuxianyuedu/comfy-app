@@ -11,6 +11,7 @@ import { useMemo } from "react";
 import { SettingsShell } from "~/components/settings/SettingsShell";
 import { Button } from "~/components/ui/button";
 import { Alert, AlertAction, AlertDescription } from "~/components/ui/alert";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import type { Section, ReadySettingsPageController } from "./hooks/use-settings-page";
 
 import { AppUpdateSection } from "./components/AppUpdateSection";
@@ -67,6 +68,27 @@ export function SettingsPageView({
     [c],
   );
 
+  /* 分区标题行右侧的存放位置徽标（ISSUE #3724）：卡片自身没有标题可挂的
+   * （整节一张无标题卡），徽标上移到大标题（`.u-title-stage`）行右侧，
+   * 不再为一张图标独占卡片头的一行。卡片自带标题的（备份 / 本地更新检测 /
+   * 远程模型）仍挂在卡片标题行。 */
+  const sectionTitleExtra = useMemo(
+    () =>
+      ({
+        appearance: <DataLocationBadge id="appearance" />,
+        comfyui: <DataLocationBadge id="app-settings" />,
+        llmLocal: <DataLocationBadge id="llm-config" />,
+        logs: <DataLocationBadge id="log-categories" />,
+        sidebar: (
+          <span className="flex items-center gap-1.5">
+            <DataLocationBadge id="sidebar-tab-local" />
+            <DataLocationBadge id="sidebar-tab-project" />
+          </span>
+        ),
+      }) satisfies Partial<Record<Section, React.ReactNode>>,
+    [],
+  );
+
   return (
     <SettingsShell
       className={className}
@@ -113,6 +135,7 @@ export function SettingsPageView({
       jumpSection={c.pendingJump}
       onJumpApplied={c.ackJumpSection}
       sections={sections}
+      sectionTitleExtra={sectionTitleExtra}
     />
   );
 }

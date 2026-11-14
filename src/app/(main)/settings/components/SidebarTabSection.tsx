@@ -14,7 +14,6 @@
 import { Button } from "~/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
-import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import { configurableSidebarItems } from "~/components/studio/NavItems";
 import {
   SIDEBAR_TAB_MODE_LABEL,
@@ -38,14 +37,7 @@ export function SidebarTabSection() {
   const items = configurableSidebarItems();
 
   return (
-    <SettingsCard
-      titleExtra={
-        <>
-          <DataLocationBadge id="sidebar-tab-local" />
-          <DataLocationBadge id="sidebar-tab-project" />
-        </>
-      }
-    >
+    <SettingsCard>
       <p className="text-muted-foreground mb-4 text-xs leading-relaxed">
         左侧栏的每一项点开后，是
         <strong className="text-ink/80">独立标签页</strong>

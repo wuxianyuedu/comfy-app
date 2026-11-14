@@ -49,6 +49,11 @@ type SettingsShellProps = {
   /** 当前分区（导航高亮用）。 */
   section: Section;
   /**
+   * 各分区标题行右侧的附加物（ISSUE #3724）：按分区 id 给一枚「数据存放位置」
+   * 徽标等小标识。没有正文的分区节（`fallback` 态）不渲染，无需给全。
+   */
+  sectionTitleExtra?: SectionTitleExtra;
+  /**
    * 屏级可见标题 —— 走 `.u-title-page`。**页签（或顶栏）已经在说屏名时不传**
    * （ISSUE #1872）：那一次出现是重复的，不传时屏名以 `sr-only` 留在 DOM，
    * 这一行也不再占位（口径与 `ui/page-header` 的 `title` / `srTitle` 同一份）。
@@ -75,6 +80,10 @@ type SettingsShellProps = {
     }
 );
 
+/** 各分区标题行右侧的附加物（ISSUE #3724）：「这类数据存在哪儿」的徽标挂在大标题
+ * （`.u-title-stage` 那一行）右侧——卡片标题行没有别的可说时，徽标不再独占一行。 */
+export type SectionTitleExtra = Partial<Record<Section, ReactNode>>;
+
 export function SettingsShell({
   section,
   onSelect,
@@ -85,6 +94,7 @@ export function SettingsShell({
   onJumpApplied,
   fallback,
   sections,
+  sectionTitleExtra,
 }: SettingsShellProps) {
   /** 滚动容器：分区节挂在它里面，观察器也以它为 root。 */
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -169,7 +179,7 @@ export function SettingsShell({
                     key={id}
                     ref={registerSection(id)}
                   >
-                    <SettingsSectionHeading section={id} />
+                    <SettingsSectionHeading section={id} titleExtra={sectionTitleExtra?.[id]} />
                     {/* 一节里可能有多张卡片（「备份与恢复」下的「创建备份 / 恢复备份」）：
                         卡片之间要有间距，否则两张卡贴在一起像一块（ISSUE #3547）。 */}
                     <div className="flex flex-col gap-4">{sections?.[id]}</div>
@@ -208,7 +218,14 @@ function sectionLabel(section: Section): string {
  *   `#c2c2c8`（实测），比同屏 14px 的行标题（`#ededf2`）还暗 —— 「标题比正文还暗」
  *   的观感就是这么来的（用户现场：「这里界面的字体是白色吗，怎么感觉有些暗」）。
  */
-function SettingsSectionHeading({ section }: { section: Section }) {
+function SettingsSectionHeading({
+  section,
+  titleExtra,
+}: {
+  section: Section;
+  /** 标题行右侧的徽标等附加物（`sectionTitleExtra` 按 id 给到这一节）。 */
+  titleExtra?: ReactNode;
+}) {
   return (
     <>
       {isGroupFirstSection(section) ? (
@@ -218,6 +235,11 @@ function SettingsSectionHeading({ section }: { section: Section }) {
       <h2 className="u-title-stage font-title border-border-subtle mb-3 flex items-baseline gap-2 border-b pb-2">
         {sectionLabel(section)}
         <span className="text-ink-muted text-xs font-normal">{sectionSummary(section)}</span>
+        {titleExtra === undefined ? null : (
+          <span className="ml-auto flex shrink-0 items-center gap-1.5 self-center">
+            {titleExtra}
+          </span>
+        )}
       </h2>
     </>
   );

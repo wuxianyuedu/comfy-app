@@ -81,6 +81,12 @@ export type DataLocationEntry = {
   migration: string;
   /** 具体落点：路径 / 表名 / 目录。 */
   target: string;
+  /**
+   * 落点**逐行拆解**（ISSUE #3724）：一份数据落在多张表时，悬浮说明按
+   * 「表名：哪里用」一行一行说，不再挤成一句「A / B 表」。单落点的条目
+   * 不用这一格（`target` 一行已经说完）。
+   */
+  targetLines?: Array<{ name: string; note: string }>;
 };
 
 /** 登记项的 id（= 一种数据 × 它的某一个存放位置）。 */
@@ -237,6 +243,10 @@ export const DATA_LOCATIONS: Record<DataLocationId, DataLocationEntry> = {
     migration:
       "标签与「标签 ↔ 工作流」的绑定都在 workflowModelTag / workflowModelTag_workflowTemplate 表里，跟着库走：换机器时带库即可。",
     target: "workflowModelTag 表",
+    targetLines: [
+      { name: "workflowModelTag 表", note: "标签本体" },
+      { name: "workflowModelTag_workflowTemplate 表", note: "标签与工作流的绑定" },
+    ],
   },
   "remote-model": {
     category: "database",
@@ -245,6 +255,10 @@ export const DATA_LOCATIONS: Record<DataLocationId, DataLocationEntry> = {
     migration:
       "供应商与模型在 llmProvider / remoteModel 表里，跟着库走；API Key 以密文存放，换机器要在新机器上重新填（或用新机器的密钥重新加密）。",
     target: "llmProvider / remoteModel 表",
+    targetLines: [
+      { name: "llmProvider 表", note: "供应商与 API Key（密文）" },
+      { name: "remoteModel 表", note: "模型参数与工坊字段映射" },
+    ],
   },
   "sidebar-tab-local": {
     category: "app-data-file",
