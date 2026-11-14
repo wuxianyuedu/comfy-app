@@ -14,6 +14,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { FieldLabel } from "~/components/ui/field";
 import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
+import { Hint } from "~/components/ui/hint";
 import { Input } from "~/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import {
@@ -22,17 +23,21 @@ import {
   DEFAULT_INTERFACE_FONT,
   DEFAULT_TERMINAL_FONT,
   FONT_SCALE_STEPS,
-  primaryFontOf,
   RADIUS_STEPS,
   readAppearance,
   registerUserFont,
   saveAppearance,
-  stackForPrimaryFont,
   type AppearancePrefs,
   type AppearanceStep,
   type FontTier,
 } from "~/lib/appearance";
-import { normalizeFontStack } from "./appearance-font-helpers";
+import {
+  describeFontPart,
+  fontGroupsOf,
+  normalizeFontStack,
+  slotInputValue,
+  stackWithSlotFont,
+} from "./appearance-font-helpers";
 
 import { SettingsCard } from "~/components/ui/settings-card";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
@@ -151,7 +156,7 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
           把该档回落到 globals.css 的原值。 */}
       <FontRow
         defaultValue={DEFAULT_INTERFACE_FONT}
-        hint="自定义整个界面使用的字体（正文与界面文字）。每类只配一种字体，留空用默认。"
+        hint="自定义整个界面使用的字体。西文 / 中文两个部分各配一种；系统回退固定。"
         label="界面字体"
         onChange={(value) => {
           update({ interfaceFont: value });
@@ -164,7 +169,7 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
       />
       <FontRow
         defaultValue={DEFAULT_CODE_FONT}
-        hint="自定义代码块使用的字体。每类只配一种字体，留空用默认。"
+        hint="自定义代码块使用的字体。等宽首选配一种；通用回退固定。"
         label="代码字体"
         onChange={(value) => {
           update({ codeFont: value });
@@ -177,7 +182,7 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
       />
       <FontRow
         defaultValue={DEFAULT_TERMINAL_FONT}
-        hint="自定义终端使用的字体（等宽展示）。每类只配一种字体，留空用默认。"
+        hint="自定义终端使用的字体（等宽展示）。等宽首选 / 中文字体各配一种；通用回退固定。"
         label="终端字体"
         onChange={(value) => {
           update({ terminalFont: value });
@@ -262,15 +267,14 @@ function FontRow({
   tier: FontTier;
   value: string;
 }) {
-  const inputId = `font-${label}`;
   const isDefault = normalizeFontStack(value) === normalizeFontStack(defaultValue);
-  /* 输入框里只出现**一种字体**（ISSUE #3784）：整条栈由「这一种 + 固定回退尾」
-     组成，中文回退等不需要用户操心。 */
-  const primary = primaryFontOf(value, tier);
+  /* 按部分分组陈列 + 每部分一种字体的输入（ISSUE #3784 与补充意见）：
+     默认栈里有哪些字体、各排在第几位一眼可见；每个可配部分各填一种。 */
+  const groups = fontGroupsOf(value, tier);
   return (
     <div className="mt-5">
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <FieldLabel className="text-ink text-sm font-semibold" htmlFor={inputId}>
+        <FieldLabel className="text-ink text-sm font-semibold" htmlFor={`font-${label}`}>
           {label}
         </FieldLabel>
         <Badge variant={isDefault ? "secondary" : "outline"}>
@@ -278,18 +282,54 @@ function FontRow({
         </Badge>
         <span className="text-muted-foreground text-xs">{hint}</span>
       </div>
+      {/* 当前栈按部分陈列：默认字体是什么、各自排在第几位，一眼可见。 */}
+      <div className="border-border bg-surface-row mb-3 flex flex-col gap-1.5 rounded-lg border p-3 text-xs">
+        {groups
+          .filter((group) => group.items.length > 0)
+          .map((group) => (
+            <div className="flex flex-wrap items-start gap-1.5" key={group.slot}>
+              <span className="text-muted-foreground min-w-24 shrink-0">{group.label}</span>
+              <div className="flex flex-wrap gap-1">
+                {group.items.map((item, i) => (
+                  <Hint key={`${group.slot}-${item}-${i}`} label={item}>
+                    <span className="bg-surface-2 text-ink rounded px-1.5 py-0.5">
+                      {describeFontPart(item)}
+                    </span>
+                  </Hint>
+                ))}
+              </div>
+            </div>
+          ))}
+      </div>
+      {/* 每个可配部分一个单行输入：每部分一种字体，留空 = 该部分用默认。 */}
+      <div className="flex flex-col gap-2">
+        {groups
+          .filter((group) => group.editable)
+          .map((group) => (
+            <div className="flex items-center gap-2" key={`input-${group.slot}`}>
+              <FieldLabel
+                className="text-ink w-24 shrink-0 text-xs"
+                htmlFor={`font-${label}-${group.slot}`}
+              >
+                {group.label}
+              </FieldLabel>
+              <Input
+                aria-label={`${label} · ${group.label}`}
+                className="min-w-0 flex-1"
+                id={`font-${label}-${group.slot}`}
+                onChange={(e) => {
+                  const family = e.target.value.trim();
+                  onChange(
+                    stackWithSlotFont(value, tier, group.slot, family.length > 0 ? family : null),
+                  );
+                }}
+                placeholder="留空 = 默认"
+                value={slotInputValue(value, tier, group.slot)}
+              />
+            </div>
+          ))}
+      </div>
       <div className="flex flex-col gap-2 md:flex-row md:items-start">
-        <Input
-          aria-label={label}
-          className="min-w-0 flex-1"
-          id={inputId}
-          onChange={(e) => {
-            const family = e.target.value.trim();
-            onChange(family.length > 0 ? stackForPrimaryFont(family, tier) : defaultValue);
-          }}
-          placeholder="留空 = 默认字体"
-          value={primary}
-        />
         <Button
           aria-label={`${label}恢复默认`}
           className="shrink-0"
@@ -302,7 +342,10 @@ function FontRow({
       </div>
       <FontFileLoader
         onLoaded={(family) => {
-          onChange(stackForPrimaryFont(family, tier));
+          const firstEditable = fontGroupsOf(value, tier).find((group) => group.editable);
+          if (firstEditable) {
+            onChange(stackWithSlotFont(value, tier, firstEditable.slot, family));
+          }
         }}
         tier={tier}
       />
