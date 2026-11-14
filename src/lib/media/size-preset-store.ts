@@ -1,4 +1,13 @@
+"use client";
+
 /* ── 尺寸预设表的持久化与订阅 ──
+ *
+ * 首行标 `"use client"` 与 `project-canvas/sync-notice.ts` 同款：本模块只跑在
+ * 浏览器（读 `localStorage`、经 `/api/size-presets` 读写应用数据），保存失败的
+ * 诊断走 `console` —— 那是项目规定的客户端日志口（`LogProvider` 拦截后落进
+ * 应用日志面板，规范 07 §7.6），也让「日志实现只有一处」的门禁
+ * （`tests/single-logger-channel.test.ts`）能把这里的 console 与**服务端**
+ * 的直接 console 区分开（服务端直写会绕开脱敏与 ERROR 镜像）。
  *
  * 用户改过的「比例 × 分辨率」表按场景（图片 / 视频）落在本机应用数据
  * （`data/size-presets.json`，经 `/api/size-presets` 读写，ISSUE #3788），
