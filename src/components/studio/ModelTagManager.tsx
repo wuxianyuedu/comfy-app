@@ -5,6 +5,7 @@ import { textHandler } from "~/lib/form-props";
 import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
@@ -226,6 +227,21 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
             })}
           </div>
         </div>
+        {/* 删除确认走非阻塞弹窗（ISSUE #3771）：原生 window.confirm() 在内嵌
+            浏览器里未被处置会以 0 CPU 卡死同源渲染进程。 */}
+        <ConfirmDialog
+          confirmLabel="删除"
+          danger
+          description={
+            c.pendingDelete
+              ? `该标签「${c.pendingDelete.name}」已绑定 ${c.pendingDelete.count} 个工作流。\n删除后这些工作流将一并解除绑定，且不可撤销。`
+              : undefined
+          }
+          onClose={c.cancelDeleteTag}
+          onConfirm={c.confirmDeleteTag}
+          open={c.pendingDelete !== null}
+          title={c.pendingDelete === null ? "删除标签" : `删除标签「${c.pendingDelete.name}」`}
+        />
       </DialogContent>
     </Dialog>
   );
