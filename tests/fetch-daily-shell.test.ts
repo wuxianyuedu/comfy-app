@@ -101,13 +101,33 @@ describe("fetch-daily-shell 默认形态", () => {
     );
   });
 
-  it("令牌按显式 → 三个环境变量的顺序取", () => {
-    expect(resolveToken({}, "").from).toBe("");
-    expect(resolveToken({ CNB_TOKEN: "t" }, "").from).toBe("CNB_TOKEN");
-    expect(resolveToken({ CNB_RELEASE_TOKEN: "r", CNB_TOKEN: "t" }, "").from).toBe(
-      "CNB_RELEASE_TOKEN",
-    );
-    expect(resolveToken({ CNB_TOKEN: "t" }, "x").from).toBe("--token");
+  it("令牌按显式 → 三个环境变量 → 用户级令牌文件的顺序取", () => {
+    expect(resolveToken({}, "", { configPaths: [] }).from).toBe("");
+    expect(resolveToken({ CNB_TOKEN: "t" }, "", { configPaths: [] }).from).toBe("CNB_TOKEN");
+    expect(
+      resolveToken({ CNB_RELEASE_TOKEN: "r", CNB_TOKEN: "t" }, "", { configPaths: [] }).from,
+    ).toBe("CNB_RELEASE_TOKEN");
+    expect(resolveToken({ CNB_TOKEN: "t" }, "x", { configPaths: [] }).from).toBe("--token");
+
+    const files: Record<string, string> = { "/cfg/token": "  file-token\r\n" };
+    const fromFile = resolveToken({}, "", {
+      configPaths: ["/cfg/missing", "/cfg/token"],
+      readFileSync: (p) => {
+        const key = String(p);
+        if (!(key in files)) {
+          throw new Error("ENOENT");
+        }
+        return files[key]!;
+      },
+    });
+    expect(fromFile.token).toBe("file-token");
+    expect(fromFile.from).toBe(path.normalize("/cfg/token"));
+
+    const envWins = resolveToken({ CNB_ISSUE_TOKEN: "env-token" }, "", {
+      configPaths: ["/cfg/token"],
+      readFileSync: () => "file-token",
+    });
+    expect(envWins).toEqual({ token: "env-token", from: "CNB_ISSUE_TOKEN" });
   });
 });
 
@@ -132,19 +152,21 @@ describe("401 / 404 失败出口（ISSUE #3728）", () => {
     expect(fs.existsSync(path.join(dir, DEFAULT_OUT))).toBe(false);
   });
 
-  it("401 明确要求登录态与 repo-release:r，不再误报资产不存在", async () => {
+  it("401 明确要求登录态与 repo-release:r，并给出令牌文件配置引导", async () => {
     const dir = makeTmpDir();
     const result = await captureMain({
       argv: [],
       cwd: dir,
-      env: { NODE_ENV: "test" },
+      env: { NODE_ENV: "test", APPDATA: String.raw`C:\Users\u\AppData\Roaming` },
       fetchImpl: () => Promise.resolve(respond(401, '{"errcode":16,"errmsg":"not logged in"}')),
-      platform: "linux",
+      platform: "win32",
     });
     expect(result.code).toBe(1);
     expect(result.err).toContain("下载失败（HTTP 401）");
     expect(result.err).toContain("repo-release:r");
     expect(result.err).toContain("CNB_RELEASE_TOKEN");
+    expect(result.err).toContain("cnb-release-token");
+    expect(result.err).toContain("未检测到可用令牌");
     expect(result.err).not.toContain("该地址下没有");
   });
 });
