@@ -20,11 +20,13 @@ import {
   applyAppearance,
   fontStackForFamily,
   parseAppearance,
+  primaryFontOf,
   readAppearance,
   registerUserFont,
   restoreUserFonts,
   saveAppearance,
   serializeAppearance,
+  stackForPrimaryFont,
 } from "./appearance";
 
 /** 一个够用的假元素：只记录被设过的属性。 */
@@ -241,6 +243,33 @@ describe("fontStackForFamily", () => {
   it("纯 ASCII 无空格的 family 不加引号", () => {
     expect(fontStackForFamily("Inter", "interface")).toBe("Inter, sans-serif");
     expect(fontStackForFamily("JetBrainsMono", "terminal")).toBe("JetBrainsMono, monospace");
+  });
+});
+
+describe("primaryFontOf / stackForPrimaryFont（ISSUE #3784：每类只配一种字体）", () => {
+  it("默认栈 → 首项为空串（输入框留空 = 未自定义）", () => {
+    expect(primaryFontOf(DEFAULT_INTERFACE_FONT, "interface")).toBe("");
+    expect(primaryFontOf(DEFAULT_CODE_FONT, "code")).toBe("");
+    expect(primaryFontOf(DEFAULT_TERMINAL_FONT, "terminal")).toBe("");
+  });
+
+  it("自定义栈 → 首项就是用户配的那一种字体", () => {
+    expect(primaryFontOf("Inter, sans-serif", "interface")).toBe("Inter");
+    expect(primaryFontOf('"Sarasa UI SC", sans-serif', "interface")).toBe("Sarasa UI SC");
+  });
+
+  it("拼栈 = 用户字体在前，默认栈的其余回退原样跟在后面", () => {
+    expect(stackForPrimaryFont("Inter", "interface")).toBe(
+      'Inter, "Sarasa UI SC", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif',
+    );
+    expect(stackForPrimaryFont("JetBrains Mono", "terminal")).toBe(
+      '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", Consolas, "Sarasa Mono SC", monospace',
+    );
+  });
+
+  it("拼栈与回读互逆：stackForPrimaryFont 的产物回读出同一种字体", () => {
+    const stack = stackForPrimaryFont("IBM Plex Mono", "code");
+    expect(primaryFontOf(stack, "code")).toBe("IBM Plex Mono");
   });
 });
 

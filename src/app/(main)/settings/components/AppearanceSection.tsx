@@ -14,29 +14,25 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { FieldLabel } from "~/components/ui/field";
 import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
-import { Hint } from "~/components/ui/hint";
+import { Input } from "~/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import { Textarea } from "~/components/ui/textarea";
 import {
   DEFAULT_APPEARANCE,
   DEFAULT_CODE_FONT,
   DEFAULT_INTERFACE_FONT,
   DEFAULT_TERMINAL_FONT,
   FONT_SCALE_STEPS,
+  primaryFontOf,
   RADIUS_STEPS,
   readAppearance,
   registerUserFont,
   saveAppearance,
+  stackForPrimaryFont,
   type AppearancePrefs,
   type AppearanceStep,
   type FontTier,
 } from "~/lib/appearance";
-import {
-  describeFontPart,
-  fontCategoryForTier,
-  normalizeFontStack,
-  splitFontStack,
-} from "./appearance-font-helpers";
+import { normalizeFontStack } from "./appearance-font-helpers";
 
 import { SettingsCard } from "~/components/ui/settings-card";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
@@ -150,13 +146,12 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
         value={prefs.fontScale}
       />
 
-      {/* 字体三档是自由字符串（非预置档位）：用文本输入框，不进 radiogroup ——
-          既贴合「可填任意字体栈」的语义，也不破坏「恰好三个 radiogroup」的契约
-          （AppearanceSection.test.tsx 锚定 ["主题外观", "圆角", "标题字阶"]）。
-          每档各带「恢复默认」：把该档回落到 globals.css 的原值。 */}
+      {/* 字体三档按 #3784 的口径：**每档只配一种字体**（单行输入框），整条栈 =
+          这一种 + 固定回退尾（中文回退等不需要用户操心）。每档各带「恢复默认」：
+          把该档回落到 globals.css 的原值。 */}
       <FontRow
         defaultValue={DEFAULT_INTERFACE_FONT}
-        hint="自定义整个界面使用的字体（正文与界面文字）。按优先级从前到后尝试，前面的字体不可用时自动回退到后面的字体。"
+        hint="自定义整个界面使用的字体（正文与界面文字）。每类只配一种字体，留空用默认。"
         label="界面字体"
         onChange={(value) => {
           update({ interfaceFont: value });
@@ -169,7 +164,7 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
       />
       <FontRow
         defaultValue={DEFAULT_CODE_FONT}
-        hint="自定义代码块使用的字体。按优先级从前到后尝试，前面的字体不可用时自动回退到后面的字体。"
+        hint="自定义代码块使用的字体。每类只配一种字体，留空用默认。"
         label="代码字体"
         onChange={(value) => {
           update({ codeFont: value });
@@ -182,7 +177,7 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
       />
       <FontRow
         defaultValue={DEFAULT_TERMINAL_FONT}
-        hint="自定义终端使用的字体（等宽展示）。按优先级从前到后尝试，前面的字体不可用时自动回退到后面的字体。"
+        hint="自定义终端使用的字体（等宽展示）。每类只配一种字体，留空用默认。"
         label="终端字体"
         onChange={(value) => {
           update({ terminalFont: value });
@@ -269,14 +264,9 @@ function FontRow({
 }) {
   const inputId = `font-${label}`;
   const isDefault = normalizeFontStack(value) === normalizeFontStack(defaultValue);
-  const parts = splitFontStack(value);
-  const grouped = new Map<string, Array<string>>();
-  for (const part of parts) {
-    const category = fontCategoryForTier(part, tier);
-    const list = grouped.get(category);
-    if (list) list.push(part);
-    else grouped.set(category, [part]);
-  }
+  /* 输入框里只出现**一种字体**（ISSUE #3784）：整条栈由「这一种 + 固定回退尾」
+     组成，中文回退等不需要用户操心。 */
+  const primary = primaryFontOf(value, tier);
   return (
     <div className="mt-5">
       <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -284,51 +274,21 @@ function FontRow({
           {label}
         </FieldLabel>
         <Badge variant={isDefault ? "secondary" : "outline"}>
-          {isDefault ? "默认字体栈" : "自定义"}
+          {isDefault ? "默认字体" : "自定义字体"}
         </Badge>
         <span className="text-muted-foreground text-xs">{hint}</span>
       </div>
-      <div className="border-border bg-surface-row mb-2 flex flex-col gap-1.5 rounded-lg border p-3 text-xs">
-        <p className="text-ink font-medium">
-          {isDefault
-            ? "当前为默认字体栈（多种字体按优先级回退，不是单一字体）"
-            : "当前为自定义字体栈（可按分类查看并分别修改）"}
-        </p>
-        {parts.length === 0 ? (
-          <p className="text-muted-foreground">未设置字体，应用时回落到默认字体栈。</p>
-        ) : (
-          [...grouped.entries()].map(([category, items]) => (
-            <div className="flex flex-wrap items-start gap-1.5" key={category}>
-              <span className="text-muted-foreground min-w-24 shrink-0">{category}</span>
-              <div className="flex flex-wrap gap-1">
-                {items.map((item, i) => (
-                  <Hint key={`${category}-${item}-${i}`} label={item}>
-                    <span className="bg-surface-2 text-ink rounded px-1.5 py-0.5">
-                      {describeFontPart(item)}
-                    </span>
-                  </Hint>
-                ))}
-              </div>
-            </div>
-          ))
-        )}
-        <p className="text-muted-foreground">
-          {isDefault
-            ? "默认值按类别分组显示；可在下方编辑完整字体栈。"
-            : "用英文逗号分隔字体项，越靠前优先级越高。"}
-        </p>
-      </div>
       <div className="flex flex-col gap-2 md:flex-row md:items-start">
-        <Textarea
+        <Input
           aria-label={label}
-          className="min-h-[96px] max-w-2xl font-mono text-xs"
+          className="min-w-0 flex-1"
           id={inputId}
           onChange={(e) => {
-            onChange(e.target.value);
+            const family = e.target.value.trim();
+            onChange(family.length > 0 ? stackForPrimaryFont(family, tier) : defaultValue);
           }}
-          placeholder='例如 Inter, "PingFang SC", system-ui, sans-serif'
-          rows={4}
-          value={value}
+          placeholder="留空 = 默认字体"
+          value={primary}
         />
         <Button
           aria-label={`${label}恢复默认`}
@@ -340,12 +300,23 @@ function FontRow({
           恢复默认
         </Button>
       </div>
-      <FontFileLoader onChange={onChange} tier={tier} />
+      <FontFileLoader
+        onLoaded={(family) => {
+          onChange(stackForPrimaryFont(family, tier));
+        }}
+        tier={tier}
+      />
     </div>
   );
 }
 
-function FontFileLoader({ onChange, tier }: { onChange: (value: string) => void; tier: FontTier }) {
+function FontFileLoader({
+  onLoaded,
+  tier,
+}: {
+  onLoaded: (family: string) => void;
+  tier: FontTier;
+}) {
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -353,7 +324,7 @@ function FontFileLoader({ onChange, tier }: { onChange: (value: string) => void;
     setError(null);
     setBusy(true);
     try {
-      onChange((await registerUserFont(file, tier)).stack);
+      onLoaded((await registerUserFont(file, tier)).family);
     } catch {
       setError("字体文件无法加载，请换一个 .ttf / .otf / .woff / .woff2 文件。");
     } finally {
