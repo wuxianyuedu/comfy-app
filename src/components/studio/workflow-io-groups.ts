@@ -79,8 +79,8 @@ export type InferredGroup = DimensionGroup | VideoGroup;
  * 尺寸对外只表达两类等价形式，可互算（`lib/size-presets` 的 `toMegapixelSpec`）：比例 + 分辨率（1k/2k/4k，
  * 按**场景**查表：图片 = AI 出图口径，视频 = 显示器 / 视频行业标准）；比例 + 百万像素 + 倍数（1M/2M/4M ×
  * 对齐倍数 8/16/32/64）。`DIM_CLARITY_PRESETS` 是**档位目录**（不含具体像素），`kind` 区分子类，具体宽高由
- * `dimsForRatio` 按场景现查；表允许用户在设置页「尺寸配置表」里改（`setting.sizePresetGet` /
- * `sizePresetSave`，本机覆盖落 `data/size-presets.json`）。 */
+ * `dimsForRatio` 按场景现查；表允许用户在设置页「尺寸配置表」里改（读写经
+ * `/api/size-presets`，本机覆盖落 `data/size-presets.json`）。 */
 
 /** 比例预设（与 `SIZE_RATIO_PRESETS` 同源；保留旧名以免全库改 import）。
  *

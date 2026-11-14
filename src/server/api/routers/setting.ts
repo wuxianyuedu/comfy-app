@@ -36,7 +36,6 @@ import {
 import { openUrlInBrowser } from "~/lib/shell/open-in-browser";
 import { isHttpUrl } from "~/lib/url-scheme";
 import { revealPathInFileManager } from "~/lib/shell/reveal-path";
-import { loadSizePresetTable, saveSizePresetTable } from "~/lib/media/size-preset.server";
 import { CPU_LIMIT_MODES } from "~/lib/comfyui/cpu-limit";
 
 /** `save` 入参里**影响运行态判据**的那几项：路径 / 端口 / 启动参数 / 解释器。
@@ -290,22 +289,6 @@ export const settingRouter = createTRPCRouter({
     .mutation(({ input }) => {
       return importBackupFromDirectory(process.cwd(), input.dir);
     }),
-
-  /* ── 尺寸配置表（ISSUE #3788）：比例 × 分辨率（图片 / 视频两场景）。
-   *  本机覆盖落 `data/size-presets.json`（应用数据），项目默认编译在
-   *  `src/lib/media/size-presets.ts`（跟代码走的那份基线）；读取侧逐格合并。
-   *  生成侧（画布 / 表单）经 `/api/size-presets` 同读同写，与这里共享一份。 */
-
-  /** 生效的尺寸配置表（项目默认 + 本机覆盖，逐格合并）。 */
-  sizePresetGet: authedProcedure.query(async () => {
-    return loadSizePresetTable(process.cwd());
-  }),
-
-  /** 保存整份尺寸配置表：任意形状先逐格校验合并再落盘（坏值回退默认）。
-   *  返回落盘（合并后）的那份表，界面据此刷新。 */
-  sizePresetSave: authedProcedure.input(z.unknown()).mutation(({ input }) => {
-    return saveSizePresetTable(input, process.cwd());
-  }),
 });
 
 /**
