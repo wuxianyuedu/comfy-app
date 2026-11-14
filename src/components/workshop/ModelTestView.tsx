@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 // ── 「测试模型能力」**视图**（规范 §17.2 第③层：只渲染 + 上抛）─────────────
 // 用工坊同款通道直接试已配置的远端模型（#3590）：左栏「用途 → 所有模式」
@@ -16,6 +16,7 @@ import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { FilePickerButton } from "~/components/ui/file-picker";
 import { FormField } from "~/components/ui/form-field";
 import { Input } from "~/components/ui/input";
+import { useInterval } from "~/components/ui/use-interval";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ViewableImage } from "~/components/ui/image-viewer";
 import { PageHeader } from "~/components/ui/page-header";
@@ -23,6 +24,7 @@ import { SectionLabel } from "~/components/ui/section-label";
 import { SelectChip } from "~/components/ui/select-chip";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
+import { fixed } from "~/lib/number-format";
 import { sceneFromMode } from "~/lib/media/size-presets";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
 import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
@@ -163,15 +165,14 @@ function SizeField({
  *  生成结束后组件随行消失（行徽标换回「已发送」）。 */
 function GeneratingElapsed({ since }: { since: number }) {
   const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => {
+  /* 走秒走 useInterval（P12：视图里不自写 setInterval）。 */
+  useInterval(
+    () => {
       setNow(Date.now());
-    }, 500);
-    return () => {
-      clearInterval(timer);
-    };
-  }, []);
-  return <>进行中 {((now - since) / 1000).toFixed(1)}s</>;
+    },
+    { ms: 500 },
+  );
+  return <>进行中 {fixed((now - since) / 1000, 1)}s</>;
 }
 
 /** 响应摘要的格式化显示（ISSUE #3799）：结构化摘要默认 JSON 缩进；
