@@ -78,6 +78,7 @@ export function SettingsPageView({
         appearance: <DataLocationBadge id="appearance" />,
         comfyui: <DataLocationBadge id="app-settings" />,
         llmLocal: <DataLocationBadge id="llm-config" />,
+        llmRemote: <DataLocationBadge id="remote-model" />,
         logs: <DataLocationBadge id="log-categories" />,
         sidebar: (
           <span className="flex items-center gap-1.5">
