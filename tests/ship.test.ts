@@ -109,6 +109,7 @@ import {
 } from "../scripts/ship-ticket.mjs";
 import {
   claimComment,
+  misclaimReleaseComment,
   decideClaim,
   decideRelease,
   finishIssueWork,
@@ -147,6 +148,7 @@ import { runPreflightStage } from "../scripts/ship-preflight.mjs";
 import { DIAGNOSE_STALL_MINUTES, runDiagnose, stallReadout } from "../scripts/ship-diagnose.mjs";
 import { main } from "../scripts/ship.mjs";
 import { readShipResult } from "../scripts/ship-result.mjs";
+import { parseStatusTarget, runStatus, statusExitCode } from "../scripts/ship-status.mjs";
 import { EMPTY_COMMIT_ENV } from "../scripts/intentional-empty-commit.mjs";
 
 /** 真机取到的一份 `cnb build get-build-status -v` 的形状（信封 + data 各有一个 status）。 */
@@ -2891,6 +2893,104 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
     }
   });
 
+  it("--release --misclaim：评论用误领文案，处理人与参与人两枚都撤（#3809）", () => {
+    const f = issueIo({ labels: [`处理人:${handle}`, `参与人:${handle}`] });
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--release", "2187", "--misclaim"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.GREEN);
+      expect(f.comments()[0]).toContain("误领释放");
+      expect(f.comments()[0]).not.toContain("开发结束");
+      expect(f.labels()).not.toContain(`处理人:${handle}`);
+      expect(f.labels()).not.toContain(`参与人:${handle}`);
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--release --misclaim：幂等 —— 误领释放在场就不再发评论，直接补撤标签", () => {
+    const f = issueIo({
+      labels: [`处理人:${handle}`, `参与人:${handle}`],
+      comments: [misclaimReleaseComment(handle)],
+    });
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--release", "2187", "--misclaim"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.GREEN);
+      expect(f.calls.some((c) => c.includes("post-issue-comment"))).toBe(false);
+      expect(f.labels()).not.toContain(`处理人:${handle}`);
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--misclaim：单独出现 ⇒ 2（只跟 --release 同用，不当独立旗标）", () => {
+    const f = issueIo();
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--misclaim"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.NOT_RUN);
+      expect(f.log.join("\n")).toContain("只跟 --release");
+      expect(f.calls.some((c) => c.includes("issues"))).toBe(false);
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--claim：先念「领取对象」读数（标题 / 状态 / 现有处理人）再动手（#3809）", () => {
+    const f = issueIo({ labels: ["处理人:someone-else"] });
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--claim", "2187"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.RED);
+      const text = f.log.join("\n");
+      const at = text.indexOf("领取对象");
+      expect(at).toBeGreaterThan(-1);
+      expect(text.slice(at)).toContain("领一张单试试");
+      expect(text.slice(at)).toContain("someone-else");
+      /* 读数在判决之前：先看到要领的是哪张，再看到「不领取」。 */
+      expect(text.indexOf("已在 处理人")).toBeGreaterThan(at);
+    } finally {
+      s.cleanup();
+    }
+  });
+
   it("--claims：按 `处理人:` 标签列 open 的单子；空列表念「没有」", () => {
     const rows = [
       { number: 2187, priority: "P1", title: "领一张单试试" },
@@ -4998,6 +5098,11 @@ describe("readPullVerdict：字段缺省时不抛，缺键走 unknown 三态（I
       /* 标题与 diffstat 的区间基线（ISSUE #3021）：`base.ref` 缺键给空串 ——
        * 调用方按「目标分支取不到」退回 upstream，不猜成主干。 */
       baseBranch: "",
+      /* 源分支头的 sha（ISSUE #3811，--status 按 sha 归属 build 用）：缺键同样
+       * 给空串 —— 调用方按「归属不了」处理，不猜 HEAD。 */
+      headSha: "",
+      /* 源分支名（--status 清单截断时按它核对落盘读数那条 PR）：缺键给空串。 */
+      headBranch: "",
     });
     expect(
       readPullVerdict({
@@ -10344,5 +10449,477 @@ describe("ISSUE #3206：main() 的落盘回读点挂载", () => {
     const before = JSON.stringify(readShipResult(process.cwd()));
     await main({ ...minimal, args: ["--merg"] });
     expect(JSON.stringify(readShipResult(process.cwd()))).toBe(before);
+  });
+});
+
+/* ── `pnpm ship --status`：每一格状态的只读统一查询口（ISSUE #3811）──────────
+ * 判定本体全部复用既有执行者（classifyBuildOutcome / readPullVerdict / issues get），
+ * 这一组用例钉三件事：退码映射只有一份、命令行形状只有一份、读面一次也不写平台。 */
+describe("ship --status：目标解析与退码映射（ISSUE #3811）", () => {
+  it("parseStatusTarget：#号 / 裸号 / 分支名 / 空值，refs/heads 前缀剥掉", () => {
+    expect(parseStatusTarget("#3804")).toEqual({ kind: "pr", number: 3804 });
+    expect(parseStatusTarget("3804")).toEqual({ kind: "pr", number: 3804 });
+    expect(parseStatusTarget("feat/x")).toEqual({ kind: "branch", name: "feat/x" });
+    expect(parseStatusTarget("refs/heads/feat/x")).toEqual({ kind: "branch", name: "feat/x" });
+    expect(parseStatusTarget("")).toBeNull();
+    expect(parseStatusTarget(null)).toBeNull();
+  });
+
+  it("statusExitCode：退码映射只有一份（绿/红/合并/缺键/冲突/无终态/没提过PR）", () => {
+    const base = {
+      pullFound: true,
+      windowComplete: true,
+      isMergedTri: "not_merged" as const,
+      mergeable: "mergeable" as const,
+      ciState: "green" as const,
+    };
+    expect(statusExitCode(base)).toBe(CODE.GREEN);
+    expect(statusExitCode({ ...base, isMergedTri: "merged" as const })).toBe(CODE.GREEN);
+    expect(statusExitCode({ ...base, ciState: "red" as const })).toBe(CODE.RED);
+    expect(statusExitCode({ ...base, mergeable: "conflict" as const })).toBe(CODE.CONFLICT);
+    expect(statusExitCode({ ...base, isMergedTri: "unknown" as const })).toBe(CODE.NOT_RUN);
+    expect(statusExitCode({ ...base, ciState: "running" as const })).toBe(CODE.CI_PENDING);
+    expect(statusExitCode({ ...base, ciState: "cancelled" as const })).toBe(CODE.CI_PENDING);
+    expect(statusExitCode({ ...base, ciState: "no-build" as const })).toBe(CODE.CI_PENDING);
+    expect(statusExitCode({ ...base, ciState: "not-read" as const })).toBe(CODE.NOT_RUN);
+    /* 分支没提过 PR：窗口取满是正面事实（退 1 提醒），扫到上界是没取到（退 2）。 */
+    expect(
+      statusExitCode({ ...base, pullFound: false, windowComplete: true, ciState: "not-read" }),
+    ).toBe(CODE.RED);
+    expect(
+      statusExitCode({ ...base, pullFound: false, windowComplete: false, ciState: "not-read" }),
+    ).toBe(CODE.NOT_RUN);
+  });
+});
+
+describe("ship --status：只读状态口整链（ISSUE #3811，假执行者）", () => {
+  const MERGED_PULL = {
+    status: 200,
+    data: {
+      number: 3804,
+      state: "closed",
+      is_merged: true,
+      mergeable_state: "merged",
+      title: "fix(x): 子页签加载收窄（#3800） (#3804)",
+      head: { ref: "refs/heads/fix/3800", sha: "752272cbb734acc83702016e94ce272a9279681c" },
+      base: { ref: "refs/heads/master" },
+    },
+  };
+  const OPEN_PULL = {
+    status: 200,
+    data: {
+      number: 3810,
+      state: "open",
+      is_merged: false,
+      mergeable_state: "mergeable",
+      title: "feat(y): 下一件（#3811）",
+      head: { ref: "refs/heads/feat/3811", sha: "d02ec96364d5f3713b77c91b0d3fe789878f1747" },
+      base: { ref: "refs/heads/master" },
+    },
+  };
+  const GREEN_STATUS = {
+    status: 200,
+    data: {
+      status: "success",
+      pipelinesStatus: {
+        "p-001": {
+          id: "p-001",
+          name: "质量门禁",
+          status: "success",
+          stages: [{ status: "success", name: "GA 回调结论回读", id: "stage-0" }],
+        },
+      },
+    },
+  };
+  const FAILED_STATUS = {
+    status: 200,
+    data: {
+      status: "error",
+      pipelinesStatus: {
+        "p-001": {
+          id: "p-001",
+          name: "质量门禁",
+          status: "error",
+          stages: [
+            { status: "success", name: "安装依赖", id: "stage-0" },
+            { status: "error", name: "受影响用例", id: "stage-1" },
+          ],
+        },
+      },
+    },
+  };
+  const RUNNING_STATUS = {
+    status: 200,
+    data: {
+      status: "pending",
+      pipelinesStatus: {
+        "p-001": {
+          id: "p-001",
+          name: "质量门禁",
+          status: "running",
+          stages: [
+            { status: "success", name: "安装依赖", id: "stage-0" },
+            {
+              status: "running",
+              name: "受影响用例",
+              id: "stage-1",
+              startTime: "2026-11-14T10:00:00Z",
+            },
+          ],
+        },
+      },
+    },
+  };
+  const ISSUE_CLOSED = {
+    status: 200,
+    data: { number: 3800, state: "closed", state_reason: "completed" },
+  };
+  const ISSUE_OPEN = {
+    status: 200,
+    data: { number: 3811, state: "open", state_reason: "open" },
+  };
+
+  /** 假执行者：与 --diagnose 那组同一形状（读数按命令 + 参数分发）。 */
+  function statusIo(opts: {
+    branch?: string;
+    builds?: Array<unknown>;
+    buildStatus?: unknown;
+    issues?: Record<string, unknown>;
+    openOrAllPulls?: Array<unknown>;
+    pull?: unknown;
+    stageDetail?: unknown;
+  }) {
+    const calls: Array<string> = [];
+    const log: Array<string> = [];
+    const ok = (stdout: string): FakeResult => ({ status: 0, stdout, stderr: "", error: null });
+    const run = (cmd: string, args: Array<string>): FakeResult => {
+      calls.push([cmd, ...args].join(" "));
+      const key = args.join(" ");
+      if (cmd === "cnb" && args[0] === "--version") {
+        return ok("1.15.25");
+      }
+      if (cmd === "git" && key.includes("@{u}")) {
+        return ok("");
+      }
+      if (cmd === "git" && key === "remote") {
+        return ok("origin\n");
+      }
+      if (cmd === "git" && key.includes("symbolic-ref")) {
+        return ok("refs/remotes/origin/master");
+      }
+      if (cmd === "git" && key.includes("--abbrev-ref")) {
+        return ok(opts.branch ?? "feat/3811");
+      }
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) {
+        return ok("d02ec9");
+      }
+      if (cmd === "git" && key.includes("get-url")) {
+        return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
+      }
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "get-pull") {
+        return ok(opts.pull ? JSON.stringify(opts.pull) : "");
+      }
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "list-pulls") {
+        const list = opts.openOrAllPulls ?? [];
+        return ok(JSON.stringify({ status: 200, data: list }));
+      }
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-logs") {
+        return ok(JSON.stringify({ status: 200, data: opts.builds ?? [] }));
+      }
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-status") {
+        return ok(JSON.stringify(opts.buildStatus ?? null));
+      }
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-stage") {
+        return ok(JSON.stringify(opts.stageDetail ?? {}));
+      }
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "get-issue") {
+        const num = String(args[args.indexOf("--number") + 1] ?? "");
+        return ok(JSON.stringify(opts.issues?.[num] ?? { status: 200, data: { state: "open" } }));
+      }
+      return ok("");
+    };
+    return { run, calls, log };
+  }
+
+  /* root 注入到临时目录：`.git/ship-result.json` 是**这台检出**的事实源（#3206），
+   * 不注入的话真实 ship 跑的落盘读数会泄进用例 —— 恰好是 ship-result.mjs 文件头
+   * 点名要防的那件事。 */
+  const runMain = (f: ReturnType<typeof statusIo>, args: Array<string>) =>
+    main({
+      args,
+      run: f.run,
+      log: (l: string) => f.log.push(l),
+      root: mkdtempSync(path.join(os.tmpdir(), "ship-status-test-")),
+    });
+
+  it("已合并 PR（点名号）⇒ 0：PR / CI / 关单 / 上一次跑四格一行不缺，一次也不写平台", async () => {
+    const f = statusIo({
+      pull: MERGED_PULL,
+      builds: [
+        {
+          sn: "cnb-m1",
+          sha: "752272cbb734acc83702016e94ce272a9279681c",
+          event: "pull_request",
+          createTime: "2026-11-14T09:00:00Z",
+        },
+      ],
+      buildStatus: GREEN_STATUS,
+      issues: { "3800": ISSUE_CLOSED },
+    });
+    const code = await runMain(f, ["--status", "3804"]);
+    const text = f.log.join("\n");
+    expect(code).toBe(CODE.GREEN);
+    expect(text).toContain("目标：PR #3804（来源：点名）");
+    expect(text).toContain("is_merged=true");
+    expect(text).toContain("CI：绿");
+    expect(text).toContain("GA 回读");
+    expect(text).toContain("关单：#3800 · state=closed");
+    expect(text).toContain("本地上一次跑：没有落盘读数");
+    /* 只读：一条写动作都没发。 */
+    for (const write of ["post-", "merge-pull", "update-issue", "delete-", "create-issue"]) {
+      expect(
+        f.calls.some((c) => c.includes(write)),
+        `发了写动作：${write}`,
+      ).toBe(false);
+    }
+  });
+
+  it("开放 PR + CI 红 ⇒ 1：指向 --diagnose，不在这里抄逐格读数", async () => {
+    const f = statusIo({
+      pull: OPEN_PULL,
+      builds: [
+        {
+          sn: "cnb-r1",
+          sha: "d02ec96364d5f3713b77c91b0d3fe789878f1747",
+          event: "pull_request",
+          createTime: "2026-11-14T10:00:00Z",
+        },
+      ],
+      buildStatus: FAILED_STATUS,
+      stageDetail: { status: 200, data: { error: "", content: [" × 真失败行"] } },
+      issues: { "3811": ISSUE_OPEN },
+    });
+    const code = await runMain(f, ["--status", "3810"]);
+    const text = f.log.join("\n");
+    expect(code).toBe(CODE.RED);
+    expect(text).toContain("CI：红");
+    expect(text).toContain("pnpm ship --diagnose cnb-r1");
+    expect(text).toContain("关单：#3811 · state=open");
+    expect(text).toContain("未关");
+  });
+
+  it("开放 PR + CI 绿 ⇒ 0：下一动作是 --merge（合并要人点名）", async () => {
+    const f = statusIo({
+      pull: OPEN_PULL,
+      builds: [
+        {
+          sn: "cnb-g1",
+          sha: "d02ec96364d5f3713b77c91b0d3fe789878f1747",
+          event: "pull_request",
+          createTime: "2026-11-14T10:00:00Z",
+        },
+      ],
+      buildStatus: GREEN_STATUS,
+    });
+    const code = await runMain(f, ["--status", "3810"]);
+    const text = f.log.join("\n");
+    expect(code).toBe(CODE.GREEN);
+    expect(text).toContain("CI：绿");
+    expect(text).toContain("pnpm ship --merge");
+  });
+
+  it("CI 在跑 ⇒ 4（无终态），不给绿也不给红", async () => {
+    const f = statusIo({
+      pull: OPEN_PULL,
+      builds: [
+        {
+          sn: "cnb-p1",
+          sha: "d02ec96364d5f3713b77c91b0d3fe789878f1747",
+          event: "pull_request",
+          createTime: "2026-11-14T10:00:00Z",
+        },
+      ],
+      buildStatus: RUNNING_STATUS,
+    });
+    const code = await runMain(f, ["--status", "3810"]);
+    expect(code).toBe(CODE.CI_PENDING);
+    expect(f.log.join("\n")).toContain("CI：在跑");
+  });
+
+  it("分支名目标：清单窗口取满且没命中 ⇒ 1（没提过 PR，与 --branches 同判）", async () => {
+    const f = statusIo({ branch: "feat/none", openOrAllPulls: [] });
+    const code = await runMain(f, ["--status", "feat/none"]);
+    const text = f.log.join("\n");
+    expect(code).toBe(CODE.RED);
+    expect(text).toContain("没提过 PR");
+    expect(text).toContain("pnpm ship");
+  });
+
+  it("点名号取不到 ⇒ 2（没有结论），不冒充「没提过 PR」", async () => {
+    const f = statusIo({ pull: null });
+    const code = await runMain(f, ["--status", "9999"]);
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(f.log.join("\n")).toContain("取不到");
+  });
+
+  it("冲突 PR ⇒ 3：当场念解冲突出口，不去问 build", async () => {
+    const conflicted = {
+      status: 200,
+      data: { ...OPEN_PULL.data, mergeable_state: "conflict", blocked_on: "code_conflict" },
+    };
+    const f = statusIo({ pull: conflicted });
+    const code = await runMain(f, ["--status", "3810"]);
+    const text = f.log.join("\n");
+    expect(code).toBe(CODE.CONFLICT);
+    expect(text).toContain("冲突");
+    expect(text).toContain("git merge");
+    expect(f.calls.some((c) => c.includes("get-build-logs"))).toBe(false);
+  });
+
+  it("缺省目标 = 当前分支；在主干上回落「上一次跑的 PR」（来源念出来）", async () => {
+    const f1 = statusIo({
+      pull: OPEN_PULL,
+      branch: "feat/3811",
+      openOrAllPulls: [OPEN_PULL.data],
+      builds: [],
+    });
+    const code1 = await runMain(f1, ["--status"]);
+    expect(code1).toBe(CODE.CI_PENDING);
+    expect(f1.log.join("\n")).toContain("目标：分支 feat/3811（来源：当前分支）");
+
+    /* 主干上没有工作分支的 PR：读落盘那份「上一次跑」（注入，不碰真 .git）。
+     * main() 没有这格的注入口 ⇒ 直接打 runStatus（装配层同一份 io 注入）。 */
+    const f2 = statusIo({ pull: MERGED_PULL, branch: "master", builds: [] });
+    const code2 = runStatus({
+      run: f2.run,
+      log: (l: string) => f2.log.push(l),
+      slug: "moon-read/comfy-app-t3",
+      cnbOk: true,
+      target: null,
+      dryRun: false,
+      localBranch: "master",
+      trunkBranch: "master",
+      root: "/tmp/does-not-matter",
+      /* currentArgv 与夹具记录的 argv 不同 ⇒ 那份记录不会被当成「这一跑自己」跳过。 */
+      currentArgv: ["--status"],
+      readLastRun: () => ({
+        found: true,
+        path: "/tmp/ship-result.json",
+        reason: "ok",
+        result: {
+          version: 1,
+          status: "green",
+          startedAt: "2026-11-14T08:40:00.000Z",
+          finishedAt: null,
+          interruptedBy: null,
+          pid: 1,
+          cwd: "/tmp",
+          argv: ["ship", "--merge"],
+          branch: "master",
+          headSha: null,
+          repo: "moon-read/comfy-app-t3",
+          pr: 3804,
+          stages: [],
+          lines: [],
+          lineCount: 0,
+          truncated: false,
+          exitCode: 0,
+          conclusion: "[ship] 结论：exit 0 —— 全绿到终态",
+        },
+      }),
+    });
+    expect(code2).toBe(CODE.GREEN);
+    expect(f2.log.join("\n")).toContain("来源：上一次跑的落盘读数");
+    expect(f2.log.join("\n")).toContain("目标：PR #3804");
+    expect(f2.log.join("\n")).toContain("exit 0 —— 全绿到终态");
+  });
+
+  it("--dry-run：只打印计划，一条 cnb 都不发", async () => {
+    const f = statusIo({});
+    const code = await runMain(f, ["--status=3810", "--dry-run"]);
+    expect(code).toBe(CODE.GREEN);
+    expect(f.log.join("\n")).toContain("--dry-run 计划");
+    expect(f.calls.some((c) => c.startsWith("cnb pulls"))).toBe(false);
+  });
+
+  it("与显式动作同行 ⇒ 2（一次只做一件，读数不许被读成动作）", async () => {
+    const f = statusIo({ pull: MERGED_PULL });
+    const code = await runMain(f, ["--status", "--merge"]);
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(f.log.join("\n")).toContain("只读、一次只做一件");
+    expect(f.calls.some((c) => c.includes("get-pull"))).toBe(false);
+  });
+});
+
+describe("ship --status：本地上一次跑那格的自指面（#3206 write-ahead）", () => {
+  it("落盘记录是这一跑自己（argv 对齐）⇒ 跳过并明说，不冒充「上一次跑」", () => {
+    /* 自带最小假执行者（statusIo 在上面的 describe 作用域里，够不着）：
+       本用例只需要「已合并 PR + 无 build」走到「本地上一次跑」那一格。 */
+    const log: Array<string> = [];
+    const ok = (stdout: string): FakeResult => ({ status: 0, stdout, stderr: "", error: null });
+    const run = (cmd: string, args: Array<string>): FakeResult => {
+      const key = args.join(" ");
+      if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
+      if (cmd === "git") {
+        return ok(key.includes("get-url") ? "https://cnb.cool/moon-read/comfy-app-t3\n" : "master");
+      }
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "get-pull")
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: {
+              number: 3804,
+              state: "closed",
+              is_merged: true,
+              mergeable_state: "merged",
+              title: "fix(x): …（#3800） (#3804)",
+              head: { ref: "refs/heads/fix/3800", sha: "752272cbb734acc83702016e94ce272a9279681c" },
+              base: { ref: "refs/heads/master" },
+            },
+          }),
+        );
+      return ok("");
+    };
+    const code = runStatus({
+      run,
+      log: (l: string) => log.push(l),
+      slug: "moon-read/comfy-app-t3",
+      cnbOk: true,
+      target: null,
+      dryRun: false,
+      localBranch: "master",
+      trunkBranch: "master",
+      root: "/tmp/does-not-matter",
+      /* currentArgv 与夹具记录的 argv 逐字相同 ⇒ 那份记录是本跑自己的（sink
+         write-ahead），念它会把「正在跑」冒充成「上一次跑」。 */
+      currentArgv: ["--status"],
+      readLastRun: () => ({
+        found: true,
+        path: "/tmp/ship-result.json",
+        reason: "ok",
+        result: {
+          version: 1,
+          status: "running",
+          startedAt: "2026-11-14T08:40:00.000Z",
+          finishedAt: null,
+          interruptedBy: null,
+          pid: 1,
+          cwd: "/tmp",
+          argv: ["--status"],
+          branch: "master",
+          headSha: null,
+          repo: "moon-read/comfy-app-t3",
+          pr: 3804,
+          stages: [],
+          lines: [],
+          lineCount: 0,
+          truncated: false,
+          exitCode: null,
+          conclusion: null,
+        },
+      }),
+    });
+    expect(code).toBe(CODE.GREEN);
+    expect(log.join("\n")).toContain("就是这一次 --status 自己的");
   });
 });

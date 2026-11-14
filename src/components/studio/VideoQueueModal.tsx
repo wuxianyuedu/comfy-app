@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { X } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Hint } from "~/components/ui/hint";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
@@ -180,9 +181,9 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
                             {task.prompt || "（无提示词）"}
                           </p>
                         </Hint>
-                        <p className="text-ink-fainter text-3xs mt-0.5 truncate font-mono">
+                        <TruncatedText className="text-ink-fainter text-3xs mt-0.5 truncate font-mono">
                           {task.workflowName}
-                        </p>
+                        </TruncatedText>
                         {task.status === "FAILED" && task.error !== null && task.error !== "" && (
                           <Hint label={task.error}>
                             <p className="text-destructive text-3xs mt-0.5 truncate">

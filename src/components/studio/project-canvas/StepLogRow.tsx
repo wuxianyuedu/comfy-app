@@ -7,7 +7,9 @@
  */
 
 import { memo } from "react";
+
 import { formatClock } from "~/lib/time-format";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import type { StepLogEntry } from "./stepLogCache";
 
 type Level = StepLogEntry["level"];
@@ -72,9 +74,9 @@ export const StepLogRow = memo(function StepLogRow({ log }: { log: StepLogEntry 
         {log.msg}
       </span>
       {log.src !== undefined && log.src !== "" && (
-        <span className="text-ink-fainter hover:text-ink-soft text-2xs max-w-50 shrink-0 truncate">
+        <TruncatedText className="text-ink-fainter hover:text-ink-soft text-2xs max-w-50 shrink-0 truncate">
           {log.src}
-        </span>
+        </TruncatedText>
       )}
     </div>
   );

@@ -4,6 +4,7 @@
 // 纯展示 + 一个跳转入口（「在资源库中打开」广播 `workspace:navigate`）。
 
 import { Button } from "~/components/ui/button";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { emitAppEvent } from "~/lib/app-events";
 import { cn } from "~/lib/utils";
 import { Icon } from "~/components/ui/icon";
@@ -193,7 +194,9 @@ export function WorkshopAside({
               <span className="bg-elevated grid size-8 place-items-center rounded-lg">
                 <Icon className="text-muted-foreground" name="file" size={14} />
               </span>
-              <span className="text-ink flex-1 truncate text-[12.5px]">{name}</span>
+              <TruncatedText className="text-ink flex-1 truncate text-[12.5px]">
+                {name}
+              </TruncatedText>
               <span className="text-faint bg-subtle text-2xs rounded-md px-2 py-1">{tag}</span>
             </div>
           ))}

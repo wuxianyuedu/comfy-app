@@ -3,8 +3,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import type { SidebarTabConfig } from "~/lib/shell/sidebar-tab-behavior";
+
 import {
-  configurableSidebarItems,
+  configurableTabViews,
   defaultSidebarTabConfig,
   globalNavItems,
   isProjectTab,
@@ -28,8 +30,9 @@ const GLOBAL_IDS: Array<WorkspaceView> = [
      workflows 之前：尾部那一组（workflows + console）是「工作流库」链路的收尾，
      设置不属于那条链路，不该挤进去。 */
   "settings",
-  /* UI 控件总览（#3726）：开发者的基元对照页，紧跟设置（同族：全局工具屏、
-     transient、不进侧栏），同样在「工作流库」链路那组之前。 */
+  /* UI 控件总览（#3726 / #3798）：开发者的基元对照页，紧跟设置（同族：全局工具屏、
+     不进侧栏），同样在「工作流库」链路那组之前。切走关不关由配置面决定，
+     出厂默认「独立标签页」，与设置的「共享标签页」不同。 */
   "uiKit",
   "workflows",
   /* 这两个此前不在本清单里 —— 它们是「全局浮层入口」（`OVERLAY_NAV_ITEMS`），
@@ -136,16 +139,15 @@ describe("模型适配 / 模式契约：已经是全局视图（此前是浮层�
   });
 });
 
-describe("瞬时页签与侧栏隐藏（ISSUE #1784）", () => {
-  /* 这两张清单是**产品判断**的落点，不是实现细节：改一个视图就换一种行为，
-     而界面上不会有任何东西提示"这一页的规则变了"。所以逐项钉死 ——
-     以后想把画布也改成瞬时、或想把设置放回侧栏，必须先来改这里并说明理由。
-     ⚠️ 自 ISSUE #3623 起，侧栏那几项的「瞬时与否」**可配置**了（配置面是
-     `~/lib/shell/sidebar-tab-behavior` 那份 JSON）：这份清单因此断言的是
-     **项目默认**那份配置下的行为 —— 出厂即如此，用户改了是他自己的选择。 */
+describe("瞬时页签与配置面（ISSUE #1784 / #3623 / #3798）", () => {
+  /* 这份清单是**产品判断**的落点，不是实现细节：改一个视图就换一种行为，
+     而界面上不会有任何东西提示「这一页的规则变了」。所以逐项钉死 ——
+     以后想把某屏改成切走即关，必须先来改这里并说明理由。
+     ⚠️ 它断言的是**项目默认**那份配置下的行为（出厂即如此，用户改了是他自己的选择）。
+     ISSUE #3798：UI 控件总览从「切走即关」改成「切走不关」，且非侧栏界面
+     （设置 / 控件总览）也进配置面 —— 判据只有配置，注册表不再写死标记。 */
   const TRANSIENT_IDS: Array<WorkspaceView> = [
     "settings",
-    "uiKit",
     "model-adapters",
     "model-test",
     "mode-contract",
@@ -163,22 +165,48 @@ describe("瞬时页签与侧栏隐藏（ISSUE #1784）", () => {
       "workshop",
       "models",
       "console",
+      /* #3798 的核心验收：对照基元时要来回切别处看效果，切走不能关。 */
+      "uiKit",
     ];
     for (const id of nonTransientIds) {
       expect(isTransientView(id, config)).toBe(false);
     }
   });
 
-  it("注册表里带瞬时标记的只有「设置」与「UI 控件总览」—— 侧栏那几项归配置面管（ISSUE #3623）", () => {
-    /* 两处出处不许并存：侧栏项的瞬时与否由 JSON 决定，注册表再写一份就成了
-       「两个地方各说各话」，而界面上没有任何东西提示用户该信哪个。 */
-    const flagged = NAV_ITEMS.filter((item) => item.transient === true).map((item) => item.id);
-    expect(flagged).toEqual(["settings", "uiKit"]);
+  it("注册表里不再写瞬时标记 —— 配置面是唯一事实来源（ISSUE #3798）", () => {
+    /* 两处出处不许并存：瞬时与否由 JSON 决定，注册表再写一份就成了
+       「两个地方各说各话」，而界面上没有任何东西提示用户该信哪个。
+       运行时判「字段不存在」还不够（导出面上留着类型，下一个人会顺手再用起来），
+       所以连源码字面量一起钉死。 */
+    const source = readFileSync(path.resolve(import.meta.dirname, "NavItems.tsx"), "utf8");
+    expect(source).not.toContain("transient?: boolean");
+    expect(source).not.toContain("item.transient");
+    for (const item of NAV_ITEMS) {
+      expect(Object.hasOwn(item, "transient")).toBe(false);
+    }
   });
 
-  it("项目默认那份 JSON 恰好覆盖配置面内的每一项（漏登记 = 那一项默默回落成常驻）", () => {
+  it("非侧栏界面「设置」「UI 控件总览」也在配置面里，且改配置能翻转行为（ISSUE #3798）", () => {
+    const ids = configurableTabViews().map((item) => item.id);
+    expect(ids).toContain("settings");
+    expect(ids).toContain("uiKit");
+    /* 默认：设置切走即关、控件总览切走不关；反过来配一份就整体翻转 ——
+       证明没有藏在注册表里的第二份意见（旧实现里这两屏永远走写死的标记）。 */
+    const defaults = defaultSidebarTabConfig();
+    expect(isTransientView("settings", defaults)).toBe(true);
+    expect(isTransientView("uiKit", defaults)).toBe(false);
+    const flipped: SidebarTabConfig = {
+      ...defaults,
+      settings: "independent",
+      uiKit: "shared",
+    };
+    expect(isTransientView("settings", flipped)).toBe(false);
+    expect(isTransientView("uiKit", flipped)).toBe(true);
+  });
+
+  it("项目默认那份 JSON 恰好覆盖配置面内的每一项（漏登记 = 那一屏没得配，ISSUE #3798）", () => {
     const configured = Object.keys(defaultSidebarTabConfig()).sort();
-    const configurable = configurableSidebarItems()
+    const configurable = configurableTabViews()
       .map((item) => item.id)
       .sort();
     expect(configured).toEqual(configurable);

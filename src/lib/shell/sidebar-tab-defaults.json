@@ -3,6 +3,8 @@
   "history": "independent",
   "queue": "independent",
   "comfyui": "independent",
+  "settings": "shared",
+  "uiKit": "independent",
   "workflows": "independent",
   "model-adapters": "shared",
   "model-test": "shared",

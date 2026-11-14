@@ -91,7 +91,7 @@ export function useWorkspaceTabs(): WorkspaceTabsController {
   const [tabsState, setTabsState] = useState<WorkspaceTabsState>(initialWorkspaceTabs);
   const activateShellTab = useShellTabs((s) => s.activateTab);
 
-  /* 侧栏项的页签行为（ISSUE #3623）：「这一项切走时关不关」由配置面决定。
+  /* 界面页签的行为（ISSUE #3623 / #3798）：「这一屏切走时关不关」由配置面决定。
    * 服务端那份还没取回时用**项目默认**（编译进产物的那份）—— 于是「配置还没到」
    * 与「配置就是默认」在界面上是同一件事，那正是它们该有的样子。
    * 兜底那份**只算一次**：它每次调用都是一份新对象，而判据是按引用 memo 的

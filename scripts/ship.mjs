@@ -223,6 +223,12 @@
  *                                              #   master…branch` 与 `branch -d` 在 squash 拓扑下
  *                                              #   恒假，不是判据，见 `scripts/ship-branches.mjs` 文件头）。
  *                                              #   它一次也不删；与任何显式动作同行退 2
+ *   pnpm ship --status [<PR号|分支名>]          # 只读：把「PR / CI 绿红 / 合并 / 关单 / 上一次跑的结论」
+ *                                              #   摆到同一张屏上（ISSUE #3811，替掉手敲 grep 翻日志）。
+ *                                              #   目标缺省 = 当前分支（主干上回落上一次跑的 PR）；
+ *                                              #   CI 终态与轮询同一份分类器，红不深挖（那是 --diagnose）；
+ *                                              #   退码 0 绿/已合并 · 1 CI红或没提过PR · 2 没结论 ·
+ *                                              #   3 冲突 · 4 CI 无终态。一次也不写平台，与显式动作同行退 2
  *   pnpm ship --new-issue "fix(ship): …" --issue-body-file .git/issue.md --priority P1
  *                                              # 一步建单：create-issue（正文文件 + 开头署名）→
  *                                              #   补 `提单人:` 标签 → 独立 get-issue 回读；
@@ -541,6 +547,9 @@ async function runFlow(deps, tmpFiles) {
     mkTmp,
     settle: (cs) => finish(cs),
     env,
+    /* 落盘 sink 的 argv 记账与它是同一个表达式（`ship-result.mjs` 里 `deps.args ??
+     * process.argv.slice(2)`）—— `--status` 靠它把「本地上一次跑」里的本跑记录跳过。 */
+    currentArgv: deps.args ?? process.argv.slice(2),
     fetchImpl: deps.fetchImpl ?? globalThis.fetch,
     sleep,
   });

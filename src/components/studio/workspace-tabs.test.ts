@@ -156,15 +156,27 @@ describe("关闭语义", () => {
 
 describe("瞬时页签：切走即关（最多只有当前页可以是 transient）", () => {
   it("设置 / 模型适配 / 模式契约 是瞬时页签，画布 / 工坊 / 模型不是", () => {
-    /* 默认判据 = 项目默认那份配置（ISSUE #3623：侧栏项的瞬时与否可配置了，
-       没注入判据时走出厂默认）。 */
+    /* 默认判据 = 项目默认那份配置（ISSUE #3623 / #3798：每个全局视图的瞬时与否
+       都可配置，没注入判据时走出厂默认）。 */
     const judge = makeTransientJudge(defaultSidebarTabConfig());
     expect(isTabTransient(makeTab("settings", null)!, judge)).toBe(true);
+    expect(isTabTransient(makeTab("uiKit", null)!, judge)).toBe(false);
     expect(isTabTransient(makeTab("model-adapters", null)!, judge)).toBe(true);
     expect(isTabTransient(makeTab("mode-contract", null)!, judge)).toBe(true);
     expect(isTabTransient(makeTab("canvas", "p1")!, judge)).toBe(false);
     expect(isTabTransient(makeTab("workshop", "p1")!, judge)).toBe(false);
     expect(isTabTransient(makeTab("models", null)!, judge)).toBe(false);
+  });
+
+  it("UI 控件总览切走不关，切回来是聚焦而非再开一页（ISSUE #3798）", () => {
+    /* 这一条是诉求的状态层验收：对照基元时要来回切主题 / 切别处看效果，
+       页签必须留在条上。默认档位改了、或判据又回落注册表，这里会先红。 */
+    const judge = makeTransientJudge(defaultSidebarTabConfig());
+    let s = openViewTab(initialWorkspaceTabs(), "uiKit", null, judge);
+    s = openViewTab(s, "models", null, judge);
+    expect(s.tabs.map((tab) => tab.view)).toEqual(["home", "uiKit", "models"]);
+    s = openViewTab(s, "uiKit", null, judge);
+    expect(s.tabs.filter((tab) => tab.view === "uiKit")).toHaveLength(1);
   });
 
   it("从设置切到别页：设置那一页退场，不动别的常驻页", () => {

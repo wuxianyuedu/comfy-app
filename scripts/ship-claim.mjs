@@ -21,358 +21,27 @@
  */
 
 import { asArray } from "./ship-build.mjs";
-import { appendComment, readCommentBodies } from "./ship-comment.mjs";
 import { CODE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
-import { cnbData } from "./cnb-fields.mjs";
-import {
-  withCommentHeader,
-  handlerLabel,
-  ISSUE_LABEL_ROLES,
-  labelValues,
-  participantLabel,
-} from "./ship-ticket.mjs";
+import { handlerLabel, ISSUE_LABEL_ROLES, labelValues, participantLabel } from "./ship-ticket.mjs";
 
-/**
- * 状态评论里那句人话。领取 / 结束共用一处生成 —— **回读判据也用它**：
- * 署名对两种动作逐字相同（只有「谁写的」），拿它判动作会把两条都认成第一条。
- *
- * @param {"claim"|"release"} kind 动作
- * @param {string} handle 留痕短名
- * @returns {string}
- */
-function commentSentence(kind, handle) {
-  return kind === "claim" ? `开发者 ${handle} 已接单，正在开发中。` : `开发者 ${handle} 开发结束。`;
-}
+import { runRelease } from "./ship-release.mjs";
+import { applyClaimLabels, ensureComment, readIssue } from "./ship-issue-io.mjs";
+import { decideClaim } from "./ship-claim-rules.mjs";
 
-/**
- * 单子评论 —— 开头一行粗体署名，正文那句人话由 `commentSentence` 统一给。
- * 回读认的是**正文那句**，不是第一行。
- *
- * @param {string} handle 留痕短名
- * @returns {string}
- */
-export function claimComment(handle) {
-  return withCommentHeader(commentSentence("claim", handle), handle);
-}
-
-/** @param {string} handle 留痕短名 */
-export function releaseComment(handle) {
-  return withCommentHeader(commentSentence("release", handle), handle);
-}
-
-/**
- * 最新一条**属于这个人的状态评论**是哪一种。
- *
- * 为什么不是「有没有出现过」：同一张单可以「领取 → 结束 → 再领取」，而两轮的文案逐字相同。
- * 只看出现过就会把上一轮那句「开发结束」当成这一轮的结论 —— 于是重领之后第一次 release
- * 不再发评论。`list-issue-comments` 按 `-created` 取，所以第一条命中的就是最新状态。
- *
- * 判据取正文那句（`commentSentence`）而不是首行署名：两种动作的署名逐字相同，
- * 用它判会把 release 认成 claim。旧格式（末尾 `处理人:`）的评论同样含这句，仍认得出。
- *
- * @param {string[]} bodies 评论正文（**新到旧**）
- * @param {string} handle 留痕短名
- * @returns {"claim"|"release"|null}
- */
-export function handleCommentState(bodies, handle) {
-  const claim = commentSentence("claim", handle);
-  const release = commentSentence("release", handle);
-  for (const body of Array.isArray(bodies) ? bodies : []) {
-    const text = String(body ?? "");
-    if (text.includes(claim)) {
-      return "claim";
-    }
-    if (text.includes(release)) {
-      return "release";
-    }
-  }
-  return null;
-}
-
-/**
- * 「这张单能不能领取」—— 纯判断，不起进程。
- *
- * 三种不许领：不在 open（状态已定）、已在别人名下、我和别人同时挂着（冲突要人裁定）。
- * 已经在我名下是**幂等**（`act:true, already:true`）：重跑只补可能缺的那条评论。
- *
- * @param {{number:number, state:string, labels:any[], handle:string|null}} input
- * @returns {{act:boolean, code:number|null, already:boolean, others:string[], reason:string}}
- */
-export function decideClaim({ number, state, labels, handle }) {
-  const name = String(handle ?? "").trim();
-  const empty = { act: false, already: false, others: [], reason: "" };
-  if (!name) {
-    return {
-      ...empty,
-      code: CODE.NOT_RUN,
-      reason: "没配留痕短名 ⇒ 写不出「谁接单」",
-    };
-  }
-  if (state !== "open") {
-    return {
-      ...empty,
-      code: CODE.RED,
-      reason: `#${number} 的状态是 ${state || "(取不到)"}，不是 open ⇒ 不领取。`,
-    };
-  }
-  const handlers = labelValues(labels, ISSUE_LABEL_ROLES.handler);
-  const mine = handlers.includes(name);
-  const others = handlers.filter((x) => x !== name);
-  if (mine && others.length > 0) {
-    return {
-      ...empty,
-      code: CODE.RED,
-      others,
-      reason:
-        `#${number} 同时挂着 处理人:${name} 与 处理人:${others.join("、")} ⇒ 冲突，` +
-        "这一格要人裁定（本脚本不替谁撤标签）。",
-    };
-  }
-  if (others.length > 0) {
-    return {
-      ...empty,
-      code: CODE.RED,
-      others,
-      reason:
-        `#${number} 已在 处理人:${others.join("、")} 名下 ⇒ 不领取、不开工。` +
-        "你仍然可以在单子上评论（评论不经过这一格）。",
-    };
-  }
-  return { act: true, code: null, already: mine, others: [], reason: "" };
-}
-
-/**
- * 「这张单能不能释放」—— 纯判断。
- *
- * 不在我名下：单子开着就是红（不能替别人释放）；单子已关闭且没有我的标签就是**无需动作**
- * （绿）—— 关单那一路收尾已经做过这件事。
- *
- * @param {{number:number, state:string, labels:any[], handle:string|null}} input
- * @returns {{act:boolean, code:number|null, others:string[], reason:string}}
- */
-export function decideRelease({ number, state, labels, handle }) {
-  const name = String(handle ?? "").trim();
-  if (!name) {
-    return {
-      act: false,
-      code: CODE.NOT_RUN,
-      others: [],
-      reason: "没配留痕短名 ⇒ 不知道要释放哪一枚标签",
-    };
-  }
-  const handlers = labelValues(labels, ISSUE_LABEL_ROLES.handler);
-  const mine = handlers.includes(name);
-  const others = handlers.filter((x) => x !== name);
-  if (!mine) {
-    if (state === "open") {
-      return {
-        act: false,
-        code: CODE.RED,
-        others,
-        reason:
-          `#${number} 不在你名下（当前 处理人:${others.join("、") || "无"}）` +
-          " ⇒ 不替你释放别人的单子。",
-      };
-    }
-    return {
-      act: false,
-      code: CODE.GREEN,
-      others,
-      reason:
-        `#${number} 的状态是 ${state || "(取不到)"}，而你名下没有 处理人:${name}` + " ⇒ 无需释放。",
-    };
-  }
-  return { act: true, code: null, others, reason: "" };
-}
-
-/**
- * `get-issue` 的回读 → 这一层要的四件原值。
- *
- * @param {{run:any, slug:string, number:number}} ctx
- * @returns {{number:number,state:string,title:string,priority:string,labels:any[]} | null} 取不到回 null
- */
-export function readIssue({ run, slug, number }) {
-  const got = cnbJson(run, [
-    "issues",
-    "get-issue",
-    "--repo",
-    slug,
-    "--number",
-    String(number),
-    "-v",
-  ]);
-  const d = cnbData(got?.json);
-  if (!d || typeof d !== "object" || Array.isArray(d)) {
-    return null;
-  }
-  return {
-    number: Number(d.number ?? number),
-    state: String(d.state ?? ""),
-    title: String(d.title ?? ""),
-    priority: String(d.priority ?? "?"),
-    labels: Array.isArray(d.labels) ? d.labels : [],
-  };
-}
-
-/**
- * 评论的**写 + 回读**只有一份（`ship-comment.mjs`）：`--comment` 那一格用的是同一条链，
- * 各写一份就回到 #2719 收掉之前那种「一边补了回读、另一边没有」。
- */
-
-/**
- * 写一条状态评论，并**独立回读**确认它是这个人的最新状态。
- *
- * 已经是最新状态就不重复发（幂等）；写出去之后回读里看不到也落 2 —— 回执不是结论。
- *
- * @param {{run:any, log:(s:string)=>void, slug:string, number:number, handle:string, kind:"claim"|"release", mkTmp:(name:string,text:string)=>string|null}} ctx
- * @returns {number} `CODE` 之一
- */
-function ensureComment(ctx) {
-  const { run, log, slug, number, handle, kind, mkTmp } = ctx;
-  const bodies = readCommentBodies({ run, slug, number });
-  if (!bodies) {
-    log(`[ship] #${number} 取不到评论列表 ⇒ 不写评论（写出去也证明不了它落地）`);
-    return CODE.NOT_RUN;
-  }
-  if (handleCommentState(bodies, handle) === kind) {
-    log(
-      `[ship] #${number} 最新一条状态评论已经是「${kind === "claim" ? "已接单" : "开发结束"}」` +
-        "（同一个人，不重复发）",
-    );
-    return CODE.GREEN;
-  }
-  const text = kind === "claim" ? claimComment(handle) : releaseComment(handle);
-  const wrote = appendComment({
-    run,
-    log,
-    slug,
-    number,
-    body: text,
-    mkTmp,
-  });
-  if (!wrote.posted) {
-    log(`[ship] #${number} 评论写那一步没跑起来 ⇒ 不念「已评论」`);
-    return CODE.NOT_RUN;
-  }
-  if (!wrote.bodies) {
-    log(`[ship] #${number} 评论写后回读没跑起来 ⇒ 不念「已评论」`);
-    return CODE.NOT_RUN;
-  }
-  if (handleCommentState(wrote.bodies, handle) !== kind) {
-    log(
-      `[ship] #${number} 评论写后回读里看不到刚写的那条 ⇒ 不念「已评论」` +
-        "（可能是并发写了别的状态，先去看一眼评论）",
-    );
-    return CODE.NOT_RUN;
-  }
-  log(`[ship] ✓ #${number} 评论已回读（list-issue-comments）：${commentSentence(kind, handle)}`);
-  return CODE.GREEN;
-}
-
-/**
- * 领取时写两枚标签，写完**一次**独立回读同时验证三件：
- *   · `处理人:<我>` 在场 —— 它是「当前谁在做」的唯一锁，结束即撤；
- *   · `参与人:<我>` 在场 —— 只增不删的经手记录，结束后仍留着；
- *   · 没有第二个 `处理人:` —— 标签不是锁，冲突要人裁定。
- *
- * 只写回读里缺的那几枚：已经在场的不重复发（`--claim` 重跑是幂等）。
- *
- * @param {{run:any, log:(s:string)=>void, slug:string, number:number, handle:string, needHandler:boolean, needParticipant:boolean}} ctx
- * @returns {{code:number, others:string[]}}
- */
-function applyClaimLabels(ctx) {
-  const { run, log, slug, number, handle, needHandler, needParticipant } = ctx;
-  const label = handlerLabel(handle);
-  const participant = participantLabel(handle);
-  if (!label || !participant) {
-    return { code: CODE.NOT_RUN, others: [] };
-  }
-  for (const [needed, name] of /** @type {[boolean, string][]} */ ([
-    [needHandler, label],
-    [needParticipant, participant],
-  ])) {
-    if (!needed) {
-      continue;
-    }
-    cnbJson(run, [
-      "issues",
-      "post-issue-labels",
-      "--repo",
-      slug,
-      "--number",
-      String(number),
-      "--labels",
-      name,
-      "-v",
-    ]);
-  }
-  const back = readIssue({ run, slug, number });
-  if (!back) {
-    log(
-      `[ship] #${number} 标签写后回读没跑起来 ⇒ 不念「已打上」` +
-        "（下一动作：再跑一次 `pnpm ship --claim`，已在名下时是幂等）",
-    );
-    return { code: CODE.NOT_RUN, others: [] };
-  }
-  const handlers = labelValues(back.labels, ISSUE_LABEL_ROLES.handler);
-  const others = handlers.filter((x) => x !== handle);
-  if (!handlers.includes(handle)) {
-    log(`[ship] #${number} 的回读里没有 ${label} ⇒ 不念「已打上」`);
-    return { code: CODE.NOT_RUN, others };
-  }
-  if (!labelValues(back.labels, ISSUE_LABEL_ROLES.participant).includes(handle)) {
-    log(`[ship] #${number} 的回读里没有 ${participant} ⇒ 不念「已打上」`);
-    return { code: CODE.NOT_RUN, others };
-  }
-  if (others.length > 0) {
-    log(
-      `[ship] ✗ #${number} 回读里同时有 处理人:${handle} 与 处理人:${others.join("、")}` +
-        " ⇒ 冲突：标签不是锁，这一格要人裁定（不要直接开工）",
-    );
-    return { code: CODE.RED, others };
-  }
-  log(`[ship] ✓ #${number} 已打上 ${label} 与 ${participant}（get-issue 回读：两枚都看得见）`);
-  return { code: CODE.GREEN, others };
-}
-
-/**
- * 撤掉 `处理人:<我>` 并回读。回读里还在 ⇒ 红。
- *
- * @param {{run:any, log:(s:string)=>void, slug:string, number:number, handle:string}} ctx
- * @returns {number} `CODE` 之一
- */
-function dropHandlerLabel(ctx) {
-  const { run, log, slug, number, handle } = ctx;
-  const label = handlerLabel(handle);
-  if (!label) {
-    return CODE.NOT_RUN;
-  }
-  cnbJson(run, [
-    "issues",
-    "delete-issue-label",
-    "--repo",
-    slug,
-    "--number",
-    String(number),
-    "--name",
-    label,
-    "-v",
-  ]);
-  const back = readIssue({ run, slug, number });
-  if (!back) {
-    log(`[ship] #${number} 撤标签后回读没跑起来 ⇒ 不念「已释放」`);
-    return CODE.NOT_RUN;
-  }
-  if (labelValues(back.labels, ISSUE_LABEL_ROLES.handler).includes(handle)) {
-    log(`[ship] ✗ #${number} 的回读里 ${label} 还在 ⇒ 撤没掉`);
-    return CODE.RED;
-  }
-  log(
-    `[ship] ✓ #${number} 已撤掉 ${label}（get-issue 回读；${participantLabel(handle)} 保留 —— 经手记录只增不删）`,
-  );
-  return CODE.GREEN;
-}
+/* 纯判断与文案、平台读写自拆出的模块再导出：测试与 ship-close 的既有引用
+ * （`../scripts/ship-claim.mjs`）保持不变。 */
+export {
+  claimComment,
+  commentSentence,
+  decideClaim,
+  decideRelease,
+  handleCommentState,
+  misclaimReleaseComment,
+  releaseComment,
+} from "./ship-claim-rules.mjs";
+export { readIssue } from "./ship-issue-io.mjs";
+export { finishIssueWork, runRelease } from "./ship-release.mjs";
 
 /**
  * `--claim`：先打标签（排除别人后到的人）再发评论，两件都独立回读。
@@ -390,6 +59,14 @@ function runClaim(ctx) {
     log(`[ship] #${number} 取不到单子 ⇒ 这一格没有结论（不是「已领取」）`);
     return CODE.NOT_RUN;
   }
+  /* 领取对象读数（ISSUE #3809）：把要领的单子先摆出来 —— 号给错（比如把将要
+   * 建出的单当成已有的一张）时，这一行让错误在当场可见，而不是事后翻单子。 */
+  const claimHandlers = labelValues(issue.labels, ISSUE_LABEL_ROLES.handler);
+  log(
+    `[ship] 领取对象：#${number} · ${issue.title} · state=${issue.state || "(取不到)"} · 处理人=${
+      claimHandlers.join("、") || "无"
+    }`,
+  );
   const plan = decideClaim({
     number,
     state: issue.state,
@@ -445,64 +122,6 @@ function runClaim(ctx) {
     kind: "claim",
     mkTmp,
   });
-}
-
-/**
- * `--release`：先发「开发结束」评论，**再**撤标签。
- *
- * 顺序与 claim 相反：撤标签是「别人可以接了」的开关，而公开的结束声明必须先成立。
- * 评论没落地就保留标签并落 2 —— 不能出现「标签没了、单子上也没人说结束了」。
- *
- * @param {{run:any, log:(s:string)=>void, slug:string, handle:string, number:number, dryRun?:boolean, mkTmp:any}} ctx
- * @returns {number} `CODE` 之一
- */
-function runRelease(ctx) {
-  const { run, log, slug, handle, number, dryRun = false, mkTmp } = ctx;
-  const issue = readIssue({ run, slug, number });
-  if (!issue) {
-    log(`[ship] #${number} 取不到单子 ⇒ 这一格没有结论（不是「已释放」）`);
-    return CODE.NOT_RUN;
-  }
-  const plan = decideRelease({
-    number,
-    state: issue.state,
-    labels: issue.labels,
-    handle,
-  });
-  if (!plan.act) {
-    log(`[ship] ${plan.reason}`);
-    return plan.code ?? CODE.RED;
-  }
-  if (dryRun) {
-    log(
-      `[ship] --dry-run：#${number} 将评论「开发者 ${handle} 开发结束。」，` +
-        `再撤 ${handlerLabel(handle)}（${participantLabel(handle)} 保留）；一条都没写。`,
-    );
-    return CODE.GREEN;
-  }
-  if (plan.others.length > 0) {
-    log(
-      `[ship] #${number} 同时挂着 处理人:${plan.others.join("、")} —— ` +
-        "这一跑只撤你自己那枚，不动别人。",
-    );
-  }
-  const said = ensureComment({
-    run,
-    log,
-    slug,
-    number,
-    handle,
-    kind: "release",
-    mkTmp,
-  });
-  if (said !== CODE.GREEN) {
-    log(
-      `[ship] #${number} 的结束评论没有落地 ⇒ **保留** ${handlerLabel(handle)} 标签` +
-        "（先有公开的结束声明，再撤标签）。",
-    );
-    return said;
-  }
-  return dropHandlerLabel({ run, log, slug, number, handle });
 }
 
 /**
@@ -581,74 +200,9 @@ function runClaims(ctx) {
 }
 
 /**
- * 关单之后那一步：补「开发结束」评论、撤自己的处理人标签（`ship-close.mjs` 调用）。
- *
- * 三条边界：
- *   · **不替别人说话**：处理人不是我（或没有这枚标签）就不发评论、不动标签 ——
- *     单子可能是别人在收尾，代发一句「开发结束」等于替别人宣布了状态。
- *   · 评论失败就保留标签（与 `runRelease` 同一条顺序理由）。
- *   · 未配留痕是**读数**：不阻断关单，只是这一格没有可留的痕。
- *
- *   `handleExplicit` 是「`handle` 是不是**人填的**」（`resolveDevHandle().explicit`；ISSUE #2833）——
- *   `false` 时「不代发」那格要念出「取的名字」这条因，不许让它长得像「处理人真是别人」。
- * @param {{run:any, log:(s:string)=>void, slug:string, handle:string|null, handleExplicit?: boolean, number:number, mkTmp:any}} ctx
- * @returns {number} `CODE` 之一
- */
-export function finishIssueWork(ctx) {
-  const { run, log, slug, handle, number, mkTmp } = ctx;
-  const name = String(handle ?? "").trim();
-  if (!name) {
-    log(`[ship] #${number}：未配留痕 ⇒ 不代发结束评论、不动 处理人 标签。`);
-    return CODE.GREEN;
-  }
-  const issue = readIssue({ run, slug, number });
-  if (!issue) {
-    log(`[ship] #${number} 关单后取不到单子 ⇒ 结束评论与标签这一格没有结论`);
-    return CODE.NOT_RUN;
-  }
-  const handlers = labelValues(issue.labels, ISSUE_LABEL_ROLES.handler);
-  if (!handlers.includes(name)) {
-    log(
-      `[ship] #${number} 的处理人${
-        handlers.length > 0 ? `是 ${handlers.join("、")}` : "标签不在场"
-      } ⇒ 不代发「开发结束」、不动标签。`,
-    );
-    /* 「不代发」背后是**两件不同的事**（ISSUE #2833 的现场）：处理人真是别人，与
-     * 「这份检出的我是谁」落到了**取的**名字上（链接 worktree 不带 `.gitignore` 掉的
-     * `.env` ⇒ 取值链跌到 git config user.name）。后者要修的是留痕通道（回主检出 /
-     * 补 COMFYAPP_DEV_HANDLE），不是「等一个不存在的换名」—— 话术必须把两件分开，
-     * 否则读的人会照着「别人在收尾」那条路走。 */
-    if (ctx.handleExplicit === false) {
-      log(
-        `[ship]   ⚠️ 而这份检出的「我是谁」是**取的**（非显式配置）—— 链接 worktree 不带 .env 时` +
-          `就会落到这一格（ISSUE #2833）：回主检出、或补上 COMFYAPP_DEV_HANDLE 后再跑 --release。`,
-      );
-    }
-    return CODE.GREEN;
-  }
-  const others = handlers.filter((x) => x !== name);
-  if (others.length > 0) {
-    log(`[ship] #${number} 同时挂着 处理人:${others.join("、")} —— 只结束你自己的那一份。`);
-  }
-  const said = ensureComment({
-    run,
-    log,
-    slug,
-    number,
-    handle: name,
-    kind: "release",
-    mkTmp,
-  });
-  if (said !== CODE.GREEN) {
-    log(`[ship] #${number} 的结束评论没有落地 ⇒ **保留** ${handlerLabel(name)} 标签。`);
-    return said;
-  }
-  return dropHandlerLabel({ run, log, slug, number, handle: name });
-}
-
-/** `opt.*Bad` 字段的运行时形状（`opt` 由各入口传进来，静态类型是 `any`）。
  * @param {unknown} value
- * @returns {value is string[]} */
+ * @returns {value is string[]}
+ */
 function isStringArray(value) {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
@@ -729,6 +283,11 @@ export function runIssueAction(ctx) {
       "[ship] [ERROR] --body-file 只跟 --comment <号> 一起用：" +
         "它是评论正文；建单的正文旗标是 --issue-body-file。",
     );
+    return CODE.NOT_RUN;
+  }
+  /* --misclaim 是 --release 的形态开关（ISSUE #3809）：单独出现 = 用法错，当场点名。 */
+  if (opt.misclaim === true && (opt.release === null || opt.release === undefined)) {
+    log("[ship] [ERROR] --misclaim 只跟 --release <号> 同用：它是误领释放的形态开关。");
     return CODE.NOT_RUN;
   }
   const wantsNewIssue =
@@ -846,5 +405,6 @@ export function runIssueAction(ctx) {
     number: opt.release,
     dryRun,
     mkTmp,
+    misclaim: opt.misclaim === true,
   });
 }

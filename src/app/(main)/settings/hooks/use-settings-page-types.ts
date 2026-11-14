@@ -217,7 +217,7 @@ export type SettingsPageController = {
   savePrefs: (override?: Settings | null) => Promise<{ error?: string; ok: boolean }>;
   /* 保存 */
   saving: boolean;
-  /** 侧边栏当前分区（纯视觉偏好，但影响渲染哪个表单，故由逻辑层持有）。 */
+  /** 当前分区（纯视觉偏好，但影响渲染哪个表单，故由逻辑层持有）。 */
   section: Section;
   /**
    * 「读不到 / 刚保存的配置」类失败的**可续用**状态（ISSUE #360）：草稿已由缓存
@@ -244,7 +244,9 @@ export type SettingsPageController = {
 
 export const SETTINGS_SECTIONS: Array<{ id: Section; label: string }> = [
   { id: "appearance", label: "外观" },
-  { id: "sidebar", label: "侧边栏" },
+  /* ISSUE #3798：这一节管的已是「全部全局视图」而非仅侧栏项，名字跟着改；
+     内部 id 沿用 `sidebar`（分区 id 是数据键，改名会牵动跳转载荷与持久化，无用户收益）。 */
+  { id: "sidebar", label: "界面页签" },
   { id: "appUpdate", label: "应用更新" },
   { id: "llmLocal", label: "本地模型" },
   { id: "llmRemote", label: "远程模型" },

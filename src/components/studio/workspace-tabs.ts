@@ -1,8 +1,8 @@
 /**
  * 工作台「视图页签」的状态模型（纯函数，不碰 React、不碰浏览器）。规则收在这里、组件只负责接线 —— 打开/关闭/回落/去重一旦散进组件就没有地方能全判到；此前 workspace 只有一个 `viewMode`，sessionStorage 也只存那一个值，要常驻页签就得升级成「一列页签 + 当前哪一个」。
  * 四条规则（ISSUE #1324 的推荐值，改前先看理由）：页签身份 = (视图, 项目) 二元组（同一「工坊」在两个项目里是两页）；已存在的页签再开一次是**聚焦**、不产生第二页；首页固定不可关，关掉当前页落到**左邻**（不是「最后打开的」，那条规则用户预测不了）；只剩首页时列表仍然成立。
- * 第五条后补（ISSUE #1784）：**瞬时页签**（`NavItem.transient`，如设置/模型适配/模式契约）切换即关。不变式：**最多只有当前页可以是 transient**；任何激活动作（开新页/切页/关页）之后都跑一次 `withTransientPruned` 坐实，于是「切走的那一页还在列表里」在状态层不可能出现，不依赖渲染时序。
- * 第六条后补（ISSUE #3623）：「瞬时与否」成了**可配置**的（侧栏项配「独立标签页 / 共享标签页」，配置面是 `~/lib/shell/sidebar-tab-behavior` 那份 JSON）。纯函数层不读配置 —— 判据由装配层注入（`TransientJudge`），没注入的调用走项目默认那份（出厂行为与今天逐字一致）。
+ * 第五条后补（ISSUE #1784）：**瞬时页签**（切走即关，如设置/模型适配/模式契约）由 `isTransientView` 判定。不变式：**最多只有当前页可以是 transient**；任何激活动作（开新页/切页/关页）之后都跑一次 `withTransientPruned` 坐实，于是「切走的那一页还在列表里」在状态层不可能出现，不依赖渲染时序。
+ * 第六条后补（ISSUE #3623 / #3798）：「瞬时与否」由**配置面**逐项决定（每个全局视图配「独立标签页 / 共享标签页」，配置面是 `~/lib/shell/sidebar-tab-behavior` 那份 JSON），注册表不再另写标记。纯函数层不读配置 —— 判据由装配层注入（`TransientJudge`），没注入的调用走项目默认那份（出厂行为与配置默认值逐字一致）。
  */
 import { clamp } from "~/lib/clamp";
 import {
@@ -17,7 +17,7 @@ import {
 export const HOME_VIEW: WorkspaceView = "home";
 
 /**
- * 默认判据 = 项目默认那份配置（编译进产物的那份）+ 注册表兜底。
+ * 默认判据 = 项目默认那份配置（编译进产物的那份，唯一事实来源）。
  *
  * 纯函数层不该自己去读配置（配置是 IO 面的事），所以判据由调用方注入；没注入的
  * 那些调用（测试、纯逻辑推演）走这一份 —— 它就是「出厂默认」，与今天的逐字行为一致。
@@ -86,7 +86,7 @@ function withHomeFirst(tabs: Array<ViewTab>): Array<ViewTab> {
   return [homeTab(), ...rest];
 }
 
-/** 这个页签是不是「瞬时页签」（切走即关，见 `NavItem.transient`）。 */
+/** 这个页签是不是「瞬时页签」（切走即关，判据见 `isTransientView`）。 */
 export function isTabTransient(tab: ViewTab, isTransient: TransientJudge): boolean {
   return isTransient(tab.view);
 }

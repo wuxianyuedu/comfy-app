@@ -5,6 +5,7 @@ import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Alert } from "~/components/ui/alert";
 import { FieldLabel } from "~/components/ui/field";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { SelectChip } from "~/components/ui/select-chip";
@@ -189,7 +190,9 @@ export function ShotCard({
     <div className="border-border bg-surface rounded-xl border p-4">
       <div className="mb-2 flex items-center gap-2">
         <IndexDot index={shot.index} />
-        <span className="text-muted-foreground truncate text-xs">{shot.sceneHeading}</span>
+        <TruncatedText className="text-muted-foreground truncate text-xs">
+          {shot.sceneHeading}
+        </TruncatedText>
         <ClipBadge status={clipStatus} />
         {clipStatus === "running" && (
           <span className="text-muted-foreground text-3xs">

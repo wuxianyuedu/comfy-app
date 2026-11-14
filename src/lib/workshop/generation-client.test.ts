@@ -8,7 +8,12 @@
 // 上传解析逻辑保持真实执行。
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { preparePortraitReferences } from "./generation-client";
+import {
+  apiGenerateImage,
+  apiPollVideo,
+  apiSubmitVideo,
+  preparePortraitReferences,
+} from "./generation-client";
 import type { Character } from "./types";
 import { isRecord } from "~/lib/is-record";
 
@@ -125,5 +130,100 @@ describe("preparePortraitReferences", () => {
     expect(first.files).toEqual(["up-t5-a.png"]);
     expect(second.files).toEqual(["up-t5-a.png"]);
     expect(mock).toHaveBeenCalledTimes(1);
+  });
+});
+
+/* ── relay 请求读数与 seed 透传（ISSUE #3791；seed 是 #3778 的漏发回归）────── */
+describe("apiGenerateImage / apiSubmitVideo / apiPollVideo 的 onDebug 与 seed", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubRelay(payload: unknown, status = 200) {
+    const mock = vi.fn((_url: string, _init?: RequestInit) =>
+      Promise.resolve(new Response(JSON.stringify(payload), { status })),
+    );
+    vi.stubGlobal("fetch", mock);
+    return mock;
+  }
+
+  function relayBodyOf(mock: ReturnType<typeof stubRelay>): Record<string, unknown> {
+    const raw: unknown = mock.mock.calls[0]?.[1]?.body;
+    const parsed: unknown = JSON.parse(typeof raw === "string" ? raw : "{}");
+    return isRecord(parsed) ? parsed : {};
+  }
+
+  it("seed 进请求体（#3778 的漏发回归：路由解析了但客户端从未发送）", async () => {
+    const mock = stubRelay({ url: "https://cdn/x.png" });
+    const url = await apiGenerateImage({ prompt: "p", seed: 42 });
+    expect(url).toBe("https://cdn/x.png");
+    expect(relayBodyOf(mock).seed).toBe(42);
+  });
+
+  it("onDebug：成功响应里的 debug 读数逐批上抛", async () => {
+    const row = {
+      body: { prompt: "p" },
+      durationMs: 12,
+      endpoint: "https://api.example.com/v1/images/generations",
+      excerpt: '{"url":"https://cdn/x.png"}',
+      ok: true,
+      phase: "image",
+      status: 200,
+    };
+    stubRelay({ url: "https://cdn/x.png", debug: [row] });
+    const seen: Array<unknown> = [];
+    await apiGenerateImage({ prompt: "p" }, { onDebug: (rows) => seen.push(...rows) });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ phase: "image", status: 200 });
+  });
+
+  it("onDebug：失败响应（502 带 debug）先上抛读数再抛错", async () => {
+    const row = {
+      body: { prompt: "p" },
+      durationMs: 5,
+      endpoint: "https://api.example.com/v1/images/generations",
+      excerpt: '{"error":"quota"}',
+      ok: false,
+      phase: "image",
+      status: 402,
+    };
+    stubRelay({ error: "API 生图失败（402）", debug: [row] }, 502);
+    const seen: Array<unknown> = [];
+    await expect(
+      apiGenerateImage({ prompt: "p" }, { onDebug: (rows) => seen.push(...rows) }),
+    ).rejects.toThrow("API 生图失败");
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ status: 402 });
+  });
+
+  it("视频提交：onDebug 上抛读数，debug 旗标进请求体", async () => {
+    const row = {
+      body: { prompt: "p" },
+      durationMs: 8,
+      endpoint: "https://api.example.com/v1/videos",
+      excerpt: '{"taskId":"t-1"}',
+      ok: true,
+      phase: "video-submit",
+      status: 200,
+    };
+    const mock = stubRelay({ remoteTaskId: "t-1", debug: [row] });
+    const seen: Array<unknown> = [];
+    await apiSubmitVideo({ prompt: "p" }, { onDebug: (rows) => seen.push(...rows) });
+    expect(relayBodyOf(mock).debug).toBe(true);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ phase: "video-submit", status: 200 });
+  });
+
+  it("视频轮询：opts.debug=true 时请求带 debug 旗标，读数上抛", async () => {
+    const mock = stubRelay({ pending: true });
+    const seen: Array<unknown> = [];
+    await apiPollVideo("t-1", {
+      debug: true,
+      mode: "T2V",
+      model: "m",
+      onDebug: (rows) => seen.push(...rows),
+    });
+    expect(relayBodyOf(mock).debug).toBe(true);
+    expect(seen).toHaveLength(0);
   });
 });

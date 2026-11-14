@@ -37,7 +37,7 @@ const SECTION_SUMMARY: Record<Section, string> = {
   dataLocation: "每类数据存在哪儿、迁移时怎么搬",
   sizePresets: "图片 / 视频的尺寸预设表（比例 × 分辨率），改完即存应用数据",
   appearance: "主题、圆角与标题字阶",
-  sidebar: "侧栏各项点开后是独立标签页还是共享标签页",
+  sidebar: "各界面点开后是独立标签页还是共享标签页（含设置与 UI 控件总览）",
   appUpdate: "检测并安装应用新版本",
   exit: "退出应用时后台服务是保活还是连带关闭",
   logs: "日志面板里显示哪几类来源",

@@ -11,6 +11,7 @@ import { useBusyAction } from "~/components/ui/use-busy-action";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { FormField } from "~/components/ui/form-field";
 import { SelectChip } from "~/components/ui/select-chip";
+import { TruncatedText } from "~/components/ui/truncated-text";
 
 type LLMContextValue = {
   closeSettings: () => void;
@@ -287,7 +288,7 @@ function LLMSettingsModal({
                       activeModel === name ? "bg-primary" : "bg-surface-2"
                     }`}
                   />
-                  <span className="flex-1 truncate">{name}</span>
+                  <TruncatedText className="flex-1 truncate">{name}</TruncatedText>
                   {provider === "local" && (
                     <span className="text-muted-foreground text-3xs">本地</span>
                   )}

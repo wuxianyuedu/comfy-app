@@ -28,7 +28,7 @@ import {
 
 /**
  * 共享的导航注册表 —— 侧栏 / 顶部标题 / 命令面板 / 项目内切换器的唯一事实来源。三个分区：全局项（`globalNavItems`，十二件项目无关的事；控制台跑仓库级脚本、设置读写应用级配置、模型适配/测试模型/模式契约读写全局配置、UI 控件总览是开发者的基元对照页，故都该能开能关）；项目页签（`projectTabs`，只在项目界面顶部的标签栏出现，脱离项目无意义）；项目入口（`PROJECTS_ENTRY`，侧栏底部「项目」分组）。
- * 全局项共十二件，但侧栏只列十件（`sidebarNavItems`）：设置与 UI 控件总览撤出侧栏（设置的入口在顶栏应用菜单、控件总览的入口在命令面板）并标 `transient`（切走即关）；「全局的 / 侧栏列不列 / 瞬时」是三个独立属性，见 `NavItem` 字段说明。
+ * 全局项共十二件，但侧栏只列十件（`sidebarNavItems`）：设置与 UI 控件总览撤出侧栏（设置的入口在顶栏应用菜单、控件总览的入口在命令面板）。「全局的 / 侧栏列不列」是两个独立属性；而「切走关不关」不再写在注册表里 —— 每个全局视图（首页除外）都在「设置 → 界面页签」的配置面里逐项配，见 `configurableTabViews` 与 `~/lib/shell/sidebar-tab-behavior`（ISSUE #3798）。
  * 历史教训：此前用 `visibleNavItems(active)` 按「首页 vs 非首页」切换项目页签显隐，导致点非首页视图时画布/工坊复现、点首页又消失；现改为「按分区归属」一次性决定，显隐不随当前视图漂移。
  */
 export type WorkspaceView =
@@ -64,22 +64,15 @@ export type NavItem = {
    */
   projectScoped?: boolean;
   /**
-   * 不在**侧栏**露面：入口在别处（当前只有「设置」—— 顶栏右上角应用菜单已有它）。
-   * 与 `projectScoped` / `transient` 是三个不同的判断，别合并：前者管「归项目还是归全局」、`transient` 管「切走关不关」、本条只管「侧栏列不列」。
-   * 设置三样各挑一个答案：全局的、瞬时的、不在侧栏列表里。
+   * 不在**侧栏**露面：入口在别处（当前只有「设置」与「UI 控件总览」—— 前者在顶栏
+   * 应用菜单、后者在命令面板 / 「+」菜单）。与 `projectScoped` 是两条不同的判断，
+   * 别合并：那条管「归项目还是归全局」，本条只管「侧栏列不列」。
+   *
+   * 「切走关不关」不在这里写：它归设置里的配置面管（ISSUE #3798），见
+   * `configurableTabViews`。非侧栏的界面与侧栏项同走一份配置，入口不同不改变
+   * 这件事 —— 否则「设置里配了、界面却不认」就是两处各说各话。
    */
   sidebarHidden?: boolean;
-  /**
-   * 「瞬时页签」：切走就关，不常驻页签条。页签的意义是让打开的界面保持打开（切回来接着用、不丢态），那是对画布/工坊这类有编辑态、跑着长任务的界面说的。
-   * 设置 / 模型适配 / 模式契约是「读过即走的配置屏」，留在页签条上只贡献占宽与「又开了个窗口」的错觉。
-   * 判据是语义不是实现：transient 的视图照常有自己的一页、也能手动关，只是切到别处时自动退场，见 `workspace-tabs.ts` 的 `withTransientPruned`（「最多只有当前页可以是 transient」）。
-   *
-   * ⚠️ **侧栏项的这一格不再写在这里**（ISSUE #3623）：侧栏那些项「独立还是共享」
-   * 是**可配置**的，配置面是 `~/lib/shell/sidebar-tab-behavior` 那份 JSON（项目默认
-   * + 本机覆盖两层）。本字段只留给**不在配置面内**的视图（设置：它不在侧栏，
-   * 入口在顶栏应用菜单），作为兜底标记。
-   */
-  transient?: boolean;
   /**
    * 屏内页头的标题。「侧栏项 / 页签 /（桌面壳）窗口标题」用 `label`（短名才像导航），屏内页头有整行宽度、写全名更清楚；两者允许不同，前提是写在同一行里 —— 分居两文件会长出两个名字且没人知道哪个是当前的（ISSUE #1423 的「队列」/「队列与运行」）。
    * 不填 = 与 `label` 同字；填了由 `pageHeaderTitle()` 统一取值，视图里不再出现裸字面量。
@@ -141,7 +134,7 @@ export const NAV_ITEMS: Array<NavItem> = [
   },
   {
     /* ComfyUI（ISSUE #1900）：**出图后端自己的屏** —— 运行状态、启动/关闭、打开查看、每次启动的日志。它从「设置 → 创作后端」搬出来独立成页：那边改**配置**（装在哪、什么端口），这边是**操作与观察**（配一次 vs 每次跑图前都要看一眼）。
-       归**全局项**而不是项目页签：它管本机后端进程，与当前画布项目无关；也不需要 `transient` —— 与队列同族，切走再回来该保留滚动位置与全屏日志态。 */
+       归**全局项**而不是项目页签：它管本机后端进程，与当前画布项目无关；也不需要切走即关 —— 与队列同族，切走再回来该保留滚动位置与全屏日志态。 */
     id: "comfyui",
     label: "ComfyUI",
     enabled: true,
@@ -149,23 +142,23 @@ export const NAV_ITEMS: Array<NavItem> = [
   },
   {
     /* 设置：与历史 / 队列 / 控制台同形的**视图**，不是浮层。原先的全屏浮层（`SettingsOverlay`）会盖住页签条，「当前在设置里」只活在一个布尔值里：没有页签可关，也不能一边开着设置一边看别处。
-     * 改成视图后入口、高亮、可关性与别的视图同一套契约。仍归**全局项**而非项目页签：它读写应用级配置（模型目录、Ollama、数据库、后端路径），与当前项目无关。 */
+     * 改成视图后入口、高亮、可关性与别的视图同一套契约。仍归**全局项**而非项目页签：它读写应用级配置（模型目录、Ollama、数据库、后端路径），与当前项目无关。
+     * 切走关不关由配置面决定（ISSUE #3798），出厂是「共享标签页」（读过即走）。 */
     id: "settings",
     label: "设置",
     enabled: true,
-    transient: true,
     sidebarHidden: true,
     icon: <Settings size={22} strokeWidth={1.8} />,
   },
   {
-    /* UI 控件总览（ISSUE #3525/#3726）：开发者的基元对照页。原先走独立路由
+    /* UI 控件总览（ISSUE #3525/#3726/#3798）：开发者的基元对照页。原先走独立路由
        `/ui-kit` 整窗跳转，会把工作区的页签条与关闭按钮整个盖住（ISSUE #3726）
        —— 改成**视图页签**：命令面板 /「+」菜单里打开，页签条留在原地。
-       与设置同族：全局项、读过即走（transient）、不进侧栏。 */
+       与设置同族：全局项、不进侧栏；但切走**不关**（#3798 的期望）—— 对照基元
+       时要来回切主题 / 切别处看效果，出厂默认「独立标签页」，同样可在设置里改。 */
     id: "uiKit",
     label: "UI 控件总览",
     enabled: true,
-    transient: true,
     sidebarHidden: true,
     icon: <Blocks size={22} strokeWidth={1.8} />,
   },
@@ -300,32 +293,36 @@ export function sidebarPinnedViewIds(): ReadonlySet<WorkspaceView> {
 const FIXED_HOME_VIEW: WorkspaceView = "home";
 
 /**
- * **配置面内**的侧栏项（可配「独立标签页 / 共享标签页」的那几项，ISSUE #3623）。
+ * **配置面内**的全局视图（可配「独立标签页 / 共享标签页」的那些界面，ISSUE #3623 / #3798）。
+ *
+ * 取 `globalNavItems()` 而不是 `sidebarNavItems()`：设置与 UI 控件总览虽不在侧栏
+ * 露面，但同样是常驻工作区的界面，用户想配「切走关不关」的诉求对它们一样成立
+ * （ISSUE #3798）。此前落在侧栏那份清单上，于是这两屏在设置里根本看不见、也没法
+ * 改 —— 「入口在别处」和「行为能不能配」是两件事，别混为一谈。
  *
  * 首页不在其中：它是**固定页签**（恒在、不可关），「切走即关」对它没有意义 ——
  * 真按它那样做，「首页永远在列表里」这条不变式就得靠另一条规则兜着，而那条规则
  * 本身没有任何用户可见的收益。
  */
-export function configurableSidebarItems(): Array<NavItem> {
-  return sidebarNavItems().filter((item) => item.id !== FIXED_HOME_VIEW);
+export function configurableTabViews(): Array<NavItem> {
+  return globalNavItems().filter((item) => item.id !== FIXED_HOME_VIEW);
 }
 
 /**
- * 某视图是不是「瞬时页签」（切走即关，不常驻）—— 规则见 `NavItem.transient`。
+ * 某视图是不是「瞬时页签」（切走即关，不常驻）—— **只认配置面**（ISSUE #3798）。
  *
- * 判据是**两层**：配置面（`SidebarTabConfig`，ISSUE #3623 的 JSON 配置）优先，
- * 配置里没有这一项时回落到注册表内置标记（设置 —— 它不在配置面内）。
+ * 此前是两层判据：配置优先，缺项时回落到注册表里写死的 `transient` 标记。那层兜底
+ * 正是非侧栏界面「设置里配了、界面却不认」的来源：设置与控件总览没有配置条目，
+ * 永远走注册表；把标记删掉又会让配置缺项时行为漂移。现在配置是**唯一事实来源**，
+ * `sidebar-tab-defaults.json` 为每个全局视图（首页除外）都给了档位，缺项即
+ * 「不瞬时」（独立标签页），代码里不再藏第二份意见。
  *
  * `config` 传的是**生效配置**（项目默认 + 本机覆盖）；服务端那份还没取回时，
  * 调用方传项目默认（编译进产物的那份），于是「配置还没到」与「配置就是默认」
  * 两件事在界面上长得一样 —— 那正是它们该有的样子（默认值本来就是用户看到的第一眼）。
  */
 export function isTransientView(view: WorkspaceView, config: SidebarTabConfig): boolean {
-  const mode = sidebarTabModeOf(view, config);
-  if (mode !== undefined) {
-    return mode === "shared";
-  }
-  return NAV_ITEMS.some((item) => item.id === view && item.transient === true);
+  return sidebarTabModeOf(view, config) === "shared";
 }
 
 /**
@@ -337,7 +334,7 @@ export function isTransientView(view: WorkspaceView, config: SidebarTabConfig): 
  */
 export type TransientJudge = (view: WorkspaceView) => boolean;
 
-/** 按生效配置造一个判据（配置面优先，注册表兜底）。 */
+/** 按生效配置造一个判据（配置面是唯一事实来源，ISSUE #3798）。 */
 export function makeTransientJudge(config: SidebarTabConfig): TransientJudge {
   return (view) => isTransientView(view, config);
 }

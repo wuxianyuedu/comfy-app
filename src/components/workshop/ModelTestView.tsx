@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 // ── 「测试模型能力」**视图**（规范 §17.2 第③层：只渲染 + 上抛）─────────────
 // 用工坊同款通道直接试已配置的远端模型（#3590）：左栏「用途 → 所有模式」
 // 页签（#3635：每个模式页签显示配了适配器的候选模型数）→ 右栏模型下拉
@@ -14,12 +16,16 @@ import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { FilePickerButton } from "~/components/ui/file-picker";
 import { FormField } from "~/components/ui/form-field";
 import { Input } from "~/components/ui/input";
+import { useInterval } from "~/components/ui/use-interval";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { ViewableImage } from "~/components/ui/image-viewer";
 import { PageHeader } from "~/components/ui/page-header";
 import { SectionLabel } from "~/components/ui/section-label";
 import { SelectChip } from "~/components/ui/select-chip";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
+import { fixed } from "~/lib/number-format";
 import { sceneFromMode } from "~/lib/media/size-presets";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
 import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
@@ -98,14 +104,14 @@ function ModeTabs({
             variant="ghost"
           >
             <span className="min-w-0 text-left leading-tight">
-              <span
+              <TruncatedText
                 className={cn(
                   "block truncate text-sm font-semibold",
                   selected ? "text-primary" : "text-ink",
                 )}
               >
                 {t.label}
-              </span>
+              </TruncatedText>
               <span className="text-muted-foreground text-2xs block">{t.mode}</span>
             </span>
             <span
@@ -156,6 +162,29 @@ function SizeField({
   );
 }
 
+/** 生成中已过时间（ISSUE #3799）：本地 500ms 一跳，只重渲自己这格文本；
+ *  生成结束后组件随行消失（行徽标换回「已发送」）。 */
+function GeneratingElapsed({ since }: { since: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  /* 走秒走 useInterval（P12：视图里不自写 setInterval）。 */
+  useInterval(
+    () => {
+      setNow(Date.now());
+    },
+    { ms: 500 },
+  );
+  return <>进行中 {fixed((now - since) / 1000, 1)}s</>;
+}
+
+/** 响应摘要的格式化显示（ISSUE #3799）：结构化摘要默认 JSON 缩进；
+ *  万一是字符串（历史读数）原样给出。 */
+function prettyOrRaw(excerpt: unknown): string {
+  if (typeof excerpt === "string") {
+    return excerpt;
+  }
+  return JSON.stringify(excerpt, null, 2) ?? "";
+}
+
 /** 必备 / 可选标识（ISSUE #3778 问题 2）：来自模式契约的 required 生效集。 */
 function RequiredBadge({ required }: { required: boolean }) {
   return (
@@ -200,7 +229,7 @@ function InputRow({
 }) {
   const labelNode = (
     <span className="flex min-w-0 items-center gap-1.5">
-      <span className="truncate">{label}</span>
+      <TruncatedText className="truncate">{label}</TruncatedText>
       <RequiredBadge required={required} />
     </span>
   );
@@ -308,6 +337,8 @@ function InputRow({
 
 export function ModelTestView() {
   const c = useModelTest();
+  /* 响应摘要的显示形态（#3799）：默认格式化，可切回原始单行。 */
+  const [excerptPretty, setExcerptPretty] = useState(true);
 
   const selectedAdapter = c.adapters.find((a) => a.mode === c.mode) ?? null;
   /* 适配器映射了的统一输入类型集合：契约行通道承接得住、但适配器没映射时，
@@ -318,6 +349,8 @@ export function ModelTestView() {
   /* 统一输入行来自模式契约（ISSUE #3778），行序 = 契约口序（ISSUE #3785）：
    * 复合尺寸口也在它契约里的位置上渲染，不整体前移。 */
   const modeLabel = c.modeTabs.find((t) => t.mode === c.mode)?.label ?? c.mode;
+  /* 回调里读 c.result 会丢掉 JSX 条件的收窄 —— 先取一次稳定引用。 */
+  const resultUrl = c.result?.url ?? null;
 
   return (
     <DocumentFrame
@@ -327,8 +360,10 @@ export function ModelTestView() {
       <PageHeader srTitle={pageHeaderTitle("model-test")} />
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
-        {/* 左栏：用途 + 所有模式（每个页签显示配了适配器的候选模型数，#3635） */}
-        <aside className="flex shrink-0 flex-col gap-5 lg:w-60">
+        {/* 左栏：用途 + 所有模式（每个页签显示配了适配器的候选模型数，#3635）。
+            桌面下吸附成独立滚动区（ISSUE #3806）：右侧内容滚动不带动左栏，
+            页签超出视口时在栏内自己滚。 */}
+        <aside className="flex shrink-0 flex-col gap-5 lg:sticky lg:top-5 lg:max-h-[calc(100dvh-120px)] lg:w-60 lg:overflow-y-auto">
           <section>
             <SectionLabel hint="同一模型的图片 / 视频分栏测试">用途</SectionLabel>
             <KindTabs kind={c.kind} onChange={c.setKind} />
@@ -408,9 +443,9 @@ export function ModelTestView() {
                         key={`${row.id}-${String(i)}`}
                         label={
                           <span className="flex min-w-0 items-center gap-1.5">
-                            <span className="truncate">
+                            <TruncatedText className="truncate">
                               {row.disabled ? `${row.label}（未承接）` : row.label}
-                            </span>
+                            </TruncatedText>
                             <RequiredBadge required={row.required} />
                           </span>
                         }
@@ -496,28 +531,149 @@ export function ModelTestView() {
                 </p>
               )}
 
+              {c.notice !== null && (
+                <p
+                  className={cn(
+                    "rounded-lg px-3 py-2 text-xs",
+                    c.notice.kind === "ok"
+                      ? "bg-elevated text-muted-foreground"
+                      : "bg-destructive/10 text-destructive",
+                  )}
+                >
+                  {c.notice.text}
+                </p>
+              )}
+
               {c.result !== null && (
                 <section className="flex flex-col gap-2">
-                  <SectionLabel hint="工坊同款产物提取（适配器 outputField / 通用提取）">
+                  <SectionLabel hint="工坊同款产物提取（适配器 outputField / 通用提取）；图片点开进查看器，可缩放并显示原始尺寸">
                     产物
                   </SectionLabel>
                   <div className="border-border bg-bg overflow-hidden rounded-xl border">
-                    <MediaThumbnail
-                      alt="生成结果"
-                      as={c.result.kind === "video" ? "video" : "image"}
-                      className="max-h-[28rem] w-full object-contain"
-                      controls
-                      src={c.result.url}
-                    />
+                    {c.result.kind === "image" ? (
+                      /* 图片查看器（ISSUE #3791）：点缩略图进 ImageViewer（缩放 +
+                       * 原始宽高显示）；视频保持既有播放器。 */
+                      <ViewableImage
+                        alt="生成结果"
+                        className="max-h-[28rem] w-full object-contain"
+                        label="生成结果"
+                        src={c.result.url}
+                      />
+                    ) : (
+                      <MediaThumbnail
+                        alt="生成结果"
+                        as="video"
+                        className="max-h-[28rem] w-full object-contain"
+                        controls
+                        src={c.result.url}
+                      />
+                    )}
                   </div>
-                  <a
-                    className="text-primary text-xs underline-offset-2 hover:underline"
-                    href={c.result.url}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    打开原始产物
-                  </a>
+                  {/* 外链统一走服务端 openExternal（ISSUE #3791）：桌面壳内
+                      target=_blank 会被壳的 shell ACL 拦下（Runtime Error）。 */}
+                  <div>
+                    <Button
+                      className="text-primary h-auto px-0 text-xs"
+                      disabled={c.openBusy}
+                      onClick={() => {
+                        if (resultUrl !== null) {
+                          void c.openResultInBrowser(resultUrl);
+                        }
+                      }}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      打开原始产物（系统浏览器）
+                    </Button>
+                  </div>
+                </section>
+              )}
+
+              {/* 请求详情（ISSUE #3791；#3799：点生成即显示本地提交行 + 生成中
+                  走秒 + 响应摘要默认格式化、可切原始）。 */}
+              {c.debugRows.length > 0 && (
+                <section className="flex flex-col gap-2">
+                  <SectionLabel hint="本次生成实际发出的请求（密钥在请求头，不在此显示；请求体里的长值已截断）">
+                    请求详情
+                  </SectionLabel>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-muted-foreground text-2xs">响应摘要</span>
+                    <SelectChip
+                      onClick={() => {
+                        setExcerptPretty(true);
+                      }}
+                      selected={excerptPretty}
+                      shape="pill"
+                    >
+                      格式化
+                    </SelectChip>
+                    <SelectChip
+                      onClick={() => {
+                        setExcerptPretty(false);
+                      }}
+                      selected={!excerptPretty}
+                      shape="pill"
+                    >
+                      原始
+                    </SelectChip>
+                  </div>
+                  {c.debugRows.map((row, i) => (
+                    <div
+                      className="border-border bg-bg overflow-hidden rounded-lg border"
+                      key={`${row.phase}-${String(i)}`}
+                    >
+                      <div className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
+                        {row.phase === "relay" ? (
+                          /* 本地提交行（#3799）：点生成即出现；生成中走秒。 */
+                          <span className="bg-primary/12 text-primary-strong text-2xs rounded-full px-2 py-0.5 tabular-nums">
+                            {c.generating && c.generatingSince !== null ? (
+                              <GeneratingElapsed since={c.generatingSince} />
+                            ) : (
+                              "已发送"
+                            )}
+                          </span>
+                        ) : (
+                          <span
+                            className={cn(
+                              "rounded-full px-2 py-0.5 text-2xs tabular-nums",
+                              row.ok
+                                ? "bg-elevated text-muted-foreground"
+                                : "bg-destructive/10 text-destructive",
+                            )}
+                          >
+                            {row.status === null ? "网络失败" : `HTTP ${String(row.status)}`}
+                          </span>
+                        )}
+                        <span className="text-muted-foreground text-2xs">
+                          {row.phase === "relay"
+                            ? "本地提交"
+                            : row.phase === "image"
+                              ? "生图"
+                              : row.phase === "video-submit"
+                                ? "视频提交"
+                                : "视频轮询"}
+                        </span>
+                        {row.durationMs !== null && (
+                          <span className="text-muted-foreground text-2xs tabular-nums">
+                            {String(row.durationMs)}ms
+                          </span>
+                        )}
+                        <TruncatedText className="min-w-0 flex-1 truncate font-mono">
+                          {row.endpoint}
+                        </TruncatedText>
+                      </div>
+                      <pre className="border-border/60 text-2xs overflow-x-auto border-t px-3 py-2 font-mono break-all whitespace-pre-wrap">
+                        {JSON.stringify(row.body, null, 2)}
+                      </pre>
+                      {row.excerpt !== null && row.excerpt !== undefined && (
+                        <pre className="text-muted-foreground border-border/60 text-2xs overflow-x-auto border-t px-3 py-2 font-mono break-all whitespace-pre-wrap">
+                          {excerptPretty
+                            ? prettyOrRaw(row.excerpt)
+                            : (JSON.stringify(row.excerpt) ?? "")}
+                        </pre>
+                      )}
+                    </div>
+                  ))}
                 </section>
               )}
             </>

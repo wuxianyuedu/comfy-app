@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { displayValue } from "~/lib/display-value";
 
 import { NAV_ITEMS, type WorkspaceView } from "./NavItems";
@@ -109,7 +110,7 @@ export function ViewTabStrip({
               }`
             }
           >
-            <span className="min-w-0 truncate">{label}</span>
+            <TruncatedText className="min-w-0 truncate">{label}</TruncatedText>
             {isTabClosable(tab) ? (
               <Button
                 aria-label={`关闭 ${displayValue(label)}`}

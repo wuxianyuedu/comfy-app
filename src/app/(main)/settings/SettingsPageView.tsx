@@ -45,8 +45,9 @@ export function SettingsPageView({
     () =>
       ({
         appearance: <AppearanceSection c={c} />,
-        /* 侧栏项的页签行为（ISSUE #3623）：独立标签页 / 共享标签页，按项配置。
-            它自己取数（配置面只有这一处读），故不吃 `c`。 */
+        /* 界面页签的行为（ISSUE #3623 / #3798）：独立标签页 / 共享标签页，按项配置；
+           清单含设置与「UI 控件总览」这类不进侧栏的界面。它自己取数（配置面只有
+           这一处读），故不吃 `c`。 */
         sidebar: <SidebarTabSection />,
         appUpdate: (
           <>

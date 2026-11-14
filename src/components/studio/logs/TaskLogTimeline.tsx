@@ -12,6 +12,7 @@ import { FileText } from "lucide-react";
 import { Checkbox } from "~/components/ui/checkbox";
 import { EmptyState } from "~/components/ui/empty-state";
 import { SelectChip } from "~/components/ui/select-chip";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { FieldLabel } from "~/components/ui/field";
 import { VirtualLogList } from "~/components/studio/logs/VirtualLogList";
 import { formatClock } from "~/lib/time-format";
@@ -180,9 +181,9 @@ function DefaultLogRow({ log, rowTestId }: { log: TaskLogEntry; rowTestId?: stri
         {log.msg}
       </span>
       {log.src !== undefined && log.src !== "" && (
-        <span className="text-ink-fainter hover:text-ink-faint text-2xs max-w-50 shrink-0 truncate">
+        <TruncatedText className="text-ink-fainter hover:text-ink-faint text-2xs max-w-50 shrink-0 truncate">
           {log.src}
-        </span>
+        </TruncatedText>
       )}
     </div>
   );

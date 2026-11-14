@@ -92,6 +92,10 @@ const ALLOWED_SCRIPTS = new Set([
   // 备份 / 恢复的唯一实现（D6，ISSUE #1611）：dev-launcher.mjs 顶层静态 import
   // 它（换文件必须排在起 Next 之前）。与 RUNTIME_SCRIPTS 同源，缺一份即红。
   "db-backup-core.mjs",
+  // 本机应用数据备份 / 恢复的实现（ISSUE #3732）：`db-backup-core.mjs` 顶层静态
+  // import 它的 `restoreAppDataBackup`，缺一份即红（与 `RUNTIME_SCRIPTS` 同源，
+  // 漏登记的那次见 `scripts/standalone-private-inputs.mjs` 里同一条的说明）。
+  "app-data-backup.mjs",
   "reap-process.mjs",
   // ComfyUI 执行器独立宿主（P3 §5 第 2 期 · Phase 2-C）：由 dev-launcher.mjs
   // 的 spawnExecutorHost 在 COMFY_EXECUTOR=host 灰度下起；桌面包里也要能起来。

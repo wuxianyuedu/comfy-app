@@ -2,6 +2,7 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Button } from "~/components/ui/button";
 import { ProgressBar } from "~/components/ui/progress-bar";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { clampPct } from "~/lib/progress";
 
 import type { TaskItem } from "./history-types";
@@ -113,7 +114,9 @@ export function HistoryTaskCard({
                 {clampPct(progress)}%
               </span>
             )}
-            <span className="text-ink-muted truncate text-xs">{task.workflowName}</span>
+            <TruncatedText className="text-ink-muted truncate text-xs">
+              {task.workflowName}
+            </TruncatedText>
             <span className="text-ink-fainter shrink-0 text-xs">· {timeAgo(task.createdAt)}</span>
           </div>
           <span className="text-ink-strong mt-1 line-clamp-1 block text-sm">
