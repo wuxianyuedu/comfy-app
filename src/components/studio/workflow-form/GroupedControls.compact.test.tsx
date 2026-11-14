@@ -4,23 +4,12 @@
  * 圈定断言：紧凑版式里控件在（带下拉触发器）、框右对齐、三个参数在框外各自成行且带大端点。
  * 宽版表单（collapseGrouped={false}）保留整块录入，本文件不涉及。 */
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 
 import type { EnrichedWidget, WorkflowIOMap } from "../workflow-io";
 import { inferGroups } from "../workflow-io";
 import { GroupedControls } from "./GroupedControls";
-
-/* 尺寸表面板现在经 tRPC 读服务端配置（ISSUE #3788）：本用例只判组合控件的版式，
- * 不判表格内容 —— 用桩替掉面板的取数 hook，免去 tRPC Provider。 */
-vi.mock("./hooks/use-size-preset-table", () => ({
-  useSizePresetTable: () => ({
-    table: { image: {}, video: {} },
-    setDims: () => undefined,
-    resetScene: () => undefined,
-    isModified: () => false,
-  }),
-}));
 
 afterEach(cleanup);
 

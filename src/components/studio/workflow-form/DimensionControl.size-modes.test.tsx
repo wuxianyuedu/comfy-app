@@ -2,22 +2,11 @@
  * 与「百万像素」（1M/2M/4M，总像素预算）两个子类。
  * 选中百万像素档时「倍数」（8/16/32/64）必须出现 —— 只有配上对齐倍数才定得下具体宽高。 */
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 import type { EnrichedWidget } from "../workflow-io";
 import { DimensionControl } from "./DimensionControl";
-
-/* 尺寸表面板现在经 tRPC 读服务端配置（ISSUE #3788）：本用例只判「像素 / 百万像素」
- * 两类表达，不判表格内容 —— 用桩替掉面板的取数 hook，免去 tRPC Provider。 */
-vi.mock("./hooks/use-size-preset-table", () => ({
-  useSizePresetTable: () => ({
-    table: { image: {}, video: {} },
-    setDims: () => undefined,
-    resetScene: () => undefined,
-    isModified: () => false,
-  }),
-}));
 
 afterEach(cleanup);
 

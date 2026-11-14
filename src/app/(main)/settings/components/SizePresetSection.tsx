@@ -15,7 +15,8 @@ import { SizePresetTablePanel } from "~/components/studio/workflow-form/SizePres
 import { useSizePresetTable } from "~/components/studio/workflow-form/hooks/use-size-preset-table";
 
 export function SizePresetSection() {
-  const c = useSizePresetTable();
+  /* 订阅尺寸表快照（画布 / 表单与设置页共用同一份 React Query 之外的 store）。 */
+  useSizePresetTable();
   return (
     <SettingsCard
       title="尺寸配置表"
@@ -30,11 +31,6 @@ export function SizePresetSection() {
         生成时「比例 × 分辨率」的宽高都查这张表（图片 / 视频两套口径）。
         改一格即存本机应用数据（data/size-presets.json）；项目默认跟代码走。
       </p>
-      {c.status === null ? null : (
-        <div className="border-warning/30 bg-warning/10 text-warning-strong mb-3 rounded-lg border px-3 py-2 text-xs">
-          {c.status}
-        </div>
-      )}
       <SizePresetTablePanel />
     </SettingsCard>
   );
