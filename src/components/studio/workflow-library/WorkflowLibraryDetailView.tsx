@@ -12,7 +12,7 @@ import { SourceModal } from "~/components/studio/SourceModal";
 import type { WorkflowLibraryDetailController } from "./hooks/use-workflow-library-detail";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { DETAIL_TABS, type DetailTab } from "./workflow-library-detail-config";
-import { DetailBody } from "./sections/DetailBody";
+import { DetailBody, TabContentLoading } from "./sections/DetailBody";
 import { DetailHeader } from "./sections/DetailHeader";
 
 /** Tabs 的值来自 `DETAIL_TABS` 的 key；集合外的值忽略。 */
@@ -50,6 +50,7 @@ export function WorkflowLibraryDetailView({
     errorMessage,
     workflowIO,
     storedIO,
+    workflowModes,
     paramMap,
     sourceData,
     patchWorkflowIO,
@@ -167,14 +168,22 @@ export function WorkflowLibraryDetailView({
               IO」再被真实数据顶掉（与 DetailBody 的 isLoading 同款口径）。 */}
           {!isLoading && (
             <ErrorBoundary fallback={ioChunkFallback}>
-              <React.Suspense fallback={null}>
+              {/* 懒分块的加载态收在本页签内容区（局部 Suspense）：没有这层
+                  边界，suspend 会冒到路由级 fallback 换来整屏加载（ISSUE #3800）。 */}
+              <React.Suspense fallback={<TabContentLoading label="加载 IO 预览…" />}>
                 <LazyWorkflowLibraryIoPanel
+                  activeMode={activeMode}
+                  /* 与编辑器 IO 面板同一口径的模式数据：真实 modes（不做
+                   * `[taskType]` 兜底）＋就地管理模式（落库走 patchModes）。 */
+                  defaultMode={metaEditor.defaultMode}
                   /* 换工作流时重建草稿：详情面板是共用实例，不按 id 卸载，
                    * 不重建会把上一条工作流的乐观编辑带到这一条。 */
-                  activeMode={activeMode}
                   key={workflow.id}
-                  modes={metaEditor.modes}
+                  modes={workflowModes}
                   onActiveModeChange={setActiveMode}
+                  onModesChange={(modes, defaultMode) => {
+                    void metaEditor.patchModes(modes, defaultMode);
+                  }}
                   onPatchWorkflowIO={patchWorkflowIO}
                   storedIO={storedIO}
                   workflowIO={workflowIO}
