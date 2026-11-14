@@ -48,6 +48,8 @@ export async function POST(req: NextRequest) {
   /* 视频秒数（#3590 测试页与适配器 duration 输入用）：1~60s 的宽松界 ——
    * 各家视频接口的合法区间不同（Agnes 4~12s），越界由上游报错。 */
   const duration = intField(body, "duration", 1, 60);
+  /* 生图种子（ISSUE #3778）：非负整数（0 也是合法种子），越界/非法 = 没带。 */
+  const seed = intField(body, "seed", 0, 4_294_967_295);
 
   try {
     if (kind === "image") {
@@ -64,6 +66,7 @@ export async function POST(req: NextRequest) {
         megapixels,
         ...(resolution === undefined ? {} : { resolution }),
         ...(multiple === undefined ? {} : { multiple }),
+        ...(seed === undefined ? {} : { seed }),
         image,
       });
       return NextResponse.json({ url });
