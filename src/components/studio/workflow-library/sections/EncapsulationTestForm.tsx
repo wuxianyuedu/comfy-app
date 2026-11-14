@@ -13,6 +13,7 @@ import { runAsyncAction } from "~/lib/async-action";
 
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { Textarea } from "~/components/ui/textarea";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { mediaPreviewUrl } from "~/lib/media/media-url";
@@ -286,9 +287,9 @@ function ImageField({
     <div className="flex-col gap-1">
       <FieldLabel label={entry.label} unwired={entry.targetIoKey === null} />
       <div className="border-border bg-surface flex items-center gap-2 rounded-lg border px-2 py-1.5">
-        <span className="text-muted-foreground/70 text-3xs min-w-0 flex-1 truncate font-mono">
+        <TruncatedText className="text-muted-foreground/70 text-3xs min-w-0 flex-1 truncate font-mono">
           {displayValue(value)}
-        </span>
+        </TruncatedText>
         <Button
           className="text-2xs h-auto rounded-md px-2 py-1"
           disabled={disabled || uploading}

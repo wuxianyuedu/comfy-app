@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 
 import { Button } from "~/components/ui/button";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { cn } from "~/lib/utils";
 
@@ -122,7 +123,7 @@ export function OptionListPopover({
               variant="ghost"
             >
               {item.prefix}
-              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+              <TruncatedText className="min-w-0 flex-1 truncate">{item.label}</TruncatedText>
               {item.suffix}
               {selected && (
                 <span aria-hidden className="text-primary-strong">

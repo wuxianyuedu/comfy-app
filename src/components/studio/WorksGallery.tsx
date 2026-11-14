@@ -12,6 +12,7 @@ import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { PageHeader } from "~/components/ui/page-header";
 import { timeAgo } from "~/lib/time-format";
 import type { ProjectOrigin } from "~/lib/project-canvas/canvas-store";
@@ -165,12 +166,12 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
                           铺满整行，长名字会径直压到「删除」两个字底下（用户看到
                           的是两段字叠在一起）。`pr-*` 在这里是给它的**让位**，
                           不是内边距：宽度不够时标题先截断，按钮始终完整。 */}
-                      <p className="text-ink-bright group-hover:text-ink truncate pr-12 text-sm font-medium">
+                      <TruncatedText className="text-ink-bright group-hover:text-ink truncate pr-12 text-sm font-medium">
                         {displayName}
-                      </p>
-                      <p className="text-ink-muted text-2xs mt-1 truncate">
+                      </TruncatedText>
+                      <TruncatedText className="text-ink-muted text-2xs mt-1 truncate">
                         {bodySummary(nodeCount, edgeCount)}
-                      </p>
+                      </TruncatedText>
                       <p className="text-ink-fainter text-2xs mt-0.5">
                         {timeAgo(project.updatedAt, { suffix: "修改" }) ?? "刚刚修改"}
                       </p>

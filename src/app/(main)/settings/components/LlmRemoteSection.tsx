@@ -11,6 +11,7 @@
 
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
+import { Hint } from "~/components/ui/hint";
 import { SettingsCard } from "~/components/ui/settings-card";
 import { TruncatedText } from "~/components/ui/truncated-text";
 
@@ -79,10 +80,16 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
                       <TruncatedText className="text-ink block truncate text-sm">
                         {provider.name}
                       </TruncatedText>
-                      <span className="text-muted-foreground text-2xs block truncate">
-                        {owned.length === 0 ? "暂无模型" : `已启用 ${enabledCount}/${owned.length}`}
-                        {provider.hasApiKey ? " · 已配密钥" : ""}
-                      </span>
+                      <Hint
+                        label={`${owned.length === 0 ? "暂无模型" : `已启用 ${enabledCount}/${owned.length}`}${provider.hasApiKey ? " · 已配密钥" : ""}`}
+                      >
+                        <span className="text-muted-foreground text-2xs block truncate">
+                          {owned.length === 0
+                            ? "暂无模型"
+                            : `已启用 ${enabledCount}/${owned.length}`}
+                          {provider.hasApiKey ? " · 已配密钥" : ""}
+                        </span>
+                      </Hint>
                     </span>
                   </Button>
                 );

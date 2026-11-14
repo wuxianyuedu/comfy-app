@@ -178,7 +178,7 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                        *  的反面：不是「点了没反应」，是根本进不来）。这里保留双击
                        *  作为快捷方式，同时补上焦点与 Enter/F2 —— F2 是各平台通用
                        *  的「重命名」键，Enter 是 `role="button"` 的默认激活键。 */
-                      <Hint label="双击（或 Enter / F2）重命名">
+                      <Hint label={`双击（或 Enter / F2）重命名「${tag.name}」`}>
                         <span
                           onDoubleClick={() => {
                             beginEdit(tag.id, tag.name);
