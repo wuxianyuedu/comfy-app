@@ -21,6 +21,7 @@ import {
 import { RequiredSummary } from "~/components/studio/RequiredSummary";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
+import { MultiModeSelect } from "~/components/ui/multi-mode-select";
 import { clearModeOverrides, withIOLabel, withModeOverride } from "~/lib/workflow/workflow-io-edit";
 import { modeLabel } from "../workflow-library-config";
 import { isPlainRecord } from "~/lib/is-record";
@@ -28,10 +29,15 @@ import { isPlainRecord } from "~/lib/is-record";
 export type WorkflowLibraryIoPanelProps = {
   /** 当前查看 / 编辑的模式；由详情层统一下发，切页签不丢。 */
   activeMode: string | null;
-  /** 工作流支持的模式（与「类型」同源）。 */
+  /** 工作流的默认模式码（选择模式的初值；可为空串）。 */
+  defaultMode: string;
+  /** 工作流**真实声明**的模式（不做 `[taskType]` 兜底）—— 与编辑器 IO 面板同一
+   *  口径：没配就是没配，如实显示「还没有配置模式」并给就地选模式的入口。 */
   modes: Array<string>;
   /** 切换当前模式（只改查看语境，不落库）。 */
   onActiveModeChange: (mode: string) => void;
+  /** 模式集合 / 默认模式变更（就地管理模式，落库走详情层的 patchModes）。 */
+  onModesChange: (modes: Array<string>, defaultMode: string) => void;
   /** 整体落库 workflowIO（PATCH 整列 + 失效两个 detail 缓存）。 */
   onPatchWorkflowIO: (next: Record<string, unknown>) => Promise<void>;
   /** 模板的原始 DB 列（落库底稿）。 */
@@ -68,8 +74,10 @@ function asIOMap(raw: Record<string, unknown>): WorkflowIOMap {
 
 export function WorkflowLibraryIoPanel({
   modes,
+  defaultMode,
   activeMode,
   onActiveModeChange,
+  onModesChange,
   onPatchWorkflowIO,
   storedIO,
   workflowIO,
@@ -234,28 +242,49 @@ export function WorkflowLibraryIoPanel({
         )}
       </div>
 
-      {/* 模式页签：与「类型」同一份模式码，切到哪个模式就编哪个模式的覆盖层。 */}
+      {/* 模式行：与编辑器 IO 面板同一形式（ISSUE #3800）—— 模式页签（>1 个时
+       *  带移除按钮）＋右侧「选择模式」就地管理，不再把用户指去不存在的「类型」
+       *  页签。切到哪个模式就编哪个模式的覆盖层。 */}
       <div className="border-border-strong flex shrink-0 flex-wrap items-center gap-1 border-b px-3 py-1.5">
-        <span className="text-ink-faint text-2xs mr-1">模式</span>
         {modes.map((code) => (
-          <Hint key={code} label={code}>
-            <Button
-              className={`${tabClass(effectiveMode === code)} h-auto`}
-              onClick={() => {
-                onActiveModeChange(code);
-              }}
-              size="xs"
-              variant="ghost"
-            >
-              {modeLabel(code)}
-            </Button>
-          </Hint>
-        ))}
-        {modes.length === 0 && (
-          <span className="text-warning-strong/80 text-2xs">
-            该工作流还没有配置模式 —— 请先在「类型」里勾选
+          <span className="flex shrink-0 items-center gap-0.5" key={code}>
+            <Hint label={code}>
+              <Button
+                className={`${tabClass(effectiveMode === code)} h-auto`}
+                onClick={() => {
+                  onActiveModeChange(code);
+                }}
+                size="xs"
+                variant="ghost"
+              >
+                {modeLabel(code)}
+              </Button>
+            </Hint>
+            {modes.length > 1 && (
+              <Hint accessibleName label={`从工作流模式中移除「${modeLabel(code)}」`}>
+                <Button
+                  className="text-ink-muted hover:text-danger-strong text-3xs rounded"
+                  onClick={() => {
+                    const next = modes.filter((mode) => mode !== code);
+                    onModesChange(next, next[0] ?? "");
+                  }}
+                  size="icon-xs"
+                  variant="ghost"
+                >
+                  ×
+                </Button>
+              </Hint>
+            )}
           </span>
-        )}
+        ))}
+        <span className="ml-auto shrink-0">
+          <MultiModeSelect
+            defaultMode={defaultMode ?? modes[0] ?? ""}
+            hideExtraBadge
+            modes={modes}
+            onChange={onModesChange}
+          />
+        </span>
       </div>
 
       <div className="nodrag nopan text-ink-bright min-h-0 flex-1 overflow-y-auto px-3 py-3">
@@ -264,8 +293,11 @@ export function WorkflowLibraryIoPanel({
             这条工作流还没有暴露任何 IO —— 请在编辑器里勾选参数后再来这里调整。
           </div>
         ) : modes.length === 0 ? (
+          /* 与编辑器 IO 面板同一句提示（ISSUE #3800）：没配模式如实说，出路是
+           * 上方那枚「选择模式」—— 就地勾选后这里立即能用，不必去别处。 */
           <div className="border-warning/30 bg-warning/5 text-warning-strong/80 text-2xs rounded-lg border border-dashed px-3 py-4 text-center leading-relaxed">
-            没有配置模式，参数配置暂不可用。
+            该工作流还没有配置模式 —— 请先在上方「模式」里勾选（文生图 / 图生图 /
+            …），之后才能在这里配置参数。
           </div>
         ) : (
           <DynamicWorkflowForm

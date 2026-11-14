@@ -361,8 +361,10 @@
   已暴露参数的显隐 / 默认值 / 必填 / 显示名 / seed 行为（ISSUE #3632）。
 - 行为与验收：显示源是 `workflow.detailFull` 富化后的 workflowIO，落库以模板
   原始 DB 列为底稿（富化字段不写回）；每次编辑即时经 `workflow.update` 的
-  `workflowIO` 整列 PATCH 落库并失效 detail / detailFull 缓存；模式页签与
-  「类型」同源，按模式分别保留覆盖层；与编辑器 IO 预览共用
+  `workflowIO` 整列 PATCH 落库并失效 detail / detailFull 缓存；模式行与编辑器
+  IO 预览同一形式（ISSUE #3800）：读工作流**真实** modes（不做 `[taskType]`
+  兜底），页签右侧挂「选择模式」就地增删模式（落库走 `patchModes`），没配模式
+  时与编辑器同句提示、不渲染参数表单；与编辑器 IO 预览共用
   `src/lib/workflow/workflow-io-edit.ts` 的变换规则。编辑器内「IO 编辑模式」
   的提示条位于顶栏下方、不叠在画布上。
 - 落点：`src/components/studio/workflow-library/sections/WorkflowLibraryIoPanel.tsx`、

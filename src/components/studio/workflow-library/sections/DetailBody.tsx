@@ -14,6 +14,7 @@ import type { WorkflowRow } from "../workflow-library-config";
 import { LazyJsonViewer } from "~/components/ui/lazy-json-viewer";
 import { ErrorBoundary } from "~/components/ui/error-boundary";
 import { useLazyChunkFallback } from "~/components/ui/use-lazy-chunk-fallback";
+import { PageLoading } from "~/components/ui/page-loading";
 import { EMBEDDED_SCROLL_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { WorkshopEncapsulationPanel } from "./WorkshopEncapsulationPanel";
 
@@ -26,6 +27,17 @@ const LazyWorkflowCanvasNodePreview = React.lazy(() =>
     default: m.WorkflowCanvasNodePreview,
   })),
 );
+
+/** 页签内容区的局部加载态：懒分块还在下载 / 现编译时，spinner 只占这一块
+ *  面板，不冒泡到路由级边界（那里换来的整屏加载会把侧栏一起顶掉 —— 不允许）。
+ *  导出给 `WorkflowLibraryDetailView` 的 IO 页签 Suspense 用：同一件事只写一份。 */
+export function TabContentLoading({ label }: { label: string }) {
+  return (
+    <div className="flex h-full min-h-40 items-center justify-center">
+      <PageLoading label={label} />
+    </div>
+  );
+}
 
 type DetailBodyProps = {
   /** **两个页签共用的当前模式**（详情层持有，见 `WorkflowLibraryDetailController`
@@ -117,28 +129,34 @@ export function DetailBody({
               {/* 画布预览是懒加载的（下面挂着画布引擎）：dev server 重建后它的分块
                   可能已被换掉，`import()` 只剩 reject。没有这层边界时错误会冒到路由级
                   边界、把整个工作流库打成错误页。 */}
+              {/* Suspense 同理必须在**本地**：懒分块下载期间组件会 suspend，没有
+                  局部边界就会一路冒到路由级 fallback（app/loading.tsx），把侧栏 +
+                  列表 + 详情整屏顶成「加载中」（ISSUE #3800）。fallback 只占画布区，
+                  外层卡片框架立即出现，切换页签不闪整屏。 */}
               <ErrorBoundary fallback={chunkFallback}>
-                <LazyWorkflowCanvasNodePreview
-                  /* 生效模式取详情层那一份（两个页签共用）；`defaultMode` 仍传，
-                   * 作为「未切过时的初值」与卡片上的默认标记。 */
-                  defaultMode={activeMode ?? meta?.defaultMode}
-                  key={workflow.id}
-                  modes={meta?.modes}
-                  onModeChange={(code) => {
-                    meta?.onModeChange(code);
-                  }}
-                  onPatchParamMap={onPatchParamMap}
-                  onSeedModeChange={onSeedModeChange}
-                  paramMap={paramMap}
-                  taskType={workflow.taskType}
-                  usable={usable}
-                  /* 页签即视图模式：「实际使用」页签可生成、可看结果，
-                   * 「编辑对外参数」页签是参数落点编辑画布。 */
-                  viewMode={tab === "use" ? "use" : "edit"}
-                  workflowId={workflow.id}
-                  workflowIO={workflowIO}
-                  workflowName={workflow.name}
-                />
+                <React.Suspense fallback={<TabContentLoading label="加载画布预览…" />}>
+                  <LazyWorkflowCanvasNodePreview
+                    /* 生效模式取详情层那一份（两个页签共用）；`defaultMode` 仍传，
+                     * 作为「未切过时的初值」与卡片上的默认标记。 */
+                    defaultMode={activeMode ?? meta?.defaultMode}
+                    key={workflow.id}
+                    modes={meta?.modes}
+                    onModeChange={(code) => {
+                      meta?.onModeChange(code);
+                    }}
+                    onPatchParamMap={onPatchParamMap}
+                    onSeedModeChange={onSeedModeChange}
+                    paramMap={paramMap}
+                    taskType={workflow.taskType}
+                    usable={usable}
+                    /* 页签即视图模式：「实际使用」页签可生成、可看结果，
+                     * 「编辑对外参数」页签是参数落点编辑画布。 */
+                    viewMode={tab === "use" ? "use" : "edit"}
+                    workflowId={workflow.id}
+                    workflowIO={workflowIO}
+                    workflowName={workflow.name}
+                  />
+                </React.Suspense>
               </ErrorBoundary>
             </div>
           </div>
