@@ -59,6 +59,7 @@ export type DataKind =
   | "log-categories"
   | "mode-contract"
   | "model-adapter"
+  | "model-tag"
   | "project-canvas"
   | "remote-model"
   | "sidebar-tab"
@@ -95,6 +96,7 @@ export type DataLocationId =
   | "mode-contract-local"
   | "mode-contract-project"
   | "model-adapter"
+  | "model-tag-library"
   | "remote-model"
   | "sidebar-tab-local"
   | "sidebar-tab-project"
@@ -227,6 +229,14 @@ export const DATA_LOCATIONS: Record<DataLocationId, DataLocationEntry> = {
     migration:
       "每条远程模型的工坊字段映射存在 remoteModel 表的 workshopAdapters 列里，跟着库走；换机器时带库，或在新机器重新配一遍字段映射。",
     target: "remoteModel 表：workshopAdapters 列",
+  },
+  "model-tag-library": {
+    category: "database",
+    kind: "model-tag",
+    kindLabel: "模型标签",
+    migration:
+      "标签与「标签 ↔ 工作流」的绑定都在 workflowModelTag / workflowModelTag_workflowTemplate 表里，跟着库走：换机器时带库即可。",
+    target: "workflowModelTag 表",
   },
   "remote-model": {
     category: "database",

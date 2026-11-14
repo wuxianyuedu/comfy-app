@@ -9,7 +9,6 @@ import { useBusyAction } from "~/components/ui/use-busy-action";
 import { runAsyncAction } from "~/lib/async-action";
 import { errorText } from "~/lib/error-message";
 import { readFileAsText } from "~/lib/file-io";
-import { isPlainRecord } from "~/lib/is-record";
 import { fixed } from "~/lib/number-format";
 import type { RouterInputs, RouterOutputs } from "~/trpc/react";
 import { isRawWorkflowJson } from "~/lib/workflow/workflow-format";
@@ -153,8 +152,9 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
           setShowImport(false);
           setImportName("");
           setImportJson("");
-          setImportModes(["T2I"]);
-          setImportDefaultMode("T2I");
+          /* 模式不给默认（ISSUE #3759）：下一次导入仍由用户自己选。 */
+          setImportModes([]);
+          setImportDefaultMode("");
           void load();
         },
         {
@@ -215,24 +215,9 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       setImportErr("");
       setImportWarn([]);
       setShowImport(true);
-      // 尽力而为的模式提示：JSON 里若暗示图生图
-      //（upscale / inpaint / img2img），建议默认 I2I；否则 T2I。
-      try {
-        let suggested = "T2I";
-        const obj: Record<string, unknown> = isPlainRecord(parsed) ? parsed : {};
-        const nodes: Array<unknown> = Array.isArray(obj.nodes) ? obj.nodes : [];
-        for (const n of nodes) {
-          const t = isPlainRecord(n) ? n.type : undefined;
-          if (typeof t === "string" && /image|upscale|inpaint|edit/i.test(t)) {
-            suggested = "I2I";
-            break;
-          }
-        }
-        setImportModes([suggested]);
-        setImportDefaultMode(suggested);
-      } catch {
-        /* 吞掉 —— 保持默认 */
-      }
+      /* 模式不给默认（ISSUE #3759）：拖入 / 选文件只预填名称与 JSON，
+       * 模式留给用户在面板里自己选 —— 此前按节点类型猜 T2I / I2I，
+       * 猜错时用户还得先删掉再选。 */
     },
     [showFileError],
   );
