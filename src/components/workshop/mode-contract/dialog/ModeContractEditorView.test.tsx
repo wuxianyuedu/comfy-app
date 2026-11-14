@@ -40,6 +40,12 @@ function stubController(
     isRequired: () => false,
     toggleRequired: vi.fn(),
     hasAnyRequired: true,
+    /* 未保存 / 切换确认（ISSUE #3762）：布局用例里恒为「不脏、无挂起切换」。 */
+    dirty: false,
+    pendingMode: null,
+    confirmSwitch: vi.fn(() => Promise.resolve()),
+    discardSwitch: vi.fn(),
+    cancelSwitch: vi.fn(),
     nextReferenceImageId: draft !== null && draft.inputs.length > 0 ? null : "reference-image",
     setOutput: vi.fn(),
     save: vi.fn(() => Promise.resolve()),
