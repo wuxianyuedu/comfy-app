@@ -21,6 +21,7 @@ import {
   apiSubmitVideo,
   type RelayDebugSink,
 } from "~/lib/workshop/generation-client";
+import { debugBodyOf } from "~/lib/workshop/api-channel-core";
 import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
 import { parseRemoteModeAdapters } from "~/lib/workshop/remote-model-adapter";
 import type { RemoteModeAdapter } from "~/lib/workshop/remote-model-adapter";
@@ -72,6 +73,8 @@ export type ModelTestController = {
   generate: () => Promise<void>;
   /** 忙碌位：提交 / 轮询进行中。 */
   generating: boolean;
+  /** 本轮生成发起的时刻（ms；null = 不在生成中）：请求详情面板的已过时间按它走秒。 */
+  generatingSince: number | null;
   /** 统一输入行清单（ISSUE #3778：来自当前模式契约，带必备标记与承接状态）。 */
   inputRows: Array<ModelTestInputRow>;
   /** 当前用途（图片 / 视频页签）。 */
@@ -129,6 +132,7 @@ export function useModelTest(): ModelTestController {
   const [error, setError] = useState<string | null>(null);
   /* 请求读数（ISSUE #3791）：由 onDebug 逐批追加，新一轮生成前清空。 */
   const [debugRows, setDebugRows] = useState<Array<ApiCallDebugRow>>([]);
+  const [generatingSince, setGeneratingSince] = useState<number | null>(null);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const busy = useBusyAction();
 
@@ -340,7 +344,24 @@ export function useModelTest(): ModelTestController {
     setError(null);
     setResult(null);
     setNotice(null);
-    setDebugRows([]);
+    /* 本地提交行（ISSUE #3799）：点生成立即显示本次要发的请求（relay 端点 +
+     * 组装好的统一输入体，长值截断），不等生成结束；上游读数回来后追加在它
+     * 后面。 */
+    const relayBody =
+      kind === "image"
+        ? assembleImageRequest({ model: selectedModel, mode, values })
+        : assembleVideoRequest({ model: selectedModel, mode, values });
+    const localRow: ApiCallDebugRow = {
+      body: debugBodyOf({ kind, debug: true, ...relayBody }),
+      durationMs: null,
+      endpoint: "/api/workshop-api/generate",
+      excerpt: null,
+      ok: true,
+      phase: "relay",
+      status: null,
+    };
+    setDebugRows([localRow]);
+    setGeneratingSince(Date.now());
     /* 失败反馈走 runAsyncAction（P27）；成功不另报 —— 产物本身已经是反馈。 */
     await busy.run(() =>
       runAsyncAction(
@@ -396,6 +417,7 @@ export function useModelTest(): ModelTestController {
         },
       ),
     );
+    setGeneratingSince(null);
   }, [appendDebug, busy, inputRows, kind, mode, selectedModel, values]);
 
   return {
@@ -406,6 +428,7 @@ export function useModelTest(): ModelTestController {
     kind,
     error,
     generating: busy.busy,
+    generatingSince,
     adapters,
     mode,
     modeTabs,

@@ -446,7 +446,7 @@ describe("call* 的请求读数（options.debug，ISSUE #3791）", () => {
     expect(rows[0]?.endpoint).toBe("https://api.example.com/v1/images/generations");
     expect(rows[0]?.durationMs).toEqual(expect.any(Number));
     expect(rows[0]?.body).toMatchObject({ prompt: "p" });
-    expect(rows[0]?.excerpt).toContain("https://cdn/x.png");
+    expect(rows[0]?.excerpt).toMatchObject({ url: "https://cdn/x.png" });
   });
 
   it("请求体长字符串截断（data URL 之类的值不整段进读数）", async () => {
