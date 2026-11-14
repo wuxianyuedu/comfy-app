@@ -715,49 +715,63 @@ export const seriesRouter = createTRPCRouter({
       let created = 0;
       let updated = 0;
       let linked = 0;
-      const linkedIds = new Set<string>();
-      for (const pc of prodChars) {
-        const name = pc?.name ?? "";
-        if (!name) {
-          continue;
-        }
-        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-        const [existing] = await ctx.db
-          .select()
-          .from(character)
-          .where(and(eq(character.seriesId, epSeriesId), eq(character.name, name)))
-          .limit(1);
-        let charId: string;
-        if (existing) {
-          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-          await ctx.db
-            .update(character)
-            .set(productionCharacterToLibrary(pc))
-            .where(eq(character.id, existing.id));
-          updated += 1;
-          charId = existing.id;
-        } else {
-          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-          const [row] = await ctx.db
-            .insert(character)
-            .values({ id: createId(), seriesId: epSeriesId, ...productionCharacterToLibrary(pc) })
-            .returning();
-          created += 1;
-          if (!row) {
-            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "写入系列角色失败" });
+      /* 查-改-插收进 immediate 事务（ISSUE #3833）：本方法注释承诺「同名角色
+       * 只更新不新建（重复跑安全）」，但 check-then-insert 在重试/并发交叠时会
+       * 插出同名重复角色（character 表没有 (seriesId, name) 唯一约束，注入侧
+       * 按 name 合并也只会命中其中一条）。SQLite 单写者 + immediate 拿锁把整段
+       * 串行化，让「重复跑安全」由机制兑现而不是靠时序运气。 */
+      await ctx.db.transaction(
+        async (tx) => {
+          const linkedIds = new Set<string>();
+          for (const pc of prodChars) {
+            const name = pc?.name ?? "";
+            if (!name) {
+              continue;
+            }
+            // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+            const [existing] = await tx
+              .select()
+              .from(character)
+              .where(and(eq(character.seriesId, epSeriesId), eq(character.name, name)))
+              .limit(1);
+            let charId: string;
+            if (existing) {
+              // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+              await tx
+                .update(character)
+                .set(productionCharacterToLibrary(pc))
+                .where(eq(character.id, existing.id));
+              updated += 1;
+              charId = existing.id;
+            } else {
+              // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+              const [row] = await tx
+                .insert(character)
+                .values({
+                  id: createId(),
+                  seriesId: epSeriesId,
+                  ...productionCharacterToLibrary(pc),
+                })
+                .returning();
+              created += 1;
+              if (!row) {
+                throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "写入系列角色失败" });
+              }
+              charId = row.id;
+            }
+            if (!linkedIds.has(charId)) {
+              // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+              await tx
+                .insert(episodeCharacter)
+                .values({ id: createId(), episodeId: ep.id, characterId: charId, role: "" })
+                .onConflictDoNothing();
+              linkedIds.add(charId);
+              linked += 1;
+            }
           }
-          charId = row.id;
-        }
-        if (!linkedIds.has(charId)) {
-          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-          await ctx.db
-            .insert(episodeCharacter)
-            .values({ id: createId(), episodeId: ep.id, characterId: charId, role: "" })
-            .onConflictDoNothing();
-          linkedIds.add(charId);
-          linked += 1;
-        }
-      }
+        },
+        { behavior: "immediate" },
+      );
       return { created, updated, linked };
     }),
 

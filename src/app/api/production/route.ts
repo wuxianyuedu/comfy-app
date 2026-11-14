@@ -8,6 +8,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { productionRepository } from "~/lib/core/repository-production";
+import { db } from "~/lib/db";
 import {
   inheritDerivedFields,
   CHARACTER_DERIVED_FIELDS,
@@ -77,29 +78,47 @@ export async function PUT(req: NextRequest) {
     // 机器衍生字段的保存继承（#2615）：草稿不携带评审 / 裁决 / rev——
     // 整列 upsert 前从库中同 id 记录继承缺键的位，否则工坊里编辑任何东西
     // 的下一次自动保存就会把它们抹掉。
-    const existing = await productionRepository.getForUser(user.id, project);
-    const existingShots = existing && Array.isArray(existing.shots) ? existing.shots : [];
-    const existingCharacters =
-      existing && Array.isArray(existing.characters) ? existing.characters : [];
-    const shots = Array.isArray(production.shots)
-      ? inheritDerivedFields(production.shots, existingShots, SHOT_DERIVED_FIELDS)
-      : production.shots;
-    const characters = Array.isArray(production.characters)
-      ? inheritDerivedFields(production.characters, existingCharacters, CHARACTER_DERIVED_FIELDS)
-      : production.characters;
-    await productionRepository.upsertForUser(user.id, {
-      id: project,
-      title: typeof production.title === "string" ? production.title : undefined,
-      type: typeof production.type === "string" ? production.type : undefined,
-      tone: typeof production.tone === "string" ? production.tone : undefined,
-      logline: typeof production.logline === "string" ? production.logline : undefined,
-      scriptMarkdown:
-        typeof production.scriptMarkdown === "string" ? production.scriptMarkdown : undefined,
-      scenes: production.scenes,
-      characters,
-      shots,
-      progress: production.progress,
-    });
+    //
+    // 读-继承-写收进 immediate 事务（ISSUE #3832）：自动保存与 run 引擎 /
+    // 成片回写并发时，这个窗口内对方写入的列会被旧基准覆盖（丢失更新）。
+    // SQLite 单写者 + immediate 拿锁即串行化这一段（与 saveLlmSettings
+    // 同一形状，§18.10.1）；事务很短：两次读 + 一次 upsert。
+    await db.transaction(
+      async (tx) => {
+        const existing = await productionRepository.getForUser(user.id, project, tx);
+        const existingShots = existing && Array.isArray(existing.shots) ? existing.shots : [];
+        const existingCharacters =
+          existing && Array.isArray(existing.characters) ? existing.characters : [];
+        const shots = Array.isArray(production.shots)
+          ? inheritDerivedFields(production.shots, existingShots, SHOT_DERIVED_FIELDS)
+          : production.shots;
+        const characters = Array.isArray(production.characters)
+          ? inheritDerivedFields(
+              production.characters,
+              existingCharacters,
+              CHARACTER_DERIVED_FIELDS,
+            )
+          : production.characters;
+        await productionRepository.upsertForUser(
+          user.id,
+          {
+            id: project,
+            title: typeof production.title === "string" ? production.title : undefined,
+            type: typeof production.type === "string" ? production.type : undefined,
+            tone: typeof production.tone === "string" ? production.tone : undefined,
+            logline: typeof production.logline === "string" ? production.logline : undefined,
+            scriptMarkdown:
+              typeof production.scriptMarkdown === "string" ? production.scriptMarkdown : undefined,
+            scenes: production.scenes,
+            characters,
+            shots,
+            progress: production.progress,
+          },
+          tx,
+        );
+      },
+      { behavior: "immediate" },
+    );
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(apiErrorBody(error, "保存生产数据失败"), {

@@ -73,15 +73,10 @@ export async function syncFilmToProject(
     };
   });
 
-  await productionRepository.upsertForUser(userId, {
-    id: row.id,
-    title: row.title,
-    type: row.type,
-    tone: row.tone,
-    logline: row.logline,
-    scriptMarkdown: row.scriptMarkdown,
-    scenes: row.scenes,
-    characters: row.characters,
+  /* 只回写自己拥有的两列（ISSUE #3832）：原先把整行读出的旧快照**全部内容列**
+   * 原样写回 —— 合成期间工坊自动保存 / run 引擎 / 评审器对剧本、角色、镜头的
+   * 任何修改都会被这份旧值回滚。字段所有权：shots/progress 归成片链路。 */
+  await productionRepository.patchShotsAndProgress(userId, projectId, {
     shots: nextShots,
     progress: { ...progress, stage: "render", rendered: true },
   });

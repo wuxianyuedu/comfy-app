@@ -49,7 +49,11 @@ export type SeriesOrganizerController = {
   /** 角色库：建 / 改 / 删。 */
   createCharacter: (seriesId: string, name: string) => void;
   createEpisode: (seasonId: string, title: string) => void;
+  /** 新建集在途（按钮禁用判据，#3833：双击不再重复建行）。 */
+  createEpisodePending: boolean;
   createSeason: (seriesId: string, title: string) => void;
+  /** 新建季在途（按钮禁用判据，#3833）。 */
+  createSeasonPending: boolean;
   createSeries: (title: string) => void;
   /** 当前项目归属的集（无归属为 null）。 */
   currentEp?: Episode | null;
@@ -336,6 +340,8 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
     characterEpisodes: charEpisodes.data,
     seasonProgress: seasonProgressQuery.data,
     batchGenerating: batchGenerateMut.isPending,
+    createSeasonPending: createSeason.isPending,
+    createEpisodePending: createEpisode.isPending,
     workflows: workflowList.data?.workflows.map((w) => ({ id: w.id, name: w.name })),
     inspectedCharacterId,
     seriesId,

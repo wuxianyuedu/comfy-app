@@ -64,6 +64,10 @@ const prodRepo = vi.hoisted(() => ({
   upsertForUser: vi.fn<(userId: string, data: Record<string, unknown>) => Promise<unknown>>(() =>
     Promise.resolve(undefined),
   ),
+  /* 成片回写改走窄列 patch（#3832）：不再整行覆写。 */
+  patchShotsAndProgress: vi.fn<
+    (userId: string, id: string, patch: Record<string, unknown>) => Promise<boolean>
+  >(() => Promise.resolve(true)),
 }));
 
 /* 首帧图合成 / 视频任务创建：startFilm 测试要读它们的**入参**断言
@@ -470,12 +474,13 @@ describe("syncFilmToProject — 成片合成后逐镜 clip + 完成状态回写�
       { shotId: "s2", videoPath: null, status: "FAILED" }, // 无产物，clip 不写
     ]);
 
-    expect(prodRepo.upsertForUser).toHaveBeenCalledTimes(1);
-    const [userId, data] = prodRepo.upsertForUser.mock.calls[0]!;
+    expect(prodRepo.patchShotsAndProgress).toHaveBeenCalledTimes(1);
+    const [userId, projectId, patch] = prodRepo.patchShotsAndProgress.mock.calls[0]!;
     expect(userId).toBe("u1");
-    expect(data.progress).toEqual({ stage: "render", rendered: true });
+    expect(projectId).toBe("proj_1");
+    expect(patch.progress).toEqual({ stage: "render", rendered: true });
     // s1 命中且带 videoPath → 写 clipUrl + clipStatus done；prompt 等原字段保留
-    expect(data.shots).toEqual([
+    expect(patch.shots).toEqual([
       {
         id: "s1",
         index: 1,
@@ -486,9 +491,11 @@ describe("syncFilmToProject — 成片合成后逐镜 clip + 完成状态回写�
       // s2 无 videoPath → 原样，不被 clip 覆盖
       { id: "s2", index: 2, prompt: "p2" },
     ]);
-    // 非镜头字段整体回写、不丢失
-    expect(data.title).toBe("项目片");
-    expect(data.characters).toEqual([{ id: "c1" }]);
+    /* 非镜头字段**不回写**（#3832 的修复语义）：合成期间的剧本 / 角色编辑
+     * 不再被读取时刻的旧快照回滚 —— 那些列归各自的写入者。 */
+    expect(patch.title).toBeUndefined();
+    expect(patch.characters).toBeUndefined();
+    expect(patch.scriptMarkdown).toBeUndefined();
   });
 
   it("脏 progress（缺字段 / 非法 stage）也规范化后再回写", async () => {
@@ -505,15 +512,16 @@ describe("syncFilmToProject — 成片合成后逐镜 clip + 完成状态回写�
       progress: {},
     });
     await syncFilmToProject("u1", "proj_2", []);
-    const [, data] = prodRepo.upsertForUser.mock.calls[0]!;
-    expect(data.progress).toEqual({ stage: "render", rendered: true });
-    expect(data.shots).toEqual([]);
+    await syncFilmToProject("u1", "proj_2", []);
+    const [, , patch] = prodRepo.patchShotsAndProgress.mock.calls[0]!;
+    expect(patch.progress).toEqual({ stage: "render", rendered: true });
+    expect(patch.shots).toEqual([]);
   });
 
   it("无 production 行 → 不写（纯文本自由建片不受影响）", async () => {
     prodRepo.getForUser.mockResolvedValue(null);
     await syncFilmToProject("u1", "proj_missing", []);
-    expect(prodRepo.upsertForUser).not.toHaveBeenCalled();
+    expect(prodRepo.patchShotsAndProgress).not.toHaveBeenCalled();
   });
 });
 
