@@ -12665,6 +12665,13 @@ Reviewer 在 Code Review 中发现未记录的新债务时，应要求：
 3. 本地起应用跑真界面（`pnpm dev` 或桌包），别拿构建产物路径当截图；图存本机即可，
    不进 git（截图是交付读数，不是仓库产物，也不进 `changelog.d/`）。
 
+**这一格现在有入口了（ISSUE #3780）**：`pnpm screenshot [路由]`（Windows 双击
+`tools\start\take-screenshot.ps1`）—— 起应用 → 无头 chromium 打开那一屏 → 明暗两态各截一张 →
+落 `log/screenshots/` 并打印本机路径。**本仓的截图能力本来就有**（`@playwright/test` 是
+devDependency、e2e 天天在用），此前缺的只是「把某一屏拍下来」这一格入口，于是每次 UI 改动
+都以「当前无可用的图形化运行与截图环境」收场。完整用法（前置、选项、明暗两态、上传命令、
+发不出图时的处置顺序）见 [guides/ui-screenshot.md](../guides/ui-screenshot.md)。
+
 #### 13.12.3 怎么发（操作面 = 现有附件/评论命令，不造第二套）
 
 Issue 侧的两条现成命令就够了（形状见 cnb-upload-attachment skill）：

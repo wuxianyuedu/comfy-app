@@ -66,6 +66,10 @@ const SCOPED_DOCS = [
    * 条目状态还挂着 PR 号 —— 漂了就会指着一个不存在的 PR 或已改名的 workflow 说
    * 「已完成」，与 `sync-after-pull.md` 同类，纳入校验。 */
   "docs/guides/ga-migration-checklist.md",
+  /* UI 改动截图指南（ISSUE #3780）：里面写着的入口（`pnpm screenshot`）、落点
+   * （`log/screenshots/`）、浏览器安装命令与主题持久化键都来自源码，漂了就会
+   * 指着一条不存在的命令说「照这个截」—— 与 `sync-after-pull.md` 同类，纳入校验。 */
+  "docs/guides/ui-screenshot.md",
   /* 产品需求文档（ISSUE #2421）：产品功能与需求的唯一口径。里面大量引用代码落点
    * （router / 组件 / 表名）与功能状态，漂了就会指着一个不存在的实现说需求 ——
    * 与功能流程图同类，纳入校验。 */
