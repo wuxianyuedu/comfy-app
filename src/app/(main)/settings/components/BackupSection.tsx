@@ -10,6 +10,7 @@ import { useState } from "react";
 
 import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { Button } from "~/components/ui/button";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { displayValue } from "~/lib/display-value";
 import { fmtBytes } from "~/lib/format-bytes";
 import { formatLocalStamp } from "~/lib/time-format";
@@ -36,7 +37,9 @@ function BackupRow({
   const size = fmtBytes(entry.size);
   return (
     <div className={`${SETTINGS_ROW_CLASS} flex items-center gap-3`}>
-      <span className="text-ink/80 min-w-0 flex-1 truncate font-mono text-xs">{entry.name}</span>
+      <TruncatedText className="text-ink/80 min-w-0 flex-1 truncate font-mono text-xs">
+        {entry.name}
+      </TruncatedText>
       <span className="text-muted-foreground shrink-0 text-xs">
         {/* 缺值占位符走 `~/lib/display-value`（规范 16 §16.2.3 的 P8）：
             名字形态认不出时刻时 `at` 是 null —— 那与「读到了 0 时刻」是两件事，
