@@ -14,7 +14,7 @@ export default function NotFound() {
           <p className="text-muted-foreground mt-2">你访问的页面不存在，或已被移动。</p>
         </div>
         <Link
-          className="bg-primary hover:bg-primary-hover rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-colors"
+          className="bg-primary hover:bg-primary-hover dark:bg-primary-600 dark:hover:bg-primary-hover/90 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-colors"
           href="/"
         >
           返回首页
