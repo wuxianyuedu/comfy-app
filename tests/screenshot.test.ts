@@ -76,10 +76,14 @@ describe("screenshot 落点与主题", () => {
     expect(out).toContain(path.join("log", "screenshots"));
   });
 
-  it("给了 --out 就用它（相对路径按仓库根解析）", () => {
-    expect(
-      outputPathFor({ root: "/repo", route: "/", theme: "light", out: String.raw`D:\tmp\a.png` }),
-    ).toBe(String.raw`D:\tmp\a.png`);
+  it("给了 --out 就用它（绝对路径原样、相对路径按仓库根解析）", () => {
+    /* ⚠️ 绝对路径的判据是**平台相关**的（`path.isAbsolute`）⇒ 用当前平台的绝对路径
+     * 来断言，别把 Windows 的盘符形态写死进用例 —— 那在 Linux runner 上必然红
+     * （`D:\…` 在 POSIX 上不是绝对路径，会被解析成仓库根下的相对路径）。 */
+    const absolute = path.resolve(path.sep, "tmp", "a.png");
+    expect(outputPathFor({ root: "/repo", route: "/", theme: "light", out: absolute })).toBe(
+      absolute,
+    );
     expect(outputPathFor({ root: "/repo", route: "/", theme: "light", out: "out/a.png" })).toBe(
       path.resolve("/repo", "out/a.png"),
     );
