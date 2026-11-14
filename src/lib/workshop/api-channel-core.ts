@@ -79,6 +79,9 @@ export type ApiVideoSubmitRequest = {
   model?: string;
   negative?: string;
   prompt: string;
+  /** 统一输入「种子」（ISSUE #3783）：非负整数；缺省 = 不带（上游自己摇）。
+   *  与生图 `ApiImageRequest.seed`（#3778）同口径。 */
+  seed?: number;
 };
 
 /** 视频提交结果：同步返回 URL，或给一个待轮询的任务 id。 */
@@ -228,6 +231,9 @@ function videoBody(req: ApiVideoSubmitRequest, model: string): Record<string, un
     image: req.imageDataUrl,
     frames: req.frames,
     fps: req.fps,
+    /* 种子（ISSUE #3783）：填了才带，字段名用远端接口的通行名
+     * （与 defaultImageBody 的 seed 同口径）。 */
+    ...(req.seed === undefined ? {} : { seed: req.seed }),
   };
 }
 
