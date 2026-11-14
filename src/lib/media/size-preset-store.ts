@@ -16,6 +16,7 @@
  * `src/lib/` 里发请求并非新起法（见 `lib/log/log-file-client` 的运行时日志上报），
  * 本模块只做存取与合并，不含 React。 */
 
+import { fireAndForget } from "~/lib/async-action";
 import {
   DEFAULT_SIZE_PRESET_TABLE,
   mergeSizePresetTable,
@@ -65,7 +66,9 @@ function commit(next: SizePresetTable): void {
   /* 服务端尚未就绪（首屏水合还没回来）时先把本地改动态记下，水合完成后补传 ——
      否则早于水合的一次改动会用「默认表 + 这一处」把用户已存的覆盖冲掉。 */
   if (hydrated) {
-    void persist(next);
+    fireAndForget(persist(next), (error) => {
+      console.error("尺寸配置表保存失败", error);
+    });
   } else {
     dirtyWhileHydrating = true;
   }
