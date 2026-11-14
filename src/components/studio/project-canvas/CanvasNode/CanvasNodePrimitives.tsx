@@ -1,5 +1,6 @@
 import React from "react";
 import { Handle, Position } from "@xyflow/react";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import {
   type CanvasNodeData,
   NODE_META,
@@ -214,9 +215,11 @@ export function NodeChip({
       >
         {meta.typeChar}
       </span>
-      <span className={`text-ink-bright truncate font-semibold ${isSm ? "text-2xs" : "text-sm"}`}>
+      <TruncatedText
+        className={`text-ink-bright truncate font-semibold ${isSm ? "text-2xs" : "text-sm"}`}
+      >
         {name}
-      </span>
+      </TruncatedText>
     </div>
   );
 }

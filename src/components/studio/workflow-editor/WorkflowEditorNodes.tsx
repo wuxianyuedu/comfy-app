@@ -131,20 +131,22 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
             type="target"
           />
         ) : null}
-        <span
-          className="truncate font-medium"
-          /* 边界 pin 标签的「字距被拉开」：画布缩得很小时浏览器默认文字渲染产生柔化
-           *  抗锯齿，读成「s a m p l e s」。`geometricPrecision` + 一点负字距收拢字形。
-           *  字体族与 `font-medium` **刻意不动**：这一列只有 11px，500 字重正是合适的
-           *  光学重量，收拢后再抬到 600 会过重。 */
-          style={{
-            maxWidth: IO_PORT_WIDTH - (valueStr !== null && valueStr !== "" ? 56 : 24),
-            textRendering: "geometricPrecision",
-            letterSpacing: "-0.01em",
-          }}
-        >
-          {data.title}
-        </span>
+        <Hint label={data.title}>
+          <span
+            className="truncate font-medium"
+            /* 边界 pin 标签的「字距被拉开」：画布缩得很小时浏览器默认文字渲染产生柔化
+             *  抗锯齿，读成「s a m p l e s」。`geometricPrecision` + 一点负字距收拢字形。
+             *  字体族与 `font-medium` **刻意不动**：这一列只有 11px，500 字重正是合适的
+             *  光学重量，收拢后再抬到 600 会过重。 */
+            style={{
+              maxWidth: IO_PORT_WIDTH - (valueStr !== null && valueStr !== "" ? 56 : 24),
+              textRendering: "geometricPrecision",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            {data.title}
+          </span>
+        </Hint>
         {valueStr !== null && valueStr !== "" ? (
           <span className="text-warning-strong/90 text-3xs shrink-0 font-mono tabular-nums">
             {valueStr}

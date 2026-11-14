@@ -9,6 +9,7 @@
 import { DynamicWorkflowForm } from "~/components/studio/workflow-form/DynamicWorkflowForm";
 import { WorkflowNodeActionButton } from "~/components/studio/workflow-form/WorkflowNodeParts";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import type { WorkflowIOMap } from "../workflow-io";
 import { WorkflowRunLogButton } from "./WorkflowRunLogButton";
 import { modeLabel } from "./workflow-library-config";
@@ -67,7 +68,9 @@ export function WorkflowPreviewUsePanel({
     <div className="flex w-full max-w-120 flex-col gap-3">
       <div className="border-border bg-panel rounded-xl border p-4">
         <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
-          <span className="text-ink min-w-0 truncate text-sm font-semibold">{workflowName}</span>
+          <TruncatedText className="text-ink min-w-0 truncate text-sm font-semibold">
+            {workflowName}
+          </TruncatedText>
           <WorkflowRunLogButton
             alwaysVisible
             onOpen={onOpenLog}

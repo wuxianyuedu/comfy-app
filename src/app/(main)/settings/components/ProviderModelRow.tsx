@@ -85,23 +85,35 @@ export function ProviderModelRow({
               </Badge>
             )}
           </div>
-          <p className="text-muted-foreground text-2xs truncate">
-            {isChat ? (
-              <>
-                上下文 {formatContextWindow(model.contextWindow)} · 输出{" "}
-                {formatContextWindow(model.maxOutputTokens)} ·{" "}
-                {LLM_API_FORMAT_SHORT_LABELS[model.apiFormat]}
-                {inputTypes.length > 0 &&
-                  ` · ${inputTypes.map((type) => MODEL_INPUT_TYPE_LABELS[type]).join("/")}`}
-              </>
-            ) : (
-              <>
-                {/* #3656：摘要念模型自己生效的端点路径（下拉落库值；库里没配 =
-                    用途默认第一项，`modelView` 已回落），不再是与配置无关的预设 */}
-                {kind === "image" ? "图像端点" : "视频端点"} {model.endpointPath}
-              </>
-            )}
-          </p>
+          <Hint
+            label={
+              isChat
+                ? `上下文 ${formatContextWindow(model.contextWindow)} · 输出 ${formatContextWindow(model.maxOutputTokens)} · ${LLM_API_FORMAT_SHORT_LABELS[model.apiFormat]}${
+                    inputTypes.length > 0
+                      ? ` · ${inputTypes.map((type) => MODEL_INPUT_TYPE_LABELS[type]).join("/")}`
+                      : ""
+                  }`
+                : `${kind === "image" ? "图像端点" : "视频端点"} ${String(model.endpointPath ?? "")}`
+            }
+          >
+            <p className="text-muted-foreground text-2xs truncate">
+              {isChat ? (
+                <>
+                  上下文 {formatContextWindow(model.contextWindow)} · 输出{" "}
+                  {formatContextWindow(model.maxOutputTokens)} ·{" "}
+                  {LLM_API_FORMAT_SHORT_LABELS[model.apiFormat]}
+                  {inputTypes.length > 0 &&
+                    ` · ${inputTypes.map((type) => MODEL_INPUT_TYPE_LABELS[type]).join("/")}`}
+                </>
+              ) : (
+                <>
+                  {/* #3656：摘要念模型自己生效的端点路径（下拉落库值；库里没配 =
+                      用途默认第一项，`modelView` 已回落），不再是与配置无关的预设 */}
+                  {kind === "image" ? "图像端点" : "视频端点"} {model.endpointPath}
+                </>
+              )}
+            </p>
+          </Hint>
         </div>
         <Hint label="按实际用法发起一次真实生成调用（参数可在弹窗内自定义）">
           <Button

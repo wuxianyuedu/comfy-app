@@ -97,6 +97,8 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
     [ioApi],
   );
   const toast = useToast();
+  /* 顶栏 stats 行（节点数 / IO 数 / 注释 / 分组 / 子图层）—— 窄屏截断时展开提示取这一份全文。 */
+  const statsLabel = `${detail.nodes.filter((node) => !isNoteType(node.class_type)).length} 个节点 · ${Object.keys(workflowIO).length} 个暴露 IO · ${detail.notes?.length ?? 0} 个注释 · ${detail.groups?.length ?? 0} 个分组${subgraphStack.length > 0 ? ` · 子工作流 #${subgraphStack.at(-1)?.uid}` : ""}`;
 
   return (
     <header
@@ -119,7 +121,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               （首次顶层拉取时捕获，跨子图导航保留），下钻不会把首段改写成子图名；
               点根段回顶层，中间各层是可点按钮。**最后**一段（当前子图）是不可交互的
               span + 紫色选择框 —— 点它会重入同一子图、把另一层压进 `subgraphStack`。
-              `max-w` + `truncate` 截断，全名经 `title` 读到。 */}
+              `max-w` + `truncate` 截断，全名经悬停提示读到。 */}
           <div className="flex items-center gap-1.5 text-xs">
             <Hint
               label={
@@ -230,21 +232,23 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               </Button>
             </Hint>
           </div>
-          <p className="text-ink-soft text-2xs mt-0.5 truncate font-medium">
-            {detail.nodes.filter((node) => !isNoteType(node.class_type)).length} 个节点
-            <span className="text-ink-fainter mx-1.5">·</span>
-            {Object.keys(workflowIO).length} 个暴露 IO
-            <span className="text-ink-fainter mx-1.5">·</span>
-            {detail.notes?.length ?? 0} 个注释
-            <span className="text-ink-fainter mx-1.5">·</span>
-            {detail.groups?.length ?? 0} 个分组
-            {subgraphStack.length > 0 && (
-              <>
-                <span className="text-ink-fainter mx-1.5">·</span>
-                <span className="text-primary-strong">子工作流 #{subgraphStack.at(-1)?.uid}</span>
-              </>
-            )}
-          </p>
+          <Hint label={statsLabel}>
+            <p className="text-ink-soft text-2xs mt-0.5 truncate font-medium">
+              {detail.nodes.filter((node) => !isNoteType(node.class_type)).length} 个节点
+              <span className="text-ink-fainter mx-1.5">·</span>
+              {Object.keys(workflowIO).length} 个暴露 IO
+              <span className="text-ink-fainter mx-1.5">·</span>
+              {detail.notes?.length ?? 0} 个注释
+              <span className="text-ink-fainter mx-1.5">·</span>
+              {detail.groups?.length ?? 0} 个分组
+              {subgraphStack.length > 0 && (
+                <>
+                  <span className="text-ink-fainter mx-1.5">·</span>
+                  <span className="text-primary-strong">子工作流 #{subgraphStack.at(-1)?.uid}</span>
+                </>
+              )}
+            </p>
+          </Hint>
           {detail.sourcePath !== undefined &&
           detail.sourcePath !== null &&
           detail.sourcePath !== "" ? (

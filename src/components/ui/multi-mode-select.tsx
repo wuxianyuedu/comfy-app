@@ -13,6 +13,7 @@ import { enterCommit } from "~/components/ui/use-enter-commit";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { ALL_WORKFLOW_TYPES, type WorkflowCategory } from "~/lib/workflow/workflow-types";
 
 /* ── per-category pill colors（走语义 token，规范 03 §3.6.2）── */
@@ -292,7 +293,9 @@ export function MultiModeSelect({
                       </svg>
                     )}
                   </span>
-                  <span className="flex-1 truncate text-sm font-medium">{item.label}</span>
+                  <TruncatedText className="flex-1 truncate text-sm font-medium">
+                    {item.label}
+                  </TruncatedText>
                   {/* 默认模式标记：点星星把该模式设为默认（未选中会顺带勾上） */}
                   <Button
                     className={`text-3xs h-auto shrink-0 rounded px-1 py-0.5 font-medium ${
