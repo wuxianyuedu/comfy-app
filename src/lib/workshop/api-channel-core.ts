@@ -247,12 +247,15 @@ export type ApiCallDebugRow = {
   durationMs: number | null;
   /** 实际请求的完整 URL（含按 Base URL 形态推导出的动作路径）。 */
   endpoint: string;
-  /** 上游响应体的摘要（超长截断）；响应不是 JSON 时给原始文本摘要。 */
-  excerpt: string | null;
+  /** 上游响应体的**结构化截断**视图（与 body 同一套截断：长字符串截断、
+   * 结构原样）—— 客户端才能可靠地格式化显示；截断的裸字符串 JSON 解析
+   * 不回去，格式化就没有结构可用了（ISSUE #3799）。网络层失败为 null。 */
+  excerpt: unknown;
   /** HTTP 层是否 2xx。 */
   ok: boolean;
-  /** 哪一步发的：生图 / 视频提交 / 视频轮询（轮询逐候选上报）。 */
-  phase: "image" | "video-poll" | "video-submit";
+  /** 哪一步发的：本地提交（客户端即时行）/ 生图 / 视频提交 / 视频轮询
+   * （轮询逐候选上报）。 */
+  phase: "image" | "relay" | "video-poll" | "video-submit";
   /** HTTP 状态码；网络层失败（fetch 抛错）时为 null。 */
   status: number | null;
 };
@@ -260,17 +263,15 @@ export type ApiCallDebugRow = {
 /** debug 面板里字符串值的截断长度：请求体里塞过 data URL（整张图），
  *  不截断的话一条读数就是几 MB。 */
 const DEBUG_STRING_LIMIT = 300;
-/** 响应摘要的截断长度。 */
-const DEBUG_EXCERPT_LIMIT = 600;
-
 function truncateDebugString(text: string): string {
   return text.length <= DEBUG_STRING_LIMIT
     ? text
     : `${text.slice(0, DEBUG_STRING_LIMIT)}…（截断，原长 ${text.length} 字符）`;
 }
 
-/** 请求体的 debug 形状：长字符串截断、结构原样（形状才是要看的）。 */
-function debugBodyOf(body: unknown): unknown {
+/** 请求体的 debug 形状：长字符串截断、结构原样（形状才是要看的）。
+ * 导出：客户端（测试页）的「本地提交」行用同一套截断展示组装好的请求体。 */
+export function debugBodyOf(body: unknown): unknown {
   if (typeof body === "string") {
     return truncateDebugString(body);
   }
@@ -287,16 +288,6 @@ function debugBodyOf(body: unknown): unknown {
     );
   }
   return body;
-}
-
-/** 上游响应体的摘要：超长截断（截断长度打在尾巴上），坏 JSON 原样收窄。 */
-function excerptOf(payload: unknown): string {
-  if (typeof payload === "string") {
-    return truncateDebugString(payload).slice(0, DEBUG_EXCERPT_LIMIT + 120);
-  }
-  /* undefined（JSON.stringify 对 undefined / 函数的返回）= 没有可读摘要。 */
-  const text = JSON.stringify(payload);
-  return text === undefined ? "" : truncateDebugString(text).slice(0, DEBUG_EXCERPT_LIMIT + 120);
 }
 
 export type ApiChannelFetchOptions = {
@@ -377,7 +368,7 @@ export async function callImageGeneration(
     body: debugBodyOf(imageBody),
     durationMs: Date.now() - startedAt,
     endpoint: target.endpoint,
-    excerpt: excerptOf(payload),
+    excerpt: debugBodyOf(payload),
     ok: res.ok,
     phase: "image",
     status: res.status,
@@ -452,7 +443,7 @@ export async function callVideoSubmit(
     body: debugBodyOf(submitBody),
     durationMs: Date.now() - submitStartedAt,
     endpoint: target.endpoint,
-    excerpt: excerptOf(payload),
+    excerpt: debugBodyOf(payload),
     ok: res.ok,
     phase: "video-submit",
     status: res.status,
@@ -510,7 +501,7 @@ export async function callVideoPoll(
           body: { remoteTaskId },
           durationMs: Date.now() - candidateStartedAt,
           endpoint: pollUrl,
-          excerpt: excerptOf(payload),
+          excerpt: debugBodyOf(payload),
           ok: res.ok,
           phase: "video-poll",
           status: res.status,
@@ -572,7 +563,7 @@ export async function callVideoPoll(
     body: { remoteTaskId },
     durationMs: Date.now() - pollStartedAt,
     endpoint: pollEndpointFor(channel.baseUrl, remoteTaskId),
-    excerpt: excerptOf(payload),
+    excerpt: debugBodyOf(payload),
     ok: res.ok,
     phase: "video-poll",
     status: res.status,
