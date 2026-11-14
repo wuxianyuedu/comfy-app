@@ -59,6 +59,8 @@
 | F12  | P1   | `src/components/studio/logs/log-analysis.ts`                     | 时间线去重索引跨轮复用（`TimelineIndex` + `mergeTimelineIndexed` / `trimTimelineIndex`）：每轮重建两张全表 Map → 只在形状变化时建；截断改摘键 | #1887 |
 | F4a  | P1   | `src/components/studio/ProjectOutputs.tsx` + `ViewContainer.tsx`（滚动锚） | 产出网格行级虚拟化：虚拟项 = 一行 2~4 卡（列数按容器宽推，镜像旧断点）；`useVirtualizer` 挂文档型滚动锚 `data-document-scroll`；未量测环境全量渲染兜底（ModelLibrary 的 `measured` 守卫同形） | #2375 |
 | L5   | P1   | `src-tauri/src/poll_clock.rs`（新）+ `lib.rs` + `single_instance.rs` | 六处手写 sleep 轮询收敛成 `PollClock`：每拍先 tick 再探测（首绘看护那次「`continue` 跳过循环底 sleep」的事故从结构上消失）；预算改墙钟、退避不缩短它；focus waiter 走 `forever` 形。守事故的 `#[test]` 同批改钉新不变量 | #2315 |
+| S14  | P1   | `src/server/workshop/comfyui.ts`（检索 `resolvedBase` / `resetWorkshopComfyBase`） | 两份进程内 memo 补失效出口：`resetWorkshopComfyBase()` 丢缓存重新探测，执行者是本模块的 `guardNetworkFailure`（连不上才复位，活实例报错不复位）；手改 settings 生效、端口漂移不再钉死 | #2323 |
+| F4b  | P1   | `src/components/studio/workflow-library/CustomNodesSettings/NodesTab.tsx`（检索 `useVirtualizer`） | 单包节点卡列表窗口化：挂载成本不再随包内类型数线性涨（另两层此前已「展开才挂载」） | #2548 |
 
 ## B. 判定修正与例外（📝）
 
@@ -99,12 +101,9 @@
 ### C.1 前端渲染（P1）
 
 - _（F4a 已闭环，见 A 表。）_
-- ⬜ **F4b** → **#2191**。节点库三层嵌套 `map`（自定义节点包可含数百~上千类型）。
-  定位：`src/components/studio/workflow-library/CustomNodesSettings/NodesTab.tsx`
-  搜 `parentBlocks.map(` / `subs.map(` / `nodeTypeList.map(`。
-  **本条转单时复核过一次，登记的话已部分过时**：三层里现在有两层是「展开才挂载」，
-  剩下的只是「展开组内不虚拟化」；另外这一带是 `~/components/ui/tree-rows` 的样本、
-  受 P36 硬闸管，动手前先读那条。
+- ~~**F4b** → **#2191**。节点库三层嵌套 `map`（自定义节点包可含数百~上千类型）。~~
+  **已闭环（#2548）**：单包节点卡列表窗口化（`useVirtualizer`），挂载成本不再随包内类型数
+  线性涨；两层「展开才挂载」的门控在此前复核中已落地。见 A 表 F4b 行。
 - _（F7 已闭环，见 A 表。）_
 
 ### C.2 资源与内存（P1）
@@ -150,8 +149,11 @@ _（全部闭环，见 A 表。）_
   （窗口大小搜 `TAIL_BYTES`，`sessions` 那份搜 `MAX_TEXT_BYTES` —— 本台账旧版写「4MiB 尾窗」是
   **抄走的数值**，复量是 40 万字节那一档，这正是「绝对数值不进台账」这条口径的由来）。
 - ~~**S13** `src/app/(main)/settings/hooks/use-settings-page.ts:183-187` —— `comfyStatus` 5s 轮询~~ **已闭环（#1874）**：5s 那一拍当初是为「外部拉起的实例要被及时认出来」而收紧的，现在改成**事件驱动为主**（服务端一发现运行态变化就经 `/api/comfy/state` 推过来，设置页收到立刻重问），兜底那一拍从 5s 放到 30s 且只剩「通道自己坏了」这一件事。**复核进展（#1873）**：快照链路已核实——TTL `1.5s` / 未绑定端口 `0s`（`COMFY_UNBOUND_PORT_TTL_MS`），且动作后会 `reset`，所以这 5s 不是「兜住一个永不过期的缓存」而是纯轮询节奏；核实中翻出的那条「启动了却读到旧结论」的窗口已单独闭环（S14a，见 A 表）。
-- ⬜ **S14** → **#2194**（只剩 `src/server/workshop/comfyui.ts` 那一半，定位搜 `settingsCache` /
-  `resolvedBase`；旧登记的 `:36-49` 其实还盖得住，改写成检索式是按本节的统一口径，不是因为它错了）。
+- ~~**S14** → **#2194**（只剩 `src/server/workshop/comfyui.ts` 那一半，定位搜 `settingsCache` /
+  `resolvedBase`；旧登记的 `:36-49` 其实还盖得住，改写成检索式是按本节的统一口径，不是因为它错了）~~
+  **已闭环（#2323）**：两份 memo 补上失效出口 `resetWorkshopComfyBase()`（与
+  `~/lib/comfyui/client.ts` 的 `resetComfyBase()` 同语义），执行者是本模块的 `guardNetworkFailure`
+  —— 连不上才复位，活实例报错不复位。见 A 表 S14 行。
   —— `status.ts` 那一半已闭环（**S14a**，见 A 表）：缓存本就有 TTL + `reset` 出口，缺的是「在途查询不随 `reset` 一起作废」，已随 #1873 修。
   —— `workshop/comfyui.ts` 的 `settingsCache` / `resolvedBase` 是**进程内 memo、无失效出口**（改设置文件后要重启才生效）。它属功能语义（何时该失效）而非纯性能，单列一轮。
   —— 转单时补的一条对照：同维度的 `src/lib/comfyui/client.ts` 那份缓存**有**出口 `resetComfyBase()`，
