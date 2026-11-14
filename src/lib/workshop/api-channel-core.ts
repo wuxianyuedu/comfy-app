@@ -60,6 +60,8 @@ export type ApiImageRequest = {
   prompt: string;
   /** 统一输入「分辨率」的取值（清晰度档位名，如 "1k"）。 */
   resolution?: string;
+  /** 统一输入「种子」（ISSUE #3778）：非负整数；缺省 = 不带（上游自己摇）。 */
+  seed?: number;
   size?: string;
 };
 
@@ -209,6 +211,8 @@ function defaultImageBody(req: ApiImageRequest, model: string): Record<string, u
     prompt: req.prompt,
     negative_prompt: req.negative === "" ? undefined : req.negative,
     size: req.size === "" ? undefined : req.size,
+    /* 种子（ISSUE #3778）：填了才带，字段名用远端接口的通行名。 */
+    ...(req.seed === undefined ? {} : { seed: req.seed }),
     n: 1,
     response_format: "url",
   };

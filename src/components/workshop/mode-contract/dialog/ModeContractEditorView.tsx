@@ -11,7 +11,7 @@ import {
   type ModeContract,
 } from "~/lib/workshop/model-mode-contract";
 import {
-  contractInputTypeHint,
+  contractInputTypeInfo,
   contractModeLabel,
   customInputKindLabel,
   isModeContractCustomized,
@@ -331,10 +331,21 @@ function ContractInputRow({
 }) {
   const label = modeContractInputIdLabel(input, draft.customInputs);
   const kind = customInputKindOf(input);
+  const typeInfo = contractInputTypeInfo(input, draft.customInputs ?? []);
 
   return (
     <div className="border-border bg-bg flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
-      <Hint label={contractInputTypeHint(input, draft.customInputs ?? [])} wrap>
+      {/* 类型与描述分两行（ISSUE #3778）：类型值用英文（与口 id 同一语言），
+          描述另起一行；无类型信息（未知口）时只给描述一行。 */}
+      <Hint
+        label={
+          <span>
+            {typeInfo.type !== "" && <span className="block">类型：{typeInfo.type}</span>}
+            <span className="block">{typeInfo.description}</span>
+          </span>
+        }
+        wrap
+      >
         <span className="text-ink min-w-0 cursor-help text-sm">
           <span className="text-muted-foreground mr-1 tabular-nums">{index + 1}.</span>
           <LabelWithId id={input} label={label} />

@@ -23,12 +23,14 @@ import { useTRPC } from "~/trpc/react";
 import {
   assembleImageRequest,
   assembleVideoRequest,
+  contractTestRows,
   defaultModeForKind,
   defaultSizeValues,
   modeTabsForKind,
   randomPromptFor,
   testCandidatesForKind,
   type AdaptersByModel,
+  type ModelTestInputRow,
   type ModelTestKind,
   type ModelTestValues,
   type ModeTab,
@@ -51,7 +53,8 @@ export type ModelTestResult =
 export type ModelTestController = {
   /** 选中模型的适配器草稿（workshopAdaptersGet 的解析结果）。 */
   adapters: Array<RemoteModeAdapter>;
-  /** 候选模型（当前 kind 下启用的远端条目）。 */
+  /** 候选模型（当前 kind 下启用的远端条目，再按当前模式收窄：
+   *  只列配了该模式适配器的模型 —— 不支持这个模式的不出现在下拉里）。 */
   candidates: Array<TestCandidate>;
   /** 一次测试的失败文案（空 = 没失败）。 */
   error: string | null;
@@ -59,8 +62,13 @@ export type ModelTestController = {
   generate: () => Promise<void>;
   /** 忙碌位：提交 / 轮询进行中。 */
   generating: boolean;
+  /** 统一输入行清单（ISSUE #3778：来自当前模式契约，带必备标记与承接状态）。 */
+  inputRows: Array<ModelTestInputRow>;
   /** 当前用途（图片 / 视频页签）。 */
   kind: ModelTestKind;
+  /** 按用途过滤（未按模式收窄）的候选数：区分「这个用途没模型」与
+   *  「这个模式没模型」两种空态用。 */
+  kindCandidateCount: number;
   /** 适配器查询 / 候选读取的加载态。 */
   loading: boolean;
   /** 当前生效的模式码（左栏页签选中项；"" = 尚未落到任何模式）。 */
@@ -69,6 +77,8 @@ export type ModelTestController = {
   modeTabs: Array<ModeTab>;
   /** 局部更新表单值（文本 / 档位）。 */
   patchValue: (type: keyof ModelTestValues, value: string) => void;
+  /** 批量更新表单值（尺寸下拉一次写回四个键）。 */
+  patchValues: (patch: Partial<ModelTestValues>) => void;
   /** 提示词随机按钮（ISSUE #3742）：从常用样本里随机填一条。 */
   randomizePrompt: () => void;
   /** 最近一次成功产物。 */
@@ -121,6 +131,26 @@ export function useModelTest(): ModelTestController {
     return testCandidatesForKind(kind, out);
   }, [configQ.data, kind]);
 
+  /* 模式契约（ISSUE #3778：统一输入行来自这里，不再来自适配器映射）。
+   * 注册表是服务端合好的生效值（成品配置 + 本机覆盖），按模式取当前那份。 */
+  const contractsQ = useQuery(trpc.llm.modeContractsGet.queryOptions());
+  const contract = useMemo(() => {
+    const rows = contractsQ.data?.contracts;
+    if (!Array.isArray(rows)) {
+      return null;
+    }
+    return rows.find((c) => c.mode === mode) ?? null;
+  }, [contractsQ.data, mode]);
+
+  /* 统一输入行：顺序 = 契约口的顺序；必备标记来自契约；承接状态来自通道
+   * 集合。契约读数未到时退兜底行（通道默认集合），表单不至于闪空。 */
+  const inputRows = useMemo<Array<ModelTestInputRow>>(
+    () => contractTestRows(contract, kind),
+    [contract, kind],
+  );
+
+  const kindCandidateCount = candidates.length;
+
   const candidateNames = useMemo(() => candidates.map((c) => c.name), [candidates]);
 
   /* 全部候选的适配器（#3635：左栏每个模式页签要显示「配了几个可用模型」）。
@@ -145,6 +175,17 @@ export function useModelTest(): ModelTestController {
     [kind, adaptersByModelQ.data],
   );
 
+  /* 模式收窄（ISSUE #3778 问题 3）：只保留配了当前模式适配器的候选 —— 左栏
+   * 页签徽标的「N 模型」与下拉是同一份读数，页签说 0 模型时下拉不再出现
+   * 不支持该模式的模型。适配器索引未到时不收窄（避免下拉先空后跳）。 */
+  const modeCandidates = useMemo<Array<TestCandidate>>(() => {
+    const byModel = adaptersByModelQ.data;
+    if (byModel === undefined) {
+      return candidates;
+    }
+    return candidates.filter((c) => (byModel[c.name] ?? []).some((a) => a.mode === mode));
+  }, [candidates, adaptersByModelQ.data, mode]);
+
   const adaptersQ = useQuery(
     trpc.llm.workshopAdaptersGet.queryOptions(
       { name: selectedModel },
@@ -166,6 +207,24 @@ export function useModelTest(): ModelTestController {
     setError(null);
   }, []);
 
+  const setMode = useCallback(
+    (next: string) => {
+      setModeState(next);
+      /* 模式收窄后，当前选中的模型可能没配新模式的适配器（不支持该模式）
+       * → 清掉选择，让下拉回到占位态，而不是留着「测的不是这个模式」的选中。 */
+      if (selectedModel !== "") {
+        const supports =
+          adaptersByModelQ.data?.[selectedModel]?.some((a) => a.mode === next) ?? false;
+        if (!supports) {
+          setSelectedModel("");
+        }
+      }
+      setResult(null);
+      setError(null);
+    },
+    [adaptersByModelQ.data, selectedModel],
+  );
+
   const selectModel = useCallback(
     (name: string) => {
       setSelectedModel(name);
@@ -179,6 +238,11 @@ export function useModelTest(): ModelTestController {
 
   const patchValue = useCallback((type: keyof ModelTestValues, value: string) => {
     setValues((prev) => ({ ...prev, [type]: value }));
+  }, []);
+
+  /* 批量更新（尺寸下拉一次写回比例 / 百万像素 / 分辨率 / 倍数四个键）。 */
+  const patchValues = useCallback((patch: Partial<ModelTestValues>) => {
+    setValues((prev) => ({ ...prev, ...patch }));
   }, []);
 
   /* 提示词随机按钮（ISSUE #3742）：从常用样本里随机填一条。 */
@@ -212,6 +276,21 @@ export function useModelTest(): ModelTestController {
     const prompt = values.prompt?.trim() ?? "";
     if (prompt === "") {
       setError("请填写提示词");
+      return;
+    }
+    /* 必备口校验（ISSUE #3778）：契约标了必备、通道又承接得住的行，空着就
+     * 拦下 —— 与「必备 / 可选」标识同一份读数，别让用户点生成才被上游打回。 */
+    const missing = inputRows
+      .filter(
+        (row) =>
+          row.required &&
+          !row.disabled &&
+          row.valueKey !== null &&
+          (values[row.valueKey]?.trim() ?? "") === "",
+      )
+      .map((row) => row.label);
+    if (missing.length > 0) {
+      setError(`请填写必备输入：${missing.join("、")}`);
       return;
     }
     setError(null);
@@ -264,10 +343,12 @@ export function useModelTest(): ModelTestController {
         },
       ),
     );
-  }, [busy, kind, mode, selectedModel, values]);
+  }, [busy, inputRows, kind, mode, selectedModel, values]);
 
   return {
-    candidates,
+    candidates: modeCandidates,
+    kindCandidateCount,
+    inputRows,
     kind,
     error,
     generating: busy.busy,
@@ -279,9 +360,10 @@ export function useModelTest(): ModelTestController {
     selectedModel,
     setInputFromFile,
     setKind,
-    setMode: setModeState,
+    setMode,
     selectModel,
     patchValue,
+    patchValues,
     randomizePrompt,
     result,
     values,
