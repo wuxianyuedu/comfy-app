@@ -307,12 +307,12 @@ function FontRow({
           .filter((group) => group.editable)
           .map((group) => (
             <div className="flex items-center gap-2" key={`input-${group.slot}`}>
-              <label
+              <FieldLabel
                 className="text-ink w-24 shrink-0 text-xs"
                 htmlFor={`font-${label}-${group.slot}`}
               >
                 {group.label}
-              </label>
+              </FieldLabel>
               <Input
                 aria-label={`${label} · ${group.label}`}
                 className="min-w-0 flex-1"
