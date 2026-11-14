@@ -88,21 +88,18 @@ export async function ensureProductionProject(
   return id;
 }
 
-/** production 行缺失时补一行（绑定 UI 侧「只建过画布、没进过工坊」的项目）。 */
+/** production 行缺失时补一行（绑定 UI 侧「只建过画布、没进过工坊」的项目）。
+ *  单语句 `onConflictDoNothing`（ISSUE #3835）：ensure 语义 = 重复执行成功且
+ *  无害；先查后插在并发首存（MCP 桥接与工坊保存赛跑）会同抢主键让后到者 500。 */
 async function ensureProductionRow(
   projectId: string,
   ownerId: string,
   title: string,
 ): Promise<void> {
-  const rows = await workshopDb
-    .select({ id: production.id })
-    .from(production)
-    .where(eq(production.id, projectId))
-    .limit(1);
-  if (rows[0]) {
-    return;
-  }
-  await workshopDb.insert(production).values({ id: projectId, userId: ownerId, title });
+  await workshopDb
+    .insert(production)
+    .values({ id: projectId, userId: ownerId, title })
+    .onConflictDoNothing({ target: production.id });
 }
 
 /** 把会话内容写进 production。**只写内容列**——进度 / run / 评审是另外的字段

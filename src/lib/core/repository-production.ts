@@ -8,6 +8,7 @@ import { TRPCError } from "@trpc/server";
 import { db } from "~/lib/db";
 import { production, type Production } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
+import type { DbExecutor } from "./repository-executor-types";
 import { and, eq } from "drizzle-orm";
 import type { ProductionRun } from "~/lib/production/run-types";
 
@@ -32,9 +33,12 @@ export class ProductionRepository extends DrizzleRepository<Production> {
     super(production, production.id);
   }
 
-  /** 读某用户某项目的生产数据；不存在或不属于该用户 → null。 */
-  async getForUser(userId: string, id: string): Promise<Production | null> {
-    const rows = await db
+  /** 读某用户某项目的生产数据；不存在或不属于该用户 → null。
+   *  `executor`：由事务入口（如工坊自动保存那条 immediate 事务）传入，读走事务里
+   *  的连接，避免读到提交前的旧行（§18.10.1 的同一条纪律）。 */
+  async getForUser(userId: string, id: string, executor?: DbExecutor): Promise<Production | null> {
+    const exec = executor ?? db;
+    const rows = await exec
       .select()
       .from(production)
       .where(and(eq(production.id, id), eq(production.userId, userId)))
@@ -92,33 +96,71 @@ export class ProductionRepository extends DrizzleRepository<Production> {
     return rows.length > 0;
   }
 
-  /** 按 proj_* upsert 生产数据（不存在则建、存在且归属当前用户则更新）。 */
-  async upsertForUser(userId: string, data: ProductionInput): Promise<Production> {
-    const existing = await db.select().from(production).where(eq(production.id, data.id)).limit(1);
+  /**
+   * 只更新 shots 与 progress 两列（成片合成回写专用，ISSUE #3832）：合成回写
+   * 「逐镜 clip + 进度」是会重复触发的收尾动作（进程重启重跑 / 手动重新合成），
+   * 原先 `syncFilmToProject` 把整行读出的旧快照**全部内容列**写回，合成期间
+   * 其他写入者（工坊自动保存 / run 引擎 / 评审器）改的字段被回滚成旧值。
+   * 字段所有权：这两列归成片链路，其余内容列一概不碰。行不存在 → false。
+   */
+  async patchShotsAndProgress(
+    userId: string,
+    id: string,
+    patch: { progress?: unknown; shots?: unknown },
+  ): Promise<boolean> {
+    const set: Record<string, unknown> = { updatedAt: new Date() };
+    if (patch.progress !== undefined) {
+      set.progress = patch.progress;
+    }
+    if (patch.shots !== undefined) {
+      set.shots = patch.shots;
+    }
+    const rows = await db
+      .update(production)
+      .set(set)
+      .where(and(eq(production.id, id), eq(production.userId, userId)))
+      .returning({ id: production.id });
+    return rows.length > 0;
+  }
+
+  /** 按 proj_* upsert 生产数据（不存在则建、存在且归属当前用户则更新）。
+   *  并发首存用 `onConflictDoNothing` 避免 PK 竞态 500（ISSUE #3832）；命中冲突后
+   *  复核归属：同一用户则更新，不同用户则拒绝（#3839），杜绝跨用户越权覆盖。 */
+  async upsertForUser(
+    userId: string,
+    data: ProductionInput,
+    executor?: DbExecutor,
+  ): Promise<Production> {
+    const exec = executor ?? db;
+    const inserted = await exec
+      .insert(production)
+      .values({ ...data, userId })
+      .onConflictDoNothing({ target: production.id })
+      .returning();
+    if (inserted[0]) {
+      return inserted[0];
+    }
+    const existing = await exec
+      .select()
+      .from(production)
+      .where(eq(production.id, data.id))
+      .limit(1);
     if (!existing[0]) {
-      const rows = await db
-        .insert(production)
-        .values({ ...data, userId })
-        .returning();
-      const created = rows[0];
-      if (!created) {
-        throw new Error("production upsert 失败：insert 未返回行");
-      }
-      return created;
+      throw new Error("production upsert 失败：冲突后未找到行");
     }
     if (existing[0].userId !== userId) {
       throw new TRPCError({ code: "FORBIDDEN", message: "无权操作该生产数据" });
     }
-    const rows = await db
+    const rows = await exec
       .update(production)
-      .set({ ...data, userId, updatedAt: new Date() })
+      .set({ ...data, updatedAt: new Date() })
       .where(and(eq(production.id, data.id), eq(production.userId, userId)))
       .returning();
-    const updated = rows[0];
-    if (!updated) {
+    const row = rows[0];
+    if (!row) {
       throw new Error("production upsert 失败：update 未返回行");
     }
-    return updated;
+    return row;
   }
 }
 

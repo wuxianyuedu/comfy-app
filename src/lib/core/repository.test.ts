@@ -222,11 +222,17 @@ describe("SkillRepository", () => {
     sortOrder: 1,
   };
 
-  it("ensureBuiltIns 幂等：第二次调用不再重复插入", async () => {
+  it("ensureBuiltIns 幂等：同一种子重复调用不重复插入；缺的 slug 按次补齐（#3835）", async () => {
     await skillRepository.ensureBuiltIns([SEED]);
-    await skillRepository.ensureBuiltIns([{ ...SEED, slug: "other" }]);
+    await skillRepository.ensureBuiltIns([SEED]);
+    // 同一种子重复执行：slug 唯一索引 + onConflictDoNothing 兜底，仍是一行。
     expect(await skillRepository.findAll()).toHaveLength(1);
+    // 换新 slug 的种子 = 「缺的技能」：补缺语义下应当被补上（部分失败后自愈），
+    // 已有行原样保留。
+    await skillRepository.ensureBuiltIns([{ ...SEED, slug: "other" }]);
+    expect(await skillRepository.findAll()).toHaveLength(2);
     expect((await skillRepository.findBySlug("cinematic"))?.isBuiltIn).toBe(true);
+    expect((await skillRepository.findBySlug("other"))?.isBuiltIn).toBe(true);
     expect(await skillRepository.findBySlug("missing")).toBeNull();
   });
 

@@ -184,6 +184,19 @@ describe("advanceRunLoop", () => {
     expect(steps[0]!.detail).toMatch(/^已生成剧本（\d+ 字）$/);
   });
 
+  it("同一项目并发 kick 收敛为一条循环（#3829）：动作只执行一遍，不会并行推进两套", async () => {
+    await seed({}, { status: "running", approvalMode: "stage" });
+    // 第一拍还没落定就再 kick 一次（双击 / resume·approve 与上一轮重叠的形状）：
+    // per-project 在飞表应当把第二次调用并到同一条循环上。
+    const first = advanceRunLoop(USER, PROJ);
+    const second = advanceRunLoop(USER, PROJ);
+    await Promise.all([first, second]);
+    // 剧本生成是这条循环的第一个动作：被并发拉起两次的话，这里会记到 2。
+    expect(completeLLM).toHaveBeenCalledTimes(1);
+    const row = await readRow();
+    expect(normalizeProductionRun(row!.run)).toMatchObject({ status: "awaiting_approval" });
+  });
+
   it("角色步：completeLLMStructured 产出写入 characters 后停在角色阶段等确认", async () => {
     completeLLMStructured.mockResolvedValueOnce([{ name: "阿宁", appearance: "短发" }]);
     await seed({ scriptMarkdown: "# 剧本" }, { status: "running", approvalMode: "stage" });

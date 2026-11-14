@@ -8,8 +8,15 @@ import { db } from "~/lib/db";
 import { filmProject, filmShot, type FilmProject } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
 import { tailWindow } from "~/lib/page-window";
-import { eq, and, desc, asc, inArray, isNotNull, count } from "drizzle-orm";
+import { KeyedAsyncMutex } from "~/lib/async-mutex";
+import { eq, and, desc, asc, inArray, isNotNull, notInArray, count } from "drizzle-orm";
 import { firstRowRequired } from "./repository-row";
+
+/** 影片日志追加的按片互斥（ISSUE #3836）：`logs` 是 JSON 列，追加是
+ * 「读整列 → push → 写回」三条语句，`watchFilm`（每 4s 打进度）与
+ * `composeFilm`（合成起止各打一条）并发时互相覆盖丢日志行。SQLite 单写者
+ * 只保证单条语句原子，这里把整段追加以影片为粒度串行化（都在本进程内）。 */
+const filmLogMutexes = new KeyedAsyncMutex();
 
 /** 单个成片任务的日志行数上限：`logs` 是 JSON 列，每打一条日志都要把整个
  *  数组读出来、再整列写回去 —— 无上限时这条路的成本随日志条数线性变贵
@@ -126,19 +133,21 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
       t: number;
     },
   ): Promise<void> {
-    const film = await db
-      .select({ logs: filmProject.logs })
-      .from(filmProject)
-      .where(eq(filmProject.id, id))
-      .limit(1);
-    const logs = film[0]?.logs;
-    const arr: Array<unknown> = isUnknownArray(logs) ? logs : [];
-    arr.push(entry);
-    await db
-      .update(filmProject)
-      .set({ logs: tailWindow(arr, LOGS_MAX) })
-      .where(eq(filmProject.id, id))
-      .catch(() => undefined);
+    await filmLogMutexes.run(id, async () => {
+      const film = await db
+        .select({ logs: filmProject.logs })
+        .from(filmProject)
+        .where(eq(filmProject.id, id))
+        .limit(1);
+      const logs = film[0]?.logs;
+      const arr: Array<unknown> = isUnknownArray(logs) ? logs : [];
+      arr.push(entry);
+      await db
+        .update(filmProject)
+        .set({ logs: tailWindow(arr, LOGS_MAX) })
+        .where(eq(filmProject.id, id))
+        .catch(() => undefined);
+    });
   }
 
   /** 按状态列出影片（进程重启后的恢复扫描用），`createdAt` 升序 = 先起先续。
@@ -179,6 +188,33 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
       .update(filmProject)
       .set({ status: "COMPOSING", progress: 90, error: null })
       .where(eq(filmProject.id, id));
+  }
+
+  /**
+   * 条件置位 GENERATING（ISSUE #3836）：仅当影片不在 GENERATING/COMPOSING 时才写入，
+   * 返回是否抢到。startFilm 原先「先读 status → 判断 → 无条件 markGenerating」，
+   * 双击/并发会在窗口内双双通过，给每个镜头排两批视频任务 —— 把判断与置位收进
+   * 同一条 UPDATE（SQLite 单写者下原子），抢不到（0 行更新）即让位。
+   */
+  async claimGenerating(id: string): Promise<boolean> {
+    const rows = await db
+      .update(filmProject)
+      .set({ status: "GENERATING", progress: 0, error: null })
+      .where(
+        and(eq(filmProject.id, id), notInArray(filmProject.status, ["GENERATING", "COMPOSING"])),
+      )
+      .returning({ id: filmProject.id });
+    return rows.length > 0;
+  }
+
+  /** 同 {@link claimGenerating}，合成侧：仅当不在 COMPOSING/DONE 时写成 COMPOSING。 */
+  async claimComposing(id: string): Promise<boolean> {
+    const rows = await db
+      .update(filmProject)
+      .set({ status: "COMPOSING", progress: 90, error: null })
+      .where(and(eq(filmProject.id, id), notInArray(filmProject.status, ["COMPOSING", "DONE"])))
+      .returning({ id: filmProject.id });
+    return rows.length > 0;
   }
 
   async markDone(id: string, finalVideo: string): Promise<void> {

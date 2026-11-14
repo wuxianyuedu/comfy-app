@@ -53,6 +53,14 @@ export const EXECUTOR_HOST_LOG_PREFIXES = ["executor-host-stdout-", "executor-ho
 /** 最近 N 份宿主日志留下（与 nextjs 那两路同值：够追溯最近几次启动即可）。 */
 export const EXECUTOR_HOST_LOG_KEEP = 5;
 
+/**
+ * 「宿主已由编排器负责」的跳过标记（ISSUE #3830）：launcher 链路里
+ * `dev-launcher`（编排 6.5 步）与它拉起的 dev server（`dev.mjs`）**先后都会执行**，
+ * 没有这道标记就会确定性起两个宿主（双领取循环打破全局单并发语义）。与
+ * `COMFYAPP_SKIP_SCHEMA_SYNC` 同构：编排器起过自己那份后，通知下游入口跳过。
+ */
+export const SKIP_EXECUTOR_HOST_ENV = "COMFYAPP_SKIP_EXECUTOR_HOST";
+
 /** 本次要起宿主的判决。抽成纯函数，好让「哪些值会起」不依赖真起一次进程。 */
 /**
  * @param {{ env?: Record<string, string | undefined> }} [options]
@@ -60,6 +68,10 @@ export const EXECUTOR_HOST_LOG_KEEP = 5;
  */
 export function planExecutorHostSpawn({ env = process.env } = {}) {
   const { mode, unknown } = resolveExecutorMode({ procEnv: env });
+  /* 跳过标记在场 ⇒ 判决照算（unknown 提示等语义不变），只是不起进程。 */
+  if (env[SKIP_EXECUTOR_HOST_ENV] === "1") {
+    return { mode, unknown, shouldSpawn: false };
+  }
   /* 认不出的值**不猜意图**：按 inline 起（与 Next 侧同判据），但调用方要留一行
    * 可见提示（规范硬规则 4）。`shouldSpawn` 因此只看归一化后的 mode。 */
   return { mode, unknown, shouldSpawn: mode === "host" };

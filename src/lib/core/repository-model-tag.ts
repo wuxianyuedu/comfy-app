@@ -50,18 +50,22 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
     }));
   }
 
+  /** 确保同名标签存在并返回带绑定计数的视图。
+   *  单语句 upsert（ISSUE #3835）：冲突目标 = `(userId, name)` 唯一索引
+   *  `wmt_user_name_uniq`；冲突时把 name 原值回写（no-op update）换 returning。
+   *  原先「先查后插」有唯一索引兜底不会重复建行，但并发重复调用（保存工作流
+   *  双击 / 两页签同时保存）会让后到者撞索引 500 —— upsert 语义应当让重复
+   *  执行成功且无害。 */
   async upsertByName(userId: string, name: string): Promise<WorkflowModelTagView> {
-    const existing = await db
-      .select()
-      .from(workflowModelTag)
-      .where(and(eq(workflowModelTag.userId, userId), eq(workflowModelTag.name, name)))
-      .limit(1);
-    const row =
-      existing[0] ??
-      firstRowRequired(
-        await db.insert(workflowModelTag).values({ userId, name }).returning(),
-        "模型标签插入",
-      );
+    const rows = await db
+      .insert(workflowModelTag)
+      .values({ userId, name })
+      .onConflictDoUpdate({
+        target: [workflowModelTag.userId, workflowModelTag.name],
+        set: { name },
+      })
+      .returning();
+    const row = firstRowRequired(rows, "模型标签插入");
     const [c] = await db
       .select({ v: count() })
       .from(workflowModelTagToWorkflowTemplate)
@@ -69,33 +73,24 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
     return { id: row.id, name: row.name, count: Number(c?.v ?? 0) };
   }
 
-  /** `upsertByName` 的批量版：保存工作流时一次要落一整套标签，逐个调用就是
-   *  每个标签 2~3 次往返（查 → 插 → 计数）。批量版一次 `IN` 查出已有的、
-   *  一条多值 INSERT 补齐缺的，最后按**输入顺序**返回 id（与逐个版同样确定；
-   *  count 视图不需要，`setModelTags` 只吃 id）。 */
+  /** `upsertByName` 的批量版：保存工作流时一次要落一整套标签。单语句批量
+   *  upsert（ISSUE #3835）：冲突目标 = `(userId, name)` 唯一索引，已存在的行
+   *  no-op 回写换 returning，一次往返拿到全部 id，且并发重复调用不再撞唯一
+   *  索引 500；按**输入顺序**返回 id（`setModelTags` 只吃 id）。 */
   async upsertByNames(userId: string, names: Array<string>): Promise<Array<string>> {
     if (!names.length) {
       return [];
     }
     const wanted = [...new Set(names)];
-    const idByName = new Map<string, string>();
-    const existing = await db
-      .select({ id: workflowModelTag.id, name: workflowModelTag.name })
-      .from(workflowModelTag)
-      .where(and(eq(workflowModelTag.userId, userId), inArray(workflowModelTag.name, wanted)));
-    for (const row of existing) {
-      idByName.set(row.name, row.id);
-    }
-    const missing = wanted.filter((name) => !idByName.has(name));
-    if (missing.length > 0) {
-      const inserted = await db
-        .insert(workflowModelTag)
-        .values(missing.map((name) => ({ userId, name })))
-        .returning({ id: workflowModelTag.id, name: workflowModelTag.name });
-      for (const row of inserted) {
-        idByName.set(row.name, row.id);
-      }
-    }
+    const rows = await db
+      .insert(workflowModelTag)
+      .values(wanted.map((name) => ({ userId, name })))
+      .onConflictDoUpdate({
+        target: [workflowModelTag.userId, workflowModelTag.name],
+        set: { name: sql`excluded.name` },
+      })
+      .returning({ id: workflowModelTag.id, name: workflowModelTag.name });
+    const idByName = new Map(rows.map((row) => [row.name, row.id]));
     return names.map((name) => idByName.get(name)).filter((id): id is string => id !== undefined);
   }
 

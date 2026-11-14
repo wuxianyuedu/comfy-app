@@ -163,8 +163,20 @@ export function getSettings(): Promise<AppSettings> {
   return Promise.resolve(getSettingsSync());
 }
 
-/* 合并一次局部更新并落盘，返回合并后的完整设置。 */
-export async function saveSettings(partial: Partial<AppSettings>): Promise<AppSettings> {
+/* 保存串行化（ISSUE #3836）：saveSettings 是「读快照 → 合并 → 整包覆盖写盘」，
+ * 两个并发保存（双击保存按钮 / 两个分区同时保存）会从**同一份旧快照**合并各自的
+ * partial，后写者整包覆盖、先写者的字段被回滚丢失。进程内 promise 链把保存
+ * 串行化 —— 设置的写入方都在本进程（执行宿主只读设置，不写盘）。 */
+let saveChain: Promise<unknown> = Promise.resolve();
+
+/** 合并一次局部更新并落盘，返回合并后的完整设置。 */
+export function saveSettings(partial: Partial<AppSettings>): Promise<AppSettings> {
+  const run = saveChain.then(() => saveSettingsUnlocked(partial));
+  saveChain = run.catch(() => undefined);
+  return run;
+}
+
+async function saveSettingsUnlocked(partial: Partial<AppSettings>): Promise<AppSettings> {
   const next: AppSettings = { ...getSettingsSync(), ...partial };
   cache = next;
   await fs.promises.mkdir(path.dirname(SETTINGS_FILE), { recursive: true });

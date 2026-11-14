@@ -14,6 +14,7 @@ import "server-only";
 import { parseExtraBodyObject } from "~/lib/llm/extra-body";
 
 import { promises as fs, readFileSync } from "node:fs";
+import { hash } from "node:crypto";
 import path from "node:path";
 
 import { remoteModelRepository, llmProviderRepository } from "~/lib/core/repository";
@@ -56,30 +57,58 @@ const FILE = path.join(process.cwd(), "data", WORKSHOP_API_SETTINGS_FILE);
 const DEFAULTS = defaultChannelsFromEnv();
 
 let cache: WorkshopApiSettings | null = null;
+/** 缓存对应的文件指纹（ISSUE #3836）：与 `app-settings.server` 同一机制 ——
+ * 原先缓存一旦建立就永不失效，另一进程（Workshop MCP）对同一份文件的写入
+ * 本进程永远读不到。 */
+let cacheFingerprint = "";
 
-/* 读配置（进程内缓存）。全新安装也能直接用（空配置 = 未配置）。 */
+/* 读配置（进程内缓存，按文件指纹失效）。全新安装也能直接用（空配置 = 未配置）。 */
 export function getWorkshopApiSettingsSync(): WorkshopApiSettings {
-  if (cache) {
+  let raw: string | null = null;
+  let fingerprint = "";
+  try {
+    raw = readFileSync(FILE, "utf8");
+    fingerprint = hash("sha1", raw, "hex");
+  } catch {
+    // 文件缺失 → 用默认值（指纹留空，必然与缓存不等）。
+  }
+  if (cache && fingerprint === cacheFingerprint) {
     return cache;
   }
   let stored: Partial<WorkshopApiSettings> = {};
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(FILE, "utf8"));
-    if (isRecord(parsed)) {
-      stored = {
-        image: sanitizeChannel(parsed.image, DEFAULTS.image),
-        video: sanitizeChannel(parsed.video, DEFAULTS.video),
-      };
+  if (raw !== null) {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (isRecord(parsed)) {
+        stored = {
+          image: sanitizeChannel(parsed.image, DEFAULTS.image),
+          video: sanitizeChannel(parsed.video, DEFAULTS.video),
+        };
+      }
+    } catch {
+      // 文件损坏 → 用默认值。
     }
-  } catch {
-    // 文件缺失或损坏 → 用默认值。
   }
   cache = normalizeSettings(stored, DEFAULTS);
+  cacheFingerprint = fingerprint;
   return cache;
 }
 
-/* 合并一次局部通道更新并落盘。 */
-export async function saveWorkshopApiSettings(
+/* 保存串行化（ISSUE #3836）：与 app-settings 的 saveSettings 同一形状 ——
+ * 两个并发保存从同一份旧基准合并各自的 patch，后写者整包覆盖、先写者丢字段。 */
+let saveChain: Promise<unknown> = Promise.resolve();
+
+/* 合并一次局部通道更新并落盘。合并基准改为**写前重读文件**：不走进程内缓存，
+ * 另一进程的写入与并发保存都不会被旧快照顶掉。 */
+export function saveWorkshopApiSettings(
+  patch: Partial<Record<ApiChannelKind, unknown>>,
+): Promise<WorkshopApiSettings> {
+  const run = saveChain.then(() => saveWorkshopApiSettingsUnlocked(patch));
+  saveChain = run.catch(() => undefined);
+  return run;
+}
+
+async function saveWorkshopApiSettingsUnlocked(
   patch: Partial<Record<ApiChannelKind, unknown>>,
 ): Promise<WorkshopApiSettings> {
   const current = getWorkshopApiSettingsSync();
@@ -88,8 +117,10 @@ export async function saveWorkshopApiSettings(
     video: patch.video === undefined ? current.video : sanitizeChannel(patch.video, current.video),
   };
   cache = next;
+  const written = JSON.stringify(next, null, 2);
   await fs.mkdir(path.dirname(FILE), { recursive: true });
-  await fs.writeFile(FILE, JSON.stringify(next, null, 2), "utf8");
+  await fs.writeFile(FILE, written, "utf8");
+  cacheFingerprint = hash("sha1", written, "hex");
   return next;
 }
 
@@ -310,6 +341,9 @@ function unifiedVideoInputs(
     "first-frame": req.imageDataUrl ?? undefined,
     negative: req.negative ?? undefined,
     prompt: req.prompt ?? undefined,
+    /* 种子（ISSUE #3783）：视频通道与生图（#3778）同口径承接 —— 适配器映射了
+     * `seed` 口就按映射下发（无适配器的默认映射经 videoBody 直带）。 */
+    seed: req.seed ?? undefined,
   };
 }
 

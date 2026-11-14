@@ -156,15 +156,24 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
       .where(eq(workflowTemplate.id, id));
   }
 
+  /** 全量覆盖模板的模型标签（保存工作流时调用，重复执行结果应一致）。
+   *  delete + insert 收进 immediate 事务（ISSUE #3835）：原先两条语句各自提交，
+   *  insert 失败会残留「无标签」中间态；并发保存交错（A 删 → B 删 → A 插 → B 插）
+   *  还会落下重复关联行（关联表无 (tag, template) 唯一约束），列表 count 虚高。 */
   async setModelTags(id: string, tagIds: Array<string>): Promise<void> {
-    await db
-      .delete(workflowModelTagToWorkflowTemplate)
-      .where(eq(workflowModelTagToWorkflowTemplate.workflowTemplate, id));
-    if (tagIds.length) {
-      await db
-        .insert(workflowModelTagToWorkflowTemplate)
-        .values(tagIds.map((t) => ({ workflowModelTag: t, workflowTemplate: id })));
-    }
+    await db.transaction(
+      async (tx) => {
+        await tx
+          .delete(workflowModelTagToWorkflowTemplate)
+          .where(eq(workflowModelTagToWorkflowTemplate.workflowTemplate, id));
+        if (tagIds.length) {
+          await tx
+            .insert(workflowModelTagToWorkflowTemplate)
+            .values(tagIds.map((t) => ({ workflowModelTag: t, workflowTemplate: id })));
+        }
+      },
+      { behavior: "immediate" },
+    );
   }
 }
 

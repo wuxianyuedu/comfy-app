@@ -190,22 +190,33 @@ export async function POST(req: NextRequest) {
     }
     await fs.mkdir(dir, { recursive: true });
 
-    // 重名不覆盖：追加 -1 / -2 …，避免用户误丢文件
+    // 重名不覆盖：追加 -1 / -2 …，避免用户误丢文件。
+    // 落盘用 `wx` 独占创建（ISSUE #3836）：原先「access 探测可用 → writeFile
+    // 覆盖」两步之间无原子性，并发上传同名文件都通过探测、后者覆盖前者（恰与
+    // 本条注释的承诺相悖）。探测与写入合成一步：EEXIST 才换下一个后缀。
     const ext = path.extname(safeName);
     const stem = safeName.slice(0, safeName.length - ext.length);
+    const buf = Buffer.from(await file.arrayBuffer());
     let finalName = safeName;
-    for (let i = 1; i < 500; i++) {
+    for (let attempt = 0; ; attempt += 1) {
       try {
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-        await fs.access(path.join(dir, finalName));
-        finalName = `${stem}-${i}${ext}`;
-      } catch {
-        break; // 不存在 → 可用
+        await fs.writeFile(path.join(dir, finalName), buf, { flag: "wx" });
+        break;
+      } catch (error) {
+        const code =
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          typeof error.code === "string"
+            ? error.code
+            : "";
+        if (code !== "EEXIST" || attempt >= 499) {
+          throw error;
+        }
+        finalName = `${stem}-${attempt + 1}${ext}`;
       }
     }
-
-    const buf = Buffer.from(await file.arrayBuffer());
-    await fs.writeFile(path.join(dir, finalName), buf);
 
     return NextResponse.json({
       ok: true,
