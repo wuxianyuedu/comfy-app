@@ -12,7 +12,6 @@
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
 import { SettingsCard } from "~/components/ui/settings-card";
-import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 
 import { ProviderDetail } from "./ProviderDetail";
 import { ProviderDialog } from "./ProviderDialog";
@@ -31,13 +30,14 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
   return (
     <>
       {/* 卡片标题去掉（ISSUE #3527）：正文那一列已经有一行分区标题「远程模型」，
-          卡片再起一个同名标题就是重复；master 侧更新过的说明文案保留。 */}
-      <SettingsCard
-        description="每个供应商维护自己的 Base URL / API Key；接口格式在模型上（同一供应商下不同用途的模型可以各用一套协议）"
-        /* 供应商与模型落在库里（ISSUE #3625）：徽标放标题行，落点与迁移办法
-            （含 API Key 密文存放、换机器要重填）在悬浮气泡里。 */
-        titleExtra={<DataLocationBadge id="remote-model" />}
-      >
+          卡片再起一个同名标题就是重复。说明段也**不进卡片头**（ISSUE #3778：
+          description 渲染在带分隔线的标题行里，没有标题的卡片上它就是一行假标题）
+          —— 降为正文首段；存放位置徽标上移到分区大标题右侧。 */}
+      <SettingsCard>
+        <p className="text-muted-foreground mb-3 text-xs leading-relaxed">
+          每个供应商维护自己的 Base URL / API
+          Key；接口格式在模型上（同一供应商下不同用途的模型可以各用一套协议）
+        </p>
         {p.errorText !== null && p.errorText !== "" && (
           <p className="bg-destructive/10 text-danger-strong mb-3 rounded-lg px-3 py-2 text-xs">
             读取供应商失败：{p.errorText}
