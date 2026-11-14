@@ -149,12 +149,17 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined") {
       return;
     }
+    let cancelled = false;
     let unlisten: (() => void) | undefined;
 
     const setup = async () => {
       try {
         const { listen } = await import("@tauri-apps/api/event");
-        unlisten = await listen<{ level: string; message: string }>("log:emit", (event) => {
+        /* StrictMode 双挂载（ISSUE #3834）：第一次的 cleanup 跑在 `import()`
+         * 完成之前，那时 `unlisten` 还没到手、`unlisten?.()` 是空操作 —— 第一条
+         * 监听器就此泄漏、壳日志被处理两次。用 `cancelled` 标志让「清理先于
+         * 注册完成」的那次订阅在到手后立刻退订。 */
+        const off = await listen<{ level: string; message: string }>("log:emit", (event) => {
           const lv = event.payload?.level ?? "info";
           const message = event.payload?.message ?? "";
           if (!message) {
@@ -164,6 +169,11 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
             lv === "error" ? "error" : lv === "warn" ? "warn" : lv === "debug" ? "debug" : "info";
           addEntry({ level, message, source: "tauri" });
         });
+        if (cancelled) {
+          off();
+          return;
+        }
+        unlisten = off;
       } catch (error) {
         /* 不在 Tauri 里运行是**正常形态**（浏览器 / 纯 web），静默即可。但「在壳里却监听失败」不是正常
            形态：最常见是 CSP 的 connect-src 漏了 `ipc: http://ipc.localhost`（事件监听走 fetch 到 ipc://
@@ -180,7 +190,10 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     };
 
     void setup();
-    return () => unlisten?.();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
   }, [addEntry]);
 
   // ── 全局未捕获错误与未处理 rejection → 面板（来源："system"） ──
