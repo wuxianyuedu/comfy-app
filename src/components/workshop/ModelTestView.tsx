@@ -359,8 +359,10 @@ export function ModelTestView() {
       <PageHeader srTitle={pageHeaderTitle("model-test")} />
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
-        {/* 左栏：用途 + 所有模式（每个页签显示配了适配器的候选模型数，#3635） */}
-        <aside className="flex shrink-0 flex-col gap-5 lg:w-60">
+        {/* 左栏：用途 + 所有模式（每个页签显示配了适配器的候选模型数，#3635）。
+            桌面下吸附成独立滚动区（ISSUE #3806）：右侧内容滚动不带动左栏，
+            页签超出视口时在栏内自己滚。 */}
+        <aside className="flex shrink-0 flex-col gap-5 lg:sticky lg:top-5 lg:max-h-[calc(100dvh-120px)] lg:w-60 lg:overflow-y-auto">
           <section>
             <SectionLabel hint="同一模型的图片 / 视频分栏测试">用途</SectionLabel>
             <KindTabs kind={c.kind} onChange={c.setKind} />
