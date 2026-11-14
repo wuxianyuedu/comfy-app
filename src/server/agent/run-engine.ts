@@ -42,6 +42,15 @@ const MAX_TICKS = 240;
 const TICK_MS = 4000;
 const nowIso = () => new Date().toISOString();
 
+/** 同一 (user, project) 只允许一个推进循环并发运行（避免重复 kick 造成重入与重复副作用）。 */
+const activeRunLoops = new Set<string>();
+const runLoopKey = (userId: string, projectId: string): string => `${userId}\0${projectId}`;
+
+/** 仅测试用：清空推进循环互斥状态，避免跨用例/异常泄漏导致后续调用被误判为“已在运行”。 */
+export function resetRunLoopGuardsForTest(): void {
+  activeRunLoops.clear();
+}
+
 type ExecResult = {
   error?: string;
   ok: boolean;
@@ -531,9 +540,14 @@ async function execFilm(
 
 /**
  * 推进 run 到下一个停点（等点头 / 完成 / 失败 / 被暂停）。fire-and-forget 调用即可；
- * 内部对每步失败落 failed，不抛给调用方。
+ * 内部对每步失败落 failed，不抛给调用方。同一 (user, project) 已有循环在跑时直接让位（不重入）。
  */
 export async function advanceRunLoop(userId: string, projectId: string): Promise<void> {
+  const loopKey = runLoopKey(userId, projectId);
+  if (activeRunLoops.has(loopKey)) {
+    return;
+  }
+  activeRunLoops.add(loopKey);
   try {
     for (let tick = 0; tick < MAX_TICKS; tick++) {
       // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
@@ -681,5 +695,7 @@ export async function advanceRunLoop(userId: string, projectId: string): Promise
     } catch {
       /* 落 failed 也失败：放弃，靠下一次 status 轮询暴露僵尸 run */
     }
+  } finally {
+    activeRunLoops.delete(loopKey);
   }
 }

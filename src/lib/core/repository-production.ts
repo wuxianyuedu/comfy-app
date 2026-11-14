@@ -4,6 +4,7 @@
  */
 import "server-only";
 
+import { TRPCError } from "@trpc/server";
 import { db } from "~/lib/db";
 import { production, type Production } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
@@ -91,7 +92,7 @@ export class ProductionRepository extends DrizzleRepository<Production> {
     return rows.length > 0;
   }
 
-  /** 按 proj_* upsert 生产数据（不存在则建、存在则更新，带归属）。 */
+  /** 按 proj_* upsert 生产数据（不存在则建、存在且归属当前用户则更新）。 */
   async upsertForUser(userId: string, data: ProductionInput): Promise<Production> {
     const existing = await db.select().from(production).where(eq(production.id, data.id)).limit(1);
     if (!existing[0]) {
@@ -105,10 +106,13 @@ export class ProductionRepository extends DrizzleRepository<Production> {
       }
       return created;
     }
+    if (existing[0].userId !== userId) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "无权操作该生产数据" });
+    }
     const rows = await db
       .update(production)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(production.id, data.id))
+      .set({ ...data, userId, updatedAt: new Date() })
+      .where(and(eq(production.id, data.id), eq(production.userId, userId)))
       .returning();
     const updated = rows[0];
     if (!updated) {

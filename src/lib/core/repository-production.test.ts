@@ -65,6 +65,26 @@ describe("ProductionRepository", () => {
     expect(await productionRepository.getForUser("u1", "proj_1")).not.toBeNull();
   });
 
+  it("跨用户 upsert 不得覆盖他人生产数据", async () => {
+    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { id: "u2", email: "u2@test.dev" });
+    await productionRepository.upsertForUser("u1", {
+      id: "proj_1",
+      title: "u1 的",
+      shots: [{ id: "s1" }],
+    });
+    await expect(
+      productionRepository.upsertForUser("u2", {
+        id: "proj_1",
+        title: "u2 篡改",
+        shots: [{ id: "bad" }],
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const got = await productionRepository.getForUser("u1", "proj_1");
+    expect(got?.title).toBe("u1 的");
+    expect(got?.shots).toEqual([{ id: "s1" }]);
+  });
+
   it("patchContent 支持 scriptReview（FR-QA-07）：JSON 列序列化落库且还原为对象", async () => {
     seedUser(tdb, { id: "u1", email: "u1@test.dev" });
     await productionRepository.upsertForUser("u1", { id: "proj_1" });

@@ -73,6 +73,29 @@ describe("PUT /api/production", () => {
     expect(got?.shots).toEqual([{ id: "s1", prompt: "p" }]);
     expect(got?.progress).toEqual({ stage: "storyboard", rendered: false });
   });
+
+  it("目标 project 已归属他人时返回 403 且不覆盖", async () => {
+    seedUser(tdb, { id: "u2", email: "u2@test.dev" });
+    await productionRepository.upsertForUser("u1", {
+      id: "proj_1",
+      title: "u1 的",
+      shots: [{ id: "s1" }],
+    });
+    auth.user = { id: "u2" };
+    const res = await PUT(
+      putRequest({
+        project: "proj_1",
+        production: {
+          title: "u2 篡改",
+          shots: [{ id: "bad" }],
+        },
+      }),
+    );
+    expect(res.status).toBe(403);
+    const got = await productionRepository.getForUser("u1", "proj_1");
+    expect(got?.title).toBe("u1 的");
+    expect(got?.shots).toEqual([{ id: "s1" }]);
+  });
 });
 
 function getRequest(project: string | null) {

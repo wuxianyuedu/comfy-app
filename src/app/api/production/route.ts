@@ -4,6 +4,7 @@
 // 表，供画布读取物化（Phase 3c）。读侧（GET）在画布接入时再补。
 // 鉴权沿用 requireRequestUser（未开启登录门槛时回落本地演示用户，单机照常可用）。
 import { type NextRequest, NextResponse } from "next/server";
+import { TRPCError } from "@trpc/server";
 
 import { requireRequestUser } from "~/server/auth/request-user";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
@@ -102,6 +103,9 @@ export async function PUT(req: NextRequest) {
     });
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (error instanceof TRPCError && error.code === "FORBIDDEN") {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
     return NextResponse.json(apiErrorBody(error, "保存生产数据失败"), {
       status: 500,
     });

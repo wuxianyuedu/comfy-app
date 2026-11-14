@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { completeLLM, completeLLMStructured, getLLMConfig } = vi.hoisted(() => ({
-  completeLLM: vi.fn((_cfg: unknown, _msgs: unknown) => "# 生成的剧本"),
+  completeLLM: vi.fn((_cfg: unknown, _msgs: unknown): string | Promise<string> => "# 生成的剧本"),
   completeLLMStructured: vi.fn<
     (cfg: unknown, msgs: unknown, schema: unknown) => Promise<Array<unknown>>
   >(() => Promise.resolve([])),
@@ -101,7 +101,7 @@ import {
   scriptDigestOf,
   type ProductionRun,
 } from "~/lib/production/run-types";
-import { advanceRunLoop } from "~/server/agent/run-engine";
+import { advanceRunLoop, resetRunLoopGuardsForTest } from "~/server/agent/run-engine";
 import { getTestDb, seedUser } from "../../../tests/helpers/test-db";
 
 const tdb = getTestDb();
@@ -151,6 +151,7 @@ const readRow = () => productionRepository.getForUser(USER, PROJ);
 beforeEach(() => {
   tdb.$reset();
   vi.clearAllMocks();
+  resetRunLoopGuardsForTest();
   seedUser(tdb, { id: USER, email: "a@test.dev" });
 });
 
@@ -309,6 +310,29 @@ describe("advanceRunLoop", () => {
   it("无生产数据行 → 直接返回，不抛", async () => {
     await expect(advanceRunLoop(USER, "no_such")).resolves.toBeUndefined();
     expect(completeLLM).not.toHaveBeenCalled();
+  });
+
+  it("同一项目并发 kick 时推进循环不重入", async () => {
+    let resolveScript!: (value: string) => void;
+    completeLLM.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveScript = resolve;
+        }),
+    );
+    await seed({}, { status: "running", approvalMode: "stage" });
+    const first = advanceRunLoop(USER, PROJ);
+    const second = advanceRunLoop(USER, PROJ);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(completeLLM).toHaveBeenCalledTimes(1);
+    resolveScript("# 生成的剧本");
+    await Promise.all([first, second]);
+    const row = await readRow();
+    expect(row!.scriptMarkdown).toBe("# 生成的剧本");
+    expect(
+      normalizeProductionRun(row!.run).log.filter((s) => s.kind === "generate_script"),
+    ).toHaveLength(1);
   });
 });
 

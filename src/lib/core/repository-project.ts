@@ -4,6 +4,7 @@
  */
 import "server-only";
 
+import { TRPCError } from "@trpc/server";
 import { db } from "~/lib/db";
 import { project, type Project } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
@@ -41,6 +42,9 @@ export class ProjectRepository extends DrizzleRepository<Project> {
         .returning();
       return firstRowRequired(rows, "项目插入");
     }
+    if (existing[0].userId !== userId) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "无权操作该项目" });
+    }
     const rows = await db
       .update(project)
       .set({
@@ -49,7 +53,7 @@ export class ProjectRepository extends DrizzleRepository<Project> {
         edges: data.edges ?? "[]",
         updatedAt: new Date(),
       })
-      .where(eq(project.id, data.id))
+      .where(and(eq(project.id, data.id), eq(project.userId, userId)))
       .returning();
     return firstRowOfExisting(rows, `项目不存在: ${data.id}`);
   }
