@@ -12822,4 +12822,32 @@ cnb issues comment --number <诉求单号> --body '改后截图：<asset_link> �
   **GA 的 PR 侧仍跑这两格**」。`docs/standards/11-测试与可观测性.md` 那一段**本来就是对的**
   （「PR 侧的执行者现在在 GA `pr-gate.yml` 的并行 job 上」）—— 这次改的是与它不一致的那些。
 
+#### 13.5.42 临时诊断探针的落点：默认 `.workbuddy/`，进 `tests/` 的跑完当场删（ISSUE #3803）
+
+- **症状**：检出里留下一份未跟踪的 `tests/__tmp-*.test.ts` 探针，`pnpm run lint`
+  （`oxlint --deny-warnings`）就退 1 —— lint 的扫描面（`src tests scripts e2e tools
+  .storybook` 等）**不区分文件是否被 git 跟踪**。探针几乎总要 `console.log`，顺手贴的
+  disable 指令没压住东西时，再被 `reportUnusedDisableDirectives = "warn"`（#3438 起）
+  按「死豁免」报一条 ⇒ `Found N warnings` + exit 1；`check:premerge` 继承 `lint`，
+  **推送那一跳跟着被拦**。现场：`tests/__tmp-parse-perf.test.ts`（文件头自述
+  「跑完即删」的上一个会话残留），按文件头自述删掉即绿。
+- **口径（按探针形态二选一）**：
+  1. **默认落点是 `.workbuddy/`**（既有的本地临时目录：已入 `.gitignore`，不在 lint
+     扫描面、也不在 vitest 收集面 `src/**` + `tests/**` 里）。探针写成**普通 Node 脚本**：
+     `.workbuddy/__tmp-<主题>.mjs`，`node .workbuddy/__tmp-<主题>.mjs` 直接跑 ——
+     探针是排障工具，不是测试资产，`console.log` 随便打，不进任何门禁面。
+     其他名字的临时目录（如 `.scratch-*/`）只要不在扫描面，同样无门禁影响。
+  2. **确需 vitest 能力**（mock / 断言 / project 环境）的探针：放
+     `tests/__tmp-<主题>.test.ts`，**文件头写明「临时探针，跑完即删」，跑完当场删**。
+     vitest 的收集面只认 `src/**` 与 `tests/**`，探针想被跑就得进这两个目录，而 lint 的
+     扫描面同样认它们 —— 所以「进 `tests/`」与「当场删」必须绑在一起；放 `src/` 同理
+     （同样在 lint 扫描面与 vitest 收集面里）。
+- **为什么不做成判据**：残留探针是「人忘了删」，不是「代码错了」；自动扫描
+  （如「`tests/` 下不许有未跟踪的 `__tmp-*`」）会误伤正在跑探针的那个人，本身就成了
+  「会静默失效的清单」（§12.18 / AGENTS 硬规则 24 末句）。**先立口径，第二次再撞车**
+  （又有人被残留探针拦住推送）再评估升级成判据。
+- **被它拦下时的处置**：lint 红且唯一命中是 `tests/__tmp-*.test.ts` ⇒ 先
+  `git status --short` 看它是否未跟踪；是 ⇒ 这就是上个会话的探针残留，**删掉重跑**，
+  不要为此改 lint 配置、不要给探针补豁免、更不要 `--no-verify`（§13.6.1 红线照旧）。
+
 ---
