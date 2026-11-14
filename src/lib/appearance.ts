@@ -14,9 +14,10 @@
  *     「正文锚定 13px」并被设置页当承诺展示给用户，实测 body 是 preflight 的
  *     16px、全站并无 13px 基准 —— 界面文案不要再写具体 px，写「保持原尺寸」。
  *   · 三档字体（`--font-sans` 界面 / `--font-code` 代码块 / `--font-mono` 终端）
- *     是**自由字符串**而非预置档位：用户可在设置面板里填任意字体栈。默认值就是
- *     `globals.css` 里那三颗的原值（逐字相同），因此「从没设过」与「设了默认」渲染
- *     完全一致；非法的空串只回落该档、不连坐圆角与字阶。
+ *     每档由用户配**一种字体**（ISSUE #3784），写进 CSS 变量的栈 =
+ *     「这一种 + 默认栈的其余回退」；默认值就是 `globals.css` 里那三颗的原值
+ *     （逐字相同），因此「从没设过」与「设了默认」渲染完全一致；非法的空串只
+ *     回落该档、不连坐圆角与字阶。
  *
  * 刻意**没有**「界面密度」这一档：仓库里没有全局密度令牌（唯一的 `DENSITY_CLASS`
  * 是画布编辑器内部的局部常量）。做一个只影响半屏的假开关，比不做更糟。
@@ -256,6 +257,48 @@ export function fontStackForFamily(family: string, tier: FontTier): string {
   const quoted = needsQuote ? `"${family}"` : family;
   const fallback = tier === "interface" ? "sans-serif" : "monospace";
   return `${quoted}, ${fallback}`;
+}
+
+function normalizeStack(stack: string): string {
+  return stack.replaceAll(/\s+/gu, " ").trim();
+}
+
+function splitStackItems(stack: string): Array<string> {
+  return stack
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+}
+
+/** 各档的默认栈（供「用户字体 + 固定回退尾」的拼装取尾用）。 */
+const DEFAULT_STACK_BY_TIER: Record<FontTier, string> = {
+  code: DEFAULT_CODE_FONT,
+  interface: DEFAULT_INTERFACE_FONT,
+  terminal: DEFAULT_TERMINAL_FONT,
+};
+
+/**
+ * 用户在某一档配置的那**一种**字体（ISSUE #3784）：取栈的首项；整栈与默认栈
+ * 一致时返回空串（= 未自定义，输入框留空）。
+ */
+export function primaryFontOf(stack: string, tier: FontTier): string {
+  if (normalizeStack(stack) === normalizeStack(DEFAULT_STACK_BY_TIER[tier])) {
+    return "";
+  }
+  const first = splitStackItems(stack)[0] ?? "";
+  return first.replaceAll(/^['"]|['"]$/gu, "");
+}
+
+/**
+ * 由用户配的那一种字体拼出该档的完整栈（ISSUE #3784）：用户字体在前，
+ * 默认栈的其余回退（中文回退等）原样跟在后面 —— 回退不需要用户配置，
+ * 配置面上每类只出现一种字体。
+ */
+export function stackForPrimaryFont(family: string, tier: FontTier): string {
+  const needsQuote = /\s/.test(family) || /[^A-Za-z0-9_ -]/.test(family);
+  const quoted = needsQuote ? `"${family}"` : family;
+  const tail = splitStackItems(DEFAULT_STACK_BY_TIER[tier]).slice(1).join(", ");
+  return `${quoted}, ${tail}`;
 }
 
 /** 打开用户字体库（首次访问时建表，按 family 作主键）。非浏览器 / 无 IndexedDB
