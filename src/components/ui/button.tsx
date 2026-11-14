@@ -38,7 +38,7 @@ const buttonVariants = cva(
         "danger-solid":
           "bg-destructive text-primary-foreground hover:bg-destructive/90 focus-visible:border-destructive focus-visible:ring-destructive/30",
         "success-solid":
-          "bg-success text-primary-foreground hover:bg-success/90 focus-visible:border-success focus-visible:ring-success/30",
+          "bg-success text-on-success hover:bg-success/90 focus-visible:border-success focus-visible:ring-success/30",
         "warning-solid":
           "bg-warning-strong text-primary-foreground hover:bg-warning-strong/90 focus-visible:border-warning-strong focus-visible:ring-warning/30",
         link: "text-primary underline-offset-4 hover:underline",

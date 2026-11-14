@@ -50,10 +50,18 @@
      文字」，深色下它会变亮；而深色渐变底（影片时间轴片段）需要的是
      「暗底上的浅琥珀字」，与它取的是两侧。 */
   --color-warning-soft: #fde8c0;
-  --color-accent: #ff5ca8;
+  /* 品红强调（第二品牌）。#ff5ca8 压白只有 2.86，白字/浅字根本压不住 ——
+     加深到 #fb4599（白字 3.27，ISSUE #3768）；色相不变，渐变终点是
+     accent-soft / accent-deep，不受这一档影响。 */
+  --color-accent: #fb4599;
   /* 品牌实心底（primary / accent）上的文字色。两态同值，但仍是 token ——
      它由「底」的颜色决定，不是一处独立的美术选择。 */
   --color-on-brand: #ffffff;
+  /* 亮彩实心底（success / accent-soft）上的文字色。这两枚底色在**暗色档更亮**
+     （#5be3c4 / #ff8ac4），白字压不住（实测 1.59 / 1.06，ISSUE #3767 / #3768）——
+     亮色档仍用白，暗色档翻成深墨。 */
+  --color-on-success: #ffffff;
+  --color-on-accent-soft: #ffffff;
   /* 极光晕的三档色相（装饰性背景，两态同名 —— 浅色下靠外面那层
      `opacity-*` 调低，深色下配 `mix-blend-screen`）。强度由使用处的
      `AuroraGlow` alpha 决定，不在这里再出一份 token。 */
@@ -221,7 +229,7 @@
   --color-ink-subtle: #3f3f46; /* 次级文字 2 (light default) */
   --color-ink-muted: #6b6b76; /* 弱文字 (light default) */
   --color-ink-faint: #71717a; /* 标签/更弱文字 (light default) */
-  --color-ink-fainter: #a1a1aa; /* 辅助说明文字 (light default) */
+  --color-ink-fainter: #8e8e99; /* 辅助说明文字 (light default)：#a1a1aa 压白 2.56 太淡，加深到 3.24（ISSUE #3770） */
   --color-ink-faintest: #b6b6bf; /* 极弱文字 (light default) */
   --color-ink-icon: #8e8e98; /* 折叠箭头/图标弱文字 (light default) */
   --color-ink-placeholder: #a1a1aa; /* placeholder (light default) */
@@ -232,7 +240,7 @@
   --color-widget-value-dim: #6b6b76; /* 参数值文字·已连线（低一档）(light default) */
   --color-info: #2563eb; /* 信息/链接强调 (light default) */
   --color-success: #0ea472; /* 成功/薄荷强调 (light default) */
-  --color-success-strong: #10b981; /* 成功绿 (light default) */
+  --color-success-strong: #059669; /* 成功绿·文字档：#10b981 压白 2.54 太淡，加深到 3.77（ISSUE #3767；暗色档仍 #10b981） (light default) */
   /* 状态色的「浅底上的文字档」：与 -strong 同一用意 —— 同一个色相当底色可以、
      当浅底上的文字色对比度不够（ISSUE #672）。`text-warning-strong` 一度被
      status-badge 引用却从没定义过，那三个状态因此渲染成无色。 */
@@ -502,6 +510,7 @@
   --color-info: #5bc6ff; /* 信息/链接强调 */
   --color-success: #5be3c4; /* 成功/薄荷强调 */
   --color-success-strong: #10b981; /* 成功绿 */
+  --color-on-success: #06251d; /* 亮薄荷实心底上的深墨字：白字只有 1.59（ISSUE #3767） */
   --color-warning-strong: #fbbf24; /* 警告文字档（琥珀-400 同值） */
   --color-danger-strong: #fca5a5; /* 危险文字档（红-300 同值） */
   --color-destructive: oklch(0.704 0.191 22.216); /* 危险原色（深色档，红-400 同值） */
@@ -518,6 +527,7 @@
   --color-glow-brand: #b79bff; /* 深色档用浅彩（压 #14141a 有 7.99，旧值 6.74）*/
   --color-amber: #ffb553; /* 琥珀强调 */
   --color-accent-soft: #ff8ac4; /* accent */
+  --color-on-accent-soft: #2b0a18; /* 亮粉实心底上的深墨字：primary-strong 压它只有 1.06（ISSUE #3768） */
   --color-accent-deep: #c026d3; /* 深色档：刻意与浅色同值（品牌渐变不随主题换色相，理由见 @theme） */
   --color-shadow-strong: rgb(0 0 0 / 0.55); /* 浮层重投影 */
   --color-ring-shadow: rgb(255 255 255 / 0.1); /* 浮层 1px ring（深色下用中性白） */

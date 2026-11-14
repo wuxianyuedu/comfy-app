@@ -53,14 +53,14 @@ const BRAND: Array<SwatchItem> = [
   { className: "bg-primary-hover text-on-brand", label: "bg-primary-hover" },
   { className: "bg-primary-soft text-primary-strong", label: "bg-primary-soft" },
   { className: "bg-accent text-on-brand", label: "bg-accent" },
-  { className: "bg-accent-soft text-primary-strong", label: "bg-accent-soft" },
+  { className: "bg-accent-soft text-on-accent-soft", label: "bg-accent-soft" },
 ];
 
 const STATUS: Array<SwatchItem> = [
-  { className: "bg-success text-on-brand", label: "bg-success" },
+  { className: "bg-success text-on-success", label: "bg-success" },
   { className: "bg-success/10 text-success-strong", label: "success / 10 档" },
   { className: "bg-warning text-on-brand", label: "bg-warning" },
-  { className: "bg-warning-soft text-warning-strong", label: "bg-warning-soft" },
+  { className: "bg-warning/10 text-warning-strong", label: "warning / 10 档" },
   { className: "bg-destructive text-white", label: "bg-destructive" },
   { className: "bg-destructive/10 text-danger-strong", label: "destructive / 10 档" },
   { className: "bg-info text-on-brand", label: "bg-info" },
