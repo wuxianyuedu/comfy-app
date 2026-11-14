@@ -42,6 +42,17 @@ const MAX_TICKS = 240;
 const TICK_MS = 4000;
 const nowIso = () => new Date().toISOString();
 
+/**
+ * per-project 在飞互斥（ISSUE #3829/#3840）：同一 (user, project) 只允许一个推进循环并发运行，
+ * 后续 kick 复用同一条 promise 让位，避免重复执行动作与状态竞态。
+ */
+const activeLoops = new Map<string, Promise<void>>();
+
+/** 仅测试用：清空推进循环互斥状态，避免跨用例/异常泄漏导致后续调用被误判为“已在运行”。 */
+export function resetRunLoopGuardsForTest(): void {
+  activeLoops.clear();
+}
+
 type ExecResult = {
   error?: string;
   ok: boolean;
@@ -530,19 +541,8 @@ async function execFilm(
 }
 
 /**
- * per-project 在飞互斥（ISSUE #3829）：`run.start / resume / approve` 三处都会
- * fire-and-forget 拉起本循环，双击、断线重试、或相邻两跳（上一轮循环还没结束就
- * approve）会让两条循环并发推进同一项目 —— 同一 stage 的动作各执行一遍（LLM 调用
- * 翻倍），成片一步更是各建一部影片（`execFilm` 的 `filmStartedAt` 防重是先读后判，
- * 挡不住并发）。这里按 `userId:projectId` 收敛：已在飞的直接复用同一条 promise，
- * 同一项目同时至多一条推进循环。循环体自身不抛（整体 try/catch 兜底落 failed），
- * `finally` 里按身份清位，不会误删后来者。
- */
-const activeLoops = new Map<string, Promise<void>>();
-
-/**
  * 推进 run 到下一个停点（等点头 / 完成 / 失败 / 被暂停）。fire-and-forget 调用即可；
- * 内部对每步失败落 failed，不抛给调用方。
+ * 内部对每步失败落 failed，不抛给调用方。同一 (user, project) 已有循环在跑时复用同一 promise。
  */
 export function advanceRunLoop(userId: string, projectId: string): Promise<void> {
   const key = `${userId}:${projectId}`;

@@ -4,6 +4,7 @@
  */
 import "server-only";
 
+import { TRPCError } from "@trpc/server";
 import { db } from "~/lib/db";
 import { production, type Production } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
@@ -122,29 +123,42 @@ export class ProductionRepository extends DrizzleRepository<Production> {
     return rows.length > 0;
   }
 
-  /** 按 proj_* upsert 生产数据（不存在则建、存在则更新，带归属）。
-   *  单语句 `onConflictDoUpdate`（ISSUE #3832）：原先「先查后插/改」在并发首存
-   *  （自动保存双触发、MCP 桥接与保存赛跑）会同抢主键，后到者撞 PK 报 500 ——
-   *  upsert 语义应当让重复执行成功且无害。`executor` 供事务入口传入。 */
+  /** 按 proj_* upsert 生产数据（不存在则建、存在且归属当前用户则更新）。
+   *  并发首存用 `onConflictDoNothing` 避免 PK 竞态 500（ISSUE #3832）；命中冲突后
+   *  复核归属：同一用户则更新，不同用户则拒绝（#3839），杜绝跨用户越权覆盖。 */
   async upsertForUser(
     userId: string,
     data: ProductionInput,
     executor?: DbExecutor,
   ): Promise<Production> {
     const exec = executor ?? db;
-    const rows = await exec
+    const inserted = await exec
       .insert(production)
       .values({ ...data, userId })
-      .onConflictDoUpdate({
-        target: production.id,
-        /* 归属列不回写（撞库不改主）；id 同值冗余无妨，undefined 的可选列
-         * 由 drizzle 跳过（缺键 = 不动既有值）。 */
-        set: { ...data, updatedAt: new Date() },
-      })
+      .onConflictDoNothing({ target: production.id })
+      .returning();
+    if (inserted[0]) {
+      return inserted[0];
+    }
+    const existing = await exec
+      .select()
+      .from(production)
+      .where(eq(production.id, data.id))
+      .limit(1);
+    if (!existing[0]) {
+      throw new Error("production upsert 失败：冲突后未找到行");
+    }
+    if (existing[0].userId !== userId) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "无权操作该生产数据" });
+    }
+    const rows = await exec
+      .update(production)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(production.id, data.id), eq(production.userId, userId)))
       .returning();
     const row = rows[0];
     if (!row) {
-      throw new Error("production upsert 失败：未返回行");
+      throw new Error("production upsert 失败：update 未返回行");
     }
     return row;
   }
