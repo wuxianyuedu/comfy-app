@@ -155,6 +155,9 @@
  *   pnpm ship --add src/a.ts --add changelog.d/0-x.md --message "…"   # 由它代为暂存（逐个点名，不 -A）
  *                                              #  **点名即封闭面**：index 里另有未点名的
  *                                              #  文件 ⇒ 退 2 并逐个念出来（ISSUE #3597）
+ *                                              #  `--add` 每次只收**一个**路径：多值写法
+ *                                              #  （--add a b c）不再报成「未知旗标」，
+ *                                              #  而是点名真实原因后退 2（ISSUE #3826）
  *   pnpm ship --add src/a.ts --allow-staged     # 显式放行上面那一格（只有确认它们该
  *                                              #  一起走时才给；不给就是不许）
  *   pnpm ship --no-commit                       # 「这一笔我自己已经提交（甚至已推送）过 ⇒
