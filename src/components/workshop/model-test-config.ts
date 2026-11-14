@@ -60,7 +60,8 @@ export type ModelTestValues = Partial<Record<WorkshopInputType, string>>;
  *  `unifiedImageInputs` / `unifiedVideoInputs` 的镜像 —— 两边必须同步改，
  *  这里多给控件 = 用户填了却被通道静默丢掉，比不给更糟）。适配器映射行里
  *  落在集合外的类型渲染成「通道未承接」的禁用态。seed（ISSUE #3778）：
- *  生图通道新增承接 —— 抽卡种子的通行字段名就是 seed。 */
+ *  生图通道新增承接 —— 抽卡种子的通行字段名就是 seed；视频通道同口径
+ *  承接（ISSUE #3783），测试页视频模式的种子口随之可用。 */
 export const RELAY_INPUT_TYPES: Record<ModelTestKind, ReadonlyArray<WorkshopInputType>> = {
   image: [
     "prompt",
@@ -72,7 +73,7 @@ export const RELAY_INPUT_TYPES: Record<ModelTestKind, ReadonlyArray<WorkshopInpu
     "image",
     "seed",
   ],
-  video: ["prompt", "negative", "first-frame", "duration"],
+  video: ["prompt", "negative", "first-frame", "duration", "seed"],
 };
 
 /** 统一输入类型 → 本页的控件形态（与 mode-contract 的 contractControlFor 同族：
@@ -346,7 +347,7 @@ export function assembleImageRequest(opts: {
 }
 
 /** 组装视频提交请求（`apiSubmitVideo` 的入参形状）。首帧走统一输入的
- *  first-frame；duration 组装成秒数。 */
+ *  first-frame；duration 组装成秒数；种子非负整数才带（0 合法，#3783）。 */
 export function assembleVideoRequest(opts: {
   mode: string;
   model: string;
@@ -358,9 +359,11 @@ export function assembleVideoRequest(opts: {
   model: string;
   negative?: string;
   prompt: string;
+  seed?: number;
 } {
   const v = opts.values;
   const duration = numericValue(v.duration);
+  const seed = seedValue(v.seed);
   return {
     model: opts.model,
     mode: opts.mode,
@@ -368,6 +371,7 @@ export function assembleVideoRequest(opts: {
     ...(v.negative?.trim() ? { negative: v.negative.trim() } : {}),
     ...(v["first-frame"]?.trim() ? { image: v["first-frame"].trim() } : {}),
     ...(duration === undefined ? {} : { duration }),
+    ...(seed === undefined ? {} : { seed }),
   };
 }
 

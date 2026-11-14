@@ -310,6 +310,9 @@ function unifiedVideoInputs(
     "first-frame": req.imageDataUrl ?? undefined,
     negative: req.negative ?? undefined,
     prompt: req.prompt ?? undefined,
+    /* 种子（ISSUE #3783）：视频通道与生图（#3778）同口径承接 —— 适配器映射了
+     * `seed` 口就按映射下发（无适配器的默认映射经 videoBody 直带）。 */
+    seed: req.seed ?? undefined,
   };
 }
 

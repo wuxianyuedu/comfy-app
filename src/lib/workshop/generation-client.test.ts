@@ -160,6 +160,13 @@ describe("apiGenerateImage / apiSubmitVideo / apiPollVideo 的 onDebug 与 seed"
     expect(relayBodyOf(mock).seed).toBe(42);
   });
 
+  it("视频提交同样透传 seed（ISSUE #3783：客户端组装不得剥掉）", async () => {
+    const mock = stubRelay({ remoteTaskId: "t-1" });
+    const result = await apiSubmitVideo({ prompt: "p", seed: 42 });
+    expect(result.remoteTaskId).toBe("t-1");
+    expect(relayBodyOf(mock).seed).toBe(42);
+  });
+
   it("onDebug：成功响应里的 debug 读数逐批上抛", async () => {
     const row = {
       body: { prompt: "p" },

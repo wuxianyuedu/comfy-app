@@ -1,6 +1,6 @@
 // 工坊 API 通道生成中转（POST /api/workshop-api/generate）。契约：
 //   图片 { kind:"image", prompt, negative?, size?, aspectRatio?, megapixels?, resolution?, multiple?, image? } → { url }
-//   视频 { kind:"video", prompt, image?, frames?, fps? } → { url?, remoteTaskId? }；轮询 { kind:"video", remoteTaskId } → { url } | { pending:true }
+//   视频 { kind:"video", prompt, image?, frames?, fps?, seed? } → { url?, remoteTaskId? }；轮询 { kind:"video", remoteTaskId } → { url } | { pending:true }
 // 中转把提供方 apiKey 留在服务端，并经共享辅助归一化上游响应形状（直给 URL vs b64 vs 异步任务 id）。
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -49,7 +49,8 @@ export async function POST(req: NextRequest) {
   /* 视频秒数（#3590 测试页与适配器 duration 输入用）：1~60s 的宽松界 ——
    * 各家视频接口的合法区间不同（Agnes 4~12s），越界由上游报错。 */
   const duration = intField(body, "duration", 1, 60);
-  /* 生图种子（ISSUE #3778）：非负整数（0 也是合法种子），越界/非法 = 没带。 */
+  /* 种子（ISSUE #3778 生图 / #3783 视频）：非负整数（0 也是合法种子），
+   * 越界/非法 = 没带。两种 relay 通道共用同一解析。 */
   const seed = intField(body, "seed", 0, 4_294_967_295);
   /* 请求读数（ISSUE #3791）：请求带 debug:true 时，把「实际发出的请求」
    * （端点 / 请求体 / 状态 / 耗时 / 响应摘要）随响应带回 —— 成功与失败都带，
@@ -114,6 +115,8 @@ export async function POST(req: NextRequest) {
           model,
           mode,
           ...(duration === undefined ? {} : { duration }),
+          /* 种子（ISSUE #3783）：视频 relay 与生图（#3778）同口径承接。 */
+          ...(seed === undefined ? {} : { seed }),
         },
         collect ? { debug: collect } : {},
       );
