@@ -96,14 +96,16 @@ describe("侧栏打开项的页签态（ISSUE #3740）", () => {
       active: "home",
       tabs: tabsOf("home", "models", "console"),
     });
-    fireEvent.click(screen.getByRole("button", { name: "关闭 控制台 页签" }));
+    /* 关闭走 pointerDown（ISSUE #3789）：行级 tooltip 收起引发的重渲染会让
+       真实点击的 click 事件落到行 <li> 上；pointerdown 阶段目标稳定。 */
+    fireEvent.pointerDown(screen.getByRole("button", { name: "关闭 控制台 页签" }));
     expect(onCloseViewTab).toHaveBeenCalledTimes(1);
     expect(onCloseViewTab).toHaveBeenCalledWith(tabKey("console", null));
   });
 
   it("点关闭按钮不会顺带触发 onSelect（关闭是兄弟控件，不进导航）", () => {
     const { onSelect } = renderShell({ active: "home", tabs: tabsOf("home", "models") });
-    fireEvent.click(screen.getByRole("button", { name: "关闭 模型 页签" }));
+    fireEvent.pointerDown(screen.getByRole("button", { name: "关闭 模型 页签" }));
     expect(onSelect).not.toHaveBeenCalled();
   });
 
