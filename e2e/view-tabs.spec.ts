@@ -60,6 +60,24 @@ test.describe("视图页签条 @critical", () => {
     await expect(page.getByRole("tablist", { name: "应用页签" })).toHaveCount(0);
   });
 
+  test("UI 控件总览切到别处仍在页签条上（ISSUE #3798：出厂独立标签页）", async ({ page }) => {
+    /* 诉求原话「UI 控件总览期望切换其他界面不要关闭」。此前它在注册表里被写死
+       `transient`，配置面里又没有条目 ⇒ 设置怎么配都不认。现在默认档是
+       independent，判据只认配置面（src/lib/shell/sidebar-tab-defaults.json）。 */
+    const strip = await openWorkspace(page);
+    await strip.getByRole("button", { name: "新页签", exact: true }).click();
+    const item = page.getByRole("menuitem", { name: "UI 控件总览", exact: true });
+    await expect(item).toBeVisible();
+    await item.click();
+    await expect(strip.getByRole("tab")).toHaveCount(2);
+    await expect(strip.getByRole("tab").nth(1)).toContainText("UI 控件总览");
+
+    await page.getByRole("button", { name: "模型", exact: true }).first().click();
+    await expect(strip.getByRole("tab")).toHaveCount(3);
+    await expect(strip.getByRole("tab").nth(1)).toContainText("UI 控件总览");
+    await expect(strip.getByRole("tab").nth(2)).toContainText("模型");
+  });
+
   test("切走的那一页仍然挂载（页签的意义就是让打开的界面保持打开）", async ({ page }) => {
     /* 这条判的是 ISSUE #1784 的第一条：页签**不卸载**被切走的视图。
        收口前 `renderCenter()` 用 `switch (viewMode)` 只渲染当前那一屏，切走即卸载

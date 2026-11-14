@@ -38,4 +38,32 @@ test.describe("UI 控件总览", () => {
     expect(pageErrors, "未捕获的页面异常").toEqual([]);
     expect(consoleErrors, "浏览器 console error").toEqual([]);
   });
+
+  test("@critical 全部基元都能用滚轮看到（ISSUE #3798）", async ({ page }) => {
+    await page.goto("/ui-kit");
+    const scroller = page.locator('[data-slot="ui-kit-scroll"]');
+    await expect(scroller).toBeVisible();
+
+    /* 只断言「有 overflow-y-auto」是空的：容器没溢出时 scrollTop 恒为 0，
+       而诉求正是「内容看不全」。先量内容真的比容器高，再滚到底看最后一节。 */
+    const metrics = await scroller.evaluate((el) => ({
+      clientHeight: el.clientHeight,
+      scrollHeight: el.scrollHeight,
+    }));
+    expect(metrics.scrollHeight, "内容应高于可视区").toBeGreaterThan(metrics.clientHeight);
+
+    await scroller.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+    await expect.poll(async () => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+    /* 真滚到底，不是只挪了一点：容器底与内容底对齐。 */
+    const reachedBottom = await scroller.evaluate(
+      (el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 2,
+    );
+    expect(reachedBottom, "滚动容器没能滚到内容底部").toBe(true);
+    /* 最后一节真的落进视口 —— 判的是「看得全」，不是「有个 overflow 值」。
+       只钉节标题会误判：滚到底时标题已被卷上去，但整节内容还在视口里。 */
+    const lastSection = page.locator("section").filter({ hasText: "数据展示与杂项" }).last();
+    await expect(lastSection).toBeInViewport();
+  });
 });

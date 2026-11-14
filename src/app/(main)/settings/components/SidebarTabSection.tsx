@@ -1,8 +1,12 @@
 "use client";
 
 /**
- * 侧栏项的页签行为分区（ISSUE #3623）：每一项点开后是**独立标签页**（常驻，切走
- * 不关）还是**共享标签页**（切走即关），按项配置、落在 JSON 里。
+ * 工作区界面的页签行为分区（ISSUE #3623 / #3798）：每个界面点开后是**独立标签页**
+ * （常驻，切走不关）还是**共享标签页**（切走即关），按项配置、落在 JSON 里。
+ *
+ * 清单取 `configurableTabViews()`（首页除外的**全部全局视图**），不只侧栏那几项：
+ * 设置与 UI 控件总览虽然入口在顶栏菜单 / 命令面板，切走关不关同样是用户该能配的
+ * 事 —— 否则那两屏永远由代码写死，「设置里配了、界面却不认」就是两处各说各话。
  *
  * 两种保存方式与「模式契约」同一套口径：
  *   · 「保存」 —— 落本机（`data/`），开发版与正式包都能用；
@@ -15,7 +19,7 @@ import { Button } from "~/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
-import { configurableSidebarItems } from "~/components/studio/NavItems";
+import { configurableTabViews } from "~/components/studio/NavItems";
 import {
   SIDEBAR_TAB_MODE_LABEL,
   sidebarTabModeOf,
@@ -30,12 +34,12 @@ const MODE_HINT: Record<SidebarTabMode, string> = {
   shared: "点开后切到别处它就关掉，不在页签条上留位置。",
 };
 
-/** 配置面里没有这一项时的兜底：没有瞬时标记的视图本来就是「常驻」。 */
+/** 配置面里没有这一项时的兜底：项目默认为每个全局视图都写了档位，缺项按「常驻」处理。 */
 const FALLBACK_MODE: SidebarTabMode = "independent";
 
 export function SidebarTabSection() {
   const c = useSidebarTabSection();
-  const items = configurableSidebarItems();
+  const items = configurableTabViews();
 
   return (
     <SettingsCard
@@ -47,12 +51,13 @@ export function SidebarTabSection() {
       }
     >
       <p className="text-muted-foreground mb-4 text-xs leading-relaxed">
-        左侧栏的每一项点开后，是
+        每个界面点开后是
         <strong className="text-ink/80">独立标签页</strong>
         （切走仍留着）还是
         <strong className="text-ink/80">共享标签页</strong>
-        （切走即关，不在页签条上留位置），按项配置。改动即时生效 —— 已经在开的页签
-        按新规则在下次切换时生效。
+        （切走即关，不在页签条上留位置），按项配置 —— 侧栏里的各项，以及从顶栏菜单、
+        命令面板打开的「设置」「UI 控件总览」都在这份清单里。改动即时生效 —— 已经在开的
+        页签按新规则在下次切换时生效。
       </p>
       <ul className="flex flex-col gap-1">
         {items.map((item) => {
