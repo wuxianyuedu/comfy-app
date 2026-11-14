@@ -76,6 +76,7 @@ export type Section =
   | "database"
   | "backup"
   | "dataLocation"
+  | "sizePresets"
   | "exit"
   | "logs";
 export type OllamaStatus = "checking" | "starting" | "up" | "down";
@@ -251,6 +252,7 @@ export const SETTINGS_SECTIONS: Array<{ id: Section; label: string }> = [
   { id: "database", label: "数据库" },
   { id: "backup", label: "备份与恢复" },
   { id: "dataLocation", label: "数据存放位置" },
+  { id: "sizePresets", label: "尺寸配置表" },
   { id: "exit", label: "退出与后台服务" },
   { id: "logs", label: "日志" },
 ];

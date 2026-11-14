@@ -15,7 +15,7 @@ export const TREE_GROUPS: Array<{
 }> = [
   { label: "模型", sections: ["llmLocal", "llmRemote"] },
   { label: "后端", sections: ["comfyui"] },
-  { label: "数据", sections: ["database", "backup", "dataLocation"] },
+  { label: "数据", sections: ["database", "backup", "dataLocation", "sizePresets"] },
   { label: "应用", sections: ["appearance", "sidebar", "appUpdate", "exit"] },
   { label: "诊断", sections: ["logs"] },
 ];
@@ -35,6 +35,7 @@ const SECTION_SUMMARY: Record<Section, string> = {
   database: "本地 SQLite 的可视化浏览与运行 SQL",
   backup: "库的快照与恢复，换文件发生在下次启动",
   dataLocation: "每类数据存在哪儿、迁移时怎么搬",
+  sizePresets: "图片 / 视频的尺寸预设表（比例 × 分辨率），改完即存应用数据",
   appearance: "主题、圆角与标题字阶",
   sidebar: "侧栏各项点开后是独立标签页还是共享标签页",
   appUpdate: "检测并安装应用新版本",

@@ -1,20 +1,17 @@
 "use client";
 
-/* 尺寸预设表 controller（规范 17 §17.2 第②层）：把 lib/size-preset-store 的模块级快照接到 React，
- * 并把「改一格 / 恢复默认 / 是否已改」包成动作，视图只拿 table 与动作、不碰 localStorage。
- * 用 useSyncExternalStore 而非 useEffect + setState：弹窗改一格，已挂载的尺寸控件（画布节点/库预览/表单
- * 可能同时存在）要在同一次渲染换值，且不触发「渲染期 setState」禁令（规范 §2.4 / §8.6）。 */
+/* 尺寸预设表 controller（规范 17 §17.2 第②层）：表格的**唯一持有者**在服务端
+ * （项目默认 + 本机覆盖 `data/size-presets.json`，经 `setting.sizePresetGet` /
+ * `sizePresetSave` 读写，ISSUE #3788）。本 hook 把 React Query 缓存接到视图，
+ * 并把「改一格 / 恢复默认 / 是否已改」包成动作；改格走乐观更新（先改缓存再落盘，
+ * 失败回读回退），工作区与设置页共用同一份缓存。 */
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { useTRPC } from "~/trpc/react";
 import {
-  getSizePresetServerSnapshot,
-  getSizePresetTable,
-  resetSizePresetScene,
-  setSizePresetDims,
-  subscribeSizePresetTable,
-} from "~/lib/media/size-preset-store";
-import {
+  DEFAULT_SIZE_PRESET_TABLE,
   sceneIsModified,
   type ResolutionTier,
   type SizeDims,
@@ -29,27 +26,60 @@ export type SizePresetTableController = {
   resetScene: (scene: SizeScene) => void;
   /** 改一格：场景 + 比例行 + 分辨率档。 */
   setDims: (scene: SizeScene, ratioLabel: string, tier: ResolutionTier, size: SizeDims) => void;
-  /** 当前生效的尺寸表（用户改过的覆盖默认表）。 */
+  /** 当前生效的尺寸表（查询未回来时是默认表）。 */
   table: SizePresetTable;
 };
 
 export function useSizePresetTable(): SizePresetTableController {
-  const table = useSyncExternalStore(
-    subscribeSizePresetTable,
-    getSizePresetTable,
-    getSizePresetServerSnapshot,
-  );
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const queryKey = trpc.setting.sizePresetGet.queryKey();
+  const query = useQuery(trpc.setting.sizePresetGet.queryOptions());
+  const saveMutation = useMutation(trpc.setting.sizePresetSave.mutationOptions());
+
+  const table = query.data ?? DEFAULT_SIZE_PRESET_TABLE;
 
   const setDims = useCallback(
     (scene: SizeScene, ratioLabel: string, tier: ResolutionTier, size: SizeDims) => {
-      setSizePresetDims(scene, ratioLabel, tier, size);
+      const current =
+        queryClient.getQueryData<SizePresetTable>(queryKey) ?? DEFAULT_SIZE_PRESET_TABLE;
+      const row = current[scene][ratioLabel];
+      if (!row) {
+        return;
+      }
+      const nextScene: SizePresetTable["image"] = {
+        ...current[scene],
+        [ratioLabel]: {
+          ...row,
+          [tier]: { width: size.width, height: size.height },
+        },
+      };
+      const next: SizePresetTable =
+        scene === "image" ? { ...current, image: nextScene } : { ...current, video: nextScene };
+      /* 乐观：先改缓存（已挂载的尺寸控件同帧换值），再落盘；失败回读回退。 */
+      queryClient.setQueryData(queryKey, next);
+      saveMutation.mutateAsync(next).catch(() => {
+        void queryClient.invalidateQueries({ queryKey });
+      });
     },
-    [],
+    [queryClient, queryKey, saveMutation],
   );
 
-  const resetScene = useCallback((scene: SizeScene) => {
-    resetSizePresetScene(scene);
-  }, []);
+  const resetScene = useCallback(
+    (scene: SizeScene) => {
+      const current =
+        queryClient.getQueryData<SizePresetTable>(queryKey) ?? DEFAULT_SIZE_PRESET_TABLE;
+      const next: SizePresetTable =
+        scene === "image"
+          ? { ...current, image: DEFAULT_SIZE_PRESET_TABLE.image }
+          : { ...current, video: DEFAULT_SIZE_PRESET_TABLE.video };
+      queryClient.setQueryData(queryKey, next);
+      saveMutation.mutateAsync(next).catch(() => {
+        void queryClient.invalidateQueries({ queryKey });
+      });
+    },
+    [queryClient, queryKey, saveMutation],
+  );
 
   const isModified = useCallback((scene: SizeScene) => sceneIsModified(scene, table), [table]);
 
