@@ -8,11 +8,11 @@ colors:
   primary-strong: "#6230cc"
   primary-solid: "#8d50e2"
   primary-soft: "#f2ecff"
-  accent: "#ff5ca8"
+  accent: "#fb4599"
   accent-deep: "#c026d3"
   ink: "#1a1a1f"
   ink-muted: "#6b6b76"
-  ink-fainter: "#a1a1aa"
+  ink-fainter: "#8e8e99"
   canvas: "#ffffff"
   surface-card: "#ffffff"
   surface-subtle: "#f7f8fa"
@@ -23,7 +23,7 @@ colors:
   danger: "#b91c1c"
   danger-solid: "#e7000b"
   success: "#0ea472"
-  success-strong: "#10b981"
+  success-strong: "#059669"
   warning: "#d97706"
   warning-strong: "#b45309"
   info: "#2563eb"
@@ -296,12 +296,12 @@ components:
 | 品牌文字/图标档        | `--color-primary-strong`                     | `#6230cc`                               | `#b79bff`                               | 浅底上的品牌紫字（原 `violet-700/400`）                                                                                                    |
 | 品牌实心档             | `--color-primary-500` / `-600`               | `#8d50e2` / `#7a3fd0`                   | 同值                                    | 实心 CTA、spinner 描边                                                                                                                     |
 | 品牌浅底               | `--color-primary-soft`                       | `#f2ecff`                               | `#251d40`                               | 图标托底、选中项底；**也是深底上的浅字档**                                                                                                 |
-| 第二品牌 / 品红        | `--color-accent` / `--color-accent-soft`     | `#ff5ca8` / `#ec4899`                   | 同值 / `#ff8ac4`                        | 指示条渐变终点、CTA 渐变终点                                                                                                               |
+| 第二品牌 / 品红        | `--color-accent` / `--color-accent-soft`     | `#fb4599` / `#ec4899`                   | 同值 / `#ff8ac4`                        | 指示条渐变终点、CTA 渐变终点（`#ff5ca8`→`#fb4599`：白字压它 2.86→3.27，ISSUE #3768）                                                       |
 | 品牌渐变中间档         | `--color-accent-deep`                        | `#c026d3`                               | 同值（刻意）                            | `.btn-gradient` 的 50% 那一段（起点 `--color-primary-600`、终点 `--color-accent-soft`，两端不另设 token）                                  |
 | 品牌实心底上的字       | `--color-on-brand`                           | `#ffffff`                               | 同值                                    | **它由「底」决定，不是独立美术选择**                                                                                                       |
 | 正文/前景              | `--color-ink`                                | `#1a1a1f`                               | `#ededf2`                               | `html/body` 前景                                                                                                                           |
 | 弱文字                 | `--color-ink-muted`                          | `#6b6b76`                               | `#9a9aad`                               | 副说明、`.u-chip` 常态字                                                                                                                   |
-| 极弱文字 / 辅助说明    | `--color-ink-fainter` / `-faintest`          | `#a1a1aa` / `#b6b6bf`                   | `#6b7088` / `#5a5f73`                   | 行号、placeholder、标签                                                                                                                    |
+| 极弱文字 / 辅助说明    | `--color-ink-fainter` / `-faintest`          | `#8e8e99` / `#b6b6bf`                   | `#6b7088` / `#5a5f73`                   | 行号、placeholder、标签（`#a1a1aa`→`#8e8e99`：压白 2.56→3.24，ISSUE #3770）                                                                |
 | 页面底                 | `--color-bg`                                 | `#ffffff`                               | `#0a0a0f`                               | `html, body` 背景                                                                                                                          |
 | 卡片/浮层表面          | `--color-surface` / `--color-card`           | `#ffffff`                               | `#16161c`                               | `bg-card`、`.u-card`                                                                                                                       |
 | 卡片内的行表面         | `--color-surface-row`                        | `#eceef4`                               | `#24242f`                               | 设置页卡片内的列表行 / 状态行 / 说明行（`bg-surface-row`，唯一出口 `SETTINGS_ROW_CLASS`）                                                    |
@@ -315,7 +315,9 @@ components:
 | 节点表面               | `--color-node`                               | `#ffffff`                               | `#2b2b36`                               | 画布节点、`<option>`                                                                                                                       |
 | 危险（当底）           | `--color-destructive`                        | `oklch(0.577 0.245 27.325)` ⇒ `#e7000b` | `oklch(0.704 0.191 22.216)` ⇒ `#ff6467` | `bg-destructive`、实心危险按钮                                                                                                             |
 | 危险（浅底上的字）     | `--color-danger-strong`                      | `#b91c1c`                               | `#fca5a5`                               | `text-danger-strong`                                                                                                                       |
-| 成功                   | `--color-success` / `--color-success-strong` | `#0ea472` / `#10b981`                   | `#5be3c4` / `#10b981`                   | 状态绿                                                                                                                                     |
+| 成功                   | `--color-success` / `--color-success-strong` | `#0ea472` / `#059669`                   | `#5be3c4` / `#10b981`                   | 状态绿（strong 浅色 `#10b981`→`#059669`：压白 2.54→3.77，ISSUE #3767）                                                                     |
+| 亮彩实心底上的字（绿） | `--color-on-success`                         | `#ffffff`                               | `#06251d`                               | `success-solid` 按钮、`bg-success` 色票（暗色 `#5be3c4` 上白字只有 1.59，翻深墨 10.25，ISSUE #3767）                                       |
+| 亮粉浅底上的字         | `--color-on-accent-soft`                     | `#ffffff`                               | `#2b0a18`                               | `bg-accent-soft` 色票（暗色 `#ff8ac4` 上 primary-strong 只有 1.06，翻深墨 8.35，ISSUE #3768）                                              |
 | 状态点**光晕**（绿）   | `--color-glow-success`                       | `#0ea472`                               | `#34d399`                               | 浅色档就是 `var(--color-success)` 本体；深色档换 400 档浅彩。**两态都必须有**，理由与对比读数见 Known Gaps 那条                            |
 | 状态点**光晕**（琥珀） | `--color-glow-warning`                       | `#d97706`                               | `#fbbf24`                               | 同上，浅色 = `var(--color-warning)`                                                                                                        |
 | 状态点**光晕**（红）   | `--color-glow-danger`                        | `oklch(0.577 0.245 27.325)` ⇒ `#e7000b` | `#fb7185`                               | 同上，浅色 = `var(--color-destructive)`（那颗是超色域 oklch，此格按换算读数写，判据会跳过它 —— 与上方 `--color-destructive` 那一行同格式） |
