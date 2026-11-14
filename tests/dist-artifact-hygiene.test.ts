@@ -4,7 +4,7 @@
  * 编译期内嵌进 exe —— secret 明文分发、开发库变成出厂数据；CI 不跑 `build-desktop`，只能靠「清单 + 产物层检查」两道守。
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { describe, expect, it, vi } from "vitest";
@@ -12,6 +12,8 @@ import { describe, expect, it, vi } from "vitest";
 import { isRecord, isUnknownArray } from "~/lib/is-record";
 
 import { symlinkDir } from "./helpers/symlink-dir";
+
+import { collectLauncherScriptClosure } from "../scripts/launcher-closure.mjs";
 
 // 运行时真的调用白名单剔除（不是只读源码文本）：嵌套条目 / 未登记新文件的
 // 行为只有真删一次才看得出来。
@@ -62,41 +64,13 @@ function allowedScriptsFromChecker(source: string): Array<string> {
  * 说明符出现即成立（ESM 加载期解析整张图）。行注释须先剥掉：JSDoc 的 `import("../lockfile/lock-diff.d.mts")` 是类型引用。
  */
 function collectRelativeClosure(entry: string): Array<string> {
+  // 闭包算法的唯一实现在 scripts/launcher-closure.mjs（affected-tests.mjs 的增量面
+  // 判据用同一份，ISSUE #3812）；这里保持本文件的旧口径：入参绝对路径、返回相对
+  // `scripts/` 的路径数组，断言文本与 RUNTIME_SCRIPTS 的条目形状都不用动。
   const scriptsRoot = join(process.cwd(), "scripts");
-  const seen = new Set<string>();
-  const walk = (file: string): void => {
-    const rel = relative(scriptsRoot, file).split("\\").join("/");
-    if (seen.has(rel)) {
-      return;
-    }
-    seen.add(rel);
-    const code = readFileSync(file, "utf8")
-      .split("\n")
-      // 只剥「整行是注释」的形态：这几份脚本的 import 都在行首，足够用且不会
-      // 误伤字符串里的 `//`（例如 URL）
-      .filter((line) => !/^\s*(?:\/\/|\*|\/\*)/.test(line))
-      .join("\n");
-    for (const m of code.matchAll(
-      /from\s+"(?<fromSpec>\.[^"]+)"|import\(\s*"(?<importSpec>\.[^"]+)"\s*\)/g,
-    )) {
-      const spec = m.groups?.fromSpec ?? m.groups?.importSpec;
-      if (spec === undefined || spec === "") {
-        continue;
-      }
-      const target = resolve(dirname(file), spec);
-      // `../src/**` 由 Next 的编译产物提供（不在 scripts/ 的白名单管辖内），
-      // `.d.mts` 之类的类型声明也不参与运行期加载
-      if (!target.startsWith(scriptsRoot) || !target.endsWith(".mjs")) {
-        continue;
-      }
-      if (!existsSync(target)) {
-        continue;
-      }
-      walk(target);
-    }
-  };
-  walk(entry);
-  return [...seen];
+  return [...collectLauncherScriptClosure({ entry })]
+    .map((rel) => relative(scriptsRoot, join(process.cwd(), rel)).split("\\").join("/"))
+    .sort();
 }
 
 describe("开发机私有输入的剔除清单（单一实现，两处复用）", () => {
