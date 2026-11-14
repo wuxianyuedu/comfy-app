@@ -235,9 +235,76 @@ function videoBody(req: ApiVideoSubmitRequest, model: string): Record<string, un
 const GENERATE_TIMEOUT_MS = 180_000;
 const POLL_TIMEOUT_MS = 30_000;
 
+/** 一条「实际发出的请求」读数（ISSUE #3791：测试生成要能看到完整请求参数）。
+ *  由各 call* 在 fetch 返回后回调 `options.debug` 上报；`body` 里的长字符串
+ *  （如输入图 data URL）已按 `DEBUG_STRING_LIMIT` 截断 —— 面板要的是形状，
+ *  不是整张图。密钥不进这里（它在请求头里，回调消费方只拿得到
+ *  endpoint / body / 状态 / 耗时 / 响应摘要）。 */
+export type ApiCallDebugRow = {
+  /** 实际发出的请求体（长字符串已截断）。 */
+  body: unknown;
+  /** 从发起到读到响应的毫秒数；候选轮询里单个候选失败也有值。 */
+  durationMs: number | null;
+  /** 实际请求的完整 URL（含按 Base URL 形态推导出的动作路径）。 */
+  endpoint: string;
+  /** 上游响应体的摘要（超长截断）；响应不是 JSON 时给原始文本摘要。 */
+  excerpt: string | null;
+  /** HTTP 层是否 2xx。 */
+  ok: boolean;
+  /** 哪一步发的：生图 / 视频提交 / 视频轮询（轮询逐候选上报）。 */
+  phase: "image" | "video-poll" | "video-submit";
+  /** HTTP 状态码；网络层失败（fetch 抛错）时为 null。 */
+  status: number | null;
+};
+
+/** debug 面板里字符串值的截断长度：请求体里塞过 data URL（整张图），
+ *  不截断的话一条读数就是几 MB。 */
+const DEBUG_STRING_LIMIT = 300;
+/** 响应摘要的截断长度。 */
+const DEBUG_EXCERPT_LIMIT = 600;
+
+function truncateDebugString(text: string): string {
+  return text.length <= DEBUG_STRING_LIMIT
+    ? text
+    : `${text.slice(0, DEBUG_STRING_LIMIT)}…（截断，原长 ${text.length} 字符）`;
+}
+
+/** 请求体的 debug 形状：长字符串截断、结构原样（形状才是要看的）。 */
+function debugBodyOf(body: unknown): unknown {
+  if (typeof body === "string") {
+    return truncateDebugString(body);
+  }
+  if (Array.isArray(body)) {
+    return body.map(debugBodyOf);
+  }
+  if (body !== null && typeof body === "object") {
+    /* isRecord 收窄而不是断言（no-unsafe-type-assertion）。 */
+    if (!isRecord(body)) {
+      return null;
+    }
+    return Object.fromEntries(
+      Object.entries(body).map(([key, value]) => [key, debugBodyOf(value)]),
+    );
+  }
+  return body;
+}
+
+/** 上游响应体的摘要：超长截断（截断长度打在尾巴上），坏 JSON 原样收窄。 */
+function excerptOf(payload: unknown): string {
+  if (typeof payload === "string") {
+    return truncateDebugString(payload).slice(0, DEBUG_EXCERPT_LIMIT + 120);
+  }
+  /* undefined（JSON.stringify 对 undefined / 函数的返回）= 没有可读摘要。 */
+  const text = JSON.stringify(payload);
+  return text === undefined ? "" : truncateDebugString(text).slice(0, DEBUG_EXCERPT_LIMIT + 120);
+}
+
 export type ApiChannelFetchOptions = {
   /** 请求体覆盖（远端模型的模式适配器翻译统一输入后给出；缺省走 OpenAI 兼容默认映射）。 */
   bodyOverride?: Record<string, unknown>;
+  /** 请求读数回调（ISSUE #3791）：给出时每次实际发出的请求（含轮询逐候选）
+   *  都上报一条 {@link ApiCallDebugRow}；网络层失败也报（status=null）。 */
+  debug?: (row: ApiCallDebugRow) => void;
   /** 模型级透传字段（#3626）：厂商特有 JSON 字段（如 `extra_body.response_format`），
    *  落在请求 body **最后** —— 覆盖适配器/默认映射组装出的字段。 */
   extraBody?: Record<string, unknown>;
@@ -274,10 +341,11 @@ export async function callImageGeneration(
       "远端 API 生图通道未配置 —— 可在设置页「远端模型」里添加生图模型（kind=图片），或到「模型适配」里配置该模型的接口与字段映射",
     );
   }
+  /* 请求体先组装好（纯函数不抛），debug 回调在 fetch 前后都要拿得到它。 */
+  const imageBody = options.bodyOverride ?? defaultImageBody(req, target.model);
   let res: Response;
+  const startedAt = Date.now();
   try {
-    /* 模型级透传字段盖在**最后**（#3626）：厂商字段覆盖默认映射/适配器组装。 */
-    const imageBody = options.bodyOverride ?? defaultImageBody(req, target.model);
     res = await fetch(target.endpoint, {
       method: "POST",
       headers: target.apiKey
@@ -292,9 +360,28 @@ export async function callImageGeneration(
       signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
     });
   } catch (error) {
+    /* 网络层失败也上报（status=null）：测试页要看到「发到了哪、发了什么」。 */
+    options.debug?.({
+      body: debugBodyOf(imageBody),
+      durationMs: Date.now() - startedAt,
+      endpoint: target.endpoint,
+      excerpt: null,
+      ok: false,
+      phase: "image",
+      status: null,
+    });
     throw new Error(errorText(error, "API 生图请求失败"), { cause: error });
   }
   const payload = await (options.readJson ?? defaultJsonReader)(res);
+  options.debug?.({
+    body: debugBodyOf(imageBody),
+    durationMs: Date.now() - startedAt,
+    endpoint: target.endpoint,
+    excerpt: excerptOf(payload),
+    ok: res.ok,
+    phase: "image",
+    status: res.status,
+  });
   if (!res.ok) {
     throw upstreamError("API 生图失败", res.status, payload);
   }
@@ -330,10 +417,10 @@ export async function callVideoSubmit(
   if (!target.endpoint) {
     throw new Error("API 视频通道未配置：请先填写 Base URL 与 API Key");
   }
+  const submitBody = options.bodyOverride ?? videoBody(req, target.model);
   let res: Response;
+  const submitStartedAt = Date.now();
   try {
-    /* 模型级透传字段盖在**最后**（#3626）：与生图同一口径。 */
-    const submitBody = options.bodyOverride ?? videoBody(req, target.model);
     res = await fetch(target.endpoint, {
       method: "POST",
       headers: target.apiKey
@@ -348,9 +435,28 @@ export async function callVideoSubmit(
       signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
     });
   } catch (error) {
+    /* 网络层失败也上报（status=null），与生图同一口径。 */
+    options.debug?.({
+      body: debugBodyOf(submitBody),
+      durationMs: Date.now() - submitStartedAt,
+      endpoint: target.endpoint,
+      excerpt: null,
+      ok: false,
+      phase: "video-submit",
+      status: null,
+    });
     throw new Error(errorText(error, "API 视频提交失败"), { cause: error });
   }
   const payload = await (options.readJson ?? defaultJsonReader)(res);
+  options.debug?.({
+    body: debugBodyOf(submitBody),
+    durationMs: Date.now() - submitStartedAt,
+    endpoint: target.endpoint,
+    excerpt: excerptOf(payload),
+    ok: res.ok,
+    phase: "video-submit",
+    status: res.status,
+  });
   if (!res.ok) {
     throw upstreamError("API 视频提交失败", res.status, payload);
   }
@@ -390,6 +496,7 @@ export async function callVideoPoll(
         continue;
       }
       let payload: unknown;
+      const candidateStartedAt = Date.now();
       try {
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：前一候选没读到就换下一个
         const res = await fetch(pollUrl, {
@@ -399,10 +506,29 @@ export async function callVideoPoll(
         });
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：同上，候选串行试
         payload = await (options.readJson ?? defaultJsonReader)(res);
+        options.debug?.({
+          body: { remoteTaskId },
+          durationMs: Date.now() - candidateStartedAt,
+          endpoint: pollUrl,
+          excerpt: excerptOf(payload),
+          ok: res.ok,
+          phase: "video-poll",
+          status: res.status,
+        });
         if (!res.ok) {
           continue;
         }
       } catch {
+        /* 网络层失败也上报（status=null）：测试页要看每一候选试到哪。 */
+        options.debug?.({
+          body: { remoteTaskId },
+          durationMs: Date.now() - candidateStartedAt,
+          endpoint: pollUrl,
+          excerpt: null,
+          ok: false,
+          phase: "video-poll",
+          status: null,
+        });
         continue;
       }
       /* 适配器指定了产物字段：与提交同一口径。 */
@@ -422,6 +548,7 @@ export async function callVideoPoll(
     throw new Error("API 视频通道未配置");
   }
   let res: Response;
+  const pollStartedAt = Date.now();
   try {
     res = await fetch(pollEndpointFor(channel.baseUrl, remoteTaskId), {
       method: "GET",
@@ -429,9 +556,27 @@ export async function callVideoPoll(
       signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
     });
   } catch (error) {
+    options.debug?.({
+      body: { remoteTaskId },
+      durationMs: Date.now() - pollStartedAt,
+      endpoint: pollEndpointFor(channel.baseUrl, remoteTaskId),
+      excerpt: null,
+      ok: false,
+      phase: "video-poll",
+      status: null,
+    });
     throw new Error(errorText(error, "API 视频轮询失败"), { cause: error });
   }
   const payload = await (options.readJson ?? defaultJsonReader)(res);
+  options.debug?.({
+    body: { remoteTaskId },
+    durationMs: Date.now() - pollStartedAt,
+    endpoint: pollEndpointFor(channel.baseUrl, remoteTaskId),
+    excerpt: excerptOf(payload),
+    ok: res.ok,
+    phase: "video-poll",
+    status: res.status,
+  });
   if (!res.ok) {
     throw upstreamError("API 视频轮询失败", res.status, payload);
   }

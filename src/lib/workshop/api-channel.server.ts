@@ -24,6 +24,7 @@ import type {
 } from "~/lib/workshop/remote-model-adapter";
 
 import {
+  type ApiCallDebugRow,
   callImageGeneration,
   callVideoPoll,
   callVideoSubmit,
@@ -271,8 +272,13 @@ function fallbackTarget(channel: ApiChannelStored): ApiUpstreamTarget {
 }
 
 /* 调一个 OpenAI 兼容的 images/generations 端点；返回可用的 URL
- *（远程 URL，或 b64 载荷内联成 data URL）。 */
-export async function generateImageViaApi(req: ApiImageRequest): Promise<string> {
+ *（远程 URL，或 b64 载荷内联成 data URL）。
+ * `opts.debug`（ISSUE #3791）：给出时每次实际发出的请求都上报一条读数，
+ * 由调用方（relay 路由）转给测试页的请求详情面板。 */
+export async function generateImageViaApi(
+  req: ApiImageRequest,
+  opts: { debug?: (row: ApiCallDebugRow) => void } = {},
+): Promise<string> {
   const resolved = await resolveTarget(req, getWorkshopApiSettingsSync().image);
   /* 有适配器：请求体按字段映射落统一输入 + 按 outputField 取结果；
    * 无适配器：OpenAI 兼容默认映射（含「未配置」时抛既有的可读错误）。 */
@@ -284,6 +290,7 @@ export async function generateImageViaApi(req: ApiImageRequest): Promise<string>
     outputField: resolved.adapter?.outputField,
     /* 模型级透传字段（#3626）：盖在请求体最后，覆盖默认映射/适配器输出同名键。 */
     extraBody: resolved.modelExtra ?? undefined,
+    debug: opts.debug,
   });
 }
 
@@ -378,7 +385,10 @@ async function resolveVideoTarget(
 
 /* 把视频任务提交到配置好的端点：带 model 时按 remoteModel 条目直连（#3590），
  * 未带 model 的工坊镜头链路保持既有行为（全局通道设置）。 */
-export async function submitVideoViaApi(req: ApiVideoSubmitRequest): Promise<ApiVideoSubmitResult> {
+export async function submitVideoViaApi(
+  req: ApiVideoSubmitRequest,
+  opts: { debug?: (row: ApiCallDebugRow) => void } = {},
+): Promise<ApiVideoSubmitResult> {
   const resolved = await resolveVideoTarget(req, getWorkshopApiSettingsSync().video);
   return callVideoSubmit(req, getWorkshopApiSettingsSync().video, {
     readJson: readUpstreamJson,
@@ -389,6 +399,7 @@ export async function submitVideoViaApi(req: ApiVideoSubmitRequest): Promise<Api
     outputField: resolved.adapter?.outputField,
     /* 模型级透传字段（#3626）：盖在提交体最后，覆盖默认组装同名键。 */
     extraBody: resolved.modelExtra ?? undefined,
+    debug: opts.debug,
   });
 }
 
@@ -401,7 +412,7 @@ export async function submitVideoViaApi(req: ApiVideoSubmitRequest): Promise<Api
  * 其次按 Base URL 形态推导，最后既有回落 /videos。 */
 export async function pollVideoViaApi(
   remoteTaskId: string,
-  opts: { mode?: string; model?: string } = {},
+  opts: { debug?: (row: ApiCallDebugRow) => void; mode?: string; model?: string } = {},
 ): Promise<{ pending: boolean; url?: string }> {
   const channel = getWorkshopApiSettingsSync().video;
   const wantedModel = (opts.model ?? "").trim();
@@ -428,11 +439,13 @@ export async function pollVideoViaApi(
         readJson: readUpstreamJson,
         pollUrls: [rest, ...(agnes === null ? [] : [agnes])],
         targetOverride: { endpoint: rest, apiKey: conn.apiKey, model: wantedModel },
+        debug: opts.debug,
       });
     }
   }
   return callVideoPoll(remoteTaskId, channel, {
     readJson: readUpstreamJson,
+    debug: opts.debug,
   });
 }
 
