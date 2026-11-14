@@ -193,6 +193,7 @@ comfy-cli 解释器」填它的绝对路径即可，留空时行上的错误与�
 | 建库                                    | `pnpm db:push`                                 | （双击启动链路会自动做）          |
 | 生成原文文档                            | `pnpm doc:gen`                                 | `tools/docs/generate-docs.ps1`    |
 | 起组件工作台                            | `pnpm storybook`                               | `tools/start/storybook.ps1`       |
+| 截「改后真实运行」界面（UI 改动交付截图） | `pnpm screenshot [路由]`                       | `tools/start/take-screenshot.ps1`  |
 | 出一份节点镜像的操作计划（装机提速）    | `pnpm ci:image-plan`                           | （Windows 侧同一条命令）          |
 | 组装免安装版（portable zip）             | `pnpm package:portable`                        | `tools/build/package-portable.ps1` |
 | 探测开发盘红利并调优                    | `pnpm dev:drive`                               | `tools/start/tune-dev-drive.ps1`  |
