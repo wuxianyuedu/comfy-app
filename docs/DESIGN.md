@@ -460,7 +460,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 | token                  | 值                                                           | 为什么是布局量而非像素凑数                                                                                                  |
 | ---------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| `--spacing-title-bar`  | 2.25rem (36px)                                               | 标题行高，`TitleBarTabs` 高度与全屏视图让位**同取这一处**（壳态下 `[data-shell] [data-slot="sidebar-container"]` 靠它让位） |
+| `--spacing-title-bar`  | 2.25rem (36px)                                               | 标题行高，`TitleBarTabs` / `WindowTitleBar` 高度与浮层让位**同取这一处**（整屏路由页 `[data-shell] [data-slot="sidebar-container"]` 靠它让位；主窗口自 #3807 起不让位） |
 | `--spacing-stage-rail` | 13rem (208px)                                                | 工坊竖向阶段轨道列宽，要装下「徽章 + 阶段名 + 完成度小字」的最长一行                                                        |
 | `--panel-right-width`  | 360px                                                        | 右侧面板宽，动画走 `transition-all + w-(--panel-right-width)`（主规范 §4.4.3 的面板级例外）                                 |
 | `--card-spacing`       | `--spacing(4)`=16px / `data-[size=sm]` → `--spacing(3)`=12px | `ui/card` 的局部变量，一个开关换两档内距                                                                                    |
@@ -751,7 +751,7 @@ git grep -l "<PageHeader" -- src/components src/app | grep -v test    # 全部�
 - **移动优先**：公开落地页/文档页从 `sm:` 起步。
 - 关键布局至少覆盖 `sm` / `md` / `lg` 三档。
 - 所有 `absolute` 浮层（抽屉、popover、tooltip）需测试 **≤1280px** 视口下不溢出。
-- 壳态几何：`[data-shell]` 下侧栏容器 `top: var(--spacing-title-bar)` + `height: calc(100svh - var(--spacing-title-bar))`；浏览器/dev 不打这个标记，侧栏从视口顶起。
+- 壳态几何（ISSUE #3807 后）：主窗口的标题行落在**内容列顶部**，与浏览器态 `ViewTabStrip` 同位，侧栏与内容列都从视口 y=0 起 —— 两形态首页都贴顶。`[data-shell]` 只剩整屏路由页（`ShellFullPage` + `WindowTitleBar`）在用：那里标题行确实是整窗第一行，侧栏容器 `top: var(--spacing-title-bar)` + `height: calc(100svh - var(--spacing-title-bar))`；浏览器 / dev 不打这个标记。
 
 ---
 
