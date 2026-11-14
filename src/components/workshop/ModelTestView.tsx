@@ -15,6 +15,7 @@ import { FilePickerButton } from "~/components/ui/file-picker";
 import { FormField } from "~/components/ui/form-field";
 import { Input } from "~/components/ui/input";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { ViewableImage } from "~/components/ui/image-viewer";
 import { PageHeader } from "~/components/ui/page-header";
 import { SectionLabel } from "~/components/ui/section-label";
 import { SelectChip } from "~/components/ui/select-chip";
@@ -318,6 +319,8 @@ export function ModelTestView() {
   /* 统一输入行来自模式契约（ISSUE #3778），行序 = 契约口序（ISSUE #3785）：
    * 复合尺寸口也在它契约里的位置上渲染，不整体前移。 */
   const modeLabel = c.modeTabs.find((t) => t.mode === c.mode)?.label ?? c.mode;
+  /* 回调里读 c.result 会丢掉 JSX 条件的收窄 —— 先取一次稳定引用。 */
+  const resultUrl = c.result?.url ?? null;
 
   return (
     <DocumentFrame
@@ -496,28 +499,111 @@ export function ModelTestView() {
                 </p>
               )}
 
+              {c.notice !== null && (
+                <p
+                  className={cn(
+                    "rounded-lg px-3 py-2 text-xs",
+                    c.notice.kind === "ok"
+                      ? "bg-elevated text-muted-foreground"
+                      : "bg-destructive/10 text-destructive",
+                  )}
+                >
+                  {c.notice.text}
+                </p>
+              )}
+
               {c.result !== null && (
                 <section className="flex flex-col gap-2">
-                  <SectionLabel hint="工坊同款产物提取（适配器 outputField / 通用提取）">
+                  <SectionLabel hint="工坊同款产物提取（适配器 outputField / 通用提取）；图片点开进查看器，可缩放并显示原始尺寸">
                     产物
                   </SectionLabel>
                   <div className="border-border bg-bg overflow-hidden rounded-xl border">
-                    <MediaThumbnail
-                      alt="生成结果"
-                      as={c.result.kind === "video" ? "video" : "image"}
-                      className="max-h-[28rem] w-full object-contain"
-                      controls
-                      src={c.result.url}
-                    />
+                    {c.result.kind === "image" ? (
+                      /* 图片查看器（ISSUE #3791）：点缩略图进 ImageViewer（缩放 +
+                       * 原始宽高显示）；视频保持既有播放器。 */
+                      <ViewableImage
+                        alt="生成结果"
+                        className="max-h-[28rem] w-full object-contain"
+                        label="生成结果"
+                        src={c.result.url}
+                      />
+                    ) : (
+                      <MediaThumbnail
+                        alt="生成结果"
+                        as="video"
+                        className="max-h-[28rem] w-full object-contain"
+                        controls
+                        src={c.result.url}
+                      />
+                    )}
                   </div>
-                  <a
-                    className="text-primary text-xs underline-offset-2 hover:underline"
-                    href={c.result.url}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    打开原始产物
-                  </a>
+                  {/* 外链统一走服务端 openExternal（ISSUE #3791）：桌面壳内
+                      target=_blank 会被壳的 shell ACL 拦下（Runtime Error）。 */}
+                  <div>
+                    <Button
+                      className="text-primary h-auto px-0 text-xs"
+                      disabled={c.openBusy}
+                      onClick={() => {
+                        if (resultUrl !== null) {
+                          void c.openResultInBrowser(resultUrl);
+                        }
+                      }}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      打开原始产物（系统浏览器）
+                    </Button>
+                  </div>
+                </section>
+              )}
+
+              {/* 请求详情（ISSUE #3791）：实际发出的每一笔请求 —— 端点 / 请求体
+                  （长值截断）/ 状态 / 耗时 / 响应摘要；失败同样保留。 */}
+              {c.debugRows.length > 0 && (
+                <section className="flex flex-col gap-2">
+                  <SectionLabel hint="本次生成实际发出的请求（密钥在请求头，不在此显示；请求体里的长值已截断）">
+                    请求详情
+                  </SectionLabel>
+                  {c.debugRows.map((row, i) => (
+                    <div
+                      className="border-border bg-bg overflow-hidden rounded-lg border"
+                      key={`${row.phase}-${String(i)}`}
+                    >
+                      <div className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
+                        <span
+                          className={cn(
+                            "rounded-full px-2 py-0.5 text-2xs tabular-nums",
+                            row.ok
+                              ? "bg-elevated text-muted-foreground"
+                              : "bg-destructive/10 text-destructive",
+                          )}
+                        >
+                          {row.status === null ? "网络失败" : `HTTP ${String(row.status)}`}
+                        </span>
+                        <span className="text-muted-foreground text-2xs">
+                          {row.phase === "image"
+                            ? "生图"
+                            : row.phase === "video-submit"
+                              ? "视频提交"
+                              : "视频轮询"}
+                        </span>
+                        {row.durationMs !== null && (
+                          <span className="text-muted-foreground text-2xs tabular-nums">
+                            {String(row.durationMs)}ms
+                          </span>
+                        )}
+                        <code className="min-w-0 flex-1 truncate font-mono">{row.endpoint}</code>
+                      </div>
+                      <pre className="border-border/60 text-2xs overflow-x-auto border-t px-3 py-2 font-mono break-all whitespace-pre-wrap">
+                        {JSON.stringify(row.body, null, 2)}
+                      </pre>
+                      {row.excerpt !== null && row.excerpt !== "" && (
+                        <pre className="text-muted-foreground border-border/60 text-2xs overflow-x-auto border-t px-3 py-2 font-mono break-all whitespace-pre-wrap">
+                          {row.excerpt}
+                        </pre>
+                      )}
+                    </div>
+                  ))}
                 </section>
               )}
             </>

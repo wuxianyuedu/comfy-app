@@ -7,14 +7,21 @@
 // 视图（ModelTestView）只渲染 + 上抛，不出现 fetch / api.*。
 
 import { useCallback, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { readFileAsDataUrl } from "~/lib/file-io";
 import { runAsyncAction } from "~/lib/async-action";
 import { sleep } from "~/lib/with-timeout";
 import { isRecord } from "~/lib/is-record";
 import { useBusyAction } from "~/components/ui/use-busy-action";
-import { apiGenerateImage, apiPollVideo, apiSubmitVideo } from "~/lib/workshop/generation-client";
+import { useExternalAction } from "~/components/ui/use-external-action";
+import {
+  apiGenerateImage,
+  apiPollVideo,
+  apiSubmitVideo,
+  type RelayDebugSink,
+} from "~/lib/workshop/generation-client";
+import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
 import { parseRemoteModeAdapters } from "~/lib/workshop/remote-model-adapter";
 import type { RemoteModeAdapter } from "~/lib/workshop/remote-model-adapter";
 
@@ -56,6 +63,9 @@ export type ModelTestController = {
   /** 候选模型（当前 kind 下启用的远端条目，再按当前模式收窄：
    *  只列配了该模式适配器的模型 —— 不支持这个模式的不出现在下拉里）。 */
   candidates: Array<TestCandidate>;
+  /** 最近一次生成的请求读数（ISSUE #3791）：端点 / 请求体 / 状态 / 耗时 /
+   *  响应摘要，成功与失败都收集；新一轮生成前清空。 */
+  debugRows: Array<ApiCallDebugRow>;
   /** 一次测试的失败文案（空 = 没失败）。 */
   error: string | null;
   /** 生成动作：按适配器映射收集统一输入并发起一次真实调用（消耗额度）。 */
@@ -75,6 +85,13 @@ export type ModelTestController = {
   mode: string;
   /** 左栏「所有模式」页签：当前用途的全部生成类模式 + 各自配了适配器的候选数。 */
   modeTabs: Array<ModeTab>;
+  /** 外部动作的反馈位（如「已交给系统浏览器打开」）：下一次动作或重置时清除。 */
+  notice: { kind: "ok" | "err"; text: string } | null;
+  /** 外链动作忙碌位（打开中禁用按钮）。 */
+  openBusy: boolean;
+  /** 用系统默认浏览器打开产物原链（ISSUE #3791）—— 桌面壳内 target=_blank
+   *  外链会被壳的 shell ACL 拦下，统一走服务端 openExternal（免重编壳）。 */
+  openResultInBrowser: (url: string) => Promise<void>;
   /** 局部更新表单值（文本 / 档位）。 */
   patchValue: (type: keyof ModelTestValues, value: string) => void;
   /** 批量更新表单值（尺寸下拉一次写回四个键）。 */
@@ -110,7 +127,34 @@ export function useModelTest(): ModelTestController {
   );
   const [result, setResult] = useState<ModelTestResult>(null);
   const [error, setError] = useState<string | null>(null);
+  /* 请求读数（ISSUE #3791）：由 onDebug 逐批追加，新一轮生成前清空。 */
+  const [debugRows, setDebugRows] = useState<Array<ApiCallDebugRow>>([]);
+  const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const busy = useBusyAction();
+
+  /* 产物原链交给系统浏览器（服务端 openExternal；免重编壳，#3791）。 */
+  const openExternalM = useMutation(trpc.setting.openExternal.mutationOptions());
+  const openExternalAction = useExternalAction({
+    target: "browser",
+    report: (kind, text) => {
+      setNotice({ kind, text });
+    },
+  });
+  const openResultInBrowser = useCallback(
+    async (url: string) => {
+      await openExternalAction.runWithTarget(url, (target) =>
+        openExternalM.mutateAsync({ url: target }),
+      );
+    },
+    [openExternalAction, openExternalM],
+  );
+
+  /* 请求读数的稳定追加器： RelayDebugSink 直接当 onDebug 用。 */
+  const appendDebug = useCallback<RelayDebugSink>((rows) => {
+    if (rows.length > 0) {
+      setDebugRows((prev) => [...prev, ...rows]);
+    }
+  }, []);
 
   const candidates = useMemo<Array<TestCandidate>>(() => {
     const raw: unknown = configQ.data?.config;
@@ -295,6 +339,8 @@ export function useModelTest(): ModelTestController {
     }
     setError(null);
     setResult(null);
+    setNotice(null);
+    setDebugRows([]);
     /* 失败反馈走 runAsyncAction（P27）；成功不另报 —— 产物本身已经是反馈。 */
     await busy.run(() =>
       runAsyncAction(
@@ -302,12 +348,14 @@ export function useModelTest(): ModelTestController {
           if (kind === "image") {
             const url = await apiGenerateImage(
               assembleImageRequest({ model: selectedModel, mode, values }),
+              { onDebug: appendDebug },
             );
             setResult({ kind: "image", url });
             return { ok: true as const };
           }
           const submitted = await apiSubmitVideo(
             assembleVideoRequest({ model: selectedModel, mode, values }),
+            { onDebug: appendDebug },
           );
           if (submitted.url !== undefined && submitted.url !== "") {
             setResult({ kind: "video", url: submitted.url });
@@ -322,7 +370,12 @@ export function useModelTest(): ModelTestController {
             // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一轮轮询用前一轮的结果
             await sleep(POLL_INTERVAL_MS);
             // oxlint-disable-next-line no-await-in-loop -- 同上
-            const round = await apiPollVideo(taskId, { model: selectedModel, mode });
+            const round = await apiPollVideo(taskId, {
+              debug: true,
+              mode,
+              model: selectedModel,
+              onDebug: appendDebug,
+            });
             if (round.url !== undefined && round.url !== "") {
               setResult({ kind: "video", url: round.url });
               return { ok: true as const };
@@ -343,10 +396,11 @@ export function useModelTest(): ModelTestController {
         },
       ),
     );
-  }, [busy, inputRows, kind, mode, selectedModel, values]);
+  }, [appendDebug, busy, inputRows, kind, mode, selectedModel, values]);
 
   return {
     candidates: modeCandidates,
+    debugRows,
     kindCandidateCount,
     inputRows,
     kind,
@@ -355,7 +409,10 @@ export function useModelTest(): ModelTestController {
     adapters,
     mode,
     modeTabs,
+    notice,
     generate,
+    openBusy: openExternalAction.busy,
+    openResultInBrowser,
     loading: configQ.isLoading,
     selectedModel,
     setInputFromFile,
