@@ -172,14 +172,14 @@ describe("setting.backupImportFromDir", () => {
   });
 });
 
-/** 取尺寸表的一格（表是 `Record<string, …>`，两层索引访问在 strict 下都是可选值）。 */
+/** 取尺寸表的一格（表是 `Record<string, …>`，首层索引访问在 strict 下是可选值）。 */
 function sizeCell(
   table: SizePresetTable,
   scene: "image" | "video",
   ratio: string,
   tier: "1k" | "2k" | "4k",
 ): SizeDims {
-  return table[scene][ratio]![tier]!;
+  return table[scene][ratio]![tier];
 }
 
 describe("setting.sizePresetGet / sizePresetSave（ISSUE #3788：尺寸配置表）", () => {
