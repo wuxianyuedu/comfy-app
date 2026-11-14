@@ -44,6 +44,7 @@ import {
 } from "~/lib/core/repository-user";
 import { decryptLlmKey } from "~/lib/llm/secrets";
 import type { DbExecutor } from "~/lib/core/repository-executor-types";
+import { db } from "~/lib/db";
 import { SETTINGS_DB_WRITE } from "~/lib/retry-policy";
 import { postRepository } from "~/lib/core/repository-post";
 import {
@@ -1059,6 +1060,16 @@ describe("FilmRepository / FilmShotRepository", () => {
     expect(await filmRepository.listByUser("u2")).toEqual([]);
     expect(f1.status).toBe("PARSING");
     expect(f1.subtitleOn).toBe(true);
+  });
+
+  it("成片+镜头创建在同一事务内：镜头插入失败时不残留孤儿成片（#3853/#3848）", async () => {
+    await expect(
+      db.transaction(async (tx) => {
+        await filmRepository.create(CREATE, tx);
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
+    expect(await filmRepository.listByUser("u1")).toEqual([]);
   });
 
   it("listByStatus 空集合直接返回空数组", async () => {

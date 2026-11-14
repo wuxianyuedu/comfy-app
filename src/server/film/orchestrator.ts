@@ -6,6 +6,7 @@
 import { clamp } from "~/lib/clamp";
 import { sleep } from "~/lib/with-timeout";
 import "server-only";
+import { db } from "~/lib/db";
 import {
   filmRepository,
   filmShotRepository,
@@ -208,37 +209,46 @@ async function persistFilmWithShots(args: {
   userId: string;
   videoWorkflowId: string;
 }): Promise<string> {
-  const film = await filmRepository.create({
-    userId: args.userId,
-    projectId: args.projectId ?? null,
-    title: args.title,
-    script: args.script,
-    type: args.type,
-    styleSlug: args.styleSlug ?? null,
-    size: JSON.stringify(args.sizeSpec),
-    fps: args.fps,
-    framesPerShot: args.framesPerShot,
-    subtitleOn: args.subtitleOn,
-    bgmName: args.bgmName ?? null,
-  });
-  await filmShotRepository.createMany(
-    film.id,
-    args.shotInputs.map((shot) => ({
-      order: shot.order,
-      shotId: shot.shotId ?? null,
-      heading: shot.heading ?? null,
-      prompt: shot.prompt,
-      negative: shot.negative ?? null,
-      params: {
-        frames: args.framesPerShot,
-        fps: args.fps,
-        size: args.sizeSpec,
-        videoWorkflowId: args.videoWorkflowId,
-        imageWorkflowId: args.imageWorkflowId,
-      },
-    })),
+  return db.transaction(
+    async (tx) => {
+      const film = await filmRepository.create(
+        {
+          userId: args.userId,
+          projectId: args.projectId ?? null,
+          title: args.title,
+          script: args.script,
+          type: args.type,
+          styleSlug: args.styleSlug ?? null,
+          size: JSON.stringify(args.sizeSpec),
+          fps: args.fps,
+          framesPerShot: args.framesPerShot,
+          subtitleOn: args.subtitleOn,
+          bgmName: args.bgmName ?? null,
+        },
+        tx,
+      );
+      await filmShotRepository.createMany(
+        film.id,
+        args.shotInputs.map((shot) => ({
+          order: shot.order,
+          shotId: shot.shotId ?? null,
+          heading: shot.heading ?? null,
+          prompt: shot.prompt,
+          negative: shot.negative ?? null,
+          params: {
+            frames: args.framesPerShot,
+            fps: args.fps,
+            size: args.sizeSpec,
+            videoWorkflowId: args.videoWorkflowId,
+            imageWorkflowId: args.imageWorkflowId,
+          },
+        })),
+        tx,
+      );
+      return film.id;
+    },
+    { behavior: "immediate" },
   );
-  return film.id;
 }
 
 export async function createFilm(input: CreateFilmInput) {

@@ -96,6 +96,11 @@ vi.mock("~/lib/core/repository", () => ({
 vi.mock("~/lib/core/repository-production", () => ({
   productionRepository: prodRepo,
 }));
+vi.mock("~/lib/db", () => ({
+  db: {
+    transaction: async <T>(fn: (tx: unknown) => Promise<T>) => fn({}),
+  },
+}));
 vi.mock("~/lib/workshop/workflow-run.server", () => ({
   createWorkflowRunTask: createRunTaskMock,
 }));
