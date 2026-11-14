@@ -29,7 +29,6 @@ import {
 import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { Toggle } from "~/components/ui/toggle";
-import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import { Field } from "./SettingsPrimitives";
 import { RuntimeLogBox } from "~/components/studio/logs/RuntimeLogBox";
 
@@ -49,11 +48,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
   };
 
   return (
-    <SettingsCard
-      /* 这张卡上的每一项（连接地址、默认模型、按任务的温度）都落在同一处 ——
-          徽标说清是哪儿，迁移配置时才知道该带走什么（ISSUE #3625）。 */
-      titleExtra={<DataLocationBadge id="llm-config" />}
-    >
+    <SettingsCard>
       {/* Base URL 仅本地 Ollama 需要；远端的连接参数由模型条目各自携带 */}
       <Field
         label="Base URL"

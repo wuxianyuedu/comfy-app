@@ -58,7 +58,9 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
                     aria-current={active ? "true" : undefined}
                     className={`h-auto w-full justify-start gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${
                       active
-                        ? "border-primary-500/40 bg-primary-500/10"
+                        ? /* 悬停 = 同色系加深（一成 → 两成），不是灰底+紫描边
+                               （ISSUE #3724：供应商页签的选中态悬停）。 */
+                          "border-primary-500/40 bg-primary-500/10 hover:bg-primary-500/20"
                         : /* 深色下 `border-border` 与行底几乎同色，清单会糊成一块 ——
                              控件可见边界走 ink 档（与 #3527 勾选框同一口径，ISSUE #3495）。 */
                           "border-border bg-surface-row hover:bg-surface-2 dark:border-ink/40"
