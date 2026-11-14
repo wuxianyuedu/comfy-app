@@ -16,6 +16,9 @@ const filmRepo = vi.hoisted(() => ({
   markDone: vi.fn((_id: string, _path: string) => undefined),
   updateProgress: vi.fn((_id: string, _progress: number) => undefined),
   markGenerating: vi.fn((_id: string) => undefined),
+  /* 条件抢占（#3836）：startFilm / composeFilm 改为「抢到才继续」，默认抢到。 */
+  claimGenerating: vi.fn((_id: string) => Promise.resolve(true)),
+  claimComposing: vi.fn((_id: string) => Promise.resolve(true)),
   create: vi.fn<(input: { size: string }) => Promise<{ id: string }>>(),
   appendLog: vi.fn((_id: string, _entry: { level: string; msg: string }) => undefined),
   /** 恢复扫描用的按状态查询（5-A）。默认「库里没有未收尾的影片」。 */
@@ -248,11 +251,16 @@ describe("composeFilm — 合成前置条件不满足时必须落 FAILED 且文�
   it("影片不存在 / 已在合成或已完成：直接返回，不重复合成", async () => {
     filmRepo.findById.mockResolvedValue(null);
     await composeFilm("f-missing");
-    expect(filmRepo.markComposing).not.toHaveBeenCalled();
+    expect(filmRepo.claimComposing).not.toHaveBeenCalled();
+    expect(filmRepo.markFailed).not.toHaveBeenCalled();
 
+    /* 「已在合成或已完成」在新契约下 = 条件抢占抢不到（WHERE 排除 COMPOSING/DONE，
+     * 0 行更新）：composeFilm 拿到 false 直接让位，不碰 ffmpeg 也不落 FAILED。 */
     filmRepo.findById.mockResolvedValue({ id: "f1", status: "DONE" });
+    filmRepo.claimComposing.mockResolvedValueOnce(false);
     await composeFilm("f1");
-    expect(filmRepo.markComposing).not.toHaveBeenCalled();
+    expect(filmRepo.claimComposing).toHaveBeenCalledWith("f1");
+    expect(filmRepo.markFailed).not.toHaveBeenCalled();
   });
 
   it("没有可用镜头：落 FAILED，且不去调 ffmpeg", async () => {
@@ -610,10 +618,10 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
       })
       .toHaveBeenCalledWith("f-term", 100);
     /* 钉「循环走到了 `pending === 0` 那一支」：确实去调了合成，而合成给出的第一个
-     * 判决就是「没有可用的镜头视频」。 */
+     * 判决就是「没有可用的镜头视频」。合成入口现在是条件抢占（#3836），钉抢占调用。 */
     await expect
-      .poll(() => filmRepo.markComposing, {
-        message: "markComposing 的调用现场",
+      .poll(() => filmRepo.claimComposing, {
+        message: "claimComposing 的调用现场",
       })
       .toHaveBeenCalledWith("f-term");
     await expect
