@@ -12,6 +12,7 @@
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
 import { SettingsCard } from "~/components/ui/settings-card";
+import { TruncatedText } from "~/components/ui/truncated-text";
 
 import { ProviderDetail } from "./ProviderDetail";
 import { ProviderDialog } from "./ProviderDialog";
@@ -75,7 +76,9 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
                     {/* 只显示必要内容（#3618）：窄列里塞 Base URL 必然截断成「已…」，
                         第二行改念启停读数 —— 右上角那个总数（不分启停）一并撤掉。 */}
                     <span className="min-w-0 flex-1">
-                      <span className="text-ink block truncate text-sm">{provider.name}</span>
+                      <TruncatedText className="text-ink block truncate text-sm">
+                        {provider.name}
+                      </TruncatedText>
                       <span className="text-muted-foreground text-2xs block truncate">
                         {owned.length === 0 ? "暂无模型" : `已启用 ${enabledCount}/${owned.length}`}
                         {provider.hasApiKey ? " · 已配密钥" : ""}
