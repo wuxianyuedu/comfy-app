@@ -25,6 +25,7 @@ import { LogCategorySection } from "./components/LogCategorySection";
 import { LlmLocalSection } from "./components/LlmLocalSection";
 import { LlmRemoteSection } from "./components/LlmRemoteSection";
 import { SidebarTabSection } from "./components/SidebarTabSection";
+import { SizePresetSection } from "./components/SizePresetSection";
 import { UpdateCheckSection } from "./components/UpdateCheckSection";
 
 export function SettingsPageView({
@@ -63,6 +64,7 @@ export function SettingsPageView({
         database: <DatabaseSection c={c} />,
         backup: <BackupSection c={c} />,
         dataLocation: <DataLocationSection />,
+        sizePresets: <SizePresetSection />,
         exit: <ExitSection c={c} />,
         logs: <LogCategorySection />,
       }) satisfies Record<Section, React.ReactNode>,

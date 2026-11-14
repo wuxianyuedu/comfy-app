@@ -834,3 +834,63 @@ export function resolutionTierOf(
   }
   return best;
 }
+
+/* ── 校验与逐格合并（ISSUE #3788：覆盖表落应用数据文件，读取侧逐格回退默认）──
+ * 纯函数、无 IO：客户端 store 与服务端存储模块共用同一份判据。 */
+
+/** 单格宽高是否合法（正整数且在常识范围内；非法值逐格回退默认）。 */
+function isValidDims(value: unknown): value is SizeDims {
+  if (!isPlainRecord(value)) {
+    return false;
+  }
+  const width = value.width;
+  const height = value.height;
+  return (
+    typeof width === "number" &&
+    typeof height === "number" &&
+    Number.isFinite(width) &&
+    Number.isFinite(height) &&
+    width > 0 &&
+    height > 0
+  );
+}
+
+/** 单场景逐格合并：默认表打底，合法覆盖项才生效。 */
+function mergeSceneTable(fallback: SceneResolutionTable, raw: unknown): SceneResolutionTable {
+  const out: SceneResolutionTable = {};
+  const record = isPlainRecord(raw) ? raw : {};
+  for (const preset of SIZE_RATIO_PRESETS) {
+    const fallbackRow = fallback[preset.label];
+    const rawRow = isPlainRecord(record[preset.label]) ? record[preset.label] : undefined;
+    const row: Record<ResolutionTier, SizeDims> = {
+      "1k": { width: 1024, height: 1024 },
+      "2k": { width: 1024, height: 1024 },
+      "4k": { width: 1024, height: 1024 },
+    };
+    for (const tier of RESOLUTION_TIERS) {
+      const candidate = isPlainRecord(rawRow) ? rawRow[tier] : undefined;
+      row[tier] = isValidDims(candidate)
+        ? {
+            width: Math.round(candidate.width),
+            height: Math.round(candidate.height),
+          }
+        : { ...(fallbackRow?.[tier] ?? { width: 1024, height: 1024 }) };
+    }
+    out[preset.label] = row;
+  }
+  return out;
+}
+
+/** 记录形状的收窄（P41 不允许视图/库层自写名为 isRecord 的函数，换个名字同语义）。 */
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+/** 覆盖表逐格合并：默认表打底，合法覆盖项才生效；缺行、缺档、改坏的值一律回退默认（ISSUE #3788）。 */
+export function mergeSizePresetTable(raw: unknown): SizePresetTable {
+  const record = isPlainRecord(raw) ? raw : {};
+  return {
+    image: mergeSceneTable(DEFAULT_SIZE_PRESET_TABLE.image, record.image),
+    video: mergeSceneTable(DEFAULT_SIZE_PRESET_TABLE.video, record.video),
+  };
+}
