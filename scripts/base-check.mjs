@@ -136,6 +136,7 @@ import {
 import { resolveGateCommand, resolveMergeBatch, runGate } from "./base-check/hook-steps.mjs";
 import { didNotRunSide, judge, judgeMergeState, nextSteps } from "./base-check/verdict.mjs";
 import { linkDependencies, unlinkDependencies } from "./base-check/snapshot-link.mjs";
+import { snapshotArgvResolver } from "./base-check/snapshot-argv.mjs";
 
 export {
   git,
@@ -309,6 +310,7 @@ export function baseCheckMany({
     dependencyLink = linkDependencies(ROOT, worktreePath);
     onTiming?.("快照建树(worktree add + 链依赖)", performance.now() - snapshotT0);
     const commit = git(["rev-parse", "--short", "HEAD"], worktreePath).stdout;
+
     const rows = [];
     for (const [i, c] of commands.entries()) {
       const cur = current[i]?.code ?? 127;
@@ -316,7 +318,10 @@ export function baseCheckMany({
       /* `baseSide: false` ⇒ **不在快照上跑**（理由见 `CHAINED_STEPS` 那条注释）：
        * 它的 `baseCode` 记 `null`（= 未跑），判决只看本检出那一侧。 */
       const baseT0 = performance.now();
-      const base = c.baseSide === false ? null : runGate(c.argv, worktreePath);
+      const base =
+        c.baseSide === false
+          ? null
+          : runGate(snapshotArgvResolver(worktreePath)(c.label, c.argv), worktreePath);
       if (base !== null) {
         onTiming?.(`快照:${c.label}`, performance.now() - baseT0);
       }
@@ -486,7 +491,7 @@ function evaluateMergeState({ commands, into, ref, keep = false, json = false })
     }
     const rows = [];
     for (const [i, c] of commands.entries()) {
-      const run = runGate(c.argv, worktreePath);
+      const run = runGate(snapshotArgvResolver(worktreePath)(c.label, c.argv), worktreePath);
       const verdict = judgeMergeState({
         currentCode: current[i]?.code ?? 0,
         mergeCode: run.code,
