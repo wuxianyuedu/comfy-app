@@ -105,11 +105,13 @@ export async function streamChat({ messages, opts, onToken, signal }: ChatArgs):
 }
 
 /* 非流式的一次性对话。 */
-export async function completeChat({ messages, opts }: ChatArgs): Promise<string> {
+export async function completeChat({ messages, opts, signal }: ChatArgs): Promise<string> {
   const res = await fetch("/api/llm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages, stream: false, ...opts }),
+    /* 调用方可取消（组件卸载 / 超时兜底）；服务端上游也有自己的预算。 */
+    signal,
   });
   /* 错误信封的读法收在一处（规范 16 §16.2.4.35）。 */
   const body = await readJsonBody(res);

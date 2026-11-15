@@ -285,6 +285,13 @@ function maskRemoteEntryForClient(e: RemoteModelEntry): RemoteModelEntry {
  *  历史 bug：Ollama 未启动 / 远端不可达时，用户只看到一句 `fetch failed`，
  *  既不知道是连不上本地 Ollama 还是远端 Key 无效，也没提示怎么处理。 */
 export function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
+  /* 预算到点 / 外部取消（AbortSignal.timeout 抛 TimeoutError，调用方 abort 抛 AbortError）：
+   * 这不是网络故障，文案要点明「等了多久被中止」，别落进下面的 DNS / 拒连分类。 */
+  if (e instanceof DOMException && (e.name === "TimeoutError" || e.name === "AbortError")) {
+    return e.name === "TimeoutError"
+      ? `LLM 上游等待超时（${cfg.baseUrl.replace(/\/$/, "")}）：一次生成在预算内没有等到响应，已中止本次调用。请检查模型服务是否卡死，或稍后重试。`
+      : `LLM 请求已中止（${cfg.baseUrl.replace(/\/$/, "")}）：调用方取消了本次生成。`;
+  }
   /* 非 TypeError（未预期的抛值形态）：与全库同一个取值出口，
    * 免得 `String(e)` 那一路把非 Error 抛值渲染成 `[object Object]`。 */
   if (!(e instanceof TypeError)) {
@@ -354,8 +361,29 @@ function formatOf(cfg: LLMConfig): LlmApiFormat {
   return cfg.apiFormat ?? "chat-completions";
 }
 
+/** 非流式上游等待预算：一次「问完等答」最多等多久。
+ *  与工坊侧 `src/server/workshop/llm.ts` 的 180s 同量级（同是 LLM 上游，口径不分裂）。 */
+export const LLM_UPSTREAM_TIMEOUT_MS = 180_000;
+/** 流式上游总预算：长回答留足余量；「连上了但挂住不吐字」也会到点终止——
+ *  没有这一格，一次挂起的上游就把 run 循环的当前步永久占住（可终止性审计 #3889 / #4003）。 */
+export const LLM_STREAM_TIMEOUT_MS = 600_000;
+
+/**
+ * 合成上游请求的 `AbortSignal`：外部取消（调用方 / 客户端断开）与墙钟预算**谁先到都算数**。
+ * 单独抽出来是为了可测——预算到点必中止、外部先取消立即中止，两条都能用假 fetch 钉住。
+ */
+export function composeUpstreamSignal(
+  external: AbortSignal | undefined,
+  timeoutMs: number,
+): AbortSignal {
+  const budget = AbortSignal.timeout(timeoutMs);
+  return external ? AbortSignal.any([external, budget]) : budget;
+}
+
 type ChatCallOptions = {
   responseFormatJson?: boolean;
+  /** 外部取消信号（如 HTTP 路由的 `req.signal`）：客户端断开时连上游一起停。 */
+  signal?: AbortSignal;
   stream: boolean;
   tools?: Array<LLMTool>;
 };
@@ -390,6 +418,12 @@ async function upstreamChat(
       method: "POST",
       headers: request.headers,
       body: JSON.stringify(request.body),
+      /* 等待必有预算（§8.11）：外部取消与墙钟预算谁先到都中止——
+       * 信号同时罩住连接期与流式读取期（undici 对 body 读取同样响应 abort）。 */
+      signal: composeUpstreamSignal(
+        options.signal,
+        options.stream ? LLM_STREAM_TIMEOUT_MS : LLM_UPSTREAM_TIMEOUT_MS,
+      ),
     });
   } catch (error) {
     throw new Error(describeFetchFailure(error, cfg), { cause: error });
@@ -419,9 +453,13 @@ function assertModelConfigured(cfg: LLMConfig): void {
 }
 
 /* 一次性（非流式）补全。 */
-export async function completeLLM(cfg: LLMConfig, messages: Array<LLMMessage>): Promise<string> {
+export async function completeLLM(
+  cfg: LLMConfig,
+  messages: Array<LLMMessage>,
+  signal?: AbortSignal,
+): Promise<string> {
   assertModelConfigured(cfg);
-  const res = await upstreamChat(cfg, messages, { stream: false });
+  const res = await upstreamChat(cfg, messages, { stream: false, signal });
   const json: unknown = await res.json();
   return extractText(formatOf(cfg), json);
 }
@@ -434,10 +472,11 @@ export async function streamLLM(
   cfg: LLMConfig,
   messages: Array<LLMMessage>,
   onToken: (token: string) => void,
+  signal?: AbortSignal,
 ): Promise<string> {
   assertModelConfigured(cfg);
   const format = formatOf(cfg);
-  const res = await upstreamChat(cfg, messages, { stream: true });
+  const res = await upstreamChat(cfg, messages, { stream: true, signal });
   if (!res.body) {
     throw new Error("LLM 服务未返回数据流，请重试");
   }
@@ -490,9 +529,14 @@ export async function completeLLMStructured<T>(
   cfg: LLMConfig,
   messages: Array<LLMMessage>,
   schema: ZodType<T>,
+  signal?: AbortSignal,
 ): Promise<T> {
   assertModelConfigured(cfg);
-  const res = await upstreamChat(cfg, messages, { stream: false, responseFormatJson: true });
+  const res = await upstreamChat(cfg, messages, {
+    stream: false,
+    responseFormatJson: true,
+    signal,
+  });
 
   const json: unknown = await res.json();
   const content = extractText(formatOf(cfg), json) || "{}";
@@ -528,6 +572,7 @@ export async function completeLLMTools(
   cfg: LLMConfig,
   messages: Array<LLMMessage>,
   tools: Array<LLMTool>,
+  signal?: AbortSignal,
 ): Promise<CompleteToolsResult> {
   assertModelConfigured(cfg);
   const format = formatOf(cfg);
@@ -536,7 +581,7 @@ export async function completeLLMTools(
       `当前供应商的接口格式（${format}）暂不支持工具调用：请在供应商设置里改用 Chat Completions 格式`,
     );
   }
-  const res = await upstreamChat(cfg, messages, { stream: false, tools });
+  const res = await upstreamChat(cfg, messages, { stream: false, tools, signal });
   const json: unknown = await res.json();
   return { content: extractText(format, json), toolCalls: extractToolCalls(format, json) };
 }
