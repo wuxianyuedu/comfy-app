@@ -1728,7 +1728,9 @@ describe("LlmProviderRepository（#3501 供应商）", () => {
       .then(() => null)
       .catch(errorText);
     expect(failure, "重名必须失败得看得见").not.toBeNull();
-    expect(`${failure?.message ?? ""} ${failure?.cause?.message ?? ""}`).toContain("UNIQUE");
+    /* #3866：约束冲突在仓储层转成可读的 409 冲突错误，失败形态不再是驱动原文，
+     * 但「重名当场拒绝」的语义不变。 */
+    expect(`${failure?.message ?? ""} ${failure?.cause?.message ?? ""}`).toContain("已被使用");
   });
 
   it("delete 在同一事务里删掉名下模型，不留下「无主」条目", async () => {

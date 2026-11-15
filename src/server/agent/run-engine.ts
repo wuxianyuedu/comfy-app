@@ -45,12 +45,23 @@ const nowIso = () => new Date().toISOString();
 /**
  * per-project 在飞互斥（ISSUE #3829/#3840）：同一 (user, project) 只允许一个推进循环并发运行，
  * 后续 kick 复用同一条 promise 让位，避免重复执行动作与状态竞态。
+ *
+ * 挂 `globalThis`（ISSUE #3880）：dev 的 HMR 会重新求值本模块，模块级 Map 会换新、
+ * 旧循环的 promise 从新表里消失 → 同一项目被再起一条推进循环（重复执行动作）。
+ * film 侧监看表（orchestrator 的 `filmWatchInFlight_v1`）是同款问题同款修法；
+ * 键名带版本号是既定坑位写法（`??=` 只认键名，不给旧单例补字段）。
  */
-const activeLoops = new Map<string, Promise<void>>();
+declare global {
+  var runEngineActiveLoops_v1: Map<string, Promise<void>> | undefined;
+}
+
+function activeLoops(): Map<string, Promise<void>> {
+  return (globalThis.runEngineActiveLoops_v1 ??= new Map<string, Promise<void>>());
+}
 
 /** 仅测试用：清空推进循环互斥状态，避免跨用例/异常泄漏导致后续调用被误判为“已在运行”。 */
 export function resetRunLoopGuardsForTest(): void {
-  activeLoops.clear();
+  activeLoops().clear();
 }
 
 type ExecResult = {
@@ -124,18 +135,34 @@ function gateStageFor(action: RunAction): ProductionStage | null {
   }
 }
 
-/**
- * 引擎收口写回（ISSUE #3893）：带用户意图位守卫 —— 库内 run 已被置 paused /
- * cancelled（run.pause / run.cancel 的写入）时整笔跳过，不再拿「拍初旧快照」
- * 把用户 mid-action 的暂停 / 取消回退成 running（旧实现一个 tick 内不复查，
- * 分钟级窗口里取消被吞、引擎继续烧算力）。返回 false = 写被跳过，下一拍
- * 重读 status 即让位。
- */
-async function saveRun(userId: string, projectId: string, run: ProductionRun): Promise<boolean> {
-  return productionRepository.updateRunGuarded(userId, projectId, { ...run, updatedAt: nowIso() }, [
-    "paused",
-    "cancelled",
-  ]);
+async function saveRun(userId: string, projectId: string, run: ProductionRun) {
+  /* 回写前重读库中状态（ISSUE #3863）：动作执行可达数分钟，期间用户可能已
+   * pause/cancel。引擎手里的 run 是拍首旧快照，直接整包回写会把 paused /
+   * cancelled 复活成 running —— 用户的暂停/取消被静默回滚，引擎下一拍继续
+   * 烧 LLM/ComfyUI。 */
+  const row = await productionRepository.getForUser(userId, projectId);
+  if (!row) {
+    return;
+  }
+  const dbStatus = normalizeProductionRun(row.run).status;
+  if (dbStatus === "cancelled") {
+    // 取消是用户终态：引擎不再回写任何东西（含 failed/done），保持 cancelled。
+    return;
+  }
+  if (dbStatus === "paused" && run.status === "running") {
+    // 已暂停：只吸收引擎推进的 stage 与执行日志，status 保持 paused——
+    // resume 后规划器从新 stage 继续，不重做已完成的动作。
+    await productionRepository.updateRun(userId, projectId, {
+      ...run,
+      status: "paused",
+      updatedAt: nowIso(),
+    });
+    return;
+  }
+  await productionRepository.updateRun(userId, projectId, {
+    ...run,
+    updatedAt: nowIso(),
+  });
 }
 
 function projectMeta(row: Production) {
@@ -528,6 +555,15 @@ async function execFilm(
   }
   // 服务端直接调成片编排（引擎在服务器上跑，不能用浏览器端的 render-film-client）。
   // createFilmFromProject→start：服务端 watchFilm 逐镜视频 + composeFilm 合成 + syncFilmToProject 回写。
+  /* 起片权先认领（ISSUE #3868）：filmStartedAt 原先要到本拍 saveRun 才落库，
+   * 与起片之间隔着数分钟的逐镜生成——进程在窗口内崩溃（或 saveRun 失败），
+   * 重启后 filmStartedAt 仍为空，用户再点一次启动会建出第二条完整成片管线。
+   * 改成起片前先 CAS 认领：抢到才起片；起片失败立刻释放，下一拍可重试。 */
+  const startedAt = nowIso();
+  const claimed = await productionRepository.claimFilmStart(userId, projectId, startedAt);
+  if (!claimed) {
+    return { ok: true, skipLog: true, summary: "成片生成中（等待合成完成）" };
+  }
   try {
     const { createFilmFromProject, startFilm } = await import("~/server/film/orchestrator");
     const { id } = await createFilmFromProject({
@@ -538,12 +574,13 @@ async function execFilm(
     });
     await startFilm(id);
   } catch (error: unknown) {
+    await productionRepository.clearFilmStart(userId, projectId).catch(() => undefined);
     return { ok: false, error: errorMessage(error, "启动成片失败") };
   }
   return {
     ok: true,
     summary: "已启动成片：服务端逐镜视频 + 合成中",
-    run: { ...run, filmStartedAt: nowIso() },
+    run: { ...run, filmStartedAt: startedAt },
   };
 }
 
@@ -553,16 +590,16 @@ async function execFilm(
  */
 export function advanceRunLoop(userId: string, projectId: string): Promise<void> {
   const key = `${userId}:${projectId}`;
-  const existing = activeLoops.get(key);
+  const existing = activeLoops().get(key);
   if (existing) {
     return existing;
   }
   const loop = advanceRunLoopOnce(userId, projectId).finally(() => {
-    if (activeLoops.get(key) === loop) {
-      activeLoops.delete(key);
+    if (activeLoops().get(key) === loop) {
+      activeLoops().delete(key);
     }
   });
-  activeLoops.set(key, loop);
+  activeLoops().set(key, loop);
   return loop;
 }
 

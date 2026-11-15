@@ -11,6 +11,11 @@ import { cancelTask as cancelExecutorTask } from "~/lib/comfyui/enqueue";
 import { kickQueue } from "~/lib/comfyui/executor-continuation";
 import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
 import { isVideo, kindOf } from "~/lib/media/media-kind";
+import { KeyedAsyncMutex } from "~/lib/async-mutex";
+
+/* 「原样重跑」按原任务 id 串行化（ISSUE #3872）：查状态与建行之间没有原子边界，
+ * 双击/并发会让同一张图入队两遍。不同原任务之间互不阻塞。 */
+const retryMutex = new KeyedAsyncMutex();
 
 /* 扩展名判据已收敛到 `media-kind.ts`（ISSUE #571）。此前这里自带一份清单，
  * 且与 `lib/media.ts` 的注释**直接矛盾**——那边明确写「gif 不是视频，`<video>`
@@ -164,40 +169,44 @@ export const taskRouter = createTRPCRouter({
    * 提示词/参数/归属/参考图逐字复制。参考图是 ComfyUI input 侧持久文件名，被清理时会在 LoadImage
    * 失败并进任务日志（可见，非静默缺图）。只放行终态任务：QUEUED/RUNNING 重跑会造第二份。 */
   retry: authedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
-    const original = await taskRepository.findByIdForUser(ctx.user.id, input.id);
-    if (!original) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
-    }
-    if (original.status === "QUEUED" || original.status === "RUNNING") {
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: "任务还在排队或执行中，不需要重试（可在队列监视里观察）",
+    /* 整段「读原行 → 判状态 → 建新行」收进按原任务 id 的互斥（ISSUE #3872）。
+     * 等锁期间状态可能已被并发的另一次 retry 改变，进锁后必须重读再判。 */
+    return retryMutex.run(input.id, async () => {
+      const original = await taskRepository.findByIdForUser(ctx.user.id, input.id);
+      if (!original) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
+      }
+      if (original.status === "QUEUED" || original.status === "RUNNING") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "任务还在排队或执行中，不需要重试（可在队列监视里观察）",
+        });
+      }
+      if (!original.execPayload) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "这一行没有执行载荷（execPayload 为空的历史遗留行），无法原样重跑：请到创作台重新生成",
+        });
+      }
+      const created = await taskRepository.createQueued({
+        userId: ctx.user.id,
+        type: original.type,
+        prompt: original.prompt,
+        negativePrompt: original.negativePrompt,
+        params: original.params,
+        workflowName: original.workflowName,
+        projectId: original.projectId,
+        shotId: original.shotId,
+        referenceImages: original.referenceImages ?? undefined,
+        workflowSnapshot: original.workflowSnapshot ?? undefined,
+        claimedBy: resolveExecutorClaim(),
+        execPayload: original.execPayload,
       });
-    }
-    if (!original.execPayload) {
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message:
-          "这一行没有执行载荷（execPayload 为空的历史遗留行），无法原样重跑：请到创作台重新生成",
-      });
-    }
-    const created = await taskRepository.createQueued({
-      userId: ctx.user.id,
-      type: original.type,
-      prompt: original.prompt,
-      negativePrompt: original.negativePrompt,
-      params: original.params,
-      workflowName: original.workflowName,
-      projectId: original.projectId,
-      shotId: original.shotId,
-      referenceImages: original.referenceImages ?? undefined,
-      workflowSnapshot: original.workflowSnapshot ?? undefined,
-      claimedBy: resolveExecutorClaim(),
-      execPayload: original.execPayload,
+      /* 与 generate 同一口径：只写行，kick 只是省掉等派发节拍（ADR §14 D1）。 */
+      kickQueue();
+      return { taskId: created.id };
     });
-    /* 与 generate 同一口径：只写行，kick 只是省掉等派发节拍（ADR §14 D1）。 */
-    kickQueue();
-    return { taskId: created.id };
   }),
 
   /** 打开产物目录：返回 comfyapp:// 深链（协议未注册时的引导见 openTaskFolder）。 */
@@ -272,6 +281,10 @@ export const taskRouter = createTRPCRouter({
        * 漏掉 `projects/<projectId>/<taskId>`；按 `localPath` 逐张 unlink 又把 `/api/generated`
        * 解析成 `public/api/generated` ⇒ ENOENT。越界时只删库行并记原因，不把根外路径交给 rm。 */
       const dir = taskOutputDir(input.id, task.projectId);
+      /* 先删库行、后清磁盘（ISSUE #3872）：原先先 rm（fire-and-forget）再删行，
+       * 一旦删行失败，行还指向已不存在的目录（封面/视频 404 且不可恢复）。
+       * 先删行则失败即止、文件保留；行删掉之后磁盘清理失败最多留孤儿文件，可再清。 */
+      await taskRepository.delete(input.id);
       if (dir === null) {
         logger.warn(
           `[task.delete] 产物目录越界，只删库行不动磁盘：taskId=${input.id} projectId=${task.projectId}`,
@@ -279,11 +292,10 @@ export const taskRouter = createTRPCRouter({
       } else {
         fsPromises.rm(dir, { recursive: true, force: true }).catch((error: unknown) => {
           logger.warn(
-            `[task.delete] 产物目录没删掉（库行照删）：${dir} — ${errorMessage(error, String(error))}`,
+            `[task.delete] 产物目录没删掉（库行已删）：${dir} — ${errorMessage(error, String(error))}`,
           );
         });
       }
-      await taskRepository.delete(input.id);
       return { ok: true };
     }),
 

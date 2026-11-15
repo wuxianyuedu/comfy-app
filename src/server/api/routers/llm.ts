@@ -22,6 +22,7 @@ import {
 import type { LlmProvider, RemoteModel } from "~/server/db/schema";
 import { isCustomContractInputId, isModeContractInputId } from "~/lib/workshop/model-mode-contract";
 import { parseRemoteModeAdapters, WORKSHOP_INPUT_TYPES } from "~/lib/workshop/remote-model-adapter";
+import { KeyedAsyncMutex } from "~/lib/async-mutex";
 import {
   loadModeContractLayers,
   resetModeContractOverride,
@@ -29,6 +30,12 @@ import {
   saveModeContractsAsProjectDefaults,
 } from "~/lib/workshop/mode-contract.server";
 import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
+
+/* workshopAdapters 文档的「读整份 → 合并 → 整份写回」按模型名串行化（ISSUE #3871）：
+ * 「接口端点」（modelSave）与「模型适配」（workshopAdaptersSave）两处都基于各自
+ * 读到的旧 doc 整份覆盖，并发保存时后写者把先写者的字段抹掉。写入方全在本进程，
+ * 进程内互斥即可闭合；读-改-写三步都在锁内，慢 IO 不在其中。 */
+const workshopAdaptersMutex = new KeyedAsyncMutex();
 
 /** 适配器输入行：统一输入类型 → 请求体字段名 */
 const adapterInputSchema = z.object({
@@ -242,19 +249,21 @@ export const llmRouter = createTRPCRouter({
      * 默认第一项（读侧 `resolveMediaEndpointPath` 统一回落）。省略 = 不动既有
      * （旧调用方不带这格）。 */
     if (input.endpointPath !== undefined) {
-      const doc = await remoteModelRepository.getWorkshopAdaptersDoc(saved.name);
-      const path =
-        isMediaEndpointKind(saved.kind) &&
-        typeof input.endpointPath === "string" &&
-        isMediaEndpointPath(saved.kind, input.endpointPath)
-          ? input.endpointPath
-          : "";
-      if (path !== doc.endpointPath) {
-        await remoteModelRepository.saveWorkshopAdaptersDoc(saved.name, {
-          ...doc,
-          endpointPath: path,
-        });
-      }
+      await workshopAdaptersMutex.run(saved.name, async () => {
+        const doc = await remoteModelRepository.getWorkshopAdaptersDoc(saved.name);
+        const path =
+          isMediaEndpointKind(saved.kind) &&
+          typeof input.endpointPath === "string" &&
+          isMediaEndpointPath(saved.kind, input.endpointPath)
+            ? input.endpointPath
+            : "";
+        if (path !== doc.endpointPath) {
+          await remoteModelRepository.saveWorkshopAdaptersDoc(saved.name, {
+            ...doc,
+            endpointPath: path,
+          });
+        }
+      });
     }
     return readProviderState();
   }),
@@ -347,15 +356,18 @@ export const llmRouter = createTRPCRouter({
       const adapters = parseRemoteModeAdapters(
         input.adapters.map((a) => ({ ...a, mode: a.mode.toUpperCase() })),
       );
-      const existing = await remoteModelRepository.getWorkshopAdaptersDoc(input.name);
-      const saved = await remoteModelRepository.saveWorkshopAdaptersDoc(input.name, {
-        endpointPath:
-          input.endpointPath === undefined
-            ? existing.endpointPath
-            : (input.endpointPath.trim() ?? ""),
-        adapters,
+      /* 读-改-写收进按模型名的互斥（ISSUE #3871）：与 modelSave 的 endpointPath
+       * 合并同锁，互相不再覆盖。 */
+      return workshopAdaptersMutex.run(input.name, async () => {
+        const existing = await remoteModelRepository.getWorkshopAdaptersDoc(input.name);
+        return remoteModelRepository.saveWorkshopAdaptersDoc(input.name, {
+          endpointPath:
+            input.endpointPath === undefined
+              ? existing.endpointPath
+              : (input.endpointPath.trim() ?? ""),
+          adapters,
+        });
       });
-      return saved;
     }),
 
   /** 各模型的适配器概览（哪些模型配了、各配了几个模式）——「模型适配」页

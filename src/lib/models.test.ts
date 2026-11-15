@@ -9,21 +9,24 @@ const comfy = vi.hoisted(() => ({
   listModels: vi.fn((_folder: string): Array<string> | Promise<Array<string>> => []),
 }));
 
-const repo = vi.hoisted(() => ({
-  disableAllLocal: vi.fn(() => Promise.resolve()),
+const repo = vi.hoisted(() => {
+  type ScannedRow = {
+    baseModel: string;
+    fileName: string;
+    folder: string;
+    name: string;
+    type: string;
+  };
+  const disableAllLocal = vi.fn(() => Promise.resolve());
   /** 参数类型与被测调用对齐：mock.calls 的元素才有东西可断言。 */
-  upsertScannedMany: vi.fn(
-    (
-      _scanned: Array<{
-        baseModel: string;
-        fileName: string;
-        folder: string;
-        name: string;
-        type: string;
-      }>,
-    ) => Promise.resolve(),
-  ),
-}));
+  const upsertScannedMany = vi.fn((_scanned: Array<ScannedRow>) => Promise.resolve());
+  /* 与真实 `applyLocalSync` 同序：先停用、后回填（mock 不开真事务）。 */
+  const applyLocalSync = vi.fn(async (scanned: Array<ScannedRow>) => {
+    await disableAllLocal();
+    await upsertScannedMany(scanned);
+  });
+  return { disableAllLocal, upsertScannedMany, applyLocalSync };
+});
 
 vi.mock("~/lib/comfyui/client", () => ({
   listModelFolders: comfy.listModelFolders,

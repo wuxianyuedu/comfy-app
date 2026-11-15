@@ -9,8 +9,8 @@ import { db } from "~/lib/db";
 import { production, type Production } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
 import type { DbExecutor } from "./repository-executor-types";
-import { and, eq, sql } from "drizzle-orm";
-import type { ProductionRun } from "~/lib/production/run-types";
+import { and, eq } from "drizzle-orm";
+import { normalizeProductionRun, type ProductionRun } from "~/lib/production/run-types";
 
 /** 写一条生产数据（按 proj_* upsert）的入参；JSON 列传对象，Drizzle 负责序列化。 */
 export type ProductionInput = {
@@ -60,35 +60,54 @@ export class ProductionRepository extends DrizzleRepository<Production> {
   }
 
   /**
-   * 带意图位守卫的 run 写回（ISSUE #3893）：仅当库内当前 run.status **不在**
-   * `blockedStatuses`（用户意图位：paused / cancelled）时才整列写回。判断收在
-   * 同一条 UPDATE 里（SQLite 单写者原子），执行引擎拿「拍初旧快照」收口时
-   * 不再把用户 mid-action 写入的暂停 / 取消回退成 running。run 列是 JSON
-   * 文本（mode:"json"）：缺 status 的 fresh 行（`{}`）按空串处理 = 不在
-   * 封禁名单、照常放行。返回是否真的写入（false = 已被用户介入，跳过）。
+   * 起片权的 CAS 认领（ISSUE #3868）：仅当 `run.filmStartedAt` 还是空串时写入
+   * 时间戳，返回是否抢到。原先「createFilmFromProject → startFilm（数分钟）→
+   * saveRun 才落 filmStartedAt」，起片成功到落库之间隔着整个逐镜生成窗口——
+   * 进程在窗口内崩溃（或 saveRun 失败），重启后 filmStartedAt 仍为空，用户再点
+   * 一次「启动」会建出第二条完整成片管线（双倍算力与产物）。改成起片**前**先在
+   * immediate 事务里认领：抢到才有资格起片，崩溃窗口不再产生第二套管线。
+   * 行不存在 → false（无生产数据可认领）。
    */
-  async updateRunGuarded(
-    userId: string,
-    id: string,
-    run: ProductionRun,
-    blockedStatuses: ReadonlyArray<string>,
-  ): Promise<boolean> {
-    const blocked = sql.join(
-      blockedStatuses.map((status) => sql`${status}`),
-      sql`, `,
+  async claimFilmStart(userId: string, id: string, ts: string): Promise<boolean> {
+    return db.transaction(
+      async (tx) => {
+        const rows = await tx
+          .select()
+          .from(production)
+          .where(and(eq(production.id, id), eq(production.userId, userId)))
+          .limit(1);
+        const row = rows[0];
+        if (!row) {
+          return false;
+        }
+        const run = normalizeProductionRun(row.run);
+        if (run.filmStartedAt !== "") {
+          return false;
+        }
+        await tx
+          .update(production)
+          .set({ run: { ...run, filmStartedAt: ts }, updatedAt: new Date() })
+          .where(and(eq(production.id, id), eq(production.userId, userId)));
+        return true;
+      },
+      { behavior: "immediate" },
     );
-    const rows = await db
-      .update(production)
-      .set({ run, updatedAt: new Date() })
-      .where(
-        and(
-          eq(production.id, id),
-          eq(production.userId, userId),
-          sql`coalesce(json_extract(${production.run}, '$.status'), '') not in (${blocked})`,
-        ),
-      )
-      .returning({ id: production.id });
-    return rows.length > 0;
+  }
+
+  /**
+   * 起片失败的补偿（ISSUE #3868）：把 `filmStartedAt` 清回空串，下一拍规划器
+   * 可以重新发起 render_film。只在确实写着时间戳时才写（免一次无谓的覆盖）。
+   */
+  async clearFilmStart(userId: string, id: string): Promise<void> {
+    const row = await this.getForUser(userId, id);
+    if (!row) {
+      return;
+    }
+    const run = normalizeProductionRun(row.run);
+    if (run.filmStartedAt === "") {
+      return;
+    }
+    await this.updateRun(userId, id, { ...run, filmStartedAt: "" });
   }
 
   /**
