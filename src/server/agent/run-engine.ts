@@ -28,6 +28,7 @@ import {
 } from "~/lib/production/run-types";
 import { applyShotRedo } from "~/lib/production/sync";
 import { reviewScoreMean } from "~/lib/production/review-types";
+import { withProductionContentLock } from "~/lib/production/content-write-lock";
 import { fixed } from "~/lib/number-format";
 import { displayValue } from "~/lib/display-value";
 import { reviewContent, reviewScript, reviewShotImage, reviseScript } from "~/server/agent/review";
@@ -330,10 +331,11 @@ async function execImages(
    * 元素形状问题由 draft-integrity 在读侧判），不再对 any[] 做盲断言。 */
   const shots = isShotArray(row.shots) ? row.shots : [];
   const want = new Set(shotIds);
-  const next: Array<Shot> = [];
+  /* 先收集本轮产出、不落库（ISSUE #3864）：生图是分钟级慢 IO，必须留在
+   * 内容写锁外；锁内只做「重读最新 shots → 叠加本轮产出 → 写回」。 */
+  const produced = new Map<string, { imageUrl?: string; status: "done" | "failed" }>();
   for (const shot of shots) {
     if (!want.has(shot.id)) {
-      next.push(shot);
       continue;
     }
     // 「种子」算高级输入、默认随机：每次自主出图都带一个新的随机 seed（首刷与抽卡重出一样），
@@ -351,14 +353,32 @@ async function execImages(
         projectId,
         seed: randomSeed(),
       });
-      next.push({ ...shot, imageUrl: path, status: "done" });
+      produced.set(shot.id, { imageUrl: path, status: "done" });
     } catch {
       // 单镜失败：记为 failed，不阻断其它镜；已处理 rev 仍写，避免无限重试同一坏镜。
-      next.push({ ...shot, status: "failed" });
+      produced.set(shot.id, { status: "failed" });
     }
   }
-  await productionRepository.patchContent(userId, projectId, { shots: next });
-  const doneCount = next.filter((s) => want.has(s.id) && s.status === "done").length;
+  /* 回写收进 per-project 内容写锁（ISSUE #3864）：锁内重读最新 shots，把本轮
+   * 产出只叠到本轮动过的镜头上——不再用拍首旧快照整列覆盖（生图期间用户改词 /
+   * 评分 / 自动保存的并发修改不再被打回）。 */
+  await withProductionContentLock(projectId, async () => {
+    const fresh = await productionRepository.getForUser(userId, projectId);
+    const freshShots = isShotArray(fresh?.shots) ? fresh.shots : [];
+    const merged = freshShots.map((shot) => {
+      const p = produced.get(shot.id);
+      if (p === undefined) {
+        return shot;
+      }
+      return {
+        ...shot,
+        ...(p.imageUrl === undefined ? {} : { imageUrl: p.imageUrl }),
+        status: p.status,
+      };
+    });
+    await productionRepository.patchContent(userId, projectId, { shots: merged });
+  });
+  const doneCount = [...produced.values()].filter((p) => p.status === "done").length;
   const failedCount = shotIds.length - doneCount;
   // 记录这些镜头「已按当前 rev 处理」——用户之后再改（rev 变大）会被重新纳入。
   return {
@@ -520,12 +540,16 @@ async function execReviewShots(
   }
 
   if (rerollIds.length > 0) {
-    const fresh = await productionRepository.getForUser(userId, projectId);
-    let shots: Array<unknown> = fresh && Array.isArray(fresh.shots) ? fresh.shots : [];
-    for (const id of rerollIds) {
-      shots = applyShotRedo(shots, id);
-    }
-    await productionRepository.patchContent(userId, projectId, { shots });
+    /* 抽卡重出收进 per-project 内容写锁（ISSUE #3864）：锁内重读最新 shots
+     * 再叠 applyShotRedo，不与评审器 / 人工裁决 / 成片回写互相覆盖。 */
+    await withProductionContentLock(projectId, async () => {
+      const fresh = await productionRepository.getForUser(userId, projectId);
+      let shots: Array<unknown> = fresh && Array.isArray(fresh.shots) ? fresh.shots : [];
+      for (const id of rerollIds) {
+        shots = applyShotRedo(shots, id);
+      }
+      await productionRepository.patchContent(userId, projectId, { shots });
+    });
   }
 
   const parts = [`${passed} 通过`];
