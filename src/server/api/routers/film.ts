@@ -106,13 +106,13 @@ export const filmRouter = createTRPCRouter({
     if (!film) {
       throw new TRPCError({ code: "NOT_FOUND", message: "成片不存在" });
     }
-    /* 终态幂等（ISSUE #3894）：DONE / FAILED / CANCELLED 已收尾，取消不改写
-     * 终态、原样回显现状态（markCancelled 侧同批加了终态守卫，双保险）。 */
+    /* 终态幂等（ISSUE #3894）：DONE / FAILED / CANCELLED 已收尾，取消不再改写
+     * 终态、按幂等处理（markCancelled 侧同批加了终态守卫，双保险）。 */
     if (film.status === "DONE" || film.status === "FAILED" || film.status === "CANCELLED") {
-      return { ok: true, status: film.status };
+      return { ok: true };
     }
     await filmRepository.markCancelled(input.id);
-    return { ok: true, status: "CANCELLED" };
+    return { ok: true };
   }),
 
   /* POST /api/film/[id]/start —— 新建 */
