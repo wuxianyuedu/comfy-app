@@ -326,14 +326,15 @@ describe("④ relayLogs：上传 → PUT → 发评论三步，base64 载体（�
       { jobs: 1, text: "== run 4242 / job「x」==\n##[error]boom\n" },
     );
     expect(code).toBe(CODE.OK);
-    /* 前 3 步是承重（上传/PUT/发评论发布附件），后 2 步是只写镜像（读改写描述）。 */
-    expect(calls.slice(0, 3).map((c) => c.method)).toEqual(["POST", "PUT", "POST"]);
-    expect(calls.slice(3).map((c) => c.method)).toEqual(["GET", "PATCH"]);
-    const putBody = calls[1]?.body ?? "";
+    /* 先查重（#3858：同 run 重跑不重复发布），再上传 / PUT / 发评论发布附件；
+     * 后 2 步是只写镜像（读改写描述）。 */
+    expect(calls.slice(0, 4).map((c) => c.method)).toEqual(["GET", "POST", "PUT", "POST"]);
+    expect(calls.slice(4).map((c) => c.method)).toEqual(["GET", "PATCH"]);
+    const putBody = calls[2]?.body ?? "";
     expect(putBody.length).toBeGreaterThan(0);
     expect(putBody).not.toContain("\n");
     expect(gunzipSync(Buffer.from(putBody, "base64")).toString("utf8")).toContain("##[error]boom");
-    expect(calls[2]?.body).toContain(RELAY_MARKER);
+    expect(calls[3]?.body).toContain(RELAY_MARKER);
     expect(out.join("\n")).toContain("已搬到 CNB");
   });
   it("任一步失败 ⇒ 没判过（2），且不会假装送达", async () => {

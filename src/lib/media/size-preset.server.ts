@@ -16,11 +16,28 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 
 import { errorText } from "~/lib/error-message";
+import { AsyncMutex } from "~/lib/async-mutex";
 import {
   DEFAULT_SIZE_PRESET_TABLE,
   mergeSizePresetTable,
   type SizePresetTable,
 } from "~/lib/media/size-presets";
+
+/** 同一份覆盖文件的多个写方（保存 / 按场景还原）先进进程内互斥（ISSUE #3859）：
+ *  「读 → 改 → 整份写回」并发交叠时，后写者会用旧快照顶掉先写者的改动。 */
+const overrideFileMutex = new AsyncMutex();
+
+/** 覆盖文件的原子写（ISSUE #3859）：tmp + rename，读侧不会撞到半截 JSON。 */
+async function atomicWriteText(file: string, text: string): Promise<void> {
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    await fs.writeFile(tmp, text, "utf8");
+    await fs.rename(tmp, file);
+  } catch (error) {
+    await fs.rm(tmp, { force: true }).catch(() => undefined);
+    throw error;
+  }
+}
 
 /** 本机覆盖的落点（应用根相对路径）。 */
 export const SIZE_PRESETS_REL_PATH = path.join("data", "size-presets.json");
@@ -71,15 +88,17 @@ export async function saveSizePresetTable(
   raw: unknown,
   root: string = process.cwd(),
 ): Promise<SizePresetTable> {
-  const merged = mergeSizePresetTable(raw);
   const file = path.join(/*turbopackIgnore: true*/ root, SIZE_PRESETS_REL_PATH);
-  try {
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, `${JSON.stringify(merged, null, 2)}\n`, "utf8");
-  } catch (error) {
-    throw new Error(errorText(error, `尺寸配置表写入失败（${file}）`), { cause: error });
-  }
-  return merged;
+  return overrideFileMutex.run(async () => {
+    const merged = mergeSizePresetTable(raw);
+    try {
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await atomicWriteText(file, `${JSON.stringify(merged, null, 2)}\n`);
+    } catch (error) {
+      throw new Error(errorText(error, `尺寸配置表写入失败（${file}）`), { cause: error });
+    }
+    return merged;
+  });
 }
 
 /** 把某个场景恢复默认：从本机覆盖里去掉该场景的原始键（另一场景不受影响）。
@@ -91,22 +110,24 @@ export async function resetSizePresetSceneOverride(
   root: string = process.cwd(),
 ): Promise<SizePresetTable> {
   const file = path.join(/*turbopackIgnore: true*/ root, SIZE_PRESETS_REL_PATH);
-  const raw = await readRawOverrideFile(file);
-  if (raw === null || typeof raw !== "object" || (!("image" in raw) && !("video" in raw))) {
-    return loadSizePresetTable(root);
-  }
-  const record = raw as Record<string, unknown>;
-  delete record[scene];
-  const remainingKeys = Object.keys(record);
-  try {
-    if (remainingKeys.length > 0) {
-      await fs.mkdir(path.dirname(file), { recursive: true });
-      await fs.writeFile(file, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
-    } else {
-      await fs.rm(file, { force: true });
+  return overrideFileMutex.run(async () => {
+    const raw = await readRawOverrideFile(file);
+    if (raw === null || typeof raw !== "object" || (!("image" in raw) && !("video" in raw))) {
+      return loadSizePresetTable(root);
     }
-  } catch (error) {
-    throw new Error(errorText(error, `尺寸配置表还原失败（${file}）`), { cause: error });
-  }
-  return loadSizePresetTable(root);
+    const record = raw as Record<string, unknown>;
+    delete record[scene];
+    const remainingKeys = Object.keys(record);
+    try {
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      if (remainingKeys.length > 0) {
+        await atomicWriteText(file, `${JSON.stringify(raw, null, 2)}\n`);
+      } else {
+        await fs.rm(file, { force: true });
+      }
+    } catch (error) {
+      throw new Error(errorText(error, `尺寸配置表还原失败（${file}）`), { cause: error });
+    }
+    return loadSizePresetTable(root);
+  });
 }

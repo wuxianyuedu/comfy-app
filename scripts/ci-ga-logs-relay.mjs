@@ -563,6 +563,32 @@ export async function relayLogs(io, collected) {
       "_",
     );
   const api = `${ctx.endpoint}/${ctx.repo}`;
+  /* 同 run 去重（ISSUE #3858）：GA 收尾 job 被 re-run 时，同一 runId+sha 不再
+   * 重复上传附件 / 重复发评论 —— 先扫 PR 评论里是否已有本 run 的 relay marker
+   * （parseRelayComment 是读取侧的既有判据，这里只补写入侧的查重）。 */
+  const existing = await cnbRequest(
+    { ctx, fetchImpl },
+    "GET",
+    `${api}/-/pulls/${ctx.pr}/comments?page=1&per_page=100`,
+  );
+  if (existing.ok) {
+    const items = Array.isArray(existing.json)
+      ? existing.json
+      : isRecord(existing.json) && Array.isArray(existing.json.data)
+        ? existing.json.data
+        : [];
+    const dup = items.some((c) => {
+      if (!isRecord(c) || typeof c.body !== "string") {
+        return false;
+      }
+      const parsed = parseRelayComment(c.body);
+      return parsed !== null && parsed.run === ctx.runId && parsed.sha === ctx.sha;
+    });
+    if (dup) {
+      log(`[ga-logs-relay] 同 run 的 relay 评论已在（run ${ctx.runId}）⇒ 跳过重复发布`);
+      return CODE.OK;
+    }
+  }
   const up = await cnbRequest({ ctx, fetchImpl }, "POST", `${api}/-/upload/files`, {
     json: { name: fileName, size: Buffer.byteLength(payload, "utf8") },
   });
