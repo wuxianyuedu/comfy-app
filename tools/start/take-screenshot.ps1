@@ -1,4 +1,4 @@
-﻿﻿#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 take-screenshot.ps1 — 给「改完 UI 要一张改后真实运行截图」用（Windows 双击入口）
 
