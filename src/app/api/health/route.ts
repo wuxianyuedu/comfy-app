@@ -7,7 +7,7 @@ import { corsHeadersFor } from "~/lib/shell/splash-origin";
 /**
  * 健康检查端点（外部探针用）：不缓存、真实探活（SELECT 1 打库），只暴露 ok/db 状态。
  * 还要探 schema：`SELECT 1` 在库文件 0 字节时照样成功（`drizzle-kit push` 无 TTY 静默失败，
- * 见 scripts/db-push.mjs），会漏报「表没建」整档（规范 §9.2 第 3 条）——表没建 = 503 + `db: empty`。
+ * 见 scripts/db/db-push.mjs），会漏报「表没建」整档（规范 §9.2 第 3 条）——表没建 = 503 + `db: empty`。
  */
 export const dynamic = "force-dynamic";
 

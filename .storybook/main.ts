@@ -137,7 +137,7 @@ const config: StorybookConfig = {
    * `.storybook/assets/` 是注入层（`data-sources.tsx` 的 `media` 值源）用的真图片，
    * 由 `scripts/build-storybook-assets.mjs` 现生成、**不入库**（同样 gitignore）。
    * 为什么不放 `public/`：那里会随 `next build` 进 standalone 产物、再被
-   * `build-desktop` 内嵌进桌包（`scripts/check-standalone-contents.cjs` 的顶层
+   * `build-desktop` 内嵌进桌包（`scripts/gates/check-standalone-contents.cjs` 的顶层
    * 白名单把它列得一清二楚）；组件工作台的示例资源没有任何理由跟着出厂。
    * 两份都列进 `staticDirs` 时后者挂同一个站点根，路径不冲突（文件在
    * `/storybook-assets/` 前缀下）。

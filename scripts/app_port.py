@@ -6,7 +6,7 @@
 抽取成独立模块的原因（ISSUE #489 缺陷 4）：算法原先内联在一个**只能在 Windows 上
 导入**的宿主里（顶层直接取 ctypes.windll / WINFUNCTYPE，那个宿主已随 ISSUE #784
 移除）。于是「四语言端口一致性」没法在 Linux / CI 上被验证 —— 只能靠人工读代码。
-抽出来后 Node 侧测试可经 `scripts/check-app-port-vectors.py` 拉起本模块，
+抽出来后 Node 侧测试可经 `scripts/gates/check-app-port-vectors.py` 拉起本模块，
 读**同一份**共享校验向量（tests/fixtures/app-port-vectors.json）做断言。
 
 取值优先级（**四语言实现必须逐条一致**，见 launch-and-build.md §1.1）：

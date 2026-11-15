@@ -4,7 +4,7 @@
  *
  * 它只做三件事：定位 typedoc 的输出目录 → 调 `scripts/typedoc-run.mjs` 跑并验 →
  * 把结论翻译成退出码。**跑与验的逻辑不在这里**（`typedoc-run.mjs` 是唯一实现，
- * `scripts/check-docs-api.cjs` 用的是同一份 —— 那边是「生成 + 自检」，这边是「只生成」）。
+ * `scripts/gates/check-docs-api.cjs` 用的是同一份 —— 那边是「生成 + 自检」，这边是「只生成」）。
  *
  * 为什么 `pnpm run docs` 不再直接写 `typedoc`：那个形态下「跑没跑成功」由
  * typedoc 的退出码说了算，而它写失败时照样退 0、日志照样收在
@@ -15,7 +15,7 @@
  * ⚠️ **产物不再进 git**（ISSUE #2231）：`docs/api/` 进了 `.gitignore` ⇒ 本命令生成的
  * 那份只是**本机的一份副本**，没有「必须一并提交」的义务，也没有人会因为它过期而红
  * ——「提交进 git 的那份产物与源同不同步」这个问题连同它的判据一起没了
- * （见 `scripts/check-docs-api.cjs` 的文件头）。平台侧那一格
+ * （见 `scripts/gates/check-docs-api.cjs` 的文件头）。平台侧那一格
  * （`.cnb.yml` 的「API 文档生成与自检」）跑的是同一份生成 + 一道自检。
  *
  * ⚠️ 别写 `pnpm docs`：那是 pnpm 的**内建命令**（`pnpm docs <PACKAGE>` 打开某包的
@@ -26,7 +26,7 @@
  * 把全仓的 `.cjs` / `.ts` / `.js` 都编进了 program，而 typedoc 用的正是那份
  * program ⇒ 一个被 import 的 `.mjs` 会**跟着进 typedoc 的类型检查面**，它身上的类型
  * 错误会让 typedoc 直接退 3（实测：`scripts/` 下一批 `.mjs` 有几十处存量类型错误）。
- * 现在 `scripts/check-docs-api.cjs` 只 import `scripts/typedoc-run.mjs` 与
+ * 现在 `scripts/gates/check-docs-api.cjs` 只 import `scripts/typedoc-run.mjs` 与
  * `scripts/docs-api-input-closure.mjs` —— 这两个（连同它们的传递依赖）都是类型干净的。
  *
  * ⚠️ 本文件现在带「被直接执行才跑」的守卫（见文件尾），所以 import 它**不再**付一次真
@@ -147,7 +147,7 @@ export function parseArgs(argv) {
     action:
       "它默认动的是 **`typedoc` 真跑一遍并把整站产物写盘**（不是只读体检；只读的引用与权威源核对在 `pnpm run doc:check`）。",
     exits: [
-      "只想确认这份文档生成得了 → node scripts/check-docs-api.cjs（同一份生成 + 一道自检）；",
+      "只想确认这份文档生成得了 → node scripts/gates/check-docs-api.cjs（同一份生成 + 一道自检）；",
       "写到别处去比对 → --out <目录>（不给就是 docs/api；给空串不是「不写」，而是写进仓库根）；",
       "不想重试、要看原始失败 → --attempts 1；",
       "整档测试与覆盖率 → pnpm test（这份入口不在那条链上）。",

@@ -31,7 +31,7 @@
  *     只有一种是既成形态）；
  *   · **一个同层环**：`logger.ts` → `app-runtime-log.ts` → `log-paths.ts`（同层），
  *     而 `log-paths.ts` 若从本 barrel 取用就会形成 `index → logger → … → index`
- *     的环。环检测（`scripts/check-circular-deps.cjs`）只认**真实存在的边**，
+ *     的环。环检测（`scripts/gates/check-circular-deps.cjs`）只认**真实存在的边**，
  *     所以它此前并不报红 —— 一个「靠没人这么写」才不成立的环，是排查成本最高
  *     的那一类（症状是 import 顺序变了就 `undefined`）。
  *   · **一条静默的加载链**：`export *` 让每个引用方都强制加载整层（pino + zod +
@@ -39,7 +39,7 @@
  *
  * 现在改为**具名转发**，只保留唯一在用的符号，并写明每一份的深路径。新增符号
  * 必须同时给出消费方 —— 没有消费方的转发正是「零消费导出」判据
- * （`scripts/check-dead-exports.cjs`，规范 §12.16）要拦的那种抽象。
+ * （`scripts/gates/check-dead-exports.cjs`，规范 §12.16）要拦的那种抽象。
  *
  * 为什么没有 eventBus
  * ------------------

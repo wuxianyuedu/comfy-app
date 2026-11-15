@@ -1,5 +1,5 @@
 /**
- * `scripts/ci-token-scopes.mjs` 的契约（ISSUE #2551）：本格答「这一跑的 `CNB_TOKEN` 够得着哪些能力」。两个危险失效形态各有用例：① 把「没量到」（无 token / 网络断 / 非信封）读成「够得着」
+ * `scripts/ci/ci-token-scopes.mjs` 的契约（ISSUE #2551）：本格答「这一跑的 `CNB_TOKEN` 够得着哪些能力」。两个危险失效形态各有用例：① 把「没量到」（无 token / 网络断 / 非信封）读成「够得着」
  * （同 §13.6.4.1「取不到 ≠ 测出来是好的」）；② 把令牌值打进日志（硬规则 17）。边界：`errcode 5/404` 不读成缺权限、缺权限不判红、`--strict` 不进 `.cnb.yml`。
  * 取数口注入、夹具用平台真实响应形状，全部用例不发网络请求。
  */
@@ -15,7 +15,7 @@ import {
   formatReadout,
   main,
   probeAll,
-} from "../scripts/ci-token-scopes.mjs";
+} from "../scripts/ci/ci-token-scopes.mjs";
 import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = path.resolve(__dirname, "..");
@@ -319,7 +319,7 @@ function scopeStage(name: string, listIndent: number, extra = ""): string {
   const pad = " ".repeat(listIndent);
   return (
     `${pad}- name: ${name}\n` +
-    `${pad}  script: node scripts/ci-cp936-exit.mjs -- node scripts/${SCOPE_SCRIPT}${extra}\n`
+    `${pad}  script: node scripts/ci/ci-cp936-exit.mjs -- node scripts/${SCOPE_SCRIPT}${extra}\n`
   );
 }
 
@@ -370,7 +370,7 @@ describe("入口计数面只认会被执行的 script 行（ISSUE #3306）", () 
 
   it("被注释掉的一格不算入口", () => {
     const config = FOUR_ENTRIES.replace(
-      "  script: node scripts/ci-cp936-exit",
+      "  script: node scripts/ci/ci-cp936-exit.mjs",
       "  # script: node scripts/ci-cp936-exit",
     );
     expect(scopeEntryScripts(config)).toHaveLength(0);

@@ -1269,7 +1269,7 @@ Python 在非 ASCII locale 下 `sys.stdout` 与 `open()` 都跟着 locale 走。
 ### 落的是什么、不是什么
 
 落的是 issue 里三条候选的第 3 条：**只在「所有 `error TS` 行都落在 `.next/` 那一个目录段」时**
-打印成因 + 处置命令。`scripts/check-tsc-artifact-hint.cjs` 由 `.githooks/pre-commit` 汇总段
+打印成因 + 处置命令。`scripts/gates/check-tsc-artifact-hint.cjs` 由 `.githooks/pre-commit` 汇总段
 在组 A 失败分支里调用，带 `|| true` 且自身恒退 0 —— 判决仍属于 tsc，这条不许变成第二种
 失败形态，也不许把组 A 的红洗成绿。
 

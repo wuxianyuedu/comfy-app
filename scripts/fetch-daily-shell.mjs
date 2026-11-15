@@ -6,7 +6,7 @@
  * ## 它做什么
  *
  * 每日桌包档会把同一份纯壳 `ComfyAPP-shell.exe`（`src-tauri/target/release/app.exe`，
- * 预编译壳、可连本地 dev server，见 `scripts/ci-ga-desktop-relay.mjs`）回传到 CNB 的
+ * 预编译壳、可连本地 dev server，见 `scripts/ci/ci-ga-desktop-relay.mjs`）回传到 CNB 的
  * 滚动 `nightly` Release。这个脚本把它下载下来，保存为本地可用的壳文件，并在项目根
  * 缺少 `Comfy APP.lnk` 时补一个指向该壳的快捷方式。
  *

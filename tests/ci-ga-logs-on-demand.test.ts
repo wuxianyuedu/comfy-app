@@ -1,5 +1,5 @@
 /**
- * `scripts/ci-ga-logs-on-demand.mjs` 的判据（ISSUE #3667 判绿按需发起）。
+ * `scripts/ci/ci-ga-logs-on-demand.mjs` 的判据（ISSUE #3667 判绿按需发起）。
  *
  * 钉住最容易静默失效的几件：
  *   ① 前提不全 ⇒ 没判过（2），不是绿；
@@ -11,14 +11,14 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { CODE } from "../scripts/ci-ga-dispatch.mjs";
+import { CODE } from "../scripts/ci/ci-ga-dispatch.mjs";
 import {
   main,
   ON_DEMAND_SCOPE,
   ON_DEMAND_WORKFLOW,
   onDemandInputs,
   resolveOnDemandContext,
-} from "../scripts/ci-ga-logs-on-demand.mjs";
+} from "../scripts/ci/ci-ga-logs-on-demand.mjs";
 
 const BASE_ENV = {
   CNB_COMMIT: "a".repeat(40),

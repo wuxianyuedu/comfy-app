@@ -14,7 +14,7 @@ import {
   probeScript,
   readProbe,
   sameWindowsPath,
-} from "../scripts/ci-nsis-tool-probe.mjs";
+} from "../scripts/ci/ci-nsis-tool-probe.mjs";
 
 /** 收走一次运行的全部读数行。 */
 function capture(lines: Array<string>) {

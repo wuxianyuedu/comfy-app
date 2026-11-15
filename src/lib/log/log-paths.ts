@@ -22,7 +22,7 @@ import path from "node:path";
  *
  * `TOOLS_LOG_DIR` 曾在同一批里被删掉，ISSUE #1326 又**按同一条判据**加了回来
  * —— 这次有真消费方（`SCHEMA_SYNC_STATUS_FILE` 的读取者横跨
- * `scripts/db-schema-state.mjs`（写）与 `src/app/api/schema/route.ts`（读）两个
+ * `scripts/db/db-schema-state.mjs`（写）与 `src/app/api/schema/route.ts`（读）两个
  * 进程，路径必须只有一处）。
  *
  * ## §18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批）
@@ -120,7 +120,7 @@ export const TOOLS_LOG_DIR = path.join(LOG_CURRENT_DIR, "tools");
 /**
  * schema 后台同步的状态文件（`log/current/tools/schema-sync.json`）。
  *
- * 「双宿主」的**唯一交汇处**：写它的是 `scripts/db-sync.mjs` 子进程，读它的
+ * 「双宿主」的**唯一交汇处**：写它的是 `scripts/db/db-sync.mjs` 子进程，读它的
  * 是另一个进程里的 Next 服务端（`GET /api/schema`）—— 两者只能靠磁盘通信。
  *
  * 此前它孤零零躺在 `log/` 根目录（Issue #1326 点名的孤儿之一）：根目录只该有

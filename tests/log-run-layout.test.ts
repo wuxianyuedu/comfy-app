@@ -438,8 +438,8 @@ describe("布局的单一出处（写方不得自己拼路径）", () => {
     const paths = await import("../src/lib/log/log-paths.ts");
     expect(path.basename(path.dirname(paths.SCHEMA_SYNC_STATUS_FILE))).toBe("tools");
     expect(path.dirname(paths.SCHEMA_SYNC_STATUS_FILE)).toBe(paths.TOOLS_LOG_DIR);
-    // 与 scripts/db-schema-state.mjs 的相对路径同形（写方在那边、读方在这边）
-    const { SCHEMA_SYNC_STATUS_FILE } = await import("../scripts/db-schema-state.mjs");
+    // 与 scripts/db/db-schema-state.mjs 的相对路径同形（写方在那边、读方在这边）
+    const { SCHEMA_SYNC_STATUS_FILE } = await import("../scripts/db/db-schema-state.mjs");
     expect(SCHEMA_SYNC_STATUS_FILE.split(path.sep)).toEqual([
       "log",
       "current",
@@ -454,7 +454,7 @@ describe("布局的单一出处（写方不得自己拼路径）", () => {
       "scripts/dev-launcher.mjs",
       "scripts/executor-host.mjs",
       "scripts/standalone-runtime.mjs",
-      "scripts/db-schema-state.mjs",
+      "scripts/db/db-schema-state.mjs",
     ];
     for (const rel of files) {
       const src = fs.readFileSync(path.join(ROOT, rel), "utf8");

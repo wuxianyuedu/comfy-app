@@ -1,5 +1,5 @@
 /**
- * 缓存根推导家（`scripts/ci-cache-slot.mjs`）的判据。
+ * 缓存根推导家（`scripts/ci/ci-cache-slot.mjs`）的判据。
  *
  * #3479 退役依赖面缓存槽之后，这份文件只剩**四套根共用的一份推导**
  * （问 `pnpm store path` 取卷根 + 包名拼子目录）与三个入口
@@ -19,7 +19,7 @@ import {
   resolveBuildCacheRoot,
   resolveToolRoot,
   TOOLS_ROOT_ENV,
-} from "../scripts/ci-cache-slot.mjs";
+} from "../scripts/ci/ci-cache-slot.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
 

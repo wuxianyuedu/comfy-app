@@ -34,7 +34,7 @@ import {
   runMirror,
   runMirrorEntry,
   sanitize,
-} from "../scripts/ci-github-mirror-push.mjs";
+} from "../scripts/ci/ci-github-mirror-push.mjs";
 /* 超时 / 次数 / 退避那一组常量自 2026-11-05 起单独一份（主文件贴着 900 行闸）。
  * 从**实现所在的模块**取，而不是从主文件的转出口取 —— 那里不再转出它们。 */
 import {
@@ -48,20 +48,20 @@ import {
   RETRY_MIN_ATTEMPT_MS,
   VERIFY_MAX_ATTEMPTS,
   VERIFY_RETRY_BUDGET_MS,
-} from "../scripts/ci-mirror-retry-policy.mjs";
+} from "../scripts/ci/ci-mirror-retry-policy.mjs";
 /* 「等托管机」前置（ISSUE #3346）单独一份：它静态 import 主文件的判据，测试直接钉它的行为。 */
-import { excerptFailureText, maybeSkipViaHosted } from "../scripts/ci-mirror-hosted-await.mjs";
+import { excerptFailureText, maybeSkipViaHosted } from "../scripts/ci/ci-mirror-hosted-await.mjs";
 /* 推送之后的自证（回读 refs + LFS batch 核对）：实现单独一份，用例直接钉它的三态。 */
 import {
   parseLfsObjects,
   parseRemoteRefSha,
   verifyLfsObjects,
   verifyPushedRef,
-} from "../scripts/ci-mirror-push-verify.mjs";
+} from "../scripts/ci/ci-mirror-push-verify.mjs";
 /* ISSUE #3234：探活与 wire 推送共用的那一份墙钟预算（纯函数，用例不必真等 4 分钟）。 */
-import { createWireBudget } from "../scripts/ci-mirror-wire-budget.mjs";
+import { createWireBudget } from "../scripts/ci/ci-mirror-wire-budget.mjs";
 /* `--master` 那一档的执行面单独一份（#3148：为回到 §12.6 R5 的 900 行闸内切出去的）。 */
-import { runMasterMirror } from "../scripts/ci-github-mirror-master.mjs";
+import { runMasterMirror } from "../scripts/ci/ci-github-mirror-master.mjs";
 /* 派发 payload 的 PR 标题那一格（run 列表可读性）。 */
 import {
   buildRunName,
@@ -70,7 +70,7 @@ import {
   readPullTitle,
   resolvePrTitle,
   RUN_TITLE_LIMIT,
-} from "../scripts/ci-mirror-payload.mjs";
+} from "../scripts/ci/ci-mirror-payload.mjs";
 /* 重试面比话术面宽一族，两个判据都从实现所在的模块直接取（与主文件的转出口同源）。 */
 import {
   describeLfsCheckFailure,
@@ -78,7 +78,7 @@ import {
   LFS_FAILURE_SHORT_ACTIONS,
   shouldRetryGitFailure,
   writeDispatchState,
-} from "../scripts/ci-mirror-failure-report.mjs";
+} from "../scripts/ci/ci-mirror-failure-report.mjs";
 
 const TOKEN = "gh-token-secret-value";
 const SHA = "26a3c3ed06deb679974200d68005ff583178d63f";
@@ -2836,7 +2836,12 @@ describe("runMirrorEntry（入口的终点）", () => {
   it("真进程回归：--master --dry-run 不再落到 Node 的 exit 13 兜底", () => {
     /* 现场那一跑就是这颗：`Detected unsettled top-level await` + EXITCODE=13。
      * 令牌留空 ⇒ 走 fail-closed 的 exit 2，不发任何网络请求。 */
-    const script = path.resolve(import.meta.dirname, "..", "scripts", "ci-github-mirror-push.mjs");
+    const script = path.resolve(
+      import.meta.dirname,
+      "..",
+      "scripts",
+      "ci/ci-github-mirror-push.mjs",
+    );
     const result = spawnSync(process.execPath, [script, "--master", "--dry-run"], {
       cwd: path.resolve(import.meta.dirname, ".."),
       encoding: "utf8",
@@ -3137,8 +3142,8 @@ ${data}`);
  * （§12.18：接线后的防回潮用逐实例 grep 断言，不新写启发式扫描器。） */
 describe("LFS 核对调用的接线（ISSUE #3400）", () => {
   const sources = [
-    { file: "scripts/ci-github-mirror-push.mjs", label: "PR 档 runMirror" },
-    { file: "scripts/ci-github-mirror-master.mjs", label: "master 档 runMasterMirror" },
+    { file: "scripts/ci/ci-github-mirror-push.mjs", label: "PR 档 runMirror" },
+    { file: "scripts/ci/ci-github-mirror-master.mjs", label: "master 档 runMasterMirror" },
   ] as const;
 
   it.for(sources)("$label 的 verifyLfsObjects 调用带 maxAttempts / sleep / now", ({ file }) => {
@@ -3153,9 +3158,12 @@ describe("LFS 核对调用的接线（ISSUE #3400）", () => {
   });
 
   it("PR 档按 once 收窄，master 档用默认上限", () => {
-    const pr = readFileSync(path.join(process.cwd(), "scripts/ci-github-mirror-push.mjs"), "utf8");
+    const pr = readFileSync(
+      path.join(process.cwd(), "scripts/ci/ci-github-mirror-push.mjs"),
+      "utf8",
+    );
     const master = readFileSync(
-      path.join(process.cwd(), "scripts/ci-github-mirror-master.mjs"),
+      path.join(process.cwd(), "scripts/ci/ci-github-mirror-master.mjs"),
       "utf8",
     );
     expect(pr.slice(pr.indexOf("verifyLfsObjects({"))).toContain("once ? 1 : VERIFY_MAX_ATTEMPTS");

@@ -1,5 +1,5 @@
 /**
- * `scripts/ci-ga-failure-logs.mjs` 的契约（#3584）：立案正文里的「红的那部分日志」。
+ * `scripts/ci/ci-ga-failure-logs.mjs` 的契约（#3584）：立案正文里的「红的那部分日志」。
  *
  * 这一族最贵的失效不是「没贴」，而是**把取不到写成没有**（§13.6.2）、**把凭据贴进单子**
  * （硬规则 17）、**正文顶穿平台硬上限被拒还以为建成了**（ISSUE #2248）。三形都有反面锚：
@@ -20,8 +20,8 @@ import {
   failedJobsFromJson,
   failureLines,
   renderLogReadout,
-} from "../scripts/ci-ga-failure-logs.mjs";
-import { FAILED_JOB_CONCLUSIONS } from "../scripts/ci-ga-logs-relay.mjs";
+} from "../scripts/ci/ci-ga-failure-logs.mjs";
+import { FAILED_JOB_CONCLUSIONS } from "../scripts/ci/ci-ga-logs-relay.mjs";
 
 const GH_REPO = "wuxianyuedu/comfy-app";
 const RUN_ID = "43014176820";
@@ -125,7 +125,7 @@ describe("红色失败窗口（至少贴红的那部分）", () => {
   });
 
   it("clampLongLines 幂等：渲染层与窗口层各过一次不会二次截短", async () => {
-    const { clampLongLines, MAX_LINE_CHARS } = await import("../scripts/ci-ga-failure-logs.mjs");
+    const { clampLongLines, MAX_LINE_CHARS } = await import("../scripts/ci/ci-ga-failure-logs.mjs");
     const once = clampLongLines(`x`.repeat(200_000));
     expect(once.length).toBe(MAX_LINE_CHARS);
     expect(clampLongLines(once)).toBe(once);
@@ -257,7 +257,7 @@ describe("复用：判红词表只有一份（与日志搬运同一集合）", (
 
 describe("main 与立案脚本接线", () => {
   it("立案正文（composeBody）在给了 logReadout 时把它放进「当场读数」", async () => {
-    const { composeBody } = await import("../scripts/ci-ga-daily-failure-issue.mjs");
+    const { composeBody } = await import("../scripts/ci/ci-ga-daily-failure-issue.mjs");
     const body = composeBody({
       ghRepo: GH_REPO,
       handle: "ci-ga-daily",
@@ -273,7 +273,7 @@ describe("main 与立案脚本接线", () => {
   });
 
   it("没给 logReadout 时旧正文形状仍成立（纯函数兼容）", async () => {
-    const { composeBody } = await import("../scripts/ci-ga-daily-failure-issue.mjs");
+    const { composeBody } = await import("../scripts/ci/ci-ga-daily-failure-issue.mjs");
     const body = composeBody({
       ghRepo: GH_REPO,
       handle: "ci-ga-daily",
@@ -289,7 +289,7 @@ describe("main 与立案脚本接线", () => {
     const fs = await import("node:fs");
     const path = await import("node:path");
     const src = fs.readFileSync(
-      path.resolve(process.cwd(), "scripts", "ci-ga-daily-failure-issue.mjs"),
+      path.resolve(process.cwd(), "scripts", "ci/ci-ga-daily-failure-issue.mjs"),
       "utf8",
     );
     expect(src).toContain("ci-ga-failure-logs.mjs");

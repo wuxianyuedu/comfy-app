@@ -1,5 +1,5 @@
 /**
- * 「类型检查」那一格的读数（`scripts/ci-run-tool.mjs`，ISSUE #3041）：过去念不出「按哪一棵树判」。平台 PR 检出的是**合成合并预览**
+ * 「类型检查」那一格的读数（`scripts/ci/ci-run-tool.mjs`，ISSUE #3041）：过去念不出「按哪一棵树判」。平台 PR 检出的是**合成合并预览**
  * （`HEAD` = 目标分支 ⊕ 本 PR），`CNB_COMMIT` 才是 PR 顶端；两者不同时 `tsc` 行号属合并树，拿 PR 顶端核对必然对不上（#2990）。
  * 夹具钉三件：两 sha 不同 ⇒ 明写「合并后的树」；无 `CNB_COMMIT` ⇒ 念 HEAD 并明写「行号属这棵树」；判决面念 `include`/`exclude` 两条 glob。
  */
@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-const SCRIPT = path.resolve(import.meta.dirname, "..", "scripts", "ci-run-tool.mjs");
+const SCRIPT = path.resolve(import.meta.dirname, "..", "scripts", "ci/ci-run-tool.mjs");
 
 /** 夹具：一棵真 git 仓 + 一份 tsconfig + 一个「报错行号不属于本树」的假编译器。 */
 type Fixture = { face: string; fakeCompiler: string; head: string; root: string };

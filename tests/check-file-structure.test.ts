@@ -1,4 +1,4 @@
-/** 提交门槛自检：黑盒跑 `scripts/check-file-structure.cjs`（子进程 = pre-commit 的 `node scripts/*.cjs` + cwd 定位扫描根），
+/** 提交门槛自检：黑盒跑 `scripts/gates/check-file-structure.cjs`（子进程 = pre-commit 的 `node scripts/*.cjs` + cwd 定位扫描根），
  * 钉的是「入口/结构硬规则真阻断提交」而非只写在文档里（launch-and-build.md §8）。坐标：R7/R8 禁 .bat/.cmd/.vbs、
  * 中文 .ps1 必须 UTF-8 BOM（cmd/PS5.1 走 GBK 必乱码，#23）；R9 根目录禁 .ps1 双击入口（#29）；R10 注释禁历史流水（#46）；
  * R11 代理约定名 src/proxy.ts（#489）；R12 src/ 禁控制字符（NUL 会让 git/diff/grep 判成二进制）；R5 超 900 行即阻断、
@@ -55,7 +55,7 @@ const PYTHON_CANDIDATES = pythonCandidates();
 /** 同 `POWER_SHELL_PROBE_ARGS`：探测用的就是真跑那一条（`-c` 是最小的可执行语句）。 */
 const PYTHON_PROBE_ARGS = ["-c", "import sys; sys.exit(0)"];
 
-const SCRIPT = join(process.cwd(), "scripts", "check-file-structure.cjs");
+const SCRIPT = join(process.cwd(), "scripts", "gates/check-file-structure.cjs");
 // 构建前置守卫：断言它真的能认出「路径落在本仓库 src-tauri\target\ 下的 app.exe」，
 // 而不是把同名的无关进程（如别处的 app.exe）当成目标壳误杀。
 const GUARD = join(process.cwd(), "tools", "scripts", "Build-Guard.ps1");
@@ -78,7 +78,7 @@ function runWith(args: Array<string>): { code: number; output: string } {
   try {
     const output = execFileSync(
       process.execPath,
-      [join(workdir, "check-file-structure.cjs"), ...args],
+      [join(workdir, "scripts", "gates", "check-file-structure.cjs"), ...args],
       { cwd: workdir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     );
     return { code: 0, output };
@@ -96,15 +96,17 @@ function runWith(args: Array<string>): { code: number; output: string } {
 
 beforeEach(() => {
   workdir = mkdtempSync(join(tmpdir(), "structure-gate-"));
-  copyFileSync(SCRIPT, join(workdir, "check-file-structure.cjs"));
+  /* 沙箱布局镜像真实仓库（#3930）：判据在 `scripts/gates/`，它的 `../file-structure-rules.cjs`、
+   * `../ci/ci-log.mjs` 等 `../` 依赖由 copyGateDeps 落回 `scripts/`，不越过沙箱根。 */
+  mkdirSync(join(workdir, "scripts", "gates"), { recursive: true });
+  copyFileSync(SCRIPT, join(workdir, "scripts", "gates", "check-file-structure.cjs"));
   /* 判据走 `require("./gate-scan-read.cjs")` 取共用读取器（容错遍历，口径见该文件头）：临时仓库只放被测那一份时
    * 是 `MODULE_NOT_FOUND`，红得像「判据坏了」，实际是夹具少带一个文件。本用例不在 `defineGateRepo` 的靶子里
    *（§11.16.1 要求 `tmpdir()` + 从 `workdir` 拉脚本 + 不 import 共享件三条同时成立；这里造的是「缓冲内容」、也没
    * 从工作区拉脚本），所以自己调 `copyGateDeps` 补齐同目录依赖 —— 与夹具内那一层同一件事。 */
-  copyGateDeps(join(workdir, "check-file-structure.cjs"));
+  copyGateDeps(join(workdir, "scripts", "gates", "check-file-structure.cjs"));
   // 脚本无条件扫描 src/（R1-R6 规则），临时工作区必须存在该目录
   mkdirSync(join(workdir, "src"));
-  mkdirSync(join(workdir, "scripts"));
   mkdirSync(join(workdir, "tools", "build"), { recursive: true });
   /* R13 的默认前提：src/lib 存在（判据只看它的顶层条目）。临时工作区不带它时
    * R13 整块跳过 —— 那些 R5 棘轮用例要的是「无 R13 噪声」，所以这里把目录建出来，
@@ -639,7 +641,7 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
    * 故用 PowerShell 打桩 Get-CimInstance、喂两类进程：本仓库 target 下的 app.exe（含大小写/相对段
    * 差异）必须命中；别处路径、或命令行恰含项目根但路径在外的 app.exe 必须不命中。 */
   // Windows PowerShell 5.1 与 7 都可用；非 Windows（Linux CI）没有 powershell，相关用例跳过，
-  // 规则本身由 scripts/check-file-structure.cjs 与本文件其它用例覆盖。
+  // 规则本身由 scripts/gates/check-file-structure.cjs 与本文件其它用例覆盖。
   // 「在场」必须由 `firstRunnableOrEmpty()` 判 —— 判据是「起得来**且**解释得了参数」（ISSUE #2316）：
   // 同名的别的可执行文件让这一格照跑，`spawnSync(candidate,["-NoProfile",…])` 退 2 ⇒ 守卫脚本 `HITS=`
   // 一个都不出现 ⇒ 等满 20s 以超时红、指不到真因；探不到时它打逐候选读数（区分「没装」与「名字被占」）。
@@ -1269,7 +1271,7 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
 
 /** ISSUE #730 的 release 壳构建失败（`cargo build --release --features custom-protocol`）当年是两条互不相干的
  * 编译错误：① `generate_context!` 报插件全局 API 脚本路径解析失败（折行 + serde_json 尾随逗号），判据随
- * #2541 删 prettier 退役（#2602；oxfmt 只扫 `src/**` 与 `.storybook/**`，见 `scripts/check-format.cjs` 头注）；
+ * #2541 删 prettier 退役（#2602；oxfmt 只扫 `src/**` 与 `.storybook/**`，见 `scripts/gates/check-format.cjs` 头注）；
  * ② 「上限 × 间隔」两常量相乘报 `expected u32, found u64`，随 #2192 退役（预算改由 `poll_clock::PollClock` 持
  * `Duration`）。共同点：本地 lint/tsc/单测全绿，只有真编 release 才暴露 ⇒ 判据只能落在「编译前提」。 */
 describe("release 壳构建的地雷（ISSUE #730）", () => {

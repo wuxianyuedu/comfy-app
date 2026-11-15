@@ -19,20 +19,21 @@ function isMaskModule(value: unknown): value is { maskNonCode: (src: string) => 
   return isRecord(value) && typeof value.maskNonCode === "function";
 }
 
-const SCRIPT = path.resolve(__dirname, "../scripts/check-test-concurrency.cjs");
+const SCRIPT = path.resolve(__dirname, "../scripts/gates/check-test-concurrency.cjs");
 
 /** 在临时仓库里跑真脚本（cwd = 临时仓库根，只放被测文件）。 */
 function gate(files: Record<string, string>): { ok: boolean; output: string } {
   const root = mkdtempSync(path.join(tmpdir(), "test-concurrency-"));
   mkdirSync(path.join(root, "scripts"), { recursive: true });
-  copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
-  copyGateDeps(path.join(root, "scripts", path.basename(SCRIPT)));
+  mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+  copyFileSync(SCRIPT, path.join(root, "scripts", "gates", path.basename(SCRIPT)));
+  copyGateDeps(path.join(root, "scripts", "gates", path.basename(SCRIPT)));
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });
     writeFileSync(abs, content);
   }
-  const entry = path.join(root, "scripts", path.basename(SCRIPT));
+  const entry = path.join(root, "scripts", "gates", path.basename(SCRIPT));
   try {
     return {
       ok: true,
@@ -199,7 +200,7 @@ describe("字符串状态机：挖掉非代码区间（§11.19.4）", () => {
    * 取 `createRequire` 是因为它**同步** —— 不必让一条纯函数用例变成 async。 */
   const requireCjs = createRequire(import.meta.url);
   /* 消费形状守卫（B5 清账）：谓词收窄后解构，不再断言。 */
-  const maskModule: unknown = requireCjs("../scripts/check-test-concurrency.cjs");
+  const maskModule: unknown = requireCjs("../scripts/gates/check-test-concurrency.cjs");
   if (!isMaskModule(maskModule)) {
     throw new Error("check-test-concurrency.cjs 缺 maskNonCode —— 判据脚本形状变了");
   }

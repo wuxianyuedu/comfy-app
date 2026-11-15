@@ -546,7 +546,7 @@ export function runFromStdin(stdinText, pushUrl = null) {
     `[pre-push] 跑合并前固定动作（check:premerge 各段；分钟级 —— 干净快照上的全仓判据那一档最贵）\n` +
       `[pre-push]   为什么要跑：${verdict.reasons.join("；")}\n` +
       `[pre-push]   受影响用例那一档不在这里：2026-10-20 起它的执行者是平台侧 PR 流水线的\n` +
-      `[pre-push]   「受影响用例」一格（scripts/ci-affected-tests.mjs → run-affected-tests.mjs）。\n`,
+      `[pre-push]   「受影响用例」一格（scripts/ci/ci-affected-tests.mjs → run-affected-tests.mjs）。\n`,
   );
   /* `--json` 拿逐段码：只有 base 段红时才再问一次归属（那是一批全仓判据的量级，放在稀有
    * 路径上付；绿的那条路径仍然只跑一次）。 */

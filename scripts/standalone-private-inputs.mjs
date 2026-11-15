@@ -94,7 +94,7 @@ export const PRIVATE_INPUTS = [
   // 它记的是「这台机器上装了什么」，出厂件该走内置的 SDXL txt2img 那份默认。
   "data/workshop-comfy-settings.json",
   // `data/` 下剩下的三处是**目录**（不是单文件）：数据库备份快照（写入方
-  // `scripts/db-backup-core.mjs` 的 `BACKUP_DIR`）、工坊 ComfyUI 通道的产物
+  // `scripts/db/db-backup-core.mjs` 的 `BACKUP_DIR`）、工坊 ComfyUI 通道的产物
   // （`src/server/workshop/comfyui.ts` 的 `OUTPUT_DIR`）、工坊合成的产物
   // （`src/server/workshop/final-compose.ts` 的 `COMPOSE_DIR`）。
   // 它们装不进「逐文件」那一层，只能按**目录**点名 —— 所以 `stripPrivateInputs`
@@ -233,14 +233,14 @@ export const RUNTIME_SCRIPTS = [
   // 起 Next 之前的两道预检（`.env` 三项非空、schema 待应用）与执行件：
   // 都在 dev-launcher.mjs 的顶层静态 import 里（见规范 §9.1 / §9.2）。
   "env-preflight.mjs",
-  "db-schema-state.mjs",
-  "db-push-core.mjs",
+  "db/db-schema-state.mjs",
+  "db/db-push-core.mjs",
   // 备份 / 恢复的唯一实现（D6，ISSUE #1611）：`dev-launcher.mjs` 顶层静态
   // import 它的 `applyPendingRestoreAtBoot`（换文件必须排在起 Next 之前）——
   // 缺这份就是整个编排器 ENOENT，与「缺一份内部分件」表现完全一样。
   // `db-backup.mjs`（`pnpm db:backup` 的手动档）**不在**这里：它是给人敲的
   // 命令，桌包里没有它也不影响任何运行时路径。
-  "db-backup-core.mjs",
+  "db/db-backup-core.mjs",
   // 本机应用数据备份 / 恢复的实现（ISSUE #3732，PR #3758 引入）：`db-backup-core.mjs`
   // 顶层静态 import 它的 `restoreAppDataBackup` —— 缺这份同样是整个编排器加载即
   // ENOENT，而表现只是「双击没反应」。⚠️ 它当初**漏登记**过：#3732 那批把内部分件

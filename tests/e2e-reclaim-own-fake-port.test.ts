@@ -148,7 +148,7 @@ describe("形状判据（`isFakeServerAnswering`）", () => {
 
 describe("接线在位：这一步真的挂在起 Playwright 之前（§13.5.12）", () => {
   const run = readFileSync(
-    path.join(path.resolve(import.meta.dirname, ".."), "scripts/e2e-run.mjs"),
+    path.join(path.resolve(import.meta.dirname, ".."), "scripts/e2e/e2e-run.mjs"),
     "utf8",
   );
 
@@ -354,7 +354,7 @@ describe("应用端口占位者的识别：两条证据缺一不可", () => {
 
 describe("接线在位：应用端口那一格也挂在起 Playwright 之前（§13.5.12）", () => {
   const run = readFileSync(
-    path.join(path.resolve(import.meta.dirname, ".."), "scripts/e2e-run.mjs"),
+    path.join(path.resolve(import.meta.dirname, ".."), "scripts/e2e/e2e-run.mjs"),
     "utf8",
   );
 

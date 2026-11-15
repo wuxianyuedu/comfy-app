@@ -1,5 +1,5 @@
 /**
- * `scripts/ci-ga-desktop-relay.mjs` 的判据（ISSUE #3607 GA 桌包成品回传 CNB）。
+ * `scripts/ci/ci-ga-desktop-relay.mjs` 的判据（ISSUE #3607 GA 桌包成品回传 CNB）。
  *
  * 钉住最容易静默失效的几件：
  *   ① 前提 fail-closed：缺令牌 / 仓库 / 成品一份都没有 ⇒ 没判过（2），不是绿；
@@ -20,7 +20,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { CODE } from "../scripts/ci-github-mirror-push.mjs";
+import { CODE } from "../scripts/ci/ci-github-mirror-push.mjs";
 import {
   collectBundles,
   ensureRelease,
@@ -34,7 +34,7 @@ import {
   resolveDesktopRelayContext,
   SHELL_ASSET_NAME,
   uploadAsset,
-} from "../scripts/ci-ga-desktop-relay.mjs";
+} from "../scripts/ci/ci-ga-desktop-relay.mjs";
 
 const tempRoots: string[] = [];
 afterEach(() => {

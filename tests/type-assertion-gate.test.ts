@@ -10,7 +10,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { copyGateDeps } from "./helpers/gate-repo";
 
-const SCRIPT = path.resolve(__dirname, "../scripts/check-type-assertion-executor.cjs");
+const SCRIPT = path.resolve(__dirname, "../scripts/gates/check-type-assertion-executor.cjs");
 
 /** 与仓库同口径的 tsconfig（`**\/*.ts` 覆盖测试文件）。 */
 const TS_CONFIG = JSON.stringify(
@@ -25,9 +25,12 @@ const TS_CONFIG = JSON.stringify(
 /** 在临时仓库里跑真脚本（cwd = 临时仓库根，只放被测文件）。 */
 function gate(files: Record<string, string>): { ok: boolean; output: string } {
   const root = mkdtempSync(path.join(tmpdir(), "type-assertion-"));
-  mkdirSync(path.join(root, "scripts"), { recursive: true });
-  copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
-  copyGateDeps(path.join(root, "scripts", path.basename(SCRIPT)));
+  /* 沙箱布局镜像真实仓库（#3930）：判据在 `scripts/gates/`，它的仓库根锚
+   * `__dirname/../../tsconfig.json` 才指回沙箱根，而不是 tmpdir 根。 */
+  mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+  const entry = path.join(root, "scripts", "gates", path.basename(SCRIPT));
+  copyFileSync(SCRIPT, entry);
+  copyGateDeps(entry);
   if (!("tsconfig.json" in files)) {
     writeFileSync(path.join(root, "tsconfig.json"), TS_CONFIG);
   }
@@ -36,7 +39,6 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
     mkdirSync(path.dirname(abs), { recursive: true });
     writeFileSync(abs, content);
   }
-  const entry = path.join(root, "scripts", path.basename(SCRIPT));
   try {
     return {
       ok: true,

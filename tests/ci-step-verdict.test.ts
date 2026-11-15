@@ -1,5 +1,5 @@
 /**
- * `scripts/ci-step-verdict.mjs` 的判据（ISSUE #3102）：治「Actions 上只有 `✗ 分支守卫` + exit code 1、为什么红要翻日志」——① 首条原因压进 `::error::` / `::warning::`，② 退出码 + 命中行 + 末尾写进 `$GITHUB_STEP_SUMMARY`。
+ * `scripts/ci/ci-step-verdict.mjs` 的判据（ISSUE #3102）：治「Actions 上只有 `✗ 分支守卫` + exit code 1、为什么红要翻日志」——① 首条原因压进 `::error::` / `::warning::`，② 退出码 + 命中行 + 末尾写进 `$GITHUB_STEP_SUMMARY`。
  * 最易写错的是 exit 2（本仓「没判」）能否折成非红：**只有子进程自己打了那段不判结论**才折；无条件折会把「判据没跑起来」（`ci-heavy-gates.mjs` 的 missing 也走 2）读成绿。
  * 两向都钉：带标记 ⇒ exit 0 + `::warning::`；不带标记 ⇒ 原样红 + `::error::`。
  */
@@ -15,9 +15,9 @@ import {
   pickReasonLines,
   renderJobSummary,
   renderSummary,
-} from "../scripts/ci-step-verdict.mjs";
+} from "../scripts/ci/ci-step-verdict.mjs";
 
-const SCRIPT = join(process.cwd(), "scripts", "ci-step-verdict.mjs");
+const SCRIPT = join(process.cwd(), "scripts", "ci/ci-step-verdict.mjs");
 
 /** 外来值先落 `unknown`，过这道守卫才谈读字段（不用类型断言）。 */
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -55,7 +55,7 @@ describe("ci-step-verdict.mjs（一步红了，为什么）", () => {
       "[branch-guard] 结论：不判",
       "--",
       "node",
-      "scripts/check-branch-guard.cjs",
+      "scripts/gates/check-branch-guard.cjs",
       "--pr-check",
       "--target",
       "master",
@@ -64,7 +64,7 @@ describe("ci-step-verdict.mjs（一步红了，为什么）", () => {
     expect(parsed.marker).toBe("[branch-guard] 结论：不判");
     expect(parsed.cmd).toEqual([
       "node",
-      "scripts/check-branch-guard.cjs",
+      "scripts/gates/check-branch-guard.cjs",
       "--pr-check",
       "--target",
       "master",

@@ -329,7 +329,7 @@ export function hostUnsafeArgs(args, viaHost) {
  * 写着 `process.platform === "win32" ? "pnpm.cmd" : "pnpm"`。那条判据在 Windows 上
  * 必错：批处理只有 cmd.exe 会解释，Node 起它直接 `EINVAL`（`res.error.code`），
  * 于是 `pnpm format:ratchet` / `check:all` 在提交门槛上直接崩 ——
- * `node scripts/check-format.cjs` 只打印一句
+ * `node scripts/gates/check-format.cjs` 只打印一句
  * `[format] 无法执行 prettier:spawnSync pnpm.cmd EINVAL` 就 exit 2
  * （ISSUE #638）。同一条坑在 §2.1.1 已解决过三次，这里是第四次，所以不再逐处修，
  * 而是把「同步跑一条 pnpm」也收成**唯一出口**。
@@ -384,7 +384,7 @@ export function runPnpmSync(
       stdout: "",
       stderr:
         `PATH 上找不到可用的 pnpm（未发现 ${name} 的任何可执行形态）。\n` +
-        "  自查：pnpm check:toolchain（或 node scripts/check-pnpm-available.mjs）",
+        "  自查：pnpm check:toolchain（或 node scripts/gates/check-pnpm-available.mjs）",
       status: null,
       signal: null,
       error: Object.assign(new Error(`${name} not found on PATH`), {

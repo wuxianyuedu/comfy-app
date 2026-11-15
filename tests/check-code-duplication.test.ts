@@ -1,5 +1,5 @@
 /**
- * 跨文件重复门禁自检：把 `scripts/check-code-duplication.cjs` 当黑盒跑在临时工作区，验证它真拦下「同一份实现被复制成两份」。规范 §12.12。
+ * 跨文件重复门禁自检：把 `scripts/gates/check-code-duplication.cjs` 当黑盒跑在临时工作区，验证它真拦下「同一份实现被复制成两份」。规范 §12.12。
  * 为什么：重复代码在 review 里最易放行 —— 单看每份都没毛病，并排比才看出（`api-channel.server.ts` 与 `server/workshop/api-channel.ts` 84% 相同；`test-usage` 两路由密钥解析各一份）。
  * 用子进程而非 import：pre-commit 以 `node scripts/xxx.cjs` 调用，脚本内部用 `process.cwd()` 定位扫描根；同一调用方式才等价于真实门禁。
  */
@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
-  script: "check-code-duplication.cjs",
+  script: "gates/check-code-duplication.cjs",
   dirs: ["src"],
 });
 

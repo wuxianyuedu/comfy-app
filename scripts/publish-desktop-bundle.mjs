@@ -50,9 +50,9 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-import { runContext } from "./ci-daily-build.mjs";
-import { ARTIFACT_ROOT_ENV, resolveArtifactRoot } from "./ci-cache-slot.mjs";
-import { hasRoomForSlot } from "./ci-slot-apply.mjs";
+import { runContext } from "./ci/ci-daily-build.mjs";
+import { ARTIFACT_ROOT_ENV, resolveArtifactRoot } from "./ci/ci-cache-slot.mjs";
+import { hasRoomForSlot } from "./ci/ci-slot-apply.mjs";
 import { runPnpmSync } from "./launcher-core/shell.mjs";
 
 const HERE = import.meta.dirname;

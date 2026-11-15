@@ -27,7 +27,7 @@ const RETIRED_SCREEN_NAMES = [
 /**
  * 用 `ui/page-header` 的屏（它的调用面）。它缺席说明收口被绕开了。⚠️ **这是具名清单，不是「所有屏」**：
  * 拦得住「这些屏退回手抄」，拦不住第 8 个新屏自己拼页头 —— 那一半由 P86 按**形态**守
- * （`scripts/check-ui-primitives.cjs`，规范 16 §16.2.4.73）：锚 `.u-title-page` 与 `mt-1 text-sm` 同现。
+ * （`scripts/gates/check-ui-primitives.cjs`，规范 16 §16.2.4.73）：锚 `.u-title-page` 与 `mt-1 text-sm` 同现。
  */
 /* SAFETY: 类型断言已复核 */
 const PAGE_HEADER_CONSUMERS = [

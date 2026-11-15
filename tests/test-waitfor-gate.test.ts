@@ -11,7 +11,7 @@ import { isRecord } from "~/lib/is-record";
 
 import { defineGateRepo, describe, expectGateRan } from "./helpers/gate-repo";
 
-const SCRIPT = path.resolve(__dirname, "../scripts/check-test-waitfor.cjs");
+const SCRIPT = path.resolve(__dirname, "../scripts/gates/check-test-waitfor.cjs");
 
 /** 判据模块的消费形状守卫（B5 清账）：只取 scanFile 一件。 */
 function isScanModule(
@@ -32,7 +32,7 @@ if (!isScanModule(scanModule)) {
 const { scanFile } = scanModule;
 
 const { test, expect } = defineGateRepo({
-  script: "check-test-waitfor.cjs",
+  script: "gates/check-test-waitfor.cjs",
   dirs: ["src"],
   workdir: "test-waitfor",
 });

@@ -79,14 +79,14 @@ describe("session-report —— 排版：五节在场、顺序稳定（他人照
         results: [
           {
             label: "文件结构硬规则",
-            argv: "node scripts/check-file-structure.cjs",
+            argv: "node scripts/gates/check-file-structure.cjs",
             ms: 1300,
             code: 0,
             tail: "",
           },
           {
             label: "CP936 字形登记",
-            argv: "node scripts/check-cp936-glyphs.cjs",
+            argv: "node scripts/gates/check-cp936-glyphs.cjs",
             ms: 2400,
             code: 0,
             tail: "",
@@ -128,14 +128,14 @@ describe("session-report —— 排版：五节在场、顺序稳定（他人照
         results: [
           {
             label: "文件结构硬规则",
-            argv: "node scripts/check-file-structure.cjs",
+            argv: "node scripts/gates/check-file-structure.cjs",
             ms: 1300,
             code: 0,
             tail: "",
           },
           {
             label: "脚本档类型检查",
-            argv: "node scripts/check-scripts-typecheck.cjs",
+            argv: "node scripts/gates/check-scripts-typecheck.cjs",
             ms: 12_400,
             code: 1,
             tail: "scripts/x.mjs(1,1): error TS7006: 基线 0 → 当前 1（新增 1 处）",

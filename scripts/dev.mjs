@@ -15,8 +15,8 @@
 // `pnpm start` 已因同类问题修过（scripts/start.mjs），这里补齐 dev 一侧。
 import { spawnSync } from "node:child_process";
 import { APP_PORT_ENV_KEY, resolveAppPortWithSource, resolveRepoRoot } from "./app-port.mjs";
-import { applyPendingRestoreAtBoot } from "./db-backup-core.mjs";
-import { spawnSchemaSync, SKIP_SCHEMA_SYNC_ENV } from "./db-schema-state.mjs";
+import { applyPendingRestoreAtBoot } from "./db/db-backup-core.mjs";
+import { spawnSchemaSync, SKIP_SCHEMA_SYNC_ENV } from "./db/db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
 import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
 import { maybeSpawnExecutorHost } from "./launcher-core/executor-host-spawn.mjs";

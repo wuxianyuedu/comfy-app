@@ -1,7 +1,7 @@
 # code scanning 巡检（镜像档）
 #
 # 把 GitHub code scanning 的 open 告警按**规则**聚合成 CNB issue（一规则一单）。
-# 实现与六条口径见 `scripts/ci-code-scanning-triage.mjs` 文件头。
+# 实现与六条口径见 `scripts/ci/ci-code-scanning-triage.mjs` 文件头。
 #
 # 为什么是 GA 而不是 CNB：`workflow_dispatch` 的手动按钮是 GA 原生的（本仓 daily.yml /
 # package-desktop.yml 同一写法），CNB 侧要另建一个手动口；而告警本体在 GitHub 那一侧。
@@ -61,4 +61,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           # CNB 侧建单 / 改单 / 贴标签（repo-issue:rw）与评论 / 仓库标签（repo-notes:rw）。
           CNB_ISSUE_TOKEN: ${{ secrets.CNB_ISSUE_TOKEN }}
-        run: node scripts/ci-code-scanning-triage.mjs
+        run: node scripts/ci/ci-code-scanning-triage.mjs

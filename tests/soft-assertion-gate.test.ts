@@ -10,14 +10,15 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { copyGateDeps } from "./helpers/gate-repo";
 
-const SCRIPT = path.resolve(__dirname, "../scripts/check-soft-assertions.cjs");
+const SCRIPT = path.resolve(__dirname, "../scripts/gates/check-soft-assertions.cjs");
 
 /** 在临时仓库里跑真脚本（cwd = 临时仓库根，只放被测文件）。 */
 function gate(files: Record<string, string>): { ok: boolean; output: string } {
   const root = mkdtempSync(path.join(tmpdir(), "soft-assert-"));
   mkdirSync(path.join(root, "scripts"), { recursive: true });
-  copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
-  copyGateDeps(path.join(root, "scripts", path.basename(SCRIPT)));
+  mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+  copyFileSync(SCRIPT, path.join(root, "scripts", "gates", path.basename(SCRIPT)));
+  copyGateDeps(path.join(root, "scripts", "gates", path.basename(SCRIPT)));
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });
@@ -26,11 +27,15 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
   try {
     return {
       ok: true,
-      output: execFileSync(process.execPath, [path.join(root, "scripts", path.basename(SCRIPT))], {
-        cwd: root,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-      }),
+      output: execFileSync(
+        process.execPath,
+        [path.join(root, "scripts", "gates", path.basename(SCRIPT))],
+        {
+          cwd: root,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      ),
     };
   } catch (error) {
     /* 失败形状按字段读（B5 清账口径）：不再断言收型。execFileSync 的失败把

@@ -9,7 +9,7 @@ import {
   repoUrl,
   workflowFileUrl,
   workflowsUrl,
-} from "../scripts/ci-github-verdict-chain.mjs";
+} from "../scripts/ci/ci-github-verdict-chain.mjs";
 import {
   CHECK_RUNS_TIMEOUT_MS,
   CLAIM_MISS_STREAK_TO_ABORT,
@@ -26,10 +26,10 @@ import {
   summarizeCheckRuns,
   summarizeWorkflowRuns,
   workflowRunsUrl,
-} from "../scripts/ci-github-verdict-read.mjs";
-import { CODE, exitCodeFor } from "../scripts/ci-github-mirror-push.mjs";
+} from "../scripts/ci/ci-github-verdict-read.mjs";
+import { CODE, exitCodeFor } from "../scripts/ci/ci-github-mirror-push.mjs";
 /* 退避表自 2026-11-05 起单独一份（主文件贴着 900 行闸）；这一格只吃它的前两项。 */
-import { RETRY_BACKOFF_MS } from "../scripts/ci-mirror-retry-policy.mjs";
+import { RETRY_BACKOFF_MS } from "../scripts/ci/ci-mirror-retry-policy.mjs";
 
 const TOKEN = "gh-token-secret-value";
 const SHA = "26a3c3ed06deb679974200d68005ff583178d63f";

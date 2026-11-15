@@ -92,12 +92,12 @@ describe("python-probe：逐个候选答「起不起得来」", () => {
     // 取证那份开头就在这句话上（`pythonForensics` 的唯一出处）。
     expect(text).toContain("python 探测现场");
     // 下一动作要能直接复制着跑。
-    expect(text).toContain("node scripts/ci-toolchain-selfcheck.mjs --python-only");
+    expect(text).toContain("node scripts/ci/ci-toolchain-selfcheck.mjs --python-only");
   });
 
   it("它不许自己再写一份候选表 —— 候选与探测都取自 `ci-toolchain-python.mjs`", () => {
     const src = readFileSync(path.join(ROOT, "scripts", "python-probe.mjs"), "utf8");
-    expect(src).toContain('from "./ci-toolchain-python.mjs"');
+    expect(src).toContain('from "./ci/ci-toolchain-python.mjs"');
     expect(src).toContain("findPython");
     /* 反向：它自己**不许**起子进程（那等于绕过 `findPython`，在同一台机器上问出
      * 第二次答案）。`spawnSync` / `execFileSync` 出现在这里就是回潮形态。 */
@@ -105,7 +105,7 @@ describe("python-probe：逐个候选答「起不起得来」", () => {
   });
 
   it("探「哪些候选」是可注入的 —— `findPython` 的候选表因此没有第二份", () => {
-    const src = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-python.mjs"), "utf8");
+    const src = readFileSync(path.join(ROOT, "scripts", "ci/ci-toolchain-python.mjs"), "utf8");
     // 两个入参（探谁、每个带什么参数）是 `probeLines` 复用同一份实现的依据。
     expect(src).toMatch(/candidates = PY_CANDIDATES/);
     expect(src).toMatch(/probeArgs = PY_PROBE_ARGS/);

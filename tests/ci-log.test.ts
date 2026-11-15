@@ -1,5 +1,5 @@
 /**
- * `scripts/ci-log.mjs` 一行判决出口的判断面（ISSUE #2506）。同一跑批的判据形态各异，最贵的是跳过与判过逐字同形（判据在场、结论静默放行）。
+ * `scripts/ci/ci-log.mjs` 一行判决出口的判断面（ISSUE #2506）。同一跑批的判据形态各异，最贵的是跳过与判过逐字同形（判据在场、结论静默放行）。
  * 判三件：三态前缀各不相同且「没判」不像「判过」；读数带「这一轮没判」时 `gatePass()` 自动降 `skip`；红的证据截断要报「另有 N 条」（同 ci-heavy-gates 口径）。
  * 不判某判据是否真改用此出口（那是 `tests/ci-log-adoption.test.ts` 的活）；本门禁只改「读得出来」，判决/退出码/账本未动。
  */
@@ -23,7 +23,7 @@ import {
   renderVerdict,
   stateOfLine,
   summarize,
-} from "../scripts/ci-log.mjs";
+} from "../scripts/ci/ci-log.mjs";
 
 describe("三条判决的形状", () => {
   it("绿：一行、带对象与读数，前缀是 [ok]", () => {

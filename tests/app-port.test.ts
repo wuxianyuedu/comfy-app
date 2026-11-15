@@ -266,7 +266,7 @@ describe("仓库根收口（resolveRepoRoot）", () => {
     const callSites = [
       "playwright.config.ts",
       "e2e/global-setup.ts",
-      "scripts/e2e-run.mjs",
+      "scripts/e2e/e2e-run.mjs",
       "scripts/dev.mjs",
       "scripts/start.mjs",
       "scripts/dev-launcher.mjs",

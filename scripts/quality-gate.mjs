@@ -35,7 +35,7 @@ import { lockfileDrift } from "./launcher-core/worktree.mjs";
 import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
-import { renderVerdict } from "./ci-log.mjs";
+import { renderVerdict } from "./ci/ci-log.mjs";
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
@@ -120,7 +120,7 @@ export const GATES = {
     /* `--changed`：判改动面 ∩ 扫描面（printWidth 80→100 起全库档对未迁移的
      * 存量恒红，见 check-format.cjs 文件头；check:all 是「按需完整验证」，
      * 对格式的读数与平台 PR 那一格同口径 —— 判「这次带来的那批」）。 */
-    args: ["../scripts/check-format.cjs", "--changed"],
+    args: ["./gates/check-format.cjs", "--changed"],
   },
   test: {
     label: "Vitest full run + coverage ratchet (excluding known baseline failures)",
@@ -158,7 +158,7 @@ export const GATES = {
    */
   dependencyAudit: {
     label: "Dependency audit ratchet (high/critical; ledger keyed by package+advisory)",
-    args: ["../scripts/check-dependency-audit.mjs"],
+    args: ["./gates/check-dependency-audit.mjs"],
   },
   /**
    * 故事枚举来源（ISSUE #1381 续，规范 16 §16.2.3.2）。
@@ -171,7 +171,7 @@ export const GATES = {
    */
   storybook: {
     label: "Storybook story enum source (cva return value / missing variants)",
-    args: ["../scripts/storybook-check.mjs"],
+    args: ["./storybook-check.mjs"],
   },
   /**
    * 依赖新鲜度：远端改过库的版本而本地还停在旧的那套上（规范 §13.5.13）。
@@ -188,7 +188,7 @@ export const GATES = {
    */
   depsFreshness: {
     label: "Dependency freshness (baseline vs origin/master + install sync)",
-    args: ["../scripts/check-deps-freshness.mjs"],
+    args: ["./gates/check-deps-freshness.mjs"],
   },
   /**
    * **client chunk 体积预算**（ISSUE #1781，规范 §13.5.4）。
@@ -205,7 +205,7 @@ export const GATES = {
    */
   bundleBudget: {
     label: "Bundle size budget (client chunk gzip total + file count ratchet)",
-    args: ["../scripts/check-bundle-budget.cjs"],
+    args: ["./gates/check-bundle-budget.cjs"],
     run: false,
   },
   /**
@@ -250,7 +250,7 @@ export const GATES = {
    */
   dailyAttendance: {
     label: "Daily tier attendance (did the last scheduled run actually execute)",
-    args: ["../scripts/check-daily-attendance.mjs"],
+    args: ["./gates/check-daily-attendance.mjs"],
     run: false,
   },
   /**
@@ -263,7 +263,7 @@ export const GATES = {
    */
   mirrorAttendance: {
     label: "GitHub mirror push attendance (did the mirror cell actually push + dispatch)",
-    args: ["../scripts/check-mirror-attendance.mjs"],
+    args: ["./gates/check-mirror-attendance.mjs"],
     run: false,
   },
   /**
@@ -277,11 +277,11 @@ export const GATES = {
    */
   oxlintZeroRules: {
     label: "Oxlint zero-cleared rules set (41 rules, repo-wide 0 hits)",
-    args: ["../scripts/check-oxlint-zero-rules.mjs"],
+    args: ["./gates/check-oxlint-zero-rules.mjs"],
   },
   premerge: {
     label: "Pre-merge fixed action (base recompute + commit claims + merge side loss)",
-    args: ["../scripts/premerge-check.mjs"],
+    args: ["./premerge-check.mjs"],
     run: false,
   },
 };
@@ -327,7 +327,7 @@ function parseArgs(argv) {
 }
 
 /**
- * 这一档判决的打印**只有一处出处**：`scripts/ci-log.mjs` 的三态出口（ISSUE #2506）。
+ * 这一档判决的打印**只有一处出处**：`scripts/ci/ci-log.mjs` 的三态出口（ISSUE #2506）。
  *
  * 从前这里用 `==> 标题` 打段头、`  [OK] … passed` / `  [FAIL] … failed (exit N)` 打结论，
  * 而同一台机上的钩子打的是 `── check: <标签>` + `  [ok] ── …`、跑批打的是 `[重档] … ok`。
@@ -427,7 +427,10 @@ function runGate(pnpm, key, gate) {
    * 与原来的覆盖面逐字相同。 */
   const [firstArg, ...restArgs] = gate.args;
   if (firstArg && /\.(?:c|m)?js$/.test(firstArg)) {
-    const script = path.resolve(ROOT, "scripts", path.basename(firstArg));
+    /* args 相对**本文件所在目录**解析（`../scripts/x` 这种旧绕行写法与
+     * `./gates/x` 这种 #3930 后的新写法都指得回真文件）。此前按 basename
+     * 拼回 `ROOT/scripts/` 是平铺假设，判据归入域子目录后会 spawn ENOENT。 */
+    const script = path.resolve(HERE, firstArg);
     // 回显解释器与脚本的**真实**路径（不写成 `node scripts/x.cjs` 的近似形态）：
     // 这一步用的是 `process.execPath`，与 PATH 上的 `node` 未必是同一个。
     echoCommandLine(process.execPath, [script, ...restArgs]);

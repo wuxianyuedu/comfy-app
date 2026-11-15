@@ -1,7 +1,7 @@
 import { defineConfig } from "vitest/config";
 import path from "node:path";
 
-import { resolveCiWorkers } from "./scripts/ci-load.mjs";
+import { resolveCiWorkers } from "./scripts/ci/ci-load.mjs";
 
 /**
  * `DOM_TEST_GLOBS` —— 进 **DOM 档**（`happy-dom`）的用例面（§11.17）。
@@ -24,7 +24,7 @@ import { resolveCiWorkers } from "./scripts/ci-load.mjs";
  * ⚠️ **例外不是「随手加一行」**：写 jsdom 头的必须有**能被指出的具体理由**
  * （哪一条 API / 哪一个行为在 happy-dom 下不同），因为这一档的默认值选 happy-dom
  * 的全部意义就是「只有真的需要 jsdom 时才付它的钱」。判据：
- * `node scripts/check-test-environment.cjs --report` 会列出每份 jsdom 头的文件。
+ * `node scripts/gates/check-test-environment.cjs --report` 会列出每份 jsdom 头的文件。
  *
  * ⚠️ **路径里的 `(main)` 这类路由组括号必须转义成 `\\(main\\)`** —— 括号是 glob 的
  * 分组语法，写成字面量时 `src/app/(main)/…` 会被翻成「匹配 `src/app/main/…`」，
@@ -33,7 +33,7 @@ import { resolveCiWorkers } from "./scripts/ci-load.mjs";
  * 「门槛写着 100、报告里查无此文件」那一族：清单条目失效不报错，只是不见了。
  *
  * ⚠️ 新增一批 DOM 用例时：若整个目录都是，就把目录加到这里；只加几份就别动它，
- * 直接写文件头（`scripts/check-test-environment.cjs` 会核「目录档与文件头矛盾」）。
+ * 直接写文件头（`scripts/gates/check-test-environment.cjs` 会核「目录档与文件头矛盾」）。
  * **不要为了省几行文件头去 `exclude` 少数派** —— 见上面 `projects` 的注释。
  */
 const DOM_TEST_GLOBS = [
@@ -253,7 +253,7 @@ const BASE_CONFIG = defineConfig({
      * 矛盾**（3 passes 与 1 pass 并排）。读者没法判断哪份是这次的总账，而这几段还压在
      * 真正的判据结论**前面** —— 这正是「摘要乱糟糟」的形状。
      *
-     * 口径：本仓的摘要**只有一个写入者** —— `scripts/ci-step-verdict.mjs`（§「一步红了，
+     * 口径：本仓的摘要**只有一个写入者** —— `scripts/ci/ci-step-verdict.mjs`（§「一步红了，
      * 为什么」的唯一出口）。它写的是「这一格判没判、红在哪」，比 reporter 的用例级
      * 计数更贴近读者要回答的那一问；两套并存 = 同一页两个口径。
      *
@@ -266,7 +266,7 @@ const BASE_CONFIG = defineConfig({
      * 追加，所以两边一致。改这一段时跑 `tests/vitest-gha-summary.test.ts` —— 它按
      * 「GITHUB_ACTIONS=true 跑一次、摘要里不许出现 `Vitest Test Report`」正面判。 */
     reporters: ["default"],
-    /* 并发上限：**取自 `scripts/ci-load.mjs` 那一处**（ISSUE #2324，以前这里是字面 8）。
+    /* 并发上限：**取自 `scripts/ci/ci-load.mjs` 那一处**（ISSUE #2324，以前这里是字面 8）。
      * 为什么不再写数字：同一句「一个 worker 至少 8 核」的判断曾在三个地方各留一份副本
      * （这里 8、`run-affected-tests.mjs` 的 4、`ci-load.mjs` 的按核折算），结果就是
      * 「单条链别占满整台机」那一档压住了平台两格，**本地这一跳照旧 8 个 worker**
@@ -292,7 +292,7 @@ const BASE_CONFIG = defineConfig({
      * 逐份判，147 份是纯冗余（目录档已给出同结论）、37 份承重**（混合目录里归属的
      * 唯一声明）。147 份已删，剩 37 份继续留 —— 同一件事只留一个来源。
      * 第 148 份冗余（`tests/sidebar-selected-state.test.tsx`）是这轮收尾时手工比漏掉的，
-     * 现在由 `scripts/check-test-environment.cjs` 的判据③「冗余文件头」守着，
+     * 现在由 `scripts/gates/check-test-environment.cjs` 的判据③「冗余文件头」守着，
      * 以后不会再长出来（§11.17.1.2）。
      *
      * 分档判据是**实测出来的目录归属**，不是「按扩展名猜」：`.test.tsx` ⇒ jsdom
@@ -316,7 +316,7 @@ const BASE_CONFIG = defineConfig({
      *
      * 这一档买到的是三件事，都不是「省注释」：
      *   ① 没写文件头的用例有确定的、按目录判定的归属（而不是一条全局默认值）；
-     *   ② 归属可被门禁核对：`scripts/check-test-environment.cjs`（进 pre-commit D 组）
+     *   ② 归属可被门禁核对：`scripts/gates/check-test-environment.cjs`（进 pre-commit D 组）
      *      判「目录档与文件头矛盾」与「环境早退」两件 —— 前者让「挪目录 / 改档」
      *      这类改动留下痕迹，后者是这条线索真正的病根；
      *   ③ 每个 project 可以按自己的代价配并发，而不是全库一个 `maxWorkers`。
@@ -844,7 +844,7 @@ const BASE_CONFIG = defineConfig({
          * `pnpm exec vitest run --coverage src/lib/db-backup tests/db-backup.test.ts`
          * 的实测值（100 / 100 / 100 / 100），只升不降。
          * 为什么能满档：本目录**只有取用面**，真正的实现在
-         * `scripts/db-backup-core.mjs`（启动链的纯 Node 宿主必须能引它），
+         * `scripts/db/db-backup-core.mjs`（启动链的纯 Node 宿主必须能引它），
          * 而那 29 条判据全打在**那份实现**上（`tests/db-backup.test.ts`）——
          * 判据的位置与实现的位置可以不同，但必须指得准。 */
         "src/lib/db-backup/**": {

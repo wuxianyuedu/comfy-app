@@ -599,10 +599,10 @@ describe("base-check —— load-flake：时间型判据在负载下的误红", 
 
 describe("base-check —— 命令解析", () => {
   test("裸脚本名补 node", () => {
-    const r = resolveGateCommand(["scripts/check-ui-primitives.cjs"]);
+    const r = resolveGateCommand(["scripts/gates/check-ui-primitives.cjs"]);
     expect(r).toMatchObject({
       ok: true,
-      argv: ["node", "scripts/check-ui-primitives.cjs"],
+      argv: ["node", "scripts/gates/check-ui-primitives.cjs"],
     });
   });
 
@@ -1111,15 +1111,15 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
     expect(byLabel.ok).toBe(true);
     if (!byLabel.ok) throw new Error("unreachable：ok=true 已由上一行断言");
     expect(byLabel.commands).toHaveLength(1);
-    expect(byLabel.commands[0]!.argv).toContain("scripts/check-file-structure.cjs");
+    expect(byLabel.commands[0]!.argv).toContain("scripts/gates/check-file-structure.cjs");
     /* 不存在的名字 ⇒ 判失败并列出候选（不许猜，同 `resolveGateCommand`）。 */
     expect(resolveMergeBatch(["这个标签不存在"]).ok).toBe(false);
   });
 
   test("只在「本次改了啥」上作答的判据不进这一批（干净快照里没有暂存区）", () => {
-    expect(mayDecideOnCleanSnapshot(["node", "scripts/check-deps-freshness.mjs", "--staged"])).toBe(
-      false,
-    );
+    expect(
+      mayDecideOnCleanSnapshot(["node", "scripts/gates/check-deps-freshness.mjs", "--staged"]),
+    ).toBe(false);
     expect(mayDecideOnCleanSnapshot(["node", "scripts/storybook-check.mjs", "--changed"])).toBe(
       false,
     );
@@ -1128,16 +1128,16 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
     /* `check-reformat-only.cjs` 带 `--staged` 时不进这一批（按参数形态认得出）。⚠️ **不带旗标那一形态现在会进来**
      * （ISSUE #3038，此前因在 `CHANGED_SCOPED` 里被排除）：它落到「判 `HEAD` 这次提交」支，区间由合成提交的父关系
      * 现算 ⇒ 干净快照上读到 `HEAD~1..HEAD`，与「只对本次改动作答」的定位对不上；但它确实算得出结论，故不算假绿。 */
-    expect(mayDecideOnCleanSnapshot(["node", "scripts/check-reformat-only.cjs", "--staged"])).toBe(
-      false,
-    );
-    expect(mayDecideOnCleanSnapshot(["node", "scripts/check-reformat-only.cjs"])).toBe(true);
+    expect(
+      mayDecideOnCleanSnapshot(["node", "scripts/gates/check-reformat-only.cjs", "--staged"]),
+    ).toBe(false);
+    expect(mayDecideOnCleanSnapshot(["node", "scripts/gates/check-reformat-only.cjs"])).toBe(true);
     /* 复算里再复算会递归。 */
     expect(mayDecideOnCleanSnapshot(["node", "scripts/base-check.mjs", "x"])).toBe(false);
     /* 全仓判据留下。 */
-    expect(mayDecideOnCleanSnapshot(["node", "scripts/check-file-structure.cjs", "--strict"])).toBe(
-      true,
-    );
+    expect(
+      mayDecideOnCleanSnapshot(["node", "scripts/gates/check-file-structure.cjs", "--strict"]),
+    ).toBe(true);
   });
 
   test("默认面里不含任何「只在改动上作答」的判据", () => {

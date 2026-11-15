@@ -1,4 +1,4 @@
-/** 独立 YAML 解析校验的判据（脚本本体见 `scripts/check-ci-yaml-parse.mjs` 头注）。
+/** 独立 YAML 解析校验的判据（脚本本体见 `scripts/gates/check-ci-yaml-parse.mjs` 头注）。
  * 守「真解析器能读下来」这层：仓库自带判据按文本形状解析 `.cnb.yml`，语法/锚点断掉时可能给出误导性的红
  * 或静默漏过；这里用 `yaml` 包独立复算。
  */
@@ -9,7 +9,7 @@ import process from "node:process";
 
 import { describe, expect, it } from "vitest";
 
-import { checkYamlFile, main } from "../scripts/check-ci-yaml-parse.mjs";
+import { checkYamlFile, main } from "../scripts/gates/check-ci-yaml-parse.mjs";
 
 const ROOT = process.cwd();
 

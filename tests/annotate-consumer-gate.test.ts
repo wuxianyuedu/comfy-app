@@ -12,7 +12,7 @@ import { defineGateRepo, type GateRepo } from "./helpers/gate-repo";
  * 必须在场；判据零站点时在读到台账前就 return，手抄夹具曾让「台账压根不存在」这条路径全绿通过。
  */
 const { test } = defineGateRepo({
-  script: "check-annotate-consumer.cjs",
+  script: "gates/check-annotate-consumer.cjs",
   dirs: ["src", "tests"],
 });
 

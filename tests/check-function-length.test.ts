@@ -1,5 +1,5 @@
 /**
- * 函数长度门禁自检：把 `scripts/check-function-length.cjs` 当黑盒跑在临时工作区，验证它真能认出「超长函数」并阻断。
+ * 函数长度门禁自检：把 `scripts/gates/check-function-length.cjs` 当黑盒跑在临时工作区，验证它真能认出「超长函数」并阻断。
  * 为什么：文件行数有 R5 守着、**函数**没有 —— 2186 行的 `SettingsPageView` 一路合法，拆不拆没有任何机器信号。
  * ISSUE #570 第 7 项补齐另一半：无名块体（IIFE / 回调 / 闭包）同受约束 —— 否则「300 行塞进 IIFE」能绕过（`lifecycle.ts` 约 288 行 IIFE）。
  */
@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
-  script: "check-function-length.cjs",
+  script: "gates/check-function-length.cjs",
   dirs: ["src"],
 });
 

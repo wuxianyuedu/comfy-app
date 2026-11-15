@@ -2,10 +2,10 @@
  *
  * ── 为什么这里是「薄封装」而不是第二份实现 ────────────────────────────────
  *
- * 备份必须发生在**会丢结构的同步之前**，而那一刻运行的是 `scripts/db-sync.mjs`
+ * 备份必须发生在**会丢结构的同步之前**，而那一刻运行的是 `scripts/db/db-sync.mjs`
  * —— 一个由启动编排用裸 `node` spawn、只认 `.mjs` 的纯 Node 宿主（见
  * `db-schema-state.mjs` 文件头）。所以**真正的实现只有一份**，在
- * `scripts/db-backup-core.mjs`；本模块只做两件事：
+ * `scripts/db/db-backup-core.mjs`；本模块只做两件事：
  *
  *   1. 给它一层带类型的取用面（`.mjs` 不在 tsconfig 的扫描面里，接口靠这份
  *      声明收口 —— 与 `src/app/api/schema/push/route.ts` 取 `db-schema-state.mjs`
@@ -33,7 +33,7 @@ import {
   readRestoreRequest,
   requestRestore,
   verifyBackupFile,
-} from "../../../scripts/db-backup-core.mjs";
+} from "../../../scripts/db/db-backup-core.mjs";
 import {
   createAppDataBackup as createAppDataBackupCore,
   importBackupFromDir as importBackupFromDirCore,

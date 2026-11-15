@@ -1,10 +1,10 @@
 /**
- * 提交门槛自检：黑盒跑 `scripts/check-merge-parents.mjs`，验证「合并提交必须双亲」真会阻断（§13.6.1 / ISSUE #1594）。
+ * 提交门槛自检：黑盒跑 `scripts/gates/check-merge-parents.mjs`，验证「合并提交必须双亲」真会阻断（§13.6.1 / ISSUE #1594）。
  * 必须真调 `git merge`：判据吃 `.git/MERGE_HEAD` 行数而非内存布尔，「拓扑错而树对」只有真合并+真解冲突才复现。
  * 覆盖：普通/真合并/`--amend`/正文含 "Merge branch"/非 git 目录放行；声明合并但单亲**阻断**并给重建出口；另钉钩子接线（§13.5.12）：`prepare-commit-msg` 真透传 `$1`/`$2`。
  */
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
@@ -14,10 +14,10 @@ import { vi } from "vitest";
  * 默认超时经常不够 —— 文件级放宽到 30s,只影响本文件。 */
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
-const SCRIPT = join(process.cwd(), "scripts", "check-merge-parents.mjs");
+const SCRIPT = join(process.cwd(), "scripts", "gates/check-merge-parents.mjs");
 
 const { test, expect } = defineGateRepo({
-  script: "check-merge-parents.mjs",
+  script: "gates/check-merge-parents.mjs",
   /* 脚本用 `process.cwd()` 定位仓库(git 命令都在 cwd 里跑),落哪都一样,选 root。 */
   dir: "root",
   /* 本判据的被测输入是**消息文件 + 提交拓扑** —— 先造一个「master 上已有一个提交」
@@ -134,11 +134,16 @@ describe("check-merge-parents.mjs(非 git 目录 / 钩子接线)", () => {
      * 自己造一个裸目录:判据取不到 git 事实时应放行,而不是抛错。 */
     const bare = mkdtempSync(join(tmpdir(), "merge-parents-nogit-"));
     try {
-      copyFileSync(SCRIPT, join(bare, "check-merge-parents.mjs"));
-      const output = execFileSync(process.execPath, [join(bare, "check-merge-parents.mjs")], {
-        cwd: bare,
-        encoding: "utf8",
-      });
+      mkdirSync(join(bare, "scripts", "gates"), { recursive: true });
+      copyFileSync(SCRIPT, join(bare, "scripts", "gates", "check-merge-parents.mjs"));
+      const output = execFileSync(
+        process.execPath,
+        [join(bare, "scripts", "gates", "check-merge-parents.mjs")],
+        {
+          cwd: bare,
+          encoding: "utf8",
+        },
+      );
       expect(output).toContain("保守放行");
     } finally {
       rmSync(bare, { recursive: true, force: true });
@@ -151,7 +156,7 @@ describe("check-merge-parents.mjs(非 git 目录 / 钩子接线)", () => {
     const text = readFileSync(hookPath, "utf8");
     /* 判据本体在 scripts/ 下;入口只做透传 —— 少传 $1 会让它退回默认的
      * COMMIT_EDITMSG,少传 $2 会让 --amend 那条误报防线失效,两者都是静默的。 */
-    expect(text).toContain("scripts/check-merge-parents.mjs");
+    expect(text).toContain("scripts/gates/check-merge-parents.mjs");
     expect(text).toContain('"$1"');
     expect(text).toContain('"$2"');
   });

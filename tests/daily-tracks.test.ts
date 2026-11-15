@@ -39,8 +39,8 @@ import {
   freshnessVerdict,
   gitUser,
   gitUserCandidates,
-} from "../scripts/freshness-ledger.mjs";
-import { dirtySinceToday, runGate, trackScopes } from "../scripts/freshness-gate.mjs";
+} from "../scripts/freshness/freshness-ledger.mjs";
+import { dirtySinceToday, runGate, trackScopes } from "../scripts/freshness/freshness-gate.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -266,7 +266,7 @@ describe("「改了就当天跑」：dirty 档的判决（§11.8 / §13.5.4）",
      * **按今天这笔要提交的改动，我欠不欠一次自证** —— 而那正是这一眼要看的东西。
      * 现在它把同一份判决作为**待办**打出来（措辞是「欠」不是「✗」），退出码仍为 0：
      * 阻断的那一份在钩子里，两个读者各有各的出口（§13.5.12：别让一条读数线变成必经之路）。 */
-    const src = readText("scripts/freshness-gate.mjs");
+    const src = readText("scripts/freshness/freshness-gate.mjs");
     const ledgerBranch = /if \(ledgerOnly\) \{[\s\S]*?\n {4}\}/.exec(src)?.[0] ?? "";
     expect(ledgerBranch, "读不出 --ledger 那一支").not.toBe("");
     // ① 判决要进去（`result.exitCode` 或 `problems` 被读出来才算「欠不欠」）
@@ -277,7 +277,7 @@ describe("「改了就当天跑」：dirty 档的判决（§11.8 / §13.5.4）",
     expect(ledgerBranch).not.toContain("failed");
     // ③ 入口要在 package.json 里挂着，否则这句话没人能找到
     expect(readText("package.json")).toMatch(
-      /"check:freshness":\s*"node scripts\/freshness-gate\.mjs --ledger"/,
+      /"check:freshness":\s*"node scripts\/freshness\/freshness-gate\.mjs --ledger"/,
     );
   });
 
@@ -337,7 +337,7 @@ describe("「改了就当天跑」：dirty 档的判决（§11.8 / §13.5.4）",
     for (const miss of [
       "docs/standards/13-提交与-code-review.md",
       "tests/hook-affected-launch.test.ts",
-      "scripts/freshness-gate.mjs",
+      "scripts/freshness/freshness-gate.mjs",
       ".githooks/pre-commit",
       "AGENTS.md",
       "changelog.d/0-x.md",
@@ -624,7 +624,7 @@ describe("两条出路：豁免与非输入面（§11.8 豁免不是绕过）", 
 describe("跑法各自的命令核（§12.12：同形而不同命令）", () => {
   it("全量单测那一档跑的是 `test:coverage`（覆盖率门槛只在这一档判，§11.7）", () => {
     /* 并发是本档**自己**加的（`--maxWorkers`，ISSUE #1993 / §13.5.21）：
-     * 位置固定在第 3 个参数、值由 `scripts/ci-load.mjs` 按现场核数给 —— 这里钉形状，
+     * 位置固定在第 3 个参数、值由 `scripts/ci/ci-load.mjs` 按现场核数给 —— 这里钉形状，
      * 不钉数字（核数会变，钉死它等于把「按事实降载」又写回一个常数）。 */
     const args = suitePlan().args;
     expect(args.slice(0, 2)).toEqual(["run", "test:coverage"]);
@@ -682,7 +682,7 @@ describe("跑法各自的命令核（§12.12：同形而不同命令）", () => 
      * 下一个人会去查一条根本不存在的失败。所以它必须走 `notWholeTrackNotice`，
      * 且那条分支要显式判「退出码 0」（否则红的形态会误用话术、把真红说成没跑整档）。 */
     for (const rel of [
-      "scripts/e2e-run.mjs",
+      "scripts/e2e/e2e-run.mjs",
       "scripts/full-suite-run.mjs",
       "scripts/artifact-run.mjs",
     ]) {
@@ -795,8 +795,8 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     const steps = [
       ...readText(".githooks/pre-commit").matchAll(/^ {2}run "(?<label>[^"]+)" (?<cmd>.+)$/gm),
     ].map((m) => ({ label: m.groups?.label ?? "", cmd: m.groups?.cmd ?? "" }));
-    const hit = steps.find((s) => s.cmd.includes("scripts/freshness-gate.mjs"));
-    expect(hit?.cmd).toBe("node scripts/freshness-gate.mjs");
+    const hit = steps.find((s) => s.cmd.includes("scripts/freshness/freshness-gate.mjs"));
+    expect(hit?.cmd).toBe("node scripts/freshness/freshness-gate.mjs");
     expect(hit?.label).toContain("e2e");
     // 标签要说清它现在判的是哪几档 —— 只写其中一档时，另一档红出来会被读成别人的事。
     expect(hit?.label).toContain("自证");
@@ -806,7 +806,7 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     // 「绿才记」「豁免下限」「账的形状」三条各被一条用例钉住，抄一份就多一处能悄悄漂的地方，
     // 而漂了不会红（账面上仍是合法的日期 + 人名 + 命令）。
     for (const rel of [
-      "scripts/e2e-run.mjs",
+      "scripts/e2e/e2e-run.mjs",
       "scripts/full-suite-run.mjs",
       "scripts/artifact-run.mjs",
     ]) {
@@ -1253,7 +1253,7 @@ describe("每日全量档的超时指纹复跑（档位表与组 C 同一条判�
 
   it("这一档不重写指纹清单：脚本里不许出现第二份超时正则", () => {
     const src = readFileSync(path.join(ROOT, "scripts/full-suite-run.mjs"), "utf8");
-    expect(src).toContain('from "./affected-launch-load-retry.mjs"');
+    expect(src).toContain('from "./affected-tests/affected-launch-load-retry.mjs"');
     /* 「Test timed out」在本仓只能是**被引用**的话术，不该在这里被重新定义成一份正则。
        两份清单漂移的代价由 `tests/hook-affected-launch.test.ts` 钉在组 C 那一侧。 */
     expect(/\/Test timed out in[^/]*\/i/.test(src)).toBe(false);

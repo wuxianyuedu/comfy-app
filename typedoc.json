@@ -5,7 +5,7 @@
     "src/server/**/!(*.test).ts",
     "src/trpc/**/!(*.test).ts",
     "src/trpc/**/!(*.test).tsx",
-    "scripts/db-backup-core.mjs"
+    "scripts/db/db-backup-core.mjs"
   ],
   "out": "docs/api",
   "exclude": [

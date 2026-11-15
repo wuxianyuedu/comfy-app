@@ -230,8 +230,8 @@ describe("premerge-check —— 不发明第二套实现（面的来源）", () 
       ],
       { encoding: "utf8" },
     );
-    expect(source).toContain('script: "check-commit-claims.mjs"');
-    expect(source).toContain('script: "check-merged-side-loss.mjs"');
+    expect(source).toContain('script: "gates/check-commit-claims.mjs"');
+    expect(source).toContain('script: "gates/check-merged-side-loss.mjs"');
   });
 });
 
@@ -271,18 +271,18 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
      */
     const chained = [
       {
-        argv: ["node", "scripts/check-commit-claims.mjs", "--range", "x..HEAD"],
+        argv: ["node", "scripts/gates/check-commit-claims.mjs", "--range", "x..HEAD"],
       },
-      { argv: ["node", "scripts/check-file-structure.cjs"] },
+      { argv: ["node", "scripts/gates/check-file-structure.cjs"] },
     ];
     const seen = scriptsInCommands(chained);
-    expect(seen.has("scripts/check-commit-claims.mjs")).toBe(true);
-    expect(seen.has("scripts/check-file-structure.cjs")).toBe(true);
+    expect(seen.has("scripts/gates/check-commit-claims.mjs")).toBe(true);
+    expect(seen.has("scripts/gates/check-file-structure.cjs")).toBe(true);
 
     /* `--light` 筛过之后那一批里**没有**它 —— 这时去重必须不生效，
      * 否则「light 档没跑」会被读成「base 段跑过了」，那正是假绿的形状。 */
-    const light = [{ argv: ["node", "scripts/check-file-structure.cjs"] }];
-    expect(scriptsInCommands(light).has("scripts/check-commit-claims.mjs")).toBe(false);
+    const light = [{ argv: ["node", "scripts/gates/check-file-structure.cjs"] }];
+    expect(scriptsInCommands(light).has("scripts/gates/check-commit-claims.mjs")).toBe(false);
 
     /* 非脚本项（`pnpm run lint` 那一族）不该被当成「跑过某个 .mjs」。 */
     expect(scriptsInCommands([{ argv: ["pnpm", "run", "lint"] }]).size).toBe(0);
@@ -510,7 +510,11 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
        * 这一批、一笔不多一笔不少」—— 只判退出码会让「审了 0 笔却报绿」也通过。 */
       const claims = execFileSync(
         process.execPath,
-        [join(process.cwd(), "scripts", "check-commit-claims.mjs"), "--range", `${target}..HEAD`],
+        [
+          join(process.cwd(), "scripts", "gates/check-commit-claims.mjs"),
+          "--range",
+          `${target}..HEAD`,
+        ],
         { cwd: repo, encoding: "utf8", env: gitSandboxEnv() },
       );
       expect(claims).toContain("1 次提交");

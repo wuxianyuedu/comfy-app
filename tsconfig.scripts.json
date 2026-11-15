@@ -23,8 +23,8 @@
    *
    * ⚠️ **这份配置本身不判任何东西**：tsc 只会退出非零，而存量红（实测 310 处）需要的是
    *    「只降不升」而不是「当场全红」。执行者是
-   *    `node scripts/check-scripts-typecheck.cjs`（棘轮 + 判决面自证），登记见
-   *    `.githooks/pre-commit` 的 D 组与 `scripts/ci-heavy-gates.mjs` 的条目表。 */
+   *    `node scripts/gates/check-scripts-typecheck.cjs`（棘轮 + 判决面自证），登记见
+   *    `.githooks/pre-commit` 的 D 组与 `scripts/ci/ci-heavy-gates.mjs` 的条目表。 */
   "extends": "./tsconfig.json",
   "compilerOptions": {
     /* 这一档由执行者现跑现判，不留 `.tsbuildinfo`：增量缓存的键含配置绝对路径，

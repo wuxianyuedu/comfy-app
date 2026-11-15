@@ -1,7 +1,7 @@
 /**
  * **类型层契约**（规范 11 §11.20）：`as const` + 派生联合 + `Record` / 类型守卫都有静默失效方向 —— 摘掉 `as const` 就
  * 宽化成 `string`、守卫退成 `value is string`，消费点按 `readonly string[]` 用无感；`vitest run` 与 `@ts-expect-error` 都看不出，
- * 唯一有效是 `expectTypeOf`（vitest 里没牙）；执行者 `tsc --noEmit`，include 面由 `scripts/check-type-assertion-executor.cjs` 守。
+ * 唯一有效是 `expectTypeOf`（vitest 里没牙）；执行者 `tsc --noEmit`，include 面由 `scripts/gates/check-type-assertion-executor.cjs` 守。
  */
 import { describe, expectTypeOf, it } from "vitest";
 

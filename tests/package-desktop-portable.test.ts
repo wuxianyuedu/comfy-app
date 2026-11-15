@@ -8,7 +8,7 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { extractZipTo } from "../scripts/ci-toolchain-browser-fetch.mjs";
+import { extractZipTo } from "../scripts/ci/ci-toolchain-browser-fetch.mjs";
 import {
   PORTABLE_ASSET_NAME,
   findSidecars,

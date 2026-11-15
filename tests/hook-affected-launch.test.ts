@@ -11,7 +11,7 @@ import process from "node:process";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { wideFallbackNote } from "../scripts/affected-tests.mjs";
+import { wideFallbackNote } from "../scripts/affected-tests/affected-tests.mjs";
 /* 「认出超时形态 + 等机器喘口气」那一层住在自己的模块里（`run-affected-tests.mjs`
  * 越过 900 行硬闸时按职责拆出，理由写在那份文件头）。用例跟着 import 走，不在这里
  * 再要一份 `run-affected-tests.mjs` 的同名出口 —— 那等于给拆出去的块留一条「搬走了
@@ -23,7 +23,7 @@ import {
   loadPerCore,
   remainingWaitMs,
   waitForLoadToSettle,
-} from "../scripts/affected-launch-load-retry.mjs";
+} from "../scripts/affected-tests/affected-launch-load-retry.mjs";
 import {
   collectFileTimings,
   planLaunches,
@@ -31,7 +31,7 @@ import {
   resolveVitestEntry,
   runChunk,
   SAFE_ARGV_BUDGET,
-} from "../scripts/run-affected-tests.mjs";
+} from "../scripts/affected-tests/run-affected-tests.mjs";
 /* 「这一跑用哪个 reporter」住在自己那份文件里（日志预算那一刀）。用例跟着 import 走，
  * 不从启动器那儿再要一份同名出口 —— 那等于给搬出去的块留一条「搬走了但还能从老地方
  * 拿到」的假象（与上面 `affected-launch-load-retry.mjs` 同一条处置）。 */
@@ -39,10 +39,13 @@ import {
   announceQuiet,
   reporterArgs,
   resolveQuiet,
-} from "../scripts/affected-launch-log-budget.mjs";
+} from "../scripts/affected-tests/affected-launch-log-budget.mjs";
 /* 日志预算的**另一半**：quiet 那档只打点，「跑了哪些用例」必须另有一处出口 —— 否则
  * 平台那屏日志里一个文件名都没有，只剩 `Tests N passed`（这一格此前就长这样）。 */
-import { fileListReport, MAX_LISTED } from "../scripts/affected-launch-file-list.mjs";
+import {
+  fileListReport,
+  MAX_LISTED,
+} from "../scripts/affected-tests/affected-launch-file-list.mjs";
 /* 清单的**另一半**：每份用例自己花了多久（ISSUE #2683 第二笔）。取数走的是
  * `precommit-timing.mjs` 的 `parseJunitXml`（账本布局的唯一出处），本组用例只钉
  * 「排成什么样」与「读不到时说什么」——判据一个字都没动，这一格买的是可读性。 */
@@ -51,7 +54,7 @@ import {
   SLOWEST_MS,
   SLOWEST_SHOWN,
   TIMED_SHOWN,
-} from "../scripts/affected-launch-file-timing-report.mjs";
+} from "../scripts/affected-tests/affected-launch-file-timing-report.mjs";
 /* 墙钟判点（ISSUE #2364）：等待有预算而**跑**没有上界，于是负载膨胀时那一格一路开到被
  * 平台掐掉（实测 3240105ms），连「未判定」那句话都没说出来。下面这几条钉两件事：
  * **界只划在「还开不开下一遍」**（已开跑的那一遍永远跑完），以及**「没开」不许长得像
@@ -73,31 +76,34 @@ import {
   STAGE_WALL_CLOCK_MS,
   wallClockBudget,
   wallClockSkipReport,
-} from "../scripts/affected-launch-wallclock.mjs";
+} from "../scripts/affected-tests/affected-launch-wallclock.mjs";
 /* junit 取数/落盘形状层拆到自己那份之后（ISSUE #2364 撞上 900 行硬闸那一刀），这里按
  * 真实落点 import —— 判据跟着搬走的符号一起改路径，而不是让机制层转出假出口。
  * 「日志预算那一刀」把同名两件事另抽过一份，已并进这份（两侧各抄一份文件名会静默漂开）。 */
-import { junitReportArgs, writeFilesManifest } from "../scripts/affected-launch-junit-io.mjs";
+import {
+  junitReportArgs,
+  writeFilesManifest,
+} from "../scripts/affected-tests/affected-launch-junit-io.mjs";
 /* 分文件读数的**两侧**要判的是同一个布局，所以判据同时 import 读的那一侧：只测写的
  * 一侧（"它传了某个文件名"）挡不住读的一侧改了前缀 —— 而那正会退化成「永远读不到，
  * 且看起来像这次没有读数」。 */
 import { cFileXmlName, failingSuiteTextsFromJunit } from "../scripts/precommit-timing.mjs";
 /* 复跑面那一层同理：按它真实的落点 import（机制层拆出去之后不再转一层假出口）。 */
-import { retryScope } from "../scripts/affected-launch-retry-scope.mjs";
+import { retryScope } from "../scripts/affected-tests/affected-launch-retry-scope.mjs";
 /* 判决粒度那一层（第 2 遍的红按文件分开）—— #2225 之后它不再住在 runChunk 的那一句
  * `isTimeoutShaped(整块输出)` 里，所以它的三档结论要能被单独钉住。 */
 import {
   classifyFirstPass,
   classifyRetry,
   mergePerFileReads,
-} from "../scripts/affected-launch-retry-verdict.mjs";
+} from "../scripts/affected-tests/affected-launch-retry-verdict.mjs";
 /* 话术层（收尾那两份账）现在住在自己那份文件里 —— 这里按它真实的落点 import，
  * 而不是让机制层再转出一层「看起来还在那儿」的假出口。 */
 import {
   firstPassKilledReport,
   rerunReport,
   unverifiedReport,
-} from "../scripts/affected-launch-rerun-report.mjs";
+} from "../scripts/affected-tests/affected-launch-rerun-report.mjs";
 import { groupShBody, withoutCommentLines } from "./helpers/hook-groups";
 /* 反向断言必须先剥注释再判（ISSUE #2660）：不剥的话「源码里不许出现 X」在 X 被挪进
  * 一句解释「为什么别这么写」的注释时**静默通过** —— 那是假绿，比误红更贵。
@@ -107,14 +113,14 @@ import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const HOOK_PATH = ".githooks/pre-commit";
-const LAUNCHER_PATH = "scripts/run-affected-tests.mjs";
+const LAUNCHER_PATH = "scripts/affected-tests/run-affected-tests.mjs";
 /* 「怎么起一次 vitest」那一层（并发覆盖 / 分块 / 入口定位 / 抓子进程输出）合并 master 之后
  * 出列到这一份 —— 判据按**真实落点**读，机制层不转假出口（转一层的话「搬走了」与
  * 「还能用」长得一样）。启动器那一层留下的仍是判决链。 */
-const SPAWN_LAYER_PATH = "scripts/affected-launch-spawn.mjs";
+const SPAWN_LAYER_PATH = "scripts/affected-tests/affected-launch-spawn.mjs";
 /* 显式全量档（`--full`）那一整格出列后的真实落点（ISSUE #3030：那一层已贴住 900 行硬闸，
  * 整档搬进自己那份文件）—— 判据按**真实落点**读，不要求内容留在启动器里。 */
-const FULL_RUN_PATH = "scripts/affected-launch-full-run.mjs";
+const FULL_RUN_PATH = "scripts/affected-tests/affected-launch-full-run.mjs";
 
 /**
  * 把 `runChunk` 期间 `process.stderr` 的写入收在手里（随返回值交出 `text`）：它的每档判决都写话术，而用例多只
@@ -204,7 +210,7 @@ describe("受影响用例的启动器", () => {
   });
 
   it("启动器不经 shell 层：spawn 的是 node 自己，且没有 shell:true", () => {
-    /* 两处都读且都剥注释（ISSUE #2660）：`spawnSync(` 真身已移到 `scripts/affected-launch-spawn.mjs:147`，主文件里
+    /* 两处都读且都剥注释（ISSUE #2660）：`spawnSync(` 真身已移到 `scripts/affected-tests/affected-launch-spawn.mjs:147`，主文件里
      * 只剩机制说明；反向断言也读那份不 spawn 的文件 ⇒ 起进程层写 `shell: true` 也不会红。剥注释治「注释里提过也算」，
      * 读对文件治「扫错对象」，两样都要。 */
     const src = stripComments(readFileSync(LAUNCHER_PATH, "utf8"), { trailing: true });
@@ -237,7 +243,7 @@ describe("受影响用例的启动器", () => {
     expect(hook).toContain("run_group C");
     const body = cGroupBody(hook);
     expect(body).not.toBe("");
-    expect(body).toMatch(/node\s+scripts\/run-affected-tests\.mjs/);
+    expect(body).toMatch(/node\s+scripts\/affected-tests\/run-affected-tests\.mjs/);
     expect(body).not.toMatch(/pnpm\s+exec\s+vitest/);
     expect(body).not.toMatch(/\$files/);
   });
@@ -248,14 +254,14 @@ describe("受影响用例的启动器", () => {
      * `tests/doc-check-hook-wiring.test.ts`（规范 §13.5.8「在场判据要解析」）。 */
     const muted = [
       'run_group C "结构守护测试" sh -c \'',
-      "  # node scripts/run-affected-tests.mjs",
+      "  # node scripts/affected-tests/run-affected-tests.mjs",
       "'",
     ].join("\n");
     expect(cGroupBody(muted)).toBe("");
 
     const oldShape = [
       'run_group C "结构守护测试" sh -c \'',
-      "  files=$(node scripts/affected-tests.mjs) || exit 1",
+      "  files=$(node scripts/affected-tests/affected-tests.mjs) || exit 1",
       "  pnpm exec vitest run --maxWorkers=4 $files'",
     ].join("\n");
     const oldBody = cGroupBody(oldShape);
@@ -311,10 +317,13 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
      * 读落点是 `base-check/verdict.mjs`：判决层随 R5 拆分搬过去（主文件 1382→648 行），只读主文件会提取落空 ⇒
      * `theirs` 是空数组 ⇒ 断言静默空转。 */
     /* 读的落点跟着**职责**走：指纹清单随 R5 拆分搬进了
-     * `scripts/affected-launch-load-retry.mjs`（`run-affected-tests.mjs` 越过 900 行硬闸，
+     * `scripts/affected-tests/affected-launch-load-retry.mjs`（`run-affected-tests.mjs` 越过 900 行硬闸，
      * 按「负载归因 vs 起进程」切开）。留在老地方读 ⇒ `pick` 落空 ⇒ 下面那条
      * `mine.length > 0` 当场红 —— 这条断言的意义正在这里，别为了它把清单抄回来。 */
-    const launcherLayer = readFileSync("scripts/affected-launch-load-retry.mjs", "utf8");
+    const launcherLayer = readFileSync(
+      "scripts/affected-tests/affected-launch-load-retry.mjs",
+      "utf8",
+    );
     const baseCheck = readFileSync("scripts/base-check/verdict.mjs", "utf8");
     const pick = (text: string): Array<string> => {
       const block = /const TIMEOUT_SIGNATURES = \[(?<body>[\s\S]*?)\n\];/.exec(text);
@@ -376,7 +385,7 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
      * 要**分两处**判：那一处判「指纹怎么读、三档怎么分」，这一处判「挡在复跑之前」。
      * 整条链的**行为**由下一节用注入的假 spawn 整个跑一遍（两向都断退出码）。 */
     const verdictSrc = readFileSync(
-      path.join(ROOT, "scripts/affected-launch-retry-verdict.mjs"),
+      path.join(ROOT, "scripts/affected-tests/affected-launch-retry-verdict.mjs"),
       "utf8",
     );
     const judge = /export function classifyFirstPass\([\s\S]*?\n\}/.exec(verdictSrc)?.[0];
@@ -1106,7 +1115,7 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
     /* 两半一起钉才成立：前半是「话术里有这条出口」，后半是「那个出口在入口里认这个旗标」。
        只钉前半 = 守一句散文；只钉后半 = 守一个没人知道的开关。 */
     const note = wideFallbackNote("门槛自身", 20, 0);
-    expect(note).toContain("scripts/run-affected-tests.mjs --full");
+    expect(note).toContain("scripts/affected-tests/run-affected-tests.mjs --full");
     expect(src, "入口不认 --full，话术就指到空气上").toContain('argv.includes("--full")');
   });
 

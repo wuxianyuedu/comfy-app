@@ -1,5 +1,5 @@
 /**
- * `scripts/ci-pr-failure-issue.mjs` 的契约（ISSUE #2332）：这一格是「**PR 那一跑红了 ⇒ 有人知道**」的唯一
+ * `scripts/ci/ci-pr-failure-issue.mjs` 的契约（ISSUE #2332）：这一格是「**PR 那一跑红了 ⇒ 有人知道**」的唯一
  * 执行者。失效形态与每日档同源，但多一条**落点选错**，故三组对着三方向：① 没结论写成红；② 红写成静默
  * （`--no-block` 只改退码、不改那句话是否打出）；③ 落点（有 PR ⇒ 评论，没有 ⇒ 建单且同格不重复建）。
  */
@@ -19,11 +19,11 @@ import {
   prIidFromUrl,
   resolveTarget,
   titleKey,
-} from "../scripts/ci-pr-failure-issue.mjs";
+} from "../scripts/ci/ci-pr-failure-issue.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
 
-const ENTRY = path.join(ROOT, "scripts", "ci-pr-failure-issue.mjs");
+const ENTRY = path.join(ROOT, "scripts", "ci/ci-pr-failure-issue.mjs");
 
 type StageRow = { id: string; name: string; status: string };
 
@@ -674,7 +674,7 @@ describe("平台配置：这一格是 Pipeline 级 `endStages`，不是 `stages`
   /* 正控：真的读到了那一格（否则下面几条断言会在「配置里没有它」上以别的名义绿掉）。 */
   it("`.cnb.yml` 里有这一格，入口是脚本而不是裸命令", () => {
     expect(CONFIG).toContain("        - name: PR 失败立案");
-    expect(CONFIG).toContain("node scripts/ci-pr-failure-issue.mjs --no-block");
+    expect(CONFIG).toContain("node scripts/ci/ci-pr-failure-issue.mjs --no-block");
     const at = CONFIG.indexOf("        - name: PR 失败立案");
     expect(CONFIG.slice(at, at + 800)).toContain("timeout: 5m");
   });

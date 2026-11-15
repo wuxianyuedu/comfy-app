@@ -13,8 +13,8 @@ import {
   judgeMirrorAttendance,
   main,
   readMirrorCell,
-} from "../scripts/check-mirror-attendance.mjs";
-import { explainRemoteProbeFailure } from "../scripts/ci-github-mirror-push.mjs";
+} from "../scripts/gates/check-mirror-attendance.mjs";
+import { explainRemoteProbeFailure } from "../scripts/ci/ci-github-mirror-push.mjs";
 
 /* 钉住的「现在」：2026-11-02T06:00:00Z。窗口内的读数都按它算。 */
 const NOW = Date.parse("2026-11-02T06:00:00.000Z");
@@ -86,7 +86,7 @@ describe("classifyMirrorText：七类形状各有下一动作，不许念成同�
   it("格子被 skip 与「有格没正文」分得开（两种都不是缺勤的证据）", () => {
     expect(classifyMirrorText("", "skipped").shape).toBe("no-cell");
     expect(
-      classifyMirrorText("Runner[orange] $ node scripts/ci-github-mirror-push.mjs").shape,
+      classifyMirrorText("Runner[orange] $ node scripts/ci/ci-github-mirror-push.mjs").shape,
     ).toBe("unreadable");
   });
 });

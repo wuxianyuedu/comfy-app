@@ -13,7 +13,7 @@ import { isRecord, isUnknownArray } from "~/lib/is-record";
 
 import { symlinkDir } from "./helpers/symlink-dir";
 
-import { collectLauncherScriptClosure } from "../scripts/launcher-closure.mjs";
+import { collectLauncherScriptClosure } from "../scripts/affected-tests/launcher-closure.mjs";
 
 // 运行时真的调用白名单剔除（不是只读源码文本）：嵌套条目 / 未登记新文件的
 // 行为只有真删一次才看得出来。
@@ -39,7 +39,7 @@ const devArtifactsModule = readFileSync(
   "utf8",
 );
 const checker = readFileSync(
-  join(process.cwd(), "scripts", "check-standalone-contents.cjs"),
+  join(process.cwd(), "scripts", "gates/check-standalone-contents.cjs"),
   "utf8",
 );
 const pkgParsed: unknown = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8"));
@@ -64,7 +64,7 @@ function allowedScriptsFromChecker(source: string): Array<string> {
  * 说明符出现即成立（ESM 加载期解析整张图）。行注释须先剥掉：JSDoc 的 `import("../lockfile/lock-diff.d.mts")` 是类型引用。
  */
 function collectRelativeClosure(entry: string): Array<string> {
-  // 闭包算法的唯一实现在 scripts/launcher-closure.mjs（affected-tests.mjs 的增量面
+  // 闭包算法的唯一实现在 scripts/affected-tests/launcher-closure.mjs（affected-tests.mjs 的增量面
   // 判据用同一份，ISSUE #3812）；这里保持本文件的旧口径：入参绝对路径、返回相对
   // `scripts/` 的路径数组，断言文本与 RUNTIME_SCRIPTS 的条目形状都不用动。
   const scriptsRoot = join(process.cwd(), "scripts");
@@ -285,7 +285,9 @@ function isCheckerExports(value: unknown): value is CheckerExports {
 }
 
 function checkerExports(): CheckerExports {
-  const mod: unknown = createRequire(import.meta.url)("../scripts/check-standalone-contents.cjs");
+  const mod: unknown = createRequire(import.meta.url)(
+    "../scripts/gates/check-standalone-contents.cjs",
+  );
   if (!isCheckerExports(mod)) {
     throw new Error("check-standalone-contents.cjs 的导出面形状变了 —— 重读该脚本再改这份守卫");
   }

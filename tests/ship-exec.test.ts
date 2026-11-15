@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { buildSnFromOutput } from "../scripts/ship-exec.mjs";
+import { buildSnFromOutput } from "../scripts/ship/ship-exec.mjs";
 
 describe("buildSnFromOutput：start-build 的 sn 回读", () => {
   it("三种在场形状都读得回（无 -v 的紧凑输出 / JSON / key=value）", () => {

@@ -130,7 +130,7 @@
   优先展示完整文件路径与行号，不再截断。
 - **comfy-cli 虚拟环境随启动自动准备**：`start-tauri.exe` 启动时检测
   `python-venv/comfy-cli`，缺失则后台自动创建 venv 并安装 comfy-cli，不阻塞启动。
-- **UI 与逻辑分离护栏（棘轮）**：新增 `scripts/check-ui-logic-separation.cjs`，
+- **UI 与逻辑分离护栏（棘轮）**：新增 `scripts/gates/check-ui-logic-separation.cjs`，
   统计视图层里的 `fetch(` / `vanillaApi.*` / tRPC hook 三类 IO，违规数**只许降不许升**，
   已接入 `pre-commit` 与 CI（治理后必须 `--update` 收紧基线）。
   当前基线 16 处 / 10 文件（P1–P4 已落地，104 → 16）。

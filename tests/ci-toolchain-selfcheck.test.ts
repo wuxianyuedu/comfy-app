@@ -16,26 +16,26 @@ import {
   pythonForensics,
   wingetAtStandardLocation,
   wingetCandidates,
-} from "../scripts/ci-toolchain-python.mjs";
+} from "../scripts/ci/ci-toolchain-python.mjs";
 import {
   cargoForensics,
   nodeAllowed,
   parseVersion,
   playwrightInstallHints,
   runPlaywrightInstall,
-} from "../scripts/ci-toolchain-selfcheck.mjs";
+} from "../scripts/ci/ci-toolchain-selfcheck.mjs";
 import {
   findPnpm,
   pnpmForensics,
   pnpmPathEntries,
   pnpmPathValue,
-} from "../scripts/ci-toolchain-pnpm.mjs";
-import { BROWSER_PACKAGES } from "../scripts/ci-toolchain-browser.mjs";
+} from "../scripts/ci/ci-toolchain-pnpm.mjs";
+import { BROWSER_PACKAGES } from "../scripts/ci/ci-toolchain-browser.mjs";
 import { pythonCandidates, pythonProbeArgs } from "../src/lib/process/python-candidates";
 
 /** 浏览器那一层的直接导出（下载根两个 / 「已装就不装」/ 「到得了哪」）。 */
 const { PLAYWRIGHT_HOST_CANDIDATES: browserCandidates } =
-  await import("../scripts/ci-toolchain-browser-reach.mjs");
+  await import("../scripts/ci/ci-toolchain-browser-reach.mjs");
 const {
   httpDownloadProbe,
   isReachableVerdict,
@@ -45,10 +45,10 @@ const {
   playwrightOnly,
   playwrightProbeUrl,
   playwrightReachability,
-} = await import("../scripts/ci-toolchain-browser.mjs");
+} = await import("../scripts/ci/ci-toolchain-browser.mjs");
 /** 自取那一层（分片 + 续传 + 自己读 zip），见 `ci-toolchain-browser-fetch.mjs`。 */
 const { browserDirName, extractZipTo, fetchRangeToFile, fetchUrlResumable } =
-  await import("../scripts/ci-toolchain-browser-fetch.mjs");
+  await import("../scripts/ci/ci-toolchain-browser-fetch.mjs");
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -193,7 +193,7 @@ describe("工具链自证：Python 候选表只有一份答案", () => {
   it("脚本里的候选与共享件逐项相同（含顺序）", () => {
     /* 候选表随 Python 那一层拆到了 `ci-toolchain-python.mjs`（selfcheck 的 900 行
      * 硬闸要求把「机制」与「编排」分开）—— 扫描面跟着走，别指到已经搬走的地方。 */
-    const text = read("scripts/ci-toolchain-python.mjs");
+    const text = read("scripts/ci/ci-toolchain-python.mjs");
     /* 扫描面先自证：抠不到表说明下面几条是空转。 */
     const found = candidatesInSource(text, "PY_CANDIDATES");
     expect(found, "抠不到 PY_CANDIDATES —— 扫描面指错了地方").not.toEqual([]);
@@ -203,7 +203,7 @@ describe("工具链自证：Python 候选表只有一份答案", () => {
   it("`py` 的 `-3` 在脚本里也没丢（裸 py 是「列出已装版本」并退非零）", () => {
     /* 只判「那份表里有 `py: ["-3"` 这一条」这**一件事**，不判它外面套了什么
      * （`/** @type … *\/ ({...})` 这种 JSDoc 归 TS 类型，与判据无关）。 */
-    const text = read("scripts/ci-toolchain-python.mjs");
+    const text = read("scripts/ci/ci-toolchain-python.mjs");
     const block = /PY_PROBE_ARGS[\s\S]{0,120}?\n\n/.exec(text)?.[0] ?? "";
     expect(block, "抠不到 PY_PROBE_ARGS —— 扫描面指错了地方").not.toBe("");
     expect(block).toContain('py: ["-3"');
@@ -211,7 +211,7 @@ describe("工具链自证：Python 候选表只有一份答案", () => {
   });
 
   it("门禁脚本（.cjs）的候选表也对得上 —— 三处一份答案", () => {
-    const gate = read("scripts/check-app-port-vectors.cjs");
+    const gate = read("scripts/gates/check-app-port-vectors.cjs");
     const found = candidatesInSource(gate, "PYTHON_CANDIDATES");
     expect(found, "抠不到 PYTHON_CANDIDATES —— 扫描面指错了地方").not.toEqual([]);
     expect(found).toEqual([...pythonCandidates("win32"), ...pythonCandidates("linux")]);
@@ -671,7 +671,7 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
 
   it("embed 包固定版本号，不取 latest（同一提交在两台节点上要装出同一个 Python）", () => {
     expect(PYTHON_EMBED_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(read("scripts/ci-toolchain-selfcheck.mjs")).not.toContain("/latest/");
+    expect(read("scripts/ci/ci-toolchain-selfcheck.mjs")).not.toContain("/latest/");
   });
 
   it("三条通道全断时，reason 逐条点名各自断在哪（不糊成一句「装不上」）", () => {
@@ -936,7 +936,7 @@ describe("工具链自证：浏览器安装的命令行（ISSUE #1961）", () =>
     ).not.toContain("chromium");
     /* 复验判的那一件必须在装的那一串里 —— 否则「装上」与「判过」指着两件不同的东西
      * （判据会一直红，而东西其实装了）。 */
-    const src = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-browser.mjs"), "utf8");
+    const src = readFileSync(path.join(ROOT, "scripts", "ci/ci-toolchain-browser.mjs"), "utf8");
     for (const pkg of BROWSER_PACKAGES) {
       expect(src, `复验找的形状与 BROWSER_PACKAGES 对不上：${pkg}`).toContain(
         pkg.replaceAll("-", "_"),
@@ -950,8 +950,8 @@ describe("工具链自证：执行入口走的是这份脚本（#3504 起执行�
     const daily = read(".github/workflows/daily.yml");
     expect(
       daily,
-      "GA daily.yml 里没有 `node scripts/ci-toolchain-selfcheck.mjs` —— 浏览器安装 step 的执行者丢了",
-    ).toContain("node scripts/ci-toolchain-selfcheck.mjs");
+      "GA daily.yml 里没有 `node scripts/ci/ci-toolchain-selfcheck.mjs` —— 浏览器安装 step 的执行者丢了",
+    ).toContain("node scripts/ci/ci-toolchain-selfcheck.mjs");
     // 老形态的两件特征：就地 winget、就地递归找安装根。
     expect(daily).not.toContain("winget install");
     expect(daily).not.toContain("Get-ChildItem");
@@ -960,7 +960,7 @@ describe("工具链自证：执行入口走的是这份脚本（#3504 起执行�
     expect(
       read(".cnb.yml"),
       "`.cnb.yml` 又在执行 ci-toolchain-selfcheck —— #3504 起它的执行者在 GA daily.yml",
-    ).not.toContain("node scripts/ci-toolchain-selfcheck.mjs");
+    ).not.toContain("node scripts/ci/ci-toolchain-selfcheck.mjs");
   });
 });
 
@@ -970,7 +970,7 @@ describe("工具链自证：执行入口走的是这份脚本（#3504 起执行�
  * `spawnSync("scoop", …)` 并用模块内 `findExeUnder` 读真 fs。按**源码结构**判（按用例数要维护一张会过期的名单），只要通道内出现直取模块级实现就红。
  */
 describe("工具链自证：安装通道的注入面按结构判（ISSUE #1961）", () => {
-  const script = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-python.mjs"), "utf8");
+  const script = readFileSync(path.join(ROOT, "scripts", "ci/ci-toolchain-python.mjs"), "utf8");
 
   it("`installPython` 的注入面覆盖每条通道会伸出去的东西", () => {
     for (const one of [
@@ -1314,11 +1314,11 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
     const yml = readFileSync(path.join(ROOT, ".github/workflows/daily.yml"), "utf8");
     expect(
       yml,
-      "GA daily.yml 里没有 `node scripts/ci-toolchain-selfcheck.mjs` —— 执行者丢了",
-    ).toContain("node scripts/ci-toolchain-selfcheck.mjs");
+      "GA daily.yml 里没有 `node scripts/ci/ci-toolchain-selfcheck.mjs` —— 执行者丢了",
+    ).toContain("node scripts/ci/ci-toolchain-selfcheck.mjs");
     /* 脚本自己也不许退回裸名字（那正是这一格红掉的形态）。 */
     const scriptSrc = readFileSync(
-      path.join(ROOT, "scripts", "ci-toolchain-selfcheck.mjs"),
+      path.join(ROOT, "scripts", "ci/ci-toolchain-selfcheck.mjs"),
       "utf8",
     );
     const code = scriptSrc
@@ -1339,7 +1339,7 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
  */
 describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
   it("落点里有 headless shell ⇒ 判过；没有 / 读不到 ⇒ 判不过", async () => {
-    const { browserExecutableExists } = await import("../scripts/ci-toolchain-selfcheck.mjs");
+    const { browserExecutableExists } = await import("../scripts/ci/ci-toolchain-selfcheck.mjs");
     const root = process.platform === "win32" ? String.raw`C:\x\ms-playwright` : "/x/ms-playwright";
     const exe =
       process.platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
@@ -1393,7 +1393,7 @@ describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
   });
 
   it("落点根按平台推（不写死盘符 / 认环境变量）", async () => {
-    const { playwrightBrowsersRoot } = await import("../scripts/ci-toolchain-selfcheck.mjs");
+    const { playwrightBrowsersRoot } = await import("../scripts/ci/ci-toolchain-selfcheck.mjs");
     /* ⚠️ 期望值一律用**目标平台**的 join 拼（`node:path` 是**宿主**那一份）。判据可注入 `platform`，
      * 这组会**在一种平台上判另一种平台** —— 拿宿主 `path.join` 会随跑判据的机器变（平台侧实测报
      * 「`expected` 反斜杠路径、`to be` 正斜杠路径」）。与 `executable-resolve.ts` 那句「大小写不敏感
@@ -1427,9 +1427,9 @@ describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
   });
 
   it("复验真的排在「装」之后，且不过要非零退出（不许提前 return 0）", () => {
-    /* 浏览器那一层的实现住在 `scripts/ci-toolchain-browser.mjs`（§12.6 R5 的 900 行
+    /* 浏览器那一层的实现住在 `scripts/ci/ci-toolchain-browser.mjs`（§12.6 R5 的 900 行
      * 硬闸下拆出来的，与 `ci-toolchain-python.mjs` 同一条边界）。 */
-    const src = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-browser.mjs"), "utf8");
+    const src = readFileSync(path.join(ROOT, "scripts", "ci/ci-toolchain-browser.mjs"), "utf8");
     const body = src.slice(
       src.indexOf("export function playwrightOnly("),
       src.indexOf("export function browserExecutableExists("),
@@ -1458,7 +1458,7 @@ describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
  */
 describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
   it("守卫把 `main()` 的返回值交给 `process.exit()`", () => {
-    const src = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-selfcheck.mjs"), "utf8");
+    const src = readFileSync(path.join(ROOT, "scripts", "ci/ci-toolchain-selfcheck.mjs"), "utf8");
     /* 按源码形状钉：末尾那一段里必须有 `process.exit(main())`。
      * 裸 `main();` 正是被吞码的形态 —— 它的表现是「打了未通过、退出码 0」。 */
     const guard = src.slice(src.indexOf("import.meta.filename"));
@@ -1473,8 +1473,8 @@ describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
      * 「install 报成功、二进制不在盘上」那一态。补丁只打在 `ci-toolchain-browser.mjs`（两句都在
      * 那一份里），`ci-toolchain-selfcheck.mjs` 的守卫（`process.exit(main())`）走**真实现**。 */
     const empty = mkdtempSync(path.join(tmpdir(), "pw-empty-"));
-    const browserProbe = path.join(ROOT, "scripts", "ci-toolchain-browser.mjs");
-    const probe = path.join(ROOT, "scripts", ".tmp-exitcode-probe.mjs");
+    const browserProbe = path.join(ROOT, "scripts", "ci/ci-toolchain-browser.mjs");
+    const probe = path.join(ROOT, "scripts", "ci", ".tmp-exitcode-probe.mjs");
     const backup = path.join(tmpdir(), `browser-backup-${Date.now()}.mjs`);
     const browserSrc = readFileSync(browserProbe, "utf8");
     writeFileSync(backup, browserSrc);
@@ -1538,10 +1538,12 @@ describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
             "（那多半是装得上的，于是它**照样绿**）",
         ).toBe(true);
       }
-      /* 子进程跑**真**的那个入口（它 import 的是补过的那份 browser 模块）。 */
+      /* 子进程跑**真**的那个入口（它 import 的是补过的那份 browser 模块）。
+       * #3930 起 selfcheck 与它的兄弟件同住 `scripts/ci/`——探针必须拷进**同一目录**，
+       * `./ci-toolchain-python.mjs` / `./ci-toolchain-browser.mjs` 这类兄弟导入才指得回。 */
       writeFileSync(
         probe,
-        readFileSync(path.join(ROOT, "scripts", "ci-toolchain-selfcheck.mjs"), "utf8"),
+        readFileSync(path.join(ROOT, "scripts", "ci/ci-toolchain-selfcheck.mjs"), "utf8"),
       );
       const r = spawnSync(process.execPath, [probe, "--playwright-only"], {
         encoding: "utf8",
@@ -2243,7 +2245,7 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
   it("不发 HEAD：载荷里没有 `HEAD` 这个动词，且带上了 `Range`", () => {
     /* 结构性一条：上面几条判的是行为，这条判的是「它没被改回去」——
      * HEAD 与 GET 在本地服务上可能都回 206，但真链路上完全不同。 */
-    const src = read("scripts/ci-toolchain-browser-reach.mjs");
+    const src = read("scripts/ci/ci-toolchain-browser-reach.mjs");
     expect(src, "浏览器探测又回到 HEAD 了 —— HEAD 答不了「取得下来吗」").not.toContain(
       'method: "HEAD"',
     );
@@ -2420,7 +2422,7 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
     /* `ci-toolchain-python.mjs` 那条路走 `tar -xf`（押的是 Windows 10 自带的 bsdtar
      * 认 zip）。而这一步是**全平台**的，GNU tar 对同一个包直接报
      * `This does not look like a tar archive`。所以这里自己读 zip 的 central directory。 */
-    const src = read("scripts/ci-toolchain-browser-fetch.mjs");
+    const src = read("scripts/ci/ci-toolchain-browser-fetch.mjs");
     expect(
       src,
       "解压又回到 `tar -xf` 了 —— 那条路只在 bsdtar 上成立，Linux / macOS 上必红",

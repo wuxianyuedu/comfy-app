@@ -14,8 +14,8 @@ import {
   makeStdinConfirm,
   MODE_BUNDLED_FLAGS,
   SHIP_MODES,
-} from "../scripts/ship-mode.mjs";
-import { parseArgs } from "../scripts/ship-args.mjs";
+} from "../scripts/ship/ship-mode.mjs";
+import { parseArgs } from "../scripts/ship/ship-args.mjs";
 
 /** 造一份 parseArgs 的返回形状（与真解析同形，缺省值齐全）。 */
 function optBase(mode: string | null = null) {

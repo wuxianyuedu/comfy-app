@@ -13,7 +13,7 @@ import {
   resolveCiWorkers,
   resolveCores,
   workersForCores,
-} from "../scripts/ci-load.mjs";
+} from "../scripts/ci/ci-load.mjs";
 
 describe("现场核数：平台读数优先，读不到才落本机 / 兜底", () => {
   it("`CNB_CPUS` 是平台给的读数，优先于本机", () => {

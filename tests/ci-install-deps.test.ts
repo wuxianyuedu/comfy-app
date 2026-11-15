@@ -1,6 +1,6 @@
 /**
  * 平台侧「装依赖」的跳过判据（ISSUE #1981 / #2010）。`.cnb.yml` 那一步只在平台跑、本地无执行者
- * （§13.5.3.5 已付两次学费）⇒ 判定收在 `scripts/ci-install-deps.mjs`，用注入的「变更清单 + node_modules」
+ * （§13.5.3.5 已付两次学费）⇒ 判定收在 `scripts/ci/ci-install-deps.mjs`，用注入的「变更清单 + node_modules」
  * 跑它。失效面：该装却装陈旧依赖、不该装没跳过、退 0 空清单被当成没变；全新 clone 只靠指纹比对（#2010）。
  */
 import fs from "node:fs";
@@ -20,7 +20,7 @@ import {
   pnpmInstallFingerprint,
   readInstallFingerprint,
   writeInstallFingerprint,
-} from "../scripts/ci-install-deps.mjs";
+} from "../scripts/ci/ci-install-deps.mjs";
 
 /** 造一个「git 调用」替身：按参数给出退出码与 stdout。 */
 const gitStub =
@@ -509,7 +509,7 @@ describe("pnpm 落点发现：服务账号的 PATH 上没它就是没装吗", ()
  */
 describe("入口层把探测事实传进安装，槽符号零残留（#3479）", () => {
   const source = fs.readFileSync(
-    fileURLToPath(new URL("../scripts/ci-install-deps.mjs", import.meta.url)),
+    fileURLToPath(new URL("../scripts/ci/ci-install-deps.mjs", import.meta.url)),
     "utf8",
   );
 

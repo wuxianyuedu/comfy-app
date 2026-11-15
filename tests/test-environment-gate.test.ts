@@ -10,7 +10,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { copyGateDeps } from "./helpers/gate-repo";
 
-const SCRIPT = path.resolve(__dirname, "../scripts/check-test-environment.cjs");
+const SCRIPT = path.resolve(__dirname, "../scripts/gates/check-test-environment.cjs");
 
 /**
  * 最小可用的 `vitest.config.ts`：脚本要按括号配对解出两个 project 的
@@ -52,8 +52,9 @@ const CONFIG = [
 function gate(files: Record<string, string>): { ok: boolean; output: string } {
   const root = mkdtempSync(path.join(tmpdir(), "test-env-"));
   mkdirSync(path.join(root, "scripts"), { recursive: true });
-  copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
-  copyGateDeps(path.join(root, "scripts", path.basename(SCRIPT)));
+  mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+  copyFileSync(SCRIPT, path.join(root, "scripts", "gates", path.basename(SCRIPT)));
+  copyGateDeps(path.join(root, "scripts", "gates", path.basename(SCRIPT)));
   writeFileSync(path.join(root, "vitest.config.ts"), CONFIG);
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
@@ -63,11 +64,15 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
   try {
     return {
       ok: true,
-      output: execFileSync(process.execPath, [path.join(root, "scripts", path.basename(SCRIPT))], {
-        cwd: root,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-      }),
+      output: execFileSync(
+        process.execPath,
+        [path.join(root, "scripts", "gates", path.basename(SCRIPT))],
+        {
+          cwd: root,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      ),
     };
   } catch (error) {
     /* 失败形状按字段读（B5 清账）：两股输出缺省当空串。 */
@@ -259,8 +264,9 @@ describe("用例环境档门禁：判据自己不许静默降级", () => {
   it("`projects` 解析不到（形状变了）→ 判失败，不退回「没有目录档」", () => {
     const root = mkdtempSync(path.join(tmpdir(), "test-env-bad-"));
     mkdirSync(path.join(root, "scripts"), { recursive: true });
-    copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
-    copyGateDeps(path.join(root, "scripts", path.basename(SCRIPT)));
+    mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+    copyFileSync(SCRIPT, path.join(root, "scripts", "gates", path.basename(SCRIPT)));
+    copyGateDeps(path.join(root, "scripts", "gates", path.basename(SCRIPT)));
     writeFileSync(
       path.join(root, "vitest.config.ts"),
       'export default { test: { environment: "node" } };\n',
@@ -268,11 +274,15 @@ describe("用例环境档门禁：判据自己不许静默降级", () => {
     let ok = true;
     let output;
     try {
-      output = execFileSync(process.execPath, [path.join(root, "scripts", path.basename(SCRIPT))], {
-        cwd: root,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-      });
+      output = execFileSync(
+        process.execPath,
+        [path.join(root, "scripts", "gates", path.basename(SCRIPT))],
+        {
+          cwd: root,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      );
     } catch (error) {
       /* 失败形状按字段读（B5 清账）：两股输出缺省当空串。 */
       const e: { stderr?: unknown; stdout?: unknown } =
@@ -294,8 +304,9 @@ describe("用例环境档门禁：判据自己不许静默降级", () => {
   it("注释里写出 `projects: [...]` → 解析仍认真正的那个键，不判失败", () => {
     const root = mkdtempSync(path.join(tmpdir(), "test-env-comment-"));
     mkdirSync(path.join(root, "scripts"), { recursive: true });
-    copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
-    copyGateDeps(path.join(root, "scripts", path.basename(SCRIPT)));
+    mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+    copyFileSync(SCRIPT, path.join(root, "scripts", "gates", path.basename(SCRIPT)));
+    copyGateDeps(path.join(root, "scripts", "gates", path.basename(SCRIPT)));
     writeFileSync(
       path.join(root, "vitest.config.ts"),
       [
@@ -308,7 +319,7 @@ describe("用例环境档门禁：判据自己不许静默降级", () => {
     writeFileSync(path.join(root, "src/lib/x.test.ts"), 'it("x", () => { expect(1).toBe(1); });\n');
     const output = execFileSync(
       process.execPath,
-      [path.join(root, "scripts", path.basename(SCRIPT))],
+      [path.join(root, "scripts", "gates", path.basename(SCRIPT))],
       { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     );
     expect(output).toContain("OK");

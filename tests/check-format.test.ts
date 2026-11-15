@@ -41,7 +41,7 @@ const OXFMT_ENTRY = join(
 );
 
 const { test, expect } = defineGateRepo({
-  script: "check-format.cjs",
+  script: "gates/check-format.cjs",
   dirs: ["src/lib"],
   /* 沙箱里没有 `node_modules`，不借这条接缝就会走「入口解析不到 → exit 2」
    * 那一档（那是脚本**正确**的 fail-closed 行为，不是本文件要验的形态）。
@@ -172,7 +172,7 @@ describe("oxfmt 格式判据（硬闸）", () => {
 
 describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
   // oxlint-disable-next-line typescript/no-require-imports
-  const required: unknown = require("../scripts/check-format.cjs");
+  const required: unknown = require("../scripts/gates/check-format.cjs");
   if (!isFormatModule(required)) {
     throw new Error("check-format.cjs 的导出面不对");
   }
@@ -182,11 +182,11 @@ describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
   test.for(
     /* 表里的路径只是**分类样例**，一律用不存在的夹具路径（ISSUE #2830）：写成真路径时，
      * 「按路径引用」那一档会把整份自测算成它们的消费方 —— 改一个 `src/**` 业务文件就拉起
-     * 这 40 多秒的一跑。被测脚本自己（`scripts/check-format.cjs`）照旧写真实路径，那是消费关系。 */
+     * 这 40 多秒的一跑。被测脚本自己（`scripts/gates/check-format.cjs`）照旧写真实路径，那是消费关系。 */
     [
       // `scripts/` `tools/` `e2e/` 已从全量档白名单移出（ISSUE #3251）：存量清完，
       // 这三类现在与 `src/**` 同面。
-      ["scripts/check-format.cjs", false],
+      ["scripts/gates/check-format.cjs", false],
       ["tools/fixture.ts", false],
       ["tests/anything.test.ts", true],
       ["e2e/fixture.spec.ts", false],

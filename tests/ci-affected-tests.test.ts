@@ -1,5 +1,5 @@
 /**
- * 平台侧「受影响用例」入口（`scripts/ci-affected-tests.mjs`，2026-10-20 接走 pre-commit C 组与 pre-push `unitTests`）。判据未变（仍走 `run-affected-tests.mjs` 判决链），故只钉入口三件易静默失效的事：①改动面取自 `CNB_PULL_REQUEST_TARGET_SHA`（三点 diff），无则退回 merge-base 两点；拿错 base 会把「本 PR 改了什么」判成「离 master 多远」。
+ * 平台侧「受影响用例」入口（`scripts/ci/ci-affected-tests.mjs`，2026-10-20 接走 pre-commit C 组与 pre-push `unitTests`）。判据未变（仍走 `run-affected-tests.mjs` 判决链），故只钉入口三件易静默失效的事：①改动面取自 `CNB_PULL_REQUEST_TARGET_SHA`（三点 diff），无则退回 merge-base 两点；拿错 base 会把「本 PR 改了什么」判成「离 master 多远」。
  * ②**没判 ≠ 绿**：git 没跑/清单空一律退 2（空清单放行会跑成全量，§13.5.21 否掉）；例外是 #3026「拿到了、答案为空」，须证三点空**且**合成提交 `第一父..HEAD` 也空。
  * ③经 `COMFY_AFFECTED_CHANGED` 递进同一条链，并发按 `ci-load.mjs` 收敛，退出码透传。不起真 vitest：`spawn` 注入假实现；每处 `main` 调用都须接住两条读数出口（#2074 的夹具日志曾与真实读数误读并排）。
  */
@@ -9,7 +9,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { main, makeLedgerDir, resolveChangedFiles } from "../scripts/ci-affected-tests.mjs";
+import { main, makeLedgerDir, resolveChangedFiles } from "../scripts/ci/ci-affected-tests.mjs";
 
 /** 接住 `main` 的两条读数出口（夹具话术不进报告，见文件头）。 */
 function silent() {
@@ -377,7 +377,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
   });
 });
 
-/* ── 起跑前的依赖面体检（`scripts/ci-worktree-deps.mjs`）─────────────────────────
+/* ── 起跑前的依赖面体检（`scripts/ci/ci-worktree-deps.mjs`）─────────────────────────
  *
  * 现场：输出里一串 `Error:` 加 `AggregateError`，一条断言都没红而格子非零退出 —— 「依赖没装上」被
  * 读成「这次改动有回归」。这一格把它分开：前提不成立 ⇒ 退 2（没判 ≠ 绿），且**一次 vitest 都不起**。

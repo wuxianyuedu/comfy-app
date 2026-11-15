@@ -1,12 +1,12 @@
 /**
- * 「平台文字开头一行署名」的只读审计（`scripts/check-comment-headers.mjs`，ISSUE #2269）：`ship` 四条出口保证署名（#2268），
+ * 「平台文字开头一行署名」的只读审计（`scripts/gates/check-comment-headers.mjs`，ISSUE #2269）：`ship` 四条出口保证署名（#2268），
  * 但手工 `create-issue` 与 #2217 前存量绕过它 —— 立案扫 21 张 open 单：缺 19·重复 1·正常 1，无处读出。钉子：`2`≠`0`、单张
  * 读不到记「读不到」、全程只读、PR 正文只认逐张 `get-pull`（`list-pulls` 的 `body` 是空串，旧版反写成教义 = #2788）。
  */
 import { describe, expect, it } from "vitest";
 
-import { collectShapes, main } from "../scripts/check-comment-headers.mjs";
-import { headerShape } from "../scripts/ship-ticket.mjs";
+import { collectShapes, main } from "../scripts/gates/check-comment-headers.mjs";
+import { headerShape } from "../scripts/ship/ship-ticket.mjs";
 
 type FakeResult = {
   error: string | null;

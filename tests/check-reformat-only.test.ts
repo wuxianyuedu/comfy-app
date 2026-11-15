@@ -19,7 +19,7 @@ import {
 } from "./helpers/gate-repo";
 import { symlinkDir } from "./helpers/symlink-dir";
 /* 区间两端的取法直接单测机制层（见「区间两端」那条用例的理由）。 */
-import { previewRangeEnds } from "../scripts/reformat-preview-range.mjs";
+import { previewRangeEnds } from "../scripts/reformat/reformat-preview-range.mjs";
 
 /**
  * 外来值是不是普通对象（数组不算）：本文件收窄判据导出面的统一入口。
@@ -67,7 +67,7 @@ function isPatchParser(v: unknown): v is {
 /** `perCommitShapeOf` 是判据的**自测入口**（理由见那一条用例的头注）。判据是 `.cjs`，
  * 所以只能 `require` —— 与 `check-format.test.ts` 同形。 */
 // oxlint-disable-next-line typescript/no-require-imports
-const requiredModule: unknown = require("../scripts/check-reformat-only.cjs");
+const requiredModule: unknown = require("../scripts/gates/check-reformat-only.cjs");
 
 if (!isPerCommitShapeOf(requiredModule)) {
   throw new Error("check-reformat-only.cjs 的导出面不对");
@@ -113,7 +113,7 @@ afterEach(() => {
  * `executable-resolve.ts` 与其 import 的 `platform.ts` 必须整条链都在，否则加载即 `ERR_MODULE_NOT_FOUND`（#1327/#1961）。
  */
 const { test, expect } = defineGateRepo({
-  script: "check-reformat-only.cjs",
+  script: "gates/check-reformat-only.cjs",
   workdir: "reformat",
   /* `src/lib` 是被扫目录（建空的即可，`seedEmpty` 往里放一份），其余三处是
    * `--staged` 那组用例要造的**扫描面上的别的树** —— 夹具只建这几层，
@@ -123,7 +123,10 @@ const { test, expect } = defineGateRepo({
     { from: "scripts/launcher-core", to: "scripts/launcher-core" },
     /* 逐提交护栏（护栏 ②）的机制层 —— 判据 `require` 它，少一份就是
      * `MODULE_NOT_FOUND`（`copyGateDeps` 只追**同目录**依赖）。 */
-    { from: "scripts/reformat-per-commit.mjs", to: "scripts/reformat-per-commit.mjs" },
+    {
+      from: "scripts/reformat/reformat-per-commit.mjs",
+      to: "scripts/reformat/reformat-per-commit.mjs",
+    },
     {
       from: "src/lib/process/executable-resolve.ts",
       to: "src/lib/process/executable-resolve.ts",
@@ -150,7 +153,10 @@ const { test, expect } = defineGateRepo({
     { from: "scripts/changed-scope.mjs", to: "scripts/changed-scope.mjs" },
     /* 区间两侧的判定收在机制层（`reformat-preview-range.mjs`，`.cjs` 动态 import 它）——
      * 拆出去的是「与平台拓扑打交道」那一段，判据本体不动。 */
-    { from: "scripts/reformat-preview-range.mjs", to: "scripts/reformat-preview-range.mjs" },
+    {
+      from: "scripts/reformat/reformat-preview-range.mjs",
+      to: "scripts/reformat/reformat-preview-range.mjs",
+    },
     { from: "scripts/git-name-status.mjs", to: "scripts/git-name-status.mjs" },
     { from: "scripts/base-check/git-ref.mjs", to: "scripts/base-check/git-ref.mjs" },
     {
@@ -939,7 +945,7 @@ describe("回读比对：本来就规范 / 改动后正是规范形态", { timeo
   /** 真仓库里那份判据（`HERE` 就是真仓库，oxfmt 解析不受临时仓库影响）。 */
   function realJudge() {
     // oxlint-disable-next-line typescript/no-require-imports
-    const required: unknown = require("../scripts/check-reformat-only.cjs");
+    const required: unknown = require("../scripts/gates/check-reformat-only.cjs");
     if (!isClassifyReformatOnly(required)) {
       throw new Error("check-reformat-only.cjs 的导出面不对");
     }
@@ -983,7 +989,7 @@ describe("批量那一档：退出 0 一次给全部结论，非 0 逐文件兜�
     entries: Array<{ after: string; before: string; file: string }>,
   ): Set<string> {
     // oxlint-disable-next-line typescript/no-require-imports
-    const required: unknown = require(join(repo.dir, "scripts", "check-reformat-only.cjs"));
+    const required: unknown = require(join(repo.dir, "scripts", "gates/check-reformat-only.cjs"));
     if (!isClassifyReformatOnly(required)) {
       throw new Error("临时仓库里 check-reformat-only.cjs 的导出面不对");
     }
@@ -1037,7 +1043,7 @@ describe("批量那一档：退出 0 一次给全部结论，非 0 逐文件兜�
 
 describe("补丁解析（纯函数，不跑 git）", () => {
   // oxlint-disable-next-line typescript/no-require-imports
-  const required: unknown = require("../scripts/check-reformat-only.cjs");
+  const required: unknown = require("../scripts/gates/check-reformat-only.cjs");
   if (!isPatchParser(required)) {
     throw new Error("check-reformat-only.cjs 的导出面不对");
   }

@@ -1,5 +1,5 @@
 /**
- * `scripts/ci-ga-daily-failure-issue.mjs` 的契约：GA 每日镜像档跑红 ⇒ CNB 出现一张按格名去重的单。
+ * `scripts/ci/ci-ga-daily-failure-issue.mjs` 的契约：GA 每日镜像档跑红 ⇒ CNB 出现一张按格名去重的单。
  *
  * 与 CNB 侧 `ci-daily-failure-issue.test.ts` 同一族，但判的是**这一跑自己**（jobs API），
  * 所以两种危险失效的形状不同：
@@ -21,7 +21,7 @@ import {
   issueTitle,
   main,
   titleKey,
-} from "../scripts/ci-ga-daily-failure-issue.mjs";
+} from "../scripts/ci/ci-ga-daily-failure-issue.mjs";
 
 /** 请求的 init 只用到 `method` / `body`（其余头由实现自己加，用例不判它们）。 */
 type Init = { body?: string; method?: string };
@@ -672,7 +672,7 @@ describe("入口自证", () => {
     const fs = await import("node:fs");
     const path = await import("node:path");
     const src = fs.readFileSync(
-      path.resolve(process.cwd(), "scripts", "ci-ga-daily-failure-issue.mjs"),
+      path.resolve(process.cwd(), "scripts", "ci/ci-ga-daily-failure-issue.mjs"),
       "utf8",
     );
     expect(src).toContain("ci-ga-daily-failure-issue.mjs");

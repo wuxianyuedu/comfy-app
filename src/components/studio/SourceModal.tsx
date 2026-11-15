@@ -4,7 +4,7 @@ import { Hint } from "~/components/ui/hint";
 /* 按需取 JsonViewer（规范 §12.19）：本弹窗只在「查看源文件」时打开，而
  * `ui/json-viewer` 顶层 import 了 `react18-json-view`（含它那份样式表）。
  * 静态 import 会使这条重依赖顺着 `components/studio/index.ts` 一路到入口 ——
- * 实测链见 `scripts/check-barrel-heavy-deps.cjs` 的报告。 */
+ * 实测链见 `scripts/gates/check-barrel-heavy-deps.cjs` 的报告。 */
 import { LazyJsonViewer } from "~/components/ui/lazy-json-viewer";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";

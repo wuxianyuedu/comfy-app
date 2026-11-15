@@ -82,7 +82,7 @@ export type ValueSource<T> = {
  * 值源的**真实来源**：Storybook 的 `staticDirs` 里那份开发期资源目录。
  *
  * 刻意**不放 `public/`**：那里会随 `next build` 进 standalone 产物、再被
- * `build-desktop` 内嵌进桌包（`scripts/check-standalone-contents.cjs` 把 `public/`
+ * `build-desktop` 内嵌进桌包（`scripts/gates/check-standalone-contents.cjs` 把 `public/`
  * 的顶层白名单列得清清楚楚）。组件工作台的示例资源没有任何理由跟着出厂。
  */
 export const STORYBOOK_ASSET_BASE = "/storybook-assets";

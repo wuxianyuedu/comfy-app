@@ -20,7 +20,7 @@ export { sanitizeHtml } from "./html";
  * 首屏不再为它付出代价。用法见 `~/components/workshop/WorkshopStageBody`。
  *
  * ⚠️ 静态 import 本模块**仍会**把 marked / dompurify 拉进静态图（它们是
- * `render.ts` / `html.ts` 的顶层依赖）。判据 `scripts/check-barrel-heavy-deps.cjs`
+ * `render.ts` / `html.ts` 的顶层依赖）。判据 `scripts/gates/check-barrel-heavy-deps.cjs`
  * 会沿着静态边找到这里，所以「加了这个函数但还是静态 import」不算修好。 */
 export async function loadMarkdownRenderer() {
   const mod = await import("./render");

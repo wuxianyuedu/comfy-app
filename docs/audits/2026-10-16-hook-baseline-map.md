@@ -120,7 +120,7 @@
 
 ## 别顺手做的一件事（实测过后果）
 
-**不要把 `check-bundle-budget.cjs` 挂进 pre-commit 或 premerge 复算名单。** 在干净 worktree（无构建产物）里 `node scripts/check-bundle-budget.cjs` 实测 **EXIT=0** 并自报「跳过：`.next/static/chunks` 不存在」⇒ 挂进去等于加一条恒 0 的静默绿。要走这条路必须先把它自己的语义改成「产物不在 ⇒ 报未校验」。（台账 R13-01；体积确认归 ISSUE #1952 点名的那 9 条提交。）
+**不要把 `check-bundle-budget.cjs` 挂进 pre-commit 或 premerge 复算名单。** 在干净 worktree（无构建产物）里 `node scripts/gates/check-bundle-budget.cjs` 实测 **EXIT=0** 并自报「跳过：`.next/static/chunks` 不存在」⇒ 挂进去等于加一条恒 0 的静默绿。要走这条路必须先把它自己的语义改成「产物不在 ⇒ 报未校验」。（台账 R13-01；体积确认归 ISSUE #1952 点名的那 9 条提交。）
 
 ## 重取这份数
 

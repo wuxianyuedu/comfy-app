@@ -4,7 +4,7 @@
  * （`ad81a912` / `bdabd26f` 形态全对的合并）一个都拦不住 —— 故 8 条验收各配真 git 样本（阻断 / 放行 / 非合并零输出 / `--amend` / 生成物 / 非 git 目录 / 混合），另判钩子接线。
  */
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
@@ -14,17 +14,24 @@ import { vi } from "vitest";
  * 默认超时经常不够 —— 文件级放宽到 30s，只影响本文件。 */
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
-const SCRIPT = "check-pending-merge-loss.mjs";
-/** 这个脚本的**同级依赖**。清单只在这里出现一次：共享夹具与 ⑦ 那个「故意不带 git」的
- *  裸目录都要把它们带上，抄成两份的后果是「加第三份依赖时只有其中一处跟着改」，
- *  而表现是子进程 `MODULE_NOT_FOUND` —— 看着像判据坏了，不像漏拷。 */
+/* #3930 起判据归入 `scripts/gates/`，夹具与直跑一律按域相对路径定位。 */
+const SCRIPT = "gates/check-pending-merge-loss.mjs";
+/** 这个脚本的**同级依赖**（#3930 起在 `scripts/base-check/`，脚本以
+ *  `../base-check/…` 引它们）。清单只在这里出现一次：共享夹具与 ⑦ 那个
+ *  「故意不带 git」的裸目录都要把它们带上，抄成两份的后果是「加第三份依赖时
+ *  只有其中一处跟着改」，而表现是子进程 `MODULE_NOT_FOUND` —— 看着像判据坏了，
+ *  不像漏拷。 */
 const SIBLINGS = ["merged-side-loss-core.mjs", "merged-side-loss-git.mjs"];
+const SIBLING_DIR = "base-check";
 
 const { test, expect } = defineGateRepo({
   script: SCRIPT,
-  /* 判据用 `import "./merged-side-loss-core.mjs"` 拉内核、用 `merged-side-loss-git.mjs`
-   * 取证 —— 同级导入只能靠夹具的 `copy` 带进来。 */
-  copy: SIBLINGS.map((f) => ({ from: `scripts/${f}`, to: `scripts/${f}` })),
+  /* 判据用 `import "../base-check/merged-side-loss-core.mjs"` 拉内核、用
+   * `merged-side-loss-git.mjs` 取证 —— 跨域导入只能靠夹具的 `copy` 带进来。 */
+  copy: SIBLINGS.map((f) => ({
+    from: `scripts/${SIBLING_DIR}/${f}`,
+    to: `scripts/${SIBLING_DIR}/${f}`,
+  })),
   setup: (repo: GateRepo) => {
     repo.git("init", "-q", "-b", "main", ".");
     repo.git("config", "user.email", "gate@example.com");
@@ -176,8 +183,13 @@ describe("check-pending-merge-loss —— 提交前档（整份取非 HEAD 侧�
      * 自己造一个裸目录：判据取不到 git 事实时应放行，而不是抛错。 */
     const bare = mkdtempSync(join(tmpdir(), "pending-merge-loss-nogit-"));
     try {
-      for (const f of [SCRIPT, ...SIBLINGS]) {
-        copyFileSync(join(process.cwd(), "scripts", f), join(bare, f));
+      /* #3930 起判据与依赖分居 `gates/` 与 `base-check/`：裸目录也按这个相对布局摆，
+       * 判据的 `../base-check/…` 导入才解析得到。 */
+      mkdirSync(join(bare, "gates"), { recursive: true });
+      mkdirSync(join(bare, SIBLING_DIR), { recursive: true });
+      copyFileSync(join(process.cwd(), "scripts", SCRIPT), join(bare, SCRIPT));
+      for (const f of SIBLINGS) {
+        copyFileSync(join(process.cwd(), "scripts", SIBLING_DIR, f), join(bare, SIBLING_DIR, f));
       }
       const output = execFileSync(process.execPath, [join(bare, SCRIPT)], {
         cwd: bare,
@@ -267,19 +279,20 @@ describe("check-pending-merge-loss —— 钩子接线", () => {
     /* 判据写得对、钩子没接上 = 没有执行者（§13.5.12 的立案现场）。
      * 少传 $2 会让 amend 那条误报防线失效，且是静默的；少传 $1 会让「逐份认账」那条
      * 出口永远读不到消息 —— 表现是**每一份都照拦**，而提示里还写着可以认账。 */
-    expect(hook).toContain("scripts/check-pending-merge-loss.mjs");
+    expect(hook).toContain("scripts/gates/check-pending-merge-loss.mjs");
     expect(hook).toContain('"$1"');
     expect(hook).toContain('"$2"');
     /* 与形态档（#1594）一前一后都在同一个入口里。 */
-    expect(hook).toContain("scripts/check-merge-parents.mjs");
+    expect(hook).toContain("scripts/gates/check-merge-parents.mjs");
   });
 
   test("与 1-1 共用内核（不许抄成第二份检测实现）", () => {
     const gate = readFileSync(
-      join(process.cwd(), "scripts", "check-pending-merge-loss.mjs"),
+      join(process.cwd(), "scripts", "gates/check-pending-merge-loss.mjs"),
       "utf8",
     );
-    expect(gate).toContain("./merged-side-loss-core.mjs");
+    /* #3930 起内核在 `scripts/base-check/`：脚本以 `../base-check/…` 引它。 */
+    expect(gate).toContain("../base-check/merged-side-loss-core.mjs");
     /* 检测核心只在核心里有；执行者里不许再出现「自己 walk 历史比 blob」的第二份。 */
     expect(gate).toContain("findEarlierVersion");
   });

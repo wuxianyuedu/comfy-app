@@ -1,5 +1,5 @@
 /**
- * `ship --gh-prs`（`scripts/ship-gh-prs.mjs`，ISSUE #3704）的取数与呈现判据。
+ * `ship --gh-prs`（`scripts/ship/ship-gh-prs.mjs`，ISSUE #3704）的取数与呈现判据。
  *
  * 钉住与 `--gh-logs` 同一条纪律：
  *   ① 清单 / 单条详情的行读数都在场（号 / 标题 / 作者 / 分支 / mergeable / URL）；
@@ -9,8 +9,8 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { parseArgs } from "../scripts/ship-args.mjs";
-import { CODE } from "../scripts/ship-core.mjs";
+import { parseArgs } from "../scripts/ship/ship-args.mjs";
+import { CODE } from "../scripts/ship/ship-core.mjs";
 import {
   ghPullApiUrl,
   ghPullsApiUrl,
@@ -18,7 +18,7 @@ import {
   parseGhPrsFilter,
   renderPullLine,
   runGhPrs,
-} from "../scripts/ship-gh-prs.mjs";
+} from "../scripts/ship/ship-gh-prs.mjs";
 
 const REPO = "wuxianyuedu/comfy-app";
 

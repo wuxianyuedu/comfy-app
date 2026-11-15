@@ -5,7 +5,7 @@ import {
   formatThroughput,
   thirdPartyEngineUsage,
   topCpuConsumers,
-} from "../scripts/dev-drive-bench.mjs";
+} from "../scripts/dev-drive/dev-drive-bench.mjs";
 
 /**
  * 契约测试：I/O 实测层的**纯函数**（不碰磁盘、不起进程）。为什么钉三档：「卷上挂了第三方过滤驱动」

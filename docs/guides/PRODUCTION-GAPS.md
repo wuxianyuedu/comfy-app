@@ -169,7 +169,7 @@
       上传完就删 `.map`，并按硬规则 17 + `launch-and-build` §7.3 确认它没落进
       standalone 的那两层白名单后随包出厂。
       证据：`next.config.js`（grep sentry / sourceMap = 0）；`docs/standards/07-日志系统.md` §7.18.2.1（日志脱敏口径）；`docs/standards/launch-and-build.md` §7.3（分发产物卫生：`.map` / `.env` 不许随包出厂）。
-- [x] **P0-5 无版本化 DB 迁移** —— **已收（ISSUE #1624）**。两件事都落地了：① `drizzle/` 有了基线迁移（`0000_*.sql` + `meta/`），`pnpm db:migrate` 成为正路，与 `db:push` 产出的 schema **逐表逐列 + 索引等价**（`tests/db-migrate-equivalence.test.ts`）；② **无 TTY 下不再可能产出 0 字节库** —— 入口换成 `scripts/db-migrate.mjs`，它**在起 drizzle-kit 之前**做前置判决（没有 `.sql` 迁移就直接退非零），因为实测 `drizzle-kit migrate` 的原形态是**先建出库文件、再退 1**（与 P0-5 原先记的 `db:push` 那半是同一族，而 `push` 那半早由 `scripts/db-push.mjs` 修掉、`migrate` 这一路一直没修）。复核依据是**库里的真事实**（用户表数 + `__drizzle_migrations` 账本条数），不是退出码；用例 `tests/db-migrate-noninteractive.test.ts` 五条钉住，含两条变异（拿掉前置判决 / 把 `.sql` 筛换成「目录在不在」）。原先记的两条证据已过期：`package.json` 的 `db:migrate` 不再是裸 `drizzle-kit migrate`。
+- [x] **P0-5 无版本化 DB 迁移** —— **已收（ISSUE #1624）**。两件事都落地了：① `drizzle/` 有了基线迁移（`0000_*.sql` + `meta/`），`pnpm db:migrate` 成为正路，与 `db:push` 产出的 schema **逐表逐列 + 索引等价**（`tests/db-migrate-equivalence.test.ts`）；② **无 TTY 下不再可能产出 0 字节库** —— 入口换成 `scripts/db/db-migrate.mjs`，它**在起 drizzle-kit 之前**做前置判决（没有 `.sql` 迁移就直接退非零），因为实测 `drizzle-kit migrate` 的原形态是**先建出库文件、再退 1**（与 P0-5 原先记的 `db:push` 那半是同一族，而 `push` 那半早由 `scripts/db/db-push.mjs` 修掉、`migrate` 这一路一直没修）。复核依据是**库里的真事实**（用户表数 + `__drizzle_migrations` 账本条数），不是退出码；用例 `tests/db-migrate-noninteractive.test.ts` 五条钉住，含两条变异（拿掉前置判决 / 把 `.sql` 筛换成「目录在不在」）。原先记的两条证据已过期：`package.json` 的 `db:migrate` 不再是裸 `drizzle-kit migrate`。
 - [ ] **P0-6 无代码签名 / 公证：等外部输入 —— 两套签名凭据（缺任一个就有一侧装不上）**。
       **不是「漏了几行配置」**：`tauri.conf.json` 的 `bundle` 段今天只有
       `active` / `targets` / `externalBin` / `resources` / `icon` / `android` ——
@@ -644,8 +644,8 @@
       「回别的值等于放行」「前缀宽容是最经典的失效形态」两条）与
       `src/app/api/health/route.test.ts` 的跨域面 4 条。
 - [x] **D6 自动备份 / 恢复工具（已落地 —— ISSUE #1611 拍板「口径照建议默认」）**。
-      证据：`scripts/db-backup-core.mjs`（唯一实现）、`src/lib/db-backup/backup.ts`
-      （服务端取用面）、`scripts/db-backup.mjs`（`pnpm db:backup` 手动档）、
+      证据：`scripts/db/db-backup-core.mjs`（唯一实现）、`src/lib/db-backup/backup.ts`
+      （服务端取用面）、`scripts/db/db-backup.mjs`（`pnpm db:backup` 手动档）、
       `src/app/(main)/settings/components/BackupSection.tsx`（设置页入口）；
       判据：`tests/db-backup.test.ts`（29 条）、`tests/db-backup-wiring.test.ts`
       （13 条，接线）、`src/server/api/routers/setting-backup.test.ts`（6 条）、
@@ -717,7 +717,7 @@
 
       | 拍板口径 | 落点 |
       | --- | --- |
-      | ① 只在会动结构的同步之前自动做，另留手动档 | `scripts/db-sync.mjs` 的 `if (force)` 支（`--force` 前）；`pnpm db:backup` |
+      | ① 只在会动结构的同步之前自动做，另留手动档 | `scripts/db/db-sync.mjs` 的 `if (force)` 支（`--force` 前）；`pnpm db:backup` |
       | ② 最近 3 份，落 `<应用根>/data/backups/` | `db-backup-core.mjs` 的 `BACKUP_DIR` / `BACKUP_KEEP` / `pruneBackups` |
       | ③ 设置页入口（选份 + 确认），换文件在「应用没在跑」那一刻 | `setting.backupRestore` 只写标记；`applyPendingRestoreAtBoot` 在三个启动入口、起 Next 之前 |
 
@@ -735,7 +735,7 @@
         （宁可让用户重来，也不要把唯一的退路丢掉）。
 
 - [x] **D7 版本号三处手工重复（均 {{app.version}}）—— 已闭合：不改「三处手写」，改为守住三者相等（ISSUE #1611 阶段三 D7）**。
-      证据：`scripts/check-app-version.cjs`（判据）、`pnpm check:app-version`（手动入口）、
+      证据：`scripts/gates/check-app-version.cjs`（判据）、`pnpm check:app-version`（手动入口）、
       pre-commit D 组「产品版本号三处同步(D7)」。
       判据：`tests/check-app-version.test.ts`（12 条：三处相等 / 逐处读不出 / 形态非法 /
       `[package]` 段外不许命中 / 与 npm script 接线）。
@@ -764,7 +764,7 @@
       **份数不写在本文里** —— 它随每次加判据变动、且没有任何判据会因它漂开而红；要现值就跑
       `pnpm exec node -e "import('./scripts/fixed-structural-tests.mjs').then((m) => console.log(m.FIXED_STRUCTURAL_TESTS.length))"`，
       口径见规范 §13.5.8）
-      （`scripts/affected-tests.mjs`，规范 §13.5.8），改到哪测到哪这条已落地；**2026-10-20
+      （`scripts/affected-tests/affected-tests.mjs`，规范 §13.5.8），改到哪测到哪这条已落地；**2026-10-20
       起这一层的执行者换成平台侧 PR 流水线的 `受影响用例` 一格**（本地两个执行者撤销的
       原因：共享机上的失效形态是 forks worker 调度超时而不是用例红，见 §13.5.25）。仍未解决
       的两点：① 靠运行时 `readdir` 自扫扫描面的判据不会被「改了某份 check 脚本」拉进
@@ -967,7 +967,7 @@
       同族两处**已核、形态本来就安全**（写在这里免得下批再找）：`check-reformat-only.cjs`
       用 `if (res.error || res.status !== 0) → 失败`，且批量失败时退回逐文件 stdin 兜底；
       `run-tests.mjs` 判 `result.error` 并透传退出码。
-      证据：`scripts/check-format.cjs`、`tests/check-format.test.ts`、规范 §13.5.1。
+      证据：`scripts/gates/check-format.cjs`、`tests/check-format.test.ts`、规范 §13.5.1。
 - [x] **E8 router 层 19 处裸 `throw new Error` —— 业务分支在客户端表现成 500（本批清零 + 升成硬闸）**：
       tRPC 对**非 `TRPCError`** 的抛出按内部错误归码，所以「分类不合法」「项目没生产数据」
       「slug 重复」这些本来该是 4xx 的分支，到 caller 边界是 `INTERNAL_SERVER_ERROR`
@@ -1097,7 +1097,7 @@
       危害不是「被拦」，是**它长得像任何别的东西** —— 判据在场、跑了 0 个用例、退出码非零而
       原因读不出；改动面越大的提交越容易撞上，也就是治理线自己的批次最先撞。
       与本台账反复记的「绿 ≠ 跑过」是同一族的两面：**红也 ≠ 跑过**。
-      修法与判据：启动那一步交给 `scripts/run-affected-tests.mjs`（`spawnSync(process.execPath,
+      修法与判据：启动那一步交给 `scripts/affected-tests/run-affected-tests.mjs`（`spawnSync(process.execPath,
   [vitest 的 ESM 入口, …])`，不经 cmd 层，上限回到 Win32 的 32767），按 24000 字符预算
       **分块**且「宁可多起一次也不丢用例」；入口走 `require.resolve("vitest/package.json")` +
       `bin.vitest`，不写死 `node_modules/vitest/…`（pnpm 布局下顶层只是链接）。
@@ -1108,7 +1108,7 @@
       「不丢用例」的判据一起红。
       ⚠️ **与同批落地的 `tests/doc-check-hook-wiring.test.ts` 对齐过一次口径**（规范 §13.5.8：
       「在场判据要解析、不要 `toContain`」——把钩子里那行前面加 `# ` 注掉，行内仍含同一段
-      字面量，`toContain` 照样命中）：本判据原先正是 `hook.toContain("scripts/run-affected-tests.mjs")`，
+      字面量，`toContain` 照样命中）：本判据原先正是 `hook.toContain("scripts/affected-tests/run-affected-tests.mjs")`，
       而本文件上方的机制说明里也写着这个文件名，**在注释上命中**是分不出「在执行」与「已静音」的。
       现在按 `run_group C … sh -c '<body>'` 解析出实调用体、剔掉行首是 `#` 的行再断言，
       并补一条「注掉那一行」的反证（实测恰好那一条红）。同一次对齐还保住了钩子里那句
@@ -1117,7 +1117,7 @@
       ⚠️ 顺带量到但**本批没动**：`.githooks/pre-commit` 的注释里有硬日期
       （`2026-09-22 并行化重排`）—— R10「注释禁止历史流水」只扫 `.ts/.tsx/.css`，shell 脚本
       在判据面之外；要把这类落点也管住，得先给 R10 加扫描面而不是逐处手改。
-      证据：`.githooks/pre-commit`、`scripts/run-affected-tests.mjs`、
+      证据：`.githooks/pre-commit`、`scripts/affected-tests/run-affected-tests.mjs`、
       `tests/hook-affected-launch.test.ts`、规范 §13.5.8。
 - [x] **E3 服务端集成覆盖收口：判据从「router 有没有测试文件」升到「每条 procedure 有没有执行者」（本批）**：
       台账从 13/16 走到这里，最后 3 个零执行者的口（`customNode` / `user` / `post`）
@@ -1240,7 +1240,7 @@
   **81 tests in 21 files**；加 `--grep=@critical` → **73 tests in 19 files**，比"标了 `@critical`
   的用例数"多，因为标记也挂在 `describe` 上、会带进整组子用例）：`e2e/*.spec.ts` 21 份
   （像素那 5 份已随整档删除）。**执行者这一格不再是空的**：平台侧 `.cnb.yml` 的每日清单里
-  有 `每日全量E2E`，它跑的是**不带 `--grep` 的** `node scripts/e2e-run.mjs` ⇒ 81 条全档，
+  有 `每日全量E2E`，它跑的是**不带 `--grep` 的** `node scripts/e2e/e2e-run.mjs` ⇒ 81 条全档，
   且 `每日生产构建` / `每日浏览器安装` 必须排在它之前（两道前提各有顺序判据）。
   2026-10-21 那次每日跑实测到 `1 failed / 80 passed`、本格 100.0s（红在一条主题 token 断言，
   三次 retry 同形 —— 见 `docs/audits/2026-10-21-timing-baseline-refs-volume.md` 的立案 5；
@@ -1491,9 +1491,9 @@
       等于把登记流程堵死 —— 这类「`--update` 不拒涨是对的」以后也必须写明理由。
 - [~] **E6 无 bundle 体积门禁 / 变异测试 / a11y 自动化**。**a11y 自动化那一格已接上执行者**：
   `tests/a11y-axe-stories.test.ts`（已进 C 组固定清单，唯一出处在
-  `scripts/affected-tests.mjs` 的 `FIXED_STRUCTURAL_TESTS`）把
+  `scripts/affected-tests/affected-tests.mjs` 的 `FIXED_STRUCTURAL_TESTS`）把
   `src/components/ui/*.stories.tsx` 的**每个故事**在 jsdom 里逐个渲染后跑 `axe-core` ——
-  补的是既有那道判据（`scripts/check-a11y-rules.cjs`，规范 06 §6.12）回答不了的一半：
+  补的是既有那道判据（`scripts/gates/check-a11y-rules.cjs`，规范 06 §6.12）回答不了的一半：
   那边判「规则开关 ⇄ 台账」，规则开着、代码照样能渲染出一枚没有名字的按钮。
   违规与「这一档拿不到状态的故事」都登记在 `scripts/.a11y-axe-known.json`，
   **双向不陈旧**（新违规 ⇒ 红；修好了登记还在 ⇒ 也红），**没有 `--update`** ——

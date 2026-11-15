@@ -15,10 +15,10 @@ import {
   checkIncrementalGates,
   parseStageIfModify,
   readCnbConfig,
-} from "../scripts/ci-incremental-gates.mjs";
-import { HEAVY_GATES } from "../scripts/ci-heavy-gates.mjs";
-import { DAILY_GATE_EXECUTORS } from "../scripts/ci-ga-trigger-map.mjs";
-import { INPUT_GLOBS, INPUT_RES, matchedInputs } from "../scripts/check-docs-api.cjs";
+} from "../scripts/ci/ci-incremental-gates.mjs";
+import { HEAVY_GATES } from "../scripts/ci/ci-heavy-gates.mjs";
+import { DAILY_GATE_EXECUTORS } from "../scripts/ci/ci-ga-trigger-map.mjs";
+import { INPUT_GLOBS, INPUT_RES, matchedInputs } from "../scripts/gates/check-docs-api.cjs";
 import { SCAN_ROOTS, TRIGGER_GLOBS } from "../scripts/file-structure-rules.cjs";
 import { globToRe } from "../scripts/vitest-projects.cjs";
 
@@ -203,7 +203,7 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     ).toBeGreaterThan(-1);
     const blockEnd = gaDaily.indexOf("\n      - name:", stepAt + 1);
     const block = gaDaily.slice(stepAt, blockEnd === -1 ? undefined : blockEnd);
-    expect(block).toContain("scripts/check-docs-api.cjs");
+    expect(block).toContain("scripts/gates/check-docs-api.cjs");
     /* 每日档是「重跑一遍」的语义；GA 侧没有 ifModify 的概念，判的是反向：
      * CNB 侧谁把这个格名加回带 `ifModify` 的 stage，就在这里红。 */
     expect(
@@ -212,7 +212,7 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     ).toBe(false);
     const runLine = block.split("\n").find((l) => l.trim().startsWith("run:")) ?? "";
     expect(runLine, `「${step}」step 解析不出 run 行`).not.toBe("");
-    expect(runLine).toContain("scripts/check-docs-api.cjs");
+    expect(runLine).toContain("scripts/gates/check-docs-api.cjs");
     expect(
       runLine,
       "那一格又带上了 `--autofix` —— 产物不进 git，没有「自动修完再提交」的对象（#2231）",
@@ -231,7 +231,7 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       "typedoc.json",
       "package.json",
       "pnpm-lock.yaml",
-      "scripts/check-docs-api.cjs",
+      "scripts/gates/check-docs-api.cjs",
       "scripts/typedoc-run.mjs",
     ]) {
       expect(matchedInputs([f]), `判据不认 ${f}，这条用例的样本已经过期`).toEqual([f]);
@@ -258,17 +258,17 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       workflow,
       "`.github/workflows/pr-gate.yml` 里没有 `check-format.cjs --changed` —— 撤出 CNB 后" +
         "它是这条判据唯一的执行者，两边都没有 = 没人跑它",
-    ).toContain("node scripts/check-format.cjs --changed");
+    ).toContain("node scripts/gates/check-format.cjs --changed");
     /* ISSUE #3291：同一 job 里还有第二格全量档（不带旗标）—— 两格互补：`--changed`
      * 判这次 PR 带来的改动面，全量档判全库不变式。缺了它，「PR 自己扩判面 / 删
      * `IGNORE_GLOBS` / 改 `.oxfmtrc.json`」又只剩人手动盘点这一条路。 */
     expect(
-      /^[ \t]*run:\s*node scripts\/check-format\.cjs\s*$/m.test(workflow),
+      /^[ \t]*run:\s*node scripts\/gates\/check-format\.cjs\s*$/m.test(workflow),
       "`.github/workflows/pr-gate.yml` 里没有不带旗标的全量档 —— 全库不变式没有自动执行者",
     ).toBe(true);
     /* `require` 进来的 CJS 模块导出面：先落 `unknown`，过守卫后逐字段收窄。 */
     // oxlint-disable-next-line typescript/no-require-imports
-    const required: unknown = require("../scripts/check-format.cjs");
+    const required: unknown = require("../scripts/gates/check-format.cjs");
     if (!isFormatModule(required)) {
       throw new Error("check-format.cjs 的导出面不对");
     }
@@ -320,11 +320,11 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       workflow,
       "`.github/workflows/pr-gate.yml` 里没有 `check-file-structure.cjs` —— 撤出 CNB 后" +
         "它是这条判据唯一的执行者",
-    ).toContain("node scripts/check-file-structure.cjs");
+    ).toContain("node scripts/gates/check-file-structure.cjs");
     /* 判据真的遍历每一个扫描根（源码里那一句 `})("<dir>")` / `walk("<dir>")`
      * 是它的读取点）—— 少了这一半，`SCAN_ROOTS` 写错也不会有东西响。 */
     const src = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "check-file-structure.cjs"),
+      path.join(process.cwd(), "scripts", "gates/check-file-structure.cjs"),
       "utf8",
     );
     for (const dir of SCAN_ROOTS) {

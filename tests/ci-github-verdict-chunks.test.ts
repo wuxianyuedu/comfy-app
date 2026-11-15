@@ -8,14 +8,14 @@ import {
   LOG_CHUNKS_DIR_REL,
   LOG_CHUNK_STATIC_STAGES,
   LOG_MANIFEST_FILE_NAME,
-} from "../scripts/ci-github-verdict-logs.mjs";
-import { normalizeDecision, decide, parseArgs } from "../scripts/ci-github-verdict-decide.mjs";
+} from "../scripts/ci/ci-github-verdict-logs.mjs";
+import { normalizeDecision, decide, parseArgs } from "../scripts/ci/ci-github-verdict-decide.mjs";
 import {
   normalizeManifest,
   parseIndex,
   renderChunk,
   renderChunkFromDisk,
-} from "../scripts/ci-print-log-chunk.mjs";
+} from "../scripts/ci/ci-print-log-chunk.mjs";
 
 const MANIFEST = {
   base64Bytes: 157_836,

@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-const SCRIPT = path.resolve(__dirname, "../scripts/check-comfyui-port-contract.cjs");
+const SCRIPT = path.resolve(__dirname, "../scripts/gates/check-comfyui-port-contract.cjs");
 const tempDirs: Array<string> = [];
 
 /** 与真实仓库保持一致的四个判据文件（只保留被判据读到的部分）。 */
@@ -47,7 +47,8 @@ function scanner(overrides: Record<string, string> = {}) {
   const root = mkdtempSync(path.join(tmpdir(), "comfyui-port-"));
   tempDirs.push(root);
   mkdirSync(path.join(root, "scripts"), { recursive: true });
-  copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
+  mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+  copyFileSync(SCRIPT, path.join(root, "scripts", "gates", path.basename(SCRIPT)));
   const files = { ...BASELINE_FILES, ...overrides };
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
@@ -65,7 +66,7 @@ function scanner(overrides: Record<string, string> = {}) {
         ok: true,
         output: execFileSync(
           process.execPath,
-          [path.join(root, "scripts", path.basename(SCRIPT))],
+          [path.join(root, "scripts", "gates", path.basename(SCRIPT))],
           { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
         ),
       };

@@ -9,7 +9,7 @@ import path from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
-import { resolveAffectedTests, wideReasonFor } from "../scripts/affected-tests.mjs";
+import { resolveAffectedTests, wideReasonFor } from "../scripts/affected-tests/affected-tests.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
 import {
   INPUT_FACES,
@@ -233,7 +233,7 @@ describe("切分与接线", () => {
   it("后补面的四条各按自己的触发面回来，且不互相带起（#2793）", () => {
     const cases: Array<[string, string]> = [
       ["oxlint.parity.config.mjs", "tests/eslint-gate-canary.test.ts"],
-      ["scripts/check-commit-claims.mjs", "tests/check-commit-claims.test.ts"],
+      ["scripts/gates/check-commit-claims.mjs", "tests/check-commit-claims.test.ts"],
       ["scripts/changed-scope.mjs", "tests/changed-scope.test.ts"],
       ["src/components/ui/button.tsx", "tests/a11y-axe-stories.test.ts"],
     ];
@@ -255,14 +255,14 @@ describe("切分与接线", () => {
     const cases: Array<[string, string]> = [
       ["scripts/base-check/verdict.mjs", "tests/base-check.test.ts"],
       ["scripts/quality-gate.mjs", "tests/gate-executors.test.ts"],
-      ["scripts/check-merge-parents.mjs", "tests/check-merge-parents.test.ts"],
+      ["scripts/gates/check-merge-parents.mjs", "tests/check-merge-parents.test.ts"],
       ["scripts/merge-changelog-fragments.mjs", "tests/merge-changelog-anchor.test.ts"],
       [".storybook/preview.tsx", "tests/storybook-tsc-input.test.ts"],
-      ["scripts/check-eslint-exemptions.cjs", "tests/eslint-exemption-staleness.test.ts"],
-      ["scripts/check-scripts-typecheck.cjs", "tests/scripts-typecheck-ratchet.test.ts"],
+      ["scripts/gates/check-eslint-exemptions.cjs", "tests/eslint-exemption-staleness.test.ts"],
+      ["scripts/gates/check-scripts-typecheck.cjs", "tests/scripts-typecheck-ratchet.test.ts"],
       ["scripts/precommit-timing.mjs", "tests/precommit-timing.test.ts"],
       [".cnb.yml", "tests/ci-env-probe.test.ts"],
-      ["scripts/check-changelog-versions.cjs", "tests/changelog-versions-gate.test.ts"],
+      ["scripts/gates/check-changelog-versions.cjs", "tests/changelog-versions-gate.test.ts"],
     ];
     const untouchable = [
       "tests/a11y-axe-stories.test.ts",

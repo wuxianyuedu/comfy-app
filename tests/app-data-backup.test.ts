@@ -19,7 +19,7 @@ import {
   pruneAppDataBackups,
   restoreAppDataBackup,
 } from "../scripts/app-data-backup.mjs";
-import { verifyBackupFile } from "../scripts/db-backup-core.mjs";
+import { verifyBackupFile } from "../scripts/db/db-backup-core.mjs";
 
 let root: string;
 let realCwd: string;

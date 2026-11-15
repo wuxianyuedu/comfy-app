@@ -72,4 +72,4 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: 文档引用与权威源一致（CNB push 档同款判据一字不改）
-        run: node scripts/check-doc-references.cjs
+        run: node scripts/gates/check-doc-references.cjs

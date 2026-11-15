@@ -14,8 +14,8 @@ import {
   collectExecutors,
   parseStageScripts,
   readCnbConfig,
-} from "../scripts/ci-autofix-duties.mjs";
-import { HEAVY_GATES } from "../scripts/ci-heavy-gates.mjs";
+} from "../scripts/ci/ci-autofix-duties.mjs";
+import { HEAVY_GATES } from "../scripts/ci/ci-heavy-gates.mjs";
 
 const CONFIG = readCnbConfig(process.cwd());
 /* ISSUE #3378 收尾：`生成态文档与源同步` 由 GA `master-gate.yml` 承接，自动修执行面
@@ -91,7 +91,7 @@ describe("平台侧自动修档（.cnb.yml --autofix ⇄ 登记表）", () => {
     expect(
       checkAutofixDuties(
         "gates: &gates\n  - name: 样本判据\n" +
-          "    script: node scripts/check-file-structure.cjs --check --autofix\n",
+          "    script: node scripts/gates/check-file-structure.cjs --check --autofix\n",
       ),
     ).toContainEqual(expect.stringContaining("不在登记表里"));
     /* ② 负控：只带 `--check` 的普通判据不许被认成自动修档 —— 否则每加一条
@@ -99,7 +99,7 @@ describe("平台侧自动修档（.cnb.yml --autofix ⇄ 登记表）", () => {
     expect(
       checkAutofixDuties(
         "gates: &gates\n  - name: 样本判据\n" +
-          "    script: node scripts/check-file-structure.cjs --check\n",
+          "    script: node scripts/gates/check-file-structure.cjs --check\n",
       ),
     ).toEqual([]);
     /* ③ 聚合档条目那一侧同款：执行面不止 `.cnb.yml` 的 stage，绕过登记表
@@ -108,7 +108,12 @@ describe("平台侧自动修档（.cnb.yml --autofix ⇄ 登记表）", () => {
       checkAutofixDuties(
         "",
         ["--autofix"],
-        [{ name: "样本条目", argv: ["node", "scripts/check-file-structure.cjs", "--autofix"] }],
+        [
+          {
+            name: "样本条目",
+            argv: ["node", "scripts/gates/check-file-structure.cjs", "--autofix"],
+          },
+        ],
       ),
     ).toContainEqual(expect.stringContaining("不在登记表里"));
   });

@@ -1,5 +1,5 @@
 /**
- * `scripts/check-a11y-rules.cjs` 的加载与入口自测（ISSUE #1623）。与 `a11y-rules-gate.test.ts` 分工：那份判
+ * `scripts/gates/check-a11y-rules.cjs` 的加载与入口自测（ISSUE #1623）。与 `a11y-rules-gate.test.ts` 分工：那份判
  * 台账五向口径；这份判「判据怎么被加载」——① 真加载只求值一次（判据配置只求值一次、后续命中同一实例）、
  * ② 导出面每个都能调用、③ 求值失败时给出结论或带原因冒出，不许把半张表当结论。
  */
@@ -128,7 +128,7 @@ test("bin 形态的脚本头两块注释与事实同源（成本那一节的判�
   /* 结构判据：文件头「成本」一节是这支改造的理由说明，不是散文 —— `--ledger` 口子、`judge(ledger)` 的显式入参、
    * CJS 都必须在源码里找得到（§13.5.14「声明 ⇄ 读者」同族）。`judge()` 的入参形状是两侧合并的产物：
    * 配置只从 `configFacts()` 来、台账只从入参来（master 侧收配置、本笔收台账）。 */
-  const src = readFileSync(path.join(REAL_ROOT, "scripts", "check-a11y-rules.cjs"), "utf8");
+  const src = readFileSync(path.join(REAL_ROOT, "scripts", "gates/check-a11y-rules.cjs"), "utf8");
   expect(src).toContain("--ledger <path>");
   expect(src).toContain("async function judge(ledger)");
   expect(src).toContain("await configFacts()");

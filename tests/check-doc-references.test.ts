@@ -1,5 +1,5 @@
 /**
- * 文档引用校验自检：锁住 `scripts/check-doc-references.cjs`（pnpm doc:check）的「单一事实 + 防裸值回潮」契约
+ * 文档引用校验自检：锁住 `scripts/gates/check-doc-references.cjs`（pnpm doc:check）的「单一事实 + 防裸值回潮」契约
  * 真的成立（规范 docs/reference-facts.md：placeholder 类出现裸值即报错，verify 类核对权威源端口族）。并行引用点
  * （ComfyUI 端口在多篇文档形态不同）要并进同一事实（otherDocs），挪出校验范围等于放弃防回潮；用子进程跑才等价。
  */
@@ -21,13 +21,13 @@ const REAL_ROOT = process.cwd();
 const PROBE = createProbeTree(REAL_ROOT);
 /** 本文件的「仓库根」= 那份克隆：判据、渲染件、探针写盘全部落在它里面。 */
 const REPO_ROOT = PROBE.dir;
-const CHECK = join(REPO_ROOT, "scripts", "check-doc-references.cjs");
+const CHECK = join(REPO_ROOT, "scripts", "gates/check-doc-references.cjs");
 
 /** 「文档怎么引用门禁」那三条判据的分片（在 `check-doc-gate-refs.cjs`）。分两份读：那一半判的不是「硬编码
  * 值 / 路径 / 端口」，合住一份越过了文件长度硬闸；接入点仍在 `check-doc-references.cjs` 的 `main`。于是
  * 「定义在哪」与「有没有人调它」是两个文件、两条读法 —— 拿哪一份找另一件都会落空，那是判据搬了家、不是没了。 */
 function gateRefsSource(): string {
-  return readFileSync(join(REPO_ROOT, "scripts", "check-doc-gate-refs.cjs"), "utf8");
+  return readFileSync(join(REPO_ROOT, "scripts", "gates/check-doc-gate-refs.cjs"), "utf8");
 }
 
 /** 把脚本真正引入的内存态 FACTS 拿来做结构断言（与脚本同源，见 doc-facts.cjs）。 */
@@ -296,7 +296,7 @@ describe("FACTS 的并行引用点（onlyDocs ∪ otherDocs）", () => {
   });
 
   it("校验脚本按 onlyDocs ∪ otherDocs 取并集，而不是只看 onlyDocs", () => {
-    const src = docText("scripts/check-doc-references.cjs");
+    const src = docText("scripts/gates/check-doc-references.cjs");
     expect(src).toContain("f.otherDocs");
   });
 });
@@ -927,13 +927,13 @@ describe("§13.1 那份清单与 pre-commit 的 D 组逐字一致（ISSUE #1404�
         abs,
         replaceOnce(
           readFileSync(abs, "utf8"),
-          "✅ node scripts/check-function-length.cjs --staged",
-          "✅ node scripts/check-function-length.cjs",
+          "✅ node scripts/gates/check-function-length.cjs --staged",
+          "✅ node scripts/gates/check-function-length.cjs",
         ),
       );
     });
     expect(code).not.toBe(0);
-    expect(output).toContain("node scripts/check-function-length.cjs --staged");
+    expect(output).toContain("node scripts/gates/check-function-length.cjs --staged");
     expect(output).toContain("flag 与钩子不一致");
   });
 
@@ -944,13 +944,13 @@ describe("§13.1 那份清单与 pre-commit 的 D 组逐字一致（ISSUE #1404�
         abs,
         replaceOnce(
           readFileSync(abs, "utf8"),
-          "✅ node scripts/check-title-bar-clearance.cjs --staged # 输入面跳过（见下 13.5.8.2）\n",
+          "✅ node scripts/gates/check-title-bar-clearance.cjs --staged # 输入面跳过（见下 13.5.8.2）\n",
           "",
         ),
       );
     });
     expect(code).not.toBe(0);
-    expect(output).toContain("node scripts/check-title-bar-clearance.cjs");
+    expect(output).toContain("node scripts/gates/check-title-bar-clearance.cjs");
     expect(output).toContain("§13.1 清单里没有这条");
   });
 
@@ -961,8 +961,8 @@ describe("§13.1 那份清单与 pre-commit 的 D 组逐字一致（ISSUE #1404�
         abs,
         replaceOnce(
           readFileSync(abs, "utf8"),
-          "✅ node scripts/check-comment-language.cjs",
-          "✅ node scripts/zz-pretend-judge.cjs\n✅ node scripts/check-comment-language.cjs",
+          "✅ node scripts/gates/check-comment-language.cjs",
+          "✅ node scripts/zz-pretend-judge.cjs\n✅ node scripts/gates/check-comment-language.cjs",
         ),
       );
     });

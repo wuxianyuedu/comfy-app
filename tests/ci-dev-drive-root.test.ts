@@ -1,7 +1,7 @@
 /** 「CI 的落点指到开发盘」那件事的**契约**（临时根 + 浏览器落点）。三行流水线级 env
  * （`TEMP` / `TMP` / `PLAYWRIGHT_BROWSERS_PATH`）随 #3504 的构建执行外迁而退役 ——
  * 本文件现在是**反向登记**（三行不许回来；构建格挂回本机时才恢复正向契约）。
- * 落点推导本身（`scripts/ci-toolchain-browser-root.mjs` 那一族）仍是活代码：
+ * 落点推导本身（`scripts/ci/ci-toolchain-browser-root.mjs` 那一族）仍是活代码：
  * 本地开发机与将来任何自托管执行面都还在用同一份「装与判同源」。 */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,8 +16,8 @@ import {
   platformDefaultBrowsersRoot,
   playwrightBrowsersRoot,
   playwrightRootCandidates,
-} from "../scripts/ci-toolchain-browser.mjs";
-import { ensureDir } from "../scripts/ci-env-probe.mjs";
+} from "../scripts/ci/ci-toolchain-browser.mjs";
+import { ensureDir } from "../scripts/ci/ci-env-probe.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const CNB = path.join(ROOT, ".cnb.yml");
@@ -266,8 +266,11 @@ describe("落点推导：装与判同源，且「装了却探不到」说得出�
 describe("落点推导只有一处实现（装与判同源的前提）", () => {
   it("`ms-playwright` 这个字面量只住在落点模块里", () => {
     const literal = /["'`]ms-playwright["'`]/;
-    const root = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-browser-root.mjs"), "utf8");
-    const browser = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-browser.mjs"), "utf8");
+    const root = readFileSync(
+      path.join(ROOT, "scripts", "ci/ci-toolchain-browser-root.mjs"),
+      "utf8",
+    );
+    const browser = readFileSync(path.join(ROOT, "scripts", "ci/ci-toolchain-browser.mjs"), "utf8");
     expect(literal.test(root)).toBe(true);
     expect(
       literal.test(browser),
@@ -277,7 +280,7 @@ describe("落点推导只有一处实现（装与判同源的前提）", () => {
   });
 
   it("`ci-toolchain-browser.mjs` 从落点模块取那三个名字（不是自己抄一份）", () => {
-    const src = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-browser.mjs"), "utf8");
+    const src = readFileSync(path.join(ROOT, "scripts", "ci/ci-toolchain-browser.mjs"), "utf8");
     expect(src).toContain('from "./ci-toolchain-browser-root.mjs"');
     for (const name of [
       "playwrightBrowsersRoot",

@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const SCRIPT = path.resolve(__dirname, "../scripts/check-ui-customizations.cjs");
+const SCRIPT = path.resolve(__dirname, "../scripts/gates/check-ui-customizations.cjs");
 const DOC = "docs/standards/16-shadcn-ui与表单校验.md";
 
 /** execFileSync 抛出的失败对象：只认「是对象」这一层，字段各自再按 typeof 收窄。 */
@@ -46,7 +46,8 @@ const MARKER =
 function gate(files: Record<string, string>): { ok: boolean; output: string } {
   const root = mkdtempSync(path.join(tmpdir(), "ui-customizations-"));
   mkdirSync(path.join(root, "scripts"), { recursive: true });
-  copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
+  mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+  copyFileSync(SCRIPT, path.join(root, "scripts", "gates", path.basename(SCRIPT)));
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });
@@ -55,11 +56,15 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
   try {
     return {
       ok: true,
-      output: execFileSync(process.execPath, [path.join(root, "scripts", path.basename(SCRIPT))], {
-        cwd: root,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-      }),
+      output: execFileSync(
+        process.execPath,
+        [path.join(root, "scripts", "gates", path.basename(SCRIPT))],
+        {
+          cwd: root,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      ),
     };
   } catch (error) {
     const e: Record<string, unknown> = isExecFailure(error) ? error : {};

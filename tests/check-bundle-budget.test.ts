@@ -1,5 +1,5 @@
 /**
- * 提交门槛自检：把 scripts/check-bundle-budget.cjs 当黑盒跑在临时工作区上，验证「client chunk 体积预算」
+ * 提交门槛自检：把 scripts/gates/check-bundle-budget.cjs 当黑盒跑在临时工作区上，验证「client chunk 体积预算」
  * 棘轮（规范 §13.5.4，ISSUE #1781）真会阻断、也不空转。用子进程跑才等价（门禁以 `node scripts/xxx.cjs` 调、
  * 内部 `__dirname/..` 定位产物）。口径只看 gzip 与文件数（逐文件账仅作诊断，chunk 名是内容哈希）；两条用例钉「失效也是绿」的位置。
  */
@@ -13,7 +13,7 @@ import { expectActionableRefusal } from "./helpers/ratchet-refusal";
  * `repo.remove(".git")` —— 常态与反常各自显式，而不是让常态靠一份取不到修订号的基线撑着。
  */
 const { test, expect } = defineGateRepo({
-  script: "check-bundle-budget.cjs",
+  script: "gates/check-bundle-budget.cjs",
   dirs: [".next/static/chunks"],
   setup: (repo) => {
     repo.git("init", "-q");
@@ -32,7 +32,7 @@ const { test, expect } = defineGateRepo({
  * 有人钉住：数不出来时说清是哪一档，数得出来时不许静默不说。
  */
 const { test: testWithGit } = defineGateRepo({
-  script: "check-bundle-budget.cjs",
+  script: "gates/check-bundle-budget.cjs",
   dirs: [".next/static/chunks"],
   workdir: "bundle-budget-git",
   setup: (repo) => {

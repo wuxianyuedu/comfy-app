@@ -70,7 +70,7 @@ function collectCallSites(): Array<{ rel: string; window: string }> {
     } catch (error) {
       /* 「列目录 → 读内容」之间会消失的文件不是判据要判的形态：并发用例
        * （tests/global-setup-cleanup.test.ts）会在 tests/ 下造 `.setup-cleanup-probe-*` 再删，
-       * 那一窗口与扫描撞上就是 ENOENT（与 scripts/gate-scan-read.cjs 共享件同一条口径）。
+       * 那一窗口与扫描撞上就是 ENOENT（与 scripts/gates/gate-scan-read.cjs 共享件同一条口径）。
        * ⚠️ 只降级 ENOENT：权限错 / 形状错吞掉就等于「读不到输入」变静默放行。 */
       if (!isMissingFile(error)) {
         throw error;

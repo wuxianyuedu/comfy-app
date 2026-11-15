@@ -1,4 +1,4 @@
-/** `scripts/ci-actionlint.mjs` 的用例（ISSUE #3063）：三态退码与「零网络取用」的措辞。 */
+/** `scripts/ci/ci-actionlint.mjs` 的用例（ISSUE #3063）：三态退码与「零网络取用」的措辞。 */
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -15,7 +15,7 @@ import {
   toolDir,
   verifyBinary,
   workflowFiles,
-} from "../scripts/ci-actionlint.mjs";
+} from "../scripts/ci/ci-actionlint.mjs";
 
 /** 每一轮 `log()` 都打到这里（`runCiActionlint` 的正文全部走 stdout）。 */
 function capture(fn: () => number): { code: number; text: string } {

@@ -19,7 +19,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 const SCRIPTS_DIR = path.resolve(__dirname, "../scripts");
-const SCRIPT = path.join(SCRIPTS_DIR, "check-gate-repo-boilerplate.cjs");
+const SCRIPT = path.join(SCRIPTS_DIR, "gates/check-gate-repo-boilerplate.cjs");
 
 /** 临时仓库列表，用例结束统一清掉。 */
 const roots: Array<string> = [];
@@ -43,20 +43,20 @@ function gate(
 ): { ok: boolean; output: string; root: string } {
   const root = mkdtempSync(path.join(tmpdir(), "gate-repo-boilerplate-"));
   roots.push(root);
-  mkdirSync(path.join(root, "scripts"), { recursive: true });
-  copyFileSync(SCRIPT, path.join(root, "scripts", "check-gate-repo-boilerplate.cjs"));
+  mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+  copyFileSync(SCRIPT, path.join(root, "scripts", "gates/check-gate-repo-boilerplate.cjs"));
   /* 判据共用的扫描读取器（`gate-` 前缀，不是 `check-`）：少带时本判据在临时仓库里
    * 直接 MODULE_NOT_FOUND，用例读到的是「门禁坏了」而不是「夹具缺一块」。 */
   copyFileSync(
-    path.join(SCRIPTS_DIR, "gate-scan-read.cjs"),
-    path.join(root, "scripts", "gate-scan-read.cjs"),
+    path.join(SCRIPTS_DIR, "gates/gate-scan-read.cjs"),
+    path.join(root, "scripts", "gates/gate-scan-read.cjs"),
   );
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });
     writeFileSync(abs, content);
   }
-  const entry = path.join(root, "scripts", "check-gate-repo-boilerplate.cjs");
+  const entry = path.join(root, "scripts", "gates/check-gate-repo-boilerplate.cjs");
   try {
     return {
       ok: true,

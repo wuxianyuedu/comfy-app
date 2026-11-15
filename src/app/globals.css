@@ -719,7 +719,7 @@
       的内容压下去、让中间那块加载卡片浮起来」。它必须比被压的对象更暗，
       换浅色会让「压暗」这件事反向失效（满足判据 1、2）。
 
-   机器化：本清单与「类型色例外」不只是注释——`scripts/check-theme-colors.cjs`
+   机器化：本清单与「类型色例外」不只是注释——`scripts/gates/check-theme-colors.cjs`
    把它们做成**机器可读的豁免清单**（`EXEMPT_TABLES` / `EXEMPT_FIXED_DARK`），
    扫描时据此把两类例外剔出报告，未豁免的写死色值走棘轮（只许降不许升）。
    口径是「豁免必须显式」：逐条列出文件 + 顶层标识符 + 理由，不做模糊放行。
@@ -794,7 +794,7 @@ body {
    自绘滚动条（`::-webkit-scrollbar`）在 WebView2 / Chromium 下生效，
    本项目有三档**刻意不同**的观感，因此这里保留三个具名类 + 一条全局兜底，
    每个类的取值各有出处。判据：`src/**` 里不得再出现
-   `::-webkit-scrollbar`（由 `scripts/check-ui-primitives.cjs` 的 P4 拦截）——
+   `::-webkit-scrollbar`（由 `scripts/gates/check-ui-primitives.cjs` 的 P4 拦截）——
    视图里写任意值变体等于把同一件事再实现一份，取值还会各自漂移。
 
    档位与谁在用：

@@ -9,7 +9,7 @@ import {
   main,
   readAttendance,
   summarizeCallbackBuilds,
-} from "../scripts/ci-ga-verdict-attendance.mjs";
+} from "../scripts/ci/ci-ga-verdict-attendance.mjs";
 
 /* 钉住的「现在」：2026-11-08T12:00:00Z。窗口内的读数都按它算。 */
 const NOW = Date.parse("2026-11-08T12:00:00.000Z");

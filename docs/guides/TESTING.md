@@ -46,7 +46,7 @@ pnpm run build          # 产物级护栏（build + 剥私有输入 + 数产物 
   所以每份的头里都写明了具体是哪一条 API / 哪一个行为在 happy-dom 下不同
   （`Node.prototype.nodeName` 空串桩 / CSSOM 不认 `color-mix()` /
   `clientWidth` 不可 spy / `getAnimations()` 不推进时钟）。现状 8 份，
-  清单跑 `node scripts/check-test-environment.cjs` 会打出来。
+  清单跑 `node scripts/gates/check-test-environment.cjs` 会打出来。
   ⚠️ 这里曾经写着「为什么不用 `projects` 分档 …… 维持」—— 那是**上一轮的结论，
   已被采纳的那次改动推翻**：分档做了，但**没有**按目录一刀切（那会把 260 份
   node 用例误升进 DOM 档，而 DOM 档下跑纯逻辑不报错、只是变慢，是静默的那一侧）。
@@ -105,7 +105,7 @@ procedure 有没有执行者**与**消费方（这两条已由 `tests/trpc-surfa
 - 纯函数模块（lib 层、utils）优先补 `*.test.ts`；跨模块通用能力先补进地基再 import（§12.18）
 - 组件测试范例：`AgentPanel.test.tsx`（轻量交互）、`SubgraphHeader.test.tsx`（真实 Provider 包装）
 - 断言基于实现语义编写，禁止为"让测试通过"而弱化断言
-- 新目录要同时登记两处：`scripts/check-file-structure.cjs` 的 `DOMAINS`（R14）与
+- 新目录要同时登记两处：`scripts/gates/check-file-structure.cjs` 的 `DOMAINS`（R14）与
   `vitest.config.ts` 的覆盖率门槛（§18.6 / §12.5.3）
 
 ### 组件测试（@testing-library/react）
@@ -157,7 +157,7 @@ procedure 有没有执行者**与**消费方（这两条已由 `tests/trpc-surfa
 
 - **全量 e2e**（`scripts/.e2e-freshness.json`）按本地日历日判「**当天的第一次提交**
   带没带一次自证」：跑 `pnpm test:e2e` 跑绿即记，或
-  `node scripts/e2e-run.mjs --skip "<理由>"` 记一条豁免（占位理由被拦）。
+  `node scripts/e2e/e2e-run.mjs --skip "<理由>"` 记一条豁免（占位理由被拦）。
 - **全量单测 + 覆盖率**（`scripts/.full-suite-freshness.json`，`pnpm run test:coverage`
   走 `scripts/full-suite-run.mjs`）与**产物级护栏**（`scripts/.artifact-freshness.json`，
   `pnpm run build` 走 `scripts/artifact-run.mjs`）判的是「**改了就当天跑**」：
@@ -199,7 +199,7 @@ Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎�
   `expect.poll` 报 `must be called inside a test`（实测 20/20 红；两条用例次序反转
   则 0/20 红）。修法：该条改回串行 `it`，或把等待换成 `vi.waitFor`。
 
-真要用的话，文件里必须写明隔离声明（`scripts/check-test-concurrency.cjs` 在
+真要用的话，文件里必须写明隔离声明（`scripts/gates/check-test-concurrency.cjs` 在
 pre-commit 强制）：
 
 ```ts

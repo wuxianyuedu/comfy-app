@@ -1,5 +1,5 @@
 /**
- * `scripts/ci-ga-verdict-placeholder.mjs` 的判据（ISSUE #3378 骨架）。
+ * `scripts/ci/ci-ga-verdict-placeholder.mjs` 的判据（ISSUE #3378 骨架）。
  *
  * 只读对账入口：把 `ListPullCommitStatuses` 的应答折成「占位 / 回调 / 认不出」
  * 三堆 + 聚合读数。钉住两件：① 角色只从带标记的文字认，认不出就归 unknown，
@@ -13,7 +13,7 @@ import {
   STATUS_PREFIX,
   statusRole,
   summarizeStatuses,
-} from "../scripts/ci-ga-verdict-placeholder.mjs";
+} from "../scripts/ci/ci-ga-verdict-placeholder.mjs";
 
 const CTX = `${STATUS_PREFIX}/pipeline-1(GA 判决回调)`;
 

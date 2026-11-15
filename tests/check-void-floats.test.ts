@@ -1,5 +1,5 @@
 /**
- * src/lib `void someFn(...)` 语句棘轮自检：把 `scripts/check-void-floats.cjs` 当黑盒跑在临时工作区上，验证 AST 判据、基线读写与「只挡新增、允许下降」的棘轮语义（规范 §13.5.7 / `18-lib层规范.md`）。
+ * src/lib `void someFn(...)` 语句棘轮自检：把 `scripts/gates/check-void-floats.cjs` 当黑盒跑在临时工作区上，验证 AST 判据、基线读写与「只挡新增、允许下降」的棘轮语义（规范 §13.5.7 / `18-lib层规范.md`）。
  * 为什么值得有门禁：PR-4b 加了 `fireAndForget` 地基、PR-10 审过 lib 里 30+ 处 `void fn()` 并改走 10 处真漏；但人工审计会漂 —— 后来者写下 `void persistLogs(taskId)`（被调方无内部 catch）就是未来的 unhandledRejection，pre-commit 不响。
  * 判据**强制显式**：写下 `void someFn()` 这个形态本身要走一次评审，要么改用 fireAndForget，要么 `--update` 收紧基线时说明「被调方内部已 catch、刻意悬空」。
  */
@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
-  script: "check-void-floats.cjs",
+  script: "gates/check-void-floats.cjs",
   dirs: ["src/lib"],
   /* 判据走 TS AST，要能解析 typescript —— 临时工作区旁边没有 node_modules，
    * 靠 NODE_PATH 指回源码仓库（脚本真的依赖这个输入，不是顺手给的口子）。 */

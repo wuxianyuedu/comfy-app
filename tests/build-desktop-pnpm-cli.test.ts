@@ -25,7 +25,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { pnpmCli } from "../scripts/ci-install-deps.mjs";
+import { pnpmCli } from "../scripts/ci/ci-install-deps.mjs";
 import { pnpmInvocation } from "../src/lib/process/pnpm-resolve.ts";
 import { stripComments } from "./helpers/strip-comments";
 
@@ -36,7 +36,7 @@ describe("build-desktop 与 daily 生产构建同用一份 pnpm 形态判据（I
     // 判**代码**：注释里解释「旧形态为什么够不着」的话不该被读成回潮。
     const code = stripComments(readFileSync(SCRIPT, "utf8"), { trailing: true });
     expect(code, "回到了按名字找 pnpm 的旧形态").not.toContain("pnpmInvocation(");
-    expect(code).toContain('import { pnpmCli } from "./ci-install-deps.mjs"');
+    expect(code).toContain('import { pnpmCli } from "./ci/ci-install-deps.mjs"');
     // 两处派生（1/4 pnpm build / DDL 导出）都经 pnpmCli，不落下一个。
     expect([...code.matchAll(/pnpmCli\(\)/g)].length).toBe(2);
   });

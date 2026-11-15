@@ -36,7 +36,7 @@ export type RecentProject = {
 
 /* 卡片类型徽标文案与图标 */
 /* 项目类别色 + 图标。色值仍是 hex，但**只作为内联 style，不走 Tailwind 任意值类**：JIT 扫不到 `bg-[${cfg.color}/15]` 这种运行时模板（此前那条写法从没生效，图标方块一直无底色）；透明档交给 `color-mix`（`kindTint`），不必再手写一份透明色。
- * 色值本身属规范 03 §3.6.1 的**类型色例外**（与 `lib/project-canvas/canvas-types.ts` 的 `NODE_META.color` 同构），已在 `scripts/check-theme-colors.cjs` 的 `EXEMPT_TABLES` 登记。 */
+ * 色值本身属规范 03 §3.6.1 的**类型色例外**（与 `lib/project-canvas/canvas-types.ts` 的 `NODE_META.color` 同构），已在 `scripts/gates/check-theme-colors.cjs` 的 `EXEMPT_TABLES` 登记。 */
 type KindConfig = { color: string; icon: React.ReactNode; label: string };
 
 const KIND_CONFIG: Record<"canvas" | "generation" | "workflow" | "video", KindConfig> = {

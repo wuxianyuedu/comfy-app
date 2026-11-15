@@ -18,7 +18,7 @@
  *     两层都有出路：跑一次，或 `--dirty "<理由>"` 声明「这次改动确实不吃这一档」。
  *
  * 记账语义与另外三档**逐字同一份实现**（`writeFreshness` / `writeSkipRecord`，
- * `scripts/freshness-ledger.mjs`）：只有绿了才记、红着不记（跑过 ≠ 跑绿过）。
+ * `scripts/freshness/freshness-ledger.mjs`）：只有绿了才记、红着不记（跑过 ≠ 跑绿过）。
  * `--skip` / `--dirty` 的解析与落账走 `scripts/daily-run.mjs`（四档共用，§12.12）。
  *
  * ## 覆盖率门槛：**默认只上报，不拦 CI**（ISSUE #2669，业主口径）
@@ -53,8 +53,8 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-import { resolveCiWorkers } from "./ci-load.mjs";
-import { pnpmCli } from "./ci-install-deps.mjs";
+import { resolveCiWorkers } from "./ci/ci-load.mjs";
+import { pnpmCli } from "./ci/ci-install-deps.mjs";
 /* 分文件耗时的形状与钩子那一档**共用同一份解析**（`parseJunitXml`）：本地账本与 CI 日志
  * 报的是同一个量的两种形状，抄两份解析器就会在「谁把外层 `<testsuites>` 当成一个文件」
  * 这种地方分叉，而那类分叉只会让读数偏，不会让它红。 */
@@ -66,8 +66,11 @@ import { parseJunitXml, failingSuitesFromJunit } from "./precommit-timing.mjs";
  * （`tests/deps-freshness-gate.test.ts:166` 超时 30s）就把后面的
  * `每日生产构建` / `每日浏览器安装` / `每日全量E2E` 三格全部 skip 掉 ——
  * 而那次红是调度排不上，不是断言报错。 */
-import { isTimeoutShaped, waitForLoadToSettle } from "./affected-launch-load-retry.mjs";
-import { planLaunches } from "./run-affected-tests.mjs";
+import {
+  isTimeoutShaped,
+  waitForLoadToSettle,
+} from "./affected-tests/affected-launch-load-retry.mjs";
+import { planLaunches } from "./affected-tests/run-affected-tests.mjs";
 /* 停用台账（ISSUE #2948）：全量档是「整档凭证」的口径，剔掉几条就不该再记账 ——
  * 那一半由下面 `--exclude` 的**在场**决定（见 `planRun` 的 `exclude` 一节）。 */
 import { suspendedNames, suspendedReading } from "./suspended-gate-tests.mjs";
@@ -87,8 +90,8 @@ import {
   isWholeTrackRun,
   notWholeTrackNotice,
   pushFreshnessLedger,
-} from "./freshness-ledger.mjs";
-import { writeFreshness } from "./freshness-ledger-write.mjs";
+} from "./freshness/freshness-ledger.mjs";
+import { writeFreshness } from "./freshness/freshness-ledger-write.mjs";
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
@@ -107,7 +110,7 @@ export const TRACK = freshnessTrack("full");
  * ⚠️ **并发跟现场核数走，不写死**（ISSUE #1993 / 规范 §13.5.21）：旧形态是在
  * `.cnb.yml` 里裸跑 `node scripts/full-suite-run.mjs`，并发吃 `vitest.config.ts` 给的
  * `maxWorkers: 8`，而那个 8 是**本机 8 核检出**的实测值 —— 平台节点换规格、或同一台机上
- * 多了一条流水线时它照旧按 8 铺开。核数由 `scripts/ci-load.mjs` 从 `CNB_CPUS` 与
+ * 多了一条流水线时它照旧按 8 铺开。核数由 `scripts/ci/ci-load.mjs` 从 `CNB_CPUS` 与
  * `os.availableParallelism()` 读（唯一出处），这里只把结论拼进参数。
  * 这不是放宽判据：用例、预算、覆盖率阈值一个字不动，动的只有排队的宽度。
  *

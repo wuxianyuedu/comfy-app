@@ -487,7 +487,7 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
   });
 });
 
-describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () => {
+describe("scripts/ci/ci-run-tool.mjs — 按名字直起包真身（#2572）", () => {
   const run = (
     argv: Array<string>,
     cwd = ROOT,
@@ -519,7 +519,7 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
      * 这一条判真跑起来之后日志里没有宿主的话术）。 */
     const entry = resolveBinEntryByName("tsc");
     expect(entry).toBeTruthy();
-    const r = run(["scripts/ci-run-tool.mjs", "tsc", "--version"]);
+    const r = run(["scripts/ci/ci-run-tool.mjs", "tsc", "--version"]);
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toMatch(/Version \d/);
     expect(r.stdout).toContain(`[ci-run-tool] 实际执行：node ${entry}`);
@@ -550,7 +550,7 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
       (root) => {
         /* cwd 换成夹具（判「无 -p ⇒ cwd 的 tsconfig.json」这一支）时，脚本本身
          * 要用绝对路径点名 —— 相对形态只在 ROOT 下解析得到。 */
-        const tool = path.join(ROOT, "scripts", "ci-run-tool.mjs");
+        const tool = path.join(ROOT, "scripts", "ci/ci-run-tool.mjs");
         const pointed = run(
           [tool, "--root", root, "tsc", "--noEmit", "-p", "tsconfig.ci.json"],
           root,
@@ -582,7 +582,7 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
             .replaceAll("\\", "/")}\n`,
       },
       (root) => {
-        const r = run(["scripts/ci-run-tool.mjs", "--root", root, "echo", "--version"]);
+        const r = run(["scripts/ci/ci-run-tool.mjs", "--root", root, "echo", "--version"]);
         expect(r.status, r.stderr).toBe(0);
         expect(r.stdout, "判决面是 tsc 的概念，别的工具念它是噪声").not.toContain("判决面");
       },
@@ -614,7 +614,7 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
         "tsconfig.json": '{ "compilerOptions": { "strict": true } }\n',
       },
       (root) => {
-        const tool = path.join(ROOT, "scripts", "ci-run-tool.mjs");
+        const tool = path.join(ROOT, "scripts", "ci/ci-run-tool.mjs");
         const red = run([tool, "--root", root, "tsc", "--noEmit"], root);
         expect(red.status, red.stderr).toBe(1);
         expect(red.stdout).toContain("[ci-run-tool] 程序图里的 .mjs：共 3 份，仓内：");
@@ -651,7 +651,7 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
         "tsconfig.json": '{ "compilerOptions": { "strict": true } }\n',
       },
       (root) => {
-        const tool = path.join(ROOT, "scripts", "ci-run-tool.mjs");
+        const tool = path.join(ROOT, "scripts", "ci/ci-run-tool.mjs");
         const r = run([tool, "--root", root, "tsc", "--noEmit"], root);
         expect(r.status, r.stderr).toBe(1);
         expect(r.stdout).toContain("程序图读数取不到");
@@ -672,7 +672,7 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
       },
       (root) => {
         const args = ["--reporter", "verbose output", "--only-changed"];
-        const r = run(["scripts/ci-run-tool.mjs", "--root", root, "echo", ...args]);
+        const r = run(["scripts/ci/ci-run-tool.mjs", "--root", root, "echo", ...args]);
         expect(r.status, r.stderr).toBe(0);
         /* 「逐字」两半都要判：值里带空格被切开 ⇒ 数组对不上；
          * 被拼成一整串再交给 shell ⇒ 更早就红了（子进程收到一个参数）。 */
@@ -691,9 +691,9 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
             .replaceAll("\\", "/")}\n`,
       },
       (root) => {
-        expect(run(["scripts/ci-run-tool.mjs", "--root", root, "fail"]).status).toBe(3);
+        expect(run(["scripts/ci/ci-run-tool.mjs", "--root", root, "fail"]).status).toBe(3);
 
-        const notRun = run(["scripts/ci-run-tool.mjs", "--root", root, "这个垫片不在"]);
+        const notRun = run(["scripts/ci/ci-run-tool.mjs", "--root", root, "这个垫片不在"]);
         expect(notRun.status, "解析不到却退 0/1 —— 会被读成「跑过了且红」").toBe(2);
         /* 话术分两档（ISSUE #2720）：fixture 没有 package.json ⇒ 名字不在仓内声明里，
          * 走「面外」那一档 —— 出口指向 ship-exec 的 pnpmInvocation，**不再出现**
@@ -710,7 +710,7 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
         "package.json": '{"dependencies":{"声明了没装":"1.0.0"}}\n',
       },
       (root) => {
-        const missing = run(["scripts/ci-run-tool.mjs", "--root", root, "声明了没装"]);
+        const missing = run(["scripts/ci/ci-run-tool.mjs", "--root", root, "声明了没装"]);
         expect(missing.status).toBe(2);
         expect(missing.stderr).toContain("仓内声明了这个依赖");
         expect(missing.stderr).toContain("pnpm install");
@@ -719,8 +719,8 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
       },
     );
     /* 「没点名要跑谁」同样是没结论，不是绿。 */
-    expect(run(["scripts/ci-run-tool.mjs"]).status).toBe(2);
-    expect(run(["scripts/ci-run-tool.mjs", "--root"]).status).toBe(2);
+    expect(run(["scripts/ci/ci-run-tool.mjs"]).status).toBe(2);
+    expect(run(["scripts/ci/ci-run-tool.mjs", "--root"]).status).toBe(2);
   });
 
   it("`.cnb.yml` 不再直接起 `.bin` 垫片，那两格在 GA 走本入口", () => {
@@ -745,9 +745,9 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
         fs.readFileSync(path.join(ROOT, ".github", "workflows", "pr-gate.yml"), "utf8"),
       ),
     ].join("\n");
-    expect(joined).toContain("node scripts/ci-run-tool.mjs tsc --noEmit");
+    expect(joined).toContain("node scripts/ci/ci-run-tool.mjs tsc --noEmit");
     expect(joined).toContain(
-      "node scripts/ci-run-tool.mjs vitest run tests/lib-node-only-declarations.test.ts",
+      "node scripts/ci/ci-run-tool.mjs vitest run tests/lib-node-only-declarations.test.ts",
     );
   });
 });

@@ -37,7 +37,7 @@ describe("默认端口是单一事实源", () => {
   });
 
   /* 连接侧与拉起侧都从**零依赖常量层**取默认端口（判据见
-   * `scripts/check-comfyui-port-contract.cjs`）：转手一次就多一条「只想要一个
+   * `scripts/gates/check-comfyui-port-contract.cjs`）：转手一次就多一条「只想要一个
    * 常量却拖进 fs」的路径，而那条路径正是设置页整页 500 的成因。 */
   it("连接侧（client.ts）与拉起侧（lifecycle-launch.ts）都从常量层取默认端口", () => {
     for (const file of ["src/lib/comfyui/client.ts", "src/lib/comfyui/lifecycle-launch.ts"]) {

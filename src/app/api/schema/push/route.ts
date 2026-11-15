@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { NextResponse } from "next/server";
 
-import { spawnSchemaSync } from "../../../../../scripts/db-schema-state.mjs";
+import { spawnSchemaSync } from "../../../../../scripts/db/db-schema-state.mjs";
 import { isRecord } from "~/lib/is-record";
 import { SCHEMA_SYNC_STATUS_FILE } from "~/lib/log/log-paths";
 

@@ -1,5 +1,5 @@
 /**
- * `scripts/ship-ga-logs-cnb.mjs` 的判据（ISSUE #3437 本地 CNB 站内读回）。
+ * `scripts/ship/ship-ga-logs-cnb.mjs` 的判据（ISSUE #3437 本地 CNB 站内读回）。
  *
  * 钉住四件最容易静默失效的事：
  *   ① `findRelayComment` 倒着扫列表认**最新**一条 marker（平台列表是旧→新、不支持 sort）；
@@ -11,7 +11,7 @@
 import { gzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 
-import type { ExecResult } from "../scripts/ship-exec.mjs";
+import type { ExecResult } from "../scripts/ship/ship-exec.mjs";
 import {
   decodeRelayPayload,
   findRelayComment,
@@ -19,7 +19,7 @@ import {
   readRelayLogs,
   readRelayMarker,
   RELAY_MARKER,
-} from "../scripts/ship-ga-logs-cnb.mjs";
+} from "../scripts/ship/ship-ga-logs-cnb.mjs";
 
 const SHA = "b".repeat(40);
 const ASSET = "u/key/f.b64";

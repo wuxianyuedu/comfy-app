@@ -1,5 +1,5 @@
 /**
- * `scripts/ci-code-scanning-triage.mjs` 的契约。
+ * `scripts/ci/ci-code-scanning-triage.mjs` 的契约。
  *
  * 四组用例，每组钉一种危险失效：
  *   ① 去重键认错了（用 alert number 或 file:line 当键 ⇒ 复发 / 行号漂移就重复建单）；
@@ -23,7 +23,7 @@ import {
   renderIssueBody,
   ruleOfTitle,
   titleKey,
-} from "../scripts/ci-code-scanning-triage.mjs";
+} from "../scripts/ci/ci-code-scanning-triage.mjs";
 
 /** 一条告警（本档 `normalizeAlert()` 之后的形状）。 */
 type Alert = {
@@ -219,7 +219,9 @@ describe("正文模板（概览 / 命中表 / 修复建议 / 验收口径）", (
     const body = renderIssueBody({
       ruleId: "js/redos",
       severity: "high",
-      alerts: [alert(17, "js/redos", "high", "scripts/ui-primitives-rules-p67-p86.cjs", 598)],
+      alerts: [
+        alert(17, "js/redos", "high", "scripts/ui-primitives/ui-primitives-rules-p67-p86.cjs", 598),
+      ],
       analysis,
       ghRepo: "wuxianyuedu/comfy-app",
     });
@@ -227,7 +229,7 @@ describe("正文模板（概览 / 命中表 / 修复建议 / 验收口径）", (
     expect(body).toContain("## 概览");
     expect(body).toContain("cbb029de");
     expect(body).toContain("refs/heads/master");
-    expect(body).toContain("scripts/ui-primitives-rules-p67-p86.cjs:598");
+    expect(body).toContain("scripts/ui-primitives/ui-primitives-rules-p67-p86.cjs:598");
     expect(body).toContain(alertLink("wuxianyuedu/comfy-app", 17));
     expect(body).toContain("## 修复建议");
     expect(body).toContain("## 验收口径");

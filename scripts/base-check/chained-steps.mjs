@@ -8,7 +8,7 @@
  * （§13.6.2 那条「面从哪来」）。而有一族判据**天然进不了钩子**、理由与「代价高」
  * 无关 —— 是**本地看不到那个形态**：
  *
- *   · 首发成员 `scripts/check-commit-claims.mjs`（「提交信息里的声明 ⇄ 那次提交的
+ *   · 首发成员 `scripts/gates/check-commit-claims.mjs`（「提交信息里的声明 ⇄ 那次提交的
  *     事实」，11 §11.23.5）判的是**某一次提交**的树（「§x.y 照旧保留」），而丢失
  *     发生在**平台侧 squash** 那一刻 —— 实测 `ad81a912` / `bdabd26f` / `b9bedd37`
  *     在 `master` 上都是**单亲**、提交信息里却带 `Merge origin/master into …` 字样，
@@ -49,7 +49,7 @@ import path from "node:path";
  * 这个形状现算「有哪些成员」，好与 `.on-demand-duties.json` 的登记**双向**核对
  * （新增一条却忘了登记 ⇒ 当场红）。改这个形状要同批改那一边。
  */
-export const CHAINED_STEPS = [{ script: "scripts/check-commit-claims.mjs" }];
+export const CHAINED_STEPS = [{ script: "scripts/gates/check-commit-claims.mjs" }];
 
 /**
  * 把这一族展开成 `resolveMergeBatch` 的 `{argv, label, baseSide}` 条目。

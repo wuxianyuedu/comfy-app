@@ -10,8 +10,8 @@ import {
   branchLandingRows,
   fetchPullsForBranches,
   readListHasMore,
-} from "../scripts/ship-branches.mjs";
-import { main } from "../scripts/ship.mjs";
+} from "../scripts/ship/ship-branches.mjs";
+import { main } from "../scripts/ship/ship.mjs";
 
 const CODE = { GREEN: 0, RED: 1, NOT_RUN: 2 };
 

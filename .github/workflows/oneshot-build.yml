@@ -1,7 +1,7 @@
 # 单跑生产构建（镜像档）—— 对位 `.cnb.yml` 已退役的「单跑生产构建」档（ISSUE #3504）
 #
 # #3504 起 CNB 侧不再执行构建：`web_trigger_build` / `api_trigger_build` 两条触发口
-# 改为单格派发（`scripts/ci-ga-dispatch.mjs --preset build`）落到本 workflow。
+# 改为单格派发（`scripts/ci/ci-ga-dispatch.mjs --preset build`）落到本 workflow。
 # 保留「只跑一档」的粒度：刚合完一笔碰构建链的改动、想立刻验一次的人不必等夜里
 # 那一轮 `daily.yml`，也不为安装 / 建库之外的格付费。
 #
@@ -88,11 +88,11 @@ jobs:
 
       - name: 同步数据库表结构（cnb 同款判据一字不改）
         timeout-minutes: 30
-        run: node scripts/db-push.mjs
+        run: node scripts/db/db-push.mjs
 
       - name: 生产构建（cnb 同款判据一字不改）
         timeout-minutes: 30
         env:
-          # 构建缓存槽开关同 CNB 旧档与 daily.yml 同名 step（机制见 scripts/ci-build-cache-slot.mjs 头注）。
+          # 构建缓存槽开关同 CNB 旧档与 daily.yml 同名 step（机制见 scripts/ci/ci-build-cache-slot.mjs 头注）。
           COMFY_CI_BUILD_CACHE: "1"
-        run: node scripts/ci-daily-build.mjs
+        run: node scripts/ci/ci-daily-build.mjs

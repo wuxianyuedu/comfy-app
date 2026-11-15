@@ -13,7 +13,7 @@ import { expectActionableRefusal } from "./helpers/ratchet-refusal";
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 
 const REPO_ROOT = resolve(process.cwd());
-const CHECK = join(REPO_ROOT, "scripts", "check-scripts-typecheck.cjs");
+const CHECK = join(REPO_ROOT, "scripts", "gates/check-scripts-typecheck.cjs");
 
 /**
  * 在临时夹具里起一次 git（`git ls-files` / `git commit` 那一半的取数要靠真仓库）。为什么**必须**经
@@ -141,7 +141,9 @@ function isTypecheckRatchetModule(value: unknown): value is TypecheckRatchetModu
 }
 
 function typecheckRatchetModule(): TypecheckRatchetModule {
-  const loaded: unknown = createRequire(import.meta.url)("../scripts/check-scripts-typecheck.cjs");
+  const loaded: unknown = createRequire(import.meta.url)(
+    "../scripts/gates/check-scripts-typecheck.cjs",
+  );
   if (!isTypecheckRatchetModule(loaded)) {
     throw new Error("check-scripts-typecheck.cjs 的出口形状不对");
   }

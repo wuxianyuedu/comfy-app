@@ -1,4 +1,4 @@
-/** 「PR 上跑什么」清单里每个名字的**执行者是谁**（`scripts/ci-gate-names.mjs`，ISSUE #2227）。停用形态与
+/** 「PR 上跑什么」清单里每个名字的**执行者是谁**（`scripts/ci/ci-gate-names.mjs`，ISSUE #2227）。停用形态与
  * 「换执行者」形态在 `.gates` 里长得一样 ⇒ 机器分不出「执行者没了」：删掉
  * `tests/core-spine-single-source.test.ts`，`core 骨架单一事实源` 的唯一执行者消失，清单照旧说它在跑 ⇒ 账面全绿。
  * 故这里钉「这一格能红」：每条都拿夹具逼红 —— 只会绿的判据就是恒绿判据（判据在场、结论静默变成放行）。
@@ -9,15 +9,15 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { readHookSteps } from "../scripts/base-check/hook-steps.mjs";
-import { HEAVY_GATES } from "../scripts/ci-heavy-gates.mjs";
-import { parseStageScripts, readCnbConfig } from "../scripts/ci-autofix-duties.mjs";
+import { HEAVY_GATES } from "../scripts/ci/ci-heavy-gates.mjs";
+import { parseStageScripts, readCnbConfig } from "../scripts/ci/ci-autofix-duties.mjs";
 import {
   commentedStageNames,
   gateNameExecutorProblems,
   gaWorkflowStepArgvs,
   registeredElsewhereGates,
   scriptPaths,
-} from "../scripts/ci-gate-names.mjs";
+} from "../scripts/ci/ci-gate-names.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
 
 /** 造一份配置夹具（形状与 `.cnb.yml` 的 env 段同款）。 */
@@ -58,11 +58,11 @@ function fakeCnb(opts: {
 /** 一份「执行面」：复合档条目 + 固定清单用例 + 钩子步骤。 */
 const SURFACE = {
   liveStages: ["活的"],
-  heavyGates: [{ argv: ["node", "scripts/check-reformat-only.cjs", "--staged"] }],
+  heavyGates: [{ argv: ["node", "scripts/gates/check-reformat-only.cjs", "--staged"] }],
   fixedTests: ["tests/core-spine-single-source.test.ts"],
   hookSteps: [{ argv: ["node", "scripts/live.cjs"] }],
   gaSteps: [
-    { argv: ["node", "scripts/ci-run-tool.mjs", "vitest", "run", "tests/ga-only.test.ts"] },
+    { argv: ["node", "scripts/ci/ci-run-tool.mjs", "vitest", "run", "tests/ga-only.test.ts"] },
   ],
 };
 
@@ -100,14 +100,20 @@ describe("ci-gate-names —— 解析", () => {
           "  x:",
           "    steps:",
           "      - name: 一格",
-          "        run: node scripts/ci-run-tool.mjs vitest run tests/db-migrate-equivalence.test.ts",
+          "        run: node scripts/ci/ci-run-tool.mjs vitest run tests/db-migrate-equivalence.test.ts",
           "      - name: 多行那一格",
           "        run: |",
           "          sudo apt-get update -qq",
         ].join("\n"),
       ),
     ).toEqual([
-      ["node", "scripts/ci-run-tool.mjs", "vitest", "run", "tests/db-migrate-equivalence.test.ts"],
+      [
+        "node",
+        "scripts/ci/ci-run-tool.mjs",
+        "vitest",
+        "run",
+        "tests/db-migrate-equivalence.test.ts",
+      ],
       /* `run: |` 那行没有命令 —— 它没有入口路径可指，核不出任何东西（无害）。 */
       ["|"],
     ]);

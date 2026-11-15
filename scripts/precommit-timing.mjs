@@ -289,7 +289,7 @@ export function parseJunitXml(xml) {
  *
  * 唯一的消费者是组 C 的隔离复跑：那里要回答「第二遍该重跑哪几份」。整块重跑的版本让
  * 一份带超时指纹的文件拖着一百多份一起串行再跑一遍（实测把组 C 推到 1411s，
- * 而整条钩子的时长几乎全是这一格）—— 见 `scripts/run-affected-tests.mjs` 的 `retryScope`。
+ * 而整条钩子的时长几乎全是这一格）—— 见 `scripts/affected-tests/run-affected-tests.mjs` 的 `retryScope`。
  *
  * 读不出来的那份（属性缺失 / 不是数字）**不算失败**：这一格的用途是缩小复跑面，
  * 而「解析不出 ⇒ 当作失败 ⇒ 复跑面变大」是安全方向；反过来漏一份真失败的文件

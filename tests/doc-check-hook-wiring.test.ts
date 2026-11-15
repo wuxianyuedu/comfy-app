@@ -14,16 +14,16 @@ import {
   registeredGateOrder,
   stageBlock,
 } from "./no-platform-ci-config.test";
-import { DAILY_GATE_EXECUTORS } from "../scripts/ci-ga-trigger-map.mjs";
+import { DAILY_GATE_EXECUTORS } from "../scripts/ci/ci-ga-trigger-map.mjs";
 
 import { groupShBody, runSteps, stepsInGroup } from "./helpers/hook-groups";
-import { HEAVY_GATES, heavyGateRegistryProblems } from "../scripts/ci-heavy-gates.mjs";
+import { HEAVY_GATES, heavyGateRegistryProblems } from "../scripts/ci/ci-heavy-gates.mjs";
 import { readHookSteps } from "../scripts/base-check/hook-steps.mjs";
 
 const REPO_ROOT = resolve(".");
 const HOOK = join(REPO_ROOT, ".githooks", "pre-commit");
-const CHECK = join(REPO_ROOT, "scripts", "check-doc-references.cjs");
-const STRUCTURE = join(REPO_ROOT, "scripts", "check-file-structure.cjs");
+const CHECK = join(REPO_ROOT, "scripts", "gates/check-doc-references.cjs");
+const STRUCTURE = join(REPO_ROOT, "scripts", "gates/check-file-structure.cjs");
 const R5_BASELINE = join(REPO_ROOT, "scripts", ".file-size-baseline.json");
 
 /**
@@ -71,7 +71,7 @@ function platformExecutor(stageName: string) {
   const gaMaster = readFileSync(join(REPO_ROOT, ".github/workflows/master-gate.yml"), "utf8");
   const gaLine = gaMaster
     .split("\n")
-    .find((l) => /^\s*run:\s*/.test(l) && l.includes("scripts/check-doc-references.cjs"));
+    .find((l) => /^\s*run:\s*/.test(l) && l.includes("scripts/gates/check-doc-references.cjs"));
   if (stageName === "文档引用与权威源一致" && gaLine) {
     return { where: "GA master-gate.yml", command: gaLine.trim() };
   }
@@ -139,7 +139,7 @@ describe("doc:check 在平台侧、不在钩子里（ISSUE #1371 立档 → ISSU
    * 平台侧**（§13.5.17：判的是文档面，挡不住代码回归；平台侧回来后有第二个执行者）。所以判两半：钩子里不再有
    * 它、平台侧那一步在。只判一半的话「钩子撤掉 + 平台侧也忘了加」会全绿，失效形态正是「谁都没跑它」。 */
   it("钩子 D 组**不再**执行这一步（它已在平台侧，见 §13.5.17）", () => {
-    const hit = steps.find((s) => s.cmd.includes("scripts/check-doc-references.cjs"));
+    const hit = steps.find((s) => s.cmd.includes("scripts/gates/check-doc-references.cjs"));
     expect(
       hit,
       `门禁链 ${steps.length} 步里又有 doc:check 了 —— 它已随 ISSUE #1975 挪到平台侧 ` +
@@ -157,8 +157,8 @@ describe("doc:check 在平台侧、不在钩子里（ISSUE #1371 立档 → ISSU
     ).not.toBeNull();
     expect(
       executor?.command,
-      "那一条点的不是 scripts/check-doc-references.cjs —— 名字在、判据换了",
-    ).toContain("scripts/check-doc-references.cjs");
+      "那一条点的不是 scripts/gates/check-doc-references.cjs —— 名字在、判据换了",
+    ).toContain("scripts/gates/check-doc-references.cjs");
   });
 
   it("脚本头不许回到「不接 pre-commit（避免过度打扰提交）」那句旧签字", () => {
@@ -181,10 +181,10 @@ describe("R5 的硬闸在钩子里（ISSUE #1404 立档 / ISSUE #1811 收成硬�
   const steps = hookGateSteps(hook);
 
   it("结构那一步真的在跑，且不带任何 flag（R5 已是硬闸，没有 --strict 可加）", () => {
-    const hit = steps.find((s) => s.cmd.includes("scripts/check-file-structure.cjs"));
+    const hit = steps.find((s) => s.cmd.includes("scripts/gates/check-file-structure.cjs"));
     expect(hit, `结构那一步不在了，或标签 / flag 与预期不符（D 组共 ${steps.length} 步）`).toEqual({
       label: "文件结构硬规则(R1-R12，R5 硬闸)",
-      cmd: "node scripts/check-file-structure.cjs",
+      cmd: "node scripts/gates/check-file-structure.cjs",
     });
     /* 反面：不许再给它加回 `--strict`。R5 翻硬闸时那个旗标被删掉了 ——
      * 加回来的人想必是想恢复「不传它就不判」的通道（那就是本次要消灭的东西）。 */
@@ -219,14 +219,14 @@ describe("R5 的硬闸在钩子里（ISSUE #1404 立档 / ISSUE #1811 收成硬�
  * 抹掉 flag」，而那份权威清单自己就漂过 5 步（§13.5.10），抄一份只会更难保持正确。断言形状与上面两条同款：
  * 解析 D 组步骤、只认真调用。
  */
-const COMMENT_LANGUAGE = join(REPO_ROOT, "scripts", "check-comment-language.cjs");
+const COMMENT_LANGUAGE = join(REPO_ROOT, "scripts", "gates/check-comment-language.cjs");
 
 describe("注释语言棘轮在钩子里（ISSUE #1451）", () => {
   const hook = readFileSync(HOOK, "utf8");
   const steps = hookGateSteps(hook);
 
   it("钩子 D 组真的执行这一步，且调的就是本脚本（被注释掉的行不算在场）", () => {
-    const hit = steps.find((s) => s.cmd.includes("scripts/check-comment-language.cjs"));
+    const hit = steps.find((s) => s.cmd.includes("scripts/gates/check-comment-language.cjs"));
     // 命令逐字相等，顺带钉住「只接判定档」：`--report` 恒 exit(0)（盘点档，接进来
     // 等于接了个寂寞）、`--update` 会改基线（人的动作）、`--strict`（基线未收紧即失败）
     // 在基线已是 total: 0 时属另一类动作 —— 三者都不许混进钩子。
@@ -236,7 +236,7 @@ describe("注释语言棘轮在钩子里（ISSUE #1451）", () => {
         "而拆掉这一步之后它一个执行者都没有（平台流水线已随 ISSUE #623 删除）",
     ).toEqual({
       label: "注释语言硬闸",
-      cmd: "node scripts/check-comment-language.cjs",
+      cmd: "node scripts/gates/check-comment-language.cjs",
     });
   });
 
@@ -258,14 +258,14 @@ describe("注释语言棘轮在钩子里（ISSUE #1451）", () => {
  * 判两半：钩子里不再有它、平台侧那一步在且**不带 `--staged`**；#2231 后也不带 `--autofix`
  * （产物不进 git，自动修+再判让陈旧隐形）。
  */
-const DOCS_API = join(REPO_ROOT, "scripts", "check-docs-api.cjs");
+const DOCS_API = join(REPO_ROOT, "scripts", "gates/check-docs-api.cjs");
 
 describe("API 文档生成与自检（#1329 收尾 → #1975 挪执行者 → #2231 改判据对象 → #2537 降每日档）", () => {
   const hook = readFileSync(HOOK, "utf8");
   const steps = hookGateSteps(hook);
 
   it("钩子 D 组**不再**执行这一步（它已在平台侧，见 §13.5.17）", () => {
-    const hit = steps.find((s) => s.cmd.includes("scripts/check-docs-api.cjs"));
+    const hit = steps.find((s) => s.cmd.includes("scripts/gates/check-docs-api.cjs"));
     expect(
       hit,
       `门禁链 ${steps.length} 步里又有 docs-api 同步了 —— 它已随 ISSUE #1975 挪到平台侧 ` +
@@ -389,22 +389,22 @@ describe("桌面壳门禁接进 pre-commit（ISSUE #1597）", () => {
  * `check-format` 2.9s 合计占 34%，而扫描面只是全库子集；`check-format` 已随 #2010 挪平台，这里只钉前者。
  * `--staged` 是这一步能存在的前提：抹掉与「回到无条件全扫」等价，而**没有别的判据**会看见（只会慢一点，慢不报错）。
  */
-const FORMAT_GATE = join(REPO_ROOT, "scripts", "check-format.cjs");
-const UI_PRIMITIVES = join(REPO_ROOT, "scripts", "check-ui-primitives.cjs");
+const FORMAT_GATE = join(REPO_ROOT, "scripts", "gates/check-format.cjs");
+const UI_PRIMITIVES = join(REPO_ROOT, "scripts", "gates/check-ui-primitives.cjs");
 
 describe("全库扫描的输入面跳过接进 D 组（ISSUE #1747）", () => {
   const hook = readFileSync(HOOK, "utf8");
   const steps = hookGateSteps(hook);
 
   it("UI 基元复用棘轮在钩子里带 --staged 条件触发", () => {
-    const hit = steps.find((s) => s.cmd.includes("scripts/check-ui-primitives.cjs"));
+    const hit = steps.find((s) => s.cmd.includes("scripts/gates/check-ui-primitives.cjs"));
     expect(
       hit,
       `门禁链 ${steps.length} 步里没有 UI 基元复用棘轮，或它丢了 --staged —— ` +
         "后者会让全库扫描回到无条件执行（每次提交白付 3.6s，D 组单项最贵）",
     ).toEqual({
       label: "UI 基元复用棘轮",
-      cmd: "node scripts/check-ui-primitives.cjs --staged",
+      cmd: "node scripts/gates/check-ui-primitives.cjs --staged",
     });
   });
 
@@ -454,10 +454,12 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
       "解析不出 D0 的 sh 正文 —— 判空是必须的：「读不到」当成「里面没步骤」" +
         "会让这一条永远绿（§13.5.12 那一族的静默降级）",
     ).not.toBe("");
-    const hit = stepsInGroup(hook, "D0").find((s) => s.cmd.includes("scripts/check-format.cjs"));
+    const hit = stepsInGroup(hook, "D0").find((s) =>
+      s.cmd.includes("scripts/gates/check-format.cjs"),
+    );
     expect(
       hit,
-      "D0 里找不到 `node scripts/check-format.cjs` —— #2610 的口径是「本地判 + 本地修」，" +
+      "D0 里找不到 `node scripts/gates/check-format.cjs` —— #2610 的口径是「本地判 + 本地修」，" +
         "这一格是它唯一的本地执行者；不在 D0，格式红就又要白跑一次 CI",
     ).toBeTruthy();
     expect(
@@ -467,7 +469,7 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
     /* 反向也钉：它不许在别的组里再出现一次（D0 已经付过 2s，D 组再跑一遍是纯重复，
      * 而「同一判据两个执行者各写一份参数」正是漂移的起点）。 */
     const elsewhere = steps.filter(
-      (s) => s.cmd.includes("scripts/check-format.cjs") && !d0Body.includes(s.cmd),
+      (s) => s.cmd.includes("scripts/gates/check-format.cjs") && !d0Body.includes(s.cmd),
     );
     expect(
       elsewhere.map((s) => s.cmd),
@@ -481,7 +483,7 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
      * `COMFYAPP_CI_GATES` 问只会要求一个「没人执行的 stage 留在配置里」。 */
     const workflow = readFileSync(join(REPO_ROOT, ".github", "workflows", "pr-gate.yml"), "utf8");
     expect(
-      /run:\s*node scripts\/check-format\.cjs/.test(workflow),
+      /run:\s*node scripts\/gates\/check-format\.cjs/.test(workflow),
       "`.github/workflows/pr-gate.yml` 里没有 `check-format.cjs` 这一步 —— 钩子撤掉 + " +
         "平台侧也没有 = 这条判据一个执行者都没有（§13.5.1.1 与 §13.5.17 同一条两半判法）",
     ).toBe(true);
@@ -499,7 +501,8 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
     /* 取的是**带 `--changed` 的那一行**：同 job 里还有第二格全量档（ISSUE #3291），
      * 用宽松匹配会读成哪一格取决于排版顺序。 */
     const scriptLine =
-      /^[ \t]*run:\s*node scripts\/check-format\.cjs --changed.*$/m.exec(workflow)?.[0] ?? "";
+      /^[ \t]*run:\s*node scripts\/gates\/check-format\.cjs --changed.*$/m.exec(workflow)?.[0] ??
+      "";
     expect(
       scriptLine,
       "GA 的工作流里找不到 `check-format.cjs` 的 `run:` 行 —— 读不到命令就当没带旗标，" +
@@ -519,7 +522,7 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
       scriptLine,
       "GA 那一步不再点名判据本体 —— #2610 起它直接跑 check-format.cjs，" +
         "中间不再隔一层会写工作区的壳",
-    ).toContain("scripts/check-format.cjs");
+    ).toContain("scripts/gates/check-format.cjs");
     /* #2610：`--autofix` 与委托回写整条摘掉。实测那一跳在 PR 事件上恒发不出去（令牌只有 repo-code:r，`start-build`
      * 回 403 / errcode 10023，缺 `repo-cnb-trigger:rw`），于是「就地修好」的改动每次都被丢在工作区，账面只剩
      * 「委托没发出去」。**修了但没人负责**比不修更坏（#2231 同型）。要恢复自动修，先得有能推出去的凭据（#2551）。 */
@@ -544,10 +547,10 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
       throw new Error("package.json 形状不对（缺 scripts/devDependencies）");
     }
     expect(pkg.scripts["format:check"], "本地 `format:check` 必须与平台格同一条命令").toBe(
-      "node scripts/check-format.cjs --changed",
+      "node scripts/gates/check-format.cjs --changed",
     );
     expect(pkg.scripts["format:report"], "存量盘点走 `--report`（只列清单、不阻断）").toBe(
-      "node scripts/check-format.cjs --report",
+      "node scripts/gates/check-format.cjs --report",
     );
     expect(
       pkg.devDependencies.oxfmt,
@@ -560,14 +563,15 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
      * 「PR 自己扩判面 / 删 `IGNORE_GLOBS` / 改 `.oxfmtrc.json`」这类形态没有判决面。
      * 这一格是合入前唯一的自动执行点（暴露窗口 0），判面与 `--changed` 互补、不是重复。 */
     const workflow = readFileSync(join(REPO_ROOT, ".github", "workflows", "pr-gate.yml"), "utf8");
-    const fullLine = /^[ \t]*run:\s*node scripts\/check-format\.cjs\s*$/m.exec(workflow)?.[0] ?? "";
+    const fullLine =
+      /^[ \t]*run:\s*node scripts\/gates\/check-format\.cjs\s*$/m.exec(workflow)?.[0] ?? "";
     expect(
       fullLine,
-      "`pr-gate.yml` 里找不到不带旗标的 `node scripts/check-format.cjs` —— 全量档又没有" +
+      "`pr-gate.yml` 里找不到不带旗标的 `node scripts/gates/check-format.cjs` —— 全量档又没有" +
         "自动执行者了（存量变脏只会在下一次人工盘点时暴露）",
     ).not.toBe("");
-    const changedAt = workflow.indexOf("node scripts/check-format.cjs --changed");
-    const fullAt = workflow.indexOf("run: node scripts/check-format.cjs\n");
+    const changedAt = workflow.indexOf("node scripts/gates/check-format.cjs --changed");
+    const fullAt = workflow.indexOf("run: node scripts/gates/check-format.cjs\n");
     expect(
       changedAt !== -1 && fullAt > changedAt,
       "全量档没有排在改动面档之后 —— 两格的顺序是「先判这次带来的、再判全库」，" +
@@ -594,7 +598,9 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
       gate,
       "`pnpm check:all` 里没有 prettier 这一档了 —— 挪走执行者之后它成了" +
         "「只有平台侧跑」的一条，而本仓承诺的是「完整验证这一档照旧能本地跑一遍」",
-    ).toContain("scripts/check-format.cjs");
+      /* #3930：quality-gate 的 args 相对 scripts/ 自身写（"./gates/…"），hook/yml
+       * 写的是全路径 —— 两种拼法都认「gates/check-format.cjs」这一段。 */
+    ).toContain("gates/check-format.cjs");
   });
 
   it("脚本头把**平台侧两格**都写明白（自称 ⇄ 实际，别让两份承诺一起过期）", () => {
@@ -675,7 +681,8 @@ describe("GA push 档 `master-gate.yml`：文档链剩余一格的并行执行�
         "自动修登记表 AUTOFIX_DUTIES 现在是空的",
     ).toBe(false);
     const refsLine =
-      /^[ \t]*run:\s*node scripts\/check-doc-references\.cjs[ \t]*$/m.exec(workflow)?.[0] ?? "";
+      /^[ \t]*run:\s*node scripts\/gates\/check-doc-references\.cjs[ \t]*$/m.exec(workflow)?.[0] ??
+      "";
     expect(
       refsLine,
       "`master-gate.yml` 里找不到 `check-doc-references.cjs` 那一行 —— 文档链第二格只有一个" +
@@ -718,35 +725,35 @@ const SECOND_TIER: ReadonlyArray<readonly [string, string, string]> = [
   [
     "标题行让位硬规则",
     "check-title-bar-clearance.cjs",
-    "node scripts/check-title-bar-clearance.cjs --staged",
+    "node scripts/gates/check-title-bar-clearance.cjs --staged",
   ],
   [
     "import 别名统一(~ 前缀)",
     "check-import-alias.cjs",
-    "node scripts/check-import-alias.cjs --staged",
+    "node scripts/gates/check-import-alias.cjs --staged",
   ],
-  ["内联样式注入", "check-inline-style.cjs", "node scripts/check-inline-style.cjs --staged"],
+  ["内联样式注入", "check-inline-style.cjs", "node scripts/gates/check-inline-style.cjs --staged"],
   [
     "跨文件重复块",
     "check-code-duplication.cjs",
-    "node scripts/check-code-duplication.cjs --staged",
+    "node scripts/gates/check-code-duplication.cjs --staged",
   ],
   [
     "函数长度(硬闸，>400 行即阻断)",
     "check-function-length.cjs",
-    "node scripts/check-function-length.cjs --staged",
+    "node scripts/gates/check-function-length.cjs --staged",
   ],
   [
     "模块循环依赖(硬闸)",
     "check-circular-deps.cjs",
-    "node scripts/check-circular-deps.cjs --staged",
+    "node scripts/gates/check-circular-deps.cjs --staged",
   ],
   [
     "地基层零消费导出(硬闸)",
     "check-dead-exports.cjs",
-    "node scripts/check-dead-exports.cjs --staged",
+    "node scripts/gates/check-dead-exports.cjs --staged",
   ],
-  ["浮层层级刻度硬闸", "check-overlay-z.cjs", "node scripts/check-overlay-z.cjs --staged"],
+  ["浮层层级刻度硬闸", "check-overlay-z.cjs", "node scripts/gates/check-overlay-z.cjs --staged"],
 ];
 
 /**
@@ -783,7 +790,7 @@ describe("第二梯队全库扫描的输入面跳过接进 D 组（ISSUE #1747 �
   it.for(SECOND_TIER)("%s 的脚本真的实现了 --staged", ([, script]) => {
     // 钩子里的 flag 与脚本里的实现是两件事：只写 flag 而脚本不认它，会被解析成未知
     // 参数（多数脚本忽略）⇒ 条件触发**静默失效**，退回无条件全库扫描。
-    const text = readFileSync(join(REPO_ROOT, "scripts", script), "utf8");
+    const text = readFileSync(join(REPO_ROOT, "scripts", "gates", script), "utf8");
     expect(
       text.includes("skipUnlessStagedTouches("),
       `${script} 没有实现 --staged —— 钩子里那个 flag 会变成静默失效的条件触发`,
@@ -795,7 +802,8 @@ describe("第二梯队全库扫描的输入面跳过接进 D 组（ISSUE #1747 �
     // （TS 模块 ≈180ms、`check-dead-exports` 语料 ≈340ms）⇒「跳过」只剩形式上的绿，退出码看不出差别。
     // 判据：短路语句行号必须小于该脚本第一次 `require("typescript")` 那一行（没有就排在 `require("node:fs")` 之后）。
     for (const [, script] of SECOND_TIER) {
-      const text = readFileSync(join(REPO_ROOT, "scripts", script), "utf8");
+      /* #3930 起判据在 scripts/gates/：脚本名按那一层解析。 */
+      const text = readFileSync(join(REPO_ROOT, "scripts", "gates", script), "utf8");
       const lines = text.split("\n");
       const skipAt = lines.findIndex((l) => l.includes("skipUnlessStagedTouches("));
       expect(skipAt, `${script} 找不到 --staged 短路语句`).toBeGreaterThanOrEqual(0);
@@ -841,7 +849,8 @@ describe("被聚合档接管的 6 条 AST 判据（ISSUE #1747 续，第四笔�
   it.for(AGGREGATED_AST_GATES)(
     '%s 自己仍实现 --staged，且短路在 require("typescript") 之前',
     (script) => {
-      const lines = readFileSync(join(REPO_ROOT, "scripts", script), "utf8").split("\n");
+      /* #3930 起判据在 scripts/gates/。 */
+      const lines = readFileSync(join(REPO_ROOT, "scripts", "gates", script), "utf8").split("\n");
       const skipAt = lines.findIndex((l) => l.includes("skipUnlessStagedTouches("));
       expect(
         skipAt,
@@ -881,9 +890,9 @@ describe("新鲜度账：平台侧的第二个执行者（ISSUE #1979）", () =>
     expect(hit?.stage, "那一步的原文块解析不出来（名字被改了？）").toBeTruthy();
     expect(
       hit?.stage,
-      "每日侧那一步跑的不是 scripts/freshness-gate.mjs —— 两处各写一份判据必然分叉，" +
+      "每日侧那一步跑的不是 scripts/freshness/freshness-gate.mjs —— 两处各写一份判据必然分叉，" +
         "而分叉之后「本地绿、平台红」（或反过来）读起来像环境差异，不像判据不一致",
-    ).toContain("scripts/freshness-gate.mjs");
+    ).toContain("scripts/freshness/freshness-gate.mjs");
     /* ⚠️ 主体那一行是这一格**存在的理由**（ISSUE #2300 主体分权）：主体=master ⇒
      * 判据读的是机器分支 `ci/freshness-ledger` 上**主干的权威账**；缺了它，每日这一格
      * 就会以 `"pr"` 上下文跑（读工作树那份），主干的账就没人判了。
@@ -934,13 +943,13 @@ describe("新鲜度账：平台侧的第二个执行者（ISSUE #1979）", () =>
   });
 
   it("本地那一半仍在钩子门禁链里（平台侧 squash 合并不跑本地钩子，不能只剩它）", () => {
-    const hit = steps.find((s) => s.cmd.includes("scripts/freshness-gate.mjs"));
+    const hit = steps.find((s) => s.cmd.includes("scripts/freshness/freshness-gate.mjs"));
     expect(
       hit,
       `门禁链 ${steps.length} 步里没有新鲜度账判决 —— 平台侧只在 PR 事件上跑，` +
         "本地迭代与 PR 之间的那些提交会整段失去能见度",
     ).toBeDefined();
-    expect(hit?.cmd).toBe("node scripts/freshness-gate.mjs");
+    expect(hit?.cmd).toBe("node scripts/freshness/freshness-gate.mjs");
   });
 });
 
@@ -950,53 +959,56 @@ describe("新鲜度账：平台侧的第二个执行者（ISSUE #1979）", () =>
  * 判五件：D0 可解析；名单逐条在 D0、命令逐字；不许无声变长 / 换序；D0 与 D 不相交、等待点在 `run_group A` 前；读不到退出码即拦下。
  */
 const FORM_PREPASS: ReadonlyArray<readonly [string, string]> = [
-  ["CHANGELOG 碎片", "node scripts/check-changelog-fragments.cjs"],
-  ["待发段落的来源锚 ⇄ 条目归属", "node scripts/check-changelog-versions.cjs"],
+  ["CHANGELOG 碎片", "node scripts/gates/check-changelog-fragments.cjs"],
+  ["待发段落的来源锚 ⇄ 条目归属", "node scripts/gates/check-changelog-versions.cjs"],
   /* 「改了文档源就得同批带上镜像」这条已随 #3586 从 D0 摘除：镜像退出入库产物，
    * 既没有可配对的产物、也没有「同批带上」这个动作。摘除时同步改这里，是因为
    * 名单与钩子步骤逐字对账 —— 留一行等于给一个已不存在的判据挂空账。 */
   /* 「把判据自己的阈值调松」此前没有任何一格会红（ISSUE #2156）：它不读代码、只把
    * 源码里的具名常量与 scripts/.gate-thresholds.json 对账，毫秒级，而它必须落在
    * 「改阈值那一笔」上 —— 挪去平台侧等于把红推给下一个动判据的人（同上一条的理由）。 */
-  ["判据自身的数值 ⇄ 账同批", "node scripts/check-gate-thresholds.cjs"],
+  ["判据自身的数值 ⇄ 账同批", "node scripts/gates/check-gate-thresholds.cjs"],
   /* 「把凭据写进被跟踪的文字」这一格此前没有执行者（ISSUE #2157）：硬规则 17 那两层防线
    * 都在产物层与日志层，而 `docs/**` / `.cnb.yml` / 夹具里落一个真 token 本地与平台都不红。
    * 存量实测 0 命中 ⇒ 直接做成硬闸，没有基线、没有 `--allow`；命中只点名位置与形状，不回显内容。 */
-  ["被跟踪文字里的凭据形状", "node scripts/check-tracked-secrets.cjs --staged"],
-  ["每档都有主（新鲜度账：e2e / 全量单测 / 产物三档自证）", "node scripts/freshness-gate.mjs"],
-  ["UI/逻辑分离硬闸", "node scripts/check-ui-logic-separation.cjs"],
-  ["地基层零消费导出(硬闸)", "node scripts/check-dead-exports.cjs --staged"],
+  ["被跟踪文字里的凭据形状", "node scripts/gates/check-tracked-secrets.cjs --staged"],
+  [
+    "每档都有主（新鲜度账：e2e / 全量单测 / 产物三档自证）",
+    "node scripts/freshness/freshness-gate.mjs",
+  ],
+  ["UI/逻辑分离硬闸", "node scripts/gates/check-ui-logic-separation.cjs"],
+  ["地基层零消费导出(硬闸)", "node scripts/gates/check-dead-exports.cjs --staged"],
   [
     "故事面（title / 接上真组件 / 分组一致 / 必填 props 的 args）",
     "node scripts/storybook-check.mjs --changed",
   ],
-  ["产品版本号三处同步(D7)", "node scripts/check-app-version.cjs"],
-  ["ui/ 定制标记与台账（§16.8）", "node scripts/check-ui-customizations.cjs"],
-  ["跨平台动作对照(.ps1⇄.mjs)", "node scripts/check-ps1-consistency.mjs"],
-  ["端口推导跨语言一致性", "node scripts/check-app-port-vectors.cjs"],
-  ["import 别名统一(~ 前缀)", "node scripts/check-import-alias.cjs --staged"],
+  ["产品版本号三处同步(D7)", "node scripts/gates/check-app-version.cjs"],
+  ["ui/ 定制标记与台账（§16.8）", "node scripts/gates/check-ui-customizations.cjs"],
+  ["跨平台动作对照(.ps1⇄.mjs)", "node scripts/gates/check-ps1-consistency.mjs"],
+  ["端口推导跨语言一致性", "node scripts/gates/check-app-port-vectors.cjs"],
+  ["import 别名统一(~ 前缀)", "node scripts/gates/check-import-alias.cjs --staged"],
   [
     "依赖新鲜度（只判动了依赖面的提交，§13.5.13）",
-    "node scripts/check-deps-freshness.mjs --staged",
+    "node scripts/gates/check-deps-freshness.mjs --staged",
   ],
   [
     "依赖构建脚本与 allowBuilds 对账（只判动了依赖面的提交）",
-    "node scripts/check-allow-builds.cjs --staged",
+    "node scripts/gates/check-allow-builds.cjs --staged",
   ],
   [
     "基础设施层文件长度硬闸(scripts+tools，§12.6 R5 姊妹档)",
-    "node scripts/check-infra-file-size.cjs --staged",
+    "node scripts/gates/check-infra-file-size.cjs --staged",
   ],
   /* 格式判据回到本地（ISSUE #2610，业主口径 2026-10-29「本地判 + 本地修，平台只判」）。
    * 排最后是有意的：它命中时要扫全库（实测 ~2s），是本档最贵的一条，而这一档串行 ——
    * 前面那些毫秒级的先给结论，它殿后。红的出口是 `pnpm exec oxfmt <点名的文件>`。 */
   [
     "oxfmt 格式（动了 src/.storybook 才扫全库，红了只格式化点名的文件）",
-    "node scripts/check-format.cjs --staged",
+    "node scripts/gates/check-format.cjs --staged",
   ],
   /* 已清零规则集的提交前置快检（ISSUE #3585）：同一份 ZERO_RULES 探针，输入面换成
    * 本次暂存源码；全仓 155s 档仍留在 D 组。放在格式之后，维持「毫秒级先出、贵者殿后」。 */
-  ["已清零 oxlint 规则集（暂存面快检）", "node scripts/check-oxlint-zero-rules.mjs --staged"],
+  ["已清零 oxlint 规则集（暂存面快检）", "node scripts/gates/check-oxlint-zero-rules.mjs --staged"],
 ];
 
 describe("D0 形态前置档：串行的那一条线（钩子重构 1）", () => {
@@ -1104,7 +1116,7 @@ describe("D0 形态前置档：串行的那一条线（钩子重构 1）", () =>
  */
 describe("复合执行者 `重档静态判据`：条目表与执行面必须对得上（2026-10-22 立项）", () => {
   /* 用**运行时那个解析器**（`readHookSteps`），不是本文件惯用的 `runSteps` ——
-   * 自证跑在 `scripts/ci-heavy-gates.mjs` 里，用另一个解析器验它等于验了另一件事
+   * 自证跑在 `scripts/ci/ci-heavy-gates.mjs` 里，用另一个解析器验它等于验了另一件事
    * （两个解析器的口径差一处，这一处就恰好是「静默少读一步」的那种）。 */
   const hook = readFileSync(HOOK, "utf8");
   const steps = readHookSteps(HOOK);

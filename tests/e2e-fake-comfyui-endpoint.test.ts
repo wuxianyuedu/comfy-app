@@ -26,7 +26,7 @@ import {
   isRealComfyuiPayload,
   resolveFakeComfyuiPort,
 } from "../e2e/support/fake-comfyui-endpoint.mjs";
-import { resolvePlaywrightFile } from "../scripts/e2e-run.mjs";
+import { resolvePlaywrightFile } from "../scripts/e2e/e2e-run.mjs";
 import {
   probeFakeComfySlot,
   readAppServerPreflight,
@@ -501,10 +501,10 @@ describe("探测时机：判「起之前有没有别人」就不能挂在 global
   });
 
   it("pre-flight 真的在 `spawn` Playwright **之前**跑（时机是全部意义）", () => {
-    /* 判据判「接线在不在」：`scripts/e2e-run.mjs` 里 `runPreflight(...)` 必须出现在
+    /* 判据判「接线在不在」：`scripts/e2e/e2e-run.mjs` 里 `runPreflight(...)` 必须出现在
      * 起 Playwright 那一跳之前 —— 反过来的话它探到的就是本轮自己起的服务，
      * 与挂在 `globalSetup` 上没有区别。 */
-    const run = readText("scripts/e2e-run.mjs");
+    const run = readText("scripts/e2e/e2e-run.mjs");
     const preflightAt = run.indexOf("await runPreflight(");
     /* 「起 Playwright」那一跳的落点：ISSUE #1998 起是 `runChild(invocation)`
      * （`spawnSync` 会把输出攒进 `res.stdout`，见 `resolvePlaywrightInvocation` 的

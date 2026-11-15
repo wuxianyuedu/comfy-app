@@ -238,7 +238,7 @@ export const settingRouter = createTRPCRouter({
     }),
 
   /* ── D6 数据库备份 / 恢复（ISSUE #1611 建议默认②③）—— 口径详见 `docs/guides/PRODUCTION-GAPS.md` D6 条目：
-   * 保留最近 3 份、落 `<应用根>/data/backups/`（由 `scripts/db-backup-core.mjs` 唯一持有）；恢复只给设置页入口
+   * 保留最近 3 份、落 `<应用根>/data/backups/`（由 `scripts/db/db-backup-core.mjs` 唯一持有）；恢复只给设置页入口
    * （选份 + 确认），但换文件不发生在点按钮那一刻 —— `backupRestore` 只写待恢复标记，真正换文件交给启动链
    * `applyPendingRestoreAtBoot`（那时天然满足「应用没在跑」）。刻意不提供「就地换文件」mutation：运行期多个进程
    * 持有此库（内嵌 Next server、执行宿主、Drizzle Studio），在别人握句柄时覆盖 `db.sqlite` 是不可逆数据事故。 */

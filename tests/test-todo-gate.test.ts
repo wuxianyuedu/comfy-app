@@ -16,7 +16,7 @@ import { defineGateRepo, type GateRepo } from "./helpers/gate-repo";
  * 而判据零站点时在读到台账之前就 return，于是「台账压根不存在」这条路径**全绿通过**。
  */
 const { test } = defineGateRepo({
-  script: "check-test-todo.cjs",
+  script: "gates/check-test-todo.cjs",
   dirs: ["src", "tests"],
 });
 
@@ -155,7 +155,9 @@ function isTodoGateModule(
   return isRecord(value) && typeof value.readForScan === "function";
 }
 
-const todoGateModule: unknown = createRequire(import.meta.url)("../scripts/check-test-todo.cjs");
+const todoGateModule: unknown = createRequire(import.meta.url)(
+  "../scripts/gates/check-test-todo.cjs",
+);
 if (!isTodoGateModule(todoGateModule)) {
   throw new Error("check-test-todo.cjs 缺 readForScan —— 判据脚本形状变了");
 }

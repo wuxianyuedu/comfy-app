@@ -340,8 +340,8 @@ export type ResolvedInvocation = {
  * **真起一次**，而它喂的参数就是这里的第二入参。于是「调用方要跑什么」与「探针喂什么」
  * 被合成了一件东西 —— 后果是**探针把真命令整条跑了一遍**：
  *
- *   · `resolveCommandInvocation("node", ["scripts/e2e-run.mjs", "--grep=@critical"])`
- *     ⇒ 探针真的起了一次 `node scripts/e2e-run.mjs --grep=@critical`（`stdio: "ignore"`、
+ *   · `resolveCommandInvocation("node", ["scripts/e2e/e2e-run.mjs", "--grep=@critical"])`
+ *     ⇒ 探针真的起了一次 `node scripts/e2e/e2e-run.mjs --grep=@critical`（`stdio: "ignore"`、
  *     30s 上限），Playwright 的 webServer（`pnpm start` + 假 ComfyUI）随之被拉起来；
  *   · `spawnSync` 超时**只收直接子进程**，那些孙子进程留在端口上接着跑 —— 真那一跑
  *     再起来时撞见「端口已有人应答」，而这一步的结论被读成「解析成功」；

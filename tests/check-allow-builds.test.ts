@@ -1,5 +1,5 @@
 /**
- * `scripts/check-allow-builds.cjs` 的自测 —— 依赖构建脚本与 `allowBuilds` 对账（AGENTS 硬规则 8）。故障形状：漏登记的人
+ * `scripts/gates/check-allow-builds.cjs` 的自测 —— 依赖构建脚本与 `allowBuilds` 对账（AGENTS 硬规则 8）。故障形状：漏登记的人
  * 当场看不出来（自己 `node_modules` 早装好），首次复现是下一个人跑非交互 `--frozen-lockfile` 安装。三层用例：①判决面
  * （`true`/显式 `false` 放行、漏登记才红；含空串脚本、作用域包、同名多版本）；②输入面（名单块 / yaml / `node_modules/.pnpm`
  * 缺失都必须红 —— 静默 `exit(0)` 正是 §13.5.12 那族）；③条件触发面（`--staged` 三方向，只看退出码挡不住「永远跳过」，#1747）。 */
@@ -10,19 +10,19 @@ import { defineGateRepo } from "./helpers/gate-repo";
 
 const ROOT = resolve(".");
 const HOOK = join(ROOT, ".githooks", "pre-commit");
-const GATE_SCRIPT = join(ROOT, "scripts", "check-allow-builds.cjs");
+const GATE_SCRIPT = join(ROOT, "scripts", "gates/check-allow-builds.cjs");
 const CHECKLIST_DOC = join(ROOT, "docs", "standards", "13-提交与-code-review.md");
-const GATE_CMD = "node scripts/check-allow-builds.cjs --staged";
+const GATE_CMD = "node scripts/gates/check-allow-builds.cjs --staged";
 const GATE_LABEL = "依赖构建脚本与 allowBuilds 对账（只判动了依赖面的提交）";
 
 const { test, expect } = defineGateRepo({
-  script: "check-allow-builds.cjs",
+  script: "gates/check-allow-builds.cjs",
   workdir: "allow-builds-gate",
   // 判据复用门禁扫描面的共用读取（消失/竞态 + `--staged` 短路器那一层），以及依赖面清单
   // 的那一处出处，两份都得带进临时工作区 —— 漏任何一份的表现都是脚本 exit 2、
   // 读起来像被测门禁自己坏了。
   copy: [
-    { from: "scripts/gate-scan-read.cjs", to: "scripts/gate-scan-read.cjs" },
+    { from: "scripts/gates/gate-scan-read.cjs", to: "scripts/gates/gate-scan-read.cjs" },
     {
       from: "scripts/dependency-face.mjs",
       to: "scripts/dependency-face.mjs",
@@ -566,7 +566,7 @@ describe("锁文件键的 peer 尾巴不是版本的一部分（ISSUE #3533）",
 describe("allow-builds 判据的接线（判据在场 ≠ 判据在跑）", () => {
   it("钩子 D 组真的执行这一步（被注释掉的行不算在场）", () => {
     const steps = dGroupSteps(readFileSync(HOOK, "utf8"));
-    const hit = steps.find((s) => s.cmd.includes("scripts/check-allow-builds.cjs"));
+    const hit = steps.find((s) => s.cmd.includes("scripts/gates/check-allow-builds.cjs"));
     expect(
       hit,
       `D 组 ${steps.length} 步里没有这一步 —— 摘掉它，硬规则 8 就又回到「零执行者」`,

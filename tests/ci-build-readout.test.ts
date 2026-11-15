@@ -27,8 +27,8 @@ import {
   resolveBuildSn,
   stageInFlight,
   stageLogExcerpt,
-} from "../scripts/ci-build-readout.mjs";
-import { buildSignature } from "../scripts/ship-build.mjs";
+} from "../scripts/ci/ci-build-readout.mjs";
+import { buildSignature } from "../scripts/ship/ship-build.mjs";
 
 /** 被取消那一跑（`cnb-lm1-1k5h1otqt`）：第二格被顶掉，第三格根本没跑。 */
 const CANCELLED_BUILD = {
@@ -1669,7 +1669,7 @@ describe("resolveBuildSn：点名照点名，没点名按 HEAD 逐字归属（�
  * 而 `scripts/` 不在 `check-code-duplication.cjs` 的量程里（它扫 `src/**`），这一族没有别的执行者会响。
  */
 describe("切分之后：ci-build 这一族的读数各只有一份定义", () => {
-  const dir = path.resolve(process.cwd(), "scripts");
+  const dir = path.resolve(process.cwd(), "scripts", "ci");
   const files = fs
     .readdirSync(dir)
     .filter((f) => /^ci-build.*\.mjs$/.test(f))

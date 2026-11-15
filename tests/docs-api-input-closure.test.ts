@@ -9,7 +9,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { INPUT_GLOBS, INPUT_RES, matchedInputs } from "../scripts/check-docs-api.cjs";
+import { INPUT_GLOBS, INPUT_RES, matchedInputs } from "../scripts/gates/check-docs-api.cjs";
 import {
   docsApiTriggerGlobs,
   globFaceForFiles,
@@ -129,12 +129,12 @@ describe("docs/api 输入面：typedoc 真解析面 ⇄ 门禁触发面（ISSUE 
     expect(INPUT_RES.length).toBe(INPUT_GLOBS.length);
   });
 
-  it("现场那个文件真的定义着被产物引用的类型：`scripts/db-backup-core.mjs`（BackupResult）", () => {
-    expect(programFiles()).toContain("scripts/db-backup-core.mjs");
+  it("现场那个文件真的定义着被产物引用的类型：`scripts/db/db-backup-core.mjs`（BackupResult）", () => {
+    expect(programFiles()).toContain("scripts/db/db-backup-core.mjs");
     /* 它**确实定义着**那个类型 —— 这是「它确实是输入」的现场证据，不是「闭包算得对」的自证。
      * ⚠️ 断言落在**源文件**上而不是产物上（ISSUE #2231）：产物不再进 git，没跑过 `pnpm run docs`
      * 的检出上盘里根本没有它 ⇒ 断产物会恒红（平台「受影响用例」也跑在文档生成之前，同形态）。 */
-    const source = path.join(ROOT, "scripts/db-backup-core.mjs");
+    const source = path.join(ROOT, "scripts/db/db-backup-core.mjs");
     expect(fs.existsSync(source), `源文件 ${source} 不在盘上`).toBe(true);
     expect(fs.readFileSync(source, "utf8")).toContain("BackupResult");
   });
