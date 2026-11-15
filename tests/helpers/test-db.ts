@@ -633,6 +633,7 @@ export type SeedTaskInput = {
   projectId?: string | null;
   prompt?: string;
   referenceImages?: unknown;
+  shotId?: string | null;
   status?: string;
   type?: string;
   userId: string;
@@ -652,6 +653,7 @@ export function seedTask(_tdb: TestDb, input: SeedTaskInput): Row {
     params: input.params ?? {},
     workflowName: input.workflowName ?? "seeded-workflow",
     projectId: input.projectId ?? null,
+    shotId: input.shotId ?? null,
     workflowSnapshot: input.workflowSnapshot ?? null,
     referenceImages: input.referenceImages ?? null,
     parentId: input.parentId ?? null,
