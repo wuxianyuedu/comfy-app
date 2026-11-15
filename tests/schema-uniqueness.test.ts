@@ -77,15 +77,22 @@ function uniqueColumnsOf(table: Parameters<typeof getTableConfig>[0]): Array<str
  * SQLite diff 对部分索引 / 表达式索引永不收敛（见 schema.ts task 表注释），
  * 该约束由应用层承（generate.ts 的锁内查重 + series-generation 的占用集合），
  * 不设库级唯一索引。
+ *
+ * 刻意**不设**唯一约束的业务键（拍板记录，别再当缺口上报）：
+ *  · `series(userId, title)` / `project(userId, name)`（#3935）：默认标题
+ *    「未命名系列 / 未命名项目」的连续创建是正常流程，强唯一会挡住它；
+ *  · `filmProject.projectId`（#3936）：一个项目允许多份成片（重制场景）。
  */
 const REQUIRED_UNIQUE_KEYS: Record<string, Array<{ columns: Array<string> }>> = {
   user: [{ columns: ["email"] }],
   session: [{ columns: ["token"] }],
+  account: [{ columns: ["providerId", "accountId", "userId"] }],
   model: [{ columns: ["fileName", "folder"] }],
   userModelConfig: [{ columns: ["userId", "folder"] }],
   favorite: [{ columns: ["userId", "modelId"] }],
   workflowModelTag: [{ columns: ["userId", "name"] }],
   workflowModelTagToWorkflowTemplate: [{ columns: ["workflowModelTag", "workflowTemplate"] }],
+  workflowTemplate: [{ columns: ["userId", "name"] }],
   llmProvider: [{ columns: ["name"] }],
   remoteModel: [{ columns: ["name"] }],
   skill: [{ columns: ["slug"] }],
@@ -209,5 +216,22 @@ describe("唯一约束行为（内存真库）", () => {
         .insert(schema.workflowModelTagToWorkflowTemplate)
         .values({ workflowModelTag: "tag1", workflowTemplate: "wt1" }),
     );
+  });
+
+  it("同一用户的模板名唯一（#3934）；不同用户互不影响", async () => {
+    const db = createTestDb();
+    await db.insert(schema.workflowTemplate).values({ id: "w1", userId: "u1", name: "导入 A" });
+    await expectUniqueRejection(
+      db.insert(schema.workflowTemplate).values({ id: "w2", userId: "u1", name: "导入 A" }),
+    );
+    await db.insert(schema.workflowTemplate).values({ id: "w3", userId: "u2", name: "导入 A" });
+  });
+
+  it("account 同一 (provider, account, user) 唯一（#3937）；换 provider 不受影响", async () => {
+    const db = createTestDb();
+    const base = { userId: "u1", accountId: "acc1", providerId: "github" };
+    await db.insert(schema.account).values({ id: "a1", ...base });
+    await expectUniqueRejection(db.insert(schema.account).values({ id: "a2", ...base }));
+    await db.insert(schema.account).values({ id: "a3", ...base, providerId: "google" });
   });
 });
