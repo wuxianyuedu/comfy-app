@@ -133,7 +133,7 @@ describe("runFetchIssue：假执行者全链（#3965）", () => {
           },
         });
       }
-      if (args[0] === "issues" && args[1] === "list-comments") {
+      if (args[0] === "issues" && args[1] === "list-issue-comments") {
         return ok({
           status: 200,
           data: [
@@ -293,7 +293,7 @@ describe("ship --fetch-issue：分派与互斥（ISSUE #3965，假执行者）",
           },
         });
       }
-      if (cmd === "cnb" && args[0] === "issues" && args[1] === "list-comments") {
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "list-issue-comments") {
         return okJson({ status: 200, data: [] });
       }
       if (cmd === "cnb" && args[0] === "issues" && args[1] === "get-imgs") {

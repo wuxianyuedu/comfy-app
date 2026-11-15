@@ -176,7 +176,7 @@ function fetchComments({ run, log, slug, number }) {
   for (let page = 1; page <= COMMENTS_MAX_PAGES; page += 1) {
     const got = cnbJson(run, [
       "issues",
-      "list-comments",
+      "list-issue-comments",
       "--repo",
       slug,
       "--number",
