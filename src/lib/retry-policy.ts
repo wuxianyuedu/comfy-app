@@ -31,9 +31,26 @@ export type BackoffShape =
   /** 指数退避 + 上限：适合「对端可能长时间不可用，别一直砸它」。 */
   | "exponential";
 
+/**
+ * 抖动形状（ISSUE #3888）：给等待时长加随机量，错开多个客户端的同拍重试。
+ *
+ * - `none`（缺省）：不加随机量 —— 既有取值一字不变；单客户端对单服务的重试不需要它。
+ * - `full`：在 `[0, delay]` 内均匀取值 —— 竞争者多、谁先试都行的场景。
+ * - `equal`：在 `[delay/2, delay]` 内均匀取值 —— 保留一半底噪，避免抖出近乎 0
+ *   的等待把刚失败的操作立刻又打回去。
+ *
+ * 什么时候该开：**多个进程 / 多个客户端会同时撞同一个资源**的重试（典型：一群
+ * worker 同时对同一份库切 WAL、抢写锁）。单客户端的指数退避本身已经错峰，不必开。
+ */
+export type JitterShape = "none" | "full" | "equal";
+
 export type BackoffShapeOptions = {
   /** `fixed` 的间隔，或 `exponential` 的基数（毫秒）。 */
   baseMs: number;
+  /**
+   * 抖动形状（缺省 `none` = 不加随机量，既有取值不变）。语义见 {@link JitterShape}。
+   */
+  jitter?: JitterShape;
   /**
    * 指数退避里 `attempt` 的封顶（默认无）。
    *
@@ -60,15 +77,28 @@ export type BackoffOptions = {
  * 就绪轮询每轮要探一个具体的服务），硬塞进一个通用 `retryAsync` 只会把这些
  * 差异挤进回调里，读起来比现在更绕。本出口负责的是**唯一不该各处写一遍的
  * 那一半**：delay 的算法。
+ *
+ * `rand` 是随机源注入口（测试喂定值）；缺省 `Math.random`。只在 `jitter`
+ * 非 `none` 时被调用 —— 缺省形状下连随机源都不碰，既有取值逐位不变。
  */
-export function backoffDelayMs(opts: BackoffOptions): number {
-  const { attempt, baseMs, shape, maxMs, maxAttempt } = opts;
+export function backoffDelayMs(opts: BackoffOptions, rand: () => number = Math.random): number {
+  const { attempt, baseMs, shape, maxMs, maxAttempt, jitter = "none" } = opts;
   const n = Math.max(0, attempt);
-  if (shape === "fixed") {
-    return baseMs;
+  const delay =
+    shape === "fixed"
+      ? baseMs
+      : Math.min(
+          baseMs * 2 ** (maxAttempt === undefined ? n : Math.min(n, maxAttempt)),
+          maxMs ?? Number.POSITIVE_INFINITY,
+        );
+  if (jitter === "none") {
+    return delay;
   }
-  const capped = maxAttempt === undefined ? n : Math.min(n, maxAttempt);
-  return Math.min(baseMs * 2 ** capped, maxMs ?? Number.POSITIVE_INFINITY);
+  /* rand 越界（调用方给了野值）夹回 [0,1]：抖动只改变时机，不许越过 delay
+   * （也就不越过 maxMs）—— 那是「错峰」，不是「再赌一把更大的」。 */
+  const r = Math.min(1, Math.max(0, rand()));
+  const scaled = jitter === "full" ? delay * r : delay / 2 + (delay / 2) * r;
+  return Math.round(scaled);
 }
 
 /* ── 具名策略：每个数都注明了它被什么约束 ──────────────────────────────────
