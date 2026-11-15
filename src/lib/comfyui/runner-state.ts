@@ -350,6 +350,25 @@ export function schedulePersistLogs(taskId: string) {
   persistTimers.set(taskId, { debounce, maxDelay });
 }
 
+/** 终态去重标记的有界保留上限（ISSUE #3961 / #3850）：`settled`/`finalized` 只需
+ *  挡住同一任务在“可见时间窗”内的重复收口；终态落库后 DB 自身也有终态守卫。
+ *  无上限会让已完成 taskId 在长生命周期进程中单调增长，这里按插入序淘汰最旧项。 */
+const TERMINAL_MARK_MAX = 4096;
+
+function rememberTerminalMark(set: Set<string>, taskId: string): void {
+  if (set.has(taskId)) {
+    set.delete(taskId);
+  }
+  set.add(taskId);
+  while (set.size > TERMINAL_MARK_MAX) {
+    const oldest = set.values().next().value;
+    if (oldest === undefined) {
+      break;
+    }
+    set.delete(oldest);
+  }
+}
+
 /**
  * 抢占任务的终态。
  *
@@ -366,7 +385,7 @@ export function claimSettle(taskId: string): boolean {
   if (s.settled.has(taskId)) {
     return false;
   }
-  s.settled.add(taskId);
+  rememberTerminalMark(s.settled, taskId);
   const t = s.timers.get(taskId);
   if (t) {
     clearTimeout(t);
@@ -383,7 +402,7 @@ export function claimFinalize(taskId: string): boolean {
   if (s.finalized.has(taskId)) {
     return false;
   }
-  s.finalized.add(taskId);
+  rememberTerminalMark(s.finalized, taskId);
   return true;
 }
 
