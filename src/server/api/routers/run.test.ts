@@ -432,3 +432,111 @@ describe("run.autoselectShot（FR-QA-04④ · #2612）", () => {
     expect(res.winnerImageUrl).toBe("/generated/task-w/1.png");
   });
 });
+
+describe("run 控制路由原子合并（#3960）", () => {
+  const engineProgress = {
+    stage: "shots" as const,
+    log: [
+      {
+        ts: "2026-01-01T00:00:00.000Z",
+        kind: "render_images",
+        ok: true,
+        detail: "逐镜生图：1 成功",
+      },
+    ],
+    processedShotRev: { s1: 2 },
+    reviewedShotRev: { s1: 1 },
+    reviewAttempts: { s1: 1 },
+    scriptReviewDigest: "abcd1234",
+    scriptReviewAttempts: 1,
+    scriptRevisionPending: false,
+    storyboardScriptDigest: "ef005678",
+    filmStartedAt: "2026-01-01T00:00:01.000Z",
+  };
+
+  async function seedRunWithProgress(
+    id: string,
+    status: "running" | "awaiting_approval" | "paused",
+  ) {
+    await seedProduction(id, {
+      scriptMarkdown: "# 剧本",
+      characters: [{ id: "c1" }],
+      shots: [{ id: "s1" }],
+    });
+    await productionRepository.updateRun("user-a", id, {
+      status,
+      approvalMode: "stage",
+      goal: "old-goal",
+      awaitingStage: status === "awaiting_approval" ? "shots" : null,
+      imageWorkflowId: "img-old",
+      videoWorkflowId: "vid-old",
+      autoReview: false,
+      error: status === "running" ? "old-err" : null,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      ...engineProgress,
+    });
+  }
+
+  it("pause 在并发推进下保留引擎进度字段", async () => {
+    await seedRunWithProgress("proj_p", "running");
+    const res = await createCaller(makeCtx()).pause({ projectId: "proj_p" });
+    expect(res.run.status).toBe("paused");
+    expect(res.run.stage).toBe("shots");
+    expect(res.run.log).toHaveLength(1);
+    expect(res.run.processedShotRev).toEqual({ s1: 2 });
+    expect(res.run.reviewedShotRev).toEqual({ s1: 1 });
+    expect(res.run.reviewAttempts).toEqual({ s1: 1 });
+    expect(res.run.scriptReviewDigest).toBe("abcd1234");
+    expect(res.run.storyboardScriptDigest).toBe("ef005678");
+    expect(res.run.filmStartedAt).toBe("2026-01-01T00:00:01.000Z");
+    const row = await productionRepository.getForUser("user-a", "proj_p");
+    expect(asRecord(row?.run)?.status).toBe("paused");
+    expect(asRecord(row?.run)?.stage).toBe("shots");
+  });
+
+  it("start 保留引擎进度字段并更新控制参数", async () => {
+    await seedRunWithProgress("proj_s", "paused");
+    const res = await createCaller(makeCtx()).start({
+      projectId: "proj_s",
+      goal: "new-goal",
+      imageWorkflowId: "img-new",
+      autoReview: true,
+    });
+    expect(res.run.status).toBe("running");
+    expect(res.run.goal).toBe("new-goal");
+    expect(res.run.imageWorkflowId).toBe("img-new");
+    expect(res.run.autoReview).toBe(true);
+    expect(res.run.error).toBeNull();
+    expect(res.run.stage).toBe("shots");
+    expect(res.run.log).toHaveLength(1);
+    expect(res.run.processedShotRev).toEqual({ s1: 2 });
+    expect(res.run.filmStartedAt).toBe("2026-01-01T00:00:01.000Z");
+  });
+
+  it("approve 保留进度字段并清 awaitingStage", async () => {
+    await seedRunWithProgress("proj_a", "awaiting_approval");
+    const res = await createCaller(makeCtx()).approve({ projectId: "proj_a" });
+    expect(res.run.status).toBe("running");
+    expect(res.run.awaitingStage).toBeNull();
+    expect(res.run.stage).toBe("shots");
+    expect(res.run.log).toHaveLength(1);
+    expect(res.run.storyboardScriptDigest).toBe("ef005678");
+  });
+
+  it("cancel 保留进度字段且对 done/failed/cancelled 幂等", async () => {
+    await seedRunWithProgress("proj_c", "running");
+    const cancelled = await createCaller(makeCtx()).cancel({ projectId: "proj_c" });
+    expect(cancelled.run.status).toBe("cancelled");
+    expect(cancelled.run.awaitingStage).toBeNull();
+    expect(cancelled.run.log).toHaveLength(1);
+    expect(cancelled.run.processedShotRev).toEqual({ s1: 2 });
+
+    await productionRepository.updateRun("user-a", "proj_c", {
+      ...cancelled.run,
+      status: "done",
+    });
+    const again = await createCaller(makeCtx()).cancel({ projectId: "proj_c" });
+    expect(again.run.status).toBe("done");
+    expect(again.action).toEqual({ kind: "idle" });
+  });
+});

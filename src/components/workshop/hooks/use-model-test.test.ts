@@ -1,7 +1,8 @@
 // 「测试模型能力」逻辑层行为（ISSUE #3995）：生成前（未点生成）请求详情面板
 // 就要能同时看到「本地提交」与「实际请求」两部分 —— 此前预览请求缺 `kind`、
-// 被中继路由按 400 拒掉，预览读数从未到达界面。本文件锁：
-// ① 预览请求必带 `kind`（dry-run 与真实发送同一条路由的准入字段）；
+// 被中继路由按 400 拒掉，预览读数从未到达界面（`kind` 本身的补法已随 #3985
+// 落在 master）。本文件锁：
+// ① 预览请求按 `kind` 分流（第二参显式传，与真实发送同一条路由）；
 // ② 生成前 previewRows 首行是「本地提交」行（relay 端点 + 统一输入），
 //    后随服务端 dry-run 算出的「实际请求」行；
 // ③ 未选模型时不发预览、也不给行；
@@ -24,7 +25,9 @@ let adaptersAll: unknown;
 let upstreamPreview: Array<ApiCallDebugRow>;
 
 const apiPreviewRequestMock =
-  vi.fn<(body: Record<string, unknown>) => Promise<Array<ApiCallDebugRow>>>();
+  vi.fn<
+    (body: Record<string, unknown>, kind: "image" | "video") => Promise<Array<ApiCallDebugRow>>
+  >();
 const apiGenerateImageMock = vi.fn<(req: unknown) => Promise<string>>();
 
 vi.mock("~/trpc/react", () => ({
@@ -47,7 +50,8 @@ vi.mock("~/trpc/react", () => ({
 vi.mock("~/lib/workshop/generation-client", () => ({
   apiGenerateImage: (req: unknown) => apiGenerateImageMock(req),
   apiPollVideo: vi.fn(),
-  apiPreviewRequest: (body: Record<string, unknown>) => apiPreviewRequestMock(body),
+  apiPreviewRequest: (body: Record<string, unknown>, kind: "image" | "video") =>
+    apiPreviewRequestMock(body, kind),
   apiSubmitVideo: vi.fn(),
 }));
 
@@ -152,15 +156,15 @@ describe("useModelTest：生成前的请求预览（ISSUE #3995）", () => {
       await vi.advanceTimersByTimeAsync(700);
     });
 
-    /* 预览请求与真实发送同一条路由：kind 必带（缺它路由 400，预览永远空）。 */
+    /* 预览请求与真实发送同一条路由：kind 走第二参显式分流（缺它路由 400）。 */
     expect(apiPreviewRequestMock).toHaveBeenCalledTimes(1);
     expect(apiPreviewRequestMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        kind: "image",
         mode: "T2I",
         model: "agnes-image",
         prompt: "测试提示词",
       }),
+      "image",
     );
 
     /* 面板读数：首行本地提交（relay 端点 + 统一输入），后随实际上游请求。 */

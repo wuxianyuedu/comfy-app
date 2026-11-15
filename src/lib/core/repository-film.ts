@@ -155,6 +155,25 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
     });
   }
 
+  /** 按项目取最近一条影片（ISSUE #3962）：run 起片恢复需要定位与项目关联的
+   *  最近一次成片尝试，判断是否已进入可恢复生成态或已终态。 */
+  async findLatestByProjectId(
+    userId: string,
+    projectId: string,
+  ): Promise<{ createdAt: Date; id: string; status: string } | null> {
+    const rows = await db
+      .select({
+        id: filmProject.id,
+        status: filmProject.status,
+        createdAt: filmProject.createdAt,
+      })
+      .from(filmProject)
+      .where(and(eq(filmProject.userId, userId), eq(filmProject.projectId, projectId)))
+      .orderBy(desc(filmProject.createdAt))
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
   /** 按状态列出影片（进程重启后的恢复扫描用），`createdAt` 升序 = 先起先续。
    *
    *  刻意**不带 userId**：这条查询的语义是「本机这份库里还有哪些行该有人推进」，
