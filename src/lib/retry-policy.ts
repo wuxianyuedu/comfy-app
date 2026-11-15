@@ -24,6 +24,8 @@
 // 判据是「同一件事的定义只有一处」，而不是「把三处改成同一种策略」
 // —— 策略**本就该不同**，本条账要的是把「为什么不同」写下来。
 
+import { clamp } from "~/lib/clamp";
+
 /** 退避策略的两种形状。 */
 export type BackoffShape =
   /** 固定间隔：适合「对端一定就绪、只是慢一拍」。 */
@@ -96,7 +98,7 @@ export function backoffDelayMs(opts: BackoffOptions, rand: () => number = Math.r
   }
   /* rand 越界（调用方给了野值）夹回 [0,1]：抖动只改变时机，不许越过 delay
    * （也就不越过 maxMs）—— 那是「错峰」，不是「再赌一把更大的」。 */
-  const r = Math.min(1, Math.max(0, rand()));
+  const r = clamp(rand(), 0, 1);
   const scaled = jitter === "full" ? delay * r : delay / 2 + (delay / 2) * r;
   return Math.round(scaled);
 }
