@@ -10194,6 +10194,8 @@ fail-closed 语义与 5m 预算一字未动 —— 迁歪的表现是那格红�
 
 **跑完（或跑到一半）之后「每一格现在什么状态」有只读统一出口：`pnpm ship --status [<PR号|分支名>]`**（ISSUE #3811）。它把 PR 存在与合并态 / CI 终态（与轮询同一份分类器，含 GA 回读说明）/ 标题认领单子的关单状态 / 本地上一次跑的落盘结论摆到同一张屏上，替掉「手敲 grep 翻自己的运行日志」——日志是那块屏幕的过去，平台的原值才是现在。退码复用既有码表（0 绿/已合并 · 1 CI 红或没提过 PR · 2 没结论 · 3 冲突 · 4 CI 无终态）；CI 红只念一行判决、深挖仍归 `--diagnose`（不抄第二份逐格读数）。判据与边界只有一份出处：`scripts/ship-status.mjs` 文件头。
 
+**这一跑自己的「走到哪了 / 结论」也落在盘上：`.git/ship-result.json`（ISSUE #3206 / #3923）。** ship 每一轮**开跑即写**（write-ahead，`status=running`），随每行读数更新状态快照（`status` / `branch` / `sha` / `repo` / `pr` / `exitCode` / `conclusion`），并追加**带时间戳的事件**（`start` / `stage`（含结构化 `facts`）/ `conclusion` / `finished` / `interrupted`）；落盘是**原子替换**（先写同目录临时文件再 rename），另一只轮询的眼睛不会读到半截 JSON。后台跑 ship 时，进度用只读口取：`pnpm ship --result`（人读摘要 + 事件时间线）或 `pnpm ship --result=json`（原始 JSON），**不要 `sleep + grep` 自己的运行日志** —— 日志是那一块屏幕的过去，落盘读数是进程自己写下的现在；`running` / `interrupted` 一律是「没给结论」，与退码 `2` 同口径，不许读成通过。**只读单件动作自己不落盘**（`--result` / `--status` / `--whoami` / `--branches` / `--claims` / `--diagnose` / `--stage-log` / `--gh-logs` / `--gh-prs`）：查询自己再写一份进去，会把后台那一跑的活读数覆盖掉 —— 轮询的眼睛不能毁掉它正在看的东西。平台侧「PR / CI / 关单」的现在仍走 `pnpm ship --status`（上一段）。判据与形状只有一份出处：`scripts/ship-result.mjs` 文件头。
+
 **工作模式：全托管与逐步确认（ISSUE #3512）。** 四条红线没有为模式开口子 —— 模式是
 **打包旗标的显式别名**：`pnpm ship --mode auto` 在语义上等于人亲手给了
 `--merge --close-issue --clean-branch` 三枚旗标（展开发生在解析层、所有阶段之前，

@@ -243,6 +243,13 @@ function readoutLastRun(log, root, currentArgv, read) {
     `${TAG} 本地上一次跑：${r.startedAt} · status=${r.status} · exit=${r.exitCode ?? "无"} · ` +
       `PR ${r.pr ?? "未读到"} · 结论：${r.conclusion ?? "（这一跑没念结论行）"}`,
   );
+  /* 「走到哪」补一行（ISSUE #3923）：状态快照里 stages 本来就在，取最近一格；
+   * 完整事件时间线归 --result 那一格，不在这里抄第二份。 */
+  const stages = Array.isArray(r.stages) ? r.stages : [];
+  const lastStage = stages.at(-1);
+  if (lastStage) {
+    log(`${TAG} 本地上一次跑走到哪：▶ ${lastStage}`);
+  }
 }
 
 /**
