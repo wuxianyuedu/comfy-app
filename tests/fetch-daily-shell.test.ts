@@ -23,6 +23,7 @@ import {
   resolveEndpoint,
   resolveToken,
   usage,
+  writeTokenConfigFile,
 } from "../scripts/fetch-daily-shell.mjs";
 
 const tmpDirs: Array<string> = [];
@@ -41,6 +42,8 @@ function respond(status: number, body: string): Response {
 /** 捕获 main() 两路输出，避免用例把日志打进 vitest 自己的输出。 */
 async function captureMain(io: {
   argv?: string[];
+  /** 建于临时目录下的令牌文件候选（不传即用真实 homedir，本机可能已有真令牌）。 */
+  configPaths?: string[];
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   fetchImpl?: typeof fetch;
@@ -160,6 +163,7 @@ describe("401 / 404 失败出口（ISSUE #3728）", () => {
       env: { NODE_ENV: "test", APPDATA: String.raw`C:\Users\u\AppData\Roaming` },
       fetchImpl: () => Promise.resolve(respond(401, '{"errcode":16,"errmsg":"not logged in"}')),
       platform: "win32",
+      configPaths: [path.join(dir, "comfy-app", "cnb-release-token")],
     });
     expect(result.code).toBe(1);
     expect(result.err).toContain("下载失败（HTTP 401）");
@@ -168,6 +172,81 @@ describe("401 / 404 失败出口（ISSUE #3728）", () => {
     expect(result.err).toContain("cnb-release-token");
     expect(result.err).toContain("未检测到可用令牌");
     expect(result.err).not.toContain("该地址下没有");
+  });
+});
+
+describe("用户级令牌文件（ISSUE #3917）", () => {
+  it("这些路径缺省都不存在，无令牌时把候选清单与存在状态念出来", async () => {
+    const dir = makeTmpDir();
+    const result = await captureMain({
+      argv: ["--dry-run"],
+      cwd: dir,
+      env: { NODE_ENV: "test", HOME: dir },
+      platform: "linux",
+    });
+    expect(result.code).toBe(0);
+    expect(result.out).toContain("鉴权：无（直连）");
+    expect(result.out).toContain("cnb-release-token（不存在）");
+    expect(result.out).toContain("--config --token");
+  });
+
+  it("--config 把令牌写进候选路径里的第一个，且只写令牌本体", async () => {
+    const dir = makeTmpDir();
+    const result = await captureMain({
+      argv: ["--config", "--token", "tok-from-flag"],
+      cwd: dir,
+      env: { NODE_ENV: "test", HOME: dir },
+      platform: "linux",
+    });
+    expect(result.code).toBe(0);
+    const target = path.join(dir, ".config", "comfy-app", "cnb-release-token");
+    expect(result.out).toContain(target);
+    expect(fs.readFileSync(target, "utf8")).toBe("tok-from-flag\n");
+    // 写完之后下载链就能取到它 —— 这条是「本地没有这个路径」的完整闭环。
+    expect(resolveToken({ HOME: dir }, "", { platform: "linux" })).toEqual({
+      token: "tok-from-flag",
+      from: path.normalize(target),
+    });
+    // 令牌本体不许回显到输出里。
+    expect(result.out).not.toContain("tok-from-flag");
+    expect(result.err).not.toContain("tok-from-flag");
+  });
+
+  it("--config 可显式给目标路径，取值像旗标时不吞", async () => {
+    const dir = makeTmpDir();
+    const crafted = path.join(dir, "custom", "tok.txt");
+    const ok = await captureMain({
+      argv: ["--config", crafted, "--token", "t"],
+      cwd: dir,
+      env: { NODE_ENV: "test", HOME: dir },
+      platform: "linux",
+    });
+    expect(ok.code).toBe(0);
+    expect(fs.readFileSync(crafted, "utf8")).toBe("t\n");
+    // `--config --token x` 的 --config 是无值形态：不许把「--token」当成目标路径。
+    expect(parseArgs(["--config", "--token", "x"]).config).toBeNull();
+    expect(parseArgs(["--config", "--token", "x"]).configOnly).toBe(true);
+    expect(fs.existsSync(path.join(dir, "--token"))).toBe(false);
+  });
+
+  it("--config 缺令牌值退 2，不写空文件", async () => {
+    const dir = makeTmpDir();
+    const result = await captureMain({
+      argv: ["--config"],
+      cwd: dir,
+      env: { NODE_ENV: "test", HOME: dir },
+      platform: "linux",
+    });
+    expect(result.code).toBe(2);
+    expect(result.err).toContain("--token");
+    expect(fs.existsSync(path.join(dir, ".config"))).toBe(false);
+  });
+
+  it("writeTokenConfigFile 自动建父目录", () => {
+    const dir = makeTmpDir();
+    const target = path.join(dir, "a", "b", "tok");
+    expect(writeTokenConfigFile({ token: " t ", target })).toBe(path.normalize(target));
+    expect(fs.readFileSync(target, "utf8")).toBe("t\n");
   });
 });
 
