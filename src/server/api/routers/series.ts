@@ -1,9 +1,10 @@
 import { z } from "zod";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
 import { TRPCError } from "@trpc/server";
 import { createId } from "@paralleldrive/cuid2";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
+import { uniqueConflict } from "./unique-conflict";
 import { isPlainRecord } from "~/lib/is-record";
 import type * as schema from "~/server/db/schema";
 import {
@@ -263,16 +264,28 @@ export const seriesRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       await assertSeriesOwner(ctx, input.seriesId);
-      const [row] = await ctx.db
-        .insert(season)
-        .values({
-          id: createId(),
-          seriesId: input.seriesId,
-          seasonNumber: input.seasonNumber ?? 1,
-          title: input.title ?? "",
-        })
-        .returning();
-      return row;
+      /* UI 建季不传季号：按「现有最大季号 +1」发号。此前默认恒为 1 —— 建第二个
+       * 季与第一个同号（#3849 现场之一）；显式传号原样用，撞号由
+       * season_series_number_uniq 兜底成 409（下方 catch），不再落重复行。 */
+      const maxRow = await ctx.db
+        .select({ maxNum: sql<number | null>`max(${season.seasonNumber})` })
+        .from(season)
+        .where(eq(season.seriesId, input.seriesId));
+      const seasonNumber = input.seasonNumber ?? (maxRow[0]?.maxNum ?? 0) + 1;
+      try {
+        const [row] = await ctx.db
+          .insert(season)
+          .values({
+            id: createId(),
+            seriesId: input.seriesId,
+            seasonNumber,
+            title: input.title ?? "",
+          })
+          .returning();
+        return row;
+      } catch (error) {
+        throw uniqueConflict(error, [{ columns: ["seasonNumber"], message: "该季号已存在" }]);
+      }
     }),
 
   updateSeason: authedProcedure
@@ -292,7 +305,11 @@ export const seriesRouter = createTRPCRouter({
       if (input.title !== undefined) {
         patch.title = input.title;
       }
-      await ctx.db.update(season).set(patch).where(eq(season.id, input.id));
+      try {
+        await ctx.db.update(season).set(patch).where(eq(season.id, input.id));
+      } catch (error) {
+        throw uniqueConflict(error, [{ columns: ["seasonNumber"], message: "该季号已存在" }]);
+      }
       return (await ctx.db.select().from(season).where(eq(season.id, input.id)).limit(1))[0];
     }),
 
@@ -331,20 +348,34 @@ export const seriesRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       await assertSeasonOwner(ctx, input.seasonId);
-      const [row] = await ctx.db
-        .insert(episode)
-        .values({
-          id: createId(),
-          seasonId: input.seasonId,
-          projectId: input.projectId ?? null,
-          episodeNumber: input.episodeNumber ?? 1,
-          title: input.title ?? "",
-          synopsis: input.synopsis ?? "",
-          targetDurationSec: input.targetDurationSec ?? null,
-          status: input.status ?? "draft",
-        })
-        .returning();
-      return row;
+      /* UI 建集不传集号：按「本季现有最大集号 +1」发号（此前默认恒 1，#3849）。
+       * 显式传号原样用；集号 / 项目绑定撞唯一索引时按列给业务 409。 */
+      const maxRow = await ctx.db
+        .select({ maxNum: sql<number | null>`max(${episode.episodeNumber})` })
+        .from(episode)
+        .where(eq(episode.seasonId, input.seasonId));
+      const episodeNumber = input.episodeNumber ?? (maxRow[0]?.maxNum ?? 0) + 1;
+      try {
+        const [row] = await ctx.db
+          .insert(episode)
+          .values({
+            id: createId(),
+            seasonId: input.seasonId,
+            projectId: input.projectId ?? null,
+            episodeNumber,
+            title: input.title ?? "",
+            synopsis: input.synopsis ?? "",
+            targetDurationSec: input.targetDurationSec ?? null,
+            status: input.status ?? "draft",
+          })
+          .returning();
+        return row;
+      } catch (error) {
+        throw uniqueConflict(error, [
+          { columns: ["episode.projectId"], message: "该项目已绑定到其他集" },
+          { columns: ["episode.episodeNumber"], message: "该集号已存在" },
+        ]);
+      }
     }),
 
   updateEpisode: authedProcedure
@@ -380,7 +411,14 @@ export const seriesRouter = createTRPCRouter({
       if (input.status !== undefined) {
         patch.status = input.status;
       }
-      await ctx.db.update(episode).set(patch).where(eq(episode.id, input.id));
+      try {
+        await ctx.db.update(episode).set(patch).where(eq(episode.id, input.id));
+      } catch (error) {
+        throw uniqueConflict(error, [
+          { columns: ["episode.projectId"], message: "该项目已绑定到其他集" },
+          { columns: ["episode.episodeNumber"], message: "该集号已存在" },
+        ]);
+      }
       return (await ctx.db.select().from(episode).where(eq(episode.id, input.id)).limit(1))[0];
     }),
 
@@ -434,12 +472,18 @@ export const seriesRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "集不存在" });
       }
       await assertSeasonOwner(ctx, ep.seasonId);
-      const [row] = await ctx.db
-        .update(episode)
-        .set({ projectId: input.projectId })
-        .where(eq(episode.id, input.episodeId))
-        .returning();
-      return row;
+      try {
+        const [row] = await ctx.db
+          .update(episode)
+          .set({ projectId: input.projectId })
+          .where(eq(episode.id, input.episodeId))
+          .returning();
+        return row;
+      } catch (error) {
+        throw uniqueConflict(error, [
+          { columns: ["episode.projectId"], message: "该项目已绑定到其他集" },
+        ]);
+      }
     }),
 
   // ───────────────────────────── 系列角色库 (FR-SR-03) ─────────────────────────────
@@ -476,27 +520,31 @@ export const seriesRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       await assertSeriesOwner(ctx, input.seriesId);
-      const [row] = await ctx.db
-        .insert(character)
-        .values({
-          id: createId(),
-          seriesId: input.seriesId,
-          name: input.name,
-          ageGender: input.ageGender ?? "",
-          appearance: input.appearance ?? "",
-          costume: input.costume ?? "",
-          personality: input.personality ?? "",
-          temperament: input.temperament ?? "",
-          styleTags: input.styleTags ?? [],
-          skillSlug: input.skillSlug ?? null,
-          positivePrompt: input.positivePrompt ?? "",
-          negativePrompt: input.negativePrompt ?? "",
-          params: input.params ?? {},
-          portraitUrl: input.portraitUrl ?? null,
-          portraits: input.portraits ?? [],
-        })
-        .returning();
-      return row;
+      try {
+        const [row] = await ctx.db
+          .insert(character)
+          .values({
+            id: createId(),
+            seriesId: input.seriesId,
+            name: input.name,
+            ageGender: input.ageGender ?? "",
+            appearance: input.appearance ?? "",
+            costume: input.costume ?? "",
+            personality: input.personality ?? "",
+            temperament: input.temperament ?? "",
+            styleTags: input.styleTags ?? [],
+            skillSlug: input.skillSlug ?? null,
+            positivePrompt: input.positivePrompt ?? "",
+            negativePrompt: input.negativePrompt ?? "",
+            params: input.params ?? {},
+            portraitUrl: input.portraitUrl ?? null,
+            portraits: input.portraits ?? [],
+          })
+          .returning();
+        return row;
+      } catch (error) {
+        throw uniqueConflict(error, [{ columns: ["character.name"], message: "同名角色已存在" }]);
+      }
     }),
 
   updateCharacter: authedProcedure
@@ -560,7 +608,11 @@ export const seriesRouter = createTRPCRouter({
       if (input.portraits !== undefined) {
         patch.portraits = input.portraits;
       }
-      await ctx.db.update(character).set(patch).where(eq(character.id, input.id));
+      try {
+        await ctx.db.update(character).set(patch).where(eq(character.id, input.id));
+      } catch (error) {
+        throw uniqueConflict(error, [{ columns: ["character.name"], message: "同名角色已存在" }]);
+      }
       return (await ctx.db.select().from(character).where(eq(character.id, input.id)).limit(1))[0];
     }),
 

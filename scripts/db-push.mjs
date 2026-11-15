@@ -43,6 +43,7 @@ import { describeSpawnFailure, pushSchema } from "./db-push-core.mjs";
 import { pnpmCli, spawnSettled } from "./ci-install-deps.mjs";
 import { rejectUnknownArgs } from "./cli-arg-contract.mjs";
 import { sweepLegacyTimestamps } from "./db-legacy-sweep.mjs";
+import { sweepDuplicateRowsForUniqueIndexes } from "./db-unique-sweep.mjs";
 import {
   probeSchemaFresh,
   resolveSqlitePath,
@@ -152,6 +153,10 @@ function syncSchema() {
    * 落点找出来，再按「绝对路径 + 参数」起 —— 命令形态仍然只有一份实现
    * （`pnpmCli` → `ensurePnpmOnPath`），这里不自己拼可执行名。 */
   const cli = pnpmCli();
+  /* 唯一索引上线前的存量重复清洗（#3849）：必须在 push **之前** —— 库里已有
+   * 重复行时 `CREATE UNIQUE INDEX` 直接失败。空转档（指纹已同步）不进来：
+   * 索引已在库里 ⇒ 重复行不可能存在，清洗本来就该空转。 */
+  sweepDuplicateRowsForUniqueIndexes(dbPath);
   const result = pushSchema(root, {
     force: true,
     /* 两个默认值不是防御，是**照契约写**：这里注入的 `run` 按内核声明是
