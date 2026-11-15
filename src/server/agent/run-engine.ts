@@ -137,33 +137,10 @@ function gateStageFor(action: RunAction): ProductionStage | null {
 }
 
 async function saveRun(userId: string, projectId: string, run: ProductionRun) {
-  /* 回写前重读库中状态（ISSUE #3863）：动作执行可达数分钟，期间用户可能已
-   * pause/cancel。引擎手里的 run 是拍首旧快照，直接整包回写会把 paused /
-   * cancelled 复活成 running —— 用户的暂停/取消被静默回滚，引擎下一拍继续
-   * 烧 LLM/ComfyUI。 */
-  const row = await productionRepository.getForUser(userId, projectId);
-  if (!row) {
-    return;
-  }
-  const dbStatus = normalizeProductionRun(row.run).status;
-  if (dbStatus === "cancelled") {
-    // 取消是用户终态：引擎不再回写任何东西（含 failed/done），保持 cancelled。
-    return;
-  }
-  if (dbStatus === "paused" && run.status === "running") {
-    // 已暂停：只吸收引擎推进的 stage 与执行日志，status 保持 paused——
-    // resume 后规划器从新 stage 继续，不重做已完成的动作。
-    await productionRepository.updateRun(userId, projectId, {
-      ...run,
-      status: "paused",
-      updatedAt: nowIso(),
-    });
-    return;
-  }
-  await productionRepository.updateRun(userId, projectId, {
-    ...run,
-    updatedAt: nowIso(),
-  });
+  /* 原子回写（ISSUE #3960 / #3850）：事务内重读当前 run 并按控制态优先级合并，
+   * 关闭「读 → 分支 → 整列写」跨语句窗口。cancelled 终态不被覆盖；paused 优先于
+   * 引擎推进/失败收口（吸收进度与日志但保持 paused），避免执行窗口内状态回退。 */
+  await productionRepository.saveEngineRun(userId, projectId, run, nowIso());
 }
 
 function projectMeta(row: Production) {
