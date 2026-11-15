@@ -609,7 +609,11 @@ export function spawnSchemaSync(root, options = {}) {
     echoCommandLine(process.execPath, force ? [script, "--force"] : [script]);
     const child = spawn(process.execPath, force ? [script, "--force"] : [script], {
       cwd: root,
-      detached: true,
+      /* 不给 `detached`（#4005）：detached 会在 POSIX 上自建进程组，逃出 launcher
+       * 的组回收——launcher 退出后它成孤儿并握着 db.sqlite 句柄（期间对该检出
+       * `pnpm install` 会 EPERM 连锁失败）。留在调用方进程组里，组回收照常收得到
+       * 它；`unref` 只表达「不吊住事件循环」，与「不入组」是两件事。子进程自身
+       * 另有 600s 预算兜底（db-push-core 对 drizzle 的超时），最坏也不会永久残留。 */
       stdio,
     });
     child.unref();
