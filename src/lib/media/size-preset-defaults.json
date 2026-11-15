@@ -1,0 +1,86 @@
+{
+  "image": {
+    "1:1 正方": {
+      "1k": { "width": 1024, "height": 1024 },
+      "2k": { "width": 2048, "height": 2048 },
+      "4k": { "width": 3840, "height": 3840 }
+    },
+    "4:3": {
+      "1k": { "width": 1024, "height": 768 },
+      "2k": { "width": 2048, "height": 1536 },
+      "4k": { "width": 4096, "height": 3072 }
+    },
+    "3:2": {
+      "1k": { "width": 1024, "height": 683 },
+      "2k": { "width": 2048, "height": 1365 },
+      "4k": { "width": 4096, "height": 2731 }
+    },
+    "16:9 横屏": {
+      "1k": { "width": 1024, "height": 576 },
+      "2k": { "width": 2048, "height": 1152 },
+      "4k": { "width": 3840, "height": 2160 }
+    },
+    "21:9 超宽": {
+      "1k": { "width": 1195, "height": 512 },
+      "2k": { "width": 2560, "height": 1080 },
+      "4k": { "width": 5120, "height": 2160 }
+    },
+    "3:4": {
+      "1k": { "width": 768, "height": 1024 },
+      "2k": { "width": 1536, "height": 2048 },
+      "4k": { "width": 3072, "height": 4096 }
+    },
+    "2:3": {
+      "1k": { "width": 683, "height": 1024 },
+      "2k": { "width": 1365, "height": 2048 },
+      "4k": { "width": 2731, "height": 4096 }
+    },
+    "9:16 竖屏": {
+      "1k": { "width": 576, "height": 1024 },
+      "2k": { "width": 1152, "height": 2048 },
+      "4k": { "width": 2160, "height": 3840 }
+    }
+  },
+  "video": {
+    "1:1 正方": {
+      "1k": { "width": 1024, "height": 1024 },
+      "2k": { "width": 2048, "height": 2048 },
+      "4k": { "width": 3840, "height": 3840 }
+    },
+    "4:3": {
+      "1k": { "width": 1280, "height": 960 },
+      "2k": { "width": 2048, "height": 1536 },
+      "4k": { "width": 4096, "height": 3072 }
+    },
+    "3:2": {
+      "1k": { "width": 1280, "height": 854 },
+      "2k": { "width": 2560, "height": 1707 },
+      "4k": { "width": 3840, "height": 2560 }
+    },
+    "16:9 横屏": {
+      "1k": { "width": 1280, "height": 720 },
+      "2k": { "width": 2560, "height": 1440 },
+      "4k": { "width": 3840, "height": 2160 }
+    },
+    "21:9 超宽": {
+      "1k": { "width": 1280, "height": 540 },
+      "2k": { "width": 2560, "height": 1080 },
+      "4k": { "width": 5120, "height": 2160 }
+    },
+    "3:4": {
+      "1k": { "width": 960, "height": 1280 },
+      "2k": { "width": 1536, "height": 2048 },
+      "4k": { "width": 2880, "height": 3840 }
+    },
+    "2:3": {
+      "1k": { "width": 854, "height": 1280 },
+      "2k": { "width": 1707, "height": 2560 },
+      "4k": { "width": 2560, "height": 3840 }
+    },
+    "9:16 竖屏": {
+      "1k": { "width": 720, "height": 1280 },
+      "2k": { "width": 1440, "height": 2560 },
+      "4k": { "width": 2160, "height": 3840 }
+    }
+  }
+}

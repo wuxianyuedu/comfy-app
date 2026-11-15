@@ -114,9 +114,10 @@
   为每一屏都显式写了档位：`uiKit` 出厂 `independent`（切走不关）、`settings` 出厂
   `shared`（读过即走）。注册表不再保留 `transient` 标记，避免「设置里配了、界面
   却不认」。两档行为对每一项都可选，当前生效值在界面上看得出来；改动即时生效 ——
-  已经开着的页签按新规则在下次切换时生效。设置页给出两个保存出口：
-  「保存」只落本机（开发版与正式包都能用），「保存为项目默认（跟代码走）」写进
-  入库那份 JSON、只在开发检出出现；「还原默认」只在真有本机覆盖时出现。
+  已经开着的页签按新规则在下次切换时生效。设置页只给**两个**出口：本机覆盖是
+  **改一档即存**（落 `data/`，开发版与正式包都能用；ISSUE #3948 去掉了「保存」那个
+  按钮 —— 配好就落盘，改完没点就切走不该等于白改），「保存为项目默认（跟代码走）」
+  写进入库那份 JSON、只在开发检出出现；「还原默认」只在真有本机覆盖时出现。
   项目默认那份 JSON 恰好覆盖配置面内的每一项（漏登记由用例拦下）。
 - 落点：`src/components/studio/NavItems.tsx`（配置面清单 + 判据）、
   `src/components/studio/workspace-tabs.ts`（状态规则）、
@@ -949,11 +950,11 @@
 
 ## 13. 设置（FR-ST）
 
-#### FR-ST-01 十个设置分区
+#### FR-ST-01 十二个设置分区
 
 - 状态：已上线
-- 需求：设置十分区：外观 / 应用更新 / 本地模型（Ollama）/ 远程模型 /
-  创作后端 / 数据库 / 备份与恢复 / 数据存放位置 / 退出与后台服务 / 日志。
+- 需求：设置十二分区：外观 / 界面页签 / 应用更新 / 本地模型（Ollama）/ 远程模型 /
+  创作后端 / 数据库 / 备份与恢复 / 数据存放位置 / 尺寸配置表 / 退出与后台服务 / 日志。
 - 行为与验收：分区表唯一出处（`SETTINGS_SECTIONS`）；外壳三态
   （首帧 loading / 失败降级 / 就绪）；同一份实现挂两个点
   （工作区设置页签 + `/settings` 路由），只差视口高度。「远程模型」分区是
@@ -1007,6 +1008,25 @@
 - 落点：`src/lib/data-location/data-locations.ts`、
   `src/components/data-location/`（徽标与总表）、
   `src/app/(main)/settings/components/DataLocationSection.tsx`
+
+#### FR-ST-06 尺寸配置表（比例 × 分辨率）
+
+- 状态：已上线（ISSUE #3948 补「保存为项目默认（跟代码走）」）
+- 需求：设置页「尺寸配置表」分区列出图片 / 视频两场景的「比例 × 分辨率」宽高表，
+  改一格即用；两条保存口径：**本机覆盖**（改一格即存，落应用数据）与
+  **项目代码库**（写进入库那份 JSON，提交后每个检出与每个桌包都是这一份）。
+- 行为与验收：① 项目默认那份是**入库 JSON**
+  （`src/lib/media/size-preset-defaults.json`），读侧现读磁盘、读不出来才回落
+  编译进包的快照（写完即生效，不必重启进程）；② 本机覆盖落
+  `data/size-presets.json`，读取侧逐格合并（缺行 / 缺档 / 坏值一律回退基准）；
+  ③ 「保存为项目默认（跟代码走）」只在开发检出出现（正式包没有源码可写，服务端大声失败）；
+  ④ 还原默认的基准是**当前项目默认**那份，不是编译进包的旧快照。
+- 落点：`src/lib/media/size-presets.ts`（纯函数层 + 项目默认解析）、
+  `src/lib/media/size-preset-defaults.json`（项目默认）、
+  `src/lib/media/size-preset.server.ts`（落盘）、
+  `src/app/api/size-presets/route.ts`、
+  `src/app/api/size-presets/project-default/route.ts`、
+  `src/app/(main)/settings/components/SizePresetSection.tsx`
 
 ---
 

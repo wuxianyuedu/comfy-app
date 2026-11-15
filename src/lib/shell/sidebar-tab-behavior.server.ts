@@ -136,7 +136,7 @@ export async function saveSidebarTabConfigAsProjectDefaults(
   if (!isDevCheckout(root)) {
     throw new Error(
       "保存为项目默认只在开发检出可用（这份检出里没有 scripts/dev-launcher.mjs）——" +
-        "正式包的改动请用「保存」（只落本机）。",
+        "正式包的改动请改一档即存（只落本机）。",
     );
   }
   const full = parseSidebarTabConfig(config);

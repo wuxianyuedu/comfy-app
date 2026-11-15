@@ -11,6 +11,8 @@ import { fixed } from "~/lib/number-format";
 /** ComfyUI 风数值步进器： [—] [值] [+]。替换浏览器原生 `<input type="number">`：后者深色主题下颜色不对、悬停就改值（spinner 按钮太容易误触）、没有 min/max 边界的视觉提示。
  * 输入用「草稿态」：聚焦期间的击键保存在本地 draft 里原样回显（受控 value 的 clamp 回写会在输入中途把 "0." / 清空 / 小于 step 的值瞬间顶回去，等于没法打字）；blur 或点 +/- 时才把草稿 clamp 成合法值提交。 */
 type NumberFieldProps = {
+  /** 数值文本的对齐（默认**居中**；要「一列数字对齐读」时传 "left"）。 */
+  align?: "center" | "left";
   /** 外层容器的额外 CSS 类 */
   className?: string;
   /** 显示的小数位（默认 0 = 整数） */
@@ -36,6 +38,7 @@ export function NumberField({
   max = 9999,
   step = 1,
   decimalPlaces = 0,
+  align = "center",
   className,
   disabled = false,
 }: NumberFieldProps) {
@@ -93,8 +96,8 @@ export function NumberField({
       >
         <Minus data-icon="inline-start" size={12} strokeWidth={2.5} />
       </Button>
-      {/* 数值**左对齐**（ComfyUI 的数值 widget 同款）：居中时同一列里的数字会随
-          位数/小数点左右跳动，参数行读起来不齐。 */}
+      {/* 数值**默认居中**（ISSUE #3948）：步进器两侧各有一颗按钮，数值夹在中间时
+          居中读起来更稳；「要一列数字对齐读」的参数行传 `align="left"`。 */}
       <input
         inputMode="decimal"
         onBlur={() => {
@@ -123,7 +126,9 @@ export function NumberField({
             currentTarget.blur();
           },
         })}
-        className="text-ink-bright h-6 min-w-9 flex-1 [appearance:textfield] bg-transparent py-0 text-left font-mono text-xs outline-none disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        className={`text-ink-bright h-6 min-w-9 flex-1 [appearance:textfield] bg-transparent py-0 font-mono text-xs outline-none disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
+          align === "left" ? "text-left" : "text-center"
+        }`}
         disabled={disabled}
       />
       <Button
