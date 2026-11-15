@@ -34,7 +34,7 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 /* 运行日志弹窗按需拉（规范 §12.19）：它下面挂着 `ui/json-viewer`
  * → `react18-json-view`，而本面板只在**真的点开日志**时才需要它。此前那条静态边
  * 会一路传进工作流库 → `components/studio/index.ts` → 入口（实测链见
- * `scripts/check-barrel-heavy-deps.cjs` 的报告）。 */
+ * `scripts/gates/check-barrel-heavy-deps.cjs` 的报告）。 */
 const LazyWorkflowRunLogModal = React.lazy(() =>
   import("../WorkflowRunLogModal").then((m) => ({
     default: m.WorkflowRunLogModal,

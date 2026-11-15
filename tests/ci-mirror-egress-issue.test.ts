@@ -1,5 +1,5 @@
 /**
- * `scripts/ci-mirror-egress-issue.mjs` 的契约（ISSUE #3278 方案 B）：
+ * `scripts/ci/ci-mirror-egress-issue.mjs` 的契约（ISSUE #3278 方案 B）：
  * 每日档自动把「窗口里出现过 GitHub 镜像 egress」变成一张单，且**不改**出勤判据的三态退码、
  * **不降级**镜像格与判决链。用例全部注入 `collect` / `existing` / `run`，一条平台命令都不发。
  *
@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { judgeMirrorAttendance } from "../scripts/check-mirror-attendance.mjs";
+import { judgeMirrorAttendance } from "../scripts/gates/check-mirror-attendance.mjs";
 import {
   ENVIRONMENT_RED_MARK,
   EGRESS_ISSUE_TITLE,
@@ -17,7 +17,7 @@ import {
   composeEgressBody,
   decideEgressAction,
   main,
-} from "../scripts/ci-mirror-egress-issue.mjs";
+} from "../scripts/ci/ci-mirror-egress-issue.mjs";
 
 const NOW = Date.parse("2026-11-07T01:00:00.000Z");
 const IN_WINDOW = new Date(NOW - 2 * 3_600_000).toISOString();

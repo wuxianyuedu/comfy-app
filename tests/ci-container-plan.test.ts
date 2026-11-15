@@ -18,8 +18,8 @@ import {
   SELF_HOSTED_TAG,
   stageLevelImages,
   stripYamlComments,
-} from "../scripts/ci-container-plan.mjs";
-import { platformImageStages, ROOT } from "../scripts/ci-image-identity.mjs";
+} from "../scripts/ci/ci-container-plan.mjs";
+import { platformImageStages, ROOT } from "../scripts/ci/ci-image-identity.mjs";
 import { stageBlock } from "./no-platform-ci-config.test";
 
 const CNB = readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");

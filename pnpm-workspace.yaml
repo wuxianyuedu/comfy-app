@@ -80,7 +80,7 @@ overrides:
   # 表现是**整仓 lint 完全跑不起来**（连非 React 文件都过不去），而不是几条告警。
   # 锁成同一个版本即可：让可选 peer 与 typescript-eslint 解析到同一实例。
   '@typescript-eslint/eslint-plugin': '8.71.0'
-  # 安全修复（ISSUE #1331，`node scripts/check-dependency-audit.mjs` 的第一批存量）：
+  # 安全修复（ISSUE #1331，`node scripts/gates/check-dependency-audit.mjs` 的第一批存量）：
   # 下面四条都是**同 major 的补丁版**，且全部是**传递依赖**（没有一处是我们直接 import 的
   # API），所以走 overrides 而不是升级顶层依赖 —— 顶层升级既动不到它们（父包钉着自己的
   # range），也会把无关的次版本跳变一起带进来。

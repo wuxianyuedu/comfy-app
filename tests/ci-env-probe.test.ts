@@ -18,8 +18,8 @@ import {
   stageBlockIn,
   stageEnvValue,
   stagesWithImage,
-} from "../scripts/ci-env-probe.mjs";
-/* 每个 stage 现在都以 `node scripts/ci-cp936-exit.mjs -- <真命令>` 起（ISSUE #1977），
+} from "../scripts/ci/ci-env-probe.mjs";
+/* 每个 stage 现在都以 `node scripts/ci/ci-cp936-exit.mjs -- <真命令>` 起（ISSUE #1977），
  * 而下面那条「环境前提点名的入口在不在盘上」判据抓的是 `scripts/…` —— 不剥外壳就会
  * 抓到外壳自己（它当然在盘上），判据从「接线对不对」退化成「外壳在不在」。 */
 import {
@@ -32,7 +32,7 @@ import {
   isReachableVerdict,
   playwrightReachability,
   playwrightReachabilityVerdicts,
-} from "../scripts/ci-toolchain-browser.mjs";
+} from "../scripts/ci/ci-toolchain-browser.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
@@ -490,7 +490,7 @@ describe("环境前提：已随 CNB 主列瘦身退役（ISSUE #3378）", () => 
       order.indexOf("GA 回调结论回读"),
       "承重回读格不在清单里 —— §13.6 的锚不能丢",
     ).toBeGreaterThan(-1);
-    expect(read("scripts/ci-env-probe.mjs").length, "脚本留盘").toBeGreaterThan(0);
+    expect(read("scripts/ci/ci-env-probe.mjs").length, "脚本留盘").toBeGreaterThan(0);
   });
 });
 
@@ -506,9 +506,9 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
   const YML = [
     ".gates: &gates",
     "  - name: 环境前提",
-    "    script: node scripts/ci-env-probe.mjs",
+    "    script: node scripts/ci/ci-env-probe.mjs",
     `  - name: ${BROWSER_INSTALL_STAGE}`,
-    "    script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
+    "    script: node scripts/ci/ci-toolchain-selfcheck.mjs --playwright-only",
     "    env:",
     '      PLAYWRIGHT_DOWNLOAD_HOST: "https://m/root"',
     '      PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"',
@@ -543,7 +543,7 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
     const disabledFixture = [
       ".gates: &gates",
       `# - name: ${BROWSER_INSTALL_STAGE}`,
-      "# script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
+      "# script: node scripts/ci/ci-toolchain-selfcheck.mjs --playwright-only",
       "# env:",
       '# PLAYWRIGHT_DOWNLOAD_HOST: "https://m/root"',
       "",
@@ -581,7 +581,7 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
     expect(
       stageBlockIn(live, BROWSER_INSTALL_STAGE),
       `${BROWSER_INSTALL_STAGE} 又出现在现役 \`.cnb.yml\` 里 —— #3504 起它的执行者（连同 \`env:\`）在 GA daily.yml；` +
-        "把它加回来会让 ci-env-probe 的「配置里那个根」读数**静默**改指 CNB 旧格，须连 scripts/ci-env-probe.mjs 的口径一起改",
+        "把它加回来会让 ci-env-probe 的「配置里那个根」读数**静默**改指 CNB 旧格，须连 scripts/ci/ci-env-probe.mjs 的口径一起改",
     ).toBeNull();
     expect(stageEnvValue(live, BROWSER_INSTALL_STAGE, "PLAYWRIGHT_DOWNLOAD_HOST")).toBeNull();
   });
@@ -659,12 +659,12 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
       ".gates: &gates",
       "  - name: 浏览器安装",
       "    image: mcr.microsoft.com/playwright:v1.63.0-noble",
-      "    script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
+      "    script: node scripts/ci/ci-toolchain-selfcheck.mjs --playwright-only",
       "    env:",
       '      PLAYWRIGHT_DOWNLOAD_HOST: "https://m/root"',
       "    timeout: 20m",
       "  - name: 环境前提",
-      "    script: node scripts/ci-env-probe.mjs",
+      "    script: node scripts/ci/ci-env-probe.mjs",
       "",
     ].join("\n");
 
@@ -745,7 +745,7 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
       config: [
         ".gates: &gates",
         "  - name: 浏览器安装",
-        "    script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
+        "    script: node scripts/ci/ci-toolchain-selfcheck.mjs --playwright-only",
         "",
       ].join("\n"),
       findPythonImpl: () => ({

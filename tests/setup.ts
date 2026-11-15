@@ -19,7 +19,7 @@ beforeEach(() => {
 
 /**
  * DOM 栈按「这份文件到底有没有 `document`」决定载不载 —— **不是按 project 分**。实测 60 份最便宜 node 档文件（断言合计 1.4s）：总时长 25.69s→13.22s、setup 占比 70%→8%，因 94% 时间在每份文件的固定装载，最大一块是 `@testing-library/react` + jest-dom（全量 782 份 × 约 0.2s 墙钟）。
- * ⚠️ 不能按 project 分配 `setupFiles`：带 `// @vitest-environment jsdom` 文件头的 `tests/**` 用例由 node 档 include、不在 DOM project 里（见 `vitest.config.ts` 与 `scripts/check-test-environment.cjs`），否则这批**静默**拿不到 RTL 卸载与 jsdom 缺口处置器，而后者恰在自己的用例里断言「接线没断」，红起来像处置器坏了、真因是分配漏了一类文件。
+ * ⚠️ 不能按 project 分配 `setupFiles`：带 `// @vitest-environment jsdom` 文件头的 `tests/**` 用例由 node 档 include、不在 DOM project 里（见 `vitest.config.ts` 与 `scripts/gates/check-test-environment.cjs`），否则这批**静默**拿不到 RTL 卸载与 jsdom 缺口处置器，而后者恰在自己的用例里断言「接线没断」，红起来像处置器坏了、真因是分配漏了一类文件。
  * 顶层 `await import()` 安全：`tsconfig` 是 `target: es2022` + `module: ESNext`，setup 在测试文件的模块图之前跑完。
  */
 if (typeof globalThis.document !== "undefined") {

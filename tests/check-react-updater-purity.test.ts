@@ -1,5 +1,5 @@
 /**
- * 提交门槛自检：把 `scripts/check-react-updater-purity.cjs` 当黑盒跑在临时 fixtures 上，验证「React 函数式
+ * 提交门槛自检：把 `scripts/gates/check-react-updater-purity.cjs` 当黑盒跑在临时 fixtures 上，验证「React 函数式
  * setState updater 里不许放副作用裸调用」真会阻断提交（ISSUE #141：DarkSelect 把 emitOpenChange 塞进 setOpen 的
  * updater，在渲染/调度期改父组件 state）。fixtures 进 tmp 再按位置参数调用：脚本须在仓库根解析 typescript，且不污染 src/。
  */
@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const SCRIPT = join(process.cwd(), "scripts", "check-react-updater-purity.cjs");
+const SCRIPT = join(process.cwd(), "scripts", "gates/check-react-updater-purity.cjs");
 
 let workdir = "";
 

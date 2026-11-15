@@ -356,7 +356,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 ### 固定暗色清单与类型色例外（判据在 `globals.css:364-488`，规范 03 §3.6.1）
 
-本应用**没有任何界面是「暗色品牌页」**。登录页、错误页、404、状态栏、日志面板全部走 token。只有两类例外，且都是**机器可读**的（`scripts/check-theme-colors.cjs` 的 `EXEMPT_FIXED_DARK` / `EXEMPT_TABLES`）：
+本应用**没有任何界面是「暗色品牌页」**。登录页、错误页、404、状态栏、日志面板全部走 token。只有两类例外，且都是**机器可读**的（`scripts/gates/check-theme-colors.cjs` 的 `EXEMPT_FIXED_DARK` / `EXEMPT_TABLES`）：
 
 - **固定暗色**（当前仅 2 条）：画布底部操作提示气泡 `bg-black/60`、子工作流加载遮罩 `bg-black/20`。准入判据两条都要满足——① 内容视图内的**极小面积叠层**（不是页面/面板/控件）；② 换浅色会破坏**其承载对象**的可读性。**整屏或结构性表面一律不进清单**，哪怕暗色更好看。
   > 底色固定时，配它的文字**也必须同为一态**（不能再用随主题的 `--color-ink-soft`，否则浅色主题下是「深底深字」）。
@@ -454,7 +454,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 ### 间距
 
-`--spacing` 未被重定义 ⇒ **Tailwind v4 默认 0.25rem，根字号 16px**（`scripts/tw4-spacing-canonical.mjs:37` 自己断言这个前提，一旦项目重定义就直接报错退出）。所以 `p-4` = 16px、`gap-1.5` = 6px，`min-h-[ 22px ]` 应写成 `min-h-5.5`。
+`--spacing` 未被重定义 ⇒ **Tailwind v4 默认 0.25rem，根字号 16px**（`scripts/tw4/tw4-spacing-canonical.mjs:37` 自己断言这个前提，一旦项目重定义就直接报错退出）。所以 `p-4` = 16px、`gap-1.5` = 6px，`min-h-[ 22px ]` 应写成 `min-h-5.5`。
 
 四条**布局决定**的具名刻度，与通用刻度同级（`--spacing-*` 命名空间顺带生成工具类）：
 
@@ -540,7 +540,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 **品牌双色渐变有自己的出口**：细条 / 小圆点 / 进度条填充用 `.u-gradient-brand`（两段 `--color-primary-500` → `--color-accent`，方向留在调用处），CTA 用 `.btn-gradient`（三段、135°）。此前五处手抄 `from-violet-500 to-fuchsia-500`，而那两格早已不等于当前品牌 token —— 改品牌色时它们一处都不会动（规范 03 §3.12）。
 
-原生控件与滚动条跟主题：`color-scheme: light` / `.dark` 下 `dark`。滚动条外观**全库唯一出口在 `globals.css`**，三档刻意不同（全局兜底 / `.custom-scrollbar` 密集日志 / `.soft-scrollbar` 文字编辑），`src/**` 里不得再出现 `::-webkit-scrollbar`（`scripts/check-ui-primitives.cjs` P4 拦）。
+原生控件与滚动条跟主题：`color-scheme: light` / `.dark` 下 `dark`。滚动条外观**全库唯一出口在 `globals.css`**，三档刻意不同（全局兜底 / `.custom-scrollbar` 密集日志 / `.soft-scrollbar` 文字编辑），`src/**` 里不得再出现 `::-webkit-scrollbar`（`scripts/gates/check-ui-primitives.cjs` P4 拦）。
 
 ---
 
@@ -701,9 +701,9 @@ git grep -l "<PageHeader" -- src/components src/app | grep -v test    # 全部�
 **颜色**
 
 - ✅ 语义色一律写**类名**：`bg-node-accent`、`text-ink-icon`、`border-primary/35`。
-- ❌ **禁止 `bg-(--color-node-accent)` 这种「属性前缀 + 内联变量」**（03 §3.1.1）。它**编得出来**、`hover:` 也生效，所以不是编译错误，而是**越过语义层**：拿不到语义名、拿不到兄弟 token，而 tsc / eslint 以及 `theme:check` 里「数裸值」「比对 token 名」那两条判据全绿（那颗变量是定义过的、这一行又没有字面色值）。判据一句话——**能不能写成一个类名？能，就必须是类名**。执行者 = `scripts/check-theme-colors.cjs`（`pnpm theme:check`，硬闸、存量 0）：只认 `-(` 紧邻 `--color-…)` 这一族；面是 `src/**` 的 `.ts` / `.tsx` 且只看代码行，所以本文讲它的那条散文不红（**正文不在面上**），而组件文件里写一句「原写法是这样」的说明注释也不红（**去注释在承重**，有用例钉）。
+- ❌ **禁止 `bg-(--color-node-accent)` 这种「属性前缀 + 内联变量」**（03 §3.1.1）。它**编得出来**、`hover:` 也生效，所以不是编译错误，而是**越过语义层**：拿不到语义名、拿不到兄弟 token，而 tsc / eslint 以及 `theme:check` 里「数裸值」「比对 token 名」那两条判据全绿（那颗变量是定义过的、这一行又没有字面色值）。判据一句话——**能不能写成一个类名？能，就必须是类名**。执行者 = `scripts/gates/check-theme-colors.cjs`（`pnpm theme:check`，硬闸、存量 0）：只认 `-(` 紧邻 `--color-…)` 这一族；面是 `src/**` 的 `.ts` / `.tsx` 且只看代码行，所以本文讲它的那条散文不红（**正文不在面上**），而组件文件里写一句「原写法是这样」的说明注释也不红（**去注释在承重**，有用例钉）。
 - ✅ 只有两类允许 `style={{ var(--color-…) }}`：① 值运行时才知道（连线 stroke、节点 accent、`boxShadow` 色相）；② 非 Tailwind 属性承载（React Flow `maskColor`、`Handle.borderColor`）。这两类**也要给随主题的 token**。
-- ❌ 不要写 `var(--color-ink, #EDEDF2)` 这种带兜底的引用。它是**装饰性 indirection**：谎称随主题，把单一事实来源悄悄换成局部常量，而且下一个人补上声明时这行会**静默改变外观**。需要两态就新增一颗 token 并两态赋值。执行者 = `scripts/check-theme-colors.cjs`（`pnpm theme:check`，硬闸、存量 0），形态与三条边界（只认色值字面量兜底；`var(--color-x, currentColor)` 是已判定放行的防御性写法；规定的取色出口 `useCssColorToken(整名, 兜底)` 形态不同、不抓）见规范 03 §3.6.1.1。
+- ❌ 不要写 `var(--color-ink, #EDEDF2)` 这种带兜底的引用。它是**装饰性 indirection**：谎称随主题，把单一事实来源悄悄换成局部常量，而且下一个人补上声明时这行会**静默改变外观**。需要两态就新增一颗 token 并两态赋值。执行者 = `scripts/gates/check-theme-colors.cjs`（`pnpm theme:check`，硬闸、存量 0），形态与三条边界（只认色值字面量兜底；`var(--color-x, currentColor)` 是已判定放行的防御性写法；规定的取色出口 `useCssColorToken(整名, 兜底)` 形态不同、不抓）见规范 03 §3.6.1.1。
 - ❌ **禁止拼 token 名**：`var(--color-aurora-${tone})`、`"--color-" + name`。Tailwind v4 会 tree-shake `@theme` 里没被**字面引用**的变量，拼出来的名字在源码里从没出现过 ⇒ 产物里当场失色、没有任何报错。JS 里按当前主题取色的规定写法是 `useCssColorToken("--color-node-mix-base", "#ffffff")`，**整名写全**。
 - ❌ 不在源码里写 `violet-500` / `emerald-400` / `#rrggbb` 表达表面或文字语义（`pnpm theme:check` **硬闸**：豁免之外须为 0，无基线、无 `--update`；出口只有就地 token 化或按 03 §3.6.1 逐条登记豁免）。
 - ✅ **扫描面是显式的两棵根，默认拒绝**（规范 03 §3.11）：`globals.css` 写的是 `@import "tailwindcss" source(none)` + `@source "../../src"` + `@source "../../.storybook"`。**改前**不写 `source()` 时 Tailwind 从项目根自动发现、只减掉 gitignored 的东西，于是规范正文与其生成物镜像、typedoc 的 HTML、`changelog.d/**` 的账本碎片、门禁与 codemod 脚本里的样本串、根 `CHANGELOG.md`、用例目录全都进产物 —— 实测同一份 CSS 只换扫描面：**自动全扫 2796 条选择器片段 / 382452 字节，两棵根 2558 条 / 349887 字节**，即 **238 条规则没有任何调用点**；反向为空（新根 − 旧根 = 0 条），这一步只做减法。真实产物也复核过：本轮 `next build` 出 4 份 CSS / 312121 字节 / 3621 条规则，探针点名的活类（`text-2xs` / `bg-card` / `rounded-node` / `z-canvas-ui` / `u-title-page`）全在，从前靠正文供给的死类（`text-[ 12px ]` 那族、`z-[99]`、`w-[360px]`、`min-h-[ 300px ]`、`duration-[0-9]`（那条是 grep 正则，逐字才读得对）、`h-[ 43px ]`）**一条都不在**。执行者 = `tests/tailwind-source-roots.test.ts`（名单逐条对得上、每根承重、判据自己的编译入口真的剥了生产根）。
@@ -729,7 +729,7 @@ git grep -l "<PageHeader" -- src/components src/app | grep -v test    # 全部�
 - ✅ 一排控件防压扁三件套：`whitespace-nowrap` + `shrink-0` + `leading-none`。收窄顺序：收内边距 → 降一档字号（且必须在断点处回升）→ 整排 `flex-wrap` → 溢出滚动。**绝不压扁控件**。可缩容的兄弟块要有**贴着按钮组实测宽度的 min-width 下限**，否则永远等不到换行。
 - ✅ 层级从刻度表挑档，不从 0 往上试。
 - ✅ 装饰层 `pointer-events-none` + `aria-hidden` + `fixed -z-10`。
-- ✅ CSS 走静态文件。❌ 渲染路径上注入 `<style>`（`scripts/check-inline-style.cjs` 硬闸，无按文件豁免——同一个形态本仓库犯过两次）。
+- ✅ CSS 走静态文件。❌ 渲染路径上注入 `<style>`（`scripts/gates/check-inline-style.cjs` 硬闸，无按文件豁免——同一个形态本仓库犯过两次）。
 - ✅ 图标统一 `lucide-react`；静态直接 import，动态/可序列化 key 走 `<Icon name>`（新增图标先在 `ui/icon.tsx` 的 `ICON_MAP` 登记）。
 
 **分层**
@@ -824,7 +824,7 @@ git grep -l "<PageHeader" -- src/components src/app | grep -v test    # 全部�
   缺名里含 `card`、`input`、`switch`、`checkbox`、`dropdown-menu`、`context-menu`、`menubar`、`navigation-menu`、`popover` 这些交互件；`dialog` / `select` / `tabs` 已在 #1651 补上。**注意口径**：上面那条判的是「有没有**同名** `.test.tsx`」，而故事面判据按组件导出计数 —— 所以 `input` / `switch` / `checkbox` 虽然没有自己的 `.stories.tsx`，仍被算进覆盖率（它们的 story 挂在同族的别份里）。这类组件的行为契约（受控/非受控、焦点、键盘、开合）此前只有故事面能看见，而**故事面不比断言** —— 要补的是交互用例，不是再多加故事。
   那三份各自钉住的、**读源码看不出来**的几件：`dialog` —— 自绘关闭却不传 `showCloseButton={false}` 就是两枚 ✕ 重叠（内置那枚吃点击、间隙成死区），以及**本体并不渲染 Backdrop**（遮罩是要调用处显式铺的另一层，`DialogOverlay` 目前在仓里零消费点；同族的 `SheetContent` 恰恰自带 `<SheetOverlay />` —— 两件同族、行为不同）；`select` —— 层级必须给在 Positioner 上（默认 `z-popup isolate`，给在 Popup 上解决不了「画得出来收不到指针」），且 `SelectValue` 显示的是 **value 本身**而不是选项文案（要显示人话必须调用处映射，`ui/select-menu` 就是在做这件事）；`tabs` —— 键盘是 **manual activation**（方向键只移焦点、Enter 才换选中），且非活动面板**被卸载**（所以调用处不能把表单状态放在面板里）。四处做过变异复核（`alignItemWithTrigger` 默认改回 true、把 `sm:max-w-sm` 加回来、`showCloseButton` 默认改成 false、`tabs-trigger` 改名），每一处都让对应那条当场变红；其余几条（`SelectValue` 显示 value、manual activation、面板卸载、本体无 Backdrop）是**实测读回来的现状**，没有各自的变异 —— 它们证明的是「今天长这样」，不是「有人守着他不变」。
 - **`.u-*` 扁平工具层全仓零消费者**（实测，量具自证：同一把 grep 在 `u-title` 上抓到 **53** 行、`u-title-page` **18** 行，所以那排 0 不是解析失效）：`u-card` / `u-card-hover` / `u-input` / `u-ghost` / `u-chip` / `u-surface` / `u-border` / `u-avatar` 各 **0** 处，只在 `globals.css` 的 `@layer components` 里有定义。三件后果要如实记下：① 上一版本文件把 `.u-input` 写成「与 `ui/input.tsx` 并存的第二种输入形态」——**错了**，实际输入框只有一种（`ui/input.tsx`：`bg-transparent` + `border-input` + `rounded-lg` + `px-2.5 py-1` + `h-8` + `text-base md:text-sm`）；② 「标题档」那节的论证依赖 `.u-title*` 在被用，那**一组确实有消费者**（按类名 token 精确计数：`u-title` **31** 处、`u-title-page` 18 处、`u-title-stage` 4 处），所以 §3.10 的判据不受影响。**两处数字之间差的是口径不是漏网**：上面那把 `\b` 界定的 grep 里连字符算词边界，所以 `u-title` 的 53 行把两枚兄弟名一起数了（31 + 18 + 4 = 53，逐 token 精确计数相加正好对上）⇒ 拿它当「`u-title` 单独的量」会虚高，拿逐 token 计数当「grep 跑出来的数」又对不上，两个都要写明。**这几枚数本身随新增屏漂移**，权威口径是本文「取证方法」第 8 条那段循环（跑一次就拿到当前的两个口径），别引用这里的 —— 这一族不变的是那条「逐 token 相加 = 宽松口径」的自证关系，它证明量具没坏，而不是证明某个数；③ §3.6.4 讲 T2 重名事故时举的证据是「`.u-chip` / `.u-ghost` 的小字在浅色下几乎看不见」——那两个类今天**不渲染**，该事故的另一半（`WorkflowNodeJsonPopover`）才是可见现场。**别把这几条类当活代码复用**：要用就照 `ui/` 基元的形状来，不要在视图里捡 `.u-*`。
-- **屏级页头的「新屏手搓」这一格此前没有执行者，现已补上（ISSUE #1668 收尾）**：`ui/page-header` 与规范 16 §16.2.4.73 落了之后，真正在守的是 `tests/page-name-single-source.test.ts`，而它的消费者清单是一份**具名文件表**（现列 10 屏 —— ISSUE #1751 补进「模型适配 / 模式契约」那两屏）—— 它拦的是「这几屏别退回手抄」，**拦不住第 8 个新屏自己拼 `h1` + 副说明 + 动作组**；P83 只判字阶档是不是 `.u-title-page`，手抄照样能过。更要紧的一条对不上：规范 16 的判据表里占着 **P86** 这一行（视图层手搓屏级页头 → 用 `PageHeader`，并标注「不进硬闸」），而 `scripts/check-ui-primitives.cjs` 里的编号**最大到 P85**、全 `scripts/` 对 `\bP86\b` 命中 **0** —— 表里那一行既不是硬闸也不是棘轮，是**占了编号的未实现**（与 §13.5.12 立的案同族）。**出路选了「真做成一条按形态取锚的判据」**：P86 落地为硬闸，锚 `.u-title-page` 与 `mt-1 text-sm` 副说明在 8 行窗口内**同现**（色类不进锚 —— 见下），引入时的唯一存量 `src/app/(main)/models/page.tsx` 同批迁到 `PageHeader` 后清零。选它的理由不是措辞偏好：那份具名清单**当时就已经漏了第 8 屏** —— `models/page.tsx` 手抄的 `h1` 写的是「模型库」而注册表里这一项叫「模型」，一屏两名（ISSUE #1423 的原始形态）、且「模型库」不在任何屏名集合里，所以 `page-name-single-source` 对它天然无感；形状这一半不收口，同一件事就会再发生一次。**两条口径记在这里**：① 色类不进锚 —— 那个样本的副说明色类是 `text-muted-foreground` 而基元里是 `text-ink-muted`，写进锚会恰好漏掉唯一的现成样本、落在 0 上永远绿；② 窗口按行不按整文件，否则一个屏里同时有页头与别的说明行时会误抓。判据的两半分工（名字口径 = 具名清单 + `pageHeaderTitle`；形状 = P86 全库形态锚）见规范 16 §16.2.4.73。
+- **屏级页头的「新屏手搓」这一格此前没有执行者，现已补上（ISSUE #1668 收尾）**：`ui/page-header` 与规范 16 §16.2.4.73 落了之后，真正在守的是 `tests/page-name-single-source.test.ts`，而它的消费者清单是一份**具名文件表**（现列 10 屏 —— ISSUE #1751 补进「模型适配 / 模式契约」那两屏）—— 它拦的是「这几屏别退回手抄」，**拦不住第 8 个新屏自己拼 `h1` + 副说明 + 动作组**；P83 只判字阶档是不是 `.u-title-page`，手抄照样能过。更要紧的一条对不上：规范 16 的判据表里占着 **P86** 这一行（视图层手搓屏级页头 → 用 `PageHeader`，并标注「不进硬闸」），而 `scripts/gates/check-ui-primitives.cjs` 里的编号**最大到 P85**、全 `scripts/` 对 `\bP86\b` 命中 **0** —— 表里那一行既不是硬闸也不是棘轮，是**占了编号的未实现**（与 §13.5.12 立的案同族）。**出路选了「真做成一条按形态取锚的判据」**：P86 落地为硬闸，锚 `.u-title-page` 与 `mt-1 text-sm` 副说明在 8 行窗口内**同现**（色类不进锚 —— 见下），引入时的唯一存量 `src/app/(main)/models/page.tsx` 同批迁到 `PageHeader` 后清零。选它的理由不是措辞偏好：那份具名清单**当时就已经漏了第 8 屏** —— `models/page.tsx` 手抄的 `h1` 写的是「模型库」而注册表里这一项叫「模型」，一屏两名（ISSUE #1423 的原始形态）、且「模型库」不在任何屏名集合里，所以 `page-name-single-source` 对它天然无感；形状这一半不收口，同一件事就会再发生一次。**两条口径记在这里**：① 色类不进锚 —— 那个样本的副说明色类是 `text-muted-foreground` 而基元里是 `text-ink-muted`，写进锚会恰好漏掉唯一的现成样本、落在 0 上永远绿；② 窗口按行不按整文件，否则一个屏里同时有页头与别的说明行时会误抓。判据的两半分工（名字口径 = 具名清单 + `pageHeaderTitle`；形状 = P86 全库形态锚）见规范 16 §16.2.4.73。
   **还有一处同款现场（ISSUE #1673，上面那一刀的收尾）**：`/workspace` 链路的
   `src/components/studio/ModelLibrary.tsx` 写着 `title="模型库"` —— 它**走了基元**，
   所以 P86（形态锚）放行；字面量又搬进了 prop，所以第 4 条（锚 `<h1 …>纯文本</h1>`）
@@ -880,7 +880,7 @@ grep -rln "@base-ui/react" src/components/ui | wc -l   # 35
 grep -rn "prefers-reduced-motion" src public .storybook | wc -l   # 3（1 行 @media 本体 + 2 行说明注释）
 grep -rn "transition-" src/components | wc -l                     # 122
 #    ⇒ 三档分治那块在 `src/app/globals.css:1392` 起；执行者 = tests/reduced-motion-tiers.test.ts
-#      （登记在 scripts/affected-tests.mjs 的固定清单里），所以这一格不再是「没有执行者」的账
+#      （登记在 scripts/affected-tests/affected-tests.mjs 的固定清单里），所以这一格不再是「没有执行者」的账
 
 # 6. 视图层写死色的权威结论（不是本文件的估计）
 pnpm theme:check

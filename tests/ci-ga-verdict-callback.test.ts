@@ -1,5 +1,5 @@
 /**
- * `scripts/ci-ga-verdict-callback.mjs` 的判据（ISSUE #3378 骨架）。
+ * `scripts/ci/ci-ga-verdict-callback.mjs` 的判据（ISSUE #3378 骨架）。
  *
  * 钉住四件最容易静默失效的事：
  *   ① 结论折叠是 **fail-closed**：只有 success/neutral/skipped 算绿，其余（含
@@ -22,7 +22,7 @@ import {
   startBuildRequest,
   verdictFromConclusion,
   VERDICT_ENV_KEY,
-} from "../scripts/ci-ga-verdict-callback.mjs";
+} from "../scripts/ci/ci-ga-verdict-callback.mjs";
 
 const SHA = "a".repeat(40);
 const BASE_ENV = {

@@ -1,7 +1,7 @@
 /** 回归护栏：**`db:migrate` 在前提不成立时会留下 0 字节库**（ISSUE #1624）。实测（无 TTY）：
  * `drizzle-kit migrate` 在 `drizzle/` 缺失时**先建库文件、再退 1** —— 调用方拿到「迁移失败」退出码
  * + 0 字节空壳，直到起应用才炸 `no such table`（同族 ISSUE #489 的 push 已修、migrate 这条路没有）。
- * 契约：走 `scripts/db-migrate.mjs`；在起 drizzle-kit **之前**拦下（事后复核只能发现、不能阻止）；
+ * 契约：走 `scripts/db/db-migrate.mjs`；在起 drizzle-kit **之前**拦下（事后复核只能发现、不能阻止）；
  * 判据是库里的真事实（表数 + 账本条数）而非退出码。用例在真仓库跑，前提靠移开/放回真 `drizzle/`。 */
 import { spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
@@ -9,7 +9,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { resolveSqlitePath } from "../scripts/db-schema-state.mjs";
+import { resolveSqlitePath } from "../scripts/db/db-schema-state.mjs";
 import { acquireRepoDrizzle } from "./helpers/repo-drizzle-lock";
 
 let tmp: string;
@@ -66,7 +66,7 @@ afterEach(() => {
 function runMigrate(databaseUrl = `file:${dbFile}`, extraArgs: Array<string> = []) {
   return spawnSync(
     process.execPath,
-    [path.join(process.cwd(), "scripts", "db-migrate.mjs"), ...extraArgs],
+    [path.join(process.cwd(), "scripts", "db/db-migrate.mjs"), ...extraArgs],
     {
       cwd: process.cwd(),
       encoding: "utf8",
@@ -116,15 +116,15 @@ function drizzleConfigUrl(value: unknown): unknown {
 }
 
 describe("pnpm db:migrate 非交互可用", () => {
-  it("package.json 的 db:migrate 经 scripts/db-migrate.mjs，而不是裸 drizzle-kit migrate", () => {
+  it("package.json 的 db:migrate 经 scripts/db/db-migrate.mjs，而不是裸 drizzle-kit migrate", () => {
     const scripts = packageScripts();
     // 裸 `drizzle-kit migrate` 在前提不成立时「先建库、再退 1、留空壳」（实测）。
-    expect(scripts["db:migrate"]).toBe("node scripts/db-migrate.mjs");
+    expect(scripts["db:migrate"]).toBe("node scripts/db/db-migrate.mjs");
     expect(scripts["db:migrate"]).not.toContain("drizzle-kit");
   });
 
   it("判定依据是库里的真事实（表数 + 账本），不是 drizzle-kit 的退出码", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "scripts", "db-migrate.mjs"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "scripts", "db/db-migrate.mjs"), "utf8");
     expect(src).toContain("countUserTables");
     expect(src).toContain("appliedMigrations");
     // 退出码在这条链路上不可信（实测：先建 0 字节库、再退 1），源码里必须写明。
@@ -132,7 +132,7 @@ describe("pnpm db:migrate 非交互可用", () => {
   });
 
   it("前置判决按 .sql 筛，而不是「目录在不在」", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "scripts", "db-migrate.mjs"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "scripts", "db/db-migrate.mjs"), "utf8");
     // 「目录在、但一份迁移都没有」与「目录不在」是同样建不出库的现场，
     // 判据只认前者的话会漏过去。
     expect(src).toContain('.endsWith(".sql")');
@@ -141,7 +141,7 @@ describe("pnpm db:migrate 非交互可用", () => {
 });
 
 /** 参数契约（ISSUE #2096）：认不出的旗标**不许**被吞掉之后照旧落库。修之前这个入口一句 `argv` 都不读，
- * `node scripts/db-migrate.mjs --dry-run` 被当成无参调用照跑 —— 临时库建 23 张表、`__drizzle_migrations`
+ * `node scripts/db/db-migrate.mjs --dry-run` 被当成无参调用照跑 —— 临时库建 23 张表、`__drizzle_migrations`
  * 记 1/1、退出码 0。⚠️ 这一档刻意**不挪开**真 `drizzle/`（与上面相反）：判的正是「迁移文件在场、写库
  * 那条路是活的」，拿「前提不成立」的早退当「它没写库」的证据会把缺陷读成不存在。断言重心是库里的事实
  * （库文件没被建出来），不是话术里有没有那两个字。 */
@@ -307,13 +307,17 @@ describe("库地址形态：交给 drizzle-kit 的必须是 libsql 认的那一�
 describe("push 管的检出：账本空但 schema 已收敛", () => {
   it("不再报「迁移没应用全、别直接起应用」，按读数返回并可直接起应用", () => {
     // 先用 db:push 建出与当前 schema 一致、且已登记指纹的库（push 管的检出形态）。
-    const push = spawnSync(process.execPath, [path.join(process.cwd(), "scripts", "db-push.mjs")], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-      env: { ...process.env, DATABASE_URL: `file:${dbFile}` },
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: 300_000,
-    });
+    const push = spawnSync(
+      process.execPath,
+      [path.join(process.cwd(), "scripts", "db/db-push.mjs")],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: { ...process.env, DATABASE_URL: `file:${dbFile}` },
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 300_000,
+      },
+    );
     expect(push.status, `${push.stdout}\n${push.stderr}`).toBe(0);
 
     // 此时 __drizzle_migrations 为空（push 不写账），但 schema 已收敛；

@@ -37,7 +37,7 @@ const devArtifactsModule = readFileSync(
   "utf8",
 );
 const checker = readFileSync(
-  join(process.cwd(), "scripts", "check-standalone-contents.cjs"),
+  join(process.cwd(), "scripts", "gates/check-standalone-contents.cjs"),
   "utf8",
 );
 const pkgParsed: unknown = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8"));
@@ -311,7 +311,9 @@ function isCheckerExports(value: unknown): value is CheckerExports {
 }
 
 function checkerExports(): CheckerExports {
-  const mod: unknown = createRequire(import.meta.url)("../scripts/check-standalone-contents.cjs");
+  const mod: unknown = createRequire(import.meta.url)(
+    "../scripts/gates/check-standalone-contents.cjs",
+  );
   if (!isCheckerExports(mod)) {
     throw new Error("check-standalone-contents.cjs 的导出面形状变了 —— 重读该脚本再改这份守卫");
   }

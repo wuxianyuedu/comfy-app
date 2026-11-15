@@ -1,5 +1,5 @@
 /**
- * `scripts/check-tracked-secrets.cjs` 的判据（ISSUE #2157）。真命中必须用拼接构造样本，否则「测试文件写着凭据形状」会被自己扫出（自指面
+ * `scripts/gates/check-tracked-secrets.cjs` 的判据（ISSUE #2157）。真命中必须用拼接构造样本，否则「测试文件写着凭据形状」会被自己扫出（自指面
  * 写在脚本文件头，是判据存在的前提）。负控制才是主体：`Bearer <token>`、PEM 头 + 短正文、CI 占位值、`user:pass@host` 四类今天全仓都在，
  * 任何误报的下一动作都是加旁路，而旁路比没有判据更坏。末条判出口：只许点名「哪儿 + 哪一类」，**不许回显内容**（抄进输出即第二次泄漏）。
  */
@@ -14,7 +14,7 @@ import {
   scanText,
   toUnits,
   trackedTexts,
-} from "../scripts/check-tracked-secrets.cjs";
+} from "../scripts/gates/check-tracked-secrets.cjs";
 
 /** 拼接出来的假凭据：文件文本里不存在任何一段完整的实体。 */
 const FAKE_GHP = "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8";

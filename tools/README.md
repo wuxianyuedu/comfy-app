@@ -15,7 +15,7 @@
 > 以 UTF-8 with BOM 保存，避免中文乱码。
 >
 > **后续新增入口：放 `tools/<分类>/xxx.ps1`，不要放仓库根**。根目录只保留工程配置与文档，
-> 该约束由 `scripts/check-file-structure.cjs` 的 R9 规则在 pre-commit 强制（ISSUE #29）。
+> 该约束由 `scripts/gates/check-file-structure.cjs` 的 R9 规则在 pre-commit 强制（ISSUE #29）。
 > 分类目录按用途划分，新增前先看现有目录能否容纳，不要按人名或临时用途建目录。
 >
 > **不再使用 `.bat`**：历史上入口是 `.bat`，但它走 cmd.exe（系统 ANSI/GBK 代码页），
@@ -31,7 +31,7 @@
 > 的 `pnpm` 脚本（例如 `pnpm check:all` = `verify-quality.ps1`、`pnpm test:file` =
 > `run-tests.ps1`、`pnpm doc:gen` = `generate-docs.ps1`），逐条对照见
 > [launch-and-build.md §9.5](../docs/standards/launch-and-build.md) 的
-> **跨平台动作对照表**，由 `scripts/check-ps1-consistency.mjs` 在 pre-commit 与 CI 守着
+> **跨平台动作对照表**，由 `scripts/gates/check-ps1-consistency.mjs` 在 pre-commit 与 CI 守着
 > —— 新增动作却只写了一侧会在提交时被拦下，而不是等用户在另一个平台上踩空。
 >
 > **各分类目录另有 README**（该目录「有哪些入口、各自什么时候用」）：
@@ -60,7 +60,7 @@
 | `start/verify-quality.ps1` | start/ | 质量门禁 | 双击即跑 typecheck / lint / vitest（跨平台等价：`pnpm check:all`，见规范 11.12） |
 | `start/run-tests.ps1` | start/ | 质量门禁 | 只跑 vitest（可指定文件 / `-Full` 复现基线失败 / 透传 vitest 参数），补 verify-quality「三项串联」之外的日常红绿循环（跨平台等价：`pnpm test:file` / `pnpm test:full`，见规范 11.12） |
 | `start/sync-lint.ps1` | start/ | 质量检查 | 同步依赖 + `pnpm lint`（install && lint，拉取更新/改完代码后日常自检用，见规范 §8） |
-| `start/tune-dev-drive.ps1` | start/ | 开发环境 | 探测开发盘（ReFS / Dev Drive）红利并给动作矩阵（逻辑在 `scripts/dev-drive-tune.mjs`，= `pnpm dev:drive`；指南 `docs/guides/dev-drive-refs.md`） |
+| `start/tune-dev-drive.ps1` | start/ | 开发环境 | 探测开发盘（ReFS / Dev Drive）红利并给动作矩阵（逻辑在 `scripts/dev-drive/dev-drive-tune.mjs`，= `pnpm dev:drive`；指南 `docs/guides/dev-drive-refs.md`） |
 | `start/register-comfyapp-protocol.ps1` | start/ | 一次性配置 | 注册 `comfyapp://` 协议（HKCU，免管理员） |
 | `start/Create-AppShortcut.ps1` | start/ | 一次性配置 | 在仓库根生成 `Comfy APP.lnk` 启动快捷方式（由 `build-tauri-release.ps1` / `build-all.ps1` 构建成功后自动调用；手动 `cargo build --release --features custom-protocol` 之后想单独补生成时也可直接双击） |
 | `start/fetch-daily-shell.ps1` | start/ | 获取成品 | 从 CNB 站内每日成品（nightly Release）下载 `ComfyAPP-shell.exe` → `src-tauri/target/release/app.exe`，并在项目根缺少 `Comfy APP.lnk` 时补齐快捷方式（跨平台等价：`pnpm fetch:daily-shell`） |
@@ -100,7 +100,7 @@
 | `start/verify-quality.ps1` | `scripts/quality-gate.ps1` |
 | `start/run-tests.ps1` | `scripts/run-tests.ps1` |
 | `start/sync-lint.ps1` | `scripts/sync-lint.ps1` |
-| `start/tune-dev-drive.ps1` | `scripts/dev-drive-tune.mjs`（跨平台逻辑，入口直调 node —— 这类没有 `.ps1` 逻辑层，见 `scripts/entry-common.ps1` 的说明） |
+| `start/tune-dev-drive.ps1` | `scripts/dev-drive/dev-drive-tune.mjs`（跨平台逻辑，入口直调 node —— 这类没有 `.ps1` 逻辑层，见 `scripts/entry-common.ps1` 的说明） |
 | `docs/generate-docs.ps1` | `scripts/generate-docs.ps1` |
 | `docs/generate-api-docs.ps1` | `scripts/generate-api-docs.mjs`（跨平台逻辑，入口直调 node —— 这类没有 `.ps1` 逻辑层，见 `scripts/entry-common.ps1` 的说明） |
 | `start/register-comfyapp-protocol.ps1` | `scripts/install-comfyapp-helper.ps1` |

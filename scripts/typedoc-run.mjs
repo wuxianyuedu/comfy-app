@@ -33,7 +33,7 @@
  *
  * 谁在用它（**只此一处实现**，调用方不许再自己 `spawn` typedoc）：
  *   · `scripts/generate-api-docs.mjs`（= `pnpm run docs`，真写入 `docs/api`）；
- *   · `scripts/check-docs-api.cjs`（= `pnpm docs:check`，重生成到临时目录再比对）。
+ *   · `scripts/gates/check-docs-api.cjs`（= `pnpm docs:check`，重生成到临时目录再比对）。
  *
  * 用法：
  *   const res = await runTypedoc({ outDir });

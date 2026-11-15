@@ -35,7 +35,7 @@ import {
   buildSignature,
   pickBuildForSha,
   readBuildVerdict,
-} from "../scripts/ship-build.mjs";
+} from "../scripts/ship/ship-build.mjs";
 import {
   CODE,
   CODE_TABLE,
@@ -58,12 +58,12 @@ import {
   readPullCreateError,
   readPullVerdict,
   resolveUpstream,
-} from "../scripts/ship-core.mjs";
+} from "../scripts/ship/ship-core.mjs";
 import {
   findLandedPull,
   findMergedPullForBranch,
   findMergedPullForHeadSha,
-} from "../scripts/ship-scan.mjs";
+} from "../scripts/ship/ship-scan.mjs";
 import {
   addPathKey,
   classifyStagedSurface,
@@ -71,9 +71,9 @@ import {
   runPushStage,
   runRerunCiStage,
   splitStagedNames,
-} from "../scripts/ship-local.mjs";
+} from "../scripts/ship/ship-local.mjs";
 /* 旗标层单独一份（ISSUE #2491）：这一族的用例读的是「命令行长什么样」，不是「执行者给了什么读数」。 */
-import { parseArgs, parseIssueNumberToken } from "../scripts/ship-args.mjs";
+import { parseArgs, parseIssueNumberToken } from "../scripts/ship/ship-args.mjs";
 import {
   buildPullBody,
   capDiffstat,
@@ -81,7 +81,7 @@ import {
   FRAGMENT_BODY_BUDGET,
   mentionsCloses,
   PULL_BODY_LIMIT,
-} from "../scripts/ship-pull-body.mjs";
+} from "../scripts/ship/ship-pull-body.mjs";
 import {
   claimNumbersFromTitle,
   closeIssues,
@@ -91,8 +91,8 @@ import {
   issueNumbersFromText,
   pullTitleBody,
   referencedNotClaimed,
-} from "../scripts/ship-close.mjs";
-import { freshnessDriftAdvice, readFreshnessState } from "../scripts/ship-freshness.mjs";
+} from "../scripts/ship/ship-close.mjs";
+import { freshnessDriftAdvice, readFreshnessState } from "../scripts/ship/ship-freshness.mjs";
 import {
   authorLabel,
   commentHeader,
@@ -106,7 +106,7 @@ import {
   ticketReading,
   withCommentHeader,
   whoamiLines,
-} from "../scripts/ship-ticket.mjs";
+} from "../scripts/ship/ship-ticket.mjs";
 import {
   claimComment,
   misclaimReleaseComment,
@@ -116,38 +116,42 @@ import {
   handleCommentState,
   releaseComment,
   runIssueAction,
-} from "../scripts/ship-claim.mjs";
+} from "../scripts/ship/ship-claim.mjs";
 import {
   cleanBranch,
   createOrReusePull,
   mergeAndVerify,
   reportVerdict,
-} from "../scripts/ship-platform.mjs";
-import { pollUntilTerminal } from "../scripts/ship-poll.mjs";
-import { conflictFiles, reportStage } from "../scripts/ship-stage.mjs";
+} from "../scripts/ship/ship-platform.mjs";
+import { pollUntilTerminal } from "../scripts/ship/ship-poll.mjs";
+import { conflictFiles, reportStage } from "../scripts/ship/ship-stage.mjs";
 import {
   gaReadoutStage,
   GA_READOUT_STAGE_NAME,
   stalledStages,
   stallReadout as stallReadoutLines,
-} from "../scripts/ci-build-readout.mjs";
+} from "../scripts/ci/ci-build-readout.mjs";
 import {
   readIssueBody,
   runAppendIssueComment,
   runIssueComment,
-} from "../scripts/ship-issue-new.mjs";
+} from "../scripts/ship/ship-issue-new.mjs";
 import {
   appendComment,
   normalizeImageAssetLinks,
   readCommentBodies,
   sameCommentBody,
   stripTrailingNewline,
-} from "../scripts/ship-comment.mjs";
-import { decideReap, instanceReading, reapCheckoutInstances } from "../scripts/ship-reap.mjs";
-import { runPreflightStage } from "../scripts/ship-preflight.mjs";
-import { DIAGNOSE_STALL_MINUTES, runDiagnose, stallReadout } from "../scripts/ship-diagnose.mjs";
-import { main } from "../scripts/ship.mjs";
-import { readShipResult } from "../scripts/ship-result.mjs";
+} from "../scripts/ship/ship-comment.mjs";
+import { decideReap, instanceReading, reapCheckoutInstances } from "../scripts/ship/ship-reap.mjs";
+import { runPreflightStage } from "../scripts/ship/ship-preflight.mjs";
+import {
+  DIAGNOSE_STALL_MINUTES,
+  runDiagnose,
+  stallReadout,
+} from "../scripts/ship/ship-diagnose.mjs";
+import { main } from "../scripts/ship/ship.mjs";
+import { readShipResult } from "../scripts/ship/ship-result.mjs";
 import { EMPTY_COMMIT_ENV } from "../scripts/intentional-empty-commit.mjs";
 
 /** 真机取到的一份 `cnb build get-build-status -v` 的形状（信封 + data 各有一个 status）。 */
@@ -307,7 +311,7 @@ describe("combineShipCodes：2 压过 1", () => {
 describe("ISSUE #3083：码表对账 —— 出口散落了谁的码，这条先红", () => {
   it("CODE 与 CODE_TABLE 一一对应：0–7 连续、名字唯一、每个码都有语义与下一步", () => {
     /* 用户拍板「看到退码就知道是什么问题」：这张表是码↔语义的唯一出处
-     * （`scripts/ship-codes.mjs`），后续新增出口若绕开它写魔数、或加了码不补
+     * （`scripts/ship/ship-codes.mjs`），后续新增出口若绕开它写魔数、或加了码不补
      * 语义行，这条先红 —— 不许出现「有码没名字」或「两码同名」。 */
     expect(CODE_TABLE.map((r) => r.code)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
     const names = CODE_TABLE.map((r) => r.name);
@@ -827,7 +831,7 @@ describe("runCommitStage：--add 点名的改动已全部在 HEAD ⇒ 跳过提�
 describe("runCommitStage：--add 的暂存面是封闭的（#3597）", () => {
   /* 现场还原（#3596）：另一份并行检出的在途工作被基线同步的 `git apply --3way`
    * 放进暂存区，而 `--add` 只点名本次那几份 —— `git commit` 吃整个 index，
-   * 于是那 15 行 `scripts/check-allow-builds.cjs` 随提交上了主干（不在点名名单里、
+   * 于是那 15 行 `scripts/gates/check-allow-builds.cjs` 随提交上了主干（不在点名名单里、
    * 没有配套用例、事后要三张单子披露）。下面的用例把三条分支钉住：
    * 命中即拦 / 点名目录算覆盖 / 显式 `--allow-staged` 才放行。 */
   function stage(adds: Array<string>, staged: Array<string>, allowStaged = false) {
@@ -866,14 +870,14 @@ describe("runCommitStage：--add 的暂存面是封闭的（#3597）", () => {
   it("暂存区里另有未点名的预暂存文件 ⇒ 退 2、逐个念出路径、一次 commit 都不发", () => {
     const { got, logs, calls } = stage(
       ["src/a.ts", "changelog.d/3597-x.md"],
-      ["scripts/check-allow-builds.cjs", "src/a.ts"],
+      ["scripts/gates/check-allow-builds.cjs", "src/a.ts"],
     );
     expect(got).toEqual({ stop: true, codes: [CODE.NOT_RUN] });
     expect(calls.some((c) => c.startsWith("git commit"))).toBe(false);
     const line = logs.join("\n");
     expect(line).toContain("另有 1 个文件不在本次 --add 点名里");
     /* 泄漏的是谁必须逐个念出来：只说「有未点名文件」等于让人自己回去翻 index。 */
-    expect(line).toContain("· scripts/check-allow-builds.cjs");
+    expect(line).toContain("· scripts/gates/check-allow-builds.cjs");
     expect(line).toContain("这一笔不提交（退 2 NOT_RUN）");
     /* 三条出口都在话术里（撤暂存 / 补点名 / 显式放行）—— 只给「停」不给出口就是死路。 */
     expect(line).toContain("git restore --staged");
@@ -920,7 +924,7 @@ describe("runCommitStage：--add 的暂存面是封闭的（#3597）", () => {
   it("显式 --allow-staged ⇒ 放行，并把「提交面比点名更大」念出来", () => {
     const { got, logs, calls } = stage(
       ["src/a.ts"],
-      ["scripts/check-allow-builds.cjs", "src/a.ts"],
+      ["scripts/gates/check-allow-builds.cjs", "src/a.ts"],
       true,
     );
     expect(got).toEqual({ stop: false, codes: [CODE.GREEN] });
@@ -929,7 +933,7 @@ describe("runCommitStage：--add 的暂存面是封闭的（#3597）", () => {
   });
 
   it("负控：没给 --add ⇒ 一次都不读暂存面（那条路的暂存面由调用方负责）", () => {
-    const { got, calls } = stage([], ["scripts/check-allow-builds.cjs"]);
+    const { got, calls } = stage([], ["scripts/gates/check-allow-builds.cjs"]);
     expect(got).toEqual({ stop: false, codes: [CODE.GREEN] });
     expect(calls.some((c) => c.includes("--cached"))).toBe(false);
     expect(calls.some((c) => c.startsWith("git commit"))).toBe(true);
@@ -3309,7 +3313,7 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
 
   /**
    * `--comment`（ISSUE #2719）：正文只从文件读、写完独立回读、**逐字相同**才退 0。与状态评论共用「落盘 → post
-   * → 回读」实现（`scripts/ship-comment.mjs`）；这组钉其上多出的三件：① 正文文件是唯一入口；② 回读比对先归一
+   * → 回读」实现（`scripts/ship/ship-comment.mjs`）；这组钉其上多出的三件：① 正文文件是唯一入口；② 回读比对先归一
    * 末尾换行；③ 不相等就是红，不是「差不多」。
    */
   /**
@@ -5365,17 +5369,21 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
     /* `planCommands` 是命令清单的第二份抄本 —— 正是要避免的形态，故与真执行面逐条对账：任何一侧新增/改名
      * 而另一侧没跟，这条就红。只比「模块 + 工具」对（参数值含 `<tmp>` / `…` 占位，逐字比会脆）。取数面是
      * `scripts/ship*.mjs` 整族 + `ci-build-readout.mjs`（`--diagnose` 与它共用取数）：只读单份会抓 0 条 ⇒ 两侧空集恒绿，前置断言拦这个。 */
-    const shipDir = path.resolve(__dirname, "../scripts");
+    /* #3930 起 ship 族归入 `scripts/ship/`，`ci-build-readout.mjs` 归入 `scripts/ci/`：
+     * 取数面按域目录各取一份再拼接，过滤口径不变。 */
+    const scriptsDir = path.resolve(__dirname, "../scripts");
+    const shipDir = path.join(scriptsDir, "ship");
     /* `ship-ga-logs-cnb.mjs` 是 `--gh-logs`（与主流程互斥的单件动作）的站内读回层：
      * 它的 cnb 调用不进主流程的 `--dry-run` 计划（那一条由 `runGhLogs` 自己念），
      * 所以不在这本「计划 ⇄ 执行」账的提取面里。排除它而不是给它编一条不会拨的
      * 旗标 —— 后者正是这条判据要防的「两处各写一遍」。 */
-    const src = readdirSync(shipDir)
-      .filter(
-        (f) =>
-          (/^ship.*\.mjs$/.test(f) || f === "ci-build-readout.mjs") && f !== "ship-ga-logs-cnb.mjs",
-      )
-      .map((f) => readFileSync(path.join(shipDir, f), "utf8"))
+    const src = [
+      ...readdirSync(shipDir)
+        .filter((f) => /^ship.*\.mjs$/.test(f) && f !== "ship-ga-logs-cnb.mjs")
+        .map((f) => `ship/${f}`),
+      "ci/ci-build-readout.mjs",
+    ]
+      .map((f) => readFileSync(path.join(scriptsDir, f), "utf8"))
       .join("\n");
     /** 从 `cnbJson(run, ["pulls", "post-pull", …])` 里抽出前两个字符串。 */
     const called = new Set<string>();
@@ -8177,7 +8185,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     /* 阶段 0 之外的每一段都嵌在 `want("preflight")` 里面，所以单跑这三段时
      * `codes` 是空数组，而 `combineShipCodes([])` 回 0 ⇒ 屏幕落出「全绿到终态」，
      * 实际一段都没跑。实测（拆分之前的同一入口）：
-     * `node scripts/ship.mjs --only=commit --dry-run` 只打印那一句结论、退 0。 */
+     * `node scripts/ship/ship.mjs --only=commit --dry-run` 只打印那一句结论、退 0。 */
     for (const phase of ["commit", "push", "pull-request"]) {
       const heard: Array<string> = [];
       const { run, calls } = fake();

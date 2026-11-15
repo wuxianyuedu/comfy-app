@@ -1,12 +1,12 @@
 /**
- * `scripts/check-ui-logic-separation.cjs`（AGENTS 硬规则 10 的执行者）。ISSUE #1811 收尾时从棘轮翻成硬闸：
+ * `scripts/gates/check-ui-logic-separation.cjs`（AGENTS 硬规则 10 的执行者）。ISSUE #1811 收尾时从棘轮翻成硬闸：
  * S* 存量清零，`--update` / `--strict` 与基线文件已删（连带 #1359 的「0 基线短路」门），故用例判「命中即退 1」。
  * 同 `check-code-duplication`：复制进一次性 workspace 的 `scripts/` 再 `execFileSync`，绝不往真 `src/` 种文件（并行会话共用检出）。
  */
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
-  script: "check-ui-logic-separation.cjs",
+  script: "gates/check-ui-logic-separation.cjs",
 });
 
 /** 在工作区里放一个文件（自动建父目录）。 */
@@ -110,7 +110,7 @@ describe("检查路径（硬闸）", () => {
       /* 出路不该是执行 `--update`：判据的输出里只该有「本判据是硬闸
        * （无基线、无 --update）」这半句声明，不该给出把 `--update` 当下一步的指示。 */
       expect(r.output, `${flag} 的出路不该指向 --update`).not.toContain(
-        "执行 node scripts/check-ui-logic-separation.cjs --update",
+        "执行 node scripts/gates/check-ui-logic-separation.cjs --update",
       );
     }
   });

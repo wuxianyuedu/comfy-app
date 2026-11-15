@@ -320,7 +320,7 @@ describe("接线在位（判据要有人跑，也要有人守那条线）", () =
   });
 
   it("台账认得 pre-push 这个执行者来源（否则接线会被读成「没人跑」）", () => {
-    const ledger = readFileSync("scripts/check-gate-executors.cjs", "utf8");
+    const ledger = readFileSync("scripts/gates/check-gate-executors.cjs", "utf8");
     expect(ledger).toContain('".githooks/pre-push"');
   });
 

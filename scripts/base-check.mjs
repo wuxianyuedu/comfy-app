@@ -104,7 +104,7 @@
  * `<门禁命令…>` 是**你被拦住的那一条**，按它在文档/钩子里的写法给，例如：
  *
  *   node scripts/base-check.mjs check-ui-primitives
- *   node scripts/base-check.mjs node scripts/check-ui-primitives.cjs
+ *   node scripts/base-check.mjs node scripts/gates/check-ui-primitives.cjs
  *   node scripts/base-check.mjs pnpm exec vitest run tests/check-title-bar-clearance.test.ts
  *
  * 也支持「只给等宽标签」的简写：`.githooks/pre-commit` 里 `run "<标签>" <命令>`

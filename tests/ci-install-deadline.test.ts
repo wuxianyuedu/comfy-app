@@ -12,7 +12,7 @@ import {
   UNDECIDED_EXIT,
   installBudgetMs,
   runInstallWithBudget,
-} from "../scripts/ci-install-deadline.mjs";
+} from "../scripts/ci/ci-install-deadline.mjs";
 
 /** 假子进程：`close` / `error` 由用例按场景触发。 */
 class FakeChild extends EventEmitter {

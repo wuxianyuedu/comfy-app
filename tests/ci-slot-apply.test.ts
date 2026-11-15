@@ -1,5 +1,5 @@
 /**
- * 槽锁与盘面原语（`scripts/ci-slot-apply.mjs`）的回归判据。
+ * 槽锁与盘面原语（`scripts/ci/ci-slot-apply.mjs`）的回归判据。
  *
  * #3479 退役依赖面缓存槽的执行档之后，这份文件留下的是**仍被共用的三件原语**：
  * `acquireSlotLock`（构建缓存槽建槽前互斥）、`hasRoomForSlot` / `statfsFreeBytes`
@@ -17,7 +17,7 @@ import {
   FREE_SPACE_FLOOR_BYTES,
   hasRoomForSlot,
   statfsFreeBytes,
-} from "../scripts/ci-slot-apply.mjs";
+} from "../scripts/ci/ci-slot-apply.mjs";
 
 let job: string;
 let cache: string;

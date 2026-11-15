@@ -29,8 +29,8 @@ import path from "node:path";
 
 import { resolveAppPort, resolveRepoRoot } from "./app-port.mjs";
 import { writeAppServiceExit } from "./app-service-exit.mjs";
-import { applyPendingRestoreAtBoot } from "./db-backup-core.mjs";
-import { spawnSchemaSync } from "./db-schema-state.mjs";
+import { applyPendingRestoreAtBoot } from "./db/db-backup-core.mjs";
+import { spawnSchemaSync } from "./db/db-schema-state.mjs";
 import { checkEnvFile, envInitHint } from "./env-preflight.mjs";
 import { createLogSink, currentDirOf, runtimeStamp, runStamp } from "./launcher-core/log.mjs";
 import { pruneRuns, recordPid, recoverStaleCurrent, startRun } from "./launcher-core/run.mjs";

@@ -42,7 +42,7 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 "!border-port-surface !size-2.5"; // ❌ v3 写法
 ```
 
-> **后两组为什么没进 codemod**（前五组由 `scripts/tw4-canonical-codemod.cjs` 批量迁移）：
+> **后两组为什么没进 codemod**（前五组由 `scripts/tw4/tw4-canonical-codemod.cjs` 批量迁移）：
 > `!x` 在 JS 里与前缀否定同形（`!ok` / `!ready` 遍地都是），纯文本替换必然误伤；
 > 它只能限定在 className 字符串内改，而「引号感知」这件事正则做不到既准又稳
 > —— 误伤一行比漏一处的代价大得多。这一组靠编辑器（`suggestCanonicalClasses`
@@ -54,7 +54,7 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 `min-h-[ 22px ]` → `min-h-5.5`，`5.5 × 0.25rem = 22px`）。它**不进文本 codemod**：
 `text-[ 13px ]` 与 `h-[ 22px ]` 形态一模一样，但前者走 font-size、后者走 spacing，
 按前缀猜必然改错量纲。判据交给 **Tailwind 引擎**，收在
-`scripts/tw4-spacing-canonical.mjs`（幂等，dry-run 默认）：
+`scripts/tw4/tw4-spacing-canonical.mjs`（幂等，dry-run 默认）：
 
 - 换算后的裸数值候选必须**真能编出规则**（`candidatesToCss` 非空）；
 - 它的声明里必须出现 `var(--spacing)`（= 该工具确实挂在 spacing scale 上）；
@@ -75,8 +75,8 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 > tw4 项翻成硬闸，规范 §13.5.12）：
 >
 > ```bash
-> node scripts/tw4-canonical-report.mjs --check   # 源文件 canonical 候选数须为 0
-> node scripts/tw4-spacing-canonical.mjs --check  # 待改写处数须为 0
+> node scripts/tw4/tw4-canonical-report.mjs --check   # 源文件 canonical 候选数须为 0
+> node scripts/tw4/tw4-spacing-canonical.mjs --check  # 待改写处数须为 0
 > ```
 >
 > 两者**都不再有基线**（曾经各带一份 `total: 0` 的棘轮，ISSUE #1811 翻闸时删掉）：
@@ -93,7 +93,7 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 >
 > ① 两份工具的字符串字面量取法此前各写一遍「全文件正则」，于是**注释里用反引号引的
 > 示例与真 className 同形**、被当成候选。修法是从两处收成一处
-> `scripts/tw4-scan-core.mjs`：扫描前先按逐字符状态机**剥注释**（保长、保换行），
+> `scripts/tw4/tw4-scan-core.mjs`：扫描前先按逐字符状态机**剥注释**（保长、保换行），
 > JS/TS 走它、`.css` / `.snap` 仍按字面量粗取。这不只是少一条误报 —— 剥之前那份
 > 正则还会被注释里的引号**打乱配对**，把注释之后**真的**类名字符串整段漏掉。
 >
@@ -102,7 +102,7 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 > **「判据报了不该报的」与「判据漏了该报的」常是同一个根因的两面。**
 
 **「更名 / 别名 / v3 遗留」那一类**（`!x`、`break-words`、`flex-shrink`、
-`overflow-ellipsis`、`bg-gradient-to-*` …）由 `scripts/tw4-canonical-report.mjs`
+`overflow-ellipsis`、`bg-gradient-to-*` …）由 `scripts/tw4/tw4-canonical-report.mjs`
 汇总：它直接问 design system 的 `canonicalizeCandidates`「有没有另一种写法生成
 **完全相同**的 CSS」，与编辑器的 `suggestCanonicalClasses` 同源。正因为判据是
 「CSS 相同」而不是「长得像 spacing 工具类」，`text-[ 13px ]` 不会被误报成
@@ -135,7 +135,7 @@ v4 的 `bg-(--color-canvas-deep)` 这种「属性前缀 + 内联变量」写法*
 "bg-node-accent border-primary/35 text-ink-icon";
 ```
 
-**这条现在有机器执行者**（`scripts/check-theme-colors.cjs`，`pnpm theme:check`，硬闸、
+**这条现在有机器执行者**（`scripts/gates/check-theme-colors.cjs`，`pnpm theme:check`，硬闸、
 存量 0）：判据形状只认一个 —— `-(` 紧邻 `--color-…)`，也就是上面那一族写法。
 下面这几条边界要说清：
 
@@ -259,7 +259,7 @@ import "@/styles/json-viewer.css";
 
 **AuroraBackground 模式**：极光装饰光晕作为可复用装饰组件集中管理（`src/components/ui/aurora-background.tsx`），不要在多个页面内联重复相同的 radial-gradient 块。
 
-**门禁（机器强制）**：`scripts/check-inline-style.cjs`（挂在 `.githooks/pre-commit`；CI 已随 ISSUE #623 删除，见 §13.5）扫描 `src/**`，
+**门禁（机器强制）**：`scripts/gates/check-inline-style.cjs`（挂在 `.githooks/pre-commit`；CI 已随 ISSUE #623 删除，见 §13.5）扫描 `src/**`，
 渲染出的 `<style>` 一律阻断——判据只看「有没有 `<style>` 元素」，不做按文件豁免
 （只有注释里解释历史写法的引用放行，因为那是口径本身）。
 这条判据来自**同一个形态在本仓库犯过两次**：`WorkflowEditorCanvas` 与
@@ -378,9 +378,9 @@ import "@/styles/json-viewer.css";
   条目？不是就换 token。
 
 **机器化**：本节的判据不只写在文档里，还有一份**机器可读的豁免清单**——
-`scripts/check-theme-colors.cjs` 的 `EXEMPT_TABLES`（类型色例外）与
+`scripts/gates/check-theme-colors.cjs` 的 `EXEMPT_TABLES`（类型色例外）与
 `EXEMPT_FIXED_DARK`（固定暗色清单）逐条列出「文件 + 被豁免的顶层标识符 +
-理由」，`node scripts/check-theme-colors.cjs` 据此把两类例外从扫描报告里剔掉。
+理由」，`node scripts/gates/check-theme-colors.cjs` 据此把两类例外从扫描报告里剔掉。
 
 ```bash
 pnpm theme:scan     # 只出清单（盘点/排批次用，不判失败）
@@ -422,7 +422,7 @@ pnpm theme:check    # 硬闸检查：豁免之外不得有未 token 化的写死
 
 上面的治理线把「写死色值」这一侧收成了零基线，但**它管不到反方向**：台账与实际
 脱钩、以及「改成 token」这一步只改了一半。这几条都是**不报错的**失效，
-所以同批补成机器判据（都在 `scripts/check-theme-colors.cjs` 里，硬闸、不进基线）。
+所以同批补成机器判据（都在 `scripts/gates/check-theme-colors.cjs` 里，硬闸、不进基线）。
 
 > **下面的 ①②③ 只是本节内的编号，与脚本自己的分档编号不同源**（脚本按「豁免层 /
 > 判定层 / 反向层 / 报告层」分层，反向层里还有几条）。要定位判据一律**按名字找**：
@@ -701,7 +701,7 @@ props 下的形态与明暗两态）与 `getComputedStyle` 类断言（§11.3，
 （0.48 / 0.42 / 0.40），现在统一走 `AuroraGlow`（`tone` 选色相、`alpha` 定强度）——
 与 §3.5 的「AuroraBackground 模式」是同一条要求：**同一个装饰不在多处内联重复**。
 
-**机器判定**：`scripts/check-theme-colors.cjs`（`pnpm theme:check`，pre-commit 的
+**机器判定**：`scripts/gates/check-theme-colors.cjs`（`pnpm theme:check`，pre-commit 的
 D 组「主题色扫描」这一步 —— 它**已是硬闸**，见 §3.6.1）。它认「写死的 `#rrggbb` /
 `rgba(...)`」，而 Tailwind 类名形式的语义色类名本来就扫不到 —— 也就是说**本节的判据
 靠「不要在源码里写字面量」实现**：只要颜色是类名，`theme:check` 与改名/换 token 都
@@ -1020,7 +1020,7 @@ className="
 18 / 20 / 24 / 34px 四五种。同一个角色在不同屏大小不一，「改一下标题字号」就退化成
 逐文件点名 —— 与 §3.6.2 治颜色前的问题是同一形态。
 
-**判据**：`scripts/check-ui-primitives.cjs` 的 **P83**（棘轮，基线 0）—— 扫视图层
+**判据**：`scripts/gates/check-ui-primitives.cjs` 的 **P83**（棘轮，基线 0）—— 扫视图层
 `<h1>` 的属性段，必须出现 `.u-title-page`（**唯一出口** —— `text-page` 那个同名类
 已经随 token 移出 `@theme` 而不存在了，挂它的 h1 字号会退回继承），
 且不得再叠 `text-lg` / `text-[ 34px ]` 这类硬写字号。属性段走平衡扫描
@@ -1070,7 +1070,7 @@ className="
 
 两条判据的分工（**一条判形状、一条判档**，都在这份文档的射程内）：
 
-- **P86**（`scripts/check-ui-primitives.cjs`，硬闸）：锚「`.u-title-page` 的标题」与
+- **P86**（`scripts/gates/check-ui-primitives.cjs`，硬闸）：锚「`.u-title-page` 的标题」与
   「`mt-1 text-sm` 的副说明」在 8 行窗口内**同现** —— 判的是**形状**（有没有手搓页头）。
   它的软肋是**要 `text-sm` 才起跳**：把档写低反而绕过它。
 - **屏级副说明档**（`tests/design-md-contract-sync.test.ts` 的**归零等式**）：锚
@@ -1202,7 +1202,7 @@ className="
 模糊 **0 像素效果**，代价却是把它自己与背后的每一份内容拖进一个合成图层。
 
 **存量与执行者**：引入这条时实测 **41 处 / 30 文件**，一次清零（ISSUE #2031）。
-执行者 `scripts/check-ui-primitives.cjs` 的 **P87**，锚点是**行内形状**：
+执行者 `scripts/gates/check-ui-primitives.cjs` 的 **P87**，锚点是**行内形状**：
 同一行里 `backdrop-blur*` 与贴边定位（`inset-x-0` / `inset-y-0` / `inset-0` /
 `fixed`，或上下 / 左右两条对边各自归零）**同现**即放行，否则判红。
 

@@ -69,7 +69,7 @@ import {
   resolveMergeBatch,
 } from "./base-check.mjs";
 import { localTierLabels } from "./base-check/hook-steps.mjs";
-import { renderVerdict } from "./ci-log.mjs";
+import { renderVerdict } from "./ci/ci-log.mjs";
 import { formatTimingSummary, recordTimingLedger } from "./premerge-timing.mjs";
 import { startProgressSync } from "./progress-heartbeat.mjs";
 import { performance } from "node:perf_hooks";
@@ -86,7 +86,7 @@ const ROOT = path.resolve(HERE, "..");
  * 检出并发推 + 多个 dev server 抢核）上失效形态不是用例红，是
  * `Failed to start forks worker / Timeout waiting for worker`；隔离复跑 88 个
  * 用例文件 / 1116 条全绿。新执行者是平台侧 PR 流水线的 `受影响用例` 一格
- * （`scripts/ci-affected-tests.mjs` → `run-affected-tests.mjs` +
+ * （`scripts/ci/ci-affected-tests.mjs` → `run-affected-tests.mjs` +
  * `COMFY_AFFECTED_CHANGED`，同一条判决链，并发按 `ci-load.mjs` 收敛）。
  * 撤段而不是「留一段恒跳过」：恒跳过的段会让 `--json` 的读数里永远有一格
  * 「没跑起来」，而那一格不构成证据（§13.6.2 的口径：没判 ≠ 绿）。
@@ -128,20 +128,20 @@ export const SEGMENTS = {
   claims: {
     label: "提交信息里的机械可核声明 ⇄ 树事实（§11.23.5）",
     kind: "anchored",
-    script: "check-commit-claims.mjs",
+    script: "gates/check-commit-claims.mjs",
     /* 审「这批」而不是审「最新那一笔」—— 见上面那段 #2070。 */
     shape: "range",
   },
   mergeLoss: {
     label: "合并有没有把一侧整份覆盖掉（#1617）",
     kind: "anchored",
-    script: "check-merged-side-loss.mjs",
+    script: "gates/check-merged-side-loss.mjs",
     shape: "baseline",
   },
   docCheck: {
     label: "文档引用与权威源一致（§13.1 清单 ⇄ 钩子步骤，#2753）",
     kind: "script",
-    script: "check-doc-references.cjs",
+    script: "gates/check-doc-references.cjs",
     args: [],
   },
 };
@@ -343,7 +343,7 @@ function runScript(script, args, extraEnv = {}, cwd = ROOT) {
  * 它筛掉 —— 拿整批去重就等于把「其实没跑」的那条也免掉，那是假绿的新住处。
  *
  * @param {Array<{argv?: string[]}>} commands
- * @returns {Set<string>} 形如 `scripts/check-commit-claims.mjs`
+ * @returns {Set<string>} 形如 `scripts/gates/check-commit-claims.mjs`
  */
 export function scriptsInCommands(commands) {
   const out = new Set();
@@ -585,7 +585,7 @@ function main(argv) {
        * 不依赖它自己能不能读到环境。 */
       const t0 = performance.now();
       const r = runScript(
-        "check-commit-claims.mjs",
+        "gates/check-commit-claims.mjs",
         [`${anchor.baseline}..HEAD`],
         { CNB_PULL_REQUEST_TARGET_SHA: anchor.baseline },
         process.cwd(),
@@ -648,7 +648,7 @@ function main(argv) {
     return total;
   }
 
-  /* 判决行的形状只有一处出处：`scripts/ci-log.mjs` 的三态出口（ISSUE #2506）。
+  /* 判决行的形状只有一处出处：`scripts/ci/ci-log.mjs` 的三态出口（ISSUE #2506）。
    * 这一跳的**段判**与它自己的三态退出码逐字同口径（`0` 绿 / `1` 红 / `2` 没跑起来）——
    * 从前段头打 `── 段名：绿|红|没跑起来`，与跑批的 `[重档] …红/没跑起来`、
    * 钩子的 `  [ok] ── …` 又是三种说法。 */

@@ -56,7 +56,7 @@
  *   node scripts/run-ast-gates.cjs --list      # 只打印清单（盘点/接线判据用）
  */
 const path = require("node:path");
-const { readStagedPaths } = require("./gate-scan-read.cjs");
+const { readStagedPaths } = require("./gates/gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 
@@ -72,42 +72,42 @@ const ROOT = path.resolve(__dirname, "..");
  */
 const GATES = [
   {
-    script: "check-react-updater-purity.cjs",
+    script: "gates/check-react-updater-purity.cjs",
     tag: "[updater-purity]",
     what: "React 函数式 updater 纯净性",
     roots: ["src"],
     parsedKey: "rel",
   },
   {
-    script: "check-non-null-assertions.cjs",
+    script: "gates/check-non-null-assertions.cjs",
     tag: "[non-null]",
     what: "src 非空断言硬闸",
     roots: ["src"],
     parsedKey: "rel",
   },
   {
-    script: "check-void-floats.cjs",
+    script: "gates/check-void-floats.cjs",
     tag: "[void-floats]",
     what: "src/lib void 悬空 Promise 棘轮",
     roots: ["src/lib"],
     parsedKey: "rel",
   },
   {
-    script: "check-ts-duplicate-keys.cjs",
+    script: "gates/check-ts-duplicate-keys.cjs",
     tag: "[ts-duplicate-keys]",
     what: "TS 重复属性判定",
     roots: ["src"],
     parsedKey: "abs",
   },
   {
-    script: "check-form-field-wiring.cjs",
+    script: "gates/check-form-field-wiring.cjs",
     tag: "[form-field-wiring]",
     what: "FormField 标签⇄控件接线",
     roots: ["src"],
     parsedKey: "abs",
   },
   {
-    script: "check-click-keyboard.cjs",
+    script: "gates/check-click-keyboard.cjs",
     tag: "[click-keyboard]",
     what: "非原生元素点击的键等价物",
     roots: ["src"],
@@ -247,7 +247,7 @@ function runGate(gate, parsed) {
  * @returns {Map<string, import("typescript").SourceFile>}
  */
 function parseShared() {
-  const { parseSources } = require("./gate-ast-read.cjs");
+  const { parseSources } = require("./gates/gate-ast-read.cjs");
   const parsed = new Map();
   parseSources({
     roots: ["src"],
@@ -362,7 +362,7 @@ function scriptOf(tag) {
  * @returns {boolean}
  */
 function touches(files, roots) {
-  const { isUnderAny } = require("./gate-scan-read.cjs");
+  const { isUnderAny } = require("./gates/gate-scan-read.cjs");
   return files.some((f) => isUnderAny(f, roots));
 }
 

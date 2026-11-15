@@ -1,5 +1,5 @@
 /**
- * 提交门槛自检：把 `scripts/check-barrel-heavy-deps.cjs` 当黑盒跑在临时工作区，验证「入口静态可达图不许有重依赖」（§12.19 / 02 §2.9）真会阻断提交。
+ * 提交门槛自检：把 `scripts/gates/check-barrel-heavy-deps.cjs` 当黑盒跑在临时工作区，验证「入口静态可达图不许有重依赖」（§12.19 / 02 §2.9）真会阻断提交。
  * 解析口径写错的表现是永远绿（判据在、结论恒「没问题」）；同族已栽过（`ui/file-picker.tsx` 门槛 100 却查无此文件、`core/index` 的 `export *` 与现状相反），故每格配正例+负例：
  * 静态 `import` 重依赖 → 红且报整条链；`import type` 同一条 → 绿（类型边编译后不存在）；`React.lazy(() => import(…))` → 绿（懒加载正是所求）；登记入口不存在 → 红（静默失效）。
  */
@@ -11,10 +11,10 @@ import { defineGateRepo, describe } from "./helpers/gate-repo";
  * 定位扫描根 —— 临时工作区与 `run` / `write` 由 `tests/helpers/gate-repo.ts` 提供。
  * 登记清单（`.barrel-heavy-deps.json`）与脚本同目录、是它的**真实输入**，
  * 所以必须一起搬进工作区，否则跑起来读不到配置（表现是 exit 2，像「门禁坏了」）。 */
-const SCRIPT = join(process.cwd(), "scripts", "check-barrel-heavy-deps.cjs");
+const SCRIPT = join(process.cwd(), "scripts", "gates/check-barrel-heavy-deps.cjs");
 
 const { test, expect } = defineGateRepo({
-  script: "check-barrel-heavy-deps.cjs",
+  script: "gates/check-barrel-heavy-deps.cjs",
   dir: "root",
   dirs: ["src/app", "src/components"],
   copy: [{ from: "scripts/.barrel-heavy-deps.json", to: "scripts/.barrel-heavy-deps.json" }],

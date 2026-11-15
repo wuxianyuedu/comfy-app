@@ -538,7 +538,7 @@ function runOnce(
   mode: string,
 ): Promise<string> {
   return new Promise((resolve) => {
-    /* 子进程**直接由 node 起 tsx**，不经 `pnpm exec`：Windows 上 `pnpm` 是 `.cmd`/`.ps1` 壳，而 Node ≥ 24 起批处理必须先经过 shell —— `spawn("pnpm.cmd", …)` 一律 `EINVAL`（ISSUE #638，`scripts/check-format.cjs` 文件头就是它）。
+    /* 子进程**直接由 node 起 tsx**，不经 `pnpm exec`：Windows 上 `pnpm` 是 `.cmd`/`.ps1` 壳，而 Node ≥ 24 起批处理必须先经过 shell —— `spawn("pnpm.cmd", …)` 一律 `EINVAL`（ISSUE #638，`scripts/gates/check-format.cjs` 文件头就是它）。
      * 也不能改成复用 `pnpmInvocation()`：那条在本机解析成 pwsh 起 `pnpm.ps1`，每个子进程多一层 shell 启动抖动，而这里量的正是几毫秒窗口里的 PRAGMA 竞态。
      * tsx 的入口按**它自己的 exports 表**解析（`tsx/cli`），不硬编码 `dist/cli.mjs`；CWD 仍是仓库根 —— 只有这样才能加载真模块（`src/lib/sqlite-pragmas.ts` 还要 import `~/lib/**`，别名由仓库根 tsconfig 解析）。 */
     const child = spawn(process.execPath, [TSX_CLI, worker, moduleUrl, startFile, file, mode], {

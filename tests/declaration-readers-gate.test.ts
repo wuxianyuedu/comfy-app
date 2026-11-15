@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const SCRIPT = path.resolve(__dirname, "../scripts/check-declaration-readers.cjs");
+const SCRIPT = path.resolve(__dirname, "../scripts/gates/check-declaration-readers.cjs");
 
 /**
  * 够过地板（MIN_CARRIERS = 8）的一份合法索引。
@@ -58,21 +58,22 @@ type Fixture = {
 
 const DEFAULT_HOOK = `${Array.from({ length: 9 }, (_, i) => `  run "标签 ${i}" node x.cjs\n`).join(
   "",
-)}  run "声明 ⇄ 读者索引" node scripts/check-declaration-readers.cjs\n`;
+)}  run "声明 ⇄ 读者索引" node scripts/gates/check-declaration-readers.cjs\n`;
 const DEFAULT_FIXED_LIST =
   'export const FIXED_STRUCTURAL_TESTS = [\n  "tests/fixed.test.ts",\n];\n';
 const DEFAULT_PKG = JSON.stringify({
   name: "fixture",
-  scripts: { "check:claims": "node scripts/check-commit-claims.mjs" },
+  scripts: { "check:claims": "node scripts/gates/check-commit-claims.mjs" },
 });
 
 /** 在临时仓库里跑真脚本（cwd = 临时仓库根）。 */
 function gate(fx: Fixture): { ok: boolean; output: string } {
   const root = mkdtempSync(path.join(tmpdir(), "decl-readers-"));
-  mkdirSync(path.join(root, "scripts"), { recursive: true });
+  /* 沙箱布局镜像真实仓库（#3930）：判据在 scripts/gates/，它的 `../` 台账与 `../../` 钩子锚才指得回。 */
+  mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
   mkdirSync(path.join(root, ".githooks"), { recursive: true });
   mkdirSync(path.join(root, "tests"), { recursive: true });
-  copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
+  copyFileSync(SCRIPT, path.join(root, "scripts", "gates", path.basename(SCRIPT)));
 
   if (fx.ledger !== undefined) {
     const body = typeof fx.ledger === "string" ? fx.ledger : JSON.stringify(fx.ledger);
@@ -96,11 +97,15 @@ function gate(fx: Fixture): { ok: boolean; output: string } {
   try {
     return {
       ok: true,
-      output: execFileSync(process.execPath, [path.join(root, "scripts", path.basename(SCRIPT))], {
-        cwd: root,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-      }),
+      output: execFileSync(
+        process.execPath,
+        [path.join(root, "scripts", "gates", path.basename(SCRIPT))],
+        {
+          cwd: root,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      ),
     };
   } catch (error) {
     /* 失败形状用运行时守卫取字段，不走 `as` 断言（B5 清账）。 */

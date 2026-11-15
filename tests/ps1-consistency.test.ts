@@ -13,7 +13,7 @@ import { isRecord } from "~/lib/is-record";
 
 import { parseMjsGates, parsePs1Gates } from "./helpers/quality-gate-gates";
 
-const GUARD = path.join(process.cwd(), "scripts", "check-ps1-consistency.mjs");
+const GUARD = path.join(process.cwd(), "scripts", "gates/check-ps1-consistency.mjs");
 const SPEC = path.join("docs", "standards", "launch-and-build.md");
 
 /** 入口清单的两份权威（判据 ③）：README 的入口表 + `tools/README.md` 的全目录视图。 */
@@ -75,8 +75,8 @@ function runGuard(overrides: Record<string, string | null>): string {
     fs.mkdirSync(path.dirname(dst), { recursive: true });
     fs.copyFileSync(src, dst);
   }
-  fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
-  fs.copyFileSync(GUARD, path.join(dir, "scripts", "check-ps1-consistency.mjs"));
+  fs.mkdirSync(path.join(dir, "scripts", "gates"), { recursive: true });
+  fs.copyFileSync(GUARD, path.join(dir, "scripts", "gates/check-ps1-consistency.mjs"));
   // ── 入口清单那一段（判据 ③）要读的三份文件 ──────────────────────────
   // 真实文件整体拷过去：判据按「README 的入口表 ⇄ tools/README.md 的全目录视图
   // ⇄ 磁盘」三向核对，抽掉任何一份都会让那一段变成另一种失败（而不是被测的那一种）。
@@ -103,11 +103,11 @@ function runGuard(overrides: Record<string, string | null>): string {
     "scripts/run-tests.mjs",
     "scripts/generate-docs.ps1",
     "scripts/generate-docs.mjs",
-    "scripts/check-app-port-vectors.ps1",
-    "scripts/check-app-port-vectors.cjs",
+    "scripts/gates/check-app-port-vectors.ps1",
+    "scripts/gates/check-app-port-vectors.cjs",
     "scripts/prepare-local-run.ps1",
     "scripts/env-init.mjs",
-    "scripts/db-push.mjs",
+    "scripts/db/db-push.mjs",
   ]) {
     const dst = path.join(dir, rel);
     if (fs.existsSync(dst)) {
@@ -128,7 +128,7 @@ function runGuard(overrides: Record<string, string | null>): string {
   }
 
   try {
-    execFileSync(process.execPath, [path.join(dir, "scripts", "check-ps1-consistency.mjs")], {
+    execFileSync(process.execPath, [path.join(dir, "scripts", "gates/check-ps1-consistency.mjs")], {
       cwd: dir,
       encoding: "utf8",
       stdio: "pipe",
@@ -173,7 +173,7 @@ describe("跨平台动作对照表（规范 §9.5）", () => {
       (l) => l.includes("端口推导跨语言自检") && l.includes("check-app-port-vectors.cjs"),
     );
     expect(idx, "找不到端口推导自检那一行（对照表漂移了？）").toBeGreaterThanOrEqual(0);
-    lines[idx] = "| 端口推导跨语言自检 | `scripts/check-app-port-vectors.ps1` | — |";
+    lines[idx] = "| 端口推导跨语言自检 | `scripts/gates/check-app-port-vectors.ps1` | — |";
     const broken = lines.join("\n");
     expect(broken).not.toBe(spec);
     const out = runGuard({ [SPEC]: broken });

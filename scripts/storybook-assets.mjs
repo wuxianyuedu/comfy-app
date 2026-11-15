@@ -10,7 +10,7 @@
 //      没有真实宽高的图等于把那段逻辑跳过。
 //
 // 为什么不放 `public/`：那里会随 `next build` 进 standalone 产物、再被
-// `build-desktop` 内嵌进桌包（`scripts/check-standalone-contents.cjs` 的顶层白名单）。
+// `build-desktop` 内嵌进桌包（`scripts/gates/check-standalone-contents.cjs` 的顶层白名单）。
 // 组件工作台的示例资源没有任何理由跟着出厂。所以走 Storybook 自己的 staticDirs
 // （声明在 `.storybook/main.ts`）。
 //

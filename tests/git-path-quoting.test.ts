@@ -18,7 +18,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { changedFilesForBaseRef } from "../scripts/changed-scope.mjs";
-import { readStagedPaths } from "../scripts/gate-scan-read.cjs";
+import { readStagedPaths } from "../scripts/gates/gate-scan-read.cjs";
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 import { stripComments } from "./helpers/strip-comments";
 
@@ -141,14 +141,14 @@ const PATH_FLAG_TOKENS = [
  */
 const EXEMPT: Array<{ count: number; file: string; why: string }> = [
   {
-    file: "scripts/check-known-failed-stale.mjs",
+    file: "scripts/gates/check-known-failed-stale.mjs",
     count: 1,
     why:
       "那一处是 `git ls-files --error-unmatch -- <路径>`：**只看退出码**（这个路径被跟踪吗），" +
       "不读输出 ⇒ 路径被不被转义与判断无关。",
   },
   {
-    file: "scripts/ship-local.mjs",
+    file: "scripts/ship/ship-local.mjs",
     count: 1,
     why:
       "那一处是 #3602 的 `git status --porcelain -- <单条 --add 路径>`：`addIsClean()` " +

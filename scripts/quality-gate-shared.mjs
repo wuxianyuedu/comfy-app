@@ -27,7 +27,7 @@
  * ../.wt-base-check cnb/master` 后在干净基线上跑同一条判据），确证是别线的红、
  * 不是本次改动引入；② 想清楚那条门禁在别处有没有更强的执行者（粒度是文件，
  * 一条红会连同一文件里其它断言一起放行）。修好后**立刻删**，别让它长期静默。
- * ⚠️ 这条纪律现在**不再只靠人记得**：`scripts/check-known-failed-stale.mjs`（pre-commit
+ * ⚠️ 这条纪律现在**不再只靠人记得**：`scripts/gates/check-known-failed-stale.mjs`（pre-commit
  * D 组）会判两头 —— 登记项必须指向真实文件（否则排除项永远匹配不到），且必须真的
  * 还红着（全绿即判「登记已过期」并要求删除）。规范 §11.12 第 3、4 条。
  */
@@ -56,6 +56,6 @@
  *
  * 处置（ISSUE #1282）：判据改成断言**性质**（取值来自 `var()` + 那颗变量两态
  * 解得出非空值），不再枚举拼法；「登记过期」本身也升成了判据，见
- * `scripts/check-known-failed-stale.mjs`（pre-commit D 组）与规范 §11.12。
+ * `scripts/gates/check-known-failed-stale.mjs`（pre-commit D 组）与规范 §11.12。
  */
 export const KNOWN_FAILED_FILES = [];

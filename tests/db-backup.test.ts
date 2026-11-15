@@ -1,5 +1,5 @@
 /**
- * 数据库备份 / 恢复的唯一实现（`scripts/db-backup-core.mjs`，D6 / ISSUE #1611）。台账三条：产物要能被
+ * 数据库备份 / 恢复的唯一实现（`scripts/db/db-backup-core.mjs`，D6 / ISSUE #1611）。台账三条：产物要能被
  * `integrity_check` 读通；`-wal`/`-shm` 不进备份（运行时产物，跨机器携带会让 SQLite 回放失败）；失败路径必须有可见出口（硬规则 4）。
  * 另钉：WAL 里未 checkpoint 的已提交数据须在产物里、轮转只删认得出的名字、备份先写临时名验完才改名。
  */
@@ -26,7 +26,7 @@ import {
   restoreNotice,
   selectBackupsToPrune,
   verifyBackupFile,
-} from "../scripts/db-backup-core.mjs";
+} from "../scripts/db/db-backup-core.mjs";
 
 let root: string;
 let dbFile: string;

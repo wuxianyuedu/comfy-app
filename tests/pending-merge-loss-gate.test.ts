@@ -267,16 +267,16 @@ describe("check-pending-merge-loss —— 钩子接线", () => {
     /* 判据写得对、钩子没接上 = 没有执行者（§13.5.12 的立案现场）。
      * 少传 $2 会让 amend 那条误报防线失效，且是静默的；少传 $1 会让「逐份认账」那条
      * 出口永远读不到消息 —— 表现是**每一份都照拦**，而提示里还写着可以认账。 */
-    expect(hook).toContain("scripts/check-pending-merge-loss.mjs");
+    expect(hook).toContain("scripts/gates/check-pending-merge-loss.mjs");
     expect(hook).toContain('"$1"');
     expect(hook).toContain('"$2"');
     /* 与形态档（#1594）一前一后都在同一个入口里。 */
-    expect(hook).toContain("scripts/check-merge-parents.mjs");
+    expect(hook).toContain("scripts/gates/check-merge-parents.mjs");
   });
 
   test("与 1-1 共用内核（不许抄成第二份检测实现）", () => {
     const gate = readFileSync(
-      join(process.cwd(), "scripts", "check-pending-merge-loss.mjs"),
+      join(process.cwd(), "scripts", "gates/check-pending-merge-loss.mjs"),
       "utf8",
     );
     expect(gate).toContain("./merged-side-loss-core.mjs");

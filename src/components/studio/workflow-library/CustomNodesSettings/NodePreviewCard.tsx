@@ -57,7 +57,7 @@ export function NodePreviewCard({
     >
       {/* 头部 —— 可点击展开。实色色带，取自类别。 */}
       {/* 原生 `<button>`：Enter/Space 与焦点语义免费（§16.2.4.29）；刻意不用
-          `ui/disclosure`（形态不同，豁免见 scripts/check-ui-primitives.cjs 的
+          `ui/disclosure`（形态不同，豁免见 scripts/gates/check-ui-primitives.cjs 的
           EXEMPT_FILES.P10）。 */}
       <Button
         /* 覆盖串排在 `variant` 之后（tailwind-merge 后面的类赢）：圆角 / 悬停底 /

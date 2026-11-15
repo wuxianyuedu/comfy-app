@@ -1,7 +1,7 @@
 "use client";
 
 // ── 后台 schema 同步的状态（底部状态栏「同步中 / 已同步请刷新」的数据源）
-// 链路：启动脚本 spawn `scripts/db-sync.mjs` 做结构核对 → 写 `log/schema-sync.json` →
+// 链路：启动脚本 spawn `scripts/db/db-sync.mjs` 做结构核对 → 写 `log/schema-sync.json` →
 // `GET /api/schema` 透出 → 本 hook 轮询。值得占一格：同步期间库结构可能还是旧的，
 // 不说「正在同步」用户只看到一个报错页。轮询 2s（切后台暂停）；探测失败**不动状态**。
 
@@ -18,11 +18,11 @@ export const SCHEMA_SYNC_POLL_MS = 2000;
  *  就是它）。仍有事要办（syncing / missing / stale / 刚探到）时才保持 2s。 */
 export const SCHEMA_SYNC_IDLE_MS = 30_000;
 
-/** 与 `scripts/db-schema-state.mjs` 的 `ensureSchemaCurrent` 返回值一一对应。 */
+/** 与 `scripts/db/db-schema-state.mjs` 的 `ensureSchemaCurrent` 返回值一一对应。 */
 export type SchemaSyncPhase = "syncing" | "ready" | "synced" | "missing" | "stale" | "unknown";
 
 export type SchemaSyncStatus = {
-  /** 执行件（`scripts/db-sync.mjs`）在不在：桌包载荷刻意不带它（那里没有
+  /** 执行件（`scripts/db/db-sync.mjs`）在不在：桌包载荷刻意不带它（那里没有
    * drizzle-kit），`false` 时 missing / stale 回落成「跑 pnpm db:push」的
    * 纯提示，不给一个点了必然失败的按钮。 */
   canPush: boolean;

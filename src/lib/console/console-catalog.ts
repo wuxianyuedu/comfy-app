@@ -130,7 +130,7 @@ export const CONSOLE_PRESETS: Array<ConsolePresetGroup> = [
         id: "db-push",
         label: "应用 schema",
         command: "pnpm db:push",
-        desc: "把 schema 推到本地库（走 scripts/db-push.mjs 的共享内核）",
+        desc: "把 schema 推到本地库（走 scripts/db/db-push.mjs 的共享内核）",
       },
       {
         id: "db-studio",
@@ -258,7 +258,7 @@ export const CONSOLE_PRESETS: Array<ConsolePresetGroup> = [
       {
         id: "port-vectors",
         label: "端口推导自检",
-        command: "node scripts/check-app-port-vectors.cjs",
+        command: "node scripts/gates/check-app-port-vectors.cjs",
         desc: "四语言（Node / PowerShell / Python / Rust）读同一份校验向量，任一侧漂移即报错",
       },
       {
@@ -276,7 +276,7 @@ export const CONSOLE_PRESETS: Array<ConsolePresetGroup> = [
       {
         id: "standalone-contents",
         label: "产物内容自检",
-        command: "node scripts/check-standalone-contents.cjs",
+        command: "node scripts/gates/check-standalone-contents.cjs",
         desc: "构建后必跑：同时查「不该进产物的」与「必须在场的运行时脚本」",
       },
       {
@@ -319,7 +319,7 @@ export const CONSOLE_PRESETS: Array<ConsolePresetGroup> = [
       {
         id: "file-structure",
         label: "文件结构硬规则",
-        command: "node scripts/check-file-structure.cjs",
+        command: "node scripts/gates/check-file-structure.cjs",
         desc: "R1–R14 一次跑完（命名 / 目录归属 / 长度棘轮 / 注释语言）",
       },
     ],

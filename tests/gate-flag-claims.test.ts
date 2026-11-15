@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = process.cwd();
-const SCRIPT = join(ROOT, "scripts", "check-gate-flag-claims.cjs");
+const SCRIPT = join(ROOT, "scripts", "gates/check-gate-flag-claims.cjs");
 
 /**
  * 在临时工作区搭一个**最小但自洽**的仓库：判据脚本 + 归类表 + 两张命令清单（判据从 `process.cwd()` 找全部输入）。
@@ -22,7 +22,8 @@ function makeWorkspace(): { dir: string; dispose: () => void } {
   for (const sub of ["scripts", "tests", "docs/standards", ".githooks"]) {
     mkdirSync(join(dir, sub), { recursive: true });
   }
-  copyFileSync(SCRIPT, join(dir, "scripts", "check-gate-flag-claims.cjs"));
+  mkdirSync(join(dir, "scripts", "gates"), { recursive: true });
+  copyFileSync(SCRIPT, join(dir, "scripts", "gates/check-gate-flag-claims.cjs"));
   /* 归类表：判据按 `const <表名>` + `\n};` 切块，所以夹具要写足那个形状。 */
   writeFileSync(join(dir, "tests", "ratchet-update-guards.test.ts"), "");
   writeFileSync(join(dir, ".githooks", "pre-commit"), "");
@@ -39,7 +40,7 @@ function makeWorkspace(): { dir: string; dispose: () => void } {
 function run(dir: string, args: Array<string> = []): { code: number; output: string } {
   const r = spawnSync(
     process.execPath,
-    [join(dir, "scripts", "check-gate-flag-claims.cjs"), ...args],
+    [join(dir, "scripts", "gates/check-gate-flag-claims.cjs"), ...args],
     { cwd: dir, encoding: "utf8" },
   );
   return { code: r.status ?? 1, output: `${r.stdout ?? ""}${r.stderr ?? ""}` };

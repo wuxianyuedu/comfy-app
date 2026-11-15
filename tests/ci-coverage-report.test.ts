@@ -8,7 +8,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { decideReport, REPORT_REL, reportArgs } from "../scripts/ci-coverage-report.mjs";
+import { decideReport, REPORT_REL, reportArgs } from "../scripts/ci/ci-coverage-report.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -44,6 +44,6 @@ describe("平台侧覆盖率上报（ISSUE #1990）", () => {
   });
 
   it("点名的入口真的在盘上（`.cnb.yml` 不可能因为写错路径而红）", () => {
-    expect(existsSync(path.join(ROOT, "scripts/ci-coverage-report.mjs"))).toBe(true);
+    expect(existsSync(path.join(ROOT, "scripts/ci/ci-coverage-report.mjs"))).toBe(true);
   });
 });

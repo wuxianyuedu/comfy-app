@@ -1,6 +1,6 @@
 /**
  * 跑 e2e 期间的**说话人**：说清「谁在替身 / 应用端口上」（ISSUE #1756 / #1766）。Playwright 先起 webServer 再
- * 跑 `globalSetup`，所以判「起之前有没有别人」不能活在这里（会恒判复用）；那条在 `scripts/e2e-run.mjs` 的
+ * 跑 `globalSetup`，所以判「起之前有没有别人」不能活在这里（会恒判复用）；那条在 `scripts/e2e/e2e-run.mjs` 的
  * pre-flight（经 `E2E_PREFLIGHT` 带进来）。这里只剩：说清端口上是本轮自起还是起前就在、拿不到结论时仍阻断陌生服务；不因真件在跑而失败。
  */
 import { resolveAppPort, resolveRepoRoot } from "../scripts/app-port.mjs";
@@ -92,7 +92,7 @@ function connectionRefused(err: unknown): boolean {
 
 /**
  * 应用 server 那一边：**起 Playwright 之前**端口上有人吗？本函数**不再自己探测**（#1766）：它跑在 webServer
- * 之后，即时探测必探到本轮自起的 server；现在只读 `scripts/e2e-run.mjs` 的 pre-flight 结论，把「起前有人」
+ * 之后，即时探测必探到本轮自起的 server；现在只读 `scripts/e2e/e2e-run.mjs` 的 pre-flight 结论，把「起前有人」
  * 与「自起」分开；拿不到结论（手工跑）返回 `null` =「不知道」，调用方据此保持沉默。
  */
 export function readAppServerPreflight(

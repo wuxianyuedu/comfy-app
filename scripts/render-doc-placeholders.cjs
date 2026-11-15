@@ -253,7 +253,7 @@ function runCheck() {
  * （它只写）。所以这一档的结论**永远来自 `runCheck()`**，写入只是它中间那一步。
  *
  * ⚠️ **它不改动 git**：提交与重跑 CI 仍由人 / 代理那一侧做（平台侧能否回写分支是另一条
- * 决策，见 `scripts/ci-autofix-duties.mjs` 头注第 1 条）。失败时把「照抄就能用」的命令
+ * 决策，见 `scripts/ci/ci-autofix-duties.mjs` 头注第 1 条）。失败时把「照抄就能用」的命令
  * 打出来，别让人从零拼。
  */
 function checkOrAutofix() {

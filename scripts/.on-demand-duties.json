@@ -1,5 +1,5 @@
 {
-  "why": "「不进钩子」的按需档 ⇄ 它的机器事实来源 ⇄ 它的执行者（规范 §13.5.4 + §13.5.12）。判据 scripts/check-on-demand-duties.cjs 双向核对：① 每一行点名的机器事实必须仍然存在（新鲜度档键 / 门禁 run:false 项 / 按需召唤台账条目）；② 每一个机器事实都必须被本索引登记（新增一档却忘了登记 ⇒ 那一档谁都不判 —— 判据的覆盖面与它自称的不符，正是 §13.5.12 的立案现场）。新增一条「不进钩子」的档时同批加一行。",
+  "why": "「不进钩子」的按需档 ⇄ 它的机器事实来源 ⇄ 它的执行者（规范 §13.5.4 + §13.5.12）。判据 scripts/gates/check-on-demand-duties.cjs 双向核对：① 每一行点名的机器事实必须仍然存在（新鲜度档键 / 门禁 run:false 项 / 按需召唤台账条目）；② 每一个机器事实都必须被本索引登记（新增一档却忘了登记 ⇒ 那一档谁都不判 —— 判据的覆盖面与它自称的不符，正是 §13.5.12 的立案现场）。新增一条「不进钩子」的档时同批加一行。",
   "duties": [
     {
       "id": "e2e-freshness",
@@ -49,7 +49,7 @@
         "kind": "on-demand-ledger",
         "script": "tw4-canonical-report.mjs"
       },
-      "executor": "按需召唤 + 硬闸（node scripts/tw4-canonical-report.mjs --check，源文件候选数须为 0、命中即退 1；ISSUE #1811 的 tw4 项已把这条的棘轮基线删掉）"
+      "executor": "按需召唤 + 硬闸（node scripts/tw4/tw4-canonical-report.mjs --check，源文件候选数须为 0、命中即退 1；ISSUE #1811 的 tw4 项已把这条的棘轮基线删掉）"
     },
     {
       "id": "tw4-spacing-canonical",
@@ -59,7 +59,7 @@
         "kind": "on-demand-ledger",
         "script": "tw4-spacing-canonical.mjs"
       },
-      "executor": "按需召唤 + 硬闸（node scripts/tw4-spacing-canonical.mjs --check，待改写处数须为 0、命中即退 1；同上已删基线）"
+      "executor": "按需召唤 + 硬闸（node scripts/tw4/tw4-spacing-canonical.mjs --check，待改写处数须为 0、命中即退 1；同上已删基线）"
     },
     {
       "id": "commit-claims-vs-facts",
@@ -67,7 +67,7 @@
       "notInHook": "**本地钩子连形态都看不到**：声明说的是某一次提交的树（「§x.y 照旧保留」），而丢失发生在**平台侧 squash** 那一刻（实测 ad81a912 / bdabd26f / b9bedd37 在 master 上都是单亲，信息里却带 Merge 字样）。判据必须手上有那次提交的事实",
       "fact": {
         "kind": "base-check-chained",
-        "script": "scripts/check-commit-claims.mjs"
+        "script": "scripts/gates/check-commit-claims.mjs"
       },
       "executor": "pnpm check:base:batch（= node scripts/base-check.mjs --base）的 CHAINED_STEPS —— 合并前 / 事后盘点，人点一次就跑一次"
     },

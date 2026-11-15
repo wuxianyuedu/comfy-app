@@ -4,7 +4,7 @@
  * doc-facts.cjs — 文档引用事实提取共享模块（供 doc:check / doc:render 复用）
  *
  * 单一事实原则：真实值只存在于源码/配置，本模块运行时从权威源动态提取。
- * scripts/check-doc-references.cjs（doc:check）与 scripts/render-doc-placeholders.cjs
+ * scripts/gates/check-doc-references.cjs（doc:check）与 scripts/render-doc-placeholders.cjs
  * （doc:render）都从这里取同一份 FACTS —— 避免出现"第二事实"。
  * 人类可读映射见 docs/reference-facts.md，本文件 FACTS 与其 key 一一对应。
  */
@@ -217,7 +217,7 @@ function extractMcpHttpPort() {
  * 产品版本号：权威源是 `package.json` 的 `version`（D7 / 规范 launch-and-build §7.1.1）。
  *
  * 另两处（`src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`）由
- * `scripts/check-app-version.cjs` 守着与它逐字相等 —— 所以这里只读一处，
+ * `scripts/gates/check-app-version.cjs` 守着与它逐字相等 —— 所以这里只读一处，
  * 不在校验脚本里再写一遍「三处怎么比」。
  */
 function extractAppVersion() {
@@ -439,7 +439,7 @@ const FACTS = [
   },
   // 产品版本号（ISSUE #1611 阶段三 D7 / 规范 launch-and-build §7.1.1）：
   // 同一个版本号写在三个文件里（package.json / src-tauri/tauri.conf.json /
-  // src-tauri/Cargo.toml），三处相等由 scripts/check-app-version.cjs 守；
+  // src-tauri/Cargo.toml），三处相等由 scripts/gates/check-app-version.cjs 守；
   // 这里守的是**第四种抄法**——在**文档里**再写一遍具体版本号（写死 `0.1.0`
   // 的那种介绍文字），它会在下一次升版本时静默过期。文档要提版本时写「读
   // package.json 的 version」或占位符，别写字面量。

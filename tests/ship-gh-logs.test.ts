@@ -1,5 +1,5 @@
 /**
- * `ship --gh-logs`（`scripts/ship-gh-logs.mjs`）的取数与呈现判据。
+ * `ship --gh-logs`（`scripts/ship/ship-gh-logs.mjs`）的取数与呈现判据。
  *
  * 四档用例钉住规范 §13.6 的承诺：
  *   ① 判红 ⇒ run / job / step / 全部 `##[error]` / 失败窗口 / 一行结论 / 绝对路径都在场；
@@ -13,9 +13,9 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { parseArgs } from "../scripts/ship-args.mjs";
-import { CODE } from "../scripts/ship-core.mjs";
-import { redactSecrets } from "../scripts/ci-github-verdict-logs.mjs";
+import { parseArgs } from "../scripts/ship/ship-args.mjs";
+import { CODE } from "../scripts/ship/ship-core.mjs";
+import { redactSecrets } from "../scripts/ci/ci-github-verdict-logs.mjs";
 import {
   classifyFailureName,
   classifyFailureOrigin,
@@ -26,7 +26,7 @@ import {
   runGhLogsOnRed,
   selectRunForPr,
   shipFailureWindow,
-} from "../scripts/ship-gh-logs.mjs";
+} from "../scripts/ship/ship-gh-logs.mjs";
 
 /** 夹具里不写凭据字面量（pre-commit 的 tracked-secrets 硬闸）：值拼出来，形状可复现。 */
 const fakeValue = "not-a-real-credential-1234567890";
@@ -448,7 +448,7 @@ describe("一行结论：环境侧 / 内容判据 / 混合作业", () => {
 
 /** 造一条 CNB relay 附件正文（gzip→base64），与 GA 侧脚本同形。 */
 import { gzipSync as gzipNode } from "node:zlib";
-import { RELAY_MARKER } from "../scripts/ci-ga-logs-relay.mjs";
+import { RELAY_MARKER } from "../scripts/ci/ci-ga-logs-relay.mjs";
 
 function relayB64(text: string): string {
   return Buffer.from(gzipNode(Buffer.from(text, "utf8"))).toString("base64");

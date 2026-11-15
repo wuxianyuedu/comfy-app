@@ -22,7 +22,7 @@
  * 把它的 Node 下限抬上去时，本仓的声明若没跟着走就会红 —— 这正是「手抄的版本号会烂」
  * 那一族的机器解法（与 §12.14 端点收口、§13.5.13 依赖新鲜度同一手法）。
  *
- * 消费方两处：`scripts/check-pnpm-available.mjs`（`pnpm check:toolchain` 的人话那一面）
+ * 消费方两处：`scripts/gates/check-pnpm-available.mjs`（`pnpm check:toolchain` 的人话那一面）
  * 与 `tests/dev-launcher-toolchain-gate.test.ts`（不变量的判据那一面）。机制落档 §2.1.8。
  *
  * ── 范围形状的边界（说清不装）────────────────────────────────────────

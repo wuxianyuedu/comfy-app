@@ -30,7 +30,7 @@ export { WorkflowLibrary } from "./workflow-library/WorkflowLibrary";
 
 /* ── 三个带重依赖的一级视图：**刻意不从本 barrel 转出** ───────────────────
  * `WorkflowCanvasEditor` / `FilmStudio` / `ProjectCanvas` 都吃 `@xyflow/react`；一旦在此转出，任何**静态** import 本 barrel 的模块都会把画布引擎拖进静态图 —— 入口 `src/app/workspace/page.tsx` 正是静态 import 它取 `HomePage` / `AppShell`。
- * 实测（`node scripts/check-barrel-heavy-deps.cjs`）：转出这三个时静态可达图有 38 个模块依赖 `@xyflow/react`，改走深路径 + `dynamic()` 后只剩 1 个（只借一个 `Edge` 类型）；消费方一律写深路径，由该脚本（规范 §12.19）守着 —— 在入口补一层 `dynamic()` 不算修好，静态边还在。 */
+ * 实测（`node scripts/gates/check-barrel-heavy-deps.cjs`）：转出这三个时静态可达图有 38 个模块依赖 `@xyflow/react`，改走深路径 + `dynamic()` 后只剩 1 个（只借一个 `Edge` 类型）；消费方一律写深路径，由该脚本（规范 §12.19）守着 —— 在入口补一层 `dynamic()` 不算修好，静态边还在。 */
 
 /* 项目主页（进入项目后的落点）：状态总览 + AI 自主成片操纵台。
  * 走自己的 barrel（`project-home/index.ts`）—— 它与 `ProjectCanvas` 一样是

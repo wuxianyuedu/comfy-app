@@ -12,7 +12,7 @@
  *
  * 拆出来之后：持久化只认这两个别名（结构上与 `Node` / `Edge` 兼容），画布业务
  * 代码继续用 `CanvasNodeType` / ReactFlow 的 `Node`。判据
- * `scripts/check-barrel-heavy-deps.cjs`。
+ * `scripts/gates/check-barrel-heavy-deps.cjs`。
  *
  * ⚠️ 别把这两个别名当成「画布节点类型」到处用 —— 它们是**存储形状**，
  * 业务代码要结构化读写请用 `canvas-types.ts` 里的那一套。

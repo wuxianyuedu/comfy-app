@@ -3,7 +3,7 @@
 //     直连的 `taskRepository` 单例；
 //   · `configureRunner({ log })` 覆盖后，DB 失败分支走注入侧、不再打 `logger`。
 // 两条用例合起来把「接缝真的接上了」这件事钉死，兼作 `check-dead-exports`
-// 眼里的消费方（同目录 `.test.ts` 算数，见 scripts/check-dead-exports.cjs
+// 眼里的消费方（同目录 `.test.ts` 算数，见 scripts/gates/check-dead-exports.cjs
 // `TEST_CONSUMER_EXT`）。
 
 import { beforeEach, describe, expect, it, vi } from "vitest";

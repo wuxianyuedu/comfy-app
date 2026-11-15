@@ -11,7 +11,7 @@ import { createVitest, type Vitest } from "vitest/node";
 import { isRecord, isUnknownArray } from "~/lib/is-record";
 
 import configDefault, { resolveTimeoutBudget } from "../vitest.config";
-import { resolveCiWorkers } from "../scripts/ci-load.mjs";
+import { resolveCiWorkers } from "../scripts/ci/ci-load.mjs";
 import { stripComments } from "./helpers/strip-comments";
 
 /** 解析后配置按 unknown 读（B5 清账）：字段形状由守卫 / typeof 现场答，不再整段断言。 */
@@ -23,7 +23,7 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const CONFIG = path.join(ROOT, "vitest.config.ts");
 
 /**
- * 根配置**自己**那一档并发：来自唯一出处 `scripts/ci-load.mjs`（ISSUE #2324），
+ * 根配置**自己**那一档并发：来自唯一出处 `scripts/ci/ci-load.mjs`（ISSUE #2324），
  * 不是这里写死的数字。表里放推导值仍然抓得住漂移 —— 谁把 `vitest.config.ts`
  * 改回字面常数（例如 8），配置读数与这一格就不相等，当场红。
  */

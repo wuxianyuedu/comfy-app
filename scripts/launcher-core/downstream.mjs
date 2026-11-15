@@ -12,7 +12,7 @@
 import process from "node:process";
 import path from "node:path";
 
-import { SKIP_SCHEMA_SYNC_ENV } from "../db-schema-state.mjs";
+import { SKIP_SCHEMA_SYNC_ENV } from "../db/db-schema-state.mjs";
 import { maybeSpawnExecutorHost } from "./executor-host-spawn.mjs";
 import {
   commandInvocation,

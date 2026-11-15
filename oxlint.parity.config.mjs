@@ -856,7 +856,7 @@ export default defineConfig({
     },
     {
       // cursor = end + close.length 是 for-update 的下一次 indexOf 入参，oxlint 未沿循环回路追踪。
-      files: ["scripts/ui-primitives-rules-p67-p86.cjs"],
+      files: ["scripts/ui-primitives/ui-primitives-rules-p67-p86.cjs"],
       rules: { "no-useless-assignment": "off" },
     },
     {
@@ -871,11 +871,11 @@ export default defineConfig({
     },
     {
       files: [
-        "scripts/check-docs-api.cjs",
-        "scripts/check-format.cjs",
-        "scripts/check-theme-colors.cjs",
-        "scripts/ci-build-readout.mjs",
-        "scripts/ci-toolchain-pnpm.mjs",
+        "scripts/gates/check-docs-api.cjs",
+        "scripts/gates/check-format.cjs",
+        "scripts/gates/check-theme-colors.cjs",
+        "scripts/ci/ci-build-readout.mjs",
+        "scripts/ci/ci-toolchain-pnpm.mjs",
         "scripts/file-structure-rules.cjs",
         "src/lib/llm/video-task-util.test.ts",
         "src/lib/llm/video-task-util.ts",

@@ -3,7 +3,6 @@
  * 于是「判出越界 / 判据没跑起来 / spawn 失败」逐字同形（PR #2404 分辨不出来）。口径：非 0 且非 spawn ⇒ output 合两流；
  * 退 0 ⇒ 只 stdout；取不到脚本 ⇒ 同码但 ran=false、spawnError 可自证；`expectGateRan()` 只在最后一格抛（§13.6.4）。
  */
-import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createGateRepo,
@@ -16,7 +15,7 @@ import {
  * 种子脚本用哪一份**与本契约无关** —— 每条用例立刻把工作区里那份换掉，
  * 子进程的行为完全由用例给定（受控才能把「两条流各有什么」钉成逐字读数）。
  */
-const SCRIPT_REL = "scripts/check-test-it-each.cjs";
+const SCRIPT_REL = "scripts/gates/check-test-it-each.cjs";
 
 const handles: Array<GateRepoHandle> = [];
 afterEach(() => {
@@ -28,7 +27,7 @@ afterEach(() => {
 /** 建一个工作区（`afterEach` 收尾），并把那份脚本换成用例指定的子进程源码。 */
 function repoWith(source: string): GateRepo {
   const handle = createGateRepo({
-    script: path.basename(SCRIPT_REL),
+    script: "gates/check-test-it-each.cjs",
     dirs: ["src"],
     workdir: "gate-repo-run-facts",
   });

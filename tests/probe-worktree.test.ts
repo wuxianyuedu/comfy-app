@@ -12,7 +12,7 @@ import { createGateRepo, type GateRepo, type GateRepoHandle } from "./helpers/ga
 import { createProbeTree, type ProbeTree } from "./helpers/probe-worktree.ts";
 
 /** 夹具只需要一个「存在的最小 git 仓」，不跑任何判据脚本 —— 这份 script 只用来落 `scripts/` 那格。 */
-const FIXTURE_SCRIPT = "check-doc-references.cjs";
+const FIXTURE_SCRIPT = "gates/check-doc-references.cjs";
 
 function worktreeLines(cwd: string): string {
   return execFileSync("git", ["worktree", "list"], { cwd, encoding: "utf8" });

@@ -72,10 +72,10 @@ const ROOT = path.resolve(HERE, "..");
  * 宽一档没坏处（多跑一次 ~0.9s），窄了才会漏。
  */
 export const MECHANISM_RE =
-  /^(?:scripts\/quality-gate-shared\.mjs|scripts\/check-known-failed-stale\.mjs|\.githooks\/pre-commit)$/;
+  /^(?:scripts\/quality-gate-shared\.mjs|scripts\/gates\/check-known-failed-stale\.mjs|\.githooks\/pre-commit)$/;
 
 /** 判据本体（`--self-test` 就是它的自证档）。 */
-export const GATE_SCRIPT = "scripts/check-known-failed-stale.mjs";
+export const GATE_SCRIPT = "scripts/gates/check-known-failed-stale.mjs";
 
 /** 读暂存区文件清单（相对仓库根、正斜杠）。 */
 export function stagedFiles() {

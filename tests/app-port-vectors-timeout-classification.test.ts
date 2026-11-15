@@ -41,12 +41,12 @@ const needsPosixExec = it.skipIf(process.platform === "win32");
 /* 形态断言的对象是这个脚本的**控制流**，不是括号 —— 先过归一化，
  * oxlint `curly` 给单语句体补 `{}` 才不会把断言打成「判据写错了」。 */
 const SCRIPT_SOURCE = normalizeControlFlow(
-  readFileSync(path.resolve(__dirname, "../scripts/check-app-port-vectors.cjs"), "utf8"),
+  readFileSync(path.resolve(__dirname, "../scripts/gates/check-app-port-vectors.cjs"), "utf8"),
   "check-app-port-vectors.cjs",
 );
 // 判据脚本是 CJS（`@ts-nocheck`），require 进来的模块形状用守卫读，不用断言。
 // oxlint-disable-next-line typescript/no-require-imports
-const required: unknown = require("../scripts/check-app-port-vectors.cjs");
+const required: unknown = require("../scripts/gates/check-app-port-vectors.cjs");
 
 if (!isJudgeModule(required)) {
   throw new Error("check-app-port-vectors.cjs 的导出面不对");
@@ -122,7 +122,7 @@ describe("命令探测分四态，不许糊成布尔", () => {
    * 在那里是空操作），于是这条夹具在 Windows 上测的不是同一件事：无扩展名的文件会被
    * `CreateProcess` 当作 `….exe` 去找、得到 ENOENT，判出的 `missing` 是巧合而不是
    * 被测形态。判据本身（EACCES 归 missing 的口径）由 `probeCommand` 的源码与
-   * `scripts/check-app-port-vectors.cjs` 的注释持有，平台分叉只此一处。 */
+   * `scripts/gates/check-app-port-vectors.cjs` 的注释持有，平台分叉只此一处。 */
   needsPosixExec(
     "没有执行位的文件同样归 missing（拿不到回答，下一步动作与「没有文件」同一件）",
     () => {

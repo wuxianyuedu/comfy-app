@@ -46,7 +46,7 @@ const GUARD_NAMED_RE = new RegExp(String.raw`\(\?<[\w$]+>\^`);
 
 /**
  * 台账：现存本地副本，分层列出以便「谁来收哪一份」可判。
- * `scripts/check-barrel-heavy-deps.cjs`（ISSUE #1777）归这一组：它跑在 pre-commit 的 D 组，
+ * `scripts/gates/check-barrel-heavy-deps.cjs`（ISSUE #1777）归这一组：它跑在 pre-commit 的 D 组，
  * 纯 Node 的 `.cjs` 加载不到 `tests/helpers/strip-comments.ts`；语义与 helper 等价（只去整块/整行）。
  */
 const LEDGER: Array<string> = [
@@ -64,17 +64,17 @@ const LEDGER: Array<string> = [
   // —— 带 HTML 注释开关的一型 ——
   "tests/shell-self-launch.test.ts",
   // —— 纯 Node 门禁层（不能直接 import TS 那份 helper）——
-  "scripts/check-barrel-heavy-deps.cjs",
-  "scripts/check-circular-deps.cjs",
-  "scripts/check-dead-exports.cjs",
-  "scripts/check-overlay-z.cjs",
-  "scripts/check-tsc-diagnostic-executors.cjs",
-  "scripts/check-theme-colors.cjs",
+  "scripts/gates/check-barrel-heavy-deps.cjs",
+  "scripts/gates/check-circular-deps.cjs",
+  "scripts/gates/check-dead-exports.cjs",
+  "scripts/gates/check-overlay-z.cjs",
+  "scripts/gates/check-tsc-diagnostic-executors.cjs",
+  "scripts/gates/check-theme-colors.cjs",
   /* UI 基元判据的文本引擎：`stripComments` 与那份判据**同批抽取**
    *（ISSUE #1747 的分层）—— 判据脚本已挂文件长度棘轮、到点必须拆，
    *  而「剥注释」是拆得最干净的那一块（不回答「算不算违规」）。
    *  它仍是纯 Node 门禁层，不能 import TS 那份 helper。 */
-  "scripts/ui-primitives-engine.cjs",
+  "scripts/ui-primitives/ui-primitives-engine.cjs",
   "scripts/lib-node-only-scan.mjs",
   // —— 视图层守卫用例里的那一型（就是 NAIVE 台账点名的缺陷形状）——
   "src/components/studio/workflow-editor/fit-viewport-source-guard.test.ts",
@@ -264,8 +264,8 @@ describe("stripComments 的唯一实现（§12.18 复用优先）", () => {
       "scripts/dev-launcher.mjs",
       "scripts/build-desktop.mjs",
       "scripts/standalone-private-inputs.mjs",
-      "scripts/run-affected-tests.mjs",
-      "scripts/affected-launch-spawn.mjs",
+      "scripts/affected-tests/run-affected-tests.mjs",
+      "scripts/affected-tests/affected-launch-spawn.mjs",
       "src-tauri/src/lib.rs",
       "src/instrumentation.ts",
     ];

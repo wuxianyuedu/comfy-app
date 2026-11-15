@@ -474,12 +474,13 @@ describe("dev/start 在起 Next 之前预检", () => {
       "dev.mjs",
       "env-preflight.mjs",
       "app-port.mjs",
-      "db-schema-state.mjs",
-      "db-push-core.mjs",
+      // db 三件 #3930 起在 scripts/db/（路径保持 scripts/ 相对，落点随名字保持同形）。
+      "db/db-schema-state.mjs",
+      "db/db-push-core.mjs",
       // D6（ISSUE #1611）：`dev.mjs` 在预检之后、起 Next 之前调
       // `applyPendingRestoreAtBoot`，它静态 import 这份唯一实现 —— 少拷一份，
       // 红出来的就是 ERR_MODULE_NOT_FOUND 而不是预检结论（同下一条注释）。
-      "db-backup-core.mjs",
+      "db/db-backup-core.mjs",
       // #3732：`db-backup-core.mjs` 静态 import 这份本机应用数据备份实现，
       // 同理必须随最小检出副本一起拷，否则红的是模块找不到。
       "app-data-backup.mjs",
@@ -488,6 +489,7 @@ describe("dev/start 在起 Next 之前预检", () => {
     for (const name of needed) {
       const src = path.join(ROOT, "scripts", name);
       if (fs.existsSync(src)) {
+        fs.mkdirSync(path.dirname(path.join(scriptsDir, name)), { recursive: true });
         fs.copyFileSync(src, path.join(scriptsDir, name));
       }
     }

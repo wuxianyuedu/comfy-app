@@ -16,7 +16,7 @@ import {
   TOOLS_ROOT_ENV,
   resolveBuildCacheRoot,
   resolveToolRoot,
-} from "../scripts/ci-cache-slot.mjs";
+} from "../scripts/ci/ci-cache-slot.mjs";
 import {
   NSIS_PLAN,
   TOOLS_MANIFEST_FILE,

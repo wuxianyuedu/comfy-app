@@ -1,5 +1,5 @@
 /**
- * `scripts/check-gate-thresholds.cjs` 的判据（ISSUE #2156）：守「放宽判据这件事本身」，故必须能喂
+ * `scripts/gates/check-gate-thresholds.cjs` 的判据（ISSUE #2156）：守「放宽判据这件事本身」，故必须能喂
  * **假账 + 假源码**跑 —— 真仓数值只证明「今天一致」，证明不了方向反了会不会红（A 档越大越松、B 档
  * 越小越危险，`strictness` 记错就会把收紧判成放宽）。`analyze()` 是纯函数，这里全走它。
  */
@@ -7,8 +7,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { analyze, isLooser, num } from "../scripts/check-gate-thresholds.cjs";
-import { gateChainScripts } from "../scripts/gate-chain-scripts.cjs";
+import { analyze, isLooser, num } from "../scripts/gates/check-gate-thresholds.cjs";
+import { gateChainScripts } from "../scripts/gates/gate-chain-scripts.cjs";
 
 /** 账里一条的形状（`group` / `movedFrom` / `movedIssue` 都是可选位）。 */
 type Entry = {
@@ -290,11 +290,11 @@ describe("analyze：整份未入账的判据文件（扫描根 = 磁盘现算）
     /* glob 写错的失效形态是「面为空 ⇒ 整格恒绿」，所以这里按磁盘自己数一遍：
        扫描根必须非空、必须含这份判据自己（`MIN_ENTRIES` 那条自证的下限在账里），
        否则「覆盖面」这句话只是断言里的一个装饰。 */
-    const scanned = readdirSync(path.join(root, "scripts"))
+    const scanned = readdirSync(path.join(root, "scripts", "gates"))
       .filter((n) => /^check-.*\.cjs$/.test(n))
-      .map((n) => `scripts/${n}`);
+      .map((n) => `scripts/gates/${n}`);
     expect(scanned.length).toBeGreaterThan(10);
-    expect(scanned).toContain("scripts/check-gate-thresholds.cjs");
+    expect(scanned).toContain("scripts/gates/check-gate-thresholds.cjs");
     const r = analyze({
       entries: ledger.entries,
       readSource: (f: string) => {
@@ -387,8 +387,8 @@ describe("扫描根：门禁链按名字调起的判定脚本也要进面（ISSU
 
   it("共享实现只有一份：两个消费方都 require gate-chain-scripts.cjs（§12.12）", () => {
     for (const consumer of [
-      "scripts/check-gate-executors.cjs",
-      "scripts/check-gate-thresholds.cjs",
+      "scripts/gates/check-gate-executors.cjs",
+      "scripts/gates/check-gate-thresholds.cjs",
     ]) {
       expect(
         readFileSync(path.join(root, consumer), "utf8"),
@@ -404,11 +404,12 @@ describe("扫描根：门禁链按名字调起的判定脚本也要进面（ISSU
      * 断的是「扩面之后链外没有藏带顶层数值的判据」这一格由共享实现保证。 */
     const filesToScan = new Set([
       ...[...chain].map((n) => `scripts/${n}`),
-      ...readdirSync(path.join(root, "scripts"))
+      /* #3930 起判据在 scripts/gates/：扫描根要把那一层也数进去。 */
+      ...readdirSync(path.join(root, "scripts", "gates"))
         .filter((f) => /^check-.*\.cjs$/.test(f))
-        .map((f) => `scripts/${f}`),
+        .map((f) => `scripts/gates/${f}`),
     ]);
     expect(filesToScan.has("scripts/shell-gate.mjs")).toBe(true);
-    expect(filesToScan.has("scripts/check-file-structure.cjs")).toBe(true);
+    expect(filesToScan.has("scripts/gates/check-file-structure.cjs")).toBe(true);
   });
 });

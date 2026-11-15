@@ -6,7 +6,7 @@
  * 用例的输入面）与 `affected-tests.mjs`（说明符扫描器，import 了 `typescript`）。
  * 放在后者里时，沙箱里那份 `changed-scope.mjs` 会连带解析 `typescript`，模块加载
  * 当场炸（ISSUE #2830 的现场：`ERR_MODULE_NOT_FOUND: Cannot find package
- * 'typescript' imported from <temp>/scripts/affected-tests.mjs`）。切分之后低层只
+ * 'typescript' imported from <temp>/scripts/affected-tests/affected-tests.mjs`）。切分之后低层只
  * 依赖 `launcher-core/sync-attribution.mjs` 的 `parseDiffEntries`（同样是零依赖）。
  */
 import { parseDiffEntries } from "./launcher-core/sync-attribution.mjs";

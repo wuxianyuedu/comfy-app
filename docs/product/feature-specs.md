@@ -973,7 +973,7 @@
   `<应用根>/data/backups/`；恢复**只写标记**，真正换文件在下次启动
   （`applyPendingRestoreAtBoot`）；**刻意不提供**就地换文件
   （运行期多进程持有该库）；换文件前必先留退路。
-- 落点：`scripts/db-backup-core.mjs`、
+- 落点：`scripts/db/db-backup-core.mjs`、
   `src/server/api/routers/setting.ts`（`backup*`）、
   `docs/guide-database-backup.md`
 

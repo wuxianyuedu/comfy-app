@@ -1,5 +1,5 @@
 /**
- * `scripts/ship-ga-logs-on-demand.mjs` 的判据（§12.20：把「手工 start-build → 再读回」
+ * `scripts/ship/ship-ga-logs-on-demand.mjs` 的判据（§12.20：把「手工 start-build → 再读回」
  * 收进一条 `pnpm ship --gh-logs pr:<号>`）。
  *
  * 钉住最容易静默失效的几件：
@@ -14,15 +14,15 @@ import { gzipSync } from "node:zlib";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { RELAY_MARKER } from "../scripts/ci-ga-logs-relay.mjs";
-import type { ExecResult } from "../scripts/ship-exec.mjs";
+import { RELAY_MARKER } from "../scripts/ci/ci-ga-logs-relay.mjs";
+import type { ExecResult } from "../scripts/ship/ship-exec.mjs";
 import {
   awaitOnDemandRelay,
   ensureOnDemandLogs,
   ON_DEMAND_EVENT,
   onDemandTriggerArgs,
   triggerOnDemandLogs,
-} from "../scripts/ship-ga-logs-on-demand.mjs";
+} from "../scripts/ship/ship-ga-logs-on-demand.mjs";
 
 const SLUG = "moon-read/comfy-app-t3";
 const PR = 3684;

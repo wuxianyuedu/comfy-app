@@ -6,33 +6,33 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-/* 每个 stage 现在都以 `node scripts/ci-cp936-exit.mjs -- <真命令>` 起（ISSUE #1977），
+/* 每个 stage 现在都以 `node scripts/ci/ci-cp936-exit.mjs -- <真命令>` 起（ISSUE #1977），
  * 而下面那条「这一步点名的入口在不在盘上」判据抓的是 `scripts/…` —— 不剥外壳就会
  * 抓到外壳自己（它当然在盘上），判据从「接线对不对」退化成「外壳在不在」。
  * （#3504 起触发口在平台池容器里直跑 node，不再有这一层外壳；判据保留给
  * 仍在自托管宿主上跑的那几格。） */
-/* 那两份清单的解析**搬进 `scripts/ci-gate-names.mjs`** 了 —— 判据脚本
- * `scripts/check-gate-name-executors.mjs` 也要读同一份清单，两边各写一遍就会漂开。
+/* 那两份清单的解析**搬进 `scripts/ci/ci-gate-names.mjs`** 了 —— 判据脚本
+ * `scripts/gates/check-gate-name-executors.mjs` 也要读同一份清单，两边各写一遍就会漂开。
  * 这里保留转出（三个消费方 import 的是这个文件的导出）。 */
 import {
   registeredDisabledGates as disabledGatesImpl,
   registeredGateOrder as gateOrderImpl,
-} from "../scripts/ci-gate-names.mjs";
+} from "../scripts/ci/ci-gate-names.mjs";
 /* 触发口 ⇄ GA workflow 的配对注册表与「每日格 ⇄ GA step」对照是**数据**，一份出处在
- * `scripts/ci-ga-trigger-map.mjs`（#3504：CNB 侧不再执行任何构建，旧注册表
+ * `scripts/ci/ci-ga-trigger-map.mjs`（#3504：CNB 侧不再执行任何构建，旧注册表
  * `ci-oneshot-gates.mjs` 随 `*oneshot_*` 锚点一并退役）。这里 import 它而不是在
  * 测试里重抄一遍 —— 重抄就成了「判据自己就是第二份事实」。 */
 import {
   DAILY_GATE_EXECUTORS,
   GA_TRIGGER_TARGETS,
   dispatchStageName,
-} from "../scripts/ci-ga-trigger-map.mjs";
+} from "../scripts/ci/ci-ga-trigger-map.mjs";
 /* 预算这一格的判据要拿**脚本自己那份预算**当基准，而不是在测试里再抄一个常数：
  * 抄一份的话「改了脚本预算、忘了改配置」两种漂移里只会看见一种。 */
 import { FULL_SUITE_TIMEOUT_MS } from "../scripts/full-suite-run.mjs";
-import { DEFAULT_BUDGET_MS } from "../scripts/ci-ga-verdict-readout.mjs";
-import { DAILY_LANE_PIPELINES } from "../scripts/check-daily-attendance.mjs";
-import { FRESHNESS_TRACKS } from "../scripts/freshness-ledger.mjs";
+import { DEFAULT_BUDGET_MS } from "../scripts/ci/ci-ga-verdict-readout.mjs";
+import { DAILY_LANE_PIPELINES } from "../scripts/gates/check-daily-attendance.mjs";
+import { FRESHNESS_TRACKS } from "../scripts/freshness/freshness-ledger.mjs";
 import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -231,7 +231,7 @@ export function ps7OnlySyntaxIn(text: string): Array<string> {
  * 而 `单元测试` 实测跑满 2h24m 被 8640s 墙钟掐断（`cnb-jt3-1k5071kou`），只剩 `timeout … exceeded` ⇒ 后面的 stage 要么看不到、要么在最贵处才看到。
  * 解析 `>-` 折叠标量、按 `,` 切名。@param text 原文；@returns stage 名（已 trim），`[]` = 键不在（调用方判红）。
  */
-/* 实现见 `scripts/ci-gate-names.mjs`（判据脚本与三处消费它的测试共用同一份解析，
+/* 实现见 `scripts/ci/ci-gate-names.mjs`（判据脚本与三处消费它的测试共用同一份解析，
  * 不各写一遍 —— §12.12 / §12.18）。 */
 export function registeredGateOrder(text: string): Array<string> {
   return gateOrderImpl(text);
@@ -242,14 +242,14 @@ export function registeredGateOrder(text: string): Array<string> {
  * 于是「临时停用」与「永久删除」在配置里逐字同形、评审只能猜。名字在此 = 被停用；不在 `GATES` 也不在此 = 被删除（判据点名）。
  * 与 `registeredGateOrder` 同一份折叠标量解析；`[]` = 键不在或为空，调用方不能据此推断「没有停用的」。
  */
-/* 实现见 `scripts/ci-gate-names.mjs`（同一份解析，三处消费共用）。 */
+/* 实现见 `scripts/ci/ci-gate-names.mjs`（同一份解析，三处消费共用）。 */
 export function registeredDisabledGates(text: string): Array<string> {
   return disabledGatesImpl(text);
 }
 
 /**
  * 每日档的执行面自 #3504 起全部在 GA：`.github/workflows/daily.yml` 是「每天跑什么」
- * 的唯一事实源。逻辑格名 ⇄ step 名的对照登记在 `scripts/ci-ga-trigger-map.mjs` 的
+ * 的唯一事实源。逻辑格名 ⇄ step 名的对照登记在 `scripts/ci/ci-ga-trigger-map.mjs` 的
  * `DAILY_GATE_EXECUTORS`（判据 import 它，不在这里重抄）。
  * 顺序即执行序（**重格链**单 job 串行，与 CNB 每日档同一工作区语义对齐）：
  *   单元测试排最后（业主口径「最容易出问题的放最后」）—— 「必须最后」由下面判据钉住。
@@ -407,13 +407,13 @@ const PACKAGE_YML = ".github/workflows/package-desktop.yml" as const;
  * 「退役决定有原文」由 `每日单元测试` 那条判据对着 daily.yml 头注钉住。
  */
 const PR_MOVED_TO_DAILY: Array<[string, string, string, string]> = [
-  ["浏览器安装", "每日浏览器安装", "scripts/ci-toolchain-selfcheck.mjs", "--playwright-only"],
+  ["浏览器安装", "每日浏览器安装", "scripts/ci/ci-toolchain-selfcheck.mjs", "--playwright-only"],
   /* `ESLint 零警告` 是**另一条理由**（起一堆子进程而非节点事实）：它挂满过 8640s 与 20m，红的地方不是这次改动违规而是这台机腾不出核。
    * 同一张表接住它，因为要判的东西逐字相同：PR 清单不许再有、GA 每日档必须有一格、点的是 `pnpm run lint`（口径见 `package.json` 的 `lint` 与 `oxlint.parity.config.mjs` 顶部）。 */
   ["ESLint 零警告", "每日 ESLint 零警告", "pnpm run lint", ""],
   /* `新鲜度账` 是**第三种理由**（ISSUE #2300 主体分权）：PR 上下文读的是**主干的账**（`FRESHNESS_TRACKS[*].subject` 三档都是 `master`，权威副本在 `ci/freshness-ledger`）。
    * 它判的是「机器 / 主干怎么被调度」，不是某次 PR 的缺陷；第四元组留空（不共用脚本、无分档参数），GA 那格的差别在 env（`COMFY_CI_SUBJECT`），env 不在比较面里。 */
-  ["新鲜度账", "每日新鲜度账", "scripts/freshness-gate.mjs", ""],
+  ["新鲜度账", "每日新鲜度账", "scripts/freshness/freshness-gate.mjs", ""],
 ];
 
 /**
@@ -453,7 +453,7 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
    * 本地可复现）逐条评过，逐条读数与裁决见规范 §13.5.40。
    * 形状与上面两条同形：**没有自己的 stage**（登记在 `COMFYAPP_CI_GATES_ELSEWHERE`，
    * 入口路径 = `tests/db-migrate-equivalence.test.ts`），执行者是 GA `pr-gate.yml` 的
-   * `typecheck-db-format` job 里那一步 —— 判据 `scripts/check-gate-name-executors.mjs`
+   * `typecheck-db-format` job 里那一步 —— 判据 `scripts/gates/check-gate-name-executors.mjs`
    * 的**第四处执行面**（GA PR 门禁的 `run:` 行）就是为它补的：另三面一处都不在 GA。 */
   { name: "schema⇄迁移等价", tier: "PR" },
   // ── push 档（COMFYAPP_CI_PUSH_GATES）──
@@ -1657,12 +1657,12 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "质量门禁的主列不是「GA 回调结论回读」一格 —— 又有格子回流自托管了",
     ).toContain("- name: GA 回调结论回读");
     expect(gatesChunk, "质量门禁的回读脚本被改写 —— 站内回读是唯一承重形态").toContain(
-      "node scripts/ci-ga-verdict-readout.mjs",
+      "node scripts/ci/ci-ga-verdict-readout.mjs",
     );
     /* endStages 立案格内联在流水线里（sh 形态），锁仍是 pr-$IID 这把钥匙唯一的用户（镜像出口用 mirror-pr-$IID）。 */
     expect(chunk, "质量门禁丢了 endStages 立案格 —— 红了没人立案").toContain("- name: PR 失败立案");
     expect(chunk, "立案格 script 不是直跑形态").toContain(
-      "node scripts/ci-pr-failure-issue.mjs --no-block",
+      "node scripts/ci/ci-pr-failure-issue.mjs --no-block",
     );
     expect(chunk, "质量门禁的锁不是 pr-$CNB_PULL_REQUEST_IID —— 这把钥匙的唯一用户变了").toContain(
       "key: pr-$CNB_PULL_REQUEST_IID",
@@ -1811,7 +1811,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       .join("\n");
     expect(chunk, "平台池出口还带 --readout —— 派发失败不会有人知道").not.toContain("--readout");
     expect(chunk, "平台池出口不是 ci-github-mirror-push.mjs —— 推送与派发没有执行者").toContain(
-      "node scripts/ci-github-mirror-push.mjs",
+      "node scripts/ci/ci-github-mirror-push.mjs",
     );
   });
 
@@ -1853,7 +1853,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "- name: GitHub master 镜像（平台池）",
     );
     expect(push, "平台池镜像出口没点名推送脚本").toContain(
-      "node scripts/ci-github-mirror-push.mjs --master",
+      "node scripts/ci/ci-github-mirror-push.mjs --master",
     );
   });
 
@@ -1882,8 +1882,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       expect(script, `\`${stage}\` 解析不出 script`).not.toBe("");
       expect(
         script,
-        `\`${stage}\` 的命令与注册表不一致 —— 应为 \`node scripts/ci-ga-dispatch.mjs --preset ${target.preset}\``,
-      ).toBe(`node scripts/ci-ga-dispatch.mjs --preset ${target.preset}`);
+        `\`${stage}\` 的命令与注册表不一致 —— 应为 \`node scripts/ci/ci-ga-dispatch.mjs --preset ${target.preset}\``,
+      ).toBe(`node scripts/ci/ci-ga-dispatch.mjs --preset ${target.preset}`);
     }
 
     /* 事件名必须是 `api_trigger` 或其前缀 —— 这是**服务端**的硬要求（实测 400
@@ -2121,7 +2121,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * commit-statuses / 流水线 name 一个字都不许动。 */
     const relayStep = workflow.slice(
       workflow.indexOf("把 GA 判红日志正文搬到 CNB"),
-      workflow.indexOf("run: node scripts/ci-ga-logs-relay.mjs"),
+      workflow.indexOf("run: node scripts/ci/ci-ga-logs-relay.mjs"),
     );
     expect(relayStep).not.toContain("continue-on-error: true");
     expect(relayStep).toContain("if: always()");
@@ -2130,7 +2130,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     /* 流水线 name 在 `.cnb.yml`（commit-status context 含它），本格一个字不动。 */
     expect(readRegisteredConfig()).toContain("name: GA 判决回调（骨架·休眠）");
     /* 本地读者在场：ship 侧从 CNB 站内读回的模块。 */
-    expect(readFileSync(path.join(ROOT, "scripts/ship-gh-logs.mjs"), "utf8")).toContain(
+    expect(readFileSync(path.join(ROOT, "scripts/ship/ship-gh-logs.mjs"), "utf8")).toContain(
       "ship-ga-logs-cnb.mjs",
     );
   });
@@ -2141,7 +2141,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 承重退码更不许动，于是把解释念进 #3437 那条本来就会发的 PR 评论。
      * 这几条钉住「env 接线在场 + 复用同一份结论折叠 + 不碰承重」。 */
     const workflow = readFileSync(path.join(ROOT, ".github/workflows/pr-gate.yml"), "utf8");
-    const relay = readFileSync(path.join(ROOT, "scripts/ci-ga-logs-relay.mjs"), "utf8");
+    const relay = readFileSync(path.join(ROOT, "scripts/ci/ci-ga-logs-relay.mjs"), "utf8");
     /* relay step 带 GA_JOB_RESULTS（与结论回调那一跳同源），评论才念得出本次 verdict。 */
     const relayBlock = workflow.slice(workflow.indexOf("把 GA 判红日志正文搬到 CNB"));
     expect(relayBlock).toContain("GA_JOB_RESULTS: ${{ join(needs.*.result, ',') }}");
@@ -2168,8 +2168,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 描述通道是「读改写只替换自己那块」的只写镜像；本地读者只扫评论列表，
      * 不许把描述也并进读源（两处都命中 = 读到哪份全凭列表顺序）。 */
     const workflow = readFileSync(path.join(ROOT, ".github/workflows/pr-gate.yml"), "utf8");
-    const relay = readFileSync(path.join(ROOT, "scripts/ci-ga-logs-relay.mjs"), "utf8");
-    const reader = readFileSync(path.join(ROOT, "scripts/ship-ga-logs-cnb.mjs"), "utf8");
+    const relay = readFileSync(path.join(ROOT, "scripts/ci/ci-ga-logs-relay.mjs"), "utf8");
+    const reader = readFileSync(path.join(ROOT, "scripts/ship/ship-ga-logs-cnb.mjs"), "utf8");
     /* 接线：新 secret 注入 relay step，脚本认这个 env 名。 */
     expect(workflow).toContain("CNB_PULL_REQUEST_TOKEN: ${{ secrets.CNB_PULL_REQUEST_TOKEN }}");
     expect(relay).toContain("CNB_PULL_REQUEST_TOKEN");
@@ -2187,7 +2187,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 流水线 name 与三态退码不变。 */
     const relayStep = workflow.slice(
       workflow.indexOf("把 GA 判红日志正文搬到 CNB"),
-      workflow.indexOf("run: node scripts/ci-ga-logs-relay.mjs"),
+      workflow.indexOf("run: node scripts/ci/ci-ga-logs-relay.mjs"),
     );
     expect(relayStep).not.toContain("continue-on-error: true");
     expect(relayStep).toContain("if: always()");
@@ -2203,9 +2203,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 代发 workflow_dispatch，本地 --gh-logs 按 marker 的 scope 呈现。
      * 这几条钉住「接线在场 + 不承重」：少一条就会静默退回出站链路。 */
     const workflow = readFileSync(path.join(ROOT, ".github/workflows/pr-gate.yml"), "utf8");
-    const relay = readFileSync(path.join(ROOT, "scripts/ci-ga-logs-relay.mjs"), "utf8");
-    const onDemand = readFileSync(path.join(ROOT, "scripts/ci-ga-logs-on-demand.mjs"), "utf8");
-    const reader = readFileSync(path.join(ROOT, "scripts/ship-gh-logs.mjs"), "utf8");
+    const relay = readFileSync(path.join(ROOT, "scripts/ci/ci-ga-logs-relay.mjs"), "utf8");
+    const onDemand = readFileSync(path.join(ROOT, "scripts/ci/ci-ga-logs-on-demand.mjs"), "utf8");
+    const reader = readFileSync(path.join(ROOT, "scripts/ship/ship-gh-logs.mjs"), "utf8");
     /* GA 侧：workflow_dispatch 多三个按需 input，relay step 读 scope / run_id / PR 号。 */
     expect(workflow).toMatch(/^ {6}pr_number:$/m);
     expect(workflow).toMatch(/^ {6}relay_scope:$/m);
@@ -2223,7 +2223,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     /* CNB 侧：触发口在册、平台池形态、点的是专用脚本（不是 --preset）、有独占锁。 */
     const cnb = readRegisteredConfig();
     expect(cnb).toContain("api_trigger_ga_logs:");
-    expect(cnb).toContain("node scripts/ci-ga-logs-on-demand.mjs");
+    expect(cnb).toContain("node scripts/ci/ci-ga-logs-on-demand.mjs");
     expect(cnb).toContain("*lock_ga_logs");
     const lane = /^[ ]{2}api_trigger_ga_logs:[\s\S]*?(?=^[ ]{2}\S|^\S)/m.exec(cnb);
     expect(lane?.[0]).not.toContain("--preset");
@@ -2235,7 +2235,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 流水线 name 与三态退码不变。 */
     const relayStep = workflow.slice(
       workflow.indexOf("把 GA 判红日志正文搬到 CNB"),
-      workflow.indexOf("run: node scripts/ci-ga-logs-relay.mjs"),
+      workflow.indexOf("run: node scripts/ci/ci-ga-logs-relay.mjs"),
     );
     expect(relayStep).not.toContain("continue-on-error: true");
     expect(relayStep).toContain("if: always()");
@@ -2469,7 +2469,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toBeLessThan(lastRed);
     const block = gaStepBlock(DAILY_YML, DAILY_GATE_EXECUTORS["每日 API 文档生成与自检"] ?? "");
     expect(block, "GA 每日档里解析不出「API 文档生成与自检」这一格").toBeTruthy();
-    expect(block).toContain("scripts/check-docs-api.cjs");
+    expect(block).toContain("scripts/gates/check-docs-api.cjs");
   });
 
   it("被停用的 stage 在 `COMFYAPP_CI_DISABLED_GATES` 里登记了，且原文以注释形态留着", () => {
@@ -2528,7 +2528,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       workflow,
       "`.github/workflows/pr-gate.yml` 里没有 `check-format.cjs --changed` —— 2026-11-05 把" +
         "`oxfmt 格式` 从 CNB PR 档搬走后，它是这条判据唯一的执行者；两边都没有 = 没人跑它",
-    ).toContain("node scripts/check-format.cjs --changed");
+    ).toContain("node scripts/gates/check-format.cjs --changed");
     const disabled = registeredDisabledGates(readRegisteredConfig());
     expect(
       disabled,
@@ -2909,7 +2909,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(
       stageScriptLine(text, dispatchStageName(dailyTarget)),
       "手点那一口不再派发 daily —— 「撤定时不撤判据」这句话就没有对象了",
-    ).toBe(`node scripts/ci-ga-dispatch.mjs --preset daily`);
+    ).toBe(`node scripts/ci/ci-ga-dispatch.mjs --preset daily`);
     /* 每日档的「跑什么」现在全部住在 daily.yml；这一格是最贵的重格，入口与预算在
      * GA 那边继续钉（stageTimeout 的对应物是 `timeout-minutes`）。 */
     const buildStep = gaStepBlock(DAILY_YML, DAILY_GATE_EXECUTORS["每日生产构建"] ?? "");
@@ -2917,9 +2917,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(
       buildStep,
       "「生产构建」跑的还是裸 `pnpm run build` —— 那样这一次的绿只落在日志里、" +
-        "账面上一个字不变。入口要写 `node scripts/ci-daily-build.mjs`",
+        "账面上一个字不变。入口要写 `node scripts/ci/ci-daily-build.mjs`",
     ).not.toContain("pnpm run build");
-    const entry = "scripts/ci-daily-build.mjs";
+    const entry = "scripts/ci/ci-daily-build.mjs";
     expect(buildStep, `「生产构建」没有点名 ${entry}`).toContain(entry);
     expect(
       existsSync(path.join(ROOT, entry)),
@@ -2981,7 +2981,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       expect(
         stageScriptLine(text, dispatchStageName(packageTarget)),
         `「${name}」不再派发 package —— 那一档的执行者就只剩 GA 的 schedule 了`,
-      ).toBe(`node scripts/ci-ga-dispatch.mjs --preset package`);
+      ).toBe(`node scripts/ci/ci-ga-dispatch.mjs --preset package`);
     }
 
     /* GA 侧承接（package-desktop.yml）的形状：构建格点既有的执行者 `pnpm tauri build`
@@ -3070,7 +3070,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(
       relayStep,
       "回传 step 没点既有入口 `ci-ga-desktop-relay.mjs`（别把上传链抄进 workflow 内联）",
-    ).toContain("node scripts/ci-ga-desktop-relay.mjs");
+    ).toContain("node scripts/ci/ci-ga-desktop-relay.mjs");
     expect(relayStep, "回传 step 缺 continue-on-error —— 回传失败会反过来把构建结论判红").toContain(
       "continue-on-error: true",
     );
@@ -3167,7 +3167,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("每日全量E2E：整档（不许带任何收窄参数）+ 排在浏览器之后 + 有分钟量级预算（GA daily.yml）", () => {
-    const entry = "scripts/e2e-run.mjs";
+    const entry = "scripts/e2e/e2e-run.mjs";
     const step = gaStepBlock(DAILY_YML, DAILY_GATE_EXECUTORS["每日全量E2E"] ?? "");
     const run =
       step
@@ -3188,7 +3188,13 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * PR 那一格带的正是 `--grep=@critical`，抄过来会得到一格「每天绿、账面永远不动」
      * 的档 —— 与「这一档三个月没人跑」在账面上逐字同形。
      * 只扫 `run`：这一档的注释正当地要写出「不许带 `--grep`」这句话。 */
-    for (const forbidden of ["--grep", "tests/", "e2e/"]) {
+    // 收窄参数的形状：入口行必须**恰好以脚本收尾**（#3930 起入口自身带 e2e/ 前缀，
+    // 「不许带 e2e/ 目录」改判为「不带任何额外参数」——加一个收窄参数就会破坏收尾对齐）。
+    expect(
+      run.endsWith(entry),
+      `「全量E2E」的 run 不是 ${entry} 的整档形态（带了收窄参数或换了入口）—— 跑绿也不记账`,
+    ).toBe(true);
+    for (const forbidden of ["--grep", "tests/", "playwright test"]) {
       expect(run, `「全量E2E」带了 ${forbidden} —— 那不是整档，跑绿也不记账`).not.toContain(
         forbidden,
       );
@@ -3367,7 +3373,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(dropPrOnlyEnvLines(['B: "1"'], [])).toEqual(['B: "1"']);
     // 脚本行不会被误认成 env 赋值（`$enc=…` / `node …` 都没有 `KEY:` 那个形状）。
     expect(envAssignmentKey("$enc=[Text.Encoding]::UTF8")).toBeNull();
-    expect(envAssignmentKey("node scripts/db-push.mjs")).toBeNull();
+    expect(envAssignmentKey("node scripts/db/db-push.mjs")).toBeNull();
     expect(envAssignmentKey('  COMFY_CI_SLOT: "1"')).toBe("COMFY_CI_SLOT");
   });
 
@@ -3378,7 +3384,10 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(
       stagesWithBuildConsumer(
         new Map([
-          ["每日生产构建", ["node scripts/ci-cp936-exit.mjs -- node scripts/ci-daily-build.mjs"]],
+          [
+            "每日生产构建",
+            ["node scripts/ci/ci-cp936-exit.mjs -- node scripts/ci/ci-daily-build.mjs"],
+          ],
         ]),
       ),
     ).toEqual(["每日生产构建"]);
@@ -3390,7 +3399,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toEqual(["桌包"]);
     expect(
       stagesWithBuildConsumer(
-        new Map([["打包·桌面成品构建", ["node scripts/ci-cp936-exit.mjs -- pnpm tauri build"]]]),
+        new Map([["打包·桌面成品构建", ["node scripts/ci/ci-cp936-exit.mjs -- pnpm tauri build"]]]),
       ),
       "经 tauri 间接触发的那一形没被认出来 —— 桌包档会被这张表判成「没有构建格」，" +
         "而它那一格真的在跑 `build-desktop.mjs` → `pnpm build`（`src-tauri/tauri.conf.json` 的 " +
@@ -3418,17 +3427,20 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
           [
             "合并形态复核",
             [
-              "node scripts/ci-cp936-exit.mjs -- node scripts/check-branch-guard.cjs --merge-commit",
+              "node scripts/ci/ci-cp936-exit.mjs -- node scripts/gates/check-branch-guard.cjs --merge-commit",
             ],
           ],
-          ["安装依赖", ["node scripts/ci-cp936-exit.mjs -- node scripts/ci-install-deps.mjs"]],
+          [
+            "安装依赖",
+            ["node scripts/ci/ci-cp936-exit.mjs -- node scripts/ci/ci-install-deps.mjs"],
+          ],
           [
             "API 文档生成与自检",
-            ["node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs"],
+            ["node scripts/ci/ci-cp936-exit.mjs -- node scripts/gates/check-docs-api.cjs"],
           ],
           [
             "工作区出处",
-            ["node scripts/ci-cp936-exit.mjs -- node scripts/ci-workspace-provenance.mjs"],
+            ["node scripts/ci/ci-cp936-exit.mjs -- node scripts/ci-workspace-provenance.mjs"],
           ],
         ]),
       ),
@@ -3628,7 +3640,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         ?.split("\n")
         .find((l) => /^\s*run:/.test(l))
         ?.trim() ?? "";
-    expect(run).toContain("scripts/ci-ga-daily-failure-issue.mjs");
+    expect(run).toContain("scripts/ci/ci-ga-daily-failure-issue.mjs");
     expect(run).toContain("--no-block");
     /* 这一格必须真的落在下游 job 里，而不是「文件里某处有个同名 step」。 */
     expect(
@@ -3652,15 +3664,15 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         "挂回去之前先给触发口配依赖安装（否则那一格红在「文件不存在」或 cnb CLI 缺失）",
     ).toBe(false);
     expect(
-      existsSync(path.join(ROOT, "scripts/ci-mirror-egress-issue.mjs")),
-      "`scripts/ci-mirror-egress-issue.mjs` 不在盘上 —— 退役是「不自动跑」，不是删文件；" +
+      existsSync(path.join(ROOT, "scripts/ci/ci-mirror-egress-issue.mjs")),
+      "`scripts/ci/ci-mirror-egress-issue.mjs` 不在盘上 —— 退役是「不自动跑」，不是删文件；" +
         "手动档（npm script 直跑）还要用它",
     ).toBe(true);
     /* 自动化的那半个执行者换成了 GA daily.yml 的镜像漂移判据（匿名 ls-remote，
      * 不引新密钥）：它红 = 两边 master 漂移，立案走 `--file-issue`。 */
     const drift = gaStepBlock(DAILY_YML, "镜像漂移判据（CNB master vs GitHub master）");
     expect(drift, "GA daily.yml 里没有「镜像漂移判据」step —— 出网兜底没有执行者了").toBeTruthy();
-    expect(drift).toContain("scripts/ci-mirror-drift.mjs");
+    expect(drift).toContain("scripts/ci/ci-mirror-drift.mjs");
     expect(drift).toContain("--file-issue");
   });
 
@@ -4096,13 +4108,13 @@ describe("单跑口：三档 + 桌包各自派发到 GA 对应 workflow，跨档
 
     /* ② preset 漂移：把 `--preset e2e` 改成别的档，由「命令与注册表一致」那条抓。 */
     const drifted = text.replace(
-      `script: node scripts/ci-ga-dispatch.mjs --preset e2e`,
-      "script: node scripts/ci-ga-dispatch.mjs --preset build",
+      `script: node scripts/ci/ci-ga-dispatch.mjs --preset e2e`,
+      "script: node scripts/ci/ci-ga-dispatch.mjs --preset build",
     );
     expect(
       stageScriptLine(drifted, dispatchStageName(e2e)),
       "② preset 漂移必须改得到那一行",
-    ).not.toBe(`node scripts/ci-ga-dispatch.mjs --preset e2e`);
+    ).not.toBe(`node scripts/ci/ci-ga-dispatch.mjs --preset e2e`);
 
     /* ③ 并发组漂移：改 oneshot-e2e.yml 的 group 值，由「workflow 形态」那条抓。 */
     const oneshotE2e = readFileAt(ROOT, ".github/workflows/oneshot-e2e.yml");

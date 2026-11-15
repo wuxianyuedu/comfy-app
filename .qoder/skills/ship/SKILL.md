@@ -6,7 +6,7 @@ description: 把「分支 → 提交 → push → PR → 等 CI → 绿了合并
 # 从工作树到 `master`：`pnpm ship`
 
 **逻辑只有一份，在 `scripts/ship*.mjs` 这一族里。** 本 Skill 不重抄流程，只说什么时候用它、
-它的边界在哪、以及哪几格仍然要人判断。要看全部旗标与阶段名就读 `scripts/ship.mjs` 的文件头
+它的边界在哪、以及哪几格仍然要人判断。要看全部旗标与阶段名就读 `scripts/ship/ship.mjs` 的文件头
 （那里列了这一族各自的职责：`-core` 判断、`-args` 旗标层、`-build` build 取数、`-exec` 效应适配、`-platform` 平台侧三段 + 分支清理、
 `-poll` 轮询那一格、`-pull-body` PR 正文那一格、`-local` 本地两段、`-close` 关单、`-claim` 领取 / 结束 / 列表 / 建单分派、`-issue-new` 一步建单、
 `-diagnose` 只读诊断、`-stage-log` 只读取某一格的日志正文、`-preflight` 阶段 0、`-preflight-d0` D0 预跑机制层，
@@ -71,7 +71,7 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
    单件动作的互斥走既有清单（展开后守卫点名的是展开面）。
 
 1. **退码分型表（0–7）：看到退码就知道是哪件事，`2` 及以上都不等于通过**（ISSUE #3083）。
-   唯一出处 `scripts/ship-codes.mjs`，`--merge` 与 `--diagnose` 同一套码：
+   唯一出处 `scripts/ship/ship-codes.mjs`，`--merge` 与 `--diagnose` 同一套码：
    `0` 走到终态且事实为绿；`1` 有事实是红的；`2` 没跑起来（**泛化兜底**：`cnb` 不在、
    cancelled、按 sha 归属不到 build、用法错）；`3` PR 与 base **冲突**，平台不派生 CI
    （先 `git fetch <远端> && git merge <基线>` 解掉再重跑，脚本只检测、**不自动解冲突**）；
@@ -86,7 +86,7 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
    **「走到哪了」另有一套输出**（同一张单）：预检通过 / 分支推送 / 新建或复用 PR
    （PR 号 + **平台回读**的标题）/ 等 CI（构建号）/ 冲突（PR 号 + 冲突面文件）/
    合并（squash + 合并提交 sha + 目标分支）/ 关单（回读 state/state_reason）/ 清分支，
-   每格一句 `[ship] ▶ <阶段> | key=value`（唯一出处 `scripts/ship-stage.mjs`）——
+   每格一句 `[ship] ▶ <阶段> | key=value`（唯一出处 `scripts/ship/ship-stage.mjs`）——
    进度说走到哪，退码说结果分类，两套信息互不替代，都不用翻日志。
    **同一把尺在手工那一跳更松：`cnb` 认不出的子命令打印 usage 却退 `0`**（ISSUE #2436）。
    例：把评论敲成 `cnb issues create-comment` —— 仓里既有的正确形状是
@@ -113,7 +113,7 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
    跳过时会念出 HEAD 的 sha 与「树上另有 N 项未提交改动」——那句是读数，不是「全部已处理」。
    **多行提交信息一律用 `--message-file`**：`pnpm run`（`pnpm ship` 就是它）会把 argv 里的
    真换行改写成字面量 `\n`，于是整条信息变成**一行 subject** 直接进历史（那样一笔当时就是 PR 标题、被平台拒过一次）。它现在会在提交前认出这个形状并停下，给出两条出口
-   （`--message-file`，或 `pnpm exec node scripts/ship.mjs --message "…"`）。
+   （`--message-file`，或 `pnpm exec node scripts/ship/ship.mjs --message "…"`）。
    **PR 标题与 squash 那一行的权威顺序是：`--title` > 平台上这条 PR 的现标题 > branch-first 推导
    > 顶端那一笔（兜底）**。branch-first 取「这条分支相对 **PR 的目标分支**（`base.ref`）的第一笔
    > 非常规提交」，不是顶端那一笔 —— 先合 master 再 `--merge`、或最后补一笔碎片，都会让顶端那笔

@@ -1,5 +1,5 @@
 /**
- * 启动链路 schema 自检（`scripts/db-schema-state.mjs::ensureSchemaCurrent`）：钉「拉含 schema 变更的代码后**不必记得**跑 `pnpm db:push`」的三条出口 —— ①指纹一致毫秒过、不起 drizzle；②不一致且只增表/索引/列 → 自动应用；③不一致且含删列/重建表 → **不许自动应用**，交人工。
+ * 启动链路 schema 自检（`scripts/db/db-schema-state.mjs::ensureSchemaCurrent`）：钉「拉含 schema 变更的代码后**不必记得**跑 `pnpm db:push`」的三条出口 —— ①指纹一致毫秒过、不起 drizzle；②不一致且只增表/索引/列 → 自动应用；③不一致且含删列/重建表 → **不许自动应用**，交人工。
  * ③是核心：`drizzle.config.ts` 开 `strict: true`，无 TTY 时列出语句→要求确认→原地退出，于是那输出就是 dry-run，白名单建在它上面；失败方向必须是「不自动应用」（格式变了最多多跑一次命令，不会替人删列）。
  * `push` 一律注入 stub：这里验分类与分支，真实 diff 行为另有 `tests/db-push-noninteractive.test.ts` 与手测（跑一次十几秒，放进单测等于每次 `pnpm test` 多等半分钟）。
  */
@@ -171,12 +171,12 @@ function collectForward(): { forward: (chunk: string) => void; lines: Array<stri
 
 describe("pendingStatements —— 只认 SQL 行", () => {
   it("从 dry-run 输出里取出待执行语句，不把报错堆栈当成语句", async () => {
-    const { pendingStatements } = await import("../scripts/db-push-core.mjs");
+    const { pendingStatements } = await import("../scripts/db/db-push-core.mjs");
     expect(pendingStatements(DRY_RUN_OUTPUT)).toEqual(["ALTER TABLE `user` ADD `color` text;"]);
   });
 
   it("没有语句列表时给空数组（调用方据此判「不认识 → 交人工」）", async () => {
-    const { pendingStatements } = await import("../scripts/db-push-core.mjs");
+    const { pendingStatements } = await import("../scripts/db/db-push-core.mjs");
     expect(pendingStatements(NO_CHANGES_OUTPUT)).toEqual([]);
     expect(pendingStatements("")).toEqual([]);
   });
@@ -184,7 +184,7 @@ describe("pendingStatements —— 只认 SQL 行", () => {
 
 describe("canAutoApply —— 白名单", () => {
   it("加表 / 加索引 / 加列可以自动应用", async () => {
-    const { canAutoApply } = await import("../scripts/db-push-core.mjs");
+    const { canAutoApply } = await import("../scripts/db/db-push-core.mjs");
     expect(
       canAutoApply([
         "ALTER TABLE `user` ADD `color` text;",
@@ -195,7 +195,7 @@ describe("canAutoApply —— 白名单", () => {
   });
 
   it("删列 / 重建表不在白名单里（判据的失败方向必须是「不自动应用」）", async () => {
-    const { canAutoApply, riskyStatements } = await import("../scripts/db-push-core.mjs");
+    const { canAutoApply, riskyStatements } = await import("../scripts/db/db-push-core.mjs");
     const drop = ["ALTER TABLE `user` DROP COLUMN `color`;", "DROP TABLE `task`;"];
     expect(canAutoApply(drop)).toBe(false);
     expect(riskyStatements(drop)).toEqual(drop);
@@ -204,7 +204,7 @@ describe("canAutoApply —— 白名单", () => {
   });
 
   it("describeRiskyChanges 把危险语句翻成「哪个表哪列会丢」，完整列出", async () => {
-    const { describeRiskyChanges } = await import("../scripts/db-push-core.mjs");
+    const { describeRiskyChanges } = await import("../scripts/db/db-push-core.mjs");
     expect(
       describeRiskyChanges([
         "ALTER TABLE `user` DROP COLUMN `color`;",
@@ -225,14 +225,14 @@ describe("canAutoApply —— 白名单", () => {
   });
 
   it("describeRiskyChanges：认不出的语句原样列出（描述不出来 ≠ 不列出来）", async () => {
-    const { describeRiskyChanges } = await import("../scripts/db-push-core.mjs");
+    const { describeRiskyChanges } = await import("../scripts/db/db-push-core.mjs");
     expect(describeRiskyChanges(["UPDATE `user` SET `a` = 1;"])).toEqual([
       "「UPDATE `user` SET `a` = 1」",
     ]);
   });
 
   it("空列表不算「可以自动应用」（不认识就交人工）", async () => {
-    const { canAutoApply } = await import("../scripts/db-push-core.mjs");
+    const { canAutoApply } = await import("../scripts/db/db-push-core.mjs");
     expect(canAutoApply([])).toBe(false);
   });
 });
@@ -255,7 +255,7 @@ describe("ensureSchemaCurrent —— 空库（一张表都没有）", () => {
 
   it("库文件都不存在时也自动建表（不再交给用户 / 不再等超时）", async () => {
     const { ensureSchemaCurrent, schemaFingerprint } =
-      await import("../scripts/db-schema-state.mjs");
+      await import("../scripts/db/db-schema-state.mjs");
     expect(fs.existsSync(dbFile)).toBe(false);
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
@@ -273,7 +273,7 @@ describe("ensureSchemaCurrent —— 空库（一张表都没有）", () => {
 
   it("0 字节空库（drizzle-kit 在无 TTY 上留下的形态）同样自动建起来", async () => {
     const { ensureSchemaCurrent, schemaFingerprint } =
-      await import("../scripts/db-schema-state.mjs");
+      await import("../scripts/db/db-schema-state.mjs");
     fs.writeFileSync(dbFile, "");
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
@@ -288,7 +288,7 @@ describe("ensureSchemaCurrent —— 空库（一张表都没有）", () => {
   });
 
   it("自动建表没落地（报了 applied 但库没变）→ missing，且不登记指纹", async () => {
-    const { ensureSchemaCurrent } = await import("../scripts/db-schema-state.mjs");
+    const { ensureSchemaCurrent } = await import("../scripts/db/db-schema-state.mjs");
     fs.writeFileSync(dbFile, "");
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
@@ -301,7 +301,7 @@ describe("ensureSchemaCurrent —— 空库（一张表都没有）", () => {
   });
 
   it("空库 + 认不出待执行语句 → missing，绝不猜着执行", async () => {
-    const { ensureSchemaCurrent } = await import("../scripts/db-schema-state.mjs");
+    const { ensureSchemaCurrent } = await import("../scripts/db/db-schema-state.mjs");
     fs.writeFileSync(dbFile, "");
     const applyChanges = vi.fn();
     const state = ensureSchemaCurrent(root, {
@@ -321,7 +321,7 @@ describe("ensureSchemaCurrent —— 空库（一张表都没有）", () => {
 describe("ensureSchemaCurrent —— 三条出口", () => {
   it("指纹一致时直接 ready，**不起 drizzle**", async () => {
     const { ensureSchemaCurrent, schemaFingerprint } =
-      await import("../scripts/db-schema-state.mjs");
+      await import("../scripts/db/db-schema-state.mjs");
     makeDb(dbFile);
     const fingerprint = schemaFingerprint(root);
     expect(fingerprint, "项目根的 schema 源必须可读").not.toBeNull();
@@ -344,7 +344,7 @@ describe("ensureSchemaCurrent —— 三条出口", () => {
 
   it("指纹缺登记、但库其实已经一致：登记指纹并判 ready（不打扰用户）", async () => {
     const { ensureSchemaCurrent, schemaFingerprint } =
-      await import("../scripts/db-schema-state.mjs");
+      await import("../scripts/db/db-schema-state.mjs");
     makeDb(dbFile);
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
@@ -357,7 +357,7 @@ describe("ensureSchemaCurrent —— 三条出口", () => {
 
   it("安全变更（加列）自动应用，并把指纹登记上", async () => {
     const { ensureSchemaCurrent, schemaFingerprint } =
-      await import("../scripts/db-schema-state.mjs");
+      await import("../scripts/db/db-schema-state.mjs");
     makeDb(dbFile);
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
@@ -386,7 +386,7 @@ describe("ensureSchemaCurrent —— 三条出口", () => {
 
   it("危险变更（删列）不自动应用：判 stale，且**库里的列还在**", async () => {
     const { ensureSchemaCurrent, schemaFingerprint } =
-      await import("../scripts/db-schema-state.mjs");
+      await import("../scripts/db/db-schema-state.mjs");
     makeDb(dbFile, "db.exec('ALTER TABLE user ADD COLUMN color text')");
     const applyChanges = vi.fn();
     const state = ensureSchemaCurrent(root, {
@@ -408,7 +408,7 @@ describe("ensureSchemaCurrent —— 三条出口", () => {
   });
 
   it("drizzle 说「已应用」但库结构没变时判 stale（不许错写指纹）", async () => {
-    const { ensureSchemaCurrent } = await import("../scripts/db-schema-state.mjs");
+    const { ensureSchemaCurrent } = await import("../scripts/db/db-schema-state.mjs");
     makeDb(dbFile);
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
@@ -460,7 +460,7 @@ describe("ensureSchemaCurrent —— force 路径（状态栏「立即同步」�
 
   it("用户确认后，含丢数据的变更也按 --force 应用并登记指纹", async () => {
     const { ensureSchemaCurrent, schemaFingerprint } =
-      await import("../scripts/db-schema-state.mjs");
+      await import("../scripts/db/db-schema-state.mjs");
     /* 库里多出一列（schema 已删掉它 → dry-run 判 stale 的那批语句），force
      * 这一路必须真的把它删掉 —— 这是用户在弹窗里确认过的那件事。 */
     makeDb(dbFile, "db.exec('ALTER TABLE user ADD COLUMN legacy text')");
@@ -491,7 +491,7 @@ describe("ensureSchemaCurrent —— force 路径（状态栏「立即同步」�
 
   it("库已一致（点按钮时并发的同步先做完了）→ ready，不误报失败", async () => {
     const { ensureSchemaCurrent, schemaFingerprint } =
-      await import("../scripts/db-schema-state.mjs");
+      await import("../scripts/db/db-schema-state.mjs");
     makeDb(dbFile);
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
@@ -504,7 +504,7 @@ describe("ensureSchemaCurrent —— force 路径（状态栏「立即同步」�
   });
 
   it("报了 applied 但库结构没动、指纹也没登记 → stale（不许错写「已同步」）", async () => {
-    const { ensureSchemaCurrent } = await import("../scripts/db-schema-state.mjs");
+    const { ensureSchemaCurrent } = await import("../scripts/db/db-schema-state.mjs");
     makeDb(dbFile);
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
@@ -520,12 +520,12 @@ describe("ensureSchemaCurrent —— force 路径（状态栏「立即同步」�
 
 describe("schemaNotice —— 只在该说话时说话", () => {
   it("ready 不打印任何东西", async () => {
-    const { schemaNotice } = await import("../scripts/db-schema-state.mjs");
+    const { schemaNotice } = await import("../scripts/db/db-schema-state.mjs");
     expect(schemaNotice({ state: "ready" })).toBeNull();
   });
 
   it("stale 要把「跑哪条命令」讲清楚（启动链路不替用户做丢数据的决定）", async () => {
-    const { schemaNotice } = await import("../scripts/db-schema-state.mjs");
+    const { schemaNotice } = await import("../scripts/db/db-schema-state.mjs");
     const notice = schemaNotice({
       state: "stale",
       detail: "含「会丢数据」的语句",
@@ -535,7 +535,7 @@ describe("schemaNotice —— 只在该说话时说话", () => {
   });
 
   it("missing 要说清是「自动建表没成功」（不是「你忘了建库」）", async () => {
-    const { schemaNotice } = await import("../scripts/db-schema-state.mjs");
+    const { schemaNotice } = await import("../scripts/db/db-schema-state.mjs");
     const notice = schemaNotice({ state: "missing" });
     expect(notice?.level).toBe("warn");
     const text = notice?.lines.join("\n") ?? "";

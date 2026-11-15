@@ -25,9 +25,9 @@ import {
   runJobsUrl,
   truncateJobLog,
   wrapBase64,
-} from "../scripts/ci-github-verdict-logs.mjs";
-import { CODE } from "../scripts/ci-github-mirror-push.mjs";
-import { runVerdict } from "../scripts/ci-github-verdict-read.mjs";
+} from "../scripts/ci/ci-github-verdict-logs.mjs";
+import { CODE } from "../scripts/ci/ci-github-mirror-push.mjs";
+import { runVerdict } from "../scripts/ci/ci-github-verdict-read.mjs";
 import { gunzipSync } from "node:zlib";
 
 /* 占位形状（§12.13）：**不用**能被当成真凭据的字面量来拼 —— 与
@@ -444,7 +444,7 @@ describe("契约：老轮询主列按停用形态留着，站内回读格在役�
     expect(yml).toContain("--decision-out");
     /* 承重换成站内回读格：活配置里它必须在，且点的是新入口。 */
     expect(live).toContain("- name: GA 回调结论回读");
-    expect(live).toContain("scripts/ci-ga-verdict-readout.mjs");
+    expect(live).toContain("scripts/ci/ci-ga-verdict-readout.mjs");
     /* 分块格数必须与模块常量同源（多一格 / 少一格都红）—— 原文三格仍在。 */
     const chunkStages = ["1", "2", "3"].filter((i) => yml.includes(`日志分块 ${i}/3`));
     expect(chunkStages).toHaveLength(LOG_CHUNK_STATIC_STAGES);

@@ -157,7 +157,13 @@ describe("401 / 404 失败出口（ISSUE #3728）", () => {
     const result = await captureMain({
       argv: [],
       cwd: dir,
-      env: { NODE_ENV: "test", APPDATA: String.raw`C:\Users\u\AppData\Roaming` },
+      /* USERPROFILE 一并给假的：脚本从**同一份 env** 取 home（令牌文件链的那一格），
+       * 真机 `~` 下恰好有令牌文件时，「未检测到可用令牌」这一格的前提才不破。 */
+      env: {
+        NODE_ENV: "test",
+        APPDATA: String.raw`C:\Users\u\AppData\Roaming`,
+        USERPROFILE: String.raw`C:\Users\u`,
+      },
       fetchImpl: () => Promise.resolve(respond(401, '{"errcode":16,"errmsg":"not logged in"}')),
       platform: "win32",
     });

@@ -1,5 +1,5 @@
 /**
- * Rust 函数长度门禁自检：把 `scripts/check-rust-function-length.cjs` 当黑盒跑在临时工作区，验证它真能
+ * Rust 函数长度门禁自检：把 `scripts/gates/check-rust-function-length.cjs` 当黑盒跑在临时工作区，验证它真能
  * 认出「超长函数」并**阻断**（硬闸）。规范：docs/standards/12-代码组织与文件结构.md §12.13；为什么需要：
  * 该门禁扫不到 Rust，`src-tauri/src/lib.rs` 的 `run()` 塞了近 300 行窗口 / 托盘 / 协议 / sidecar 编排，无机器信号（#536 P4）。
  */
@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
-  script: "check-rust-function-length.cjs",
+  script: "gates/check-rust-function-length.cjs",
   dirs: ["src-tauri/src"],
 });
 

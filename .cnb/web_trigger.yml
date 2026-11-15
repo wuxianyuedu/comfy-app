@@ -24,7 +24,7 @@
 # ⚠️ #3504 起这些按钮**都不在本机跑构建**：每条流水线的正文就是一格 `GA 派发·<档>`
 # （跑在平台池 Linux 容器上，把 master HEAD 派发到镜像仓 GitHub Actions 的对应
 # workflow）；实际构建全部由 GA runner 执行，档位 ⇄ workflow 文件的配对登记在
-# `scripts/ci-ga-trigger-map.mjs`（唯一出处，判据 import 它）。
+# `scripts/ci/ci-ga-trigger-map.mjs`（唯一出处，判据 import 它）。
 branch:
   - reg: ^master$
     buttons:
@@ -37,7 +37,7 @@ branch:
       # ── 单跑某一档（三个按钮各对 `.cnb.yml` 里一条流水线）────────────────
       # 每个按钮派发 GA 侧一个专用的 oneshot workflow（「最小前提 + 目标那一格」），
       # 共享格与每日档逐字同形（判据钉着），不是抄的第二份。档位 ⇄ workflow 文件的
-      # 配对登记在 `scripts/ci-ga-trigger-map.mjs`；按钮 ↔ 事件键的配对由判据双向核对
+      # 配对登记在 `scripts/ci/ci-ga-trigger-map.mjs`；按钮 ↔ 事件键的配对由判据双向核对
       # （这里写了按钮而配置没那个键 ⇒ 按下去什么都不跑；反过来 ⇒ 永远没人点）。
       # ⚠️ 单跑**不等于每日档出勤**：它证「这一档现在过不过」，不证「今天定时那一跑跑过了」
       # （那条区分见 ISSUE #2114）。

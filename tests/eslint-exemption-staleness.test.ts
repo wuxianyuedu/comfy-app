@@ -1,5 +1,5 @@
 /**
- * `scripts/check-eslint-exemptions.cjs` 用例（ISSUE #2607 第 3 条）：判 eslint 文件级豁免台账有无已不需要的豁免。
+ * `scripts/gates/check-eslint-exemptions.cjs` 用例（ISSUE #2607 第 3 条）：判 eslint 文件级豁免台账有无已不需要的豁免。
  * 最坏形态不是判错，而是「一条都没判」被读成「台账全陈旧」——取数全失败时脚本照样打「命中 0 处 / 0 份文件」。
  * #2777 PR-C 起取数改调 oxlint CLI，守它三处「没判成」：诊断无 `code`、`number_of_files` 不足应扫份数、CLI 起不来或输出不可解析。
  */
@@ -9,7 +9,7 @@ import path from "node:path";
 import { expect, test } from "vitest";
 
 const REAL_ROOT = path.resolve(__dirname, "..");
-const SCRIPT = path.join(REAL_ROOT, "scripts", "check-eslint-exemptions.cjs");
+const SCRIPT = path.join(REAL_ROOT, "scripts", "gates/check-eslint-exemptions.cjs");
 
 /** oxlint `--format json` 的输出形状（本文件只喂它自己造的读数，不依赖 CLI 的完整类型）。 */
 type FakeDiagnostic = {
@@ -24,7 +24,7 @@ type FakeOxlintRun = {
   status?: number | null;
 };
 
-/** 判据的导出面（与 `scripts/check-eslint-exemptions.cjs` 的 `module.exports` 对齐）。 */
+/** 判据的导出面（与 `scripts/gates/check-eslint-exemptions.cjs` 的 `module.exports` 对齐）。 */
 type JudgeModule = {
   FILE_LEVEL_EXEMPTIONS: Array<{ removalCriterion: string; ruleId: string }>;
   isGlobEntry: (entry: string) => boolean;

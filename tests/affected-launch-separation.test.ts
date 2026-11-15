@@ -12,16 +12,16 @@ import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
 import {
   planSeparatedLaunches,
   resolveAffectedSegment,
-} from "../scripts/affected-launch-segments.mjs";
-import { runChunk } from "../scripts/run-affected-tests.mjs";
+} from "../scripts/affected-tests/affected-launch-segments.mjs";
+import { runChunk } from "../scripts/affected-tests/run-affected-tests.mjs";
 import {
   BATCH_SORT_TIER,
   mergeTimingLedger,
   orderByKnownDuration,
   readTimingLedger,
   sortTier,
-} from "../scripts/affected-launch-duration-order.mjs";
-import { isNoiseLine } from "../scripts/affected-launch-noise-reporter.mjs";
+} from "../scripts/affected-tests/affected-launch-duration-order.mjs";
+import { isNoiseLine } from "../scripts/affected-tests/affected-launch-noise-reporter.mjs";
 import { isPlainRecord } from "../src/lib/is-record";
 
 /** 落盘台账的 JSON 形状：files 是一本 { ms, source } 字典。 */
@@ -310,7 +310,7 @@ describe("runChunk 透传 filterLine 到两遍 spawn", () => {
     dir = undefined;
   });
 
-  /** 与 `spawnVitest(entry, args, options)` 的形状对齐（scripts/affected-launch-spawn.mjs）。 */
+  /** 与 `spawnVitest(entry, args, options)` 的形状对齐（scripts/affected-tests/affected-launch-spawn.mjs）。 */
   type SpawnOpts = { filterLine?: (line: string) => boolean; timeoutMs?: number };
   type SpawnFn = (
     entry: string,

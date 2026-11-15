@@ -3,7 +3,7 @@
 # 触发链：cnb PR 流水线的**平台池镜像出口**（`.cnb.yml` 的 `pull_request`
 # 第二条「GitHub 镜像同步（平台池）」）把本跑 HEAD 推到本仓库的 `cnb-pr-<IID>`
 # 专属 ref，再派发 `repository_dispatch`（event_type 逐字配对
-# `scripts/ci-github-mirror-push.mjs` 的 `EVENT_TYPE`）；本 workflow 按**同一笔 sha**
+# `scripts/ci/ci-github-mirror-push.mjs` 的 `EVENT_TYPE`）；本 workflow 按**同一笔 sha**
 # 检出并跑判据 —— 两边判同一份树，读数才对得上账。
 # ISSUE #3418 起：自托管主列那格停用（出网不稳、判断推送成功半天出不来），
 # 推送与派发整个由平台池那条承担；本 workflow 的触发方式一字未变。
@@ -40,12 +40,12 @@ name: PR gate (mirror)
 # run-name 进 run 列表的 display_title：CNB 回读格按 `event=repository_dispatch`
 # 拉 run 后靠 display_title 里的 head_sha 认领本跑（`?head_sha=` 对 dispatch 触发的
 # run 失效 —— 那类 run 的 head_sha 落默认分支 HEAD，payload 的 sha 只在 client_payload）。
-# 字段名逐字对 `scripts/ci-github-mirror-push.mjs` 的 dispatchPayload（pr_number/head_sha）。
+# 字段名逐字对 `scripts/ci/ci-github-mirror-push.mjs` 的 dispatchPayload（pr_number/head_sha）。
 #
 # 标题（`pr_title`）排在中间、sha 留在**末尾且不截断**：认领靠整 sha 子串匹配，
 # 排版怎么变都动不到它。`pr_title` 缺席（老 payload / 平台标题读不到）时正中间那段
 # 是空串、尾随分隔符也不出现 ⇒ 渲染回老格式 `PR #号 · sha`，不是 `PR #号 ·  · sha`。
-# 标题由镜像格归一成单行并截到 160 字符（`scripts/ci-mirror-payload.mjs`），
+# 标题由镜像格归一成单行并截到 160 字符（`scripts/ci/ci-mirror-payload.mjs`），
 # 这里不做二次处理：run-name 总量上限 256，前缀 + 标题 + sha 最坏 ≈ 211。
 run-name: "PR #${{ github.event.client_payload.pr_number || 'manual' }} · ${{ github.event.client_payload.pr_title || '' }}${{ github.event.client_payload.pr_title && ' · ' }}${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}"
 
@@ -100,7 +100,7 @@ env:
   CI: "true"
   # 覆盖率 reporter 安静档（ISSUE #1959；逐文件明细在落盘的 lcov / json-summary 里）。
   COMFYAPP_QUIET_COVERAGE: "1"
-  # vitest 并发：默认由 `scripts/ci-load.mjs:resolveCiWorkers()` 按平台分档推导 ——
+  # vitest 并发：默认由 `scripts/ci/ci-load.mjs:resolveCiWorkers()` 按平台分档推导 ——
   # GA 托管 runner（`GITHUB_ACTIONS=true`，每个 job 独享 4 核 VM）走 `ceil(cores/2)` ⇒ 2；
   # CNB 自托管（共享宿主机）仍走 `ceil(cores/8)` ⇒ 16 核上 2，行为逐字不变。
   # 这里只接「人的覆盖出口」，**不写数**：仓库变量没设 ⇒ 展开成空串 ⇒ 走上面的默认；
@@ -146,52 +146,52 @@ jobs:
         # 「源分支没有超出 master 的提交」是派发形态本身 ⇒ 显式「不判」（exit 2，
         # 外壳 `ci-step-verdict.mjs` 只在标记出现时折成非红）。PR 形态不带这个旗标，
         # 判据照旧红。
-        run: node scripts/ci-step-verdict.mjs --label "分支守卫" --inconclusive-marker "[branch-guard] 结论：不判" -- node scripts/check-branch-guard.cjs --pr-check --target master ${{ github.event_name == 'workflow_dispatch' && '--manual-dispatch' || '' }}
+        run: node scripts/ci/ci-step-verdict.mjs --label "分支守卫" --inconclusive-marker "[branch-guard] 结论：不判" -- node scripts/gates/check-branch-guard.cjs --pr-check --target master ${{ github.event_name == 'workflow_dispatch' && '--manual-dispatch' || '' }}
 
       - name: 提交声明核对（cnb 同款判据一字不改）
         run: node scripts/premerge-check.mjs --only=claims
 
       - name: 标题行让位
-        run: node scripts/check-title-bar-clearance.cjs
+        run: node scripts/gates/check-title-bar-clearance.cjs
 
       - name: 文件结构硬规则
-        run: node scripts/check-file-structure.cjs
+        run: node scripts/gates/check-file-structure.cjs
 
       - name: 跨平台动作对照
-        run: node scripts/check-ps1-consistency.mjs
+        run: node scripts/gates/check-ps1-consistency.mjs
 
       - name: import 别名统一
-        run: node scripts/check-import-alias.cjs
+        run: node scripts/gates/check-import-alias.cjs
 
       - name: ComfyUI 端口口径
-        run: node scripts/check-comfyui-port-contract.cjs
+        run: node scripts/gates/check-comfyui-port-contract.cjs
 
       - name: 内联样式注入
-        run: node scripts/check-inline-style.cjs
+        run: node scripts/gates/check-inline-style.cjs
 
       - name: 跨文件重复块
-        run: node scripts/check-code-duplication.cjs
+        run: node scripts/gates/check-code-duplication.cjs
 
       - name: 函数长度 TS
-        run: node scripts/check-function-length.cjs
+        run: node scripts/gates/check-function-length.cjs
 
       - name: 函数长度 Rust
-        run: node scripts/check-rust-function-length.cjs
+        run: node scripts/gates/check-rust-function-length.cjs
 
       - name: 模块循环依赖
-        run: node scripts/check-circular-deps.cjs
+        run: node scripts/gates/check-circular-deps.cjs
 
       - name: 端口推导跨语言一致性
-        run: node scripts/check-app-port-vectors.cjs
+        run: node scripts/gates/check-app-port-vectors.cjs
 
       - name: CHANGELOG 碎片
-        run: node scripts/check-changelog-fragments.cjs
+        run: node scripts/gates/check-changelog-fragments.cjs
 
       - name: 主题色扫描
-        run: node scripts/check-theme-colors.cjs
+        run: node scripts/gates/check-theme-colors.cjs
 
       - name: UI/逻辑分离
-        run: node scripts/check-ui-logic-separation.cjs
+        run: node scripts/gates/check-ui-logic-separation.cjs
 
       - name: 失败时上传诊断产物
         if: failure()
@@ -234,7 +234,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: 同步数据库表结构（cnb 同款判据一字不改）
-        run: node scripts/db-push.mjs
+        run: node scripts/db/db-push.mjs
 
       - name: schema⇄迁移等价（cnb 同款判据一字不改）
         # 「版本化迁移 ⇄ `schema.ts`」这一格（ISSUE #1624 验收第 2 条）：
@@ -256,13 +256,13 @@ jobs:
         #
         # 判据本体一字未改（`tests/db-migrate-equivalence.test.ts` 是这件事的**唯一**
         # 判据，别为平台侧另写一份 —— §12.12 / §12.18）。
-        run: node scripts/ci-run-tool.mjs vitest run tests/db-migrate-equivalence.test.ts
+        run: node scripts/ci/ci-run-tool.mjs vitest run tests/db-migrate-equivalence.test.ts
 
       - name: 类型检查（cnb 同款判据一字不改）
-        run: node scripts/ci-run-tool.mjs tsc --noEmit
+        run: node scripts/ci/ci-run-tool.mjs tsc --noEmit
 
       - name: oxfmt 格式（cnb 同款判据一字不改；基线 = CNB_PULL_REQUEST_TARGET_SHA）
-        run: node scripts/check-format.cjs --changed
+        run: node scripts/gates/check-format.cjs --changed
 
       - name: oxfmt 格式（全量档：硬闸「未过 oxfmt 的文件一个都不许有」）
         # 与上一格互补，不是重复：`--changed` 判「这次 PR 带来的那一批」，这一格判全库
@@ -271,10 +271,10 @@ jobs:
         # `GLOBS` 都不进），新纳入的那些存量没有任何判决面。
         # 成本只有实测读数：本机全量档 3.5–4.8s（2107 份判据面，热缓存）。PR 档是
         # 合入前唯一的自动执行点 ⇒ 红在合入前、暴露窗口 0（不会先落主干再回补）。
-        run: node scripts/check-format.cjs
+        run: node scripts/gates/check-format.cjs
 
       - name: lib Node-only 声明（cnb 同款判据一字不改）
-        run: node scripts/ci-run-tool.mjs vitest run tests/lib-node-only-declarations.test.ts
+        run: node scripts/ci/ci-run-tool.mjs vitest run tests/lib-node-only-declarations.test.ts
 
       - name: 失败时上传诊断产物
         if: failure()
@@ -339,12 +339,12 @@ jobs:
       - name: 固定结构用例（cnb 同款判据一字不改）
         env:
           COMFY_AFFECTED_SEGMENT: fixed
-        run: node scripts/ci-step-verdict.mjs --label "固定结构用例" -- node scripts/ci-affected-tests.mjs
+        run: node scripts/ci/ci-step-verdict.mjs --label "固定结构用例" -- node scripts/ci/ci-affected-tests.mjs
 
       - name: 受影响用例（cnb 同款判据一字不改）
         env:
           COMFY_AFFECTED_SEGMENT: affected
-        run: node scripts/ci-step-verdict.mjs --label "受影响用例" -- node scripts/ci-affected-tests.mjs
+        run: node scripts/ci/ci-step-verdict.mjs --label "受影响用例" -- node scripts/ci/ci-affected-tests.mjs
 
       - name: 失败时上传诊断产物
         if: failure()
@@ -475,7 +475,7 @@ jobs:
       - name: 重档静态判据（cnb 同款判据一字不改）
         # 「没判」那一档（缺 CNB_COMMIT 等前提）由脚本自己打结论行，外壳据此折成非红；
         # 有红 / 有缺件不折，红照样红（ISSUE #3102）。
-        run: node scripts/ci-step-verdict.mjs --label "重档静态判据" --inconclusive-marker "[重档] 结论：没判" -- node scripts/ci-heavy-gates.mjs
+        run: node scripts/ci/ci-step-verdict.mjs --label "重档静态判据" --inconclusive-marker "[重档] 结论：没判" -- node scripts/ci/ci-heavy-gates.mjs
 
       - name: 失败时上传诊断产物
         if: failure()
@@ -539,7 +539,7 @@ jobs:
           CNB_PULL_REQUEST_IID: ${{ github.event.inputs.pr_number || github.event.client_payload.pr_number || '' }}
           CNB_PULL_REQUEST_MERGE_SHA: ${{ github.event.client_payload.cnb_merge_sha || '' }}
           GA_JOB_RESULTS: ${{ join(needs.*.result, ',') }}
-        run: node scripts/ci-ga-verdict-callback.mjs
+        run: node scripts/ci/ci-ga-verdict-callback.mjs
 
       # ISSUE #3437：把**失败 job 的日志正文**搬到 CNB 侧（站内），本地 `pnpm ship
       # --gh-logs` 优先从 CNB 读，判红时不必再出站 github.com —— 本单从头治的那一格。
@@ -587,4 +587,4 @@ jobs:
           # 自动档（repository_dispatch）没有这个 input ⇒ 空串 ⇒ scope=failed，#3437 原样。
           GA_LOG_SCOPE: ${{ github.event.inputs.relay_scope || '' }}
           GA_LOG_RUN_ID: ${{ github.event.inputs.run_id || '' }}
-        run: node scripts/ci-ga-logs-relay.mjs
+        run: node scripts/ci/ci-ga-logs-relay.mjs

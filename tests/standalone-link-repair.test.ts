@@ -355,7 +355,7 @@ describe("接线在位", () => {
     const order = [
       "next build",
       "scripts/standalone-link-repair.mjs",
-      "scripts/check-standalone-contents.cjs",
+      "scripts/gates/check-standalone-contents.cjs",
       "scripts/smoke-executor-host-standalone.mjs",
     ].map((s) => build.indexOf(s));
     for (const idx of order) {

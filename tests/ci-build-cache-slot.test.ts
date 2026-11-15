@@ -17,8 +17,8 @@ import {
   linkBuildCache,
   planBuildCache,
   withBuildCacheSlot,
-} from "../scripts/ci-build-cache-slot.mjs";
-import { resolveBuildCacheRoot } from "../scripts/ci-cache-slot.mjs";
+} from "../scripts/ci/ci-build-cache-slot.mjs";
+import { resolveBuildCacheRoot } from "../scripts/ci/ci-cache-slot.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
 const FACE = "a".repeat(64);

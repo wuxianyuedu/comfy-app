@@ -25,7 +25,7 @@
  *
  * ── 复用什么、不重写什么（§12.18 / 硬规则 27）───────────────────────────
  *
- *   · 说明符解析复用 `scripts/affected-tests.mjs` 的 `specifiersOf`（同一份
+ *   · 说明符解析复用 `scripts/affected-tests/affected-tests.mjs` 的 `specifiersOf`（同一份
  *     TypeScript 预处理扫描器、同一套别名与相对路径口径）；
  *   · glob → 正则复用 `scripts/vitest-projects.cjs` 的 `globToRe`；
  *   · tsconfig 展开复用 TypeScript 自己的 API —— 那正是 typedoc 走的那一条。
@@ -44,7 +44,7 @@ import { createRequire } from "node:module";
 
 import ts from "typescript";
 
-import { specifiersOf } from "./affected-tests.mjs";
+import { specifiersOf } from "./affected-tests/affected-tests.mjs";
 
 /* glob → 正则**复用** `scripts/vitest-projects.cjs` 已导出的那一份（同一套 `**` /
  * `*` / `{a,b}` 口径，且带 `^…$` 锚点）—— 不在本模块写第二套 glob 匹配。它是 CJS。 */

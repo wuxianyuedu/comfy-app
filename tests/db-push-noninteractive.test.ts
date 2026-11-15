@@ -1,7 +1,7 @@
 /**
  * 回归护栏：**Linux / CI 首次上手链路的两个静默失败**（ISSUE #489）。缺陷 2：`pnpm db:push` 无 TTY 时报
  * `Interactive prompts require a TTY terminal` 后 **exit 0**、`db.sqlite` 留成 **0 字节** —— 调用方看到「成功」、
- * `/` 与 `/api/health` 都 200，只有业务路由 500。契约：① 走 `scripts/db-push.mjs`（`--force` 复核有无表）；② `.mjs`/`.ts` 探测同源。
+ * `/` 与 `/api/health` 都 200，只有业务路由 500。契约：① 走 `scripts/db/db-push.mjs`（`--force` 复核有无表）；② `.mjs`/`.ts` 探测同源。
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -57,16 +57,19 @@ function packageScripts(): Record<string, string> {
 }
 
 describe("pnpm db:push 非交互可用", () => {
-  it("package.json 的 db:push 经 scripts/db-push.mjs，而不是裸 drizzle-kit push", () => {
+  it("package.json 的 db:push 经 scripts/db/db-push.mjs，而不是裸 drizzle-kit push", () => {
     const scripts = packageScripts();
     // 裸 `drizzle-kit push` 在无 TTY 上「报错 + exit 0 + 留空库」，是本条缺陷的形态。
-    expect(scripts["db:push"]).toBe("node scripts/db-push.mjs");
+    expect(scripts["db:push"]).toBe("node scripts/db/db-push.mjs");
     expect(scripts["db:push"]).not.toContain("drizzle-kit");
   });
 
   it("以 --force 运行 drizzle-kit，且判定依据不是它的退出码", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "scripts", "db-push.mjs"), "utf8");
-    const core = fs.readFileSync(path.join(process.cwd(), "scripts", "db-push-core.mjs"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "scripts", "db/db-push.mjs"), "utf8");
+    const core = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "db/db-push-core.mjs"),
+      "utf8",
+    );
     /* `--force` 与「命令起没起来 / 跑完落没落地」的判据自 2026-09-20 起收在
      * db-push-core.mjs：`pnpm db:push`（force: true）与启动链路的按需同步
      * （force: false）共用它 —— 两处各判一次必然分叉。 */
@@ -83,7 +86,7 @@ describe("pnpm db:push 非交互可用", () => {
     // 指向一个不存在的目录 → drizzle-kit 建不了库，脚本必须失败退出。
     const result = spawnSync(
       process.execPath,
-      [path.join(process.cwd(), "scripts", "db-push.mjs")],
+      [path.join(process.cwd(), "scripts", "db/db-push.mjs")],
       {
         cwd: process.cwd(),
         encoding: "utf8",
@@ -100,14 +103,14 @@ describe("pnpm db:push 非交互可用", () => {
   }, 150_000);
 
   it("认不出的旗标 ⇒ 非零退出，且**一个字节都没往库里写**（ISSUE #1956）", () => {
-    /* 立案现场：这个入口不解析 argv，于是 `node scripts/db-push.mjs --dry-run`
+    /* 立案现场：这个入口不解析 argv，于是 `node scripts/db/db-push.mjs --dry-run`
      * 被当成「没有参数的那次调用」照跑 —— 而它默认动的是 `push --force`（真写库、
      * 自动批准会丢数据的语句）。实测那一跑落了库，只因为那批里唯一的 DROP 恰好
      * 打在一张 0 行的表上才没造成损失；方向不该由「恰好表是空的」来兜。
      * 破坏性入口遇到不认识的旗标，唯一不猜的答复是不作动。 */
     const result = spawnSync(
       process.execPath,
-      [path.join(process.cwd(), "scripts", "db-push.mjs"), "--dry-run"],
+      [path.join(process.cwd(), "scripts", "db/db-push.mjs"), "--dry-run"],
       {
         cwd: process.cwd(),
         encoding: "utf8",
@@ -134,7 +137,7 @@ describe("db:push 的空转档：库已经是这一版 schema 建的就不再起
    * ⇒ 交给 drizzle 说；判据失效（库不在 / 读不到指纹 / 读不到 schema 源）⇒「拿不到结论」不是「已一致」。
    */
   it("库里登记的指纹与源码一致 ⇒ synced（空转档的判据）", async () => {
-    const state = await import("../scripts/db-schema-state.mjs");
+    const state = await import("../scripts/db/db-schema-state.mjs");
     const url = `file:${dbFile}`;
     /* 造一份「schema 源目录」：指纹算的是那份目录里 .ts 的内容哈希，与仓库
      * 自己的 src/server/db 无关，所以这里能用最小夹具把两侧对齐。 */
@@ -157,7 +160,7 @@ describe("db:push 的空转档：库已经是这一版 schema 建的就不再起
   });
 
   it("库不在 / 空库 / 读不到 schema 源 ⇒ 都是 unknown（不据此跳过）", async () => {
-    const state = await import("../scripts/db-schema-state.mjs");
+    const state = await import("../scripts/db/db-schema-state.mjs");
     const url = `file:${dbFile}`;
     // 库文件都不在
     expect(state.probeSchemaFresh(tmp, url).state).toBe("unknown");
@@ -171,7 +174,7 @@ describe("db:push 的空转档：库已经是这一版 schema 建的就不再起
   });
 
   it("db-push 的入口用的是共享判据（不是在本文件里另判一次指纹）", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "scripts", "db-push.mjs"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "scripts", "db/db-push.mjs"), "utf8");
     expect(src).toContain("probeSchemaFresh");
     expect(src).toContain('fresh.state === "synced"');
     // 判据失效时不许跳：只认 "synced" 这一档（写成 `!== "outdated"` 会把 unknown 也放过）。
@@ -180,8 +183,8 @@ describe("db:push 的空转档：库已经是这一版 schema 建的就不再起
 });
 
 describe("探测判据跨实现同源", () => {
-  it("scripts/db-schema-state.mjs 与 src/lib/db-schema-ready.ts 认同一张哨兵表", async () => {
-    const mjs = await import("../scripts/db-schema-state.mjs");
+  it("scripts/db/db-schema-state.mjs 与 src/lib/db-schema-ready.ts 认同一张哨兵表", async () => {
+    const mjs = await import("../scripts/db/db-schema-state.mjs");
     const ts = await import("../src/lib/db-schema-ready");
     const tsSrc = fs.readFileSync(
       path.join(process.cwd(), "src", "lib", "db-schema-ready.ts"),
@@ -200,7 +203,7 @@ describe("探测判据跨实现同源", () => {
   });
 
   it("同一批真实库状态下，两份实现给出同一结论", async () => {
-    const mjs = await import("../scripts/db-schema-state.mjs");
+    const mjs = await import("../scripts/db/db-schema-state.mjs");
     const ts = await import("../src/lib/db-schema-ready");
 
     // 状态一：库文件不存在
@@ -239,14 +242,14 @@ describe("构建期缺 DATABASE_URL 不得把构建打死", () => {
   });
 
   it("db-push 与 db.ts 认同一套默认库文件锚点", () => {
-    const pushSrc = fs.readFileSync(path.join(process.cwd(), "scripts", "db-push.mjs"), "utf8");
+    const pushSrc = fs.readFileSync(path.join(process.cwd(), "scripts", "db/db-push.mjs"), "utf8");
     const dbSrc = fs.readFileSync(path.join(process.cwd(), "src", "server", "db.ts"), "utf8");
     /* 默认锚点（`file:./db.sqlite`）的**唯一实现**在 `db-schema-state.mjs` 的 `resolveSqlitePath` ——
        `db-push.mjs` 与 `db-migrate.mjs` 都 import 它。此前断言「`db-push.mjs` 源码里含这个字面量」是在钉
        实现位置而非意图：锚点一经收口（ISSUE #1624 收掉一份逐字重复的 `resolveDbPath`）这条就红了，而两处
        仍认同一个锚点。改成按意图断言：① 共享实现里有字面量；② 两入口都 import；③ TS 侧默认值逐字相同。 */
     const stateSrc = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "db-schema-state.mjs"),
+      path.join(process.cwd(), "scripts", "db/db-schema-state.mjs"),
       "utf8",
     );
     expect(stateSrc).toContain('"file:./db.sqlite"');
@@ -263,7 +266,7 @@ describe("spawn 失败原因的两种形状都念得出来（ISSUE #2724）", ()
    * 「起 pnpm 失败（…）」那一行都必须说出原因 —— 此前串形状读 `.code` 双双
    * 兜底成 UNKNOWN。判据打在渲染出的那一行上（ISSUE #2660 的口径）。 */
   it("error 为串（spawnSettled 形状）⇒ 原文出现，不降级成 UNKNOWN", async () => {
-    const { pushSchema, describeSpawnFailure } = await import("../scripts/db-push-core.mjs");
+    const { pushSchema, describeSpawnFailure } = await import("../scripts/db/db-push-core.mjs");
     const result = pushSchema(process.cwd(), {
       run: () => ({ status: null, stdout: "", stderr: "", error: "ENOENT" }),
     });
@@ -272,7 +275,7 @@ describe("spawn 失败原因的两种形状都念得出来（ISSUE #2724）", ()
   });
 
   it("error 为 ErrnoException 形状 ⇒ 仍读 .code", async () => {
-    const { pushSchema, describeSpawnFailure } = await import("../scripts/db-push-core.mjs");
+    const { pushSchema, describeSpawnFailure } = await import("../scripts/db/db-push-core.mjs");
     const err = Object.assign(new Error("spawn pnpm ENOENT"), {
       code: "ENOENT",
     });

@@ -1,5 +1,5 @@
 /**
- * `scripts/check-daily-attendance.mjs` 的判据面（ISSUE #2114，§13.5.23）：结论必须跟着读数走，不是「配置里有这格」；
+ * `scripts/gates/check-daily-attendance.mjs` 的判据面（ISSUE #2114，§13.5.23）：结论必须跟着读数走，不是「配置里有这格」；
  * 三档重档的唯一执行者是平台每日那一跑，而五派发零跑完的四天里账面全绿。不碰网络（§13.5.13），用注入读数：
  * 绿派发 = 出勤、超窗 = 缺勤、被取消落 2 不落 1（那跑没验证过产物）；按 `crontab:` 前缀认派发（时刻会漂，PR/push/单跑不算）。
  */
@@ -23,7 +23,7 @@ import {
   main,
   pickDailySubject,
   readOffline,
-} from "../scripts/check-daily-attendance.mjs";
+} from "../scripts/gates/check-daily-attendance.mjs";
 
 /**
  * 外来值（子进程 stdout 的 JSON / 平台列表原样）一律先落 `unknown`：
@@ -34,7 +34,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const SCRIPT = path.join(ROOT, "scripts/check-daily-attendance.mjs");
+const SCRIPT = path.join(ROOT, "scripts/gates/check-daily-attendance.mjs");
 
 /** 2026-10-23 00:00 那一跑的真形状（第一次 `0 0` 派发，11 格全 success）。 */
 const GREEN_STAGES = [

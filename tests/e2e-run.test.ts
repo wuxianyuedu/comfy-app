@@ -20,18 +20,18 @@ import {
   spawnFailureLine,
   shouldRecord,
   stripArgvSeparator,
-} from "../scripts/e2e-run.mjs";
+} from "../scripts/e2e/e2e-run.mjs";
 /* schema 预检那三张卡在 #1956 这一批里从 `e2e-run.mjs` 拆到了
  * `e2e-schema-preflight.mjs`（R5 的 900 行硬闸，出口只有按职责拆）。判据直接指着
  * 定义它们的那一份，不跟着走「转出去再用」的路 —— 多一层转发就多一处「改了实现
  * 忘了改出口」的缝。 */
-import { canAutoApply, pendingStatements, pushBlockedByTty } from "../scripts/db-push-core.mjs";
+import { canAutoApply, pendingStatements, pushBlockedByTty } from "../scripts/db/db-push-core.mjs";
 import {
   checkSchemaBeforeRun,
   dryRunConcluded,
   ensureSchemaBeforeRun,
   schemaPreflightDecision,
-} from "../scripts/e2e-schema-preflight.mjs";
+} from "../scripts/e2e/e2e-schema-preflight.mjs";
 import {
   FRESHNESS_TRACKS,
   freshnessRecord,
@@ -39,8 +39,8 @@ import {
   freshnessTrack,
   isSameLocalDay,
   readFreshnessLedgerAt,
-} from "../scripts/freshness-ledger.mjs";
-import { runGate } from "../scripts/freshness-gate.mjs";
+} from "../scripts/freshness/freshness-ledger.mjs";
+import { runGate } from "../scripts/freshness/freshness-gate.mjs";
 import { isRecord } from "~/lib/is-record";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -353,10 +353,10 @@ describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
      * 由 `tests/no-platform-ci-config.test.ts` 判 —— 两侧合起来才是「本地不拦」这句豁免
      * 的完整前提；少任何一侧，「不拦」都会变成「谁都不跑」。 */
     expect(freshnessTrack("e2e").ciStage).toBe("每日全量E2E");
-    expect(freshnessTrack("e2e").skipHow).toBe('node scripts/e2e-run.mjs --skip "<理由>"');
+    expect(freshnessTrack("e2e").skipHow).toBe('node scripts/e2e/e2e-run.mjs --skip "<理由>"');
     // e2e 现在也吃输入面（钩子重构 4），于是它也有「这次改动不吃这一档」那条出路。
     expect(freshnessTrack("e2e").dirty.length).toBeGreaterThan(0);
-    expect(freshnessTrack("e2e").dirtyHow).toBe('node scripts/e2e-run.mjs --dirty "<理由>"');
+    expect(freshnessTrack("e2e").dirtyHow).toBe('node scripts/e2e/e2e-run.mjs --dirty "<理由>"');
     /* 三档**都**要有出路：没有 `skipHow` / `dirtyHow` 就等于拦人而指不出退路，
      * 而下一个人做的事会是 `--no-verify`（§13.5.4 那条边界）。逐档一起判，
      * 只有一侧变了就说明「同形」这句话已经不成立了。 */
@@ -590,7 +590,7 @@ describe("全量 e2e 的自证账（ISSUE #1282 立「每天首次」→ 钩子�
      * —— 出路少一条不会红，只会让人在钩子里被拦之后自己去找命令（那就是 §13.5.12
      * 那一族：判据在场、没人敲）。顺手钉住「出路先于起跑」：给了出路还去起 webServer，
      * 既白付十几分钟，又会把「不跑」那一条账记成跑绿的。 */
-    const src = readText("scripts/e2e-run.mjs");
+    const src = readText("scripts/e2e/e2e-run.mjs");
     const loopAt = src.indexOf('["--skip", "--dirty"]');
     expect(loopAt, "main 里那两条出路只剩一条了？").toBeGreaterThan(-1);
     const launchAt = src.indexOf("= planRun(");
@@ -615,9 +615,9 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     const parsed: unknown = JSON.parse(readText("package.json"));
     const scripts = isRecord(parsed) && isRecord(parsed.scripts) ? parsed.scripts : undefined;
     /* 按**入口**判而不是按命令长得像什么：`playwright test` 与
-     * `node scripts/e2e-run.mjs` 都能跑出同样的用例，只有后者会记账 ——
+     * `node scripts/e2e/e2e-run.mjs` 都能跑出同样的用例，只有后者会记账 ——
      * 而「账上有没有日期」正是这一档存在的全部意义。 */
-    expect(scripts?.["test:e2e"]).toContain("scripts/e2e-run.mjs");
+    expect(scripts?.["test:e2e"]).toContain("scripts/e2e/e2e-run.mjs");
     expect(scripts?.["test:e2e:dry"]).toContain("--dry-run");
   });
 
@@ -627,8 +627,8 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     const steps = [
       ...readText(".githooks/pre-commit").matchAll(/^ {2}run "(?<label>[^"]+)" (?<cmd>.+)$/gm),
     ].map((m) => ({ label: m.groups?.label ?? "", cmd: m.groups?.cmd ?? "" }));
-    const hit = steps.find((s) => s.cmd.includes("scripts/freshness-gate.mjs"));
-    expect(hit?.cmd).toBe("node scripts/freshness-gate.mjs");
+    const hit = steps.find((s) => s.cmd.includes("scripts/freshness/freshness-gate.mjs"));
+    expect(hit?.cmd).toBe("node scripts/freshness/freshness-gate.mjs");
     // 标签要能让人从这一行读出「判的是哪几档」—— 只写其中一档时，
     // 另一档红出来会被读成别人的事。
     expect(hit?.label).toContain("e2e");
@@ -637,7 +637,7 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
   it("账文件真的读同一个落点（读接口与登记表同源）", () => {
     const live = readFreshnessLedgerAt(ROOT, TRACK.ledger);
     expect(Object.keys(live)).toContain(TRACK.key);
-    // 这份记录是**真跑**过的（本轮的 `node scripts/e2e-run.mjs`），不是手写的一行。
+    // 这份记录是**真跑**过的（本轮的 `node scripts/e2e/e2e-run.mjs`），不是手写的一行。
     /* 索引值用运行时守卫收窄，不走 `as` 断言（B5 清账）。 */
     const entry: unknown = live[TRACK.key];
     const rec: Record<string, unknown> | undefined = isRecord(entry) ? entry : undefined;
@@ -865,7 +865,7 @@ describe("起 Playwright 的那一跳：不缓存输出（ISSUE #1998）", () =>
     /* 按**调用形态**判而不是按字面：要拦的形态是「某一行里真的调了 spawnSync」，
      * 而函数头注里那句来历（`` * ## 为什么不是 `spawnSync(process.execPath, …)``` ）
      * 与 `--dry-run` 的用法说明都会被字面判据误伤。 */
-    const src = readText("scripts/e2e-run.mjs");
+    const src = readText("scripts/e2e/e2e-run.mjs");
     expect(src).toContain("await runChild(invocation)");
     const calls = src
       .split("\n")

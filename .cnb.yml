@@ -28,7 +28,7 @@
 #    见规范 §13.5.3.4.1.6。
 #    所以本仓的形态只有一档：**整条宿主机直跑，一格都不写 `image:`**。
 #    判据在 `tests/ci-image-identity.test.ts`：进容器的 stage 名单必须是**空**的
-#    —— 多一格就红，理由写在 `scripts/ci-image-identity.mjs` 的头注。
+#    —— 多一格就红，理由写在 `scripts/ci/ci-image-identity.mjs` 的头注。
 #    （官方 `build-node.md` 只写了「`pipeline.docker.image` 等不会生效」,
 #    `script-vs-plugin.md` 讲的是平台池那种形态；两句都真，只是它们**不构成**
 #    「任务级 image 在这条路上可用」的推论。）
@@ -79,12 +79,12 @@
 #    所以「机器侧改一处全好」这条路**不成立**（已经改过、也重启过，读数说没用）。
 #    仓库侧只剩一条：**让每个字节以 CP936 出口**（逐 stage 转码）。本 stage 第 4 行探针
 #    就是用来一次定死这件事的（直接以 CP936 字节写 stdout）。
-#    `scripts/ci-console-encoding.mjs` 头注与规范 §13.5.3.5 记着读数与判读。
+#    `scripts/ci/ci-console-encoding.mjs` 头注与规范 §13.5.3.5 记着读数与判读。
 #
 #    ⚠️⚠️ **那条出路已经有执行者了**：每个 stage 的命令
-#    现在都包在 `scripts/ci-cp936-exit.mjs` 外面 ——
+#    现在都包在 `scripts/ci/ci-cp936-exit.mjs` 外面 ——
 #
-#      node scripts/ci-cp936-exit.mjs -- <真命令>
+#      node scripts/ci/ci-cp936-exit.mjs -- <真命令>
 #
 #    它起那条命令、把输出交给 PowerShell **按 936 重发**、再把退出码原样转出去。
 #    两件事别搞混：**钉 65001 照旧要留**（它让 PS 把 Node 的 UTF-8 **读对**，是转码能
@@ -105,7 +105,7 @@
 #   master 合并复核 push（只复核「确实是 PR 合并进来的」，不重跑全套）
 #   GA 派发·每日档 / 单跑三档 / 桌包   web_trigger_* / api_trigger_*（#3504 起）
 #                    —— CNB 只作**触发入口**：把按下那一刻的 master HEAD 派发到 GA
-#                    的对应 workflow（`scripts/ci-ga-dispatch.mjs`），实际构建一格
+#                    的对应 workflow（`scripts/ci/ci-ga-dispatch.mjs`），实际构建一格
 #                    都不在本机跑。执行者全部在镜像仓：
 #                    `daily.yml`（每天 01:37 schedule + 手动口，口径见 §13.5.23）、
 #                    `oneshot-build.yml` / `oneshot-e2e.yml` / `oneshot-unit.yml`
@@ -212,7 +212,7 @@
   #      —— 在本仓这一档上那就是计费的平台池（头注第 5 条）。
   #
   # ⇒ 仓库侧实际能调的只有两件，且都已落地：**锁的粒度**（上面这一把 + 下面 `.lock-*`
-  #   那一族：「谁挡谁」）与**单条流水线内部的宽度**（`scripts/ci-load.mjs` 按现场核数
+  #   那一族：「谁挡谁」）与**单条流水线内部的宽度**（`scripts/ci/ci-load.mjs` 按现场核数
   #   折算 `--maxWorkers`，§13.5.21：「一条别把整台机占满」）。「整机同时最多 3 条、
   #   其余排队」差的那一格仍然空着 —— 要补就得在仓库侧自建一条全局车道
   # （平台不给队列原语），那是另一个决定，别在这一行偷偷实现。
@@ -307,7 +307,7 @@
     # **机器可读**地登记一次。
     #
     # 登记的值是**入口路径**（`scripts/xxx.cjs` / `tests/xxx.test.ts`），不是执行者自己的
-    # 定义 —— 判据 `scripts/check-gate-name-executors.mjs` 去执行面（复合档条目 / 固定清单
+    # 定义 —— 判据 `scripts/gates/check-gate-name-executors.mjs` 去执行面（复合档条目 / 固定清单
     # 用例 / 钩子步骤）核「这个路径真的会被跑」，**不抄第二份**（§12.12 / §12.18）。
     # 多个入口用 `|` 分隔；每一项形如 `名字=路径`。
     #
@@ -323,15 +323,15 @@
     #
     # `schema⇄迁移等价` 是**第四行**，形状与前两行**不同**：它的执行者**不在**复合格里，
     # 而是 GA `pr-gate.yml` 的 `typecheck-db-format` job 里那一步
-    # （`node scripts/ci-run-tool.mjs vitest run tests/db-migrate-equivalence.test.ts`）。
-    # ⇒ 判据 `scripts/check-gate-name-executors.mjs` 的**第四处执行面**（GA PR 门禁的
+    # （`node scripts/ci/ci-run-tool.mjs vitest run tests/db-migrate-equivalence.test.ts`）。
+    # ⇒ 判据 `scripts/gates/check-gate-name-executors.mjs` 的**第四处执行面**（GA PR 门禁的
     # `run:` 行）就是为它补的（ISSUE #3599）：另三面（复合档条目 / 固定清单用例 /
     # 钩子步骤）一处都不在 GA，指向 GA step 的入口路径会被误判成「没有执行者」。
     # 登记的**仍是入口路径**（那份用例文件），不是执行者自己的定义 —— 判据去执行面
     # 核那个指针，不抄第二份（§12.12 / §12.18）。
     COMFYAPP_CI_GATES_ELSEWHERE: >-
-      格式化提交分离=scripts/check-reformat-only.cjs,
-      零消费导出=scripts/check-dead-exports.cjs,
+      格式化提交分离=scripts/gates/check-reformat-only.cjs,
+      零消费导出=scripts/gates/check-dead-exports.cjs,
       schema⇄迁移等价=tests/db-migrate-equivalence.test.ts
     # 恢复动作照旧三步：`.gates` 里取消注释 → 名字挪回 `GATES` → 从本清单删掉。
     # `ESLint 零警告` 现在的落点：它是台上唯一真的会挂满预算的静态判据
@@ -340,7 +340,7 @@
     # 当初给恢复动作立的**两条条件**，到这一批都成立，逐条给出处：
     #
     # 当初给恢复动作立的**两条条件**均已成立，机制照旧有效：CP936 转码层
-    # （`scripts/ci-cp936-exit.mjs`）解决了平台日志中文不可读的那一跳；带这层的格
+    # （`scripts/ci/ci-cp936-exit.mjs`）解决了平台日志中文不可读的那一跳；带这层的格
     # （`ESLint 零警告` / `单元测试`）`script` 都带这层。`重档静态判据` 整格搬到 GA
     # （Linux runner，没有 CP936 这一层的问题），不再是这里的例子。
     # 后又随薄化整格搬到 GA `pr-gate.yml`（见 `.gates` 顶部归属表）。
@@ -414,7 +414,7 @@
     # anstyle 都读它 —— 挂上之后被聚合档**捕获后解析**的那份子进程输出会开始带色号，
     # 而 `lastLine()` / `looksSkipped()` / 90 字压缩三处都会把色号算进内容
     # （§13.5.29.1 那条边界写明的后果）。所以这枚只被本仓那一层认
-    # （`scripts/ci-log.mjs` 的 `colorEnabled()`），第三方读不到它 ⇒ 子进程那一路
+    # （`scripts/ci/ci-log.mjs` 的 `colorEnabled()`），第三方读不到它 ⇒ 子进程那一路
     # 天然仍是干净文本。
     #
     # 为什么写在这**一级**：它说的是「这台节点的日志页会渲染色号」，那是宿主的属性、
@@ -439,7 +439,7 @@
 # `ifModify`（CNB 官方语法手册 `zh/build/grammar.md` 的 `#stage-ifmodify`）：
 # 变更文件一个都不落在给定 glob 内 ⇒ 这一步不执行。它**支持 PR 触发的事件**
 # （官方原文：「PR 触发的事件，统计 PR 中的变更文件」），正是本流水线要跑的那一类。
-# 语义与本地钩子那一层（`scripts/gate-scan-read.cjs` 的 `skipUnlessStagedTouches()`）
+# 语义与本地钩子那一层（`scripts/gates/gate-scan-read.cjs` 的 `skipUnlessStagedTouches()`）
 # **逐字同义** —— 也就是说，平台侧终于和本地用同一套扫描面在说话。
 #
 # 两条安全边界（都是「宁可多跑」的方向）：
@@ -450,7 +450,7 @@
 # ⚠️ 还有**两种**收窄不在 `ifModify` 这一档（它们的前半是前提，跳不得）：
 #   · `安装依赖` 的**装的那一跳**（push / 单跑那几档；PR 档已不装）——
 #     依赖面（锁文件 / `package.json` / `pnpm-workspace.yaml` / `next.config.js`）一项都
-#     没碰就不装，判定在 `scripts/ci-install-deps.mjs`（`pnpm` 自证照旧每次都跑，
+#     没碰就不装，判定在 `scripts/ci/ci-install-deps.mjs`（`pnpm` 自证照旧每次都跑，
 #     判据见 §13.5.20）；
 #   · `oxfmt 格式` 的**扫描面** —— 判据面是「改动面 ∩ `GLOBS`」（`check-format.cjs`，
 #     `GLOBS` 含 mjs/cjs、改动面不过 `IGNORE_GLOBS`）。它整格在 GA 上跑，没有
@@ -461,15 +461,15 @@
 #     仍是触发面的唯一派生处（从 typedoc 的解析根派生），供判据自己的 `--staged` 档与
 #     元测试使用，不手抄第二份。
 #
-# ⚠️ **「哪几条被收窄了」只有一处出处**：`scripts/ci-incremental-gates.mjs` 的
+# ⚠️ **「哪几条被收窄了」只有一处出处**：`scripts/ci/ci-incremental-gates.mjs` 的
 # `INCREMENTAL_GATES`（每条都写着它守的是哪份脚本、为什么这条收窄安全）。
 # 两个方向都由 `tests/ci-incremental-gates.test.ts` 判（登记表里每条 ⇒ 配置里必须
 # 逐字带着那组 `ifModify`；配置里带 `ifModify` 的 ⇒ 必须在登记表里），
 # 该判据在固定清单里、每次提交都跑。**别在这里直接给一个 stage 加 `ifModify`** ——
 # 那会在两处各写一份「收窄名单」，而漂了之后「哪一份是真的」没有判据能回答。
-# 随手自查：`pnpm run check:ci-incremental`（= `node scripts/ci-incremental-gates.mjs --check`）。
+# 随手自查：`pnpm run check:ci-incremental`（= `node scripts/ci/ci-incremental-gates.mjs --check`）。
 #
-# 判定门槛（哪类能进登记表、哪类绝对不行）逐条写在 `scripts/ci-incremental-gates.mjs`
+# 判定门槛（哪类能进登记表、哪类绝对不行）逐条写在 `scripts/ci/ci-incremental-gates.mjs`
 # 的文件头；口径与边界见规范 §13.5.18。
 # ── 锁按**触发类**分：`push` / `daily` / 单跑三档各一把 ────────────────────────
 #
@@ -676,7 +676,7 @@
 # `unknown`，由既有 `decideAction()` 判「不构成结论 ⇒ 不写」，没有第二套判据。
 # 落点按「有没有人能收」分两档：`CNB_PULL_REQUEST_IID` 在场上 ⇒ 评论在那张 PR 下
 # （一条诉求一张单，不另开单）；认不出来 ⇒ 按格名去重建单。取舍与两种形状都在
-# `scripts/ci-pr-failure-issue.mjs` 头注里，这里不重抄。
+# `scripts/ci/ci-pr-failure-issue.mjs` 头注里，这里不重抄。
 #
 # ⚠️ **这两格必须留在 `endStages`**：它们的本职是「红也要跑」（平台 grammar：无论
 # stages 是否成功，endStages 都将执行），挪进主列就会被那一次红一起 skip 掉 ——
@@ -712,7 +712,7 @@
   #
   # 所以它只做三件事：把磁盘上真有什么（OS / 内核）与声明的身份一起打出来、
   # 把「标签没钉版本 / digest 拼错」写成读数、以及**没有标识时给出下一动作**。
-  # 逻辑在 `scripts/ci-image-identity.mjs` —— 不在配置里就地写 PowerShell，
+  # 逻辑在 `scripts/ci/ci-image-identity.mjs` —— 不在配置里就地写 PowerShell，
   # 理由与 `工具链自证` 逐字相同（配置里的逻辑一条判据都测不到它）。
   # ── `Python 可用性` / `Python 探针读数` 已经不在这一条上──
   #
@@ -738,7 +738,7 @@
   # 工具三套根共用一份 store 卷推导），`ci-slot-apply.mjs` 只是**槽锁与盘面原语**
   # （构建缓存槽建槽前互斥、盘够不够）。构建缓存槽自己仍在（`每日生产构建` /
   # 它的执行者已随 #3504 迁 GA（`daily.yml` / `oneshot-build.yml` 置
-  # `COMFY_CI_BUILD_CACHE=1`），机制见 `scripts/ci-build-cache-slot.mjs` 头注与
+  # `COMFY_CI_BUILD_CACHE=1`），机制见 `scripts/ci/ci-build-cache-slot.mjs` 头注与
   # 规范 §13.5.37。
   # ── GitHub 镜像同步（**停用**）──
   #
@@ -791,10 +791,10 @@
   #   # --await-hosted：先等托管机实验格的结果 —— refs 回读见本跑 HEAD 即
   #   # 跳过推送（托管机那条影子流水线已推送并派发，本格只落回执），预算
   #   # （HOSTED_AWAIT_BUDGET_MS 300s）到点没见才走下面的正常推送（兜底语义不变）。
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs --await-hosted
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci/ci-cp936-exit.mjs -- node scripts/ci/ci-github-mirror-push.mjs --await-hosted
   #   # 三跳 git 调用各自带超时：内容推送与回读共用一份 240s 墙钟预算（不再探活，
   #   # 预算从推送第一刀起算；至多 10 次、退避 5s→50s）、LFS 整档 60s（至多 5 次）——
-  #   # 同一份阶梯、两档窗口，常量与理由在 `scripts/ci-mirror-retry-policy.mjs` 与
+  #   # 同一份阶梯、两档窗口，常量与理由在 `scripts/ci/ci-mirror-retry-policy.mjs` 与
   #   # `ci-mirror-wire-budget.mjs`。没有限时就得吃 git 自己那个 21s 的 connect 超时，
   #   # 而那一形过去只被念成「令牌活不活」。
   #   # 15m 是外框（外框从 10m 抬）：最坏账 300s（等托管机）+ 240s（推送）+ 60s（回读）
@@ -825,7 +825,7 @@
   # 浏览器那一格复用 `ci-toolchain-browser.mjs` 的 `browserExecutableExists()` /
   # `playwrightReachabilityVerdicts()`（与 `浏览器安装` 同源 —— 打印与判据共用
   # 同一次结论，不造第二轮子）。
-  # 逻辑在 `scripts/ci-env-probe.mjs` —— **不在这里就地写 PowerShell**，理由与
+  # 逻辑在 `scripts/ci/ci-env-probe.mjs` —— **不在这里就地写 PowerShell**，理由与
   # `工具链自证` 逐字相同：配置里的逻辑一条判据都测不到它。
   # 代价几秒（浏览器那格最坏是 4 个候选 × 8s 的 HEAD 串行），它只 import `node:*`，
   # 因此在这一档（此后不再有安装格）排在任何长等待之前都能立刻给出结论。
@@ -882,7 +882,7 @@
   # 恢复动作：取消下面三行注释 → 名字挪回 `COMFYAPP_CI_GATES` → 从 `COMFYAPP_CI_DISABLED_GATES`
   # 删掉 → 删掉 `.daily-gates` 里的 `每日 ESLint 零警告` 与 `COMFYAPP_CI_DAILY_GATES` 里的名字。
   # - name: ESLint 零警告
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- pnpm run lint
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci/ci-cp936-exit.mjs -- pnpm run lint
   #   # 实测 114s（本机 8 核，热缓存）/ 256~274s（自托管节点）。而节点被压死时它
   #   # 挂到 **8640s**（2h24m）被 Job 上限掐掉 —— 那是节点被压死、这一步根本没在算。
   #   # 给 20m 是「量级余量」：真跑得完的形态差两个数量级，而卡死的形态 20m 就能
@@ -893,7 +893,7 @@
   #   timeout: 20m
   # ── 换了执行者的两格（原文以注释形态留着；执行者是 GA 的 `重档静态判据` job）──
   #
-  # 它们从来没有自己的 stage：判据本体是 `scripts/ci-heavy-gates.mjs` 里的条目
+  # 它们从来没有自己的 stage：判据本体是 `scripts/ci/ci-heavy-gates.mjs` 里的条目
   # （执行面 = 钩子注册表），原先由 PR 档的 `重档静态判据` 那一格跑；那一格
   # 整格搬到 `.github/workflows/pr-gate.yml` 的同名 job，这两条的档位随之 retired
   # （见 `GATE_TIER_LEDGER`）。原文留在这里有两个用处：
@@ -903,9 +903,9 @@
   #      「(无旗标)」那一形，认的就是这一行命令的形状 —— 删掉它，台账会报「这一形
   #      没人跑」，而真正的原因是**证明形状的那份原文被删了**。
   # - name: 格式化提交分离
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-reformat-only.cjs
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci/ci-cp936-exit.mjs -- node scripts/gates/check-reformat-only.cjs
   # - name: 零消费导出
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-dead-exports.cjs
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci/ci-cp936-exit.mjs -- node scripts/gates/check-dead-exports.cjs
   # ── 新鲜度账（**临时撤到每日档**；停用原文，别删）──
   #
   # 每日那一格叫 `每日新鲜度账`（`.daily-gates` 里），`script` 与这里**逐字相同**，
@@ -914,7 +914,7 @@
   # `COMFYAPP_CI_DISABLED_GATES` 删掉 → 删掉 `.daily-gates` 里的 `每日新鲜度账`
   # 与 `COMFYAPP_CI_DAILY_GATES` 里的名字。
   #   - name: 新鲜度账
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/freshness-gate.mjs
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci/ci-cp936-exit.mjs -- node scripts/freshness/freshness-gate.mjs
   #   # 秒级；给 5m 只是「卡死要早报」这条量级余量（判据本身远小于它，不需要更宽）。
   #   timeout: 5m
   # ── 测试（**临时停用**）──
@@ -934,7 +934,7 @@
   #   全量 vitest 只跑**一遍**（`test:coverage` 一次运行即产出覆盖率报告，
   #   判据强度不变，阈值仍由 vitest.config.ts 的目录阈值守着）。
   #
-  #   **并发由 `scripts/ci-load.mjs` 按**现场核数**算（规范 §13.5.21），
+  #   **并发由 `scripts/ci/ci-load.mjs` 按**现场核数**算（规范 §13.5.21），
   #   不是写死的 4，也不吃配置里那个 8**：这条件路径与本地跑不是同一种负载。
   #   ① 宿主机 16 逻辑核（无 docker、整机可用），vitest 若照默认铺开就有 ~15 个 worker；
   #   ② `--coverage` 给每个文件都加一层插桩（本机实测同样两文件 6.2s → 9.2s，约 +50% CPU）；
@@ -949,7 +949,7 @@
   #   ⚠️ **为什么不再写死 4**：`runner.cpus` 在自托管上是无效旋钮（官方文档原文见文件头
   #   第 2 条），平台也不给「同时跑几条」的旋钮 —— 那么配置里那个常数就与「这台机现在
   #   几个核」**没有任何联系**。节点换规格、或同一台机上多了第二条流水线时，它照旧按
-  #   16 核铺开，现场形态是「既不推进也不报错」。现在由 `scripts/ci-load.mjs` 从
+  #   16 核铺开，现场形态是「既不推进也不报错」。现在由 `scripts/ci/ci-load.mjs` 从
   #   `CNB_CPUS` 与 `os.availableParallelism()` 读现场核数、按「一个 worker 至少 8 核」
   #   折算（16 核 ⇒ 2 个 worker；档位从 4 抬到 8 的理由与三条边界见规范 §13.5.21，
   #   `受影响用例` 一格占整条流水线七成格时，这一档买的是「单条流水线
@@ -978,7 +978,7 @@
   #   （`pr-gate.yml` 的两个 job；读数与逐条理由见规范 §13.5.41、ISSUE #3662 出口 B）。
   #   恢复前提：平台能给这一格一条不与并行 PR 争抢的执行环境（那才是这条决定的边界，不是判据）。
   # - name: 单元测试
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/full-suite-run.mjs
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci/ci-cp936-exit.mjs -- node scripts/full-suite-run.mjs
   # 实测 827s（安静机器，755 文件全量绿）；本机 `--maxWorkers=4` 实测
   # 198s。而满载机器上它挂到 **8640s**（2h24m）才被掐掉，留下的
   # 只有 `timeout of 8640000ms exceeded` —— 一条失败原因都读不到。
@@ -1004,7 +1004,7 @@
   # 直接拦合（它不自己发明一红，只是如实报「判不了」，由承重链路拦下）。
   #
   # ⚠️ **45m 是上限，不是每次都该花完**。两种「等下去没有意义」的形态
-  # 各有自己的提前收工判据，都在 `scripts/ci-github-verdict-read.mjs` 里：
+  # 各有自己的提前收工判据，都在 `scripts/ci/ci-github-verdict-read.mjs` 里：
   #   ① **上游派发没发生**：镜像格把结论落在工作区的 `.comfy-ci/mirror-dispatch.json`
   #      （`writeDispatchState`）。推送 / LFS / 派发任意一跳失败 ⇒ 本跑永远不会有 run，
   #      回读格读到 `dispatched: false` 就**一秒不轮询**、exit 2 并把上游原因念出来
@@ -1054,7 +1054,7 @@
   # `--decision-out`：这一格只**读数 + 落盘**，退码恒 0 —— 判定交给后面最后一格。
   # 理由：CNB 的 stage 串行，这一格若直接退 1，后面「日志分块」那几格根本跑不到，
   # 而「判红」恰恰是最需要看日志的那一形。判定文件读不到 ⇒ 判定格退 2（fail-closed）。
-  # script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-verdict-read.mjs --decision-out .comfy-ci/tmp/github-verdict-logs/decision.json
+  # script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci/ci-cp936-exit.mjs -- node scripts/ci/ci-github-verdict-read.mjs --decision-out .comfy-ci/tmp/github-verdict-logs/decision.json
   # 包住 45m 轮询预算 + 进程开销；与 GitHub 侧最重格的外框同级。
   # timeout: 60m
   #
@@ -1080,13 +1080,13 @@
   # 这三格**不许变成必红**：清单读不到 / 这一块不存在 / 块文件缺失，都只各念一行、退 0；
   # 判决由最后一格退码，日志取不到不改变三态与退码（用例钉着）。
   # - name: 日志分块 1/3
-  # script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-print-log-chunk.mjs 1
+  # script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci/ci-cp936-exit.mjs -- node scripts/ci/ci-print-log-chunk.mjs 1
   # timeout: 2m
   # - name: 日志分块 2/3
-  # script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-print-log-chunk.mjs 2
+  # script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci/ci-cp936-exit.mjs -- node scripts/ci/ci-print-log-chunk.mjs 2
   # timeout: 2m
   # - name: 日志分块 3/3
-  # script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-print-log-chunk.mjs 3
+  # script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci/ci-cp936-exit.mjs -- node scripts/ci/ci-print-log-chunk.mjs 3
   # timeout: 2m
   #
   # ── 判决判定：**承重**。把回读格留下的 `decision.json` 换成流水线真退码。
@@ -1094,7 +1094,7 @@
   # 读不到 / 不是合法 JSON / 形状不对 ⇒ exit 2（判不了就拦合，fail-closed）；exit 1 ⇒ 拦合；
   # **只有**明确写着 exit 0 才放行 —— 与回读格那套三态一字不差，本格不做第二次判读。
   # - name: GitHub 判决判定
-  # script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-verdict-decide.mjs .comfy-ci/tmp/github-verdict-logs/decision.json
+  # script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci/ci-cp936-exit.mjs -- node scripts/ci/ci-github-verdict-decide.mjs .comfy-ci/tmp/github-verdict-logs/decision.json
   # timeout: 2m
   #
   # ── GA 回调结论回读：**承重**（§13.5.33）───────────────────
@@ -1121,7 +1121,7 @@
     # 平台池 Linux 容器（#3478）：PowerShell 前缀与 cp936 外壳都不许带 —— sh 会把
     # 前者拆碎当场退 127，后者在 Linux 上是直通的多余一层（契约由
     # no-platform-ci-config 的质量门禁段钉住）。
-    script: node scripts/ci-ga-verdict-readout.mjs
+    script: node scripts/ci/ci-ga-verdict-readout.mjs
     # 包住站内短轮询预算（脚本 DEFAULT_BUDGET_MS 70m = GA 最重 job 60m + 回调 5m +
     # 余量，对齐见 #3593；不变式由 ci-ga-verdict-readout.test.ts 现算 pr-gate.yml 钉住）
     # + 进程开销。旧 45m/60m 都会比 GA 的最坏路径先死 —— GA 正常跑满才回调时，
@@ -1143,7 +1143,7 @@
   #     判据一字未改，动的只有执行者（§13.5.17），口径与那条豁免的前提见 §11.8。
   #   · 它是这条线上仅有的两档**没有并发旋钮**的重档之一（另一档是全量单测）：
   #     `next build` 的 worker 数由构建器自己按机器定，`NODE_OPTIONS` 改的是内存不是并发
-  #     （§13.5.21）。而不同 PR 之间仍然会叠加（`scripts/ci-load.mjs` 文件头），
+  #     （§13.5.21）。而不同 PR 之间仍然会叠加（`scripts/ci/ci-load.mjs` 文件头），
   #     所以它在 PR 上的耗时是变量，**红了分不清是构建挂了还是机器被压死** ——
   #     §13.6.4 那一族在这条线上唯一的解法就是「别让两条流水线挤同一台机」。
   #
@@ -1240,7 +1240,7 @@
   #
   # 长期看，这一格最省事的一条仍然是「**把浏览器预装进节点的落点**」：装过一次之后
   # 它再也不碰网络（`环境前提` 会打一行「落点已有那一件」，那也是这一档现在的常态）。
-  # `scripts/ci-image-plan.mjs` 那份节点镜像计划里已经带着这一步。
+  # `scripts/ci/ci-image-plan.mjs` 那份节点镜像计划里已经带着这一步。
   #
   # ⚠️ **「怎样才允许写回去」也写在这里**，因为判据只能判形态、判不了那台机器：
   # 当天花板上出现「节点开了容器能力」这件事实（平台侧开、或换了台开了容器的机器），
@@ -1372,7 +1372,7 @@
   # 形态①），缺了它们这一条会在 01:00 以「找不到 next / 连不上库 / Executable doesn't
   # exist」的形态红 —— 而它一天只红这一次，等于当天没结论。
   #
-  # `node scripts/ci-daily-build.mjs` 就是 `artifact-run.mjs`（同一个判据、同一份记账）
+  # `node scripts/ci/ci-daily-build.mjs` 就是 `artifact-run.mjs`（同一个判据、同一份记账）
   # 外面一层**只属于定时那一跑**的壳：打事件身份、打一次工具链镜像读数、把退出码转出去。
   # 判据一个字都没在这里重写 —— 重写一遍得到的就是「两条产物链各自漂」（§12.12）。
   #
@@ -1420,7 +1420,7 @@ master:
       stages: *gates
       endStages:
         - name: PR 失败立案
-          script: node scripts/ci-pr-failure-issue.mjs --no-block
+          script: node scripts/ci/ci-pr-failure-issue.mjs --no-block
           # 5m：三次读命令（列表 / 逐格详情 / 逐格日志，后者最多三格）+ 一次写 + 一次回读。
           # 取不到读数时它**不重试也不写**，退 2 由话术说出来（形态理由见上方立案叙述块）。
           timeout: 5m
@@ -1471,7 +1471,7 @@ master:
         - https://cnb.cool/moon-read/GITHUB_MIRROR_TOKEN/-/blob/main/envs.yml
       stages:
         - name: GitHub 镜像同步
-          script: node scripts/ci-github-mirror-push.mjs
+          script: node scripts/ci/ci-github-mirror-push.mjs
           # 10m 外框包住最坏账（推送 240s + 回读 + LFS 60s）与冷启动余量；
           # 与自托管主列那格同一份重试预算（常量在 `ci-mirror-retry-policy.mjs`）。
           timeout: 10m
@@ -1528,11 +1528,11 @@ master:
       # `docker.build` 的 Dockerfile 预装（见 `.cnb/ci-image/Dockerfile`）。
       endStages:
         - name: push 失败立案
-          script: node scripts/ci-pr-failure-issue.mjs --no-block --lane push
+          script: node scripts/ci/ci-pr-failure-issue.mjs --no-block --lane push
           timeout: 5m
       stages:
         - name: GitHub master 镜像
-          script: node scripts/ci-github-mirror-push.mjs --master
+          script: node scripts/ci/ci-github-mirror-push.mjs --master
           # 10m 外框包住最坏账（推送 240s + 回读 + LFS 60s）与冷启动余量；
           # 与 PR 出口同一份重试预算（常量在 `ci-mirror-retry-policy.mjs`）。
           timeout: 10m
@@ -1544,7 +1544,7 @@ master:
   # 而同样的构建内容 GA 侧早有执行者：`daily.yml` / `package-desktop.yml` 的
   # schedule，与本批新增的 `oneshot-build.yml` / `oneshot-e2e.yml` / `oneshot-unit.yml`。
   # 现在每条触发口只剩**一个动作**：把按下那一刻的 master HEAD 派发到 GA 的对应
-  # workflow（`scripts/ci-ga-dispatch.mjs --preset <名>`）。实际构建一格都不在本机跑。
+  # workflow（`scripts/ci/ci-ga-dispatch.mjs --preset <名>`）。实际构建一格都不在本机跑。
   #
   # 形态与两条镜像出口同族（平台池 Linux 容器、自带 runner / docker / imports、
   # 不吃 `*common`、无 PowerShell 前缀与 cp936 外壳）：派发要出站 `api.github.com`，
@@ -1558,7 +1558,7 @@ master:
   # API 口的 `--branch` 也只认 master（镜像仓没有别的分支可派）——
   # 这是 #3504 的能力收敛：以前能在本机跑任意 CNB 分支，现在只有镜像跟得住的 master。
   #
-  # preset ⇄ workflow 的对应关系在 `scripts/ci-ga-trigger-map.mjs`（单一出处），
+  # preset ⇄ workflow 的对应关系在 `scripts/ci/ci-ga-trigger-map.mjs`（单一出处），
   # 由 `tests/ci-ga-trigger-map.test.ts` 双向核对：触发口的 `--preset` 必须在注册表里、
   # 注册表的 workflow 文件必须真实存在且带 `workflow_dispatch`。
   # 事件键名与流水线名一个都没改（`.cnb/web_trigger.yml` 的按钮、
@@ -1582,7 +1582,7 @@ master:
       lock: *lock_daily
       stages:
         - name: GA 派发·每日档
-          script: node scripts/ci-ga-dispatch.mjs --preset daily
+          script: node scripts/ci/ci-ga-dispatch.mjs --preset daily
           # 10m 外框包住等 sha 可见的默认预算（360s）与冷启动余量；与镜像出口同量级。
           timeout: 10m
 
@@ -1592,7 +1592,7 @@ master:
       lock: *lock_daily
       stages:
         - name: GA 派发·每日档
-          script: node scripts/ci-ga-dispatch.mjs --preset daily
+          script: node scripts/ci/ci-ga-dispatch.mjs --preset daily
           timeout: 10m
 
   # 单跑三档：粒度保留（只在 GA 侧各跑一档，不为另外几格付费），
@@ -1603,7 +1603,7 @@ master:
       lock: *lock_oneshot_build
       stages:
         - name: GA 派发·单跑生产构建
-          script: node scripts/ci-ga-dispatch.mjs --preset build
+          script: node scripts/ci/ci-ga-dispatch.mjs --preset build
           timeout: 10m
 
   web_trigger_e2e:
@@ -1612,7 +1612,7 @@ master:
       lock: *lock_oneshot_e2e
       stages:
         - name: GA 派发·单跑全量E2E
-          script: node scripts/ci-ga-dispatch.mjs --preset e2e
+          script: node scripts/ci/ci-ga-dispatch.mjs --preset e2e
           timeout: 10m
 
   web_trigger_unit:
@@ -1621,7 +1621,7 @@ master:
       lock: *lock_oneshot_unit
       stages:
         - name: GA 派发·单跑全量单测
-          script: node scripts/ci-ga-dispatch.mjs --preset unit
+          script: node scripts/ci/ci-ga-dispatch.mjs --preset unit
           timeout: 10m
 
   # 桌包那一档：成品落点随之换形 —— GA `package-desktop.yml` 产 artifact（14 天，
@@ -1631,7 +1631,7 @@ master:
   # 诉求在 CNB 侧提、包也该在 CNB 侧拿，GitHub 只是镜像仓；四类并列：安装版 / 免安装版 /
   # 纯壳单文件 ComfyAPP-shell.exe（只编壳不打包、放进检出根连本地 dev server）/ 以及
   # #3621 之后二进制 PUT 的分钟级墙钟与网络类重试。见 package-desktop.yml 收尾那格与
-  # scripts/ci-ga-desktop-relay.mjs 文件头（规范 §7.7 同批订正）。
+  # scripts/ci/ci-ga-desktop-relay.mjs 文件头（规范 §7.7 同批订正）。
   # `*package_fail_stage`（桌包失败立案）随本批退役：立案脚本的执行者与它的对象
   # （本机执行的桌包跑）一起消失；GA 桌包失败目前落在 GA run 页面（自动立案是后续账）。
   web_trigger_package:
@@ -1640,7 +1640,7 @@ master:
       lock: *lock_package
       stages:
         - name: GA 派发·桌面成品包
-          script: node scripts/ci-ga-dispatch.mjs --preset package
+          script: node scripts/ci/ci-ga-dispatch.mjs --preset package
           timeout: 10m
 
   api_trigger_package:
@@ -1649,7 +1649,7 @@ master:
       lock: *lock_package
       stages:
         - name: GA 派发·桌面成品包
-          script: node scripts/ci-ga-dispatch.mjs --preset package
+          script: node scripts/ci/ci-ga-dispatch.mjs --preset package
           timeout: 10m
 
   api_trigger_e2e:
@@ -1658,7 +1658,7 @@ master:
       lock: *lock_oneshot_e2e
       stages:
         - name: GA 派发·单跑全量E2E
-          script: node scripts/ci-ga-dispatch.mjs --preset e2e
+          script: node scripts/ci/ci-ga-dispatch.mjs --preset e2e
           timeout: 10m
 
   api_trigger_build:
@@ -1667,7 +1667,7 @@ master:
       lock: *lock_oneshot_build
       stages:
         - name: GA 派发·单跑生产构建
-          script: node scripts/ci-ga-dispatch.mjs --preset build
+          script: node scripts/ci/ci-ga-dispatch.mjs --preset build
           timeout: 10m
 
   api_trigger_unit:
@@ -1676,7 +1676,7 @@ master:
       lock: *lock_oneshot_unit
       stages:
         - name: GA 派发·单跑全量单测
-          script: node scripts/ci-ga-dispatch.mjs --preset unit
+          script: node scripts/ci/ci-ga-dispatch.mjs --preset unit
           timeout: 10m
   # ── ISSUE #3667：判绿时「有需要」也要能经 GA→CNB→本地 拿到日志 ──────────
   #
@@ -1696,7 +1696,7 @@ master:
       lock: *lock_ga_logs
       stages:
         - name: GA 派发·日志按需搬运
-          script: node scripts/ci-ga-logs-on-demand.mjs
+          script: node scripts/ci/ci-ga-logs-on-demand.mjs
           timeout: 10m
 
   # ── 这里曾有第四个 API 口：`api_trigger_formatfix`（已摘除）─────────
@@ -1741,15 +1741,15 @@ master:
   # `git.enable: false` 时工作区没有代码（绑预合并 sha 必须关检出 —— 不关的话
   # clone 服务只 fetch master，`checkout` 直接 `fatal: reference is not a tree`，
   # 探针实测过的死因）。配套脚本放在**发回调的 GA 侧**
-  # （`scripts/ci-ga-verdict-callback.mjs`）与只读对账入口
-  # （`scripts/ci-ga-verdict-placeholder.mjs`），不在这一档里跑。
+  # （`scripts/ci/ci-ga-verdict-callback.mjs`）与只读对账入口
+  # （`scripts/ci/ci-ga-verdict-placeholder.mjs`），不在这一档里跑。
   #
   # 三态（fail-closed）：`GA_VERDICT` 明确是绿词（success/neutral/skipped）
   # ⇒ exit 0；是红词或缺席 ⇒ exit 1；`GA_ROLE` 不是 callback ⇒ exit 2
   # （没判过 ≠ 判过）。
   #
   # **日志身份读数**：`env` 里除 `GA_VERDICT` / `GA_ROLE` / `GA_PR_NUMBER` 外，
-  # `scripts/ci-ga-verdict-callback.mjs` 还带 `GA_CALLBACK_SHA=<预合并 sha>` ——
+  # `scripts/ci/ci-ga-verdict-callback.mjs` 还带 `GA_CALLBACK_SHA=<预合并 sha>` ——
   # 这条短 build 绑的是哪笔，CNB 侧日志自己念得出来，不必跳去 GA run 页面翻。
   # `CNB_COMMIT` 一并打印作交叉核对：文档没给 `api_trigger*` 事件的取值保证，
   # 两者不一致时以 `GA_CALLBACK_SHA` 为准并明写 `mismatch`，别把绑错的 sha

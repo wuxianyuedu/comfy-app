@@ -83,7 +83,7 @@ function parseReport(output: string): FreshnessReport {
 }
 
 const { test, expect } = defineGateRepo({
-  script: "check-deps-freshness.mjs",
+  script: "gates/check-deps-freshness.mjs",
   workdir: "deps-freshness-gate",
   // 判据 import 了 lockfile / launcher-core 的同级模块，得一并拷进工作区。
   copy: [

@@ -42,25 +42,25 @@ import path from "node:path";
 import process from "node:process";
 import { performance } from "node:perf_hooks";
 
-import { parseRange } from "./reformat-scan-core.mjs";
+import { parseRange } from "./reformat/reformat-scan-core.mjs";
 
 /** 默认验证批 —— 每一步都是**既有执行者**，本工具只编排 + 计时（§12.20）。
  *  顺序按「便宜在前、最贵收尾」，读的人先看到快的都绿了。 */
 const DEFAULT_STEPS = [
-  { label: "文件结构硬规则", argv: ["node", "scripts/check-file-structure.cjs"] },
+  { label: "文件结构硬规则", argv: ["node", "scripts/gates/check-file-structure.cjs"] },
   {
     label: "infra 尺寸（scripts+tools ≤900 行）",
-    argv: ["node", "scripts/check-infra-file-size.cjs"],
+    argv: ["node", "scripts/gates/check-infra-file-size.cjs"],
   },
-  { label: "函数长度", argv: ["node", "scripts/check-function-length.cjs"] },
-  { label: "changelog 碎片形态", argv: ["node", "scripts/check-changelog-fragments.cjs"] },
-  { label: "CP936 字形登记", argv: ["node", "scripts/check-cp936-glyphs.cjs"] },
-  { label: "已清零 oxlint 规则集", argv: ["node", "scripts/check-oxlint-zero-rules.mjs"] },
+  { label: "函数长度", argv: ["node", "scripts/gates/check-function-length.cjs"] },
+  { label: "changelog 碎片形态", argv: ["node", "scripts/gates/check-changelog-fragments.cjs"] },
+  { label: "CP936 字形登记", argv: ["node", "scripts/gates/check-cp936-glyphs.cjs"] },
+  { label: "已清零 oxlint 规则集", argv: ["node", "scripts/gates/check-oxlint-zero-rules.mjs"] },
   {
     label: "脚本档类型检查（.mjs 全量面棘轮）",
-    argv: ["node", "scripts/check-scripts-typecheck.cjs"],
+    argv: ["node", "scripts/gates/check-scripts-typecheck.cjs"],
   },
-  { label: "文档引用与权威源一致", argv: ["node", "scripts/check-doc-references.cjs"] },
+  { label: "文档引用与权威源一致", argv: ["node", "scripts/gates/check-doc-references.cjs"] },
 ];
 
 /**

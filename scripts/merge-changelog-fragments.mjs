@@ -87,7 +87,7 @@ function readFragments() {
     if (!SECTIONS.includes(section)) {
       console.error(
         `[merge-changelog] 碎片 ${name} 首行不是段落标题(应为 ## Added / ## Fixed …)。` +
-          `先跑 node scripts/check-changelog-fragments.cjs 修好再并入。`,
+          `先跑 node scripts/gates/check-changelog-fragments.cjs 修好再并入。`,
       );
       process.exit(1);
     }

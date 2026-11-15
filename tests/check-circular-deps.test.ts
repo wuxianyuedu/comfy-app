@@ -1,5 +1,5 @@
 /**
- * 提交门槛自检：黑盒跑 `scripts/check-circular-deps.cjs`，验证「模块循环依赖」（§12.7，ISSUE #574）
+ * 提交门槛自检：黑盒跑 `scripts/gates/check-circular-deps.cjs`，验证「模块循环依赖」（§12.7，ISSUE #574）
  * 真的阻断提交，而不只是写在文档里。
  * 用子进程而非 import：pre-commit 以 `node scripts/xxx.cjs` 调用、脚本靠 `process.cwd()` 定位扫描根，复刻同一种调用才等价。
  */
@@ -13,12 +13,12 @@ import { defineGateRepo, describe } from "./helpers/gate-repo";
  * 提供；脚本落点选 `root`（脚本用 cwd，落哪都一样）。
  * 下面「真实仓库的状态」那组不搭临时仓库，直接对着源码仓库跑，所以这里
  * 仍然保留脚本的绝对路径。 */
-const SCRIPT = join(process.cwd(), "scripts", "check-circular-deps.cjs");
+const SCRIPT = join(process.cwd(), "scripts", "gates/check-circular-deps.cjs");
 /** 硬闸判据不该再有基线文件；这条路径只用于断言它**不存在**。 */
 const BASELINE = join(process.cwd(), "scripts", ".circular-deps-baseline.json");
 
 const { test, expect } = defineGateRepo({
-  script: "check-circular-deps.cjs",
+  script: "gates/check-circular-deps.cjs",
   dir: "root",
   dirs: ["src", "scripts"],
 });

@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
-  script: "check-click-keyboard.cjs",
+  script: "gates/check-click-keyboard.cjs",
   dirs: ["src"],
   /* 判据走 TS AST，要能解析 typescript —— 临时工作区旁边没有 node_modules，
    * 靠 NODE_PATH 指回源码仓库（脚本真的依赖这个输入，不是顺手给的口子）。 */

@@ -1,5 +1,5 @@
 /**
- * `scripts/gate-tier-summary.cjs` —— 降档收尾那几句话的判断面（ISSUE #2154）：唯一功能是不让「本地过了」被读成
+ * `scripts/gates/gate-tier-summary.cjs` —— 降档收尾那几句话的判断面（ISSUE #2154）：唯一功能是不让「本地过了」被读成
  * 「全套判据过了」（§13.5.25）。旧实现写死全集，`COMFY_HEAVY_GATES=1` 那一跑当场推翻自己（同族 #2145/#2149）。
  * 只判脚本收到名单后说的话：降档点名、跑了的不进「没跑」、挪去平台的不并入降档、标签只认钩子那份（变异验证）。
  */
@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const SCRIPT = path.join(ROOT, "scripts", "gate-tier-summary.cjs");
+const SCRIPT = path.join(ROOT, "scripts", "gates/gate-tier-summary.cjs");
 const HOOK = path.join(ROOT, ".githooks", "pre-commit");
 
 /** 跑一次脚本，返回 stdout 与退出码。 */

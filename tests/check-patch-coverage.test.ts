@@ -21,7 +21,7 @@ import {
   main,
   mergeLcovMaps,
   parseLcov,
-} from "../scripts/check-patch-coverage.mjs";
+} from "../scripts/gates/check-patch-coverage.mjs";
 
 const tmpDirs: Array<string> = [];
 afterEach(() => {

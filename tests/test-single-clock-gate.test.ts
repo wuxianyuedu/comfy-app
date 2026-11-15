@@ -6,7 +6,7 @@
 import { defineGateRepo } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
-  script: "check-test-single-clock.cjs",
+  script: "gates/check-test-single-clock.cjs",
   dirs: ["src", "tests"],
   workdir: "single-clock",
 });

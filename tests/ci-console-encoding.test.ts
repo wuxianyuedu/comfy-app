@@ -12,7 +12,7 @@ import {
   codePageIsUtf8,
   readConsoleEncoding,
   UTF8_CODE_PAGE,
-} from "../scripts/ci-console-encoding.mjs";
+} from "../scripts/ci/ci-console-encoding.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
@@ -152,7 +152,7 @@ describe("控制台输出编码：流水线上真的在纠它", () => {
   });
 
   it("纠编码脚本留盘（本地开发仍用），但配置里没有它的执行者", () => {
-    expect(read("scripts/ci-console-encoding.mjs").length, "脚本留盘").toBeGreaterThan(0);
+    expect(read("scripts/ci/ci-console-encoding.mjs").length, "脚本留盘").toBeGreaterThan(0);
     const code = read(".cnb.yml")
       .split("\n")
       .filter((l) => !l.trimStart().startsWith("#"))
@@ -174,7 +174,7 @@ describe("控制台输出编码：流水线上真的在纠它", () => {
   });
 
   it("「环境前提」把读数打出来（每一跑都能读到代码页，不靠人去猜）", () => {
-    const probe = read("scripts/ci-env-probe.mjs");
+    const probe = read("scripts/ci/ci-env-probe.mjs");
     expect(probe).toContain("readConsoleEncoding");
     expect(probe).toContain("codePageIsUtf8");
     /* 话术里必须给**下一动作**（与 §13.5.3.5.1「红了要红在能指路的位置」同口径）。 */

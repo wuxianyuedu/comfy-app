@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const SCRIPT = "scripts/check-oxlint-zero-rules.mjs";
+const SCRIPT = "scripts/gates/check-oxlint-zero-rules.mjs";
 
 /** 外来值是不是普通对象（数组不算）：本文件收窄 package.json 的入口。 */
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -159,7 +159,7 @@ describe("门槛接线", () => {
     const hook = readFileSync(".githooks/pre-commit", "utf8");
     const zeroRuleLines = hook
       .split("\n")
-      .filter((line) => line.includes("node scripts/check-oxlint-zero-rules.mjs"));
+      .filter((line) => line.includes("node scripts/gates/check-oxlint-zero-rules.mjs"));
     // D0 快检在提交时拦「这次带进来的新文件」；D 组全仓档继续由重档 / 推送前复算执行。
     expect(zeroRuleLines.some((line) => line.includes(" --staged"))).toBe(true);
     expect(zeroRuleLines.some((line) => !line.includes(" --staged"))).toBe(true);
@@ -172,7 +172,7 @@ describe("门槛接线", () => {
 
   it("pre-commit D 组有这条 run 行", () => {
     const hook = readFileSync(".githooks/pre-commit", "utf8");
-    expect(hook).toContain("node scripts/check-oxlint-zero-rules.mjs");
+    expect(hook).toContain("node scripts/gates/check-oxlint-zero-rules.mjs");
   });
 
   it("quality-gate.mjs 的 GATES 登记了这个门禁", () => {

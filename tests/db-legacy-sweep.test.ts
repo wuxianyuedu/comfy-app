@@ -1,5 +1,5 @@
 /**
- * 历史时间戳写法的一次性归一（`scripts/db-legacy-sweep.mjs`，ISSUE #1501）：`project` 表混着裸毫秒串与 ISO 串，写入侧早已只有 ISO，
+ * 历史时间戳写法的一次性归一（`scripts/db/db-legacy-sweep.mjs`，ISSUE #1501）：`project` 表混着裸毫秒串与 ISO 串，写入侧早已只有 ISO，
  * 所以前者是读进来就得挡的历史痕迹 —— 归一后读取侧只剩一条路径。三条判据各对应一种静默走偏：只认整串十进制（`Number(v)` 会认下 `" 12 "` / `"1e3"`）；
  * 解不出合法时间的值原样留着并报出来（不顺手抹平）；幂等：第二次跑是空操作（挂在 `pnpm db:push` 收尾，每次都会跑到）。
  */
@@ -9,7 +9,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { epochMsToIso, sweepLegacyTimestamps } from "../scripts/db-legacy-sweep.mjs";
+import { epochMsToIso, sweepLegacyTimestamps } from "../scripts/db/db-legacy-sweep.mjs";
 
 let tmp: string;
 let dbFile: string;

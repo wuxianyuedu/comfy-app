@@ -2,7 +2,7 @@
 
 // ── 「立即同步」按钮的动作侧（底部状态栏数据库过期那一格）
 // 视图层不得直接 fetch（规范 §17）：`POST /api/schema/push` 收在 hooks/，组件只拿
-// `push` / `pushing`。服务端 spawn `scripts/db-sync.mjs --force`，结果走状态文件 →
+// `push` / `pushing`。服务端 spawn `scripts/db/db-sync.mjs --force`，结果走状态文件 →
 // `GET /api/schema` 2s 轮询回到页面；本 hook 不管结果，只负责发起与在途态。
 
 import { useCallback, useEffect, useRef, useState } from "react";

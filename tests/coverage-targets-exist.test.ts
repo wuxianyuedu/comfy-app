@@ -18,7 +18,7 @@ function isFormatModule(value: unknown): value is FormatModule {
 
 const requiredFormat: unknown =
   // oxlint-disable-next-line typescript/no-require-imports
-  require("../scripts/check-format.cjs");
+  require("../scripts/gates/check-format.cjs");
 
 if (!isFormatModule(requiredFormat)) {
   throw new Error("check-format.cjs 的出口形状不对（缺 globToRegExp）");

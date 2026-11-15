@@ -77,7 +77,7 @@ const DOMAINS = [
    * `integrity_check` 验证、待恢复标记与换文件。它**不属于 `core`** ——
    * `core` 是仓储层（SQL 出口），本域是「库文件本身的生死」；也不属于
    * `drizzle-studio`（那是可视化工具的生命周期）。
-   * 真正的实现在 `scripts/db-backup-core.mjs`（启动链的纯 Node 宿主必须能引它），
+   * 真正的实现在 `scripts/db/db-backup-core.mjs`（启动链的纯 Node 宿主必须能引它），
    * 本目录只放服务端取用面与设置页的接线。 */
   "db-backup",
   "drizzle-studio",
@@ -280,7 +280,7 @@ const DOMAIN_EXEMPT = new Set([
   "src/lib/auth-server.ts",
   /* 产品版本号的**运行时读取面**（ISSUE #1611 阶段三 D7）：权威源是
    * `package.json` 的 `version`，而另外两处（`src-tauri/tauri.conf.json` /
-   * `src-tauri/Cargo.toml`）由 `scripts/check-app-version.cjs` 守着与它逐字相等。
+   * `src-tauri/Cargo.toml`）由 `scripts/gates/check-app-version.cjs` 守着与它逐字相等。
    * 消费方是**服务端**（`src/server/mcp/workshop-mcp.ts` 的 MCP `serverInfo.version`）
    * 与将来任何要显示产品版本的视图 —— 两侧都得能读它，且**浏览器图里不许出现
    * `process.env.npm_package_version`**（那个变量只在 `pnpm run` 起的进程里有值，
@@ -440,7 +440,7 @@ const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
  *      R7/R8 的第一层就扫在 `"."`）。按目录写成 `<dir>/**`，根目录写成
  *      `ROOT_SCRIPT_GLOBS`（**点名的扩展名**，不是 `*`：根目录里还有 README、
  *      配置、`.gitignore` 那些，它们一个都不参与 R7/R8 的判据）；
- *   ② 导出给 `scripts/ci-incremental-gates.mjs`，由那边的登记表原样用在
+ *   ② 导出给 `scripts/ci/ci-incremental-gates.mjs`，由那边的登记表原样用在
  *      `ifModify` 上 —— **别在 YAML 里手抄第二份**。
  *
  * ⚠️ 新增一条以别的目录为扫描根的规则时，同批回来加一行（这是 R 系列唯一会让

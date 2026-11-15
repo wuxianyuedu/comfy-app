@@ -101,7 +101,7 @@ beforeAll(async () => {
 
     const migrate = spawnSync(
       process.execPath,
-      [path.join(process.cwd(), "scripts", "db-migrate.mjs")],
+      [path.join(process.cwd(), "scripts", "db/db-migrate.mjs")],
       {
         cwd: process.cwd(),
         encoding: "utf8",
@@ -114,13 +114,17 @@ beforeAll(async () => {
       throw new Error(`db:migrate 失败：${migrate.stderr || migrate.stdout}`);
     }
 
-    const push = spawnSync(process.execPath, [path.join(process.cwd(), "scripts", "db-push.mjs")], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-      env: { ...process.env, DATABASE_URL: `file:${pushedDb}` },
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: 300_000,
-    });
+    const push = spawnSync(
+      process.execPath,
+      [path.join(process.cwd(), "scripts", "db/db-push.mjs")],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: { ...process.env, DATABASE_URL: `file:${pushedDb}` },
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 300_000,
+      },
+    );
     if (push.status !== 0) {
       throw new Error(`db:push 失败：${push.stderr || push.stdout}`);
     }
@@ -285,13 +289,17 @@ describe("db:migrate ⇄ db:push 的 schema 等价", () => {
 
   it("迁移是幂等的：连跑两次第二次不改结构", () => {
     const before = readShape(migratedDb);
-    const r = spawnSync(process.execPath, [path.join(process.cwd(), "scripts", "db-migrate.mjs")], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-      env: { ...process.env, DATABASE_URL: `file:${migratedDb}` },
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: 300_000,
-    });
+    const r = spawnSync(
+      process.execPath,
+      [path.join(process.cwd(), "scripts", "db/db-migrate.mjs")],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: { ...process.env, DATABASE_URL: `file:${migratedDb}` },
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 300_000,
+      },
+    );
     expect(r.status, "第二次迁移必须是 no-op 且 exit 0").toBe(0);
     expect(readShape(migratedDb)).toEqual(before);
   }, 300_000);

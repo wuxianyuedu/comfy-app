@@ -197,9 +197,9 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
     }));
 
   test("「判据执行者台账」这一步真在 D 组里（被注掉的行不算在场）", () => {
-    expect(steps().find((s) => s.cmd.includes("scripts/check-gate-executors.cjs"))).toEqual({
+    expect(steps().find((s) => s.cmd.includes("scripts/gates/check-gate-executors.cjs"))).toEqual({
       label: "判据执行者台账",
-      cmd: "node scripts/check-gate-executors.cjs",
+      cmd: "node scripts/gates/check-gate-executors.cjs",
     });
   });
 

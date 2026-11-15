@@ -2,7 +2,7 @@
 /**
  * artifact-run.mjs — 产物级护栏那一档的**记账通道**（规范 §13.5.4 / §13.5.12）。
  *
- * 为什么它需要一条账：`pnpm run build` + `node scripts/check-standalone-contents.cjs`
+ * 为什么它需要一条账：`pnpm run build` + `node scripts/gates/check-standalone-contents.cjs`
  * 是 ISSUE #623 删掉平台流水线之后**没有自动执行者**的判定档之一（§13.5.3 的欠账表
  * 点名了它）。而它的失效形态恰好是**最不容易被发现**的那一类：
  *   · `next build` 无条件把仓库根 `.env` 与 `db.sqlite` 拷进 `.next/standalone`
@@ -34,8 +34,8 @@ import path from "node:path";
 import process from "node:process";
 
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
-import { pnpmCli } from "./ci-install-deps.mjs";
-import { withBuildCacheSlot } from "./ci-build-cache-slot.mjs";
+import { pnpmCli } from "./ci/ci-install-deps.mjs";
+import { withBuildCacheSlot } from "./ci/ci-build-cache-slot.mjs";
 import { abortedAdvice, classifyOutcome, runPnpmSync } from "./launcher-core/shell.mjs";
 import {
   freshnessTrack,
@@ -44,7 +44,7 @@ import {
   notWholeTrackNotice,
   pushFreshnessLedger,
   writeFreshness,
-} from "./freshness-ledger.mjs";
+} from "./freshness/freshness-ledger.mjs";
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");

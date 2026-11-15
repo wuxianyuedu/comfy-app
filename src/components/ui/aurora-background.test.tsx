@@ -5,7 +5,7 @@
  * 不是组件行为差异。 */
 /**
  * `AuroraGlow` 色相映射回归（规范 03 §3.6.1.1「拼接 token 名」判据的配套用例）：组件刚由 `var(--color-aurora-${tone})` 改成「整名 → 字面量」表，表化唯一可能引入的新错是抄错色相（运行时字符串仍合法）。
- * 「有没有拼名字」不由本用例守，由 `scripts/check-theme-colors.cjs` 静态判据守（Tailwind v4 按**字面名**决定是否保留 `@theme` 变量，拼出来的名字连编译产物都进不去）。
+ * 「有没有拼名字」不由本用例守，由 `scripts/gates/check-theme-colors.cjs` 静态判据守（Tailwind v4 按**字面名**决定是否保留 `@theme` 变量，拼出来的名字连编译产物都进不去）。
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";

@@ -22,15 +22,15 @@
 - [ ] 同一串手工命令已经被敲过**第二次** ⇒ 已收成有名字的入口（`pnpm <动词>` / `scripts/*.mjs` / `tools/<分类>/*.ps1`），且入口只编排既有判定、不另立第二套结论，降档会被念出来（见 [12.20](12-代码组织与文件结构.md#1220-重复的手工流程收成有名字的入口能做成工具的就做成工具)）
 - [ ] 这一轮里**换过判断方式**（原先那个命令/量具被实测推翻过）⇒ 正确的口径已写进规范可引用的那一节、「每次都要重做的判断」收成只读入口、错法本身当场立案 —— **不许只留在会话或代理的私有笔记里**（那是私有状态，下一个读者读不到；见 [12.20 第五种登记物](12-代码组织与文件结构.md#第五种要登记的东西方法型教训我刚换了一种判断方式)）
 - [ ] 注释无作者 / 日期 / 版本流水，只写「当前代码的 Why」（见 [12.4](12-代码组织与文件结构.md#124-注释规范只写当前代码的-why)）
-- [ ] 新增 / 改动的注释是**中文**（只有 `reference-facts` 登记的「纯 ASCII 模块」写英文；由 `node scripts/check-comment-language.cjs` 在 pre-commit 的「注释语言硬闸」一步强制，见 [12.4.6](12-代码组织与文件结构.md#1246-注释语言一律中文只有纯-ascii-模块例外issue-678机器强制)）
+- [ ] 新增 / 改动的注释是**中文**（只有 `reference-facts` 登记的「纯 ASCII 模块」写英文；由 `node scripts/gates/check-comment-language.cjs` 在 pre-commit 的「注释语言硬闸」一步强制，见 [12.4.6](12-代码组织与文件结构.md#1246-注释语言一律中文只有纯-ascii-模块例外issue-678机器强制)）
 - [ ] 用户可感知的变更已写入 `changelog.d/<issue号>-<slug>.md` 碎片（内部重构/文档修订除外）——**不直接改 `CHANGELOG.md`**，见 [13.10.5](#13105-碎片化落地改-changelogd不改-changelogmd)
 - [ ] 碎片名 / commit message 里那个 **ISSUE 号确实对应本次改动的诉求**（动手前读过那张单的正文）——号不对等于把改动挂到别人的账上，查那张单的人只会读到无关内容；**没有对应单时走 `0-<slug>.md`**，不许拿一个「看起来相关」的号凑，见 [13.10.8](#13108-issue-号是改动--诉求之间的唯一接线写错比不写更贵issue-1693)
 - [ ] 新组件 200 行以内；超过则已拆分（见 [4.1](04-组件设计.md#41-单一职责一个组件干一件事)）
 - [ ] 列表/日志有内存上限（见 [2.1](02-性能规范.md#21-列表日志必须有上限)）
 - [ ] 高频状态用 Zustand 而非 Context（见 [1.1](01-架构与状态管理.md#11-全局高频状态禁止用-react-context)）
 - [ ] 图标用 `lucide-react`，无新增内联 SVG（装饰性除外）
-- [ ] 可交互元素有 `aria-label`；模态/抽屉有焦点管理；**非原生元素（`div` / `li` / `span`）上的 `onClick` 有键等价物**（换原生可交互元素，或补 `simpleKeyHandler`；由 `node scripts/check-click-keyboard.cjs` 在 pre-commit 强制，见 [06 §6.11](06-无障碍访问-a11y.md#611-非原生元素上的点击必须有键等价物check-click-keyboardcjs)）
-- [ ] `jsx-a11y` 的规则没有被**悄悄**关掉，也没有**没人决定过**的规则（关一条 / 官方两份配置谁都没提到的非废弃规则，都要在 `scripts/.a11y-rule-ledger.json` 登记「为什么 + 谁在守它」，由 `node scripts/check-a11y-rules.cjs` 双核，见 [06](06-无障碍访问-a11y.md#612-jsx-a11y-的规则开关官方-recommended-全开方言逐条登记check-a11y-rulescjs)）
+- [ ] 可交互元素有 `aria-label`；模态/抽屉有焦点管理；**非原生元素（`div` / `li` / `span`）上的 `onClick` 有键等价物**（换原生可交互元素，或补 `simpleKeyHandler`；由 `node scripts/gates/check-click-keyboard.cjs` 在 pre-commit 强制，见 [06 §6.11](06-无障碍访问-a11y.md#611-非原生元素上的点击必须有键等价物check-click-keyboardcjs)）
+- [ ] `jsx-a11y` 的规则没有被**悄悄**关掉，也没有**没人决定过**的规则（关一条 / 官方两份配置谁都没提到的非废弃规则，都要在 `scripts/.a11y-rule-ledger.json` 登记「为什么 + 谁在守它」，由 `node scripts/gates/check-a11y-rules.cjs` 双核，见 [06](06-无障碍访问-a11y.md#612-jsx-a11y-的规则开关官方-recommended-全开方言逐条登记check-a11y-rulescjs)）
 - [ ] 无 monkey-patch（`history.pushState` 等）→ 改用 `usePathname`（见 [8.4](08-异步与副作用.md#84-禁止-monkey-patch-全局-api)）
 - [ ] 代码行为变更已同步文档（文档与代码同提交，见主规范 §9）
 - [ ] 说「行为面跑过了」时，证据不是 `-t` 的那一屏绿 —— `-t` 没命中会**跑 0 条也退 0**，
@@ -147,7 +147,7 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 > 判的是**合并后的树**（2026-10-28 起是「树级校验档」，见 `COMFYAPP_CI_PUSH_GATES`）。
 >
 > **一条从 #623 那次留下的判据（这次直接可用）**：`push` 侧的合并形态复核
-> （`node scripts/check-branch-guard.cjs --merge-commit`）**必须认得 Squash Merge**
+> （`node scripts/gates/check-branch-guard.cjs --merge-commit`）**必须认得 Squash Merge**
 > ——squash 落到 `master` 的提交只有 **1 个父**，与「本地直连主干提交」在拓扑上
 > 同形。此前判据是「父提交数 > 1 才算合并」，后果是 `master` 的 push 复核**每一次
 > 都是红的**（`611150b`…`8a9efb3` 全部命中），却一次真正的绕过都没抓到。现在判据是
@@ -164,7 +164,7 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 | 平台（流水线）        | 仓库根 `.cnb.yml` → 自托管节点（标签 `win`）                                                  | **平台读数**（镜像身份 / 工作区复用读数 / 缓存槽读数 / 环境前提）+ **判决**（`GA 回调结论回读` 站内读 GA 送回的 status）+ `master` 合并形态复核；镜像推送与派发在**平台池**那条流水线（§13.5.33.2） | 源分支删入口（见 13.6.1 服务端那两条）    |
 | 平台（push 树级判据） | `.github/workflows/master-gate.yml` → GitHub Actions                                          | `文档引用与权威源一致`（2026-11-06 起与 CNB push 档**并行**判，同一入口，见 §13.5.34）；`生成态文档与源同步` 那一格已随 `docs/generated/**` 退出入库产物于 #3586 退役                               | 无（镜像仓 master 每笔 push 必跑）        |
 
-> **服务端形态重新有了调用方**：`scripts/check-branch-guard.cjs` 的
+> **服务端形态重新有了调用方**：`scripts/gates/check-branch-guard.cjs` 的
 > `--pr-check` / `--merge-commit` 由 `.github/workflows/pr-gate.yml`（前者）与
 > `.cnb.yml` 的 push 流水线（后者）调用。它们从来不是「为 CI 准备的第二份判据」——
 > `tests/check-branch-guard.test.ts` 用真仓库跑三种拓扑，与本地门槛共用同一份实现。
@@ -182,35 +182,35 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 `run "<标签>" <命令>`，默认档只串行跑 D0 形态前置档，A/B/C/D 由 `COMFY_HEAVY_GATES`
 决定谁执行（§13.5.25）。编排：D0 在前，其余四组并行——A=tsc、B=eslint、
 C=受影响用例（它的执行者已不在本地，见下面那一行）、D=其余静态检查：
-✅ node scripts/check-branch-guard.cjs     # 不在 master 上直接提交（见 13.6）
-✅ node scripts/check-file-structure.cjs   # 命名/组织硬规则 R1-R12 + R5 硬闸（见 §12.6/§12.8/§12.11）
-✅ node scripts/check-ps1-consistency.mjs  # 跨平台动作对照表：.ps1⇄.mjs 两侧齐全、会静默失效的清单只定义一次、入口清单与磁盘/package.json 三向对齐（见 launch-and-build §9.5）
+✅ node scripts/gates/check-branch-guard.cjs     # 不在 master 上直接提交（见 13.6）
+✅ node scripts/gates/check-file-structure.cjs   # 命名/组织硬规则 R1-R12 + R5 硬闸（见 §12.6/§12.8/§12.11）
+✅ node scripts/gates/check-ps1-consistency.mjs  # 跨平台动作对照表：.ps1⇄.mjs 两侧齐全、会静默失效的清单只定义一次、入口清单与磁盘/package.json 三向对齐（见 launch-and-build §9.5）
 ✅ node scripts/run-ast-gates.cjs --staged  # **AST 判据聚合档**：6 条判据（updater 纯净性 / 非空断言 / void 悬空 / TS 重复属性 / FormField 接线 / 点击键等价物）共享**一次解析**，省 ≈1.9s（见下 13.5.8.2「第四笔账」）。共享的是解析产物，遍历与判定各归各条；人的动作仍跑单条脚本
-✅ node scripts/check-title-bar-clearance.cjs --staged # 输入面跳过（见下 13.5.8.2）
+✅ node scripts/gates/check-title-bar-clearance.cjs --staged # 输入面跳过（见下 13.5.8.2）
 ✅ pnpm exec tsc --noEmit
 ✅ pnpm run lint
-✅ node scripts/check-ui-logic-separation.cjs   # 视图层 IO 硬闸（命中即阻断，见 17）
-✅ node scripts/check-changelog-fragments.cjs
-✅ node scripts/check-changelog-versions.cjs # 待发段落的**来源锚** ⇄ 条目归属：锚写歪了 / 解析不出提交 / 同一 ISSUE 号跨锚分裂（见 §13.10.6）
-✅ node scripts/check-gate-thresholds.cjs # 判据自身的数值 ⇄ 账：把 R5 的 900、函数长度 400 这类阈值**调松而不同批改 `scripts/.gate-thresholds.json`** 即红（方向逐条记，见下 §13.5.26）
-✅ node scripts/check-tracked-secrets.cjs --staged # 被跟踪的文字里的凭据形状：明文凭据进 `docs/**` / `.cnb.yml` / 夹具即红，只点名位置与形状、不回显内容，无基线无 `--allow`（见 launch-and-build.md §7.3 末节）
-✅ node scripts/check-import-alias.cjs --staged # import 别名只有一种前缀 `~`（R13，见 §12.8.0）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-app-port-vectors.cjs   # 端口推导跨语言一致性（见 launch-and-build §1.1）
-✅ node scripts/check-ui-primitives.cjs --staged # UI 基元复用棘轮（见 16 §16.2.3；`--staged` = 只碰了 `src/` 下的扫描根才扫，见下 13.5.8.2）
-✅ node scripts/check-overlay-z.cjs --staged # 浮层层级刻度硬闸（见 16 §16.2.5）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-theme-colors.cjs       # 主题色扫描**硬闸**：豁免（类型色例外 / 固定暗色清单）之外不得有未 token 化的写死色值（见 03 §3.6.1）
-✅ node scripts/check-comfyui-port-contract.cjs # ComfyUI 端口口径一致性（见 launch-and-build §5）
-✅ node scripts/check-inline-style.cjs --staged # 视图层不得动态注入 <style>（见 03 §3.5）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-code-duplication.cjs --staged # 跨文件重复块硬闸（见 12 §12.12）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-function-length.cjs --staged # 函数长度硬闸 TS/TSX（见 12 §12.13）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-rust-function-length.cjs # 函数长度硬闸 Rust 壳（见 12 §12.13.1）
-✅ node scripts/check-infra-file-size.cjs --staged # 基础设施层文件长度**硬闸**：`scripts/**` 的 .cjs/.mjs 与 `tools/**` 的 .ps1，与 R5 同阈值同口径、另立一档（见 12 §12.8 R5 姊妹档）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-format.cjs --staged   # oxfmt 格式**硬闸**（无基线、无 `--update`）：2026-10-29 起回到 D0（见 13.5.1.1，ISSUE #2610）。红了当场 `pnpm exec oxfmt <它点名的文件>` —— **只点本次改的**，全库 `--write` 违 §13.7；平台侧「oxfmt 格式」那一格 2026-11-05 起由 GA `pr-gate.yml` 跑 `--changed`（改动面 ∩ `GLOBS`，ISSUE #2979 起 `GLOBS` 含 mjs/cjs、不过 `IGNORE_GLOBS`）作第二层，`--staged` 见下 13.5.8.2
+✅ node scripts/gates/check-ui-logic-separation.cjs   # 视图层 IO 硬闸（命中即阻断，见 17）
+✅ node scripts/gates/check-changelog-fragments.cjs
+✅ node scripts/gates/check-changelog-versions.cjs # 待发段落的**来源锚** ⇄ 条目归属：锚写歪了 / 解析不出提交 / 同一 ISSUE 号跨锚分裂（见 §13.10.6）
+✅ node scripts/gates/check-gate-thresholds.cjs # 判据自身的数值 ⇄ 账：把 R5 的 900、函数长度 400 这类阈值**调松而不同批改 `scripts/.gate-thresholds.json`** 即红（方向逐条记，见下 §13.5.26）
+✅ node scripts/gates/check-tracked-secrets.cjs --staged # 被跟踪的文字里的凭据形状：明文凭据进 `docs/**` / `.cnb.yml` / 夹具即红，只点名位置与形状、不回显内容，无基线无 `--allow`（见 launch-and-build.md §7.3 末节）
+✅ node scripts/gates/check-import-alias.cjs --staged # import 别名只有一种前缀 `~`（R13，见 §12.8.0）；`--staged` 见下 13.5.8.2
+✅ node scripts/gates/check-app-port-vectors.cjs   # 端口推导跨语言一致性（见 launch-and-build §1.1）
+✅ node scripts/gates/check-ui-primitives.cjs --staged # UI 基元复用棘轮（见 16 §16.2.3；`--staged` = 只碰了 `src/` 下的扫描根才扫，见下 13.5.8.2）
+✅ node scripts/gates/check-overlay-z.cjs --staged # 浮层层级刻度硬闸（见 16 §16.2.5）；`--staged` 见下 13.5.8.2
+✅ node scripts/gates/check-theme-colors.cjs       # 主题色扫描**硬闸**：豁免（类型色例外 / 固定暗色清单）之外不得有未 token 化的写死色值（见 03 §3.6.1）
+✅ node scripts/gates/check-comfyui-port-contract.cjs # ComfyUI 端口口径一致性（见 launch-and-build §5）
+✅ node scripts/gates/check-inline-style.cjs --staged # 视图层不得动态注入 <style>（见 03 §3.5）；`--staged` 见下 13.5.8.2
+✅ node scripts/gates/check-code-duplication.cjs --staged # 跨文件重复块硬闸（见 12 §12.12）；`--staged` 见下 13.5.8.2
+✅ node scripts/gates/check-function-length.cjs --staged # 函数长度硬闸 TS/TSX（见 12 §12.13）；`--staged` 见下 13.5.8.2
+✅ node scripts/gates/check-rust-function-length.cjs # 函数长度硬闸 Rust 壳（见 12 §12.13.1）
+✅ node scripts/gates/check-infra-file-size.cjs --staged # 基础设施层文件长度**硬闸**：`scripts/**` 的 .cjs/.mjs 与 `tools/**` 的 .ps1，与 R5 同阈值同口径、另立一档（见 12 §12.8 R5 姊妹档）；`--staged` 见下 13.5.8.2
+✅ node scripts/gates/check-format.cjs --staged   # oxfmt 格式**硬闸**（无基线、无 `--update`）：2026-10-29 起回到 D0（见 13.5.1.1，ISSUE #2610）。红了当场 `pnpm exec oxfmt <它点名的文件>` —— **只点本次改的**，全库 `--write` 违 §13.7；平台侧「oxfmt 格式」那一格 2026-11-05 起由 GA `pr-gate.yml` 跑 `--changed`（改动面 ∩ `GLOBS`，ISSUE #2979 起 `GLOBS` 含 mjs/cjs、不过 `IGNORE_GLOBS`）作第二层，`--staged` 见下 13.5.8.2
 ✅ node scripts/shell-gate.mjs               # 桌面壳门禁：**只在暂存命中 src-tauri 四类壳输入时**
    # 才做事 —— 有 .rs 改动就跑 `cargo test`（壳内全部 #[test] 唯一的执行者；条数随源码
    # 变动，不在文档里记账），并复用
    # `dev-launcher.mjs` 的 `shellStaleWarning` 把硬规则 5「改了壳必须重编」升成阻断（见 11 §11.10.4）
-✅ node scripts/freshness-gate.mjs           # 每一档都有主（**三份同形的账**，见 11 §11.8）：
+✅ node scripts/freshness/freshness-gate.mjs           # 每一档都有主（**三份同形的账**，见 11 §11.8）：
    # **全量 e2e**（`scripts/.e2e-freshness.json`）、**全量单测 + 覆盖率**
    # （`scripts/.full-suite-freshness.json`）、**产物级护栏**（`scripts/.artifact-freshness.json`）
    # —— 判「每一档都有一条新鲜度记录，且写清谁 / 什么时候 / 按哪条命令复核的」。
@@ -225,7 +225,7 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
    # 判决面由 `FRESHNESS_TRACKS` **现算**（`trackScopes()`），不手抄档名清单。钩子里**不跑**这三档
    # （起 webServer / 十分钟量级），记账走各自的跑法脚本（见 §13.5.4 那张「谁在什么时候跑它」表）。
    # 动手前想知道「今天欠哪几档」：`pnpm check:freshness`（只读、不阻断，见 §11.8）。
-✅ node scripts/run-affected-tests.mjs       # C 组登记的那一步：结构守护固定清单 + 本次改动
+✅ node scripts/affected-tests/run-affected-tests.mjs       # C 组登记的那一步：结构守护固定清单 + 本次改动
    # 牵扯到的用例，一次 vite。**这一档的本地执行者已撤下**，现在跑它的是 `.cnb.yml` 的
    # `受影响用例` 那一格（同一个 `run-affected-tests.mjs`、同一条判决链，见 §13.5.25）；
    # 钩子里那一行留着不删，是因为入口形状由 `tests/hook-affected-launch.test.ts` 钉着，
@@ -236,63 +236,63 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
    # 命令行上限 —— 表现是「组 C 红、一条用例没跑、原因是一行 GBK 乱码」。
    # 面大时它还会在起 vitest **之前**打一段读数（这次多大 / 哪一刀最值 / 拆开估算剩多少），
    # 那是「把大改动拆小」那条建议的执行者；**纯提示、不改变退出码**（见下 13.5.8.2 第七笔账）
-✅ node scripts/check-circular-deps.cjs --staged # 模块循环依赖硬闸（见 12 §12.7）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-barrel-heavy-deps.cjs   # 入口静态图上不许有重依赖（见 12 §12.19 / 02 §2.9）
-✅ node scripts/check-reformat-only.cjs --staged  # 格式化提交与行为改动分离（见下 13.5.2；`--staged` = 面上没有源文件时跳过，ISSUE #1993）
-✅ node scripts/check-gate-flag-claims.cjs  # 翻闸删掉的 `--update` / `--strict` 不许还在被人教着跑（见下 13.5.16）
-✅ node scripts/check-dead-exports.cjs --staged # src/lib + src/trpc 零消费导出硬闸（见 12 §12.16）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-ui-customizations.cjs  # ui/ 定制标记与台账（见 16 §16.8）
+✅ node scripts/gates/check-circular-deps.cjs --staged # 模块循环依赖硬闸（见 12 §12.7）；`--staged` 见下 13.5.8.2
+✅ node scripts/gates/check-barrel-heavy-deps.cjs   # 入口静态图上不许有重依赖（见 12 §12.19 / 02 §2.9）
+✅ node scripts/gates/check-reformat-only.cjs --staged  # 格式化提交与行为改动分离（见下 13.5.2；`--staged` = 面上没有源文件时跳过，ISSUE #1993）
+✅ node scripts/gates/check-gate-flag-claims.cjs  # 翻闸删掉的 `--update` / `--strict` 不许还在被人教着跑（见下 13.5.16）
+✅ node scripts/gates/check-dead-exports.cjs --staged # src/lib + src/trpc 零消费导出硬闸（见 12 §12.16）；`--staged` 见下 13.5.8.2
+✅ node scripts/gates/check-ui-customizations.cjs  # ui/ 定制标记与台账（见 16 §16.8）
 ✅ node scripts/storybook-check.mjs --changed # 故事枚举来源（cva 返回值 / 漏档）+ 组件覆盖率棘轮 + 故事面（见 16 §16.2.3.4 / §16.2.3.8）
-✅ node scripts/check-comment-language.cjs   # 注释语言硬闸：注释一律中文，只有「纯 ASCII 模块」例外（见 12 §12.4.6；§12.4.6 早写着它在钩子里报红，而它一直不在，ISSUE #1451 补齐）
-✅ node scripts/check-cp936-glyphs.cjs   # CP936 字形登记：会进 CI 日志的面里，没有 CP936 字形的字符必须已登记替代写法（否则它们在平台日志里各变成一个问号 —— 连「这一条过了」都认不出；见 13 §13.5.3.5）
-✅ node scripts/check-gate-executors.cjs     # 判据 ⇄ 执行者双向判据：判定型脚本无执行者即红（除非登记按需召唤台账）、报告型自称供 pre-commit 调用即红、而登记成**入口**的每一形（台账 `entrypoints`：脚本 + 那串旗标 + 执行者）必须在写明的执行者里真找得到那行命令 —— 同一脚本的两档在账上不许塌成一个（见下 13.5.12）
-✅ node scripts/check-declaration-readers.cjs # 声明 ⇄ 读者索引：本仓库每一种「声明」（判据自称在跑 / 条件性 skip / 已知基线失败登记 / 环境归属 / 并发隔离 / 类型断言执行者 / 软断言语义 / 新鲜度档…）都必须答出「谁在读它 + 执行者在哪」——读者丢了、执行者从门禁链里被摘掉、索引自己静默降级，都红（见 11 §11.23）
-✅ node scripts/check-gate-name-executors.mjs # 「PR 上跑什么」那份清单里的每个名字 ⇄ 执行者：清单里那几个名字**以注释形态留在 `.gates` 里**（停用形态与「换了执行者」形态机器分不出两者），「换了执行者」在配置里机器可读地登记一次（`COMFYAPP_CI_GATES_ELSEWHERE`，登记的是入口路径），双向核对「清单里每个名字都有执行者 / 登记的每个入口都真在执行面里 / 既不是停用也不是在跑的注释残留当场点名」（见下 13.5.8）
-✅ node scripts/check-on-demand-duties.cjs   # 「不进钩子」的按需档 ⇄ 执行者索引：每一行的机器事实仍在（新鲜度档键 / 门禁 run:false / 按需召唤条目，全部现算）+ 每一个机器事实都被登记（新增一档忘了登记 ⇒ 那一档谁都不判）（见 13.5.4）
-✅ node scripts/check-test-environment.cjs   # 用例的环境档：环境早退（绿但一条断言没跑）+ 目录档与文件头矛盾 + 冗余文件头（见 11 §11.17）
-✅ node scripts/check-soft-assertions.cjs    # 软断言（expect.soft）只许用在循环体里（一张清单逐项判）；落在循环外会把真正的原因吞掉（见 11 §11.18）
-✅ node scripts/check-test-concurrency.cjs  # 并发档位（it.concurrent）用在哪：不许与 expect.poll 同文件、且必须有隔离声明（见 11 §11.19）
-✅ node scripts/check-test-sleep.cjs        # 测试层裸 sleep 硬闸：`await new Promise(r => setTimeout(r, N))` 一处即阻断（正当形态逐站点声明 `sleep-ok`；见 11 §11.14）
-✅ node scripts/check-test-waitfor.cjs      # 测试层 `waitFor` 的边界：只有「等 DOM」与「假定时器窗口内」两种形态该留 `waitFor`，其余等值的一律 `expect.poll`（见 11 §11.14.3）
-✅ node scripts/check-test-single-clock.cjs # 测试层「一个用例一把时钟」硬闸：同一用例体内先真实时钟等待（`expect.poll` / `await waitFor`）再 `vi.useFakeTimers()`，或 `expect.poll` 落在假时钟窗口内 —— 命中即阻断（**硬闸**：两条规则实测存量 0，无基线、无 `--update`；不判挂载位置、不判跨 `describe` 的窗口归属；见 11 §11.14）
-✅ node scripts/check-test-it-each.cjs     # 参数化用例 `it.for` ⇄ `it.each`（**硬闸**：站点须为 0）；`it/test/describe.each` 一视同仁（本地同名 helper 不看、夹具字符串不算；见 11 §11.15.1）
-✅ node scripts/check-gate-repo-boilerplate.cjs # 门禁自测**别再手搓临时仓库样板**：`tmpdir()` + 从 `workdir` 拉判据脚本 + 没 import 共享件 —— 三条同时成立即红。用 `tests/helpers/gate-repo.ts` 的 `defineGateRepo`（见 11 §11.16.1）
-✅ node scripts/check-type-assertion-executor.cjs # 类型层断言（expectTypeOf/assertType）的执行者在场：站点必须在 tsconfig 的 include 面里 —— 它在 vitest 里没有牙，唯一执行者是 tsc（见 11 §11.20）
-✅ node scripts/check-annotate-consumer.cjs # `ctx.annotate` 的消费方在场：有站点就必须登记「谁读、怎么读」—— 它写下的注释只有失败时可见、JSON 报告里没有（见 11 §11.21）
-✅ node scripts/check-task-meta-consumer.cjs # `ctx.task.meta` 的消费方在场：它是唯一能从 CLI 那侧读到的通道，但门禁链没带 `--reporter=json` —— 有站点就必须登记「谁读、怎么读」（见 11 §11.22）
-✅ node scripts/check-test-todo.cjs        # `test.todo` 的消费方在场：退出码 0、不进失败计数，而门禁链只看退出码 —— 一份零成本、没人读的声明；有站点就必须登记「谁读、怎么读」（见 11 §11.24）
-✅ node scripts/check-skip-probe-readings.mjs # 「按环境跳过的那一组，得说得出为什么」：有 `firstRunnable(` 探测站点就必须配 `describeProbeMisses(` —— 机器上真没有（去装）与「有个同名的东西顶掉了它」（改探测）是两个下一动作完全不同的形态，暗下去时说不清是哪一种就红（见 11 §11.17）
-✅ node scripts/check-known-failed-stale.mjs  # 已知基线失败登记过期：登记项必须指向真实文件、且真的还红着（见 11 §11.12；清单为空时零耗时）
+✅ node scripts/gates/check-comment-language.cjs   # 注释语言硬闸：注释一律中文，只有「纯 ASCII 模块」例外（见 12 §12.4.6；§12.4.6 早写着它在钩子里报红，而它一直不在，ISSUE #1451 补齐）
+✅ node scripts/gates/check-cp936-glyphs.cjs   # CP936 字形登记：会进 CI 日志的面里，没有 CP936 字形的字符必须已登记替代写法（否则它们在平台日志里各变成一个问号 —— 连「这一条过了」都认不出；见 13 §13.5.3.5）
+✅ node scripts/gates/check-gate-executors.cjs     # 判据 ⇄ 执行者双向判据：判定型脚本无执行者即红（除非登记按需召唤台账）、报告型自称供 pre-commit 调用即红、而登记成**入口**的每一形（台账 `entrypoints`：脚本 + 那串旗标 + 执行者）必须在写明的执行者里真找得到那行命令 —— 同一脚本的两档在账上不许塌成一个（见下 13.5.12）
+✅ node scripts/gates/check-declaration-readers.cjs # 声明 ⇄ 读者索引：本仓库每一种「声明」（判据自称在跑 / 条件性 skip / 已知基线失败登记 / 环境归属 / 并发隔离 / 类型断言执行者 / 软断言语义 / 新鲜度档…）都必须答出「谁在读它 + 执行者在哪」——读者丢了、执行者从门禁链里被摘掉、索引自己静默降级，都红（见 11 §11.23）
+✅ node scripts/gates/check-gate-name-executors.mjs # 「PR 上跑什么」那份清单里的每个名字 ⇄ 执行者：清单里那几个名字**以注释形态留在 `.gates` 里**（停用形态与「换了执行者」形态机器分不出两者），「换了执行者」在配置里机器可读地登记一次（`COMFYAPP_CI_GATES_ELSEWHERE`，登记的是入口路径），双向核对「清单里每个名字都有执行者 / 登记的每个入口都真在执行面里 / 既不是停用也不是在跑的注释残留当场点名」（见下 13.5.8）
+✅ node scripts/gates/check-on-demand-duties.cjs   # 「不进钩子」的按需档 ⇄ 执行者索引：每一行的机器事实仍在（新鲜度档键 / 门禁 run:false / 按需召唤条目，全部现算）+ 每一个机器事实都被登记（新增一档忘了登记 ⇒ 那一档谁都不判）（见 13.5.4）
+✅ node scripts/gates/check-test-environment.cjs   # 用例的环境档：环境早退（绿但一条断言没跑）+ 目录档与文件头矛盾 + 冗余文件头（见 11 §11.17）
+✅ node scripts/gates/check-soft-assertions.cjs    # 软断言（expect.soft）只许用在循环体里（一张清单逐项判）；落在循环外会把真正的原因吞掉（见 11 §11.18）
+✅ node scripts/gates/check-test-concurrency.cjs  # 并发档位（it.concurrent）用在哪：不许与 expect.poll 同文件、且必须有隔离声明（见 11 §11.19）
+✅ node scripts/gates/check-test-sleep.cjs        # 测试层裸 sleep 硬闸：`await new Promise(r => setTimeout(r, N))` 一处即阻断（正当形态逐站点声明 `sleep-ok`；见 11 §11.14）
+✅ node scripts/gates/check-test-waitfor.cjs      # 测试层 `waitFor` 的边界：只有「等 DOM」与「假定时器窗口内」两种形态该留 `waitFor`，其余等值的一律 `expect.poll`（见 11 §11.14.3）
+✅ node scripts/gates/check-test-single-clock.cjs # 测试层「一个用例一把时钟」硬闸：同一用例体内先真实时钟等待（`expect.poll` / `await waitFor`）再 `vi.useFakeTimers()`，或 `expect.poll` 落在假时钟窗口内 —— 命中即阻断（**硬闸**：两条规则实测存量 0，无基线、无 `--update`；不判挂载位置、不判跨 `describe` 的窗口归属；见 11 §11.14）
+✅ node scripts/gates/check-test-it-each.cjs     # 参数化用例 `it.for` ⇄ `it.each`（**硬闸**：站点须为 0）；`it/test/describe.each` 一视同仁（本地同名 helper 不看、夹具字符串不算；见 11 §11.15.1）
+✅ node scripts/gates/check-gate-repo-boilerplate.cjs # 门禁自测**别再手搓临时仓库样板**：`tmpdir()` + 从 `workdir` 拉判据脚本 + 没 import 共享件 —— 三条同时成立即红。用 `tests/helpers/gate-repo.ts` 的 `defineGateRepo`（见 11 §11.16.1）
+✅ node scripts/gates/check-type-assertion-executor.cjs # 类型层断言（expectTypeOf/assertType）的执行者在场：站点必须在 tsconfig 的 include 面里 —— 它在 vitest 里没有牙，唯一执行者是 tsc（见 11 §11.20）
+✅ node scripts/gates/check-annotate-consumer.cjs # `ctx.annotate` 的消费方在场：有站点就必须登记「谁读、怎么读」—— 它写下的注释只有失败时可见、JSON 报告里没有（见 11 §11.21）
+✅ node scripts/gates/check-task-meta-consumer.cjs # `ctx.task.meta` 的消费方在场：它是唯一能从 CLI 那侧读到的通道，但门禁链没带 `--reporter=json` —— 有站点就必须登记「谁读、怎么读」（见 11 §11.22）
+✅ node scripts/gates/check-test-todo.cjs        # `test.todo` 的消费方在场：退出码 0、不进失败计数，而门禁链只看退出码 —— 一份零成本、没人读的声明；有站点就必须登记「谁读、怎么读」（见 11 §11.24）
+✅ node scripts/gates/check-skip-probe-readings.mjs # 「按环境跳过的那一组，得说得出为什么」：有 `firstRunnable(` 探测站点就必须配 `describeProbeMisses(` —— 机器上真没有（去装）与「有个同名的东西顶掉了它」（改探测）是两个下一动作完全不同的形态，暗下去时说不清是哪一种就红（见 11 §11.17）
+✅ node scripts/gates/check-known-failed-stale.mjs  # 已知基线失败登记过期：登记项必须指向真实文件、且真的还红着（见 11 §11.12；清单为空时零耗时）
 ✅ node scripts/known-failed-selftest-gate.mjs # 上一条的自证档执行者：**只在暂存命中这套机制
    # （登记表 / 判据本体 / 钩子接线）时**才做事，跑一次 `--self-test`（红侧 + 绿侧对照组）。
    # 上一条「清单为空 ⇒ 零耗时」是代价的正确取舍，但它留下的空档是「真跑那一档在干净仓库
    # 上从没被执行过、自证入口一个执行者都没有」（见 11 §11.12.1）
-✅ node scripts/check-deps-freshness.mjs --staged # 依赖新鲜度（ISSUE #1569）：远端改过库的
+✅ node scripts/gates/check-deps-freshness.mjs --staged # 依赖新鲜度（ISSUE #1569）：远端改过库的
    # 版本而本地还停在旧的那套上 —— 只在**本次暂存动了依赖面**时判（否则退 0 零输出），
    # 判据自身不做网络请求，远端引用陈旧只打 [未校验]、不阻断（见下 13.5.13）
-✅ node scripts/check-allow-builds.cjs --staged # 依赖构建脚本 ⇄ allowBuilds 对账（AGENTS 硬规则 8）：
+✅ node scripts/gates/check-allow-builds.cjs --staged # 依赖构建脚本 ⇄ allowBuilds 对账（AGENTS 硬规则 8）：
    # 每个已安装且带 preinstall/install/postinstall 的包都必须在 `pnpm-workspace.yaml` 的
    # `allowBuilds` 里有一条显式条目 —— `true`（批准）与 `false`（显式拒绝）都算回答过，
    # 漏答才红。反向（名单里有无脚本的条目）刻意不判。读不到扫描面判红、不静默放行。
    # `--staged` = 只在本次提交动了**依赖面**（`package.json` / `pnpm-lock.yaml` /
    # `pnpm-workspace.yaml`，清单 import 自 `dependency-face.mjs` 的导出）时才扫全树，
    # 未命中打印「未触及依赖面」而不是冒充结论（见下 13.5.15）
-✅ node scripts/check-tsc-diagnostic-executors.cjs # 类型层声明 ⇄ 执行者（见下 13.5.14）：19 条 tsc 错
+✅ node scripts/gates/check-tsc-diagnostic-executors.cjs # 类型层声明 ⇄ 执行者（见下 13.5.14）：19 条 tsc 错
    # 落进 master 的共同根因是「声明（JSDoc / 类型注解）落后于实现」，而 tsc 那条判据缺的是
    # 「什么时候被敲」。本步不跑第二遍 tsc（合并前那一跳归 §13.6.2 的 check:base:batch），
    # 判的是那条判据自己的执行者：每条登记项的执行者在场 + 与声明 ⇄ 读者索引逐行同源 +
    # **声明行计数零增量**（新写一处就红，直到你回答「它谁在执行」）
-✅ node scripts/check-scripts-typecheck.cjs  # 脚本档的类型层（见下 13.5.14.1）：主 tsconfig 的 include 里没有
+✅ node scripts/gates/check-scripts-typecheck.cjs  # 脚本档的类型层（见下 13.5.14.1）：主 tsconfig 的 include 里没有
    # `**/*.mjs`，于是**未被 import 的脚本**整个不在判决面上（实测 210 份里只在场 169 份）。
    # 这一档跑第二份配置（`tsconfig.scripts.json` = 全量 `**/*.mjs`）+ 判决面自证 + 按
    # `(文件, TS 码)` 记账的只降不升棘轮（账在 `scripts/.scripts-typecheck-baseline.json`；
    # 现值由 `pnpm check:scripts-types -- --report` 现算，登记那一刻实测 310 处 / 29 份，
    # 之后由 #2589 按批往下清 —— 别在这里抄一个会过期的数）。
    # 本机实测 12.5–17.9s ⇒ 在重档（`COMFY_HEAVY_GATES` / 平台「重档静态判据」条目），与 A 组同档
-✅ node scripts/check-app-version.cjs        # 产品版本号三处同步（D7，ISSUE #1611）：package.json /
+✅ node scripts/gates/check-app-version.cjs        # 产品版本号三处同步（D7，ISSUE #1611）：package.json /
    # src-tauri/tauri.conf.json / src-tauri/Cargo.toml 三处逐字相等 + 形态合法（见 launch-and-build §7.1.1）。
    # 只判相等，刻意不判「该不该升」——那是发布判断
-✅ node scripts/check-test-inventory.cjs # 用例存量：磁盘上的 `*.test.ts(x)` ⇄ `vitest.config.ts`
+✅ node scripts/gates/check-test-inventory.cjs # 用例存量：磁盘上的 `*.test.ts(x)` ⇄ `vitest.config.ts`
    # 两个 project 的 `include` / `exclude` 给出的**收集面**。「一个档都没接住」（漏收）与
    # 「两个档都接住」（重叠）即阻断 —— 前者的失效方向是静默的：那份文件从此不在任何
    # project 的收集面上，却照样被 eslint / tsc 扫、照样进 PR diff，只是再也没人跑它。
@@ -300,12 +300,12 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
    # 共用解析件 `scripts/vitest-projects.cjs`；那一份刻意不判这两条（它判文件头与目录档
    # 有没有打架），这一份专判。已知边界：判不出「收了但零条用例」（整份 skip / 只剩类型导出）
    # —— 那一层归 `conditional-skip-registry` 与 `check-test-todo.cjs`（见 11 §11.27）
-✅ node scripts/check-a11y-rules.cjs         # jsx-a11y 的规则开关 ⇄ 判据（见 06 §6.12）：
+✅ node scripts/gates/check-a11y-rules.cjs         # jsx-a11y 的规则开关 ⇄ 判据（见 06 §6.12）：
    # 官方 recommended 集合全开（从插件自己的数据算，不手抄规则表）、本仓与官方默认的
    # 每一处不同都在 scripts/.a11y-rule-ledger.json 登记（关掉一条 / 就地豁免一个文件，
    # 都要答出「为什么」+「谁在守它」）；**官方两份配置谁都没提到、又没被标记废弃的**
    # 规则也要有一笔裁决（开着、或登记为不开）—— 台账双向拦
-✅ node scripts/check-eslint-exemptions.cjs  # eslint 的**文件级豁免台账** ⇄ 真违例（见本文 §13.5.31，ISSUE #2607 第 3 条）：
+✅ node scripts/gates/check-eslint-exemptions.cjs  # eslint 的**文件级豁免台账** ⇄ 真违例（见本文 §13.5.31，ISSUE #2607 第 3 条）：
    # 只判「多登记」那一向 —— 台账里替某份文件关着一条规则，而那份文件现在**已经不含**该规则的
    # 命中，就是该从 `files` 里摘掉的陈旧豁免（那块台账自己的注释写着「何时可移除」，此前没有
    # 执行者）。「漏登记」（有命中而没登记）由 `pnpm run lint` 本体报，这里不立第二个执行者。
@@ -313,10 +313,10 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
    # 实测把 13 量成 42），读台账复用 `check-a11y-rules.cjs` 导出的 `loadEslintConfig()`。
    # ⚠️ **任何一份没判成 ⇒ 退 2（没结论）**，既不判红也不判绿：`verify` 的内联配置写成
    # eslintrc 形时它对每份文件都抛错，而朴素实现照样打「命中 0 处」= 「台账全部陈旧」
-✅ node scripts/check-oxlint-zero-rules.mjs # 已清零 oxlint 规则集防回潮（见下 13.5.32，ISSUE #3016）：
+✅ node scripts/gates/check-oxlint-zero-rules.mjs # 已清零 oxlint 规则集防回潮（见下 13.5.32，ISSUE #3016）：
    # `ZERO_RULES` 在册清单（41 条）全仓 `--type-aware` 复扫判 0 命中，命中逐条列位置退 1；
    # 实测约 155s，只在重档付
-✅ node scripts/check-oxlint-zero-rules.mjs --staged # 同一清单的提交前置快检（ISSUE #3585）：
+✅ node scripts/gates/check-oxlint-zero-rules.mjs --staged # 同一清单的提交前置快检（ISSUE #3585）：
    # 只扫本次暂存源码，本机实测约 7s / 3 份暂存文件；全仓档仍按上一行在重档复算
 ```
 
@@ -392,7 +392,7 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 但「等基线整改完再接入」的代价是**每个新文件都可以带着任意格式进来**，存量只增
 不减，那一天永远不会到。
 
-判据因此**先**改为「基线 + 只许下降」（`scripts/check-format.cjs`，与重复块 /
+判据因此**先**改为「基线 + 只许下降」（`scripts/gates/check-format.cjs`，与重复块 /
 函数长度 / 文件行数 / 环依赖同口径）；存量清零之后（ISSUE #1811 收尾）**再翻成硬闸**：
 
 | 情形                                                                                   | 结果                                                     |
@@ -493,7 +493,7 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 
 格式判据只判「文件干不干净」，管不住「顺手全库 `format:write`」—— 后者会把一次
 真实改动埋在几百个文件的重排里，`git blame` 当场失效、评审看不出改了什么。
-`scripts/check-reformat-only.cjs` 判**这次提交的形态**：
+`scripts/gates/check-reformat-only.cjs` 判**这次提交的形态**：
 
 - 某文件的改动若「把改动前的**整份文件**交给 oxfmt 重排，结果逐字等于改动后」，
   即记为**纯格式化文件**；
@@ -649,7 +649,7 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 10. **不认识的旗标 ⇒ 非零退出，不许「明念一句但照旧判」**（ISSUE #3163）。这条判据的
     判决面由参数决定，而旧实现用 `args.indexOf("--range")` 裸取：传 `--base` 时那个旗标
     被完全忽略，它照默认面判完还给一句 `[ok]` —— **判据面在没人说话的情况下换了**，屏幕
-    上与正常放行逐字相同（假绿）。现在 `parseFaceArgs()`（`scripts/reformat-scan-core.mjs`）
+    上与正常放行逐字相同（假绿）。现在 `parseFaceArgs()`（`scripts/reformat/reformat-scan-core.mjs`）
     是唯一解析处，认识的只有 `--staged` / `--strict` / `--range <值>`；其余一律 exit 2，
     并念出 ① 哪个旗标/参数不认识、② **当前实际判决面**、③ 合法写法与例子。`--range`
     缺取值、取值解析不出区间（如漏了 `..`）同办 —— 「判据面不确定」就不该给结论。
@@ -770,7 +770,7 @@ docker image inspect --format "{{index .RepoDigests 0}}" <同样的引用>
 [Environment]::SetEnvironmentVariable("COMFYAPP_NODE_IMAGE_DIGEST", "sha256:…", "Machine")
 ```
 
-**两个变量名与它们的判读**（实现与取值只有一处：`scripts/ci-image-identity.mjs`）：
+**两个变量名与它们的判读**（实现与取值只有一处：`scripts/ci/ci-image-identity.mjs`）：
 
 - `COMFYAPP_NODE_IMAGE` —— `pinned`（有版本标签）/ `floating`（`latest` 或无标签）/
   `missing`（没声明）。后两档都只说一件事：**「哪一版」不可追**，下一动作一样是钉个标签；
@@ -822,7 +822,7 @@ docker image inspect --format "{{index .RepoDigests 0}}" <同样的引用>
 是哪份源码」不可追，而那正是 `镜像身份` 那一档存在的理由（环境必须是**可见**的，
 §13.5.3.5 反复红的根因就是「环境是隐形的」）。
 
-###### 实现落点：`scripts/ci-image-plan.mjs`（**不碰 docker**）
+###### 实现落点：`scripts/ci/ci-image-plan.mjs`（**不碰 docker**）
 
 它只**算命令**（造镜像 / 装进宿主机 / 钉身份）与**打包**，一行 `spawn("docker")` 都没有。
 三条理由，与上一条那三档逐条对应：
@@ -938,7 +938,7 @@ runner 开容器能力**，所以任何要求它起容器的东西都在起格�
 
 两条判据把这件事钉住，缺哪条都不够：
 
-- `stageLevelImages()`（`scripts/ci-container-plan.mjs`）**点名**写在 stage 上的那一格，
+- `stageLevelImages()`（`scripts/ci/ci-container-plan.mjs`）**点名**写在 stage 上的那一格，
   `tests/ci-container-plan.test.ts` 要求现役配置里它**为空**——「写错层」此前没有任何
   执行者，而它的形态是「配置看着完全正常」；
 - `容器计划` 那三行读数里，写错层的那一行排在**最前**：那一格压根跑不起来，比
@@ -956,7 +956,7 @@ runner 开容器能力**，所以任何要求它起容器的东西都在起格�
 ① 落点上已有那一件 ⇒ 秒级返回；② 分片自取 + 续传（这台节点唯一走完过 119 MiB 的路，
 §13.5.3.5）；③ 才交给 `playwright install`（用它自己 `env` 里的
 `PLAYWRIGHT_DOWNLOAD_HOST`）。长期看最省事的一条仍然是**把浏览器预装进节点的落点**
-（`scripts/ci-image-plan.mjs` 那份节点镜像计划里就带着这一步），装过一次之后这一格
+（`scripts/ci/ci-image-plan.mjs` 那份节点镜像计划里就带着这一步），装过一次之后这一格
 再也不碰网络。
 
 ⚠️ 连带撤掉的一件事：`PLAYWRIGHT_BROWSERS_PATH: /ms-playwright` 那一行**是给容器配的**
@@ -981,7 +981,7 @@ runner 开容器能力**，所以任何要求它起容器的东西都在起格�
   「配置真的干净」在结果上无法区分，那正是这条判据要堵的失效形态；
 - 同一组还判 `.cnb.yml` 里 `PLAYWRIGHT_BROWSERS_PATH` **不许指向容器那个路径**
   （`/ms-playwright`；撤掉它的理由见上，**收窄**的那一次见 §13.5.3.4.4）；
-- `scripts/ci-image-identity.mjs` 的 `platformImageStages()` 与那条读数**保留**：
+- `scripts/ci/ci-image-identity.mjs` 的 `platformImageStages()` 与那条读数**保留**：
   `镜像身份` 每跑打一行 `容器格（任务级 image:）：…`，下一次有人加一格时当场看得见
   名字，不必等 70ms 的那句红。
 
@@ -1039,7 +1039,7 @@ volumes:
 
 ###### 实现落点与判据
 
-`scripts/ci-container-plan.mjs` 从 `.cnb.yml` 读出三件（`runnerShape()` /
+`scripts/ci/ci-container-plan.mjs` 从 `.cnb.yml` 读出三件（`runnerShape()` /
 `containerStages()` / `plan()`），`describePlan()` 把「几格进容器、桥通不通」打成三行人读的
 话，由 `镜像身份` 那一档每跑打一遍 —— 让「这一次跑在什么环境上」不必翻 1000 行 YAML。
 
@@ -1250,7 +1250,7 @@ out-file : Could not find a part of the path 'F:\dev\null'.
 rg -n "没有 docker daemon|连「起容器」|连起容器" --glob '!docs/generated/**'
 ```
 
-此刻命中 `scripts/ci-env-probe.mjs`、`scripts/ci-image-plan.mjs`、`scripts/ci-image-identity.mjs`、
+此刻命中 `scripts/ci/ci-env-probe.mjs`、`scripts/ci/ci-image-plan.mjs`、`scripts/ci/ci-image-identity.mjs`、
 `tests/ci-image-identity.test.ts`、`docs/guides/ci-node-image.md` 与三份已登记的 `changelog.d/`
 碎片（后两者里那句会随发版进 `CHANGELOG.md`）。本条只改了**正文权威源**与 `.cnb.yml` 头注：
 那两处是「下一个人先读到」的地方，其余是注释与话术。
@@ -1397,7 +1397,7 @@ workspace`，最后一段恒定，只取 `basename` 就把有区分度的那一�
 工作区的**状态**而不是某棵树的文本，任何收窄都可能正好筛掉真正动了源码的那一次。
 
 **第二增量先落的是读数，不是开关**（2026-10-20）：新增一格 `缓存槽读数`
-（`scripts/ci-cache-slot.mjs`，恒退 0，与 `工作区复用读数` 同性质），只回答三问 ——
+（`scripts/ci/ci-cache-slot.mjs`，恒退 0，与 `工作区复用读数` 同性质），只回答三问 ——
 有没有槽（`COMFY_CI_CACHE_ROOT` 配没配）、该落哪个键、这一跑与它的关系是 `reuse` /
 `install-into-slot` / `no-cache` 哪一档。**键复用 `ci-install-deps.mjs` 的
 `pnpmInstallFingerprint`，不在这里重算一份 sha**：两处各算一份的漂移形态是具体的 ——
@@ -1408,13 +1408,13 @@ workspace`，最后一段恒定，只取 `basename` 就把有区分度的那一�
 为什么不与开关同批：那一格接的是 `Install dependencies`，**每次构建都要过它**，键算错的代价是所有 PR 装不上 —— 与 §13.5.25 那一刀立的「先让判据在场，再把开关拨过去」是同一条纪律。
 
 **第二增量的执行档已落地，开关已拨**（机制在 #2045、拨动在 2026-10-20）：动作全在
-`scripts/ci-slot-apply.mjs`，由 `COMFY_CI_SLOT=1` 才走。不置它时 `ci-install-deps.mjs`
+`scripts/ci/ci-slot-apply.mjs`，由 `COMFY_CI_SLOT=1` 才走。不置它时 `ci-install-deps.mjs`
 的行为与本增量之前逐字相同（一次槽都不问）；回退 = 摘掉那两行 env。
 
 **第三增量：构建缓存槽**（ISSUE #2158，2026-10-22）。这一格与前两格**不是一回事** ——
 但差别**不在「键带不带工作区路径」**（那句是本节过去写错的话，见下面「两臂」段末的订正）：
 依赖面那两格的键同样是**纯内容**哈希（`pnpmInstallFingerprint` = `DEP_FILES` 的内容 +
-`patches/` 摘要，`scripts/ci-deps-face.mjs`），槽根由 `pnpm store path` 所在卷 + 包名推导
+`patches/` 摘要，`scripts/ci/ci-deps-face.mjs`），槽根由 `pnpm store path` 所在卷 + 包名推导
 （`cacheRootFacts`），两者都不含作业目录 ⇒ **换一个 job 目录照样命中**。真正的区别是
 **缓存的对象**：前两格缓存装出来的依赖树（`node_modules`），这一格缓存 **Turbopack 的编译产物**
 （`<仓库>/.next/cache`），且它带一枚默认关的开关 `COMFY_CI_BUILD_CACHE`。实测（同机、同源码、
@@ -1430,7 +1430,7 @@ workspace`，最后一段恒定，只取 `basename` 就把有区分度的那一�
 同一份缓存重建，产物里出现了新源码的内容（18 个文件命中哨兵、0 个陈旧）—— 缓存按内容失效，
 不按路径失效。
 
-机制在 `scripts/ci-build-cache-slot.mjs`（四步，每一步都能单独不成立而不影响构建）：
+机制在 `scripts/ci/ci-build-cache-slot.mjs`（四步，每一步都能单独不成立而不影响构建）：
 
 1. **槽根**与依赖面那套槽**同一个推导**（问 `pnpm store path` 取它所在卷，再拼
    `ci-build-cache/<包名>`）—— 写在 `ci-cache-slot.mjs` 的 `resolveBuildCacheRoot` 里，
@@ -1813,7 +1813,7 @@ push 那一档后来也接 —— 分档的那条线见上面「push 档也接�
 
 配套三件事，缺一件那条读数就答不完整：
 
-- **配额与 TTL 的数字住在读数那一侧**（`scripts/ci-cache-slot.mjs`），执行档从那里取 ——
+- **配额与 TTL 的数字住在读数那一侧**（`scripts/ci/ci-cache-slot.mjs`），执行档从那里取 ——
   漂了之后的表现是「读数说够、执行按另一份算」，而淘汰那一刀是**会删盘**的动作；
 - **淘汰在「命中」那条路上也跑**（此前只在「装槽」那条路上跑）—— 于是「不再新建键 ⇒
   旧键永不回收」：依赖面不再变的那段时间里，过了 TTL 的键会一直躺着。而命中是最常走的
@@ -1825,7 +1825,7 @@ push 那一档后来也接 —— 分档的那条线见上面「push 档也接�
   没有产物的目录里没有任何东西值得保护，而目录自己的 mtime 就是「它从哪儿来」的证据。
   ⚠️ **读数那一格按同一份谓词把空壳从「被 TTL 挡着」里剔掉**（#2494）：空壳没有邮票、
   看起来在闸门内，旧读数会把它数进去 —— 于是同一份盘上「读数说它被挡着」与「执行档
-  无条件回收它」同时成立。谓词只有一份、住在读数侧（`scripts/ci-cache-slot.mjs` 的
+  无条件回收它」同时成立。谓词只有一份、住在读数侧（`scripts/ci/ci-cache-slot.mjs` 的
   `isUselessShell`），执行档从那里 import：依赖方向本来就是执行 → 读数，反向会成环。
 
 ⚠️ **配额那一档一个字没改**：仍是「超配额**且**过了 TTL 才淘汰」，闸门内的键一律留着
@@ -1858,7 +1858,7 @@ stream-log（`G:\runner\data\orange-ci\stream-log\cnb-<sn>-001.log`）：
 只看 <生效落点>」。⚠️ **判据本身一个字没放宽** —— 默认根里有、而生效落点里没有时仍然判不过
 （`ok` 仍是假）：运行时只看生效落点，判过它才是假的。这一问只改**读数说的是什么**。
 而「装」与「判」之所以还能是同一个落点，靠的是**落点推导只有一份实现**
-（`scripts/ci-toolchain-browser-root.mjs`，从 `ci-toolchain-browser.mjs` 里拆出来的 ——
+（`scripts/ci/ci-toolchain-browser-root.mjs`，从 `ci-toolchain-browser.mjs` 里拆出来的 ——
 那一族三个文件已经在 900 行硬闸边上）。
 
 **临时根必须事先存在**：临时根不存在时 Node 的 `os.tmpdir()` 仍会把它当临时目录返回，
@@ -1918,7 +1918,7 @@ stream-log（`G:\runner\data\orange-ci\stream-log\cnb-<sn>-001.log`）：
 | **git**                                                 | 自托管机的基本依赖（官方文档原话「必装」）                                                                                                                                                                                                                 | 工具链自证                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | **Node**（在 `engines.node` 范围内）                    | 什么都跑不起来                                                                                                                                                                                                                                             | 工具链自证                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | **pnpm**                                                | 同上（`corepack` 会在缺它时自己去下载 `packageManager` 指的那版，但那是每次构建的额外网络往返）                                                                                                                                                            | 工具链自证                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| **Python**                                              | `check-app-port-vectors.cjs` 把这一侧归进 `missing` 档、**退出四侧比对**；`log-run-layout` / `api/logs/diagnostics` 直接 `spawnSync python3 ENOENT`；E2E `@critical` 的假 comfy-cli 是一个 Python 包，没有解释器时执行器起不来                             | **`scripts/ci-toolchain-selfcheck.mjs`（编排与打印）＋ `scripts/ci-toolchain-python.mjs`（Python 那一层的机制）**：候选表读 `src/lib/process/python-candidates.ts`（同口径探 `python` / `py` / `python3`，`py` 带 `-3`）。缺件时**按序三条真装通道** —— ① `winget`（入口按**一串落点**找：本账号 → 其他账号 profile → 各盘 `Program Files`；安装 **`--scope user` → `--scope machine` 两条都试** —— Runner 常以服务账号跑，用户级安装它看不见）② `scoop` ③ **官方 embed 包解到检出本地**（固定版本号，不碰系统 / 不需要管理员 / 不依赖包管理器）。**装完一律用同一个探针复验**（不采信安装器的退出码），三条都不成时非零退出并把它写成平台侧人工动作；详见 §13.5.3.5.1 |
+| **Python**                                              | `check-app-port-vectors.cjs` 把这一侧归进 `missing` 档、**退出四侧比对**；`log-run-layout` / `api/logs/diagnostics` 直接 `spawnSync python3 ENOENT`；E2E `@critical` 的假 comfy-cli 是一个 Python 包，没有解释器时执行器起不来                             | **`scripts/ci/ci-toolchain-selfcheck.mjs`（编排与打印）＋ `scripts/ci/ci-toolchain-python.mjs`（Python 那一层的机制）**：候选表读 `src/lib/process/python-candidates.ts`（同口径探 `python` / `py` / `python3`，`py` 带 `-3`）。缺件时**按序三条真装通道** —— ① `winget`（入口按**一串落点**找：本账号 → 其他账号 profile → 各盘 `Program Files`；安装 **`--scope user` → `--scope machine` 两条都试** —— Runner 常以服务账号跑，用户级安装它看不见）② `scoop` ③ **官方 embed 包解到检出本地**（固定版本号，不碰系统 / 不需要管理员 / 不依赖包管理器）。**装完一律用同一个探针复验**（不采信安装器的退出码），三条都不成时非零退出并把它写成平台侧人工动作；详见 §13.5.3.5.1 |
 | **（说明）缺 Python 那一档在单元测试层是 `env` 档跳过** | 三条验包 / 真跑的用例没有它就跑不了 —— 它们跳过后**在 `tests/conditional-skip-registry.test.ts` 里看得见**（档位 `env`，与 `check-file-structure.test.ts` 的 `!python` 同处置）。机器缺工具是**环境**缺口，本仓的既有口径是「跳过 + 登记」，不是让流水线红 | 守卫是文件顶部的 `PYTHON_OK` 常量。**别写成 `it.skipIf(!hasPython())`**：登记表的扫描器按 `[^)]*` 取守卫文本，守卫里带一对括号会让它整个匹配不上，新增的 skip 站点于是在登记表里**隐形** —— 那正是登记表要防的失效形态                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | git 的可提交身份                                        | `tests/helpers/gate-repo.ts` 那一族（`base-check` / `merged-side-loss` / `deps-freshness`）里夹具的 `git commit` 失败                                                                                                                                      | **夹具自己说话**，见下                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
@@ -1945,7 +1945,7 @@ stream-log（`G:\runner\data\orange-ci\stream-log\cnb-<sn>-001.log`）：
 >
 > 处置分两层，按「谁的事实」分：
 >
-> - **仓库侧（已做）**：新增 `scripts/ci-console-encoding.mjs`，流水线第一步
+> - **仓库侧（已做）**：新增 `scripts/ci/ci-console-encoding.mjs`，流水线第一步
 >   （`工具链自证`）**先纠编码再打印任何中文** —— `chcp` 与
 >   `[Console]::OutputEncoding` 都钉成 UTF-8。它们改的是**控制台对象**上的设置、
 >   同一控制台里的进程共享它，所以第一步设、后面的 stage 都受益。`环境前提` 那一步
@@ -1980,14 +1980,14 @@ stream-log（`G:\runner\data\orange-ci\stream-log\cnb-<sn>-001.log`）：
 >   调用点（`src/app/api/custom-nodes/route.ts` 的三条链）不再自写候选表；
 >   **平台字面量只住在 `python-run.test.ts`**，调用点的用例取 `pythonCandidates()` 当期望 ——
 >   两边同时写死一串字面量时一起错也一起绿，那正是台账 A14 的成因。
-> - **跨宿主的两处保留文本副本、由用例对账**：`scripts/check-app-port-vectors.cjs`
->   是 `.cjs`（`require` 不到那份 `.ts`），`scripts/ci-toolchain-selfcheck.mjs` 刻意不
+> - **跨宿主的两处保留文本副本、由用例对账**：`scripts/gates/check-app-port-vectors.cjs`
+>   是 `.cjs`（`require` 不到那份 `.ts`），`scripts/ci/ci-toolchain-selfcheck.mjs` 刻意不
 >   `import` 它（这一步要在「Node 模块链还没被证明可用」的机器上也能给出可读输出）。
 >   两份副本由 `tests/ci-toolchain-selfcheck.test.ts` 逐项对账 —— **漂了就红**。
 > - **逻辑从配置里搬进脚本**：那一步原先是一段 ~70 行就地 PowerShell（探 Python、
 >   `winget` 当场装、打印取证），而**配置里的逻辑一条判据都测不到它**
 >   （`.cnb.yml` 只在平台上跑，本地一个执行者都没有）。现在它是
->   `scripts/ci-toolchain-selfcheck.mjs`，能被单测直接跑；判的是 git / node
+>   `scripts/ci/ci-toolchain-selfcheck.mjs`，能被单测直接跑；判的是 git / node
 >   （含 `engines.node` 的 caret **上界**）/ pnpm / Python 四件。
 > - **红的时候必须给下一动作**：`CommandNotFoundException` 分不出「装了 Python 但没进
 >   PATH」与「压根没装」，而处置不同（改 PATH vs 去装一个）。失败分支把这两条处置
@@ -2006,7 +2006,7 @@ stream-log（`G:\runner\data\orange-ci\stream-log\cnb-<sn>-001.log`）：
 > **零命中** ⇒ 会得出「这台机真的没装」；可同一份日志的 PATH 里明明带着
 > `D:\Users\<name>\...` 与 `D:\Program Files\...` —— 这台机把用户数据与程序放在
 > `D:` 盘，解释器根本不在标准落点上。**只查标准落点会反向误导。** 现在
-> `scripts/ci-toolchain-selfcheck.mjs` 的落点清单一处定义、三处用（取证 / 装后回找 /
+> `scripts/ci/ci-toolchain-selfcheck.mjs` 的落点清单一处定义、三处用（取证 / 装后回找 /
 > 安装），扩成三类：**标准落点** + **本机 PATH 上出现过的盘符下的同类位置**
 > （从 PATH 反推盘符，不写死 `C:` / `D:` —— 写死等于又假设了一遍）+
 > **其他账号 profile 里的按用户安装**（`<盘>:\Users\*\AppData\Local\Programs\Python`）
@@ -2018,9 +2018,9 @@ stream-log（`G:\runner\data\orange-ci\stream-log\cnb-<sn>-001.log`）：
 
 > **第四轮：e2e 那一档也有了自己的 Python 前置。** 假 comfy-cli 是一个 Python 包，
 > 缺解释器时主链路那条 `@critical` 只会以「执行器收口失败」红 —— 一件事被报成两条
-> 功能红，而报错不指向真因。现在 `scripts/e2e-run.mjs` 在起 Playwright **之前**判一次
+> 功能红，而报错不指向真因。现在 `scripts/e2e/e2e-run.mjs` 在起 Playwright **之前**判一次
 > （`e2e/support/preflight-python.mjs`），判红**不放行**（与同批的浏览器预检同口径），
-> 出口指向 `scripts/ci-toolchain-selfcheck.mjs`。同批修掉一个真 bug：`fakeExecutorEnv()`
+> 出口指向 `scripts/ci/ci-toolchain-selfcheck.mjs`。同批修掉一个真 bug：`fakeExecutorEnv()`
 > 交给应用的 `COMFY_CLI_PYTHON` 是个**裸名字**（`python` / `py`），而应用侧直接 `spawn`
 > 它 —— Windows 上 Node 不认 PATHEXT，裸名字必然 `ENOENT`。现在 pre-flight 把它解析成
 > **绝对路径**，经 `E2E_PYTHON_PREFLIGHT` 带进 `playwright.config.ts`；读不到时退回裸
@@ -2180,9 +2180,9 @@ stream-log（`G:\runner\data\orange-ci\stream-log\cnb-<sn>-001.log`）：
 仍然起不来（解压坏了、杀软拦了、PATH 还没生效）都是真有的形态；下一个人读的是
 `== python ==` 那一行有没有版本号。所以 `main()` 装完**一律回到 `findPython()` 再探
 一遍**，判据只有那一个。装与判分家的另一个好处是本地也能自查 ——
-`node scripts/ci-toolchain-selfcheck.mjs` 不装任何东西，只回答「这台机器够不够跑门禁链」。
+`node scripts/ci/ci-toolchain-selfcheck.mjs` 不装任何东西，只回答「这台机器够不够跑门禁链」。
 
-**这一层为什么与「自证」分开成一个文件**：`scripts/ci-toolchain-selfcheck.mjs` 一度涨到
+**这一层为什么与「自证」分开成一个文件**：`scripts/ci/ci-toolchain-selfcheck.mjs` 一度涨到
 900 行以上，而 `check-infra-file-size.cjs` 的硬闸（§12.6 R5 的姊妹档）就在那儿 ——
 **没有基线可登记，出路只有拆**。拆的边界按职责，不按长度：`ci-toolchain-python.mjs`
 回答「哪个解释器能跑、弄不到时怎么弄到手」（候选探测 / 三条装通道 / 安装根 / 取证），
@@ -2193,7 +2193,7 @@ stream-log（`G:\runner\data\orange-ci\stream-log\cnb-<sn>-001.log`）：
 
 **这一步为什么不进 §9.5 的「跨平台动作对照表」**：那张表每一行必须同时给出 `.ps1` 与
 跨平台侧脚本（判据是「同一件事在两个平台上各有一份实现」），而工具链自证**只有一份
-实现** —— `scripts/ci-toolchain-selfcheck.mjs`，`.cnb.yml` 那一步直接 `node` 它，本地
+实现** —— `scripts/ci/ci-toolchain-selfcheck.mjs`，`.cnb.yml` 那一步直接 `node` 它，本地
 自查也是同一个入口。它内部按平台分叉的只有「Python 那条探测与三条装通道」（Windows
 专属），那是**同一份脚本里的分支**，不是两份实现。登记进对照表反而会把「这里有两份要
 同步的东西」说过头 —— 而对照表的存在意义正是让「必须同步的那几对」看得见。
@@ -2213,7 +2213,7 @@ stream-log（`G:\runner\data\orange-ci\stream-log\cnb-<sn>-001.log`）：
 > 写那一份时按 **5.1 的语法面**自查：要判空就显式 `if ($x) { … }`，不要用 `?.`。
 >
 > （同一件事的另一半理由：正因为这类**只有推上台才照得出来**的坑，工具链自证的逻辑
-> 现在整体搬进了 `scripts/ci-toolchain-selfcheck.mjs` —— Node 侧，本地能跑、能被单测跑。）
+> 现在整体搬进了 `scripts/ci/ci-toolchain-selfcheck.mjs` —— Node 侧，本地能跑、能被单测跑。）
 
 > **「自查」这件事现在有执行者**（只靠人记得是不够的：开发机通常只有 `pwsh` 7，
 > 同一行在那边完全正常 —— **「我这儿跑得通」在这条上不构成证据**）。
@@ -2311,7 +2311,7 @@ stream-log（`G:\runner\data\orange-ci\stream-log\cnb-<sn>-001.log`）：
 **第五类：判据与被判的对象不是同一条解析链**（第七轮，`E2E 关键流程` 1 例，
 **崩溃在加载期**）。前四类都是用例内部的事，这一类是**判据本身从没走到那条路上**：
 
-- 现场：`node scripts/e2e-run.mjs --grep @critical` 在 **897ms** 退 1 ——
+- 现场：`node scripts/e2e/e2e-run.mjs --grep @critical` 在 **897ms** 退 1 ——
   `ERR_MODULE_NOT_FOUND: Cannot find module '…/src/lib/process/executable-resolve'
   imported from …/src/lib/process/python-resolve.ts`。而这一跑前面全绿：ESLint 196s、
   `单元测试` 13.2m、27 条结构判据、`生产构建` 2.1m（bundle 在预算内、产物干净）。
@@ -2340,7 +2340,7 @@ stream-log（`G:\runner\data\orange-ci\stream-log\cnb-<sn>-001.log`）：
 >
 > - **判据要按链走，不是按「一份文件」走**。`platform.ts` 那个叶子挂上去之后，
 >   `tests/standalone-runtime.test.ts` 的随包清单（`RUNTIME_SRC`）、
->   `scripts/check-standalone-contents.cjs` 的 `ALLOWED_SRC_FILES`、
+>   `scripts/gates/check-standalone-contents.cjs` 的 `ALLOWED_SRC_FILES`、
 >   `tests/linux-env-bootstrap.test.ts` / `tests/dependency-audit.test.ts` /
 >   `tests/check-reformat-only.test.ts` 三份临时仓库夹具**当场全红** ——
 >   它们列的都是**一份文件**，而不是那条链的闭包。逐文件放行的语义是
@@ -2386,7 +2386,7 @@ stream-log（`G:\runner\data\orange-ci\stream-log\cnb-<sn>-001.log`）：
   对照命令：`cnb build get-build-logs --repo <slug> --page-size 100 --page <n>`，
   看返回里 `pipelines[].labels`（**平台池与自托管在同一个字段上就能区分**，
   不需要别的通道）。
-- **看第一步的「工具链自证」输出**（`scripts/ci-toolchain-selfcheck.mjs`）：
+- **看第一步的「工具链自证」输出**（`scripts/ci/ci-toolchain-selfcheck.mjs`）：
   `== OS ==` 那一段打出的是 `win32` / 宿主 arch —— 它是这条流水线里唯一与
   「跑在 Windows 宿主机上」绑定的证据，平台池（Linux）上会直接是 `linux`。
   这也是那一步不只是「打印版本」的原因。它同时打出 `== python ==` 那一行：
@@ -2442,7 +2442,7 @@ stream-log（`G:\runner\data\orange-ci\stream-log\cnb-<sn>-001.log`）：
 （洞察 → 单元测试覆盖率 那一页）只能由平台侧的 `cnb insight ut report` 写进去，
 没有仓库自己的等价通道 —— 那一页在 #623 删旧版流水线后一直显示「无 / 无」，因为
 写它的 `testing:coverage` 插件随旧配置一起没了、#1959 重建时没被带回来。现在它是
-一条**后置**的普通 step（`scripts/ci-coverage-report.mjs`），三处与旧插件不同：
+一条**后置**的普通 step（`scripts/ci/ci-coverage-report.mjs`），三处与旧插件不同：
 ① 自己判 `coverage/lcov.info` 在不在，缺了只跳过、**不判红**（`单元测试` 此刻被
 临时停用时报告本来就不存在，判红等于让停用连带把整条流水线拦死）；
 ② **不设任何阈值**（平台阈值是绝对百分比，与本仓「按目录记门槛 + 棘轮」的口径冲突）；
@@ -2488,7 +2488,7 @@ stream-log（`G:\runner\data\orange-ci\stream-log\cnb-<sn>-001.log`）：
 
 > ⚠️ **本节的两处数字都是历史条件，不是现状**：那一步后来改走跑法脚本
 > `scripts/full-suite-run.mjs`（#1979），并发不再由 `.cnb.yml` 写死，而是由
-> `scripts/ci-load.mjs` 按现场核数折算（#1993 → §13.5.21）；档位从「一 worker 至少 4 核」
+> `scripts/ci/ci-load.mjs` 按现场核数折算（#1993 → §13.5.21）；档位从「一 worker 至少 4 核」
 > 抬到「至少 8 核」（#2317，16 核 ⇒ 2）；而**本节当作对照的那个 `vitest.config.ts` 的 8**
 > 自 #2324 起也改成同一个出处推导 —— 「写死 4 vs 吃配置里的 8」这个**两副本**的问题
 > 已经不存在，剩下的是**一个数**在两个消费点。下面这些读数与推导**保留原样**当账本
@@ -2538,7 +2538,7 @@ stage 变红** —— 用到解释器的那几条用例按既有口径走 `env` 
 （`python` / `py` / `python3`，`py` 的判据是 `py -3 --version`），并由
 `.githooks/pre-commit` 的 C 组在跑结构守护用例**之前**打印一次。两处分工要说清：
 
-- `--python-only`（`scripts/ci-toolchain-selfcheck.mjs`）判**结论** —— 「门禁链要的那个
+- `--python-only`（`scripts/ci/ci-toolchain-selfcheck.mjs`）判**结论** —— 「门禁链要的那个
   解释器在不在」，判据只有一条，缺件时非零退出；
 - `python-probe.mjs` 列**论据** —— 「另外那几个命令在哪」，退出码恒为 0，
   它是打印、不是判据。
@@ -2628,7 +2628,7 @@ E2E 那两格调绿」的每一轮里都要白重跑一遍，节点侧 ESLint �
 
 | 面                         | 缺了会怎样（红在哪）                                                                                                                                                                                                                                                  | 现在的执行者                                                                                                |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| **解释器的版本**           | **哪一步都不会红**：门禁的 Python 侧探到解释器就把那一侧拉进四向比对（版本不够时它自己先抛 `SyntaxError`，报出来的是一句看不懂的 Python 栈）、那几条真跑的用例走 `env` 档跳过并登记 —— 「版本不对」与「装好了」在日志里**逐字同形**                                   | `环境前提`（`scripts/ci-env-probe.mjs`），下限 `Python 3.10`                                                |
+| **解释器的版本**           | **哪一步都不会红**：门禁的 Python 侧探到解释器就把那一侧拉进四向比对（版本不够时它自己先抛 `SyntaxError`，报出来的是一句看不懂的 Python 栈）、那几条真跑的用例走 `env` 档跳过并登记 —— 「版本不对」与「装好了」在日志里**逐字同形**                                   | `环境前提`（`scripts/ci/ci-env-probe.mjs`），下限 `Python 3.10`                                                |
 | **`.cnb.yml` 的语法面**    | 不在解析期报错，只在跑到那一段时整段炸。实测落点在 `Install dependencies` —— 而它前面的预算已经花掉了                                                                                                                                                                 | `环境前提`（同一份 `ps7OnlySyntaxIn`，与 `tests/no-platform-ci-config.test.ts` 的判据同源）                 |
 | **浏览器那一格的网络前提** | **红在整条流水线的倒数第二步**（`浏览器安装`）：落点空 + 下载根不通 ⇒ 必然失败，而那之前几十步（含 `单元测试` 897s、`生产构建`）的预算已经花掉。实测这一格红过四次，形态都是「前面三十步全绿、二十几分钟之后卡在下载上」（`cnb-gt1-1k513ill4` / `cnb-g9d-1k515kvrq`） | `环境前提`（同一份 `browserExecutableExists()` + `playwrightReachabilityVerdicts()`，与 `浏览器安装` 同源） |
 
@@ -2705,7 +2705,7 @@ E2E 那两格调绿」的每一轮里都要白重跑一遍，节点侧 ESLint �
   **浏览器落点空、而配置里那一步要用的下载根取不回字节**（没配根时退成「候选那一族
   一条都到不了」——那时「这台机器出得去这类域吗」才是要答的问题）。
 
-**`Install dependencies` 那一步同批补了 1 秒的自证**（`node scripts/check-pnpm-available.mjs`）
+**`Install dependencies` 那一步同批补了 1 秒的自证**（`node scripts/gates/check-pnpm-available.mjs`）
 —— 判在 `pnpm install` **之前**。它判的是「host 自己的解析面起不起得来 pnpm」，
 与 `工具链自证` 那份**刻意按形态解析**的探针不是同一条链（corepack 的三个形态里
 Node 只起得来一个，见 §2.1.1）；两者不一致时此前的形态是「第一步绿、几十步之后
@@ -2953,7 +2953,7 @@ squash 不同分支 = 连续两次落 master = 两条 `push` 流水线，第二�
 **按车道分锁**（给一台机造出并行容量），这里做的是相反的一件事：把「一件工作被另一件
 不相干的工作掐掉」修回去。同一台机上几条重档会叠加这件事**本来就存在**（PR 之间各用
 `pr-<iid>`，早已在并行；每日档这一把 `pr-` 与它们本就不同名），压力的答案住在
-`scripts/ci-load.mjs` 那条按现场核数收敛里（§13.5.21），不在锁里。
+`scripts/ci/ci-load.mjs` 那条按现场核数收敛里（§13.5.21），不在锁里。
 而「按事件分两档各写一份」那条反对意见在这里仍然被避开：**每类只有定义一处**
 （`.lock-*` 锚点），流水线只**引用** —— 漂移的那一半由下面的判据拦。
 
@@ -3158,7 +3158,7 @@ E2E 关键流程                 562ms  ❌  [e2e] ✗ PATH 上没有可用的 P
 > 于是它开始**在链路抖的时候红** —— 而这一格要回答的问题是「这一档跑得起来需要的东西
 > 在不在」，不是「今天能不能连上 CDN」。
 >
-> 三处同批（都记在 `scripts/ci-toolchain-browser.mjs` 的头注里）：
+> 三处同批（都记在 `scripts/ci/ci-toolchain-browser.mjs` 的头注里）：
 >
 > - **装过的就不下**：开跑前先按落点判一次（与那条复验**同一份实现**），两件都齐
 >   直接跳过。判据仍是「东西落地了」，所以「只装了完整 `chromium`」这一档**不会**被
@@ -3547,7 +3547,7 @@ ffmpeg），而 E2E 真启动的是 headless shell —— 所以 ffmpeg 不是�
   error: option '-g, --grep <grep>' argument missing
   ```
 
-  根因：`script: node scripts/e2e-run.mjs --grep @critical` 里那个 `@critical`
+  根因：`script: node scripts/e2e/e2e-run.mjs --grep @critical` 里那个 `@critical`
   **在 stage shell 那一层就没了**。`.cnb.yml` 头注第 3 条写着「脚本语言是
   PowerShell」—— 在 PowerShell 里 `@critical` 是**给 `$critical` 的 splatting**，
   变量不存在就展开成空，于是 Playwright 只收到一个没有值的 `--grep`。
@@ -3589,7 +3589,7 @@ ffmpeg），而 E2E 真启动的是 headless shell —— 所以 ffmpeg 不是�
 `script:` 的值以 `[` 开头 —— 在 YAML 里那是**流式序列**的开头，整份文件当场解析不过
 （当年是 prettier 报 `SyntaxError: Unexpected scalar at node end`），而平台侧只会表现成
 「流水线起不来」，看不出是哪一行。所以写成 `$enc=…` 开头的两句。语法判据是**免费**的：
-`pnpm check:ci-yaml`（`scripts/check-ci-yaml-parse.mjs`，用 `yaml` 包解析 `.cnb.yml` 与
+`pnpm check:ci-yaml`（`scripts/gates/check-ci-yaml-parse.mjs`，用 `yaml` 包解析 `.cnb.yml` 与
 `.github/workflows/`，2026-11-02 起；prettier 已随 #2541 退役，当年那句
 `pnpm exec prettier --check .cnb.yml` 今天跑不了 —— 别再照它敲）。改完配置文件跑一下，
 就知道语法有没有炸、锚点引用断没断。
@@ -3609,7 +3609,7 @@ ffmpeg），而 E2E 真启动的是 headless shell —— 所以 ffmpeg 不是�
 ```
 
 **三行同一种乱法**说明的事很硬：抓取端**不是**按「当前控制台代码页」解码的 ——
-它按**宿主 ANSI 代码页**（这台机器上是 CP936；`scripts/ci-console-encoding.mjs`
+它按**宿主 ANSI 代码页**（这台机器上是 CP936；`scripts/ci/ci-console-encoding.mjs`
 自己那行读数 `宿主输出代码页：936（非 UTF-8 …）` 就是答案），而**改控制台对象上的
 设置动不了它**。这同时否掉了本仓此前写在 `ci-console-encoding.mjs` 头注里的那半句
 「PowerShell 自己打的字是好的」（那是在**没钉** UTF-8 时的形态：PS 按 936 写、
@@ -3686,9 +3686,9 @@ UTF-8 **解对**，那正是「以 CP936 出口」这一步的前提 —— 不�
 上面那条「逐 stage 转码」此前只是一个**结论**，没有任何执行者 —— 每个 stage 照旧只钉
 65001，子进程的 UTF-8 字节照旧被平台按 CP936 解（现场就是 `Python 探针读数` 那一行
 `ok  python --version  鈫? Python 3.12.10`）。现在它落成了
-**`scripts/ci-cp936-exit.mjs`**，`.cnb.yml` 里每个 stage 的命令都包在它外面：
+**`scripts/ci/ci-cp936-exit.mjs`**，`.cnb.yml` 里每个 stage 的命令都包在它外面：
 
-    node scripts/ci-cp936-exit.mjs -- <真命令> [参数...]
+    node scripts/ci/ci-cp936-exit.mjs -- <真命令> [参数...]
 
 三件事值得记，都不是风格：
 
@@ -3746,12 +3746,12 @@ UTF-8 **解对**，那正是「以 CP936 出口」这一步的前提 —— 不�
 
 **处置**：换字形，而不是换编码。
 
-- **仓库侧**：`scripts/ci-cp936-glyphs.mjs` 在**转码之前**把没有字形的字符换成**读得出来的等价写法**
+- **仓库侧**：`scripts/ci/ci-cp936-glyphs.mjs` 在**转码之前**把没有字形的字符换成**读得出来的等价写法**
   （`✓` → `√`、`✗` → `×`、`⇒` → `→`；这些替代物全都在 CP936 里）；零宽类（零宽空格 /
   变体选择符 / BOM / 软连字符）**删掉**；其余写成 `\uXXXX`（纯 ASCII，**信息不丢**）。
   归一化**幂等**，且**读数自己**必须全是 CP936 编得出来的字符 —— 否则读数自己会变成问号，
   那正是这一层要治的病（`tests/ci-cp936-glyphs.test.ts` 判这一条）。
-- **入口守卫**：`scripts/check-cp936-glyphs.cjs` 判「会进 CI 日志的面里（`scripts/**`、`tests/**`、
+- **入口守卫**：`scripts/gates/check-cp936-glyphs.cjs` 判「会进 CI 日志的面里（`scripts/**`、`tests/**`、
   `tools/**`、`src/**` 的测试文件、`.cnb.yml`），没有字形的字符是不是都登记了替代写法」。
   没登记的那些走 `\uXXXX` 兜底 —— 信息不丢，但那是「如实记下」而不是「好好显示」，
   作者得知道自己在日志里写出来的是什么样子。
@@ -3776,7 +3776,7 @@ UTF-8 **解对**，那正是「以 CP936 出口」这一步的前提 —— 不�
     TypeError [ERR_UNKNOWN_ENCODING]: Unknown encoding: buffer
         at Buffer.from (node:buffer:339:12)
         at spawnSync (node:child_process:916:29)
-        at scripts/ci-cp936-exit.mjs:121
+        at scripts/ci/ci-cp936-exit.mjs:121
 
 `spawnSync` 的 `encoding` 收的是**编码名字符串**（或 `null`，表示 stdout/stderr 给
 `Buffer`），`"buffer"` **不是**编码名。这条错法有个连体的第二形态：被拒之后自然会改成
@@ -3813,7 +3813,7 @@ CP936 出口这一步成立），红的位置往下走到 `Install dependencies`
 
     [cp936-exit] 起不了这条命令：pnpm
 
-`.cnb.yml` 那一行是 `node scripts/ci-cp936-exit.mjs -- pnpm install --frozen-lockfile`
+`.cnb.yml` 那一行是 `node scripts/ci/ci-cp936-exit.mjs -- pnpm install --frozen-lockfile`
 —— 包的是**一个名字**，而外壳当时用的是 `commandInvocation()`。那一层的契约是
 「**候选路径** → spawn 形态」：它解析不出来时**原样退回候选**（`{command: candidate}`），
 对一条已经在盘上的路径是忠实的，对 `pnpm` 这种名字却等于把 `spawn("pnpm")` 直接扔给
@@ -3859,7 +3859,7 @@ shim 是 shebang），而当时 `.cnb.yml` 里那条 `node_modules/.bin/tsc` 与
 —— 这是两个问题。**
 
 > **#2572 把这一处从「起得来」升级成「起得省」**：那两格后来改走
-> `node scripts/ci-run-tool.mjs <名字>` —— 它按**垫片名字**问出包真身的 JS 入口，再
+> `node scripts/ci/ci-run-tool.mjs <名字>` —— 它按**垫片名字**问出包真身的 JS 入口，再
 > `spawn(process.execPath, [入口, …])`。外壳对垫片路径的处理**一字未改**（清单里再没有
 > 那种写法，判据仍在 `tests/ci-cp936-exit.test.ts`），少掉的只是「非要经一层 PowerShell
 > 宿主才能起一个仓里的编译器」这一跳。为什么必须按名字问、不能按依赖名问（本仓 `tsc`
@@ -3917,9 +3917,9 @@ const code = raw
   .join("\n");
 ```
 
-而 `scripts/ci-cp936-exit.mjs` 的头注（`/** … */`）里正好拿 `spawn("pnpm")` 当**反面
+而 `scripts/ci/ci-cp936-exit.mjs` 的头注（`/** … */`）里正好拿 `spawn("pnpm")` 当**反面
 举例**。块注释的每一行都以 `*` 起头，上面那种剥法一条都匹配不上 —— 于是判据把注释里的
-引文读成「这个文件真写了这句」，点名 `scripts/ci-cp936-exit.mjs: 直接起 pnpm`。
+引文读成「这个文件真写了这句」，点名 `scripts/ci/ci-cp936-exit.mjs: 直接起 pnpm`。
 
 它此前一直没露出来，原因有两个、彼此独立：平台侧停在 `类型检查` 前面几步；而
 `scripts/base-check/hook-steps.mjs` 里同形态的引文被「该文件**别处**用了 `runPnpmSync`」
@@ -4007,7 +4007,7 @@ standalone 入口属于**桌包链**（`standalone-runtime.mjs`）—— 那边�
 与数据锚点也由它自己给。`scripts/start.mjs` 已退回 `next start` 并就地写明这段来历，
 `tests/standalone-runtime-completeness.test.ts` 那一组**反向**钉住：不许出现
 `useStandalone` / `[standaloneServer]` / `buildStandaloneRuntimeEnv(` 这三样。
-实测 `CI=1 node scripts/e2e-run.mjs --grep=@critical` ⇒ **73 passed（36.7s）**。
+实测 `CI=1 node scripts/e2e/e2e-run.mjs --grep=@critical` ⇒ **73 passed（36.7s）**。
 
 > 这一处与前面九处同源、方向相反：前面几处是「结论到不了人手里」，这一处是**结论到了、
 > 被误读了** —— 一句 `⚠` 与一句 `Error:` 在日志里只差一个符号，按错的那一个改下去，
@@ -4044,7 +4044,7 @@ standalone 入口属于**桌包链**（`standalone-runtime.mjs`）—— 那边�
 
 **处置：认出「是我们自己的上次留下的」才收，收完把 pre-flight 结论重算一遍。**
 
-- 新增 `e2e/support/reclaim-ports.mjs`；`scripts/e2e-run.mjs` 在 `spawn` Playwright
+- 新增 `e2e/support/reclaim-ports.mjs`；`scripts/e2e/e2e-run.mjs` 在 `spawn` Playwright
   **之前**调它（`if (env.CI && preflight.fakeOccupied)`）。位置只有一个正确取值：
   Playwright 抛在探测那一步，收它只能在 `spawn` 之前。
 - 判据是**两条证据、缺一不可**：命令行点名本仓的 `e2e/support/fake-comfyui-server.mjs`
@@ -4085,7 +4085,7 @@ standalone 入口属于**桌包链**（`standalone-runtime.mjs`）—— 那边�
     ❌ E2E 关键流程: 2160122ms (error)
        错误信息: timeout of 2160000ms exceeded
        ─── 日志 ───
-       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/e2e-run.mjs --grep=@critical
+       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci/ci-cp936-exit.mjs -- node scripts/e2e/e2e-run.mjs --grep=@critical
        Finished, code: ECONNABORTED, duration: 36m 0s
 
 **36 分钟、零行输出**（`cnb-ib5-1k52mvr8k`）。`e2e-run` 那几条前置读数
@@ -4151,13 +4151,13 @@ standalone 入口属于**桌包链**（`standalone-runtime.mjs`）—— 那边�
 外壳起那条命令之前会先问一句「这个候选在这台机器上起得来吗」，而那次确认
 （`usableCommand` 的「真起一次」）喂的参数**正是那条命令自己的真实参数**：
 
-    resolveShellInvocation("node", ["scripts/e2e-run.mjs", "--grep=@critical"])
+    resolveShellInvocation("node", ["scripts/e2e/e2e-run.mjs", "--grep=@critical"])
       → resolveCommandInvocation("node", <同一份真实参数>)
       → usableCommand(<node 的绝对路径>, <同一份真实参数>)   ← 探针在这里**起了它**
 
 于是 `.cnb.yml` 里每一格 `node scripts/…` 都被**执行了两遍**。E2E 那一格最贵：
 
-- 探针真起了一次 `node scripts/e2e-run.mjs --grep=@critical` —— 它把 Playwright 的
+- 探针真起了一次 `node scripts/e2e/e2e-run.mjs --grep=@critical` —— 它把 Playwright 的
   webServer（`pnpm start` = standalone server + 假 ComfyUI）**拉起来**；
 - `spawnSync` 的超时**只收直接子进程**，那些服务器是孙子进程、留在端口上继续跑
   （本机真跑一次量过：`spawnSync(…, {timeout: 3000})` 退 `ETIMEDOUT`，孙子 `listening`
@@ -4252,7 +4252,7 @@ duration: 36m 0s`），只差构建号与那十几毫秒。
 | `spawnSync(…, { stdio: "inherit" })`（旧） | 看不出差别 | 缓冲随进程消失 ⇒ **日志零行** |
 | `spawn` + `{ stdio: "inherit" }`（现在）   | 一样       | 每一行**都已经发出去了**      |
 
-起法现在由 `scripts/e2e-run-playwright.mjs` 的 `resolvePlaywrightInvocation()` 一处给出
+起法现在由 `scripts/e2e/e2e-run-playwright.mjs` 的 `resolvePlaywrightInvocation()` 一处给出
 （**不缓存**：这是它与旧写法唯一的实质差别），`runChild()` 负责真起一次并把退出码 /
 被信号打死 / `ENOENT` 三条收场分开交出。
 
@@ -4261,7 +4261,7 @@ duration: 36m 0s`），只差构建号与那十几毫秒。
 `runPreflightReadings()` 编排成一步（`makePreflightCollectors()` 把三份判决翻成
 「一句读数 / 一句阻断话术」，判据一个字没搬）：**拦之前先把已算出来的说出口**。
 
-**为什么这一格要拆文件**：`scripts/e2e-run.mjs` 加上这两半之后越过了
+**为什么这一格要拆文件**：`scripts/e2e/e2e-run.mjs` 加上这两半之后越过了
 `check-infra-file-size.cjs` 的 900 行硬闸（存量已清零、无基线可登记），出口只有拆。
 拆的边界是「怎么起 Playwright」这一族（入口解析 + 起法 + 等结论 + 读上游源码），
 `e2e-run.mjs` 留住「这一跑算不算跑绿了、要不要记账」。
@@ -4459,7 +4459,7 @@ null，而 harness 打的是「退出码 **信号** / 不记账」。
 卡 60s（`/settings` ×2、`/workspace` ×1），而单 worker 独跑同一条 spec 时冷编译只要
 14.8s —— 路由不慢，红的是并发下首帧编译被同伴撕超；降到 2 后复测，超时形态
 33 → 3 → 1（剩下那条在 runtime-budget 的 `/workspace`，该 spec 本机单跑也是真红，
-与负载无关）。档位三处同批：`playwright.config.ts` / `scripts/e2e-run.mjs` /
+与负载无关）。档位三处同批：`playwright.config.ts` / `scripts/e2e/e2e-run.mjs` /
 `tests/e2e-runtime-budget.test.ts` 的钉值。
 
 **本地那条默认刻意不减配**：`pnpm start` 要求先 `pnpm build`，那会把「按需跑一次
@@ -4512,7 +4512,7 @@ e2e」变成「先花十分钟构建」。要那一档的人用 `PNPM_START=1` �
 「按需手动跑」，而那句话没有任何东西在守（同 §13.5.12 的立案现场）。现在每一条都答得出：
 
 **这张表现在是机器判的**（ISSUE #1569 收尾）：它的机器可读形态是
-`scripts/.on-demand-duties.json`，由 `scripts/check-on-demand-duties.cjs` 在 pre-commit
+`scripts/.on-demand-duties.json`，由 `scripts/gates/check-on-demand-duties.cjs` 在 pre-commit
 的 D 组**双向**核对 —— 上一轮补的是**散文**，而写进文档的表格不会自己响：
 
 - **每一行点名的机器事实仍然存在**（档被删 / 改名 / 已接进 `check:all` ⇒ 过期承诺）；
@@ -4551,7 +4551,7 @@ e2e」变成「先花十分钟构建」。要那一档的人用 `PNPM_START=1` �
    **而这一格如今不在 PR 上**：它整体挪进每日档（`每日生产构建` → `ci-daily-build.mjs`，
    同一份 `artifact-run.mjs`），全量单测同理（`每日单元测试`）。见 §13.5.23。
 2. **「新鲜度账」那一格：2026-10-18 落在 PR 侧，2026-10-23 起撤到每日档**（ISSUE #2300
-   主体分权，判据本体一字未改 —— 仍是 `scripts/freshness-gate.mjs`，与钩子 D 组同一份）。
+   主体分权，判据本体一字未改 —— 仍是 `scripts/freshness/freshness-gate.mjs`，与钩子 D 组同一份）。
    **今日形状**：每日档有 `每日新鲜度账`（`.daily-gates`，env 多带
    `COMFY_CI_SUBJECT: "master"` ⇒ 读**主干主体**的权威账），PR 档**没有**这一格
    （名字以注释形态留在 `.gates`，登记在 `COMFYAPP_CI_DISABLED_GATES`）。
@@ -4637,10 +4637,10 @@ e2e」变成「先花十分钟构建」。要那一档的人用 `PNPM_START=1` �
 >
 > - 每日档整条迁到 GA `.github/workflows/daily.yml`（北京时间 01:37 定时 + 触发口
 >   手动派发，两个入口跑**同一份** step 清单）；CNB 侧 `crontab` 与手动 / API 触发
->   流水线的正文收敛为一格 `GA 派发·每日档`（`scripts/ci-ga-dispatch.mjs`，
+>   流水线的正文收敛为一格 `GA 派发·每日档`（`scripts/ci/ci-ga-dispatch.mjs`，
 >   `timeout: 10m`，平台池）—— **CNB 不再执行任何构建**。
 > - 「格名 ⇄ step 名」的执行者核对面从 `COMFYAPP_CI_DAILY_GATES`（连同其解析器
->   一起删除）换到 `scripts/ci-ga-trigger-map.mjs` 的 `DAILY_GATE_EXECUTORS`；
+>   一起删除）换到 `scripts/ci/ci-ga-trigger-map.mjs` 的 `DAILY_GATE_EXECUTORS`；
 >   `FRESHNESS_TRACKS[*].ciStage` 的逻辑格名（`每日单元测试` 等）**保持不变**，
 >   freshness-gate / daily-tracks 的判据面零改动，对账对象换到 GA 的 step 名
 >   （`tests/no-platform-ci-config.test.ts` 判「每个非空 `ciStage` 的执行者 step
@@ -4705,7 +4705,7 @@ e2e」变成「先花十分钟构建」。要那一档的人用 `PNPM_START=1` �
    这一条与把全量单测放进每日档是同一个取舍，接受它的理由是上面那三条。
 2. **归因变粗**。每日那一跑跑的是 master 的 HEAD，红的时候不知道是哪一笔改动带来的，
    而负责人机制把「去看的人」固定成配置持有者。下一动作写进
-   `scripts/ci-daily-build.mjs` 的头注：**按上一次绿的构建取提交区间**
+   `scripts/ci/ci-daily-build.mjs` 的头注：**按上一次绿的构建取提交区间**
    （`git log --since=<上次绿>`）定位，不要直接派单给负责人。
 
 **这一格撤掉之后仍在场的判据**（别把「stage 没了」读成「这条判据没人执行了」）：
@@ -4750,7 +4750,7 @@ E2E 只红在 `launch` 那一跳、指不到真正缺的那一格）。它同时
 
 **代价比前两条更明**：合并之前，「这次改动能不能构建 / 全量单测能不能过 / 端到端整链路
 通不通」**没有任何机器执行者**。第二天 01:37 那一跑回答它们，而定时那一跑的执行身份是
-配置的持有者、不是改坏的那个人 —— 归因下一动作见 `scripts/ci-daily-build.mjs` 头注。
+配置的持有者、不是改坏的那个人 —— 归因下一动作见 `scripts/ci/ci-daily-build.mjs` 头注。
 这是处置权在人的一次签字，不是判据被放宽：三档的命令、用例、阈值、覆盖率门槛一个字没动。
 
 ##### 同日第三处：只判**节点事实**的那四格，不再每个 PR 都判（业主口径）
@@ -4864,16 +4864,16 @@ Error: Timed out waiting 180000ms from config.webServer.
 # 而「配置里的三份流水线 ⇄ 那份名单」的双向核才是判据（缺格红、多格红、顺序也钉两头）。
 .daily-gates:
   &daily_gates # 名单是 env.COMFYAPP_CI_DAILY_GATES（判据双向核对）：立案 + 前提格 + 三档重档
-  - name: 每日失败立案 # node scripts/ci-daily-failure-issue.mjs --no-block --lane 每日生产构建，timeout: 5m —— **排最前**，理由见下面那节
+  - name: 每日失败立案 # node scripts/ci/ci-daily-failure-issue.mjs --no-block --lane 每日生产构建，timeout: 5m —— **排最前**，理由见下面那节
   - name: 每日工具链自证
   - name: 每日安装依赖 # script 与 PR 那格逐字相同（镜像判据连 env 一起钉）
   - name: 每日 Python 可用性
   - name: 每日 Python 探针读数
   - name: 每日同步数据库表结构
-  - name: 每日生产构建 # node scripts/ci-daily-build.mjs，timeout: 30m
+  - name: 每日生产构建 # node scripts/ci/ci-daily-build.mjs，timeout: 30m
   - name: 每日 ESLint 零警告 # 2026-10-19 从 PR 撤到这里（撤节奏 ≠ 撤账）
   - name: 每日浏览器安装 # 与 PR 那格同 command + 同 env；缺件要在便宜位置报
-  - name: 每日全量E2E # node scripts/e2e-run.mjs，timeout: 45m，不带 --grep，env: COMFY_E2E_SERVER=start
+  - name: 每日全量E2E # node scripts/e2e/e2e-run.mjs，timeout: 45m，不带 --grep，env: COMFY_E2E_SERVER=start
   - name: 每日单元测试 # node scripts/full-suite-run.mjs，timeout: 45m —— **排最后**，理由见下
 
 master:
@@ -4911,7 +4911,7 @@ master:
 
 > ⚠️ **#3504（2026-11-10）起下面两张表与两段里的 `.cnb.yml` 形态是历史**：触发口不再
 > `stages: *daily_gates` 本机执行，正文收敛为一格 `GA 派发·<档>`；`COMFYAPP_CI_DAILY_GATES`
-> 与 `ci-oneshot-gates.mjs` 注册表退役，配对登记换到 `scripts/ci-ga-trigger-map.mjs`
+> 与 `ci-oneshot-gates.mjs` 注册表退役，配对登记换到 `scripts/ci/ci-ga-trigger-map.mjs`
 > （`tests/ci-ga-trigger-map.test.ts` 双向钉住触发口 ⇄ workflow 文件）。决策与理由照旧成立：
 > 「两个入口同一件事」在 GA 侧由 daily.yml 的 schedule + workflow_dispatch 兑现，
 > 「单跑不是出勤」那条边界原文照用。
@@ -4992,7 +4992,7 @@ master 行不行」，不是「复现夜里那一跑」—— 要复现得先确
    装饰**：每次构建都是全新 job 目录、`node_modules` 恒不在场（§13.5.3.4.2 形态①），
    缺了它们这一条会在 00:00 以「找不到 next / 连不上库 / Executable doesn't exist」的形态红
    —— 一天只红这一次，等于当天没结论。**手点那一口不改变这一点**：同一份清单，缺哪格都一样红。
-   `node scripts/ci-daily-build.mjs` 就是 `artifact-run.mjs`（同一条 `pnpm run build` 链、
+   `node scripts/ci/ci-daily-build.mjs` 就是 `artifact-run.mjs`（同一条 `pnpm run build` 链、
    同一份记账）外面一层**只属于定时那一跑**的壳：打事件身份（`CNB_EVENT` / `CNB_BUILD_ID` /
    执行身份）、打一次工具链镜像读数（`ci-image-identity.mjs`，读数、恒退 0）、把退出码
    原样转出去。判据一个字都没有在这里重写 —— 重写一遍得到的就是「两条产物链各自漂」（§12.12）。
@@ -5054,7 +5054,7 @@ CI 去执行」。答成「能，但**不是挪到 PR 那一条**」，理由有
 | 为什么不能放回 PR 那条        | 读数 / 出处                                                                                                                                                                                                                                      |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **同机 ⇒ 挪过去不减少总负载** | CI 与本地钩子跑在同一台 16 核自托管节点上（`cpus=16` 标签）。挪动改变的是「谁被假红卡住」与「重试的代价」，不是负载本身                                                                                                                          |
-| **不同 PR 之间仍会叠加**      | `scripts/ci-load.mjs` 文件头明写：`lock` 按 PR 分锁只掐同一 key 的旧跑，平台不给「同时跑几条」的旋钮。历史上三条全量流水线挤同一台机，`单元测试` 跑到 **8640s 被墙钟掐断**，只留下 `timeout of 8640000ms exceeded`（`cnb-jt3-1k5071kou` 那一族） |
+| **不同 PR 之间仍会叠加**      | `scripts/ci/ci-load.mjs` 文件头明写：`lock` 按 PR 分锁只掐同一 key 的旧跑，平台不给「同时跑几条」的旋钮。历史上三条全量流水线挤同一台机，`单元测试` 跑到 **8640s 被墙钟掐断**，只留下 `timeout of 8640000ms exceeded`（`cnb-jt3-1k5071kou` 那一族） |
 | **套件里大量用例真起子进程**  | 超订的那一份从「等 CPU」变成「等子进程」，形态就是 `Test timed out in 30000ms` 而单跑全绿（§11.13 / §13.6.4）。本仓账本给的分母：组 C 前 20 份里 **15 份起子进程、5 份建 worktree、1 份碰网络**（§13.5.8.3 第九笔账）                            |
 
 放在每天 01:37 那一跑，这三个前提同时消失：**没有并发的 PR、机器是空的** —— 而这正是
@@ -5112,7 +5112,7 @@ CI 去执行」。答成「能，但**不是挪到 PR 那一条**」，理由有
 
 **「全量 E2E」这一行为什么需要一条账**（PR #1545 / #1547）：`pnpm test:e2e` 此前是
 「人记得就跑」，而**没有任何东西守它上一次是绿的** —— 实测的形态是靠人手动把这条入口跑了
-一遍才发现它已经红了两天。现在它走 `scripts/e2e-run.mjs`，跑绿即记
+一遍才发现它已经红了两天。现在它走 `scripts/e2e/e2e-run.mjs`，跑绿即记
 `scripts/.e2e-freshness.json`（与另两档**同形而不同键**，见 §13.5.12 的同款纪律与
 §11.8 的对照表），并由钩子那一步在每一次提交里把它的日期打出来 ——
 「这一档上次真跑绿是什么时候」从此是被看见的读数。
@@ -5480,7 +5480,7 @@ ISSUE #1404 摘掉：基线 `total: 0`（那句「本地保持只提醒」的前
 「编辑态文档一切正确」，两个判据管的不是同一件事。
 
 判据 2026-10-16 起从 `.githooks/pre-commit` 的 D 组挪到平台侧（§13.5.17），2026-10-19
-起跑在聚合执行者 `重档静态判据` 的条目里（`scripts/ci-heavy-gates.mjs`），与写入模式
+起跑在聚合执行者 `重档静态判据` 的条目里（`scripts/ci/ci-heavy-gates.mjs`），与写入模式
 **共用同一份「源 → 生成物」计算**（`scripts/render-doc-placeholders.cjs` 的
 `renderDocContent()`，只比对不写入）。
 
@@ -5574,7 +5574,7 @@ CI 往返，且红话指着那个人根本没碰过的文件 —— 与 §13.6.2
 同一份口径的取证在 `tests/ship.test.ts`（那一调带没带上旗标 —— 不带就是装饰）、
 `tests/check-doc-mirror-pairing.test.ts` 与 `tests/known-failed-stale.test.ts`（三个形状各一条）。
 
-##### 13.5.5.1 同族第二处：API 文档生成与自检（`node scripts/check-docs-api.cjs`）
+##### 13.5.5.1 同族第二处：API 文档生成与自检（`node scripts/gates/check-docs-api.cjs`）
 
 上一节管的是 `docs/generated/**`（**编辑文档**的渲染产物）。这里管的是另一族：
 **TypeDoc 产物** `docs/api/**`（两千多份 HTML/JS），它的源是**代码**。
@@ -5659,7 +5659,7 @@ CI 往返，且红话指着那个人根本没碰过的文件 —— 与 §13.6.2
    钉住「会重试」与「救回来算成功」两条（typedoc 冷跑以数十秒计，用例真跑不起；
    那一格现在自己的墙钟见 §13.5.17）。
 3. **`--autofix` 不再被接受**（2026-10-23）。产物不进 git ⇒ 没有「自动修完再提交」的
-   对象 ⇒ 那一档在 `scripts/ci-autofix-duties.mjs` 的登记表里**被删掉**（自动修名单
+   对象 ⇒ 那一档在 `scripts/ci/ci-autofix-duties.mjs` 的登记表里**被删掉**（自动修名单
    当时只剩 `docs/generated/**` 那一族；#3586 把这一族也摘了，登记表自此为空。
    空表是合法终态，不是「清单被掏空」，反向半判据见 `tests/ci-autofix-duties.test.ts`）。
    撞上 `--autofix` 的调用直接退 1 并说明为什么 ——
@@ -5680,11 +5680,11 @@ CI 往返，且红话指着那个人根本没碰过的文件 —— 与 §13.6.2
 **一条容易踩的连带判据**：仓库的 `tsconfig.json` 把 `**/*.cjs` / `**/*.ts` / `**/*.js`
 都编进了 program，而 typedoc 用的正是那份 program ⇒ 一个被 `await import` 的 `.mjs`
 会**跟着进 typedoc 的类型检查面**，它身上的类型错误会让 typedoc 直接退 3（实测：
-`scripts/` 下一批 `.mjs` 有几十处存量类型错误）。现在 `scripts/check-docs-api.cjs`
+`scripts/` 下一批 `.mjs` 有几十处存量类型错误）。现在 `scripts/gates/check-docs-api.cjs`
 只 import `scripts/typedoc-run.mjs` 与 `scripts/docs-api-input-closure.mjs` ——
 这两个（连同它们的传递依赖）都是类型干净的。
 
-#### 13.5.6 src 非空断言 `!` 硬闸（`node scripts/check-non-null-assertions.cjs`）
+#### 13.5.6 src 非空断言 `!` 硬闸（`node scripts/gates/check-non-null-assertions.cjs`）
 
 **须为 0**。判据走 TypeScript AST 的 `ts.isNonNullExpression`（不用正则——
 正则会把 `!==` / `!x` / 注释里的 `!` 全误伤），扫描 src 下的 .ts/.tsx
@@ -5721,7 +5721,7 @@ CI 往返，且红话指着那个人根本没碰过的文件 —— 与 §13.6.2
 就没有「两个口径时代」要拉平。今后扩展形态（`<T>x!` / `x?.y!`）直接扩判据即可，
 不需要版本号。判据排在 `.githooks/pre-commit` 的 D 组（AST 判据聚合档）。
 
-#### 13.5.7 src/lib `void someFn(...)` 悬空棘轮（`node scripts/check-void-floats.cjs`）
+#### 13.5.7 src/lib `void someFn(...)` 悬空棘轮（`node scripts/gates/check-void-floats.cjs`）
 
 类型安全审查 src/lib 报告 **H-6** 的机器化收口。PR-4b 加了 `fireAndForget(task, onError)`
 作为「刻意不 await、失败必须落到显式 onError」的地基；PR-10 逐个审了 lib 里
@@ -5752,15 +5752,15 @@ await」等一并揪出来，一次报几百处、评审看下来全是"这里�
 `canvas-store.ts` 2）；`--update` 需伴随下降、`--strict` 强制下降同批收紧。
 判据排在 `.githooks/pre-commit` 的 D 组末尾。
 
-#### 13.5.8 提交前增量测试层：改到哪、测到哪（`node scripts/affected-tests.mjs`）
+#### 13.5.8 提交前增量测试层：改到哪、测到哪（`node scripts/affected-tests/affected-tests.mjs`）
 
 `.githooks/pre-commit` 的 C 组从「写死几个结构守护用例」升级成**固定清单 + 本次
 改动牵扯到的用例**，仍然只起一次 vite（§13.5 的口径：需要 vite 的测试并入同一行
 `vitest run`，别新起一次冷启）。⚠️ **2026-10-20 起这一档本地不再执行**：执行者是
-平台侧 PR 流水线的 `受影响用例` 一格（`scripts/ci-affected-tests.mjs` → 本节这条
+平台侧 PR 流水线的 `受影响用例` 一格（`scripts/ci/ci-affected-tests.mjs` → 本节这条
 判决链；撤销原因与边界见 §13.5.25）。固定清单的**唯一出处**是
 `scripts/fixed-structural-tests.mjs` 里的 `FIXED_STRUCTURAL_TESTS`（它原先嵌在
-`scripts/affected-tests.mjs` 里，拆出来是因为「登记一条守卫要写四五行理由」会把判据代码
+`scripts/affected-tests/affected-tests.mjs` 里，拆出来是因为「登记一条守卫要写四五行理由」会把判据代码
 本身写长到撞 §12.6 的长度棘轮 —— 数据与编排分档，两边才都写得清楚），钩子不再抄一份 ——
 抄的那份在用例改名后会变成
 「一条都不跑、钩子却全绿」。固定清单守的是**全库级不变量**（不会因为
@@ -5799,7 +5799,7 @@ basename 会把半个测试面误拉进来（`route.ts` / `index.ts` 这类名�
 
 **改动面的口径只有一处**（ISSUE #2224 的连带）：`scripts/changed-scope.mjs` 是「这次改了什么」
 的**唯一出处**（基线怎么选 + diff 形态 + 改名的两侧），「受影响用例」这一格
-（`scripts/ci-affected-tests.mjs`）与桌面壳门禁（`scripts/shell-gate.mjs --base <ref>`）
+（`scripts/ci/ci-affected-tests.mjs`）与桌面壳门禁（`scripts/shell-gate.mjs --base <ref>`）
 **都调它**。两边各算一次，就会在某一次改动里漂开 —— 改名的旧路径算不算？三点 diff 还是两点？
 基线取 PR 目标 sha 还是 merge-base？判据见 `tests/changed-scope.test.ts`；两档的 diff 形态
 逐字沿用既有实现（PR 三点 / 兜底两点），**判决链一个字没改**。
@@ -5816,7 +5816,7 @@ basename 会把半个测试面误拉进来（`route.ts` / `index.ts` 这类名�
 现在的口径：**「换了执行者」在配置里机器可读**（`.cnb.yml` 的
 `COMFYAPP_CI_GATES_ELSEWHERE`，键名与 `COMFYAPP_CI_DISABLED_GATES` 同一形态）。登记的值是
 **入口路径**（`scripts/xxx.cjs` / `tests/xxx.test.ts`），不是执行者自己的定义 ⇒ 判据
-`scripts/check-gate-name-executors.mjs` 去执行面（复合档条目 / 固定清单用例 / 钩子步骤 /
+`scripts/gates/check-gate-name-executors.mjs` 去执行面（复合档条目 / 固定清单用例 / 钩子步骤 /
 **GA PR 门禁 workflow 的 `run:` 行** 四面）核「这个路径真的会被跑」，**不抄第二份**
 （§12.12 / §12.18）。第四面是 2026-11-13 补的（§13.5.40）：PR 主列的代码判据全在 GA 侧，
 而前三面一处都不在 GA ⇒ 指向 GA step 的入口路径会被误判成「没有执行者」。
@@ -5829,7 +5829,7 @@ basename 会把半个测试面误拉进来（`route.ts` / `index.ts` 这类名�
 `重档静态判据` 自动跑它（那一格跑的正是钩子注册表，见 §13.5.25）。判据见
 `tests/ci-gate-names.test.ts`（每一条都拿夹具把判据逼红 —— 一条只会绿的判据就是又一条恒绿
 判据）。那份用例同时登记进**固定结构守护清单**（`scripts/fixed-structural-tests.mjs`）——
-不登记的话它只在 `scripts/ci-gate-names.mjs` 改动时才跑，而「有人把它改软」恰好**不在**
+不登记的话它只在 `scripts/ci/ci-gate-names.mjs` 改动时才跑，而「有人把它改软」恰好**不在**
 改动面上（与 `doc-check-hook-wiring` 同因进固定清单）。
 
 **复合档「重档静态判据」逐条按面收窄**（ISSUE #2255 的现场）。平台侧那 13 个 stage 带
@@ -5842,14 +5842,14 @@ stage-11 / 14~21 / 23 共 10 个带 `ifModify` 的 stage 确实 `skipped`，而�
 
 - **整格**仍不许挂 `ifModify` —— 一格装多条时它只能表达「一起跑 / 一起不跑」，而那几条的
   扫描面并不相同（后者是「判据在场、结论静默变成放行」，比不收窄坏得多）。
-- **格内**逐条按**收窄登记表**（`scripts/ci-incremental-gates.mjs` 的 `INCREMENTAL_GATES`）
+- **格内**逐条按**收窄登记表**（`scripts/ci/ci-incremental-gates.mjs` 的 `INCREMENTAL_GATES`）
   判面 —— 与平台那一格的 `ifModify` **同一份 glob**（`checkIncrementalGates()` 已在核
   「表 ⇄ `.cnb.yml`」的双向一致）⇒ 两处口径逐字相同。查表按**判据脚本**查
   （`narrowingEntryForScript()`），不按标签名查 —— 标签名是平台那一侧的说法。
 - 收窄的两条边界：**改动面取不到 ⇒ 一条都不跳**（「不知道」≠「没改」，空清单同样不算）；
   **跳过的逐条点名，且不计入「绿」**（跳过不是判过 —— 静默跳过与静默放行是同一族病）。
   合计行因此多一档「按面未触及 N」。
-- 判据见 `tests/ci-heavy-gates.test.ts`；面从哪儿来见 `scripts/ci-incremental-gates.mjs`
+- 判据见 `tests/ci-heavy-gates.test.ts`；面从哪儿来见 `scripts/ci/ci-incremental-gates.mjs`
   末尾那两个出口（`narrowingEntryForScript()` / `faceTouched()`，glob→正则**复用**
   `scripts/vitest-projects.cjs` 的 `globToRe` —— 另写一份就会与 vitest 收集面那套 `**`
   语义漂开）。
@@ -5867,7 +5867,7 @@ stage-11 / 14~21 / 23 共 10 个带 `ifModify` 的 stage 确实 `skipped`，而�
 **形态档在平台上也要有判决面**（ISSUE #2265，#2256 的另一半）。上面那条只治「**无声**」；
 这一条治「**恒绿**」—— 看见之后，还要让它**不再是绿**。
 
-现场（空暂存区 = 平台同形态，`node scripts/ci-heavy-gates.mjs --no-narrow` 逐条读数）：
+现场（空暂存区 = 平台同形态，`node scripts/ci/ci-heavy-gates.mjs --no-narrow` 逐条读数）：
 复合档 56 条里**只有 2 条**的判决面不成立，而它们都被计成了「绿」：
 
 | 步                                          | 判据脚本                                 | 平台上实际发生了什么                       |
@@ -5912,7 +5912,7 @@ stage-11 / 14~21 / 23 共 10 个带 `ifModify` 的 stage 确实 `skipped`，而�
 逐条验过是「重排单独成一条提交」。
 
 处置与前三例同源，只是**换发的旗标不同**：它只认 `<before>..<after>`，所以复合档换发的是
-`--range <基线>..HEAD`（`scripts/ci-heavy-gates.mjs` 的 `RANGE_SCOPED`），而不是
+`--range <基线>..HEAD`（`scripts/ci/ci-heavy-gates.mjs` 的 `RANGE_SCOPED`），而不是
 `shell-gate` 那种 `--base <ref>`。给它一个裸 ref，判据那一侧 `split("..")` 会拿到
 `[ref, undefined]` —— 「判了但面是错的」，比不判更糟。
 
@@ -5967,7 +5967,7 @@ runner 检出后只 `git config --local` 配了身份与凭据，**一条 `core.
 3. **防复发**：一条静态判据 —— `scripts/**` 里凡是读 git 路径的调用必须带守卫；豁免
    逐条登记（同一份用例的 `EXEMPT`），**处数对不上就红**（豁免是负债，不是赦免名单）。
 
-⚠️ **这一族仓库里已经踩过一次、修了一处、没传播**：`scripts/check-commit-claims.mjs`
+⚠️ **这一族仓库里已经踩过一次、修了一处、没传播**：`scripts/gates/check-commit-claims.mjs`
 早就把机制写清楚了（「`-c core.quotePath=false` 是**必须的**……名单**静默变成 0 份**」，
 实测贡献 4 处假红），那一处修好了，**改动面/暂存面那几处没有** ⇒ 同一个机制在别处
 继续生效。**这正是「写新的那一处之前先查既有那一处」为什么不能靠自觉**：修一处要连
@@ -5985,7 +5985,7 @@ runner 检出后只 `git config --local` 配了身份与凭据，**一条 `core.
 读数**，见 §13.5.24 那句「要一个可引用的前后对比得在机器空的时候各跑一次」）。而这六份里
 没有任何一份在运行期读那份 `.md` —— 那个字符串只在注释里。
 
-改法是拿**唯一那份** `stripComments`（`scripts/tw4-scan-core.mjs` 的重导出，纯 Node 层
+改法是拿**唯一那份** `stripComments`（`scripts/tw4/tw4-scan-core.mjs` 的重导出，纯 Node 层
 不能 import `tests/helpers/` 的 TS 版本，见 §12.18 与该文件的台账注释）在建树时顺手算出
 `codeTexts`，第 ④ 档只比它；`importedBy` 那一档改由 `ts.preProcessFile` 取说明符（ISSUE #2830），
 也就是说**它自己也不再被字符串与注释骗到** —— 两档面对「不像代码的那一片」口径一致，
@@ -6056,7 +6056,7 @@ master 上本来就红（属别线），于是「一笔无关改动」会被别�
 一个决定**，不再有「没有出口」这个借口 —— 当前口径仍是**不自动跑全量**（耗时不值），
 而出口是一条人按需要的具名命令。
 
-**显式全量档：`node scripts/run-affected-tests.mjs --full`**（ISSUE #1393 写下的前置，承接 #1679 的「增量 / 全量两档」一问）
+**显式全量档：`node scripts/affected-tests/run-affected-tests.mjs --full`**（ISSUE #1393 写下的前置，承接 #1679 的「增量 / 全量两档」一问）
 
 - **它是「按名字要全量」**，与上面那条空清单守卫是**相反方向**的两件事：`--full`
   跳过暂存区解析、**不拼位置参数**（`vitest run` 不带位置参数即全量收集），由调用方
@@ -6074,7 +6074,7 @@ master 上本来就红（属别线），于是「一笔无关改动」会被别�
 **连带要求：守「钩子自身内容」的判据必须进固定清单**。`.githooks/**` 被改时固定清单是
 唯一的执行者，所以这类判据留在「按路径/按字面量引用才会被拉起」的那份用例里 = 零执行者，
 而它要拦的动作恰恰就是那次改动。实测（ISSUE #1371）：收录 `tests/doc-check-hook-wiring.test.ts`
-之前，`node scripts/affected-tests.mjs --changed .githooks/pre-commit` 给出 17 个用例，
+之前，`node scripts/affected-tests/affected-tests.mjs --changed .githooks/pre-commit` 给出 17 个用例，
 里面**没有**「`doc:check` 这一步还在不在钩子里」那组断言 —— 同一份断言写在
 `tests/check-doc-references.test.ts` 里时，改钩子的那次提交一条都不会跑到。
 同族先例：`tests/no-platform-ci-config.test.ts`（平台侧有没有兜底）、
@@ -6095,7 +6095,7 @@ master 上本来就红（属别线），于是「一笔无关改动」会被别�
 A(tsc)、B(eslint)、D(组内串行的静态判据) 与它并行，再按 8 起 forks 就会抢不过来，
 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 respond`（几百条全过、退出码非零）。全量 `pnpm test` 仍走配置里的 8。这个常数现在
-写在启动器 `scripts/run-affected-tests.mjs` 里，不在钩子的那行 shell 上。
+写在启动器 `scripts/affected-tests/run-affected-tests.mjs` 里，不在钩子的那行 shell 上。
 
 **启动面自己也是一条判据面**（`tests/hook-affected-launch.test.ts`，固定清单成员）：
 清单是**位置参数**，长度随改动面线性增长。原先钩子直接 `pnpm exec vitest run $files`，
@@ -6124,7 +6124,7 @@ respond`（几百条全过、退出码非零）。全量 `pnpm test` 仍走配�
 `skipped`**。同一个上限在这个仓里早被写着（见本节第 2 条 —— 那是**全量清单**那条路，
 为此造了 `--full`），只是**认错了对象**。
 现在改动面走 **stdin**（`--changed-stdin`，一行一个路径）：**判决链一个字没动**，
-换的只是**载体**；那一跳住在 `scripts/affected-launch-changed-list.mjs`（与话术层、
+换的只是**载体**；那一跳住在 `scripts/affected-tests/affected-launch-changed-list.mjs`（与话术层、
 复跑面同一刀 —— 读不动的那一层的失效形态是「判据恒绿」，不是报错）。
 失败话术也分开了：「**起不来**」（子进程没起来）与「**判红**」（跑起来但退非零）
 两件事各有各的处置，**条数一起念出来**（对账用：送过去的条数与改动面条数必须对得上，
@@ -6178,7 +6178,7 @@ respond`（几百条全过、退出码非零）。全量 `pnpm test` 仍走配�
 
 **那共享机上的人怎么办**：钩子的并发此前**写死 4、没有覆盖口** —— 文件头那句
 「机器紧张把 C/D 也挪成串行即可」只是一句话，没有执行者，于是唯一的出路变成改钩子
-或 `--no-verify`（两条都不该是常态）。现在 `scripts/run-affected-tests.mjs` 认一个
+或 `--no-verify`（两条都不该是常态）。现在 `scripts/affected-tests/run-affected-tests.mjs` 认一个
 **只调并发、不碰任何判据**的环境变量：
 
 ```sh
@@ -6378,7 +6378,7 @@ COMFY_PRECOMMIT_MAX_WORKERS=1 git commit …   # 机器被别的东西占着时
 平台那格 `ifModify` 不含 ⇒ 根本不执行，#2942 重跑现场点名的三份全在 `scripts/`）。
 平台那一格的 `ifModify` 同批扩到 `scripts/**` `tests/**` `tools/**` `e2e/**`
 
-- 根级 `*.config.*`（逐字对账在 `scripts/ci-incremental-gates.mjs` 的登记条目）。
+- 根级 `*.config.*`（逐字对账在 `scripts/ci/ci-incremental-gates.mjs` 的登记条目）。
   存量读数（2026-11-04 现测）：新面内 **136 份**未过（`scripts/tests/tools/e2e`
   134 + 根级 config 2），按 #2710 的增量口径「谁碰谁迁」，不随这一格清。
 
@@ -6391,7 +6391,7 @@ COMFY_PRECOMMIT_MAX_WORKERS=1 git commit …   # 机器被别的东西占着时
    `check-ui-primitives.cjs` 把 `SCAN_DIRS` 交给共享件。抄一份就会漂，而漂移的形态是
    静默的：抄的那份多收一个目录，那类文件的违规从此没人查（§12.12 / §12.18）。
    「读暂存清单 + 判前缀 + 跳过话术 + fail-closed」这套四件套收进
-   **`scripts/gate-scan-read.cjs` 的 `skipUnlessStagedTouches()`**（与 `walk()` 当年
+   **`scripts/gates/gate-scan-read.cjs` 的 `skipUnlessStagedTouches()`**（与 `walk()` 当年
    收进同一处同一个理由）—— 实测全仓有 9 处各自手写 `git diff --cached --name-only`，
    这一层是它们的共同地基。
 2. **跳过是结论，不是沉默放行**。两步都打印「本次提交未触及扫描面，跳过」，与扫过
@@ -6615,7 +6615,7 @@ per file)`」并建议 `isolate: false`。**但它在真 C 组里一分不省**�
 ⇒ **分界落在「受影响 60 份」这个量级上**：往下与「不改代码」没区别，往上立刻翻倍。
 60 因此是**本仓库自己的数据**划出来的（见 `SCOPE_ADVICE_MIN` 的文档），不是拍的整数。
 
-**归因（`scripts/affected-tests.mjs --attribute`）才是这条建议的实质**：改动面不是
+**归因（`scripts/affected-tests/affected-tests.mjs --attribute`）才是这条建议的实质**：改动面不是
 一个数，而是一组**贡献极不均衡**的数 —— 最后那行 227 份里，`src/lib/endpoints.ts`
 一个就占 173，另外四个加起来不到它的一半。**不知道这件事，「拆小」就是盲拆。**
 
@@ -6798,7 +6798,7 @@ A/B/D 又与 C 并行（挪走它们省不到墙钟），真正的大头 C 却�
 | 那一格         | 做法与为什么这么做                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 用什么取       | vitest 的 **junit reporter**：每个文件一个内层 `<testsuite name="tests/x.test.ts" time="0.33">`。`json` reporter 的 `duration` 是**逐用例**的、没有文件级时长 —— 拿它拼只能再自己加一遍聚合                                                                                                                                                                                                                                                                                                                                                                                                                |
-| 落在哪         | 钩子的 `$LOGD`（每次新建、随 EXIT trap 删除、**不在检出里**）—— 写进检出就是未跟踪文件，被结构门禁那一套判，且会被下一次 checkout 牵走。平台那一格没有 `$LOGD`，由 `scripts/ci-affected-tests.mjs` 自己造一份同布局目录（`node_modules/.cache/comfy-affected-*`，跑完删掉）经 `LOGD` 交给启动器（ISSUE #2074）：此前这一格**没有账本**，复跑面每次都退回整块、对账也没做成                                                                                                                                                                                                                                 |
+| 落在哪         | 钩子的 `$LOGD`（每次新建、随 EXIT trap 删除、**不在检出里**）—— 写进检出就是未跟踪文件，被结构门禁那一套判，且会被下一次 checkout 牵走。平台那一格没有 `$LOGD`，由 `scripts/ci/ci-affected-tests.mjs` 自己造一份同布局目录（`node_modules/.cache/comfy-affected-*`，跑完删掉）经 `LOGD` 交给启动器（ISSUE #2074）：此前这一格**没有账本**，复跑面每次都退回整块、对账也没做成                                                                                                                                                                                                                                 |
 | 怎么不顶掉输出 | **`--reporter=default` 与 `--reporter=junit` 两个都给**：只给 junit 会把人类可读的输出整个换掉，而真红那一屏是唯一能读的东西（由 `tests/hook-affected-launch.test.ts` 钉住）。唯一例外是 quiet 档（`--reporter=dot`，平台日志预算）：已经有人读的出口时**不再叠 default**，否则同一跑打印两遍，正好把 102400 字节的预算作废（`junitReportArgs` 的 `withDefaultReporter`，ISSUE #2074）                                                                                                                                                                                                                     |
 | 清单谁念       | quiet 档换掉的是**逐一打印的那一份**（`dot` 只打点），于是「这次跑了哪些用例」在平台日志里**一个文件名都没有**，只剩 `Tests N passed` —— 而清单里排在最前面的是**固定清单**（份数**不写在本文里**：现值取 `FIXED_STRUCTURAL_TESTS.length`，一条命令的取法见本节末「日志预算的另一半」那一段），它们才是「这次守的到底是什么」的答案，总数答不了。所以 `affected-launch-file-list.mjs` 在 quiet 档把**送进 vitest 的那一份清单**逐行念一遍（默认 200 行封顶，超出只念条数；**只打、不为它多起一次 vitest**、不改任何判据）。不 quiet 时不打 —— 默认 reporter 已经打过了，重复打印会把那一档的预算又作废一次 |
 | 两块 / 两遍    | 每块、每遍各一个文件。合并按 `(块, 遍)` 升序、**后写的覆盖先写的** ⇒ 隔离复跑那遍赢。拿首跑那组数排序会把**负载**读成**文件的成本**（§13.6.4 那一族）                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -6825,7 +6825,7 @@ A/B/D 又与 C 并行（挪走它们省不到墙钟），真正的大头 C 却�
 拿 n=1 就动手把某条降级，等于把一次观测当稳态读数（§13.5.8.2.1 那条）。
 
 它是**读数**，与 §13.5.10 那条「提示 vs 阻断」同口径：不进 D0、不改变任何退出码，
-`--junit-dir` 没递到时连一个字都不加（人自己跑 `node scripts/run-affected-tests.mjs`
+`--junit-dir` 没递到时连一个字都不加（人自己跑 `node scripts/affected-tests/run-affected-tests.mjs`
 的形态与今天逐字相同）。
 
 **布局只有一份出处**：清单文件名与 junit 前缀定义在账本那一侧（`C_MANIFEST_NAME` /
@@ -6922,7 +6922,7 @@ A/B/D 又与 C 并行（挪走它们省不到墙钟），真正的大头 C 却�
 D 组的 `run()` 走 `timed_step`、`COMFY_TIMING_SH` 与 `LOGD` 都导出、trap 里先记账
 再删目录）。抹掉任意一条，**没有任何别的判据会看见差异**。
 
-#### 13.5.9 依赖漏洞扫描棘轮（`node scripts/check-dependency-audit.mjs`，ISSUE #1331）
+#### 13.5.9 依赖漏洞扫描棘轮（`node scripts/gates/check-dependency-audit.mjs`，ISSUE #1331）
 
 **它补的是「发现」这一步，不是「修」这一步。** 本仓此前没有任何依赖漏洞扫描（无
 `pnpm audit` 门禁、无 dependabot/renovate），`pnpm-workspace.yaml` 里那几条
@@ -7088,7 +7088,7 @@ high/critical**（其中 1 条是 `next` 的 **critical**），**全部有同 ma
 那些行。D 组当前的标签里，`文件结构硬规则(R1-R12，R5 硬闸)`、
 `UI/逻辑分离棘轮(--strict)`、`生成态文档与源同步`、`文档引用与权威源一致` 这几个是最常被引用的。
 
-**判据**：`scripts/check-doc-references.cjs` 的 `checkGateStepIndexRefs()`（= `pnpm doc:check`，
+**判据**：`scripts/gates/check-doc-references.cjs` 的 `checkGateStepIndexRefs()`（= `pnpm doc:check`，
 已在 pre-commit 的 D 组「文档引用与权威源一致」这一步）。同一行既要出现 `第 N 步`，
 也要出现 `pre-commit` / `.githooks` / `CI` 才报错；**有主人的过程序号**
 （§2.2 的第 5 步、`prepare-local-run.ps1` 的第 3 步）不在此列，
@@ -7186,12 +7186,12 @@ eslint 的缓存键 =「**文件内容 + 解析后的 eslint 配置**」—— �
 与 `tests/eslint-cache-fingerprint.test.ts` 都不再存在（eslint 退役，缓存这一步整体删除）。
 下面保留原始判据形状，只作为历史口径：指纹由用例钉住（两个方向各一组：**变了 → 真删**、
 **没变 → 保留**；反向验证：把 `runFingerprint` 改成永远不删，前一组的「缓存已消失」
-即失败），并登记在 `scripts/affected-tests.mjs` 的固定清单里 —— 改 `.githooks/**`
+即失败），并登记在 `scripts/affected-tests/affected-tests.mjs` 的固定清单里 —— 改 `.githooks/**`
 会让增量层放弃收窄，而「接线断掉」正是它要拦的动作。
 
-#### 13.5.12 判据 ⇄ 执行者的双向判据（`node scripts/check-gate-executors.cjs`，ISSUE #1451 要求 2）
+#### 13.5.12 判据 ⇄ 执行者的双向判据（`node scripts/gates/check-gate-executors.cjs`，ISSUE #1451 要求 2）
 
-`scripts/check-comment-language.cjs` 头部自称「提交门槛脚本，供 `.githooks/pre-commit`
+`scripts/gates/check-comment-language.cjs` 头部自称「提交门槛脚本，供 `.githooks/pre-commit`
 调用」、§12.4.6 也写着它在钩子里报红 —— 而 `grep -c comment-language .githooks/pre-commit`
 一直是 **0**，CI 又随 ISSUE #623 删除：**一条基线为 0 的硬闸一个执行者都没有，而文档
 说它在执行**。这类事故比漏报更难发现 —— 漏报只是判据不响，「自称在跑」会让所有人
@@ -7279,14 +7279,14 @@ C 组的固定清单里、每次提交都执行 —— 那是真的执行者，�
 `--update` 已不存在）——**形状守不住行为**：一个把判定档写成永远退 0 的版本同样
 满足「有 `--check`、有 `process.exit(1)` 字样」。
 
-**姊妹维度：声明 ⇄ 读者（`scripts/check-declaration-readers.cjs`，规范 §11.23）。**
+**姊妹维度：声明 ⇄ 读者（`scripts/gates/check-declaration-readers.cjs`，规范 §11.23）。**
 本节判的是**脚本**有没有执行者（`process.exit` 那条线）；它不覆盖另一种同样常见的
 声明 —— 「我在读某份数据 / 我声明了某个契约」。后者的索引是
 `scripts/.declaration-readers.json`：每一种声明都必须答出「谁在读它 + 执行者在哪」，
 读者丢了、执行者从门禁链里被摘掉、或索引自己静默降级，都红。两节维度不同、**互不替代**
 （本节判「判据在场 ≠ 判据在跑」里的**脚本**那一半，§11.23 判**声明**那一半）。
 
-**还有一条**：`scripts/check-ts-duplicate-keys.cjs` 此前是报告型
+**还有一条**：`scripts/gates/check-ts-duplicate-keys.cjs` 此前是报告型
 （`scripts/report-ts-duplicate-keys.mjs`，0 处 `process.exit`）、**零判定档** ——
 而它判的正是「命令行全绿、编辑器标红」那一族（项目钉的 `typescript6` 对重复属性不报，
 editor 的 TS 服务报 `ts(2783)`），判据只能落在源码形态上。收成判定档的前提是
@@ -7298,7 +7298,7 @@ editor 的 TS 服务报 `ts(2783)`），判据只能落在源码形态上。收�
 本身带来了一个新的静默失效面：把 A 档的绿抄进 B 档的账，**账面上完全正常** —— 日期合法、人名合法、
 命令是一条真命令，只有「这条记录由哪个跑法证出来」这一件事被搞错了。所以记录多了一栏 `trackedBy`，
 判据逐条比对它；几份账的读写（`readFreshnessLedgerAt` / `writeFreshness`）与记录形状
-（`freshnessRecord`）收在 `scripts/freshness-ledger.mjs` **一份实现**里，各跑法脚本只留
+（`freshnessRecord`）收在 `scripts/freshness/freshness-ledger.mjs` **一份实现**里，各跑法脚本只留
 「怎么算口径 / 什么时候不记」（§12.12）。
 
 **这条纪律与前一条同源**：`check-gate-executors.cjs` 判的是「判据有没有执行者」，
@@ -7321,7 +7321,7 @@ editor 的 TS 服务报 `ts(2783)`），判据只能落在源码形态上。收�
 "entrypoints": {
   "check-deps-freshness.mjs": [
     { "flags": ["--staged"], "judges": "只判这次动没动依赖面", "executors": [".githooks/pre-commit"] },
-    { "flags": ["--json"],   "judges": "全档判定，供 ship 阶段 0 念", "executors": ["scripts/ship-preflight.mjs"] },
+    { "flags": ["--json"],   "judges": "全档判定，供 ship 阶段 0 念", "executors": ["scripts/ship/ship-preflight.mjs"] },
     { "flags": [],           "judges": "开工前那一档：②+③ 全判", "executors": ["package.json", "scripts/quality-gate.mjs"] }
   ]
 }
@@ -7372,7 +7372,7 @@ editor 的 TS 服务报 `ts(2783)`），判据只能落在源码形态上。收�
 反向自证做过：把 `problems.push(...entryAudit.problems)`
 那一行摘掉，9 条里 6 条当场红（另外 3 条是「正向不报」与「`--update` 保留」，本来就不该依赖它）。
 
-#### 13.5.13 依赖新鲜度：远端改过库的版本，本地还在旧的上面干活（`node scripts/check-deps-freshness.mjs`，ISSUE #1569）
+#### 13.5.13 依赖新鲜度：远端改过库的版本，本地还在旧的上面干活（`node scripts/gates/check-deps-freshness.mjs`，ISSUE #1569）
 
 远端 `master` 上别人升过依赖，而本地检出还停在旧的那一套上 —— 这时在旧依赖树上
 改代码、跑门禁，结论**看起来一切正常**，其实判据的版本已经不是远端那份了。这一格
@@ -7469,7 +7469,7 @@ addon-a11y/node_modules/axe-core` 是 4.13.0，而声明要的是 4.14.0），�
 基线是不是旧的」是**必须回答**的问题：否则你会在旧依赖上解冲突，或把一份基于旧基线的
 lockfile 推上去。判据的口径与代价都收在脚本文件头。
 
-**平台侧「重档静态判据」这一格只判 ③**（`scripts/ci-heavy-gates.mjs` 的
+**平台侧「重档静态判据」这一格只判 ③**（`scripts/ci/ci-heavy-gates.mjs` 的
 `heavyGateArgv()` 把钩子里这一步换发 `--offline`）：那一格跑在**平台构造的合成 merge
 预览**上，第一父是派发那刻的 master 快照，而 master 在 PR 存活期间继续前进、可能改过
 依赖面 ⇒ ② 会把「分叉点 vs 领先后的 `origin/master`」读成「你的基线旧了」，出口却是
@@ -7521,9 +7521,9 @@ lockfile 推上去。判据的口径与代价都收在脚本文件头。
 做完了）。所以本判据判的是**那条判据自己的执行者**：
 
 ```bash
-node scripts/check-tsc-diagnostic-executors.cjs            # 检查（D 组「类型层声明 ⇄ 执行者」）
-node scripts/check-tsc-diagnostic-executors.cjs --report   # 只出清单不判失败（盘点用）
-node scripts/check-tsc-diagnostic-executors.cjs --update   # 把基线收紧到当前实测（只许降）
+node scripts/gates/check-tsc-diagnostic-executors.cjs            # 检查（D 组「类型层声明 ⇄ 执行者」）
+node scripts/gates/check-tsc-diagnostic-executors.cjs --report   # 只出清单不判失败（盘点用）
+node scripts/gates/check-tsc-diagnostic-executors.cjs --update   # 把基线收紧到当前实测（只许降）
 ```
 
 三条口径（每一条不满足都会退化成「看着在守、其实没守」）：
@@ -7536,7 +7536,7 @@ node scripts/check-tsc-diagnostic-executors.cjs --update   # 把基线收紧到�
 
 **扫描面与 `tsconfig.include` 同口径**（`src/` + `scripts/` + `tests/`，含 `.cjs` / `.js`
 且 `checkJs: true`）—— 这一点是前提之一：很多人以为「`.mjs` 是脚本、类型不收」，
-而立案那 19 条里有 **12 条**正是 `scripts/freshness-ledger.mjs` 的三处 JSDoc。
+而立案那 19 条里有 **12 条**正是 `scripts/freshness/freshness-ledger.mjs` 的三处 JSDoc。
 
 > ⚠️ **这一句过去写错了**（ISSUE #2524）：原文把覆盖面写成「含 `.mjs` / `.cjs`」，
 > 而 `tsconfig.json` 的 `include` 里**只有 `**/*.cjs` 与 `**/*.js`，没有 `**/*.mjs`**。
@@ -7612,7 +7612,7 @@ exclude 或删掉，照前者记账就是把一份不在版本控制里的东西
   （`trackedMjs()` + `splitTrackedFace()`），账本只记 `(文件, TS 码)` 与总数（见本节末
   「账上只有一本账」）。
 
-**立案现场**：`scripts/ci-daily-build.mjs` 里躺着两处死声明（`ARTIFACT_TIMEOUT_MS` 被
+**立案现场**：`scripts/ci/ci-daily-build.mjs` 里躺着两处死声明（`ARTIFACT_TIMEOUT_MS` 被
 import 却从未使用、`const HERE` 定义后从未使用），而 `pnpm exec tsc --noEmit` 在主干上
 **一个字都不报**。它们现形的唯一变量是 ISSUE #2503 新增的
 `scripts/publish-desktop-bundle.mjs` 里那一行 `import { runContext } from "./ci-daily-build.mjs"`
@@ -7641,7 +7641,7 @@ import 却从未使用、`const HERE` 定义后从未使用），而 `pnpm exec 
 所以这是一处能安静躺在主干上的真错。两例合起来才是本条存在的理由：**面不收口，这类东西
 不是「偶尔漏掉」，是永远读不到**。立案 **#2588** / **#2609**（缺陷各一张，不混进本单）。
 
-**这一档判什么**（`node scripts/check-scripts-typecheck.cjs`，退出码 0 / 1 / 2 = 过 / 阻断 / 没结论）：
+**这一档判什么**（`node scripts/gates/check-scripts-typecheck.cjs`，退出码 0 / 1 / 2 = 过 / 阻断 / 没结论）：
 
 | 口径                       | 做法                                                                                                                                                            | 不做会怎样                                                                                                                                                                                                    |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -7714,7 +7714,7 @@ import 却从未使用、`const HERE` 定义后从未使用），而 `pnpm exec 
 
 **执行者**（`check-gate-executors.cjs` 认的那一份，不是本文抄的）：
 `.githooks/pre-commit` 的 D 组那一步 `脚本档类型检查(tsc 的 .mjs 全量面)`，与平台侧
-「重档静态判据」的**同名条目**（`scripts/ci-heavy-gates.mjs` 的 `HEAVY_GATES` —— 名称与
+「重档静态判据」的**同名条目**（`scripts/ci/ci-heavy-gates.mjs` 的 `HEAVY_GATES` —— 名称与
 argv 必须与钩子逐字一致，`heavyGateRegistryProblems()` 在开跑前先自证，对不上就判红且
 一条都不跑）。人在本地想单跑：`pnpm check:scripts-types`。
 
@@ -7757,7 +7757,7 @@ argv 必须与钩子逐字一致，`heavyGateRegistryProblems()` 在开跑前先
 同步一次）：否则判据走「没按入库清单筛」那一档、面取磁盘原值，「入库的 N 份」这条读数
 就没有对象（实测 1 failed）。
 
-#### 13.5.15 依赖构建脚本 ⇄ `allowBuilds` 对账（`node scripts/check-allow-builds.cjs`）
+#### 13.5.15 依赖构建脚本 ⇄ `allowBuilds` 对账（`node scripts/gates/check-allow-builds.cjs`）
 
 **立案现场**：AGENTS 硬规则 8 写着「新增含 postinstall 构建脚本的依赖：同步更新
 `pnpm-workspace.yaml` 的 `allowBuilds`，否则非交互模式 `pnpm install` 会 exit 1」，
@@ -7873,7 +7873,7 @@ argv 必须与钩子逐字一致，`heavyGateRegistryProblems()` 在开跑前先
 只认真调用，另钉一份 §13.1 清单在场；而断言里 `cmd` 逐字带 `--staged`，
 所以「抹掉这个 flag」与「摘掉整步」在本文件里等价（同 §13.5.5.1 那条的理由）。
 
-#### 13.5.16 翻闸删掉的旗标 ⇄ 还在教人跑它们的散文（`node scripts/check-gate-flag-claims.cjs`）
+#### 13.5.16 翻闸删掉的旗标 ⇄ 还在教人跑它们的散文（`node scripts/gates/check-gate-flag-claims.cjs`）
 
 **立案现场**：ISSUE #1811 把 18 条棘轮翻成硬闸，每条都删掉 `--update` / `--strict`
 与那份基线。**判据本身没问题，问题是「谁还在说跑那条命令」**—— 收尾复审里人工 grep
@@ -7963,7 +7963,7 @@ ISSUE #2694 那一批把「固定清单有几份」收成命令形态的决定�
 | 取法                                            | 谁在给这个数                                                           |
 | ----------------------------------------------- | ---------------------------------------------------------------------- |
 | `pnpm ship --stage-log <sn> API 文档生成与自检` | 平台那一格自己的逐格原值（毫秒由平台计，剥 ANSI、给完整日志行号）      |
-| `node scripts/check-docs-api.cjs`               | 本机全量档（写 `docs/api/`，**不进 git**，产物只在本机，见 §13.5.5.1） |
+| `node scripts/gates/check-docs-api.cjs`               | 本机全量档（写 `docs/api/`，**不进 git**，产物只在本机，见 §13.5.5.1） |
 
 2026-10-31 取到的样本，**量具随数一起引**：
 
@@ -7980,7 +7980,7 @@ ISSUE #2694 那一批把「固定清单有几份」收成命令形态的决定�
 
 **2026-11-03 复测（ISSUE #2843 落地后）**，同一台机、暖态、ReFS、非并发，取法与量具同上：
 
-- 端到端 `node scripts/check-docs-api.cjs`：改前 **111.7s**（`EXIT=0`）→ 带旗标 **33.6s**
+- 端到端 `node scripts/gates/check-docs-api.cjs`：改前 **111.7s**（`EXIT=0`）→ 带旗标 **33.6s**
   （`EXIT=0`），产物读数一字不差：**2859 份文件 / 391 个模块页**。
 - 同一份 `typedoc.json` 直接跑 typedoc，正反两种顺序各一对（排除缓存先后的影响）：
   无旗标 **58.1s / 83.3s**，带旗标 **29.5s / 26.8s** —— 省下的正是 typedoc 自己那趟类型检查。
@@ -8096,7 +8096,7 @@ D 组里比它们贵、也同样「不必每次跑」的步骤还有的是（`ch
 
 | 这一层                           | 本地钩子                                                    | 平台侧（`.cnb.yml`）                                              |
 | -------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------- |
-| 「改动没碰到扫描面就跳过」的机制 | `scripts/gate-scan-read.cjs` 的 `skipUnlessStagedTouches()` | stage 级 `ifModify: [glob…]`                                      |
+| 「改动没碰到扫描面就跳过」的机制 | `scripts/gates/gate-scan-read.cjs` 的 `skipUnlessStagedTouches()` | stage 级 `ifModify: [glob…]`                                      |
 | 输入面                           | 暂存区（`git diff --cached`）                               | 本次事件的变更文件（`push` 对比 before/after、`PR` 统计 PR 变更） |
 | 语义                             | 一个都没落在扫描面内 ⇒ 跳过                                 | 一个都没落在 glob 内 ⇒ 不执行                                     |
 
@@ -8145,7 +8145,7 @@ D 组里比它们贵、也同样「不必每次跑」的步骤还有的是（`ch
 > 上面点到的这批静态判据（`生成态文档与源同步` / `API 文档生成与自检` /
 > `文档引用与权威源一致` / `覆盖率上报` / `core 骨架单一事实源` / `零消费导出` /
 > `core 出口纪律与基类纯度` / `格式化提交分离`）现在**只占一个 stage**，条目串行跑在
-> `scripts/ci-heavy-gates.mjs` 里。立的理由是现场：`cnb-hpl-1k5a0s6ss` 上 `ESLint 零警告`
+> `scripts/ci/ci-heavy-gates.mjs` 里。立的理由是现场：`cnb-hpl-1k5a0s6ss` 上 `ESLint 零警告`
 > 撞平台单 stage 的 **20m 硬上限**被强杀（一行输出都没有），后面三十格整片 skipped，
 > 而同一台机上另一次同类跑是 305s 过的 —— 差的是「每一格都在各付一次 job 开销与盘上
 > 扫描」，不是判据变慢。
@@ -8165,7 +8165,7 @@ D 组里比它们贵、也同样「不必每次跑」的步骤还有的是（`ch
   `parseStageIfModify()` 只认 `stages:` 直接子项的两空格缩进 —— 每日那五格是 8 空格，
   不在这一列的作用范围内，它们的在场与入口由 `tests/no-platform-ci-config.test.ts` 判。）
 
-**「收窄名单只有一处出处」怎么被守**：`scripts/ci-incremental-gates.mjs` 的
+**「收窄名单只有一处出处」怎么被守**：`scripts/ci/ci-incremental-gates.mjs` 的
 `INCREMENTAL_GATES`（每条写着它守的是哪份脚本、为什么这条收窄安全），
 `tests/ci-incremental-gates.test.ts`（**进固定清单**，每次提交都跑）双向核对：
 
@@ -8186,7 +8186,7 @@ D 组里比它们贵、也同样「不必每次跑」的步骤还有的是（`ch
   脚本、阈值全部原样。`.cnb.yml` 里那些 stage 跑的还是同一份脚本的**全量档**；
 - **本地那一档照旧**：`skipUnlessStagedTouches()` 与这套 `ifModify` 是**两个执行者、
   同一份扫描面定义**，谁替换不了谁（本地判暂存区、平台判本次事件）；
-- **新增一处 `ifModify` 的完整动作**是两件同批：`scripts/ci-incremental-gates.mjs`
+- **新增一处 `ifModify` 的完整动作**是两件同批：`scripts/ci/ci-incremental-gates.mjs`
   登记（含「为什么安全」）＋ `.cnb.yml` 写上那组 glob。自查 `pnpm run check:ci-incremental`。
 
 **这一档买到的**：只改文档 / 只改 `changelog.d/` / 只改 `src-tauri` 的一次 PR，
@@ -8291,7 +8291,7 @@ D 组里比它们贵、也同样「不必每次跑」的步骤还有的是（`ch
 >
 > | 位置                             | 跑什么                     | 带什么旗标         | 红了怎么办                                                                     |
 > | -------------------------------- | -------------------------- | ------------------ | ------------------------------------------------------------------------------ |
-> | `.githooks/pre-commit` 的 **D0** | `scripts/check-format.cjs` | `--staged`         | 当场 `pnpm exec oxfmt <它点名的文件>`（只点本次改的，全库 `--write` 违 §13.7） |
+> | `.githooks/pre-commit` 的 **D0** | `scripts/gates/check-format.cjs` | `--staged`         | 当场 `pnpm exec oxfmt <它点名的文件>`（只点本次改的，全库 `--write` 违 §13.7） |
 > | `.cnb.yml` 的 `oxfmt 格式`       | 同一份脚本                 | 不带旗标（全量档） | **只判不修** —— 兜住 `--no-verify` 与平台侧 squash 合并那两条本地钩子不跑的路  |
 > | `pnpm check:all` 的 `format` 项  | 同一份脚本                 | 不带旗标           | 人的完整自查                                                                   |
 >
@@ -8307,7 +8307,7 @@ D 组里比它们贵、也同样「不必每次跑」的步骤还有的是（`ch
 > 翻成正面断言（谁再往里加源文件写者，那一条会红）。
 
 **「哪几档会自己改工作区」也只有一处出处**（与 §13.5.18 同一条口径）：
-`scripts/ci-autofix-duties.mjs` 的 `AUTOFIX_DUTIES`，`tests/ci-autofix-duties.test.ts`
+`scripts/ci/ci-autofix-duties.mjs` 的 `AUTOFIX_DUTIES`，`tests/ci-autofix-duties.test.ts`
 （**进固定清单**，每次提交都跑）双向核对 —— 登记表里每条 ⇒ 配置里同名 stage 的 `script`
 真的点名它的入口、且 `--check` 与 `--autofix` 逐字都在；配置里带 `--autofix` 的 ⇒ 必须在
 登记表里。少了任一半，「某天某个 stage 忽然改写了工作区」就没有任何信号（`--autofix` 只是
@@ -8349,7 +8349,7 @@ typedoc 的入口 glob」。那句话对，结论错 —— **入口 glob 是能
 落实为常量 `INPUT_RES`。
 
 所以这一档的 `ifModify` **不由人抄**，由那份常量机械反推：
-`scripts/ci-incremental-gates.mjs` 的 `globFromInputRe()` 把每条「锚定到仓库根」的
+`scripts/ci/ci-incremental-gates.mjs` 的 `globFromInputRe()` 把每条「锚定到仓库根」的
 输入面正则还原成 glob（`/^src\/lib\/.*\.ts$/` → `src/lib/**`，
 `/^typedoc\.json$/` → `typedoc.json`），认不出的形状**直接抛**（猜窄了 = 静默漏跑，
 猜宽了 = 静默白跑，两种都没有信号）。于是：
@@ -8358,7 +8358,7 @@ typedoc 的入口 glob」。那句话对，结论错 —— **入口 glob 是能
 - 反过来那条漂也被判据钉住了：`tests/ci-incremental-gates.test.ts` 用**注入样本**复算
   「判据认的每一类输入面，配置的 globs 里都有对应项」（不靠读实现，靠样本过判据）。
 
-顺带补上原输入面漏掉的两格：`scripts/check-docs-api.cjs` 与
+顺带补上原输入面漏掉的两格：`scripts/gates/check-docs-api.cjs` 与
 `scripts/typedoc-run.mjs` 也是它的输入（改判据当然能改变「这一步红不红」）——
 此前改它们**不触发它们自己**，「改了判据 → 推上去 → 它没跑」是这类改动的默认形状。
 
@@ -8372,18 +8372,18 @@ typedoc 的入口 glob」。那句话对，结论错 —— **入口 glob 是能
 
 - typedoc **沿 import 走**。入口点（三条 `entryPoints` glob）之外的文件，只要被入口点
   静态引用，**它定义的类型就会出现在 `docs/api/**` 里**；
-- 现场：`BackupResult` 定义在 `scripts/db-backup-core.mjs`，`src/lib/db-backup/backup.ts`
+- 现场：`BackupResult` 定义在 `scripts/db/db-backup-core.mjs`，`src/lib/db-backup/backup.ts`
   导入它，而它出现在 `docs/api/functions/lib_db-backup_backup.createBackup.html` 里
   ⇒ 改那份 `.mjs` **会改产物**，可它**不在**那三条 glob 之下 ⇒ 那一格被 `ifModify`
   跳过 ⇒ **漏判**，而漏判是静默的（被跳过的形态与「判过且通过」在读数上无差别）；
 - 当时的兜底判据也拦不住：它只比「窄面的**第一段前缀**是不是落在某条 glob 里」，
-  于是 `scripts/db-backup-core.mjs` 的前缀 `scripts` 被 `scripts/check-docs-api.cjs`
+  于是 `scripts/db/db-backup-core.mjs` 的前缀 `scripts` 被 `scripts/gates/check-docs-api.cjs`
   那条满足 ⇒ **任何 `scripts/` 下的新文件都算「已覆盖」**。
 
 **处置**：面 = 三根 ∪ **闭包叶子集**，而叶子集**不是手抄的** ——
 `scripts/docs-api-input-closure.mjs` 从 `typedoc.json` 的 `entryPoints` 出发沿静态
 import 走，算出「根外的那批文件」（实测 11 个，其中 10 个原先不在面内）；声明侧是
-`scripts/check-docs-api.cjs` 的 `CLOSURE_LEAVES`，两侧由
+`scripts/gates/check-docs-api.cjs` 的 `CLOSURE_LEAVES`，两侧由
 `tests/docs-api-input-closure.test.ts` **双向对账**（闭包多出任何一个文件而面里没有
 它 ⇒ 当场红）。同时把那条前缀比较换成**真「罩住」**：窄面命中的每一个文件都要被某条
 glob 真的罩住（枚举办法是从每条正则里取出它锚定的字面前缀，把那个前缀下的文件逐个过）。
@@ -8421,7 +8421,7 @@ glob 真的罩住（枚举办法是从每条正则里取出它锚定的字面前
   `node_modules` 里装的还是锁文件说的那一套，这一跳就是一次空操作。
 
 所以收窄放在**步内**：整步照常执行，只有「装」那一跳按语义判。判定收在
-`scripts/ci-install-deps.mjs`（**不在 `.cnb.yml` 里就地写 PowerShell** —— 配置里的逻辑
+`scripts/ci/ci-install-deps.mjs`（**不在 `.cnb.yml` 里就地写 PowerShell** —— 配置里的逻辑
 一条判据都测不到它，这条链上已经为此付过两次学费，见 §13.5.3.5）。三条口径：
 
 1. **依赖面** = `pnpm-lock.yaml` / `package.json` / `pnpm-workspace.yaml` / `next.config.js`
@@ -8484,7 +8484,7 @@ glob 真的罩住（枚举办法是从每条正则里取出它锚定的字面前
 
 **落地的这一半**：把「几个并发」从**常数**变成**按现场核数算出来的值**。
 
-- 唯一出处 `scripts/ci-load.mjs`：`resolveCores()`（`CNB_CPUS` → `os.availableParallelism()`
+- 唯一出处 `scripts/ci/ci-load.mjs`：`resolveCores()`（`CNB_CPUS` → `os.availableParallelism()`
   → 兜底）、`workersForCores()`（`ceil(cores / 8)`，即「一个 worker 至少 8 核」）、
   `resolveCiWorkers()`（叠一层人的出口 `COMFY_CI_MAX_WORKERS`）。
 - **消费点现在有三处，全都从这一处取**（ISSUE #2324 之前是三份副本）：
@@ -8621,8 +8621,8 @@ GA ⇒ `GA_CORES_PER_WORKER=2`（留一半余量，4 核 ⇒ 2）；其余（CNB
 ⇒ 第一条先命中、装照跑。也就是说那条判据写得很对，但它**永远走不到「跳过」那一支**。
 
 现在的判据换成「装出来的那一套 ⇄ 现在的依赖面」对不对得上，实现是
-`scripts/ci-install-deps.mjs` 的 `pnpmInstallFingerprint()`（这份声明的**住处**自
-#2022 第二增量起是叶子 `scripts/ci-deps-face.mjs`，前者原样转出这三个名字，调用方不变；
+`scripts/ci/ci-install-deps.mjs` 的 `pnpmInstallFingerprint()`（这份声明的**住处**自
+#2022 第二增量起是叶子 `scripts/ci/ci-deps-face.mjs`，前者原样转出这三个名字，调用方不变；
 抽出去的原因见 §13.5.3.4.3 末段那条环）：
 
 - 指纹 = `DEP_FILES` 四份内容的 sha256 + `patches/` 目录摘要（**内容**，不是 mtime ——
@@ -8731,7 +8731,7 @@ E2E 互不依赖。⚠️ 定时那一跑**稍晚**于名义时刻暴露（平�
 `每日全量E2E` 的**唯一执行者**就在这条链上（§13.5.21）⇒ 一天红 = 主干一天没有行为面读数，
 而账面全绿。现场：`cnb-8r8-1k5knrl91`（2026-10-23T16:00:17Z），红了四十分钟账上没有一张单。
 
-现在这件事由链上**第一格**负责：`node scripts/ci-daily-failure-issue.mjs --no-block`。
+现在这件事由链上**第一格**负责：`node scripts/ci/ci-daily-failure-issue.mjs --no-block`。
 
 | 它判什么                 | 用谁判（判决链一个字不另立）                                                                                                                                                                                                                                                                                                                                                                  |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -8813,7 +8813,7 @@ E2E 互不依赖。⚠️ 定时那一跑**稍晚**于名义时刻暴露（平�
 六向（两跑红、断点截断、读数认不出、格没跑、窗口没盖住、派发不足）/ 判决行与判据源码对账 /
 离线档三种读数各念一句），加
 `tests/no-platform-ci-config.test.ts` 里新增那条 —— 每日链必须有一格点的是
-`scripts/ci-daily-failure-issue.mjs --no-block` 且排在最前（**名字还在、块被换成别的命令，
+`scripts/ci/ci-daily-failure-issue.mjs --no-block` 且排在最前（**名字还在、块被换成别的命令，
 那种绿本档不认**，与上面「撤档 ≠ 撤账」是同一族）。条数随用例变，这里不写死它（同 `cargo test`
 那条口径）。
 
@@ -8828,7 +8828,7 @@ token 建单是通的（#2273 / #2274 就是那么建的），CI 那一侧**还�
 ##### 镜像出勤也要有人问：`每日镜像出勤立案`（ISSUE #3278 方案 B）
 
 **补的是「判据在场、执行者不在场」的第二次**。§13.5.23 那一格把「每日那一跑红了」自动变成一张单；
-`scripts/check-mirror-attendance.mjs`（#3046 期望第 2 条）则把「`GitHub 镜像同步` 那一格
+`scripts/gates/check-mirror-attendance.mjs`（#3046 期望第 2 条）则把「`GitHub 镜像同步` 那一格
 有没有推成、没推成是什么形状」判成三态 `0 出勤 / 1 缺勤 / 2 没结论`，按**正文**认
 「已推 · 已派发」、七类形状各有下一动作，`egress` 独立成键。但那份判据是**按需档**：
 `COMFYAPP_CI_GATES` / `_PUSH_GATES` / `_DAILY_GATES` 三份清单里没有一格跑它 ⇒ 节点到
@@ -8913,12 +8913,12 @@ headline 点名 egress / `--json` 与日志档都有信号）、
   与**空改动清单**（分不清「什么都没改」与「拿不到清单」）。后者与 `ci-install-deps.mjs`
   那两条安全边界同一取向：「不知道」不等于「没变」。
 
-**实测效果**：`node scripts/affected-tests.mjs --changed docs/README.md` 从 90 份变 86 份，
+**实测效果**：`node scripts/affected-tests/affected-tests.mjs --changed docs/README.md` 从 90 份变 86 份，
 跳过的正是当时登记的那几条（合计 260s 分文件耗时）。清单后来按同一把尺补过两轮
 （#2793 / #2798），份数以 `INPUT_FACES` 为准 —— 这里记的是那一跑的读数，不重抄现值。
 
 ⚠️ **两套机制是并集，不是替换** —— 这一格是量出来才发现的：`check-bundle-budget` 在跳过名单里，
-可当次提交改了 `scripts/affected-tests.mjs`，import 图照样把它点回来（那次 C 的分文件读数里
+可当次提交改了 `scripts/affected-tests/affected-tests.mjs`，import 图照样把它点回来（那次 C 的分文件读数里
 它仍在，81.2s）。方向上这是对的一侧（图说相关就跑），但它意味着**只筛固定清单省不到账面那么多**：
 固定清单那 4 条合计 260s，实际省下的要看图有没有同时放行。
 
@@ -8945,7 +8945,7 @@ headline 点名 egress / `--json` 与日志档都有信号）、
 
 **第三刀（已落）：收窄的是「边」，不是清单** —— 把同一把尺用到第 ④ 档的比对面。
 文档类提交的整条尾巴不是固定清单带进来的，而是「测试的**注释**里引用了这份文档路径」
-带进来的：`node scripts/affected-tests.mjs --changed docs/standards/13-提交与-code-review.md`
+带进来的：`node scripts/affected-tests/affected-tests.mjs --changed docs/standards/13-提交与-code-review.md`
 改前 **94 份**（固定 87 + 受影响 7）、改后 **88 份**（固定 86 + 受影响 2）。掉出去的六份
 正是那几台最贵的门禁自测（`check-reformat-only` 278.9s、`check-bundle-budget` 101.2s、
 `check-format` 52.0s、`check-void-floats` 12.3s、`check-non-null-assertions` 8.4s、
@@ -8955,7 +8955,7 @@ headline 点名 egress / `--json` 与日志档都有信号）、
 （机器 100%、27 个 node 进程），按上面那条纪律，前后各一次要在机器空的时候跑，
 不能拿这一轮冒充因果。
 
-安全方向当场在真仓库上复算过：改 `scripts/check-reformat-only.cjs` 时
+安全方向当场在真仓库上复算过：改 `scripts/gates/check-reformat-only.cjs` 时
 `tests/check-reformat-only.test.ts` **仍然**被「脚本同名回归」点回来（87 份里含它），
 所以这一刀不是「把守卫关掉」，是把「注释里的引用」不再当消费关系。
 **判据**：`tests/affected-tests.test.ts` 新增两例 —— 注释里的路径不拉人、同一份路径写在
@@ -8993,11 +8993,11 @@ D0(形态前置) 21.2s**，而**钩子总墙钟的中位是 346.6s、p90 894.9s*
 | 组 0 + **D0**          | 分支守卫 + 这次提交**自身的形态**(CHANGELOG 碎片 / 来源锚 / 新鲜度账 / UI-逻辑分离 / 零消费导出 / R9-R12 / 依赖面 / 长度硬闸…) | `.githooks/pre-commit`(默认)                                                                                                                                                                                                                                                                                                                                                                                            | **28.3s**(一次实测墙钟；**入选那几条的条数不写在这里**——出处是钩子里 `run_group D0` 那一块与 `localTierLabels()`) |
 | A `tsc`                | 类型检查                                                                                                                       | **pre-push**（`check:premerge` 的 `base` 段在合并快照上复算）+ 平台 `类型检查` 格(既有)                                                                                                                                                                                                                                                                                                                                 | 节点侧 125.9s                                                                                                     |
 | B `eslint`             | 零警告                                                                                                                         | **pre-push**（同上）+ 平台 `ESLint 零警告` 格(**本批恢复**)                                                                                                                                                                                                                                                                                                                                                             | 节点侧 256~274s                                                                                                   |
-| C 单测                 | 受影响用例（增量层）                                                                                                           | **GA `pr-gate.yml` 的 `受影响用例` 一格**（2026-10-20 起；CNB 侧那一格 2026-11-02 随 #3052 撤掉，**GA 侧这一格仍在**——读数见 §13.5.41；入口 `scripts/ci-affected-tests.mjs` → `run-affected-tests.mjs`，改动面由 `COMFY_AFFECTED_CHANGED` 传入，走**同一条判决链**，并发按 `ci-load.mjs` 收敛）；全量在节点上归 `每日单元测试`（**不在 PR 档**：并行 PR 会让带超时的读数不可信，且它跑绿要刷「整档凭证」，见 §13.5.21） | 本地两个执行者（C 组 / pre-push 的 `unitTests` 段）2026-10-20 双双撤销，原因见下面那段                            |
-| D 静态判据(整张注册表) | 结构 / 复用 / 棘轮 / 文档一致性                                                                                                | **pre-push**（`base` 段复算）+ 平台 `重档静态判据` 格(**本批新增**，`node scripts/ci-heavy-gates.mjs`)                                                                                                                                                                                                                                                                                                                  | 本地同一条命令串行跑完：**全绿、零条「没跑起来」**（逐条读数在 `[重档] 合计` 那行输出里，条数不在这里写）         |
+| C 单测                 | 受影响用例（增量层）                                                                                                           | **GA `pr-gate.yml` 的 `受影响用例` 一格**（2026-10-20 起；CNB 侧那一格 2026-11-02 随 #3052 撤掉，**GA 侧这一格仍在**——读数见 §13.5.41；入口 `scripts/ci/ci-affected-tests.mjs` → `run-affected-tests.mjs`，改动面由 `COMFY_AFFECTED_CHANGED` 传入，走**同一条判决链**，并发按 `ci-load.mjs` 收敛）；全量在节点上归 `每日单元测试`（**不在 PR 档**：并行 PR 会让带超时的读数不可信，且它跑绿要刷「整档凭证」，见 §13.5.21） | 本地两个执行者（C 组 / pre-push 的 `unitTests` 段）2026-10-20 双双撤销，原因见下面那段                            |
+| D 静态判据(整张注册表) | 结构 / 复用 / 棘轮 / 文档一致性                                                                                                | **pre-push**（`base` 段复算）+ 平台 `重档静态判据` 格(**本批新增**，`node scripts/ci/ci-heavy-gates.mjs`)                                                                                                                                                                                                                                                                                                                  | 本地同一条命令串行跑完：**全绿、零条「没跑起来」**（逐条读数在 `[重档] 合计` 那行输出里，条数不在这里写）         |
 
 **这一刀唯一的正确形态是「步骤留在钩子里，档位决定谁执行」，不是「把步骤搬走」** ——
-理由不是审美：`scripts/check-gate-executors.cjs` 认的执行者出处只有三处(钩子里
+理由不是审美：`scripts/gates/check-gate-executors.cjs` 认的执行者出处只有三处(钩子里
 `^  run "<标签>" <命令>` 那些步骤行、`quality-gate.mjs` 的 gate 表、`quality-gate.ps1` 的
 `$Blocks`)，**`.cnb.yml` 不在它的解析面上**。把那些步骤删过去 = 那一族判据当场没有执行者，
 而账面一条红都不会出现(「没有档要找执行者」)。所以 `.githooks/pre-commit` 里那些步骤行逐字
@@ -9011,7 +9011,7 @@ D0(形态前置) 21.2s**，而**钩子总墙钟的中位是 346.6s、p90 894.9s*
 **「跳过」必须被说出来**，否则一次只跑了 D0 的绿会被读成「全套过了」：
 
 - 钩子收尾那句「⚠ 本次提交本地**没跑**：…」自 ISSUE #2154 起由
-  `scripts/gate-tier-summary.cjs` 按**这一轮实际降了哪几档**逐组念（标签当场从钩子那五行
+  `scripts/gates/gate-tier-summary.cjs` 按**这一轮实际降了哪几档**逐组念（标签当场从钩子那五行
   `run_group <id> "<说明>"` 取，脚本里不许另存一份表），并紧跟一句「这句不是『已通过』，
   它等价于这次没测行为面」，再给出本地拿回全套的出口（`COMFY_HEAVY_GATES=1 git commit`
   或 `pnpm check:all`）。⚠️ 这句话术**过去住在钩子里、清单是写死的**，于是在
@@ -9033,7 +9033,7 @@ D0(形态前置) 21.2s**，而**钩子总墙钟的中位是 346.6s、p90 894.9s*
   它在最需要给出结论的机器上给的恰是最不可信的读数。撤的两个执行者是 pre-commit 的 C 组与
   pre-push 的 `unitTests` 段（后者活了不到一天）；判据与判决链一字未改
   （`run-affected-tests.mjs` + `COMFY_AFFECTED_CHANGED`），换的只是谁起它。新入口
-  `scripts/ci-affected-tests.mjs` 做三件事：按 `CNB_PULL_REQUEST_TARGET_SHA` 算这个 PR 的
+  `scripts/ci/ci-affected-tests.mjs` 做三件事：按 `CNB_PULL_REQUEST_TARGET_SHA` 算这个 PR 的
   改动面（三点 diff，`--name-status -M` —— 改名的旧路径也进面，见 §13.5.8；取不到 ⇒ **退 2**，
   空清单同样退 2 —— 放行会让启动器把 vitest 跑成全量，
   而全量绿在 PR 这一跳上是被 §13.5.21 否掉的读数）、按 `ci-load.mjs` 收敛并发、把退出码
@@ -9051,7 +9051,7 @@ PR 一轮的墙钟按上面的数约 ~20 分钟，且 `单元测试` 那格的 4
 **这一格还顺带把两条旧停用理由的前提清了**：`单元测试` 当初因「宿主侧够不着 Python」停用，
 而今天同一台节点上 `Python 可用性` / `Python 探针读数` 两格在 PR 流水线就有读数；
 `ESLint 零警告` 当初因「本地 B 组每条提交都在跑，这里再跑没新信息」让位，今天那条前提反转。
-恢复的三格都带 `scripts/ci-cp936-exit.mjs` 那层包裹 —— 「真红时读不出原因」是当初退回它的
+恢复的三格都带 `scripts/ci/ci-cp936-exit.mjs` 那层包裹 —— 「真红时读不出原因」是当初退回它的
 一半理由，不带它就是重新犯一遍。
 
 **平台首跑的读数**（`cnb-tuj-1k59trjac`，整体 success）：`ESLint 零警告` 470.6s success
@@ -9090,7 +9090,7 @@ PR 一轮的墙钟按上面的数约 ~20 分钟，且 `单元测试` 那格的 4
 `D(N 个判据脚本)` 仍然在场，由 `tests/doc-check-hook-wiring.test.ts` 核它与解析出的步骤总数一致
 （那是唯一一处「写给读者看的数」，它有判据兜着，见 ISSUE #1407 收掉的那一型）。
 
-#### 13.5.26 判据自身的数值也要有账：`node scripts/check-gate-thresholds.cjs`（ISSUE #2156）
+#### 13.5.26 判据自身的数值也要有账：`node scripts/gates/check-gate-thresholds.cjs`（ISSUE #2156）
 
 上面每一格判据都把「什么算违规」钉在源码里的某个数值上（R5 的 900、函数长度 400、孪生 0.75/60、
 注释语言的 3…）。**而把这些数值调松，此前没有任何一格会红** —— `check-file-structure.cjs`
@@ -9153,7 +9153,7 @@ PR 一轮的墙钟按上面的数约 ~20 分钟，且 `单元测试` 那格的 4
 就是这本账自己的盲区 —— 而那恰好是它要防的那一型。
 
 **明确不覆盖的三块**（写在这里，不假装管住了）：`vitest.config.ts` 那一大片覆盖率门槛项由
-`scripts/ci-coverage-report.mjs` 从**实测**生成，再抄一份进第二本账必然脱钩（§11.7 那条棘轮
+`scripts/ci/ci-coverage-report.mjs` 从**实测**生成，再抄一份进第二本账必然脱钩（§11.7 那条棘轮
 有自己的账）；写进表达式里的**内联数值**（如 `check-theme-colors.cjs` 判短写法 hex 的
 `v.length <= 5`）这一格扫不到 —— 它只认顶层具名常量，把它们先提成具名常量属于改判据本身，另案处理；
 **扫描根只有 `check-*.cjs`** —— `*-check.mjs` / `ship-*.mjs` / `quality-gate.mjs` 这些形状可以被账
@@ -9175,7 +9175,7 @@ PR 一轮的墙钟按上面的数约 ~20 分钟，且 `单元测试` 那格的 4
 `.cnb.yml` 侧任何改法（加条件、调顺序、拆流水线）都改不了这件事：**被取消之后，那一跑就没有
 后续了**。仓库能做的只有一件：把两件事在读数上分开，并点名「哪一格被取消、下面哪几格根本没跑」。
 
-**落成**：一份分类 + 两个消费口。分类只有一份，在 `scripts/ci-build-classify.mjs` 的
+**落成**：一份分类 + 两个消费口。分类只有一份，在 `scripts/ci/ci-build-classify.mjs` 的
 `classifyBuildOutcome()`（逐格读数优先于构建级状态），不许两处各写一套（§12.12）。
 这一族现在按**变化方向**分成三份（ISSUE #2526 —— 起因是 `ci-build-readout.mjs` 顶到 900 硬闸
 只剩 12 行，与 §13.6 那两条「顶到闸才发现」同一个出口）：判断在 `ci-build-classify.mjs`、
@@ -9186,8 +9186,8 @@ PR 一轮的墙钟按上面的数约 ~20 分钟，且 `单元测试` 那格的 4
 
 | 消费口                   | 入口                                                | 答的是哪一档                                                       |
 | ------------------------ | --------------------------------------------------- | ------------------------------------------------------------------ |
-| **单跑口**（手点 / API） | `node scripts/ci-build-readout.mjs --repo … --sn …` | 这一跑是哪一档；被取消时是哪一格、下面哪几格没跑、平台给的原因原话 |
-| **PR 口**（`pnpm ship`） | `scripts/ship-platform.mjs` 的判决那一格            | 同上一份分类；「被取消」不再被念成「CI 红」                        |
+| **单跑口**（手点 / API） | `node scripts/ci/ci-build-readout.mjs --repo … --sn …` | 这一跑是哪一档；被取消时是哪一格、下面哪几格没跑、平台给的原因原话 |
+| **PR 口**（`pnpm ship`） | `scripts/ship/ship-platform.mjs` 的判决那一格            | 同上一份分类；「被取消」不再被念成「CI 红」                        |
 
 **三档与退出码**（与 `ship-core.mjs` 的 `CODE` 同一口径：0 绿、1 有事实是红的、2 没拿到测量）：
 
@@ -9288,7 +9288,7 @@ Pipeline prepare error: Pipeline was stoped，Pipeline: cnb-jpf-1k5qok15v-001 go
 #### 13.5.28 登记面 ⇄ 执行面：两次搬动方向相反，在中间对穿（2026-10-22）
 
 **症状**：`docs/api/**` 与源脱节了 32 份（落后 / 缺失 17 / 多余 1 三类都报）。本地
-`node scripts/check-docs-api.cjs --check` **退 1**，墙钟 **491.2s** —— 而这条判据
+`node scripts/gates/check-docs-api.cjs --check` **退 1**，墙钟 **491.2s** —— 而这条判据
 本该在每次 PR 上把这件事挡下来。
 
 **根因不是「判据写错了」，是两次搬动在中间对穿**：
@@ -9325,7 +9325,7 @@ Pipeline prepare error: Pipeline was stoped，Pipeline: cnb-jpf-1k5qok15v-001 go
    域不是某几个目录，收窄成任何子集都是漏判；而它自己只要 0.42s）。
 2. **复合执行者的成员表收成真相**：只剩钩子里真有的那几条，而这一格**先自证、后跑** ——
    表里每一条的 `argv` 必须逐字出现在钩子的步骤行里，对不上就判红、什么都不跑
-   （`scripts/ci-heavy-gates.mjs` 的 `heavyGateRegistryProblems()`）。
+   （`scripts/ci/ci-heavy-gates.mjs` 的 `heavyGateRegistryProblems()`）。
    ⇒ 「把这一步摘掉而表上还留着」从此当场红，那正是 2026-10-20 的动作。
 3. **逐条墙钟进读数**：这一格此前只打「ok / 红」，**没有任何计时**（文件头承诺过
    「每条的墙钟」，代码里没有）。48.3s 的 53 条只有总数没有分布 ⇒ 无从判断该优化谁。
@@ -9362,7 +9362,7 @@ Pipeline prepare error: Pipeline was stoped，Pipeline: cnb-jpf-1k5qok15v-001 go
 **「我判了，是干净的」与「我没有判」在屏幕上逐字同形**。这与 §13.5.20 / §13.5.25
 反复钉的「判据在场 ≠ 判据在跑」是同一个病，只是它长在**措辞**上。
 
-**落成：`scripts/ci-log.mjs` 是这一层的唯一出口**。三个动词，对应三态：
+**落成：`scripts/ci/ci-log.mjs` 是这一层的唯一出口**。三个动词，对应三态：
 
 | 动词                      | 什么时候用                          | 打出来的那一行                                                      |
 | ------------------------- | ----------------------------------- | ------------------------------------------------------------------- |
@@ -9382,7 +9382,7 @@ Pipeline prepare error: Pipeline was stoped，Pipeline: cnb-jpf-1k5qok15v-001 go
 - **没有证据就不打红**。`gateFail` 收到空清单时一条都不打并回 `ok` —— 反过来就是屏幕上出现
   一条「命中 0 条」的红，读的人第一动作是去找那 0 条在哪。调用点该做的是「先判，再打」。
 - **前缀只用 ASCII + CP936 有字形的符号**。`[ok]` / `[skip]` / `[红]`、`·`（U+00B7）、
-  `→`（U+2192）都在 CP936 里（`scripts/ci-cp936-glyphs.mjs` 那张表说了算）；颜色不参与可读性
+  `→`（U+2192）都在 CP936 里（`scripts/ci/ci-cp936-glyphs.mjs` 那张表说了算）；颜色不参与可读性
   （平台日志页与本地终端对 ANSI 的处理不一致，而 `ci-cp936-exit.mjs` 那一跳会让颜色码变成乱码
   字节 —— 结构和措辞才是可读性）。
 
@@ -9423,7 +9423,7 @@ Pipeline prepare error: Pipeline was stoped，Pipeline: cnb-jpf-1k5qok15v-001 go
 
 三态让「没判」与「判过了」分得开，但**一屏十几条判决全是同一种灰**时，眼睛仍要先读字才能
 知道哪一条是红的。业主那条单的后半句就是这件事（「现在颜色有些单一…还有什么手段能提高可读性
-都用上」）。这一轮给同一层补三样，**都在 `scripts/ci-log.mjs` 里，只有一处口径**：
+都用上」）。这一轮给同一层补三样，**都在 `scripts/ci/ci-log.mjs` 里，只有一处口径**：
 
 | 手段       | 形态                                                        | 治的是什么                                     |
 | ---------- | ----------------------------------------------------------- | ---------------------------------------------- |
@@ -9542,7 +9542,7 @@ GitHub Actions conclusion（45m）→ 日志分块 ×3 → `GitHub 判决判定`
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `COMFYAPP_CI_GATES`             | 撤 `GitHub 判决回读` / `日志分块 1/3..3/3` / `GitHub 判决判定` 五格，加 `GA 回调结论回读`                                                            |
 | `COMFYAPP_CI_DISABLED_GATES`    | 五格登记为**停用**（停用 ≠ 删除，原文按注释形态留在 `.gates`，恢复动作照旧「取消注释 → 挪回 GATES → 从停用清单删」）                                 |
-| `.gates`                        | 五格真身转注释形态；新增一格 `GA 回调结论回读` 点 `scripts/ci-ga-verdict-readout.mjs`                                                                |
+| `.gates`                        | 五格真身转注释形态；新增一格 `GA 回调结论回读` 点 `scripts/ci/ci-ga-verdict-readout.mjs`                                                                |
 | `GATE_TIER_LEDGER`              | 五格进 `retired` 段并逐项写明「现在谁跑」；新格进 `PR` 段；`慢 stage 的 timeout 预算` 与两份顺序锚用例（`ci-env-probe` / `ci-image-identity`）同批改 |
 | `pr-gate.yml` / `.cnb.yml` 注释 | 收尾 job 与 `api_trigger_ga_verdict` 段从「骨架·休眠」改成转正事实；占位写者（`GA_ROLE=placeholder`）退役                                            |
 
@@ -9637,7 +9637,7 @@ build**（§13.6「PR 跑绿才合并」的承重锚一个字没换）。
 | 面         | 动作                                                                                                                                                                                                                                                                                                                           |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | push 主列  | `GitHub master 镜像` 出 `COMFYAPP_CI_PUSH_GATES` / `.push-stages` / `GATE_TIER_LEDGER`（进 retired）；`master 合并复核` 不再 import `GITHUB_MIRROR_TOKEN`。主列此后只判「合并后的树」                                                                                                                                          |
-| 平台池出口 | `push` 事件新增**第二条**流水线 `GitHub master 镜像（平台池）`：平台池 tags + docker git-lfs + 自带类锁 `*lock_push_mirror` + import 同一枚令牌；stage 名仍是 `GitHub master 镜像`（与历史出勤读数同名，换机器不换名），脚本 `node scripts/ci-github-mirror-push.mjs --master`（**摘 `--readout`**、退码生效），`timeout: 10m` |
+| 平台池出口 | `push` 事件新增**第二条**流水线 `GitHub master 镜像（平台池）`：平台池 tags + docker git-lfs + 自带类锁 `*lock_push_mirror` + import 同一枚令牌；stage 名仍是 `GitHub master 镜像`（与历史出勤读数同名，换机器不换名），脚本 `node scripts/ci/ci-github-mirror-push.mjs --master`（**摘 `--readout`**、退码生效），`timeout: 10m` |
 | 兜底       | 失败出口 = 该流水线自己的 error 落进 push build（`push 失败立案` 读逐格读数，它挂在**本条**的 `endStages`、与本格同跑）+ 每日 `镜像漂移判据`（`always()`、跨仓匿名 ls-remote）兜「之后没人再推」。`findMirrorReadoutFailure()` 那套「读数档折零」专用立案随 `--readout` 一起退役                                               |
 
 **为什么分两条流水线**：镜像出口不校验树、不吃 `node_modules`，与「文档链红不红」没有对偶关系。
@@ -9973,7 +9973,7 @@ GitHub 出站链路。月读原话：「现在只有红了才能拉取 ga 日志
   master 上每一笔都要有自己的读数，后一笔不许把前一笔的结论掐掉。
 - **命令与 CNB push 档逐字一致**（同一入口、同一旗标）：
   `node scripts/render-doc-placeholders.cjs --check --autofix`、
-  `node scripts/check-doc-references.cjs`。`--autofix` 不改口径：它是「红了就地重渲染再判
+  `node scripts/gates/check-doc-references.cjs`。`--autofix` 不改口径：它是「红了就地重渲染再判
   一次」，与既有入口同旗标。
 - **检出面**：`fetch-depth: 0` + `lfs: true`；保留 `pnpm install --frozen-lockfile`
   （用户已定，不为省时间引入「无 node_modules 能否真跑」的未验证前提）。
@@ -10054,7 +10054,7 @@ D0「文档源 ⇄ 生成态镜像同批」判据守（§13.5.5）—— **这�
 判据，不写工作区也不判镜像（见本节开头那张表）；③ `push 失败立案`
 内联进平台池出口那一跳已在 push 节点上实测：因为照抄了自托管那句 Windows
 PowerShell 编码前缀，整格 `sh` 退 127（ISSUE #3453）—— 修法是把该格收成 Linux 原生
-`node scripts/ci-pr-failure-issue.mjs --no-block --lane push`，并给平台池镜像的
+`node scripts/ci/ci-pr-failure-issue.mjs --no-block --lane push`，并给平台池镜像的
 Dockerfile 预装 `cnb` CLI（立案脚本的判决链要起 `cnb` 子进程；不装会「绿着空转」）。
 失败出口另由每日 `镜像漂移判据` 兜底。平台池 `CNB_TOKEN` 的 scope 边界另见 #3457。
 
@@ -10185,7 +10185,7 @@ fail-closed 语义与 5m 预算一字未动 —— 迁歪的表现是那格红�
 | 不另立判定、不藏绕过  | 结论必须来自既有执行者的原值；不 `git add -A`（暂存面由 `--add` 逐个点名，它同时打印「暂存了什么、还有什么没暂存」；点名即**封闭面**，index 里另有未点名的文件 ⇒ 退 2，见本节末「`--add` 是封闭暂存面」那一段）、不 `--no-verify`、不 `--force`、不改历史、不代写提交信息 |
 | CI 红了先取读数再归因 | `pnpm ship --diagnose [sn]` 取失败格与失败行（§13.10.13），归因仍归 `scripts/base-check.mjs`（§13.6.2）；「PR 跑绿才合并」是纪律而不是习惯（§13.5.25）                                                                                                                    |
 
-用法全表与失败语义的**脚本侧台账**在 `scripts/ship.mjs` 文件头（与 `ship-core` /
+用法全表与失败语义的**脚本侧台账**在 `scripts/ship/ship.mjs` 文件头（与 `ship-core` /
 `ship-platform` / `ship-claim` 等分模块同族）；**代理侧的执行说明**在 project Skill
 `.qoder/skills/ship/SKILL.md`。规范各处不重抄旗标清单——抄一份，下一个旗标加进来时它就是第二次脱钩。
 
@@ -10204,7 +10204,7 @@ CI 已经红的那一跳不问合并（问了也会被验真守卫拒掉，照�
 而人说的是「不要继续」，那不是失败。默认（不给 `--mode`）行为一字不变；模式与单件动作
 （`--claims` / `--diagnose` / `--reap` 等）互斥走既有清单（展开后守卫点名的是展开面）。
 词表只有 `auto` / `confirm`，词表外 / 重复 / 缺值 ⇒ 退 2 不静默收下。
-实现收在 `scripts/ship-mode.mjs`（词表 / 展开 / 确认应答，与 `ship-args` 同一档
+实现收在 `scripts/ship/ship-mode.mjs`（词表 / 展开 / 确认应答，与 `ship-args` 同一档
 「跟着命令行长什么样动」）；确认应答对「stdin 断流」fail-closed —— EOF 时 readline 的
 question 可能永不定案，实现里让回答与流断开赛跑，先到者收口。
 
@@ -10243,7 +10243,7 @@ question 可能永不定案，实现里让回答与流断开赛跑，先到者�
 `--no-preflight-d0`（用法见 `ship.mjs` 文件头）；跳过条件各念一行（dry-run / 带 `--add` ⇒
 暂存面还没成形、预跑没有对象 / 依赖没就绪），暂存面为空静默跳过（提交段本来就跳过），
 跑了就报总耗时。依赖新鲜度那一步不双付（阶段 0 刚跑过同一判据的 `--json` 形态）。
-机制层 `scripts/ship-preflight-d0.mjs`、接线 `scripts/ship-preflight.mjs`；
+机制层 `scripts/ship/ship-preflight-d0.mjs`、接线 `scripts/ship/ship-preflight.mjs`；
 清单漂移由 `tests/ship-preflight-d0.test.ts` 对真钩子钉住。
 
 **`--add` 是封闭暂存面：点名之外不许有「顺便」进提交的文件**（ISSUE #3597）。
@@ -10251,7 +10251,7 @@ question 可能永不定案，实现里让回答与流断开赛跑，先到者�
 index** —— 两步之间没有收口时，任何在调用 ship **之前**就已经暂存的文件都会随本次提交
 进历史：`git apply --3way` 解基线冲突留下的东西、手工 `git add` 过的、另一份并行检出
 的在途工作被顺手带进来的。实测代价（#3596 的合并提交 `fc3f75c8`）：15 行
-`scripts/check-allow-builds.cjs` 上了主干，它既不在 `--add` 名单里、也没有配套用例，
+`scripts/gates/check-allow-builds.cjs` 上了主干，它既不在 `--add` 名单里、也没有配套用例，
 事后要三张单子披露。`--add` 对这类文件**没有豁免力**：它只做增量 `git add`。
 所以提交段在 `git add` 之后、`git commit` 之前读一次暂存面
 （`git -c core.quotePath=false diff --cached --name-only -z`），逐条比对点名集合：
@@ -10279,10 +10279,10 @@ dry-run 的计划同步反映「不 add、不看暂存面、不 commit」。push
 **同一把尺还有第三种误读：`cnb` 的退出码 `0` 不等于「这条命令做了事」**（ISSUE #2436）。
 认不出的子命令打印的是**模块 usage**，而退出码是 `0` —— 于是「一次也没写」在终端上与
 「写成功」逐字同形。现场：手工补落地评论时把命令名敲成 `cnb issues create-comment`
-（仓里既有的正确形状是 **`post-issue-comment`**，`scripts/ship-claim.mjs` 用的就是它），
+（仓里既有的正确形状是 **`post-issue-comment`**，`scripts/ship/ship-claim.mjs` 用的就是它），
 `POST_EXIT=0` 当场被读成「写了」；独立回读 `list-issue-comments --sort -created` 才给出真相
 —— 条数一条也没多（换正确名字后才 2 → 3）。
-**脚本侧对这一族早有防线，而且是刻意的**：`scripts/ship-exec.mjs` 的 `cnbJson` 以
+**脚本侧对这一族早有防线，而且是刻意的**：`scripts/ship/ship-exec.mjs` 的 `cnbJson` 以
 「输出必须是可解析 JSON」为在场条件，拿不到 JSON 就落 `NOT_RUN`（= 那一格**没有结论**，
 既不是绿也不是红，见上面退出码三态）。所以暴露面只剩**人手工那一跳**与任何绕开 `cnbJson`
 新写的一次性脚本，而这一条**不新写门禁**（§12.20）：要买的是一句读数口径，不是第二轮子。
@@ -10365,7 +10365,7 @@ branch-first，与「这条 PR 本来没改标题」在屏幕上长得不一样�
    `git fetch <远端> && git merge <基线>` 逐个解 → push → 重跑 `pnpm ship`（PR 复用幂等，
    接着等 CI）。分型与出口话术各只有一份（`ship-core.mjs` 的 `classifyPrMergeable` /
    `conflictAdviceLines`），各格共用。
-2. **退码分型表**（单一出处 `scripts/ship-codes.mjs`，`--merge` 与 `--diagnose` 同一套码）：
+2. **退码分型表**（单一出处 `scripts/ship/ship-codes.mjs`，`--merge` 与 `--diagnose` 同一套码）：
    `0` 绿、`1` 红、`2` 没跑起来（泛化兜底：执行者不在 / cancelled / 归属不到 / 用法错）
    三态语义**不变**，「没跑起来家族（≥2）压 1、1 压 0」的合码口径也不变，CI 与自动化照旧按
    「非零即不过」消费；新增的是对「没跑起来」的细分 —— `3` 冲突（PR 与 base 冲突，平台不
@@ -10374,7 +10374,7 @@ branch-first，与「这条 PR 本来没改标题」在屏幕上长得不一样�
    拦住这一跳（本节 #2250 那格与 #2812 漂移守卫，原退 `2`）/ `7` 本地前置不成立
    （非 git 检出 / 在 master 上 / 缺碎片 / 依赖没装，原退 `1`/`2`）。行为变更逐条登记在
    `changelog.d/3083-ship-conflict-visibility.md`。
-3. **阶段化进度输出**（唯一出处 `scripts/ship-stage.mjs`）：预检通过 / 分支推送 /
+3. **阶段化进度输出**（唯一出处 `scripts/ship/ship-stage.mjs`）：预检通过 / 分支推送 /
    新建或复用 PR（PR 号 + **平台回读**的标题）/ 等 CI（构建号）/ 冲突（PR 号 + 冲突面）/
    合并（squash + 合并提交 sha + 目标分支）/ 关单（issue 号 + 回读 state/state_reason）/
    清分支，每格一句 `[ship] ▶ <阶段> | key=value`，完整不截断、可 grep。进度说「走到哪」，
@@ -10454,7 +10454,7 @@ PR 档随之卸下这四格。判据面：新增 push 档「声明与事实双�
 一条 npm 包里的规则，而欠账形式是**多登记的豁免**。
 
 **执行者**：`.githooks/pre-commit` D 组那一步 `lint 文件级豁免台账⇄真违例（§13.5.31）`
-（`node scripts/check-eslint-exemptions.cjs`，与 `jsx-a11y 规则开关⇄判据（§6.12）`
+（`node scripts/gates/check-eslint-exemptions.cjs`，与 `jsx-a11y 规则开关⇄判据（§6.12）`
 同族同档），加上 `tests/eslint-exemption-staleness.test.ts`（在 `FIXED_STRUCTURAL_TESTS` 里，
 它那条 bin 用例起真子进程跑真配置 —— 平台侧的执行者是这一条，与 a11y 那件的落地形状一致）。
 
@@ -10468,7 +10468,7 @@ PR 档随之卸下这四格。判据面：新增 push 档「声明与事实双�
 **取数必须用规则本体**，不许自写正则近似：实测自写「找 `\xNN` 转义」那把尺量出 **42 份**，
 而规则真报 **13 份**（转义也会出现在字符串与注释里，规则只管正则字面量）——
 拿 42 那份集合建判据会把 29 处正当写法判红。同理，读台账用
-`scripts/check-a11y-rules.cjs` 已经导出的 `loadOxlintConfig()`（每进程一次的去重单飞，
+`scripts/gates/check-a11y-rules.cjs` 已经导出的 `loadOxlintConfig()`（每进程一次的去重单飞，
 **不另写第二份配置加载器**，硬规则 24）取那块 `files` 数组本身，而不是抠配置文本。
 
 **三把尺的实测（eslint 侧，历史）**：真配置 CLI **27.8s** / 最小配置 CLI
@@ -10534,7 +10534,7 @@ eslint 配置）：本机 1s 级；用库里那条 bin 的预算仍与 a11y 同�
 
 **#2636 密钥扫描（gitleaks 之类）⇒ 不引入 gitleaks；且单子的「现状」读数不成立——判据已经在场。**
 
-- 「仓内没有任何密钥扫描工具」搜漏了：`scripts/check-tracked-secrets.cjs`（ISSUE #2157，
+- 「仓内没有任何密钥扫描工具」搜漏了：`scripts/gates/check-tracked-secrets.cjs`（ISSUE #2157，
   launch-and-build.md §7.3 末节 / AGENTS 硬规则 17）就是这一格的执行者，两档都在岗——
   `--staged` 增量面挂 `.githooks/pre-commit` D0（扫本次暂存新增行，0.34~0.37s，对位
   「PR 只扫新增 diff 的 L1」）；`--all` 全仓档即「全历史扫描兜 base 漏网」，存量实测
@@ -10572,10 +10572,10 @@ eslint 配置）：本机 1s 级；用库里那条 bin 的预算仍与 a11y 同�
   #3016 再清 14 处）。拍板（方案 A）：判空三元一律写 `x === undefined ? 兜底 : 主路`
   —— 条件取等号判空、**肯定侧在前**，只交换真/假分支、条件本身不动，两条规则同时满足；
   `no-negated-condition` 的配置不动。本批 14 处按此形态改完（`src/lib/comfyui` 9 份 10 处、
-  `scripts/reformat-preview-range.mjs` 3 处、`src/lib/comfyui/firstframe.test.ts` 1 处），
+  `scripts/reformat/reformat-preview-range.mjs` 3 处、`src/lib/comfyui/firstframe.test.ts` 1 处），
   与 #2977 已清零形态逐字一致。
 - 防回潮：已清零规则此前是「人工复扫惯例」、无在册清单 —— 清零批落地之后没人守，下一批
-  落地就把同形态带回来。现落成 `scripts/check-oxlint-zero-rules.mjs` 的 `ZERO_RULES`
+  落地就把同形态带回来。现落成 `scripts/gates/check-oxlint-zero-rules.mjs` 的 `ZERO_RULES`
   （41 条 = #2775 批 39 条 + #2776 的 `eqeqeq` / `no-void`），**清单是唯一登记面：
   每清零一条新规则就往那里加一行**。闸的形态是探针而非根级 config 条目（理由见脚本
   文件头：extends 同一预设、categories 全关、只抬清单内规则为 error 的全仓
@@ -10623,7 +10623,7 @@ eslint 配置）：本机 1s 级；用库里那条 bin 的预算仍与 a11y 同�
   要认 `f<T = Default>([])` 就必须在探针里另写一套 AST / 形状扫描器，正是硬规则 24 末句与
   `AGENTS.md`「遇到代码怪癖：当场立案，不就地绕开」那节明禁的「新造判据抓怪癖」——
   误报一片且本身会静默失效。`ZERO_RULES` 是**规则名**清单，不掺调用点形状；怪癖的归宿是
-  口径文档 + 单子，不是门禁。`scripts/check-oxlint-zero-rules.mjs` 文件头指向本节，改规则
+  口径文档 + 单子，不是门禁。`scripts/gates/check-oxlint-zero-rules.mjs` 文件头指向本节，改规则
   清单时能看到这条例外。
 - **复评触发**：上游 `typescript/no-unnecessary-type-arguments` 开始把「默认值 + 空数组实参」
   纳入判断，或 `@xyflow/react` 把 `useEdgesState` 改成不靠初值反推类型参数时，重跑上面三份
@@ -10640,10 +10640,10 @@ eslint 配置）：本机 1s 级；用库里那条 bin 的预算仍与 a11y 同�
 | 层   | 位置                                                                                    | 拦什么                                     | 能绕过吗                                  |
 | ---- | --------------------------------------------------------------------------------------- | ------------------------------------------ | ----------------------------------------- |
 | 平台 | CNB **分支保护设置**（保护分支 + 禁止直接 push，要求 PR）                               | `master` 的**直接 push**，**放行 PR 合并** | 需管理员改设置（本身就要权限）            |
-| 本地 | `.githooks/pre-commit` 开头的「master 分支提交守卫」跑 `scripts/check-branch-guard.cjs` | `master` 上的**每一次本地提交**            | 只能 `--no-verify`（进历史，Review 可见） |
+| 本地 | `.githooks/pre-commit` 开头的「master 分支提交守卫」跑 `scripts/gates/check-branch-guard.cjs` | `master` 上的**每一次本地提交**            | 只能 `--no-verify`（进历史，Review 可见） |
 
 > **服务端那两层已随 `.cnb.yml` 重新启用**（ISSUE #1959；#623 那次曾随删除一同
-> 失去调用方，但判据本身从未删过）。`scripts/check-branch-guard.cjs` 的
+> 失去调用方，但判据本身从未删过）。`scripts/gates/check-branch-guard.cjs` 的
 > `--pr-check` / `--merge-commit` 两个服务端形态由 `.cnb.yml` 调用（前者在
 > `pull_request` 那条流水线、后者在 `push` 那条）；它们是**判据本身**
 > （`tests/check-branch-guard.test.ts` 用真仓库跑三种拓扑），与本地门槛共用同一份实现。
@@ -10662,7 +10662,7 @@ eslint 配置）：本机 1s 级；用库里那条 bin 的预算仍与 a11y 同�
 **判据（为什么不能只看分支名）**：pre-commit 在**合并提交**时 `HEAD` 也是 `master`，
 只看 `git rev-parse --abbrev-ref HEAD` 会把「PR 合并」一起拦掉。可用的事实是
 「本次提交有几个父」：合并提交有 2 个父（被合分支 + `master`），普通提交只有 1 个。
-所以 `scripts/check-branch-guard.cjs` 的口径是：
+所以 `scripts/gates/check-branch-guard.cjs` 的口径是：
 
 - `HEAD` 不在 `master` 上 → 放行（正常的分支开发）；
 - `HEAD` 在 `master` 上且父提交数 > 1 → 放行（PR 合并提交，在平台侧完成）；
@@ -10715,7 +10715,7 @@ squash 合并把 `master` 上几批修复整体回退的现场：解冲突时 `g
 而本地钩子四组全绿。
 
 所以补一条判据，落在 `.githooks/prepare-commit-msg`（入口）→
-`node scripts/check-merge-parents.mjs`（判据本体）：
+`node scripts/gates/check-merge-parents.mjs`（判据本体）：
 
 - **提交信息声明自己是合并**（首行是 git 会写的那几种：`Merge branch` /
   `Merge remote-tracking` / `Merge tag` / `Merge commit` / `Merge pull request`）
@@ -10742,8 +10742,8 @@ squash 合并把 `master` 上几批修复整体回退的现场：解冲突时 `g
 改动一笔退回。所以 `.githooks/prepare-commit-msg` 里**一前一后**接了两条判据：
 
 ```sh
-node scripts/check-merge-parents.mjs "$1" "$2" || exit 1     # ① 形态档（#1594）
-exec node scripts/check-pending-merge-loss.mjs "$2"          # ② 内容档（#1618）
+node scripts/gates/check-merge-parents.mjs "$1" "$2" || exit 1     # ① 形态档（#1594）
+exec node scripts/gates/check-pending-merge-loss.mjs "$2"          # ② 内容档（#1618）
 ```
 
 ② 的三条合起来才算命中（缺一条都会误报）：结果版（索引里那一版）**不等于**
@@ -10753,7 +10753,7 @@ exec node scripts/check-pending-merge-loss.mjs "$2"          # ② 内容档（#
 文件」是**正当**的，不报。阻断话术指名叫哪几份、并给出口（`git checkout HEAD -- <文件>`
 或 `git checkout --merge <文件>` 重解一次，**别整份 goback**）。
 
-**它与 1-1（事后复算档）共用内核** `scripts/merged-side-loss-core.mjs` 的
+**它与 1-1（事后复算档）共用内核** `scripts/base-check/merged-side-loss-core.mjs` 的
 `findEarlierVersion` —— 两个执行者问的是同一件事：「结果里这一版的内容，是不是等于
 某个更早版本的内容」。内核只接**已经取好的事实**（结果 blob、候选历史 sha 清单、
 取某版本的函数），不认识「基线」「HEAD」「MERGE_HEAD」这些业务名词，也不含任何
@@ -10785,7 +10785,7 @@ exec node scripts/check-pending-merge-loss.mjs "$2"          # ② 内容档（#
 > **`.githooks` 下的两个钩子是两件事**：`pre-commit` 管「提交这一刻的门槛」，
 > `prepare-commit-msg` 管「提交消息与拓扑是否自洽」。两者都由
 > `core.hooksPath=.githooks` 覆盖调用，`scripts/install-git-hooks.mjs` 不必改 ——
-> 但**判据执行者的口径要跟着长**：`scripts/check-gate-executors.cjs` 的
+> 但**判据执行者的口径要跟着长**：`scripts/gates/check-gate-executors.cjs` 的
 > `EXECUTOR_SOURCES` 已把 `prepare-commit-msg` 一并收进「谁在跑它」的来源
 > （漏登记 = 那条判据被判成「无执行者」，方向正好反了）。
 
@@ -10816,7 +10816,7 @@ exec node scripts/check-pending-merge-loss.mjs "$2"          # ② 内容档（#
    ```bash
    node scripts/base-check.mjs check-ui-primitives          # 换成拦住你的那条（钩子标签 / 脚本名 / 整条命令都认）
    node scripts/base-check.mjs --fetch "UI 基元复用棘轮"     # 先 fetch 再复算
-   node scripts/base-check.mjs --json node scripts/check-ui-primitives.cjs   # 机器可读（碎片里要贴的那句事实）
+   node scripts/base-check.mjs --json node scripts/gates/check-ui-primitives.cjs   # 机器可读（碎片里要贴的那句事实）
    ```
 
    它给你**五态之一**（`--merge-state` 那一档给第六态 `merge-red`，见下），每一态的下一动作不同（下面的口径就是它的话术）：
@@ -10851,7 +10851,7 @@ exec node scripts/check-pending-merge-loss.mjs "$2"          # ② 内容档（#
    登记，而这次根本没有「一条有主的账」可登 —— 下一次它不红，那条登记从此就解释不清
    （同 §13.6.4 反对把负载假红读成 `baseline-red` 的理由，只是换了触发原因）。
 
-   第三条入口的现场（同一条命令、两侧同码）：`node scripts/base-check.mjs "node scripts/ci-affected-tests.mjs"`
+   第三条入口的现场（同一条命令、两侧同码）：`node scripts/base-check.mjs "node scripts/ci/ci-affected-tests.mjs"`
    报的是 **`baseline-red`（本检出 2，origin/master 2）**，而它自己引用的那段基线输出末尾
    逐字写着「※ 这一档**不算绿也不算红**」—— 两份说法在同一条结论里并存。根因很薄：
    `judge()` 只看「非零」，而本仓门禁入口普遍是**三态**（0 绿 / 1 事实红 / 2 这一跳没结论，
@@ -11000,7 +11000,7 @@ exec node scripts/check-pending-merge-loss.mjs "$2"          # ② 内容档（#
 
   **这批判据的第二个来源：`CHAINED_STEPS`**（ISSUE #1605）。上面那一段说的是「面从
   钩子步骤现算」—— 而有一族判据**天然进不了钩子、却同样属于「合并前该算一遍」**：
-  首发成员是 `scripts/check-commit-claims.mjs`（提交信息里的声明 ⇄ 那次提交的事实，
+  首发成员是 `scripts/gates/check-commit-claims.mjs`（提交信息里的声明 ⇄ 那次提交的事实，
   口径见 11 §11.23.5）。理由是**本地看不到那个形态**：声明说的是某一次提交的树
   （「§x.y 照旧保留」），而丢失发生在**平台侧 squash** 那一刻 —— 实测 `ad81a912` /
   `bdabd26f` / `b9bedd37` 在 `master` 上都是**单亲**，信息里却带 `Merge origin/master
@@ -11028,7 +11028,7 @@ exec node scripts/check-pending-merge-loss.mjs "$2"          # ② 内容档（#
 
   **与「提交信息里的声明 ⇄ diff 的事实」的分工**（ISSUE #1605）：`--base` 自带的
   那批判据复算的是**代码**在合并后会不会红，它读不出「提交信息里那句话是不是真的」。
-  那一半归 `scripts/check-commit-claims.mjs`（§11.23.5）—— 立案现场 `ad81a912` 的
+  那一半归 `scripts/gates/check-commit-claims.mjs`（§11.23.5）—— 立案现场 `ad81a912` 的
   文字自称保留了两节、而那次提交的树里两节都不在，`--base` 原生的那批对这一句无话可说。
   **两者都不进本地钩子**（平台侧 squash 本地看不到形态），但差别在**谁在敲**：
   原生那批由**钩子步骤**现算（人在合并前点一次 `--base` 就跑），而声明那一族是
@@ -11122,7 +11122,7 @@ exec node scripts/check-pending-merge-loss.mjs "$2"          # ② 内容档（#
 
   钩子那侧只负责调用与 stdin 的分配（pre-push 的 stdin 只能读一次，LFS 与复算都要它），
   判据与编排一律不重抄（§12.12）。这条接线由 `tests/premerge-push-trigger.test.ts` 守着，
-  并登记在 `scripts/affected-tests.mjs` 的固定清单里 —— 改 `.githooks/**` 会让增量层放弃收窄，
+  并登记在 `scripts/affected-tests/affected-tests.mjs` 的固定清单里 —— 改 `.githooks/**` 会让增量层放弃收窄，
   守接线的那条如果只跟着改动走，恰好会在「有人把这一行注掉」那一次一条都不跑。
 
   **它不发明第二套编排**（§12.18 / §12.12）：`base` 段**直接 import** 既有实现的
@@ -11207,7 +11207,7 @@ exec node scripts/check-pending-merge-loss.mjs "$2"          # ② 内容档（#
 写一句『走不到门禁』」的代价，实测是 **25 条 `tsc` 错落进 `master`**，然后拦住从它
 分出的**每一个**提交（13.6.2 的硬闸形态）。前面那八分钟是为了不付后面那份账。
 
-**判据入口**：`pnpm check:toolchain`（`scripts/check-pnpm-available.mjs`）。它现在正面
+**判据入口**：`pnpm check:toolchain`（`scripts/gates/check-pnpm-available.mjs`）。它现在正面
 回答那个被误判的问题 —— 依赖未装时分三行给「能不能装 / 装多久 / 装完能跑什么」，
 并且显式点名「不得以本容器无 node_modules 为由跳过门禁」。它的 `node_modules` 判据
 **直接 import 启动器的 `checkNodeModules()`**（`scripts/launcher-core/worktree.mjs`），
@@ -11223,13 +11223,13 @@ exec node scripts/check-pending-merge-loss.mjs "$2"          # ② 内容档（#
 `pnpm dev`（原生模块被进程锁定会 EPERM，AGENTS 硬规则 9）。
 
 **这条纪律的一个机器读者：`pnpm ship` 阶段 0**（ISSUE #2390）。那一格调
-`scripts/check-deps-freshness.mjs`，而那份判据的三件不同的事**共用一个非零码** ——
+`scripts/gates/check-deps-freshness.mjs`，而那份判据的三件不同的事**共用一个非零码** ——
 「远端在依赖面上前进过」（真漂移）、「依赖压根没装」（`installDrift.state = no-install`）、
 「拿不到 git 状态」（`envBroken`）。只看退出码就必然把后两种念成「新鲜度红了」，
 而「红了」在三态码里的意思是**有事实是红的** ⇒ 判据的措辞反过来教人做本节禁止的那件事，
 后果是新克隆 / 评审容器 / NPC 工作区里整条 ship 链一步都走不了。
 
-现在的分档由 `scripts/ship-core.mjs` 的 `readFreshnessState()` 给（读判据自己的
+现在的分档由 `scripts/ship/ship-core.mjs` 的 `readFreshnessState()` 给（读判据自己的
 `--json` 原值，不另立判定），四档各自对应本节那张表的不同行：
 
 | 判据原值                          | 段位 | 念的那句话与下一动作                                                                    |
@@ -11282,7 +11282,7 @@ oxfmt / vitest worker），而它们与「等资源」争的是同一样东西 �
 `base-check`、再手敲 `--no-file-parallelism`，才知道那是不是假红。于是「无论机器多忙，
 提交都能正常走下去」这件事**在钩子这一侧没有执行者** —— 超时就是终局。
 
-现在有了，落在 C 组的启动器 `scripts/run-affected-tests.mjs` 里（口径一个字没改，
+现在有了，落在 C 组的启动器 `scripts/affected-tests/run-affected-tests.mjs` 里（口径一个字没改，
 只把「重测一次」这一步机器化）：
 
 | 情形                                         | 动作                                                                                  |
@@ -11297,7 +11297,7 @@ oxfmt / vitest worker），而它们与「等资源」争的是同一样东西 �
 
 ⚠️ **判决粒度必须与取数粒度一致**（ISSUE #2225）：复跑面早已按文件收窄，判决却一度停在
 `isTimeoutShaped(整块输出)` —— 于是「A 超时 + B 真断言红」被整块读成「只是超时形态」并退 0，
-`scripts/ci-affected-tests.mjs` 把这个 0 原样透传成平台 stage 的 **success**，B 那次真红
+`scripts/ci/ci-affected-tests.mjs` 把这个 0 原样透传成平台 stage 的 **success**，B 那次真红
 没有任何一格会看见。现在第 2 遍的红先按 `precommit-timing.mjs` 的 `failingSuiteTextsFromJunit`
 **逐 suite** 取各自的失败文本来分档（一份超时只降级那一份）；第 2 遍的 junit 认不出的那些文件，
 先做**有界逐文件补跑**（一份一次，那份退出码就是它的结论，上限见
@@ -11305,8 +11305,8 @@ oxfmt / vitest worker），而它们与「等资源」争的是同一样东西 �
 退 2 这一档的**落点在哪一侧**要说清：`run_group C` 里那一句 `return 0` 在档位开关**之前**
 （2026-10-20 起本地不跑受影响用例，`COMFY_HEAVY_GATES=1` 也换不回来 —— §13.5.25），
 所以钩子这一侧**没有**这一档的分支，也不在那里写一段永远跑不到的处理。真正的落点是平台那一格：
-`scripts/ci-affected-tests.mjs` 原值透传 ⇒ stage 非零 ⇒ **不再被算进绿**；而它也不是红 ——
-话术点名的是「哪几份拿不到自己的读数」。本地手工那一跳（`node scripts/run-affected-tests.mjs`
+`scripts/ci/ci-affected-tests.mjs` 原值透传 ⇒ stage 非零 ⇒ **不再被算进绿**；而它也不是红 ——
+话术点名的是「哪几份拿不到自己的读数」。本地手工那一跳（`node scripts/affected-tests/run-affected-tests.mjs`
 或 `pnpm check:all`）读到 2 时同样按「未判定」念：既不许写成「已通过」，也不许照 `1` 去查产物。
 `base-check` 的 `inconclusive`、出勤判据的退 2、`ci-build-readout` 的「没有结论」—— 与这一档
 是同一个三态口径第四次出现，**0/1 两档的系统读不出它**。
@@ -11385,7 +11385,7 @@ oxfmt / vitest worker），而它们与「等资源」争的是同一样东西 �
    `...chunk` 原样再串行跑一遍，于是**一份**带超时指纹的文件会拖着整块（实测 90~115 份）
    全部重跑 —— 一次改了 `.cnb.yml` 的提交因此组 C **1411s / 全钩子 1412s**（账本里那次的
    A/B/D 分别是 11.7s / 109.0s / 125.1s，也就是说整条钩子的时长几乎全是这一格）。
-   现在复跑名单取自本档自己写下的 junit 读数（`scripts/affected-launch-retry-scope.mjs`，
+   现在复跑名单取自本档自己写下的 junit 读数（`scripts/affected-tests/affected-launch-retry-scope.mjs`，
    与话术层 `affected-launch-rerun-report.mjs` 同一刀拆法 —— 机制层塞第五件事就会长到读不动，
    而读不动的那一层失效形态是「判据恒绿」；形状知识仍只在 `precommit-timing.mjs` 一处：
    「谁失败」与「谁多久」读同一个内层 `<testsuite>` 标签，各写一遍正则就会有一半漂移），
@@ -11393,7 +11393,7 @@ oxfmt / vitest worker），而它们与「等资源」争的是同一样东西 �
    同一份输入产出两条不同的命令行，而命令行长度与「不丢不重」都有判据在数）。
    **三条读不出来的形态一律退回整块**（没有账本目录 / 文件取不到 / 读数里一份失败都没有），
    方向是单边化的：宁可多跑，也绝不漏跑一份真失败的文件。第一格「没有账本目录」在平台侧
-   不该再是常态：`scripts/ci-affected-tests.mjs` 自己造账本（见 §13.5.8.3 第九笔账，
+   不该再是常态：`scripts/ci/ci-affected-tests.mjs` 自己造账本（见 §13.5.8.3 第九笔账，
    ISSUE #2074），真造不出来时收尾复述会念「没有落点」—— 那是可读的代价，不是默认形态。
    而「未校验」那份点名也跟着收窄 ——
    第一遍已经绿过的文件不能被写成「这次没测」。
@@ -11407,7 +11407,7 @@ oxfmt / vitest worker），而它们与「等资源」争的是同一样东西 �
    串行复跑 13.6 分钟、第三遍 31.1 分钟没跑完，最后平台在 3240105ms 那一刀掐掉 ——
    那一格正文只剩「命令行 + `Finished, code: ECONNABORTED`」两行，**连一句结论都没留下**，
    而「把『这次没测』说出来并逐份点名」正是这一节花最大力气建起来的东西。
-   现在界划在**开下一遍之前**（`scripts/affected-launch-wallclock.mjs`，三个数都进
+   现在界划在**开下一遍之前**（`scripts/affected-tests/affected-launch-wallclock.mjs`，三个数都进
    `scripts/.gate-thresholds.json` 按 `report` 入账）：成本估计 = 首遍的**真实墙钟** ×
    `SERIAL_RERUN_FACTOR`，**不按失败份数的比例算** —— 串行那一遍只跑 2/98 份却比首遍
    **更慢**（1.48 倍，因为串行去掉了并发优势），按比例会把界划在错的一侧；买不起就
@@ -11519,7 +11519,7 @@ oxfmt / vitest worker），而它们与「等资源」争的是同一样东西 �
   而不是 `timed out`，**别把「串行绿 = 预算」套上去**（失效的是前提不是预算）。
 
 **这一套现在也覆盖 D 组那一格「子进程时间预算型判据」**（审查台账 R11-01 的第二刀）：
-`scripts/check-app-port-vectors.cjs` 取 Python 侧的回答时带 `PY_TIMEOUT_MS` 预算，
+`scripts/gates/check-app-port-vectors.cjs` 取 Python 侧的回答时带 `PY_TIMEOUT_MS` 预算，
 `python3 --version` 探测带 `PROBE_TIMEOUT_MS`。它的两遍形态与 C 组同构，差别只在
 复跑的是**同一趟取证**而不是同一份用例清单：
 
@@ -11601,8 +11601,8 @@ Rust / PowerShell 侧的锁引用仍在同一趟里判。判决本身是纯函�
 | `git branch -d <分支>` 能不能删                  | 「分支头是不是主干的祖先」                    | 同一原因 ⇒ 恒假；它红不代表「没合并」                                                                                                 |
 | 提交信息里的 `(#N)`                              | 人写的字                                      | 不是平台终态，也不核                                                                                                                  |
 
-**入口**：`pnpm ship --branches`（`scripts/ship-branches.mjs`，规范上属于 `ship` 那一条链，
-所以用法只写在 `scripts/ship.mjs` 文件头与 Skill 那份表里，本节不抄旗标）。它是**只读**的：
+**入口**：`pnpm ship --branches`（`scripts/ship/ship-branches.mjs`，规范上属于 `ship` 那一条链，
+所以用法只写在 `scripts/ship/ship.mjs` 文件头与 Skill 那份表里，本节不抄旗标）。它是**只读**的：
 
 - 逐条本地分支给 `PR 号 / is_merged / merged_by / 远端引用在不在 / tip sha` 五件原值；
 - 结论只有三种：`landed`（已落地可删）/ `not-merged`（**别删**）/ `no-pull-in-window`
@@ -11734,8 +11734,8 @@ changelog.d/408-changelog-conflict-free.md
 **门禁与工具**
 
 ```bash
-node scripts/check-changelog-fragments.cjs            # 校验碎片形态(pre-commit 自动跑)
-node scripts/check-changelog-versions.cjs             # 待发段落的来源锚 ⇄ 条目归属(pre-commit 自动跑)
+node scripts/gates/check-changelog-fragments.cjs            # 校验碎片形态(pre-commit 自动跑)
+node scripts/gates/check-changelog-versions.cjs             # 待发段落的来源锚 ⇄ 条目归属(pre-commit 自动跑)
 node scripts/merge-changelog-fragments.mjs            # 并入带锚的待发段落并删除碎片
 node scripts/merge-changelog-fragments.mjs --check    # 只预览,不落盘
 node scripts/merge-changelog-fragments.mjs --anchor 9321411   # 显式指定本轮最早的那个提交
@@ -11803,7 +11803,7 @@ node scripts/merge-changelog-fragments.mjs --release 0.2.0    # 并入并把待�
 于是锚总是「这些条目里最早的那个提交」，而不是写这条的人当时的 HEAD。段落的标题
 在 `--release <版本>` 之外**不动**：`[Unreleased]` 不会因为并一次就长出版本号。
 
-**判据**：`scripts/check-changelog-versions.cjs`（pre-commit 的 D 组「待发段落的来源
+**判据**：`scripts/gates/check-changelog-versions.cjs`（pre-commit 的 D 组「待发段落的来源
 锚 ⇄ 条目归属」）三件事 —— 锚的形状（歪 ⇒ 红）、锚解析不解析得开、ISSUE 号有没有跨锚分裂；
 外加「判据自己不许静默降级」（`CHANGELOG.md` 读不到 / 一个待发段落都解析不出 ⇒ 判失败，
 不是「没有段落要查、于是放过」，§11.23.3 同款）。
@@ -11920,7 +11920,7 @@ node scripts/merge-changelog-fragments.mjs --release 0.2.0    # 并入并把待�
 
 现场读数（2026-10-22，当场量到）：`changelog.d/` 195 份未并入碎片里 **72 份以 `0-` 开头**，
 其中 **43 份的段落是 `## Fixed`**；`origin/master` 最近 80 笔非常规提交里 `fix` 类 32 笔，
-**10 笔不带 `(#N)`**。缺的不是记性，是执行者：形态门禁 `scripts/check-changelog-fragments.cjs`
+**10 笔不带 `(#N)`**。缺的不是记性，是执行者：形态门禁 `scripts/gates/check-changelog-fragments.cjs`
 认 `0` 为一个**合法号**（`FILE_RE = /^#?(\d+)-…/`，它判形态、判不了有没有诉求单），
 而 `pnpm ship` 过去只数碎片**份数**——于是「修问题却没立案」在整条链上没有任何一处会被读出来，
 唯一的读数时机落在 `--close-issue` 那一格，而它发生在**改动已经进主干之后**。
@@ -11929,8 +11929,8 @@ node scripts/merge-changelog-fragments.mjs --release 0.2.0    # 并入并把待�
 
 | 时刻           | 谁在做                                                                              | 做什么                                                                                                       |
 | -------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| 交出去之前     | `scripts/ship-ticket.mjs` 的 `ticketReading()`，由 `ship-preflight.mjs` 阶段 0 打印 | 念出「本次碎片挂在 `#N`」；`## Fixed` 而号是 `0` 的点一句「先立案」并给出建单出口                            |
-| 合并并且验真后 | `pnpm ship --merge --close-issue [号…]`（`scripts/ship-close.mjs`）                 | 关掉**落地那一行标题本体**里点名的号 + 人点名的号（并集），再独立回读 `state` / `state_reason` / `closed_at` |
+| 交出去之前     | `scripts/ship/ship-ticket.mjs` 的 `ticketReading()`，由 `ship-preflight.mjs` 阶段 0 打印 | 念出「本次碎片挂在 `#N`」；`## Fixed` 而号是 `0` 的点一句「先立案」并给出建单出口                            |
+| 合并并且验真后 | `pnpm ship --merge --close-issue [号…]`（`scripts/ship/ship-close.mjs`）                 | 关掉**落地那一行标题本体**里点名的号 + 人点名的号（并集），再独立回读 `state` / `state_reason` / `closed_at` |
 
 **早已落地、却还挂着的单子**（变更随别人的 PR 进了主干）走 `pnpm ship --close-issue <号>` 那一路：
 不跑 preflight / commit / push，前提从「本轮合并已验真」换成平台侧的落地证明 ——
@@ -12092,7 +12092,7 @@ cnb issues post-issue-labels --repo <组织>/<仓库> --number <号> --labels �
 
 `COMFYAPP_DEV_HANDLE` **故意不进** `src/env.js`：它是提单留痕，不是应用配置，运行期一次也不读它，
 而 `.env` 本来就被 `standalone-private-inputs.mjs` 从产物里剥掉（AGENTS 硬规则 17），所以它不随包。
-执行者是 `scripts/ship-ticket.mjs` 的 `issueAuthoring()`（纯判断，平台形态由调用方注入 ——
+执行者是 `scripts/ship/ship-ticket.mjs` 的 `issueAuthoring()`（纯判断，平台形态由调用方注入 ——
 不在判据里摸 `process.platform`，同 AGENTS 那条「平台判据只收两处」）与 `readDevHandle()`
 （回落 `.env` 用的是 `app-port.mjs` 的同一份最小解析器，不重抄第二份）。回归见
 `tests/ship.test.ts` 的 `issueAuthoring` / `readDevHandle` 两组（含「非 Windows 未配 ⇒ 不点名」
@@ -12107,7 +12107,7 @@ cnb issues post-issue-labels --repo <组织>/<仓库> --number <号> --labels �
   领取 / 结束评论**同一格式**（角色分工由标签承担，正文不再重复写 `提单人:` / `处理人:`）；
   未配时如实写 `**[评论人：未配]**`，**不编一个名字**（也**不许**拿 git `user.name`
   顶替 —— 那是提交身份，不是提单 / 处理身份）。
-  这一行由 `scripts/ship-ticket.mjs` 的 `withCommentHeader` 一处收口，保证**有且只有一行**：
+  这一行由 `scripts/ship/ship-ticket.mjs` 的 `withCommentHeader` 一处收口，保证**有且只有一行**：
   正文文件里自己已经写了署名的，**保留第一行原样、去掉后面重复的、不改写人名**
   （`#2258` 的现场是旧写法无条件前插 ⇒ 平台正文连着两遍同名）。只看开头 ——
   正文中间出现的同形文字（比如在讲这个格式本身）不算署名、不动。
@@ -12415,7 +12415,7 @@ pnpm ship --gh-logs pr:3195 --dry-run            # 只念计划（含按需触�
   超预算是「没结论」不是「日志为空」—— 仍退回原 GitHub 快速回退链路，不改三态、不改退码。
   `run:` 形态、判红自动回读（`runGhLogsOnRed` 不给 `onDemand`）、以及 CNB 侧已有 marker 但附件
   读不回的情形，一律不伸手触发（后者白派一条 GA run 没有意义）。实现收在
-  `scripts/ship-ga-logs-on-demand.mjs`，判据 `tests/ship-ga-logs-on-demand.test.ts` +
+  `scripts/ship/ship-ga-logs-on-demand.mjs`，判据 `tests/ship-ga-logs-on-demand.test.ts` +
   `tests/ship-gh-logs.test.ts` ⑥ 组。
 - 台面直接念出：run id + URL、失败 job 名、失败 step 名、该 step 的**全部** `##[error]` 注解、
   失败 step 的原始日志窗口（head 20 + tail 120，带 `[head]` / `[tail]` 标记并写明省略行数）、
@@ -12513,7 +12513,7 @@ Missing required scopes: repo-cnb-history:r
 **缺的那一项**。「PR 上到底有没有 `repo-issue:r`」这个问题，过去只能翻官方文档的权限表
 再猜平台实现。**这一节把「猜」换成「量」**。
 
-**落成**：`scripts/ci-token-scopes.mjs` 拿一串**只读**接口挨个问一遍（分支 / 仓库元信息 /
+**落成**：`scripts/ci/ci-token-scopes.mjs` 拿一串**只读**接口挨个问一遍（分支 / 仓库元信息 /
 Issue / PR / 构建历史 / 发行版 / 制品 / 知识库 / 管理面三格）。403 里平台会自己点名缺什么
 scope ⇒ **平台自报的授权面**落进构建日志，不必等某一格真去写。这条读数现役挂在
 PR / 每日 / 桌包 / push 这几条流水线上：每日档是 `.daily-gates` 里的第二格
@@ -12600,7 +12600,7 @@ pnpm ship --comment 2719 --body-file .git/comment.md
    长度一起打出来 —— 少了几个字与「末尾换行差一个」在终端里长得一模一样，读数里要能分开。
 3. **署名行由脚本保证有且只有一行**（`withCommentHeader`，与建单 / PR 正文同一份实现）：
    正文文件里自己已经写了的，不再前插第二遍。那是留痕，不是判断。
-4. **一份实现**（`scripts/ship-comment.mjs`）：领取 / 结束 / 关单收尾（`ensureComment`）、CI 那一路
+4. **一份实现**（`scripts/ship/ship-comment.mjs`）：领取 / 结束 / 关单收尾（`ensureComment`）、CI 那一路
    的 `runAppendIssueComment`、以及本格，三处共用同一对原语（`appendComment` 写 /
    `readCommentBodies` 读）。此前这两段各写一份，漂移形态就是「一边补了回读、另一边没有」
    （§12.12 同族）。`--comment` 也**不需要留痕短名**：它是「在单子上贴一段读数」，不是「谁在做」。
@@ -12749,13 +12749,13 @@ cnb issues comment --number <诉求单号> --body '改后截图：<asset_link> �
   3. **本地可复现 ✓** —— 一条命令：`pnpm exec vitest run tests/db-migrate-equivalence.test.ts`。
 - **落档的形状**（三处同批，缺一处就红）：
   - **执行者**：GA `.github/workflows/pr-gate.yml` 的 `typecheck-db-format` job 里那一步
-    （`node scripts/ci-run-tool.mjs vitest run tests/db-migrate-equivalence.test.ts`，
+    （`node scripts/ci/ci-run-tool.mjs vitest run tests/db-migrate-equivalence.test.ts`，
     与同 job 的 `lib Node-only 声明` 同一形状）。**判据一字未改**。
   - **登记**：`.cnb.yml` 的 `COMFYAPP_CI_GATES` 加名 + `COMFYAPP_CI_GATES_ELSEWHERE`
     登记入口路径（`tests/db-migrate-equivalence.test.ts`）+ `GATE_TIER_LEDGER` 的 **PR** 段
     加同名条目（档位 = L1，§13.5.30 的三条门槛由人判、本账只拦「改档却没定级 /
     撤档却没登记」）。
-  - **判据面补一处**：④`scripts/check-gate-name-executors.mjs` 的**执行面从三处补到四处**
+  - **判据面补一处**：④`scripts/gates/check-gate-name-executors.mjs` 的**执行面从三处补到四处**
     —— 增的是「GA PR 门禁 workflow 的 `run:` 行」。补它的理由是**执行者搬家了而判据没跟**：
     PR 主列的代码判据全在 GA 侧（`.cnb.yml` 的 PR 档自 #3378 起只剩「站内回读结论 +
     红了立案」两件纯 API 动作），而另三处执行面（复合档条目 / 固定清单用例 / 钩子步骤）

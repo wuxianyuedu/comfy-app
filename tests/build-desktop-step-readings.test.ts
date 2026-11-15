@@ -95,7 +95,7 @@ describe("build-desktop 念得出每一步多久（ISSUE #2574）", () => {
   });
 
   it("时长格式化只有一份：用 src/lib/time-format 那一处，不在脚本里再写一份", () => {
-    // 脚本侧从 .mjs 引 .ts 的先例是 `scripts/ci-build-readout.mjs:96`，同一形态。
+    // 脚本侧从 .mjs 引 .ts 的先例是 `scripts/ci/ci-build-readout.mjs:96`，同一形态。
     expect(src).toContain('from "../src/lib/time-format.ts"');
     expect(src, "不许在本文件里长出第二份时长格式化").not.toMatch(
       /(?:function|const)\s+formatDuration/,

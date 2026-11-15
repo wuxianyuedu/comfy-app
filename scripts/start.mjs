@@ -10,8 +10,8 @@
 // 保证「一处配置、两条链路一致」，多份检出并行时也各得其所。
 import { spawnSync } from "node:child_process";
 import { APP_PORT_ENV_KEY, resolveAppPortWithSource, resolveRepoRoot } from "./app-port.mjs";
-import { applyPendingRestoreAtBoot } from "./db-backup-core.mjs";
-import { spawnSchemaSync } from "./db-schema-state.mjs";
+import { applyPendingRestoreAtBoot } from "./db/db-backup-core.mjs";
+import { spawnSchemaSync } from "./db/db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
 import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
 import { maybeSpawnExecutorHost } from "./launcher-core/executor-host-spawn.mjs";

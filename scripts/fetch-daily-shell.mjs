@@ -6,7 +6,7 @@
  * ## 它做什么
  *
  * 每日桌包档会把同一份纯壳 `ComfyAPP-shell.exe`（`src-tauri/target/release/app.exe`，
- * 预编译壳、可连本地 dev server，见 `scripts/ci-ga-desktop-relay.mjs`）回传到 CNB 的
+ * 预编译壳、可连本地 dev server，见 `scripts/ci/ci-ga-desktop-relay.mjs`）回传到 CNB 的
  * 滚动 `nightly` Release。这个脚本把它下载下来，保存为本地可用的壳文件，并在项目根
  * 缺少 `Comfy APP.lnk` 时补一个指向该壳的快捷方式。
  *
@@ -104,7 +104,10 @@ export function usage() {
  * @returns {string[]}
  */
 export function tokenConfigPaths(env = process.env, platform = process.platform) {
-  const home = os.homedir();
+  /* home 与 APPDATA 取**同一份 env**（USERPROFILE 优先，兜底 os.homedir()）：
+   * 此前 home 直接走进程级 os.homedir()，与 env.APPDATA 两套来源 —— 传假 env 的
+   * 调用方（测试 / 显式传入 env 的宿主）隔离不了「真机恰好有令牌文件」那一格。 */
+  const home = (env.USERPROFILE ?? "").trim() || os.homedir();
   /** @type {string[]} */
   const paths = [];
   if (platform === "win32") {
