@@ -268,8 +268,7 @@ export function main(deps = {}) {
    * `finally` 里、计数写在里面。 */
   const r = (() => {
     try {
-      /* run-affected-tests.mjs 在 affected-tests/ 子域（#3930）：按两级的相对路径解析。 */
-      return spawn(path.join(HERE, "..", "affected-tests", "run-affected-tests.mjs"), childEnv);
+      return spawn(path.join(HERE, "run-affected-tests.mjs"), childEnv);
     } finally {
       if (ledgerDir) {
         junitCount = countJunitFiles(ledgerDir);
