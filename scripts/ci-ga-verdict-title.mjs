@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * `ci-ga-verdict-title.mjs` —— 把 PR 标题写进 `GITHUB_ENV`，供收尾的回调那一跳读（ISSUE #3981）。
+ * `ci-ga-verdict-title.mjs` —— 把 PR 标题写进 `GITHUB_ENV`，供收尾的回调那一跳读（ISSUE #3981 / #3980）。
  *
  * ## 为什么需要它
  *
@@ -9,32 +9,41 @@
  * 平台侧 `dto.StartBuildReq` 有独立的 `title` 字段（与流水线 `name`、事件名都不是同一个源），
  * 于是修法是：GA 这一跳把 PR 标题取到，`ci-ga-verdict-callback.mjs` 再送进请求体。
  *
- * ## 两条取值路径（一份落点）
+ * ## 三条取值路径（一份落点）
  *
- * | 触发形态                             | 标题从哪来                                     |
- * | ------------------------------------ | ---------------------------------------------- |
- * | 自动档（`repository_dispatch`）      | payload 的 `github.event.pull_request.title`   |
- * | 按需档（`workflow_dispatch`，#3667） | **没有** payload ⇒ 站内读 `GET /{repo}/-/pulls/{n}` |
+ * | 顺序 | 来源                                         | 什么时候用               |
+ * | ---- | -------------------------------------------- | ------------------------ |
+ * | ①    | `GA_PR_TITLE`（环境变量）                     | 显式注入 / 手跑复验       |
+ * | ②    | `GITHUB_EVENT_PATH` 的 `client_payload.pr_title` | 自动档（`repository_dispatch`） |
+ * | ③    | 站内 `GET /{repo}/-/pulls/{n}`                | 上面两条都空时（按需档 / 老 payload） |
  *
- * 两条路都往 `GITHUB_ENV` 里写同一个键 `GA_PR_TITLE`，下游只认那一个键 ——
+ * 三条路都往 `GITHUB_ENV` 里写同一个键 `GA_PR_TITLE`，下游只认那一个键 ——
  * 否则「按需档的回调又变回无标题」会是只修一半的那种形态。
+ *
+ * ## 为什么读的是 payload 而不是 `github.event.pull_request.title`（ISSUE #3980）
+ *
+ * 本 workflow **没有** `pull_request` 触发（只有 `repository_dispatch` 与
+ * `workflow_dispatch`），那个上下文字段在这里恒为空串 —— #3981 的自动档那一步
+ * 于是从来没写进过任何东西。真正带标题的是镜像格送来的 `client_payload.pr_title`
+ * （`scripts/ci-mirror-payload.mjs` 的 `dispatchPayload`），`run-name` 同一份。
+ * 所以取值口就是那份 payload 文件，不再依赖不存在的上下文。
  *
  * ## 什么算成功
  *
- * 取到非空标题 ⇒ `0`（已写进 `GITHUB_ENV`，日志里念一遍）。
- * 取不到（标题空 / 没有 `GITHUB_ENV` / 没有令牌 / 请求失败）⇒ `2`，**日志逐条说明是哪一件**。
+ * 取到非空标题 ⇒ `0`（已写进 `GITHUB_ENV`，日志里念一遍 + 念来源）。
+ * 取不到（三条都空 / 没有 `GITHUB_ENV` / 请求失败）⇒ `2`，**日志逐条说明是哪一件**。
  * 退非零不代表判决变了：调用它的那一步带 `continue-on-error`，缺标题只让那条 build
  * 回落平台缺省标题，不该让一条本可送达的结论送不出去 —— 「没拿到测量 ≠ 测量结果是红的」
  * 在这一格同样成立。
  *
- * 用法（`pr-gate.yml` 的收尾 job，两条形态各一步）：
+ * 用法（`pr-gate.yml` 的收尾 job，两条触发形态**同一个入口**）：
  *
  * ```text
- * GA_PR_TITLE="<payload 里的标题>" node scripts/ci-ga-verdict-title.mjs   # 自动档
- * CNB_TRIGGER_TOKEN=… CNB_PULL_REQUEST_IID=<n> node scripts/ci-ga-verdict-title.mjs  # 按需档
+ * GITHUB_EVENT_PATH=<payload.json> CNB_TRIGGER_TOKEN=… node scripts/ci-ga-verdict-title.mjs
+ * GA_PR_TITLE="<显式标题>" node scripts/ci-ga-verdict-title.mjs
  * ```
  */
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -55,6 +64,36 @@ export const DEFAULT_API_ENDPOINT = "https://api.cnb.cool";
 const CODE = { OK: 0, NO_FACT: 2 };
 
 /**
+ * 空串 / 全空白统一成 `""`：三条取值路径的「没拿到」必须同形，
+ * 否则下游 `if (!title)` 会在一条路上短路、在另一条路上带着空白继续走。
+ *
+ * @param {unknown} value 原值
+ * @returns {string} 剪过两头空白的结果；非字符串回空串
+ */
+const trim = (value) => (typeof value === "string" ? value.trim() : "");
+
+/**
+ * 从**派发 payload** 里取 PR 标题（`scripts/ci-mirror-payload.mjs` 的 `dispatchPayload`）。
+ *
+ * 只认 `client_payload.pr_title`：那是镜像格读平台 `data.title` 之后塞进 payload 的
+ * 那一份，与 `run-name` 的 `pr_title` 同一来源。缺键 / 非字符串 / 空白 ⇒ 空串，
+ * 调用方按「没有标题」处置（继续走站内读）。
+ *
+ * @param {unknown} json `GITHUB_EVENT_PATH` 那份 payload
+ * @returns {string} 标题；取不到时空串
+ */
+export function titleFromEvent(json) {
+  if (typeof json !== "object" || json === null || !("client_payload" in json)) {
+    return "";
+  }
+  const { client_payload: payload } = json;
+  if (typeof payload !== "object" || payload === null || !("pr_title" in payload)) {
+    return "";
+  }
+  return trim(payload.pr_title);
+}
+
+/**
  * 从按需档的 `GET /{repo}/-/pulls/{n}` 应答里取标题。
  *
  * 只认 `data.title`（平台信封），并容忍脚本自己拼的 `/pulls/{n}` 直读形态；
@@ -73,7 +112,31 @@ export function titleFromPull(json) {
   if (typeof data !== "object" || data === null || !("title" in data)) {
     return "";
   }
-  return typeof data.title === "string" ? data.title.trim() : "";
+  return trim(data.title);
+}
+
+/**
+ * 从 PR 应答里取 PR 号 —— 按需档补读标题时 `pull_number` / `number` 任一即可。
+ *
+ * 有了它，「站内读标题」这条路就不必再依赖 workflow 表达式算出的 PR 号：
+ * 那一枚在按需档上取不到时是空串（#3980 现场那一档就是这样断的）。
+ *
+ * @param {unknown} json 平台应答
+ * @returns {string} 纯数字 PR 号；取不到时空串
+ */
+export function numberFromPull(json) {
+  if (typeof json !== "object" || json === null || !("data" in json)) {
+    return "";
+  }
+  const { data } = json;
+  if (typeof data !== "object" || data === null) {
+    return "";
+  }
+  /* `dto.PullRequest` 信封里两种形状都见过：PR 号本身 `number`，
+   * 而 `/pulls/{n}` 直读那一层给的是 `pull_number` —— 两个都认，先认后者。 */
+  const raw = "pull_number" in data ? data.pull_number : "number" in data ? data.number : "";
+  const text = typeof raw === "number" ? String(raw) : trim(raw);
+  return /^\d+$/.test(text) ? text : "";
 }
 
 /**
@@ -89,12 +152,31 @@ export function writeTitle({ envFile, title }) {
 }
 
 /**
- * 主流程：先看 env 里有没有现成标题（自动档），没有再问平台（按需档）。
+ * 读 `GITHUB_EVENT_PATH` 那份 payload；读不到 / 不是 JSON ⇒ `null`（不抛）。
+ *
+ * 这一步失败只是让标题少一条来源，不该让本可送达的判决送不出去。
+ *
+ * @param {string} eventPath payload 文件路径
+ * @returns {unknown} 解析后的 payload；取不到时 `null`
+ */
+function readEventPayload(eventPath) {
+  if (!eventPath) {
+    return null;
+  }
+  try {
+    return JSON.parse(readFileSync(eventPath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 主流程：环境变量 → 派发 payload → 站内读，三条路取第一个非空标题。
  *
  * `fetchImpl` 是注入面（同 `ci-ga-verdict-callback.mjs` 那一族的做法）：只吃
  * `url` + 回一个 `{ ok, status, json }`，不逼假件去造整个 `Response`。
  *
- * @param {{env?: Record<string, string | undefined>, fetchImpl?: FetchLike, log?: (line: string) => void}} io
+ * @param {{env?: Record<string, string | undefined>, fetchImpl?: FetchLike, log?: (line: string) => void, readPayload?: (eventPath: string) => unknown}} io
  * @returns {Promise<number>} 0 已落盘 / 2 没拿到
  */
 export async function main(io = {}) {
@@ -104,27 +186,46 @@ export async function main(io = {}) {
     ((line) => {
       console.log(line);
     });
-  const envFile = (env.GITHUB_ENV ?? "").trim();
+  const envFile = trim(env.GITHUB_ENV);
   if (!envFile) {
-    log(`[ga-title] 没有 GITHUB_ENV（不在 actions runner 上？）⇒ 标题传不到下一步`);
+    log("[ga-title] 没有 GITHUB_ENV（不在 actions runner 上？）⇒ 标题传不到下一步");
     return CODE.NO_FACT;
   }
 
-  /* 自动档：payload 里的标题已经由 workflow 的 `env` 送进来。 */
-  let title = (env[TITLE_ENV_KEY] ?? "").trim();
-  let source = "payload";
+  /* ① 显式注入（手跑复验用；也是唯一能压过 payload 的那条路）。 */
+  let title = trim(env[TITLE_ENV_KEY]);
+  let source = "env";
+  let pr = trim(env.CNB_PULL_REQUEST_IID);
+
+  /* ② 自动档：镜像格送来的 `client_payload.pr_title`（ISSUE #3980 —— 这里此前
+   * 读的是 `github.event.pull_request.title`，而本 workflow 没有那个触发形态，
+   * 于是自动档从来没写进过任何东西）。PR 号顺带从同一份 payload 取，
+   * 免得下游 `/pulls/{n}` 那一步因为表达式算不出号而空转。 */
+  if (!title) {
+    const payload = (io.readPayload ?? readEventPayload)(trim(env.GITHUB_EVENT_PATH));
+    title = titleFromEvent(payload);
+    source = "payload";
+    if (!pr && typeof payload === "object" && payload !== null && "client_payload" in payload) {
+      const { client_payload: body } = payload;
+      if (typeof body === "object" && body !== null && "pr_number" in body) {
+        const raw = trim(body.pr_number);
+        pr = /^\d+$/.test(raw) ? raw : "";
+      }
+    }
+  }
+
+  /* ③ 站内补读：按需档没有 payload（也没有老 payload 的 `pr_title`）。 */
   if (!title) {
     source = "api";
-    const pr = (env.CNB_PULL_REQUEST_IID ?? "").trim();
-    const repo = (env.CNB_REPO_SLUG ?? "").trim();
-    const token = (env.CNB_TRIGGER_TOKEN ?? "").trim();
+    const repo = trim(env.CNB_REPO_SLUG);
+    const token = trim(env.CNB_TRIGGER_TOKEN);
     const endpoint = (env.CNB_API_ENDPOINT || DEFAULT_API_ENDPOINT).replace(/\/+$/, "");
     if (!/^\d+$/.test(pr)) {
-      log(`[ga-title] PR 号缺席或不是纯数字（${pr || "空"}）⇒ 读不到标题，回落平台缺省`);
+      log(`[ga-title] 前两条路都没有标题，且 PR 号缺席或不是纯数字（${pr || "空"}）⇒ 回落平台缺省`);
       return CODE.NO_FACT;
     }
     if (!repo || !token) {
-      log("[ga-title] 仓库 slug 或令牌缺席 ⇒ 读不到标题，回落平台缺省");
+      log("[ga-title] 前两条路都没有标题，且仓库 slug 或令牌缺席 ⇒ 回落平台缺省");
       return CODE.NO_FACT;
     }
     try {
@@ -136,7 +237,13 @@ export async function main(io = {}) {
         log(`[ga-title] 读 PR #${pr} 的标题被平台拒（${response.status}）⇒ 回落平台缺省`);
         return CODE.NO_FACT;
       }
-      title = titleFromPull(await response.json());
+      const json = await response.json();
+      title = titleFromPull(json);
+      if (!title) {
+        /* 应答里 PR 号还在的话，把它写回去 —— 下一跳要的是「这条属于哪张 PR」，
+         * 与标题是两件事，缺标题不该连号一起丢掉。 */
+        pr = pr || numberFromPull(json);
+      }
     } catch (error) {
       log(`[ga-title] 读 PR #${pr} 的标题没跑起来：${String(error)}`);
       return CODE.NO_FACT;
