@@ -284,10 +284,18 @@ export async function reviewShotImage(
     throw new Error("该镜头还没有生成图（先在工坊生图，再视觉评审）");
   }
 
+  /* 打分是慢 IO，按 content-write-lock 的纪律留在锁外；落判定收进锁内重读最新
+   * shots 再叠加（#4019）：此前这里锁外拿旧快照整列写回，评审期间持锁写者
+   * （自动保存 / 生图回写 / 成片回写）写入的内容会被旧快照静默回滚。 */
   const verdict = await scoreShotImage(row, rec, imageUrl);
-  const nextShots = applyImageReview(shots, shotId, verdict);
-  await productionRepository.patchContent(userId, projectId, {
-    shots: nextShots,
+  await withProductionContentLock(projectId, async () => {
+    const fresh = listForKind(await loadRow(userId, projectId), "shot");
+    if (!findRecord(fresh, shotId)) {
+      throw new Error(`要评审的镜头已不存在（id=${shotId}）`);
+    }
+    await productionRepository.patchContent(userId, projectId, {
+      shots: applyImageReview(fresh, shotId, verdict),
+    });
   });
   return verdict;
 }
@@ -367,10 +375,18 @@ export async function autoselectShotImage(
   const winner = scored.reduce((best, c) =>
     (reviewScoreMean(c.verdict) ?? 0) > (reviewScoreMean(best.verdict) ?? 0) ? c : best,
   );
-  // 赢家判定落到镜头（与 reviewShotImage 同一落点；字段所有权见 #2615）。
-  const nextShots = applyImageReview(shots, shotId, winner.verdict);
-  await productionRepository.patchContent(userId, projectId, {
-    shots: nextShots,
+  /* 赢家判定落到镜头（与 reviewShotImage 同一落点；字段所有权见 #2615）。
+   * 落判定收进内容写锁、锁内重读最新 shots（#4019，理由同 reviewShotImage）——
+   * 逐候选打分的慢 IO 已在锁外完成。 */
+  await withProductionContentLock(projectId, async () => {
+    const fresh = listForKind(await loadRow(userId, projectId), "shot");
+    if (!findRecord(fresh, shotId)) {
+      throw new Error(`要优选的镜头已不存在（id=${shotId}）`);
+    }
+    const nextShots = applyImageReview(fresh, shotId, winner.verdict);
+    await productionRepository.patchContent(userId, projectId, {
+      shots: nextShots,
+    });
   });
   return {
     winnerTaskId: winner.taskId,
