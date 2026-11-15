@@ -9,17 +9,21 @@
  *      `GA_VERDICT` / `GA_ROLE=callback` / `GA_CALLBACK_SHA`（让 CNB 日志念得出绑定 sha）、
  *      事件名与 `.cnb.yml` 配对；
  *   ④ 「没拿回 sn」≠「发出去了」：应答缺 sn 一律退 2；
- *   ⑤ 退出码只表送达：判红也照样退 0（判决内容由 GA_VERDICT 交给 CNB 回调 build 折）。
+ *   ⑤ 退出码只表送达：判红也照样退 0（判决内容由 GA_VERDICT 交给 CNB 回调 build 折）；
+ *   ⑥ 标题（ISSUE #3981）：`<PR 标题> (#<号>)` 拼得出来才送 `title`，拼不出来
+ *      **一个 `title` 键都不多写** —— 回落平台缺省，不发明「无标题」这一形态。
  */
 import { describe, expect, it } from "vitest";
 
 import {
+  buildTitle,
   CALLBACK_EVENT,
   conclusionFromJobResults,
   main,
   resolveCallbackContext,
   SHA_ENV_KEY,
   startBuildRequest,
+  TITLE_ENV_KEY,
   verdictFromConclusion,
   VERDICT_ENV_KEY,
 } from "../scripts/ci-ga-verdict-callback.mjs";
@@ -109,9 +113,63 @@ describe("请求体：逐字对 StartBuildReq", () => {
     });
   });
 
+  it("PR 标题拼成 build 标题：`<标题> (#号)`，拼不出来就不送 title 键（#3981）", () => {
+    const withTitle = startBuildRequest({
+      pr: "3981",
+      sha: SHA,
+      title: buildTitle("feat(ci): 示例 PR", "3981"),
+      verdict: "success",
+    });
+    expect(JSON.parse(withTitle.init.body)).toMatchObject({ title: "feat(ci): 示例 PR (#3981)" });
+    /* 拼不出来（标题缺席 / 全空白）⇒ 请求体里**没有** title 这个键 ——
+     * 送一个空串会让那条 build 变成「有标题但空着」，与「没标题」不是同一件事。 */
+    for (const title of [buildTitle("", "3981"), buildTitle("   \n\t ", "3981")]) {
+      const parsed: unknown = JSON.parse(
+        startBuildRequest({ pr: "3981", sha: SHA, title, verdict: "success" }).init.body,
+      );
+      expect(
+        typeof parsed === "object" && parsed !== null && "title" in parsed,
+        "缺标题时不该写 title 键（回落平台缺省）",
+      ).toBe(false);
+    }
+  });
+
   it("Authorization 占位不落真令牌（硬规则 17）", () => {
     const { init } = startBuildRequest({ pr: "3378", sha: SHA, verdict: "success" });
     expect(init.headers.Authorization).toBe("Bearer <redacted>");
+  });
+});
+
+describe("标题拼装：单行、带上 PR 号、有无都不改退码（#3981）", () => {
+  it("换行 / 制表折成单空格（列表那一列是单行）", () => {
+    expect(buildTitle("feat: 两行\n标题\t尾", "3981")).toBe("feat: 两行 标题 尾 (#3981)");
+  });
+
+  it("超长标题截断并留省略号，不把整段塞进构建标题", () => {
+    const long = "长".repeat(400);
+    const out = buildTitle(long, "3981");
+    expect(out.endsWith("… (#3981)")).toBe(true);
+    expect(out.length).toBeLessThanOrEqual(200 + " (#3981)".length);
+  });
+
+  it("PR 号不是纯数字时不拼号（不发明形状）", () => {
+    expect(buildTitle("feat: x", "HEAD")).toBe("feat: x");
+  });
+
+  it("标题从 env 读、`--title` 优先；标题缺席不影响 resolveCallbackContext 的 ok", () => {
+    const fromEnv = resolveCallbackContext({
+      argv: ["--conclusion", "success"],
+      env: { ...BASE_ENV, [TITLE_ENV_KEY]: "from env" },
+    });
+    expect(fromEnv.ok && fromEnv.title).toBe("from env (#3378)");
+    const fromArgv = resolveCallbackContext({
+      argv: ["--conclusion", "success", "--title", "from argv"],
+      env: { ...BASE_ENV, [TITLE_ENV_KEY]: "from env" },
+    });
+    expect(fromArgv.ok && fromArgv.title).toBe("from argv (#3378)");
+    /* 标题是可选件：缺席只让那一列回落平台缺省，不该让一条本可送达的结论送不出去。 */
+    const none = resolveCallbackContext({ argv: ["--conclusion", "success"], env: BASE_ENV });
+    expect(none.ok && none.title).toBe("");
   });
 });
 

@@ -353,6 +353,10 @@ const PR_GATE_YML = ".github/workflows/pr-gate.yml" as const;
  *   · `把结论送回 CNB` / `把 GA 判红日志正文搬到 CNB` —— **判决的运输腿**
  *     （`continue-on-error: true`，不承重；承重退码在 CNB 侧的 `GA 回调结论回读`，
  *     那一条在 PR 段）。
+ *   · `记下 PR 标题（自动档）` / `按需档补 PR 标题` —— **判决的显示面**（#3981）：
+ *     它们只把 PR 标题写进 `GITHUB_ENV` 供 `把结论送回 CNB` 拼 build 标题，
+ *     一步也不判红（后者带 `continue-on-error`）。标题取不到 ⇒ 那条 build 回落
+ *     平台缺省标题，与判决内容无关。
  */
 const GA_PR_INFRA_STEPS: ReadonlyArray<string> = [
   "检出（按镜像 payload 的 sha）",
@@ -369,6 +373,8 @@ const GA_PR_INFRA_STEPS: ReadonlyArray<string> = [
   "失败时上传诊断产物",
   "把结论送回 CNB",
   "把 GA 判红日志正文搬到 CNB",
+  "记下 PR 标题（自动档）",
+  "按需档补 PR 标题",
 ];
 
 /**
