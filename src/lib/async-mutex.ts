@@ -27,14 +27,26 @@ export class AsyncMutex {
 
 /** 按 key 分锁的互斥：不同 key 之间不互斥（如按影片 id 各串各的日志追加）。 */
 export class KeyedAsyncMutex {
-  private readonly locks = new Map<string, AsyncMutex>();
+  private readonly locks = new Map<string, { lock: AsyncMutex; pending: number }>();
+
+  /** 当前驻留的 key 数（含仍有排队/进行中任务的 key）；主要用于观测与测试。 */
+  get keyCount(): number {
+    return this.locks.size;
+  }
 
   run<T>(key: string, fn: () => Promise<T>): Promise<T> {
-    let lock = this.locks.get(key);
-    if (!lock) {
-      lock = new AsyncMutex();
-      this.locks.set(key, lock);
+    let entry = this.locks.get(key);
+    if (!entry) {
+      entry = { lock: new AsyncMutex(), pending: 0 };
+      this.locks.set(key, entry);
     }
-    return lock.run(fn);
+    entry.pending += 1;
+    const release = () => {
+      entry.pending -= 1;
+      if (entry.pending === 0 && this.locks.get(key) === entry) {
+        this.locks.delete(key);
+      }
+    };
+    return entry.lock.run(fn).finally(release);
   }
 }
