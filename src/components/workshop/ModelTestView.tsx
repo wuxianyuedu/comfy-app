@@ -371,20 +371,21 @@ function ReferenceImageField({
               <MediaThumbnail
                 alt={`参考图 ${i + 1}`}
                 as="image"
-                className="border-border h-16 w-16 rounded-lg border object-cover"
+                className="border-border size-16 rounded-lg border object-cover"
                 src={src}
               />
               {/* 清除按钮：悬停才出现在缩略图右上角（#3949 需求 7）。 */}
-              <button
+              <Button
                 aria-label={`移除第 ${i + 1} 张参考图`}
                 className="text-2xs absolute top-1 right-1 hidden rounded-full bg-black/60 px-1.5 py-0.5 leading-none text-white group-hover:block"
                 onClick={() => {
                   onRemove(i);
                 }}
-                type="button"
+                size="sm"
+                variant="ghost"
               >
                 ✕
-              </button>
+              </Button>
             </div>
           ))}
           <FilePickerButton
