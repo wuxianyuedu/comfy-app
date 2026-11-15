@@ -44,34 +44,65 @@ function kickEngine(userId: string, projectId: string): void {
   })();
 }
 
-/** 读项目并归一 run；无生产数据行 → 抛可行动错误。 */
-async function loadRun(userId: string, projectId: string): Promise<ProductionRun> {
-  const row = await productionRepository.getForUser(userId, projectId);
-  // PRECONDITION_FAILED 而不是 NOT_FOUND：这一支要告诉调用方「先去医院，先产出内容」。
-  // 探测面没有变大 —— 别人的项目与没内容的项目走的是同一条 `row === null`，
-  // 回的是同一句话（口径同 A2 / A3 / A12 的「越权与不存在同形」）。
-  if (!row) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "该项目还没有生产数据（先在工坊产出内容再启动）",
-    });
-  }
-  return normalizeProductionRun(row.run);
+function missingProductionError(): TRPCError {
+  return new TRPCError({
+    code: "PRECONDITION_FAILED",
+    message: "该项目还没有生产数据（先在工坊产出内容再启动）",
+  });
 }
 
-/** 保存 run 并回显下一步动作（含规划视图）。 */
-async function persistAndPlan(
+/** 控制路由写回时必须保留的引擎进度字段（ISSUE #3960）：控制态与进度态分治，
+ *  事务内取 `current` 的这些字段，避免 stale 读或并发推进被控制写覆盖。 */
+function preserveProgress(current: ProductionRun, patch: Partial<ProductionRun>): ProductionRun {
+  return {
+    ...current,
+    ...patch,
+    stage: current.stage,
+    log: current.log,
+    processedShotRev: current.processedShotRev,
+    autoReview: patch.autoReview ?? current.autoReview,
+    reviewedShotRev: current.reviewedShotRev,
+    reviewAttempts: current.reviewAttempts,
+    scriptReviewDigest: current.scriptReviewDigest,
+    scriptReviewAttempts: current.scriptReviewAttempts,
+    scriptRevisionPending: current.scriptRevisionPending,
+    storyboardScriptDigest: current.storyboardScriptDigest,
+    filmStartedAt: current.filmStartedAt,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+async function planForRun(
   userId: string,
   projectId: string,
   run: ProductionRun,
-): Promise<{ action: RunAction; run: ProductionRun }> {
-  const saved = await productionRepository.updateRun(userId, projectId, run);
-  if (!saved) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
-  }
+): Promise<RunAction> {
   const row = await productionRepository.getForUser(userId, projectId);
-  const action = planNextRunAction(toRunView(row ?? null), run);
-  return { run, action };
+  return planNextRunAction(toRunView(row ?? null), run);
+}
+
+type ControlDecision = { noop: true; run: ProductionRun } | { next: ProductionRun; noop: false };
+
+async function applyControlMutation(
+  userId: string,
+  projectId: string,
+  decide: (current: ProductionRun) => ControlDecision,
+): Promise<{ action: RunAction; run: ProductionRun; wrote: boolean }> {
+  const outcome = await productionRepository.mutateRun(userId, projectId, (current) => {
+    const decision = decide(current);
+    if (decision.noop) {
+      return null;
+    }
+    return { meta: undefined, next: decision.next };
+  });
+  if (!outcome) {
+    throw missingProductionError();
+  }
+  const run = outcome.next;
+  const action = outcome.wrote
+    ? await planForRun(userId, projectId, run)
+    : { kind: "idle" as const };
+  return { action, run, wrote: outcome.wrote };
 }
 
 export const runRouter = createTRPCRouter({
@@ -106,115 +137,93 @@ export const runRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const run = await loadRun(ctx.user.id, input.projectId);
-      const next: ProductionRun = {
-        ...run,
-        status: "running",
-        approvalMode: input.approvalMode ?? run.approvalMode,
-        goal: input.goal ?? run.goal,
-        imageWorkflowId: input.imageWorkflowId ?? run.imageWorkflowId,
-        videoWorkflowId: input.videoWorkflowId ?? run.videoWorkflowId,
-        autoReview: input.autoReview ?? run.autoReview,
-        awaitingStage: null,
-        error: null,
-        updatedAt: new Date().toISOString(),
-      };
-      const result = await persistAndPlan(ctx.user.id, input.projectId, next);
-      kickEngine(ctx.user.id, input.projectId);
-      return result;
+      const result = await applyControlMutation(ctx.user.id, input.projectId, (current) => ({
+        noop: false,
+        next: preserveProgress(current, {
+          status: "running",
+          approvalMode: input.approvalMode ?? current.approvalMode,
+          goal: input.goal ?? current.goal,
+          imageWorkflowId: input.imageWorkflowId ?? current.imageWorkflowId,
+          videoWorkflowId: input.videoWorkflowId ?? current.videoWorkflowId,
+          autoReview: input.autoReview ?? current.autoReview,
+          awaitingStage: null,
+          error: null,
+        }),
+      }));
+      if (result.wrote) {
+        kickEngine(ctx.user.id, input.projectId);
+      }
+      return { action: result.action, run: result.run };
     }),
 
   /** 用户主动暂停（画布/工坊的「暂停」按钮）。 */
   pause: authedProcedure
     .input(z.object({ projectId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const run = await loadRun(ctx.user.id, input.projectId);
-      if (run.status !== "running" && run.status !== "awaiting_approval") {
-        return {
-          run,
-          /* SAFETY: 类型断言已复核 */
-          action: {
-            kind: "idle",
-          } as RunAction,
-        };
-      }
-      return persistAndPlan(ctx.user.id, input.projectId, {
-        ...run,
-        status: "paused",
-        updatedAt: new Date().toISOString(),
+      const result = await applyControlMutation(ctx.user.id, input.projectId, (current) => {
+        if (current.status !== "running" && current.status !== "awaiting_approval") {
+          return { noop: true, run: current };
+        }
+        return { noop: false, next: preserveProgress(current, { status: "paused" }) };
       });
+      return { action: result.action, run: result.run };
     }),
 
   /** 继续（从 paused 恢复）。awaiting_approval 的点头走 approve。 */
   resume: authedProcedure
     .input(z.object({ projectId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const run = await loadRun(ctx.user.id, input.projectId);
-      if (run.status !== "paused") {
-        return {
-          run,
-          /* SAFETY: 类型断言已复核 */
-          action: {
-            kind: "idle",
-          } as RunAction,
-        };
-      }
-      const result = await persistAndPlan(ctx.user.id, input.projectId, {
-        ...run,
-        status: "running",
-        updatedAt: new Date().toISOString(),
+      const result = await applyControlMutation(ctx.user.id, input.projectId, (current) => {
+        if (current.status !== "paused") {
+          return { noop: true, run: current };
+        }
+        return { noop: false, next: preserveProgress(current, { status: "running" }) };
       });
-      kickEngine(ctx.user.id, input.projectId);
-      return result;
+      if (result.wrote) {
+        kickEngine(ctx.user.id, input.projectId);
+      }
+      return { action: result.action, run: result.run };
     }),
 
   /** 对某步点头放行（awaiting_approval → running）。 */
   approve: authedProcedure
     .input(z.object({ projectId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const run = await loadRun(ctx.user.id, input.projectId);
-      if (run.status !== "awaiting_approval") {
+      const result = await applyControlMutation(ctx.user.id, input.projectId, (current) => {
+        if (current.status !== "awaiting_approval") {
+          return { noop: true, run: current };
+        }
         return {
-          run,
-          /* SAFETY: 类型断言已复核 */
-          action: {
-            kind: "idle",
-          } as RunAction,
+          noop: false,
+          next: preserveProgress(current, { status: "running", awaitingStage: null }),
         };
-      }
-      const result = await persistAndPlan(ctx.user.id, input.projectId, {
-        ...run,
-        status: "running",
-        awaitingStage: null,
-        updatedAt: new Date().toISOString(),
       });
-      kickEngine(ctx.user.id, input.projectId);
-      return result;
+      if (result.wrote) {
+        kickEngine(ctx.user.id, input.projectId);
+      }
+      return { action: result.action, run: result.run };
     }),
 
   /** 取消整条自主执行。 */
   cancel: authedProcedure
     .input(z.object({ projectId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const run = await loadRun(ctx.user.id, input.projectId);
-      /* 终态幂等（ISSUE #3901）：done / failed 已收尾，取消不改写终态、
-       * 原样回显（与 pause / resume / approve 一样先查当前状态再动笔）；
-       * 重复取消（已 cancelled）同样幂等返回。 */
-      if (run.status === "done" || run.status === "failed" || run.status === "cancelled") {
+      const result = await applyControlMutation(ctx.user.id, input.projectId, (current) => {
+        /* 终态幂等（ISSUE #3901）：done / failed 已收尾，取消不改写终态、
+         * 原样回显；重复取消（已 cancelled）同样幂等返回。 */
+        if (
+          current.status === "done" ||
+          current.status === "failed" ||
+          current.status === "cancelled"
+        ) {
+          return { noop: true, run: current };
+        }
         return {
-          run,
-          /* SAFETY: 类型断言已复核 */
-          action: {
-            kind: "idle",
-          } as RunAction,
+          noop: false,
+          next: preserveProgress(current, { status: "cancelled", awaitingStage: null }),
         };
-      }
-      return persistAndPlan(ctx.user.id, input.projectId, {
-        ...run,
-        status: "cancelled",
-        awaitingStage: null,
-        updatedAt: new Date().toISOString(),
       });
+      return { action: result.action, run: result.run };
     }),
 
   /** 评审一个分镜镜头（文本评审）：调模型给判定 → 落库 `shot.review` → 回显判定。 */
