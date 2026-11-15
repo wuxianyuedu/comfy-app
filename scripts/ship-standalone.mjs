@@ -35,6 +35,7 @@ import { runGhPrs } from "./ship-gh-prs.mjs";
 import { runStageLog } from "./ship-stage-log.mjs";
 import { runRerunCiStage } from "./ship-local.mjs";
 import { runResultQuery } from "./ship-result.mjs";
+import { runFetchIssue } from "./ship-fetch-issue.mjs";
 import { whoamiLines } from "./ship-ticket.mjs";
 
 /**
@@ -96,6 +97,7 @@ function namedActions(opt, self) {
     ["branches", opt.branches, "--branches"],
     ["status", opt.status, "--status"],
     ["result", opt.result, "--result"],
+    ["fetchIssue", opt.fetchIssue !== null && opt.fetchIssue !== undefined, "--fetch-issue"],
     [
       "newIssue",
       (opt.newIssue !== null && opt.newIssue !== undefined) || opt.newIssueBad.length > 0,
@@ -455,6 +457,33 @@ export async function runStandaloneAction(io) {
           currentArgv,
         }),
       ]),
+    };
+  }
+
+  /* ── `--fetch-issue <号>`：单子正文 / 评论 / 图片一次取到本机（ISSUE #3965）──
+   * 只读平台（get-issue / list-comments / get-imgs 三条读命令）+ 落盘到
+   * `.workbuddy/issues/<号>/`（gitignored，重跑即更新）。与主流程互斥、
+   * 一次只做一张；执行体在 `ship-fetch-issue.mjs`。 */
+  if (opt.fetchIssue !== null || opt.fetchIssueBad.length > 0) {
+    const clashes = namedActions(opt, "fetchIssue");
+    if (clashes.length > 0) {
+      log(`[ship] [ERROR] --fetch-issue 只读、一次只做一件：不与 ${clashes.join(" / ")} 同跑。`);
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    if (opt.fetchIssueBad.length > 0 || opt.fetchIssue === null) {
+      log(
+        `[ship] [ERROR] --fetch-issue 收的是 issue 号（2 位以上数字，可写 #3965）：` +
+          `${opt.fetchIssueBad.join(" / ") || "(缺号)"} ⇒ 这一格没有结论。`,
+      );
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    if (!cnbOk || !slug) {
+      log(`[fetch-issue] 没有执行者（${cnbOk ? "仓库 slug 取不到" : "cnb 不在"}）⇒ 没有结论。`);
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    return {
+      handled: true,
+      code: settle([runFetchIssue({ run, log, slug, number: opt.fetchIssue, root })]),
     };
   }
 
