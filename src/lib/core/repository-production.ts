@@ -60,6 +60,68 @@ export class ProductionRepository extends DrizzleRepository<Production> {
   }
 
   /**
+   * 引擎回写 run 的原子落库（ISSUE #3960 / #3850）：在 immediate 事务内重读当前
+   * `run` 并按控制态优先级合并后写回，收口 `saveRun` 原先「读 → 分支 → 整列写」
+   * 的跨语句 TOCTOU。
+   *
+   * 规则（以库中当前状态为准）：
+   * - `cancelled`：用户终态，丢弃引擎回写（含 failed/done），保持 cancelled。
+   * - `paused`：用户主动暂停优先于引擎推进/失败收口；吸收引擎产出的 stage /
+   *   log / 进度与错误信息，但 `status` 保持 `paused`，避免执行窗口内被 running
+   *   或 failed 覆盖导致暂停丢失。
+   * - 其余：按引擎本次快照写回（含正常推进、awaiting_approval、done、failed）。
+   *
+   * 行不存在 → 不写入。
+   */
+  async saveEngineRun(
+    userId: string,
+    id: string,
+    next: ProductionRun,
+    updatedAtIso: string,
+  ): Promise<void> {
+    await db.transaction(
+      async (tx) => {
+        const rows = await tx
+          .select()
+          .from(production)
+          .where(and(eq(production.id, id), eq(production.userId, userId)))
+          .limit(1);
+        const row = rows[0];
+        if (!row) {
+          return;
+        }
+        const current = normalizeProductionRun(row.run);
+        if (current.status === "cancelled") {
+          return;
+        }
+        if (current.status === "paused") {
+          await tx
+            .update(production)
+            .set({
+              run: {
+                ...next,
+                status: "paused",
+                awaitingStage: null,
+                updatedAt: updatedAtIso,
+              },
+              updatedAt: new Date(updatedAtIso),
+            })
+            .where(and(eq(production.id, id), eq(production.userId, userId)));
+          return;
+        }
+        await tx
+          .update(production)
+          .set({
+            run: { ...next, updatedAt: updatedAtIso },
+            updatedAt: new Date(updatedAtIso),
+          })
+          .where(and(eq(production.id, id), eq(production.userId, userId)));
+      },
+      { behavior: "immediate" },
+    );
+  }
+
+  /**
    * 起片权的 CAS 认领（ISSUE #3868）：仅当 `run.filmStartedAt` 还是空串时写入
    * 时间戳，返回是否抢到。原先「createFilmFromProject → startFilm（数分钟）→
    * saveRun 才落 filmStartedAt」，起片成功到落库之间隔着整个逐镜生成窗口——
