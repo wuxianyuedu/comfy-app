@@ -550,8 +550,19 @@ function runOnce(
       out += chunk.toString();
     });
     child.on("exit", (code) => {
-      const line = out.split("\n").find((l) => l.trim());
-      resolve(line?.trim() ?? `exit:${code}`);
+      /* #3978：结论看**全部输出行**里有没有 `ok`——重试告警（经仓库 logger 落到
+       * 子进程 stdout）会先于 `ok` 出现，只看第一行会把「重试后成功」误读成失败。
+       * 真失败（`fail:…`，或非零退出且始终没有 `ok`）照旧是非 ok。 */
+      const lines = out
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean);
+      if (lines.includes("ok")) {
+        resolve("ok");
+        return;
+      }
+      const fail = lines.find((l) => l.startsWith("fail:"));
+      resolve(fail ?? `exit:${code}`);
     });
   });
 }
