@@ -167,7 +167,7 @@ describe("runFetchIssue：假执行者全链（#3965）", () => {
       root,
     });
     expect(code).toBe(CODE.GREEN);
-    const dir = path.join(root, ".workbuddy", "issues", "3965");
+    const dir = path.join(root, ".tmp", "issues", "3965");
     const issueMd = fs.readFileSync(path.join(dir, "issue.md"), "utf8");
     const commentsMd = fs.readFileSync(path.join(dir, "comments.md"), "utf8");
     /* 图片链接换成了本地相对路径，原始尾段不再出现。 */
@@ -197,7 +197,7 @@ describe("runFetchIssue：假执行者全链（#3965）", () => {
     expect(runFetchIssue(io)).toBe(CODE.GREEN);
     expect(runFetchIssue(io)).toBe(CODE.GREEN);
     expect(
-      fs.readFileSync(path.join(root, ".workbuddy", "issues", "3965", "issue.md"), "utf8"),
+      fs.readFileSync(path.join(root, ".tmp", "issues", "3965", "issue.md"), "utf8"),
     ).toContain("#3965");
   });
 
@@ -211,10 +211,7 @@ describe("runFetchIssue：假执行者全链（#3965）", () => {
       root,
     });
     expect(code).toBe(CODE.GREEN);
-    const issueMd = fs.readFileSync(
-      path.join(root, ".workbuddy", "issues", "3965", "issue.md"),
-      "utf8",
-    );
+    const issueMd = fs.readFileSync(path.join(root, ".tmp", "issues", "3965", "issue.md"), "utf8");
     expect(issueMd).toContain(T1);
     expect(f.log.join("\n")).toContain("图片取不到");
   });
@@ -304,7 +301,7 @@ describe("ship --fetch-issue：分派与互斥（ISSUE #3965，假执行者）",
     return { run, log };
   }
 
-  it("分派到 runFetchIssue：文件落进 root 的 .workbuddy/issues/3965/", async () => {
+  it("分派到 runFetchIssue：文件落进 root 的 .tmp/issues/3965/", async () => {
     const f = mainRun({});
     const code = await main({
       args: ["--fetch-issue", "3965"],
@@ -314,7 +311,7 @@ describe("ship --fetch-issue：分派与互斥（ISSUE #3965，假执行者）",
       root,
     });
     expect(code).toBe(CODE.GREEN);
-    expect(fs.existsSync(path.join(root, ".workbuddy", "issues", "3965", "issue.md"))).toBe(true);
+    expect(fs.existsSync(path.join(root, ".tmp", "issues", "3965", "issue.md"))).toBe(true);
     expect(f.log.join("\n")).toContain("已落到");
   });
 
