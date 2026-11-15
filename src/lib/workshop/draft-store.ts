@@ -9,6 +9,7 @@
 import { readStorageItem, writeStorageJson } from "~/lib/browser-storage";
 import { isRecord } from "~/lib/is-record";
 import { emptyProject } from "~/lib/workshop/script-parser";
+import type { WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
 import type { Character, ProjectMeta, Scene, Shot } from "~/lib/workshop/types";
 
 /** 默认项目元信息的唯一出处（`emptyProject()`），别处不得再抄一份（§12.14）。 */
@@ -21,6 +22,9 @@ export type WorkshopDraft = {
   scenes: Array<Scene>;
   scriptMarkdown: string;
   shots: Array<Shot>;
+  /** 最近一次写入时刻（epoch ms，#4023）：与服务端镜像做版本对账
+   *  （恢复时取较新的一侧）。缺省 = 旧数据，不参与对账。 */
+  updatedAt?: number;
   /** 工坊「视频」阶段选定的「工作流库工作流」id。
    *  字段与生图分开 —— 两类工作流的对外参数口径不同（生图无首帧、视频有），
    *  共用一个 id 会互相串味。 */
@@ -86,6 +90,10 @@ function parseDraft(raw: string | null): WorkshopDraft {
       shots: isShotList(draft.shots) ? draft.shots : [],
       workflowId: typeof draft.workflowId === "string" ? draft.workflowId : "",
       videoWorkflowId: typeof draft.videoWorkflowId === "string" ? draft.videoWorkflowId : "",
+      updatedAt:
+        typeof draft.updatedAt === "number" && Number.isFinite(draft.updatedAt)
+          ? draft.updatedAt
+          : undefined,
     };
   } catch {
     return emptyWorkshopDraft();
@@ -100,4 +108,29 @@ export function readWorkshopDraft(id: string): WorkshopDraft {
 /** 写某项目的工坊草稿。存储满 / 隐私模式：静默失败，不影响编辑。 */
 export function writeWorkshopDraft(id: string, draft: WorkshopDraft): void {
   writeStorageJson(draftKeyFor(id), { v: 1, ...draft });
+}
+
+/** 服务端镜像 DTO → 内部草稿（字段同构；本地专有的 workflowId / videoWorkflowId
+ *  不在镜像里，回落空串——它们只活在浏览器侧）。 */
+export function dtoToDraft(dto: WorkshopDraftDto): WorkshopDraft {
+  return {
+    meta: dto.meta,
+    scriptMarkdown: dto.scriptMarkdown ?? "",
+    scenes: dto.scenes ?? [],
+    characters: dto.characters ?? [],
+    shots: dto.shots ?? [],
+    workflowId: "",
+    videoWorkflowId: "",
+    updatedAt: dto.updatedAt,
+  };
+}
+
+/** 内部草稿是否为「空」——仅空时才值得用服务端镜像覆盖（避免覆盖进行中的编辑）。 */
+export function draftIsEmpty(draft: WorkshopDraft): boolean {
+  return (
+    !draft.scriptMarkdown &&
+    draft.scenes.length === 0 &&
+    draft.characters.length === 0 &&
+    draft.shots.length === 0
+  );
 }

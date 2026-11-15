@@ -178,13 +178,19 @@ export function saveSettings(partial: Partial<AppSettings>): Promise<AppSettings
 
 async function saveSettingsUnlocked(partial: Partial<AppSettings>): Promise<AppSettings> {
   const next: AppSettings = { ...getSettingsSync(), ...partial };
-  cache = next;
+  const written = JSON.stringify(next, null, 2);
   await fs.promises.mkdir(path.dirname(SETTINGS_FILE), { recursive: true });
-  await fs.promises.writeFile(SETTINGS_FILE, JSON.stringify(next, null, 2), "utf8");
-  /* 落盘后把指纹对齐到刚写的这一份：不这样做的话，下一次读会拿「自己刚写进去的
+  await fs.promises.writeFile(SETTINGS_FILE, written, "utf8");
+  /* **先写盘、后改缓存**（#4020）：写盘失败（磁盘满 / 权限）时若已把 `cache`
+   * 换成 `next`，而指纹仍匹配磁盘上的旧内容，本进程后续的 `getSettingsSync()`
+   * 会指纹命中、一直返回这份从未落盘的「新设置」，另一进程按指纹重读磁盘拿到
+   * 旧值——内存与文件永久分叉，重启即回退。写成功后 here 才对齐缓存与指纹。
+   *
+   * 落盘后把指纹对齐到刚写的这一份：不这样做的话，下一次读会拿「自己刚写进去的
    * 内容」判成外部改动、白白重读一遍（读出来还是同一份，只是白花一次 IO）。
    * 别的进程（执行宿主）不受这里影响，它自己按文件指纹重读。 */
-  cacheFingerprint = hash("sha1", JSON.stringify(next, null, 2), "hex");
+  cache = next;
+  cacheFingerprint = hash("sha1", written, "hex");
   return next;
 }
 

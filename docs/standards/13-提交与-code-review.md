@@ -10210,7 +10210,7 @@ fail-closed 语义与 5m 预算一字未动 —— 迁歪的表现是那格红�
 | 触发面 | `pr-gate.yml` 的 `on:` 只有 `repository_dispatch` / `workflow_dispatch`，**没有 `pull_request`** |
 | 后果 ① | 第一步 `记下 PR 标题（自动档）` 的 `if: github.event.pull_request.title` 恒假 ⇒ 这一步**从来没执行过** |
 | 后果 ② | 第二步 `if: !github.event.pull_request.title` 恒真，但 `CNB_PULL_REQUEST_IID` 表达式与它同一前提 —— 号取不到 ⇒ 站内读那一步也空转 |
-| 真正的标题在哪 | 镜像格的 `client_payload.pr_title`（`scripts/ci-mirror-payload.mjs` 的 `dispatchPayload`），`run-name` 用的就是它 |
+| 真正的标题在哪 | 镜像格的 `client_payload.pr_title`（`scripts/ci/ci-mirror-payload.mjs` 的 `dispatchPayload`），`run-name` 用的就是它 |
 
 **判据缺失是病灶**：`tests/ci-ga-verdict-title.test.ts` 当时只钉「两个触发形态写同一个键 /
 取不到退 2」，一次也没问「自动档那一格的输入在这个 workflow 上存不存在」——

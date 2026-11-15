@@ -537,7 +537,9 @@ if (unread > 0 || untrusted > 0) {
         "（JSON 解析失败或不是对象）：",
     );
     for (const p of untrustedPaths) {
-      console.error(`  · ${p}`);
+      /* 路径统一成 `a/b/c` 形状再出口：Windows 的 `path.relative` 给反斜杠，
+       * 断言与读数都按 POSIX 比对（同 tw4 用例 `namesFile` 的口径）。 */
+      console.error(`  · ${p.replaceAll("\\", "/")}`);
     }
     console.error(
       "  文件在原地、字节也读到了，坏的是内容本身（安装被中断 / 产物损坏）——\n" +

@@ -244,3 +244,35 @@ useMessageCenterStore.subscribe((state, prev) => {
     writeStorageJson(MESSAGE_CENTER_STORAGE_KEY, state.messages);
   }
 });
+
+/* 别的同源窗口写了这份存储 → 把它**新增**的消息并进本窗口内存（#4026）。
+ * 此后本窗口的整表落盘就包含对方的消息，两个窗口不再互相抹掉对方的留底。
+ * 刻意**只并入、不删除 / 不改已读态**：跨窗口的删除与已读传播需要删除墓碑
+ * 或共享真相源，超出本条的范围——本窗口的 clear / markAllRead 仍只作用于
+ * 本窗口。排序与上限和 `push` 同一条判据（新到旧、200 条封顶）。 */
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (event.key !== MESSAGE_CENTER_STORAGE_KEY || event.newValue === null) {
+      return;
+    }
+    try {
+      const parsed: unknown = JSON.parse(event.newValue);
+      if (!Array.isArray(parsed)) {
+        return;
+      }
+      const incoming = parsed.map(asMessageRecord).filter((m): m is MessageRecord => m !== null);
+      const current = useMessageCenterStore.getState().messages;
+      const known = new Set(current.map((m) => m.id));
+      const foreign = incoming.filter((m) => !known.has(m.id));
+      if (foreign.length === 0) {
+        return;
+      }
+      const merged = [...current, ...foreign]
+        .sort((a, b) => b.time - a.time)
+        .slice(0, MAX_MESSAGES);
+      useMessageCenterStore.setState({ messages: merged });
+    } catch {
+      /* 损坏的存储内容：忽略 */
+    }
+  });
+}

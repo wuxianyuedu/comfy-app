@@ -28,21 +28,26 @@ export function draftToRow(draft: WorkshopDraftDto): Partial<WorkshopDraftInsert
 
 /** 纯函数：行 → 线上草稿。 */
 export function rowToDto(row: WorkshopDraftRow): WorkshopDraftDto {
-  return parseDraftDto({
-    meta: {
-      title: row.title,
-      type: row.type,
-      tone: row.tone,
-      logline: row.logline,
+  return {
+    ...parseDraftDto({
+      meta: {
+        title: row.title,
+        type: row.type,
+        tone: row.tone,
+        logline: row.logline,
+        scriptMarkdown: row.scriptMarkdown,
+      },
       scriptMarkdown: row.scriptMarkdown,
-    },
-    scriptMarkdown: row.scriptMarkdown,
-    // scenes/characters/shots 是 JSON 列（unknown）：交给 parseDraftDto 的
-    // isSceneList 等守卫判「是数组」这层（与旧断言同口径，非数组回落 []）。
-    scenes: row.scenes,
-    characters: row.characters,
-    shots: row.shots,
-  });
+      // scenes/characters/shots 是 JSON 列（unknown）：交给 parseDraftDto 的
+      // isSceneList 等守卫判「是数组」这层（与旧断言同口径，非数组回落 []）。
+      scenes: row.scenes,
+      characters: row.characters,
+      shots: row.shots,
+    }),
+    /* 行的 updatedAt（drizzle `$onUpdate`）透出成版本戳：GET 的消费方（挂载恢复
+     * 的对账）据此与本地草稿取较新一侧（#4023）。 */
+    updatedAt: row.updatedAt.getTime(),
+  };
 }
 
 /** 读取某项目的服务端镜像；不存在返回 null。 */

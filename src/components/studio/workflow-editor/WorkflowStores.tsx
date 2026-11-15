@@ -246,8 +246,11 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         for (const [i, { entryKey, entry }] of without.entries()) {
           renumbered[entryKey] = { ...entry, displayOrder: i + 1 };
         }
-        /* 发往服务端（调用形状与之前一致）。 */
-        patchWorkflowSilently({ id: workflowId, workflowIO: renumbered });
+        /* 发往服务端（调用形状与之前一致）；失败把本地顺序回滚到拖拽前（#4024），
+         * 不让内存顺序与落库值在会话内分歧。 */
+        patchWorkflowSilently({ id: workflowId, workflowIO: renumbered }, () => {
+          set({ workflowIO: prev });
+        });
         return { workflowIO: renumbered };
       });
     },
@@ -371,10 +374,21 @@ export function createRgthreeGroupsStore(
       set((state) => ({
         overrides: { ...state.overrides, [groupId]: bypass },
       }));
-      patchWorkflowSilently({
-        id: get().workflowId,
-        groups: [{ id: groupId, bypass }],
-      });
+      patchWorkflowSilently(
+        {
+          id: get().workflowId,
+          groups: [{ id: groupId, bypass }],
+        },
+        /* 写失败撤回本地 override（#4024）：留着会与落库值会话内分歧
+         * （刷新才回正）；撤掉后 getBypass 回落 detail 值，开关当场弹回。 */
+        () => {
+          set((state) => {
+            const next = { ...state.overrides };
+            delete next[groupId];
+            return { overrides: next };
+          });
+        },
+      );
     },
   }));
 }

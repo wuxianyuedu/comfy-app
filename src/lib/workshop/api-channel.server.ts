@@ -120,10 +120,12 @@ async function saveWorkshopApiSettingsUnlocked(
     image: patch.image === undefined ? current.image : sanitizeChannel(patch.image, current.image),
     video: patch.video === undefined ? current.video : sanitizeChannel(patch.video, current.video),
   };
-  cache = next;
   const written = JSON.stringify(next, null, 2);
   await fs.mkdir(path.dirname(FILE), { recursive: true });
   await fs.writeFile(FILE, written, "utf8");
+  /* **先写盘、后改缓存**（#4020，与 app-settings.server.ts 同一批）：写失败时
+   * 若已换缓存，指纹仍匹配磁盘旧内容，本进程会一直返回从未落盘的「新设置」。 */
+  cache = next;
   cacheFingerprint = hash("sha1", written, "hex");
   return next;
 }
