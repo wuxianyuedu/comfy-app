@@ -553,8 +553,15 @@
 #
 # 不与 `pr-$CNB_PULL_REQUEST_IID` 共用：api_trigger 事件上那个变量无值，
 # 落回字面 `pr-` 会把并行的 PR 主列一起掐掉（`pr-` 一把共用的同款死因）。
+#
+# 锁按**绑定的 sha** 分（ISSUE #3924）：key 原先是全局一把 `ga-verdict`——
+# 两条**不同 PR** 的回调撞在同一时刻时，后一条会把前一条 cancel 掉；被 cancel
+# 的 callback 不写终态，前一条 PR 的「GA 回调结论回读」就只能空等到 70m 预算
+# 判「没判过」（正是「GA 侧跑完了、CNB 侧读不到结果」的一种真实成因）。
+# `CNB_COMMIT` 在这条回调 build 上 = 绑定的预合并 sha（实测 stage 日志
+# `sha_check=match`），于是同一次派发天然同 key、不同 PR / 不同派发互不掐。
 .lock-ga-verdict: &lock_ga_verdict
-  key: ga-verdict
+  key: ga-verdict-$CNB_COMMIT
   cancel-in-progress: true
 # ISSUE #3667：按需日志搬运那一口的锁。它既不是判决回调、也不是任一固定档 ——
 # 与 ga-verdict 共用会把「有人想看一眼绿跑日志」变成「把还在等结论的回调掐掉」。
