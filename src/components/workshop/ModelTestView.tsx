@@ -697,10 +697,17 @@ export function ModelTestView() {
 
               {/* 请求详情（ISSUE #3791；#3799：点生成即显示本地提交行 + 生成中
                   走秒 + 响应摘要默认格式化、可切原始；#3949 需求 4/8：生成前
-                  显示「准备请求」、按模式 / 模型隔离、解释换算字段）。 */}
+                  显示「准备请求」、按模式 / 模型隔离、解释换算字段；#3995：
+                  生成前同时可见「本地提交 + 实际请求」两行预览）。 */}
               {detailRows.length > 0 && (
                 <section className="flex flex-col gap-2">
-                  <SectionLabel hint="本次生成实际发出的请求（密钥在请求头，不在此显示；请求体里的长值已截断）">
+                  <SectionLabel
+                    hint={
+                      previewOnly
+                        ? "生成前预览：「本地提交」= 前端发给中继的统一输入；「实际请求」= 经模型适配器翻译后真正发往上游的请求（密钥在请求头，不在此显示；请求体里的长值已截断）"
+                        : "本次生成实际发出的请求（密钥在请求头，不在此显示；请求体里的长值已截断）"
+                    }
+                  >
                     请求详情{previewOnly ? "（准备请求 · 未发送）" : ""}
                   </SectionLabel>
                   <div className="flex items-center gap-1.5">
@@ -732,7 +739,7 @@ export function ModelTestView() {
                       <div className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
                         {row.phase === "relay" ? (
                           /* 本地提交行（#3799）：点生成即出现；生成中走秒。
-                              #3949 需求 8：生成前是「准备请求」（未发送）。 */
+                              #3949 需求 8 / #3995：生成前是「准备请求」（未发送）。 */
                           <span className="bg-primary/12 text-primary-strong text-2xs rounded-full px-2 py-0.5 tabular-nums">
                             {previewOnly ? (
                               "准备请求"
@@ -741,6 +748,12 @@ export function ModelTestView() {
                             ) : (
                               "已发送"
                             )}
+                          </span>
+                        ) : previewOnly ? (
+                          /* 预览行（ISSUE #3995）：还没发出去，不冒充真实读数 ——
+                              status=null 的既有读法是给已发送行准备的「网络失败」。 */
+                          <span className="bg-elevated text-muted-foreground text-2xs rounded-full px-2 py-0.5 tabular-nums">
+                            未发送
                           </span>
                         ) : (
                           <span
@@ -756,14 +769,14 @@ export function ModelTestView() {
                         )}
                         <span className="text-muted-foreground text-2xs">
                           {row.phase === "relay"
-                            ? previewOnly
-                              ? "准备请求（未发送）"
-                              : "本地提交"
-                            : row.phase === "image"
-                              ? "生图"
-                              : row.phase === "video-submit"
-                                ? "视频提交"
-                                : "视频轮询"}
+                            ? "本地提交"
+                            : previewOnly
+                              ? "实际请求"
+                              : row.phase === "image"
+                                ? "生图"
+                                : row.phase === "video-submit"
+                                  ? "视频提交"
+                                  : "视频轮询"}
                         </span>
                         {row.durationMs !== null && (
                           <span className="text-muted-foreground text-2xs tabular-nums">

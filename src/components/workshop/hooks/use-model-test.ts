@@ -106,7 +106,9 @@ export type ModelTestController = {
   patchValues: (patch: Partial<ModelTestValues>) => void;
   /** 生成前的「准备请求」读数（#3949 需求 8）：按当前 模式 / 模型 / 输入 走
    *  服务端 dry-run 现算的**实际上游请求**（端点 + 适配器翻译后的请求体），
-   *  点生成前就显示；生成开始后让位给真实读数（debugRows）。 */
+   *  点生成前就显示；生成开始后让位给真实读数（debugRows）。
+   *  #3995：首行是「本地提交」行（与点生成那一步同一份组装）—— 未点生成
+   *  也能同时看到「本地提交 + 实际请求」两部分。 */
   previewRows: Array<ApiCallDebugRow>;
   /** 提示词随机按钮（ISSUE #3742）：从常用样本里随机填一条。 */
   randomizePrompt: () => void;
@@ -294,7 +296,12 @@ function useRequestPreview(args: {
       const relayBody = imageBody ?? videoBody ?? {};
       void runAsyncAction(
         async () => {
-          const rows = await apiPreviewRequest(relayBody);
+          /* kind 必带（ISSUE #3995）：dry-run 与真实发送同一条路由，缺 kind
+           * 会被路由 400 拒掉，生成前永远看不到「实际请求」读数。 */
+          const rows = await apiPreviewRequest({
+            ...relayBody,
+            kind: imageBody === null ? "video" : "image",
+          });
           if (seqRef.current === seq) {
             setPreviewRows(rows);
           }
@@ -671,13 +678,29 @@ export function useModelTest(): ModelTestController {
   }, []);
   /* 生成前的「准备请求」读数（#3949 需求 8）：子 hook 里走服务端 dry-run，
    * 按当前 模式 / 模型 / 输入 现算**实际上游请求**；点生成后由真实读数接棒。 */
-  const previewRows = useRequestPreview({
+  const upstreamPreviewRows = useRequestPreview({
     buildBodies,
     busy: busy.busy,
     debugRowCount: debugRows.length,
     onError: showPreviewError,
     selectedModel,
   });
+  /* 生成前的「本地提交」行（ISSUE #3995）：与点生成那一步同一份组装
+   * （buildBodies + relayDebugRow，两处各拼一套必然漂移），未点生成也先给
+   * 出来 —— 请求详情面板在生成前就同时可见「本地提交 + 实际请求」两部分。
+   * 未选模型时不给（没有可提交的对象）。 */
+  const localPreviewRow = useMemo(() => {
+    if (selectedModel === "") {
+      return null;
+    }
+    const { imageBody, videoBody } = buildBodies();
+    return relayDebugRow(kind, imageBody ?? videoBody ?? {});
+  }, [buildBodies, kind, selectedModel]);
+  const previewRows = useMemo(
+    () =>
+      localPreviewRow === null ? upstreamPreviewRows : [localPreviewRow, ...upstreamPreviewRows],
+    [localPreviewRow, upstreamPreviewRows],
+  );
 
   return {
     candidates: modeCandidates,

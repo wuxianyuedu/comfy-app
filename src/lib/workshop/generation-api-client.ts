@@ -371,9 +371,11 @@ export async function fetchApiChannels(): Promise<ApiChannelsView | null> {
 
 /* 「准备请求」预览（#3949 需求 8）：dryRun=true 让 relay 只做上游解析与请求体
  * 组装、不真正调用 —— 返回的读数就是「实际会发出去的请求」（端点 + 适配器
- * 翻译后的请求体，长字符串已截断、密钥不在其中）。 */
+ * 翻译后的请求体，长字符串已截断、密钥不在其中）。
+ * `kind` 必带（ISSUE #3995）：dry-run 与真实发送走同一条路由，缺 kind 会被
+ * 路由的 kind 校验 400 拒掉 —— 预览从此永远拿不到读数（类型层面防再犯）。 */
 export async function apiPreviewRequest(
-  body: Record<string, unknown>,
+  body: Record<string, unknown> & { kind: "image" | "video" },
 ): Promise<ApiRelayDebugRow[]> {
   const data = await postRelay({ ...body, dryRun: true });
   return relayDebugRows(data);
