@@ -141,4 +141,36 @@ describe("ProductionRepository", () => {
     await productionRepository.upsertForUser("u1", { id: "proj_1" });
     await expect(productionRepository.clearFilmStart("u1", "proj_1")).resolves.toBeUndefined();
   });
+
+  it("mutateRun 在事务内重读并原子应用控制写/识别 no-op 与缺失行", async () => {
+    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    await productionRepository.upsertForUser("u1", { id: "proj_1" });
+    await productionRepository.updateRun(
+      "u1",
+      "proj_1",
+      normalizeProductionRun({
+        status: "running",
+        stage: "shots",
+        log: [{ ts: "t", kind: "render_images", ok: true, detail: "x" }],
+        processedShotRev: { s1: 2 },
+      }),
+    );
+
+    const wrote = await productionRepository.mutateRun("u1", "proj_1", (current) => ({
+      meta: "paused" as const,
+      next: { ...current, status: "paused", updatedAt: "2026-01-02T00:00:00.000Z" },
+    }));
+    expect(wrote?.wrote).toBe(true);
+    expect(wrote?.next.status).toBe("paused");
+    expect(wrote?.next.stage).toBe("shots");
+    expect(wrote?.next.log).toHaveLength(1);
+
+    const noop = await productionRepository.mutateRun("u1", "proj_1", () => null);
+    expect(noop?.wrote).toBe(false);
+    expect(noop?.current.status).toBe("paused");
+
+    expect(
+      await productionRepository.mutateRun("u1", "missing", (c) => ({ meta: 1, next: c })),
+    ).toBeNull();
+  });
 });
