@@ -791,50 +791,63 @@ export const seriesRouter = createTRPCRouter({
         throw new TRPCError({ code: "BAD_REQUEST", message: "项目尚未挂载到任何集" });
       }
       await assertEpisodeOwner(ctx, ep.id);
-      const [prod] = await ctx.db
-        .select()
-        .from(production)
-        .where(eq(production.id, input.projectId))
-        .limit(1);
-      if (!prod) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "生产数据不存在" });
-      }
-      if (prod.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "无权操作该项目" });
-      }
-      const links = await ctx.db
-        .select({ character })
-        .from(episodeCharacter)
-        .innerJoin(character, eq(episodeCharacter.characterId, character.id))
-        .where(eq(episodeCharacter.episodeId, ep.id));
-      const prodChars = Array.isArray(prod.characters)
-        ? prod.characters.filter(isProductionCharacterRow)
-        : [];
-      const byName = new Map<string, Record<string, unknown>>();
-      for (const c of prodChars) {
-        const n = typeof c?.name === "string" ? c.name : "";
-        if (n) {
-          byName.set(n, c);
-        }
-      }
-      let injected = 0;
-      let merged = 0;
-      for (const link of links) {
-        const lc = link.character;
-        const mapped = libraryCharacterToProduction(lc);
-        const existing = byName.get(lc.name);
-        if (existing) {
-          Object.assign(existing, mapped);
-          merged += 1;
-        } else {
-          prodChars.push(mapped);
-          injected += 1;
-        }
-      }
-      await ctx.db
-        .update(production)
-        .set({ characters: prodChars })
-        .where(eq(production.id, input.projectId));
-      return { injected, merged, total: prodChars.length };
+      return ctx.db.transaction(
+        async (tx) => {
+          const [prod] = await tx
+            .select()
+            .from(production)
+            .where(eq(production.id, input.projectId))
+            .limit(1);
+          if (!prod) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "生产数据不存在" });
+          }
+          if (prod.userId !== ctx.user.id) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "无权操作该项目" });
+          }
+          const links = await tx
+            .select({ character })
+            .from(episodeCharacter)
+            .innerJoin(character, eq(episodeCharacter.characterId, character.id))
+            .where(eq(episodeCharacter.episodeId, ep.id));
+          const prodChars = Array.isArray(prod.characters)
+            ? prod.characters.filter(isProductionCharacterRow)
+            : [];
+          const byName = new Map<string, ProductionCharacter>();
+          for (const c of prodChars) {
+            const n = typeof c?.name === "string" ? c.name : "";
+            if (n) {
+              byName.set(n, c);
+            }
+          }
+          let injected = 0;
+          let merged = 0;
+          for (const link of links) {
+            const lc = link.character;
+            const mapped = libraryCharacterToProduction(lc);
+            const existing = byName.get(lc.name);
+            if (existing) {
+              Object.assign(existing, mapped);
+              merged += 1;
+            } else {
+              const next = mapped as ProductionCharacter;
+              prodChars.push(next);
+              if (lc.name) {
+                byName.set(lc.name, next);
+              }
+              injected += 1;
+            }
+          }
+          const updated = await tx
+            .update(production)
+            .set({ characters: prodChars })
+            .where(and(eq(production.id, input.projectId), eq(production.userId, ctx.user.id)))
+            .returning({ id: production.id });
+          if (!updated[0]) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "无权操作该项目" });
+          }
+          return { injected, merged, total: prodChars.length };
+        },
+        { behavior: "immediate" },
+      );
     }),
 });

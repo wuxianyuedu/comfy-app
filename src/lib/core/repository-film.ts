@@ -7,6 +7,7 @@ import "server-only";
 import { db } from "~/lib/db";
 import { filmProject, filmShot, type FilmProject } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
+import type { DbExecutor } from "./repository-executor-types";
 import { tailWindow } from "~/lib/page-window";
 import { KeyedAsyncMutex } from "~/lib/async-mutex";
 import { eq, and, desc, asc, inArray, isNotNull, notInArray, count } from "drizzle-orm";
@@ -89,23 +90,27 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
     return rows[0] ?? null;
   }
 
-  async create(input: {
-    bgmName?: string | null;
-    fps: number;
-    framesPerShot: number;
-    /** 关联的统一项目 id（proj_*）；纯文本自由建片时为空。 */
-    projectId?: string | null;
-    script: string;
-    /** 成片画幅的**尺寸表达** JSON（`lib/size-presets` 的 `SizeSpec`）。
-     *  老行里是 "1280x720" 字符串 —— 读的一律用 `toSizeSpec` 归一。 */
-    size: string;
-    styleSlug?: string | null;
-    subtitleOn: boolean;
-    title: string;
-    type: string;
-    userId: string;
-  }): Promise<FilmProject> {
-    const rows = await db
+  async create(
+    input: {
+      bgmName?: string | null;
+      fps: number;
+      framesPerShot: number;
+      /** 关联的统一项目 id（proj_*）；纯文本自由建片时为空。 */
+      projectId?: string | null;
+      script: string;
+      /** 成片画幅的**尺寸表达** JSON（`lib/size-presets` 的 `SizeSpec`）。
+       *  老行里是 "1280x720" 字符串 —— 读的一律用 `toSizeSpec` 归一。 */
+      size: string;
+      styleSlug?: string | null;
+      subtitleOn: boolean;
+      title: string;
+      type: string;
+      userId: string;
+    },
+    executor?: DbExecutor,
+  ): Promise<FilmProject> {
+    const exec = executor ?? db;
+    const rows = await exec
       .insert(filmProject)
       .values({
         userId: input.userId,
@@ -244,8 +249,10 @@ export class FilmShotRepository {
       /** 关联的统一镜头 id（Phase 5 回写用）；自由建片时为空。 */
       shotId?: string | null;
     }>,
+    executor?: DbExecutor,
   ): Promise<void> {
-    await db.insert(filmShot).values(
+    const exec = executor ?? db;
+    await exec.insert(filmShot).values(
       shots.map((shot) => ({
         filmId,
         shotId: shot.shotId ?? null,
