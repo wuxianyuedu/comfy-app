@@ -8,6 +8,7 @@ import { uniqueSorted } from "~/lib/ordered-set";
 import { db } from "~/lib/db";
 import { model, type Model } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
+import type { DbExecutor } from "./repository-executor-types";
 import { eq, and, like, inArray, desc, count, sql } from "drizzle-orm";
 
 /* 单条多值 INSERT 的行数上限：SQLite 的绑定变量有上限，一次塞几千行会直接报
@@ -33,8 +34,11 @@ export class ModelRepository extends DrizzleRepository<Model> {
     await db.update(model).set({ isAvailable }).where(eq(model.folder, folder));
   }
 
-  async disableAllLocal(): Promise<void> {
-    await db.update(model).set({ isAvailable: false }).where(eq(model.source, "LOCAL"));
+  /** 停用全部 LOCAL 行。`executor`：由「停用 + 回填」的事务入口传入（ISSUE #3869），
+   *  让两步同滚；缺省 = 模块级连接的单语句路径。 */
+  async disableAllLocal(executor?: DbExecutor): Promise<void> {
+    const exec = executor ?? db;
+    await exec.update(model).set({ isAvailable: false }).where(eq(model.source, "LOCAL"));
   }
 
   async upsertScanned(input: {
@@ -69,7 +73,9 @@ export class ModelRepository extends DrizzleRepository<Model> {
   /* `upsertScanned` 的批量版。扫描一次模型目录就是几百到几千个文件，逐条
    * `await` 等于同数量的数据库往返；这里拼成多值 INSERT ... ON CONFLICT DO
    * UPDATE，往返数从 N 降到 N / UPSERT_CHUNK。语义与单条版一致：按
-   * (fileName, folder) 冲突则更新为「可见 + 最新的 name/type/baseModel」。 */
+   * (fileName, folder) 冲突则更新为「可见 + 最新的 name/type/baseModel」。
+   * `executor`：由「停用 + 回填」的事务入口传入（ISSUE #3869）——分片虽逐片
+   * 执行，但都落在同一事务里，某片失败整体回滚，不再留「部分可见」中间态。 */
   async upsertScannedMany(
     inputs: Array<{
       baseModel: string;
@@ -78,14 +84,16 @@ export class ModelRepository extends DrizzleRepository<Model> {
       name: string;
       type: string;
     }>,
+    executor?: DbExecutor,
   ): Promise<void> {
     if (!inputs.length) {
       return;
     }
+    const exec = executor ?? db;
     for (let start = 0; start < inputs.length; start += UPSERT_CHUNK) {
       const chunk = inputs.slice(start, start + UPSERT_CHUNK);
       // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-      await db
+      await exec
         .insert(model)
         .values(
           chunk.map((input) => ({
@@ -109,6 +117,27 @@ export class ModelRepository extends DrizzleRepository<Model> {
           },
         });
     }
+  }
+
+  /** 「全量停用 + 批量回填」一次提交（ISSUE #3869）：`syncModels` 的落库段收进
+   *  同一 `immediate` 事务——分片逐片执行但同滚，中途失败不留「部分模型可见、
+   *  部分不可见」的中间态。调用方（models.ts）不直接开事务、不直接摸 db。 */
+  async applyLocalSync(
+    inputs: Array<{
+      baseModel: string;
+      fileName: string;
+      folder: string;
+      name: string;
+      type: string;
+    }>,
+  ): Promise<void> {
+    await db.transaction(
+      async (tx) => {
+        await this.disableAllLocal(tx);
+        await this.upsertScannedMany(inputs, tx);
+      },
+      { behavior: "immediate" },
+    );
   }
 
   async listAvailableFileNamesByFolders(folders: Array<string>): Promise<Array<string>> {

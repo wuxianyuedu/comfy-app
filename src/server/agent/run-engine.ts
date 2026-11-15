@@ -45,12 +45,23 @@ const nowIso = () => new Date().toISOString();
 /**
  * per-project 在飞互斥（ISSUE #3829/#3840）：同一 (user, project) 只允许一个推进循环并发运行，
  * 后续 kick 复用同一条 promise 让位，避免重复执行动作与状态竞态。
+ *
+ * 挂 `globalThis`（ISSUE #3880）：dev 的 HMR 会重新求值本模块，模块级 Map 会换新、
+ * 旧循环的 promise 从新表里消失 → 同一项目被再起一条推进循环（重复执行动作）。
+ * film 侧监看表（orchestrator 的 `filmWatchInFlight_v1`）是同款问题同款修法；
+ * 键名带版本号是既定坑位写法（`??=` 只认键名，不给旧单例补字段）。
  */
-const activeLoops = new Map<string, Promise<void>>();
+declare global {
+  var runEngineActiveLoops_v1: Map<string, Promise<void>> | undefined;
+}
+
+function activeLoops(): Map<string, Promise<void>> {
+  return (globalThis.runEngineActiveLoops_v1 ??= new Map<string, Promise<void>>());
+}
 
 /** 仅测试用：清空推进循环互斥状态，避免跨用例/异常泄漏导致后续调用被误判为“已在运行”。 */
 export function resetRunLoopGuardsForTest(): void {
-  activeLoops.clear();
+  activeLoops().clear();
 }
 
 type ExecResult = {
@@ -125,6 +136,29 @@ function gateStageFor(action: RunAction): ProductionStage | null {
 }
 
 async function saveRun(userId: string, projectId: string, run: ProductionRun) {
+  /* 回写前重读库中状态（ISSUE #3863）：动作执行可达数分钟，期间用户可能已
+   * pause/cancel。引擎手里的 run 是拍首旧快照，直接整包回写会把 paused /
+   * cancelled 复活成 running —— 用户的暂停/取消被静默回滚，引擎下一拍继续
+   * 烧 LLM/ComfyUI。 */
+  const row = await productionRepository.getForUser(userId, projectId);
+  if (!row) {
+    return;
+  }
+  const dbStatus = normalizeProductionRun(row.run).status;
+  if (dbStatus === "cancelled") {
+    // 取消是用户终态：引擎不再回写任何东西（含 failed/done），保持 cancelled。
+    return;
+  }
+  if (dbStatus === "paused" && run.status === "running") {
+    // 已暂停：只吸收引擎推进的 stage 与执行日志，status 保持 paused——
+    // resume 后规划器从新 stage 继续，不重做已完成的动作。
+    await productionRepository.updateRun(userId, projectId, {
+      ...run,
+      status: "paused",
+      updatedAt: nowIso(),
+    });
+    return;
+  }
   await productionRepository.updateRun(userId, projectId, {
     ...run,
     updatedAt: nowIso(),
@@ -546,16 +580,16 @@ async function execFilm(
  */
 export function advanceRunLoop(userId: string, projectId: string): Promise<void> {
   const key = `${userId}:${projectId}`;
-  const existing = activeLoops.get(key);
+  const existing = activeLoops().get(key);
   if (existing) {
     return existing;
   }
   const loop = advanceRunLoopOnce(userId, projectId).finally(() => {
-    if (activeLoops.get(key) === loop) {
-      activeLoops.delete(key);
+    if (activeLoops().get(key) === loop) {
+      activeLoops().delete(key);
     }
   });
-  activeLoops.set(key, loop);
+  activeLoops().set(key, loop);
   return loop;
 }
 
