@@ -18,6 +18,7 @@ import { hash } from "node:crypto";
 import path from "node:path";
 
 import { remoteModelRepository, llmProviderRepository } from "~/lib/core/repository";
+import { effectiveModelAdaptersDoc } from "~/lib/workshop/model-adapter-defaults.server";
 import type {
   RemoteModeAdapter,
   RemoteModelAdaptersDoc,
@@ -225,7 +226,12 @@ async function resolveRemoteModelConnection(wantedModel: string): Promise<
       kind: "ok",
       base,
       apiKey,
-      doc: await remoteModelRepository.getWorkshopAdaptersDoc(wantedModel),
+      /* 生效档 = 项目默认（跟代码走的基线，ISSUE #3951）与 DB 存档逐模式合并 ——
+       * 与「模型适配」页的编辑器、保存口共用同一份判据。 */
+      doc: await effectiveModelAdaptersDoc(
+        wantedModel,
+        await remoteModelRepository.getWorkshopAdaptersDoc(wantedModel),
+      ),
       extraBody: entry.extraBody,
       name: entry.name,
     };
