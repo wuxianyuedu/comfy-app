@@ -9,19 +9,22 @@ import { getActiveId } from "~/lib/project-canvas/canvas-store";
 
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import { cancelLocalTask, type WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
-import { fetchServerDraft, pushServerDraft } from "~/lib/workshop/draft-sync-client";
+import { pushServerDraft } from "~/lib/workshop/draft-sync-client";
 import { fetchProductionProgress, pushProduction } from "~/lib/production/production-client";
 import { buildProductionPayload } from "~/lib/production/payload";
 import { errorMessage } from "~/lib/error-message";
 import { beginStaleRun } from "~/lib/stale-run";
-import { useWorkshopBootstrapData, useWorkshopTaskRecovery } from "./use-workshop-pipeline-effects";
+import {
+  useWorkshopBootstrapData,
+  useWorkshopDraftRestore,
+  useWorkshopTaskRecovery,
+} from "./use-workshop-pipeline-effects";
 import {
   DEFAULT_META,
   readWorkshopDraft as readDraft,
   writeWorkshopDraft as writeDraft,
   type WorkshopDraft,
 } from "~/lib/workshop/draft-store";
-import { draftHasContent, type WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
 import { auditDraftElements, type DraftElementIssue } from "~/lib/workshop/draft-integrity";
 import type { Character, ProjectMeta, Scene, Shot, StyleRef } from "~/lib/workshop/types";
 import {
@@ -61,30 +64,6 @@ import {
  *  （Phase 3c-2b）要写同一份按 proj_* 存的草稿，两侧必须共用同一套键规则与组装
  *  口径（§12.12 去重、§12.18 复用优先）。这里只留工坊恢复专用的两个本地转换。 */
 
-/** 服务端 DTO → 内部草稿（字段完全同构，显式构造避免隐式 cast 告警）。 */
-function dtoToDraft(dto: WorkshopDraftDto): WorkshopDraft {
-  return {
-    meta: dto.meta,
-    scriptMarkdown: dto.scriptMarkdown ?? "",
-    scenes: dto.scenes ?? [],
-    characters: dto.characters ?? [],
-    shots: dto.shots ?? [],
-    workflowId: "",
-    videoWorkflowId: "",
-    updatedAt: dto.updatedAt,
-  };
-}
-
-/** 内部草稿是否为「空」——仅空时才值得用服务端镜像覆盖（避免覆盖进行中的编辑）。 */
-function draftIsEmpty(draft: WorkshopDraft): boolean {
-  return (
-    !draft.scriptMarkdown &&
-    draft.scenes.length === 0 &&
-    draft.characters.length === 0 &&
-    draft.shots.length === 0
-  );
-}
-
 /** 页面加载期间只读一次 localStorage（多个 state 惰性初始化器共用）。
  *  工坊当前项目 = 画布活跃 proj_*（getActiveId）；Phase 1 闸门保证进入工坊时
  *  已有活跃项目，异常无活跃项目时返回 null，state 落默认值。 */
@@ -99,9 +78,6 @@ function loadWorkshopDraftOnce(): WorkshopDraft | null {
   workshopDraftCache ??= readDraft(pid);
   return workshopDraftCache;
 }
-
-/** 本浏览器会话内已做过一次「服务端镜像回填」的项目集合（避免热重挂载反复拉取）。 */
-const serverRecoveredIds = new Set<string>();
 
 /* 进度类型随生成逻辑一起住在 `use-workshop-generation`；这里再导出一次，
    保持主管线的对外类型面不变（消费方仍从本文件取）。 */
@@ -431,53 +407,22 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     // 仅在卸载时执行一次
   }, []);
 
-  /* 挂载回填：当前项目本地为空、或服务端镜像比本地**新**（版本对账，#4023）时，
-   * 用服务端内容恢复 / 接管当前项目，不覆盖进行中的较新编辑。同会话只执行一次
-   *（热重挂载由上面的卸载兜底保存保住了 localStorage）。 */
-  React.useEffect(() => {
-    void (async () => {
-      const activeId = activeProjectRef.current;
-      if (!activeId) {
-        restoreSettledRef.current = true;
-        return;
-      }
-      if (serverRecoveredIds.has(activeId)) {
-        restoreSettledRef.current = true;
-        return;
-      }
-      serverRecoveredIds.add(activeId);
-      try {
-        const serverDraft = await fetchServerDraft(activeId);
-        const local = latestDraftRef.current;
-        const localAt = typeof local.updatedAt === "number" ? local.updatedAt : null;
-        const serverAt = serverDraft?.updatedAt ?? null;
-        /* 版本对账（#4023）：两侧都带时刻时取**较新**的一侧（旧标签页 / 另一会话
-         * 的较新编辑不再被本机旧草稿覆盖）；任一侧缺时刻（旧数据）保持既有行为
-         * ——本地非空即本地优先（#3905 的保护不变），本地为空才采用服务端。 */
-        const serverNewer =
-          serverDraft !== null &&
-          typeof serverAt === "number" &&
-          (localAt === null || serverAt > localAt);
-        if (!draftIsEmpty(local) && !serverNewer) {
-          return;
-        }
-        if (serverDraft && draftHasContent(serverDraft)) {
-          const draft = dtoToDraft(serverDraft);
-          writeDraft(activeId, draft);
-          applyDraft(draft);
-          // 让模块级草稿缓存也指向恢复后的内容，避免再次重挂载读到旧空草稿。
-          workshopDraftCache = draft;
-        }
-      } catch {
-        /* 服务不可用：保持纯本地 */
-      } finally {
-        /* 对账落定后才放行自动保存 / 卸载兜底的写穿（#4023）。 */
-        restoreSettledRef.current = true;
-      }
-    })();
-    // 仅首挂载执行一次；闭包读取经 ref，避免陈旧 state
-    // oxlint-disable-next-line react/exhaustive-deps
-  }, []);
+  /* 挂载回填的对账（#4023）沉在 `./use-workshop-pipeline-effects` 的
+   * `useWorkshopDraftRestore`：本地为空、或服务端镜像比本地**新**（版本对账）时
+   * 采用服务端内容；对账落定前不放行自动保存 / 卸载兜底的服务端写穿。 */
+  useWorkshopDraftRestore({
+    activeProjectRef,
+    latestDraftRef,
+    onAdopt: (draft) => {
+      writeDraft(activeProjectRef.current, draft);
+      applyDraft(draft);
+      // 让模块级草稿缓存也指向恢复后的内容，避免再次重挂载读到旧空草稿。
+      workshopDraftCache = draft;
+    },
+    onSettled: () => {
+      restoreSettledRef.current = true;
+    },
+  });
 
   /* Phase 4（设计 §7）：完成状态以 production 表的 progress 为单一持久来源。
    * 挂载时从持久化 progress 恢复 rendered —— 修「rendered 只在 React state、刷新即丢」；

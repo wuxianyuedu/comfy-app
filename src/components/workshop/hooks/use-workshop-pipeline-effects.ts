@@ -14,6 +14,9 @@ import {
   fetchWorkshopStyles,
   fetchWorkshopWorkflows,
 } from "~/lib/workshop/generation-client";
+import { fetchServerDraft } from "~/lib/workshop/draft-sync-client";
+import { draftHasContent } from "~/lib/workshop/draft-sync-shared";
+import { dtoToDraft, draftIsEmpty } from "~/lib/workshop/draft-store";
 import type { Shot, StyleRef } from "~/lib/workshop/types";
 import type { WorkshopDraft } from "~/lib/workshop/draft-store";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
@@ -146,6 +149,61 @@ export function useWorkshopTaskRecovery(input: {
       }
     }
     // 仅挂载执行一次；镜头列表经 ref 读取（惰性初始化在首渲染已完成）
+    // oxlint-disable-next-line react/exhaustive-deps
+  }, []);
+}
+
+/** 本浏览器会话内已做过一次「服务端镜像回填」的项目集合（避免热重挂载反复拉取）。 */
+const serverRecoveredIds = new Set<string>();
+
+/** 挂载恢复的版本对账（#4023）：本地为空、或服务端镜像比本地**新**（两侧都带
+ *  `updatedAt` 时刻）时，采纳服务端草稿；任一侧缺时刻（旧数据）保持既有行为——
+ *  本地非空即本地优先（#3905 的保护不变）。同会话对同一项目只执行一次。
+ *  对账落定（含早退）必调 `onSettled`——主 hook 据此放行自动保存 / 卸载兜底的
+ *  服务端写穿。 */
+export function useWorkshopDraftRestore(input: {
+  activeProjectRef: { current: string };
+  latestDraftRef: { current: WorkshopDraft };
+  /** 采纳服务端草稿：落本地 localStorage + 灌进受管 state + 指向模块级缓存。 */
+  onAdopt: (draft: WorkshopDraft) => void;
+  onSettled: () => void;
+}) {
+  const { activeProjectRef, latestDraftRef, onAdopt, onSettled } = input;
+
+  useEffect(() => {
+    void (async () => {
+      const activeId = activeProjectRef.current;
+      if (!activeId) {
+        onSettled();
+        return;
+      }
+      if (serverRecoveredIds.has(activeId)) {
+        onSettled();
+        return;
+      }
+      serverRecoveredIds.add(activeId);
+      try {
+        const serverDraft = await fetchServerDraft(activeId);
+        const local = latestDraftRef.current;
+        const localAt = typeof local.updatedAt === "number" ? local.updatedAt : null;
+        const serverAt = serverDraft?.updatedAt ?? null;
+        const serverNewer =
+          serverDraft !== null &&
+          typeof serverAt === "number" &&
+          (localAt === null || serverAt > localAt);
+        if (!draftIsEmpty(local) && !serverNewer) {
+          return;
+        }
+        if (serverDraft && draftHasContent(serverDraft)) {
+          onAdopt(dtoToDraft(serverDraft));
+        }
+      } catch {
+        /* 服务不可用：保持纯本地 */
+      } finally {
+        onSettled();
+      }
+    })();
+    // 仅首挂载执行一次；本地草稿经 ref 读取（惰性初始化在首渲染已完成）
     // oxlint-disable-next-line react/exhaustive-deps
   }, []);
 }
