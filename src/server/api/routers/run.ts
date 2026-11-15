@@ -23,6 +23,7 @@ import {
   applyScriptHumanVerdict,
 } from "~/lib/production/review-types";
 import { calibrateFromShots } from "~/lib/production/review-calibration";
+import { withProductionContentLock } from "~/lib/production/content-write-lock";
 import {
   regenerateShot,
   reviewContent,
@@ -328,19 +329,39 @@ export const runRouter = createTRPCRouter({
           message: `找不到要裁决的${input.kind === "shot" ? "镜头" : "角色卡"}`,
         });
       }
-      const revRaw = isPlainRecord(rec) ? rec.rev : undefined;
-      const rev = typeof revRaw === "number" && Number.isFinite(revRaw) ? revRaw : 0;
-      const verdict = {
-        pass: input.pass,
-        note: input.note.trim(),
-        at: new Date().toISOString(),
-        rev,
-      };
-      const nextList = applyHumanVerdict(list, input.targetId, verdict);
-      await productionRepository.patchContent(ctx.user.id, input.projectId, {
-        ...(input.kind === "shot" ? { shots: nextList } : { characters: nextList }),
+      /* 写回收进 per-project 内容写锁（ISSUE #3864）：裁决快照的 rev 取**锁内
+       * 重读**到的最新值，叠加裁决后整列写回——与引擎/评审器的并发修改不再互覆。 */
+      const humanVerdict = await withProductionContentLock(input.projectId, async () => {
+        const fresh = await productionRepository.getForUser(ctx.user.id, input.projectId);
+        if (!fresh) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
+        }
+        const freshRaw = input.kind === "shot" ? fresh.shots : fresh.characters;
+        const freshList: Array<unknown> = Array.isArray(freshRaw) ? freshRaw : [];
+        const freshRec = freshList.find(
+          (item) => isPlainRecord(item) && item.id === input.targetId,
+        );
+        if (freshRec === undefined) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: `找不到要裁决的${input.kind === "shot" ? "镜头" : "角色卡"}`,
+          });
+        }
+        const revRaw = isPlainRecord(freshRec) ? freshRec.rev : undefined;
+        const rev = typeof revRaw === "number" && Number.isFinite(revRaw) ? revRaw : 0;
+        const verdict = {
+          pass: input.pass,
+          note: input.note.trim(),
+          at: new Date().toISOString(),
+          rev,
+        };
+        const nextList = applyHumanVerdict(freshList, input.targetId, verdict);
+        await productionRepository.patchContent(ctx.user.id, input.projectId, {
+          ...(input.kind === "shot" ? { shots: nextList } : { characters: nextList }),
+        });
+        return verdict;
       });
-      return { humanVerdict: verdict };
+      return { humanVerdict };
     }),
 
   /** 人工评分一个镜头（0~5；null = 清除）。写 `shot.humanRating`。 */
@@ -357,16 +378,24 @@ export const runRouter = createTRPCRouter({
       if (!row) {
         throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
       }
-      const shots: Array<unknown> = Array.isArray(row.shots) ? row.shots : [];
-      const nextShots = applyHumanRating(shots, input.shotId, input.rating);
-      if (nextShots === shots) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "找不到要评分的镜头",
+      /* 写回收进 per-project 内容写锁（ISSUE #3864）：锁内重读最新 shots 再叠加
+       * 评分，不与引擎/评审器的并发修改互覆。 */
+      await withProductionContentLock(input.projectId, async () => {
+        const fresh = await productionRepository.getForUser(ctx.user.id, input.projectId);
+        if (!fresh) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
+        }
+        const shots: Array<unknown> = Array.isArray(fresh.shots) ? fresh.shots : [];
+        const nextShots = applyHumanRating(shots, input.shotId, input.rating);
+        if (nextShots === shots) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "找不到要评分的镜头",
+          });
+        }
+        await productionRepository.patchContent(ctx.user.id, input.projectId, {
+          shots: nextShots,
         });
-      }
-      await productionRepository.patchContent(ctx.user.id, input.projectId, {
-        shots: nextShots,
       });
       return { ok: true };
     }),
@@ -392,9 +421,17 @@ export const runRouter = createTRPCRouter({
         at: new Date().toISOString(),
         digest: scriptDigestOf(script),
       };
-      const next = applyScriptHumanVerdict(row.scriptReview, verdict);
-      await productionRepository.patchContent(ctx.user.id, input.projectId, {
-        scriptReview: next,
+      /* 写回收进 per-project 内容写锁（ISSUE #3864）：锁内重读最新评审位再叠加
+       * 人工裁决，裁决快照的指纹按当前剧本算。 */
+      await withProductionContentLock(input.projectId, async () => {
+        const fresh = await productionRepository.getForUser(ctx.user.id, input.projectId);
+        if (!fresh) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
+        }
+        const next = applyScriptHumanVerdict(fresh.scriptReview, verdict);
+        await productionRepository.patchContent(ctx.user.id, input.projectId, {
+          scriptReview: next,
+        });
       });
       return { humanVerdict: verdict };
     }),

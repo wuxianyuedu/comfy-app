@@ -11,6 +11,7 @@ import path from "node:path";
 import { filmRepository, filmShotRepository } from "~/lib/core/repository";
 import { productionRepository } from "~/lib/core/repository-production";
 import { normalizeProductionProgress } from "~/lib/production/progress";
+import { withProductionContentLock } from "~/lib/production/content-write-lock";
 import type { Shot } from "~/lib/workshop/types";
 import { isFilmShotStatus, type ShotStatus } from "~/lib/film/film-status";
 import { sizeSpecDims, toSizeSpec } from "~/lib/media/size-presets";
@@ -46,39 +47,43 @@ export async function syncFilmToProject(
   projectId: string,
   filmShots: Array<FilmShotClip>,
 ): Promise<void> {
-  const row = await productionRepository.getForUser(userId, projectId);
-  if (!row) {
-    return;
-  }
-  const progress = normalizeProductionProgress(row.progress);
-  const rawShots = isShotArray(row.shots) ? row.shots : [];
-
-  // 按 shotId 索引成片结果（只取有 videoPath 的镜头回写 clip）。
-  const clipByShotId = new Map<string, FilmShotClip>();
-  for (const fs of filmShots) {
-    if (fs.shotId !== null && fs.videoPath !== null) {
-      clipByShotId.set(fs.shotId, fs);
+  /* 整段读-改-写收进 per-project 内容写锁（ISSUE #3864）：与 run 引擎 / 评审器 /
+   * 人工裁决的并发修改不再互覆（无慢 IO 在锁内，纯读列-合并-写列）。 */
+  await withProductionContentLock(projectId, async () => {
+    const row = await productionRepository.getForUser(userId, projectId);
+    if (!row) {
+      return;
     }
-  }
+    const progress = normalizeProductionProgress(row.progress);
+    const rawShots = isShotArray(row.shots) ? row.shots : [];
 
-  const nextShots: Array<Shot> = rawShots.map((shot) => {
-    const clip = clipByShotId.get(shot.id);
-    if (!clip) {
-      return shot;
+    // 按 shotId 索引成片结果（只取有 videoPath 的镜头回写 clip）。
+    const clipByShotId = new Map<string, FilmShotClip>();
+    for (const fs of filmShots) {
+      if (fs.shotId !== null && fs.videoPath !== null) {
+        clipByShotId.set(fs.shotId, fs);
+      }
     }
-    return {
-      ...shot,
-      clipUrl: clip.videoPath ?? undefined,
-      clipStatus: "done",
-    };
-  });
 
-  /* 只回写自己拥有的两列（ISSUE #3832）：原先把整行读出的旧快照**全部内容列**
-   * 原样写回 —— 合成期间工坊自动保存 / run 引擎 / 评审器对剧本、角色、镜头的
-   * 任何修改都会被这份旧值回滚。字段所有权：shots/progress 归成片链路。 */
-  await productionRepository.patchShotsAndProgress(userId, projectId, {
-    shots: nextShots,
-    progress: { ...progress, stage: "render", rendered: true },
+    const nextShots: Array<Shot> = rawShots.map((shot) => {
+      const clip = clipByShotId.get(shot.id);
+      if (!clip) {
+        return shot;
+      }
+      return {
+        ...shot,
+        clipUrl: clip.videoPath ?? undefined,
+        clipStatus: "done",
+      };
+    });
+
+    /* 只回写自己拥有的两列（ISSUE #3832）：原先把整行读出的旧快照**全部内容列**
+     * 原样写回 —— 合成期间工坊自动保存 / run 引擎 / 评审器对剧本、角色、镜头的
+     * 任何修改都会被这份旧值回滚。字段所有权：shots/progress 归成片链路。 */
+    await productionRepository.patchShotsAndProgress(userId, projectId, {
+      shots: nextShots,
+      progress: { ...progress, stage: "render", rendered: true },
+    });
   });
 }
 
