@@ -11,7 +11,11 @@
  *   ④ 「没拿回 sn」≠「发出去了」：应答缺 sn 一律退 2；
  *   ⑤ 退出码只表送达：判红也照样退 0（判决内容由 GA_VERDICT 交给 CNB 回调 build 折）；
  *   ⑥ 标题（ISSUE #3981）：`<PR 标题> (#<号>)` 拼得出来才送 `title`，拼不出来
- *      **一个 `title` 键都不多写** —— 回落平台缺省，不发明「无标题」这一形态。
+ *      **一个 `title` 键都不多写** —— 回落平台缺省，不发明「无标题」这一形态；
+ *   ⑦ 前提**取值口**（ISSUE #3998）：`cnb_merge_sha` / `pr_number` 以派发 payload
+ *      为准，其次才是环境变量 —— `pr-gate.yml` 那两条 `||` 表达式在自动档上会把
+ *      payload 里的值短路成空串（`inputs` 键存在、值为空串时 `||` 不回落），
+ *      现场后果是「回调前提不成立 ⇒ CNB 侧 status 缺席 ⇒ 白等 70m」。
  */
 import { describe, expect, it } from "vitest";
 
@@ -20,6 +24,7 @@ import {
   CALLBACK_EVENT,
   conclusionFromJobResults,
   main,
+  payloadField,
   resolveCallbackContext,
   SHA_ENV_KEY,
   startBuildRequest,
@@ -84,6 +89,56 @@ describe("前提：缺一件就是没判过", () => {
     expect(badSha.ok).toBe(false);
     const noConclusion = resolveCallbackContext({ argv: [], env: BASE_ENV });
     expect(noConclusion.ok).toBe(false);
+  });
+});
+
+describe("前提取值口：payload 优先于环境变量（ISSUE #3998 现场）", () => {
+  /* 现场：`CNB_PULL_REQUEST_MERGE_SHA` 是空的（镜像格那一刻 CNB 侧没给），而 payload
+   * 里 `cnb_merge_sha` 是有的。workflow 的 `||` 兜底在自动档上不生效 ⇒ 脚本自己读。 */
+  const PAYLOAD = {
+    client_payload: { cnb_merge_sha: SHA, pr_number: "3998" },
+  };
+  const readPayload = () => PAYLOAD;
+
+  it("环境变量两枚都空时，从 payload 里补回 sha 与 PR 号", () => {
+    const ctx = resolveCallbackContext({
+      argv: ["--conclusion", "failure"],
+      env: { ...BASE_ENV, CNB_PULL_REQUEST_MERGE_SHA: "", CNB_PULL_REQUEST_IID: "" },
+      readPayload,
+    });
+    expect(ctx.ok).toBe(true);
+    if (!ctx.ok) throw new Error("unreachable：ok=true 已由上一行断言");
+    expect(ctx.sha).toBe(SHA);
+    expect(ctx.pr).toBe("3998");
+  });
+
+  it("显式旗标仍然压过 payload（手跑复验那一路）", () => {
+    const other = "b".repeat(40);
+    const ctx = resolveCallbackContext({
+      argv: ["--conclusion", "failure", "--sha", other, "--pr", "1111"],
+      env: BASE_ENV,
+      readPayload,
+    });
+    expect(ctx.ok).toBe(true);
+    if (!ctx.ok) throw new Error("unreachable：ok=true 已由上一行断言");
+    expect(ctx.sha).toBe(other);
+    expect(ctx.pr).toBe("1111");
+  });
+
+  it("payload 也缺 / 读不出来时照旧退没判过，不编一个 sha", () => {
+    const ctx = resolveCallbackContext({
+      argv: ["--conclusion", "failure"],
+      env: { ...BASE_ENV, CNB_PULL_REQUEST_MERGE_SHA: "" },
+      readPayload: () => null,
+    });
+    expect(ctx.ok).toBe(false);
+  });
+
+  it("payloadField 只认 client_payload 里的非空字符串", () => {
+    expect(payloadField(readPayload(), "cnb_merge_sha")).toBe(SHA);
+    expect(payloadField({ client_payload: { pr_number: 3998 } }, "pr_number")).toBe("");
+    expect(payloadField({ client_payload: null }, "pr_number")).toBe("");
+    expect(payloadField(null, "pr_number")).toBe("");
   });
 });
 

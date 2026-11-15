@@ -2245,8 +2245,12 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(workflow).toMatch(/^ {6}run_id:$/m);
     expect(workflow).toContain("GA_LOG_SCOPE: ${{ github.event.inputs.relay_scope || '' }}");
     expect(workflow).toContain("GA_LOG_RUN_ID: ${{ github.event.inputs.run_id || '' }}");
+    /* ISSUE #3998：`github.event.inputs.* || github.event.client_payload.*` 这条形状
+     * **在自动档上恒取空串** —— `inputs` 这个键在 repository_dispatch 上也存在
+     * （值是空串），而 `||` 只在 null / false 时才短路。所以这里钉的是「先按事件
+     * 分形态」：自动档读 payload、按需档读 inputs，两边各自才真是「会空」。 */
     expect(workflow).toContain(
-      "github.event.inputs.pr_number || github.event.client_payload.pr_number",
+      "github.event_name == 'repository_dispatch' && github.event.client_payload.pr_number || inputs.pr_number",
     );
     /* relay 脚本：默认 failed、只认字面 all、marker 带 scope、判绿全量也走同一载体。 */
     expect(relay).toContain("relayScopeFromEnv");

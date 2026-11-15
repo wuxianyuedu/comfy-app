@@ -10231,6 +10231,61 @@ fail-closed 语义与 5m 预算一字未动 —— 迁歪的表现是那格红�
 **真验**：下一次 PR 的回调 build 的 `title` 应形如 `<PR 标题> (#<号>)`；
 构建历史的读数是 `cnb build get-build-logs --repo moon-read/comfy-app-t3 --event api_trigger_ga_verdict`。
 
+#### 13.5.39.3 回调的两枚前提在自动档上恒空：`||` 不回落空串（ISSUE #3998）
+
+#3998 那一跑（`cnb-2vg-1k7gdc4e2`）读数是：`GA 回调结论回读` 等满 70m 预算报
+`status 缺席 ⇒ GA 还没送回结论`。终态不是判据红，是**根本没有结论** —— 顺着查过去，
+GA 侧的 `ga-verdict-callback` job 跑了，但「把结论送回 CNB」那一步自己退了 2：
+
+```
+[ga-callback] 前提不成立：预合并 sha 缺席或不是 40 位十六进制（回调必须绑 PR 预合并 sha）
+```
+
+**根因不在脚本的判据，在 workflow 那一行的取值写法**：
+
+```yaml
+CNB_PULL_REQUEST_MERGE_SHA: ${{ github.event.client_payload.cnb_merge_sha || '' }}
+```
+
+这一行只认自动档的 `client_payload`。看着「自动档恒有值所以够用」，实际不成立 ——
+镜像格推那一刻 `CNB_PULL_REQUEST_MERGE_SHA` 在 CNB 侧可以是空的（`ci-github-mirror-push.mjs`
+的 `resolveContext()` 对它**刻意不阻断**：「缺席不阻断 —— 那一格不读它」），payload 里
+`cnb_merge_sha` 于是就是空串 ⇒ 回调这边 sha 判据 fail-closed 退 2 ⇒ CNB 侧那条
+commit-status 从头到尾没被写过 ⇒ 主列白等预算到点判红。
+
+**同一个病灶的另一半**：`CNB_PULL_REQUEST_IID: ${{ github.event.inputs.pr_number || github.event.client_payload.pr_number || '' }}`
+这条「两条触发形态都读」的写法在**自动档上也是空转** —— GitHub 的 `||` 是**表达式语法**，
+只在左侧为 `null` / `false` 时短路；`github.event.inputs` 这个键在 `repository_dispatch`
+上**存在且为空串**，空串不算假 ⇒ 永远取到空串、回不到 `client_payload`。
+（也正因为「空串不算假」，`||` 那侧写什么都救不回来 —— 只能先按事件分形态。）
+
+**修法两层，同指向一份字段名**：
+
+| 层 | 改动 |
+| --- | --- |
+| workflow | 两枚都改成 `github.event_name == 'repository_dispatch' && github.event.client_payload.X \|\| inputs.X \|\| ''` —— 先分形态，`\|\|` 两边才各是「这个形态下真的会空」的取值；`workflow_dispatch` 补 `merge_sha` input（按需档把结论送回 CNB 要的正是这一笔） |
+| 脚本 | `ci-ga-verdict-callback.mjs` 自己读 `GITHUB_EVENT_PATH` 的 `client_payload`：取值顺序 **显式旗标 → payload → 环境变量**。环境变量那条路留着给「payload 里没有这个键」的老形态；`--sha` / `--pr` 仍是手跑复验的显式覆盖 |
+
+**为什么脚本那层必须独立**：workflow 的表达式只在 runner 上算得出来，本地跑不出来；
+而「前提从哪来」是这个脚本自己的契约。payload 形状与 `ci-mirror-payload.mjs` 的
+`dispatchPayload()` 同源，两处读同一份字段名，不另立第二套。
+
+**回归判据**：
+
+- `tests/ci-ga-verdict-callback.test.ts` 的「前提取值口」那组：环境变量两枚都空时从
+  payload 补回 sha / PR 号（**改动前这一格是红的**）；旗标仍压过 payload；payload 也缺时
+  照旧退「没判过」，不编一个 sha。
+- `tests/no-platform-ci-config.test.ts` 的 #3667 那一格改为钉「先按事件分形态」的写法 ——
+  原来钉的是 `github.event.inputs.pr_number || github.event.client_payload.pr_number`，
+  而那正是本条要拆掉的形状。
+
+**边界**：判决链、三态退码、`GA_VERDICT` 折叠、`质量门禁` 的承重锚一字未动。本条只修
+「前提送不进去」，不碰「判了什么」。
+
+**真验**：下一次 PR 的回调 build 在 `cnb build get-build-stage --stageId stage-0` 里的日志应
+形如 `callback sha=<40 位> ... sha_check=match`，且本 PR 的 `cnb/api_trigger_ga_verdict/*`
+status 有终态（不再是「缺席」）。
+
 ### 13.6 分支与合并策略
 
 - 功能分支：`feat/<short-desc>`；修复分支：`fix/<issue-id>-<desc>`。
