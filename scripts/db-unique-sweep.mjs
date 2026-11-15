@@ -28,7 +28,9 @@
 import fs from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
-/** 库里有没有这张表。 */
+/** 库里有没有这张表。
+ *  @param {DatabaseSync} db
+ *  @param {string} table */
 function hasTable(db, table) {
   const row = db
     .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?")
