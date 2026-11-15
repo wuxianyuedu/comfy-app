@@ -257,18 +257,23 @@ export async function saveModeContractsAsProjectDefaults(
         "正式包的契约改动请用「保存模式契约」（只落本机）。",
     );
   }
-  const configured = await readConfiguredModeContracts(root);
-  /* 全量落盘 + required 固化：读侧拿到的每一条都自描述。 */
-  const full = mergeModeContracts(configured, parseModeContracts(contracts)).map((c) => ({
-    ...c,
-    required: requiredInputsFor(c),
-  }));
-  const file = path.join(/*turbopackIgnore: true*/ root, MODE_CONTRACT_DEFAULTS_REL_PATH);
-  try {
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, `${JSON.stringify(full, null, 2)}\n`, "utf8");
-  } catch (error) {
-    throw new Error(errorText(error, `项目默认写入失败（${file}）`), { cause: error });
-  }
-  return { contracts: full, file };
+  /* 与 saveModeContracts / resetModeContractOverride 同一把互斥 + 原子写
+   * （ISSUE #3911）：读基线 → 合并 → 整包写回这段跨 await 的读改写不再与
+   * 并发的保存 / 还原互相覆盖，崩溃也不再留半截 JSON。 */
+  return overrideFileMutex.run(async () => {
+    const configured = await readConfiguredModeContracts(root);
+    /* 全量落盘 + required 固化：读侧拿到的每一条都自描述。 */
+    const full = mergeModeContracts(configured, parseModeContracts(contracts)).map((c) => ({
+      ...c,
+      required: requiredInputsFor(c),
+    }));
+    const file = path.join(/*turbopackIgnore: true*/ root, MODE_CONTRACT_DEFAULTS_REL_PATH);
+    try {
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await atomicWriteText(file, `${JSON.stringify(full, null, 2)}\n`);
+    } catch (error) {
+      throw new Error(errorText(error, `项目默认写入失败（${file}）`), { cause: error });
+    }
+    return { contracts: full, file };
+  });
 }
