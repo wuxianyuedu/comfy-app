@@ -6,7 +6,7 @@
 // apiSubmitVideo / apiPollVideo —— 远端模型按 remoteModel 表 + 适配器直连）。
 // 视图（ModelTestView）只渲染 + 上抛，不出现 fetch / api.*。
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { readFileAsDataUrl } from "~/lib/file-io";
@@ -18,6 +18,7 @@ import { useExternalAction } from "~/components/ui/use-external-action";
 import {
   apiGenerateImage,
   apiPollVideo,
+  apiPreviewRequest,
   apiSubmitVideo,
   type RelayDebugSink,
 } from "~/lib/workshop/generation-client";
@@ -103,9 +104,10 @@ export type ModelTestController = {
   patchValue: (type: keyof ModelTestValues, value: string) => void;
   /** 批量更新表单值（尺寸下拉一次写回四个键）。 */
   patchValues: (patch: Partial<ModelTestValues>) => void;
-  /** 生成前的「准备请求」读数（#3949 需求 8）：按当前 模式 / 模型 / 输入 现算的
-   *  请求体，点生成前就显示；生成开始后让位给真实读数（debugRows）。 */
-  previewRow: ApiCallDebugRow | null;
+  /** 生成前的「准备请求」读数（#3949 需求 8）：按当前 模式 / 模型 / 输入 走
+   *  服务端 dry-run 现算的**实际上游请求**（端点 + 适配器翻译后的请求体），
+   *  点生成前就显示；生成开始后让位给真实读数（debugRows）。 */
+  previewRows: Array<ApiCallDebugRow>;
   /** 提示词随机按钮（ISSUE #3742）：从常用样本里随机填一条。 */
   randomizePrompt: () => void;
   /** 参考图组（#3949 需求 6/7）：契约口 reference-image 的多张取值（data URL）。 */
@@ -264,6 +266,55 @@ function missingRequiredLabels(
       return key !== null && (values[key]?.trim() ?? "") === "";
     })
     .map((row) => row.label);
+}
+
+/** 生成前的「准备请求」读数子 hook（#3949 需求 8）：按当前 模式 / 模型 / 输入
+ *  走服务端 dry-run 现算**实际上游请求**（端点 + 适配器翻译后的请求体），
+ *  点生成前就显示；点生成后由真实读数（debugRows）接棒。600ms 去抖 + 序号
+ *  守卫：慢响应不覆盖新一轮的读数。从主 hook 拆出（§12.13 函数长度硬闸）。 */
+function useRequestPreview(args: {
+  buildBodies: () => ReturnType<typeof buildRequestBodies>;
+  busy: boolean;
+  debugRowCount: number;
+  /** 预览失败的出口（如「模型没有可用接口地址」）——与生成失败同一反馈位。 */
+  onError: (text: string) => void;
+  selectedModel: string;
+}): Array<ApiCallDebugRow> {
+  const { busy, buildBodies, debugRowCount, onError, selectedModel } = args;
+  const [previewRows, setPreviewRows] = useState<Array<ApiCallDebugRow>>([]);
+  const seqRef = useRef(0);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (busy || selectedModel === "" || debugRowCount > 0) {
+        setPreviewRows([]);
+        return;
+      }
+      const seq = ++seqRef.current;
+      const { imageBody, videoBody } = buildBodies();
+      const relayBody = imageBody ?? videoBody ?? {};
+      void runAsyncAction(
+        async () => {
+          const rows = await apiPreviewRequest(relayBody);
+          if (seqRef.current === seq) {
+            setPreviewRows(rows);
+          }
+          return { ok: true as const };
+        },
+        {
+          report: (kind, text) => {
+            if (kind === "err") {
+              onError(text);
+            }
+          },
+          failureText: "请求预览失败",
+        },
+      );
+    }, 600);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [busy, buildBodies, debugRowCount, onError, selectedModel]);
+  return previewRows;
 }
 
 export function useModelTest(): ModelTestController {
@@ -614,16 +665,19 @@ export function useModelTest(): ModelTestController {
     cancelRef.current?.abort();
   }, []);
 
-  /* 生成前的「准备请求」读数（#3949 需求 8）：按当前 模式 / 模型 / 输入 现算，
-   * 点生成前就显示；点生成后由真实读数（debugRows）接棒。 */
-  const previewRow = useMemo<ApiCallDebugRow | null>(() => {
-    if (busy.busy || selectedModel === "") {
-      return null;
-    }
-    const { imageBody, videoBody } = buildBodies();
-    const relayBody = imageBody ?? videoBody ?? {};
-    return relayDebugRow(kind, relayBody);
-  }, [buildBodies, busy.busy, kind, selectedModel]);
+  /** 预览失败的出口（与生成失败同一反馈位；#3637 失败必须可见）。 */
+  const showPreviewError = useCallback((text: string) => {
+    setNotice({ kind: "err", text });
+  }, []);
+  /* 生成前的「准备请求」读数（#3949 需求 8）：子 hook 里走服务端 dry-run，
+   * 按当前 模式 / 模型 / 输入 现算**实际上游请求**；点生成后由真实读数接棒。 */
+  const previewRows = useRequestPreview({
+    buildBodies,
+    busy: busy.busy,
+    debugRowCount: debugRows.length,
+    onError: showPreviewError,
+    selectedModel,
+  });
 
   return {
     candidates: modeCandidates,
@@ -638,7 +692,7 @@ export function useModelTest(): ModelTestController {
     referenceImages: referenceGroup.images,
     addReferenceImages,
     removeReferenceImage,
-    previewRow,
+    previewRows,
     adapters,
     mode,
     modeTabs,

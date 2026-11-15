@@ -762,8 +762,7 @@ export async function apiSubmitVideo(
 }
 
 /* API 通道：对异步视频任务做一次轮询。model/mode 跟着提交那一步走（#3590）：
- * 远端模型的任务查询地址与密钥都挂在条目上。 */
-export async function apiPollVideo(
+ * 远端模型的任务查询地址与密钥都挂在条目上。 */ export async function apiPollVideo(
   remoteTaskId: string,
   opts: {
     /* 请求读数（ISSUE #3791）：与提交同一口径，逐候选轮询也上报。 */
@@ -893,4 +892,14 @@ export async function fetchApiChannels(): Promise<ApiChannelsView | null> {
   } catch {
     return null;
   }
+}
+
+/* 「准备请求」预览（#3949 需求 8）：dryRun=true 让 relay 只做上游解析与请求体
+ * 组装、不真正调用 —— 返回的读数就是「实际会发出去的请求」（端点 + 适配器
+ * 翻译后的请求体，长字符串已截断、密钥不在其中）。 */
+export async function apiPreviewRequest(
+  body: Record<string, unknown>,
+): Promise<ApiRelayDebugRow[]> {
+  const data = await postRelay({ ...body, dryRun: true });
+  return relayDebugRows(data);
 }
