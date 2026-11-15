@@ -529,23 +529,24 @@ jobs:
         with:
           node-version: 26
 
-      # ISSUE #3981：标题走 `GITHUB_ENV` 传 —— **按需档（workflow_dispatch）没有
-      # `pull_request` payload**，`github.event.pull_request.title` 那枚表达式
-      # 求值成空串（不是报错），于是「先写文件、下一步再读」这条路两条形态都能落住：
-      # 自动档把 payload 里的标题写进文件，按需档让下一步用 API 补写，
-      # 最后那一步只认文件。三条路都空 ⇒ 脚本不送 `title`，回落平台缺省。
-      - name: 记下 PR 标题（自动档）
-        if: always() && github.event.pull_request.title
-        env:
-          GA_PR_TITLE: ${{ github.event.pull_request.title }}
-        run: node scripts/ci-ga-verdict-title.mjs --stdin-env
-
-      # 按需档（#3667）没有 payload，用 `CNB_TRIGGER_TOKEN` 站内读一次
-      # `GET /{repo}/-/pulls/{n}` 把标题写进同一份文件（与镜像格同一个端点）。
+      # ISSUE #3981 / #3980：标题走 `GITHUB_ENV` 传给收尾那一跳（它只认文件）。
+      #
+      # 取值**只有一个入口**（`scripts/ci-ga-verdict-title.mjs` 内三条路依次回落）：
+      #   ① `GA_PR_TITLE`（显式注入，手跑复验用）
+      #   ② `client_payload.pr_title`（镜像格送来的那枚，与 `run-name` 同源）
+      #   ③ 站内 `GET /{repo}/-/pulls/{n}`（按需档 #3667 没有 payload）
+      #
+      # 为什么不再分两步、也不再读 `github.event.pull_request.title`（#3980 现场）：
+      # 本 workflow 的触发面只有 `repository_dispatch` / `workflow_dispatch`，
+      # **没有 `pull_request`** ⇒ 那个表达式恒为空串 ⇒ 旧的两步里「自动档」那一步
+      # 从来没执行过，「按需档」那一步又因为 `pr_number` 缺失而空转，于是 100% 的
+      # 回调 build 都落回平台缺省 `API custom event`。payload 文件里本来就有标题，
+      # 直接读它即可 —— 这里不再写任何 `github.event.pull_request.*` 表达式。
+      #
       # `continue-on-error`：标题只是那一列的显示，读不到不该让一条本可送达的
       # 判决送不出去 —— 它的成败不进 `needs.*.result`（step 不是 job）。
-      - name: 按需档补 PR 标题
-        if: always() && !github.event.pull_request.title
+      - name: 取 PR 标题（写进 GITHUB_ENV）
+        if: always()
         continue-on-error: true
         env:
           CNB_TRIGGER_TOKEN: ${{ secrets.CNB_TRIGGER_TOKEN }}
@@ -564,8 +565,8 @@ jobs:
           CNB_PULL_REQUEST_MERGE_SHA: ${{ github.event.client_payload.cnb_merge_sha || '' }}
           # ISSUE #3981：CNB 构建历史里回调 build 的标题 —— 不送就一律落到平台缺省
           # （历史现场全是 `API custom event`），认不出属于哪张 PR。取值来自上面
-          # 两步写进 `GITHUB_ENV` 的 `GA_PR_TITLE`（自动档 payload / 按需档 API 读）；
-          # 三条路都空 ⇒ 脚本不送 `title` 键、回落缺省，不发明「无标题」这一形态。
+          # 那一步写进 `GITHUB_ENV` 的 `GA_PR_TITLE`（三条路依次回落，见该脚本文件头）；
+          # 都取不到 ⇒ 脚本不送 `title` 键、回落缺省，不发明「无标题」这一形态。
           GA_PR_TITLE: ${{ env.GA_PR_TITLE || '' }}
           GA_JOB_RESULTS: ${{ join(needs.*.result, ',') }}
         run: node scripts/ci-ga-verdict-callback.mjs
