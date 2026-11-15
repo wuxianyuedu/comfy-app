@@ -1104,8 +1104,8 @@ describe("FilmRepository / FilmShotRepository", () => {
     await filmRepository.update(first.id, {
       createdAt: new Date(second.createdAt.getTime() + 60_000),
     });
-    await filmRepository.markGenerating(first.id);
-    await filmRepository.markGenerating(second.id);
+    await filmRepository.claimGenerating(first.id);
+    await filmRepository.claimGenerating(second.id);
 
     const resumed = await filmRepository.listByStatus(["GENERATING"]);
     /* 跨 userId：`first` 属 u1、`second` 属 u2，两条都要被列出 —— 补上归属条件
@@ -1166,14 +1166,14 @@ describe("FilmRepository / FilmShotRepository", () => {
       { t: 2, level: "progress", msg: "50%" },
     ]);
 
-    await filmRepository.markGenerating(f.id);
+    await filmRepository.claimGenerating(f.id);
     expect(await filmRepository.findById(f.id)).toMatchObject({
       status: "GENERATING",
       progress: 0,
     });
     await filmRepository.updateProgress(f.id, 55);
     expect((await filmRepository.findById(f.id))?.progress).toBe(55);
-    await filmRepository.markComposing(f.id);
+    await filmRepository.claimComposing(f.id);
     expect(await filmRepository.findById(f.id)).toMatchObject({
       status: "COMPOSING",
       progress: 90,
@@ -1184,16 +1184,41 @@ describe("FilmRepository / FilmShotRepository", () => {
       progress: 100,
       finalVideo: "/tmp/final.mp4",
     });
+    /* 终态保护（ISSUE #3894）：DONE 之后 markFailed / markCancelled 都不再
+     * 改写终态（旧实现 DONE→FAILED→CANCELLED 一路被覆盖）。 */
     await filmRepository.markFailed(f.id, "合片失败");
     expect(await filmRepository.findById(f.id)).toMatchObject({
-      status: "FAILED",
-      error: "合片失败",
+      status: "DONE",
+      finalVideo: "/tmp/final.mp4",
     });
     await filmRepository.markCancelled(f.id);
+    expect(await filmRepository.findById(f.id)).toMatchObject({
+      status: "DONE",
+      error: null,
+    });
+  });
+
+  it("终态守卫：CANCELLED / FAILED 不再被改写，非终态照常流转（ISSUE #3894）", async () => {
+    const f = await filmRepository.create(CREATE);
+    await filmRepository.claimGenerating(f.id); // PARSING → GENERATING
+    await filmRepository.markCancelled(f.id); // GENERATING → CANCELLED（取消合法）
+    expect(await filmRepository.findById(f.id)).toMatchObject({ status: "CANCELLED" });
+    await filmRepository.markDone(f.id, "/tmp/x.mp4"); // CANCELLED 不被合成复活成 DONE
+    await filmRepository.markFailed(f.id, "迟到判死"); // CANCELLED 不被超时判死覆盖
     expect(await filmRepository.findById(f.id)).toMatchObject({
       status: "CANCELLED",
       error: "已取消",
     });
+
+    const g = await filmRepository.create(CREATE);
+    await filmRepository.claimComposing(g.id); // PARSING → COMPOSING
+    await filmRepository.markFailed(g.id, "合成失败");
+    expect(await filmRepository.findById(g.id)).toMatchObject({
+      status: "FAILED",
+      error: "合成失败",
+    });
+    await filmRepository.markDone(g.id, "/tmp/y.mp4"); // FAILED 不被改回 DONE
+    expect(await filmRepository.findById(g.id)).toMatchObject({ status: "FAILED" });
   });
 
   it("镜头状态流转与两类筛选：status / onlyWithVideo", async () => {

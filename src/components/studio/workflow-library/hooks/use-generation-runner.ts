@@ -6,7 +6,7 @@
  * （useWorkflowRunResume）共用**同一组回调** —— 此前各写一份，节流/产物捕获/
  * 终态迁移逐字相同，收成一份后行为不可能再分叉。 */
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { createThrottleGate } from "~/components/ui/use-throttled-progress";
 import { errorMessage } from "~/lib/error-message";
@@ -62,6 +62,9 @@ async function executeRun(
   payload: RunPayload,
   run: {
     handlers: WorkflowRunHandlers;
+    /** 登记本次 SSE 订阅的 closer（ISSUE #3912）：组件卸载时由 effect 撤掉，
+     *  不再让订阅存活到任务终态。 */
+    registerCloser: (closer: () => void) => void;
     setPhase: (p: Phase) => void;
   },
 ) {
@@ -75,7 +78,7 @@ async function executeRun(
     effectiveParamMap,
     seedModes,
   } = payload;
-  const { setPhase, handlers } = run;
+  const { setPhase, handlers, registerCloser } = run;
   setPhase({ kind: "starting" });
   try {
     const mapped = workflowIO
@@ -111,13 +114,14 @@ async function executeRun(
     await new Promise<void>((resolve) => {
       /* onSettled 在共享回调里只做终态迁移；发起路径还要借此结束本次
        * await（恢复路径没有这一层等待），所以在这里包一层。 */
-      watchWorkflowRun(taskId, {
+      const closer = watchWorkflowRun(taskId, {
         ...handlers,
         onSettled: (id, result) => {
           handlers.onSettled(id, result);
           resolve();
         },
       });
+      registerCloser(closer);
     });
   } catch (error) {
     setPhase({ kind: "failed", message: errorMessage(error, String(error)) });
@@ -135,6 +139,16 @@ export function useGenerationRunner(params: { enabled: boolean; workflowId: stri
   /* 节点相位的节流闸门（`~/components/ui/use-throttled-progress`）。
    * 发起与恢复两条订阅路径共用同一个闸门 —— 按任务分窗，不会互相挤掉。 */
   const progressGate = useRef(createThrottleGate());
+  /* 发起路径在跑的 SSE 订阅 closer（ISSUE #3912）：executeRun 里
+   * watchWorkflowRun 返回的 closer 由此登记，卸载时撤掉，生成中切走页签
+   * 不再让 EventSource 存活到任务终态（持续打日志、占用同源连接）。 */
+  const activeCloserRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    return () => {
+      activeCloserRef.current?.();
+      activeCloserRef.current = null;
+    };
+  }, []);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   // onOutput 与 onSettled 都来自同一 SSE 闭包，state 读取会拿到渲染期旧值——
   // 用 ref 保证 onSettled 能看到 onOutput 刚写入的结果图。
@@ -196,7 +210,13 @@ export function useGenerationRunner(params: { enabled: boolean; workflowId: stri
 
   const startRun = useCallback(
     (payload: RunPayload) => {
-      void executeRun(payload, { setPhase, handlers });
+      void executeRun(payload, {
+        setPhase,
+        handlers,
+        registerCloser: (closer) => {
+          activeCloserRef.current = closer;
+        },
+      });
     },
     [handlers],
   );
