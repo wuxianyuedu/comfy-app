@@ -9,8 +9,7 @@ import { getSession } from "~/server/better-auth/server";
 import { requireServerUser, type ServerUser, type SessionLike } from "~/lib/auth-server";
 
 /**
- * 鉴权闸（REST 面唯一入口）：`loginRequired` 打开时无会话返回 null（调用方回 401），否则回落演示用户。
- * 刻意不提供「总是兜底演示用户」的第二入口 —— 那会把 `loginRequired` 变成可被单个路由误绕过的建议。
+ * 鉴权闸（REST 面唯一入口）：无登录流程时无会话一律回落演示用户（ISSUE #3827），不再因 `loginRequired` 返回 401。
  * tRPC 面的对应闸门 `authedProcedure` 与本函数共用 `requireServerUser` 单点判决。
  */
 export async function requireRequestUser(): Promise<ServerUser | null> {
