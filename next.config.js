@@ -134,7 +134,17 @@ const config = {
     // set experimental.turbopackFileSystemCacheForDev: false）。
     // 代价：放弃 dev 暖启动的编译缓存（冷启动变慢）；等上游修复（跟踪 #100267）
     // 后删掉这一行即可回退。
-    turbopackFileSystemCacheForDev: false,
+    //
+    // 想量一次「这个缓存到底值多少」⇒ `COMFY_TURBOPACK_DEV_CACHE=1 pnpm dev` 临时打开
+    // 它（#3943 的第二档，与默认档同一份代码、只差这一格）。**三条边界**：
+    //   · 只认 `"1"` 这一个值，别的一律按关闭处理 —— 回滚循环的代价是一整场调试，
+    //     而「写错一个值 ⇒ 悄悄进另一档」正是这种代价最不该有的来源；
+    //   · **每轮都要重读这一行**：它开的是「上层已经判定有风险的档」，所以启动器
+    //     会在启动日志里念一行 `⚠`（`[dev] Turbopack dev 持久缓存已显式打开`），
+    //     不许安静地跑在风险档上（口径同「降档必须被读出来」，§13.5.25）；
+    //   · 上游 #100267 修好之后**删掉整条分叉**（连同下面那行注释与 `tests/`
+    //     里钉它的那条断言），不是把默认值改成 true。
+    turbopackFileSystemCacheForDev: process.env.COMFY_TURBOPACK_DEV_CACHE === "1",
     // #2542 第一格：Turbopack 插件运行时从默认的 childProcesses 换成 workerThreads
     // （Next 16.4.3 config-shared.d.ts L691：'workerThreads' | 'childProcesses' |
     // 'forceWorkerThreads'，默认 childProcesses）。动机是子进程冷启开销：每个插件

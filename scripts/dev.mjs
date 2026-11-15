@@ -95,6 +95,21 @@ if (
   );
 }
 
+/* 风险档必须被读出来（#3943）：`COMFY_TURBOPACK_DEV_CACHE=1` 打开的是 Turbopack
+ * dev 持久缓存，而这一档在 Next 16.4.3 上与 turbopack-subscribe 的 hmrVersion 校验
+ * 组合出过「整页每 ~2.3s 硬重载一次」的死循环（默认档为此关着它，见 next.config.js
+ * 那段注释与 #3559）。它保留的唯一用途是**量一次这个缓存值多少编译时间**，所以：
+ * 打开的那一刻必须有人看见。用户看到的现象是「界面自己在刷」而不是一条报错，没人
+ * 会在那种现场回头找启动日志里少没少一行提示 —— 因此这行提示是这一档的入口条件，
+ * 不是装饰。判据（值只认 "1"）在配置那一侧，这里只负责说出来。 */
+if (process.env.COMFY_TURBOPACK_DEV_CACHE === "1") {
+  process.stderr.write(
+    "[dev.mjs] ⚠ Turbopack dev 持久缓存已显式打开（COMFY_TURBOPACK_DEV_CACHE=1）：\n" +
+      "[dev.mjs]   若界面开始整页反复重载（约每 2 秒一次、console 无报错），先去掉这个变量——\n" +
+      "[dev.mjs]   那是 Next 16.4.3 的已知回滚循环（#3559 / 上游 #100267）。量完就收掉它。\n",
+  );
+}
+
 // 环境配置预检：失败就**在起 Next 之前**退出并给出可行动作。
 // 放在这里的理由见 env-preflight.mjs —— 否则 Next 会先打印「✓ Ready」，
 // 用户看到的是「起来了但报错」，而事实是端口无人监听。
