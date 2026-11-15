@@ -637,7 +637,7 @@ export function looksNewlineMangled(msg) {
  * ⚠️ 它**不**保证恒退 0：dry-run 免掉的是「执行写动作」，不免掉「报出阻塞」。正在
  * `master` 上、或缺 `changelog.d/` 碎片时照样退 1 —— 一个会藏掉阻塞事实的预览比不预览更糟。
  *
- * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,noCommit?:boolean,closeIssue?:boolean,asMerged?:number|null,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,comment?:boolean,branches?:boolean,newIssue?:boolean,diagnose?:boolean,stageLog?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null,prBodyFile?:boolean}} st 当前状态
+ * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,noCommit?:boolean,closeIssue?:boolean,asMerged?:number|null,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,comment?:boolean,branches?:boolean,newIssue?:boolean,diagnose?:boolean,stageLog?:boolean,fetchIssue?:number|string|null,createBranch?:string|null,remote?:string|null,baseBranch?:string|null,prBodyFile?:boolean}} st 当前状态
  * @returns {string[]} 逐条命令
  */
 export function planCommands(st) {
@@ -835,6 +835,15 @@ export function planCommands(st) {
     p.push(
       "再读一次 runningAppInstances 作为回读 —— 回读说还在 ⇒ 红；via session ⇒ 这一格不收、落 2",
     );
+  }
+  /* `--fetch-issue`（ISSUE #3965）的三条读命令只在它自己的旗标下进计划 —— 与
+   * --diagnose 同一档：默认那份计划里不出现，否则 dry-run 教的执行面比请求的大。 */
+  if (st.fetchIssue) {
+    p.push(`cnb issues get-issue --repo ${st.slug} --number ${st.fetchIssue} -v`);
+    p.push(
+      `cnb issues list-issue-comments --repo ${st.slug} --number ${st.fetchIssue} --sort created --page <p> --page-size 50 -v`,
+    );
+    p.push(`cnb issues get-imgs --repo ${st.slug} --img-path <imgs/issues/…> -v`);
   }
   return p;
 }

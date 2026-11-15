@@ -5404,6 +5404,15 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
     expect(made.indexOf("post-issue-labels")).toBeLessThan(made.indexOf("get-issue"));
   });
 
+  it("#3965：--fetch-issue 的三条读命令只在它的旗标下进计划", () => {
+    const plain = planCommands(st).join("\n");
+    expect(plain).not.toContain("get-imgs");
+    const plan = planCommands({ ...st, fetchIssue: 3965 }).join("\n");
+    expect(plan).toContain("cnb issues get-issue --repo moon-read/comfy-app-t3 --number 3965 -v");
+    expect(plan).toContain("cnb issues list-issue-comments");
+    expect(plan).toContain("cnb issues get-imgs");
+  });
+
   it("对账：计划里的「模块+工具」对 ⇄ 源码里真实调用的，必须同集合", () => {
     /* `planCommands` 是命令清单的第二份抄本 —— 正是要避免的形态，故与真执行面逐条对账：任何一侧新增/改名
      * 而另一侧没跟，这条就红。只比「模块 + 工具」对（参数值含 `<tmp>` / `…` 占位，逐字比会脆）。取数面是
@@ -5449,6 +5458,7 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
       comment: true,
       diagnose: true,
       prBodyFile: true,
+      fetchIssue: 3965,
     })) {
       const m = /^cnb (?<module>\w+) (?<tool>[\w-]+)/.exec(line);
       if (m) {

@@ -48,6 +48,7 @@ pnpm ship --claims                               # 列出自己领取中（state
 pnpm ship --branches                             # 只读：逐条本地分支给「落地了没有」（判据只有 PR 的 `is_merged`）—— 一次也不删，与任何显式动作同行退 2
 pnpm ship --status [<PR号|分支名>]                # 只读：PR / CI 绿红 / 合并 / 关单 / 上一次跑的结论摆到同一张屏（ISSUE #3811，替掉手敲 grep 翻日志）。目标缺省 = 当前分支（主干上回落上一次跑的 PR）；红不深挖（--diagnose 的事）。退码 0 绿/已合并 · 1 CI红或没提过PR · 2 没结论 · 3 冲突 · 4 CI无终态；一次也不写平台，与显式动作同行退 2
 pnpm ship --result                  # 只读：本机 .git/ship-result.json 的状态快照 + 事件时间线（ISSUE #3923）。后台跑 ship 时轮询它取「走到哪了 / 结论」，不 sleep + grep 运行日志；--result=json 出原始 JSON。只读口自己不落盘，不覆盖后台那一跑的活读数
+pnpm ship --fetch-issue 3965       # 只读：把一张 issue 的正文 / 评论 / 图片一次取到 .workbuddy/issues/<号>/（ISSUE #3965；gitignored、按号分目录、重跑即更新；图片走 get-imgs 官方通道，不手拼 URL 撞 404）
 pnpm ship --rerun-ci                         # CI 红/未判定要重跑：在**当前 PR 分支**推一笔空提交重新派生流水线（平台侧没有 PR 重跑入口）；动手前有一层只读前置读数（ISSUE #3341）：在跑的提醒先等终态、红的念红在哪些格与「重跑不会改变 infra 故障」、被取消的念「重跑正是对的」—— 读数不是闸，空提交照推
 pnpm ship --diagnose cnb-xxx-yyy                  # CI 红了：只读取回失败格 + 失败行（带行号）+ 日志链接（不给 sn 按 HEAD 的 sha 归属）
 pnpm ship --gh-prs                                # 只读：列 GitHub 仓库侧（镜像仓 wuxianyuedu/comfy-app）的 PR —— 号 / 标题 / 作者 / 分支 / mergeable / URL；

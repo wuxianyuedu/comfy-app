@@ -583,6 +583,7 @@ function relayDebugRows(data: RelayResponse): ApiRelayDebugRow[] {
 async function postRelay(
   body: Record<string, unknown>,
   onDebug?: RelayDebugSink,
+  signal?: AbortSignal,
 ): Promise<RelayResponse> {
   let res: Response;
   try {
@@ -590,12 +591,19 @@ async function postRelay(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(RELAY_TIMEOUT_MS),
+      /* 用户取消（#3949 需求 5）与到点超时并成一路：任一触发都 abort。 */
+      signal: AbortSignal.any(
+        signal === undefined
+          ? [AbortSignal.timeout(RELAY_TIMEOUT_MS)]
+          : [signal, AbortSignal.timeout(RELAY_TIMEOUT_MS)],
+      ),
     });
   } catch (error: unknown) {
-    /* AbortSignal.timeout 的到点是 TimeoutError（浏览器主动 abort 是
-     * AbortError）：翻译成可行动的中文，别让控制台的英文 DOMException
-     * 原样进错误条。 */
+    /* 用户主动取消（#3949 需求 5）给一句独立的、不带「失败」色彩的话 ——
+     * 它不是故障。TimeoutError（到点）才是超时文案。 */
+    if (signal?.aborted === true) {
+      throw new Error("已取消生成", { cause: error });
+    }
     if (
       error instanceof DOMException &&
       (error.name === "TimeoutError" || error.name === "AbortError")
@@ -640,6 +648,9 @@ export async function apiGenerateImage(
      *  适配器映射了「分辨率」口的远端接口直接拿到 "1k"/"2k"/"4k"。 */
     aspectRatio?: string;
     image?: string;
+    /** 参考图组（#3949 需求 6/7）：多张以数组随请求下发；首张另走 `image`
+     *  （既有单图适配器不受影响）。 */
+    images?: Array<string>;
     megapixels?: string;
     /** 工坊模式码（T2I / I2I / …）：远端模型有该模式适配器时按它翻译字段 */
     mode?: string;
@@ -653,7 +664,7 @@ export async function apiGenerateImage(
     seed?: number;
     size?: string;
   },
-  opts: { onDebug?: RelayDebugSink } = {},
+  opts: { onDebug?: RelayDebugSink; signal?: AbortSignal } = {},
 ): Promise<string> {
   const data = await postRelay(
     {
@@ -674,6 +685,7 @@ export async function apiGenerateImage(
         : {}),
       ...(req.multiple === undefined ? {} : { multiple: req.multiple }),
       ...(req.image !== undefined && req.image !== "" ? { image: req.image } : {}),
+      ...(req.images !== undefined && req.images.length > 0 ? { images: req.images } : {}),
       /* 种子（ISSUE #3778）：此前请求体组装漏了这一键 —— 路由解析得到、
        * 客户端从未发送，用户填的种子静默丢失。 */
       ...(req.seed === undefined ? {} : { seed: req.seed }),
@@ -681,6 +693,7 @@ export async function apiGenerateImage(
       ...(opts.onDebug === undefined ? {} : { debug: true }),
     },
     opts.onDebug,
+    opts.signal,
   );
   const url = data && typeof data.url === "string" && data.url ? data.url : null;
   if (url === null) {
@@ -714,7 +727,7 @@ export async function apiSubmitVideo(
     /** 统一输入「种子」（ISSUE #3783）：非负整数；缺省 = 不带。 */
     seed?: number;
   },
-  opts: { onDebug?: RelayDebugSink } = {},
+  opts: { onDebug?: RelayDebugSink; signal?: AbortSignal } = {},
 ): Promise<ApiVideoSubmitResult> {
   const data = await postRelay(
     {
@@ -734,6 +747,7 @@ export async function apiSubmitVideo(
       ...(opts.onDebug === undefined ? {} : { debug: true }),
     },
     opts.onDebug,
+    opts.signal,
   );
   if (!data) {
     throw new Error("API 视频响应格式错误");
@@ -757,6 +771,7 @@ export async function apiPollVideo(
     mode?: string;
     model?: string;
     onDebug?: RelayDebugSink;
+    signal?: AbortSignal;
   } = {},
 ): Promise<{ pending: boolean; url?: string }> {
   const data = await postRelay(
@@ -768,6 +783,7 @@ export async function apiPollVideo(
       ...(opts.debug === true ? { debug: true } : {}),
     },
     opts.onDebug,
+    opts.signal,
   );
   if (!data) {
     return { pending: true };

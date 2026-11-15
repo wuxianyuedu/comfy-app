@@ -1,9 +1,9 @@
 /**
- * `SidebarTabSection` 的视图判据（ISSUE #3623 / #3798）。
+ * `SidebarTabSection` 的视图判据（ISSUE #3623 / #3798 / #3948）。
  *
  * 这一节要判的是**这一格界面长什么样**：配置面里的每一项都给出两档选择、当前
- * 生效值落在选中态上、两个保存出口按「是不是开发检出」显隐、「还原默认」只在真有
- * 本机覆盖时出现。
+ * 生效值落在选中态上、**没有「保存」那个按钮**（改一档即存本机）、「写项目默认」
+ * 按「是不是开发检出」显隐、「还原默认」只在真有本机覆盖时出现。
  *
  * 断言对齐可见行为（选中态 / 按钮显隐 / 点了之后调了哪个动作），不锁样式类。
  */
@@ -21,7 +21,6 @@ const controller = vi.hoisted(() => ({
     projectDefaultEditable: false,
     resetToDefault: vi.fn(() => Promise.resolve()),
     resetBusy: false,
-    save: vi.fn(() => Promise.resolve()),
     saveAsProjectDefaults: vi.fn(() => Promise.resolve()),
     saving: false,
     savingProjectDefaults: false,
@@ -117,14 +116,12 @@ describe("SidebarTabSection 的配置面", () => {
     expect(call?.[1]).toBe("shared" satisfies SidebarTabMode);
   });
 
-  it("「保存」把当前草稿交出去", async () => {
-    const user = userEvent.setup();
+  it("没有「保存」那个按钮了（改一档即存本机，ISSUE #3948）", () => {
     seedController();
-    controller.section.save.mockClear();
     render(<SidebarTabSection />);
-
-    await user.click(screen.getByRole("button", { name: "保存" }));
-    expect(controller.section.save).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "保存" })).toBeNull();
+    /* 只有「写项目默认」那一个是显式动作（它进代码库，不能顺手就改）。 */
+    expect(screen.queryByRole("button", { name: /保存为项目默认/ })).toBeNull();
   });
 
   it("正式包不给「保存为项目默认」这个出口（没有源码可写）", () => {

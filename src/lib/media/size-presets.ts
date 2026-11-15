@@ -78,97 +78,22 @@ const dims = (width: number, height: number): SizeDims => ({ width, height });
 /* ── 默认表 ──
  * 图片场景：AI 出图 / 通用场景，长边约 1024 / 2048 / 3840~4096。
  * 视频场景：显示器 / 视频行业标准，1K 俗称 = 1280×720、2K = 2560×1440、
- *          4K UHD = 3840×2160；超宽档按行业常见值单列。 */
-const DEFAULT_IMAGE_TABLE: SceneResolutionTable = {
-  "1:1 正方": {
-    "1k": dims(1024, 1024),
-    "2k": dims(2048, 2048),
-    "4k": dims(3840, 3840),
-  },
-  "4:3": {
-    "1k": dims(1024, 768),
-    "2k": dims(2048, 1536),
-    "4k": dims(4096, 3072),
-  },
-  "3:2": {
-    "1k": dims(1024, 683),
-    "2k": dims(2048, 1365),
-    "4k": dims(4096, 2731),
-  },
-  "16:9 横屏": {
-    "1k": dims(1024, 576),
-    "2k": dims(2048, 1152),
-    "4k": dims(3840, 2160),
-  },
-  "21:9 超宽": {
-    "1k": dims(1195, 512),
-    "2k": dims(2560, 1080),
-    "4k": dims(5120, 2160),
-  },
-  "3:4": {
-    "1k": dims(768, 1024),
-    "2k": dims(1536, 2048),
-    "4k": dims(3072, 4096),
-  },
-  "2:3": {
-    "1k": dims(683, 1024),
-    "2k": dims(1365, 2048),
-    "4k": dims(2731, 4096),
-  },
-  "9:16 竖屏": {
-    "1k": dims(576, 1024),
-    "2k": dims(1152, 2048),
-    "4k": dims(2160, 3840),
-  },
-};
+ *          4K UHD = 3840×2160；超宽档按行业常见值单列。
+ *
+ * 这份基线**住在入库的 JSON 里**（`size-preset-defaults.json`，ISSUE #3948）：
+ * 设置页「保存到项目代码库」写的就是它，提交后每个检出与每个桌包都是同一份。
+ * 静态 import（不走 fs）—— 编译进产物后读到的就是这份快照，与写回侧
+ * （`size-preset.server.ts` 落 `SIZE_PRESET_DEFAULTS_REL_PATH`）指向同一份文件，
+ * 与「侧栏页签行为」「模式契约」的项目默认同一套口径。 */
+import defaultsJson from "./size-preset-defaults.json";
 
-const DEFAULT_VIDEO_TABLE: SceneResolutionTable = {
-  "1:1 正方": {
-    "1k": dims(1024, 1024),
-    "2k": dims(2048, 2048),
-    "4k": dims(3840, 3840),
-  },
-  "4:3": {
-    "1k": dims(1280, 960),
-    "2k": dims(2048, 1536),
-    "4k": dims(4096, 3072),
-  },
-  "3:2": {
-    "1k": dims(1280, 854),
-    "2k": dims(2560, 1707),
-    "4k": dims(3840, 2560),
-  },
-  "16:9 横屏": {
-    "1k": dims(1280, 720),
-    "2k": dims(2560, 1440),
-    "4k": dims(3840, 2160),
-  },
-  "21:9 超宽": {
-    "1k": dims(1280, 540),
-    "2k": dims(2560, 1080),
-    "4k": dims(5120, 2160),
-  },
-  "3:4": {
-    "1k": dims(960, 1280),
-    "2k": dims(1536, 2048),
-    "4k": dims(2880, 3840),
-  },
-  "2:3": {
-    "1k": dims(854, 1280),
-    "2k": dims(1707, 2560),
-    "4k": dims(2560, 3840),
-  },
-  "9:16 竖屏": {
-    "1k": dims(720, 1280),
-    "2k": dims(1440, 2560),
-    "4k": dims(2160, 3840),
-  },
-};
-
-export const DEFAULT_SIZE_PRESET_TABLE: SizePresetTable = {
-  image: DEFAULT_IMAGE_TABLE,
-  video: DEFAULT_VIDEO_TABLE,
-};
+/** 项目默认那份（跟代码走的那份基线）：由入库 JSON 解析而来，逐格校验过。
+ *
+ *  它同时是**编译进产物的快照**（正式包没有源码，读到的就是这份）与**本机覆盖的
+ *  基准**（`mergeSizePresetTable` 的默认基准）。开发检出里磁盘上那份可能被
+ *  「保存到项目代码库」改过 —— 那时读侧现读磁盘（`size-preset.server.ts`），
+ *  写完即生效，不必重启进程（与「模式契约」#3634 同一口径）。 */
+export const DEFAULT_SIZE_PRESET_TABLE: SizePresetTable = parseSizePresetDefaults(defaultsJson);
 
 /** 场景的显示名。 */
 export const SIZE_SCENE_LABELS: Record<SizeScene, string> = {
@@ -789,10 +714,18 @@ export function parseRatioFromText(text: string): number | null {
   return w / h;
 }
 
-/** 某场景的表相对默认值是否被改过（配置界面据此显示「已改」与恢复入口）。 */
-export function sceneIsModified(scene: SizeScene, table: SizePresetTable): boolean {
+/** 某场景的表相对默认值是否被改过（配置界面据此显示「已改」与恢复入口）。
+ *
+ *  基准**可传**（默认是项目默认那份）：项目默认被「保存到项目代码库」改过之后，
+ *  「已改」的判据要跟着那份新基线走，否则界面会把没改过的格子也标成已改。
+ */
+export function sceneIsModified(
+  scene: SizeScene,
+  table: SizePresetTable,
+  base: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
+): boolean {
   const current = table[scene];
-  const fallback = DEFAULT_SIZE_PRESET_TABLE[scene];
+  const fallback = base[scene];
   for (const preset of SIZE_RATIO_PRESETS) {
     for (const tier of RESOLUTION_TIERS) {
       const a = current[preset.label]?.[tier];
@@ -886,11 +819,63 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-/** 覆盖表逐格合并：默认表打底，合法覆盖项才生效；缺行、缺档、改坏的值一律回退默认（ISSUE #3788）。 */
-export function mergeSizePresetTable(raw: unknown): SizePresetTable {
+/** 空表：给「查不到就按长边算」的兜底路径用（`resolutionDims` 查不到行时走那条）。 */
+const EMPTY_TABLE: SizePresetTable = { image: {}, video: {} };
+
+/**
+ * 项目默认那份（入库 JSON）的解析：逐格校验，坏格回退到**算出来的**默认值。
+ *
+ * 为什么坏格还能兜底：长边口径是死的（1k = 1024、2k = 2048、4k = 3840），按比例
+ * 一除就是那一格 —— 与 `resolutionDims` 的兜底同一条口径。于是文件被手改坏时界面
+ * 仍有可用的宽高，而不是整张表空掉。
+ *
+ * 这份 JSON 是**项目默认的唯一出处**（ISSUE #3948：设置页「保存到项目代码库」
+ * 写的就是它），所以它坏掉的概率不为零 —— 读侧与写侧都要能扛住。
+ */
+export function parseSizePresetDefaults(raw: unknown): SizePresetTable {
+  const record = isPlainRecord(raw) ? raw : {};
+  const out: SizePresetTable = { image: {}, video: {} };
+  for (const scene of ["image", "video"] as const) {
+    const sceneValue = record[scene];
+    const sceneRaw = isPlainRecord(sceneValue) ? sceneValue : {};
+    const table: SceneResolutionTable = {};
+    for (const preset of SIZE_RATIO_PRESETS) {
+      const rowValue = sceneRaw[preset.label];
+      const rowRaw = isPlainRecord(rowValue) ? rowValue : {};
+      /* 三个档位逐个写出来（键名写死但**由类型兜住**：档位表多一档，这里就红 ——
+         少写一格会静默留个空档）。 */
+      const row: Record<ResolutionTier, SizeDims> = {
+        "1k": { width: 0, height: 0 },
+        "2k": { width: 0, height: 0 },
+        "4k": { width: 0, height: 0 },
+      };
+      for (const tier of RESOLUTION_TIERS) {
+        const candidateValue = rowRaw[tier];
+        const candidate = isPlainRecord(candidateValue) ? candidateValue : undefined;
+        row[tier] = isValidDims(candidate)
+          ? { width: Math.round(candidate.width), height: Math.round(candidate.height) }
+          : resolutionDims(scene, preset.ratio, tier, EMPTY_TABLE);
+      }
+      table[preset.label] = row;
+    }
+    out[scene] = table;
+  }
+  return out;
+}
+
+/** 覆盖表逐格合并：基准表打底，合法覆盖项才生效；缺行、缺档、改坏的值一律回退基准
+ *  （ISSUE #3788）。
+ *
+ *  基准**可传**（默认是项目默认那份）：本机覆盖是相对**当前项目默认**算的 —— 项目
+ *  默认被「保存到项目代码库」改过之后，基准必须跟着变，否则还原会回到旧值。
+ */
+export function mergeSizePresetTable(
+  raw: unknown,
+  base: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
+): SizePresetTable {
   const record = isPlainRecord(raw) ? raw : {};
   return {
-    image: mergeSceneTable(DEFAULT_SIZE_PRESET_TABLE.image, record.image),
-    video: mergeSceneTable(DEFAULT_SIZE_PRESET_TABLE.video, record.video),
+    image: mergeSceneTable(base.image, record.image),
+    video: mergeSceneTable(base.video, record.video),
   };
 }
