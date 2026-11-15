@@ -163,9 +163,8 @@ const timingMiddleware = t.middleware(async ({ next, path, type }) => {
 export const publicProcedure = t.procedure.use(timingMiddleware);
 
 /**
- * 需登录（带演示用户兜底）的 procedure，保证 ctx.user 非 null；放行由 `~/lib/auth-server` 的 `requireServerUser`
- * 一处判决（`loginRequired` 为唯一开关）：false → 回落演示用户（本机单用户，与 REST 一致）；true → UNAUTHORIZED。
- * 旧实现自带「无条件兜底 + 缓存 demo 用户」，令开关在 tRPC 面形同虚设、并复刻了缓存越过数据库的缺陷。
+ * 需用户身份的 procedure，保证 ctx.user 非 null。无登录流程时 `requireServerUser`
+ * 始终回落演示用户（ISSUE #3827），因此这里不会因缺少会话而拒绝请求。
  */
 export const authedProcedure = t.procedure.use(timingMiddleware).use(async ({ ctx, next }) => {
   const user = ctx.user ?? (await requireServerUser(ctx.session));
